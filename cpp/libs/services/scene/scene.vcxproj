@@ -332,6 +332,8 @@
     <ClCompile Include="player\system\mission_marshal.cpp" />
     <ClInclude Include="player\system\mission_marshal.h" />
     <ClCompile Include="player\system\player_activity_schedule.cpp" />
+    <ClCompile Include="player\system\player_activity.cpp" />
+    <ClInclude Include="player\system\player_activity.h" />
     <ClInclude Include="player\system\player_activity_schedule.h" />
   </ItemGroup>
   <ItemGroup>

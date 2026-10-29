@@ -559,14 +559,14 @@ type EnterGameResponse struct {
 	// These two fields are non-zero **only on the first successful EnterGame
 	// after a server merge**. They drive client UI:
 	//
-	//   • post_merge_notice_ts > 0  →  client SHOULD show a one-shot
+	//   - post_merge_notice_ts > 0  →  client SHOULD show a one-shot
 	//     "Your zone was merged into <new_zone_name> on <date>" notice.
 	//     The timestamp is the merge wall-clock millis (set by
 	//     tools/merge_zone/post_merge_stamp.go), useful for the notice
 	//     copy. Login server clears the underlying Redis flag before
 	//     returning, so the value is non-zero exactly once per merge.
 	//
-	//   • force_rename_required = true  →  client MUST show a forced-rename
+	//   - force_rename_required = true  →  client MUST show a forced-rename
 	//     UI before letting the player into the world. Set when the
 	//     player's name collided with an existing name in the merge
 	//     target zone.

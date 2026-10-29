@@ -22,4 +22,14 @@ message ActivityScheduleTable {
   uint64 baseline_start_at_ms = 3;
   // UTC Unix 结束毫秒；必须晚于开始时间，结束时刻不可接取
   uint64 baseline_end_at_ms = 4;
+  // 永不复用的内容身份；空值尚未配置，不可收藏。
+  string definition_key = 5;
+  uint64 configuration_revision = 6;
+  // PlayerActivityCategory：0未分类、1日常、2限时、3福利、4其他。
+  uint32 category = 7;
+  string name = 8;
+  string description = 9;
+  string icon_key = 10;
+  // 每次正式任务完成贡献；没有启用活跃规则时不入账。
+  uint32 vitality_points = 11;
 }

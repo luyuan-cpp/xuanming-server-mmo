@@ -2770,6 +2770,23 @@ Test-Case 'scene(Deployment)就绪探针探 gRPC 口 50000 并声明该端口;Ag
     Assert-Match -Text $fleet -Pattern 'kind: Fleet' -Because '必须检查真正的 Fleet'
     Assert-NotMatch -Text $fleet -Pattern 'livenessProbe|startupProbe|readinessProbe' -Because 'GameServer Pod 是 restartPolicy: Never,杀容器 = 销毁 GameServer;就绪交给 Agones SDK'
 }
+Test-Case 'node-config 与 battle-node-config 原样镜像 battle_rewards.json，Deployment 与 Agones 均不依赖被遮蔽的镜像配置' {
+    $expected = ((Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'bin/etc/battle_rewards.json') -Raw -Encoding utf8) -replace "`r`n", "`n").TrimEnd()
+    foreach ($case in @(
+        @{ Label = 'zone Deployment'; Output = $devOut; Name = 'node-config' }
+        @{ Label = 'zone Agones'; Output = $agonesOut; Name = 'node-config' }
+        @{ Label = 'battle Deployment'; Output = $battleInfraRun.Output; Name = 'battle-node-config' }
+        @{ Label = 'battle Agones'; Output = $battleZoneRedisFleetRun.Output; Name = 'battle-node-config' }
+    )) {
+        $block = Select-ManifestByName -Output $case.Output -Name $case.Name
+        Assert-True -Condition ($null -ne $block) -Because "$($case.Label) 必须生成 $($case.Name)"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, '(?m)^  battle_rewards\.json:\s*\|').Count) -Because "$($case.Label) 的奖励配置只能出现一次"
+        $actual = (Get-ConfigMapEmbeddedText -Block $block -FileName 'battle_rewards.json').TrimEnd()
+        Assert-True -Condition ($actual -ceq $expected) -Because "$($case.Label) 的奖励 JSON 必须逐字等于 bin/etc/battle_rewards.json（仅归一化换行与块尾空行），不能另写一份额度或丢失策略配置"
+        $null = $actual | ConvertFrom-Json -ErrorAction Stop
+    }
+}
+
 Test-Case 'battle 配置必须满足独立票据密钥与权威连接上限' {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle-node-config')
     Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.BattleTokenSecret') -ceq $BattleTestEnv.MMORPG_BATTLE_TOKEN_SECRET) -Because 'battle 密钥必须来自独立环境注入，测试不回显值'

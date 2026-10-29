@@ -228,11 +228,78 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActivityScheduleTable final : publi
 
   // accessors -------------------------------------------------------
   enum : int {
+    kDefinitionKeyFieldNumber = 5,
+    kNameFieldNumber = 8,
+    kDescriptionFieldNumber = 9,
+    kIconKeyFieldNumber = 10,
     kIdFieldNumber = 1,
     kEnabledFieldNumber = 2,
     kBaselineStartAtMsFieldNumber = 3,
     kBaselineEndAtMsFieldNumber = 4,
+    kConfigurationRevisionFieldNumber = 6,
+    kCategoryFieldNumber = 7,
+    kVitalityPointsFieldNumber = 11,
   };
+  // string definition_key = 5;
+  void clear_definition_key() ;
+  [[nodiscard]] const ::std::string& definition_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_definition_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_definition_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_definition_key();
+  void set_allocated_definition_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_definition_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_definition_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_definition_key();
+
+  public:
+  // string name = 8;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // string description = 9;
+  void clear_description() ;
+  [[nodiscard]] const ::std::string& description() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_description(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_description();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_description();
+  void set_allocated_description(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_description() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_description(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_description();
+
+  public:
+  // string icon_key = 10;
+  void clear_icon_key() ;
+  [[nodiscard]] const ::std::string& icon_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_icon_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_icon_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_icon_key();
+  void set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_icon_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_icon_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_icon_key();
+
+  public:
   // uint32 id = 1;
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
@@ -273,12 +340,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActivityScheduleTable final : publi
   void _internal_set_baseline_end_at_ms(::uint64_t value);
 
   public:
+  // uint64 configuration_revision = 6;
+  void clear_configuration_revision() ;
+  [[nodiscard]] ::uint64_t configuration_revision() const;
+  void set_configuration_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_configuration_revision() const;
+  void _internal_set_configuration_revision(::uint64_t value);
+
+  public:
+  // uint32 category = 7;
+  void clear_category() ;
+  [[nodiscard]] ::uint32_t category() const;
+  void set_category(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_category() const;
+  void _internal_set_category(::uint32_t value);
+
+  public:
+  // uint32 vitality_points = 11;
+  void clear_vitality_points() ;
+  [[nodiscard]] ::uint32_t vitality_points() const;
+  void set_vitality_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_vitality_points() const;
+  void _internal_set_vitality_points(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ActivityScheduleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          0, 75,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -306,10 +403,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActivityScheduleTable final : publi
         const ActivityScheduleTable& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr definition_key_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr description_;
+    ::google::protobuf::internal::ArenaStringPtr icon_key_;
     ::uint32_t id_;
     bool enabled_;
     ::uint64_t baseline_start_at_ms_;
     ::uint64_t baseline_end_at_ms_;
+    ::uint64_t configuration_revision_;
+    ::uint32_t category_;
+    ::uint32_t vitality_points_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -548,7 +652,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActivityScheduleTableData final : p
 inline void ActivityScheduleTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t ActivityScheduleTable::id() const {
   // @@protoc_insertion_point(field_get:ActivityScheduleTable.id)
@@ -556,7 +660,7 @@ inline ::uint32_t ActivityScheduleTable::id() const {
 }
 inline void ActivityScheduleTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:ActivityScheduleTable.id)
 }
 inline ::uint32_t ActivityScheduleTable::_internal_id() const {
@@ -572,7 +676,7 @@ inline void ActivityScheduleTable::_internal_set_id(::uint32_t value) {
 inline void ActivityScheduleTable::clear_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enabled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline bool ActivityScheduleTable::enabled() const {
   // @@protoc_insertion_point(field_get:ActivityScheduleTable.enabled)
@@ -580,7 +684,7 @@ inline bool ActivityScheduleTable::enabled() const {
 }
 inline void ActivityScheduleTable::set_enabled(bool value) {
   _internal_set_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:ActivityScheduleTable.enabled)
 }
 inline bool ActivityScheduleTable::_internal_enabled() const {
@@ -596,7 +700,7 @@ inline void ActivityScheduleTable::_internal_set_enabled(bool value) {
 inline void ActivityScheduleTable::clear_baseline_start_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.baseline_start_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t ActivityScheduleTable::baseline_start_at_ms() const {
   // @@protoc_insertion_point(field_get:ActivityScheduleTable.baseline_start_at_ms)
@@ -604,7 +708,7 @@ inline ::uint64_t ActivityScheduleTable::baseline_start_at_ms() const {
 }
 inline void ActivityScheduleTable::set_baseline_start_at_ms(::uint64_t value) {
   _internal_set_baseline_start_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:ActivityScheduleTable.baseline_start_at_ms)
 }
 inline ::uint64_t ActivityScheduleTable::_internal_baseline_start_at_ms() const {
@@ -620,7 +724,7 @@ inline void ActivityScheduleTable::_internal_set_baseline_start_at_ms(::uint64_t
 inline void ActivityScheduleTable::clear_baseline_end_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.baseline_end_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t ActivityScheduleTable::baseline_end_at_ms() const {
   // @@protoc_insertion_point(field_get:ActivityScheduleTable.baseline_end_at_ms)
@@ -628,7 +732,7 @@ inline ::uint64_t ActivityScheduleTable::baseline_end_at_ms() const {
 }
 inline void ActivityScheduleTable::set_baseline_end_at_ms(::uint64_t value) {
   _internal_set_baseline_end_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:ActivityScheduleTable.baseline_end_at_ms)
 }
 inline ::uint64_t ActivityScheduleTable::_internal_baseline_end_at_ms() const {
@@ -638,6 +742,334 @@ inline ::uint64_t ActivityScheduleTable::_internal_baseline_end_at_ms() const {
 inline void ActivityScheduleTable::_internal_set_baseline_end_at_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.baseline_end_at_ms_ = value;
+}
+
+// string definition_key = 5;
+inline void ActivityScheduleTable::clear_definition_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.definition_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ActivityScheduleTable::definition_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ActivityScheduleTable.definition_key)
+  return _internal_definition_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ActivityScheduleTable::set_definition_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.definition_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ActivityScheduleTable.definition_key)
+}
+inline ::std::string* PROTOBUF_NONNULL ActivityScheduleTable::mutable_definition_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_definition_key();
+  // @@protoc_insertion_point(field_mutable:ActivityScheduleTable.definition_key)
+  return _s;
+}
+inline const ::std::string& ActivityScheduleTable::_internal_definition_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.definition_key_.Get();
+}
+inline void ActivityScheduleTable::_internal_set_definition_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.definition_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ActivityScheduleTable::_internal_mutable_definition_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.definition_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ActivityScheduleTable::release_definition_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ActivityScheduleTable.definition_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.definition_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.definition_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ActivityScheduleTable::set_allocated_definition_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.definition_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.definition_key_.IsDefault()) {
+    _impl_.definition_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ActivityScheduleTable.definition_key)
+}
+
+// uint64 configuration_revision = 6;
+inline void ActivityScheduleTable::clear_configuration_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.configuration_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t ActivityScheduleTable::configuration_revision() const {
+  // @@protoc_insertion_point(field_get:ActivityScheduleTable.configuration_revision)
+  return _internal_configuration_revision();
+}
+inline void ActivityScheduleTable::set_configuration_revision(::uint64_t value) {
+  _internal_set_configuration_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:ActivityScheduleTable.configuration_revision)
+}
+inline ::uint64_t ActivityScheduleTable::_internal_configuration_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.configuration_revision_;
+}
+inline void ActivityScheduleTable::_internal_set_configuration_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.configuration_revision_ = value;
+}
+
+// uint32 category = 7;
+inline void ActivityScheduleTable::clear_category() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.category_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t ActivityScheduleTable::category() const {
+  // @@protoc_insertion_point(field_get:ActivityScheduleTable.category)
+  return _internal_category();
+}
+inline void ActivityScheduleTable::set_category(::uint32_t value) {
+  _internal_set_category(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:ActivityScheduleTable.category)
+}
+inline ::uint32_t ActivityScheduleTable::_internal_category() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.category_;
+}
+inline void ActivityScheduleTable::_internal_set_category(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.category_ = value;
+}
+
+// string name = 8;
+inline void ActivityScheduleTable::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& ActivityScheduleTable::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ActivityScheduleTable.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ActivityScheduleTable::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ActivityScheduleTable.name)
+}
+inline ::std::string* PROTOBUF_NONNULL ActivityScheduleTable::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:ActivityScheduleTable.name)
+  return _s;
+}
+inline const ::std::string& ActivityScheduleTable::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void ActivityScheduleTable::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ActivityScheduleTable::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ActivityScheduleTable::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ActivityScheduleTable.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ActivityScheduleTable::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ActivityScheduleTable.name)
+}
+
+// string description = 9;
+inline void ActivityScheduleTable::clear_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.description_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& ActivityScheduleTable::description() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ActivityScheduleTable.description)
+  return _internal_description();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ActivityScheduleTable::set_description(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.description_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ActivityScheduleTable.description)
+}
+inline ::std::string* PROTOBUF_NONNULL ActivityScheduleTable::mutable_description()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_description();
+  // @@protoc_insertion_point(field_mutable:ActivityScheduleTable.description)
+  return _s;
+}
+inline const ::std::string& ActivityScheduleTable::_internal_description() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.description_.Get();
+}
+inline void ActivityScheduleTable::_internal_set_description(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.description_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ActivityScheduleTable::_internal_mutable_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.description_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ActivityScheduleTable::release_description() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ActivityScheduleTable.description)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.description_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.description_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ActivityScheduleTable::set_allocated_description(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.description_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.description_.IsDefault()) {
+    _impl_.description_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ActivityScheduleTable.description)
+}
+
+// string icon_key = 10;
+inline void ActivityScheduleTable::clear_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& ActivityScheduleTable::icon_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ActivityScheduleTable.icon_key)
+  return _internal_icon_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ActivityScheduleTable::set_icon_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.icon_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ActivityScheduleTable.icon_key)
+}
+inline ::std::string* PROTOBUF_NONNULL ActivityScheduleTable::mutable_icon_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_icon_key();
+  // @@protoc_insertion_point(field_mutable:ActivityScheduleTable.icon_key)
+  return _s;
+}
+inline const ::std::string& ActivityScheduleTable::_internal_icon_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.icon_key_.Get();
+}
+inline void ActivityScheduleTable::_internal_set_icon_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ActivityScheduleTable::_internal_mutable_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.icon_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ActivityScheduleTable::release_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ActivityScheduleTable.icon_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.icon_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.icon_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ActivityScheduleTable::set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.icon_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.icon_key_.IsDefault()) {
+    _impl_.icon_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ActivityScheduleTable.icon_key)
+}
+
+// uint32 vitality_points = 11;
+inline void ActivityScheduleTable::clear_vitality_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.vitality_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t ActivityScheduleTable::vitality_points() const {
+  // @@protoc_insertion_point(field_get:ActivityScheduleTable.vitality_points)
+  return _internal_vitality_points();
+}
+inline void ActivityScheduleTable::set_vitality_points(::uint32_t value) {
+  _internal_set_vitality_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:ActivityScheduleTable.vitality_points)
+}
+inline ::uint32_t ActivityScheduleTable::_internal_vitality_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.vitality_points_;
+}
+inline void ActivityScheduleTable::_internal_set_vitality_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.vitality_points_ = value;
 }
 
 // -------------------------------------------------------------------

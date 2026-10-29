@@ -1348,3 +1348,19 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 续批实现门槛按当前代码核对，而不是只等补测：go/db尚须让SQL拒写不推进已应用游标，以同一租约令牌原子发布缓存和提交证据，并给父快照缺失的冷加载加待落写屏障。这三项沿用`db-write-fencing-mysql.md`主线，不能在战斗来源里另造epoch。随后在PrepareBattle冻结点固定真实的个人owner/源存档版本；当前响应、玩家快照与结算均未携带该接缝，不能拿进程SaveSeq当前值或已清除last_save_seq的快照冒充。现有DataService资产SQL证明接口读取的是go/db发布到Redis的提交证据，尚不覆盖战斗结算收据，也不是独立SQL强读。全量资产应用和旧R07切换须在上述条件闭合后验收。
 
 本批最终证据封存于`build/r07-source-20261016/r07-phase-a-final-proof-20261017.json`：C++ battle节点最终串行构建及裸指针门禁通过，turn测试238/238；Go新增真实三broker→TiDB恢复1/1，核对SQL失败不提交broker位点、恢复同一原bytes及全员来源、重投幂等，另有authority、消费者、主包及build/vet证据；Java六类97/97，含11项真TiDB，0失败或未运行。9个C++/proto来源与验收快照SHA一致。首次外部合并冲突、旧rpc库链接失败及12分钟构建资源等待超时日志均保留，最终没有跳过检查。官方生成已包含客户端；本批没有新增客户端交互，未新跑Unity，客户端当前并行UI修改保留。上述证据仅完成来源归档切片，不覆盖SQL到账收据、跨区域完整故障或容量。
+
+### 2026-10-23：结算奖励按场配置，与人数无关
+
+本节替代旧 D41/D43 的逐怪奖励口径。PVE 获胜时，每位 A 方存活且未逃跑的玩家各领一份奖励；怪物仍可随队伍规模生成，任务仍记录真实击杀，但经验、货币和道具抽取次数均不乘除人数或击杀数。PVP、失败、平局、阵亡和逃跑不发这份 PVE 奖励。
+
+权威配置为 `bin/etc/battle_rewards.json`，结构由 `proto/battle/battle_data.proto` 的 `BattleRewardConfig` 定义。`profiles` 按 `battle_config_id` 与 `strategy_key` 选档：优先副本策略档、副本通用档、默认策略档、默认通用档；副本号 0、空策略为必需默认档。每档可配 `exp_gain`、`currencies`、`item_draws` 和带 `item_table_id/count/weight` 的 `random_items`。默认货币为金币 100、钻石 10、绑定钻石 20；药品 10/11 等权抽 2 次，有放回、同种汇总。经验继续沿用现有结算字段及 scene 处理口径，不新增升级系统。
+
+battle 在表加载完成后读取文件一次，支持 `BATTLE_REWARD_CONFIG_PATH` 覆盖默认 `etc/battle_rewards.json`；非法/缺失配置拒绝启动。修改文件后需重启 battle。K8s 生成器从同一文件渲染 ConfigMap，避免整个 `etc` 挂载遮蔽奖励文件。每场开局复制通用奖励档，终局 `SelectRewardStrategy(playerId)` 预留服务端按实际战斗行为选档的入口，目前返回空，不假定尚未确定的策略规则。
+
+随机道具仅在终局生成一次，使用战斗种子与玩家 ID 的固定 SplitMix64 混合生成独立 `mt19937_64`；不消费战斗行动 RNG，也不依赖玩家遍历顺序。同种子、同玩家、同配置在 1/2/5 人局的抽取结果相同。`BuildSettlement`、结果归档、outbox 重投与重连均只读冻结奖励。
+
+结算新增 `currency_gains=16`，新生产者只写该集合、`gold_gain=0`；scene 与客户端在集合非空时忽略旧金币字段，集合为空时兼容历史 `gold_gain`。scene 在任何货币入账前完整校验币种、重复、金额、必需组件及余额上溢，然后走 `CurrencySystem::AddCurrency` 保留补缴、封禁、流水和整局幂等账本。某币种业务封禁仅跳过该币，其他结算照常；非法载荷整笔保留、零入账。现有 R07 持久与来源归档边界不因此扩大。
+
+更新时须先更新 scene 与客户端，再启用新的 battle；旧 scene 只读 `gold_gain`，不能与仅写新集合的 battle 混跑。UI 对应名称为银两（Gold）、灵石（Diamond）、绑定灵石（BindDiamond）。
+
+用户明确本轮暂不处理独立 Java 玩法服务器，仅完成当前 C++/Go 服务端与客户端。验证结果在本次 `docs/PROGRESS.md` 条目及 `build/verification/battle-rewards-20261023/` 记录。

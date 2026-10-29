@@ -70,4 +70,28 @@ struct FCfgActivityScheduleRow : public FTableRowBase
 	/** UTC Unix 结束毫秒；必须晚于开始时间，结束时刻不可接取 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|ActivitySchedule")
 	int64 baseline_end_at_ms = 0;
+
+	/** 永不复用的内容身份；空值尚未配置，不可收藏。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActivitySchedule")
+	FString definition_key;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActivitySchedule")
+	int64 configuration_revision = 0;
+
+	/** PlayerActivityCategory：0未分类、1日常、2限时、3福利、4其他。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActivitySchedule")
+	int32 category = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActivitySchedule")
+	FString name;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActivitySchedule")
+	FString description;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActivitySchedule")
+	FString icon_key;
+
+	/** 每次正式任务完成贡献；没有启用活跃规则时不入账。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActivitySchedule")
+	int32 vitality_points = 0;
 };

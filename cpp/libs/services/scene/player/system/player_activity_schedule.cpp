@@ -47,7 +47,11 @@ uint32_t PlayerActivityScheduleSystem::BuildInfo(const MissionTable& mission,
         const auto startMs = schedule->baseline_start_at_ms();
         const auto endMs = schedule->baseline_end_at_ms();
         const bool emptyWindow = startMs == 0 && endMs == 0;
-        if ((!emptyWindow && (startMs == 0 || endMs <= startMs)) ||
+        // 贡献来源依赖稳定内容身份；接取前拒绝坏配置，不能开放后再吞唯一完成通知。
+        if (schedule->category() > PLAYER_ACTIVITY_CATEGORY_OTHER ||
+            (schedule->vitality_points() > 0 &&
+                (schedule->definition_key().empty() || schedule->configuration_revision() == 0)) ||
+            (!emptyWindow && (startMs == 0 || endMs <= startMs)) ||
             (schedule->enabled() && emptyWindow))
             return RejectConfiguration(out, kInvalidTableData);
     }
@@ -55,6 +59,17 @@ uint32_t PlayerActivityScheduleSystem::BuildInfo(const MissionTable& mission,
     out.set_activity_id(mission.id());
     out.set_mission_id(mission.id());
     out.set_reward_id(mission.reward_id());
+    out.set_mission_scope(0);
+    out.set_entry_kind(PLAYER_ACTIVITY_ENTRY_MISSION);
+    if (schedule != nullptr) {
+        out.set_definition_key(schedule->definition_key());
+        out.set_configuration_revision(schedule->configuration_revision());
+        out.set_category(static_cast<PlayerActivityCategory>(schedule->category()));
+        out.set_name(schedule->name());
+        out.set_description(schedule->description());
+        out.set_icon_key(schedule->icon_key());
+        out.set_vitality_points(schedule->vitality_points());
+    }
     // 合法未排期不暴露停用的旧时间，避免客户端把它显示为有效安排。
     if (schedule == nullptr || !schedule->enabled())
     {

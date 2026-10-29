@@ -40,6 +40,7 @@ type BroadcastToPlayersRequest struct {
 	//   - session_list 形态:发送方按升序填 session_list,两个列表逐项对应;
 	//   - bitmap 形态:gate 按 bit 序(= session_id 升序)遍历,第 i 个置位的
 	//     session 对应 player_list[i]。
+	//
 	// 两种形态都归结为同一条规则,不存在第二种解释。
 	// 留空 = 老发送方(灰度窗口),gate 放行不校验。
 	PlayerList    []uint64 `protobuf:"varint,5,rep,packed,name=player_list,json=playerList,proto3" json:"player_list,omitempty"`

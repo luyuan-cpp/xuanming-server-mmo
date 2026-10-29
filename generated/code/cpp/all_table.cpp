@@ -5,6 +5,8 @@
 #include "muduo/base/CountDownLatch.h"
 
 #include "activityschedule_table.h"
+#include "activityvitalityreward_table.h"
+#include "activityvitalityrule_table.h"
 #include "actoractioncombatstate_table.h"
 #include "actoractionstate_table.h"
 #include "attributeallocratio_table.h"
@@ -56,6 +58,10 @@ LoadSuccessCallback loadSuccessCallback;
 void LoadTables() {
 
     ActivityScheduleTableManager::Instance().Load();
+
+    ActivityVitalityRewardTableManager::Instance().Load();
+
+    ActivityVitalityRuleTableManager::Instance().Load();
 
     ActorActionCombatStateTableManager::Instance().Load();
 
@@ -148,6 +154,10 @@ void LoadTables() {
 
 
     ActivityScheduleTableManager::Instance().LoadSuccess();
+
+    ActivityVitalityRewardTableManager::Instance().LoadSuccess();
+
+    ActivityVitalityRuleTableManager::Instance().LoadSuccess();
 
     ActorActionCombatStateTableManager::Instance().LoadSuccess();
 
@@ -244,7 +254,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(45);
+    static muduo::CountDownLatch latch(47);
 
     std::thread ActivityScheduleLoadThread([]() {
         void InitThreadLocalConfig();
@@ -253,6 +263,22 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     ActivityScheduleLoadThread.detach();
+
+    std::thread ActivityVitalityRewardLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        ActivityVitalityRewardTableManager::Instance().Load();
+        latch.countDown();
+    });
+    ActivityVitalityRewardLoadThread.detach();
+
+    std::thread ActivityVitalityRuleLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        ActivityVitalityRuleTableManager::Instance().Load();
+        latch.countDown();
+    });
+    ActivityVitalityRuleLoadThread.detach();
 
     std::thread ActorActionCombatStateLoadThread([]() {
         void InitThreadLocalConfig();
@@ -610,6 +636,10 @@ void LoadTablesAsync() {
 
 
     ActivityScheduleTableManager::Instance().LoadSuccess();
+
+    ActivityVitalityRewardTableManager::Instance().LoadSuccess();
+
+    ActivityVitalityRuleTableManager::Instance().LoadSuccess();
 
     ActorActionCombatStateTableManager::Instance().LoadSuccess();
 

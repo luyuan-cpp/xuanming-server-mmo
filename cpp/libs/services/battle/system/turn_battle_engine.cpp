@@ -3,13 +3,15 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 
-#include "data/table_battle_data_provider.h"
 #include "system/battle_result_activity.h"
 #include "system/combat_damage_rules.h"
+#include "modules/currency/constants/currency.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
@@ -21,7 +23,7 @@
 // 差异点:
 //   1. 一切时间维度换算为回合(RoundsFrom*,kRoundDurationMs=6000),无任何 timer;
 //   2. 去掉 casting/recovery/channel 相位与对应校验(CheckCasting/CheckRecovery/CheckChannel);
-//   3. 所有随机只走成员 RNG(mt19937_64(seed)),禁 tlsRandom/rand();
+//   3. 战斗随机走成员 RNG，奖励随机按种子与玩家号独立派生，禁 tlsRandom/rand();
 //   4. 引擎内不打日志(纯逻辑库,校验失败以错误码/静默降级表达,由 battle 节点记日志);
 //      唯一例外:Initialize 建房参数违规打 ERROR(编排层错误须运维可见,设计文档 §11 D14)。
 
@@ -95,9 +97,25 @@ double HealthRatio(const BattleActorState& actor) {
     return static_cast<double>(actor.attributes().health()) / static_cast<double>(actor.max_health());
 }
 
-}  // namespace
+// 固定的 SplitMix64 混合，不依赖 std::hash 或平台实现；同种子同玩家不受队伍、回合或击杀数影响。
+uint64_t MixRewardSeed(uint64_t value) {
+    value += UINT64_C(0x9e3779b97f4a7c15);
+    value = (value ^ (value >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+    value = (value ^ (value >> 27)) * UINT64_C(0x94d049bb133111eb);
+    return value ^ (value >> 31);
+}
 
-TurnBattleEngine::TurnBattleEngine() : TurnBattleEngine(MakeTableBattleDataProvider()) {}
+uint64_t RewardRandomIndex(std::mt19937_64& rewardRng, uint64_t count) {
+    // 拒绝取模偏差，算法与随机消费顺序跨平台固定；count 已由奖励档校验保证非零。
+    const uint64_t threshold = (uint64_t{0} - count) % count;
+    uint64_t value = 0;
+    do {
+        value = rewardRng();
+    } while (value < threshold);
+    return value % count;
+}
+
+}  // namespace
 
 TurnBattleEngine::TurnBattleEngine(std::shared_ptr<BattleDataProvider> provider)
     : dataProvider(std::move(provider)) {}
@@ -156,8 +174,13 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
 
     const bool isPve =
         request.match_mode() == kMatchModePveSolo || request.match_mode() == kMatchModePveTeam;
-    if (isPve && !InitMonsters(request)) {
-        return false;
+    if (isPve) {
+        const auto* rewardProfile = dataProvider->FindBattleReward(request.battle_config_id(), "");
+        if (rewardProfile == nullptr || !rewardProfile->strategy_key().empty() ||
+            !IsValidRewardProfile(*rewardProfile) || !InitMonsters(request)) {
+            return false;
+        }
+        defaultRewardProfile = *rewardProfile;
     }
 
     // 两侧都必须有单位,否则开局即无意义(PVP 快照分边错误也在此兜住)
@@ -178,6 +201,34 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     }
 
     initialized = true;
+    return true;
+}
+
+bool TurnBattleEngine::IsValidRewardProfile(const BattleRewardProfile& profile) const {
+    // Provider 边界也兜住坏数据，避免测试替身或新数据源绕过生产加载校验后溢出或无界抽取。
+    if (profile.strategy_key().size() > 64 || profile.item_draws() > 100 ||
+        profile.random_items_size() > 256 ||
+        (profile.item_draws() > 0 && profile.random_items_size() == 0)) {
+        return false;
+    }
+    std::set<uint32_t> currencyTypes;
+    for (const auto& currency : profile.currencies()) {
+        if (currency.currency_type() >= kCurrencyMax ||
+            currency.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
+            !currencyTypes.insert(currency.currency_type()).second) {
+            return false;
+        }
+    }
+    std::set<uint32_t> itemIds;
+    for (const auto& item : profile.random_items()) {
+        const auto* row = dataProvider->FindItem(item.item_table_id());
+        if (item.item_table_id() == 0 || row == nullptr || row->max_stack_size() == 0 ||
+            item.count() == 0 || item.weight() == 0 ||
+            !itemIds.insert(item.item_table_id()).second ||
+            static_cast<uint64_t>(item.count()) * profile.item_draws() > UINT32_MAX) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -789,9 +840,8 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
     // 6. 胜负判定(含 max_rounds 打满进攻方判负)
     UpdateOutcome();
 
-    // 7. 掉落掷点:只在刚判出玩家方获胜时摇一次。放在这里(而不是逐怪死亡时)是因为
-    //    此后不再有任何战斗随机消费,同种子回放基线不被平移
-    RollDrops();
+    // 7. 终局奖励只生成一次，固定额度与独立随机结果写进结算账本供重复读取。
+    RollRewards();
 
     pendingActions.clear();
     if (outcome == BATTLE_OUTCOME_ONGOING) {
@@ -1810,51 +1860,55 @@ void TurnBattleEngine::UpdateOutcome() {
     }
 }
 
-void TurnBattleEngine::RollDrops() {
-    // 只有玩家方(team 0)真正打赢才掉落;平局/打满回合/被团灭都不掉。
-    if (outcome != BATTLE_OUTCOME_SIDE_A_WIN || defeatedMonsters.empty()) {
+std::string TurnBattleEngine::SelectRewardStrategy(uint64_t playerId) const {
+    // 尚未确定战斗策略识别规则，当前所有玩家均选通用档。
+    (void)playerId;
+    return {};
+}
+
+void TurnBattleEngine::RollRewards() {
+    if (!IsPveMatch() || outcome != BATTLE_OUTCOME_SIDE_A_WIN) {
         return;
     }
-    // 遍历序必须固定:settlements 是 std::map(player_id 升序),defeatedMonsters 是击杀序,
-    // drop 槽按表内顺序。三层都确定 → 同种子同战斗必然掉出同样的东西。
     for (auto& [playerId, settlement] : settlements) {
         const auto* actor = FindActor(playerId);
-        // 发奖条件与经验/金币完全一致(BuildSettlement):玩家方、未逃跑、未阵亡
-        if (actor == nullptr || actor->team_index() != 0 || actor->fled() || actor->is_dead()) {
+        if (actor == nullptr || actor->team_index() != 0 || !IsActorActive(*actor)) {
             continue;
         }
-        for (const auto& defeat : defeatedMonsters) {
-            const auto* monsterRow = dataProvider->FindMonster(defeat.monster_config_id());
-            if (monsterRow == nullptr) {
-                continue;
+        BattleRewardProfile profile = defaultRewardProfile;
+        const auto strategyKey = SelectRewardStrategy(playerId);
+        if (!strategyKey.empty()) {
+            const auto* selected = dataProvider->FindBattleReward(createRequest.battle_config_id(), strategyKey);
+            // 找不到策略档时使用开局冻结的通用档，不重新读取可能已改变的通用配置。
+            if (selected != nullptr && selected->strategy_key() == strategyKey && IsValidRewardProfile(*selected)) {
+                profile = *selected;
             }
-            // defeatedMonsters 每条恒为一次击杀(HandleDeath 逐只 emplace,count 固定写 1),
-            // count 字段只为协议兼容保留。这里不按 count 放大,与 BuildSettlement 的
-            // 经验/金币聚合口径保持一致 —— 两处口径分叉会让"掉落比经验多算一份"。
-            for (const auto& drop : monsterRow->drop()) {
-                // 坏表判定:三列缺一即空槽(导表器允许整槽留空)
-                if (drop.drop_item() == 0 || drop.drop_count() == 0 || drop.drop_rate() == 0) {
-                    continue;
+        }
+        settlement.set_exp_gain(profile.exp_gain());
+        settlement.set_gold_gain(0);
+        *settlement.mutable_currency_gains() = profile.currencies();
+
+        uint64_t totalWeight = 0;
+        for (const auto& item : profile.random_items()) {
+            totalWeight += item.weight();
+        }
+        std::mt19937_64 rewardRng(MixRewardSeed(createRequest.seed() ^ MixRewardSeed(playerId)));
+        // 有放回抽取；先按物品号汇总，输出次序不依赖被抽中的先后。
+        std::map<uint32_t, uint32_t> itemCounts;
+        for (uint32_t draw = 0; draw < profile.item_draws(); ++draw) {
+            uint64_t roll = RewardRandomIndex(rewardRng, totalWeight);
+            for (const auto& item : profile.random_items()) {
+                if (roll < item.weight()) {
+                    itemCounts[item.item_table_id()] += item.count();
+                    break;
                 }
-                // 每人、每只、每槽各掷一次:组队 PVE 里每个合格成员独立得掉落,
-                // 与经验/金币"人人全额"的口径一致,不做分赃
-                if (Rand01() * static_cast<double>(kDropRateDenominator) >=
-                    static_cast<double>(drop.drop_rate())) {
-                    continue;
-                }
-                BattleItemEntry* gained = nullptr;
-                for (auto& entry : *settlement.mutable_items_gained()) {
-                    if (entry.item_table_id() == drop.drop_item()) {
-                        gained = &entry;
-                        break;
-                    }
-                }
-                if (gained == nullptr) {
-                    gained = settlement.add_items_gained();
-                    gained->set_item_table_id(drop.drop_item());
-                }
-                gained->set_count(gained->count() + drop.drop_count());
+                roll -= item.weight();
             }
+        }
+        for (const auto& [itemId, count] : itemCounts) {
+            auto* entry = settlement.add_items_gained();
+            entry->set_item_table_id(itemId);
+            entry->set_count(count);
         }
     }
 }
@@ -2288,26 +2342,12 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         petSettlement->set_is_dead(other.is_dead());
     }
 
-    // 奖励:仅在玩家侧(A 方=team 0)获胜时结算,给未逃跑的存活参战者。
-    // 经验/金币 = 本场被击杀怪物 MonsterTable.exp_reward/gold_reward 之和;
-    // 队伍 PVE 每个达成条件的成员各得全额(经典 MMO 组队口径)。
-    // 逃跑或阵亡的玩家不发奖(与 RollDrops 的发奖条件逐条同源)。掉落 items_gained 由
-    // RollDrops 在终局一次性摇定并写进 settlements,这里只原样带出 —— 本函数必须保持
-    // const 且可重复读(节点 outbox 会重投、重复读同一份结算)。
-    if (outcome == BATTLE_OUTCOME_SIDE_A_WIN && actor->team_index() == 0 &&
-        !actor->fled() && !actor->is_dead()) {
-        uint64_t expSum = 0;
-        uint64_t goldSum = 0;
+    // 奖励已由 RollRewards 终局冻结；这里只带出实际击杀事实，读取结算不查配置、不掷随机。
+    if (IsPveMatch() && outcome == BATTLE_OUTCOME_SIDE_A_WIN && actor->team_index() == 0 &&
+        IsActorActive(*actor)) {
         for (const auto& defeat : defeatedMonsters) {
             *settlement.add_defeated_monsters() = defeat;
-            const MonsterTable* row = dataProvider->FindMonster(defeat.monster_config_id());
-            if (row != nullptr) {
-                expSum += row->exp_reward();
-                goldSum += row->gold_reward();
-            }
         }
-        settlement.set_exp_gain(expSum);
-        settlement.set_gold_gain(goldSum);
     }
     return settlement;
 }

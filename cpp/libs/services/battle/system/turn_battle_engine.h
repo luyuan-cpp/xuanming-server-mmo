@@ -2,12 +2,13 @@
 #include <map>
 #include <memory>
 #include <random>
+#include <string>
 #include <vector>
 
 // 回合制战斗确定性引擎(设计文档 §5.1)。
 //
 // 纯逻辑库:零网络/零 ECS/零 timer 依赖。输入 = 快照 + 指令流 + 随机种子,
-// 输出纯函数;所有随机只走成员 RNG(std::mt19937_64(seed)),
+// 输出纯函数;战斗随机走成员 RNG(std::mt19937_64(seed)),奖励使用种子与玩家号派生的独立 RNG,
 // 相同输入必产出逐字节相同的事件流(观战/回放/断线重连依赖,宪法 §7 新增不变量 5)。
 //
 // 依赖的 proto 产物(proto/battle/*.proto 重生成后落到 generated/proto/battle/ 下,
@@ -27,10 +28,7 @@ namespace turnbattle {
 
 class TurnBattleEngine {
 public:
-    // 默认构造:生产环境,数据源为全局表管理器
-    TurnBattleEngine();
-
-    // 注入构造:单测用,喂内存数据源,隔离 Excel 依赖
+    // 数据源显式注入：生产使用开局前已加载配置的表数据源，单测使用内存数据源。
     explicit TurnBattleEngine(std::shared_ptr<BattleDataProvider> dataProvider);
 
     // 快照 + 怪物侧 + 配置初始化;返回是否合法
@@ -95,6 +93,7 @@ private:
 
     bool InitPlayers(const CreateBattleRequest& request);
     bool InitMonsters(const CreateBattleRequest& request);
+    bool IsValidRewardProfile(const BattleRewardProfile& profile) const;
     // 出战宝宝:与主人同队的独立行动单位(player-pet.md §5)。
     // 无客户端行动权(SubmitAction 只收 PLAYER),每回合由 FillDefaultActions 选可用技能或普攻,
     // 因此不进 AllPlayersReady 的就绪判定 —— 带宝宝不会拖慢任何一个回合。
@@ -201,10 +200,10 @@ private:
                                  const BuffTable& buffRow, TurnResultS2C& result);
     void DecayCooldowns();
     void UpdateOutcome();
-    // 掉落掷点:只在 outcome 刚判定为玩家方获胜时调用一次,写进 settlements[].items_gained。
-    // 放在终局而不是逐怪死亡时,是为了不把随机消费插进战斗中段、平移既有同种子回放基线。
-    // 遍历序固定:settlements(map 升序) × defeatedMonsters(击杀序) × MonsterTable.drop 槽序。
-    void RollDrops();
+    // 终局一次性冻结每人的配置奖励；数量不随人数或击杀数变化，奖励随机不消费战斗 RNG。
+    void RollRewards();
+    // 服务端策略识别入口：当前返回空通用档，未来可根据该玩家的实际战斗行为选策略键。
+    std::string SelectRewardStrategy(uint64_t playerId) const;
     // 快照带入的 buff 清洗(G5):丢掉表缺失/控制类/瞬时类条目,把 caster_id 从
     // scene 的 entt 整数域改写到局内 actor_id 域(认不出来的一律置 0)。
     void SanitizeSnapshotBuffs(BattleActorState& actor);
@@ -303,6 +302,7 @@ private:
 
     // 引擎状态全部用 proto 消息承载(宪法 §3:不手写与 proto 重复的并行 struct)
     CreateBattleRequest createRequest;                    // 开局请求副本(种子/模式/配置)
+    BattleRewardProfile defaultRewardProfile;             // PVE 开局冻结的通用奖励档
     std::vector<BattleMonsterDefeat> defeatedMonsters;    // 按实际死亡转移顺序记录玩家方击杀，不能按阵位重建
     std::vector<BattleActorState> actors;                 // 全部战斗单位,插入序稳定
     std::map<uint64_t, BattleAction> pendingActions;      // actor_id → 本回合行动(有序容器保确定性)

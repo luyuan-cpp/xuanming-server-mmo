@@ -752,6 +752,346 @@
    "id": 2403,
    "max_stack_size": 999,
    "name": "迅捷宝石·三级"
+  },
+  {
+   "affix_pool": 1,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 220
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "10级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 10,
+   "icon_key": "UI/qdao_v3/icons_weapon/012_peachwood_sword",
+   "id": 1110,
+   "max_stack_size": 1,
+   "name": "青铜剑"
+  },
+  {
+   "affix_pool": 1,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 620
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "30级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 30,
+   "icon_key": "UI/qdao_v3/icons_weapon/007_flying_sword",
+   "id": 1130,
+   "max_stack_size": 1,
+   "name": "玄铁剑"
+  },
+  {
+   "affix_pool": 1,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 1020
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "50级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 50,
+   "icon_key": "UI/qdao_v3/icons_weapon/001_daoist_saber",
+   "id": 1150,
+   "max_stack_size": 1,
+   "name": "龙纹剑"
+  },
+  {
+   "affix_pool": 1,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 1420
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "70级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 70,
+   "icon_key": "UI/qdao_v3/icons_weapon/074_lu_dongbin_immortal_sword",
+   "id": 1170,
+   "max_stack_size": 1,
+   "name": "星陨剑"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 66
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "10级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 10,
+   "id": 1210,
+   "max_stack_size": 1,
+   "name": "青纹冠"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 186
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "30级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 30,
+   "id": 1230,
+   "max_stack_size": 1,
+   "name": "玄铁盔"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 306
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "50级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 50,
+   "id": 1250,
+   "max_stack_size": 1,
+   "name": "龙纹盔"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 426
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "70级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 70,
+   "id": 1270,
+   "max_stack_size": 1,
+   "name": "星陨冠"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 132
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "10级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 10,
+   "id": 1310,
+   "max_stack_size": 1,
+   "name": "青纹袍"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 372
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "30级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 30,
+   "id": 1330,
+   "max_stack_size": 1,
+   "name": "玄铁甲"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 612
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "50级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 50,
+   "id": 1350,
+   "max_stack_size": 1,
+   "name": "龙纹甲"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 852
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "70级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 70,
+   "id": 1370,
+   "max_stack_size": 1,
+   "name": "星陨袍"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 66
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 48
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "10级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 10,
+   "id": 1410,
+   "max_stack_size": 1,
+   "name": "青纹靴"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 186
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 128
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "30级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 30,
+   "id": 1430,
+   "max_stack_size": 1,
+   "name": "玄铁靴"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 306
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 208
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "50级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 50,
+   "id": 1450,
+   "max_stack_size": 1,
+   "name": "龙纹靴"
+  },
+  {
+   "affix_pool": 2,
+   "affix_rule": 1,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 426
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 288
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "70级装备，提供本部位基础属性。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 70,
+   "id": 1470,
+   "max_stack_size": 1,
+   "name": "星陨靴"
   }
  ]
 }

@@ -170,6 +170,7 @@ SkillTable& AddLegacySkill(MemoryBattleDataProvider& provider, uint32_t skillId)
 
 std::shared_ptr<MemoryBattleDataProvider> MakeClassProvider() {
     auto provider = std::make_shared<MemoryBattleDataProvider>();
+    provider->AddBattleReward(0); // 职业技能测试显式使用无奖通用档，隔离奖励数值。
 
     auto& strike = AddClassSkill(*provider, kStrike, TargetTeam::kEnemy, 1);
     strike.set_damage_type(combatdamage::kPhysicalDamage);

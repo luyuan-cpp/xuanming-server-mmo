@@ -45,14 +45,18 @@ public final class ActivityScheduleTableOuterClass extends com.google.protobuf.G
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\034activityschedule_table.proto\"n\n\025Activi" +
-      "tyScheduleTable\022\n\n\002id\030\001 \001(\r\022\017\n\007enabled\030\002" +
-      " \001(\010\022\034\n\024baseline_start_at_ms\030\003 \001(\004\022\032\n\022ba" +
-      "seline_end_at_ms\030\004 \001(\004\"A\n\031ActivitySchedu" +
-      "leTableData\022$\n\004data\030\001 \003(\0132\026.ActivitySche" +
-      "duleTableBG\n\016com.game.tableB\037ActivitySch" +
-      "eduleTableOuterClassP\001Z\022generated/pb/tab" +
-      "leb\006proto3"
+      "\n\034activityschedule_table.proto\"\206\002\n\025Activ" +
+      "ityScheduleTable\022\n\n\002id\030\001 \001(\r\022\017\n\007enabled\030" +
+      "\002 \001(\010\022\034\n\024baseline_start_at_ms\030\003 \001(\004\022\032\n\022b" +
+      "aseline_end_at_ms\030\004 \001(\004\022\026\n\016definition_ke" +
+      "y\030\005 \001(\t\022\036\n\026configuration_revision\030\006 \001(\004\022" +
+      "\020\n\010category\030\007 \001(\r\022\014\n\004name\030\010 \001(\t\022\023\n\013descr" +
+      "iption\030\t \001(\t\022\020\n\010icon_key\030\n \001(\t\022\027\n\017vitali" +
+      "ty_points\030\013 \001(\r\"A\n\031ActivityScheduleTable" +
+      "Data\022$\n\004data\030\001 \003(\0132\026.ActivityScheduleTab" +
+      "leBG\n\016com.game.tableB\037ActivityScheduleTa" +
+      "bleOuterClassP\001Z\022generated/pb/tableb\006pro" +
+      "to3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -63,7 +67,7 @@ public final class ActivityScheduleTableOuterClass extends com.google.protobuf.G
     internal_static_ActivityScheduleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ActivityScheduleTable_descriptor,
-        new java.lang.String[] { "Id", "Enabled", "BaselineStartAtMs", "BaselineEndAtMs", });
+        new java.lang.String[] { "Id", "Enabled", "BaselineStartAtMs", "BaselineEndAtMs", "DefinitionKey", "ConfigurationRevision", "Category", "Name", "Description", "IconKey", "VitalityPoints", });
     internal_static_ActivityScheduleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_ActivityScheduleTableData_fieldAccessorTable = new

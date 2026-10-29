@@ -215,6 +215,32 @@ message BattleMonsterDefeat {
   uint32 count = 2;
 }
 
+// 货币类型沿用 CurrencyType：0 金币、1 钻石、2 绑定钻石。
+message BattleCurrencyGain {
+  uint32 currency_type = 1;
+  uint64 amount = 2;
+}
+
+// 每场、每名合格玩家的奖励，不乘人数或击杀数。
+message BattleRandomItemReward {
+  uint32 item_table_id = 1;
+  uint32 count = 2;
+  uint32 weight = 3;
+}
+
+message BattleRewardProfile {
+  uint32 battle_config_id = 1; // 0 为未单独配置副本的默认档。
+  string strategy_key = 2; // 空为通用档；由服务端战斗策略识别入口选择。
+  uint64 exp_gain = 3;
+  repeated BattleCurrencyGain currencies = 4;
+  uint32 item_draws = 5; // 每人固定抽取次数，有放回抽取。
+  repeated BattleRandomItemReward random_items = 6;
+}
+
+message BattleRewardConfig {
+  repeated BattleRewardProfile profiles = 1;
+}
+
 message BattleSettlementData {
   uint64 battle_id = 1;
   uint64 player_id = 2;
@@ -232,6 +258,8 @@ message BattleSettlementData {
   repeated BattlePetSettlementData pets = 14;  // 该玩家出战宝宝的战后终值(scene 回写实例)
   // battle 根据真实阵亡怪物生成，scene 用于任务进度；客户端不能上报。
   repeated BattleMonsterDefeat defeated_monsters = 15;
+  // 新结算仅填此集合；非空时忽略旧 gold_gain，历史空集合仍读 gold_gain。
+  repeated BattleCurrencyGain currency_gains = 16;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----

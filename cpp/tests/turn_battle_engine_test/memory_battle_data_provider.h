@@ -1,5 +1,6 @@
 #pragma once
 #include <map>
+#include <string>
 #include <vector>
 
 #include "data/battle_data_provider.h"
@@ -38,6 +39,15 @@ public:
         row.set_id(dungeonTableId);
         return row;
     }
+
+    BattleRewardProfile& AddBattleReward(uint32_t battleConfigId, const std::string& strategyKey = "") {
+        auto& row = rewardProfiles[{battleConfigId, strategyKey}];
+        row.set_battle_config_id(battleConfigId);
+        row.set_strategy_key(strategyKey);
+        return row;
+    }
+
+    void ClearBattleRewards() { rewardProfiles.clear(); }
 
     MonsterTable& AddMonster(uint32_t monsterTableId) {
         auto& row = monsterRows[monsterTableId];
@@ -112,6 +122,17 @@ public:
         return it == dungeonRows.end() ? nullptr : &it->second;
     }
 
+    const BattleRewardProfile* FindBattleReward(uint32_t battleConfigId,
+                                               const std::string& strategyKey) const override {
+        for (const auto& key : {std::make_pair(battleConfigId, strategyKey),
+                               std::make_pair(battleConfigId, std::string{}),
+                               std::make_pair(0u, strategyKey), std::make_pair(0u, std::string{})}) {
+            const auto it = rewardProfiles.find(key);
+            if (it != rewardProfiles.end()) return &it->second;
+        }
+        return nullptr;
+    }
+
     const MonsterTable* FindMonster(uint32_t monsterTableId) const override {
         const auto it = monsterRows.find(monsterTableId);
         return it == monsterRows.end() ? nullptr : &it->second;
@@ -166,6 +187,7 @@ private:
     std::map<uint32_t, BuffTable> buffRows;
     std::map<uint32_t, SkillPermissionTable> permissionRows;
     std::map<uint32_t, DungeonTable> dungeonRows;
+    std::map<std::pair<uint32_t, std::string>, BattleRewardProfile> rewardProfiles;
     std::map<uint32_t, MonsterTable> monsterRows;
     std::map<uint32_t, ItemTable> itemRows;
     std::map<uint32_t, uint64_t> cooldownDurations;

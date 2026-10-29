@@ -75,6 +75,239 @@ func (PlayerActivityStatus) EnumDescriptor() ([]byte, []int) {
 	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{0}
 }
 
+type PlayerActivityCategory int32
+
+const (
+	PlayerActivityCategory_PLAYER_ACTIVITY_CATEGORY_UNSPECIFIED PlayerActivityCategory = 0
+	PlayerActivityCategory_PLAYER_ACTIVITY_CATEGORY_DAILY       PlayerActivityCategory = 1
+	PlayerActivityCategory_PLAYER_ACTIVITY_CATEGORY_LIMITED     PlayerActivityCategory = 2
+	PlayerActivityCategory_PLAYER_ACTIVITY_CATEGORY_BENEFIT     PlayerActivityCategory = 3
+	PlayerActivityCategory_PLAYER_ACTIVITY_CATEGORY_OTHER       PlayerActivityCategory = 4
+)
+
+// Enum value maps for PlayerActivityCategory.
+var (
+	PlayerActivityCategory_name = map[int32]string{
+		0: "PLAYER_ACTIVITY_CATEGORY_UNSPECIFIED",
+		1: "PLAYER_ACTIVITY_CATEGORY_DAILY",
+		2: "PLAYER_ACTIVITY_CATEGORY_LIMITED",
+		3: "PLAYER_ACTIVITY_CATEGORY_BENEFIT",
+		4: "PLAYER_ACTIVITY_CATEGORY_OTHER",
+	}
+	PlayerActivityCategory_value = map[string]int32{
+		"PLAYER_ACTIVITY_CATEGORY_UNSPECIFIED": 0,
+		"PLAYER_ACTIVITY_CATEGORY_DAILY":       1,
+		"PLAYER_ACTIVITY_CATEGORY_LIMITED":     2,
+		"PLAYER_ACTIVITY_CATEGORY_BENEFIT":     3,
+		"PLAYER_ACTIVITY_CATEGORY_OTHER":       4,
+	}
+)
+
+func (x PlayerActivityCategory) Enum() *PlayerActivityCategory {
+	p := new(PlayerActivityCategory)
+	*p = x
+	return p
+}
+
+func (x PlayerActivityCategory) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PlayerActivityCategory) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_activity_proto_enumTypes[1].Descriptor()
+}
+
+func (PlayerActivityCategory) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_activity_proto_enumTypes[1]
+}
+
+func (x PlayerActivityCategory) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PlayerActivityCategory.Descriptor instead.
+func (PlayerActivityCategory) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{1}
+}
+
+type PlayerActivityRewardType int32
+
+const (
+	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_UNSPECIFIED PlayerActivityRewardType = 0
+	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_EXPERIENCE  PlayerActivityRewardType = 1
+	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_TAO         PlayerActivityRewardType = 2
+	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_ITEM        PlayerActivityRewardType = 3
+	PlayerActivityRewardType_PLAYER_ACTIVITY_REWARD_EQUIPMENT   PlayerActivityRewardType = 4
+)
+
+// Enum value maps for PlayerActivityRewardType.
+var (
+	PlayerActivityRewardType_name = map[int32]string{
+		0: "PLAYER_ACTIVITY_REWARD_UNSPECIFIED",
+		1: "PLAYER_ACTIVITY_REWARD_EXPERIENCE",
+		2: "PLAYER_ACTIVITY_REWARD_TAO",
+		3: "PLAYER_ACTIVITY_REWARD_ITEM",
+		4: "PLAYER_ACTIVITY_REWARD_EQUIPMENT",
+	}
+	PlayerActivityRewardType_value = map[string]int32{
+		"PLAYER_ACTIVITY_REWARD_UNSPECIFIED": 0,
+		"PLAYER_ACTIVITY_REWARD_EXPERIENCE":  1,
+		"PLAYER_ACTIVITY_REWARD_TAO":         2,
+		"PLAYER_ACTIVITY_REWARD_ITEM":        3,
+		"PLAYER_ACTIVITY_REWARD_EQUIPMENT":   4,
+	}
+)
+
+func (x PlayerActivityRewardType) Enum() *PlayerActivityRewardType {
+	p := new(PlayerActivityRewardType)
+	*p = x
+	return p
+}
+
+func (x PlayerActivityRewardType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PlayerActivityRewardType) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_activity_proto_enumTypes[2].Descriptor()
+}
+
+func (PlayerActivityRewardType) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_activity_proto_enumTypes[2]
+}
+
+func (x PlayerActivityRewardType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PlayerActivityRewardType.Descriptor instead.
+func (PlayerActivityRewardType) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{2}
+}
+
+type PlayerActivityEntryKind int32
+
+const (
+	PlayerActivityEntryKind_PLAYER_ACTIVITY_ENTRY_UNSPECIFIED PlayerActivityEntryKind = 0
+	PlayerActivityEntryKind_PLAYER_ACTIVITY_ENTRY_MISSION     PlayerActivityEntryKind = 1
+)
+
+// Enum value maps for PlayerActivityEntryKind.
+var (
+	PlayerActivityEntryKind_name = map[int32]string{
+		0: "PLAYER_ACTIVITY_ENTRY_UNSPECIFIED",
+		1: "PLAYER_ACTIVITY_ENTRY_MISSION",
+	}
+	PlayerActivityEntryKind_value = map[string]int32{
+		"PLAYER_ACTIVITY_ENTRY_UNSPECIFIED": 0,
+		"PLAYER_ACTIVITY_ENTRY_MISSION":     1,
+	}
+)
+
+func (x PlayerActivityEntryKind) Enum() *PlayerActivityEntryKind {
+	p := new(PlayerActivityEntryKind)
+	*p = x
+	return p
+}
+
+func (x PlayerActivityEntryKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PlayerActivityEntryKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_activity_proto_enumTypes[3].Descriptor()
+}
+
+func (PlayerActivityEntryKind) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_activity_proto_enumTypes[3]
+}
+
+func (x PlayerActivityEntryKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PlayerActivityEntryKind.Descriptor instead.
+func (PlayerActivityEntryKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{3}
+}
+
+type PlayerActivityRewardItem struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ItemConfigId uint32                 `protobuf:"varint,1,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	Count        uint64                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Name         string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	IconKey      string                 `protobuf:"bytes,4,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
+	// 未提供绑定语义时留空，不能从图标推断。
+	BindingDescription string `protobuf:"bytes,5,opt,name=binding_description,json=bindingDescription,proto3" json:"binding_description,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *PlayerActivityRewardItem) Reset() {
+	*x = PlayerActivityRewardItem{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerActivityRewardItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerActivityRewardItem) ProtoMessage() {}
+
+func (x *PlayerActivityRewardItem) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerActivityRewardItem.ProtoReflect.Descriptor instead.
+func (*PlayerActivityRewardItem) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *PlayerActivityRewardItem) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *PlayerActivityRewardItem) GetCount() uint64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *PlayerActivityRewardItem) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PlayerActivityRewardItem) GetIconKey() string {
+	if x != nil {
+		return x.IconKey
+	}
+	return ""
+}
+
+func (x *PlayerActivityRewardItem) GetBindingDescription() string {
+	if x != nil {
+		return x.BindingDescription
+	}
+	return ""
+}
+
 type PlayerActivityInfo struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	ActivityId        uint32                 `protobuf:"varint,1,opt,name=activity_id,json=activityId,proto3" json:"activity_id,omitempty"`
@@ -88,13 +321,26 @@ type PlayerActivityInfo struct {
 	CanParticipate    bool                   `protobuf:"varint,9,opt,name=can_participate,json=canParticipate,proto3" json:"can_participate,omitempty"`
 	UnavailableReason string                 `protobuf:"bytes,10,opt,name=unavailable_reason,json=unavailableReason,proto3" json:"unavailable_reason,omitempty"`
 	RewardId          uint32                 `protobuf:"varint,11,opt,name=reward_id,json=rewardId,proto3" json:"reward_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// definition_key 是不可复用的内容身份；配置未补齐时空值禁止收藏。
+	DefinitionKey         string                      `protobuf:"bytes,12,opt,name=definition_key,json=definitionKey,proto3" json:"definition_key,omitempty"`
+	ConfigurationRevision uint64                      `protobuf:"varint,13,opt,name=configuration_revision,json=configurationRevision,proto3" json:"configuration_revision,omitempty"`
+	Category              PlayerActivityCategory      `protobuf:"varint,14,opt,name=category,proto3,enum=PlayerActivityCategory" json:"category,omitempty"`
+	RewardTypes           []PlayerActivityRewardType  `protobuf:"varint,15,rep,packed,name=reward_types,json=rewardTypes,proto3,enum=PlayerActivityRewardType" json:"reward_types,omitempty"`
+	EntryKind             PlayerActivityEntryKind     `protobuf:"varint,16,opt,name=entry_kind,json=entryKind,proto3,enum=PlayerActivityEntryKind" json:"entry_kind,omitempty"`
+	MissionScope          uint32                      `protobuf:"varint,17,opt,name=mission_scope,json=missionScope,proto3" json:"mission_scope,omitempty"`
+	CompletionCountKnown  bool                        `protobuf:"varint,18,opt,name=completion_count_known,json=completionCountKnown,proto3" json:"completion_count_known,omitempty"`
+	CompletedCount        uint32                      `protobuf:"varint,19,opt,name=completed_count,json=completedCount,proto3" json:"completed_count,omitempty"`
+	CompletionLimit       uint32                      `protobuf:"varint,20,opt,name=completion_limit,json=completionLimit,proto3" json:"completion_limit,omitempty"`
+	CompletionPeriod      string                      `protobuf:"bytes,21,opt,name=completion_period,json=completionPeriod,proto3" json:"completion_period,omitempty"`
+	VitalityPoints        uint32                      `protobuf:"varint,22,opt,name=vitality_points,json=vitalityPoints,proto3" json:"vitality_points,omitempty"`
+	Rewards               []*PlayerActivityRewardItem `protobuf:"bytes,23,rep,name=rewards,proto3" json:"rewards,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PlayerActivityInfo) Reset() {
 	*x = PlayerActivityInfo{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[0]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -106,7 +352,7 @@ func (x *PlayerActivityInfo) String() string {
 func (*PlayerActivityInfo) ProtoMessage() {}
 
 func (x *PlayerActivityInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[0]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -119,7 +365,7 @@ func (x *PlayerActivityInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerActivityInfo.ProtoReflect.Descriptor instead.
 func (*PlayerActivityInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{0}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PlayerActivityInfo) GetActivityId() uint32 {
@@ -199,6 +445,308 @@ func (x *PlayerActivityInfo) GetRewardId() uint32 {
 	return 0
 }
 
+func (x *PlayerActivityInfo) GetDefinitionKey() string {
+	if x != nil {
+		return x.DefinitionKey
+	}
+	return ""
+}
+
+func (x *PlayerActivityInfo) GetConfigurationRevision() uint64 {
+	if x != nil {
+		return x.ConfigurationRevision
+	}
+	return 0
+}
+
+func (x *PlayerActivityInfo) GetCategory() PlayerActivityCategory {
+	if x != nil {
+		return x.Category
+	}
+	return PlayerActivityCategory_PLAYER_ACTIVITY_CATEGORY_UNSPECIFIED
+}
+
+func (x *PlayerActivityInfo) GetRewardTypes() []PlayerActivityRewardType {
+	if x != nil {
+		return x.RewardTypes
+	}
+	return nil
+}
+
+func (x *PlayerActivityInfo) GetEntryKind() PlayerActivityEntryKind {
+	if x != nil {
+		return x.EntryKind
+	}
+	return PlayerActivityEntryKind_PLAYER_ACTIVITY_ENTRY_UNSPECIFIED
+}
+
+func (x *PlayerActivityInfo) GetMissionScope() uint32 {
+	if x != nil {
+		return x.MissionScope
+	}
+	return 0
+}
+
+func (x *PlayerActivityInfo) GetCompletionCountKnown() bool {
+	if x != nil {
+		return x.CompletionCountKnown
+	}
+	return false
+}
+
+func (x *PlayerActivityInfo) GetCompletedCount() uint32 {
+	if x != nil {
+		return x.CompletedCount
+	}
+	return 0
+}
+
+func (x *PlayerActivityInfo) GetCompletionLimit() uint32 {
+	if x != nil {
+		return x.CompletionLimit
+	}
+	return 0
+}
+
+func (x *PlayerActivityInfo) GetCompletionPeriod() string {
+	if x != nil {
+		return x.CompletionPeriod
+	}
+	return ""
+}
+
+func (x *PlayerActivityInfo) GetVitalityPoints() uint32 {
+	if x != nil {
+		return x.VitalityPoints
+	}
+	return 0
+}
+
+func (x *PlayerActivityInfo) GetRewards() []*PlayerActivityRewardItem {
+	if x != nil {
+		return x.Rewards
+	}
+	return nil
+}
+
+type PlayerActivityVitalityReward struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ThresholdId    uint32                 `protobuf:"varint,1,opt,name=threshold_id,json=thresholdId,proto3" json:"threshold_id,omitempty"`
+	RequiredPoints uint32                 `protobuf:"varint,2,opt,name=required_points,json=requiredPoints,proto3" json:"required_points,omitempty"`
+	RewardId       uint32                 `protobuf:"varint,3,opt,name=reward_id,json=rewardId,proto3" json:"reward_id,omitempty"`
+	CanClaim       bool                   `protobuf:"varint,4,opt,name=can_claim,json=canClaim,proto3" json:"can_claim,omitempty"`
+	Claimed        bool                   `protobuf:"varint,5,opt,name=claimed,proto3" json:"claimed,omitempty"`
+	// 只表示原父快照及可恢复投递意图已持久，不宣称 SQL 已同步提交。
+	Durable           bool                        `protobuf:"varint,6,opt,name=durable,proto3" json:"durable,omitempty"`
+	UnavailableReason string                      `protobuf:"bytes,7,opt,name=unavailable_reason,json=unavailableReason,proto3" json:"unavailable_reason,omitempty"`
+	Items             []*PlayerActivityRewardItem `protobuf:"bytes,8,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PlayerActivityVitalityReward) Reset() {
+	*x = PlayerActivityVitalityReward{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerActivityVitalityReward) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerActivityVitalityReward) ProtoMessage() {}
+
+func (x *PlayerActivityVitalityReward) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerActivityVitalityReward.ProtoReflect.Descriptor instead.
+func (*PlayerActivityVitalityReward) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PlayerActivityVitalityReward) GetThresholdId() uint32 {
+	if x != nil {
+		return x.ThresholdId
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalityReward) GetRequiredPoints() uint32 {
+	if x != nil {
+		return x.RequiredPoints
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalityReward) GetRewardId() uint32 {
+	if x != nil {
+		return x.RewardId
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalityReward) GetCanClaim() bool {
+	if x != nil {
+		return x.CanClaim
+	}
+	return false
+}
+
+func (x *PlayerActivityVitalityReward) GetClaimed() bool {
+	if x != nil {
+		return x.Claimed
+	}
+	return false
+}
+
+func (x *PlayerActivityVitalityReward) GetDurable() bool {
+	if x != nil {
+		return x.Durable
+	}
+	return false
+}
+
+func (x *PlayerActivityVitalityReward) GetUnavailableReason() string {
+	if x != nil {
+		return x.UnavailableReason
+	}
+	return ""
+}
+
+func (x *PlayerActivityVitalityReward) GetItems() []*PlayerActivityRewardItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+type PlayerActivityVitalitySnapshot struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Available             bool                   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"`
+	UnavailableReason     string                 `protobuf:"bytes,2,opt,name=unavailable_reason,json=unavailableReason,proto3" json:"unavailable_reason,omitempty"`
+	RuleId                uint32                 `protobuf:"varint,3,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	ConfigurationRevision uint64                 `protobuf:"varint,4,opt,name=configuration_revision,json=configurationRevision,proto3" json:"configuration_revision,omitempty"`
+	// 周期身份等于该 UTC 绝对周期的起点，必须连同规则身份提交。
+	PeriodId         uint64                          `protobuf:"varint,5,opt,name=period_id,json=periodId,proto3" json:"period_id,omitempty"`
+	PeriodStartsAtMs uint64                          `protobuf:"varint,6,opt,name=period_starts_at_ms,json=periodStartsAtMs,proto3" json:"period_starts_at_ms,omitempty"`
+	PeriodEndsAtMs   uint64                          `protobuf:"varint,7,opt,name=period_ends_at_ms,json=periodEndsAtMs,proto3" json:"period_ends_at_ms,omitempty"`
+	Points           uint32                          `protobuf:"varint,8,opt,name=points,proto3" json:"points,omitempty"`
+	PointsLimit      uint32                          `protobuf:"varint,9,opt,name=points_limit,json=pointsLimit,proto3" json:"points_limit,omitempty"`
+	Rewards          []*PlayerActivityVitalityReward `protobuf:"bytes,10,rep,name=rewards,proto3" json:"rewards,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *PlayerActivityVitalitySnapshot) Reset() {
+	*x = PlayerActivityVitalitySnapshot{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerActivityVitalitySnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerActivityVitalitySnapshot) ProtoMessage() {}
+
+func (x *PlayerActivityVitalitySnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerActivityVitalitySnapshot.ProtoReflect.Descriptor instead.
+func (*PlayerActivityVitalitySnapshot) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetUnavailableReason() string {
+	if x != nil {
+		return x.UnavailableReason
+	}
+	return ""
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetRuleId() uint32 {
+	if x != nil {
+		return x.RuleId
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetConfigurationRevision() uint64 {
+	if x != nil {
+		return x.ConfigurationRevision
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetPeriodId() uint64 {
+	if x != nil {
+		return x.PeriodId
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetPeriodStartsAtMs() uint64 {
+	if x != nil {
+		return x.PeriodStartsAtMs
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetPeriodEndsAtMs() uint64 {
+	if x != nil {
+		return x.PeriodEndsAtMs
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetPoints() uint32 {
+	if x != nil {
+		return x.Points
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetPointsLimit() uint32 {
+	if x != nil {
+		return x.PointsLimit
+	}
+	return 0
+}
+
+func (x *PlayerActivityVitalitySnapshot) GetRewards() []*PlayerActivityVitalityReward {
+	if x != nil {
+		return x.Rewards
+	}
+	return nil
+}
+
 type GetActivityListRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -207,7 +755,7 @@ type GetActivityListRequest struct {
 
 func (x *GetActivityListRequest) Reset() {
 	*x = GetActivityListRequest{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[1]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -219,7 +767,7 @@ func (x *GetActivityListRequest) String() string {
 func (*GetActivityListRequest) ProtoMessage() {}
 
 func (x *GetActivityListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[1]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -232,21 +780,22 @@ func (x *GetActivityListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActivityListRequest.ProtoReflect.Descriptor instead.
 func (*GetActivityListRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{1}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{4}
 }
 
 type GetActivityListResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	Activities    []*PlayerActivityInfo  `protobuf:"bytes,2,rep,name=activities,proto3" json:"activities,omitempty"`
-	ServerTimeMs  uint64                 `protobuf:"varint,3,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage            `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Activities    []*PlayerActivityInfo           `protobuf:"bytes,2,rep,name=activities,proto3" json:"activities,omitempty"`
+	ServerTimeMs  uint64                          `protobuf:"varint,3,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	Vitality      *PlayerActivityVitalitySnapshot `protobuf:"bytes,4,opt,name=vitality,proto3" json:"vitality,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetActivityListResponse) Reset() {
 	*x = GetActivityListResponse{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[2]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -258,7 +807,7 @@ func (x *GetActivityListResponse) String() string {
 func (*GetActivityListResponse) ProtoMessage() {}
 
 func (x *GetActivityListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[2]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -271,7 +820,7 @@ func (x *GetActivityListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetActivityListResponse.ProtoReflect.Descriptor instead.
 func (*GetActivityListResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{2}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetActivityListResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -295,11 +844,185 @@ func (x *GetActivityListResponse) GetServerTimeMs() uint64 {
 	return 0
 }
 
+func (x *GetActivityListResponse) GetVitality() *PlayerActivityVitalitySnapshot {
+	if x != nil {
+		return x.Vitality
+	}
+	return nil
+}
+
+type ClaimActivityVitalityRewardRequest struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	RuleId                uint32                 `protobuf:"varint,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	ConfigurationRevision uint64                 `protobuf:"varint,2,opt,name=configuration_revision,json=configurationRevision,proto3" json:"configuration_revision,omitempty"`
+	PeriodId              uint64                 `protobuf:"varint,3,opt,name=period_id,json=periodId,proto3" json:"period_id,omitempty"`
+	ThresholdId           uint32                 `protobuf:"varint,4,opt,name=threshold_id,json=thresholdId,proto3" json:"threshold_id,omitempty"`
+	// 玩家先持久化 UUID，再提交；结果未知时重放原请求，不能另造一次领取。
+	RequestId     string `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimActivityVitalityRewardRequest) Reset() {
+	*x = ClaimActivityVitalityRewardRequest{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimActivityVitalityRewardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimActivityVitalityRewardRequest) ProtoMessage() {}
+
+func (x *ClaimActivityVitalityRewardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimActivityVitalityRewardRequest.ProtoReflect.Descriptor instead.
+func (*ClaimActivityVitalityRewardRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ClaimActivityVitalityRewardRequest) GetRuleId() uint32 {
+	if x != nil {
+		return x.RuleId
+	}
+	return 0
+}
+
+func (x *ClaimActivityVitalityRewardRequest) GetConfigurationRevision() uint64 {
+	if x != nil {
+		return x.ConfigurationRevision
+	}
+	return 0
+}
+
+func (x *ClaimActivityVitalityRewardRequest) GetPeriodId() uint64 {
+	if x != nil {
+		return x.PeriodId
+	}
+	return 0
+}
+
+func (x *ClaimActivityVitalityRewardRequest) GetThresholdId() uint32 {
+	if x != nil {
+		return x.ThresholdId
+	}
+	return 0
+}
+
+func (x *ClaimActivityVitalityRewardRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type ClaimActivityVitalityRewardResponse struct {
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage            `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Snapshot      *PlayerActivityVitalitySnapshot `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	RequestId     string                          `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Claimed       bool                            `protobuf:"varint,4,opt,name=claimed,proto3" json:"claimed,omitempty"`
+	Durable       bool                            `protobuf:"varint,5,opt,name=durable,proto3" json:"durable,omitempty"`
+	Replayed      bool                            `protobuf:"varint,6,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimActivityVitalityRewardResponse) Reset() {
+	*x = ClaimActivityVitalityRewardResponse{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimActivityVitalityRewardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimActivityVitalityRewardResponse) ProtoMessage() {}
+
+func (x *ClaimActivityVitalityRewardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimActivityVitalityRewardResponse.ProtoReflect.Descriptor instead.
+func (*ClaimActivityVitalityRewardResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ClaimActivityVitalityRewardResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ClaimActivityVitalityRewardResponse) GetSnapshot() *PlayerActivityVitalitySnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
+func (x *ClaimActivityVitalityRewardResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *ClaimActivityVitalityRewardResponse) GetClaimed() bool {
+	if x != nil {
+		return x.Claimed
+	}
+	return false
+}
+
+func (x *ClaimActivityVitalityRewardResponse) GetDurable() bool {
+	if x != nil {
+		return x.Durable
+	}
+	return false
+}
+
+func (x *ClaimActivityVitalityRewardResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
 var File_proto_scene_player_activity_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\n" +
-	"!proto/scene/player_activity.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\"\x89\x03\n" +
+	"!proto/scene/player_activity.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\"\xb6\x01\n" +
+	"\x18PlayerActivityRewardItem\x12$\n" +
+	"\x0eitem_config_id\x18\x01 \x01(\rR\fitemConfigId\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x19\n" +
+	"\bicon_key\x18\x04 \x01(\tR\aiconKey\x12/\n" +
+	"\x13binding_description\x18\x05 \x01(\tR\x12bindingDescription\"\xcd\a\n" +
 	"\x12PlayerActivityInfo\x12\x1f\n" +
 	"\vactivity_id\x18\x01 \x01(\rR\n" +
 	"activityId\x12\x1d\n" +
@@ -316,21 +1039,87 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\x0fcan_participate\x18\t \x01(\bR\x0ecanParticipate\x12-\n" +
 	"\x12unavailable_reason\x18\n" +
 	" \x01(\tR\x11unavailableReason\x12\x1b\n" +
-	"\treward_id\x18\v \x01(\rR\brewardId\"\x18\n" +
-	"\x16GetActivityListRequest\"\xaa\x01\n" +
+	"\treward_id\x18\v \x01(\rR\brewardId\x12%\n" +
+	"\x0edefinition_key\x18\f \x01(\tR\rdefinitionKey\x125\n" +
+	"\x16configuration_revision\x18\r \x01(\x04R\x15configurationRevision\x123\n" +
+	"\bcategory\x18\x0e \x01(\x0e2\x17.PlayerActivityCategoryR\bcategory\x12<\n" +
+	"\freward_types\x18\x0f \x03(\x0e2\x19.PlayerActivityRewardTypeR\vrewardTypes\x127\n" +
+	"\n" +
+	"entry_kind\x18\x10 \x01(\x0e2\x18.PlayerActivityEntryKindR\tentryKind\x12#\n" +
+	"\rmission_scope\x18\x11 \x01(\rR\fmissionScope\x124\n" +
+	"\x16completion_count_known\x18\x12 \x01(\bR\x14completionCountKnown\x12'\n" +
+	"\x0fcompleted_count\x18\x13 \x01(\rR\x0ecompletedCount\x12)\n" +
+	"\x10completion_limit\x18\x14 \x01(\rR\x0fcompletionLimit\x12+\n" +
+	"\x11completion_period\x18\x15 \x01(\tR\x10completionPeriod\x12'\n" +
+	"\x0fvitality_points\x18\x16 \x01(\rR\x0evitalityPoints\x123\n" +
+	"\arewards\x18\x17 \x03(\v2\x19.PlayerActivityRewardItemR\arewards\"\xb8\x02\n" +
+	"\x1cPlayerActivityVitalityReward\x12!\n" +
+	"\fthreshold_id\x18\x01 \x01(\rR\vthresholdId\x12'\n" +
+	"\x0frequired_points\x18\x02 \x01(\rR\x0erequiredPoints\x12\x1b\n" +
+	"\treward_id\x18\x03 \x01(\rR\brewardId\x12\x1b\n" +
+	"\tcan_claim\x18\x04 \x01(\bR\bcanClaim\x12\x18\n" +
+	"\aclaimed\x18\x05 \x01(\bR\aclaimed\x12\x18\n" +
+	"\adurable\x18\x06 \x01(\bR\adurable\x12-\n" +
+	"\x12unavailable_reason\x18\a \x01(\tR\x11unavailableReason\x12/\n" +
+	"\x05items\x18\b \x03(\v2\x19.PlayerActivityRewardItemR\x05items\"\xa8\x03\n" +
+	"\x1ePlayerActivityVitalitySnapshot\x12\x1c\n" +
+	"\tavailable\x18\x01 \x01(\bR\tavailable\x12-\n" +
+	"\x12unavailable_reason\x18\x02 \x01(\tR\x11unavailableReason\x12\x17\n" +
+	"\arule_id\x18\x03 \x01(\rR\x06ruleId\x125\n" +
+	"\x16configuration_revision\x18\x04 \x01(\x04R\x15configurationRevision\x12\x1b\n" +
+	"\tperiod_id\x18\x05 \x01(\x04R\bperiodId\x12-\n" +
+	"\x13period_starts_at_ms\x18\x06 \x01(\x04R\x10periodStartsAtMs\x12)\n" +
+	"\x11period_ends_at_ms\x18\a \x01(\x04R\x0eperiodEndsAtMs\x12\x16\n" +
+	"\x06points\x18\b \x01(\rR\x06points\x12!\n" +
+	"\fpoints_limit\x18\t \x01(\rR\vpointsLimit\x127\n" +
+	"\arewards\x18\n" +
+	" \x03(\v2\x1d.PlayerActivityVitalityRewardR\arewards\"\x18\n" +
+	"\x16GetActivityListRequest\"\xe7\x01\n" +
 	"\x17GetActivityListResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x123\n" +
 	"\n" +
 	"activities\x18\x02 \x03(\v2\x13.PlayerActivityInfoR\n" +
 	"activities\x12$\n" +
-	"\x0eserver_time_ms\x18\x03 \x01(\x04R\fserverTimeMs*\x8a\x01\n" +
+	"\x0eserver_time_ms\x18\x03 \x01(\x04R\fserverTimeMs\x12;\n" +
+	"\bvitality\x18\x04 \x01(\v2\x1f.PlayerActivityVitalitySnapshotR\bvitality\"\xd3\x01\n" +
+	"\"ClaimActivityVitalityRewardRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\rR\x06ruleId\x125\n" +
+	"\x16configuration_revision\x18\x02 \x01(\x04R\x15configurationRevision\x12\x1b\n" +
+	"\tperiod_id\x18\x03 \x01(\x04R\bperiodId\x12!\n" +
+	"\fthreshold_id\x18\x04 \x01(\rR\vthresholdId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x05 \x01(\tR\trequestId\"\x87\x02\n" +
+	"#ClaimActivityVitalityRewardResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12;\n" +
+	"\bsnapshot\x18\x02 \x01(\v2\x1f.PlayerActivityVitalitySnapshotR\bsnapshot\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\x12\x18\n" +
+	"\aclaimed\x18\x04 \x01(\bR\aclaimed\x12\x18\n" +
+	"\adurable\x18\x05 \x01(\bR\adurable\x12\x1a\n" +
+	"\breplayed\x18\x06 \x01(\bR\breplayed*\x8a\x01\n" +
 	"\x14PlayerActivityStatus\x12\x1f\n" +
 	"\x1bPLAYER_ACTIVITY_UNSCHEDULED\x10\x00\x12\x1c\n" +
 	"\x18PLAYER_ACTIVITY_UPCOMING\x10\x01\x12\x18\n" +
 	"\x14PLAYER_ACTIVITY_OPEN\x10\x02\x12\x19\n" +
-	"\x15PLAYER_ACTIVITY_ENDED\x10\x032m\n" +
+	"\x15PLAYER_ACTIVITY_ENDED\x10\x03*\xd6\x01\n" +
+	"\x16PlayerActivityCategory\x12(\n" +
+	"$PLAYER_ACTIVITY_CATEGORY_UNSPECIFIED\x10\x00\x12\"\n" +
+	"\x1ePLAYER_ACTIVITY_CATEGORY_DAILY\x10\x01\x12$\n" +
+	" PLAYER_ACTIVITY_CATEGORY_LIMITED\x10\x02\x12$\n" +
+	" PLAYER_ACTIVITY_CATEGORY_BENEFIT\x10\x03\x12\"\n" +
+	"\x1ePLAYER_ACTIVITY_CATEGORY_OTHER\x10\x04*\xd0\x01\n" +
+	"\x18PlayerActivityRewardType\x12&\n" +
+	"\"PLAYER_ACTIVITY_REWARD_UNSPECIFIED\x10\x00\x12%\n" +
+	"!PLAYER_ACTIVITY_REWARD_EXPERIENCE\x10\x01\x12\x1e\n" +
+	"\x1aPLAYER_ACTIVITY_REWARD_TAO\x10\x02\x12\x1f\n" +
+	"\x1bPLAYER_ACTIVITY_REWARD_ITEM\x10\x03\x12$\n" +
+	" PLAYER_ACTIVITY_REWARD_EQUIPMENT\x10\x04*c\n" +
+	"\x17PlayerActivityEntryKind\x12%\n" +
+	"!PLAYER_ACTIVITY_ENTRY_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dPLAYER_ACTIVITY_ENTRY_MISSION\x10\x012\xd7\x01\n" +
 	"\x19SceneActivityClientPlayer\x12D\n" +
-	"\x0fGetActivityList\x12\x17.GetActivityListRequest\x1a\x18.GetActivityListResponse\x1a\n" +
+	"\x0fGetActivityList\x12\x17.GetActivityListRequest\x1a\x18.GetActivityListResponse\x12h\n" +
+	"\x1bClaimActivityVitalityReward\x12#.ClaimActivityVitalityRewardRequest\x1a$.ClaimActivityVitalityRewardResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -345,26 +1134,45 @@ func file_proto_scene_player_activity_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_activity_proto_rawDescData
 }
 
-var file_proto_scene_player_activity_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_scene_player_activity_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_scene_player_activity_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_proto_scene_player_activity_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_scene_player_activity_proto_goTypes = []any{
-	(PlayerActivityStatus)(0),       // 0: PlayerActivityStatus
-	(*PlayerActivityInfo)(nil),      // 1: PlayerActivityInfo
-	(*GetActivityListRequest)(nil),  // 2: GetActivityListRequest
-	(*GetActivityListResponse)(nil), // 3: GetActivityListResponse
-	(*base.TipInfoMessage)(nil),     // 4: TipInfoMessage
+	(PlayerActivityStatus)(0),                   // 0: PlayerActivityStatus
+	(PlayerActivityCategory)(0),                 // 1: PlayerActivityCategory
+	(PlayerActivityRewardType)(0),               // 2: PlayerActivityRewardType
+	(PlayerActivityEntryKind)(0),                // 3: PlayerActivityEntryKind
+	(*PlayerActivityRewardItem)(nil),            // 4: PlayerActivityRewardItem
+	(*PlayerActivityInfo)(nil),                  // 5: PlayerActivityInfo
+	(*PlayerActivityVitalityReward)(nil),        // 6: PlayerActivityVitalityReward
+	(*PlayerActivityVitalitySnapshot)(nil),      // 7: PlayerActivityVitalitySnapshot
+	(*GetActivityListRequest)(nil),              // 8: GetActivityListRequest
+	(*GetActivityListResponse)(nil),             // 9: GetActivityListResponse
+	(*ClaimActivityVitalityRewardRequest)(nil),  // 10: ClaimActivityVitalityRewardRequest
+	(*ClaimActivityVitalityRewardResponse)(nil), // 11: ClaimActivityVitalityRewardResponse
+	(*base.TipInfoMessage)(nil),                 // 12: TipInfoMessage
 }
 var file_proto_scene_player_activity_proto_depIdxs = []int32{
-	0, // 0: PlayerActivityInfo.status:type_name -> PlayerActivityStatus
-	4, // 1: GetActivityListResponse.error_message:type_name -> TipInfoMessage
-	1, // 2: GetActivityListResponse.activities:type_name -> PlayerActivityInfo
-	2, // 3: SceneActivityClientPlayer.GetActivityList:input_type -> GetActivityListRequest
-	3, // 4: SceneActivityClientPlayer.GetActivityList:output_type -> GetActivityListResponse
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	0,  // 0: PlayerActivityInfo.status:type_name -> PlayerActivityStatus
+	1,  // 1: PlayerActivityInfo.category:type_name -> PlayerActivityCategory
+	2,  // 2: PlayerActivityInfo.reward_types:type_name -> PlayerActivityRewardType
+	3,  // 3: PlayerActivityInfo.entry_kind:type_name -> PlayerActivityEntryKind
+	4,  // 4: PlayerActivityInfo.rewards:type_name -> PlayerActivityRewardItem
+	4,  // 5: PlayerActivityVitalityReward.items:type_name -> PlayerActivityRewardItem
+	6,  // 6: PlayerActivityVitalitySnapshot.rewards:type_name -> PlayerActivityVitalityReward
+	12, // 7: GetActivityListResponse.error_message:type_name -> TipInfoMessage
+	5,  // 8: GetActivityListResponse.activities:type_name -> PlayerActivityInfo
+	7,  // 9: GetActivityListResponse.vitality:type_name -> PlayerActivityVitalitySnapshot
+	12, // 10: ClaimActivityVitalityRewardResponse.error_message:type_name -> TipInfoMessage
+	7,  // 11: ClaimActivityVitalityRewardResponse.snapshot:type_name -> PlayerActivityVitalitySnapshot
+	8,  // 12: SceneActivityClientPlayer.GetActivityList:input_type -> GetActivityListRequest
+	10, // 13: SceneActivityClientPlayer.ClaimActivityVitalityReward:input_type -> ClaimActivityVitalityRewardRequest
+	9,  // 14: SceneActivityClientPlayer.GetActivityList:output_type -> GetActivityListResponse
+	11, // 15: SceneActivityClientPlayer.ClaimActivityVitalityReward:output_type -> ClaimActivityVitalityRewardResponse
+	14, // [14:16] is the sub-list for method output_type
+	12, // [12:14] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_activity_proto_init() }
@@ -377,8 +1185,8 @@ func file_proto_scene_player_activity_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_activity_proto_rawDesc), len(file_proto_scene_player_activity_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   3,
+			NumEnums:      4,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

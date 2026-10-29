@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1c\x61\x63tivityschedule_table.proto\"n\n\x15\x41\x63tivityScheduleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0f\n\x07\x65nabled\x18\x02 \x01(\x08\x12\x1c\n\x14\x62\x61seline_start_at_ms\x18\x03 \x01(\x04\x12\x1a\n\x12\x62\x61seline_end_at_ms\x18\x04 \x01(\x04\"A\n\x19\x41\x63tivityScheduleTableData\x12$\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x16.ActivityScheduleTableBG\n\x0e\x63om.game.tableB\x1f\x41\x63tivityScheduleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1c\x61\x63tivityschedule_table.proto\"\x86\x02\n\x15\x41\x63tivityScheduleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0f\n\x07\x65nabled\x18\x02 \x01(\x08\x12\x1c\n\x14\x62\x61seline_start_at_ms\x18\x03 \x01(\x04\x12\x1a\n\x12\x62\x61seline_end_at_ms\x18\x04 \x01(\x04\x12\x16\n\x0e\x64\x65\x66inition_key\x18\x05 \x01(\t\x12\x1e\n\x16\x63onfiguration_revision\x18\x06 \x01(\x04\x12\x10\n\x08\x63\x61tegory\x18\x07 \x01(\r\x12\x0c\n\x04name\x18\x08 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\t \x01(\t\x12\x10\n\x08icon_key\x18\n \x01(\t\x12\x17\n\x0fvitality_points\x18\x0b \x01(\r\"A\n\x19\x41\x63tivityScheduleTableData\x12$\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x16.ActivityScheduleTableBG\n\x0e\x63om.game.tableB\x1f\x41\x63tivityScheduleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,8 +32,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'activityschedule_table_pb2'
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\037ActivityScheduleTableOuterClassP\001Z\022generated/pb/table'
-  _globals['_ACTIVITYSCHEDULETABLE']._serialized_start=32
-  _globals['_ACTIVITYSCHEDULETABLE']._serialized_end=142
-  _globals['_ACTIVITYSCHEDULETABLEDATA']._serialized_start=144
-  _globals['_ACTIVITYSCHEDULETABLEDATA']._serialized_end=209
+  _globals['_ACTIVITYSCHEDULETABLE']._serialized_start=33
+  _globals['_ACTIVITYSCHEDULETABLE']._serialized_end=295
+  _globals['_ACTIVITYSCHEDULETABLEDATA']._serialized_start=297
+  _globals['_ACTIVITYSCHEDULETABLEDATA']._serialized_end=362
 # @@protoc_insertion_point(module_scope)

@@ -30,6 +30,8 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "ActivityScheduleTable.h"
+#include "ActivityVitalityRewardTable.h"
+#include "ActivityVitalityRuleTable.h"
 #include "ActorActionCombatStateTable.h"
 #include "ActorActionStateTable.h"
 #include "AttributeAllocRatioTable.h"
@@ -112,7 +114,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 45;
+	static constexpr int32 TableCount = 47;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -165,6 +167,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UActivityScheduleTable* GetActivityScheduleTable() const { return ActivityScheduleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UActivityVitalityRewardTable* GetActivityVitalityRewardTable() const { return ActivityVitalityRewardTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UActivityVitalityRuleTable* GetActivityVitalityRuleTable() const { return ActivityVitalityRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UActorActionCombatStateTable* GetActorActionCombatStateTable() const { return ActorActionCombatStateTable; }
@@ -301,6 +309,10 @@ public:
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UActivityScheduleTable> ActivityScheduleTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UActivityVitalityRewardTable> ActivityVitalityRewardTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UActivityVitalityRuleTable> ActivityVitalityRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UActorActionCombatStateTable> ActorActionCombatStateTable;
 	UPROPERTY(Transient)

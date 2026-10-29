@@ -929,6 +929,16 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="code\activityschedule_table.cpp" />
+    <ClCompile Include="code\activityvitalityrule_table.cpp" />
+    <ClCompile Include="code\activityvitalityreward_table.cpp" />
+    <ClCompile Include="code\activityvitalityreward_table_fk.cpp" />
+    <ClCompile Include="proto\activityvitalityrule_table.pb.cc" />
+    <ClCompile Include="proto\activityvitalityreward_table.pb.cc" />
+    <ClInclude Include="code\activityvitalityrule_table.h" />
+    <ClInclude Include="code\activityvitalityreward_table.h" />
+    <ClInclude Include="code\activityvitalityreward_table_fk.h" />
+    <ClInclude Include="proto\activityvitalityrule_table.pb.h" />
+    <ClInclude Include="proto\activityvitalityreward_table.pb.h" />
     <ClCompile Include="code\activityschedule_table_fk.cpp" />
     <ClCompile Include="proto\activityschedule_table.pb.cc" />
     <ClInclude Include="code\activityschedule_table.h" />

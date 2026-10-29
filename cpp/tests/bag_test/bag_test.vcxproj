@@ -182,6 +182,7 @@
     <ClCompile Include="player_battle_settlement_test.cpp" />
     <ClCompile Include="player_mission_system_test.cpp" />
     <ClCompile Include="player_activity_schedule_test.cpp" />
+    <ClCompile Include="player_activity_system_test.cpp" />
     <ClCompile Include="player_feature_persistence_test.cpp" />
     <ClCompile Include="persist_round_trip_test.cpp" />
   </ItemGroup>

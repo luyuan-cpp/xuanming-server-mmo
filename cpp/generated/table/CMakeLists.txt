@@ -181,6 +181,11 @@ set(SOURCE_FILES
     proto/tip/team_error_tip.pb.cc
     proto/world_table.pb.cc
     code/activityschedule_table.cpp
+    code/activityvitalityrule_table.cpp
+    code/activityvitalityreward_table.cpp
+    code/activityvitalityreward_table_fk.cpp
+    proto/activityvitalityrule_table.pb.cc
+    proto/activityvitalityreward_table.pb.cc
     code/activityschedule_table_fk.cpp
     proto/activityschedule_table.pb.cc
 )

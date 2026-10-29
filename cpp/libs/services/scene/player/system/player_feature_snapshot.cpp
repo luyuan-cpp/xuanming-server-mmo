@@ -24,6 +24,7 @@
 #include "services/scene/player/system/player_equip.h"
 #include "services/scene/player/system/player_mission.h"
 #include "services/scene/player/system/player_activity_schedule.h"
+#include "services/scene/player/system/player_activity.h"
 #include "engine/core/time/system/time.h"
 
 namespace {
@@ -225,11 +226,30 @@ uint32_t PlayerActivityReadSystem::BuildList(entt::entity player, uint64_t serve
         return kServiceUnavailable;
     }
     out.set_server_time_ms(serverTimeMs);
+    if (const auto result = PlayerActivitySystem::BuildVitality(player, serverTimeMs, *out.mutable_vitality()); result != kSuccess)
+        return result;
+    const auto* missions = tlsEcs.actorRegistry.get<MissionsContainerComp>(player).Get(MissionListComp::kPlayerMission);
     for (const auto& row : MissionTableManager::Instance().FindAll().data())
     {
         if (row.mission_type() != 2) continue;
         auto* info = out.add_activities();
-        PlayerActivityScheduleSystem::BuildInfo(row.id(), serverTimeMs, *info);
+        const auto scheduleResult = PlayerActivityScheduleSystem::BuildInfo(row.id(), serverTimeMs, *info);
+        if (scheduleResult != kSuccess) {
+            // 保留目录身份以解释异常配置，不能把清空后的 id=0 伪装成新活动。
+            info->set_activity_id(row.id());
+            info->set_mission_id(row.id());
+            continue;
+        }
+        // 现有任务不可重复接取；这里的次数是每角色终身一次，绝不是每日目标计数。
+        info->set_completion_count_known(missions != nullptr);
+        info->set_completed_count(missions != nullptr && missions->IsComplete(row.id()) ? 1 : 0);
+        info->set_completion_limit(1);
+        info->set_completion_period("每角色一次");
+        if (const auto rewardResult = PlayerActivitySystem::FillRewardDisplay(row.reward_id(), *info); rewardResult != kSuccess) {
+            info->set_unavailable_reason("活动奖励配置异常，暂不可参与");
+            info->set_can_participate(false);
+            continue;
+        }
         const auto acceptance = PlayerMissionSystem::CheckAccept(
             player, MissionListComp::kPlayerMission, row.id(), serverTimeMs);
         info->set_can_participate(info->status() == PLAYER_ACTIVITY_OPEN && acceptance == kSuccess);

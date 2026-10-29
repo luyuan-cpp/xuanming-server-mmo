@@ -14,6 +14,36 @@ enum PlayerActivityStatus {
   PLAYER_ACTIVITY_ENDED = 3;
 }
 
+enum PlayerActivityCategory {
+  PLAYER_ACTIVITY_CATEGORY_UNSPECIFIED = 0;
+  PLAYER_ACTIVITY_CATEGORY_DAILY = 1;
+  PLAYER_ACTIVITY_CATEGORY_LIMITED = 2;
+  PLAYER_ACTIVITY_CATEGORY_BENEFIT = 3;
+  PLAYER_ACTIVITY_CATEGORY_OTHER = 4;
+}
+
+enum PlayerActivityRewardType {
+  PLAYER_ACTIVITY_REWARD_UNSPECIFIED = 0;
+  PLAYER_ACTIVITY_REWARD_EXPERIENCE = 1;
+  PLAYER_ACTIVITY_REWARD_TAO = 2;
+  PLAYER_ACTIVITY_REWARD_ITEM = 3;
+  PLAYER_ACTIVITY_REWARD_EQUIPMENT = 4;
+}
+
+enum PlayerActivityEntryKind {
+  PLAYER_ACTIVITY_ENTRY_UNSPECIFIED = 0;
+  PLAYER_ACTIVITY_ENTRY_MISSION = 1;
+}
+
+message PlayerActivityRewardItem {
+  uint32 item_config_id = 1;
+  uint64 count = 2;
+  string name = 3;
+  string icon_key = 4;
+  // 未提供绑定语义时留空，不能从图标推断。
+  string binding_description = 5;
+}
+
 message PlayerActivityInfo {
   uint32 activity_id = 1;
   uint32 mission_id = 2;
@@ -26,6 +56,45 @@ message PlayerActivityInfo {
   bool can_participate = 9;
   string unavailable_reason = 10;
   uint32 reward_id = 11;
+  // definition_key 是不可复用的内容身份；配置未补齐时空值禁止收藏。
+  string definition_key = 12;
+  uint64 configuration_revision = 13;
+  PlayerActivityCategory category = 14;
+  repeated PlayerActivityRewardType reward_types = 15;
+  PlayerActivityEntryKind entry_kind = 16;
+  uint32 mission_scope = 17;
+  bool completion_count_known = 18;
+  uint32 completed_count = 19;
+  uint32 completion_limit = 20;
+  string completion_period = 21;
+  uint32 vitality_points = 22;
+  repeated PlayerActivityRewardItem rewards = 23;
+}
+
+message PlayerActivityVitalityReward {
+  uint32 threshold_id = 1;
+  uint32 required_points = 2;
+  uint32 reward_id = 3;
+  bool can_claim = 4;
+  bool claimed = 5;
+  // 只表示原父快照及可恢复投递意图已持久，不宣称 SQL 已同步提交。
+  bool durable = 6;
+  string unavailable_reason = 7;
+  repeated PlayerActivityRewardItem items = 8;
+}
+
+message PlayerActivityVitalitySnapshot {
+  bool available = 1;
+  string unavailable_reason = 2;
+  uint32 rule_id = 3;
+  uint64 configuration_revision = 4;
+  // 周期身份等于该 UTC 绝对周期的起点，必须连同规则身份提交。
+  uint64 period_id = 5;
+  uint64 period_starts_at_ms = 6;
+  uint64 period_ends_at_ms = 7;
+  uint32 points = 8;
+  uint32 points_limit = 9;
+  repeated PlayerActivityVitalityReward rewards = 10;
 }
 
 message GetActivityListRequest {}
@@ -33,6 +102,25 @@ message GetActivityListResponse {
   TipInfoMessage error_message = 1;
   repeated PlayerActivityInfo activities = 2;
   uint64 server_time_ms = 3;
+  PlayerActivityVitalitySnapshot vitality = 4;
+}
+
+message ClaimActivityVitalityRewardRequest {
+  uint32 rule_id = 1;
+  uint64 configuration_revision = 2;
+  uint64 period_id = 3;
+  uint32 threshold_id = 4;
+  // 玩家先持久化 UUID，再提交；结果未知时重放原请求，不能另造一次领取。
+  string request_id = 5;
+}
+
+message ClaimActivityVitalityRewardResponse {
+  TipInfoMessage error_message = 1;
+  PlayerActivityVitalitySnapshot snapshot = 2;
+  string request_id = 3;
+  bool claimed = 4;
+  bool durable = 5;
+  bool replayed = 6;
 }
 
 service SceneActivityClientPlayer {
@@ -40,4 +128,6 @@ service SceneActivityClientPlayer {
   option (OptionIsClientProtocolService) = true;
   // 目录只读取 MissionTable.mission_type=2；无运营时间配置时一律未排期。
   rpc GetActivityList (GetActivityListRequest) returns (GetActivityListResponse);
+  // 重放同一请求同时承担查询恢复；已领取记录优先于当前周期及配置校验。
+  rpc ClaimActivityVitalityReward (ClaimActivityVitalityRewardRequest) returns (ClaimActivityVitalityRewardResponse);
 }

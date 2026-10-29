@@ -19,6 +19,7 @@
 #include "node_config_manager.h"
 
 #include "data/battle_table_fingerprint.h"
+#include "data/table_battle_data_provider.h"
 
 #include "proto/common/base/node.pb.h"
 
@@ -33,6 +34,8 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <cstdlib>
+#include <filesystem>
 
 using namespace muduo;
 using namespace muduo::net;
@@ -221,6 +224,16 @@ namespace
                 // 指纹比对(设计文档 cross-zone-matchmaking.md §10);启动日志里打出来便于跨节点排障
                 LOG_INFO << "battle combat table fingerprint: table_fingerprint="
                          << turnbattle::BattleTableFingerprint::Refresh();
+
+                // 奖励独立于人数/怪物表；只在启动边界读文件，建房时不做磁盘 I/O。
+                std::filesystem::path rewardPath = "etc/battle_rewards.json";
+                if (const char* overridePath = std::getenv("BATTLE_REWARD_CONFIG_PATH"); overridePath && *overridePath)
+                    rewardPath = overridePath;
+                auto provider = std::make_shared<turnbattle::TableBattleDataProvider>();
+                if (!provider->LoadBattleRewards(rewardPath.string())) {
+                    LOG_FATAL << "Battle reward config rejected: " << rewardPath.string();
+                }
+                BattleRoomManager::Instance().SetDataProvider(std::move(provider));
             }
         };
 

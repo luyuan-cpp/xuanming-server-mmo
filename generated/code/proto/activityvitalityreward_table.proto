@@ -1,0 +1,20 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "ActivityVitalityRewardTableOuterClass";
+option java_multiple_files = true;
+
+
+message ActivityVitalityRewardTable {
+	uint32 id = 1;
+	uint32 rule_id = 2;
+	uint32 required_points = 3;
+	uint32 reward_id = 4;
+}
+
+message ActivityVitalityRewardTableData {
+	repeated ActivityVitalityRewardTable data = 1;
+}

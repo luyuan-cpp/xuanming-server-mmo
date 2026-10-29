@@ -130,7 +130,9 @@ cd tools/data_table_exporter && py -m pytest -q
 
 | 表 | 源表 | 权威 schema | 列 | 字段 | 行 | 唯一键 | 多值键 | 索引 | 外键 | 位序 | 表达式 | 子消息 |
 |---|---|---|---:|---:|---:|---|---|---|---|---|---|---|
-| **ActivitySchedule** | `ActivitySchedule.xlsx` | `activityschedule_table.proto` | 4 | 4 | 3 | — | — | `id` | `id→Mission.id` | — | — | — |
+| **ActivitySchedule** | `ActivitySchedule.xlsx` | `activityschedule_table.proto` | 11 | 11 | 3 | — | — | `id` | `id→Mission.id` | — | — | — |
+| **ActivityVitalityReward** | `ActivityVitalityReward.xlsx` | `activityvitalityreward_table.proto` | 4 | 4 | 0 | — | — | `rule_id` `reward_id` | `rule_id→ActivityVitalityRule.id` `reward_id→Reward.id` | — | — | — |
+| **ActivityVitalityRule** | `ActivityVitalityRule.xlsx` | `activityvitalityrule_table.proto` | 6 | 6 | 0 | — | — | — | — | — | — | — |
 | **ActorActionCombatState** | `ActorActionCombatState.xlsx` | `actoractioncombatstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
 | **ActorActionState** | `ActorActionState.xlsx` | `actoractionstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
 | **AttributeAllocRatio** | `AttributeAllocRatio.xlsx` | `attributeallocratio_table.proto` | 10 | 10 | 8 | — | — | `dimension_id` `class_id` | `dimension_id→AttributeDimension.id` | — | — | — |
@@ -158,7 +160,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **GuildLevel** | `GuildLevel.xlsx` | `guildlevel_table.proto` | 4 | 4 | 10 | — | — | — | — | — | — | — |
 | **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 10 | 10 | 1 | — | — | — | — | — | — | — |
 | **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 11 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
-| **Item** | `Item.xlsx` | `item_table.proto` | 19 | 14 | 61 | — | — | `affix_rule` | `affix_rule→EquipAffixRule.id` | — | — | `base_attr` |
+| **Item** | `Item.xlsx` | `item_table.proto` | 19 | 14 | 77 | — | — | `affix_rule` | `affix_rule→EquipAffixRule.id` | — | — | `base_attr` |
 | **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 87 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
@@ -176,6 +178,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 
-合计 **45** 张表、**497** 个物理列、**353** 个进产物的字段。
+合计 **47** 张表、**514** 个物理列、**370** 个进产物的字段。
 
 <!-- END GENERATED -->

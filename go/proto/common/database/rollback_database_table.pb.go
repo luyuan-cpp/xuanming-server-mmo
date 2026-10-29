@@ -208,7 +208,9 @@ type PlayerSnapshot struct {
 	// 不改主键:rollback_audit_log.snapshot_id_used 引用的是自增 id,换主键等于篡改历史审计。
 	SnapshotGuid uint64 `protobuf:"varint,9,opt,name=snapshot_guid,json=snapshotGuid,proto3" json:"snapshot_guid,omitempty"`
 	// 来源:0 = GM/data_service 直接写入(data 列是 Redis 字段图 JSON),
-	//       1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 的两个 proto blob)。
+	//
+	//	1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 的两个 proto blob)。
+	//
 	// 两种格式不兼容,回滚读路径在学会解 proto blob 之前必须先过滤 source=0。
 	Source        uint32 `protobuf:"varint,10,opt,name=source,proto3" json:"source,omitempty"`
 	unknownFields protoimpl.UnknownFields

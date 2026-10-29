@@ -109,6 +109,7 @@ set(SOURCE_FILES
     player/system/db_task_dispatch_ledger.cpp
     player/system/db_task_dispatch_system.cpp
     player/system/player_lifecycle.cpp
+    player/system/role_admission_system.cpp
     player/system/player_scene.cpp
     player/system/player_team.cpp
     player/system/player_team_aoi.cpp
@@ -117,8 +118,6 @@ set(SOURCE_FILES
     player/system/player_attribute.cpp
     player/system/player_pet.cpp
     player/system/player_equip.cpp
-    # 神秘商人(docs/design/mystery-merchant.md §5):读记录、公告、查询、购买。
-    # 纯规则头 mystery_merchant_rules.h 与 player_mystery_merchant.h 不需要登记(CMake 只列编译单元)。
     player/system/player_mystery_merchant.cpp
     player/system/player_tip.cpp
     player/system/stress_test_probe.cpp
@@ -138,6 +137,7 @@ set(SOURCE_FILES
     player/system/player_mission.cpp
     player/system/mission_marshal.cpp
     player/system/player_activity_schedule.cpp
+    player/system/player_activity.cpp
 )
 
 add_library(scene STATIC ${SOURCE_FILES})

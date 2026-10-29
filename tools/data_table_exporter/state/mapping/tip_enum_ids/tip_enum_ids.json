@@ -186,7 +186,14 @@
         "SkillCooldownNotReady": 7003,
         "SkillCannotBeCastInCurrentState": 7004,
         "SkillCannotBeCastSilenceRestriction": 7005,
-        "SkillCannotBeCastStunRestriction": 7006
+        "SkillCannotBeCastStunRestriction": 7006,
+        "SkillNotInClass": 7007,
+        "SkillRankChanged": 7008,
+        "SkillUpgradeCountInvalid": 7009,
+        "SkillLevelNotEnough": 7010,
+        "SkillMaxRankReached": 7011,
+        "SkillGoldNotEnough": 7012,
+        "SkillUpgradeBusy": 7013
       }
     },
     "buff_error": {

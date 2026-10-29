@@ -31,6 +31,7 @@
 #include "combat/buff/constants/buff.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 // tlsGuidSegmentRegistry:掉落入包前预检 item 号段余量(审计 cpp-economy#0)。
@@ -1860,16 +1861,27 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 			return false;
 		}
 
-	    // 唯一会正常返回失败的入账入口必须在 HP/宝宝/任务副作用之前执行。
-	    // 按 AddCurrency 的返回码契约分两类(currency_system.h):
-	    //  - kAssetBlocked(全服 GainBlock / GM 单人封禁)是终局拒绝,重投永远同样被拒。整笔返回 false
-	    //    会让这一局永远应用不上:药品不扣,掉落与任务进度丢失,下一局还会覆盖单槽 pending
-	    //    (审计 cpp-economy#1)。所以只跳过金币,其余照常应用并登记账本,与资产通道把封禁记成
-	    //    REJECTED 同一口径。拒绝发生在任何改动之前(AddCurrency 先判封禁再动账),跳过即零副作用。
-	    //  - 其余失败(冻结 kAssetFrozen、缺组件 kInvalidParameter 等)不标记完成、不销账,保留 pending
-	    //    等条件消失后重投。冻结其实已被前面的 IsSettlementApplicable 整笔挡掉。
-	    bool goldBlocked = false;
-	    if (settlement.gold_gain() > 0)
+	    // 新集合是整笔货币奖励的权威来源；只有旧原件没有新集合时才回退到 gold_gain，
+	    // 两者不能相加。全部参数、必需组件和余额上界必须在首笔入账之前校验，否则
+	    // 后一币种失败后重投会把前面已成功的币种再发一次。重复币种拒绝，避免同币多笔
+	    // 分别通过余额检查后累计溢出。零额条目合法，但仍参与币种与重复校验。
+	    std::map<CurrencyType, uint64_t> currencyGains;
+	    if (settlement.currency_gains_size() > 0)
+	    {
+	        for (const auto& gain : settlement.currency_gains())
+	        {
+	            if (gain.currency_type() >= static_cast<uint32_t>(kCurrencyMax) ||
+	                gain.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
+	                !currencyGains.emplace(static_cast<CurrencyType>(gain.currency_type()), gain.amount()).second)
+	            {
+	                LOG_ERROR << "[PlayerBattle] Invalid currency settlement: player_id=" << playerId
+	                          << " battle_id=" << battleId << " currency_type=" << gain.currency_type()
+	                          << " amount=" << gain.amount();
+	                return false;
+	            }
+	        }
+	    }
+	    else if (settlement.gold_gain() > 0)
 	    {
 	        if (settlement.gold_gain() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
 	        {
@@ -1877,19 +1889,54 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 	                      << " battle_id=" << battleId;
 	            return false;
 	        }
-	        const auto err = CurrencySystem::AddCurrency(
-	            player, kCurrencyGold, static_cast<int64_t>(settlement.gold_gain()));
+	        currencyGains.emplace(kCurrencyGold, settlement.gold_gain());
+	    }
+	    const bool grantsCurrency = std::any_of(currencyGains.begin(), currencyGains.end(),
+	        [](const auto& gain) { return gain.second > 0; });
+	    const auto* currency = tlsEcs.actorRegistry.try_get<CurrencyComp>(player);
+	    if (grantsCurrency && (currency == nullptr || !tlsEcs.actorRegistry.all_of<PlayerCurrencyComp>(player)))
+	    {
+	        LOG_ERROR << "[PlayerBattle] Currency settlement component missing: player_id=" << playerId
+	                  << " battle_id=" << battleId;
+	        return false;
+	    }
+	    for (const auto& [type, amount] : currencyGains)
+	    {
+	        if (amount == 0) continue;
+	        const auto typeId = static_cast<uint32_t>(type);
+	        // GetBalance 当前会补齐 values 槽；预检直接只读已加载的 proto，保证拒绝时零副作用。
+	        const uint64_t balance = typeId < static_cast<uint32_t>(currency->values_size())
+	            ? currency->values(static_cast<int>(typeId)) : 0;
+	        // 保守按全额检查；补缴只会减少实际入账额，不能使本检查失效。
+	        if (balance > std::numeric_limits<uint64_t>::max() - amount)
+	        {
+	            LOG_ERROR << "[PlayerBattle] Currency settlement balance overflow: player_id=" << playerId
+	                      << " battle_id=" << battleId << " currency_type=" << static_cast<uint32_t>(type);
+	            return false;
+	        }
+	    }
+
+	    // scene EventLoop 内同步执行且不让出；AddCurrency 的参数、组件与冻结拒绝条件已
+	    // 全部前置。剩下的全服/GM 封禁是终局业务拒绝：只跳过该币种，其他资产照常应用。
+	    bool goldBlocked = false;
+	    uint32_t currenciesBlocked = 0;
+	    for (const auto& [type, amount] : currencyGains)
+	    {
+	        if (amount == 0) continue;
+	        const auto err = CurrencySystem::AddCurrency(player, type, static_cast<int64_t>(amount));
 	        if (err == kAssetBlocked)
 	        {
-	            goldBlocked = true;
-	            LOG_WARN << "[PlayerBattle] metric=battle_settlement_gold_blocked player_id=" << playerId
-	                     << " battle_id=" << battleId << " gold=" << settlement.gold_gain()
-	                     << ",gold gain blocked(GM or global gain block);gold skipped, rest of settlement applied";
+	            goldBlocked = goldBlocked || type == kCurrencyGold;
+	            ++currenciesBlocked;
+	            LOG_WARN << "[PlayerBattle] metric=battle_settlement_currency_blocked player_id=" << playerId
+	                     << " battle_id=" << battleId << " currency_type=" << static_cast<uint32_t>(type)
+	                     << " amount=" << amount << ",currency gain blocked;remaining settlement applied";
 	        }
 	        else if (err != kSuccess)
 	        {
-	            LOG_WARN << "[PlayerBattle] Currency credit failed;settlement retained for redelivery: player_id=" << playerId
-	                     << " battle_id=" << battleId << " err=" << err;
+	            LOG_ERROR << "[PlayerBattle] Currency credit failed after preflight;settlement retained for redelivery: player_id="
+	                      << playerId << " battle_id=" << battleId
+	                      << " currency_type=" << static_cast<uint32_t>(type) << " err=" << err;
 	            return false;
 	        }
 	    }
@@ -1995,6 +2042,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 				 << " health=" << health << " mana=" << settlement.mana()
 				 << " gold=" << settlement.gold_gain()
 				 << " gold_blocked=" << goldBlocked
+				 << " currency_gains=" << currencyGains.size()
+				 << " currencies_blocked=" << currenciesBlocked
 				 << " is_dead=" << settlement.is_dead()
 				 << " rounds=" << settlement.total_rounds();
         return true;

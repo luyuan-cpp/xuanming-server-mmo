@@ -116,16 +116,16 @@ type PlayerLocation struct {
 	// 自己读出来选频道。不经票据 / login / 客户端转手,目标地图不会被持票者改写。0 = 默认大世界。
 	PendingSceneConfId uint64 `protobuf:"varint,6,opt,name=pending_scene_conf_id,json=pendingSceneConfId,proto3" json:"pending_scene_conf_id,omitempty"`
 	// 路由 / 重定向投递失败后的回滚回执(GO-2 根治,cross-zone-scene-travel.md §12.8)。
-	// - 只由 scene_manager 的回滚 Lua(owner_epoch.go luaRollbackPlayerPlacement)写入,值为被回滚那次
-	//   铸造所凭的 handoff 标记原文 "{epoch}:{saved_at_ms}"。
-	// - 与这条恢复出来的 location、INCR 之后的 owner_epoch 在同一段 Lua 里原子写入;此时本条的
-	//   owner_epoch 字段等于 INCR 后的键值。
-	// - 空值 = 不是回滚恢复出来的,或被回滚的那次铸造不凭标记。任何新落点都整条重写 location,回执随之
-	//   消失;不铸造的回滚(keep)按原字节恢复,可能带回更早的回执 —— 那份回执对不上任何在途交接
-	//   (每次交接的 saved_at_ms 都是新值),无害。
-	// - 唯一消费者是源 scene 的 ResolveTravelOutcome:只认与自己本次交接标记原文逐字节相同的回执。
-	//   其它读 location 的服务一律忽略这个字段。
-	// - GO-3 的新字段从 10 起取(8 / 9 已被会话身份占用)。
+	//   - 只由 scene_manager 的回滚 Lua(owner_epoch.go luaRollbackPlayerPlacement)写入,值为被回滚那次
+	//     铸造所凭的 handoff 标记原文 "{epoch}:{saved_at_ms}"。
+	//   - 与这条恢复出来的 location、INCR 之后的 owner_epoch 在同一段 Lua 里原子写入;此时本条的
+	//     owner_epoch 字段等于 INCR 后的键值。
+	//   - 空值 = 不是回滚恢复出来的,或被回滚的那次铸造不凭标记。任何新落点都整条重写 location,回执随之
+	//     消失;不铸造的回滚(keep)按原字节恢复,可能带回更早的回执 —— 那份回执对不上任何在途交接
+	//     (每次交接的 saved_at_ms 都是新值),无害。
+	//   - 唯一消费者是源 scene 的 ResolveTravelOutcome:只认与自己本次交接标记原文逐字节相同的回执。
+	//     其它读 location 的服务一律忽略这个字段。
+	//   - GO-3 的新字段从 10 起取(8 / 9 已被会话身份占用)。
 	RollbackReceipt string `protobuf:"bytes,7,opt,name=rollback_receipt,json=rollbackReceipt,proto3" json:"rollback_receipt,omitempty"`
 	// 最近一次被 scene_manager 放行、并写入或确认这条 location 的 EnterScene 所代表的会话
 	// (docs/design/scene-enter-chain-residuals.md §3 / §5)。0 / 0 = 无身份(旧版 scene_manager 写入或请求不带会话),

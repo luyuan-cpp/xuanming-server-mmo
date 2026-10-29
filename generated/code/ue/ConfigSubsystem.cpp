@@ -34,6 +34,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// 只建管理器,**不装载**:配置文件从哪来是工程决策(Content 目录 / pak /
 	// 下载目录),生成器不替工程猜。装载由调用方显式调 LoadAll。
 	ActivityScheduleTable = NewObject<UActivityScheduleTable>(this);
+	ActivityVitalityRewardTable = NewObject<UActivityVitalityRewardTable>(this);
+	ActivityVitalityRuleTable = NewObject<UActivityVitalityRuleTable>(this);
 	ActorActionCombatStateTable = NewObject<UActorActionCombatStateTable>(this);
 	ActorActionStateTable = NewObject<UActorActionStateTable>(this);
 	AttributeAllocRatioTable = NewObject<UAttributeAllocRatioTable>(this);
@@ -83,6 +85,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UConfigSubsystem::Deinitialize()
 {
 	ActivityScheduleTable = nullptr;
+	ActivityVitalityRewardTable = nullptr;
+	ActivityVitalityRuleTable = nullptr;
 	ActorActionCombatStateTable = nullptr;
 	ActorActionStateTable = nullptr;
 	AttributeAllocRatioTable = nullptr;
@@ -137,6 +141,8 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 {
 	return TArray<FString>{
 		UActivityScheduleTable::FileName(),
+		UActivityVitalityRewardTable::FileName(),
+		UActivityVitalityRuleTable::FileName(),
 		UActorActionCombatStateTable::FileName(),
 		UActorActionStateTable::FileName(),
 		UAttributeAllocRatioTable::FileName(),
@@ -198,6 +204,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!ActivityScheduleTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (ActivityVitalityRewardTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivityVitalityReward] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!ActivityVitalityRewardTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (ActivityVitalityRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivityVitalityRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!ActivityVitalityRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -867,6 +901,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!ActivityScheduleTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (ActivityVitalityRewardTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivityVitalityReward] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UActivityVitalityRewardTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivityVitalityReward] 取不到 %s"), UActivityVitalityRewardTable::FileName());
+		bAllOk = false;
+	}
+	else if (!ActivityVitalityRewardTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (ActivityVitalityRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivityVitalityRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UActivityVitalityRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivityVitalityRule] 取不到 %s"), UActivityVitalityRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!ActivityVitalityRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

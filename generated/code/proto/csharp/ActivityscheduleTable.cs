@@ -22,17 +22,20 @@ public static partial class ActivityscheduleTableReflection {
   static ActivityscheduleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChxhY3Rpdml0eXNjaGVkdWxlX3RhYmxlLnByb3RvIm4KFUFjdGl2aXR5U2No",
-          "ZWR1bGVUYWJsZRIKCgJpZBgBIAEoDRIPCgdlbmFibGVkGAIgASgIEhwKFGJh",
-          "c2VsaW5lX3N0YXJ0X2F0X21zGAMgASgEEhoKEmJhc2VsaW5lX2VuZF9hdF9t",
-          "cxgEIAEoBCJBChlBY3Rpdml0eVNjaGVkdWxlVGFibGVEYXRhEiQKBGRhdGEY",
-          "ASADKAsyFi5BY3Rpdml0eVNjaGVkdWxlVGFibGVCRwoOY29tLmdhbWUudGFi",
-          "bGVCH0FjdGl2aXR5U2NoZWR1bGVUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJh",
-          "dGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "ChxhY3Rpdml0eXNjaGVkdWxlX3RhYmxlLnByb3RvIoYCChVBY3Rpdml0eVNj",
+          "aGVkdWxlVGFibGUSCgoCaWQYASABKA0SDwoHZW5hYmxlZBgCIAEoCBIcChRi",
+          "YXNlbGluZV9zdGFydF9hdF9tcxgDIAEoBBIaChJiYXNlbGluZV9lbmRfYXRf",
+          "bXMYBCABKAQSFgoOZGVmaW5pdGlvbl9rZXkYBSABKAkSHgoWY29uZmlndXJh",
+          "dGlvbl9yZXZpc2lvbhgGIAEoBBIQCghjYXRlZ29yeRgHIAEoDRIMCgRuYW1l",
+          "GAggASgJEhMKC2Rlc2NyaXB0aW9uGAkgASgJEhAKCGljb25fa2V5GAogASgJ",
+          "EhcKD3ZpdGFsaXR5X3BvaW50cxgLIAEoDSJBChlBY3Rpdml0eVNjaGVkdWxl",
+          "VGFibGVEYXRhEiQKBGRhdGEYASADKAsyFi5BY3Rpdml0eVNjaGVkdWxlVGFi",
+          "bGVCRwoOY29tLmdhbWUudGFibGVCH0FjdGl2aXR5U2NoZWR1bGVUYWJsZU91",
+          "dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::ActivityScheduleTable), global::ActivityScheduleTable.Parser, new[]{ "Id", "Enabled", "BaselineStartAtMs", "BaselineEndAtMs" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::ActivityScheduleTable), global::ActivityScheduleTable.Parser, new[]{ "Id", "Enabled", "BaselineStartAtMs", "BaselineEndAtMs", "DefinitionKey", "ConfigurationRevision", "Category", "Name", "Description", "IconKey", "VitalityPoints" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::ActivityScheduleTableData), global::ActivityScheduleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -79,6 +82,13 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
     enabled_ = other.enabled_;
     baselineStartAtMs_ = other.baselineStartAtMs_;
     baselineEndAtMs_ = other.baselineEndAtMs_;
+    definitionKey_ = other.definitionKey_;
+    configurationRevision_ = other.configurationRevision_;
+    category_ = other.category_;
+    name_ = other.name_;
+    description_ = other.description_;
+    iconKey_ = other.iconKey_;
+    vitalityPoints_ = other.vitalityPoints_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -136,6 +146,90 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
     }
   }
 
+  /// <summary>Field number for the "definition_key" field.</summary>
+  public const int DefinitionKeyFieldNumber = 5;
+  private string definitionKey_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string DefinitionKey {
+    get { return definitionKey_; }
+    set {
+      definitionKey_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "configuration_revision" field.</summary>
+  public const int ConfigurationRevisionFieldNumber = 6;
+  private ulong configurationRevision_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong ConfigurationRevision {
+    get { return configurationRevision_; }
+    set {
+      configurationRevision_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "category" field.</summary>
+  public const int CategoryFieldNumber = 7;
+  private uint category_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint Category {
+    get { return category_; }
+    set {
+      category_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "name" field.</summary>
+  public const int NameFieldNumber = 8;
+  private string name_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string Name {
+    get { return name_; }
+    set {
+      name_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "description" field.</summary>
+  public const int DescriptionFieldNumber = 9;
+  private string description_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string Description {
+    get { return description_; }
+    set {
+      description_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "icon_key" field.</summary>
+  public const int IconKeyFieldNumber = 10;
+  private string iconKey_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string IconKey {
+    get { return iconKey_; }
+    set {
+      iconKey_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "vitality_points" field.</summary>
+  public const int VitalityPointsFieldNumber = 11;
+  private uint vitalityPoints_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint VitalityPoints {
+    get { return vitalityPoints_; }
+    set {
+      vitalityPoints_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -155,6 +249,13 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
     if (Enabled != other.Enabled) return false;
     if (BaselineStartAtMs != other.BaselineStartAtMs) return false;
     if (BaselineEndAtMs != other.BaselineEndAtMs) return false;
+    if (DefinitionKey != other.DefinitionKey) return false;
+    if (ConfigurationRevision != other.ConfigurationRevision) return false;
+    if (Category != other.Category) return false;
+    if (Name != other.Name) return false;
+    if (Description != other.Description) return false;
+    if (IconKey != other.IconKey) return false;
+    if (VitalityPoints != other.VitalityPoints) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -166,6 +267,13 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
     if (Enabled != false) hash ^= Enabled.GetHashCode();
     if (BaselineStartAtMs != 0UL) hash ^= BaselineStartAtMs.GetHashCode();
     if (BaselineEndAtMs != 0UL) hash ^= BaselineEndAtMs.GetHashCode();
+    if (DefinitionKey.Length != 0) hash ^= DefinitionKey.GetHashCode();
+    if (ConfigurationRevision != 0UL) hash ^= ConfigurationRevision.GetHashCode();
+    if (Category != 0) hash ^= Category.GetHashCode();
+    if (Name.Length != 0) hash ^= Name.GetHashCode();
+    if (Description.Length != 0) hash ^= Description.GetHashCode();
+    if (IconKey.Length != 0) hash ^= IconKey.GetHashCode();
+    if (VitalityPoints != 0) hash ^= VitalityPoints.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -200,6 +308,34 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
       output.WriteRawTag(32);
       output.WriteUInt64(BaselineEndAtMs);
     }
+    if (DefinitionKey.Length != 0) {
+      output.WriteRawTag(42);
+      output.WriteString(DefinitionKey);
+    }
+    if (ConfigurationRevision != 0UL) {
+      output.WriteRawTag(48);
+      output.WriteUInt64(ConfigurationRevision);
+    }
+    if (Category != 0) {
+      output.WriteRawTag(56);
+      output.WriteUInt32(Category);
+    }
+    if (Name.Length != 0) {
+      output.WriteRawTag(66);
+      output.WriteString(Name);
+    }
+    if (Description.Length != 0) {
+      output.WriteRawTag(74);
+      output.WriteString(Description);
+    }
+    if (IconKey.Length != 0) {
+      output.WriteRawTag(82);
+      output.WriteString(IconKey);
+    }
+    if (VitalityPoints != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(VitalityPoints);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -226,6 +362,34 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
       output.WriteRawTag(32);
       output.WriteUInt64(BaselineEndAtMs);
     }
+    if (DefinitionKey.Length != 0) {
+      output.WriteRawTag(42);
+      output.WriteString(DefinitionKey);
+    }
+    if (ConfigurationRevision != 0UL) {
+      output.WriteRawTag(48);
+      output.WriteUInt64(ConfigurationRevision);
+    }
+    if (Category != 0) {
+      output.WriteRawTag(56);
+      output.WriteUInt32(Category);
+    }
+    if (Name.Length != 0) {
+      output.WriteRawTag(66);
+      output.WriteString(Name);
+    }
+    if (Description.Length != 0) {
+      output.WriteRawTag(74);
+      output.WriteString(Description);
+    }
+    if (IconKey.Length != 0) {
+      output.WriteRawTag(82);
+      output.WriteString(IconKey);
+    }
+    if (VitalityPoints != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(VitalityPoints);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -247,6 +411,27 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
     }
     if (BaselineEndAtMs != 0UL) {
       size += 1 + pb::CodedOutputStream.ComputeUInt64Size(BaselineEndAtMs);
+    }
+    if (DefinitionKey.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(DefinitionKey);
+    }
+    if (ConfigurationRevision != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(ConfigurationRevision);
+    }
+    if (Category != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Category);
+    }
+    if (Name.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
+    }
+    if (Description.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(Description);
+    }
+    if (IconKey.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(IconKey);
+    }
+    if (VitalityPoints != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(VitalityPoints);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -271,6 +456,27 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
     }
     if (other.BaselineEndAtMs != 0UL) {
       BaselineEndAtMs = other.BaselineEndAtMs;
+    }
+    if (other.DefinitionKey.Length != 0) {
+      DefinitionKey = other.DefinitionKey;
+    }
+    if (other.ConfigurationRevision != 0UL) {
+      ConfigurationRevision = other.ConfigurationRevision;
+    }
+    if (other.Category != 0) {
+      Category = other.Category;
+    }
+    if (other.Name.Length != 0) {
+      Name = other.Name;
+    }
+    if (other.Description.Length != 0) {
+      Description = other.Description;
+    }
+    if (other.IconKey.Length != 0) {
+      IconKey = other.IconKey;
+    }
+    if (other.VitalityPoints != 0) {
+      VitalityPoints = other.VitalityPoints;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -307,6 +513,34 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
           BaselineEndAtMs = input.ReadUInt64();
           break;
         }
+        case 42: {
+          DefinitionKey = input.ReadString();
+          break;
+        }
+        case 48: {
+          ConfigurationRevision = input.ReadUInt64();
+          break;
+        }
+        case 56: {
+          Category = input.ReadUInt32();
+          break;
+        }
+        case 66: {
+          Name = input.ReadString();
+          break;
+        }
+        case 74: {
+          Description = input.ReadString();
+          break;
+        }
+        case 82: {
+          IconKey = input.ReadString();
+          break;
+        }
+        case 88: {
+          VitalityPoints = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -340,6 +574,34 @@ public sealed partial class ActivityScheduleTable : pb::IMessage<ActivitySchedul
         }
         case 32: {
           BaselineEndAtMs = input.ReadUInt64();
+          break;
+        }
+        case 42: {
+          DefinitionKey = input.ReadString();
+          break;
+        }
+        case 48: {
+          ConfigurationRevision = input.ReadUInt64();
+          break;
+        }
+        case 56: {
+          Category = input.ReadUInt32();
+          break;
+        }
+        case 66: {
+          Name = input.ReadString();
+          break;
+        }
+        case 74: {
+          Description = input.ReadString();
+          break;
+        }
+        case 82: {
+          IconKey = input.ReadString();
+          break;
+        }
+        case 88: {
+          VitalityPoints = input.ReadUInt32();
           break;
         }
       }

@@ -80,6 +80,11 @@ public:
 
     static BattleRoomManager &Instance();
 
+    // 表加载完成后在本节点 EventLoop 安装一次，房间共享只读配置源。
+    void SetDataProvider(std::shared_ptr<turnbattle::BattleDataProvider> provider) {
+        dataProvider_ = std::move(provider);
+    }
+
     // ---- 房间生命周期回调(集群外入口 D82 / D85;main.cpp 装配,转发给 Agones GameServerLifecycle) ----
     //
     // 房间 = Agones 的"单元":第一个房间建出之前要 allocate、最后一个房间移除之后回 Ready。
@@ -234,6 +239,8 @@ private:
 
     struct BattleRoom
     {
+        explicit BattleRoom(std::shared_ptr<turnbattle::BattleDataProvider> provider)
+            : engine(std::move(provider)) {}
         uint64_t battleId = 0;
         // 开局参数副本(BattleResultEvent 回流给 match 用;引擎内的请求副本是私有的)
         uint32_t matchMode = 0;
@@ -281,6 +288,7 @@ private:
         std::map<uint64_t, std::weak_ptr<muduo::net::TcpConnection>> directConnByPlayer;
     };
 
+    std::shared_ptr<turnbattle::BattleDataProvider> dataProvider_;
     BattleRoom *FindRoom(uint64_t battleId);
 
     // 房间插表(键 = room->battleId):成功后房间表触发一次 onCreated,返回表内的房间。

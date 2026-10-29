@@ -110,6 +110,9 @@ static void ActivityScheduleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>&
 	ActivityScheduleTableCheckNarrowedField(RowObject, TEXT("id"), TEXT("id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	ActivityScheduleTableCheckNarrowedField(RowObject, TEXT("baseline_start_at_ms"), TEXT("baseline_start_at_ms"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	ActivityScheduleTableCheckNarrowedField(RowObject, TEXT("baseline_end_at_ms"), TEXT("baseline_end_at_ms"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ActivityScheduleTableCheckNarrowedField(RowObject, TEXT("configuration_revision"), TEXT("configuration_revision"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ActivityScheduleTableCheckNarrowedField(RowObject, TEXT("category"), TEXT("category"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ActivityScheduleTableCheckNarrowedField(RowObject, TEXT("vitality_points"), TEXT("vitality_points"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UActivityScheduleTable::LoadFromJson(const FString& JsonText, FString& OutError)

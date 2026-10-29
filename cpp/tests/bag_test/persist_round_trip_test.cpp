@@ -414,6 +414,24 @@ protected:
         mainMission.add_progress(5);
         (*mainScope->mutable_mission_list()->mutable_mission_begin_time())[7] = kAcceptedAtMs;
         mainScope->add_completed_mission_ids(11);
+        // 活动三层账本均随任务快照携带；覆盖每层未知字段，不能靠标冻结绕过恢复校验。
+        mainScope->add_completed_mission_ids(15);
+        auto *activityLedger = mainScope->mutable_mission_list()->mutable_activity_ledger();
+        auto *activitySource = activityLedger->add_sources();
+        activitySource->set_mission_scope(MissionListComp::kPlayerMission);
+        activitySource->set_mission_id(15);
+        activitySource->set_rule_id(47);
+        activitySource->set_configuration_revision(2);
+        activitySource->set_period_id(1900000000000);
+        activitySource->set_points(8);
+        auto *activityClaim = activityLedger->add_claims();
+        activityClaim->set_rule_id(47);
+        activityClaim->set_configuration_revision(2);
+        activityClaim->set_period_id(1900000000000);
+        activityClaim->set_threshold_id(7);
+        activityClaim->set_request_id("persist-round-trip-activity");
+        activityClaim->set_reward_id(1);
+        activityClaim->set_claimed_at_ms(kAcceptedAtMs);
         auto *secondaryScope = quest.add_scopes();
         secondaryScope->set_scope(77);
         auto &secondaryMission = (*secondaryScope->mutable_mission_list()->mutable_missions())[7];

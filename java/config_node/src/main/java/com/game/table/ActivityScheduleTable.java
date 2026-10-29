@@ -28,6 +28,10 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private ActivityScheduleTable() {
+    definitionKey_ = "";
+    name_ = "";
+    description_ = "";
+    iconKey_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -92,6 +96,195 @@ private static final long serialVersionUID = 0L;
     return baselineEndAtMs_;
   }
 
+  public static final int DEFINITION_KEY_FIELD_NUMBER = 5;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object definitionKey_ = "";
+  /**
+   * <code>string definition_key = 5;</code>
+   * @return The definitionKey.
+   */
+  @java.lang.Override
+  public java.lang.String getDefinitionKey() {
+    java.lang.Object ref = definitionKey_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      definitionKey_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string definition_key = 5;</code>
+   * @return The bytes for definitionKey.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDefinitionKeyBytes() {
+    java.lang.Object ref = definitionKey_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      definitionKey_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int CONFIGURATION_REVISION_FIELD_NUMBER = 6;
+  private long configurationRevision_ = 0L;
+  /**
+   * <code>uint64 configuration_revision = 6;</code>
+   * @return The configurationRevision.
+   */
+  @java.lang.Override
+  public long getConfigurationRevision() {
+    return configurationRevision_;
+  }
+
+  public static final int CATEGORY_FIELD_NUMBER = 7;
+  private int category_ = 0;
+  /**
+   * <code>uint32 category = 7;</code>
+   * @return The category.
+   */
+  @java.lang.Override
+  public int getCategory() {
+    return category_;
+  }
+
+  public static final int NAME_FIELD_NUMBER = 8;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object name_ = "";
+  /**
+   * <code>string name = 8;</code>
+   * @return The name.
+   */
+  @java.lang.Override
+  public java.lang.String getName() {
+    java.lang.Object ref = name_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      name_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string name = 8;</code>
+   * @return The bytes for name.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNameBytes() {
+    java.lang.Object ref = name_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      name_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int DESCRIPTION_FIELD_NUMBER = 9;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object description_ = "";
+  /**
+   * <code>string description = 9;</code>
+   * @return The description.
+   */
+  @java.lang.Override
+  public java.lang.String getDescription() {
+    java.lang.Object ref = description_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      description_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string description = 9;</code>
+   * @return The bytes for description.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDescriptionBytes() {
+    java.lang.Object ref = description_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      description_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int ICON_KEY_FIELD_NUMBER = 10;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object iconKey_ = "";
+  /**
+   * <code>string icon_key = 10;</code>
+   * @return The iconKey.
+   */
+  @java.lang.Override
+  public java.lang.String getIconKey() {
+    java.lang.Object ref = iconKey_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      iconKey_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string icon_key = 10;</code>
+   * @return The bytes for iconKey.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getIconKeyBytes() {
+    java.lang.Object ref = iconKey_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      iconKey_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int VITALITY_POINTS_FIELD_NUMBER = 11;
+  private int vitalityPoints_ = 0;
+  /**
+   * <code>uint32 vitality_points = 11;</code>
+   * @return The vitalityPoints.
+   */
+  @java.lang.Override
+  public int getVitalityPoints() {
+    return vitalityPoints_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -118,6 +311,27 @@ private static final long serialVersionUID = 0L;
     if (baselineEndAtMs_ != 0L) {
       output.writeUInt64(4, baselineEndAtMs_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(definitionKey_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 5, definitionKey_);
+    }
+    if (configurationRevision_ != 0L) {
+      output.writeUInt64(6, configurationRevision_);
+    }
+    if (category_ != 0) {
+      output.writeUInt32(7, category_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(name_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 8, name_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(description_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 9, description_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(iconKey_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 10, iconKey_);
+    }
+    if (vitalityPoints_ != 0) {
+      output.writeUInt32(11, vitalityPoints_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -137,6 +351,30 @@ private static final long serialVersionUID = 0L;
     if (baselineEndAtMs_ != 0L) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt64Size(4, baselineEndAtMs_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(definitionKey_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(5, definitionKey_);
+    }
+    if (configurationRevision_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(6, configurationRevision_);
+    }
+    if (category_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(7, category_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(name_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(8, name_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(description_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(9, description_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(iconKey_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(10, iconKey_);
+    }
+    if (vitalityPoints_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(11, vitalityPoints_);
     }
     return size;
   }
@@ -170,6 +408,20 @@ private static final long serialVersionUID = 0L;
         != other.getBaselineStartAtMs()) return false;
     if (getBaselineEndAtMs()
         != other.getBaselineEndAtMs()) return false;
+    if (!getDefinitionKey()
+        .equals(other.getDefinitionKey())) return false;
+    if (getConfigurationRevision()
+        != other.getConfigurationRevision()) return false;
+    if (getCategory()
+        != other.getCategory()) return false;
+    if (!getName()
+        .equals(other.getName())) return false;
+    if (!getDescription()
+        .equals(other.getDescription())) return false;
+    if (!getIconKey()
+        .equals(other.getIconKey())) return false;
+    if (getVitalityPoints()
+        != other.getVitalityPoints()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -192,6 +444,21 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + BASELINE_END_AT_MS_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getBaselineEndAtMs());
+    hash = (37 * hash) + DEFINITION_KEY_FIELD_NUMBER;
+    hash = (53 * hash) + getDefinitionKey().hashCode();
+    hash = (37 * hash) + CONFIGURATION_REVISION_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getConfigurationRevision());
+    hash = (37 * hash) + CATEGORY_FIELD_NUMBER;
+    hash = (53 * hash) + getCategory();
+    hash = (37 * hash) + NAME_FIELD_NUMBER;
+    hash = (53 * hash) + getName().hashCode();
+    hash = (37 * hash) + DESCRIPTION_FIELD_NUMBER;
+    hash = (53 * hash) + getDescription().hashCode();
+    hash = (37 * hash) + ICON_KEY_FIELD_NUMBER;
+    hash = (53 * hash) + getIconKey().hashCode();
+    hash = (37 * hash) + VITALITY_POINTS_FIELD_NUMBER;
+    hash = (53 * hash) + getVitalityPoints();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -327,6 +594,13 @@ private static final long serialVersionUID = 0L;
       enabled_ = false;
       baselineStartAtMs_ = 0L;
       baselineEndAtMs_ = 0L;
+      definitionKey_ = "";
+      configurationRevision_ = 0L;
+      category_ = 0;
+      name_ = "";
+      description_ = "";
+      iconKey_ = "";
+      vitalityPoints_ = 0;
       return this;
     }
 
@@ -372,6 +646,27 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000008) != 0)) {
         result.baselineEndAtMs_ = baselineEndAtMs_;
       }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.definitionKey_ = definitionKey_;
+      }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.configurationRevision_ = configurationRevision_;
+      }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.category_ = category_;
+      }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.name_ = name_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.description_ = description_;
+      }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.iconKey_ = iconKey_;
+      }
+      if (((from_bitField0_ & 0x00000400) != 0)) {
+        result.vitalityPoints_ = vitalityPoints_;
+      }
     }
 
     @java.lang.Override
@@ -397,6 +692,35 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getBaselineEndAtMs() != 0L) {
         setBaselineEndAtMs(other.getBaselineEndAtMs());
+      }
+      if (!other.getDefinitionKey().isEmpty()) {
+        definitionKey_ = other.definitionKey_;
+        bitField0_ |= 0x00000010;
+        onChanged();
+      }
+      if (other.getConfigurationRevision() != 0L) {
+        setConfigurationRevision(other.getConfigurationRevision());
+      }
+      if (other.getCategory() != 0) {
+        setCategory(other.getCategory());
+      }
+      if (!other.getName().isEmpty()) {
+        name_ = other.name_;
+        bitField0_ |= 0x00000080;
+        onChanged();
+      }
+      if (!other.getDescription().isEmpty()) {
+        description_ = other.description_;
+        bitField0_ |= 0x00000100;
+        onChanged();
+      }
+      if (!other.getIconKey().isEmpty()) {
+        iconKey_ = other.iconKey_;
+        bitField0_ |= 0x00000200;
+        onChanged();
+      }
+      if (other.getVitalityPoints() != 0) {
+        setVitalityPoints(other.getVitalityPoints());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -444,6 +768,41 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000008;
               break;
             } // case 32
+            case 42: {
+              definitionKey_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 42
+            case 48: {
+              configurationRevision_ = input.readUInt64();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 48
+            case 56: {
+              category_ = input.readUInt32();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
+            case 66: {
+              name_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 66
+            case 74: {
+              description_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 74
+            case 82: {
+              iconKey_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 82
+            case 88: {
+              vitalityPoints_ = input.readUInt32();
+              bitField0_ |= 0x00000400;
+              break;
+            } // case 88
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -585,6 +944,390 @@ private static final long serialVersionUID = 0L;
     public Builder clearBaselineEndAtMs() {
       bitField0_ = (bitField0_ & ~0x00000008);
       baselineEndAtMs_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object definitionKey_ = "";
+    /**
+     * <code>string definition_key = 5;</code>
+     * @return The definitionKey.
+     */
+    public java.lang.String getDefinitionKey() {
+      java.lang.Object ref = definitionKey_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        definitionKey_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string definition_key = 5;</code>
+     * @return The bytes for definitionKey.
+     */
+    public com.google.protobuf.ByteString
+        getDefinitionKeyBytes() {
+      java.lang.Object ref = definitionKey_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        definitionKey_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string definition_key = 5;</code>
+     * @param value The definitionKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDefinitionKey(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      definitionKey_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string definition_key = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDefinitionKey() {
+      definitionKey_ = getDefaultInstance().getDefinitionKey();
+      bitField0_ = (bitField0_ & ~0x00000010);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string definition_key = 5;</code>
+     * @param value The bytes for definitionKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDefinitionKeyBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      definitionKey_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+
+    private long configurationRevision_ ;
+    /**
+     * <code>uint64 configuration_revision = 6;</code>
+     * @return The configurationRevision.
+     */
+    @java.lang.Override
+    public long getConfigurationRevision() {
+      return configurationRevision_;
+    }
+    /**
+     * <code>uint64 configuration_revision = 6;</code>
+     * @param value The configurationRevision to set.
+     * @return This builder for chaining.
+     */
+    public Builder setConfigurationRevision(long value) {
+
+      configurationRevision_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 configuration_revision = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearConfigurationRevision() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      configurationRevision_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private int category_ ;
+    /**
+     * <code>uint32 category = 7;</code>
+     * @return The category.
+     */
+    @java.lang.Override
+    public int getCategory() {
+      return category_;
+    }
+    /**
+     * <code>uint32 category = 7;</code>
+     * @param value The category to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCategory(int value) {
+
+      category_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 category = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCategory() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      category_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object name_ = "";
+    /**
+     * <code>string name = 8;</code>
+     * @return The name.
+     */
+    public java.lang.String getName() {
+      java.lang.Object ref = name_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        name_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string name = 8;</code>
+     * @return The bytes for name.
+     */
+    public com.google.protobuf.ByteString
+        getNameBytes() {
+      java.lang.Object ref = name_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        name_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string name = 8;</code>
+     * @param value The name to set.
+     * @return This builder for chaining.
+     */
+    public Builder setName(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      name_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string name = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearName() {
+      name_ = getDefaultInstance().getName();
+      bitField0_ = (bitField0_ & ~0x00000080);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string name = 8;</code>
+     * @param value The bytes for name to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNameBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      name_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object description_ = "";
+    /**
+     * <code>string description = 9;</code>
+     * @return The description.
+     */
+    public java.lang.String getDescription() {
+      java.lang.Object ref = description_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        description_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string description = 9;</code>
+     * @return The bytes for description.
+     */
+    public com.google.protobuf.ByteString
+        getDescriptionBytes() {
+      java.lang.Object ref = description_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        description_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string description = 9;</code>
+     * @param value The description to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDescription(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      description_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string description = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDescription() {
+      description_ = getDefaultInstance().getDescription();
+      bitField0_ = (bitField0_ & ~0x00000100);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string description = 9;</code>
+     * @param value The bytes for description to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDescriptionBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      description_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object iconKey_ = "";
+    /**
+     * <code>string icon_key = 10;</code>
+     * @return The iconKey.
+     */
+    public java.lang.String getIconKey() {
+      java.lang.Object ref = iconKey_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        iconKey_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string icon_key = 10;</code>
+     * @return The bytes for iconKey.
+     */
+    public com.google.protobuf.ByteString
+        getIconKeyBytes() {
+      java.lang.Object ref = iconKey_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        iconKey_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string icon_key = 10;</code>
+     * @param value The iconKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIconKey(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      iconKey_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string icon_key = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearIconKey() {
+      iconKey_ = getDefaultInstance().getIconKey();
+      bitField0_ = (bitField0_ & ~0x00000200);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string icon_key = 10;</code>
+     * @param value The bytes for iconKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIconKeyBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      iconKey_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+
+    private int vitalityPoints_ ;
+    /**
+     * <code>uint32 vitality_points = 11;</code>
+     * @return The vitalityPoints.
+     */
+    @java.lang.Override
+    public int getVitalityPoints() {
+      return vitalityPoints_;
+    }
+    /**
+     * <code>uint32 vitality_points = 11;</code>
+     * @param value The vitalityPoints to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVitalityPoints(int value) {
+
+      vitalityPoints_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 vitality_points = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearVitalityPoints() {
+      bitField0_ = (bitField0_ & ~0x00000400);
+      vitalityPoints_ = 0;
       onChanged();
       return this;
     }

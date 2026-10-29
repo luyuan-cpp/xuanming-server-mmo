@@ -52,6 +52,8 @@ void Unmarshal(entt::entity player, const QuestAllData& in) {
             // 重复 scope 再并一次会让重复字段翻倍。
             if (seenScopes.insert(scope.scope()).second) {
                 list.mutable_unknown_fields()->MergeFrom(scope.mission_list().unknown_fields());
+                if (scope.mission_list().has_activity_ledger())
+                    list.mutable_activity_ledger()->CopyFrom(scope.mission_list().activity_ledger());
             }
             list.set_type(scope.scope());
             for (const auto& [id, mission] : scope.mission_list().missions())

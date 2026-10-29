@@ -648,7 +648,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         return;
     }
 
-    auto room = std::make_unique<BattleRoom>();
+    auto room = std::make_unique<BattleRoom>(dataProvider_);
     room->battleId = battleId;
     room->matchMode = request.match_mode();
     room->battleConfigId = request.battle_config_id();

@@ -1,0 +1,19 @@
+{
+  "profiles": [
+    {
+      "battle_config_id": 0,
+      "strategy_key": "",
+      "exp_gain": "100",
+      "currencies": [
+        { "currency_type": 0, "amount": "100" },
+        { "currency_type": 1, "amount": "10" },
+        { "currency_type": 2, "amount": "20" }
+      ],
+      "item_draws": 2,
+      "random_items": [
+        { "item_table_id": 10, "count": 1, "weight": 1 },
+        { "item_table_id": 11, "count": 1, "weight": 1 }
+      ]
+    }
+  ]
+}

@@ -5466,6 +5466,9 @@ ${grpcClientBlock}
 	# battle-node-config 也由本模板生成,battle 不读这一段,多出来无副作用。
 	[void](Get-PlayerInboxConsumerEnabled -Expected $PlayerInboxConsumer)
 	$playerInboxBlock = Get-AuthoritativeYamlBlock -RelativePath 'bin/etc/game_config.yaml' -Key 'player_inbox'
+	# etc 是整目录 ConfigMap 挂载；奖励文件必须从同一份权威源带入，不能依赖镜像内文件。
+	$battleRewards = Get-Content -LiteralPath (Join-Path $RepoRoot 'bin/etc/battle_rewards.json') -Raw -Encoding utf8 -ErrorAction Stop
+	$null = $battleRewards | ConvertFrom-Json -ErrorAction Stop
 	$gameConfig = @"
 SceneNodeType: 0
 ZoneId: $CurrentZoneId
@@ -5490,6 +5493,8 @@ data:
 $($baseDeployConfig -split "`r?`n" | ForEach-Object { "    $_" } | Out-String)
   game_config.yaml: |
 $($gameConfig -split "`r?`n" | ForEach-Object { "    $_" } | Out-String)
+  battle_rewards.json: |
+$($battleRewards -split "`r?`n" | ForEach-Object { "    $_" } | Out-String)
 "@
 }
 

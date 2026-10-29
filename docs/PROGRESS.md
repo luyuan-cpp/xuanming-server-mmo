@@ -14762,3 +14762,38 @@ Java r14全30实际执行完：7568项7200通过59失败7错误302外部跳过�
 - 修正 Match authority/store.go 两个未使用导入，并将本地 Match 构建/运行入口改为整个包，纳入 original_role_interceptor.go。只读验收通过 Match 直连与 Router 转发的 GetNetworkProbePlan；会话入口现有测试通过。
 - 当前手动客户端已实测 PVE_SOLO config=1，battle=82496116915372032，9 回合胜利结算。客户端另修探测期间提前查询撤销匹配、同步错误提示被覆盖及排行榜焦点已销毁对象空引用；队列相关纯逻辑回归 38/38 通过。客户端源码防护尚未重新打包。
 - 验证产物：服务端 build/verification/pve-match-20261022/，客户端 .codex-artifacts/pve-match-20261022/。本次未改共享协议或服务端业务规则；Java 版无对应业务改动。
+
+### 2026-10-23：角色、装备、技能与怪物第一版数值基线
+
+- 按用户希望接近成熟回合制成长体验的要求，重配 AttributeAllocRatio / AttributeRule / AttributeAutoPlan / EquipAttributeCap / Item / Skill / Monster 七张源表。角色分配点改线性，满投主攻击提高标准基础的100%（对应输出职业125%）、体质气血200%（丹心250%）、速度100%（逐风125%）；职业推荐兼顾生存、治疗与抢速，不再全投一项。
+- 收紧装备一级属性、全属性、准确与随机触发预算，增强气血、防御直接词条；补齐四部位10/30/50/70级16件装备，旧物品ID与数据行保留。三种常用群攻和丹心四种治疗同步标定；现有固定关卡怪物重配，不新增高等级副本或自动技能AI。
+- 通过Artifact Tool创作并渲染七源表，逐格核对原有值只改授权单元格、非工作表ZIP内容不变。权威导表器在沙盒完成47表主键/外键与数据输出，仅转入本批14个JSON/PB；manifest32全量源与产物hash核验通过，独立复核七表Excel→JSON→PB等价。配置索引已更新并check通过。默认全语言沙盒导表因缺protoc-gen-go失败，后以官方导表器的纯数据配置完成，不安装工具或覆盖多端代码。
+- 新增verify_turn_balance.py，读取正式JSON及源码常量：当前11085设计检查、280种属性组合、172次技能重数比较零失败；同一最终脚本对旧输入11053检查有108失败。普通装备简化PVE为4/4/12回合；85级丹心常规单奶3052，急救5521、低于30%血线理论7178（仍按缺血封顶）。这些是无随机触发、无宠物、非联机的数值镜像，不能宣称真实战斗验收通过。
+- 原生测试首轮链接报BattleSettlementData::_table_未解析，已定位生成对象世代不一致，保留首错后串行重建proto依赖；此条追加时重建仍进行中，尚无本批原生通过结论。NoRawPointer检查因本机工具缺失SKIP，不算严格静态检查通过。证据位于build/verification/turn-balance-20261023/。
+- 本批未改共享协议、未重启本地运行服务、未改客户端或清理角色数据。Java独立仓D:/luyuan/xuanming-server-mmo当前不存在，无法更新PARITY.md，数值同步待做；不声明双版本完成。
+
+### 2026-10-23：数值基线原生回归完成
+
+- 保留首轮LNK2001原件，正式proto工程完整重建退出0，再构建turn_battle_engine_test退出0；完整运行XML独立计数18套、282注册/282执行/282通过，0失败、0跳过、0未运行。EXE SHA256 FE9D68650F9E5D56DCE072BFAC5C9887C24C27EC5E4138F5ED012F912F2B594C，XML SHA256 7B33E7B74B73EAE310EE512BCAD7C96FF465B29F4E5DD78A44FBDBA1D12B1701。汇总在build/verification/turn-balance-20261023/native-validation.json。
+- 补入四职业普通装备教学与早期普通关验证，均可仅普攻通过；最终独立设计脚本11101检查、280属性组合、172重数比较零失败，同脚本旧输入11069检查有108失败。正式报告official-balance.json绑定最终脚本SHA，不以旧报告替代。
+- generated/tables/*.pb补充Git二进制属性，避免无NUL的Protobuf文件被当文本检查空白或执行换行转换；本批文本与二进制范围diff --check通过。全仓已有其它生成Java文件的空白问题不属于本批，未修改。
+- proto构建无warning/error；测试链接有168项第三方缺PDB的LNK4099 warning但0error。NoRaw静态工具仍缺失，不能视为静态门禁通过。未构建bag_test或完整运行节点，未重启服务、未联机，Java独立仓同步仍待做。
+
+## 2026-10-23 活动中心：权威实现与验证续作（未部署）
+
+- 活动目录追加稳定内容身份、修订、分类/展示/真实奖励类型、明确一次性完成次数及任务入口；当前三项正式活动仍未排期，不能把设计图六项样例或 05:00、10/100 写成运营规则。正活跃贡献缺稳定身份/修订时接取前明确拒绝配置，保留真实目录 ID。收藏属于角色/内容身份偏好，任务真值仍沿现有任务域。
+- 新增正式空表 ActivityVitalityRule/ActivityVitalityReward、任务快照内的积分来源与领取账本，以及消息 345 ClaimActivityVitalityReward；正式导表/协议生成已执行。积分只消费真实一次性任务完成，scope+mission_id 永久去重；领取按角色、原 request_id 与规则/周期/阈值校验，背包整批发放后等待精确父快照和归属围栏证明。重放优先于跨周期和配置撤销，配置修订不清分、不复领；两类账本各 4096 条输入预算，长期归档与循环任务事实合同仍待决。
+- Go/proto 28 包编译退出 0（无测试文件，169 输入无漂移）；同仓 Java config_node release 21 编译 405 Java 源退出 0（406 输入无漂移），真实 AllTable JSON/PB 消费烟测退出 0（三活动未排期、两张活跃表空、96 配置输入无漂移）。收据在 build/verification/activity-center-20261022/resume-20261023-go-java/final-receipt.json；旧 Java JAR 路径失败保留，本次未复现，不推定根因已修复。
+- C++ r3 使用 amd64 MSBuild、/m:1 与进程局部 _CL_=/MP1，已编译活动核心、排期、任务快照/来源/存档桥及场景 RPC handler；场景节点链接因公共 proto.lib 在并发重建期间消失而 LNK1104，明确退出 1，测试尚未执行，不能登记通过。冲突证据 proto-library-conflict.json；当前 scene.lib 提取的五个活动/任务目标与本轮 obj 逐字节一致，源码 SHA/源及 obj 时间和归档稳定性见 scene-activity-archive-receipt.json。新增 14 核心、1 RPC 派发、1 排期配置测试待共享库恢复后实际执行，后续结论另行追加。
+- 另一版 Java 规范源仓 D:/luyuan/xuanming-server-mmo 不存在；D:/work/xuanming-server-mmo 只有 grpc 构建残留，无业务源、AGENTS/PARITY/Git，不能声称双版对齐。正式运营分类/日期/活跃规则/阈值/日界线、循环次数及长期账本归档待决；未做账号联机、真库崩溃恢复、清库、压测、部署、提交或推送。
+
+## 2026-10-29：可配置战斗结算奖励完成收尾
+
+- 奖励权威配置为 `bin/etc/battle_rewards.json`。当前默认每位符合资格的 PVE 胜利玩家获得银两 100、灵石 10、绑定灵石 20，以及从药品 10/11 等权、有放回抽取 2 次的道具；同种道具汇总。奖励额度与抽取次数均不乘除人数或击杀数；真实击杀继续用于任务。资格沿用 A 方获胜、存活且未逃跑，PVP 不发这份奖励。
+- `BattleRewardConfig` 可按副本与 `strategy_key` 配档，`SelectRewardStrategy(playerId)` 预留服务端按实际战斗行为选策略入口，目前返回空。启动时加载、校验配置，缺失或非法拒启；支持 `BATTLE_REWARD_CONFIG_PATH`，修改后需重启 battle。每场开局复制通用档，终局用种子与玩家号独立生成一次道具，不消费战斗 RNG，重复读取与重投复用冻结结果。
+- 正式协议生成器已刷新 C++/Go 与客户端绑定。结算追加 `currency_gains=16`；新集合优先，空集合兼容旧 `gold_gain`。scene 在任何币种入账前预检整笔币种、去重、金额、组件与余额上溢，再走原 `AddCurrency` 与整局账本；保留补缴和封禁口径。客户端显示三币与完整金额，长奖励列表可纵向滚动并在每次展示时回到顶部。部署时须先更新 scene 与客户端，再启用新 battle。经验仍沿用既有结算处理口径，本轮不新增经验到账或升级系统。
+- 10 月 23 日实际完成 proto/table/battle/scene 库，以及独立输出的两个测试工程和 battle/scene 节点构建；四个最终工程均退出 0，严格裸指针检查分别解析 9/23/7/26 个编译单元并通过。战斗全量 282/282、结算专项 53/53，共 335 项通过，0 失败、0 跳过、0 禁用。10 月 29 日收尾核对 21 份本轮源码/配置、24 份独立库与 proto 库均未漂移，复用上述实际运行证据，没有把本次核对写成重新运行测试。最终汇总为 `build/verification/battle-rewards-20261023/final-proof.json`，复核为同目录 `resume-audit-20261029.json`。
+- 首次原生工具环境、共享 PDB 与并发完整 Rebuild 清除公共 proto 库导致的失败日志保留。最终使用稳定库快照和独立输出、中间目录，串行构建且未跳过静态门禁。节点工程默认复制步骤执行前，仅主动停止本任务构建树，随后显式 `PostBuildEventUseInBuild=false` 完成构建；中断收据保留，运行目录 battle/scene 程序与构建前哈希一致。
+- Go `GOPROXY=off go test ./battle ./contracts/kafka` 退出 0，两包无测试文件，属于绑定编译验证。客户端运行时与战斗测试程序集编译为 0 错误、128 条警告；临时 targets 仅补入并行任务已存在但尚未被 Unity 生成工程收录的真实源码，未修改生成工程。客户端四份本轮源码在本次复核中与收据 SHA 一致；新增界面测试只完成编译，未运行 Unity、截图或联机。证据为客户端 `.codex-artifacts/battle-rewards-20261023/client-validation-receipt.json`，该收据明确属于编译后采样，不宣称全量输入冻结。
+- Debug 配置准备、源/派生 JSON 哈希、manifest 与唯一只读挂载核对及 compose config 通过，未启动容器。K8s 全量契约脚本实际 286 项中 273 通过、13 失败，新奖励 JSON 的四种部署路径检查通过；未运行旧版基线，不能将 13 项称为已证明的历史失败。完整日志原写入沙箱 TEMP 并被清理，仅保留最终计数、用例名和已确认原因的稳定收据 `build/verification/battle-rewards-deploy-20261023-092618/receipt.json`，不是完整原日志。
+- 本轮按用户要求不处理独立 Java 玩法服务器；未启动或重启服务、部署、重新打包客户端、清理角色数据、提交或推送。设计说明已追加到 `docs/design/turn-based-battle-server.md`，客户端交付边界保留在其既有 `Docs/GameplayUI-20260910.md`。

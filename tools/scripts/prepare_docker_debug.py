@@ -233,7 +233,8 @@ def main() -> None:
     config_dir.mkdir(exist_ok=True)
     sql_dir.mkdir(exist_ok=True)
     source_paths = [f"go/{service}/etc/{filename}" for service, filename in GO_CONFIGS.items()]
-    source_paths += ["bin/etc/base_deploy_config.yaml", "bin/etc/game_config.yaml", "java/gateway_node/src/main/resources/application.yaml"]
+    source_paths += ["bin/etc/base_deploy_config.yaml", "bin/etc/game_config.yaml",
+                     "bin/etc/battle_rewards.json", "java/gateway_node/src/main/resources/application.yaml"]
     configs = {service: container_addresses(load_yaml(f"go/{service}/etc/{filename}")) for service, filename in GO_CONFIGS.items()}
     for service, config in configs.items():
         # 这两个入口把 ListenOn 原样注册为 NodeInfo，并不读取 POD_IP；显式绑定本容器可达地址。
@@ -277,6 +278,8 @@ def main() -> None:
     game = load_yaml("bin/etc/game_config.yaml")
     game["zoneredis"]["host"] = "redis"
     write_yaml(config_dir / "game_config.yaml", game)
+    # 奖励不派生第二份默认值，原样复制权威配置并纳入同批来源摘要。
+    shutil.copyfile(REPO / "bin/etc/battle_rewards.json", config_dir / "battle_rewards.json")
     gateway = container_addresses(load_yaml("java/gateway_node/src/main/resources/application.yaml"))
     gateway["spring"]["datasource"].update(url=gateway["spring"]["datasource"]["url"].replace("localhost:3306", "mysql:3306"), username="appuser", password=environment["MYSQL_PASSWORD"])
     gateway["spring"]["data"]["redis"]["host"] = "redis"
@@ -293,7 +296,7 @@ def main() -> None:
     (output / ".env").write_text("# 仅用于本机独立开发栈；不要输出、上传或加入版本控制。\n" + "".join(f"{key}={value}\n" for key, value in sorted(environment.items())), encoding="utf-8")
     manifest = {path: hashlib.sha256((REPO / path).read_bytes()).hexdigest() for path in source_paths}
     (output / "source-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"已从当前 10 份源配置准备独立开发栈: {output}")
+    print(f"已从当前 {len(source_paths)} 份源配置准备独立开发栈: {output}")
     print("密钥已保存在忽略目录并沿用已有值；未构建、启动容器或删除数据。")
 
 

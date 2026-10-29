@@ -1,9 +1,15 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <system_error>
 #include <vector>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "../test_config_helper.h"
 #include "constants/turn_battle_constants.h"
@@ -14,6 +20,7 @@
 #include "table/code/skill_table.h"
 #include "table/code/dungeon_table.h"
 #include "table/code/monster_table.h"
+#include "table/code/item_table.h"
 
 // TableBattleDataProvider 对「真实导出表」(generated/tables/*.pb)的契约测试,
 // 设计文档 §15(PVE 数据化)。2026-09-02「开局秒杀」事故的根因就是 Monster 表只有 id 列、
@@ -70,6 +77,7 @@ protected:
         MonsterTableManager::Instance().Load();
         SkillTableManager::Instance().Load();
         BuffTableManager::Instance().Load();
+        ItemTableManager::Instance().Load();
     }
 
     static void TearDownTestSuite() {
@@ -95,7 +103,80 @@ protected:
 std::filesystem::path TableBattleDataProviderTest::originalDir;
 bool TableBattleDataProviderTest::tablesLoaded = false;
 
+class RewardConfigFile {
+public:
+    explicit RewardConfigFile(const std::string& json)
+        : path(std::filesystem::path(::testing::TempDir()) /
+               ("mmorpg-battle-reward-config-test-" + std::to_string(
+#ifdef _WIN32
+                   _getpid()
+#else
+                   getpid()
+#endif
+               ) + ".json")) {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << json;
+    }
+    ~RewardConfigFile() { std::error_code ec; std::filesystem::remove(path, ec); }
+    std::filesystem::path path;
+};
+
 }  // namespace
+
+TEST_F(TableBattleDataProviderTest, BattleRewardsDefaultGivesAllCurrenciesAndRandomItems) {
+    turnbattle::TableBattleDataProvider provider;
+    ASSERT_TRUE(provider.LoadBattleRewards("etc/battle_rewards.json"));
+    const auto* reward = provider.FindBattleReward(1, "");
+    ASSERT_NE(reward, nullptr);
+    ASSERT_EQ(reward->currencies_size(), 3);
+    for (int i = 0; i < 3; ++i) {
+        EXPECT_EQ(reward->currencies(i).currency_type(), static_cast<uint32_t>(i));
+        EXPECT_GT(reward->currencies(i).amount(), 0u);
+    }
+    EXPECT_EQ(reward->item_draws(), 2u);
+    EXPECT_EQ(reward->random_items_size(), 2);
+}
+
+TEST_F(TableBattleDataProviderTest, BattleRewardsSelectDungeonAndStrategyWithExplicitFallback) {
+    RewardConfigFile file(R"({"profiles":[
+        {"exp_gain":"10"},
+        {"battle_config_id":7,"exp_gain":"20"},
+        {"battle_config_id":7,"strategy_key":"control","exp_gain":"30"}
+    ]})");
+    turnbattle::TableBattleDataProvider provider;
+    ASSERT_TRUE(provider.LoadBattleRewards(file.path.string()));
+    EXPECT_EQ(provider.FindBattleReward(8, "")->exp_gain(), 10u);
+    EXPECT_EQ(provider.FindBattleReward(7, "")->exp_gain(), 20u);
+    EXPECT_EQ(provider.FindBattleReward(7, "control")->exp_gain(), 30u);
+    EXPECT_EQ(provider.FindBattleReward(7, "unknown")->exp_gain(), 20u);
+}
+
+TEST_F(TableBattleDataProviderTest, BattleRewardsRejectInvalidConfigWithoutReplacingLoadedRewards) {
+    turnbattle::TableBattleDataProvider provider;
+    ASSERT_TRUE(provider.LoadBattleRewards("etc/battle_rewards.json"));
+    const auto before = provider.FindBattleReward(0, "")->SerializeAsString();
+    const std::vector<std::string> invalid = {
+        R"({"profiles":[]})",
+        R"({"profiles":[{"battle_config_id":7}]})",
+        R"({"profiles":[{},{}]})",
+        R"({"profiles":[{"currencies":[{"currency_type":3,"amount":"1"}]}]})",
+        R"({"profiles":[{"currencies":[{"amount":"1"},{"amount":"2"}]}]})",
+        R"({"profiles":[{"currencies":[{"amount":"9223372036854775808"}]}]})",
+        R"({"profiles":[{"item_draws":101}]})",
+        R"({"profiles":[{"item_draws":1}]})",
+        R"({"profiles":[{"random_items":[{"item_table_id":10,"count":1,"weight":0}]}]})",
+        R"({"profiles":[{"random_items":[{"item_table_id":999999,"count":1,"weight":1}]}]})",
+        R"({"profiles":[{"item_draws":2,"random_items":[{"item_table_id":10,"count":4294967295,"weight":1}]}]})",
+        R"({"profiles":[{"unknown_key":1}]})",
+        "invalid json"
+    };
+    for (const auto& json : invalid) {
+        RewardConfigFile file(json);
+        EXPECT_FALSE(provider.LoadBattleRewards(file.path.string())) << json;
+        EXPECT_EQ(provider.FindBattleReward(0, "")->SerializeAsString(), before);
+    }
+    EXPECT_FALSE(provider.LoadBattleRewards("missing-battle-reward-config-test.json"));
+}
 
 // 副本怪物组与 data/Dungeon.xlsx 的 monster 列一致(0 值补位不能进组);未配置副本返回空
 TEST_F(TableBattleDataProviderTest, DungeonMonsterGroupsMatchExportedTable) {

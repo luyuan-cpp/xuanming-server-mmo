@@ -12,6 +12,10 @@ namespace turnbattle {
 
 class TableBattleDataProvider final : public BattleDataProvider {
 public:
+    // 启动时加载一次；失败不安装配置，建房拒绝缺失的 PVE 奖励档。
+    bool LoadBattleRewards(const std::string& path);
+    const BattleRewardProfile* FindBattleReward(uint32_t battleConfigId,
+                                               const std::string& strategyKey) const override;
     const SkillTable* FindSkill(uint32_t skillTableId) const override;
     const BuffTable* FindBuff(uint32_t buffTableId) const override;
     const SkillPermissionTable* FindSkillPermission(uint32_t combatStateId) const override;
@@ -26,9 +30,8 @@ public:
     double GetSkillDamage(uint32_t skillTableId, double casterLevel) override;
     double GetBuffHealthRegeneration(uint32_t buffTableId, double level, double lostHealth) override;
     double GetBuffBonusDamage(uint32_t buffTableId) override;
+private:
+    BattleRewardConfig rewards;
 };
-
-// 生产实现工厂:引擎默认构造走这里,把表管理器依赖隔离在单独编译单元
-std::shared_ptr<BattleDataProvider> MakeTableBattleDataProvider();
 
 }  // namespace turnbattle

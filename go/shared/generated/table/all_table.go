@@ -15,6 +15,12 @@ func LoadTables(configDir string, useBinary bool) {
     if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load ActivitySchedule table: %v", err)
     }
+    if err := ActivityVitalityRewardTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load ActivityVitalityReward table: %v", err)
+    }
+    if err := ActivityVitalityRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load ActivityVitalityRule table: %v", err)
+    }
     if err := ActorActionCombatStateTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load ActorActionCombatState table: %v", err)
     }
@@ -157,11 +163,23 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(45)
+    wg.Add(47)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load ActivitySchedule table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := ActivityVitalityRewardTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load ActivityVitalityReward table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := ActivityVitalityRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load ActivityVitalityRule table: %v", err)
         }
     }()
     go func() {
@@ -448,6 +466,14 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newActivitySchedule.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload ActivitySchedule failed: %w", err)
     }
+    newActivityVitalityReward := NewActivityVitalityRewardTableManager()
+    if err := newActivityVitalityReward.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload ActivityVitalityReward failed: %w", err)
+    }
+    newActivityVitalityRule := NewActivityVitalityRuleTableManager()
+    if err := newActivityVitalityRule.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload ActivityVitalityRule failed: %w", err)
+    }
     newActorActionCombatState := NewActorActionCombatStateTableManager()
     if err := newActorActionCombatState.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload ActorActionCombatState failed: %w", err)
@@ -627,6 +653,8 @@ func ReloadTables(configDir string, useBinary bool) error {
 
     // Swap all instances at once after all loads succeed.
     ActivityScheduleTableManagerInstance = newActivitySchedule
+    ActivityVitalityRewardTableManagerInstance = newActivityVitalityReward
+    ActivityVitalityRuleTableManagerInstance = newActivityVitalityRule
     ActorActionCombatStateTableManagerInstance = newActorActionCombatState
     ActorActionStateTableManagerInstance = newActorActionState
     AttributeAllocRatioTableManagerInstance = newAttributeAllocRatio

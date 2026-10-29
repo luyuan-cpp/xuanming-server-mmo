@@ -1,0 +1,15 @@
+syntax = "proto3";
+package mmorpg.cfgtable.v1;
+import "cfg_options.proto";
+message ActivityVitalityRuleTable {
+  option (cfg_sheet) = "ActivityVitalityRule";
+  option (cfg_source_file) = "ActivityVitalityRule.xlsx";
+  option (cfg_primary_key) = "id";
+  uint32 id = 1;
+  bool enabled = 2;
+  uint64 configuration_revision = 3;
+  // 第一个周期的 UTC 绝对起点；正式运营决定，不能采用客户端日期。
+  uint64 first_period_starts_at_ms = 4;
+  uint64 period_duration_ms = 5;
+  uint32 points_limit = 6;
+}

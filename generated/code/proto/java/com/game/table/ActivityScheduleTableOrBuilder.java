@@ -33,4 +33,70 @@ public interface ActivityScheduleTableOrBuilder extends
    * @return The baselineEndAtMs.
    */
   long getBaselineEndAtMs();
+
+  /**
+   * <code>string definition_key = 5;</code>
+   * @return The definitionKey.
+   */
+  java.lang.String getDefinitionKey();
+  /**
+   * <code>string definition_key = 5;</code>
+   * @return The bytes for definitionKey.
+   */
+  com.google.protobuf.ByteString
+      getDefinitionKeyBytes();
+
+  /**
+   * <code>uint64 configuration_revision = 6;</code>
+   * @return The configurationRevision.
+   */
+  long getConfigurationRevision();
+
+  /**
+   * <code>uint32 category = 7;</code>
+   * @return The category.
+   */
+  int getCategory();
+
+  /**
+   * <code>string name = 8;</code>
+   * @return The name.
+   */
+  java.lang.String getName();
+  /**
+   * <code>string name = 8;</code>
+   * @return The bytes for name.
+   */
+  com.google.protobuf.ByteString
+      getNameBytes();
+
+  /**
+   * <code>string description = 9;</code>
+   * @return The description.
+   */
+  java.lang.String getDescription();
+  /**
+   * <code>string description = 9;</code>
+   * @return The bytes for description.
+   */
+  com.google.protobuf.ByteString
+      getDescriptionBytes();
+
+  /**
+   * <code>string icon_key = 10;</code>
+   * @return The iconKey.
+   */
+  java.lang.String getIconKey();
+  /**
+   * <code>string icon_key = 10;</code>
+   * @return The bytes for iconKey.
+   */
+  com.google.protobuf.ByteString
+      getIconKeyBytes();
+
+  /**
+   * <code>uint32 vitality_points = 11;</code>
+   * @return The vitalityPoints.
+   */
+  int getVitalityPoints();
 }

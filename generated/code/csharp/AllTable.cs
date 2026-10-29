@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 45;
+        public const int TableCount = 47;
 
         private static Action s_loadSuccessCallback;
 
@@ -39,6 +39,8 @@ namespace MmorpgClient.Table
             return new string[]
             {
                 ActivityScheduleTableManager.FileName(useBinary),
+                ActivityVitalityRewardTableManager.FileName(useBinary),
+                ActivityVitalityRuleTableManager.FileName(useBinary),
                 ActorActionCombatStateTableManager.FileName(useBinary),
                 ActorActionStateTableManager.FileName(useBinary),
                 AttributeAllocRatioTableManager.FileName(useBinary),
@@ -91,6 +93,8 @@ namespace MmorpgClient.Table
         public static void LoadTables(string configDir, bool useBinary)
         {
             ActivityScheduleTableManager.Instance.Load(configDir, useBinary);
+            ActivityVitalityRewardTableManager.Instance.Load(configDir, useBinary);
+            ActivityVitalityRuleTableManager.Instance.Load(configDir, useBinary);
             ActorActionCombatStateTableManager.Instance.Load(configDir, useBinary);
             ActorActionStateTableManager.Instance.Load(configDir, useBinary);
             AttributeAllocRatioTableManager.Instance.Load(configDir, useBinary);
@@ -161,6 +165,10 @@ namespace MmorpgClient.Table
 
             LoadOne(ActivityScheduleTableManager.FileName(useBinary), byteProvider, useBinary,
                 ActivityScheduleTableManager.Instance.LoadFromBytes, ActivityScheduleTableManager.Instance.LoadFromJson);
+            LoadOne(ActivityVitalityRewardTableManager.FileName(useBinary), byteProvider, useBinary,
+                ActivityVitalityRewardTableManager.Instance.LoadFromBytes, ActivityVitalityRewardTableManager.Instance.LoadFromJson);
+            LoadOne(ActivityVitalityRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                ActivityVitalityRuleTableManager.Instance.LoadFromBytes, ActivityVitalityRuleTableManager.Instance.LoadFromJson);
             LoadOne(ActorActionCombatStateTableManager.FileName(useBinary), byteProvider, useBinary,
                 ActorActionCombatStateTableManager.Instance.LoadFromBytes, ActorActionCombatStateTableManager.Instance.LoadFromJson);
             LoadOne(ActorActionStateTableManager.FileName(useBinary), byteProvider, useBinary,

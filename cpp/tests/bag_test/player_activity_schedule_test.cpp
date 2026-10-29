@@ -102,6 +102,19 @@ TEST_F(PlayerActivityScheduleTest, KeepsWideTimesWithoutNarrowingOrArithmeticOve
     EXPECT_EQ(PLAYER_ACTIVITY_ENDED, out.status());
 }
 
+TEST_F(PlayerActivityScheduleTest, ContributionRequiresStableContentIdentityAndRevision)
+{
+    schedule.set_vitality_points(8);
+    EXPECT_EQ(kInvalidTableData, BuildAt(1900000000001));
+    EXPECT_FALSE(out.can_participate());
+    EXPECT_FALSE(out.unavailable_reason().empty());
+    schedule.set_definition_key("test.activity.stable");
+    EXPECT_EQ(kInvalidTableData, BuildAt(1900000000001));
+    schedule.set_configuration_revision(1);
+    EXPECT_EQ(kSuccess, BuildAt(1900000000001));
+    EXPECT_EQ(PLAYER_ACTIVITY_OPEN, out.status());
+}
+
 TEST_F(PlayerActivityScheduleTest, RejectsEnabledEmptyWindow)
 {
     schedule.set_baseline_start_at_ms(0);

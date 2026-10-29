@@ -16,7 +16,7 @@
    "id": 1,
    "resistance": 0,
    "speed": 240,
-   "strength": 14
+   "strength": 30
   },
   {
    "armor": 48,
@@ -39,161 +39,161 @@
    "id": 2,
    "resistance": 0,
    "speed": 252,
-   "strength": 14
+   "strength": 32
   },
   {
    "armor": 60,
    "critchance": 0,
    "exp_reward": 30,
    "gold_reward": 15,
-   "health": 760,
+   "health": 900,
    "id": 3,
    "resistance": 0,
    "speed": 346,
-   "strength": 53
+   "strength": 65
   },
   {
    "armor": 72,
    "critchance": 0,
    "exp_reward": 40,
    "gold_reward": 20,
-   "health": 1050,
+   "health": 1250,
    "id": 4,
    "resistance": 5,
    "speed": 410,
-   "strength": 63
+   "strength": 90
   },
   {
    "armor": 84,
    "critchance": 5,
    "exp_reward": 50,
    "gold_reward": 25,
-   "health": 1380,
+   "health": 1650,
    "id": 5,
    "resistance": 5,
    "speed": 475,
-   "strength": 73
+   "strength": 115
   },
   {
    "armor": 96,
    "critchance": 5,
    "exp_reward": 80,
    "gold_reward": 40,
-   "health": 1620,
+   "health": 2000,
    "id": 6,
    "resistance": 10,
    "speed": 540,
-   "strength": 82
+   "strength": 140
   },
   {
    "armor": 120,
    "critchance": 5,
    "exp_reward": 100,
    "gold_reward": 55,
-   "health": 1920,
+   "health": 2400,
    "id": 7,
    "resistance": 10,
    "speed": 605,
-   "strength": 92
+   "strength": 165
   },
   {
    "armor": 144,
    "critchance": 10,
    "exp_reward": 130,
    "gold_reward": 70,
-   "health": 2250,
+   "health": 2850,
    "id": 8,
    "resistance": 15,
    "speed": 702,
-   "strength": 106
+   "strength": 200
   },
   {
    "armor": 168,
    "critchance": 10,
    "exp_reward": 160,
    "gold_reward": 90,
-   "health": 2690,
+   "health": 3400,
    "id": 9,
    "resistance": 15,
    "speed": 799,
-   "strength": 121
+   "strength": 235
   },
   {
    "armor": 192,
    "critchance": 10,
    "exp_reward": 200,
    "gold_reward": 120,
-   "health": 2940,
+   "health": 4000,
    "id": 10,
    "resistance": 20,
    "speed": 896,
-   "strength": 135
+   "strength": 280
   },
   {
    "armor": 216,
    "critchance": 15,
    "exp_reward": 260,
    "gold_reward": 150,
-   "health": 3500,
+   "health": 4600,
    "id": 11,
    "resistance": 20,
    "speed": 1026,
-   "strength": 154
+   "strength": 190
   },
   {
    "armor": 240,
    "critchance": 15,
    "exp_reward": 320,
    "gold_reward": 190,
-   "health": 3670,
+   "health": 5000,
    "id": 12,
    "resistance": 25,
    "speed": 1123,
-   "strength": 168
+   "strength": 210
   },
   {
    "armor": 264,
    "critchance": 15,
    "exp_reward": 400,
    "gold_reward": 240,
-   "health": 4340,
+   "health": 6000,
    "id": 13,
    "resistance": 25,
    "speed": 1285,
-   "strength": 192
+   "strength": 420
   },
   {
    "armor": 300,
    "critchance": 20,
    "exp_reward": 520,
    "gold_reward": 300,
-   "health": 4670,
+   "health": 7000,
    "id": 14,
    "resistance": 30,
    "speed": 1447,
-   "strength": 216
+   "strength": 500
   },
   {
    "armor": 336,
    "critchance": 20,
    "exp_reward": 680,
    "gold_reward": 400,
-   "health": 5550,
+   "health": 8500,
    "id": 15,
    "resistance": 30,
    "speed": 1674,
-   "strength": 249
+   "strength": 600
   },
   {
    "armor": 420,
    "critchance": 25,
    "exp_reward": 1200,
    "gold_reward": 800,
-   "health": 12130,
+   "health": 10500,
    "id": 16,
    "resistance": 40,
    "speed": 1320,
-   "strength": 365
+   "strength": 320
   }
  ]
 }

@@ -158,10 +158,12 @@ type JoinQueueRequest struct {
 	BattleConfigId uint32   `protobuf:"varint,6,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // 回合制战斗配置(DungeonTable id:怪物组/人数/回合上限)
 	// PVE 人数档(只有 MATCH_MODE_PVE_TEAM 读它,docs/design/pve-team-size-matching.md):想凑成几人的队伍。
 	// 怪物只数跟着实际参战人数走(每人一整组怪:单人打一组,N 人打 N 组)。
-	//   0        = 该副本的人数上限(加这个字段之前的行为;老客户端不填就是它)
-	//   1        = 不排队,即时开战
-	//   2..上限  = 进这个人数档的队列,凑满即开
-	//   超过上限 = 拒绝(kMatchModeNotOpen)
+	//
+	//	0        = 该副本的人数上限(加这个字段之前的行为;老客户端不填就是它)
+	//	1        = 不排队,即时开战
+	//	2..上限  = 进这个人数档的队列,凑满即开
+	//	超过上限 = 拒绝(kMatchModeNotOpen)
+	//
 	// 上限 = match 配置 PveTeamSizeByConfigId[battle_config_id],且不超过引擎每队上限 5。
 	TeamSize uint32 `protobuf:"varint,7,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
 	// 同一玩家意图重放必须复用；为空只允许未启用全球权威的开发兼容模式。

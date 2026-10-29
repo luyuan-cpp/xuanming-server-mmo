@@ -48,11 +48,11 @@ constexpr ActivityScheduleTable::ParseTableT_ ActivityScheduleTable::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,36 +62,89 @@ constexpr ActivityScheduleTable::ParseTableT_ ActivityScheduleTable::InternalGen
       ::_pbi::TcParser::GetTable<::ActivityScheduleTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 baseline_end_at_ms = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActivityScheduleTable, _impl_.baseline_end_at_ms_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.baseline_end_at_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActivityScheduleTable, _impl_.id_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActivityScheduleTable, _impl_.id_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.id_)}},
       // bool enabled = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ActivityScheduleTable, _impl_.enabled_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ActivityScheduleTable, _impl_.enabled_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.enabled_)}},
       // uint64 baseline_start_at_ms = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActivityScheduleTable, _impl_.baseline_start_at_ms_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActivityScheduleTable, _impl_.baseline_start_at_ms_), 6>(),
+       {24, 6, 0,
         PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.baseline_start_at_ms_)}},
+      // uint64 baseline_end_at_ms = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActivityScheduleTable, _impl_.baseline_end_at_ms_), 7>(),
+       {32, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.baseline_end_at_ms_)}},
+      // string definition_key = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.definition_key_)}},
+      // uint64 configuration_revision = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ActivityScheduleTable, _impl_.configuration_revision_), 8>(),
+       {48, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.configuration_revision_)}},
+      // uint32 category = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActivityScheduleTable, _impl_.category_), 9>(),
+       {56, 9, 0,
+        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.category_)}},
+      // string name = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.name_)}},
+      // string description = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.description_)}},
+      // string icon_key = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.icon_key_)}},
+      // uint32 vitality_points = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActivityScheduleTable, _impl_.vitality_points_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.vitality_points_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool enabled = 2;
-      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.enabled_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.enabled_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint64 baseline_start_at_ms = 3;
-      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.baseline_start_at_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.baseline_start_at_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 baseline_end_at_ms = 4;
-      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.baseline_end_at_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.baseline_end_at_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string definition_key = 5;
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.definition_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 configuration_revision = 6;
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.configuration_revision_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 category = 7;
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.category_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 8;
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string description = 9;
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.description_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string icon_key = 10;
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.icon_key_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 vitality_points = 11;
+      {PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.vitality_points_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
+      "\25\0\0\0\0\16\0\0\4\13\10\0\0\0\0\0"
+      "ActivityScheduleTable"
+      "definition_key"
+      "name"
+      "description"
+      "icon_key"
     }},
   };
 }
@@ -101,10 +154,25 @@ inline constexpr ActivityScheduleTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        definition_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        description_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        icon_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         id_{0u},
         enabled_{false},
         baseline_start_at_ms_{::uint64_t{0u}},
-        baseline_end_at_ms_{::uint64_t{0u}} {}
+        baseline_end_at_ms_{::uint64_t{0u}},
+        configuration_revision_{::uint64_t{0u}},
+        category_{0u},
+        vitality_points_{0u} {}
 
 template <typename>
 constexpr ActivityScheduleTable::ActivityScheduleTable(::_pbi::ConstantInitialized,
@@ -122,7 +190,7 @@ inline void* PROTOBUF_NONNULL ActivityScheduleTable::PlacementNew_(
   return ::new (mem) ActivityScheduleTable(arena);
 }
 constexpr auto ActivityScheduleTable::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ActivityScheduleTable), alignof(ActivityScheduleTable));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ActivityScheduleTable), alignof(ActivityScheduleTable));
 }
 constexpr auto ActivityScheduleTable::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -358,15 +426,29 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_._has_bits_),
-        7, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.enabled_),
         PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.baseline_start_at_ms_),
         PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.baseline_end_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.definition_key_),
+        PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.configuration_revision_),
+        PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.category_),
+        PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.description_),
+        PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.icon_key_),
+        PROTOBUF_FIELD_OFFSET(::ActivityScheduleTable, _impl_.vitality_points_),
+        4,
+        5,
+        6,
+        7,
         0,
+        8,
+        9,
         1,
         2,
         3,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ActivityScheduleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -377,7 +459,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ActivityScheduleTable)},
-        {11, sizeof(::ActivityScheduleTableData)},
+        {25, sizeof(::ActivityScheduleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -386,20 +468,24 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_activityschedule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\034activityschedule_table.proto\"n\n\025Activi"
-    "tyScheduleTable\022\n\n\002id\030\001 \001(\r\022\017\n\007enabled\030\002"
-    " \001(\010\022\034\n\024baseline_start_at_ms\030\003 \001(\004\022\032\n\022ba"
-    "seline_end_at_ms\030\004 \001(\004\"A\n\031ActivitySchedu"
-    "leTableData\022$\n\004data\030\001 \003(\0132\026.ActivitySche"
-    "duleTableBG\n\016com.game.tableB\037ActivitySch"
-    "eduleTableOuterClassP\001Z\022generated/pb/tab"
-    "leb\006proto3"
+    "\n\034activityschedule_table.proto\"\206\002\n\025Activ"
+    "ityScheduleTable\022\n\n\002id\030\001 \001(\r\022\017\n\007enabled\030"
+    "\002 \001(\010\022\034\n\024baseline_start_at_ms\030\003 \001(\004\022\032\n\022b"
+    "aseline_end_at_ms\030\004 \001(\004\022\026\n\016definition_ke"
+    "y\030\005 \001(\t\022\036\n\026configuration_revision\030\006 \001(\004\022"
+    "\020\n\010category\030\007 \001(\r\022\014\n\004name\030\010 \001(\t\022\023\n\013descr"
+    "iption\030\t \001(\t\022\020\n\010icon_key\030\n \001(\t\022\027\n\017vitali"
+    "ty_points\030\013 \001(\r\"A\n\031ActivityScheduleTable"
+    "Data\022$\n\004data\030\001 \003(\0132\026.ActivityScheduleTab"
+    "leBG\n\016com.game.tableB\037ActivityScheduleTa"
+    "bleOuterClassP\001Z\022generated/pb/tableb\006pro"
+    "to3"
 };
 static ::absl::once_flag descriptor_table_activityschedule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_activityschedule_5ftable_2eproto = {
     false,
     false,
-    290,
+    443,
     descriptor_table_protodef_activityschedule_5ftable_2eproto,
     "activityschedule_table.proto",
     &descriptor_table_activityschedule_5ftable_2eproto_once,
@@ -423,30 +509,58 @@ ActivityScheduleTable::ActivityScheduleTable(::google::protobuf::Arena* PROTOBUF
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:ActivityScheduleTable)
 }
+PROTOBUF_NDEBUG_INLINE ActivityScheduleTable::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::ActivityScheduleTable& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        definition_key_(arena, from.definition_key_),
+        name_(arena, from.name_),
+        description_(arena, from.description_),
+        icon_key_(arena, from.icon_key_) {}
+
 ActivityScheduleTable::ActivityScheduleTable(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ActivityScheduleTable& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ActivityScheduleTable& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, ActivityScheduleTable_get_class_data()),
+    : ::google::protobuf::Message(arena, ActivityScheduleTable_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  ActivityScheduleTable* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, id_),
+           offsetof(Impl_, vitality_points_) -
+               offsetof(Impl_, id_) +
+               sizeof(Impl_::vitality_points_));
+
+  // @@protoc_insertion_point(copy_constructor:ActivityScheduleTable)
 }
 PROTOBUF_NDEBUG_INLINE ActivityScheduleTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        definition_key_(arena),
+        name_(arena),
+        description_(arena),
+        icon_key_(arena) {}
 
 inline void ActivityScheduleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, baseline_end_at_ms_) -
+           offsetof(Impl_, vitality_points_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::baseline_end_at_ms_));
+               sizeof(Impl_::vitality_points_));
 }
 ActivityScheduleTable::~ActivityScheduleTable() {
   // @@protoc_insertion_point(destructor:ActivityScheduleTable)
@@ -459,6 +573,10 @@ inline void ActivityScheduleTable::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.definition_key_.Destroy();
+  this_._impl_.name_.Destroy();
+  this_._impl_.description_.Destroy();
+  this_._impl_.icon_key_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -497,9 +615,28 @@ PROTOBUF_NOINLINE void ActivityScheduleTable::Clear() {
 
   cached_has_bits = _impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.definition_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.description_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.icon_key_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.baseline_end_at_ms_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.baseline_end_at_ms_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.configuration_revision_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.vitality_points_) -
+        reinterpret_cast<char*>(&_impl_.configuration_revision_)) + sizeof(_impl_.vitality_points_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -525,7 +662,7 @@ PROTOBUF_NOINLINE void ActivityScheduleTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -534,7 +671,7 @@ PROTOBUF_NOINLINE void ActivityScheduleTable::Clear() {
   }
 
   // bool enabled = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_enabled() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -543,7 +680,7 @@ PROTOBUF_NOINLINE void ActivityScheduleTable::Clear() {
   }
 
   // uint64 baseline_start_at_ms = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_baseline_start_at_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -552,11 +689,78 @@ PROTOBUF_NOINLINE void ActivityScheduleTable::Clear() {
   }
 
   // uint64 baseline_end_at_ms = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_baseline_end_at_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           4, this_._internal_baseline_end_at_ms(), target);
+    }
+  }
+
+  // string definition_key = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_definition_key().empty()) {
+      const ::std::string& _s = this_._internal_definition_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "ActivityScheduleTable.definition_key");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // uint64 configuration_revision = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_configuration_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_configuration_revision(), target);
+    }
+  }
+
+  // uint32 category = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_category() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_category(), target);
+    }
+  }
+
+  // string name = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "ActivityScheduleTable.name");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // string description = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_description().empty()) {
+      const ::std::string& _s = this_._internal_description();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "ActivityScheduleTable.description");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  // string icon_key = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_icon_key().empty()) {
+      const ::std::string& _s = this_._internal_icon_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "ActivityScheduleTable.icon_key");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // uint32 vitality_points = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_vitality_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_vitality_points(), target);
     }
   }
 
@@ -585,32 +789,83 @@ PROTOBUF_NOINLINE void ActivityScheduleTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // uint32 id = 1;
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string definition_key = 5;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_definition_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_definition_key());
+      }
+    }
+    // string name = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // string description = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_description().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_description());
+      }
+    }
+    // string icon_key = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_icon_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_icon_key());
+      }
+    }
+    // uint32 id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // bool enabled = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_enabled() != 0) {
         total_size += 2;
       }
     }
     // uint64 baseline_start_at_ms = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_baseline_start_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_baseline_start_at_ms());
       }
     }
     // uint64 baseline_end_at_ms = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_baseline_end_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_baseline_end_at_ms());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    // uint64 configuration_revision = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_configuration_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_configuration_revision());
+      }
+    }
+    // uint32 category = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_category() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_category());
+      }
+    }
+    // uint32 vitality_points = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_vitality_points() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_vitality_points());
       }
     }
   }
@@ -631,25 +886,78 @@ void ActivityScheduleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_definition_key().empty()) {
+        _this->_internal_set_definition_key(from._internal_definition_key());
+      } else {
+        if (_this->_impl_.definition_key_.IsDefault()) {
+          _this->_internal_set_definition_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_description().empty()) {
+        _this->_internal_set_description(from._internal_description());
+      } else {
+        if (_this->_impl_.description_.IsDefault()) {
+          _this->_internal_set_description("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_icon_key().empty()) {
+        _this->_internal_set_icon_key(from._internal_icon_key());
+      } else {
+        if (_this->_impl_.icon_key_.IsDefault()) {
+          _this->_internal_set_icon_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_enabled() != 0) {
         _this->_impl_.enabled_ = from._impl_.enabled_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_baseline_start_at_ms() != 0) {
         _this->_impl_.baseline_start_at_ms_ = from._impl_.baseline_start_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_baseline_end_at_ms() != 0) {
         _this->_impl_.baseline_end_at_ms_ = from._impl_.baseline_end_at_ms_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_configuration_revision() != 0) {
+        _this->_impl_.configuration_revision_ = from._impl_.configuration_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_category() != 0) {
+        _this->_impl_.category_ = from._impl_.category_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_vitality_points() != 0) {
+        _this->_impl_.vitality_points_ = from._impl_.vitality_points_;
       }
     }
   }
@@ -668,11 +976,17 @@ void ActivityScheduleTable::CopyFrom(const ActivityScheduleTable& from) {
 
 void ActivityScheduleTable::InternalSwap(ActivityScheduleTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.definition_key_, &other->_impl_.definition_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.description_, &other->_impl_.description_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.baseline_end_at_ms_)
-      + sizeof(ActivityScheduleTable::_impl_.baseline_end_at_ms_)
+      PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.vitality_points_)
+      + sizeof(ActivityScheduleTable::_impl_.vitality_points_)
       - PROTOBUF_FIELD_OFFSET(ActivityScheduleTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

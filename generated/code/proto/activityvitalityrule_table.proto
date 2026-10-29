@@ -1,0 +1,22 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "ActivityVitalityRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message ActivityVitalityRuleTable {
+	uint32 id = 1;
+	bool enabled = 2;
+	uint64 configuration_revision = 3;
+	uint64 first_period_starts_at_ms = 4;
+	uint64 period_duration_ms = 5;
+	uint32 points_limit = 6;
+}
+
+message ActivityVitalityRuleTableData {
+	repeated ActivityVitalityRuleTable data = 1;
+}

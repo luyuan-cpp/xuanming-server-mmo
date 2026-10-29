@@ -3,14 +3,18 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
+#include <map>
 #include <memory>
 #include <random>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "constants/turn_battle_constants.h"
 #include "memory_battle_data_provider.h"
+#include "modules/currency/constants/currency.h"
 #include "system/combat_damage_rules.h"
 #include "system/turn_battle_engine.h"
 #include "../../libs/services/scene/battle/system/battle_settlement_application_cache.h"
@@ -83,10 +87,53 @@ constexpr uint32_t kBuffRegen = 240;      // 周期回血
 constexpr uint32_t kItemPotion = 301;     // 战斗药品
 constexpr uint32_t kCooldownGroup = 9;
 constexpr uint32_t kDungeonConfig = 7;
+constexpr uint64_t kConfiguredExp = 73;
+constexpr uint64_t kConfiguredGold = 31;
+constexpr uint64_t kConfiguredDiamond = 11;
+constexpr uint64_t kConfiguredBindDiamond = 17;
+
+void ConfigureRewards(MemoryBattleDataProvider& provider, uint32_t battleConfigId = 0) {
+    auto& profile = provider.AddBattleReward(battleConfigId);
+    profile.Clear();
+    profile.set_battle_config_id(battleConfigId);
+    profile.set_exp_gain(kConfiguredExp);
+    for (const auto& [currencyType, amount] :
+         {std::make_pair(kCurrencyGold, kConfiguredGold),
+          std::make_pair(kCurrencyDiamond, kConfiguredDiamond),
+          std::make_pair(kCurrencyBindDiamond, kConfiguredBindDiamond)}) {
+        auto* currency = profile.add_currencies();
+        currency->set_currency_type(currencyType);
+        currency->set_amount(amount);
+    }
+}
+
+uint64_t CurrencyReward(const BattleSettlementData& settlement, uint32_t currencyType) {
+    for (const auto& currency : settlement.currency_gains()) {
+        if (currency.currency_type() == currencyType) return currency.amount();
+    }
+    return 0;
+}
+
+void ExpectConfiguredRewards(const BattleSettlementData& settlement) {
+    EXPECT_EQ(settlement.exp_gain(), kConfiguredExp);
+    EXPECT_EQ(settlement.gold_gain(), 0u);
+    ASSERT_EQ(settlement.currency_gains_size(), 3);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyDiamond), kConfiguredDiamond);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyBindDiamond), kConfiguredBindDiamond);
+}
+
+void ExpectNoRewards(const BattleSettlementData& settlement) {
+    EXPECT_EQ(settlement.exp_gain(), 0u);
+    EXPECT_EQ(settlement.gold_gain(), 0u);
+    EXPECT_EQ(settlement.currency_gains_size(), 0);
+    EXPECT_EQ(settlement.items_gained_size(), 0);
+}
 
 // 装配一套标准测试表数据
 std::shared_ptr<MemoryBattleDataProvider> MakeProvider() {
     auto provider = std::make_shared<MemoryBattleDataProvider>();
+    ConfigureRewards(*provider);
 
     // 伤害技能:单体目标(targeting_mode 存位号,1 = 指向性),普通施放类型
     auto& damageSkill = provider->AddSkill(kSkillDamage);
@@ -116,6 +163,7 @@ std::shared_ptr<MemoryBattleDataProvider> MakeProvider() {
 
     // 战斗药水:回血 100(原先写死在 kDefaultItemHealHp,2026-09-17 起读表)
     auto& potion = provider->AddItem(kItemPotion);
+    potion.set_max_stack_size(99);
     potion.set_battle_usable(1);
     potion.set_battle_heal_hp(100);
 
@@ -160,6 +208,29 @@ std::shared_ptr<MemoryBattleDataProvider> MakeProvider() {
     permission.add_skill_type(kSuccess);                              // 普攻
 
     return provider;
+}
+
+void ConfigureRandomRewardPool(MemoryBattleDataProvider& provider, uint32_t battleConfigId = 0,
+                               uint32_t draws = 6) {
+    auto& profile = provider.AddBattleReward(battleConfigId);
+    profile.set_item_draws(draws);
+    profile.clear_random_items();
+    for (const auto itemId : {kItemPotion, kItemPotion + 1}) {
+        provider.AddItem(itemId).set_max_stack_size(99);
+        auto* item = profile.add_random_items();
+        item->set_item_table_id(itemId);
+        item->set_count(itemId == kItemPotion ? 2 : 3);
+        item->set_weight(itemId == kItemPotion ? 1 : 3);
+    }
+}
+
+std::string RewardBytes(const BattleSettlementData& settlement) {
+    BattleSettlementData rewards;
+    rewards.set_exp_gain(settlement.exp_gain());
+    rewards.set_gold_gain(settlement.gold_gain());
+    *rewards.mutable_currency_gains() = settlement.currency_gains();
+    *rewards.mutable_items_gained() = settlement.items_gained();
+    return rewards.SerializeAsString();
 }
 
 CreateBattleRequest MakeRequest(uint64_t battleId, uint32_t matchMode, uint64_t seed) {
@@ -1085,8 +1156,8 @@ TEST(TurnBattleEngineTest, PveScaledMonsterCountCapsAtTwoFormationRows) {
     EXPECT_EQ(monsters.back().formationSlot, turnbattle::kMaxScaledPveMonsterCount - 1);
 }
 
-// 打完按人数放大的一组怪:击杀簿逐只记,奖励 = 实际打死的每一只之和(同种怪出现两只就算两份)
-TEST(TurnBattleEngineTest, PveScaledMonstersAllCountTowardRewards) {
+// 打完按人数放大的怪物组：击杀簿逐只记录，每人的配置奖励保持固定。
+TEST(TurnBattleEngineTest, PveScaledMonsterKillsDoNotScaleConfiguredRewards) {
     auto provider = MakeScaledMonsterProvider(1);
     auto& x = provider->AddMonster(kScaledMonsterX);
     x.set_health(30);
@@ -1130,17 +1201,17 @@ TEST(TurnBattleEngineTest, PveScaledMonstersAllCountTowardRewards) {
     }
     ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
 
-    // 每个存活成员各得全额(既有组队口径):X、Y、X 三只 = 经验 10+15+10、金币 5+7+5
+    // 每个存活成员各得配置全额，忽略 X、Y、X 三只怪各自的旧奖励列。
     for (uint32_t offset = 0; offset < 3; ++offset) {
         const auto settlement = engine.BuildSettlement(kPlayerA + offset);
         EXPECT_EQ(settlement.defeated_monsters_size(), 3) << "player_offset=" << offset;
-        EXPECT_EQ(settlement.exp_gain(), 35u) << "player_offset=" << offset;
-        EXPECT_EQ(settlement.gold_gain(), 17u) << "player_offset=" << offset;
+        EXPECT_EQ(settlement.exp_gain(), kConfiguredExp) << "player_offset=" << offset;
+        EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold) << "player_offset=" << offset;
     }
 }
 
 // 2026-09-02:怪物属性从 MonsterTable 读入(不再写死 300 常量)→ PVE 多回合;
-// 玩家击杀怪物后结算累加 MonsterTable.exp_reward/gold_reward。
+// 怪物旧奖励列不参与结算，胜利奖励由独立配置提供。
 TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards) {
     auto provider = MakeProvider();
     // 表配怪物:200 HP、护甲 60(防御单位 ×12,原 5)、速度 96(慢于玩家),奖励经验 50 金币 25。
@@ -1177,10 +1248,10 @@ TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards)
     EXPECT_GE(rounds, 3);  // 多回合(不是 1 回合秒杀)
     EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);  // 玩家胜
 
-    // 结算:击杀怪物累加经验/金币
+    // 结算按独立通用档发奖，不读取怪物经验和金币。
     const auto settlement = engine.BuildSettlement(kPlayerA);
-    EXPECT_EQ(settlement.exp_gain(), 50u);
-    EXPECT_EQ(settlement.gold_gain(), 25u);
+    EXPECT_EQ(settlement.exp_gain(), kConfiguredExp);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold);
 
     // 败方(此局无败玩家)/逃跑玩家不发奖的语义:阵亡玩家 exp_gain 应为 0
     // (此处玩家胜,单独验证"未击杀/失败不发奖"由 outcome 分支保证,不再造局)
@@ -1189,6 +1260,7 @@ TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards)
 // 玩家阵亡(怪物过强)时不发奖励:outcome != SIDE_A_WIN 分支
 TEST(TurnBattleEngineTest, PlayerDefeatYieldsNoReward) {
     auto provider = MakeProvider();
+    ConfigureRandomRewardPool(*provider);
     constexpr uint32_t kBossTableId = 7001;
     auto& boss = provider->AddMonster(kBossTableId);
     boss.set_health(100000);     // 打不死
@@ -1206,8 +1278,7 @@ TEST(TurnBattleEngineTest, PlayerDefeatYieldsNoReward) {
     engine.ResolveCurrentRound();
     EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_B_WIN);  // 玩家败
     const auto settlement = engine.BuildSettlement(kPlayerA);
-    EXPECT_EQ(settlement.exp_gain(), 0u);   // 败方无奖励
-    EXPECT_EQ(settlement.gold_gain(), 0u);
+    ExpectNoRewards(settlement);
 }
 
 // ---------------------------------------------------------------------------
@@ -1393,8 +1464,8 @@ TEST(TurnBattleEngineTest, MonsterZeroSpeedInTableFallsBackToDefaultSpeed) {
     EXPECT_EQ(monster->attributes().speed(), turnbattle::kMonsterDefaultSpeed);
 }
 
-// 多怪副本:奖励按击杀的每只怪逐个累加,一只不多一只不少
-TEST(TurnBattleEngineTest, RewardsAccumulateAcrossAllMonstersInGroup) {
+// 多怪副本：击杀事实保留，每人的奖励仍是配置固定额度。
+TEST(TurnBattleEngineTest, RewardsStayConfiguredWhileAllMonsterKillsAreRecorded) {
     auto provider = MakeProvider();
     constexpr uint32_t kMonsterX = 7004;
     constexpr uint32_t kMonsterY = 7005;
@@ -1437,8 +1508,8 @@ TEST(TurnBattleEngineTest, RewardsAccumulateAcrossAllMonstersInGroup) {
     EXPECT_EQ(rounds, 4);  // 2 只 x 2 刀,确定性
 
     const auto settlement = engine.BuildSettlement(kPlayerA);
-    EXPECT_EQ(settlement.exp_gain(), 25u);
-    EXPECT_EQ(settlement.gold_gain(), 12u);
+    EXPECT_EQ(settlement.exp_gain(), kConfiguredExp);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold);
     ASSERT_EQ(settlement.defeated_monsters_size(), 2);
     EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), kMonsterX);
     EXPECT_EQ(settlement.defeated_monsters(1).monster_config_id(), kMonsterY);
@@ -1451,6 +1522,7 @@ TEST(TurnBattleEngineTest, RewardsAccumulateAcrossAllMonstersInGroup) {
 // 只测 outcome 分支不够 —— 队伍打赢但自己中途跑了,照发奖就是刷奖漏洞。
 TEST(TurnBattleEngineTest, FledPlayerOnWinningTeamGetsNoReward) {
     auto provider = MakeProvider();
+    ConfigureRandomRewardPool(*provider);
     constexpr uint32_t kRewardMonster = 7006;
     auto& monster = provider->AddMonster(kRewardMonster);
     monster.set_health(150);
@@ -1488,22 +1560,24 @@ TEST(TurnBattleEngineTest, FledPlayerOnWinningTeamGetsNoReward) {
 
     const auto settlementA = engine.BuildSettlement(kPlayerA);
     EXPECT_FALSE(settlementA.fled());
-    EXPECT_EQ(settlementA.exp_gain(), 40u);
-    EXPECT_EQ(settlementA.gold_gain(), 20u);
+    EXPECT_EQ(settlementA.exp_gain(), kConfiguredExp);
+    EXPECT_EQ(CurrencyReward(settlementA, kCurrencyGold), kConfiguredGold);
 
     const auto settlementB = engine.BuildSettlement(kPlayerB);
     EXPECT_TRUE(settlementB.fled());
     EXPECT_EQ(settlementB.defeated_monsters_size(), 0);
     ASSERT_EQ(settlementA.defeated_monsters_size(), 1);
     EXPECT_EQ(settlementA.defeated_monsters(0).monster_config_id(), kRewardMonster);
-    EXPECT_EQ(settlementB.exp_gain(), 0u) << "逃跑玩家不能吃队伍的胜利奖励";
-    EXPECT_EQ(settlementB.gold_gain(), 0u);
+    ExpectNoRewards(settlementB);
+    ExpectConfiguredRewards(settlementA);
+    EXPECT_GT(settlementA.items_gained_size(), 0);
 }
 
 // 胜方里阵亡的玩家同样不发奖(结算条件的 !is_dead 那一半)。
 // 与 FledPlayerOnWinningTeamGetsNoReward 成对:一个覆盖 fled,一个覆盖 is_dead。
 TEST(TurnBattleEngineTest, DeadPlayerOnWinningTeamGetsNoReward) {
     auto provider = MakeProvider();
+    ConfigureRandomRewardPool(*provider);
     constexpr uint32_t kBruiserMonster = 7007;
     auto& monster = provider->AddMonster(kBruiserMonster);
     monster.set_health(400);   // 够 A 慢慢磨,给怪物足够回合打到 B
@@ -1541,20 +1615,21 @@ TEST(TurnBattleEngineTest, DeadPlayerOnWinningTeamGetsNoReward) {
 
     const auto settlementA = engine.BuildSettlement(kPlayerA);
     EXPECT_FALSE(settlementA.is_dead());
-    EXPECT_EQ(settlementA.exp_gain(), 60u);
-    EXPECT_EQ(settlementA.gold_gain(), 30u);
+    EXPECT_EQ(settlementA.exp_gain(), kConfiguredExp);
+    EXPECT_EQ(CurrencyReward(settlementA, kCurrencyGold), kConfiguredGold);
 
     const auto settlementB = engine.BuildSettlement(kPlayerB);
     EXPECT_TRUE(settlementB.is_dead());
     EXPECT_EQ(settlementB.defeated_monsters_size(), 0);
     ASSERT_EQ(settlementA.defeated_monsters_size(), 1);
     EXPECT_EQ(settlementA.defeated_monsters(0).monster_config_id(), kBruiserMonster);
-    EXPECT_EQ(settlementB.exp_gain(), 0u) << "阵亡玩家不吃队伍的胜利奖励";
-    EXPECT_EQ(settlementB.gold_gain(), 0u);
+    ExpectNoRewards(settlementB);
+    ExpectConfiguredRewards(settlementA);
+    EXPECT_GT(settlementA.items_gained_size(), 0);
 }
 
 // 组队 PVE 的奖励口径:每个达成条件的成员**各得全额**,不是按人头平分。
-// 结算是逐人重算的,平分/漏发都只会在多人局暴露,单人局测不出来。
+// 奖励在终局逐人冻结，平分或漏发只会在多人局暴露。
 TEST(TurnBattleEngineTest, EveryQualifyingTeamMemberGetsFullReward) {
     auto provider = MakeProvider();
     constexpr uint32_t kSharedMonster = 7009;
@@ -1583,10 +1658,10 @@ TEST(TurnBattleEngineTest, EveryQualifyingTeamMemberGetsFullReward) {
 
     const auto settlementA = engine.BuildSettlement(kPlayerA);
     const auto settlementB = engine.BuildSettlement(kPlayerB);
-    EXPECT_EQ(settlementA.exp_gain(), 80u);
-    EXPECT_EQ(settlementA.gold_gain(), 40u);
-    EXPECT_EQ(settlementB.exp_gain(), 80u) << "队友不该被平分掉奖励";
-    EXPECT_EQ(settlementB.gold_gain(), 40u);
+    EXPECT_EQ(settlementA.exp_gain(), kConfiguredExp);
+    EXPECT_EQ(CurrencyReward(settlementA, kCurrencyGold), kConfiguredGold);
+    EXPECT_EQ(settlementB.exp_gain(), kConfiguredExp) << "队友不该被平分掉奖励";
+    EXPECT_EQ(CurrencyReward(settlementB, kCurrencyGold), kConfiguredGold);
 }
 
 // 回合上限来源:DungeonTable.time_limit(秒)换算;缺行或 time_limit==0 一律退回 kDefaultMaxRounds。
@@ -2129,8 +2204,8 @@ TEST(TurnBattleEngineTest, SettlementKeepsActualKillOrderAndRepeatedReadIsStable
     EXPECT_EQ(settlement.defeated_monsters(1).monster_config_id(), xId);
     EXPECT_EQ(settlement.defeated_monsters(0).count(), 1u);
     EXPECT_EQ(settlement.defeated_monsters(1).count(), 1u);
-    EXPECT_EQ(settlement.gold_gain(), 12u);
-    EXPECT_EQ(settlement.exp_gain(), 25u);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold);
+    EXPECT_EQ(settlement.exp_gain(), kConfiguredExp);
     EXPECT_EQ(engine.BuildSettlement(kPlayerA).SerializeAsString(), settlement.SerializeAsString());
 }
 
@@ -2164,7 +2239,7 @@ TEST(TurnBattleEngineTest, SettlementKeepsPoisonAndBurnKillBeforeLaterSkillKill)
         ASSERT_EQ(settlement.defeated_monsters_size(), 2);
         EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), yId);
         EXPECT_EQ(settlement.defeated_monsters(1).monster_config_id(), xId);
-        EXPECT_EQ(settlement.gold_gain(), 6u);
+        EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold);
         EXPECT_EQ(engine.BuildSettlement(kPlayerA).SerializeAsString(), settlement.SerializeAsString());
     }
 }
@@ -2197,7 +2272,7 @@ TEST(TurnBattleEngineTest, SettlementDoesNotCreditUnknownOrMonsterSourceDeath) {
         const auto settlement = engine.BuildSettlement(kPlayerA);
         ASSERT_EQ(settlement.defeated_monsters_size(), 1);
         EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), xId);
-        EXPECT_EQ(settlement.gold_gain(), 3u);
+        EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold);
     }
 }
 
@@ -2271,7 +2346,7 @@ TEST(SettlementApplicationCacheTest, CapacityNeverEvictsInflightAndRetentionIsFi
 
 namespace {
 
-constexpr uint32_t kMonsterWithDrop = 61;   // 必掉 kItemPotion 的测试怪
+constexpr uint32_t kMonsterWithDrop = 61;   // 带旧掉落列的测试怪，独立奖励配置覆盖它
 constexpr uint32_t kDungeonWithDrop = 62;
 constexpr uint32_t kItemManaPotion = 302;   // 纯回蓝药
 constexpr uint32_t kItemNotBattleUsable = 303;
@@ -2279,7 +2354,7 @@ constexpr uint32_t kSkillPassiveOnly = 401; // 被动技能:不该能提交
 constexpr uint32_t kBuffStunTable = 250;    // 控制类:不该被快照带进来
 constexpr uint32_t kBuffInstantTable = 251; // 瞬时类:同上
 
-// 在标准表基础上补一只"必掉药"的怪 + 一个只有它的副本
+// 在标准表基础上补一个单怪副本和明确的固定抽取配置。
 std::shared_ptr<MemoryBattleDataProvider> MakeDropProvider() {
     auto provider = MakeProvider();
     auto& monster = provider->AddMonster(kMonsterWithDrop);
@@ -2294,12 +2369,19 @@ std::shared_ptr<MemoryBattleDataProvider> MakeDropProvider() {
     provider->SetDungeonMonsters(kDungeonWithDrop, {kMonsterWithDrop});
     auto& dungeon = provider->AddDungeon(kDungeonWithDrop);
     dungeon.set_time_limit(1800);
+    ConfigureRewards(*provider, kDungeonWithDrop);
+    auto& profile = provider->AddBattleReward(kDungeonWithDrop);
+    profile.set_item_draws(1);
+    auto* item = profile.add_random_items();
+    item->set_item_table_id(kItemPotion);
+    item->set_count(2);
+    item->set_weight(1);
     return provider;
 }
 
 }  // namespace
 
-TEST(TurnBattleEngineTest, VictoryRollsMonsterDropsIntoSettlement) {
+TEST(TurnBattleEngineTest, VictoryRollsConfiguredItemsIntoSettlement) {
     auto provider = MakeDropProvider();
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9301, turnbattle::kMatchModePveSolo, 42);
@@ -2312,6 +2394,7 @@ TEST(TurnBattleEngineTest, VictoryRollsMonsterDropsIntoSettlement) {
     ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
 
     const auto settlement = engine.BuildSettlement(kPlayerA);
+    ExpectConfiguredRewards(settlement);
     ASSERT_EQ(settlement.items_gained_size(), 1);
     EXPECT_EQ(settlement.items_gained(0).item_table_id(), kItemPotion);
     EXPECT_EQ(settlement.items_gained(0).count(), 2u);
@@ -2321,9 +2404,9 @@ TEST(TurnBattleEngineTest, VictoryRollsMonsterDropsIntoSettlement) {
     EXPECT_EQ(again.items_gained(0).count(), 2u);
 }
 
-TEST(TurnBattleEngineTest, DropRateZeroNeverDrops) {
+TEST(TurnBattleEngineTest, ZeroConfiguredDrawsIgnoresGuaranteedMonsterDrop) {
     auto provider = MakeDropProvider();
-    provider->AddMonster(kMonsterWithDrop).mutable_drop(0)->set_drop_rate(0);
+    provider->AddBattleReward(kDungeonWithDrop).set_item_draws(0);
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9302, turnbattle::kMatchModePveSolo, 42);
@@ -2335,6 +2418,249 @@ TEST(TurnBattleEngineTest, DropRateZeroNeverDrops) {
     engine.ResolveCurrentRound();
     ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
     EXPECT_EQ(engine.BuildSettlement(kPlayerA).items_gained_size(), 0);
+}
+
+TEST(TurnBattleEngineTest, ConfiguredRewardsAndPlayerRandomDrawsStaySameForOneTwoFivePlayers) {
+    std::map<uint64_t, std::string> playerRewards;
+    for (const uint32_t teamSize : {1u, 2u, 5u}) {
+        for (const bool reverseOrder : {false, true}) {
+            SCOPED_TRACE(::testing::Message() << "team_size=" << teamSize << " reversed=" << reverseOrder);
+            auto provider = MakeScaledMonsterProvider(1);
+            ConfigureRandomRewardPool(*provider, 0, 8);
+            auto request = MakeRequest(9800 + teamSize,
+                teamSize == 1 ? turnbattle::kMatchModePveSolo : turnbattle::kMatchModePveTeam, 77);
+            for (uint32_t index = 0; index < teamSize; ++index) {
+                const uint32_t offset = reverseOrder ? teamSize - index - 1 : index;
+                AddPlayer(request, kPlayerA + offset, 0, 10000, 10000, 20, 100, 0, 240);
+            }
+            TurnBattleEngine engine(provider);
+            ASSERT_TRUE(engine.Initialize(request));
+            ExpectNoRewards(engine.BuildSettlement(kPlayerA));
+            for (uint32_t offset = 0; offset < teamSize; ++offset) {
+                const auto action = MakeAction(BATTLE_ACTION_SKILL, kMonsterId + offset, kSkillNuke);
+                ASSERT_EQ(engine.ValidateAction(kPlayerA + offset, action), kSuccess);
+                engine.SubmitAction(kPlayerA + offset, action);
+            }
+            engine.ResolveCurrentRound();
+            ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+            for (uint32_t offset = 0; offset < teamSize; ++offset) {
+                const auto settlement = engine.BuildSettlement(kPlayerA + offset);
+                ExpectConfiguredRewards(settlement);
+                EXPECT_EQ(settlement.defeated_monsters_size(), static_cast<int>(teamSize));
+                uint32_t draws = 0;
+                for (const auto& item : settlement.items_gained()) {
+                    const uint32_t units = item.item_table_id() == kItemPotion ? 2 : 3;
+                    EXPECT_EQ(item.count() % units, 0u);
+                    draws += item.count() / units;
+                }
+                EXPECT_EQ(draws, 8u);
+                const auto bytes = RewardBytes(settlement);
+                const auto [it, inserted] = playerRewards.emplace(kPlayerA + offset, bytes);
+                if (!inserted) EXPECT_EQ(it->second, bytes);
+                EXPECT_EQ(engine.BuildSettlement(kPlayerA + offset).SerializeAsString(), settlement.SerializeAsString());
+            }
+        }
+    }
+}
+
+TEST(TurnBattleEngineTest, DungeonRewardProfileOverridesDefaultAmountsAndDrawCount) {
+    auto provider = MakeDropProvider();
+    auto& profile = provider->AddBattleReward(kDungeonWithDrop);
+    profile.set_exp_gain(1234);
+    profile.mutable_currencies(0)->set_amount(456);
+    profile.set_item_draws(3);
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9810, turnbattle::kMatchModePveSolo, 42);
+    request.set_battle_config_id(kDungeonWithDrop);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+    ASSERT_TRUE(engine.Initialize(request));
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    EXPECT_EQ(settlement.exp_gain(), 1234u);
+    EXPECT_EQ(settlement.gold_gain(), 0u);
+    ASSERT_EQ(settlement.currency_gains_size(), 3);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), 456u);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyDiamond), kConfiguredDiamond);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyBindDiamond), kConfiguredBindDiamond);
+    ASSERT_EQ(settlement.items_gained_size(), 1);
+    EXPECT_EQ(settlement.items_gained(0).count(), 6u);
+}
+
+TEST(TurnBattleEngineTest, RewardProfileIsFrozenAtStartAndSettlementReadsNeverReroll) {
+    auto provider = MakeDropProvider();
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9811, turnbattle::kMatchModePveSolo, 42);
+    request.set_battle_config_id(kDungeonWithDrop);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+    ASSERT_TRUE(engine.Initialize(request));
+    provider->ClearBattleRewards();
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    ExpectConfiguredRewards(settlement);
+    ASSERT_EQ(settlement.items_gained_size(), 1);
+    EXPECT_EQ(settlement.items_gained(0).count(), 2u);
+    provider->AddMonster(kMonsterWithDrop).set_exp_reward(UINT32_MAX);
+    for (int read = 0; read < 3; ++read) {
+        engine.ResolveCurrentRound();
+        EXPECT_EQ(engine.BuildSettlement(kPlayerA).SerializeAsString(), settlement.SerializeAsString());
+    }
+}
+
+TEST(TurnBattleEngineTest, RandomRewardPoolDrawsConfiguredCountsWithReplacementAndHasMultipleItems) {
+    std::set<uint32_t> seenItems;
+    std::set<std::string> seenResults;
+    for (uint64_t seed = 1; seed <= 32; ++seed) {
+        auto provider = MakeDropProvider();
+        ConfigureRandomRewardPool(*provider, kDungeonWithDrop);
+        TurnBattleEngine engine(provider);
+        auto request = MakeRequest(9812, turnbattle::kMatchModePveSolo, seed);
+        request.set_battle_config_id(kDungeonWithDrop);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+        ASSERT_TRUE(engine.Initialize(request));
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+        engine.ResolveCurrentRound();
+        ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+        const auto settlement = engine.BuildSettlement(kPlayerA);
+        uint32_t draws = 0;
+        uint32_t previousItemId = 0;
+        for (const auto& item : settlement.items_gained()) {
+            ASSERT_TRUE(item.item_table_id() == kItemPotion || item.item_table_id() == kItemPotion + 1);
+            EXPECT_GT(item.item_table_id(), previousItemId);
+            previousItemId = item.item_table_id();
+            const uint32_t units = item.item_table_id() == kItemPotion ? 2 : 3;
+            EXPECT_EQ(item.count() % units, 0u);
+            draws += item.count() / units;
+            seenItems.insert(item.item_table_id());
+        }
+        EXPECT_EQ(draws, 6u);
+        seenResults.insert(RewardBytes(settlement));
+    }
+    EXPECT_EQ(seenItems.size(), 2u);
+    EXPECT_GT(seenResults.size(), 1u);
+}
+
+TEST(TurnBattleEngineTest, RewardDrawsDoNotConsumeCombatRandomOrChangeCombatEvents) {
+    auto noDrawProvider = MakeDropProvider();
+    auto drawProvider = MakeDropProvider();
+    noDrawProvider->AddBattleReward(kDungeonWithDrop).set_item_draws(0);
+    ConfigureRandomRewardPool(*drawProvider, kDungeonWithDrop, 100);
+    TurnBattleEngine noDrawEngine(noDrawProvider), drawEngine(drawProvider);
+    auto request = MakeRequest(9813, turnbattle::kMatchModePveSolo, 93);
+    request.set_battle_config_id(kDungeonWithDrop);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 37, 500);
+    ASSERT_TRUE(noDrawEngine.Initialize(request));
+    ASSERT_TRUE(drawEngine.Initialize(request));
+    EXPECT_EQ(turnbattle::TurnBattleEngineDeathTestAccess::PeekNextRandom(noDrawEngine),
+              turnbattle::TurnBattleEngineDeathTestAccess::PeekNextRandom(drawEngine));
+    noDrawEngine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    drawEngine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    EXPECT_EQ(noDrawEngine.ResolveCurrentRound().SerializeAsString(), drawEngine.ResolveCurrentRound().SerializeAsString());
+    ASSERT_EQ(drawEngine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    EXPECT_EQ(turnbattle::TurnBattleEngineDeathTestAccess::PeekNextRandom(noDrawEngine),
+              turnbattle::TurnBattleEngineDeathTestAccess::PeekNextRandom(drawEngine));
+    EXPECT_EQ(noDrawEngine.BuildSettlement(kPlayerA).items_gained_size(), 0);
+    EXPECT_GT(drawEngine.BuildSettlement(kPlayerA).items_gained_size(), 0);
+}
+
+TEST(TurnBattleEngineTest, VictoryRewardDoesNotDependOnCreditedMonsterKillCount) {
+    auto provider = MakeDropProvider();
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9817, turnbattle::kMatchModePveSolo, 42);
+    request.set_battle_config_id(kDungeonWithDrop);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 500);
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_TRUE(turnbattle::TurnBattleEngineDeathTestAccess::AddBuff(engine, kMonsterId, kBuffPoison, 0));
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    EXPECT_EQ(settlement.defeated_monsters_size(), 0);
+    ExpectConfiguredRewards(settlement);
+    ASSERT_EQ(settlement.items_gained_size(), 1);
+    EXPECT_EQ(settlement.items_gained(0).count(), 2u);
+}
+
+TEST(TurnBattleEngineTest, RewardPoolUsesConfiguredWeights) {
+    auto provider = MakeDropProvider();
+    ConfigureRandomRewardPool(*provider, kDungeonWithDrop, 100);
+    auto& profile = provider->AddBattleReward(kDungeonWithDrop);
+    profile.mutable_random_items(0)->set_weight(UINT32_MAX);
+    profile.mutable_random_items(1)->set_weight(1);
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9818, turnbattle::kMatchModePveSolo, 42);
+    request.set_battle_config_id(kDungeonWithDrop);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+    ASSERT_TRUE(engine.Initialize(request));
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    ASSERT_GT(settlement.items_gained_size(), 0);
+    EXPECT_EQ(settlement.items_gained(0).item_table_id(), kItemPotion);
+    // 固定种子下的大权重应占绝大多数；等概率抽取或忽略权重无法满足此断言。
+    EXPECT_GE(settlement.items_gained(0).count(), 190u);
+}
+
+TEST(TurnBattleEngineTest, MissingPveRewardProfileRejectsStartWhilePvpDoesNotRequireOne) {
+    auto provider = MakeProvider();
+    provider->ClearBattleRewards();
+    auto request = MakeRequest(9814, turnbattle::kMatchModePveSolo, 42);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+    TurnBattleEngine pveEngine(provider);
+    EXPECT_FALSE(pveEngine.Initialize(request));
+    request.set_match_mode(3); // PVP 1v1
+    AddPlayer(request, kPlayerB, 1, 1, 1, 0, 0, 0, 12);
+    TurnBattleEngine pvpEngine(provider);
+    ASSERT_TRUE(pvpEngine.Initialize(request));
+    pvpEngine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    pvpEngine.ResolveCurrentRound();
+    ASSERT_EQ(pvpEngine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    ExpectNoRewards(pvpEngine.BuildSettlement(kPlayerA));
+}
+
+TEST(TurnBattleEngineTest, WinningPvpReceivesNoPveRewardsEvenWhenRewardProfileExists) {
+    auto provider = MakeProvider();
+    ConfigureRandomRewardPool(*provider);
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9815, 3, 42); // PVP 1v1
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+    AddPlayer(request, kPlayerB, 1, 1, 1, 0, 0, 0, 12);
+    ASSERT_TRUE(engine.Initialize(request));
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    ExpectNoRewards(engine.BuildSettlement(kPlayerA));
+    ExpectNoRewards(engine.BuildSettlement(kPlayerB));
+}
+
+TEST(TurnBattleEngineTest, InvalidRewardProfilesFromProviderRejectPveStart) {
+    const std::vector<std::function<void(BattleRewardProfile&)>> corruptions = {
+        [](auto& p) { p.mutable_random_items(0)->set_weight(0); },
+        [](auto& p) { p.mutable_random_items(0)->set_count(0); },
+        [](auto& p) { p.mutable_random_items(0)->set_item_table_id(999999); },
+        [](auto& p) { p.clear_random_items(); },
+        [](auto& p) { p.set_item_draws(101); },
+        [](auto& p) { p.set_item_draws(2); p.mutable_random_items(0)->set_count(UINT32_MAX); },
+        [](auto& p) { *p.add_random_items() = p.random_items(0); },
+        [](auto& p) { *p.add_currencies() = p.currencies(0); },
+        [](auto& p) { p.mutable_currencies(0)->set_currency_type(kCurrencyMax); },
+        [](auto& p) { p.mutable_currencies(0)->set_amount(std::numeric_limits<uint64_t>::max()); },
+        [](auto& p) { p.set_strategy_key("not-general"); },
+    };
+    for (size_t index = 0; index < corruptions.size(); ++index) {
+        SCOPED_TRACE(index);
+        auto provider = MakeDropProvider();
+        corruptions[index](provider->AddBattleReward(kDungeonWithDrop));
+        auto request = MakeRequest(9816, turnbattle::kMatchModePveSolo, 42);
+        request.set_battle_config_id(kDungeonWithDrop);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+        TurnBattleEngine engine(provider);
+        EXPECT_FALSE(engine.Initialize(request));
+    }
 }
 
 TEST(TurnBattleEngineTest, ItemEffectComesFromItemTableAndManaPotionRestoresMana) {
@@ -3048,8 +3374,8 @@ TEST(TurnBattleEngineTest, CombatReflectKillCreditsDefenderAndWinsBattle) {
     const auto settlement = engine.BuildSettlement(kPlayerA);
     ASSERT_EQ(settlement.defeated_monsters_size(), 1);
     EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), kGlassMonster);
-    EXPECT_EQ(settlement.exp_gain(), 50u);
-    EXPECT_EQ(settlement.gold_gain(), 25u);
+    EXPECT_EQ(settlement.exp_gain(), kConfiguredExp);
+    EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold);
 }
 
 // ---- 反击 ----

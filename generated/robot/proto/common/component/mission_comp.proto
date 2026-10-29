@@ -32,6 +32,32 @@ message MissionListComp
 	bytes complete_missions = 2;
 	map<uint32, uint64> mission_begin_time = 3;
 	uint32 type = 4;
+    // 活动完成事实与任务、背包同属玩家快照；追踪偏好不进入这里。
+    PlayerActivityLedger activity_ledger = 5;
+}
+
+message PlayerActivityPointSource {
+  uint32 mission_scope = 1;
+  uint32 mission_id = 2;
+  uint32 rule_id = 3;
+  uint64 configuration_revision = 4;
+  uint64 period_id = 5;
+  uint32 points = 6;
+}
+
+message PlayerActivityClaimRecord {
+  uint32 rule_id = 1;
+  uint64 configuration_revision = 2;
+  uint64 period_id = 3;
+  uint32 threshold_id = 4;
+  string request_id = 5;
+  uint32 reward_id = 6;
+  uint64 claimed_at_ms = 7;
+}
+
+message PlayerActivityLedger {
+  repeated PlayerActivityPointSource sources = 1;
+  repeated PlayerActivityClaimRecord claims = 2;
 }
 
 message RewardListComp

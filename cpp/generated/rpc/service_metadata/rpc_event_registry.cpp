@@ -331,7 +331,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 345,
+static_assert(kMaxRpcMethodCount == 346,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1262,6 +1262,11 @@ void InitMessageInfo()
         "SceneActivityClientPlayer", "GetActivityList",
         std::make_unique<::GetActivityListRequest>(),
         std::make_unique<::GetActivityListResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerClaimActivityVitalityRewardMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "ClaimActivityVitalityReward",
+        std::make_unique<::ClaimActivityVitalityRewardRequest>(),
+        std::make_unique<::ClaimActivityVitalityRewardResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneAttributeClientPlayer ---
@@ -2198,6 +2203,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneClientPlayerCommonKickPlayerMessageId:
 	case SceneClientPlayerCommonRedirectToGateMessageId:
 	case SceneActivityClientPlayerGetActivityListMessageId:
+	case SceneActivityClientPlayerClaimActivityVitalityRewardMessageId:
 	case SceneAttributeClientPlayerGetAttributePanelMessageId:
 	case SceneAttributeClientPlayerAllocateAttributePointsMessageId:
 	case SceneAttributeClientPlayerResetAttributePointsMessageId:

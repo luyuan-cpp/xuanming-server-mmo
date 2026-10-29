@@ -35,32 +35,34 @@ type PlayerMigrationEvent struct {
 	// SHA-256 of `serialized_player_data` taken at publish time.
 	//
 	// Why this exists (cross-zone-readiness-audit.md §7 失败 D):
-	//   Kafka rebalance / re-assignment can redeliver the same
-	//   `player_migrate` to the destination after we already processed it.
-	//   The destination's idempotency guard in HandlePlayerMigration
-	//   currently leans on "is the player entity already present in this
-	//   node's registry" — a structural check that catches the common
-	//   case but is fragile under restart-recovery (entity not yet built
-	//   when the duplicate arrives) and migration-failure-then-retry
-	//   (the reaper republishes a *fresh* payload that may differ from
-	//   the original, e.g. the player gained an item between the original
-	//   send and the retry).
 	//
-	//   The SHA-256 lets the destination distinguish:
-	//     • exact-duplicate delivery (same hash) → skip Init, re-emit ACK
-	//     • reaper retry with mutated payload (different hash) → process
-	//       as a fresh migration, the source's most recent state wins
+	//	Kafka rebalance / re-assignment can redeliver the same
+	//	`player_migrate` to the destination after we already processed it.
+	//	The destination's idempotency guard in HandlePlayerMigration
+	//	currently leans on "is the player entity already present in this
+	//	node's registry" — a structural check that catches the common
+	//	case but is fragile under restart-recovery (entity not yet built
+	//	when the duplicate arrives) and migration-failure-then-retry
+	//	(the reaper republishes a *fresh* payload that may differ from
+	//	the original, e.g. the player gained an item between the original
+	//	send and the retry).
 	//
-	//   Source side computes once on send. Destination compares against
-	//   the hash it stamps onto a per-player de-dup key when it processes
-	//   a migration; details in HandlePlayerMigration.
+	//	The SHA-256 lets the destination distinguish:
+	//	  • exact-duplicate delivery (same hash) → skip Init, re-emit ACK
+	//	  • reaper retry with mutated payload (different hash) → process
+	//	    as a fresh migration, the source's most recent state wins
+	//
+	//	Source side computes once on send. Destination compares against
+	//	the hash it stamps onto a per-player de-dup key when it processes
+	//	a migration; details in HandlePlayerMigration.
 	//
 	// Wire compatibility:
-	//   Empty bytes is the "absent" signal. Older nodes (pre-this-field)
-	//   publish empty; destination treats empty hash as "fall back to the
-	//   structural check." The structural check still catches every case
-	//   we've seen in stress tests; the hash is belt-and-suspenders for
-	//   the rare edge case (reaper retry vs Kafka redelivery race).
+	//
+	//	Empty bytes is the "absent" signal. Older nodes (pre-this-field)
+	//	publish empty; destination treats empty hash as "fall back to the
+	//	structural check." The structural check still catches every case
+	//	we've seen in stress tests; the hash is belt-and-suspenders for
+	//	the rare edge case (reaper retry vs Kafka redelivery race).
 	PayloadSha256 []byte `protobuf:"bytes,10,opt,name=payload_sha256,json=payloadSha256,proto3" json:"payload_sha256,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

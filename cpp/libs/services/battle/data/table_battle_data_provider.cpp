@@ -1,5 +1,13 @@
 #include "data/table_battle_data_provider.h"
 
+#include <fstream>
+#include <limits>
+#include <set>
+#include <utility>
+#include "google/protobuf/util/json_util.h"
+#include "modules/currency/constants/currency.h"
+#include "muduo/base/Logging.h"
+
 #include "table/code/skill_table.h"
 #include "table/code/buff_table.h"
 #include "table/code/cooldown_table.h"
@@ -9,6 +17,60 @@
 #include "table/code/item_table.h"
 
 namespace turnbattle {
+
+bool TableBattleDataProvider::LoadBattleRewards(const std::string& path) {
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() <= 0 || input.tellg() > 1024 * 1024) {
+        LOG_ERROR << "Battle reward config unavailable or exceeds 1 MiB: " << path;
+        return false;
+    }
+    std::string json(static_cast<size_t>(input.tellg()), '\0');
+    input.seekg(0);
+    if (!input.read(json.data(), static_cast<std::streamsize>(json.size()))) return false;
+    BattleRewardConfig candidate;
+    const auto status = google::protobuf::util::JsonStringToMessage(json, &candidate);
+    if (!status.ok()) {
+        LOG_ERROR << "Invalid battle reward config: " << status.ToString();
+        return false;
+    }
+    if (candidate.profiles_size() == 0 || candidate.profiles_size() > 256) return false;
+    std::set<std::pair<uint32_t, std::string>> keys;
+    for (const auto& profile : candidate.profiles()) {
+        if (profile.strategy_key().size() > 64 ||
+            !keys.emplace(profile.battle_config_id(), profile.strategy_key()).second ||
+            profile.item_draws() > 100 || profile.random_items_size() > 256 ||
+            (profile.item_draws() > 0 && profile.random_items_size() == 0)) return false;
+        std::set<uint32_t> currencies;
+        for (const auto& currency : profile.currencies()) {
+            if (currency.currency_type() >= kCurrencyMax ||
+                currency.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
+                !currencies.insert(currency.currency_type()).second) return false;
+        }
+        std::set<uint32_t> items;
+        for (const auto& item : profile.random_items()) {
+            const auto* row = FindItem(item.item_table_id());
+            if (row == nullptr || row->max_stack_size() == 0 || item.count() == 0 || item.weight() == 0 ||
+                !items.insert(item.item_table_id()).second ||
+                static_cast<uint64_t>(item.count()) * profile.item_draws() > UINT32_MAX) return false;
+        }
+    }
+    // 未单独配置的副本必须有明确默认档；缺配置不能悄悄退回逐怪发奖。
+    if (keys.count({0, ""}) == 0) return false;
+    rewards.Swap(&candidate);
+    return true;
+}
+
+const BattleRewardProfile* TableBattleDataProvider::FindBattleReward(
+    uint32_t battleConfigId, const std::string& strategyKey) const {
+    for (const auto& key : {std::make_pair(battleConfigId, strategyKey),
+                            std::make_pair(battleConfigId, std::string{}),
+                            std::make_pair(0u, strategyKey), std::make_pair(0u, std::string{})}) {
+        for (const auto& profile : rewards.profiles()) {
+            if (profile.battle_config_id() == key.first && profile.strategy_key() == key.second) return &profile;
+        }
+    }
+    return nullptr;
+}
 
 const SkillTable* TableBattleDataProvider::FindSkill(uint32_t skillTableId) const {
     // Silent 版:查不到不刷错误日志,是否算错误由引擎按调用场景判定
@@ -81,10 +143,6 @@ double TableBattleDataProvider::GetBuffHealthRegeneration(uint32_t buffTableId, 
 
 double TableBattleDataProvider::GetBuffBonusDamage(uint32_t buffTableId) {
     return BuffTableManager::Instance().GetBonusDamage(buffTableId);
-}
-
-std::shared_ptr<BattleDataProvider> MakeTableBattleDataProvider() {
-    return std::make_shared<TableBattleDataProvider>();
 }
 
 }  // namespace turnbattle

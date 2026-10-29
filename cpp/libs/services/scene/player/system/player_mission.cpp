@@ -14,6 +14,7 @@
 #include "modules/mission/mission_events.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "services/scene/player/system/player_activity_schedule.h"
+#include "services/scene/player/system/player_activity.h"
 #include "services/scene/player/system/player_lifecycle.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
@@ -93,6 +94,8 @@ void ApplyFollowUps(entt::entity player, const MissionFollowUps& followUps) {
             LOG_WARN << "任务链接取被拒 mission=" << missionId << " tip=" << result;
     }
     for (const uint32_t missionId : followUps.completed) {
+        PlayerActivitySystem::OnMissionCompleted(player, MissionListComp::kPlayerMission,
+            missionId, TimeSystem::NowMillisecondsUTC());
         const ConditionEvent completed{player,
             static_cast<uint32_t>(eConditionType::kConditionCompleteMission), {missionId}, 1};
         PlayerMissionSystem::OnCondition(player, completed);

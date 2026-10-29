@@ -41,4 +41,46 @@ public final class ActivityScheduleTableComp {
         }
     }
 
+    public record Definition_key(String value) {
+        public static Definition_key from(ActivityScheduleTable row) {
+            return new Definition_key(row.getDefinitionKey());
+        }
+    }
+
+    public record Configuration_revision(long value) {
+        public static Configuration_revision from(ActivityScheduleTable row) {
+            return new Configuration_revision(row.getConfigurationRevision());
+        }
+    }
+
+    public record Category(int value) {
+        public static Category from(ActivityScheduleTable row) {
+            return new Category(row.getCategory());
+        }
+    }
+
+    public record Name(String value) {
+        public static Name from(ActivityScheduleTable row) {
+            return new Name(row.getName());
+        }
+    }
+
+    public record Description(String value) {
+        public static Description from(ActivityScheduleTable row) {
+            return new Description(row.getDescription());
+        }
+    }
+
+    public record Icon_key(String value) {
+        public static Icon_key from(ActivityScheduleTable row) {
+            return new Icon_key(row.getIconKey());
+        }
+    }
+
+    public record Vitality_points(int value) {
+        public static Vitality_points from(ActivityScheduleTable row) {
+            return new Vitality_points(row.getVitalityPoints());
+        }
+    }
+
 }

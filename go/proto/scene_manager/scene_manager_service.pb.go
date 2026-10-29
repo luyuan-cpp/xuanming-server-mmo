@@ -332,12 +332,12 @@ type EnterSceneRequest struct {
 	// Zone ID of the player's current Gate. Used to detect cross-zone transitions.
 	GateZoneId uint32 `protobuf:"varint,9,opt,name=gate_zone_id,json=gateZoneId,proto3" json:"gate_zone_id,omitempty"`
 	// 应答关联号:scene_manager 只在 EnterSceneResponse.correlation_id 里原样回显它。
-	// - 不进 request_id 的去重与指纹(算指纹前清零),不参与任何路由判定。它和 request_id 语义相反:
-	//   幂等键要求同一逻辑操作重试时取同一个值,关联号要求每次发送取不同的值、只认最新一次,
-	//   所以不能复用 request_id(复用会让每条交接请求多一次 SETNX/EVAL,还会带出假的"执行中")。
-	// - 取值是发送方线程内的单调号:scene 进程所有 EnterScene 都经统一出口发出,恒非 0;
-	//   0 表示调用方不需要按请求对应答(如 login)。
-	// - 请求侧后续新字段从 13 起用。
+	//   - 不进 request_id 的去重与指纹(算指纹前清零),不参与任何路由判定。它和 request_id 语义相反:
+	//     幂等键要求同一逻辑操作重试时取同一个值,关联号要求每次发送取不同的值、只认最新一次,
+	//     所以不能复用 request_id(复用会让每条交接请求多一次 SETNX/EVAL,还会带出假的"执行中")。
+	//   - 取值是发送方线程内的单调号:scene 进程所有 EnterScene 都经统一出口发出,恒非 0;
+	//     0 表示调用方不需要按请求对应答(如 login)。
+	//   - 请求侧后续新字段从 13 起用。
 	CorrelationId uint64 `protobuf:"varint,10,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
 	// 客户端主动选线(docs/design/world-channel-switch.md §4):这条请求的 scene_id 是玩家自己在
 	// 客户端点选的,不是服务器替他决定的。只有 scene 节点的客户端 EnterScene 入口会置位;
@@ -348,14 +348,14 @@ type EnterSceneRequest struct {
 	ClientChannelPick bool `protobuf:"varint,11,opt,name=client_channel_pick,json=clientChannelPick,proto3" json:"client_channel_pick,omitempty"`
 	// 登录代次(docs/design/scene-enter-session-fence.md、scene-enter-chain-residuals.md §5):
 	// 与 session_id 一起构成本请求代表的会话身份。
-	// - login 发起:本链铸出的代次(每条登录链持玩家锁铸造一次的单调值)。
-	// - scene 自发(换图 / 跟随 / 疏散 / 交接重发 / 镜像进场):实体已放行的代次,只在请求会话号与实体会话一致时
-	//   才填,可落后于会话记录;旧版 scene 填 0。
-	// - 0 = 调用方没有代次(旧版 login / 旧版 scene),落点身份裁决按 legacy 放行。
-	// - scene_manager 用它做落点会话身份裁决(陈旧登录 / 会话冲突回私有码 25),同时仍原样放进
-	//   RoutePlayerEvent.login_generation 下发,gate 对同一角色取 max,scene 入场栅栏照旧裁决。
-	// - 不进 request_id 的去重指纹(算指纹前清零,与 correlation_id 同理):login 的重试复用同一个
-	//   request_id,但每条登录链铸出的代次都不同,进指纹会把合法重试判成幂等冲突。
+	//   - login 发起:本链铸出的代次(每条登录链持玩家锁铸造一次的单调值)。
+	//   - scene 自发(换图 / 跟随 / 疏散 / 交接重发 / 镜像进场):实体已放行的代次,只在请求会话号与实体会话一致时
+	//     才填,可落后于会话记录;旧版 scene 填 0。
+	//   - 0 = 调用方没有代次(旧版 login / 旧版 scene),落点身份裁决按 legacy 放行。
+	//   - scene_manager 用它做落点会话身份裁决(陈旧登录 / 会话冲突回私有码 25),同时仍原样放进
+	//     RoutePlayerEvent.login_generation 下发,gate 对同一角色取 max,scene 入场栅栏照旧裁决。
+	//   - 不进 request_id 的去重指纹(算指纹前清零,与 correlation_id 同理):login 的重试复用同一个
+	//     request_id,但每条登录链铸出的代次都不同,进指纹会把合法重试判成幂等冲突。
 	LoginGeneration uint64 `protobuf:"varint,12,opt,name=login_generation,json=loginGeneration,proto3" json:"login_generation,omitempty"`
 	// 账号目录放行的所有权修订；完整参与幂等指纹，不能用新买家的修订替旧路由补权。0拒绝。
 	OwnerRevision uint64 `protobuf:"varint,13,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
@@ -496,12 +496,12 @@ type EnterSceneResponse struct {
 	PlayerId uint64 `protobuf:"varint,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	// GO-2 回显(cross-zone-scene-travel.md §12.8):本请求铸造的 owner_epoch 在推路由 / 重定向失败后
 	// 已被原子回滚,且回滚方式是再 INCR 一格(bump)时,这里填回滚后的值(= 铸出值 + 1,只升不降)。
-	// - 只出现在 ErrKafkaRoute 应答里;错误应答不进 request_id 去重缓存,不存在"跟缓存重放"。
-	// - 0 = 本应答不对 epoch 做任何断言(没回滚、keep 回滚、回滚未确认、旧版 scene_manager)。
-	// - 只用于日志和排障,**绝不是采纳凭证**:回滚会同时把交接标记转写到新 epoch,源 scene 必须经
-	//   ResolveTravelOutcome 的原子脚本先删掉本次交接这一族标记、并读到 PlayerLocation.rollback_receipt
-	//   与自己本次标记原文逐字节相同,才能采纳新 epoch。凭回显采纳会在"第三方已凭转写标记铸出更新值"
-	//   时造成双持有。
+	//   - 只出现在 ErrKafkaRoute 应答里;错误应答不进 request_id 去重缓存,不存在"跟缓存重放"。
+	//   - 0 = 本应答不对 epoch 做任何断言(没回滚、keep 回滚、回滚未确认、旧版 scene_manager)。
+	//   - 只用于日志和排障,**绝不是采纳凭证**:回滚会同时把交接标记转写到新 epoch,源 scene 必须经
+	//     ResolveTravelOutcome 的原子脚本先删掉本次交接这一族标记、并读到 PlayerLocation.rollback_receipt
+	//     与自己本次标记原文逐字节相同,才能采纳新 epoch。凭回显采纳会在"第三方已凭转写标记铸出更新值"
+	//     时造成双持有。
 	OwnerEpochAfterRollback uint64 `protobuf:"varint,5,opt,name=owner_epoch_after_rollback,json=ownerEpochAfterRollback,proto3" json:"owner_epoch_after_rollback,omitempty"`
 	// 原样回显 EnterSceneRequest.correlation_id。scene 节点靠它把应答对回"哪一次发送"
 	// (player_id 只用来找实体):只有号匹配的应答才算本代传送交接的证据。

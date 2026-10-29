@@ -277,6 +277,22 @@ protected:
         return it->second.progress(slot);
     }
     uint32_t KillProgress() const { return KillProgressAt(0) + KillProgressAt(1); }
+    void AddCurrencyGain(uint32_t type, uint64_t amount) {
+        auto* gain = settlement.add_currency_gains();
+        gain->set_currency_type(type);
+        gain->set_amount(amount);
+    }
+    void ExpectCurrencySettlementRejectedWithoutEffects() {
+        const auto currencyBefore = tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString();
+        EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+        EXPECT_EQ(currencyBefore, tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString());
+        EXPECT_EQ(100u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+        EXPECT_EQ(50u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).mana());
+        EXPECT_EQ(0u, KillProgress());
+        EXPECT_FALSE(battle_settlement::HasApplied(
+            tlsEcs.actorRegistry.get<BattleSettlementLedgerComp>(player), settlement.battle_id()));
+        EXPECT_EQ(0, gPersistCalls);
+    }
     entt::entity player{entt::null};
     uint64_t playerId{};
     BattleSettlementData settlement;
@@ -300,6 +316,117 @@ TEST_F(PlayerBattleSettlementTest, DuplicateSuccessfulCallbacksPayAndProgressOnc
     EXPECT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 24u);
     EXPECT_EQ(KillProgress(), 4u);
+}
+
+// 新集合包含金币且优先于旧 gold_gain；重复投递不能重复任何一种货币、任务或存盘请求。
+TEST_F(PlayerBattleSettlementTest, AllCurrencyGainsOverrideLegacyGoldAndApplyOnce) {
+    settlement.set_gold_gain(999);
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(kCurrencyDiamond, 7);
+    AddCurrencyGain(kCurrencyBindDiamond, 3);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(1, gPersistCalls);
+
+    bool alreadyApplied = false;
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement, alreadyApplied));
+    EXPECT_TRUE(alreadyApplied);
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(1, gPersistCalls);
+}
+
+TEST_F(PlayerBattleSettlementTest, NewCurrencyGainsDoNotImplicitlyAddLegacyGold) {
+    AddCurrencyGain(kCurrencyDiamond, 5);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+}
+
+TEST_F(PlayerBattleSettlementTest, LegacyGoldGainStillAppliesWithoutNewCurrencyGains) {
+    ASSERT_EQ(0, settlement.currency_gains_size());
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+}
+
+// 故意把坏币种放在有效金币之后，证明预检覆盖整笔，而不是边校验边入账。
+TEST_F(PlayerBattleSettlementTest, InvalidLaterCurrencyRejectsAllEffectsAndCanRetryAfterCorrection) {
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(kCurrencyMax, 5);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+
+    settlement.mutable_currency_gains(1)->set_currency_type(kCurrencyDiamond);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+}
+
+TEST_F(PlayerBattleSettlementTest, DuplicateCurrencyRejectsBeforeAnyCredit) {
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(kCurrencyGold, 3);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+}
+
+TEST_F(PlayerBattleSettlementTest, OversizedLaterCurrencyRejectsBeforeAnyCredit) {
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(kCurrencyDiamond,
+        static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+}
+
+TEST_F(PlayerBattleSettlementTest, LegacyGoldAboveSignedCreditRangeRejectsAllEffects) {
+    settlement.set_gold_gain(static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+}
+
+TEST_F(PlayerBattleSettlementTest, LargestSignedCurrencyGainIsCreditedWithoutNarrowing) {
+    const auto amount = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+    AddCurrencyGain(kCurrencyDiamond, amount);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(amount, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+}
+
+TEST_F(PlayerBattleSettlementTest, LaterCurrencyBalanceOverflowRejectsBeforeEarlierCredit) {
+    const auto largestCredit = std::numeric_limits<int64_t>::max();
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyDiamond, largestCredit));
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyDiamond, largestCredit));
+    ASSERT_EQ(std::numeric_limits<uint64_t>::max() - 1,
+              CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(kCurrencyDiamond, 2);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+}
+
+TEST_F(PlayerBattleSettlementTest, MissingCurrencyDebtComponentRejectsAllCurrencyGainsWithoutCreatingIt) {
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(kCurrencyDiamond, 5);
+    tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+    EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerCurrencyComp>(player));
+
+    tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+}
+
+TEST_F(PlayerBattleSettlementTest, ZeroCurrencyGainSuppressesLegacyGoldWithoutCallingCredit) {
+    AddCurrencyGain(kCurrencyDiamond, 0);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(2u, KillProgress());
 }
 
 TEST_F(PlayerBattleSettlementTest, CurrencyFailureLeavesPendingSideEffectsUntouchedAndCanRetry) {
@@ -569,6 +696,30 @@ TEST_F(PlayerBattleSettlementTest, GmCurrencyBlockSkipsGoldButAppliesRestOfSettl
     EXPECT_TRUE(alreadyApplied);
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u);
     EXPECT_EQ(KillProgress(), 2u);
+}
+
+TEST_F(PlayerBattleSettlementTest, BlockedMiddleCurrencySkipsOnlyThatGainAndDoesNotRetryIt) {
+    AddCurrencyGain(kCurrencyGold, 12);
+    AddCurrencyGain(kCurrencyDiamond, 7);
+    AddCurrencyGain(kCurrencyBindDiamond, 3);
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyDiamond));
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+
+    ASSERT_EQ(kSuccess, CurrencySystem::UnblockCurrency(player, kCurrencyDiamond));
+    bool alreadyApplied = false;
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement, alreadyApplied));
+    EXPECT_TRUE(alreadyApplied);
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+    EXPECT_EQ(2u, KillProgress());
+    EXPECT_EQ(1, gPersistCalls);
 }
 
 // 全服 GainBlock 与单人 GM 封禁同属终局拒绝(AddCurrency 都回 kAssetBlocked),处理口径相同。

@@ -45,6 +45,9 @@ docs/PROGRESS.md merge=union
 *.nav binary
 *.navmesh binary
 
+# 配表 PB 是二进制，禁止自动换行转换或按文本检查字节中的空白。
+generated/tables/*.pb binary
+
 # 补丁文件必须逐字节保留:内容是 CRLF 的 vcxproj diff,
 # 被 text=auto 归一成 LF 后在新 clone 上 git apply 必然失败。
 *.patch -text

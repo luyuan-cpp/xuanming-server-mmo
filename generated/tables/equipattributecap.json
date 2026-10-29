@@ -5,210 +5,210 @@
    "cap": 20,
    "id": 1001,
    "level": 1,
-   "min_value": 6
+   "min_value": 10
+  },
+  {
+   "attr_id": 1,
+   "cap": 150,
+   "id": 1020,
+   "level": 20,
+   "min_value": 75
   },
   {
    "attr_id": 1,
    "cap": 300,
-   "id": 1020,
-   "level": 20,
-   "min_value": 90
+   "id": 1040,
+   "level": 40,
+   "min_value": 150
+  },
+  {
+   "attr_id": 1,
+   "cap": 450,
+   "id": 1060,
+   "level": 60,
+   "min_value": 225
   },
   {
    "attr_id": 1,
    "cap": 600,
-   "id": 1040,
-   "level": 40,
-   "min_value": 180
-  },
-  {
-   "attr_id": 1,
-   "cap": 900,
-   "id": 1060,
-   "level": 60,
-   "min_value": 270
-  },
-  {
-   "attr_id": 1,
-   "cap": 1200,
    "id": 1080,
    "level": 80,
-   "min_value": 360
+   "min_value": 300
   },
   {
    "attr_id": 2,
-   "cap": 30,
+   "cap": 15,
    "id": 2001,
    "level": 1,
-   "min_value": 9
+   "min_value": 8
+  },
+  {
+   "attr_id": 2,
+   "cap": 100,
+   "id": 2020,
+   "level": 20,
+   "min_value": 50
+  },
+  {
+   "attr_id": 2,
+   "cap": 200,
+   "id": 2040,
+   "level": 40,
+   "min_value": 100
+  },
+  {
+   "attr_id": 2,
+   "cap": 300,
+   "id": 2060,
+   "level": 60,
+   "min_value": 150
   },
   {
    "attr_id": 2,
    "cap": 400,
-   "id": 2020,
-   "level": 20,
-   "min_value": 120
-  },
-  {
-   "attr_id": 2,
-   "cap": 800,
-   "id": 2040,
-   "level": 40,
-   "min_value": 240
-  },
-  {
-   "attr_id": 2,
-   "cap": 1200,
-   "id": 2060,
-   "level": 60,
-   "min_value": 360
-  },
-  {
-   "attr_id": 2,
-   "cap": 1600,
    "id": 2080,
    "level": 80,
-   "min_value": 480
+   "min_value": 200
   },
   {
    "attr_id": 3,
-   "cap": 2,
+   "cap": 1,
    "id": 3001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 3,
-   "cap": 5,
+   "cap": 2,
    "id": 3020,
    "level": 20,
+   "min_value": 1
+  },
+  {
+   "attr_id": 3,
+   "cap": 3,
+   "id": 3040,
+   "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 3,
-   "cap": 10,
-   "id": 3040,
-   "level": 40,
+   "cap": 4,
+   "id": 3060,
+   "level": 60,
+   "min_value": 2
+  },
+  {
+   "attr_id": 3,
+   "cap": 6,
+   "id": 3080,
+   "level": 80,
    "min_value": 3
   },
   {
-   "attr_id": 3,
-   "cap": 15,
-   "id": 3060,
-   "level": 60,
-   "min_value": 5
-  },
-  {
-   "attr_id": 3,
-   "cap": 20,
-   "id": 3080,
-   "level": 80,
-   "min_value": 6
-  },
-  {
    "attr_id": 4,
-   "cap": 2,
+   "cap": 1,
    "id": 4001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 4,
-   "cap": 5,
+   "cap": 2,
    "id": 4020,
    "level": 20,
+   "min_value": 1
+  },
+  {
+   "attr_id": 4,
+   "cap": 3,
+   "id": 4040,
+   "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 4,
-   "cap": 10,
-   "id": 4040,
-   "level": 40,
+   "cap": 4,
+   "id": 4060,
+   "level": 60,
+   "min_value": 2
+  },
+  {
+   "attr_id": 4,
+   "cap": 6,
+   "id": 4080,
+   "level": 80,
    "min_value": 3
   },
   {
-   "attr_id": 4,
-   "cap": 15,
-   "id": 4060,
-   "level": 60,
-   "min_value": 5
-  },
-  {
-   "attr_id": 4,
-   "cap": 20,
-   "id": 4080,
-   "level": 80,
-   "min_value": 6
-  },
-  {
    "attr_id": 5,
-   "cap": 2,
+   "cap": 1,
    "id": 5001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 5,
-   "cap": 5,
+   "cap": 2,
    "id": 5020,
    "level": 20,
+   "min_value": 1
+  },
+  {
+   "attr_id": 5,
+   "cap": 3,
+   "id": 5040,
+   "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 5,
-   "cap": 10,
-   "id": 5040,
-   "level": 40,
+   "cap": 4,
+   "id": 5060,
+   "level": 60,
+   "min_value": 2
+  },
+  {
+   "attr_id": 5,
+   "cap": 6,
+   "id": 5080,
+   "level": 80,
    "min_value": 3
   },
   {
-   "attr_id": 5,
-   "cap": 15,
-   "id": 5060,
-   "level": 60,
-   "min_value": 5
-  },
-  {
-   "attr_id": 5,
-   "cap": 20,
-   "id": 5080,
-   "level": 80,
-   "min_value": 6
-  },
-  {
    "attr_id": 6,
-   "cap": 2,
+   "cap": 1,
    "id": 6001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 6,
-   "cap": 5,
+   "cap": 2,
    "id": 6020,
    "level": 20,
+   "min_value": 1
+  },
+  {
+   "attr_id": 6,
+   "cap": 3,
+   "id": 6040,
+   "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 6,
-   "cap": 10,
-   "id": 6040,
-   "level": 40,
-   "min_value": 3
-  },
-  {
-   "attr_id": 6,
-   "cap": 15,
+   "cap": 4,
    "id": 6060,
    "level": 60,
-   "min_value": 5
+   "min_value": 2
   },
   {
    "attr_id": 6,
-   "cap": 20,
+   "cap": 6,
    "id": 6080,
    "level": 80,
-   "min_value": 6
+   "min_value": 3
   },
   {
    "attr_id": 7,
@@ -219,308 +219,308 @@
   },
   {
    "attr_id": 7,
-   "cap": 4,
+   "cap": 1,
    "id": 7020,
    "level": 20,
-   "min_value": 2
+   "min_value": 1
   },
   {
    "attr_id": 7,
-   "cap": 8,
+   "cap": 1,
    "id": 7040,
    "level": 40,
-   "min_value": 3
+   "min_value": 1
   },
   {
    "attr_id": 7,
-   "cap": 12,
+   "cap": 2,
    "id": 7060,
    "level": 60,
-   "min_value": 4
+   "min_value": 1
   },
   {
    "attr_id": 7,
-   "cap": 16,
+   "cap": 2,
    "id": 7080,
    "level": 80,
-   "min_value": 5
+   "min_value": 1
   },
   {
    "attr_id": 8,
-   "cap": 6,
+   "cap": 24,
    "id": 8001,
    "level": 1,
-   "min_value": 2
+   "min_value": 12
   },
   {
    "attr_id": 8,
-   "cap": 80,
+   "cap": 180,
    "id": 8020,
    "level": 20,
-   "min_value": 24
+   "min_value": 90
   },
   {
    "attr_id": 8,
-   "cap": 160,
+   "cap": 360,
    "id": 8040,
    "level": 40,
-   "min_value": 48
+   "min_value": 180
   },
   {
    "attr_id": 8,
-   "cap": 240,
+   "cap": 540,
    "id": 8060,
    "level": 60,
-   "min_value": 72
+   "min_value": 270
   },
   {
    "attr_id": 8,
-   "cap": 320,
+   "cap": 720,
    "id": 8080,
    "level": 80,
-   "min_value": 96
+   "min_value": 360
   },
   {
    "attr_id": 9,
-   "cap": 10,
+   "cap": 30,
    "id": 9001,
    "level": 1,
-   "min_value": 3
+   "min_value": 15
   },
   {
    "attr_id": 9,
-   "cap": 160,
+   "cap": 240,
    "id": 9020,
    "level": 20,
-   "min_value": 48
+   "min_value": 120
   },
   {
    "attr_id": 9,
-   "cap": 320,
+   "cap": 480,
    "id": 9040,
    "level": 40,
-   "min_value": 96
+   "min_value": 240
   },
   {
    "attr_id": 9,
-   "cap": 480,
+   "cap": 720,
    "id": 9060,
    "level": 60,
-   "min_value": 144
+   "min_value": 360
   },
   {
    "attr_id": 9,
-   "cap": 640,
+   "cap": 960,
    "id": 9080,
    "level": 80,
-   "min_value": 192
+   "min_value": 480
   },
   {
    "attr_id": 10,
-   "cap": 8,
+   "cap": 20,
    "id": 10001,
    "level": 1,
-   "min_value": 3
+   "min_value": 10
   },
   {
    "attr_id": 10,
-   "cap": 120,
+   "cap": 160,
    "id": 10020,
    "level": 20,
-   "min_value": 36
+   "min_value": 80
   },
   {
    "attr_id": 10,
-   "cap": 240,
+   "cap": 320,
    "id": 10040,
    "level": 40,
-   "min_value": 72
-  },
-  {
-   "attr_id": 10,
-   "cap": 360,
-   "id": 10060,
-   "level": 60,
-   "min_value": 108
+   "min_value": 160
   },
   {
    "attr_id": 10,
    "cap": 480,
+   "id": 10060,
+   "level": 60,
+   "min_value": 240
+  },
+  {
+   "attr_id": 10,
+   "cap": 640,
    "id": 10080,
    "level": 80,
-   "min_value": 144
+   "min_value": 320
   },
   {
    "attr_id": 12,
-   "cap": 2,
+   "cap": 1,
    "id": 12001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 12,
-   "cap": 4,
+   "cap": 2,
    "id": 12020,
    "level": 20,
-   "min_value": 2
+   "min_value": 1
   },
   {
    "attr_id": 12,
-   "cap": 6,
+   "cap": 3,
    "id": 12040,
    "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 12,
-   "cap": 8,
+   "cap": 4,
    "id": 12060,
    "level": 60,
-   "min_value": 3
+   "min_value": 2
   },
   {
    "attr_id": 12,
-   "cap": 10,
+   "cap": 5,
    "id": 12080,
    "level": 80,
    "min_value": 3
   },
   {
    "attr_id": 13,
-   "cap": 2,
+   "cap": 1,
    "id": 13001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 13,
-   "cap": 4,
+   "cap": 2,
    "id": 13020,
    "level": 20,
-   "min_value": 2
+   "min_value": 1
   },
   {
    "attr_id": 13,
-   "cap": 6,
+   "cap": 3,
    "id": 13040,
    "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 13,
-   "cap": 8,
+   "cap": 4,
    "id": 13060,
    "level": 60,
-   "min_value": 3
+   "min_value": 2
   },
   {
    "attr_id": 13,
-   "cap": 10,
+   "cap": 5,
    "id": 13080,
    "level": 80,
    "min_value": 3
   },
   {
    "attr_id": 14,
-   "cap": 2,
+   "cap": 1,
    "id": 14001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 14,
-   "cap": 4,
+   "cap": 2,
    "id": 14020,
    "level": 20,
-   "min_value": 2
+   "min_value": 1
   },
   {
    "attr_id": 14,
-   "cap": 6,
+   "cap": 3,
    "id": 14040,
    "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 14,
-   "cap": 8,
+   "cap": 4,
    "id": 14060,
    "level": 60,
-   "min_value": 3
+   "min_value": 2
   },
   {
    "attr_id": 14,
-   "cap": 10,
+   "cap": 5,
    "id": 14080,
    "level": 80,
    "min_value": 3
   },
   {
    "attr_id": 15,
-   "cap": 2,
+   "cap": 1,
    "id": 15001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 15,
-   "cap": 4,
+   "cap": 2,
    "id": 15020,
    "level": 20,
-   "min_value": 2
+   "min_value": 1
   },
   {
    "attr_id": 15,
-   "cap": 6,
+   "cap": 3,
    "id": 15040,
    "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 15,
-   "cap": 8,
+   "cap": 4,
    "id": 15060,
    "level": 60,
-   "min_value": 3
+   "min_value": 2
   },
   {
    "attr_id": 15,
-   "cap": 10,
+   "cap": 5,
    "id": 15080,
    "level": 80,
    "min_value": 3
   },
   {
    "attr_id": 16,
-   "cap": 2,
+   "cap": 1,
    "id": 16001,
    "level": 1,
    "min_value": 1
   },
   {
    "attr_id": 16,
-   "cap": 4,
+   "cap": 2,
    "id": 16020,
    "level": 20,
-   "min_value": 2
+   "min_value": 1
   },
   {
    "attr_id": 16,
-   "cap": 6,
+   "cap": 3,
    "id": 16040,
    "level": 40,
    "min_value": 2
   },
   {
    "attr_id": 16,
-   "cap": 8,
+   "cap": 4,
    "id": 16060,
    "level": 60,
-   "min_value": 3
+   "min_value": 2
   },
   {
    "attr_id": 16,
-   "cap": 10,
+   "cap": 5,
    "id": 16080,
    "level": 80,
    "min_value": 3
@@ -534,31 +534,31 @@
   },
   {
    "attr_id": 17,
-   "cap": 2,
+   "cap": 1,
    "id": 17020,
    "level": 20,
    "min_value": 1
   },
   {
    "attr_id": 17,
-   "cap": 3,
+   "cap": 1,
    "id": 17040,
    "level": 40,
    "min_value": 1
   },
   {
    "attr_id": 17,
-   "cap": 4,
+   "cap": 2,
    "id": 17060,
    "level": 60,
-   "min_value": 2
+   "min_value": 1
   },
   {
    "attr_id": 17,
-   "cap": 5,
+   "cap": 2,
    "id": 17080,
    "level": 80,
-   "min_value": 2
+   "min_value": 1
   },
   {
    "attr_id": 18,
