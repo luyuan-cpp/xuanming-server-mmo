@@ -17753,3 +17753,25 @@ C++第二轮AD21277A真实退出1，resource正常，首错是NoRaw解析kafka_c
 - 最新 Java actual：`build/verification/java-Applied43-Mallr6-canonicalP-pure16-20261028-r1/native-stage-20261028T235127030Z-bf29cef8/proof.json`，SHA `A0945EB20B23B67396706B62B64F9069AC05B9583584995D65BC46D8DE156D82`；同 stage 下保留全部 16 份 XML、16 份 txt 和 5 份 dumpstream，完整索引 SHA `628C10A9B89AEAC6C763F854DE88FBBD4EFA892253E6C4F7B49418D3CE4A5D4D`。
 - 继续入口：`C:/Users/luyua/.codex/tmp/root-global-verification-20261028-r1/current.continuation.json`；最新消费输入 SHA `2C2E200E965A7DE06485D08AB63F926348E83618FC857FB1132DAF7A534FF565`。Docker 正常启动后先按原门禁重取容器/物理/Raw/I3 资格，再继续真库与最终验收，不能复用旧 D5 待跑计划或把 HOLD 当作 actual。
 - 本条只追加主仓现有进度文件。协作方已逐份核对：CPP 完整 4065 输入及 Go20 完整源元数据、producer/Reader20 显式输入均不包含本文件或主仓 docs，因此此追加不改变已完成 CPP/Go 验收声明的输入；不据此抬绿尚未完成的 SourceBinder、现代 Java 或 Main。
+
+### 2026-10-28：重启后必要环境恢复、SQL资格刷新与当前Java145实际通过
+
+- 唯一新Root继续验收；原9个必要容器按既有资源恢复，旧Kafka3和10个无关容器保持停止。19项Redis/etcd/Kafka协议检查实际通过，38条原生记录均exit0，source首尾相同；五个Kafka主题522个分区完整、RF3与ISR1/2/3等合同均符合。实际F0287482FDD8816339F451F0E13BCA5A92567B49E6CAB852FC34FA1068CD3792，公开语义审核3C10CA18355309C943E95F3A54E4D4A7BD548768BA42B37901083C392466A466。
+- 新SQL3、Raw4与I3已实际完成。Raw最初因D证据目录祖先写权限被原路径守卫拒绝（85A53442…，尚未进入SQL）；未改系统ACL或守卫，改用原受信C临时根后Raw实际0A42776C…、I3实际094EF21B…均绿，SELECT_ONLY和LOCK_TOUCH均确认自有临时对象已清理。新本地physical为713858B3DBF287E8694FBC05A00AFDFB4A0B6C4459964C9F353B68D67D179E04，精确接线见C:/Users/luyua/.codex/tmp/global-newroot-rawV2-preparation-20261027-r1/post-PC-restart-20261028-r1/Raw-I3-current/DELIVERY.PureRaw-Physical-I3.ROOT.READY.json（17A326A7…）。一次Kafka3前证据IO握手红74713B4E…完整保留；当次未发Docker启动，后续仅补未执行单步，未放宽原2秒边界。
+- 当前2C2/06A冻结输入的Player145真实专项完成：D:/luyuan/xuanming-server-mmo-cpp/build/verification/java-execution-on-D-20261028-r1/native-stage-20261029T031231323Z-67255766/proof.json，SHA422FB6A139555E6249FEE5B85F36ED50B7B16D85465630B799239B45F8167963，1842.972秒、primary/IO均0。原12607源码向量、before/after文件及计划按顺序path/SHA五向一致；5类145个唯一CaseID精确匹配，145P/0F/0E/0S，无缺失、额外或重复。全P原报告留存1110份（旧报告单列不计本轮），完整索引CEE9FF97D1244FB4028AB970B8B4A60A0A05CA17A5ACDF8DA446059C46290E4B位于同stage/retained-all-original-Java-reports/INDEX.complete-original-reports-and-case-identities.actual.json。
+- 本轮新私有receipt根经原CF3 helper实际验证（7ABD7305…，外层52689FB1…），只隔离本轮随机夹具；旧459个owner原件及可能UNKNOWN对象保留，不能凭文件数判断SQL残留。并行审阅发现旧r3只读reconcile假设单normal账号，不能直接宣称覆盖已支持多normal账号的旧夹具；旧遗留清理尚未完成。
+- Pb10已启动，尚无通过结论。剩余原283专项、独立ACL1、新商城54、Gateway5合计343项待闭环，另有默认31模块clean install、现代Java六角色、SourceCurrent双遍/清缓存、Main36与双区联验。C++/Go和115纯测试既有结果不重跑，不据环境或局部145抬全任务通过；Java仍0.1.0-SNAPSHOT，未改J/P源、未commit/push/tag。
+### 2026-10-29（UTC）：当前Java原专项追加至208项，公会167项执行中
+
+- 当前冻结2C2/06A输入的Pb10、Team18、Trade35均实际通过：10/18/35项，失败、错误、跳过均为0，精确CaseID无缺失/额外/重复，12607源码向量五向相等。加上此前Player145，真库专项及独立追加合同共208/488项已通过，尚余280项；此数只指具名真库专项，不表示全局任务进度百分比。
+- Pb10 actual F1D7BAF3D918B72D0F3A4FDF7B20F6FE6E2637CC9CFF3F4A4494D2933D1C4FAB，完整原报告索引D8561A81D0119F330F6741666EF5D4527FCA945C551CDA88D67F51D80C4A6014；Team18 actual CF4E5496140E8E5760DECCAF5FE94611598A43D2EFDB9FB6FF2E7BFE177A1919，索引B7760C16C7978911ABCD49A11FA5ED77A30159E512B364AEEF47EFC0A83C73CB；Trade35 actual 71317DB97881A17864D62C2B0BFAE9314CEBF23024381B9BA75F59D9A3B49E8B，索引F52BF0D8D3574D61F667C517B512E3B41CCB98CCE57F212648ECB5A75F67F89B。原件位于各自build/verification/java-execution-on-D-20261028-r1/native-stage-*，所有新旧报告均留存，本轮只计严格原生出生/修改时间窗的XML。
+- 报告留存器首次因路径分隔符比较拒绝Pb元数据捕获，未复制原件；CreateNew r2只规范路径比较，逆构原留存器相等，实际捕获成功。此元数据失败不改变原Pb测试绿色。每次下一clean前，前组完整索引及实际留存脚本均已被下一真实计划不可变pin，原脚本与原计划均未改写。
+- Guild167已在唯一重型槽启动，计划710CC162C8DCB655B5C067D551CC18FC579506327F89D2AD9479C7EDA71B8F32，尚无通过结论；接着是Friend44、Data9、ACL1、新商城54、Gateway5、默认31模块clean install。全部原断言、权限、资源与超时合同保持。
+- 准备/静审已并行：现代Java完整报告与最终JAR原件读取候选完成独立静审，但尚缺未来实际输入与六角色；旧多normal账号只读reconcile的r4有限候选已备，尚未执行，旧UNKNOWN仍未解除。SourceCurrent双遍/清缓存、Main36/双区仍待完成，不据局部通过宣称总验收完成。
+### 2026-10-29（UTC）：公会167专项失败留存，确认测试时间边界与环境OOM
+
+- 公会167本轮实际失败，原stage native-stage-20261029T043801452Z-9b2daec0/proof.json SHA3EDA5A372423BD07693C95F80571671C747DCA0B17B3E45D19BC0A90301B802A。原完整报告881份已留存，索引AA2B7AEBF959A484D174F8134EF9B66919CCC835E868863B3657AF03C1A6ACB6（832899B）；69个实际case为28P/1F/40E/0S，批准167锚缺106/额外8，五向12607源图相等。28个局部通过不追加为整组通过，旧208/488只代表此前四组原冻结图。
+- 单个活动断言失败498行：冻结PLAYER首次调用把next_attempt推进至NOW+21006，PARTNER成功入队使总返回1；原第二次调用NOW+20007早于到期，返回0符合生产代码。候选保留CaseID与原断言，增加到期前0、到期时1的精确时钟边界。负责人已明确批准仅此一个相对测试文件解冻并同步J/P、重封源图和必要回归；本条记录时尚未应用。完整新输入SHA必变，不能把旧208静默计作新图通过，CPP/Go不因此重跑。
+- 配置另有一项独立错误：仅Guild内存CaseEnv MAIL_RANK_TEST_JDBC的根URL缺末尾/，AssetOpSqlProof直接拼库名，形成24000guild_proof非法端口。已静读全部14类及后继组，两个-D JDBC原参数及其他CaseEnv均按原契约保留，不统改为双斜杠，不改SQL权限。
+- 原95C监督的noEnv9只读实际FC988356AF90A903C70B27FC9C703508CB47E1720A351CF922A5D6C57E2126C4确认TiKV在04:47:30Z OOMKilled=true、exit137（原3GiB/6GiB），Kafka2在02:49:13Z exit1（原512MiB/512MiB）；其余7容器仍运行。有限日志实际确认Kafka2多次Java heap space，原公开heap是128/256MiB。没有增加资源或清卷/改镜像/网络。
+- 四命令诊断stage native-stage-20261029T054247809Z-a9ed5f90整体仍红B938CC974AAEA976C94EDAA1F6EE1248F4813AB28C45F090A155FDC08B6FFF0A：前两条固定日志各2native全0，第三MemTotal资源复核触发原2秒单调预算、IO worker退出1，stats未执行。家族after11条alive0，原件保留；未连续重试、未放宽资源门禁，也未把局部取证冒作完整环境恢复。
