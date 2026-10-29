@@ -2,7 +2,6 @@ package team
 
 import (
 	"context"
-	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"net"

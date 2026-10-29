@@ -17731,3 +17731,25 @@ C++第二轮AD21277A真实退出1，resource正常，首错是NoRaw解析kafka_c
 - Kafka3按单独批准实际Create一次：r2 outer `9759C6CA8690546E7C54C99F96A2FABE89B1B357052D3D2F64D6CF9BA3AB7B37` 为历史RED，公共actual `4C5B7C5F85EC91262E1503ECF61C772A6B60DF10D427012BBC47DC083D7091DD` 确认create_attempted/returned=true；新CID `425c65fd3b5b67fcc7f1bf399209970f04ad7d78130758d8d29134f2ec073e31` 已created。严格配置比较停在Docker默认空数组/null及OomKillDisable默认表示差，未再Create。其后只读VerifyExisting实际绿：outer `886E509B3E0D68FCE5B5BD928E51F057AC2EF47B331B41188EAB363F313FBD8A`，公共actual `5CE13D8025AE1D648C6EED555A5A69E77504A92027A160379948A406813CD222`，7个只读Docker调用全0、原9前后固定配置一致。
 - 新Kafka3已单次start成功，公共actual `B6119AB84C6B2A33865AC75D16C5688123878A5C0D51D269845743A37B66154F` 确认attempt/returned=true及4个Docker调用全0；outer `73C520EEAA746D201DEB79E2DAD50037BD9779409337FF66FC40FECC6FEC65C8` 仍为历史RED，原因仅启动前后OomKillDisable false/null默认表示严比，不得冒称wrapper绿。独立成熟单CLI全10CID只读复核实际绿：outer `C4AD9266D1C9414546125D77F0F562CB93CCAF35ED6F7F6B676FFB80A5C1FBCB`，原始快照SHA256 `B3D242515EF3351289076178AD3D4483B7F773EE11099FFF9CCC0410B5629F12`；Root资格 `root-post-Kafka3-start-full10-readonly-20261028-r1/Root.post-single-start.configuration.ACTUAL-qualified.json` SHA256 `607BF12F39E8D715796AA70A3F2A65FD5EAEE4C5E3AA46B5C61F074600CD4376`。新CID运行PID10058、RestartCount0、healthy，heap512MiB、memory/swap总1GiB无swap、原三卷、精确网络ID及别名均已核；原9固定配置与状态逐字段无差，旧Kafka3保停。没有第二次Start/重建/offset reset。
 - Kafka3原19项协议与三副本验收尚未运行；READY `Main36-nineteen.Kafka3-425c.Root-post-readonly.READY.r3.plan.json` SHA256 `0FF2FA2B014E7D2C69137E82A6BED17AD3A29D5BA360E5BA8E389C849CFF6229` 已接上述真实证据，RF3/ISR3标准保持，不能把配置健康视作三副本或双区已通过。主窗口正在复验PbMysql公共fixture修复，尚待新真库结果。
+
+### 2026-10-28：全球同服 ID 发号上线前审计与 Claude Code 修复交接
+
+- 用户明确同类型业务身份在全部物理集群、跨服/迁库/合服与重新创建时终身不重号；不同身份类型允许同数是既定规则。最新前提为尚未上线、允许清理开发数据，不做旧 ID 兼容、历史重映射或混跑迁移。
+- 新增 `docs/handoff/global-id-prelaunch-claude-20261028.md` 并登记总索引，区分已确定要求、源码事实、由 Claude 决定的号源/恢复/权威绑定方案和验收。本轮只写交接、索引及本进度条目，未修改实现、未清库、未提交推送；没有把候选号源方案记为已拍板。
+- 前序只读审计实际在 `go/shared` 运行 `GOPROXY=off` 环境下的 `go test -mod=readonly -p 1 -count=1 -timeout 60s ./idsegment ./snowflake ./snowflakealloc`，三个包通过、exit 0；未启用 integration 标签，不代表真实 TiDB/etcd、跨集群、迁库合服或恢复验收。仅文档变更未重复运行上述测试。
+- Java 现有版本 `0.1.0-SNAPSHOT` 尚未因本任务修复；worker 换机复用与跨进程时间水位的静态反例已交接，真实修复和 PARITY 登记由接手方实施，本轮未修改另一仓。Claude 按根规范只实施代码/测试/文档，构建测试压测交 Codex 执行。
+
+### 2026-10-28：ID 发号交接的两仓验证分工补注
+
+- 独立审阅后核对 Java `AGENTS.md §4` 的既有用户授权：Claude 可在 Java 仓自行构建和测试；主仓 C++/Go 仍按 `AGENTS.md §10.1` 交 Codex。已修正新交接文档中的统一限制表述，上一条进度的分工描述仅适用于主仓；本轮仍未修改或验证 Java 实现。
+
+### 2026-10-28：全球同服验收检查点（Codex：Java 本地 115 项通过，真库待恢复）
+
+- Java 已将本轮 43 个具名路径的修复同步到正式仓与既有构建副本；随后只在原两份测试中补充精确删除依赖索引的准备语句，保留全部原断言。最新定向 clean test 的 14 个 reactor 构建通过，16 类共 115 项通过，失败、错误、跳过均为 0；这是纯单元/H2 与编译证据，三份真实 SQL 测试类只编译、未在此轮选择执行。
+- 本轮当前输入为 J/P 各 2760、工具 581、第三方 tail 6506，共 12607 行；完整首尾 path/SHA 相等。原 113 通过、2 个缺列准备错误的记录和原报告全部保留，未通过跳过测试或削弱断言取得绿色。
+- 原授权的三个 Docker 应用进程恢复已执行，并重新打开原安装应用；引擎仍因 socket 访问错误未恢复。等待负责人从系统托盘完全退出 Docker Desktop，再从 Windows 开始菜单打开并报告状态；没有新的 PID 强制终止、WSL 关机、清理卷/镜像、重置或配置更新授权。
+- 尚未完成：当前源的原 428 项及独立 ACL 真库验收、新商城与网关真库验收、Java 全量 clean install、完整 SourceCurrent 双遍与清缓存、Main36/双区业务联验。不得据此宣称全球验收完成。现有 C++/Go 专项结果仍以各自原完整源图和原 actual 为准。
+- 资源证据 Reader 的全局 stale 退出记录关联已修正；历史 352 个 persisted 样本、原摘要链及边界/CPU 的 3 项 helper 实际通过。该结果不代表重放 live ACK、完整源图或现代角色资格通过。
+- 最新 Java actual：`build/verification/java-Applied43-Mallr6-canonicalP-pure16-20261028-r1/native-stage-20261028T235127030Z-bf29cef8/proof.json`，SHA `A0945EB20B23B67396706B62B64F9069AC05B9583584995D65BC46D8DE156D82`；同 stage 下保留全部 16 份 XML、16 份 txt 和 5 份 dumpstream，完整索引 SHA `628C10A9B89AEAC6C763F854DE88FBBD4EFA892253E6C4F7B49418D3CE4A5D4D`。
+- 继续入口：`C:/Users/luyua/.codex/tmp/root-global-verification-20261028-r1/current.continuation.json`；最新消费输入 SHA `2C2E200E965A7DE06485D08AB63F926348E83618FC857FB1132DAF7A534FF565`。Docker 正常启动后先按原门禁重取容器/物理/Raw/I3 资格，再继续真库与最终验收，不能复用旧 D5 待跑计划或把 HOLD 当作 actual。
+- 本条只追加主仓现有进度文件。协作方已逐份核对：CPP 完整 4065 输入及 Go20 完整源元数据、producer/Reader20 显式输入均不包含本文件或主仓 docs，因此此追加不改变已完成 CPP/Go 验收声明的输入；不据此抬绿尚未完成的 SourceBinder、现代 Java 或 Main。
