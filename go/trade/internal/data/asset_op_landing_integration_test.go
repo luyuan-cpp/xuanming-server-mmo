@@ -33,6 +33,7 @@ import (
 	tradepb "proto/trade"
 
 	"shared/assetop"
+	"shared/assetop/assetoptest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,8 +178,10 @@ func (landingLedger) ReadStoreLedger(context.Context, uint64) (assetop.StoreLedg
 	return assetop.StoreLedger{Found: true, Released: true, Ledger: &componentpb.PlayerAssetOpLedgerComp{}}, nil
 }
 
-// landingApplier 记下每一次投递并一律回"已落盘的全额应用"。
+// landingApplier 记下每一次投递并一律回"已落盘的全额应用",结局同时记进自己的已提交账本(Loop 终结前核对它)。
 type landingApplier struct {
+	assetoptest.CommittedLedger
+
 	mu    sync.Mutex
 	calls []*assetpb.AssetOpRequest
 }
@@ -187,7 +190,11 @@ func (a *landingApplier) Do(_ context.Context, _ assetop.RPC, req *assetpb.Asset
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.calls = append(a.calls, req)
-	return assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED, Durable: true}, nil
+	res := assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED, Durable: true}
+	if err := a.Commit(req, res); err != nil {
+		return assetop.Result{}, err
+	}
+	return res, nil
 }
 
 func (a *landingApplier) requests() []*assetpb.AssetOpRequest {
@@ -560,6 +567,7 @@ func TestWakePlayer_EndToEndWithTradeStore(t *testing.T) {
 
 	applier := &landingApplier{}
 	loop := landingLoop(t, f, applier, itNow)
+	loop.Ledger = applier
 	ctx, cancel := context.WithTimeout(f.ctx, 10*time.Second)
 	defer cancel()
 	processed, err := loop.WakePlayer(ctx, player)

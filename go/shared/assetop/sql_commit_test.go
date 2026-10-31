@@ -10,28 +10,24 @@ import (
 	componentpb "proto/common/component"
 )
 
-// requireSQLCommit 打开 LoopConfig.RequireSQLCommit(生产恒开),给 newTestLoop 用。
-func requireSQLCommit(c *LoopConfig) { c.RequireSQLCommit = true }
-
-// splitLedger 让 Redis 父键 blob 与 SQL 提交证据各给各的账本:开关打开时自动放弃要两份都读,
-// 「证据落后于父键」(fence-inflight.md F6)只能用两份不同的账本造出来。
+// splitLedger 让 ReadPersistedLedger 与 ReadSQLCommittedLedger 各给各的账本,用来断言终结只认后者。
 type splitLedger struct {
-	blob *fakeLedger
-	sql  *fakeLedger
+	persisted *fakeLedger
+	sql       *fakeLedger
 }
 
 func (s *splitLedger) ReadPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
-	return s.blob.ReadPersistedLedger(ctx, playerID)
+	return s.persisted.ReadPersistedLedger(ctx, playerID)
 }
 
 func (s *splitLedger) ReadSQLCommittedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
 	return s.sql.ReadPersistedLedger(ctx, playerID)
 }
 
-// blobOnlyLedger 只会读 Redis 父键 blob(没有实现 SQLCommitLedgerReader),模拟开关打开却装错了读取器。
-type blobOnlyLedger struct{ inner *fakeLedger }
+// persistedOnlyLedger 只实现 LedgerReader,没实现 SQLCommitLedgerReader:装错读取器的样子。
+type persistedOnlyLedger struct{ inner *fakeLedger }
 
-func (b blobOnlyLedger) ReadPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
+func (b persistedOnlyLedger) ReadPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
 	return b.inner.ReadPersistedLedger(ctx, playerID)
 }
 
@@ -71,7 +67,7 @@ func TestSQLProofRequiredBeforeFinalizing(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := newFakeStore(testOp(1))
-			loop, _ := newTestLoop(t, store, &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) { return resultApplied(true), nil }}, requireSQLCommit)
+			loop, _ := newTestLoop(t, store, &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) { return resultApplied(true), nil }}, nil)
 			if tc.reader != nil {
 				loop.Ledger = tc.reader
 			}
@@ -80,100 +76,51 @@ func TestSQLProofRequiredBeforeFinalizing(t *testing.T) {
 				t.Fatalf("SQL 确认证据决定终结: got=%+v err=%v", got, err)
 			}
 			if got.Finalized && !got.Result.SQLCommitted {
-				t.Fatal("开关打开时终结的结果必须带 SQLCommitted")
+				t.Fatal("终结的结果必须带 SQLCommitted")
 			}
 		})
 	}
 }
 
-// 开关关闭(缺省)回到 HEAD 口径:scene 回包 durable 即终结,不读 SQL 证据,结果不带 SQLCommitted。
-func TestSQLProofSwitchOffKeepsHeadSemantics(t *testing.T) {
-	op := testOp(1)
-	store := newFakeStore(op)
-	loop, _ := newTestLoop(t, store, &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) { return resultApplied(true), nil }}, nil)
-	ledger := &splitLedger{blob: &fakeLedger{}, sql: &fakeLedger{}}
-	loop.Ledger = ledger
-	if err := loop.CheckWiring(); err != nil {
-		t.Fatalf("开关关闭时 Ledger 可选,不得拒启: %v", err)
-	}
-	got, err := loop.ProcessOne(context.Background(), op)
-	if err != nil || !got.Finalized || got.Status != StatusApplied {
-		t.Fatalf("开关关闭时 scene durable 即终结: %+v %v", got, err)
-	}
-	if got.Result.SQLCommitted {
-		t.Fatal("开关关闭时不得声称 SQL 已提交")
-	}
-	if ledger.blob.reads.Load() != 0 || ledger.sql.reads.Load() != 0 {
-		t.Fatalf("在线终结不读账本: blob=%d sql=%d", ledger.blob.reads.Load(), ledger.sql.reads.Load())
-	}
-
-	// 回包 durable=false 仍按 AwaitDurable 重排,与 HEAD 一致。
-	store2 := newFakeStore(op)
-	loop2, _ := newTestLoop(t, store2, &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) { return resultApplied(false), nil }}, nil)
-	loop2.Ledger = sqlLedgerFixture(true, op)
-	got, err = loop2.ProcessOne(context.Background(), op)
-	if err != nil || got.Finalized {
-		t.Fatalf("开关关闭时未落盘的回包不得因 SQL 证据而终结: %+v %v", got, err)
-	}
-}
-
-// 离线读账本按开关选来源:关闭读 Redis 父键 blob,打开只读 SQL 证据。
-func TestOfflineLedgerReadFollowsSwitch(t *testing.T) {
+// 离线终结只认已提交账本:另一份账本已见本笔也不算,已提交账本见了才终结。
+func TestOfflineFinalizeOnlyTrustsSQLLedger(t *testing.T) {
 	op := testOp(1)
 	op.Attempts = 5
 	notHere := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
 		return Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE, Local: true}, nil
 	}}
-	// blob 已见、证据未见:证据落后于父键。
-	newLedger := func() *splitLedger {
-		return &splitLedger{blob: sqlLedgerFixture(true, op), sql: sqlLedgerFixture(true, testOp(2))}
-	}
+	loop, _ := newTestLoop(t, newFakeStore(op), notHere, nil)
+	ledger := &splitLedger{persisted: sqlLedgerFixture(true, op), sql: sqlLedgerFixture(true, testOp(2))}
+	loop.Ledger = ledger
 
-	t.Run("关闭读blob", func(t *testing.T) {
-		loop, _ := newTestLoop(t, newFakeStore(op), notHere, nil)
-		ledger := newLedger()
-		loop.Ledger = ledger
-		got, err := loop.ProcessOne(context.Background(), op)
-		if err != nil || !got.Finalized || got.Result.SQLCommitted {
-			t.Fatalf("关闭时按 blob 终结且不带 SQLCommitted: %+v %v", got, err)
-		}
-		if ledger.sql.reads.Load() != 0 {
-			t.Fatal("关闭时不得读 SQL 证据")
-		}
-	})
-	t.Run("打开只认证据", func(t *testing.T) {
-		loop, _ := newTestLoop(t, newFakeStore(op), notHere, requireSQLCommit)
-		ledger := newLedger()
-		loop.Ledger = ledger
-		got, err := loop.ProcessOne(context.Background(), op)
-		if err != nil || got.Finalized {
-			t.Fatalf("证据未见时不得凭 blob 终结: %+v %v", got, err)
-		}
-		if ledger.blob.reads.Load() != 0 {
-			t.Fatal("打开时离线终结不得读 blob")
-		}
-		ledger.sql = sqlLedgerFixture(true, op)
-		got, err = loop.ProcessOne(context.Background(), op)
-		if err != nil || !got.Finalized || !got.Result.SQLCommitted {
-			t.Fatalf("证据已见应终结并带 SQLCommitted: %+v %v", got, err)
-		}
-	})
+	got, err := loop.ProcessOne(context.Background(), op)
+	if err != nil || got.Finalized {
+		t.Fatalf("已提交账本未见时不得终结: %+v %v", got, err)
+	}
+	if ledger.persisted.reads.Load() != 0 {
+		t.Fatal("离线终结不得读 ReadPersistedLedger")
+	}
+	ledger.sql = sqlLedgerFixture(true, op)
+	got, err = loop.ProcessOne(context.Background(), op)
+	if err != nil || !got.Finalized || !got.Result.SQLCommitted {
+		t.Fatalf("已提交账本已见应终结并带 SQLCommitted: %+v %v", got, err)
+	}
 }
 
-// 开关打开却没有能读 SQL 证据的 Ledger:启动时拒启(fence-inflight.md F6 (b))。
-func TestCheckWiringRequiresSQLLedgerWhenSwitchOn(t *testing.T) {
+// 没有能读已提交账本的 Ledger:启动时拒启(fence-inflight.md F6 (b))。
+func TestCheckWiringRequiresSQLLedger(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		ledger LedgerReader
 		ok     bool
 	}{
 		{"没挂", nil, false},
-		{"只会读blob", blobOnlyLedger{inner: &fakeLedger{}}, false},
-		{"能读SQL证据", &fakeLedger{}, true},
+		{"读不了已提交账本", persistedOnlyLedger{inner: &fakeLedger{}}, false},
+		{"能读已提交账本", &fakeLedger{}, true},
 		{"DataServiceLedger", &DataServiceLedger{}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			loop, _ := newTestLoop(t, newFakeStore(), appliedApplier(), requireSQLCommit)
+			loop, _ := newTestLoop(t, newFakeStore(), appliedApplier(), nil)
 			if tc.ledger != nil {
 				loop.Ledger = tc.ledger
 			}
@@ -182,15 +129,11 @@ func TestCheckWiringRequiresSQLLedgerWhenSwitchOn(t *testing.T) {
 			}
 		})
 	}
-	loop, _ := newTestLoop(t, newFakeStore(), appliedApplier(), nil)
-	if err := loop.CheckWiring(); err != nil {
-		t.Fatalf("开关关闭时没挂 Ledger 也合法(HEAD 口径): %v", err)
-	}
 }
 
 func TestSQLProofCanConfirmBeforeRedisReply(t *testing.T) {
 	op := testOp(1)
-	loop, _ := newTestLoop(t, newFakeStore(op), &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) { return resultApplied(false), nil }}, requireSQLCommit)
+	loop, _ := newTestLoop(t, newFakeStore(op), &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) { return resultApplied(false), nil }}, nil)
 	loop.Ledger = sqlLedgerFixture(true, op)
 	got, err := loop.ProcessOne(context.Background(), op)
 	if err != nil || !got.Finalized {
@@ -207,13 +150,13 @@ func TestSQLProofRetainsCompleteEscrowReceipt(t *testing.T) {
 		res := resultApplied(true)
 		res.Snapshot = &assetpb.AssetSnapshot{Items: []*assetpb.AssetItemInstance{{ItemUuid: 99, InstanceProto: []byte("仅RPC中的原件")}}}
 		return res, nil
-	}}, requireSQLCommit)
+	}}, nil)
 	loop.Ledger = reader
 	got, err := loop.ProcessOne(context.Background(), op)
 	if err != nil || got.Finalized {
 		t.Fatalf("SQL 缺托管原件时不得终结: %+v %v", got, err)
 	}
-	digest, _ := receiptDigest(op)
+	digest, _ := ReceiptDigest(op)
 	reader.ledger.Streams[0].Receipts = []*componentpb.AssetOpReceipt{{Seq: op.Seq, CorrelationId: op.CorrelationID, RequestDigest: digest[:], Snapshot: &assetpb.AssetSnapshot{Items: []*assetpb.AssetItemInstance{{ItemUuid: 99, InstanceProto: []byte{1, 2, 3}}}}}}
 	res, err := loop.verifySQLCommit(context.Background(), op, resultApplied(true))
 	if err != nil || !res.Durable || len(res.Snapshot.GetItems()) != 1 {
@@ -234,8 +177,8 @@ func TestSQLProofRetainsCompleteEscrowReceipt(t *testing.T) {
 	}
 }
 
-// 开关关闭时托管扣出照 HEAD 口径信 scene 回包,但回包里的原件必须与本笔实例身份一致,否则不终结。
-func TestEscrowReceiptCheckedWhenSwitchOff(t *testing.T) {
+// 托管扣出的原件只认已提交账本:身份一致才终结并把原件交给 Finalize,身份不符或缺实例字节都不终结。
+func TestEscrowReceiptFromSQLLedgerReachesFinalize(t *testing.T) {
 	op := testOp(1)
 	op.Stream = assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT
 	op.Bundle = &assetpb.AssetBundle{ItemUuids: []uint64{99}}
@@ -251,11 +194,10 @@ func TestEscrowReceiptCheckedWhenSwitchOff(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := newFakeStore(op)
-			loop, _ := newTestLoop(t, store, &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
-				res := resultApplied(true)
-				res.Snapshot = &assetpb.AssetSnapshot{Items: []*assetpb.AssetItemInstance{{ItemUuid: tc.uuid, InstanceProto: tc.instance}}}
-				return res, nil
-			}}, nil)
+			loop, _ := newTestLoop(t, store, appliedApplier(), nil)
+			reader := sqlLedgerFixture(true, op)
+			reader.ledger.Streams[0].Receipts[0].Snapshot = &assetpb.AssetSnapshot{Items: []*assetpb.AssetItemInstance{{ItemUuid: tc.uuid, InstanceProto: tc.instance}}}
+			loop.Ledger = reader
 			got, err := loop.ProcessOne(context.Background(), op)
 			if err != nil || got.Finalized != tc.finalize {
 				t.Fatalf("托管原件判据: %+v %v", got, err)

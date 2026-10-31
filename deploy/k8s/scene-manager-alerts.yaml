@@ -216,13 +216,13 @@ spec:
           annotations:
             summary: "scene_manager 有 scene 节点的负载计数持续读不到(超过 30 分钟)"
             description: |
-              领导者每拍刷新时有节点的 scene_count / player_count 读不到(WRONGTYPE、值是空串或非数字,或传输层失败),
+              领导者每拍刷新时有节点的 scene_count / 成员集合读不到(WRONGTYPE、scene_count 的值是空串或非数字,或传输层失败),
               30 分钟里每个 10 分钟窗口都有。这些节点:在负载集里的一直保留旧分;不在的以哨兵分 1e12 加入、选点永远
               排最后,等于悄悄少了一份容量;它们的每节点序列(node_player_count / node_load_score)停在最后一次成功的
               值,SceneManagerWorldNodeSaturated / SceneManagerLoadScoreDispersionLow 按这份旧值判。个别键坏掉只记
               outcome=partial,SceneManagerLoadRefreshFailing 不覆盖这种情形。
-              处置:领导者日志搜 "[LoadRefresh]",从 first 里拿到 zone / node,用 redis-cli 的 TYPE / GET 查
-              node:zone:{z}:{node}:scene_count 与 player_count;同时有 read_failed 时先按 Failing 查 Redis。
+              处置:领导者日志搜 "[LoadRefresh]",从 first 里拿到 zone / node,用 redis-cli 的 TYPE / GET / SCARD 查
+              node:zone:{z}:{node}:scene_count 与 node:zone:{z}:{node}:members;同时有 read_failed 时先按 Failing 查 Redis。
               阈值与 for 是起步值,待压测基线。
             runbook_url: docs/ops/scene-node-role-split.md
 
@@ -293,7 +293,7 @@ spec:
         # 它有过一段恒为空向量、永远不会响的时期(Prometheus 对恒空表达式不报错):
         #   - "scene_gone" 的唯一发射点在提交 a0152a5b8(2026-05-02)随 destroy-while-entering
         #     分支一起被删。这条分支在提交 d41219ca7(2026-05-30)加了回来(go/scene_manager/internal/logic/enterscenelogic.go
-        #     里 AtomicIncrPlayerCountIfSceneExists 返回 <0 → ErrNoAvailableNode
+        #     里 AtomicAddSceneMemberIfSceneExists 返回 <0 → ErrNoAvailableNode
         #     "scene %d disappeared during enter"),但当时**没有**带回 enter_scene_rejected_total,
         #     只记了 enter_scene_stage_seconds{stage="reserve"} 的耗时。
         #     (2026-10-12 历史改写后对应的新号是 0e26844b5 与 f3f08e2ad,内容相同;2026-10-21 起旧历史经 6c7f507cc
@@ -322,8 +322,8 @@ spec:
         #                                 DataServiceRpc 且 AllowGateZoneAsHomeZone=false。带 GateId 的
         #                                 EnterScene(登录、换图)**全部**被拒,属依赖不可用。
         #                                 注意它的 zone_id 是 gate zone(home_zone.go),其余 reason 是目标 zone。
-        #   home_zone_unmapped_travel     跨 zone 传送遇到没有 player:zone 映射的玩家(未回填
-        #                                 的存量号 / 映射 Redis 丢失):gate zone 不能代表归属,拒绝(错误码同
+        #   home_zone_unmapped_travel     跨 zone 传送遇到全局库 player_route 里没有归属的玩家:
+        #                                 gate zone 不能代表归属,拒绝(错误码同
         #                                 上,20)。zone_id 同样是 gate zone:第一条腿上是源 zone(玩家留在
         #                                 原地收 tip),第二条腿上是目标 zone(玩家落不了地,应≈0)。它不是
         #                                 依赖故障,重试不会好,要查这名玩家的 player_route 行(建角时写入)。
@@ -448,14 +448,14 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "gate zone {{ $labels.zone_id }} 持续有跨 zone 传送因玩家缺 player:zone 映射被拒(>0.01 req/s)"
+            summary: "gate zone {{ $labels.zone_id }} 持续有跨 zone 传送因玩家没有归属记录被拒(>0.01 req/s)"
             description: |
-              跨 zone 传送的两条腿上 gate zone 不能代表归属,玩家没有 player:zone 映射就 fail-closed
+              跨 zone 传送的两条腿上 gate zone 不能代表归属,玩家在 player_route 里没有归属就 fail-closed
               拒绝(错误码 20,未改玩家状态)。zone_id 是 gate zone:第一条腿上是源 zone,玩家留在
               原地收 tip;第二条腿上是目标 zone,玩家已离开源 scene、落不了地,优先处理(指标与
               日志都不区分两条腿,要看该玩家的 player:{id}:location 是否为无 node_id 的等待落点)。
-              处置:查这名玩家的 player_route 行(建角时写入),再查 data_service
-              的映射 Redis 是否丢过数据。scene_manager 日志搜 "[home-zone] Cross-zone travel rejected"
+              处置:查这名玩家的 player_route 行(建角时写入),再查全局库
+              是否回档过。scene_manager 日志搜 "[home-zone] Cross-zone travel rejected"
               可看到具体 player(每次拒绝一条 ERROR,由玩家操作直接触发;2026-10-13 日志英文化之前的
               原文是 "[home-zone] 跨 zone 传送被拒")。
             runbook_url: docs/design/cross-zone-scene-travel.md
@@ -493,7 +493,7 @@ spec:
           annotations:
             summary: "EnterScene 持续因场景在进入途中被回收而拒绝 >0.05 req/s(zone {{ $labels.zone_id }})"
             description: |
-              场景在进入途中被销毁(destroy-while-entering):AtomicIncrPlayerCountIfSceneExists
+              场景在进入途中被销毁(destroy-while-entering):AtomicAddSceneMemberIfSceneExists
               返回 -1,客户端收到 ErrNoAvailableNode "scene N disappeared during enter",未改玩家状态。
               确认 InstanceIdleTimeoutSeconds / MirrorIdleTimeoutSeconds 没有短于客户端的平均重试
               预算;对照 scene_manager_scene_orphans_reconciled_total 与
@@ -680,3 +680,41 @@ spec:
               常见原因:持有节点对 Redis 的存盘长时间失败、A1′ 开关被关、实体缓存的 owner_epoch 落后于 location。
               强制删除之后持有节点若仍在写,它的存盘会被 owner CAS 拒绝(看 scene 的 [OwnerEpoch]
               stale_owner_rejected_exiting)。按 scene_manager 的 [LeaveRelease] ERROR 日志定位玩家与节点。
+
+    # --- 成员集合对账(docs/design/redis-player-store-cluster.md §5.10,internal/logic/scene_member_reconcile.go)-------
+    # 只有领导者跑,计数器按 sum 聚合。redis_player_cluster_contract 的告警用例核对指标名与 outcome 取值。
+    - name: scene-manager.scene-member-reconcile
+      interval: 30s
+      rules:
+        # 读 location 或摘成员持续失败:残留的成员摘不掉,实例不销毁、选线躲着它。location 写坏不算(那是 skipped)。
+        - alert: SceneManagerSceneMemberReconcileErrors
+          expr: |
+            sum(increase(scene_manager_scene_member_reconcile_members_total{outcome="error"}[15m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "scene_manager 成员集合对账持续失败"
+            description: "15 分钟内读 location 或摘成员失败,且持续 15 分钟。location 在玩家域、成员集合在控制域:先看玩家域 Redis 是否可用(deploy/k8s/redis-player-alerts.yaml)。不影响进场主路径,影响的是崩溃残留的成员摘不掉,人数多计、实例不销毁。"
+
+        # 经常摘到残留成员:scene_manager 经常在进场中途崩溃,或有摘成员的路径漏了(设计 §5.10「代价与残余」)。
+        - alert: SceneManagerSceneMemberReconcileRemoving
+          expr: |
+            sum(increase(scene_manager_scene_member_reconcile_members_total{outcome="removed"}[1h])) > 100
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "scene_manager 成员集合对账持续摘除残留成员"
+            description: "正常运行时进场与离场各自维护成员集合,对账应当摘不到什么。1 小时摘除超过 100 个且持续 1 小时:查 scene_manager 重启记录,再按设计 §5.10 的入口表核对摘成员的路径。阈值是起步值。"
+
+        # 走完一遍的次数长时间不涨:预算跟不上成员数,或领导者卡住。一遍的时长约 成员总数 ÷ 2000 × 10s(100 万在线约 2.8 小时)。
+        - alert: SceneManagerSceneMemberReconcileStalled
+          expr: |
+            sum(increase(scene_manager_scene_member_reconcile_passes_total[12h])) == 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "scene_manager 成员集合对账 12 小时没有走完一遍"
+            description: "看领导者是否在换,再看 SceneMemberReconcile.MembersPerRound / ScansPerRound 的预算是否跟不上成员总数。残留成员的摘除因此变慢,不影响进场主路径。"

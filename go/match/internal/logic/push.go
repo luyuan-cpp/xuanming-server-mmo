@@ -22,7 +22,7 @@ import (
 const pushTimeout = 5 * time.Second
 
 // loadPlayerSession 读 player_locator 维护的 player:session:{id}
-// (契约 key,只经 SharedRedis 读)。返回 (nil, nil) 表示键不存在。
+// (契约 key,只经 PlayerRedis 读)。返回 (nil, nil) 表示键不存在。
 func loadPlayerSession(svcCtx *svc.ServiceContext, playerId uint64) (*plpb.PlayerSession, error) {
 	return playercontract.LoadSession(context.Background(), svcCtx, playerId)
 }

@@ -18,7 +18,7 @@ import (
 //	            ├─ etcd 发 DELETE → Go 立刻判死 → resolveScene / rebalance /
 //	            │  孤儿收尾 改写 scene:{id}:node 并让新节点 CreateScene
 //	            └─ C++ 老节点健康检查(每秒)发现租约过期 →
-//	               BeginEmergencyRelocateAll:抄会话 → SavePlayerToRedis → drain
+//	               BeginEmergencyRelocateAll:抄会话 → SavePlayer → drain
 //	T0+TTL ~ +drain  老节点仍在写玩家最终态,而新节点已经 load 了更旧的快照
 //	                 → 同一玩家双写 / 回档
 //

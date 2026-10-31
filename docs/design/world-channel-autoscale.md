@@ -8,7 +8,7 @@
 
 | 层 | 伸缩什么 | 谁决定 | 依据 |
 |---|---|---|---|
-| 频道 | 一张大世界地图开几个 Scene(频道) | Go SceneManager `world_autoscale.go` | 频道人数 `instance:{sceneId}:player_count` |
+| 频道 | 一张大世界地图开几个 Scene(频道) | Go SceneManager `world_autoscale.go` | 频道人数 `SCARD instance:{sceneId}:members` |
 | 进程 | Scene Node Pod 数(Fleet replicas) | Agones FleetAutoscaler(Counter 策略) | 剩余空闲**房间名额**(rooms Counter) |
 | 接入 | gate Pod 数 | 运维 + drain 标记 | 在线连接数 |
 
@@ -19,7 +19,7 @@
 
 ### 1.1 口径
 
-- 人数**按频道**算(`instance:{sceneId}:player_count`),不是按进程。
+- 人数**按频道**算(`SCARD instance:{sceneId}:members`),不是按进程。
 - **扩容**:该地图**所有**频道人数都 `>= ScaleOutPlayerThreshold`(默认 2000)
   → 期望频道数 +1,并立刻建出来。
   - 要求"所有"而不是"任一":负载不均时(刚扩的新频道是空的、老频道还满着),

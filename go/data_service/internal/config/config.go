@@ -12,9 +12,9 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	// 仅隔离的历史MySQL/Redis工具夹具可显式开启；dev也默认全球SQL，不因Mode=dev自动降级。
-	LegacyNonGlobal bool `json:",optional"`
-	MappingRedis    redis.RedisConf
+	// NameCacheRedis 只放可丢弃的读缓存(player:name:{id},routing.PlayerNameCache):里面没有任何权威数据,
+	// 整个实例丢了,名字读路径回源一次全局库,建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
+	NameCacheRedis redis.RedisConf
 
 	// Snapshot MySQL(player_snapshot / transaction_log 审计库)
 	SnapshotMySQL SnapshotMySQLConfig `json:",optional"`
@@ -46,8 +46,7 @@ type Config struct {
 	// Store 见 StoreConfig。
 	Store StoreConfig `json:",optional"`
 
-	// RouteStore 是玩家归属 / 落点映射的提交点(redis | db_first),见 RouteStoreConfig。
-	// 整段可缺失:缺失 = redis 模式,与 2026-10-12 之前逐字相同。
+	// RouteStore 是全局库 player_route 连接池与合服映射缓存的运行参数,见 RouteStoreConfig。整段可缺失。
 	RouteStore RouteStoreConfig `json:",optional"`
 
 	// Kafka 是 C++ scene 产出的 transaction_log_topic / player_snapshot_topic 的落库消费者
@@ -235,130 +234,42 @@ type StoreConfig struct {
 	Required bool `json:",optional"`
 }
 
-// ── 玩家归属 / 落点映射的提交点(docs/design/player-route-mapping-durability-proposal.md §4、§11.2,第 1a 批)──
-
-// RouteStoreModeRedis:与 2026-10-12 之前逐字相同,mapping Redis 里那段 SETNX Lua 就是提交点。缺省值。
-const RouteStoreModeRedis = "redis"
-
-// RouteStoreModeDBFirst:先在全局库 player_route 提交(store.RouteStore.RegisterHome),再按 maprev
-// set-if-newer 发布到 mapping Redis 并等 WAITAOF 确认落盘(routing/route_publish.go)。
-//
-// 切换顺序见 proposal §13.4(P1 冻结窗口 + 导入 + 审计 → P2 切 db_first → P3 Arm → P4 新版 merge_zone → P5 读方)。
-// 合服不改路由行,只写 zone_merged_into(docs/design/player-data-tidb-scaling-plan.md §7.1)。
-const RouteStoreModeDBFirst = "db_first"
+// ── 玩家归属映射(docs/design/player-route-mapping-durability-proposal.md §15)──
 
 // RouteStore 段各键的默认值(Normalize 照抄这一份;etc/data_service.yaml 写的就是它们)。
 const (
 	DefaultRouteStoreMaxOpenConn          = 20
 	DefaultRouteStoreMaxIdleConn          = 5
-	DefaultRouteStorePublishAttempts      = 3
-	DefaultRouteStoreWaitAOFNumLocal      = 1
-	DefaultRouteStoreWaitAOFNumReplicas   = 0
-	DefaultRouteStoreWaitAOFTimeoutMs     = 1500
 	DefaultRouteStoreMergedZoneRefreshSec = 5
 )
 
-// RouteStore 段的上界(Validate 用)。WaitAOFTimeoutMs 的上界 = 服务端默认超时 2000ms 减去库这一段与回包的余量
-// (yaml 没配 Timeout,go-zero 默认 2000ms;go-redis 默认 ReadTimeout 3s,更大的值会先被客户端读超时截断)。
-//
-// MergedZoneRefreshSec 的上界 60:它就是合服映射的滞后上限,tools/merge_zone 写完映射后要等 2 个周期才跑业务合并任务,
-// 周期再大维护窗口就被它拖长了。
-const (
-	MaxRouteStorePublishAttempts      = 5
-	MaxRouteStoreWaitAOFNumReplicas   = 16
-	MaxRouteStoreWaitAOFTimeoutMs     = 1500
-	MaxRouteStoreMergedZoneRefreshSec = 60
-)
+// MaxRouteStoreMergedZoneRefreshSec 是 MergedZoneRefreshSec 的上界:它就是合服映射的滞后上限,
+// 各服务 2 个周期内全部生效,周期再大,合服生效的等待就被它拖长了。
+const MaxRouteStoreMergedZoneRefreshSec = 60
 
-// RouteStore.PublishRedisPoolSize 的缺省值与上界(A2-1 / LR-4,2026-10-20;见该字段的注释)。
-//
-// 缺省 20 的论证(W1 并发):每次 W1 的发布 + WAITAOF 从取到连接起占住它,直到 WAITAOF 返回;appendfsync everysec 下
-// 平均约 0.5s、最长约 1s 多(上限 WaitAOFTimeoutMs)。单副本 W1 吞吐上限 ≈ 池大小 / 平均占用 ≈ 2 × 池大小 次/s。
-// 改动前发布与读共用 go-zero 的 mapping 池(K8s 上 GOMAXPROCS=2 时 10 × 2 = 20 条),W1 的上限约 40 次/s/副本,
-// 代价是建角尖峰把读饿死。缺省取同一个 20:W1 的吞吐上限不低于改动前,而读路径的 20 条从此不再被 W1 占用。
-// 更大的建角峰值(容量模型的开服尖峰)靠加池补不上(要几百条),属于 WAITAOF 组提交 / 拓扑的设计问题,以压测为准再定。
-// 上界 128:单副本 128 条已是共享 Redis 连接总账里最大的一项,再大应先改设计而不是加连接。
-const (
-	DefaultRouteStorePublishRedisPoolSize = 20
-	MaxRouteStorePublishRedisPoolSize     = 128
-)
-
-// RouteStoreConfig 是映射提交点的运行参数。整段可缺失。
+// RouteStoreConfig 是 player_route 连接池与合服映射缓存的运行参数。整段可缺失。
 //
 // 【为什么零值 = "没配"、默认值由 Normalize 填】理由同 PlayerNameConfig:go-zero 不下钻一个未出现的
-// optional 结构,default 标签一个都不会回填。WaitAOF 两项用 *int 而不是 int,理由同 SchemaConfig.AutoMigrate:
-// 它们的安全默认值(本地落盘 1)不是零值,而"显式写 0"又有合法语义(不发 WAITAOF,只给没开 AOF 的环境 / 单测),
-// 必须把"没写"与"写了 0"分开。
+// optional 结构,default 标签一个都不会回填。
 //
-// 【为什么配错拒启而不是纠正】理由同 PlayerNameConfig.Validate:Mode 拼成 `DB_FIRST` / `db-first` 被悄悄当成
-// redis,运维以为切了提交点而实际没切,这种偏差不报错也没有日志。Mode 不论取哪个值,任何一项非法都拒启。
+// 【为什么配错拒启而不是纠正】理由同 PlayerNameConfig.Validate:配置与实际行为对不上,这种偏差不报错也没有日志。
 type RouteStoreConfig struct {
-	// Mode:redis(缺省)| db_first,大小写敏感。
-	Mode string `json:",optional"`
 	// MaxOpenConn / MaxIdleConn:route store **独立**连接池(会话级 RC + 锁等待 1s,不能与别的 store 共用池)。
 	MaxOpenConn int `json:",optional"`
 	MaxIdleConn int `json:",optional"`
-	// PublishAttempts:一次发布(脚本 + WAITAOF)的尝试上限,[1, 5];只有网络错误与"落盘副本数不足"才重试。
-	PublishAttempts int `json:",optional"`
-	// WaitAOFNumLocal / WaitAOFNumReplicas:WAITAOF 的两个参数。nil = 默认 1 / 0;两者都显式写 0 = 不发 WAITAOF。
-	// redis-ha 档(有副本)NumReplicas 要写 1。
-	WaitAOFNumLocal    *int `json:",optional"`
-	WaitAOFNumReplicas *int `json:",optional"`
-	// WaitAOFTimeoutMs:WAITAOF 的等待上限(毫秒),[1, 1500];0 = 默认 1500。实际取 min(本值, ctx 剩余 − 100ms)。
-	// 默认不是 1000:appendfsync everysec 下本地确认最长要等到下一次 fsync(约 1s)再加事件循环延迟,
-	// 1000ms 正压在边界上,会系统性地抬高"已提交未确认"的比例(规格 d 节 M2)。
-	WaitAOFTimeoutMs int `json:",optional"`
-	// PublishRedisPoolSize:db_first 下 W1 发布 + WAITAOF 专用 go-redis 客户端的连接池上限,[1, 128];0 = 缺省 20
-	// (论证见 DefaultRouteStorePublishRedisPoolSize)。连接参数取 MappingRedis(同一个实例),但池与 go-zero 的 mapping 客户端
-	// (GetPlayerHomeZone / BatchGet / 玩家锁 / 读脚本)分开、不经 go-zero 熔断器,建角尖峰不再饿住读路径(routing/publish_redis.go)。
-	// redis 模式不建这个客户端、不开连接;db_first 下是每个副本额外占 mapping Redis 的连接上限,要进共享 Redis 连接总账。
-	PublishRedisPoolSize int `json:",optional"`
 	// MergedZoneRefreshSec:定时重读 zone_merged_into 的周期(秒),[1, 60];0 = 缺省 5。它是归属解析的滞后上限
-	// (routing.MergedZoneCache,docs/design/player-data-tidb-scaling-plan.md §7.1)。启动时读不到拒启,之后读失败保留旧值。
-	// 只在 db_first 下生效:redis 模式没有 route store,也没有合服。
+	// (placement.MergedZoneCache,docs/design/player-data-tidb-scaling-plan.md §7.1)。启动时读不到拒启,之后读失败保留旧值。
 	MergedZoneRefreshSec int `json:",optional"`
-	// ReadRequiresReady:第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2)。
-	// true 时 GetPlayerHomeZone / BatchGetPlayerHomeZone / 内部路由的 home 查询只在就绪标记绑定的就是本次读所在的
-	// mapping Redis 实例(placement.VerifyRouteReady = Trusted)时信任缓存,否则回源全局库 player_route(库故障回 Unavailable,
-	// 绝不 NotFound)。只许 Mode=db_first(redis 模式下库不是真源,没有可回源的东西);启动期试跑一次读脚本,跑不起来(或 route
-	// store 因别的原因没装配起来)不论 Store.Required 取值都拒启(M1-5,svc.ServiceContext.RouteReadGateUnassembled)。缺省 false = 与今天逐字相同。所有副本应取同一值;打开前提是对账 leader 已挂标记(规格 §8 P5),
-	// 回退时先关它、再关 ArmReadyMarker、再切回 redis(规格 §13.5 第 1 条)。打开时还要求 Reconcile.Enabled 不是 false
-	// (没有 leader 就没人撤 / 维护就绪标记,见 RouteReconcileConfig.Enabled;Validate 拒启)。
-	ReadRequiresReady bool `json:",optional"`
-	// Reconcile 是 db_first 下对账 leader 的运行参数(第 1b-2 批,见 RouteReconcileConfig)。整段可缺失,缺失 = 全部默认值;
-	// redis 模式下不构造 leader,但非法值照样拒启(与本段其它键同口径)。
-	Reconcile RouteReconcileConfig `json:",optional"`
 }
 
-// Normalize 返回一份把"没配"(零值 / nil)换成默认值的副本。负数不纠正,交给 Validate 拒绝。
-// 刻意返回值而不是原地改(同 PlayerNameConfig.Normalize);指针字段只在 nil 时换成新指针,不改调用方指向的值。
+// Normalize 返回一份把"没配"(零值)换成默认值的副本。负数不纠正,交给 Validate 拒绝。
+// 刻意返回值而不是原地改(同 PlayerNameConfig.Normalize)。
 func (r RouteStoreConfig) Normalize() RouteStoreConfig {
-	r.Reconcile = r.Reconcile.Normalize()
-	if r.Mode == "" {
-		r.Mode = RouteStoreModeRedis
-	}
 	if r.MaxOpenConn == 0 {
 		r.MaxOpenConn = DefaultRouteStoreMaxOpenConn
 	}
 	if r.MaxIdleConn == 0 {
 		r.MaxIdleConn = DefaultRouteStoreMaxIdleConn
-	}
-	if r.PublishAttempts == 0 {
-		r.PublishAttempts = DefaultRouteStorePublishAttempts
-	}
-	if r.WaitAOFNumLocal == nil {
-		v := DefaultRouteStoreWaitAOFNumLocal
-		r.WaitAOFNumLocal = &v
-	}
-	if r.WaitAOFNumReplicas == nil {
-		v := DefaultRouteStoreWaitAOFNumReplicas
-		r.WaitAOFNumReplicas = &v
-	}
-	if r.WaitAOFTimeoutMs == 0 {
-		r.WaitAOFTimeoutMs = DefaultRouteStoreWaitAOFTimeoutMs
-	}
-	if r.PublishRedisPoolSize == 0 {
-		r.PublishRedisPoolSize = DefaultRouteStorePublishRedisPoolSize
 	}
 	if r.MergedZoneRefreshSec == 0 {
 		r.MergedZoneRefreshSec = DefaultRouteStoreMergedZoneRefreshSec
@@ -366,13 +277,8 @@ func (r RouteStoreConfig) Normalize() RouteStoreConfig {
 	return r
 }
 
-// Validate 检查(通常是 Normalize 之后的)取值。任何一项非法都返回 error,与 Mode 无关:
-// redis 模式下这些键暂时不生效,但一份"切到 db_first 才会炸"的配置不该等到切换那一刻才被发现。
+// Validate 检查(通常是 Normalize 之后的)取值。任何一项非法都返回 error。
 func (r RouteStoreConfig) Validate() error {
-	if r.Mode != RouteStoreModeRedis && r.Mode != RouteStoreModeDBFirst {
-		return fmt.Errorf("RouteStore.Mode %q must be exactly %q or %q (case-sensitive; a typo must not silently fall back to redis)",
-			r.Mode, RouteStoreModeRedis, RouteStoreModeDBFirst)
-	}
 	if r.MaxOpenConn <= 0 {
 		return fmt.Errorf("RouteStore.MaxOpenConn must be positive, got %d", r.MaxOpenConn)
 	}
@@ -380,286 +286,8 @@ func (r RouteStoreConfig) Validate() error {
 		// database/sql 会**静默**把 idle 压到 open,配置与实际行为从此对不上(同 PlayerNameConfig)。
 		return fmt.Errorf("RouteStore.MaxIdleConn must be in [0, MaxOpenConn=%d], got %d", r.MaxOpenConn, r.MaxIdleConn)
 	}
-	if r.PublishAttempts < 1 || r.PublishAttempts > MaxRouteStorePublishAttempts {
-		return fmt.Errorf("RouteStore.PublishAttempts must be in [1, %d], got %d", MaxRouteStorePublishAttempts, r.PublishAttempts)
-	}
-	if local := r.NumLocal(); local != 0 && local != 1 {
-		return fmt.Errorf("RouteStore.WaitAOFNumLocal must be 0 or 1, got %d", local)
-	}
-	if replicas := r.NumReplicas(); replicas < 0 || replicas > MaxRouteStoreWaitAOFNumReplicas {
-		return fmt.Errorf("RouteStore.WaitAOFNumReplicas must be in [0, %d], got %d", MaxRouteStoreWaitAOFNumReplicas, replicas)
-	}
-	if r.WaitAOFTimeoutMs < 1 || r.WaitAOFTimeoutMs > MaxRouteStoreWaitAOFTimeoutMs {
-		return fmt.Errorf("RouteStore.WaitAOFTimeoutMs must be in [1, %d] (WAITAOF timeout 0 blocks forever; the cap leaves room inside the 2000ms server budget), got %d",
-			MaxRouteStoreWaitAOFTimeoutMs, r.WaitAOFTimeoutMs)
-	}
-	if r.ReadRequiresReady && r.Mode != RouteStoreModeDBFirst {
-		// 回退顺序写反(先切回 redis、读方开关还开着)时在这里拒启,而不是让读方在没有真源可回源的模式下静默跑(规格 §13.5)。
-		return fmt.Errorf("RouteStore.ReadRequiresReady=true requires Mode=%q (in %q mode the mapping Redis is the source of truth and there is no player_route to fall back to; turn ReadRequiresReady off first), got Mode=%q",
-			RouteStoreModeDBFirst, RouteStoreModeRedis, r.Mode)
-	}
-	if r.ReadRequiresReady && !r.Reconcile.On() {
-		// A1-6 / A2-2 / M1-1 / LR-6(2026-10-20):Enabled=false 时本副本不构造 leader。就绪标记没有 TTL、读方只核身份不看新鲜度,
-		// 全服都这样配时现存标记无人撤销(M4)、无人维护(孤儿行补发、M3 回档检测、淘汰 / DEBUG 自检全停),读方却继续判 Trusted,
-		// 缺键被当成权威缺席(login 退回建角 zone、go/db 写进 legacy 库)。所以读方开着时不许急停 leader;顺序见报错文案。
-		// go/db 的 Placement.RequireRouteReady 本服务校验不到,只能靠 runbook 约束。
-		return errors.New("RouteStore.ReadRequiresReady=true requires RouteStore.Reconcile.Enabled not false: without the reconcile leader " +
-			"nobody withdraws or maintains mapping:route:ready (no disarm withdrawal, no orphan-row republish, no rollback detection, " +
-			"no eviction / debug self-check) while readers keep trusting it. Before an emergency stop of the leader, turn off every reader switch first " +
-			"(RouteStore.ReadRequiresReady, go/db Placement.RequireRouteReady), then set " +
-			"Reconcile.ArmReadyMarker=false and wait for data_service_route_reconcile_event_total{event=\"marker_dropped_disarmed\"}, and only then set Enabled=false")
-	}
-	if r.PublishRedisPoolSize < 1 || r.PublishRedisPoolSize > MaxRouteStorePublishRedisPoolSize {
-		return fmt.Errorf("RouteStore.PublishRedisPoolSize must be in [1, %d], got %d", MaxRouteStorePublishRedisPoolSize, r.PublishRedisPoolSize)
-	}
 	if r.MergedZoneRefreshSec < 1 || r.MergedZoneRefreshSec > MaxRouteStoreMergedZoneRefreshSec {
 		return fmt.Errorf("RouteStore.MergedZoneRefreshSec must be in [1, %d], got %d", MaxRouteStoreMergedZoneRefreshSec, r.MergedZoneRefreshSec)
-	}
-	if err := r.Reconcile.validate(r.Mode); err != nil {
-		return err
-	}
-	return nil
-}
-
-// ReconcileEnabled 报告是否要构造对账 leader:Mode=db_first 且 Reconcile.Enabled 不是 false(nil = true)。
-// redis 模式下 Redis 才是提交点、库只是 P1 时刻的快照,往缓存推库值会回填缓存缺的键,所以一律不构造(规格 scout D1)。
-func (r RouteStoreConfig) ReconcileEnabled() bool {
-	return r.DBFirst() && r.Reconcile.On()
-}
-
-// DBFirst 报告提交点是否在全局库(db_first)。
-func (r RouteStoreConfig) DBFirst() bool {
-	return r.Mode == RouteStoreModeDBFirst
-}
-
-// WaitsForAOF 报告发布之后要不要发 WAITAOF:两项都是 0(显式写的)才不发。
-func (r RouteStoreConfig) WaitsForAOF() bool {
-	return r.NumLocal() > 0 || r.NumReplicas() > 0
-}
-
-// NumLocal 是 WAITAOF 的 numlocal;没配(nil)= 默认 1。
-func (r RouteStoreConfig) NumLocal() int {
-	if r.WaitAOFNumLocal == nil {
-		return DefaultRouteStoreWaitAOFNumLocal
-	}
-	return *r.WaitAOFNumLocal
-}
-
-// NumReplicas 是 WAITAOF 的 numreplicas;没配(nil)= 默认 0。
-func (r RouteStoreConfig) NumReplicas() int {
-	if r.WaitAOFNumReplicas == nil {
-		return DefaultRouteStoreWaitAOFNumReplicas
-	}
-	return *r.WaitAOFNumReplicas
-}
-
-// ── 对账 leader(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §4、§13.1,第 1b-2 批)──
-
-// RouteStore.Reconcile 段各键的默认值(Normalize 照抄这一份;etc/data_service.yaml 写的就是它们)。
-const (
-	DefaultRouteReconcileLeaseMs                  = 10000
-	DefaultRouteReconcileRenewIntervalMs          = 3000
-	DefaultRouteReconcileTickIntervalMs           = 1000
-	DefaultRouteReconcileIncrementalIntervalMs    = 30000
-	DefaultRouteReconcileIncrementalOverlapMs     = 15000
-	DefaultRouteReconcileRepairLookbackMs         = 60000
-	DefaultRouteReconcileRollbackToleranceMs      = 0
-	DefaultRouteReconcilePushBatch                = 500
-	DefaultRouteReconcilePushMaxRowsPerSec        = 20000
-	DefaultRouteReconcileRedisPoolSize            = 4
-	DefaultRouteReconcileFreezeTimeoutMs          = 5000
-	DefaultRouteReconcileArmingBlockedReportLimit = 1000
-)
-
-// RouteStore.Reconcile 段的取值范围(Validate 用,闭区间)。
-const (
-	MinRouteReconcileLeaseMs, MaxRouteReconcileLeaseMs                             = 3000, 60000
-	MinRouteReconcileTickIntervalMs, MaxRouteReconcileTickIntervalMs               = 200, 10000
-	MinRouteReconcileIncrementalIntervalMs, MaxRouteReconcileIncrementalIntervalMs = 1000, 600000
-	MinRouteReconcileIncrementalOverlapMs, MaxRouteReconcileIncrementalOverlapMs   = 5000, 600000
-	MinRouteReconcileRepairLookbackMs, MaxRouteReconcileRepairLookbackMs           = 15000, 86400000
-	MaxRouteReconcileRollbackToleranceMs                                           = 60000
-	// MaxRouteReconcilePushBatch = store.RouteBatchLimit(1000;config 不 import store,两处各写一份,store 端超限直接拒绝)。
-	MaxRouteReconcilePushBatch                                             = 1000
-	MinRouteReconcilePushMaxRowsPerSec, MaxRouteReconcilePushMaxRowsPerSec = 100, 1000000
-	MaxRouteReconcileRedisPoolSize                                         = 32
-	// MinRouteReconcileFreezeTimeoutMs = store.RouteFreezeTimeoutMin(5s):TiDB 把 route_meta 设成缓存表后,冻结写要等读租约。
-	MinRouteReconcileFreezeTimeoutMs, MaxRouteReconcileFreezeTimeoutMs = 5000, 60000
-	MaxRouteReconcileRedisFailureReleaseMs                             = 600000
-	MaxRouteReconcileArmingBlockedReportLimit                          = 100000
-)
-
-// RouteReconcileConfig 是对账 leader 的运行参数(RouteStore.Reconcile)。零值 / nil = 没配,由 Normalize 填默认值
-// (理由同 RouteStoreConfig:go-zero 不下钻未出现的 optional 结构)。
-//
-// 运行前提与上线纪律(规格 §8、§13.1 第 6 条):
-//   - 只在 Mode=db_first 时构造(ReconcileEnabled);redis 模式下不建客户端、不抢租约、不碰任何控制键;
-//   - ArmReadyMarker 是**全服单值**:所有共享同一全局库的 data_service 副本取同一个值;P3 门禁(二次导入、audit -require-maprev = 0)
-//     满足之后才改 true;回退时先关全部读方开关,再改 false(false = leader 每拍撤掉现存标记,撤销信任);
-//   - 共享同一全局库的副本必须指向同一个 MappingRedis(不变量 I4;指错时另一实例上的标记身份不符,读方不信任,安全由 M1 兜住)。
-type RouteReconcileConfig struct {
-	// Enabled:nil = true。写 false 是急停:本副本不构造 leader —— 不再补发孤儿行、不再做回档检测、不做淘汰 / DEBUG 自检,
-	// **也不撤现存的就绪标记**(撤标记是 leader 在 ArmReadyMarker=false 时每拍做的事,leader 不在就没人做)。
-	// 所以只许在读方全部关闭之后急停(2026-10-20,Validate 拒绝 ReadRequiresReady=true 时写 false):顺序是先关全部读方开关
-	// (RouteStore.ReadRequiresReady、go/db Placement.RequireRouteReady)→ Arm=false 并看到
-	// marker_dropped_disarmed → 最后才 Enabled=false。go/db 的开关本服务校验不到,靠 runbook 约束。
-	Enabled *bool `json:",optional"`
-	// ArmReadyMarker:true 才挂就绪标记(mapping:route:ready)。只许 Mode=db_first 且 Enabled 不是 false。
-	ArmReadyMarker bool `json:",optional"`
-	// LeaseMs:租约时长,[3000, 60000]。本地在「续约发出时刻 + LeaseMs − LeaseMs/5」之后自行降级。
-	LeaseMs int `json:",optional"`
-	// RenewIntervalMs:leader 续约间隔,≤ (LeaseMs − LeaseMs/5)/2,且 ≥ TickIntervalMs(续约在拍里做)。
-	RenewIntervalMs int `json:",optional"`
-	// TickIntervalMs:一拍的间隔,[200, 10000]。
-	TickIntervalMs int `json:",optional"`
-	// IncrementalIntervalMs:两次增量推送之间至少隔多久,[1000, 600000]。
-	IncrementalIntervalMs int `json:",optional"`
-	// IncrementalOverlapMs:增量起点 = cache_verified_ms − 本值(饱和到 0),[5000, 600000]。
-	// 不变量 I1:任何映射写事务从写 updated_at_ms 到提交小于本值。
-	IncrementalOverlapMs int `json:",optional"`
-	// RepairLookbackMs:身份变化后的回看修补起点 = min(标记水位, cache_verified_ms) − 本值(饱和到 0),[15000, 86400000],且 ≥ IncrementalOverlapMs。
-	RepairLookbackMs int `json:",optional"`
-	// RollbackToleranceMs:水位键的水位比库水位大多少才判回档,nil = 0(负责人 10-17 拍板),[0, 60000]。
-	RollbackToleranceMs *int `json:",optional"`
-	// PushBatch:每批扫 / 推的行数,[1, 1000](= store.RouteBatchLimit)。
-	PushBatch int `json:",optional"`
-	// PushMaxRowsPerSec:推送限速(行 / 秒),[100, 1000000]。
-	PushMaxRowsPerSec int `json:",optional"`
-	// RedisPoolSize:leader 独立 go-redis 连接池上限,[1, 32](不经 go-zero 熔断器;只有当选 leader 才真正建连接)。
-	// 共享 Redis 连接总账要把它算进去(第 1b-3 批 k8s_deploy)。
-	RedisPoolSize int `json:",optional"`
-	// AssumeNoEviction:mapping Redis 禁用了 CONFIG(托管 Redis)时按 noeviction 处理。只影响淘汰策略这一项,
-	// enable-debug-command 读不到时仍拒绝挂标记(规格 §13.1 第 5 条:不是 no 就拒绝)。
-	AssumeNoEviction bool `json:",optional"`
-	// FreezeTimeoutMs:含冻结写(leader 冻结映射写者)的每拍事务时限,[5000, 60000],且 ≤ LeaseMs − 2·(LeaseMs/5)
-	// (冻结前本地剩余租约不够 FreezeTimeout + Safety 就先续约,租约要撑得住一次冻结)。
-	FreezeTimeoutMs int `json:",optional"`
-	// RedisFailureReleaseMs:连续读不到 mapping Redis(身份 / 控制键)超过它就主动让出租约,让连得上的副本接手;
-	// 0 = 默认等于 LeaseMs。[TickIntervalMs, 600000]。
-	RedisFailureReleaseMs int `json:",optional"`
-	// ArmingBlockedReportLimit:挂标记被拒(armingBlocked)时记下的未决 player_id 上限,[1, 100000];超出只计数,
-	// 解除之后要重新全量预热(记不全就不能只复读记下的那些)。
-	ArmingBlockedReportLimit int `json:",optional"`
-}
-
-// Normalize 返回一份把没配的键换成默认值的副本(负数不纠正,交给 Validate)。
-func (rc RouteReconcileConfig) Normalize() RouteReconcileConfig {
-	if rc.Enabled == nil {
-		v := true
-		rc.Enabled = &v
-	}
-	if rc.LeaseMs == 0 {
-		rc.LeaseMs = DefaultRouteReconcileLeaseMs
-	}
-	if rc.RenewIntervalMs == 0 {
-		rc.RenewIntervalMs = DefaultRouteReconcileRenewIntervalMs
-	}
-	if rc.TickIntervalMs == 0 {
-		rc.TickIntervalMs = DefaultRouteReconcileTickIntervalMs
-	}
-	if rc.IncrementalIntervalMs == 0 {
-		rc.IncrementalIntervalMs = DefaultRouteReconcileIncrementalIntervalMs
-	}
-	if rc.IncrementalOverlapMs == 0 {
-		rc.IncrementalOverlapMs = DefaultRouteReconcileIncrementalOverlapMs
-	}
-	if rc.RepairLookbackMs == 0 {
-		rc.RepairLookbackMs = DefaultRouteReconcileRepairLookbackMs
-	}
-	if rc.RollbackToleranceMs == nil {
-		v := DefaultRouteReconcileRollbackToleranceMs
-		rc.RollbackToleranceMs = &v
-	}
-	if rc.PushBatch == 0 {
-		rc.PushBatch = DefaultRouteReconcilePushBatch
-	}
-	if rc.PushMaxRowsPerSec == 0 {
-		rc.PushMaxRowsPerSec = DefaultRouteReconcilePushMaxRowsPerSec
-	}
-	if rc.RedisPoolSize == 0 {
-		rc.RedisPoolSize = DefaultRouteReconcileRedisPoolSize
-	}
-	if rc.FreezeTimeoutMs == 0 {
-		rc.FreezeTimeoutMs = DefaultRouteReconcileFreezeTimeoutMs
-	}
-	if rc.RedisFailureReleaseMs == 0 {
-		rc.RedisFailureReleaseMs = rc.LeaseMs
-	}
-	if rc.ArmingBlockedReportLimit == 0 {
-		rc.ArmingBlockedReportLimit = DefaultRouteReconcileArmingBlockedReportLimit
-	}
-	return rc
-}
-
-// On 报告 Enabled 是不是开着(nil = true)。只看本段;是否真的构造 leader 要看 RouteStoreConfig.ReconcileEnabled(还要 db_first)。
-func (rc RouteReconcileConfig) On() bool {
-	return rc.Enabled == nil || *rc.Enabled
-}
-
-// ToleranceMs 是回档检测容差(RollbackToleranceMs,nil = 0)。
-func (rc RouteReconcileConfig) ToleranceMs() uint64 {
-	if rc.RollbackToleranceMs == nil || *rc.RollbackToleranceMs < 0 {
-		return 0
-	}
-	return uint64(*rc.RollbackToleranceMs)
-}
-
-// LeaseSafetyMs 是本地自行降级的提前量 = LeaseMs/5(scout D6)。
-func (rc RouteReconcileConfig) LeaseSafetyMs() int {
-	return rc.LeaseMs / 5
-}
-
-// validate 检查(通常是 Normalize 之后的)取值;mode 是 RouteStore.Mode。与 Mode 无关一律校验范围,
-// 只有 ArmReadyMarker=true 额外要求 db_first 且 Enabled 不是 false(否则回退顺序写反时会以为开着挂标记)。
-func (rc RouteReconcileConfig) validate(mode string) error {
-	type bound struct {
-		name     string
-		got      int
-		min, max int
-	}
-	for _, b := range []bound{
-		{"LeaseMs", rc.LeaseMs, MinRouteReconcileLeaseMs, MaxRouteReconcileLeaseMs},
-		{"TickIntervalMs", rc.TickIntervalMs, MinRouteReconcileTickIntervalMs, MaxRouteReconcileTickIntervalMs},
-		{"IncrementalIntervalMs", rc.IncrementalIntervalMs, MinRouteReconcileIncrementalIntervalMs, MaxRouteReconcileIncrementalIntervalMs},
-		{"IncrementalOverlapMs", rc.IncrementalOverlapMs, MinRouteReconcileIncrementalOverlapMs, MaxRouteReconcileIncrementalOverlapMs},
-		{"RepairLookbackMs", rc.RepairLookbackMs, MinRouteReconcileRepairLookbackMs, MaxRouteReconcileRepairLookbackMs},
-		{"PushBatch", rc.PushBatch, 1, MaxRouteReconcilePushBatch},
-		{"PushMaxRowsPerSec", rc.PushMaxRowsPerSec, MinRouteReconcilePushMaxRowsPerSec, MaxRouteReconcilePushMaxRowsPerSec},
-		{"RedisPoolSize", rc.RedisPoolSize, 1, MaxRouteReconcileRedisPoolSize},
-		{"FreezeTimeoutMs", rc.FreezeTimeoutMs, MinRouteReconcileFreezeTimeoutMs, MaxRouteReconcileFreezeTimeoutMs},
-		{"ArmingBlockedReportLimit", rc.ArmingBlockedReportLimit, 1, MaxRouteReconcileArmingBlockedReportLimit},
-	} {
-		if b.got < b.min || b.got > b.max {
-			return fmt.Errorf("RouteStore.Reconcile.%s must be in [%d, %d], got %d", b.name, b.min, b.max, b.got)
-		}
-	}
-	if rc.RollbackToleranceMs == nil {
-		return fmt.Errorf("RouteStore.Reconcile.RollbackToleranceMs is unset (call Normalize first)")
-	}
-	if tol := *rc.RollbackToleranceMs; tol < 0 || tol > MaxRouteReconcileRollbackToleranceMs {
-		return fmt.Errorf("RouteStore.Reconcile.RollbackToleranceMs must be in [0, %d], got %d", MaxRouteReconcileRollbackToleranceMs, tol)
-	}
-	safety := rc.LeaseSafetyMs()
-	if maxRenew := (rc.LeaseMs - safety) / 2; rc.RenewIntervalMs < rc.TickIntervalMs || rc.RenewIntervalMs > maxRenew {
-		return fmt.Errorf("RouteStore.Reconcile.RenewIntervalMs must be in [TickIntervalMs=%d, (LeaseMs - LeaseMs/5)/2=%d] "+
-			"(two renewals fit in the locally trusted part of the lease; renewals happen inside ticks), got %d",
-			rc.TickIntervalMs, maxRenew, rc.RenewIntervalMs)
-	}
-	if maxFreeze := rc.LeaseMs - 2*safety; rc.FreezeTimeoutMs > maxFreeze {
-		return fmt.Errorf("RouteStore.Reconcile.FreezeTimeoutMs=%d must be <= LeaseMs - 2*(LeaseMs/5) = %d "+
-			"(the lease must outlive one freeze transaction after a renewal); raise LeaseMs", rc.FreezeTimeoutMs, maxFreeze)
-	}
-	if rc.RepairLookbackMs < rc.IncrementalOverlapMs {
-		return fmt.Errorf("RouteStore.Reconcile.RepairLookbackMs=%d must be >= IncrementalOverlapMs=%d (the repair lookback covers at least the incremental overlap)",
-			rc.RepairLookbackMs, rc.IncrementalOverlapMs)
-	}
-	if rc.RedisFailureReleaseMs < rc.TickIntervalMs || rc.RedisFailureReleaseMs > MaxRouteReconcileRedisFailureReleaseMs {
-		return fmt.Errorf("RouteStore.Reconcile.RedisFailureReleaseMs must be in [TickIntervalMs=%d, %d], got %d",
-			rc.TickIntervalMs, MaxRouteReconcileRedisFailureReleaseMs, rc.RedisFailureReleaseMs)
-	}
-	if rc.ArmReadyMarker && (mode != RouteStoreModeDBFirst || !rc.On()) {
-		return fmt.Errorf("RouteStore.Reconcile.ArmReadyMarker=true requires Mode=%q and Reconcile.Enabled not false (got Mode=%q, Enabled=%t); "+
-			"when rolling back, set ArmReadyMarker=false first", RouteStoreModeDBFirst, mode, rc.On())
 	}
 	return nil
 }
@@ -671,10 +299,8 @@ type SchemaConfig struct {
 	// 其中 player_name 走 schema.go 的手写 bootstrap DDL
 	// (proto2mysql 把 string 渲染成 MEDIUMTEXT,TEXT 列上建不了唯一键),
 	// 迁移对它们只做列漂移校验。
-	// 另有路由表(player_route / zone_merged_into / route_meta / route_reconcile,
-	// 2026-10-12 映射持久化第 1a 批与 G1a 热点修复)同样走手写 DDL,迁移按各自的 proto 只守列名与主键,
-	// 并种 route_meta / route_reconcile(id=1)。
-	// **redis 模式也依赖它们**:这一步失败时快照 / 流水 / 号段 / 名字四个 store 一并不装配(规格 g.3 第 8 条)。
+	// 另有路由表(player_route / zone_merged_into / route_meta)同样走手写 DDL,
+	// 迁移按各自的 proto 只守列名与主键,并种 route_meta(id=1)。
 	//
 	// 生产必须显式设 false:存量大表上的 ALTER 会持有 MDL,阻塞期间所有 GM 回滚/流水查询停摆,
 	// 这种事不该发生在某个副本的启动路径上;改为部署阶段显式跑一次 `data_service -f <yaml> -migrate`
@@ -892,7 +518,7 @@ type PlayerNameConfig struct {
 	// 后一次),10 分钟已经极其宽裕。运维清孤儿走 admin token 那条路,不限时间。
 	ReleaseWindow time.Duration `json:",optional"`
 
-	// CacheTTL 是 player:name:{id} 正缓存的存活时间。v1 不支持改名,名字**内容**不会变,
+	// CacheTTL 是 player:name:{id} 正缓存的存活时间(NameCacheRedis)。v1 不支持改名,名字**内容**不会变,
 	// 所以可以给很长;上限的意义只在"名字被释放且 DEL 缓存失败"时封顶脏值。
 	CacheTTL time.Duration `json:",optional"`
 

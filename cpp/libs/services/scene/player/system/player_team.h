@@ -23,10 +23,7 @@
 // 每一跳回调都在发出命令前捕获 player_id,回调里先核对 valid(entity) && Guid == player_id,
 // 实体已销毁或槽位被复用时丢弃,绝不让另一个玩家去跟随。
 
-#include <charconv>
-#include <system_error>
-
-#include <hiredis/hiredis.h>
+#include <cstdint>
 
 #include "entt/src/entt/entity/entity.hpp"
 
@@ -37,38 +34,16 @@ class PlayerTeamRefreshEvent;
 // 同时小于 kMaxViewRadius(10),保证"不触发瞬移"的队员一定在队长的可见半径内。
 constexpr double kTeamRegroupDistance = 8.0;
 
-// HMGET team:player:<id> tid epoch 回复的三态判定结果。
-enum class TeamIndexReplyKind : uint8_t
-{
-	kUnknown = 0,    // 回复为空 / 错误 / 形状不对 / 数字非法:不改组件,也不继续
-	kKeyMissing = 1, // 两个字段都是 NIL:key 不存在(过期或被淘汰),与 Go 侧"索引缺失即无队"口径一致
-	kPresent = 2,    // 两个字段都是合法十进制字符串(teamId 可以为 0,表示已离队但保留 epoch)
-};
-
-struct TeamIndexReply
-{
-	TeamIndexReplyKind kind = TeamIndexReplyKind::kUnknown;
-	uint64_t teamId = 0;
-	uint64_t epoch = 0;
-};
-
 class PlayerTeamSystem
 {
 public:
 	// ---- 纯函数(无 I/O、无 ECS,头文件内联,供 cpp/tests/aoi_test 直接单测)----
 
 	// 是否把一次读到的成员关系写进 TeamId 组件。
-	//   keyMissing:无条件应用(按 tid=0 清除)。旧 epoch 已无从比较;key 重建时 epoch 用
-	//               Redis TIME 起种,必然大于旧值,所以之后的正常读不会被误判为回退。
-	//   没有组件:  应用(组件在 tid=0 时被移除,旧 epoch 随之丢失,无从比较)。
-	//   有组件:    只有 incomingEpoch 严格大于当前 epoch 才应用;相等或更小视为重复/乱序,忽略。
-	static bool ShouldApplyMembership(uint64_t currentEpoch, bool hasComponent, uint64_t incomingEpoch,
-									  bool keyMissing)
+	//   没有组件:应用。
+	//   有组件:  只有 incomingEpoch 严格大于当前 epoch 才应用;相等或更小视为重复/乱序,忽略。
+	static bool ShouldApplyMembership(uint64_t currentEpoch, bool hasComponent, uint64_t incomingEpoch)
 	{
-		if (keyMissing)
-		{
-			return true;
-		}
 		if (!hasComponent)
 		{
 			return true;
@@ -85,40 +60,6 @@ public:
 	static bool ShouldRegroup(double horizontalDistance, bool mutuallyVisible)
 	{
 		return !mutuallyVisible || horizontalDistance > kTeamRegroupDistance;
-	}
-
-	// 解析 HMGET team:player:<id> tid epoch 的回复。逐个元素先判 type 再读 str,
-	// 绝不对 NIL 元素读 str/len。
-	static TeamIndexReply ParseTeamIndexReply(const redisReply* reply)
-	{
-		TeamIndexReply result;
-		if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY || reply->elements != 2 ||
-			reply->element == nullptr)
-		{
-			return result;
-		}
-		const redisReply* tidElement = reply->element[0];
-		const redisReply* epochElement = reply->element[1];
-		if (tidElement == nullptr || epochElement == nullptr)
-		{
-			return result;
-		}
-		if (tidElement->type == REDIS_REPLY_NIL && epochElement->type == REDIS_REPLY_NIL)
-		{
-			result.kind = TeamIndexReplyKind::kKeyMissing;
-			return result;
-		}
-		// 半个 hash(一个字段 NIL、另一个有值)不是 Go 侧 Lua 能写出的形状,按未知处理
-		uint64_t teamId = 0;
-		uint64_t epoch = 0;
-		if (!ParseDecimalElement(tidElement, teamId) || !ParseDecimalElement(epochElement, epoch))
-		{
-			return result;
-		}
-		result.kind = TeamIndexReplyKind::kPresent;
-		result.teamId = teamId;
-		result.epoch = epoch;
-		return result;
 	}
 
 	// ---- 场景生命周期入口 ----
@@ -158,18 +99,6 @@ private:
 		kFollowLeaderAndFanout = 2,
 	};
 
-	static bool ParseDecimalElement(const redisReply* element, uint64_t& out)
-	{
-		if (element->type != REDIS_REPLY_STRING || element->str == nullptr || element->len == 0)
-		{
-			return false;
-		}
-		const char* begin = element->str;
-		const char* end = element->str + element->len;
-		const auto [ptr, ec] = std::from_chars(begin, end, out, 10);
-		return ec == std::errc{} && ptr == end;
-	}
-
 	// 刷新并跟随(不扇出)。
 	static void RefreshAndFollow(entt::entity player);
 
@@ -178,11 +107,14 @@ private:
 
 	// 把读到的成员关系写进 TeamId 组件(按 epoch 去乱序),tid 变化时修正队友 AOI。
 	// 事件驱动路径,不在 per-tick 上(AGENTS §7 #5)。
-	static void ApplyMembership(entt::entity player, uint64_t teamId, uint64_t epoch, bool keyMissing);
+	static void ApplyMembership(entt::entity player, uint64_t teamId, uint64_t epoch);
 
 	// 非队长跟随队长:战斗 / 会话 / battle:lock / zone / 节点守卫全部通过之后,
 	// 队长在别的场景 -> 请求 SceneManager 切过去;已在同一场景 -> RegroupToLeader。
 	static void CheckFollowLeader(entt::entity player, uint64_t leaderId);
+
+	// CheckFollowLeader 的第二跳:自己的战斗锁已确认不在,读队长位置并按上面的规则决定切场景或归队。
+	static void ReadLeaderLocationForFollow(entt::entity player, uint64_t playerId, uint64_t leaderId);
 
 	// 同一场景实例内的归队:按 ShouldRegroup 判定,需要时把 player 瞬移到队长脚下。
 	// 只由 CheckFollowLeader 在全部守卫通过后调用;队长实体不在本节点 / 不在同一场景 / 归属交接在途时不动。

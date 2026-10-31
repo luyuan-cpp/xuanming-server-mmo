@@ -28,8 +28,6 @@ func holdPlayerStoreForTest(t *testing.T, ctx context.Context, d *AccountDirecto
 	require.NoError(t, err)
 }
 
-func roleImportTestID(n byte) []byte { out := make([]byte, 32); out[31] = n; return out }
-
 func admissionTestRequest(player, generation, revision uint64) *dspb.RegisterRoleAdmissionRequest {
 	return &dspb.RegisterRoleAdmissionRequest{Identity: &base.RoleAdmissionIdentity{PlayerId: player, SceneInstanceId: admissionTestInstance, Generation: generation, OwnerRevision: revision, OwnerEpoch: 17, SceneNodeId: "11", SceneId: 111, ZoneId: 1, SessionId: 7, LoginGeneration: 999}}
 }
@@ -311,7 +309,7 @@ func TestTiDBRoleAdmissionSQLProofRejectsRouteAndSchemaFailures(t *testing.T) {
 	require.Zero(t, receipts)
 }
 
-func TestTiDBRoleAdmissionOpenRejectsRemovalAndToolRestoreKeepsFloor(t *testing.T) {
+func TestTiDBRoleAdmissionOpenRejectsRemovalAndFloorSurvivesRemoval(t *testing.T) {
 	d, global := accountDirectoryTiDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -322,78 +320,14 @@ func TestTiDBRoleAdmissionOpenRejectsRemovalAndToolRestoreKeepsFloor(t *testing.
 	_, err = a.Register(ctx, admissionTestRequest(11, 1, 1))
 	require.NoError(t, err)
 	require.ErrorIs(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}), accountdirectory.ErrConflict)
-	for _, restore := range []bool{false, true} {
-		_, err = d.ImportRole(ctx, "seller", role, restore, roleImportTestID(1))
-		require.ErrorIs(t, err, accountdirectory.ErrConflict)
-	}
 	_, err = createInitialRoleForTest(d, ctx, "seller", role)
 	require.NoError(t, err, "普通建角原请求幂等不扩大成全部在线角色禁用")
 	_, err = a.CloseAdmissions(ctx, &dspb.CloseRoleAdmissionsRequest{PlayerId: 11, SceneInstanceId: admissionTestInstance, OwnerRevision: 1, ThroughGeneration: 1, RequiredOwnerEpoch: 17, RequiredSaveSeq: 3})
 	require.NoError(t, err)
 	require.NoError(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}))
-	_, err = d.ImportRole(ctx, "seller", role, true, roleImportTestID(1))
-	require.NoError(t, err)
-	owned, err := d.Lookup(ctx, 11)
-	require.NoError(t, err)
-	require.Equal(t, uint64(3), owned.OwnerRevision)
 	var floorEpoch, floorSeq, closed uint64
 	require.NoError(t, global.QueryRowContext(ctx, "SELECT required_owner_epoch,required_save_seq,closed_through FROM account_role_admission WHERE player_id=11").Scan(&floorEpoch, &floorSeq, &closed))
 	require.Equal(t, []uint64{17, 3, 1}, []uint64{floorEpoch, floorSeq, closed})
-}
-
-func TestTiDBRoleImportReceiptRevokesOldRoutesAndDoesNotBumpOnResume(t *testing.T) {
-	d, global := accountDirectoryTiDB(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
-	defer cancel()
-	role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11, AppearanceId: "original"}
-	_, err := createInitialRoleForTest(d, ctx, "seller", role)
-	require.NoError(t, err)
-	type result struct{ err error }
-	results := make(chan result, 8)
-	var wg sync.WaitGroup
-	for n := 0; n < 8; n++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, err := d.ImportRole(ctx, "seller", role, false, roleImportTestID(1))
-			results <- result{err}
-		}()
-	}
-	wg.Wait()
-	close(results)
-	count := 0
-	for r := range results {
-		require.NoError(t, r.err)
-		count++
-	}
-	require.Equal(t, 8, count)
-	owned, err := d.Lookup(ctx, 11)
-	require.NoError(t, err)
-	require.Equal(t, uint64(2), owned.OwnerRevision)
-	_, err = d.ImportRole(ctx, "seller", role, true, roleImportTestID(1))
-	require.NoError(t, err, "从false加replace恢复只能回原维护修订")
-	owned, err = d.Lookup(ctx, 11)
-	require.NoError(t, err)
-	require.Equal(t, uint64(2), owned.OwnerRevision)
-	a := NewAccountRoleAdmissionStore(d)
-	_, err = a.Register(ctx, admissionTestRequest(11, 1, 1))
-	require.ErrorIs(t, err, accountdirectory.ErrConflict, "旧路由不能在目录改修订后入场")
-	_, err = d.ImportRole(ctx, "other", role, true, roleImportTestID(1))
-	require.ErrorIs(t, err, accountdirectory.ErrConflict, "同维护键换目标账号拒绝")
-	changed := proto.Clone(role).(*base.AccountSimplePlayer)
-	changed.AppearanceId = "changed"
-	_, err = d.ImportRole(ctx, "seller", changed, true, roleImportTestID(1))
-	require.ErrorIs(t, err, accountdirectory.ErrConflict)
-	_, err = d.ImportRole(ctx, "seller", role, true, roleImportTestID(2))
-	require.NoError(t, err)
-	owned, err = d.Lookup(ctx, 11)
-	require.NoError(t, err)
-	require.Equal(t, uint64(3), owned.OwnerRevision)
-	_, err = d.ImportRole(ctx, "seller", role, true, roleImportTestID(1))
-	require.ErrorIs(t, err, accountdirectory.ErrConflict, "之后新导入使旧包不能覆盖新状态")
-	var receipts int
-	require.NoError(t, global.QueryRowContext(ctx, "SELECT COUNT(*) FROM account_role_import_receipt").Scan(&receipts))
-	require.Equal(t, 2, receipts)
 }
 
 // 持有者已经写不了存档(写权行不是它):不等 ACK,判为排空,代次抬到它登记的代次之上挡住在途的认领,关掉它的登记。

@@ -160,6 +160,7 @@ func TestEnterScene_MintConfirmedBeforeRoutePush(t *testing.T) {
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	withReachableSceneNode(t, sc, "10", "20")
 
@@ -194,9 +195,11 @@ func TestEnterScene_MintNotDurableRollsBackHandoffWithoutRouting(t *testing.T) {
 	)
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "3")
-	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
+	seedNodeMembers(mr, testZoneId, "10", 3)
+	seedNodeMembers(mr, testZoneId, "20", 4)
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	withReachableSceneNode(t, sc, "10", "20")
 	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
@@ -220,15 +223,10 @@ func TestEnterScene_MintNotDurableRollsBackHandoffWithoutRouting(t *testing.T) {
 	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt)
 	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
 	assert.Equal(t, "3:1757000000000", forwarded)
-	for key, want := range map[string]string{
-		fmt.Sprintf(InstancePlayerCountKey, targetID): "4",
-		fmt.Sprintf(InstancePlayerCountKey, oldScene): "3",
-		nodePlayerCountKey(testZoneId, "20"):          "4",
-		nodePlayerCountKey(testZoneId, "10"):          "3",
-	} {
-		got, _ := sc.Redis.Get(key)
-		assert.Equal(t, want, got, "人数全部退回: %s", key)
-	}
+	assert.Equal(t, "4", sceneCountText(sc, targetID), "目标场景预占退回")
+	assert.Equal(t, "3", sceneCountText(sc, oldScene), "旧场景人数还回去")
+	assert.Equal(t, "4", nodeCountText(sc, testZoneId, "20"), "目标节点预占退回")
+	assert.Equal(t, "3", nodeCountText(sc, testZoneId, "10"), "旧节点人数还回去")
 }
 
 // 跨 zone 第一条腿凭标记铸出 2,WAITAOF 出错(例如回复读失败):不推重定向,epoch 回滚到 3,location 回到
@@ -243,6 +241,7 @@ func TestEnterScene_MintDurabilityErrorRollsBackCrossZoneAdmission(t *testing.T)
 	)
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
 	testMinter(t, sc).setDurability(svc.MintDurabilityError, errors.New("WAITAOF: i/o timeout"))
@@ -269,7 +268,7 @@ func TestEnterScene_MintDurabilityErrorRollsBackCrossZoneAdmission(t *testing.T)
 	assert.Equal(t, "10", loc.NodeId)
 	assert.Equal(t, oldScene, loc.SceneId)
 	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt)
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "3", oldCount, "旧场景人数退回")
 }
 
@@ -295,7 +294,7 @@ func TestEnterScene_FirstPlacementMintNotDurableDeletesLocation(t *testing.T) {
 	assert.Empty(t, *captured)
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "首次落点回滚 = 删除 location")
 	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "铸出 1 → 回滚到 2")
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	count := sceneCountText(sc, targetID)
 	assert.Equal(t, "5", count, "目标场景预占退回")
 
 	testMinter(t, sc).setDurability(svc.MintDurabilityConfirmed, nil)
@@ -324,6 +323,7 @@ func TestEnterScene_SameNodeZeroEpochMintNotDurableKeepsEpoch(t *testing.T) {
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
 	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
 	require.NoError(t, err)
+	adoptSceneMember(mr, oldScene, playerID)
 	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	withReachableSceneNode(t, sc, "10")
 	testMinter(t, sc).setDurability(svc.MintDurabilityNotDurable, errTestWaitAOFShort)
@@ -339,8 +339,8 @@ func TestEnterScene_SameNodeZeroEpochMintNotDurableKeepsEpoch(t *testing.T) {
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	restoredRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	assert.Equal(t, oldRaw, restoredRaw)
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	oldCount := sceneCountText(sc, oldScene)
+	targetCount := sceneCountText(sc, targetID)
 	assert.Equal(t, "3", oldCount)
 	assert.Equal(t, "4", targetCount)
 }
@@ -391,7 +391,7 @@ func TestEnterScene_MintNotSentLeavesPlacementUntouched(t *testing.T) {
 	assert.Empty(t, *captured)
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
 	assert.False(t, mr.Exists(ownerepoch.OwnerEpochKey(playerID)))
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	count := sceneCountText(sc, targetID)
 	assert.Equal(t, "2", count)
 }
 
@@ -590,6 +590,7 @@ func TestEnterScene_WallClockFloorRouteFailureBumpsOneAndForwardsMarker(t *testi
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	withReachableSceneNode(t, sc, "10", "20")
 	testMinter(t, sc).setNowMs(testWallClockMs)

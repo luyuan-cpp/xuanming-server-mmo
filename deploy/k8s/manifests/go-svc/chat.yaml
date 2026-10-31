@@ -5,7 +5,7 @@
 # gate → client-rpc-router 到达,路由服对 ChatNodeService 不做 zone 过滤(ZoneScopedNodeTypes 默认仅 Login),
 # 所以全 zone 的玩家都会被随机路由到这里的实例。
 # k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
-# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-chat-config 由脚本生成。
+# infra-up / all-up 部署:ConfigMap 与迁移 Job 在基础设施阶段,进程排在第一个 zone 的 data-service 之后(见 k8s_deploy.ps1 的 Apply-GlobalGoSvcManifests)。ConfigMap go-svc-chat-config 由脚本生成。
 #
 # ⚠ 已知前提:chat 只承诺路由服模式可达。路由服部署链(镜像 / 目录 / ConfigMap / manifests/go-svc/client-rpc-router.yaml /
 # C++ 发现前缀 / 按 POD_IP 通告)已登记齐,gate 的 GATE_CLIENT_RPC_ROUTER 在 K8s 上默认 "1"(k8s_deploy.ps1 -GateRouterMode,

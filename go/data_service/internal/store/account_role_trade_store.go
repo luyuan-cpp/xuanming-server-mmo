@@ -105,7 +105,7 @@ func ensureAccountRoleTradeSchema(ctx context.Context, db *sql.DB, name string) 
 
 // RoleFreezeVerifier 在目录同一 SQL 事务内验证原生冻结、严格存盘和旧入场链排空证据。
 // 实现只允许同事务 SQL 读，不能在持锁期间调用 Redis、RPC 或接受 caller 自报离线。
-// 生产仅在显式 TiDB/db_first/存储白名单配置后装配；缺配置不能产生 FROZEN。
+// 生产仅在显式 TiDB/存储白名单配置后装配；缺配置不能产生 FROZEN。
 type RoleFreezeVerifier interface {
 	VerifyFrozen(context.Context, *sql.Tx, *dbpb.AccountRoleTrade) (*dspb.AccountRoleFreezeEvidence, error)
 }

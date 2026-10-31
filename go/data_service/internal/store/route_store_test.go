@@ -26,7 +26,7 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 )
 
-// RouteStore 不连库的单测:DSN、DDL 契约、SQL 文本形状、写入点守卫、导入判定、行的编解码、写者标识。
+// RouteStore 不连库的单测:DSN、DDL 契约、SQL 文本形状、写入点守卫、行的校验、写者标识。
 // 「库应答 → 结局 / 语句 / 参数」的契约在 route_store_contract_test.go(假驱动);
 // 锁、ODKU 行数、CHECK、并发只有真库能证,在 route_store_integration_test.go(-tags=integration)。
 
@@ -47,13 +47,13 @@ func TestRouteDSNSetsReadCommittedAndLockWaitWithoutClientFoundRows(t *testing.T
 		t.Fatalf("buildRouteDSN 产出的 DSN 解析失败: %v", err)
 	}
 	if cfg.ClientFoundRows {
-		t.Fatal("buildRouteDSN 设了 clientFoundRows=true:R4 / R7 / R10 / R15 的 ODKU no-op 会回 1 行,撞键被误判成插入成功")
+		t.Fatal("buildRouteDSN 设了 clientFoundRows=true:R4 / R15 / R16 的 ODKU no-op 会回 1 行,撞键被误判成插入成功")
 	}
 	if got := cfg.Params["transaction_isolation"]; got != "'READ-COMMITTED'" {
 		t.Fatalf("transaction_isolation = %q, want 'READ-COMMITTED'(带单引号:驱动原样拼进 SET)", got)
 	}
 	if routeLockWaitTimeoutSec != 1 {
-		t.Fatalf("routeLockWaitTimeoutSec = %d:规格 c.2 的预算分配按 1s 算(服务端 2s 预算 = 锁等待 1s + 发布)", routeLockWaitTimeoutSec)
+		t.Fatalf("routeLockWaitTimeoutSec = %d:W1 的预算分配按 1s 算(服务端 2s 预算里锁等待最多占 1s)", routeLockWaitTimeoutSec)
 	}
 	if got := cfg.Params["innodb_lock_wait_timeout"]; got != strconv.Itoa(routeLockWaitTimeoutSec) {
 		t.Fatalf("innodb_lock_wait_timeout = %q, want %d", got, routeLockWaitTimeoutSec)
@@ -69,7 +69,6 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		PlayerRouteTableName:    playerRouteBootstrapDDL,
 		ZoneMergedIntoTableName: zoneMergedIntoBootstrapDDL,
 		RouteMetaTableName:      routeMetaBootstrapDDL,
-		RouteReconcileTableName: routeReconcileBootstrapDDL,
 	}
 	for name, ddl := range ddls {
 		if !strings.HasPrefix(ddl, "CREATE TABLE IF NOT EXISTS `"+name+"` (") {
@@ -89,7 +88,7 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 			t.Fatalf("%s 有 %d 个 ascii 列,只有 %d 个显式 COLLATE ascii_bin(MySQL 默认 ascii_general_ci、TiDB 只有 ascii_bin)", name, n, m)
 		}
 	}
-	// 16张既有业务/路由/恢复事实表之外，正式authority catalog新增六张永久写资格控制表。
+	// 12张业务/路由表之外，正式authority catalog新增六张永久写资格控制表。
 	writerControlDDLs := map[string]string{
 		"writer_registry":                writerRegistryBootstrapDDL,
 		"writer_slot":                    writerSlotBootstrapDDL,
@@ -98,8 +97,8 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		"sql_writer_freeze_ticket":       writerFreezeTicketBootstrapDDL,
 		"sql_writer_maintenance_receipt": writerMaintenanceReceiptBootstrapDDL,
 	}
-	if got, want := len(bootstrapTables), 16+len(writerControlDDLs); got != want {
-		t.Fatalf("bootstrapTables 有 %d 项,want %d(既有16表加六张正式authority控制表)", got, want)
+	if got, want := len(bootstrapTables), 12+len(writerControlDDLs); got != want {
+		t.Fatalf("bootstrapTables 有 %d 项,want %d(12张业务/路由表加六张正式authority控制表)", got, want)
 	}
 	for name, ddl := range writerControlDDLs {
 		if bootstrapTables[name] != ddl {
@@ -115,7 +114,6 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		"PRIMARY KEY (`route_shard`, `player_id`) /*T![clustered_index] CLUSTERED */",
 		"KEY `idx_route_home` (`home_zone`, `route_shard`, `player_id`)",
 		"KEY `idx_route_storage` (`storage_id`, `route_shard`, `player_id`)",
-		"KEY `idx_route_updated` (`route_shard`, `updated_at_ms`, `player_id`)",
 		"CONSTRAINT `chk_route_shard` CHECK (`route_shard` = `player_id` % " + shards + ")",
 		"CONSTRAINT `chk_route_home` CHECK (`home_zone` IS NULL OR `home_zone` BETWEEN 1 AND " + strconv.FormatUint(uint64(RouteHomeZoneMax), 10) + ")",
 		"CONSTRAINT `chk_route_place` CHECK",
@@ -136,18 +134,8 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 	if n := strings.Count(playerRouteBootstrapDDL, "CONSTRAINT `chk_route_"); n != 6 {
 		t.Fatalf("player_route 有 %d 个 chk_route_* 约束,want 6", n)
 	}
-	if n := strings.Count(playerRouteBootstrapDDL, "KEY `idx_route_"); n != 3 {
-		t.Fatalf("player_route 有 %d 个 idx_route_* 索引,want 3", n)
-	}
-
-	// route_meta 只留很少写的开关;常写的租约 / 水位在 route_reconcile(G1a 拆表)。
-	for _, col := range []string{"watermark_ms", "cache_verified_ms", "leader", "lease_until_ms"} {
-		if strings.Contains(routeMetaBootstrapDDL, "`"+col+"`") {
-			t.Fatalf("route_meta 的 DDL 里又出现了 %s:每次 W1 都读的开关行不能和 1b leader 每拍写的列放在同一行", col)
-		}
-		if !strings.Contains(routeReconcileBootstrapDDL, "`"+col+"`") {
-			t.Fatalf("route_reconcile 的 DDL 丢了 %s", col)
-		}
+	if n := strings.Count(playerRouteBootstrapDDL, "KEY `idx_route_"); n != 2 {
+		t.Fatalf("player_route 有 %d 个 idx_route_* 索引,want 2", n)
 	}
 
 	// 列漂移守卫的事实源是 proto(routeTableMessages):每张路由表的 proto 字段集合 = DDL 列集合(双向,多一列少一列都拒),
@@ -170,7 +158,7 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		name, ok := proto2mysql.TableNameFromDescriptor(md)
 		ddl, known := ddls[name]
 		if !ok || !known {
-			t.Fatalf("routeTableMessages 里的 %s 表名 %q 不是四张路由表之一", md.FullName(), name)
+			t.Fatalf("routeTableMessages 里的 %s 表名 %q 不是路由表之一", md.FullName(), name)
 		}
 		if name <= prevName {
 			t.Fatalf("routeTableMessages 没有按表名升序(%s 排在 %s 之后):守卫的日志与失败顺序要稳定", name, prevName)
@@ -206,8 +194,8 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		}
 	}
 
-	// 四张表每列的注释 pb:N 都等于 proto 字段号:player_route 的 pb:1..10 是 1a 批预留、补 proto 时沿用的;
-	// 另外四张补 proto 时按列序新定、同时补进 DDL。字段号上线后不复用(AGENTS §4),只有这里能钉住两边不各自重编号。
+	// 三张表每列的注释 pb:N 都等于 proto 字段号:player_route 的 pb:1..10 是 1a 批预留、补 proto 时沿用的;
+	// 另外两张补 proto 时按列序新定、同时补进 DDL。字段号上线后不复用(AGENTS §4),只有这里能钉住两边不各自重编号。
 	pbCommentRe := regexp.MustCompile("(?m)^  `([a-z_]+)` .*COMMENT 'pb:(\\d+)'")
 	for _, m := range routeMsgs {
 		md := m.ProtoReflect().Descriptor()
@@ -306,7 +294,7 @@ func TestRouteRowMirrorsPlayerRouteProto(t *testing.T) {
 func TestRouteShardModulusProbeDiscriminates(t *testing.T) {
 	keys := routeShardModulusProbeKeys()
 	// 期望写成字面量(64 片):被测函数用的就是 placement.RouteRowShards,期望再引用它等于自己证自己。
-	if want := []RouteScanCursor{{Shard: 0, PlayerID: 64}, {Shard: 63, PlayerID: 63}}; !slices.Equal(keys, want) {
+	if want := []routeKey{{Shard: 0, PlayerID: 64}, {Shard: 63, PlayerID: 63}}; !slices.Equal(keys, want) {
 		t.Fatalf("routeShardModulusProbeKeys() = %+v, want %+v", keys, want)
 	}
 	for i, k := range keys {
@@ -316,12 +304,12 @@ func TestRouteShardModulusProbeDiscriminates(t *testing.T) {
 		if k.Shard > 255 {
 			t.Fatalf("探针第 %d 行的片 %d 放不进 route_shard(tinyint unsigned)", i+1, k.Shard)
 		}
-		if i > 0 && !keys[i-1].Less(k) {
+		if i > 0 && !keys[i-1].less(k) {
 			t.Fatalf("探针行没有按聚簇键升序:%+v 排在 %+v 之后(多副本同时探针时取锁顺序要一致)", k, keys[i-1])
 		}
 	}
 
-	accepts := func(modulus uint32, k RouteScanCursor) bool { return uint64(k.Shard) == k.PlayerID%uint64(modulus) }
+	accepts := func(modulus uint32, k routeKey) bool { return uint64(k.Shard) == k.PlayerID%uint64(modulus) }
 	// 判别表(与 probeRouteShardModulus 注释里的表一致):true = 被接受。
 	for _, tc := range []struct {
 		modulus uint32
@@ -350,10 +338,10 @@ func TestRouteShardModulusProbeDiscriminates(t *testing.T) {
 	}
 }
 
-// TestOpenRouteStoreHintByCause:建 route store 失败时给运维的提示按原因分流(OpenRouteStoreHint,db_first 的
-// data_service、debugutil、route_tool 三处共用)。表按另一个行片模数建的(ErrRouteShardModulusMismatch,经 NewRouteStore
-// 包了几层也要认得出)不能再提示「先跑迁移」—— 只重跑 -migrate 修不好它;其余原因保持 route_tool 原来的文案,字节不变。
-// 建池失败本身要真库,三个入口的整条路径在这里测不到,只测这个纯函数。
+// TestOpenRouteStoreHintByCause:建 route store 失败时给运维的提示按原因分流(OpenRouteStoreHint,data_service、route_tool
+// 两处共用)。表按另一个行片模数建的(ErrRouteShardModulusMismatch,经 NewRouteStore 包了几层也要认得出)不能再提示
+// 「先跑迁移」—— 只重跑 -migrate 修不好它;其余原因保持原来的文案,字节不变。
+// 建池失败本身要真库,两个入口的整条路径在这里测不到,只测这个纯函数。
 func TestOpenRouteStoreHintByCause(t *testing.T) {
 	mismatch := fmt.Errorf("route store on 127.0.0.1:3306/testdb: %w",
 		fmt.Errorf("%w: probe row (route_shard=63, player_id=63) is legal under %% 64 but chk_route_shard rejected it", ErrRouteShardModulusMismatch))
@@ -385,21 +373,9 @@ func allRouteSQLForTest() map[string]string {
 		"R5":              routeLockRowSQL,
 		"R6a":             routeFillHomeSQL,
 		"R6b":             routeFillHomePlacementSQL,
-		"R7(1)":           routeImportInsertSQL(1),
-		"R7(3)":           routeImportInsertSQL(3),
-		"R8(2)":           routeSelectRowsSQL(2, true),
-		"R8ro(2)":         routeSelectRowsSQL(2, false),
-		"R9":              routeImportFillSQL,
-		"R10":             routeInsertMergedIntoSQL,
-		"R11":             routeLockMergedIntoSQL,
-		"R11ro":           routeReadMergedIntoSQL,
-		"R12":             routeScanSQL,
+		"R13(2)":          routeSelectRowsSQL(2),
 		"R14":             routeListMergedIntoSQL,
 		"R15":             routeMetaSeedSQL,
-		"R16":             routeReconcileSeedSQL,
-		"R17":             routeRepairOverwriteSQL,
-		"R18":             routeReadMetaSQL,
-		"R18x":            routeLockMetaSQL,
 		"P0":              routeLockProbeGuardSQL,
 		"P4":              routeProbeShardCheckSQL,
 		"P5":              routeProbeShardModulusSQL,
@@ -407,7 +383,6 @@ func allRouteSQLForTest() map[string]string {
 		"ddl_route":       playerRouteBootstrapDDL,
 		"ddl_merged_into": zoneMergedIntoBootstrapDDL,
 		"ddl_meta":        routeMetaBootstrapDDL,
-		"ddl_reconcile":   routeReconcileBootstrapDDL,
 	}
 	for i, stmt := range routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000}) {
 		out["T2/T3("+strconv.Itoa(i)+")"] = stmt
@@ -437,10 +412,7 @@ func TestRouteODKUClausesAreNoOp(t *testing.T) {
 		name, stmt, clause string
 	}{
 		{"R4", routeInsertNewSQL, "player_id = player_id"},
-		{"R7", routeImportInsertSQL(2), "player_id = player_id"},
-		{"R10", routeInsertMergedIntoSQL, "src_zone = src_zone"},
 		{"R15", routeMetaSeedSQL, "id = id"},
-		{"R16", routeReconcileSeedSQL, "id = id"},
 	} {
 		const marker = "ON DUPLICATE KEY UPDATE"
 		idx := strings.Index(tc.stmt, marker)
@@ -457,7 +429,7 @@ func TestRouteODKUClausesAreNoOp(t *testing.T) {
 }
 
 // TestNoPlayerRouteWritesOutsideRouteStore:player_route 的写入只许出现在 internal/store/route_store.go
-// (提案 §4.1-6「防绕过」)。绕过它的写者不走 rev、不发布,缓存与库会静默分叉。
+// (提案 §4.1-6「防绕过」)。绕过它的写者不走 rev,行版本就不再可信。
 //
 // 用 go/parser 只检查**字符串字面量**(先 unquote),不看注释 —— 注释里讲解 SQL 是正当的。
 // 局限:跨字面量拼接出来的语句("UPDATE " + table)查不到;生成代码(generated/)与 _test.go 不检查。
@@ -528,19 +500,17 @@ func TestNoPlayerRouteWritesOutsideRouteStore(t *testing.T) {
 	}
 }
 
-// TestRouteMetaAndReconcileWritesOnlyInStoreFiles(第 1b-1 批):route_meta 的可写开关与 route_reconcile 的水位 / 租约
-// 也只许本 store 写。绕过它的写者(例如在服务里手写一句 UPDATE route_meta SET writable=1)会跳过「解冻前先抬水位」
-// 「修库持 meta 行锁」这些顺序约束。做法与 TestNoPlayerRouteWritesOutsideRouteStore 相同(只看字符串字面量)。
-// 第 1b-2 批新增 internal/store/route_reconcile.go(对账 leader 的 SQL)时把它加进 allowed。
-func TestRouteMetaAndReconcileWritesOnlyInStoreFiles(t *testing.T) {
+// TestRouteMetaWritesOnlyInStoreFiles:本 store 对 route_meta 只有迁移种行这一条写。
+// route_meta 的可写开关只归 authoritysql.Catalog:绕过它的写者(例如在服务里手写一句 UPDATE route_meta SET writable=1)
+// 会跳过写资格框架的顺序约束。做法与 TestNoPlayerRouteWritesOutsideRouteStore 相同(只看字符串字面量)。
+func TestRouteMetaWritesOnlyInStoreFiles(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("resolve go/data_service root: %v", err)
 	}
-	write := regexp.MustCompile("(?i)(INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO|TRUNCATE\\s+TABLE)\\s+`?(" +
-		RouteMetaTableName + "|" + RouteReconcileTableName + ")\\b")
+	write := regexp.MustCompile("(?i)(INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO|TRUNCATE\\s+TABLE)\\s+`?" + RouteMetaTableName + "\\b")
 	metaMutation := regexp.MustCompile("(?i)(UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO|TRUNCATE\\s+TABLE)\\s+`?" + RouteMetaTableName + "\\b")
-	allowed := map[string]bool{"internal/store/route_store.go": true, "internal/store/route_reconcile.go": true}
+	allowed := map[string]bool{"internal/store/route_store.go": true}
 
 	var files, allowedHits int
 	var offenders []string
@@ -594,384 +564,47 @@ func TestRouteMetaAndReconcileWritesOnlyInStoreFiles(t *testing.T) {
 	if files == 0 {
 		t.Fatalf("在 %s 下一个 .go 文件都没扫到:守卫失效", root)
 	}
-	// 仍必须识别五条真实写：Schema 的 R15/R16 与 normal 的 R23/R25/R27。
+	// 必须识别那条真实写：迁移种行的 R15。
 	// writable/epoch/catalog 的 UPDATE 属于独立 authoritysql.Catalog，服务模块绝不拥有。
-	if allowedHits < 5 {
-		t.Fatalf("允许的文件里只匹配到 %d 条 route_meta / route_reconcile 写语句(至少应有 R15/R16/R23/R25/R27):正则失效", allowedHits)
+	if allowedHits < 1 {
+		t.Fatalf("允许的文件里只匹配到 %d 条 route_meta 写语句(至少应有 R15):正则失效", allowedHits)
 	}
 	if len(offenders) > 0 {
-		t.Fatalf("route_meta / route_reconcile 的写入只许出现在 %v,以下位置绕过了它:\n%s", allowed, strings.Join(offenders, "\n"))
+		t.Fatalf("route_meta 的写入只许出现在 %v,以下位置绕过了它:\n%s", allowed, strings.Join(offenders, "\n"))
 	}
 }
 
-// TestRouteRepairOverwriteSQLBindsMapRevNotIncrement:R17 把 rev **置为** maprev(两边 rev 相同,之后的发布 / audit 才认得出
-// 是同一版),不是 rev + 1;按聚簇键定位、按读到的 rev 做 CAS;占位符恰好 9 个(实参顺序由契约用例
-// TestRepairRoutesFromCacheStatementSequence 钉住)。
-func TestRouteRepairOverwriteSQLBindsMapRevNotIncrement(t *testing.T) {
-	stmt := routeRepairOverwriteSQL
-	if strings.Contains(stmt, "rev + 1") || !strings.Contains(stmt, " rev = ?, ") {
-		t.Fatalf("R17 必须把 rev 置为实参(maprev),不是 +1:%q", stmt)
-	}
-	if !strings.HasSuffix(stmt, " WHERE route_shard = ? AND player_id = ? AND rev = ?") {
-		t.Fatalf("R17 必须按聚簇键定位并按读到的 rev 做 CAS:%q", stmt)
-	}
-	if n := strings.Count(stmt, "?"); n != 9 {
-		t.Fatalf("R17 有 %d 个占位符,want 9(home、storage、version、frozen、rev、writer、行片、player_id、库 rev)", n)
-	}
-	if !strings.Contains(stmt, "updated_at_ms = "+dbNowMsSQL) {
-		t.Fatalf("R17 的 updated_at_ms 必须取库时钟:%q", stmt)
-	}
-}
-
-// TestDecideRepair 覆盖反向修库判定表(decideRepair,提案 §11.2「第 1b 批」D5)的每一格。
-func TestDecideRepair(t *testing.T) {
-	const player uint64 = 90002
-	stable := func(s uint32, v uint64) *placement.Record { return &placement.Record{StorageID: s, Version: v} }
-	frozen := &placement.Record{StorageID: 7, Version: 2, Frozen: true, RunID: "run-b"}
-	dbRow := func(home, storage uint32, version uint64, frozenRun string, rev uint64) *RouteRow {
-		return &RouteRow{PlayerID: player, HomeZone: home, StorageID: storage, PlacementVersion: version,
-			FrozenRunID: frozenRun, Rev: rev, UpdatedBy: "old", CreatedAtMs: 11, UpdatedAtMs: 22}
-	}
-
-	for _, tc := range []struct {
-		name        string
-		db          *RouteRow
-		cache       RouteImportRow
-		resolveTies bool
-		want        repairAction
-		wantRow     RouteRow // 只对 insert / restore / tie_resolved / fill 有意义
-	}{
-		{
-			name:    "库无行_rev取maprev",
-			cache:   RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 1), MapRev: 5},
-			want:    repairInsert,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, StorageID: 7, PlacementVersion: 1, Rev: 5},
-		},
-		{
-			name:    "库无行_无maprev_rev取1",
-			cache:   RouteImportRow{PlayerID: player, HomeZone: 7},
-			want:    repairInsert,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, Rev: 1},
-		},
-		{
-			name:    "maprev大于库rev_整行覆盖_rev置为maprev",
-			db:      dbRow(7, 0, 0, "", 3),
-			cache:   RouteImportRow{PlayerID: player, HomeZone: 7, Placement: frozen, MapRev: 5},
-			want:    repairRestore,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, StorageID: 7, PlacementVersion: 2, FrozenRunID: "run-b", Rev: 5},
-		},
-		// 2026-10-18 修复评审:原用例「缓存没有落点_库的落点也清掉」(判 restore、把库的落点清成 NULL)改判 conflict ——
-		// db_first 下库的 home / 落点只会从 NULL 变成有值,rev 更高却少一列只可能是脚本之外的 DEL,覆盖会把正确的值清掉、
-		// 之后两边都没有这一列,audit 看不见。
-		{
-			name:  "maprev大于库rev_缓存没有落点而库有_冲突不覆盖",
-			db:    dbRow(7, 7, 1, "", 3),
-			cache: RouteImportRow{PlayerID: player, HomeZone: 8, MapRev: 4},
-			want:  repairConflict,
-		},
-		{
-			name:  "maprev大于库rev_缓存没有home而库有_冲突不覆盖",
-			db:    dbRow(7, 0, 0, "", 3),
-			cache: RouteImportRow{PlayerID: player, Placement: stable(7, 1), MapRev: 5},
-			want:  repairConflict,
-		},
-		{
-			name:    "maprev大于库rev_库缺的列由缓存补上_照常覆盖",
-			db:      dbRow(0, 7, 1, "", 3),
-			cache:   RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 2), MapRev: 4},
-			want:    repairRestore,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, StorageID: 7, PlacementVersion: 2, Rev: 4},
-		},
-		{
-			name:    "maprev大于库rev_库里是墓碑",
-			db:      dbRow(0, 0, 0, "", 1),
-			cache:   RouteImportRow{PlayerID: player, HomeZone: 7, MapRev: 2},
-			want:    repairRestore,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, Rev: 2},
-		},
-		{
-			name:  "maprev小于库rev_库领先_不动",
-			db:    dbRow(8, 0, 0, "", 9),
-			cache: RouteImportRow{PlayerID: player, HomeZone: 7, MapRev: 5},
-			want:  repairDBAhead,
-		},
-		{
-			name:  "同rev同值_match",
-			db:    dbRow(7, 7, 2, "run-b", 5),
-			cache: RouteImportRow{PlayerID: player, HomeZone: 7, Placement: frozen, MapRev: 5},
-			want:  repairMatch,
-		},
-		{
-			name:  "同rev异值_默认只报告",
-			db:    dbRow(8, 0, 0, "", 5),
-			cache: RouteImportRow{PlayerID: player, HomeZone: 7, MapRev: 5},
-			want:  repairTie,
-		},
-		{
-			name:  "同rev_冻结态与稳定态视为不同_平局",
-			db:    dbRow(7, 7, 2, "", 5),
-			cache: RouteImportRow{PlayerID: player, HomeZone: 7, Placement: frozen, MapRev: 5},
-			want:  repairTie,
-		},
-		{
-			name:        "同rev异值_resolve-ties=cache_覆盖且rev不变",
-			db:          dbRow(8, 0, 0, "", 5),
-			cache:       RouteImportRow{PlayerID: player, HomeZone: 7, MapRev: 5},
-			resolveTies: true,
-			want:        repairTieResolved,
-			wantRow:     RouteRow{PlayerID: player, HomeZone: 7, Rev: 5},
-		},
-		{
-			name:        "同rev同值_resolve-ties也是match",
-			db:          dbRow(7, 0, 0, "", 5),
-			cache:       RouteImportRow{PlayerID: player, HomeZone: 7, MapRev: 5},
-			resolveTies: true,
-			want:        repairMatch,
-		},
-		{
-			name:    "无maprev_退回导入语义_补NULL列",
-			db:      dbRow(0, 7, 1, "", 2),
-			cache:   RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 1)},
-			want:    repairFill,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, StorageID: 7, PlacementVersion: 1, Rev: 2, UpdatedBy: "old", CreatedAtMs: 11, UpdatedAtMs: 22},
-		},
-		{
-			name:  "无maprev_两边不同_冲突不覆盖",
-			db:    dbRow(8, 0, 0, "", 2),
-			cache: RouteImportRow{PlayerID: player, HomeZone: 7},
-			want:  repairConflict,
-		},
-		{
-			name:  "无maprev_库有缓存无_db_ahead",
-			db:    dbRow(7, 7, 1, "", 2),
-			cache: RouteImportRow{PlayerID: player, HomeZone: 7},
-			want:  repairDBAhead,
-		},
-		{
-			name:  "无maprev_一致_match",
-			db:    dbRow(7, 0, 0, "", 2),
-			cache: RouteImportRow{PlayerID: player, HomeZone: 7},
-			want:  repairMatch,
-		},
-		{
-			name:        "库行本身不合法_即使maprev更大也只报冲突",
-			db:          dbRow(7, 7, 0, "", 2),
-			cache:       RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 1), MapRev: 9},
-			resolveTies: true,
-			want:        repairConflict,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := decideRepair(tc.db, tc.cache, tc.resolveTies)
-			if got.action != tc.want {
-				t.Fatalf("decideRepair = %s, want %s", got.action, tc.want)
-			}
-			switch tc.want {
-			case repairInsert, repairRestore, repairTieResolved, repairFill:
-				if got.row != tc.wantRow {
-					t.Fatalf("decideRepair row = %+v\nwant %+v", got.row, tc.wantRow)
-				}
-			}
-		})
-	}
-}
-
-// TestDecideImport 覆盖规格 b.2 判定表的每一格,加上 rev 规则。
-func TestDecideImport(t *testing.T) {
-	const player uint64 = 90001
-	stable := func(s uint32, v uint64) *placement.Record { return &placement.Record{StorageID: s, Version: v} }
-	frozen := &placement.Record{StorageID: 7, Version: 1, Frozen: true, RunID: "run-a"}
-	dbRow := func(home, storage uint32, version uint64, frozenRun string, rev uint64) *RouteRow {
-		return &RouteRow{PlayerID: player, HomeZone: home, StorageID: storage, PlacementVersion: version,
-			FrozenRunID: frozenRun, Rev: rev, UpdatedBy: "old", CreatedAtMs: 11, UpdatedAtMs: 22}
-	}
-
-	for _, tc := range []struct {
-		name    string
-		db      *RouteRow
-		redis   RouteImportRow
-		want    importAction
-		wantRow RouteRow // 只对 insert / fill 有意义
-	}{
-		{
-			name:    "库无行_无maprev_rev取1",
-			redis:   RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 1)},
-			want:    importInsert,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, StorageID: 7, PlacementVersion: 1, Rev: 1},
-		},
-		{
-			name:    "库无行_rev取maprev",
-			redis:   RouteImportRow{PlayerID: player, HomeZone: 7, MapRev: 5},
-			want:    importInsert,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, Rev: 5},
-		},
-		{
-			name:    "库无行_冻结落点原样插入",
-			redis:   RouteImportRow{PlayerID: player, Placement: frozen},
-			want:    importInsert,
-			wantRow: RouteRow{PlayerID: player, StorageID: 7, PlacementVersion: 1, FrozenRunID: "run-a", Rev: 1},
-		},
-		{
-			name:  "maprev大于库rev_疑似回档_不看列",
-			db:    dbRow(7, 0, 0, "", 2),
-			redis: RouteImportRow{PlayerID: player, HomeZone: 7, MapRev: 5},
-			want:  importRevRegression,
-		},
-		{
-			name:  "两列相等_match",
-			db:    dbRow(7, 7, 1, "", 5),
-			redis: RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 1), MapRev: 5},
-			want:  importMatch,
-		},
-		{
-			name:  "maprev小于库rev_按列比_match",
-			db:    dbRow(7, 0, 0, "", 9),
-			redis: RouteImportRow{PlayerID: player, HomeZone: 7, MapRev: 3},
-			want:  importMatch,
-		},
-		{
-			name:    "home库NULL_Redis有_fill",
-			db:      dbRow(0, 7, 1, "", 2),
-			redis:   RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 1)},
-			want:    importFill,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, StorageID: 7, PlacementVersion: 1, Rev: 2, UpdatedBy: "old", CreatedAtMs: 11, UpdatedAtMs: 22},
-		},
-		{
-			name:    "落点库NULL_Redis有_fill",
-			db:      dbRow(7, 0, 0, "", 2),
-			redis:   RouteImportRow{PlayerID: player, HomeZone: 7, Placement: frozen},
-			want:    importFill,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, StorageID: 7, PlacementVersion: 1, FrozenRunID: "run-a", Rev: 2, UpdatedBy: "old", CreatedAtMs: 11, UpdatedAtMs: 22},
-		},
-		{
-			name:  "home库有_Redis无键_dbAhead",
-			db:    dbRow(7, 7, 1, "", 2),
-			redis: RouteImportRow{PlayerID: player, Placement: stable(7, 1)},
-			want:  importDBAhead,
-		},
-		{
-			name:  "落点库有_Redis无键_dbAhead",
-			db:    dbRow(7, 7, 1, "", 2),
-			redis: RouteImportRow{PlayerID: player, HomeZone: 7},
-			want:  importDBAhead,
-		},
-		{
-			name:  "home两边不同_conflict",
-			db:    dbRow(8, 0, 0, "", 2),
-			redis: RouteImportRow{PlayerID: player, HomeZone: 7},
-			want:  importConflict,
-		},
-		{
-			name:  "落点稳定态与冻结态视为不同_conflict",
-			db:    dbRow(7, 7, 1, "", 2),
-			redis: RouteImportRow{PlayerID: player, HomeZone: 7, Placement: frozen},
-			want:  importConflict,
-		},
-		{
-			name:    "home要补_落点库领先_fill且保留库落点",
-			db:      dbRow(0, 7, 3, "", 4),
-			redis:   RouteImportRow{PlayerID: player, HomeZone: 7},
-			want:    importFill,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, StorageID: 7, PlacementVersion: 3, Rev: 4, UpdatedBy: "old", CreatedAtMs: 11, UpdatedAtMs: 22},
-		},
-		{
-			name:  "一列conflict一列fill_整行conflict",
-			db:    dbRow(8, 0, 0, "", 2),
-			redis: RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 1)},
-			want:  importConflict,
-		},
-		{
-			name:    "库里是墓碑_补home",
-			db:      dbRow(0, 0, 0, "", 3),
-			redis:   RouteImportRow{PlayerID: player, HomeZone: 7},
-			want:    importFill,
-			wantRow: RouteRow{PlayerID: player, HomeZone: 7, Rev: 3, UpdatedBy: "old", CreatedAtMs: 11, UpdatedAtMs: 22},
-		},
-		{
-			name:  "库里的落点本身不合法_按conflict报给人",
-			db:    dbRow(7, 7, 0, "", 2),
-			redis: RouteImportRow{PlayerID: player, HomeZone: 7, Placement: stable(7, 1)},
-			want:  importConflict,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := decideImport(tc.db, tc.redis)
-			if got.action != tc.want {
-				t.Fatalf("decideImport = %s, want %s", got.action, tc.want)
-			}
-			if (tc.want == importInsert || tc.want == importFill) && got.row != tc.wantRow {
-				t.Fatalf("decideImport row = %+v\nwant %+v", got.row, tc.wantRow)
-			}
-		})
-	}
-}
-
-// TestValidateRouteImportRows:批次乱序 / 重复 / 0 / 越界 / 空行 / 坏落点 / 超限,一律 ErrRouteInvalidArgument。
-func TestValidateRouteImportRows(t *testing.T) {
-	ok := []RouteImportRow{{PlayerID: 1, HomeZone: 7}, {PlayerID: 2, Placement: &placement.Record{StorageID: 7, Version: 1}}}
-	if err := validateRouteImportRows(ok); err != nil {
-		t.Fatalf("合法批次被拒: %v", err)
-	}
-	if err := validateRouteImportRows(nil); err != nil {
-		t.Fatalf("空批次应合法: %v", err)
-	}
-	for _, tc := range []struct {
-		name string
-		rows []RouteImportRow
-	}{
-		{"乱序", []RouteImportRow{{PlayerID: 2, HomeZone: 7}, {PlayerID: 1, HomeZone: 7}}},
-		{"重复", []RouteImportRow{{PlayerID: 1, HomeZone: 7}, {PlayerID: 1, HomeZone: 7}}},
-		{"player_id为0", []RouteImportRow{{PlayerID: 0, HomeZone: 7}}},
-		{"home越界", []RouteImportRow{{PlayerID: 1, HomeZone: RouteHomeZoneMax + 1}}},
-		{"既无home也无落点", []RouteImportRow{{PlayerID: 1, MapRev: 3}}},
-		{"落点不合法", []RouteImportRow{{PlayerID: 1, Placement: &placement.Record{StorageID: 7}}}},
-		{"超限", make([]RouteImportRow, RouteBatchLimit+1)},
-	} {
-		if err := validateRouteImportRows(tc.rows); !errors.Is(err, ErrRouteInvalidArgument) {
-			t.Fatalf("%s: err = %v, want ErrRouteInvalidArgument", tc.name, err)
-		}
-	}
-}
-
-// TestRouteRowPlacementValue:行的落点三列 → 缓存值。坏行必须报 ErrMalformed,绝不发布垃圾。
-func TestRouteRowPlacementValue(t *testing.T) {
+// TestRouteRowPlacement:行的落点三列 → 落点记录。坏行必须报 ErrMalformed:读方不能按一条坏行选库。
+func TestRouteRowPlacement(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		row     RouteRow
-		want    string
+		want    placement.Record
+		wantOK  bool
 		wantErr bool
 	}{
-		{"无落点", RouteRow{PlayerID: 1, HomeZone: 7}, "", false},
-		{"稳定态", RouteRow{PlayerID: 1, StorageID: 1000000, PlacementVersion: 3}, "1000000:3", false},
-		{"冻结态", RouteRow{PlayerID: 1, StorageID: 102, PlacementVersion: 3, FrozenRunID: "run-1"}, "102:3:frozen:run-1", false},
-		{"version为0", RouteRow{PlayerID: 1, StorageID: 102}, "", true},
-		{"冻结run_id不合法", RouteRow{PlayerID: 1, StorageID: 102, PlacementVersion: 1, FrozenRunID: "bad run"}, "", true},
-		{"没有storage却带version", RouteRow{PlayerID: 1, PlacementVersion: 3}, "", true},
-		{"没有storage却带run_id", RouteRow{PlayerID: 1, FrozenRunID: "run-1"}, "", true},
+		{name: "无落点", row: RouteRow{PlayerID: 1, HomeZone: 7}},
+		{name: "稳定态", row: RouteRow{PlayerID: 1, StorageID: 1000000, PlacementVersion: 3}, want: placement.Record{StorageID: 1000000, Version: 3}, wantOK: true},
+		{name: "冻结态", row: RouteRow{PlayerID: 1, StorageID: 102, PlacementVersion: 3, FrozenRunID: "run-1"}, want: placement.Record{StorageID: 102, Version: 3, Frozen: true, RunID: "run-1"}, wantOK: true},
+		{name: "version为0", row: RouteRow{PlayerID: 1, StorageID: 102}, wantErr: true},
+		{name: "冻结run_id不合法", row: RouteRow{PlayerID: 1, StorageID: 102, PlacementVersion: 1, FrozenRunID: "bad run"}, wantErr: true},
+		{name: "没有storage却带version", row: RouteRow{PlayerID: 1, PlacementVersion: 3}, wantErr: true},
+		{name: "没有storage却带run_id", row: RouteRow{PlayerID: 1, FrozenRunID: "run-1"}, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := tc.row.PlacementValue()
+			got, ok, err := tc.row.Placement()
 			if tc.wantErr {
 				if !errors.Is(err, placement.ErrMalformed) {
-					t.Fatalf("PlacementValue() = (%q, %v), want ErrMalformed", got, err)
+					t.Fatalf("Placement() = (%+v, %t, %v), want ErrMalformed", got, ok, err)
 				}
 				return
 			}
-			if err != nil || got != tc.want {
-				t.Fatalf("PlacementValue() = (%q, %v), want (%q, nil)", got, err, tc.want)
+			if err != nil || ok != tc.wantOK || got != tc.want {
+				t.Fatalf("Placement() = (%+v, %t, %v), want (%+v, %t, nil)", got, ok, err, tc.want, tc.wantOK)
 			}
 		})
 	}
 
-	if got := (RouteRow{HomeZone: 0}).HomeValue(); got != "" {
-		t.Fatalf("HomeValue of NULL home = %q, want empty", got)
-	}
-	if got := (RouteRow{HomeZone: 102}).HomeValue(); got != "102" {
-		t.Fatalf("HomeValue = %q, want 102", got)
-	}
-	if !(RouteRow{}).IsTombstone() || (RouteRow{HomeZone: 1}).IsTombstone() || (RouteRow{StorageID: 1, PlacementVersion: 1}).IsTombstone() {
-		t.Fatal("IsTombstone 的口径是「home 与落点都 NULL」")
-	}
 }
 
 // TestNewRouteWriterID:写者标识只留 [A-Za-z0-9._@:-]、不超过 updated_by 列宽,host 为空时用 unknown。
@@ -1029,7 +662,6 @@ func TestRouteRegisterOutcomeStringsAreStableLowCardinality(t *testing.T) {
 		{RouteRegisterFilledHomePlacementKept.String(), "filled_home_placement_kept"},
 		{RouteRegisterAlreadySame.String(), "already_same"},
 		{RouteRegisterConflict.String(), "conflict"},
-		{RouteRegisterRowMissing.String(), "row_missing"},
 		{RouteRegisterOutcome(0).String(), "unknown"},
 	} {
 		if tc.got != tc.want {
@@ -1054,30 +686,25 @@ func TestRouteLockRetryBudget(t *testing.T) {
 	}
 }
 
-// TestRouteScanCursorOrder:键集游标与排序都按聚簇键 (route_shard, player_id) —— 先比片、后比 id;
-// 片只经 placement.RouteRowShard 算;零值游标小于任何合法键(player_id 为 0 的行不合法)。
-func TestRouteScanCursorOrder(t *testing.T) {
+// TestRouteKeyOrder:排序按聚簇键 (route_shard, player_id) —— 先比片、后比 id;片只经 placement.RouteRowShard 算。
+func TestRouteKeyOrder(t *testing.T) {
 	for _, tc := range []struct {
-		a, b RouteScanCursor
+		a, b routeKey
 		less bool
 	}{
 		// 字面量取 64 片下真实存在的键:1 与 129(= 2×64 + 1)在片 1,2 在片 2。
-		{RouteScanCursor{Shard: 1, PlayerID: 129}, RouteScanCursor{Shard: 2, PlayerID: 2}, true}, // 片小者在前,不看 id
-		{RouteScanCursor{Shard: 2, PlayerID: 2}, RouteScanCursor{Shard: 1, PlayerID: 129}, false},
-		{RouteScanCursor{Shard: 1, PlayerID: 1}, RouteScanCursor{Shard: 1, PlayerID: 129}, true}, // 同片按 id
-		{RouteScanCursor{Shard: 1, PlayerID: 129}, RouteScanCursor{Shard: 1, PlayerID: 129}, false},
+		{routeKey{Shard: 1, PlayerID: 129}, routeKey{Shard: 2, PlayerID: 2}, true}, // 片小者在前,不看 id
+		{routeKey{Shard: 2, PlayerID: 2}, routeKey{Shard: 1, PlayerID: 129}, false},
+		{routeKey{Shard: 1, PlayerID: 1}, routeKey{Shard: 1, PlayerID: 129}, true}, // 同片按 id
+		{routeKey{Shard: 1, PlayerID: 129}, routeKey{Shard: 1, PlayerID: 129}, false},
 	} {
-		if got := tc.a.Less(tc.b); got != tc.less {
-			t.Fatalf("%+v.Less(%+v) = %t, want %t", tc.a, tc.b, got, tc.less)
+		if got := tc.a.less(tc.b); got != tc.less {
+			t.Fatalf("%+v.less(%+v) = %t, want %t", tc.a, tc.b, got, tc.less)
 		}
 	}
 	for _, id := range []uint64{1, 15, 16, 17, 63, 64, 65, 4242, 1<<55 - 1} {
-		key := RouteScanCursorAt(RouteRow{PlayerID: id})
-		if key != (RouteScanCursor{Shard: placement.RouteRowShard(id), PlayerID: id}) {
-			t.Fatalf("RouteScanCursorAt(%d) = %+v:片必须经 placement.RouteRowShard 算", id, key)
-		}
-		if !(RouteScanCursor{}).Less(key) {
-			t.Fatalf("零值游标不小于 %+v:从头扫会漏掉这一行", key)
+		if key := routeKeyOf(id); key != (routeKey{Shard: placement.RouteRowShard(id), PlayerID: id}) {
+			t.Fatalf("routeKeyOf(%d) = %+v:片必须经 placement.RouteRowShard 算", id, key)
 		}
 	}
 
@@ -1093,20 +720,17 @@ func TestRouteScanCursorOrder(t *testing.T) {
 // TestRouteTiDBPrepareStatements:tidb-prepare 的语句逐字钉住(TiDB 上的写法未核实,改它要先在真 TiDB 上取证,
 // 见 route_tidb.go 文件头),以及入参规范化(去重升序、越界拒绝)。
 func TestRouteTiDBPrepareStatements(t *testing.T) {
-	// 行数据与 idx_route_updated 每片一个切点:片 1..63(片 0 的起点就是表 / 索引的起点,不用切),共 63 个、64 段。
+	// 行数据每片一个切点:片 1..63(片 0 的起点就是表的起点,不用切),共 63 个、64 段。
 	// 63 写成字面量(= 64 − 1),故意不引用 placement.RouteRowShards:被测函数用的就是那个常量,期望再引用它等于自己证自己。
-	perShard := func(suffix string) string {
-		parts := make([]string, 0, 63)
-		for sh := 1; sh <= 63; sh++ {
-			parts = append(parts, "("+strconv.Itoa(sh)+suffix+")")
-		}
-		return strings.Join(parts, ", ")
+	parts := make([]string, 0, 63)
+	for sh := 1; sh <= 63; sh++ {
+		parts = append(parts, "("+strconv.Itoa(sh)+", 0)")
 	}
+	perShard := strings.Join(parts, ", ")
 	// idx_route_home / idx_route_storage 每个 zone / 落点值 8 个切点:片 0、8、…、56(每段 8 片),逐字写出。
 	want := []string{
 		"ALTER TABLE `player_route` ATTRIBUTES 'merge_option=deny'",
-		"SPLIT TABLE `player_route` BY " + perShard(", 0"),
-		"SPLIT TABLE `player_route` INDEX `idx_route_updated` BY " + perShard(", 0, 0"),
+		"SPLIT TABLE `player_route` BY " + perShard,
 		"SPLIT TABLE `player_route` INDEX `idx_route_home` BY (1, 0, 0), (1, 8, 0), (1, 16, 0), (1, 24, 0), " +
 			"(1, 32, 0), (1, 40, 0), (1, 48, 0), (1, 56, 0)",
 		"SPLIT TABLE `player_route` INDEX `idx_route_home` BY (2, 0, 0), (2, 8, 0), (2, 16, 0), (2, 24, 0), " +
@@ -1114,14 +738,10 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 		"SPLIT TABLE `player_route` INDEX `idx_route_storage` BY (1000000, 0, 0), (1000000, 8, 0), (1000000, 16, 0), " +
 			"(1000000, 24, 0), (1000000, 32, 0), (1000000, 40, 0), (1000000, 48, 0), (1000000, 56, 0)",
 	}
-	// 期望自检:perShard 拼出来的头尾与个数(免得上面的循环自己写错了还和被测函数错到一处去)。
+	// 期望自检:拼出来的头尾与个数(免得上面的循环自己写错了还和被测函数错到一处去)。
 	if !strings.HasPrefix(want[1], "SPLIT TABLE `player_route` BY (1, 0), (2, 0), (3, 0), ") ||
 		!strings.HasSuffix(want[1], ", (62, 0), (63, 0)") || strings.Count(want[1], "(") != 63 {
 		t.Fatalf("用例自己的期望拼错了(行数据):%q", want[1])
-	}
-	if !strings.HasPrefix(want[2], "SPLIT TABLE `player_route` INDEX `idx_route_updated` BY (1, 0, 0), (2, 0, 0), ") ||
-		!strings.HasSuffix(want[2], ", (62, 0, 0), (63, 0, 0)") || strings.Count(want[2], "(") != 63 {
-		t.Fatalf("用例自己的期望拼错了(idx_route_updated):%q", want[2])
 	}
 	got := routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000})
 	if len(got) != len(want) {
@@ -1132,8 +752,8 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 			t.Fatalf("第 %d 条:\n got=%q\nwant=%q", i, got[i], want[i])
 		}
 	}
-	if n := len(routeTiDBPrepareStatements([]uint32{7}, nil)); n != 1+2+1+0 {
-		t.Fatalf("1 个 zone、0 个 storage 应生成 4 条语句,got %d", n)
+	if n := len(routeTiDBPrepareStatements([]uint32{7}, nil)); n != 1+1+1+0 {
+		t.Fatalf("1 个 zone、0 个 storage 应生成 3 条语句,got %d", n)
 	}
 	// 切点密度的两个常量:8 个点、间隔 8 片(64 / 8);切点数必须整除行片数(route_tidb.go 另有编译期断言)。
 	if routeTiDBPrefixSplitPoints != 8 || routeTiDBPrefixSplitStride != 8 || placement.RouteRowShards%routeTiDBPrefixSplitPoints != 0 {

@@ -4,8 +4,8 @@ package main
 // 双双 JoinQueue(1V1) 后断言被匹配进同一场对局,并自动战斗到终局。
 //
 // 兑现 docs/design/cross-zone-matchmaking.md §8 "robot" / §9 验证清单第 3 条:
-//   机器人 A:登 zone_a → JoinQueue(1V1) → NotifyBattleStart → 直连 battle 节点(含 GetBattleState 补拉)
-//             → 直连上 SetAutoBattle → NotifyBattleEnd;
+//   机器人 A:登 zone_a → 地域探测(network_probe.go)→ JoinQueue(1V1) → NotifyBattleStart
+//             → 直连 battle 节点(含 GetBattleState 补拉)→ 直连上 SetAutoBattle → NotifyBattleEnd;
 //   机器人 B:登 zone_b → 同上;
 //   主流程:断言 A/B 的 gate 地址不同(落在不同 zone 的证据)、battle_id 相同、
 //           双方回合数 ≥ 1。
@@ -53,8 +53,9 @@ const (
 // crossZoneBattleConfigId 是 1V1 JoinQueue 携带的 battle_config_id。
 //
 // 合法性依据(禁止只凭 PVE 冒烟的习惯照抄):
-//   - go/match joinqueuelogic.go 对 MATCH_MODE_1V1 只取 required=2,不查
-//     battle_config_id;gather.go 原样透传给 CreateBattleRequest.battle_config_id;
+//   - go/match joinqueuelogic.go 的入口白名单:(模式, battle_config_id) 必须是 PlayMode 表里开放的行,
+//     否则回 kMatchModeNotOpen;表里开放了 (MATCH_MODE_1V1, 1)。成局后原样透传给
+//     CreateBattleRequest.battle_config_id;
 //   - cpp/libs/services/battle/system/turn_battle_engine.cpp Initialize:
 //     FindDungeon(battle_config_id) 查不到只是回落缺省 30 回合(不报错),
 //     InitMonsters 仅在 PVE 模式执行 —— 所以 PVP 下任何值都不会让
@@ -244,7 +245,7 @@ func runCrossZoneMatchSmoke(cfg *config.Config) {
 }
 
 // runCrossZoneFighter 是一侧参战方的完整流程:
-// JoinQueue(mode) → 等 NotifyBattleStart → 直连 → 直连上 SetAutoBattle → 等 NotifyBattleEnd。
+// 地域探测 → JoinQueue(mode) → 等 NotifyBattleStart → 直连 → 直连上 SetAutoBattle → 等 NotifyBattleEnd。
 // side 只用于日志与失败步骤名("A"/"B")。
 func runCrossZoneFighter(side string, bot *battleSmokeBot, zone uint32, mode match.MatchMode,
 	stats *metrics.Stats,
@@ -253,6 +254,11 @@ func runCrossZoneFighter(side string, bot *battleSmokeBot, zone uint32, mode mat
 	zap.L().Info("[cross-zone] step 2: join queue",
 		zap.String("side", side), zap.String("account", bot.account),
 		zap.Uint32("zone", zone), zap.String("mode", mode.String()))
+
+	planId, err := ensureNetworkProbe(bot.gc, stats, bot.account)
+	if err != nil {
+		return crossZoneFighterResult{step: stepPrefix + "-network-probe", err: err}
+	}
 
 	// 开战预算从发 JoinQueue 起算,回包与 NotifyBattleStart 推送共用(与迁移前同口径);
 	// battleSmokeJoinQueue 只让拒绝立即失败,受理后照旧等开战推送(1V1 要等对侧也入队才凑成对局)。
@@ -264,6 +270,8 @@ func runCrossZoneFighter(side string, bot *battleSmokeBot, zone uint32, mode mat
 		Mode:           mode,
 		BattleConfigId: crossZoneBattleConfigId,
 		ZoneId:         zone,
+		RequestId:      chatSmokeRequestId(),
+		NetworkPlanId:  planId,
 	}, battleSmokeStartTimeout); err != nil {
 		startCancel()
 		return crossZoneFighterResult{step: stepPrefix + "-join-queue", err: err}

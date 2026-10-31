@@ -33,9 +33,15 @@ func TestBuildListingFilter(t *testing.T) {
 		},
 		{
 			name:     "寄售中含 LOCKED + 分区 + 子类",
-			q:        ListingQuery{Tab: tradepb.ListingTab_LISTING_TAB_ON_SALE, Category: weapon, Subcategory: 2, MarketZone: 7, NowMs: nowMs},
-			wantSQL:  " WHERE `status` IN (?, ?) AND `notice_end_ms` <= ? AND `sale_end_ms` > ? AND `market_zone` = ? AND `category` = ? AND `subcategory` = ?",
+			q:        ListingQuery{Tab: tradepb.ListingTab_LISTING_TAB_ON_SALE, Category: weapon, Subcategory: 2, MarketZones: []uint32{7}, NowMs: nowMs},
+			wantSQL:  " WHERE `status` IN (?, ?) AND `notice_end_ms` <= ? AND `sale_end_ms` > ? AND `market_zone` IN (?) AND `category` = ? AND `subcategory` = ?",
 			wantArgs: []any{listed, locked, nowMs, nowMs, uint32(7), int32(weapon), uint32(2)},
+		},
+		{
+			name:     "合服之后一个分区对应多个原始区",
+			q:        ListingQuery{Tab: tradepb.ListingTab_LISTING_TAB_PUBLIC_NOTICE, Category: weapon, MarketZones: []uint32{4, 5, 6}, NowMs: nowMs},
+			wantSQL:  " WHERE `status` = ? AND `notice_end_ms` > ? AND `market_zone` IN (?,?,?) AND `category` = ?",
+			wantArgs: []any{listed, nowMs, uint32(4), uint32(5), uint32(6), int32(weapon)},
 		},
 		{
 			name:     "非数字搜索只按标题",

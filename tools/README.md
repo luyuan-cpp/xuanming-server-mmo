@@ -9,7 +9,7 @@
 | [`proto_generator/`](proto_generator/) | Go | 协议生成器 proto-gen:从 `proto/` 生成 C++、Go、机器人、客户端代码 |
 | [`data_table_exporter/`](data_table_exporter/) | Python | 导表器:从 `data/` 生成表数据与各语言的查表代码 |
 | [`scripts/`](scripts/) | PowerShell、Shell、Python | 工程脚本:启动、构建、部署、发布、压测 |
-| `merge_zone/` | Go | 合服与玩家搬库工具 |
+| `merge_zone/` | Go | 不停服合服工具:写、删、查 `zone_merged_into` 映射(手册 [`docs/ops/merge-zone-runbook.md`](../docs/ops/merge-zone-runbook.md)) |
 | `data_consistency_check/` | Go | 跨区数据交叉引用巡检 |
 | `navmesh_baker/` | C++ / Python | 场景导航烘焙(Recast);`sync_current_maps.py` 从客户端新地图合同同步正式网格/源表并支持 `--verify` |
 | `battle_art_gen/` | Go | 战斗美术素材的程序化生成 |

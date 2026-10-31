@@ -179,6 +179,10 @@ func main() {
 	// 默认开;只有领导者真正调度。依赖上面发布的分线目录,必须排在选主接线之后。
 	logic.StartMysteryMerchantScheduler(ctx, svcCtx)
 
+	// 成员集合对账(docs/design/redis-player-store-cluster.md §5.10):摘掉崩溃留下、location 不再指向这里的成员。
+	// 默认开;只有领导者真正对账,必须排在选主接线之后。
+	logic.StartSceneMemberReconciler(ctx, svcCtx)
+
 	// RPC 级热关停(shared/killswitch):线上某个方法把依赖打爆时,往 etcd 写一个
 	// key 就能秒级把它短路掉,不必走一遍构建-发布-滚动更新。
 	//

@@ -28,6 +28,10 @@ const (
 	// 它停摆的表现是「到点了商人不出现」,已经排好的那一轮不受影响。
 	SafePointMysteryMerchant = "scene_manager.mystery_merchant"
 
+	// SafePointSceneMemberReconcile 是成员集合与 location 的周期对账。
+	// 它停摆的表现是崩溃留下的残留成员摘不掉:实例不销毁、选线躲着它。
+	SafePointSceneMemberReconcile = "scene_manager.scene_member_reconcile"
+
 	// SafePointAgonesReconcile 是 Agones rooms 计数与 Redis 映射的周期比对。
 	SafePointAgonesReconcile = "scene_manager.agones_reconcile"
 

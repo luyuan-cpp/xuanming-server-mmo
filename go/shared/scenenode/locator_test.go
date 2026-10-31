@@ -74,8 +74,8 @@ func TestResolveNotOnline(t *testing.T) {
 	if !IsNoHolder(err) {
 		t.Fatal("不在线属于「没人持有」一族")
 	}
-	if reader.gotKey != "player:42:location" {
-		t.Fatalf("读的键 = %q, want player:42:location", reader.gotKey)
+	if reader.gotKey != "player:{42}:location" {
+		t.Fatalf("读的键 = %q, want player:{42}:location", reader.gotKey)
 	}
 	if reader.callCnt != 1 {
 		t.Fatalf("一次 Resolve 应当只读一次 Redis,实得 %d", reader.callCnt)

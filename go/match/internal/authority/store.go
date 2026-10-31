@@ -19,6 +19,7 @@ import (
 	battlepb "proto/battle"
 	pb "proto/match"
 	"schemamigrate"
+	"shared/placement"
 	"shared/roleidentity"
 )
 
@@ -34,6 +35,8 @@ type Store struct {
 	// catalog 与 schedule 由 ConfigureMatchCatalog 启动时装配，之后只读（见 match_rules.go）。
 	catalog  *catalog.Catalog
 	schedule scope.Schedule
+	// zones 是合服映射缓存，BindMergedZones 启动时写一次，之后只读（见 merged_zones.go）。
+	zones *placement.MergedZoneCache
 }
 
 const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,preferred_region,owner_account,owner_revision"

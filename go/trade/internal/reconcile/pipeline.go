@@ -126,10 +126,8 @@ type Deps struct {
 	// Now 注入时钟,单测可控;nil 时用 time.Now。
 	Now func() time.Time
 	// Ledger 读玩家已落盘的资产账本(生产是 assetop.DataServiceLedger):在线 / 离线终结和自动放弃都靠它。
-	// RequireSQLCommit 打开时必填,否则 New 拒绝构造(Loop.CheckWiring)。
+	// 必填,缺了或读不了已提交账本时 New 拒绝构造(Loop.CheckWiring)。
 	Ledger assetop.LedgerReader
-	// RequireSQLCommit 原样进 assetop.LoopConfig。生产恒 true(svc.newAssetChannel),false 只给单测。
-	RequireSQLCommit bool
 	// Recovery 是落地恢复的循环参数(停放档 / 自动放弃 / 日对账);零值 = 全部关闭。
 	Recovery Recovery
 }
@@ -205,9 +203,7 @@ func New(d Deps) (*Pipeline, error) {
 	if now == nil {
 		now = time.Now
 	}
-	cfg := loopConfig(d.Recovery)
-	cfg.RequireSQLCommit = d.RequireSQLCommit
-	loop, err := assetop.NewLoop(cfg, d.Ops, d.Caller, d.Metrics, now)
+	loop, err := assetop.NewLoop(loopConfig(d.Recovery), d.Ops, d.Caller, d.Metrics, now)
 	if err != nil {
 		return nil, fmt.Errorf("trade: 资产重投循环参数非法: %w", err)
 	}
@@ -220,7 +216,7 @@ func New(d Deps) (*Pipeline, error) {
 	if d.Ledger != nil {
 		loop.Ledger = d.Ledger
 	}
-	// 开关打开却没有能读 SQL 证据的 Ledger:每笔终结都只能停在 AwaitDurable,必须在构造时拒绝。
+	// 没有能读已提交账本的 Ledger:每笔终结都只能停在 AwaitDurable,必须在构造时拒绝。
 	if err := loop.CheckWiring(); err != nil {
 		return nil, fmt.Errorf("trade: %w", err)
 	}
@@ -269,10 +265,9 @@ func (p *Pipeline) Run(ctx context.Context) {
 		return
 	}
 	logx.Infof("[trade] Asset redelivery loop started: interval=%v batch=%d workers=%d lease=%v "+
-		"offline_after_attempts=%d offline_backoff=%v abandon_after=%v audit_interval=%v ledger=%t require_sql_commit=%t",
+		"offline_after_attempts=%d offline_backoff=%v abandon_after=%v audit_interval=%v",
 		loopInterval, loopBatch, loopWorkers, loopLease,
-		p.recovery.OfflineAfterAttempts, p.recovery.OfflineBackoff, p.recovery.AbandonAfter, p.recovery.AuditInterval,
-		p.loop.Ledger != nil, p.loop.RequireSQLCommit())
+		p.recovery.OfflineAfterAttempts, p.recovery.OfflineBackoff, p.recovery.AbandonAfter, p.recovery.AuditInterval)
 	p.loop.Run(ctx)
 	logx.Info("[trade] Asset redelivery loop stopped")
 }
@@ -299,7 +294,7 @@ func (p *Pipeline) MaintenanceEnabled() bool {
 //
 // **只该在一个副本上跑**:svc 用 shared/leader 选主,当选时以领导权的 ctx 调用、卸任时取消
 // (设计 §6.2;多副本同时跑不会出错,只是按类 gauge 有多份、候选扫描重复)。
-// 自动放弃另需 Deps.Ledger 挂上,缺了 assetop 只打一次 INFO、不运行(fail-closed)。
+// 自动放弃另需 Deps.Ledger 能读 player_store(StoreLedgerReader),读不了时 assetop 只打一次 INFO、不运行(fail-closed)。
 // 空接收者直接返回。
 func (p *Pipeline) RunMaintenance(ctx context.Context) {
 	if p == nil {

@@ -16,7 +16,7 @@ import (
 //
 // 帮会按 zone 隔离(建帮落哪个区、能看见 / 加入哪些帮、看哪张榜),而客户端请求里的
 // zone_id 是玩家自己选的,不能当依据。唯一真源是 data_service:建角时登记,读取时已解析到最终区
-// (别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1),公会行由合服的公会合并任务改到目标区,两边一致。
+// (docs/design/player-data-tidb-scaling-plan.md §7.1)。公会行记的是建帮时的原始区,比较时由 GuildRepo.SameZone 解析。
 //
 // 返回 (0, nil) 表示映射里没有这名玩家(数据状态);err 非 nil 表示查询失败(故障)。
 type HomeZoneLookup interface {

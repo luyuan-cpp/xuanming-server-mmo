@@ -26,9 +26,11 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	redv9 "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 
@@ -37,6 +39,7 @@ import (
 	pb "proto/friend"
 	plpb "proto/player_locator"
 	"shared/kafkautil"
+	"shared/redisslot"
 )
 
 // pushTimeout 覆盖"读会话 + 组命令 + 写 Kafka"这一整段。
@@ -51,12 +54,10 @@ const pushTimeout = 1500 * time.Millisecond
 // playerSessionKey 是 player_locator 维护的会话键(值 = proto PlayerSession)。
 //
 // ⚠ 跨运行时契约 key(契约 §4):键名是 login / player_locator / gate / friend 几方的共同
-// 约定,**只能经 SharedRedis 读**,而且这里不许加 friend 自己的 hash tag 或版本前缀 ——
-// 改了键名就读不到别人写的值,而且全程零报错(GET 未命中在业务上长得像"玩家离线")。
-// data/session_reader.go 里有同一个键的批量读法;两处刻意各写一份而不抽公共常量,
-// 是因为抽到 shared/ 需要新增共享抽象(F1 §0 第 7 条禁止),代价是**改一处必须改两处**。
+// 约定,**只能经 PlayerRedis 读**,唯一构造点在 shared/redisslot。改了键名就读不到别人写的值,
+// 而且全程零报错(GET 未命中在业务上长得像"玩家离线")。
 func playerSessionKey(playerID uint64) string {
-	return fmt.Sprintf("player:session:%d", playerID)
+	return redisslot.SessionKey(playerID)
 }
 
 // pushReasonLabel 把 proto 枚举映射成 metrics 的 reason label。
@@ -165,14 +166,12 @@ func (l *FriendLogic) pushFriendEvent(ctx context.Context, toPlayerID uint64, re
 // 解不开只可能是键被别的东西占用或 proto 不兼容,把它记成 offline 会让一次协议事故
 // 表现为"全服都离线"且零异常指标(metrics 里 offline 与 error 分开就是为了这个)。
 func (l *FriendLogic) loadPlayerSession(ctx context.Context, playerID uint64) (*plpb.PlayerSession, error) {
-	// GetCtx 吞 redis.Nil 并返回空串(go-zero core/stores/redis 的语义),
-	// 所以"键不存在"必须靠空串判,不能靠 err != nil。
-	raw, err := l.deps.SvcCtx.SharedRedis.GetCtx(ctx, playerSessionKey(playerID))
+	raw, err := l.deps.SvcCtx.PlayerRedis.Get(ctx, playerSessionKey(playerID)).Result()
+	if errors.Is(err, redv9.Nil) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get player session %d: %w", playerID, err)
-	}
-	if raw == "" {
-		return nil, nil
 	}
 	sess := &plpb.PlayerSession{}
 	if err := proto.Unmarshal([]byte(raw), sess); err != nil {

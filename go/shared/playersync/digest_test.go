@@ -2,7 +2,7 @@ package playersync
 
 // digest_test.go —— 摘要契约的回归(docs/design/landing-recovery-sync-digest.md §3)。
 //
-// BumpScript 在 miniredis 上真实执行(go-zero 与 go-redis 两个适配器各跑一遍):起种、递增、续期、
+// BumpScript 在 miniredis 上真实执行(经 go-redis 适配器):起种、递增、续期、
 // 重建后代次必变,这些是客户端「只拉变了的域」正确性的全部前提(L-2、L-3)。
 // 「不发命令」「失败计数」这类调用面行为用记录型假 Evaler 断言,不依赖 miniredis 的命令计数口径。
 // 时钟一律用 miniredis.SetTime 固定,不读 Go 墙钟(AGENTS §11.4)。
@@ -22,7 +22,6 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	goredis "github.com/redis/go-redis/v9"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 
 	scenepb "proto/scene"
 )
@@ -70,15 +69,12 @@ func (r *recordingEvaler) taken() []evalCall {
 	return out
 }
 
-// ── miniredis 上的两个真适配器 ─────────────────────────────────
+// ── miniredis 上的真适配器 ─────────────────────────────────
 
 // forEachAdapter 为每个适配器起一个独立的 miniredis 跑同一段用例。
 func forEachAdapter(t *testing.T, run func(t *testing.T, mr *miniredis.Miniredis, b *Bumper)) {
 	t.Helper()
 	builders := map[string]func(t *testing.T, mr *miniredis.Miniredis) Evaler{
-		"go-zero": func(_ *testing.T, mr *miniredis.Miniredis) Evaler {
-			return NewGoZeroEvaler(gzredis.MustNewRedis(gzredis.RedisConf{Host: mr.Addr(), Type: "node"}))
-		},
 		"go-redis": func(t *testing.T, mr *miniredis.Miniredis) Evaler {
 			c := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
 			t.Cleanup(func() { _ = c.Close() })
@@ -110,10 +106,10 @@ func requireTTL(t *testing.T, mr *miniredis.Miniredis, key string) {
 }
 
 func TestKey(t *testing.T) {
-	if got := Key(42); got != "player:42:sync_digest" {
+	if got := Key(42); got != "player:{42}:sync_digest" {
 		t.Fatalf("Key(42) = %q", got)
 	}
-	if got := Key(18446744073709551615); got != "player:18446744073709551615:sync_digest" {
+	if got := Key(18446744073709551615); got != "player:{18446744073709551615}:sync_digest" {
 		t.Fatalf("Key(max uint64) = %q:player_id 是 uint64,不能按有符号格式化", got)
 	}
 }
@@ -251,7 +247,7 @@ func TestBumpScriptArguments(t *testing.T) {
 	if c.script != BumpScript {
 		t.Fatalf("脚本不是 BumpScript")
 	}
-	if len(c.keys) != 1 || c.keys[0] != "player:5:sync_digest" {
+	if len(c.keys) != 1 || c.keys[0] != "player:{5}:sync_digest" {
 		t.Fatalf("keys = %v", c.keys)
 	}
 	want := []string{"2592000", field(domainFriendRequest), field(domainFriendList)}
@@ -317,10 +313,10 @@ func TestNilBumperIsNoop(t *testing.T) {
 	if NewBumper(nil, "x") != nil {
 		t.Fatalf("NewBumper(nil) 应返回 nil")
 	}
-	if NewGoZeroEvaler(nil) != nil || NewGoRedisEvaler(nil) != nil {
+	if NewGoRedisEvaler(nil) != nil {
 		t.Fatalf("nil 句柄的适配器应返回 nil Evaler")
 	}
-	if NewBumper(NewGoZeroEvaler(nil), "x") != nil {
+	if NewBumper(NewGoRedisEvaler(nil), "x") != nil {
 		t.Fatalf("没有核心库句柄时 Bumper 应为 nil")
 	}
 }

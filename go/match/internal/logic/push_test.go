@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"match/internal/metrics"
+	"match/internal/playercontract"
 
 	plpb "proto/player_locator"
 
@@ -22,7 +23,7 @@ func TestPushToPlayerRecordsKafkaPushMetric(t *testing.T) {
 	require.ErrorIs(t, err, errPlayerOffline)
 	require.Equal(t, errBefore+1, metrics.KafkaPushValue("error"))
 
-	require.NoError(t, mr.Set(playerSessionKey(32), "\x0a\x05ab")) // 截断的 length-delimited 字段
+	require.NoError(t, mr.Set(playercontract.SessionKey(32), "\x0a\x05ab")) // 截断的 length-delimited 字段
 	err = pushToPlayer(svcCtx, 32, 1, msg)
 	require.Error(t, err)
 	require.NotErrorIs(t, err, errPlayerOffline)

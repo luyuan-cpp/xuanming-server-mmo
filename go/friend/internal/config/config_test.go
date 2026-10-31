@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"friend/internal/data"
+	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/service"
@@ -25,11 +26,11 @@ func loadEtcFixture(c *Config) error {
 		return err
 	}
 	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	if !strings.Contains(text, "GlobalLoginSessions: false") || !strings.Contains(text, "LoginRedis:\n  Host: \"\"") {
+	if !strings.Contains(text, "GlobalLoginSessions: false") || !strings.Contains(text, "LoginRedis:\n  Addrs: []") {
 		return fmt.Errorf("本地原登录态占位形状已变化")
 	}
 	text = strings.Replace(text, "GlobalLoginSessions: false", "GlobalLoginSessions: true", 1)
-	text = strings.Replace(text, "LoginRedis:\n  Host: \"\"", "LoginRedis:\n  Host: \"127.0.0.1:6379\"", 1)
+	text = strings.Replace(text, "LoginRedis:\n  Addrs: []", "LoginRedis:\n  Addrs: [127.0.0.1:6379]", 1)
 	return conf.LoadFromYamlBytes([]byte(text), c)
 }
 
@@ -40,8 +41,8 @@ func TestOriginalLoginConfigMustBeExplicit(t *testing.T) {
 	}
 	for _, mutate := range []func(*Config){
 		func(c *Config) { c.AccountRoleSchema = "" }, func(c *Config) { c.AccountRoleSchema = "bad.schema" },
-		func(c *Config) { c.GlobalLoginSessions = false }, func(c *Config) { c.LoginRedis.Host = "" },
-		func(c *Config) { c.LoginRedis.DB = -1 }, func(c *Config) { c.LoginRedis.PoolSize = 0 },
+		func(c *Config) { c.GlobalLoginSessions = false }, func(c *Config) { c.LoginRedis.Addrs = nil },
+		func(c *Config) { c.LoginRedis.DB = -1 }, func(c *Config) { c.LoginRedis.PoolSizePerNode = 0 },
 	} {
 		c := validConfig()
 		mutate(&c)
@@ -252,7 +253,7 @@ func TestEtcYamlZoneRewriteAnchors(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^Etcd:\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+Key:\s*""`).MatchString(text) {
 		t.Error("Etcd 段必须显式写 `Key: \"\"`")
 	}
-	// go-zero 的共享 RedisConf 没有 DB 字段；独立的 LoginRedisConf 则必须允许
+	// go-zero 的共享 RedisConf 没有 DB 字段；独立的 LoginRedis 段则必须允许
 	// 显式选择原登录态的 DB。禁止未知字段只作用于共享 Redis 段，不能误伤登录态。
 	if sharedRedisHasDBKey(text) {
 		t.Error("共享 Redis 段不应出现 DB: 键(契约 key 由多运行时共写,DB 号必须全仓一致 = 默认 0)")
@@ -314,7 +315,7 @@ func TestSharedRedisDBAnchorScope(t *testing.T) {
 func validConfig() Config {
 	c := Config{
 		AccountRoleSchema: "testdb", GlobalLoginSessions: true,
-		LoginRedis:        LoginRedisConf{Host: "127.0.0.1:6379", DB: 3, PoolSize: 8},
+		LoginRedis:        playerredis.LoginReaderConfig{Addrs: []string{"127.0.0.1:6379"}, DB: 3, PoolSizePerNode: 8},
 		Backend:           "tidb",
 		ZoneId:            1,
 		LeaseTTL:          60,
@@ -542,5 +543,35 @@ func TestListenHostPort(t *testing.T) {
 			t.Errorf("ListenHostPort(%q) = (%q, %d), want (%q, %d)",
 				tc.listenOn, host, port, tc.wantHost, tc.wantPort)
 		}
+	}
+}
+
+// 没写 PlayerRedis.Addrs:玩家域指向 Redis 段那一个实例;写了就完全按它来;Cluster 没写种子拒启。
+func TestEffectivePlayerRedis(t *testing.T) {
+	c := validConfig()
+	c.Redis.Pass = "shared-secret"
+	got := c.EffectivePlayerRedis()
+	if len(got.Addrs) != 1 || got.Addrs[0] != c.Redis.Host || got.Cluster || got.Password != "shared-secret" {
+		t.Fatalf("没写 Addrs 应指向 Redis 段: %+v", got)
+	}
+	if got.PoolSizePerNode != playerRedisFallbackPoolSize {
+		t.Errorf("PoolSizePerNode = %d, want %d", got.PoolSizePerNode, playerRedisFallbackPoolSize)
+	}
+	if err := got.Validate(); err != nil {
+		t.Errorf("生效配置应合法: %v", err)
+	}
+
+	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true}
+	got = c.EffectivePlayerRedis()
+	if len(got.Addrs) != 2 || !got.Cluster || got.Password != "" {
+		t.Fatalf("写了 Addrs 应完全按它来: %+v", got)
+	}
+	if err := c.Validate(); err != nil {
+		t.Errorf("集群配置应通过校验: %v", err)
+	}
+
+	c.PlayerRedis = playerredis.Config{Cluster: true}
+	if err := c.Validate(); err == nil {
+		t.Error("Cluster=true 没写种子地址应拒绝")
 	}
 }

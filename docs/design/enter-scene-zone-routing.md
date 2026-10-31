@@ -57,7 +57,7 @@ SceneManager 正常启动已要求 `DataServiceRpc` 和角色目录签名能力�
 
 ### 3.2 请求幂等与会话身份
 
-非空 `request_id` 使用 `enter_scene:dedup:<player_id>:<request_id>`，TTL 为 60 秒。确定性请求指纹保留 `owner_revision`，排除每次发送的 `correlation_id` 和每条登录链的 `login_generation`。同指纹请求仍在执行时回 15，复用 ID 却改变内容时回 16；只缓存完整成功响应，重放不补发 Kafka 路由。错误释放本次 pending，完成和释放均按精确原值 CAS。
+非空 `request_id` 使用 `enter_scene:dedup:{<player_id>}:<request_id>`，TTL 为 60 秒。确定性请求指纹保留 `owner_revision`，排除每次发送的 `correlation_id` 和每条登录链的 `login_generation`。同指纹请求仍在执行时回 15，复用 ID 却改变内容时回 16；只缓存完整成功响应，重放不补发 Kafka 路由。错误释放本次 pending，完成和释放均按精确原值 CAS。
 
 读取位置后，再按 `(session_id, login_generation)` 裁决会话：陈旧或冲突的跨会话请求回 25；同有效会话保留最大代次。兼容无代次请求的分支仍存在，但不能降低已有的非零身份。
 
@@ -165,22 +165,22 @@ SceneManager 正常启动已要求 `DataServiceRpc` 和角色目录签名能力�
 
 ## 7. 当前 Redis 键与部署前提
 
-下表的尖括号是占位符，实际键例如 `player:42:location`，不带字面花括号。这组位置与归属键尚未整体改成 Redis Cluster 的同槽键。
+下表的尖括号是占位符，花括号是字面的 hash tag，实际键例如 `player:{42}:location`。同一玩家的键同槽，场景、节点这类控制域键不带 tag（[玩家态 Redis 集群化](redis-player-store-cluster.md) §5.2）。
 
 | 键 | 当前内容与约束 |
 |----|----------------|
 | `scene:<id>:zone` | 场景实例所属区；世界场景与按需场景创建时写入，用于反查 |
 | `world_channels:zone:<zone>:<conf>` | 按运行区和地图配置维护的世界频道集合 |
-| `player:<id>:location` | `PlayerLocation`：scene_id、node_id、update_time、zone_id、owner_epoch、pending_scene_conf_id、rollback_receipt、session_id、login_generation |
-| `player:<id>:owner_epoch` | 持有归属代次；不随离场删除，不能通过删键重置 |
-| `player:<id>:handoff` | `<epoch>:<saved_at_ms>`；源 Scene 条件写入，特定失败回滚可由 SceneManager 转写，TTL 300 秒 |
-| `player:<id>:location_revision` | SQL 角色修订与位置原文摘要的绑定标签 |
-| `player:<id>:location_revision_floor` | 已观察角色修订下界，不是授权真源 |
-| `player:<id>:leave_release_wait` | 离场释放等待的诊断记录，不因到期而授予删除权限 |
-| `enter_scene:dedup:<id>:<request_id>` | 请求执行中与成功结果的幂等记录，TTL 60 秒 |
+| `player:{<id>}:location` | `PlayerLocation`：scene_id、node_id、update_time、zone_id、owner_epoch、pending_scene_conf_id、rollback_receipt、session_id、login_generation |
+| `player:{<id>}:owner_epoch` | 持有归属代次；不随离场删除，不能通过删键重置 |
+| `player:{<id>}:handoff` | `<epoch>:<saved_at_ms>`；源 Scene 条件写入，特定失败回滚可由 SceneManager 转写，TTL 300 秒 |
+| `player:{<id>}:location_revision` | SQL 角色修订与位置原文摘要的绑定标签 |
+| `player:{<id>}:location_revision_floor` | 已观察角色修订下界，不是授权真源 |
+| `player:{<id>}:leave_release_wait` | 离场释放等待的诊断记录，不因到期而授予删除权限 |
+| `enter_scene:dedup:{<id>}:<request_id>` | 请求执行中与成功结果的幂等记录，TTL 60 秒 |
 | `node:zone:<zone>:<node>:death_at` | 节点注销后的再入屏障证据之一 |
 
-位置、归属、修订及相关多键 Lua 当前仍要求共享实例内的原子操作。服务主链尚未接入新的玩家域 Cluster，不能因 `shared/playerstore` 或 C++ 集群路由基础代码已经存在，就声称本流程已支持分片部署。`PlayerLocation` 的源契约见 [storage.proto](../../proto/scene_manager/storage.proto)，请求契约见 [scene_manager_service.proto](../../proto/scene_manager/scene_manager_service.proto)。
+位置、归属、修订及相关多键 Lua 当前仍要求共享实例内的原子操作。服务主链尚未接入新的玩家域 Cluster，不能因 `shared/playerredis` 或 C++ 集群路由基础代码已经存在，就声称本流程已支持分片部署。`PlayerLocation` 的源契约见 [storage.proto](../../proto/scene_manager/storage.proto)，请求契约见 [scene_manager_service.proto](../../proto/scene_manager/scene_manager_service.proto)。
 
 ## 8. 当前合服边界
 
@@ -201,7 +201,7 @@ SceneManager 正常启动已要求 `DataServiceRpc` 和角色目录签名能力�
 | 项目 | 核实时状态 | 尚需完成的接缝 |
 |------|------------|----------------|
 | epoch 墙钟地板与 `WAITAOF` | **部分实现**：`OwnerEpochMinter` 执行器、配置、专用客户端和启动探针已有源码并装配；落点业务尚未调用它 | `placePlayerLocation` 仍 `observedEpoch+1` 后直接 `Redis.Eval`，Lua 仍 `INCR`；不能据 `owner_epoch.go` 文首的先行注释宣称主链已具备墙钟地板或铸造持久确认 |
-| 玩家态 Redis Cluster | **分批实施**：`shared/redisslot`、`shared/playerstore` 等基础代码已存在 | 位置、handoff、修订等键改名、服务句柄、Lua 原子范围和部署验收尚未全链接通；当前运行前提仍见 §7 |
+| 玩家态 Redis Cluster | **分批实施**：`shared/redisslot`、`shared/playerredis` 等基础代码已存在 | 位置、handoff、修订等键改名、服务句柄、Lua 原子范围和部署验收尚未全链接通；当前运行前提仍见 §7 |
 | 撤销 Redis 映射副本、归属与落点直读 TiDB | **2026-10-23 方向，待落地** | 当前仍有可信副本读、SQL 回源、Redis 发布、就绪标记和对账路径；不能将选定方向写成现状 |
 | 全部释放标记统一双 SQL ACK 保障 | **当前存在覆盖差异** | 主动旅行已有双 ACK 门；退出及凭证补写路径见 §5.1，不能由前者推定后者已覆盖 |
 | 全部内部进场请求统一归属 / 合服门禁 | **当前存在覆盖差异** | 普通落点的无 `GateId` 分支见 §4，尚不能声称统一覆盖 |

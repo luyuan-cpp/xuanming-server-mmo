@@ -52,7 +52,7 @@ func TestOriginalIdentityPreservesGateRevisionAndLoginAccount(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.True(t, called)
-	require.Equal(t, "login_session:原gate:8", reader.key)
+	require.Equal(t, "login_session:{原gate:8}", reader.key)
 }
 
 func TestOriginalIdentityMissingLegacyOrStaleNeverReachesBusiness(t *testing.T) {

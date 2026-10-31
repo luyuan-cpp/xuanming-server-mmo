@@ -237,7 +237,7 @@ func TestWorldChannel_DrainReleasesRoom(t *testing.T) {
 
 	// 人走干净后下一拍收尾。
 	sc.Redis.Set(sceneNodeKey(102), "10")
-	sc.Redis.Set("instance:102:player_count", "0")
+	seedSceneMembersVia(sc, 102, 0)
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 
 	assert.EqualValues(t, 1, alloc.roomsOf("gs-a"), "排空销毁的频道必须把名额还回去")

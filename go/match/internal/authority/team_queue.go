@@ -104,7 +104,8 @@ func (s *Store) replaceTeamLaunchRegions(ctx context.Context, tx *sql.Tx, launch
 	if err = s.requireTeamHomeGroupTx(ctx, tx, group); err != nil {
 		return err
 	}
-	home, err := TeamUnitHomeZone(group)
+	// 投影按当前映射算，每次维护重写一遍，合服、撤销之后最多落后一轮维护。
+	home, err := TeamUnitHomeZone(group, s.MergedZones())
 	if err != nil {
 		return err
 	}

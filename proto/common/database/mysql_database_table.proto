@@ -4,7 +4,6 @@ option go_package = "common/database";
 import "proto/db/proto_option.proto";
 import "proto/common/base/user_accounts.proto";
 import "proto/common/component/asset_op_ledger_comp.proto";
-import "proto/common/component/battle_settlement_ledger_comp.proto";
 import "proto/common/component/player_inbox_ledger_comp.proto";
 import "proto/common/component/player_attribute_comp.proto";
 import "proto/common/component/player_mystery_merchant_comp.proto";
@@ -104,6 +103,8 @@ message player_centre_database
 message player_database
 {
   option (OptionIsPlayerDatabase) = true;
+  // 10 是合服标记,17 是旧战斗结算账本,18 / 19 是旧存盘围栏,都已删除。
+  reserved 10, 17, 18, 19;
   uint64 player_id = 1 [(OptionPersistGroup) = 0];
   Transform transform = 2 [(OptionPersistGroup) = 1];
   PlayerUint64Comp uint64_pb_component = 3 [(OptionPersistGroup) = 1];
@@ -117,14 +118,6 @@ message player_database
   // scene 每次真正写盘时重新打探针、不读回加载值,所以标 OptionPersistUncarried
   // (docs/design/mixed-version-persist-field-protection.md §3.2)。
   PlayerStressTestProbe stress_test_probe = 9 [(OptionPersistUncarried) = true, (OptionPersistGroup) = 4];
-  // Server-merge transient state (force_rename_required +
-  // post_merge_notice_seen_ms). Default-zero during normal play; stamped
-  // by tools/merge_zone/ during a maintenance-window merge and cleared
-  // on the first qualifying post-merge action. See player_comp.proto's
-  // PlayerMergeStateComp comment for the full contract.
-  // scene 的 PlayerDatabaseMessageFieldsMarshal 不处理本字段,整行写会把它清空,所以标 OptionPersistUncarried;
-  // 是否属于有意的「首次存盘清除合服标记」见 mixed-version-persist-field-protection.md §12。
-  PlayerMergeStateComp merge_state = 10 [(OptionPersistUncarried) = true, (OptionPersistGroup) = 4];
   // 属性加点(方案/已分配点/额外点/外部加成),设计文档 player-attribute-allocation.md
   PlayerAttributeComp attribute_component = 11 [(OptionPersistGroup) = 3];
   // 宝宝(宠物):实例列表 + 出战中的宝宝,设计文档 player-pet.md
@@ -144,18 +137,10 @@ message player_database
   // 必须与 currency / bag_component 同组同一次提交:账本与资产一起落盘、一起丢,
   // 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。
   PlayerAssetOpLedgerComp asset_op_ledger = 16 [(OptionPersistGroup) = 2];
-  // 回合制战斗结算幂等账本(§9.3)。与 asset_op_ledger 同一条不变量 I3:必须与
-  // currency / bag_component 同记录同一次落盘 —— 标记和它产生的资产要么一起在盘上,
-  // 要么一起没有,不允许"资产落了标记没落"(重复发奖)或"标记落了资产没落"(白丢奖励)。
-  BattleSettlementLedgerComp settlement_ledger = 17 [(OptionPersistGroup) = 2];
-  // 旧存盘路径的行内围栏,现在恒为 0(存盘的版本在 player_store 的写权行上)。
-  uint64 fence_owner_epoch = 18 [(OptionPersistGroup) = 0];
-  uint64 fence_save_seq = 19 [(OptionPersistGroup) = 0];
   // 玩家收件箱消费端账本(docs/design/player-inbox-service.md §4.4):每域「已按 seq 处理到哪」+ 最近 32 条结局。
   // 与 asset_op_ledger 同一条不变量 I3(收件箱侧记作 IB-3):必须与 currency / bag_component 同记录同一次落盘 ——
   // GM 处置的效果(封锁 / 欠款随 CurrencyComp 落盘)和它的账本要么一起在盘上,要么一起没有;
   // 否则「效果落了账本没落」会让不幂等的 AttachDebt 被重复执行,「账本落了效果没落」会把没生效的处置确认成已执行。
-  // 按加列纪律取 18/19 之后的下一个空闲号 20,声明在末尾、不留空洞。
   PlayerInboxLedgerComp inbox_ledger = 20 [(OptionPersistGroup) = 2];
   // 覆盖世代(docs/design/mixed-version-persist-field-protection.md §3.3):这份记录里该世代及以前定义的字段,值都是真实的。
   // 由 scene 存盘时盖章 max(本二进制世代, 加载世代);go/db 据此判定超前延后 / 倒退拒写(§6.2)。
@@ -196,9 +181,8 @@ message player_database_1
   uint64 player_id = 1;
   // 同 player_database.stress_test_probe:每次写盘重新打探针,标 OptionPersistUncarried。
   PlayerStressTestProbe stress_test_probe = 2 [(OptionPersistUncarried) = true];
-  // 同 player_database 的 18 / 19 号,现在恒为 0。
-  uint64 fence_owner_epoch = 3;
-  uint64 fence_save_seq = 4;
+  // 3 / 4 是旧存盘围栏,已删除。
+  reserved 3, 4;
   // 覆盖世代,语义同 player_database 的 21 号;两张表盖同一个值。下一个新字段从 6 起。
   uint32 persist_schema_gen = 5;
 }

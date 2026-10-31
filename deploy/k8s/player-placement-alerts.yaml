@@ -7,9 +7,9 @@
 #                                                          每一次真正发生的按需打开落点库(StoreOpen* 常量);打开失败后的冷却期
 #                                                          (缺省 10s)内复用上次的错误、不重复计数,所以速率是「每个冷却期最多一次」
 #
-# 选库本身的失败(没有落点记录、搬库冻结、映射 Redis 的副本不可信)与打不开库一样回 Unavailable,在 go/db 上不细分,
+# 选库本身的失败(读全局库 player_route 出错、行被冻结)与打不开库一样回 Unavailable,在 go/db 上不细分,
 # 都记 db_player_store_requests_total{result="unavailable"};原因看 go/db 日志 `[player_store] resolve storage of player`
-# (搬库冻结不打这一行)。这个计数目前没有告警规则(没有压测基线),只进看板与 stress_summarize。
+# (行被冻结不打这一行)。这个计数目前没有告警规则(没有压测基线),只进看板与 stress_summarize。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/player-placement-alerts.yaml
@@ -46,7 +46,7 @@ spec:
       interval: 30s
       rules:
         # 落点库名不在 db 的库名白名单里,也没被 Placement.AllowStoreFamilies 放行:落到这个库的玩家存盘和认领都回 Unavailable。
-        # 错的多半是配置(白名单 / AllowStoreFamilies=false)或指错的库(login 的 NewPlayerStorageId、搬库清单的目标库)。
+        # 错的多半是配置(白名单 / AllowStoreFamilies=false)或指错的库(login 的 NewPlayerStorageId)。
         - alert: DbPlacementStoreRejected
           expr: |
             sum by (namespace) (increase(db_placement_store_open_total{result="rejected"}[10m])) > 0
@@ -64,8 +64,7 @@ spec:
               过去 10 分钟约 {{ $value | printf "%.0f" }} 次按需打开落点库被拒(rejected,每个冷却期最多计一次)。落到这个库的玩家:
               存盘由 scene 退避重试,进度只在 scene 内存里(库能打开之前不要重启这些 scene,停机时没落定的玩家会丢掉最后一次提交之后的进度);认领重试 30 秒后进场失败。
               go/db 日志 `[placement] store rejected` 行给出 storage id 与当前白名单。核对:db 配置的库名白名单与 Placement.AllowStoreFamilies;
-              login 的 NewPlayerStorageId 是否指向一个 go/db 打不开的库(设计 §13 禁止项);搬库清单的目标库是否预建并加进白名单
-              (docs/ops/merge-zone-runbook.md §14.5)。修好配置并滚动 db 之后,scene 的重试自动落库。
+              login 的 NewPlayerStorageId 是否指向一个 go/db 打不开的库(设计 §13 禁止项)。修好配置并滚动 db 之后,scene 的重试自动落库。
             runbook_url: docs/design/player-storage-placement.md
 
         # 落点库打开失败(Ping 不通、schema 闸不过、库不存在 —— go/db 按需打开只 Ping + 只读 schema 闸,从不建库)。
@@ -86,6 +85,6 @@ spec:
             description: >-
               过去 10 分钟约 {{ $value | printf "%.0f" }} 次按需打开落点库失败(error,每个冷却期最多计一次),已持续 5 分钟。
               落到这个库的玩家:存盘由 scene 退避重试,进度只在 scene 内存里;认领重试 30 秒后进场失败。go/db 日志 `[placement] store open failed`
-              行给出 storage id 与错误:库不存在 = 没有预建(go/db 从不建库,按 docs/ops/merge-zone-runbook.md §14.5 预建);
+              行给出 storage id 与错误:库不存在 = 没有预建(go/db 从不建库);
               schema 闸不过 = 该库没跑迁移或版本落后;Ping 不通 = MySQL 实例 / 网络问题(落点库必须与 Database.Hosts 在同一实例或集群,设计 §13)。
             runbook_url: docs/design/player-storage-placement.md

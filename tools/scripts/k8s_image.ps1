@@ -130,7 +130,15 @@ param(
     [ValidateSet("auto", "none", "queue")]
     [string]$RedisSplit = "auto",
     [switch]$ConfirmRedisSplitSwitch,
-    [string]$RedisQueueMaxMemory = ""
+    [string]$RedisQueueMaxMemory = "",
+    # 玩家域 Redis Cluster,透传给 k8s_deploy.ps1 同名参数,语义见那边参数注释。主节点数与副本数 0 = 不透传,容量非空才透传。
+    # staging / prod 的 release-zone、release-all 必须给主节点数:scene 的 player_redis 由它决定。容量只对 release-all(不带 -SkipInfra)有意义。
+    [ValidateRange(0, 512)]
+    [int]$PlayerRedisMasters = 0,
+    [ValidateRange(0, 2)]
+    [int]$PlayerRedisReplicasPerMaster = 0,
+    [string]$PlayerRedisMaxMemory = "",
+    [string]$PlayerRedisStorage = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -455,6 +463,11 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($RedisSplit) -and $RedisSplit -ne 'auto') { $args.RedisSplit = $RedisSplit }
     if ($ConfirmRedisSplitSwitch) { $args.ConfirmRedisSplitSwitch = $true }
     if (-not [string]::IsNullOrWhiteSpace($RedisQueueMaxMemory)) { $args.RedisQueueMaxMemory = $RedisQueueMaxMemory }
+    # 玩家域 Redis Cluster:非 0 / 非空才传。
+    if ($PlayerRedisMasters -gt 0) { $args.PlayerRedisMasters = $PlayerRedisMasters }
+    if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }
+    if (-not [string]::IsNullOrWhiteSpace($PlayerRedisMaxMemory)) { $args.PlayerRedisMaxMemory = $PlayerRedisMaxMemory }
+    if (-not [string]::IsNullOrWhiteSpace($PlayerRedisStorage)) { $args.PlayerRedisStorage = $PlayerRedisStorage }
     # 同一口径留空不透传。本函数从不传 -GoSvcRegistry,k8s_deploy.ps1 因此不部署 login / scene_manager,
     # 这个值只进它的组合预检、不写进 ConfigMap;"不生效"的告警在脚本入口打(见 switch ($Command) 之前),这里只透传。
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }

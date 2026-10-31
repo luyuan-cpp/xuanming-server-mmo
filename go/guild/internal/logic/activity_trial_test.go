@@ -7,7 +7,7 @@ package logic
 //     那是 data/activity_repo_integration_test.go 的 I13–I23;这里只验 logic 传给仓储什么、拿到每种结果之后做什么。
 //   - fakeMatch:match 内部服务的替身,按脚本作答,并记下每次请求与当时的 ctx。
 //   - 两个 miniredis:一个当 guild 全局 Redis(邀请房间的 Lua 真跑在上面),一个当 PlayerLocatorRedis
-//     (会话、战斗锁、对局结果记录)。分开是为了能单独把其中一个关掉来注入故障。
+//     (会话、战斗锁)。分开是为了能单独把其中一个关掉来注入故障。
 //
 // 时间一律走注入的 trialTestClock(房间过期、周期键、结算的"现在"),不读墙钟;唯一与墙钟有关的是调 match 的预算,
 // 那几条用例用"没有截止 / 截止已过 / 预算上限小于下限"这类与机器快慢无关的输入(AGENTS.md §11.4)。
@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -331,14 +330,22 @@ const (
 	trialTestActivityID uint32 = 3
 )
 
-// trialResultKey 是 battle 写结果记录的键(跨语言契约:battle:activity_result:{battle_id})。在这里写成字面量,
-// logic 侧的销账若删错了键,用例会直接看到记录还在。
-func trialResultKey(battleID uint64) string {
-	return "battle:activity_result:" + strconv.FormatUint(battleID, 10)
+// fakeTrialResults 顶替 match 权威库的 SQL 终局(data.TrialResultRecords)。err 非 nil 时读取失败。
+type fakeTrialResults struct {
+	payloads map[uint64][]byte
+	err      error
+}
+
+func (f *fakeTrialResults) Load(_ context.Context, battleID uint64) ([]byte, bool, error) {
+	if f.err != nil {
+		return nil, false, f.err
+	}
+	payload, found := f.payloads[battleID]
+	return payload, found, nil
 }
 
 // trialFixture:帮会 9(zone 2)在缓存里;MySQL 是 noMembershipMySQL(活动视图的读全回空);
-// 历练的仓储、match、推送都是替身;两个 miniredis 分别当 guild 全局 Redis(房间)与 PlayerLocatorRedis(会话 / 锁 / 结果记录)。
+// 历练的仓储、match、结果来源、推送都是替身;两个 miniredis 分别当 guild 全局 Redis(房间)与 PlayerLocatorRedis(会话 / 锁)。
 type trialFixture struct {
 	l        *GuildLogic
 	deps     *ActivityDeps
@@ -348,6 +355,7 @@ type trialFixture struct {
 	clock    *trialTestClock
 	lobbies  *miniredis.Miniredis
 	locator  *miniredis.Miniredis
+	results  *fakeTrialResults
 }
 
 // newTrialFixture 建夹具。调用前先用 swapActivityTables 布好配表。mutate(可为 nil)在装配前改依赖,
@@ -372,8 +380,7 @@ func newTrialFixture(t *testing.T, g data.GuildData, mutate func(d *ActivityDeps
 	})
 	lobbyRepo, err := data.NewTrialLobbyRepo(lobbyRedis)
 	require.NoError(t, err)
-	results, err := data.NewTrialResultRecords(locatorRedis)
-	require.NoError(t, err)
+	results := &fakeTrialResults{payloads: map[uint64][]byte{}}
 	activityRepo, err := data.NewActivityRepo(repo)
 	require.NoError(t, err)
 
@@ -384,6 +391,7 @@ func newTrialFixture(t *testing.T, g data.GuildData, mutate func(d *ActivityDeps
 		clock:    &trialTestClock{now: activityTestNow},
 		lobbies:  lobbies,
 		locator:  locator,
+		results:  results,
 	}
 	deps := ActivityDeps{
 		Repo:        activityRepo,
@@ -436,16 +444,12 @@ func (f *trialFixture) respond(playerID, lobbyID uint64, accept bool) (*pb.Respo
 // lobbyCreated 报告是否真的建过房间(发号键只在建房时被 INCR)。
 func (f *trialFixture) lobbyCreated() bool { return f.lobbies.Exists("guild:trial:lobby:seq") }
 
-// putResult 按 battle 的写法落一条结果记录。
+// putResult 落一条 SQL 终局(巡检器的结果来源)。
 func (f *trialFixture) putResult(t *testing.T, ev *kafkapb.BattleResultEvent) {
 	t.Helper()
 	raw, err := proto.Marshal(ev)
 	require.NoError(t, err)
-	require.NoError(t, f.locator.Set(trialResultKey(ev.GetBattleId()), string(raw)))
-}
-
-func (f *trialFixture) hasResult(battleID uint64) bool {
-	return f.locator.Exists(trialResultKey(battleID))
+	f.results.payloads[ev.GetBattleId()] = raw
 }
 
 // activityPushes 返回已记录的 ACTIVITY_CHANGED 推送。
@@ -614,7 +618,7 @@ func TestTrialCandidates(t *testing.T) {
 
 // TestTrialClosedWhenAnyDependencyMissing:match / 房间 / 结果记录任一没接线,历练就是"未开放":
 // 两个写 RPC 回 kGuildActivityNotOpen 且不碰仓储与 match,活动页里历练强制 DISABLED。
-// 没有结果记录(= 结算后销不了账、巡检器兜不了底)也算缺依赖:没有结算就不许开战。
+// 没有结果记录(= 巡检器兜不了底)也算缺依赖:没有兜底就不许开战。
 func TestTrialClosedWhenAnyDependencyMissing(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -1242,7 +1246,7 @@ func TestMyTrialBattleIDFromLock(t *testing.T) {
 	settled.State = pb.GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_SETTLED
 	expired := started
 	expired.State = pb.GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_EXPIRED
-	const lockKey = "battle:lock:42"
+	const lockKey = "battle:lock:{42}"
 
 	cases := []struct {
 		name    string
@@ -1326,7 +1330,7 @@ func TestTrialPageShowsInviteAndOwed(t *testing.T) {
 // ── 结算 ──────────────────────────────────────────────────────
 
 // TestSettleSkipsEventsThatAreNotGuildTrials:没有活动上下文、kind=NONE、或是别的活动类型的结果与 guild 无关 ——
-// 不读不写、**不销账**(别的活动的结果记录不归 guild 删),未接线时也照样跳过(普通对局的结果占 topic 的绝大多数)。
+// 不读不写,未接线时也照样跳过(普通对局的结果占 topic 的绝大多数)。
 func TestSettleSkipsEventsThatAreNotGuildTrials(t *testing.T) {
 	useTrialTables(t, nil, nil)
 	f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
@@ -1339,7 +1343,6 @@ func TestSettleSkipsEventsThatAreNotGuildTrials(t *testing.T) {
 
 	for _, ev := range []*kafkapb.BattleResultEvent{plain, none, foreign, nil} {
 		if ev != nil {
-			f.putResult(t, ev)
 		}
 
 		outcome, err := f.l.SettleTrialResult(context.Background(), ev)
@@ -1347,7 +1350,6 @@ func TestSettleSkipsEventsThatAreNotGuildTrials(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, TrialOutcomeSkipped, outcome)
 		if ev != nil {
-			assert.True(t, f.hasResult(ev.GetBattleId()), "不是历练的结果记录不许删")
 		}
 	}
 	assert.Zero(t, f.store.settleCount())
@@ -1359,7 +1361,7 @@ func TestSettleSkipsEventsThatAreNotGuildTrials(t *testing.T) {
 }
 
 // TestSettleBadContextAcksWithoutTouchingRepo(06 §6.40 的 TestSettleFiltersEvents):是历练的结果但上下文残缺
-// 或对局模式不对 → BadContext,不调仓储;battle_id 非 0 时销账(重发多少次都一样,没有保留的意义)。
+// 或对局模式不对 → BadContext,不调仓储。
 func TestSettleBadContextAcksWithoutTouchingRepo(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -1377,7 +1379,6 @@ func TestSettleBadContextAcksWithoutTouchingRepo(t *testing.T) {
 			f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
 			ev := trialEvent(501, 42, 43)
 			tc.mutate(ev)
-			f.putResult(t, ev)
 
 			outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
@@ -1385,7 +1386,6 @@ func TestSettleBadContextAcksWithoutTouchingRepo(t *testing.T) {
 			assert.Equal(t, TrialOutcomeBadContext, outcome)
 			assert.Zero(t, f.store.settleCount(), "上下文不可用不调仓储")
 			assert.Empty(t, f.store.marked)
-			assert.False(t, f.hasResult(501), "battle_id 非 0 时销账")
 		})
 	}
 
@@ -1403,14 +1403,13 @@ func TestSettleBadContextAcksWithoutTouchingRepo(t *testing.T) {
 }
 
 // TestSettleWinPassesCandidatesAndAcks(06 §6.29):胜局把"己方 − 逃跑者"(含阵亡者,U2)交给仓储,带上开战时的
-// 周期键、对局结束时刻、本次调用的"现在";提交后销账。本局计了帮会资金 → 推给全帮成员。
+// 周期键、对局结束时刻、本次调用的"现在"。本局计了帮会资金 → 推给全帮成员。
 func TestSettleWinPassesCandidatesAndAcks(t *testing.T) {
 	useTrialTables(t, nil, nil)
 	f := newTrialFixture(t, activityGuild(1, 42, 43, 44, 45), nil)
 	ev := trialEvent(501, 44, 42, 43)
 	ev.FledPlayerIds = []uint64{43}
 	ev.DeadPlayerIds = []uint64{44}
-	f.putResult(t, ev)
 	f.store.settle = func(data.TrialSettleInput) (data.TrialSettleResult, error) {
 		return data.TrialSettleResult{
 			Status: data.TrialSettleSettled, Result: pb.GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_WIN,
@@ -1433,14 +1432,13 @@ func TestSettleWinPassesCandidatesAndAcks(t *testing.T) {
 	assert.Equal(t, ev.GetFinishedAtMs(), in.FinishedAtMs)
 	assert.Equal(t, f.nowMs(), in.NowMs)
 
-	assert.False(t, f.hasResult(501), "提交后销账")
 	pushes := f.activityPushes()
 	require.Len(t, pushes, 1)
 	assert.Subset(t, pushes[0].recipients, []uint64{42, 43, 44, 45}, "计了资金:全帮成员都要知道")
 	assert.Equal(t, trialTestGuildID, pushes[0].change.GetGuildId())
 }
 
-// TestSettleLossNotifiesParticipantsOnly:负 / 平局不发奖(Win=false 交给仓储记 LOSS),照样销账;
+// TestSettleLossNotifiesParticipantsOnly:负 / 平局不发奖(Win=false 交给仓储记 LOSS);
 // 只通知己方参战者(他们的"进行中"要消掉),不打扰全帮。
 func TestSettleLossNotifiesParticipantsOnly(t *testing.T) {
 	for _, loss := range []battlepb.EBattleOutcome{battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN, battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW} {
@@ -1450,7 +1448,6 @@ func TestSettleLossNotifiesParticipantsOnly(t *testing.T) {
 			f := newTrialFixture(t, activityGuild(1, 42, 43, 44), func(d *ActivityDeps) { d.OpIDs = minter })
 			ev := trialEvent(501, 42, 43)
 			ev.Outcome = loss
-			f.putResult(t, ev)
 
 			outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
@@ -1460,7 +1457,6 @@ func TestSettleLossNotifiesParticipantsOnly(t *testing.T) {
 			assert.False(t, f.store.settleInputs[0].Win)
 			assert.Nil(t, f.store.settleInputs[0].Reward)
 			assert.Zero(t, minter.callCount(), "不发奖的局不烧号")
-			assert.False(t, f.hasResult(501))
 			pushes := f.activityPushes()
 			require.Len(t, pushes, 1)
 			assert.Equal(t, []uint64{42, 43}, pushes[0].recipients)
@@ -1517,7 +1513,6 @@ func TestSettleWithItemsWhileChannelClosed(t *testing.T) {
 	useTrialTables(t, trialRowWithReward(), nil)
 	f := newTrialFixture(t, activityGuild(1, 42, 43), func(d *ActivityDeps) { d.OpIDs = &seqMinter{next: 1} })
 	ev := trialEvent(501, 42, 43)
-	f.putResult(t, ev)
 	f.store.settle = func(in data.TrialSettleInput) (data.TrialSettleResult, error) {
 		op := in.Reward.Ops[0]
 		return data.TrialSettleResult{Status: data.TrialSettleSettled, Result: pb.GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_WIN,
@@ -1529,11 +1524,10 @@ func TestSettleWithItemsWhileChannelClosed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, TrialOutcomeSettled, outcome)
 	require.NotNil(t, f.store.settleInputs[0].Reward)
-	assert.False(t, f.hasResult(501))
 }
 
 // TestSettleTemporaryFailuresKeepTheRecord:暂时性失败(发号失败、写冲突、库故障)原样返回错误,
-// 让调用方退避重试 —— 不标毒、不销账(销了账这一局的奖励就永久丢了)。
+// 让调用方退避重试 —— 不标毒。
 func TestSettleTemporaryFailuresKeepTheRecord(t *testing.T) {
 	t.Run("发号失败:不进事务", func(t *testing.T) {
 		useTrialTables(t, trialRowWithReward(), nil)
@@ -1541,7 +1535,6 @@ func TestSettleTemporaryFailuresKeepTheRecord(t *testing.T) {
 			d.OpIDs = &seqMinter{err: errors.New("segment fenced")}
 		})
 		ev := trialEvent(501, 42, 43)
-		f.putResult(t, ev)
 
 		outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
@@ -1549,19 +1542,16 @@ func TestSettleTemporaryFailuresKeepTheRecord(t *testing.T) {
 		assert.Zero(t, outcome)
 		assert.Zero(t, f.store.settleCount())
 		assert.Empty(t, f.store.marked)
-		assert.True(t, f.hasResult(501))
 	})
 	t.Run("发号器未接线:不进事务", func(t *testing.T) {
 		useTrialTables(t, trialRowWithReward(), nil)
 		f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
 		ev := trialEvent(501, 42, 43)
-		f.putResult(t, ev)
 
 		_, err := f.l.SettleTrialResult(context.Background(), ev)
 
 		require.Error(t, err)
 		assert.Zero(t, f.store.settleCount())
-		assert.True(t, f.hasResult(501))
 	})
 	for _, repoErr := range []error{
 		data.ErrWriteConflict,
@@ -1571,7 +1561,6 @@ func TestSettleTemporaryFailuresKeepTheRecord(t *testing.T) {
 			useTrialTables(t, nil, nil)
 			f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
 			ev := trialEvent(501, 42, 43)
-			f.putResult(t, ev)
 			f.store.settle = func(data.TrialSettleInput) (data.TrialSettleResult, error) { return data.TrialSettleResult{}, repoErr }
 
 			outcome, err := f.l.SettleTrialResult(context.Background(), ev)
@@ -1579,7 +1568,6 @@ func TestSettleTemporaryFailuresKeepTheRecord(t *testing.T) {
 			require.ErrorIs(t, err, repoErr)
 			assert.Zero(t, outcome)
 			assert.Empty(t, f.store.marked, "暂时性失败不标毒")
-			assert.True(t, f.hasResult(501), "暂时性失败不销账")
 			assert.Empty(t, f.activityPushes())
 		})
 	}
@@ -1605,7 +1593,7 @@ func TestSettleUsesFreshNowOnEachCall(t *testing.T) {
 }
 
 // TestSettlePoisonMarksAndAcks(06 §6.40、§6.31):确定性失败(溢出 / 结果过旧 / 输入畸形 / 奖励包坏)不重试 ——
-// 把对局标成 POISON、销账、回 (Poison, nil),让消费者提交 offset,分区不被卡住。
+// 把对局标成 POISON、回 (Poison, nil),让消费者提交 offset,分区不被卡住。
 func TestSettlePoisonMarksAndAcks(t *testing.T) {
 	for _, repoErr := range []error{
 		fmt.Errorf("%w: funds of guild 9", data.ErrActivityPoison),
@@ -1615,7 +1603,6 @@ func TestSettlePoisonMarksAndAcks(t *testing.T) {
 			useTrialTables(t, nil, nil)
 			f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
 			ev := trialEvent(501, 42, 43)
-			f.putResult(t, ev)
 			f.store.settle = func(data.TrialSettleInput) (data.TrialSettleResult, error) { return data.TrialSettleResult{}, repoErr }
 
 			outcome, err := f.l.SettleTrialResult(context.Background(), ev)
@@ -1623,7 +1610,6 @@ func TestSettlePoisonMarksAndAcks(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, TrialOutcomePoison, outcome)
 			assert.Equal(t, []data.TrialBattleKey{trialEventKey(ev)}, f.store.marked, "标记带完整上下文,没登记过的局也能留下一行")
-			assert.False(t, f.hasResult(501), "标毒之后销账")
 		})
 	}
 
@@ -1633,7 +1619,6 @@ func TestSettlePoisonMarksAndAcks(t *testing.T) {
 		useTrialTables(t, row, nil)
 		f := newTrialFixture(t, activityGuild(1, 42, 43), func(d *ActivityDeps) { d.OpIDs = &seqMinter{next: 1} })
 		ev := trialEvent(501, 42, 43)
-		f.putResult(t, ev)
 
 		outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
@@ -1641,12 +1626,11 @@ func TestSettlePoisonMarksAndAcks(t *testing.T) {
 		assert.Equal(t, TrialOutcomePoison, outcome)
 		assert.Zero(t, f.store.settleCount())
 		assert.Len(t, f.store.marked, 1)
-		assert.False(t, f.hasResult(501))
 	})
 }
 
-// TestSettlePoisonMarkOutcomes:标毒时发现这一局其实已有定论,就按那个定论答复(仍然销账);
-// 标记本身遇到库故障则是暂时性失败,不销账、下一轮再来。
+// TestSettlePoisonMarkOutcomes:标毒时发现这一局其实已有定论,就按那个定论答复;
+// 标记本身遇到库故障则是暂时性失败,下一轮再来。
 func TestSettlePoisonMarkOutcomes(t *testing.T) {
 	poison := func(data.TrialSettleInput) (data.TrialSettleResult, error) {
 		return data.TrialSettleResult{}, data.ErrActivityPoison
@@ -1666,14 +1650,12 @@ func TestSettlePoisonMarkOutcomes(t *testing.T) {
 			useTrialTables(t, nil, nil)
 			f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
 			ev := trialEvent(501, 42, 43)
-			f.putResult(t, ev)
 			f.store.settle, f.store.markOutcome = poison, tc.mark
 
 			outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, outcome)
-			assert.False(t, f.hasResult(501))
 		})
 	}
 
@@ -1681,18 +1663,16 @@ func TestSettlePoisonMarkOutcomes(t *testing.T) {
 		useTrialTables(t, nil, nil)
 		f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
 		ev := trialEvent(501, 42, 43)
-		f.putResult(t, ev)
 		f.store.settle, f.store.markErr = poison, data.ErrWriteConflict
 
 		outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
 		require.ErrorIs(t, err, data.ErrWriteConflict)
 		assert.Zero(t, outcome)
-		assert.True(t, f.hasResult(501), "没标上就不销账")
 	})
 }
 
-// TestSettleTerminalStatusesAck:重复事件 / 帮会已解散 / 登记在别帮名下 —— 都是"已有定论",销账、不推送、不重试。
+// TestSettleTerminalStatusesAck:重复事件 / 帮会已解散 / 登记在别帮名下 —— 都是"已有定论",不推送、不重试。
 func TestSettleTerminalStatusesAck(t *testing.T) {
 	cases := []struct {
 		status data.TrialSettleStatus
@@ -1707,7 +1687,6 @@ func TestSettleTerminalStatusesAck(t *testing.T) {
 			useTrialTables(t, nil, nil)
 			f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
 			ev := trialEvent(501, 42, 43)
-			f.putResult(t, ev)
 			f.store.settle = func(data.TrialSettleInput) (data.TrialSettleResult, error) {
 				return data.TrialSettleResult{Status: tc.status}, nil
 			}
@@ -1716,7 +1695,6 @@ func TestSettleTerminalStatusesAck(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, outcome)
-			assert.False(t, f.hasResult(501))
 			assert.Empty(t, f.activityPushes())
 			assert.Empty(t, f.store.marked)
 		})
@@ -1724,8 +1702,8 @@ func TestSettleTerminalStatusesAck(t *testing.T) {
 }
 
 // TestSettleShortCircuitsAlreadySettledBattles(06 §6.29 落码修正第 10 点):对局行已是 SETTLED —— 正常结算过、被标成
-// 毒消息、或运维按 §6.35a 做法 A 手工写成终态 —— 入口处直接回 Duplicate 并销账,不构建奖励包、不发号、不进事务。
-// 这是 battle 重发副本(逐字节相同,至多 30 份)的常规去向,也是"卡住的消息"的人工出口,所以必须排在发号与事务门
+// 毒消息、或运维按 §6.35a 做法 A 手工写成终态 —— 入口处直接回 Duplicate,不构建奖励包、不发号、不进事务。
+// 这是发件箱重投副本(逐字节相同)的常规去向,也是"卡住的消息"的人工出口,所以必须排在发号与事务门
 // 之前:用例里发号器是坏的、事务一进就回"正在合服",预读排错了位置,这条结果就一直是暂时性失败。
 func TestSettleShortCircuitsAlreadySettledBattles(t *testing.T) {
 	useTrialTables(t, trialRowWithReward(), nil)
@@ -1735,14 +1713,13 @@ func TestSettleShortCircuitsAlreadySettledBattles(t *testing.T) {
 		return data.TrialSettleResult{}, data.ErrWriteConflict
 	}
 	ev := trialEvent(501, 42, 43)
-	f.putResult(t, ev)
 	f.store.battles = map[uint64]data.TrialBattleRow{501: {
 		TrialBattleKey: trialEventKey(ev),
 		State:          pb.GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_SETTLED,
 		Result:         pb.GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_POISON,
 	}}
 
-	// 同一局的副本来多少份都走同一条路(第二份起结果记录已经不在,销账是幂等的)。
+	// 同一局的副本来多少份都走同一条路。
 	for i := 0; i < 3; i++ {
 		outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
@@ -1752,13 +1729,12 @@ func TestSettleShortCircuitsAlreadySettledBattles(t *testing.T) {
 	assert.Zero(t, minter.callCount(), "已有终态的局不烧号")
 	assert.Zero(t, f.store.settleCount(), "已有终态的局不进事务")
 	assert.Empty(t, f.store.marked)
-	assert.False(t, f.hasResult(501), "重复的结果照样销账,battle 的重发随之停止")
 	assert.Empty(t, f.activityPushes())
 }
 
 // TestSettlePreReadOnlyTrustsSettledRows:预读只认"SETTLED 且登记在结果所说的那个帮名下"。已登记未结算、已被巡检器
 // 判过期(迟到的结果仍要结算)、终态行登记在别的帮名下(归属由事务里持锁的闸门判),都照常进事务;
-// 预读本身读失败是 guild 自己的库故障 → 暂时性错误,不烧号、不销账。
+// 预读本身读失败是 guild 自己的库故障 → 暂时性错误,不烧号。
 func TestSettlePreReadOnlyTrustsSettledRows(t *testing.T) {
 	ev := trialEvent(501, 42, 43)
 	rowOf := func(guildID uint64, state pb.GuildTrialBattleState) data.TrialBattleRow {
@@ -1778,7 +1754,6 @@ func TestSettlePreReadOnlyTrustsSettledRows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			useTrialTables(t, nil, nil)
 			f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
-			f.putResult(t, ev)
 			f.store.battles = map[uint64]data.TrialBattleRow{501: tc.row}
 
 			outcome, err := f.l.SettleTrialResult(context.Background(), ev)
@@ -1793,7 +1768,6 @@ func TestSettlePreReadOnlyTrustsSettledRows(t *testing.T) {
 		useTrialTables(t, trialRowWithReward(), nil)
 		minter := &seqMinter{next: 1}
 		f := newTrialFixture(t, activityGuild(1, 42, 43), func(d *ActivityDeps) { d.OpIDs = minter })
-		f.putResult(t, ev)
 		readErr := errors.New("driver: bad connection")
 		f.store.battlesErr = readErr
 
@@ -1804,7 +1778,6 @@ func TestSettlePreReadOnlyTrustsSettledRows(t *testing.T) {
 		assert.Zero(t, minter.callCount(), "读不到对局行就不往下走,不白烧号")
 		assert.Zero(t, f.store.settleCount())
 		assert.Empty(t, f.store.marked)
-		assert.True(t, f.hasResult(501), "暂时性失败不销账")
 	})
 }
 
@@ -1816,7 +1789,6 @@ func TestSettleConfigMissing(t *testing.T) {
 	minter := &seqMinter{next: 1}
 	f := newTrialFixture(t, activityGuild(1, 42, 43), func(d *ActivityDeps) { d.OpIDs = minter })
 	ev := trialEvent(501, 42, 43)
-	f.putResult(t, ev)
 	f.store.settle = func(data.TrialSettleInput) (data.TrialSettleResult, error) {
 		return data.TrialSettleResult{Status: data.TrialSettleSettled, Result: pb.GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_CONFIG_MISSING}, nil
 	}
@@ -1829,7 +1801,6 @@ func TestSettleConfigMissing(t *testing.T) {
 	assert.Nil(t, f.store.settleInputs[0].Activity)
 	assert.Nil(t, f.store.settleInputs[0].Reward)
 	assert.Zero(t, minter.callCount())
-	assert.False(t, f.hasResult(501))
 
 	// 活动 1 存在但不是历练:同样按缺行处理,不能拿灯会的奖励去结算历练。
 	wrongType := trialEvent(502, 42, 43)
@@ -1839,19 +1810,13 @@ func TestSettleConfigMissing(t *testing.T) {
 	assert.Nil(t, f.store.settleInputs[1].Activity)
 }
 
-// TestSettleNotWiredIsAnError:历练的结果到了,而仓储 / 结果记录没接线 —— 按暂时性错误返回(消费者停在这条消息上重试),
+// TestSettleNotWiredIsAnError:历练的结果到了,而仓储没接线 —— 按暂时性错误返回(消费者停在这条消息上重试),
 // 绝不当成"处理完了"把结果丢掉。
 func TestSettleNotWiredIsAnError(t *testing.T) {
 	ev := trialEvent(501, 42, 43)
 
 	_, err := NewGuildLogic(nil, nil, nil, nil).SettleTrialResult(context.Background(), ev)
 	require.ErrorIs(t, err, errTrialNotWired)
-
-	useTrialTables(t, nil, nil)
-	f := newTrialFixture(t, activityGuild(1, 42, 43), func(d *ActivityDeps) { d.Results = nil })
-	_, err = f.l.SettleTrialResult(context.Background(), ev)
-	require.ErrorIs(t, err, errTrialNotWired)
-	assert.Zero(t, f.store.settleCount())
 }
 
 // TestSettleDoesNotDependOnTrialBeingOpen:关掉历练(match / 房间没接线)之后,在途对局的结果照常结算。
@@ -1859,11 +1824,9 @@ func TestSettleDoesNotDependOnTrialBeingOpen(t *testing.T) {
 	useTrialTables(t, nil, nil)
 	f := newTrialFixture(t, activityGuild(1, 42, 43), func(d *ActivityDeps) { d.Match, d.Lobby = nil, nil })
 	ev := trialEvent(501, 42, 43)
-	f.putResult(t, ev)
 
 	outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
 	require.NoError(t, err)
 	assert.Equal(t, TrialOutcomeSettled, outcome)
-	assert.False(t, f.hasResult(501))
 }

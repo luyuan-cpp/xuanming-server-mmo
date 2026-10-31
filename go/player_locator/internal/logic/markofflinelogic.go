@@ -47,7 +47,7 @@ func (l *MarkOfflineLogic) MarkOffline(in *pb.MarkOfflineRequest) (*common.Empty
 	}
 
 	playerID := in.PlayerId
-	data, err := l.svcCtx.RedisClient.Get(l.ctx, sessionKey(playerID)).Bytes()
+	data, err := l.svcCtx.PlayerRedis.Get(l.ctx, sessionKey(playerID)).Bytes()
 	if err != nil && err != redis.Nil {
 		return nil, err
 	}
@@ -167,5 +167,7 @@ func (l *MarkOfflineLogic) notifySceneManagerLeaveOrEnqueue(
 		// 玩家已瞬间重登(会话键重新出现):新登录的 EnterScene 会改写位置,
 		// 旧清理不再需要。
 		l.Infof("MarkOffline: player %d re-logged in before cleanup enqueue; skip", playerID)
+		return
 	}
+	wakeLeaseMonitorAt(l.svcCtx, playerID, readyAt)
 }

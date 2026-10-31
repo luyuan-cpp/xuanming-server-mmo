@@ -14,11 +14,11 @@ import (
 	"net"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"friend/internal/data"
 	"shared/authoritysql"
+	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -61,9 +61,10 @@ const (
 // 报 "conflict key Redis"(core/conf/config.go addOrMergeFields)。共享库一律用 c.Redis.RedisConf
 // —— 与 chat / match / trade 同一写法。
 type Config struct {
-	AccountRoleSchema   string         `json:",optional"`
-	GlobalLoginSessions bool           `json:",optional"`
-	LoginRedis          LoginRedisConf `json:",optional"`
+	AccountRoleSchema   string `json:",optional"`
+	GlobalLoginSessions bool   `json:",optional"`
+	// LoginRedis 只读原登录态，必须显式指定全局同 login 的实例/DB，不能由 Redis 段猜测。
+	LoginRedis playerredis.LoginReaderConfig `json:",optional"`
 	zrpc.RpcServerConf
 
 	// ZoneId:只影响 etcd 注册路径 <Prefix>/zone/<z>/...(路由服按 NodeInfo 发现本服务)。
@@ -105,6 +106,10 @@ type Config struct {
 	// 全仓 Go 服务统一走 go-zero 句柄,回落逻辑才能与 chat / match 复用同一套写法。
 	FriendRedis redis.RedisConf `json:",optional"`
 
+	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):player:session:{id}(判在线、推送路由、
+	// 在线目录)与 player:{id}:sync_digest。读取走 EffectivePlayerRedis():没写 Addrs 时指向 Redis 段那一个实例,开发环境不用改。
+	PlayerRedis playerredis.Config `json:",optional"`
+
 	// Kafka:S2C 推送(kafkautil.PushToPlayer → gate-cmd_g<N>)的 broker 地址。
 	//
 	// ⚠ 本字段不在 F1 规格 §3.1 的结构清单里,但 §3.6 要求 svc 继续按现有写法建
@@ -124,12 +129,28 @@ type Config struct {
 	Friend FriendConf `json:"Friend"`
 }
 
-// 只读原登录态，必须显式指定全局同 login 的实例/DB，不能由 SharedRedis 猜测。
-type LoginRedisConf struct {
-	Host     string `json:",optional"`
-	Password string `json:",optional"`
-	DB       int    `json:",optional"`
-	PoolSize int    `json:",optional"`
+// 没写 PlayerRedis.Addrs 时玩家域连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,读写 3s,
+// 取连接 4s,拨号 5s)。这里写成常量,不随 CPU limit 漂移。
+const (
+	playerRedisFallbackPoolSize      = 20
+	playerRedisFallbackIOTimeoutMs   = 3000
+	playerRedisFallbackPoolTimeoutMs = 4000
+	playerRedisFallbackDialTimeoutMs = 5000
+)
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 Redis 段那一个实例。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{c.Redis.Host},
+		Username:        c.Redis.User,
+		Password:        c.Redis.Pass,
+		TLS:             c.Redis.Tls,
+		PoolSizePerNode: playerRedisFallbackPoolSize,
+		DialTimeoutMs:   playerRedisFallbackDialTimeoutMs,
+		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
+		PoolTimeoutMs:   playerRedisFallbackPoolTimeoutMs,
+	})
 }
 
 // MySQLConf 是 mmorpg_friend 的连接参数。
@@ -284,7 +305,7 @@ func (c *Config) Validate() error {
 	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) {
 		return errors.New("好友 AccountRoleSchema 必须显式指定同事务域的全局角色目录")
 	}
-	if !c.GlobalLoginSessions || strings.TrimSpace(c.LoginRedis.Host) == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize <= 0 {
+	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode <= 0 {
 		return errors.New("好友必须显式配置全局同 login 的 LoginRedis 实例/DB/正池上限")
 	}
 	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
@@ -345,12 +366,14 @@ func (c *Config) Validate() error {
 			c.MySQL.MaxOpenConn, c.MySQL.MaxIdleConn)
 	}
 
-	// 共享库 Host 为空:它既是 FriendRedis 未配置时的回落目标,也是读跨运行时契约 key
-	// player:session:{id}(判好友在不在线)的唯一句柄(契约 §4)。缺它 = 回落落到空地址,
-	// 所有私有 key 操作与在线判定都失败。
+	// 共享库 Host 为空:它既是 FriendRedis 未配置时的回落目标,也是 PlayerRedis 没写 Addrs 时玩家域的落点。
+	// 缺它 = 回落落到空地址,所有私有 key 操作与在线判定都失败。
 	if c.Redis.Host == "" {
 		return errors.New("Redis.Host(共享库)不能为空:FriendRedis 未配置时私有 key 回落到它," +
-			"且它是读契约 key player:session:{id} 的唯一句柄")
+			"PlayerRedis 没写 Addrs 时玩家域也指向它")
+	}
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("PlayerRedis: %w", err)
 	}
 
 	// Friend 各阈值为 0 都是"功能静默变形"而不是报错:MaxFriends=0 让谁都加不上好友;

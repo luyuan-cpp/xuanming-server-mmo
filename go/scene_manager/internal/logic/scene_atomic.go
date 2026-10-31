@@ -15,68 +15,78 @@ import (
 //
 // Problem without CAS:
 //   goroutine A (lifecycle tick):
-//     1. GET instance:{id}:player_count == "0"
+//     1. SCARD instance:<id>:members == 0
 //     2. (context switch)
-//     3. DEL scene:{id}:node, ZREM ..., DEL instance:{id}:player_count
+//     3. DEL scene:{id}:node, ZREM ..., DEL instance:<id>:members
 //   goroutine B (EnterScene RPC, between A.1 and A.3):
 //     1. GET scene:{id}:node -> "node-7" (scene still alive)
 //     2. UpdatePlayerLocation, route to gate
-//     3. INCR instance:{id}:player_count -> new key "1"
-//   Result: player routed into a dead scene; an orphan player_count key
-//   lives forever; node-scene-count drifts.
+//     3. SADD instance:<id>:members -> new key with one member
+//   Result: player routed into a dead scene; node-scene-count drifts.
 //
 // Fix: both paths touch the same keys inside a single Lua script so Redis
 // serializes them.
+//
+// 这些脚本的键全部在控制域单实例上,一段脚本里可以跨场景、跨节点(文件 scene_membership.go 讲成员集合)。
+// 它们不碰任何玩家域键,scene_keys_contract_test.go 钉住这一点。
 
-// luaAtomicIncrPlayerCount atomically:
+// luaAtomicAddSceneMember atomically:
 //  1. checks scene:{id}:node still exists,
-//  2. if yes, INCRs instance:{id}:player_count and returns the new count,
-//  3. if no, returns -1 without creating the player_count key.
+//  2. if yes, SADDs the player into instance:<id>:members (and the node's set
+//     when KEYS[3] is passed) and returns the new SCARD,
+//  3. if no, returns -1 without creating the members key.
 //
 // KEYS[1] = scene:{id}:node
-// KEYS[2] = instance:{id}:player_count
+// KEYS[2] = instance:<id>:members
+// KEYS[3] = node:zone:{zoneId}:{nodeId}:members(节点未知时不传)
+// ARGV[1] = 十进制 player_id
 // Return: (int) new count, or -1 if scene is gone.
-const luaAtomicIncrPlayerCount = `
+const luaAtomicAddSceneMember = `
 if redis.call('EXISTS', KEYS[1]) == 0 then
     return -1
 end
-return redis.call('INCR', KEYS[2])
+redis.call('SADD', KEYS[2], ARGV[1])
+if KEYS[3] ~= nil then
+    redis.call('SADD', KEYS[3], ARGV[1])
+end
+return redis.call('SCARD', KEYS[2])
 `
 
 // luaReserveBestWorldChannel atomically selects the least-loaded live world
-// channel from KEYS scene/count pairs and reserves one player slot on it.
-// Selection and INCR have to be a single Redis operation during login storms,
-// otherwise many concurrent calls can observe the same zero-count channel.
+// channel from KEYS scene/members pairs and reserves one player slot on it.
+// Selection and SADD have to be a single Redis operation during login storms,
+// otherwise many concurrent calls can observe the same empty channel.
 //
-// KEYS are laid out as 2N + 1 + 1 entries so every key the script touches is
-// declared up-front, which is the Redis Cluster contract:
+// KEYS are laid out as 3N entries so every key the script touches is declared up-front:
 //
-//	KEYS[1..2N] = scene:{id}:node, instance:{id}:player_count, ...
-//	              (interleaved per candidate)
-//	KEYS[2N+1]  = node:zone:{zoneId}:{bestNode}:player_count (one per candidate, packed
-//	              starting at index 2N+1 so the script can look up the
-//	              chosen candidate's node counter without string-building
-//	              a key from data).
+//	KEYS[1..2N]    = scene:{id}:node, instance:<id>:members, ...
+//	                 (interleaved per candidate)
+//	KEYS[2N+1..3N] = node:zone:{zoneId}:{candidateNode}:members (one per candidate, so the
+//	                 script can look up the chosen candidate's node set without
+//	                 string-building a key from data).
 //
 // ARGV[i] for i in 1..N = nodeId string for candidate i, used both for the
 // equality check against scene:{id}:node and to remember the picked node.
+// ARGV[N+1] = 十进制 player_id。
 //
-// Return = {sceneId, nodeId, newCount}, or nil if every candidate went stale.
+// Return = {bestIdx, nodeId, newCount}, or nil if every candidate went stale.
+//
+// 预占是集合成员,同一玩家重复预占不累加;玩家已经在所选频道时 SADD 是空操作,释放预占由 removeSceneMember 的
+// location 保住他的成员身份(scene_membership.go)。
 //
 // NOTE: keys are constructed from Go (see ReserveBestWorldChannel) and
-// passed in fixed slots. The script never builds a key from ARGV data,
-// which means it stays Cluster-safe.
+// passed in fixed slots. The script never builds a key from ARGV data.
 const luaReserveBestWorldChannel = `
-local n = #ARGV
+local n = #ARGV - 1
+local player = ARGV[n + 1]
 local bestIdx = nil
 local bestCount = nil
 
 for i = 1, n do
     local sceneNodeKey = KEYS[(i - 1) * 2 + 1]
-    local countKey = KEYS[(i - 1) * 2 + 2]
+    local membersKey = KEYS[(i - 1) * 2 + 2]
     if redis.call('GET', sceneNodeKey) == ARGV[i] then
-        local raw = redis.call('GET', countKey)
-        local count = tonumber(raw or '0') or 0
+        local count = redis.call('SCARD', membersKey)
         if bestCount == nil or count < bestCount then
             bestIdx = i
             bestCount = count
@@ -88,10 +98,11 @@ if bestIdx == nil then
     return nil
 end
 
-local bestCountKey = KEYS[(bestIdx - 1) * 2 + 2]
+local bestMembersKey = KEYS[(bestIdx - 1) * 2 + 2]
 local bestNodeKey = KEYS[2 * n + bestIdx]
-local newCount = redis.call('INCR', bestCountKey)
-redis.call('INCR', bestNodeKey)
+redis.call('SADD', bestMembersKey, player)
+redis.call('SADD', bestNodeKey, player)
+local newCount = redis.call('SCARD', bestMembersKey)
 
 -- ARGV[bestIdx] is the chosen nodeId; recover the sceneId from its
 -- scene:{id}:node key by stripping the prefix/suffix on the caller side.
@@ -101,7 +112,7 @@ return {tostring(bestIdx), ARGV[bestIdx], tostring(newCount)}
 `
 
 // luaAtomicDestroyInstance atomically:
-//  1. checks instance:{id}:player_count is missing or equals "0",
+//  1. checks instance:<id>:members is empty,
 //  2. if yes, reads scene:{id}:node into a local, then wipes every
 //     scene-scoped Redis key and removes the scene from the active set,
 //     and returns the nodeId (so the caller can fire DestroyScene RPC and
@@ -110,7 +121,7 @@ return {tostring(bestIdx), ARGV[bestIdx], tostring(newCount)}
 //     anything — destroy was a false alarm, try again next tick.
 //
 // KEYS[1] = scene:{id}:node
-// KEYS[2] = instance:{id}:player_count
+// KEYS[2] = instance:<id>:members
 // KEYS[3] = instances:zone:{zone}:active (sorted set)
 // KEYS[4] = scene:{id}:mirror
 // KEYS[5] = scene:{id}:source
@@ -130,8 +141,7 @@ return {tostring(bestIdx), ARGV[bestIdx], tostring(newCount)}
 // reconciliation loop double-checks scene:{id}:node before destroying so
 // a stale node-scenes set entry is harmless.
 const luaAtomicDestroyInstance = `
-local pc = redis.call('GET', KEYS[2])
-if pc and pc ~= '0' and pc ~= '' then
+if redis.call('SCARD', KEYS[2]) > 0 then
     return {'', ''}
 end
 local nodeId = redis.call('GET', KEYS[1])
@@ -148,17 +158,18 @@ return {nodeId, agonesGs}
 `
 
 // luaAtomicDestroyInstanceForce 是 luaAtomicDestroyInstance 的 force 版:
-// 不做 player_count 守卫;ARGV[2] 为空时无条件抹掉场景键,非空时只在属主等于它时抹;
-// 返回抹除前的 {nodeId, agonesGs, playerCount}。GET 与 DEL 在同一脚本里原子执行,
+// 不做人数守卫;ARGV[2] 为空时无条件抹掉场景键,非空时只在属主等于它时抹;
+// 返回抹除前的 {nodeId, agonesGs, 成员 1, 成员 2, ...}。读与 DEL 在同一脚本里原子执行,
 // 并发的销毁(空闲回收的非 force 脚本、explicit / 级联 / 收尾的 force 脚本,或领导者降级
 // 窗口里的新旧领导者)只有第一个能拿到非空返回 —— 计数减法 / Agones 名额归还 / 镜像级联
 // 这些副作用因此恰好执行一次,不双减计数、不双还名额。
+// 成员交回给调用方,由它从节点集合里摘掉(节点键要等读到属主才知道,不在脚本里现拼)。
 //
 // KEYS 与 luaAtomicDestroyInstance 相同。
 // ARGV[1] = sceneId(ZREM 用)
 // ARGV[2] = 期望属主;空串表示不比对(explicit / source_migrated / source_scaled_in 经
 // destroyInstanceForce,以及镜像级联,语义同前)。空闲回收走的是 luaAtomicDestroyInstance,不经这里。
-// 非空时只有 scene:{id}:node 仍等于它才抹,否则一个键都不动,返回 {'', '', '0'}。
+// 非空时只有 scene:{id}:node 仍等于它才抹,否则一个键都不动,返回两个空串。
 // 死节点收尾靠它(2026-10-22):收尾读到「属主是死节点」之后,只要有写者用 reassignSceneNode 把实例
 // 改派到活节点并 CreateScene,不比对的话这里会把新属主的场景抹掉、向新节点发 DestroyScene、扣新节点的
 // 计数。比较必须和删除在同一个脚本里,收尾自己的读挡不住这个窗口。(修复时这样的写者是 resolveScene 的
@@ -170,10 +181,10 @@ return {nodeId, agonesGs}
 const luaAtomicDestroyInstanceForce = `
 local nodeId = redis.call('GET', KEYS[1])
 if ARGV[2] ~= nil and ARGV[2] ~= '' and nodeId ~= ARGV[2] then
-    return {'', '', '0'}
+    return {'', ''}
 end
 local agonesGs = redis.call('GET', KEYS[7])
-local pc = redis.call('GET', KEYS[2])
+local members = redis.call('SMEMBERS', KEYS[2])
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 redis.call('ZREM', KEYS[3], ARGV[1])
 if not nodeId then
@@ -182,23 +193,24 @@ end
 if not agonesGs then
     agonesGs = ''
 end
-if not pc then
-    pc = '0'
+local out = {nodeId, agonesGs}
+for i = 1, #members do
+    out[i + 2] = members[i]
 end
-return {nodeId, agonesGs, pc}
+return out
 `
 
 // AtomicDestroyForce 原子认领并抹掉一个场景的全部 Redis 键(不看人数)。
-// 返回抹除前的 (nodeId, agonesGs, playerCount)。三者全空/零说明别的进程
+// 返回抹除前的 (nodeId, agonesGs, members)。三者全空说明别的进程
 // 已抢先抹掉 —— 调用方必须跳过一切副作用(计数、归还、级联、RPC)。
 //
 // expectedOwner 非空时只在 scene:{id}:node 仍等于它时才抹;不等(含映射已不存在)时什么都不动,
-// 返回值同样全空/零。认领成功时返回的 nodeId 必然等于 expectedOwner,所以调用方仍按「全空即未认领」判断。
+// 返回值同样全空。认领成功时返回的 nodeId 必然等于 expectedOwner,所以调用方仍按「全空即未认领」判断。
 // 空串表示不比对。
-func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string) (string, string, int64, error) {
+func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string) (string, string, []string, error) {
 	keys := []string{
 		sceneNodeKey(sceneId),
-		fmt.Sprintf(InstancePlayerCountKey, sceneId),
+		instanceMembersKey(sceneId),
 		activeInstancesKey(zoneId),
 		sceneMirrorFlagKey(sceneId),
 		sceneSourceKey(sceneId),
@@ -207,30 +219,34 @@ func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint6
 	}
 	raw, err := svcCtx.Redis.Eval(luaAtomicDestroyInstanceForce, keys, fmt.Sprintf("%d", sceneId), expectedOwner)
 	if err != nil {
-		return "", "", 0, err
+		return "", "", nil, err
 	}
 	parts := toSlice(raw)
-	if len(parts) < 3 {
-		return "", "", 0, nil
+	if len(parts) < 2 {
+		return "", "", nil, nil
 	}
-	return toString(parts[0]), toString(parts[1]), toInt64(parts[2]), nil
+	members := make([]string, 0, len(parts)-2)
+	for _, member := range parts[2:] {
+		members = append(members, toString(member))
+	}
+	return toString(parts[0]), toString(parts[1]), members, nil
 }
 
-// AtomicIncrPlayerCountIfSceneExists is the race-safe replacement for
-// IncrInstancePlayerCount used inside EnterScene. It guarantees the
-// player_count key is only ever created/incremented when scene:{id}:node
-// still exists, eliminating orphan keys when the scene gets destroyed in
-// the middle of EnterScene.
+// AtomicAddSceneMemberIfSceneExists 是 EnterScene 指定场景时的预占:只有 scene:{id}:node 还在才把玩家加进成员集合,
+// 场景在 EnterScene 中途被销毁时不会造出孤儿键。nodeID 为空时不动节点集合。
 //
 // Returns the new count, or -1 if the scene was destroyed between
 // resolveScene and this call. Callers should treat -1 as "retry or
 // fail the request".
-func AtomicIncrPlayerCountIfSceneExists(svcCtx *svc.ServiceContext, sceneId uint64) (int64, error) {
+func AtomicAddSceneMemberIfSceneExists(svcCtx *svc.ServiceContext, sceneId uint64, zoneId uint32, nodeId string, playerId uint64) (int64, error) {
 	keys := []string{
 		sceneNodeKey(sceneId),
-		fmt.Sprintf(InstancePlayerCountKey, sceneId),
+		instanceMembersKey(sceneId),
 	}
-	raw, err := svcCtx.Redis.Eval(luaAtomicIncrPlayerCount, keys)
+	if nodeId != "" {
+		keys = append(keys, nodeMembersKey(zoneId, nodeId))
+	}
+	raw, err := svcCtx.Redis.Eval(luaAtomicAddSceneMember, keys, strconv.FormatUint(playerId, 10))
 	if err != nil {
 		return 0, err
 	}
@@ -243,38 +259,39 @@ func AtomicIncrPlayerCountIfSceneExists(svcCtx *svc.ServiceContext, sceneId uint
 //
 // KEY layout passed to the script:
 //
-//	KEYS[1..2N]   = scene:{id}:node, instance:{id}:player_count, ...
+//	KEYS[1..2N]   = scene:{id}:node, instance:<id>:members, ...
 //	                interleaved per candidate (N candidates total)
-//	KEYS[2N+1..3N] = node:zone:{zoneId}:{candidateNode}:player_count, one per candidate,
+//	KEYS[2N+1..3N] = node:zone:{zoneId}:{candidateNode}:members, one per candidate,
 //	                 indexed identically to ARGV so the script can pick
 //	                 the winner's node key without string-building.
 //
 // ARGV[i] = candidate i's nodeId string. Used both as the value the
 // scene:{id}:node GET is compared to, and as the node identifier
-// returned to Go.
-func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChannelCandidate) (uint64, string, int64, error) {
+// returned to Go. ARGV[N+1] = 十进制 player_id。
+func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChannelCandidate, playerId uint64) (uint64, string, int64, error) {
 	if len(candidates) == 0 {
 		return 0, "", 0, nil
 	}
 
 	n := len(candidates)
 	keys := make([]string, 0, 3*n)
-	// Pairs: scene_node_key, count_key, scene_node_key, count_key, ...
+	// Pairs: scene_node_key, members_key, scene_node_key, members_key, ...
 	for _, c := range candidates {
 		keys = append(keys,
 			fmt.Sprintf(SceneNodeKeyFmt, c.SceneID),
-			fmt.Sprintf(InstancePlayerCountKey, c.SceneID),
+			instanceMembersKey(c.SceneID),
 		)
 	}
-	// Trailing N entries: per-candidate node player_count keys.
+	// Trailing N entries: per-candidate node members keys.
 	for _, c := range candidates {
-		keys = append(keys, nodePlayerCountKey(c.ZoneID, c.NodeID))
+		keys = append(keys, nodeMembersKey(c.ZoneID, c.NodeID))
 	}
 
-	args := make([]any, 0, n)
+	args := make([]any, 0, n+1)
 	for _, c := range candidates {
 		args = append(args, c.NodeID)
 	}
+	args = append(args, strconv.FormatUint(playerId, 10))
 
 	raw, err := svcCtx.Redis.Eval(luaReserveBestWorldChannel, keys, args...)
 	if err != nil {
@@ -299,7 +316,7 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 
 // AtomicDestroyIfIdle is the race-safe replacement for the multi-step
 // Redis cleanup in destroyInstance. If the scene still has players
-// (player_count > 0), returns "" without touching anything. Otherwise
+// (members not empty), returns "" without touching anything. Otherwise
 // wipes the scene's Redis state and returns the nodeId the scene was on
 // so the caller can notify C++ and fix counters.
 //
@@ -313,7 +330,7 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 func AtomicDestroyIfIdle(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (string, string, error) {
 	keys := []string{
 		sceneNodeKey(sceneId),
-		fmt.Sprintf(InstancePlayerCountKey, sceneId),
+		instanceMembersKey(sceneId),
 		activeInstancesKey(zoneId),
 		sceneMirrorFlagKey(sceneId),
 		sceneSourceKey(sceneId),

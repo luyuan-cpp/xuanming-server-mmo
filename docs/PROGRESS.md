@@ -18660,3 +18660,424 @@ Java 版(对应 0.1.0-SNAPSHOT):都是服务端内部实现,不改客户端契�
 没做:不停服合服(`docs/ops/merge-zone-runbook.md` 开头的目标)、删 Redis 里的战斗结算原件 `battle:settlement:pending`、映射直读 TiDB(映射提案 §15)、阶段 B 压测、阶段 C。
 
 Java 版(对应 0.1.0-SNAPSHOT):都是服务端内部实现,客户端契约只有 ID 变大,不在 `PARITY.md` 加行。mysql 档、别名合服、榜单拆片在 Java 版是否已有等价实现没有逐项核对,按待核对。
+
+### 2026-10-30 Claude:go/match 只剩 SQL 权威路径(未编译,待 Codex 验证)
+
+`GlobalMatch.Enabled` 和本地 Redis 模式已删,`Authority` 变成必需依赖,开发与生产同一份代码,缺配置起不来。`go/match` 99 个文件,+2328 / -19629。方案见 `docs/design/player-data-tidb-scaling-plan.md` §5.4。
+
+- **Redis 还留什么**:观战协调键 `spectate:*`;SharedRedis 只读 `player:session:*`、`player:{id}:location`、`battle:lock:*`,组队 bump `player:{id}:sync_digest`;LoginRedis 读会话。`spectate:battle:{id}` 现在只写没人读,留着是因为任务点名观战记录要保留,可以后续删。删掉 `match:{mq}:*`、`match:ticket:*`、`match:party:end:*`、`challenge:*`、`spectate:watching:*`、`team:*`。
+- **guild**:历练超时巡检改读 `<MatchAuthoritySchema>.match_battle_completion`,`decision=1` 取 `raw_payload`,中止或没有行按原超时语义;启动核这张表的列。`battle:activity_result:*` 与销账逻辑全删。`go/guild/etc/guild.yaml` 的 `AccountRoleSchema` 从过期的 `testdb` 改成 `mmorpg_global`,与 data_service 同库。
+- **本机**:`start_game.ps1` 用 root 幂等建 `mmorpg_match` / `mmorpg_guild` / `mmorpg_global`,第 5 步前跑新命令 `dev_tools -Command go-svc-migrate -LocalMySQL -GoServices match,guild`。guild 从可选变必需(match 启动要核它的表)。`-LocalMySQL` 下 match 派生配置改连本机 MySQL,全局库和登录 Redis 取 data_service / login 的原件。开发密钥 `lib/match_dev_secret.ps1` → `run/secrets/match-dev.env`,battle 经 `cpp_nodes.ps1` 拿同一把,并带 `GLOBAL_MATCH_ENABLED=true`、`PHYSICAL_REGION=1`。顺手修了 `Start-ServiceInstance` 把 `Get-YamlScalar` 返回的哈希表当字符串比的两行,它们让所有 SQL 服务走不过写者启动路径。
+- **K8s**:`Get-GlobalMatchDeploymentSettings` 所有档位都要 SQL 入口;机房号 staging / prod 必须显式,dev 缺省 1;battle 无条件注入探测与终局密钥;Kafka RF3 门禁只放行 dev,与 Go 的 `ResultTopicRequiresDurability` 同口径。合同测试改了 `lobby_authority_render`、`k8s_migrate_gate`、`k8s_deploy_contract`、`go_services_local_mysql`。
+- **docker 调试栈**:`prepare_docker_debug.py` 改连 compose 的 MySQL,加 `match-migrate`、`guild-migrate` 两个一次性任务。guild 镜像要另外构建后用 `GUILD_IMAGE` 指定。
+
+**还跑不起来**:常驻 match 的 `MATCH_MYSQL_PASSWORD` 和写者资格只能来自 `MMORPG_SQL_BOOT_CATALOG`(`maintenance_drain.ps1`,明确禁止父进程回退),仓库没有本机生成它的脚本。`db`、`data_service`、`login`、`chat` 都一样,所以 `start_game.ps1` 不设它走到第 3 步就拒绝,这不是本批引入的;docker 调试栈同样缺。需要决定怎么给本机发写者授权。
+
+**其它风险**:客户端和 robot 进匹配要先走 `GetNetworkProbePlan`,观战要带 `request_id`,`robot/battle_smoke_scenario.go` 没改,战斗冒烟现在走不通。`tools/merge_zone/preflight.go` 和 C++ `player_team.*` 还引用 `team:player`、`team:rec`(不在本批范围)。删掉的指标名在历史文档里还能看到。
+
+**给 Codex**:
+
+1. `go/match` 目录:`go build ./...`、`go vet ./...`、`go test ./...`。真库用例设 `MATCH_IT_TIDB=<loopback 地址>`、`MATCH_IT_REQUIRE_TIDB=1`,不设会跳过。重点看 `internal/team` 的 `sql_store_integration_test.go`、`internal/logic`。
+2. `go/guild` 目录:`go build ./...`、`go test ./internal/data ./internal/logic ./internal/kafka ./internal/config`。`TestTiDBTrialResultRecordsReadMatchTerminal` 要 `GUILD_ROLE_TEST_DSN`、`GUILD_ROLE_REQUIRE_TIDB=1`。
+3. 仓库根目录逐个 `pwsh -File tools/scripts/tests/<名字>.tests.ps1`:`go_services_local_mysql`、`lobby_authority_render`、`k8s_migrate_gate`、`k8s_deploy_contract`、`k8s_redis_split_contract`、`k8s_client_entry_contract`、`start_game_command_contract`、`global_authority_deploy`。`go_services_ports` 在 HEAD 就缺写者函数桩,chat / trade 启动类用例失败不是本批造成的。
+4. 通过标准:全绿;失败保留 go 输出和 ps1 的 `Assert` 文案,不要改断言。
+
+Java 版(对应 0.1.0-SNAPSHOT):服务端内部实现,客户端契约没变,不在 `PARITY.md` 加行。
+
+### 2026-10-30 Claude:不停服合服第二批,go/match 读时解析(未编译,待 Codex 验证)
+
+合服的最后一处业务判定补上了,手册 `docs/ops/merge-zone-runbook.md` §9 去掉「match 是下一批」,方案 `docs/design/player-data-tidb-scaling-plan.md` §7.1 写了 match 的口径。**未编译、未测试**,命令和场景见手册 §11。
+
+- **映射**:match 直接读全局库 `zone_merged_into`(`authority/merged_zones.go`、`svc/merged_zones.go`)。启动读不到拒启;默认 5 秒重读,失败留旧值,计 `match_merged_zone_refresh_total{result}`;`StopAndReport` 在封写者资格和关库之前停。没有新配置键。
+- **记录写原始区**:`PlayerHomeZone` 不再解析。队伍的归属查询从 data_service 改成读 `player_route`(`team.AuthorityHomeZone`),因为 data_service 回的是最终区。开战原件的 `Zones` 改成在路由锁内读归属,原来记的是玩家位置的物理 zone,访客和归属对不上。
+- **判定**:`zoneCheck`、`RequireTeamHomeZoneTx`、`TeamUnitHomeZone`、提交点 `admitScope`、撮合 `poolUnitInput` 按最终区;`CandidateTeamPeers`、`TeamLaunchPeers` 的等值条件改成 `IN (Members(z))`,绑定参数。队伍视图和回执重放给最终区,回执里存原始区。
+- **在途**:同区只在 launch 诞生时判一次,维护、成局、失败重排都不重判,合服提交和撤销都不会让恢复循环报错。撤销后跨原始区的队伍不散、这一局走完,新开战回 `kTeamCrossZoneDenied`,写进手册 §7。
+- **不解析**:玩家位置 zone、`BattleRouting.zone_id`、节点注册路径(都是物理节点);`gather_zone_mix_total`(统计物理路由);票、投影、launch 原件之间的相等比较(同一个原始值的抄写,核的是没有过期)。
+- **HEAD 就有的问题,这批修了**:满队直接开战的 `ReserveSQLTeamMatch` 用 `buildGlobalDirect` 建票不带 `ZoneId`,提交点 `TeamUnitHomeZone` 必回 `ErrTeamRoute`,这一单永远提交不了,`match.team.sql.prepared` 循环每轮 Hold。加了 `applyLaunchHomes`。这条路径之前没有真库用例,新用例 `TestTeamTiDBFullLaunchReservesWithOriginalZones` 如果还有下游问题会在这里暴露。
+- **placement**:删 `ResolveMergedZoneSQL`,`ResolveMergedZone` 收成包内 `resolveMergedZone`,`MergedZoneQueryer` 改名 `RoleRouteQueryer`。其余导出函数都还有调用方。
+
+**范围外要补**:`deploy/k8s` 加 match 的刷新失败告警;写者计划的 `tables` 给 match 运行账号列 `<全局库>.zone_merged_into` 的 SELECT。
+
+Java 版(对应 0.1.0-SNAPSHOT):待做,同样的读时解析没有做(手册 §9)。队伍视图的 `zone_id` 在合服之后是最终区,字段不变。
+
+### 2026-10-31 Claude:本机写者启动目录生成器(未运行,待 Codex 验证)
+
+`start_game.ps1` 走到第 3 步拒绝的问题补上了:`pwsh -File tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local` 在本机备齐全部写者授权,`start_game.ps1` 每次启动自动跑。只接受回环数据库。没有给 Go、C++、Java 加旁路,`Get-SqlWriterBootEnvironment` 的校验没动。用法、前置、产物、重来都在 `tools/scripts/README.md` 的 start_game.ps1 一节。
+
+- **新文件**:`tools/scripts/lib/sql_boot_catalog_local.ps1`、`tools/scripts/tests/sql_boot_catalog_local.tests.ps1`。
+- **复用的正式链路**:注册、grant、选中配置走 `writer_authority -command register`(单条目 roster);角色文本走 `ConvertTo-AuthorityRoleSql` 和 `deploy/sql` 模板;建表走各服务 `-migrate` 与 go/db `cmd/migrate`;产物用 `Get-SqlWriterBootEnvironment` 自检;端口和派生配置问 `go_services.ps1 -Command plan-instances`(新增)。
+- **脚本自己做的**:建账号(模板写明由部署者做)、拼 roster(K8s 也是操作者提供)、每服务的本机配置改写表、每服务的跨库授权清单、`LOCK_TOUCH` / `SELECT_ONLY` 按档位选。
+- **锁资格是本机声明**:文件正文写明不是真实 I3 报告,writer_authority 只核 SHA。
+
+为了让全套真能拉起来,顺带改了这些(都是读码查到的阻塞,未实跑):
+
+- `go_services.ps1`:删掉给 db 注入 `DB_AUTO_MIGRATE_SCHEMA=1`(`InitDB` 见到就拒启);`Test-InstanceProcessIdentity` 认带引号的 `"-f"` 和每 boot 配置路径(PID 记录加 `ConfigPath`),否则 `start_game.ps1` 第二批启动就误判第一批身份;db 的 `Entry` 改 `.`(`db.go` 依赖同目录 `player_store_wiring.go`);player_inbox 注入 scene 验签密钥;整批 `go-svc-build` 带上 `writer_authority`、`db_migrate`、`private_control_file`。
+- `start_game.ps1`:删掉 trade / friend / player_inbox 的 appuser 库预检(`00_init_zone_dbs.sql` 早就不给 appuser 授权,新卷上三个服务必被跳过)和第 5 步的 `go-svc-migrate`(建表挪进生成器,写者授权要枚举表);设 `MMORPG_DB_ALLOWED_DATABASES=zone_1_db`;网关走同一闸门,账号走 `--spring.config.additional-location`,Windows 上带 `private_control_file`(放 `%LOCALAPPDATA%`,仓库目录过不了 Java 的路径 ACL 校验);mail / rank 的跳过条件去掉 DSN。
+- `tests/go_services_local_mysql.tests.ps1`:接线断言改到生成器;修 `Arguments[1]` 比较时没去引号的旧断言。
+
+**Codex 验证顺序**:`proto-gen-run`(no-unity 配置,JSON 表清单和 pb 还没有 `player_store`)→ `go-svc-build`(不带 `-GoServices`)→ `mvn` 打网关 jar → `pwsh -File tools/scripts/tests/sql_boot_catalog_local.tests.ps1`、`go_services_local_mysql.tests.ps1`、`go_services_ports.tests.ps1`、`go_services_stop.tests.ps1`、`maintenance_drain.tests.ps1` → `start_game.ps1`。本机卷若有旧 `mmorpg_global` 会报 `has tables but lacks the authority set`,按 README 清卷。
+
+**拿不准,要看真库结果**:
+
+- 跨库授权清单来自读码,漏表会在服务日志里报 1142;data_service 对 guild、mail、match、inbox、trade 按库授 `SELECT,UPDATE`,比实际用到的宽。
+- MySQL 上 `LOCK_TOUCH` 只读码核过,没用最小权限账号实跑。
+- schema 身份本机就是 root,`authority_operator_role.sql` 的 schema 段没有跑到;该段的 `GRANT INSERT ON mmorpg_guild.guild_player_state` 在表不存在时会报 1146,生产空库若先授权再迁移要留意。
+- 旧 writer 行不退休,只删账号;只影响本机维护演练。
+
+**没做**:docker 调试栈没接(产物是 Windows 路径和回环 DSN,要接得在 compose 里加 registrar init);mail、rank 的生产者签名密钥仍由调用方给,`start_game.ps1` 缺了就跳过;`tools/scripts/go_svc_image.ps1` 的 db 镜像 `Entry = "db.go"` 同样漏 `player_store_wiring.go`,K8s 镜像链路没动,要单独修。
+
+Java 版:不涉及(只是本仓本机启动工具;网关用的是已有的 `WriterAuthority`)。
+
+### 2026-10-31 Claude:部署脚本、告警、压测脚本同步映射直读与不停服合服,全局服务改排在 data-service 之后(未运行,待 Codex 验证)
+
+部署这一层跟上了路由只在全局库、合服只写 `zone_merged_into`、go/db 不用 Redis 这批改动。没有跑任何编译、测试和部署,只做了 ps1 语法解析和 yaml 解析。
+
+- **部署参数**:删 `-RouteStoreMode`、`-RouteReconcileArm`、`-RouteReadRequiresReady`、`-DbPlacementRequireRouteReady`、`-ConfirmRouteSwitchChange` 和线上粘滞核对,`dev_tools.ps1` 同步。没有新增参数。
+- **渲染与总账**:db 的 ConfigMap 不再写 `RedisClient`、`Placement.Required`、`RequireRouteReady`;data-service 写 `NameCacheRedis`,`RouteStore` 只剩 `MaxOpenConn`、`MaxIdleConn`、`MergedZoneRefreshSec`。Redis 总账删 db 行,data-service 只算一个缺省池。MySQL 总账的路由池恒计。scene-manager 铸造 owner_epoch 的 WAITAOF 副本数改由 `Get-OwnerEpochMintWaitAOFNumReplicas` 按 `Get-RedisTopology` 算。
+- **启动顺序**:全新集群上,全局服务要读的表由第一个 zone 的 `data-service-migrate` 建,guild、trade 还要读 `GetMergedZones`,所以 `infra-up -WaitReady` 原来会卡死。现在基础设施阶段只做全部全局服务的 ConfigMap 和迁移 Job,只有 client-rpc-router 连进程一起起;其余进程排在第一个 zone 的 data-service 就绪之后。`all-up` 自动按这个顺序。分开跑是 `infra-up` → `zone-up` → 再 `infra-up`,第一次 `infra-up` 只告警 `[GlobalGoSvc]Deferred:`,`zone-up` 末尾告警 `[GlobalGoSvc]NotStarted:`。迁移 Job 没有往后排,data-service 启动要核这些表。guild、trade 加了 `startupProbe`,预算 150 秒,盖住 60 秒等待。「读不到映射拒绝启动」没有放宽。说明见 `deploy/k8s/README.md`「全局服务的部署顺序」。
+- **告警**:`data-service-route-alerts.yaml` 只剩读失败、注册失败和四条映射刷新告警,新增 `MatchMergedZoneRefreshFailing`、`GuildMergedZoneRefreshFailing`、`TradeMergedZoneRefreshFailing`。其它告警文件里提到已删日志和映射 Redis 的注释按现状改了。
+- **压测脚本**:`stress_summarize.ps1` 的 D1 列改成 `rr_ok rr_nf rr_err`,P4 删 `rpool_wait`、`rpool_tmo`;`currency_crash_window.ps1`、`stress_round19.ps1` 删对账复位和 leader 探测。
+- **工具**:`k8s_route_tool.ps1` 只剩 `tidb-prepare`、`freeze`、`unfreeze`,退出码 0 / 2;`k8s_zone_rollback.ps1` 的部署事实改读 login ConfigMap 里的核心 Redis,Schema 升到 4。
+- **权限**:`authority_operator_role.sql` 加 `zone_merged_into` 的 `SELECT,INSERT,DELETE`。K8s 不渲染写者计划,go/db 和 match 要的 `player_route`、`zone_merged_into` 的 SELECT 写进了 `docs/ops/k8s-open-server-runbook.md` §1,由运维在 `tables` 里给。
+- **测试**:合同测试按上面同步;删 `dev_tools_route_switch_forwarding.tests.ps1`;`k8s_deploy_contract` 加了全局服务顺序、`Find-ReadyDataServiceNamespace`、startupProbe 预算的用例。
+
+**Codex 验证**:在仓库根目录逐个跑 `pwsh -File tools/scripts/tests/<名字>.tests.ps1`,名字是 `k8s_deploy_contract`、`k8s_client_entry_contract`、`k8s_redis_split_contract`、`k8s_migrate_gate`、`k8s_route_tool`、`k8s_zone_rollback_discard`、`dev_tools_merge_zone_contract`、`maintenance_drain`、`lobby_authority_render`;再跑 `pwsh -File tools/scripts/test_stress_summarize.ps1`。全部退出码 0 算通过,失败保留原始输出,不要改断言。CI 跑的是 `tools/scripts/tests` 一级目录的全部脚本,有余力一起跑。这些测试不需要集群。集群上的顺序还没人验证过,要在首次开服演练里看:`-WaitReady` 不卡死,guild、trade 不反复重启。
+
+**拿不准,要负责人看**:
+
+- 延后范围比原来说的 guild、trade 大:match、chat、friend、mail、player-inbox 也依赖 `data-service-migrate` 建的表,一起延后了。代价是全新集群分开跑多一次 `infra-up`。
+- `infra-up` 的 DryRun 按「已有 zone」渲染,产物是升级路径上会 apply 的内容,看不出全新集群的 Deferred 分支。
+
+**留着没动**:`go/scene_manager/etc/scene_manager_service.yaml` 第 56 行注释还写已删函数 `Get-RouteStoreWaitAOFNumReplicas`(`go/**` 不在这次范围);`go/proto` 生成物里的 `save_barrier` 等旧名,`proto/` 源里已没有,等重新生成;`docs/design` 的旧设计和已标作废的段落保留原文。
+
+Java 版:不涉及(部署脚本和告警是本仓内部实现,没碰客户端契约),`PARITY.md` 不加行。
+
+### 2026-10-31 Claude:删观战记录键 `spectate:battle:{id}`,备战预算随之收窄;docker 调试栈接上写者授权(未运行,待 Codex 验证)
+
+没有跑任何编译、测试和容器,只做了 gofmt、ps1 语法解析、python 语法和 compose 的 yaml 结构核对。
+
+- **观战记录键**:观战记录早就由 SQL 成局现算(`loadSpectateBattle`),这个键只写没人读。删 `spectateBattleKey`、`writeSpectateRecord`、`publishSpectateBattle`、`spectateRecordWrite*`、`spectateRedisOpWorst`、`newSpectateRecord`。开局成功后直接 `addSpectateActive(battleId, createdAtMs, visibility)`。活跃集合和其余观战键不动。
+- **备战预算**:`gatherCreateStageWorst` 从 22.2s 变成 2×5 = 10s。1/2/5/10 人 = 30(配置下限,公式值 29)/35/53/83s,5 人开战锁 88s,十人组 scene 锁最长 +143s,`kConfirmResendWindowMs` 180s 仍够。两轮 Create 留着:建房前还有能力查询、存原件、核对工作租约三次调用(各 3s 上限),公式没单独计。设计文档 D5、k8s-client-entry、team-system 加了当天更正。
+- **docker 调试栈**:`db`、`data-service`、`login`、`match`、`gateway` 前各有一次性的 `<服务>-sql-boot`,与 K8s registrar init 同形状。新增 `lib/sql_boot_catalog_docker.ps1`(复用 `sql_boot_catalog_local.ps1` 的授权清单、账号、roster,端点写死 compose 的 mysql,本机入口的回环校验没动)、`deploy/debug/Dockerfile.sql-boot`(pwsh + mysql 客户端,`writer_authority` 由 `build_docker_go_debug.py` 叠上去)、`sql-boot` 公共步骤(补库、共用口令、判定全局库)。授权、每 boot 配置和 SQL 变量在命名卷 `<服务>-sql-writer`,消费标记在 `<服务>-sql-consume`。常驻配置不再带账号,`appuser` 共享账号删了。`rebuild_docker_debug.py` 更新写者时连注册步骤一起重建。用法见 `tools/scripts/README.md` 的 prepare_docker_debug.py 一节。
+- **顺带补的,否则同样起不来**:账号目录四把调用方密钥(data-service、login、scene-manager、match、scene)、data-service 的 `DB_ALLOWED_DATABASES`、`db-migrate` 和 `data-migrate` 改用 root 配置(`-migrate` 的 schema 主体原来没给)、`data-migrate` 只在空库跑(它拒绝已有表,而每次 `up` 都重跑一次性容器)。
+
+**Codex 验证**:
+
+1. `go/match`:`go build ./...`、`go vet ./...`、`go test ./internal/logic/ ./internal/team/`。预算断言在 `ticket_cas_test.go`、`team_battle_test.go`。
+2. `pwsh -File tools/scripts/tests/docker_debug_sql_boot.tests.ps1`(新增)、`sql_boot_catalog_local.tests.ps1`(`Resolve-LocalSqlBootSettings` 拆了一层,行为应不变)、`k8s_deploy_contract.tests.ps1`。
+3. 真实栈,旧卷先 `down -v`:`python tools/scripts/prepare_docker_debug.py` → `docker --context desktop-linux build -f deploy/debug/Dockerfile.sql-boot -t local/mmorpg-sql-boot:debug-20261031 deploy/debug` → 按 README 备齐其余镜像 → `python tools/scripts/rebuild_docker_debug.py go --services sql-boot` → `compose config --quiet` → `up -d --no-build --pull never --wait --wait-timeout 300`。通过标准:全部写者 healthy;`restart data-service` 明确拒启(grant 已消费);`up -d --no-deps --force-recreate data-service-sql-boot data-service` 能起;`stop` 后 `up` 能起;运行中再 `up` 不影响常驻容器。失败时留 `docker compose logs <服务>-sql-boot`,不要贴 `.env` 和展开后的配置。
+
+**拿不准,要负责人看**:
+
+- login 进程不连 SQL、不消费授权,也加了注册步骤,只为和 `go_services.ps1`、K8s 的写者清单同形状,代价是每次启动多注册一个没人用的身份。
+- chat、friend、guild、mail、rank、trade、player_inbox 不在这个栈里,这次没加。player_inbox 不在,全球匹配成局的结算投不到收件箱;mail、trade、player_inbox 的表也没建,data_service 跨域探针只记错误、不拒启。要不要把它们加进栈单独定。
+- pwsh 用 `ubuntu:24.04` 加官方 7.4.6 tar 包,没钉 digest,没实际构建过。
+
+**留着没动**(`cpp/**`、`proto/**` 不在这次范围,要改的人顺手更新):`cpp/nodes/battle/logic/battle_room_manager.cpp:215-217`、`.h:402` 的注释还写 42/48/66/96s 和 156s;`proto/match/match_service.proto:47、:180-181` 的注释还提 `spectate:battle:{id}`。`docs/design/` 里其余提到这个键的旧条目按要求不回头改。
+
+**顺带发现,没改**:`k8s_deploy.ps1` 的 `Add-SqlWriterBootManifest` 把 login 列进去,但它要求 Go 参数第一个是 `-f`,login 是 `-loginService`,部署 login 时会抛错。
+
+Java 版:不涉及(观战协调键和调试栈都是本仓内部实现,没碰客户端契约),`PARITY.md` 不加行。
+
+### 2026-10-31 Claude:玩家态 Redis 集群化第 3 批落码(未编译,待 Codex 验证)
+
+设计见 [redis-player-store-cluster.md](design/redis-player-store-cluster.md) §5.2、§5.3、§5.10、§13。这批只改键形和脚本结构,连接还是单实例。未提交。
+
+**键改名**:`handoff`、`location`、`location_revision(_floor)`、`leave_release_wait`、`channel_switch_cooldown`、`enter_scene:dedup`、`login_generation`、`sync_digest`、`player_locker`、`login_idempotent`、`battle:lock`、`battle:ctx`、`player:session`、`player:afk_pass` 全部带 `{player_id}`。构造函数集中在 `go/shared/redisslot/player_keys.go` 和 C++ `player_ownership_comp.h` 等处,两边金样钉住。旧键 `player:location:<id>` 的读者已删。
+
+**离场与人数**:`instance:<scene>:player_count`、`node:zone:<z>:<node>:player_count` 改成成员集合 `…:members`,人数 = SCARD,这两把键留在控制域、不带 tag。离场拆两步:玩家域条件删 location,控制域摘成员,第二步失败回错误让 player_locator 重试。撤销无资格持有者同样拆开。不变量「location 指向 ⇔ 是成员」由三条约定收敛,见 `scene_membership.go`。
+
+**脚本结构**:C++ `player_team` 的跨玩家 MGET 拆成两跳 GET;friend、guild、match、player_locator 的跨玩家 MGET 改按 slot 分组(`playerstore.MGetBySlot` / `MGetStringsBySlot`)。新增 `scene_keys_contract_test.go`:玩家域脚本同 slot、控制域键不带 tag,并走一遍真实进场离场核对每条 EVAL 不跨域。
+
+**留给后面**:
+
+- 第 5c 批:C++ 句柄切换。
+- 第 6 批:friend、match 换 `UniversalClient` 后删 `MGetStringsBySlot`;scene_manager 分玩家域与控制域句柄(`removeSceneMember` 读 location 走玩家域);friend 在线目录与 player_locator 的 SCAN 逐主节点。
+- 第 7 批:player_locator 的 `replaceSessionAndCancelLeaseScript`、`setDisconnectingScript`、`deleteSessionIfUnchangedScript`、`claimExpiredLeasesScript`(现拼会话键)、`commitLeaseExpiryScript`、`rearmLeaseClaimScript`、`enqueueOfflineCleanupScript`、`pruneGateIndexMemberScript`、`repairGateIndexMemberScript` 这批只改了键形,仍跨槽。
+
+**拿不准,要负责人看**:
+
+- `GetLocation` / `SetLocation` 两个 RPC 只改成 fail-closed,没删协议,删要跑 proto 生成。
+- 摘成员先读一次 location、摘完再读一次,每次摘成员多一次读,换来排空收尾、机会迁移不会因人数下探而动一个有人的频道。压测时看 EnterScene 延迟。
+- scene_manager 在预占后或摘旧场景前崩溃,会留下没人摘的成员,与计数器时代多计一次同一后果,没做对账。
+
+**Codex 验证**(都在仓库根下,串行,失败时留完整错误输出,不要重试):
+
+1. Go,先 `gofmt -l` 确认本批文件无输出(`agones_binding.go` 是既有问题),再逐模块跑:
+   - `cd go/shared && go build ./... && go vet ./redisslot/... ./playerstore/... ./ownerepoch/... ./playersync/... ./scenenode/... && go test ./redisslot/... ./playerstore/... ./ownerepoch/... ./playersync/... ./scenenode/...`
+   - `go/scene_manager`、`go/player_locator`、`go/player_inbox`、`go/friend`、`go/guild`、`go/login`、`go/mail`、`go/match`:各自 `go build ./... && go vet ./... && go test ./...`。
+   - `robot`:`go build ./...`。
+   - 通过标准:全绿。scene_manager 的测试改动最大(人数断言从字符串计数换成成员集合),没跑过,红了先看夹具的玩家是不是成员,不要直接改期望。
+2. C++:`msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`(必须串行),然后跑 `currency_test --gtest_filter=CurrencyTest.PlayerDomainRedisKeysMatchGoContract` 和全量 `cross_zone_test`。设了 `MMORPG_TEST_REDIS_ADDR` 时再跑 `currency_test` 全量,真 Redis 用例的键形已同步。
+3. PowerShell:`pwsh -File tools/scripts/tests/k8s_zone_rollback_discard.tests.ps1`。
+4. 跨语言:`go test ./redisslot/ -run TestBattleKeyFormatsMatchCpp`(在 `go/shared`,解析 C++ 头)。
+
+Java 版:0.1.0-SNAPSHOT 不涉及(只改服务端内部的 Redis 键形和人数统计,客户端契约没动),`PARITY.md` 不加行。
+
+### 2026-10-31 Claude:玩家态 Redis 集群化第 5b、5c 批落码(未编译,待 Codex 验证)
+
+scene 的玩家域命令全部换到 `tlsPlayerRedis`(`RedisClusterClient`),控制域留在 `tlsRedis`。设计见 [redis-player-store-cluster.md](design/redis-player-store-cluster.md) §5.6 末段,§13 已改状态。
+
+**配置**:`game_config.yaml` 的 `player_redis`(`GameConfig.player_redis = 9`):`mode`、`seeds`、`password`,环境变量 `PLAYER_REDIS_PASSWORD` 覆盖口令。整段缺失 = standalone,地址与口令沿用 `zoneredis`,开发环境不用改。配错了 scene 拒绝启动,gate、battle 不读这一段。
+
+**键的归属**:
+
+- 玩家域:`player:{id}:owner_epoch`、`handoff`、`handoff_fence`、`location`、`sync_digest`,`battle:lock:{id}`、`battle:ctx:{id}`。
+- 控制域:`world_channel_directory:zone:*`、`mystery_merchant:zone:*`、`PUBLISH assetop:wake`。
+- 只有 scene 连玩家域。battle 节点已经不访问 Redis,gate 不访问玩家域。
+
+**改动**:
+
+- `RedisSystem`:解析配置、建连、重连回调(任一主节点握手触发,每秒最多补发一轮)、30s 快照多一行 `[PlayerRedis]`。`Node` 收尾与 scene 入口都释放 `tlsPlayerRedis`。
+- 调用点:`player_lifecycle`、`role_admission_system`、`player_battle`、`player_team`、`player_landing`。其中 10 处原来忽略 `command()` 的返回值(`connected()` 为真时单个 slot 也可能不可用),补了检查,走与「Redis 断开」相同的降级。
+- `tlsPlayerRedis` 用 `HashTagPolicy::kAllKeys`:单键命令也必须带 tag,控制域的键发到这个句柄当场拒绝,单实例开发时也一样。`RedisClusterClient` 的缺省策略不变。
+- FIFO 依赖逐处核对,结论表在设计 §5.6 末段。同玩家的顺序靠同 slot 停等;跨玩家的回调链第 3 批已显式。原来排在同一连接上、现在没有顺序的是「玩家域命令 → `PUBLISH assetop:wake`」两处,都不依赖,理由写在表里。
+- 新增契约测试 `cpp/tests/currency_test/player_redis_route_contract_test.cpp`:scene 的全部多键 Lua(10 段交接脚本与战斗锁脚本的 KEYS)过真正的路由判定,断言同 slot、带 tag;控制域的键和 `PUBLISH` 上不了这个句柄。
+
+**部署批次(第 10 批)要接的**:scene 的 node ConfigMap 写 `player_redis`(`k8s_deploy.ps1` 的 `New-NodeConfigMapYaml`);口令写进 yaml 或注入 `PLAYER_REDIS_PASSWORD`;连接总账加 scene 每进程 M 条(`k8s_deploy.ps1` 与 `k8s_deploy_contract.tests.ps1` 现在写的「C++ 每进程 1 条」只算控制域);告警抓 `[PlayerRedis]`。不写 `player_redis` 时行为不变。
+
+**拿不准,要负责人看**:
+
+- `tlsPlayerRedis` 没放进 `thread_context/redis_manager.*`,放在 `redis_cluster_client.{h,cpp}`,`redis_manager.h` 留一行指引:反过来放是 `thread_context` 与 `infra` 的循环依赖。
+- 登录读锁与进场唤醒原来同连接,现在没有顺序。slot 迁移或切主时读锁可能卡到 10s,重投的资产指令可能先于冻结重建到达。没改成回调链:周期重投本来就能落进这个窗口,读锁空应答时窗口更长。
+- 单键守卫是第 5a 批留待决定的,这批打开了。
+
+**Codex 验证**(都在仓库根下,串行,失败时留完整错误输出,不要重试):
+
+1. 协议生成,必须先跑,否则 `player_redis()` 不存在:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`(没有工具时先跑 `-Command proto-gen-build`)。期望 `cpp/generated/proto/common/base/config.pb.{h,cc}` 与 `go/proto/common/base/config.pb.go` 多出 `player_redis`。
+2. C++:`msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`,必须串行。第 5a 批也没编译过,路由层的编译错误会一起出现。
+3. 单测,全绿为通过:
+   - `currency_test --gtest_filter=PlayerRedisRouteContract.*:CurrencyTest.PlayerDomainRedisKeysMatchGoContract`
+   - `rpc_controller_test --gtest_filter=RedisCommandRouteTest.*:RedisNodeEndpointTest.*:RedisReplyClassifierTest.*:RedisRetryBudgetTest.*:RedisSlotQueuesTest.*:RedisClusterTopologyTest.*:RedisSlotTest.*`,再跑全量 `rpc_controller_test`
+   - `configuration_table_test --gtest_filter=GameConfigPlayerRedis.*:GameConfigEnvOverride.*:GameConfigPlayerInbox.*`
+   - 全量 `cross_zone_test`、`currency_test`、`bag_test`、`routing_identity_test`、`player_landing_test`。这些宿主没有 Redis,走的是 `tlsPlayerRedis` 未连接的分支,断言不该变
+   - 设 `MMORPG_TEST_REDIS_ADDR` 再跑一遍 `currency_test`,真 Redis 用例用同步连接直接跑脚本,不经句柄
+4. Linux:`cpp/tests/redis_lifecycle_test` 按它的 CMakeLists 构建运行。
+5. 冒烟,不改任何配置起本机全套:scene 日志有 `Player Redis: mode=standalone seeds=127.0.0.1:6379 auth=off`,没有 `Redis cluster guard rejected command`;跑 `robot` 的 travel-smoke,`[PlayerRedis]` 行的 `rejected_by_guard=0`。
+
+没有编译,以上都没有运行证据。真集群验证(§14.2)要等第 10 批的 compose 集群。
+
+Java 版:0.1.0-SNAPSHOT 不涉及(只改服务端内部的 Redis 句柄和部署配置,客户端契约没动),`PARITY.md` 不加行。
+
+### 2026-10-31 Claude:玩家态 Redis 集群化第 6 批落码(未编译,待 Codex 验证)
+
+设计见 [redis-player-store-cluster.md](design/redis-player-store-cluster.md) §5.7、§5.8、§5.10、§13。改了约 95 个文件,超过 AGENTS §10.2 的 30 文件线,范围是派发时定的(七个服务加包改名,测试夹具占了很大一部分)。未提交。
+
+**包改名**:`go/shared/playerstore` → `go/shared/playerredis`。它是玩家域 Redis 的客户端,和 TiDB 的 `player_store` 表、`go/db/internal/playerstore` 不是一回事。
+
+**配置**:各服务加 `PlayerRedis`(类型 `playerredis.Config`)。没写 `Addrs` 时指向这个服务现有的 Redis 单实例,所以开发环境和还没渲染这一段的 K8s ConfigMap 都不用改。`etc/*.yaml` 只把 `PoolSizePerNode` 写明。`Cluster: true` 却没写种子时拒启。
+
+| 服务 | 玩家域句柄读写 | 没写 `Addrs` 时指向 | 连接池(`PoolSizePerNode`) |
+|---|---|---|---|
+| scene_manager | location、修订、离场等待、冷却、去重、owner_epoch、handoff、handoff_fence | `Redis` | 20,铸造通道另有 32 |
+| friend | 会话、同步摘要 | `Redis` | 20 |
+| match | 会话、位置、战斗锁、同步摘要 | `Redis` | 20 |
+| guild | 会话、位置、战斗锁、同步摘要 | `PlayerLocatorRedis` | 跟它(yaml 20),摘要专用池 4 |
+| trade | 位置 | `SharedRedis` | 跟它(yaml 20) |
+| player_inbox | owner_epoch、位置 | `CoreRedis` | 跟它(yaml 20) |
+| mail | 会话、位置 | `SharedRedisAddr` | 8 |
+
+data_service、chat 不读玩家域键,没动。login 不在这批。
+
+**scene_manager 分句柄**:`svcCtx.PlayerRedis` 是玩家域,`svcCtx.Redis` 是控制域。`removeSceneMember` 读 location 走玩家域,写成员走控制域。调用点收在 `logic/player_redis.go`,`Get` 缺键仍翻成空串,判断逻辑没变。新用例 `TestPlayerDomainAndControlDomainCanLiveOnSeparateInstances` 把两个域放到两个 miniredis 上走一遍进场、重连、换图、回滚、离场。
+
+**铸造通道**按 [回退防护 §4.3.3](design/zone-redis-regression-guard-20261022.md) 的三处改完:按第一个键取主节点再发 pipeline;MOVED / ASK / TRYAGAIN / CLUSTERDOWN / LOADING / READONLY 算没执行,重发上限 16 次,不计入结果未知的 3 次;启动探针逐主节点发。`Redis.Type=cluster` 拒启那条删了,连接身份取 `PlayerRedis`。这条 pipeline 含 EVAL,守卫的管道规则会拒绝它,所以用 `playerredis.NewPinned`,键的规则由 `EvalAndConfirm` 发送前调 `CheckKeys`。
+
+**成员集合对账**(`logic/scene_member_reconcile.go`):只有领导者跑。每 10s 一轮,每轮最多读 2000 个成员的 location、发 512 条 SSCAN,下一轮接着走(`SceneMemberReconcile.IntervalSeconds / MembersPerRound / ScansPerRound`)。location 不指向这里的成员走 `removeSceneMember`,读不到或写坏的不动。指标 `scene_manager_scene_member_reconcile_members_total{outcome}`、`scene_manager_scene_member_reconcile_passes_total`。100 万在线走完一遍约 2.8 小时(推算)。
+
+**friend 在线目录**:改 `playerredis.ScanPage`。游标从 `v1:<scan>:<偏移>` 换成 `v2:<摘要>.<主节点序号>.<节点内游标>:<偏移>`,客户端不解析。拓扑变了从头开始,客户端按玩家 id 去重。
+
+**删除**:`MGetStringsBySlot`、`PipelineRunner`、`playersync` 的 go-zero 适配器、friend 与 match 的 `SharedRedis` 字段。
+
+**拿不准,要负责人看**:
+
+- `ScanPage` 的指纹不含 run_id,只读一个节点的 `CLUSTER NODES`。逐主节点读 run_id 是每页 2 × 主节点数次往返。代价是主节点原地重启后旧游标可能漏键,在线目录能接受,所以偏离了 §5.7 原文,原因写在设计文档里。
+- 没写 `PlayerRedis` 时静默落到现有实例。上了真集群之后,漏配的服务读到的是控制域,表现是全员不在线。启动日志和横幅打印了落点,部署批次要把每个服务都渲染上。
+- 玩家域句柄没有 go-zero 的熔断器和自动重试。Redis 整个不可用时每个请求要等到超时才失败;瞬时网络错误不再自动重发,直接报给调用方。这是 §5.7 要的语义,但 EnterScene 的错误率和尾延迟要在压测里看。
+
+**留给后面**:
+
+- 部署批次(第 10 批):ConfigMap 渲染 `PlayerRedis.Addrs` / `Cluster` / `Password` 或 `PasswordEnv`;连接总账给 scene-manager、friend、match、guild、trade、player-inbox、mail 各加一个玩家域池(Cluster 下按节点算,`ownerEpochMintPoolSize` 同样),`Get-RedisPoolMirror` 镜像 `PlayerRedis.PoolSizePerNode`。告警没加。
+- 第 7 批:player_locator 的 `MGetBySlot` 只改了 import,句柄和跨槽脚本没动。
+- 第 11 批:各服务的 `LoginRedis`。
+
+**Codex 验证**(都在仓库根下,串行,失败时留完整错误输出,不要重试):
+
+1. `gofmt -l go/shared/playerredis go/shared/playersync go/shared/scenenode go/friend/internal go/guild/internal go/match/internal/svc go/match/internal/team go/match/internal/config go/match/internal/playercontract go/trade/internal/svc go/trade/internal/config go/player_inbox/internal go/scene_manager/internal/svc go/scene_manager/internal/config go/scene_manager/internal/metrics`。`go/mail/mail.go` 单独查。已知既有输出不用管:`go/trade/internal/commerce/tick_isolation_db_test.go`、`go/trade/internal/data/commerce_repo.go`、`go/match/internal/authority/pvp_team.go`、`go/match/internal/catalog/catalog_test.go`、`go/match/internal/metrics/pool.go`、`go/match/internal/poolgroup/poolgroup.go`、`go/scene_manager/internal/logic/agones_binding.go`。
+2. `go mod tidy`:`go/match`、`go/mail`。go-redis 从 indirect 变 direct,版本不该变。其余模块依赖没变。
+3. `cd go/shared && go build ./... && go vet ./playerredis/... ./playersync/... ./scenenode/... ./redisslot/... && go test ./playerredis/... ./playersync/... ./scenenode/... ./redisslot/... ./assetop/...`
+4. 逐模块 `go build ./... && go vet ./... && go test ./...`:`go/scene_manager`、`go/player_inbox`、`go/friend`、`go/guild`、`go/match`、`go/mail`、`go/trade`、`go/player_locator`(后者另有代理在改,只看 `gate_session_index.go` 的 import 能否编译)。需要真 TiDB / MySQL 的用例按各模块原来的环境变量跑,没配就按原样跳过。通过标准:全绿。
+   - scene_manager 改动最大:`TestSceneMemberReconcile*`、`TestPlayerDomainAndControlDomainCanLiveOnSeparateInstances`、`TestEvalAndConfirm*`、`TestOwnerEpochMintClientConfig` 是新的或改过的。红了先看夹具的 `PlayerRedis` 是不是连到了同一个 miniredis,不要直接改期望。
+   - `TestEvalAndConfirmNotExecutedHasALimit` 有真实退避,最多约 3.4s。
+   - `TestScanPageClusterClient` 让 `ClusterClient` 连 miniredis。它要是因 miniredis 不支持而失败,说明这条路径只能真集群验,把错误贴回来,不要删用例。
+5. `pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:`ownerEpochMintPoolSize` 字面量没改,yaml 只多了一段。
+6. 冒烟,不改任何配置起本机全套:scene_manager、friend、match、guild、player_inbox、trade 的启动日志或横幅有 `addrs=127.0.0.1:6379 cluster=false`(trade 只有开了资产通道才有),没有 `playerredis:` 开头的守卫错误;跑 `robot` 的 travel-smoke,`curl -s http://127.0.0.1:9150/metrics | grep scene_member_reconcile` 里 `outcome="error"` 为 0、`passes_total` 在涨。
+
+真集群验证(§14.2)要等第 10 批的 compose 集群。没有编译,以上都没有运行证据。
+
+Java 版:0.1.0-SNAPSHOT 不涉及(只改服务端内部的 Redis 句柄;在线目录游标对客户端是不透明串,客户端不解析,客户端契约没动),`PARITY.md` 不加行。
+
+### 2026-10-31 Claude:玩家态 Redis 集群化第 7 批,player_locator 按 slot 分桶(未编译,待 Codex 验证)
+
+设计见 [redis-player-store-cluster.md](design/redis-player-store-cluster.md) §5.9 末段、[player-locator-gate-session-index.md](design/player-locator-gate-session-index.md) §2–§4。未提交。
+
+**键形**:会话 `player:session:{<pid>}` 不变。租约 `player:leases:{<slottag>}` 及同 tag 的 `:processing`、`:claim_tokens`、`:claim_payloads`,gate 索引 `player:gate_index:{<slottag>}:sessions:<uuid>`、`player:gate_index:{<slottag>}:gates`,都按会话 pid 的 slot-tag 分桶。就绪、代次、审计时间、选主锁留在控制域,不带 tag。能力键与就绪标记换 v2 前缀。
+
+**脚本**:会话 CAS 与本 slot 的租约、索引在同一段 Lua 里维护,I1 不变。KEYS 恒定长度,`""` 哨兵挪进 ARGV,没有索引的位置放本 slot 的登记集占位。认领拆两步:按 slot 认领只返回成员与令牌,逐人的钉载荷脚本声明会话键后核令牌。全部校验先于写入,可能报键类型错的簿记排前面,会话字节最后写。
+
+**分片**:`slot_shard.go`,256 段,每段 64 个 slot。每 10s 心跳登记成员、读全部段租约、续约,公平份额 `ceil(256 / N)`,超过的释放,不足的接管无主段。`lease_monitor` 与 `gate_sweep` 各一套键,etcd 不可达只让清扫让出段。死 gate 清扫改成每个副本扫自己的 slot(`gate_sweep.go`),连续 3 拍失败退出分片,成功一拍回来。写者检查与补建 / 审计仍由一个 leader 跑,全键扫描换 `playerredis.ScanEachMaster`。
+
+**LeaseMonitor**:每拍取「持有 slot 数 × 拍长 / `ScanRoundSeconds`」个 slot,pipeline 探测 ready 与 processing,全服约 2048 条 ZCOUNT/s,与副本数无关,一拍最多认领 `BatchSize` 个。MarkOffline 入队清理后到点叫醒本进程处理那个 slot,首拍不多等一个探测周期。
+
+**句柄**:玩家域 `ServiceContext.PlayerRedis`(`redis.UniversalClient`,配置 `PlayerRedis`,整段不写时指向 `RedisClient` 这个单实例),控制域 `RedisClient` 照旧。
+
+**测试**:每段多键脚本加了同 slot 契约(`script_slots_contract_test.go`,含走一遍真实生命周期核对每条 EVAL);单测的玩家域客户端挂生产守卫,跨 slot 当场失败。现有语义的用例按新形状改,没有删覆盖,唯一删掉的是 `TestParseRedisRunID`(那段解析已移到 `ScanEachMaster`)。「同一页全部转换失败就整拍失败」的用例改成「坏租约键只影响一个 slot」,理由见下。新增分片(`slot_shard_test.go`:接管、公平份额、无主段、退出回归)、探测与认领(`leasemonitor_scan_test.go`)。
+
+**其他服务**:没有别的服务读租约或 gate 索引键,friend、guild、match、mail、login 只读会话键,键形没变。
+
+**留给部署批次**(本批没碰 `deploy/**`、`tools/scripts/**`):
+
+- `tools/scripts/k8s_deploy.ps1` 的 player-locator ConfigMap 加 `PlayerRedis` 段:`Addrs`、`Cluster`、`PasswordEnv` 或 `Password`、`PoolSizePerNode`。不写时现状能跑。Redis 连接总账:缺省时 player_locator 多一个 `RedisClient.PoolSize` 大小的池,要算进去。
+- `deploy/k8s/player-locator-alerts.yaml`:`DeadGatesPending` 现在按 is_leader 过滤,只看得到 leader 自己那一份,改成 `sum(player_locator_reconcile_dead_gate_members) > 0`;`RoundsFailing` 的 `> 3` 现在是全部副本合计,要按副本数重估;`LegacySessionWriters` 描述里的能力键前缀换 v2;`GateIndexNotReady` 描述里的 `redis run_id changed` 换成拓扑变化;新增 `sum by (role) (player_locator_slot_shard_segments) < 256` 持续 5 分钟。
+- `tools/scripts/deploy-staging.sh`、`stress-linux-tier.sh` 的清理模式加 `player:leases:*`、`player:locator_shard:*`(`player:gate_index:*` 新旧形状都匹配)。
+
+**拿不准,要负责人看**:
+
+- 登记集收紧:一把索引键空了就把 gate 移出本 slot 的登记集。B0-1 原写法是「登记集只增不减,gate 死后释放」,按 slot 分桶之后一个长寿 gate 迟早碰遍 16384 个 slot,不收紧的话登记集约 7.3e7 个成员 [I]。每次摘成员多一次 SCARD。
+- `gate_index_members`、`dead_gate_members` 改成每副本一份的索引键数,不再逐键 SCARD(目标规模下每拍千万条命令)。这两个指标不再是「成员数」,名字没改。
+- 两套分片比一套多一倍读量:2Z = 890 个副本时全服约 4.6 万 GET/s [I]。换来 etcd 不可达时断线租约照常到期。
+- 全键扫描换 `ScanEachMaster` 之后,SCAN 一次失败整遍作废(原来对同一游标重试 5 次),玩家域客户端又不自动重放。目标规模下一遍接近 19 小时 [I],这条要在 `ScanEachMaster` 里加同游标重试才算稳,`shared/playerredis` 不归本批。
+- 清扫的 `MaxTransitionsPerSecond`、`DeadGateMembersPerRound` 现在按副本计,全服上限随持段副本数涨。LeaveScene 与踢人命令的下游压力仍由 LeaseMonitor 的 `BatchSize` 限住。
+- 每个持段副本每拍读一次 etcd 全量 gate(原来只有 leader),目标规模下最多 256 次 / 60s,每次约 2 MB [I]。要压可以改成 leader 发布死 gate 名单。
+- 索引内存约 3–4 GB [I],比全局索引多一倍多。
+
+**Codex 验证**(都在仓库根下,串行,失败时留完整错误输出,不要重试,不要改期望):
+
+1. `gofmt -l go/player_locator/internal go/player_locator/player_locator.go`,期望无输出。
+2. `cd go/shared && go build ./... && go vet ./redisslot/... ./playerredis/... && go test ./redisslot/... ./playerredis/...`(`shared/playerredis` 是另一个代理在改的,这里只确认依赖能编)。
+3. `cd go/player_locator && go build ./... && go vet ./... && go test ./...`。通过标准:全绿。`TestEveryPlayerDomainEvalStaysInOneSlot` 红时先看缺的是哪段脚本;`internal/logic` 大改过,没编译过,编译错是预期内可能发生的,照错修。
+4. 有 etcd 时:`cd go/player_locator && go test -tags integration ./internal/node/...`(能力键随租约存亡,确认 v2 前缀不影响)。
+5. 真 Redis(单实例,7.2 与 8.x 各一轮,只记录结果,不下性能结论):按 B0-1 §12 末尾的核对步骤跑 robot login-test,再结束 gate 进程等约 3 分钟。
+
+Java 版:0.1.0-SNAPSHOT 不涉及(只改服务端内部的 Redis 键形与后台循环,没动客户端契约),`PARITY.md` 不加行。
+
+### 2026-10-31 Claude:玩家态 Redis 集群化第 11 批,登录域与 go/login 玩家域句柄(未编译,待 Codex 验证)
+
+设计见 [redis-player-store-cluster.md](design/redis-player-store-cluster.md) §10.2 末段。未提交。
+
+**键形**(构造函数在 `shared/redisslot/login_keys.go`,`AccountTag` 配金样):`login_session:{<gate>:<inc>}`、`login:sessfence:{<gate>:<inc>}`、`login_account_sessions:{<tag>}:<account>`、`account_refresh:{<tag>}:<account>`、`access_token:{<tag>}:<secret>`、`refresh_token:{<tag>}:<secret>`、`refresh_family:{<tag>}:<id>`、`login:password:quota:v1:{<指纹>}`。
+
+**令牌**:字符串改成 `<tag>.<secret>`。校验先拆字符串,格式不对按无效令牌,不访问 Redis;读到载荷再核对账号的 tag。索引成员和家族 `head` 存 secret,四段令牌脚本一个字没改,一次性轮换、家族作废、账号封顶淘汰都在。
+
+**登录提交拆两步**:脚本只碰栅栏和登录态,连接没关才写;成功后 `SADD` + `PEXPIRE` 设备集。第 2 步失败回 `kLoginRedisSetFailed`,登录态随 TTL 过期;Disconnect 抢在第 2 步之前留一个陈旧成员,下一次 `PruneStaleFromDeviceSet`(已改 `MGetBySlot`)剔除。其余栅栏脚本都是单键,不用拆。
+
+**句柄**:login 分三个。`PlayerRedis` 管 `player_locker`、`login_idempotent`、`login_generation`;`LoginRedis` 管上面七族,口令配额的专用小池地址随它;`RedisClient` 只剩账号锁和 gate 排空标记。没写 `Addrs` 时都指向 `Node.RedisClient` 那一个实例,开发环境不用改。`playerredis.Config` 为此加了 `DB`,Cluster 下写非 0 拒启。`locker` 改收 `UniversalClient`,`shared/leader` 加 `UniversalMaxCallDuration`。
+
+**读者**:chat、friend、guild、match、mail、trade 的登录态句柄换 `playerredis.New`(mail、trade 设计没写,它们也读),配置共用 `playerredis.LoginReaderConfig`。这一段两种写法都认,新键优先:`k8s_deploy.ps1` 渲染 `Addrs`、`PoolSizePerNode`,etc 下的 yaml 与本机脚本写 `Host`、`PoolSize`。
+
+**删除**:`RefOf` 的 legacy 分支、`Ref.Legacy`、`Ref.WriteKeys` 双写、`loginsession.Save`、`loginsession_legacy_key_total`、`KeyOf ok=false` 的放行分支、`enterGameSessionState.fenced`、`constants.GenerateSessionKey`、`shared/loginsession.KeyFromMember`。没有会话代次的连接:Login、CreatePlayer、EnterGame 回 `kLoginSessionIdNotFound`,Login 在认证之前拒绝;Disconnect、LeaveGame 记 ERROR 后返回。
+
+**拿不准,要负责人看**:
+
+- `LegacyGateLoginEnabled` 和 `legacy_gate_killswitch_*` 没删。它管的是 gate 上口令 / 第三方首认证,不是没有会话代次的 gate,`access_token` 绑定和弃用遥测的分类还要它。只删了 `fenced=false` 的子用例。要一起废掉 gate 上的凭据登录是另一件事。
+- `account_lock:*` 留在控制域,设计表没列。每次登录一次 `SET NX` 加一次释放,按登录速率压控制域,开服峰值要看。
+- 第 2 步失败时登录态留到 TTL。这条连接接着发 CreatePlayer / EnterGame 能读到账号:认证确实过了,不是越权,但绕过了设备数上限。设备数超限的分支原来就是这样,这里没加清理。
+- 单实例回落时 login 三个池各按 `Node.RedisClient.PoolSize`,上界从 20 变 60 条。流量分到三个池,实际占用没变多,但连接总账要改。
+- 读者配置留了双形状,是这批唯一的兼容写法。不留的话要同时改 `go_services.ps1`、`sql_boot_catalog_local.ps1` 和它们的三个测试,这些文件其他代理正在动,又跑不了。本机脚本切到新键之后删 `Host`、`PoolSize`。
+
+**留给后面**(第 10 批):`k8s_deploy.ps1` 已经给 login、chat、friend、guild、match 渲染新键。mail 的 ConfigMap 还写 `Host` 指向控制域,trade 的 `Rmb.LoginRedis` 没渲染,上 Cluster 时都要补,否则这两个服务读不到登录态,客户端请求一律被拒。`k8s_deploy_contract.tests.ps1` 里读 ConfigMap 的 `LoginRedis.Host`、`LoginRedis.PoolSize` 断言要跟渲染走;etc 下的 yaml 这批没改键,`Get-LoginRedisPoolKeyPath` 的旧键分支还不能删。
+
+**Codex 验证**(都在仓库根下,串行,失败时留完整错误输出,不要重试):
+
+1. `gofmt -l go/shared/redisslot go/shared/playerredis go/shared/loginsession go/shared/leader go/login/internal go/login/login.go go/chat/internal/config go/chat/internal/svc go/friend/internal/config go/friend/internal/svc go/friend/internal/session go/guild/guild.go go/guild/internal/config go/guild/internal/session go/match/internal/config go/match/internal/svc go/mail/mail.go go/mail/internal/server go/trade/internal/config go/trade/internal/svc`。应为空。
+2. 依赖没变,`go.mod` 不用动。match、mail 的 `go mod tidy` 按第 6 批那条。
+3. `cd go/shared && go build ./... && go vet ./redisslot/... ./playerredis/... ./loginsession/... ./leader/... && go test ./redisslot/... ./playerredis/... ./loginsession/... ./leader/...`。
+4. `cd go/login && go build ./... && go vet ./... && go test ./...`。这批改动最大,没编译过,编译错是预期内可能发生的,照错修。重点用例:
+   - `internal/logic/pkg/token`:`TestMalformedTokenIsInvalidWithoutTouchingRedis`、`TestTokenWithAnotherAccountTagIsInvalid`、`TestTokenPayloadAccountMustMatchTheTag`、`TestTokenLifecycleKeysStayInTheAccountSlot`,以及改过键形的 `TestTokenFamily_*`。`TestTokenFamily_CrossAccountIndexCorruptionCannotDeleteForeignFamily` 的夹具换了:脚本按本账号 tag 现拼键,够不到别的账号,所以把别的账号的载荷写进本账号键空间。
+   - `internal/logic/clientplayerlogin`:`login_commit_two_step_test.go`(两步提交的失败分支、Disconnect 抢先的自愈)、`redis_domains_wiring_test.go`(三个域放三个 miniredis,核对每个键落在哪)、`TestConnectionWithoutIdentityIsRejected`。红了先看夹具的 `LoginRedis` / `PlayerRedis` 是不是连到了同一个 miniredis,不要直接改期望。
+   - `internal/logic/pkg/loginsession`、`sessionfence`:`TestPruneStaleFromDeviceSetAcrossSlots`、`TestEveryFenceScriptPassesTheClusterGuard`。
+   - `LOGIN_TEST_LOCAL_AUTH_FIXTURES=1` 的真 MySQL / Redis 用例(`TestInitAuthProvidersRealSQLCanonicalQuotaAcrossReplicas`、`TestPasswordQuotaRealRedisCrossReplica`)按原来的环境跑,没配就跳过。`TestTokenFamily_RealRedis` 同理。
+5. 逐模块 `go build ./... && go vet ./... && go test ./...`:`go/chat`、`go/friend`、`go/guild`、`go/match`、`go/mail`、`go/trade`。需要真 TiDB / MySQL 的用例按各模块原来的环境变量跑,没配就按原样跳过。其中 mail、match 的 `go.mod` 里 go-redis 是否 direct 按第 6 批已有的 `go mod tidy` 结果,这批不新增依赖。
+6. `pwsh -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:etc 下读者的 `LoginRedis` 键没变,login.yaml 只多两段。这个测试同时受第 10 批改动影响,红了先看是不是 ConfigMap 渲染的键,不要改 Go。
+7. 冒烟,不改任何配置起本机全套:login 启动横幅有 `player redis: addrs=127.0.0.1:6379 cluster=false`、`login redis: addrs=127.0.0.1:6379 cluster=false`,没有 `playerredis:` 开头的守卫错误;跑 `robot` 的 login-test 与 travel-smoke,`redis-cli --scan --pattern 'access_token:*'` 的键带 `{<tag>}`,`login_session:` 的键带 `{<gate>:<inc>}`。
+8. 真集群验证(§14.2)要等第 10 批的 compose 集群:`LoginRedis` 指向集群后再跑一遍 robot login-test。
+
+没有编译,以上都没有运行证据。
+
+Java 版:0.1.0-SNAPSHOT 不涉及。令牌仍是不透明串,客户端不解析,客户端契约不变,`PARITY.md` 不加行。Java 网关(`java/gateway_node`)不读这些键,只经 gRPC 透传令牌。
+
+### 2026-10-31 Claude:玩家态 Redis 集群化第 9、10 批,部署与工具收尾(未运行,待 Codex 验证)
+
+设计 [redis-player-store-cluster.md](design/redis-player-store-cluster.md) §13 第 9、10 行,实现补充在 §13 末尾;手册 [redis-player-cluster-runbook.md](ops/redis-player-cluster-runbook.md)。
+
+**第 10 批**
+
+- **清单**:`deploy/k8s/manifests/infra/redis-player-cluster.yaml`。`redis:8.10.2` 钉摘要,每主 1 副本可配,AOF everysec,PVC,`OnDelete`。每个 Pod 一个 ClusterIP Service,节点宣告 Service IP。建群 Job 全部空白才 `--cluster create`,否则只核对,核 `cluster_state:ok` 和 16384 个 slot。`redis-match-cluster.yaml` 头注释改掉。
+- **`k8s_deploy.ps1`**:`-PlayerRedisMasters`(dev 缺省 0 不建集群;staging、prod 必须显式,至少 3)、`-PlayerRedisReplicasPerMaster`、`-PlayerRedisMaxMemory`、`-PlayerRedisStorage`,`dev_tools.ps1`、`k8s_image.ps1` 透传。`infra-up` 建集群并等就绪。各服务 ConfigMap 渲染 `PlayerRedis`、`LoginRedis`,node ConfigMap 写 `player_redis`。口令走 Secret `redis-player-auth`(`MMORPG_PLAYER_REDIS_PASSWORD`),scene 带配置指纹。WAITAOF 副本份数取 1。`redis-wipe` 遍历加 `redis-player`。变更闸:缺集群、下线、缩容、改 PVC 都在写操作之前拒绝。
+- **连接总账**:每主节点连接 = Σ(每服务 `PoolSizePerNode` × 副本数) + scene 进程数,和 `maxclients` 比,80% 告警不阻断。打印行 `Redis player connection ledger: per_master ...`。建了集群时控制域那一份去掉这些池。
+- **告警**:`deploy/k8s/redis-player-alerts.yaml`,组 `redis.player-domain`,10 条。`scene-manager-alerts.yaml` 加成员对账组 3 条。`player-locator-alerts.yaml` 加 `PlayerLocatorSlotSegmentsUncovered`,并按分片后的指标改了 `DeadGatesPending`、`RoundsFailing`。
+- **本机**:`deploy/compose.redis-cluster.yml`(3 主 3 从,7100-7105,一次性建群容器);`tools/scripts/redis_cluster_capacity.ps1`,按 `INFO` 求差出每主节点 ops 与主线程 CPU,没压满或压测端同机就判不算证据,退出码 2。
+
+**第 9 批**
+
+- `maintenance_drain.ps1` 每主节点一个目标,记录取样首尾的拓扑指纹;`go/db/internal/maintenancephase` 核对目标集合等于持有 slot 的主节点、拓扑没变。
+- `stress_snap.ps1` 加 `k8s-cluster:`、`docker-cluster:`,每个时刻现列主节点;`stress_summarize.ps1` 的 R1、R2 逐主节点出行再合成 `<name>-all`。
+- `lib/redis_local_flush.ps1` 统一本机清库,`dev_tools.ps1 -Command redis-wipe-local`、`currency_crash_window.ps1`、`stress_round19.ps1` 共用。`deploy-staging.sh`、`stress-linux-tier.sh` 用 `REDIS_PLAYER_NODES` 逐主节点清。AGENTS.md §6 的命令同步。
+- `k8s_zone_rollback.ps1` 部署事实 Schema 5 加 `PlayerRedis`,线上是集群时缺种子或主节点数在停服之前拒绝。
+- `tools/data_consistency_check`、`tools/merge_zone`、`go/guild/cmd/assetopfix`、`go/data_service/cmd/debug_*` 核对过,不碰玩家域键。
+- **docker 调试栈**:加 `player-inbox`、`player-inbox-sql-boot`、`player-inbox-migrate`。`prepare_docker_debug.py` 生成配置与 root 建表配置,打开调试栈的 `player_inbox.consumer_enabled`。`rebuild_docker_debug.py`、`build_docker_go_debug.py`、`.vscode/tasks.json` 同步,调试端口 2352。
+
+**顺手修的,都与集群无关但验证部署时会卡住**
+
+- `deploy/k8s/manifests/go-svc/player-inbox.yaml` 缺 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE`,`NewConsumerVerifier` 缺它拒启,K8s 上 player-inbox 起不来。
+- trade 的 `Rmb.LoginRedis` 以前完全没渲染,`-AssetOps on` 时 `config.Validate` 拒启。现在各档位都写,资产通道关着时不连,总账按打开计。
+- `k8s_redis_split_contract.tests.ps1` 的 zone-up 夹具没有写者计划。写者计划夹具提到 `tests/lib/deploy_capture.ps1` 的 `New-SqlWriterCatalogFixture`。
+
+**测试**:新增 `redis_player_cluster_contract.tests.ps1`。`tests/lib/deploy_capture.ps1` 的 `Add-PlayerRedisDeployFixture` 给 staging、prod 的 DryRun 补一组合法参数,要测闸本身的用例显式传 `-PlayerRedisMasters`。`k8s_deploy_contract`、`k8s_redis_split_contract`、`k8s_client_entry_contract`、`docker_debug_sql_boot`、`lobby_authority_render`、`chat_authority_deploy`、`k8s_zone_rollback_discard`、`maintenance_drain`、`stress_snap_redis`、`test_stress_summarize` 同步。CI 的 paths 加 `deploy/compose.redis-cluster.yml`、`deploy/debug/**`、总账读的三个 Go 文件。
+
+**拿不准,要负责人看**:
+
+- `go/db/internal/maintenancephase` 没有按任务写的换成 `playerredis.ScanEachMaster`:这个包不自己扫 Redis,只核对 collector 的证据。改成逐主节点目标加拓扑指纹,保证相同,同样 fail-closed。
+- 部署脚本只渲染登录域与玩家域共用一个集群,拆开要再加参数。
+- 回档工具 `zone_rollback_discard` 还没落地,`k8s_zone_rollback.ps1` 只改了契约与预检。
+- 镜像摘要沿用 Java 版的 `redis:8.10.2@sha256:6f81e891…`。Docker Hub 现在这个标签的摘要是 `97ec88…`(10-22 重建),没用,要换就两版一起换。
+- `OnDelete`、`cluster-require-full-coverage no`、`save ""`、每主 1 副本 `min-replicas-to-write 0`,理由见设计 §7、§13 末尾。
+- 调试栈打开 `consumer_enabled` 只影响 `prepare_docker_debug.py` 的产物,源配置不动。
+- exporter 的指标名按 v1.62.0 凭记忆写的,阈值是占位值,部署后要核对。
+
+**Codex 验证**(都在仓库根下,串行,失败时留完整错误输出,不要重试):
+
+1. `gofmt -l go/db/internal/maintenancephase`,没有输出。
+2. `cd go/db && go build ./... && go vet ./internal/maintenancephase/... && go test ./internal/maintenancephase/...`。新用例在 `drain_test.go`。
+3. `cd go/player_locator && go test ./internal/logic/ -run TestAlertRulesReferenceRegisteredMetrics`。
+4. 逐个 `pwsh -NoProfile -File tools/scripts/tests/<名字>.tests.ps1`:`redis_player_cluster_contract`、`k8s_deploy_contract`、`k8s_redis_split_contract`、`k8s_client_entry_contract`、`docker_debug_sql_boot`、`lobby_authority_render`、`chat_authority_deploy`、`k8s_zone_rollback_discard`、`k8s_zone_rollback_gate_router_mode`、`k8s_migrate_gate`、`maintenance_drain`、`stress_snap_redis`、`redis_exporter_contract`、`redis_maxclients_contract`、`deploy_capture_contract`。再跑 `pwsh -NoProfile -File tools/scripts/test_stress_summarize.ps1`。这批没跑过,红了先看是夹具还是渲染,把错误带回来。
+5. `python tools/scripts/gen_docs_index.py --check`。
+6. 开发集群:`docker --context desktop-linux compose -f deploy/compose.redis-cluster.yml up -d`,`docker --context desktop-linux wait redis-player-cluster-init` 打印 0。按 `tools/scripts/README.md`「compose.redis-cluster.yml」把本机服务指过去,跑 robot 的 login-test 与 travel-smoke,再做设计 §14.2 的迁移与故障用例。这几份配置改动不要提交。
+7. 容量工具:`pwsh -File tools/scripts/redis_cluster_capacity.ps1 -Target docker-cluster:redis-player-cluster-0:7100 -ClientSteps 50,200 -StageSeconds 30`,产出 `capacity.txt`、`capacity.json`。压测端同机,退出码 2 是预期。容量结论要按设计 §14.3 在独占主机的环境里跑。
+8. kind:`pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-infra-up -PlayerRedisMasters 3 -WaitReady <其余参数>`,再 `k8s-zone-up -PlayerRedisMasters 3`,走手册 §3 的核对清单。再做一次手册 §4 的扩容和 §5 的缩容。
+9. docker 调试栈:按 `tools/scripts/README.md` 构建 `player-inbox` 镜像,重跑 `prepare_docker_debug.py`,`up -d`。全球匹配成局一次,确认结算进 `mmorpg_player_inbox`,scene 拉取后落到玩家身上。
+
+没有运行,以上都没有证据。语法层面做过:PowerShell 语法解析、YAML 解析、`gofmt -l`、`bash -n`。
+
+Java 版:0.1.0-SNAPSHOT 不涉及客户端契约,部署与工具都是服务端内部,`PARITY.md` 不加行。Java 自身 Redisson 单实例的集群化已在其 PARITY.md 第 274 行登记。
+
+### 2026-10-31 Claude:玩家存储水平扩展的服务器代码写完,Redis 评审修正(未编译,待 Codex 验证)
+
+[玩家态 Redis 集群化](design/redis-player-store-cluster.md) 第 3、5、6、7、9、10、11 批写完,第 4、8 批作废。到这里服务器代码写完,总验证清单在 [progress.md](handoff/player-save-direct-commit-20261030/progress.md)。上面第 11 批条目说账号锁留在控制域,后来移进了登录域,以设计 §10.2 为准。
+
+**两路评审修掉的(C++、Go 各一路,只读代码)**
+
+- `go/shared/playerredis/noreplay.go`:`ResultUnknownError` 删 `Unwrap`,改 `Cause()`。go-redis 9.17 的 `shouldRetry` 用 `errors.Is`,带 `Unwrap` 时 EOF 之后仍会重发已执行的脚本。上下文错误不再包,调用方还能 `errors.Is`。
+- `Hiredis`(`muduo_windows`、Linux 覆盖件):空应答也问 `notExecuted`。新增 `hasNoSideEffect`,AUTH、探测 PING、CLUSTER SLOTS、ASKING 都用它,节点退场时不再永久卡住维护排空。
+- `RedisClusterClient::CanAccept`:集群模式下节点还在首次握手时照常排队,不回 `REDIS_ERR`。单实例不变。
+- `config.cpp`:`player_redis.seeds` 不是序列就拒启,不再静默回落 zone redis。
+- scene_manager:强制销毁时残留成员逐个走 `removeSceneMember`,不直接 SREM 节点集合;对账加 2 分钟宽限(`sceneMemberStaleGrace`),不摘在途预占。设计 §5.10「残留与对账」。
+- scene_manager、player_locator 启动时校验 `PlayerRedis` 段。`go/trade/internal/config/config.go` 补 import。
+
+**`LoginRedis` 只留一种写法**:`playerredis.LoginReaderConfig` 删 `Host`、`PoolSize`、`Pool()`。六份服务 yaml、`go_services.ps1`、`sql_boot_catalog_local.ps1`、`k8s_deploy.ps1`(删 `Get-LoginRedisPoolKeyPath`)和用例同步。yaml 里写 `Addrs: [127.0.0.1:6379]`,脚本按标量读写这一行。
+
+**Codex 验证**:总清单 §3、§6、§7、§12。这一条新增的用例:`TestSceneMemberReconcileWaitsOutGraceBeforeRemoving`、`TestSceneMemberReconcileForgetsSuspectsMissingFromAPass`、`TestForceDestroyRemovesResidualMembersByLocation`、`IdleSlotOnHandshakingMasterQueuesInsteadOfRejecting`、`NoSideEffectCommandNullReplyKeepsFrontierKnown`。`seeds` 拒启走 `LOG_FATAL`,没有写用例,冒烟时写错一次核对退出信息即可。
+
+没有编译、没有运行。只做过 `gofmt -l`、PowerShell 语法解析、YAML 解析。
+
+Java 版:0.1.0-SNAPSHOT。这一条是服务端内部,不动客户端契约,`PARITY.md` 不加行。Java 仓 `PARITY.md` 第 420 行的不停服合服待做行还没提交。

@@ -42,46 +42,21 @@ func isRatedMode(mode matchpb.MatchMode) bool {
 	}
 }
 
-// formatRating 评分的存储 / ARGV 形态:保留两位小数,ZSET score 与 hash 字段同口径。
+// formatRating 评分的日志形态:保留两位小数。
 func formatRating(rating float64) string {
 	return strconv.FormatFloat(rating, 'f', 2, 64)
 }
 
-// parseRating 解析存储形态的评分;空串 / 非法回落默认值。
-func parseRating(raw string) float64 {
-	if raw == "" {
-		return defaultRating
-	}
-	v, err := strconv.ParseFloat(raw, 64)
-	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
-		return defaultRating
-	}
-	return v
-}
-
-// ratingOverrideForTest 测试注入点(生产恒为 nil,照 requeueFrontHook 的包级变量模式):
-// 没有全球权威库的匹配用例靠它喂评分。
-var ratingOverrideForTest func(playerId uint64) (float64, bool)
-
-// loadRating 读玩家评分;没有记录返回 defaultRating。评分只在全球权威库;没有权威库只可能是
-// dev / test 档(servicecontext 在其余档拒启),一律按默认分。
+// loadRating 读玩家评分;没有记录返回 defaultRating。评分只在权威库。
 func loadRating(svcCtx *svc.ServiceContext, playerId uint64) (float64, error) {
-	if ratingOverrideForTest != nil {
-		if rating, ok := ratingOverrideForTest(playerId); ok {
-			return rating, nil
-		}
-	}
-	if svcCtx.Authority == nil {
-		return defaultRating, nil
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	rating, e := svcCtx.Authority.Rating(ctx, playerId)
 	return float64(rating) / 100, e
 }
 
-// loadRatingOrDefault 读评分,失败只记日志回落默认值:评分是对局质量的软约束,
-// 不能让库抖动把排队 / 回队首整个拒掉(票据与队列的强一致由别处保证)。
+// loadRatingOrDefault 读评分,失败只记日志回落默认值:评分在这里只是分队与点名成局记录的软约束,
+// 计分池的入队另走 loadRating(读不到拒绝入队)。
 func loadRatingOrDefault(svcCtx *svc.ServiceContext, playerId uint64) float64 {
 	rating, err := loadRating(svcCtx, playerId)
 	if err != nil {
@@ -147,33 +122,7 @@ func ratingToleranceMaxWaitFor(svcCtx *svc.ServiceContext) int64 {
 	return 90
 }
 
-// ratingToleranceSaturationFor 返回容差曲线到达上限所需的等待秒数
-// (默认 (1000-100)/100 × 5 = 45s):锚点等过这个时间仍凑不到候选,就是曲线本身
-// 救不了的饥饿(段位里没人 / 分差 > Max),popGroup 据此记限频日志。
-func ratingToleranceSaturationFor(svcCtx *svc.ServiceContext) int64 {
-	base := float64(svcCtx.Config.RatingToleranceBase)
-	if base <= 0 {
-		base = 100
-	}
-	stepSeconds := svcCtx.Config.RatingToleranceStepSeconds
-	if stepSeconds <= 0 {
-		stepSeconds = 5
-	}
-	stepDelta := float64(svcCtx.Config.RatingToleranceStepDelta)
-	if stepDelta <= 0 {
-		stepDelta = 100
-	}
-	maxTol := float64(svcCtx.Config.RatingToleranceMax)
-	if maxTol <= 0 {
-		maxTol = 1000
-	}
-	if maxTol <= base {
-		return 0
-	}
-	return int64(math.Ceil((maxTol-base)/stepDelta)) * stepSeconds
-}
-
-// anchorToleranceFor 返回 popGroup 里锚点实际使用的容差:非 rated 模式(PVE_TEAM)
+// anchorToleranceFor 返回撮合里锚点实际使用的容差(poolPolicy):非 rated 模式(PVE_TEAM)
 // 恒 ∞;rated 模式已等 ≥ RatingToleranceMaxWaitSeconds 时也退化为 ∞(纯等待序,
 // 与 PVE_TEAM 同分支),保证"最长等待 N 秒必配";否则走曲线。
 func anchorToleranceFor(svcCtx *svc.ServiceContext, rated bool, waitSeconds int64) float64 {
@@ -219,7 +168,7 @@ func assignBalancedTeams(members []uint64, ratings map[uint64]float64) []uint32 
 const (
 	ratingOutcomeApplied   = "applied"   // 全员已更新评分
 	ratingOutcomeDuplicate = "duplicate" // 同一 battle_id 已入账(Kafka 重复投递)
-	ratingOutcomeIgnored   = "ignored"   // PVE / 切磋 / 未结束 / 队伍形态异常 / 没有权威库,不计分
+	ratingOutcomeIgnored   = "ignored"   // PVE / 切磋 / 未结束 / 队伍形态异常,不计分
 	ratingOutcomeError     = "error"     // 入账事务失败,调用方可重试
 )
 
@@ -271,11 +220,6 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 			metrics.ObserveRatingRoundCapDraw(modeName)
 			scoreA = 0.5
 		}
-	}
-	if svcCtx.Authority == nil {
-		// 评分只在全球权威库。没有权威库只可能是 dev / test 档。
-		logx.Infof("[rating] Global authority not assembled; rating unchanged battle=%d mode=%s", battleId, modeName)
-		return finish(ratingOutcomeIgnored), nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()

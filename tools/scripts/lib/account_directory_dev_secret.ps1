@@ -4,13 +4,15 @@ function Get-AccountDirectoryDevSecretAllNames {
     @('LOGIN','TRADE','SCENE','SCENE_MANAGER' | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" }) + 'MMORPG_PLAYER_STORE_SECRET_SCENE'
 }
 function Get-AccountDirectoryDevSecretNames {
-    param([Parameter(Mandatory)][ValidateSet('scene','data-service','login','trade','match','scene-manager','db')][string]$Service)
+    param([Parameter(Mandatory)][ValidateSet('scene','data-service','login','trade','match','scene-manager','db','player-inbox')][string]$Service)
     $names = switch ($Service) {
         'data-service' { 'LOGIN'; 'TRADE'; 'SCENE'; 'SCENE_MANAGER' }
         'scene' { 'SCENE'; 'TRADE' }
         'login' { 'LOGIN' }
         'trade' { 'TRADE' }
         'match' { 'SCENE' }
+        # 收件箱消费只认 scene 的入场签名(player_inbox_server.go NewConsumerVerifier),缺了拒启。
+        'player-inbox' { 'SCENE' }
         'scene-manager' { 'SCENE_MANAGER' }
     }
     @($names | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" })

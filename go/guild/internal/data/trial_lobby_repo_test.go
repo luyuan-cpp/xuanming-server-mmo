@@ -1,14 +1,10 @@
 package data
 
-// trial_lobby_repo_test.go —— 同道历练在 Redis 一侧的两个仓库:邀请房间(trial_lobby_repo.go,06 §6.40 的 8 条)与
-// 活动对局结果记录的读 / 销账(trial_result_record.go)。
+// trial_lobby_repo_test.go —— 同道历练在 Redis 一侧的仓库:邀请房间(trial_lobby_repo.go,06 §6.40 的 8 条)。
 //
 // 不带 build tag、不连 MySQL:Lua 脚本在 miniredis 里真跑(它内嵌了 Lua 解释器),普通 `go test ./...` 必跑。
 // 时间有两个来源,测试里分别控制:脚本里的"现在"由调用方传入(这里一律从 lobbyNowMs 派生,不读墙钟);
 // 键的 TTL 由 miniredis 的时钟管,只有 FastForward 才会前进。
-//
-// 结果记录的测试放在本文件末尾:B6b-srv2 的文件清单没有给 trial_result_record.go 单列测试文件,
-// 它与房间同属"历练的 Redis 侧"、共用同一个 miniredis 夹具。
 
 import (
 	"context"
@@ -436,60 +432,4 @@ func TestTrialSweepLease(t *testing.T) {
 
 	_, err = f.repo.AcquireSweepLease(f.ctx, "", ttl)
 	assert.Error(t, err)
-}
-
-// ── 活动对局结果记录(trial_result_record.go)──────────────────
-
-// TestActivityResultKeyMatchesBattleNode 钉住跨语言键契约:与 C++ battle_result_activity.h 的
-// kActivityResultKeyPrefix + 十进制 battle_id 逐字一致。改这里之前先改 C++ 那一侧。
-func TestActivityResultKeyMatchesBattleNode(t *testing.T) {
-	assert.Equal(t, "battle:activity_result:", activityResultKeyPrefix)
-	assert.Equal(t, "battle:activity_result:1", activityResultKey(1))
-	assert.Equal(t, "battle:activity_result:18446744073709551615", activityResultKey(^uint64(0)))
-}
-
-// TestTrialResultRecords_LoadAndAck:读到 battle 写下的原始字节;销账后读不到;销账幂等;不误删别的局。
-func TestTrialResultRecords_LoadAndAck(t *testing.T) {
-	_, err := NewTrialResultRecords(nil)
-	assert.Error(t, err)
-
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { rdb.Close() })
-	records, err := NewTrialResultRecords(rdb)
-	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	t.Cleanup(cancel)
-
-	const (
-		battleID uint64 = 9_007_199_254_741_001
-		otherID  uint64 = 9_007_199_254_741_002
-	)
-	// 值是 protobuf 字节,不是文本:带 0x00 与非 UTF-8 字节,原样读回。
-	payload := string([]byte{0x08, 0x00, 0xff, 0x10, 0x01})
-	require.NoError(t, mr.Set(activityResultKey(battleID), payload))
-	require.NoError(t, mr.Set(activityResultKey(otherID), "other"))
-
-	got, found, err := records.Load(ctx, battleID)
-	require.NoError(t, err)
-	require.True(t, found)
-	assert.Equal(t, []byte(payload), got)
-
-	require.NoError(t, records.Ack(ctx, battleID))
-	_, found, err = records.Load(ctx, battleID)
-	require.NoError(t, err)
-	assert.False(t, found, "销账后记录不在")
-	require.NoError(t, records.Ack(ctx, battleID), "重复销账不算错")
-	assert.True(t, mr.Exists(activityResultKey(otherID)), "只删这一局的键")
-
-	_, _, err = records.Load(ctx, 0)
-	assert.Error(t, err)
-	assert.Error(t, records.Ack(ctx, 0))
-
-	// Redis 故障:读与销账都返回错误,不把"读不到"伪装成"没有记录"。
-	mr.Close()
-	_, found, err = records.Load(ctx, otherID)
-	assert.Error(t, err)
-	assert.False(t, found)
-	assert.Error(t, records.Ack(ctx, otherID))
 }

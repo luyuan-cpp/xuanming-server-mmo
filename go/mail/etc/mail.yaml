@@ -13,11 +13,19 @@ MaxOpenConns: 16
 AutoMigrate: false
 TableDir: ../../generated/tables
 SharedRedisAddr: 127.0.0.1:6379
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):提醒读会话,资产定位读位置。
+# 不写 Addrs = 指向上面的 SharedRedisAddr。集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
+#   Cluster: true
+#   PasswordEnv: MMORPG_MAIL_REDIS_PASSWORD
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。读写与取连接 300ms、拨号 1s 沿用这条路径原来的口径。
+PlayerRedis:
+  PoolSizePerNode: 8
 # 与data_service同TiDB集群的全局目录；不是玩家分片。启动必须声明真实全局登录态命名空间。
 AccountRoleSchema: testdb
 GlobalLoginSessions: false
 LoginRedis:
-  Host: ""
+  Addrs: []
   DB: 0
   PasswordEnv: MMORPG_LOGIN_REDIS_PASSWORD
 KafkaBrokers: [127.0.0.1:9092]

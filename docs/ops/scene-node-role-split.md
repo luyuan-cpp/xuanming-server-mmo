@@ -155,9 +155,9 @@ Keys worth a Grafana / redis-cli dashboard:
 | `scene_nodes:zone:{zoneId}` | Live node IDs in the zone |
 | `scene_nodes:zone:{zoneId}:load` | ZSET, lowest score = most attractive |
 | `scene_manager:zones` | SET of zone ids(十进制)— 2026-10-16 起的 zone 登记集合,领导者清扫陈旧负载集与孤儿频道时靠它发现 zone(替代全库 SCAN);只加不减,唯一删除方是 `merge_zone -clear-source-hot-state`。计数读失败、又不在负载集里的节点以 `1e12` 的哨兵分加入负载集(选点排最后,下一拍读成功后纠正),`redis-cli` 里看到这个分数不是负载 |
-| `node:zone:{zoneId}:{nodeId}:player_count` | Aggregate online players on that pod |
+| `node:zone:{zoneId}:{nodeId}:members` | SET of player ids on that pod; `SCARD` = online players |
 | `node:zone:{zoneId}:{nodeId}:scene_node_type` | 0=world, 1=instance, 2=world-cross, 3=instance-cross |
-| `scene:{id}:player_count` | Per-scene online players (subset of the above) |
+| `instance:{id}:members` | SET of player ids in that scene; `SCARD` = per-scene online players (subset of the above) |
 
 ### 4.2 Prometheus metrics
 
@@ -166,7 +166,7 @@ Set `MetricsListenAddr: ":9150"` in `scene_manager_service.yaml` to expose
 
 | Metric | Meaning |
 |--------|---------|
-| `scene_manager_node_player_count` | Mirrors `node:zone:{zoneId}:{nodeId}:player_count` |
+| `scene_manager_node_player_count` | Mirrors `SCARD node:zone:{zoneId}:{nodeId}:members` |
 | `scene_manager_node_scene_count` | Mirrors `node:zone:{zoneId}:{nodeId}:scene_count` |
 | `scene_manager_node_load_score` | Composite score actually used for scheduling |
 | `scene_manager_nodes_by_role{zone_id,role}` | Live-node count per role — use for alerting when a role pool empties. 空池发布 0 而不是序列消失(2026-09-28 起,补 0 的范围见下方 Recommended alerts 第一条) |
@@ -234,7 +234,7 @@ Recommended alerts:
     amtool silence add 'zone_id="<zoneId>"' 'alertname=~"SceneManager(Instance|World)PoolEmpty"' \
       --duration=2h --comment="zone <zoneId> 开服 / 维护" --alertmanager.url=<alertmanager-url>
     ```
-- `node:zone:{zoneId}:{nodeId}:player_count` stays ≥ 90% of expected cap for > 5 min on
+- `SCARD node:zone:{zoneId}:{nodeId}:members` stays ≥ 90% of expected cap for > 5 min on
   any world pod → consider bumping `WorldChannelCountByConfId`.
 - ZSET score dispersion on `scene_nodes:zone:{zoneId}:load` < 10% →
   consider raising `NodeLoadWeightPlayerCount` so live players carry

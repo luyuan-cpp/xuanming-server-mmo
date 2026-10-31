@@ -130,6 +130,7 @@ func TestWakePlayerSkipsRowsClaimedElsewhere(t *testing.T) {
 	store.lost[2] = true
 	applier := appliedApplier()
 	loop, m := newTestLoop(t, store, applier, nil)
+	loop.Ledger = sqlLedgerFixture(true, testOp(1), testOp(3))
 
 	n, err := loop.WakePlayer(context.Background(), 42)
 	if err != nil {
@@ -196,6 +197,7 @@ func TestWakePlayerCapsRowsPerWake(t *testing.T) {
 	store := newWakeStore(ops...)
 	applier := appliedApplier()
 	loop, _ := newTestLoop(t, store, applier, nil)
+	loop.Ledger = sqlLedgerFixture(true, ops...)
 
 	n, err := loop.WakePlayer(context.Background(), 42)
 	if err != nil {
@@ -261,15 +263,17 @@ func TestWakePlayerRejectsBudgetBelowOpBudget(t *testing.T) {
 // 没轮到的行连 Claim 都不发 —— 领下来却被截在半路,行会带着租约没人处理,或被记成一次传输失败。
 func TestWakePlayerStopsClaimingWhenBudgetShort(t *testing.T) {
 	store := newWakeStore(testOp(1), testOp(2), testOp(3))
-	// 每行投递耗时 500ms(替身不看 ctx):第一行开始时剩约 1.2s >= OpBudget 800ms;
-	// 它做完之后最多剩 0.7s,第二行不再开始。时序不依赖机器快慢,只依赖 sleep 至少睡够。
+	// 每行投递耗时 400ms(替身不看 ctx):第一行开始时剩约 1.85s >= OpBudget 1.5s;
+	// 它做完之后最多剩 1.45s,第二行不再开始。时序不依赖机器快慢,只依赖 sleep 至少睡够。
+	// 投递预算 OpBudget-settleBudget = 800ms,装得下这 400ms 再加一次读已提交账本。
 	applier := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(400 * time.Millisecond)
 		return resultApplied(true), nil
 	}}
-	loop, m := newTestLoop(t, store, applier, func(c *LoopConfig) { c.OpBudget = 800 * time.Millisecond })
+	loop, m := newTestLoop(t, store, applier, func(c *LoopConfig) { c.OpBudget = 1500 * time.Millisecond })
+	loop.Ledger = sqlLedgerFixture(true, testOp(1), testOp(2), testOp(3))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1850*time.Millisecond)
 	defer cancel()
 	n, err := loop.WakePlayer(ctx, 42)
 	if err != nil {
@@ -284,8 +288,6 @@ func TestWakePlayerStopsClaimingWhenBudgetShort(t *testing.T) {
 	if claimed != 1 {
 		t.Fatalf("预算不够的行不得领取,实际领了 %d 行", claimed)
 	}
-	// RequireSQLCommit 关闭(HEAD 口径):scene 回包 durable 即可终结。开关打开时这一行缺 SQL 确认、保留待办,
-	// 那一侧由 sql_commit_test.go 与 TestAwaitSQLKeepsBudgetAfterApplyExhaustsIt 覆盖。
 	finalized, _ := store.snapshot()
 	if len(finalized) != 1 || finalized[0].Op.OpID != 1 {
 		t.Fatalf("已开始的第一行应照常终结,实际 %+v", finalized)

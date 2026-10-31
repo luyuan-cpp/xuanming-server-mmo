@@ -281,7 +281,7 @@ func openIntegration(t *testing.T) *itEnv {
 	if err = fixture.GrantProtoTables(ctx, dbName, data.Tables()); err != nil {
 		t.Fatal(err)
 	}
-	if err = fixture.GrantTables(ctx, dbName, "account_role", "account_role_admission", "route_meta", "player_route", "zone_merged_into", "route_reconcile"); err != nil {
+	if err = fixture.GrantTables(ctx, dbName, "account_role", "account_role_admission", "route_meta", "player_route", "zone_merged_into"); err != nil {
 		t.Fatal(err)
 	}
 	db, err = fixture.Open(ctx, dbName, 64)

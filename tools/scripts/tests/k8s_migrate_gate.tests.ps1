@@ -126,11 +126,6 @@ function Reset-MigrateFixture {
         ConfigMap = 'go-svc-match-config'; Manifest = 'match.yaml'; MigrateJob = 'match-migrate.yaml'
         ConfigFile = 'match_service.yaml'; ImageName = 'mmorpg-match'; Port = 50500; Global = $true
     }
-    $script:MatchGlobalEnabled = $true
-    Set-Item Function:script:Get-GlobalMatchDeploymentSettings {
-        param($Profile, $TiDBHost, $Region)
-        return [pscustomobject]@{ Enabled = $script:MatchGlobalEnabled }
-    }
     # 本套只核迁移门禁，常驻三把密钥的注入由部署合同测试覆盖。
     Set-Item Function:script:Add-MatchAuthoritySecretEnv { param($ManifestContent) return $ManifestContent }
     $script:GrpcAllowLists = @{ guild = @{ PolicyName = 'guild-grpc-allowlist' } }
@@ -244,6 +239,39 @@ Test-Case '成功 Job 才放行 Deployment，且 ConfigMap 与 Job 的顺序正�
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Job 要读取先前创建的 ConfigMap'
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '迁移必须先于服务部署'
     Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能直接放行'
+}
+
+# 全局服务分两步(k8s_deploy.ps1 的 Apply-GlobalGoSvcManifests):第一步只有 ConfigMap 与迁移 Job,第二步只有工作负载。
+Test-Case '-Stage Prepare 只做 ConfigMap 与迁移 Job,不碰 Deployment 与注入的 Secret;门禁失败同样中断' {
+    Reset-MigrateFixture
+    $script:JobAbsentBeforeApply = $true
+    $script:AssetOpsOn = $true
+    $script:AssetOpSecrets = @{ trade = 'contract-asset-op-secret-trade-0123456789abcdef'; guild = 'contract-asset-op-secret-guild-0123456789abcdef' }
+    Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 -Stage Prepare
+    $events = @($script:Events)
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -ge 0 -and [Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Prepare 先 ConfigMap 再 Job'
+    Assert-True -Condition ($events -notcontains 'apply:Deployment') -Because 'Prepare 不起进程:data-service 就绪之前 trade 读不到合服映射'
+    Assert-True -Condition (@($events | Where-Object { $_ -like 'apply:Secret:*' }).Count -eq 0) -Because '只有工作负载引用的 Secret 留给 Workload,迁移 Job 不读它'
+
+    Reset-MigrateFixture
+    $script:ReleaseProfile = 'prod'
+    $script:JobAbsentBeforeApply = $true
+    $script:AfterApplyCondition = 'Failed'
+    $failure = Get-ThrownMessage { Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 -Stage Prepare }
+    Assert-Match -Text $failure -Pattern 'trade-migrate.*failed' -Because 'Prepare 阶段迁移失败同样中断发布,不留到第二步才发现'
+}
+
+Test-Case '-Stage Workload 只起进程:不重写 ConfigMap、不重跑迁移 Job;注入的 Secret 先于 Deployment' {
+    Reset-MigrateFixture
+    $script:AssetOpsOn = $true
+    $script:AssetOpSecrets = @{ trade = 'contract-asset-op-secret-trade-0123456789abcdef'; guild = 'contract-asset-op-secret-guild-0123456789abcdef' }
+    Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 -Stage Workload
+    $events = @($script:Events)
+    Assert-True -Condition ($events -contains 'apply:Deployment') -Because 'Workload 要 apply Deployment'
+    foreach ($absent in @('apply:ConfigMap', 'apply:Job', 'delete:Job', 'query:Job')) {
+        Assert-True -Condition ($events -notcontains $absent) -Because "Workload 不该有 $absent:ConfigMap 与 Job 第一步已经做过"
+    }
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade') -ge 0 -and [Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'secretKeyRef 不是 optional,Secret 必须先于 Deployment'
 }
 
 # friend（好友，D-14 独占库 mmorpg_friend）是第二个带 MigrateJob 的建表服务。用真 manifest 名跑一遍，
@@ -679,7 +707,7 @@ Test-Case '全球match即使dev不带WaitReady也须先完成独立迁移Job' {
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because '迁移先消费同一ConfigMap'
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'match常驻形态不自动DDL'
-    Assert-True -Condition ($events -contains 'query:Job') -Because 'dev全球模式也必须核真实Job完成'
+    Assert-True -Condition ($events -contains 'query:Job') -Because 'dev也必须核真实Job完成'
     Assert-Match -Text $script:MigrationContent -Pattern 'args:.*"-migrate"' -Because '运行正式迁移CLI'
     Assert-Match -Text $script:MigrationContent -Pattern 'MATCH_MIGRATION_USER' -Because '独立迁移账号'
     Assert-Match -Text $script:MigrationContent -Pattern 'key: match-migration-password' -Because '独立迁移口令'
@@ -697,14 +725,6 @@ Test-Case 'match迁移失败不得部署常驻进程' {
     Assert-Match -Text $failure -Pattern 'match-migrate.*failed' -Because '返回原迁移失败'
     Assert-True -Condition ($script:Events -contains 'apply:Job') -Because '确实运行迁移链'
     Assert-True -Condition ($script:Events -notcontains 'apply:Deployment') -Because '失败不能继续接流'
-}
-
-Test-Case '显式旧dev关闭全球SQL时不运行match迁移Job' {
-    Reset-MigrateFixture
-    $script:ReleaseProfile = 'dev'
-    $script:MatchGlobalEnabled = $false
-    Apply-GoSvcMigrateJob -SvcName match -Namespace audit-infra -SvcImage audit/match:test -PullPolicy IfNotPresent
-    Assert-Equal 0 $script:Events.Count '兼容端口不能隐式建SQL表'
 }
 
 exit (Complete-TestRun -SuiteName 'k8s_migrate_gate')

@@ -52,6 +52,33 @@
 #include <unistd.h>
 #endif
 
+// 房间按生产合同只由 Match 的持久决定收尾(DestroyBattle 删不掉),这里直接走决定之后的收尾入口,不启动 match。
+class BattleRoomManagerTestAccess {
+public:
+    // Match 回了 COMPLETE。房间不存在返回 false。调用之后房间已删(来源校验不过时保留)。
+    static bool Complete(const uint64_t battleId) {
+        auto& manager = BattleRoomManager::Instance();
+        auto* room = manager.FindRoom(battleId);
+        if (room == nullptr) return false;
+        manager.OnSqlOutcomeComplete(*room);
+        return true;
+    }
+    // Match 回了 ABORT。房间不存在时什么都不做。
+    static void Abort(const uint64_t battleId) {
+        auto& manager = BattleRoomManager::Instance();
+        if (auto* room = manager.FindRoom(battleId); room != nullptr) manager.OnSqlOutcomeAbort(*room);
+    }
+    // 清掉全部房间与节点级定时器:管理器是进程级单例,房间(连同观众)不能漏到后面的用例,定时器不能挂在已析构的 loop 上。
+    // 只能在 loop 线程、loop 析构之前调用。
+    static void EraseAllRooms() {
+        auto& manager = BattleRoomManager::Instance();
+        for (const auto battleId : manager.rooms_.Ids()) manager.EraseRoom(battleId);
+        manager.sqlOutcomeRooms_.clear();
+        manager.sqlOutcomeTimer_.Cancel();
+        manager.stuckRoomReportTimer_.Cancel();
+    }
+};
+
 namespace {
 constexpr uint64_t kFirstPlayer = 59001;
 constexpr uint64_t kSecondPlayer = 59002;
@@ -318,7 +345,7 @@ private:
     std::optional<std::string> previous_;
 };
 
-// v1未知房间按生产合同不能Destroy；接口回归在独立子进程中建房，父进程不留下房间或定时器。
+// 改动进程环境与密钥门的接口回归在独立子进程中建房，父进程不留下房间或定时器。
 // threadsafe模式重新执行测试进程；退出码携带全部断言结果，OS退出负责回收该受控子进程资源。
 void AssertInFreshOutcomeProcess(const std::function<void()>& check) {
     struct RestoreDeathStyle {
@@ -373,11 +400,9 @@ protected:
 
     void TearDown() override {
         if (node_) {
-            // 夹具房间连同用例另建的房间一起销毁:管理器是进程级单例,漏掉的房间(连同观众)会带进后续用例,
+            // 夹具房间连同用例另建的房间一起清掉:管理器是进程级单例,漏掉的房间(连同观众)会带进后续用例,
             // 还会占用节点观众席配额
-            std::vector<uint64_t> rooms = extraBattles_;
-            rooms.push_back(battleId_);
-            for (const auto battleId : rooms) Destroy(battleId);
+            BattleRoomManagerTestAccess::EraseAllRooms();
             manager().SetClientEdge(nullptr);
             node_.reset(); // 既有Node两跳排空完成后才销毁EventLoop。
         }
@@ -391,7 +416,7 @@ protected:
 
     static BattleRoomManager& manager() { return BattleRoomManager::Instance(); }
 
-    // 按夹具原件的放置操作销毁房间;房间不存在时幂等。
+    // 按夹具原件的放置操作发 DestroyBattle:房间还在时什么都不做,不存在时幂等并立操作墓碑。
     static void Destroy(const uint64_t battleId) {
         DestroyBattleRequest request;
         request.set_battle_id(battleId);
@@ -400,10 +425,10 @@ protected:
         manager().HandleDestroyBattle(request);
     }
 
-    CreateBattleRequest OriginalCreation(uint32_t outcomeProtocol = 0) const {
+    CreateBattleRequest OriginalCreation() const {
         CreateBattleRequest request;
         request.set_battle_id(battleId_);
-        request.set_outcome_protocol_version(outcomeProtocol);
+        request.set_outcome_protocol_version(1);
         request.set_match_mode(::match::MATCH_MODE_1V1);
         request.set_seed(1);
         request.set_created_at_ms(originalNowMs_);
@@ -461,12 +486,11 @@ protected:
         ASSERT_EQ(BATTLE_CREATION_PRESENT, state.state());
     }
 
-    // 夹具房间之外另建一间(可见性由用例指定),TearDown 统一销毁。
+    // 夹具房间之外另建一间(可见性由用例指定),TearDown 统一清掉。
     void CreateExtraRoom(const uint64_t battleId, const ::eSpectateVisibility visibility) {
         auto request = OriginalCreation();
         request.set_battle_id(battleId);
         request.set_spectate_visibility(visibility);
-        extraBattles_.push_back(battleId);
         CreateBattleResponse reply;
         manager().HandleCreateBattle(request, reply);
         ASSERT_EQ(0u, reply.error_message().id());
@@ -598,7 +622,7 @@ protected:
     }
 
     // 结算一回合,不等定时器:第二名参战者挂机,第一名切回手动再切自动,「未就绪 → 全员就绪」的翻转立即结算。
-    // 夹具的 1000 气血几回合内打不死人(普攻基础伤害 10),房间保持 ONGOING,TearDown 能正常销毁。
+    // 夹具的 1000 气血几回合内打不死人(普攻基础伤害 10),房间保持 ONGOING。
     void DriveOneRound(const uint64_t battleId) {
         ASSERT_NO_FATAL_FAILURE(SetAuto(battleId, kSecondPlayer, true));
         ASSERT_NO_FATAL_FAILURE(SetAuto(battleId, kFirstPlayer, false));
@@ -610,6 +634,8 @@ protected:
 
     ObserverFixtureEnvironment global_{"GLOBAL_MATCH_ENABLED", "true"};
     ObserverFixtureEnvironment region_{"PHYSICAL_REGION", "1"};
+    // 建房要求终局签名密钥就绪;测密钥门的用例在自己的作用域里换值。
+    ObserverFixtureEnvironment outcomeKey_{"MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012"};
     NodeConfigManager savedGlobal_;
     NodeConfigManager savedThread_;
     std::unique_ptr<muduo::net::EventLoop> loop_;
@@ -618,8 +644,6 @@ protected:
     std::filesystem::path logDirectory_;
     uint64_t battleId_{0};
     uint64_t originalNowMs_{0};
-    // CreateExtraRoom 建的房间,TearDown 与 battleId_ 一起销毁。
-    std::vector<uint64_t> extraBattles_;
     // 观战帧出口捕获到的记录,以及出口对它们的回答(false = 模拟没进生产者队列)。
     std::vector<battle_spectate_relay::FrameRecord> spectateFrames_;
     bool spectateSinkAccepts_ = true;
@@ -925,7 +949,7 @@ TEST_F(BattleObserverContract, ClientEdgeBindingDerivesObserverQuotaFromConnecti
 // 观众帧编码一次(battle-spectate-tiered-fanout.md §10 第 3 条):同一帧只编码一份,逐条直连写出。共享的那份字节
 // 不能被第一条连接的发送清空(对共享 Buffer 调 send(Buffer*) 会 retrieveAll),所以每名有直连的观众都必须收到
 // 与单发分帧逐字节相同的完整帧;夹在中间、没有直连的观众只是被跳过,不打断后面的观众。
-// 作废房间推 SpectateEnd(ABORTED) 是不依赖引擎出招的确定路径;回合结果的观众帧走同一个出口(PushSpectatorFrame)。
+// Match 判 ABORT 时推 SpectateEnd(ABORTED) 是不依赖引擎出招的确定路径;回合结果的观众帧走同一个出口(PushSpectatorFrame)。
 TEST_F(BattleObserverContract, SpectatorFrameEncodedOnceReachesEveryDirectObserverIntact) {
     // 回环连接先于建房打开:建房之后到销毁之前不驱动 loop,房间的回合 / 确认定时器没有机会触发,
     // 两条直连上只会出现这一帧
@@ -949,7 +973,7 @@ TEST_F(BattleObserverContract, SpectatorFrameEncodedOnceReachesEveryDirectObserv
     ASSERT_TRUE(manager().AttachDirectConnection(battleId_, last.observer_player_id(), ::BATTLE_TICKET_ROLE_OBSERVER,
                                                  lastDirect.ServerSide(), nullptr, last.spectator_operation_id()));
 
-    Destroy(battleId_);
+    BattleRoomManagerTestAccess::Abort(battleId_);
 
     // 期望字节按单发 Send 的分帧(ProtobufCodec::fillEmptyBuffer)独立算一遍,不经被测的编码出口
     ::SpectateEndS2C end;
@@ -971,6 +995,90 @@ TEST_F(BattleObserverContract, SpectatorFrameEncodedOnceReachesEveryDirectObserv
     EXPECT_EQ(expected, lastDirect.ClientReceived());
 }
 
+// 只有终局协议 v1:其它版本、缺放置操作或目标实例的创建请求一律拒绝,不留房间,也不回采用值。
+TEST_F(BattleObserverContract, CreateRejectsAnythingOtherThanOutcomeProtocolV1) {
+    const auto expectRefused = [this](const CreateBattleRequest& request) {
+        CreateBattleResponse reply;
+        manager().HandleCreateBattle(request, reply);
+        EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), reply.error_message().id());
+        EXPECT_EQ(0u, reply.adopted_outcome_protocol_version());
+        EXPECT_EQ(BATTLE_CREATION_ABSENT, CreationState().state());
+    };
+    for (const uint32_t version : {0u, 2u}) {
+        SCOPED_TRACE(version);
+        auto request = OriginalCreation();
+        request.set_outcome_protocol_version(version);
+        expectRefused(request);
+    }
+    auto noPlacement = OriginalCreation();
+    noPlacement.clear_placement_operation_id();
+    expectRefused(noPlacement);
+    auto noTarget = OriginalCreation();
+    noTarget.clear_target_instance_id();
+    expectRefused(noTarget);
+
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(OriginalCreation(), created);
+    EXPECT_EQ(0u, created.error_message().id());
+    EXPECT_EQ(1u, created.adopted_outcome_protocol_version());
+    EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
+}
+
+// 房间只由 Match 的持久决定收尾:房间还在时 DestroyBattle 什么都不做(不发 END、不删房);
+// 从未建成的原操作立墓碑,同 battle_id 迟到的 CreateBattle 被拒。
+TEST_F(BattleObserverContract, DestroyNeverEndsALiveRoomAndTombstonesAnAbsentOne) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    (void)TakeFrames();
+    Destroy(battleId_);
+    EXPECT_TRUE(TakeFrames().empty());
+    EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
+    EXPECT_EQ(0u, Attach(battleId_, kOtherRelayGate, kOtherGateInstance).error_message().id()) << "房间还在";
+
+    const auto absentBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    Destroy(absentBattle);
+    auto late = OriginalCreation();
+    late.set_battle_id(absentBattle);
+    CreateBattleResponse refused;
+    manager().HandleCreateBattle(late, refused);
+    EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), refused.error_message().id());
+    EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(absentBattle, kRelayGate, kGateInstance).error_message().id());
+}
+
+// Match 持久 COMPLETE:此刻才公布最后一回合与终局,观众收 BATTLE_FINISHED + 真实胜负,房间随即删除。
+TEST_F(BattleObserverContract, CompleteDecisionPublishesFinalTurnThenEndAndErasesRoom) {
+    auto creation = OriginalCreation();
+    for (auto& player : *creation.mutable_players()) {
+        player.set_max_health(1);
+        player.mutable_base_attributes()->set_health(1);
+    }
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    (void)TakeFrames();
+
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    EXPECT_TRUE(TakeFrames().empty()) << "拿到决定之前不公布终局";
+    Destroy(battleId_);
+    EXPECT_TRUE(TakeFrames().empty()) << "等决定期间 DestroyBattle 不能宣布作废";
+
+    ASSERT_TRUE(BattleRoomManagerTestAccess::Complete(battleId_));
+    const auto frames = TakeFrames();
+    ASSERT_EQ(2u, frames.size());
+    ExpectRelayRecord(frames[0], battleId_, kRelayGate, kGateInstance);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_TURN, ParseFrame(frames[0]).kind());
+    ExpectRelayRecord(frames[1], battleId_, kRelayGate, kGateInstance);
+    const auto endFrame = ParseFrame(frames[1]);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, endFrame.kind());
+    const auto end = ParseClientFrame<SpectateEndS2C>(endFrame, BattleClientPlayerNotifySpectateEndMessageId);
+    EXPECT_EQ(::SPECTATE_END_BATTLE_FINISHED, end.reason());
+    EXPECT_NE(::BATTLE_OUTCOME_ONGOING, end.outcome());
+    EXPECT_EQ(static_cast<uint32_t>(::kEntityIsNull), Attach(battleId_, kRelayGate, kGateInstance).error_message().id())
+        << "房间已删";
+    EXPECT_FALSE(BattleRoomManagerTestAccess::Complete(battleId_));
+}
+
 // 查询能力来自本节点此刻可签名状态；空/短/仅空白密钥均不能宣告v1。
 TEST_F(BattleObserverContract, OutcomeCapabilityRequiresTrimmedSigningKey) {
     const std::vector<std::pair<const char*, uint32_t>> cases{
@@ -990,7 +1098,7 @@ TEST_F(BattleObserverContract, OutcomeCapabilityRequiresTrimmedSigningKey) {
 // 真正Create入口拒绝缺密钥的新v1操作，且不遗留房间或采用回执；合法密钥才准创建。
 TEST_F(BattleObserverContract, NewOutcomeV1CreationFailsClosedUntilSigningKeyReady) {
     ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
-        const auto original = OriginalCreation(1);
+        const auto original = OriginalCreation();
         for (const char* secret : {"", "1234567890123456789012345678901", " \t\r\n"}) {
             ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", secret);
             CreateBattleResponse refused;
@@ -1012,10 +1120,10 @@ TEST_F(BattleObserverContract, NewOutcomeV1CreationFailsClosedUntilSigningKeyRea
     }));
 }
 
-// 已采用的原操作不随运行时缺密钥降为legacy；同原件幂等仍回原adopted，新操作继续拒绝。
+// 已采用的原操作不随运行时缺密钥改变；同原件幂等仍回原adopted，新操作继续拒绝。
 TEST_F(BattleObserverContract, ExistingOutcomeV1AdoptionSurvivesSigningKeyLossWithoutFallback) {
     ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
-        const auto original = OriginalCreation(1);
+        const auto original = OriginalCreation();
         {
             ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012");
             CreateBattleResponse created;
@@ -1252,14 +1360,14 @@ TEST_F(BattleObserverContract, PromoteIsIdempotentAndLaterRoundsOnlyBroadcast) {
 
     // END 也只发广播,升档前挂的两台 gate 不再单发:与最后一回合的 TURN 同分区保序。中继 END 可能越过广播上的 TURN,
     // gate 收尾后把那一帧丢掉,观众就看不到最后一回合(§15.4)。
-    Destroy(battleId_);
+    BattleRoomManagerTestAccess::Abort(battleId_);
     frames = TakeFrames();
     ASSERT_EQ(1u, frames.size());
     ExpectBroadcastRecord(frames[0], battleId_);
     EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, ParseFrame(frames[0]).kind());
 }
 
-// 结束 / 作废:没升档时每台中继 gate 各一帧 END,升过档只发广播一帧(编好的 166,reason 与 L0 同值),不要求房间有直连观众;
+// Match 判 ABORT:没升档时每台中继 gate 各一帧 END,升过档只发广播一帧(编好的 166,reason 与 L0 同值),不要求房间有直连观众;
 // 房间没了就没有第二帧;从没开过通道的房间不发。
 TEST_F(BattleObserverContract, EndFrameReachesEveryChannelOnceWithDirectObserverReason) {
     ASSERT_NO_FATAL_FAILURE(Create());
@@ -1270,7 +1378,7 @@ TEST_F(BattleObserverContract, EndFrameReachesEveryChannelOnceWithDirectObserver
     ASSERT_EQ(4u, turnFrames.size()); // 两帧 STATE + 两帧 TURN
     const auto lastTurnRound = ParseFrame(turnFrames.back()).round_index();
 
-    Destroy(battleId_);
+    BattleRoomManagerTestAccess::Abort(battleId_);
     auto frames = TakeFrames();
     ASSERT_EQ(2u, frames.size());
     ExpectRelayRecord(frames[0], battleId_, kRelayGate, kGateInstance);
@@ -1284,14 +1392,14 @@ TEST_F(BattleObserverContract, EndFrameReachesEveryChannelOnceWithDirectObserver
         EXPECT_EQ(::SPECTATE_END_BATTLE_ABORTED, end.reason());
         EXPECT_EQ(::BATTLE_OUTCOME_ONGOING, end.outcome());
     }
-    Destroy(battleId_);
+    BattleRoomManagerTestAccess::Abort(battleId_);
     EXPECT_TRUE(TakeFrames().empty());
 
     const auto promotedBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
     ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(promotedBattle, ::SPECTATE_VISIBILITY_PUBLIC));
     ASSERT_EQ(0u, Promote(promotedBattle).error_message().id());
     (void)TakeFrames();
-    Destroy(promotedBattle);
+    BattleRoomManagerTestAccess::Abort(promotedBattle);
     frames = TakeFrames();
     ASSERT_EQ(1u, frames.size());
     ExpectBroadcastRecord(frames[0], promotedBattle);
@@ -1299,7 +1407,7 @@ TEST_F(BattleObserverContract, EndFrameReachesEveryChannelOnceWithDirectObserver
 
     const auto quietBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
     ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(quietBattle, ::SPECTATE_VISIBILITY_PUBLIC));
-    Destroy(quietBattle);
+    BattleRoomManagerTestAccess::Abort(quietBattle);
     EXPECT_TRUE(TakeFrames().empty());
 }
 
@@ -1330,7 +1438,7 @@ TEST_F(BattleObserverContract, DirectObserverAndRelayGateShareTheSameSpectatorEn
 
     ASSERT_TRUE(DriveLoopUntil(*loop_, [&] { return direct.ClientReceived().size() >= expected.size(); }));
     EXPECT_EQ(expected, direct.ClientReceived());
-    Destroy(battleId_);
+    BattleRoomManagerTestAccess::Abort(battleId_);
 }
 
 // 帧没发出去只计数:挂接照常成功,回合照常推进,不重试;下一帧带全量状态,自愈。
@@ -1353,32 +1461,16 @@ TEST_F(BattleObserverContract, RefusedSpectateFramesNeitherFailAttachNorBlockRou
     EXPECT_EQ(ParseFrame(refused[0]).round_index() + 1, ParseFrame(healed[0]).round_index());
 }
 
-// 停机口径与 L0 相同(§5.3):结果未落定的房间不发 END(不能发一个可能与真实结果矛盾的 ABORTED),中继观众靠 gate 的
-// 空闲超时收尾;没有结果要等的房间照常发 END(ABORTED)。v1 房间按生产合同删不掉,放在独立子进程里。
-TEST_F(BattleObserverContract, ShutdownSendsNoEndFrameForUndecidedRoomButEndsAbortableRoom) {
-    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
-        ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012");
-        CreateBattleResponse undecided;
-        manager().HandleCreateBattle(OriginalCreation(1), undecided);
-        ASSERT_EQ(0u, undecided.error_message().id());
-        auto abortable = OriginalCreation();
-        abortable.set_battle_id(battleId_ + 1);
-        CreateBattleResponse created;
-        manager().HandleCreateBattle(abortable, created);
-        ASSERT_EQ(0u, created.error_message().id());
-        ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
-        ASSERT_EQ(0u, Attach(abortable.battle_id(), kRelayGate, kGateInstance).error_message().id());
-        (void)TakeFrames();
+// 停机口径与 L0 相同(§5.3):不发 END(不能发一个可能与 Match 真实决定矛盾的 ABORTED),中继观众靠 gate 的
+// 空闲超时收尾;房间留在表里等决定。
+TEST_F(BattleObserverContract, ShutdownSendsNoEndFrameWhileOutcomeIsUndecided) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    (void)TakeFrames();
 
-        manager().AbortAllRooms("unit_shutdown");
-        const auto frames = TakeFrames();
-        ASSERT_EQ(1u, frames.size());
-        ExpectRelayRecord(frames[0], abortable.battle_id(), kRelayGate, kGateInstance);
-        const auto frame = ParseFrame(frames[0]);
-        EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, frame.kind());
-        const auto end = ParseClientFrame<SpectateEndS2C>(frame, BattleClientPlayerNotifySpectateEndMessageId);
-        EXPECT_EQ(::SPECTATE_END_BATTLE_ABORTED, end.reason());
-    }));
+    manager().AbortAllRooms("unit_shutdown");
+    EXPECT_TRUE(TakeFrames().empty());
+    EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
 }
 
 // 等结果回执期间,终局已算出但还没拿到决定:最后一回合的 TURN 不提前发,新挂的 gate 收到的 STATE 是冻结的可见状态,
@@ -1386,7 +1478,7 @@ TEST_F(BattleObserverContract, ShutdownSendsNoEndFrameForUndecidedRoomButEndsAbo
 TEST_F(BattleObserverContract, RelayStateFrameDuringOutcomeWaitDoesNotLeakTerminalResult) {
     ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
         ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012");
-        auto creation = OriginalCreation(1);
+        auto creation = OriginalCreation();
         for (auto& player : *creation.mutable_players()) {
             player.set_max_health(1);
             player.mutable_base_attributes()->set_health(1);

@@ -67,7 +67,7 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
         // snapshot 号段没号(种类未启用、两段耗尽且 data_service 还没把续段送回来)。
         // 快照只是回滚兜底,宁可少一条也不能写 snapshot_id=0 —— 那会和别的节点、
         // 别的时刻的 0 号快照互相覆盖,反而毁掉回滚链路。真正的存盘走
-        // SavePlayerToRedis,不受影响。没有 snowflake 回退,fail-closed。
+        // SavePlayer,不受影响。没有 snowflake 回退,fail-closed。
         LOG_ERROR << "[SnapshotSystem] snapshot id segment not ready; "
                   << "skipping snapshot for player " << playerId
                   << " trigger=" << static_cast<int>(trigger) << " "

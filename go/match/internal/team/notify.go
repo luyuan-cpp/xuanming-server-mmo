@@ -28,33 +28,28 @@ import (
 //     (请求结束即取消,§A.3 第 7 条);失败只记日志与指标,绝不影响 RPC 结果;
 //   - 推送至多一次投递(playercontract.PushToPlayer):不在线就不推,客户端靠 GetMyTeam /
 //     ListMyInvites 拉取自愈(J-26);
-//   - 每份视图的 epoch 只取自 S_COMMIT / S_READ_MEMBERS 的同源结果(view.go);
+//   - 每份视图的 epoch 只取自提交 / ReadMembers 的同源结果(view.go);
 //   - RPC 调用者本人不收快照推送:他的回包里已经是同一次提交构建的视图;
-//   - scene 信号只是"去重读一下 SharedRedis",不带权威数据,乱序 / 重复 / 丢失都安全(§B.2);
+//   - scene 信号只是"去读一下队伍原件",不带权威数据,乱序 / 重复 / 丢失都安全(§B.2);
 //   - 落地摘要 bump 也从 publish 派发(syncdigest.go),同一个异步上下文、先于推送,失败同样只记日志与指标。
 
 const (
 	// pushBatchBudget 一批推送 + scene 信号的总预算(§G.3)。
 	pushBatchBudget = 3 * time.Second
 
-	pushKindSnapshot       = "snapshot"
-	pushKindInvite         = "invite"
-	pushKindEvent          = "event"
-	pushKindMembersChanged = "members_changed"
+	pushKindSnapshot = "snapshot"
+	pushKindInvite   = "invite"
+	pushKindEvent    = "event"
 
 	pushOutcomeOK      = "ok"
 	pushOutcomeOffline = "offline"
 	pushOutcomeError   = "error"
-	pushOutcomeSkipped = "skipped"
 
 	sceneOutcomeOK         = "ok"
 	sceneOutcomeNoLocation = "no_location"
 	sceneOutcomeNoNode     = "no_node"
 	sceneOutcomeEmptyUuid  = "empty_uuid"
 	sceneOutcomeError      = "error"
-
-	healKindOrphanIndex   = "orphan_index"   // S_HEAL_ORPHAN:索引指向已不存在的记录
-	healKindIndexMismatch = "index_mismatch" // {-2} 修复提交:保留成员的索引已指向别队
 )
 
 // 测试缝(照 logic.runGatherFn 的包级变量模式,§I.3 #14)。生产值不可在运行期修改。
@@ -67,35 +62,28 @@ var (
 	asyncFn = safego.Go
 )
 
-// publish 异步执行一批已落盘提交的落地摘要 bump、推送与 scene 信号,另给 healed 里的玩家发 scene 信号。
-// commits 按落盘顺序传入(修复提交在前、主提交在后),调用方交出后不得再修改。
+// publish 异步执行一批已落盘提交的落地摘要 bump、推送与 scene 信号。
+// commits 按落盘顺序传入,调用方交出后不得再修改。
 // caller 是 RPC 调用者(后台提交传 0):推送排除他,摘要 bump 包含他(syncdigest.go)。
-func (s *Service) publish(caller uint64, commits []*CommitResult, healed []uint64) {
-	if len(commits) == 0 && len(healed) == 0 {
+func (s *Service) publish(caller uint64, commits []*CommitResult) {
+	if len(commits) == 0 {
 		return
-	}
-	// 名单变了 → 本队在排的补位单整单撤出(team-backfill-matching.md §4.3)。用自己的后台任务与预算:
-	// 它要读排队票据所在的库,不能排在下面这批推送 / scene 信号前面占它们的时间 —— 票据库一慢,
-	// 离队 / 踢人的推送就会整批超时丢掉。撤单自己会给仍在队里的人推 MATCH_QUEUE_CANCELED。
-	for _, c := range commits {
-		s.cancelPartyOnRosterChange(c)
 	}
 	s.launchRelay("match.team.publish", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
 		defer cancel()
 		// 摘要先于推送:推送至多一次、丢了靠拉取自愈,而 bump 正是落地后那次拉取的触发条件。
-		s.bumpSyncDigest(ctx, caller, commits, healed)
+		s.bumpSyncDigest(ctx, caller, commits)
 		var refresh []uint64
 		for _, c := range commits {
 			if c == nil {
 				continue
 			}
 			s.pushCommit(ctx, caller, c)
-			// tid 发生变化的人:新加入者与移出者(解散时移出者即全员;修复提交里被移出的成员也发,§F.3)。
+			// tid 发生变化的人:新加入者与移出者(解散时移出者即全员,§F.3)。
 			refresh = append(refresh, c.Decision.Joined...)
 			refresh = append(refresh, c.Decision.Left...)
 		}
-		refresh = append(refresh, healed...)
 		for _, pid := range uniqueIds(refresh) {
 			s.refreshScene(ctx, pid)
 		}
@@ -103,11 +91,11 @@ func (s *Service) publish(caller uint64, commits []*CommitResult, healed []uint6
 }
 
 // publishOnline GetMyTeam{notify_online}:把当前视图推给其他在线队员(MEMBER_ONLINE,version 不变)。
-func (s *Service) publishOnline(caller, teamId uint64, knownMembers []uint64) {
+func (s *Service) publishOnline(caller, teamId uint64) {
 	s.launchRelay("match.team.online", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), pushBatchBudget)
 		defer cancel()
-		s.pushOnlineRefresh(ctx, caller, teamId, knownMembers)
+		s.pushOnlineRefresh(ctx, caller, teamId)
 	})
 }
 
@@ -136,13 +124,14 @@ func (s *Service) pushCommit(ctx context.Context, caller uint64, c *CommitResult
 	if d.Record != nil && (len(recipients) > 0 || d.InvitedPlayer != 0) {
 		dc = s.presence.loadDisplay(ctx, rosterIds(d.Record))
 	}
+	zones := s.mergedZones()
 	for _, pid := range recipients {
 		if pid == caller {
 			continue
 		}
-		view, ok := viewFromCommit(c, pid, dc)
+		view, ok := viewFromCommit(c, pid, dc, zones)
 		if !ok {
-			continue // 索引已指向别队(修复提交里被移出者):不拼视图,交给他自己的拉取
+			continue // 索引已指向别队:不拼视图,交给他自己的拉取
 		}
 		if rosterChanged(c) {
 			s.markFillSupported(view) // 名单变化的提交不做匹配态装饰,理由见 commitResponse
@@ -150,10 +139,10 @@ func (s *Service) pushCommit(ctx context.Context, caller uint64, c *CommitResult
 			s.decorateQueueState(ctx, pid, view)
 		}
 		s.push(ctx, pid, uint32(game.ClientPlayerTeamNotifyTeamSnapshotMessageId), pushKindSnapshot,
-			&teampb.TeamSnapshotS2C{Team: view, Reason: d.Reason, ActorId: d.Actor, Tip: c.PushTip})
+			&teampb.TeamSnapshotS2C{Team: view, Reason: d.Reason, ActorId: d.Actor})
 	}
 	if d.InvitedPlayer != 0 {
-		if invite := incomingInviteView(d.Record, d.InvitedPlayer, c.NowMs, dc); invite != nil {
+		if invite := incomingInviteView(d.Record, d.InvitedPlayer, c.NowMs, dc, zones); invite != nil {
 			s.push(ctx, d.InvitedPlayer, uint32(game.ClientPlayerTeamNotifyTeamInviteMessageId), pushKindInvite,
 				&teampb.TeamInviteS2C{Invite: invite, ServerTimeMs: c.NowMs})
 		}
@@ -183,7 +172,7 @@ func (s *Service) pushCommit(ctx context.Context, caller uint64, c *CommitResult
 //   - 建队:无(回包即视图);
 //   - 申请 / 邀请增减、过期清理:只推队长(申请与已发邀请只有队长可见);
 //     同一次提交若惰性转让了队长,成员都要知道,改推全员;
-//   - 其余(加入、离队、踢人、转让、解散、自愈、开战状态):J ∪ K ∪ L 全员,
+//   - 其余(加入、离队、踢人、转让、解散、开战状态):J ∪ K ∪ L 全员,
 //     移出者收到 team_id=0 的空视图。
 func snapshotRecipients(c *CommitResult) []uint64 {
 	d := c.Decision
@@ -204,13 +193,9 @@ func snapshotRecipients(c *CommitResult) []uint64 {
 	return uniqueIds(all)
 }
 
-// pushOnlineRefresh 用 S_READ_MEMBERS 给 tid==本队 的其他在线队员推当前视图(§C.5、§I.3 #26)。
-func (s *Service) pushOnlineRefresh(ctx context.Context, caller, teamId uint64, knownMembers []uint64) {
-	snap, err := s.store.ReadMembers(ctx, teamId, knownMembers)
-	if errors.Is(err, ErrMembersChanged) {
-		metrics.ObserveTeamPush(pushKindMembersChanged, pushOutcomeSkipped)
-		return
-	}
+// pushOnlineRefresh 用 ReadMembers 给 tid==本队 的其他在线队员推当前视图(§C.5、§I.3 #26)。
+func (s *Service) pushOnlineRefresh(ctx context.Context, caller, teamId uint64) {
+	snap, err := s.store.ReadMembers(ctx, teamId)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("[team] Online state refresh failed to read members team=%d: %v", teamId, err)
 		metrics.ObserveTeamPush(pushKindSnapshot, pushOutcomeError)
@@ -220,11 +205,12 @@ func (s *Service) pushOnlineRefresh(ctx context.Context, caller, teamId uint64, 
 		return
 	}
 	dc := s.presence.loadDisplay(ctx, rosterIds(snap.Record))
+	zones := s.mergedZones()
 	for _, pid := range MemberIds(snap.Record) {
 		if pid == caller || !dc[pid].Online {
 			continue
 		}
-		view, ok := viewFromMembers(snap, pid, dc)
+		view, ok := viewFromMembers(snap, pid, dc, zones)
 		if !ok {
 			continue // 索引 tid ≠ 本队(已离队 / 索引缺失):不推,交给他自己的拉取自愈
 		}

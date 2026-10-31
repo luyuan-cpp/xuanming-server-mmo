@@ -13,13 +13,22 @@ import (
 	smpb "proto/scene_manager"
 	"shared/generated/table"
 	"shared/kafkacmd"
+	"shared/playerredis"
 )
 
+// leaseCleanupWakeBuffer 是 LeaseCleanupWake 的容量:满了就丢,常规轮转兜底。
+const leaseCleanupWakeBuffer = 1024
+
 type ServiceContext struct {
-	Config             config.Config
-	RedisClient        *redis.Client
+	Config config.Config
+	// RedisClient 是控制域:选主锁、就绪标记、代次、审计时间。
+	RedisClient *redis.Client
+	// PlayerRedis 是玩家域:会话、断线租约、gate 索引、分片登记、AFK 通行、位置(只读)。
+	PlayerRedis        redis.UniversalClient
 	KafkaWriter        *kafkago.Writer
 	SceneManagerClient smpb.SceneManagerClient
+	// LeaseCleanupWake 叫醒本进程的 LeaseMonitor 立刻处理一个 slot(见 wakeLeaseMonitorAt)。nil = 不叫醒,只靠常规轮转。
+	LeaseCleanupWake chan uint16
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -41,6 +50,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	// 生效值(缺省时是 go-redis 算出来的 10 × GOMAXPROCS):核对 ConfigMap 镜像的 PoolSize 是否真的被加载。
 	logx.Infof("Redis client %s DB=%d pool_size=%d", c.RedisClient.Host, c.RedisClient.DB, rdb.Options().PoolSize)
+
+	playerConf, err := playerRedisConf(c)
+	if err != nil {
+		panic(err)
+	}
+	playerRedis, err := playerredis.New(playerConf)
+	if err != nil {
+		panic(fmt.Errorf("failed to build player redis client: %w", err))
+	}
+	if err := playerRedis.Ping(context.Background()).Err(); err != nil {
+		panic(fmt.Errorf("failed to connect player redis: %w", err))
+	}
+	logx.Infof("Player redis client %s", playerConf.Describe())
 
 	w := &kafkago.Writer{
 		Addr: kafkago.TCP(c.Kafka.Brokers...),
@@ -72,9 +94,32 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return &ServiceContext{
 		Config:             c,
 		RedisClient:        rdb,
+		PlayerRedis:        playerRedis,
 		KafkaWriter:        w,
 		SceneManagerClient: smClient,
+		LeaseCleanupWake:   make(chan uint16, leaseCleanupWakeBuffer),
 	}
+}
+
+// playerRedisConf 是玩家域客户端的配置:没写 PlayerRedis 段时指向 RedisClient 这个单实例,沿用它的连接池上限与
+// go-redis 缺省超时,开发环境和还没渲染这一段的 ConfigMap 不用改就能跑。玩家域只用 DB 0,所以 RedisClient.DB 不是 0
+// 时不能这样缺省:会话会悄悄换一个 DB,读会话的别的服务看不到。
+func playerRedisConf(c config.Config) (playerredis.Config, error) {
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return playerredis.Config{}, fmt.Errorf("PlayerRedis: %w", err)
+	}
+	if len(c.PlayerRedis.Addrs) == 0 && c.RedisClient.DB != 0 {
+		return playerredis.Config{}, fmt.Errorf("PlayerRedis is not set and RedisClient.DB=%d: the player domain only uses DB 0, set PlayerRedis.Addrs explicitly", c.RedisClient.DB)
+	}
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{c.RedisClient.Host},
+		Password:        c.RedisClient.Password,
+		PoolSizePerNode: min(c.RedisClient.PoolSize, playerredis.MaxPoolSizePerNode),
+		DialTimeoutMs:   5000,
+		ReadTimeoutMs:   3000,
+		WriteTimeoutMs:  3000,
+		PoolTimeoutMs:   4000,
+	}), nil
 }
 
 func (s *ServiceContext) Stop() {
@@ -86,6 +131,11 @@ func (s *ServiceContext) Stop() {
 	if s.RedisClient != nil {
 		if err := s.RedisClient.Close(); err != nil {
 			logx.Errorf("Failed to close Redis client: %v", err)
+		}
+	}
+	if s.PlayerRedis != nil {
+		if err := s.PlayerRedis.Close(); err != nil {
+			logx.Errorf("Failed to close player redis client: %v", err)
 		}
 	}
 }

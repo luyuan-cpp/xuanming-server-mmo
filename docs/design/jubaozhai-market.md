@@ -45,7 +45,7 @@
 | 幂等发放 / 托管(D1/D1b) | **没有落码**,只在文档里 | `cpp/ go/ proto/` 零命中 |
 | transaction_log 交易类型 | 枚举有 `TX_TRADE/TX_AUCTION_SELL/TX_AUCTION_BUY`,**零写入方**;`LogItemTransfer` 零调用 | `transaction_log.proto:22-65` |
 | 战斗中闸 | Bag/Currency 写入口**不拦** `InBattleComp`(只拦跨 zone 冻结) | `bag_service.cpp:82` 等 |
-| Go → scene 同步调用 | **已有**:`SceneNodeGrpc`(match `PrepareBattle` 范式,读 `player:%d:location` 寻址) | `proto/scene_manager/scene_node_service.proto`;`go/match/internal/logic/gather.go:282` |
+| Go → scene 同步调用 | **已有**:`SceneNodeGrpc`(match `PrepareBattle` 范式,读 `player:{%d}:location` 寻址) | `proto/scene_manager/scene_node_service.proto`;`go/match/internal/logic/gather.go:282` |
 | scene → Go | 只允许 SceneManager / DataService | `cpp/nodes/scene/main.cpp:78` |
 | 账号 ↔ 角色 | 账号角色列表**只在 Redis `account:{account}`,TTL 12h,找不到 MySQL 写入**;反查键 `player_to_account:{id}` 永不过期且 EnterGame 会据此自愈回写 | `go/login/etc/login.yaml:68`;`entergamelogic.go:144-190` |
 | 登录冻结 / 封禁 | **没有**任何字段或闸;踢人 `KickPlayerEvent` 只有 session_id,提示写死"顶号" | `gate_event_handler.cpp:160` |
@@ -78,12 +78,12 @@
 
 - `market_zone`:商品所属的**逻辑市场分区** = 上架时卖家的 home_zone,由服务端调 `DataService.BatchGetPlayerHomeZone` 写入,**不接受客户端传值**;未映射时 fail-closed 拒绝上架/下单(契约 §4)。无论当前是否全服都写,切换不补数据。
 - 配置 `Market.Scope`:
-  - `zone`:浏览只返回 `market_zone = 买家 home_zone`;下单时服务端再校验一致(`kTradeZoneMismatch`)。
+  - `zone`:浏览只返回 `market_zone` 与买家 home_zone 解析到同一个最终区的商品(`market_zone IN (Members(z))`);下单时服务端再校验一致(`kTradeZoneMismatch`)。
   - `global`:浏览不按分区过滤;客户端可传 `zone_filter`(0 = 全部)仅作筛选;允许跨区购买。
 - 不照搬 guild `GetGuildRank` "客户端传 0 即全服"的做法:市场范围是服务端策略,不是客户端参数。
-- 跨区交付天然成立:资产经 `player:%d:location` 找到买家当前所在 scene;角色过户不改 home_zone(映射是 SETNX 永不覆盖),买家选该区进入即可。
-- 合服(**P1 已落**,`tools/merge_zone` 步骤 3b / 撤销 3b' / `verify:trade_listing`):按合服清单里的 listing_id 分批 `UPDATE trade_listing SET market_zone=dst WHERE market_zone=src AND listing_id IN (…)`(不用整区 UPDATE,否则清单落盘后新进源区的商品会被改写却不在清单里,撤销找不回);改写后复查源区计数仍 > 0 则中止不标完成;`seller_zone_at_listing` 不改。trade 库缺失时合服 fail-closed,只有显式 `-skip-trade-mysql`(dev_tools `-MergeSkipTradeMySql`)跳过。订单、流水、审计表保留原 zone 列(`server_merge_design.md` §6.4 口径)。
-- 合服闸:上架、下单、交付前查 `merge:in_progress:{zone}`,读失败按"合服中"处理(fail-closed),照抄 `go/guild/internal/logic/merge_fence.go`。
+- 跨区交付天然成立:资产经 `player:{%d}:location` 找到买家当前所在 scene;角色过户不改 home_zone(映射是 SETNX 永不覆盖),买家选该区进入即可。
+- 合服(2026-10-30 改为不停服,[总体方案 §7.1](player-data-tidb-scaling-plan.md)):合服只写一条 `zone_merged_into` 映射,`market_zone` 和 `seller_zone_at_listing` 都不改写。trade 启动时从 `data_service.GetMergedZones` 取映射(`placement.MergedZoneCache`,读不到拒绝启动),可见性判定两边解析到最终区再比,按区查询用 `market_zone IN (Members(z))`,客户端看到的 `market_zone` 是最终区。撤销合服只删映射:合服期间上架的商品记的是目标区,留在目标区。人民币寄售不按区过滤(`RmbList` 和商城都不看 `market_zone`),这个字段只是合同条款和回显,不解析。订单、流水、审计表保留原 zone 列。
+- 合服闸:已删除。合服不动商品行,没有需要挡的窗口。
 
 ## 5. 状态机
 
@@ -132,7 +132,7 @@ CREATED ──向渠道下单──▶ PAYING ──验签回调 + 主动查单�
      - **P2 实际状态:通用通道 v1 没有结果环**(开放项 J-A1)。重试靠的是账本位图给出同一结局,不靠环里的快照;快照字段号已占好但零写者零读者,详见 §6.4。
 4. **结局一旦决定就固定**:scene 见过某 seq,结局(`APPLIED` / `REJECTED`)落盘,重试返回同一结局。暂时性条件(背包满、战斗中、跨区冻结、玩家不在本节点)返回 `RETRY` / `NOT_HERE`,**不**记账。
 5. **`AssetAbortDebit(seq)`**:scene 未见过该 seq 则记为 `REJECTED` 占位;见过则返回原结局。Go 靠它确定性收口任何悬挂的托管。
-6. **只在玩家在线时应用**。Go 的 reconcile 循环扫描未决 outbox,按 `player:%d:location` 批量查在线者重投;离线玩家的发放等其上线,延迟 ≤ 扫描周期(默认 2s)。v1 不做登录时 scene 主动拉取;若日后要做,按契约 §8 走直连 gRPC(专用 READY 选择器 + `nodeTypeNameMap` + 前缀表 + scene 白名单),**不能借路由服**。
+6. **只在玩家在线时应用**。Go 的 reconcile 循环扫描未决 outbox,按 `player:{%d}:location` 批量查在线者重投;离线玩家的发放等其上线,延迟 ≤ 扫描周期(默认 2s)。v1 不做登录时 scene 主动拉取;若日后要做,按契约 §8 走直连 gRPC(专用 READY 选择器 + `nodeTypeNameMap` + 前缀表 + scene 白名单),**不能借路由服**。
 7. 重复投递安全(scene 幂等),所以多副本 reconcile 用行级租约只为省流量,不为正确性。
 
 ### 6.2 各类商品

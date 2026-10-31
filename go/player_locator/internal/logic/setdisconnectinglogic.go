@@ -62,7 +62,7 @@ func (l *SetDisconnectingLogic) SetDisconnecting(in *pb.SetDisconnectingRequest)
 	key := sessionKey(in.PlayerId)
 
 	// Get current session
-	data, err := l.svcCtx.RedisClient.Get(l.ctx, key).Bytes()
+	data, err := l.svcCtx.PlayerRedis.Get(l.ctx, key).Bytes()
 	if err == redis.Nil {
 		return &common.Empty{}, nil // No session, nothing to disconnect
 	}

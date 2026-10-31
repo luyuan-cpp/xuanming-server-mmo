@@ -28,8 +28,8 @@ func (l *CancelActivityBattleLogic) CancelActivityBattle(in *pb.CancelActivityBa
 	if details, client := ctxkeys.GetSessionDetails(l.ctx); client && details != nil {
 		return nil, status.Error(codes.PermissionDenied, "客户端不能取消内部活动开战原件")
 	}
-	if l.svcCtx == nil || l.svcCtx.Authority == nil || l.svcCtx.ActivityCancelAuth == nil || len(l.svcCtx.ActivityCancelSecret) < 32 {
-		return nil, status.Error(codes.Unavailable, "活动取消权威或独立签名依赖未就绪")
+	if l.svcCtx == nil || l.svcCtx.ActivityCancelAuth == nil || len(l.svcCtx.ActivityCancelSecret) < 32 {
+		return nil, status.Error(codes.Unavailable, "活动取消独立签名依赖未就绪")
 	}
 	method := pb.MatchInternal_CancelActivityBattle_FullMethodName
 	caller, err := l.svcCtx.ActivityCancelAuth.Verify(l.ctx, method, in)

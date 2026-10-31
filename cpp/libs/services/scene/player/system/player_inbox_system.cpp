@@ -150,7 +150,7 @@ namespace
 		return true;
 	}
 
-	PlayerInboxSystem::PersistFn gPersistFn = &PlayerLifecycleSystem::SavePlayerToRedis;
+	PlayerInboxSystem::PersistFn gPersistFn = &PlayerLifecycleSystem::SavePlayer;
 	PlayerInboxSystem::NowMsFn gNowMsFn = &DefaultSteadyNowMs;
 	PlayerInboxSystem::SendFetchFn gSendFetchFn = &DefaultSendFetch;
 	PlayerInboxSystem::SendAckFn gSendAckFn = &DefaultSendAck;
@@ -502,7 +502,7 @@ namespace
 
 	void OnPersistProbe(uint64_t playerId, uint32_t domain);
 
-	// 请求一次存盘(500ms 节流),压了写就在同一条连接上紧跟一条 PING 走快路径。
+	// 请求一次存盘(500ms 节流),压了写就挂一个存盘落定回调,落定时判 durable。
 	void RequestPersist(entt::entity player, uint64_t playerId, PlayerInboxDomainState &state, uint64_t nowMs)
 	{
 		if (state.lastPersistRequestMs != 0 && nowMs - state.lastPersistRequestMs < player_inbox_rules::kPersistThrottleMs)
@@ -1829,7 +1829,7 @@ void PlayerInboxSystem::OnAckFailed(uint64_t playerId, uint32_t domain, uint64_t
 
 void PlayerInboxSystem::SetPersistFnForTest(PersistFn fn)
 {
-	gPersistFn = (fn == nullptr) ? &PlayerLifecycleSystem::SavePlayerToRedis : fn;
+	gPersistFn = (fn == nullptr) ? &PlayerLifecycleSystem::SavePlayer : fn;
 }
 
 void PlayerInboxSystem::SetNowFnForTest(NowMsFn fn)

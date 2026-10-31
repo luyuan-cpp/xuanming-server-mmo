@@ -167,7 +167,7 @@ var (
 
 // NewDeps 由 main 调用,签名是 F1 批与 F2 批之间的接缝契约(F1 规格 §3.8)。
 func NewDeps(svcCtx *svc.ServiceContext) *Deps {
-	// 缓存句柄用 FriendRedis(friend 私有 key),不是 SharedRedis:
+	// 缓存句柄用 FriendRedis(friend 私有 key),不是 PlayerRedis:
 	// 共享库只放跨运行时契约 key(契约 §4),好友缓存挤进去会与契约 key 争内存。
 	// 列表读的硬上限交给 repo 保管(F2 §4):缓存里存的是**已经截断过**的列表,
 	// 逐调用传上限会让"缓存里那份按谁的上限截的"取决于谁先回填。
@@ -191,10 +191,10 @@ func NewDeps(svcCtx *svc.ServiceContext) *Deps {
 		CheckOriginalRole: repo.CheckOriginalRole,
 		SvcCtx:            svcCtx,
 		Repo:              repo,
-		// 在线状态必须走 SharedRedis:player:session:{id} 是 player_locator 写的跨运行时
-		// 契约 key,FriendRedis 可能是另一套(甚至 Cluster)实例,读不到它。
+		// 在线状态必须走 PlayerRedis:player:session:{id} 是 player_locator 写的跨运行时
+		// 契约 key,FriendRedis 可能是另一套实例,读不到它。
 		// 一次 MGET 的 key 数按 ListReadHardLimit 分批,上限与列表读同源。
-		Sessions: data.NewSessionReader(svcCtx.SharedRedis, svcCtx.Config.Friend.ListReadHardLimit),
+		Sessions: data.NewSessionReader(svcCtx.PlayerRedis, svcCtx.Config.Friend.ListReadHardLimit),
 		Sweeps:   repo,
 		Now:      time.Now,
 	}
@@ -530,7 +530,7 @@ func (l *FriendLogic) GetFriendList(ctx context.Context, req *pb.GetFriendListRe
 		pbFriends = append(pbFriends, entry)
 	}
 	// 展示补全失败不隐藏真实好友关系；返回可用字段并记录故障。
-	directory := data.OnlineDirectory{Redis: l.deps.SvcCtx.SharedRedis, DataService: l.deps.SvcCtx.DataService}
+	directory := data.OnlineDirectory{Redis: l.deps.SvcCtx.PlayerRedis, DataService: l.deps.SvcCtx.DataService}
 	if err := directory.FillFriendProfiles(ctx, pbFriends); err != nil {
 		logx.WithContext(ctx).Errorf("[friend] Failed to complete friend display profiles: %v", err)
 	}

@@ -13,6 +13,7 @@ import (
 	smpb "proto/scene_manager"
 
 	"shared/kafkacmd"
+	"shared/redisslot"
 	"shared/scenenode"
 
 	"github.com/segmentio/kafka-go"
@@ -137,7 +138,7 @@ func (n *KafkaNotifier) notify(ctx context.Context, playerID uint64, domain inbo
 	if n == nil || n.Locations == nil || n.Nodes == nil || n.Writer == nil || n.EventID == 0 {
 		return NotifyError, errNotifierIncomplete
 	}
-	raw, err := n.Locations.GetLocation(ctx, scenenode.LocationKey(playerID))
+	raw, err := n.Locations.GetLocation(ctx, redisslot.LocationKey(playerID))
 	if err != nil {
 		return NotifyError, err
 	}

@@ -1,5 +1,5 @@
 // Package svc 是 friend 服务的依赖装配:etcd 客户端、mmorpg_friend 连接池、
-// FriendRedis / SharedRedis 双句柄,以及 S2C 推送用的 Kafka writer。
+// FriendRedis / PlayerRedis 双句柄,以及 S2C 推送用的 Kafka writer。
 //
 // 与 trade / chat 的 svc 包刻意不同的一点:本包**不含** Prometheus 指标。
 // friend 的指标在 friend/internal/metrics 里(懒注册 + Start(addr),由 main 调用),
@@ -26,6 +26,7 @@ import (
 	"shared/idsegment"
 	"shared/kafkacmd"
 	"shared/kafkautil"
+	"shared/playerredis"
 	"shared/playersync"
 
 	// database/sql 只认注册过的驱动名;这个空导入就是注册 "mysql" 的唯一动作,删了它
@@ -59,7 +60,7 @@ const (
 
 type ServiceContext struct {
 	// LoginSessions 只读显式全局 login 登录态，与好友缓存/在线投影句柄分离。
-	LoginSessions *redv9.Client
+	LoginSessions redv9.UniversalClient
 	Config        config.Config
 
 	// Etcd 供 shared/noderegistry 注册与 shared/killswitch 监听共用 —— 同一个集群不开第二条连接。
@@ -84,27 +85,21 @@ type ServiceContext struct {
 	SQLDialect sqldialect.Dialect
 
 	// 双存储(契约 §4):
-	//   - SharedRedis:跨运行时契约 key(`player:session:{id}`)的**唯一句柄**,禁 Cluster。
-	//     这条 key 的写者是 C++ / login,C++ 侧没有集群客户端,所以它永远指向既有共享库;
-	//     friend 靠它判在线(F2 批的推送路径)。
-	//   - FriendRedis:friend 私有 key(好友列表缓存、申请配额……),可指向 Redis Cluster。
-	// FriendRedis 未配置时两者是同一个句柄(本地单库形态),见 NewRedisHandles。
-	//
-	// 两个句柄都是 go-zero core/stores/redis 的 *redis.Redis(照 chat / match / trade),
-	// 不再直接用 github.com/redis/go-redis/v9:同进程里两套客户端 = 两套连接池、
-	// 两套超时与断路器语义,排障时对不上账。
-	SharedRedis *redis.Redis
+	//   - PlayerRedis:玩家域句柄(shared/playerredis,生产可以是 Redis Cluster):跨运行时契约 key
+	//     `player:session:{id}` 与 `player:{id}:sync_digest`。键一律带 {player_id},发送前经守卫核对。
+	//   - FriendRedis:friend 私有 key(好友列表缓存、申请配额……),go-zero 句柄,可指向 Redis Cluster。
+	//     未配置时回落到 Redis 段的共享库(本地单库形态),见 NewRedisHandles。
+	PlayerRedis redv9.UniversalClient
 	FriendRedis *redis.Redis
 
 	// SyncDigest 在好友写提交之后给受影响玩家的落地摘要 bump 好友三个域
 	// (docs/design/landing-recovery-sync-digest.md §3.3 friend 行)。
-	// 句柄必须是 SharedRedis:player:{id}:sync_digest 是 C++ scene 读的核心契约键,
-	// C++ 只连核心实例,FriendRedis(可能是 Cluster)它读不到。
+	// 句柄必须是 PlayerRedis:player:{id}:sync_digest 是 C++ scene 读的玩家域键,FriendRedis 它读不到。
 	// 指标 player_sync_bump_total 由 shared/playersync 自己注册在默认 registry 上(叶子包,不与本包成环)。
 	// 手工构造的 ServiceContext(logic 单测)不填时为 nil,bump 全部是无操作。
 	SyncDigest *playersync.Bumper
 
-	// 在线组队目录按权威 home zone 过滤；映射库不一定与 SharedRedis 同库。
+	// 在线组队目录按权威 home zone 过滤；映射库不一定与 PlayerRedis 同库。
 	DataService   dspb.DataServiceClient
 	RequestIDs    *idsegment.Client
 	directoryConn *grpc.ClientConn
@@ -182,7 +177,15 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic(fmt.Sprintf("friend: Backend=%q, but the authority database dialect is %s; refusing to start", c.Backend, dialect))
 	}
 
-	friendRds, sharedRds, target := NewRedisHandles(c)
+	friendRds, target := NewRedisHandles(c)
+	playerRedisConf := c.EffectivePlayerRedis()
+	playerRedis, err := playerredis.New(playerRedisConf)
+	if err != nil {
+		_ = db.Close()
+		_ = etcdCli.Close()
+		panic(fmt.Errorf("friend: invalid PlayerRedis config: %w", err))
+	}
+	logx.Infof("[friend] player redis %s", playerRedisConf.Describe())
 	directoryClient, directoryConn := newDirectoryDataService(c)
 	requestIDs, err := NewRequestIDSegment(directoryClient)
 	if err != nil {
@@ -218,9 +221,9 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		Etcd:               etcdCli,
 		DB:                 db,
 		SQLDialect:         dialect,
-		SharedRedis:        sharedRds,
+		PlayerRedis:        playerRedis,
 		FriendRedis:        friendRds,
-		SyncDigest:         playersync.NewBumper(relayDigestEvaler{next: playersync.NewGoZeroEvaler(sharedRds), relay: relay}, "friend"),
+		SyncDigest:         playersync.NewBumper(relayDigestEvaler{next: playersync.NewGoRedisEvaler(playerRedis), relay: relay}, "friend"),
 		DataService:        directoryClient,
 		RequestIDs:         requestIDs,
 		directoryConn:      directoryConn,
@@ -230,14 +233,15 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 }
 
-func NewLoginSessionClient(c config.Config) (*redv9.Client, error) {
-	if !c.GlobalLoginSessions || c.LoginRedis.Host == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize <= 0 {
+func NewLoginSessionClient(c config.Config) (redv9.UniversalClient, error) {
+	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode <= 0 {
 		return nil, errors.New("好友全局 LoginRedis 未显式配置")
 	}
-	client := redv9.NewClient(&redv9.Options{Addr: c.LoginRedis.Host, Password: c.LoginRedis.Password,
-		DB: c.LoginRedis.DB, PoolSize: c.LoginRedis.PoolSize, MaxActiveConns: c.LoginRedis.PoolSize,
-		MaxIdleConns: c.LoginRedis.PoolSize, PoolTimeout: time.Second, DialTimeout: 2 * time.Second,
-		ReadTimeout: 2 * time.Second, WriteTimeout: 2 * time.Second, MaxRetries: -1, ContextTimeoutEnabled: true})
+	client, err := playerredis.New(c.LoginRedis.ClientConfig(playerredis.Config{PoolTimeoutMs: 1000, DialTimeoutMs: 2000,
+		ReadTimeoutMs: 2000, WriteTimeoutMs: 2000}))
+	if err != nil {
+		return nil, errors.New("好友全局 LoginRedis 配置非法")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -256,29 +260,24 @@ func newDirectoryDataService(c config.Config) (dspb.DataServiceClient, *grpc.Cli
 	return dspb.NewDataServiceClient(conn), conn
 }
 
-// NewRedisHandles 按配置建立 (FriendRedis, SharedRedis) 两个句柄,并返回 FriendRedis 落点描述。
-// FriendRedis.Host 为空即未配置,私有 key 回落到共享库,两者返回**同一个**句柄。
+// NewRedisHandles 按配置建立 FriendRedis 句柄,并返回它的落点描述。
+// FriendRedis.Host 为空即未配置,私有 key 回落到共享库(config.Validate 把 `Redis.Host == ""` 当配置错误拒掉,这里不用再判空)。
 // 拆成独立函数是为了不依赖 etcd / MySQL 就能测回落逻辑(与 chat / match 的同名函数同形)。
-func NewRedisHandles(c config.Config) (friendRds, sharedRds *redis.Redis, target string) {
-	// 共享库无条件建:它是 `player:session:{id}` 的唯一句柄,也是 FriendRedis 的回落目标,
-	// 所以 config.Validate 把 `Redis.Host == ""` 当配置错误拒掉,这里不用再判空。
-	sharedRds = redis.MustNewRedis(c.Redis.RedisConf)
+func NewRedisHandles(c config.Config) (friendRds *redis.Redis, target string) {
 	if c.FriendRedis.Host == "" {
 		// go-zero 的 logx 没有 Warn 级别;用 Error 级打出来,保证在默认日志级别下一定可见
 		// (Info 级在 staging/prod 常被调掉,这条正是那里最需要看到的)。
 		// 回落本身不是故障(本地单库形态就是这样),但在 staging/prod 出现就是部署缺陷:
-		// 好友私有 key 要和契约 key 抢内存。2026-10-12 起本地 compose 也改为 noeviction(K8s 一直是
+		// 好友私有 key 要和同实例的其他键抢内存。2026-10-12 起本地 compose 也改为 noeviction(K8s 一直是
 		// noeviction),共享库设了 maxmemory 时写满会连带拒写契约 key;共享库一旦被配成淘汰型,
 		// 契约 key 也可能被淘汰,后果是"玩家明明在线却判成离线",推送静默丢。
 		logx.Errorf("[friend] WARN FriendRedis not configured; friend private keys falling back to shared database host=%s type=%s -- "+
 			"local single-database deployments only; staging/prod require separate FriendRedis with maxmemory-policy=noeviction (contract section 4)",
 			c.Redis.Host, c.Redis.Type)
-		return sharedRds, sharedRds, fmt.Sprintf("shared-fallback host=%s type=%s", c.Redis.Host, c.Redis.Type)
+		return redis.MustNewRedis(c.Redis.RedisConf), fmt.Sprintf("shared-fallback host=%s type=%s", c.Redis.Host, c.Redis.Type)
 	}
-	friendRds = redis.MustNewRedis(c.FriendRedis)
-	logx.Infof("[friend] Separate FriendRedis configuration active host=%s type=%s (shared database host=%s used only for contract key access)",
-		c.FriendRedis.Host, c.FriendRedis.Type, c.Redis.Host)
-	return friendRds, sharedRds, fmt.Sprintf("FriendRedis host=%s type=%s", c.FriendRedis.Host, c.FriendRedis.Type)
+	logx.Infof("[friend] Separate FriendRedis configuration active host=%s type=%s", c.FriendRedis.Host, c.FriendRedis.Type)
+	return redis.MustNewRedis(c.FriendRedis), fmt.Sprintf("FriendRedis host=%s type=%s", c.FriendRedis.Host, c.FriendRedis.Type)
 }
 
 // BuildDSN 拼 mmorpg_friend 的 DSN,与 go/trade/internal/svc BuildDSN、
@@ -531,6 +530,9 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	}
 	if sc.LoginSessions != nil {
 		result = errors.Join(result, sc.LoginSessions.Close())
+	}
+	if sc.PlayerRedis != nil {
+		result = errors.Join(result, sc.PlayerRedis.Close())
 	}
 	if sc.DB != nil {
 		result = errors.Join(result, sc.DB.Close())

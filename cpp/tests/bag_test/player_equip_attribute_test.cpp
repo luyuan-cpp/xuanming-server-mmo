@@ -54,7 +54,6 @@
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
-#include "proto/common/component/battle_settlement_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
@@ -959,7 +958,6 @@ protected:
 		EmplaceIfAbsent<PlayerProfileComp>(entity);
 		EmplaceIfAbsent<MissionsContainerComp>(entity);
 		EmplaceIfAbsent<PlayerAssetOpLedgerComp>(entity);
-		EmplaceIfAbsent<BattleSettlementLedgerComp>(entity);
 		EmplaceIfAbsent<PlayerInboxLedgerComp>(entity);
 		EmplaceIfAbsent<PlayerMysteryMerchantComp>(entity);
 		// 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由两张表的 Unmarshal 创建。

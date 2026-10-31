@@ -177,7 +177,7 @@ func TestMyApplicationViews_FillsLeaderNamesInOneBatch(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
 	seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门"), 10)
 	seedGuild(t, mr, namesTestGuild(namesTestGuildTwo, namesTestLeaderC, 2, "凌霄阁"), 20)
-	// 回滚合服后留下的跨区残留行:不展示,也不该为它的帮主付一次取名。
+	// 撤销合服后留下的跨区残留行:不展示,也不该为它的帮主付一次取名。
 	seedGuild(t, mr, namesTestGuild(namesTestGuildFar, namesTestLeaderD, 7, "七区帮"), 30)
 	names := &recordingPlayerNames{names: map[uint64]string{
 		namesTestLeaderA: "云中君",
@@ -207,8 +207,8 @@ func TestMyApplicationViews_FillsLeaderNamesInOneBatch(t *testing.T) {
 	assert.Equal(t, []uint64{namesTestLeaderA, namesTestLeaderC}, names.batches[0])
 }
 
-// TestNamesStayEmptyWithoutResolver:不注入 resolver(没配 DataServiceRpc)时名字全空且不 panic。
-// WithPlayerNames(nil) 与"根本不传"必须等价 —— guild.go 在没配 DataServiceRpc 时传的就是 nil 接口。
+// TestNamesStayEmptyWithoutResolver:不注入 resolver 时名字全空且不 panic。
+// WithPlayerNames(nil) 与"根本不传"必须等价。
 func TestNamesStayEmptyWithoutResolver(t *testing.T) {
 	for name, opts := range map[string][]Option{
 		"不传 Option":            nil,

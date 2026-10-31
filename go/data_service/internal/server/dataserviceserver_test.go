@@ -26,26 +26,82 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// newHomeZoneTestServer 只装 Router(mapping Redis 指向 miniredis),其余 store
-// 保持 nil —— GetPlayerHomeZone 只碰 mapping,不需要 MySQL。
-func newHomeZoneTestServer(t *testing.T) (*DataServiceServer, *miniredis.Miniredis) {
-	t.Helper()
-	return newHomeZoneTestServerWithConfig(t, func(*config.Config) {})
+// memRouteStore 是内存版路由表,判定与 store.RouteStore.RegisterHome 同口径:绝不覆盖,落点只在这次真的写入时钉上。
+// SQL 本身由 store 包的契约用例与真库用例钉住,这里只测 server 这一层:routing 的错误怎么翻成 gRPC code + error_code。
+type memRouteStore struct {
+	rows map[uint64]store.RouteRow
+	// err 非 nil 时读写都回它,模拟全局库故障(含 route_meta 冻结)。
+	err error
+	// failGetRoutesOn 让第 n 次 GetRoutes(从 1 起)失败。
+	failGetRoutesOn int
+	registerCalls   int
+	getRoutesCalls  int
 }
 
-// newHomeZoneTestServerWithConfig 同上,但允许改配置(目前只用来配 AdminToken)。
-func newHomeZoneTestServerWithConfig(t *testing.T, tweak func(*config.Config)) (*DataServiceServer, *miniredis.Miniredis) {
-	t.Helper()
-	mr := miniredis.RunT(t)
-	c := config.Config{
-		MappingRedis: redis.RedisConf{Host: mr.Addr(), Type: "node"},
+// 接口一变,编译期先炸。
+var _ routing.RouteStore = (*memRouteStore)(nil)
+
+var errRouteSQL = errors.New("player_route: connection reset by peer")
+
+func (f *memRouteStore) RegisterHome(_ context.Context, req store.RouteRegisterRequest) (store.RouteRegisterResult, error) {
+	f.registerCalls++
+	if f.err != nil {
+		return store.RouteRegisterResult{}, f.err
 	}
-	tweak(&c)
-	r := routing.NewRouter(c)
-	t.Cleanup(r.Close)
-	return NewDataServiceServer(&svc.ServiceContext{Config: c, Router: r, MergedZones: routing.NewStaticMergedZoneCache(nil)}), mr
+	row, ok := f.rows[req.PlayerID]
+	switch {
+	case !ok:
+		f.rows[req.PlayerID] = store.RouteRow{PlayerID: req.PlayerID, HomeZone: req.HomeZone, StorageID: req.StorageID, Rev: 1}
+		return store.RouteRegisterResult{Outcome: store.RouteRegisterInserted}, nil
+	case row.HomeZone == req.HomeZone:
+		return store.RouteRegisterResult{Outcome: store.RouteRegisterAlreadySame}, nil
+	default:
+		return store.RouteRegisterResult{Outcome: store.RouteRegisterConflict, ExistingHome: row.HomeZone}, nil
+	}
+}
+
+// GetRoutes 同真实驱动:ctx 已结束的查询直接失败。
+func (f *memRouteStore) GetRoutes(ctx context.Context, ids []uint64) (map[uint64]store.RouteRow, error) {
+	f.getRoutesCalls++
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.getRoutesCalls == f.failGetRoutesOn {
+		return nil, errRouteSQL
+	}
+	out := make(map[uint64]store.RouteRow, len(ids))
+	for _, id := range ids {
+		if row, ok := f.rows[id]; ok {
+			out[id] = row
+		}
+	}
+	return out, nil
+}
+
+// staticMergedZones 建一个固定内容的合服缓存:不 Start,快照就是构造时读到的这一份。
+func staticMergedZones(t *testing.T, merges map[uint32]uint32) *placement.MergedZoneCache {
+	t.Helper()
+	cache, err := placement.NewMergedZoneCache(context.Background(),
+		func(context.Context) (map[uint32]uint32, error) { return merges, nil }, placement.MergedZoneCacheOptions{})
+	require.NoError(t, err)
+	return cache
+}
+
+// newHomeZoneTestServer 只装 Router(内存版路由表)与空的合服缓存,其余 store 保持 nil ——
+// 归属 RPC 只碰这两样,不需要 MySQL。
+func newHomeZoneTestServer(t *testing.T) (*DataServiceServer, *memRouteStore) {
+	t.Helper()
+	routes := &memRouteStore{rows: map[uint64]store.RouteRow{}}
+	return NewDataServiceServer(&svc.ServiceContext{
+		Router:      routing.NewRouter(routes),
+		MergedZones: staticMergedZones(t, nil),
+	}), routes
 }
 
 // ── GetPlayerHomeZone:缺失 ≠ 故障 ──────────────────────────────
@@ -73,7 +129,7 @@ func TestGetPlayerHomeZone_ReturnsRegisteredZone(t *testing.T) {
 	s, _ := newHomeZoneTestServer(t)
 	ctx := context.Background()
 
-	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1001, HomeZoneId: 7})
+	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1001, HomeZoneId: 7, StorageId: placement.DefaultGlobalStorageID})
 	require.NoError(t, err)
 
 	resp, err := s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 1001})
@@ -81,32 +137,29 @@ func TestGetPlayerHomeZone_ReturnsRegisteredZone(t *testing.T) {
 	assert.Equal(t, uint32(7), resp.GetHomeZoneId())
 }
 
-// TestGetPlayerHomeZone_RedisFailureIsUnavailableNotNotFound:传输层故障与
-// 「没有映射」必须是两个不同的码,否则一次 Redis 宕机会伪装成一批"老玩家",
-// 合服当天最需要这条信号时它恰好是哑的。
-func TestGetPlayerHomeZone_RedisFailureIsUnavailableNotNotFound(t *testing.T) {
-	s, mr := newHomeZoneTestServer(t)
+// TestGetPlayerHomeZone_StoreFailureIsUnavailableNotNotFound:库故障与「没有映射」必须是两个不同的码,
+// 否则一次全局库宕机会伪装成一批"老玩家",合服当天最需要这条信号时它恰好是哑的。
+func TestGetPlayerHomeZone_StoreFailureIsUnavailableNotNotFound(t *testing.T) {
+	s, routes := newHomeZoneTestServer(t)
 	ctx := context.Background()
-	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1002, HomeZoneId: 3})
+	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1002, HomeZoneId: 3, StorageId: placement.DefaultGlobalStorageID})
 	require.NoError(t, err)
 
-	mr.Close()
+	routes.err = errRouteSQL
 	resp, err := s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 1002})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-
-	st, ok := status.FromError(err)
-	require.True(t, ok)
-	assert.Equal(t, codes.Unavailable, st.Code())
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+	st, _ := status.FromError(err)
 	assert.NotContains(t, st.Message(), "no home zone mapping",
-		"Redis 故障绝不能带上'缺失映射'的文案,否则 login 会把故障当成正常状态吞掉")
+		"库故障绝不能带上'缺失映射'的文案,否则 login 会把故障当成正常状态吞掉")
 }
 
 // newMergedZoneTestServer 同 newHomeZoneTestServer,再装一张固定的合服映射。
 func newMergedZoneTestServer(t *testing.T, merges map[uint32]uint32) *DataServiceServer {
 	t.Helper()
 	s, _ := newHomeZoneTestServer(t)
-	s.svcCtx.MergedZones = routing.NewStaticMergedZoneCache(merges)
+	s.svcCtx.MergedZones = staticMergedZones(t, merges)
 	return s
 }
 
@@ -116,7 +169,7 @@ func TestHomeZoneRPCs_ResolveToFinalZone(t *testing.T) {
 	s := newMergedZoneTestServer(t, map[uint32]uint32{5: 6, 6: 7})
 	ctx := context.Background()
 	for player, zone := range map[uint64]uint32{1101: 5, 1102: 6, 1103: 7, 1104: 9} {
-		_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: player, HomeZoneId: zone})
+		_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: player, HomeZoneId: zone, StorageId: placement.DefaultGlobalStorageID})
 		require.NoError(t, err, "registering into a merged source zone is allowed")
 	}
 
@@ -131,38 +184,15 @@ func TestHomeZoneRPCs_ResolveToFinalZone(t *testing.T) {
 	assert.Equal(t, map[uint64]uint32{1101: 7, 1102: 7, 1103: 7, 1104: 9}, batch.GetPlayerZoneMap(), "absent ids stay absent")
 
 	// 幂等重试按原始值比:重试同一个源区照旧成功,不被解析后的值判成冲突。
-	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1101, HomeZoneId: 5})
+	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1101, HomeZoneId: 5, StorageId: placement.DefaultGlobalStorageID})
 	require.NoError(t, err)
-}
-
-// TestHomeZoneRPCs_UnresolvableMergeFailsClosed:映射成环解析不出最终区时回 Unavailable(不是 NotFound,也不回原始值),
-// 批量整批失败、不回半份;别的区不受影响。
-func TestHomeZoneRPCs_UnresolvableMergeFailsClosed(t *testing.T) {
-	s := newMergedZoneTestServer(t, map[uint32]uint32{5: 6, 6: 5})
-	ctx := context.Background()
-	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1201, HomeZoneId: 5})
-	require.NoError(t, err)
-	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1202, HomeZoneId: 9})
-	require.NoError(t, err)
-
-	resp, err := s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 1201})
-	assert.Nil(t, resp)
-	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
-
-	batch, err := s.BatchGetPlayerHomeZone(ctx, &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: []uint64{1201, 1202}})
-	assert.Nil(t, batch, "no partial map")
-	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
-
-	ok, err := s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 1202})
-	require.NoError(t, err)
-	assert.Equal(t, uint32(9), ok.GetHomeZoneId())
 }
 
 // TestHomeZoneRPCs_MissingCacheFailsClosed:缓存没装配(main 本该拒启,这是纵深防御)时不能当成没有合服。
 func TestHomeZoneRPCs_MissingCacheFailsClosed(t *testing.T) {
 	s, _ := newHomeZoneTestServer(t)
 	ctx := context.Background()
-	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1301, HomeZoneId: 5})
+	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1301, HomeZoneId: 5, StorageId: placement.DefaultGlobalStorageID})
 	require.NoError(t, err)
 	s.svcCtx.MergedZones = nil
 
@@ -172,13 +202,48 @@ func TestHomeZoneRPCs_MissingCacheFailsClosed(t *testing.T) {
 	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
 }
 
+// TestGetMergedZones:回答缓存快照里的全部映射(src → dst,不沿链解析);没有合服是一个答案,回空;
+// 缓存没装配回 Unavailable + 码 30,调用方不能把「读不到」当成「没有合服」。
+func TestGetMergedZones(t *testing.T) {
+	ctx := context.Background()
+
+	s := newMergedZoneTestServer(t, map[uint32]uint32{5: 6, 6: 7})
+	resp, err := s.GetMergedZones(ctx, &emptypb.Empty{})
+	require.NoError(t, err)
+	assert.Equal(t, map[uint32]uint32{5: 6, 6: 7}, resp.GetMergedInto())
+
+	s = newMergedZoneTestServer(t, nil)
+	resp, err = s.GetMergedZones(ctx, &emptypb.Empty{})
+	require.NoError(t, err)
+	assert.Empty(t, resp.GetMergedInto())
+
+	s.svcCtx.MergedZones = nil
+	resp, err = s.GetMergedZones(ctx, &emptypb.Empty{})
+	assert.Nil(t, resp)
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+}
+
+// TestHomeZoneRPCs_NoRouteStoreFailsClosed:route store 没装配时读写都回 Unavailable + 码 30,绝不 NotFound。
+func TestHomeZoneRPCs_NoRouteStoreFailsClosed(t *testing.T) {
+	s, _ := newHomeZoneTestServer(t)
+	s.svcCtx.Router = routing.NewRouter(nil)
+	ctx := context.Background()
+
+	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 1401, HomeZoneId: 5, StorageId: placement.DefaultGlobalStorageID})
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+	_, err = s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 1401})
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+	_, err = s.BatchGetPlayerHomeZone(ctx, &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: []uint64{1401}})
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+}
+
 // TestBatchGetPlayerHomeZone_OmitsMissingIds:批量口径刻意与单查不同 ——
 // 缺席的 id 直接不出现,不是错误(角色列表天然要处理"部分有部分没有")。
 func TestBatchGetPlayerHomeZone_OmitsMissingIds(t *testing.T) {
 	s, _ := newHomeZoneTestServer(t)
 	ctx := context.Background()
 
-	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 2001, HomeZoneId: 5})
+	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 2001, HomeZoneId: 5, StorageId: placement.DefaultGlobalStorageID})
 	require.NoError(t, err)
 
 	resp, err := s.BatchGetPlayerHomeZone(ctx, &data_service.BatchGetPlayerHomeZoneRequest{
@@ -190,16 +255,54 @@ func TestBatchGetPlayerHomeZone_OmitsMissingIds(t *testing.T) {
 	assert.False(t, present, "缺席的 id 直接不出现,不能整批失败")
 }
 
-// ── RegisterPlayerZone:SETNX ────────────────────────
+// bigHomeZoneBatch 造一批跨过单批上限的 id,读路径要分两块。
+func bigHomeZoneBatch() []uint64 {
+	ids := make([]uint64, store.RouteBatchLimit+5)
+	for i := range ids {
+		ids[i] = uint64(610001 + i)
+	}
+	return ids
+}
+
+// TestBatchGetPlayerHomeZone_AnswersAcrossChunks:跨过单批上限时分块读、结果合并。
+func TestBatchGetPlayerHomeZone_AnswersAcrossChunks(t *testing.T) {
+	s, routes := newHomeZoneTestServer(t)
+	ids := bigHomeZoneBatch()
+	first, last := ids[0], ids[store.RouteBatchLimit]
+	routes.rows[first] = store.RouteRow{PlayerID: first, HomeZone: 9, Rev: 1}
+	routes.rows[last] = store.RouteRow{PlayerID: last, HomeZone: 11, Rev: 1}
+
+	resp, err := s.BatchGetPlayerHomeZone(context.Background(), &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: ids})
+	require.NoError(t, err)
+	assert.Equal(t, map[uint64]uint32{first: 9, last: 11}, resp.GetPlayerZoneMap())
+	assert.Equal(t, 2, routes.getRoutesCalls)
+}
+
+// TestBatchGetPlayerHomeZone_AnyChunkFailureFailsWholeBatch:任一块读库失败整批 Unavailable + 码 30,不回半份:
+// 半份会被调用方当成「这些人没有归属」。
+func TestBatchGetPlayerHomeZone_AnyChunkFailureFailsWholeBatch(t *testing.T) {
+	s, routes := newHomeZoneTestServer(t)
+	ids := bigHomeZoneBatch()
+	routes.rows[ids[0]] = store.RouteRow{PlayerID: ids[0], HomeZone: 9, Rev: 1}
+	routes.failGetRoutesOn = 2
+
+	resp, err := s.BatchGetPlayerHomeZone(context.Background(), &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: ids})
+	require.Error(t, err)
+	assert.Nil(t, resp, "no partial map")
+	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
+	assert.Equal(t, 2, routes.getRoutesCalls)
+}
+
+// ── RegisterPlayerZone:绝不覆盖 ────────────────────────
 
 func TestRegisterPlayerZone_ConflictIsAlreadyExistsWithExistingZone(t *testing.T) {
 	s, _ := newHomeZoneTestServer(t)
 	ctx := context.Background()
 
-	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3001, HomeZoneId: 3})
+	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3001, HomeZoneId: 3, StorageId: placement.DefaultGlobalStorageID})
 	require.NoError(t, err)
 
-	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3001, HomeZoneId: 8})
+	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3001, HomeZoneId: 8, StorageId: placement.DefaultGlobalStorageID})
 	require.Error(t, err)
 	st, ok := status.FromError(err)
 	require.True(t, ok)
@@ -218,26 +321,25 @@ func TestRegisterPlayerZone_SameZoneIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 3; i++ {
-		_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3002, HomeZoneId: 4})
+		_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3002, HomeZoneId: 4, StorageId: placement.DefaultGlobalStorageID})
 		require.NoError(t, err, "第 %d 次重复登记同一 zone 必须成功(CreatePlayer 允许重试)", i+1)
 	}
 }
 
-// TestRegisterPlayerZone_StorageIdPinsPlacementOnlyOnFirstWrite:storage_id 经 RPC 透传到
-// 同一段 Lua;冲突被拒时落点零变更,拒绝码与不带 storage_id 时相同。
+// TestRegisterPlayerZone_StorageIdPinsPlacementOnlyOnFirstWrite:storage_id 经 RPC 透传到库;
+// 冲突被拒时落点零变更。
 func TestRegisterPlayerZone_StorageIdPinsPlacementOnlyOnFirstWrite(t *testing.T) {
-	s, mr := newHomeZoneTestServer(t)
+	s, routes := newHomeZoneTestServer(t)
 	ctx := context.Background()
 
 	_, err := s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{
 		PlayerId: 3101, HomeZoneId: 4, StorageId: placement.DefaultGlobalStorageID,
 	})
 	require.NoError(t, err)
-	raw, err := mr.Get(placement.Key(3101))
-	require.NoError(t, err)
-	assert.Equal(t, placement.StableValue(placement.DefaultGlobalStorageID, 1), raw)
+	assert.Equal(t, placement.DefaultGlobalStorageID, routes.rows[3101].StorageID)
 
-	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3102, HomeZoneId: 4})
+	const firstStorage = uint32(11)
+	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{PlayerId: 3102, HomeZoneId: 4, StorageId: firstStorage})
 	require.NoError(t, err)
 	_, err = s.RegisterPlayerZone(ctx, &data_service.RegisterPlayerZoneRequest{
 		PlayerId: 3102, HomeZoneId: 8, StorageId: placement.DefaultGlobalStorageID,
@@ -245,7 +347,7 @@ func TestRegisterPlayerZone_StorageIdPinsPlacementOnlyOnFirstWrite(t *testing.T)
 	st, ok := status.FromError(err)
 	require.True(t, ok)
 	assert.Equal(t, codes.AlreadyExists, st.Code())
-	assert.False(t, mr.Exists(placement.Key(3102)), "冲突的登记不得留下落点")
+	assert.Equal(t, firstStorage, routes.rows[3102].StorageID, "冲突的登记不得改落点")
 }
 
 // ── admin token 的公共辅助 ──────────
@@ -261,48 +363,7 @@ func adminCtx(token string) context.Context {
 	return peer.NewContext(ctx, &peer.Peer{Addr: &net.TCPAddr{IP: net.IPv4(10, 0, 0, 9), Port: 51234}})
 }
 
-// ── RegisterPlayerZone 的 db_first 错误映射(docs/design/player-route-mapping-durability-proposal.md §4,规格 c.3)──
-//
-// 这一组只测 server 这一层:routing 的错误怎么翻成 gRPC code + error_code。编排本身由 routing 的
-// route_publish_test.go 覆盖,库的行为由 store 的契约 / 真库用例覆盖,这里用假 store 挡在外面。
-
-// fakeRouteStore 按 routing.RouteStore 注入,记调用次数。
-type fakeRouteStore struct {
-	result store.RouteRegisterResult
-	err    error
-	calls  int
-}
-
-// 接口一变,编译期先炸。
-var _ routing.RouteStore = (*fakeRouteStore)(nil)
-
-func (f *fakeRouteStore) RegisterHome(_ context.Context, _ store.RouteRegisterRequest) (store.RouteRegisterResult, error) {
-	f.calls++
-	if f.err != nil {
-		return store.RouteRegisterResult{}, f.err
-	}
-	return f.result, nil
-}
-
-func intPtr(v int) *int { return &v }
-
-// newDBFirstTestServer 同 newHomeZoneTestServerWithConfig,但 RouteStore **显式**写 db_first 并注入假 store。
-// WAITAOF 两项显式写 0:miniredis 是否支持 WAITAOF 没有核实(规格 Q4),真实的 WAITAOF 只在 routing 的真 Redis 集成测试里验。
-func newDBFirstTestServer(t *testing.T, fake routing.RouteStore) (*DataServiceServer, *miniredis.Miniredis) {
-	t.Helper()
-	mr := miniredis.RunT(t)
-	c := config.Config{
-		MappingRedis: redis.RedisConf{Host: mr.Addr(), Type: "node"},
-		RouteStore: config.RouteStoreConfig{
-			Mode:               config.RouteStoreModeDBFirst,
-			WaitAOFNumLocal:    intPtr(0),
-			WaitAOFNumReplicas: intPtr(0),
-		},
-	}
-	r := routing.NewRouter(c, routing.WithRouteStore(fake))
-	t.Cleanup(r.Close)
-	return NewDataServiceServer(&svc.ServiceContext{Config: c, Router: r, MergedZones: routing.NewStaticMergedZoneCache(nil)}), mr
-}
+// ── RegisterPlayerZone 的错误映射 ──
 
 // assertStatusCode 断言 err 是 gRPC status、code 相符、message 以 "error_code=<n>:" 开头。
 // 按前缀加冒号比,免得 "error_code=1" 误配 "error_code=14"。
@@ -315,95 +376,67 @@ func assertStatusCode(t *testing.T, err error, code codes.Code, errCode uint32) 
 		"message %q must start with %q", st.Message(), errCodeTag(errCode)+":")
 }
 
-// TestDBFirstRegister_ErrorMapping:db_first 下 gRPC code 的集合与 redis 模式完全相同(OK / AlreadyExists /
-// Unavailable),新增的码 30(库故障)与码 14(参数非法)只体现在 message 里。
-func TestDBFirstRegister_ErrorMapping(t *testing.T) {
+// TestRegisterPlayerZone_ErrorMapping:gRPC code 只有 OK / AlreadyExists / Unavailable,
+// 码 30(库故障)与码 14(参数非法)只体现在 message 里。
+func TestRegisterPlayerZone_ErrorMapping(t *testing.T) {
 	const playerID, zone = uint64(5101), uint32(7)
-	committed := func(outcome store.RouteRegisterOutcome, row store.RouteRow) store.RouteRegisterResult {
-		row.PlayerID, row.HomeZone = playerID, zone
-		if row.Rev == 0 {
-			row.Rev = 1
-		}
-		return store.RouteRegisterResult{Outcome: outcome, Row: row}
-	}
 
 	cases := []struct {
 		name     string
 		playerID uint64
-		fake     *fakeRouteStore
-		setup    func(mr *miniredis.Miniredis, fake *fakeRouteStore)
+		home     uint32
+		setup    func(routes *memRouteStore)
 		code     codes.Code
 		errCode  uint32
+		noStore  bool // 参数非法不许碰库
 	}{
+		{name: "新玩家:提交即完成", playerID: playerID, home: zone, code: codes.OK},
 		{
-			name: "新玩家:提交并发布", playerID: playerID,
-			fake: &fakeRouteStore{result: committed(store.RouteRegisterInserted, store.RouteRow{})},
+			name: "库里是同一个 home:幂等", playerID: playerID, home: zone,
+			setup: func(routes *memRouteStore) {
+				routes.rows[playerID] = store.RouteRow{PlayerID: playerID, HomeZone: zone, Rev: 1}
+			},
 			code: codes.OK,
 		},
 		{
-			name: "库里是别的 home", playerID: playerID,
-			fake: &fakeRouteStore{result: store.RouteRegisterResult{Outcome: store.RouteRegisterConflict, ExistingHome: 3}},
+			name: "库里是别的 home", playerID: playerID, home: zone,
+			setup: func(routes *memRouteStore) {
+				routes.rows[playerID] = store.RouteRow{PlayerID: playerID, HomeZone: 3, Rev: 1}
+			},
 			code: codes.AlreadyExists, errCode: constants.ErrCodeZoneMappingConflict,
 		},
 		{
-			name: "库故障(route_meta 冻结)", playerID: playerID,
-			fake: &fakeRouteStore{err: store.ErrRouteNotWritable},
-			code: codes.Unavailable, errCode: constants.ErrCodeRouteStoreError,
+			name: "库故障(route_meta 冻结)", playerID: playerID, home: zone,
+			setup: func(routes *memRouteStore) { routes.err = store.ErrRouteNotWritable },
+			code:  codes.Unavailable, errCode: constants.ErrCodeRouteStoreError,
 		},
 		{
-			name: "缓存认得玩家而库里无行", playerID: playerID,
-			fake: &fakeRouteStore{result: store.RouteRegisterResult{Outcome: store.RouteRegisterRowMissing}},
-			setup: func(mr *miniredis.Miniredis, _ *fakeRouteStore) {
-				_ = mr.Set(placement.Key(playerID), placement.StableValue(placement.DefaultGlobalStorageID, 1))
-			},
-			code: codes.Unavailable, errCode: constants.ErrCodeRouteStoreError,
+			name: "参数非法(player_id=0)", playerID: 0, home: zone,
+			code: codes.Unavailable, errCode: constants.ErrCodeInvalidRequest, noStore: true,
 		},
 		{
-			name: "发布失败(畸形 maprev,脚本拒绝)", playerID: playerID,
-			fake: &fakeRouteStore{result: committed(store.RouteRegisterAlreadySame, store.RouteRow{})},
-			setup: func(mr *miniredis.Miniredis, _ *fakeRouteStore) {
-				_ = mr.Set(placement.MapRevKey(playerID), "not-a-rev")
-			},
-			code: codes.Unavailable, errCode: constants.ErrCodeRedis,
-		},
-		{
-			name: "遗留值冲突(无 maprev,缓存落点与库不同)", playerID: playerID,
-			fake: &fakeRouteStore{result: committed(store.RouteRegisterAlreadySame,
-				store.RouteRow{StorageID: placement.DefaultGlobalStorageID, PlacementVersion: 1})},
-			setup: func(mr *miniredis.Miniredis, _ *fakeRouteStore) {
-				_ = mr.Set(placement.Key(playerID), "7:1")
-			},
-			code: codes.Unavailable, errCode: constants.ErrCodeRedis,
-		},
-		{
-			name: "参数非法(player_id=0)", playerID: 0,
-			fake: &fakeRouteStore{result: committed(store.RouteRegisterInserted, store.RouteRow{})},
-			code: codes.Unavailable, errCode: constants.ErrCodeInvalidRequest,
+			name: "参数非法(home 越界)", playerID: playerID, home: store.RouteHomeZoneMax + 1,
+			code: codes.Unavailable, errCode: constants.ErrCodeInvalidRequest, noStore: true,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, mr := newDBFirstTestServer(t, tc.fake)
+			s, routes := newHomeZoneTestServer(t)
 			if tc.setup != nil {
-				tc.setup(mr, tc.fake)
+				tc.setup(routes)
 			}
 			_, err := s.RegisterPlayerZone(context.Background(), &data_service.RegisterPlayerZoneRequest{
-				PlayerId: tc.playerID, HomeZoneId: zone,
+				PlayerId: tc.playerID, HomeZoneId: tc.home, StorageId: placement.DefaultGlobalStorageID,
 			})
 			if tc.code == codes.OK {
 				require.NoError(t, err)
-				got, err := mr.Get(placement.HomeZoneKey(playerID))
-				require.NoError(t, err)
-				assert.Equal(t, "7", got)
-				rev, err := mr.Get(placement.MapRevKey(playerID))
-				require.NoError(t, err)
-				assert.Equal(t, "1", rev)
+				assert.Equal(t, zone, routes.rows[playerID].HomeZone)
 				return
 			}
 			require.Error(t, err)
 			assertStatusCode(t, err, tc.code, tc.errCode)
-			if tc.errCode == constants.ErrCodeInvalidRequest {
-				assert.Zero(t, tc.fake.calls, "参数非法不许碰库")
+			if tc.noStore {
+				assert.Zero(t, routes.registerCalls, "参数非法不许碰库")
 			}
 		})
 	}
@@ -495,27 +528,25 @@ func (f *fakePlayerNameStore) BatchGet(_ context.Context, ids []uint64) (map[uin
 	return out, nil
 }
 
-// newPlayerNameTestServer 装 Router(指向 miniredis)+ 假 store,配置走**规范化后的默认值**
+// newPlayerNameTestServer 装名字缓存(指向 miniredis)+ 假 store,配置走**规范化后的默认值**
 // —— 与线上一致的 10m / 24h / 60s,这样窗口断言用的是真正的默认窗口。
 func newPlayerNameTestServer(t *testing.T, tweak func(*config.Config)) (*DataServiceServer, *fakePlayerNameStore) {
 	t.Helper()
 	mr := miniredis.RunT(t)
 	c := config.Config{
-		MappingRedis: redis.RedisConf{Host: mr.Addr(), Type: "node"},
-		PlayerName:   config.PlayerNameConfig{}.Normalize(),
+		NameCacheRedis: redis.RedisConf{Host: mr.Addr(), Type: "node"},
+		PlayerName:     config.PlayerNameConfig{}.Normalize(),
 	}
 	if tweak != nil {
 		tweak(&c)
 	}
-	r := routing.NewRouter(c)
-	t.Cleanup(r.Close)
 
 	fake := &fakePlayerNameStore{
 		reserveOutcome: store.ReserveInserted,
 		releaseOutcome: store.ReleaseDeleted,
 		names:          map[uint64]string{},
 	}
-	return NewDataServiceServer(&svc.ServiceContext{Config: c, Router: r, PlayerNameStore: fake}), fake
+	return NewDataServiceServer(&svc.ServiceContext{Config: c, PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis), PlayerNameStore: fake}), fake
 }
 
 // ── Reserve ────────────────────────────────────────────────────
@@ -810,186 +841,4 @@ func TestBatchGetPlayerName_SqlErrorReturnsNoPartialResult(t *testing.T) {
 	st, _ := status.FromError(err)
 	assert.Equal(t, codes.Unavailable, st.Code())
 	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodePlayerNameDBError))
-}
-
-// ── 三个 Rollback* 一律要 x-admin-token(docs/design/guild-phase2/07-rollback-fail-closed.md §7.6.3 Q2 = ②,D8 的 token 半边)──
-
-// ── 第 3 批读方门禁的协议形状(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2、§13.2 第 6 条)──
-//
-// 只测 server 这一层:routing 回什么 → gRPC code + error_code。编排由 routing 的 route_read_test.go 覆盖。
-// mapping Redis 用 miniredis:它不支持 INFO server,读脚本在它上面必然报错 —— 开关打开时正好就是「缓存不可信 → 回源库」,
-// 不需要再造标记。回源读者用假实现挡在外面。
-
-// readGateFakeReader 是 routing.RouteReader 的假实现。err 非 nil 时三个方法都回它;failGetRoutesOn 让第 n 次 GetRoutes
-// (从 1 起)失败。calls 记三个方法一共被调了几次(开关关闭时必须为 0)。
-type readGateFakeReader struct {
-	rows            map[uint64]store.RouteRow
-	err             error
-	failGetRoutesOn int
-	getRoutes       int
-	calls           int
-}
-
-var _ routing.RouteReader = (*readGateFakeReader)(nil)
-
-var errReadGateSQL = errors.New("player_route: connection reset by peer")
-
-func (f *readGateFakeReader) GetRoutes(_ context.Context, ids []uint64) (map[uint64]store.RouteRow, error) {
-	f.calls++
-	f.getRoutes++
-	if f.err != nil {
-		return nil, f.err
-	}
-	if f.failGetRoutesOn != 0 && f.getRoutes == f.failGetRoutesOn {
-		return nil, errReadGateSQL
-	}
-	out := map[uint64]store.RouteRow{}
-	for _, id := range ids {
-		if row, ok := f.rows[id]; ok {
-			out[id] = row
-		}
-	}
-	return out, nil
-}
-
-func (f *readGateFakeReader) ScanRoutesByHome(context.Context, uint32, store.RouteScanCursor, int) ([]store.RouteRow, error) {
-	f.calls++
-	return nil, f.err
-}
-
-// newReadGateTestServer 同 newDBFirstTestServer,另按 on 设 ReadRequiresReady;reader 非 nil 时注入回源读者
-// (不把 nil 的 *readGateFakeReader 传进去:那是「非 nil 接口包着 nil 指针」)。
-func newReadGateTestServer(t *testing.T, on bool, reader *readGateFakeReader) (*DataServiceServer, *miniredis.Miniredis) {
-	t.Helper()
-	mr := miniredis.RunT(t)
-	c := config.Config{
-		MappingRedis: redis.RedisConf{Host: mr.Addr(), Type: "node"},
-		RouteStore: config.RouteStoreConfig{
-			Mode:               config.RouteStoreModeDBFirst,
-			WaitAOFNumLocal:    intPtr(0),
-			WaitAOFNumReplicas: intPtr(0),
-			ReadRequiresReady:  on,
-		},
-	}
-	var opts []routing.RouterOption
-	if reader != nil {
-		opts = append(opts, routing.WithRouteReader(reader))
-	}
-	r := routing.NewRouter(c, opts...)
-	t.Cleanup(r.Close)
-	return NewDataServiceServer(&svc.ServiceContext{Config: c, Router: r, MergedZones: routing.NewStaticMergedZoneCache(nil)}), mr
-}
-
-// TestReadGate_ProtocolShapeWhenCacheUntrusted:ReadRequiresReady=true 且缓存不可信时
-//   - SQL 故障 → Unavailable + ErrCodeRouteStoreError(绝不 NotFound,消息里也不带「缺失映射」的契约文案);
-//   - SQL 无行 → NotFound(文案契约不变),哪怕缓存里有一个值;
-//   - SQL 有行 → OK,home 取自库;
-//   - 回源读者没装配 → Unavailable + ErrCodeRouteStoreError;
-//   - 批量任一块 SQL 故障 → 整批 Unavailable + ErrCodeRouteStoreError,不回半份。
-func TestReadGate_ProtocolShapeWhenCacheUntrusted(t *testing.T) {
-	const player = uint64(6101)
-	ctx := context.Background()
-	bigBatch := make([]uint64, store.RouteBatchLimit+5)
-	for i := range bigBatch {
-		bigBatch[i] = uint64(610001 + i)
-	}
-
-	single := []struct {
-		name    string
-		reader  *readGateFakeReader
-		code    codes.Code
-		errCode uint32
-		zone    uint32
-	}{
-		{name: "SQL failure is Unavailable, never NotFound", reader: &readGateFakeReader{err: errReadGateSQL},
-			code: codes.Unavailable, errCode: constants.ErrCodeRouteStoreError},
-		{name: "SQL has no row is NotFound", reader: &readGateFakeReader{},
-			code: codes.NotFound, errCode: constants.ErrCodeNotFound},
-		{name: "SQL row answers OK", reader: &readGateFakeReader{rows: map[uint64]store.RouteRow{
-			player: {PlayerID: player, HomeZone: 9, Rev: 1}}}, code: codes.OK, zone: 9},
-		{name: "no route reader assembled is Unavailable", reader: nil,
-			code: codes.Unavailable, errCode: constants.ErrCodeRouteStoreError},
-	}
-	for _, tc := range single {
-		t.Run("GetPlayerHomeZone/"+tc.name, func(t *testing.T) {
-			s, mr := newReadGateTestServer(t, true, tc.reader)
-			// 缓存里是另一个值:不可信时它既不能被用,它的存在也不能把「库里没有」变成别的答案。
-			require.NoError(t, mr.Set(placement.HomeZoneKey(player), "5"))
-			resp, err := s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: player})
-			if tc.code == codes.OK {
-				require.NoError(t, err)
-				assert.Equal(t, tc.zone, resp.GetHomeZoneId())
-				return
-			}
-			require.Error(t, err)
-			assert.Nil(t, resp)
-			assertStatusCode(t, err, tc.code, tc.errCode)
-			st, _ := status.FromError(err)
-			if tc.code == codes.NotFound {
-				assert.Contains(t, st.Message(), "no home zone mapping", "the NotFound text is a login contract")
-			} else {
-				assert.NotContains(t, st.Message(), "no home zone mapping", "a fallback failure must not look like a missing mapping")
-			}
-		})
-	}
-
-	t.Run("BatchGetPlayerHomeZone/any chunk SQL failure fails the whole batch", func(t *testing.T) {
-		reader := &readGateFakeReader{failGetRoutesOn: 2, rows: map[uint64]store.RouteRow{
-			bigBatch[0]: {PlayerID: bigBatch[0], HomeZone: 9, Rev: 1}}}
-		s, _ := newReadGateTestServer(t, true, reader)
-		resp, err := s.BatchGetPlayerHomeZone(ctx, &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: bigBatch})
-		require.Error(t, err)
-		assert.Nil(t, resp, "no partial map")
-		assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
-		assert.Equal(t, 2, reader.getRoutes)
-	})
-
-	t.Run("BatchGetPlayerHomeZone/answers from player_route", func(t *testing.T) {
-		reader := &readGateFakeReader{rows: map[uint64]store.RouteRow{
-			bigBatch[0]:                     {PlayerID: bigBatch[0], HomeZone: 9, Rev: 1},
-			bigBatch[store.RouteBatchLimit]: {PlayerID: bigBatch[store.RouteBatchLimit], HomeZone: 11, Rev: 1},
-		}}
-		s, mr := newReadGateTestServer(t, true, reader)
-		require.NoError(t, mr.Set(placement.HomeZoneKey(bigBatch[1]), "5"))
-		resp, err := s.BatchGetPlayerHomeZone(ctx, &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: bigBatch})
-		require.NoError(t, err)
-		assert.Equal(t, map[uint64]uint32{bigBatch[0]: 9, bigBatch[store.RouteBatchLimit]: 11}, resp.GetPlayerZoneMap(),
-			"an untrusted cached value is not returned; absent ids stay absent")
-	})
-
-	t.Run("BatchGetPlayerHomeZone/no route reader assembled", func(t *testing.T) {
-		s, _ := newReadGateTestServer(t, true, nil)
-		resp, err := s.BatchGetPlayerHomeZone(ctx, &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: bigBatch[:2]})
-		require.Error(t, err)
-		assert.Nil(t, resp)
-		assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRouteStoreError)
-	})
-}
-
-// TestReadGate_OffKeepsTheContract:ReadRequiresReady=false(缺省)时契约与今天逐字相同 —— 哪怕 db_first 且回源读者已装配,
-// 两个 RPC 也只读缓存:缺键 NotFound(不去库里找)、mapping Redis 故障 Unavailable + ErrCodeRedis(码 1,不是码 30)。
-func TestReadGate_OffKeepsTheContract(t *testing.T) {
-	ctx := context.Background()
-	reader := &readGateFakeReader{rows: map[uint64]store.RouteRow{6202: {PlayerID: 6202, HomeZone: 9, Rev: 1}}}
-	s, mr := newReadGateTestServer(t, false, reader)
-	require.NoError(t, mr.Set(placement.HomeZoneKey(6201), "5"))
-
-	resp, err := s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 6201})
-	require.NoError(t, err)
-	assert.Equal(t, uint32(5), resp.GetHomeZoneId(), "switch off: the cache answers")
-
-	_, err = s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 6202})
-	assertStatusCode(t, err, codes.NotFound, constants.ErrCodeNotFound)
-
-	batch, err := s.BatchGetPlayerHomeZone(ctx, &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: []uint64{6201, 6202}})
-	require.NoError(t, err)
-	assert.Equal(t, map[uint64]uint32{6201: 5}, batch.GetPlayerZoneMap())
-	assert.Zero(t, reader.calls, "the route reader must not be consulted while ReadRequiresReady=false")
-
-	mr.Close()
-	_, err = s.GetPlayerHomeZone(ctx, &data_service.GetPlayerHomeZoneRequest{PlayerId: 6201})
-	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRedis)
-	_, err = s.BatchGetPlayerHomeZone(ctx, &data_service.BatchGetPlayerHomeZoneRequest{PlayerIds: []uint64{6201}})
-	assertStatusCode(t, err, codes.Unavailable, constants.ErrCodeRedis)
-	assert.Zero(t, reader.calls)
 }

@@ -57,7 +57,10 @@ func TestReconcileMetricLabelsArePrimed(t *testing.T) {
 			out.err = errTestSentinel
 		}
 		if c := [2]string{reconcileLoopIndex, out.result()}; !primed[c] {
-			t.Errorf("索引循环会发出 %v,但没有预置", c)
+			t.Errorf("死 gate 清扫会发出 %v,但没有预置", c)
+		}
+		if c := [2]string{reconcileLoopWriters, out.result()}; !primed[c] {
+			t.Errorf("写者检查会发出 %v,但没有预置", c)
 		}
 	}
 	for _, c := range [][2]string{
@@ -85,14 +88,20 @@ func TestReconcileMetricLabelsArePrimed(t *testing.T) {
 		}
 	}
 
-	// last_success 的预置与清零(primeReconcileMetrics / resetReconcileLeaderGauges)按 reconcileLoops 走:它必须覆盖
-	// reconcile_round_total 用到的每个 loop。漏一个,从未成功过的 Pod 当选后就没有那条序列,Stalled 一类规则对它失明。
+	// last_success 的预置(primeReconcileMetrics)按 reconcileLoops 走:它必须覆盖 reconcile_round_total 用到的每个 loop。
+	// 漏一个,从未成功过的 Pod 就没有那条序列,Stalled 一类规则对它失明。
+	// 随任期清零的只有 leader 专属的 loop:清扫每个副本都在跑,与谁是 leader 无关,换主不能把它清零。
+	for _, loop := range reconcileLeaderLoops {
+		if loop == reconcileLoopIndex {
+			t.Errorf("清扫不是 leader 专属的 loop,不能随任期清零")
+		}
+	}
 	// (单测里 go-zero 的指标后端不生效,读不到运行期的值,只能做表级核对。)
 	loops := toSet(reconcileLoops)
 	if len(loops) != len(reconcileLoops) {
 		t.Errorf("reconcileLoops 有重复:%v", reconcileLoops)
 	}
-	for _, loop := range []string{reconcileLoopIndex, reconcileLoopRepair, reconcileLoopAudit} {
+	for _, loop := range []string{reconcileLoopIndex, reconcileLoopWriters, reconcileLoopRepair, reconcileLoopAudit} {
 		if _, ok := loops[loop]; !ok {
 			t.Errorf("loop %s 不在 reconcileLoops 里,它的 last_success 不会被预置为 0", loop)
 		}

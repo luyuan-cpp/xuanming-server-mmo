@@ -616,7 +616,7 @@ func TestAtomicDestroyIfIdle_ReturnsAndWipesAgonesMapping(t *testing.T) {
 	sceneId := uint64(4242)
 
 	sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneId), "10")
-	sc.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, sceneId), "0")
+	seedSceneMembersVia(sc, sceneId, 0)
 	sc.Redis.Set(sceneAgonesGsKey(sceneId), "gs-77")
 
 	nodeId, gsName, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
@@ -634,7 +634,7 @@ func TestAtomicDestroyIfIdle_AbortKeepsAgonesMapping(t *testing.T) {
 	sceneId := uint64(4243)
 
 	sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneId), "10")
-	sc.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, sceneId), "3")
+	seedSceneMembersVia(sc, sceneId, 3)
 	sc.Redis.Set(sceneAgonesGsKey(sceneId), "gs-77")
 
 	nodeId, gsName, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)

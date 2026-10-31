@@ -12,6 +12,7 @@ import (
 	"proto/scene_manager"
 	"scene_manager/internal/svc"
 	"shared/ownerepoch"
+	"shared/redisslot"
 )
 
 // 删 location 绑定「持有者已释放」(docs/design/location-release-binding.md §3.1 R1、§3.2)。
@@ -154,7 +155,7 @@ func newHolderReleasePendingError(playerID, sceneID uint64, nodeID string, epoch
 const leaveReleaseWaitKeyMargin = 10 * time.Minute
 
 func leaveReleaseWaitKey(playerID uint64) string {
-	return fmt.Sprintf("player:%d:leave_release_wait", playerID)
+	return redisslot.LeaveReleaseWaitKey(playerID)
 }
 
 // leaveReleaseWaitScope 是等待计时所属的那一份 location。
@@ -188,7 +189,7 @@ return 0
 // 不读本进程墙钟;脚本出错按"刚开始等"返回 0(只会多等)。
 func noteLeaveReleaseWait(svcCtx *svc.ServiceContext, playerID uint64, scope string, budget time.Duration) time.Duration {
 	ttlSeconds := int64((budget + leaveReleaseWaitKeyMargin) / time.Second)
-	result, err := svcCtx.Redis.Eval(luaNoteLeaveReleaseWait, []string{leaveReleaseWaitKey(playerID)}, scope,
+	result, err := playerRedisEval(svcCtx, luaNoteLeaveReleaseWait, []string{leaveReleaseWaitKey(playerID)}, scope,
 		strconv.FormatInt(ttlSeconds, 10))
 	if err != nil {
 		logx.Errorf("[LeaveRelease] wait timer unavailable, treating as just started: player=%d scope=%s err=%v",

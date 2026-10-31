@@ -19,10 +19,9 @@ const guildIDBizTag = "guild"
 // 尽早暴露在启动日志里;超时不阻止起服(号段是弱依赖,见 shared/idsegment 包注释)。
 const guildIDWarmTimeout = 5 * time.Second
 
-// initDataServiceClient 按 DataServiceRpc 建 data_service 客户端。guild 用它做两件事:
-// 领 guild_id 号段(initGuildIDSegment)与查玩家归属 zone(logic.DataServiceHomeZone,客户端请求的
-// zone 隔离)。没配目标时保持 nil,由两个使用方各自决定拒启(号段)还是拒请求(归属 zone)。
-// 配置里 NonBlock: true,data_service 暂未起时不阻塞 guild 起服。
+// initDataServiceClient 按 DataServiceRpc 建 data_service 客户端。guild 用它领 guild_id 号段(initGuildIDSegment)、
+// 查玩家归属 zone(logic.DataServiceHomeZone)和读合服映射(LoadMergedZones)。没配目标时保持 nil,
+// LoadMergedZones 据此拒绝启动。配置里 NonBlock: true,建客户端不等 data_service,等待由 LoadMergedZones 负责且有上限。
 func (s *ServiceContext) initDataServiceClient() {
 	if !hasRpcTarget(s.Config.DataServiceRpc) {
 		return

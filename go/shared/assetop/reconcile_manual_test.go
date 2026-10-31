@@ -39,6 +39,7 @@ func TestRescheduleLeaseLostCountedNotFailed(t *testing.T) {
 		return resultApplied(false), nil // 结局有了但没落盘 → await_durable 重排
 	}}
 	loop, m := newTestLoop(t, store, applier, nil)
+	loop.Ledger = &fakeLedger{}
 
 	if _, err := loop.ProcessOne(context.Background(), op); err != nil {
 		t.Fatalf("租约被接管不算处理失败,不该返回错误: %v", err)
@@ -62,6 +63,7 @@ func TestRescheduleStoreErrorStillFails(t *testing.T) {
 		return resultApplied(false), nil
 	}}
 	loop, m := newTestLoop(t, store, applier, nil)
+	loop.Ledger = &fakeLedger{}
 
 	if _, err := loop.ProcessOne(context.Background(), op); err == nil {
 		t.Fatal("存储故障必须报错")

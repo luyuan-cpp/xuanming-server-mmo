@@ -1,8 +1,8 @@
 # match 服务私有的 Redis Cluster(3 主 3 从),部署到 mmorpg-infra namespace。
 # 设计:docs/design/cross-zone-matchmaking.md §2 D2(双存储)/ §7(部署形态)。
 #
-# 与 redis.yaml(单副本共享库)并存:共享库继续承载 player:location /
-# player:session / battle:lock 这类跨运行时契约 key(C++ hiredis 不支持集群),
+# 与控制域 redis.yaml、玩家域 redis-player-cluster.yaml 并存:player:{id}:location / player:session:{id} /
+# battle:lock:{id} 这类跨运行时契约 key 在玩家域(C++ 经自研路由层访问 Redis Cluster,docs/design/redis-player-store-cluster.md §5.6),
 # 本集群只放 match:* / challenge:* / spectate:* 这类 match 独占的 key。
 #
 # 节点 announce 的是 pod 的 headless DNS 而不是 pod IP(cluster-announce-hostname +

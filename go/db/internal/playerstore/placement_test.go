@@ -2,35 +2,113 @@ package playerstore
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"testing"
 
-	"shared/placement"
+	"db/internal/dbtest"
 )
 
-func TestDecideStorage(t *testing.T) {
-	const zone = 3
-	record := func(storage uint32, frozen bool) placementSnapshot {
-		return placementSnapshot{rec: placement.Record{StorageID: storage, Frozen: frozen}, recPresent: true}
-	}
+type fakeRouteReader struct {
+	route storageRoute
+	found bool
+	err   error
+}
+
+func (f fakeRouteReader) readRoute(context.Context, uint64) (storageRoute, bool, error) {
+	return f.route, f.found, f.err
+}
+
+// 选库的五种结局。读错不能被当成没有落点:没有落点要查数据,读错只要等库恢复。
+func TestResolveOutcomes(t *testing.T) {
+	readFailure := errors.New("Error 2013: lost connection")
 	cases := []struct {
-		name     string
-		snap     placementSnapshot
-		required bool
-		want     uint32
-		wantErr  error
+		name    string
+		reader  fakeRouteReader
+		want    uint32
+		wantErr error
 	}{
-		{name: "有记录用记录", snap: record(7, false), want: 7},
-		{name: "有记录时 required 不影响", snap: record(7, false), required: true, want: 7},
-		{name: "搬库中不能认领", snap: record(7, true), wantErr: ErrStorageFrozen},
-		{name: "没记录用 home_zone", snap: placementSnapshot{home: 5, homePresent: true}, want: 5},
-		{name: "home_zone 不等于本进程也不算 stale", snap: placementSnapshot{home: 9, homePresent: true}, want: 9},
-		{name: "都没有用本进程 zone", snap: placementSnapshot{}, want: zone},
-		{name: "required 且没记录要拒绝", snap: placementSnapshot{home: 5, homePresent: true}, required: true, wantErr: ErrPlayerStorageMissing},
+		{name: "路由读到", reader: fakeRouteReader{route: storageRoute{storageID: 7}, found: true}, want: 7},
+		{name: "非 zone 落点", reader: fakeRouteReader{route: storageRoute{storageID: 1000000}, found: true}, want: 1000000},
+		{name: "没有路由行", reader: fakeRouteReader{}, wantErr: ErrPlayerStorageMissing},
+		{name: "storage_id 为 NULL", reader: fakeRouteReader{found: true}, wantErr: ErrPlayerStorageMissing},
+		{name: "搬库冻结", reader: fakeRouteReader{route: storageRoute{storageID: 7, frozen: true}, found: true}, wantErr: ErrStorageFrozen},
+		{name: "SQL 读错", reader: fakeRouteReader{err: readFailure}, wantErr: readFailure},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := decideStorage(tc.snap, zone, tc.required)
+			got, err := (&storageRouter{routes: tc.reader}).resolve(context.Background(), 42)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Fatalf("storage = %d, want %d", got, tc.want)
+			}
+			if tc.reader.err != nil && errors.Is(err, ErrPlayerStorageMissing) {
+				t.Fatalf("a read failure must not look like a missing placement: %v", err)
+			}
+		})
+	}
+}
+
+func routeRow(storage, frozen driver.Value) *dbtest.Rows {
+	return &dbtest.Rows{Columns: []string{"storage_id", "frozen_run_id"}, Values: [][]driver.Value{{storage, frozen}}}
+}
+
+// 真实的读路径:按聚簇键点查、库名限定、不加锁;NULL 列和无行都走到对的结局。
+func TestNewStorageResolverReadsGlobalRouteRow(t *testing.T) {
+	const player = uint64(130) // route_shard = 130 % 64 = 2
+	var query string
+	var args []driver.NamedValue
+	db, rec := dbtest.Open(t, func(_ context.Context, q string, a []driver.NamedValue) (*dbtest.Rows, error) {
+		query, args = q, a
+		return routeRow(int64(7), nil), nil
+	})
+	resolve, err := NewStorageResolver(ResolverOptions{DB: db, RouteSchema: "mmorpg_global"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolve(context.Background(), player)
+	if err != nil || got != 7 {
+		t.Fatalf("resolve = %d, %v", got, err)
+	}
+	const wantQuery = "SELECT storage_id, frozen_run_id FROM `mmorpg_global`.`player_route` WHERE route_shard = ? AND player_id = ?"
+	if query != wantQuery {
+		t.Fatalf("query = %q", query)
+	}
+	if len(args) != 2 || args[0].Value != int64(2) || args[1].Value != int64(player) {
+		t.Fatalf("args = %+v", args)
+	}
+	if got := rec.Statements(); len(got) != 1 {
+		t.Fatalf("a claim reads the route exactly once: %v", got)
+	}
+}
+
+func TestNewStorageResolverReadOutcomes(t *testing.T) {
+	sqlFailure := errors.New("Error 1142: SELECT command denied")
+	cases := []struct {
+		name    string
+		rows    *dbtest.Rows
+		err     error
+		want    uint32
+		wantErr error
+	}{
+		{name: "路由读到", rows: routeRow(int64(1000000), nil), want: 1000000},
+		{name: "没有路由行", rows: &dbtest.Rows{Columns: []string{"storage_id", "frozen_run_id"}}, wantErr: ErrPlayerStorageMissing},
+		{name: "storage_id 为 NULL", rows: routeRow(nil, nil), wantErr: ErrPlayerStorageMissing},
+		{name: "搬库冻结", rows: routeRow(int64(7), "run-1"), wantErr: ErrStorageFrozen},
+		{name: "SQL 读错", err: sqlFailure, wantErr: sqlFailure},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := dbtest.Open(t, func(context.Context, string, []driver.NamedValue) (*dbtest.Rows, error) {
+				return tc.rows, tc.err
+			})
+			resolve, err := NewStorageResolver(ResolverOptions{DB: db, RouteSchema: "mmorpg_global"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := resolve(context.Background(), 42)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tc.wantErr)
 			}
@@ -41,62 +119,28 @@ func TestDecideStorage(t *testing.T) {
 	}
 }
 
-func TestParsePlacementSnapshot(t *testing.T) {
-	snap, err := parsePlacementSnapshot([]interface{}{nil, nil})
-	if err != nil || snap != (placementSnapshot{}) {
-		t.Fatalf("both keys absent: snap=%+v err=%v", snap, err)
+// 列值读不出来也是读错,不能当成没有落点。
+func TestNewStorageResolverUnreadableColumnIsAReadFailure(t *testing.T) {
+	db, _ := dbtest.Open(t, func(context.Context, string, []driver.NamedValue) (*dbtest.Rows, error) {
+		return routeRow("not-a-number", nil), nil
+	})
+	resolve, err := NewStorageResolver(ResolverOptions{DB: db, RouteSchema: "mmorpg_global"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	snap, err = parsePlacementSnapshot([]interface{}{"102:3:frozen:run-a", "101"})
-	if err != nil || !snap.recPresent || !snap.rec.Frozen || snap.rec.StorageID != 102 || !snap.homePresent || snap.home != 101 {
-		t.Fatalf("record and home present: snap=%+v err=%v", snap, err)
+	if _, err := resolve(context.Background(), 42); err == nil || errors.Is(err, ErrPlayerStorageMissing) {
+		t.Fatalf("err = %v, want a read failure", err)
 	}
-	snap, err = parsePlacementSnapshot([]interface{}{nil, ""})
-	if err != nil || snap.homePresent {
-		t.Fatalf("empty home follows the shared contract (absent): snap=%+v err=%v", snap, err)
+}
+
+func TestNewStorageResolverRejectsBadConfig(t *testing.T) {
+	if _, err := NewStorageResolver(ResolverOptions{RouteSchema: "mmorpg_global"}); err == nil {
+		t.Fatal("a nil pool must be rejected")
 	}
-	// 畸形必须拒绝,绝不能当缺席。
-	for _, vals := range [][]interface{}{
-		{"", nil},
-		{"102", nil},
-		{"0:1", nil},
-		{"102:1:moving:run", nil},
-		{nil, "abc"},
-		{nil, "0"},
-		{nil, "1000000"},
-	} {
-		if _, err := parsePlacementSnapshot(vals); !errors.Is(err, placement.ErrMalformed) {
-			t.Errorf("values %v must be malformed, got %v", vals, err)
+	db, _ := dbtest.Open(t, noQuery(t))
+	for _, schema := range []string{"", "bad`schema", "global db", "1global"} {
+		if _, err := NewStorageResolver(ResolverOptions{DB: db, RouteSchema: schema}); err == nil {
+			t.Fatalf("schema %q must be rejected", schema)
 		}
-	}
-	if _, err := parsePlacementSnapshot([]interface{}{int64(1), nil}); err == nil {
-		t.Error("an unexpected reply type is an error, not an absent key")
-	}
-	if _, err := parsePlacementSnapshot([]interface{}{nil}); err == nil {
-		t.Error("a short reply is an error")
-	}
-}
-
-type fakeRouteReadyReader struct {
-	read placement.RouteReadyRead
-	err  error
-}
-
-func (f fakeRouteReadyReader) readRouteReady(context.Context, ...string) (placement.RouteReadyRead, error) {
-	return f.read, f.err
-}
-
-// 副本不可信时不用读到的值,也不把缺键当「没有落点」。
-func TestLookupReadyRefusesUntrustedReplica(t *testing.T) {
-	router := &storageRouter{zone: 3, ready: fakeRouteReadyReader{read: placement.RouteReadyRead{Values: []interface{}{nil, nil}}}}
-	if _, err := router.resolve(context.Background(), 42); !errors.Is(err, ErrRouteNotReady) {
-		t.Fatalf("err = %v, want ErrRouteNotReady", err)
-	}
-}
-
-func TestLookupReadyScriptFailureIsAnError(t *testing.T) {
-	failure := errors.New("script failed")
-	router := &storageRouter{zone: 3, ready: fakeRouteReadyReader{err: failure}}
-	if _, err := router.resolve(context.Background(), 42); !errors.Is(err, failure) {
-		t.Fatalf("err = %v, want the script failure", err)
 	}
 }

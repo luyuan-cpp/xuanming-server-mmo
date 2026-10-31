@@ -23,7 +23,6 @@
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
 // 回合制战斗结算幂等账本(turn-battle-gap-closure.md §9.3):与 asset_op_ledger 同一条不变量 I3,
 // 必须与 currency / bag_component 同记录同一次落盘,否则「资产落了标记没落」=重复发奖,反之=白丢奖励。
-#include "proto/common/component/battle_settlement_ledger_comp.pb.h"
 // 玩家收件箱消费端账本(player-inbox-service.md §4.4):与资产账本同一条不变量(IB-3 ≡ I3),
 // 处置效果(CurrencyComp.blocked_types / debts)与账本必须同记录、同一次落盘。
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
@@ -158,10 +157,6 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 				  << " reason=" << err;
 		tlsEcs.actorRegistry.emplace_or_replace<PlayerAssetOpLedgerInvalidComp>(player);
 	}
-	// 结算幂等账本跟着同一条 player_database 行回来。不做校验、不阻断登录:
-	// 空账本的后果只是「上一局可能被重投补发一次」,而补发本身被待结算记录的条件删兜住;
-	// 拿不准时宁可多判一次「已应用」也不要让玩家进不去游戏。
-	tlsEcs.actorRegistry.emplace<BattleSettlementLedgerComp>(player, message.settlement_ledger());
 	// 玩家收件箱消费端账本(字段 20)跟着同一条 player_database 行回来;旧存档没有这个字段 = 空账本,合法。
 	// 校验不过只停用这名玩家的收件箱(挂 PlayerInboxLedgerInvalidComp,前置闸据此不再拉取),不阻断登录、
 	// 不改写原数据 —— 拿坏账本继续记账会让不幂等的挂欠款被重复执行(设计 §8 #19)。
@@ -222,8 +217,6 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	FindPersistedComp<PlayerBagsComp>(player, "PlayerBagsComp", missing);
 	FindPersistedComp<MissionsContainerComp>(player, "MissionsContainerComp", missing);
 	const auto* assetOpLedger = FindPersistedComp<PlayerAssetOpLedgerComp>(player, "PlayerAssetOpLedgerComp", missing);
-	const auto* settlementLedger =
-		FindPersistedComp<BattleSettlementLedgerComp>(player, "BattleSettlementLedgerComp", missing);
 	// 收件箱账本缺失同样整份拒存:补一本空账本落盘,会让已执行过的挂欠款在下次投递时被判成"没见过"再挂一次。
 	const auto* inboxLedger = FindPersistedComp<PlayerInboxLedgerComp>(player, "PlayerInboxLedgerComp", missing);
 	// 限购记录缺失同样整份拒存:补一份空记录落盘,等于把这一轮已经买过的名额清零。
@@ -267,10 +260,7 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	// 位置必须在下面那对 currency CopyFrom / SaveToProto **之外** —— 夹在中间会把
 	// 刚写进去的补缴欠款抹掉(见下条注释)。
 	message.mutable_asset_op_ledger()->CopyFrom(*assetOpLedger);
-	// 结算幂等账本:与上一行同理由(不变量 I3)。位置同样必须在下面那对 currency
-	// CopyFrom / SaveToProto **之外**,夹在中间会把刚写进去的补缴欠款抹掉。
-	message.mutable_settlement_ledger()->CopyFrom(*settlementLedger);
-	// 玩家收件箱消费端账本(字段 20):与上两条同理由(IB-3,与 I3 同构)—— GM 处置的效果
+	// 玩家收件箱消费端账本(字段 20):与上一条同理由(IB-3,与 I3 同构)—— GM 处置的效果
 	// (封锁在 CurrencyComp.blocked_types、欠款经 SaveToProto 写进 CurrencyComp.debts)与账本同记录、
 	// 同一次 Marshal。位置同样必须在下面那对 currency CopyFrom / SaveToProto **之外**:那一对的先后决定
 	// 欠款会不会被抹掉,任何新写入都不夹进它们中间。

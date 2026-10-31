@@ -88,7 +88,7 @@ func closedWatchVerdict(closeTip uint32) globalWatchVerdict {
 		return globalWatchVerdict{tip: closeTip, outcome: "already_watching", msg: "已在观战中"}
 	case constants.ErrBattleNotWatchable:
 		// 意图只存客户端 tip：成局已变、准入截止与 battle 的各类拒绝（含房间不存在）同落 16018，
-		// 全局路径一律记 not_found，不再细分 rejected（细分须给意图另存关闭类别，见 resumeGlobalSpectator）。
+		// 一律记 not_found，不再细分 rejected（细分须给意图另存关闭类别，见 resumeGlobalSpectator）。
 		return globalWatchVerdict{tip: closeTip, outcome: "not_found", msg: "该战斗当前无法观战"}
 	case constants.ErrSpectateFull:
 		return globalWatchVerdict{tip: closeTip, outcome: "full", msg: "观战人数已满"}
@@ -100,12 +100,12 @@ func closedWatchVerdict(closeTip uint32) globalWatchVerdict {
 	}
 }
 
-// globalWatchBattle 是全局（TiDB 权威）观战入口。业务拒绝回明确 tip；参数错、ErrOriginalPlayer 与存储 / 传输
+// globalWatchBattle 是 SQL 权威的观战入口。业务拒绝回明确 tip；参数错、ErrOriginalPlayer 与存储 / 传输
 // 故障维持 16004（fail-closed）；只有故障打 Error 日志；每个出口都计 match_watch_battle_total。
 func globalWatchBattle(l *WatchBattleLogic, in *pb.WatchBattleRequest, player uint64) (*pb.WatchBattleResponse, error) {
 	id, err := uuid.Parse(in.RequestId)
 	if err != nil || id == uuid.Nil || id.String() != in.RequestId || (in.PlayerId != 0 && in.PlayerId != player) {
-		// 参数错在任何 SQL 之前拒绝；不是服务端故障，沿用 16004（与 Redis 路径缺身份同口径），不打 Error。
+		// 参数错在任何 SQL 之前拒绝；不是服务端故障，沿用 16004（与缺身份同口径），不打 Error。
 		metrics.ObserveWatchBattle("internal")
 		return &pb.WatchBattleResponse{ErrorMessage: tipErr(constants.ErrInternal, "观战请求参数无效")}, nil
 	}
@@ -120,7 +120,7 @@ func globalWatchBattle(l *WatchBattleLogic, in *pb.WatchBattleRequest, player ui
 	metrics.ObserveWatchBattle(verdict.outcome)
 	resp := &pb.WatchBattleResponse{BattleId: result.battleID, Delivery: result.delivery, SpectateTicket: result.ticket}
 	if result.delivery != pb.ESpectateDelivery_SPECTATE_DELIVERY_LOBBY {
-		// L1 / L2 观众在 battle 没有观战原操作,不回操作编号(与 Redis 路径一致)。
+		// L1 / L2 观众在 battle 没有观战原操作,不回操作编号。
 		resp.SpectatorOperationId = in.RequestId
 	}
 	if verdict.tip != 0 {
@@ -241,7 +241,7 @@ type globalWatchTarget struct {
 }
 
 // locateGlobalWatch 核对目标成局与观众会话(首次 prepare 与 LOBBY 重放共用)。rejectTip≠0 是能证明的业务拒绝:
-// 不存在、成局未确认或已中止、私密局同落 16018(与 Redis 路径同一文案,不泄露存在性);会话不在线,或本请求所在会话
+// 不存在、成局未确认或已中止、私密局同落 16018(同一文案,不泄露存在性);会话不在线,或本请求所在会话
 // 已被顶号或重连替换(观众路由不再属于这次请求)落 16019。err 是读取故障或会话数据损坏,不算结论。
 func (l *WatchBattleLogic) locateGlobalWatch(battle, player uint64) (target globalWatchTarget, rejectTip uint32, err error) {
 	s := l.svcCtx
@@ -265,7 +265,7 @@ func (l *WatchBattleLogic) locateGlobalWatch(battle, player uint64) (target glob
 	}
 	gate, err := strconv.ParseUint(session.GateId, 10, 32)
 	if err != nil || gate == 0 {
-		// gate_id 是数字节点 id 的字符串形态；解析不了是会话数据损坏（与 Redis 路径同口径），不关闭意图。
+		// gate_id 是数字节点 id 的字符串形态；解析不了是会话数据损坏，不关闭意图。
 		return target, 0, fmt.Errorf("会话 gate_id 无效 %q", session.GateId)
 	}
 	if detail.SessionId != session.SessionId || detail.GateInstanceId != session.GateInstanceId || uint32(gate) != detail.GateNodeId {
@@ -616,8 +616,8 @@ func resumeGlobalSpectator(ctx context.Context, s *svc.ServiceContext, original 
 		return cancelGlobalSpectator(ctx, s, original, expectedHead)
 	}
 	if battleTip := reply.GetErrorMessage().GetId(); battleTip != 0 {
-		// 与 Redis 路径共用拒绝码映射，但只取客户端 tip：意图只持久化 close_tip，首答与重放的 outcome 都由它推出。
-		// 代价是 outcome 不细分：房间不存在与 battle 的其它拒绝同落 16018，全局路径记 not_found，与 Redis 路径 /
+		// 只取客户端 tip：意图只持久化 close_tip，首答与重放的 outcome 都由它推出。
+		// 代价是 outcome 不细分：房间不存在与 battle 的其它拒绝同落 16018，记 not_found，与
 		// Java 版对其它拒绝记 rejected 的口径不同；要细分须给意图另存关闭类别。原始 battle 码只进这条 Info 日志。
 		closeTip, _, roomMissing := spectateRejectVerdict(battleTip)
 		logx.Infof("全局观战被battle拒绝 battle=%d battle_tip=%d close_tip=%d", original.BattleId, battleTip, closeTip)
@@ -655,7 +655,7 @@ const (
 	globalSpectatorIntentPurgeInterval = time.Minute
 )
 
-// startGlobalSpectateMaintenance 启动全局模式的两个低频维护循环(本地模式的索引清理在 runMatcherRound 里):
+// startGlobalSpectateMaintenance 启动两个低频维护循环:
 //   - 观战索引:ZSET 成员没有 TTL,没有终局提交就结束的场(实例崩溃)只能靠这里按过期分界摘除;不清的话过期成员越积越多,
 //     随机观战最多试 3 次,全落空就把请求永久关成「没有可观战的战斗」;
 //   - 意图保留期(globalSpectatorIntentPurge)。
@@ -698,9 +698,6 @@ func (p *globalSpectatorIntentPurge) round(ctx context.Context, purger spectator
 // 固定高水位覆盖旧占用；每状态索引页合并、两在途许可、单操作3秒，未知继续游标。
 // 网络调用在SQL事务之外；新输入不会延长当前尾界，也不占撮合工作槽。
 func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
-	if s.Authority == nil {
-		return
-	}
 	startGlobalDirectAdmissionRecovery(ctx, s)
 	startGlobalJoinAdmissionRecovery(ctx, s)
 	s.LaunchRelayTask("match.global_spectator_recovery", func() {

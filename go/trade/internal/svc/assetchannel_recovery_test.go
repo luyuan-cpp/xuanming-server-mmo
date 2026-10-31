@@ -213,7 +213,8 @@ func TestAssetChannelStartThenCloseReturns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSigner: %v", err)
 	}
-	p, err := reconcile.New(reconcile.Deps{Ops: repo, Caller: &assetop.Caller{Signer: signer}, OpIDs: fakeOpIDs{}})
+	p, err := reconcile.New(reconcile.Deps{Ops: repo, Caller: &assetop.Caller{Signer: signer}, OpIDs: fakeOpIDs{},
+		Ledger: persistedLedger(dspb.NewDataServiceClient(nil))})
 	if err != nil {
 		t.Fatalf("reconcile.New: %v", err)
 	}

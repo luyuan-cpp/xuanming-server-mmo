@@ -68,10 +68,7 @@ MySQL:
 Schema:
   AutoMigrate: false
 
-# 核心 Redis(与 C++ scene / scene_manager 同一实例,DB 0):
-#   player:{id}:owner_epoch —— 围栏上界 R(IB-8);
-#   player:{id}:location    —— 在线提醒定位玩家所在 scene 节点;
-#   player_inbox:maintenance:leader —— 后台循环选主锁。
+# 控制域 Redis:player_inbox:maintenance:leader —— 后台循环选主锁。
 # 段名不能叫 Redis:与 zrpc.RpcServerConf 的同名字段冲突,加载期报 conflict key Redis。
 CoreRedis:
   Host: 127.0.0.1:6379
@@ -83,6 +80,16 @@ CoreRedis:
   # 改它看部署时打印的 "Redis connection ledger" 一行。
   # 读 / 写超时(各 1s 兜底)与 ContextTimeoutEnabled 写在代码里(svc.coreRedisOptions),不是配置项。
   PoolSize: 20
+
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):
+#   player:{id}:owner_epoch —— 围栏上界 R(IB-8);
+#   player:{id}:location    —— 在线提醒定位玩家所在 scene 节点。
+# 不写 Addrs = 指向上面的 CoreRedis 实例。集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
+#   Cluster: true
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。
+PlayerRedis:
+  PoolSizePerNode: 20
 
 # 在线提醒:SceneCommand{DispatchEvent, PlayerInboxNotifyEvent} 写 scene-cmd_g<N>(分区 = scene node_id % P),
 # key = player_id,target_instance_id = 目标 scene 节点 uuid(AGENTS §7 #2 #3)。

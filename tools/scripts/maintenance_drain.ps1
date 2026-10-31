@@ -506,23 +506,13 @@ function ConvertTo-AuthorityRoleSql {
     $business = [Collections.Generic.List[string]]::new()
     $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($table in $Plan.tables) {
-        Assert-MaintenanceProperties -Value $table -Required @('schema','table','operations') -Optional @('updateColumns')
+        Assert-MaintenanceProperties -Value $table -Required @('schema','table','operations')
         $schema = ConvertTo-AuthoritySqlIdentifier $table.schema; $name = ConvertTo-AuthoritySqlIdentifier $table.table
         if (-not $seen.Add($table.schema+'.'+$table.table)) { throw '业务GRANT重复或触及权限真值表' }
         $ops = @($table.operations)
         if ($ops.Count -eq 0 -or ($ops | Select-Object -Unique).Count -ne $ops.Count) { throw '业务GRANT操作空或重复' }
         foreach ($op in $ops) { if ($op -cnotin @('SELECT','INSERT','UPDATE','DELETE')) { throw 'runtime禁止DDL/GRANT/注册能力' } }
-        if ($table.table -ieq 'route_reconcile') {
-            # 对账租约/水位属于DataService业务调度；writable/epoch/catalog仍只归正式Catalog owner。
-            # 只接受同authority和固定四列的显式请求，绝不将整个控制表放进一般UPDATE叶。
-            if ($table.table -cne 'route_reconcile' -or $table.schema -cne $Plan.authoritySchema -or ($ops -join ',') -cne 'SELECT,UPDATE' -or -not $table.Contains('updateColumns') -or (@($table.updateColumns) -join ',') -cne 'leader,lease_until_ms,watermark_ms,cache_verified_ms') { throw 'route_reconcile只准同authority固定四列调度权限' }
-            $columns = (@($table.updateColumns) | ForEach-Object { ConvertTo-AuthoritySqlIdentifier $_ }) -join ','
-            $business.Add("GRANT SELECT ON $schema.$name TO $($values.RUNTIME_ACCOUNT);")
-            $business.Add("GRANT UPDATE ($columns) ON $schema.$name TO $($values.RUNTIME_ACCOUNT);")
-            continue
-        }
-        if ($table.Contains('updateColumns')) { throw '列级调度特例只准route_reconcile，不解释任意业务列' }
-        if ($table.table -iin @('route_reconcile','route_meta','writer_registry','writer_slot','writer_lifecycle_receipt','sql_writer_drain_run','sql_writer_freeze_ticket','sql_writer_maintenance_receipt')) { throw '业务GRANT重复或触及权限真值表' }
+        if ($table.table -iin @('route_meta','writer_registry','writer_slot','writer_lifecycle_receipt','sql_writer_drain_run','sql_writer_freeze_ticket','sql_writer_maintenance_receipt')) { throw '业务GRANT重复或触及权限真值表' }
         $business.Add("GRANT $($ops -join ',') ON $schema.$name TO $($values.RUNTIME_ACCOUNT);")
     }
     $values.BUSINESS_TABLE_GRANTS=$business -join "`n"
@@ -538,9 +528,6 @@ function ConvertTo-AuthorityRoleSql {
     if($schemaGrants.Count -eq 0){throw 'fresh prestart schema必须显式具名库清单，不能由业务表暗推'}
     if(-not $schemaSeen.Contains([string]$Plan.authoritySchema)){throw 'fresh schema清单必须包含同authority，不能从业务表旁路建控制表'}
     $metadataGrants.Add("GRANT CREATE,INSERT ON $($values.AUTHORITY_SCHEMA).``route_meta`` TO $($values.SCHEMA_ACCOUNT);")
-    if([IO.File]::ReadAllText((Join-Path $TemplateRoot 'authority_operator_role.sql')).Contains('`route_reconcile`')){
-        $metadataGrants.Add("GRANT CREATE,INSERT ON $($values.AUTHORITY_SCHEMA).``route_reconcile`` TO $($values.SCHEMA_ACCOUNT);")
-    }
     if($schemaSeen.Contains('mmorpg_guild')){$metadataGrants.Add("GRANT INSERT ON ``mmorpg_guild``.``guild_player_state`` TO $($values.SCHEMA_ACCOUNT);")}
     $values.SCHEMA_DDL_GRANTS=$schemaGrants -join "`n"
     $values.SCHEMA_METADATA_GRANTS=$metadataGrants -join "`n"
@@ -609,7 +596,7 @@ function Invoke-AuthorityPhaseCli {
     if((Get-MaintenanceSha256 -Path $runtimePlan) -cne $Plan.runtimePlanSha256){throw '正式runtime Receipt原bytes SHA不符'}
     $drainDir=[IO.Path]::GetFullPath($Plan.drainDirectory)
     if(-not [IO.Directory]::Exists($drainDir) -or (Get-Item -LiteralPath $drainDir).Attributes -band [IO.FileAttributes]::ReparsePoint){throw '缺私有drain原件目录或路径重解析'}
-    # 固定现有save_barrier_restore子模式，无eval/任意命令/新gRPC。工具owner核全部v2原件，不读passed=true。
+    # 固定现有maintenance_phase子模式，无eval/任意命令/新gRPC。工具owner核全部v2原件，不读passed=true。
     if($Phase -cnotin @('collect-kafka-catalog','collect-kafka-baseline','collect-kafka','seal-request','advance','grant-ticket','revoke-ticket','freeze','release','read')){throw '未知正式authority子动作，不透传任意参数'}
     $arguments=@('-authority-phase',$Phase,'-maintenance-drain-plan',$runtimePlan,'-maintenance-drain-dir',$drainDir,'-maintenance-drain-sha256',$Plan.runtimePlanSha256,'-authority-phase-output',$Output,'-dsn-env','MMORPG_SQL_MAINTENANCE_DSN')
     $kafkaPhase=$Phase -cin @('collect-kafka-catalog','collect-kafka-baseline','collect-kafka')
@@ -624,8 +611,6 @@ function Invoke-AuthorityPhaseCli {
             $arguments+=@('-authority-ticket',$Plan.authorityTicketFile,'-authority-ticket-sha256',$Plan.authorityTicketSha256)
         }
         if($Phase -cin @('grant-ticket','revoke-ticket','freeze') -and -not $Plan.Contains('authorityTicketFile')){throw 'grant/revoke/freeze缺原正式ticket，禁止脚本自铸票据'}
-        if($Plan.Contains('localTargetId')){$arguments+=@('-local-target-id',$Plan.localTargetId)}
-        if($Plan.Contains('sqlTargetAddress')){$arguments+=@('-sql-target-address',$Plan.sqlTargetAddress)}
     }
     & $exe @arguments
     if ($LASTEXITCODE -ne 0) { throw "authority-phase ${Phase}失败，全部关闭保持HOLD" }
@@ -687,7 +672,8 @@ function Read-MaintenanceRedisResp {
 
 function Invoke-MaintenanceRedisRead {
     param($Session,[Parameter(Mandatory)][string[]]$Arguments)
-    if($Arguments.Count -eq 0 -or $Arguments[0] -cnotin @('AUTH','SELECT','PING','INFO','SCAN','TYPE','GET','PTTL','LLEN','ZCARD','HLEN','LRANGE','ZRANGE','HGETALL','DUMP')){throw '维护collector拒绝非白名单只读命令'}
+    if($Arguments.Count -eq 0 -or $Arguments[0] -cnotin @('AUTH','SELECT','PING','INFO','SCAN','TYPE','GET','PTTL','LLEN','ZCARD','HLEN','LRANGE','ZRANGE','HGETALL','DUMP','CLUSTER')){throw '维护collector拒绝非白名单只读命令'}
+    if($Arguments[0] -ceq 'CLUSTER' -and ($Arguments.Count -ne 2 -or $Arguments[1] -cne 'NODES')){throw '维护collector只读CLUSTER NODES'}
     return (Send-MaintenanceRedisCommand -Session $Session -Arguments $Arguments)
 }
 
@@ -754,12 +740,84 @@ function Get-MaintenanceRedisRunId {
 }
 
 
+# Redis Cluster 目标(docs/design/redis-player-store-cluster.md §5.7,核对规则在 go/db/internal/maintenancephase/redis_cluster.go):
+# 每个主节点是一个物理目标,计划要把它们列全。SCAN 与读键只看本节点、不跟随重定向,所以经 kubectl port-forward 取样也成立。
+# CLUSTER NODES 证明取样首尾拓扑不变、本节点确实是持有 slot 的主;漏主节点由 Go 侧把全部目标放在一起判。
+function ConvertFrom-MaintenanceClusterNodes {
+    param([Parameter(Mandatory)][string]$Text)
+    $entries=[Collections.Generic.List[string]]::new();$selfId='';$selfRanges=@();$selfIsMaster=$false;$total=0
+    foreach($line in ($Text -split "`r?`n")){
+        $fields=@($line -split '\s+' | Where-Object {$_ -ne ''})
+        if($fields.Count -lt 8){continue}
+        $flags=@($fields[2] -split ',')
+        $tokens=@($fields | Select-Object -Skip 8)
+        if($tokens | Where-Object {$_.StartsWith('[')}){throw 'Redis Cluster有进行中的逐键迁移，保持HOLD'}
+        $isMaster=$flags -ccontains 'master'
+        if($flags -ccontains 'myself'){$selfId=$fields[0];$selfRanges=$tokens;$selfIsMaster=$isMaster}
+        if(-not $isMaster -or $tokens.Count -eq 0){continue}
+        if($flags -ccontains 'fail' -or $flags -ccontains 'fail?' -or $flags -ccontains 'handshake' -or $flags -ccontains 'noaddr'){throw 'Redis Cluster持有slot的主节点状态不稳定，保持HOLD'}
+        foreach($token in $tokens){
+            if($token -cnotmatch '^(?<low>[0-9]+)(-(?<high>[0-9]+))?$'){throw 'CLUSTER NODES的slot段非法'}
+            $low=[int]$Matches.low;$high=if($Matches.high){[int]$Matches.high}else{$low}
+            $total+=$high-$low+1
+        }
+        $entries.Add($fields[0]+'|'+($tokens -join ','))
+    }
+    if($selfId -ceq ''){throw 'CLUSTER NODES没有myself行'}
+    if(-not $selfIsMaster -or $selfRanges.Count -eq 0){throw 'Redis目标不是持有slot的主节点，计划要列主节点'}
+    if($total -ne 16384){throw "Redis Cluster持有slot合计$total，不是16384，不能断言扫完了玩家域"}
+    return [pscustomobject]@{NodeId=$selfId;Ranges=$selfRanges;Fingerprint=(@($entries | Sort-Object -CaseSensitive) -join ';')}
+}
+
+function Get-MaintenanceRedisClusterView {
+    param($Session)
+    $info=Get-MaintenanceRedisText (Invoke-MaintenanceRedisRead -Session $Session -Arguments @('INFO','cluster'))
+    if($info -cnotmatch '(?m)^cluster_enabled:1\r?$'){return $null}
+    return (ConvertFrom-MaintenanceClusterNodes -Text (Get-MaintenanceRedisText (Invoke-MaintenanceRedisRead -Session $Session -Arguments @('CLUSTER','NODES'))))
+}
+
+# HashSlot,与 go/shared/redisslot 同一算法:第一个 {} 之间非空时只算这段,CRC16-XMODEM 取低 14 位。
+function Get-MaintenanceRedisKeySlot {
+    param([Parameter(Mandatory)][string]$Key)
+    [byte[]]$bytes=[Text.UTF8Encoding]::new($false,$true).GetBytes($Key)
+    $open=[Array]::IndexOf($bytes,[byte]123)
+    if($open -ge 0){
+        $close=[Array]::IndexOf($bytes,[byte]125,$open+1)
+        if($close -gt $open+1){$bytes=$bytes[($open+1)..($close-1)]}
+    }
+    [int]$crc=0
+    foreach($value in $bytes){
+        $crc=$crc -bxor ([int]$value -shl 8)
+        for($bit=0;$bit -lt 8;$bit++){
+            if($crc -band 0x8000){$crc=(($crc -shl 1) -bxor 0x1021) -band 0xFFFF}else{$crc=($crc -shl 1) -band 0xFFFF}
+        }
+    }
+    return ($crc -band 16383)
+}
+
+# Cluster 下 nonce 要落在本节点持有的 slot 上,否则 SET 回 MOVED。候选 tag 按序号枚举,结果只由键前缀和 slot 段决定,P0 与 P4 算出同一把;
+# 拓扑变了算出来就是另一把,读到 none 或 MOVED,照样保持 HOLD。
+function Get-MaintenanceClusterNonceKey {
+    param([Parameter(Mandatory)][string]$BaseKey,[Parameter(Mandatory)][string[]]$Ranges)
+    for($i=0;$i -lt 65536;$i++){
+        $key=$BaseKey+':{n'+$i.ToString([Globalization.CultureInfo]::InvariantCulture)+'}'
+        $slot=Get-MaintenanceRedisKeySlot -Key $key
+        foreach($range in $Ranges){
+            $parts=@($range -split '-')
+            if($slot -ge [int]$parts[0] -and $slot -le [int]$parts[-1]){return $key}
+        }
+    }
+    throw '找不到落在本节点slot上的nonce键'
+}
+
 function Get-MaintenanceRedisNonceIdentity {
-    param([Collections.IDictionary]$Plan,[Collections.IDictionary]$Target)
+    param([Collections.IDictionary]$Plan,[Collections.IDictionary]$Target,$ClusterView=$null)
     if($Plan.operationId -cnotmatch '^[a-f0-9]{32}$' -or $Plan.operationId -ceq ('0'*32)){throw 'Redis nonce必须绑定正式非零run16'}
     try{$bytes=[Convert]::FromBase64String([string]$Target.maintenanceNonce)}catch{throw 'Redis nonce必须为正式16字节'}
     if($bytes.Length -ne 16 -or [Convert]::ToHexString($bytes) -ceq ('0'*32) -or [Convert]::ToBase64String($bytes) -cne $Target.maintenanceNonce){throw 'Redis nonce必须为规范非零16字节'}
-    return @{key=('sql:writer:maintenance:'+$Plan.operationId+':nonce');value=[Convert]::ToHexString($bytes).ToLowerInvariant();bytes=[Convert]::ToBase64String($bytes)}
+    $key='sql:writer:maintenance:'+$Plan.operationId+':nonce'
+    if($null -ne $ClusterView){$key=Get-MaintenanceClusterNonceKey -BaseKey $key -Ranges $ClusterView.Ranges}
+    return @{key=$key;value=[Convert]::ToHexString($bytes).ToLowerInvariant();bytes=[Convert]::ToBase64String($bytes)}
 }
 
 function Get-MaintenanceRedisNonceObservation {
@@ -796,11 +854,13 @@ function Initialize-MaintenanceRedisNonces {
     finally{if($null -ne $attemptStream){$attemptStream.Dispose()}}
     $clock=[Diagnostics.Stopwatch]::StartNew();$seeded=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal);$pins=[Collections.Generic.List[object]]::new()
     foreach($target in $Plan.redisTargets){
-        $identity=Get-MaintenanceRedisNonceIdentity -Plan $Plan -Target $target;$db=Get-MaintenanceRedisDb -Target $target
+        $db=Get-MaintenanceRedisDb -Target $target
         $session=Open-MaintenanceRedis -Target $target -Clock $clock
         try{
             $started=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds();$runId=Get-MaintenanceRedisRunId $session
             if($runId -cne $target.serverRunId){throw 'P0 Redis物理run_id改变'}
+            $clusterBefore=Get-MaintenanceRedisClusterView $session
+            $identity=Get-MaintenanceRedisNonceIdentity -Plan $Plan -Target $target -ClusterView $clusterBefore
             $physicalKey=[string]$target.address+'|'+[string]$db
             if($first -and $seeded.Add($physicalKey)){
                 $reply=Send-MaintenanceRedisCommand -Session $session -Arguments @('SET',$identity.key,$identity.value,'NX')
@@ -809,14 +869,18 @@ function Initialize-MaintenanceRedisNonces {
             $before=Get-MaintenanceRedisNonceObservation -Session $session -Identity $identity
             $after=Get-MaintenanceRedisNonceObservation -Session $session -Identity $identity
             if((Get-MaintenanceRedisRunId $session) -cne $runId){throw 'P0 Redis首尾物理run_id不同'}
+            $clusterAfter=Get-MaintenanceRedisClusterView $session
+            if(($null -eq $clusterBefore) -ne ($null -eq $clusterAfter) -or ($null -ne $clusterAfter -and $clusterAfter.Fingerprint -cne $clusterBefore.Fingerprint)){throw 'P0 Redis Cluster拓扑在取样期间变化，保持HOLD'}
             $ended=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds();Assert-MaintenanceRedisDeadline $session
             if($ended -lt $started -or $ended-$started -gt 60000){throw 'P0 Redis原件时窗非法'}
             $proof=[ordered]@{schema='SQL_DRAIN_REDIS_BASELINE_V1';role=$target.role;address=$target.address;db=$db;server_run_id=$runId;observed_start_ms=$started;observed_end_ms=$ended;nonce_key=$identity.key;nonce_before=$before.value;nonce_after=$after.value;nonce_pttl_before_ms=$before.pttl;nonce_pttl_after_ms=$after.pttl}
+            if($null -ne $clusterAfter){$proof['cluster']=[ordered]@{node_id=$clusterAfter.NodeId;fingerprint_before=$clusterBefore.Fingerprint;fingerprint_after=$clusterAfter.Fingerprint}}
             $proofPath=Join-Path $OutputDirectory ('redis-'+$pins.Count+'.baseline.v1.json')
             if([IO.File]::Exists($proofPath)){
                 $existing=Read-MaintenanceJson -Path $proofPath
                 Assert-MaintenanceProperties -Value $existing -Required @($proof.Keys)
-                foreach($name in @($proof.Keys|Where-Object {$_ -cnotin @('observed_start_ms','observed_end_ms')})){if([string]$existing[$name] -cne [string]$proof[$name]){throw 'P0 Redis恢复原件身份/nonce冲突'}}
+                foreach($name in @($proof.Keys|Where-Object {$_ -cnotin @('observed_start_ms','observed_end_ms','cluster')})){if([string]$existing[$name] -cne [string]$proof[$name]){throw 'P0 Redis恢复原件身份/nonce冲突'}}
+                if($proof.Contains('cluster') -and [string]$existing['cluster']['fingerprint_after'] -cne [string]$proof['cluster']['fingerprint_after']){throw 'P0 Redis恢复原件拓扑已变，保持HOLD'}
                 if([long]$existing.observed_start_ms -le 0 -or [long]$existing.observed_end_ms -lt [long]$existing.observed_start_ms -or [long]$existing.observed_end_ms-[long]$existing.observed_start_ms -gt 60000){throw 'P0 Redis旧原件时窗非法'}
                 $sha=Get-MaintenanceSha256 $proofPath
             }else{$sha=Write-MaintenanceImmutableJson -Path $proofPath -Value $proof}
@@ -829,34 +893,11 @@ function Initialize-MaintenanceRedisNonces {
 }
 
 function Get-MaintenanceRedisKeyKind {
-    param([string]$Key,[string[]]$Topics)
-    if($Key -cmatch '^player:save_pending:(?<zone>[1-9][0-9]*):(?<bucket>0|[1-9][0-9]*)$'){
-        if([int]$Matches.bucket -ge 64){throw 'pending桶必须精确0..63'}
-        return @{kind='pending';topic='';type='zset'}
-    }
-    if($Key -cmatch '^player:\{(?<player>[1-9][0-9]*)\}:save_barrier$'){
+    param([string]$Key)
+    if($Key -cmatch '^player:\{(?<player>[1-9][0-9]*)\}:handoff_fence$'){
         $number=[uint64]0
-        if(-not [uint64]::TryParse($Matches.player,[ref]$number) -or $number.ToString([Globalization.CultureInfo]::InvariantCulture) -cne $Matches.player){throw 'save_barrier玩家键不是规范uint64'}
-        return @{kind='barrier';topic='';type='hash'}
-    }
-    $prefixes=[ordered]@{'kafka:retry:queue:'='retry';'kafka:dead:queue:'='dead';'kafka:retry:processing:'='processing';'kafka:retry:instances:'='instances';'kafka:retry:instance_mode:'='modes'}
-    foreach($prefix in $prefixes.Keys){
-        if(-not $Key.StartsWith($prefix,[StringComparison]::Ordinal)){continue}
-        $suffix=$Key.Substring($prefix.Length)
-        foreach($topic in ($Topics | Sort-Object -Property Length -Descending)){
-            if($suffix -ceq $topic){$kind=$prefixes[$prefix];return @{kind=$kind;topic=$topic;type=$(if($kind -ceq 'instances'){'zset'}elseif($kind -ceq 'modes'){'hash'}else{'list'})}}
-            if($prefixes[$prefix] -ceq 'retry' -and $suffix.StartsWith($topic+':p',[StringComparison]::Ordinal)){
-                $partition=$suffix.Substring($topic.Length+2)
-                if($partition -cnotmatch '^(0|[1-9][0-9]*)$'){throw 'retry分区后缀不规范'}
-                return @{kind='retry';topic=$topic;type='list'}
-            }
-            if($prefixes[$prefix] -ceq 'processing' -and $suffix.StartsWith($topic+':',[StringComparison]::Ordinal)){
-                $instance=$suffix.Substring($topic.Length+1)
-                if($instance -cnotmatch '^[A-Za-z0-9_-]{1,128}$'){throw 'processing实例后缀不规范'}
-                return @{kind='processing';topic=$topic;type='list'}
-            }
-        }
-        throw 'SCAN发现P0目录以外历史topic/动态后缀，HOLD，不忽略'
+        if(-not [uint64]::TryParse($Matches.player,[ref]$number) -or $number.ToString([Globalization.CultureInfo]::InvariantCulture) -cne $Matches.player){throw '交接资格玩家键不是规范uint64'}
+        return @{kind='handoff_fence';topic='';type='hash'}
     }
     throw 'SCAN发现未分类键，不能猜空或删掉'
 }
@@ -871,19 +912,17 @@ function Get-MaintenanceRedisObservation {
         if($pttl.Number -ne -2){throw 'Redis不存在键的PTTL不一致'}
     }else{
         if($type -cne $Meaning.type -or $pttl.Number -ne -1){throw 'Redis键类型/永久性不符，不能把错误类型/TTL当空'}
-        $counter=if($type -ceq 'list'){'LLEN'}elseif($type -ceq 'zset'){'ZCARD'}else{'HLEN'}
-        $reply=Invoke-MaintenanceRedisRead -Session $Session -Arguments @($counter,$Key)
+        $reply=Invoke-MaintenanceRedisRead -Session $Session -Arguments @('HLEN',$Key)
         if($reply.Kind -cne 'integer' -or $reply.Number -lt 0 -or $reply.Number -gt 16384){throw 'Redis成员数不符或超16K预算'}
         $count=[uint64]$reply.Number
-        $args=if($type -ceq 'list'){@('LRANGE',$Key,'0','-1')}elseif($type -ceq 'zset'){@('ZRANGE',$Key,'0','-1','WITHSCORES')}else{@('HGETALL',$Key)}
-        $reply=Invoke-MaintenanceRedisRead -Session $Session -Arguments $args
+        $reply=Invoke-MaintenanceRedisRead -Session $Session -Arguments @('HGETALL',$Key)
         if($reply.Kind -cne 'array'){throw 'Redis成员原件类型不符'}
-        $stride=if($type -ceq 'list'){1}else{2}
-        if($reply.Items.Count -ne $stride*[int]$count){throw 'Redis取样期间集合变化，必须HOLD重开全新尝试'}
-        for($i=0;$i -lt $reply.Items.Count;$i+=$stride){
+        if($reply.Items.Count -ne 2*[int]$count){throw 'Redis取样期间集合变化，必须HOLD重开全新尝试'}
+        for($i=0;$i -lt $reply.Items.Count;$i+=2){
             if($reply.Items[$i].Kind -cne 'bulk'){throw 'Redis成员非原始bytes'}
             $members.Add([Convert]::ToBase64String($reply.Items[$i].Data))
-            if($stride -eq 2){if($reply.Items[$i+1].Kind -cne 'bulk'){throw 'Redis值非原始bytes'};$values.Add([Convert]::ToBase64String($reply.Items[$i+1].Data))}
+            if($reply.Items[$i+1].Kind -cne 'bulk'){throw 'Redis值非原始bytes'}
+            $values.Add([Convert]::ToBase64String($reply.Items[$i+1].Data))
         }
     }
     $dump=Invoke-MaintenanceRedisRead -Session $Session -Arguments @('DUMP',$Key)
@@ -896,9 +935,8 @@ function Collect-MaintenanceRedisClosure {
     param([Parameter(Mandatory)][Collections.IDictionary]$Plan,[Parameter(Mandatory)][string]$OutputDirectory)
     # 本地输入只是正式P0 Plan的操作投影；不成为第二manifest。最终v2 owner逐项与PlanProto原件比等集。
     if(-not $Plan.Contains('redisTargets') -or @($Plan.redisTargets).Count -eq 0 -or @($Plan.redisTargets).Count -gt 128){throw '缺固定Redis物理目标或超既有source预算'}
-    $patterns=@('kafka:retry:queue:*','kafka:dead:queue:*','kafka:retry:processing:*','kafka:retry:instances:*','kafka:retry:instance_mode:*','player:save_pending:*','player:{*}:save_barrier')
+    $patterns=@('player:{*}:handoff_fence')
     $clock=[Diagnostics.Stopwatch]::StartNew();$targets=[Collections.Generic.List[object]]::new();$targetSeen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-    $topics=@($Plan.kafkaPartitions | ForEach-Object {$_.topicName} | Sort-Object -Unique)
     foreach($target in $Plan.redisTargets){
         $db=Get-MaintenanceRedisDb -Target $target
         $identity=$target.role+'|'+$target.address+'|'+[string]$db
@@ -908,7 +946,8 @@ function Collect-MaintenanceRedisClosure {
             $started=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
             $runId=Get-MaintenanceRedisRunId $session
             if($runId -cne $target.serverRunId){throw 'Redis进程世代改变，不能缝合旧取样'}
-            $nonceIdentity=Get-MaintenanceRedisNonceIdentity -Plan $Plan -Target $target
+            $clusterBefore=Get-MaintenanceRedisClusterView $session
+            $nonceIdentity=Get-MaintenanceRedisNonceIdentity -Plan $Plan -Target $target -ClusterView $clusterBefore
             $nonceBefore=Get-MaintenanceRedisNonceObservation -Session $session -Identity $nonceIdentity
             $pages=[Collections.Generic.List[object]]::new();$keys=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
             foreach($seed in $target.observations){if(-not $keys.Add([string]$seed.key)){throw 'P0 required Redis键重复'}}
@@ -923,7 +962,7 @@ function Collect-MaintenanceRedisClosure {
                     foreach($raw in $reply.Items[1].Items){
                         $key=Get-MaintenanceRedisText $raw
                         if($key.Length -gt 4096){throw 'SCAN键超过预算'}
-                        $null=Get-MaintenanceRedisKeyKind -Key $key -Topics $topics
+                        $null=Get-MaintenanceRedisKeyKind -Key $key
                         $pageKeys.Add($key);$null=$keys.Add($key)
                         if($keys.Count -gt 16384){throw 'Redis observation超过既有16K预算'}
                     }
@@ -933,14 +972,17 @@ function Collect-MaintenanceRedisClosure {
             }
             $observations=[Collections.Generic.List[object]]::new()
             foreach($key in @($keys | Sort-Object -CaseSensitive)){
-                $meaning=Get-MaintenanceRedisKeyKind -Key $key -Topics $topics
+                $meaning=Get-MaintenanceRedisKeyKind -Key $key
                 $observations.Add((Get-MaintenanceRedisObservation -Session $session -Key $key -Meaning $meaning))
             }
             $nonceAfter=Get-MaintenanceRedisNonceObservation -Session $session -Identity $nonceIdentity
             if((Get-MaintenanceRedisRunId $session) -cne $runId){throw 'Redis取样首尾物理run_id不同'}
+            $clusterAfter=Get-MaintenanceRedisClusterView $session
+            if(($null -eq $clusterBefore) -ne ($null -eq $clusterAfter) -or ($null -ne $clusterAfter -and $clusterAfter.Fingerprint -cne $clusterBefore.Fingerprint)){throw 'Redis Cluster拓扑在取样期间变化，不能断言扫完了玩家域，保持HOLD'}
             $ended=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds();Assert-MaintenanceRedisDeadline $session
             if($ended -lt $started -or $ended-$started -gt 60000){throw 'Redis SCAN原件时窗非法'}
             $proof=[ordered]@{schema='SQL_DRAIN_REDIS_SCAN_V2';role=$target.role;address=$target.address;db=$db;server_run_id=$runId;observed_start_ms=$started;observed_end_ms=$ended;nonce_key=$nonceIdentity.key;nonce_before=$nonceBefore.value;nonce_after=$nonceAfter.value;nonce_pttl_before_ms=$nonceBefore.pttl;nonce_pttl_after_ms=$nonceAfter.pttl;pages=$pages.ToArray()}
+            if($null -ne $clusterAfter){$proof['cluster']=[ordered]@{node_id=$clusterAfter.NodeId;fingerprint_before=$clusterBefore.Fingerprint;fingerprint_after=$clusterAfter.Fingerprint}}
             $safeName='redis-'+$targets.Count+'.scan.v2.json';$proofPath=Join-Path $OutputDirectory $safeName
             $proofSha=Write-MaintenanceImmutableJson -Path $proofPath -Value $proof
             if((Get-Item -LiteralPath $proofPath).Length -gt 16777216){throw '完整SCAN原件超过既有16MiB预算，不能拆源逃逸'}

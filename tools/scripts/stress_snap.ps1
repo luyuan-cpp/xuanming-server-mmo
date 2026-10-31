@@ -20,7 +20,7 @@
 #   每个时刻 HTTP 抓完后,再对 -RedisTargets 里的每个实例抓一次 `redis-cli INFO <sections>`,
 #   存成 `t{N}m_redis_<name>.txt`,首行是 `# stress_snap target=<name> spec=<spec> captured_at=<ISO8601>`,
 #   之后是 INFO 原文。stress_summarize.ps1 用两次快照之差出 ops/s、CPU、命令级耗时。
-#   本机与 K8s 都没有 redis_exporter,所以走 INFO 文本快照;G4a 拆分之前 mapping 与核心是同一个实例。
+#   本机与 K8s 都没有 redis_exporter,所以走 INFO 文本快照。
 #
 # 参数:
 #   -RedisTargets       hashtable,name → spec,缺省 @{ core = 'docker:redis' };传 @{} 关闭 Redis 抓取。
@@ -34,7 +34,13 @@
 #                                                (host 缺省 = statefulset 名,port 缺省 6379;高可用形态下 host 写 Service,
 #                                                经 haproxy 落到当前主)。口令取 Pod 自己的 REDIS_PASSWORD,经 REDISCLI_AUTH
 #                                                传给 redis-cli,不上本机命令行、不进日志(同 k8s_gate_drain.ps1)。
-#                       本地要单列 mapping 时传 @{ core = 'docker:redis'; mapping = 'docker:redis' }:同一实例抓两份,
+#                         'k8s-cluster:<namespace>/<statefulset>'
+#                         'docker-cluster:<container>:<port>'
+#                                                Redis Cluster(玩家域 k8s-cluster:mmorpg-infra/redis-player,本机开发集群
+#                                                docker-cluster:redis-player-cluster-0:7100)。每个时刻先读一次 CLUSTER NODES,再对持有 slot 的
+#                                                每个主节点抓一份,文件是 t<N>m_redis_<name>-<节点 ID 前 8 位>.txt,元信息行多一个 cluster=<name>。
+#                                                主节点是实时列出来的,扩容、切主之后自动跟上;汇总脚本按主节点逐行出 R1 / R2,再合成一行 <name>-all。
+#                       本地要单列排队实例时传 @{ core = 'docker:redis'; queue = 'docker:redis' }:同一实例抓两份,
 #                       汇总脚本按 run_id 识别成 same_as,不重复计数。
 #   -DockerContext      docker 形态用的 --context,缺省 'desktop-linux'(同 start_game.ps1);传 '' 用当前 context。
 #   -RedisInfoSections  INFO 的 section 列表(多 section 需 Redis 7.0+;K8s 7.2 与本机 8.x 都满足),必须含 server
@@ -42,6 +48,7 @@
 #                       文件变大、形状随版本漂移。
 #   -RedisInfoProvider  测试接缝:非空时改调 `& $RedisInfoProvider <name> <spec>` 取 INFO 文本,不起 docker / kubectl。
 #                       只供进程内调用(`& stress_snap.ps1 …`),pwsh -File 传不进 scriptblock。
+#   -RedisClusterNodesProvider  同上,取 CLUSTER NODES 文本:`& $RedisClusterNodesProvider <name> <spec>`。
 #   每次 INFO 抓取有 10s 进程级超时(超时即杀掉本次 docker / kubectl 进程),失败只在 job.log 记一行 FAIL、
 #   不写文件、不中断后面的 target 与时刻。建议 L-14 的 -Stages 带上 0,t0m 作 Redis 求差基线。
 #
@@ -79,7 +86,9 @@ param(
     [string[]]$RedisInfoSections = @('server', 'clients', 'memory', 'persistence', 'stats', 'cpu',
         'commandstats', 'errorstats', 'latencystats', 'keyspace'),
 
-    [scriptblock]$RedisInfoProvider = $null
+    [scriptblock]$RedisInfoProvider = $null,
+
+    [scriptblock]$RedisClusterNodesProvider = $null
 )
 
 $ErrorActionPreference = 'Stop'
@@ -108,9 +117,17 @@ function Assert-RedisTargetName {
 function ConvertFrom-RedisTargetSpec {
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Spec)
     if ($Spec -cmatch '^docker:(?<container>[A-Za-z0-9][A-Za-z0-9_.-]*)$') {
-        return [pscustomobject]@{ Kind = 'docker'; Container = $Matches['container'] }
+        return [pscustomobject]@{ Kind = 'docker'; Container = $Matches['container']; Host = ''; Port = 0; Cluster = $false }
     }
     $dns = '[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?'
+    if ($Spec -cmatch '^docker-cluster:(?<container>[A-Za-z0-9][A-Za-z0-9_.-]*):(?<port>\d{1,5})$') {
+        $port = [int]$Matches['port']
+        if ($port -lt 1 -or $port -gt 65535) { throw "Redis spec '$Spec' 端口 $port 越界(1..65535)" }
+        return [pscustomobject]@{ Kind = 'docker'; Container = $Matches['container']; Host = '127.0.0.1'; Port = $port; Cluster = $true }
+    }
+    if ($Spec -cmatch "^k8s-cluster:(?<ns>$dns)/(?<sts>$dns)$") {
+        return [pscustomobject]@{ Kind = 'k8s'; Namespace = $Matches['ns']; StatefulSet = $Matches['sts']; Host = '127.0.0.1'; Port = 6379; Cluster = $true }
+    }
     $hostPattern = '[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?'
     if ($Spec -cmatch "^k8s:(?<ns>$dns)/(?<sts>$dns)(?:@(?<host>$hostPattern):(?<port>\d{1,5}))?$") {
         $redisHost = if ($Matches['host']) { $Matches['host'] } else { $Matches['sts'] }
@@ -122,9 +139,10 @@ function ConvertFrom-RedisTargetSpec {
             StatefulSet = $Matches['sts']
             Host        = $redisHost
             Port        = $port
+            Cluster     = $false
         }
     }
-    throw "Redis spec '$Spec' 非法:只支持 'docker:<container>' 与 'k8s:<namespace>/<statefulset>[@<host>:<port>]'"
+    throw "Redis spec '$Spec' 非法:只支持 'docker:<container>'、'k8s:<namespace>/<statefulset>[@<host>:<port>]'、'docker-cluster:<container>:<port>' 与 'k8s-cluster:<namespace>/<statefulset>'"
 }
 
 # 返回 { FilePath; ArgumentList }。参数逐项进 ArgumentList,不经本机 shell 拼接。
@@ -136,17 +154,23 @@ function Get-RedisInfoCommand {
         [Parameter(Mandatory = $true)]$Target,
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$DockerContext,
         [Parameter(Mandatory = $true)][string[]]$Sections,
-        [Parameter(Mandatory = $true)][int]$TimeoutSec
+        [Parameter(Mandatory = $true)][int]$TimeoutSec,
+        # 缺省 INFO <sections>;读集群拓扑时传 CLUSTER NODES。
+        [string[]]$Command = @()
     )
+    if ($Command.Count -eq 0) { $Command = @('INFO') + $Sections }
     if ($Target.Kind -eq 'docker') {
         $argv = @()
         if ($DockerContext) { $argv += @('--context', $DockerContext) }
-        $argv += @('exec', $Target.Container, 'redis-cli', 'INFO') + $Sections
+        $argv += @('exec', $Target.Container, 'redis-cli')
+        # 集群节点各有端口(本机开发集群共用一个网络命名空间);单实例形态不带 -h / -p,与以前逐字相同。
+        if ($Target.Port -gt 0) { $argv += @('-h', $Target.Host, '-p', [string]$Target.Port) }
+        $argv += $Command
         return [pscustomobject]@{ FilePath = 'docker'; ArgumentList = $argv }
     }
     $shell = 'h=$1; p=$2; shift 2; if [ -n "$REDIS_PASSWORD" ]; then REDISCLI_AUTH=$REDIS_PASSWORD; export REDISCLI_AUTH; fi; exec redis-cli -h "$h" -p "$p" "$@"'
     $argv = @("--request-timeout=${TimeoutSec}s", 'exec', '-n', $Target.Namespace, "statefulset/$($Target.StatefulSet)",
-        '-c', 'redis', '--', 'sh', '-c', $shell, 'sh', $Target.Host, [string]$Target.Port, 'INFO') + $Sections
+        '-c', 'redis', '--', 'sh', '-c', $shell, 'sh', $Target.Host, [string]$Target.Port) + $Command
     return [pscustomobject]@{ FilePath = 'kubectl'; ArgumentList = $argv }
 }
 
@@ -222,6 +246,65 @@ function Get-RedisInfoText {
     return $text
 }
 
+# CLUSTER NODES 文本 → 持有 slot 的主节点(NodeId、Host、Port)。形状不对或一个都没有即 throw:不把「没读到」当成「没有节点」。
+function ConvertFrom-RedisClusterNodesText {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
+    $masters = @(
+        foreach ($line in ($Text -split "`r?`n")) {
+            $fields = @($line -split '\s+' | Where-Object { $_ -ne '' })
+            if ($fields.Count -lt 9) { continue }
+            if (@($fields[2] -split ',') -cnotcontains 'master') { continue }
+            if ($fields[0] -cnotmatch '^[0-9a-f]{40}$' -or $fields[1] -cnotmatch '^(?<host>[0-9A-Fa-f.:]+):(?<port>\d{1,5})@') { continue }
+            [pscustomobject]@{ NodeId = $fields[0]; Host = $Matches['host']; Port = [int]$Matches['port'] }
+        }
+    )
+    if ($masters.Count -eq 0) { throw "CLUSTER NODES 里没有持有 slot 的主节点(长度 $($Text.Length))" }
+    return , $masters
+}
+
+# 跑一条 redis-cli 命令取文本;任何失败都 throw,由调用方记 FAIL。
+function Invoke-RedisCliText {
+    param(
+        [Parameter(Mandatory = $true)]$Target,
+        [Parameter(Mandatory = $true)][string[]]$Command
+    )
+    $cmd = Get-RedisInfoCommand -Target $Target -DockerContext $DockerContext -Sections $RedisInfoSections -TimeoutSec $RedisInfoTimeoutSec -Command $Command
+    $exe = Get-Command $cmd.FilePath -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $exe) { throw "找不到 $($cmd.FilePath)" }
+    $result = Invoke-BoundedProcess -FilePath $exe.Source -ArgumentList $cmd.ArgumentList -TimeoutSec $RedisInfoTimeoutSec
+    if ($result.TimedOut) { throw $result.ErrorOutput }
+    if ($result.ExitCode -ne 0) {
+        $tail = ([string]$result.ErrorOutput).Trim()
+        if ($tail.Length -gt 300) { $tail = $tail.Substring($tail.Length - 300) }
+        throw "exit=$($result.ExitCode): $tail"
+    }
+    return [string]$result.Output
+}
+
+# 列出一个集群当前持有 slot 的主节点,展开成逐节点的抓取目标。
+function Get-RedisClusterMemberTargets {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Spec,
+        [Parameter(Mandatory = $true)]$Target
+    )
+    $text = if ($null -ne $RedisClusterNodesProvider) {
+        (@(& $RedisClusterNodesProvider $Name $Spec) | ForEach-Object { [string]$_ }) -join "`n"
+    } else {
+        Invoke-RedisCliText -Target $Target -Command @('CLUSTER', 'NODES')
+    }
+    foreach ($master in (ConvertFrom-RedisClusterNodesText -Text $text)) {
+        $member = $Target.PSObject.Copy()
+        $member.Host = $master.Host
+        $member.Port = $master.Port
+        [pscustomobject]@{
+            Name   = '{0}-{1}' -f $Name, $master.NodeId.Substring(0, 8)
+            Spec   = '{0}@{1}:{2}' -f $Spec, $master.Host, $master.Port
+            Target = $member
+        }
+    }
+}
+
 # ----- 参数校验:全部在任何抓取与落盘之前完成 ---------------------------------
 
 foreach ($svc in $Endpoints.Keys) {
@@ -286,14 +369,29 @@ foreach ($mins in $stageList) {
     }
 
     foreach ($rt in $redisTargetList) {
-        $outFile = Join-Path $snapDir "${tag}_redis_$($rt.Name).txt"
-        try {
-            $text = Get-RedisInfoText -Name $rt.Name -Spec $rt.Spec -Target $rt.Target
-            $header = "# stress_snap target=$($rt.Name) spec=$($rt.Spec) captured_at=$((Get-Date).ToString('o'))"
-            Set-Content -Path $outFile -Value ($header + "`n" + $text) -Encoding UTF8
-            Write-JobLog "$tag redis_$($rt.Name) saved size=$($text.Length) ($($rt.Spec))"
-        } catch {
-            Write-JobLog "$tag redis_$($rt.Name) FAIL ($($rt.Spec)): $($_.Exception.Message)"
+        # Redis Cluster:这一刻的主节点现列,每个主节点一份。列不出来只记 FAIL,不中断后面的 target 与时刻。
+        $captureList = @($rt)
+        $clusterTail = ''
+        if ($rt.Target.Cluster) {
+            $clusterTail = " cluster=$($rt.Name)"
+            try {
+                $captureList = @(Get-RedisClusterMemberTargets -Name $rt.Name -Spec $rt.Spec -Target $rt.Target)
+                Write-JobLog "$tag redis_$($rt.Name) cluster masters=$($captureList.Count) ($($rt.Spec))"
+            } catch {
+                Write-JobLog "$tag redis_$($rt.Name) FAIL ($($rt.Spec)): cluster nodes: $($_.Exception.Message)"
+                continue
+            }
+        }
+        foreach ($capture in $captureList) {
+            $outFile = Join-Path $snapDir "${tag}_redis_$($capture.Name).txt"
+            try {
+                $text = Get-RedisInfoText -Name $capture.Name -Spec $capture.Spec -Target $capture.Target
+                $header = "# stress_snap target=$($capture.Name) spec=$($capture.Spec)$clusterTail captured_at=$((Get-Date).ToString('o'))"
+                Set-Content -Path $outFile -Value ($header + "`n" + $text) -Encoding UTF8
+                Write-JobLog "$tag redis_$($capture.Name) saved size=$($text.Length) ($($capture.Spec))"
+            } catch {
+                Write-JobLog "$tag redis_$($capture.Name) FAIL ($($capture.Spec)): $($_.Exception.Message)"
+            }
         }
     }
 }

@@ -97,6 +97,7 @@
   文件命名 `t<N>m_login.txt` / `t<N>m_sm.txt` / `t<N>m_db.txt` / `t<N>m_ds.txt`，summarize 脚本自动按后缀分流。
   同一时刻还对 `-RedisTargets`（缺省 `@{ core = 'docker:redis' }`）抓 `redis-cli INFO` 快照 `t<N>m_redis_<name>.txt`，
   汇总脚本相邻两份求差出 Redis 的 ops/s、CPU、热点命令；Redis 求差要基线，`-Stages` 建议带上 0。
+  玩家域上了 Redis Cluster 时，target 写 `k8s-cluster:<namespace>/redis-player` 或 `docker-cluster:redis-player-cluster-0:7100`：逐主节点抓，R1 / R2 逐主节点出行，再合成一行 `<name>-all`。
 - 旧式单端口手拉（legacy 兼容）：`curl -s http://127.0.0.1:9101/metrics > $RunDir/prom-snapshots/t<n>m.txt`。
 - 历史复盘文档（`stress-1zone-*.md`）直接复用脚本输出的表格，不要再贴 raw count/sum 数字。
 
@@ -107,7 +108,7 @@
    - `robot/logs/stress-*` 旧目录（留最近 1 个备查，其余删掉）
    - `bin/log/*` cpp gate/scene 日志
    - 各 go service stderr/stdout（`go-svc-stop` + 删 `tools/scripts/.run/` 的 pid/log）
-   - `redis-cli FLUSHALL` 清掉残留 lock / session key
+   - 清掉残留 lock / session key：`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`（单实例加玩家域开发集群的每个主节点），K8s 压测环境用 `-Command k8s-redis-wipe -ConfirmWipeAllRedis`。Redis Cluster 的 `FLUSHALL` 只清本节点，不要只对一个节点执行
    - kafka topic offset reset（`pwsh tools/scripts/dev_tools.ps1 -Command kafka-offset-reset`）+ broker 数据目录可选清，生产/历史不要清
    - prom snapshot 目录 = 新建 `robot/logs/stress-<name>-<ts>/prom-snapshots/`
 3. **压测中** —— 至少在 ramp 完成 / 稳态中段 / 稳态末三个时刻拉 snapshot 进 `prom-snapshots/`。

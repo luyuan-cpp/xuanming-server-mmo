@@ -122,6 +122,7 @@ struct CallbackPhase {
 struct PendingMaintenanceCommand {
   Hiredis::CommandCallback callback;
   std::shared_ptr<Hiredis::MaintenanceState> state;
+  Hiredis::NotExecutedPredicate notExecuted = nullptr;
   bool admitted = false;
   bool known = false;
   ~PendingMaintenanceCommand()
@@ -448,13 +449,40 @@ int Hiredis::command(const CommandCallback& cb, muduo::StringArg cmd, ...)
   return ret;
 }
 
+int Hiredis::formattedCommand(const CommandCallback& cb, const char* cmd, size_t len, NotExecutedPredicate notExecuted)
+{
+  if (!connected() || !cb) return REDIS_ERR;
+  loop_->assertInLoopThread();
+
+  // 接纳与释放的约定同 command(),理由见那里的注释;两边必须一起改。
+  auto pending = std::make_unique<PendingMaintenanceCommand>();
+  pending->callback = cb;
+  pending->state = maintenance_;
+  pending->notExecuted = notExecuted;
+  if (!maintenance_ || !maintenance_->Begin()) return REDIS_ERR;
+  pending->admitted = true;
+  LOG_TRACE;
+  auto* p = pending.get();
+  const int ret = ::redisAsyncFormattedCommand(context_, commandCallback, p, cmd, len);
+  if (ret != REDIS_OK)
+  {
+    p->known = true; // 同步拒绝发生在 hiredis 接受之前，确定零副作用。
+  }
+  else
+  {
+    pending.release(); // 只有真实 native 接受后才把唯一完成责任交给应答队列。
+  }
+  return ret;
+}
+
 /* static */ void Hiredis::commandCallback(redisAsyncContext* ac, void* r, void* privdata)
 {
   redisReply* reply = static_cast<redisReply*>(r);
   std::unique_ptr<PendingMaintenanceCommand> cb(static_cast<PendingMaintenanceCommand*>(privdata));
   // 正常分发由 Channel tie 保活，析构中的 null-reply 由析构体同步 free 保活。
   // 回调返回后只清理本地回调副本，不再通过业务指针访问 wrapper。
-  const bool known = reply != nullptr && reply->type != REDIS_REPLY_ERROR;
+  const bool known = (reply != nullptr && reply->type != REDIS_REPLY_ERROR)
+      || (cb->notExecuted != nullptr && cb->notExecuted(reply));
   cb->callback(getHiredis(ac), reply);
   cb->known = known;
   // 析构在业务回调返回后计完成；空回包、服务端错误或异常永久 HOLD。

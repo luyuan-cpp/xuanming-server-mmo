@@ -298,10 +298,11 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [linux-staging-stress-runbook.md](ops/linux-staging-stress-runbook.md) — Linux Staging 部署 + 阶梯压测留位
 - [log-management.md](ops/log-management.md) — Log Management
 - [login-queue-stress-runbook.md](ops/login-queue-stress-runbook.md) — 登录排队压测 — 判读清单
-- [merge-zone-runbook.md](ops/merge-zone-runbook.md) — Merge-Zone Runbook(合服操作手册)
+- [merge-zone-runbook.md](ops/merge-zone-runbook.md) — 不停服合服操作手册
 - [mysql-backup-pitr-runbook.md](ops/mysql-backup-pitr-runbook.md) — MySQL Backup & PITR Runbook
 - [online-debug-data-fetch.md](ops/online-debug-data-fetch.md) — 线上玩家数据拉取与本地复现
 - [player-inbox-runbook.md](ops/player-inbox-runbook.md) — 玩家持久收件箱(player_inbox)运维手册
+- [redis-player-cluster-runbook.md](ops/redis-player-cluster-runbook.md) — 玩家域 Redis Cluster 运维手册
 - [release-checklist.md](ops/release-checklist.md) — 服务端发布清单
 - [run-directory.md](ops/run-directory.md) — `run/` — Runtime Artifacts
 - [stress-3zone-runbook.md](ops/stress-3zone-runbook.md) — 3 Zone × 15000 压测 — Runbook(2026-05)
@@ -428,5 +429,6 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [centre_decommission_ha_checklist.md](archive/centre_decommission_ha_checklist.md) — Centre Decommission + HA Checklist (2026-03-15) · [EN](archive/centre_decommission_ha_checklist_en.md) · [中文](archive/centre_decommission_ha_checklist_zh.md)
 - [centre_decommission_migration_plan.md](archive/centre_decommission_migration_plan.md) — Centre 去中心化迁移方案 (2026-03-15)
 - [cross-zone-merge-rollback-audit-2026-05.md](archive/cross-zone-merge-rollback-audit-2026-05.md) — 跨服 / 合服 / 回档 — 真实实现状态审计
+- [merge-zone-runbook-stop-the-world.md](archive/merge-zone-runbook-stop-the-world.md) — 合服操作手册(已作废:停服合服与别名合服过渡版)
 
 <!-- END GENERATED INDEX -->

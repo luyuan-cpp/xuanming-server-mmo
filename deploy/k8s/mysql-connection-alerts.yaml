@@ -25,8 +25,7 @@
 #
 # 池指标 mmorpg_sql_pool_*{sql_client,pool} 由 go/shared/sqlpoolstats 导出,按池类别聚合,不含库名:
 #   sql_client="db"            pool = home | extra_zone | extra_non_zone(go/db/internal/metrics 的 Pool* 常量)
-#   sql_client="data_service"  pool = snapshot | transaction_log | player_name,
-#                              以及只在 RouteStore.Mode=db_first 时才声明的 player_route(go/data_service/internal/metrics 的 Pool* 常量)
+#   sql_client="data_service"  pool = snapshot | transaction_log | player_name | player_route(go/data_service/internal/metrics 的 Pool* 常量)
 # friend / trade / Java gateway 没有导出池指标,不在 sql-pool.client 组的覆盖范围内;它们占的连接只能从 MySQL 服务端那一组看到。
 #
 # 表达式按 namespace 分组(zone 级服务每个 zone 一个 namespace)。namespace 是抓取配置附加的目标 label:

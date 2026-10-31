@@ -35,7 +35,7 @@ func TestFriendInviteListDoesNotReportUnknownPresenceAsOffline(t *testing.T) {
 		t.Run(failure, func(t *testing.T) {
 			f := newFixture(t, nil)
 			f.store.friends = []data.FriendEntry{{FriendPlayerID: 8003, SinceMs: 1}}
-			f.deps.Sessions = data.NewSessionReader(f.svcCtx.SharedRedis, 64)
+			f.deps.Sessions = data.NewSessionReader(f.svcCtx.PlayerRedis, 64)
 			switch failure {
 			case "redis_error":
 				f.sharedMr.SetError("ERR presence storage unavailable")

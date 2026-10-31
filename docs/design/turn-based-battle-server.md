@@ -10,6 +10,9 @@
 > (如 D6、D10 / D11 的理由、§3.1、§3.2、§4.3、§10.2、§11 的 `SetAutoBattle` 路由、§14 验收项),都是收缩前的形态,原文保留作判据链。
 > 现状:战斗上行与战斗帧只走客户端直连 battle(§22 D66 / D68),Bind / Unbind 契约已删、事件号墓碑(D67),
 > scene 换会话只推重连提示(D72)。未编译、未测试,待 Codex 验证(§22.7)。
+>
+> **(2026-10-30 更正)结算只走 match SQL + 收件箱**:§3.2、§6、§7 以及后文各处的 `battle:settlement:pending:*`、`battle:activity_result:*`、`BattleSettlementEvent`、R07 结算发件箱(先落 Redis → 投 SceneCommand → 未销账重投 → 登录补应用)、旧协议 0 与本地模式都已删除,原文保留作判据链。
+> 现状([玩家数据只存 TiDB 总体方案](./player-data-tidb-scaling-plan.md) §5.4):battle 只接受 `outcome_protocol_version = 1` 的房间,打完把冻结的终局原件经 `CommitBattleOutcome` 提交 match SQL,拿到持久决定才公布终局、删房;match 发件箱投 player_inbox 与 Kafka;scene 经 `ApplyInboxSettlement` 应用,结算随存档提交、同 E/q 双 SQL 确认之后由 `CompleteInboxSettlement` 解冻、条件删 `battle:lock` + `battle:ctx`、推 `BattleEndS2C`。这两个键是协调键,留在 Redis;其余释放时机(备战取消、冻结到期、TTL)见 `cpp/libs/services/scene/battle/system/battle_lock_rules.h` 文件头。未编译、未测试,待 Codex 验证。
 
 ## 1. 背景与一期范围
 

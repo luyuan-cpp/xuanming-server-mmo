@@ -263,7 +263,7 @@ bool IsAssetOpDurable(entt::entity player, const AssetOpRequest& request, bool e
 	return false;
 }
 
-// 触发一次存盘并记下时刻。返回 SavePlayerToRedis 的原值:
+// 触发一次存盘并记下时刻。返回 SavePlayer 的原值:
 // true = 确实压了一次写、稍后有落盘回调;false 仅表示没有压入新写,
 // 包括与旧快照相等、交接已发起、缺身份/持久组件拒存。不能从 bool 推断具体原因或 durable。
 // **前置**:IsPlayerMutable(player) 为真;durable 始终由真实落盘快照单独判定。

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"os"
 	"strconv"
 	"testing"
@@ -18,6 +17,7 @@ import (
 	mailpb "proto/mail"
 	locator "proto/player_locator"
 	"shared/kafkacmd"
+	"shared/redisslot"
 )
 
 func TestRealKafkaRedisMailReminderUsesGateFenceAndNoAssetAuthority(t *testing.T) {
@@ -73,7 +73,7 @@ func TestRealKafkaRedisMailReminderUsesGateFenceAndNoAssetAuthority(t *testing.T
 		t.Fatal(err)
 	}
 	player := binary.LittleEndian.Uint64(random[:]) | 1
-	key := fmt.Sprintf("player:session:%d", player)
+	key := redisslot.SessionKey(player)
 	defer rdb.Del(context.Background(), key)
 	session := &locator.PlayerSession{PlayerId: player, State: locator.PlayerSessionState_SESSION_STATE_ONLINE, GateId: "5", GateInstanceId: "mail-test-gate-instance", SessionId: 99}
 	raw, _ := proto.Marshal(session)

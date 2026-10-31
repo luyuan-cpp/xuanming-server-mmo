@@ -4,8 +4,8 @@ package logic
 //
 //	待入队物品循环  结算时某位得奖者的未决指令已满(16 条),他的物品先记进待入队表;本循环等窗口有空位,
 //	               把它转成一行资产指令(同一事务里删掉待入队行),之后由资产重投循环投递。**绝不跳过**。
-//	巡检器          兜住"对局结果事件丢了":对登记已久仍无结果的对局,去读 battle 落在 SharedRedis 的结果记录直接结算;
-//	               连记录都没有且登记更久的,判为 EXPIRED(迟到的结果仍可结算)。
+//	巡检器          兜住"对局结果事件没到":对登记已久仍无结果的对局,去读 match 权威库的 SQL 终局直接结算;
+//	               连终局都没有且登记更久的,判为 EXPIRED(迟到的结果仍可结算)。
 //
 // 三条纪律:
 //
@@ -47,6 +47,8 @@ const (
 )
 
 const (
+	// rankFoldBudget:折叠一轮旧榜的预算,要盖住等榜维护锁的 5 秒。超时就留给下一轮,折叠是幂等的。
+	rankFoldBudget = 10 * time.Second
 	// owedPageSize:待入队循环一页读多少行(06 §6.32 的 50)。
 	owedPageSize = 50
 	// owedMaxRowsPerRound:一轮最多看多少行。积压很大时把单轮的工作量封顶;没看完的下一轮从游标处接着看
@@ -54,7 +56,7 @@ const (
 	owedMaxRowsPerRound = 500
 	// trialSweepBatch:巡检一轮最多看多少条超时对局。06 §6.33 原写 50;取大是因为候选按登记时刻升序,
 	// 排在最前面的往往是"gather 失败、永远等不来结果"的局(要等到判过期才离开候选),批量太小会把后面
-	// 有结果记录可救的局挡住。每条候选只是一次 Redis GET。
+	// 有结果记录可救的局挡住。每条候选只是一次主键点查。
 	trialSweepBatch = 200
 	// trialSweepLeaseMargin:巡检租约比巡检间隔短多少。租约不主动释放,必须在下一轮开始前自然到期,
 	// 否则持有者自己下一轮也抢不到。
@@ -114,6 +116,7 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 		// Done 放在 defer 里:safego 兜住 panic 时它照样执行,stop 不会永远等下去。
 		defer wg.Done()
 		runTrialLoop(ctx, trialOwedLoopPoint, c.OwedInterval, func(ctx context.Context) {
+			l.foldMergedZoneRanks(ctx)
 			if d.Lobby != nil {
 				budget, cancel := context.WithTimeout(ctx, 2*time.Second)
 				next, err := d.Lobby.ExpirePendingSQL(budget, lobbyCursor)
@@ -153,6 +156,26 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 		cancel()
 		wg.Wait()
 	}, nil
+}
+
+// foldMergedZoneRanks 把已合走区的旧榜并进最终区(data.GuildRepo.FoldMergedZoneRanks)。合服之后到折叠完成之前,
+// 源区公会暂时不在最终区的榜上,所以要跑得勤。
+//
+// 和历练无关,挂在待入队循环上是借它的节拍和排空接入:它是 guild 里每个副本都无条件跑、间隔最短(默认 10 秒)的循环。
+// 榜是可重建的缓存,失败只打日志,不 Hold 排空,也不影响这一轮别的事;下一轮再试,稳态下只有映射里每个源区一次 EXISTS。
+func (l *GuildLogic) foldMergedZoneRanks(ctx context.Context) {
+	budget, cancel := context.WithTimeout(ctx, rankFoldBudget)
+	defer cancel()
+	folded, err := l.repo.FoldMergedZoneRanks(budget)
+	if err != nil {
+		if ctx.Err() == nil {
+			logx.Errorf("[guild] fold ranks of merged zones failed, will retry next round: %v", err)
+		}
+		return
+	}
+	if folded > 0 {
+		logx.Infof("[guild] folded %d rank entries of merged zones into their final zones", folded)
+	}
 }
 
 // runTrialLoop 阻塞运行一个定时循环,ctx 取消即返回。每一轮各自 recover(纪律 2)。interval 必须为正。
@@ -333,11 +356,11 @@ func sweepLeaseTTL(interval time.Duration) time.Duration {
 }
 
 // trialSweepRound 跑一轮巡检。逐条看"登记早于 now − ResultOverdue 且仍为 STARTED"的对局:
-//   - battle 的结果记录还在 → 按它结算(SettleTrialResult,与消费者同一条路径、同一个幂等闸门);
+//   - match 权威库有这一局的 COMPLETE 终局 → 按它结算(SettleTrialResult,与消费者同一条路径、同一个幂等闸门);
 //   - 没有记录、且登记早于 now − Abandon → 判 EXPIRED;
 //   - 没有记录、还没到放弃时限 → 只计数(guild_trial_result_overdue)。
 //
-// 结果记录的 Redis 读出错时**本轮到此为止**:读不到不等于没有记录,不能据此把对局判过期。
+// 结果记录读出错时**本轮到此为止**:读不到不等于没有记录,不能据此把对局判过期。
 // 按记录结算某一局时出错或 panic,只影响那一局(记录原样留着,下一轮再试),不挡同一轮里排在后面的候选。
 // 没拿到租约的副本本轮不扫,并把自己的 overdue gauge 清 0(告警取各副本的最大值,见指标说明)。
 func (l *GuildLogic) trialSweepRound(ctx context.Context, d *ActivityDeps, c TrialBackgroundConf) (stats trialSweepStats) {
@@ -430,11 +453,11 @@ func (l *GuildLogic) trialSweepRound(ctx context.Context, d *ActivityDeps, c Tri
 	return stats
 }
 
-// recoverTrialResult 用 battle 落下的结果记录处理一局超时未结算的对局。返回 true = 这条记录处理完了
+// recoverTrialResult 用 SQL 终局里的结果记录处理一局超时未结算的对局。返回 true = 这条记录处理完了
 // (已结算,或判定为重复 / 帮会已解散 / 毒消息等任何"有了定论"的去向)。
 //
 // 记录解不开、或它描述的根本不是这一局(battle_id 不符、不是帮会历练的上下文):这是确定性的坏数据,
-// 把这一局标成 POISON 并销账 —— 否则它会永远停在候选里(有记录就不会被判过期)。
+// 把这一局标成 POISON —— 否则它会永远停在候选里(有记录就不会被判过期)。
 // 结算回暂时性错误时什么都不做,下一轮再来。
 func (l *GuildLogic) recoverTrialResult(ctx context.Context, d *ActivityDeps, row data.OverdueTrialBattle, payload []byte, nowMs uint64, admissions ...*drainproof.Session) bool {
 	hold := func() {

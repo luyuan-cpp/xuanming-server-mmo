@@ -51,7 +51,7 @@ spec:
             description: >-
               每秒约 {{ $value | printf "%.2f" }} 次。在线玩家的进度暂时只在 scene 内存里,库恢复后 scene 的重试自动提交;这段时间不要重启 scene,
               scene 崩溃或停机会丢掉最后一次提交之后的进度。认领失败的玩家重试 30 秒后进场失败。
-              unavailable = 选不了库或打不开库:同时看 GoDbRouteNotTrusted、DbPlacementStoreOpenErrors。
+              unavailable = 选不了库或打不开库:同时看 DbPlacementStoreOpenErrors 和 go/db 日志 `[player_store] resolve storage of player`。
               unknown_outcome = 提交语句出错、结果未知:看 go/db 日志 `[player_store]` 行和数据库(连接数、锁等待、TiDB 的写冲突)。
 
         # 调用方验签失败。scene 的存盘密钥和 go/db 不一致时,这个 zone 的玩家全部存不了盘。

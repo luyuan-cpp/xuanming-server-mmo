@@ -14,7 +14,7 @@
 // but eliminates the "did I forget to set dirty?" bug class entirely.
 //
 // This header is the small, dependency-free building block. The rollout into
-// SavePlayerToRedis itself is staged separately (see
+// SavePlayer itself is staged separately (see
 // docs/design/proto-compare-dirty-save.md) because it interacts with the
 // per-player snapshot retention strategy and that decision needs more
 // thought than a header-only utility.

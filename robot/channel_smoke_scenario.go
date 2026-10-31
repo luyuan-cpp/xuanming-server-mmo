@@ -219,7 +219,7 @@ func RunChannelSmoke(cfg *config.Config) {
 		// 不按 SKIP 处理:单机器人的环境里别的线全都不可选,要么环境坏了(节点判死 / 人数计数没对账),
 		// 要么目录的状态判定有缺陷 —— 后者正是本冒烟要抓的。
 		fail("C3-pick", "This map has %d channels, but no SMOOTH / BUSY channel other than the current one is selectable: %s. "+
-			"UNAVAILABLE = the channel scene node is not alive or the scene:{id}:node mapping is missing; FULL = instance:{id}:player_count reached the per-channel limit %d"+
+			"UNAVAILABLE = the channel scene node is not alive or the scene:{id}:node mapping is missing; FULL = SCARD instance:<id>:members reached the per-channel limit %d"+
 			" (stale counts not being cleared after node death is a known issue, design document section 9 item 3); CLOSING = the channel is being reclaimed",
 			len(firstDir.GetChannels()), channelSmokeDescribe(firstDir), firstDir.GetMaxPlayersPerChannel())
 	}

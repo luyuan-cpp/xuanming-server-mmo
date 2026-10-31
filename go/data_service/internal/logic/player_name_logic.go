@@ -199,10 +199,10 @@ func ReservePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 // cachePlayerNameBestEffort 回填正缓存,失败只记日志。抽出来是因为 Reserve 与
 // BatchGet 的回填口径必须完全一致(同一个 TTL、同样的"失败不影响结果")。
 func cachePlayerNameBestEffort(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, name string) {
-	if svcCtx.Router == nil {
+	if svcCtx.PlayerNameCache == nil {
 		return
 	}
-	if err := svcCtx.Router.SetPlayerNames(ctx,
+	if err := svcCtx.PlayerNameCache.SetPlayerNames(ctx,
 		map[uint64]string{playerID: name}, svcCtx.Config.PlayerName.CacheTTL); err != nil {
 		logx.Errorf("[player-name] cache set failed for player_id=%d (name is already committed in MySQL, "+
 			"read path will refill on next BatchGet): %v", playerID, err)
@@ -312,8 +312,8 @@ func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 		// 留着名字"没有可见后果,而且 CacheTTL 封顶。
 		//
 		// DEL 失败同理不算业务失败(库已经是真相)。
-		if svcCtx.Router != nil {
-			if cacheErr := svcCtx.Router.DelPlayerName(ctx, playerID); cacheErr != nil {
+		if svcCtx.PlayerNameCache != nil {
+			if cacheErr := svcCtx.PlayerNameCache.DelPlayerName(ctx, playerID); cacheErr != nil {
 				logx.Errorf("[player-name] cache del failed for player_id=%d after MySQL delete committed "+
 					"(stale name visible until CacheTTL expires): %v", playerID, cacheErr)
 			}
@@ -437,8 +437,8 @@ func BatchGetPlayerName(ctx context.Context, svcCtx *svc.ServiceContext, ids []u
 		hits   map[uint64]string
 		absent map[uint64]bool
 	)
-	if svcCtx != nil && svcCtx.Router != nil {
-		h, a, err := svcCtx.Router.MGetPlayerNames(ctx, unique)
+	if svcCtx != nil && svcCtx.PlayerNameCache != nil {
+		h, a, err := svcCtx.PlayerNameCache.MGetPlayerNames(ctx, unique)
 		if err != nil {
 			// Redis 挂了只意味着"全部未命中",不该让读接口整体失败:
 			// 真相在 MySQL,回源一次就是了(代价是这段时间 SQL 压力变大)。
@@ -501,7 +501,7 @@ func BatchGetPlayerName(ctx context.Context, svcCtx *svc.ServiceContext, ids []u
 		stillAbsent = append(stillAbsent, id)
 	}
 
-	if svcCtx.Router != nil {
+	if svcCtx.PlayerNameCache != nil {
 		if len(found) > 0 {
 			// 【已知的窄窗口】这一步写的是**读库那一刻**的名字。如果在"读库之后、写缓存
 			// 之前"有一次 Release 提交并 DEL 了缓存,这里的覆盖式 SET 会把那个已经不存在
@@ -510,13 +510,13 @@ func BatchGetPlayerName(ctx context.Context, svcCtx *svc.ServiceContext, ids []u
 			// 不在这里用更短的 TTL 去收窄:那会让帮会成员列表这条真正的热读路径长期多打
 			// SQL,拿确定的成本换一个只在"建角失败补偿/运维清孤儿"时才可能出现、且对象
 			// 是不存在的角色的展示面脏值,不划算。
-			if cacheErr := svcCtx.Router.SetPlayerNames(ctx, found, svcCtx.Config.PlayerName.CacheTTL); cacheErr != nil {
+			if cacheErr := svcCtx.PlayerNameCache.SetPlayerNames(ctx, found, svcCtx.Config.PlayerName.CacheTTL); cacheErr != nil {
 				logx.Errorf("[player-name] cache refill failed for %d names: %v", len(found), cacheErr)
 			}
 		}
 		if len(stillAbsent) > 0 {
 			// 负缓存用 SET NX,永远盖不掉同一时刻刚写进来的真名(§3.5 的时序分析)。
-			if cacheErr := svcCtx.Router.SetPlayerNamesAbsent(ctx, stillAbsent,
+			if cacheErr := svcCtx.PlayerNameCache.SetPlayerNamesAbsent(ctx, stillAbsent,
 				svcCtx.Config.PlayerName.NegativeCacheTTL); cacheErr != nil {
 				logx.Errorf("[player-name] negative cache refill failed for %d ids: %v", len(stillAbsent), cacheErr)
 			}

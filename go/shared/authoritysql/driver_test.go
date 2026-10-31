@@ -580,13 +580,62 @@ func TestWriterDriverAuto1062RollsBackWithoutPoison(t *testing.T) {
 	}
 }
 
-func TestWriterDriverUnproved1213StaysUnknown(t *testing.T) {
-	w := &writerFakeWire{execErr: &mysql.MySQLError{Number: 1213}}
+// 业务语句回死锁、锁等待超时、写冲突:COMMIT 没发,回滚之后结局确定。保留原错误让调用方整笔重试,连接可复用。
+func TestWriterDriverLockAbortKeepsErrorAndConnection(t *testing.T) {
+	for _, number := range []uint16{mysqlErrLockWaitTimeout, mysqlErrDeadlock, tidbErrWriteConflict} {
+		abort := &mysql.MySQLError{Number: number}
+		w := &writerFakeWire{execErr: abort}
+		c := writerFixture(w)
+		_, err := c.ExecContext(context.Background(), "UPDATE t SET n=n+1", nil)
+		if err != abort || errors.Is(err, ErrOutcomeUnknown) || w.rollbacks != 1 || w.commits != 0 || !c.IsValid() {
+			t.Fatalf("%d 应回滚、保留原错误、连接可复用: %v", number, err)
+		}
+	}
+}
+
+// 显式事务里同样结束事务:防下一条语句脱离 slot 落进 autocommit。
+func TestWriterDriverLockAbortEndsExplicitTx(t *testing.T) {
+	abort := &mysql.MySQLError{Number: mysqlErrDeadlock}
+	w := &writerFakeWire{execErr: abort}
+	c := writerFixture(w)
+	tx, err := c.BeginTx(context.Background(), driver.TxOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.ExecContext(context.Background(), "UPDATE t SET n=n+1", nil); err != abort {
+		t.Fatalf("应保留原错误: %v", err)
+	}
+	if w.rollbacks != 1 || w.commits != 0 || !c.IsValid() {
+		t.Fatalf("应已回滚且连接可复用: rollbacks=%d commits=%d", w.rollbacks, w.commits)
+	}
+	// 调用方吞掉错误接着用同一个事务:后面的语句不能落进新的自动事务单独提交。
+	w.execErr = nil
+	if _, err = c.ExecContext(context.Background(), "UPDATE t SET m=1", nil); err != abort {
+		t.Fatalf("事务结束前后面的语句都应回原错误: %v", err)
+	}
+	if w.commits != 0 {
+		t.Fatal("中止之后的语句不能被提交")
+	}
+	if err = tx.Commit(); err != abort {
+		t.Fatalf("事务已结束,Commit 应回原错误: %v", err)
+	}
+	if w.commits != 0 {
+		t.Fatal("不能再发 COMMIT")
+	}
+	// sql.Tx 结束之后连接回到池里,可以正常用。
+	if _, err = c.ExecContext(context.Background(), "UPDATE t SET n=n+1", nil); err != nil {
+		t.Fatalf("事务结束后连接应可复用: %v", err)
+	}
+}
+
+// 没有列在分类里的服务端错误,结局仍按未知处理。
+func TestWriterDriverOtherServerErrorStaysUnknown(t *testing.T) {
+	w := &writerFakeWire{execErr: &mysql.MySQLError{Number: 1105}}
 	c := writerFixture(w)
 	_, err := c.ExecContext(context.Background(), "UPDATE t SET n=n+1", nil)
 	var server *mysql.MySQLError
 	if !errors.Is(err, ErrOutcomeUnknown) || errors.As(err, &server) || c.IsValid() {
-		t.Fatalf("未证明的目标Tx-abort不可伪称可重试: %v", err)
+		t.Fatalf("未分类的错误不可伪称可重试: %v", err)
 	}
 }
 

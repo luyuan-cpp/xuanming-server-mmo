@@ -24,6 +24,7 @@ func (r *GuildRepo) ConfigureMatchAuthority(schema string, backend authoritysql.
 		"SELECT player_id,state,ticket,request_id,formation_id,mode,config_id,team_size,enqueued_ms,not_before_ms,zone_id,rating_centi,team_id,network_profile,expires_ms,selected_region,preferred_region FROM `" + schema + "`.match_authority_ticket LIMIT 0",
 		"SELECT actor_id,request_high,request_low,player_id,state FROM `" + schema + "`.team_launch_role LIMIT 0",
 		"SELECT actor_id,request_high,request_low,state FROM `" + schema + "`.team_launch LIMIT 0",
+		"SELECT battle_id,raw_payload,decision FROM `" + schema + "`.match_battle_completion LIMIT 0",
 	} {
 		rows, err := r.db.QueryContext(ctx, query)
 		if err != nil {

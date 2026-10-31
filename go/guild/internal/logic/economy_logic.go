@@ -9,7 +9,7 @@ package logic
 //     快照里没有本人时以 MySQL 复核(ResolvePlayerGuild);事务回"不是成员 / 帮会不存在"时经 mapWriteErr
 //     调 VerifyPlayerGuildID 自愈。经济 RPC **不查**归属 zone(R4):S2 的申请事务已保证"是成员 ⇒ 归属区一致",
 //     省下的同步预算留给 scene 同步投递。
-//  2. (已删:事务内的合服闸门。别名合服不再有闸门,公会合并任务在维护窗口里只影响公会自己;其余纪律编号不变)
+//  2. (已删:事务内的合服闸门。合服只写一条映射,不动公会行,不需要闸门;其余纪律编号不变)
 //  3. **PENDING 不是错误**:scene 暂时不可达时指令留在 outbox 由重投循环接手,玩家看到的是视图里的
 //     "结算中",不是 error_message —— 客户端遇到任何非 0 tip 都会中断后续刷新(05 §5.4)。
 //  4. **业务拒绝回 tip,故障回 gRPC 错误**(沿用 guild_manage_logic.go 的纪律 3)。
@@ -685,7 +685,7 @@ func (l *GuildLogic) OnAssetFinalized(ctx context.Context, op data.FinalizedOp) 
 // 去重记录(guild_client_request)与指令行、计数、扣帮贡在同一个预留事务里提交,寿命见 guild_db.proto 的 GuildClientRequestRecord。
 //
 // 三道检查,少一道都会在某个窗口里重复执行或答非所问:
-//  1. 前置之前先查(replay*):首次已提交就直接按它答复 —— 哪怕玩家此后已离帮、帮会已解散、资产通道已关、正在合服,
+//  1. 前置之前先查(replay*):首次已提交就直接按它答复 —— 哪怕玩家此后已离帮、帮会已解散、资产通道已关,
 //     那笔指令也确实发生了;回"未入帮"会让客户端以为没扣。
 //  2. 预留事务在锁住本人成员行之后复核(data.ErrClientRequestReplayed):首次与重发并发在途时,成员行把两者排成一列,
 //     后到者在锁内读到先到者已提交的记录,整体回滚(白烧一个 op_id,号段只进不退,可以接受)。

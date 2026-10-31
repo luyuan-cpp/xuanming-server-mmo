@@ -65,10 +65,11 @@ func seedHolderInZone1MissingLoadSet(t *testing.T, sc *svc.ServiceContext, mr *m
 	t.Helper()
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, oldScene), "10")
 	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, oldScene), "1")
-	mr.Set(fmt.Sprintf(InstancePlayerCountKey, oldScene), "5")
+	seedSceneMembers(mr, oldScene, 5)
 	raw := identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: oldScene, NodeId: "10", ZoneId: 1, OwnerEpoch: 1, UpdateTime: 100,
 	})
+	adoptSceneMember(mr, oldScene, playerID)
 	require.False(t, mr.Exists(nodeLoadKey(1)), "前提:zone 1 的负载集整键不存在")
 	return raw
 }
@@ -89,7 +90,7 @@ func TestEnterScene_MissingLoadSetWhileZoneRegisteredKeepsHandoffGate(t *testing
 	registerKnownNodeForTest(t, "SceneNodeService.rpc/stale-z2-20", 2, "20")
 	locRaw := seedHolderInZone1MissingLoadSet(t, sc, mr, playerID, oldScene)
 	seedSceneOnNode(mr, 2, targetID, "20", "3")
-	mr.Set(nodePlayerCountKey(2, "20"), "8")
+	seedNodeMembers(mr, 2, "20", 8)
 	withReachableSceneNode(t, sc, "20")
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
@@ -104,9 +105,9 @@ func TestEnterScene_MissingLoadSetWhileZoneRegisteredKeepsHandoffGate(t *testing
 	assert.Equal(t, locRaw, identLocationRaw(t, sc, playerID), "location 一个字节都不改")
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "不得铸造新 epoch")
 	assert.Empty(t, *captured, "不得发路由")
-	assert.Equal(t, "3", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, targetID)))
-	assert.Equal(t, "8", identValue(t, sc, nodePlayerCountKey(2, "20")))
-	assert.Equal(t, "5", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, oldScene)))
+	assert.Equal(t, "3", sceneCountText(sc, targetID))
+	assert.Equal(t, "8", nodeCountText(sc, 2, "20"))
+	assert.Equal(t, "5", sceneCountText(sc, oldScene))
 }
 
 // 登录不指定去向(ZoneId = 0、SceneId = 0),从 zone 2 的 gate 进来;位置记在 zone 1 的 node 10,zone 1 的负载集整键丢失。
@@ -142,7 +143,7 @@ func TestEnterScene_LoginOverMissingLoadSetDecidedByRegistry(t *testing.T) {
 			t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
 			mr.SAdd(worldChannelsKey(2, defaultConf), fmt.Sprintf("%d", defaultID))
 			seedSceneOnNode(mr, 2, defaultID, "20", "0")
-			mr.Set(nodePlayerCountKey(2, "20"), "0")
+			seedNodeMembers(mr, 2, "20", 0)
 			withReachableSceneNode(t, sc, "20")
 
 			logic := NewEnterSceneLogic(context.Background(), sc)
@@ -163,7 +164,7 @@ func TestEnterScene_LoginOverMissingLoadSetDecidedByRegistry(t *testing.T) {
 				assert.Equal(t, []uint32{1}, redirectZones)
 				assert.Equal(t, locRaw, identLocationRaw(t, sc, playerID), "只送连接,不改 location")
 				assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "不得铸造新 epoch")
-				assert.Equal(t, "0", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, defaultID)), "不得在 gate zone 预占")
+				assert.Equal(t, "0", sceneCountText(sc, defaultID), "不得在 gate zone 预占")
 				return
 			}
 			assert.Nil(t, resp.Redirect)
@@ -176,7 +177,7 @@ func TestEnterScene_LoginOverMissingLoadSetDecidedByRegistry(t *testing.T) {
 			assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "陈旧位置被过滤后按首次落点铸造")
 			event := decodeRoutePlayerEvent(t, (*captured)[0])
 			assert.Equal(t, uint64(2), event.GetOwnerEpoch())
-			assert.Equal(t, "5", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, oldScene)), "下线 zone 的旧场景计数不去碰")
+			assert.Equal(t, "5", sceneCountText(sc, oldScene), "下线 zone 的旧场景计数不去碰")
 		})
 	}
 }

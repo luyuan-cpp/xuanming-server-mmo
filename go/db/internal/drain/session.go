@@ -3,8 +3,8 @@ package drain
 
 import (
 	"context"
-	"db/internal/barrierrestore"
 	"db/internal/logic/pkg/proto_sql"
+	"db/internal/maintenancephase"
 	"errors"
 	"shared/drainproof"
 	"time"
@@ -27,7 +27,7 @@ func runOwners(ctx context.Context, runtime *drainproof.Runtime, stores *proto_s
 	if runtime == nil || stores == nil {
 		return drainproof.ErrHold
 	}
-	if err := barrierrestore.ValidateAuthorityPlan(runtime.Plan); err != nil {
+	if err := maintenancephase.ValidateAuthorityPlan(runtime.Plan); err != nil {
 		return err
 	}
 	source, relay := drainproof.New(), drainproof.New()

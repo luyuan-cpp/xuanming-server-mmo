@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"shared/drainproof"
+	"shared/playerredis"
 	"slices"
 	"time"
 
@@ -83,7 +84,7 @@ type KafkaGuildNotifier struct {
 	admission *drainproof.Session
 	writer    *kafkago.Writer
 	builder   kafkautil.GateCommandBuilder
-	sessions  *redis.Client // svcCtx.PlayerLocatorRedisClient,读 player:session:*
+	sessions  redis.UniversalClient // svcCtx.PlayerRedis,读 player:session:*
 	// messageID 固定为 NotifyGuildChanged 的客户端消息号;存字段而不是每次现取,
 	// 是为了让"推送用的是哪个号"在构造处一眼可见。
 	messageID uint32
@@ -94,7 +95,7 @@ type KafkaGuildNotifier struct {
 // 必须在这里判:kafkautil.PushToPlayer 不判 nil writer(go/shared/kafkautil/gate_push.go),
 // 真拿 nil writer 去 WriteMessages 会 panic 在推送协程里 —— 那是配置缺失,
 // 不该表现为运行期崩溃。打 Info 而不是 Error:本地开发不配 Kafka 是正常形态。
-func NewGuildNotifier(w *kafkago.Writer, b kafkautil.GateCommandBuilder, sessions *redis.Client, admissions ...*drainproof.Session) GuildNotifier {
+func NewGuildNotifier(w *kafkago.Writer, b kafkautil.GateCommandBuilder, sessions redis.UniversalClient, admissions ...*drainproof.Session) GuildNotifier {
 	var gate *drainproof.Session
 	if len(admissions) > 1 {
 		panic("公会通知角色重复")
@@ -191,12 +192,12 @@ func (n *KafkaGuildNotifier) Notify(change *pb.GuildChangedS2C, recipients []uin
 	})
 }
 
-// loadGateInfos:MGET player:session:*,返回在线者的网关路由信息与离线人数。
+// loadGateInfos:按 slot 分组 MGET 会话键,返回在线者的网关路由信息与离线人数。
 //
 // "推不出去"一律按离线计(返回值的第二项),不单独分类:对调用方来说
 // 离线、会话解不开、缺实例 id 的处置完全相同 —— 都是这一批不发给他。
 // ids 必须已经去重且不含 0(由 uniqueNonZero 保证)。
-func loadGateInfos(ctx context.Context, rdb *redis.Client, ids []uint64) ([]kafkautil.PlayerGateInfo, int, error) {
+func loadGateInfos(ctx context.Context, rdb redis.UniversalClient, ids []uint64) ([]kafkautil.PlayerGateInfo, int, error) {
 	if rdb == nil || len(ids) == 0 {
 		return nil, 0, nil
 	}
@@ -205,7 +206,7 @@ func loadGateInfos(ctx context.Context, rdb *redis.Client, ids []uint64) ([]kafk
 	for _, playerID := range ids {
 		keys = append(keys, playerSessionKey(playerID))
 	}
-	values, err := rdb.MGet(ctx, keys...).Result()
+	values, err := playerredis.MGetBySlot(ctx, rdb, keys)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -246,7 +247,7 @@ func loadGateInfos(ctx context.Context, rdb *redis.Client, ids []uint64) ([]kafk
 // uniqueNonZero 去重并丢掉 0,保持首次出现的顺序。
 //
 // 丢 0 是必须的:收件人由"快照成员 - 操作者"之类的集合运算得来,
-// 0 表示"没有这个人"(比如解散时 target=0),拿去拼 player:session:0 只会白读一次 Redis。
+// 0 表示"没有这个人"(比如解散时 target=0),拿去拼 player:session:{0} 只会白读一次 Redis。
 func uniqueNonZero(ids []uint64) []uint64 {
 	if len(ids) == 0 {
 		return nil

@@ -145,7 +145,7 @@ func (r *DataServicePlayerNames) BatchResolve(ctx context.Context, playerIDs []u
 
 // resolveNames 是 l.playerNames 的 nil 安全包装,所有填充点都经它取名。
 //
-// 未注入 resolver(没配 DataServiceRpc,或单测)时返回 nil map:对 nil map 按键取值
+// 未注入 resolver(单测)时返回 nil map:对 nil map 按键取值
 // 得到零值 "",正好是"名字留空"的语义,调用方不必再判空。
 func (l *GuildLogic) resolveNames(ctx context.Context, playerIDs []uint64) map[uint64]string {
 	if l.playerNames == nil || len(playerIDs) == 0 {

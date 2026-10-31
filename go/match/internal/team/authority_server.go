@@ -31,9 +31,6 @@ type AuthorityServer struct {
 }
 
 func NewAuthorityServer(s *svc.ServiceContext) (*AuthorityServer, error) {
-	if s.Authority == nil {
-		return nil, nil
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := s.Authority.CheckTeamRouteContract(ctx); err != nil {
@@ -53,9 +50,6 @@ func (s *AuthorityServer) ReadMembership(ctx context.Context, request *teampb.Re
 	}
 	if _, ok := ctxkeys.GetSessionDetails(ctx); ok {
 		return nil, status.Error(codes.PermissionDenied, "仅允许场景内部调用")
-	}
-	if s == nil || s.verifier == nil {
-		return nil, status.Error(codes.Unavailable, "SQL队伍读取未装配")
 	}
 	caller, err := s.verifier.Verify(ctx, teamMembershipMethod, request)
 	if err != nil || caller != "scene" {

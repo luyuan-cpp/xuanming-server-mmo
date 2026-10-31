@@ -72,8 +72,8 @@ public:
 	//   (含应答前连接就被关闭,那时另有一条断线 ERROR):不移交,对业务等同于「Redis 不可用」;每个重连间隔在回调栈外
 	//   重建握手连接再试一次。每次失败打一条带 metric=zone_redis_auth_failed 的 ERROR:被拒、发不出去当场打,
 	//   没有应答在截止时打("Redis AUTH timed out on ...")。告警按这个标记抓。
-	//   不能放行未认证的连接(fail-open):部分调用方把 ERROR 应答当业务结论处理,例如 battle 结算外发箱
-	//   (BattleRoomManager::ProbeAndRetryOne)把非预期应答当成已销账并删条目,NOAUTH 会被误读成玩家资产结论。
+	//   不能放行未认证的连接(fail-open):部分调用方把 ERROR 应答当业务结论处理(例如登录读战斗锁时 ERROR 按无锁),
+	//   NOAUTH 会被误读成业务结论。
 	// - Hiredis::command() 在未连接时直接返回 REDIS_ERR,不会把命令缓存到连上之后,
 	//   所以不存在「建连前排队的命令跑到 AUTH 前面」的情况。
 	// - 口令只在 AUTH 命令里出现,任何日志都不打印它;服务端错误文本里含口令原文时遮掉。
@@ -173,4 +173,6 @@ private:
 	std::shared_ptr<LifetimeToken> lifetimeToken_;           // 见 LifetimeToken;未 Connect 或已 Shutdown 时为空
 };
 
+// 控制域句柄(世界分线目录、神秘商人、PUBLISH assetop:wake)。每个 C++ 节点一条连接。
+// 玩家域键(带 {player_id} 的键)走 tlsPlayerRedis,声明在 infra/storage/redis_cluster/redis_cluster_client.h。
 extern thread_local RedisManager tlsRedis;

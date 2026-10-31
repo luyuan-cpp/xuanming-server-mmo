@@ -6,8 +6,7 @@ package clientplayerloginlogic
 //   - 后台链绑定点看到「期间已离开游戏」→ 删除本次写入的会话;
 //   - Disconnect / LeaveGame 带 player_id = 0(BindSession 还没到 gate)时,用栅栏里绑定的玩家收尾;
 //   - 换角时会话头带的是旧角色(gate 在 LeaveGame 后不清 playerId),栅栏里绑定的新角色也要收尾;
-//   - 绑定报错(结果未知)也补挂断线租约,且补偿不受已取消的链 ctx 影响;
-//   - 旧版 gate(没有会话代次)完全不碰栅栏。
+//   - 绑定报错(结果未知)也补挂断线租约,且补偿不受已取消的链 ctx 影响。
 
 import (
 	"context"
@@ -104,15 +103,14 @@ func newFenceWiring(t *testing.T) (*svc.ServiceContext, *redis.Client, *fenceLoc
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 	locator := &fenceLocator{}
-	return &svc.ServiceContext{RedisClient: rdb, AccountDirectory: fixtureDirectory(t, rdb), PlayerLocatorClient: locator}, rdb, locator
+	return &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), PlayerLocatorClient: locator}, rdb, locator
 }
 
-func fenceWiringState(fenced bool, gen uint64) enterGameSessionState {
+func fenceWiringState(gen uint64) enterGameSessionState {
 	return enterGameSessionState{
 		playerID:       fenceWiringPlayerID,
 		sessionID:      fenceWiringSessionID,
 		gateInstanceID: fenceWiringGate,
-		fenced:         fenced,
 		fenceKey:       fenceWiringKey,
 		fenceGen:       gen,
 	}
@@ -128,7 +126,7 @@ func TestBindSessionFence_ClosedBeforeBindPlacesDisconnectLease(t *testing.T) {
 	require.NoError(t, err)
 
 	l := NewEnterGameLogic(ctx, svcCtx)
-	err = l.bindSessionFence(ctx, fenceWiringState(true, gen))
+	err = l.bindSessionFence(ctx, fenceWiringState(gen))
 	require.Error(t, err, "连接已关闭时后台链必须按失败收尾,不发 BindSession、不进场")
 	require.Len(t, locator.disconnecting, 1, "必须由后台链补挂断线租约,否则玩家永久停在 ONLINE")
 	require.Equal(t, fenceWiringPlayerID, locator.disconnecting[0].GetPlayerId())
@@ -147,7 +145,7 @@ func TestBindSessionFence_LeftDuringChainRemovesSession(t *testing.T) {
 	locator.current = &plpb.PlayerSession{SessionId: fenceWiringSessionID, SessionVersion: 3}
 
 	l := NewEnterGameLogic(ctx, svcCtx)
-	err = l.bindSessionFence(ctx, fenceWiringState(true, gen))
+	err = l.bindSessionFence(ctx, fenceWiringState(gen))
 	require.Error(t, err)
 	require.Len(t, locator.markedOffline, 1, "期间离开过游戏,本次写入的会话必须删掉")
 	require.Equal(t, fenceWiringPlayerID, locator.markedOffline[0].GetPlayerId())
@@ -155,19 +153,14 @@ func TestBindSessionFence_LeftDuringChainRemovesSession(t *testing.T) {
 	require.Empty(t, locator.disconnecting)
 }
 
-func TestBindSessionFence_OpenConnectionBindsAndLegacyGateSkips(t *testing.T) {
+func TestBindSessionFence_OpenConnectionBinds(t *testing.T) {
 	ctx := context.Background()
 	svcCtx, rdb, locator := newFenceWiring(t)
 	l := NewEnterGameLogic(ctx, svcCtx)
 
-	require.NoError(t, l.bindSessionFence(ctx, fenceWiringState(false, 0)), "旧版 gate 不碰栅栏")
-	exists, err := rdb.Exists(ctx, "login:sessfence:"+fenceWiringGate+":42").Result()
-	require.NoError(t, err)
-	require.Zero(t, exists)
-
 	_, gen, err := sessionfence.CheckEnterGame(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, sessionFenceTTL)
 	require.NoError(t, err)
-	require.NoError(t, l.bindSessionFence(ctx, fenceWiringState(true, gen)))
+	require.NoError(t, l.bindSessionFence(ctx, fenceWiringState(gen)))
 	bound, err := sessionfence.Close(ctx, rdb, fenceWiringKey, sessionFenceTTL)
 	require.NoError(t, err)
 	require.Equal(t, fenceWiringPlayerID, bound, "绑定成功之后,Disconnect 能从栅栏读到玩家")
@@ -287,7 +280,7 @@ func TestBindSessionFence_BindErrorPlacesDisconnectLeaseEvenIfChainCanceled(t *t
 	chainCtx, chainCancel := context.WithCancel(context.Background())
 	chainCancel()
 	l := NewEnterGameLogic(chainCtx, svcCtx)
-	err = l.bindSessionFence(chainCtx, fenceWiringState(true, gen))
+	err = l.bindSessionFence(chainCtx, fenceWiringState(gen))
 	require.Error(t, err)
 	require.Equal(t, []uint64{fenceWiringPlayerID}, locator.disconnectingPlayers())
 	require.Empty(t, locator.markedOffline)
@@ -374,7 +367,7 @@ func TestCompensateFenceBind_CarriesChainGateInstance(t *testing.T) {
 		_, err = sessionfence.Close(ctx, rdb, fenceWiringKey, sessionFenceTTL)
 		require.NoError(t, err)
 
-		err = NewEnterGameLogic(ctx, svcCtx).bindSessionFence(ctx, fenceWiringState(true, gen))
+		err = NewEnterGameLogic(ctx, svcCtx).bindSessionFence(ctx, fenceWiringState(gen))
 		require.Error(t, err)
 		require.Equal(t, []uint64{fenceWiringPlayerID}, locator.disconnectingPlayers())
 		requireSetDisconnectingInstances(t, locator, fenceWiringGate)
@@ -389,7 +382,7 @@ func TestCompensateFenceBind_CarriesChainGateInstance(t *testing.T) {
 		// 本链刚写下的记录就是本链实例号,player_locator 的实例号校验放行。
 		locator.current = &plpb.PlayerSession{SessionId: fenceWiringSessionID, SessionVersion: 3, GateInstanceId: fenceWiringGate}
 
-		err = NewEnterGameLogic(ctx, svcCtx).bindSessionFence(ctx, fenceWiringState(true, gen))
+		err = NewEnterGameLogic(ctx, svcCtx).bindSessionFence(ctx, fenceWiringState(gen))
 		require.Error(t, err)
 		require.Equal(t, []uint64{fenceWiringPlayerID}, locator.markedOfflinePlayers())
 		requireMarkOfflineInstances(t, locator, fenceWiringGate)

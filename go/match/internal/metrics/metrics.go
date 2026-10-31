@@ -32,7 +32,7 @@ var (
 	}, []string{"mode", "outcome"})
 
 	// gatherZoneMix 回答"跨 zone 对局占比":组内成员 zone 去重数 ==1 记 single,
-	// 否则 cross(设计决策 D8;queue_depth 不加 zone 标签,队列本就不分 zone)。
+	// 否则 cross(设计决策 D8)。
 	gatherZoneMix = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "gather_zone_mix_total",
@@ -67,12 +67,6 @@ var (
 		Help:      "Challenge flow events by stage (invite|respond) and outcome.",
 	}, []string{"stage", "outcome"})
 
-	queueDepth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "queue_depth",
-		Help:      "Current Redis queue length per (mode, battle_config_id, team_size). Config ids are bounded table ids, not player ids; team_size is the PVE party-size tier (2..5), 0 for queues without one.",
-	}, []string{"mode", "config", "team_size"})
-
 	discoveredNodes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "discovered_nodes",
@@ -85,17 +79,16 @@ var (
 		Help:      "Challenge S2C pushes via gate Kafka by outcome (ok|error).",
 	}, []string{"outcome"})
 
-	// watchBattleTotal WatchBattle 每个出口记一次(Redis 与全局两条路径同一组标签;一个进程只走一条路径)。
-	// full = battle 回观众席位已满;closed = 全局路径重放已关闭且未记录原因的原请求;
-	// pending = 全局路径原操作尚未拿到 battle 的终局证明,复用原 request_id 重试;internal 含参数错与服务端故障;
-	// private = Redis 路径按 battle_id 指定了私密局(可见性闸,客户端收到的与 not_found 相同,不泄露存在性)。
+	// watchBattleTotal WatchBattle 每个出口记一次。
+	// full = 观众席位已满;closed = 重放已关闭且未记录原因的原请求;
+	// pending = 原操作尚未拿到 battle 的终局证明,复用原 request_id 重试;internal 含参数错与服务端故障;
 	// ok = L0 直连席准入;lobby = L1 / L2 准入(凭观战凭证经大厅连接收帧,battle-spectate-tiered-fanout.md §15.6)。
-	// 口径差异:全局路径的 outcome 由意图上持久化的客户端 tip 推出,16018(成局已变 / 准入截止 / 私密局 / battle 的
-	// 各类拒绝,含房间不存在)一律记 not_found,不出 rejected / private;Redis 路径对 battle 的非「房间不存在」拒绝记 rejected。
+	// outcome 由意图上持久化的客户端 tip 推出,16018(成局已变 / 准入截止 / 私密局 / battle 的各类拒绝,含房间不存在)
+	// 一律记 not_found;rejected 只留给意图上不认识的关闭原因。
 	watchBattleTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "watch_battle_total",
-		Help:      "WatchBattle requests by outcome (ok|lobby|queued|in_battle|already_watching|offline|no_battle|not_found|private|rejected|full|closed|pending|internal). Global path counts every 16018 close as not_found.",
+		Help:      "WatchBattle requests by outcome (ok|lobby|queued|in_battle|already_watching|offline|no_battle|not_found|rejected|full|closed|pending|internal). Every 16018 close counts as not_found.",
 	}, []string{"outcome"})
 
 	// spectateTierTotal 观众按档位的准入次数:回答「观众都落在哪一档」,与 watch_battle_total 的 ok / lobby 同口径,
@@ -130,51 +123,24 @@ var (
 		Help:      "Closed non-head match_spectator_intent rows deleted by the retention purge.",
 	})
 
-	// requestBattleTicketTotal 丢票补签(MatchService.RequestBattleTicket → BattleNode.IssueBattleTicket)
-	// 的出口分布:rejected = battle 核对名单后拒签,no_node = 观战索引指向的 battle 节点未发现。
+	// requestBattleTicketTotal 丢票补签(MatchService.RequestBattleTicket)入口的结论:
+	// rejected = 业务拒绝(成局不属于本人、已结束等),internal = 服务端故障,no_session = 缺玩家身份。
 	requestBattleTicketTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "request_battle_ticket_total",
-		Help:      "RequestBattleTicket requests by outcome (ok|no_session|not_found|no_node|rpc_error|rejected|internal).",
+		Help:      "RequestBattleTicket requests by outcome (ok|no_session|rejected|internal).",
 	}, []string{"outcome"})
 
 	// ---- 评分匹配(设计文档 §11)----
 
 	// ratingUpdateTotal 对局结果回流(Kafka match-results)的入账结果:
 	// applied 已更新 / duplicate 重复投递 / ignored 不计分(PVE、未结束等)/
-	// partial 只落账了一部分玩家(标记留 applying,等重投续写)/
-	// error Redis 出错(一人未写)/ decode_error 反序列化失败。
+	// error SQL 事务失败,消息不提交、重投续做 / decode_error 反序列化失败。
 	ratingUpdateTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "rating_update_total",
-		Help:      "Battle result events consumed from Kafka by mode and outcome (applied|duplicate|ignored|partial|error|decode_error); error also covers a failed leaderboard snapshot publish (all members applied, marker left applying for retry).",
+		Help:      "Battle result events consumed from Kafka by mode and outcome (applied|duplicate|ignored|error|decode_error).",
 	}, []string{"mode", "outcome"})
-
-	// groupRatingSpread 每次凑组成功时组内最高分与最低分之差:分布右移说明
-	// 容差放宽得太快或某段位人太少。
-	groupRatingSpread = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: subsystem,
-		Name:      "group_rating_spread",
-		Help:      "Max minus min rating inside each formed group, by mode.",
-		Buckets:   []float64{0, 25, 50, 100, 200, 300, 500, 800, 1000, 1600},
-	}, []string{"mode"})
-
-	// waitSeconds 凑组成功时锚点(队首)已等待的秒数:回答"评分匹配让人多等了多久"。
-	waitSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: subsystem,
-		Name:      "wait_seconds",
-		Help:      "Seconds the anchor (queue head) waited before its group formed, by mode.",
-		Buckets:   []float64{1, 2, 5, 10, 20, 30, 45, 60, 120, 300},
-	}, []string{"mode"})
-
-	// starvedAnchorWait 本轮 popGroup 尝试过却凑不到候选的锚点里等得最久的秒数
-	// (0 = 没有这样的锚点):wait_seconds 只在成组时记样本,饥饿中的锚点在
-	// 那里不可见;这条 gauge 持续上升就是"容差 / 人数不够,有人在饿"。
-	starvedAnchorWait = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "starved_anchor_wait_seconds",
-		Help:      "Longest wait (seconds) among anchors the last matcher round tried but could not fill, per (mode, config, team_size); 0 when none.",
-	}, []string{"mode", "config", "team_size"})
 
 	// ratingRoundCapDraw PVP 队列模式回合打满(total_rounds >= RatingDrawRoundCap)
 	// 被改按平局结算的局数:C++ 引擎回合打满一律判 SIDE_B_WIN,match 侧纠正。
@@ -186,14 +152,13 @@ var (
 
 	// ---- 活动开局(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.18.3)----
 
-	// activityBattleTotal MatchInternal.StartActivityBattle 的结果。result 分两类:
-	//   - 同步出口(每个请求恰好记一个):started / invalid / offline / in_battle / not_ready / internal;
-	//   - started 之后异步 gather 的终态:gather_ok / gather_failed(失败细分看 match_gather_total{mode="MATCH_MODE_PVE_TEAM"})。
+	// activityBattleTotal MatchInternal.StartActivityBattle 的同步出口,每个请求恰好记一个:
+	// started / invalid / offline / in_battle / not_ready / internal。开局终态看 match_gather_total{mode="MATCH_MODE_PVE_TEAM"}。
 	// kind = 活动类型短名(guild_trial / none / unknown),由调用方从枚举收敛,**不含** player_id / guild_id / battle_id。
 	activityBattleTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "activity_battle_total",
-		Help:      "MatchInternal.StartActivityBattle results by activity kind and result (started|invalid|offline|in_battle|not_ready|internal|gather_ok|gather_failed).",
+		Help:      "MatchInternal.StartActivityBattle results by activity kind and result (started|invalid|offline|in_battle|not_ready|internal).",
 	}, []string{"kind", "result"})
 
 	// ---- 组队(team-system.md §G.3)----
@@ -213,13 +178,6 @@ var (
 		Name:      "commit_retry_total",
 		Help:      "Team record commit retries after a version conflict, by op.",
 	}, []string{"op"})
-
-	// teamHealTotal 单 key 丢失 / 记录与索引矛盾时的自愈次数(按自愈类型,§C.6)。
-	teamHealTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: teamSubsystem,
-		Name:      "heal_total",
-		Help:      "Team storage self-heal actions (missing index rebuilt, orphan index cleared, ...), by kind.",
-	}, []string{"kind"})
 
 	// teamPushTotal 组队 S2C 推送结果(kind = snapshot|invite|event 之类的固定值)。
 	teamPushTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -260,19 +218,33 @@ var (
 	})
 )
 
+// match_merged_zone_refresh_total{result} 的取值:定时重读 zone_merged_into 的结局(placement.MergedZoneCache)。
+const (
+	MergedZoneRefreshOK    = "ok"
+	MergedZoneRefreshError = "error"
+)
+
+// mergedZoneRefreshTotal:result="error" 持续上涨 = 这个副本在用旧映射。合服之后它会把两个区当成不同的区,
+// 回一次可重试的拒绝;刷新恢复后自己回到正确。与 guild、trade、data_service 的 *_merged_zone_refresh_total 同一形状。
+var mergedZoneRefreshTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: subsystem,
+	Name:      "merged_zone_refresh_total",
+	Help:      "Periodic reads of zone_merged_into by result (ok|error). On error the previous mapping stays in use.",
+}, []string{"result"})
+
 var registerOnce sync.Once
 
 func register() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(
 			globalFlowTotal, probeRTT,
+			mergedZoneRefreshTotal,
 			joinQueueTotal,
 			gatherTotal,
 			gatherDuration,
 			gatherZoneMix,
 			tableFingerprintMismatch,
 			challengeTotal,
-			queueDepth,
 			discoveredNodes,
 			kafkaPushTotal,
 			watchBattleTotal,
@@ -282,14 +254,10 @@ func register() {
 			spectatorIntentPurgedTotal,
 			requestBattleTicketTotal,
 			ratingUpdateTotal,
-			groupRatingSpread,
-			waitSeconds,
-			starvedAnchorWait,
 			ratingRoundCapDraw,
 			activityBattleTotal,
 			teamRPCTotal,
 			teamCommitRetryTotal,
-			teamHealTotal,
 			teamPushTotal,
 			teamSceneRefreshTotal,
 			teamMatchTotal,
@@ -304,10 +272,20 @@ func register() {
 func ObserveGlobalFlow(stage, outcome string) { globalFlowTotal.WithLabelValues(stage, outcome).Inc() }
 func ObserveProbeRTT(ms uint32)               { probeRTT.Observe(float64(ms)) }
 
-// SetStarvedAnchorWait 更新某队列本轮凑不到候选的锚点的最长等待秒数(0 = 无)。
-// teamSize 是 PVE 人数档("2".."5";没有人数档的队列传 "0"),见 SetQueueDepth。
-func SetStarvedAnchorWait(mode string, config string, teamSize string, seconds float64) {
-	starvedAnchorWait.WithLabelValues(mode, config, teamSize).Set(seconds)
+// PrimeMergedZoneRefresh 预置两条序列为 0:否则「从未出错」和「指标不存在」在告警规则里长得一样。
+func PrimeMergedZoneRefresh() {
+	mergedZoneRefreshTotal.WithLabelValues(MergedZoneRefreshOK).Add(0)
+	mergedZoneRefreshTotal.WithLabelValues(MergedZoneRefreshError).Add(0)
+}
+
+// ObserveMergedZoneRefresh 记一次定时重读的结局。result 取 MergedZoneRefresh* 常量。
+func ObserveMergedZoneRefresh(result string) {
+	mergedZoneRefreshTotal.WithLabelValues(result).Inc()
+}
+
+// MergedZoneRefreshValue 读回某个结局的计数(单测断言用)。
+func MergedZoneRefreshValue(result string) float64 {
+	return counterVecValue(mergedZoneRefreshTotal, result)
 }
 
 // ObserveRatingRoundCapDraw 记录一局回合打满被改按平局结算。
@@ -336,16 +314,6 @@ func RatingUpdateValue(mode string, outcome string) float64 {
 		return 0
 	}
 	return m.GetCounter().GetValue()
-}
-
-// ObserveGroupRatingSpread 记录一次凑组的组内最大分差。
-func ObserveGroupRatingSpread(mode string, spread float64) {
-	groupRatingSpread.WithLabelValues(mode).Observe(spread)
-}
-
-// ObserveMatchWait 记录一次凑组时锚点已等待的秒数。
-func ObserveMatchWait(mode string, seconds float64) {
-	waitSeconds.WithLabelValues(mode).Observe(seconds)
 }
 
 // ObserveJoinQueue 记录一次 JoinQueue 请求结果。
@@ -387,13 +355,6 @@ func TableFingerprintMismatchValue(mode string) float64 {
 // ObserveChallenge 记录挑战链路某一阶段的结果。
 func ObserveChallenge(stage string, outcome string) {
 	challengeTotal.WithLabelValues(stage, outcome).Inc()
-}
-
-// SetQueueDepth 更新某个队列的当前长度(matcher loop 扫描时刷新)。
-// teamSize 是 PVE 人数档("2".."5";没有人数档的队列传 "0"):同一副本的各人数档是互不相干的队列,
-// 少了这个标签它们会互相覆盖同一条时间序列。取值只有个位数种,不是高基数标签。
-func SetQueueDepth(mode string, config string, teamSize string, depth int) {
-	queueDepth.WithLabelValues(mode, config, teamSize).Set(float64(depth))
 }
 
 // SetDiscoveredNodes 更新节点发现缓存规模。
@@ -487,7 +448,7 @@ func ObserveRequestBattleTicket(outcome string) {
 
 // ---- 活动开局(guild-phase2 §6.18.3)----
 
-// ObserveActivityBattle 记录一次活动开局的同步出口或异步 gather 终态(label 取值见 activityBattleTotal)。
+// ObserveActivityBattle 记录一次活动开局的同步出口(label 取值见 activityBattleTotal)。
 func ObserveActivityBattle(kind string, result string) {
 	activityBattleTotal.WithLabelValues(kind, result).Inc()
 }
@@ -507,11 +468,6 @@ func ObserveTeamRPC(method string, outcome string) {
 // ObserveTeamCommitRetry 记录一次提交冲突后的重试(op = 操作名)。
 func ObserveTeamCommitRetry(op string) {
 	teamCommitRetryTotal.WithLabelValues(op).Inc()
-}
-
-// ObserveTeamHeal 记录一次存储自愈(kind = 自愈类型)。
-func ObserveTeamHeal(kind string) {
-	teamHealTotal.WithLabelValues(kind).Inc()
 }
 
 // ObserveTeamPush 记录一次组队 S2C 推送结果。
@@ -555,10 +511,6 @@ func TeamRPCValue(method string, outcome string) float64 {
 
 func TeamCommitRetryValue(op string) float64 {
 	return counterVecValue(teamCommitRetryTotal, op)
-}
-
-func TeamHealValue(kind string) float64 {
-	return counterVecValue(teamHealTotal, kind)
 }
 
 func TeamPushValue(kind string, outcome string) float64 {

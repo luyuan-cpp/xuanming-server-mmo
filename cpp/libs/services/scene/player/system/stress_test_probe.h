@@ -3,7 +3,7 @@
 // Scene-side stamping for the data-consistency stress probe.
 //
 // When the env var STRESS_TEST_PROBE=1 is set at process start, every call
-// to SavePlayerToRedis stamps each sub-table message with a monotonic
+// to SavePlayer stamps each sub-table message with a monotonic
 // per-(player_id, msg_type) counter and a deterministic 16-byte signature
 // over (player_id || msg_type || test_seq). The Go-side verifier
 // (go/db/cmd/verifier) re-validates the signature and uses test_seq to

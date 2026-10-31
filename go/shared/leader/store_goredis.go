@@ -58,6 +58,24 @@ func GoRedisMaxCallDuration(opts *redis.Options) time.Duration {
 	return opts.ReadTimeout + opts.WriteTimeout
 }
 
+// UniversalMaxCallDuration 是 GoRedisMaxCallDuration 的 UniversalClient 版,给拿着玩家域句柄的锁用。
+// ClusterOptions 的超时字段与 Options 同样在构造时归一化,判定规则一致;认不出的客户端类型按 UnboundedCall 算,只会让心跳更早降级。
+func UniversalMaxCallDuration(c redis.UniversalClient) time.Duration {
+	switch client := c.(type) {
+	case *redis.Client:
+		return GoRedisMaxCallDuration(client.Options())
+	case *redis.ClusterClient:
+		opts := client.Options()
+		return GoRedisMaxCallDuration(&redis.Options{
+			ReadTimeout:           opts.ReadTimeout,
+			WriteTimeout:          opts.WriteTimeout,
+			ContextTimeoutEnabled: opts.ContextTimeoutEnabled,
+		})
+	default:
+		return UnboundedCall
+	}
+}
+
 func (s *goRedisStore) SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
 	return s.c.SetNX(ctx, key, value, ttl).Result()
 }

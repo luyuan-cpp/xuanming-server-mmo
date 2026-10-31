@@ -72,6 +72,35 @@ func TestClassifyCounterReply(t *testing.T) {
 	}
 }
 
+// memberCountReplyForTest 是一条已执行的 SCARD,判定只看它存不存在,取值由 err 参数表达。
+type memberCountReplyForTest struct{}
+
+func (memberCountReplyForTest) Result() (int64, error) { return 0, nil }
+
+// 一条 SCARD 可不可信:键不存在回 0 是可信的「没有人」,熔断拒绝留下的零值不是。
+func TestClassifyMemberCountReply(t *testing.T) {
+	someErr := errors.New("first failed command in the batch")
+	executed := memberCountReplyForTest{}
+	cases := []struct {
+		name          string
+		reply         memberCountReply
+		err, batchErr error
+		wantOK        bool
+	}{
+		{"callback never ran", nil, nil, nil, false},
+		{"breaker open, command never ran", executed, nil, breaker.ErrServiceUnavailable, false},
+		{"breaker open, wrapped", executed, nil, fmt.Errorf("pipeline: %w", breaker.ErrServiceUnavailable), false},
+		{"key missing reads as nobody", executed, nil, nil, true},
+		{"count present while another command failed", executed, nil, someErr, true},
+		{"command error", executed, errors.New("WRONGTYPE"), someErr, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.wantOK, classifyMemberCountReply(c.reply, c.err, c.batchErr))
+		})
+	}
+}
+
 // 整批是否按「没执行」处理。
 func TestPipelineBatchRejected(t *testing.T) {
 	someErr := errors.New("boom")
@@ -144,9 +173,9 @@ func TestLoadRefreshReportOutcomePriority(t *testing.T) {
 func TestRefreshLoadScores_NonMemberReadFailureUsesSentinelScore(t *testing.T) {
 	sc, mr := newLoadRefreshScopeCtx(t)
 	registerKnownNodeForTest(t, "SceneNodeService.rpc/scope-966", 1, "966")
-	failedKey := nodePlayerCountKey(1, "966")
+	failedKey := nodeMembersKey(1, "966")
 	installRedisCommandRecorderForTest(t, mr, func(cmd string, args []string) string {
-		if cmd == "GET" && len(args) > 0 && args[0] == failedKey {
+		if cmd == "SCARD" && len(args) > 0 && args[0] == failedKey {
 			return "ERR injected counter read failure"
 		}
 		return ""

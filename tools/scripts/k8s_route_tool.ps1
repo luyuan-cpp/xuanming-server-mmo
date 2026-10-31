@@ -1,15 +1,13 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    在 K8s 上以一次性 Job 跑 data_service 的映射运维工具 route-tool(import-from-redis / audit / freeze / reconcile-from-cache /
-    unfreeze / tidb-prepare / rewarm),等它结束,把 stdout / stderr 存进报告目录,按容器退出码原样返回。
+    在 K8s 上以一次性 Job 跑 data_service 的路由运维工具 route-tool(tidb-prepare / freeze / unfreeze),等它结束,
+    把 stdout / stderr 存进报告目录,按容器退出码原样返回。
 
 .DESCRIPTION
-    D1 第 1b-3 批(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §7 第 3 条、§13.4 第 3 条)。
     生产上 route-tool 并在 data_service 主程序里:`/app/service -f /app/etc/data_service.yaml -route-tool <子命令> [参数]`
     (go/data_service/data_service.go;子命令与退出码见 go/data_service/internal/routetoolcli/cli.go)。
-    不 kubectl exec 进在役 Pod:data-service 容器 limit 512Mi,import / audit 的已见集合是 O(N),可能把在役进程一起 OOM 掉
-    (exec 只限 -dry-run 或小库,runbook §9.4)。本脚本改为渲染 deploy/k8s/manifests/go-svc/data-service-route-tool.yaml:
+    不 kubectl exec 进在役 Pod:一次性 Job 不占在役进程的资源,输出按运行号留档。本脚本渲染 deploy/k8s/manifests/go-svc/data-service-route-tool.yaml:
     同一镜像(缺省取在役 deployment/data-service 的镜像)、同一 ConfigMap(go-svc-data-service-config)、资源单独设。
 
     流程:
@@ -25,11 +23,11 @@
     -DryRun 只做第 1 步与渲染,把 Job 清单打印出来(夹在 --- BEGIN MANIFEST --- / --- END MANIFEST --- 之间,与 k8s_deploy.ps1 同一标记),
     不调用 kubectl、不建报告目录。没给 -Image 时清单里的镜像写成说明文字(真跑时从 deployment/data-service 读)。
 
-    退出码:route-tool 容器的退出码原样返回 —— 0 干净 / 1 完成但需要人工处理 / 2 失败 / 3 有生效的合服围栏。
-    本脚本自己失败(参数不合法、kubectl 失败、namespace 不存在、已有在途 Job、等不到终态、容器退出码不在 0..3、取不到退出码)一律 2,
+    退出码:route-tool 容器的退出码原样返回 —— 0 完成 / 2 失败。
+    本脚本自己失败(参数不合法、kubectl 失败、namespace 不存在、已有在途 Job、等不到终态、容器退出码不是这两个、取不到退出码)一律 2,
     控制台与 summary.txt 写明是哪一种;等不到终态时 Job 可能还在跑,不要立刻再起一次。
-    未预料的异常由入口兜成 2(pwsh -File 下未捕获异常的退出码是 1,会与「完成但需要人工处理」撞号);Job 结束之后写报告
-    (stdout.txt / stderr.txt / summary.txt)失败只告警,退出码仍按容器退出码,不让写盘失败盖掉 0..3。
+    未预料的异常由入口兜成 2(pwsh -File 下未捕获异常的退出码是 1,route-tool 没有这个码);Job 结束之后写报告
+    (stdout.txt / stderr.txt / summary.txt)失败只告警,退出码仍按容器退出码,不让写盘失败盖掉它。
     例外:参数绑定失败(pwsh -File 下缺 -ZoneName / -RouteToolArgs、-ZoneName 不合格式)发生在脚本运行之前,退出码是 pwsh 的 1;
     经 dev_tools.ps1 -Command k8s-route-tool 调用时由包装层兜成 2。
 
@@ -38,16 +36,16 @@
 
 .EXAMPLE
     # 预览清单(不碰集群)
-    pwsh -NoProfile -Command "& ./tools/scripts/k8s_route_tool.ps1 -ZoneName z1 -RouteToolArgs @('audit') -Image ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab -DryRun"
+    pwsh -NoProfile -Command "& ./tools/scripts/k8s_route_tool.ps1 -ZoneName z1 -RouteToolArgs @('tidb-prepare', '-zones=1,2') -Image ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab -DryRun"
 
 .EXAMPLE
-    # 冻结期审计(全局库回档后的恢复流程第 3 步,runbook §9.4)
-    pwsh -NoProfile -Command "& ./tools/scripts/k8s_route_tool.ps1 -ZoneName z1 -RouteToolArgs @('audit', '-frozen-recovery', '-timeout=60m') -TimeoutSeconds 4200 -KubeContext kind-mmorpg"
+    # 路由表预切 Region(TiDB;MySQL 上跳过)
+    pwsh -NoProfile -Command "& ./tools/scripts/k8s_route_tool.ps1 -ZoneName z1 -RouteToolArgs @('tidb-prepare', '-zones=1,2', '-dry-run=false') -KubeContext kind-mmorpg"
     子命令参数含 '-' 开头的项,用 -Command 形式传数组;`pwsh -File` 下逗号列表会被当成一个字符串。
 #>
 param(
     # zone 名,与 k8s_deploy.ps1 -ZoneName 同义:namespace = <NamespacePrefix>-<ZoneName>。
-    # route-tool 读写的是全服共用的全局库与 mapping Redis,哪个 zone 都一样;选 zone 只决定用哪份 ConfigMap、在哪个 namespace 起 Job。
+    # route-tool 读写的是全服共用的全局库,哪个 zone 都一样;选 zone 只决定用哪份 ConfigMap、在哪个 namespace 起 Job。
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')]
     [string]$ZoneName,
@@ -101,16 +99,13 @@ function Get-RouteToolContract {
         ConfigMapName           = 'go-svc-data-service-config'
         # 与 data-service.yaml 的 args 前两项相同,再接 -route-tool(data_service.go 的 flag)。
         FixedArgs               = @('-f', '/app/etc/data_service.yaml', '-route-tool')
-        # routetoolcli/cli.go 的 sub* 常量(第 1a / 1b-1 批)加第 1b-2 批的 rewarm。新增子命令时先在 cli.go 加,再加到这里
-        # (测试钉住 cli.go 里的每个子命令都在这张表里)。
-        Subcommands             = @('import-from-redis', 'audit', 'tidb-prepare', 'freeze', 'reconcile-from-cache', 'unfreeze', 'rewarm')
+        # routetoolcli/cli.go 的 sub* 常量。新增子命令时先在 cli.go 加,再加到这里(测试钉住 cli.go 里的每个子命令都在这张表里)。
+        Subcommands             = @('tidb-prepare', 'freeze', 'unfreeze')
         # 由本脚本固定的入口参数(Go flag 认 -x 与 --x、-x=v):出现在 -RouteToolArgs 里一律拒绝。
         ReservedFlags           = @('f', 'route-tool', 'migrate', 'version')
         # route-tool 的退出码(cli.go usage):原样返回。本脚本自己的失败也用 Failed。
         ExitClean               = 0
-        ExitNeedsAttention      = 1
         ExitFailed              = 2
-        ExitFenced              = 3
         # 标记行(Job 模板的 sh 包装打印;{0} = 运行号)。
         StdoutBeginFormat       = '@@ROUTE_TOOL_STDOUT_BEGIN {0}@@'
         StdoutEndFormat         = '@@ROUTE_TOOL_STDOUT_END {0}@@'
@@ -141,7 +136,7 @@ function Get-RouteToolArgErrors {
     # 只有一项时它就是子命令,子命令名里没有空白与逗号:出现了就是整条命令行被塞成了一项(pwsh -File 下逗号列表就是这样)。
     # 多项时逗号是合法值(tidb-prepare -zones=1,2),不在此列。
     if ($items.Count -eq 1 -and $items[0] -match '[\s,]') {
-        $errors.Add("-RouteToolArgs 只有一项且含空白或逗号('$($items[0])'):看起来把整条命令行塞成了一个字符串(pwsh -File 下逗号列表就是这样)。请用 -Command 形式逐项传数组,例如 @('audit', '-frozen-recovery');本脚本不替你按空格 / 逗号切分")
+        $errors.Add("-RouteToolArgs 只有一项且含空白或逗号('$($items[0])'):看起来把整条命令行塞成了一个字符串(pwsh -File 下逗号列表就是这样)。请用 -Command 形式逐项传数组,例如 @('tidb-prepare', '-zones=1,2');本脚本不替你按空格 / 逗号切分")
         return [string[]]$errors.ToArray()
     }
     for ($i = 0; $i -lt $items.Count; $i++) {
@@ -244,7 +239,7 @@ function Split-RouteToolLog {
     return [pscustomobject]@{ Stdout = $stdout; Stderr = $stderr; MarkersFound = $true }
 }
 
-# 容器退出码 → 本脚本退出码。0..3 原样返回;取不到($null)或其它值(OOMKilled 137、找不到二进制 127、被信号杀掉)一律 2。
+# 容器退出码 → 本脚本退出码。0 / 2 原样返回;取不到($null)或其它值(OOMKilled 137、找不到二进制 127、被信号杀掉)一律 2。
 function Resolve-RouteToolExitCode {
     param([AllowNull()]$ContainerExitCode)
     $contract = Get-RouteToolContract
@@ -254,9 +249,7 @@ function Resolve-RouteToolExitCode {
     $code = [int]$ContainerExitCode
     switch ($code) {
         0 { return [pscustomobject]@{ ExitCode = 0; Verdict = 'clean' } }
-        1 { return [pscustomobject]@{ ExitCode = 1; Verdict = 'needs-attention' } }
         2 { return [pscustomobject]@{ ExitCode = 2; Verdict = 'failed' } }
-        3 { return [pscustomobject]@{ ExitCode = 3; Verdict = 'merge-fence-active' } }
     }
     return [pscustomobject]@{ ExitCode = $contract.ExitFailed; Verdict = "unexpected-exit-code-$code" }
 }
@@ -437,7 +430,7 @@ function Write-RouteToolSummary {
 }
 
 # Job apply 之后的落盘一律经这两个函数:写不了(磁盘满、目录没权限)只告警,不 throw。到这一步 Job 已经建了、可能已经跑完,
-# 退出码必须仍按容器退出码(或本脚本已判出的 2)返回;让写盘异常冒到入口,会把真实的 0..3 盖成 2,而且 done 一行打不出来。
+# 退出码必须仍按容器退出码(或本脚本已判出的 2)返回;让写盘异常冒到入口,会把真实的 0 盖成 2,而且 done 一行打不出来。
 function Save-RouteToolSummary {
     param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Fields)
     try {

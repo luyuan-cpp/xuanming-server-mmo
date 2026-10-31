@@ -1,0 +1,414 @@
+# 玩家域 Redis Cluster(docs/design/redis-player-store-cluster.md §5.1、§5.6、§7;运维手册 docs/ops/redis-player-cluster-runbook.md)。
+#
+# 由 tools/scripts/k8s_deploy.ps1 的 New-RedisPlayerClusterManifest 渲染,不要直接 kubectl apply 本文件:-PlayerRedisMasters ≥ 3 的
+# infra-up / 带 infra 的 all-up 才 apply。占位(前后各两个下划线,这里不写全,免得注释也被替换):
+#   INFRA_NAMESPACE                  infra namespace
+#   PLAYER_REDIS_NODES               节点总数 = 主节点数 × (1 + 每主副本数)
+#   PLAYER_REDIS_REPLICAS_PER_MASTER 每主副本数(-PlayerRedisReplicasPerMaster,1 或 2)
+#   PLAYER_REDIS_MIN_REPLICAS_TO_WRITE 1 副本取 0,2 副本取 1(§7)
+#   PLAYER_REDIS_MAXMEMORY           每节点 maxmemory(-PlayerRedisMaxMemory)
+#   PLAYER_REDIS_MEM                 容器内存 = 2 × maxmemory(AOF 重写 fork 时写时复制最坏会翻倍)
+#   PLAYER_REDIS_STORAGE             每节点 PVC(-PlayerRedisStorage;volumeClaimTemplates 创建后不可改)
+#   PLAYER_REDIS_ORDINAL             每 Pod 一个的 Service 文档,按节点序号展开 N 份
+# 有占位没替换就拒绝 apply(Assert-InfraManifestPlaceholdersReplaced)。
+#
+# 里面放什么:以 player_id 为身份的协调键(位置、归属代次、交接资格、会话、断线租约、gate 索引、战斗锁……,§5.2),缺省还有登录域
+# (令牌、登录态、连接栅栏,§10.2 第 11 批)。玩家存档不在这里,在 TiDB。控制域(redis.yaml / redis-ha.yaml)不变。
+#
+# 与 redis-match-cluster.yaml 的差别:
+#   - 宣告 IP 而不是主机名:C++ 路由层只认 IP 字面量,运行期不做阻塞 DNS(§5.6「连接」)。每个 Pod 一个 ClusterIP Service,
+#     cluster-announce-ip 写这个 Service 的 IP。Pod 重建换 Pod IP,Service IP 不变,所以 nodes.conf 与客户端拓扑不失效;
+#     只有删除重建 Service 才换地址(§11 最后一行)。不要 kubectl delete 这些 Service,也不要给它们写 clusterIP: None。
+#   - 版本钉 8.10.x:扩缩容要原子迁移(CLUSTER MIGRATION IMPORT,8.4 起才有)。镜像摘要与 Java 版 deploy/compose/infra.yaml 同一份,
+#     本地 compose 的 redis:latest 2026-10 也是 8.10.2。升级走手册的滚动步骤,不要用浮动标签。
+#   - updateStrategy OnDelete:apply 改了 Pod 模板也不重启任何节点。滚动要先把主切走再删 Pod(手册「滚动重启」),
+#     否则一次 apply 就可能连着打掉一对主从。代价:kubectl rollout status 不可用,就绪看 init Job 与手册的核对清单。
+#   - cluster-require-full-coverage no:一片主从都挂时只影响这一片的玩家(1/M),其余 slot 照常服务(§1、§2)。
+#     代价是 cluster_state 这时还是 ok,所以告警要单独盯 slot 覆盖(deploy/k8s/redis-player-alerts.yaml)。
+#   - noeviction + 显式 maxmemory:玩家态不允许淘汰,写满报错、由告警发现(§7)。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-player-cluster-config
+  labels:
+    app: redis-player
+data:
+  redis.conf: |
+    port 6379
+    cluster-enabled yes
+    cluster-config-file nodes.conf
+    # 主节点失联到副本发起选举的时间,§7 按 5s 算不可写窗口;C++ 路由层的 10s 预算要盖住它(§5.6)。
+    cluster-node-timeout 5000
+    cluster-require-full-coverage no
+    # 与多数派失联的主自行停止服务,读也停:这是防脑裂的主要手段(§7),不要改成 yes。
+    cluster-allow-reads-when-down no
+    # 迁空 slot 的主自动变成接收方的副本,缩容手册依赖这一条(缺省就是 yes,写出来防被改)。
+    cluster-allow-replica-migration yes
+    # 只认 IP 端点(缺省就是 ip,写出来防被改:C++ 路由层不接受主机名)。
+    cluster-preferred-endpoint-type ip
+    appendonly yes
+    appendfsync everysec
+    # AOF 是唯一的持久化,关掉周期 RDB:否则大键量下多一条 fork 路径,CPU 与写时复制的尖峰算不清账。
+    # 全量同步仍会 fork(缺省无盘复制),容器内存的 2 倍余量就是留给它和 AOF 重写的。
+    save ""
+    maxmemory __PLAYER_REDIS_MAXMEMORY__
+    maxmemory-policy noeviction
+    # 每主 1 副本时必须是 0:写成 1 的话副本一重启这一片就整片拒写;2 副本才取 1(§7)。
+    min-replicas-to-write __PLAYER_REDIS_MIN_REPLICAS_TO_WRITE__
+    # DEBUG RELOAD 会在同一进程里整库替换数据而 run_id 不变,谁都认不出换过数据。
+    enable-debug-command no
+---
+# StatefulSet 要求的 governing service。客户端不用它:种子走下面每 Pod 一个的 ClusterIP Service,之后按集群宣告的 IP 直连。
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-player-headless
+  labels:
+    app: redis-player
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: redis-player
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+    - name: cluster-bus
+      port: 16379
+      targetPort: 16379
+---
+# 每 Pod 一个 ClusterIP Service,k8s_deploy.ps1 按节点序号展开。这份文档必须保持「恰好一个序号占位、只含这一个 Service」。
+# publishNotReadyAddresses:节点没 Ready 也要能经集群总线互相找到,否则建群和故障恢复都要等探针。
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-player-__PLAYER_REDIS_ORDINAL__
+  labels:
+    app: redis-player
+    mmorpg.io/redis-player-node: "true"
+spec:
+  type: ClusterIP
+  publishNotReadyAddresses: true
+  selector:
+    app: redis-player
+    statefulset.kubernetes.io/pod-name: redis-player-__PLAYER_REDIS_ORDINAL__
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+    - name: cluster-bus
+      port: 16379
+      targetPort: 16379
+---
+# 自愿驱逐一次最多一个节点:kubectl drain 不会同时带走一对主从。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-player-pdb
+  labels:
+    app: redis-player
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: redis-player
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-player
+  labels:
+    app: redis-player
+spec:
+  serviceName: redis-player-headless
+  replicas: __PLAYER_REDIS_NODES__
+  # 节点并行拉起:建群 Job 只关心全部节点应答 PING,不需要顺序启动。
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: OnDelete
+  selector:
+    matchLabels:
+      app: redis-player
+  template:
+    metadata:
+      labels:
+        app: redis-player
+      # default-container:不带 -c 的 kubectl exec / logs 落到 redis 容器。prometheus.io/*:指向 redis-exporter 的 9121,告警见 deploy/k8s/redis-player-alerts.yaml。
+      annotations:
+        kubectl.kubernetes.io/default-container: redis
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+        prometheus.io/path: "/metrics"
+    spec:
+      # SIGTERM 后 redis-server 要把 AOF 缓冲刷盘再退出,给足时间。
+      terminationGracePeriodSeconds: 60
+      affinity:
+        podAntiAffinity:
+          # 尽量分散到不同节点。容量验收要求每个主独占主机或 CPU 核(§14.3),那时改用专用节点池,这里只是缺省保底。
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: redis-player
+                topologyKey: kubernetes.io/hostname
+      containers:
+        # 容器名必须叫 redis:k8s_deploy.ps1 的 redis-wipe 与 maxclients 核对、stress_snap.ps1 都按「pod/redis-player-<序号> -c redis」exec 进来。
+        - name: redis
+          image: redis:8.10.2@sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee
+          # 启动薄壳做三件事:打印 fd 限值(做法与理由同 redis.yaml,被容器 nofile 硬限下调时这一行是事后唯一的证据)、解析本 Pod 对应 Service 的 IP、
+          # 带上口令。解析不到就退出让 K8s 重启,不带一个错的地址起来:错地址写进 nodes.conf 之后别的节点和客户端都连不上。
+          # 不解析 POD_IP:Pod 重建就换地址,C++ 路由层 §5.6 的「宣告地址不变」前提就没了。
+          # MAXCLIENTS 只在这里定义一次,部署脚本的总账(Get-RedisPlayerConnectionLedgerInputs)从这一行读值,取值见 §6.1:
+          # 每节点连接 = Σ(每服务池上限 × 副本数) + scene 进程数,目标规模约 4000–13000 条。
+          # --masterauth:副本连主也要认证,不写的话副本永远同步不上,而 NOAUTH 只出现在副本日志里。
+          command:
+            - sh
+            - -c
+            - |
+              MAXCLIENTS=40000
+              need=$((MAXCLIENTS + 32))
+              soft=$(ulimit -Sn 2>/dev/null || echo unknown)
+              hard=$(ulimit -Hn 2>/dev/null || echo unknown)
+              echo "redis fd limit: soft=$soft hard=$hard need=$need maxclients=$MAXCLIENTS"
+              case "$hard" in
+                unlimited|unknown) ;;
+                *) if [ "$hard" -lt "$need" ]; then echo "ERROR: nofile hard limit $hard < $need, redis-server will lower maxclients below $MAXCLIENTS" >&2; fi ;;
+              esac
+              service_host="${POD_NAME}.${POD_NAMESPACE}.svc.cluster.local"
+              announce_ip=""
+              attempt=0
+              while [ "$attempt" -lt 60 ]; do
+                resolved=$(getent hosts "$service_host" || true)
+                announce_ip=${resolved%% *}
+                if [ -n "$announce_ip" ]; then break; fi
+                attempt=$((attempt + 1))
+                sleep 2
+              done
+              if [ -z "$announce_ip" ]; then
+                echo "ERROR: cannot resolve $service_host, refusing to start without an announce address" >&2
+                exit 1
+              fi
+              echo "redis cluster announce: ip=$announce_ip port=6379 bus_port=16379"
+              set -- redis-server /etc/redis/redis.conf --maxclients "$MAXCLIENTS" --cluster-announce-ip "$announce_ip" --cluster-announce-port 6379 --cluster-announce-bus-port 16379
+              if [ -n "$REDIS_PASSWORD" ]; then
+                set -- "$@" --requirepass "$REDIS_PASSWORD" --masterauth "$REDIS_PASSWORD"
+              fi
+              exec "$@"
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # 可选 Secret:dev 档不注入口令时无口令启动;release 档由 k8s_deploy.ps1 在 apply 本清单之前按 MMORPG_PLAYER_REDIS_PASSWORD 建好。
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-player-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 6379
+              name: redis
+            - containerPort: 16379
+              name: cluster-bus
+          # 探针照搬 redis.yaml:PONG(无口令)或 NOAUTH(设了口令、未认证)都说明已加载完 AOF;加载期间回 LOADING,按未就绪处理。
+          # 不看 cluster_state:集群整体状态不该让单个 Pod 被摘流量或被杀,否则一次网络分区会变成全体重启。
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'r=$(redis-cli -h 127.0.0.1 -p 6379 ping 2>&1); case "$r" in PONG|NOAUTH*) exit 0 ;; *) exit 1 ;; esac'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 120
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'r=$(redis-cli -h 127.0.0.1 -p 6379 ping 2>&1); case "$r" in PONG|NOAUTH*) exit 0 ;; *) exit 1 ;; esac'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          # 内存 requests = limits = 2 × maxmemory。CPU 只写 requests、不设 limits:主线程被 CFS 限流时延迟抖动比多占一点 CPU 更糟。
+          resources:
+            requests:
+              cpu: 500m
+              memory: __PLAYER_REDIS_MEM__
+            limits:
+              memory: __PLAYER_REDIS_MEM__
+          volumeMounts:
+            - name: config
+              mountPath: /etc/redis
+              readOnly: true
+            - name: data
+              mountPath: /data
+        # 指标出口:每个节点一个,只连本节点,告警规则在 deploy/k8s/redis-player-alerts.yaml。口令走环境变量,不上命令行、不进日志。
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.62.0
+          env:
+            - name: REDIS_ADDR
+              value: redis://127.0.0.1:6379
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-player-auth
+                  key: password
+                  optional: true
+          ports:
+            - containerPort: 9121
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      volumes:
+        - name: config
+          configMap:
+            name: redis-player-cluster-config
+  # 不写 storageClassName = 用集群默认 StorageClass(与 redis.yaml 一致)。
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: __PLAYER_REDIS_STORAGE__
+---
+# 建群 Job。重跑幂等:k8s_deploy.ps1 每次 infra-up 先删再建(Job 的 template 不可变),而脚本只在全部节点都是空白时才建群。
+#   全部空白(known_nodes=1 且没有 slot)→ --cluster create;
+#   任一节点已有集群状态 → 不建群、不修复,只核对;核对不过就失败,交给手册「中断恢复」。一半空白一半有状态可能是扩容新起的节点,
+#     也可能是 PVC 丢了:脚本分不清,所以不碰,只打 WARNING。
+# 核对:每个已入群节点 cluster_state:ok、16384 个 slot 全部分配且 ok、节点间对 slot 配置一致(--cluster check)。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-player-cluster-init
+  labels:
+    app: redis-player-init
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: redis-player-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: cluster-init
+          image: redis:8.10.2@sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # redis-cli 认这个变量(含 --cluster 子命令),口令不上命令行。
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: redis-player-auth
+                  key: password
+                  optional: true
+            - name: NODES
+              value: "__PLAYER_REDIS_NODES__"
+            - name: REPLICAS_PER_MASTER
+              value: "__PLAYER_REDIS_REPLICAS_PER_MASTER__"
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              info_field() {
+                redis-cli -h "$1" -p 6379 cluster info 2>/dev/null | tr -d '\r' | sed -n "s/^$2://p"
+              }
+              # 1. 等全部节点应答 PONG。LOADING 不算,AOF 没加载完不能判断它是不是空白节点。
+              addresses=""
+              ordinal=0
+              while [ "$ordinal" -lt "$NODES" ]; do
+                service_host="redis-player-${ordinal}.${POD_NAMESPACE}.svc.cluster.local"
+                attempt=0
+                while :; do
+                  resolved=$(getent hosts "$service_host" || true)
+                  ip=${resolved%% *}
+                  if [ -n "$ip" ] && [ "$(redis-cli -h "$ip" -p 6379 ping 2>/dev/null)" = "PONG" ]; then break; fi
+                  attempt=$((attempt + 1))
+                  if [ "$attempt" -ge 300 ]; then
+                    echo "ERROR: $service_host did not answer PONG within 600s" >&2
+                    exit 1
+                  fi
+                  sleep 2
+                done
+                echo "$service_host is up at $ip"
+                addresses="$addresses $ip"
+                ordinal=$((ordinal + 1))
+              done
+              # 2. 分类。
+              blank=""
+              joined=""
+              for ip in $addresses; do
+                known=$(info_field "$ip" cluster_known_nodes)
+                assigned=$(info_field "$ip" cluster_slots_assigned)
+                if [ -z "$known" ] || [ -z "$assigned" ]; then
+                  echo "ERROR: cannot read CLUSTER INFO from $ip" >&2
+                  exit 1
+                fi
+                if [ "$known" = "1" ] && [ "$assigned" = "0" ]; then blank="$blank $ip"; else joined="$joined $ip"; fi
+              done
+              if [ -z "$joined" ]; then
+                seeds=""
+                for ip in $addresses; do seeds="$seeds $ip:6379"; done
+                echo "all $NODES nodes are blank, creating the cluster with $REPLICAS_PER_MASTER replica(s) per master"
+                redis-cli --cluster create $seeds --cluster-replicas "$REPLICAS_PER_MASTER" --cluster-yes
+                joined="$addresses"
+                blank=""
+              else
+                echo "cluster already formed, skipping create"
+              fi
+              if [ -n "$blank" ]; then
+                echo "WARNING: nodes not in the cluster:$blank. New nodes from a scale-up join by the runbook; a node that lost its PVC needs the node-failure steps. docs/ops/redis-player-cluster-runbook.md"
+              fi
+              # 3. 核对。create 返回时 slot 表还在 gossip 传播,等到全部一致再退出,否则 Job 成功不等于集群可用。
+              attempt=0
+              while :; do
+                settled=true
+                for ip in $joined; do
+                  if [ "$(info_field "$ip" cluster_state)" != "ok" ] || [ "$(info_field "$ip" cluster_slots_assigned)" != "16384" ] || [ "$(info_field "$ip" cluster_slots_ok)" != "16384" ]; then
+                    settled=false
+                  fi
+                done
+                if [ "$settled" = "true" ]; then break; fi
+                attempt=$((attempt + 1))
+                if [ "$attempt" -ge 120 ]; then
+                  echo "ERROR: cluster did not settle within 240s (cluster_state:ok and 16384 slots ok on every joined node). See docs/ops/redis-player-cluster-runbook.md" >&2
+                  for ip in $joined; do
+                    echo "--- $ip"
+                    redis-cli -h "$ip" -p 6379 cluster info | tr -d '\r' | grep -E '^cluster_(state|slots_assigned|slots_ok|slots_pfail|slots_fail|known_nodes|size)' || true
+                  done
+                  exit 1
+                fi
+                sleep 2
+              done
+              first=""
+              for ip in $joined; do first="$ip"; break; done
+              redis-cli --cluster check "$first:6379"
+              redis-cli -h "$first" -p 6379 cluster info | tr -d '\r' | grep -E '^cluster_(state|slots_assigned|slots_ok|known_nodes|size)'
+              echo "redis player cluster verified: 16384 slots covered"

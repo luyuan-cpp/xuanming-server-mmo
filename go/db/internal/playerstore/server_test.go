@@ -201,6 +201,13 @@ func TestServer_UnavailableDependencies(t *testing.T) {
 	if _, err := frozen.LoadAndClaim(ctx, signed(t, methodLoadAndClaim, validClaim(), sceneCaller, testSecret)); grpcCode(err) != codes.Unavailable {
 		t.Fatalf("frozen: %v", err)
 	}
+	for name, failure := range map[string]error{"no placement": ErrPlayerStorageMissing, "route read failed": errors.New("Error 2013: secret route detail")} {
+		unresolved := testServer(t, db, func(context.Context, uint64) (uint32, error) { return 0, failure })
+		_, err := unresolved.LoadAndClaim(ctx, signed(t, methodLoadAndClaim, validClaim(), sceneCaller, testSecret))
+		if grpcCode(err) != codes.Unavailable || strings.Contains(err.Error(), "secret route detail") {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
 	down := testServer(t, db, func(context.Context, uint64) (uint32, error) { return 99, nil })
 	if _, err := down.LoadAndClaim(ctx, signed(t, methodLoadAndClaim, validClaim(), sceneCaller, testSecret)); grpcCode(err) != codes.Unavailable {
 		t.Fatalf("storage down on claim: %v", err)

@@ -1,16 +1,16 @@
 # Guild Service Configuration
 Name: guild.rpc
 Mode: dev
-AccountRoleSchema: testdb
+AccountRoleSchema: mmorpg_global
 # 同主TiDB连接池跨库只读核验真实Match/Team表；缺表或配置缺失拒启。
 MatchAuthoritySchema: mmorpg_match
 # 必须指向login实际使用的同一全局实例/DB；不能按gateNodeId猜zone或回退本地缓存。
 GlobalLoginSessions: true
 LoginRedis:
-  Host: 127.0.0.1:6379
+  Addrs: [127.0.0.1:6379]
   Password: ""
   DB: 0
-  PoolSize: 8
+  PoolSizePerNode: 8
 ListenOn: 127.0.0.1:50300
 # zrpc 服务端整体超时(毫秒):≤ 路由服 ForwardTimeoutMs(5000)− 1000 = 4000
 # (docs/design/guild-phase2/00-contract.md §2)。另须 ≥ DataServiceRpc.Timeout + 1500(归属区查询)
@@ -37,12 +37,20 @@ RedisClient:
   DB: 0
   PoolSize: 20
 
-# Online status source (player_locator session store)
+# 控制域:assetop:wake 频道(scene 发布,AssetOp.Wake 订阅)与它的跨副本去重键。玩家键已移到下面的 PlayerRedis。
 PlayerLocatorRedis:
   Host: 127.0.0.1:6379
   Password: ""
   DB: 0
   PoolSize: 20
+
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):会话、位置、战斗锁、同步摘要。
+# 不写 Addrs = 指向上面的 PlayerLocatorRedis 实例。集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
+#   Cluster: true
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。落地恢复摘要另有固定 4 条的专用池。
+PlayerRedis:
+  PoolSizePerNode: 20
 
 # ---- 独占库 mmorpg_guild(D-14 §1/§5,§8 已修订)----
 # 库由 deploy/mysql-init/00_init_zone_dbs.sql 预建(存量卷需 root 手工执行那两行);表由 go/schemamigrate
@@ -86,10 +94,10 @@ Kafka:
     - "localhost:9092"
 
 # DataService gRPC client (discovered via etcd,与 login 的 PlayerLocatorRpc 同一写法)。
-# guild 用它查角色归属区(GetPlayerHomeZone)及领取 guild_id 号段(AllocateIdSegment)。
+# guild 用它查角色归属区(GetPlayerHomeZone)、读合服映射(GetMergedZones)及领取 guild_id 号段(AllocateIdSegment)。
 # 配置目标即拨号,IdSegment.Enabled=false 只关闭号段发号,不关闭归属区查询。
-# NonBlock: true —— 号段是弱依赖(设计稿 §6.5):data_service 没起时 guild 照常起服,
-# 领段失败即拒绝建帮。
+# NonBlock: true —— 建客户端不等 data_service。启动时读合服映射会等它,最多 60 秒,读不到拒绝启动;
+# 起来之后 data_service 不可用只影响当时的请求:合服映射继续用旧值,领段失败即拒绝建帮。
 DataServiceRpc:
   Etcd:
     Hosts:
@@ -122,8 +130,8 @@ IdSegment:
 # 签名密钥**只**从环境变量 MMORPG_ASSET_OP_SECRET_GUILD 读,本段没有、也不许加存放密钥的键:
 #   本机由 tools/scripts/go_services.ps1 / start_game.ps1 从 run/secrets/assetop-dev.env 注入(与 scene 验签同一把);
 #   Enabled=true 而缺密钥、或去首尾空白后短于 32 字节,启动即拒绝。
-# 玩家定位读的是上面 PlayerLocatorRedis 里的 player:{id}:location:它必须与 scene / scene_manager 写这把键的
-#   Redis **同一实例同一 DB**(K8s 指向 SharedRedis)。指错的表现是所有玩家"不在线"、指令永远 PENDING,且不报错。
+# 玩家定位读的是上面 PlayerRedis 里的 player:{id}:location:它必须与 scene / scene_manager 写这把键的是
+#   同一个存储域。指错的表现是所有玩家"不在线"、指令永远 PENDING,且不报错。
 # 另依赖 IdSegment.Enabled=true 与 DataServiceRpc:op_id 由号段 biz_tag=guild_asset_op 发,无 snowflake 回退
 #   (config.Validate 强制)。
 AssetOp:
@@ -163,7 +171,7 @@ AssetOp:
   # !! 滚动升级:旧版实例的发送不推进 last_send_ms。从不认识 last_send_ms 的旧版本升级时,先把 AbandonAfterDays 写 0
   #   全量上线新二进制,确认没有旧实例在跑之后再改回 180(设计 §6.3「滚动升级」)。本项目尚未上线,首发直接开启。
   # 另需 DataServiceRpc(离线读账本;Enabled=true 时 config.Validate 已强制),缺了放弃不运行(只打一条 INFO)。
-  # 「玩家无位置」只看上面 PlayerLocatorRedis 里的 player:{id}:location 是否存在,不依赖 scene 节点镜像(etcd):
+  # 「玩家无位置」只看上面 PlayerRedis 里的 player:{id}:location 是否存在,不依赖 scene 节点镜像(etcd):
   #   etcd 缺失或镜像未同步时,有位置记录的玩家投递发不出去、行留在 PENDING,但放弃仍按其余条件照常进行。
   #   要停掉放弃只能把 AbandonAfterDays 写 0。
   # AbandonSafetyGapMs ≥ 600000 且 ≥ LeaseMs;AbandonBatch 是每轮候选上限 [1, 1000];AbandonIntervalMs ∈ [60000, 86400000]。
@@ -204,13 +212,11 @@ MatchRpc:
     Breaker: false
 
 # 历练的后台节律与对局结果消费。
-#   TrialResultOverdueSeconds:对局登记多久后仍无结果,巡检器去读 battle 落在 Redis 的结果记录兜底
-#     (= match 的 BattleMaxDurationSeconds 300 + 120)。
-#   TrialAbandonSeconds:多久后仍无结果也无记录则判 EXPIRED(迟到的结果仍可结算);必须 ≥ 上一项 + 600,≤ 604800(7 天)。
+#   TrialResultOverdueSeconds:对局登记多久后仍无结果,巡检器去读 MatchAuthoritySchema 库的 SQL 终局(match_battle_completion)兜底。
+#   TrialAbandonSeconds:多久后仍无结果也无终局则判 EXPIRED(迟到的结果仍可结算);必须 ≥ 上一项 + 600,≤ 604800(7 天)。
 #   TrialSweepIntervalSeconds:巡检间隔 [10, 600];多副本靠全局 Redis 的 guild:trial:sweep:lease 互斥。
 #   OwedLoopIntervalSeconds:待入队物品循环间隔 [1, 60](结算时未决指令已满者的物品,等窗口有空位再入队)。
-# 结果记录与战斗锁读的是上面的 PlayerLocatorRedis:它必须与 battle / scene 的 zone Redis(K8s 的 SharedRedis)
-#   **同一实例同一 DB**。指错的表现是结算后销不掉账(battle 每局重发满 30 次)、巡检器永远读不到记录,且不报错。
+# 战斗锁读的是上面的 PlayerLocatorRedis:它必须与 scene 的 zone Redis(K8s 的 SharedRedis)**同一实例同一 DB**。
 Activity:
   TrialResultOverdueSeconds: 420
   TrialAbandonSeconds: 3600

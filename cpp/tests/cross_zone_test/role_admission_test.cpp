@@ -16,6 +16,7 @@
 #include "battle/system/player_battle.h"
 #include "player/comp/player_frozen_comp.h"
 #include "proto/common/component/battle_comp.pb.h"
+#include "proto/player_store/player_store.pb.h"
 #include "proto/scene/scene.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "spatial/comp/scene_node_scene_comp.h"
@@ -333,19 +334,17 @@ TEST_F(RoleAdmissionTest, LateLoadCannotActivateAndItsOriginalFenceRaisesDrainFl
     ASSERT_EQ(1u, activated.size());
     auto context = activated.back();
     context.inheritClear.outstandingReplies = 1;
+    context.ownerEpoch = 10; // 认领在途时新路由把上下文覆盖成更高的代次,写权行上仍是这次认领的 9。
     PlayerLifecycleSystem::GetPendingEnterMap()[kPlayer] = context;
     SessionMap()[91] = kPlayer;
     pendingLoad = true;
     Admission::BeginCallback(kPlayer);
     ASSERT_TRUE(Admission::Seal(SealFor()));
-    PlayerAllData loaded;
-    loaded.mutable_player_database_data()->set_player_id(kPlayer);
-    loaded.mutable_player_database_data()->set_fence_owner_epoch(9);
-    loaded.mutable_player_database_data()->set_fence_save_seq(2);
-    loaded.mutable_player_database_1_data()->set_player_id(kPlayer);
-    loaded.mutable_player_database_1_data()->set_fence_owner_epoch(9);
-    loaded.mutable_player_database_1_data()->set_fence_save_seq(2);
-    PlayerLifecycleSystem::HandlePlayerAsyncLoaded(kPlayer, loaded);
+    playerstore::LoadAndClaimResponse claimed;
+    claimed.set_result(playerstore::LOAD_AND_CLAIM_CLAIMED);
+    claimed.set_owner_epoch(9);
+    claimed.set_save_seq(2);
+    PlayerLifecycleSystem::HandlePlayerStoreClaimed(kPlayer, &claimed);
     EXPECT_EQ(1u, activated.size());
     Tick(); EXPECT_TRUE(acks.empty());
     pendingLoad = false; Admission::EndCallback(kPlayer);

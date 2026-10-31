@@ -1,6 +1,7 @@
 package logic
 
 // 赛事局运营入口(SetSpectateFeatured)与观战列表的赛事局排序(battle-spectate-tiered-fanout.md §15.6)的 miniredis 测试。
+// 成局原件走 fakeSpectateFormations(spectate_test.go)。
 
 import (
 	"context"
@@ -120,7 +121,7 @@ func TestSetSpectateFeaturedRejectsMissingAndPrivateBattles(t *testing.T) {
 	require.Empty(t, relay.promotes)
 }
 
-// 置位:写标记(TTL 同记录)并立即升 L2;直连席没满的场也一样。取消只删标记、不降档。重复设置同值幂等成功。
+// 置位:写标记(TTL = spectateTTLSeconds)并立即升 L2;直连席没满的场也一样。取消只删标记、不降档。重复设置同值幂等成功。
 func TestSetSpectateFeaturedPromotesAndCancelKeepsTier(t *testing.T) {
 	svcCtx, mr := newFeaturedSvcCtx(t)
 	relay := stubRelayRPCs(t)
@@ -130,7 +131,7 @@ func TestSetSpectateFeaturedPromotesAndCancelKeepsTier(t *testing.T) {
 	resp := setFeatured(t, svcCtx, battleId, true)
 	require.Equal(t, pb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NONE, resp.GetReject())
 	require.Equal(t, tierBroadcast, resp.GetTier())
-	require.Equal(t, time.Duration(spectateTTLSeconds(svcCtx))*time.Second, mr.TTL(spectateFeaturedKey(battleId)))
+	require.Equal(t, time.Duration(spectateTTLSeconds)*time.Second, mr.TTL(spectateFeaturedKey(battleId)))
 	require.Len(t, relay.promotes, 1)
 	require.Equal(t, 1, broadcastQuotaCount(t, svcCtx))
 
@@ -149,10 +150,8 @@ func TestSetSpectateFeaturedQuotaFullThenPromotedByViewer(t *testing.T) {
 	svcCtx, mr := newFeaturedSvcCtx(t)
 	svcCtx.Config.Spectate.BroadcastMaxConcurrent = 1
 	svcCtx.Config.Spectate.BroadcastAutoGateThreshold = 0 // 只认运营标记
-	stubObserverRPCs(t)
 	relay := stubRelayRPCs(t)
 	const watcher, battleId = uint64(7501), uint64(884030)
-	setPlayerSessionOnline(t, mr, watcher)
 	registerBattle(t, svcCtx, battleId, nowMs())
 	raiseTier(t, svcCtx, battleId, tierRelay)
 	_, err := mr.ZAdd(spectateBroadcastActiveKey, float64(testRelayDeadlineMs), "999999")
@@ -167,12 +166,12 @@ func TestSetSpectateFeaturedQuotaFullThenPromotedByViewer(t *testing.T) {
 	_, err = svcCtx.MatchRedis.Zrem(spectateBroadcastActiveKey, "999999")
 	require.NoError(t, err)
 	mr.FastForward(spectatePromoteLeaseSeconds * time.Second) // 上一次尝试的租约到期
-	requireLobbyAdmitted(t, watchBattle(t, svcCtx, watcher, battleId), battleId, watcher)
+	requireLobbyAdmitted(t, lobbyAdmitOnGate3(t, svcCtx, watcher, battleId), battleId, watcher)
 	require.Len(t, relay.promotes, 1, "赛事局的观众触发升档")
 	require.Equal(t, tierBroadcast, tierOf(t, svcCtx, battleId))
 }
 
-// 标记时 battle 回房间不存在(全局模式下战斗结束后成局仍是 state 4,读得到记录):回 NOT_FOUND 并撤掉标记,
+// 标记时 battle 回房间不存在(战斗结束后成局仍是 state 4,读得到记录):回 NOT_FOUND 并撤掉标记,
 // 否则一场不存在的战斗会排在观战列表最前。其它升档失败不算错,标记照留。
 func TestSetSpectateFeaturedMissingRoomRejectsAndUnmarks(t *testing.T) {
 	reply := func(tip uint32) func(*battlepb.PromoteSpectateBroadcastRequest) (*battlepb.PromoteSpectateBroadcastResponse, error) {
@@ -268,7 +267,7 @@ func TestListWatchableBattlesPutsFeaturedFirst(t *testing.T) {
 	require.Equal(t, []bool{false, false, false}, flags)
 }
 
-// 赛事局记录已不在(战斗结束、TTL 已清):不出现在列表里,索引成员现场摘掉。
+// 赛事局的成局已不在:不出现在列表里,索引成员现场摘掉。
 func TestListWatchableBattlesDropsFeaturedWithoutRecord(t *testing.T) {
 	svcCtx, mr := newFeaturedSvcCtx(t)
 	const gone, live = uint64(884060), uint64(884061)
@@ -283,7 +282,7 @@ func TestListWatchableBattlesDropsFeaturedWithoutRecord(t *testing.T) {
 	require.Zero(t, count)
 }
 
-// 赛事局索引按到期清理:定期清理顺手清掉过期成员,未到期的保留(全局模式谁来调见 TestGlobalSpectateMaintenanceLoopPrunesIndexes)。
+// 赛事局索引按到期清理:定期清理顺手清掉过期成员,未到期的保留(谁来调见 TestSpectateMaintenanceLoopPrunesIndexes)。
 func TestCleanupExpiredSpectateIndexPrunesFeaturedIndex(t *testing.T) {
 	svcCtx, mr := newFeaturedSvcCtx(t)
 	_, err := mr.ZAdd(spectateFeaturedActiveKey, float64(nowMs()-1000), "884070")

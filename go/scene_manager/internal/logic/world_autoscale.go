@@ -18,7 +18,7 @@ import (
 // 大世界频道按人数自动扩缩容。
 //
 // 口径(见 docs/design/world-channel-autoscale.md):
-//   - 人数 = `instance:{sceneId}:player_count`,**按频道**算,不是按进程。
+//   - 人数 = `instance:{sceneId}:members` 的 SCARD,**按频道**算,不是按进程。
 //   - 扩容:该地图**所有**频道都 >= ScaleOutPlayerThreshold 才加一个频道。
 //     要求"所有"而不是"任一",是因为负载不均时(新频道空、老频道满)按
 //     "任一"会连续扩出一堆空频道。
@@ -468,7 +468,7 @@ func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 
 	svcCtx.Redis.Del(sceneNodeKey(sceneID))
 	svcCtx.Redis.Del(sceneZoneKey(sceneID))
-	svcCtx.Redis.Del(fmt.Sprintf(InstancePlayerCountKey, sceneID))
+	svcCtx.Redis.Del(instanceMembersKey(sceneID))
 	svcCtx.Redis.Del(sceneAgonesGsKey(sceneID))
 	svcCtx.Redis.Del(sceneDrainingKey(sceneID))
 	svcCtx.Redis.Srem(worldDrainingSetKey(zoneID, confID), sceneIDStr)
@@ -483,19 +483,6 @@ func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	logx.Infof("[WorldAutoscale] channel %d fully drained and removed (zone=%d node=%s)",
 		sceneID, zoneID, nodeID)
 	metrics.ObserveWorldAutoscale(zoneID, "scale_in", "drained")
-}
-
-// readScenePlayerCount 读一个场景的在线人数。读不到当 0。
-func readScenePlayerCount(svcCtx *svc.ServiceContext, sceneID uint64) int64 {
-	raw, err := svcCtx.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneID))
-	if err != nil || raw == "" {
-		return 0
-	}
-	n, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || n < 0 {
-		return 0
-	}
-	return n
 }
 
 func inCooldown(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) bool {

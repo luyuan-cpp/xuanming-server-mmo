@@ -90,7 +90,8 @@
 | 域 | 内容 | 部署 | 分片 |
 |---|---|---|---|
 | **玩家域 player** | 一切以 player_id 为身份的键，以及由玩家派生、必须与玩家同槽的按 slot 索引（§5.2 表） | 新建 Redis Cluster，Redis ≥ 8.4（取 8.10.x），每主 1 副本（可选 2 副本，§7），AOF everysec，PVC 持久化；每个 Pod 一个 ClusterIP Service，以 `cluster-announce-ip/port/bus-port` 宣告 Service IP（§5.6「连接」） | `slot = CRC16(<pid 十进制>) mod 16384`；slot → 主节点由集群管理 |
-| **控制域 control** | 场景路由、登录会话与令牌、选主锁、重试队列、task:result、协议世代、战斗活动结果、队伍、各服务私有键、工具互斥键 | 现有共享实例（含 redis-ha），名字与地址不变；排队族已由 G4a 第 1a 批拆到按 zone 组的 queue 实例 | 不分片（上限与路线见 §10.2） |
+| **登录域 login** | 连接栅栏、登录态、设备集、账号索引、令牌、令牌家族、口令配额（第 11 批从控制域拆出，§10.2） | K8s 缺省与玩家域共用一个 Redis Cluster，配置上能拆开（`LoginRedis`） | 连接键按 `{<gate>:<inc>}`，账号键按 `{AccountTag(account)}` |
+| **控制域 control** | 场景路由、账号锁、选主锁、重试队列、task:result、协议世代、战斗活动结果、队伍、各服务私有键、工具互斥键 | 现有共享实例（含 redis-ha），名字与地址不变；排队族已由 G4a 第 1a 批拆到按 zone 组的 queue 实例 | 不分片（上限与路线见 §10.2） |
 | **映射域 mapping** | `player:zone/placement/maprev`、合服围栏镜像、就绪标记 | 2026-10-23 起改为直读 TiDB，移出 Redis（§5.13） | 不适用 |
 
 **接缝规则（可机械检查）**：玩家域客户端只接受带 hash tag 的键，非玩家域的键一律不带 `{<数字>}`。C++ 路由层与 Go 玩家域客户端的守卫在发送前检查（§5.6、§5.7），本机单实例开发时同样生效。
@@ -101,43 +102,41 @@
 
 | 族 | 旧键形 | 新键形 | 主要写者 / 读者 |
 |---|---|---|---|
-| 父快照 | `PlayerAllData:<pid>` | `PlayerAllData:{<pid>}` | C++ 存盘；login 冷加载、种子、身份补齐、外观补齐；data_service 账本；friend、match 只读 |
-| 归属代次 | `player:<pid>:owner_epoch` | `player:{<pid>}:owner_epoch` | scene_manager 铸造；C++、login、go/db、player_inbox |
+| 父快照 | `PlayerAllData:<pid>` | **删除**（存档只在 TiDB `player_store`） | — |
+| 归属代次 | `player:<pid>:owner_epoch` | `player:{<pid>}:owner_epoch` | scene_manager 铸造；C++、player_inbox |
 | 交接标记 | `player:<pid>:handoff` | `player:{<pid>}:handoff` | C++；scene_manager |
+| 交接资格 | — | `player:{<pid>}:handoff_fence` | C++ 写；scene_manager 读；go/db 维护阶段排空核对 |
 | 位置 | `player:<pid>:location` | `player:{<pid>}:location` | scene_manager；C++、locator、login、guild、trade、mail、match、player_inbox |
 | 位置修订 / 下限 | `player:<pid>:location_revision(_floor)` | `player:{<pid>}:location_revision(_floor)` | scene_manager |
 | 离场等待 | `player:<pid>:leave_release_wait` | `player:{<pid>}:leave_release_wait` | scene_manager |
 | 换线冷却 | `player:<pid>:channel_switch_cooldown` | `player:{<pid>}:channel_switch_cooldown` | scene_manager |
 | 进场去重 | `enter_scene:dedup:<pid>:<req>` | `enter_scene:dedup:{<pid>}:<req>` | scene_manager |
-| 离场墓碑（新增，见 §5.10） | — | `player:{<pid>}:leave_tomb` | scene_manager |
+| 离场墓碑 | — | **删除**（方案作废，§5.10；后缀留在保留表防误用） | — |
 | 登录代次 | `player:<pid>:login_generation` | `player:{<pid>}:login_generation` | login |
 | 同步摘要 | `player:<pid>:sync_digest` | `player:{<pid>}:sync_digest` | friend / guild / match 写；C++ 读 |
-| 存盘屏障 | `player:{<pid>}:save_barrier` | 不变 | C++、go/db、login |
-| 资产 SQL 证据 | `player:{<pid>}:asset_sql_commit` | 不变 | go/db；data_service |
-| 补投索引 | `player:save_pending:<home_zone>:<pid%64>` | `player:save_pending:{<slottag>}` | C++ 写；go/db 认领 / 回收 |
-| 补投段租约（新增） | — | `player:save_outbox_lease:{<slottag>}` | go/db |
-| 补投成员登记（新增） | — | `player:save_outbox_members:{afps}`（slot 0 的 tag，单键） | go/db |
+| 存盘屏障 | `player:{<pid>}:save_barrier` | **删除** | — |
+| 资产 SQL 证据 | `player:{<pid>}:asset_sql_commit` | **删除**（生产无读写，后缀留在保留表） | — |
+| 补投索引 / 段租约 / 成员登记 | `player:save_pending:*`、`player:save_outbox_*` | **删除** | — |
 | 会话 | `player:session:<pid>` | `player:session:{<pid>}` | player_locator；friend、guild、mail、match、login |
-| 旧位置键 | `player:location:<pid>` | **删除**（生产不再写，未上线无存量） | — |
+| 旧位置键 | `player:location:<pid>` | **删除**（读者已删，未上线无存量） | — |
 | 会话租约（4 键） | `player:leases`、`:processing`、`:claim_tokens`、`:claim_payloads` | `player:leases:{<slottag>}` 及同 tag 的三个兄弟键 | player_locator |
 | gate 索引 | `player:gate_index:sessions:<uuid>`、`:gates` | `player:gate_index:{<slottag>}:sessions:<uuid>`、`player:gate_index:{<slottag>}:gates` | player_locator（B0-1 §11 的既定形状） |
+| 分片登记 / 段租约 | — | `player:locator_shard:<role>:members:{afps}`、`player:locator_shard:<role>:segment:{<SlotTag(64c)>}`，role 是 `lease_monitor` 或 `gate_sweep` | player_locator（§5.4 同一套办法，§5.9） |
 | AFK 通行 | `player:afk_pass:<pid>` | `player:afk_pass:{<pid>}` | player_locator |
 | 玩家锁 | `player_locker:<pid>` | `player_locker:{<pid>}` | login |
-| 合服提示 | `player_merge_notice:<pid>`、`player_force_rename:<pid>` | `…:{<pid>}` | merge_zone 写；login 读删 |
+| 合服提示 | `player_merge_notice:<pid>`、`player_force_rename:<pid>` | **删除**（生产无读写） | — |
 | 登录幂等 | `login_idempotent:<pid>:<req>` | `login_idempotent:{<pid>}:<req>` | login |
 | 战斗锁 / 上下文 | `battle:lock:<pid>`、`battle:ctx:<pid>` | `battle:lock:{<pid>}`、`battle:ctx:{<pid>}` | C++；guild、match 只读 |
-| 待结算 | `battle:settlement:pending:<pid>`、`…:pending:id:<pid>` | `battle:settlement:pending:{<pid>}`、`battle:settlement:pending:id:{<pid>}` | battle、scene |
-| 结算索引 | `battle:settlement:pending:index`（全局） | `battle:settlement:pending:index:{<slottag>}` | battle、scene（§5.11） |
-| 已暂存标记 | `battle:settlement:staged:<battle_id>`（每局一个 SET） | `battle:settlement:staged:{<pid>}:<battle_id>`（每人每局一个串，EX 86400） | battle |
-| go/db 排序锁 | `distributed:lock:kafka:ordering:<topic>:<pid>:<msg>` | `…:<topic>:{<pid>}:<msg>` | go/db；merge_zone 镜像 |
-| go/db 游标 / epoch | `consumer:applied(_epoch):<topic>:<pid>:<msg>` | `consumer:applied(_epoch):<topic>:{<pid>}:<msg>` | go/db |
-| 子表缓存 | `<msgType>:<pid>` | `<msgType>:{<pid>}` | go/db |
-| expand 消费锁 | `kafka:consumer:lock:<pid>` | `kafka:consumer:lock:{<pid>}` | go/db |
+| 待结算 / 结算索引 / 已暂存标记 | `battle:settlement:*` | **删除** | — |
+| go/db 排序锁 / 游标 / epoch | `distributed:lock:kafka:ordering:*`、`consumer:applied(_epoch):*` | **删除** | — |
+| 子表缓存 / expand 消费锁 | `<msgType>:<pid>`、`kafka:consumer:lock:<pid>` | **删除** | — |
 | data_service 字段 | `player:{<id>}:<field>`、`__lock/__version/__fields` | 不变 | data_service |
 
-控制域里与玩家相关、但**不进**玩家域的键（不带玩家 tag）：`player:save_barrier:maintenance:<zone>`（屏障恢复工具的 zone 互斥键）、`player_to_account:<id>`（login 账号反查）、`assetop:wake:<svc>:<pid>`（guild / trade 的唤醒去重）。它们不与玩家域键出现在同一条命令里（§5.3 对屏障恢复与 debug_import 的改形保证这一点）。
+每个键只有一个构造函数：Go 在 `shared/redisslot/player_keys.go`（owner_epoch、handoff 在 `shared/ownerepoch`，handoff_fence 在 `shared/handofffence`，sync_digest 在 `shared/playersync`）；C++ 在 `player_ownership_comp.h`、`battle_lock_rules.h`、`player_landing.h`。两边的键形由 `redisslot/player_keys_test.go` 与 `currency_test` 的金样钉住。
 
-**data_service 命名空间**：`player:{<id>}:<字段>` 是 data_service 的字段命名空间，新进入该前缀的后缀（owner_epoch、handoff、location、location_revision、location_revision_floor、leave_release_wait、channel_switch_cooldown、leave_tomb、login_generation、sync_digest，加上已有的 save_barrier、asset_sql_commit）统一由 Go 共享包 `shared/redisslot` 的保留后缀表登记（第 1 批已落），`isReservedPlayerField` 改为查这张表，不再逐个比键名。今后任何模块新增 `player:{<id>}:` 键，必须登记到这张表（契约测试枚举核对）。
+控制域里与玩家相关、但**不进**玩家域的键（不带玩家 tag）：`player_to_account:<id>`（login 账号反查）、`assetop:wake:<svc>:<pid>`（guild / trade 的唤醒去重）、`instance:<scene>:members`、`node:zone:<z>:<node>:members`（场景与节点成员，§5.10）。它们不与玩家域键出现在同一条命令里，`scene_keys_contract_test.go` 钉住 scene_manager 这一侧。
+
+**data_service 命名空间**：`player:{<id>}:<字段>` 是 data_service 的字段命名空间，新进入该前缀的后缀（owner_epoch、handoff、handoff_fence、location、location_revision、location_revision_floor、leave_release_wait、channel_switch_cooldown、leave_tomb、login_generation、sync_digest，加上已有的 save_barrier、asset_sql_commit）统一由 Go 共享包 `shared/redisslot` 的保留后缀表登记（第 1 批已落），`isReservedPlayerField` 改为查这张表，不再逐个比键名。今后任何模块新增 `player:{<id>}:` 键，必须登记到这张表（契约测试枚举核对）。
 
 **slot 与 slot-tag**（两种语言逐字一致，金样向量钉住；第 1 批已落 `go/shared/redisslot` 与 `cpp/libs/engine/infra/storage/redis_cluster/redis_slot.h`）：
 
@@ -148,21 +147,23 @@
 
 ### 5.3 原子范围与脚本改形
 
+> **2026-10-31 现状**：存盘屏障、战斗结算 6 段、go/db 与 saveoutbox、屏障恢复、debug_import、login begin / publish / 种子 / 身份补齐这些行随存档移出 Redis 作废，下表原文保留，不再是计划。第 3 批已落的是「C++ 归属 / 交接 / 改派 / 取证 / 战斗 lock-ctx」「`player_team` 的 MGET」「scene_manager」三类；player_locator 第 3 批只改了会话键形，第 7 批改了结构（§5.9）。
+
 | 脚本 | 改形 | 同槽证明 |
 |---|---|---|
 | C++ `kSaveWithCommitBarrierLuaScript` | KEYS 换成 `PlayerAllData:{pid}`、`player:{pid}:owner_epoch`、`player:{pid}:save_barrier`、`player:save_pending:{<slottag>}`；键形校验同步更新（父键与 owner 键按新形状逐字比对，索引键按 `^player:save_pending:{[a-z]+}$` 校验）；topic 仍按 `db_task_zone_<z>[_g<n>]` 校验，但不再要求与索引里的 zone 相等（索引已不含 zone）；ZADD 成员与分数不变 | 前三键同 `{pid}`；索引 tag 按构造与 pid 同槽，路由层发送前再核一次 |
 | C++ 归属 / 交接 / 改派 / 取证 / SQL 回执 / 战斗 lock-ctx 共 15 段 | 只改调用方传入的键名 | 全部同 `{pid}` |
 | C++ 战斗结算 6 段 | 全局索引换成按 slot 索引；stage 脚本把每局的 SET 换成每人每局的串标记（`SET NX EX 86400` 语义） | 同 `{pid}` + 本 slot 索引 |
-| C++ `player_team` 的 MGET | 拆成两条 GET：队长位置、自己的战斗锁 | 原 FIFO 依赖是「本人删锁先于本人读锁」，两条命令都在本人 slot，路由层停等保证执行顺序（§5.6） |
+| C++ `player_team` 的 MGET | 拆成两跳 GET：先读自己的战斗锁，回调里再读队长位置（已落） | 原 FIFO 依赖是「本人删锁先于本人读锁」，读锁在本人 slot，路由层停等保证执行顺序（§5.6）；队长位置单独一条，不依赖它 |
 | go/db 令牌发布 / 游标 / 释放与续租 | 锁、缓存、游标、epoch 键带 `{pid}`；`RunTokenScript` 把锁键加进 KEYS 的方式不变 | 全部同 `{pid}` |
 | go/db saveoutbox 认领 / 推迟 / 计次 / 终态 / 提示 | 桶换成按 slot 索引；**删除跨 zone 迁移脚本**（索引已与 zone 无关） | 屏障 `{pid}` + 本 slot 索引 |
 | go/db 屏障恢复 `restoreScript` / `mappingInspectScript` | 维护键（控制域）移出脚本，改为脚本外前后各核一次（它只是工具互斥，业务写者不读它，`barrierrestore/scripts.go` 头注释已说明）；「本 zone 64 桶为空」改为「该玩家不在其 slot 索引中」（同槽 ZSCORE）；映射三键随映射域移出 | 余下键全部同 `{pid}` + 本 slot 索引 |
 | data_service `debug_import` 的 stage / commit 脚本 | stage 去掉按 zone 的桶、改用该玩家的 slot 索引；commit 去掉控制域的 `player_to_account:<id>`（脚本没用到它） | 同 `{pid}` |
 | login begin / publish / 种子 / 身份补齐 | 只改键名（身份补齐的四键：父快照、玩家锁、会话、位置都属玩家域） | 全部同 `{pid}` |
 | login 外观补齐的跨玩家 MGET | 改 `MGetBySlot` | 按 slot 分组 |
-| scene_manager 落点 / 回滚 / 快照 / 进场去重 | 只改键名 | 全部同 `{pid}` |
-| scene_manager 离场 | 拆成玩家域与控制域两步，人数改为按成员集合计（§5.10） | 第一步同 `{pid}`；第二步只碰控制域 |
-| player_locator 9 段会话 Lua 与 3 段 gate 索引脚本 | 租约与 gate 索引按 slot 分桶；认领脚本不再现拼其他玩家的会话键；`""` 哨兵挪进 ARGV（§5.9） | 会话 `{pid}` + 本 slot 的租约与索引 |
+| scene_manager 落点 / 回滚 / 快照 / 进场去重 | 只改键名（已落）；KEYS 收进 `placementKeys` 等函数，契约测试与生产共用 | 全部同 `{pid}`，`scene_keys_contract_test.go` 按 `HashSlot` 断言，并走一遍真实进场离场核对每条 EVAL |
+| scene_manager 离场、撤销无资格持有者 | 拆成玩家域与控制域两步，人数改为按成员集合计（§5.10，已落） | 第一步同 `{pid}`；第二步只碰控制域 |
+| player_locator 9 段会话 Lua 与 3 段 gate 索引脚本 | 租约与 gate 索引按 slot 分桶；认领脚本不再现拼其他玩家的会话键；`""` 哨兵挪进 ARGV（第 7 批已落，§5.9） | 会话 `{pid}` + 本 slot 的租约与索引 |
 | data_service 字段脚本 | 不变（已同 `{pid}`）；脚本内按索引现拼的字段键仍是同 tag，该接口无生产写者（`data_logic.go:180`） | 同 `{pid}` |
 
 **Lua 失败顺序**：所有改形保留「全部校验先于任何写入」的结构；Redis Lua 不回滚报错前的写入，改形不新增可能在写入后报错的分支。uint64 版本比较仍按字节，不经 double。
@@ -181,7 +182,7 @@
 
 ### 5.5 go/db
 
-- 句柄拆成两个：**PlayerStore**（玩家域，`playerstore` 构造）承担排序锁、游标、epoch、子表缓存、屏障 ACK、资产证据、owner_epoch 读、saveoutbox；**RedisClient**（控制域）保留重试队列全族、WAITAOF 组提交、`task:result` 与发布通知、expand 状态、协议世代、能力标记、persist 引导标记。映射句柄 `Placement.Redis` 由映射直读 TiDB 的改造移除。
+- 句柄拆成两个：**PlayerStore**（玩家域，`playerredis` 构造）承担排序锁、游标、epoch、子表缓存、屏障 ACK、资产证据、owner_epoch 读、saveoutbox；**RedisClient**（控制域）保留重试队列全族、WAITAOF 组提交、`task:result` 与发布通知、expand 状态、协议世代、能力标记、persist 引导标记。映射句柄 `Placement.Redis` 由映射直读 TiDB 的改造移除。
 - saveoutbox 的「owner 与父缓存同实例」门禁换成「二者都在 PlayerStore」——在新拓扑下由构造保证（都从同一个句柄取），门禁改为核对句柄身份。
 - 每任务往返数不变（每表 7 次玩家域 [C]），只是这 7 次随主节点数扩展。`kafka:expand:status:<topic>` 每任务一次 GET 是控制域单键热点，改为进程内 1s 缓存（该功能按 10-13 拍板是保留的死代码，缓存不改变语义）。
 
@@ -201,36 +202,164 @@
 
 **重连回调**：任一节点完成握手都触发一次（带节点身份）。`RedisSystem` 的补发逻辑本身幂等（注释已声明正确性不靠补发顺序，靠闸门）；`MessageAsyncClient::OnReconnected` 改为只强制冲刷到期的待重试项，不再挪动其他节点上仍在途的元素（单连接时代挪动在途是防御性的，断连时 hiredis 已对在途命令空应答回调）。
 
-**两个句柄**：`tlsRedis` 保留为控制域连接（世界分线目录、神秘商人、`PUBLISH assetop:wake`、battle 活动结果）；新增 `tlsPlayerRedis` 承担玩家域。gate 节点不访问玩家域，不建玩家域连接。
+**两个句柄**：`tlsRedis` 保留为控制域连接（世界分线目录、神秘商人、`PUBLISH assetop:wake`）；新增 `tlsPlayerRedis` 承担玩家域。gate、battle 节点不访问玩家域，不建玩家域连接（battle 不写 Redis，结算只走 match SQL 与收件箱）。
 
 **依赖说明（§11.2）**：不引入 hiredis-cluster / redis-plus-plus。它们没有 muduo 事件循环适配，接入要么另起线程，要么自写适配层，且无法保证上面的「同 slot 停等」与「未执行类错误不外泄」两条契约；路由层需要的能力（CRC16、`CLUSTER SLOTS` 解析、按 slot 分发与重发）用现有 hiredis 1.2.0 的格式化接口即可实现，代码量与风险更可控。
 
+**第 5a 批实现补充（2026-10-31，代码在 `cpp/libs/engine/infra/storage/redis_cluster/`，未编译）**。以下是上文没有写明、落码时定下的细节：
+
+- **预算从成为队头起算**：排队不消耗预算，否则一次长迁移会让后面的命令还没发出就超时。
+- **MOVED / ASK 立即重发设上限（5 次）**，超过按退避走。只有两个节点互相指向时才碰得到，不设上限会以 RTT 为周期空转到预算耗尽。
+- **命令表 fail-closed**：只认按当前 C++ 代码核对过的命令（`redis_command_route.cpp` 的 `kCommandKeySpecs`），未登记的一律拒绝，`commandForKey` 也不例外。`PUBLISH` 属控制域，不进表。
+- **单键命令不强制 hash tag**：§5.1 的「玩家域只接受带 tag 的键」目前只在多键路径上检查。第 3 批改名之前现有单键大多没有 tag，强制就接不上线；改名完成后再决定是否打开。（第 5c 批已打开，见下。）
+- **维护前沿**：`Hiredis::MaintenanceState` 把任何错误应答记成 UNKNOWN，MOVED 会让进程永远过不了维护排空，所以 `formattedCommand` 多一个可选的 `NotExecutedPredicate`，判定为「确定没有执行」的错误不算 UNKNOWN。路由层接受的每条命令也单独计入 `ProcessMaintenance()` 直到最终结果：排队与退避中的命令不在任何连接上，否则排空会把它们漏掉。
+- **`Hiredis.h` 实际有三份**：`muduo_windows`（编译 muduo.lib）、`tools/archived/muduo_linux_overlay`（Linux 覆盖件）、`third_party/muduo/contrib/hiredis`（业务代码 `#include <muduo/contrib/hiredis/Hiredis.h>` 实际命中的就是这份）。改接口要三处同改；`.cc` 只有前两份在编译。
+- **重连抖动**靠给每个节点的 `reconnectIntervalSec` 加 `[0, 1s)` 的随机量实现，`RedisManager` 未改。
+- **断连发现有延迟的一种情况**：退避中的队头要等下一次重试才发现节点断了（最迟 1s）；在途命令是立刻空应答。`RedisManager` 没有断线回调，这条延迟换来不改它。
+- **种子回退**：全部已知节点连不上持续 5s（`seedFallbackDelay`）才把种子连回来。
+
+**第 5b、5c 批实现补充（2026-10-31，未编译）**：
+
+- **句柄放在哪**：`tlsPlayerRedis` 的声明与定义在 `redis_cluster_client.{h,cpp}`，`redis_manager.h` 只留一行指引。`redis_cluster_client.h` 依赖 `redis_manager.h`（`RedisConnectOptions`），`infra` 依赖 `thread_context`；句柄放进 `thread_context` 就成了头文件与静态库的循环。
+- **配置**：`game_config.yaml` 的 `player_redis`（`GameConfig.player_redis = 9`）：`mode`（standalone | cluster）、`seeds`（host:port 列表）、`password`，环境变量 `PLAYER_REDIS_PASSWORD` 覆盖口令。整段缺失 = standalone，地址与口令沿用 `zoneredis`。写了 `seeds` 就是另一个实例，口令不继承。加载器只读入与补默认（`Node` 不看 `readGameConfig` 的返回值，gate、battle 也不该被这段配置拖累）；取值错误与主机名解析失败由 `RedisSystem::Initialize` 拒绝启动。建连也在那里，所以只有 scene 连玩家域。
+- **键的归属**：玩家域是 `player:{id}:owner_epoch`、`handoff`、`handoff_fence`、`location`、`sync_digest`，`battle:lock:{id}`、`battle:ctx:{id}`。控制域是 `world_channel_directory:zone:*`、`mystery_merchant:zone:*` 和 `PUBLISH assetop:wake`。上文提到的「存盘后紧跟 PING」「battle 节点孤儿清理」「`MessageAsyncClient`」都已随存档移出 Redis 删除，C++ 现在没有无键业务命令，`commandForKey` 暂无生产调用方。
+- **接缝守卫打开**：`tlsPlayerRedis` 用 `HashTagPolicy::kAllKeys`，单键命令也必须带 tag。两个句柄在单实例开发时指向同一个实例，错发的键照样读写成功，要到上集群才变成读写落在两边；守卫让它当场 `REDIS_ERR`。`RedisClusterClient` 的缺省策略仍是只查多键。
+- **`connected()` 为真时 `command()` 也可能 `REDIS_ERR`**（这个 slot 的节点断了、排队满了）。忽略返回值的 10 处（`player_battle.cpp` 8 处、`player_team.cpp` 2 处）补了检查，走与「Redis 断开」相同的降级。其余调用点本来就检查。
+- **调用点里没有针对 MOVED 或连接地址的假设。**「ERROR = 确定没执行」的分支（如 `BeginTravelHandoff`）继续成立：READONLY、LOADING 这类错误到不了业务，预算耗尽走空应答，落到各处「结果未知」的分支，那是偏保守的一侧。
+- **重连回调**：任一主节点握手都触发，表里的条目不一定在这个节点上。补发幂等：撤回是条件写，A2′ 与核实只重发没有在途的条目。主节点多时切主或网络恢复会连着触发很多次，所以限成每秒一轮，否则最坏是「主节点数 × 待撤回表上限」条带整段 Lua 的命令堆在 loop 线程上。
+- **可观测**：`RedisSystem` 的 30s 快照多一行 `[PlayerRedis]`，有变化才打，守卫拒绝、排队满、预算耗尽有增长时是 WARN。
+
+**同一连接 FIFO 依赖的逐处结论**（§3.3 的清单，按当前代码核对）：
+
+| 依赖 | 结论 |
+|---|---|
+| 条件删锁先于跟随链读锁；reaper 删锁先于登录复查读锁；`SET battle:lock` 先于 `SET battle:ctx` | 同玩家同 slot，路由层停等，仍成立 |
+| A2′ 先于载入 | 载入已是 go/db 的 gRPC，本来就没有连接顺序。`HandlePlayerAsyncLoaded` 的闸门在 A2′ 确认前暂存载入结果 |
+| 放弃补写、凭证补写、取证 | 靠 `handoff_fence` 的 CAS 或一段 Lua，不靠顺序（r2-lc#2） |
+| 跟随链：读本人锁 → 读队长位置 | 跨玩家、跨 slot，回调链已是显式的（第 3 批） |
+| 存盘后紧跟 PING、battle 节点孤儿清理三步 | 代码已删 |
+| 条件删锁（玩家域）→ `PUBLISH assetop:wake`（控制域） | 原来同连接，现在没有顺序。不依赖：消费端重投的指令到 scene 只看 `InBattleComp`（发布时已摘），不读锁 |
+| 登录读锁（玩家域）→ 进场唤醒 `PUBLISH`（控制域） | 原来同连接，现在没有顺序。slot 迁移或切主时读锁可能卡到 10s，重投的指令可能先于冻结重建到达。不改：周期重投本来就能落进这个窗口，读锁空应答时窗口更长（登录复查 30s），战斗闸对这个窗口不是硬保证 |
+
 ### 5.7 Go 客户端
 
-- 玩家域句柄统一为 `redis.UniversalClient`，由共享构造器 `shared/playerstore` 按配置产出（第 1 批已落）：`Addrs` 一个且 `Cluster=false` 为单实例；`Cluster=true` 为 `ClusterClient`。每节点池上限显式化（缺省每节点 4 条，各服务可按现值设定，例如 go/db、login 单实例阶段沿用 20），`MinIdleConns=0`，空闲 60s 回收；`ContextTimeoutEnabled` 缺省开（ctx 截止约束套接字读写，player_inbox 500ms、guild 2s 这类预算依赖它）；`PoolTimeout` 可配。
+- 玩家域句柄统一为 `redis.UniversalClient`，由共享构造器 `shared/playerredis` 按配置产出（第 1 批已落）：`Addrs` 一个且 `Cluster=false` 为单实例；`Cluster=true` 为 `ClusterClient`。每节点池上限显式化（缺省每节点 4 条，各服务可按现值设定，例如 go/db、login 单实例阶段沿用 20），`MinIdleConns=0`，空闲 60s 回收；`ContextTimeoutEnabled` 缺省开（ctx 截止约束套接字读写，player_inbox 500ms、guild 2s 这类预算依赖它）；`PoolTimeout` 可配。
 - **不自动重放结果未知的命令**：单实例 `MaxRetries=-1`；Cluster 模式下 go-redis 的 process 循环会在 EOF / 超时后自动重发同一命令（最多 MaxRedirects 次），可能重放已在服务端执行的 Lua。构造器用 `OnNewNode` 给每个节点客户端挂钩子，把命令发出后遇到的网络错误包成不可重试的「结果未知」错误，只保留 MOVED / ASK / TRYAGAIN / CLUSTERDOWN / LOADING 这类「未执行」重试——与 C++ 路由层的语义一致。
 - 构造器挂发送前守卫：EVAL / EVALSHA / MGET / DEL 等多键命令的键必须同 slot、玩家域的键必须带 tag，否则直接返回错误，单实例开发时同样生效。
-- 跨玩家 MGET 统一走 `playerstore.MGetBySlot`：按 slot 分组后 pipeline（ClusterClient 自动按节点拆批），结果按输入顺序还原。
-- 全库扫描分两种：离线全量任务用 `playerstore.ScanEachMaster`——逐主节点扫完，任何一个节点失败就整体失败；扫描前后各取一次拓扑指纹（每个主节点的节点 ID、run_id 与所持 slot 段，以及有无进行中的迁移），扫描所用的主节点集合取自指纹，前后不一致、或看到进行中的迁移，就返回 `ErrTopologyChanged`（fail-closed，调用方不得据此断言「键不存在」）；按请求分页的在线目录用 `playerstore.ScanPage`（第 6 批加）：游标 = 指纹摘要 + 主节点序号 + 节点内游标，指纹变化即游标失效、从头开始。
+- 跨玩家 MGET 统一走 `playerredis.MGetBySlot`：按 slot 分组后 pipeline（ClusterClient 自动按节点拆批），结果按输入顺序还原。
+- 全库扫描分两种：离线全量任务用 `playerredis.ScanEachMaster`——逐主节点扫完，任何一个节点失败就整体失败；扫描前后各取一次拓扑指纹（每个主节点的节点 ID、run_id 与所持 slot 段，以及有无进行中的迁移），扫描所用的主节点集合取自指纹，前后不一致、或看到进行中的迁移，就返回 `ErrTopologyChanged`（fail-closed，调用方不得据此断言「键不存在」）；按请求分页的在线目录用 `playerredis.ScanPage`（第 6 批加）：游标 = 指纹摘要 + 主节点序号 + 节点内游标，指纹变化即游标失效、从头开始。
 - go-zero 句柄（scene_manager、friend、match）在玩家域改用 go-redis `UniversalClient`；控制域照旧。
+
+**第 6 批实现补充（2026-10-31，未编译）。**
+
+- 包名从 `shared/playerstore` 改为 `shared/playerredis`：它是玩家域 Redis 的客户端，和 TiDB 的 `player_store` 表、`go/db/internal/playerstore` 不是一回事。
+- **配置**：各服务统一用 `playerredis.Config`，配置键 `PlayerRedis`（`Addrs`、`Cluster`、`Username`、`Password`、`PasswordEnv`、`TLS`、`PoolSizePerNode`、`ConnMaxIdleSeconds`、`DialTimeoutMs`、`ReadTimeoutMs`、`WriteTimeoutMs`、`PoolTimeoutMs`、`DisableContextTimeout`）。没写 `Addrs` 时指向这个服务现有的 Redis 单实例（`OrDefault`），`etc/*.yaml` 只把连接池上限写明，开发环境和还没渲染这一段的 K8s ConfigMap 都不用改。`ValidateSection` 拒绝 `Cluster: true` 却没写种子：那样会静默落到现有实例上。
+- **`ScanPage` 的指纹与 `ScanEachMaster` 不同**：它串在在线请求上，逐主节点读 run_id 是每页 2 × 主节点数次往返，随规模线性增长。所以只读一个节点的 `CLUSTER NODES`（一次往返），指纹取主节点 ID 与 slot 段。代价：主节点原地重启看不出来，旧游标在新进程上可能漏掉或重复一些键。在线目录是展示面，可以接受；要「扫完 = 没有遗漏」的任务用 `ScanEachMaster`。单实例指纹是常量，不多一次往返。
+- **`friend` 在线目录游标**：`v2:<摘要>.<主节点序号>.<节点内游标>:<这一批消费到哪>`，最长 43 字节（上限 48 不变）。客户端不解析，`v1` 游标判参数错误，从空游标重拉即可（未上线，不留兼容）。
+- **铸造通道**：`playerredis.NewPinned` 不挂守卫的管道规则（EVAL + WAITAOF 要进同一条 pipeline，只发给节点客户端，不会自动重发），键的规则由 `EvalAndConfirm` 发送前调 `CheckKeys`。按第一个键取主节点、重定向类重发、切主后的回滚见[回退防护 §4.3.3](zone-redis-regression-guard-20261022.md)。启动探针逐主节点发。
+- **守卫**：玩家域句柄一律 `playerredis.New`，guild 的摘要专用客户端同样如此。guild、player_inbox、trade 的控制域客户端（选主锁、`assetop:wake`）不经守卫，它们的键不带 tag。
+- **没有 go-zero 的熔断器**：玩家域句柄不挂熔断，失败面由超时和 ctx 截止约束。Redis 整个不可用时，每个请求要等到超时才失败，而不是概率性快速失败。
 
 ### 5.8 其他服务的玩家域读写
 
-friend（会话、父快照、同步摘要）、guild（会话、位置、战斗锁、同步摘要）、match（会话、战斗锁、父快照、同步摘要）、mail（会话、位置）、trade（位置）、player_inbox（owner_epoch、位置）、login（父快照、玩家锁、登录代次、合服提示、外观补齐）各自新增 `PlayerStore` 配置并改用上节的构造器；跨玩家 MGET 改 `MGetBySlot`，friend 在线目录改 `ScanPage`（游标格式随之变化，是客户端可见的不透明游标，按 [G4a §20.5](shared-redis-split-by-purpose.md) 已登记的两版同批评审处理）。guild 的 `assetop:wake` 订阅、去重键、战斗活动结果仍在控制域。
+friend（会话、父快照、同步摘要）、guild（会话、位置、战斗锁、同步摘要）、match（会话、战斗锁、父快照、同步摘要）、mail（会话、位置）、trade（位置）、player_inbox（owner_epoch、位置）、login（父快照、玩家锁、登录代次、合服提示、外观补齐）各自新增 `PlayerRedis` 配置并改用上节的构造器；跨玩家 MGET 改 `MGetBySlot`，friend 在线目录改 `ScanPage`（游标格式随之变化，是客户端可见的不透明游标，按 [G4a §20.5](shared-redis-split-by-purpose.md) 已登记的两版同批评审处理）。guild 的 `assetop:wake` 订阅、去重键、战斗活动结果仍在控制域。
+
+**第 6 批核对（2026-10-31）。** 父快照已不在 Redis，上面那几项随之不存在。data_service 与 chat 不读玩家域键（只有 `player:name:<id>` 私有缓存和 `LoginRedis`），不用改。login 的玩家键由它自己的批次处理，读登录态的 `LoginRedis` 句柄属第 11 批。各服务的分工：
+
+| 服务 | 玩家域句柄（`PlayerRedis`） | 没写 `Addrs` 时指向 | 控制域留下的 |
+|---|---|---|---|
+| scene_manager | location、修订、离场等待、冷却、去重、owner_epoch、handoff、handoff_fence | `Redis` | `Redis`：场景路由、成员集合、世界频道、选主锁 |
+| friend | 会话、同步摘要 | `Redis` | `FriendRedis`：私有键。`SharedRedis` 字段删除，`Redis` 段只作回落目标 |
+| match | 会话、位置、战斗锁、同步摘要 | `Redis` | `MatchRedis`：私有键。`SharedRedis` 字段删除，`Redis` 段只作回落目标 |
+| guild | 会话、位置、战斗锁、同步摘要 | `PlayerLocatorRedis` | `PlayerLocatorRedis`：`assetop:wake` 与去重键；`RedisClient`：私有键、选主锁 |
+| trade | 位置 | `SharedRedis` | `SharedRedis`：`assetop:wake` 与去重键、选主锁 |
+| player_inbox | owner_epoch、位置 | `CoreRedis` | `CoreRedis`：选主锁 |
+| mail | 会话、位置 | `SharedRedisAddr` | 无 |
+
+`playersync` 的 go-zero 适配器没有调用方了，随之删除。
 
 ### 5.9 player_locator
 
 按 [B0-1 设计 §11](player-locator-gate-session-index.md) 的既定形状落地：会话 `player:session:{pid}`；租约四键与 gate 索引按会话 pid 的 slot-tag 分桶，会话 CAS 与本 slot 的租约、索引在同一脚本里原子维护（不变量 I1 不变）。`claimExpiredLeasesScript` 改为按 slot 认领，只返回成员与令牌、不在脚本里读其他玩家的会话；逐人的提交脚本声明会话键后再核状态。`""` 哨兵挪进 ARGV。LeaseMonitor 与死 gate 清扫按 §5.4 同一套「成员登记 + 段租约」分片。补建 / 审计用 `ScanEachMaster`（逐主节点核 run_id 与迁移状态）。就绪 / 代次 / 审计时间这几个全局控制键留在控制域。能力键按设计换 v2 前缀。
 
+**第 7 批实现补充（2026-10-31，代码在 `go/player_locator/internal/logic/`，未编译）**。详细状态机见 [B0-1 设计](player-locator-gate-session-index.md) §2–§4，这里记总设计层面定下的事：
+
+- **两套分片**：`lease_monitor` 只依赖 Redis，`gate_sweep` 还依赖 etcd，各自一套成员登记与段租约。合成一套的话，etcd 不可达时清扫让出段，断线租约也跟着没人扫。代价是每个副本每 10s 多读 256 把键，2Z = 890 个副本时全服约 4.6 万 GET/s，散在各主节点上 [I]。
+- **读失败的段这一周期不算持有**：不续、不扫，到期后归能连上它的副本。**有段读失败的副本这一周期也不算成员**（撤销登记，照常持有读得到的段）：否则它占着一份份额却接不了那些段，别的副本又持满了自己的份额，那些段就一直没人扫。这两条比 §5.4 多，只要有一个副本读得全，它的份额就够接下全部无主段；所有副本都读不全时成员数归零按 1 算，各自接管读得到的。键类型不对不算读不全，只跳过那一段。
+- **认领分两步**：按 slot 认领脚本只碰本 slot 的租约键，只返回成员与令牌；逐人的钉载荷脚本声明会话键后核令牌、把会话字节钉进 `claim_payloads`。commit / rearm 同样逐人。
+- **`""` 哨兵**：KEYS 恒定长度，「这一侧没有索引」的位置放本 slot 的登记集占位，脚本凭 ARGV 里的 gate 判断。
+- **写入顺序**：可能因键类型不对而报错的簿记排前面，会话字节最后写，Redis 不回滚报错前的写入，报错时会话原样。
+- **登记集收紧**：一把索引键空了就把 gate 移出本 slot 的登记集（`redis.pcall`，不是不变量）。不收紧的话，一个长寿 gate 迟早碰遍 16384 个 slot。
+- **清扫不选主，写者检查与补建 / 审计仍由一个 leader 跑**，就绪、代次、审计时间、选主锁留在控制域。leader 只有这些事，一个 leader 也读不动全部登记集。
+- **LeaseMonitor 探测量是常数**：每拍取「持有 slot 数 × 拍长 / `ScanRoundSeconds`」个 slot（默认 16s），全服约 2048 条 ZCOUNT/s，与副本数无关。代价是租约到期后最迟晚 16s 才被认领。登出清理的首拍不等这个：同账号首次登录在清理期间会被拒，所以 MarkOffline 入队后到点叫醒本进程处理那个 slot（认领脚本才是互斥手段，没有段也能认领），叫不醒时常规轮转兜底。
+- **gauge 按索引键数计，不逐键 SCARD**：目标规模下索引键约等于在线人数（一个 gate 约 4500 人散在约 3900 个 slot 上 [I]），逐键 SCARD 每拍是千万条命令。`gate_index_members`、`dead_gate_members` 因此变成每副本一份的键数，跨副本求和约等于人数。
+- **容量**：索引约 1.75e7 把键加同样多的登记成员，约 3–4 GB [I]，比全局索引多一倍多，是分桶的代价。一遍审计接近 19 小时（第 1 阶段 SCAN 约 9 小时，第 2 阶段逐把键约 10 小时）[I]，日审计已偏紧，后续可把第 2 阶段按批走 pipeline。
+- **`ScanEachMaster` 的代价**：SCAN 失败不重试，玩家域客户端又不自动重放，一次超时就作废一遍。SCAN 是只读的，后续可以在 `ScanEachMaster` 里对同一游标重试。
+
 ### 5.10 scene_manager 离场拆分
 
-原 `luaDeletePlayerLocationIfUnchanged` 把删除位置与递减场景 / 节点人数绑在一次提交里，同时覆盖 go-zero 原样重发与 player_locator 重试（`leavescenelogic.go:34-38`）。分到两个域之后计数器做不到「谁删谁减」：LeaveScene 预读到位置为空就直接回成功（`:207`），第二步若在两步之间失败，人数永久多计；而实例只有人数不大于 0 才会进空闲销毁（`instance_lifecycle.go:113`），多计会让实例永不销毁。
+**定稿（第 3 批，2026-10-31，已读完全部计数入口，未编译）。** 原 `luaDeletePlayerLocationIfUnchanged` 把删除位置与递减场景 / 节点人数绑在一次提交里。分到两个域之后计数器做不到「谁删谁减」：第二步在两步之间失败，人数永久多计，实例永不销毁。所以人数改按成员集合计，v1 的墓碑方案作废。
 
-**方向：人数改为按成员集合计。** 控制域 `instance:<scene>:members`、`node:zone:<z>:<node>:members` 为 SET（成员 pid），人数 = SCARD；进场 / 预占 SADD，离场 SREM——天然幂等，原样重发、调用方重试、并发重进场都不会多减或漏减，不再需要墓碑与去重键（v1 的墓碑方案作废，`leave_tomb` 后缀保留在保留表里以防误用）。离场两步：玩家域 CAS 删除位置等键；控制域 SREM。第二步失败时 player_locator 的重试会再次驱动 SREM（SREM 不依赖第一步是否「本次」删除）。
+**键。** 控制域 `instance:<scene>:members`、`node:zone:<z>:<node>:members`，SET，成员是十进制 player_id，人数 = SCARD。`instance:<scene>:player_count`、`node:zone:<z>:<node>:player_count` 已删。
 
-预占语义（`luaReserveBestWorldChannel` 先 INCR 再落点、按人数选线）与销毁判定改用 SCARD 的细节，第 3 批读完 scene_manager 全部计数入口后定稿；在那之前本节是设计方向，不是已核实的方案。
+**不变量。** location 指向 (scene, node) ⇔ 玩家是这两个集合的成员。由三条约定收敛，任意交错都成立（`scene_membership.go`）：
+
+1. 预占时 SADD，让并发选线看到在途请求。
+2. 落点提交后再 SADD 一次：预占之后、落点之前，别的请求可能已经把它摘掉。
+3. 摘成员时，location 此刻指向这里的部分不摘；其余 SREM 之后再读一次 location，这时指向这里就加回去：SREM 之前并发进场可能已经落点。
+
+**为什么要第 3 条。** 计数器的「+1 再 -1」对重叠是安全的，集合不是：
+
+- 自动选线碰巧选中玩家已在的频道，这次进场又被拒：预占和已有的成员身份是同一个成员，释放不能把人移出去。
+- 同节点换图：摘旧场景时节点集合不能动。
+- 死节点接管落回同一个频道。
+- 并发请求的释放可能摘掉已落点的成员。
+
+有了第 3 条，调用方不用判断旧新场景、旧新节点是否相同，也不用区分预占是不是本请求加的。
+
+**残留与对账。** 请求路径摘不掉的成员由领导者后台对账收掉(`scene_member_reconcile.go`)。三种来源:
+
+- scene_manager 在预占之后、落点之前崩溃,或落点之后、摘旧场景之前崩溃。
+- 离场第二步失败:player_locator 保留清理任务重试,但这时 location 已删、生产上 `session.SceneId` 恒 0,重试解析不出场景号,直接 ack。
+- 强制销毁之后才离场:`scene:<id>:node` 已删,离场查不到节点。强制销毁时,场景里剩的成员逐个走 `removeSceneMember` 摘节点集合,location 仍指向这个节点的留着(玩家可能还在节点上),离场之后由对账摘。
+
+在途预占的 location 同样不指向这里。它是实例里唯一的成员时,摘掉会让空闲回收销毁实例,玩家落到一个已经没了的场景。所以成员要**连续 2 分钟**(`sceneMemberStaleGrace`,长过一次进场请求)不指向这里才摘;期间再指向这里就重新计时。记录只在进程内存,换领导者重新计时,一遍里没再看到的记录作废,上限 65536 条,记不下的这一遍不动。指标 `scene_manager_scene_member_reconcile_members_total{outcome="skipped"}` 含宽限内的成员。
+
+**入口。**
+
+| 入口 | 动作 |
+|---|---|
+| 自动选线 `luaReserveBestWorldChannel` | 按 SCARD 选人最少的线并 SADD；同一玩家重复预占不累加 |
+| 指定场景 `luaAtomicAddSceneMember` | `scene:<id>:node` 还在才 SADD，否则回 -1、不建键 |
+| 落点提交、同落点重连、回滚恢复旧落点 | `addSceneMember` |
+| 拒绝时释放预占、离开旧场景、接管收尾、回滚时摘新落点 | `removeSceneMember`；这些路径的主结果已定，失败只记日志 |
+| 离场 | 第一步玩家域 `luaDeletePlayerLocationIfUnchanged`，「键已不在」排在最前，go-redis 原样重发回 0 而不是 -1；第二步控制域摘成员。除「未释放」之外的结局都做第二步，失败回错误，player_locator 保留清理任务重试 |
+| 离场重试 | LeaveScene 读到 location 已不在或已换场景时，同样摘请求里的场景，这是第二步失败后的恢复路径 |
+| 撤销无资格持有者 | 7 键玩家域 Lua，结果为「已撤销」「已不在」时摘成员 |
+| 空闲销毁 `luaAtomicDestroyInstance` | SCARD 大于 0 放弃，等于 0 才删场景键 |
+| 强制销毁 `luaAtomicDestroyInstanceForce` | 脚本返回残留成员，调用方把它们 SREM 出节点集合 |
+| 死节点收尾 `luaFinishDeadNodeReconcile` | 与任务出队同一段脚本删节点集合 |
+| 负载刷新 | pipeline 里 SCARD；键不存在读作 0，WRONGTYPE、网络错误、熔断不按 0 写 |
+
+**代价与残余。**
+
+- 每次摘成员多读一次 location（共两次）。第 3 条先读再摘是为了不让人数下探：排空收尾（`world_autoscale.go`）、机会迁移（`world_rebalance.go`）只读一次人数就做决定，看到 0 就会动一个有人的频道。只有「第一次读之后、SREM 之前恰好有并发进场落到这里」时才下探一次往返。
+- scene_manager 在预占之后、落点之前崩溃，或落点之后、摘旧场景之前崩溃，留下一个 location 不指向这里的成员，请求路径上没有人会再摘它。后果与计数器时代多计一次相同（实例不销毁、选线躲着它），由下面的对账收掉。
+- 场景被改派过时，玩家当初进的是旧节点的集合，而改派只发生在旧节点已死之后，它的集合由死节点收尾删掉。
+
+**句柄（第 6 批，2026-10-31，未编译）。** `svcCtx.PlayerRedis` 是玩家域，`svcCtx.Redis` 是控制域。`removeSceneMember` 读 location 走玩家域，写成员走控制域；离场两步分别在两个句柄上。`scene_keys_contract_test.go` 把两个域放到两个 miniredis 上走一遍进场、重连、换图、回滚、离场：哪条路径用错句柄，流程就走不通。
+
+**成员集合对账（第 6 批，`scene_member_reconcile.go`）。** 只有领导者跑（`isLeader`，降级即停并丢掉遍历位置）。
+
+- **集合来源**：登记过的 zone ∪ 有活节点的 zone → 负载集里的节点 → 节点的成员集合，以及它名下场景的成员集合。全部点查，不 SCAN 键空间。死节点的集合由死节点收尾删，不归这里管。
+- **预算**：每轮最多读 `MembersPerRound`（缺省 2000）个成员的 location、发 `ScansPerRound`（缺省 512）条 SSCAN，间隔 `IntervalSeconds`（缺省 10s），用完就停，下一轮接着走。遍历位置只在进程内存里，换领导者从头开始。小集合（intset / listpack）SSCAN 一次回完、可能超过预算，余下的成员留在内存里下一轮接着核，不丢。走完一遍约 成员总数 ÷ 2000 × 10s：100 万在线（每人两个集合）约 2.8 小时。
+- **判据**：`MGetBySlot` 读 location，按 `locationOverlap` 判是否指向这个集合。指向就不动；不指向就走 `removeSceneMember`（第 3 条：SREM 之后再读一次，指向这里就加回去）。location 写坏、读 location 失败都不动，不把「不知道」当成「不指向」。成员不是合法 player_id 时直接 SREM，并打 Error。
+- **与在途请求的交错**：预占还没落点时被摘掉是安全的，落点提交之后会再 SADD（第 2 条），预占期间人数少算一个。
+- **指标**：`scene_manager_scene_member_reconcile_members_total{outcome=ok|removed|skipped|malformed|error}`、`scene_manager_scene_member_reconcile_passes_total`。`removed` 长期不为 0 说明 scene_manager 经常在进场中途崩溃，或有摘成员的路径漏了。没加告警（`deploy/` 不在这批）。
 
 ### 5.11 战斗结算
+
+> **2026-10-31**：`battle:settlement:*` 已全部删除，本节作废，原文保留。战斗锁与上下文（`battle:lock:{<pid>}`、`battle:ctx:{<pid>}`）第 3 批已带 tag，C++ 的 7 段 lock-ctx 脚本同 slot。
 
 结算索引按 slot 分桶，与该玩家的 pending / lock / ctx 同槽；stage 去重从「每局一个跨玩家 SET」改为「每人每局一个标记串」，battle 节点结束时按名单删除或交给 TTL。battle 节点的积压扫描与孤儿清理按 slot 遍历：每个 battle 节点按节点号对 slot 取模负责一份，另以低速全量轮转兜底（每秒 1 个 slot，约 4.5 小时一轮），保证节点数变化期间不会有 slot 永久无人扫。三步清理在同一 slot 内由路由层停等保序。
 
@@ -252,7 +381,7 @@ friend（会话、父快照、同步摘要）、guild（会话、位置、战斗
 C_master = N_cpp + Σ_svc ( R_svc × p_svc )
 ```
 
-- `N_cpp`：访问玩家域的 C++ 进程数（scene + battle；gate 不连），每进程每主节点 1 条。
+- `N_cpp`：访问玩家域的 C++ 进程数（只有 scene；gate、battle 不连），每进程每主节点 1 条。
 - `R_svc`：Go 服务副本数；`p_svc`：该服务每节点实际活跃连接（池上限缺省 4，空闲 60s 回收；按往返率估算，绝大多数服务稳定在 1–2 条）。
 - 每个进程的玩家域连接数 = 主节点数 M（C++）或 ≤ 池上限 × M（Go）。副本不接客户端连接（不读副本）。
 
@@ -277,7 +406,7 @@ C_master = N_cpp + Σ_svc ( R_svc × p_svc )
 - **复制是异步的，与今天相同**：主节点应答之后、复制之前宕机，最后一段写入可能随故障转移丢失；被隔离的旧主在 node-timeout 内收到的写同样会丢。分片不改变这一点，但把影响面从「全部玩家」缩小到「该主节点的 1/M 玩家」。
 - **丢尾的后果是整体回到较旧的一致版本**：两表 ACK 与 pending 同在一个 save_barrier hash，且 ACK 总在 pending 之后写，异步复制保留的是写入流的前缀，所以不会出现「ACK 超前于 pending」，而是父快照、pending、ACK 一起回到旧版本。**防线是实例身份戳**：屏障里记录写入时执行节点的 `run_id:master_replid`，login 冷加载要求它等于当前执行节点，不等就读两张 SQL 行核验、必要时按 SQL 采纳（`parent_commit_barrier.go:20-30`）。故障转移会换 `master_replid`，所以丢尾的玩家必然走核验路径，读到的是 SQL 里的新版本，不会读回旧档。**玩家域不变量**：身份戳按执行节点取值，任何改动不得删除或绕过这条核验。
 - **迁移同样触发核验**：键随 slot 搬到别的主之后身份戳必然对不上，迁过去的玩家下一次冷加载都会走两行 SQL 核验加提交脚本。扩容迁 X% 的 slot，就有约 X% 的玩家在下次登录时多两次 TiDB 点读 [I]（§8.4 计入并限速）。
-- owner_epoch 的 INCR 丢失会让代次回退，理论上给旧持有者重新放行——今天就存在的风险，建议后续在铸造后同一节点连接上发 `WAITAOF 1 1`（scene_manager 是铸造唯一入口），列为 §16 的独立项，不并入分片批次。**2026-10-24 已落码（未编译）**：失败语义、时间预算、延迟与三种拓扑的取值见 [zone Redis 回退防护 §4.3.3](zone-redis-regression-guard-20261022.md)；本域每主 1 副本时取 `1 1`，代价是该主的副本不可用期间这 1/M 玩家的首登与换节点回 7。第 6 批把 scene_manager 换成玩家域句柄时，铸造通道要按该节列的三处改（按 slot 取主节点再发 pipeline、重定向类重发、切主后的回滚），在那之前它对 cluster 句柄拒启。
+- owner_epoch 的 INCR 丢失会让代次回退，理论上给旧持有者重新放行——今天就存在的风险，建议后续在铸造后同一节点连接上发 `WAITAOF 1 1`（scene_manager 是铸造唯一入口），列为 §16 的独立项，不并入分片批次。**2026-10-24 已落码（未编译）**：失败语义、时间预算、延迟与三种拓扑的取值见 [zone Redis 回退防护 §4.3.3](zone-redis-regression-guard-20261022.md)；本域每主 1 副本时取 `1 1`，代价是该主的副本不可用期间这 1/M 玩家的首登与换节点回 7。第 6 批把 scene_manager 换成玩家域句柄时，铸造通道已按该节列的三处改完（按 slot 取主节点再发 pipeline、重定向类重发、切主后的回滚），未编译。
 - **不可写窗口**：主节点宕机到副本提升约 `cluster-node-timeout`（建议 5s）加选举时间；该主的 slot 在窗口内不可写。C++ 路由层按 10s 预算重试后空应答，Go 侧按错误重试或失败。
 
 ## 8. 扩容、缩容与迁移
@@ -341,6 +470,50 @@ C_master = N_cpp + Σ_svc ( R_svc × p_svc )
 - **登录令牌 / 会话随在线人数增长，仍压在控制域单主上**，是控制域到达 2000 万口径前的主要瓶颈 [I]（G4a §24）。路线：第 11 批把登录域拆成自己的 Redis Cluster——令牌族按 `{acc}` tag，会话栅栏与设备集的同脚本问题（连接键与账号键同在 `commitLoginScript`）需要先改形，设计在第 11 批开工前补齐。在它落地前，系统级 Redis 上限由控制域单主决定。
 - 映射域原有的「每条写任务两次就绪读、每次两次 INFO」热点随直读 TiDB 一并消失（§5.13）。
 
+**第 11 批设计(2026-10-31,开工前补齐)**
+
+目标:令牌、登录态、连接栅栏不再压在控制域单主上,加主节点就能扩。
+
+- **部署**:登录域和玩家域同样用 `shared/playerredis` 的 `UniversalClient`,配置独立成 `LoginRedis`。K8s 缺省和玩家域共用一个 Redis Cluster(只有一种东西要运维,加主节点就扩);配置上能拆开,登录量大到要隔离时改地址即可。
+- **账号 tag**:账号是用户输入,可能带花括号,不能直接当 hash tag。`AccountTag(account) = SlotTag(CRC16(account) mod 16384)`,放进 `shared/redisslot`。SlotTag 是纯字母,没有解析歧义,同一账号的键必然同槽。
+- **键形**:
+
+| 族 | 旧键形 | 新键形 |
+|---|---|---|
+| 连接栅栏 | `login:sessfence:<gate>:<inc>` | `login:sessfence:{<gate>:<inc>}` |
+| 登录态 | `login_session:<gate>:<inc>` | `login_session:{<gate>:<inc>}` |
+| 设备集 | `login_account_sessions:<account>` | `login_account_sessions:{<AccountTag>}:<account>` |
+| 账号索引 | `account_refresh:<account>` | `account_refresh:{<AccountTag>}:<account>` |
+| 令牌 | `access_token:<随机>`、`refresh_token:<随机>` | `access_token:{<AccountTag>}:<随机>`、`refresh_token:{<AccountTag>}:<随机>` |
+| 令牌家族 | `refresh_family:<id>` | `refresh_family:{<AccountTag>}:<id>` |
+| 密码配额 | `login:password:quota:v1:<指纹>` | `login:password:quota:v1:{<指纹>}` |
+
+- **令牌字符串**:`<AccountTag>.<随机>`。令牌对客户端是不透明串,客户端不解析。校验时先取 tag 再拼键;格式不对按无效令牌。令牌的发放、轮换、作废脚本的全部键都在账号这个槽里,脚本结构不变。
+- **登录提交拆两步**:`commitLoginScript` 现在同时碰连接栅栏、登录态和设备集,设备集按账号分布,不同槽。改成:
+  1. 脚本只碰栅栏和登录态(同一个连接 tag):连接没关才写登录态。「检查通过、Disconnect 插进来、再写入」的窗口仍然没有。
+  2. 脚本成功后再 `SADD` + `PEXPIRE` 设备集。
+  两步之间的结局都能自愈:第 2 步失败,这次登录按 Redis 故障回失败,登录态随 TTL 过期;Disconnect 抢在第 2 步之前,设备集留一个陈旧成员,下一次 `PruneStaleFromDeviceSet` 发现登录态不存在就剔除。设备数上限本来就是软限制,不影响资产和写权。
+- **`PruneStaleFromDeviceSet`** 跨连接读登录态,改 `MGetBySlot`。
+- **删旧 gate 兼容**:`RefOf` 的 legacy 分支、`Ref.WriteKeys` 双写、`loginsession.Save` 两步写、`loginsession_legacy_key_total` 全部删除。没有会话代次的连接直接拒绝。
+- **读者**:chat、friend、guild、match 经 `shared/loginsession` 读登录态,改成同一个键构造函数,客户端类型换 `UniversalClient`。
+- **排队**:`queue:zone:*`、`admitted:zset:zone:*` 已按 zone 组拆实例,不动。
+- **玩家键**:`player_locker`、`login_idempotent`、`login_generation` 已在第 3 批带 `{pid}`,属于玩家域,不属于登录域。
+
+**第 11 批实现补充(2026-10-31,未编译)。**
+
+- **句柄**:login 的 `ServiceContext` 三个句柄。`PlayerRedis` 管上面三族玩家键,`LoginRedis` 管设计表里的七族键,`RedisClient` 只剩控制域。两段配置都是 `playerredis.Config`,没写 `Addrs` 时指向 `Node.RedisClient` 那一个实例。口令配额的专用小池地址、口令、集群形态随 `LoginRedis`,连接数(每节点 4)和超时(250ms)是它自己的。
+- **`playerredis.Config` 加了 `DB`**:只对单实例有意义,回落到现有实例时要落在它原来的库号上,否则 `Node.RedisClient.DB` 非 0 的部署,登录键会悄悄换库。`Cluster: true` 时写非 0 拒启。
+- **`account_lock:*` 也进登录域**:设计表没列,实现时补上。它的压力随登录速率增长,留在控制域单主上仍是瓶颈。键形 `account_lock:login:{<AccountTag>}:<account>`、`account_lock:create:{<AccountTag>}:<account>`。
+- **令牌里的 secret 与 head**:账号索引的成员和家族的 `head` 存 secret,不存完整令牌。脚本校验 `#head == 43`,并按「前缀 + secret」现拼 refresh 键,前缀带账号 tag。四段脚本一个字没改,现拼的键与声明的键同槽;`KEYS` 之外的键在 Cluster 上能访问的前提是同槽且在本节点,这里成立。
+- **校验顺序**:先拆令牌字符串。tag 必须是规范的 SlotTag,secret 必须是 32 字节随机数的规范 base64url,否则按无效令牌,不访问 Redis。读到载荷后再核对 `AccountTag(账号) == tag`:账号索引键按账号算槽,家族键按 tag 算槽,两者不一致的载荷进不了同一段脚本。
+- **`KeyOf` 拒绝之后**:Login、CreatePlayer、EnterGame 回 `kLoginSessionIdNotFound`,Login 的拒绝在认证之前,第三方 code 不被消费。Disconnect、LeaveGame 没有 tip 可回,记 ERROR 后直接返回:这种连接过不了 Login,没有状态要收尾。gate 每条连接都带实例号与代次(`client_session_handler.cpp`、`client_request_lane.cpp`),走到这里是接线缺陷。
+- **其余脚本逐段核对**:`close`、`checkEnterGame`、`bindPlayer`、`leave` 都只碰栅栏一个键,不用改。Disconnect 清理本来就是 `Close` → `GET` → `SREM` → `DEL` 分开发的,跨槽不影响;`SREM` 之后 `DEL` 之前中断,登录态随 TTL 过期,连接已关闭,没人再读它。`mintLoginGeneration` 单键。
+- **`LegacyGateLoginEnabled` 没删**:它是 gate 上口令 / 第三方首认证的开关(ARCH §12),和「没有会话代次的 gate」是两回事,gate 上的 `access_token` 绑定、弃用遥测的分类都还要它。`legacy_gate_killswitch_*_test.go` 留着,只删 `fenced=false` 的子用例。
+- **读者**:除设计写的 chat、friend、guild、match 之外,mail、trade 也经 `shared/loginsession` 读登录态,一并换。六个服务共用 `playerredis.LoginReaderConfig`,各自只给超时和缺省连接池。etc 下的 yaml、本机脚本和 `k8s_deploy.ps1` 都写 `Addrs`、`PoolSizePerNode`,只有这一种形状。`KeyFromMember` 删除,`shared/loginsession` 只留 `ConnectionKey`,键形只在 `redisslot/login_keys.go`。
+- **Java 网关**:`java/gateway_node` 不读这些键,令牌只经 gRPC 透传。令牌长度从 43 变成至多 48 字符,网关、gate、robot 都不解析、不限长。
+
+**部署要改的键(第 10 批)**:`login` 的 `PlayerRedis.{Addrs,Cluster,Password|PasswordEnv,PoolSizePerNode}`、`LoginRedis.{同上}`;chat、friend、guild、match 的 `LoginRedis.{Addrs,Cluster,DB,Password|PasswordEnv,PoolSizePerNode}`(Cluster 下 `DB` 必须是 0)。mail 和 trade 也读登录态:mail 的 ConfigMap 原来写 `Host` 指向控制域,trade 的 `Rmb.LoginRedis` 原来没渲染,第 10 批都补了(未运行),否则上 Cluster 后这两个服务读不到登录态,客户端请求一律被拒。连接总账:login 每个 Pod 多两个池(单实例回落时各按 `Node.RedisClient.PoolSize`,etc 里写的是 20),口令配额池(每节点 4)改连登录域;mail 读登录态的池固定 8。
+
 ### 10.3 再往上：多集群联邦
 
 Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与副本都算）。按 §10.1 每主 1 副本还有约 2–10 倍余量，每主 2 副本约 1.3–6.7 倍。**节点数达到约 600 时立项联邦**：`partition = hash64(pid) mod 2^k`，版本化的分区表（存 etcd）把分区映射到集群，客户端先选集群再按 slot 选节点。**键形不变**；跨集群搬分区需要自建「冻结分区 → 复制 → 翻转 → 清理」的迁移协议，届时单独设计。
@@ -376,7 +549,7 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 | 存盘围栏「父快照屏障部署前提是同一 Redis 实例」 | 改为「同一 `{pid}` slot」；§18.7 的二选一按 B（同 slot）落地 |
 | saveoutbox 同实例门禁、`BucketCount=64` | 改为按 slot 索引与成员登记 + 段租约；门禁改为核对玩家域句柄 |
 | B0-1 §11 | 按原设计落地（§5.9） |
-| 各处「共享库不许集群化」的注释 | 随对应批次改为「玩家域在 PlayerStore（Cluster），控制域仍单实例」 |
+| 各处「共享库不许集群化」的注释 | 随对应批次改为「玩家域在 PlayerRedis（Cluster），控制域仍单实例」 |
 | cross_server 原则「同一连接 FIFO」 | 收窄为「同一 slot 内 FIFO」，由路由层停等保证 |
 | 「真 Redis 验证 7.2 与 8.x 两版都跑」 | 玩家域只跑 ≥ 8.4（取 8.10.x），原子迁移需要；控制域仍两版 |
 
@@ -388,33 +561,55 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 
 | 批 | 内容 | 状态 |
 |---|---|---|
-| 1 | 基础契约：Go `shared/redisslot`（CRC16、HashSlot、PlayerSlot、SlotTag、保留后缀表）与 `shared/playerstore`（UniversalClient 构造器、每节点池上限、同槽 / 带 tag 守卫、MGetBySlot、ScanEachMaster）；C++ `redis_slot.h`；两侧金样测试；本设计文档 | 已落码，未编译；评审后的修补见本批补丁 |
+| 1 | 基础契约：Go `shared/redisslot`（CRC16、HashSlot、PlayerSlot、SlotTag、保留后缀表）与 `shared/playerredis`（UniversalClient 构造器、每节点池上限、同槽 / 带 tag 守卫、MGetBySlot、ScanEachMaster）；C++ `redis_slot.h`；两侧金样测试；本设计文档 | 已落码，未编译；评审后的修补见本批补丁 |
 | 2a | owner_epoch 改名：C++ `player_ownership_comp.h` 与 `role_admission_system.cpp` 的内联拼键、存盘 Lua 的 owner 键形校验；Go `shared/ownerepoch` 与 merge_zone `save_barrier_verify` 镜像、barrierrestore；data_service 改查保留后缀表；相关测试 | 已落码，未编译（2026-10-24；另补 merge_zone blob 拷贝跳过保留后缀，见 PROGRESS） |
 | 2b | 父快照改名：C++ `redis_client.h` 父键构造与 Lua 父键校验；login dataloader、外观补齐（同批改 `MGetBySlot`）；data_service 账本与 debug 工具；friend、match 读者；merge_zone `player_rows`；barrierrestore；相关测试 | 已落码，未编译（2026-10-24；共享构造 `savebarrier.ParentKey`，见 PROGRESS）。保留（2026-10-29：用户确认未上线、玩家数据可全部清空；纯改名不改语义，父快照随 TiDB 决策 §9 新存盘路径移出 Redis 时这些调用点一并删除）。Codex 10-24 全量 C++ 构建与各 Go 模块单测已覆盖这些文件 |
 | 2c | 补投索引按 slot：C++ 索引键与 Lua 索引校验；saveoutbox 契约、认领、回收改按 slot 索引（本批暂保留「只认领 topic 属于本 zone 的意图」，沿用单 topic 发布器）；merge_zone P4 排空检查、barrierrestore 恢复脚本改形、debug_import 脚本改形；相关测试 | 作废（2026-10-29）：补投索引与补投器只服务于 Redis 里的父快照与 outbox 载荷；TiDB 决策 §9 把它们移出 Redis 后（§9.4 两种存盘路径都不再在 Redis 留意图）失去用途，不为将删除的组件做分片。未开工、无代码改动 |
 | 2d | 补投器分片：成员登记 + 段租约、多 topic 发布器与按 topic 熔断、逐意图闸、去掉映射读与跨 zone 迁移脚本、续约前提；相关测试 | 作废（2026-10-29）：同 2c。未开工、无代码改动 |
-| 3 | 归属与位置族改名：handoff、location、修订、离场、去重、冷却、登录代次、同步摘要、玩家锁、合服提示；C++ 与 Go 镜像；scene_manager 离场拆分与成员集合计数（先核实预占语义） | 待做 |
-| 4 | go/db 玩家域句柄：排序锁 / 游标 / 缓存键改名，句柄拆分，expand 状态缓存 | 待做 |
-| 5a | C++ 两份 `Hiredis` 加 `formattedCommand`；`RedisClusterClient`（停等、错误归类、拓扑、资源上限）与单测；暂无调用方 | 待做 |
-| 5b | scene 接线：`tlsPlayerRedis`、`RedisSystem`、`MessageAsyncClient` 改接口 | 待做 |
-| 5c | 其余 C++ 调用点换句柄（player_lifecycle、player_battle、battle_room_manager、player_team 拆 MGET 等） | 待做 |
-| 6 | 各 Go 服务玩家域句柄：login、scene_manager、player_inbox、friend（含 `ScanPage`）、guild、match、mail、trade、data_service | 待做 |
-| 7 | player_locator 按 slot 分桶（§5.9） | 待做 |
-| 8 | 战斗结算按 slot（§5.11） | 待做 |
-| 9 | 工具收尾：前面批次标为 fail-closed 的工具恢复可用，data_consistency_check 等 | 待做 |
-| 10 | 部署：K8s 玩家域 Cluster 清单（≥ 8.4，每 Pod 一个 Service 宣告 IP）与初始化 Job、原子迁移扩缩容手册、各服务配置渲染、连接总账；compose 开发集群（8.10.x）；容量基准工具。G4a 会话 2026-10-23 已落的部署能力要接上：玩家域主节点加入 `k8s_deploy.ps1` 的 `redis-wipe` 遍历；玩家域告警另起 PrometheusRule 组，不并进 `deploy/k8s/redis-alerts.yaml` 的 `redis.control-domain` | 待做 |
-| 11 | 登录域（令牌 / 会话 / 栅栏）横向扩展（§10.2），开工前补设计 | 待做 |
+| 3 | 协调键改名：handoff、location、修订、离场、去重、冷却、登录代次、同步摘要、玩家锁、登录幂等、会话、AFK、战斗锁与上下文；C++ 与 Go 镜像、脚本、告警、手册；scene_manager 离场拆分与成员集合计数；跨玩家 MGET 改按 slot 分组；多键脚本同槽契约测试 | 已落码，未编译（2026-10-31，定稿见 §5.10）。player_locator 只改了会话键形，跨槽结构留给第 7 批。合服提示无生产读写，表里标删除 |
+| 4 | go/db 玩家域句柄：排序锁 / 游标 / 缓存键改名，句柄拆分，expand 状态缓存 | 作废（2026-10-30）：存盘直接提交 TiDB，go/db 不再连 Redis |
+| 5a | C++ 两份 `Hiredis` 加 `formattedCommand`；`RedisClusterClient`（停等、错误归类、拓扑、资源上限）与单测；暂无调用方 | 已落码，未编译（2026-10-31，实现补充见 §5.6 末段） |
+| 5b | scene 接线：`tlsPlayerRedis`、`RedisSystem`、`MessageAsyncClient` 改接口 | 已落码，未编译（2026-10-31，实现补充见 §5.6 末段）。`MessageAsyncClient` 已随存档移出 Redis 删除，不用改 |
+| 5c | 其余 C++ 调用点换句柄（player_lifecycle、player_battle、battle_room_manager、player_team 拆 MGET 等） | 已落码，未编译（2026-10-31，FIFO 依赖逐处结论见 §5.6 末段）。battle_room_manager 已不访问 Redis；MGET 第 3 批已拆 |
+| 6 | 各 Go 服务玩家域句柄：scene_manager、player_inbox、friend（含 `ScanPage`）、guild、match、mail、trade；包改名 `shared/playerredis`；scene_manager 分句柄与成员集合对账 | 已落码，未编译（2026-10-31，分工见 §5.8，实现补充见 §5.7，对账见 §5.10）。data_service、chat 不读玩家域键，不用改；login 不在这批 |
+| 7 | player_locator 按 slot 分桶（§5.9） | 已落码，未编译（2026-10-31，实现补充见 §5.9 末段） |
+| 8 | 战斗结算按 slot（§5.11） | 作废（2026-10-30）：结算只走 match SQL 加收件箱，`battle:settlement:pending` 已删除（总体方案 §5.4） |
+| 9 | 工具收尾：前面批次标为 fail-closed 的工具恢复可用，data_consistency_check 等 | 已落码，未运行（2026-10-31，实现补充见本节末） |
+| 10 | 部署：K8s 玩家域 Cluster 清单（≥ 8.4，每 Pod 一个 Service 宣告 IP）与初始化 Job、原子迁移扩缩容手册、各服务配置渲染、连接总账；compose 开发集群（8.10.x）；容量基准工具。G4a 会话 2026-10-23 已落的部署能力要接上：玩家域主节点加入 `k8s_deploy.ps1` 的 `redis-wipe` 遍历；玩家域告警另起 PrometheusRule 组，不并进 `deploy/k8s/redis-alerts.yaml` 的 `redis.control-domain` | 已落码，未运行（2026-10-31，实现补充见本节末；手册 [redis-player-cluster-runbook.md](../ops/redis-player-cluster-runbook.md)） |
+| 11 | 登录域（令牌 / 会话 / 栅栏）横向扩展（§10.2），顺带 go/login 玩家域句柄 | 已落码，未编译（2026-10-31，实现补充见 §10.2 末段） |
 
 映射域不在本稿批次内（§5.13）。
+
+**第 10 批实现补充(2026-10-31,未运行)。**
+
+- **参数**:`k8s_deploy.ps1` 的 `-PlayerRedisMasters`(dev 缺省 0 不建集群,staging、prod 必须显式、至少 3)、`-PlayerRedisReplicasPerMaster`、`-PlayerRedisMaxMemory`、`-PlayerRedisStorage`,口令 `MMORPG_PLAYER_REDIS_PASSWORD`。都不粘滞。登录域和玩家域共用这一个集群;Go 配置上能拆,部署脚本目前只渲染共用形态。
+- **清单**:`redis-player-cluster.yaml`。镜像摘要取自 Java 版 `deploy/compose/infra.yaml` 的 `redis:8.10.2`。Docker Hub 同一个标签 10-22 重建过,摘要不同:钉摘要就是防这个。
+- **`updateStrategy: OnDelete`**:改模板不自动重启节点。`RollingUpdate` 不知道谁是主,一次 apply 可能连着打掉一对主从。代价是 `rollout status` 不可用,就绪看建群 Job。
+- **建群 Job**:全部节点空白才 `--cluster create`,否则只核对。一半空白一半有状态可能是扩容新起的节点,也可能是 PVC 丢了,脚本分不清,所以不碰。Job 从不跑 `--cluster fix`。
+- **总账**:部署脚本按池上限记,不按 §6.1 的活跃连接估算,偏保守。登录域的池算进同一行。不建集群时这些池都记在控制域那一份上。
+- **口令**:集群模式下 `PlayerRedis`、`LoginRedis` 的 `PasswordEnv` 都指向容器环境变量 `PLAYER_REDIS_PASSWORD`,来自 Secret `redis-player-auth`。scene 的 Pod 模板带种子加口令的指纹,变了自动滚动;Go 服务没有指纹,口令轮换要手工重启,写在手册里。
+- **trade 的 `Rmb.LoginRedis`**:ConfigMap 各档位都写。这一段以前完全没有渲染,`AssetOp.Enabled=true` 时 `config.Validate` 直接拒启,与集群无关。资产通道关着时不读也不连,总账按打开计。
+- **`deploy/k8s/manifests/go-svc/player-inbox.yaml` 补 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE`**:`NewConsumerVerifier` 缺它拒启,K8s 上 player-inbox 原本起不来。与集群无关,验证部署时会卡在这里,所以一起补。
+- **docker 调试栈**:加 `player-inbox` 常驻容器、`player-inbox-sql-boot`、`player-inbox-migrate`。`prepare_docker_debug.py` 把调试栈的 `player_inbox.consumer_enabled` 打开:只入箱不消费,结算到不了玩家。源配置的 `false` 是线上分步打开用的,不变。
+
+**第 9 批实现补充(2026-10-31,未运行)。**
+
+- **`go/db/internal/maintenancephase` 没有换成 `ScanEachMaster`**:这个包不自己扫 Redis,只核对 `maintenance_drain.ps1` 采集的证据。改法是计划里每个主节点列一个目标,collector 记录取样首尾的拓扑指纹,`verifyAuthorityRedisClusterViews` 核对目标集合正好等于持有 slot 的主节点、取样期间拓扑没变。保证相同,任何一条不成立都按未闭合拒绝。nonce 键尾带 hash tag,落在各主节点自己持有的 slot 上。
+- **`tools/data_consistency_check`** 只读 `guild_rank:zone:*`,不碰玩家域,不用改。
+- **清库**:`tools/scripts/lib/redis_local_flush.ps1` 统一本机清库(单实例加开发集群的每个主节点),`dev_tools.ps1 -Command redis-wipe-local`、`currency_crash_window.ps1`、`stress_round19.ps1` 共用。`deploy-staging.sh`、`stress-linux-tier.sh` 用 `REDIS_PLAYER_NODES` 列节点,逐主节点清。
+- **压测**:`stress_snap.ps1` 的 target 加 `k8s-cluster:<ns>/<sts>`、`docker-cluster:<container>:<port>`,每个时刻现列主节点。`stress_summarize.ps1` 的 R1、R2 逐主节点出行,再合成 `<name>-all`。
+- **`k8s_zone_rollback.ps1`**:部署事实 Schema 5 加 `PlayerRedis`,线上是集群时缺种子或主节点数在停服之前拒绝。回档工具 `zone_rollback_discard` 本身还没有落地,脚本写了它要接的参数契约。
 
 ## 14. 验证与验收（交 Codex 执行）
 
 ### 14.1 单元与契约
 
-- Go：`cd go/shared && go test ./redisslot/... ./playerstore/...`；C++：`rpc_controller_test` 中的 `RedisSlotTest.*`。两侧金样（§5.2）逐字一致；SlotTag 全表 SHA-256 与 FNV-1a 64 一致。
+- Go：`cd go/shared && go test ./redisslot/... ./playerredis/...`；C++：`rpc_controller_test` 中的 `RedisSlotTest.*`。两侧金样（§5.2）逐字一致；SlotTag 全表 SHA-256 与 FNV-1a 64 一致。
 - 每批对涉及的多键脚本做「全部 KEYS 同 slot」契约断言（按 §5.2 的 HashSlot 计算）。
 
 ### 14.2 真集群集成（玩家域 Redis 8.10.x）
+
+> 2026-10-31：存盘闭包、补投、go/db 发布 / 游标和第 7 项的用例，随存盘直接提交 TiDB 作废；第 6 项的「切主丢尾后冷加载」改为核对玩家存档不受 Redis 切主影响。其余照跑。
 
 - compose 起 3 主 3 从，跑存盘闭包、补投、go/db 发布 / 游标、login 冷加载、scene_manager 落点 / 离场、locator 会话的集成用例；断言无 CROSSSLOT、无守卫拒绝。
 - 迁移与故障，每项断言：意图不丢（最终被回收或停在可解释的终态）、版本不回退、ACK 单调、没有非重定向类错误：
@@ -439,15 +634,15 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 
 ## 15. Java 版（AGENTS.md §12）
 
-Java 版玩家存盘是单个 SQL 事务（`player` / `player_state` 两表），Redis 只承载目录、锁、信号与缓存，没有本稿的父快照屏障、补投索引、go/db 发布链。本稿各批只改服务端内部，不改客户端契约，**Java 没有对应待做项**；Java 自身 Redisson 单实例的集群化已在其 PARITY.md 第 274 行登记，本稿不新增行。会影响客户端的两项（friend 在线目录游标格式、不改成转区）按既有两版同批评审处理：前者在第 6 批落码时提交评审，后者本稿已确定不改。
+Java 版玩家存盘是单个 SQL 事务（`player` / `player_state` 两表），Redis 只承载目录、锁、信号与缓存，没有本稿的父快照屏障、补投索引、go/db 发布链。本稿各批只改服务端内部，不改客户端契约，**Java 没有对应待做项**；Java 自身 Redisson 单实例的集群化已在其 PARITY.md 第 274 行登记，本稿不新增行。会影响客户端的两项（friend 在线目录游标格式、不改成转区）按既有两版同批评审处理：前者第 6 批已落码，游标对客户端是不透明串，客户端不解析，Java 的游标是自己的实现，都不用改；后者本稿已确定不改。
 
 ## 16. 风险与未决
 
-1. **owner_epoch 铸造的异步复制丢失**（§7）：现存风险，建议独立立项在铸造后同节点 `WAITAOF`。2026-10-24 已落码（未编译，[回退防护 §4.3.3](zone-redis-regression-guard-20261022.md)）；剩余未决是 R-b 压测下的进场延迟与吞吐上限（组提交是升级路线），以及第 6 批的 Cluster 适配。
-2. **离场人数改成员集合**（§5.10）：预占语义与销毁判定的细节第 3 批定稿。
+1. **owner_epoch 铸造的异步复制丢失**（§7）：现存风险，建议独立立项在铸造后同节点 `WAITAOF`。2026-10-24 已落码（未编译，[回退防护 §4.3.3](zone-redis-regression-guard-20261022.md)）；剩余未决是 R-b 压测下的进场延迟与吞吐上限（组提交是升级路线）。第 6 批的 Cluster 适配已落码，未编译，真集群上的切主演练按 §14.2。
+2. **离场人数改成员集合**（§5.10）：第 3 批已定稿，崩溃留下的成员由第 6 批的后台对账摘除。剩余：对账的预算是推算值，规模上来后要看走完一遍的时长。
 3. **Go 服务按 zone 部署的进程数**：物理 zone 增长时它主导连接数（§6.2），建议 Go 服务改为一进程多 zone，单独立项。
 4. **DBTask 按 home_zone 分 topic**：逻辑 zone 达到 10 万时 Kafka topic 数不可行，与 Redis 无关，单独立项。
-5. **登录令牌 / 会话仍在控制域单主**（§10.2）：第 11 批之前它决定系统级上限。
+5. **登录令牌 / 会话仍在控制域单主**（§10.2）：第 11 批之前它决定系统级上限。第 11 批代码已切到 `LoginRedis`（2026-10-31，未编译），第 10 批部署脚本把它指向 Cluster（2026-10-31，未运行），真集群验证之后这条才解除。
 6. **迁移后的 SQL 核验读放大**（§7、§8.4）：扩容须分批、低峰执行。
 7. **data_service 字段脚本**在迁移交接瞬间可能被短暂阻塞（无生产写者，§5.3）。
 
@@ -466,3 +661,9 @@ Java 版玩家存盘是单个 SQL 事务（`player` / `player_state` 两表）�
   - **批次**：第 2 批实际约 55–60 个文件，拆为 2a–2d；第 5 批拆为 5a–5c；工具随键族同批或 fail-closed。
   - **清单补漏**：屏障恢复脚本与 debug_import 脚本的改形、`player:save_barrier:maintenance:<zone>` 与 `player_to_account:<id>` 归控制域、login 外观补齐的 MGET。
   - **边界口径**：1000 节点含副本，余量重算；控制域里登录令牌 / 会话随在线增长，系统级上限在第 11 批前由控制域单主决定。
+- **第 3 批（2026-10-31）**：§5.2 表按实际情况标注已删除的键族，§5.10 定稿。
+- **第 11 批（2026-10-31）**：§10.2 补实现细节与部署要改的键；§13 第 11 行更新状态。
+- **第 7 批（2026-10-31）**：§5.2、§5.3 去掉「未改」标注，加分片键；§5.9 补实现细节。
+- **第 6 批（2026-10-31）**：包改名 `shared/playerredis`；§5.7 补实现细节（配置、`ScanPage` 指纹取舍、铸造通道）；§5.8 补各服务分工；§5.10 补分句柄与成员集合对账。
+- **第 5b、5c 批（2026-10-31）**：§5.6 补实现细节与 FIFO 依赖逐处结论；§6.1 的 `N_cpp` 改为只算 scene。
+- **第 9、10 批（2026-10-31）**：§13 第 9、10 行更新状态并补实现细节；§10.2 与 §16 第 5 条更新部署状态。

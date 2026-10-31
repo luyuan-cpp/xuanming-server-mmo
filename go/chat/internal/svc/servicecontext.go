@@ -30,7 +30,7 @@ type ServiceContext struct {
 	Config        config.Config
 	Authority     authority.Service
 	AuthorityDB   *sql.DB
-	LoginSessions *redv9.Client
+	LoginSessions redv9.UniversalClient
 
 	// 保留旧缓存配置接口；正式发送/拉取只依赖Authority，不向这些句柄回落授权或历史。
 	ChatRedis   *redis.Redis

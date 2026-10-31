@@ -11,16 +11,15 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	plpb "proto/player_locator"
+	"shared/playerredis"
+	"shared/redisslot"
 	"shared/safego"
 )
 
-const playerSessionKeyPrefix = "player:session:"
-
-// playerSessionKey 拼 player_locator 维护的会话键(契约 key,只读不写)。
-// 抽成函数是为了让"在线判定"与"推送路由"读的是同一把键 —— 两处各拼一次
-// 迟早有一处漏改前缀。
+// playerSessionKey 是 player_locator 维护的会话键(契约 key,只读不写,构造点在 shared/redisslot)。
+// 一批玩家的会话键散落在不同 slot,批量读一律按 slot 分组(playerredis.MGetBySlot),不发跨槽 MGET。
 func playerSessionKey(playerID uint64) string {
-	return fmt.Sprintf("%s%d", playerSessionKeyPrefix, playerID)
+	return redisslot.SessionKey(playerID)
 }
 
 // onlineSessionFrom 解一条 MGET 结果。
@@ -49,13 +48,13 @@ func onlineSessionFrom(value any) (*plpb.PlayerSession, bool) {
 
 // OnlineStatusResolver resolves player online state from player_locator session store.
 type OnlineStatusResolver struct {
-	rdb *redis.Client
+	rdb redis.UniversalClient
 	// strictTimeout 是 BatchResolveStrict 的独立上限;<= 0 用 DefaultStrictOnlineLookupTimeout。
 	// 只有单测会改它(同包直接赋值),生产一律走默认值,所以不进构造函数、不改 guild.go 的调用点。
 	strictTimeout time.Duration
 }
 
-func NewOnlineStatusResolver(rdb *redis.Client) *OnlineStatusResolver {
+func NewOnlineStatusResolver(rdb redis.UniversalClient) *OnlineStatusResolver {
 	return &OnlineStatusResolver{rdb: rdb}
 }
 
@@ -77,7 +76,7 @@ func (r *OnlineStatusResolver) BatchResolve(ctx context.Context, playerIDs []uin
 		keys = append(keys, playerSessionKey(playerID))
 	}
 
-	values, err := r.rdb.MGet(ctx, keys...).Result()
+	values, err := playerredis.MGetBySlot(ctx, r.rdb, keys)
 	if err != nil {
 		logx.Errorf("batch get player sessions failed: %v", err)
 		return onlineMap
@@ -102,9 +101,8 @@ func (r *OnlineStatusResolver) BatchResolve(ctx context.Context, playerIDs []uin
 
 // DefaultStrictOnlineLookupTimeout 是 BatchResolveStrict 一次批量读的独立上限。
 //
-// 为什么必须有独立上限(92-handoff §8.2 记过的旧问题):locator Redis 客户端没开 ContextTimeoutEnabled,
-// go-redis v9 此时的套接字读**不看** ctx 截止时间,每次尝试只受默认 3s ReadTimeout 约束;Redis 卡住时
-// BatchResolve 的调用方要等约 6s 才返回,远超 handler 的 3500ms 业务预算。团圆领奖在这一步之后还要发号、
+// 为什么必须有独立上限(92-handoff §8.2 记过的旧问题):生产句柄(PlayerRedis)的 ctx 截止已经约束套接字读写,但测试和别的调用方
+// 传进来的客户端不一定如此,套接字读不看 ctx 时 Redis 卡住要等满读超时,远超 handler 的 3500ms 业务预算。团圆领奖在这一步之后还要发号、
 // 跑事务(1500ms 子预算)、同步投递,所以这里只给 800ms:正常一次 MGET 是毫秒级,800ms 仍读不到就是 Redis 出了状况。
 const DefaultStrictOnlineLookupTimeout = 800 * time.Millisecond
 
@@ -201,7 +199,7 @@ type strictMGetResult struct {
 
 // mgetWithin 在独立上限内做一次 MGET。
 //
-// 光给 MGet 传一个带超时的 ctx **不够**:locator 客户端没开 ContextTimeoutEnabled,套接字读不看 ctx,
+// 只给 MGet 传一个带超时的 ctx 不够保险:没开 ContextTimeoutEnabled 的客户端,套接字读不看 ctx,
 // ctx 只在取连接与重试退避处生效(见 DefaultStrictOnlineLookupTimeout)。所以把 MGET 放进单独的协程,
 // 本协程在"结果到达"与"上限到期"之间择先:到期就立刻回错误,handler 不再陪着等套接字超时。
 //
@@ -218,7 +216,7 @@ func (r *OnlineStatusResolver) mgetWithin(ctx context.Context, keys []string) ([
 
 	done := make(chan strictMGetResult, 1)
 	safego.Go("guild.online_strict_mget", func() {
-		values, err := r.rdb.MGet(lookupCtx, keys...).Result()
+		values, err := playerredis.MGetBySlot(lookupCtx, r.rdb, keys)
 		done <- strictMGetResult{values: values, err: err}
 	})
 	select {

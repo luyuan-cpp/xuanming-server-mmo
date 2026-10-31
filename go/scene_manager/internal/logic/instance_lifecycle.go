@@ -103,12 +103,8 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 			continue
 		}
 
-		// Check player count.
-		playerCountStr, _ := svcCtx.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneId))
-		playerCount := 0
-		if playerCountStr != "" {
-			fmt.Sscanf(playerCountStr, "%d", &playerCount)
-		}
+		// Check player count. 读失败当 0:下面的 AtomicDestroyIfIdle 在脚本里再判一次 SCARD。
+		playerCount := readScenePlayerCount(svcCtx, sceneId)
 
 		if playerCount > 0 {
 			// Instance is active, update its "last active" time.
@@ -175,8 +171,8 @@ func destroyInstance(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uin
 	destroyInstanceInternal(ctx, svcCtx, zoneId, sceneId, false, "", "idle")
 }
 
-// destroyInstanceForce force-destroys a scene even if its player_count is
-// still non-zero, whoever owns it now. Callers: the DestroyScene RPC
+// destroyInstanceForce force-destroys a scene even if it still has members,
+// whoever owns it now. Callers: the DestroyScene RPC
 // (explicit, surfaces err to its caller), world_rebalance (source_migrated)
 // and world_autoscale (source_scaled_in), which ignore the result. The
 // mirror cascade does not come through here: destroyInstanceInternal
@@ -230,7 +226,6 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 
 	// Snapshot everything we need BEFORE the atomic wipe:
 	//   - nodeId so we can notify C++ + fix counters
-	//   - residual player count so we can drain the per-node aggregate
 	//   - mirror source (if any) so we can SREM from scene:{src}:mirrors
 	//   - list of mirrors whose source is this scene, so we cascade them
 	//   - whether we were a mirror (for the Prometheus kind label)
@@ -239,8 +234,8 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	// Agones 模式:这个 Scene 占用的是哪个 GameServer 的房间名额。
 	// 非 Agones 模式下这个键不存在,后续归还是 no-op。
 	agonesGs, _ := svcCtx.Redis.Get(sceneAgonesGsKey(sceneId))
-	residualStr, _ := svcCtx.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneId))
-	residual, _ := strconv.ParseInt(residualStr, 10, 64)
+	// force 销毁时场景里剩的成员,要从节点集合里摘掉。空闲回收走到销毁时 SCARD 已确认是 0。
+	var residualMembers []string
 	sourceStr, _ := svcCtx.Redis.Get(sceneSourceKey(sceneId))
 	sourceId, _ := strconv.ParseUint(sourceStr, 10, 64)
 	mirrorFlag, _ := svcCtx.Redis.Get(sceneMirrorFlagKey(sceneId))
@@ -277,7 +272,7 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 		// 窗口里新旧领导者清理同一死节点)会各自拿到非空快照,把节点
 		// scene_count 双减、Agones 名额双还。改成 Lua 原子认领:读与删同
 		// 脚本,只有赢家拿到非空返回并执行副作用,输家静默退出。
-		atomicNode, atomicGs, atomicResidual, err := AtomicDestroyForce(svcCtx, zoneId, sceneId, expectedOwner)
+		atomicNode, atomicGs, atomicMembers, err := AtomicDestroyForce(svcCtx, zoneId, sceneId, expectedOwner)
 		if err != nil {
 			logx.Errorf("[InstanceLifecycle] AtomicDestroyForce failed for scene %d: %v", sceneId, err)
 			return false, err
@@ -289,7 +284,7 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 		}
 		nodeId = atomicNode
 		agonesGs = atomicGs
-		residual = atomicResidual
+		residualMembers = atomicMembers
 	}
 
 	if !destroyed {
@@ -355,11 +350,15 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 		sceneCountKey := nodeSceneCountKey(zoneId, nodeId)
 		svcCtx.Redis.Incrby(sceneCountKey, -1)
 
-		if residual > 0 {
-			playerCountKey := nodePlayerCountKey(zoneId, nodeId)
-			newVal, err := svcCtx.Redis.Incrby(playerCountKey, -residual)
-			if err == nil && newVal < 0 {
-				svcCtx.Redis.Set(playerCountKey, "0")
+		// 逐个按 location 判:残留成员的 location 可能指向同节点别的场景,这种人不能从节点集合里摘。
+		// 失败、或不是合法 player_id 的成员,都由对账收掉(scene_member_reconcile.go)。
+		for _, member := range residualMembers {
+			playerID, err := strconv.ParseUint(member, 10, 64)
+			if err != nil {
+				continue
+			}
+			if err := removeSceneMember(svcCtx, playerID, 0, zoneId, nodeId); err != nil {
+				logx.Errorf("[InstanceLifecycle] remove player %d from node %s members failed: %v", playerID, nodeId, err)
 			}
 		}
 	}
@@ -381,43 +380,9 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	return true, nil
 }
 
-// IncrInstancePlayerCount increments both the per-scene and per-node player
-// counters. The per-node counter feeds into GetBestNode's composite load
-// score so nodes with many concurrent players become less attractive even
-// when they host few scenes.
-//
-// Call order matters: scene counter first, then per-node aggregate. The
-// two writes are not atomic — a crash between them skews the per-node
-// counter by at most one, which the zset score refresher smooths out.
-func IncrInstancePlayerCount(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) {
-	svcCtx.Redis.Incr(fmt.Sprintf(InstancePlayerCountKey, sceneId))
-	if nodeId := lookupSceneNode(svcCtx, sceneId); nodeId != "" {
-		svcCtx.Redis.Incr(nodePlayerCountKey(zoneId, nodeId))
-	}
-}
-
-// DecrInstancePlayerCount mirrors IncrInstancePlayerCount. Both counters
-// are clamped to 0 so a missed EnterScene or a stale LeaveScene can't drive
-// them negative.
-func DecrInstancePlayerCount(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) {
-	key := fmt.Sprintf(InstancePlayerCountKey, sceneId)
-	val, err := svcCtx.Redis.Incrby(key, -1)
-	if err == nil && val < 0 {
-		svcCtx.Redis.Set(key, "0")
-	}
-
-	if nodeId := lookupSceneNode(svcCtx, sceneId); nodeId != "" {
-		nodeKey := nodePlayerCountKey(zoneId, nodeId)
-		nodeVal, err := svcCtx.Redis.Incrby(nodeKey, -1)
-		if err == nil && nodeVal < 0 {
-			svcCtx.Redis.Set(nodeKey, "0")
-		}
-	}
-}
-
 // lookupSceneNode resolves the node currently hosting a scene, returning ""
-// when the mapping is missing. Used by the player-count helpers; a missing
-// mapping is a soft error (per-node aggregate skew of at most one event).
+// when the mapping is missing. Used by the member helpers; a missing
+// mapping is a soft error (the per-node set keeps at most one stale member).
 func lookupSceneNode(svcCtx *svc.ServiceContext, sceneId uint64) string {
 	nodeId, _ := svcCtx.Redis.Get(fmt.Sprintf(SceneNodeKeyFmt, sceneId))
 	return nodeId

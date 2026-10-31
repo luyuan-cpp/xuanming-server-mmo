@@ -18,7 +18,7 @@ import (
 	"proto/scene_manager"
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
-	"shared/savebarrier"
+	"shared/handofffence"
 )
 
 // GO-3(cross-zone-scene-travel.md §13.10):scene 进程崩溃后,重启的新进程拿回原来的 node_id。location 指向的
@@ -43,13 +43,13 @@ func registerKnownInstanceForTest(t *testing.T, key string, zoneID uint32, nodeI
 }
 
 // holderFenceForTest 构造一份 C++ 会写出的交接资格原文 "E|S|N|A|K|T"。
-func holderFenceForTest(epoch uint64, instance string, state savebarrier.HandoffFenceState) string {
+func holderFenceForTest(epoch uint64, instance string, state handofffence.HandoffFenceState) string {
 	return fmt.Sprintf("%d|%s|3|%s|%c|%s", epoch, instance, strings.Repeat("a", 32), state, strings.Repeat("b", 32))
 }
 
 func seedHandoffFenceForTest(t *testing.T, mr *miniredis.Miniredis, playerID uint64, raw string) {
 	t.Helper()
-	mr.HSet(savebarrier.Key(playerID), savebarrier.HandoffFenceField, raw)
+	mr.HSet(handofffence.Key(playerID), handofffence.HandoffFenceField, raw)
 }
 
 // forgetInstanceGoneObservationForTest 开始与结束各删一次本副本对该实例的消失记录。
@@ -101,7 +101,8 @@ func seedReplacedHolder(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Mini
 	raw := identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: oldScene, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
 	})
-	seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedOldInstance, savebarrier.HandoffFenceHeld))
+	adoptSceneMember(mr, oldScene, playerID)
+	seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedOldInstance, handofffence.HandoffFenceHeld))
 	return raw
 }
 
@@ -140,7 +141,7 @@ func TestEnterScene_ReplacedOwnerAfterBarrierIsTakenOver(t *testing.T) {
 	assert.Equal(t, uint64(2), loc.OwnerEpoch)
 	require.Len(t, *captured, 1)
 	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
-	assert.Equal(t, "2", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, oldScene)), "旧场景占的人数要还回去")
+	assert.Equal(t, "2", sceneCountText(sc, oldScene), "旧场景占的人数要还回去")
 }
 
 // 本副本第一次确认旧实例不在册:屏障从此刻起算,一个字节都不改地回 17;屏障内重试不再打 etcd。
@@ -161,7 +162,7 @@ func TestEnterScene_ReplacedOwnerFirstObservationStartsBarrier(t *testing.T) {
 		assert.Equal(t, locRaw, identLocationRaw(t, sc, playerID), "location 一个字节都不改")
 		assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "不得铸造")
 		assert.Empty(t, *captured, "不得发路由:同号新进程按原 epoch 登记必被拒")
-		assert.Equal(t, "4", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, targetID)), "不得预占目标场景人数")
+		assert.Equal(t, "4", sceneCountText(sc, targetID), "不得预占目标场景人数")
 	}
 	_, observed := instanceGoneObservedSince(replacedOldInstance)
 	assert.True(t, observed, "首次复核要登记观察时刻")
@@ -193,7 +194,7 @@ func TestPlayerLocationOwnerReplacedRequiresEveryPieceOfEvidence(t *testing.T) {
 	const playerID = uint64(6321)
 	loc := &scene_manager.PlayerLocation{SceneId: 7321, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1}
 	held := func(t *testing.T, mr *miniredis.Miniredis) {
-		seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedOldInstance, savebarrier.HandoffFenceHeld))
+		seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedOldInstance, handofffence.HandoffFenceHeld))
 	}
 	cases := []struct {
 		name    string
@@ -203,7 +204,7 @@ func TestPlayerLocationOwnerReplacedRequiresEveryPieceOfEvidence(t *testing.T) {
 		want    ownerReplacedVerdict
 	}{
 		{name: "资格章就是在册实例(新进程已真的持有)", arrange: func(t *testing.T, mr *miniredis.Miniredis) {
-			seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedNewInstance, savebarrier.HandoffFenceHeld))
+			seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedNewInstance, handofffence.HandoffFenceHeld))
 		}},
 		{name: "资格 epoch 不是当前代(铸造后新持有者还没登记)", arrange: held, epoch: 2},
 		{name: "恢复墓碑不点名任何实例", arrange: func(t *testing.T, mr *miniredis.Miniredis) {
@@ -256,7 +257,7 @@ func TestPlayerLocationOwnerReplacedRequiresEveryPieceOfEvidence(t *testing.T) {
 	}
 
 	// 冻结(F)与撤销(R)同样点名了旧实例:kRegisterFenceLua 对同 E 不同实例一律拒,屏障过后同样接管。
-	for _, state := range []savebarrier.HandoffFenceState{savebarrier.HandoffFenceFrozen, savebarrier.HandoffFenceRevoked} {
+	for _, state := range []handofffence.HandoffFenceState{handofffence.HandoffFenceFrozen, handofffence.HandoffFenceRevoked} {
 		t.Run("资格状态 "+string(rune(state))+" 屏障过后同样接管", func(t *testing.T) {
 			sc, mr := newTestSvcCtxWithWorldScenes(t)
 			clearKnownNodesForTest()
@@ -286,9 +287,9 @@ func TestPlayerLocationOwnerReplacedRequiresEveryPieceOfEvidence(t *testing.T) {
 		stubFreshRegistryForTest(t, false, nil)
 		logic := NewEnterSceneLogic(context.Background(), sc)
 
-		seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedOldInstance, savebarrier.HandoffFenceFrozen))
+		seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedOldInstance, handofffence.HandoffFenceFrozen))
 		assert.Equal(t, ownerNotReplaced, logic.playerLocationOwnerReplaced(playerID, loc, testZoneId, 1, barrierSiteReplacedOwnerTakeover))
-		seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedOldInstance, savebarrier.HandoffFenceHeld))
+		seedHandoffFenceForTest(t, mr, playerID, holderFenceForTest(1, replacedOldInstance, handofffence.HandoffFenceHeld))
 		assert.Equal(t, ownerReplacedBarrierPending, logic.playerLocationOwnerReplaced(playerID, loc, testZoneId, 1, barrierSiteReplacedOwnerTakeover))
 	})
 

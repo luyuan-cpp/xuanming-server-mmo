@@ -29,10 +29,11 @@ import (
 	"shared/idsegment"
 	"shared/kafkacmd"
 	"shared/kafkautil"
+	"shared/placement"
+	"shared/playerredis"
 	"shared/playersync"
 	"shared/serviceauth"
 
-	"github.com/google/uuid"
 	redv9 "github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -67,7 +68,7 @@ type ServiceContext struct {
 	DrainRuntime     *drainproof.Runtime
 	Config           config.Config
 	Authority        *authority.Store
-	LoginSessions    *redv9.Client
+	LoginSessions    redv9.UniversalClient
 	// 仅main显式装配，缺失时CancelActivityBattle拒绝；不复用网络探测或其它服务秘密。
 	ActivityCancelAuth   *serviceauth.Verifier
 	ActivityCancelSecret string
@@ -93,23 +94,18 @@ type ServiceContext struct {
 	// Placement 记录本副本在各 battle 节点上的在途备战数与临时熔断,用于机房内选点(internal/battleplace)。
 	Placement *battleplace.Picker
 
-	// 双存储(设计文档 cross-zone-matchmaking.md D2):
-	//   - MatchRedis:match 私有 key(match:* / challenge:* / spectate:*),
-	//     可指向 Redis Cluster;队列三类 key 共用 {mq} hash tag 同 slot。
-	//   - SharedRedis:跨运行时契约 key(player:{id}:location /
-	//     player:session:{id} / battle:lock:{id}),写者是 scene_manager /
-	//     player_locator / C++ scene,match 只读。C++ 无集群客户端,所以
-	//     这条永远是既有共享库。
-	// MatchRedis 未配置时两者是同一句柄(本地单库形态,行为与改前一致)。
+	// 双存储(设计文档 cross-zone-matchmaking.md D2)。两者都只放协调态,权威都在 SQL:
+	//   - MatchRedis:match 私有 key(spectate:* 观战索引、档位与配额),go-zero 句柄,可指向 Redis Cluster。
+	//     未配置时回落到 Redis 段的共享库(本地单库形态),见 NewRedisHandles。
+	//   - PlayerRedis:玩家域句柄(shared/playerredis,生产可以是 Redis Cluster):跨运行时契约 key(player:{id}:location /
+	//     player:session:{id} / battle:lock:{id}),写者是 scene_manager / player_locator / C++ scene,match 只读;
+	//     player:{id}:sync_digest 由组队 bump。键一律带 {player_id},发送前经守卫核对。
 	MatchRedis  *redis.Redis
-	SharedRedis *redis.Redis
-	// Redis 是 SharedRedis 的过渡别名:保留一版避免外部引用断裂,
-	// 新代码一律按 key 归属显式选 MatchRedis / SharedRedis,不要再用它。
-	Redis *redis.Redis
+	PlayerRedis redv9.UniversalClient
 
 	// SyncDigest 组队名册提交后给受影响玩家的落地摘要 bump TEAM / TEAM_INVITE
 	// (docs/design/landing-recovery-sync-digest.md §3.3),由 team.NewService 取用。
-	// 句柄必须是 SharedRedis:player:{id}:sync_digest 是 C++ scene 读的核心契约键,MatchRedis(可能是集群)C++ 读不到。
+	// 句柄必须是 PlayerRedis:player:{id}:sync_digest 是 C++ scene 读的玩家域键,MatchRedis C++ 读不到。
 	// 指标 label service 固定为 "team":排队 / 切磋 / 观战不 bump 摘要。
 	// 手工构造的 ServiceContext(单测)不填时为 nil,bump 全部是无操作。
 	SyncDigest *playersync.Bumper
@@ -125,45 +121,41 @@ type ServiceContext struct {
 	BattleIDGen     BattleIDGenerator
 	battleIDSegment *idsegment.Client
 
-	// InstanceID 是本进程一次性 UUID,用作 matcher 凑单锁的持有者标记
-	// (释放锁时比对,避免误删别的实例续拿的锁)。
-	InstanceID string
-
 	// SceneNodes / BattleNodes 是 etcd list-watch 内存镜像:
 	//   - SceneNodes:按 player:{id}:location 里的 (zone_id, node_id) 定位
 	//     scene 节点 gRPC 地址(PrepareBattle / CancelBattlePrepare 对端);
-	//   - BattleNodes:全局池,v1 随机选一个执行 CreateBattle。
+	//   - BattleNodes:全局池,机房内按负载选点(internal/battleplace)后写进成局原件。
 	SceneNodes  *discovery.NodeWatcher
 	BattleNodes *discovery.NodeWatcher
 
-	// DataServiceClient 是 data_service 的 gRPC 客户端,team 用它查玩家 home zone
-	// (BatchGetPlayerHomeZone,team-system.md §D.3)。DataServiceRpc 没配任何目标时为 nil,
-	// team 需要 home zone 的请求一律 fail-closed。连接是 NonBlock 的:data_service 没起
+	// DataServiceClient 是 data_service 的 gRPC 客户端:领号段、查玩家昵称与展示资料。
+	// DataServiceRpc 没配任何目标时为 nil,号段装配随之拒绝启动。连接是 NonBlock 的:data_service 没起
 	// 不阻塞 match 起服,调用时才返回 Unavailable。
 	DataServiceClient dspb.DataServiceClient
+
+	// MergedZones 是 zone_merged_into 的进程内副本,Authority 按它解析同区(authority/merged_zones.go)。
+	// 启动时读不到拒绝启动;StopAndReport 在关库之前停它的定时重读。
+	MergedZones *placement.MergedZoneCache
 
 	stopOnce            sync.Once
 	rankPublisherCancel context.CancelFunc
 	rankPublisherDone   chan struct{}
-	// partyTeam 队伍补位匹配里 logic 反过来问 / 通知 team 域的端口(见 PartyTeamPort),
+	// partyTeam 整队排队里 logic 反过来问 / 通知 team 域的端口(见 PartyTeamPort),
 	// 装配时由 SetPartyTeam 注入。用 atomic:matcher 循环比组队服务先启动。
 	partyTeam atomic.Pointer[partyTeamHolder]
 }
 
-// PartyTeamPort 队伍补位匹配(docs/design/team-backfill-matching.md)里 logic 需要 team 域回答 / 接收的两件事,
+// PartyTeamPort 整队排队里 logic 需要 team 域回答 / 接收的两件事,
 // 由 team.Service 实现、match_service.go 装配时注入。接口定义在 svc:logic 与 team 互不 import
 // (team 依赖 proto/team 生成物),方法签名只用内建类型;原因码见 constants.PartyEnd*。
 type PartyTeamPort interface {
-	// CheckParty 补位单弹组前 / 自愈时的复核:队伍记录还在、成员集合与 members 相等、全员在线。
+	// CheckParty 整队成局前的复核:队伍记录还在、成员集合与 members 相等、全员在线。
 	// 返回 (constants.PartyEndNone, 0, nil) 表示仍然有效;否则是失效原因与相关成员(可为 0)。
-	// err 非 nil = 读不到(Redis 抖动),调用方不做失效判定。
+	// err 非 nil = 读不到,调用方不做失效判定。
 	CheckParty(ctx context.Context, teamId uint64, members []uint64) (reason uint32, culprit uint64, err error)
-	// PartyEnded 一支补位单已被撤出队列(不是成功开战)之后的通知:team 给 members 推当前视图与原因。
-	// 实现方自己异步执行,不阻塞调用方(调用方可能持有凑单锁);members 是这一单的名单。
+	// PartyEnded 一支排队中的整队已被撤出(不是成功开战)之后的通知:team 给 members 推当前视图与原因。
+	// 实现方自己异步执行,不阻塞调用方;members 是这一单的名单。
 	PartyEnded(teamId uint64, members []uint64, reason uint32, culprit uint64)
-	// PartyStarted 一支补位单凑满并开局成功(票据已推进 ready)之后的通知:team 给 members 推一次当前视图,
-	// 让队伍面板从「匹配中」归位(进战斗本身由既有的 BattleStartS2C 驱动,不靠这条)。同样异步、至多一次。
-	PartyStarted(teamId uint64, members []uint64)
 }
 
 type partyTeamHolder struct{ port PartyTeamPort }
@@ -205,8 +197,8 @@ func (s *ServiceContext) PoolMembers() []string {
 	return out
 }
 
-// PartyTeam 取补位端口;未注入返回 nil。端口缺失时 matcher 不让补位单成组(核不了就本轮搁置),
-// 撤单照做但通知发不出去、只记日志。生产装配在 matcher 循环启动之前注入(match_service.go)。
+// PartyTeam 取补位端口;未注入返回 nil。端口缺失时 matcher 不让整队成组(核不了就本轮搁置)。
+// 生产装配在 matcher 循环启动之前注入(match_service.go)。
 func (s *ServiceContext) PartyTeam() PartyTeamPort {
 	if h := s.partyTeam.Load(); h != nil {
 		return h.port
@@ -226,9 +218,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	if root == nil || relay == nil || root == relay {
 		panic("匹配真实角色门禁未装配")
 	}
-	if c.Mode != "dev" && c.Mode != "test" && !c.GlobalMatch.Enabled {
-		panic("生产匹配必须启用全球SQL事务权威")
-	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: 5 * time.Second,
@@ -237,17 +226,22 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic("failed to create etcd client: " + err.Error())
 	}
 
-	matchRds, sharedRds := NewRedisHandles(c)
+	matchRds := NewRedisHandles(c)
+	playerRedisConf := c.EffectivePlayerRedis()
+	playerRedis, err := playerredis.New(playerRedisConf)
+	if err != nil {
+		_ = etcdCli.Close()
+		panic(fmt.Errorf("invalid PlayerRedis config: %w", err))
+	}
+	logx.Infof("[match] player redis %s", playerRedisConf.Describe())
 	sc := &ServiceContext{
 		WriterConfig: writer, RootAdmission: root, RelayAdmission: relay, RelayIngress: drainproof.New(),
 		Config:             c,
 		MatchRedis:         matchRds,
-		SharedRedis:        sharedRds,
-		Redis:              sharedRds,
-		SyncDigest:         playersync.NewBumper(playersync.NewGoZeroEvaler(sharedRds), "team"),
+		PlayerRedis:        playerRedis,
+		SyncDigest:         playersync.NewBumper(playersync.NewGoRedisEvaler(playerRedis), "team"),
 		Etcd:               etcdCli,
 		GateCommandBuilder: matchkafka.NewGateCommandBuilder(),
-		InstanceID:         uuid.New().String(),
 	}
 
 	kafkaWriteTimeout := time.Duration(c.KafkaWriteTimeoutSeconds) * time.Second
@@ -312,141 +306,144 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	if c.Spectate.RelayEnabled && !c.Spectate.RelayUsable() {
 		logx.Error("[match] Spectate.RelayEnabled is on but Spectate.TicketSecret is empty (dev/test only); spectator relay stays off and full direct seats return 16021")
 	}
-	if c.GlobalMatch.Enabled {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		store, err := authority.OpenWithPermission(ctx, c.GlobalMatch, authoritysql.Writer(writer))
-		if err != nil {
-			sc.Stop()
-			panic(fmt.Errorf("全球匹配权威初始化失败: %w", err))
-		}
-		sc.Authority = store
-		schedule := scope.Schedule{
-			GroupAfterMs:  uint64(c.GlobalMatch.ScopeGroupAfterSeconds) * 1000,
-			GlobalAfterMs: uint64(c.GlobalMatch.ScopeGlobalAfterSeconds) * 1000,
-		}
-		if err := store.ConfigureMatchCatalog(matchCatalog, schedule); err != nil {
-			sc.Stop()
-			panic(fmt.Errorf("全球匹配范围规则无效: %w", err))
-		}
-		if err := store.ConfigureRoleAuthority(ctx, c.GlobalMatch.AccountRoleSchema); err != nil {
-			sc.Stop()
-			panic("全球匹配角色目录不可用")
-		}
-		if err := store.ConfigureMatchEntryAuthority(ctx, c.GlobalMatch.GuildTrialSchema); err != nil {
-			sc.Stop()
-			panic(fmt.Errorf("全球匹配跨域提交围栏不可用: %w", err))
-		}
-		// 先只读核准全部跨域真源；错误schema不能先固化为不可覆盖的全局策略原件。
-		if err := sc.RunRelay(func() error { return store.EnsureGlobalPolicy(ctx, c) }); err != nil {
-			sc.Stop()
-			panic(err)
-		}
-		loginSessions, err := NewLoginSessionClient(c)
-		if err != nil {
-			sc.Stop()
-			panic(err)
-		}
-		sc.LoginSessions = loginSessions
-		secret := os.Getenv(c.GlobalMatch.RankSecretEnv)
-		if len(secret) < 32 || c.GlobalMatch.RankEndpoint == "" {
-			sc.Stop()
-			panic("全球评级投榜必须注入RANK_PRODUCER_SECRET_MATCH与RankEndpoint")
-		}
-		// 终局发件箱的批量与并发(GlobalMatch.OutcomeOutbox,2026-10-30):越界拒启、不悄悄夹紧;逐行结局计入 metrics。
-		outboxOptions, err := authority.OutcomeOutboxOptions{
-			ResultBatch:  c.GlobalMatch.OutcomeOutbox.ResultBatch,
-			FirstBatch:   c.GlobalMatch.OutcomeOutbox.FirstBatch,
-			WaitingBatch: c.GlobalMatch.OutcomeOutbox.WaitingBatch,
-			Concurrency:  c.GlobalMatch.OutcomeOutbox.Concurrency,
-			Observe:      metrics.ObserveOutcomeOutboxDelivery,
-		}.Normalized()
-		if err != nil {
-			sc.Stop()
-			panic(fmt.Errorf("GlobalMatch.OutcomeOutbox 参数无效: %w", err))
-		}
-		pubctx, pubcancel := context.WithCancel(context.Background())
-		sc.rankPublisherCancel = pubcancel
-		sc.rankPublisherDone = make(chan struct{})
-		outcomeSecret := os.Getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE")
-		outcomeVerifier, err := serviceauth.New(map[string]string{"battle": outcomeSecret})
-		inboxSecret := os.Getenv("MMORPG_PLAYER_INBOX_SECRET_MATCH")
-		if err != nil || len(inboxSecret) < 32 {
-			pubcancel()
-			close(sc.rankPublisherDone)
-			sc.Stop()
-			panic("全球终局必须配置独立Battle/Match入箱签名密钥")
-		}
-		sc.BattleOutcomeAuth, sc.BattleOutcomeSecret = outcomeVerifier, outcomeSecret
-		inboxNodes := discovery.NewNodeWatcher("player_inbox", PlayerInboxRpcPrefix, nil, func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
-		sc.resultPublisher = &kafka.Writer{Completion: func(_ []kafka.Message, err error) { sc.HoldRelay(err) }, Addr: kafka.TCP(c.Kafka.Brokers...), Balancer: &kafka.Hash{}, RequiredAcks: kafka.RequireAll, Async: false, MaxAttempts: 1, WriteTimeout: 2 * time.Second, AllowAutoTopicCreation: false}
-		resolveInbox := func(ctx context.Context) (inboxpb.PlayerInboxClient, error) {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			node, ok := inboxNodes.PickRandom()
-			if !ok {
-				return nil, fmt.Errorf("收件箱尚无正式发现端点")
-			}
-			conn, err := discovery.DialEndpoint(node.Endpoint)
-			if err != nil {
-				return nil, err
-			}
-			return inboxpb.NewPlayerInboxClient(conn), nil
-		}
-		publishResult := func(ctx context.Context, battle uint64, raw []byte) error {
-			return sc.resultPublisher.WriteMessages(ctx, kafka.Message{Topic: c.ResultTopic, Key: []byte(fmt.Sprint(battle)), Value: raw})
-		}
-		sc.RefreshBattleSettlement = func(ctx context.Context, ticket *matchpb.MatchAuthorityTicketRecord) error {
-			return store.RefreshBattleSettlementReceipt(ctx, ticket, resolveInbox, inboxSecret)
-		}
-		var publishers sync.WaitGroup
-		publishers.Add(3)
-		go func() {
-			defer publishers.Done()
-			authority.RunRankPublisher(pubctx, store, c.GlobalMatch.RankEndpoint, secret, relay)
-		}()
-		go func() { defer publishers.Done(); inboxNodes.Run(pubctx, etcdCli) }()
-		go func() {
-			defer publishers.Done()
-			ticker := time.NewTicker(c.GlobalMatch.OutcomeOutboxInterval())
-			defer ticker.Stop()
-			for {
-				if pubctx.Err() != nil {
-					return
-				}
-				call, cancel := context.WithTimeout(context.WithoutCancel(pubctx), 40*time.Second)
-				finish, enterErr := relay.Enter()
-				if enterErr != nil {
-					cancel()
-					return
-				}
-				err := func() (resultErr error) {
-					defer finish()
-					defer func() {
-						if recovered := recover(); recovered != nil {
-							relay.Hold()
-							panic(recovered)
-						}
-						if resultErr != nil {
-							relay.Hold()
-						}
-					}()
-					return store.PublishBattleOutcomes(call, resolveInbox, inboxSecret, publishResult, outboxOptions)
-				}()
-				cancel()
-				if err != nil && pubctx.Err() == nil {
-					logx.Errorf("终局原件投递等待恢复: %v", err)
-				}
-				select {
-				case <-pubctx.Done():
-					return
-				case <-ticker.C:
-				}
-			}
-		}()
-		go func() { publishers.Wait(); close(sc.rankPublisherDone) }()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	store, err := authority.OpenWithPermission(ctx, c.GlobalMatch, authoritysql.Writer(writer))
+	if err != nil {
+		sc.Stop()
+		panic(fmt.Errorf("全球匹配权威初始化失败: %w", err))
 	}
+	sc.Authority = store
+	schedule := scope.Schedule{
+		GroupAfterMs:  uint64(c.GlobalMatch.ScopeGroupAfterSeconds) * 1000,
+		GlobalAfterMs: uint64(c.GlobalMatch.ScopeGlobalAfterSeconds) * 1000,
+	}
+	if err := store.ConfigureMatchCatalog(matchCatalog, schedule); err != nil {
+		sc.Stop()
+		panic(fmt.Errorf("全球匹配范围规则无效: %w", err))
+	}
+	if err := store.ConfigureRoleAuthority(ctx, c.GlobalMatch.AccountRoleSchema); err != nil {
+		sc.Stop()
+		panic("全球匹配角色目录不可用")
+	}
+	// 分不清「没有合服」和「读不到」的实例不能对外服务,同区判定全靠这份映射。
+	if err := sc.loadMergedZones(ctx, store); err != nil {
+		sc.Stop()
+		panic(fmt.Errorf("match: cannot read %s.zone_merged_into, refusing to start (the account needs SELECT on it): %w", c.GlobalMatch.AccountRoleSchema, err))
+	}
+	if err := store.ConfigureMatchEntryAuthority(ctx, c.GlobalMatch.GuildTrialSchema); err != nil {
+		sc.Stop()
+		panic(fmt.Errorf("全球匹配跨域提交围栏不可用: %w", err))
+	}
+	// 先只读核准全部跨域真源；错误schema不能先固化为不可覆盖的全局策略原件。
+	if err := sc.RunRelay(func() error { return store.EnsureGlobalPolicy(ctx, c) }); err != nil {
+		sc.Stop()
+		panic(err)
+	}
+	loginSessions, err := NewLoginSessionClient(c)
+	if err != nil {
+		sc.Stop()
+		panic(err)
+	}
+	sc.LoginSessions = loginSessions
+	secret := os.Getenv(c.GlobalMatch.RankSecretEnv)
+	if len(secret) < 32 || c.GlobalMatch.RankEndpoint == "" {
+		sc.Stop()
+		panic("全球评级投榜必须注入RANK_PRODUCER_SECRET_MATCH与RankEndpoint")
+	}
+	// 终局发件箱的批量与并发(GlobalMatch.OutcomeOutbox,2026-10-30):越界拒启、不悄悄夹紧;逐行结局计入 metrics。
+	outboxOptions, err := authority.OutcomeOutboxOptions{
+		ResultBatch:  c.GlobalMatch.OutcomeOutbox.ResultBatch,
+		FirstBatch:   c.GlobalMatch.OutcomeOutbox.FirstBatch,
+		WaitingBatch: c.GlobalMatch.OutcomeOutbox.WaitingBatch,
+		Concurrency:  c.GlobalMatch.OutcomeOutbox.Concurrency,
+		Observe:      metrics.ObserveOutcomeOutboxDelivery,
+	}.Normalized()
+	if err != nil {
+		sc.Stop()
+		panic(fmt.Errorf("GlobalMatch.OutcomeOutbox 参数无效: %w", err))
+	}
+	pubctx, pubcancel := context.WithCancel(context.Background())
+	sc.rankPublisherCancel = pubcancel
+	sc.rankPublisherDone = make(chan struct{})
+	outcomeSecret := os.Getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE")
+	outcomeVerifier, err := serviceauth.New(map[string]string{"battle": outcomeSecret})
+	inboxSecret := os.Getenv("MMORPG_PLAYER_INBOX_SECRET_MATCH")
+	if err != nil || len(inboxSecret) < 32 {
+		pubcancel()
+		close(sc.rankPublisherDone)
+		sc.Stop()
+		panic("全球终局必须配置独立Battle/Match入箱签名密钥")
+	}
+	sc.BattleOutcomeAuth, sc.BattleOutcomeSecret = outcomeVerifier, outcomeSecret
+	inboxNodes := discovery.NewNodeWatcher("player_inbox", PlayerInboxRpcPrefix, nil, func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
+	sc.resultPublisher = &kafka.Writer{Completion: func(_ []kafka.Message, err error) { sc.HoldRelay(err) }, Addr: kafka.TCP(c.Kafka.Brokers...), Balancer: &kafka.Hash{}, RequiredAcks: kafka.RequireAll, Async: false, MaxAttempts: 1, WriteTimeout: 2 * time.Second, AllowAutoTopicCreation: false}
+	resolveInbox := func(ctx context.Context) (inboxpb.PlayerInboxClient, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		node, ok := inboxNodes.PickRandom()
+		if !ok {
+			return nil, fmt.Errorf("收件箱尚无正式发现端点")
+		}
+		conn, err := discovery.DialEndpoint(node.Endpoint)
+		if err != nil {
+			return nil, err
+		}
+		return inboxpb.NewPlayerInboxClient(conn), nil
+	}
+	publishResult := func(ctx context.Context, battle uint64, raw []byte) error {
+		return sc.resultPublisher.WriteMessages(ctx, kafka.Message{Topic: c.ResultTopic, Key: []byte(fmt.Sprint(battle)), Value: raw})
+	}
+	sc.RefreshBattleSettlement = func(ctx context.Context, ticket *matchpb.MatchAuthorityTicketRecord) error {
+		return store.RefreshBattleSettlementReceipt(ctx, ticket, resolveInbox, inboxSecret)
+	}
+	var publishers sync.WaitGroup
+	publishers.Add(3)
+	go func() {
+		defer publishers.Done()
+		authority.RunRankPublisher(pubctx, store, c.GlobalMatch.RankEndpoint, secret, relay)
+	}()
+	go func() { defer publishers.Done(); inboxNodes.Run(pubctx, etcdCli) }()
+	go func() {
+		defer publishers.Done()
+		ticker := time.NewTicker(c.GlobalMatch.OutcomeOutboxInterval())
+		defer ticker.Stop()
+		for {
+			if pubctx.Err() != nil {
+				return
+			}
+			call, cancel := context.WithTimeout(context.WithoutCancel(pubctx), 40*time.Second)
+			finish, enterErr := relay.Enter()
+			if enterErr != nil {
+				cancel()
+				return
+			}
+			err := func() (resultErr error) {
+				defer finish()
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						relay.Hold()
+						panic(recovered)
+					}
+					if resultErr != nil {
+						relay.Hold()
+					}
+				}()
+				return store.PublishBattleOutcomes(call, resolveInbox, inboxSecret, publishResult, outboxOptions)
+			}()
+			cancel()
+			if err != nil && pubctx.Err() == nil {
+				logx.Errorf("终局原件投递等待恢复: %v", err)
+			}
+			select {
+			case <-pubctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	go func() { publishers.Wait(); close(sc.rankPublisherDone) }()
 
 	return sc
 }
@@ -460,7 +457,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 // 拆成独立函数是为了不起 etcd 也能测试。
 func NewDataServiceClient(c zrpc.RpcClientConf) dspb.DataServiceClient {
 	if c.Etcd.Key == "" && len(c.Endpoints) == 0 && c.Target == "" {
-		logx.Error("[match] DataServiceRpc not configured: cannot query player home zone; team requests requiring home zone will all fail")
+		logx.Error("[match] DataServiceRpc not configured: id segments and player display lookups are unavailable")
 		return nil
 	}
 	if !c.NonBlock {
@@ -471,19 +468,14 @@ func NewDataServiceClient(c zrpc.RpcClientConf) dspb.DataServiceClient {
 	return dspb.NewDataServiceClient(conn.Conn())
 }
 
-// NewRedisHandles 按配置建立 (MatchRedis, SharedRedis) 两个句柄。
-// MatchRedis.Host 为空即未配置,私有 key 回落到共享库,两者返回同一句柄
-// (向后兼容:本地/既有部署不改 yaml 照跑)。拆成独立函数是为了不依赖
-// etcd 就能测试回落逻辑。
-func NewRedisHandles(c config.Config) (matchRds, sharedRds *redis.Redis) {
-	sharedRds = redis.MustNewRedis(c.Redis.RedisConf)
+// NewRedisHandles 按配置建立 MatchRedis 句柄。MatchRedis.Host 为空即未配置,私有 key 回落到 Redis 段的共享库。
+// 拆成独立函数是为了不依赖 etcd 就能测试回落逻辑。
+func NewRedisHandles(c config.Config) *redis.Redis {
 	if c.MatchRedis.Host == "" {
-		return sharedRds, sharedRds
+		return redis.MustNewRedis(c.Redis.RedisConf)
 	}
-	matchRds = redis.MustNewRedis(c.MatchRedis)
-	logx.Infof("[match] Separate MatchRedis configuration active host=%s type=%s (contract keys still use Redis host=%s)",
-		c.MatchRedis.Host, c.MatchRedis.Type, c.Redis.Host)
-	return matchRds, sharedRds
+	logx.Infof("[match] Separate MatchRedis configuration active host=%s type=%s", c.MatchRedis.Host, c.MatchRedis.Type)
+	return redis.MustNewRedis(c.MatchRedis)
 }
 
 func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
@@ -603,6 +595,8 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	if err := sc.RelayAdmission.Wait(ctx); err != nil {
 		return err
 	}
+	// 最后一个用同区判定的调用方已经退出。必须早于封写者资格和关库,否则最后一拍重读会报假故障。
+	sc.MergedZones.Stop()
 	sc.WriterConfig.Seal()
 	var result error
 	if sc.Authority != nil {
@@ -610,6 +604,9 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	}
 	if sc.LoginSessions != nil {
 		result = errors.Join(result, sc.LoginSessions.Close())
+	}
+	if sc.PlayerRedis != nil {
+		result = errors.Join(result, sc.PlayerRedis.Close())
 	}
 	if sc.Etcd != nil {
 		result = errors.Join(result, sc.Etcd.Close())

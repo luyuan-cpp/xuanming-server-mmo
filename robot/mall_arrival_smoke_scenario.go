@@ -88,7 +88,7 @@ var (
 func mallArrivalTipHint(tip uint32) string {
 	switch tip {
 	case tipMallFeatureDisabled:
-		return "(kTradeFeatureDisabled:trade 没装配商城 —— AssetOp.Enabled / RequireSQLCommit / Mall.URL 三项缺一,或商城密钥环境变量没注入)"
+		return "(kTradeFeatureDisabled:trade 没装配商城 —— AssetOp.Enabled / Mall.URL 两项缺一,或商城密钥环境变量没注入)"
 	case tipMallUnavailable:
 		return "(kServiceUnavailable:trade 连不上商城,或商城回了 trade 未映射的状态码,例如未付单超过上限的 429;看 trade 日志里的「商城请求失败 HTTP …」)"
 	case tipMallOrderNotFound:

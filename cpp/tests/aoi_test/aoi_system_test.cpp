@@ -1113,181 +1113,23 @@ TEST_F(AoiTeammateRefreshTest, DowngradePriorityOnlyMatchesExactTag)
 
 TEST(TeamMembershipRuleTest, OlderEpochIsIgnored)
 {
-    EXPECT_FALSE(PlayerTeamSystem::ShouldApplyMembership(5, true, 4, false));
+    EXPECT_FALSE(PlayerTeamSystem::ShouldApplyMembership(5, true, 4));
 }
 
 TEST(TeamMembershipRuleTest, EqualEpochIsIgnored)
 {
-    EXPECT_FALSE(PlayerTeamSystem::ShouldApplyMembership(5, true, 5, false));
+    EXPECT_FALSE(PlayerTeamSystem::ShouldApplyMembership(5, true, 5));
 }
 
 TEST(TeamMembershipRuleTest, NewerEpochIsApplied)
 {
-    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(5, true, 6, false));
+    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(5, true, 6));
 }
 
 TEST(TeamMembershipRuleTest, MissingComponentAlwaysApplies)
 {
-    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(0, false, 0, false));
-    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(0, false, 1700000000123ULL, false));
-}
-
-TEST(TeamMembershipRuleTest, KeyMissingForcesClearEvenWithNewerLocalEpoch)
-{
-    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(9, true, 0, true));
-}
-
-// ---------------------------------------------------------------------------
-// 纯函数:PlayerTeamSystem::ParseTeamIndexReply(手工构造 redisReply)
-// ---------------------------------------------------------------------------
-
-class TeamIndexReplyParseTest : public ::testing::Test
-{
-protected:
-    // NIL 元素故意给一个非法 str + 巨大 len:解析器一旦对 NIL 元素读 str 就会越界/崩溃。
-    static redisReply MakeNil()
-    {
-        redisReply r{};
-        r.type = REDIS_REPLY_NIL;
-        r.str = nullptr;
-        r.len = static_cast<size_t>(-1);
-        return r;
-    }
-
-    static redisReply MakeString(std::string& storage)
-    {
-        redisReply r{};
-        r.type = REDIS_REPLY_STRING;
-        r.str = storage.data();
-        r.len = storage.size();
-        return r;
-    }
-
-    static redisReply MakeArray(redisReply** elements, size_t count)
-    {
-        redisReply r{};
-        r.type = REDIS_REPLY_ARRAY;
-        r.elements = count;
-        r.element = elements;
-        return r;
-    }
-};
-
-TEST_F(TeamIndexReplyParseTest, NullReplyIsUnknown)
-{
-    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(nullptr).kind, TeamIndexReplyKind::kUnknown);
-}
-
-TEST_F(TeamIndexReplyParseTest, ErrorReplyIsUnknown)
-{
-    std::string message = "ERR boom";
-    redisReply error = MakeString(message);
-    error.type = REDIS_REPLY_ERROR;
-    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&error).kind, TeamIndexReplyKind::kUnknown);
-}
-
-TEST_F(TeamIndexReplyParseTest, WrongArraySizeIsUnknown)
-{
-    std::string tid = "1";
-    redisReply tidReply = MakeString(tid);
-    redisReply* one[] = {&tidReply};
-    redisReply arrayOfOne = MakeArray(one, 1);
-    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&arrayOfOne).kind, TeamIndexReplyKind::kUnknown);
-
-    std::string epoch = "2";
-    std::string extra = "3";
-    redisReply epochReply = MakeString(epoch);
-    redisReply extraReply = MakeString(extra);
-    redisReply* three[] = {&tidReply, &epochReply, &extraReply};
-    redisReply arrayOfThree = MakeArray(three, 3);
-    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&arrayOfThree).kind, TeamIndexReplyKind::kUnknown);
-}
-
-TEST_F(TeamIndexReplyParseTest, TwoNilElementsMeanKeyMissing)
-{
-    redisReply tidNil = MakeNil();
-    redisReply epochNil = MakeNil();
-    redisReply* elements[] = {&tidNil, &epochNil};
-    redisReply array = MakeArray(elements, 2);
-
-    const auto parsed = PlayerTeamSystem::ParseTeamIndexReply(&array);
-    EXPECT_EQ(parsed.kind, TeamIndexReplyKind::kKeyMissing);
-    EXPECT_EQ(parsed.teamId, 0u);
-    EXPECT_EQ(parsed.epoch, 0u);
-}
-
-TEST_F(TeamIndexReplyParseTest, HalfNilHashIsUnknownWithoutReadingNil)
-{
-    std::string tid = "123";
-    redisReply tidReply = MakeString(tid);
-    redisReply epochNil = MakeNil();
-    redisReply* elements[] = {&tidReply, &epochNil};
-    redisReply array = MakeArray(elements, 2);
-    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&array).kind, TeamIndexReplyKind::kUnknown);
-
-    redisReply* reversed[] = {&epochNil, &tidReply};
-    redisReply reversedArray = MakeArray(reversed, 2);
-    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&reversedArray).kind, TeamIndexReplyKind::kUnknown);
-}
-
-TEST_F(TeamIndexReplyParseTest, StringElementsAreParsedAsDecimal)
-{
-    // 13 位毫秒 epoch(key 重建时 Redis TIME 起种)必须完整保留
-    std::string tid = "123456789012345678";
-    std::string epoch = "1700000000123";
-    redisReply tidReply = MakeString(tid);
-    redisReply epochReply = MakeString(epoch);
-    redisReply* elements[] = {&tidReply, &epochReply};
-    redisReply array = MakeArray(elements, 2);
-
-    const auto parsed = PlayerTeamSystem::ParseTeamIndexReply(&array);
-    EXPECT_EQ(parsed.kind, TeamIndexReplyKind::kPresent);
-    EXPECT_EQ(parsed.teamId, 123456789012345678ULL);
-    EXPECT_EQ(parsed.epoch, 1700000000123ULL);
-}
-
-TEST_F(TeamIndexReplyParseTest, ZeroTeamIdMeansLeftButEpochKept)
-{
-    std::string tid = "0";
-    std::string epoch = "42";
-    redisReply tidReply = MakeString(tid);
-    redisReply epochReply = MakeString(epoch);
-    redisReply* elements[] = {&tidReply, &epochReply};
-    redisReply array = MakeArray(elements, 2);
-
-    const auto parsed = PlayerTeamSystem::ParseTeamIndexReply(&array);
-    EXPECT_EQ(parsed.kind, TeamIndexReplyKind::kPresent);
-    EXPECT_EQ(parsed.teamId, 0u);
-    EXPECT_EQ(parsed.epoch, 42u);
-}
-
-TEST_F(TeamIndexReplyParseTest, MalformedNumbersAreUnknown)
-{
-    std::string good = "7";
-    redisReply goodReply = MakeString(good);
-
-    for (std::string bad : {std::string("12a"), std::string(""), std::string("-1"), std::string(" 5"),
-                            std::string("99999999999999999999999")})
-    {
-        redisReply badReply = MakeString(bad);
-        redisReply* elements[] = {&goodReply, &badReply};
-        redisReply array = MakeArray(elements, 2);
-        EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&array).kind, TeamIndexReplyKind::kUnknown)
-            << "epoch=\"" << bad << "\"";
-    }
-}
-
-TEST_F(TeamIndexReplyParseTest, IntegerElementsAreUnknown)
-{
-    redisReply tidInt{};
-    tidInt.type = REDIS_REPLY_INTEGER;
-    tidInt.integer = 1;
-    redisReply epochInt{};
-    epochInt.type = REDIS_REPLY_INTEGER;
-    epochInt.integer = 2;
-    redisReply* elements[] = {&tidInt, &epochInt};
-    redisReply array = MakeArray(elements, 2);
-    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&array).kind, TeamIndexReplyKind::kUnknown);
+    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(0, false, 0));
+    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(0, false, 1700000000123ULL));
 }
 
 int main(int argc, char** argv)

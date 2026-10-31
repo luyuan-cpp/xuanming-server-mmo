@@ -1,5 +1,9 @@
 # 独立本机开发栈：先运行 tools/scripts/prepare_docker_debug.py，再用其 .env 启动。
 # 所有镜像必须由当前源码预先构建；这里禁止自动拉取或借用其他项目的容器、卷。
+#
+# 写者授权与 K8s 的 registrar init 同形状：每个写者前有一个一次性注册步骤 <服务>-sql-boot（账号、授权清单同 lib/sql_boot_catalog_local.ps1），
+# 单次启动授权、每 boot 配置和 SQL 变量写进这个服务的命名卷，常驻容器只读挂载。授权启动即消费，重启原容器会被拒启，
+# 要连注册步骤一起重建（up -d --no-deps --force-recreate <服务>-sql-boot <服务>）。说明见 tools/scripts/README.md。
 name: ${COMPOSE_PROJECT_NAME:-xuanming-debug-current}
 
 x-app: &app
@@ -19,6 +23,33 @@ x-infra-deps: &infra-deps
   kafka-init:
     condition: service_completed_successfully
 
+# 注册步骤的公共部分。要 root 把产物交给常驻容器的 10001；umask 077 让授权、配置和 SQL 变量过得了私有文件校验（0600、目录他人不可写）。
+x-sql-boot: &sql-boot
+  <<: *app
+  image: ${SQL_BOOT_IMAGE:-local/mmorpg-sql-boot:debug-20261031}
+  user: "0:0"
+  entrypoint: [/bin/sh, -ec, 'umask 077; exec pwsh -NoLogo -NoProfile -NonInteractive -File /app/sql-boot/tools/scripts/lib/sql_boot_catalog_docker.ps1 "$$@"', --]
+  environment:
+    MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先准备配置}
+    DB_ALLOWED_DATABASES: zone_1_db
+
+# 授权逐表给，所以注册排在全部建表之后。
+x-sql-boot-deps: &sql-boot-deps
+  mysql:
+    condition: service_healthy
+  sql-boot:
+    condition: service_completed_successfully
+  db-migrate:
+    condition: service_completed_successfully
+  data-migrate:
+    condition: service_completed_successfully
+  match-migrate:
+    condition: service_completed_successfully
+  guild-migrate:
+    condition: service_completed_successfully
+  player-inbox-migrate:
+    condition: service_completed_successfully
+
 x-cpp: &cpp
   <<: *app
   image: ${NODE_DEBUG_IMAGE:-local/xuanming-node:debug-20261020}
@@ -34,8 +65,6 @@ services:
     image: ${MYSQL_IMAGE:-mysql:latest}
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先准备配置}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请先准备配置}
-      MYSQL_USER: appuser
       MYSQL_DATABASE: mmorpg
       MYSQL_INITDB_SKIP_TZINFO: "1"
     volumes:
@@ -131,6 +160,21 @@ services:
       kafka:
         condition: service_healthy
 
+  # 每次 up 先跑：补库，生成注册步骤共用的口令和原件（只进 sql-boot-private），判定全局库要不要跑 data_service -migrate。
+  # 镜像基于 deploy/debug/Dockerfile.sql-boot，writer_authority 由 build_docker_go_debug.py 叠到 /app/service。
+  sql-boot:
+    <<: *sql-boot
+    command: [-Step, prepare]
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-boot:/app/sql-boot:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config:/app/sql-boot-config:ro
+      - sql-boot-private:/run/sql-boot/private
+      - sql-boot-state:/run/sql-boot/state
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # 建表都用 root：常驻账号没有 DDL，账号与角色模板见 deploy/sql。
   db-migrate:
     <<: *app
     image: ${DB_MIGRATE_IMAGE:-local/mmorpg-db-migrate:debug-20261020}
@@ -138,38 +182,109 @@ services:
     environment:
       DB_ALLOWED_DATABASES: zone_1_db
     volumes:
-      - ${DEBUG_RUN_DIR:?请先准备配置}/config/db.yaml:/app/etc/service.yaml:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config/db.schema.yaml:/app/etc/service.yaml:ro
     depends_on:
       mysql:
         condition: service_healthy
+      sql-boot:
+        condition: service_completed_successfully
 
+  # data_service -migrate 只接受空库，而每次 up 都会重跑一次性容器：权威表齐全时 sql-boot 留标记，这里跳过；半成品 sql-boot 就拒绝了。
   data-migrate:
     <<: *app
     image: ${DATA_SERVICE_IMAGE:-local/mmorpg-data-service:debug-20261020}
+    entrypoint: [/bin/sh, -ec, 'if [ -f /run/sql-boot/state/global-schema-ready ]; then echo "global schema already migrated"; exit 0; fi; exec /app/service "$$@"', --]
     command: [-f, /app/etc/service.yaml, -migrate]
+    environment:
+      MMORPG_SQL_SCHEMA_PRINCIPAL: root@%
     volumes:
-      - ${DEBUG_RUN_DIR:?请先准备配置}/config/data_service.yaml:/app/etc/service.yaml:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config/data_service.schema.yaml:/app/etc/service.yaml:ro
+      - sql-boot-state:/run/sql-boot/state:ro
     depends_on:
       mysql:
         condition: service_healthy
+      sql-boot:
+        condition: service_completed_successfully
+
+  # match 与 guild 启动时互相核对对方的表，两边的表都要先于 match 建好。
+  match-migrate:
+    <<: *app
+    image: ${MATCH_IMAGE:-local/mmorpg-match:debug-20261020}
+    command: [-f, /app/etc/service.yaml, -migrate]
+    environment:
+      MATCH_MIGRATION_USER: root
+      MATCH_MIGRATION_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先准备配置}
+      MMORPG_SQL_SCHEMA_PRINCIPAL: root@%
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config/match.yaml:/app/etc/service.yaml:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      sql-boot:
+        condition: service_completed_successfully
+
+  # 调试栈不常驻 guild，只借镜像建表。build_docker_go_debug.py 不管它，镜像用 go_svc_image.ps1 构建后经 GUILD_IMAGE 指定。
+  guild-migrate:
+    <<: *app
+    image: ${GUILD_IMAGE:-local/mmorpg-guild:debug-20261020}
+    command: [-f, /app/etc/service.yaml, -migrate]
+    environment:
+      MMORPG_GUILD_SQL_DSN: "root:${MYSQL_ROOT_PASSWORD:?请先准备配置}@tcp(mysql:3306)/mmorpg_guild?charset=utf8mb4&parseTime=true&loc=Local"
+      MMORPG_SQL_SCHEMA_PRINCIPAL: root@%
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config/guild.yaml:/app/etc/service.yaml:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      sql-boot:
+        condition: service_completed_successfully
+
+  player-inbox-migrate:
+    <<: *app
+    image: ${PLAYER_INBOX_IMAGE:-local/mmorpg-player-inbox:debug-20261031}
+    command: [-f, /app/etc/service.yaml, -migrate]
+    environment:
+      GOLANG_PROTOBUF_REGISTRATION_CONFLICT: warn
+      MMORPG_SQL_SCHEMA_PRINCIPAL: root@%
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config/player_inbox.schema.yaml:/app/etc/service.yaml:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      sql-boot:
+        condition: service_completed_successfully
+
+  db-sql-boot:
+    <<: *sql-boot
+    command: [-Step, register, -WriterService, db]
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-boot:/app/sql-boot:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config:/app/sql-boot-config:ro
+      - sql-boot-private:/run/sql-boot/private
+      - db-sql-writer:/run/sql-boot/boot/db
+      - db-sql-consume:/run/sql-boot/boot/db/consume
+    depends_on: *sql-boot-deps
 
   db:
     <<: *app
     image: ${DB_IMAGE:-local/mmorpg-db:debug-20261020}
-    command: [-f, /app/etc/service.yaml]
+    entrypoint: [/bin/sh, /sql-writer-entry.sh]
+    command: [/app/service, -f, /run/sql-writer/runtime/db.yaml]
     environment:
       <<: *go-env
       DB_ALLOWED_DATABASES: zone_1_db
       POD_IP: ${DB_IP:?请先准备配置}
       MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
     volumes:
-      - ${DEBUG_RUN_DIR:?请先准备配置}/config/db.yaml:/app/etc/service.yaml:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
+      - db-sql-writer:/run/sql-writer:ro
+      - db-sql-consume:/run/sql-writer/consume
     networks:
       default:
         ipv4_address: ${DB_IP:?请先准备配置}
     depends_on:
       <<: *infra-deps
-      db-migrate:
+      db-sql-boot:
         condition: service_completed_successfully
     healthcheck:
       test: [CMD-SHELL, 'nc -z -w 2 127.0.0.1 6000']
@@ -177,21 +292,42 @@ services:
       timeout: 3s
       retries: 30
 
+  data-service-sql-boot:
+    <<: *sql-boot
+    command: [-Step, register, -WriterService, data_service]
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-boot:/app/sql-boot:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config:/app/sql-boot-config:ro
+      - sql-boot-private:/run/sql-boot/private
+      - data-service-sql-writer:/run/sql-boot/boot/data_service
+      - data-service-sql-consume:/run/sql-boot/boot/data_service/consume
+    depends_on: *sql-boot-deps
+
   data-service:
     <<: *app
     image: ${DATA_SERVICE_IMAGE:-local/mmorpg-data-service:debug-20261020}
-    command: [-f, /app/etc/service.yaml]
+    entrypoint: [/bin/sh, /sql-writer-entry.sh]
+    command: [/app/service, -f, /run/sql-writer/runtime/data_service.yaml]
     environment:
       <<: *go-env
       POD_IP: ${DATA_SERVICE_IP:?请先准备配置}
+      # 角色交易 SQL 证明的玩家库白名单，与 go/db 同一份。
+      DB_ALLOWED_DATABASES: zone_1_db
+      # 账号目录四个调用方各一把，缺任何一把 data_service 拒启（validateGlobalCallerSecrets）。
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN:?请先准备配置}
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE:?请先准备配置}
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER:?请先准备配置}
     volumes:
-      - ${DEBUG_RUN_DIR:?请先准备配置}/config/data_service.yaml:/app/etc/service.yaml:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
+      - data-service-sql-writer:/run/sql-writer:ro
+      - data-service-sql-consume:/run/sql-writer/consume
     networks:
       default:
         ipv4_address: ${DATA_SERVICE_IP:?请先准备配置}
     depends_on:
       <<: *infra-deps
-      data-migrate:
+      data-service-sql-boot:
         condition: service_completed_successfully
     healthcheck:
       test: [CMD-SHELL, 'nc -z -w 2 127.0.0.1 9000']
@@ -206,6 +342,7 @@ services:
     environment:
       <<: *go-env
       POD_IP: ${SCENE_MANAGER_IP:?请先准备配置}
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER:?请先准备配置}
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/scene_manager.yaml:/app/etc/service.yaml:ro
     networks:
@@ -243,10 +380,23 @@ services:
       timeout: 3s
       retries: 30
 
+  # login 进程不连 SQL、不消费授权，这一步只为和 go_services.ps1、K8s 的写者清单同形状。
+  login-sql-boot:
+    <<: *sql-boot
+    command: [-Step, register, -WriterService, login]
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-boot:/app/sql-boot:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config:/app/sql-boot-config:ro
+      - sql-boot-private:/run/sql-boot/private
+      - login-sql-writer:/run/sql-boot/boot/login
+      - login-sql-consume:/run/sql-boot/boot/login/consume
+    depends_on: *sql-boot-deps
+
   login:
     <<: *app
     image: ${LOGIN_IMAGE:-local/mmorpg-login:debug-20261020}
-    command: [-loginService, /app/etc/service.yaml]
+    entrypoint: [/bin/sh, /sql-writer-entry.sh]
+    command: [/app/service, -loginService, /run/sql-writer/runtime/login.yaml]
     environment:
       <<: *go-env
       POD_IP: ${LOGIN_IP:?请先准备配置}
@@ -254,13 +404,18 @@ services:
       QUEUE_TOKEN_SECRET: ${QUEUE_TOKEN_SECRET:?请先准备配置}
       INTERNAL_AUTH_SECRET: ${INTERNAL_AUTH_SECRET:?请先准备配置}
       LOGIN_DEV_PASSWORD_SHARED_SECRET: ${LOGIN_DEV_PASSWORD_SHARED_SECRET:?请先准备配置}
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN:?请先准备配置}
     volumes:
-      - ${DEBUG_RUN_DIR:?请先准备配置}/config/login.yaml:/app/etc/service.yaml:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
+      - login-sql-writer:/run/sql-writer:ro
+      - login-sql-consume:/run/sql-writer/consume
     networks:
       default:
         ipv4_address: ${LOGIN_IP:?请先准备配置}
     depends_on:
       <<: *infra-deps
+      login-sql-boot:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       data-service:
@@ -294,20 +449,42 @@ services:
       timeout: 3s
       retries: 30
 
+  match-sql-boot:
+    <<: *sql-boot
+    command: [-Step, register, -WriterService, match]
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-boot:/app/sql-boot:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config:/app/sql-boot-config:ro
+      - sql-boot-private:/run/sql-boot/private
+      - match-sql-writer:/run/sql-boot/boot/match
+      - match-sql-consume:/run/sql-boot/boot/match/consume
+    depends_on: *sql-boot-deps
+
   match:
     <<: *app
     image: ${MATCH_IMAGE:-local/mmorpg-match:debug-20261020}
-    command: [-f, /app/etc/service.yaml]
+    entrypoint: [/bin/sh, /sql-writer-entry.sh]
+    command: [/app/service, -f, /run/sql-writer/runtime/match.yaml]
     environment:
       <<: *go-env
       POD_IP: ${MATCH_IP:?请先准备配置}
+      # 探测与终局证明由 battle 签、match 验，两端同值。MATCH_MYSQL_PASSWORD 由入口脚本从本 boot 的私有卷读。
+      MATCH_PROBE_SECRET: ${MATCH_PROBE_SECRET:?请先准备配置}
+      MMORPG_MATCH_OUTCOME_SECRET_BATTLE: ${MMORPG_MATCH_OUTCOME_SECRET_BATTLE:?请先准备配置}
+      RANK_PRODUCER_SECRET_MATCH: ${RANK_PRODUCER_SECRET_MATCH:?请先准备配置}
+      MMORPG_PLAYER_INBOX_SECRET_MATCH: ${MMORPG_PLAYER_INBOX_SECRET_MATCH:?请先准备配置}
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
     volumes:
-      - ${DEBUG_RUN_DIR:?请先准备配置}/config/match.yaml:/app/etc/service.yaml:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
+      - match-sql-writer:/run/sql-writer:ro
+      - match-sql-consume:/run/sql-writer/consume
     networks:
       default:
         ipv4_address: ${MATCH_IP:?请先准备配置}
     depends_on:
       <<: *infra-deps
+      match-sql-boot:
+        condition: service_completed_successfully
       data-service:
         condition: service_healthy
     healthcheck:
@@ -316,12 +493,72 @@ services:
       timeout: 3s
       retries: 30
 
+  # 全球匹配成局的个人结算投到这里（match 签名），scene 登录后拉取。收件箱不可用不阻断进场，所以别的服务不依赖它。
+  player-inbox-sql-boot:
+    <<: *sql-boot
+    command: [-Step, register, -WriterService, player_inbox]
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-boot:/app/sql-boot:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config:/app/sql-boot-config:ro
+      - sql-boot-private:/run/sql-boot/private
+      - player-inbox-sql-writer:/run/sql-boot/boot/player_inbox
+      - player-inbox-sql-consume:/run/sql-boot/boot/player_inbox/consume
+    depends_on: *sql-boot-deps
+
+  player-inbox:
+    <<: *app
+    image: ${PLAYER_INBOX_IMAGE:-local/mmorpg-player-inbox:debug-20261031}
+    entrypoint: [/bin/sh, /sql-writer-entry.sh]
+    command: [/app/service, -f, /run/sql-writer/runtime/player_inbox.yaml]
+    environment:
+      <<: *go-env
+      POD_IP: ${PLAYER_INBOX_IP:?请先准备配置}
+      GOLANG_PROTOBUF_REGISTRATION_CONFLICT: warn
+      # scene 拉取验这一把，缺失拒启。
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
+      # match 结算入箱验这一把，缺失时入箱回 Unavailable。
+      MMORPG_PLAYER_INBOX_SECRET_MATCH: ${MMORPG_PLAYER_INBOX_SECRET_MATCH:?请先准备配置}
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
+      - player-inbox-sql-writer:/run/sql-writer:ro
+      - player-inbox-sql-consume:/run/sql-writer/consume
+    networks:
+      default:
+        ipv4_address: ${PLAYER_INBOX_IP:?请先准备配置}
+    depends_on:
+      <<: *infra-deps
+      player-inbox-sql-boot:
+        condition: service_completed_successfully
+      data-service:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'nc -z -w 2 127.0.0.1 50950']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  gateway-sql-boot:
+    <<: *sql-boot
+    command: [-Step, register, -WriterService, gateway]
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-boot:/app/sql-boot:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config:/app/sql-boot-config:ro
+      - sql-boot-private:/run/sql-boot/private
+      - gateway-sql-writer:/run/sql-boot/boot/gateway
+      - gateway-sql-consume:/run/sql-boot/boot/gateway/consume
+    depends_on: *sql-boot-deps
+
   gateway:
     <<: *app
     image: ${GATEWAY_IMAGE:-local/mmorpg-gateway:debug-20261020}
-    command: [--spring.config.additional-location=file:/app/config/application.yaml]
+    entrypoint: [/bin/sh, /sql-writer-entry.sh]
+    # 后一份覆盖前一份：数据源账号和运行档位来自本 boot 的私有配置，其余来自准备好的 gateway.yaml。
+    command: [java, -jar, /app/service.jar, "--spring.config.additional-location=file:/app/config/application.yaml,file:/run/sql-writer/runtime/gateway.yaml"]
     volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/gateway.yaml:/app/config/application.yaml:ro
+      - gateway-sql-writer:/run/sql-writer:ro
+      - gateway-sql-consume:/run/sql-writer/consume
     ports:
       # 对齐本机客户端默认地址；保留本轮已有的管理／冒烟入口。
       - 127.0.0.1:8081:8081
@@ -329,6 +566,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      gateway-sql-boot:
+        condition: service_completed_successfully
       login:
         condition: service_healthy
 
@@ -371,6 +610,8 @@ services:
       SCENE_NODE_TYPE: "0"
       SCENE_RUN_MODE: dev
       MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
+      MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE:?请先准备配置}
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/base_deploy_config.yaml:/app/bin/etc/base_deploy_config.yaml:ro
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/game_config.yaml:/app/bin/etc/game_config.yaml:ro
@@ -393,6 +634,10 @@ services:
       RPC_PORT: "20000"
       ZONE_ID: "1"
       BATTLE_RUN_MODE: dev
+      GLOBAL_MATCH_ENABLED: "true"
+      PHYSICAL_REGION: "1"
+      MATCH_PROBE_SECRET: ${MATCH_PROBE_SECRET:?请先准备配置}
+      MMORPG_MATCH_OUTCOME_SECRET_BATTLE: ${MMORPG_MATCH_OUTCOME_SECRET_BATTLE:?请先准备配置}
       CLIENT_ENDPOINT_SOURCE: static
       CLIENT_ENDPOINT_HOST: 127.0.0.1
       CLIENT_ENDPOINT_PORT: ${BATTLE_PORT:-28010}
@@ -426,3 +671,19 @@ volumes:
   gate-logs:
   scene-logs:
   battle-logs:
+  # 注册与维护账号口令、物理 authority 原件、锁资格声明、各服务的账号记录。只有注册步骤挂载。
+  sql-boot-private:
+  sql-boot-state:
+  # 每个写者两个卷：*-sql-writer 放授权、每 boot 配置和 SQL 变量（常驻容器只读），*-sql-consume 放消费标记（常驻容器可写）。
+  db-sql-writer:
+  db-sql-consume:
+  data-service-sql-writer:
+  data-service-sql-consume:
+  login-sql-writer:
+  login-sql-consume:
+  match-sql-writer:
+  match-sql-consume:
+  player-inbox-sql-writer:
+  player-inbox-sql-consume:
+  gateway-sql-writer:
+  gateway-sql-consume:

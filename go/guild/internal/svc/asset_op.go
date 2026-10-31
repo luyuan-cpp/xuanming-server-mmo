@@ -117,8 +117,6 @@ func LoopConfigFrom(c config.AssetOpConf, retryBase time.Duration) assetop.LoopC
 		AbandonBatch:          c.AbandonBatch,
 		AbandonInterval:       msToDuration(c.AbandonIntervalMs),
 		AuditInterval:         msToDuration(c.AuditIntervalMs),
-		// 终结只认强读 player_store 得到的账本(docs/design/player-data-tidb-scaling-plan.md §3.4)。
-		RequireSQLCommit: true,
 	}
 }
 
@@ -191,21 +189,23 @@ const maintenanceLeaderKey = "guild:assetop:maintenance:leader"
 // NewAssetPipeline 建签名器、scene 定位件、Caller 与重投循环。只在 AssetOp.Enabled=true 时调用;
 // 返回错误一律启动致命(密钥缺失 / 过短、循环参数非法、退避基数大于 MaxBackoffMs 等)。
 //
-// locatorRedis 读 player:{id}:location:必须与 scene / scene_manager 写这把键的是**同一实例同一 DB**
-// (本地是 svcCtx.PlayerLocatorRedisClient;K8s 必须指向 SharedRedis),指错的表现是所有玩家
+// playerRedis 读 player:{id}:location:必须是 scene / scene_manager 写这把键的同一个玩家域(svcCtx.PlayerRedis),指错的表现是所有玩家
 // "不在线"、资产指令永远 PENDING,且没有任何报错。
 //
-// 落地唤醒(AssetOp.Wake 开启时)订阅的也是 locatorRedis:scene 在核心 Redis(`redis` 实例 DB 0)上 PUBLISH assetop:wake,
+// 落地唤醒(AssetOp.Wake 开启时)订阅的是控制域的 wakeRedis:scene 在核心 Redis(`redis` 实例 DB 0)上 PUBLISH assetop:wake,
 // 本服务里指向它的正是 PlayerLocatorRedis 这一份配置(设计 §2「唤醒通道」)。Pub/Sub 不分 DB,但实例指错的表现同样是
 // 永远收不到唤醒、只剩原退避,且不报错。
 //
 // 不连任何东西:ConnCache 惰性拨号,watcher 在 Start 里才连 etcd,Redis 在第一次定位 / Start 订阅时才连。
-func NewAssetPipeline(c config.AssetOpConf, retryBase time.Duration, locatorRedis *redis.Client, store assetop.Store) (*AssetPipeline, error) {
+func NewAssetPipeline(c config.AssetOpConf, retryBase time.Duration, playerRedis, wakeRedis redis.UniversalClient, store assetop.Store) (*AssetPipeline, error) {
 	if store == nil {
 		return nil, errors.New("guild: 资产管线缺 outbox 存储(GuildAssetStore)")
 	}
-	if locatorRedis == nil {
+	if playerRedis == nil {
 		return nil, errors.New("guild: 资产管线缺位置键 Redis(player:{id}:location)")
+	}
+	if wakeRedis == nil {
+		return nil, errors.New("guild: 资产管线缺唤醒频道 Redis(assetop:wake)")
 	}
 	signer, err := NewAssetOpSigner()
 	if err != nil {
@@ -218,7 +218,7 @@ func NewAssetPipeline(c config.AssetOpConf, retryBase time.Duration, locatorRedi
 		// 节点从 etcd 消失时丢掉它的连接:留着只会让下一次投递卡在一个已经没人听的地址上。
 		func(e scenenode.NodeEntry) { conns.Remove(e.Endpoint) })
 	locator := &scenenode.Locator{
-		Reader:  scenenode.GoRedisReader{Client: locatorRedis},
+		Reader:  scenenode.GoRedisReader{Client: playerRedis},
 		Watcher: watcher,
 		Conns:   conns,
 		Metrics: nodeMetrics,
@@ -247,7 +247,7 @@ func NewAssetPipeline(c config.AssetOpConf, retryBase time.Duration, locatorRedi
 	// 订阅端与 Loop.WakePlayer 各管一段 result。Service 进跨副本去重键 assetop:wake:guild:{player_id},取本服务的调用方名。
 	var wake *assetopwake.Subscriber
 	if c.Wake.On() {
-		wake, err = assetopwake.New(locatorRedis, assetopwake.Config{
+		wake, err = assetopwake.New(wakeRedis, assetopwake.Config{
 			Service:     AssetOpCaller,
 			Concurrency: c.Wake.EffectiveConcurrency(),
 			WakeTimeout: c.Wake.EffectiveTimeout(),

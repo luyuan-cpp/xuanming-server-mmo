@@ -4,9 +4,10 @@
 #
 # 流程:先跑 O5–O7(三组独立账号,不碰主机器人,见下文);再由主机器人 robot_9901 做 O1 登录进场
 #       → O2 清场:GetQueueStatus(153)必须是 NOT_QUEUED(上一轮残留会直接失败并说明)
-#       → O3 重复 20 轮:不等回包连发 JoinQueue(157,1V1)→ CancelQueue(148,不带票号),等两条回包都到,
-#          再查 GetQueueStatus。客户端意图是「加入后取消」,最终必须不在队列里;停在 QUEUED 就是执行顺序被颠倒,
-#          本轮带 Join 回包里的票号补一次取消收尾,最后汇总乱序轮次。
+#       → O3 先走一次地域探测,再重复 20 轮:不等回包连发 JoinQueue(157,1V1)→ CancelQueue(148,与 Join 共用同一个 request_id),
+#          等两条回包都到,再带 request_id 查 GetQueueStatus。客户端意图是「加入后取消」,最终必须不在队列里且撤销墓碑已提交。
+#          撤销在 SQL 留永久墓碑,执行顺序被颠倒时 Join 被墓碑挡下(回 kMatchInternal + request_cancelled),玩家同样不在队列里,
+#          这一轮记为乱序;万一停在 QUEUED 也记乱序,并带 Join 回包里的票号补一次取消收尾。最后汇总乱序轮次。
 #
 # 预期:gate 路由 lane(批次 C)上线之前,本场景**会间歇失败**(ORDERING_SMOKE_FAIL step=O3-order),这正是它要证明的缺陷;
 #       上线之后必须每轮都通过。
@@ -14,7 +15,7 @@
 # 前置(缺一条就会失败,原因写进 ORDERING_SMOKE_FAIL 的 reason):
 #   1. gate 是路由模式(GATE_CLIENT_RPC_ROUTER=1;本地 start_game.ps1 与 K8s 默认都是)。直连模式下 match 不回写会话头,
 #      gate 收不到 match 的回包,O2 会超时。
-#   2. client_rpc_router、match 已启动;玩家有场景位置(JoinQueue 要求在场景里)。
+#   2. client_rpc_router、match 已启动;玩家有场景位置(JoinQueue 要求在场景里);battle 公网端口从 robot 所在机器可达(O3 入队前要探测)。
 #   3. 环境里没有别的玩家在排 1V1:否则本机器人可能在 Join 与 Cancel 之间被凑走(O3-status 报前置条件不满足)。
 #   4. robot_9901 不在任何队伍里、没有未收尾的匹配票据。前缀必须是 robot_ 才会命中 login 侧 DevPasswordAuth。
 #   5. 从 robot/ 目录运行(table_dir 是相对路径)。

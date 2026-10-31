@@ -116,8 +116,6 @@ Set-Content -Path (Join-Path $snapDirForTest "t18m_db.txt") -Value $fakeDbSnapsh
 #     - denied 只出现在 claim 上:按 op 过滤写错就会串到 save 那张表。
 #     - row_bytes:HOT 100 行,sum 12800 → 128 字节,桶 le=256:100 → p99 插值到 253;ASSET 有 count 没有桶 → p99 n/a;
 #       其余组没有序列 → n/a。
-#     - db_redis_pool_wait_seconds_total 不能被当成 wait_total 加进 rpool_wait;只有 redis_client="main" 一份
-#       (placement 与 main 共用 client 时 go/db 只导出 main),rpool_wait 必须是 5 而不是翻倍。
 #     - sql_in_use 跨 pool 求和 3 + 1 = 4;open_err = error 6 + rejected 0;cooldown 跨 pool 求和 0 + 1 = 1。
 $fakeDbSnapshotStore = @"
 # TYPE db_player_store_seconds histogram
@@ -152,12 +150,6 @@ db_player_store_row_bytes_sum{kind="PLAYER_STORE_KIND_HOT"} 12800
 db_player_store_row_bytes_count{kind="PLAYER_STORE_KIND_HOT"} 100
 db_player_store_row_bytes_sum{kind="PLAYER_STORE_KIND_ASSET"} 3000
 db_player_store_row_bytes_count{kind="PLAYER_STORE_KIND_ASSET"} 10
-# TYPE db_redis_pool_wait_total counter
-db_redis_pool_hits_total{redis_client="main"} 900
-db_redis_pool_wait_total{redis_client="main"} 5
-db_redis_pool_wait_seconds_total{redis_client="main"} 0.5
-db_redis_pool_timeouts_total{redis_client="main"} 1
-db_redis_pool_conns{redis_client="main"} 12
 # TYPE mmorpg_sql_pool_in_use_connections gauge
 mmorpg_sql_pool_in_use_connections{pool="home",sql_client="db"} 3
 mmorpg_sql_pool_in_use_connections{pool="extra_zone",sql_client="db"} 1
@@ -254,8 +246,8 @@ Set-Content -Path (Join-Path $snapDirForTest "t5m_sm.txt") -Value $fakeSmOld -En
 #     - D1 / D2:t18m_ds 是新版 data_service。
 #       home:ok 40 / not_found 5 / error 1,sum 合计 0.1s / 46 次 → avg 2.2ms(没有桶 → p99 n/a);
 #       batch:ok 100(sum 0.3s → 3.0ms),not_found / error 为 0;batch_ids sum 300 / 100 → 3.0。
-#       route_read_total:home_fence cache 30 / sql 3 / not_found_sql 1 / sql_error 1,batch cache 90 / sql 8
-#       (batch 没有 not_found_sql 组合)→ rr_cache 120、rr_sql 12、rr_sqlerr 1。
+#       route_read_total:home ok 33 / not_found 1 / error 1,batch ok 98 / error 0
+#       (batch 没有 not_found 组合)→ rr_ok 131、rr_nf 1、rr_err 1。
 #       D2:read ok 200 + rejected 3 + error 2 = 205 次,sum 2.05s → 10.0ms;lookup ok 300,sum 0.3s → 1.0ms;
 #       其余三个 rpc 没有序列 → n/a。t5m_ds 是旧版 data_service → D1 / D2 全 n/a。
 $fakeDsNew = @"
@@ -276,13 +268,11 @@ data_service_home_zone_read_seconds_count{result="error",rpc="batch"} 0
 data_service_home_zone_batch_ids_sum 300
 data_service_home_zone_batch_ids_count 100
 # TYPE data_service_route_read_total counter
-data_service_route_read_total{path="home_fence",result="cache"} 30
-data_service_route_read_total{path="home_fence",result="sql"} 3
-data_service_route_read_total{path="home_fence",result="not_found_sql"} 1
-data_service_route_read_total{path="home_fence",result="sql_error"} 1
-data_service_route_read_total{path="batch",result="cache"} 90
-data_service_route_read_total{path="batch",result="sql"} 8
-data_service_route_read_total{path="batch",result="sql_error"} 0
+data_service_route_read_total{path="home",result="ok"} 33
+data_service_route_read_total{path="home",result="not_found"} 1
+data_service_route_read_total{path="home",result="error"} 1
+data_service_route_read_total{path="batch",result="ok"} 98
+data_service_route_read_total{path="batch",result="error"} 0
 # TYPE data_service_account_directory_rpc_seconds histogram
 data_service_account_directory_rpc_seconds_sum{result="ok",rpc="read"} 1.5
 data_service_account_directory_rpc_seconds_count{result="ok",rpc="read"} 200
@@ -297,8 +287,8 @@ data_service_account_directory_rpc_seconds_count{result="ok",rpc="lookup"} 300
 "@
 Set-Content -Path (Join-Path $snapDirForTest "t18m_ds.txt") -Value $fakeDsNew -Encoding utf8
 $fakeDsOld = @"
-# TYPE data_service_route_ready_verdict_total counter
-data_service_route_ready_verdict_total{verdict="trusted"} 1
+# TYPE data_service_merged_zone_refresh_total counter
+data_service_merged_zone_refresh_total{result="ok"} 1
 "@
 Set-Content -Path (Join-Path $snapDirForTest "t5m_ds.txt") -Value $fakeDsOld -Encoding utf8
 
@@ -308,14 +298,17 @@ Set-Content -Path (Join-Path $snapDirForTest "t5m_ds.txt") -Value $fakeDsOld -En
 #       error replies 1 → 3 → 2;Errorstats 段在、没有 OOM → oom 0。
 #       commandstats:get 500 → 9100 次(Δ8600 → 47.8/s,usec 1000 → 18200 → 2.00 µs/call),
 #       mget 100 → 1900 次(Δ1800 → 10.0/s,usec 500 → 9500 → 5.00 µs/call,累计 p50 / p99 / p99.9 = 4.0 / 12.0 / 20.0)。
-#     - mapping 在同两个时刻抓的是同一实例(同 run_id)→ R1 / R2 只打 same_as=core;M1 的 rd 取 mapping,数与 core 相同。
+#     - queue 在同两个时刻抓的是同一实例(同 run_id)→ R1 / R2 只打 same_as=core;M1 的 rd 取 core。
+#     - player 是 Redis Cluster 的两个主节点(元信息带 cluster=player,run_id 各不相同),数字与 core 相同 → 逐节点各一行,
+#       player-all 合计:ops/s 200,cpu 2.0%,main 1.0%,KB/s 2.0,clients 14,used 4.0,错误 4;get 95.6/s,没有百分位。
 function New-FakeRedisInfo {
     param([int]$Uptime, [int]$Cmds, [string]$CpuSys, [string]$CpuUser, [string]$MainSys, [string]$MainUser,
-          [int]$NetBytes, [int]$ErrReplies, [int]$GetCalls, [int]$GetUsec, [int]$MgetCalls, [int]$MgetUsec)
+          [int]$NetBytes, [int]$ErrReplies, [int]$GetCalls, [int]$GetUsec, [int]$MgetCalls, [int]$MgetUsec,
+          [string]$RunId = 'fixturerunid0000000000000000000000000001')
     return @"
 # Server
 redis_version:7.2.4
-run_id:fixturerunid0000000000000000000000000001
+run_id:$RunId
 uptime_in_seconds:$Uptime
 # Clients
 connected_clients:7
@@ -345,13 +338,22 @@ latency_percentiles_usec_mget:p50=4.001,p99=12.003,p99.9=20.001
 latency_percentiles_usec_get:p50=1.003,p99=3.007,p99.9=5.001
 "@
 }
-foreach ($target in @('core', 'mapping')) {
+foreach ($target in @('core', 'queue')) {
     Set-Content -Path (Join-Path $snapDirForTest "t2m_redis_$target.txt") -Encoding utf8 -Value (
         "# stress_snap target=$target spec=docker:redis captured_at=2026-10-23T00:02:00Z`n" +
         (New-FakeRedisInfo -Uptime 100 -Cmds 1000 -CpuSys '0.6' -CpuUser '0.4' -MainSys '0.3' -MainUser '0.2' -NetBytes 0 -ErrReplies 1 -GetCalls 500 -GetUsec 1000 -MgetCalls 100 -MgetUsec 500))
     Set-Content -Path (Join-Path $snapDirForTest "t5m_redis_$target.txt") -Encoding utf8 -Value (
         "# stress_snap target=$target spec=docker:redis captured_at=2026-10-23T00:05:00Z`n" +
         (New-FakeRedisInfo -Uptime 280 -Cmds 19000 -CpuSys '1.6' -CpuUser '1.2' -MainSys '0.8' -MainUser '0.6' -NetBytes 184320 -ErrReplies 3 -GetCalls 9100 -GetUsec 18200 -MgetCalls 1900 -MgetUsec 9500))
+}
+
+foreach ($member in @('aaaaaaaa', 'bbbbbbbb')) {
+    Set-Content -Path (Join-Path $snapDirForTest "t2m_redis_player-$member.txt") -Encoding utf8 -Value (
+        "# stress_snap target=player-$member spec=docker-cluster:redis-player-cluster-0:7100@127.0.0.1:7100 cluster=player captured_at=2026-10-23T00:02:00Z`n" +
+        (New-FakeRedisInfo -RunId "run-$member" -Uptime 100 -Cmds 1000 -CpuSys '0.6' -CpuUser '0.4' -MainSys '0.3' -MainUser '0.2' -NetBytes 0 -ErrReplies 1 -GetCalls 500 -GetUsec 1000 -MgetCalls 100 -MgetUsec 500))
+    Set-Content -Path (Join-Path $snapDirForTest "t5m_redis_player-$member.txt") -Encoding utf8 -Value (
+        "# stress_snap target=player-$member spec=docker-cluster:redis-player-cluster-0:7100@127.0.0.1:7100 cluster=player captured_at=2026-10-23T00:05:00Z`n" +
+        (New-FakeRedisInfo -RunId "run-$member" -Uptime 280 -Cmds 19000 -CpuSys '1.6' -CpuUser '1.2' -MainSys '0.8' -MainUser '0.6' -NetBytes 184320 -ErrReplies 3 -GetCalls 9100 -GetUsec 18200 -MgetCalls 1900 -MgetUsec 9500))
 }
 
 # ── Run stress_summarize and capture output ─────────────────────────────
@@ -545,15 +547,15 @@ Assert-SectionRow -Lines $outputLines -SectionMarker 'P3 Player store row bytes'
     -Pattern '^\s*t18m_db(\s+\|(\s+n/a){3}){5}\s*$' `
     -Reason "a db without committed rows must print n/a"
 
-# P4 连接池与落点:rpool_wait 只有 main 一份 = 5(不翻倍,也没把 wait_seconds_total 的 0.5 加进来)。
+# P4 连接池与落点。
 Assert-HeaderMatches -Lines $outputLines `
-    -Pattern 'rpool_wait\s+rpool_tmo\s+\|\s+sql_in_use\s+sql_wait\s+sql_wait_s\s+\|\s+open_stores\s+open_err\s+cooldown\s*$' `
+    -Pattern '\|\s+sql_in_use\s+sql_wait\s+sql_wait_s\s+\|\s+open_stores\s+open_err\s+cooldown\s*$' `
     -Reason "P4 DB pools table must keep its column order"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'P4 DB pools' -SnapshotName 't20m_db' `
-    -Pattern '^\s*t20m_db\s+\|\s+5\s+1\s+\|\s+4\s+9\s+1\.5\s+\|\s+2\s+6\s+1\s*$' `
-    -Reason "redis pool counters, SQL pool sums across pools and placement counters must land in their own columns"
+    -Pattern '^\s*t20m_db\s+\|\s+4\s+9\s+1\.5\s+\|\s+2\s+6\s+1\s*$' `
+    -Reason "SQL pool sums across pools and placement counters must land in their own columns"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'P4 DB pools' -SnapshotName 't18m_db' `
-    -Pattern '^\s*t18m_db\s+\|\s+n/a\s+n/a\s+\|(\s+n/a){3}\s+\|\s+1\s+n/a\s+n/a\s*$' `
+    -Pattern '^\s*t18m_db\s+\|(\s+n/a){3}\s+\|\s+1\s+n/a\s+n/a\s*$' `
     -Reason "the gauge that is present prints its value, missing series print n/a"
 
 # ── L-18 观测批的新表(造数见 1e) ────────────────────────────────────────
@@ -597,8 +599,8 @@ Assert-SectionRow -Lines $outputLines -SectionMarker 'S1 SceneManager' -Snapshot
     -Reason "an old scene_manager without the new stages prints n/a"
 
 Assert-SectionRow -Lines $outputLines -SectionMarker 'D1 data_service home-zone' -SnapshotName 't18m_ds' `
-    -Pattern '^\s*t18m_ds\s+\|\s+40\s+5\s+1\s+2\.2ms\s+n/a\s+\|\s+100\s+0\s+0\s+3\.0ms\s+n/a\s+\|\s+3\.0\s+\|\s+120\s+12\s+1\s*$' `
-    -Reason "per-result counts, merged avg, no buckets → p99 n/a; route_read sums both paths, batch has no not_found_sql"
+    -Pattern '^\s*t18m_ds\s+\|\s+40\s+5\s+1\s+2\.2ms\s+n/a\s+\|\s+100\s+0\s+0\s+3\.0ms\s+n/a\s+\|\s+3\.0\s+\|\s+131\s+1\s+1\s*$' `
+    -Reason "per-result counts, merged avg, no buckets → p99 n/a; route_read sums both paths, batch has no not_found"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'D1 data_service home-zone' -SnapshotName 't5m_ds' `
     -Pattern '^\s*t5m_ds(\s+\|(\s+n/a){5}){2}\s+\|\s+n/a\s+\|(\s+n/a){3}\s*$' `
     -Reason "an old data_service prints n/a everywhere"
@@ -616,8 +618,8 @@ Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'D2 data_service account
 Assert-SectionRow -Lines $outputLines -SectionMarker 'R1 Redis instance load' -SnapshotName 'core' `
     -Pattern '^\s*core\s+\|\s+t2m-t5m\s+\|\s+180\s+100\s+1\.0%\s+0\.5%\s+1\.0\s+1\.0\s+\|\s+7\s+2\.0\s+-\s+\|\s+0\s+2\s+0\s+0\s+\|\s*$' `
     -Reason "window by Δuptime; ops/s, cpu%, main%, KB/s; maxmemory 0 → mem% '-'"
-Assert-SectionRow -Lines $outputLines -SectionMarker 'R1 Redis instance load' -SnapshotName 'mapping' `
-    -Pattern '^\s*mapping\s+\|\s+t2m-t5m\s+\|.*same_as=core\s*$' `
+Assert-SectionRow -Lines $outputLines -SectionMarker 'R1 Redis instance load' -SnapshotName 'queue' `
+    -Pattern '^\s*queue\s+\|\s+t2m-t5m\s+\|.*same_as=core\s*$' `
     -Reason "the same instance captured twice is printed once"
 
 Assert-SectionRow -Lines $outputLines -SectionMarker 'R2 Redis top commands' -SnapshotName 'core' `
@@ -627,12 +629,22 @@ Assert-SectionAnyRow -Lines $outputLines -SectionMarker 'R2 Redis top commands' 
     -Pattern '^\s*core\s+\|\s+t2m-t5m\s+\|\s+mget\s+\|\s+10\.0\s+5\.00\s+\|\s+4\.0\s+12\.0\s+20\.0\s+\|\s+0\s+0\s*$' `
     -Reason "mget: Δcalls/s, Δusec per call, cumulative latency percentiles"
 
+Assert-SectionRow -Lines $outputLines -SectionMarker 'R1 Redis instance load' -SnapshotName 'player-aaaaaaaa' `
+    -Pattern '^\s*player-aaaaaaaa\s+\|\s+t2m-t5m\s+\|\s+180\s+100\s+1\.0%\s+0\.5%\s+1\.0\s+1\.0\s+\|\s+7\s+2\.0\s+-\s+\|\s+0\s+2\s+0\s+0\s+\|\s*$' `
+    -Reason "each cluster master gets its own row"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'R1 Redis instance load' -SnapshotName 'player-all' `
+    -Pattern '^\s*player-all\s+\|\s+t2m-t5m\s+\|\s+180\s+200\s+2\.0%\s+1\.0%\s+2\.0\s+2\.0\s+\|\s+14\s+4\.0\s+-\s+\|\s+0\s+4\s+0\s+0\s+\|\s+sum of 2 masters\s*$' `
+    -Reason "the cluster rollup sums the masters and says so"
+Assert-SectionRow -Lines $outputLines -SectionMarker 'R2 Redis top commands' -SnapshotName 'player-all' `
+    -Pattern '^\s*player-all\s+\|\s+t2m-t5m\s+\|\s+get\s+\|\s+95\.6\s+2\.00\s+\|\s+n/a\s+n/a\s+n/a\s+\|\s+0\s+0\s*$' `
+    -Reason "rollup calls add up; percentiles cannot be added"
+
 Assert-SectionRow -Lines $outputLines -SectionMarker 'M1 Mapping read path' -SnapshotName 't18m' `
     -Pattern '^\s*t18m\s+\|\s+3\.0ms\s+n/a\s+\|\s+3\.0ms\s+2\.2ms\s+10\.0ms\s+\|\s+2\.0ms\s+n/a\s+\|\s+n/a\s+n/a\s+\|\s+n/a\s+n/a\s*$' `
     -Reason "M1 joins login / ds / sm / db by tag; no Redis snapshot at t18m"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'M1 Mapping read path' -SnapshotName 't5m' `
     -Pattern '^\s*t5m(\s+\|\s+n/a\s+n/a){1}\s+\|(\s+n/a){3}\s+\|(\s+n/a){2}\s+\|(\s+n/a){2}\s+\|\s+100\s+0\.5%\s*$' `
-    -Reason "rd uses the mapping target window ending at t5m"
+    -Reason "rd uses the core target window ending at t5m"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'M1 Mapping read path' -SnapshotName 't20m' `
     -Pattern '^\s*t20m\s+\|\s+n/a\s+n/a\s+\|(\s+n/a){3}\s+\|(\s+n/a){2}\s+\|\s+10\.0ms\s+2\.0ms\s+\|\s+n/a\s+n/a\s*$' `
     -Reason "db_claim / db_save come from db_player_store_seconds{op}"

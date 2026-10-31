@@ -42,8 +42,8 @@ type channelMigration struct {
 //
 //  1. Never migrate a channel with online players while its old process is
 //     still registered. Live migration would require cross-node state transfer
-//     which this codebase does not have. A truly dead node may retain a stale
-//     player_count; that mapping is already unusable and is rebuilt urgently.
+//     which this codebase does not have. A truly dead node may retain stale
+//     members; that mapping is already unusable and is rebuilt urgently.
 //  2. Respect MaxRebalanceMigrationsPerTick so a big scale event (say, +4
 //     pods) does not trigger N*channels simultaneous CreateScene/DestroyScene
 //     RPCs and knock the cluster over.
@@ -170,7 +170,7 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 				// "不在 world pool" 同时包含两种情况：进程真死了，以及进程
 				// 仍活着但 role 刚被改成非 world。后者若还有玩家，直接换
 				// scene:{id}:node 就是未实现的跨节点热迁移，必须 fail-closed。
-				if count := readInt64(svcCtx, fmt.Sprintf(InstancePlayerCountKey, sceneId)); count > 0 {
+				if count := readScenePlayerCount(svcCtx, sceneId); count > 0 {
 					if _, err := svcCtx.Redis.Zscore(nodeLoadKey(zoneId), curNode); err == nil {
 						logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d old node %s is still registered with %d players; refusing cross-node hot migration",
 							zoneId, confId, sceneId, curNode, count)
@@ -178,7 +178,7 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 					}
 				}
 				// 再入屏障:老节点刚判死时,它还在 emergency relocate drain 里
-				// SavePlayerToRedis(C++ kDrainBudget)。此刻迁频道 = 新节点
+				// SavePlayer(C++ kDrainBudget)。此刻迁频道 = 新节点
 				// CreateScene 并接管归属,与老节点的最终存盘互相覆盖。
 				// 屏障未到就本轮不排进迁移计划,下一拍(事件或周期 tick)再来。
 				// 放在计划阶段而不是执行阶段,是为了连那次白跑的 CreateScene RPC
@@ -193,7 +193,7 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 				})
 				continue
 			}
-			if count := readInt64(svcCtx, fmt.Sprintf(InstancePlayerCountKey, sceneId)); count > 0 {
+			if count := readScenePlayerCount(svcCtx, sceneId); count > 0 {
 				continue
 			}
 			opportunistic = append(opportunistic, channelMigration{
@@ -323,7 +323,7 @@ func destroyUnownedMigrationTarget(ctx context.Context, svcCtx *svc.ServiceConte
 
 // cascadeMirrorsOnSourceMigration force-destroys mirrors that were co-located
 // with a source scene that just moved nodes. Each mirror is destroyed via
-// the standard force path so player_count residuals, reverse indexes, and
+// the standard force path so residual members, reverse indexes, and
 // node-scene counters all stay in sync. reason="source_migrated" so
 // dashboards can distinguish this from idle / explicit / cascade-on-destroy.
 //

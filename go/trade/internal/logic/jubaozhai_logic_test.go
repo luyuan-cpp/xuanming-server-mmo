@@ -18,6 +18,8 @@ import (
 	base "proto/common/base"
 	tradepb "proto/trade"
 
+	"shared/placement"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/logx/logtest"
@@ -428,14 +430,14 @@ func TestBrowseZoneScopeFiltersByCallerHomeZoneAndIgnoresZoneFilter(t *testing.T
 	require.NoError(t, err)
 	require.Zero(t, resp.GetErrorMessage().GetId())
 	require.NotNil(t, f.store.lastQuery)
-	assert.Equal(t, zoneA, f.store.lastQuery.MarketZone, "zone 范围必须按调用者 home_zone 过滤")
+	assert.Equal(t, []uint32{zoneA}, f.store.lastQuery.MarketZones, "zone 范围必须按调用者 home_zone 过滤")
 	assert.Equal(t, []uint64{playerB}, f.homes.calls)
 	assert.Equal(t, tradepb.MarketScope_MARKET_SCOPE_ZONE, resp.GetMarketScope())
 	assert.Equal(t, testNowMs, resp.GetServerNowMs())
 }
 
 func TestBrowseGlobalScopeHonoursZoneFilter(t *testing.T) {
-	for _, filter := range []uint32{0, zoneB} {
+	for filter, want := range map[uint32][]uint32{0: nil, zoneB: {zoneB}} {
 		f := newFixture(t, config.ScopeGlobal)
 		in := browseRequest()
 		in.ZoneFilter = filter
@@ -444,10 +446,71 @@ func TestBrowseGlobalScopeHonoursZoneFilter(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Zero(t, resp.GetErrorMessage().GetId())
-		assert.Equal(t, filter, f.store.lastQuery.MarketZone)
+		assert.Equal(t, want, f.store.lastQuery.MarketZones)
 		assert.Empty(t, f.homes.calls, "global 范围不查 home_zone")
 		assert.Equal(t, tradepb.MarketScope_MARKET_SCOPE_GLOBAL, resp.GetMarketScope())
 	}
+}
+
+// bindMergedZones 给夹具接一份固定的合服映射。用真缓存,不写替身:不 Start 就不起 goroutine。
+func bindMergedZones(t *testing.T, f *fixture, merges map[uint32]uint32) {
+	t.Helper()
+	cache, err := placement.NewMergedZoneCache(context.Background(), func(context.Context) (map[uint32]uint32, error) {
+		return merges, nil
+	}, placement.MergedZoneCacheOptions{})
+	require.NoError(t, err)
+	f.deps.Zones = cache
+}
+
+// 合服不改写 market_zone:目标区买家要同时查到合进来的原始区,源区买家(归属读滞后)查到的是同一组。
+func TestBrowseZoneScopeQueriesEveryMergedZone(t *testing.T) {
+	const source, target = uint32(zoneB), uint32(zoneA)
+	for name, caller := range map[string]uint64{"目标区买家": playerB, "源区买家": playerC} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t, config.ScopeZone)
+			bindMergedZones(t, f, map[uint32]uint32{source: target})
+			f.store.total = 1
+			f.store.page = []*tradepb.TradeListingRecord{onSaleListing(11, playerA, source)}
+
+			resp, err := f.as(caller).BrowseListings(browseRequest())
+
+			require.NoError(t, err)
+			require.Zero(t, resp.GetErrorMessage().GetId())
+			assert.ElementsMatch(t, []uint32{source, target}, f.store.lastQuery.MarketZones)
+			require.Len(t, resp.GetListings(), 1)
+			assert.Equal(t, target, resp.GetListings()[0].GetMarketZone(), "客户端看到的是最终区,记录里的原始区不外露")
+		})
+	}
+}
+
+func TestBrowseGlobalScopeZoneFilterQueriesEveryMergedZone(t *testing.T) {
+	const source, target = uint32(zoneB), uint32(zoneA)
+	f := newFixture(t, config.ScopeGlobal)
+	bindMergedZones(t, f, map[uint32]uint32{source: target})
+	in := browseRequest()
+	in.ZoneFilter = source
+
+	_, err := f.as(playerB).BrowseListings(in)
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []uint32{source, target}, f.store.lastQuery.MarketZones)
+}
+
+// 详情可见性也按最终区:源区商品对目标区买家可见,字段是最终区。
+func TestGetListingDetail_MergedZoneIsVisible(t *testing.T) {
+	const source, target = uint32(zoneB), uint32(zoneA)
+	f := newFixture(t, config.ScopeZone)
+	f.store.listings[21] = onSaleListing(21, playerC, source)
+
+	before, err := f.as(playerB).GetListingDetail(&tradepb.GetListingDetailRequest{ListingId: 21})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrListingNotFound, before.GetErrorMessage().GetId(), "没合服时别区商品不可见")
+
+	bindMergedZones(t, f, map[uint32]uint32{source: target})
+	after, err := f.as(playerB).GetListingDetail(&tradepb.GetListingDetailRequest{ListingId: 21})
+	require.NoError(t, err)
+	require.Zero(t, after.GetErrorMessage().GetId())
+	assert.Equal(t, target, after.GetDetail().GetSummary().GetMarketZone())
 }
 
 func TestBrowseHomeZoneFailures(t *testing.T) {

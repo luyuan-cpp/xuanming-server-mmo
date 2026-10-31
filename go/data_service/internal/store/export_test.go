@@ -130,24 +130,21 @@ const (
 func MigrateLockNameForTest(dbName string) string { return migrateLockName(dbName) }
 
 // 路由表(route_store.go)的 SQL:真库用例用与生产**同一段文本**扮演并发持锁者 / 造数据,
-// 免得用例里抄一份语句、改生产时两边漂移。编号同规格 b.4。
+// 免得用例里抄一份语句、改生产时两边漂移。
 const (
 	RouteReadWritableSQLForTest      = routeReadWritableSQL      // R1
 	RouteInsertNewSQLForTest         = routeInsertNewSQL         // R4
 	RouteLockRowSQLForTest           = routeLockRowSQL           // R5
 	RouteFillHomeSQLForTest          = routeFillHomeSQL          // R6a
 	RouteFillHomePlacementSQLForTest = routeFillHomePlacementSQL // R6b
-	RouteImportFillSQLForTest        = routeImportFillSQL        // R9
-	RouteScanSQLForTest              = routeScanSQL              // R12
 	RouteMetaSeedSQLForTest          = routeMetaSeedSQL          // R15
-	RouteReconcileSeedSQLForTest     = routeReconcileSeedSQL     // R16
 	RouteProbeShardCheckSQLForTest   = routeProbeShardCheckSQL   // P4
 	// RouteDBNowMsSQLForTest 是库时钟毫秒的表达式:用例按库时钟取时刻,不用本机时钟。
 	RouteDBNowMsSQLForTest = dbNowMsSQL
 )
 
-// RouteSelectRowsSQLForTest 返回 n 个 id 的批量读(R8 / R13;forUpdate 即 R8 的加锁形态),EXPLAIN 回归用。
-func RouteSelectRowsSQLForTest(n int, forUpdate bool) string { return routeSelectRowsSQL(n, forUpdate) }
+// RouteSelectRowsSQLForTest 返回 n 个 id 的批量读(R13),EXPLAIN 回归用。
+func RouteSelectRowsSQLForTest(n int) string { return routeSelectRowsSQL(n) }
 
 // PlayerRouteBootstrapDDLForTest 是 player_route 的建表语句:真库用例把其中 chk_route_shard 的模数换掉,
 // 手工建出「按另一个模数建过的表」,证明建池探针 P5 认得出来(TestRouteStore_ProbeRejectsTableBuiltWithAnotherShardModulus)。
@@ -158,7 +155,7 @@ const PlayerRouteBootstrapDDLForTest = playerRouteBootstrapDDL
 const RouteTiDBPrefixSplitPointsForTest = routeTiDBPrefixSplitPoints
 
 // BootstrapRouteTablesOnlyForTest 只建路由表(按 routeTableMessages 的顺序——即表名升序——执行它们的 bootstrap DDL),
-// 再跑 ensureRouteTables(形状守卫 + 种两张单行表的行)。给真 TiDB 用例用:全局库的整套迁移在 TiDB 上会因
+// 再跑 ensureRouteTables(形状守卫 + 种 route_meta 的行)。给真 TiDB 用例用:全局库的整套迁移在 TiDB 上会因
 // player_snapshot 的可空唯一键失败,用不了 NewMigratedDB。
 func BootstrapRouteTablesOnlyForTest(ctx context.Context, db *sql.DB, dbName string) error {
 	for _, m := range routeTableMessages() {
@@ -183,10 +180,6 @@ const (
 	RouteProbeGuardSQLForTest        = routeLockProbeGuardSQL
 	RouteProbeShardModulusSQLForTest = routeProbeShardModulusSQL
 )
-
-// RouteLockMetaSQLForTest 是反向修库写事务的第一句(R18x,route_meta(id=1) FOR UPDATE):真库用例用同一段生产文本
-// 扮演一个正在修库的事务,证明解冻的 R22 排在它后面(TestRouteStore_UnfreezeWaitsForRepairMetaLock)。
-const RouteLockMetaSQLForTest = routeLockMetaSQL
 
 // NewRouteStoreFromDBForTest 在调用方给的池上跑探针并装出 store(失败时关掉 db)。
 // 真库用例拿一个**没有**会话变量的池(storetest 的 Raw)来证明探针 fail-closed。

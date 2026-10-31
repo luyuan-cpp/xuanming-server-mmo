@@ -553,6 +553,9 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	} else {
 		fmt.Printf("  queue redis: shared\n")
 	}
+	playerRedisConf, loginRedisConf := cfg.EffectivePlayerRedis(), cfg.EffectiveLoginRedis()
+	fmt.Printf("  player redis: %s\n", playerRedisConf.Describe())
+	fmt.Printf("  login redis:  %s\n", loginRedisConf.Describe())
 	fmt.Println("=============================================================")
 	server.Start()
 

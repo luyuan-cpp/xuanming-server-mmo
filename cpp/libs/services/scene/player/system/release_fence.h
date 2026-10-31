@@ -139,7 +139,7 @@ namespace release_fence
 	// 安全性与"改派踢线前的凭证补写"(relocate_confirm::DecideCredential)同理:本节点没有该玩家的任何内存态,盘上就是最终态;
 	// 条件写保证不会给更新的一代发证。
 	// 2026-10-23 更正(r2-lc#2):只比 owner_epoch 挡不住同 E 的迟到写(同节点短重连重载不铸新 epoch),标记写一律改为
-	// save_barrier.handoff_fence 原件的 CAS(handoff_sql_barrier.h)。完全不持有时没有缓存的原 H,所以本判定放行(kWrite)之后
+	// handoff_fence 原件的 CAS(handoff_sql_barrier.h)。完全不持有时没有缓存的原 H,所以本判定放行(kWrite)之后
 	// 粘合层先 HGET 读现任资格原件,回调里按下面的 DecideCredentialQualification 核对 —— 读回时仍完全不持有、原件是本进程
 	// 实例在期望 E 下的资格 —— 才以观察到的原件做 CAS(kCredentialMarkLua)。迟到的凭证帧在任何更新的登记 / 恢复 / 撤销 /
 	// 发布之后都 CAS 失败,不会复活凭证。不能拒发了事:location-release-binding.md §15 起等待超时不再授权删 location,
@@ -218,7 +218,7 @@ namespace release_fence
 
 	// ── 凭证的资格核对(2026-10-23,r2-lc#2 之后;location-release-binding.md §3.3)───────────────────────────────
 	//
-	// DecideSessionEndedCredential 判 kWrite 之后,粘合层 HGET player:{id}:save_barrier 的 handoff_fence,在 scene 线程的
+	// DecideSessionEndedCredential 判 kWrite 之后,粘合层 HGET player:{id}:handoff_fence 的 handoff_fence,在 scene 线程的
 	// 回调里按本判定决定能不能拿读到的原件做 CAS。为什么这样不会复活凭证:
 	//   * 原件必须是本进程实例(S == 本进程 node_uuid,即 RoleAdmission 登记时写入的 S)在期望 E 下的资格。别的节点 / 别的
 	//     进程 / 别的 E 的资格不归本节点处置;跨节点接手先铸 E+1,同节点新持有先登记更新的 N(都会轮换原件)。

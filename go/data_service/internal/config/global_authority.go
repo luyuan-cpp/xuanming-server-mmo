@@ -12,24 +12,15 @@ import (
 const RoleProofDatabaseAllowlistEnv = "DB_ALLOWED_DATABASES"
 const MaxRoleProofStorageIDs = 1024
 
-// ResolveGlobalAuthority固定服务启动合同；迁移/route_tool保留自己的显式工具入口，不能把工具兼容带入服务。
+// ResolveGlobalAuthority固定服务启动合同；迁移/route_tool保留自己的显式工具入口。
 // 只读取库名白名单，不接凭据。storage_id仅从正规外部库名反解，不从请求、Regions或本实例Zone补齐。
 func (c Config) ResolveGlobalAuthority(getenv func(string) string) (Config, error) {
 	if _, err := authoritysql.ParseBackend(c.SnapshotMySQL.Backend); err != nil {
 		return c, fmt.Errorf("SnapshotMySQL.Backend: %w", err)
 	}
-	if c.LegacyNonGlobal {
-		if c.Mode != "dev" && c.Mode != "test" {
-			return c, fmt.Errorf("LegacyNonGlobal仅允许显式dev/test隔离夹具")
-		}
-		return c, nil
-	}
-	if c.RouteStore.Mode == "" {
-		c.RouteStore.Mode = RouteStoreModeDBFirst
-	}
 	c.RouteStore = c.RouteStore.Normalize()
-	if !c.Store.Required || !c.RouteStore.DBFirst() || !c.RouteStore.ReadRequiresReady || !c.RouteStore.Reconcile.On() || !c.RouteStore.Reconcile.ArmReadyMarker || !c.AccountDirectory.RoleTradeSQLProof.Enabled {
-		return c, fmt.Errorf("全球服务必须db_first、reconcile/arm/read-ready与RoleTradeSQLProof全部启用；历史Redis仅允许显式LegacyNonGlobal工具夹具")
+	if !c.Store.Required || !c.AccountDirectory.RoleTradeSQLProof.Enabled {
+		return c, fmt.Errorf("必须启用Store.Required与RoleTradeSQLProof")
 	}
 	if err := c.RouteStore.Validate(); err != nil {
 		return c, err

@@ -6,62 +6,67 @@ import (
 	"fmt"
 	"time"
 
-	dspb "proto/data_service"
+	"match/internal/authority"
 )
 
 // 玩家 home zone 查询(设计文档 docs/design/team-system.md §D.3)。
 //
-// 为什么要查:队伍 zone 与成员 zone 必须写进记录(跨区校验、合服 preflight 都靠它),
-// 而客户端请求里没有、也不能信任 zone。唯一真源是 data_service(建角登记;读取时已解析到最终区,
-// 合服只写 zone_merged_into 别名),风格照 guild 的 home_zone.go。
+// 为什么要查:队伍 zone 与成员 zone 必须写进记录(跨区校验靠它),而客户端请求里没有、也不能信任 zone。
+// 唯一真源是全局库 player_route,match 有这条连接,提交事务也按它复核(RequireTeamHomeZoneTx)。
+//
+// 不走 data_service:它的归属接口回的是解析后的最终区,而记录要写原始区。合服不改写记录,比较时两边解析到最终区
+// (别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1);记了最终区,撤销合服之后记录就和路由行对不上了。
 //
 // 查不到一律 fail-closed:不论 AllowCrossZone 开关如何,zone=0 不许写进记录。
 
-// HomeZoneLookup 批量查玩家 home zone。
+// HomeZoneLookup 批量查玩家 home zone(原始区)。
 //
 // 契约:
-//   - 返回 map 缺某个 id(或值为 0)= 映射里没有这名玩家(数据状态),调用方回 ErrHomeZoneUnknown;
-//   - err 非 nil = 查询失败(故障:data_service 不可用、超时、客户端未配置),调用方回 ErrInternal;
+//   - 返回 map 缺某个 id(或值为 0)= 路由表里没有这名玩家的归属(数据状态),调用方回 ErrHomeZoneUnknown;
+//   - err 非 nil = 查询失败(故障:库不可用、超时),调用方回 ErrInternal;
 //   - 一次最多 2 个 id(组队只查调用者或目标);实现自带超时,调用方 ctx 仍能截断它;
 //   - 线程安全。
 type HomeZoneLookup interface {
 	HomeZones(ctx context.Context, playerIds []uint64) (map[uint64]uint32, error)
 }
 
-// DefaultHomeZoneLookupTimeout 单次查询预算:与 guild 同值(一次 data_service Redis 往返),
-// 远小于 team 的 3500ms 请求预算,超时能以故障形式及时返回。
+// DefaultHomeZoneLookupTimeout 单次查询预算,远小于 team 的 3500ms 请求预算,超时能以故障形式及时返回。
 const DefaultHomeZoneLookupTimeout = 1500 * time.Millisecond
 
-// errHomeZoneClientMissing DataServiceRpc 没配任何目标时 svc 不建客户端(nil)。
-var errHomeZoneClientMissing = errors.New("team: data_service 客户端未配置(DataServiceRpc),无法查询 home zone")
+// errHomeZoneStoreMissing 权威存储没装配(只有单测)。
+var errHomeZoneStoreMissing = errors.New("team: 权威存储未装配,无法查询 home zone")
 
-// DataServiceHomeZone 用 data_service.BatchGetPlayerHomeZone 实现 HomeZoneLookup。
-type DataServiceHomeZone struct {
-	client  dspb.DataServiceClient
+// AuthorityHomeZone 用全局库 player_route 实现 HomeZoneLookup。
+type AuthorityHomeZone struct {
+	store   *authority.Store
 	timeout time.Duration
 }
 
-// NewDataServiceHomeZone client 可为 nil(DataServiceRpc 未配置):此时每次查询都返回错误,
-// 组队需要 home zone 的请求回 ErrInternal,match 其余功能不受影响。timeout<=0 用默认值。
-func NewDataServiceHomeZone(client dspb.DataServiceClient, timeout time.Duration) *DataServiceHomeZone {
+// NewAuthorityHomeZone timeout<=0 用默认值。
+func NewAuthorityHomeZone(store *authority.Store, timeout time.Duration) *AuthorityHomeZone {
 	if timeout <= 0 {
 		timeout = DefaultHomeZoneLookupTimeout
 	}
-	return &DataServiceHomeZone{client: client, timeout: timeout}
+	return &AuthorityHomeZone{store: store, timeout: timeout}
 }
 
-// HomeZones 见 HomeZoneLookup。data_service 对缺失映射的 id 不放进 map
-// (go/data_service/internal/server/dataserviceserver.go 的 BatchGetPlayerHomeZone),
-// 这里原样返回,由调用方按"缺项 = 未映射"处理。
-func (h *DataServiceHomeZone) HomeZones(ctx context.Context, playerIds []uint64) (map[uint64]uint32, error) {
-	if h == nil || h.client == nil {
-		return nil, errHomeZoneClientMissing
+// HomeZones 见 HomeZoneLookup。没有归属的 id 不放进 map,由调用方按"缺项 = 未映射"处理。
+func (h *AuthorityHomeZone) HomeZones(ctx context.Context, playerIds []uint64) (map[uint64]uint32, error) {
+	if h == nil || h.store == nil {
+		return nil, errHomeZoneStoreMissing
 	}
 	lookupCtx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
-	resp, err := h.client.BatchGetPlayerHomeZone(lookupCtx, &dspb.BatchGetPlayerHomeZoneRequest{PlayerIds: playerIds})
-	if err != nil {
-		return nil, fmt.Errorf("team: 批量查询 home zone 失败 players=%v: %w", playerIds, err)
+	zones := make(map[uint64]uint32, len(playerIds))
+	for _, player := range playerIds {
+		zone, err := h.store.PlayerHomeZone(lookupCtx, player)
+		if errors.Is(err, authority.ErrTeamRoute) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("team: 查询 home zone 失败 player=%d: %w", player, err)
+		}
+		zones[player] = zone
 	}
-	return resp.GetPlayerZoneMap(), nil
+	return zones, nil
 }

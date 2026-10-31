@@ -29,7 +29,7 @@ import (
 //
 // 一次刷新的形状(refreshZoneLoadSets):
 //  1. 一条 SADD 把本次涉及的全部 zone 登记进 scene_manager:zones(尽力而为,见 zone_registry.go);
-//  2. 读:pipeline 分批,每个节点两条 GET(scene_count / player_count);
+//  2. 读:pipeline 分批,每个节点一条 GET(scene_count)、一条 SCARD(成员集合);
 //  3. 写之前再判一次领导权;pipeline 分批写:每个节点一条 SET 类型镜像,每个 zone 一条 ZADD 写读成功的
 //     节点,再加一条 ZADD NX 把读失败的节点以哨兵分加进去(已在负载集里的不受影响);
 //  4. 计数读成功、且所在 zone 的分数 ZADD 确认写成功的节点发每节点指标(导出的分数必须是 Redis 里生效的那个)。
@@ -62,7 +62,7 @@ const (
 	// loadRefreshPipelineMaxCmds:单个 pipeline 批次的命令数上限。批太大会拉长 Redis 单次处理时间、抬高
 	// 其它客户端的尾延迟;太小则往返次数多。1024 是起步值,对其它客户端尾延迟的影响未压测(AGENTS §6)。
 	loadRefreshPipelineMaxCmds = 1024
-	// loadRefreshNodesPerReadBatch:读批里每个节点两条 GET。
+	// loadRefreshNodesPerReadBatch:读批里每个节点两条命令。
 	loadRefreshNodesPerReadBatch = loadRefreshPipelineMaxCmds / 2
 
 	// nodeLoadScoreUnknown:计数读不到、又不在负载集里的节点以这个分数加入负载集(ZADD NX)。
@@ -232,17 +232,22 @@ type errReply interface {
 	Err() error
 }
 
-// readLoadRefreshCounters 分批 pipeline 读每个节点的 scene_count / player_count,结果回填到 nodes。
+// memberCountReply 是 pipeline 里一条 SCARD 的结果(*redis.IntCmd 满足它)。
+type memberCountReply interface {
+	Result() (int64, error)
+}
+
+// readLoadRefreshCounters 分批 pipeline 读每个节点的 scene_count 与成员人数,结果回填到 nodes。
 func readLoadRefreshCounters(ctx context.Context, svcCtx *svc.ServiceContext, nodes []*loadRefreshNode, report *loadRefreshReport) {
 	for start := 0; start < len(nodes); start += loadRefreshNodesPerReadBatch {
 		batch := nodes[start:min(start+loadRefreshNodesPerReadBatch, len(nodes))]
 		sceneReplies := make([]counterReply, len(batch))
-		playerReplies := make([]counterReply, len(batch))
+		playerReplies := make([]memberCountReply, len(batch))
 		// 取连接失败时回调不会被调用,两个切片里全是 nil,replyResult 按「未执行」处理。
 		batchErr := svcCtx.Redis.PipelinedCtx(ctx, func(p redis.Pipeliner) error {
 			for i, n := range batch {
 				sceneReplies[i] = p.Get(ctx, nodeSceneCountKey(n.zoneID, n.nodeID))
-				playerReplies[i] = p.Get(ctx, nodePlayerCountKey(n.zoneID, n.nodeID))
+				playerReplies[i] = p.SCard(ctx, nodeMembersKey(n.zoneID, n.nodeID))
 			}
 			return nil
 		})
@@ -250,7 +255,7 @@ func readLoadRefreshCounters(ctx context.Context, svcCtx *svc.ServiceContext, no
 		cmdErrs := make([]error, 0, 2*len(batch))
 		for i := range batch {
 			_, sceneErr := replyResult(sceneReplies[i])
-			_, playerErr := replyResult(playerReplies[i])
+			_, playerErr := memberCountResult(playerReplies[i])
 			cmdErrs = append(cmdErrs, sceneErr, playerErr)
 		}
 		rejected := pipelineBatchRejected(batchErr, cmdErrs)
@@ -264,17 +269,17 @@ func readLoadRefreshCounters(ctx context.Context, svcCtx *svc.ServiceContext, no
 				continue
 			}
 			sceneVal, sceneErr := replyResult(sceneReplies[i])
-			playerVal, playerErr := replyResult(playerReplies[i])
+			playerCount, playerErr := memberCountResult(playerReplies[i])
 			sceneCount, sceneOK := classifyCounterReply(sceneVal, sceneErr, batchErr)
-			playerCount, playerOK := classifyCounterReply(playerVal, playerErr, batchErr)
+			playerOK := classifyMemberCountReply(playerReplies[i], playerErr, batchErr)
 			if sceneOK && playerOK {
 				n.sceneCount, n.playerCount, n.readOK = sceneCount, playerCount, true
 				readOK++
 				continue
 			}
 			if firstFailure == "" {
-				firstFailure = fmt.Sprintf("zone=%d node=%s scene_count=(%q, %v) player_count=(%q, %v)",
-					n.zoneID, n.nodeID, sceneVal, sceneErr, playerVal, playerErr)
+				firstFailure = fmt.Sprintf("zone=%d node=%s scene_count=(%q, %v) members=(%d, %v)",
+					n.zoneID, n.nodeID, sceneVal, sceneErr, playerCount, playerErr)
 			}
 		}
 
@@ -297,6 +302,15 @@ func readLoadRefreshCounters(ctx context.Context, svcCtx *svc.ServiceContext, no
 func replyResult(r counterReply) (string, error) {
 	if r == nil {
 		return "", nil
+	}
+	return r.Result()
+}
+
+// memberCountResult 取一条 SCARD 的结果;回调没被调用(r 为 nil)时按「未执行」返回 (0, nil),
+// 由 pipelineBatchRejected / classifyMemberCountReply 判成失败。
+func memberCountResult(r memberCountReply) (int64, error) {
+	if r == nil {
+		return 0, nil
 	}
 	return r.Result()
 }
@@ -376,6 +390,19 @@ func classifyCounterReply(val string, err error, batchErr error) (int64, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// classifyMemberCountReply 判一条 SCARD 的结果可不可信。键不存在时 SCARD 回 0,是可信的「没有人」,但熔断拒绝时
+// IntCmd 的零值同样是 (0, nil),不能读成 0 人:
+//
+//   - 回调没被调用(r 为 nil)或熔断拒绝:命令没执行,不可信;
+//   - 命令自身带错(网络 / WRONGTYPE):不可信;
+//   - 其余可信。
+func classifyMemberCountReply(r memberCountReply, err error, batchErr error) bool {
+	if r == nil || (batchErr != nil && errors.Is(batchErr, breaker.ErrServiceUnavailable)) {
+		return false
+	}
+	return err == nil
 }
 
 // loadRefreshWriteCmd 是写批里的一条命令。zoneID 用于出错时的日志与按 zone 判定指标能否导出;

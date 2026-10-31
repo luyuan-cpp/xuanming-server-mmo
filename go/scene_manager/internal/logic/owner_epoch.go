@@ -453,7 +453,7 @@ var errHandoffWithdrawn = errors.New("handoff marker withdrawn by the source sce
 // currentOwnerEpoch 读当前归属 epoch,不铸造。键不存在返回 0(旧版 / 从未分配)。
 // 值损坏(非十进制整数)按错误返回:那是存储被写坏,不是可以猜的状态。
 func currentOwnerEpoch(svcCtx *svc.ServiceContext, playerID uint64) (uint64, error) {
-	raw, err := svcCtx.Redis.Get(ownerepoch.OwnerEpochKey(playerID))
+	raw, err := playerRedisGet(svcCtx, ownerepoch.OwnerEpochKey(playerID))
 	if err != nil {
 		return 0, err
 	}
@@ -627,6 +627,11 @@ func rollbackPlacementAfterPushFailure(svcCtx *svc.ServiceContext, log logx.Logg
 	return rollbackPlayerPlacement(svcCtx, log, playerID, placed, plan)
 }
 
+// rollbackPlacementKeys 是 luaRollbackPlayerPlacement 的 KEYS,全部在玩家自己的 slot 上(scene_keys_contract_test.go)。
+func rollbackPlacementKeys(playerID uint64) []string {
+	return []string{getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID), ownerepoch.HandoffKey(playerID), locationRevisionKey(playerID), locationRevisionFloorKey(playerID)}
+}
+
 // rollbackPlayerPlacement 按计划执行回滚 Lua(location 退回、铸造过的 epoch 再前进一格、凭标记时写回执并
 // 转写标记),返回 (restored, echo):
 //
@@ -634,7 +639,7 @@ func rollbackPlacementAfterPushFailure(svcCtx *svc.ServiceContext, log logx.Logg
 //	already_rolled_back  go-redis 重发时首发已经回滚过(见 Lua)             → true(人数照还,否则漏还);回显 epochAfter
 //	marker_gone          凭标记铸造,所凭标记已不是那一份,什么都没动       → false
 //	superseded           位置或 epoch 已被并发请求推进,什么都没动          → false
-//	redis_error          go-redis 自带重试耗尽仍出错,或返回值无法解读      → false
+//	redis_error          Redis 出错(玩家域句柄不自动重发),或返回值无法解读  → false
 //
 // restored 决定调用方要不要把人数也退回去;echo 只进 ErrKafkaRoute 应答供日志排障,**绝不是采纳凭证**。
 // 每种结果计一次 scene_manager_enter_scene_rollback_total{outcome},日志统一前缀 [RouteRollback]。
@@ -646,8 +651,7 @@ func rollbackPlacementAfterPushFailure(svcCtx *svc.ServiceContext, log logx.Logg
 //
 // redis_error 时本函数不知道回滚执行了没有(读超时那一类可能已执行),Redis 里可能留着本次
 // 落点:epoch 已推进、location 指向新落点 / 等待落点。有意**不做应用层重试**:
-//   - go-redis 已按 MaxRetries=3 重试过;持续出错时再试多半同样失败,只会把 handler 往源端
-//     看门狗(30s)推;
+//   - 持续出错时再试多半同样失败,只会把 handler 往源端看门狗(30s)推;
 //   - zrpc 服务端超时之后,这次应答本来就到不了源端;
 //   - 回滚晚于源端裁决落地更糟:location 会指回一个已经不在的实体(凭标记的回滚会因标记已被源端删掉而回
 //     marker_gone,不凭标记的没有这层保护)。
@@ -662,8 +666,8 @@ func rollbackPlacementAfterPushFailure(svcCtx *svc.ServiceContext, log logx.Logg
 //     cross-zone-scene-travel.md §12)。
 func rollbackPlayerPlacement(svcCtx *svc.ServiceContext, log logx.Logger, playerID uint64,
 	placed placedLocation, plan routeRollbackPlan) (restored bool, echo uint64) {
-	result, err := svcCtx.Redis.Eval(luaRollbackPlayerPlacement,
-		[]string{getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID), ownerepoch.HandoffKey(playerID), locationRevisionKey(playerID), locationRevisionFloorKey(playerID)},
+	result, err := playerRedisEval(svcCtx, luaRollbackPlayerPlacement,
+		rollbackPlacementKeys(playerID),
 		placed.raw, plan.restoredRaw, strconv.FormatUint(placed.epoch, 10), plan.mode.String(),
 		plan.requiredMarker, plan.forwardMarker, strconv.FormatInt(int64(ownerepoch.HandoffTTL.Seconds()), 10), optionalRevisionText(placed.revision), placed.tag, restoreRevisionTag(placed, plan.restoredRaw))
 	if err != nil {
@@ -740,7 +744,7 @@ type handoffVerdict struct {
 // 缓存的也是 0,它落盘后写出的标记就是 "0:{ms}",同样能比对通过;没有标记就
 // 说明它还没落盘,与非 0 代际的语义完全一致。
 func checkHandoffCommitted(svcCtx *svc.ServiceContext, playerID uint64, observedEpoch uint64) (handoffVerdict, error) {
-	markerRaw, err := svcCtx.Redis.Get(ownerepoch.HandoffKey(playerID))
+	markerRaw, err := playerRedisGet(svcCtx, ownerepoch.HandoffKey(playerID))
 	if err != nil {
 		return handoffVerdict{}, fmt.Errorf("读 handoff 标记失败: %w", err)
 	}

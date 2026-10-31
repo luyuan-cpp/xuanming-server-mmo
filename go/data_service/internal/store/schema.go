@@ -32,10 +32,9 @@ import (
 // 各自的理由写在对应的常量注释里:
 //   - bootstrapTables 清单里的表:整表预建,之后不再交给 proto2mysql 同步,只做形状守卫,守卫的事实源都是 proto。
 //     id_segment、player_name:proto 字段都有同名列 + 单列唯一键;
-//     路由表 player_route / zone_merged_into / route_meta / route_reconcile(2026-10-12 映射持久化
-//     第 1a 批,docs/design/player-route-mapping-durability-proposal.md §3.2;route_reconcile 是同日 G1a 热点修复
-//     从 route_meta 拆出的;2026-10-19 补 proto,取代原手写的 routeTableShapes):proto 字段都有同名列 +
-//     主键列序等于 proto 的 OptionPrimaryKey(assertRouteTableShapes)。
+//     路由表 player_route / zone_merged_into / route_meta
+//     (docs/design/player-route-mapping-durability-proposal.md §3.2、§15;2026-10-19 补 proto,取代原手写的 routeTableShapes):
+//     proto 字段都有同名列 + 主键列序等于 proto 的 OptionPrimaryKey(assertRouteTableShapes)。
 //   - nullableUniqueKeys 清单里的可空唯一列(player_snapshot.snapshot_guid_nz +
 //     uk_snapshot_guid_nz):表仍全程由 proto 驱动,只在同步之后**追加**一列 + 一个键。
 
@@ -136,8 +135,8 @@ const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 // MEDIUMTEXT、标量一律 NOT NULL DEFAULT 0(TEXT 列不能做无前缀主键,MySQL 错误 1170)。列漂移守卫的事实源是
 // proto/common/database/rollback_database_table.proto 的同名 message(routeTableMessages):它们进 TableMessages
 // 只为表名守卫,同步循环跳过它们,形状由 ensureRouteTables 守。改了 DDL 就要同步改 proto,反之亦然。
-// 四张表每列的注释 pb:N 都等于 proto 字段号(route_store_test 的 TestRouteBootstrapDDLContract 钉住):player_route 的
-// pb:1..10 是第 1a 批预留的(route_shard 是 10,player_id 仍是 1);另外三张是 2026-10-20 补 proto 时按列序新定、同时补进
+// 三张表每列的注释 pb:N 都等于 proto 字段号(route_store_test 的 TestRouteBootstrapDDLContract 钉住):player_route 的
+// pb:1..10 是第 1a 批预留的(route_shard 是 10,player_id 仍是 1);另外两张是 2026-10-20 补 proto 时按列序新定、同时补进
 // DDL 的。CREATE TABLE IF NOT EXISTS 不改已存在的表,所以补注释前建过表的库列上仍没有这些注释:形状守卫只按列名比对,
 // 不受影响;项目尚未上线,只是这类库的 SHOW CREATE TABLE 与新建库差在列注释上。
 //
@@ -145,14 +144,12 @@ const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 //
 // TiDB 热点(登记在 docs/design/global-data-layer-tidb-decision.md §4 / §6,MySQL 上不存在),2026-10-12 G1a
 // (提案 §11.2「第 1a 批热点修复」)在建表前改形:
-//   - player_route 主键改为聚簇 (route_shard, player_id),route_shard = player_id % 64;三条二级索引都带片前缀。
+//   - player_route 主键改为聚簇 (route_shard, player_id),route_shard = player_id % 64;二级索引都带片前缀。
 //     号段发的 player_id 在每个 login 段内严格递增,只按 player_id 排序的主键 / 索引在开服首日始终只写同一个尾部
 //     Region(首日数据量到不了按大小分裂的阈值);带片前缀之后每条索引是 64 条尾部(idx_route_home 每 zone 64 条)。
 //     模数 2026-10-13 按容量模型(docs/design/capacity-model-hok-scale.md §4.1)由 16 改为 64,见 placement.RouteRowShards。
 //   - 只有片前缀、不预切,在 TiDB 上等于没做(空表只有 1 个 Region):预切由 `route_tool tidb-prepare` 显式执行,
 //     因为按 zone 预切需要真实 zone 清单,迁移拿不到;TRUNCATE / BR 恢复后也要重跑。
-//   - route_meta 拆成很少写的开关表 route_meta 与 1b leader 常写的对账表 route_reconcile:每次 W1 都普通读 writable,
-//     不能和每秒写一次的水位放在同一行上(TiDB 的读会被更早的未提交写锁拖住,且常写的表没法设成缓存表)。
 // 聚簇属性建表后不能再改(TiDB),所以这些都只能在任何环境建表之前定;MySQL 上 InnoDB 主键本来就聚簇,
 // /*T![clustered_index] CLUSTERED */ 只是注释,行为与容量都不变。
 //
@@ -160,8 +157,8 @@ const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 // utf8mb4_0900_ai_ci / ascii_general_ci,TiDB 默认 utf8mb4_bin / ascii_bin,两种引擎的比较语义会不同;
 // 这些列都是标识符或排障 JSON,逐字节比较才是正确语义。
 
-// playerRouteBootstrapDDL 每个玩家一行:home 与落点同行,原 Redis 里「两键要么一起写、要么都不写」退化成单行原子。
-// 两列都是 NULL = 「真的没有记录」(提案 §3.2 末)。rev 本行任何列变化 +1,只供缓存排序(player:maprev)。
+// playerRouteBootstrapDDL 每个玩家一行:home 与落点同行,单行原子。
+// 两列都是 NULL = 「真的没有记录」(提案 §3.2 末)。rev 本行任何列变化 +1,是行版本。
 // 时间戳一律取库时钟(route_store.go 的 dbNowMsSQL)。
 //
 // route_shard 由应用按 placement.RouteRowShard 算出并绑定(不用生成列:TiDB 不支持 ALTER 加 STORED 生成列,
@@ -170,10 +167,10 @@ const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 // 才等价于「player_id 唯一」),所以 RouteStore 建池时实测它生效(probeRouteShardCheck),不生效就拒绝建 store。
 // 其中的 64 与 placement.RouteRowShards 必须一致(route_store_test.go 钉住);任何环境建过表之后都不可改。
 // HEAD(d5cbb8a8e)按 % 16 提交过:CREATE TABLE IF NOT EXISTS 不会改已有的表,按 16 建过表的库要先人工 DROP
-// 全部四张路由表再迁移(同 playerRouteG1aShapeHint 的做法;形状守卫只查列名与主键,认不出旧模数)。
+// 全部路由表再迁移(同 playerRouteG1aShapeHint 的做法;形状守卫只查列名与主键,认不出旧模数)。
 //
-// 三条二级索引显式写出尾部 player_id:InnoDB 本来就会追加主键列、TiDB 非唯一索引也带 handle,写出来是为了让
-// 键集翻页的游标 (route_shard, player_id) / (updated_at_ms, player_id) 在两种引擎上语义一致,不增加存储。
+// 两条二级索引显式写出尾部 player_id:InnoDB 本来就会追加主键列、TiDB 非唯一索引也带 handle,写出来是为了让
+// 键集翻页的游标 (route_shard, player_id) 在两种引擎上语义一致,不增加存储。
 // 聚簇表不能再用 SHARD_ROW_ID_BITS / PRE_SPLIT_REGIONS(那是 NONCLUSTERED 表打散 _tidb_rowid 用的)。
 const playerRouteBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_route` (\n" +
 	"  `route_shard` tinyint unsigned NOT NULL COMMENT 'pb:10',\n" +
@@ -189,7 +186,6 @@ const playerRouteBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_route` (\n" 
 	"  PRIMARY KEY (`route_shard`, `player_id`) /*T![clustered_index] CLUSTERED */,\n" +
 	"  KEY `idx_route_home` (`home_zone`, `route_shard`, `player_id`),\n" +
 	"  KEY `idx_route_storage` (`storage_id`, `route_shard`, `player_id`),\n" +
-	"  KEY `idx_route_updated` (`route_shard`, `updated_at_ms`, `player_id`),\n" +
 	"  CONSTRAINT `chk_route_shard` CHECK (`route_shard` = `player_id` % 64),\n" +
 	"  CONSTRAINT `chk_route_home` CHECK (`home_zone` IS NULL OR `home_zone` BETWEEN 1 AND 999999),\n" +
 	"  CONSTRAINT `chk_route_place` CHECK ((`storage_id` IS NULL) = (`placement_version` IS NULL)),\n" +
@@ -199,8 +195,7 @@ const playerRouteBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_route` (\n" 
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='player_route';"
 
 // zoneMergedIntoBootstrapDDL 是合服映射(源区 → 目标区)的永久记录,契约同 tools/merge_zone/merged_into.go。
-// 别名合服之后它是归属解析的真源(placement.ResolveMergedZone,docs/design/player-data-tidb-scaling-plan.md §7.1);
-// route_tool 从 Redis 的 merge:merged_into:* 导入时 merged_at_ms 取导入时刻的库时钟。
+// 别名合服之后它是归属解析的真源(placement.MergedZones,docs/design/player-data-tidb-scaling-plan.md §7.1)。
 const zoneMergedIntoBootstrapDDL = "CREATE TABLE IF NOT EXISTS `zone_merged_into` (\n" +
 	"  `src_zone` int unsigned NOT NULL COMMENT 'pb:1',\n" +
 	"  `dst_zone` int unsigned NOT NULL COMMENT 'pb:2',\n" +
@@ -210,11 +205,7 @@ const zoneMergedIntoBootstrapDDL = "CREATE TABLE IF NOT EXISTS `zone_merged_into
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='zone_merged_into';"
 
 // routeMetaBootstrapDDL 是开关表,单行(id=1):库世代与可写开关。行由迁移种(bootstrapRouteMetaRow,ODKU no-op,
-// 已存在不改);writable=0 = 全体映射写者拒写。
-//
-// **很少写**(只有第 1b 批的冻结 / 回档恢复写它),而每次 W1 都普通读 writable(R1)—— 这正是它和 route_reconcile
-// 分开的原因(G1a):1b leader 每秒写的水位、每 3 秒续的租约如果还在这一行上,TiDB 的读会间歇地被更早的未提交写锁
-// 拖住(抖动直接进建角 p99),也没法把它设成缓存表(ALTER TABLE route_meta CACHE 要求表很少写)。
+// 已存在不改);writable=0 = 全体映射写者拒写。很少写(只有维护流程经 Catalog 写它),而每次 W1 都普通读 writable(R1)。
 var routeMetaBootstrapDDL = authoritysql.CatalogBootstrapStatements()["route_meta"]
 
 // authority 表与路由表同属一个物理事务目标。字段真源为本仓正式 proto，
@@ -232,13 +223,6 @@ var writerFreezeTicketBootstrapDDL = authoritysql.CatalogBootstrapStatements()["
 
 var writerMaintenanceReceiptBootstrapDDL = authoritysql.CatalogBootstrapStatements()["sql_writer_maintenance_receipt"]
 
-// routeReconcileBootstrapDDL 是对账表,单行(id=1):第 1b 批对账 leader 的租约、水位与缓存校验时刻,每拍都写。
-// 第 1a 批不读不写,只由迁移种 id=1(bootstrapRouteReconcileRow,ODKU no-op)。
-//
-// leader 用 ascii(原 route_meta.leader 是 utf8mb4):leader 标识与写者标识同源(NewRouteWriterID 只产
-// [A-Za-z0-9._@:-]),第 1b 批的 leader 标识必须是同一形态的 ASCII,非 ASCII 字节在严格模式下会被库拒绝。
-var routeReconcileBootstrapDDL = authoritysql.CatalogBootstrapStatements()["route_reconcile"]
-
 // bootstrapTables 是走手写 DDL 预建、**不**交给 proto2mysql 同步的表:表名 → 建表语句。
 //
 // 迁移时先逐条执行(全部 CREATE TABLE IF NOT EXISTS,幂等),之后只做形状守卫,事实源都是 TableMessages 里的 proto:
@@ -247,24 +231,22 @@ var routeReconcileBootstrapDDL = authoritysql.CatalogBootstrapStatements()["rout
 // 再加一张这类表 = 在这里加一行 + 在 proto 里加 message(路由表再进 routeTableMessages),
 // 不要回到 migrateSchemaOn 里加 if 分支;清单化是为了让"哪些表不由 proto 驱动建"这件事只有一处答案。
 var bootstrapTables = map[string]string{
-	"writer_registry":                     writerRegistryBootstrapDDL,
-	"writer_slot":                         writerSlotBootstrapDDL,
-	"writer_lifecycle_receipt":            writerLifecycleReceiptBootstrapDDL,
-	"sql_writer_drain_run":                writerDrainRunBootstrapDDL,
-	"sql_writer_freeze_ticket":            writerFreezeTicketBootstrapDDL,
-	"sql_writer_maintenance_receipt":      writerMaintenanceReceiptBootstrapDDL,
-	AccountDirectoryTableName:             accountDirectoryDDL,
-	AccountRoleTableName:                  accountRoleDDL,
-	AccountRoleTradeTableName:             accountRoleTradeDDL,
-	AccountRoleTransferTableName:          accountRoleTransferDDL,
-	AccountRoleAdmissionTableName:         accountRoleAdmissionDDL,
-	AccountRoleTradeHolderTableName:       accountRoleTradeHolderDDL,
-	AccountRoleImportTableName:            accountRoleImportDDL,
-	PlayerNameTableName:                   playerNameBootstrapDDL,
-	PlayerRouteTableName:                  playerRouteBootstrapDDL,
-	ZoneMergedIntoTableName:               zoneMergedIntoBootstrapDDL,
-	RouteMetaTableName:                    routeMetaBootstrapDDL,
-	RouteReconcileTableName:               routeReconcileBootstrapDDL,
+	"writer_registry":                writerRegistryBootstrapDDL,
+	"writer_slot":                    writerSlotBootstrapDDL,
+	"writer_lifecycle_receipt":       writerLifecycleReceiptBootstrapDDL,
+	"sql_writer_drain_run":           writerDrainRunBootstrapDDL,
+	"sql_writer_freeze_ticket":       writerFreezeTicketBootstrapDDL,
+	"sql_writer_maintenance_receipt": writerMaintenanceReceiptBootstrapDDL,
+	AccountDirectoryTableName:        accountDirectoryDDL,
+	AccountRoleTableName:             accountRoleDDL,
+	AccountRoleTradeTableName:        accountRoleTradeDDL,
+	AccountRoleTransferTableName:     accountRoleTransferDDL,
+	AccountRoleAdmissionTableName:    accountRoleAdmissionDDL,
+	AccountRoleTradeHolderTableName:  accountRoleTradeHolderDDL,
+	PlayerNameTableName:              playerNameBootstrapDDL,
+	PlayerRouteTableName:             playerRouteBootstrapDDL,
+	ZoneMergedIntoTableName:          zoneMergedIntoBootstrapDDL,
+	RouteMetaTableName:               routeMetaBootstrapDDL,
 }
 
 // playerRouteG1aShapeHint 是 player_route 形状守卫失败时的处理提示(G1a 改主键之后,本机跑过旧版第 1a 批迁移的库会撞上)。
@@ -276,10 +258,10 @@ var bootstrapTables = map[string]string{
 // (文案里不能出现「改写 player_route」形状的 SQL 动词短语:TestNoPlayerRouteWritesOutsideRouteStore 按字面量匹配。)
 const playerRouteG1aShapeHint = "if this is the pre-G1a shape of the 1a batch (no route_shard column / primary key = player_id) " +
 	"and the route tables hold no data worth keeping, DROP TABLE player_route, zone_merged_into, route_meta " +
-	"(and route_reconcile if it exists) by hand, then rerun `data_service -f <yaml> -migrate`; " +
+	"by hand, then rerun `data_service -f <yaml> -migrate`; " +
 	"the migration never drops them itself (docs/design/player-route-mapping-durability-proposal.md §11.2 G1a)"
 
-// routeTableMessages 是四张路由表的形状事实源(proto/common/database/rollback_database_table.proto),
+// routeTableMessages 是路由表的形状事实源(proto/common/database/rollback_database_table.proto),
 // 按表名排序(日志与失败顺序稳定)。它们也在 TableMessages 里(表名守卫),但不由 proto2mysql 建表或同步。
 //
 // 为什么只守列名与主键、不守类型:CREATE TABLE IF NOT EXISTS 在表已存在时整条跳过,一张被手工改过的
@@ -291,7 +273,6 @@ func routeTableMessages() []proto.Message {
 	return []proto.Message{
 		&dbpb.PlayerRoute{},
 		&dbpb.RouteMeta{},
-		&dbpb.RouteReconcile{},
 		&dbpb.ZoneMergedInto{},
 	}
 }
@@ -382,17 +363,14 @@ func assertRouteTableShapes(ctx context.Context, db *sql.DB, dbName string) erro
 }
 
 // ensureRouteTables 在 bootstrapTables 全部执行之后调用(migrateSchemaOn 与 TiDB 用例的测试钩子共用):
-// 形状守卫 → 种 route_meta(id=1)→ 种 route_reconcile(id=1)。任一步失败整次迁移失败(redis 模式也受影响,
-// 1a 风险第 8 条:表形状不对时 RouteStore 的判定会安静地错,不能带着它启动)。
+// 形状守卫 → 种 route_meta(id=1)。任一步失败整次迁移失败
+// (表形状不对时 RouteStore 的判定会安静地错,不能带着它启动)。
 // 种行放在形状守卫之后:列不齐时 INSERT 会以列错误失败,文案不如守卫清楚。
 func ensureRouteTables(ctx context.Context, db *sql.DB, dbName string) error {
 	if err := assertRouteTableShapes(ctx, db, dbName); err != nil {
 		return err
 	}
-	if err := bootstrapRouteMetaRow(ctx, db); err != nil {
-		return err
-	}
-	return bootstrapRouteReconcileRow(ctx, db)
+	return bootstrapRouteMetaRow(ctx, db)
 }
 
 // sameColumnSequence 判断两组列序逐个相等(大小写不敏感:MySQL 列名如此)。
@@ -1465,19 +1443,21 @@ func hasUniqueIndex(ctx context.Context, db *sql.DB, dbName, tableName, indexNam
 
 // serverIsTiDB 判断对端是不是 TiDB。TiDB 的 VERSION() 形如 "8.0.11-TiDB-v7.5.0",
 // 即它同时声称自己是 MySQL 8 —— 只看主版本号区分不出来,必须看这个后缀。
+// TiDB 配了 server-version 时 VERSION() 里没有这个字样,@@version_comment 不受影响,所以两个都看(同 authoritysql 的后端核对)。
 // 读不到版本号说明连接已经不可用,原样报错:这一步之后要下发 ALTER,不是猜的时候。
 func serverIsTiDB(ctx context.Context, db *sql.DB) (bool, string, error) {
 	var version string
-	if err := db.QueryRowContext(ctx, `SELECT VERSION()`).Scan(&version); err != nil {
+	var comment sql.NullString // 正常不会是 NULL;真是 NULL 时只是少一个判据
+	if err := db.QueryRowContext(ctx, `SELECT VERSION(),@@version_comment`).Scan(&version, &comment); err != nil {
 		return false, "", fmt.Errorf("read server version: %w", err)
 	}
-	return strings.Contains(strings.ToUpper(version), "TIDB"), version, nil
+	return strings.Contains(strings.ToUpper(version+" "+comment.String), "TIDB"), version, nil
 }
 
 // TableMessages 返回全局库全部表的 proto 原型,顺序即迁移顺序。
 // 前三张由 proto2mysql 建表与同步;其余都在 bootstrapTables 里(手写 DDL 预建):
 // id_segment、player_name 由同步循环做列漂移与唯一键检查;
-// 四张路由表(routeTableMessages)由 ensureRouteTables 守列名与主键,同步循环跳过。
+// 路由表(routeTableMessages)由 ensureRouteTables 守列名与主键,同步循环跳过。
 func TableMessages() []proto.Message {
 	return append(append([]proto.Message{
 		&dbpb.TransactionLog{},
@@ -1490,7 +1470,6 @@ func TableMessages() []proto.Message {
 		&dbpb.AccountRoleTransferReceipt{},
 		&dbpb.AccountRoleAdmission{},
 		&dbpb.AccountRoleTradeHolder{},
-		&dbpb.AccountRoleImportReceipt{},
 	}, routeTableMessages()...), writerAuthorityTableMessages()...)
 }
 
@@ -1697,14 +1676,13 @@ func acquireMigrateLock(ctx context.Context, db *sql.DB, dbName string, wait tim
 }
 
 // migrateSchemaOn 注册 TableMessages 的全部表 → 表名守卫 → 预建 bootstrapTables(手写 DDL 的 id_segment、
-// player_name 与路由表)→ 路由表按各自的 proto 查列名与主键,并种 route_meta / route_reconcile(id=1)
+// player_name 与路由表)→ 路由表按各自的 proto 查列名与主键,并种 route_meta(id=1)
 // (ensureRouteTables)
 // → 有 proto 的 bootstrap 表只做形状守卫(列齐 + 单列唯一键还在)、其余三张 CreateOrUpdateTable
 // → 补缺失索引 → 补 nullableUniqueKeys 的可空唯一列(player_snapshot.snapshot_guid_nz)
 // (2026-10-30 起发号不再用 id_segment 表,迁移也不再预建号段行,见 internal/idissuer)。
 //
-// 路由表那一步失败同样让整次迁移失败(redis 模式也受影响:启动路径会因此不装配任何 store,
-// 规格 g.3 第 8 条)。这是刻意的:表形状不对时 RouteStore 的判定会安静地错,不能带着它启动。
+// 路由表那一步失败同样让整次迁移失败。这是刻意的:表形状不对时 RouteStore 的判定会安静地错,不能带着它启动。
 func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts MigrateOptions) error {
 	model := proto2mysql.NewDB().WithContext(ctx)
 	if err := model.OpenDB(db, dbName); err != nil {

@@ -47,12 +47,15 @@ function Invoke-DeployDryRun {
             $rosterPath=Join-Path $fixtureRoot 'roster.json'
             [IO.File]::WriteAllText($rosterPath,'{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[{},{}]}',[Text.UTF8Encoding]::new($false))
             $rosterSha=(Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
-            $zone='contract-test';$prefix='mmorpg-zone';$infra='mmorpg-infra'
+            $zone='contract-test';$prefix='mmorpg-zone';$infra='mmorpg-infra';$zonesPath=Join-Path (Get-RepoRoot) 'deploy/k8s/zones.json'
             for($i=0;$i -lt $fixtureArgs.Count-1;$i++){
-                switch($fixtureArgs[$i]){'-ZoneName'{$zone=$fixtureArgs[$i+1]};'-NamespacePrefix'{$prefix=$fixtureArgs[$i+1]};'-InfraNamespace'{$infra=$fixtureArgs[$i+1]}}
+                switch($fixtureArgs[$i]){'-ZoneName'{$zone=$fixtureArgs[$i+1]};'-NamespacePrefix'{$prefix=$fixtureArgs[$i+1]};'-InfraNamespace'{$infra=$fixtureArgs[$i+1]};'-ZonesConfigPath'{$zonesPath=$fixtureArgs[$i+1]}}
             }
+            # all-up 按 zones 配置部署:每个 zone 的服务都要有写者计划。配置读不了时交给部署脚本自己报错,这里不抢。
+            $zoneNames=@($zone)
+            try{$zoneNames+=@((Get-Content -LiteralPath $zonesPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop).zones | ForEach-Object {[string]$_.name})}catch{}
             $catalog=@{}
-            foreach($ns in @(($prefix+'-'+$zone),$infra)){
+            foreach($ns in @(@($zoneNames | Sort-Object -Unique | ForEach-Object {$prefix+'-'+$_})+$infra)){
                 foreach($svc in @('login','gateway','data-service','db','chat','friend','guild','mail','match','player-inbox','rank','trade')){
                     $catalog[$ns+'/'+$svc]=@{requestSecret='fixture-request';registrarSecret='fixture-registrar';registrarImage=('fixture.invalid/registrar@sha256:'+('a'*64));physicalAuthoritySha256=('b'*64);runtimeConfigSecret='fixture-runtime';replicas=2;rosterFile=$rosterPath;rosterSha256=$rosterSha;schemaConfigSecret='fixture-schema-config';schemaPermissionSecret='fixture-schema-permission'}
                 }
@@ -1046,27 +1049,18 @@ Test-Case "node ConfigMap 不再写已退役的键:DbTaskTopicGeneration / Persi
     Assert-NotMatch -Text (Select-ManifestByName -Output $devOut -Name "node-config") -Pattern 'game-events|db_task_zone' -Because 'game-events 与 db_task topic 都已退役'
 }
 
-Test-Case "data-service 的 MappingRedis 不写 DB 键;go/db 读落点记录的 Redis 必须与它同址且为 DB 0" {
-    # go-zero 的 RedisConf 没有 DB 字段:ConfigMap 里写 `DB: 15` 会被静默忽略,映射实际在 DB 0,
-    # 留着只会让运维照它给 merge_zone 填 -mapping-redis-db 15(gap-fixes B6 / player-storage-placement.md §12 A12)。
-    # go/db 按落点选库时 MGET player:placement / player:zone(§6.2):Placement.Redis 不写就复用 ServerConfig.RedisClient。
-    # 两边不同址或不是 DB 0 = 读不到任何记录与 home_zone,全员按本 zone 选库,被钉到别处的玩家静默写错库。
+Test-Case "data-service 的 NameCacheRedis 指向共享 Redis、不写 DB 键;go/db 的 ConfigMap 没有 Redis 句柄" {
+    # go-zero 的 RedisConf 没有 DB 字段:写了也被静默忽略,缓存实际在 DB 0。NameCacheRedis 只放可丢弃的读缓存,与 go/db 无关。
     $dsFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-data-service-config")
-    $mappingHost = Get-FlatValue -Flat $dsFlat -KeyPath 'data.data_service.yaml.MappingRedis.Host'
-    Assert-True -Condition (-not $dsFlat.Scalars.Contains('data.data_service.yaml.MappingRedis.DB')) -Because "MappingRedis 的 DB 键对 go-zero 无效,写出来只会误导合服参数"
-
+    Assert-Equal -Expected 'redis.mmorpg-infra:6379' -Actual (Get-FlatValue -Flat $dsFlat -KeyPath 'data.data_service.yaml.NameCacheRedis.Host') -Because 'NameCacheRedis 是必填键,缺了 data_service 起不来'
+    foreach ($key in @('NameCacheRedis.DB', 'MappingRedis', 'LegacyNonGlobal')) {
+        Assert-Equal -Expected 0 -Actual @(Get-FlatSubtreeKeys -Flat $dsFlat -Path "data.data_service.yaml.$key").Count -Because "data-service ConfigMap 不该再写 $key"
+    }
+    # go/db 不连 Redis,选库读全局库 player_route;这些键已从 go/db/internal/config 删掉,写了也没人读。
     $dbFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-db-config")
-    # 显式写了 Placement.Redis 就以它为准(DB 缺省 0),否则取 RedisClient —— 与 go/db 的取值规则一致。
-    if ($dbFlat.Scalars.Contains('data.db.yaml.Placement.Redis.Hosts')) {
-        $placementHost = Get-FlatValue -Flat $dbFlat -KeyPath 'data.db.yaml.Placement.Redis.Hosts'
-        $placementDb = if ($dbFlat.Scalars.Contains('data.db.yaml.Placement.Redis.DB')) { Get-FlatValue -Flat $dbFlat -KeyPath 'data.db.yaml.Placement.Redis.DB' } else { '0' }
+    foreach ($key in @('ServerConfig.RedisClient', 'Placement.Redis', 'Placement.Required', 'Placement.RequireRouteReady', 'LegacyNonGlobal')) {
+        Assert-Equal -Expected 0 -Actual @(Get-FlatSubtreeKeys -Flat $dbFlat -Path "data.db.yaml.$key").Count -Because "go/db ConfigMap 不该再写 $key"
     }
-    else {
-        $placementHost = Get-FlatValue -Flat $dbFlat -KeyPath 'data.db.yaml.ServerConfig.RedisClient.Hosts'
-        $placementDb = Get-FlatValue -Flat $dbFlat -KeyPath 'data.db.yaml.ServerConfig.RedisClient.DB'
-    }
-    Assert-Equal -Expected $mappingHost -Actual $placementHost -Because "go/db 读落点记录的 Redis 必须是 data-service 的 MappingRedis 实例"
-    Assert-Equal -Expected '0' -Actual $placementDb -Because "落点记录与 player:zone 恒在 DB 0"
 }
 
 Test-Case "login ConfigMap 必须带 Secrets.InternalAuth(否则生产 login 拒绝启动)" {
@@ -1152,15 +1146,19 @@ Test-Case "prod 档位 + 注入环境变量时生成器可以正常出产物" {
     Assert-Equal -Expected 0 -Actual $prodRun.ExitCode -Because "注入齐全时不该失败。输出: $($prodRun.Output)"
 }
 
-Test-Case 'data-service默认强SQL:dev/prod均db_first，Arm/read/db就绪门禁同开且服务源一致' {
+Test-Case 'data-service ConfigMap 的 RouteStore 段只写连接池与合服映射刷新周期,取值镜像服务 yaml' {
+    $source = 'go/data_service/etc/data_service.yaml'
     foreach ($case in @(@{ Label = 'dev'; Output = $devOut }, @{ Label = 'prod'; Output = $prodRun.Output })) {
         $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Output -Name 'go-svc-data-service-config')
-        Assert-Equal -Expected 'db_first' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.RouteStore.Mode') -Because "$($case.Label):全球SQL为唯一权威默认"
-        foreach ($key in @('ReadRequiresReady', 'Reconcile.ArmReadyMarker')) {
-            Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath "data.data_service.yaml.RouteStore.$key") -Because '默认即强制SQL就绪，不能静默回Redis'
+        $prefix = 'data.data_service.yaml.RouteStore'
+        $keys = @(Get-FlatSubtreeKeys -Flat $flat -Path $prefix | Where-Object { $_ -cne $prefix } | Sort-Object)
+        Assert-Equal -Expected ("$prefix.MaxIdleConn,$prefix.MaxOpenConn,$prefix.MergedZoneRefreshSec") -Actual ($keys -join ',') -Because "$($case.Label):映射直读全局库之后 RouteStore 只剩这三项,Mode / ReadRequiresReady / Reconcile / WaitAOF* / Publish* 都已删除"
+        foreach ($key in @('MaxOpenConn', 'MaxIdleConn', 'MergedZoneRefreshSec')) {
+            Assert-Equal -Expected (Get-EtcValue -RelativePath $source -KeyPath "RouteStore.$key") -Actual (Get-FlatValue -Flat $flat -KeyPath "$prefix.$key") -Because "$($case.Label):RouteStore.$key 镜像服务 yaml"
         }
+        Assert-Equal -Expected 'tidb.invalid:4000' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.SnapshotMySQL.Host') -Because '同一明确虚构TiDB入口，不回落zone MySQL'
+        Assert-Equal -Expected 'tidb' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.SnapshotMySQL.Backend') -Because '部署缺省 tidb 档，实际身份由服务启动核验'
     }
-    Assert-Equal -Expected 'db_first' -Actual (Get-EtcValue -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath 'RouteStore.Mode') -Because '本地与部署同为全球SQL'
 }
 
 Test-Case "prod 档位下 db 段不得出现 root/root 或空密码" {
@@ -1348,7 +1346,7 @@ Test-Case 'zone Redis 口令(prod):node-config 的 zoneredis.password == MMORPG_
     foreach ($name in @('gate', 'scene')) {
         $block = Select-CppWorkloadBlock -Output $prodRun.Output -Kind 'Deployment' -Name $name -Label "prod $name"
         Assert-Equal -Expected $expected -Actual (Get-ZoneRedisAuthHash -Block $block -Label "prod $name") -Because "${name}:指纹必须只由口令决定(期望值只用口令算出)"
-        Assert-Match -Text $block -Pattern '(?m)^      annotations:[ ]*\r?\n        mmorpg\.io/cpp-log-sidecar-config-hash: "[0-9a-f]{12}"[ ]*\r?\n        mmorpg\.io/zone-redis-auth-hash: "[0-9a-f]{12}"[ ]*\r?\n(?:        prometheus\.io/(?:scrape|port|path): "[^"]*"[ ]*\r?\n){3}      labels:' -Because "${name}:两条注解必须同在 Pod 模板的一个 annotations 段(sidecar 在前);重复的 annotations: 键各解析器行为不一"
+        Assert-Match -Text $block -Pattern '(?m)^      annotations:[ ]*\r?\n        mmorpg\.io/cpp-log-sidecar-config-hash: "[0-9a-f]{12}"[ ]*\r?\n        mmorpg\.io/zone-redis-auth-hash: "[0-9a-f]{12}"[ ]*\r?\n(?:        mmorpg\.io/player-redis-config-hash: "[0-9a-f]{12}"[ ]*\r?\n)?(?:        prometheus\.io/(?:scrape|port|path): "[^"]*"[ ]*\r?\n){3}      labels:' -Because "${name}:两条注解必须同在 Pod 模板的一个 annotations 段(sidecar 在前,scene 另有玩家域配置指纹);重复的 annotations: 键各解析器行为不一"
         Assert-True -Condition (-not $block.Contains($ProdEnv.MMORPG_REDIS_PASSWORD)) -Because "${name}:工作负载里只有指纹,不出现口令明文"
     }
 }
@@ -3073,7 +3071,7 @@ foreach ($mysqlLedgerFnName in $mysqlLedgerFunctionNames) {
     if (-not (Test-Path "Function:$mysqlLedgerFnName")) { throw "k8s_deploy.ps1 缺少函数 $mysqlLedgerFnName(MySQL 连接总账被删了?后续断言无意义)" }
 }
 
-# 用仓库权威文件的输入算一份总账。Z / E_z 由调用方给,其余形态参数(E_n / route store 是否 db_first / 滚动余量 / 运维余量)取规划档。
+# 用仓库权威文件的输入算一份总账。Z / E_z 由调用方给,其余形态参数(E_n / 滚动余量 / 运维余量)取规划档。
 function Get-RepoMysqlConnectionLedger {
     param(
         [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Plan,
@@ -3083,7 +3081,7 @@ function Get-RepoMysqlConnectionLedger {
     # Get-MysqlConnectionLedgerInputs 及其依赖按动态作用域读这个变量(在 k8s_deploy.ps1 里它是脚本级变量)。
     $RepoRoot = Get-RepoRoot
     return Get-MysqlConnectionLedger -Inputs (Get-MysqlConnectionLedgerInputs) -ZoneCount $ZoneCount -ExtraZoneStores $ExtraZoneStores `
-        -NonZoneStores $Plan.NonZoneStores -RouteStoreDbFirst $Plan.RouteStoreDbFirst `
+        -NonZoneStores $Plan.NonZoneStores `
         -RolloutExtraPodsPerDeployment $Plan.RolloutExtraPodsPerDeployment -OpsReserve $Plan.OpsReserve
 }
 
@@ -3132,7 +3130,7 @@ Test-Case 'MySQL 连接总账:deploy/k8s/zones.json 的 zone 数(E_z=Z−1)峰�
     Assert-True -Condition ($ledger.Peak -le $ledger.MaxConnections) -Because ("deploy/k8s/zones.json 的 {0} 个 zone(每个 go/db 实例打开其余 {1} 个 zone 的库)峰值 {2} 超过 max_connections={3}。分项:{4}" -f $zoneCount, ($zoneCount - 1), $ledger.Peak, $ledger.MaxConnections, (Format-MysqlConnectionLedger -Ledger $ledger))
 }
 
-Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 → 500另加现役目录独立池),对旧 max_connections=500 判超限,输入非法即 throw' {
+Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 → 500另加现役目录与路由独立池),对旧 max_connections=500 判超限,输入非法即 throw' {
     $RepoRoot = Get-RepoRoot
     $directoryPool = Get-AccountDirectoryPoolMaxOpen
     # 合成输入 = 2026-10-12 手算那一版的口径(docs/PROGRESS.md「落点多库连接拓扑核算」):gateway 还是每副本 10 条,
@@ -3155,36 +3153,37 @@ Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 �
         }
     }
 
-    # 当时的名义值:不算额外落点库(E_z = E_n = 0)、route store 不计(F = 0)、不含滚动余量与运维余量。
+    # 当时的名义值:不算额外落点库(E_z = E_n = 0)、route store 不计、不含滚动余量与运维余量。route store 的独立池现在恒计,断言另加它($routePool)。
     # 每 zone = 2 × (db 60 + ds 35 + gateway 10) = 210;全局 = friend 2 × 20 + trade 2 × 20 = 80。
     # 收件箱(2 × 20 = 40)是后加的全局池:断言按「2026-10-12 的核算 + 40」比,历史那份核算本身仍逐项复现。
     # 帮会(2 × 20 = 40)同理是 2026-10-16 后加的全局池,下面的断言一并加上;邮件(2 × 20 = 40)同日加入,同样一并加上。
     $inboxGlobal = 2 * 20 + 2 * 20 + 2 * 20 + 2 * 20 + 2 * 16
-    $nominalShape = @{ ExtraZoneStores = 0; NonZoneStores = 0; RouteStoreDbFirst = $false; RolloutExtraPodsPerDeployment = 0; OpsReserve = 0 }
+    $routePool = 20
+    $nominalShape = @{ ExtraZoneStores = 0; NonZoneStores = 0; RolloutExtraPodsPerDeployment = 0; OpsReserve = 0 }
     foreach ($case in @(@{ Zones = 4; Steady = 920 }, @{ Zones = 2; Steady = 500 })) {
         $ledger = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -ZoneCount $case.Zones @nominalShape
-        Assert-Equal -Expected ('60/{0}/10/{1}/{2}' -f (35 + $directoryPool), (210 + 2 * $directoryPool), (80 + $inboxGlobal)) -Actual ('{0}/{1}/{2}/{3}/{4}' -f $ledger.DbPerInstance, $ledger.DsPerInstance, $ledger.GatewayPerInstance, $ledger.PerZone, $ledger.Global) -Because "Z=$($case.Zones):db / ds / gateway 每实例、每 zone、全局(friend + trade + 收件箱) 五项"
-        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * $directoryPool) -Actual $ledger.Steady -Because "Z=$($case.Zones) 的稳态应为历史核算、现役全局池与每zone目录池总和"
-        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * $directoryPool) -Actual $ledger.Peak -Because '不含滚动余量与运维余量时,峰值 = 稳态'
-        Assert-Equal -Expected (500 - $case.Steady - $inboxGlobal - $case.Zones * 2 * $directoryPool) -Actual $ledger.Headroom -Because '余量 = max_connections − 峰值(当时 Z=2 恰好为 0,加上收件箱后两者都为负)'
+        Assert-Equal -Expected ('60/{0}/10/{1}/{2}' -f (35 + $directoryPool + $routePool), (210 + 2 * ($directoryPool + $routePool)), (80 + $inboxGlobal)) -Actual ('{0}/{1}/{2}/{3}/{4}' -f $ledger.DbPerInstance, $ledger.DsPerInstance, $ledger.GatewayPerInstance, $ledger.PerZone, $ledger.Global) -Because "Z=$($case.Zones):db / ds / gateway 每实例、每 zone、全局(friend + trade + 收件箱) 五项"
+        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * ($directoryPool + $routePool)) -Actual $ledger.Steady -Because "Z=$($case.Zones) 的稳态应为历史核算、现役全局池与每zone目录池、路由池总和"
+        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * ($directoryPool + $routePool)) -Actual $ledger.Peak -Because '不含滚动余量与运维余量时,峰值 = 稳态'
+        Assert-Equal -Expected (500 - $case.Steady - $inboxGlobal - $case.Zones * 2 * ($directoryPool + $routePool)) -Actual $ledger.Headroom -Because '余量 = max_connections − 峰值(当时 Z=2 恰好为 0,加上收件箱后两者都为负)'
     }
 
     # 旧上限 500 对规划档必须判超限(峰值 > max_connections,余量为负)—— 这就是上限要跟着规划档走的原因。
     $plan = Get-MysqlConnectionPlan
     $planShape = @{
         ZoneCount = $plan.ZoneCount; ExtraZoneStores = $plan.ExtraZoneStores; NonZoneStores = $plan.NonZoneStores
-        RouteStoreDbFirst = $plan.RouteStoreDbFirst; RolloutExtraPodsPerDeployment = $plan.RolloutExtraPodsPerDeployment; OpsReserve = $plan.OpsReserve
+        RolloutExtraPodsPerDeployment = $plan.RolloutExtraPodsPerDeployment; OpsReserve = $plan.OpsReserve
     }
     $overLimit = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) @planShape
     Assert-True -Condition ($overLimit.Peak -gt 500 -and $overLimit.Headroom -lt 0) -Because ("规划档对旧上限 500 必须判超限,实际:{0}" -f (Format-MysqlConnectionLedger -Ledger $overLimit))
 
     # 滚动口径：R=2比R=0多2×所有域每实例池之和，额外含正规源读取的目录独立池。
     # 多出来的是「实例」(maxSurge 的新 Pod + 仍在优雅退出、连接还没释放的旧 Pod),不乘副本数,也不乘 zone 数。
-    $rolloutShape = @{ ZoneCount = 4; ExtraZoneStores = 0; NonZoneStores = 0; RouteStoreDbFirst = $false; OpsReserve = 0 }
+    $rolloutShape = @{ ZoneCount = 4; ExtraZoneStores = 0; NonZoneStores = 0; OpsReserve = 0 }
     $withoutRollout = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -RolloutExtraPodsPerDeployment 0 @rolloutShape
     $withRollout = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -RolloutExtraPodsPerDeployment 2 @rolloutShape
-    Assert-Equal -Expected (2 * (241 + $directoryPool)) -Actual ($withRollout.Peak - $withoutRollout.Peak) -Because 'R=2 与 R=0 的峰值之差必须是 2 × (db + ds + gateway + friend + trade + 收件箱 + 帮会 + 邮件 每实例之和)'
-    Assert-Equal -Expected (2 * (241 + $directoryPool)) -Actual $withRollout.RolloutSurge -Because '这个差值就是分项里的 RolloutSurge'
+    Assert-Equal -Expected (2 * (241 + $directoryPool + $routePool)) -Actual ($withRollout.Peak - $withoutRollout.Peak) -Because 'R=2 与 R=0 的峰值之差必须是 2 × (db + ds + gateway + friend + trade + 收件箱 + 帮会 + 邮件 每实例之和)'
+    Assert-Equal -Expected (2 * (241 + $directoryPool + $routePool)) -Actual $withRollout.RolloutSurge -Because '这个差值就是分项里的 RolloutSurge'
     Assert-Equal -Expected $withoutRollout.Steady -Actual $withRollout.Steady -Because '滚动余量不进稳态'
 
     # 逐项钉公式:副本数、池上限、形态参数各取互不相同的值,任何一项漏算、两个额外库旋钮接反、副本数错配,结果都对不上。
@@ -3204,7 +3203,7 @@ Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 �
         RankReplicas = 10; RankMaxOpen = 6
         ChatReplicas = 11; ChatMaxOpen = 7
     }
-    $distinct = Get-MysqlConnectionLedger -Inputs $distinctInputs -ZoneCount 3 -ExtraZoneStores 2 -NonZoneStores 1 -RouteStoreDbFirst $true -RolloutExtraPodsPerDeployment 1 -OpsReserve 7
+    $distinct = Get-MysqlConnectionLedger -Inputs $distinctInputs -ZoneCount 3 -ExtraZoneStores 2 -NonZoneStores 1 -RolloutExtraPodsPerDeployment 1 -OpsReserve 7
     Assert-Equal -Expected '85/78/10/444/550/1882/255/7/2144/5000/2856' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}/{6}/{7}/{8}/{9}/{10}' -f $distinct.DbPerInstance, $distinct.DsPerInstance, $distinct.GatewayPerInstance, $distinct.PerZone, $distinct.Global, $distinct.Steady, $distinct.RolloutSurge, $distinct.OpsReserve, $distinct.Peak, $distinct.MaxConnections, $distinct.Headroom) -Because '分项依次是 db / ds / gateway 每实例、每 zone、全局、稳态、滚动余量、运维余量、峰值、上限、余量'
 
     # 输入非法一律 throw 并点名是哪个键(fail-closed:不能拿一个猜出来的连接数去和上限比)。
@@ -3254,7 +3253,7 @@ Test-Case '连 MySQL 的 ConfigMap 只有总账认识的那些(zone-up 三个、
         $authorityPrefix = "data.$authorityService.yaml."
         Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'GlobalLoginSessions')) -Because "$authorityService 必须声明真实全局登录态，不沿用本地占位false"
         Assert-Match -Text (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'AccountRoleSchema')) -Pattern '^[a-z][a-z0-9_]{0,63}$' -Because "$authorityService 必须显式指定全局角色目录"
-        Assert-Match -Text (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'LoginRedis.Host')) -Pattern '^redis\..+:6379$' -Because "$authorityService 必须连接部署的全局login Redis，不能空地址"
+        Assert-Match -Text (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'LoginRedis.Addrs[0]')) -Pattern '^redis\..+:6379$' -Because "$authorityService 必须连接部署的全局login Redis，不能空地址"
         Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.RedisClient.DB') -Actual (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'LoginRedis.DB')) -Because "$authorityService 原会话账号读取必须与login同DB"
     }
     $infraExpected = @('go-svc-friend-config', 'go-svc-trade-config', 'go-svc-player-inbox-config', 'go-svc-guild-config', 'go-svc-mail-config', 'go-svc-rank-config', 'go-svc-chat-config' | Sort-Object) -join ','
@@ -3590,6 +3589,7 @@ Test-Case 'mysql-connection-alerts.yaml:PrometheusRule 形状,额外库数阈值
 # $devOut(zone-up)/ $battleInfraRun(infra-up)核对;包装入口的透传照上面 GateRouterMode 的做法。全部不碰任何集群。
 $redisLedgerFunctionNames = @(
     'Get-RedisConnectionPlan', 'Get-RedisMaxClientsFromManifest', 'Get-RedisPoolMirror', 'Get-RedisConnectionLedgerInputs', 'Get-RedisConnectionLedger',
+    'Get-RedisPlayerPoolMirror',
     'Get-RedisPodTemplateDigest', 'Get-RedisCoreRestartVerdict', 'Assert-RedisCoreRestartConfirmed', 'Get-LiveRedisCoreTemplateDigest',
     # 没有 sts 与旧 Deployment 时再查孤儿 redis-<n> Pod(2026-10-19,半截的 1 → 3 切换不再被当成全新集群)。
     'Get-LiveRedisOrphanPodOrdinals'
@@ -3616,8 +3616,7 @@ function Get-RepoRedisPlanLedger {
     # Get-RedisConnectionLedgerInputs 及其依赖按动态作用域读这个变量(在 k8s_deploy.ps1 里它是脚本级变量)。
     $RepoRoot = Get-RepoRoot
     $plan = Get-RedisConnectionPlan
-    # 规划档按 RouteStore.Mode=db_first 记 D1 对账 leader 的独立池(Get-RedisConnectionPlan 的 RouteStoreDbFirst,与 MySQL 规划档同源)。
-    return Get-RedisConnectionLedger -Inputs (Get-RedisConnectionLedgerInputs -RouteStoreDbFirst ([bool]$plan.RouteStoreDbFirst)) -ZoneCount $plan.ZoneCount `
+    return Get-RedisConnectionLedger -Inputs (Get-RedisConnectionLedgerInputs) -ZoneCount $plan.ZoneCount `
         -CppZoneProcesses ($plan.ZoneCount * ($plan.GatePerZone + $plan.ScenePerZone)) -BattleProcesses $plan.BattleProcesses `
         -RolloutExtraPodsPerDeployment $plan.RolloutExtraPodsPerDeployment -OpsReserve $plan.OpsReserve -WarnRatio $plan.WarnRatio
 }
@@ -3662,9 +3661,10 @@ Test-Case 'Redis 总账输入:客户端表的副本数就是各 manifest 的 rep
     Assert-Equal -Expected 10 -Actual $inputs.GoPoolSizePerProc -Because 'go-redis v9 的 PoolSize 缺省 = 10 × GOMAXPROCS(只用于还没显式池上限的 DefaultPools)'
     Assert-Equal -Expected 1 -Actual $inputs.CppConnectionsPerProcess -Because 'C++ 每进程 1 条(node.cpp 唯一的 tlsRedis.Connect)'
     $names = @($inputs.Clients | ForEach-Object { $_.Name })
-    foreach ($expectedName in @('login', 'db', 'data-service', 'player-locator', 'scene-manager', 'gateway', 'match', 'chat', 'friend', 'trade', 'guild', 'player-inbox')) {
+    foreach ($expectedName in @('login', 'data-service', 'player-locator', 'scene-manager', 'gateway', 'match', 'chat', 'friend', 'trade', 'guild', 'player-inbox')) {
         Assert-True -Condition ($names -contains $expectedName) -Because "客户端表里必须有 $expectedName(它连着共享 Redis;不连了要先改代码再删这一行)"
     }
+    Assert-True -Condition ($names -notcontains 'db') -Because 'go/db 不连 Redis,总账里不该有它'
     # player-inbox(go/player_inbox/internal/svc/servicecontext.go openCoreRedis):全局一份、核心 Redis 一个 go-redis 池(CoreRedis.PoolSize,
     # 池上限的出处在下面 $explicitPools 里核)、没有 Pub/Sub;围栏上界、在线提醒与选主锁共用这一个客户端。改成多个池或加订阅时这里先变红,逼着同改总账那一行。
     $inbox = @($inputs.Clients | Where-Object { $_.Name -eq 'player-inbox' })
@@ -3674,22 +3674,24 @@ Test-Case 'Redis 总账输入:客户端表的副本数就是各 manifest 的 rep
 
     # 显式 PoolSize 的 go-redis 直连池(P0-E 第 3 批):ConfiguredPoolConns 必须等于服务 yaml 里那个键的值(这里独立读,不经被测函数),
     # 且是正整数;这几个服务剩下的缺省大小池(go-zero 封装)按表里的 DefaultPools 核。换键名、拆成多个池、或删掉显式值时这里先变红。
+    # 没建玩家域集群时(本用例的缺省输入),PlayerRedis 与 LoginRedis 也连这台 Redis,一起算。ConstPool 是代码里写死的池:mail 的 LoginRedis 在 go/mail/mail.go 写死 8。
     $explicitPools = @(
-        @{ Name = 'login'; Source = 'go/login/etc/login.yaml'; KeyPath = 'Node.RedisClient.PoolSize'; DefaultPools = 0 }
-        @{ Name = 'db'; Source = 'go/db/etc/db.yaml'; KeyPath = 'ServerConfig.RedisClient.PoolSize'; DefaultPools = 0 }
-        @{ Name = 'player-locator'; Source = 'go/player_locator/etc/player_locator.yaml'; KeyPath = 'RedisClient.PoolSize'; DefaultPools = 0 }
-        @{ Name = 'trade'; Source = 'go/trade/etc/trade.yaml'; KeyPath = 'SharedRedis.PoolSize'; DefaultPools = 0 }
-        @{ Name = 'guild'; Source = 'go/guild/etc/guild.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerLocatorRedis.PoolSize', 'LoginRedis.PoolSize'); DefaultPools = 0 }
-        @{ Name = 'friend'; Source = 'go/friend/etc/friend.yaml'; KeyPath = 'LoginRedis.PoolSize'; DefaultPools = 1 }
-        @{ Name = 'match'; Source = 'go/match/etc/match_service.yaml'; KeyPath = 'LoginRedis.PoolSize'; DefaultPools = 1 }
-        @{ Name = 'chat'; Source = 'go/chat/etc/chat.yaml'; KeyPath = 'LoginRedis.PoolSize'; DefaultPools = 0 }
-        @{ Name = 'player-inbox'; Source = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = 'CoreRedis.PoolSize'; DefaultPools = 0 }
+        @{ Name = 'login'; Source = 'go/login/etc/login.yaml'; KeyPath = @('Node.RedisClient.PoolSize', 'PlayerRedis.PoolSizePerNode', 'LoginRedis.PoolSizePerNode'); DefaultPools = 0 }
+        @{ Name = 'player-locator'; Source = 'go/player_locator/etc/player_locator.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
+        @{ Name = 'scene-manager'; Source = 'go/scene_manager/etc/scene_manager_service.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
+        @{ Name = 'trade'; Source = 'go/trade/etc/trade.yaml'; KeyPath = @('SharedRedis.PoolSize', 'PlayerRedis.PoolSizePerNode', 'Rmb.LoginRedis.PoolSizePerNode'); DefaultPools = 0 }
+        @{ Name = 'guild'; Source = 'go/guild/etc/guild.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerLocatorRedis.PoolSize', 'LoginRedis.PoolSizePerNode', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
+        @{ Name = 'friend'; Source = 'go/friend/etc/friend.yaml'; KeyPath = @('LoginRedis.PoolSizePerNode', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 1 }
+        @{ Name = 'match'; Source = 'go/match/etc/match_service.yaml'; KeyPath = @('LoginRedis.PoolSizePerNode', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 1 }
+        @{ Name = 'chat'; Source = 'go/chat/etc/chat.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; DefaultPools = 0 }
+        @{ Name = 'player-inbox'; Source = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = @('CoreRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
+        @{ Name = 'mail'; Source = 'go/mail/etc/mail.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; ConstPool = 8; DefaultPools = 0 }
     )
     $explicitNames = @($explicitPools | ForEach-Object { $_.Name })
     foreach ($pool in $explicitPools) {
         $row = @($inputs.Clients | Where-Object { $_.Name -eq $pool.Name })
         Assert-Equal -Expected 1 -Actual $row.Count -Because "客户端表里 $($pool.Name) 只能有一行"
-        $expected = 0
+        $expected = [int]$pool.ConstPool
         foreach ($poolKey in @($pool.KeyPath)) {
             $raw = Get-EtcValue -RelativePath $pool.Source -KeyPath $poolKey
             $poolValue = 0
@@ -3801,13 +3803,12 @@ Test-Case '自检:Redis 总账公式逐项可复现,滚动余量只按「每副�
     Assert-Match -Text $message -Pattern 'WarnRatio=1\.5 必须在 \(0, 1\] 内' -Because '告警比例越界必须 throw'
 }
 
-Test-Case 'ConfigMap 镜像 go-redis 池上限 PoolSize == 服务 yaml(zone-up:login / db / player-locator;infra-up:trade / player-inbox),Redis 连接总账读同一个键' {
+Test-Case 'ConfigMap 镜像 go-redis 池上限 PoolSize == 服务 yaml(zone-up:login / player-locator;infra-up:trade / player-inbox),Redis 连接总账读同一个键' {
     # P0-E 第 3 批:这几个 go-redis 直连客户端以前不设 PoolSize,池上限 = 10 × GOMAXPROCS,跟着 CPU limit 漂,总账只能按 G=2 估。
     # 现在服务 yaml 写显式值,ConfigMap 镜像同一个键(Get-RedisPoolMirror),总账读同一个键。镜像漏写时 go-zero 按 0 加载 =
     # 回到缺省池,集群跑的就不是账上的数,而且没有任何报错。
     $zoneMirrors = @(
         @{ ConfigMap = 'go-svc-login-config'; Prefix = 'data.login.yaml.'; Source = 'go/login/etc/login.yaml'; KeyPath = 'Node.RedisClient.PoolSize' }
-        @{ ConfigMap = 'go-svc-db-config'; Prefix = 'data.db.yaml.'; Source = 'go/db/etc/db.yaml'; KeyPath = 'ServerConfig.RedisClient.PoolSize' }
         @{ ConfigMap = 'go-svc-player-locator-config'; Prefix = 'data.player_locator.yaml.'; Source = 'go/player_locator/etc/player_locator.yaml'; KeyPath = 'RedisClient.PoolSize' }
     )
     foreach ($mirror in $zoneMirrors) {
@@ -3838,8 +3839,8 @@ Test-Case 'ConfigMap 镜像 go-redis 池上限 PoolSize == 服务 yaml(zone-up:l
         -Actual (Get-FlatValue -Flat $inboxFlat -KeyPath 'data.player_inbox.yaml.CoreRedis.PoolSize') `
         -Because 'go-svc-player-inbox-config 的 CoreRedis.PoolSize 必须与 go/player_inbox/etc/player_inbox.yaml 一致(Redis 连接总账读的是同一个键)'
     $chatFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $infraRun.Output -Name 'go-svc-chat-config')
-    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'LoginRedis.PoolSize') `
-        -Actual (Get-FlatValue -Flat $chatFlat -KeyPath 'data.chat.yaml.LoginRedis.PoolSize') `
+    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'LoginRedis.PoolSizePerNode') `
+        -Actual (Get-FlatValue -Flat $chatFlat -KeyPath 'data.chat.yaml.LoginRedis.PoolSizePerNode') `
         -Because 'Chat 唯一登录原件只读池与其服务 YAML、Redis 总账使用同一个显式上限'
 }
 
@@ -3855,6 +3856,8 @@ $redisPoolMirrorFixtureFiles = @(
     'go/friend/etc/friend.yaml'
     'go/chat/etc/chat.yaml'
     'go/player_inbox/etc/player_inbox.yaml'
+    'go/scene_manager/etc/scene_manager_service.yaml'
+    'go/mail/etc/mail.yaml'
 )
 
 Test-Case '负向:服务 yaml 的 go-redis PoolSize 不是正整数时 Get-RedisPoolMirror throw 并点名文件与键路径,总账输入同样 throw(夹具是临时目录里的副本,不碰仓库)' {
@@ -3877,12 +3880,12 @@ Test-Case '负向:服务 yaml 的 go-redis PoolSize 不是正整数时 Get-Redis
         $RepoRoot = $tempRoot
         # 前提:副本不改就该放行,且每个目标恰好一个正整数池上限。否则下面几条负向断言分不清是谁造成的失败。
         & $resetFixture
-        foreach ($target in @('login', 'db', 'player-locator', 'trade', 'guild', 'friend', 'match', 'chat', 'player-inbox')) {
+        foreach ($target in @('login', 'player-locator', 'trade', 'guild', 'friend', 'match', 'chat', 'player-inbox')) {
             $values = Get-RedisPoolMirror -Target $target
             $expectedPoolCount = if ($target -eq 'guild') { 3 } else { 1 }
             Assert-Equal -Expected $expectedPoolCount -Actual $values.Count -Because "前提:$target 的显式池数量必须与真实客户端匹配"
             if ($target -eq 'guild') {
-                Assert-Equal -Expected 'LoginRedis.PoolSize,PlayerLocatorRedis.PoolSize,RedisClient.PoolSize' `
+                Assert-Equal -Expected 'LoginRedis.PoolSizePerNode,PlayerLocatorRedis.PoolSize,RedisClient.PoolSize' `
                     -Actual (@($values.Keys | Sort-Object) -join ',') -Because 'Guild 的三池逐键绑定当前服务客户端，不能只把计数改大'
             }
             foreach ($poolSize in $values.Values) { Assert-True -Condition ($poolSize -gt 0) -Because "前提:仓库里 $target 的 PoolSize 是正整数" }
@@ -3891,15 +3894,14 @@ Test-Case '负向:服务 yaml 的 go-redis PoolSize 不是正整数时 Get-Redis
 
         foreach ($bad in @(
             @{ Why = 'login 写 0(= go-redis 缺省池)'; Target = 'login'; File = 'go/login/etc/login.yaml'; KeyPath = 'Node.RedisClient.PoolSize'; Value = '0' }
-            @{ Why = 'db 写负数'; Target = 'db'; File = 'go/db/etc/db.yaml'; KeyPath = 'ServerConfig.RedisClient.PoolSize'; Value = '-1' }
             @{ Why = 'player-locator 写小数'; Target = 'player-locator'; File = 'go/player_locator/etc/player_locator.yaml'; KeyPath = 'RedisClient.PoolSize'; Value = '20.5' }
             @{ Why = 'trade 写 0'; Target = 'trade'; File = 'go/trade/etc/trade.yaml'; KeyPath = 'SharedRedis.PoolSize'; Value = '0' }
             @{ Why = 'guild 全局池写0'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'RedisClient.PoolSize'; Value = '0' }
             @{ Why = 'guild 在线池写负数'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'PlayerLocatorRedis.PoolSize'; Value = '-1' }
-            @{ Why = 'guild 登录原件池写0'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'LoginRedis.PoolSize'; Value = '0' }
-            @{ Why = 'friend 登录原件池写负数'; Target = 'friend'; File = 'go/friend/etc/friend.yaml'; KeyPath = 'LoginRedis.PoolSize'; Value = '-1' }
-            @{ Why = 'match 登录原件池写0'; Target = 'match'; File = 'go/match/etc/match_service.yaml'; KeyPath = 'LoginRedis.PoolSize'; Value = '0' }
-            @{ Why = 'chat 登录原件池写0'; Target = 'chat'; File = 'go/chat/etc/chat.yaml'; KeyPath = 'LoginRedis.PoolSize'; Value = '0' }
+            @{ Why = 'guild 登录原件池写0'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; Value = '0' }
+            @{ Why = 'friend 登录原件池写负数'; Target = 'friend'; File = 'go/friend/etc/friend.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; Value = '-1' }
+            @{ Why = 'match 登录原件池写0'; Target = 'match'; File = 'go/match/etc/match_service.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; Value = '0' }
+            @{ Why = 'chat 登录原件池写0'; Target = 'chat'; File = 'go/chat/etc/chat.yaml'; KeyPath = 'LoginRedis.PoolSizePerNode'; Value = '0' }
             @{ Why = 'player-inbox 写 0'; Target = 'player-inbox'; File = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = 'CoreRedis.PoolSize'; Value = '0' }
         )) {
             & $resetFixture
@@ -3939,7 +3941,7 @@ Test-Case '部署写路径打印 Redis connection ledger:zone-up 的数字可按
 
     $RepoRoot = Get-RepoRoot
     $plan = Get-RedisConnectionPlan
-    $deployLedger = Get-RedisConnectionLedger -Inputs (Get-RedisConnectionLedgerInputs -RouteStoreDbFirst $true) -ZoneCount $cppByZone.Count -CppZoneProcesses $cppTotal `
+    $deployLedger = Get-RedisConnectionLedger -Inputs (Get-RedisConnectionLedgerInputs) -ZoneCount $cppByZone.Count -CppZoneProcesses $cppTotal `
         -BattleProcesses $battleDefault -RolloutExtraPodsPerDeployment $plan.RolloutExtraPodsPerDeployment -OpsReserve $plan.OpsReserve -WarnRatio $plan.WarnRatio
     $planLedger = Get-RepoRedisPlanLedger
 
@@ -4286,8 +4288,8 @@ Test-Case 'dev_tools / k8s_image 的 -ConfirmRedisCoreRestart:不给不透传,�
 $redisHaFunctionNames = @(
     'Get-RedisTopologyFor', 'Get-RedisTopologyChangeVerdict', 'Get-RedisHaLimits', 'Get-RedisHaScriptsDigest', 'Assert-RedisPasswordSentinelSafe',
     # 2026-10-19 接入补齐:zone 写路径跟随线上、WAITAOF 副本份数与拓扑同源(读脚本参数的几个按动态作用域在用例里给值)。
-    'Get-MappingRedisTopologyFor', 'Get-RedisZoneTopologyDecision', 'Get-RedisTopology', 'Get-MappingRedisTopology',
-    'Resolve-RedisTopologyFromLive', 'Get-RouteStoreWaitAOFNumReplicas', 'Get-RedisReplicasFromOrphanOrdinals',
+    'Get-OwnerEpochMintWaitAOFNumReplicas', 'Get-RedisZoneTopologyDecision', 'Get-RedisTopology',
+    'Resolve-RedisTopologyFromLive', 'Get-RedisReplicasFromOrphanOrdinals',
     # 拒绝文本按线上读数的来源写(sts / 孤儿 Pod),副本数不是 1 / 3 时不给传不进去的参数建议。
     'Format-RedisLiveShape', 'Get-RedisLiveShapeManualFix', 'Assert-RedisTopologyChangeIsSafe'
 )
@@ -4410,15 +4412,15 @@ Test-Case 'dev 基线(不传 -RedisReplicas)仍是单实例;prod 档缺省就是
 }
 
 Test-Case 'zone 写路径的 Redis 拓扑判定:没给 -RedisReplicas 跟随线上 1 / 3;显式值与线上不同、线上 0 / 2 拒绝;线上没有 sts 照本次解析' {
-    Assert-Equal -Expected 'single' -Actual (Get-MappingRedisTopologyFor -Topology (Get-RedisTopologyFor -Replicas 1)) -Because '1 = 单实例(WAITAOF 不等副本)'
-    Assert-Equal -Expected 'ha' -Actual (Get-MappingRedisTopologyFor -Topology (Get-RedisTopologyFor -Replicas 3)) -Because '3 = 高可用(WAITAOF 等 1 个副本)'
+    Assert-Equal -Expected 0 -Actual (Get-OwnerEpochMintWaitAOFNumReplicas -Topology (Get-RedisTopologyFor -Replicas 1)) -Because '1 = 单实例(WAITAOF 不等副本)'
+    Assert-Equal -Expected 1 -Actual (Get-OwnerEpochMintWaitAOFNumReplicas -Topology (Get-RedisTopologyFor -Replicas 3)) -Because '3 = 高可用(WAITAOF 等 1 个副本)'
     $cases = @(
         @{ Live = $null; Requested = 0; Resolved = 3; Expected = 'resolved'; Why = 'infra 还没部署,不替 infra-up 判断' },
         @{ Live = 3; Requested = 0; Resolved = 3; Expected = 'resolved'; Why = '线上与档位缺省一致' },
         @{ Live = 1; Requested = 1; Resolved = 1; Expected = 'resolved'; Why = '显式值与线上一致' },
         @{ Live = 1; Requested = 0; Resolved = 3; Expected = 'live'; Why = 'staging / prod 还在单实例上:没给参数就跟随线上,zone 回滚 Step 6 照常可用' },
         @{ Live = 3; Requested = 0; Resolved = 1; Expected = 'live'; Why = 'dev 档上手工切过高可用:跟随线上,不把 WAITAOF 降回 0' },
-        @{ Live = 1; Requested = 3; Resolved = 3; Expected = 'refuse'; Why = '显式 3 而线上 1:WAITAOF 写 1 没有副本可等,go/db 拒启' },
+        @{ Live = 1; Requested = 3; Resolved = 3; Expected = 'refuse'; Why = '显式 3 而线上 1:WAITAOF 写 1 没有副本可等,scene-manager 拒启' },
         @{ Live = 3; Requested = 1; Resolved = 1; Expected = 'refuse'; Why = '显式 1 而线上 3:WAITAOF 写 0,切主时静默丢已确认写入' },
         @{ Live = 2; Requested = 0; Resolved = 3; Expected = 'refuse'; Why = '线上 2 个副本不是本脚本产生的形态,不猜' },
         @{ Live = 0; Requested = 0; Resolved = 1; Expected = 'refuse'; Why = '线上 0 个副本不是本脚本产生的形态,不猜' }
@@ -4440,12 +4442,12 @@ Test-Case 'Resolve-RedisTopologyFromLive:prod 档没给参数遇到线上单实�
     try {
         $script:RedisReplicasFollowedLive = $null
         $RedisReplicas = 0
-        Assert-Equal -Expected 'ha' -Actual (Get-MappingRedisTopology) -Because '夹具前提:prod 档缺省高可用'
+        Assert-Equal -Expected 3 -Actual (Get-RedisTopology).Replicas -Because '夹具前提:prod 档缺省高可用'
         $out = (Resolve-RedisTopologyFromLive 6>&1 | Out-String)
         Assert-Match -Text $out -Pattern 'Redis topology: following live statefulset/redis replicas=1 \(profile default was 3; -RedisReplicas not given\)[^\r\n]*waitaof_replicas=0' -Because '跟随线上要打一行,带上档位缺省与 WAITAOF 副本份数'
         Assert-Equal -Expected 1 -Actual $script:RedisReplicasFollowedLive -Because '跟随的线上值记在脚本级变量里,供随后的渲染使用'
-        Assert-Equal -Expected 'single' -Actual (Get-MappingRedisTopology) -Because '跟随线上之后 data-service / scene-manager 的 WAITAOF 按单实例渲染'
-        Assert-Equal -Expected 0 -Actual (Get-RouteStoreWaitAOFNumReplicas -Topology (Get-MappingRedisTopology)) -Because '单实例没有副本可等'
+        Assert-Equal -Expected 1 -Actual (Get-RedisTopology).Replicas -Because '跟随线上之后 scene-manager 的 WAITAOF 按单实例渲染'
+        Assert-Equal -Expected 0 -Actual (Get-OwnerEpochMintWaitAOFNumReplicas -Topology (Get-RedisTopology)) -Because '单实例没有副本可等'
 
         $script:RedisReplicasFollowedLive = $null
         $RedisReplicas = 3
@@ -4461,7 +4463,7 @@ Test-Case 'Resolve-RedisTopologyFromLive:prod 档没给参数遇到线上单实�
         $stubLive = [pscustomobject]@{ Replicas = $null; Source = 'none'; Ordinals = @() }
         Resolve-RedisTopologyFromLive 6>$null
         Assert-True -Condition ($null -eq $script:RedisReplicasFollowedLive) -Because '线上没有 sts/redis 也没有孤儿 Pod 时照本次解析,不跟随'
-        Assert-Equal -Expected 'ha' -Actual (Get-MappingRedisTopology) -Because '没有跟随时仍按档位缺省'
+        Assert-Equal -Expected 3 -Actual (Get-RedisTopology).Replicas -Because '没有跟随时仍按档位缺省'
 
         # 孤儿 Pod 读数:序号连续(只剩 redis-0)时跟随并写明来源;缺号时拒绝,不说「sts/redis 有 N 个副本」,不建议传不进去的 -RedisReplicas。
         $stubLive = [pscustomobject]@{ Replicas = 1; Source = 'orphan-pods'; Ordinals = @(0) }
@@ -4613,7 +4615,7 @@ Test-Case 'Apply-Infra 的共享 Redis 顺序(AST):拓扑变更闸 → 高可用
     }
 }
 
-Test-Case '写路径门禁(AST):zone 写路径部署 zone Go 服务时先 Resolve-RedisTopologyFromLive,再打开关计划行与 Redis 总账;不经 Get-RedisTopology 之外的地方定拓扑' {
+Test-Case '写路径门禁(AST):zone 写路径部署 zone Go 服务时先 Resolve-RedisTopologyFromLive,再打 Redis 总账;不经 Get-RedisTopology 之外的地方定拓扑' {
     $gates = @($deadlineDeployAst.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.IfStatementAst] -and $_.Clauses[0].Item1.Extent.Text -match '^\$Command\s+-in\s+@\(\s*"zone-up"\s*,\s*"all-up"\s*,\s*"infra-up"\s*\)$' })
     Assert-Equal -Expected 1 -Actual $gates.Count -Because '夹具前提:恰好一个写路径门禁块'
     $gate = $gates[0]
@@ -4623,10 +4625,8 @@ Test-Case '写路径门禁(AST):zone 写路径部署 zone Go 服务时先 Resolv
     $parentIf = $resolve[0].Parent
     while ($null -ne $parentIf -and $parentIf -isnot [System.Management.Automation.Language.IfStatementAst]) { $parentIf = $parentIf.Parent }
     Assert-True -Condition ($null -ne $parentIf -and $parentIf.Clauses[0].Item1.Extent.Text -match 'Test-ZoneDbDeployed' -and $parentIf.Clauses[0].Item1.Extent.Text -match 'SkipInfra') -Because '只在 zone-up / all-up -SkipInfra 且部署 zone Go 服务(渲染 WAITAOF)时查线上'
-    foreach ($later in @('Assert-RouteSwitchPreflight', 'Write-RedisConnectionLedger')) {
-        $c = @($calls | Where-Object { $_.GetCommandName() -eq $later })
-        Assert-True -Condition ($c.Count -ge 1 -and $resolve[0].Extent.StartOffset -lt $c[0].Extent.StartOffset) -Because "跟随线上必须先于 $later(它打印 / 计算的拓扑要是跟随之后的)"
-    }
+    $ledgerCalls = @($calls | Where-Object { $_.GetCommandName() -eq 'Write-RedisConnectionLedger' })
+    Assert-True -Condition ($ledgerCalls.Count -ge 1 -and $resolve[0].Extent.StartOffset -lt $ledgerCalls[0].Extent.StartOffset) -Because '跟随线上必须先于 Write-RedisConnectionLedger(它计算的拓扑要是跟随之后的)'
     $topologyFn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Get-RedisTopology' }, $true)
     Assert-Match -Text $topologyFn.Body.Extent.Text -Pattern '\$script:RedisReplicasFollowedLive' -Because 'Get-RedisTopology 要认跟随线上记下的值'
 }
@@ -4765,7 +4765,7 @@ Test-Case 'data-service ConfigMap 只写 config.go 认的键:Regions / DevRedis 
     foreach ($key in @('Regions', 'DevRedis', 'PlayerLockTTLSec', 'GuildInternalRpc', 'GuildClockSkewMarginMs', 'GuildCheckBudgetSeconds', 'MethodTimeouts', 'PlayerStorePath', 'LoginAdminRpc')) {
         Assert-NotMatch -Text $embedded -Pattern ('(?m)^' + [regex]::Escape($key) + '\s*:') -Because "$key 已从 go/data_service 的配置里删掉"
     }
-    Assert-Match -Text $embedded -Pattern '(?m)^MappingRedis:\s*\n\s+Host: redis\.mmorpg-infra:6379\s*$' -Because 'MappingRedis 仍指向共享 Redis'
+    Assert-Match -Text $embedded -Pattern '(?m)^NameCacheRedis:\s*\n\s+Host: redis\.mmorpg-infra:6379\s*$' -Because 'NameCacheRedis 指向共享 Redis'
 }
 
 Test-Case 'go_svc_image.ps1 与 k8s_deploy.ps1 的 guild 镜像名一致(否则发布的镜像与部署拉的镜像对不上)' {
@@ -4929,7 +4929,7 @@ $spectateEnv = @{} + $BattleTestEnv
 $spectateEnv['MMORPG_SPECTATE_TOKEN_SECRET'] = $SpectateTestSecret
 $spectateEnv['MMORPG_MATCH_OPS_CALLER_SECRET'] = $SpectateOpsTestSecret
 $spectateZoneRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc')) -Env $spectateEnv
-# 打开全局匹配的 match ConfigMap 要真实机房号与 ≥3 副本的 Kafka(Get-GlobalMatchDeploymentSettings / Assert-GlobalMatchKafkaTopology),否则生成期就拒绝。
+# match ConfigMap 的机房号与 Kafka 副本数按生产形态给:staging/prod 缺了在生成期拒绝(Get-GlobalMatchDeploymentSettings / Assert-GlobalMatchKafkaTopology)。
 $spectateInfraRun = Invoke-DeployDryRun -Arguments ($guildInfraArgs + @('-PhysicalRegion', '7', '-KafkaBrokers', '3')) -Env $spectateEnv
 
 Test-Case '观战 topic 的基名与广播分区数以 C++ 常量为准(node_command_topic.h,gate 与 battle 按它寻址)' {
@@ -5015,13 +5015,13 @@ Test-Case 'node-config 写 SpectateTokenSecret(gate 验签):值来自 MMORPG_SPE
     Assert-True -Condition (-not $battle.Scalars.Contains($key)) -Because 'battle 不验观战凭证,不该拿到这把密钥'
 }
 
-Test-Case 'match ConfigMap 的 Spectate 段:RelayEnabled 按单 Kafka 集群写 true,三项镜像服务 yaml,两把密钥来自注入,顶层排队票据 TTL 不受影响' {
+Test-Case 'match ConfigMap 的 Spectate 段:RelayEnabled 按单 Kafka 集群写 true,三项镜像服务 yaml,两把密钥来自注入' {
     Assert-Equal -Expected 0 -Actual $spectateInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($spectateInfraRun.Output)"
     $cm = Select-ManifestByName -Output $spectateInfraRun.Output -Name 'go-svc-match-config'
     Assert-True -Condition ($null -ne $cm) -Because 'infra-up 产物里应当有 go-svc-match-config'
     $flat = ConvertTo-UnprefixedScalars -Scalars (ConvertTo-FlatManifest -Block $cm).Scalars -Prefix 'data.match_service.yaml.'
     Assert-Equal -Expected 'true' -Actual ([string]$flat['Spectate.RelayEnabled']) -Because 'K8s 是单 Kafka 集群形态(Q6)'
-    foreach ($key in @('Spectate.BroadcastMaxConcurrent', 'Spectate.BroadcastAutoGateThreshold', 'Spectate.TicketTTLSeconds', 'TicketTTLSeconds')) {
+    foreach ($key in @('Spectate.BroadcastMaxConcurrent', 'Spectate.BroadcastAutoGateThreshold', 'Spectate.TicketTTLSeconds')) {
         Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath $key) -Actual ([string]$flat[$key]) -Because "ConfigMap 的 $key 必须等于服务 yaml(生成器不得自带常数)"
     }
     Assert-True -Condition ([string]$flat['Spectate.TicketSecret'] -ceq $SpectateTestSecret) -Because 'match 签发用的密钥必须与 gate 验签的是同一个注入值'
@@ -6725,7 +6725,8 @@ foreach ($s5bVar in @('RepoRoot', 'KafkaBrokers', 'ReleaseProfile', 'OpsProfile'
 $S1FunctionNames = @(
     # 依赖(与 k8s_deploy.ps1 里同一份函数体)。
     'Get-AuthoritativeScalar', 'Get-ManifestDeploymentReplicas',
-    'Get-RedisPoolMirror', 'Get-RedisMaxClientsFromManifest', 'Get-RedisConnectionLedgerInputs'
+    'Get-RedisPoolMirror', 'Get-RedisMaxClientsFromManifest', 'Get-RedisConnectionLedgerInputs',
+    'Get-RedisPlayerPoolMirror'
 )
 foreach ($s1FnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($S1FunctionNames -contains $s1FnAst.Name) {
@@ -6736,32 +6737,30 @@ foreach ($s1FnName in $S1FunctionNames) {
     if (-not (Test-Path "Function:$s1FnName")) { throw "k8s_deploy.ps1 缺少函数 ${s1FnName}(Redis 总账被删了?后续断言无意义)" }
 }
 
-Test-Case 'zone-up DryRun:db ConfigMap 只写 go/db/internal/config 认的段(PlayerStore、Database、RedisClient、MethodTimeouts、Placement),Kafka / Fencing / WAITAOF 都不再写' {
+Test-Case 'zone-up DryRun:db ConfigMap 只写 go/db/internal/config 认的段(PlayerStore、Database、MethodTimeouts、Placement),Kafka / Fencing / Redis 都不再写' {
     $block = Select-ManifestByName -Output $devOut -Name 'go-svc-db-config'
     $flat = ConvertTo-FlatManifest -Block $block
     $embedded = Get-ConfigMapEmbeddedText -Block $block -FileName 'db.yaml'
     Assert-Match -Text $embedded -Pattern '(?m)^  PlayerStore: \{\}\s*$' -Because 'ServerConfig.PlayerStore 段与 go/db/etc/db.yaml 同形;payload 预算不写 = 代码默认值'
-    foreach ($keyPath in @('ServerConfig.Fencing', 'ServerConfig.Kafka', 'ServerConfig.RedisClient.WaitAOFNumLocal', 'ServerConfig.RedisClient.WaitAOFNumReplicas', 'ServerConfig.RedisClient.WaitAOFTimeoutMs', 'ServerConfig.PlayerStore.Path')) {
+    foreach ($keyPath in @('ServerConfig.Fencing', 'ServerConfig.Kafka', 'ServerConfig.RedisClient', 'ServerConfig.PlayerStore.Path', 'Placement.Required', 'Placement.RequireRouteReady', 'Placement.Redis')) {
         $found = @($flat.Scalars.Keys | Where-Object { $_ -eq "data.db.yaml.$keyPath" -or $_ -like "data.db.yaml.$keyPath.*" })
         Assert-Equal -Expected 0 -Actual $found.Count -Because "$keyPath 已从 go/db 的配置里删掉(实际出现:$($found -join ', '))"
     }
-    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/db/etc/db.yaml' -KeyPath 'Placement.Required') -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.db.yaml.Placement.Required') -Because 'Placement.Required 是启动门禁,与服务 yaml 同值'
     $expected = @(Get-ZrpcMethodTimeouts -Text ([IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/db/etc/db.yaml'))) | ForEach-Object { "$($_.FullMethod)=$($_.Timeout)" }) -join ';'
     $actual = @(Get-ZrpcMethodTimeouts -Text $embedded | ForEach-Object { "$($_.FullMethod)=$($_.Timeout)" }) -join ';'
     Assert-True -Condition ($expected.Length -gt 0) -Because '夹具前提:go/db/etc/db.yaml 里有存盘接口的 MethodTimeouts'
     Assert-Equal -Expected $expected -Actual $actual -Because '存盘接口的服务端超时必须与服务 yaml 一致,否则被 go-zero 默认 2000ms 截断、结果未知'
 }
 
-Test-Case 'Redis 连接总账:db 行只有 ServerConfig.RedisClient 的主池,login 行没有 Pub/Sub,data-service 行没有显式池' {
+Test-Case 'Redis 连接总账:没有 db 行,login 行没有 Pub/Sub,data-service 行只有 NameCacheRedis 的缺省池' {
     $RepoRoot = Get-RepoRoot
     $inputs = Get-RedisConnectionLedgerInputs
-    $dbRow = @($inputs.Clients | Where-Object { $_.Name -eq 'db' })
-    Assert-Equal -Expected 1 -Actual $dbRow.Count -Because 'Redis 连接总账里 db 只能有一行'
-    Assert-Equal -Expected 'zone/0/0/0/db' -Actual ('{0}/{1}/{2}/{3}/{4}' -f $dbRow[0].Scope, $dbRow[0].DefaultPools, $dbRow[0].PubSub, $dbRow[0].Fixed, $dbRow[0].PoolMirror) -Because 'WAITAOF 专用客户端随 Kafka 消费者删掉了;db 行按 zone 计、只有主池'
+    Assert-Equal -Expected 0 -Actual @($inputs.Clients | Where-Object { $_.Name -eq 'db' }).Count -Because 'go/db 不连 Redis'
     $loginRow = @($inputs.Clients | Where-Object { $_.Name -eq 'login' })
     Assert-Equal -Expected 0 -Actual $loginRow[0].PubSub -Because 'task:result 频道已删,login 不再订阅'
     $dsRow = @($inputs.Clients | Where-Object { $_.Name -eq 'data-service' })
-    Assert-Equal -Expected 0 -Actual $dsRow[0].ConfiguredPoolConns -Because 'DevRedis 已删,data-service 只剩 go-zero 的 MappingRedis 与 db_first 的专用池'
+    Assert-Equal -Expected 1 -Actual $dsRow.Count -Because '客户端表里 data-service 只能有一行'
+    Assert-Equal -Expected '0/1/0' -Actual ('{0}/{1}/{2}' -f $dsRow[0].ConfiguredPoolConns, $dsRow[0].DefaultPools, $dsRow[0].Fixed) -Because 'data-service 只剩 go-zero 的 NameCacheRedis 一个缺省池,路由发布与对账的专用池已删'
 }
 
 Test-Case 'G3b Redis 连接总账:scene-manager 行 Fixed == go/scene_manager/internal/svc/owner_epoch_mint.go 的 ownerEpochMintPoolSize(铸造专用客户端,不占 go-zero 缺省池)' {
@@ -6789,455 +6788,227 @@ Test-Case 'G3b zone-up DryRun:scene-manager ConfigMap 的 OwnerEpochMint.WaitAOF
     Assert-Equal -Expected '0' -Actual (Get-EtcValue -RelativePath $yamlPath -KeyPath 'OwnerEpochMint.WaitAOFNumReplicas') -Because "$yamlPath 的 WaitAOFNumReplicas 给本机 compose 单实例用,保持 0(写 1 本机启动探针等不到副本而拒启)"
     Assert-Equal -Expected '0' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.OwnerEpochMint.WaitAOFNumReplicas') -Because 'dev 档缺省单实例(redis.yaml),铸造的 WAITAOF 不等副本'
     $prodFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name 'go-svc-scene-manager-config')
-    Assert-Equal -Expected '1' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.scene_manager_service.yaml.OwnerEpochMint.WaitAOFNumReplicas') -Because 'prod 档缺省高可用(redis-ha.yaml),铸造的 WAITAOF 等 1 个副本(与 data-service 同源)'
+    Assert-Equal -Expected '1' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.scene_manager_service.yaml.OwnerEpochMint.WaitAOFNumReplicas') -Because 'prod 档缺省高可用(redis-ha.yaml),铸造的 WAITAOF 等 1 个副本'
 }
 
 # ─────────────────────────────────────────────────────────────────
-# D1 玩家归属与落点映射持久化的部署载体(第 1b-3 批:docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §7、§13.4)
+# 玩家归属直读全局库之后的部署形状(docs/design/player-route-mapping-durability-proposal.md §15.9)
 # ─────────────────────────────────────────────────────────────────
-# 缺省产物用基线 $devOut / $prodRun / $peakAllUpRun;开关打开的产物另起 DryRun(all-up 多 zone、infra-up 带全局 Go 服务);
-# 组合门禁的负向用例断错误文本;粘滞核对与读集群按 AST 抽出,给 Invoke-ClientEntryKubectl 替身(只在用例函数里定义,不影响别的节)。
-# 全部不碰任何集群。
-$routeSwitchFunctionNames = @(
-    'Get-RouteStoreWaitAOFNumReplicas', 'Get-RouteStoreDeploySettings', 'Get-RouteSwitchParamErrors', 'ConvertFrom-RouteSwitchLiveYaml',
-    'Get-RouteSwitchDrift', 'Get-RouteSwitchKeepArgs', 'Read-LiveRouteSwitchFacts', 'Assert-RouteSwitchClusterState',
-    'Get-AuthoritativeScalar', 'Get-ZoneNamespace', 'Get-RedisConnectionPlan', 'Get-MysqlConnectionPlan', 'Get-RedisConnectionLedgerInputs'
-)
-foreach ($routeSwitchFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
-    if ($routeSwitchFunctionNames -contains $routeSwitchFnAst.Name) {
-        Set-Item -Path "Function:script:$($routeSwitchFnAst.Name)" -Value $routeSwitchFnAst.Body.GetScriptBlock()
+# 路由只在全局库 player_route 一份,没有可切换的模式,部署脚本不再有开关与粘滞核对。
+
+Test-Case '路由开关已删:参数块里没有,给了就在参数绑定处失败,早于任何写操作;粘滞核对与 WAITAOF 渲染的旧函数都不在了' {
+    $paramNames = @($deadlineDeployAst.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+    foreach ($retired in @('RouteStoreMode', 'RouteReconcileArm', 'RouteReadRequiresReady', 'DbPlacementRequireRouteReady', 'ConfirmRouteSwitchChange')) {
+        Assert-True -Condition ($paramNames -notcontains $retired) -Because "-$retired 已删:路由只在全局库,没有可切换的模式"
+    }
+    $run = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-RouteStoreMode', 'db_first'))
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "已删的参数不能被静默接受。输出: $($run.Output)"
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '参数绑定失败先于任何写操作'
+    $functionNames = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) | ForEach-Object { $_.Name })
+    foreach ($retired in @('Assert-RouteSwitchPreflight', 'Assert-RouteSwitchClusterState', 'Read-LiveRouteSwitchFacts', 'Get-RouteSwitchParamErrors',
+            'Get-RouteStoreDeploySettings', 'Get-RouteStoreWaitAOFNumReplicas', 'Get-MappingRedisTopology', 'Get-MappingRedisTopologyFor')) {
+        Assert-True -Condition ($functionNames -notcontains $retired) -Because "$retired 已随路由开关删除"
     }
 }
-foreach ($routeSwitchFnName in $routeSwitchFunctionNames) {
-    if (-not (Test-Path "Function:$routeSwitchFnName")) { throw "k8s_deploy.ps1 缺少函数 ${routeSwitchFnName}(D1 部署载体被删了?后续断言无意义)" }
-}
 
-# 全部开关打开(Mode 故意写成大小写混排:参数绑定后必须规范成 data_service 认的小写 db_first)。
-$RouteSwitchOnArgs = @('-RouteStoreMode', 'DB_First', '-RouteReconcileArm', '-RouteReadRequiresReady', '-DbPlacementRequireRouteReady')
-$routeAllUpOnRun = Invoke-DeployDryRun -Arguments ($PeakAllUpArgs + $RouteSwitchOnArgs) -Env $ProdEnv
-
-# DryRun 产物里某个名字的 ConfigMap 全部拍平(all-up 每个 zone 一份;Select-ManifestByName 只取第一块)。
-function Get-RouteSwitchConfigMapFlats {
-    param([Parameter(Mandatory = $true)][string]$Output, [Parameter(Mandatory = $true)][string]$Name)
-    return @(Get-ManifestBlocks -Output $Output | Where-Object { $_ -match '(?m)^kind: ConfigMap\s*$' -and $_ -match ('(?m)^  name:\s*' + [regex]::Escape($Name) + '\s*$') } |
-        ForEach-Object { ConvertTo-FlatManifest -Block $_ })
-}
-
-# 写路径打印的 Redis 总账一行拆成数字(部署那一份的 zones / steady / peak,与规划那一份的 peak)。
-function Get-RouteSwitchRedisLedgerNumbers {
-    param([Parameter(Mandatory = $true)][string]$Output, [Parameter(Mandatory = $true)][string]$Label)
-    $lines = @($Output -split "`r?`n" | Where-Object { $_ -match '^\s*Redis connection ledger: zones=' })
-    if ($lines.Count -ne 1) { throw "${Label}:应当恰好一行 Redis connection ledger(实际 $($lines.Count) 行)" }
-    $m = [regex]::Match([string]$lines[0], 'zones=(?<z>\d+) steady=(?<s>\d+) peak=(?<p>\d+) .*; plan zones=\d+ peak=(?<pp>\d+) ')
-    if (-not $m.Success) { throw "${Label}:Redis connection ledger 一行认不出:$($lines[0])" }
-    return [pscustomobject]@{ Zones = [int]$m.Groups['z'].Value; Steady = [int]$m.Groups['s'].Value; Peak = [int]$m.Groups['p'].Value; PlanPeak = [int]$m.Groups['pp'].Value }
-}
-
-Test-Case 'D1 1b-3 缺省产物(dev / prod):RouteStore 段 db_first、read/Arm true、WaitAOF 1 / 0 / 服务 yaml;Reconcile 段只写 ArmReadyMarker;FenceShards 不再写;db Placement.RequireRouteReady true' {
-    $waitTimeout = Get-EtcValue -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath 'RouteStore.WaitAOFTimeoutMs'
-    # WaitAOFNumReplicas 按共享 Redis 形态:dev 档缺省单实例 0,prod 档缺省高可用 1(2026-10-19 redis-ha 接入)。
-    foreach ($case in @(@{ Label = 'dev'; Output = $devOut; Replicas = '0' }, @{ Label = 'prod'; Output = $prodRun.Output; Replicas = '1' })) {
-        $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Output -Name 'go-svc-data-service-config')
-        $p = 'data.data_service.yaml.RouteStore.'
-        Assert-Equal -Expected 'db_first' -Actual (Get-FlatValue -Flat $flat -KeyPath "${p}Mode") -Because "$($case.Label):不带开关即强SQL默认"
-        Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath "${p}ReadRequiresReady") -Because "$($case.Label):读方门禁缺省开"
-        Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath "${p}Reconcile.ArmReadyMarker") -Because "$($case.Label):就绪标记缺省挂"
-        $reconcileKeys = @(Get-FlatSubtreeKeys -Flat $flat -Path "${p}Reconcile" | Where-Object { $_ -cne "${p}Reconcile" })
-        Assert-Equal -Expected "${p}Reconcile.ArmReadyMarker" -Actual ($reconcileKeys -join ',') -Because "$($case.Label):Reconcile 段只写 ArmReadyMarker,其余取代码缺省(RedisPoolSize 4 计入 Redis 总账)"
-        Assert-True -Condition (-not $flat.Scalars.Contains("${p}FenceShards")) -Because "$($case.Label):RouteStore.FenceShards 已从 go/data_service 的配置里删掉"
-        Assert-Equal -Expected 'tidb.invalid:4000' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.SnapshotMySQL.Host') -Because '同一明确虚构TiDB入口，不回落zone MySQL'
-        Assert-Equal -Expected 'tidb' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.SnapshotMySQL.Backend') -Because '部署缺省 tidb 档，实际身份由服务启动核验'
-        Assert-Equal -Expected '1' -Actual (Get-FlatValue -Flat $flat -KeyPath "${p}WaitAOFNumLocal") -Because "$($case.Label):redis.yaml 开着 AOF,本地落盘确认 1"
-        Assert-Equal -Expected $case.Replicas -Actual (Get-FlatValue -Flat $flat -KeyPath "${p}WaitAOFNumReplicas") -Because "$($case.Label):单实例 redis.yaml 写 0,高可用 redis-ha.yaml 写 1"
-        Assert-Equal -Expected $waitTimeout -Actual (Get-FlatValue -Flat $flat -KeyPath "${p}WaitAOFTimeoutMs") -Because "$($case.Label):WAITAOF 超时镜像服务 yaml"
-        $dbFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Output -Name 'go-svc-db-config')
-        Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $dbFlat -KeyPath 'data.db.yaml.Placement.RequireRouteReady') -Because "$($case.Label):go/db 读方门禁缺省开"
-    }
-    Assert-Match -Text $devOut -Pattern ('Route switches: mode=db_first arm=true read_requires_ready=true db_require_route_ready=true backend=tidb-required waitaof=1/0/' + $waitTimeout + 'ms redis_topology=single ') -Because '写路径入口打一行开关计划'
-    Assert-Match -Text $prodRun.Output -Pattern ('Route switches: [^\r\n]*waitaof=1/1/' + $waitTimeout + 'ms redis_topology=ha ') -Because 'prod 档缺省高可用,开关计划行的拓扑与副本份数随之变'
-    Assert-Match -Text $devOut -Pattern '\[dry-run\] Skipping D1 route switch sticky check' -Because 'DryRun 不读集群,粘滞核对只打一行说明'
-}
-
-Test-Case 'D1 1b-3 Arm 全服单值:all-up 多 zone 时每个 zone 的 data-service ConfigMap 取值相同(带开关全部 db_first / true,不带全部缺省);db 同理;-RouteStoreMode 规范成小写' {
-    Assert-True -Condition ($PeakAllUpArgs -contains '-DryRun') -Because '夹具前提:all-up 必须是 DryRun'
-    Assert-Equal -Expected 0 -Actual $routeAllUpOnRun.ExitCode -Because "开关全开的 all-up DryRun 应当成功(组合合法)。输出: $($routeAllUpOnRun.Output)"
-    $expectedZones = @((Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/zones.sample.json') -Raw | ConvertFrom-Json).zones).Count
-    Assert-True -Condition ($expectedZones -ge 2) -Because '夹具前提:zones.sample.json 至少两个 zone,才谈得上「全部 zone 同一取值」'
-    foreach ($case in @(
-            @{ Label = '开关全开'; Output = $routeAllUpOnRun.Output; Mode = 'db_first'; Bool = 'true' }
-            @{ Label = '缺省'; Output = $peakAllUpRun.Output; Mode = 'db_first'; Bool = 'true' }
-        )) {
-        $dsFlats = @(Get-RouteSwitchConfigMapFlats -Output $case.Output -Name 'go-svc-data-service-config')
-        Assert-Equal -Expected $expectedZones -Actual $dsFlats.Count -Because "$($case.Label):每个 zone 一份 go-svc-data-service-config"
-        $tuples = @($dsFlats | ForEach-Object {
-                '{0}/{1}/{2}' -f (Get-FlatValue -Flat $_ -KeyPath 'data.data_service.yaml.RouteStore.Mode'),
-                (Get-FlatValue -Flat $_ -KeyPath 'data.data_service.yaml.RouteStore.Reconcile.ArmReadyMarker'),
-                (Get-FlatValue -Flat $_ -KeyPath 'data.data_service.yaml.RouteStore.ReadRequiresReady')
-            } | Sort-Object -Unique)
-        Assert-Equal -Expected 1 -Actual $tuples.Count -Because "$($case.Label):全部 zone 的 Mode / Arm / ReadRequiresReady 必须是同一组值(实际 $($tuples -join ' | '))"
-        Assert-Equal -Expected "$($case.Mode)/$($case.Bool)/$($case.Bool)" -Actual $tuples[0] -Because "$($case.Label):取值来自参数(Mode 规范成小写)"
-        $dbFlats = @(Get-RouteSwitchConfigMapFlats -Output $case.Output -Name 'go-svc-db-config')
-        Assert-Equal -Expected $expectedZones -Actual $dbFlats.Count -Because "$($case.Label):每个 zone 一份 go-svc-db-config"
-        $dbValues = @($dbFlats | ForEach-Object { Get-FlatValue -Flat $_ -KeyPath 'data.db.yaml.Placement.RequireRouteReady' } | Sort-Object -Unique)
-        Assert-Equal -Expected $case.Bool -Actual ($dbValues -join ',') -Because "$($case.Label):全部 zone 的 Placement.RequireRouteReady 同一取值"
-    }
-    Assert-Match -Text $routeAllUpOnRun.Output -Pattern 'Route switches: mode=db_first arm=true read_requires_ready=true db_require_route_ready=true ' -Because '计划行打出规范化之后的取值'
-    Assert-NotMatch -Text $routeAllUpOnRun.Output -Pattern '\[RouteSwitch\]NoEffect:-RouteStoreMode' -Because '本次部署 zone 的 Go 服务,这几个开关有效果'
-}
-
-Test-Case 'D1 1b-3 Redis 连接总账在 db_first 时包含 leader 与 W1 发布的独立池:data-service 行 Fixed redis 0 / db_first 24;all-up 部署行 steady 多 zones × 副本 × 4、峰值再多滚动余量;规划行恒按 db_first 计(与 MySQL 规划档同源)' {
-    $RepoRoot = Get-RepoRoot
-    $redisRows = @((Get-RedisConnectionLedgerInputs -RouteStoreDbFirst $false).Clients)
-    $dbFirstRows = @((Get-RedisConnectionLedgerInputs -RouteStoreDbFirst $true).Clients)
-    $redisDs = @($redisRows | Where-Object { $_.Name -eq 'data-service' })
-    $dbFirstDs = @($dbFirstRows | Where-Object { $_.Name -eq 'data-service' })
-    Assert-Equal -Expected 1 -Actual $dbFirstDs.Count -Because '客户端表里 data-service 只能有一行'
-    Assert-Equal -Expected 0 -Actual $redisDs[0].Fixed -Because '纯历史redis规划输入不装配leader，不能作为真实up默认'
-    Assert-Equal -Expected 24 -Actual $dbFirstDs[0].Fixed -Because 'db_first 时计 leader 的独立 go-redis 池(Reconcile.RedisPoolSize 代码缺省 4)与 W1 发布的专用池(PublishRedisPoolSize 代码缺省 20);ConfigMap 都不写它们'
-    $publishKey = Get-YamlScalar -Path (Join-Path (Get-RepoRoot) 'go/data_service/etc/data_service.yaml') -KeyPath 'RouteStore.PublishRedisPoolSize'
-    if ($publishKey.Found) {
-        Assert-Equal -Expected '20' -Actual ([string]$publishKey.Value) -Because '服务 yaml 写了 PublishRedisPoolSize 时必须等于总账按的代码缺省 20(ConfigMap 不镜像它)'
-    }
-    foreach ($row in $redisRows) {
-        if ($row.Name -eq 'data-service') { continue }
-        $other = @($dbFirstRows | Where-Object { $_.Name -eq $row.Name })
-        Assert-Equal -Expected ('{0}/{1}/{2}' -f $row.ConfiguredPoolConns, $row.Fixed, $row.DefaultPools) -Actual ('{0}/{1}/{2}' -f $other[0].ConfiguredPoolConns, $other[0].Fixed, $other[0].DefaultPools) -Because "$($row.Name) 行与 RouteStore.Mode 无关"
-    }
-    $poolKey = Get-YamlScalar -Path (Join-Path (Get-RepoRoot) 'go/data_service/etc/data_service.yaml') -KeyPath 'RouteStore.Reconcile.RedisPoolSize'
-    if ($poolKey.Found) {
-        Assert-Equal -Expected '4' -Actual ([string]$poolKey.Value) -Because '服务 yaml 写了 Reconcile.RedisPoolSize 时必须等于总账按的代码缺省 4(ConfigMap 不镜像它)'
-    }
-    Assert-Equal -Expected 'True/True' -Actual ('{0}/{1}' -f [bool](Get-RedisConnectionPlan).RouteStoreDbFirst, [bool](Get-MysqlConnectionPlan).RouteStoreDbFirst) -Because 'Redis 规划档按 db_first 计,取自 MySQL 规划档同一个 RouteStoreDbFirst'
-
-    $off = Get-RouteSwitchRedisLedgerNumbers -Output $peakAllUpRun.Output -Label '缺省 all-up'
-    $on = Get-RouteSwitchRedisLedgerNumbers -Output $routeAllUpOnRun.Output -Label 'db_first all-up'
-    $dsReplicas = [int]$redisDs[0].Replicas
-    $rollout = [int](Get-RedisConnectionPlan).RolloutExtraPodsPerDeployment
-    Assert-Equal -Expected $off.Zones -Actual $on.Zones -Because '两次 all-up 数的是同一批 zone'
-    Assert-Equal -Expected 0 -Actual ($on.Steady - $off.Steady) -Because '缺省与显式db_first均含leader池，稳态总账必须相同'
-    Assert-Equal -Expected 0 -Actual ($on.Peak - $off.Peak) -Because '缺省与显式强SQL峰值均含相同滚动余量'
-    Assert-Equal -Expected $off.PlanPeak -Actual $on.PlanPeak -Because '规划档与本次参数无关(恒按 db_first 计)'
-}
-
-Test-Case 'D1 1b-3 组合门禁:Get-RouteSwitchParamErrors 逐项;DryRun 下 Arm 配 redis 在任何 kubectl 写操作之前拒绝并点名' {
-    foreach ($case in @(
-            @{ Mode = 'redis'; Arm = $false; Ready = $false; Db = $false; Count = 0; Pattern = '' }
-            @{ Mode = 'db_first'; Arm = $false; Ready = $false; Db = $false; Count = 0; Pattern = '' }
-            @{ Mode = 'db_first'; Arm = $true; Ready = $false; Db = $false; Count = 0; Pattern = '' }
-            @{ Mode = 'db_first'; Arm = $true; Ready = $true; Db = $true; Count = 0; Pattern = '' }
-            @{ Mode = 'redis'; Arm = $true; Ready = $false; Db = $false; Count = 1; Pattern = '-RouteReconcileArm 要求 -RouteStoreMode db_first' }
-            @{ Mode = 'redis'; Arm = $false; Ready = $false; Db = $true; Count = 2; Pattern = '-DbPlacementRequireRouteReady 要求 -RouteStoreMode db_first[\s\S]*-DbPlacementRequireRouteReady 要求同时给 -RouteReconcileArm' }
-            @{ Mode = 'db_first'; Arm = $false; Ready = $true; Db = $false; Count = 1; Pattern = '-RouteReadRequiresReady 要求同时给 -RouteReconcileArm' }
-            @{ Mode = 'redis'; Arm = $true; Ready = $true; Db = $true; Count = 1; Pattern = '-RouteReconcileArm / -RouteReadRequiresReady / -DbPlacementRequireRouteReady 要求 -RouteStoreMode db_first' }
-        )) {
-        $errors = @(Get-RouteSwitchParamErrors -Mode $case.Mode -ArmReadyMarker $case.Arm -ReadRequiresReady $case.Ready -DbRequireRouteReady $case.Db)
-        $label = "Mode=$($case.Mode) Arm=$($case.Arm) Ready=$($case.Ready) Db=$($case.Db)"
-        Assert-Equal -Expected $case.Count -Actual $errors.Count -Because "${label}:错误条数($($errors -join ' | '))"
-        if ($case.Pattern) { Assert-Match -Text ($errors -join "`n") -Pattern $case.Pattern -Because "${label}:点名哪个开关、缺什么" }
-    }
-    $run = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-RouteStoreMode', 'redis'))
-    Assert-True -Condition ($run.ExitCode -ne 0) -Because "Arm 配 redis 模式必须拒绝(data_service 会拒启)。输出: $($run.Output)"
-    Assert-Match -Text $run.Output -Pattern 'D1 映射开关的参数组合不合法,未做任何写操作' -Because '拒绝来自写路径入口的 Assert-RouteSwitchPreflight'
-    Assert-Match -Text $run.Output -Pattern '要求 -RouteStoreMode db_first' -Because '错误点名不安全模式'
-    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '组合门禁先于任何写操作'
-    $calls = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Assert-RouteSwitchPreflight' }, $true))
-    Assert-Equal -Expected 1 -Actual $calls.Count -Because '整个脚本只在写路径门禁块里调用一次 Assert-RouteSwitchPreflight'
-    $commandSwitches = @($deadlineDeployAst.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.SwitchStatementAst] -and $_.Condition.Extent.Text -match '^\(?\s*\$Command\s*\)?$' })
-    Assert-True -Condition ($commandSwitches.Count -eq 1 -and $calls[0].Extent.StartOffset -lt $commandSwitches[0].Extent.StartOffset) -Because 'Assert-RouteSwitchPreflight 必须先于 switch ($Command)(写操作都在它的分支里)'
-}
-
-Test-Case 'D1 1b-3 mapping Redis 拓扑:与 Apply-Infra 选清单同源(Get-RedisTopology),不另存常量;single → WaitAOFNumReplicas 0,ha → 1,其余 throw' {
-    # 2026-10-19 redis-ha 接入:以前的 $script:MappingRedisTopology 常量删掉,改由 Get-MappingRedisTopology 每次从 Get-RedisTopology 现取。
-    $topologyAssign = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:MappingRedisTopology' }, $true))
-    Assert-Equal -Expected 0 -Actual $topologyAssign.Count -Because '不得再有 $script:MappingRedisTopology 常量:拓扑只从 Get-RedisTopology 推出,与 Apply-Infra 选清单同一处'
-    $mappingFn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Get-MappingRedisTopology' }, $true)
-    Assert-True -Condition ($null -ne $mappingFn -and $mappingFn.Body.Extent.Text -match 'Get-RedisTopology\b') -Because 'Get-MappingRedisTopology 必须从 Get-RedisTopology 推出'
+Test-Case '共享 Redis 拓扑:Apply-Infra 选清单与 scene-manager 的 WAITAOF 同一个来源(Get-RedisTopology),不另存常量' {
     # 只看 `=` 赋值(初值表);`+=` 追加的是 loki.yaml 这类条件项,与 Redis 拓扑无关。
     $infraAssign = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$infraManifests' -and $a.Operator -eq [System.Management.Automation.Language.TokenKind]::Equals }, $true))
     Assert-Equal -Expected 1 -Actual $infraAssign.Count -Because 'Apply-Infra 里 $infraManifests 的初值表只能有一处'
     $manifests = $infraAssign[0].Right.Extent.Text
     Assert-True -Condition ($manifests -match '\$redisTopology\.Manifest' -and $manifests -notmatch 'redis(-ha)?\.yaml') -Because "Apply-Infra 的共享 Redis 清单只能取自 `$redisTopology.Manifest(实际 $manifests)"
     $applyInfra = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Apply-Infra' }, $true)
-    Assert-Match -Text $applyInfra.Body.Extent.Text -Pattern '\$redisTopology\s*=\s*Get-RedisTopology\b' -Because 'Apply-Infra 的拓扑与 WAITAOF 渲染同一个来源'
-    Assert-Equal -Expected 0 -Actual (Get-RouteStoreWaitAOFNumReplicas -Topology 'single') -Because '单实例没有副本可等'
-    Assert-Equal -Expected 1 -Actual (Get-RouteStoreWaitAOFNumReplicas -Topology 'ha') -Because 'redis-ha 等一个副本落盘(哨兵切主时被提升的副本上要有这次写)'
-    $message = ''
-    try { Get-RouteStoreWaitAOFNumReplicas -Topology 'Single' | Out-Null } catch { $message = $_.Exception.Message }
-    Assert-Match -Text $message -Pattern '不是 single / ha' -Because '拓扑名区分大小写,认不出就拒绝渲染'
-    $RepoRoot = Get-RepoRoot
-    $ha = Get-RouteStoreDeploySettings -Mode 'db_first' -ArmReadyMarker $true -ReadRequiresReady $false -Topology 'ha'
-    Assert-Equal -Expected 'db_first/true/false/1/1' -Actual ('{0}/{1}/{2}/{3}/{4}' -f $ha.Mode, $ha.ArmReadyMarker, $ha.ReadRequiresReady, $ha.WaitAOFNumLocal, $ha.WaitAOFNumReplicas) -Because 'Get-RouteStoreDeploySettings 原样带出开关并按拓扑取副本份数'
-    $message = ''
-    try { Get-RouteStoreDeploySettings -Mode 'DB_FIRST' -ArmReadyMarker $false -ReadRequiresReady $false -Topology 'single' | Out-Null } catch { $message = $_.Exception.Message }
-    Assert-Match -Text $message -Pattern "RouteStore\.Mode 'DB_FIRST' 不是 redis / db_first" -Because 'Mode 区分大小写(data_service 同样区分),没规范化就拒绝渲染'
+    Assert-Match -Text $applyInfra.Body.Extent.Text -Pattern '\$redisTopology\s*=\s*Get-RedisTopology\b' -Because 'Apply-Infra 的拓扑只从 Get-RedisTopology 取'
+    $generator = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'New-GoSvcConfigMapYaml' }, $true)
+    Assert-Match -Text $generator.Body.Extent.Text -Pattern ([regex]::Escape('Get-OwnerEpochMintWaitAOFNumReplicas -Topology (Get-RedisTopology)')) -Because 'scene-manager 的 WAITAOF 副本份数每次现取,zone 写路径跟随线上之后的渲染才跟着变'
 }
 
-Test-Case 'D1 1b-3 guild:go/guild 已删合服标记段,ConfigMap 不再写 MergeMarkerRedis / RequireRouteReady;zone 级开关在 infra-up 上告警无效果' {
+Test-Case 'guild:go/guild 已删合服标记段,ConfigMap 不再写 MergeMarkerRedis / RequireRouteReady' {
     $infraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test')
     Assert-True -Condition (($infraArgs -contains '-DryRun') -and -not ($infraArgs -contains '-SkipGoSvc')) -Because '夹具前提:infra-up 仍是 DryRun,且部署全局 Go 服务'
-    $onRun = Invoke-DeployDryRun -Arguments ($infraArgs + @('-RouteStoreMode', 'db_first', '-RouteReconcileArm')) -Env $BattleTestEnv
-    Assert-Equal -Expected 0 -Actual $onRun.ExitCode -Because "infra-up DryRun 应当成功。输出: $($onRun.Output)"
+    $run = Invoke-DeployDryRun -Arguments $infraArgs -Env $BattleTestEnv
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "infra-up DryRun 应当成功。输出: $($run.Output)"
     # 按 kind 过滤:guild 的 Deployment / 迁移 Job 也引用这个 ConfigMap 名,Select-ManifestByName 只按名字取第一块。
-    $blocks = @(Get-ManifestBlocks -Output $onRun.Output | Where-Object { $_ -match '(?m)^kind: ConfigMap\s*$' -and $_ -match '(?m)^  name:\s*go-svc-guild-config\s*$' })
+    $blocks = @(Get-ManifestBlocks -Output $run.Output | Where-Object { $_ -match '(?m)^kind: ConfigMap\s*$' -and $_ -match '(?m)^  name:\s*go-svc-guild-config\s*$' })
     Assert-Equal -Expected 1 -Actual $blocks.Count -Because 'infra-up 带全局 Go 服务时应当恰好生成一份 go-svc-guild-config'
     Assert-NotMatch -Text $blocks[0] -Pattern 'MergeMarkerRedis|RequireRouteReady' -Because 'go/guild/internal/config 已没有这两个键'
-    Assert-Match -Text $onRun.Output -Pattern '\[RouteSwitch\]NoEffect:-RouteStoreMode' -Because 'infra-up 不部署 zone 的 Go 服务,zone 级开关要告警「无效果」'
-    Assert-NotMatch -Text $onRun.Output -Pattern 'guild_require_route_ready' -Because '计划行不再打 guild 开关'
 }
 
-# 粘滞核对夹具:被抽函数读的脚本级变量一次给全,Invoke-ClientEntryKubectl 换成按规则表回应的假函数(只活在本函数里)。
-# 返回 { Message(throw 的文本,没 throw 为空);Output(Write-Host / Write-Warning 合并);Calls(kubectl 参数串)}。
-function Invoke-RouteSwitchClusterCase {
-    param(
-        [object[]]$Rules = @(),
-        [string]$Mode = 'redis', [bool]$Arm = $false, [bool]$Ready = $false, [bool]$DbRequire = $false,
-        [bool]$Confirm = $false, [string[]]$ZoneNames = @('contract-test'), [bool]$DeploysZoneGoSvc = $true
-    )
-    $RouteStoreMode = $Mode
-    $RouteReconcileArm = $Arm
-    $RouteReadRequiresReady = $Ready
-    $DbPlacementRequireRouteReady = $DbRequire
-    $ConfirmRouteSwitchChange = $Confirm
-    $NamespacePrefix = 'mmorpg-zone'
-    $InfraNamespace = 'contract-infra'
-    $KubeContext = 'contract-route-ctx'
-    $KubeConfig = ''
-    $GoSvcCatalogue = @{
-        'data-service' = @{ ConfigMap = 'go-svc-data-service-config'; ConfigFile = 'data_service.yaml' }
-        db             = @{ ConfigMap = 'go-svc-db-config'; ConfigFile = 'db.yaml' }
+# ── 全局服务的部署顺序(deploy/k8s/README.md 同名一节)──
+# 全局库的表只由 zone 阶段的 data-service-migrate 建,match / chat / friend / mail / player-inbox / guild 启动要核它们,guild / trade 启动还要读
+# data_service.GetMergedZones,rank 启动阻塞拨号 mail。这些进程排在 zone 之前,全新集群上 -WaitReady 就等不到头。反过来 data_service 启动要核
+# trade / guild / mail / match / player-inbox 的表,所以它们的迁移 Job 不能跟着往后排。
+
+# 输出里第一次出现某段文字的位置;没有就 throw,免得 -1 把「先后」断言变成假绿。
+function Get-OutputIndex {
+    param([Parameter(Mandatory = $true)][string]$Text, [Parameter(Mandatory = $true)][string]$Needle)
+    $at = $Text.IndexOf($Needle, [System.StringComparison]::Ordinal)
+    if ($at -lt 0) { throw "输出里找不到「$Needle」" }
+    return $at
+}
+
+$GlobalSvcAfterDataService = @('chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade')
+$GlobalOrderArgs = @('-Command', 'all-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-WaitReady', '-InfraNamespace', 'contract-order-infra', '-BattleReplicas', '0',
+    '-ZonesConfigPath', (Join-Path (Get-RepoRoot) 'deploy/k8s/zones.sample.json'), '-GoSvcRegistry', 'registry.invalid/test', '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab')
+$globalOrderAllUp = Invoke-DeployDryRun -Arguments $GlobalOrderArgs -Env $BattleTestEnv
+
+Test-Case '全局服务目录:只有 client-rpc-router 的进程排在 zone 之前;新增全局服务缺省排在 data-service 之后' {
+    $catalogueText = (Get-Content -LiteralPath (Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1') -Raw) -replace "`r`n", "`n"
+    $flagged = @([regex]::Matches($catalogueText, '(?m)^\s*"?(?<svc>[a-z-]+)"?\s*=\s*@\{[^\n}]*StartsBeforeZones\s*=\s*\$true') | ForEach-Object { $_.Groups['svc'].Value })
+    Assert-Equal -Expected 'client-rpc-router' -Actual ($flagged -join ',') -Because 'gate 的依赖门要等路由服,它自己启动不读全局库、不调 data_service;其余全局服务启动都依赖 data-service'
+}
+
+Test-Case 'all-up:全局服务的迁移 Job 先于 data-service,进程排在第一个 zone 的 data-service 就绪之后,再到其余 zone' {
+    Assert-Equal -Expected 0 -Actual $globalOrderAllUp.ExitCode -Because "带 infra 与全局 Go 服务的 all-up DryRun 应当成功。输出: $($globalOrderAllUp.Output)"
+    $out = $globalOrderAllUp.Output
+    $firstZone = 'mmorpg-zone-yesterday'
+    $dataServiceApplied = Get-OutputIndex -Text $out -Needle '[applied] data-service'
+    # data-service 就绪等待:-WaitReady 下 Wait-ForZoneReady 等过一次,Apply-GlobalGoSvcWorkloads 再等一次,取最后一次(只数第一个 zone 的)。
+    $dataServiceReady = $out.LastIndexOf("kubectl rollout status deployment/data-service -n $firstZone", [System.StringComparison]::Ordinal)
+    Assert-True -Condition ($dataServiceReady -gt $dataServiceApplied) -Because '全局服务的进程之前必须等第一个 zone 的 data-service 就绪'
+    $secondZone = Get-OutputIndex -Text $out -Needle 'Applying zone deployment: zone=today'
+    foreach ($svc in $GlobalSvcAfterDataService) {
+        Assert-True -Condition ((Get-OutputIndex -Text $out -Needle "[prepared] $svc ->") -lt $dataServiceApplied) -Because "$svc 的迁移 Job 要排在 data-service 之前:data_service 启动要核这些表(ConfigureAssetContracts),或这些服务互相核表"
+        $applied = Get-OutputIndex -Text $out -Needle "[applied] $svc ->"
+        Assert-True -Condition ($applied -gt $dataServiceReady) -Because "$svc 的进程必须排在 data-service 就绪之后"
+        Assert-True -Condition ($applied -lt $secondZone) -Because "$svc 的进程在第一个 zone 之后就起,不等其余 zone"
+        Assert-True -Condition ((Get-OutputIndex -Text $out -Needle "kubectl rollout status deployment/$svc -n contract-order-infra") -gt $applied) -Because "-WaitReady 下要等 $svc 就绪,而且是 apply 之后才等"
+        $configMaps = @(Get-ManifestBlocks -Output $out | Where-Object { $_ -match '(?m)^kind: ConfigMap\s*$' -and $_ -match ('(?m)^  name:\s*go-svc-' + [regex]::Escape($svc) + '-config\s*$') })
+        Assert-Equal -Expected 1 -Actual $configMaps.Count -Because "$svc 的 ConfigMap 只在第一步写一次"
     }
-    $calls = [System.Collections.Generic.List[string]]::new()
-    function Invoke-ClientEntryKubectl {
-        param(
-            [Parameter(Mandatory = $true)][string[]]$KubectlArgs,
-            [Parameter(Mandatory = $true)][AllowEmptyString()][string]$KubeContext,
-            [Parameter(Mandatory = $true)][AllowEmptyString()][string]$KubeConfig,
-            [switch]$AllowFailure,
-            [switch]$CaptureOutput
-        )
-        $line = $KubectlArgs -join ' '
-        $calls.Add($line)
-        if ($KubeContext -cne 'contract-route-ctx') { throw "假 kubectl:没带脚本的 -KubeContext(实际 '$KubeContext'),会落到本机默认 context" }
-        foreach ($rule in $Rules) {
-            if ($line -match $rule.Pattern) { return [pscustomobject]@{ ExitCode = [int]$rule.ExitCode; Stdout = [string]$rule.Stdout; Stderr = [string]$rule.Stderr } }
-        }
-        throw "假 kubectl:没有规则命中这次调用:kubectl $line"
+    Assert-True -Condition ((Get-OutputIndex -Text $out -Needle '[applied] client-rpc-router ->') -lt $dataServiceApplied) -Because 'gate 的依赖门要等路由服,它排在 zone 之前'
+}
+
+Test-Case 'infra-up:DryRun 按「已有 zone」渲染升级路径,全局服务的进程排在 data-service 就绪之后;zone-up 不碰全局服务' {
+    $infraOrderArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-InfraNamespace', 'contract-order-infra', '-BattleReplicas', '0', '-ZoneName', 'contract-test',
+        '-GoSvcRegistry', 'registry.invalid/test', '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab')
+    $waited = Invoke-DeployDryRun -Arguments ($infraOrderArgs + @('-WaitReady')) -Env $BattleTestEnv
+    Assert-Equal -Expected 0 -Actual $waited.ExitCode -Because "infra-up DryRun 应当成功。输出: $($waited.Output)"
+    Assert-Match -Text $waited.Output -Pattern 'would look for a ready deployment/data-service in the mmorpg-zone-\* namespaces' -Because 'DryRun 不查集群,要写明按什么假设渲染'
+    Assert-True -Condition ((Get-OutputIndex -Text $waited.Output -Needle 'kubectl rollout status deployment/data-service -n mmorpg-zone-contract-test') -lt (Get-OutputIndex -Text $waited.Output -Needle '[applied] guild ->')) -Because '-WaitReady 下先等 data-service 就绪,再起依赖它的进程'
+    $notWaited = Invoke-DeployDryRun -Arguments $infraOrderArgs -Env $BattleTestEnv
+    Assert-Equal -Expected 0 -Actual $notWaited.ExitCode -Because "不带 -WaitReady 的 infra-up DryRun 应当成功。输出: $($notWaited.Output)"
+    Assert-NotMatch -Text $notWaited.Output -Pattern 'rollout status deployment/data-service' -Because 'dev 档不带 -WaitReady 不等,与迁移 Job 同一条门禁(靠 K8s 重启收敛)'
+    Assert-Match -Text $notWaited.Output -Pattern '\[applied\] guild ->' -Because '不等也要起进程'
+    # zone-up 的产物里没有全局服务的进程与 Job,也不等它们。
+    foreach ($svc in $GlobalSvcAfterDataService) {
+        Assert-NotMatch -Text $devOut -Pattern ('\[(applied|prepared)\] ' + [regex]::Escape($svc) + ' ->') -Because "zone-up 不碰全局服务 $svc"
     }
+    $branches = @($deadlineDeployAst.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.SwitchStatementAst] -and $_.Condition.Extent.Text -match '^\(?\s*\$Command\s*\)?$' })
+    Assert-Equal -Expected 1 -Actual $branches.Count -Because '顶层恰好一个 switch ($Command)'
+    $clause = { param($Name) ($branches[0].Clauses | Where-Object { $_.Item1.Extent.Text -eq "`"$Name`"" } | Select-Object -First 1).Item2.Extent.Text }
+    Assert-Match -Text (& $clause 'infra-up') -Pattern 'Apply-Infra\s+Apply-GlobalGoSvcWorkloadsIfDataServiceReady' -Because 'infra-up 先做基础设施,再按线上 data-service 决定起不起全局服务的进程'
+    Assert-Match -Text (& $clause 'zone-up') -Pattern 'Write-GlobalGoSvcPendingReminder' -Because 'zone-up 只提醒,不写 infra namespace'
+    Assert-NotMatch -Text (& $clause 'zone-up') -Pattern 'Apply-GlobalGoSvcWorkloads' -Because 'zone-up 不碰全局服务'
+}
+
+# 第二步的判定与告警:按 AST 抽出函数直接调,读集群给替身。
+$globalOrderFunctionNames = @('Find-ReadyDataServiceNamespace', 'Apply-GlobalGoSvcWorkloadsIfDataServiceReady', 'Write-GlobalGoSvcPendingReminder',
+    'Get-GlobalGoSvcNames', 'Get-GlobalGoSvcNamesAfterDataService', 'Get-ZoneNamespace')
+foreach ($globalOrderFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+    if ($globalOrderFunctionNames -contains $globalOrderFnAst.Name) {
+        Set-Item -Path "Function:script:$($globalOrderFnAst.Name)" -Value $globalOrderFnAst.Body.GetScriptBlock()
+    }
+}
+
+Test-Case 'Find-ReadyDataServiceNamespace:只认 <前缀>- 开头且有就绪副本的 namespace;没有回 $null,kubectl 失败或输出不是 JSON 即 throw' {
+    $DryRun = $false; $NamespacePrefix = 'mmorpg-zone'; $KubeContext = ''; $KubeConfig = ''; $ZoneName = 'unused'
+    $script:StubDeployments = $null
+    function Invoke-ClientEntryKubectl { param($KubectlArgs, $KubeContext, $KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure) return $script:StubDeployments }
+    $items = {
+        param([object[]]$Entries)
+        $list = @($Entries | ForEach-Object { @{ metadata = @{ namespace = $_.Namespace }; status = $(if ($null -ne $_.Ready) { @{ readyReplicas = $_.Ready } } else { @{} }) } })
+        return [pscustomobject]@{ ExitCode = 0; Stdout = (@{ items = $list } | ConvertTo-Json -Depth 6); Stderr = '' }
+    }
+    $script:StubDeployments = & $items @(@{ Namespace = 'other-zone-x'; Ready = 2 }, @{ Namespace = 'mmorpg-zone-a'; Ready = $null }, @{ Namespace = 'mmorpg-zone-b'; Ready = 1 })
+    Assert-Equal -Expected 'mmorpg-zone-b' -Actual (Find-ReadyDataServiceNamespace) -Because '别的前缀不算,没有就绪副本的不算'
+    $script:StubDeployments = & $items @(@{ Namespace = 'mmorpg-zone-a'; Ready = $null })
+    Assert-True -Condition ($null -eq (Find-ReadyDataServiceNamespace)) -Because '只有没就绪的副本 = 还没有可用的 data-service'
+    $script:StubDeployments = [pscustomobject]@{ ExitCode = 1; Stdout = ''; Stderr = 'forbidden' }
     $message = ''
-    $output = ''
-    try {
-        $output = (Assert-RouteSwitchClusterState -ZoneNames $ZoneNames -DeploysZoneGoSvc $DeploysZoneGoSvc 3>&1 6>&1 | Out-String -Width 4096)
+    try { $null = Find-ReadyDataServiceNamespace } catch { $message = $_.Exception.Message }
+    Assert-Match -Text $message -Pattern '读不到不等于没有' -Because 'kubectl 失败不能当成全新集群'
+    $script:StubDeployments = [pscustomobject]@{ ExitCode = 0; Stdout = 'not json'; Stderr = '' }
+    $message = ''
+    try { $null = Find-ReadyDataServiceNamespace } catch { $message = $_.Exception.Message }
+    Assert-Match -Text $message -Pattern '不是合法 JSON' -Because '输出认不出同样拒绝'
+    $DryRun = $true
+    Assert-Equal -Expected 'mmorpg-zone-unused' -Actual ((Find-ReadyDataServiceNamespace 6>$null)) -Because 'DryRun 不查集群,按 -ZoneName 那个 zone 已有 data-service 渲染'
+}
+
+Test-Case 'infra-up 第二步:线上 data-service 就绪就起进程;全新集群只告警、点名下一步,不起也不失败' {
+    $NamespacePrefix = 'mmorpg-zone'
+    $GoSvcCatalogue = @{
+        guild = @{ Global = $true }; mail = @{ Global = $true }; 'client-rpc-router' = @{ Global = $true; StartsBeforeZones = $true }; db = @{}
     }
-    catch {
-        $message = $_.Exception.Message
+    $script:StartedWith = $null
+    function Test-GlobalGoSvcDeployed { return $true }
+    function Find-ReadyDataServiceNamespace { return $script:LiveNamespace }
+    function Apply-GlobalGoSvcWorkloads { param($DataServiceNamespace) $script:StartedWith = $DataServiceNamespace }
+    $script:LiveNamespace = 'mmorpg-zone-b'
+    Apply-GlobalGoSvcWorkloadsIfDataServiceReady
+    Assert-Equal -Expected 'mmorpg-zone-b' -Actual $script:StartedWith -Because '已有 zone(升级、第一个 zone 之后重跑)就接着起'
+    $script:StartedWith = $null
+    $script:LiveNamespace = $null
+    $warnings = (Apply-GlobalGoSvcWorkloadsIfDataServiceReady 3>&1 | Out-String -Width 4096)
+    Assert-True -Condition ($null -eq $script:StartedWith) -Because '全新集群不起进程'
+    Assert-Match -Text $warnings -Pattern '\[GlobalGoSvc\]Deferred:' -Because '要告警,否则运维以为全局服务都起了'
+    Assert-Match -Text $warnings -Pattern 'guild, mail' -Because '点名没起的服务,client-rpc-router 不在其中'
+    Assert-Match -Text $warnings -Pattern 're-run infra-up' -Because '点名下一步'
+}
+
+Test-Case 'zone-up 的提醒:infra-up 留下的全局服务进程还没起就告警重跑 infra-up;读失败只告警;DryRun 不查集群' {
+    $InfraNamespace = 'mmorpg-infra'; $KubeContext = ''; $KubeConfig = ''; $DryRun = $false
+    $GoSvcManifestsDir = Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc'
+    $GoSvcCatalogue = @{ guild = @{ Global = $true; Manifest = 'guild.yaml' }; trade = @{ Global = $true; Manifest = 'trade.yaml' } }
+    function Test-ZoneDbDeployed { return $true }
+    $script:StubDeployments = $null
+    function Invoke-ClientEntryKubectl { param($KubectlArgs, $KubeContext, $KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure) return $script:StubDeployments }
+    $script:StubDeployments = [pscustomobject]@{ ExitCode = 0; Stdout = "deployment.apps/trade`n"; Stderr = '' }
+    $warnings = (Write-GlobalGoSvcPendingReminder 3>&1 | Out-String -Width 4096)
+    Assert-Match -Text $warnings -Pattern '\[GlobalGoSvc\]NotStarted:guild not deployed' -Because '缺哪个点名哪个'
+    $script:StubDeployments = [pscustomobject]@{ ExitCode = 0; Stdout = "deployment.apps/guild`ndeployment.apps/trade`n"; Stderr = '' }
+    Assert-Equal -Expected '' -Actual ((Write-GlobalGoSvcPendingReminder 3>&1 | Out-String).Trim()) -Because '都在就不打扰'
+    $script:StubDeployments = [pscustomobject]@{ ExitCode = 1; Stdout = ''; Stderr = 'forbidden' }
+    Assert-Match -Text (Write-GlobalGoSvcPendingReminder 3>&1 | Out-String -Width 4096) -Pattern '\[GlobalGoSvc\]ReadFailed:' -Because 'zone 已经部署完,读失败不该让它变成失败'
+    $DryRun = $true
+    $script:StubDeployments = $null
+    Assert-Equal -Expected '' -Actual ((Write-GlobalGoSvcPendingReminder 3>&1 | Out-String).Trim()) -Because 'DryRun 不查集群'
+}
+
+Test-Case 'guild / trade 的 startupProbe 预算盖住 shared/mergedzone.StartupBudget:探针不抢在进程自己判定之前杀它' {
+    $source = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/shared/mergedzone/mergedzone.go'))
+    $budget = [regex]::Match($source, '(?m)^\s*StartupBudget\s*=\s*(?<s>\d+)\s*\*\s*time\.Second')
+    Assert-True -Condition $budget.Success -Because 'mergedzone.go 里应当有 StartupBudget = N * time.Second(换了写法要同步本用例)'
+    foreach ($svc in @('guild', 'trade')) {
+        $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) "deploy/k8s/manifests/go-svc/$svc.yaml")) -replace "`r`n", "`n"
+        $probe = [regex]::Match($manifest, '(?m)^          startupProbe:\n(?<body>(?:^            [^\n]*\n)+)')
+        Assert-True -Condition $probe.Success -Because "$svc 的主容器要有 startupProbe:gRPC 口在读到合服映射之后才监听,没有它 liveness 会在预算用完之前杀进程"
+        $period = [regex]::Match($probe.Groups['body'].Value, '(?m)^\s*periodSeconds:\s*(\d+)\s*$')
+        $threshold = [regex]::Match($probe.Groups['body'].Value, '(?m)^\s*failureThreshold:\s*(\d+)\s*$')
+        Assert-True -Condition ($period.Success -and $threshold.Success) -Because "$svc 的 startupProbe 要显式写 periodSeconds 与 failureThreshold"
+        Assert-True -Condition (([int]$period.Groups[1].Value * [int]$threshold.Groups[1].Value) -gt [int]$budget.Groups['s'].Value) -Because "$svc 的 startupProbe 总预算必须大于启动时等映射的 $($budget.Groups['s'].Value) 秒,否则进程还在等就被杀"
     }
-    return [pscustomobject]@{ Message = $message; Output = $output; Calls = @($calls) }
 }
 
-# 一份 data-service 的 data_service.yaml(只写本节关心的键;参数留空 = 不写那个键,看缺键按缺省)。
-function New-RouteSwitchDataServiceYaml {
-    param([string]$Mode = '', [string]$Arm = '', [string]$Ready = '')
-    $lines = @('Name: dataservice.rpc', 'RouteStore:')
-    if ($Mode) { $lines += "  Mode: $Mode" }
-    $lines += '  MaxOpenConn: 20'
-    if ($Ready) { $lines += "  ReadRequiresReady: $Ready" }
-    if ($Arm) { $lines += '  Reconcile:', "    ArmReadyMarker: $Arm" }
-    $lines += 'MetricsListenAddr: ":9260"'
-    return ($lines -join "`n")
-}
-
-# kubectl get configmap -o json 的一个 ConfigMap 对象;-NoData = 没有服务 yaml 那个数据键(不是本脚本生成的形状)。
-function New-RouteSwitchConfigMap {
-    param([string]$Name, [string]$Namespace, [string]$ConfigFile, [AllowEmptyString()][string]$Yaml = '', [switch]$NoData)
-    $configMap = [ordered]@{ apiVersion = 'v1'; kind = 'ConfigMap'; metadata = [ordered]@{ name = $Name; namespace = $Namespace } }
-    if (-not $NoData) { $configMap['data'] = @{ $ConfigFile = $Yaml } }
-    return $configMap
-}
-
-# 全部 namespace 的 data-service ConfigMap 列表的回应。
-function New-RouteSwitchDataServiceListRule {
-    param([object[]]$Items = @(), [int]$ExitCode = 0)
-    $stdout = if ($ExitCode -eq 0) { [ordered]@{ apiVersion = 'v1'; kind = 'List'; items = @($Items) } | ConvertTo-Json -Depth 8 } else { '' }
-    $stderr = if ($ExitCode -ne 0) { 'Error from server (Forbidden): configmaps is forbidden: User "deployer" cannot list resource "configmaps" at the cluster scope' } else { '' }
-    return @{ Pattern = '^get configmap --all-namespaces --field-selector metadata\.name=go-svc-data-service-config -o json$'; ExitCode = $ExitCode; Stdout = $stdout; Stderr = $stderr }
-}
-
-# 一个 namespace 里一份 ConfigMap 的回应;-Absent = 不存在(--ignore-not-found 无输出)。
-function New-RouteSwitchOneRule {
-    param([string]$Name, [string]$Namespace, [string]$ConfigFile, [AllowEmptyString()][string]$Yaml = '', [switch]$Absent)
-    $stdout = if ($Absent) { '' } else { (New-RouteSwitchConfigMap -Name $Name -Namespace $Namespace -ConfigFile $ConfigFile -Yaml $Yaml) | ConvertTo-Json -Depth 8 }
-    return @{ Pattern = ('^get configmap ' + [regex]::Escape($Name) + ' -n ' + [regex]::Escape($Namespace) + ' --ignore-not-found -o json$'); ExitCode = 0; Stdout = $stdout; Stderr = '' }
-}
-
-Test-Case 'D1 1b-3 粘滞核对(纯函数):线上 yaml 缺键按代码缺省、认不出的写法带 ? 记下;比对逐键;照传现状的参数串' {
-    $live = ConvertFrom-RouteSwitchLiveYaml -Scope 'data-service' -Text (New-RouteSwitchDataServiceYaml)
-    Assert-Equal -Expected 'redis/false/false' -Actual ('{0}/{1}/{2}' -f $live.RouteStoreMode, $live.RouteReconcileArm, $live.RouteReadRequiresReady) -Because '本批之前的 ConfigMap 不写这几个键:按 data_service 的缺省(redis / false / false)'
-    $live = ConvertFrom-RouteSwitchLiveYaml -Scope 'data-service' -Text (New-RouteSwitchDataServiceYaml -Mode 'db_first' -Arm 'true' -Ready 'false')
-    Assert-Equal -Expected 'db_first/true/false' -Actual ('{0}/{1}/{2}' -f $live.RouteStoreMode, $live.RouteReconcileArm, $live.RouteReadRequiresReady) -Because 'Reconcile 是 RouteStore 下的嵌套段'
-    Assert-Equal -Expected '-RouteStoreMode db_first -RouteReconcileArm:$true -RouteReadRequiresReady:$false' -Actual (Get-RouteSwitchKeepArgs -Live $live) -Because '新默认true下必须显式保留false，省略会改变真实live语义'
-    Assert-Equal -Expected '-DbPlacementRequireRouteReady:$false' -Actual (Get-RouteSwitchKeepArgs -Live ([ordered]@{ DbPlacementRequireRouteReady = 'false' })) -Because '所有bool均显式复现，不因新默认替旧live补权'
-    $weird = ConvertFrom-RouteSwitchLiveYaml -Scope 'data-service' -Text (New-RouteSwitchDataServiceYaml -Mode 'DB_FIRST' -Arm 'True')
-    Assert-Equal -Expected 'DB_FIRST?/True?' -Actual ('{0}/{1}' -f $weird.RouteStoreMode, $weird.RouteReconcileArm) -Because '认不出的写法原样带 ? 记下(data_service 区分大小写,看不懂不等于没开)'
-    Assert-True -Condition ($null -eq (Get-RouteSwitchKeepArgs -Live $weird)) -Because '线上取值认不出时给不出照传参数串'
-    $db = ConvertFrom-RouteSwitchLiveYaml -Scope 'db' -Text "Placement:`n  ZoneStoreMaxOpenConn: 8`n  RequireRouteReady: true"
-    Assert-Equal -Expected 'true' -Actual $db.DbPlacementRequireRouteReady -Because 'db 的开关在 Placement 段'
-    $drifts = @(Get-RouteSwitchDrift -Live $live -Desired ([ordered]@{ RouteStoreMode = 'redis'; RouteReconcileArm = 'true'; RouteReadRequiresReady = 'false'; Unrelated = 'x' }))
-    Assert-Equal -Expected '-RouteStoreMode 线上 db_first,本次 redis' -Actual ($drifts -join ' | ') -Because '只报不一致的键;-Desired 里多出来的键不比'
-}
-
-Test-Case 'D1 1b-3 粘滞核对:读全部 zone 的 data-service(含本 zone 已被删掉重建的回档场景)与本 zone 的 db;不一致且没给 -ConfirmRouteSwitchChange 即拒绝并给出照传参数,给了只告警;一致放行' {
-    $dbFirstYaml = New-RouteSwitchDataServiceYaml -Mode 'db_first' -Arm 'true'
-    $items = @(
-        New-RouteSwitchConfigMap -Name 'go-svc-data-service-config' -Namespace 'mmorpg-zone-z2' -ConfigFile 'data_service.yaml' -Yaml $dbFirstYaml
-        # 别的前缀部署的 namespace 不认(与 Read-PlayerInboxGateLiveFacts 同一口径)。
-        New-RouteSwitchConfigMap -Name 'go-svc-data-service-config' -Namespace 'other-zone-x' -ConfigFile 'data_service.yaml' -Yaml (New-RouteSwitchDataServiceYaml -Mode 'redis')
-    )
-    # 本 zone(contract-test)的 namespace 不在:zone 回档 Step 1 删掉了它,Step 6 重建 —— 只读它自己就核对不出来。
-    $rules = @(
-        (New-RouteSwitchDataServiceListRule -Items $items)
-        (New-RouteSwitchOneRule -Name 'go-svc-db-config' -Namespace 'mmorpg-zone-contract-test' -ConfigFile 'db.yaml' -Absent)
-    )
-    $refused = Invoke-RouteSwitchClusterCase -Rules $rules
-    Assert-Match -Text $refused.Message -Pattern 'D1 映射开关的线上现状与本次参数不一致\(1 处\),未做任何写操作' -Because '缺省参数部署到已是 db_first 的集群:拒绝(防止静默降回 redis)'
-    Assert-Match -Text $refused.Message -Pattern 'data-service\(namespace=mmorpg-zone-z2\)' -Because '点名是哪个 zone 的现状'
-    Assert-Match -Text $refused.Message -Pattern '-RouteStoreMode 线上 db_first,本次 redis' -Because '逐键列出不一致'
-    Assert-Match -Text $refused.Message -Pattern '-RouteReconcileArm 线上 true,本次 false' -Because '逐键列出不一致'
-    Assert-Match -Text $refused.Message -Pattern '线上现状对应的参数是 -RouteStoreMode db_first -RouteReconcileArm:\$true' -Because '给出线上现状对应的参数串(布尔值显式写出)'
-    Assert-NotMatch -Text $refused.Message -Pattern '要保持现状请照传|布尔开关不给 = false' -Because '全球默认 true 之后「不给 = false」不成立,入口闸也不许照传 redis / false 保持现状(review OPS-9)'
-    Assert-Match -Text $refused.Message -Pattern '-ConfirmRouteSwitchChange' -Because '点名确认开关'
-    Assert-NotMatch -Text $refused.Message -Pattern 'other-zone-x' -Because '只认 -NamespacePrefix 下的 zone'
-    Assert-Equal -Expected 2 -Actual $refused.Calls.Count -Because '读一次全部 namespace 的 data-service,再读本 zone 的 db'
-
-    $same = Invoke-RouteSwitchClusterCase -Rules $rules -Mode 'db_first' -Arm $true
-    Assert-Equal -Expected '' -Actual $same.Message -Because '照传现状:放行'
-    Assert-Match -Text $same.Output -Pattern 'Route switch live state: data_service_zones=1 db_zones=0 drifts_refused=0 ' -Because '放行时打一行现状摘要'
-
-    $confirmed = Invoke-RouteSwitchClusterCase -Rules $rules -Confirm $true
-    Assert-Equal -Expected '' -Actual $confirmed.Message -Because '给了 -ConfirmRouteSwitchChange:放行'
-    Assert-Match -Text $confirmed.Output -Pattern '\[RouteSwitch\]Confirmed:-ConfirmRouteSwitchChange supplied; allowed: data-service\(namespace=mmorpg-zone-z2\)' -Because '放行但留一条告警'
-
-    $dbRules = @(
-        (New-RouteSwitchDataServiceListRule -Items @())
-        (New-RouteSwitchOneRule -Name 'go-svc-db-config' -Namespace 'mmorpg-zone-contract-test' -ConfigFile 'db.yaml' -Yaml "Placement:`n  RequireRouteReady: true")
-    )
-    $dbRefused = Invoke-RouteSwitchClusterCase -Rules $dbRules
-    Assert-Match -Text $dbRefused.Message -Pattern 'db\(namespace=mmorpg-zone-contract-test\):-DbPlacementRequireRouteReady 线上 true,本次 false' -Because 'db 的读方开关逐 zone 粘滞:漏传会把已打开的门禁静默关掉'
-    Assert-Match -Text $dbRefused.Message -Pattern '线上现状对应的参数是 -DbPlacementRequireRouteReady:\$true' -Because '给出线上现状对应的参数'
-
-    $weirdRules = @((New-RouteSwitchDataServiceListRule -Items @(New-RouteSwitchConfigMap -Name 'go-svc-data-service-config' -Namespace 'mmorpg-zone-z2' -ConfigFile 'data_service.yaml' -Yaml (New-RouteSwitchDataServiceYaml -Mode 'DB_FIRST'))), (New-RouteSwitchOneRule -Name 'go-svc-db-config' -Namespace 'mmorpg-zone-contract-test' -ConfigFile 'db.yaml' -Absent))
-    $weirdRefused = Invoke-RouteSwitchClusterCase -Rules $weirdRules
-    Assert-Match -Text $weirdRefused.Message -Pattern '线上取值认不出' -Because '认不出的线上写法 fail-closed'
-}
-
-Test-Case 'D1 1b-3 粘滞核对 fail-closed:列 ConfigMap 失败、ConfigMap 没有服务 yaml 数据键都拒绝;guild 不再参与' {
-    $failed = Invoke-RouteSwitchClusterCase -Rules @((New-RouteSwitchDataServiceListRule -ExitCode 1))
-    Assert-Match -Text $failed.Message -Pattern '读取各 zone 线上的 ConfigMap go-svc-data-service-config 失败' -Because 'kubectl 失败按 fail-closed 处理'
-    Assert-Match -Text $failed.Message -Pattern '尚未做任何写操作' -Because '在任何写操作之前'
-
-    $noData = Invoke-RouteSwitchClusterCase -Rules @((New-RouteSwitchDataServiceListRule -Items @(New-RouteSwitchConfigMap -Name 'go-svc-data-service-config' -Namespace 'mmorpg-zone-z2' -ConfigFile 'data_service.yaml' -NoData)))
-    Assert-Match -Text $noData.Message -Pattern '不是本脚本生成的形状' -Because 'ConfigMap 在而数据键不在:判不出,拒绝'
-
-    # ValidateSet 不再认 guild:读线上现状只有 data-service 与 db 两类。
-    $thrown = ''
-    try { $null = ConvertFrom-RouteSwitchLiveYaml -Scope 'guild' -Text 'Name: x' } catch { $thrown = $_.Exception.Message }
-    Assert-Match -Text $thrown -Pattern 'guild' -Because 'Scope 只接受 data-service / db'
-}
-
-# review OPS-2(a) / B3-2:-ConfirmRouteSwitchChange 只放行「本次要改的值」;读方前提(本次渲染了读方开关时,本次不部署的 zone 的
-# data-service 必须已是 db_first + Arm=true)不受它豁免。2026-10-21 起 k8s_deploy 的 D1 缺省是 db_first / 全 true(全球默认),
-# zone-up / all-up 每次都会渲染读方,所以这条前提在每次真实部署上都生效:不能误拒已切好的集群,也不能放过半切的集群。
-Test-Case 'D1 读方前提不受 -ConfirmRouteSwitchChange 豁免:本次不部署的 zone 必须已是 db_first + Arm=true;本次部署的 zone 自己、已切好的集群、全新集群都放行' {
-    $ds = {
-        param([string]$Namespace, [string]$Mode = '', [string]$Arm = '', [string]$Ready = '')
-        New-RouteSwitchConfigMap -Name 'go-svc-data-service-config' -Namespace $Namespace -ConfigFile 'data_service.yaml' -Yaml (New-RouteSwitchDataServiceYaml -Mode $Mode -Arm $Arm -Ready $Ready)
-    }
-    $dbAbsent = New-RouteSwitchOneRule -Name 'go-svc-db-config' -Namespace 'mmorpg-zone-contract-test' -ConfigFile 'db.yaml' -Absent
-    # 全球默认:zone-up 渲染 db_first + Arm + 两个读方。
-    $on = @{ Mode = 'db_first'; Arm = $true; Ready = $true; DbRequire = $true }
-
-    # (b) zone-up 一个 zone,其它 zone 一个是 db_first 但 Arm=false、一个还是 redis:带 Confirm 也拒绝,提示改用 all-up。
-    $halfSwitched = @(
-        (New-RouteSwitchDataServiceListRule -Items @((& $ds 'mmorpg-zone-z2' 'db_first' 'false'), (& $ds 'mmorpg-zone-z3' 'redis')))
-        $dbAbsent
-    )
-    $r = Invoke-RouteSwitchClusterCase -Rules $halfSwitched @on -Confirm $true
-    Assert-Match -Text $r.Message -Pattern 'D1 读方开关的前提不满足\(2 个 zone\)' -Because 'z2 的副本当选 leader 就撤标记(M4),本 zone 的 go/db 认领与存盘随即回暂不可用;z3 不挂标记'
-    Assert-Match -Text $r.Message -Pattern 'data-service\(namespace=mmorpg-zone-z2\):[^\n]*-RouteReconcileArm 线上 false,本次 true[^\n]*本次要打开 -RouteReadRequiresReady / -DbPlacementRequireRouteReady' -Because '点名 Arm 未开的 zone'
-    Assert-Match -Text $r.Message -Pattern 'data-service\(namespace=mmorpg-zone-z3\):[^\n]*线上 RouteStore\.Mode=redis' -Because '点名仍是 redis 的 zone'
-    Assert-Match -Text $r.Message -Pattern '改用 all-up 一次部署全部 zone' -Because '多 zone 首次切换只能一次切全部 zone'
-
-    # (c) all-up 覆盖全部 zone:每个 zone 都是本次渲染的,线上旧值只是本次要改的值,Confirm 放行。
-    $allZones = @(
-        (New-RouteSwitchDataServiceListRule -Items @((& $ds 'mmorpg-zone-z2' 'db_first' 'false')))
-        $dbAbsent
-        (New-RouteSwitchOneRule -Name 'go-svc-db-config' -Namespace 'mmorpg-zone-z2' -ConfigFile 'db.yaml' -Absent)
-    )
-    $r = Invoke-RouteSwitchClusterCase -Rules $allZones @on -Confirm $true -ZoneNames @('contract-test', 'z2')
-    Assert-Equal -Expected '' -Actual $r.Message -Because 'all-up 一次渲染全部 zone:不违反前提'
-    Assert-Match -Text $r.Output -Pattern 'precondition_refused=0' -Because '摘要行带前提拒绝数'
-    Assert-Match -Text $r.Output -Pattern '\[RouteSwitch\]Confirmed:[^\r\n]*data-service\(namespace=mmorpg-zone-z2\)' -Because '本次要改的值仍按漂移告警'
-
-    # (d) 单 zone 升级:唯一的 data-service 就是本次部署的 zone,不算前提;漂移照常要 Confirm。
-    $selfOnly = @((New-RouteSwitchDataServiceListRule -Items @((& $ds 'mmorpg-zone-contract-test'))), $dbAbsent)
-    $r = Invoke-RouteSwitchClusterCase -Rules $selfOnly @on -Confirm $true
-    Assert-Equal -Expected '' -Actual $r.Message -Because '本次部署的 zone 自己的旧值是本次要改的值'
-    $r = Invoke-RouteSwitchClusterCase -Rules $selfOnly @on
-    Assert-Match -Text $r.Message -Pattern 'D1 映射开关的线上现状与本次参数不一致' -Because '没带 Confirm 按漂移拒绝'
-    Assert-NotMatch -Text $r.Message -Pattern '前提不满足' -Because '不是前提问题'
-
-    # (e) 已切好的集群(全部 db_first / true):不带 Confirm 直接放行,不误拒。
-    $switched = @((New-RouteSwitchDataServiceListRule -Items @((& $ds 'mmorpg-zone-z2' 'db_first' 'true' 'true'))), $dbAbsent)
-    $r = Invoke-RouteSwitchClusterCase -Rules $switched @on
-    Assert-Equal -Expected '' -Actual $r.Message -Because '全球默认部署到已切好的集群必须放行'
-    Assert-Match -Text $r.Output -Pattern 'drifts_refused=0 [^\r\n]*precondition_refused=0' -Because '没有漂移、没有前提问题'
-
-}
-
-Test-Case 'D1 调用点与参数一致:k8s_deploy.ps1 对本节函数的每次调用只用被调函数 param 块声明过的参数名' {
-    # 2026-10-20 Read-LiveRouteSwitchFacts 的 -DbZoneNames 改成 -ReadDb 而调用点没跟上:每次非 DryRun 部署 Go 服务都在参数绑定处 throw,
-    # DryRun 不走粘滞核对,产物用例全绿。这里按 AST 钉住调用点与 param 块逐字一致(PowerShell 的参数名缩写也不许用)。
-    $d1Functions = @('Get-RouteStoreWaitAOFNumReplicas', 'Get-RouteStoreDeploySettings', 'Get-RouteSwitchParamErrors', 'ConvertFrom-RouteSwitchLiveYaml',
-        'Get-RouteSwitchDrift', 'Get-RouteSwitchKeepArgs', 'Read-LiveRouteSwitchFacts', 'Assert-RouteSwitchClusterState')
-    $declared = @{}
-    foreach ($fn in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)) {
-        if ($d1Functions -notcontains $fn.Name) { continue }
-        $names = @()
-        if ($null -ne $fn.Body.ParamBlock) { $names = @($fn.Body.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath }) }
-        $declared[$fn.Name] = $names
-    }
-    Assert-Equal -Expected $d1Functions.Count -Actual $declared.Count -Because '夹具前提:本节函数都在 k8s_deploy.ps1 里'
-    $checked = 0
-    foreach ($call in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] }, $true)) {
-        $name = $call.GetCommandName()
-        if ([string]::IsNullOrEmpty($name) -or -not $declared.ContainsKey($name)) { continue }
-        foreach ($element in @($call.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] })) {
-            Assert-True -Condition ($declared[$name] -contains $element.ParameterName) -Because "第 $($call.Extent.StartLineNumber) 行调用 $name 给了 -$($element.ParameterName),它的 param 块没有这个参数(声明的是 $($declared[$name] -join ' / '))"
-            $checked++
-        }
-    }
-    Assert-True -Condition ($checked -ge 10) -Because "夹具前提:应当核到本节函数的全部命名参数(实际 $checked 个)"
-    $readCalls = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Read-LiveRouteSwitchFacts' }, $true))
-    Assert-Equal -Expected 1 -Actual $readCalls.Count -Because '线上现状只在 Assert-RouteSwitchClusterState 里读一次'
-}
-
-Test-Case 'D1 1b-3 mapping Redis 启动参数:redis.yaml 的两条 exec、redis-ha.yaml 的 redis-server、docker-compose 的 redis 都显式 --enable-debug-command no' {
+Test-Case '共享 Redis 启动参数:redis.yaml 的两条 exec、redis-ha.yaml 的 redis-server、docker-compose 的 redis 都显式 --enable-debug-command no' {
     $redisYaml = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/infra/redis.yaml')) -replace "`r`n", "`n"
     $execLines = @([regex]::Matches($redisYaml, '(?m)^[ \t]*exec redis-server [^\n]*$') | ForEach-Object { $_.Value })
     Assert-True -Condition ($execLines.Count -ge 2) -Because "redis.yaml 有口令、无口令两条 exec redis-server(实际 $($execLines.Count) 条)"
     foreach ($line in $execLines) {
-        Assert-Match -Text $line -Pattern '--enable-debug-command[ \t]+no(?:[ \t]|$)' -Because "每一条 exec 都要关掉 DEBUG(DEBUG RELOAD 在进程内替换数据而 run_id / replid 不变,读方的身份判据认不出,规格 §13.1 第 5 条):$($line.Trim())"
+        Assert-Match -Text $line -Pattern '--enable-debug-command[ \t]+no(?:[ \t]|$)' -Because "每一条 exec 都要关掉 DEBUG(DEBUG RELOAD 在进程内替换数据而 run_id / replid 不变):$($line.Trim())"
     }
     $haYaml = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/infra/redis-ha.yaml')) -replace "`r`n", "`n"
     $haStart = [regex]::Match($haYaml, '(?ms)^[ \t]*set -- redis-server \\\n(?<args>(?:[^\n]*\\\n)*[^\n]*)$')
     Assert-True -Condition $haStart.Success -Because 'redis-ha.yaml 的启动脚本里应当有 set -- redis-server \ 续行的参数表'
-    Assert-Match -Text $haStart.Groups['args'].Value -Pattern '--enable-debug-command no' -Because 'redis-ha 的每个节点同样关掉 DEBUG(被提升的副本也会成为 mapping Redis)'
+    Assert-Match -Text $haStart.Groups['args'].Value -Pattern '--enable-debug-command no' -Because 'redis-ha 的每个节点同样关掉 DEBUG(被提升的副本也会成为主)'
     $compose = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/docker-compose.yml')) -replace "`r`n", "`n"
     $redisService = [regex]::Match($compose, '(?ms)^  redis:\n(?<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\z)')
     Assert-True -Condition $redisService.Success -Because 'docker-compose.yml 里应当有 redis 服务'
-    Assert-Match -Text $redisService.Groups['body'].Value -Pattern '(?m)^\s+--enable-debug-command no\s*$' -Because '本机 compose 的 redis 同样是 mapping Redis'
+    Assert-Match -Text $redisService.Groups['body'].Value -Pattern '(?m)^\s+--enable-debug-command no\s*$' -Because '本机 compose 的 redis 与线上同样关掉 DEBUG'
 }
 
-# ── 告警引用的指标名与标签取值从 Go 源码核对(D1 映射与落点告警;照 mail-alerts / rank-alerts 用例读 metrics.go 的做法)──
+# ── 告警引用的指标名与标签取值从 Go 源码核对(路由与落点告警;照 mail-alerts / rank-alerts 用例读 metrics.go 的做法)──
 # 改名后告警表达式恒为空、不报错,与「一切正常」长得一样;手写名单拦不住(review B3-6 / OPS-7)。读到的 Go 文件同步列在
 # .github/workflows/deploy-config-tests.yml 的 paths 里,只改这些 Go 文件也会重跑本用例。
 
@@ -7260,15 +7031,6 @@ function Get-GoPrefixedStringConsts {
     $values = @([regex]::Matches($source, ('(?m)^\s*{0}[A-Za-z0-9]*\s*=\s*"(?<v>[a-z0-9_]+)"' -f [regex]::Escape($Prefix))) | ForEach-Object { $_.Groups['v'].Value } | Sort-Object -Unique)
     if ($values.Count -eq 0) { throw "$RelativePath 里找不到以 $Prefix 开头的字符串常量(改名了?要同步本用例)" }
     return $values
-}
-
-# 三个读方共用的 verdict 取值:shared/placement 的 7 个名字(routeReadyVerdictNames 数组字面量)加 script_error(data_service 的常量)。
-function Get-RouteReadyVerdictLabelValues {
-    $source = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/shared/placement/route_ready.go'))
-    $table = [regex]::Match($source, '(?s)routeReadyVerdictNames\s*=\s*\[routeReadyVerdictCount\]string\{(?<body>[^}]*)\}')
-    if (-not $table.Success) { throw 'go/shared/placement/route_ready.go 里找不到 routeReadyVerdictNames 的数组字面量(换了写法要同步本用例)' }
-    $names = @([regex]::Matches($table.Groups['body'].Value, '"(?<v>[a-z_]+)"') | ForEach-Object { $_.Groups['v'].Value })
-    return @($names + @(Get-GoPrefixedStringConsts -RelativePath 'go/data_service/internal/metrics/metrics.go' -Prefix 'RouteReadyVerdictScriptError'))
 }
 
 # 告警文件里全部 expr 块拼成一段文本(`expr: |` 到同一规则的 `for:` 之前)。
@@ -7307,22 +7069,16 @@ function Assert-AlertLabelValues {
     }
 }
 
-Test-Case 'D1 1b-3 告警 data-service-route-alerts.yaml:PrometheusRule 形状、interval 30s、每条规则有 severity / summary / description;规格点名的规则都在;NoLeader 兜住缺序列,ReadyMissing 用 max(arm_enabled);抓取前提写在文件头' {
+Test-Case '告警 data-service-route-alerts.yaml:PrometheusRule 形状、interval 30s、每条规则有 severity / summary / description / for;规则名单钉死;指标名与标签取值从 Go 源码核对' {
     $path = 'deploy/k8s/data-service-route-alerts.yaml'
     $text = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) $path)) -replace "`r`n", "`n"
     Assert-Match -Text $text -Pattern '(?m)^kind:[ ]*PrometheusRule[ ]*$' -Because '必须是 PrometheusRule(与 owner-epoch-alerts.yaml 同一安装方式)'
     $intervals = @([regex]::Matches($text, '(?m)^      interval:[ ]*(\S+)[ ]*$') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
     Assert-Equal -Expected '30s' -Actual ($intervals -join ',') -Because '每个组 interval: 30s'
     $alertNames = @([regex]::Matches($text, '(?m)^        - alert:[ ]*(\S+)[ ]*$') | ForEach-Object { $_.Groups[1].Value })
-    foreach ($name in @('DataServiceRouteNoLeader', 'DataServiceRouteMultiLeader', 'DataServiceRouteArmMixed', 'DataServiceRouteReadyMissing', 'DataServiceRouteWritesFrozen',
-            'DataServiceRouteRollbackOrCacheAhead', 'DataServiceRouteArmingRefused', 'DataServiceRoutePushConflicts',
-            'DataServiceRouteCacheVerifyStale', 'DataServiceRouteReadSQLErrors',
-            # leader 让出租约;评审补的读方持续不可信(A2-6)与 W1 发布 / 登记失败(B3-9)。
-            'DataServiceRouteLeaderRedisUnreachable', 'DataServiceRouteReadNotTrusted', 'GoDbRouteNotTrusted', 'DataServiceMergedZoneRefreshFailing',
-            'DataServiceRoutePublishUnconfirmed', 'DataServiceRouteRegisterFailures')) {
-        Assert-True -Condition ($alertNames -contains $name) -Because "规格 §7 / §13.4 点名(或评审补上)的告警 $name 必须在"
-    }
-    Assert-Equal -Expected $alertNames.Count -Actual (@($alertNames | Sort-Object -Unique).Count) -Because '告警名不重复'
+    $expectedAlerts = @('DataServiceMergedZoneRefreshFailing', 'DataServiceRouteReadErrors', 'DataServiceRouteRegisterFailures',
+        'GuildMergedZoneRefreshFailing', 'MatchMergedZoneRefreshFailing', 'TradeMergedZoneRefreshFailing' | Sort-Object)
+    Assert-Equal -Expected ($expectedAlerts -join ',') -Actual (@($alertNames | Sort-Object) -join ',') -Because '路由只在全局库之后,副本、就绪、发布、对账类规则全部删除;合服映射刷新四个服务各一条'
     $rules = @(($text -split '(?m)^        - alert:') | Select-Object -Skip 1)
     Assert-Equal -Expected $alertNames.Count -Actual $rules.Count -Because '按 - alert: 切出的规则块数等于告警数'
     foreach ($rule in $rules) {
@@ -7332,47 +7088,46 @@ Test-Case 'D1 1b-3 告警 data-service-route-alerts.yaml:PrometheusRule 形状�
         Assert-Match -Text $rule -Pattern '(?m)^            description:' -Because "$ruleName 要有 description"
         Assert-Match -Text $rule -Pattern '(?m)^          for:[ ]*\d+[ms][ ]*$' -Because "$ruleName 要写 for"
     }
-    $noLeader = $rules | Where-Object { $_ -match '^\s*DataServiceRouteNoLeader\b' }
-    Assert-Match -Text $noLeader -Pattern ([regex]::Escape('(sum(data_service_route_reconcile_leader) or vector(0)) == 0 and sum(data_service_route_reconcile_assembled) > 0')) -Because 'NoLeader 用 or vector(0) 兜住「一个序列都没有」,并按装配过滤(规格 §13.4 第 2 条)'
-    $readyMissing = $rules | Where-Object { $_ -match '^\s*DataServiceRouteReadyMissing\b' }
-    Assert-Match -Text $readyMissing -Pattern ([regex]::Escape('max(data_service_route_reconcile_arm_enabled) == 1 and (max(data_service_route_ready_marker) or vector(0)) == 0')) -Because 'ReadyMissing 用 max(arm_enabled) 作闸,ready_marker 缺序列按不在'
-    # 指标名从源码拼全名(不再手写名单):data_service / go/db 读 metrics 包的 subsystem + Name。
-    $registered = @(Get-GoSubsystemMetricNames -RelativeDir 'go/data_service/internal/metrics') + @(Get-GoSubsystemMetricNames -RelativeDir 'go/db/internal/metrics')
+    # 指标名从源码拼全名(不手写名单):data_service / match 读 metrics 包的 subsystem + Name;guild、trade 的刷新指标写在 svc 包里,单独核。
+    $registered = @(Get-GoSubsystemMetricNames -RelativeDir 'go/data_service/internal/metrics') + @(Get-GoSubsystemMetricNames -RelativeDir 'go/match/internal/metrics')
+    $guildSource = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/guild/internal/svc/merged_zones.go'))
+    Assert-Match -Text $guildSource -Pattern '(?s)Namespace:\s*"guild",\s*Subsystem:\s*"merged_zone",\s*Name:\s*"refresh_total"' -Because 'guild 的指标全名是 guild_merged_zone_refresh_total(告警引用它,改名后告警静默失效)'
+    $registered += 'guild_merged_zone_refresh_total'
+    $tradeSource = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/trade/internal/svc/servicecontext.go'))
+    Assert-Match -Text $tradeSource -Pattern '(?s)Subsystem:\s*"trade",\s*Name:\s*"merged_zone_refresh_total"' -Because 'trade 的指标全名是 trade_merged_zone_refresh_total(告警引用它,改名后告警静默失效)'
+    $registered += 'trade_merged_zone_refresh_total'
     $exprs = Get-AlertExprText -Text $text
-    $referenced = @([regex]::Matches($exprs, '\b(?:data_service|db)_[a-z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    $referenced = @([regex]::Matches($exprs, '\b(?:data_service|db|guild|trade|match)_[a-z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    Assert-True -Condition ($referenced.Count -ge 6) -Because "正则失配时这条先红(实际 $($referenced -join ','))"
     foreach ($metric in $referenced) {
-        Assert-True -Condition ($registered -contains $metric) -Because "表达式里的 $metric 必须由 data_service / go/db 的代码注册(名字逐字一致,改名后告警会静默失效)"
+        Assert-True -Condition ($registered -contains $metric) -Because "表达式里的 $metric 必须由代码注册(名字逐字一致,改名后告警会静默失效)"
     }
     # 标签取值从常量核对(写错取值的表达式不报错、只会永远不响)。
     $dsMetrics = 'go/data_service/internal/metrics/metrics.go'
-    $verdicts = Get-RouteReadyVerdictLabelValues
     foreach ($check in @(
-            @{ Metric = 'data_service_route_reconcile_event_total'; Label = 'event'; Path = $dsMetrics; Prefix = 'RouteReconcileEvent' }
-            @{ Metric = 'data_service_route_reconcile_push_total'; Label = 'result'; Path = $dsMetrics; Prefix = 'RouteReconcilePush' }
-            @{ Metric = 'data_service_route_reconcile_push_total'; Label = 'phase'; Path = $dsMetrics; Prefix = 'RouteReconcilePhase' }
-            @{ Metric = 'data_service_route_reconcile_tick_total'; Label = 'result'; Path = $dsMetrics; Prefix = 'RouteReconcileTick' }
-            @{ Metric = 'data_service_route_reconcile_mirror_total'; Label = 'result'; Path = $dsMetrics; Prefix = 'RouteReconcileMirror' }
-            @{ Metric = 'data_service_route_publish_total'; Label = 'result'; Path = $dsMetrics; Prefix = 'RoutePublish' }
             @{ Metric = 'data_service_route_register_total'; Label = 'outcome'; Path = $dsMetrics; Prefix = 'RouteRegister' }
             @{ Metric = 'data_service_route_read_total'; Label = 'result'; Path = $dsMetrics; Prefix = 'RouteReadResult' }
             @{ Metric = 'data_service_route_read_total'; Label = 'path'; Path = $dsMetrics; Prefix = 'RouteReadPath' }
             @{ Metric = 'data_service_merged_zone_refresh_total'; Label = 'result'; Path = $dsMetrics; Prefix = 'MergedZoneRefresh' }
+            @{ Metric = 'match_merged_zone_refresh_total'; Label = 'result'; Path = 'go/match/internal/metrics/metrics.go'; Prefix = 'MergedZoneRefresh' }
         )) {
         Assert-AlertLabelValues -Exprs $exprs -Metric $check.Metric -Label $check.Label -Allowed (Get-GoPrefixedStringConsts -RelativePath $check.Path -Prefix $check.Prefix) -Source "$($check.Path) 的 $($check.Prefix)*"
     }
-    foreach ($metric in @('data_service_route_ready_verdict_total', 'db_route_ready_verdict_total', 'data_service_route_ready_selfcheck')) {
-        Assert-AlertLabelValues -Exprs $exprs -Metric $metric -Label 'verdict' -Allowed $verdicts -Source 'shared/placement 的 verdict 名加 script_error'
-    }
+    Assert-AlertLabelValues -Exprs $exprs -Metric 'guild_merged_zone_refresh_total' -Label 'result' -Allowed @(Get-GoPrefixedStringConsts -RelativePath 'go/guild/internal/svc/merged_zones.go' -Prefix 'mergedZoneRefresh') -Source 'go/guild/internal/svc/merged_zones.go 的 mergedZoneRefresh*'
+    Assert-AlertLabelValues -Exprs $exprs -Metric 'trade_merged_zone_refresh_total' -Label 'result' -Allowed @('ok', 'error') -Source 'go/trade/internal/svc/servicecontext.go 的 ResultOK / ResultError'
+    Assert-Match -Text $tradeSource -Pattern '(?m)^\s*ResultOK\s*=\s*"ok"' -Because 'trade 的 result 取值 ok 来自 ResultOK'
+    Assert-Match -Text $tradeSource -Pattern '(?m)^\s*ResultError\s*=\s*"error"' -Because 'trade 的 result 取值 error 来自 ResultError'
     foreach ($check in @(
-            @{ Rule = 'DataServiceRouteReadNotTrusted'; Pattern = 'data_service_route_ready_verdict_total\{verdict!="trusted"\}' }
-            @{ Rule = 'GoDbRouteNotTrusted'; Pattern = 'db_route_ready_verdict_total\{verdict!="trusted"\}' }
-            @{ Rule = 'DataServiceRoutePublishUnconfirmed'; Pattern = 'data_service_route_publish_total\{result=~"not_durable\|error"\}' }
-            @{ Rule = 'DataServiceRouteRegisterFailures'; Pattern = 'data_service_route_register_total\{outcome=~"store_error\|precheck_error"\}' }
+            @{ Rule = 'DataServiceRouteReadErrors'; Pattern = 'data_service_route_read_total\{result="error"\}' }
+            @{ Rule = 'DataServiceRouteRegisterFailures'; Pattern = 'data_service_route_register_total\{outcome="store_error"\}' }
+            @{ Rule = 'GuildMergedZoneRefreshFailing'; Pattern = 'guild_merged_zone_refresh_total\{result="error"\}' }
+            @{ Rule = 'TradeMergedZoneRefreshFailing'; Pattern = 'trade_merged_zone_refresh_total\{result="error"\}' }
+            @{ Rule = 'MatchMergedZoneRefreshFailing'; Pattern = 'match_merged_zone_refresh_total\{result="error"\}' }
         )) {
         $body = $rules | Where-Object { $_ -match ('^\s*' + $check.Rule + '\b') }
-        Assert-Match -Text $body -Pattern $check.Pattern -Because "$($check.Rule) 的选择器(评审 A2-6 / B3-9 定的口径)"
+        Assert-Match -Text $body -Pattern $check.Pattern -Because "$($check.Rule) 的选择器"
     }
-    Assert-Match -Text $text -Pattern 'ServiceMonitor' -Because '文件头写明抓取前提:data-service 只有 Prometheus 注解、没有 ServiceMonitor,接入方式是 P2 门禁一项'
+    Assert-Match -Text $text -Pattern 'ServiceMonitor' -Because '文件头写明抓取前提:这些服务只有 Prometheus 注解、没有 ServiceMonitor'
 }
 
 Test-Case '存盘告警 player-store-alerts.yaml:PrometheusRule 形状、每条规则有 severity / summary / description / for;指标名由 go/db 源码注册;result 取值只能是 proto 枚举名或 go/db 的三个常量;提交失败和被拒的规则选择器钉死' {

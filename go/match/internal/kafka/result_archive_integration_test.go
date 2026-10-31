@@ -43,7 +43,7 @@ func TestCompletionKafkaTiDBArchiveBeforeOffsetRecovery(t *testing.T) {
 	transport := &kafkago.Transport{DialTimeout: 3 * time.Second}
 	t.Cleanup(transport.CloseIdleConnections)
 	client := &kafkago.Client{Addr: kafkago.TCP(brokers...), Transport: transport, Timeout: 8 * time.Second}
-	require.NoError(t, EnsureResultTopic(ResultConsumerConfig{Brokers: brokers, Topic: topic, GroupID: group, Partitions: 1, RequireSQLCommit: true}))
+	require.NoError(t, EnsureResultTopic(ResultConsumerConfig{Brokers: brokers, Topic: topic, GroupID: group, Partitions: 1, RequireDurability: true}))
 	t.Cleanup(func() {
 		cleanup, done := context.WithTimeout(context.Background(), 15*time.Second)
 		defer done()
@@ -118,7 +118,7 @@ func TestCompletionKafkaTiDBArchiveBeforeOffsetRecovery(t *testing.T) {
 	runResultConsumer(ctx, failed, func(context.Context, *kafkapb.BattleResultEvent) error {
 		t.Fatal("来源SQL失败时评分不能先运行")
 		return nil
-	}, true, sleepCtx, func(call context.Context, got *kafkapb.BattleResultEvent, body []byte, source string, part int, off int64) error {
+	}, sleepCtx, func(call context.Context, got *kafkapb.BattleResultEvent, body []byte, source string, part int, off int64) error {
 		attempts++
 		require.Equal(t, raw, body)
 		return failedStore.ArchiveCompletion(call, got, body, source, part, off)
@@ -155,7 +155,7 @@ func TestCompletionKafkaTiDBArchiveBeforeOffsetRecovery(t *testing.T) {
 			rated++
 			require.Equal(t, 1, archived)
 			return nil // 等价于评分关闭或不计分，完整来源仍必须归档。
-		}, true, sleepCtx, func(call context.Context, got *kafkapb.BattleResultEvent, body []byte, source string, part int, off int64) error {
+		}, sleepCtx, func(call context.Context, got *kafkapb.BattleResultEvent, body []byte, source string, part int, off int64) error {
 			archived++
 			require.Equal(t, raw, body)
 			require.Equal(t, expectedOffset, off)

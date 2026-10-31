@@ -246,6 +246,7 @@ func TestProcessOneAwaitsDurable(t *testing.T) {
 		return resultApplied(false), nil
 	}}
 	loop, m := newTestLoop(t, store, applier, nil)
+	loop.Ledger = &fakeLedger{}
 
 	if _, err := loop.ProcessOne(context.Background(), op); err != nil {
 		t.Fatalf("ProcessOne 出错: %v", err)
@@ -393,6 +394,7 @@ func TestRescheduleCarriesLeaseToken(t *testing.T) {
 		return resultApplied(false), nil
 	}}
 	loop, _ := newTestLoop(t, store, applier, nil)
+	loop.Ledger = &fakeLedger{}
 
 	loop.Tick(context.Background())
 
@@ -494,6 +496,7 @@ func TestWorkersBounded(t *testing.T) {
 		return resultApplied(true), nil
 	}}
 	loop, _ := newTestLoop(t, store, applier, func(c *LoopConfig) { c.Workers = 3 })
+	loop.Ledger = sqlLedgerFixture(true, ops...)
 
 	done := make(chan int, 1)
 	go func() { done <- loop.Tick(context.Background()) }()
@@ -847,7 +850,7 @@ func (f *fakeLedger) ReadPersistedLedger(context.Context, uint64) (*componentpb.
 	return f.ledger, f.err
 }
 
-// ReadSQLCommittedLedger 让同一份假账本也能充当已提交账本(RequireSQLCommit 打开的用例)。
+// ReadSQLCommittedLedger 让同一份假账本充当已提交账本。
 func (f *fakeLedger) ReadSQLCommittedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
 	return f.ReadPersistedLedger(ctx, playerID)
 }

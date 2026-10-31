@@ -43,7 +43,7 @@ const takeoverZone = testZoneId
 const takeoverScenePlayers = 2
 
 // takeoverCase:一个场景节点刚死,名下有几个实例(属主映射、反向索引、active 集合、实例人数齐全),
-// 死节点的 scene_count / player_count 与之对应。leading 控制本进程是不是领导者。
+// 死节点的 scene_count / 成员集合与之对应。leading 控制本进程是不是领导者。
 // 节点号 8990~8993、场景号 899xx 不与别的用例重名:再入屏障会读进程内的推迟摘除队列。
 type takeoverCase struct {
 	sc      *svc.ServiceContext
@@ -72,10 +72,10 @@ func newTakeoverCase(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Minired
 		require.NoError(t, err)
 		_, err = mr.ZAdd(activeInstancesKey(takeoverZone), float64(nowUnix()), member)
 		require.NoError(t, err)
-		require.NoError(t, mr.Set(fmtInstancePlayerCountKey(id), strconv.Itoa(takeoverScenePlayers)))
+		seedSceneMembers(mr, id, takeoverScenePlayers)
 	}
 	require.NoError(t, mr.Set(nodeSceneCountKey(takeoverZone, node), strconv.Itoa(len(scenes))))
-	require.NoError(t, mr.Set(nodePlayerCountKey(takeoverZone, node), strconv.Itoa(takeoverScenePlayers*len(scenes))))
+	seedNodeMembers(mr, takeoverZone, node, takeoverScenePlayers*len(scenes))
 	return &takeoverCase{sc: sc, mr: mr, leading: leading, node: node, scenes: scenes}
 }
 
@@ -118,8 +118,8 @@ func (c *takeoverCase) valueOrMissing(key string) string {
 func (c *takeoverCase) requireIntact(t *testing.T, why string) {
 	t.Helper()
 	assert.Equal(t, strconv.Itoa(len(c.scenes)), c.valueOrMissing(nodeSceneCountKey(takeoverZone, c.node)), "%s: scene_count", why)
-	assert.Equal(t, strconv.Itoa(takeoverScenePlayers*len(c.scenes)), c.valueOrMissing(nodePlayerCountKey(takeoverZone, c.node)),
-		"%s: player_count", why)
+	assert.Equal(t, strconv.Itoa(takeoverScenePlayers*len(c.scenes)), nodeMemberCount(c.mr, takeoverZone, c.node),
+		"%s: 节点成员", why)
 	for _, id := range c.scenes {
 		assert.Equal(t, c.node, c.valueOrMissing(sceneNodeKey(id)), "%s: scene %d 的属主映射", why, id)
 		in, err := c.sc.Redis.Sismember(nodeScenesKey(takeoverZone, c.node), strconv.FormatUint(id, 10))
@@ -134,14 +134,14 @@ func (c *takeoverCase) requireCleanedUp(t *testing.T, why string) {
 	t.Helper()
 	for _, id := range c.scenes {
 		assert.Equal(t, "<missing>", c.valueOrMissing(sceneNodeKey(id)), "%s: scene %d 是死节点的孤儿实例,必须销毁", why, id)
-		assert.Equal(t, "<missing>", c.valueOrMissing(fmtInstancePlayerCountKey(id)), "%s: scene %d 的实例人数", why, id)
+		assert.False(t, c.mr.Exists(instanceMembersKey(id)), "%s: scene %d 的成员集合", why, id)
 		in, err := c.sc.Redis.Sismember(nodeScenesKey(takeoverZone, c.node), strconv.FormatUint(id, 10))
 		require.NoError(t, err)
 		assert.False(t, in, "%s: scene %d 不得留在死节点的反向索引里", why, id)
 		requireActiveInstance(t, c.sc, takeoverZone, id, false)
 	}
 	assert.Equal(t, "<missing>", c.valueOrMissing(nodeSceneCountKey(takeoverZone, c.node)), "%s: 收完后删死节点的 scene_count", why)
-	assert.Equal(t, "<missing>", c.valueOrMissing(nodePlayerCountKey(takeoverZone, c.node)), "%s: 收完后删死节点的 player_count", why)
+	assert.False(t, c.mr.Exists(nodeMembersKey(takeoverZone, c.node)), "%s: 收完后删死节点的成员集合", why)
 }
 
 func nodeDeathDestroyedCountForTest(t *testing.T) float64 {

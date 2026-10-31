@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"shared/placement"
 	"shared/sqlpoolstats"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -175,60 +174,28 @@ var (
 		Help:      "GetPlayerInboxLedger outcomes: found (row read, ledger returned) | absent (no owner row) | error (routing, Redis or corrupt blob).",
 	}, []string{"result"})
 
-	// ── 玩家归属映射的提交点(docs/design/player-route-mapping-durability-proposal.md §4,第 1a 批)──
+	// ── 玩家归属映射(player_route 只在全局库一份,docs/design/player-route-mapping-durability-proposal.md §15)──
 	//
-	// 只在 RouteStore.Mode=db_first 时有数(redis 模式的 RegisterPlayerZone 不计)。两个 label 都是封闭集合,
-	// db_first 启动时由 PrimeRoute 全部预置为 0。**不要**把 player_id / rev 加成 label(AGENTS.md §9),
-	// 逐条明细在 `[RegisterPlayerZone][db_first]` 的 ERROR 日志里。
+	// 两个 label 都是封闭集合,启动时由 PrimeRoute 全部预置为 0。**不要**把 player_id 加成 label(AGENTS.md §9),
+	// 逐条明细在 `[RegisterPlayerZone]` / `[DataRoute]` 的 ERROR 日志里。
 	//
-	// 每一次 db_first 的 W1 恰好计一次,合计 = db_first 下 W1 的请求数。Redis 预检本身出错(三键 MGET
-	// 失败、MGET 长度不对、缓存里的 zone 解析不了)单独计 precheck_error:RegisterPlayerZone 的 error_code 只在 gRPC
-	// status 的 message 里,grpcstats 只分得出 Unavailable、分不出码 1 与码 30,不计的话这类拒绝在指标上就看不见。
+	// RegisterPlayerZone 的 error_code 只在 gRPC status 的 message 里,grpcstats 只分得出 Unavailable、分不出码,
+	// 所以每次 W1 恰好计一次结局:库里的判定走这个计数,不靠状态码。
 	routeRegisterTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "route_register_total",
-		Help: "db_first RegisterPlayerZone outcomes, exactly one per request: inserted|filled_home|filled_home_placement_kept|already_same " +
-			"(committed in player_route, published separately, see route_publish_total) | conflict|refused_unknown_row " +
-			"(decided by player_route) | precheck_conflict (decided by the mapping Redis precheck, store not called) | " +
-			"precheck_error (the mapping Redis precheck itself failed: MGET error or an unparsable cached zone; store not called) | " +
-			"store_error|invalid.",
+		Help: "RegisterPlayerZone outcomes, exactly one per request: inserted|filled_home|filled_home_placement_kept|already_same " +
+			"(committed in player_route) | conflict (player_route holds another home zone) | store_error|invalid.",
 	}, []string{"outcome"})
 
-	// 发布(set-if-newer 脚本 + WAITAOF)每次 publishRoute 调用的最终结果。not_durable 持续非零 = WAITAOF 预算不够
-	// (appendfsync everysec 下本地确认最长约 1s),每一次都在库里留下一行已提交未确认的映射,见提案 §11.2 的 P2 门禁。
-	// WAITAOF 回复形状不对(不是两个非负整数)是确定性错误、不重试,计在 error 而不是 not_durable:
-	// P2 门禁量「发布未确认率」时要把 error 一并看(提案 §11.2)。
-	routePublishTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "route_publish_total",
-		Help: "db_first route publish results per publishRoute call: applied|confirmed|superseded (success) | " +
-			"conflict|legacy_conflict|not_durable|error (failure; the player_route row stays committed but unpublished).",
-	}, []string{"result"})
-
-	// ── 第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2)──
-	//
-	// RouteStore.ReadRequiresReady=true 时 R2(home_fence)/ R6(home)/ R3(batch,按块计)每次读计一次,
-	// 结果是 cache(副本可信,用了缓存,含权威缺席)| sql(回源库读到了)| not_found_sql(回源库,权威缺席)| sql_error(回源失败,
-	// RPC 回 Unavailable)。enumerate(R7)在 db_first 下一律读库,与开关无关,只有 sql / sql_error。两个 label 都是封闭集合,
-	// 开关打开时 PrimeRouteRead 全部预置为 0;sql_error 持续非零 = 缓存不可信期间全局库也不可用,读方整体 fail-closed。
-	// **不要**把 player_id 加成 label(AGENTS.md §9),逐条明细在 `[RouteRead]` 日志里。
+	// player_route 的 SQL 读:home 每次读计一次,batch 每块计一次。error 持续非零 = 全局库读失败,归属查询整体 fail-closed;
+	// 调用方自己取消 / 超时不计(由 gRPC 层的状态码统计)。逐条明细在 `[DataRoute]` 日志里。
 	routeReadTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "route_read_total",
-		Help: "Route read gate results (RouteStore.ReadRequiresReady): path home|home_fence|batch (per chunk)|enumerate, " +
-			"result cache (trusted replica used, including authoritative absence) | sql (fell back to player_route and found the row) | " +
-			"not_found_sql (fell back, authoritative absence) | sql_error (fell back and failed; the RPC answers Unavailable).",
+		Help: "player_route SQL reads: path home|batch (per chunk), result ok (row read) | not_found (authoritative absence, home only) | " +
+			"error (the read failed; the RPC answers Unavailable).",
 	}, []string{"path", "result"})
-
-	// 读方每执行一次就绪读脚本记一次 verdict(placement.RouteReadyVerdict 的低基数名字),外加 script_error:
-	// 脚本没执行成功或回复形状不对(按不可信处理、回源库)。trusted 以外的取值持续出现 = 读方正在回源。
-	// P5 的门禁看对账 leader 的自检 gauge,不看这个计数(开关打开前读方不执行脚本,规格 §13.1 第 8 条)。
-	routeReadyVerdictTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "route_ready_verdict_total",
-		Help: "Route ready read script verdicts seen by data_service readers: trusted|absent|malformed|newer_version|" +
-			"identity_unavailable|not_master|identity_mismatch, or script_error (the script failed or replied in an unexpected shape).",
-	}, []string{"verdict"})
 
 	registerOnce sync.Once
 )
@@ -240,22 +207,18 @@ const (
 	RouteRegisterFilledHomePlacementKept = "filled_home_placement_kept"
 	RouteRegisterAlreadySame             = "already_same"
 	RouteRegisterConflict                = "conflict"
-	RouteRegisterRefusedUnknownRow       = "refused_unknown_row"
-	RouteRegisterPrecheckConflict        = "precheck_conflict"
-	RouteRegisterPrecheckError           = "precheck_error"
 	RouteRegisterStoreError              = "store_error"
 	RouteRegisterInvalid                 = "invalid"
 )
 
-// route_publish_total{result} 的取值(封闭集合,同上)。
+// route_read_total{path,result} 的取值(封闭集合,PrimeRoute 逐个预置;新增取值必须同时加进 routeReadSeries)。
 const (
-	RoutePublishApplied        = "applied"
-	RoutePublishConfirmed      = "confirmed"
-	RoutePublishSuperseded     = "superseded"
-	RoutePublishConflict       = "conflict"
-	RoutePublishLegacyConflict = "legacy_conflict"
-	RoutePublishNotDurable     = "not_durable"
-	RoutePublishError          = "error"
+	RouteReadPathHome  = "home"
+	RouteReadPathBatch = "batch"
+
+	RouteReadResultOK       = "ok"
+	RouteReadResultNotFound = "not_found"
+	RouteReadResultError    = "error"
 )
 
 var (
@@ -265,21 +228,18 @@ var (
 		RouteRegisterFilledHomePlacementKept,
 		RouteRegisterAlreadySame,
 		RouteRegisterConflict,
-		RouteRegisterRefusedUnknownRow,
-		RouteRegisterPrecheckConflict,
-		RouteRegisterPrecheckError,
 		RouteRegisterStoreError,
 		RouteRegisterInvalid,
 	}
 
-	routePublishResults = []string{
-		RoutePublishApplied,
-		RoutePublishConfirmed,
-		RoutePublishSuperseded,
-		RoutePublishConflict,
-		RoutePublishLegacyConflict,
-		RoutePublishNotDurable,
-		RoutePublishError,
+	// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(5 条):batch 没有逐 id 的缺席结论,
+	// 不出现的组合不预置,免得面板上多出恒为 0、看着像「在跑」的序列。
+	routeReadSeries = [][2]string{
+		{RouteReadPathHome, RouteReadResultOK},
+		{RouteReadPathHome, RouteReadResultNotFound},
+		{RouteReadPathHome, RouteReadResultError},
+		{RouteReadPathBatch, RouteReadResultOK},
+		{RouteReadPathBatch, RouteReadResultError},
 	}
 )
 
@@ -295,39 +255,37 @@ func register() {
 			playerNameOpsTotal, playerNameOpSeconds, playerNameCacheTotal,
 			assetOpLedgerReadTotal,
 			playerInboxLedgerReadTotal,
-			routeRegisterTotal, routePublishTotal,
-			routeReadTotal, routeReadyVerdictTotal,
+			routeRegisterTotal,
+			routeReadTotal,
 		)
 	})
 }
 
-// PrimeRoute 把 route_register_total(10 条)与 route_publish_total(7 条)的封闭集合逐个预置为 0。
-// 只在 RouteStore.Mode=db_first 时调(data_service.go 启动路径):—
-// refused_unknown_row / legacy_conflict 这类一辈子可能只发生几次的结局,序列不预先存在的话
-// `increase(...) > 0` 恰好漏掉第一次。redis 模式不调,免得面板上多出一组恒为 0、看着像"在跑"的序列。
+// PrimeRoute 把 route_register_total(7 条)与 route_read_total(5 条)的封闭集合逐个预置为 0(data_service.go 启动路径):
+// store_error 这类一辈子可能只发生几次的结局,序列不预先存在的话 `increase(...) > 0` 恰好漏掉第一次。
 func PrimeRoute() {
 	register()
 	for _, outcome := range routeRegisterOutcomes {
 		routeRegisterTotal.WithLabelValues(outcome).Add(0)
 	}
-	for _, result := range routePublishResults {
-		routePublishTotal.WithLabelValues(result).Add(0)
+	for _, s := range routeReadSeries {
+		routeReadTotal.WithLabelValues(s[0], s[1]).Add(0)
 	}
 }
 
-// ObserveRouteRegister 记一次 db_first RegisterPlayerZone 的结局。outcome 取 RouteRegister* 常量(封闭集合),本函数不校验。
+// ObserveRouteRegister 记一次 RegisterPlayerZone 的结局。outcome 取 RouteRegister* 常量(封闭集合),本函数不校验。
 func ObserveRouteRegister(outcome string) {
 	register()
 	routeRegisterTotal.WithLabelValues(outcome).Inc()
 }
 
-// ObserveRoutePublish 记一次发布(publishRoute 一次调用,含其内部重试)的最终结果。result 取 RoutePublish* 常量。
-func ObserveRoutePublish(result string) {
+// ObserveRouteRead 记一次 player_route 的 SQL 读。path / result 取 RouteRead* 常量(封闭集合),本函数不校验。
+func ObserveRouteRead(path, result string) {
 	register()
-	routePublishTotal.WithLabelValues(result).Inc()
+	routeReadTotal.WithLabelValues(path, result).Inc()
 }
 
-// merged_zone_refresh_total{result} 的取值:定时重读 zone_merged_into 的结局(routing.MergedZoneCache)。
+// merged_zone_refresh_total{result} 的取值:定时重读 zone_merged_into 的结局(placement.MergedZoneCache)。
 const (
 	MergedZoneRefreshOK    = "ok"
 	MergedZoneRefreshError = "error"
@@ -359,91 +317,26 @@ func ObserveMergedZoneRefresh(result string) {
 	mergedZoneRefreshTotal.WithLabelValues(result).Inc()
 }
 
-// route_read_total{path,result} 与 route_ready_verdict_total{verdict} 的取值(封闭集合,PrimeRouteRead 逐个预置;
-// 新增取值必须同时加进 routeReadSeries / routeReadyVerdicts)。
-const (
-	RouteReadPathHome  = "home"
-	RouteReadPathBatch = "batch"
-
-	RouteReadResultCache       = "cache"
-	RouteReadResultSQL         = "sql"
-	RouteReadResultNotFoundSQL = "not_found_sql"
-	RouteReadResultSQLError    = "sql_error"
-
-	// RouteReadyVerdictScriptError 是 verdict 之外的一个取值:读脚本没执行成功或回复形状不对。
-	RouteReadyVerdictScriptError = "script_error"
-)
-
-// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(7 条):batch 没有逐 id 的缺席结论,
-// 不出现的组合不预置,免得面板上多出恒为 0、看着像「在跑」的序列。
-var routeReadSeries = [][2]string{
-	{RouteReadPathHome, RouteReadResultCache},
-	{RouteReadPathHome, RouteReadResultSQL},
-	{RouteReadPathHome, RouteReadResultNotFoundSQL},
-	{RouteReadPathHome, RouteReadResultSQLError},
-	{RouteReadPathBatch, RouteReadResultCache},
-	{RouteReadPathBatch, RouteReadResultSQL},
-	{RouteReadPathBatch, RouteReadResultSQLError},
-}
-
-// routeReadyVerdicts 是 route_ready_verdict_total 的封闭集合:placement 的 7 个 verdict 名字(唯一出处,不在这里抄一份)
-// 加 script_error,共 8 条。
-func routeReadyVerdicts() []string {
-	return append(placement.RouteReadyVerdictNames(), RouteReadyVerdictScriptError)
-}
-
-// PrimeRouteRead 把 route_read_total(7 条)与 route_ready_verdict_total(8 条)逐个预置为 0。
-// 只在 RouteStore.ReadRequiresReady=true(必然 db_first)时调(svc.NewServiceContext):理由同 PrimeRoute ——
-// sql_error 这类一辈子可能只发生几次的结局,序列不预先存在的话 `increase(...) > 0` 恰好漏掉第一次;
-// 开关关着时不调,免得面板上多出一组恒为 0 的序列。
-func PrimeRouteRead() {
-	register()
-	for _, s := range routeReadSeries {
-		routeReadTotal.WithLabelValues(s[0], s[1]).Add(0)
-	}
-	for _, v := range routeReadyVerdicts() {
-		routeReadyVerdictTotal.WithLabelValues(v).Add(0)
-	}
-}
-
-// ObserveRouteRead 记一次读方门禁的读。path / result 取 RouteRead* 常量(封闭集合),本函数不校验。
-func ObserveRouteRead(path, result string) {
-	register()
-	routeReadTotal.WithLabelValues(path, result).Inc()
-}
-
-// ObserveRouteReadyVerdict 记读方一次就绪读脚本的结论:placement.RouteReadyVerdict.String() 或 RouteReadyVerdictScriptError。
-func ObserveRouteReadyVerdict(verdict string) {
-	register()
-	routeReadyVerdictTotal.WithLabelValues(verdict).Inc()
-}
-
 // 连接池类别(mmorpg_sql_pool_*{sql_client="data_service",pool=...},G2b):一个 store 一个独立连接池,类别即 store 名。
 // 封闭集合;svc.ServiceContext.SQLPoolSamples 按这些常量报样本。
 const (
 	PoolSnapshot       = "snapshot"        // player_snapshot / rollback_audit_log(SnapshotMySQL.MaxOpenConn)
 	PoolTransactionLog = "transaction_log" // transaction_log(SnapshotMySQL.MaxOpenConn)
 	PoolPlayerName     = "player_name"     // player_name(PlayerName.MaxOpenConn)
-	PoolPlayerRoute    = "player_route"    // 路由表(RouteStore.MaxOpenConn),只在 RouteStore.Mode=db_first 时装配
+	PoolPlayerRoute    = "player_route"    // 路由表(RouteStore.MaxOpenConn)
 )
 
 // NewSQLPoolCollector 只构造不注册(单测用自己的注册表)。sql_client 取本包的 subsystem("data_service")。
-// includeRoute 为 false 时不声明 player_route:理由同 PrimeRoute —— redis 模式下不装配 route store,
-// 不要一组恒为 0、看着像在跑的序列。
-func NewSQLPoolCollector(source sqlpoolstats.Source, includeRoute bool) prometheus.Collector {
-	pools := []string{PoolSnapshot, PoolTransactionLog, PoolPlayerName}
-	if includeRoute {
-		pools = append(pools, PoolPlayerRoute)
-	}
-	return sqlpoolstats.NewCollector(subsystem, pools, source)
+func NewSQLPoolCollector(source sqlpoolstats.Source) prometheus.Collector {
+	return sqlpoolstats.NewCollector(subsystem, []string{PoolSnapshot, PoolTransactionLog, PoolPlayerName, PoolPlayerRoute}, source)
 }
 
 // RegisterSQLPools 把连接池快照接到默认注册表(Start 暴露的那个)。进程内调一次(data_service.go 启动路径;
 // 不能放进 svc.NewServiceContext:单测会多次构造 ServiceContext,默认注册表重复注册会报错)。
-// 注册失败只记日志:指标是观测面,不能挡住 Load/Save。
-func RegisterSQLPools(source sqlpoolstats.Source, includeRoute bool) {
+// 注册失败只记日志:指标是观测面,不能挡住业务。
+func RegisterSQLPools(source sqlpoolstats.Source) {
 	register()
-	if err := prometheus.Register(NewSQLPoolCollector(source, includeRoute)); err != nil {
+	if err := prometheus.Register(NewSQLPoolCollector(source)); err != nil {
 		logx.Errorf("[metrics] register sql pool collector failed (pool metrics unavailable): %v", err)
 	}
 }
@@ -643,7 +536,7 @@ const (
 	HomeZoneRPCBatch = "batch" // BatchGetPlayerHomeZone(login 角色列表)
 
 	// 按返回的 gRPC code 归类(server.homeZoneReadResult):OK → ok,NotFound(映射的权威缺席)→ not_found,
-	// 其余(mapping Redis / 全局库故障、调用方取消或超时)→ error。批量查没有缺席结论,not_found 恒为 0。
+	// 其余(全局库故障、调用方取消或超时)→ error。批量查没有缺席结论,not_found 恒为 0。
 	HomeZoneReadResultOK       = "ok"
 	HomeZoneReadResultNotFound = "not_found"
 	HomeZoneReadResultError    = "error"
@@ -682,7 +575,7 @@ var (
 		AccountDirectoryResultOK, AccountDirectoryResultNotFound, AccountDirectoryResultRejected, AccountDirectoryResultError,
 	}
 
-	// loginReadLatencyBuckets:0.5ms 起步盖住 Redis 就绪读的命中,2.5s 封顶盖住 login / scene_manager 1.5s 级的调用方超时与 TiDB 锁等待。
+	// loginReadLatencyBuckets:0.5ms 起步盖住同地域的 TiDB 点查,2.5s 封顶盖住 login / scene_manager 1.5s 级的调用方超时与 TiDB 锁等待。
 	loginReadLatencyBuckets = []float64{0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5}
 
 	homeZoneReadSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -748,314 +641,4 @@ func ObserveHomeZoneBatchIDs(n int) {
 func ObserveAccountDirectoryRPC(rpc, result string, d time.Duration) {
 	registerLoginReads()
 	accountDirectoryRPCSeconds.WithLabelValues(rpc, result).Observe(d.Seconds())
-}
-
-// ── 对账 leader(D1 第 1b-2 批,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §4.2、§13.1 第 8、9 条)──
-//
-// 三类序列,口径不同(告警按 leader 过滤,1b-3):
-//   - 装配型 gauge(route_reconcile_leader / assembled / arm_enabled):每个装配了 reconciler 的副本**恒导出**,值 0/1;
-//     NoLeader 告警 = sum(leader) == 0 and sum(assembled) > 0,ArmEnabled 出现两种取值即告警(全服单值)。
-//   - leader 观测型 gauge(route_ready_marker / route_writable / route_cache_verified_age_seconds / route_ready_selfcheck):
-//     **只有现任 leader 导出**,掉主时删掉(ClearRouteLeaderObservations),免得非 leader 的 0 或前任的旧值把告警带偏。
-//   - 计数 / 直方图:全部封闭集合,PrimeRouteReconcile 在装配时逐个预置 0(理由同 PrimeRoute)。
-//
-// 单独一把 sync.Once 注册,不动上面那张 MustRegister 清单(只追加)。label 不带 player_id / zone(AGENTS.md §9)。
-
-// route_reconcile_tick_total{result} 的取值。
-const (
-	RouteReconcileTickOK         = "ok"
-	RouteReconcileTickNotLeader  = "not_leader"
-	RouteReconcileTickLeaseLost  = "lease_lost"
-	RouteReconcileTickDBError    = "db_error"
-	RouteReconcileTickRedisError = "redis_error"
-	RouteReconcileTickFrozen     = "frozen"
-)
-
-// route_reconcile_event_total{event} 的取值。
-const (
-	RouteReconcileEventMarkerArmed                   = "marker_armed"
-	RouteReconcileEventMarkerDroppedIdentity         = "marker_dropped_identity"
-	RouteReconcileEventMarkerDroppedEviction         = "marker_dropped_eviction"
-	RouteReconcileEventMarkerDroppedMalformed        = "marker_dropped_malformed"
-	RouteReconcileEventMarkerDroppedDisarmed         = "marker_dropped_disarmed"
-	RouteReconcileEventArmingRefusedEviction         = "arming_refused_eviction"
-	RouteReconcileEventArmingRefusedUnresolved       = "arming_refused_unresolved"
-	RouteReconcileEventArmingRefusedDebugEnabled     = "arming_refused_debug_enabled"
-	RouteReconcileEventFreezeWatermark               = "freeze_watermark"
-	RouteReconcileEventFreezeGeneration              = "freeze_generation"
-	RouteReconcileEventFreezeCacheAhead              = "freeze_cache_ahead"
-	RouteReconcileEventLeaseReleasedRedisUnreachable = "lease_released_redis_unreachable"
-	RouteReconcileEventTaskStarted                   = "task_started"
-	RouteReconcileEventTaskCompleted                 = "task_completed"
-	RouteReconcileEventTaskAborted                   = "task_aborted"
-)
-
-// route_reconcile_push_total{phase,result} 与 task_seconds / task_rows{phase} 的 phase 取值。
-const (
-	RouteReconcilePhasePrewarm     = "prewarm"
-	RouteReconcilePhaseRepair      = "repair"
-	RouteReconcilePhaseCatchUp     = "catch_up"
-	RouteReconcilePhaseIncremental = "incremental"
-)
-
-// route_reconcile_push_total{phase,result} 的 result 取值(一行一个结局)。cache_ahead 不是发布脚本的回复,
-// 是 superseded 之后复读库确认「缓存比库新」的那一行(随即冻结映射写者)。
-const (
-	RouteReconcilePushSkippedCurrent   = "skipped_current"
-	RouteReconcilePushApplied          = "applied"
-	RouteReconcilePushConfirmed        = "confirmed"
-	RouteReconcilePushSuperseded       = "superseded"
-	RouteReconcilePushCacheAhead       = "cache_ahead"
-	RouteReconcilePushConflict         = "conflict"
-	RouteReconcilePushLegacyConflict   = "legacy_conflict"
-	RouteReconcilePushTombstoneSkipped = "tombstone_skipped"
-	RouteReconcilePushDBInvalid        = "db_invalid"
-	RouteReconcilePushError            = "error"
-)
-
-// route_reconcile_mirror_total{result} 的取值:merge:merged_into:{src}(只增)。
-const (
-	RouteReconcileMirrorMergedIntoAdded    = "merged_into_added"
-	RouteReconcileMirrorMergedIntoPresent  = "merged_into_present"
-	RouteReconcileMirrorMergedIntoConflict = "merged_into_conflict"
-	RouteReconcileMirrorError              = "error"
-)
-
-// RouteReadySelfCheckScriptError 是 route_ready_selfcheck{verdict} 在 placement 的 7 个 verdict 之外的一个取值:
-// 自检脚本没执行成功或回复形状不对。
-const RouteReadySelfCheckScriptError = "script_error"
-
-var (
-	routeReconcileTickResults = []string{
-		RouteReconcileTickOK, RouteReconcileTickNotLeader, RouteReconcileTickLeaseLost,
-		RouteReconcileTickDBError, RouteReconcileTickRedisError, RouteReconcileTickFrozen,
-	}
-	routeReconcileEvents = []string{
-		RouteReconcileEventMarkerArmed,
-		RouteReconcileEventMarkerDroppedIdentity,
-		RouteReconcileEventMarkerDroppedEviction,
-		RouteReconcileEventMarkerDroppedMalformed,
-		RouteReconcileEventMarkerDroppedDisarmed,
-		RouteReconcileEventArmingRefusedEviction,
-		RouteReconcileEventArmingRefusedUnresolved,
-		RouteReconcileEventArmingRefusedDebugEnabled,
-		RouteReconcileEventFreezeWatermark,
-		RouteReconcileEventFreezeGeneration,
-		RouteReconcileEventFreezeCacheAhead,
-		RouteReconcileEventLeaseReleasedRedisUnreachable,
-		RouteReconcileEventTaskStarted,
-		RouteReconcileEventTaskCompleted,
-		RouteReconcileEventTaskAborted,
-	}
-	routeReconcilePhases = []string{
-		RouteReconcilePhasePrewarm, RouteReconcilePhaseRepair, RouteReconcilePhaseCatchUp, RouteReconcilePhaseIncremental,
-	}
-	routeReconcilePushResults = []string{
-		RouteReconcilePushSkippedCurrent,
-		RouteReconcilePushApplied,
-		RouteReconcilePushConfirmed,
-		RouteReconcilePushSuperseded,
-		RouteReconcilePushCacheAhead,
-		RouteReconcilePushConflict,
-		RouteReconcilePushLegacyConflict,
-		RouteReconcilePushTombstoneSkipped,
-		RouteReconcilePushDBInvalid,
-		RouteReconcilePushError,
-	}
-	routeReconcileMirrorResults = []string{
-		RouteReconcileMirrorMergedIntoAdded,
-		RouteReconcileMirrorMergedIntoPresent,
-		RouteReconcileMirrorMergedIntoConflict,
-		RouteReconcileMirrorError,
-	}
-)
-
-// routeReadySelfCheckVerdicts 是 route_ready_selfcheck{verdict} 的封闭集合:placement 的 7 个 verdict 名字(唯一出处)加 script_error。
-func routeReadySelfCheckVerdicts() []string {
-	return append(placement.RouteReadyVerdictNames(), RouteReadySelfCheckScriptError)
-}
-
-var (
-	routeReconcileLeader = prometheus.NewGauge(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_leader",
-		Help:      "1 while this data_service replica holds the route reconcile lease, else 0. Exported by every replica that assembled the reconciler.",
-	})
-	routeReconcileAssembled = prometheus.NewGauge(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_assembled",
-		Help:      "1 on every replica that assembled the route reconcile leader (RouteStore.Mode=db_first and Reconcile.Enabled).",
-	})
-	routeReconcileArmEnabled = prometheus.NewGauge(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_arm_enabled",
-		Help:      "RouteStore.Reconcile.ArmReadyMarker of this replica (0/1); it must be the same on every replica sharing the global DB.",
-	})
-	routeReadyMarker = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "route_ready_marker",
-		Help:      "Current reconcile leader only: 1 if mapping:route:ready is present after this tick, else 0.",
-	}, nil)
-	routeWritable = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "route_writable",
-		Help:      "Current reconcile leader only: route_meta.writable as seen by its last tick (0 = route writers frozen).",
-	}, nil)
-	routeCacheVerifiedAgeSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "route_cache_verified_age_seconds",
-		Help:      "Current reconcile leader only: database clock minus route_reconcile.cache_verified_ms, in seconds (+Inf when never verified).",
-	}, nil)
-	routeReadySelfCheck = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "route_ready_selfcheck",
-		Help:      "Current reconcile leader only: 1 on the verdict its route ready read script (no mapping keys) returned this tick, 0 on the others.",
-	}, []string{"verdict"})
-	routeReconcileTickTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_tick_total",
-		Help:      "Route reconcile ticks by result: ok|not_leader|lease_lost|db_error|redis_error|frozen.",
-	}, []string{"result"})
-	routeReconcileEventTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_event_total",
-		Help:      "Route reconcile leader events (marker armed / dropped, arming refused, freezes, lease released, tasks).",
-	}, []string{"event"})
-	routeReconcilePushTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_push_total",
-		Help:      "Rows pushed by the reconcile leader, by phase (prewarm|repair|catch_up|incremental) and per-row result.",
-	}, []string{"phase", "result"})
-	routeReconcileMirrorTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_mirror_total",
-		Help:      "merge:merged_into (add-only) reconciliation results.",
-	}, []string{"result"})
-	routeReconcileTaskSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_task_seconds",
-		Help:      "Wall time of finished reconcile tasks (completed or aborted), by phase.",
-		Buckets:   []float64{1, 5, 15, 60, 300, 900, 1800, 3600, 7200, 14400, 28800, 57600},
-	}, []string{"phase"})
-	routeReconcileTaskRows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: subsystem,
-		Name:      "route_reconcile_task_rows",
-		Help:      "Rows processed so far by the running (or last) reconcile task, by phase (progress).",
-	}, []string{"phase"})
-
-	reconcileRegisterOnce sync.Once
-)
-
-func registerRouteReconcile() {
-	reconcileRegisterOnce.Do(func() {
-		prometheus.MustRegister(
-			routeReconcileLeader, routeReconcileAssembled, routeReconcileArmEnabled,
-			routeReadyMarker, routeWritable, routeCacheVerifiedAgeSeconds, routeReadySelfCheck,
-			routeReconcileTickTotal, routeReconcileEventTotal, routeReconcilePushTotal, routeReconcileMirrorTotal,
-			routeReconcileTaskSeconds, routeReconcileTaskRows,
-		)
-	})
-}
-
-// PrimeRouteReconcile 在装配了 reconciler 的副本上调一次(data_service.go 启动路径):assembled=1、leader=0、arm_enabled=arm,
-// 计数器的全部封闭集合预置 0(tick 6、event 15、push 4×10、mirror 4),task_seconds / task_rows 每个 phase 一条。
-// leader 观测型 gauge 不预置(只有现任 leader 导出)。redis 模式与 Enabled=false 不调。
-func PrimeRouteReconcile(arm bool) {
-	registerRouteReconcile()
-	routeReconcileAssembled.Set(1)
-	routeReconcileLeader.Set(0)
-	routeReconcileArmEnabled.Set(boolGauge(arm))
-	for _, r := range routeReconcileTickResults {
-		routeReconcileTickTotal.WithLabelValues(r).Add(0)
-	}
-	for _, e := range routeReconcileEvents {
-		routeReconcileEventTotal.WithLabelValues(e).Add(0)
-	}
-	for _, p := range routeReconcilePhases {
-		for _, r := range routeReconcilePushResults {
-			routeReconcilePushTotal.WithLabelValues(p, r).Add(0)
-		}
-		routeReconcileTaskSeconds.WithLabelValues(p)
-		routeReconcileTaskRows.WithLabelValues(p).Set(0)
-	}
-	for _, r := range routeReconcileMirrorResults {
-		routeReconcileMirrorTotal.WithLabelValues(r).Add(0)
-	}
-}
-
-// SetRouteReconcileLeader 写 route_reconcile_leader(恒导出,不删)。
-func SetRouteReconcileLeader(held bool) {
-	registerRouteReconcile()
-	routeReconcileLeader.Set(boolGauge(held))
-}
-
-// ObserveRouteReconcileTick 记一拍的结果(RouteReconcileTick* 常量)。
-func ObserveRouteReconcileTick(result string) {
-	registerRouteReconcile()
-	routeReconcileTickTotal.WithLabelValues(result).Inc()
-}
-
-// ObserveRouteReconcileEvent 记一个事件(RouteReconcileEvent* 常量)。
-func ObserveRouteReconcileEvent(event string) {
-	registerRouteReconcile()
-	routeReconcileEventTotal.WithLabelValues(event).Inc()
-}
-
-// ObserveRouteReconcilePush 累加 n 行某个推送结局。n <= 0 直接返回。
-func ObserveRouteReconcilePush(phase, result string, n int) {
-	if n <= 0 {
-		return
-	}
-	registerRouteReconcile()
-	routeReconcilePushTotal.WithLabelValues(phase, result).Add(float64(n))
-}
-
-// ObserveRouteReconcileMirror 累加 n 个镜像对账结局。n <= 0 直接返回。
-func ObserveRouteReconcileMirror(result string, n int) {
-	if n <= 0 {
-		return
-	}
-	registerRouteReconcile()
-	routeReconcileMirrorTotal.WithLabelValues(result).Add(float64(n))
-}
-
-// ObserveRouteReconcileTaskSeconds 记一个已结束任务(完成或中止)的耗时。
-func ObserveRouteReconcileTaskSeconds(phase string, d time.Duration) {
-	registerRouteReconcile()
-	routeReconcileTaskSeconds.WithLabelValues(phase).Observe(d.Seconds())
-}
-
-// SetRouteReconcileTaskRows 写任务进度(已处理行数)。
-func SetRouteReconcileTaskRows(phase string, n int) {
-	registerRouteReconcile()
-	routeReconcileTaskRows.WithLabelValues(phase).Set(float64(n))
-}
-
-// SetRouteLeaderObservations 由现任 leader 每拍写一次四个观测型 gauge。selfCheck 取 placement.RouteReadyVerdict.String()
-// 或 RouteReadySelfCheckScriptError:该 verdict 置 1,其余 7 个置 0。cacheVerifiedAgeSeconds 可以是 +Inf(从未验证)。
-func SetRouteLeaderObservations(markerPresent, writable bool, cacheVerifiedAgeSeconds float64, selfCheck string) {
-	registerRouteReconcile()
-	routeReadyMarker.WithLabelValues().Set(boolGauge(markerPresent))
-	routeWritable.WithLabelValues().Set(boolGauge(writable))
-	routeCacheVerifiedAgeSeconds.WithLabelValues().Set(cacheVerifiedAgeSeconds)
-	for _, v := range routeReadySelfCheckVerdicts() {
-		routeReadySelfCheck.WithLabelValues(v).Set(boolGauge(v == selfCheck))
-	}
-}
-
-// ClearRouteLeaderObservations 删掉四个 leader 观测型 gauge 的全部序列(掉主、关停时调):只有现任 leader 导出它们。
-func ClearRouteLeaderObservations() {
-	registerRouteReconcile()
-	routeReadyMarker.Reset()
-	routeWritable.Reset()
-	routeCacheVerifiedAgeSeconds.Reset()
-	routeReadySelfCheck.Reset()
-}
-
-// boolGauge 把 bool 换成 gauge 的 0/1。
-func boolGauge(b bool) float64 {
-	if b {
-		return 1
-	}
-	return 0
 }

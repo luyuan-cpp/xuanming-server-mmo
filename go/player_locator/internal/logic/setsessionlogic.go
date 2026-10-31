@@ -39,7 +39,7 @@ func (l *SetSessionLogic) SetSession(in *pb.SetSessionRequest) (*common.Empty, e
 	// clone 后再补继承字段，避免修改 gRPC request 自身。
 	s := proto.Clone(incoming).(*pb.PlayerSession)
 	key := sessionKey(s.PlayerId)
-	expected, err := l.svcCtx.RedisClient.Get(l.ctx, key).Bytes()
+	expected, err := l.svcCtx.PlayerRedis.Get(l.ctx, key).Bytes()
 	if err != nil && err != redis.Nil {
 		return nil, err
 	}

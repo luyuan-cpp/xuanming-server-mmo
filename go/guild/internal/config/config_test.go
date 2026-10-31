@@ -10,6 +10,7 @@ import (
 	"github.com/zeromicro/go-zero/core/conf"
 
 	"shared/assetopwake"
+	"shared/playerredis"
 )
 
 // 直接加载当前正式样例，避免测试注入掩盖全局会话权威的配置回归。
@@ -23,7 +24,7 @@ func TestEtcTemplateRequiresExplicitGlobalSessions(t *testing.T) {
 	if err := loadEtcWithAuthorityForTest(t, &c); err != nil {
 		t.Fatalf("当前样例显式全局权威配置应可加载: %v", err)
 	}
-	if c.AccountRoleSchema == "" || c.MySQL.Backend != "tidb" || c.MatchAuthoritySchema == "" || !c.GlobalLoginSessions || strings.TrimSpace(c.LoginRedis.Host) == "" {
+	if c.AccountRoleSchema == "" || c.MySQL.Backend != "tidb" || c.MatchAuthoritySchema == "" || !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() {
 		t.Fatal("生产样例必须显式声明同事务域权威库、Match权威库和全局LoginRedis")
 	}
 	for _, test := range []struct {
@@ -31,9 +32,9 @@ func TestEtcTemplateRequiresExplicitGlobalSessions(t *testing.T) {
 		change func(*Config)
 	}{
 		{"未声明全局会话", func(c *Config) { c.GlobalLoginSessions = false }},
-		{"登录实例缺失", func(c *Config) { c.LoginRedis.Host = "" }},
+		{"登录实例缺失", func(c *Config) { c.LoginRedis.Addrs = nil }},
 		{"非法登录DB", func(c *Config) { c.LoginRedis.DB = -1 }},
-		{"非法登录连接池", func(c *Config) { c.LoginRedis.PoolSize = -1 }},
+		{"非法登录连接池", func(c *Config) { c.LoginRedis.PoolSizePerNode = -1 }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			invalid := c
@@ -162,7 +163,7 @@ func TestTrialMatchAuthoritySchemaMustBeExplicit(t *testing.T) {
 	c := loadMinimal(t)
 	c.AccountRoleSchema = "global_roles"
 	c.GlobalLoginSessions = true
-	c.LoginRedis.Host = "127.0.0.1:26379"
+	c.LoginRedis.Addrs = []string{"127.0.0.1:26379"}
 	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "MatchAuthoritySchema") {
 		t.Fatalf("不能从DSN猜Match权威库: %v", err)
 	}
@@ -1021,5 +1022,29 @@ func TestApplicationQuotaConfig(t *testing.T) {
 		if err := conf.LoadFromYamlBytes([]byte(minimalGuildYaml+"\nApplicationQuotaPerMinute: "+raw+"\n"), &invalid); err == nil {
 			t.Errorf("显式配置阈值 %s 不得被默认值掩盖", raw)
 		}
+	}
+}
+
+// 没写 PlayerRedis.Addrs:玩家域指向 PlayerLocatorRedis 那一个实例,它没写 Host 时回落 RedisClient;写了就完全按它来。
+func TestEffectivePlayerRedis(t *testing.T) {
+	c := Config{
+		RedisClient:        RedisConf{Host: "global:6379", Password: "global-secret"},
+		PlayerLocatorRedis: RedisConf{Host: "locator:6379", Password: "locator-secret", PoolSize: 9},
+	}
+	got := c.EffectivePlayerRedis()
+	if len(got.Addrs) != 1 || got.Addrs[0] != "locator:6379" || got.Password != "locator-secret" || got.PoolSizePerNode != 9 {
+		t.Fatalf("应指向 PlayerLocatorRedis: %+v", got)
+	}
+
+	c.PlayerLocatorRedis = RedisConf{}
+	got = c.EffectivePlayerRedis()
+	if len(got.Addrs) != 1 || got.Addrs[0] != "global:6379" || got.Password != "global-secret" || got.PoolSizePerNode != playerRedisFallbackPoolSize {
+		t.Fatalf("PlayerLocatorRedis 没写 Host 时应回落 RedisClient: %+v", got)
+	}
+
+	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true}
+	got = c.EffectivePlayerRedis()
+	if len(got.Addrs) != 2 || !got.Cluster || got.Password != "" {
+		t.Fatalf("写了 Addrs 应完全按它来: %+v", got)
 	}
 }

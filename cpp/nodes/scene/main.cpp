@@ -5,6 +5,7 @@
 #include "node/system/node/node_entry.h"
 #include "node/system/etcd/etcd_transport.h"
 #include "infra/agones/agones_gameserver_lifecycle.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "handler/rpc/scene_handler.h"
 #include "handler/grpc/scene_node_service.h"
 #include "core/config/config.h"
@@ -395,6 +396,7 @@ int main(int argc, char *argv[])
 
 		// Node 正常 finalizer 已先 free Hiredis;这里是幂等兜底。
 		tlsRedis.Shutdown();
+		tlsPlayerRedis.Shutdown();
 		tlsRedisSystem.Shutdown();
 
 		// loop 退出后的兜底 join。SetBeforeShutdown 已经调过一次,Stop() 幂等;

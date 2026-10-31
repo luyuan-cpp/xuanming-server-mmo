@@ -3,7 +3,6 @@ package accountdirectory
 import (
 	"context"
 	"regexp"
-	"shared/savebarrier"
 	"strings"
 	"unicode/utf8"
 
@@ -13,6 +12,11 @@ import (
 
 const SceneSecretEnv = "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE"
 const MaxTradeHolders = 256
+
+// InitialOwnerEpoch/InitialSaveSeq 只供严格全新 ID 的目录和 player_store 初始行共同提交使用。
+// 这不是 actor 号源：加载先采纳此地板，首任 actor 仍由 SceneManager 从 1 铸出（取 max(2, 当前 + 1)）。
+const InitialOwnerEpoch uint64 = 1
+const InitialSaveSeq uint64 = 1
 
 var instanceIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
@@ -46,9 +50,9 @@ func ValidFreezeEvidence(e *dspb.AccountRoleFreezeEvidence) bool {
 		return e.OwnerEpoch == 0 && e.SaveSeq == 0
 	case dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE:
 		return e.OwnerEpoch > 0 && e.SaveSeq > 0 &&
-			!(e.OwnerEpoch == savebarrier.InitialOwnerEpoch && e.SaveSeq == savebarrier.InitialSaveSeq)
+			!(e.OwnerEpoch == InitialOwnerEpoch && e.SaveSeq == InitialSaveSeq)
 	case dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT:
-		return e.OwnerEpoch == savebarrier.InitialOwnerEpoch && e.SaveSeq == savebarrier.InitialSaveSeq
+		return e.OwnerEpoch == InitialOwnerEpoch && e.SaveSeq == InitialSaveSeq
 	default:
 		return false
 	}

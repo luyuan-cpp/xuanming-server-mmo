@@ -5,7 +5,7 @@ package logic
 // 断言面是「给谁 bump 了哪些域」:用记录型假 Evaler 装进 playersync.Bumper,读它收到的 KEYS / ARGV。
 // 键名与字段名测试自己拼(不调 playersync.Key):它们是 C++ scene 解析的跨语言契约,
 // 生产端改了格式、测试跟着一起改,谁也发现不了。
-// 最后一条用例在 miniredis 上经 go-zero 适配器真实执行 BumpScript,钉住装配形态(SharedRedis 句柄)。
+// 最后一条用例在 miniredis 上经 go-redis 适配器真实执行 BumpScript,钉住装配形态(PlayerRedis 句柄)。
 
 import (
 	"context"
@@ -73,7 +73,7 @@ func (f *fixture) withSyncDigest() *recordingDigest {
 
 // digestKey 拼 player:{id}:sync_digest。刻意不调 playersync.Key:见文件头。
 func digestKey(playerID uint64) string {
-	return "player:" + strconv.FormatUint(playerID, 10) + ":sync_digest"
+	return "player:{" + strconv.FormatUint(playerID, 10) + "}:sync_digest"
 }
 
 // digestFields 把域转成排好序的域号十进制(hash 字段名)。
@@ -378,10 +378,10 @@ func TestNilSyncDigestIsNoop(t *testing.T) {
 	})
 }
 
-// 装配形态:SharedRedis(go-zero)上真实执行 BumpScript —— g 起种、计数加一、键带 TTL。
-func TestAcceptFriendBumpsSharedRedis(t *testing.T) {
+// 装配形态:PlayerRedis 上真实执行 BumpScript —— g 起种、计数加一、键带 TTL。
+func TestAcceptFriendBumpsPlayerRedis(t *testing.T) {
 	f := newFixture(t, nil)
-	f.svcCtx.SyncDigest = playersync.NewBumper(playersync.NewGoZeroEvaler(f.svcCtx.SharedRedis), "friend")
+	f.svcCtx.SyncDigest = playersync.NewBumper(playersync.NewGoRedisEvaler(f.svcCtx.PlayerRedis), "friend")
 
 	resp, err := f.logic().AcceptFriend(playerCtx(digestMe), &pb.AcceptFriendRequest{FromPlayerId: digestPeer, RequestId: digestPeer})
 	require.NoError(t, err)
@@ -393,6 +393,6 @@ func TestAcceptFriendBumpsSharedRedis(t *testing.T) {
 		assert.Equal(t, "1", f.sharedMr.HGet(key, strconv.Itoa(int(domFriendList))), key)
 		assert.Equal(t, "1", f.sharedMr.HGet(key, strconv.Itoa(int(domFriendRequest))), key)
 		assert.Equal(t, playersync.DefaultTTL, f.sharedMr.TTL(key), key)
-		assert.False(t, f.friendMr.Exists(key), "摘要键只能写在 SharedRedis(C++ 只读核心实例)")
+		assert.False(t, f.friendMr.Exists(key), "摘要键只能写在 PlayerRedis(C++ 读玩家域)")
 	}
 }

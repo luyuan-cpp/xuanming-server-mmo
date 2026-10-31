@@ -43,8 +43,8 @@
 //     零号分支只留给单测和绕过统一出口的调用。
 //   * 传输失败 = 结果未知(kTransportFailed),与"等不到完成通知"(kNoReply)同侧:settle 之前不读、不提前踢,
 //     读不到时也不盲踢。
-//   * 核实与凭证补写只走不重放的 zone Redis 连接(tlsRedis.GetZoneRedis() 的 muduo hiredis::Hiredis::command,
-//     无队列、无重放)。改走带重试队列的接口,补写可能被重放到某次载入的标记清理之后,等于给活持有者发放行证。
+//   * 核实与凭证补写只走不重放结果未知命令的玩家域句柄(tlsPlayerRedis:路由层只重试确定没执行的命令)。
+//     改走会重放的接口,补写可能被重放到某次载入的标记清理之后,等于给活持有者发放行证。
 //   * 本节点有该玩家实体、或他的载入在途时绝不补写(DecideCredential 的 kSkipLocalHolder);实体已建出时也不踢。
 //   * 核实应答只在 AcceptsVerifyReply 为真时受理(阶段 + 在途 + 代际,连同 Find 的 seq 共四项)。
 //   * 无法核实(连续 kVerifyBudget 读不到)时,只有"本节点替他发的请求都确定没写过落点"才踢
@@ -144,9 +144,8 @@ namespace relocate_confirm
 	// 为什么不删任何键、也不复用 kLuaJudgeTravelOutcome:那段脚本"先删本族标记再读"是为了让活着的冻结实体能安全
 	//   解冻;这里没有实体可解冻,删标记只会毁掉被踢玩家重登要出示的凭证(换手门回 18)。
 	// 为什么用 MGET 不用 GET:类型不对的键给 nil,不抛 WRONGTYPE。
-	// 三个键须同槽。owner 键已带 {id} 哈希标签(redis-player-store-cluster.md §13 第 2a 批);location / handoff 第 3 批
-	// 才加标签,在那之前 Redis Cluster 下本脚本会被 CROSSSLOT 整体拒绝(所有核实都落到"读不到")。当前部署不是 Cluster;
-	// 交接链上其它多键脚本(取证、条件写、标记清理)同样依赖这一点。
+	// 三个键同 {id} 同 slot(redis-player-store-cluster.md §5.2)。交接链上其它多键脚本(取证、条件写、标记清理)同样依赖这一点,
+	// 契约测试见 cpp/tests/currency_test/player_redis_route_contract_test.cpp。
 	inline constexpr const char *kLuaReadPlacement =
 		"#!lua\n"
 		"return redis.call('MGET', KEYS[1], KEYS[2], KEYS[3])";
@@ -427,7 +426,7 @@ namespace relocate_confirm
 		kWritten,	   // 写成了
 		kEpochMoved,   // owner_epoch 已不是派发时缓存的值,没写
 		kFailed,	   // 命令发不出去 / 空应答 / ERROR / 其它
-		kSuperseded,   // 实体缓存的原 H 已被轮换(save_barrier.handoff_fence 返回 -2),没写
+		kSuperseded,   // 实体缓存的原 H 已被轮换(handoff_fence 返回 -2),没写
 
 		kCount
 	};
@@ -869,7 +868,7 @@ namespace relocate_confirm
 	};
 
 	// 踢线前补不补写重登凭证。补写 = 以"owner_epoch 仍等于读到的 X"为条件写一份 "X:now"(exit_release_mark 的
-	// kLuaWriteIfOwnerEpoch),并只消费条目缓存的原 H(save_barrier.handoff_fence 的 CAS,原 H 已被轮换时 -2、不写,
+	// kLuaWriteIfOwnerEpoch),并只消费条目缓存的原 H(handoff_fence 的 CAS,原 H 已被轮换时 -2、不写,
 	// 2026-10-23 r2-lc#2),让被踢的玩家租约内重登到别的节点时过得了换手门。按顺序判,第一个命中的就是结果:
 	//   1. 读数不是"没变",或 X 为 0 → kNone(已不存在 / 在别处时没有凭证可言;X 为 0 写出来的 "0:now" 没有意义);
 	//   2. 已有同代有效标记 → kKeepExisting。scene_manager 的回滚自己会把所凭标记转写到新代际,改派时写的那份

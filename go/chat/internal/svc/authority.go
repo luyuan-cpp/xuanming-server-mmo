@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"os"
-	"time"
 
 	"chat/internal/authority"
 	"chat/internal/config"
 	"shared/authoritysql"
+	"shared/playerredis"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -67,11 +67,14 @@ func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate b
 	return db, store, nil
 }
 
-func openLoginSessions(ctx context.Context, c config.Config) (*redis.Client, error) {
-	if !c.GlobalLoginSessions || c.LoginRedis.Host == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize < 1 || c.LoginRedis.PoolSize > 128 {
+func openLoginSessions(ctx context.Context, c config.Config) (redis.UniversalClient, error) {
+	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 1 || c.LoginRedis.PoolSizePerNode > 128 {
 		return nil, errors.New("聊天全局原登录态依赖缺失")
 	}
-	r := redis.NewClient(&redis.Options{Addr: c.LoginRedis.Host, Password: os.Getenv(c.LoginRedis.PasswordEnv), DB: c.LoginRedis.DB, PoolSize: c.LoginRedis.PoolSize, MaxActiveConns: c.LoginRedis.PoolSize, MaxRetries: -1, DialerRetries: 1, ContextTimeoutEnabled: true, DialTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second, PoolTimeout: time.Second, DisableIndentity: true})
+	r, err := playerredis.New(c.LoginRedis.ClientConfig(playerredis.Config{DialTimeoutMs: 1000, ReadTimeoutMs: 1000, WriteTimeoutMs: 1000, PoolTimeoutMs: 1000}))
+	if err != nil {
+		return nil, errors.New("聊天全局原登录态配置非法")
+	}
 	if err := r.Ping(ctx).Err(); err != nil {
 		r.Close()
 		return nil, errors.New("聊天全局原登录态不可用")

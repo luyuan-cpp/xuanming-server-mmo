@@ -10,6 +10,8 @@ import (
 	"time"
 
 	login_proto_common "proto/common/base"
+	"shared/playerredis"
+	"shared/redisslot"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -28,11 +30,11 @@ func newTestRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 
 var testKey = Key{GateInstanceID: "gate-uuid-1", Incarnation: 7}
 
-func TestKeyOfSkipsLegacyGate(t *testing.T) {
+func TestKeyOfRejectsConnectionWithoutIdentity(t *testing.T) {
 	_, ok := KeyOf(&login_proto_common.SessionDetails{GateInstanceId: "g", SessionIncarnation: 0})
-	require.False(t, ok, "旧版 gate 不带会话代次,跳过栅栏")
+	require.False(t, ok, "没有会话代次的连接没有身份")
 	_, ok = KeyOf(&login_proto_common.SessionDetails{SessionIncarnation: 3})
-	require.False(t, ok, "缺 gate_instance_id 时跳过栅栏")
+	require.False(t, ok, "缺 gate_instance_id 的连接没有身份")
 	_, ok = KeyOf(nil)
 	require.False(t, ok)
 	key, ok := KeyOf(&login_proto_common.SessionDetails{GateInstanceId: "g", SessionIncarnation: 3})
@@ -46,36 +48,28 @@ func TestKeyIsPerGateInstanceAndIncarnation(t *testing.T) {
 	rdb, _ := newTestRedis(t)
 	_, err := Close(ctx, rdb, Key{GateInstanceID: "gate-old", Incarnation: 1}, testTTL)
 	require.NoError(t, err)
-	err = CommitLogin(ctx, rdb, Key{GateInstanceID: "gate-new", Incarnation: 1},
-		[]string{"login_session:gate-new:1"}, "acc", time.Minute, "devices:acc", "gate-new:1", time.Minute)
+	err = CommitLogin(ctx, rdb, Key{GateInstanceID: "gate-new", Incarnation: 1}, "acc", time.Minute)
 	require.NoError(t, err, "另一个 gate 进程的关闭标记不影响本连接")
 }
 
 func TestKeyStringIsSharedConnectionIdentity(t *testing.T) {
-	// login_session 新键(loginsession.RefOf)与栅栏键共用这一种拼法。
+	// login_session 键(loginsession.RefOf)与栅栏键共用这一种连接身份。
 	require.Equal(t, "gate-uuid-1:7", testKey.String())
-	require.Equal(t, "login:sessfence:gate-uuid-1:7", testKey.redisKey())
+	require.Equal(t, "login:sessfence:{gate-uuid-1:7}", testKey.redisKey())
 }
 
-// 本测试里的 login_session 键与设备集成员按 loginsession.Ref 的形状给:新键 + 双写的旧键。
-var testSessionKeys = []string{"login_session:gate-uuid-1:7", "login_session:42"}
+const testSessionKey = "login_session:{gate-uuid-1:7}"
 
-func TestCommitLoginWritesSessionAndDeviceSetWhenOpen(t *testing.T) {
+func TestCommitLoginWritesOnlySessionWhenOpen(t *testing.T) {
 	ctx := context.Background()
 	rdb, mr := newTestRedis(t)
-	err := CommitLogin(ctx, rdb, testKey, testSessionKeys, "robot_0001", 30*time.Minute, "devices:robot_0001", "gate-uuid-1:7", 30*time.Minute)
-	require.NoError(t, err)
+	require.NoError(t, CommitLogin(ctx, rdb, testKey, "robot_0001", 30*time.Minute))
 
-	for _, key := range testSessionKeys {
-		got, err := mr.Get(key)
-		require.NoError(t, err, "key=%s", key)
-		require.Equal(t, "robot_0001", got, "key=%s", key)
-		require.Equal(t, 30*time.Minute, mr.TTL(key), "key=%s", key)
-	}
-	members, err := mr.Members("devices:robot_0001")
+	got, err := mr.Get(testSessionKey)
 	require.NoError(t, err)
-	require.Equal(t, []string{"gate-uuid-1:7"}, members)
-	require.Equal(t, 30*time.Minute, mr.TTL("devices:robot_0001"))
+	require.Equal(t, "robot_0001", got)
+	require.Equal(t, 30*time.Minute, mr.TTL(testSessionKey))
+	require.Equal(t, []string{testSessionKey}, mr.Keys(), "设备集在另一个槽,不在这段脚本里;连接没关时也不建栅栏记录")
 }
 
 func TestCommitLoginAfterCloseWritesNothing(t *testing.T) {
@@ -85,21 +79,9 @@ func TestCommitLoginAfterCloseWritesNothing(t *testing.T) {
 	_, err := Close(ctx, rdb, testKey, testTTL)
 	require.NoError(t, err)
 
-	err = CommitLogin(ctx, rdb, testKey, testSessionKeys, "robot_0001", 30*time.Minute, "devices:robot_0001", "gate-uuid-1:7", 30*time.Minute)
+	err = CommitLogin(ctx, rdb, testKey, "robot_0001", 30*time.Minute)
 	require.True(t, errors.Is(err, ErrClosed), "err=%v", err)
-	for _, key := range testSessionKeys {
-		require.False(t, mr.Exists(key), "关闭之后不得写 login_session: %s", key)
-	}
-	require.False(t, mr.Exists("devices:robot_0001"), "关闭之后不得登记设备集")
-}
-
-func TestCommitLoginRequiresSessionKey(t *testing.T) {
-	ctx := context.Background()
-	rdb, mr := newTestRedis(t)
-	err := CommitLogin(ctx, rdb, testKey, nil, "robot_0001", 30*time.Minute, "devices:robot_0001", "gate-uuid-1:7", 30*time.Minute)
-	require.Error(t, err)
-	require.False(t, errors.Is(err, ErrClosed))
-	require.False(t, mr.Exists("devices:robot_0001"))
+	require.False(t, mr.Exists(testSessionKey), "关闭之后不得写 login_session")
 }
 
 func TestHandshakeCloseBeforeBind(t *testing.T) {
@@ -262,13 +244,38 @@ func TestCommitLoginRejectsNonPositiveTTL(t *testing.T) {
 	// SessionExpireMin 漏配为 0 时脚本的 SET ... PX 0 会被 Redis 拒绝;这里在进脚本之前显式报错,且什么都不写。
 	ctx := context.Background()
 	rdb, mr := newTestRedis(t)
-	err := CommitLogin(ctx, rdb, testKey, testSessionKeys, "robot_0001", 0, "devices:robot_0001", "gate-uuid-1:7", 30*time.Minute)
-	require.Error(t, err)
-	require.False(t, errors.Is(err, ErrClosed))
-	err = CommitLogin(ctx, rdb, testKey, testSessionKeys, "robot_0001", 30*time.Minute, "devices:robot_0001", "gate-uuid-1:7", 0)
-	require.Error(t, err)
-	for _, key := range testSessionKeys {
-		require.False(t, mr.Exists(key))
+	for _, ttl := range []time.Duration{0, -time.Second} {
+		err := CommitLogin(ctx, rdb, testKey, "robot_0001", ttl)
+		require.Error(t, err)
+		require.False(t, errors.Is(err, ErrClosed))
 	}
-	require.False(t, mr.Exists("devices:robot_0001"))
+	require.False(t, mr.Exists(testSessionKey))
+}
+
+// 栅栏的每段脚本都走生产的玩家域构造器:守卫在发送前拒绝不带 tag、跨槽的键。CommitLogin 是唯一的多键脚本,
+// 它的两个键必须同槽;其余脚本只碰栅栏这一个键。上了 Cluster 这些才不会收到 CROSSSLOT。
+func TestEveryFenceScriptPassesTheClusterGuard(t *testing.T) {
+	ctx := context.Background()
+	mr := miniredis.RunT(t)
+	rdb, err := playerredis.New(playerredis.Config{Addrs: []string{mr.Addr()}})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rdb.Close() })
+	require.Equal(t, redisslot.HashSlot(testKey.redisKey()), redisslot.HashSlot(testSessionKey))
+
+	require.NoError(t, CommitLogin(ctx, rdb, testKey, "robot_0001", time.Minute))
+	outcome, gen, err := CheckEnterGame(ctx, rdb, testKey, 1001, testTTL)
+	require.NoError(t, err)
+	require.Equal(t, OutcomeOK, outcome)
+	outcome, err = BindPlayer(ctx, rdb, testKey, 1001, gen, testTTL)
+	require.NoError(t, err)
+	require.Equal(t, OutcomeOK, outcome)
+	outcome, err = Recheck(ctx, rdb, testKey, gen)
+	require.NoError(t, err)
+	require.Equal(t, OutcomeOK, outcome)
+	bound, err := Leave(ctx, rdb, testKey, testTTL)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1001), bound)
+	_, err = Close(ctx, rdb, testKey, testTTL)
+	require.NoError(t, err)
+	require.ErrorIs(t, CommitLogin(ctx, rdb, testKey, "robot_0001", time.Minute), ErrClosed)
 }

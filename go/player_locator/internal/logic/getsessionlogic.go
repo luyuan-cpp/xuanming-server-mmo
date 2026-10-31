@@ -27,7 +27,7 @@ func NewGetSessionLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetSes
 
 func (l *GetSessionLogic) GetSession(in *pb.GetSessionRequest) (*pb.GetSessionResponse, error) {
 	key := sessionKey(in.PlayerId)
-	data, err := l.svcCtx.RedisClient.Get(l.ctx, key).Bytes()
+	data, err := l.svcCtx.PlayerRedis.Get(l.ctx, key).Bytes()
 	if err == redis.Nil {
 		return &pb.GetSessionResponse{Found: false}, nil
 	}

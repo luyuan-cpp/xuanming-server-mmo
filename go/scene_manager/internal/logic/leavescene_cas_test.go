@@ -1,11 +1,10 @@
 package logic
 
-// GO-4 残余:LeaveScene 改成「比对原文」的条件删除,删 location 与减人数在同一段 Lua 里提交
-// (leavescenelogic.go luaDeletePlayerLocationIfUnchanged)。
+// GO-4 残余:LeaveScene 改成「比对原文」的条件删除(leavescenelogic.go luaDeletePlayerLocationIfUnchanged),
+// 摘成员是删除之后的第二步(scene_membership.go,设计 §5.10)。
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"strconv"
 	"sync/atomic"
@@ -40,7 +39,8 @@ func leaveCasValue(t *testing.T, mr *miniredis.Miniredis, key string) string {
 	return v
 }
 
-// seedLeaveCasFixture:location 写 raw,场景人数与节点 10 的人数都设为 count,scene:{id}:node 指向 "10"。
+// seedLeaveCasFixture:location 写 raw,场景与节点 10 的成员集合都铺成 count 人(count 非 0 时含这名玩家),
+// scene:{id}:node 指向 "10"。
 //
 // raw 能解析且记着非 0 的 owner_epoch 时,另外摆上当前代的释放证据(owner_epoch 键 + handoff 标记 "E:100"):
 // LeaveScene 删 location 之前要求持有者已释放(docs/design/location-release-binding.md §3.2),而用这个夹具的用例
@@ -48,8 +48,12 @@ func leaveCasValue(t *testing.T, mr *miniredis.Miniredis, key string) string {
 func seedLeaveCasFixture(t *testing.T, mr *miniredis.Miniredis, playerID, sceneID uint64, raw, count string) {
 	t.Helper()
 	require.NoError(t, mr.Set(getPlayerLocationKey(playerID), raw))
-	require.NoError(t, mr.Set(fmt.Sprintf(InstancePlayerCountKey, sceneID), count))
-	require.NoError(t, mr.Set(nodePlayerCountKey(testZoneId, "10"), count))
+	var members []uint64
+	if n := mustAtoi(count); n > 0 {
+		members = append(members, playerID)
+	}
+	seedSceneMembers(mr, sceneID, mustAtoi(count), members...)
+	seedNodeMembers(mr, testZoneId, "10", mustAtoi(count), members...)
 	require.NoError(t, mr.Set(sceneNodeKey(sceneID), "10"))
 	loc := &scene_manager.PlayerLocation{}
 	if err := gproto.Unmarshal([]byte(raw), loc); err == nil && loc.GetOwnerEpoch() != 0 {
@@ -68,76 +72,74 @@ func TestDeletePlayerLocationIfUnchanged_Outcomes(t *testing.T) {
 	l1 := leaveCasLocationRaw(t, &scene_manager.PlayerLocation{SceneId: sceneID, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100})
 	l2 := leaveCasLocationRaw(t, &scene_manager.PlayerLocation{SceneId: sceneID, NodeId: "20", ZoneId: testZoneId, OwnerEpoch: 2, UpdateTime: 200})
 	locKey := getPlayerLocationKey(playerID)
-	instKey := fmt.Sprintf(InstancePlayerCountKey, sceneID)
-	nodeKey := nodePlayerCountKey(testZoneId, "10")
 	seedLeaveCasFixture(t, mr, playerID, sceneID, l1, "2")
 
 	outcome, err := deletePlayerLocationIfUnchanged(sc, playerID, l1, testZoneId, sceneID)
 	require.NoError(t, err)
 	assert.Equal(t, leaveOutcomeDeleted, outcome)
 	assert.False(t, mr.Exists(locKey))
-	assert.Equal(t, "1", leaveCasValue(t, mr, instKey))
-	assert.Equal(t, "1", leaveCasValue(t, mr, nodeKey))
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
+	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 
 	outcome, err = deletePlayerLocationIfUnchanged(sc, playerID, l1, testZoneId, sceneID)
 	require.NoError(t, err)
 	assert.Equal(t, leaveOutcomeAlreadyGone, outcome)
-	assert.Equal(t, "1", leaveCasValue(t, mr, instKey), "键已不在:不是本次删的,不再减")
-	assert.Equal(t, "1", leaveCasValue(t, mr, nodeKey))
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID), "成员已摘,再来一次不多减")
+	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 
 	require.NoError(t, mr.Set(locKey, l2))
 	outcome, err = deletePlayerLocationIfUnchanged(sc, playerID, l1, testZoneId, sceneID)
 	require.NoError(t, err)
 	assert.Equal(t, leaveOutcomeSuperseded, outcome)
 	assert.Equal(t, l2, leaveCasValue(t, mr, locKey), "同一场景里换了节点 / 铸了新 epoch 的新落点必须原样保留")
-	assert.Equal(t, "1", leaveCasValue(t, mr, instKey))
-	assert.Equal(t, "1", leaveCasValue(t, mr, nodeKey))
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
+	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 
-	// scene:{id}:node 读不到:只减场景计数,节点人数键不传给脚本,也就不会被 DECR 新建出来。
+	// scene:{id}:node 读不到:只摘场景成员,节点集合键不传给脚本,也就不会被建出来。
 	mr.Del(sceneNodeKey(sceneID))
-	mr.Del(nodeKey)
+	mr.Del(nodeMembersKey(testZoneId, "10"))
+	seedSceneMembers(mr, sceneID, 2, playerID)
 	require.NoError(t, mr.Set(locKey, l1))
 	outcome, err = deletePlayerLocationIfUnchanged(sc, playerID, l1, testZoneId, sceneID)
 	require.NoError(t, err)
 	assert.Equal(t, leaveOutcomeDeleted, outcome)
-	assert.Equal(t, "0", leaveCasValue(t, mr, instKey))
-	assert.False(t, mr.Exists(nodeKey), "节点人数键不得被新建")
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
+	assert.False(t, mr.Exists(nodeMembersKey(testZoneId, "10")), "节点集合键不得被新建")
 }
 
-// go-redis 读超时后会把同一条 EVAL 原样重发:首发已删并减过人数,重发只看到「键已不在」,人数只减一次。
-func TestDeletePlayerLocationIfUnchanged_ReplayDecrementsExactlyOnce(t *testing.T) {
+// go-redis 读超时后会把同一条 EVAL 原样重发:首发已删,重发只看到「键已不在」;SREM 幂等,人数只少一个。
+func TestDeletePlayerLocationIfUnchanged_ReplayRemovesMemberOnce(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	const (
 		playerID = uint64(8102)
 		sceneID  = uint64(9202)
 	)
 	l1 := leaveCasLocationRaw(t, &scene_manager.PlayerLocation{SceneId: sceneID, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100})
-	instKey := fmt.Sprintf(InstancePlayerCountKey, sceneID)
-	nodeKey := nodePlayerCountKey(testZoneId, "10")
 	seedLeaveCasFixture(t, mr, playerID, sceneID, l1, "2")
 
 	outcome, err := deletePlayerLocationIfUnchanged(sc, playerID, l1, testZoneId, sceneID)
 	require.NoError(t, err)
 	assert.Equal(t, leaveOutcomeDeleted, outcome)
-	assert.Equal(t, "1", leaveCasValue(t, mr, instKey))
-	assert.Equal(t, "1", leaveCasValue(t, mr, nodeKey))
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
+	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 
 	outcome, err = deletePlayerLocationIfUnchanged(sc, playerID, l1, testZoneId, sceneID)
 	require.NoError(t, err)
 	assert.Equal(t, leaveOutcomeAlreadyGone, outcome)
-	assert.Equal(t, "1", leaveCasValue(t, mr, instKey), "重发不得再减")
-	assert.Equal(t, "1", leaveCasValue(t, mr, nodeKey))
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID), "重发不得再减")
+	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 
-	// 人数已经是 0 时再删一次:钳在 0,不出现负数(与 DecrInstancePlayerCount 一致)。
+	// 成员集合已经空了再删一次:SREM 什么都不做,也不把键建出来。
 	seedLeaveCasFixture(t, mr, playerID, sceneID, l1, "0")
 	outcome, err = deletePlayerLocationIfUnchanged(sc, playerID, l1, testZoneId, sceneID)
 	require.NoError(t, err)
 	assert.Equal(t, leaveOutcomeDeleted, outcome)
-	assert.Equal(t, "0", leaveCasValue(t, mr, instKey))
-	assert.Equal(t, "0", leaveCasValue(t, mr, nodeKey))
+	assert.False(t, mr.Exists(instanceMembersKey(sceneID)))
+	assert.False(t, mr.Exists(nodeMembersKey(testZoneId, "10")))
 }
 
 // GET 与删除之间有并发 EnterScene 写入了同一场景的新落点(换了节点、铸了新 epoch):不得删掉它。
+// 成员身份跟着 location 走:场景还是这个场景,成员保住;旧节点 10 不再持有这名玩家,摘掉。
 func TestLeaveScene_KeepsLocationRewrittenBetweenReadAndDelete(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	const (
@@ -180,8 +182,8 @@ func TestLeaveScene_KeepsLocationRewrittenBetweenReadAndDelete(t *testing.T) {
 	require.Nil(t, rewriteErr.Load())
 
 	assert.Equal(t, l2, leaveCasValue(t, mr, locKey), "并发写入的新落点必须保留")
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)), "没删就不减")
-	assert.Equal(t, "2", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID), "新落点还在这个场景")
+	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"), "新落点已不在节点 10")
 }
 
 // Redis 失败必须回错误(player_locator 据此保留 claim 重试),而不是回成功让 location 永久残留。
@@ -204,8 +206,8 @@ func TestLeaveScene_RedisFailureIsReturnedForRetry(t *testing.T) {
 	require.Error(t, err)
 
 	assert.Equal(t, l1, leaveCasValue(t, mr, getPlayerLocationKey(playerID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
+	assert.Equal(t, "2", nodeMemberCount(mr, testZoneId, "10"))
 }
 
 // 写坏的 location 不是瞬时故障:回成功(不能变成永远重试的毒 claim),也不删、不动人数。
@@ -225,6 +227,6 @@ func TestLeaveScene_CorruptLocationIsNotDeletedAndNotRetried(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, corrupt, leaveCasValue(t, mr, getPlayerLocationKey(playerID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
+	assert.Equal(t, "2", nodeMemberCount(mr, testZoneId, "10"))
 }

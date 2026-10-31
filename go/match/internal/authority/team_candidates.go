@@ -102,8 +102,10 @@ func (s *Store) TeamLaunchPeers(ctx context.Context, anchor *pb.MatchAuthorityTi
 		if anchor.ZoneId == 0 {
 			return nil, ErrTeamRoute
 		}
-		query += " AND r.home_zone=?"
-		args = append(args, anchor.ZoneId)
+		// 同区按最终区算。混合 unit 的投影是 0，不在任何成员集合里，禁止跨区时进不了候选。
+		clause, zoneArgs := zoneInSQL("r.home_zone", s.MergedZones().Members(anchor.ZoneId))
+		query += " AND " + clause
+		args = append(args, zoneArgs...)
 	}
 	if local {
 		query += " AND r.local_preferred=1"

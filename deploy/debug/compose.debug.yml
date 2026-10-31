@@ -22,19 +22,29 @@ services:
       - SYS_PTRACE
     restart: "no"
 
-  # 迁移任务必须直接运行并退出，不能由长驻调试器包装。
-  data-migrate:
+  # 迁移任务必须直接运行并退出，不能由长驻调试器包装（data-migrate 的入口在基础文件里已经直接跑 /app/service）。
+  match-migrate:
     entrypoint: [/app/service]
 
+  guild-migrate:
+    entrypoint: [/app/service]
+
+  player-inbox-migrate:
+    entrypoint: [/app/service]
+
+  # 写者的入口脚本先取本 boot 的授权再 exec，调试器放在 command 里接到它后面。
   login:
+    command: [/usr/local/bin/dlv, exec, /app/service, --headless=true, --listen=0.0.0.0:40000, --api-version=2, --accept-multiclient, --continue, --, -loginService, /run/sql-writer/runtime/login.yaml]
     cap_add: [SYS_PTRACE]
     ports: ["127.0.0.1:2345:40000"]
 
   db:
+    command: [/usr/local/bin/dlv, exec, /app/service, --headless=true, --listen=0.0.0.0:40000, --api-version=2, --accept-multiclient, --continue, --, -f, /run/sql-writer/runtime/db.yaml]
     cap_add: [SYS_PTRACE]
     ports: ["127.0.0.1:2346:40000"]
 
   data-service:
+    command: [/usr/local/bin/dlv, exec, /app/service, --headless=true, --listen=0.0.0.0:40000, --api-version=2, --accept-multiclient, --continue, --, -f, /run/sql-writer/runtime/data_service.yaml]
     cap_add: [SYS_PTRACE]
     ports: ["127.0.0.1:2347:40000"]
 
@@ -51,8 +61,14 @@ services:
     ports: ["127.0.0.1:2350:40000"]
 
   match:
+    command: [/usr/local/bin/dlv, exec, /app/service, --headless=true, --listen=0.0.0.0:40000, --api-version=2, --accept-multiclient, --continue, --, -f, /run/sql-writer/runtime/match.yaml]
     cap_add: [SYS_PTRACE]
     ports: ["127.0.0.1:2351:40000"]
+
+  player-inbox:
+    command: [/usr/local/bin/dlv, exec, /app/service, --headless=true, --listen=0.0.0.0:40000, --api-version=2, --accept-multiclient, --continue, --, -f, /run/sql-writer/runtime/player_inbox.yaml]
+    cap_add: [SYS_PTRACE]
+    ports: ["127.0.0.1:2352:40000"]
 
   gateway:
     environment:

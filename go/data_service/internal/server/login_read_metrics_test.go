@@ -33,7 +33,7 @@ func TestHomeZoneReadResultFollowsReturnedCode(t *testing.T) {
 	}{
 		{"ok", nil, metrics.HomeZoneReadResultOK},
 		{"mapping absent", status.Error(codes.NotFound, "no home zone mapping for player 1"), metrics.HomeZoneReadResultNotFound},
-		{"mapping redis / global db down", status.Error(codes.Unavailable, "error_code=30"), metrics.HomeZoneReadResultError},
+		{"global db down", status.Error(codes.Unavailable, "error_code=30"), metrics.HomeZoneReadResultError},
 		{"caller canceled", status.FromContextError(context.Canceled).Err(), metrics.HomeZoneReadResultError},
 		{"caller deadline", status.FromContextError(context.DeadlineExceeded).Err(), metrics.HomeZoneReadResultError},
 		{"non-status error", errors.New("boom"), metrics.HomeZoneReadResultError},

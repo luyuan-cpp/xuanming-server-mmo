@@ -31,7 +31,7 @@ func NewSetSpectateFeaturedLogic(ctx context.Context, svcCtx *svc.ServiceContext
 //   - 调用方只认 serviceauth 的 ops,签名绑定方法与整个请求,不放行别的方法;运营入口未配置密钥或验签失败一律回 DENIED;
 //   - 记录不存在 → NOT_FOUND;非公开 → PRIVATE;重复设置同值幂等成功。可见性闸与 WatchBattle 同一判据;
 //   - 置位写标记并立即尝试升 L2(受全服配额约束,配额满或升档失败都不算错,回当前档位,下一名观众再试);
-//     battle 回房间不存在时撤掉标记并回 NOT_FOUND:全局模式的成局在战斗结束后仍是 state 4,读得到记录,
+//     battle 回房间不存在时撤掉标记并回 NOT_FOUND:成局在战斗结束后仍是 state 4,读得到记录,
 //     留着标记会让一场不存在的战斗排在观战列表最前;
 //   - 取消只删标记、不降档(一场只升不降);
 //   - 中继不可用(RelayEnabled 关闭,Q6)时只写标记:列表照样排在前面,但没有 L2 可升。
@@ -44,7 +44,7 @@ func (l *SetSpectateFeaturedLogic) SetSpectateFeatured(in *pb.SetSpectateFeature
 		return &pb.SetSpectateFeaturedResponse{Reject: pb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_DENIED}, nil
 	}
 
-	record, err := loadSpectateBattle(l.svcCtx, battleId)
+	record, err := loadSpectateBattleFn(l.svcCtx, battleId)
 	if err != nil {
 		return l.internalReject("读观战记录", battleId, err), nil
 	}
@@ -71,7 +71,7 @@ func (l *SetSpectateFeaturedLogic) SetSpectateFeatured(in *pb.SetSpectateFeature
 			if tier != battlepb.ESpectateTier_SPECTATE_TIER_BROADCAST {
 				_, _, rejectTip := promoteSpectateBroadcast(l.ctx, l.svcCtx, record)
 				if _, _, roomMissing := spectateRejectVerdict(rejectTip); roomMissing {
-					// 只撤标记,记录与活跃集合留给观众路径的懒剔除:本地模式的房间可能还在建(roomMayBeCreating)。
+					// 只撤标记,记录与活跃集合留给观众路径的懒剔除。
 					if err := unmarkSpectateFeatured(l.ctx, l.svcCtx, battleId); err != nil {
 						return l.internalReject("撤销赛事局标记", battleId, err), nil
 					}

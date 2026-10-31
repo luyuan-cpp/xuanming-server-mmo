@@ -1,12 +1,13 @@
 package team
 
 // 纯函数规则的表驱动单测(设计文档 docs/design/team-system.md §I.3 #1-#5)。
-// 不起 Redis、不读墙钟:nowMs 一律是固定常量。
+// 不起存储、不读墙钟:nowMs 一律是固定常量。
 
 import (
 	"testing"
 
 	teampb "proto/team"
+	"shared/placement"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -216,6 +217,66 @@ func TestCrossZoneSwitch(t *testing.T) {
 	mixed.Members[1].ZoneId = 2
 	d = Apply(KickOp(1, 2), mixed, ruleNow, nil, deny)
 	require.Zero(t, d.Code)
+}
+
+// 别名合服:记录里的原始区不动,同区判定两边都解析到最终区。四个入口(申请、审批、邀请、接受)都走 zoneCheck。
+func TestZoneCheckResolvesMergedZones(t *testing.T) {
+	mergedCfg := func(t *testing.T, merges map[uint32]uint32) RuleConfig {
+		t.Helper()
+		zones, err := placement.NewMergedZones(merges)
+		require.NoError(t, err)
+		return RuleConfig{Zones: zones}
+	}
+	notMerged := RuleConfig{}
+	merged := mergedCfg(t, map[uint32]uint32{2: ruleZone}) // 2 区合进 1 区
+
+	t.Run("申请", func(t *testing.T) {
+		require.Equal(t, ErrCrossZoneDenied, Apply(ApplyOp(3, 2), newRecord(1), ruleNow, nil, notMerged).Code, "没合服仍然不同区")
+		d := Apply(ApplyOp(3, 2), newRecord(1), ruleNow, nil, merged)
+		require.Zero(t, d.Code, "合服后两个原始区算同区")
+		require.Equal(t, uint32(2), d.Record.GetApplications()[0].GetZoneId(), "记录里存原始区")
+		require.Equal(t, ErrCrossZoneDenied, Apply(ApplyOp(4, 9), newRecord(1), ruleNow, nil, merged).Code, "没参与合服的区还是别的区")
+	})
+
+	t.Run("审批按申请记录里的原始区复核", func(t *testing.T) {
+		pending := withApplication(newRecord(1), 3, 2, ruleNow-1000, ruleNow+60000)
+		require.Equal(t, ErrCrossZoneDenied, Apply(HandleApplicationOp(1, 3, true), pending, ruleNow, nil, notMerged).Code, "撤销合服后不造出新的跨区成员")
+		d := Apply(HandleApplicationOp(1, 3, true), pending, ruleNow, nil, merged)
+		require.Zero(t, d.Code)
+		require.Equal(t, uint32(2), FindMember(d.Record, 3).GetZoneId(), "成员记录写原始区")
+		require.Equal(t, ruleZone, d.Record.GetZoneId(), "队伍的区不改写")
+	})
+
+	t.Run("邀请", func(t *testing.T) {
+		require.Equal(t, ErrCrossZoneDenied, Apply(InviteOp(1, 4, 2), newRecord(1), ruleNow, nil, notMerged).Code)
+		d := Apply(InviteOp(1, 4, 2), newRecord(1), ruleNow, nil, merged)
+		require.Zero(t, d.Code)
+		require.Equal(t, uint32(2), d.Record.GetInvites()[0].GetZoneId())
+	})
+
+	t.Run("接受按邀请记录里的原始区复核", func(t *testing.T) {
+		invited := withInvite(newRecord(1), 4, 2, ruleNow-1000, ruleNow+60000)
+		require.Equal(t, ErrCrossZoneDenied, Apply(RespondInviteOp(4, true), invited, ruleNow, nil, notMerged).Code)
+		d := Apply(RespondInviteOp(4, true), invited, ruleNow, nil, merged)
+		require.Zero(t, d.Code)
+		require.Equal(t, uint32(2), FindMember(d.Record, 4).GetZoneId())
+	})
+
+	t.Run("队伍在源区、申请人在目标区也算同区", func(t *testing.T) {
+		rec := newRecord(1)
+		rec.ZoneId = 2
+		require.Zero(t, Apply(ApplyOp(3, ruleZone), rec, ruleNow, nil, merged).Code)
+		require.Equal(t, ErrCrossZoneDenied, Apply(ApplyOp(3, ruleZone), rec, ruleNow, nil, notMerged).Code)
+	})
+
+	t.Run("连续合服沿链解析", func(t *testing.T) {
+		chain := mergedCfg(t, map[uint32]uint32{3: 2, 2: ruleZone})
+		require.Zero(t, Apply(ApplyOp(5, 3), newRecord(1), ruleNow, nil, chain).Code)
+	})
+
+	t.Run("查不到归属照样拒绝", func(t *testing.T) {
+		require.Equal(t, ErrHomeZoneUnknown, Apply(ApplyOp(3, 0), newRecord(1), ruleNow, nil, merged).Code)
+	})
 }
 
 // #3:离队转让、最后一人解散、惰性转让。
@@ -479,35 +540,37 @@ func TestJoinClearsBothApplicationAndInvite(t *testing.T) {
 	require.Equal(t, []uint64{3}, d.InvitesRemoved)
 }
 
-func TestRepairRemoveMember(t *testing.T) {
-	d := RepairRemoveMember(newRecord(1, 2, 3), 1, ruleNow, allOnline(3))
+func TestMatchLockRules(t *testing.T) {
+	require.Equal(t, 5, Capacity, "logic 测试同样钉住 kMaxBattleTeamSize == 5(两包互不 import),改容量要两边同步")
+
+	rec := newRecord(1, 2, 3)
+	rec.LeaderId = 2
+	require.Equal(t, []uint64{2, 1, 3}, MatchRoster(rec), "队长在前,其余按 join_seq")
+
+	require.Equal(t, ErrDungeonNotOpen, CheckMatchTeamSize(rec, 0))
+	require.Equal(t, ErrSizeExceeded, CheckMatchTeamSize(rec, 2))
+	require.Zero(t, CheckMatchTeamSize(rec, 3))
+	require.Zero(t, CheckMatchTeamSize(rec, 5), "人数少于上限允许开战(J-5)")
+	require.Equal(t, ErrNotLeader, CheckMatchStart(rec, 1, ruleNow))
+	require.Zero(t, CheckMatchStart(rec, 2, ruleNow))
+
+	orig := proto.Clone(rec)
+	d := LockMatch(rec, 2, "tok", []uint64{2, 1, 3}, ruleNow+83_000, ruleNow)
+	require.Zero(t, d.Code)
 	require.True(t, d.Changed)
-	require.Equal(t, teampb.TeamChangeReason_TEAM_CHANGE_REASON_HEALED, d.Reason)
-	require.Equal(t, uint64(1), d.Actor)
-	require.Equal(t, []uint64{1}, d.Left)
-	require.Equal(t, []uint64{2, 3}, d.Kept)
-	require.Equal(t, uint64(3), d.Record.GetLeaderId(), "被修复移出的是队长时照离队规则转让")
-
-	d = RepairRemoveMember(newRecord(1), 1, ruleNow, nil)
-	require.True(t, d.Disbanded)
-	require.Nil(t, d.Record)
-
-	require.False(t, RepairRemoveMember(newRecord(1, 2), 9, ruleNow, nil).Changed)
-
-	// 一次移出多人:Left 相对原记录;不在记录里的 id 跳过;Actor 为第一个实际移出的人。
-	d = RepairRemoveMembers(newRecord(1, 2, 3, 4), []uint64{9, 3, 1}, ruleNow, allOnline(2, 4))
-	require.True(t, d.Changed)
-	require.Equal(t, teampb.TeamChangeReason_TEAM_CHANGE_REASON_HEALED, d.Reason)
-	require.Equal(t, uint64(3), d.Actor)
-	require.Equal(t, []uint64{1, 3}, d.Left)
-	require.Equal(t, []uint64{2, 4}, d.Kept)
-	require.Equal(t, uint64(2), d.Record.GetLeaderId())
-
-	d = RepairRemoveMembers(newRecord(1, 2), []uint64{2, 1}, ruleNow, nil)
-	require.True(t, d.Disbanded, "全员移出即解散")
-	require.Nil(t, d.Record)
-	require.Equal(t, []uint64{1, 2}, d.Left)
-	require.False(t, RepairRemoveMembers(newRecord(1, 2), []uint64{8, 9}, ruleNow, nil).Changed)
+	require.True(t, proto.Equal(orig, rec), "纯函数不改入参")
+	require.Equal(t, teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_STARTED, d.Reason)
+	require.ElementsMatch(t, []uint64{1, 2, 3}, d.Kept)
+	require.Empty(t, d.Joined)
+	require.Empty(t, d.Left)
+	require.Equal(t, "tok", d.Record.GetMatchLockToken())
+	require.Equal(t, ruleNow+83_000, d.Record.GetMatchLockExpireAtMs())
+	require.Equal(t, []uint64{2, 1, 3}, d.Record.GetMatchLockRoster())
+	require.Equal(t, ErrStateChanged, LockMatch(rec, 2, "tok", []uint64{2, 1}, ruleNow+83_000, ruleNow).Code,
+		"名单与成员集合不等绝不加锁")
+	require.Equal(t, ErrInMatch, LockMatch(d.Record, 2, "tok2", []uint64{2, 1, 3}, ruleNow+84_000, ruleNow+1).Code)
+	require.Equal(t, ErrInternal, LockMatch(rec, 2, "", []uint64{2, 1, 3}, ruleNow+83_000, ruleNow).Code, "token 不能为空")
+	require.Equal(t, ErrInternal, LockMatch(rec, 2, "tok", []uint64{2, 1, 3}, ruleNow, ruleNow).Code, "截止必须晚于 now")
 }
 
 func TestPruneExpiredDoesNotMutateInput(t *testing.T) {

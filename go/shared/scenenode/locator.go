@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	smpb "proto/scene_manager"
+	"shared/redisslot"
 
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
@@ -15,48 +16,20 @@ import (
 // 路径、match 的 svc.SceneNodeRpcPrefix 必须一字不差。
 const SceneNodeRpcPrefix = "SceneNodeService.rpc/"
 
-// locationKeyFormat 是玩家位置键的格式串。
-//
-// **这不是仓内第 7 份字面量,而是 Go 侧 shared 的收口点**:同一串跨运行时契约
-// 目前另有 6 份实现,改格式必须 7 处同改(改错的表现是静默定位不到人):
-//
-//	go/login/internal/logic/clientplayerlogin/player_class_backfill.go:57
-//	                                                          backfillPlayerClassScript 的 KEYS[4]
-//	go/match/internal/playercontract/playercontract.go:50     LocationKey
-//	go/scene_manager/internal/logic/changesceneutil.go:18-20  getPlayerLocationKey(写者)
-//	tools/merge_zone/scene_hot_state.go:51                    playerLocationKeyFmt
-//	cpp/libs/services/scene/player/system/player_team.cpp:40  kPlayerLocationKeyFmt
-//	cpp/nodes/battle/logic/battle_room_manager.cpp:1680       内联 GET
-//
-// login 那处不是顺带引用:它把这个键当作 Lua CAS 脚本的第 4 个 KEY,用来判断
-// 「角色是否仍在场」,格式改错会把在场角色当成离线档回写存档。
-//
-// 三个 Go 服务(login / match / scene_manager)本可以改成引用本包,但它们不在本批
-// 的文件归属里;后续批次把它们转调过来之后,Go 侧就只剩本处 + C++ 两份。
-// 同族键 player:{id}:owner_epoch / player:{id}:handoff 的契约在 shared/ownerepoch。
-const locationKeyFormat = "player:%d:location"
-
-// LocationKey 返回 scene_manager 维护的玩家位置权威键(值为 PlayerLocation protobuf)。
-func LocationKey(playerID uint64) string {
-	return fmt.Sprintf(locationKeyFormat, playerID)
-}
-
 // LocationReader 读一个位置键的原始字节。键不存在必须返回 (nil, nil) —— 让
 // 「玩家不在线」与「Redis 故障」在接口层就分开,调用方不必认各家客户端的哨兵值。
 //
-// 单独抽接口的原因:guild 用 go-redis,match / scene_manager 用 go-zero redis,
-// 两者的"键不存在"表达方式不同(redis.Nil vs 空串);测试还要塞假数据。
+// 单独抽接口的原因:测试要塞假数据,而且 go-redis 的"键不存在"是哨兵错误,不该漏到调用方。
 type LocationReader interface {
 	GetLocation(ctx context.Context, key string) ([]byte, error)
 }
 
 // GoRedisReader 用 go-redis 客户端实现 LocationReader。
 //
-// guild 直接复用 svcCtx.PlayerLocatorRedisClient:本地它与 SharedRedis 是同一个
-// 实例,K8s 部署时必须指向 SharedRedis(位置键的写者 scene_manager 写在那儿),
+// Client 必须是玩家域句柄(各服务的 PlayerRedis,shared/playerredis 构造),位置键的写者 scene_manager 写在那儿,
 // 指错库的表现是所有玩家都"不在线"。
 type GoRedisReader struct {
-	Client *redis.Client
+	Client redis.UniversalClient
 }
 
 // GetLocation 读键;键不存在返回 (nil, nil),其余错误原样返回(不吞、不降级)。
@@ -152,7 +125,7 @@ func (l *Locator) Resolve(ctx context.Context, playerID uint64) (Target, error) 
 		return Target{}, errors.New("scenenode: Locator 未装配 Reader / Watcher")
 	}
 
-	raw, err := l.Reader.GetLocation(ctx, LocationKey(playerID))
+	raw, err := l.Reader.GetLocation(ctx, redisslot.LocationKey(playerID))
 	if err != nil {
 		l.Metrics.ObserveResolve(ResolveError)
 		return Target{}, fmt.Errorf("scenenode: 读玩家位置失败 player=%d: %w", playerID, err)

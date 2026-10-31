@@ -281,7 +281,7 @@ func TestTargetValidationBeforeRepo(t *testing.T) {
 
 // TestReviewApproveChecksApplicantZoneBeforeRepo 钉住 §29 第 8 条与 M1 的修法。
 //
-// 申请行是最长 72 小时前写的,这期间申请人可能被合服搬去了别的区。放进来就会造出一个
+// 申请行是最长 72 小时前写的,这期间可能发生过合服或撤销合服。放进来一个解析不到同一个最终区的人,就会造出一个
 // "人在 A 区、帮在 B 区"的成员,而帮会的一切按 zone 隔离 —— 那要手工修数据。
 // 所以归属 zone 查不到或查询报错一律不批(fail-closed),且这一步在事务之前。
 func TestReviewApproveChecksApplicantZoneBeforeRepo(t *testing.T) {

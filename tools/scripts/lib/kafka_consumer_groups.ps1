@@ -14,19 +14,19 @@
       - 表格按表头列名定位(TOPIC / PARTITION / CURRENT-OFFSET / LOG-END-OFFSET / LAG / NEW-OFFSET),不按下标;
         "-" 记为 $null(该分区没有已提交位点)。
 
-    「组不存在」的识别是白名单,与 tools/merge_zone/preflight.go 的 consumerGroupMissing 同一份,改一边必须同步另一边。
+    「组不存在」的识别是白名单。
     当前三条文案(Kafka 3.x 的 "Consumer group 'g' does not exist."、新 group coordinator 可能给出的
     GroupIdNotFoundException / GROUP_ID_NOT_FOUND)是按版本行为推定的;钉版 apache/kafka:4.3.1 上的原文
     由 Codex 实测,拿到后两边同步补正则,并把原文追加为测试 fixture。
     原文一条都不命中时现有逻辑已是 fail-closed(无表头 → throw),只是会把"组不存在"误报成失败。
     白名单命中只在**没有表头**时才认定 missing(2026-10-17,R7 复核 [8]):白名单在整段输出上匹配,管理客户端在新旧 describe API
     之间回退时可能先往 stderr 打一行带 GroupIdNotFoundException 的 WARN、随后照常打印表格。白名单命中又有表头时:
-    本 topic 有数值位点即矛盾输出,throw;没有数值位点则两种读法都是「没有位点」,交给常规判定。Go 侧 groupMissingInDescribe 同口径。
+    本 topic 有数值位点即矛盾输出,throw;没有数值位点则两种读法都是「没有位点」,交给常规判定。
 #>
 
 <#
 .SYNOPSIS
-    「组不存在」文案白名单(正则)。与 tools/merge_zone/preflight.go consumerGroupMissing 保持一致。
+    「组不存在」文案白名单(正则)。
 #>
 function Get-KafkaGroupMissingPatterns {
     return @(
@@ -180,7 +180,6 @@ function Get-KafkaCommittedOffsetMap {
          (组在但没人订阅本 topic、或订阅了还没提交过,都是 no-offsets);
       4. 没有表头但有 "has no active members" → no-offsets(Empty 组一个已提交位点都没有时 CLI 不打表头);
       5. 其余一律 throw(无法解析 describe 输出)。
-    规则 1 与 tools/merge_zone/preflight.go 的 groupMissingInDescribe 同口径,改一边必须同步另一边。
 #>
 function Resolve-KafkaGroupTopicOffsets {
     param(
@@ -200,7 +199,7 @@ function Resolve-KafkaGroupTopicOffsets {
         if ($missingCommitted.Count -gt 0) {
             $partitionsText = (@($missingCommitted.Keys | Sort-Object) -join ',')
             throw ("kafka-consumer-groups --describe 的输出自相矛盾,按读不到处理:既命中「组不存在」文案,又列出了 topic $Topic 在分区 $partitionsText 上的已提交位点。" +
-                "不猜哪一边为真;拿到该 Kafka 版本的原文后同步修正白名单(lib Get-KafkaGroupMissingPatterns 与 tools/merge_zone/preflight.go consumerGroupMissingPatterns)。")
+                "不猜哪一边为真;拿到该 Kafka 版本的原文后修正白名单(lib Get-KafkaGroupMissingPatterns)。")
         }
     }
     $errorLines = @($allLines | Where-Object { $_ -match '^\s*Error:' })

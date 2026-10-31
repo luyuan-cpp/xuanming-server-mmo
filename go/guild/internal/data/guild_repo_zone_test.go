@@ -76,7 +76,7 @@ func memberCount(t *testing.T, ctx context.Context, db *sql.DB, playerID uint64)
 // TestApplyToGuildRejectsGuildFromAnotherZone:入帮的第一道 zone 防线搬到了申请这一步
 // (直接入帮的 AddMemberInZone 已随申请制删除)。
 //
-// 归属区不符时不能只是"不加成员",连申请行都不许留下:留下的话,合服回滚之后那条跨区申请
+// 归属区不符时不能只是"不加成员",连申请行都不许留下:留下的话,那条跨区申请
 // 仍躺在表里,被审批就造出一个跨区成员 —— ReviewApplication 锁内的 zone 复核是第二道防线,
 // 但两道防线都该各自成立,不能互相当借口。
 func TestApplyToGuildRejectsGuildFromAnotherZone(t *testing.T) {
@@ -105,6 +105,29 @@ func TestApplyToGuildRejectsGuildFromAnotherZone(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.Inserted)
 	assert.Equal(t, 1, playerApplicationCount(t, ctx, db, internal))
+}
+
+// 合服不改写 guild.zone_id:公会行还记着 2 区,2 区合进 3 区之后,3 区的玩家能申请它;没合服的区照旧不行。
+func TestApplyToGuildAcceptsGuildInTheSameFinalZone(t *testing.T) {
+	ctx, db, repo := openGuildIntegrationRepo(t)
+	const (
+		guildID   uint64 = 7111
+		applicant uint64 = 8111
+		outsider  uint64 = 8112
+	)
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
+		 VALUES (?, 'merged-guild', 'merged-guild', 9111, 1, '', 1, 50, 2, 0, 0)`, guildID)
+	require.NoError(t, err)
+	bindMergedZones(t, repo, map[uint32]uint32{2: 3})
+
+	res, err := repo.ApplyToGuild(ctx, guildID, applicant, 3, testNowMs, testRules)
+	require.NoError(t, err)
+	assert.True(t, res.Inserted)
+
+	_, err = repo.ApplyToGuild(ctx, guildID, outsider, 4, testNowMs, testRules)
+	assert.ErrorIs(t, err, ErrGuildZoneMismatch)
+	assert.Zero(t, playerApplicationCount(t, ctx, db, outsider))
 }
 
 func TestCreateGuildMapsNameCollisionAcrossZones(t *testing.T) {

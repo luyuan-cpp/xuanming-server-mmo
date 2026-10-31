@@ -44,7 +44,7 @@ service MatchService {
   rpc WatchBattle(WatchBattleRequest) returns (WatchBattleResponse) {}
 
   // ---- 战斗票据补签(客户端丢票 / 冷启动;turn-based-battle-server.md §18 D25) ----
-  // 大厅会话唯一的补签入口:match 按 spectate:battle:{battle_id} 索引定位房间所在 battle 节点,
+  // 大厅会话唯一的补签入口:match 按 SQL 成局记录定位房间所在 battle 节点,
   // 调 BattleNode.IssueBattleTicket 由 battle 本地核对名单并自签;仅参战者 / 观众可得票。
   // 曾是 BattleClientPlayer.RequestBattleTicket(gate→battle gRPC);gate 收成只连路由服后 gate 不再
   // 认识 battle 节点,补签改由 match 转,请求 / 响应消息复用 player_battle.proto 里的定义。
@@ -177,9 +177,8 @@ message ChallengeResultS2C {
 }
 
 // ----- 二期:观战匹配(设计文档 §10) -----
-// 活跃战斗索引由 match 维护:gather 开局成功后写 spectate:battle:{battle_id}
-// (SpectateBattleRecord pb,TTL = 战斗最长期限 + 余量)+ ZADD spectate:battles:active;
-// 清理靠 TTL + 观战失败(battle 节点报房间不存在)时懒剔除,battle 节点不碰 Redis。
+// 活跃战斗索引由 match 维护:gather 开局成功后 ZADD spectate:battles:active(观战记录由 SQL 成局组出);
+// 清理靠到期剔除 + 观战失败(battle 节点报房间不存在)时懒剔除,battle 节点不碰 Redis。
 
 message WatchBattleRequest {
   uint64 player_id = 1;      // 权威身份以 session metadata 为准
@@ -222,12 +221,12 @@ message BattleWatchSummary {
   bool featured = 6;         // 运营标记的赛事局(列表排在最前,优先升全服广播)
 }
 
-// 内部登记记录(Redis value,含路由所需的 battle 节点 id,不下发客户端)
+// 内部记录(由 SQL 成局组出,含路由所需的 battle 节点 id,不下发客户端)
 message SpectateBattleRecord {
   BattleWatchSummary summary = 1;
   uint32 battle_node_id = 2;
-  // 与 CreateBattleRequest.spectate_visibility 同值(建房原件冻结)。非 PUBLIC 的记录照样写
-  // (丢票补签要靠它定位 battle 节点),但不进 spectate:battles:active,也不能被 WatchBattle 指定观战。
+  // 与 CreateBattleRequest.spectate_visibility 同值(建房原件冻结)。非 PUBLIC 的记录
+  // 只用来给丢票补签定位 battle 节点,不进 spectate:battles:active,也不能被 WatchBattle 指定观战。
   eSpectateVisibility visibility = 3;
   // 以下三项由 match 在观战准入时维护(§15.6):档位以独立键 spectate:tier:{id} 为准(Lua 只升不降),
   // 这里只是建房时的初值;实例与期限来自 battle 的 AttachRelayGate / PromoteSpectateBroadcast 回包。

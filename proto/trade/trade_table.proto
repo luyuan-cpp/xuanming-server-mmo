@@ -40,7 +40,7 @@ message TradeListingRecord {
   uint64 listing_id = 1;              // data_service 号段,biz_tag = trade_listing
   uint64 seller_player_id = 2;
   string seller_account = 3;          // P3 下单判"同账号不能自买"用;P1 种子为空串
-  uint32 market_zone = 4;             // 逻辑市场分区 = 上架时卖家 home_zone;合服时改写
+  uint32 market_zone = 4;             // 逻辑市场分区 = 上架时卖家 home_zone;合服不改写,读的时候解析到最终区
   uint32 seller_zone_at_listing = 5;  // 上架时 home_zone 原值;合服不改,审计用
   ListingCategory category = 6;
   uint32 subcategory = 7;             // 0 = 无子类;编码见 docs/design/jubaozhai-market.md §3

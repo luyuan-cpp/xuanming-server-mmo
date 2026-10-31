@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/conf"
 )
@@ -68,7 +69,30 @@ func TestReconcileConfNormalized(t *testing.T) {
 	}
 }
 
-// dev yaml 只用注释说明 Reconcile 各项,不写值:leader 是全服一个,K8s ConfigMap 也不镜像这些项,
+func TestLeaseScanRound(t *testing.T) {
+	if got := (LeaseConf{}).ScanRound(); got != DefaultLeaseScanRoundSeconds*time.Second {
+		t.Errorf("零值 ScanRound = %v", got)
+	}
+	if got := (LeaseConf{ScanRoundSeconds: -3}).ScanRound(); got != DefaultLeaseScanRoundSeconds*time.Second {
+		t.Errorf("负数按默认值处理,得到 %v", got)
+	}
+	if got := (LeaseConf{ScanRoundSeconds: 5}).ScanRound(); got != 5*time.Second {
+		t.Errorf("显式值不得被改写,得到 %v", got)
+	}
+}
+
+// PlayerRedis 段不写时由服务指向 RedisClient(svc.playerRedisConf):开发环境不用改配置就能跑。
+func TestEtcYamlLeavesPlayerRedisToFallback(t *testing.T) {
+	var c Config
+	if err := conf.Load("../../etc/player_locator.yaml", &c); err != nil {
+		t.Fatalf("加载 etc/player_locator.yaml 失败: %v", err)
+	}
+	if len(c.PlayerRedis.Addrs) != 0 {
+		t.Fatalf("etc/player_locator.yaml 的 PlayerRedis.Addrs = %v;dev 环境靠缺省指向 RedisClient", c.PlayerRedis.Addrs)
+	}
+}
+
+// dev yaml 只用注释说明 Reconcile 各项,不写值:这些项全服必须一致,K8s ConfigMap 也不镜像,
 // 两处各写一份迟早漂移,事实源只留在代码默认值。有人往 yaml 里加值时这里红,提醒同时决定 K8s 怎么镜像。
 func TestEtcYamlLeavesReconcileToCodeDefaults(t *testing.T) {
 	var c Config
@@ -80,5 +104,8 @@ func TestEtcYamlLeavesReconcileToCodeDefaults(t *testing.T) {
 	}
 	if c.Lease.ReconcileIntervalSeconds != 0 {
 		t.Fatalf("etc/player_locator.yaml 的 Lease.ReconcileIntervalSeconds = %d;全服必须一致,不在 dev yaml 里单独设", c.Lease.ReconcileIntervalSeconds)
+	}
+	if c.Lease.ScanRoundSeconds != 0 {
+		t.Fatalf("etc/player_locator.yaml 的 Lease.ScanRoundSeconds = %d;事实源是代码默认值,要改默认值请改 config.go", c.Lease.ScanRoundSeconds)
 	}
 }

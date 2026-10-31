@@ -68,7 +68,7 @@ cd go/login && go test ./...
 区库的表结构用 `go/db/cmd/migrate` 管理(`-command status | plan | up`);guild、friend、trade
 的独占库在服务启动时按 proto 自动迁移,也可以用 `-migrate` 参数只迁移不启动。
 
-历史玩家提交屏障的停写恢复入口为 `go/db/cmd/save_barrier_restore`（默认只生成计划，执行需原文件 SHA-256）。
+维护排空的阶段动作入口为 `go/db/cmd/maintenance_phase`（必须带 `-authority-phase`，由 `tools/scripts/maintenance_drain.ps1` 调用）。
 适用路由/存储边界、排空门禁与 `plan/apply` 命令见 [SQL 恢复手册](../docs/ops/mysql-backup-pitr-runbook.md) 的「历史屏障计划与维护恢复工具」；它不会自动清缓存或开放流量。
 
 `build.ps1` 不编译:它重新生成 db 与 login 的 goctl 包装代码并修正 import。`.pb.go` 的重新生成走

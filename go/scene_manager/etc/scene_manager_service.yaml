@@ -21,6 +21,16 @@ Redis:
   Type: node
   Key: scenemanagerservice
 
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.10):location、位置修订、离场等待、切线冷却、进场去重、
+# owner_epoch、handoff、handoff_fence。上面的 Redis 段只剩控制域(场景路由、成员集合、选主锁),一段脚本不跨这两个域。
+# 不写 Addrs = 指向上面的 Redis 实例。集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
+#   Cluster: true
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。铸造通道另有固定 32 条(svc.ownerEpochMintPoolSize)。
+# 读写 3s、取连接 4s、拨号 5s 沿用这条路径换句柄之前的口径,要改写 ReadTimeoutMs / WriteTimeoutMs / PoolTimeoutMs / DialTimeoutMs。
+PlayerRedis:
+  PoolSizePerNode: 20
+
 # Zone ID for C++ convention etcd registration (Scene nodes discover SceneManager by this).
 ZoneId: 1
 
@@ -53,14 +63,14 @@ KafkaWriteTimeoutSeconds: 5
 # 单实例只等本地刷盘(≤ 约 1s),上限调高不影响它。
 # NumLocal 1 要求 appendonly yes(compose 与 K8s 的 redis 都开着);开启时启动先探一次,失败拒启。两项都写 0 = 关闭(启动打 ERROR)。
 # NumReplicas 这里写 0 给本机 compose 单实例;K8s ConfigMap 不镜像它,按共享 Redis 拓扑渲染(单实例 0、高可用 1,
-# tools/scripts/k8s_deploy.ps1 Get-RouteStoreWaitAOFNumReplicas,与 go/db、data_service 同源)。NumLocal / TimeoutMs 原样镜像。
+# tools/scripts/k8s_deploy.ps1 Get-OwnerEpochMintWaitAOFNumReplicas)。NumLocal / TimeoutMs 原样镜像。
 OwnerEpochMint:
   WaitAOFNumLocal: 1
   WaitAOFNumReplicas: 0
   WaitAOFTimeoutMs: 2000
 
 # 开发旁路:true 时跨节点切场景 / 已有位置的跨区重定向不再要求源 scene 先写出
-# 「已落盘」标记(player:{id}:handoff)。
+# 「已落盘」标记(player:<id>:handoff)。
 # 旁路放行(无标记)时**不铸造**新 owner_epoch,只做「epoch 没被并发推进才写 location」的 CAS
 # (cross-zone-scene-travel.md §10.2 R6;理由见 enterscenelogic.go requireHandoffCommitted)。
 # 生产必须 false:依赖标记 + epoch 两道换手门(docs/design/cross-zone-scene-travel.md CZ-4),
@@ -245,7 +255,7 @@ NodeLoadWeightPlayerCount: 0.01
 
 # Bound on world-channel migrations per rebalance tick. Rebalance runs when
 # a world-hosting node joins or leaves the zone. Only empty channels are
-# moved (player_count == 0); hot channels stay put. Set 0 to disable
+# moved (no members); hot channels stay put. Set 0 to disable
 # proactive rebalancing — on-demand lazy-reassign in GetBestWorldChannel
 # will still repair mappings to dead nodes.
 MaxRebalanceMigrationsPerTick: 10
@@ -262,6 +272,15 @@ RebalanceCheckIntervalSeconds: 300
 # 候选地图取 world_channels:desired:zone:{z} 的字段,全部点查。升级前遗留、从未登记的 zone 需要
 # 一次性补登记,命令见 docs/ops/scene-node-role-split.md §6.1。
 CleanupOrphanChannelsOnStartup: true
+
+# 成员集合对账(logic/scene_member_reconcile.go,设计 §5.10):摘掉崩溃留下、location 不再指向这里的成员。只有领导者跑。
+# 整块可以不写,下面的值就是缺省值。每轮最多读 MembersPerRound 个成员的 location、发 ScansPerRound 条 SSCAN,下一轮接着走。
+# 走完一遍的时长约 成员总数 ÷ MembersPerRound × IntervalSeconds,看 scene_manager_scene_member_reconcile_passes_total。
+# Disabled: true 关掉之后,残留成员让实例永远不销毁、选线一直躲着它。
+SceneMemberReconcile:
+  IntervalSeconds: 10
+  MembersPerRound: 2000
+  ScansPerRound: 512
 
 # RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
 # 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。

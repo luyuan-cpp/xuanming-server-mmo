@@ -8,17 +8,22 @@ package svc
 //     写」的复制偏移,换一条连接就覆盖不到这次铸造。AOF 与复制流都是单一有序日志,偏移 X 已落盘意味着 X 之前所有连接的写
 //     都已落盘,所以确认同时覆盖了铸造之前的源端冻结存盘与交接标记(设计 §3「三点补充推导」第 2 条)。
 //
-// 为什么不用 ServiceContext.Redis(go-zero 的 *redis.Redis)而另建 go-redis 客户端(写法同 go/data_service
-// internal/routing/publish_redis.go 与 go/db internal/kafka/durable_enqueue.go):
-//   - go-zero 按地址只建一个底层客户端、不暴露 Pipelined,EVAL 与 WAITAOF 没法保证落在同一条连接上;
-//   - WAITAOF 在 appendfsync everysec 下平均占住连接约 0.5s、最坏约 1s。放进 go-zero 的共享池(10 × GOMAXPROCS),
-//     首登尖峰会把 EnterScene 其余的读写与后台循环一起饿住;
-//   - go-zero 的熔断器把确定性的脚本错误回复也计成失败,熔断一开所有 Redis 读写都按概率被拒。
+// 为什么不用 ServiceContext.PlayerRedis 而另建客户端:
+//   - WAITAOF 在 appendfsync everysec 下平均占住连接约 0.5s、最坏约 1s。放进共享池,首登尖峰会把 EnterScene 其余的读写一起饿住;
+//   - 读超时要比 WAITAOF 的等待长,共享句柄的读超时给不了这么宽;
+//   - 这条 pipeline 含 EVAL,共享句柄的守卫按规则会拒绝它(playerredis.ErrNonIdempotentInPipeline)。这里的 pipeline 只发给节点
+//     客户端、不会自动重发,所以用 playerredis.NewPinned,键的规则由 EvalAndConfirm 发送前自己核(CheckKeys)。
 //
 // 契约:
-//   - 连接身份(地址、账号、口令、TLS、DB 0)取 Config.Redis,与 go-zero 对同一份 redis.RedisConf 的换算逐项相同;
-//     Type 只许空或 node:铸造脚本是多键脚本,WAITAOF 按单实例连接的写偏移定义;
-//   - 池上限固定 ownerEpochMintPoolSize,不预建空闲连接。这个数就是 tools/scripts/k8s_deploy.ps1 Redis 连接总账
+//   - 连接身份(地址、账号、口令、TLS)取玩家域配置 Config.EffectivePlayerRedis(),铸造的键都在玩家域;
+//   - **Cluster 下不能用 ClusterClient.Pipelined**:它按键分组发送,无键的 WAITAOF 会被发到任意节点,确认的是另一台机器的偏移。
+//     所以先按第一个键取持有该 slot 的主节点(playerredis.MasterForKey),在它上面发 pipeline;
+//   - 对 EVAL 而言 MOVED / ASK / TRYAGAIN / CLUSTERDOWN / LOADING / READONLY 都表示「没执行」:刷新路由表后重发,ASK 在同一条
+//     pipeline 里前置 ASKING 发往目标节点。这一类重发有自己的上限,不计入「结果未知」的次数;
+//   - EVAL 之后、WAITAOF 之前发生切主:WAITAOF 落到已降级的旧主上,回 cannot be used with replica instances,结论是
+//     MintDurabilityError,logic 按推送失败回滚。回滚 Lua 在新主上做 CAS,铸造随切主丢了就回 superseded、什么都不改,没丢就正常回滚,
+//     两种终态都自洽(设计 §4.3.3);
+//   - 池上限固定 ownerEpochMintPoolSize(Cluster 下按节点计),不预建空闲连接。这个数就是 tools/scripts/k8s_deploy.ps1 Redis 连接总账
 //     scene-manager 行的 Fixed,两边要一起改(契约测试钉住);
 //   - ReadTimeout = WAITAOF 超时 + 1s,WAITAOF 的服务端超时先于客户端读超时到期;ContextTimeoutEnabled:取连接排队与
 //     读写都受调用方 ctx 截止约束,WAITAOF 的预算在发送前按 ctx 剩余算好;
@@ -31,17 +36,15 @@ package svc
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"time"
 
 	"scene_manager/internal/config"
+	"shared/playerredis"
 
 	goredis "github.com/redis/go-redis/v9"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 const (
@@ -63,6 +66,13 @@ const (
 	// ownerEpochMintRetryBackoffMin / Max:重发前的抖动等待,同时失败的请求错开重来。
 	ownerEpochMintRetryBackoffMin = 10 * time.Millisecond
 	ownerEpochMintRetryBackoffMax = 50 * time.Millisecond
+	// ownerEpochMintNotExecutedLimit:「确定没执行」类错误回复的重发上限,不计入 ownerEpochMintAttempts。时间上还受铸造 ctx 的截止约束。
+	// 切主与 slot 交接都是秒级,等待上限 × 次数约 3s,够撑过路由表刷新,撑不过时回错误,由上游重试整个请求。
+	ownerEpochMintNotExecutedLimit = 16
+	// ownerEpochMintNotExecutedBackoffMin / Max:这一类重发前的抖动等待。go-redis 的路由表是后台刷新的,发现 MOVED 之后马上重取
+	// 多半还是旧节点。
+	ownerEpochMintNotExecutedBackoffMin = 20 * time.Millisecond
+	ownerEpochMintNotExecutedBackoffMax = 200 * time.Millisecond
 )
 
 // OwnerEpochMinter 是 logic 铸造 owner_epoch 用的执行面。生产实现是 *RedisOwnerEpochMinter;单测通过同一接口注入替身。
@@ -95,7 +105,8 @@ type MintEvalResult struct {
 	// Durability 与 DurableErr:落盘结论与不满足时的原因(Disabled / Confirmed 时 DurableErr 为 nil)。
 	Durability MintDurability
 	DurableErr error
-	// Attempts 是 pipeline 实际发送的次数(≥ 1)。> 1 说明首发结果未知、重发过,脚本回 0 时首发可能已生效。
+	// Attempts 是 pipeline 因结果未知而发送的次数(≥ 1)。> 1 说明首发结果未知、重发过,脚本回 0 时首发可能已生效。
+	// 「确定没执行」的重发(MOVED 等)不计入。
 	Attempts int
 	// Elapsed 是最后一次 pipeline 的往返耗时(含 WAITAOF 的等待),只给指标用。
 	Elapsed time.Duration
@@ -119,18 +130,20 @@ func (a mintAOFAck) enabled() bool {
 	return a.numLocal > 0 || a.numReplicas > 0
 }
 
-// RedisOwnerEpochMinter 是 OwnerEpochMinter 的生产实现:专用 go-redis 客户端 + 注入的墙钟。
+// RedisOwnerEpochMinter 是 OwnerEpochMinter 的生产实现:专用玩家域客户端 + 注入的墙钟。
 type RedisOwnerEpochMinter struct {
-	client *goredis.Client
-	ack    mintAOFAck
-	nowMs  func() uint64
+	client goredis.UniversalClient
+	// conf 是 client 的配置,ASK 重定向时按它临时连目标节点。
+	conf  playerredis.Config
+	ack   mintAOFAck
+	nowMs func() uint64
 }
 
 var _ OwnerEpochMinter = (*RedisOwnerEpochMinter)(nil)
 
-// NewRedisOwnerEpochMinter 建铸造专用客户端(go-redis 懒连接,构造本身不拨号)。mint 必须已过 Validate;
+// NewRedisOwnerEpochMinter 建铸造专用客户端(go-redis 懒连接,构造本身不拨号)。conn 是玩家域配置;mint 必须已过 Validate;
 // nowMs 是墙钟(生产传 WallClockMs,单测传固定值),不得为 nil。
-func NewRedisOwnerEpochMinter(conn redis.RedisConf, mint config.OwnerEpochMintConfig, nowMs func() uint64) (*RedisOwnerEpochMinter, error) {
+func NewRedisOwnerEpochMinter(conn playerredis.Config, mint config.OwnerEpochMintConfig, nowMs func() uint64) (*RedisOwnerEpochMinter, error) {
 	if nowMs == nil {
 		return nil, errors.New("owner epoch mint: wall clock must not be nil")
 	}
@@ -142,42 +155,24 @@ func NewRedisOwnerEpochMinter(conn redis.RedisConf, mint config.OwnerEpochMintCo
 		numReplicas: mint.NumReplicas(),
 		timeout:     mint.EffectiveWaitAOFTimeout(),
 	}
-	opts, err := ownerEpochMintRedisOptions(conn, ack)
+	conf := ownerEpochMintClientConfig(conn, ack)
+	client, err := playerredis.NewPinned(conf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("owner epoch mint: %w", err)
 	}
-	return &RedisOwnerEpochMinter{client: goredis.NewClient(opts), ack: ack, nowMs: nowMs}, nil
+	return &RedisOwnerEpochMinter{client: client, conf: conf, ack: ack, nowMs: nowMs}, nil
 }
 
-// ownerEpochMintRedisOptions 把 Config.Redis 换算成铸造专用客户端的参数(纯函数,单测直接测)。
-// 连接身份与 go-zero getClient 对同一份 redis.RedisConf 的换算逐项相同;池、超时与重试按本文件头的契约。
-func ownerEpochMintRedisOptions(conn redis.RedisConf, ack mintAOFAck) (*goredis.Options, error) {
-	if conn.Type != "" && conn.Type != redis.NodeType {
-		return nil, fmt.Errorf("owner epoch mint needs a single-instance zone redis (Redis.Type=%q, want %q): "+
-			"the mint script is multi-key and WAITAOF confirms one connection's writes on one instance", conn.Type, redis.NodeType)
-	}
-	if strings.TrimSpace(conn.Host) == "" {
-		return nil, errors.New("owner epoch mint: Redis.Host is empty")
-	}
-	var tlsConfig *tls.Config
-	if conn.Tls {
-		// 与 go-zero redisclientmanager.go 的 getClient 同口径(Tls=true 时 InsecureSkipVerify),同一份配置两边行为一致。
-		tlsConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // 与 go-zero 对同一配置项的处理一致
-	}
-	return &goredis.Options{
-		Addr:                  conn.Host,
-		Username:              conn.User,
-		Password:              conn.Pass,
-		DB:                    0,
-		PoolSize:              ownerEpochMintPoolSize,
-		MinIdleConns:          0,
-		MaxRetries:            -1,
-		WriteTimeout:          ownerEpochMintWriteTimeout,
-		ReadTimeout:           ack.timeout + ownerEpochMintReadTimeoutSlack,
-		ContextTimeoutEnabled: true,
-		DisableIdentity:       true, // 同 go/db durableClientOptions:不发 CLIENT SETINFO
-		TLSConfig:             tlsConfig,
-	}, nil
+// ownerEpochMintClientConfig 把玩家域配置换算成铸造专用客户端的配置(纯函数,单测直接测)。
+// 连接身份与集群形态原样保留;池、超时按本文件头的契约。
+func ownerEpochMintClientConfig(conn playerredis.Config, ack mintAOFAck) playerredis.Config {
+	readTimeout := ack.timeout + ownerEpochMintReadTimeoutSlack
+	conn.PoolSizePerNode = ownerEpochMintPoolSize
+	conn.WriteTimeoutMs = int(ownerEpochMintWriteTimeout.Milliseconds())
+	conn.ReadTimeoutMs = int(readTimeout.Milliseconds())
+	conn.PoolTimeoutMs = int((readTimeout + time.Second).Milliseconds())
+	conn.DisableContextTimeout = false
+	return conn
 }
 
 // WallClockMs 是生产用的墙钟:当前 Unix 毫秒。系统时钟早于 1970 时返回 0(地板不起作用,铸造退化为观察值 + 1)。
@@ -199,25 +194,31 @@ func (m *RedisOwnerEpochMinter) WaitsForAOF() bool {
 	return m.ack.enabled()
 }
 
-// EvalAndConfirm 实现 OwnerEpochMinter:同一个 pipeline 里先 EVAL、再 WAITAOF(开启时)。
+// EvalAndConfirm 实现 OwnerEpochMinter:在持有 keys[0] 所在 slot 的主节点上,同一个 pipeline 里先 EVAL、再 WAITAOF(开启时)。
 //
 // 判定:
+//   - keys 不合键形规则(没带 tag、跨 slot):确定性的编程错误,一条都不发,返回 error;
 //   - 发送前按 ctx 剩余算 WAITAOF 的等待上限:min(配置值, 剩余 − 100ms),**先截断成整毫秒**,不足 1ms 一条都不发
-//     (WAITAOF 的 timeout 0 是无限阻塞)—— 首发前就不够时回 ErrOwnerEpochMintNotSent;
-//   - EVAL 是 Redis 错误回复(脚本 error_reply、WRONGTYPE、OOM 等):确定性的,不重发,返回 error;
+//     (WAITAOF 的 timeout 0 是无限阻塞)—— 还没有结果未知的发送时回 ErrOwnerEpochMintNotSent;
+//   - EVAL 回 MOVED / ASK / TRYAGAIN / CLUSTERDOWN / LOADING / READONLY:确定没执行,刷新路由表后重发,不计入结果未知的次数,
+//     有自己的上限 ownerEpochMintNotExecutedLimit;
+//   - EVAL 是其余错误回复(脚本 error_reply、WRONGTYPE、OOM 等):确定性的,不重发,返回 error;
 //   - EVAL 传输错误(含取连接失败、ctx 截止):结果未知,退避后在新连接上重发整条 pipeline,最多 ownerEpochMintAttempts 次。
 //     首发若已生效,凭标记的铸造会被脚本的重放识别认出来;脚本在识别分支里把 owner_epoch 原值写回一次,所以新连接上的
 //     WAITAOF 仍覆盖首发那次写。不凭标记的铸造认不出,重发回 0(已登记的残余,调用方据 Attempts 打日志);
 //   - EVAL 有回复之后不再重发:WAITAOF 的结论原样写进 Durability,由调用方按「推送失败」处理不满足的情形。
 func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script string, keys []string, args ...any) (MintEvalResult, error) {
+	if len(keys) == 0 {
+		return MintEvalResult{}, errors.New("owner epoch mint: script needs at least one key")
+	}
+	if err := playerredis.CheckKeys(keys); err != nil {
+		return MintEvalResult{}, fmt.Errorf("owner epoch mint keys rejected, nothing sent: %w", err)
+	}
 	var lastErr error
-	for attempt := 1; attempt <= ownerEpochMintAttempts; attempt++ {
-		if attempt > 1 {
-			if err := sleepCtx(ctx, mintRetryBackoff()); err != nil {
-				return MintEvalResult{Attempts: attempt - 1},
-					fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s) (retry wait: %v): %w", attempt-1, err, lastErr)
-			}
-		}
+	attempt := 1
+	notExecuted := 0
+	askAddr := ""
+	for {
 		var waitMs int64
 		if m.ack.enabled() {
 			deadline, hasDeadline := ctx.Deadline()
@@ -233,39 +234,84 @@ func (m *RedisOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script strin
 		}
 
 		started := time.Now()
-		var evalCmd, waitCmd *goredis.Cmd
-		// 不看 Pipelined 的返回值:它只是第一条失败命令的错误,逐条命令的结果才是判据。
-		_, _ = m.client.Pipelined(ctx, func(p goredis.Pipeliner) error {
-			evalCmd = p.Eval(ctx, script, keys, args...)
-			if m.ack.enabled() {
-				waitCmd = p.Do(ctx, "WAITAOF", m.ack.numLocal, m.ack.numReplicas, waitMs)
-			}
-			return nil
-		})
+		evalCmd, waitCmd, evalErr := m.sendPipeline(ctx, askAddr, script, keys, args, waitMs)
 		elapsed := time.Since(started)
-		if evalCmd == nil {
-			lastErr = errors.New("pipeline callback was not invoked")
-			continue
+		askAddr = ""
+		if evalErr == nil {
+			durability, durableErr := m.judgeWaitAOF(waitCmd)
+			return MintEvalResult{
+				Reply:      evalCmd.Val(),
+				Durability: durability,
+				DurableErr: durableErr,
+				Attempts:   attempt,
+				Elapsed:    elapsed,
+			}, nil
 		}
-		if evalErr := evalCmd.Err(); evalErr != nil {
-			if isRedisErrorReply(evalErr) {
+
+		if kind, addr := playerredis.ClassifyNotExecuted(evalErr); kind != playerredis.NotExecutedNo {
+			notExecuted++
+			if notExecuted > ownerEpochMintNotExecutedLimit {
 				return MintEvalResult{Attempts: attempt},
-					fmt.Errorf("owner epoch mint script rejected by redis (deterministic, not resent): %w", evalErr)
+					fmt.Errorf("owner epoch mint EVAL still redirected after %d resend(s): %w", ownerEpochMintNotExecutedLimit, evalErr)
 			}
-			lastErr = evalErr
+			if kind == playerredis.NotExecutedAsk {
+				askAddr = addr
+				continue
+			}
+			playerredis.ReloadTopology(ctx, m.client)
+			if err := sleepCtx(ctx, mintNotExecutedBackoff()); err != nil {
+				return MintEvalResult{Attempts: attempt},
+					fmt.Errorf("owner epoch mint EVAL redirected and the retry wait ended (%v): %w", err, evalErr)
+			}
 			continue
 		}
-		durability, durableErr := m.judgeWaitAOF(waitCmd)
-		return MintEvalResult{
-			Reply:      evalCmd.Val(),
-			Durability: durability,
-			DurableErr: durableErr,
-			Attempts:   attempt,
-			Elapsed:    elapsed,
-		}, nil
+		if isRedisErrorReply(evalErr) {
+			return MintEvalResult{Attempts: attempt},
+				fmt.Errorf("owner epoch mint script rejected by redis (deterministic, not resent): %w", evalErr)
+		}
+
+		lastErr = evalErr
+		if attempt >= ownerEpochMintAttempts {
+			return MintEvalResult{Attempts: attempt},
+				fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s): %w", attempt, lastErr)
+		}
+		if err := sleepCtx(ctx, mintRetryBackoff()); err != nil {
+			return MintEvalResult{Attempts: attempt},
+				fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s) (retry wait: %v): %w", attempt, err, lastErr)
+		}
+		attempt++
 	}
-	return MintEvalResult{Attempts: ownerEpochMintAttempts},
-		fmt.Errorf("owner epoch mint EVAL result unknown after %d attempt(s): %w", ownerEpochMintAttempts, lastErr)
+}
+
+// sendPipeline 发一次 EVAL + WAITAOF。第三个返回值是 EVAL 的结论:nil = EVAL 有正常回复。
+// askAddr 非空时前置 ASKING 发往这个节点,否则发往持有 keys[0] 所在 slot 的主节点。
+func (m *RedisOwnerEpochMinter) sendPipeline(ctx context.Context, askAddr, script string, keys []string, args []any, waitMs int64) (*goredis.Cmd, *goredis.Cmd, error) {
+	var node *goredis.Client
+	if askAddr != "" {
+		node = playerredis.NewNodeClient(m.conf, askAddr)
+		defer func() { _ = node.Close() }()
+	} else {
+		var err error
+		if node, err = playerredis.MasterForKey(ctx, m.client, keys[0]); err != nil {
+			return nil, nil, err
+		}
+	}
+	var evalCmd, waitCmd *goredis.Cmd
+	// 不看 Pipelined 的返回值:它只是第一条失败命令的错误,逐条命令的结果才是判据。
+	_, _ = node.Pipelined(ctx, func(p goredis.Pipeliner) error {
+		if askAddr != "" {
+			p.Do(ctx, "ASKING")
+		}
+		evalCmd = p.Eval(ctx, script, keys, args...)
+		if m.ack.enabled() {
+			waitCmd = p.Do(ctx, "WAITAOF", m.ack.numLocal, m.ack.numReplicas, waitMs)
+		}
+		return nil
+	})
+	if evalCmd == nil {
+		return nil, nil, errors.New("pipeline callback was not invoked")
+	}
+	return evalCmd, waitCmd, evalCmd.Err()
 }
 
 // judgeWaitAOF 把 WAITAOF 那条命令的结果翻成结论。waitCmd 为 nil = 没发(两项都配 0)。
@@ -300,14 +346,20 @@ func judgeWaitAOFReply(waitCmd *goredis.Cmd, numLocal, numReplicas int) (MintDur
 // 为什么在启动期挡:WAITAOF 的配置错误(appendonly no 回 ERR、Redis < 7.2 回 unknown command、NumReplicas 写了 1 而拓扑里
 // 没有副本)是确定性的,留到运行期就是每一次铸造都被当成未落盘回滚,所有换节点 / 首登都失败。探针用的连接上没写过东西,
 // 本地确认会立即返回;timeout 仍取配置值,免得赶上 fsync 间隙误判。
+//
+// Cluster 下逐个主节点探:配置错误可能只在其中一个节点上。主节点是副本时(探针之后才切的主)不在这里管,运行期按「未落盘」回滚。
 func (m *RedisOwnerEpochMinter) Probe(ctx context.Context) error {
 	if !m.ack.enabled() {
 		return nil
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, m.ack.timeout+ownerEpochMintProbeTimeoutSlack)
 	defer cancel()
+	return playerredis.ForEachMaster(probeCtx, m.client, m.probeNode)
+}
+
+func (m *RedisOwnerEpochMinter) probeNode(ctx context.Context, node *goredis.Client) error {
 	timeoutMs := m.ack.timeout.Milliseconds()
-	acks, err := m.client.Do(probeCtx, "WAITAOF", m.ack.numLocal, m.ack.numReplicas, timeoutMs).Slice()
+	acks, err := node.Do(ctx, "WAITAOF", m.ack.numLocal, m.ack.numReplicas, timeoutMs).Slice()
 	if err != nil {
 		if !isRedisErrorReply(err) {
 			// 没执行(连不上、ctx 已结束)单独报,否则会报成「needs appendonly yes」,把运维引错方向。
@@ -373,6 +425,11 @@ func waitAOFBudgetMs(now, deadline time.Time, hasDeadline bool, configured, marg
 // mintRetryBackoff 在 [Min, Max] 内均匀取一个等待时长(同 data_service publishRetryBackoff)。
 func mintRetryBackoff() time.Duration {
 	return ownerEpochMintRetryBackoffMin + rand.N(ownerEpochMintRetryBackoffMax-ownerEpochMintRetryBackoffMin+1)
+}
+
+// mintNotExecutedBackoff 在 [Min, Max] 内均匀取一个等待时长。
+func mintNotExecutedBackoff() time.Duration {
+	return ownerEpochMintNotExecutedBackoffMin + rand.N(ownerEpochMintNotExecutedBackoffMax-ownerEpochMintNotExecutedBackoffMin+1)
 }
 
 // sleepCtx 可取消的等待:ctx 先结束就立即返回 ctx.Err()。

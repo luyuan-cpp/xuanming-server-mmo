@@ -46,7 +46,7 @@ const (
 	ErrCrossZoneDenied = uint32(table.TeamError_kTeamCrossZoneDenied)
 	// ErrInviteNotFound:邀请不存在或已过期。
 	ErrInviteNotFound = uint32(table.TeamError_kTeamInviteNotFound)
-	// ErrInviteLimit:被邀请人待处理的邀请已达上限(S_COMMIT 返回 {-3,i})。
+	// ErrInviteLimit:被邀请人待处理的邀请已达上限。
 	ErrInviteLimit = uint32(table.TeamError_kTeamInviteLimit)
 	// ErrInMatch:开战锁有效期间变更名单。
 	ErrInMatch = uint32(table.TeamError_kTeamInMatch)
@@ -62,6 +62,6 @@ const (
 	ErrSizeExceeded = uint32(table.TeamError_kTeamSizeExceeded)
 	// ErrStateChanged:提交重试耗尽 / 请求 ctx 已过期放弃提交。
 	ErrStateChanged = uint32(table.TeamError_kTeamStateChanged)
-	// ErrInternal:Redis、data_service、发号故障(表中 fault=1)。
+	// ErrInternal:SQL、Redis、data_service、发号故障(表中 fault=1)。
 	ErrInternal = uint32(table.TeamError_kTeamInternal)
 )

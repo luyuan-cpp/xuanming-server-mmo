@@ -70,11 +70,28 @@ const (
 type serverOutcomePolicy interface{ classify(error) serverOutcome }
 type mysqlStatementPolicy struct{}
 
+// 分类用到的服务端错误号。
+const (
+	mysqlErrDuplicateEntry  uint16 = 1062
+	mysqlErrLockWaitTimeout uint16 = 1205
+	mysqlErrDeadlock        uint16 = 1213
+	tidbErrWriteConflict    uint16 = 9007
+)
+
 func (mysqlStatementPolicy) classify(err error) serverOutcome {
-	// 首个候选仅支持直接的确定1062；不通过As拆开混合transport/Join错误。
-	// 1213与SQLSTATE40等Tx-abort类别待驱动/实际TiDB证据，不在此冒充已支持。
-	if server, ok := err.(*mysql.MySQLError); ok && server.Number == 1062 {
+	// 只认直接的服务端回包；不通过As拆开混合transport/Join错误。
+	server, ok := err.(*mysql.MySQLError)
+	if !ok {
+		return outcomeUnknown
+	}
+	switch server.Number {
+	case mysqlErrDuplicateEntry:
 		return outcomeStatementRejected
+	case mysqlErrLockWaitTimeout, mysqlErrDeadlock, tidbErrWriteConflict:
+		// 这里只处理业务语句的回包，COMMIT的错误走endLocked，恒为结果未知。服务端回了错、COMMIT还没发，
+		// failLocked随后回滚，这笔事务不可能提交：结局确定，调用方可以整笔重试，连接也不用隔离。
+		// 不依赖服务端是否已自行回滚，MySQL、TiDB都成立。
+		return outcomeTransactionAborted
 	}
 	return outcomeUnknown
 }
@@ -124,13 +141,16 @@ func (c *guardedConnector) Connect(ctx context.Context) (driver.Conn, error) {
 // 底层没有Context接口时仅保证调用前取消检查；网络上限仍由原socket预算限制。
 // 不另启goroutine制造“返回了但SQL还在跑”的伪取消。
 type guardedConn struct {
-	permission  Permission
-	mu          sync.Mutex
-	raw         driver.Conn
-	gate        writerGate
-	session     sessionPolicy
-	outcomes    serverOutcomePolicy
-	tx          *guardedTx
+	permission Permission
+	mu         sync.Mutex
+	raw        driver.Conn
+	gate       writerGate
+	session    sessionPolicy
+	outcomes   serverOutcomePolicy
+	tx         *guardedTx
+	// abortedTx 是服务端已中止、这里已替它回滚的显式事务。database/sql 还以为它开着:调用方吞掉错误接着用同一个 sql.Tx 时,
+	// 后面的语句不能落进新的自动事务单独提交,一律回原错误,直到 sql.Tx 结束。
+	abortedTx   *guardedTx
 	rows        *guardedRows
 	closed      bool
 	quarantined bool
@@ -148,6 +168,9 @@ type guardedTx struct {
 func (c *guardedConn) usableLocked() error {
 	if c.closed || c.quarantined {
 		return errGuardClosed
+	}
+	if c.abortedTx != nil {
+		return c.abortedTx.failure
 	}
 	if c.rows != nil {
 		return errGuardBusy
@@ -237,6 +260,9 @@ func (c *guardedConn) failLocked(tx *guardedTx, cause error) error {
 			result = rollbackErr
 		}
 		tx.failure = result
+		if outcome == outcomeTransactionAborted && !tx.automatic && !c.quarantined {
+			c.abortedTx = tx
+		}
 	}
 	return result
 }
@@ -284,9 +310,17 @@ func (c *guardedConn) endLocked(tx *guardedTx, commit bool) error {
 	return nil
 }
 
+// clearAbortedLocked 在 sql.Tx 结束时解除 abortedTx,连接回到池里可以复用。
+func (c *guardedConn) clearAbortedLocked(tx *guardedTx) {
+	if c.abortedTx == tx {
+		c.abortedTx = nil
+	}
+}
+
 func (tx *guardedTx) Commit() error {
 	tx.owner.mu.Lock()
 	defer tx.owner.mu.Unlock()
+	tx.owner.clearAbortedLocked(tx)
 	if tx.done || tx.owner.tx != tx {
 		if tx.failure != nil {
 			return tx.failure
@@ -304,6 +338,7 @@ func (tx *guardedTx) Commit() error {
 func (tx *guardedTx) Rollback() error {
 	tx.owner.mu.Lock()
 	defer tx.owner.mu.Unlock()
+	tx.owner.clearAbortedLocked(tx)
 	if tx.done || tx.owner.tx != tx {
 		if tx.failure != nil {
 			return tx.failure

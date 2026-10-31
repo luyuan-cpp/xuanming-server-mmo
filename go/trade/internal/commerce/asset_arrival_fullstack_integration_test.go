@@ -16,7 +16,7 @@ package commerce
 //
 // 两名专用角色须由外部机器人保持在线/空闲，处于不同zone，不参与正式trade/其他资产写入。
 // 卖家主背包须有显式指定GUID的单件装备（含成长数据），买家有至少17金币和空格；
-// 两人无冻结、欠款、战斗或交接。scene加载相同物品表/TRADE密钥，home zone DB均为dual/TiDB。
+// 两人无冻结、欠款、战斗或交接。scene加载相同物品表/TRADE密钥，玩家存档须在TiDB的player_store。
 // 使用正式DataService的trade_listing/trade_asset_op号源。随机库新流使用正式建行毫秒纪元，
 // 因此严禁与正式trade共享这两个测试角色。成交后原件留在买家、17金币移交卖家，不删除账本。
 // 未开启require只是跳过，不代表全栈通过；开启后缺任何前置或真实证据必须失败。
@@ -49,6 +49,7 @@ import (
 	componentpb "proto/common/component"
 	playerpb "proto/common/database"
 	dspb "proto/data_service"
+	storepb "proto/player_store"
 	tradepb "proto/trade"
 	"schemamigrate"
 	"shared/accountdirectory"
@@ -70,7 +71,7 @@ type tradeFullstackRig struct {
 	caller              *assetop.Caller
 }
 
-// 每次只读同一实际玩家SQL行，不以Redis父快照构造资产或账本。
+// 每次只读同一实际玩家SQL行，不用别的副本构造资产或账本。
 type tradeFullstackSQL struct {
 	currency   *componentpb.CurrencyComp
 	bag        *playerpb.BagAllData
@@ -416,7 +417,7 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 		t.Cleanup(func() { _ = db.Close() })
 		row := rig.readSQL(t, player)
 		if row.epoch == 0 || row.seq == 0 {
-			t.Fatal("实际玩家SQL没有dual围栏")
+			t.Fatal("实际玩家SQL没有写权行序号")
 		}
 	}
 	items := tables.NewItemTableManager()
@@ -565,7 +566,7 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	}
 	rig.engine.Roles = roles
 	cfg := assetop.DefaultLoopConfig()
-	cfg.RequireSQLCommit, cfg.Workers, cfg.Batch = true, 1, 4
+	cfg.Workers, cfg.Batch = 1, 4
 	cfg.Streams = []assetpb.AssetOpStream{assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT, assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_CREDIT}
 	cfg.AbandonAfter, cfg.AuditInterval, cfg.OfflineAfterAttempts = 0, 0, 0
 	rig.loop, err = assetop.NewLoop(cfg, ops, caller, nil, nil)
@@ -581,14 +582,20 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 
 func (r *tradeFullstackRig) readSQL(t *testing.T, player uint64) *tradeFullstackSQL {
 	t.Helper()
-	row := &tradeFullstackSQL{currency: &componentpb.CurrencyComp{}, bag: &playerpb.BagAllData{}, ledger: &componentpb.PlayerAssetOpLedgerComp{}}
-	var currency, bag, ledger []byte
-	if err := r.players[player].QueryRowContext(r.ctx, "SELECT currency,bag_component,asset_op_ledger,fence_owner_epoch,fence_save_seq FROM player_database WHERE player_id=?", player).Scan(&currency, &bag, &ledger, &row.epoch, &row.seq); err != nil {
-		t.Fatalf("直接读取实际玩家SQL失败: %v", err)
+	row := &tradeFullstackSQL{}
+	// 写权行有代次和序号；kAsset 行是 player_database 的资产片段（货币、背包、账本）。
+	if err := r.players[player].QueryRowContext(r.ctx, "SELECT owner_epoch,save_seq FROM player_store WHERE player_id=? AND kind=?", player, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER)).Scan(&row.epoch, &row.seq); err != nil {
+		t.Fatalf("直接读取实际玩家写权行失败: %v", err)
 	}
-	if proto.Unmarshal(currency, row.currency) != nil || proto.Unmarshal(bag, row.bag) != nil || proto.Unmarshal(ledger, row.ledger) != nil {
+	var payload []byte
+	if err := r.players[player].QueryRowContext(r.ctx, "SELECT payload FROM player_store WHERE player_id=? AND kind=?", player, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET)).Scan(&payload); err != nil {
+		t.Fatalf("直接读取实际玩家资产行失败: %v", err)
+	}
+	asset := &playerpb.PlayerDatabase{}
+	if proto.Unmarshal(payload, asset) != nil || asset.GetCurrency() == nil || asset.GetBagComponent() == nil || asset.GetAssetOpLedger() == nil {
 		t.Fatal("实际玩家SQL资产/账本编码无效")
 	}
+	row.currency, row.bag, row.ledger = asset.GetCurrency(), asset.GetBagComponent(), asset.GetAssetOpLedger()
 	return row
 }
 

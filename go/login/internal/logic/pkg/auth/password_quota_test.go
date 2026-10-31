@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"shared/playerredis"
+	"shared/redisslot"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -145,8 +148,11 @@ func TestPasswordQuotaIdentityDomainsAndOriginalBytes(t *testing.T) {
 	q, _ := testPasswordQuota(t, 1)
 	a := mustPasswordBegin(t, q, "Álice")
 	digest := sha256.Sum256([]byte("Álice"))
-	if a.key != passwordQuotaPrefix+"{known:"+hex.EncodeToString(digest[:])+"}" {
+	if a.key != "login:password:quota:v1:{known:"+hex.EncodeToString(digest[:])+"}" {
 		t.Fatal("键必须使用canonical原字节完整SHA256")
+	}
+	if !redisslot.HasHashTag(a.key) {
+		t.Fatal("登录域的键必须带 hash tag")
 	}
 	mustPasswordFinish(t, q, a, PasswordMismatch)
 	b := mustPasswordBegin(t, q, "álice")
@@ -161,7 +167,7 @@ func TestPasswordQuotaIdentityDomainsAndOriginalBytes(t *testing.T) {
 func TestPasswordQuotaRejectsMixedConfigAndMalformedStateWithoutDeleting(t *testing.T) {
 	q, _ := testPasswordQuota(t, 2)
 	attempt := mustPasswordBegin(t, q, "state")
-	mixed := &RedisPasswordFailureQuota{prefix: q.prefix, fingerprint: "v1:3:900000:300000:30000", limit: 3, window: q.window, lock: q.lock, run: q.run, now: q.now}
+	mixed := &RedisPasswordFailureQuota{fingerprint: "v1:3:900000:300000:30000", limit: 3, window: q.window, lock: q.lock, run: q.run, now: q.now}
 	if _, err := mixed.Begin(context.Background(), KnownPasswordAccount, "state"); !errors.Is(err, ErrPasswordQuotaUnavailable) {
 		t.Fatalf("混配=%v", err)
 	}
@@ -279,12 +285,32 @@ func TestPasswordQuotaLostRepliesRemainFailClosedAndAllowSameOutcomeConfirmation
 	}
 }
 
+// 配额脚本走生产的登录域构造器:守卫拒绝不带 tag 的键,上了 Cluster 不会收到 CROSSSLOT。
+func TestPasswordQuotaPassesTheClusterGuard(t *testing.T) {
+	server := miniredis.RunT(t)
+	rdb, err := playerredis.New(playerredis.Config{Addrs: []string{server.Addr()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rdb.Close() })
+	quota, err := NewRedisPasswordFailureQuota(rdb, 2, 15*time.Minute, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt := mustPasswordBegin(t, quota, "guarded")
+	mustPasswordFinish(t, quota, attempt, PasswordMismatch)
+	if !server.Exists(attempt.key) {
+		t.Fatalf("配额记录不在预期的键上: %v", server.Keys())
+	}
+}
+
 func TestPasswordQuotaRealRedisCrossReplica(t *testing.T) {
 	if os.Getenv("LOGIN_TEST_LOCAL_AUTH_FIXTURES") != "1" {
 		t.Skip("显式开启本机13379专用Redis夹具")
 	}
 	clients := []*redis.Client{redis.NewClient(&redis.Options{Addr: "127.0.0.1:13379", DB: 14, MaxRetries: -1, ContextTimeoutEnabled: true, DialTimeout: PasswordQuotaBudget, ReadTimeout: PasswordQuotaBudget, WriteTimeout: PasswordQuotaBudget}), redis.NewClient(&redis.Options{Addr: "127.0.0.1:13379", DB: 14, MaxRetries: -1, ContextTimeoutEnabled: true, DialTimeout: PasswordQuotaBudget, ReadTimeout: PasswordQuotaBudget, WriteTimeout: PasswordQuotaBudget})}
-	prefix := "login:test:password:" + uuid.NewString() + ":"
+	// 账号带随机后缀:键按账号摘要算,用例之间互不相撞,结束时只删本例的键。
+	account := "same-" + uuid.NewString()
 	var quotas []*RedisPasswordFailureQuota
 	for _, client := range clients {
 		t.Cleanup(func() { _ = client.Close() })
@@ -292,7 +318,6 @@ func TestPasswordQuotaRealRedisCrossReplica(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		q.prefix = prefix
 		quotas = append(quotas, q)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -308,7 +333,7 @@ func TestPasswordQuotaRealRedisCrossReplica(t *testing.T) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			attempt, err := quotas[index%2].Begin(ctx, KnownPasswordAccount, "same")
+			attempt, err := quotas[index%2].Begin(ctx, KnownPasswordAccount, account)
 			if err == nil {
 				mu.Lock()
 				winner = attempt
@@ -333,10 +358,10 @@ func TestPasswordQuotaRealRedisCrossReplica(t *testing.T) {
 	mustPasswordFinish(t, quotas[0], winner, PasswordAbort)
 	for index := 0; index < 5; index++ {
 		q := quotas[index%2]
-		mustPasswordFinish(t, q, mustPasswordBegin(t, q, "same"), PasswordMismatch)
+		mustPasswordFinish(t, q, mustPasswordBegin(t, q, account), PasswordMismatch)
 	}
 	for _, q := range quotas {
-		if _, err := q.Begin(ctx, KnownPasswordAccount, "same"); !errors.Is(err, ErrPasswordQuotaDenied) {
+		if _, err := q.Begin(ctx, KnownPasswordAccount, account); !errors.Is(err, ErrPasswordQuotaDenied) {
 			t.Fatalf("五次后锁定=%v", err)
 		}
 	}

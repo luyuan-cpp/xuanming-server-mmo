@@ -96,7 +96,7 @@ public:
 	// ── 测试注入点(AGENTS §11.2 显式依赖:存盘、时钟、传输都要能替换)──
 	// 全部传 nullptr 恢复默认实现。生产代码**不调用**这些 setter。
 
-	// 默认 &PlayerLifecycleSystem::SavePlayerToRedis。true = 确实压了一次写;false 不代表任何具体原因,
+	// 默认 &PlayerLifecycleSystem::SavePlayer。true = 确实压了一次写;false 不代表任何具体原因,
 	// 是否已落盘一律只看 PlayerLastPersistedSnapshotComp。
 	using PersistFn = bool (*)(entt::entity);
 	static void SetPersistFnForTest(PersistFn fn);

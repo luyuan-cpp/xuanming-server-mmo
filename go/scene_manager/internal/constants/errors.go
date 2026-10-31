@@ -38,13 +38,13 @@ const (
 	ErrEnterSceneIdempotencyConflict uint32 = 16
 	// ErrSceneReentryBarrier: 场景当前映射的节点刚被判死,但再入屏障(见
 	// reentry_barrier.go)还没走完 —— 老节点可能仍在 emergency relocate drain
-	// 里 SavePlayerToRedis。此刻改派会造成同一玩家双写/回档,所以本次请求
+	// 里 SavePlayer。此刻改派会造成同一玩家双写/回档,所以本次请求
 	// **一个字节都不改**地拒绝,由上游带着同样的 scene_conf_id 退避重试。
 	// 这是可重试的瞬时拒绝,不是故障。
 	ErrSceneReentryBarrier uint32 = 17
 	// ErrHandoffPending: 玩家已有位置记录且需要换到别的节点 / zone,但源 scene 还
-	// 没有写出「已落盘」标记(player:{id}:handoff 的 epoch != 当前 owner_epoch)。
-	// 源节点可能仍在 SavePlayerToRedis,此刻放行就是新节点读到旧快照。与
+	// 没有写出「已落盘」标记(player:<id>:handoff 的 epoch != 当前 owner_epoch)。
+	// 源节点可能仍在 SavePlayer,此刻放行就是新节点读到旧快照。与
 	// ErrSceneReentryBarrier 同款语义:**一个字节都不改**地拒绝,上游退避重试,
 	// 源 scene 落地并写标记后自然放行。见 cross-zone-scene-travel.md CZ-4。
 	ErrHandoffPending uint32 = 18

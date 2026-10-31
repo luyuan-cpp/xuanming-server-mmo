@@ -22,6 +22,7 @@ import (
 	"guild/internal/session"
 	base "proto/common/base"
 	pb "proto/guild"
+	"shared/placement"
 )
 
 // 客户端来源请求的身份与 zone 隔离。需要 MySQL 的入会 zone 校验在
@@ -213,6 +214,70 @@ func TestGetGuild_OtherZoneLooksNonexistentToClient(t *testing.T) {
 		GetGuild(clientCtx(42), &pb.GetGuildRequest{GuildId: 701})
 	require.NoError(t, err)
 	assert.Equal(t, uint64(701), same.GetGuild().GetGuildId())
+}
+
+// bindMergedZones 给 repo 接一份固定的合服映射。用真缓存,不写替身:不 Start 就不起 goroutine。
+func bindMergedZones(t *testing.T, repo *data.GuildRepo, merges map[uint32]uint32) {
+	t.Helper()
+	cache, err := placement.NewMergedZoneCache(context.Background(), func(context.Context) (map[uint32]uint32, error) {
+		return merges, nil
+	}, placement.MergedZoneCacheOptions{})
+	require.NoError(t, err)
+	repo.BindMergedZones(cache)
+}
+
+// 合服不改写公会行:zone_id 还是 7,7 区合进 2 区之后,2 区的玩家看得见它,客户端拿到的是最终区。
+func TestGetGuild_MergedZoneIsVisibleAndShowsTheFinalZone(t *testing.T) {
+	repo, mr := newCacheOnlyRepo(t)
+	seedGuild(t, mr, data.GuildData{GuildID: 701, Name: "七区帮", ZoneID: 7}, 30)
+	bindMergedZones(t, repo, map[uint32]uint32{7: 2})
+
+	for _, home := range []uint32{2, 7} { // 归属读可能滞后一拍,还回答 7:两种答案都要看得见
+		resp, err := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: home}).
+			GetGuild(clientCtx(42), &pb.GetGuildRequest{GuildId: 701})
+		require.NoError(t, err)
+		require.NotNil(t, resp.GetGuild(), "home=%d", home)
+		assert.Equal(t, uint32(2), resp.GetGuild().GetZoneId(), "home=%d", home)
+	}
+
+	other, err := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 3}).
+		GetGuild(clientCtx(42), &pb.GetGuildRequest{GuildId: 701})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrGuildNotFound, other.GetErrorMessage().GetId(), "没合服的区照旧看不见")
+}
+
+// 客户端读本区榜:归属读滞后、还回答源区时,读到的也是最终区那张榜。
+func TestGetGuildRank_ClientReadsTheFinalZoneRank(t *testing.T) {
+	repo, mr := newCacheOnlyRepo(t)
+	seedGuild(t, mr, data.GuildData{GuildID: 501, Name: "二区帮", ZoneID: 2}, 20)
+	bindMergedZones(t, repo, map[uint32]uint32{7: 2})
+
+	for _, home := range []uint32{2, 7} {
+		l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: home})
+		page, err := l.GetGuildRank(clientCtx(42), &pb.GetGuildRankRequest{})
+		require.NoError(t, err)
+		require.Len(t, page.GetEntries(), 1, "home=%d", home)
+		assert.Equal(t, uint64(501), page.GetEntries()[0].GetGuildId())
+
+		byGuild, err := l.GetGuildRankByGuild(clientCtx(42), &pb.GetGuildRankByGuildRequest{GuildId: 501})
+		require.NoError(t, err)
+		assert.Equal(t, uint32(1), byGuild.GetEntry().GetRank(), "home=%d", home)
+	}
+}
+
+// 申请列表的过滤口径与 GetGuild 相同:合进来的区不算别区。
+func TestMyApplicationViews_MergedZoneIsNotAnotherZone(t *testing.T) {
+	repo, mr := newCacheOnlyRepo(t)
+	seedGuild(t, mr, data.GuildData{GuildID: 701, Name: "七区帮", ZoneID: 7}, 30)
+	seedGuild(t, mr, data.GuildData{GuildID: 801, Name: "八区帮", ZoneID: 8}, 30)
+	bindMergedZones(t, repo, map[uint32]uint32{7: 2})
+	l := NewGuildLogic(repo, nil, nil, nil)
+
+	views, err := l.myApplicationViews(context.Background(), []data.ApplicationRow{{GuildID: 701}, {GuildID: 801}}, 2)
+
+	require.NoError(t, err)
+	require.Len(t, views, 1)
+	assert.Equal(t, uint64(701), views[0].GetGuildId())
 }
 
 func TestGetGuildRankByGuild_ClientOnlyRanksInHomeZone(t *testing.T) {

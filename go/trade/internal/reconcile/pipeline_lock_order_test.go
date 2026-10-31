@@ -213,7 +213,7 @@ func TestEnqueueEscrowDebitStatementOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAssetOpRepo: %v", err)
 	}
-	p, err := New(Deps{Ops: repo, Caller: newTestCaller(t), OpIDs: &fakeIDs{}})
+	p, err := New(Deps{Ops: repo, Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: fakeLedger{}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestEnqueueEscrowDebitSkipsShortTxWhenSeqRowExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAssetOpRepo: %v", err)
 	}
-	p, err := New(Deps{Ops: repo, Caller: newTestCaller(t), OpIDs: &fakeIDs{}})
+	p, err := New(Deps{Ops: repo, Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: fakeLedger{}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

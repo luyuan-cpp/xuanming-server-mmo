@@ -28,6 +28,69 @@ function Get-ToolsScriptsDir { return $script:ToolsScriptsDir }
 
 <#
 .SYNOPSIS
+    写者计划夹具,返回 catalog 文件路径(给环境变量 MMORPG_SQL_K8S_BOOT_CATALOG)。k8s_deploy.ps1 渲染 SQL 写者(db、data-service、login ……)时要它。
+
+.DESCRIPTION
+    只供 DryRun 渲染:roster 是两条空 entry,过得了部署脚本的容量校验,真正的 registrar 不认。文件写在 -Root 下,由调用方清理。
+#>
+function New-SqlWriterCatalogFixture {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string[]]$Namespaces
+    )
+
+    $null = [System.IO.Directory]::CreateDirectory($Root)
+    $rosterPath = Join-Path $Root 'roster.json'
+    [System.IO.File]::WriteAllText($rosterPath, '{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[{},{}]}', [System.Text.UTF8Encoding]::new($false))
+    $rosterSha = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $catalog = @{}
+    foreach ($namespace in $Namespaces) {
+        foreach ($service in @('login', 'gateway', 'data-service', 'db', 'chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade')) {
+            $catalog["$namespace/$service"] = @{
+                requestSecret = 'fixture-request'; registrarSecret = 'fixture-registrar'; registrarImage = ('fixture.invalid/registrar@sha256:' + ('a' * 64))
+                physicalAuthoritySha256 = ('b' * 64); runtimeConfigSecret = 'fixture-runtime'; replicas = 2; rosterFile = $rosterPath; rosterSha256 = $rosterSha
+                schemaConfigSecret = 'fixture-schema-config'; schemaPermissionSecret = 'fixture-schema-permission'
+            }
+        }
+    }
+    $catalogPath = Join-Path $Root 'catalog.json'
+    [System.IO.File]::WriteAllText($catalogPath, ($catalog | ConvertTo-Json -Depth 8 -Compress), [System.Text.UTF8Encoding]::new($false))
+    return $catalogPath
+}
+
+<#
+.SYNOPSIS
+    给跑 k8s_deploy.ps1 的子进程补玩家域 Redis Cluster 的参数,返回 @{ Arguments; Env }。
+
+.DESCRIPTION
+    staging / prod 必须显式给 -PlayerRedisMasters,要 apply 集群时还要容量,开了集群还要口令(docs/design/redis-player-store-cluster.md §5.1)。
+    绝大多数用例测的不是这条闸,不补的话全部非 dev 档的 DryRun 都停在这里。
+    用例自己给了 -PlayerRedisMasters(含 0,测闸本身)就原样不动;-Env 写了 MMORPG_PLAYER_REDIS_PASSWORD(含空串)就用它。
+    dev 档不补:dev 缺省不建集群,这是要钉住的行为。
+#>
+function Add-PlayerRedisDeployFixture {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][hashtable]$Env
+    )
+
+    $result = @{ Arguments = $Arguments; Env = $Env }
+    $profileAt = [array]::IndexOf($Arguments, '-ReleaseProfile')
+    if ($profileAt -lt 0 -or ($profileAt + 1) -ge $Arguments.Count -or $Arguments[$profileAt + 1] -notin @('staging', 'prod')) { return $result }
+    if ($Arguments -contains '-PlayerRedisMasters') { return $result }
+    $added = @('-PlayerRedisMasters', '3')
+    # 容量只在本次 apply 集群时生效,zone-up 带上它只会多一条 NoEffect 警告。
+    if (($Arguments -contains 'infra-up') -or ($Arguments -contains 'all-up')) { $added += @('-PlayerRedisMaxMemory', '1gb', '-PlayerRedisStorage', '8Gi') }
+    $result.Arguments = @($Arguments) + $added
+    if (-not $Env.ContainsKey('MMORPG_PLAYER_REDIS_PASSWORD')) {
+        $result.Env = @{} + $Env
+        $result.Env['MMORPG_PLAYER_REDIS_PASSWORD'] = 'contract-player-redis-pw-01'
+    }
+    return $result
+}
+
+<#
+.SYNOPSIS
     以子进程跑一个 pwsh 脚本,合并捕获 stdout+stderr,返回 @{ ExitCode; Output }。
 
 .DESCRIPTION
@@ -55,6 +118,14 @@ function Invoke-CapturedPwsh {
         [Parameter(Mandatory = $true)][string[]]$Arguments,
         [hashtable]$Env = @{}
     )
+
+    # 部署脚本(以及照抄它 param 块的驱动)在 staging / prod 要带玩家域集群参数,见 Add-PlayerRedisDeployFixture。
+    $scriptLeaf = [System.IO.Path]::GetFileName($ScriptPath)
+    if ($scriptLeaf -ceq 'k8s_deploy.ps1' -or $scriptLeaf -like 'mmorpg-client-entry-dryrun-*') {
+        $fixture = Add-PlayerRedisDeployFixture -Arguments $Arguments -Env $Env
+        $Arguments = $fixture.Arguments
+        $Env = $fixture.Env
+    }
 
     $savedEnv = @{}
     foreach ($k in $Env.Keys) {

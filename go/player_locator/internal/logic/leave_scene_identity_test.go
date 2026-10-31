@@ -19,6 +19,7 @@ import (
 
 	"player_locator/internal/svc"
 	pb "proto/player_locator"
+	"shared/redisslot"
 )
 
 // leaveIdentSetup 装上 SceneManager 假实现,写一条 ONLINE 会话(会话号 100、版本 1、SceneId 50、带代次),
@@ -70,7 +71,7 @@ func TestLeaseExpiry_LeaveSceneCarriesSessionIdentity(t *testing.T) {
 		PlayerId: playerID, SessionId: session.SessionId, LeaseTtlSeconds: 1,
 	})
 	require.NoError(t, err)
-	claims, err := claimExpiredLeases(ctx, sc, base.Add(2*time.Second), 10, 5*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), base.Add(2*time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 
@@ -81,7 +82,7 @@ func TestLeaseExpiry_LeaveSceneCarriesSessionIdentity(t *testing.T) {
 	assert.Equal(t, session.SceneId, calls[0].SceneId)
 	assert.Equal(t, session.SessionId, calls[0].SessionId)
 	assert.Equal(t, generation, calls[0].LoginGeneration, "断线只推进 session_version,不改代次;到期清理带的仍是这次登录的代次")
-	processing, err := sc.RedisClient.ZRange(ctx, LeaseProcessingZSetKey, 0, -1).Result()
+	processing, err := sc.PlayerRedis.ZRange(ctx, leaseKeysForPlayer(playerID).processing, 0, -1).Result()
 	require.NoError(t, err)
 	assert.NotContains(t, processing, "17002", "副作用全部成功后 claim 应已 ack")
 }
@@ -103,7 +104,7 @@ func TestMarkOffline_EnqueuedRetryPreservesGeneration(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, fake.leaveCalls(), 1)
 
-	claims, err := claimExpiredLeases(ctx, sc, time.Now().Add(2*time.Second), 10, 5*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), time.Now().Add(2*time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 	queued := &pb.PlayerSession{}

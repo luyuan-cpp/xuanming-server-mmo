@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 const minimalYaml = `
 Name: dataservice.rpc
 ListenOn: 0.0.0.0:9000
-MappingRedis:
+NameCacheRedis:
   Host: 127.0.0.1:6379
   Type: node
 `
@@ -312,8 +311,7 @@ AdminToken: merge-window-token
 
 // TestShippedYamlLoads 保证仓库里那份 etc/data_service.yaml 始终能被 go-zero 读进来。
 //
-// 这条不是形式主义:MappingRedis 段刚删掉一个**被静默忽略**的 `DB: 15`
-// (go-zero 的 redis.RedisConf 没有 DB 字段,映射实际一直在 DB 0)。
+// 这条不是形式主义:go-zero 对多余的键一律静默忽略,同一段里写错键名只有读回来才看得见。
 // 顺带钉住 AdminToken 在这份 dev 配置里保持关闭 —— 本地栈不该默认开着运维 RPC
 // (今天是 Rollback* 与 ReleasePlayerName 的运维路径;remap 已停用,与 token 无关)。
 func TestShippedYamlLoads(t *testing.T) {
@@ -321,8 +319,8 @@ func TestShippedYamlLoads(t *testing.T) {
 	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
 		t.Fatalf("load etc/data_service.yaml: %v", err)
 	}
-	if c.MappingRedis.Host == "" {
-		t.Fatal("etc/data_service.yaml: MappingRedis.Host 不能为空")
+	if c.NameCacheRedis.Host == "" {
+		t.Fatal("etc/data_service.yaml: NameCacheRedis.Host 不能为空")
 	}
 	if c.AdminToken != "" {
 		t.Fatalf("etc/data_service.yaml 不该内置 AdminToken(会让本地栈默认开着运维 RPC),got %q", c.AdminToken)
@@ -463,40 +461,27 @@ func TestShippedYamlPlayerNameMatchesDefaults(t *testing.T) {
 
 // ── 回档帮会闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.5,测试 C1)──────────
 
-// ── RouteStore(映射提交点,docs/design/player-route-mapping-durability-proposal.md §4、§11.2)──────────
+// ── RouteStore(player_route 连接池与合服映射缓存,docs/design/player-route-mapping-durability-proposal.md §15)──────────
 
-func intPtr(v int) *int { return &v }
-
-// assertRouteStoreDefaults 断言 got 是 Normalize 之后的默认形态(redis、8、20/5、3、1/0/1500)。
+// assertRouteStoreDefaults 断言 got 是 Normalize 之后的默认形态(20/5、合服映射 5 秒)。
 func assertRouteStoreDefaults(t *testing.T, got RouteStoreConfig) {
 	t.Helper()
-	if got.Mode != RouteStoreModeRedis || got.MergedZoneRefreshSec != 5 || got.MaxOpenConn != 20 || got.MaxIdleConn != 5 ||
-		got.PublishAttempts != 3 || got.NumLocal() != 1 || got.NumReplicas() != 0 || got.WaitAOFTimeoutMs != 1500 {
-		t.Fatalf("RouteStore = %+v (numlocal=%d numreplicas=%d), want redis / 8 / 20,5 / 3 / 1,0,1500",
-			got, got.NumLocal(), got.NumReplicas())
-	}
-	if got.WaitAOFNumLocal == nil || got.WaitAOFNumReplicas == nil {
-		t.Fatal("Normalize must fill both WaitAOF pointers")
+	if got.MaxOpenConn != 20 || got.MaxIdleConn != 5 || got.MergedZoneRefreshSec != 5 {
+		t.Fatalf("RouteStore = %+v, want 20,5 / 5", got)
 	}
 }
 
-// TestRouteStoreDefaultsWhenBlockAbsent:yaml 里没有 `RouteStore:` 段 = redis 模式,与 2026-10-12 之前逐字相同;
-// 规范化之后的默认值合法。go-zero 不下钻未出现的 optional 结构,所以默认值只能由 Normalize 给。
+// TestRouteStoreDefaultsWhenBlockAbsent:yaml 里没有 `RouteStore:` 段时规范化之后的默认值合法。
+// go-zero 不下钻未出现的 optional 结构,所以默认值只能由 Normalize 给。
 func TestRouteStoreDefaultsWhenBlockAbsent(t *testing.T) {
 	c := loadYaml(t, minimalYaml)
-	if c.RouteStore.Mode != "" || c.RouteStore.WaitAOFNumLocal != nil || c.RouteStore.WaitAOFNumReplicas != nil {
+	if c.RouteStore != (RouteStoreConfig{}) {
 		t.Fatalf("an absent RouteStore block must stay zero-valued, got %+v", c.RouteStore)
 	}
 	rs := c.RouteStore.Normalize()
 	assertRouteStoreDefaults(t, rs)
 	if err := rs.Validate(); err != nil {
 		t.Fatalf("normalized defaults must validate: %v", err)
-	}
-	if rs.DBFirst() {
-		t.Fatal("the default mode must be redis, not db_first")
-	}
-	if !rs.WaitsForAOF() {
-		t.Fatal("the default must wait for local AOF (numlocal=1)")
 	}
 
 	// 只写 `RouteStore:` 不写键,语义与缺失一致。
@@ -506,68 +491,39 @@ RouteStore: {}
 	assertRouteStoreDefaults(t, c.RouteStore.Normalize())
 }
 
-// TestRouteStoreValidateRejects 覆盖规格 d 节的每一条拒绝规则:配错**拒绝**而不是纠正。
-// 最要紧的是 Mode 拼错:`DB_FIRST` / `db-first` 被悄悄当成 redis,运维以为切了提交点而实际没切。
+// TestRouteStoreValidateRejects:配错**拒绝**而不是纠正;闭区间的边界本身是允许的,免得有人照着报错信息改成边界值却仍被拒。
 func TestRouteStoreValidateRejects(t *testing.T) {
 	base := RouteStoreConfig{}.Normalize()
 	if err := base.Validate(); err != nil {
 		t.Fatalf("defaults must validate: %v", err)
 	}
-	cases := []struct {
+	for _, tc := range []struct {
 		name   string
 		mutate func(r *RouteStoreConfig)
 	}{
-		{"Mode 大写", func(r *RouteStoreConfig) { r.Mode = "DB_FIRST" }},
-		{"Mode 连字符", func(r *RouteStoreConfig) { r.Mode = "db-first" }},
-		{"Mode 未知值", func(r *RouteStoreConfig) { r.Mode = "mysql" }},
-		{"Mode 首字母大写", func(r *RouteStoreConfig) { r.Mode = "Redis" }},
 		{"MergedZoneRefreshSec 为负", func(r *RouteStoreConfig) { r.MergedZoneRefreshSec = -1 }},
 		{"MergedZoneRefreshSec 超过 60", func(r *RouteStoreConfig) { r.MergedZoneRefreshSec = 61 }},
 		{"MaxOpenConn 为负", func(r *RouteStoreConfig) { r.MaxOpenConn = -1 }},
 		{"MaxIdleConn 为负", func(r *RouteStoreConfig) { r.MaxIdleConn = -1 }},
 		{"MaxIdleConn 超过 MaxOpenConn", func(r *RouteStoreConfig) { r.MaxIdleConn = r.MaxOpenConn + 1 }},
-		{"PublishAttempts 为负", func(r *RouteStoreConfig) { r.PublishAttempts = -1 }},
-		{"PublishAttempts 超过 5", func(r *RouteStoreConfig) { r.PublishAttempts = 6 }},
-		{"WaitAOFNumLocal 为 2", func(r *RouteStoreConfig) { r.WaitAOFNumLocal = intPtr(2) }},
-		{"WaitAOFNumLocal 为负", func(r *RouteStoreConfig) { r.WaitAOFNumLocal = intPtr(-1) }},
-		{"WaitAOFNumReplicas 为负", func(r *RouteStoreConfig) { r.WaitAOFNumReplicas = intPtr(-1) }},
-		{"WaitAOFNumReplicas 超过 16", func(r *RouteStoreConfig) { r.WaitAOFNumReplicas = intPtr(17) }},
-		{"WaitAOFTimeoutMs 为负", func(r *RouteStoreConfig) { r.WaitAOFTimeoutMs = -1 }},
-		{"WaitAOFTimeoutMs 超过 1500", func(r *RouteStoreConfig) { r.WaitAOFTimeoutMs = 1501 }},
-	}
-	for _, tc := range cases {
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := base
 			tc.mutate(&r)
 			if err := r.Validate(); err == nil {
 				t.Fatalf("%+v must be rejected", r)
 			}
-			// db_first 下同样拒绝:非法值与 Mode 无关。
-			if r.Mode == RouteStoreModeRedis {
-				r.Mode = RouteStoreModeDBFirst
-				if err := r.Validate(); err == nil {
-					t.Fatalf("%+v must be rejected under db_first too", r)
-				}
-			}
 		})
 	}
 
-	// 闭区间的边界本身是允许的,免得有人照着报错信息改成边界值却仍被拒。
-	accepted := []struct {
+	for _, tc := range []struct {
 		name   string
 		mutate func(r *RouteStoreConfig)
 	}{
-		{"db_first", func(r *RouteStoreConfig) { r.Mode = RouteStoreModeDBFirst }},
 		{"MergedZoneRefreshSec=1", func(r *RouteStoreConfig) { r.MergedZoneRefreshSec = 1 }},
 		{"MergedZoneRefreshSec=60", func(r *RouteStoreConfig) { r.MergedZoneRefreshSec = 60 }},
 		{"MaxIdleConn=MaxOpenConn", func(r *RouteStoreConfig) { r.MaxIdleConn = r.MaxOpenConn }},
-		{"PublishAttempts=1", func(r *RouteStoreConfig) { r.PublishAttempts = 1 }},
-		{"PublishAttempts=5", func(r *RouteStoreConfig) { r.PublishAttempts = 5 }},
-		{"WaitAOFNumReplicas=16", func(r *RouteStoreConfig) { r.WaitAOFNumReplicas = intPtr(16) }},
-		{"WaitAOFTimeoutMs=1", func(r *RouteStoreConfig) { r.WaitAOFTimeoutMs = 1 }},
-		{"WaitAOFTimeoutMs=1500", func(r *RouteStoreConfig) { r.WaitAOFTimeoutMs = 1500 }},
-	}
-	for _, tc := range accepted {
+	} {
 		t.Run("accept/"+tc.name, func(t *testing.T) {
 			r := base
 			tc.mutate(&r)
@@ -578,201 +534,15 @@ func TestRouteStoreValidateRejects(t *testing.T) {
 	}
 }
 
-// TestRouteStoreExplicitZeroWaitDisables:两项都**显式**写 0 = 不发 WAITAOF(只给没开 AOF 的环境 / miniredis 单测),
-// 且 Normalize 不得把显式的 0 当成"没写"改回默认 1 —— 这正是两项用 *int 的原因。
-func TestRouteStoreExplicitZeroWaitDisables(t *testing.T) {
-	c := loadYaml(t, minimalYaml+`
-RouteStore:
-  WaitAOFNumLocal: 0
-  WaitAOFNumReplicas: 0
-`)
-	if c.RouteStore.WaitAOFNumLocal == nil || c.RouteStore.WaitAOFNumReplicas == nil {
-		t.Fatalf("explicit zeros must be loaded as non-nil pointers, got %+v", c.RouteStore)
-	}
-	rs := c.RouteStore.Normalize()
-	if rs.NumLocal() != 0 || rs.NumReplicas() != 0 {
-		t.Fatalf("Normalize must keep explicit zeros, got numlocal=%d numreplicas=%d", rs.NumLocal(), rs.NumReplicas())
-	}
-	if rs.WaitsForAOF() {
-		t.Fatal("WaitAOFNumLocal=0 + WaitAOFNumReplicas=0 must disable WAITAOF")
-	}
-	if err := rs.Validate(); err != nil {
-		t.Fatalf("explicit zeros must validate: %v", err)
-	}
-
-	// 只要求副本(redis-ha 档的写法)仍然要发 WAITAOF。
-	rs.WaitAOFNumReplicas = intPtr(1)
-	if !rs.WaitsForAOF() {
-		t.Fatal("WaitAOFNumReplicas=1 must still wait for AOF")
-	}
-}
-
-// 随仓库配置采用全球 TiDB 提交点；其余池与发布参数沿用组件默认值。
-func TestShippedYamlRouteStoreIsDBFirstAndValid(t *testing.T) {
+// 随仓库配置写的就是组件默认值,这一段不偷偷改参数。
+func TestShippedYamlRouteStoreMatchesDefaults(t *testing.T) {
 	var c Config
 	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
 		t.Fatalf("load etc/data_service.yaml: %v", err)
 	}
-	if c.RouteStore.Mode != RouteStoreModeDBFirst {
-		t.Fatalf("etc/data_service.yaml RouteStore.Mode = %q, want an explicit %q", c.RouteStore.Mode, RouteStoreModeDBFirst)
-	}
-	if c.RouteStore.WaitAOFNumLocal == nil || c.RouteStore.WaitAOFNumReplicas == nil {
-		t.Fatal("etc/data_service.yaml must spell out both WaitAOF keys (their safe default is not the zero value)")
-	}
-	// 已单独断言全球覆盖值；下面只比较未覆盖的组件默认参数。
-	rest := c.RouteStore
-	rest.Mode = RouteStoreModeRedis
-	assertRouteStoreDefaults(t, rest)
+	assertRouteStoreDefaults(t, c.RouteStore)
 	if err := c.RouteStore.Validate(); err != nil {
 		t.Fatalf("shipped RouteStore block must validate: %v", err)
-	}
-}
-
-// TestRouteStoreReadRequiresReady(第 3 批读方门禁,规格 §5.2):组件原始缺省 false(整段缺失、段在键不在都一样,
-// Normalize 不改它);true 只许 db_first —— redis 模式下没有可回源的真源,回退顺序写反时必须拒启而不是静默跑;
-// 随仓库的全球应用配置显式开启 ready 门禁。
-func TestRouteStoreReadRequiresReady(t *testing.T) {
-	for _, y := range []string{minimalYaml, minimalYaml + `
-RouteStore: {}
-`, minimalYaml + `
-RouteStore:
-  Mode: db_first
-`} {
-		if c := loadYaml(t, y); c.RouteStore.ReadRequiresReady || c.RouteStore.Normalize().ReadRequiresReady {
-			t.Fatalf("ReadRequiresReady must default to false, got true for yaml:\n%s", y)
-		}
-	}
-
-	c := loadYaml(t, minimalYaml+`
-RouteStore:
-  Mode: db_first
-  ReadRequiresReady: true
-`)
-	rs := c.RouteStore.Normalize()
-	if !rs.ReadRequiresReady {
-		t.Fatal("ReadRequiresReady: true must be loaded and kept by Normalize")
-	}
-	if err := rs.Validate(); err != nil {
-		t.Fatalf("ReadRequiresReady=true under db_first must validate: %v", err)
-	}
-
-	for _, mode := range []string{RouteStoreModeRedis, ""} {
-		bad := RouteStoreConfig{Mode: mode, ReadRequiresReady: true}.Normalize()
-		err := bad.Validate()
-		if err == nil {
-			t.Fatalf("ReadRequiresReady=true with Mode=%q (normalized %q) must be rejected", mode, bad.Mode)
-		}
-		if !strings.Contains(err.Error(), "ReadRequiresReady") {
-			t.Fatalf("the rejection must name the key, got %v", err)
-		}
-	}
-
-	var shipped Config
-	if err := conf.Load("../../etc/data_service.yaml", &shipped); err != nil {
-		t.Fatalf("load etc/data_service.yaml: %v", err)
-	}
-	if !shipped.RouteStore.ReadRequiresReady {
-		t.Fatal("etc/data_service.yaml must enable RouteStore.ReadRequiresReady for global db_first reads")
-	}
-}
-
-// TestRouteStoreReadRequiresReadyNeedsReconcileLeader(A1-6 / A2-2 / M1-1 / LR-6):读方门禁开着时不许急停对账 leader
-// (Reconcile.Enabled=false)—— 没有 leader 就没人撤 / 维护就绪标记,读方却继续判 Trusted。
-//   - 读方开 + Enabled=false:不论 ArmReadyMarker 是否已改成 false 都拒启,报错点名两个键(结构体与 yaml 两条入口);
-//   - 先关读方再急停、或 leader 开着(没写 = true / 显式 true):照常通过;
-//   - 随仓库的全球默认组合(db_first + 读方门禁 + leader 开)通过;在它上面只把 Enabled 改成 false(Arm 一并改 false,
-//     只留这一处违例)就被拒 —— 守卫确实罩住现役配置。
-func TestRouteStoreReadRequiresReadyNeedsReconcileLeader(t *testing.T) {
-	off, on := false, true
-
-	for _, arm := range []bool{false, true} {
-		bad := RouteStoreConfig{Mode: RouteStoreModeDBFirst, ReadRequiresReady: true}
-		bad.Reconcile.Enabled = &off
-		bad.Reconcile.ArmReadyMarker = arm
-		err := bad.Normalize().Validate()
-		if err == nil {
-			t.Fatalf("ReadRequiresReady=true with Reconcile.Enabled=false (ArmReadyMarker=%t) must be rejected", arm)
-		}
-		if !arm && (!strings.Contains(err.Error(), "ReadRequiresReady") || !strings.Contains(err.Error(), "Reconcile.Enabled")) {
-			t.Fatalf("the rejection must name both keys, got %v", err)
-		}
-	}
-
-	c := loadYaml(t, minimalYaml+`
-RouteStore:
-  Mode: db_first
-  ReadRequiresReady: true
-  Reconcile:
-    Enabled: false
-`)
-	if err := c.RouteStore.Normalize().Validate(); err == nil || !strings.Contains(err.Error(), "Reconcile.Enabled") {
-		t.Fatalf("the same combination written in yaml must be rejected naming Reconcile.Enabled, got %v", err)
-	}
-
-	stop := RouteStoreConfig{Mode: RouteStoreModeDBFirst}
-	stop.Reconcile.Enabled = &off
-	if err := stop.Normalize().Validate(); err != nil {
-		t.Fatalf("an emergency stop after the readers are off must validate: %v", err)
-	}
-	for _, enabled := range []*bool{nil, &on} {
-		r := RouteStoreConfig{Mode: RouteStoreModeDBFirst, ReadRequiresReady: true}
-		r.Reconcile.Enabled = enabled
-		if err := r.Normalize().Validate(); err != nil {
-			t.Fatalf("ReadRequiresReady=true with the leader on (Enabled=%v) must validate: %v", enabled, err)
-		}
-	}
-
-	var shipped Config
-	if err := conf.Load("../../etc/data_service.yaml", &shipped); err != nil {
-		t.Fatalf("load etc/data_service.yaml: %v", err)
-	}
-	rs := shipped.RouteStore.Normalize()
-	if !rs.DBFirst() || !rs.ReadRequiresReady || !rs.Reconcile.On() {
-		t.Fatalf("this case assumes the shipped global default (db_first + ReadRequiresReady + leader on), got Mode=%q ReadRequiresReady=%t Enabled=%t",
-			rs.Mode, rs.ReadRequiresReady, rs.Reconcile.On())
-	}
-	if err := rs.Validate(); err != nil {
-		t.Fatalf("the shipped global default combination must validate: %v", err)
-	}
-	rs.Reconcile.Enabled = &off
-	rs.Reconcile.ArmReadyMarker = false
-	if err := rs.Validate(); err == nil || !strings.Contains(err.Error(), "Reconcile.Enabled") {
-		t.Fatalf("stopping the leader on the shipped global default must be rejected naming Reconcile.Enabled, got %v", err)
-	}
-}
-
-// TestRouteStorePublishRedisPoolSize(A2-1 / LR-4):db_first 发布客户端的池上限。没配(整段缺失、段在键不在)= 缺省 20;
-// [1, 128] 之外拒启(0 由 Normalize 换成缺省,所以拒绝的是负数与超上限),与 Mode 无关;边界值本身允许;
-// 随仓库的 yaml 写的就是缺省值。
-func TestRouteStorePublishRedisPoolSize(t *testing.T) {
-	for _, y := range []string{minimalYaml, minimalYaml + `
-RouteStore: {}
-`} {
-		if got := loadYaml(t, y).RouteStore.Normalize().PublishRedisPoolSize; got != DefaultRouteStorePublishRedisPoolSize {
-			t.Fatalf("PublishRedisPoolSize must default to %d, got %d for yaml:\n%s", DefaultRouteStorePublishRedisPoolSize, got, y)
-		}
-	}
-	for _, mode := range []string{RouteStoreModeRedis, RouteStoreModeDBFirst} {
-		for _, size := range []int{-1, MaxRouteStorePublishRedisPoolSize + 1} {
-			err := RouteStoreConfig{Mode: mode, PublishRedisPoolSize: size}.Normalize().Validate()
-			if err == nil || !strings.Contains(err.Error(), "PublishRedisPoolSize") {
-				t.Fatalf("Mode=%s PublishRedisPoolSize=%d must be rejected naming the key, got %v", mode, size, err)
-			}
-		}
-		for _, size := range []int{1, MaxRouteStorePublishRedisPoolSize} {
-			if err := (RouteStoreConfig{Mode: mode, PublishRedisPoolSize: size}).Normalize().Validate(); err != nil {
-				t.Fatalf("Mode=%s PublishRedisPoolSize=%d must be accepted: %v", mode, size, err)
-			}
-		}
-	}
-
-	var shipped Config
-	if err := conf.Load("../../etc/data_service.yaml", &shipped); err != nil {
-		t.Fatalf("load etc/data_service.yaml: %v", err)
-	}
-	if shipped.RouteStore.PublishRedisPoolSize != DefaultRouteStorePublishRedisPoolSize {
-		t.Fatalf("etc/data_service.yaml RouteStore.PublishRedisPoolSize = %d, want the default %d spelled out",
-			shipped.RouteStore.PublishRedisPoolSize, DefaultRouteStorePublishRedisPoolSize)
 	}
 }
 
@@ -914,211 +684,5 @@ func TestShippedYamlKafkaConsumerKnobsAreRowByRowAndValid(t *testing.T) {
 	}
 	if err := k.Normalize().ValidateConsumers(c.SnapshotMySQL.MaxOpenConn); err != nil {
 		t.Fatalf("shipped Kafka consumer knobs must validate: %v", err)
-	}
-}
-
-// ── RouteStore.Reconcile(对账 leader,第 1b-2 批;规格 spec_D1_batch1b2_2_3.md §4.5、scout 1b-2 config 一项)──────
-
-// assertReconcileDefaults 断言 got 是 Normalize 之后的默认形态。
-func assertReconcileDefaults(t *testing.T, got RouteReconcileConfig) {
-	t.Helper()
-	if got.Enabled == nil || !*got.Enabled || got.ArmReadyMarker || got.AssumeNoEviction {
-		t.Fatalf("Reconcile switches = Enabled %v ArmReadyMarker %t AssumeNoEviction %t, want true / false / false",
-			got.Enabled, got.ArmReadyMarker, got.AssumeNoEviction)
-	}
-	if got.RollbackToleranceMs == nil || *got.RollbackToleranceMs != 0 || got.ToleranceMs() != 0 {
-		t.Fatalf("RollbackToleranceMs = %v, want an explicit 0 (owner decision 10-17)", got.RollbackToleranceMs)
-	}
-	want := map[string][2]int{
-		"LeaseMs":                  {got.LeaseMs, 10000},
-		"RenewIntervalMs":          {got.RenewIntervalMs, 3000},
-		"TickIntervalMs":           {got.TickIntervalMs, 1000},
-		"IncrementalIntervalMs":    {got.IncrementalIntervalMs, 30000},
-		"IncrementalOverlapMs":     {got.IncrementalOverlapMs, 15000},
-		"RepairLookbackMs":         {got.RepairLookbackMs, 60000},
-		"PushBatch":                {got.PushBatch, 500},
-		"PushMaxRowsPerSec":        {got.PushMaxRowsPerSec, 20000},
-		"RedisPoolSize":            {got.RedisPoolSize, 4},
-		"FreezeTimeoutMs":          {got.FreezeTimeoutMs, 5000},
-		"RedisFailureReleaseMs":    {got.RedisFailureReleaseMs, 10000},
-		"ArmingBlockedReportLimit": {got.ArmingBlockedReportLimit, 1000},
-		"LeaseSafetyMs":            {got.LeaseSafetyMs(), 2000},
-	}
-	for name, v := range want {
-		if v[0] != v[1] {
-			t.Errorf("Reconcile.%s = %d, want %d", name, v[0], v[1])
-		}
-	}
-}
-
-// TestRouteReconcileDefaults:整段缺失、`Reconcile: {}`、只写 Mode 时都得到默认值且合法;leader 只在 db_first 下构造
-// (ReconcileEnabled),RedisFailureReleaseMs 缺省跟着 LeaseMs 走。
-func TestRouteReconcileDefaults(t *testing.T) {
-	for _, y := range []string{minimalYaml, minimalYaml + `
-RouteStore: {}
-`, minimalYaml + `
-RouteStore:
-  Reconcile: {}
-`} {
-		c := loadYaml(t, y)
-		if c.RouteStore.Reconcile.Enabled != nil || c.RouteStore.Reconcile.LeaseMs != 0 {
-			t.Fatalf("an absent Reconcile block must stay zero-valued, got %+v", c.RouteStore.Reconcile)
-		}
-		rs := c.RouteStore.Normalize()
-		assertReconcileDefaults(t, rs.Reconcile)
-		if err := rs.Validate(); err != nil {
-			t.Fatalf("normalized defaults must validate: %v", err)
-		}
-		if rs.ReconcileEnabled() {
-			t.Fatal("redis mode must not construct the reconcile leader")
-		}
-		rs.Mode = RouteStoreModeDBFirst
-		if !rs.ReconcileEnabled() {
-			t.Fatal("db_first with Reconcile.Enabled unset must construct the reconcile leader (nil = true)")
-		}
-	}
-
-	// RedisFailureReleaseMs 没写时跟着 LeaseMs 走,写了就按写的。
-	rc := RouteReconcileConfig{LeaseMs: 20000}.Normalize()
-	if rc.RedisFailureReleaseMs != 20000 {
-		t.Fatalf("RedisFailureReleaseMs must default to LeaseMs, got %d", rc.RedisFailureReleaseMs)
-	}
-	rc = RouteReconcileConfig{LeaseMs: 20000, RedisFailureReleaseMs: 3000}.Normalize()
-	if rc.RedisFailureReleaseMs != 3000 {
-		t.Fatalf("an explicit RedisFailureReleaseMs must be kept, got %d", rc.RedisFailureReleaseMs)
-	}
-
-	// 急停:Enabled=false 在 db_first 下也不构造。
-	c := loadYaml(t, minimalYaml+`
-RouteStore:
-  Mode: db_first
-  Reconcile:
-    Enabled: false
-`)
-	rs := c.RouteStore.Normalize()
-	if rs.Reconcile.On() || rs.ReconcileEnabled() {
-		t.Fatal("Reconcile.Enabled: false must be honoured (emergency stop)")
-	}
-	if err := rs.Validate(); err != nil {
-		t.Fatalf("db_first + Enabled=false must validate: %v", err)
-	}
-}
-
-// TestRouteReconcileRejects:每条范围 / 跨字段规则各一格,非法值不论 Mode 都拒启;ArmReadyMarker=true 只许 db_first 且 Enabled≠false。
-func TestRouteReconcileRejects(t *testing.T) {
-	base := RouteStoreConfig{}.Normalize()
-	if err := base.Validate(); err != nil {
-		t.Fatalf("defaults must validate: %v", err)
-	}
-	off := false
-	cases := []struct {
-		name   string
-		mutate func(r *RouteReconcileConfig)
-	}{
-		{"LeaseMs 低于 3000", func(r *RouteReconcileConfig) { r.LeaseMs = 2999 }},
-		{"LeaseMs 超过 60000", func(r *RouteReconcileConfig) { r.LeaseMs = 60001 }},
-		{"LeaseMs 8000 撑不住默认冻结时限", func(r *RouteReconcileConfig) { r.LeaseMs = 8000 }},
-		{"TickIntervalMs 低于 200", func(r *RouteReconcileConfig) { r.TickIntervalMs = 199 }},
-		{"TickIntervalMs 超过 10000", func(r *RouteReconcileConfig) { r.TickIntervalMs = 10001 }},
-		{"RenewIntervalMs 太大", func(r *RouteReconcileConfig) { r.RenewIntervalMs = 4001 }},
-		{"RenewIntervalMs 小于拍间隔", func(r *RouteReconcileConfig) { r.RenewIntervalMs = 900 }},
-		{"IncrementalIntervalMs 低于 1000", func(r *RouteReconcileConfig) { r.IncrementalIntervalMs = 999 }},
-		{"IncrementalOverlapMs 低于 5000", func(r *RouteReconcileConfig) { r.IncrementalOverlapMs = 4999 }},
-		{"RepairLookbackMs 低于 15000", func(r *RouteReconcileConfig) { r.RepairLookbackMs = 14999 }},
-		{"RepairLookbackMs 小于重叠量", func(r *RouteReconcileConfig) { r.IncrementalOverlapMs, r.RepairLookbackMs = 20000, 15000 }},
-		{"RollbackToleranceMs 为负", func(r *RouteReconcileConfig) { r.RollbackToleranceMs = intPtr(-1) }},
-		{"RollbackToleranceMs 超过 60000", func(r *RouteReconcileConfig) { r.RollbackToleranceMs = intPtr(60001) }},
-		{"PushBatch 为负", func(r *RouteReconcileConfig) { r.PushBatch = -1 }},
-		{"PushBatch 超过 1000", func(r *RouteReconcileConfig) { r.PushBatch = 1001 }},
-		{"PushMaxRowsPerSec 低于 100", func(r *RouteReconcileConfig) { r.PushMaxRowsPerSec = 99 }},
-		{"RedisPoolSize 超过 32", func(r *RouteReconcileConfig) { r.RedisPoolSize = 33 }},
-		{"FreezeTimeoutMs 低于 5000", func(r *RouteReconcileConfig) { r.FreezeTimeoutMs = 4999 }},
-		{"FreezeTimeoutMs 超过 60000", func(r *RouteReconcileConfig) { r.LeaseMs, r.FreezeTimeoutMs = 60000, 60001 }},
-		{"RedisFailureReleaseMs 小于拍间隔", func(r *RouteReconcileConfig) { r.RedisFailureReleaseMs = 100 }},
-		{"RedisFailureReleaseMs 超过 600000", func(r *RouteReconcileConfig) { r.RedisFailureReleaseMs = 600001 }},
-		{"ArmingBlockedReportLimit 为负", func(r *RouteReconcileConfig) { r.ArmingBlockedReportLimit = -1 }},
-		{"ArmingBlockedReportLimit 超过 100000", func(r *RouteReconcileConfig) { r.ArmingBlockedReportLimit = 100001 }},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			for _, mode := range []string{RouteStoreModeRedis, RouteStoreModeDBFirst} {
-				r := base
-				r.Mode = mode
-				tc.mutate(&r.Reconcile)
-				err := r.Validate()
-				if err == nil {
-					t.Fatalf("Mode=%s Reconcile=%+v must be rejected", mode, r.Reconcile)
-				}
-				if !strings.Contains(err.Error(), "RouteStore.Reconcile.") {
-					t.Fatalf("the rejection must name the key, got %v", err)
-				}
-			}
-		})
-	}
-
-	// ArmReadyMarker=true:redis 模式、或 db_first 但 Enabled=false,一律拒绝(回退时先改 Arm=false)。
-	for _, tc := range []struct {
-		name    string
-		mode    string
-		enabled *bool
-	}{
-		{"redis 模式", RouteStoreModeRedis, nil},
-		{"db_first 但急停", RouteStoreModeDBFirst, &off},
-	} {
-		r := base
-		r.Mode = tc.mode
-		r.Reconcile.ArmReadyMarker = true
-		r.Reconcile.Enabled = tc.enabled
-		if err := r.Validate(); err == nil || !strings.Contains(err.Error(), "ArmReadyMarker") {
-			t.Fatalf("%s: ArmReadyMarker=true must be rejected naming the key, got %v", tc.name, err)
-		}
-	}
-
-	accepted := []struct {
-		name   string
-		mutate func(r *RouteStoreConfig)
-	}{
-		{"db_first + ArmReadyMarker", func(r *RouteStoreConfig) { r.Mode, r.Reconcile.ArmReadyMarker = RouteStoreModeDBFirst, true }},
-		{"redis + Enabled=false", func(r *RouteStoreConfig) { r.Reconcile.Enabled = &off }},
-		{"RollbackToleranceMs=60000", func(r *RouteStoreConfig) { r.Reconcile.RollbackToleranceMs = intPtr(60000) }},
-		{"PushBatch=1000", func(r *RouteStoreConfig) { r.Reconcile.PushBatch = 1000 }},
-		{"RenewIntervalMs=4000", func(r *RouteStoreConfig) { r.Reconcile.RenewIntervalMs = 4000 }},
-		{"LeaseMs=60000", func(r *RouteStoreConfig) { r.Reconcile.LeaseMs = 60000 }},
-		{"FreezeTimeoutMs=6000", func(r *RouteStoreConfig) { r.Reconcile.FreezeTimeoutMs = 6000 }},
-		{"RedisFailureReleaseMs=TickIntervalMs", func(r *RouteStoreConfig) { r.Reconcile.RedisFailureReleaseMs = r.Reconcile.TickIntervalMs }},
-	}
-	for _, tc := range accepted {
-		t.Run("accept/"+tc.name, func(t *testing.T) {
-			r := base
-			tc.mutate(&r)
-			if err := r.Validate(); err != nil {
-				t.Fatalf("%+v must be accepted: %v", r.Reconcile, err)
-			}
-		})
-	}
-}
-
-// 全球配置运行对账并开启 ready 装配；实际发布仍须通过 leader 的历史导入与回档检查。
-func TestShippedYamlReconcileEnablesGlobalReady(t *testing.T) {
-	var c Config
-	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
-		t.Fatalf("load etc/data_service.yaml: %v", err)
-	}
-	rc := c.RouteStore.Reconcile
-	if !rc.ArmReadyMarker {
-		t.Fatal("etc/data_service.yaml must enable RouteStore.Reconcile.ArmReadyMarker for global readiness")
-	}
-	if rc.Enabled == nil || rc.RollbackToleranceMs == nil {
-		t.Fatal("etc/data_service.yaml must spell out Reconcile.Enabled and Reconcile.RollbackToleranceMs (their safe default is not the zero value)")
-	}
-	if !c.RouteStore.Normalize().ReconcileEnabled() {
-		t.Fatal("the shipped global db_first yaml must construct the reconcile leader")
-	}
-	// Arm 已单独断言，其他对账参数继续保持组件默认值。
-	rest := rc.Normalize()
-	rest.ArmReadyMarker = false
-	assertReconcileDefaults(t, rest)
-	if err := c.RouteStore.Normalize().Validate(); err != nil {
-		t.Fatalf("shipped RouteStore block (with Reconcile) must validate: %v", err)
 	}
 }

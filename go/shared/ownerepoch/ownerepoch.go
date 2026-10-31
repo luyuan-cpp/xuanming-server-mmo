@@ -56,9 +56,10 @@ func OwnerEpochKey(playerID uint64) string {
 	return "player:" + redisslot.PlayerTag(playerID) + ":owner_epoch"
 }
 
-// HandoffKey 返回 player:{id}:handoff。
+// HandoffKey 返回 player:{<id>}:handoff。别和交接资格 hash player:{<id>}:handoff_fence(shared/handofffence)弄混,
+// 两个键只差后缀。C++ player_ownership::HandoffRedisKey 与它逐字一致。
 func HandoffKey(playerID uint64) string {
-	return fmt.Sprintf("player:%d:handoff", playerID)
+	return "player:" + redisslot.PlayerTag(playerID) + ":handoff"
 }
 
 // ErrMalformedHandoff 表示 handoff 标记的值不是 "{epoch}:{saved_at_ms}"。

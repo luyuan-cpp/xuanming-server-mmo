@@ -33,7 +33,7 @@ func NewDestroySceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Dest
 
 // DestroyScene is the explicit RPC path operators / gameplay code use to
 // force-destroy a scene. Unlike the lifecycle auto-destroy it does NOT
-// respect player_count — an explicit DestroyScene means "tear it down now",
+// respect the member count — an explicit DestroyScene means "tear it down now",
 // whoever owns the scene at that moment.
 //
 // 经 destroyInstanceForce(reason=explicit)原子认领、不比对属主:属主、Agones 名额、人数都以脚本认领时

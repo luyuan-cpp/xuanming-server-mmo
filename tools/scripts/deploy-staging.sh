@@ -123,11 +123,21 @@ cmd_start() {
   log "wiping redis residue (player_locator/login_session/etc) for clean rollout..."
   # player:gate_index:* 是 player_locator 按 gate 建的会话索引与就绪标记 / 代次(与会话同生同灭):
   # 只删会话不删索引会留下脏成员与幽灵 gate,下次启动后由对账补建重建。
-  for p in 'player:session:*' 'player:gate_index:*' 'player:*:location' 'player_to_account:*' \
-           'access_token:*' 'refresh_token:*' 'login_session:*' \
+  # player:leases:* 是按 slot 分桶的断线租约,player:locator_shard:* 是分片登记与段租约,同样与会话同生同灭。
+  # REDIS_PLAYER_NODES:玩家域在 Redis Cluster 上时,写集群全部节点的 host:port(空格分隔)。SCAN 只看本节点,所以逐个主节点扫;
+  # 副本跳过(它的 SCAN 列出的键,DEL 回 MOVED)。
+  for p in 'player:session:*' 'player:gate_index:*' 'player:leases:*' 'player:locator_shard:*' 'player:*:location' 'player_to_account:*' \
+           'access_token:*' 'refresh_token:*' 'refresh_family:*' 'account_refresh:*' \
+           'login_session:*' 'login:sessfence:*' 'login_account_sessions:*' \
            'login_step:*' 'account_lock:*' 'player_locker:*'; do
     redis-cli --scan --pattern "$p" 2>/dev/null \
       | while read -r k; do [[ -n "$k" ]] && redis-cli DEL "$k" >/dev/null; done
+    for node in ${REDIS_PLAYER_NODES:-}; do
+      node_host="${node%:*}"; node_port="${node##*:}"
+      [[ "$(redis-cli -h "$node_host" -p "$node_port" --raw role 2>/dev/null | head -n 1)" == "slave" ]] && continue
+      redis-cli -h "$node_host" -p "$node_port" --scan --pattern "$p" 2>/dev/null \
+        | while read -r k; do [[ -n "$k" ]] && redis-cli -h "$node_host" -p "$node_port" DEL "$k" >/dev/null; done
+    done
   done
 
   for tier in 1 2 3; do

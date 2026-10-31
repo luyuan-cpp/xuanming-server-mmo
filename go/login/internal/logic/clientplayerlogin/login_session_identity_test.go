@@ -11,6 +11,7 @@ package clientplayerloginlogic
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	dbpb "proto/common/database"
 	login_proto "proto/login"
 	"shared/generated/pb/table"
+	"shared/redisslot"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -56,8 +58,7 @@ type identityHarness struct {
 	svcCtx *svc.ServiceContext
 }
 
-// newIdentityHarness 种下重启前那条连接的全部残留:victim 的登录态(新键 + 双写的旧键,与新 login 的 CommitLogin
-// 一致;旧键也就是旧 login 会写的那个)、victim 的账号 blob 与角色反查索引。
+// newIdentityHarness 种下重启前那条连接的全部残留:victim 的登录态与设备集成员、victim 的账号 blob 与角色反查索引。
 func newIdentityHarness(t *testing.T) *identityHarness {
 	t.Helper()
 	previous := config.AppConfig
@@ -76,12 +77,9 @@ func newIdentityHarness(t *testing.T) *identityHarness {
 	t.Cleanup(func() { _ = rdb.Close() })
 	ctx := context.Background()
 
-	victim := loginsession.RefOf(identityOldGateDetails())
-	oldFence, ok := sessionfence.KeyOf(identityOldGateDetails())
-	require.True(t, ok)
-	require.NoError(t, sessionfence.CommitLogin(ctx, rdb, oldFence, victim.WriteKeys(), identityVictimAccount,
-		loginsession.TTL(), constants.GenerateSessionKey(identityVictimAccount), victim.DeviceMember(), loginsession.TTL()))
-	require.True(t, mr.Exists(fmt.Sprintf("login_session:%d", identitySessionID)), "前提:按 session_id 的旧键里确实留着 victim")
+	victim := identityRef(t, identityOldGateDetails())
+	require.NoError(t, sessionfence.CommitLogin(ctx, rdb, victim.Fence(), identityVictimAccount, loginsession.TTL()))
+	require.NoError(t, loginsession.RegisterDevice(ctx, rdb, identityVictimAccount, victim, loginsession.TTL()))
 
 	blob, err := proto.Marshal(&dbpb.UserAccounts{SimplePlayers: &pbbase.AccountSimplePlayerList{
 		Players: []*pbbase.AccountSimplePlayer{{PlayerId: identityVictimPlayer, Name: "受害者"}},
@@ -91,9 +89,16 @@ func newIdentityHarness(t *testing.T) *identityHarness {
 	require.NoError(t, rdb.Set(ctx, constants.PlayerToAccountKey(identityVictimPlayer), identityVictimAccount, 0).Err())
 
 	return &identityHarness{rdb: rdb, mr: mr, svcCtx: &svc.ServiceContext{
-		RedisClient: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+		RedisClient: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 		TokenManager: token.NewManager(rdb, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 30 * 24 * time.Hour}),
 	}}
+}
+
+func identityRef(t *testing.T, details *pbbase.SessionDetails) loginsession.Ref {
+	t.Helper()
+	ref, ok := loginsession.RefOf(details)
+	require.True(t, ok, "夹具的连接身份必须完整")
+	return ref
 }
 
 func (h *identityHarness) victimBlob(t *testing.T) []byte {
@@ -114,7 +119,7 @@ func TestCreatePlayerAfterGateRestartWithoutLoginIsRejected(t *testing.T) {
 	require.Equal(t, uint32(table.LoginError_kLoginSessionNotFound), resp.GetErrorMessage().GetId(),
 		"撞号的新连接没有 Login 过,不能在 victim 的账号下建角")
 	require.Equal(t, before, h.victimBlob(t), "victim 的账号 blob 不得被改动")
-	require.False(t, h.mr.Exists("account_lock:create:"+identityVictimAccount), "拒绝发生在拿建角锁之前")
+	require.False(t, h.mr.Exists(redisslot.AccountCreateLockKey(identityVictimAccount)), "拒绝发生在拿建角锁之前")
 }
 
 func TestEnterGameAfterGateRestartWithoutLoginIsRejected(t *testing.T) {
@@ -126,9 +131,9 @@ func TestEnterGameAfterGateRestartWithoutLoginIsRejected(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint32(table.LoginError_kLoginSessionNotFound), resp.GetErrorMessage().GetId(),
 		"撞号的新连接没有 Login 过,不能进 victim 的角色")
-	require.False(t, h.mr.Exists(fmt.Sprintf("player_locker:%d", identityVictimPlayer)), "拒绝发生在拿玩家锁之前")
+	require.False(t, h.mr.Exists(fmt.Sprintf("player_locker:{%d}", identityVictimPlayer)), "拒绝发生在拿玩家锁之前")
 	newFence, _ := sessionfence.KeyOf(identityRestartedGateDetails())
-	require.False(t, h.mr.Exists("login:sessfence:"+newFence.String()), "拒绝发生在建会话栅栏记录之前,不留残留")
+	require.False(t, h.mr.Exists(redisslot.SessionFenceKey(newFence.String())), "拒绝发生在建会话栅栏记录之前,不留残留")
 }
 
 func TestLoginOnRestartedGateBindsOwnAccountOnly(t *testing.T) {
@@ -141,12 +146,12 @@ func TestLoginOnRestartedGateBindsOwnAccountOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, loginResp.GetErrorMessage().GetId(), "正常 Login 不受影响")
 
-	account, err := loginsession.GetAccount(ctx, h.rdb, loginsession.RefOf(identityRestartedGateDetails()))
+	account, err := loginsession.GetAccount(ctx, h.rdb, identityRef(t, identityRestartedGateDetails()))
 	require.NoError(t, err)
 	require.Equal(t, identityOwnAccount, account, "本连接的登录态是自己的账号")
-	legacy, err := h.mr.Get(fmt.Sprintf("login_session:%d", identitySessionID))
+	victimAccount, err := loginsession.GetAccount(ctx, h.rdb, identityRef(t, identityOldGateDetails()))
 	require.NoError(t, err)
-	require.Equal(t, identityOwnAccount, legacy, "双写把同号旧键覆盖成本连接的账号,旧 login 也读不到 victim")
+	require.Equal(t, identityVictimAccount, victimAccount, "另一条连接的登录态不受影响")
 
 	// 登录之后会话检查放行,但读到的是自己的账号:victim 的角色不在其中、反查索引也不指向自己 → 不能进。
 	enterResp, err := NewEnterGameLogic(ctx, h.svcCtx).EnterGame(&login_proto.EnterGameRequest{PlayerId: identityVictimPlayer})
@@ -154,39 +159,66 @@ func TestLoginOnRestartedGateBindsOwnAccountOnly(t *testing.T) {
 	require.Equal(t, uint32(table.LoginError_kLoginEnterGameGuid), enterResp.GetErrorMessage().GetId())
 }
 
-func TestLegacyGateWithoutIncarnationStillUsesSessionIDKey(t *testing.T) {
-	// 旧版 gate(不带会话代次)的兼容路径:登录态照旧按 session_id 建键,Login 写下、CreatePlayer / EnterGame 读得到。
-	// 这条路径保留撞号旧风险,只能靠升级 gate 消除;用量看 loginsession_legacy_key_total。
-	h := newIdentityHarness(t)
-	legacyDetails := &pbbase.SessionDetails{SessionId: identitySessionID + 1}
-	ctx := ctxkeys.WithSessionDetails(context.Background(), legacyDetails)
-	authType := fmt.Sprintf("identity-legacy-%d", accountPersistenceAuthSequence.Add(1))
-	auth.Register(authType, accountPersistenceAuth{account: identityOwnAccount})
+// identityCountingAuth 记下认证器被调用的次数:第三方 code 是一次性的,被拒的连接不能消费它。
+type identityCountingAuth struct {
+	account string
+	calls   atomic.Int32
+}
 
-	loginResp, err := NewLoginLogic(ctx, h.svcCtx).Login(&login_proto.LoginRequest{AuthType: authType})
-	require.NoError(t, err)
-	require.Zero(t, loginResp.GetErrorMessage().GetId())
-	stored, err := h.mr.Get(fmt.Sprintf("login_session:%d", identitySessionID+1))
-	require.NoError(t, err)
-	require.Equal(t, identityOwnAccount, stored)
-	members, err := h.mr.Members(constants.GenerateSessionKey(identityOwnAccount))
-	require.NoError(t, err)
-	require.Equal(t, []string{fmt.Sprint(identitySessionID + 1)}, members, "旧版设备集成员仍是 session_id")
+func (a *identityCountingAuth) Validate(context.Context, string) (*auth.AuthResult, error) {
+	a.calls.Add(1)
+	return &auth.AuthResult{Account: a.account}, nil
+}
 
-	enterResp, err := NewEnterGameLogic(ctx, h.svcCtx).EnterGame(&login_proto.EnterGameRequest{PlayerId: identityVictimPlayer})
-	require.NoError(t, err)
-	require.Equal(t, uint32(table.LoginError_kLoginEnterGameGuid), enterResp.GetErrorMessage().GetId(),
-		"会话检查放行(读到自己的账号),归属检查拒绝别人的角色")
+// 没有完整连接身份(实例号 + 会话代次)的连接一律拒绝,回 kLoginSessionIdNotFound,什么都不写。
+// 按 session_id 建键的旧路径已删除:它正是撞号继承登录态的来源。
+func TestConnectionWithoutIdentityIsRejected(t *testing.T) {
+	for name, details := range map[string]*pbbase.SessionDetails{
+		"no incarnation":   {SessionId: identitySessionID + 1, GateInstanceId: "gate-x"},
+		"no gate instance": {SessionId: identitySessionID + 1, SessionIncarnation: 3},
+		"session id only":  {SessionId: identitySessionID + 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newIdentityHarness(t)
+			before := h.mr.Keys()
+			ctx := ctxkeys.WithSessionDetails(context.Background(), details)
+			provider := &identityCountingAuth{account: identityOwnAccount}
+			authType := fmt.Sprintf("identity-rejected-%d", accountPersistenceAuthSequence.Add(1))
+			auth.Register(authType, provider)
+			wantTip := uint32(table.LoginError_kLoginSessionIdNotFound)
+
+			loginResp, err := NewLoginLogic(ctx, h.svcCtx).Login(&login_proto.LoginRequest{AuthType: authType})
+			require.NoError(t, err)
+			require.Equal(t, wantTip, loginResp.GetErrorMessage().GetId())
+			require.Zero(t, provider.calls.Load(), "拒绝发生在认证之前,第三方 code 不被消费")
+			require.Empty(t, loginResp.GetAccessToken())
+
+			createResp, err := NewCreatePlayerLogic(ctx, h.svcCtx).CreatePlayer(&login_proto.CreatePlayerRequest{})
+			require.NoError(t, err)
+			require.Equal(t, wantTip, createResp.GetErrorMessage().GetId())
+
+			enterResp, err := NewEnterGameLogic(ctx, h.svcCtx).EnterGame(&login_proto.EnterGameRequest{PlayerId: identityVictimPlayer})
+			require.NoError(t, err)
+			require.Equal(t, wantTip, enterResp.GetErrorMessage().GetId())
+
+			// 断线与离开没有回包可带 tip,也没有状态要收尾。
+			_, err = NewDisconnectLogic(ctx, h.svcCtx).Disconnect(&login_proto.LoginNodeDisconnectRequest{SessionId: identitySessionID + 1})
+			require.NoError(t, err)
+			_, err = NewLeaveGameLogic(ctx, h.svcCtx).LeaveGame(&login_proto.LeaveGameRequest{})
+			require.NoError(t, err)
+
+			require.Equal(t, before, h.mr.Keys(), "被拒的连接不得留下任何键")
+		})
+	}
 }
 
 func TestDisconnectOnRestartedGateLeavesOtherConnectionsAlone(t *testing.T) {
-	// 撞号的新连接断开:只清本连接的登录态与同号旧键,不动重启前那条连接按新键记的登录态。
+	// 撞号的新连接断开:只清本连接的登录态,不动重启前那条连接的登录态。
 	h := newIdentityHarness(t)
 	ctx := ctxkeys.WithSessionDetails(context.Background(), identityRestartedGateDetails())
 
 	_, err := NewDisconnectLogic(ctx, h.svcCtx).Disconnect(&login_proto.LoginNodeDisconnectRequest{SessionId: identitySessionID})
 	require.NoError(t, err)
 
-	require.False(t, h.mr.Exists(fmt.Sprintf("login_session:%d", identitySessionID)), "同号旧键已删,旧 login 也无从继承")
-	require.True(t, h.mr.Exists(loginsession.RefOf(identityOldGateDetails()).Key()), "另一条连接的新键不受影响")
+	require.True(t, h.mr.Exists(identityRef(t, identityOldGateDetails()).Key()), "另一条连接的登录态不受影响")
 }

@@ -61,14 +61,14 @@ func guildRoleTiDB(t *testing.T) (context.Context, *sql.DB, *GuildRepo, *Activit
 	require.NoError(t, err)
 	model := proto2mysql.NewDB()
 	require.NoError(t, model.OpenDB(db, schema))
-	tables := append(Tables(), []proto.Message{&dbpb.AccountRole{}, &matchpb.MatchAuthorityTicketRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRoleRecord{}}...)
+	tables := append(Tables(), []proto.Message{&dbpb.AccountRole{}, &matchpb.MatchAuthorityTicketRecord{}, &matchpb.MatchBattleCompletionRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRoleRecord{}}...)
 	for _, row := range tables {
 		model.RegisterTable(row)
 		require.NoError(t, model.CreateOrUpdateTable(row))
 	}
 	createGuildRouteFixture(t, ctx, db)
 	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
-	require.NoError(t, fixture.GrantTables(ctx, schema, "route_meta", "player_route", "zone_merged_into", "route_reconcile"))
+	require.NoError(t, fixture.GrantTables(ctx, schema, "route_meta", "player_route", "zone_merged_into"))
 	db, err = fixture.Open(ctx, schema, 8)
 	require.NoError(t, err)
 	mr := miniredis.RunT(t)
@@ -81,6 +81,47 @@ func guildRoleTiDB(t *testing.T) (context.Context, *sql.DB, *GuildRepo, *Activit
 	require.NoError(t, err)
 	return ctx, db, repo, activities
 }
+
+// 巡检器读 match 的 SQL 终局:COMPLETE 原样读回原字节(protobuf 字节,不是文本);ABORT 没有 battle 原字节,等于没有结果,
+// 走超时语义;没有行同样是没有结果;SQL 故障必须报错,不能伪装成没有结果。
+func TestTiDBTrialResultRecordsReadMatchTerminal(t *testing.T) {
+	ctx, db, repo, _ := guildRoleTiDB(t)
+	_, err := NewTrialResultRecords(nil)
+	require.Error(t, err)
+	_, err = NewTrialResultRecords(NewGuildRepo(nil, db, time.Minute))
+	require.Error(t, err, "没配 MatchAuthoritySchema 不能装配")
+	records, err := NewTrialResultRecords(repo)
+	require.NoError(t, err)
+
+	const completed, aborted, absent uint64 = 9_007_199_254_741_001, 9_007_199_254_741_002, 9_007_199_254_741_003
+	payload := []byte{0x08, 0x00, 0xff, 0x10, 0x01}
+	insert := func(battle uint64, raw []byte, decision matchpb.BattleOutcomeDecision) {
+		_, err := db.ExecContext(ctx, "INSERT INTO match_battle_completion(battle_id,raw_payload,payload_digest,format_version,archived_ms,source_topic,source_partition,source_offset,decision,source_kind,placement_operation_id,target_instance_id,outcome_protocol_version,result_published,next_retry_ms) VALUES(?,?,?,1,1,'',0,0,?,2,'op','instance',1,0,0)",
+			battle, raw, []byte{1}, uint32(decision))
+		require.NoError(t, err)
+	}
+	insert(completed, payload, matchpb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE)
+	insert(aborted, []byte{}, matchpb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT)
+
+	got, found, err := records.Load(ctx, completed)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, payload, got)
+	for _, battle := range []uint64{aborted, absent} {
+		_, found, err = records.Load(ctx, battle)
+		require.NoError(t, err)
+		require.False(t, found, "battle=%d", battle)
+	}
+	_, _, err = records.Load(ctx, 0)
+	require.Error(t, err)
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, found, err = records.Load(cancelled, completed)
+	require.Error(t, err, "读不到不是没有结果")
+	require.False(t, found)
+}
+
 func TestTiDBGuildCommitRechecksActorAndTrialOriginalsAndRetainsFrozenOwed(t *testing.T) {
 	ctx, db, repo, activities := guildRoleTiDB(t)
 	seedManagedGuild(t, ctx, db, 44, 1, 1, 30, 11, map[uint64]uint32{22: 1})

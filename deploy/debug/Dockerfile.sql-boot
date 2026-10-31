@@ -1,0 +1,19 @@
+# 仅供本机开发：写者注册一次性容器（compose.game.yml 的 sql-boot、<服务>-sql-boot）的基础镜像，只装 pwsh 和 mysql 客户端。
+# 注册逻辑是 tools/scripts/lib/sql_boot_catalog_*.ps1，由 prepare_docker_debug.py 复制到运行目录后只读挂载，不进镜像；
+# writer_authority 由 build_docker_go_debug.py 经 Dockerfile.go 叠到 /app/service（rebuild_docker_debug.py go --services sql-boot）。
+#
+#   docker --context desktop-linux build -f deploy/debug/Dockerfile.sql-boot -t local/mmorpg-sql-boot:debug-20261031 deploy/debug
+#
+# mysql 客户端用 Ubuntu 的 Oracle 版：它自带 caching_sha2_password，与 compose 的 MySQL 默认认证一致。
+FROM ubuntu:24.04
+ARG PWSH_VERSION=7.4.6
+ENV POWERSHELL_TELEMETRY_OPTOUT=1
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl libgssapi-krb5-2 libicu74 libssl3t64 mysql-client \
+    && mkdir -p /opt/powershell /app \
+    && curl -fsSL "https://github.com/PowerShell/PowerShell/releases/download/v${PWSH_VERSION}/powershell-${PWSH_VERSION}-linux-x64.tar.gz" \
+       | tar -xz -C /opt/powershell \
+    && chmod +x /opt/powershell/pwsh \
+    && ln -s /opt/powershell/pwsh /usr/local/bin/pwsh \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app

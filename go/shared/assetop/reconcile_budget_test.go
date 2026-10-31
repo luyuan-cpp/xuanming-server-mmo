@@ -7,6 +7,7 @@ import (
 	"time"
 
 	assetpb "proto/common/asset"
+	componentpb "proto/common/component"
 )
 
 // 本文件只验一件事:单行预算怎么在「投递」和「落库」之间分,以及落库那一步会不会被
@@ -91,24 +92,42 @@ func (a *budgetEatingApplier) budget() (time.Duration, bool) {
 	return a.remaining, a.hasDeadline
 }
 
+// budgetEatingLedger 一直等到投递预算耗尽才交出账本:已提交证据拖到预算最后一刻才读回来。
+type budgetEatingLedger struct {
+	proof          *componentpb.PlayerAssetOpLedgerComp
+	afterExhausted func() // 预算结束、账本交付前同步触发父取消，消除等长 timer 观察竞态。
+}
+
+func (l *budgetEatingLedger) ReadPersistedLedger(ctx context.Context, _ uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
+	<-ctx.Done()
+	if l.afterExhausted != nil {
+		l.afterExhausted()
+	}
+	return l.proof, nil
+}
+
+func (l *budgetEatingLedger) ReadSQLCommittedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
+	return l.ReadPersistedLedger(ctx, playerID)
+}
+
 // 把投递预算压到 120ms,免得测试真等 1.8s;落库预留仍是 settleBudget,分配逻辑不变。
 func tightBudget(c *LoopConfig) { c.OpBudget = settleBudget + 120*time.Millisecond }
 
-// 投递吃满预算、父 ctx 已经过期之后,落库仍须拿到可用的 ctx(RequireSQLCommit 关闭,HEAD 口径)。
+// 读已提交账本吃满投递预算、父 ctx 已经过期之后,落库仍须拿到可用的 ctx。
 //
 // 修复前这里是会丢钱的:scene 扣了钱,Finalize 拿着死 ctx 写不进去,行还是 PENDING,
 // 下一轮重投又投一次。
-func TestFinalizeKeepsBudgetAfterApplyExhaustsIt(t *testing.T) {
+func TestFinalizeKeepsBudgetAfterProofReadExhaustsApplyBudget(t *testing.T) {
 	op := testOp(1)
 	store := &settleSpyStore{fakeStore: newFakeStore(op)}
-	applier := &budgetEatingApplier{res: resultApplied(true)}
-	loop, _ := newTestLoop(t, store, applier, tightBudget)
+	loop, _ := newTestLoop(t, store, appliedApplier(), tightBudget)
 
 	// 父 ctx 只剩投递那一段:同步路径的调用方在进来之前已经花掉了前面一部分预算。
-	// 投递吃满之后父 ctx 必然过期,正是修复前落库拿到死 ctx 的那条时序。
+	// 取证吃满之后父 ctx 必然过期,正是修复前落库拿到死 ctx 的那条时序。
 	parent, cancel := context.WithTimeout(context.Background(), loop.cfg.OpBudget-settleBudget)
 	defer cancel()
-	applier.afterExhausted = cancel // 等实际投递预算耗尽，再同步确认父取消。
+	// 等实际投递预算耗尽，再同步确认父取消。
+	loop.Ledger = &budgetEatingLedger{proof: sqlLedgerFixture(true, op).ledger, afterExhausted: cancel}
 
 	processed, err := loop.ProcessOne(parent, op)
 	if err != nil {
@@ -136,16 +155,13 @@ func TestFinalizeKeepsBudgetAfterApplyExhaustsIt(t *testing.T) {
 	}
 }
 
-// RequireSQLCommit 打开时同一条时序:投递吃满预算之后已没有时间读 SQL 证据,不得终结,
+// 投递吃满预算之后已没有时间读 SQL 证据,不得终结,
 // 但重排仍须拿到完整的落库预留(否则这一行会原地被反复领取投递)。
 func TestAwaitSQLKeepsBudgetAfterApplyExhaustsIt(t *testing.T) {
 	op := testOp(1)
 	store := &settleSpyStore{fakeStore: newFakeStore(op)}
 	applier := &budgetEatingApplier{res: resultApplied(true)}
-	loop, _ := newTestLoop(t, store, applier, func(c *LoopConfig) {
-		tightBudget(c)
-		c.RequireSQLCommit = true
-	})
+	loop, _ := newTestLoop(t, store, applier, tightBudget)
 
 	ledger := sqlLedgerFixture(true, op)
 	loop.Ledger = ledger
@@ -194,6 +210,7 @@ func TestApplyBudgetReservesSettleShare(t *testing.T) {
 	store := &settleSpyStore{fakeStore: newFakeStore(op)}
 	applier := &budgetEatingApplier{res: resultApplied(true)}
 	loop, _ := newTestLoop(t, store, applier, tightBudget)
+	loop.Ledger = sqlLedgerFixture(true, op)
 	want := loop.cfg.OpBudget - settleBudget
 
 	// 父 ctx 不带截止:投递的截止时刻只可能来自本包自己切的那一份预算。
@@ -209,7 +226,7 @@ func TestApplyBudgetReservesSettleShare(t *testing.T) {
 	}
 }
 
-// 已准入投递在 scene 答复交付边界取消父 ctx，终局仍要落库(RequireSQLCommit 关闭,HEAD 口径)。
+// 已准入投递在 scene 答复交付边界取消父 ctx，终局仍要落库。
 func TestFinalizeSurvivesCanceledParent(t *testing.T) {
 	op := testOp(1)
 	store := &settleSpyStore{fakeStore: newFakeStore(op)}
@@ -221,6 +238,7 @@ func TestFinalizeSurvivesCanceledParent(t *testing.T) {
 		return resultApplied(true), nil
 	}}
 	loop, _ := newTestLoop(t, store, applier, nil)
+	loop.Ledger = sqlLedgerFixture(true, op)
 
 	processed, err := loop.ProcessOne(parent, op)
 	if err != nil {
@@ -241,7 +259,7 @@ func TestFinalizeSurvivesCanceledParent(t *testing.T) {
 	}
 }
 
-// RequireSQLCommit 打开且已准入投递耗尽 apply 预算时，不读取或伪造 SQL 证据；父取消不连累待办可靠写回。
+// 已准入投递耗尽 apply 预算时，不读取或伪造 SQL 证据；父取消不连累待办可靠写回。
 func TestUnconfirmedResultSurvivesCanceledParentAsPending(t *testing.T) {
 	op := testOp(1)
 	store := &settleSpyStore{fakeStore: newFakeStore(op)}
@@ -249,10 +267,7 @@ func TestUnconfirmedResultSurvivesCanceledParentAsPending(t *testing.T) {
 	defer cancel()
 	// 已准入的 scene 投递耗尽 apply 预算后交付结果，并同步取消父调用；不能再用该预算取 SQL 证据。
 	applier := &budgetEatingApplier{res: resultApplied(true), afterExhausted: cancel}
-	loop, _ := newTestLoop(t, store, applier, func(c *LoopConfig) {
-		tightBudget(c)
-		requireSQLCommit(c)
-	})
+	loop, _ := newTestLoop(t, store, applier, tightBudget)
 	ledger := sqlLedgerFixture(true, op)
 	loop.Ledger = ledger
 	if err := loop.CheckWiring(); err != nil {
@@ -292,6 +307,7 @@ func TestRescheduleSurvivesCanceledParent(t *testing.T) {
 		return resultApplied(false), nil // 结局有了但没落盘 → await_durable 重排
 	}}
 	loop, _ := newTestLoop(t, store, applier, nil)
+	loop.Ledger = &fakeLedger{}
 
 	if _, err := loop.ProcessOne(parent, op); err != nil {
 		t.Fatalf("ProcessOne 出错: %v", err)

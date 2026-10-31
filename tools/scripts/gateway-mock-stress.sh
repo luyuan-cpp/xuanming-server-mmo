@@ -60,7 +60,7 @@ wipe_redis() {
   # Wipe the same keys the linux stress runner wipes so EnterGame stays
   # decision=FirstLogin and the limiter's account cooldown doesn't smear
   # results across tiers.
-  for p in 'access_token:*' 'refresh_token:*' 'account_lock:*' \
+  for p in 'access_token:*' 'refresh_token:*' 'refresh_family:*' 'account_refresh:*' 'account_lock:*' \
            'account_data:*' 'rl:zone:*' 'rl:ip:*'; do
     docker exec redis redis-cli --scan --pattern "$p" 2>/dev/null \
       | while read -r k; do [[ -n "$k" ]] && docker exec redis redis-cli DEL "$k" >/dev/null; done

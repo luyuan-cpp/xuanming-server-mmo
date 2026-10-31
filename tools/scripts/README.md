@@ -15,11 +15,99 @@ PowerShell and shell scripts for common development tasks.
 
 ### prepare_docker_debug.py（独立 Docker 断点调试环境）
 
-在仓库根执行 `python tools/scripts/prepare_docker_debug.py`，从当前 10 份源配置派生容器配置、初始化 SQL 与 topic 契约，输出到 Git 忽略的 `build/docker-debug-current/`。需要本机 Python、PyYAML 和运行中的 Docker；脚本只读检查现有 Docker 子网，不构建、不启动容器、不删除数据。首次生成随机密钥，后续保留原值，不把密钥写进受管文件或输出。
+在仓库根执行 `python tools/scripts/prepare_docker_debug.py`，从当前源配置派生容器配置、初始化 SQL 与 topic 契约，并复制写者注册步骤用的脚本和角色模板，输出到 Git 忽略的 `build/docker-debug-current/`。需要本机 Python、PyYAML 和运行中的 Docker；脚本只读检查现有 Docker 子网，不构建、不启动容器、不删除数据。首次生成随机密钥，后续保留原值，不把密钥写进受管文件或输出。
 
-预先用当前源码构建镜像后，运行 `docker compose --env-file build/docker-debug-current/.env -f deploy/debug/compose.game.yml -f deploy/debug/compose.debug.yml up -d`。镜像构建沿用 `deploy/k8s/Dockerfile.cpp`、`Dockerfile.go-svc`（上下文 `go/`、命名上下文 `tables=generated/tables`）及 `Dockerfile.java-svc`；C++ 调试层见 `deploy/debug/Dockerfile`。Compose 禁止自动拉取，初始化任务成功后才启动 15 个常驻容器。
+预先用当前源码构建镜像后，运行 `docker compose --env-file build/docker-debug-current/.env -f deploy/debug/compose.game.yml -f deploy/debug/compose.debug.yml up -d`。镜像构建沿用 `deploy/k8s/Dockerfile.cpp`、`Dockerfile.go-svc`（上下文 `go/`、命名上下文 `tables=generated/tables`）及 `Dockerfile.java-svc`；C++ 调试层见 `deploy/debug/Dockerfile`。Compose 禁止自动拉取，初始化任务成功后才启动 16 个常驻容器。
 
-默认客户端入口为 `http://127.0.0.1:8081`，同一网关另保留 `http://127.0.0.1:18081`；gate 为 `127.0.0.1:28000`，battle 为 `127.0.0.1:28010`。可用 `--gateway-port` 调整附加 HTTP 端口、用 `--gate-port` / `--battle-port` 调整对应入口；`8081` 保留给客户端默认网关。VS Code 附加到固定名称的三个调试容器。此栈只启用登录、建角、主世界进场与战斗所需服务，未启动域的请求按现有路由契约失败。校验配置时使用 `docker compose ... config --quiet`，不要把展开后的配置与 `.env` 打印或上传。
+写者注册步骤用单独的镜像（pwsh、mysql 客户端、`writer_authority`），首次要构建。基础镜像只构建一次，`writer_authority` 变了只跑第二行：
+
+```powershell
+docker --context desktop-linux build -f deploy/debug/Dockerfile.sql-boot -t local/mmorpg-sql-boot:debug-20261031 deploy/debug
+python tools/scripts/rebuild_docker_debug.py go --services sql-boot
+```
+
+`player-inbox` 的运行镜像同样首次要构建一次，之后重编只跑第二行（迁移任务用同一个镜像）。已有 `build/docker-debug-current` 时先重跑一次 `prepare_docker_debug.py`，补上 `player_inbox` 的配置和 `PLAYER_INBOX_IP`：
+
+```powershell
+docker --context desktop-linux build -f deploy/k8s/Dockerfile.go-svc --build-arg SERVICE=player_inbox --build-arg ENTRY=player_inbox.go --build-context tables=generated/tables -t local/mmorpg-player-inbox:debug-20261031 go
+python tools/scripts/rebuild_docker_debug.py go --services player-inbox
+```
+
+写者授权与 K8s 的 registrar init 同形状，门禁与生产相同，没有 dev 旁路：
+
+- `sql-boot` 每次 `up` 先跑：补库，生成注册和维护账号的口令、物理 authority 原件、锁资格声明（命名卷 `sql-boot-private`，口令随机，不进被跟踪文件），判定全局库要不要跑 `data_service -migrate`（它只接受空库）。全局库是半成品时直接报错，不替人删数据，用 `down -v` 重来；已有数据卷的权威表不全同样如此。
+- `db-migrate`、`data-migrate`、`match-migrate`、`guild-migrate`、`player-inbox-migrate` 用 root 建表。
+- `db`、`data-service`、`login`、`match`、`player-inbox`、`gateway` 前各有一个一次性的 `<服务>-sql-boot`（`service_completed_successfully`）：用 `lib/sql_boot_catalog_local.ps1` 的授权清单和 `deploy/sql` 的角色模板建这一 boot 的账号 `lw_<boot>_<服务>`，调 `writer_authority -command register`，把单次授权、运行配置和 SQL 变量写进命名卷 `<服务>-sql-writer`。常驻容器只读挂载它，由 `sql-writer-entry.sh` 取出摘要和变量再启动业务进程；消费标记写在 `<服务>-sql-consume`。
+- 上一轮的账号没有连接就删，还有连接（服务还在跑）就留到下一轮。`writer_registry` 里的旧行不删，只是停用账号的历史记录。
+- login 进程不连 SQL、不消费授权，这一步只为和 `go_services.ps1`、K8s 的写者清单同形状。chat、friend、guild、mail、rank、trade 不在这个栈里；要加时照 `match-sql-boot` 写一段，并在 `prepare_docker_debug.py` 的 `GO_CONFIGS` 加配置。
+- `player-inbox` 收全球匹配成局的个人结算：match 用 `MMORPG_PLAYER_INBOX_SECRET_MATCH` 签名入箱，scene 用 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE` 签名拉取。这个栈的 `game_config.yaml` 由 `prepare_docker_debug.py` 打开 `player_inbox.consumer_enabled`（源配置默认关），否则结算只进箱、到不了玩家。调试端口 `127.0.0.1:2352`。
+
+单次授权启动即消费，**`docker compose restart <写者>` 会被拒启**（`SQL writer启动grant缺失、漂移或已消费`）。要重启就连注册步骤一起重建，`rebuild_docker_debug.py` 更新写者时也是这样做：
+
+```powershell
+docker --context desktop-linux compose --env-file build/docker-debug-current/.env -f deploy/debug/compose.game.yml -f deploy/debug/compose.debug.yml up -d --no-build --pull never --no-deps --force-recreate data-service-sql-boot data-service
+```
+
+`stop` 之后再 `up` 不用管：一次性容器每次 `up` 都重跑，注册出新授权。运行中重复 `up` 也会重跑注册，常驻容器不受影响。
+
+默认客户端入口为 `http://127.0.0.1:8081`，同一网关另保留 `http://127.0.0.1:18081`；gate 为 `127.0.0.1:28000`，battle 为 `127.0.0.1:28010`。可用 `--gateway-port` 调整附加 HTTP 端口、用 `--gate-port` / `--battle-port` 调整对应入口；`8081` 保留给客户端默认网关。VS Code 附加到固定名称的三个调试容器。此栈只启用登录、建角、主世界进场、战斗与全球匹配结算所需服务，未启动域的请求按现有路由契约失败。校验配置时使用 `docker compose ... config --quiet`，不要把展开后的配置与 `.env` 打印或上传。
+
+### compose.redis-cluster.yml(玩家域 Redis Cluster 本机开发版)
+
+3 主 3 从,8.10.x,端口 7100-7105,与 K8s 清单同一个镜像摘要。真集群验证用(设计 `docs/design/redis-player-store-cluster.md` §14.2)。开发时不需要它:不写 `PlayerRedis` / `player_redis` 就是单实例。
+
+```powershell
+docker --context desktop-linux compose -f deploy/compose.redis-cluster.yml up -d
+docker --context desktop-linux wait redis-player-cluster-init    # 打印 0 才算建好
+docker --context desktop-linux logs redis-player-cluster-init    # 最后一行 redis player cluster verified: 16384 slots covered
+docker --context desktop-linux compose -f deploy/compose.redis-cluster.yml down -v
+```
+
+不要用 `up --wait`:一次性容器退出会被它判成失败。节点共用一个网络命名空间,宣告 `127.0.0.1:710N`,所以只有宿主机上的进程能连,`deploy/debug` 的调试栈连不上它。
+
+**把本机服务指过去**,只改跑在宿主机上的那几份配置,改完重启服务:
+
+```yaml
+# go/<服务>/etc/*.yaml 的 PlayerRedis(login、player_locator、scene_manager、match、friend、guild、trade、player_inbox、mail)
+PlayerRedis:
+  Addrs: [127.0.0.1:7100, 127.0.0.1:7101, 127.0.0.1:7102]
+  Cluster: true
+  PoolSizePerNode: 20
+# LoginRedis 同样结构(login、chat、friend、guild、match、mail,trade 在 Rmb 下)。DB 必须是 0 或不写。
+LoginRedis:
+  Addrs: [127.0.0.1:7100, 127.0.0.1:7101, 127.0.0.1:7102]
+  Cluster: true
+```
+
+```yaml
+# bin/etc/game_config.yaml:scene 连玩家域。开发集群没有口令。
+player_redis:
+  mode: cluster
+  seeds: ["127.0.0.1:7100", "127.0.0.1:7101", "127.0.0.1:7102"]
+```
+
+这些改动不要提交。连上之后 login 启动横幅有 `player redis: addrs=127.0.0.1:7100,... cluster=true`,scene 日志有 `Player Redis: mode=cluster`。
+
+清库:`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`,单实例加开发集群的每个主节点(`lib/redis_local_flush.ps1`)。`FLUSHALL` 在 Cluster 里只清本节点,不要只对一个节点执行。压测快照的 target 写 `docker-cluster:redis-player-cluster-0:7100`(`stress_snap.ps1`)。
+
+### redis_cluster_capacity.ps1(玩家域容量基准)
+
+逐档加压,按 `INFO` 求差出每个主节点的 ops 和主线程 CPU,判定有没有真的压到饱和(设计 §14.3)。副本数、代理数、连接数都不是证据。
+
+```powershell
+# 只看将要执行什么,不连任何东西
+pwsh -File tools/scripts/redis_cluster_capacity.ps1 -Target k8s-cluster:mmorpg-stress-a/redis-player -DryRun
+# K8s 压测环境。压测端是单独的 Pod,跑完删除
+pwsh -File tools/scripts/redis_cluster_capacity.ps1 -Target k8s-cluster:mmorpg-stress-a/redis-player -ClientSteps 100,200,400,800,1600 -StageSeconds 120
+# 本机开发集群,只验证脚本:压测端和节点同机,判定不会算作容量证据
+pwsh -File tools/scripts/redis_cluster_capacity.ps1 -Target docker-cluster:redis-player-cluster-0:7100 -ClientSteps 50,200 -StageSeconds 30
+```
+
+- 退出码:0 = 已饱和,可作证据;2 = 没饱和或压测端与节点同机,不能作证据;1 = 失败(拓扑中途变化、节点重启、压测端提前退出)。
+- 三条都成立才算饱和:最后一档每个主的主线程 CPU ≥ `-SaturatedCpuPercent`(缺省 90)、总 ops 比上一档增长 < `-PlateauGrowthPercent`(缺省 5)、错误回复不超过千分之一。没到就加 `-ClientSteps` 的上限、`-Threads`、`-Pipeline`,或换更大的压测端。
+- 结果在 `-OutDir`(缺省 `build/redis-capacity-<时间>`):`capacity.txt`、`capacity.json`、每档每节点的 `INFO` 原文。
+- K8s 的 namespace 必须匹配 `^mmorpg-stress-`:它往集群里写键、把主线程压满。键前缀 `capbench:`,全部带 600 秒 TTL。
+- 负载是一段 Lua(写 location、写会话 hash、铸代次),只是玩家域写路径的近似。端到端结论走 AGENTS.md §6 的压测流程。
 
 ### start_game.ps1（本机游戏一键启动）
 
@@ -30,9 +118,55 @@ PowerShell and shell scripts for common development tasks.
 - 指定客户端：`pwsh -File tools/scripts/start_game.ps1 -OpenClient -ClientPath "E:/其他目录/mmorpg.exe"`。
 - 只检查运行文件：`pwsh -File tools/scripts/start_game.ps1 -CheckOnly`。
 - 前置：PowerShell 7、Java 23+、本机 Docker Desktop、已缓存镜像与游戏编译产物；日常启动不执行构建或镜像下载。
+- 写者授权：第 3 步每次都重新生成（见下一节）。第 1 步要求 `bin/go_services/` 下有 `writer_authority.exe`、`db_migrate.exe`、`private_control_file.exe`，由不带 `-GoServices` 的 `dev_tools.ps1 -Command go-svc-build` 一并编出。
 - 日志：`run/logs/game-launcher/<时间>/`；服务日志仍位于 `run/logs/go_services` 和 `run/logs/cpp_nodes`。
 - 旧 PID 会核对程序完整路径，失效记录先备份。Docker 停止时，已知遗留通信目录与独立 socket 会重命名备份；不删除数据卷、账号或角色。
 - 失败时显示原因与日志位置；已经启动的服务保留，解决原因后可重新双击。
+
+#### 本机写者启动目录（`sql-boot-catalog-local`）
+
+常驻 SQL 服务（db、data_service、login、chat、friend、guild、mail、rank、match、trade、player_inbox）和 Java 网关只认写者启动目录 `MMORPG_SQL_BOOT_CATALOG`：每个实例一份单次启动授权，启动即消费，账号也是每次一换（`writer_registry.sql_principal` 永久唯一）。这条命令在本机生成它，只接受回环数据库（`127.0.0.1`、`localhost`、`[::1]`），其他地址一律拒绝。Go、C++、Java 都没有 dev 旁路，`Get-SqlWriterBootEnvironment` 的校验没有放宽。C++ 节点不碰 SQL，不需要授权。
+
+```powershell
+pwsh -File tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local            # 全部写者
+pwsh -File tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local -GoServices db,data_service
+```
+
+`start_game.ps1` 每次启动自动跑，不用手动。直接用 `go-svc-start` / `go-svc-start-exe` 时先跑它，再按最后一行输出设 `MMORPG_SQL_BOOT_CATALOG` 和 `MMORPG_DB_ALLOWED_DATABASES`；服务每启动一次都要重新生成。
+
+前置：
+
+- 编译产物：`proto-gen-run` 之后的 `go-svc-build`（不带 `-GoServices`），网关要用当前源码打的 jar。
+- 数据库：默认用 compose 的 `mysql` 容器，SQL 走 `docker exec`，主机不用装客户端。容器发布的端口要和端点一致。
+- root 账号：默认取 `go/db/etc/db.yaml` 的 `ServerConfig.Database.User` / `Passwd`（与 compose 的 `MYSQL_ROOT_PASSWORD` 同值）；可用 `MMORPG_LOCAL_SQL_ROOT_USER`、`MMORPG_LOCAL_SQL_ROOT_PASSWORD` 覆盖。容器外连入时主体默认是 `<user>@%`，不一样就设 `MMORPG_SQL_SCHEMA_PRINCIPAL`。
+- 本机 TiDB 或其他端口：`$env:MMORPG_GLOBAL_AUTHORITY_TIDB_HOST='127.0.0.1:4000'`，PATH 上要有 `mysql.exe`，root 要有口令（match 迁移拒绝空口令）。档位自动探测：MySQL 用 `LOCK_TOUCH`，TiDB 用 `SELECT_ONLY`。
+- 仓库在固定 NTFS 盘：授权文件要落私有 ACL。
+
+步骤：建库 → 建表（go/db `cmd/migrate`、data_service `-migrate` 仅空库、其余服务 `-migrate`；账号都是 root，常驻账号没有 DDL）→ 按 `deploy/sql` 模板给每个实例建账号 `lw_<boot>_<实例>`，口令本机随机 → 每实例调一次 `writer_authority -command register`（单条目 roster）→ 写目录，用 `Get-SqlWriterBootEnvironment` 自检。可选服务（chat、friend、mail、rank、trade、player_inbox）建表失败只跳过它们，必需服务失败就中止。
+
+产物都在 `run/secrets/sql-boot-local/`（`.gitignore` 的 `run/*` 覆盖，目录 ACL 只留当前账号、SYSTEM、Administrators），不打印口令：
+
+| 路径 | 内容 |
+|---|---|
+| `catalog.json` | `MMORPG_SQL_BOOT_CATALOG` 指向它。已在运行的实例不发新授权（go_services 会 skip） |
+| `last-run.json` | 本轮摘要：注册 / 运行中 / 跳过的实例，网关用的 `private_control_file` 路径与 SHA |
+| `boots/<boot>/<实例>/` | `grant/`（单次授权）、`runtime/`（`-f` 用的私有配置，含账号）、`env/`（白名单 SQL 变量）、`consume/`（消费标记） |
+| `operators.json` | 注册与维护账号（`mmorpg_local_registrar`、`mmorpg_local_maintenance`）及口令 |
+| `runtime-accounts.json` | 各实例账号的记录，下一轮据此清理 |
+
+另有 `%LOCALAPPDATA%\mmorpg\sql-boot-local\private_control_file.exe`：Java 在 Windows 上经它读写私有文件，并要求 exe 的整条路径不能被非受信主体替换，仓库目录一般过不了。
+
+重来：
+
+- 只换授权：重跑命令。已停实例的账号和旧 `boots/<boot>` 会清掉；运行中实例的账号保留，`writer_registry` 里的旧行不删（只是停用账号的历史记录，不影响新实例）。
+- 报 `has tables but lacks the authority set`：`mmorpg_global` 是旧布局或半成品，`data_service -migrate` 只跑空库，脚本不替人删数据。项目未上线，先停服（`dev_tools.ps1 -Command dev-stop`，网关另停），再 `docker --context desktop-linux compose -f deploy/docker-compose.yml --profile redis-cluster down -v` 清掉本机卷（含 Redis、etcd、Kafka），删掉 `run/secrets/sql-boot-local`，重新启动。
+
+已知限制：
+
+- mail、rank 的生产者签名密钥由 `go_services.ps1` 注入本机开发值（`run/secrets/producer-dev.env`、`mail-admin-producer-dev.env`、`assetop-dev.env`），调用方已设置的值优先。
+- 只管单区、每服务一个实例（`start_game.ps1` 的形态）。多区要另外给 `MMORPG_DB_ALLOWED_DATABASES`，实例键也不同，目前不支持。
+- Windows 保留端口让服务挪了端口时，生成目录和启动之间端口变了会明确拒启（`ListenOn` 对不上），重跑即可。
+- 这条命令只管本机进程。Docker 调试栈在容器里注册，见 prepare_docker_debug.py 一节。
 
 ### dev_tools.ps1
 
@@ -51,6 +185,7 @@ Supported commands include:
 - `third-party-protobuf-build`
 - `no-raw-pointer-setup`
 - `iwyu-run`
+- `sql-boot-catalog-local`（本机写者启动目录，见 start_game.ps1 一节）
 - `k8s-*`
 
 Proto generator naming references:
@@ -391,7 +526,7 @@ pwsh -File dev_tools.ps1 -Command proto-gen-run -ConfigPath ../proto_generator/p
 
 ### 本机 Docker 修改后重编与断点
 
-在仓库根执行 `python tools/scripts/rebuild_docker_debug.py cpp`、`python tools/scripts/rebuild_docker_debug.py go --services login` 或 `python tools/scripts/rebuild_docker_debug.py java`，分别更新 C++ 三节点、Go 登录服或 Java 网关。入口先构建独占镜像，核对当前源码与产物，再只重建对应服务；现有数据卷、账号和随机开发密码保留。`--build-only` 只构建，不更新配置或容器。
+在仓库根执行 `python tools/scripts/rebuild_docker_debug.py cpp`、`python tools/scripts/rebuild_docker_debug.py go --services login` 或 `python tools/scripts/rebuild_docker_debug.py java`，分别更新 C++ 三节点、Go 登录服或 Java 网关。入口先构建独占镜像，核对当前源码与产物，再只重建对应服务（写者连同它的注册步骤 `<服务>-sql-boot`，`--services sql-boot` 只换镜像）；现有数据卷和随机开发密码保留，写者账号每次重建都换。`--build-only` 只构建，不更新配置或容器。
 
 `build_docker_cpp_debug.py` 使用本机已验证 SDK 和 `Debug/-O0`，SDK 来源及依赖守卫位于忽略目录 `build/docker-debug-current/cpp-toolchain.json`；依赖源码变化时停止，不复用不匹配 SDK。`build_docker_go_debug.py` 使用当前 Go 1.27.2、`all=-N -l` 与固定 Delve v1.27.2，逐服务串行构建。`build_docker_java_debug.py` 使用已有 JDK 23/Maven 离线单线程执行测试、打包并核验行号表。三个底层构建器只输出本地镜像及 `--output/result.json`，不自行更新运行栈。
 

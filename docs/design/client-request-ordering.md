@@ -416,6 +416,7 @@ go-zero 超时拦截器用 `context.WithTimeout` 派生 ctx 交给 handler,超�
 2. `login_session` 键只用 uint32 session_id,gate 重启后可能与旧进程的会话撞号,存在继承别人登录态的风险【码】`loginsession.go:38-40`。
    > 2026-10-18 已修(未编译、未运行,待 Codex 验证;审计 [data-overwrite-rollback-audit-20261018.md](./data-overwrite-rollback-audit-20261018.md) §2.3 login-session-route#1):
    > - **login**:登录态改按 gate 连接建键 `login_session:{gate_instance_id}:{session_incarnation}`(`loginsession.RefOf`,与会话栅栏共用 `sessionfence.Key.String`);CreatePlayer / EnterGame 只读本连接的新键,**不回落**旧键,撞号的新连接读不到任何账号。账号设备集成员同步改为键后缀,`PruneStaleFromDeviceSet` 对两种形状通用。
+   > - (2026-10-31 更正:下面两条的旧版 gate 兼容与旧键双写已删除,没有会话代次的连接直接拒绝,键形也已带 hash tag,见 [redis-player-store-cluster.md](./redis-player-store-cluster.md) §10.2 第 11 批。)
    > - **旧版 gate 兼容**:代次为 0 或缺实例号时仍按 session_id 建键,计 `loginsession_legacy_key_total{op=save|get|cleanup}`;这条路径保留旧风险,只能靠升级 gate 消除。
    > - **滚动升级**:新路径 Login 时在同一段 `CommitLogin` 脚本里双写一份旧键,让并存窗口里仍按 session_id 读的旧 login 与 login 回滚都能工作;新 login 从不读它,Disconnect / LeaveGame 一并删除。反方向(旧 login 受理 Login、新 login 受理 EnterGame)会被判未登录、需要重登,这是有意的 fail-closed。全部 login 升级、上述计数长期为 0 之后,删除双写与兼容路径。
    > - **gate 纵深防御**:`SessionInfo.loginSucceeded` 记录本连接是否收到过成功的 Login 回包(`handler/rpc/login_admission.h`),CreatePlayer / EnterGame / LeaveGame 在此之前一律回带请求 id 的信封 2028(与 login 同一个「未登录」码)。路由模式在 lane 发出时判(连发的 Login → EnterGame 仍可用,O7 不受影响),直连模式在收包时判。这一层在「新 gate + 旧 login」窗口里挡住撞号请求。直连模式的 `BuildSessionDetails` 同时补上会话代次(此前只有 lane 写,直连的 Login / EnterGame 一直走旧版路径)。

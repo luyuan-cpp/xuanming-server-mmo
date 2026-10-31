@@ -68,12 +68,7 @@ func TestSpectateSecretEnforcedAtLoadInProd(t *testing.T) {
 }
 
 func TestSpectateValidate(t *testing.T) {
-	valid := func() Config {
-		c := Config{}
-		c.Mode = "pro"
-		return c
-	}
-	c := valid()
+	c := validForTest()
 	require.NoError(t, c.Validate(), "开关关闭时不要求密钥")
 
 	for name, mutate := range map[string]func(c *Config){
@@ -81,17 +76,17 @@ func TestSpectateValidate(t *testing.T) {
 		"阈值为负":         func(c *Config) { c.Spectate.BroadcastAutoGateThreshold = -1 },
 		"运营密钥不足 32 字节": func(c *Config) { c.Spectate.OpsCallerSecret = strings.Repeat("o", 31) },
 	} {
-		c := valid()
+		c := validForTest()
 		mutate(&c)
 		require.Error(t, c.Validate(), name)
 	}
 
-	c = valid()
+	c = validForTest()
 	c.Spectate.OpsCallerSecret = "   "
 	require.NoError(t, c.Validate(), "纯空白等同没配:运营入口关闭")
 	require.False(t, c.Spectate.OpsEntryEnabled())
 
-	c = valid()
+	c = validForTest()
 	c.Spectate.OpsCallerSecret = strings.Repeat("o", 32)
 	require.NoError(t, c.Validate())
 	require.True(t, c.Spectate.OpsEntryEnabled())

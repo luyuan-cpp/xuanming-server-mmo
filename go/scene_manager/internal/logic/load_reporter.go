@@ -20,9 +20,8 @@ import (
 )
 
 const (
-	NodeLoadKeyFmt     = "scene_nodes:zone:%d:load"
-	NodeSceneCountKey  = "node:zone:%d:%s:scene_count"
-	NodePlayerCountKey = "node:zone:%d:%s:player_count"
+	NodeLoadKeyFmt    = "scene_nodes:zone:%d:load"
+	NodeSceneCountKey = "node:zone:%d:%s:scene_count"
 	// NodeSceneNodeTypeKey mirrors the scene_node_type declared by the C++
 	// node (0=MainWorld, 1=Instance, 2=MainWorldCross, 3=InstanceCross). The
 	// load reporter writes this when a node registers so selection logic can
@@ -54,10 +53,6 @@ func nodeLoadKey(zoneID uint32) string {
 
 func nodeSceneCountKey(zoneID uint32, nodeID string) string {
 	return fmt.Sprintf(NodeSceneCountKey, zoneID, nodeID)
-}
-
-func nodePlayerCountKey(zoneID uint32, nodeID string) string {
-	return fmt.Sprintf(NodePlayerCountKey, zoneID, nodeID)
 }
 
 func nodeSceneNodeTypeKey(zoneID uint32, nodeID string) string {
@@ -317,7 +312,7 @@ func readInt64(svcCtx *svc.ServiceContext, key string) int64 {
 //	  理由见函数体内第一段注释。
 //
 //	**推迟做** —— 孤儿实例场景的强制销毁与节点计数清理。C++ 老节点丢租约后
-//	  还有 kDrainBudget(15s)的 emergency relocate,期间仍在 SavePlayerToRedis;
+//	  还有 kDrainBudget(15s)的 emergency relocate,期间仍在 SavePlayer;
 //	  此刻销毁它名下的场景映射,等于在老节点停笔前就把归属改了。收尾任务与摘负载集
 //	  同一次 Lua 写进 Redis,由(任何一任)领导者的 drainPendingDeadNodeReconciles 在屏障
 //	  走完后执行(reentry_barrier.go「被屏障推迟的死节点收尾」)。
@@ -1172,7 +1167,7 @@ func GetBestNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32)
 // resolveScene / world_rebalance)、场景销毁(destroyscenelogic)与孤儿清理
 // (orphan_cleanup)。判「死」是**破坏性**的一侧——它会改写 scene:{id}:node
 // 并让新节点 CreateScene。而 C++ 老节点在丢租约后还有 15s 的 emergency
-// relocate drain(node.cpp kDrainBudget),期间仍在 SavePlayerToRedis。
+// relocate drain(node.cpp kDrainBudget),期间仍在 SavePlayer。
 // 一次 Redis 抖动若被当成「节点已死」,就会在老节点还在存盘时把玩家改派到
 // 新节点,造成同一玩家双写 / 回档。
 //

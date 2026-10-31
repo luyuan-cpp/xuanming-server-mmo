@@ -14,6 +14,7 @@ import (
 	"login/internal/config"
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/token"
+	"shared/playerredis"
 )
 
 // InitAuthProviders 按显式配置注册认证器。生产口令认证只读权威 MySQL 中的
@@ -38,7 +39,7 @@ func InitAuthProviders() (cleanup func()) {
 	}
 
 	if productionPassword.Enabled {
-		provider, closeProvider, err := productionPasswordProviderFromConfig(productionPassword, config.AppConfig.Node.RedisClient, os.LookupEnv)
+		provider, closeProvider, err := productionPasswordProviderFromConfig(productionPassword, config.AppConfig.EffectiveLoginRedis(), os.LookupEnv)
 		if err != nil {
 			panic(fmt.Sprintf("initialize PasswordAuth provider: %v", err))
 		}
@@ -117,18 +118,20 @@ func InitAuthProviders() (cleanup func()) {
 	return cleanup
 }
 
-// 专用小池使认证依赖具有独立硬上限；不继承主缓存池的重试/无界等待策略。
-func passwordQuotaRedisOptions(conf config.RedisConf) *redis.Options {
-	return &redis.Options{
-		Addr: conf.Host, Password: conf.Password, DB: int(conf.DB),
-		PoolSize: 4, MaxActiveConns: 4, MaxRetries: -1, DialerRetries: 1,
-		ContextTimeoutEnabled: true, DisableIndentity: true,
-		DialTimeout: auth.PasswordQuotaBudget, ReadTimeout: auth.PasswordQuotaBudget,
-		WriteTimeout: auth.PasswordQuotaBudget, PoolTimeout: auth.PasswordQuotaBudget,
-	}
+// 口令配额在登录域。专用小池使认证依赖具有独立硬上限；不继承主缓存池的等待策略。
+// 地址、口令、集群形态随登录域,连接数与超时是这条路径自己的预算;认 ctx 截止、不重放结果未知的命令由 playerredis 保证。
+func passwordQuotaRedisConfig(loginRedis playerredis.Config) playerredis.Config {
+	budgetMs := int(auth.PasswordQuotaBudget.Milliseconds())
+	loginRedis.PoolSizePerNode = 4
+	loginRedis.DisableContextTimeout = false
+	loginRedis.DialTimeoutMs = budgetMs
+	loginRedis.ReadTimeoutMs = budgetMs
+	loginRedis.WriteTimeoutMs = budgetMs
+	loginRedis.PoolTimeoutMs = budgetMs
+	return loginRedis
 }
 
-func productionPasswordProviderFromConfig(conf config.PasswordAuthConf, redisConf config.RedisConf, lookup func(string) (string, bool)) (*auth.ProductionPasswordProvider, func(), error) {
+func productionPasswordProviderFromConfig(conf config.PasswordAuthConf, loginRedis playerredis.Config, lookup func(string) (string, bool)) (*auth.ProductionPasswordProvider, func(), error) {
 	if err := conf.ValidateFailureQuota(); err != nil {
 		return nil, nil, err
 	}
@@ -140,7 +143,11 @@ func productionPasswordProviderFromConfig(conf config.PasswordAuthConf, redisCon
 	if err != nil {
 		return nil, nil, err
 	}
-	rdb := redis.NewClient(passwordQuotaRedisOptions(redisConf))
+	rdb, err := playerredis.New(passwordQuotaRedisConfig(loginRedis))
+	if err != nil {
+		_ = store.Close()
+		return nil, nil, fmt.Errorf("password quota Redis config: %w", err)
+	}
 	var once sync.Once
 	cleanup := func() { once.Do(func() { _ = rdb.Close(); _ = store.Close() }) }
 	ready := false

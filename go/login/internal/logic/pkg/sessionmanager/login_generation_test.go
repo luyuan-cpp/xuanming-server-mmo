@@ -44,8 +44,8 @@ func mustMint(t *testing.T, rdb *redis.Client, sessionFloor uint64, now time.Tim
 
 // 键名是跨进程约定(设计文档 §3.2):纯十进制 player_id,不带前导零、不带 hash tag。
 func TestMintLoginGeneration_KeyName(t *testing.T) {
-	if got := LoginGenerationKey(mintPlayerID); got != "player:7001:login_generation" {
-		t.Fatalf("LoginGenerationKey = %q, want player:7001:login_generation", got)
+	if got := LoginGenerationKey(mintPlayerID); got != "player:{7001}:login_generation" {
+		t.Fatalf("LoginGenerationKey = %q, want player:{7001}:login_generation", got)
 	}
 }
 

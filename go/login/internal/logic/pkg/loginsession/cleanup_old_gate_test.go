@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"login/internal/constants"
+	"shared/redisslot"
 
 	"github.com/stretchr/testify/require"
 )
@@ -13,17 +13,15 @@ import (
 func TestCleanupOldGateLeavesRestartedGateSessionAndDevice(t *testing.T) {
 	ctx := context.Background()
 	rdb, _ := newTestRedis(t)
-	oldRef := RefOf(oldGateDetails())
-	newRef := RefOf(restartedGateDetails())
+	oldRef := mustRef(t, oldGateDetails())
+	newRef := mustRef(t, restartedGateDetails())
 	const newAccount = "restarted_gate_account"
 	for _, entry := range []struct {
 		ref     Ref
 		account string
 	}{{oldRef, victimAccount}, {newRef, newAccount}} {
-		for _, key := range entry.ref.WriteKeys() {
-			require.NoError(t, rdb.Set(ctx, key, entry.account, TTL()).Err())
-		}
-		require.NoError(t, rdb.SAdd(ctx, constants.GenerateSessionKey(entry.account), entry.ref.DeviceMember()).Err())
+		require.NoError(t, rdb.Set(ctx, entry.ref.Key(), entry.account, TTL()).Err())
+		require.NoError(t, rdb.SAdd(ctx, redisslot.AccountDeviceSetKey(entry.account), entry.ref.DeviceMember()).Err())
 	}
 
 	for range 2 {
@@ -31,10 +29,10 @@ func TestCleanupOldGateLeavesRestartedGateSessionAndDevice(t *testing.T) {
 		account, err := GetAccount(ctx, rdb, newRef)
 		require.NoError(t, err)
 		require.Equal(t, newAccount, account, "旧连接迟到或重复清理不能删除新连接的权威登录态")
-		member, err := rdb.SIsMember(ctx, constants.GenerateSessionKey(newAccount), newRef.DeviceMember()).Result()
+		member, err := rdb.SIsMember(ctx, redisslot.AccountDeviceSetKey(newAccount), newRef.DeviceMember()).Result()
 		require.NoError(t, err)
 		require.True(t, member, "新连接的账号设备成员必须保留")
 	}
 	require.Zero(t, rdb.Exists(ctx, oldRef.Key()).Val())
-	require.False(t, rdb.SIsMember(ctx, constants.GenerateSessionKey(victimAccount), oldRef.DeviceMember()).Val())
+	require.False(t, rdb.SIsMember(ctx, redisslot.AccountDeviceSetKey(victimAccount), oldRef.DeviceMember()).Val())
 }

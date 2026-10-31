@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"shared/redisslot"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 )
@@ -23,7 +25,43 @@ const (
 	testDevice   = "device-1"
 )
 
-var testConfig = Config{AccessTokenTTL: 2 * time.Hour, RefreshTokenTTL: 720 * time.Hour}
+var (
+	testConfig = Config{AccessTokenTTL: 2 * time.Hour, RefreshTokenTTL: 720 * time.Hour}
+	// testIndexKey 是 testAccount 的 refresh 索引键。
+	testIndexKey = redisslot.AccountRefreshKey(testAccount)
+)
+
+// 用例里的键一律从令牌字符串经生产构造函数得到,键形本身由 redisslot 的金样钉住。
+
+func mustParseToken(t *testing.T, token string) (tag, secret string) {
+	t.Helper()
+	tag, secret, ok := parseToken(token)
+	if !ok {
+		t.Fatalf("令牌 %q 格式不对", token)
+	}
+	return tag, secret
+}
+
+func accessKeyOf(t *testing.T, token string) string {
+	t.Helper()
+	return redisslot.AccessTokenKey(mustParseToken(t, token))
+}
+
+func refreshKeyOf(t *testing.T, token string) string {
+	t.Helper()
+	return redisslot.RefreshTokenKey(mustParseToken(t, token))
+}
+
+// secretOf 是令牌在账号索引里的成员值,也是家族 head 的取值。
+func secretOf(t *testing.T, token string) string {
+	t.Helper()
+	_, secret := mustParseToken(t, token)
+	return secret
+}
+
+func familyKeyOf(account, familyID string) string {
+	return redisslot.RefreshFamilyKey(redisslot.AccountTag(account), familyID)
+}
 
 func newTestManager(t *testing.T) (*Manager, *redis.Client, *miniredis.Miniredis) {
 	t.Helper()
@@ -92,29 +130,29 @@ func requireRotated(t *testing.T, mr *miniredis.Miniredis, old, got *TokenPair) 
 	if got == nil {
 		t.Fatal("rotation committed but Refresh returned no pair")
 	}
-	if mr.Exists(refreshTokenPrefix + old.RefreshToken) {
+	if mr.Exists(refreshKeyOf(t, old.RefreshToken)) {
 		t.Fatal("old refresh token still valid after a committed rotation")
 	}
-	setKey := accountRefreshKey + testAccount
+	setKey := testIndexKey
 	members, err := mr.ZMembers(setKey)
 	if err != nil {
 		t.Fatalf("read account set: %v", err)
 	}
-	if slices.Contains(members, old.RefreshToken) {
+	if slices.Contains(members, secretOf(t, old.RefreshToken)) {
 		t.Fatalf("old refresh token still in the account set: %v", members)
 	}
-	if !slices.Contains(members, got.RefreshToken) {
+	if !slices.Contains(members, secretOf(t, got.RefreshToken)) {
 		t.Fatalf("new refresh token missing from the account set: %v", members)
 	}
-	if score, err := mr.ZScore(setKey, got.RefreshToken); err != nil || int64(score) != got.RefreshTokenExpire {
+	if score, err := mr.ZScore(setKey, secretOf(t, got.RefreshToken)); err != nil || int64(score) != got.RefreshTokenExpire {
 		t.Fatalf("new member score = %v/%v, want refresh expiry %d", score, err, got.RefreshTokenExpire)
 	}
 	if ttl := mr.TTL(setKey); ttl != testConfig.RefreshTokenTTL {
 		t.Fatalf("account set ttl = %s, want %s", ttl, testConfig.RefreshTokenTTL)
 	}
 	for key, wantTTL := range map[string]time.Duration{
-		accessTokenPrefix + got.AccessToken:   testConfig.AccessTokenTTL,
-		refreshTokenPrefix + got.RefreshToken: testConfig.RefreshTokenTTL,
+		accessKeyOf(t, got.AccessToken):   testConfig.AccessTokenTTL,
+		refreshKeyOf(t, got.RefreshToken): testConfig.RefreshTokenTTL,
 	} {
 		raw, err := mr.Get(key)
 		if err != nil {
@@ -236,7 +274,7 @@ func TestRefresh_AllOrNothingAtEveryCommandBoundary(t *testing.T) {
 func TestRefresh_ConsumedBetweenReadAndCommitWritesNothing(t *testing.T) {
 	m, rdb, mr := newTestManager(t)
 	old := issueSeed(t, m)
-	oldKey := refreshTokenPrefix + old.RefreshToken
+	oldKey := refreshKeyOf(t, old.RefreshToken)
 	rdb.AddHook(&afterFirstCommand{do: func() { mr.Del(oldKey) }})
 	before := snapshot(t, mr)
 	delete(before, oldKey)
@@ -247,7 +285,7 @@ func TestRefresh_ConsumedBetweenReadAndCommitWritesNothing(t *testing.T) {
 	if after := snapshot(t, mr); !maps.Equal(before, after) {
 		t.Fatalf("a lost race must write nothing:\nbefore=%v\nafter=%v", before, after)
 	}
-	if got := keysWithPrefix(mr, refreshTokenPrefix); len(got) != 0 {
+	if got := keysWithPrefix(mr, "refresh_token:"); len(got) != 0 {
 		t.Fatalf("refresh keys after a lost race = %v, want none", got)
 	}
 }

@@ -16,7 +16,6 @@ import (
 	storepb "proto/player_store"
 	"shared/accountdirectory"
 	"shared/generated/persistschema"
-	"shared/savebarrier"
 )
 
 // initialStoreRow 是建角时写进 player_store 的一行。
@@ -67,7 +66,7 @@ func insertInitialPlayerStoreRows(ctx context.Context, tx *sql.Tx, schema string
 	for _, row := range rows {
 		placeholders = append(placeholders, "(?,?,?,?,?,?,?,?)")
 		// holder_instance、payload 是 NOT NULL:绑定空切片,nil 会被驱动写成 NULL。
-		args = append(args, role.PlayerId, int32(row.kind), savebarrier.InitialOwnerEpoch, savebarrier.InitialSaveSeq,
+		args = append(args, role.PlayerId, int32(row.kind), accountdirectory.InitialOwnerEpoch, accountdirectory.InitialSaveSeq,
 			persistschema.Gen, []byte{}, row.released, row.payload)
 	}
 	query := "INSERT INTO `" + schema + "`.`player_store` (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES " +

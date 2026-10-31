@@ -394,7 +394,7 @@ func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, con
 			}
 			nodeUsable = worldChannelNodeUsable(svcCtx, zoneID, nodeID)
 		}
-		// readScenePlayerCount 把读失败 / 负数 / 非数字都当 0:人数只用于展示和软上限,
+		// readScenePlayerCount 把读失败(含键类型不对)当 0:人数只用于展示和软上限,
 		// 而且全仓没有对账(world-channel-switch.md §9.3),不值得为它放弃整轮发布。
 		players := readScenePlayerCount(svcCtx, sceneID)
 		channels = append(channels, &scenepb.SceneChannelInfo{

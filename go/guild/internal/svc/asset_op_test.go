@@ -178,11 +178,6 @@ func TestLoopConfigFromMapsY06(t *testing.T) {
 		cfg.AbandonBatch != def.AbandonBatch || cfg.AbandonInterval != def.AbandonInterval || cfg.AuditInterval != def.AuditInterval {
 		t.Errorf("落地恢复默认值与 assetop.DefaultLoopConfig 不一致: guild=%+v assetop=%+v", cfg, def)
 	}
-
-	// 终结只认已提交账本,没有配置项可以关。
-	if !cfg.RequireSQLCommit {
-		t.Fatal("RequireSQLCommit 必须恒开")
-	}
 }
 
 // TestLoopConfigFromSatisfiesNewLoop:config.Validate 允许的边界值(见 config 包的区间常量)
@@ -299,15 +294,18 @@ func TestNewAssetPipelineRejectsIncompleteDeps(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
 	defer func() { _ = rdb.Close() }()
 
-	if _, err := NewAssetPipeline(y06Defaults(), time.Second, rdb, nil); err == nil {
+	if _, err := NewAssetPipeline(y06Defaults(), time.Second, rdb, rdb, nil); err == nil {
 		t.Fatal("缺 Store 必须报错")
 	}
-	if _, err := NewAssetPipeline(y06Defaults(), time.Second, nil, stubAssetStore{}); err == nil {
+	if _, err := NewAssetPipeline(y06Defaults(), time.Second, rdb, nil, stubAssetStore{}); err == nil {
+		t.Fatal("缺唤醒频道 Redis 必须报错")
+	}
+	if _, err := NewAssetPipeline(y06Defaults(), time.Second, nil, rdb, stubAssetStore{}); err == nil {
 		t.Fatal("缺位置键 Redis 必须报错")
 	}
 
 	t.Setenv(AssetOpSecretEnv, "")
-	if _, err := NewAssetPipeline(y06Defaults(), time.Second, rdb, stubAssetStore{}); !errors.Is(err, ErrAssetSecretMissing) {
+	if _, err := NewAssetPipeline(y06Defaults(), time.Second, rdb, rdb, stubAssetStore{}); !errors.Is(err, ErrAssetSecretMissing) {
 		t.Fatalf("缺密钥必须回 ErrAssetSecretMissing(资产路径 fail-closed),得到 %v", err)
 	}
 }
@@ -327,7 +325,7 @@ func TestAssetPipelineStopWaitsAndIsIdempotent(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
 	defer func() { _ = rdb.Close() }()
 
-	p, err := NewAssetPipeline(y06Defaults(), time.Second, rdb, stubAssetStore{})
+	p, err := NewAssetPipeline(y06Defaults(), time.Second, rdb, rdb, stubAssetStore{})
 	if err != nil {
 		t.Fatalf("NewAssetPipeline: %v", err)
 	}
@@ -371,7 +369,7 @@ func TestAttachMaintenanceLeaderBranches(t *testing.T) {
 		t.Helper()
 		wakeOff := false
 		c.Wake.Enabled = &wakeOff
-		p, err := NewAssetPipeline(c, time.Second, rdb, stubAssetStore{})
+		p, err := NewAssetPipeline(c, time.Second, rdb, rdb, stubAssetStore{})
 		if err != nil {
 			t.Fatalf("NewAssetPipeline: %v", err)
 		}

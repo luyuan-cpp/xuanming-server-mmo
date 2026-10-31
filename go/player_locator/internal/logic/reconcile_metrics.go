@@ -7,9 +7,13 @@ import "github.com/zeromicro/go-zero/core/metric"
 // label 全是有限枚举,**不用 player_id,也不用 gate uuid**(AGENTS §9:高基数;gate uuid 每次进程启动都变)。
 // 要定位具体 gate / 玩家看同一时刻的日志。
 //
-// 计数器每个副本各报一份,规则用 sum();gauge **只由 leader 产出**:进程启动预置 0、任期开始与结束都清零
-// (resetReconcileLeaderGauges),所以每个副本都导出这些序列,非零值只可能来自现任(或卡死僵尸 leader 只会变旧的值)。
-// 告警大多乘上 reconcile_is_leader==1 过滤后再 max();Stalled 例外,直接对全体副本取 max(见告警文件头)。
+// 计数器每个副本各报一份,规则用 sum()。gauge 分两类:
+//   - leader 专属(legacy_writers、gate_index_ready、last_success 的 writers / repair / audit):进程启动预置 0、任期开始与
+//     结束都清零(resetReconcileLeaderGauges),所以每个副本都导出这些序列,非零值只可能来自现任。规则乘上
+//     reconcile_is_leader==1 过滤后再 max();
+//   - 每个副本一份(dead_gates、dead_gate_members、gate_index_members、slot_shard_segments、last_success 的 index):
+//     死 gate 清扫按段分给各副本,读数只覆盖本副本持有的 slot,规则用 sum()(dead_gates 同一个 gate 可能被多个副本各算一次),
+//     last_success 取 max()。
 //
 // 指标经 go-zero 自带的 /metrics agent 暴露。go-zero 在 Prometheus agent 启动之前的写入一律丢弃
 // (core/metric 的 update 先判 prometheus.Enabled()),所以预置 0(primeReconcileMetrics)必须在
@@ -26,18 +30,23 @@ const (
 	metricReconcileIsLeader        = "reconcile_is_leader"
 	metricGateIndexReady           = "gate_index_ready"
 	metricGateIndexMembers         = "gate_index_members"
+	metricSlotShardSegments        = "slot_shard_segments"
 )
 
 // reconcile_round_total / reconcile_last_success_unix 的 loop 取值。
 const (
-	reconcileLoopIndex  = "index"  // 索引循环:每拍读死 gate 的索引
-	reconcileLoopRepair = "repair" // 补建:就绪标记缺失时的全键扫描
-	reconcileLoopAudit  = "audit"  // 审计:就绪后按 AuditIntervalSeconds 的全键扫描
+	reconcileLoopIndex   = "index"   // 死 gate 清扫:每个副本每拍读自己那些 slot 的登记集与死 gate 的索引
+	reconcileLoopWriters = "writers" // 写者检查:leader 每拍查有没有旧版写者、给就绪标记续租
+	reconcileLoopRepair  = "repair"  // 补建:就绪标记缺失时的全键扫描
+	reconcileLoopAudit   = "audit"   // 审计:就绪后按 AuditIntervalSeconds 的全键扫描
 )
 
-// reconcileLoops 是 loop 的全部取值:reconcile_last_success_unix 的预置与清零都按这张表走,
+// reconcileLeaderLoops 是只由 leader 跑的 loop:reconcile_last_success_unix 随任期清零按这张表走。
+var reconcileLeaderLoops = []string{reconcileLoopWriters, reconcileLoopRepair, reconcileLoopAudit}
+
+// reconcileLoops 是 loop 的全部取值:reconcile_last_success_unix 的预置按这张表走,
 // 加一个 loop 只改这里(TestReconcileMetricLabelsArePrimed 核对它覆盖 reconcile_round_total 用到的全部 loop)。
-var reconcileLoops = []string{reconcileLoopIndex, reconcileLoopRepair, reconcileLoopAudit}
+var reconcileLoops = append([]string{reconcileLoopIndex}, reconcileLeaderLoops...)
 
 // reconcile_round_total 的 result 取值。
 const (
@@ -71,6 +80,10 @@ var reconcileRoundCombos = [][2]string{
 	{reconcileLoopIndex, reconcileResultEtcdError},
 	{reconcileLoopIndex, reconcileResultRedisError},
 	{reconcileLoopIndex, reconcileResultPanic},
+	{reconcileLoopWriters, reconcileResultOK},
+	{reconcileLoopWriters, reconcileResultEtcdError},
+	{reconcileLoopWriters, reconcileResultRedisError},
+	{reconcileLoopWriters, reconcileResultPanic},
 	{reconcileLoopRepair, reconcileResultOK},
 	{reconcileLoopRepair, reconcileResultEtcdError},
 	{reconcileLoopRepair, reconcileResultRedisError},
@@ -100,16 +113,17 @@ var (
 	reconcileRoundTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 		Namespace: reconcileMetricsNamespace,
 		Name:      metricReconcileRoundTotal,
-		Help: "Session reconciler rounds by loop (index | repair | audit) and result " +
-			"(ok | etcd_error | redis_error | gen_changed | incomplete | panic). Only the leader runs rounds.",
+		Help: "Session reconciler rounds by loop (index | writers | repair | audit) and result " +
+			"(ok | etcd_error | redis_error | gen_changed | incomplete | panic). Every replica runs index rounds " +
+			"over its own slots; only the leader runs the other loops.",
 		Labels: []string{"loop", "result"},
 	})
 	reconcileLastSuccessUnix = metric.NewGaugeVec(&metric.GaugeVecOpts{
 		Namespace: reconcileMetricsNamespace,
 		Name:      metricReconcileLastSuccessUnix,
-		Help: "Unix seconds of the last completed round per loop in the current leader term. Leader-only: primed to 0 " +
-			"at process start and reset to 0 when a term starts and when it ends, so every replica exports the series " +
-			"and a term reads 0 until its first completed round.",
+		Help: "Unix seconds of the last completed round per loop. The writers, repair and audit loops are leader-only: " +
+			"primed to 0 at process start and reset to 0 when a term starts and when it ends, so every replica exports " +
+			"the series and a term reads 0 until its first completed round. The index loop is per replica.",
 		Labels: []string{"loop"},
 	})
 	reconcileSessionsTotal = metric.NewCounterVec(&metric.CounterVecOpts{
@@ -124,13 +138,14 @@ var (
 	reconcileDeadGates = metric.NewGaugeVec(&metric.GaugeVecOpts{
 		Namespace: reconcileMetricsNamespace,
 		Name:      metricReconcileDeadGates,
-		Help:      "Gates in the index registry absent from etcd for two consecutive rounds and not yet released. Leader-only.",
+		Help: "Gates in this replica's slot registries absent from etcd for two consecutive rounds and not yet released. " +
+			"Per replica: a dead gate usually spans many slots, so summing replicas can count it more than once.",
 	})
 	reconcileDeadGateMembers = metric.NewGaugeVec(&metric.GaugeVecOpts{
 		Namespace: reconcileMetricsNamespace,
 		Name:      metricReconcileDeadGateMembers,
-		Help: "Sum of index members (SCARD) of confirmed-dead gates after this round's budget: the work left. " +
-			"Leader-only.",
+		Help: "Index keys (one per slot and gate, usually one or two members each) of confirmed-dead gates left on this " +
+			"replica's slots after this round's budget: the work left. Per replica, sum it.",
 	})
 	reconcileLegacyWriters = metric.NewGaugeVec(&metric.GaugeVecOpts{
 		Namespace: reconcileMetricsNamespace,
@@ -152,8 +167,16 @@ var (
 	gateIndexMembers = metric.NewGaugeVec(&metric.GaugeVecOpts{
 		Namespace: reconcileMetricsNamespace,
 		Name:      metricGateIndexMembers,
-		Help: "Sum of index members (SCARD) over live gates. An UPPER BOUND of ONLINE sessions, not an online " +
-			"count: stale members linger until the audit prunes them. Leader-only.",
+		Help: "Index keys (one per slot and gate) of live gates on this replica's slots. Per replica, sum it. Approximates " +
+			"ONLINE sessions, not an exact count: players sharing a slot and a gate count once, stale keys linger until " +
+			"the audit prunes them.",
+	})
+	reconcileSlotShardSegments = metric.NewGaugeVec(&metric.GaugeVecOpts{
+		Namespace: reconcileMetricsNamespace,
+		Name:      metricSlotShardSegments,
+		Help: "Slot segments (of 256) this replica holds, by role (lease_monitor | gate_sweep). Sum by role below 256 " +
+			"means some slots have no scanner right now.",
+		Labels: []string{"role"},
 	})
 )
 
@@ -163,6 +186,7 @@ func reconcileMetricFullNames() []string {
 		metricReconcileRoundTotal, metricReconcileLastSuccessUnix, metricReconcileSessionsTotal,
 		metricReconcileDeadGates, metricReconcileDeadGateMembers,
 		metricReconcileLegacyWriters, metricReconcileIsLeader, metricGateIndexReady, metricGateIndexMembers,
+		metricSlotShardSegments,
 	}
 	for i, n := range names {
 		names[i] = reconcileMetricsNamespace + "_" + n
@@ -170,7 +194,7 @@ func reconcileMetricFullNames() []string {
 	return names
 }
 
-// primeReconcileMetrics 把计数器的全部 label 组合、is_leader 与全部 leader-only gauge 预置为 0:
+// primeReconcileMetrics 把计数器的全部 label 组合、is_leader 与全部 gauge 预置为 0:
 //   - increase() 对「从无到 1」只有一个样本,计数器不预置会恰好漏掉第一次;
 //   - is_leader 不预置,跟随者没有序列,NoLeader 的 sum 就分不清「没有 leader」与「没抓到」;
 //   - last_success 不预置,从未成功过的 Pod 当选后在第一拍成功之前没有这条序列,Stalled 的判定就取决于别的 Pod
@@ -186,17 +210,20 @@ func primeReconcileMetrics() {
 		reconcileSessionsTotal.Add(0, a)
 	}
 	reconcileIsLeader.Set(0)
+	reconcileDeadGates.Set(0)
+	reconcileDeadGateMembers.Set(0)
+	gateIndexMembers.Set(0)
+	for _, loop := range reconcileLoops {
+		reconcileLastSuccessUnix.Set(0, loop)
+	}
 	resetReconcileLeaderGauges()
 }
 
 // resetReconcileLeaderGauges 把只由 leader 产出的 gauge 清零:进程启动(预置)、任期开始、任期结束各调一次。
 func resetReconcileLeaderGauges() {
-	reconcileDeadGates.Set(0)
-	reconcileDeadGateMembers.Set(0)
 	reconcileLegacyWriters.Set(0)
 	gateIndexReady.Set(0)
-	gateIndexMembers.Set(0)
-	for _, loop := range reconcileLoops {
+	for _, loop := range reconcileLeaderLoops {
 		reconcileLastSuccessUnix.Set(0, loop)
 	}
 }

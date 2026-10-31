@@ -20,6 +20,7 @@ import (
 	dspb "proto/data_service"
 
 	"shared/leader"
+	"shared/playerredis"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/redis/go-redis/v9"
@@ -125,6 +126,7 @@ type recordingDeps struct {
 	etcd     *clientv3.Client
 	db       *sql.DB
 	rds      *redis.Client
+	player   *redis.Client
 	conn     *grpc.ClientConn
 	failAt   string // 这个入口返回错误
 	registry *prometheus.Registry
@@ -169,6 +171,14 @@ func (r *recordingDeps) deps() externalDeps {
 			// 指向不监听的地址:装配不发命令,关停后 Ping 回 ErrClosed 用来判断「已关」。
 			r.rds = redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
 			return r.rds, nil
+		},
+		openPlayerRedis: func(playerredis.Config) (redis.UniversalClient, error) {
+			r.calls["player_redis"]++
+			if r.failAt == "player_redis" {
+				return nil, errInjected
+			}
+			r.player = redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+			return r.player, nil
 		},
 		openDataService: func(zrpc.RpcClientConf) (*grpc.ClientConn, error) {
 			r.calls["dataservice"]++
@@ -243,11 +253,20 @@ func TestNewServiceContextClosesOpenedResourcesOnFailure(t *testing.T) {
 	}
 
 	rec = newRecordingDeps(t)
+	rec.failAt = "player_redis"
+	if sc, err := newServiceContext(testConfig(), rec.deps()); err == nil || sc != nil || !errors.Is(err, errInjected) {
+		t.Fatalf("玩家域 Redis 失败应返回包着原因的错误: sc=%v err=%v", sc, err)
+	}
+	if !redisClosed(rec.rds) || !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
+		t.Error("玩家域 Redis 失败时控制域 Redis / MySQL / etcd 都应已关闭")
+	}
+
+	rec = newRecordingDeps(t)
 	rec.failAt = "dataservice"
 	if sc, err := newServiceContext(testConfig(), rec.deps()); err == nil || sc != nil || !errors.Is(err, errInjected) {
 		t.Fatalf("data_service 失败应返回错误(不再 MustNewClient 直接退出进程): sc=%v err=%v", sc, err)
 	}
-	if !redisClosed(rec.rds) || !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
+	if !redisClosed(rec.rds) || !redisClosed(rec.player) || !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
 		t.Error("data_service 失败时 Redis / MySQL / etcd 都应已关闭")
 	}
 }
@@ -262,12 +281,12 @@ func TestNewServiceContextWiresDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newServiceContext: %v", err)
 	}
-	for _, name := range []string{"etcd", "mysql", "redis", "dataservice"} {
+	for _, name := range []string{"etcd", "mysql", "redis", "player_redis", "dataservice"} {
 		if rec.calls[name] != 1 {
 			t.Errorf("%s 入口应恰好调用一次,got %d", name, rec.calls[name])
 		}
 	}
-	if sc.Etcd != rec.etcd || sc.DB != rec.db || sc.CoreRedis != rec.rds || sc.dataServiceConn != rec.conn {
+	if sc.Etcd != rec.etcd || sc.DB != rec.db || sc.CoreRedis != rec.rds || sc.PlayerRedis != rec.player || sc.dataServiceConn != rec.conn {
 		t.Fatal("ServiceContext 持有的连接不是入口建出来的那些")
 	}
 	if sc.Registry == nil || sc.Store == nil || sc.Ledgers == nil || sc.Loops == nil || sc.DataService == nil ||
@@ -294,7 +313,7 @@ func TestNewServiceContextWiresDependencies(t *testing.T) {
 		t.Errorf("stopTimeout = %v, want %v", sc.stopTimeout, loopsStopTimeout)
 	}
 	sc.Stop() // 没 Start 也要关连接
-	if !redisClosed(rec.rds) || !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
+	if !redisClosed(rec.rds) || !redisClosed(rec.player) || !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
 		t.Error("Stop 应关闭 Redis / MySQL / etcd")
 	}
 	if rec.conn.GetState() != connectivity.Shutdown {

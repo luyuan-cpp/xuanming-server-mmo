@@ -55,32 +55,18 @@ try {
         $plan.tables=@(@{schema='authority_fixture';table='writer_registry';operations=@('UPDATE')})
         $message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message}
         Assert-Match -Text $message -Pattern '权限真值' -Because '业务表清单不能混入registry自助篡改'
-        $columns=@('leader','lease_until_ms','watermark_ms','cache_verified_ms')
-        $plan.tables=@(@{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=$columns})
-        $reconcile=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
-        Assert-Match -Text $reconcile.runtime -Pattern ([regex]::Escape('GRANT SELECT ON `authority_fixture`.`route_reconcile`')) -Because '对账只读取同authority调度原件'
-        Assert-Match -Text $reconcile.runtime -Pattern ([regex]::Escape('GRANT UPDATE (`leader`,`lease_until_ms`,`watermark_ms`,`cache_verified_ms`) ON `authority_fixture`.`route_reconcile`')) -Because '只允许续约与推进实际写到的固定四列'
-        Assert-True -Condition ($reconcile.runtime -notmatch '(?i)GRANT\s+UPDATE\s+ON[^;]+route_reconcile') -Because '不能退化成route_reconcile整表UPDATE'
-        $badRows=@(
-            @{schema='domain_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=$columns},
-            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','INSERT','UPDATE');updateColumns=$columns},
-            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE','DELETE');updateColumns=$columns},
-            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE')},
-            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=@('leader','lease_until_ms','watermark_ms')},
-            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=@('leader','lease_until_ms','watermark_ms','cache_verified_ms','writer_epoch')},
-            @{schema='authority_fixture';table='route_reconcile';operations=@('SELECT','UPDATE');updateColumns=@('leader','leader','watermark_ms','cache_verified_ms')},
-            @{schema='domain_fixture';table='player';operations=@('SELECT','UPDATE');updateColumns=$columns}
-        )
-        # TiDB表名大小写等价；所有变体必须先进入固定特例再严格拒非canonical原名，不能落一般整表DML。
-        foreach($tableCase in @('Route_Reconcile','ROUTE_RECONCILE','rOuTe_ReCoNcIlE')){
-            foreach($schemaCase in @('authority_fixture','domain_fixture','AUTHORITY_FIXTURE')){
-                foreach($operations in @(@('UPDATE'),@('INSERT'),@('DELETE'),@('SELECT','UPDATE'))){
-                    $badRows+=@{schema=$schemaCase;table=$tableCase;operations=$operations}
-                    $badRows+=@{schema=$schemaCase;table=$tableCase;operations=$operations;updateColumns=$columns}
-                }
-            }
-        }
-        foreach($bad in $badRows){$plan.tables=@($bad);$message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message};Assert-Match -Text $message -Pattern 'route_reconcile' -Because '异库/额外操作/缺列/外列/重列和通用列授权均拒绝'}
+        $plan.tables=@(@{schema='authority_fixture';table='player_route';operations=@('SELECT')})
+        $route=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
+        Assert-Match -Text $route.runtime -Pattern ([regex]::Escape('GRANT SELECT ON `authority_fixture`.`player_route`')) -Because 'go/db认领前按player_route选库，只读授权由计划tables给出'
+        Assert-True -Condition (($route.runtime+$route.operator) -notmatch 'route_reconcile') -Because '对账表已删除，任何账号都不再授权'
+        Assert-Match -Text $route.operator -Pattern ([regex]::Escape('GRANT SELECT,INSERT,DELETE ON `authority_fixture`.`zone_merged_into`')) -Because '合服工具的操作员身份要能写映射表'
+        Assert-True -Condition ($route.runtime -notmatch 'zone_merged_into') -Because '运行账号只有计划tables列出时才有映射表的读权限，操作员的写权限不进runtime'
+        $plan.tables=@(@{schema='authority_fixture';table='zone_merged_into';operations=@('SELECT')})
+        $merged=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
+        Assert-Match -Text $merged.runtime -Pattern ([regex]::Escape('GRANT SELECT ON `authority_fixture`.`zone_merged_into`')) -Because 'match启动读全局库的合服映射，只读授权由计划tables给出'
+        $plan.tables=@(@{schema='authority_fixture';table='player_route';operations=@('SELECT');updateColumns=@('storage_id')})
+        $message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '未知' -Because '列级UPDATE特例已随对账表删除，计划不能再带updateColumns'
         foreach($forbidden in @('route_meta','ROUTE_META','Route_Meta','writer_registry','WRITER_REGISTRY','writer_slot','WRITER_SLOT','writer_lifecycle_receipt','WRITER_LIFECYCLE_RECEIPT','sql_writer_drain_run','SQL_WRITER_DRAIN_RUN','sql_writer_freeze_ticket','SQL_WRITER_FREEZE_TICKET','sql_writer_maintenance_receipt','SQL_WRITER_MAINTENANCE_RECEIPT')){$plan.tables=@(@{schema='authority_fixture';table=$forbidden;operations=@('UPDATE')});$message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message};Assert-Match -Text $message -Pattern '权限真值' -Because '所有真正权限真值表仍禁止business清单写入'}
     }
     Test-Case '在线激活保留原runtime字节且拒绝替换既有上下文' {
@@ -135,13 +121,12 @@ try {
         $message='';try{$null=Assert-MaintenanceControlDirectory -Plan $plan}catch{$message=$_.Exception.Message}
         Assert-Match -Text $message -Pattern 'controlDirectory' -Because '缺少启动目录绑定不得凭drain路径猜测'
     }
-    Test-Case 'Redis动态键用唯一kind映射，未知历史topic和非规范后缀HOLD' {
-        foreach($pair in @(@{key='kafka:retry:queue:task_g1';kind='retry'},@{key='kafka:dead:queue:task_g1';kind='dead'},@{key='kafka:retry:processing:task_g1:instance-1';kind='processing'},@{key='kafka:retry:instances:task_g1';kind='instances'},@{key='kafka:retry:instance_mode:task_g1';kind='modes'},@{key='player:save_pending:101:63';kind='pending'},@{key='player:{18446744073709551615}:save_barrier';kind='barrier'})){
-            $meaning=Get-MaintenanceRedisKeyKind -Key $pair.key -Topics @('task_g1')
-            Assert-Equal -Expected $pair.kind -Actual $meaning.kind -Because '复用现restore.go的唯一映射'
-        }
-        foreach($bad in @('kafka:retry:queue:task_g0','kafka:retry:queue:task_g1:p01','player:save_pending:101:64','player:{01}:save_barrier','player:{18446744073709551616}:save_barrier')){
-            $rejected=$false;try{$null=Get-MaintenanceRedisKeyKind -Key $bad -Topics @('task_g1')}catch{$rejected=$true}
+    Test-Case 'Redis只认规范的交接资格键，退役键和非规范键HOLD' {
+        $meaning=Get-MaintenanceRedisKeyKind -Key 'player:{18446744073709551615}:handoff_fence'
+        Assert-Equal -Expected 'handoff_fence' -Actual $meaning.kind -Because '与restore.go的键角色一致'
+        Assert-Equal -Expected 'hash' -Actual $meaning.type -Because '交接资格是hash'
+        foreach($bad in @('kafka:retry:queue:task_g1','kafka:dead:queue:task_g1','player:save_pending:101:63','player:{01}:handoff_fence','player:{18446744073709551616}:handoff_fence','player:101:handoff')){
+            $rejected=$false;try{$null=Get-MaintenanceRedisKeyKind -Key $bad}catch{$rejected=$true}
             Assert-True -Condition $rejected -Because '未覆盖/非规范键不能按glob忽略成零'
         }
     }
@@ -237,12 +222,43 @@ try {
         }finally{Set-Item -Path Function:Invoke-MaintenanceRedisRead -Value $readOriginal}
     }
 
+    Test-Case 'Redis Cluster目标：HashSlot与Go金样一致，nonce键落在本节点slot，拓扑不全或不稳定都HOLD' {
+        foreach($sample in @(@('123456789',12739),@('{user1000}.following',3443),@('foo{}{bar}',8363),@('foo{{bar}}zap',4015),@('foo{bar}{zap}',5061),@('player:{42}:owner_epoch',8000))){
+            Assert-Equal -Expected $sample[1] -Actual (Get-MaintenanceRedisKeySlot -Key $sample[0]) -Because 'CRC16金样与go/shared/redisslot、C++ redis_slot.h逐字一致'
+        }
+        $nodes=@(
+            'aaa 10.0.0.1:6379@16379 myself,master - 0 0 1 connected 0-5460 7000',
+            'bbb 10.0.0.2:6379@16379 master - 0 0 2 connected 5461-6999 7001-10922',
+            'ccc 10.0.0.3:6379@16379 master - 0 0 3 connected 10923-16383',
+            'ddd 10.0.0.4:6379@16379 slave aaa 0 0 1 connected'
+        ) -join "`n"
+        $view=ConvertFrom-MaintenanceClusterNodes -Text $nodes
+        Assert-Equal -Expected 'aaa' -Actual $view.NodeId -Because '本节点身份取myself行'
+        Assert-Equal -Expected 'aaa|0-5460,7000;bbb|5461-6999,7001-10922;ccc|10923-16383' -Actual $view.Fingerprint -Because '指纹只含持有slot的主节点，按节点ID排序，格式与Go parseClusterFingerprint一致'
+        $base='sql:writer:maintenance:'+('1'*32)+':nonce'
+        $key=Get-MaintenanceClusterNonceKey -BaseKey $base -Ranges $view.Ranges
+        $slot=Get-MaintenanceRedisKeySlot -Key $key
+        Assert-True -Condition (($slot -le 5460) -or ($slot -eq 7000)) -Because 'nonce必须落在本节点持有的slot上，否则SET回MOVED'
+        Assert-Equal -Expected $key -Actual (Get-MaintenanceClusterNonceKey -BaseKey $base -Ranges $view.Ranges) -Because 'P0与P4按同一拓扑算出同一把键'
+        foreach($bad in @(
+            @{Why='本节点是副本';Text=($nodes -replace 'myself,master','master' -replace ' slave aaa',' myself,slave aaa');Pattern='不是持有slot的主节点'},
+            @{Why='slot没有全覆盖';Text=($nodes -replace '10923-16383','10923-16000');Pattern='合计'},
+            @{Why='主节点失联';Text=($nodes -replace 'bbb 10.0.0.2:6379@16379 master','bbb 10.0.0.2:6379@16379 master,fail');Pattern='状态不稳定'},
+            @{Why='有逐键迁移';Text=($nodes -replace '10923-16383','10923-16383 [5->-bbb]');Pattern='逐键迁移'}
+        )){
+            $message='';try{$null=ConvertFrom-MaintenanceClusterNodes -Text $bad.Text}catch{$message=$_.Exception.Message}
+            Assert-Match -Text $message -Pattern $bad.Pattern -Because "$($bad.Why)时不能断言扫完了玩家域"
+        }
+        $message='';try{$null=Invoke-MaintenanceRedisRead -Session @{} -Arguments @('CLUSTER','RESET')}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern 'CLUSTER NODES' -Because '维护collector不能发别的CLUSTER子命令'
+    }
+
     Test-Case 'Redis P0先固定attempt且清库恢复绝不SET，P4带真实首尾时窗' {
         $dir=Join-Path $taskRoot 'redis-nonce';$null=[IO.Directory]::CreateDirectory($dir)
         $scanDir=Join-Path $taskRoot 'redis-scan';$null=[IO.Directory]::CreateDirectory($scanDir)
         $target=@{role='core';address='127.0.0.1:6379';db='0';serverRunId=[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes('a'*40));maintenanceNonce=[Convert]::ToBase64String([Convert]::FromHexString('2'*32));zones=@(101);observations=@()}
-        $plan=@{operationId=('1'*32);redisTargets=@($target);kafkaPartitions=@()}
-        $savedFunctions=@{};foreach($name in @('Open-MaintenanceRedis','Get-MaintenanceRedisRunId','Assert-MaintenanceRedisDeadline','Send-MaintenanceRedisCommand','Invoke-MaintenanceRedisRead')){$savedFunctions[$name]=(Get-Command $name).ScriptBlock}
+        $plan=@{operationId=('1'*32);redisTargets=@($target)}
+        $savedFunctions=@{};foreach($name in @('Open-MaintenanceRedis','Get-MaintenanceRedisRunId','Get-MaintenanceRedisClusterView','Assert-MaintenanceRedisDeadline','Send-MaintenanceRedisCommand','Invoke-MaintenanceRedisRead')){$savedFunctions[$name]=(Get-Command $name).ScriptBlock}
         $script:nonceFixture=@{value=$null;sets=0;attempt=(Join-Path $dir 'redis-nonce-seed.attempt.json');serverRunId=$target.serverRunId}
         try{
             function Open-MaintenanceRedis {
@@ -252,6 +268,7 @@ try {
             }
             function Assert-MaintenanceRedisDeadline {param($Session)}
             function Get-MaintenanceRedisRunId {param($Session) return $script:nonceFixture.serverRunId}
+            function Get-MaintenanceRedisClusterView {param($Session) return $null}
             function Send-MaintenanceRedisCommand {
                 param($Session,[string[]]$Arguments)
                 if($Arguments.Count -ne 4 -or $Arguments[0] -cne 'SET' -or $Arguments[3] -cne 'NX' -or -not [IO.File]::Exists($script:nonceFixture.attempt)){throw 'SET必须在固定attempt后且只能NX'}

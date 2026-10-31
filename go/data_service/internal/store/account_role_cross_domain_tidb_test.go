@@ -105,7 +105,7 @@ func TestTiDBRoleFreezeAndMembershipCommitAreMutuallyExclusive(t *testing.T) {
 	}
 }
 
-func TestTiDBRolePendingAssetsRejectFreezeRemovalAndImport(t *testing.T) {
+func TestTiDBRolePendingAssetsRejectFreezeAndRemoval(t *testing.T) {
 	d, s, db := crossRoleGuardStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -118,8 +118,6 @@ func TestTiDBRolePendingAssetsRejectFreezeRemovalAndImport(t *testing.T) {
 	_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
 	require.ErrorIs(t, err, accountdirectory.ErrConflict)
 	require.ErrorIs(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}), accountdirectory.ErrConflict)
-	_, err = d.ImportRole(ctx, "seller", role, false, roleImportTestID(51))
-	require.ErrorIs(t, err, accountdirectory.ErrConflict)
 	owned, err := d.Lookup(ctx, 11)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, owned.OwnerRevision)
@@ -258,8 +256,6 @@ func TestTiDBRoleGuildMailPendingManualAndOwedBlockOwnershipChanges(t *testing.T
 			_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
 			require.ErrorIs(t, err, accountdirectory.ErrConflict)
 			require.ErrorIs(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}), accountdirectory.ErrConflict)
-			_, err = d.ImportRole(ctx, "seller", role, false, roleImportTestID(52))
-			require.ErrorIs(t, err, accountdirectory.ErrConflict)
 			predicate := "player_id=11"
 			if test.table == "match_challenge_invitation" {
 				predicate = "challenger_player_id=11 OR target_player_id=11"
@@ -279,49 +275,54 @@ func TestTiDBRoleGuildMailPendingManualAndOwedBlockOwnershipChanges(t *testing.T
 }
 
 func TestTiDBRoleKnownAssetTerminalsAndMatchTerminalAllowOwnershipChanges(t *testing.T) {
-	d, s, db := crossRoleGuardStore(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
-	_, err := createInitialRoleForTest(d, ctx, "seller", role)
-	require.NoError(t, err)
-	for index, status := range []uint32{2, 3, 4, 6} {
-		seq := uint64(index + 1)
-		insertRoleGuardFixture(t, db, "trade_asset_op", &tradepb.TradeAssetOpRecord{OpId: 100 + seq, PlayerId: 11, Seq: seq, Status: tradepb.TradeAssetOpStatus(status)})
-		insertRoleGuardFixture(t, db, "guild_asset_op", &guildpb.GuildAssetOpRecord{OpId: 200 + seq, PlayerId: 11, Seq: seq, Status: guildpb.GuildAssetOpStatus(status)})
+	for _, change := range []struct {
+		name  string
+		apply func(context.Context, *AccountDirectoryStore, *AccountRoleTradeStore) error
+	}{
+		{"remove", func(ctx context.Context, d *AccountDirectoryStore, _ *AccountRoleTradeStore) error {
+			return d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}})
+		}},
+		{"freeze", func(ctx context.Context, _ *AccountDirectoryStore, s *AccountRoleTradeStore) error {
+			_, err := s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
+			return err
+		}},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			d, s, db := crossRoleGuardStore(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}
+			_, err := createInitialRoleForTest(d, ctx, "seller", role)
+			require.NoError(t, err)
+			for index, status := range []uint32{2, 3, 4, 6} {
+				seq := uint64(index + 1)
+				insertRoleGuardFixture(t, db, "trade_asset_op", &tradepb.TradeAssetOpRecord{OpId: 100 + seq, PlayerId: 11, Seq: seq, Status: tradepb.TradeAssetOpStatus(status)})
+				insertRoleGuardFixture(t, db, "guild_asset_op", &guildpb.GuildAssetOpRecord{OpId: 200 + seq, PlayerId: 11, Seq: seq, Status: guildpb.GuildAssetOpStatus(status)})
+			}
+			for index, status := range []uint32{2, 3, 5} {
+				seq := uint64(index + 1)
+				insertRoleGuardFixture(t, db, "mail_asset_op", &mailpb.MailAssetOpRecord{OpId: 300 + seq, PlayerId: 11, Seq: seq, Status: status})
+			}
+			insertRoleGuardFixture(t, db, "guild_trial_launch_role", &guildpb.GuildTrialLaunchRoleRecord{PlayerId: 11, RequestId: 51, Account: "seller", OwnerRevision: 1, State: 2})
+			insertRoleGuardFixture(t, db, "guild_trial_launch", &guildpb.GuildTrialLaunchRecord{RequestId: 51, State: 3})
+			insertRoleGuardFixture(t, db, "guild_trial_lobby", &guildpb.GuildTrialLobbyRecord{LobbyId: 51, State: 4})
+			insertRoleGuardFixture(t, db, "guild_trial_lobby_slot", &guildpb.GuildTrialLobbySlotRecord{PlayerId: 11, LobbyId: 51})
+			insertRoleGuardFixture(t, db, "team_launch", &teampb.TeamLaunchRecord{ActorId: 11, RequestHigh: 51, State: 5})
+			insertRoleGuardFixture(t, db, "team_launch_role", &teampb.TeamLaunchRoleRecord{PlayerId: 11, ActorId: 11, RequestHigh: 51, State: 5})
+			for _, status := range []uint32{2, 3, 4, 5} {
+				insertRoleGuardFixture(t, db, "player_inbox_item", &inboxpb.PlayerInboxItemRow{Shard: inboxshard.RowShard(11), PlayerId: 11, Seq: uint64(status), RequestId: uint64(status), State: status, OwnerAccount: "seller", OwnerRevision: 1})
+			}
+			insertRoleGuardFixture(t, db, "match_authority_ticket", &matchpb.MatchAuthorityTicketRecord{PlayerId: 11, Ticket: "finished", FormationId: 51, State: 4})
+			for index, state := range []uint32{1, 2, 3} {
+				expires := ^uint64(0)
+				if state == 1 {
+					expires = 1
+				}
+				insertRoleGuardFixture(t, db, "match_challenge_invitation", &matchpb.MatchChallengeInvitationRecord{ChallengeId: uint64(51 + index), ChallengerPlayerId: 11, TargetPlayerId: 12, State: state, ExpiresMs: expires})
+			}
+			require.NoError(t, change.apply(ctx, d, s))
+		})
 	}
-	for index, status := range []uint32{2, 3, 5} {
-		seq := uint64(index + 1)
-		insertRoleGuardFixture(t, db, "mail_asset_op", &mailpb.MailAssetOpRecord{OpId: 300 + seq, PlayerId: 11, Seq: seq, Status: status})
-	}
-	insertRoleGuardFixture(t, db, "guild_trial_launch_role", &guildpb.GuildTrialLaunchRoleRecord{PlayerId: 11, RequestId: 51, Account: "seller", OwnerRevision: 1, State: 2})
-	insertRoleGuardFixture(t, db, "guild_trial_launch", &guildpb.GuildTrialLaunchRecord{RequestId: 51, State: 3})
-	insertRoleGuardFixture(t, db, "guild_trial_lobby", &guildpb.GuildTrialLobbyRecord{LobbyId: 51, State: 4})
-	insertRoleGuardFixture(t, db, "guild_trial_lobby_slot", &guildpb.GuildTrialLobbySlotRecord{PlayerId: 11, LobbyId: 51})
-	insertRoleGuardFixture(t, db, "team_launch", &teampb.TeamLaunchRecord{ActorId: 11, RequestHigh: 51, State: 5})
-	insertRoleGuardFixture(t, db, "team_launch_role", &teampb.TeamLaunchRoleRecord{PlayerId: 11, ActorId: 11, RequestHigh: 51, State: 5})
-	for _, status := range []uint32{2, 3, 4, 5} {
-		insertRoleGuardFixture(t, db, "player_inbox_item", &inboxpb.PlayerInboxItemRow{Shard: inboxshard.RowShard(11), PlayerId: 11, Seq: uint64(status), RequestId: uint64(status), State: status, OwnerAccount: "seller", OwnerRevision: 1})
-	}
-	insertRoleGuardFixture(t, db, "match_authority_ticket", &matchpb.MatchAuthorityTicketRecord{PlayerId: 11, Ticket: "finished", FormationId: 51, State: 4})
-	for index, state := range []uint32{1, 2, 3} {
-		expires := ^uint64(0)
-		if state == 1 {
-			expires = 1
-		}
-		insertRoleGuardFixture(t, db, "match_challenge_invitation", &matchpb.MatchChallengeInvitationRecord{ChallengeId: uint64(51 + index), ChallengerPlayerId: 11, TargetPlayerId: 12, State: state, ExpiresMs: expires})
-	}
-	_, err = d.ImportRole(ctx, "seller", role, false, roleImportTestID(53))
-	require.NoError(t, err)
-	owned, err := d.Lookup(ctx, 11)
-	require.NoError(t, err)
-	require.NoError(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: owned.OwnerRevision}}))
-	_, err = d.ImportRole(ctx, "seller", role, true, roleImportTestID(54))
-	require.NoError(t, err)
-	owned, err = d.Lookup(ctx, 11)
-	require.NoError(t, err)
-	_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: owned.OwnerRevision})
-	require.NoError(t, err)
 }
 
 func TestTiDBRoleExactEmptyMatchPlaceholderDoesNotTrapFreeze(t *testing.T) {
@@ -386,8 +387,6 @@ func TestTiDBRoleLaunchTerminalRequiresOriginalAndProjectionTogether(t *testing.
 			_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
 			require.ErrorIs(t, err, accountdirectory.ErrConflict)
 			require.ErrorIs(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}), accountdirectory.ErrConflict)
-			_, err = d.ImportRole(ctx, "seller", role, false, roleImportTestID(58))
-			require.ErrorIs(t, err, accountdirectory.ErrConflict)
 			owned, err := d.Lookup(ctx, 11)
 			require.NoError(t, err)
 			require.EqualValues(t, 1, owned.OwnerRevision)
@@ -412,8 +411,6 @@ func TestTiDBRolePendingGuardMissingSchemaOrColumnDisablesAllOwnershipChanges(t 
 		_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
 		require.ErrorIs(t, err, accountdirectory.ErrUnavailable)
 		require.ErrorIs(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}), accountdirectory.ErrUnavailable)
-		_, err = d.ImportRole(ctx, "seller", role, false, roleImportTestID(55))
-		require.ErrorIs(t, err, accountdirectory.ErrUnavailable)
 	}
 	for _, inboxSchema := range []string{"", "bad.schema", "missing_role_inbox_guard_schema"} {
 		require.Error(t, s.ConfigureAssetContracts(schema, schema, schema, schema, inboxSchema))
@@ -499,8 +496,6 @@ func TestTiDBRoleUnknownCommerceStatusCannotBorrowKnownRefundStage(t *testing.T)
 	_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
 	require.ErrorIs(t, err, accountdirectory.ErrConflict)
 	require.ErrorIs(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}), accountdirectory.ErrConflict)
-	_, err = d.ImportRole(ctx, "seller", role, false, roleImportTestID(56))
-	require.ErrorIs(t, err, accountdirectory.ErrConflict)
 	_, err = db.ExecContext(ctx, "UPDATE trade_commerce SET status=8 WHERE commerce_id=77")
 	require.NoError(t, err)
 	insertRoleGuardFixture(t, db, "trade_asset_op", &tradepb.TradeAssetOpRecord{OpId: 51, PlayerId: 11, Status: 5})
@@ -543,8 +538,6 @@ func TestTiDBRoleNullAssetStateRemainsBlocking(t *testing.T) {
 			_, err = s.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 88, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
 			require.ErrorIs(t, err, accountdirectory.ErrConflict)
 			require.ErrorIs(t, d.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}), accountdirectory.ErrConflict)
-			_, err = d.ImportRole(ctx, "seller", role, false, roleImportTestID(57))
-			require.ErrorIs(t, err, accountdirectory.ErrConflict)
 		})
 	}
 }

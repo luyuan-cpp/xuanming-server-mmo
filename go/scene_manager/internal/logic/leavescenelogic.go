@@ -16,42 +16,38 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// luaDeletePlayerLocationIfUnchanged:location 仍是调用方读到的那份原文时,删掉它并在同一次
-// 提交里把人数减一(GO-4 残余);释放模式下另外原子复核"持有者已释放"(docs/design/location-release-binding.md R2)。
+// luaDeletePlayerLocationIfUnchanged:location 仍是调用方读到的那份原文时,删掉它(GO-4 残余);
+// 释放模式下另外原子复核"持有者已释放"(docs/design/location-release-binding.md R2)。
+// 脚本的键全部同 {id} slot。摘场景与节点的成员是第二步,在控制域上,见 deletePlayerLocationGuardedWithTag。
 //
 // KEYS[1]=player:{id}:location  KEYS[2]=player:{id}:owner_epoch  KEYS[3]=player:{id}:handoff
 // KEYS[4]=player:{id}:leave_release_wait(删成功时一并删掉等待计时)
-// KEYS[5]=instance:{sceneId}:player_count
-// KEYS[6]=node:zone:{z}:{node}:player_count(scene:{id}:node 读不到时不传,脚本按 #KEYS 处理)
+// KEYS[5]=player:{id}:location_revision(删成功时一并删掉)  KEYS[6]=player:{id}:location_revision_floor(只比不删)
 // ARGV[1]=调用方 GET 到、并据此核对过 SceneId 的 location 原文
 // ARGV[2]=模式:any(只比原文)| released(另比 owner_epoch 与 handoff 标记)
 // ARGV[3]=当前代 E 的十进制文本(只在 released 模式下用)
-// 返回 1=已删且人数已减;0=键已不在;-1=已被改写,什么都没动;-2=释放模式复核不过(未释放),什么都没动
+// ARGV[4]=调用方随 location 一起读到的 location_revision 原文;ARGV[5]=期望的 floor,空串 = 不核
+// 返回 1=已删;0=键已不在;-1=已被改写,什么都没动;-2=释放模式复核不过(未释放),什么都没动
 //
 //   - 为什么比对原文而不只比 SceneId:原文里带 node_id / owner_epoch / update_time,同一场景里
 //     换了节点或铸了新 epoch 的新落点也能认出来。只比 SceneId 的裸 DEL 会把 GET 之后并发
 //     EnterScene 写入的新落点一起删掉。
-//   - 为什么人数也放进脚本:go-redis 读超时后会把同一条 EVAL 原样重发(与 owner_epoch.go 的
-//     重放识别同一原因)。首发已删、应答丢失时,重发只能看到「键已不在」;如果减人数留在脚本外、
-//     又按「不是本次删的就不减」处理,就没有任何一方减过,实例人数永久多 1,destroy-on-empty
-//     永不触发。另一种情况是 go-redis 重试耗尽后返回错误,player_locator 再次调用时 GET 为空。
-//     把删与减绑成同一次提交,「谁删谁减」对这两种情况都成立。
+//   - 为什么「键已不在」排在最前面:go-redis 读超时后会把同一条 EVAL 原样重发(与 owner_epoch.go 的
+//     重放识别同一原因)。首发已删、应答丢失时,重发只能看到「键已不在」,不能因为修订侧车也删了而回 -1。
+//   - 人数不再放进脚本:成员集合在控制域,位置在玩家域。删 location 的调用方一律再摘一次成员(幂等),
+//     首发已删、应答丢失,或 go-redis 重试耗尽后 player_locator 再次调用时 GET 为空,都照样能把人摘掉。
 //   - 释放模式为什么在脚本里再比一次:Go 侧预读到标记之后、删除之前,标记可能被撤回(交接取消)、owner_epoch
 //     可能被推进。判定与提交锚在同一次原子执行上,中间没有窗口。owner_epoch 缺键视作未变:标记只能在键为 E
 //     时写出(exit_release_mark::kLuaWriteIfOwnerEpoch),已有的 "E:t" 仍是有效证据。代际比较不用 tonumber
 //     (uint64 超过 2^53 会丢精度):去掉前导零后按字符串比,与 C++ A2′ 同法。
-//   - 钳 0 与 DecrInstancePlayerCount 一致;键全部由 Go 构造、经 KEYS 声明,与 scene_atomic.go
-//     同一约定(脚本从不用数据拼键)。
+//   - 键全部由 Go 构造、经 KEYS 声明,与 scene_atomic.go 同一约定(脚本从不用数据拼键)。
 const luaDeletePlayerLocationIfUnchanged = `
-local count_end = tonumber(ARGV[6]) or #KEYS
-if ARGV[4] ~= nil then
-    if (redis.call('GET',KEYS[count_end+1]) or '') ~= ARGV[4] then return -1 end
-    if ARGV[5] ~= '' and redis.call('GET',KEYS[count_end+2]) ~= ARGV[5] then return -1 end
-end
 local cur = redis.call('GET', KEYS[1])
 if cur == false then
     return 0
 end
+if (redis.call('GET',KEYS[5]) or '') ~= ARGV[4] then return -1 end
+if ARGV[5] ~= '' and redis.call('GET',KEYS[6]) ~= ARGV[5] then return -1 end
 if cur ~= ARGV[1] then
     return -1
 end
@@ -75,14 +71,7 @@ if ARGV[2] == 'released' then
 elseif ARGV[2] ~= 'any' then
     return redis.error_reply('LEAVE_SCENE unknown delete mode')
 end
-redis.call('DEL', KEYS[1], KEYS[4])
-if ARGV[4] ~= nil then redis.call('DEL',KEYS[count_end+1]) end
-for i = 5, count_end do
-    local v = redis.call('DECR', KEYS[i])
-    if v < 0 then
-        redis.call('SET', KEYS[i], '0')
-    end
-end
+redis.call('DEL', KEYS[1], KEYS[4], KEYS[5])
 return 1
 `
 
@@ -93,8 +82,20 @@ const (
 	leaveOutcomeSuperseded  = "superseded"
 )
 
-// deletePlayerLocationIfUnchanged 在 location 仍等于 expectedRaw 时删掉它(只比原文,不看释放证据),并在同一段 Lua 里把
-// 场景人数(以及此刻 scene:{id}:node 指向的节点人数)减一。LeaveScene 走 deletePlayerLocationGuarded;本函数是它的
+// leaveDeleteKeys 是 luaDeletePlayerLocationIfUnchanged 的 KEYS,全部在玩家自己的 slot 上(scene_keys_contract_test.go)。
+func leaveDeleteKeys(playerID uint64) []string {
+	return []string{
+		getPlayerLocationKey(playerID),
+		ownerepoch.OwnerEpochKey(playerID),
+		ownerepoch.HandoffKey(playerID),
+		leaveReleaseWaitKey(playerID),
+		locationRevisionKey(playerID),
+		locationRevisionFloorKey(playerID),
+	}
+}
+
+// deletePlayerLocationIfUnchanged 在 location 仍等于 expectedRaw 时删掉它(只比原文,不看释放证据),再把玩家摘出
+// 场景(以及此刻 scene:{id}:node 指向的节点)的成员集合。LeaveScene 走 deletePlayerLocationGuarded;本函数是它的
 // any 模式,保留给只关心删除机制本身的调用方与单测。
 func deletePlayerLocationIfUnchanged(svcCtx *svc.ServiceContext, playerID uint64, expectedRaw string,
 	zoneID uint32, sceneID uint64) (string, error) {
@@ -102,9 +103,6 @@ func deletePlayerLocationIfUnchanged(svcCtx *svc.ServiceContext, playerID uint64
 }
 
 // deletePlayerLocationGuarded 按 mode 条件删除 location(见 luaDeletePlayerLocationIfUnchanged)。
-//
-// 节点人数键按**此刻**的 scene:{id}:node 找,找不到就只减场景计数 —— 与 DecrInstancePlayerCount
-// 同一口径,也同样不原子:scene:{id}:node 在读与 EVAL 之间被改派时,节点人数最多偏差一次。
 func deletePlayerLocationGuarded(svcCtx *svc.ServiceContext, playerID uint64, expectedRaw string,
 	zoneID uint32, sceneID uint64, mode string, epoch uint64) (string, error) {
 	_, raw, tag, err := getPlayerLocationSnapshot(svcCtx, playerID)
@@ -120,37 +118,38 @@ func deletePlayerLocationGuarded(svcCtx *svc.ServiceContext, playerID uint64, ex
 	return deletePlayerLocationGuardedWithTag(svcCtx, playerID, expectedRaw, zoneID, sceneID, mode, epoch, tag, 0)
 }
 
+// deletePlayerLocationGuardedWithTag 分两步(docs/design/redis-player-store-cluster.md §5.10):
+//  1. 玩家域:luaDeletePlayerLocationIfUnchanged 条件删除 location 等键;
+//  2. 控制域:把玩家摘出 sceneID 的成员集合(removeScenePlayer)。除「未释放」之外的结局都做这一步:
+//     已删、已不在要摘是显然的;已被改写时也摘,因为这一步幂等且按 location 核对过 ——
+//     玩家仍在这个场景(同落点重连写了新身份)时成员身份会被加回,已不在这个场景时正好补上
+//     「删 location 的那一次第二步没做成、之后又进了别的场景」这种残留。
+//
+// 第二步失败返回错误:LeaveScene 把它交给 player_locator 重试,重试时 location 已不在,第二步再跑一次。
 func deletePlayerLocationGuardedWithTag(svcCtx *svc.ServiceContext, playerID uint64, expectedRaw string,
 	zoneID uint32, sceneID uint64, mode string, epoch uint64, expectedTag string, revision uint64) (string, error) {
-	keys := []string{
-		getPlayerLocationKey(playerID),
-		ownerepoch.OwnerEpochKey(playerID),
-		ownerepoch.HandoffKey(playerID),
-		leaveReleaseWaitKey(playerID),
-		fmt.Sprintf(InstancePlayerCountKey, sceneID),
-	}
-	if node := lookupSceneNode(svcCtx, sceneID); node != "" {
-		keys = append(keys, nodePlayerCountKey(zoneID, node))
-	}
-	countEnd := len(keys)
-	keys = append(keys, locationRevisionKey(playerID), locationRevisionFloorKey(playerID))
-
-	result, err := svcCtx.Redis.Eval(luaDeletePlayerLocationIfUnchanged, keys, expectedRaw, mode,
-		strconv.FormatUint(epoch, 10), expectedTag, optionalRevisionText(revision), countEnd)
+	result, err := playerRedisEval(svcCtx, luaDeletePlayerLocationIfUnchanged, leaveDeleteKeys(playerID), expectedRaw, mode,
+		strconv.FormatUint(epoch, 10), expectedTag, optionalRevisionText(revision))
 	if err != nil {
 		return "", fmt.Errorf("比对删除 location 失败: player=%d scene=%d mode=%s: %w", playerID, sceneID, mode, err)
 	}
+	var outcome string
 	switch fmt.Sprint(result) {
 	case "1":
-		return leaveOutcomeDeleted, nil
+		outcome = leaveOutcomeDeleted
 	case "0":
-		return leaveOutcomeAlreadyGone, nil
+		outcome = leaveOutcomeAlreadyGone
 	case "-1":
-		return leaveOutcomeSuperseded, nil
+		outcome = leaveOutcomeSuperseded
 	case "-2":
 		return leaveOutcomeNotReleased, nil
+	default:
+		return "", fmt.Errorf("比对删除 location 返回值非法: player=%d scene=%d mode=%s result=%v", playerID, sceneID, mode, result)
 	}
-	return "", fmt.Errorf("比对删除 location 返回值非法: player=%d scene=%d mode=%s result=%v", playerID, sceneID, mode, result)
+	if err := removeScenePlayer(svcCtx, playerID, sceneID, zoneID); err != nil {
+		return "", fmt.Errorf("摘场景成员失败: player=%d scene=%d outcome=%s: %w", playerID, sceneID, outcome, err)
+	}
+	return outcome, nil
 }
 
 type LeaveSceneLogic struct {
@@ -169,9 +168,9 @@ func NewLeaveSceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *LeaveS
 
 // LeaveScene handles a player leaving a scene (or pre-transfer cleanup).
 //
-// 删除是「比对原文」的条件删除,删 location 与减人数在同一段 Lua 里提交(见
-// luaDeletePlayerLocationIfUnchanged)。LeaveScene 不再单独调用 DecrInstancePlayerCount:
-// 删掉它的那一方在脚本里减过;改写它的 EnterScene 已减过旧场景人数。
+// 删除是「比对原文」的条件删除(见 luaDeletePlayerLocationIfUnchanged),之后摘场景与节点的成员
+// (deletePlayerLocationGuardedWithTag)。两步不在一段脚本里:位置在玩家域,成员集合在控制域。
+// location 已经不在、或已不指向这个场景时同样摘一次:上一次调用的第二步可能没做成,这是它的重试入口。
 //
 // 错误语义:Redis 读失败或删除失败返回 error(以前回成功)。依据是唯一调用方 player_locator 的
 // 契约(leasemonitor.go 的租约清理:RPC 失败必须返回错误,出错时保留 claim 重试;MarkOffline
@@ -180,7 +179,7 @@ func NewLeaveSceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *LeaveS
 //
 // 会话身份(scene-enter-chain-residuals.md §3.2):SceneId 比对之后按 decideLeaveIdentity 比较 location 记的
 // 身份与请求带的被删会话身份。location 已属于更新的登录(keep_newer)或代次相等而会话冲突(keep_conflict)时
-// 不删、不扣人数、回成功;legacy(任一侧无代次)与 deleted 照旧原文 CAS 删除。判定读的是 GET 到的同一份原文,
+// 不删、不摘成员、回成功;legacy(任一侧无代次)与 deleted 照旧原文 CAS 删除。判定读的是 GET 到的同一份原文,
 // 随后的删除 Lua 仍以它为期望值,判定与提交之间没有窗口。以前挡不住的两类因此收口:
 //   - samePlacement 重连:新登录在 samePlacement 时已把自己的身份写进 location(enterscenelogic.go 第 4 步),
 //     迟到的旧会话 LeaveScene 判 keep_newer;
@@ -206,6 +205,9 @@ func (l *LeaveSceneLogic) LeaveScene(in *scene_manager.LeaveSceneRequest) (*base
 	}
 	if raw == "" {
 		l.Logger.Infof("Player %d requested leave scene %d but has no location info", in.PlayerId, in.SceneId)
+		if err := removeScenePlayer(l.svcCtx, in.PlayerId, in.SceneId, 0); err != nil {
+			return nil, fmt.Errorf("remove player %d from scene %d members: %w", in.PlayerId, in.SceneId, err)
+		}
 		return &base.Empty{}, nil
 	}
 
@@ -232,6 +234,9 @@ func (l *LeaveSceneLogic) LeaveScene(in *scene_manager.LeaveSceneRequest) (*base
 	if currentLoc.SceneId != in.SceneId {
 		l.Logger.Infof("Player %d requested leave scene %d but is in scene %d, ignoring",
 			in.PlayerId, in.SceneId, currentLoc.SceneId)
+		if err := removeScenePlayer(l.svcCtx, in.PlayerId, in.SceneId, 0); err != nil {
+			return nil, fmt.Errorf("remove player %d from scene %d members: %w", in.PlayerId, in.SceneId, err)
+		}
 		return &base.Empty{}, nil
 	}
 
@@ -306,11 +311,11 @@ func (l *LeaveSceneLogic) LeaveScene(in *scene_manager.LeaveSceneRequest) (*base
 		return l.keepLocationUntilReleased(in, currentLoc, release)
 	}
 	if outcome != leaveOutcomeDeleted {
-		// already_gone:别的调用(或 go-redis 重发的首发)已经删过并在同一段脚本里减过人数;
-		// superseded:GET 之后有 EnterScene 写入了新落点(它已减过旧场景人数),或同落点重连写了新身份
-		// (玩家仍在这个场景里,人数本就不该减)。两种都不动人数。
+		// already_gone:别的调用(或 go-redis 重发的首发)已经删过;
+		// superseded:GET 之后有 EnterScene 写入了新落点,或同落点重连写了新身份。
+		// 两种的成员集合都已在 deletePlayerLocationGuardedWithTag 里按 location 收敛。
 		// 只有确实删除才计释放判定；UNKNOWN和并发更新均不得被记成已释放。
-		l.Logger.Infof("Player %d leave scene %d: location not deleted by this call (outcome=%s holder_release=%s), player counts untouched",
+		l.Logger.Infof("Player %d leave scene %d: location not deleted by this call (outcome=%s holder_release=%s)",
 			in.PlayerId, in.SceneId, outcome, release.verdict)
 		return &base.Empty{}, nil
 	}
@@ -365,7 +370,7 @@ func (l *LeaveSceneLogic) judgeHolderRelease(in *scene_manager.LeaveSceneRequest
 		if j.epoch != 0 && !facts.noHolder {
 			owner := NewEnterSceneLogic(l.ctx, l.svcCtx)
 			facts.ownerDead = owner.playerLocationOwnerDead(loc, j.zoneID)
-			markerRaw, err := l.svcCtx.Redis.Get(ownerepoch.HandoffKey(in.PlayerId))
+			markerRaw, err := playerRedisGet(l.svcCtx, ownerepoch.HandoffKey(in.PlayerId))
 			if err != nil {
 				return j, fmt.Errorf("read handoff marker of player %d: %w", in.PlayerId, err)
 			}

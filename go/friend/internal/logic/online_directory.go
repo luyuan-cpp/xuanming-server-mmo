@@ -35,7 +35,7 @@ func (l *FriendLogic) listOnlinePlayers(ctx context.Context, caller uint64, req 
 	if count > 60 {
 		return reject(constants.ErrRateLimited, "online directory rate limited")
 	}
-	directory := data.OnlineDirectory{Redis: l.deps.SvcCtx.SharedRedis, DataService: l.deps.SvcCtx.DataService}
+	directory := data.OnlineDirectory{Redis: l.deps.SvcCtx.PlayerRedis, DataService: l.deps.SvcCtx.DataService}
 	resp, err := directory.List(ctx, caller, req.GetCursor(), limit, req.GetExcludePlayerIds(), req.GetQuery())
 	if errors.Is(err, data.ErrInvalidDirectoryInput) {
 		return reject(constants.ErrInvalidParameter, "invalid online directory parameters")

@@ -89,7 +89,6 @@ Client/System → Go SceneManager.CreateScene(scene_conf_id)
    │    3. GetBestNodeForPurpose(Instance)  # filters by scene_node_type
    ├─ allocateScene → SceneIDGen.Generate(Snowflake), SET scene:{id}:node
    ├─ ZADD instances:zone:{zoneId}:active (score = timestamp)
-   ├─ SET instance:{id}:player_count = 0
    └─ RequestNodeCreateSceneWithOptions → gRPC → C++ Scene.CreateScene(config_id, mirror_config_id, creator_ids)
 ```
 
@@ -113,7 +112,7 @@ The per-node load score in `scene_nodes:zone:{zone}:load` is now a
 weighted sum of two counters:
 
 ```
-score = α · scene_count + β · player_count
+score = α · scene_count + β · SCARD(members)
 α = NodeLoadWeightSceneCount  (default 1.0)
 β = NodeLoadWeightPlayerCount (default 0.01)
 ```
@@ -122,13 +121,12 @@ Defaults treat one scene ≈ 100 players — an empty scene still burns CPU
 on tick/AOI scaffolding, so it dominates. Shift β up if your scenes are
 cheap but players are expensive (heavy physics, per-player AI).
 
-Counters are maintained in Redis as `node:zone:{zoneId}:{nodeId}:scene_count` and
-`node:zone:{zoneId}:{nodeId}:player_count`. Node IDs are only unique inside a
-zone, so no node-scoped key or connection cache may omit `zoneId`. The player aggregate is piggy-backed on the
-existing `IncrInstancePlayerCount` / `DecrInstancePlayerCount` hooks:
-each scene enter/leave also touches the per-node counter, and
-`destroyInstance` drains the residual so force-destroys don't leak
-ghost players.
+They are kept in Redis as the counter `node:zone:{zoneId}:{nodeId}:scene_count` and
+the set `node:zone:{zoneId}:{nodeId}:members` (player count = `SCARD`). Node IDs are only unique inside a
+zone, so no node-scoped key or connection cache may omit `zoneId`. The node set moves together with
+`instance:{id}:members`: each scene enter/leave touches both, and
+`destroyInstance` removes the scene's residual members from the node set so force-destroys don't leak
+ghost players. See [redis-player-store-cluster.md](redis-player-store-cluster.md) §5.10.
 
 谁、多久把这两个计数折成负载分写进负载集:见下文「负载刷新与 zone 登记集合(2026-10-16)」(只有领导者按 zone
 批量刷新;计数读失败不按 0 写)。
@@ -150,7 +148,7 @@ Two safety rules keep this cheap:
    cross-node state-transfer protocol that is not implemented.
 2. **Opportunistic migration** (`reasonBetterHome`) — channels on a live
    node but mapped to a non-ideal hash target are moved only when empty
-   (`player_count == 0`). Hot channels stay put until they naturally
+   (no members). Hot channels stay put until they naturally
    drain; live player migration across nodes is out of scope and would
    need cross-node state transfer the codebase does not have.
 
@@ -364,11 +362,11 @@ destroyInstanceInternal(scene_id)
   ← destroyInstance (idle) / destroyInstanceForce (explicit DestroyScene RPC,
     source_migrated, source_scaled_in) / destroyOrphanOfDeadNode (node_death)
 │
-├─ snapshot GET scene:{id}:{node, agones_gs, player_count, source, mirror}  (reference only)
-├─ [atomic claim] EVAL luaAtomicDestroyInstance (idle: aborts if player_count > 0)
+├─ snapshot GET scene:{id}:{node, agones_gs, source, mirror}  (reference only)
+├─ [atomic claim] EVAL luaAtomicDestroyInstance (idle: aborts if SCARD instance:{id}:members > 0)
 │                 or luaAtomicDestroyInstanceForce (others; node_death passes the
 │                 dead node as expected owner, aborts if scene:{id}:node differs)
-│    └─ DEL scene:{id}:{node, player_count, mirror, source, zone, agones_gs}
+│    └─ DEL scene:{id}:{node, mirror, source, zone, agones_gs}, instance:{id}:members
 │       + ZREM instances:zone:{zoneId}:active
 │    claim lost → return, no side effects at all
 ├─ [cascade] SMEMBERS scene:{id}:mirrors → destroyInstanceInternal(child, force, reason=cascade)
@@ -376,29 +374,29 @@ destroyInstanceInternal(scene_id)
 ├─ RequestNodeDestroyScene → gRPC → C++ Scene.DestroyScene(scene_id)   (only if owner alive)
 ├─ SREM node:zone:{zoneId}:{nodeId}:scenes
 ├─ [if mirror] SREM scene:{sourceId}:mirrors
-├─ INCRBY node:zone:{zoneId}:{nodeId}:scene_count -1 + drain residual from player_count
+├─ INCRBY node:zone:{zoneId}:{nodeId}:scene_count -1 + SREM residual members from node:zone:{zoneId}:{nodeId}:members
 └─ ReleaseAgonesRoomForScene (if agones_gs was set)
 ```
 
 ### Destroy-while-entering race (fixed 2026-04-23)
 
 Without synchronisation, there is a window between the lifecycle tick's
-`player_count==0` check and its `DEL scene:{id}:node` call where an
+empty-members check and its `DEL scene:{id}:node` call where an
 `EnterScene` RPC can land. That would route a player into a scene that
-is about to be wiped, and also create an orphan `instance:{id}:player_count`
+is about to be wiped, and also create an orphan `instance:{id}:members`
 key that lives forever (nothing cleans it up after the owning scene is
 gone).
 
 The fix moves both sides into single-keyspace Lua scripts so Redis
 serialises them:
 
-- **`luaAtomicIncrPlayerCount`** (EnterScene path): checks
+- **`luaAtomicAddSceneMember`** (EnterScene path): checks
   `EXISTS scene:{id}:node`; if missing returns `-1` without creating
-  `instance:{id}:player_count`. If present INCRs and returns the new count.
+  `instance:{id}:members`. If present SADDs and returns the new `SCARD`.
   EnterScene treats `-1` as "scene disappeared, reject the request" and
   rolls back the `PlayerLocation` write.
 - **`luaAtomicDestroyInstance`** (idle lifecycle path, via `destroyInstance`): if
-  `player_count > 0`, returns `""` without touching anything; otherwise
+  `SCARD instance:{id}:members > 0`, returns `""` without touching anything; otherwise
   wipes every scene-scoped key, `ZREM`s from the active set, and returns
   the hosted nodeId so the caller can fire `DestroyScene` RPC and drain
   counters. A force path (`luaAtomicDestroyInstanceForce`) bypasses the idle
@@ -418,10 +416,10 @@ Failure mode coverage:
 | Enter wins the race   | Destroy's script returns `""` → lifecycle reseeds the idle clock via `ZADD` and re-evaluates next tick |
 | Both sides racing under retries | Bounded: every retry goes through the same Lua, Redis serialises |
 
-Regression: `TestAtomicIncrPlayerCount_{SceneExists,SceneGone}`,
+Regression: `TestAtomicAddSceneMember_{SceneExists,SceneGone}`,
 `TestAtomicDestroyIfIdle_{AbortsOnPlayers,DestroysWhenIdle}`,
 `TestDestroyInstance_CAS_AbortsWhenPlayersPresent`,
-`TestEnterScene_AtomicIncr_NoOrphanPlayerCount`.
+`TestEnterScene_AtomicAdd_NoOrphanMembers`.
 
 ### Reverse indexes (added 2026-04-23)
 
@@ -485,7 +483,7 @@ Invariants (comment block in `reentry_barrier.go`, 「被屏障推迟的死节�
   the reverse index (scenes a new incarnation creates on the same node_id
   are not this death's; the owner compare cannot protect them). A second
   death of the same node_id before the task finishes unions the scopes;
-- **R1-I3** the dead node's `scene_count` / `player_count` are deleted only
+- **R1-I3** the dead node's `scene_count` / `members` are deleted only
   when the scope is empty, in the same Lua script that removes the task
   (`luaFinishDeadNodeReconcile`), or forcibly when the task is abandoned;
 - **R1-I4** only the leader reads or writes tasks: drain returns at once on
@@ -507,7 +505,7 @@ member and aborts on lost leadership:
    earlier in the same sweep — every destroy script `ZREM`s atomically with
    the mapping `DEL`. Only `redis.Nil` counts as "not in the set"; a read
    error counts `failed`.
-3. The rest go to `destroyOrphanOfDeadNode(deadNode)`: no player_count
+3. The rest go to `destroyOrphanOfDeadNode(deadNode)`: no members
    check, but the Lua script only wipes the scene while `scene:{id}:node`
    still equals the dead node; otherwise it touches nothing and the member
    is counted `stale`. That covers a writer that moved the instance with
@@ -647,15 +645,15 @@ Operators choose one mirror semantics regime per deployment:
 
 ## Player Count Tracking
 
-- `EnterScene` → `IncrInstancePlayerCount(zoneId, sceneId)` — Redis INCR on `instance:{sceneId}:player_count` plus the zone-scoped node aggregate.
-- `LeaveScene` → `DecrInstancePlayerCount(sceneId)` — Redis INCRBY -1, clamped to 0 (guards against double-leave or disconnect without leave).
+- `EnterScene` → SADD into `instance:{sceneId}:members` and the zone-scoped `node:zone:{zoneId}:{nodeId}:members` when reserving, and again after the placement commits.
+- `LeaveScene` → conditional delete of the location, then SREM from both sets. SREM is idempotent, so double-leave or a retry after a partial failure cannot under-count. See [redis-player-store-cluster.md](redis-player-store-cluster.md) §5.10.
 - Instance lifecycle manager periodically scans active instances. If player count is 0 for longer than `InstanceIdleTimeoutSeconds`, the instance is destroyed.
 
 ## Instance Lifecycle Manager
 
 - Runs as a goroutine started alongside the SceneManager.
 - Polls every `InstanceCheckIntervalSeconds` (default 30s).
-- For each active instance: if `player_count > 0`, resets idle clock (updates sorted set score to now). If `player_count == 0` and idle duration exceeds the **per-type** timeout, calls `destroyInstance`.
+- For each active instance: if `SCARD instance:{id}:members > 0`, resets idle clock (updates sorted set score to now). If it is 0 and idle duration exceeds the **per-type** timeout, calls `destroyInstance`.
 - `destroyInstance` notifies C++ node via `RequestNodeDestroyScene` before cleaning Redis state.
 
 ### Mirror vs. instance idle timeouts
@@ -966,10 +964,10 @@ outcome 上 `read_failed` 只记**传输层失败**:批被拒,或有命令带着
 | `world_channels:zone:{zoneId}:{confId}` | Set | 该 zone、该世界配置的活动频道 sceneId 集合 |
 | `world_channels:desired:zone:{zoneId}` | Hash | confId → 当前期望频道数；配置只作首次播种 |
 | `instances:zone:{zoneId}:active` | ZSet | Active instances (score = create/last-active timestamp) |
-| `instance:{id}:player_count` | String (int) | Player count per instance |
-| `scene_nodes:zone:{zoneId}:load` | ZSet | Node load balancing (score = α·scene_count + β·player_count) |
+| `instance:{id}:members` | Set | Player ids in the instance; player count = `SCARD` |
+| `scene_nodes:zone:{zoneId}:load` | ZSet | Node load balancing (score = α·scene_count + β·SCARD(members)) |
 | `node:zone:{zoneId}:{nodeId}:scene_count` | String (int) | Node's hosted scene count |
-| `node:zone:{zoneId}:{nodeId}:player_count` | String (int) | Node's aggregate player count (sum across hosted scenes) |
+| `node:zone:{zoneId}:{nodeId}:members` | Set | Player ids on the node; player count = `SCARD` (across hosted scenes) |
 | `node:zone:{zoneId}:{nodeId}:scene_node_type` | String (int) | Mirrored `eSceneNodeType` value for purpose filtering |
 | `node:zone:{zoneId}:{nodeId}:scenes` | Set | Scene ids currently hosted by this node (node-death reconciliation) |
 | `scene_manager:zones` | Set | (2026-10-16)出现过负载集成员或频道期望数的 zone(十进制);只加不减,`merge_zone -clear-source-hot-state` 摘除。领导者清扫与孤儿清理靠它发现 zone,替代全库 SCAN |

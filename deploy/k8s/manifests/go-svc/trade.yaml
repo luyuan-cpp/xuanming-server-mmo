@@ -4,7 +4,7 @@
 # 商品按 market_zone(卖家上架时的 home_zone)分市场,但表里天然有跨 zone 的行(D-2),所以与 chat 同形态;
 # 客户端经 gate → client-rpc-router 到达,路由服对 TradeNodeService 不做 zone 过滤。
 # k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
-# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-trade-config 由脚本生成。
+# infra-up / all-up 部署:ConfigMap 与迁移 Job 在基础设施阶段,进程排在第一个 zone 的 data-service 之后(见 k8s_deploy.ps1 的 Apply-GlobalGoSvcManifests)。ConfigMap go-svc-trade-config 由脚本生成。
 #
 # 库与表(port-decisions D-14):
 #   - 独占库 mmorpg_trade 由 mysql-init-sql ConfigMap 带入的 deploy/mysql-init/00_init_zone_dbs.sql 预建 + GRANT appuser
@@ -145,6 +145,13 @@ spec:
             # 与 ConfigMap 的 MetricsListenAddr ":9230" 及上面 prometheus.io/port 注解一致(9230 = trade)
             - containerPort: 9230
               name: metrics
+          # 启动时读 data_service.GetMergedZones,读不到等 60 秒后退出(go/shared/mergedzone),gRPC 口在那之后才监听。
+          # 启动探针给足 150 秒,不抢在进程自己判定之前杀它;通过之后才开始 readiness / liveness。
+          startupProbe:
+            grpc:
+              port: 50800
+            periodSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             grpc:
               port: 50800

@@ -99,7 +99,7 @@ func TestDeadNodeReconcile_AbandonsAfterGiveUpDeadline(t *testing.T) {
 	assert.False(t, pending)
 	assert.False(t, mr.Exists(nodeReconcileScenesKey(takeoverZone, node)), "收尾范围随任务一起删")
 	assert.Equal(t, "<missing>", c.valueOrMissing(nodeSceneCountKey(takeoverZone, node)), "放弃时同样删计数,不留无界的正残留")
-	assert.Equal(t, "<missing>", c.valueOrMissing(nodePlayerCountKey(takeoverZone, node)))
+	assert.False(t, mr.Exists(nodeMembersKey(takeoverZone, node)))
 	assert.Equal(t, node, c.valueOrMissing(sceneNodeKey(89941)), "没结论的场景不动")
 	in, err := sc.Redis.Sismember(nodeScenesKey(takeoverZone, node), "89941")
 	require.NoError(t, err)

@@ -61,7 +61,7 @@ func TestOriginalGuildSessionRejectsMissingAccountZeroRevisionAndChangedOwner(t 
 				require.Empty(t, reader.keys)
 				require.False(t, checked)
 			} else {
-				require.Equal(t, []string{"login_session:原gate:8"}, reader.keys)
+				require.Equal(t, []string{"login_session:{原gate:8}"}, reader.keys)
 			}
 		})
 	}

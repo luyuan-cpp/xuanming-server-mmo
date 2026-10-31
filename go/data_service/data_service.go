@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -21,15 +18,12 @@ import (
 	dskafka "data_service/internal/kafka"
 	"data_service/internal/metrics"
 	"data_service/internal/noderegistry"
-	"data_service/internal/routereconcile"
 	"data_service/internal/routetoolcli"
 	"data_service/internal/server"
 	"data_service/internal/store"
 	"data_service/internal/svc"
 	base "proto/common/base"
-	databasepb "proto/common/database"
 	"proto/data_service"
-	"shared/authoritysql"
 	"shared/buildinfo"
 	"shared/drainproof"
 	"shared/grpcstats"
@@ -53,10 +47,10 @@ var configFile = flag.String("f", "etc/data_service.yaml", "the config file")
 var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式 typed 排空 runtime 原件")
 var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原件目录")
 var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime 原文件 SHA256")
-var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空与危险观察的私有目录")
+var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空的私有目录")
 
 // migrateOnly 是生产用的显式建表入口:`data_service -f <yaml> -migrate` 对全局库跑一次
-// store.MigrateSchema(proto 驱动的五张 + 手写 DDL 的路由表,并种 route_meta / route_reconcile 行;与
+// store.MigrateSchema(proto 驱动的五张 + 手写 DDL 的路由表,并种 route_meta 行;与
 // Schema.AutoMigrate=true 的启动路径是同一段代码),跑完即退出,不起 gRPC、不连 Redis。
 // 生产把 AutoMigrate 设 false,部署阶段单进程跑这个。
 var migrateOnly = flag.Bool("migrate", false, "run the global-DB schema migration (proto2mysql) and exit")
@@ -68,9 +62,9 @@ var idIssuerInit = flag.Bool("id-issuer-init", false, "initialize the id issuer 
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
-// routeTool 是 route_tool 的主程序入口(映射持久化第 1b-1 批,2026-10-18):`data_service -f <yaml> -route-tool <子命令> [参数]`
+// routeTool 是 route_tool 的主程序入口:`data_service -f <yaml> -route-tool <子命令> [参数]`
 // 跑一个运维子命令后退出,不起 gRPC、不连别的依赖。K8s 镜像只构建单一入口 /app/service(deploy/k8s/Dockerfile.go-svc),
-// 生产上只能这样跑 route_tool(一次性 Job / Pod,runbook §9.4)。逻辑在 internal/routetoolcli,与 cmd/route_tool 同一份。
+// 生产上只能这样跑 route_tool(一次性 Job / Pod)。逻辑在 internal/routetoolcli,与 cmd/route_tool 同一份。
 var routeTool = flag.Bool("route-tool", false, "run a route_tool subcommand and exit: data_service -f <yaml> -route-tool <subcommand> [flags]")
 
 // entryMode 是 main 的入口。
@@ -86,8 +80,8 @@ const (
 // selectEntry 按 flag 选入口(纯函数,data_service_entry_test.go 表驱动钉住)。args 是 flag.Args()(第一个非 flag 参数起)。
 //   - -migrate、-route-tool、-id-issuer-init 同时给多个:拒绝(一次只做一件事);
 //   - -route-tool 但没有子命令:拒绝;
-//   - 没有 -route-tool 却带位置参数:拒绝 —— 以前这些参数被静默忽略,`data_service -f x.yaml audit` 会被当成一次普通启动、
-//     起一个服务进发现池,而运维以为自己跑的是审计。
+//   - 没有 -route-tool 却带位置参数:拒绝 —— 以前这些参数被静默忽略,`data_service -f x.yaml freeze` 会被当成一次普通启动、
+//     起一个服务进发现池,而运维以为自己跑的是冻结。
 func selectEntry(migrate, routeTool, issuerInit bool, args []string) (entryMode, error) {
 	switch {
 	case migrate && routeTool, migrate && issuerInit, routeTool && issuerInit:
@@ -169,9 +163,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// RouteStore 段(映射提交点,docs/design/player-route-mapping-durability-proposal.md §4、§11.2):
-	// 任何一项非法都拒启,与 Mode 无关;拒绝而不纠正,理由同 PlayerNameConfig.Validate(Mode 拼错被悄悄当成
-	// redis,运维以为切了提交点而实际没切)。-migrate 不读它,所以放在那之后。
+	// RouteStore 段:任何一项非法都拒启;拒绝而不纠正,理由同 PlayerNameConfig.Validate。-migrate 不读它,所以放在那之后。
 	c.RouteStore = c.RouteStore.Normalize()
 	if err := c.RouteStore.Validate(); err != nil {
 		logx.Errorf("[startup] invalid RouteStore config; refusing to start: %v", err)
@@ -179,14 +171,8 @@ func main() {
 		logx.Close()
 		os.Exit(1)
 	}
-	if c.RouteStore.DBFirst() {
-		logx.Infof("[startup] RouteStore.Mode=db_first: max_open_conn=%d max_idle_conn=%d publish_attempts=%d "+
-			"waitaof_numlocal=%d waitaof_numreplicas=%d waitaof_timeout_ms=%d merged_zone_refresh_sec=%d",
-			c.RouteStore.MaxOpenConn, c.RouteStore.MaxIdleConn, c.RouteStore.PublishAttempts,
-			c.RouteStore.NumLocal(), c.RouteStore.NumReplicas(), c.RouteStore.WaitAOFTimeoutMs, c.RouteStore.MergedZoneRefreshSec)
-		// go-zero 的 logx 没有 WARN 级别,取 ERROR:这条是运维必须看见的前提,淹在 Info 里等于没有。
-		logx.Errorf("[startup] WARN %s", routeStoreDBFirstWarning)
-	}
+	logx.Infof("[startup] RouteStore: max_open_conn=%d max_idle_conn=%d merged_zone_refresh_sec=%d",
+		c.RouteStore.MaxOpenConn, c.RouteStore.MaxIdleConn, c.RouteStore.MergedZoneRefreshSec)
 
 	// Kafka 段 player_snapshot 消费者的批量 / 并发旋钮与 lag 探针(G2a):越界一律拒启,拒绝而不纠正(同 RouteStore)。
 	// 与 Brokers 是否为空无关:一份"开 Kafka 才炸"的配置不该等到开的那一刻才被发现。-migrate 在它之前已返回,不受影响。
@@ -210,58 +196,11 @@ func runDataService(c config.Config) (runErr error) {
 	if err != nil {
 		return err
 	}
-	evidenceDir := *maintenanceControlDir
-	if runtime != nil {
-		evidenceDir = runtime.Directory
-	}
-	if c.RouteStore.ReconcileEnabled() {
-		if err := authoritysql.CheckPrivateControlDirectory(evidenceDir); err != nil {
-			return fmt.Errorf("路由危险原件目录不可用: %w", err)
-		}
-	}
 	signalCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignals()
 	controlCtx, cancelControl := context.WithCancel(context.Background())
 	defer cancelControl()
-	dangerNotice := make(chan error, 1)
-	var dangerOnce sync.Once
-	var dangerErr error
-	var svcCtx *svc.ServiceContext
-	var kafkaOwner *dskafka.ConsumerOwner
-	onDanger := func(ctx context.Context, observation *store.RouteEmergencyError) error {
-		root.CloseAdmission()
-		if svcCtx != nil {
-			svcCtx.CloseRootAndRelayIngress()
-		}
-		if kafkaOwner != nil {
-			kafkaOwner.BeginDrain()
-		}
-		dangerOnce.Do(func() {
-			root.Hold()
-			relay.Hold()
-			if observation == nil || svcCtx == nil {
-				dangerErr = drainproof.ErrHold
-			} else {
-				record := struct {
-					Schema                string
-					WriterKey, InstanceID []byte
-					Generation            string
-					Observation           *store.RouteEmergencyError
-				}{
-					"DATA_SERVICE_ROUTE_DANGER_OBSERVATION_V1", svcCtx.Writer.WriterKey(), svcCtx.Writer.InstanceID(), svcCtx.Writer.Generation(), observation}
-				raw, encodeErr := json.Marshal(record)
-				dangerErr = encodeErr
-				if encodeErr == nil {
-					path := filepath.Join(evidenceDir, "route-danger-"+hex.EncodeToString(svcCtx.Writer.InstanceID())+".observation.json")
-					dangerErr = authoritysql.WritePrivateControlFile(path, raw)
-				}
-				dangerErr = errors.Join(observation, dangerErr)
-			}
-			dangerNotice <- dangerErr
-		})
-		return dangerErr
-	}
-	svcCtx = svc.NewServiceContextWithAdmission(c, root, relay, onDanger)
+	svcCtx := svc.NewServiceContextWithAdmission(c, root, relay)
 	// 启动自检仍 fail-closed；尚未启动任何 worker 时可安全关闭三个空门禁后回收。
 	cleanupUnstarted := func() error {
 		svcCtx.CloseRootAndRelayIngress()
@@ -271,68 +210,23 @@ func runDataService(c config.Config) (runErr error) {
 	if missing := svcCtx.MissingStores(); c.Store.Required && len(missing) > 0 {
 		return errors.Join(fmt.Errorf("Store.Required=true，依赖未就绪: %v", missing), cleanupUnstarted())
 	}
-	if err := svcCtx.RouteReadGateUnassembled(); err != nil {
-		return errors.Join(err, cleanupUnstarted())
-	}
 	if err := svcCtx.MergedZonesUnassembled(); err != nil {
 		return errors.Join(err, cleanupUnstarted())
 	}
 	// 定时重读合服映射;CloseAndReport 里停。上面的自检没过时不起,也就不用单独收回。
 	svcCtx.MergedZones.Start()
 
-	kafkaOwner, err = dskafka.NewConsumerOwner(relay, svcCtx.RelayIngress)
+	kafkaOwner, err := dskafka.NewConsumerOwner(relay, svcCtx.RelayIngress)
 	if err != nil {
 		return errors.Join(err, cleanupUnstarted())
 	}
 	kafkaStart := startKafkaConsumers(context.Background(), c.Kafka, svcCtx, kafkaOwner)
-	var sourceMu sync.Mutex
-	sourceClosed := false
-	sourceMerged := false
-	routeStarted := false
-	var stopRoute func(context.Context) error
-	startRoute := func() {
-		sourceMu.Lock()
-		defer sourceMu.Unlock()
-		if routeStarted || sourceClosed || root.Closed() {
-			return
-		}
-		stopRoute = startRouteReconciler(svcCtx)
-		routeStarted = true
-	}
-	// prepare-only boot 不提前启动会发起业务写的定时 owner；正式 Open 后再启动。
-	if runtime == nil || runtime.Request.RunPhase != databasepb.SqlWriterDrainRun_SQL_RELEASED {
-		startRoute()
-	}
+	// SOURCE 闭合:本服务的 SOURCE 只有 gRPC 入口这一个来源,没有后台发行者。关闭接纳、等在途 RPC 结束就闭合,
+	// 闭合摘要由 root 自己的计数算出(Session.SettledDigest)。上游都走 RELAY,见 dataServiceRelayMethods。
+	// 两步都幂等:排空控制线与 closeRelay 都会调到这里。
 	closeSource := func(ctx context.Context) error {
-		sourceMu.Lock()
-		defer sourceMu.Unlock()
-		if sourceClosed {
-			return nil
-		}
 		root.CloseAdmission()
-		var result error
-		if stopRoute != nil {
-			if err := stopRoute(ctx); err != nil {
-				root.Hold()
-				result = errors.Join(result, err)
-			}
-		}
-		result = errors.Join(result, root.Wait(ctx))
-		if result != nil {
-			return result
-		}
-		if svcCtx.RouteReconciler != nil && routeStarted && !sourceMerged {
-			digest, err := svcCtx.RouteReconciler.SettledDigest(ctx)
-			if err != nil {
-				return err
-			}
-			if err = root.MergeClosedSettled(digest); err != nil {
-				return err
-			}
-			sourceMerged = true
-		}
-		sourceClosed = true
-		return nil
+		return root.Wait(ctx)
 	}
 	var relayMu sync.Mutex
 	relayClosed := false
@@ -405,17 +299,14 @@ func runDataService(c config.Config) (runErr error) {
 	}()
 
 	// 连接池指标(mmorpg_sql_pool_*{sql_client="data_service"},G2b):一个 store 一个独立池,只报装配成功的,
-	// 每次抓取时现取 sql.DBStats。player_route 只在 db_first 时声明(redis 模式不装配 route store)。
+	// 每次抓取时现取 sql.DBStats。
 	// 不能放进 NewServiceContext:单测会多次构造 ServiceContext,默认注册表重复注册会报错。注册失败只记日志。
-	metrics.RegisterSQLPools(svcCtx.SQLPoolSamples, c.RouteStore.DBFirst())
+	metrics.RegisterSQLPools(svcCtx.SQLPoolSamples)
 
 	// HTTP 导出仅观察指标与并发安全的 DB.Stats，不派生业务写；不作为资产发行者 closure。
 	// 空地址保持禁用。
 	metrics.Start(c.MetricsListenAddr)
-	// 映射提交点的两组序列(route_register_total / route_publish_total)只在 db_first 时有数,同理预置为 0。
-	if c.RouteStore.DBFirst() {
-		metrics.PrimeRoute()
-	}
+	metrics.PrimeRoute()
 
 	// ── 热关停(killswitch)────────────────────────────────────────────
 	// data_service 是玩家权威数据的读写入口,真出事时最缺的是"秒级止血阀":
@@ -458,19 +349,17 @@ func runDataService(c config.Config) (runErr error) {
 	s.AddUnaryInterceptors(holdDataServiceFaults(root, relay, relayMethods))
 	// in-band 故障拦截器:本服务的 handler 一律 `return resp, nil`,把失败塞进
 	// 响应体的 `uint32 error_code` —— gRPC status 恒 OK,go-zero 自带的指标拦截器
-	// 会把每一次"Redis 挂了""快照库写不进去"都记成一次成功请求,监控上看不出
+	// 会把每一次"快照库写不进去"都记成一次成功请求,监控上看不出
 	// 任何比例变化,直到玩家数据已经丢了才有人发现。这层把响应体里的码读出来
 	// 定性:故障打日志 + 计数,业务拒绝只计数。它不改响应内容、不吞错,对调用方无感。
 	//
 	// 传 ErrorCodeClassifier 而**不是** TipClassifier,依据是 proto 与 handler 的
 	// 事实:data_service 走的是自己的私有码表(internal/constants/error_codes.go,
 	// 0..17),由 `uint32 error_code` 字段承载,与 friend/guild 那套 TipInfoMessage
-	// 码表完全无关 —— 数值区间还高度重叠(本表的 1 是 Redis 失败,tip 的 1 是
-	// kSuccess),混用会得到垃圾定性。serverbase 在没有 ErrorCodeClassifier 时
+	// 码表完全无关 —— 数值区间还高度重叠,混用会得到垃圾定性。serverbase 在没有 ErrorCodeClassifier 时
 	// 对私有码只敢记成 VerdictBizReject,所以这份集合必须由本服务显式给出。
 	//
 	// 归进"服务端内部故障"的码,逐个都有产码点为证:
-	//   ErrCodeRedis(1)          —— 名字展示缓存之类的 Redis 读失败
 	//   ErrCodeSnapshotDBError(11) —— 快照/流水 MySQL 出错,或 store 干脆没配起来
 	// 其余非 0 码刻意**不算**故障,免得刷出满屏假告警:
 	//   LockConflict(2) / VersionMismatch(3)  正常并发竞争,重试即可
@@ -491,13 +380,9 @@ func runDataService(c config.Config) (runErr error) {
 	// RegisterPlayerZone 的响应体是 emptypb.Empty,都没有 in-band 的 error_code 字段可读。它们的可见性由
 	// handler 里的 logx.Errorf 提供(每一条都带调用方身份),外加 grpcstats 那层按 gRPC code 统计的失败率。
 	// (22、24 随合服围栏删除,号不复用。)
-	// 映射持久化的 ErrCodeRouteStoreError(30)同理:只出现在 gRPC status message 里(Unavailable),这层看不到。
-	// 产码点有两类(2026-10-19 更正:此前写的「只用于 RegisterPlayerZone」已不成立):
-	//   - db_first 下 RegisterPlayerZone 的库这一段故障 —— 可见性来自 data_service_route_register_total{outcome="store_error"}
-	//     与 `[RegisterPlayerZone][db_first]` 的 ERROR 日志;
-	//   - 第 3 批读方门禁(ReadRequiresReady=true)下 GetPlayerHomeZone / BatchGetPlayerHomeZone 缓存不可信、回源全局库又失败
-	//     (routing.ErrRouteReadUnavailable)—— 可见性来自 data_service_route_read_total{result="sql_error"};
-	//   - 这两个 RPC 的合服映射解析失败(成环、缓存没装配)—— 可见性来自 handler 的 ERROR 日志。
+	// 归属映射的 ErrCodeRouteStoreError(30)同理:只出现在 gRPC status message 里(Unavailable),这层看不到。可见性来自
+	// data_service_route_register_total{outcome="store_error"} / data_service_route_read_total{result="error"}
+	// 与 `[RegisterPlayerZone]` / `[DataRoute]` 的 ERROR 日志。
 	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{
 		ErrorCodeClassifier: dataServiceFaultClassifier(),
 	}))
@@ -540,13 +425,8 @@ func runDataService(c config.Config) (runErr error) {
 	// node_id 要等端口 accept 后由注册 goroutine 打日志([NodeRegistry] ...);横幅只能给出路径与租约。
 	fmt.Printf("  c++ node:    DataServiceNodeService.rpc/zone/%d/node_type/%d (lease_ttl=%ds, advertised %s:%d)\n",
 		c.ZoneId, uint32(base.ENodeType_DataServiceNodeService), c.LeaseTTL, registrar.host, registrar.port)
-	fmt.Printf("  redis:       %s\n", c.MappingRedis.Host)
-	fmt.Printf("  route:       RouteStore.Mode=%s\n", c.RouteStore.Mode)
-	if c.RouteStore.DBFirst() {
-		fmt.Printf("  WARN:        %s\n", routeStoreDBFirstWarning)
-	}
-	fmt.Printf("  reconcile:   %s\n", routeReconcileBanner(c.RouteStore, svcCtx.RouteReconciler))
-	fmt.Printf("  read gate:   RouteStore.ReadRequiresReady=%t\n", c.RouteStore.ReadRequiresReady)
+	fmt.Printf("  name cache:  %s\n", c.NameCacheRedis.Host)
+	fmt.Printf("  route:       player_route on the global DB (merged_zone_refresh_sec=%d)\n", c.RouteStore.MergedZoneRefreshSec)
 	if c.MetricsListenAddr != "" {
 		fmt.Printf("  metrics:     %s/metrics\n", c.MetricsListenAddr)
 	}
@@ -610,9 +490,6 @@ func runDataService(c config.Config) (runErr error) {
 					return kafkaStart.WithReady(openCtx, raw, commit)
 				}}, nil
 			})
-		if result == nil && runtime != nil && runtime.Request.RunPhase == databasepb.SqlWriterDrainRun_SQL_RELEASED {
-			startRoute()
-		}
 		controlResult <- result
 	}()
 	shutdownRuntime := func(reason error) error {
@@ -630,8 +507,6 @@ func runDataService(c config.Config) (runErr error) {
 			if relay.Closed() {
 				return shutdownRuntime(nil)
 			}
-		case err := <-dangerNotice:
-			return shutdownRuntime(errors.Join(drainproof.ErrHold, err))
 		case err := <-kafkaOwner.Errors():
 			return shutdownRuntime(errors.Join(drainproof.ErrHold, err))
 		case err := <-registrar.failed:
@@ -654,7 +529,7 @@ func runMigration(c config.Config) int {
 		fmt.Fprintf(os.Stderr, "schema migration FAILED: %v\n", err)
 		return migrateExitCode(err)
 	}
-	fmt.Printf("schema migration OK: transaction_log, player_snapshot, rollback_audit_log synced from proto; route tables player_route, zone_merged_into, route_meta, route_reconcile in place (route_meta / route_reconcile row id=1 seeded if absent)\n")
+	fmt.Printf("schema migration OK: transaction_log, player_snapshot, rollback_audit_log synced from proto; route tables player_route, zone_merged_into, route_meta in place (route_meta row id=1 seeded if absent)\n")
 	return 0
 }
 
@@ -683,38 +558,6 @@ func runIdIssuerInit(c config.Config) int {
 		fmt.Println("id issuer init: at least one reservation record already exists, nothing changed")
 	}
 	return 0
-}
-
-// routeStoreDBFirstWarning 是 RouteStore.Mode=db_first 时启动日志与横幅里的那条 WARN(规格 d 节,M4)。
-// 仍要提醒的是:旧版 merge_zone 二进制会改写玩家映射(别名合服之后不再有这一步),一律禁用;切换与回退顺序按提案 §13.4。
-const routeStoreDBFirstWarning = "RouteStore.Mode=db_first: merge_zone 写模式只许别名合服版二进制(旧版会改写玩家映射,一律禁用);" +
-	"P4 解除冻结窗口之前不跑合服写模式;" +
-	"ArmReadyMarker 与读方开关按 proposal §13.4 切换,回退先关读方、再 Arm=false"
-
-// startRouteReconciler 返回真实停止新拍并 join 原任务的接缝；不把 bool Wait 或租约 TTL 当成功。
-func startRouteReconciler(svcCtx *svc.ServiceContext) func(context.Context) error {
-	rec := svcCtx.RouteReconciler
-	if rec == nil {
-		return func(context.Context) error { return nil }
-	}
-	metrics.PrimeRouteReconcile(rec.ArmEnabled())
-	stop := rec.StartWithReport(context.Background())
-	logx.Infof("[startup] route reconcile leader started: leader_id=%s arm_ready_marker=%t", rec.LeaderID(), rec.ArmEnabled())
-	return stop
-}
-
-// routeReconcileBanner 是启动横幅里对账 leader 那一行:装配了就是 on + 标识 + Arm 取值;没装配写明原因。
-// rec 取具体指针类型而不是接口:nil 的 *Reconciler 转成接口就不再等于 nil(「非 nil 接口包着 nil 指针」)。
-func routeReconcileBanner(rs config.RouteStoreConfig, rec *routereconcile.Reconciler) string {
-	switch {
-	case !rs.DBFirst():
-		return "off (redis mode)"
-	case !rs.Reconcile.On():
-		return "off (RouteStore.Reconcile.Enabled=false)"
-	case rec == nil:
-		return "NOT ASSEMBLED (see the [ServiceContext] errors above)"
-	}
-	return fmt.Sprintf("leader=on arm_ready=%t leader_id=%s", rec.ArmEnabled(), rec.LeaderID())
 }
 
 // migrateExitLockBusy 与 go/schemamigrate 的 ExitLockBusy 同值:迁移锁被另一个实例(另一个副本的启动路径,
@@ -1120,6 +963,7 @@ func dataServiceRelayMethods() map[string]bool {
 		"/data_service.DataService/RegisterPlayerZone":            true,
 		"/data_service.DataService/GetPlayerHomeZone":             true,
 		"/data_service.DataService/BatchGetPlayerHomeZone":        true,
+		"/data_service.DataService/GetMergedZones":                true,
 		"/data_service.DataService/ListPlayerSnapshots":           true,
 		"/data_service.DataService/QueryTransactionLog":           true,
 		"/data_service.DataService/AllocateIdSegment":             true,
@@ -1133,7 +977,6 @@ func dataServiceRelayMethods() map[string]bool {
 }
 func dataServiceFaultClassifier() serverbase.Classifier {
 	return serverbase.FaultCodeSet(
-		constants.ErrCodeRedis,
 		constants.ErrCodeSnapshotDBError,
 		constants.ErrCodeIdSegmentSourceError,
 		constants.ErrCodeIdSegmentExhausted,
@@ -1141,7 +984,7 @@ func dataServiceFaultClassifier() serverbase.Classifier {
 	)
 }
 
-// DS 的 SQL/Redis 不定结果常以 error_code 返回；不能将 Go error=nil 当作 SOURCE/RELAY 已成功。
+// DS 的 SQL 不定结果常以 error_code 返回；不能将 Go error=nil 当作 SOURCE/RELAY 已成功。
 func holdDataServiceFaults(root, relay *drainproof.Session, methods map[string]bool) grpc.UnaryServerInterceptor {
 	classify := serverbase.Options{ErrorCodeClassifier: dataServiceFaultClassifier()}
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {

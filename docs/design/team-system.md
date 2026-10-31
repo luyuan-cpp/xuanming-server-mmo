@@ -447,7 +447,7 @@ message JoinQueueRequest {
 | `team:player:<player_id>` | hash | `tid`(十进制，无队伍为 `"0"`)、`epoch`(十进制) | 24h,每次提交续期;**离队后不删除，只把 tid 置 0**,保留 epoch | **SharedRedis** | team、C++ scene | team(只通过 Lua) |
 | `team:invite:<player_id>` | zset | member=team_id,score=expire_at_ms | 每次 ZADD 后 `EXPIRE 3600` | **SharedRedis** | team(ListMyInvites) | team(提交 Lua 写;ListMyInvites 用 S_INVITE_LIST 剔除过期项、S_INVITE_PRUNE 条件删除，见 §C.5) |
 | `match:ticket:<player_id>` | hash | 既有字段(`queue.go:246-257`)加上 **`team_id`**(新增，只用于观测) | 既有:matched 用 `matchedTicketTTLFor(n)`(`queue.go:327-338`),ready 60s | MatchRedis | match | match |
-| `player:session:<id>` / `player:<id>:location` / `battle:lock:<id>` | 既有 | 既有 | 既有 | SharedRedis | team、match、scene | 各既有写者 |
+| `player:session:{<id>}` / `player:{<id>}:location` / `battle:lock:{<id>}` | 既有 | 既有 | 既有 | SharedRedis | team、match、scene | 各既有写者 |
 | `<PlayerAllData 全名>:<id>` | string | `PlayerAllData` pb(key 拼法见 `go/login/internal/logic/clientplayerlogin/player_class_backfill.go:26-27`) | 既有 | SharedRedis(login 的 `RedisClient` 本地是 127.0.0.1:6379,`go/login/etc/login.yaml:29-30`,与 match 的 `Redis` 同址) | team(只取展示字段，尽力而为) | login/db |
 
 **不新增**:扫描器用的集合、招募索引、幂等键。申请和邀请的正文都存在 `TeamRecord` 里(每队上限各 10 条);`team:invite:<pid>` 只是反查索引。
@@ -645,7 +645,7 @@ return 0
 1. 按 `bind` 执行 S_READ(模式见上)。
    - **未绑定**(bindCaller 且 `tidNow ≠ expectedTid`):不写，返回 `errNotBound`。server 层回 4013(LeaveTeam 回成功，见 §D.6),视图取调用者自己的一次"自由读"。
    - **记录不存在**(`ver == ""`):非建队操作**一律不进入 S_COMMIT**。bindCaller 且 `tidNow == tid` → S_HEAL_ORPHAN 并通知该玩家的 scene(§F.3),回 4013 + 空视图(LeaveTeam 回成功 + 空视图，与 §D.6 一致);bindTarget → 回 4013(RespondInvite 顺手 S_INVITE_PRUNE)。
-   - 再 `MGET player:session:<成员>` 取在线态，供惰性转让队长(§D.7)使用。
+   - 再按 slot 分组 `MGET player:session:{<成员>}` 取在线态，供惰性转让队长(§D.7)使用。
 2. 调纯函数 `rules.Apply(op, rec, nowMs, sessions, cfg)`,`nowMs` 就是 S_READ 返回的 Redis 时钟(§C.4 唯一时钟源),得到新记录、成员增减集、邀请增减集，或者一个 tip 错误。这一步没有 I/O,可以表驱动单测。
 3. 整理提交集合并提交:
    - **`ID := ID \ IA`**。清理过期邀请时被清掉的被邀请人进入 ID;同一次操作又重邀此人时他进入 IA,两者去重后只留在 IA。
@@ -697,12 +697,12 @@ return 0
 - 客户端调用 `Notify*` 方法：服务端实现为空操作，直接返回 Empty,不产生任何副作用。
 
 ### D.3 home zone 与 AllowCrossZone
-- **查询**:新增 `team.HomeZoneLookup` 接口，风格照 guild `home_zone.go` 的 `HomeZoneLookup`。实现调用 `BatchGetPlayerHomeZone`(`proto/data_service/data_service.proto:23`、`:112-118`),一次最多查 2 个 id。
-  - 返回 map 里**缺某个 id,视为未映射**(`go/data_service/internal/server/dataserviceserver.go:141-150`),回 `kTeamHomeZoneUnknown`。
-  - RPC 出错回 `kTeamInternal`。
+- **查询**:`team.HomeZoneLookup` 接口，风格照 guild `home_zone.go` 的 `HomeZoneLookup`。实现读全局库 `player_route.home_zone`(`team.AuthorityHomeZone`),一次最多查 2 个 id。2026-10-30 起不再调 `BatchGetPlayerHomeZone`:它回的是解析后的最终区,而记录要写原始区(别名合服,[总体方案 §7.1](./player-data-tidb-scaling-plan.md))。
+  - 返回 map 里**缺某个 id,视为未映射**,回 `kTeamHomeZoneUnknown`。
+  - 读库出错回 `kTeamInternal`。
   - 查不到 zone 时，不论开关是否打开都 **fail-closed**,因为 zone_id 必须写进记录。
-- 成员 zone 在入队时写进记录;队伍 zone 取建队者的 home zone。
-- **校验点**(仅 `AllowCrossZone=false` 时):ApplyJoinTeam、HandleApplication(approve)、InviteToTeam、RespondInvite(accept)。比较对方 zone 与 `rec.zone_id`,不一致回 `kTeamCrossZoneDenied`。
+- 成员 zone 在入队时写进记录;队伍 zone 取建队者的 home zone。记录里是原始区,合服不改写,给客户端的视图解析成最终区。
+- **校验点**(仅 `AllowCrossZone=false` 时):ApplyJoinTeam、HandleApplication(approve)、InviteToTeam、RespondInvite(accept)。对方 zone 与 `rec.zone_id` 两边解析到最终区再比,不一致回 `kTeamCrossZoneDenied`。
   - 审批、接受时用申请或邀请记录里存的 zone 再核一次，所以开关中途改成 false 也能拦住。
 - 开关从 true 改回 false 时，已有的跨区成员保留，只拦新增。
 - 开关靠 yaml 加滚动重启切换。混跑窗口里各实例判定可能不一致，窗口有界(J-13a)。
@@ -816,7 +816,7 @@ gRPC 回包按 message_id 先进先出匹配(`E:\work\mmorpg-client\Assets\Scrip
 | KickMember(expected=A, X) | X 被踢后又被重新批准入 A | 绑定成功(仍是 A)→ X 再次被踢。这是"队长在 A 队对 X 发出的踢人意图"被兑现，版本号和客户端视图都能看出来，接受 |
 
 ### D.7 队长离线惰性转让
-- **判定**:队长的 `player:session:<id>` **不存在**。session 不存在只可能是正常登出(MarkOffline 删 key)或租约到期(`go/player_locator/internal/logic/leasemonitor.go` 删 key 后通知 gate)。断线等重连期间状态是 `SESSION_STATE_DISCONNECTING`(`proto/player_locator/player_locator.proto:26-31`),key 还在，不算离线。所以 player_locator 的 30s 重连宽限天然就是转让宽限。
+- **判定**:队长的 `player:session:{<id>}` **不存在**。session 不存在只可能是正常登出(MarkOffline 删 key)或租约到期(`go/player_locator/internal/logic/leasemonitor.go` 删 key 后通知 gate)。断线等重连期间状态是 `SESSION_STATE_DISCONNECTING`(`proto/player_locator/player_locator.proto:26-31`),key 还在，不算离线。所以 player_locator 的 30s 重连宽限天然就是转让宽限。
 - **触发时机**:任何 `store.Mutate` 的 rule 阶段，以及 GetMyTeam、StartTeamMatch。**没有后台扫描器**(J-10)。
 - **新队长**:在线成员中 join_seq 最小的。没有在线成员就不转。
 - **离线队员**:v1 不自动移出，一直留在队里，直到被队长踢出或者队伍空闲 24h 过期(J-10)。
@@ -856,6 +856,7 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
        (2026-09-29 更正:matched TTL 公式加了 gatherCreateStageWorst 项(观战记录先写 + D82 换节点重试),
         现行位置 queue.go:342、:367-380(matchedTicketTTLFor)、:382-386(compensationTicketTTLFor),
         **5 人 = 66 + 25 + 10 = 101s**;公式见 cross-zone-matchmaking.md D5 更正、logic/team_battle.go:60-66)
+       (2026-10-31 更正:观战记录键已删,**5 人 = 53 + 25 + 10 = 88s**;下文故障表里的 101s、66s 按此读)
        - Go 序列化前防御性断言 set(roster) == set(rec.members);真正的保证是 ver CAS:
          预检期间任何名单变化(LeaveTeam、队外被邀请人自己 RespondInvite 接受)都会让 ver+1
        - {0} → 整轮重来;{-2} → 按 Mutate 规则修复后整轮重来;{1} → 推全员 MATCH_STARTED(match_state=STARTING)
@@ -1001,7 +1002,7 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 - `CheckFollowLeader(player, leaderId)`:把现有 `OnGetLeaderLocation`(`player_scene.cpp:100-183`)迁移过来并加守卫:
   - `IsInBattle` → 跳过;
   - **会话仍然活着才跟随**:`PlayerSessionSnapshotComp` 存在、`SessionMap()[snapshot.gate_session_id()] == playerId`(照 `player_lifecycle.cpp:290-301` 的判法)、实体没有 `UnregisterPlayer` 标记;否则跳过。队长扇出时，断线宽限期内仍绑在旧 session 上的成员实体不会拿旧 `gate_session_id` 去请求 SceneManager(否则会改写离线玩家的 location,还会产生一次无效的 gate 路由);
-  - **一跳读两个 key**:`MGET player:%llu:location battle:lock:%llu`(leaderId, self)。`battle:lock:<self>` 存在或读失败 → fail-closed 跳过(与 `IsInBattle` 取或)。原因：登录时新实体的 `InBattleComp` 由 `PlayerBattleSystem::OnPlayerEnterScene` 异步重建(`player_lifecycle.cpp:431`,先 GET 挂起结算 `player_battle.cpp:1425-1438`,再在 EVAL 回调里 emplace `:965-976`,共 2 跳),组队链(`:408` 先发出)现在是 3 跳才走到 `IsInBattle`,只是碰巧晚于冻结重建;以后任一方合并跳数，战斗在途的玩家重登就会被拉去队长场景。直接读锁不依赖这种巧合;
+  - **两跳读两个 key**:先 `GET battle:lock:{%llu}`(self),再 `GET player:{%llu}:location`(leaderId)。两把键属于不同玩家、不同 slot,不能放进一条 MGET(2026-10-31,[玩家态 Redis 集群化](redis-player-store-cluster.md) §5.3)。`battle:lock:{<self>}` 存在或读失败 → fail-closed 跳过(与 `IsInBattle` 取或)。原因：登录时新实体的 `InBattleComp` 由 `PlayerBattleSystem::OnPlayerEnterScene` 异步重建(`player_lifecycle.cpp:431`,先 GET 挂起结算 `player_battle.cpp:1425-1438`,再在 EVAL 回调里 emplace `:965-976`,共 2 跳),组队链(`:408` 先发出)现在是 3 跳才走到 `IsInBattle`,只是碰巧晚于冻结重建;以后任一方合并跳数，战斗在途的玩家重登就会被拉去队长场景。直接读锁不依赖这种巧合;
   - `loc.zone_id() != GetZoneId()` → 跳过，记指标 `cross_zone`;
   - `loc.node_id() != std::to_string(GetNodeInfo().node_id())` → 跳过，记指标 `cross_node`。`PlayerLocation.node_id` 是 string(`proto/scene_manager/storage.proto:10`、`:19`),值来自 `scene:<id>:node`(`enterscenelogic.go:611-612`),scene_manager 按 `strconv.FormatUint(..., 10)` 写十进制(`load_reporter.go:136`);
   - 场景相同或 `scene_id==0` → 返回;
@@ -1039,14 +1040,14 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 ## G. 在线态、展示信息与推送
 
 ### G.1 在线态
-- **唯一真值**:`player:session:<id>`,只有 `SESSION_STATE_ONLINE` 算在线(`push.go:41-44`)。
+- **唯一真值**:`player:session:{<id>}`,只有 `SESSION_STATE_ONLINE` 算在线(`push.go:41-44`)。
 - **不写进记录**(§11.6)。每次构建视图时，对成员和申请人批量 `MGET`;MGET 出错时整批按离线处理并记日志，照 guild online_status_resolver 的做法。
 - **刷新时机**:
   1. 每次构建视图;
   2. 队员进游戏后调 `GetMyTeam{notify_online:true}`;
   3. 客户端面板打开期间每 30s 调一次 `GetMyTeam`。
 - **不做离线主动推送**:player_locator 的租约到期事件只发给 gate(`leasemonitor.go:218-244`),没有业务服务可订阅的上下线事件。v2 可以让 player_locator 补发 presence 事件(J-27)。
-- `in_battle`:批量 MGET `battle:lock:<id>`,是咨询性判断。
+- `in_battle`:按 slot 分组批量 MGET `battle:lock:{<id>}`,是咨询性判断。
 
 ### G.2 展示信息
 
@@ -1505,7 +1506,7 @@ cd robot && go mod vendor && go build ./...
 | S-3 | major | regen 后看 git diff 查不出 Agones 块缺失，块早已被删 | **采纳** | `git show 6c4021ae5` 删除 `AcquireCreatePermitBlocking` 调用;全仓只剩 `agones_scene_lifecycle.h:134`、`.cpp:214`;`scene_handler.cpp:732-733` 注释过时 | §I.6 第 2 步改正向 grep 断言;§I.2 批 0 前置②;J-28 ④(批 0 前单独修复) |
 | S-4 | minor | trade 改 proto_gen.yaml 未生成，批 0 会混入他人产物、判据失真 | **采纳**(与 I-2 合并) | 同 I-2;本轮复核 trade 已生成未提交 | 同 I-2;另见下方"本轮自查"第 1 条 |
 | S-5 | minor | 跟随补检查挂在结算事件上，不覆盖取消/作废/reaper,丢弃事件时误触发 | **采纳** | `player_battle.cpp` 摘 InBattleComp 处:`:295`、`:366`(ClearBattleFreeze 内，调用点 `:750/:1285/:1295/:1540`)、`:1148`、`:1321`、`:1532`;`:1229-1237` battle_id 不匹配直接丢弃。评审给的 `:1328` 在工作区是 `:1321`(行号漂移) | §F.1 第 6 条;§F.2 "战斗冻结解除"行(`RemoveInBattleComp` 统一回调);§I.1 批 3 #7,`battle_event_handler.cpp` 不改;待核实清单删两项 |
-| S-6 | minor | 登录时"战斗中不跟随"碰巧依赖 hiredis 跳数 | **采纳** | `player_lifecycle.cpp:408` 先 HandleEnterScene、`:431` 后 OnPlayerEnterScene;`player_battle.cpp:1417-1431` GET 挂起结算 → RestoreBattleFreezeOnLogin,`:976` 在 EVAL 回调里 emplace | §F.2 `CheckFollowLeader` 一跳 `MGET location + battle:lock:<self>`,锁存在或读失败 fail-closed |
+| S-6 | minor | 登录时"战斗中不跟随"碰巧依赖 hiredis 跳数 | **采纳** | `player_lifecycle.cpp:408` 先 HandleEnterScene、`:431` 后 OnPlayerEnterScene;`player_battle.cpp:1417-1431` GET 挂起结算 → RestoreBattleFreezeOnLogin,`:976` 在 EVAL 回调里 emplace | §F.2 `CheckFollowLeader` 一跳 `MGET location + battle:lock:{<self>}`,锁存在或读失败 fail-closed |
 | S-7 | minor | 幂等早退跳过第 5 步;扇出不排除宽限期旧会话;多跳回调只判 valid | **采纳** | `player_scene.cpp:195-202` 早退在第 5 步之前、`:51` 只判 valid;`player_lifecycle.cpp:290-301` 已有 SessionMap 活会话判法;`enterscenelogic.go` samePlacement 重连 | §F.2 调用点移到 `EnterScene` 第 3 步之后 + s2s 补调;多跳回调通用规则(`valid && GuidForLog==playerId`);CheckFollowLeader 会话校验 |
 | S-8 | minor | RefreshTeammateAoi 只遍历自己的兴趣表，不对称条目得不到修正 | **采纳** | `interest.cpp:105-114` 满容量淘汰;`:145-160` UpgradePriority 找不到条目直接 return;`aoi.cpp:111-121` 两个方向分别判 CanSee | §F.4 按当前格+邻格遍历、双向修正、新增 `DowngradePriority`;§I.4 不对称用例 |
 | S-9 | minor | v1 gender 恒 0,客户端头像推导要求 Gender 1/2,永远"待同步" | **采纳** | `TeamWindow.cs:283-284` 条件、`:294` 待同步、`:347-348` 门派只看 ClassId | §G.2;§H.4 头像行;§B.1 字段注释;J-29(推荐 a:客户端放宽条件) |
@@ -1813,7 +1814,7 @@ cd robot && go mod vendor && go build ./...
 ### R.5 未解决问题
 
 1. **全部未编译**。R.2 的生成物名字靠读生成器模板和同类生成物推断,生成后可能要改引用方;C++ 没有任何语法检查工具可用。
-2. **跨节点 / 登录时序的跟随正确性只能靠端到端验证**:队长换图时 `player:<id>:location` 是否已被 scene_manager 写成新场景,决定队员的 MGET 读到的是新 scene_id 还是旧的;`HasLiveSession` 新守卫是否会误伤正常在线队员。都要等 team_smoke S6 实测。
+2. **跨节点 / 登录时序的跟随正确性只能靠端到端验证**:队长换图时 `player:{<id>}:location` 是否已被 scene_manager 写成新场景,决定队员的 MGET 读到的是新 scene_id 还是旧的;`HasLiveSession` 新守卫是否会误伤正常在线队员。都要等 team_smoke S6 实测。
 3. **StartTeamMatch 的预检不是全 ctx 化**:`TicketBlocked` 的票据读取与自愈用无 ctx 的 MatchRedis 调用,Redis 卡顿时可能超出 3500ms 预算。改它会触及 JoinQueue 共用路径,本次没动。预检逐成员串行,5 人约 20 次 Redis 往返,未压测。
 4. **EndMatch 与进程退出**:match 退出(包括 snowflake 失租强退)时不等后台 EndMatch,开战锁只能靠自然过期(5 人 101s;2026-09-29 更正,原 83s);110s 截止(2026-09-29 更正,原 90s;2026-10-12 起为锁时长 + 3.2s 截止,见 W.4)或持续故障时同样如此。这期间队伍显示 STARTING、回 TeamInMatch。
 5. **会话批量读失败时的错误码有误导性**:SessionLoader 整批失败时全员是 SessionUnknown,TransferLeader 回 TeamMemberOffline,实际是 Redis 故障。修正要在规则层区分 Unknown(核心层范围)。
@@ -2164,7 +2165,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
 | 4 | `player_battle.cpp` 的 `RemoveInBattleComp` 统一入口 | **已覆盖全部路径,无遗漏**。全仓 `remove<InBattleComp>` 只剩 `RemoveInBattleComp` 内部一处,5 个调用点(登录重建撤销 `:319`、`ClearBattleFreeze` `:392`、重复结算 `:1427`、离线挂起结算 `:1608`、备战到期 reaper `:1818`)全部走它;本轮 main 在同一函数里的改动(条件删锁、按 battle_id 条件摘)与组队改动是**叠加**关系,顺序刻意是"先发条件删锁、再摘组件",跟随链读 `battle:lock` 才不会读到删锁前的状态 |
 | 5 | `PlayerTeamRefreshEvent` 与"等待落点"位置 | **fail-closed,正确**。跨 zone 放行后 `player:{id}:location` 会变成 `{zone=目标, node_id="", scene_id=0}`(`changesceneutil.go` `placePlayerLocation` 的唯一空 node 来源),`refreshScene` 走 `SceneNodes.EntryOf(zone, "")` 必然查不到节点,按 AGENTS §7 #2 不发信号,不会误投到 node 0 |
 | 6 | DV-6 的前提 | **仍成立,但依据换了**,见 §决策表 DV-6 的 2026-09-18 补注 |
-| 7 | 组队的 zone 规则 vs 访客 | **不冲突**。组队按 `home_zone`(`team/homezone.go` 查 data_service),跟随按 `location.zone_id`;访客(人在目标 zone、home 仍是原 zone)队伍不散,但跟随会按 `reason=cross_zone` 跳过 —— 与 CZ-6"组队按 team D.3"、DV-6 一致 |
+| 7 | 组队的 zone 规则 vs 访客 | **不冲突**。组队按 `home_zone`(`team/homezone.go`,2026-10-30 起读全局库 `player_route`),跟随按 `location.zone_id`;访客(人在目标 zone、home 仍是原 zone)队伍不散,但跟随会按 `reason=cross_zone` 跳过 —— 与 CZ-6"组队按 team D.3"、DV-6 一致 |
 | 8 | `scene_manager_service.proto` 本轮新增字段 | **无号段冲突**。跨 zone 只加了 `EnterSceneResponse.player_id = 4`(该 message 原有 1-3),组队一个字段都没碰这个文件;组队的新号全在 `proto/team/team.proto`、`team_comp.proto`、`team_event.proto`、`message_id.txt`、`event_id.txt`。复核当时工作区里还有另一会话未提交的 `storage.proto` `PlayerLocation.pending_scene_conf_id = 6`,同样与组队无交集(C++ 侧 `player_team.cpp` 只读该 message 的 zone / node / scene 字段,加字段向后兼容) |
 
 ### 本轮所做的修改(手写代码,未编译)

@@ -14,25 +14,28 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/protobuf/proto"
+	"shared/playerredis"
+	"shared/redisslot"
 )
 
 // corruptProto 是一个被截断的 length-delimited 字段(声明 5 字节、实际只有 2 字节),
 // 任何 message 解析它都会报错。
 const corruptProto = "\x0a\x05ab"
 
-// newSplitSvcCtx 起两个独立的 miniredis:shared 充当 SharedRedis(契约 key 所在库),
+// newSplitSvcCtx 起两个独立的 miniredis:shared 充当 PlayerRedis(契约 key 所在库),
 // private 充当 MatchRedis。契约读如果误走 MatchRedis,就读不到 shared 里铺的数据,测试会失败。
 // 不设置 Kafka:本文件的推送用例都在在线判定处返回,不会走到 Kafka。
 func newSplitSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis, *miniredis.Miniredis) {
 	t.Helper()
 	shared := miniredis.RunT(t)
 	private := miniredis.RunT(t)
-	sharedRds := redis.MustNewRedis(redis.RedisConf{Host: shared.Addr(), Type: "node"})
+	playerRedis, err := playerredis.New(playerredis.Config{Addrs: []string{shared.Addr()}})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = playerRedis.Close() })
 	privateRds := redis.MustNewRedis(redis.RedisConf{Host: private.Addr(), Type: "node"})
 	return &svc.ServiceContext{
 		MatchRedis:  privateRds,
-		SharedRedis: sharedRds,
-		Redis:       sharedRds,
+		PlayerRedis: playerRedis,
 	}, shared, private
 }
 
@@ -55,19 +58,19 @@ func onlineSession(playerId uint64) *plpb.PlayerSession {
 
 // key 字面量是与 C++ scene / scene_manager / player_locator 共用的跨进程契约,钉死。
 func TestContractKeyLiterals(t *testing.T) {
-	require.Equal(t, "player:session:42", SessionKey(42))
-	require.Equal(t, "player:42:location", LocationKey(42))
-	require.Equal(t, "battle:lock:42", BattleLockKey(42))
+	require.Equal(t, "player:session:{42}", SessionKey(42))
+	require.Equal(t, "player:{42}:location", LocationKey(42))
+	require.Equal(t, "battle:lock:{42}", BattleLockKey(42))
 
 	const maxID = uint64(18446744073709551615)
-	require.Equal(t, "player:session:18446744073709551615", SessionKey(maxID))
-	require.Equal(t, "player:18446744073709551615:location", LocationKey(maxID))
-	require.Equal(t, "battle:lock:18446744073709551615", BattleLockKey(maxID))
+	require.Equal(t, "player:session:{18446744073709551615}", SessionKey(maxID))
+	require.Equal(t, "player:{18446744073709551615}:location", LocationKey(maxID))
+	require.Equal(t, "battle:lock:{18446744073709551615}", BattleLockKey(maxID))
 
-	// 按玩家分布的契约 key 不得带 hash tag。
+	// 玩家域键带玩家 id 的 hash tag,同一玩家同 slot(docs/design/redis-player-store-cluster.md §5.2)。
 	for _, key := range []string{SessionKey(1), LocationKey(1), BattleLockKey(1)} {
-		require.NotContains(t, key, "{", key)
-		require.NotContains(t, key, "}", key)
+		require.Contains(t, key, "{1}", key)
+		require.Equal(t, redisslot.PlayerSlot(1), redisslot.HashSlot(key), key)
 	}
 }
 
@@ -84,7 +87,7 @@ func TestParseSession(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestLoadSessionReadsSharedRedisOnly(t *testing.T) {
+func TestLoadSessionReadsPlayerRedisOnly(t *testing.T) {
 	svcCtx, shared, private := newSplitSvcCtx(t)
 	ctx := context.Background()
 	const pid = uint64(9001)
@@ -159,28 +162,6 @@ func TestLoadLocation(t *testing.T) {
 	require.NoError(t, shared.Set(LocationKey(pid), corruptProto))
 	_, err = LoadLocation(ctx, svcCtx, pid)
 	require.Error(t, err)
-}
-
-// BattleLockValue 读的是 scene 写锁的那个库(SharedRedis):读错库只会得到空串,等于永远「没锁」,
-// matcher 就再也认不出排队期间进了别的战斗的人。
-func TestBattleLockValueReadsSharedRedis(t *testing.T) {
-	svcCtx, shared, private := newSplitSvcCtx(t)
-	ctx := context.Background()
-
-	require.NoError(t, private.Set(BattleLockKey(7), "880002"))
-	value, err := BattleLockValue(ctx, svcCtx, 7)
-	require.NoError(t, err)
-	require.Empty(t, value, "只在 MatchRedis 的锁不算数")
-
-	require.NoError(t, shared.Set(BattleLockKey(7), "880002"))
-	value, err = BattleLockValue(ctx, svcCtx, 7)
-	require.NoError(t, err)
-	require.Equal(t, "880002", value)
-
-	shared.SetError("ERR injected failure")
-	_, err = BattleLockValue(ctx, svcCtx, 8)
-	require.Error(t, err, "读不到要报错,调用方 fail-closed 结束本轮")
-	shared.SetError("")
 }
 
 func TestIsBattleLocked(t *testing.T) {

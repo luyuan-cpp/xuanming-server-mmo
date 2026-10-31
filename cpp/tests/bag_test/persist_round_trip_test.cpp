@@ -513,10 +513,6 @@ protected:
         receipt->mutable_snapshot()->mutable_currency()->set_currency_type(1);
         receipt->mutable_snapshot()->mutable_currency()->set_amount(50);
 
-        auto *settled = db.mutable_settlement_ledger()->add_applied();
-        settled->set_battle_id((uint64_t{1} << 60) + 901);
-        settled->set_applied_at_ms(kAcceptedAtMs);
-
         auto *cursor = db.mutable_inbox_ledger()->add_cursors();
         cursor->set_domain(1);
         cursor->set_decided_through_seq(5);

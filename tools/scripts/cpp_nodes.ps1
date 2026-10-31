@@ -125,6 +125,7 @@ $LegacyPidFile = Join-Path $RepoRoot "bin\cpp_nodes.pid.json"
 # 否则每一次资产 RPC 都回 27008(AssetAuthFailed)。密钥值不写进仓库,见该文件的说明。
 . (Join-Path $ScriptDir "lib\assetop_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\account_directory_dev_secret.ps1")
+. (Join-Path $ScriptDir "lib\match_dev_secret.ps1")
 
 # ── Node catalogue ───────────────────────────────────────────────
 $NodeCatalogue = [ordered]@{
@@ -416,6 +417,9 @@ function Invoke-Start {
             $injectAssetOpSecrets = ($name -eq 'scene')
             $previousAccountDirectorySecrets = $null
             $previousAuthorityEnvironment=$null
+            # 全球匹配：探测与终局证明由 battle 签、match 验，两端要同一把；机房号决定 match 能不能把局放到这个节点。
+            # 值取自 run/secrets/match-dev.env，只在没设时兜底、不回显、finally 里还原；部署链（k8s_deploy.ps1）从不调用这里。
+            $previousMatchDevSecrets = $null
             try {
                 if ($name -eq 'scene') {
                     $previousAccountDirectorySecrets = Backup-AccountDirectoryDevSecrets -Service 'scene'
@@ -426,6 +430,10 @@ function Invoke-Start {
                     # 放在 try 外面就进不了下面的 finally，那一半改动会留在父 shell 里。
                     $prevAssetOpSecrets = Backup-AssetOpDevSecrets
                     Initialize-AssetOpDevSecrets -RepoRoot $RepoRoot | Out-Null
+                }
+                if ($name -eq 'battle') {
+                    $previousMatchDevSecrets = Backup-MatchDevSecrets -Service 'battle'
+                    Initialize-MatchDevSecrets -RepoRoot $RepoRoot -Service 'battle'
                 }
                 $childAuthorityEnvironment=@{MMORPG_MAINTENANCE_CONTROL_DIR=$control;MMORPG_MAINTENANCE_PREPARE_ONLY=$(if($PrepareOnly){'1'}else{$null})}
                 $previousAuthorityEnvironment=Enter-SqlWriterBootEnvironment -Environment $childAuthorityEnvironment
@@ -447,6 +455,7 @@ function Invoke-Start {
                 # 没注入过就没什么可还原的（$prevAssetOpSecrets 仍是 $null）。
                 if ($injectAssetOpSecrets) { Restore-AssetOpDevSecrets $prevAssetOpSecrets }
                 Restore-AccountDirectoryDevSecrets $previousAccountDirectorySecrets
+                Restore-MatchDevSecrets $previousMatchDevSecrets
                 Restore-SqlWriterBootEnvironment $previousAuthorityEnvironment
             }
 

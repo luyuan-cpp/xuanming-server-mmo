@@ -1,21 +1,112 @@
 #include "redis.h"
 
+#include <chrono>
 #include <cstdlib>
+#include <string>
+#include <utility>
 
 #include "muduo/net/EventLoop.h"
+#include "muduo/net/InetAddress.h"
 
+#include <node_config_manager.h>
+
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "player/system/dirty_save_stats.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_store_client.h"
 #include "player/system/release_fence.h" // [ReleaseFence] 汇总行
 #include "player/system/save_seq.h"      // [SaveSeq] 汇总行
 #include "thread_context/ecs_context.h"
-#include "thread_context/redis_manager.h"
 
 thread_local RedisSystem tlsRedisSystem;
 
 using namespace muduo;
 using namespace muduo::net;
+
+namespace
+{
+	// 部署配置 → 路由层参数(docs/design/redis-player-store-cluster.md §5.6)。配置错误写进 error 返回 false,调用方拒绝启动;
+	// error 不含口令。主机名只在这里解析一次:路由层只认 IP 字面量,运行期不做阻塞 DNS。解析失败同样拒绝启动,
+	// 进程重启会重新解析;带着连不上的种子起来,玩家域就永远不可用。
+	bool BuildPlayerRedisOptions(const GameConfig::PlayerRedisConfig& config, RedisClusterOptions& options, std::string& error)
+	{
+		if (config.mode() == "standalone")
+		{
+			options.mode = RedisClusterMode::kStandalone;
+		}
+		else if (config.mode() == "cluster")
+		{
+			options.mode = RedisClusterMode::kCluster;
+		}
+		else
+		{
+			error = "player_redis.mode must be standalone or cluster, got '" + config.mode() + "'";
+			return false;
+		}
+		if (config.seeds().empty() || (options.mode == RedisClusterMode::kStandalone && config.seeds().size() != 1))
+		{
+			error = "player_redis.seeds has " + std::to_string(config.seeds().size()) + " entries, mode " + config.mode() +
+					(options.mode == RedisClusterMode::kStandalone ? " needs exactly one" : " needs at least one");
+			return false;
+		}
+		for (const std::string& seed : config.seeds())
+		{
+			const std::optional<redis_cluster::HostPort> parts = redis_cluster::SplitHostPort(seed);
+			if (!parts)
+			{
+				error = "player_redis seed '" + seed + "' is not host:port";
+				return false;
+			}
+			std::string ip(parts->host);
+			if (!redis_cluster::IsIpLiteral(ip))
+			{
+				muduo::net::InetAddress resolved(parts->port);
+				if (!muduo::net::InetAddress::resolve(ip, &resolved))
+				{
+					error = "player_redis seed '" + seed + "' could not be resolved";
+					return false;
+				}
+				ip = resolved.toIp();
+			}
+			options.seeds.push_back(redis_cluster::NodeEndpoint{std::move(ip), parts->port});
+		}
+		options.connect.password = config.password();
+		// 玩家域只接受带 hash tag 的键(§5.1):控制域的键发到这个句柄当场拒绝,单实例开发时也一样。
+		options.hashTagPolicy = redis_cluster::HashTagPolicy::kAllKeys;
+		return true;
+	}
+
+	// 只打模式、种子和开关,不打口令。
+	void LogPlayerRedisOptions(const RedisClusterOptions& options)
+	{
+		std::string seeds;
+		for (const redis_cluster::NodeEndpoint& seed : options.seeds)
+		{
+			if (!seeds.empty())
+			{
+				seeds += ',';
+			}
+			seeds += seed.ToString();
+		}
+		LOG_INFO << "Player Redis: mode=" << (options.mode == RedisClusterMode::kCluster ? "cluster" : "standalone")
+				 << " seeds=" << seeds << " auth=" << (options.connect.password.empty() ? "off" : "on");
+	}
+
+	std::string FormatPlayerRedisStats(const RedisClusterStats& stats)
+	{
+		return "[PlayerRedis] rejected_by_guard=" + std::to_string(stats.rejectedByGuard) +
+			   " rejected_not_connected=" + std::to_string(stats.rejectedNotConnected) +
+			   " rejected_queue_full=" + std::to_string(stats.rejectedQueueFull) +
+			   " moved=" + std::to_string(stats.movedRedirects) +
+			   " ask=" + std::to_string(stats.askRedirects) +
+			   " backoff_retries=" + std::to_string(stats.backoffRetries) +
+			   " budget_exhausted=" + std::to_string(stats.budgetExhausted) +
+			   " null_replies=" + std::to_string(stats.nullReplies) +
+			   " aborted=" + std::to_string(stats.abortedCommands) +
+			   " topology_applied=" + std::to_string(stats.topologyApplied) +
+			   " topology_refresh_failures=" + std::to_string(stats.topologyRefreshFailures);
+	}
+} // namespace
 
 void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 {
@@ -28,10 +119,27 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 	shutdownBegun_ = false;
     loop_ = std::ref(*loop);
 
-    tlsRedis.SetReconnectCallback([]()
+	RedisClusterOptions playerRedisOptions;
+	std::string playerRedisError;
+	if (!BuildPlayerRedisOptions(tlsNodeConfigManager.GetGameConfig().player_redis(), playerRedisOptions, playerRedisError))
+	{
+		LOG_FATAL << "[PlayerRedis] refused to start: " << playerRedisError;
+	}
+	LogPlayerRedisOptions(playerRedisOptions);
+
+	// 任一主节点完成握手(首次与重连)都会进来,这时表里的条目不一定落在这个节点上。补发是幂等的:撤回是条件写,
+	// A2′ 与核实只重发没有在途的条目。主节点很多时一次切主或网络恢复会连着进来很多次,所以限成每秒一轮,
+	// 没赶上的由 1s 定时器接着发,正确性不靠这里抢的这点时间。路由层回调前会拷一份函数对象,限速状态放在 shared_ptr 里才留得住。
+    tlsPlayerRedis.SetReconnectCallback([lastSweep = std::make_shared<std::chrono::steady_clock::time_point>()](const redis_cluster::NodeEndpoint& node)
                                   {
-        LOG_INFO << "Redis reconnected, retrying pending handoff marks";
-        // 补发没确认的 handoff 标记撤回。撤回可能被 Redis 以 ERROR 拒掉(只读副本 / 正在加载数据集),
+        const auto now = std::chrono::steady_clock::now();
+        if (now - *lastSweep < std::chrono::seconds(1))
+        {
+            return;
+        }
+        *lastSweep = now;
+        LOG_INFO << "Player Redis node " << node.ToString() << " ready, retrying pending handoff marks";
+        // 补发没确认的 handoff 标记撤回。撤回可能以空应答告终(只读副本 / 正在加载数据集,路由层预算耗尽),
         // 所以正确性**不**靠它,靠的是 PlayerLifecycleSystem::IsSceneChangeBusy:撤回没确认之前**本节点**不替该玩家发 EnterScene。
         // (这道闸管不到不经本节点的跨节点落点,例如玩家断线后重登落到别的节点;那条路在撤回确认前
         // 仍只有标记 TTL 兜底,见 handoff_mark_withdraw.h 的契约说明。)
@@ -39,10 +147,11 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // 断线期间失败、等重发的 A2′(载入前"先核归属再删"继承来的 handoff 标记)也立刻补发。闸门只认 A2′ 的应答(见 exit_release_mark.h)。
         PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
         // 疏散 / 排空改派的待确认表(relocate_confirm.h):断线期间没读到、在等重试的核实立刻重发(不绕过 settle 等待)。
-        // 核实读与随后的凭证补写走这条不重放的连接,是为了补写不被推迟到任意时刻(R7);
-        // 正确性**不**靠这条 FIFO(2026-10-23,r2-lc#2):补写在 Lua 里原子复核 owner_epoch 与条目缓存的原 H
-        // (save_barrier.handoff_fence),之后的登记已换掉原件时返回 -2、不写。表空时直接返回。
+        // 核实读与随后的凭证补写走不重放的句柄,是为了补写不被推迟到任意时刻(R7);
+        // 正确性**不**靠命令顺序(2026-10-23,r2-lc#2):补写在 Lua 里原子复核 owner_epoch 与条目缓存的原 H
+        // (handoff_fence),之后的登记已换掉原件时返回 -2、不写。表空时直接返回。
         PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/true); });
+    tlsPlayerRedis.Connect(loop, std::move(playerRedisOptions));
 
     // 协调用途的 Redis 写(继承标记清理、handoff 标记撤回、改派核实)的 1s 重试节拍。
     static constexpr double kRetryIntervalSec = 1.0;
@@ -64,8 +173,10 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     static constexpr double kQueueSnapshotIntervalSec = 30.0;
     // lastEnterFence:上一次打出 [EnterFence] 时的计数(只在本定时器里读写,逻辑线程上;初值全 0 = 第一次有计数就打)。
     // lastReleaseFence:上一次打出 [ReleaseFence] 时的计数(同上,只在本定时器里读写)。
+    // lastPlayerRedis:上一次打出 [PlayerRedis] 时的计数(同上)。
     snapshotTimerId_ = loop->runEvery(kQueueSnapshotIntervalSec, [lastEnterFence = enter_fence_stats::Snapshot{},
-                                                                  lastReleaseFence = release_fence_stats::Snapshot{}]() mutable
+                                                                  lastReleaseFence = release_fence_stats::Snapshot{},
+                                                                  lastPlayerRedis = RedisClusterStats{}]() mutable
                                       {
         // Piggyback on the same 30s tick so a fresh timer isn't needed
         // just for two counters. Format is parsed by
@@ -208,6 +319,24 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 LOG_INFO << line;
             }
             lastReleaseFence = releaseFenceStats;
+        }
+        // 玩家域路由层的累计计数(redis-player-store-cluster.md §8.1 观察项),有变化才打。单独一行、单独前缀,不动上面几行的解析格式。
+        // 这一拍里拒绝类或预算耗尽有增长时升 WARN:这些命令没有执行,调用方走的是各自的失败路径。重定向是迁移时的常态,只打 INFO。
+        const RedisClusterStats playerRedisStats = tlsPlayerRedis.stats();
+        if (playerRedisStats != lastPlayerRedis)
+        {
+            const bool alarming = playerRedisStats.rejectedByGuard > lastPlayerRedis.rejectedByGuard ||
+                                  playerRedisStats.rejectedQueueFull > lastPlayerRedis.rejectedQueueFull ||
+                                  playerRedisStats.budgetExhausted > lastPlayerRedis.budgetExhausted;
+            if (alarming)
+            {
+                LOG_WARN << FormatPlayerRedisStats(playerRedisStats);
+            }
+            else
+            {
+                LOG_INFO << FormatPlayerRedisStats(playerRedisStats);
+            }
+            lastPlayerRedis = playerRedisStats;
         } });
     snapshotTimerActive_ = true;
 
@@ -218,7 +347,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     // playerId % interval == 当前槽位 的玩家 —— 每个玩家每个周期仍然被存
     // 恰好一次,但单次回调的工作量是 N/interval 而不是 N。
     // 旧实现每 interval 秒在**单个回调里**全量遍历 playerList 逐个
-    // SavePlayerToRedis(每次都是整份 PlayerAllData 的 marshal + 脏比较),
+    // SavePlayer(每次都是整份 PlayerAllData 的 marshal + 脏比较),
     // 回调跑在游戏 tick 同一个 EventLoop 线程上:几千在线就是每 300 秒一次
     // 数百毫秒级的全服停顿,World::Update 的固定步长累加器 clamp 在 1s,
     // 超过即直接丢模拟时间。注释里 "10k players over 300s = ~33 saves/sec"
@@ -256,7 +385,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 {
                     continue;
                 }
-                PlayerLifecycleSystem::SavePlayerToRedis(player);
+                PlayerLifecycleSystem::SavePlayer(player);
                 ++saved;
             }
             // 只在整个周期的最后一个槽位打一条汇总,避免每秒刷日志。
@@ -296,7 +425,8 @@ void RedisSystem::Shutdown()
 {
 	BeginShutdown();
 
-	// 先取消定时器,再清 RedisManager 回调。
+	// 先取消定时器,再清玩家域句柄的回调。只在 Initialize 跑过、还没 Shutdown 时碰句柄:析构走到这里时
+	// tlsPlayerRedis 可能已先析构(它比 tlsRedisSystem 晚构造)。连接本身由 Node 的收尾与 scene 入口的兜底 Shutdown 释放。
     if (loop_.has_value())
     {
         muduo::net::EventLoop &loop = loop_->get();
@@ -310,8 +440,8 @@ void RedisSystem::Shutdown()
             loop.cancel(snapshotTimerId_);
             snapshotTimerActive_ = false;
         }
+        tlsPlayerRedis.SetReconnectCallback({});
     }
-	tlsRedis.SetReconnectCallback({});
 	loop_.reset();
 }
 

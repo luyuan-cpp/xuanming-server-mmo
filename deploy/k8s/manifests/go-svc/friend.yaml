@@ -6,7 +6,7 @@
 # 路由服对 FriendNodeService 不做 zone 过滤。go/friend/etc/friend.yaml 里的 ZoneId 只影响
 # etcd 注册路径,不是业务分区键。
 # k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
-# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-friend-config 由脚本生成。
+# infra-up / all-up 部署:ConfigMap 与迁移 Job 在基础设施阶段,进程排在第一个 zone 的 data-service 之后(见 k8s_deploy.ps1 的 Apply-GlobalGoSvcManifests)。ConfigMap go-svc-friend-config 由脚本生成。
 #
 # 库与表(port-decisions D-14):
 #   - 独占库 mmorpg_friend 由 mysql-init-sql ConfigMap 带入的 deploy/mysql-init/00_init_zone_dbs.sql 预建 + GRANT appuser

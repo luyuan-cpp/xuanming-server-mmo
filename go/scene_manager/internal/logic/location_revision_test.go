@@ -11,6 +11,7 @@ import (
 	smpb "proto/scene_manager"
 	"scene_manager/internal/svc"
 	"shared/ownerepoch"
+	"shared/redisslot"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func TestEnterSceneCurrentSQLRevisionPrecedesOldDoneAndAllProjectionWrites(t *te
 	sc, mr := newTestSvcCtx(t, "revision-test")
 	sc.RoleDirectory = testRoleDirectory(2)
 	const player = uint64(99001)
-	key := fmt.Sprintf("enter_scene:dedup:%d:old-success", player)
+	key := redisslot.EnterSceneDedupKey(player, "old-success")
 	mr.Set(key, "done:old-response")
 	before := mr.Keys()
 	out, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&smpb.EnterSceneRequest{PlayerId: player, OwnerRevision: 1, RequestId: "old-success"})
@@ -109,7 +110,7 @@ func TestLocationRevisionRepairRequiresExactRawAndTagAndKeepsEpochFloor(t *testi
 	require.False(t, mr.Exists(locationRevisionKey(player)))
 	require.Equal(t, "9", revisionFixtureValue(t, mr, ownerepoch.OwnerEpochKey(player)))
 	require.Equal(t, revisionText(2), revisionFixtureValue(t, mr, locationRevisionFloorKey(player)))
-	require.Equal(t, "1", revisionFixtureValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, scene)))
+	require.Equal(t, "1", sceneMemberCount(mr, scene))
 }
 
 func TestUnknownLocationRevisionIsNeverFilledFromCurrentDirectory(t *testing.T) {
@@ -136,14 +137,14 @@ func TestLeaveSceneInvalidOriginalRevisionSidecarCannotAcknowledgeCleanup(t *tes
 			}
 			mr.Set(locationRevisionKey(player), tag)
 			beforeKeys := mr.Keys()
-			beforeCount := revisionFixtureValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, scene))
+			beforeCount := sceneMemberCount(mr, scene)
 			out, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(&smpb.LeaveSceneRequest{PlayerId: player, SceneId: scene})
 			require.Nil(t, out, "新标签损坏不是旧PB毒数据，不得成功ACK清理")
 			require.ErrorIs(t, err, errLocationRevisionProjectionCorrupt)
 			require.Equal(t, beforeKeys, mr.Keys())
 			require.Equal(t, raw, revisionFixtureValue(t, mr, getPlayerLocationKey(player)))
 			require.Equal(t, tag, revisionFixtureValue(t, mr, locationRevisionKey(player)))
-			require.Equal(t, beforeCount, revisionFixtureValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, scene)))
+			require.Equal(t, beforeCount, sceneMemberCount(mr, scene))
 			require.Equal(t, "9", revisionFixtureValue(t, mr, ownerepoch.OwnerEpochKey(player)))
 		})
 	}

@@ -36,7 +36,7 @@ type GuildLogic struct {
 	repo           *data.GuildRepo
 	ids            IDMinter
 	onlineResolver *OnlineStatusResolver
-	// homeZones 为 nil = 没配 DataServiceRpc:内部调用照常,客户端来源的请求一律拒绝
+	// homeZones 为 nil = 没接线(只有单测,生产没有 DataServiceRpc 拒绝启动):内部调用照常,客户端来源的请求一律拒绝
 	// (没有归属 zone 的真源就不能猜玩家属于哪个区)。
 	homeZones HomeZoneLookup
 	// notifier 是帮会变更推送的唯一出口,默认 NoopNotifier{}(未配 Kafka 或单测)。
@@ -50,7 +50,7 @@ type GuildLogic struct {
 	// 与 notifier 同一纪律:只在 MySQL 提交之后被调用,失败绝不影响 RPC 结果。
 	syncBumper GuildSyncBumper
 	// playerNames 批量取成员 / 帮主的展示名(player_name_resolver.go)。
-	// nil = 没配 DataServiceRpc 或单测:名字一律留空,不 panic。只经 resolveNames 访问。
+	// nil = 单测:名字一律留空,不 panic。只经 resolveNames 访问。
 	playerNames PlayerNameResolver
 	// economy 是捐献 / 升级 / 商店的依赖(economy_logic.go 的 EconomyDeps),经 WithEconomy 注入。
 	// nil = 未接线:五个经济 RPC 一律回 codes.Unavailable,其余 RPC 不受影响。
@@ -106,7 +106,7 @@ func WithApplicationQuota(q *ApplicationQuota) Option {
 
 // WithPlayerNames 注入展示名解析器;不传或传 nil = 名字一律留空(90-consistency.md Y-02:
 // 依赖注入只保留函数式 Option,03-names.md 正文里的 SetPlayerNameResolver 不再使用)。
-// 生产由 guild.go 在配了 DataServiceRpc 时传 NewDataServicePlayerNames。
+// 生产由 guild.go 传 NewDataServicePlayerNames。
 //
 // 这里的判空只挡得住 nil **接口**;装着 nil 指针的接口由 DataServicePlayerNames.BatchResolve
 // 自己的 nil 接收者分支兜住。
@@ -143,7 +143,8 @@ func tipErr(id uint32, msg string) *base.TipInfoMessage {
 // 客户端来源(带 gate 会话)的请求:身份取会话里的 player_id,zone 取 data_service 的
 // 归属 zone,请求体里的 player_id / zone_id 一律不信。帮会按 zone 隔离 —— 只能在自己的区
 // 建帮,只看得见、加得进自己区的帮,只看自己区的榜;别区的帮会对客户端表现为「不存在」。
-// 帮名仍全局唯一(uk_guild,按 name_norm):合服时两区的帮会直接合并,不需要改名。
+// 帮名仍全局唯一(uk_guild,按 name_norm):合服时两区的帮会直接归到同一个最终区,不需要改名。
+// 公会行记的是建帮时的原始区,合服不改写它,同区比较一律经 repo 解析到最终区(GuildRepo.SameZone)。
 //
 // 内部调用(无会话:GM、运维工具、其它服务)沿用请求体字段,行为与接入客户端之前一致。
 // B2 新增的管理 / 申请 RPC **不开**内部调用口(协议里没有 player_id 字段),见 clientWrite。
@@ -181,9 +182,9 @@ func (l *GuildLogic) clientZone(ctx context.Context, playerID uint64) (uint32, *
 	return zoneID, nil, nil
 }
 
-// visibleIn:zoneID 为 0 表示不按 zone 过滤(内部调用)。
-func visibleIn(guild *data.GuildData, zoneID uint32) bool {
-	return zoneID == 0 || guild.ZoneID == zoneID
+// visibleIn:zoneID 为 0 表示不按 zone 过滤(内部调用)。两边都解析到最终区再比。
+func (l *GuildLogic) visibleIn(guild *data.GuildData, zoneID uint32) bool {
+	return zoneID == 0 || l.repo.SameZone(guild.ZoneID, zoneID)
 }
 
 // normalizeGuildName 去掉首尾空白后校验帮名。帮名进全局唯一索引并展示给所有人,
@@ -342,13 +343,13 @@ func (l *GuildLogic) GetGuild(ctx context.Context, req *pb.GetGuildRequest) (*pb
 		return nil, err
 	}
 	// 别区的帮会与不存在的帮会同一答复,不向客户端透露"它在别的区"。
-	if guild == nil || !visibleIn(guild, visibleZone) {
+	if guild == nil || !l.visibleIn(guild, visibleZone) {
 		return &pb.GetGuildResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
 	}
 	return &pb.GetGuildResponse{Guild: l.guildInfoFor(ctx, guild, viewerOf(who))}, nil
 }
 
-// GetPlayerGuild 不按 zone 过滤:玩家自己的帮会永远看得见(合服会把帮会与归属映射一起搬走)。
+// GetPlayerGuild 不按 zone 过滤:玩家自己的帮会永远看得见(合服之后人和帮都解析到同一个最终区)。
 //
 // 客户端来源改走 ResolvePlayerGuild:它在"缓存说没入帮"和"快照里没有本人"两种情况下
 // 用 MySQL 复核一次。不复核的话,一次失败的缓存失效会让刚入帮的玩家在 30 分钟里
@@ -497,8 +498,7 @@ func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildReque
 		return &pb.DisbandGuildResponse{ErrorMessage: tip}, err
 	}
 
-	// 清榜**只能**用事务内读到的 zone。缓存里的 ZoneID 在合服之后会整整一个 TTL 指向源区,
-	// 按它 ZREM 会去删一个空 ZSET,把条目永久留在目标区榜上(榜上出现查不到名字的幽灵帮会)。
+	// 清榜用事务内读到的 zone:行删掉之后再也读不到权威值。留下的条目就是榜上一个查不到名字的幽灵帮会。
 	// 失败可容忍:RebuildRanks 会自愈。
 	if err := l.repo.RemoveGuildFromRank(ctx, guildID, res.ZoneID); err != nil {
 		logx.Errorf("remove guild %d (zone %d) from rank: %v", guildID, res.ZoneID, err)
@@ -570,7 +570,7 @@ func (l *GuildLogic) UpdateGuildScore(ctx context.Context, req *pb.UpdateGuildSc
 	// DisbandGuild 清榜时只按事务内读到的 zone 调 RemoveGuildFromRank,若这里允许
 	// req.ZoneId 把分数写进别的 zone 的 ZSET,解散后那个条目将永久残留
 	// (榜单上出现查不到名字的幽灵公会)。
-	if req.ZoneId > 0 && req.ZoneId != guild.ZoneID {
+	if req.ZoneId > 0 && !l.repo.SameZone(req.ZoneId, guild.ZoneID) {
 		logx.Errorf("UpdateGuildScore: requested zone %d ignored, guild %d belongs to zone %d",
 			req.ZoneId, req.GuildId, guild.ZoneID)
 	}
@@ -753,7 +753,7 @@ func (l *GuildLogic) toProtoGuild(ctx context.Context, g *data.GuildData) *pb.Gu
 		Announcement: g.Announcement,
 		CreateTimeMs: g.CreateTimeMs,
 		MaxMembers:   g.MaxMembers,
-		ZoneId:       g.ZoneID,
+		ZoneId:       l.repo.FinalZone(g.ZoneID), // 客户端看到的是最终区,和玩家自己的归属区同一口径
 		Funds:        g.Funds,
 	}
 	officerCount := uint32(0)

@@ -382,7 +382,7 @@ Java 版:本节只记录共享设计原则及 C++/Go 当前源码,对应 Java �
 | data_service 读 `PlayerAllData:{<pid>}` 解账本(`GetPlayerAssetOpLedger`、`GetPlayerInboxLedger`) | guild / trade / mail 资产通道与 player_inbox 对账判断「已见 / 未见」[C]:`persisted_player_database.go` | 同上;data_service 已有在 TiDB 里跨 schema 读两张玩家行的代码 [C]:`account_role_sql_proof.go` |
 | `task:result:<id>` 读结果 | 玩家读 DBTask 的回包,载荷是整条消息,TTL 5 分钟 [C]:`key_ordered_consumer.go` | 加载改直读后不再承载玩家数据;其他读任务是否还用它另定 |
 | `battle:settlement:pending:<pid>` 结算原件(伴生的 `battle:settlement:pending:id:<pid>`、积压索引 `battle:settlement:pending:index`、落库标记 `battle:settlement:staged:<battle_id>` 是协调键,随原件一起去留) | battle 先写再投递,scene 应用并按 battle_id 销账后才删,不过期;投递整条丢失时,下次登录靠它补发。值是要并入玩家存档的奖励原件 [C]:`cpp/libs/services/battle/settlement/settlement_outbox.h`、`player_battle.cpp` | 去向是 match 写 SQL 原件 + player_inbox(TiDB)入箱的新路径(工作区未提交)。两条路径各覆盖哪些对局核实之前,旧路径不删 |
-| `match:rating:<pid>`(及入账标记 `match:rating:applied:<battle_id>`) | `GlobalMatch.Enabled=false` 时玩家评分只存在 MatchRedis,无 TTL;这个分支只有 dev / test 档允许,非 dev / test 档强制开启,评分走 TiDB `match_rating` / `match_rating_applied` [C]:`go/match/internal/logic/keys.go`、`rating.go`,`go/match/internal/authority/rating.go`,`go/match/internal/svc/servicecontext.go` | 删除 Redis 分支,评分只走 TiDB |
+| `match:rating:<pid>`(及入账标记 `match:rating:applied:<battle_id>`) | **2026-10-30 更正:本地模式已删除,这两个键不再存在,评分只走 TiDB。以下为原文。** `GlobalMatch.Enabled=false` 时玩家评分只存在 MatchRedis,无 TTL;这个分支只有 dev / test 档允许,非 dev / test 档强制开启,评分走 TiDB `match_rating` / `match_rating_applied` [C]:`go/match/internal/logic/keys.go`、`rating.go`,`go/match/internal/authority/rating.go`,`go/match/internal/svc/servicecontext.go` | 删除 Redis 分支,评分只走 TiDB |
 | data_service 字段 KV `player:{<id>}:<field>`、`__version`、`__fields`、`__lock` | 只存在于 Redis,没有生产写者;GM 快照、回档建在它上面 [C]:`data_logic.go`、`snapshot_logic.go`、`rollback_logic.go` | 删除,或把 GM 能力重建在 TiDB 玩家行上 |
 
 **B. 新设计时逐项裁定**
@@ -398,10 +398,10 @@ Java 版:本节只记录共享设计原则及 C++/Go 当前源码,对应 Java �
 
 **C. 继续用 Redis(不受本条影响)**
 
-- 归属与交接:`player:{<pid>}:owner_epoch` 的铸造、`player:<pid>:handoff`、`location` / `location_revision` / `location_revision_floor`、离场释放等待。
+- 归属与交接:`player:{<pid>}:owner_epoch` 的铸造、`player:{<pid>}:handoff`、`location` / `location_revision` / `location_revision_floor`、离场释放等待。
 - 会话与登录:`player:session:*`、`player:leases*`、`player_locker:*`、`login_generation`、进场去重。
 - 战斗:`battle:lock:*`、`battle:ctx:*`(值是 `InBattleComp` 的对局状态,不在玩家表里)。
-- 落地恢复摘要 `player:<pid>:sync_digest`:代次加各域变更计数,只是提示,丢失或过期时客户端全量拉一次。
+- 落地恢复摘要 `player:{<pid>}:sync_digest`:代次加各域变更计数,只是提示,丢失或过期时客户端全量拉一次。
 - 排队与限流、场景路由与节点负载、选主锁。
 - Pub/Sub:`assetop:wake`、`task:result:notify*`。
 - 各服务私有 Redis 的协调用途:chat / friend / guild / match 的限流、配额、排队、选主锁等(rank 已全部走 SQL,不用 Redis;match 评分见表 A,非权威读缓存见表 B)。

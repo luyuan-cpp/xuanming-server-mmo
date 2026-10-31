@@ -16,10 +16,8 @@
 #include "player/comp/player_persist_carry_comp.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/save_seq.h"
-#include "player/system/save_seq_floor.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
-#include "proto/common/component/battle_settlement_ledger_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -49,7 +47,6 @@ using save_seq::NextSaveSeq;
 using save_seq::ObserveResult;
 using save_seq::ObserveUpperBound;
 using save_seq::SaveSeqAllocator;
-using save_seq::SaveSeqFloorFrom;
 using save_seq::WallClockFloor;
 
 // 用例里的「现在」:固定的毫秒时间戳(2026-10-16 前后),不读墙钟。
@@ -205,29 +202,6 @@ TEST(SaveSeq, PersonalFloorSaturates)
     EXPECT_EQ(ApplyPersonalFloor(kMaxSaveSeq, 0).value_or(0), kMaxSaveSeq);
 }
 
-TEST(SaveSeq, FloorFromAllData)
-{
-    PlayerAllData empty;
-    EXPECT_EQ(SaveSeqFloorFrom(empty), 0u);
-
-    PlayerAllData warm; // 父键存在:只有 last_save_seq
-    warm.set_last_save_seq(900);
-    EXPECT_EQ(SaveSeqFloorFrom(warm), 900u);
-
-    PlayerAllData cold; // 父键缺失、login 从子表拼出来:只有子表围栏,两张表取大
-    cold.mutable_player_database_data()->set_fence_save_seq(700);
-    cold.mutable_player_database_1_data()->set_fence_save_seq(800);
-    EXPECT_EQ(SaveSeqFloorFrom(cold), 800u);
-
-    PlayerAllData mixed;
-    mixed.set_last_save_seq(500);
-    mixed.mutable_player_database_data()->set_fence_save_seq(1200);
-    mixed.mutable_player_database_1_data()->set_fence_save_seq(1100);
-    EXPECT_EQ(SaveSeqFloorFrom(mixed), 1200u) << "三路取 max,不看 epoch";
-    mixed.mutable_player_database_data()->set_fence_save_seq(0);
-    EXPECT_EQ(SaveSeqFloorFrom(mixed), 1100u);
-}
-
 TEST(SaveSeq, PersistedPayloadCurrentIgnoresSeq)
 {
     PlayerAllData current;
@@ -236,10 +210,6 @@ TEST(SaveSeq, PersistedPayloadCurrentIgnoresSeq)
 
     PlayerAllData landed = current;
     landed.set_last_save_seq(4242);
-    landed.mutable_player_database_data()->set_fence_owner_epoch(3);
-    landed.mutable_player_database_data()->set_fence_save_seq(4242);
-    landed.mutable_player_database_1_data()->set_fence_owner_epoch(3);
-    landed.mutable_player_database_1_data()->set_fence_save_seq(4242);
     EXPECT_TRUE(player_exit::IsPersistedPayloadCurrent(landed, current)) << "只差存盘元数据:判收敛";
     EXPECT_EQ(landed.last_save_seq(), 4242u) << "入参不改";
 

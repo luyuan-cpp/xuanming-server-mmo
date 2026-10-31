@@ -30,8 +30,8 @@
           when | mapped unmapped unconfig error | hz_n hz_avg hz_p99 | rl_n rl_avg rl_p99
 
       [D1 data_service home-zone reads(*_ds,:9260):GetPlayerHomeZone / BatchGetPlayerHomeZone 服务端耗时与结果、
-       每批 id 数、读方门禁回源计数]
-          when | h_ok h_nf h_err h_avg h_p99 | b_ok b_nf b_err b_avg b_p99 | ids/b | rr_cache rr_sql rr_sqlerr
+       每批 id 数、player_route 的 SQL 读结局]
+          when | h_ok h_nf h_err h_avg h_p99 | b_ok b_nf b_err b_avg b_p99 | ids/b | rr_ok rr_nf rr_err
 
       [D2 data_service account directory RPC(*_ds):每个快照 × 每个账号目录 RPC 一行]
           when | rpc | n avg p99 | nf rej err
@@ -46,14 +46,16 @@
       [P3 Player store row bytes(db_player_store_row_bytes,已提交的行):每组 n / 均值 / p99,单位字节]
           when | hot_* | asset_* | growth_* | profile_* | legacy1_*
 
-      [P4 DB pools and placement(db_redis_pool_*、mmorpg_sql_pool_*、db_placement_*、db_store_cooldown_stores)]
-          when | rpool_wait rpool_tmo | sql_in_use sql_wait sql_wait_s | open_stores open_err cooldown
+      [P4 DB pools and placement(mmorpg_sql_pool_*、db_placement_*、db_store_cooldown_stores)]
+          when | sql_in_use sql_wait sql_wait_s | open_stores open_err cooldown
 
       [R1 Redis instance load(stress_snap.ps1 抓的 t<N>m_redis_<name>.txt,INFO 相邻两份求差 + 首末整体窗口)]
           target | window | secs ops/s cpu% main% in_KB/s out_KB/s | clients used_MB mem% | rej_conn err_rep oom aof_dfs | note
+          Redis Cluster 每个主节点一行(target = <name>-<节点 ID 前 8 位>),再合成一行 <name>-all:ops、连接、内存是合计;main% 也是合计,看饱和要读各主节点那一行。
 
       [R2 Redis top commands(commandstats 求差 + latencystats 累计百分位)]
           target | window | cmd | calls/s usec/call | p50 p99 p99.9 | failed rejected
+          同样逐主节点 + <name>-all;合计行没有百分位(累计分布不能相加),打 n/a。
 
       [M1 Mapping read path at a glance:按 t<N>m 把 login / ds / sm / db / redis 的关键均值连成一行]
           tag | l_bgz l_rad | ds_batch ds_home ds_dir | sm_hz sm_rl | db_claim db_save | rd_ops/s rd_main%
@@ -395,6 +397,8 @@ function Read-RedisInfoSnapshot {
     $snap = [pscustomobject]@{
         Tag      = [int]$Matches['n']
         Name     = $Matches['name']
+        Cluster  = ''
+        RollupOf = 0
         Fields   = @{}
         Cmd      = @{}
         Lat      = @{}
@@ -403,7 +407,11 @@ function Read-RedisInfoSnapshot {
     }
     foreach ($raw in [System.IO.File]::ReadLines($File.FullName)) {
         $line = $raw.Trim()
-        if ($line.Length -eq 0 -or $line.StartsWith('# stress_snap ')) { continue }
+        if ($line.Length -eq 0) { continue }
+        if ($line.StartsWith('# stress_snap ')) {
+            if ($line -cmatch ' cluster=(?<cluster>[a-z][a-z0-9-]*) ') { $snap.Cluster = $Matches['cluster'] }
+            continue
+        }
         if ($line.StartsWith('#')) { $null = $snap.Sections.Add($line.TrimStart('#').Trim()); continue }
         $i = $line.IndexOf(':')
         if ($i -le 0) { continue }
@@ -415,6 +423,47 @@ function Read-RedisInfoSnapshot {
         else { $snap.Fields[$key] = $value }
     }
     return $snap
+}
+
+# 把同一时刻、同一个集群的各主节点合成一份快照 <集群>-all,走 R1 / R2 同一套求差。
+#   累计量与连接、内存按节点求和;uptime 取最小值(窗口长度不能比最晚启动的节点还长);run_id 拼起来:任何一个节点重启或切主,这个窗口就按 restart 处理,
+#   不把两个实例的计数相减。缺某个字段的节点不计入该字段;全部节点都缺时字段不存在,出 n/a。百分位不能相加,Lat 留空。
+function New-RedisClusterRollup {
+    param([string]$Cluster, [int]$Tag, [object[]]$Members)
+    $invariant = [System.Globalization.CultureInfo]::InvariantCulture
+    $rollup = [pscustomobject]@{
+        Tag      = $Tag
+        Name     = "$Cluster-all"
+        Cluster  = ''
+        RollupOf = $Members.Count
+        Fields   = @{}
+        Cmd      = @{}
+        Lat      = @{}
+        Err      = @{}
+        Sections = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    }
+    foreach ($key in @('connected_clients', 'used_memory', 'maxmemory', 'total_commands_processed', 'total_net_input_bytes', 'total_net_output_bytes',
+            'rejected_connections', 'total_error_replies', 'aof_delayed_fsync', 'used_cpu_sys', 'used_cpu_user', 'used_cpu_sys_main_thread', 'used_cpu_user_main_thread')) {
+        $values = @($Members | ForEach-Object { Get-RedisNumberOrNull $_ $key } | Where-Object { $null -ne $_ })
+        if ($values.Count -gt 0) { $rollup.Fields[$key] = ([double]($values | Measure-Object -Sum).Sum).ToString('R', $invariant) }
+    }
+    $uptimes = @($Members | ForEach-Object { Get-RedisNumberOrNull $_ 'uptime_in_seconds' } | Where-Object { $null -ne $_ })
+    if ($uptimes.Count -gt 0) { $rollup.Fields['uptime_in_seconds'] = ([double]($uptimes | Measure-Object -Minimum).Minimum).ToString('R', $invariant) }
+    $rollup.Fields['run_id'] = (@($Members | ForEach-Object { [string]$_.Fields['run_id'] } | Sort-Object) -join ',')
+    foreach ($member in $Members) {
+        foreach ($section in $member.Sections) { $null = $rollup.Sections.Add($section) }
+        foreach ($cmd in $member.Cmd.Keys) {
+            if (-not $rollup.Cmd.ContainsKey($cmd)) { $rollup.Cmd[$cmd] = @{} }
+            foreach ($field in @('calls', 'usec', 'failed_calls', 'rejected_calls')) {
+                if ($member.Cmd[$cmd].ContainsKey($field)) { $rollup.Cmd[$cmd][$field] = [double]$rollup.Cmd[$cmd][$field] + [double]$member.Cmd[$cmd][$field] }
+            }
+        }
+        foreach ($err in $member.Err.Keys) {
+            if (-not $rollup.Err.ContainsKey($err)) { $rollup.Err[$err] = @{ count = 0.0 } }
+            if ($member.Err[$err].ContainsKey('count')) { $rollup.Err[$err]['count'] = [double]$rollup.Err[$err]['count'] + [double]$member.Err[$err]['count'] }
+        }
+    }
+    return $rollup
 }
 
 function Get-RedisNumberOrNull {
@@ -538,7 +587,7 @@ $homeZoneReadResults = @('ok', 'not_found', 'error')
 #   ResourceExhausted / FailedPrecondition),error = 依赖故障(Unavailable),not_found = NotFound。
 $accountDirectoryRpcs = @('read', 'create', 'lookup', 'repair', 'remove')
 $accountDirectoryResults = @('ok', 'not_found', 'rejected', 'error')
-# $redisAlwaysCommands:R2 在 Δcalls 前 8 名之外必列的命令(有就列),对应 mapping 读路径与核心读写。
+# $redisAlwaysCommands:R2 在 Δcalls 前 8 名之外必列的命令(有就列),对应核心读写。
 $redisAlwaysCommands = @('mget', 'evalsha', 'eval', 'get', 'set')
 # $playerStoreSaveColumns / $playerStoreClaimColumns:db_player_store_requests_total 的 result → 列名。result 取
 #   proto/player_store/player_store.proto 的 SavePlayerResult / LoadAndClaimResult 枚举名,加 go/db/internal/metrics 的
@@ -625,6 +674,11 @@ if (Test-Path $snapDir) {
     $redisPattern = '^t\d+m_redis_[a-z][a-z0-9-]*$'
     $redisSnapshots = @($allTxt | Where-Object { $_.BaseName -match $redisPattern } |
         ForEach-Object { Read-RedisInfoSnapshot $_ } | Sort-Object Tag, Name)
+    # Redis Cluster:每个主节点是一个 target,再按「集群 + 时刻」合成一份 <集群>-all。主节点按抓取那一刻现列,切主后 target 名会变,合计行不受影响。
+    $redisRollups = @($redisSnapshots | Where-Object { $_.Cluster } | Group-Object Cluster, Tag | ForEach-Object {
+            New-RedisClusterRollup -Cluster $_.Group[0].Cluster -Tag $_.Group[0].Tag -Members @($_.Group)
+        })
+    if ($redisRollups.Count -gt 0) { $redisSnapshots = @(@($redisSnapshots) + $redisRollups | Sort-Object Tag, Name) }
     $promTxt = @($allTxt | Where-Object { $_.BaseName -notmatch $redisPattern })
     # New multi-endpoint layout (Round 16+) uses suffixes: t{N}m_login.txt,
     # t{N}m_sm.txt, t{N}m_db.txt, t{N}m_ds.txt (data_service, 2026-10-23+).
@@ -875,11 +929,11 @@ if ($smSnapshots.Count -eq 0) {
     }
 }
 
-# D1:data_service 归属读(*_ds,:9260)。h_* = GetPlayerHomeZone(进场 / 换图,带合服围栏),b_* = BatchGetPlayerHomeZone
+# D1:data_service 归属读(*_ds,:9260)。h_* = GetPlayerHomeZone(进场 / 换图),b_* = BatchGetPlayerHomeZone
 #     (登录角色列表)。ok / nf / err 是 data_service_home_zone_read_seconds 按 result 的次数;avg / p99 跨 result 合并,
 #     是服务端 handler 耗时,与 L1 的 login 客户端耗时之差约等于网络与排队。ids/b = home_zone_batch_ids 的均值(每批几个角色)。
-#     rr_* = data_service_route_read_total 在 path ∈ {home_fence, batch} 上按 result 求和(只在读方门禁打开时预建):
-#     rr_cache = 副本命中,rr_sql = 回源库(sql + not_found_sql),rr_sqlerr = 回源失败。门禁关着或旧版 data_service 打 n/a。
+#     rr_* = data_service_route_read_total(player_route 的 SQL 读,home 每次读计一次,batch 每块计一次)在 path ∈ {home, batch} 上按 result 求和:
+#     rr_ok = 读到行,rr_nf = 权威缺席(只有 home 有),rr_err = 读失败(RPC 回 Unavailable)。没有这一族的旧快照打 n/a。
 $d1Fmt = "  {0,-30} | {1,-6} {2,-5} {3,-6} {4,-8} {5,-8} | {6,-6} {7,-5} {8,-6} {9,-8} {10,-8} | {11,-5} | {12,-8} {13,-7} {14}"
 Write-Host ""
 Write-Host "=== D1 data_service home-zone reads (data_service_home_zone_read_seconds / _batch_ids / _route_read_total, :9260) ===" -ForegroundColor Yellow
@@ -887,7 +941,7 @@ Write-Host ""
 if ($dsSnapshots.Count -eq 0) {
     Write-NoData "没有 *_ds 快照(stress_snap.ps1 缺省抓 data_service :9260)"
 } else {
-    Write-Host ($d1Fmt -f @('snapshot', 'h_ok', 'h_nf', 'h_err', 'h_avg', 'h_p99', 'b_ok', 'b_nf', 'b_err', 'b_avg', 'b_p99', 'ids/b', 'rr_cache', 'rr_sql', 'rr_sqlerr'))
+    Write-Host ($d1Fmt -f @('snapshot', 'h_ok', 'h_nf', 'h_err', 'h_avg', 'h_p99', 'b_ok', 'b_nf', 'b_err', 'b_avg', 'b_p99', 'ids/b', 'rr_ok', 'rr_nf', 'rr_err'))
     Write-Host ($d1Fmt -f @('--------', '----', '----', '-----', '-----', '-----', '----', '----', '-----', '-----', '-----', '-----', '--------', '------', '---------'))
     foreach ($snap in $dsSnapshots) {
         $m = Read-PromSnapshot $snap.FullName
@@ -901,23 +955,23 @@ if ($dsSnapshots.Count -eq 0) {
         }
         $ids = Get-HistogramOrNull $m 'data_service_home_zone_batch_ids'
         $cells += $(if ($null -eq $ids) { 'n/a' } elseif ($ids.Count -le 0) { '-' } else { Format-DecimalCell ($ids.Sum / $ids.Count) 1 })
-        # route_read_total 不是每个 path × result 组合都存在(batch 没有逐 id 的缺席结论,没有 not_found_sql),
+        # route_read_total 不是每个 path × result 组合都存在(batch 没有逐 id 的缺席结论,没有 not_found),
         # 所以按「族存在规则」取:整族没有序列 → n/a;有 → 缺的组合按 0 计。
         $rrSeen = $null -ne (Get-SeriesSumOrNull $m 'data_service_route_read_total')
         $rr = @{}
-        foreach ($res in @('cache', 'sql', 'not_found_sql', 'sql_error')) {
+        foreach ($res in @('ok', 'not_found', 'error')) {
             if (-not $rrSeen) { $rr[$res] = $null; continue }
             $sum = 0.0
-            foreach ($path in @('home_fence', 'batch')) {
+            foreach ($path in @('home', 'batch')) {
                 $v = Get-SeriesSumOrNull $m 'data_service_route_read_total' @{ path = $path; result = $res }
                 if ($null -ne $v) { $sum += $v }
             }
             $rr[$res] = $sum
         }
         $cells += @(
-            (Format-CountCell $rr['cache']),
-            (Format-CountCell (Get-SumOrNull @($rr['sql'], $rr['not_found_sql']))),
-            (Format-CountCell $rr['sql_error']))
+            (Format-CountCell $rr['ok']),
+            (Format-CountCell $rr['not_found']),
+            (Format-CountCell $rr['error']))
         Write-Host ($d1Fmt -f $cells)
     }
 }
@@ -968,7 +1022,7 @@ if ($dsSnapshots.Count -eq 0) {
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $cppLogDir = Join-Path $RepoRoot "run\logs\cpp_nodes"
 
-# Only scan scene*.log files (gate logs don't run SavePlayerToRedis).
+# Only scan scene*.log files (gate logs don't run SavePlayer).
 # The glob deliberately omits the underscore so it matches both legacy
 # single-instance "scene.stdout.log" and multi-instance "scene_1.stdout.log".
 $sceneLogs = @()
@@ -1188,20 +1242,18 @@ if ($dbSnapshots.Count -eq 0) {
     }
 }
 
-# P4:连接池与落点。rpool_wait / rpool_tmo = go-redis 连接池等待次数 / 取连接超时次数(db_redis_pool_wait_total / timeouts_total,
-#     跨 redis_client 求和;placement 与 main 是同一个 client 时只导出 main 一份,不会重复计数)。
-#     sql_in_use = 此刻在用的 SQL 连接数,sql_wait / sql_wait_s = 等连接的累计次数与秒数(mmorpg_sql_pool_*{sql_client="db"},跨 pool 求和),
+# P4:连接池与落点。sql_in_use = 此刻在用的 SQL 连接数,sql_wait / sql_wait_s = 等连接的累计次数与秒数(mmorpg_sql_pool_*{sql_client="db"},跨 pool 求和),
 #     存盘慢先看这两列。open_stores = 常驻的落点库个数,open_err = 按需打开失败或被拒的累计次数(db_placement_store_open_total 的
 #     error + rejected),cooldown = 此刻在库级冷却期内的库个数(db_store_cooldown_stores,跨 pool 求和)。
-$p4Fmt = "  {0,-30} | {1,-10} {2,-9} | {3,-10} {4,-8} {5,-10} | {6,-11} {7,-8} {8}"
+$p4Fmt = "  {0,-30} | {1,-10} {2,-8} {3,-10} | {4,-11} {5,-8} {6}"
 Write-Host ""
-Write-Host "=== P4 DB pools and placement (db_redis_pool_*, mmorpg_sql_pool_*, db_placement_*, db_store_cooldown_stores) ===" -ForegroundColor Yellow
+Write-Host "=== P4 DB pools and placement (mmorpg_sql_pool_*, db_placement_*, db_store_cooldown_stores) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($dbSnapshots.Count -eq 0) {
     Write-NoData $dbNoSnapshot
 } else {
-    Write-Host ($p4Fmt -f @('snapshot', 'rpool_wait', 'rpool_tmo', 'sql_in_use', 'sql_wait', 'sql_wait_s', 'open_stores', 'open_err', 'cooldown'))
-    Write-Host ($p4Fmt -f @('--------', '----------', '---------', '----------', '--------', '----------', '-----------', '--------', '--------'))
+    Write-Host ($p4Fmt -f @('snapshot', 'sql_in_use', 'sql_wait', 'sql_wait_s', 'open_stores', 'open_err', 'cooldown'))
+    Write-Host ($p4Fmt -f @('--------', '----------', '--------', '----------', '-----------', '--------', '--------'))
     foreach ($snap in $dbSnapshots) {
         $m = Read-PromSnapshot $snap.FullName
         $sqlMatch = @{ sql_client = 'db' }
@@ -1209,8 +1261,6 @@ if ($dbSnapshots.Count -eq 0) {
             (Get-SeriesSumOrNull $m 'db_placement_store_open_total' @{ result = 'error' }),
             (Get-SeriesSumOrNull $m 'db_placement_store_open_total' @{ result = 'rejected' }))
         Write-Host ($p4Fmt -f @($snap.BaseName,
-            (Format-CountCell (Get-SeriesSumOrNull $m 'db_redis_pool_wait_total')),
-            (Format-CountCell (Get-SeriesSumOrNull $m 'db_redis_pool_timeouts_total')),
             (Format-CountCell (Get-SeriesSumOrNull $m 'mmorpg_sql_pool_in_use_connections' $sqlMatch)),
             (Format-CountCell (Get-SeriesSumOrNull $m 'mmorpg_sql_pool_wait_count_total' $sqlMatch)),
             (Format-DecimalCell (Get-SeriesSumOrNull $m 'mmorpg_sql_pool_wait_duration_seconds_total' $sqlMatch) 1),
@@ -1222,8 +1272,8 @@ if ($dbSnapshots.Count -eq 0) {
 
 # ----- 2h. Redis INFO 快照(R1 / R2)与映射读路径总览(M1),2026-10-23 -----------
 
-# 按 target 分组(组内已按分钟数数值排序),并找出「同一时刻 run_id 相同」的 target:同一个实例被抓了两份
-# (G4a 之前 mapping 与核心就是同一台),后出现的只标 same_as=<先出现的 target>,不重复出数。
+# 按 target 分组(组内已按分钟数数值排序),并找出「同一时刻 run_id 相同」的 target:同一个实例被抓了两份,
+# 后出现的只标 same_as=<先出现的 target>,不重复出数。
 $redisByTarget = [ordered]@{}
 $redisSameAs = @{}
 $redisFirstByTagRun = @{}
@@ -1260,6 +1310,13 @@ function Get-RedisSameAsCells {
     return @($Target, $Window) + @(1..($Width - 3) | ForEach-Object { '' }) + @("same_as=$SameAs")
 }
 
+# 集群合计行的 note:点明节点数,读的人不会把合计的 main% 当成单线程饱和度。
+function Get-RedisRowNote {
+    param($Snap, [string]$Note)
+    if ($Snap.RollupOf -le 0) { return $Note }
+    return (@($Note, "sum of $($Snap.RollupOf) masters") | Where-Object { $_ }) -join ' '
+}
+
 # R1:每个 target 相邻两份一行,再加一行首→末整体窗口(overall);只有一份时打一行「since start」。口径见 Get-RedisWindow:
 #     ops/s、cpu%、main%(单线程饱和判据,接近 100% 就是瓶颈)、网络 KB/s 按窗口求差;clients / used_MB / mem% 取窗口末瞬时值。
 $r1Fmt = "  {0,-10} | {1,-11} | {2,-6} {3,-9} {4,-7} {5,-7} {6,-8} {7,-8} | {8,-7} {9,-8} {10,-6} | {11,-8} {12,-7} {13,-4} {14,-7} | {15}"
@@ -1277,7 +1334,7 @@ if ($redisSnapshots.Count -eq 0) {
             $s = $list[0]
             $same = $redisSameAs["$($s.Tag)|$name"]
             if ($same) { Write-Host ($r1Fmt -f (Get-RedisSameAsCells $name "t$($s.Tag)m" $same 16)); continue }
-            Write-Host ($r1Fmt -f (Get-RedisLoadCells $name "t$($s.Tag)m" (Get-RedisWindow $null $s) '(single snapshot, since start)'))
+            Write-Host ($r1Fmt -f (Get-RedisLoadCells $name "t$($s.Tag)m" (Get-RedisWindow $null $s) (Get-RedisRowNote $s '(single snapshot, since start)')))
             continue
         }
         for ($i = 1; $i -lt $list.Count; $i++) {
@@ -1286,7 +1343,7 @@ if ($redisSnapshots.Count -eq 0) {
             $window = "t$($p.Tag)m-t$($c.Tag)m"
             $same = $redisSameAs["$($c.Tag)|$name"]
             if ($same) { Write-Host ($r1Fmt -f (Get-RedisSameAsCells $name $window $same 16)); continue }
-            Write-Host ($r1Fmt -f (Get-RedisLoadCells $name $window (Get-RedisWindow $p $c) ''))
+            Write-Host ($r1Fmt -f (Get-RedisLoadCells $name $window (Get-RedisWindow $p $c) (Get-RedisRowNote $c '')))
         }
         if ($list.Count -gt 2) {
             $p = $list[0]
@@ -1294,7 +1351,7 @@ if ($redisSnapshots.Count -eq 0) {
             $window = "t$($p.Tag)m-t$($c.Tag)m"
             $same = $redisSameAs["$($c.Tag)|$name"]
             if ($same) { Write-Host ($r1Fmt -f (Get-RedisSameAsCells $name $window $same 16)); continue }
-            Write-Host ($r1Fmt -f (Get-RedisLoadCells $name $window (Get-RedisWindow $p $c) 'overall'))
+            Write-Host ($r1Fmt -f (Get-RedisLoadCells $name $window (Get-RedisWindow $p $c) (Get-RedisRowNote $c 'overall')))
         }
     }
 }
@@ -1369,8 +1426,8 @@ if ($redisSnapshots.Count -eq 0) {
 #     上一份快照之间的窗口,只有一份时自实例启动)。缺哪份快照哪列打 n/a。
 #     l_bgz / l_rad = login 客户端 BatchGetPlayerHomeZone / ReadAccountDirectory;ds_batch / ds_home / ds_dir = data_service
 #     服务端批量归属读 / 单查 / ReadAccountDirectory;sm_hz / sm_rl = scene_manager 两个查询 stage;db_claim / db_save =
-#     go/db 存盘接口认领 / 存盘的服务端耗时(db_player_store_seconds{op});rd = Redis target,mapping 优先,没有就 core,
-#     再没有就第一个。G4a 之前 mapping 与核心是同一个实例,rd 的数是两者合计。L-18 第 5 步「是不是瓶颈」先看这一张。
+#     go/db 存盘接口认领 / 存盘的服务端耗时(db_player_store_seconds{op});rd = Redis target,core 优先,没有就第一个。
+#     映射本身读全局库,rd 只是对照。L-18 第 5 步「是不是瓶颈」先看这一张。
 $m1ByTag = @{}
 foreach ($pair in @(@('login', $snapshots), @('sm', $smSnapshots), @('ds', $dsSnapshots), @('db', $dbSnapshots))) {
     foreach ($f in $pair[1]) {
@@ -1381,8 +1438,7 @@ foreach ($pair in @(@('login', $snapshots), @('sm', $smSnapshots), @('ds', $dsSn
         }
     }
 }
-$m1Redis = if ($redisByTarget.Contains('mapping')) { 'mapping' } elseif ($redisByTarget.Contains('core')) { 'core' }
-           elseif ($redisByTarget.Count -gt 0) { @($redisByTarget.Keys)[0] } else { $null }
+$m1Redis = if ($redisByTarget.Contains('core')) { 'core' } elseif ($redisByTarget.Count -gt 0) { @($redisByTarget.Keys)[0] } else { $null }
 $m1RedisByTag = @{}
 if ($null -ne $m1Redis) {
     $list = $redisByTarget[$m1Redis]

@@ -188,10 +188,9 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
      - 1:参数、配置、Redis 连接或盘点出错,修好原因后重跑。
   4. **回滚镜像时认准 revision**:第 1 步的 `rollout restart` / `set env` 本身会生成新的 revision,之后不带参数的 `kubectl rollout undo deploy/db` 回到的是切换前那个 S1 revision,不是 S1 之前的镜像。先 `kubectl -n <zone ns> rollout history deploy/db` 找到 S1 之前镜像的 revision,用 `kubectl -n <zone ns> rollout undo deploy/db --to-revision=<N>`;或者走「部署上一版本」。ConfigMap 里的 `RetryRouting` / `WaitAOF*` 不用先改:go/db 用的 go-zero v1.10.0 忽略未知键(`go/db/internal/config/config_test.go` 的 `TestConfigLoaderIgnoresUnknownKeys` 守住)。回滚完成后建议再跑一次第 3 步确认 p* 仍为 0(回到的镜像早于按实例 processing 列表、不往登记表里写时,共享收件箱、死信、旧共享 processing(`kafka:retry:processing:{topic}`,这类镜像的在途收据就在这里)也都为 0 时以 4 退出,参数核对无误即可;旧共享 processing 非 0、p* 为 0 时以 0 退出)。
   5. **已经回滚了(没做上面几步,或紧急回滚)**:约 10 分钟内会响 DbRetryPartitionedStranded。立即按第 2 步核对(此时 db 应已全是 S1 之前的镜像),用第 3 步同一组参数先跑 `-check`,再去掉 `-check` 执行搬回(把 p* 搬回共享收件箱;同样过退出码 4 / 5 两道门,一条不动就退出;可重入,中途失败修好原因后重跑)。搬完它会再盘点一次,退出码 0 才算搬完,3 表示还有实例在把收件箱分拣回 p*。搬回完成之前不要清理任何 Redis 键,也不要重启或清空这台 Redis。告警按 Prometheus 里 6h 内的最后样本判定,搬回之后窗口内仍会响,以 `-check` 退出码 0 为准并静默。
-- [ ] **写过落点记录之后,禁止把 go/db 回滚到不认落点记录的版本**(2026-10-23 补;规则本身来自 [player-storage-placement.md](../design/player-storage-placement.md) §13 与 [merge-zone-runbook.md](merge-zone-runbook.md) §14「上线顺序红线」第 5、8 条,本清单原来没有)。旧版 go/db 按本进程 zone 选库,会把已经 pin 合服、relocate 或建角钉过落点的玩家写进 `zone_<z>_db`,与真源分叉,全程零报错。上面「部署上一版本」与 `kubectl rollout undo deploy/db` 两条路径都受这条约束。
-  - **怎么判断「写过」**:任一玩家已有落点记录,即全局库 `player_route` 里有 `storage_id IS NOT NULL` 的行(`SELECT 1 FROM player_route WHERE storage_id IS NOT NULL LIMIT 1`),或 mapping Redis 里有 `player:placement:*` 键。拿不准就按「写过」处理。
-  - **还没写过**:可以照常回滚,但要等满 90s 或手工 `DEL db:capability:zone:<Z>` 之后,才能做 pin 合服、relocate、打开 `PinOnCreate`(红线第 7 条)。
-  - **任一 go/db 开过 `Placement.Required=true`**:另外不许把 login 的 `PinOnCreate` 改回 false,不许把 login / data_service 回滚到不支持 storage_id 的版本(红线第 8 条)。要回滚这些组件,先关掉全部 go/db 的 `Required`。
+- [ ] **写过落点记录之后,禁止把 go/db 回滚到不认落点记录的版本**(2026-10-23 补;规则本身来自 [player-storage-placement.md](../design/player-storage-placement.md) §13,本清单原来没有)。旧版 go/db 按本进程 zone 选库,会把已经 pin 合服、relocate 或建角钉过落点的玩家写进 `zone_<z>_db`,与真源分叉,全程零报错。上面「部署上一版本」与 `kubectl rollout undo deploy/db` 两条路径都受这条约束。
+  - **怎么判断「写过」**:login 建角恒写落点,所以有过玩家就算写过。全局库 `player_route` 里有 `storage_id IS NOT NULL` 的行(`SELECT 1 FROM player_route WHERE storage_id IS NOT NULL LIMIT 1`)即是。拿不准就按「写过」处理。
+  - **写过之后**:同样不许把 login / data_service 回滚到不支持 storage_id 的版本。
 - [ ] **回滚后核对**:按 §3.1 确认 Pod `imageID` digest、启动版本行、`/app/BUILD_INFO` 都已是上一版本;再做附录 E.3"回滚后必做"。
 - **数据不随代码回滚**:库结构迁移只前进(`go/schemamigrate` 只有 `Up`;trade 的迁移 Job 以 `-migrate` 运行),回滚前确认上一版本能在当前库结构上运行。需要把数据回到某个时间点时走 `tools/scripts/k8s_zone_rollback.ps1`(`-NodeImage` 必填,且必须是不可变引用)与 [zone_data_rollback.md](../design/zone_data_rollback.md)。
 
@@ -355,9 +354,9 @@ net.ipv4.tcp_keepalive_probes = 3
 
 > **2026-10-18 更正(B0-1 会话对账按 gate 建索引)**:上表最后一行的数据源写错了,而且不能照做:
 > `player_locator:lease_zset` 这个键不存在(断线租约 ZSET 是 `player:leases`);生产核心 Redis 上也**不要**跑 `SCAN player:session:*` 全键扫描 —— 目标规模下一遍要数小时,和业务抢同一个单主。改为:
-> - 在线数上界:指标 `player_locator_gate_index_members`(只由会话对账 leader 产出,按 `player_locator_reconcile_is_leader == 1` 过滤后取 max)。它是**上界**,不是精确在线数:存活 gate 索引里的脏成员要等日审计清掉;
-> - 断线中(DISCONNECTING、等租约到期)的人数:`ZCARD player:leases`;
-> - 抽查单个 gate:`SMEMBERS player:gate_index:gates` 列出登记过的 gate 实例 uuid,再 `SCARD player:gate_index:sessions:<uuid>`;
+> - 在线数估计(2026-10-31 按 slot 分桶后口径变了):指标 `player_locator_gate_index_members` 每个副本一份,跨副本 `sum()`。它是存活 gate 的索引键数,约等于在线数,不是精确值:同 slot 同 gate 的多名玩家只计一次,脏键要等日审计清掉;
+> - 断线中(DISCONNECTING、等租约到期)的人数:租约按 slot 分桶,没有一把键能直接读。抽查一名玩家:`ZSCORE player:leases:{<slottag>} <player_id>`,slot-tag 见 `redisslot.PlayerIndexTag`;
+> - 抽查单个 gate:索引也按 slot 分桶,在从节点或低峰期 `redis-cli --scan --pattern 'player:gate_index:{*}:sessions:<uuid>'`,逐把 `SCARD` 求和(Cluster 下逐主节点各跑一次);
 > - 「偏差 > 20%」的对照基线改为 gateway / login 侧的在线计数;对账本身有没有在跑,看 `deploy/k8s/player-locator-alerts.yaml` 的 NoLeader / Stalled。
 > - 单个玩家卡在 ONLINE 的定向补救见本附录 F.B-1 末尾「定向补救」。机制见 [player-locator-gate-session-index.md](../design/player-locator-gate-session-index.md)。
 

@@ -34,6 +34,7 @@ import (
 	"shared/clientendpoint"
 	"shared/generated/table"
 	"shared/idsegment"
+	"shared/playerredis"
 	"shared/safego"
 	"time"
 )
@@ -53,10 +54,15 @@ type ServiceContext struct {
 	idSegmentNeverUsed bool
 	idSegmentFrontier  []byte
 	AccountDirectory   accountdirectory.Directory
-	RedisClient        *redis.Client
+	// RedisClient 是控制域:gate 排空标记。键不带 hash tag,不经玩家域守卫。
+	RedisClient *redis.Client
 	// QueueRedis 只给排队(loginqueue.Queue)与放行锁(loginqueue.Dispatcher)用。Node.QueueRedis 没配置时
 	// 与 RedisClient 是同一个指针(newQueueRedis)。gate 排空标记仍走 RedisClient。
 	QueueRedis *redis.Client
+	// PlayerRedis 是玩家域句柄(shared/playerredis,生产是 Redis Cluster):player_locker、login_idempotent、login_generation。
+	PlayerRedis redis.UniversalClient
+	// LoginRedis 是登录域句柄(同上,部署上可以与玩家域共用一个 Cluster):连接栅栏、登录态、设备集、令牌。
+	LoginRedis redis.UniversalClient
 	// SnowFlake 是 PlayerId 发号器。包了一层 fence 闸(见 player_id_gen.go):
 	// 失去 worker id 所有权后必须一个号都发不出去,不能靠"停服"兜底。
 	SnowFlake *PlayerIDGen
@@ -121,6 +127,9 @@ func NewServiceContext() *ServiceContext {
 	if err := config.AppConfig.ValidateGlobalAuthority(os.Getenv); err != nil {
 		panic(fmt.Errorf("全球Login配置拒绝启动: %w", err))
 	}
+	if err := config.AppConfig.ValidateRedisDomains(); err != nil {
+		panic(fmt.Errorf("invalid redis domain config: %w", err))
+	}
 	ctx := context.Background()
 
 	table.LoadTables(config.AppConfig.TableDir, false)
@@ -149,6 +158,8 @@ func NewServiceContext() *ServiceContext {
 	// 生效值(缺省时是 go-redis 算出来的 10 × GOMAXPROCS):核对 ConfigMap 镜像的 PoolSize 是否真的被加载。
 	logx.Infof("Redis client %s DB=%d pool_size=%d", redisHost, redisDB, redisClient.Options().PoolSize)
 	queueRedis := newQueueRedis(ctx, redisClient, config.AppConfig.Node.QueueRedis)
+	playerRedis := mustNewDomainRedis(ctx, "PlayerRedis", config.AppConfig.EffectivePlayerRedis())
+	loginRedis := mustNewDomainRedis(ctx, "LoginRedis", config.AppConfig.EffectiveLoginRedis())
 
 	kafkaClient, err := kafka.NewCommandProducer(config.AppConfig.Kafka)
 	if err != nil {
@@ -180,7 +191,7 @@ func NewServiceContext() *ServiceContext {
 	gateWatcher := node.NewNodeWatcher(etcdClient, gatePrefix)
 
 	// Initialize token manager for access/refresh tokens
-	tokenMgr := token.NewManager(redisClient, token.Config{
+	tokenMgr := token.NewManager(loginRedis, token.Config{
 		AccessTokenTTL:  config.AppConfig.TokenConfig.AccessTokenTTL,
 		RefreshTokenTTL: config.AppConfig.TokenConfig.RefreshTokenTTL,
 	})
@@ -212,6 +223,8 @@ func NewServiceContext() *ServiceContext {
 		preloads:            drainproof.New(),
 		RedisClient:         redisClient,
 		QueueRedis:          queueRedis,
+		PlayerRedis:         playerRedis,
+		LoginRedis:          loginRedis,
 		KafkaClient:         kafkaClient,
 		PlayerLocatorClient: plClient,
 		SceneManagerClient:  smClient,
@@ -272,6 +285,20 @@ func newQueueRedis(ctx context.Context, core *redis.Client, c *config.RedisConf)
 		panic(fmt.Errorf("failed to connect Node.QueueRedis %s: %w", c.Host, err))
 	}
 	logx.Infof("Redis queue client %s DB=%d pool_size=%d", c.Host, c.DB, client.Options().PoolSize)
+	return client
+}
+
+// mustNewDomainRedis 按配置建玩家域或登录域句柄,配置非法或连不上起服即失败。错误与日志不带口令。
+func mustNewDomainRedis(ctx context.Context, name string, c playerredis.Config) redis.UniversalClient {
+	client, err := playerredis.New(c)
+	if err != nil {
+		panic(fmt.Errorf("%s: %w", name, err))
+	}
+	if err := client.Ping(ctx).Err(); err != nil {
+		_ = client.Close()
+		panic(fmt.Errorf("failed to connect %s (%s): %w", name, c.Describe(), err))
+	}
+	logx.Infof("Redis %s client %s", name, c.Describe())
 	return client
 }
 

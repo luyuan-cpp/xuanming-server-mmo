@@ -14,8 +14,7 @@ type placementHolder struct {
 	Placement PlacementConfig `json:"Placement,optional"`
 }
 
-// 字段零值保留旧解码形状，全球Config启动另由ValidateGlobalAuthority拒绝缺失门禁；
-// 不用default/Normalize把显式false静默变true，历史形状仅在显式LegacyNonGlobal中可启动。
+// 整段缺省:落点库家族放行,连接池由 Normalize 回填默认值。
 func TestPlacementBlockMissingMeansDefaults(t *testing.T) {
 	var h placementHolder
 	if err := conf.LoadFromYamlBytes([]byte("Name: db.rpc\n"), &h); err != nil {
@@ -23,12 +22,6 @@ func TestPlacementBlockMissingMeansDefaults(t *testing.T) {
 	}
 	if !h.Placement.StoreFamiliesAllowed() {
 		t.Fatal("a missing Placement block must allow store families")
-	}
-	if h.Placement.Required {
-		t.Fatal("a missing Placement block must not require placement records")
-	}
-	if h.Placement.Redis != nil {
-		t.Fatal("a missing Placement block must reuse RedisClient")
 	}
 
 	c := Config{Placement: h.Placement}
@@ -43,14 +36,14 @@ func TestPlacementBlockMissingMeansDefaults(t *testing.T) {
 // 写了段但没写 AllowStoreFamilies:同样按 true(*bool 的 nil),不能因为「写了半段」换一套默认值。
 func TestPlacementPartialBlockKeepsFamilyDefault(t *testing.T) {
 	var h placementHolder
-	if err := conf.LoadFromYamlBytes([]byte("Placement:\n  Required: true\n"), &h); err != nil {
+	if err := conf.LoadFromYamlBytes([]byte("Placement:\n  ZoneStoreMaxOpenConn: 12\n"), &h); err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	if !h.Placement.StoreFamiliesAllowed() {
 		t.Fatal("an omitted AllowStoreFamilies must stay true inside a present block")
 	}
-	if !h.Placement.Required {
-		t.Fatal("Required=true must be honored")
+	if h.Placement.ZoneStoreMaxOpenConn != 12 {
+		t.Fatalf("ZoneStoreMaxOpenConn = %d, want 12", h.Placement.ZoneStoreMaxOpenConn)
 	}
 }
 
@@ -58,18 +51,12 @@ func TestPlacementExplicitValues(t *testing.T) {
 	var h placementHolder
 	yaml := "Placement:\n" +
 		"  AllowStoreFamilies: false\n" +
-		"  ExtraStoreMaxOpenConn: 16\n" +
-		"  Redis:\n" +
-		"    Hosts: \"10.0.0.1:6379\"\n" +
-		"    DB: 3\n"
+		"  ExtraStoreMaxOpenConn: 16\n"
 	if err := conf.LoadFromYamlBytes([]byte(yaml), &h); err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	if h.Placement.StoreFamiliesAllowed() {
 		t.Fatal("an explicit AllowStoreFamilies=false must disable store families")
-	}
-	if h.Placement.Redis == nil || h.Placement.Redis.Hosts != "10.0.0.1:6379" || h.Placement.Redis.DB != 3 {
-		t.Fatalf("Placement.Redis = %+v", h.Placement.Redis)
 	}
 
 	c := Config{Placement: h.Placement}
@@ -79,14 +66,6 @@ func TestPlacementExplicitValues(t *testing.T) {
 	}
 	if c.Placement.ExtraStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn {
 		t.Fatalf("an omitted idle size falls back to the default, got %d", c.Placement.ExtraStoreMaxIdleConn)
-	}
-}
-
-// Placement.Redis 段出现就必须带 Hosts:空的 Redis 段静默落到默认地址,读到的就不是 mapping Redis。
-func TestPlacementRedisBlockRequiresHosts(t *testing.T) {
-	var h placementHolder
-	if err := conf.LoadFromYamlBytes([]byte("Placement:\n  Redis:\n    DB: 0\n"), &h); err == nil {
-		t.Fatal("a Placement.Redis block without Hosts must be rejected")
 	}
 }
 
@@ -109,9 +88,8 @@ func TestEtcYamlPlacementBlockMatchesDefaults(t *testing.T) {
 	if c.Placement.AllowStoreFamilies == nil {
 		t.Fatal("etc/db.yaml must spell out AllowStoreFamilies so the example documents the key")
 	}
-	if !c.Placement.StoreFamiliesAllowed() || !c.Placement.Required {
-		t.Fatalf("etc/db.yaml must ship the default semantics, got families=%v required=%v",
-			c.Placement.StoreFamiliesAllowed(), c.Placement.Required)
+	if !c.Placement.StoreFamiliesAllowed() {
+		t.Fatal("etc/db.yaml must ship the default semantics: store families allowed")
 	}
 	if c.Placement.ZoneStoreMaxOpenConn != DefaultPlacementExtraStoreMaxOpenConn ||
 		c.Placement.ZoneStoreMaxIdleConn != DefaultPlacementExtraStoreMaxIdleConn ||
@@ -125,9 +103,6 @@ func TestEtcYamlPlacementBlockMatchesDefaults(t *testing.T) {
 	if c.Placement.ExtraStoreConnMaxIdleSeconds != DefaultPlacementExtraStoreConnMaxIdleSeconds {
 		t.Fatalf("etc/db.yaml ExtraStoreConnMaxIdleSeconds = %d, want %d",
 			c.Placement.ExtraStoreConnMaxIdleSeconds, DefaultPlacementExtraStoreConnMaxIdleSeconds)
-	}
-	if c.Placement.Redis != nil {
-		t.Fatal("etc/db.yaml must keep Placement.Redis commented out (reuse RedisClient) for local dev")
 	}
 }
 
@@ -215,41 +190,22 @@ func TestPlacementSplitPoolsNewKeysWin(t *testing.T) {
 	}
 }
 
-// etc/db.yaml必须显式写ready门禁开；键名写错不能静默退回旧MGET。
-func TestEtcYamlPlacementRouteReadyKeys(t *testing.T) {
+// go/db 不再连 Redis、选库读全局库:样例不能留着已经没有含义的键,读的人会以为它们还起作用。
+func TestEtcYamlDropsRetiredKeys(t *testing.T) {
 	raw, err := os.ReadFile("../../etc/db.yaml")
 	if err != nil {
 		t.Fatalf("read etc/db.yaml: %v", err)
 	}
-	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	if !strings.Contains(text, "\n  RequireRouteReady: true\n") {
-		t.Fatal("全球etc/db.yaml必须显式Placement.RequireRouteReady: true")
-	}
-	var c Config
-	if err := conf.LoadFromYamlBytes([]byte(text), &c); err != nil {
-		t.Fatalf("load etc/db.yaml: %v", err)
-	}
-	if !c.Placement.RequireRouteReady {
-		t.Fatal("全球etc/db.yaml必须保持Placement.RequireRouteReady=true")
-	}
-}
-
-// 整段缺省或只写了别的键:RequireRouteReady 保持 false,不能被 Normalize 悄悄打开或关闭。
-func TestPlacementRouteReadyOmittedStaysFalse(t *testing.T) {
-	for _, yaml := range []string{"Name: db.rpc\n", "Placement:\n  Required: true\n"} {
-		var h placementHolder
-		if err := conf.LoadFromYamlBytes([]byte(yaml), &h); err != nil {
-			t.Fatalf("load %q: %v", yaml, err)
-		}
-		c := Config{Placement: h.Placement}
-		c.Normalize()
-		if c.Placement.RequireRouteReady {
-			t.Fatalf("%q: an omitted RequireRouteReady must stay false", yaml)
+	text := string(raw)
+	for _, key := range []string{"RedisClient:", "Required:", "RequireRouteReady:", "LegacyNonGlobal:", "Redis:"} {
+		if strings.Contains(text, key) {
+			t.Fatalf("etc/db.yaml still carries the retired key %q", key)
 		}
 	}
 }
 
-// 配置加载器忽略不认识的键:yaml 里遗留的旧键(Kafka、Fencing 等)不会让新二进制起不来。
+// 配置加载器忽略不认识的键:yaml 里遗留的旧键(Kafka、RedisClient、Placement.Redis 等)不会让新二进制起不来,
+// 部署模板晚一批同步也能启动。
 func TestConfigLoaderIgnoresUnknownKeys(t *testing.T) {
 	raw, err := os.ReadFile("../../etc/db.yaml")
 	if err != nil {
@@ -260,12 +216,17 @@ func TestConfigLoaderIgnoresUnknownKeys(t *testing.T) {
 	if strings.Count(text, anchor) != 1 {
 		t.Fatalf("etc/db.yaml must contain the anchor %q exactly once", anchor)
 	}
-	text = strings.Replace(text, anchor, anchor+"  Kafka:\n    PartitionCnt: 10\n", 1)
+	text = strings.Replace(text, anchor, anchor+"  Kafka:\n    PartitionCnt: 10\n  RedisClient:\n    Hosts: \"127.0.0.1:6379\"\n    PoolSize: 20\n", 1)
+	const placementAnchor = "\nPlacement:\n"
+	if strings.Count(text, placementAnchor) != 1 {
+		t.Fatalf("etc/db.yaml must contain the anchor %q exactly once", placementAnchor)
+	}
+	text = strings.Replace(text, placementAnchor, placementAnchor+"  Required: true\n  RequireRouteReady: true\n  Redis:\n    Hosts: \"127.0.0.1:6379\"\n", 1)
 	var c Config
 	if err := conf.LoadFromYamlBytes([]byte(text), &c); err != nil {
 		t.Fatalf("unknown keys must be ignored by the config loader: %v", err)
 	}
-	if c.ServerConfig.RedisClient.Hosts == "" {
+	if c.ServerConfig.Database.Hosts == "" || c.Placement.ZoneStoreMaxOpenConn <= 0 {
 		t.Fatal("the rest of etc/db.yaml must still load")
 	}
 }

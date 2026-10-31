@@ -33,12 +33,12 @@ func (l *StartActivityBattleLogic) startGlobalActivity(in *pb.StartActivityBattl
 		return &pb.StartActivityBattleResponse{BattleId: old.BattleId, FormationState: old.State}, nil
 	}
 	for _, pid := range in.MemberPlayerIds {
-		reject, _ := l.precheckMember(pid)
+		reject := l.precheckMember(pid)
 		if reject != pb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_NONE {
 			return l.reject(kind, reject, pid), nil
 		}
 	}
-	f, e := reserveGlobalDirect(l.ctx, l.svcCtx, key, payload, pb.MatchMode_MATCH_MODE_PVE_TEAM, in.BattleConfigId, in.MemberPlayerIds, nil, gatherOptions{activityContext: in.ActivityContext})
+	f, e := reserveGlobalDirect(l.ctx, l.svcCtx, key, payload, pb.MatchMode_MATCH_MODE_PVE_TEAM, in.BattleConfigId, in.MemberPlayerIds, directOptions{activityContext: in.ActivityContext})
 	if e != nil {
 		return l.reject(kind, pb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_INTERNAL, 0), nil
 	}

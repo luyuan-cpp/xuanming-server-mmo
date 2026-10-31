@@ -1,12 +1,10 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 
 	"shared/authoritysql"
 
-	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -15,8 +13,6 @@ type Config struct {
 	zrpc.RpcServerConf
 	ZoneId       uint32       `json:"ZoneId"`
 	ServerConfig ServerConfig `json:"ServerConfig"`
-	// LegacyNonGlobal 只供显式dev/test历史夹具；Mode本身不会关闭全球SQL启动门禁。
-	LegacyNonGlobal bool `json:"LegacyNonGlobal,optional"`
 
 	// MetricsListenAddr is the bind address for the Prometheus /metrics
 	// HTTP endpoint. Leave empty to disable (production default; opt-in
@@ -25,33 +21,21 @@ type Config struct {
 	// and scene_manager :9150.
 	MetricsListenAddr string `json:"MetricsListenAddr,optional"`
 
-	// Placement 是按玩家存储落点选库的参数(docs/design/player-storage-placement.md §6)。
+	// Placement 是落点库的放行与连接池参数(docs/design/player-storage-placement.md §6)。
 	// 整块可缺省,缺省语义见 PlacementConfig。
 	Placement PlacementConfig `json:"Placement,optional"`
 }
 
-// PlacementConfig 控制 go/db 如何按 player:placement:{id} / player:zone:{id} 选库。
+// PlacementConfig 控制 go/db 能打开哪些落点库、每个库的连接池多大。选库本身读全局库 player_route,不用配。
 //
-// 整块缺省仍保留旧字段零值，但全球服务的ValidateGlobalAuthority会拒绝缺失的必需开关。
-// 只有显式LegacyNonGlobal且Mode=dev/test才接受旧Required=false语义。go-zero对整段optional且
-// 未出现的嵌套结构不回填内层 default 标签,所以这里不写 default:
+// go-zero 对整段 optional 且未出现的嵌套结构不回填内层 default 标签,所以这里不写 default:
 //   - AllowStoreFamilies 用 *bool,nil(没写)按 true 读,经 StoreFamiliesAllowed 取值;
-//   - Required的零值false不冒充已启用全球门禁，不能Normalize静默覆盖显式关闭;
 //   - 连接池大小由 Normalize 回填。
 type PlacementConfig struct {
 	// AllowStoreFamilies 为 nil 或 true 时,名字属于 zone_{1..999999}_db / player_store_{>=1000000}_db
 	// 两个家族之一的落点库即使不在库名白名单里也允许按需打开(§6.1)。按需打开只 Ping + 只读 schema 闸,
 	// 从不建库,白名单「防 ZoneId 填错静默建新库」的语义不受影响。显式 false 时只认白名单。
 	AllowStoreFamilies *bool `json:"AllowStoreFamilies,optional"`
-
-	// Required=true:没有落点记录的玩家一律 fail-closed,认领和释放都拒绝(§6.2)。
-	// 打开前提(§13):全部 login 已 PinOnCreate=true,且各 zone 已 -mode pin-placement 钉完存量。
-	Required bool `json:"Required,optional"`
-
-	// RequireRouteReady=true:选库改用就绪读脚本(shared/placement.RouteReadyReadScript),只有 mapping Redis 的副本被判可信
-	// (就绪标记里记下的 run_id / master_replid 就是本次读所在的主实例)时才按读到的值选库,否则认领和释放回「暂不可用」。
-	// 全球服务必须显式true；缺省false仅供LegacyNonGlobal的历史夹具。
-	RequireRouteReady bool `json:"RequireRouteReady,optional"`
 
 	// 额外落点库按家族分两个池旋钮(G2b 批 C;本 zone 库仍用 ServerConfig.Database.MaxOpenConn / MaxIdleConn):
 	//   ZoneStore*    —— **每个**额外 zone 家族库 zone_{1..999999}_db(本 zone 库除外):冷缓存访客读、合服 pin 后的源区库;
@@ -70,22 +54,6 @@ type PlacementConfig struct {
 	// 新配置不要再写。Normalize 仍回填它的默认值 8 / 2,让「只写旧键」的旧部署两类库维持原来的大小。
 	ExtraStoreMaxOpenConn int `json:"ExtraStoreMaxOpenConn,optional"`
 	ExtraStoreMaxIdleConn int `json:"ExtraStoreMaxIdleConn,optional"`
-
-	// Redis 指向落点记录所在的 Redis(与 player:zone 同库:data_service 的 MappingRedis,恒 DB 0)。
-	// nil = 复用 ServerConfig.RedisClient。两者不是同一实例 / 同一 DB 时**必须**显式填:
-	// 读错库 = 读不到任何记录与 home_zone,全员按本进程 zone 选库,被钉到别处的玩家会写错库。
-	// 必须是主节点而不是只读副本:落库后复核(§6.3)要读到搬库工具最新写下的冻结 / 切换。
-	Redis *PlacementRedisConfig `json:"Redis,optional"`
-}
-
-// PlacementRedisConfig 是落点记录所在 Redis 的连接参数。段出现时 Hosts 必填。
-type PlacementRedisConfig struct {
-	Hosts    string `json:"Hosts"`
-	Password string `json:"Password,optional"`
-	DB       int    `json:"DB,optional"`
-	// PoolSize 同 RedisConfig.PoolSize(0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,负数拒启)。
-	// 只在本段写出、另开一个落点客户端时生效;K8s 的 db ConfigMap 不写本段。
-	PoolSize int `json:"PoolSize,optional"`
 }
 
 // StoreFamiliesAllowed 返回是否按家族放行落点库;没写(nil)按 true。
@@ -96,7 +64,6 @@ func (p PlacementConfig) StoreFamiliesAllowed() bool {
 // ServerConfig holds core service settings.
 type ServerConfig struct {
 	Database    DatabaseConfig    `json:"Database"`
-	RedisClient RedisConfig       `json:"RedisClient"`
 	JsonPath    string            `json:"JsonPath"`
 	PlayerStore PlayerStoreConfig `json:"PlayerStore,optional"`
 }
@@ -198,19 +165,6 @@ type MigrationConfig struct {
 	InnodbLockWaitSeconds   int `json:"InnodbLockWaitSeconds,optional"`
 	StatementTimeoutSeconds int `json:"StatementTimeoutSeconds,optional"`
 	AdvisoryLockSeconds     int `json:"AdvisoryLockSeconds,optional"`
-}
-
-// RedisConfig holds Redis connection settings.
-type RedisConfig struct {
-	Hosts             string `json:"Hosts"`
-	DefaultTTLSeconds int    `json:"DefaultTTLSeconds"`
-	Password          string `json:"Password"`
-	DB                int    `json:"DB"`
-	// PoolSize 是 go-redis 连接池上限(共享 Redis 连接总账,P0-E 第 3 批)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-	// 随 CPU limit 漂移;负数起服即失败(svc.NewServiceContext)。K8s 上 tools/scripts/k8s_deploy.ps1 从 etc/db.yaml
-	// 镜像 ServerConfig.RedisClient.PoolSize 并要求正整数,Redis 连接总账读同一个键。
-	// Placement.Redis 缺省时落点句柄复用本客户端,不另开池。
-	PoolSize int `json:"PoolSize,optional"`
 }
 
 var AppConfig Config
@@ -320,23 +274,10 @@ func (c *Config) Validate() error {
 	return c.ValidateGlobalAuthority()
 }
 
-// ValidateGlobalAuthority是普通服务启动的配置门禁，不执行DDL、不写ready、不接管旧Redis目录。
-// 零值或遗漏键必须拒绝，不能因为Mode=dev/test便静默退回非全球权威。
+// ValidateGlobalAuthority 是普通服务启动的配置门禁,不执行 DDL。Mode 不放宽它。
 func (c *Config) ValidateGlobalAuthority() error {
 	if _, err := authoritysql.ParseBackend(c.ServerConfig.Database.Backend); err != nil {
 		return fmt.Errorf("ServerConfig.Database.Backend: %w", err)
-	}
-	if c.LegacyNonGlobal {
-		if c.Mode != service.DevMode && c.Mode != service.TestMode {
-			return errors.New("LegacyNonGlobal仅允许显式Mode=dev/test的历史非全球夹具")
-		}
-		return nil
-	}
-	if !c.Placement.Required {
-		return errors.New("全球DB必须配置Placement.Required=true，缺失落点不得回落home或本区库")
-	}
-	if !c.Placement.RequireRouteReady {
-		return errors.New("全球DB必须配置Placement.RequireRouteReady=true，选库须等待DS正式对账ready")
 	}
 	return nil
 }

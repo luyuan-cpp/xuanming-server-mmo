@@ -294,7 +294,6 @@ Test-SecretValue -Id 'secret.admin.apikey' -RelativePath 'java/gateway_node/src/
 Test-SecretValue -Id 'secret.mysql.db'      -RelativePath 'go/db/etc/db.yaml'                                     -KeyPath 'ServerConfig.Database.Passwd' -MinLength 12 | Out-Null
 Test-SecretValue -Id 'secret.mysql.gateway' -RelativePath 'java/gateway_node/src/main/resources/application.yaml' -KeyPath 'spring.datasource.password'    -MinLength 12 | Out-Null
 
-Test-SecretValue -Id 'secret.redis.db'      -RelativePath 'go/db/etc/db.yaml'                     -KeyPath 'ServerConfig.RedisClient.Password' -MinLength 12 | Out-Null
 Test-SecretValue -Id 'secret.redis.locator' -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'RedisClient.Password'          -MinLength 12 | Out-Null
 Test-SecretValue -Id 'secret.redis.login'   -RelativePath 'go/login/etc/login.yaml'                -KeyPath 'Node.RedisClient.Password'        -MinLength 12 | Out-Null
 

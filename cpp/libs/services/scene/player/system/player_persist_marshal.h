@@ -43,7 +43,7 @@ namespace player_persist
 }
 
 // 返回 false = 持久组件缺失(含两个 Carry 组件)或携带的未知字段损坏,out 保持原样;调用方必须拒绝这次写入。
-// 不打压测探针、不写 last_save_seq 与围栏元数据:这些只在真正写盘的路径上写(SavePlayerToRedisImpl)。
+// 不打压测探针、不写 last_save_seq 与围栏元数据:这些只在真正写盘的路径上写(SavePlayerImpl)。
 [[nodiscard]] inline bool MarshalPlayerForPersist(entt::entity player, Guid playerId, PlayerAllData &out)
 {
     const auto loaded = LoadedSchemaGen(player);

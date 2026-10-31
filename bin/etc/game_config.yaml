@@ -28,6 +28,16 @@ zoneredis:
   max_connections: 100     # 最大连接数
   retry_interval: 1000     # 连接重试间隔时间（毫秒）
 
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;上面的 zoneredis 是控制域。
+# 整段缺失 = standalone,地址与口令沿用 zoneredis,开发环境不用改。上集群时打开:
+#   mode      standalone | cluster,其它取值 scene 拒绝启动
+#   seeds     host:port 列表。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
+#   password  空 = 不认证;带口令的环境用环境变量 PLAYER_REDIS_PASSWORD 注入,值不进日志
+# player_redis:
+#   mode: cluster
+#   seeds: ["10.0.0.1:6379", "10.0.0.2:6379", "10.0.0.3:6379"]
+#   password: ""
+
 # 玩家持久收件箱的 scene 消费端(docs/design/player-inbox-service.md §3.3、§7.3、§11.7)。
 #   consumer_enabled        false = 不发 Fetch,账本字段照常随存档往返(回滚下限);上线顺序第 5 步才统一打开。
 #   periodic_fetch_minutes  在线有界兜底周期(分钟,±20% 抖动),0 = 关闭。整段或此键缺失时加载器取 30。

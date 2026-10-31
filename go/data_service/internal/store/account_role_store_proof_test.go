@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"shared/savebarrier"
+	"shared/accountdirectory"
 )
 
 func proofRow(kind int32, epoch, seq uint64, payload string) playerStoreProofRow {
@@ -15,12 +15,12 @@ func proofRow(kind int32, epoch, seq uint64, payload string) playerStoreProofRow
 // 只要有一行不再是建角时的版本,就不是初始存档。
 func TestIsInitialPlayerStore(t *testing.T) {
 	initial := []playerStoreProofRow{
-		proofRow(playerStoreOwnerKind, savebarrier.InitialOwnerEpoch, savebarrier.InitialSaveSeq, ""),
-		proofRow(1, savebarrier.InitialOwnerEpoch, savebarrier.InitialSaveSeq, "hot"),
+		proofRow(playerStoreOwnerKind, accountdirectory.InitialOwnerEpoch, accountdirectory.InitialSaveSeq, ""),
+		proofRow(1, accountdirectory.InitialOwnerEpoch, accountdirectory.InitialSaveSeq, "hot"),
 	}
 	require.True(t, isInitialPlayerStore(initial))
 	saved := []playerStoreProofRow{
-		proofRow(playerStoreOwnerKind, savebarrier.InitialOwnerEpoch, savebarrier.InitialSaveSeq, ""),
+		proofRow(playerStoreOwnerKind, accountdirectory.InitialOwnerEpoch, accountdirectory.InitialSaveSeq, ""),
 		proofRow(1, 7, 9, "hot"),
 	}
 	require.False(t, isInitialPlayerStore(saved))
@@ -59,4 +59,3 @@ func TestDigestPlayerStoreRowsCoversEveryColumn(t *testing.T) {
 	right[1].holderInstance, right[1].bytes = []byte("a"), []byte("bc")
 	require.NotEqual(t, digestPlayerStoreRows("zone_1_db", left), digestPlayerStoreRows("zone_1_db", right))
 }
-

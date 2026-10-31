@@ -24,7 +24,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"os"
 	"path/filepath"
-	pb "proto/common/database"
 	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
 	"sync/atomic"
@@ -257,34 +256,3 @@ func isMySQLErr(err error, number uint16) bool {
 
 // Fixture只供integration测试复用正式控制面，不向生产装配暴露Schema/Operator。
 func (d *DB) Fixture() *sqltest.Fixture { return d.fixture }
-func (d *DB) Freeze(ctx context.Context) (*pb.SqlWriterMaintenanceReceipt, error) {
-	return d.fixture.Freeze(ctx)
-}
-func (d *DB) PrepareRelease(ctx context.Context, floor uint64) ([]byte, *pb.SqlWriterMaintenanceReceipt, error) {
-	return d.fixture.PrepareRelease(ctx, floor)
-}
-func (d *DB) Release(ctx context.Context, floor uint64) (*pb.SqlWriterMaintenanceReceipt, error) {
-	receipt, err := d.fixture.Release(ctx, floor)
-	if err == nil {
-		d.Cfg.Permission = d.fixture.Permission
-	}
-	return receipt, err
-}
-func (d *DB) ReopenAfterRelease(ctx context.Context) error {
-	if err := d.fixture.ReopenAfterRelease(ctx); err != nil {
-		return err
-	}
-	d.Cfg.Permission = d.fixture.Permission
-	return nil
-}
-
-// MaintenanceCfg只交给恢复工具；冻结原件由调用者另传RouteStoreOptions.MaintenanceFreeze。
-func (d *DB) MaintenanceCfg(ctx context.Context) (store.MySQLConfig, error) {
-	var principal string
-	if err := d.Raw.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal); err != nil {
-		return store.MySQLConfig{}, err
-	}
-	cfg := d.SchemaCfg
-	cfg.Permission = authoritysql.Operator(principal)
-	return cfg, nil
-}

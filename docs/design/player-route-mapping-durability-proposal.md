@@ -1534,9 +1534,9 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 ---
 
-## 15. 2026-10-23 负责人拍板：映射改为直读 TiDB，撤掉 Redis 副本（设计已定，未落码）
+## 15. 2026-10-23 负责人拍板：映射改为直读 TiDB，撤掉 Redis 副本（2026-10-30 已落码，未编译，待 Codex 验证）
 
-> **状态**：方向已拍板，本节是落码依据；**一行代码都还没改**。取代 §2「Redis 完整副本 + 就绪标记」、§5.1 / §5.4、§13 的 M1–M5、第 1b-2 批对账 leader 与第 3 批读方。保留：库为真源、四张（含 proto 守卫共五张）路由表、合服围栏落库、提交点在 TiDB 事务。
+> **状态（2026-10-30 更新）**：已按 §15.9「落码口径」写完，未编译。下面是当时的方向说明，**落码以 §15.9 为准**。取代 §2「Redis 完整副本 + 就绪标记」、§5.1 / §5.4、§13 的 M1–M5、第 1b-2 批对账 leader 与第 3 批读方。保留：库为真源、四张（含 proto 守卫共五张）路由表、合服围栏落库、提交点在 TiDB 事务。
 > **来源**：负责人在会话「账号登录逻辑/物理服瓶颈」里，面对三个选项（直读 TiDB / Redis 分片副本 / 这次不动）选了「直读 TiDB（推荐）」。选项原文：去掉 Redis 映射副本，`player_route` 只在 TiDB 一份，登录、进场、go/db 直接 SQL 点查，go/db 在同一 TiDB 事务里核落点；删掉就绪标记、对账 leader、预热、发布等待。负责人同日说明：项目未上线，玩家数据可完全清空。
 > **与 §14 的关系**：§14（2026-10-21 全球正式默认与首次启动）里依赖副本的部分随本节作废：对账 leader 自然挂 ready、go/db 消费 / 重试就绪闸放行、「Mapping Redis 无历史 zone/placement/maprev/merged_into」这一条空环境判据、存量环境的 `route-tool import-from-redis` 与 `audit -require-maprev`。首次启动改为：预建并迁移全局库与白名单落点库 → 起 data_service（§14 的 SQL 空环境判据保留）→ 直接起 go/db 与 login，不再等待 ready。§14 其余内容（RequireTiDB、Placement.Required、PinOnCreate、storage_id 白名单反解、强读会话）保留。
 > **依据**：§12.3 与 2026-10-22~23 的两轮多代理静态核对（基线 HEAD `940ef9746` / `2c07f2c28`）；D1 移交 [d1-review-fix-handoff-20261023.md](../handoff/d1-review-fix-handoff-20261023.md)；数据服务路由审计会话给出的写门禁契约（[data_service_role_and_scope.md](./data_service_role_and_scope.md)「写门禁契约」「已澄清」）。本节的删除清单是汇总结果，**不是穷举**；落码第一步先按 §15.7 B0 做全仓穷举盘点。
@@ -1735,6 +1735,27 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
   - (b) 按 [cluster 稿](./redis-player-store-cluster.md) §5.4 不再读映射，由消费端 go/db 的 stale 判定作权威。§5.4 是作废的 2c / 2d 分片设计的一部分，单独采用要重新核对补投索引的跨 zone 迁移语义。
 
   两种都依赖 §15.5 第 1 条的三态。按 §11「先做最小完整方案」，倾向 (a)。
+
+**2026-10-30 落码口径(用户「没做完的话你就按最标准的方式去做,数据强一致性,代码可读易懂,可水平扩展」,本段定了上面的待决项)**
+
+B8 删掉了 go/db 的 Kafka 消费和 saveoutbox,上面清单里 G1、G2、G9、G12、T1、T2、T10 对应的代码已经不存在,不再处理。其余按下面定:
+
+- **(a) §15 为准。** 10-26 补段里挂在 `route_reconcile`、ReadyMarker、Redis watermark 上的释放水位全部删除,R 侧收敛到现有的 `RequireReconcile=false` 形状,然后把这个参数和 floor 校验一起删掉,只剩一种形状。
+- **(b)(c)** 用户已授权,先写完,再整批交 Codex 验证。
+- **(d) go/db 选库:认领前一次强读 `player_route`,不在玩家库事务里跨库锁路由行。** 原选项写的是「在同一 TiDB 事务里核落点」,这里有意偏离,理由:
+  - 新路径上写权已经由写权行(代次 + 持有者)在玩家库的提交事务里判定,路由行不再是防旧写的手段。
+  - `Save` 带着认领时返回的落点,不读路由;只有 `LoadAndClaim` 和实体已没的空行释放读一次。每笔存盘多一次跨库 `FOR UPDATE`,等于把全部存盘串到全局库上,违背「所有层都要水平扩展」。
+  - 跨库事务只在同一个集群里成立,拆多集群(总体方案阶段 C)就不能用了。
+  - 现在没有搬库工具,落点建角后不变。将来搬库必须先在旧库的写权行上打搬离标记、把现任围掉,再改路由(写进总体方案 §7),不靠路由行锁。
+- **T3** `home_zone` 为 NULL 的行:go/db 按落点选库,`storage_id` 和 `home_zone` 都没有就是 `ErrPlayerStorageMissing`。data_service 的 `GetPlayerHomeZone` 对这种行回 NotFound。(10-30 落码核对补)建角恒写 `storage_id`:唯一写者 login 的启动门禁强制 `Placement.PinOnCreate=true` 且 `Node.ZoneId` 非零,`StorageIDForNewPlayer` 恒回非 0;`RegisterHome` 和 `chk_route_place` 本身允许 NULL,只有 `LegacyNonGlobal` 的 dev/test 夹具走得到。所以 go/db 只留一种 fail-closed 语义:`storage_id` 为 NULL 或没有路由行都是 `ErrPlayerStorageMissing`,不回落 `home_zone` 或本进程 zone,`Placement.Required` 配置项删除。
+- **T4、T5** barrierrestore 里按路由模式分支、映射键检查、广播围栏、`RouteRecoveryAudit` 整套删除。路由表现在只有 SQL 一份,维护恢复不需要比对 Redis。
+- **T6** go/db 的路由库名取写者配置的 `AuthoritySchema`,不加新配置项。
+- **T7** relocate 已随旧工具删除,不再处理。
+- **T8** runtime 角色计划加 `player_route` 的 SELECT,写进运维文档;`maintenance_drain.ps1` 的计划由运维提供,不改脚本。
+- **T9** 容量:每次认领一次点查,存盘不读路由。
+- **L16** dev 模式「未登记、可写」的口径随 Redis 模式一起删,只剩一种语义:没有路由行就是 NotFound。
+- **`MappingRedis`**:写门禁的玩家锁如果 B8 之后已经没有调用方,一起删;只剩名字缓存时改名 `NameCacheRedis`,说明写清楚「只放可丢弃的读缓存」。
+- **F8 Java**:Java 没有映射层,`route_authority.proto` 是 Java 自己的副本,不在客户端契约内,这边改不影响它,不动 Java 仓。
 
 **逐文件清单**
 

@@ -113,18 +113,16 @@ func seedGuild(t *testing.T, db *sql.DB, guildID uint64, name string, zone uint3
 	require.NoError(t, err)
 }
 
-// TestRemoveGuildFromRank_UsesAuthoritativeZoneNotCallerHint 是合服后那个
-// "幽灵公会"的直接复现:调用方拿着(合服前的)源 zone 来清榜,而 MySQL 里公会
-// 已经属于目标 zone。修复前 ZREM 打在源 zone 的空 ZSET 上,目标 zone 榜里的条目
-// 永远留着 —— 榜首出现一个查不到名字的公会。
+// TestRemoveGuildFromRank_UsesAuthoritativeZoneNotCallerHint:调用方传错 zone 来清榜,
+// 权威 zone 榜里的条目也要摘掉,否则榜首会留下一个查不到名字的公会。
 func TestRemoveGuildFromRank_UsesAuthoritativeZoneNotCallerHint(t *testing.T) {
 	repo, db, _ := newRepoOnThrowawayDB(t)
 	ctx := context.Background()
 
 	const (
 		guildID    uint64 = 5001
-		sourceZone uint32 = 10 // 合服前的 zone,也是陈旧缓存里的值
-		targetZone uint32 = 20 // MySQL 里的权威 zone(合服已改写)
+		sourceZone uint32 = 10 // 调用方传错的 zone
+		targetZone uint32 = 20 // MySQL 里的权威 zone
 	)
 	seedGuild(t, db, guildID, "ghost-candidate", targetZone)
 
@@ -133,7 +131,6 @@ func TestRemoveGuildFromRank_UsesAuthoritativeZoneNotCallerHint(t *testing.T) {
 	require.NoError(t, repo.rdb.ZAdd(ctx, zoneRankKey(sourceZone),
 		redis.Z{Score: 999, Member: guildID}).Err())
 
-	// 调用方传的是**陈旧**的源 zone —— 修复前这一步只会删源 zone 的条目。
 	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, sourceZone))
 
 	assertNotRanked(t, ctx, repo, guildRankKey, guildID)
@@ -194,6 +191,65 @@ func TestRemoveGuildFromRank_OtherGuildsUntouched(t *testing.T) {
 	score, err := repo.rdb.ZScore(ctx, zoneRankKey(30), "5004").Result()
 	require.NoError(t, err)
 	assert.Equal(t, float64(200), score, "同区其它公会必须原封不动")
+}
+
+// 合服不改写 guild.zone_id:写分按最终区进榜,源区的键不再增长;zone_id 还是建帮时的原始区。
+func TestUpdateGuildScore_WritesTheFinalZoneRank(t *testing.T) {
+	repo, db, _ := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const guildID uint64 = 5101
+	seedGuild(t, db, guildID, "merged-source", 10)
+	bindMergedZones(t, repo, map[uint32]uint32{10: 20})
+
+	require.NoError(t, repo.UpdateGuildScore(ctx, guildID, 10, 777))
+
+	score, err := repo.rdb.ZScore(ctx, zoneRankKey(20), fmt.Sprintf("%d", guildID)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, float64(777), score)
+	assertNotRanked(t, ctx, repo, zoneRankKey(10), guildID)
+	var zone uint32
+	require.NoError(t, db.QueryRow("SELECT zone_id FROM guild WHERE guild_id=?", guildID).Scan(&zone))
+	assert.Equal(t, uint32(10), zone, "合服不改写 zone_id")
+}
+
+// 重建按当前映射:合服之后源区公会进最终区的榜,旧键被清掉;撤销之后重建,回到各自的区。
+func TestRebuildRanks_FollowsTheCurrentMapping(t *testing.T) {
+	repo, db, _ := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	seedGuild(t, db, 5111, "from-source", 10)
+	seedGuild(t, db, 5112, "from-target", 20)
+	require.NoError(t, repo.rdb.ZAdd(ctx, zoneRankKey(10), redis.Z{Score: 1, Member: 5111}).Err())
+
+	bindMergedZones(t, repo, map[uint32]uint32{10: 20})
+	require.NoError(t, repo.RebuildRanks(ctx))
+	assert.EqualValues(t, 2, repo.rdb.ZCard(ctx, zoneRankKey(20)).Val())
+	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, zoneRankKey(10)).Val(), "源区的旧键要清掉")
+
+	bindMergedZones(t, repo, nil)
+	require.NoError(t, repo.RebuildRanks(ctx))
+	assert.EqualValues(t, 1, repo.rdb.ZCard(ctx, zoneRankKey(10)).Val())
+	assert.EqualValues(t, 1, repo.rdb.ZCard(ctx, zoneRankKey(20)).Val())
+}
+
+// 解散清榜:条目在最终区榜上,解散事务读到的是原始区,照样摘干净。
+func TestDisbandPath_RemovesFromTheFinalZoneRank(t *testing.T) {
+	repo, db, _ := newRepoOnThrowawayDB(t)
+	ctx := context.Background()
+	const (
+		guildID  uint64 = 5121
+		leaderID uint64 = guildID + 1
+	)
+	seedGuild(t, db, guildID, "merged-disband", 10)
+	bindMergedZones(t, repo, map[uint32]uint32{10: 20})
+	require.NoError(t, repo.UpdateGuildScore(ctx, guildID, 10, 100))
+
+	res, err := repo.DisbandGuild(ctx, guildID, leaderID, testNowMs)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(10), res.ZoneID)
+	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, res.ZoneID))
+
+	assertNotRanked(t, ctx, repo, guildRankKey, guildID)
+	assertNotRanked(t, ctx, repo, zoneRankKey(20), guildID)
 }
 
 func assertNotRanked(t *testing.T, ctx context.Context, repo *GuildRepo, key string, guildID uint64) {

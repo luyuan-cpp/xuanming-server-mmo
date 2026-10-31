@@ -8,10 +8,11 @@
 //     也不把 scene 自己持有的数据(背包、货币、宠物、属性、任务)放进摘要(设计 §3.4)。
 //   - 唤醒只是提示:丢了退回资产通道原有的退避重投,不影响正确性(设计 L-4)。
 //
-// Redis 契约(核心 Redis,即 tlsRedis.GetZoneRedis();改一边必须同步改另一边):
-//   player:<player_id>:sync_digest  hash  g          = 代次(hash 创建时刻的 Redis 服务器毫秒,只在 hash 不存在时写)
+// Redis 契约(改一边必须同步改另一边):
+//   player:{player_id}:sync_digest  玩家域(tlsPlayerRedis),hash
+//                                         g          = 代次(hash 创建时刻的 Redis 服务器毫秒,只在 hash 不存在时写)
 //                                         "<域号十进制>" = 该域的变更计数(HINCRBY)
-//   assetop:wake                    Pub/Sub 频道,载荷 = 十进制 player_id
+//   assetop:wake                    控制域(tlsRedis),Pub/Sub 频道,载荷 = 十进制 player_id
 // kSyncDigestKeyFmt 由 Go 测试逐字解析比对(沿用 owner_epoch_crosslang_test.go 的 cppStringConstant:
 // 它在文件里找第一处「星号 + 名字 + 空格 + 等号」,再取其后的字符串字面量),所以声明必须保持
 // "inline constexpr const char 指针" 的写法,名字与值都不要改;注释里也不要写出那个模式,否则会先被它匹配到。
@@ -33,8 +34,8 @@
 
 namespace player_landing
 {
-	// 摘要 hash 的键;%llu = player_id。与 Go 侧 playersync 的 "player:%d:sync_digest" 是同一份契约。
-	inline constexpr const char *kSyncDigestKeyFmt = "player:%llu:sync_digest";
+	// 摘要 hash 的键;%llu = player_id。与 Go 侧 playersync 的 "player:{%d}:sync_digest" 是同一份契约。
+	inline constexpr const char *kSyncDigestKeyFmt = "player:{%llu}:sync_digest";
 
 	// 摘要 hash 里代次字段的名字;其余字段名都是域号十进制。
 	inline constexpr const char *kSyncDigestGenerationField = "g";
@@ -50,9 +51,9 @@ class PlayerLandingSystem
 {
 public:
 	// ---- 纯函数(无 I/O、无 ECS,头文件内联,供 cpp/tests/player_landing_test 直接单测,
-	//      测试不必链接 scene 库;写法同 PlayerTeamSystem::ParseTeamIndexReply)----
+	//      测试不必链接 scene 库)----
 
-	// 把 HGETALL player:<id>:sync_digest 的字段名 / 值对解析进 *out(设计 §4.2 第 4 步)。
+	// 把 HGETALL player:{id}:sync_digest 的字段名 / 值对解析进 *out(设计 §4.2 第 4 步)。
 	//   - "g"                    → generation;
 	//   - 能解析成已知 SyncDomain 的字段(规范十进制、> 0、是已定义的枚举值)→ entries,保持输入顺序;
 	//   - 其余字段一律视为未知并跳过,值也不校验(新服务端先上、旧 scene 未升级时字段会多于枚举)。

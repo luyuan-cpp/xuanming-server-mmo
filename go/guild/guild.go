@@ -45,6 +45,7 @@ import (
 	"shared/idsegment"
 	"shared/kafkautil"
 	"shared/killswitch"
+	"shared/playerredis"
 	"shared/safego"
 	"shared/serverbase"
 	"shared/snowflakealloc"
@@ -150,6 +151,15 @@ func main() {
 	if err := repo.BindPublication(relay); err != nil {
 		panic(err)
 	}
+	// 合服映射(docs/design/player-data-tidb-scaling-plan.md §7.1):同区比较、按区查询、公会榜都按它解析。
+	// guild 没有全局库连接,从 data_service 取,读不到拒绝启动。放在榜单重建之前:重建要按它算最终区。
+	mergedZones, err := svc.LoadMergedZones(context.Background(), svcCtx.DataServiceClient)
+	if err != nil {
+		logx.Must(fmt.Errorf("guild merged zones: %w", err))
+	}
+	repo.BindMergedZones(mergedZones)
+	mergedZones.Start()
+	defer mergedZones.Stop()
 	sqlBackend := authoritysql.Backend(config.AppConfig.MySQL.Backend)
 	if err := repo.ConfigureRoleAuthority(config.AppConfig.AccountRoleSchema, sqlBackend); err != nil {
 		logx.Must(err)
@@ -157,11 +167,12 @@ func main() {
 	if err := repo.ConfigureMatchAuthority(config.AppConfig.MatchAuthoritySchema, sqlBackend); err != nil {
 		logx.Must(err)
 	}
-	loginPool := config.AppConfig.LoginRedis.PoolSize
-	if loginPool == 0 {
-		loginPool = 8
+	loginRedis, err := playerredis.New(config.AppConfig.LoginRedis.ClientConfig(playerredis.Config{
+		PoolSizePerNode: 8, DialTimeoutMs: 5000, ReadTimeoutMs: 3000, WriteTimeoutMs: 3000, PoolTimeoutMs: 1000,
+	}))
+	if err != nil {
+		logx.Must(fmt.Errorf("guild LoginRedis config: %w", err))
 	}
-	loginRedis := redis.NewClient(&redis.Options{Addr: config.AppConfig.LoginRedis.Host, Password: config.AppConfig.LoginRedis.Password, DB: config.AppConfig.LoginRedis.DB, PoolSize: loginPool, MaxActiveConns: loginPool, MaxIdleConns: loginPool, PoolTimeout: time.Second, MaxRetries: -1})
 	defer func() {
 		if !ownerReady || shutdownComplete {
 			loginRedis.Close()
@@ -287,7 +298,7 @@ func main() {
 	if err := repo.RebuildRanks(context.Background()); err != nil {
 		panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
 	}
-	onlineResolver := logic.NewOnlineStatusResolver(svcCtx.PlayerLocatorRedisClient)
+	onlineResolver := logic.NewOnlineStatusResolver(svcCtx.PlayerRedis)
 
 	// guild_id 只由号段发(svcCtx.GuildIDSegment,IdSegment.Enabled 时已在 NewServiceContext
 	// 里接好 data_service),号段失败即建帮失败。
@@ -333,7 +344,7 @@ func main() {
 			logx.Must(fmt.Errorf("guild asset op timing invalid: %w", err))
 		}
 		assetPipe, err = svc.NewAssetPipeline(config.AppConfig.AssetOp, logic.AssetOpRetryBase(),
-			svcCtx.PlayerLocatorRedisClient, assetStore)
+			svcCtx.PlayerRedis, svcCtx.PlayerLocatorRedisClient, assetStore)
 		if err != nil {
 			logx.Must(fmt.Errorf("guild asset pipeline: %w", err))
 		}
@@ -386,14 +397,13 @@ func main() {
 	// trialMatch 是不是 nil 决定;而结算、巡检器、待入队循环在历练关着时也要跑(关之前留下的在途对局与待入队物品
 	// 仍要处理完),它们需要这两个仓储。
 	//   - 邀请/同意/占位使用同TiDB原角色P锁，Redis只保留巡检租约，清空不会丢失原件；
-	//   - 结果记录与战斗锁在 PlayerLocatorRedis:它必须与 battle / scene 的 zone Redis 是同一实例同一 DB
-	//     (K8s 的 SharedRedis)。指错的表现是结算后销不掉账、巡检器永远读不到记录,而且不报错 —— 启动期无从自检,
-	//     由部署核对(§6.46 B6b-srv1 第 0 步)。
+	//   - 结果记录读 match 权威库的 SQL 终局(MatchAuthoritySchema,启动期已核列);
+	//   - 战斗锁在玩家域(PlayerRedis):它必须与 scene 写 battle:lock:{id} 的是同一个存储域。
 	trialLobby, err := data.NewSQLTrialLobbyRepo(svcCtx.RedisClient, repo, guildIDs.Mint)
 	if err != nil {
 		logx.Must(fmt.Errorf("guild trial lobby repo: %w", err))
 	}
-	trialResults, err := data.NewTrialResultRecords(svcCtx.PlayerLocatorRedisClient)
+	trialResults, err := data.NewTrialResultRecords(repo)
 	if err != nil {
 		logx.Must(fmt.Errorf("guild trial result records: %w", err))
 	}
@@ -426,7 +436,7 @@ func main() {
 		Match:        trialMatch,
 		Cancellation: trialCancellation,
 		Results:      trialResults,
-		BattleLocks:  svcCtx.PlayerLocatorRedisClient,
+		BattleLocks:  svcCtx.PlayerRedis,
 		// 没配 MatchRpc 时 Timeout 是 0,logic 取自己的默认值(1500ms),但那时也不会调 match。
 		MatchBudget: time.Duration(config.AppConfig.MatchRpc.Timeout) * time.Millisecond,
 	}
@@ -435,19 +445,11 @@ func main() {
 	logTrialClosedReason(config.AppConfig, matchConfigured)
 
 	// 帮会按 zone 隔离:客户端请求的 zone 取 data_service 的玩家归属映射(logic/home_zone.go)。
-	// 没配 DataServiceRpc 时保持 nil 接口:内部调用照常,客户端请求一律按服务不可用拒绝。
-	//
-	// 成员 / 帮主展示名走同一个 data_service 客户端(logic/player_name_resolver.go,B3b)。
-	// 同样保持 nil 接口:没配 DataServiceRpc 时名字一律留空、不 panic。两者语义不同 ——
+	// 成员 / 帮主展示名走同一个 data_service 客户端(logic/player_name_resolver.go,B3b)。两者语义不同 ——
 	// 归属区查不到要拒绝请求(fail-closed),名字取不到只是少显示几个字(fail-open)。
-	var homeZones logic.HomeZoneLookup
-	var playerNames logic.PlayerNameResolver
-	if svcCtx.DataServiceClient != nil {
-		homeZones = logic.NewDataServiceHomeZone(svcCtx.DataServiceClient, logic.DefaultHomeZoneLookupTimeout)
-		playerNames = logic.NewDataServicePlayerNames(svcCtx.DataServiceClient, logic.DefaultPlayerNameLookupTimeout)
-	} else {
-		logx.Error("Guild: DataServiceRpc not configured; cannot determine player home zone, all client guild requests will be rejected; member and leader names will be empty")
-	}
+	// 走到这里 DataServiceClient 一定不是 nil:上面读合服映射时没有客户端已经拒绝启动。
+	homeZones := logic.NewDataServiceHomeZone(svcCtx.DataServiceClient, logic.DefaultHomeZoneLookupTimeout)
+	playerNames := logic.NewDataServicePlayerNames(svcCtx.DataServiceClient, logic.DefaultPlayerNameLookupTimeout)
 	// 推送出口与"申请推送冷却"在这里一次装配(设计 §13.7 / §10.1)。
 	//
 	// NewGuildNotifier 自己判 nil:没配 Kafka(Brokers 为空 → KafkaWriter 为 nil)时它退回
@@ -479,7 +481,7 @@ func main() {
 	}
 	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, homeZones,
 		logic.WithApplicationQuota(applicationQuota),
-		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient, relay)),
+		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerRedis, relay)),
 		logic.WithApplyPushGate(repo.TryMarkApplyPush),
 		logic.WithPlayerNames(playerNames),
 		logic.WithEconomy(economy),
@@ -510,6 +512,7 @@ func main() {
 	// 必须在 MustNewServer 之后:go-zero 指标的全局开关由它内部的 SetUp → StartAgent 打开,之前写的样本会被丢弃
 	// (理由与告警口径见 server.PrimeGuildInternalMetrics)。
 	server.PrimeGuildInternalMetrics()
+	svc.PrimeMergedZoneMetrics()
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root))
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(loginRedis, repo.CheckOriginalRole))...)
 	defer s.Stop()
@@ -778,7 +781,7 @@ const trialResultsPoint = "guild.kafka.trial_results"
 //
 // 接线只有两处:
 //   - 结算入口:消费者只关心"提交位点还是退避重调",所以丢掉 SettleTrialResult 的去向、只留 error。
-//     销账(删 battle 落在 SharedRedis 的结果记录)、幂等闸门、毒消息标记都在 SettleTrialResult 里,这里不重复;
+//     幂等闸门、毒消息标记都在 SettleTrialResult 里,这里不重复;
 //   - 两个计数出口:指标在 logic 包注册,消费者(internal/kafka)不 import logic,经回调计数。
 func startTrialResultConsumer(c config.Config, guildLogic *logic.GuildLogic, admissions ...*drainproof.Session) (stop func(), err error) {
 	if len(admissions) > 1 {

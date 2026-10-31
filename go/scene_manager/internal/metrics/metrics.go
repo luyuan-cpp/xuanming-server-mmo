@@ -112,7 +112,7 @@ var (
 	//
 	// 它**不是**"所有被拒的 EnterScene":场景解析失败(resolveSceneForEnter 出错)、再入屏障
 	// 未到、Redis 读写失败、Kafka 路由失败等快速失败路径只回错误码,不记这条指标。
-	// scene_gone = destroy-while-entering(AtomicIncrPlayerCountIfSceneExists 返回 <0,场景在解析
+	// scene_gone = destroy-while-entering(AtomicAddSceneMemberIfSceneExists 返回 <0,场景在解析
 	// 之后、预占之前被回收;只有请求指定 scene_id 的进入走这条预占路径)。这个发射点曾在 a0152a5b8
 	// 被删、d41219ca7 加回分支时漏带,2026-09-20 补回。(2026-10-12 历史改写后对应的新号是 0e26844b5
 	// 与 f3f08e2ad;10-21 起旧号经 6c7f507cc 也作为祖先保留在 main 里,引用以新号为准。)
@@ -453,6 +453,27 @@ var (
 		Help:      "Dead scene node reconcile passes by outcome (completed|retry|abandoned).",
 	}, []string{"zone_id", "outcome"})
 
+	// sceneMemberReconcileMembersTotal:成员集合对账读过的成员(internal/logic/scene_member_reconcile.go),按结局分。
+	// outcome 取 SceneMemberReconcile* 常量:
+	//   ok         location 指向这里,成员身份成立
+	//   removed    location 不指向这里,已摘除(含摘除后复核又加回去的,那是对账与进场恰好交错)
+	//   skipped    location 写坏了,或还在宽限内(可能是在途预占),这一轮不动它
+	//   malformed  成员不是合法的 player_id,已摘除
+	//   error      读 location 或摘除失败,下一遍再看
+	// removed 长期不为 0 说明 scene_manager 经常在进场中途崩溃,或有摘成员的路径漏了。只有领导者会发出。
+	sceneMemberReconcileMembersTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "scene_member_reconcile_members_total",
+		Help:      "Members checked by the scene member reconcile against player location, by outcome (ok|removed|skipped|malformed|error).",
+	}, []string{"outcome"})
+
+	// sceneMemberReconcilePassesTotal:走完一遍全部成员集合的次数。它长时间不涨说明预算跟不上成员总量,或对账循环停了。
+	sceneMemberReconcilePassesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "scene_member_reconcile_passes_total",
+		Help:      "Completed passes of the scene member reconcile over all live member sets.",
+	})
+
 	// nodeDetachDeferredTotal:已判死的 scene 节点因为 death_at 写不进、或摘负载集(ZREM)失败,
 	// 被**留在负载集里**推迟摘除(GO-6,internal/logic/reentry_barrier.go 的「推迟的摘除」一段)。
 	// outcome 取 NodeDetachOutcome* 常量:
@@ -590,9 +611,13 @@ func register() {
 			enterHolderReleaseTotal,
 			loadRefreshTotal, loadRefreshSeconds, loadRefreshNodeErrorsTotal,
 			mysteryMerchantScheduleTotal,
+			sceneMemberReconcileMembersTotal, sceneMemberReconcilePassesTotal,
 		)
 		for _, outcome := range loadRefreshOutcomes {
 			loadRefreshTotal.WithLabelValues(outcome).Add(0)
+		}
+		for _, outcome := range sceneMemberReconcileOutcomes {
+			sceneMemberReconcileMembersTotal.WithLabelValues(outcome).Add(0)
 		}
 		for _, result := range ownerEpochMintDurableResults {
 			ownerEpochMintDurableTotal.WithLabelValues(result).Add(0)
@@ -732,6 +757,39 @@ func ObserveNodeDetachDeferred(zoneID uint32, outcome string) {
 }
 
 // dead_node_reconcile_total 的 outcome 标签取值。**必须是常量**:它们直接变成 Prometheus label。
+// 成员集合对账的 outcome 标签取值,见 sceneMemberReconcileMembersTotal 的注释。**必须是常量**:它们直接变成 Prometheus label。
+const (
+	SceneMemberReconcileOK        = "ok"
+	SceneMemberReconcileRemoved   = "removed"
+	SceneMemberReconcileSkipped   = "skipped"
+	SceneMemberReconcileMalformed = "malformed"
+	SceneMemberReconcileError     = "error"
+)
+
+// sceneMemberReconcileOutcomes 是注册时预置为 0 的全部 outcome,新增取值时同步加在这里。
+var sceneMemberReconcileOutcomes = [...]string{
+	SceneMemberReconcileOK,
+	SceneMemberReconcileRemoved,
+	SceneMemberReconcileSkipped,
+	SceneMemberReconcileMalformed,
+	SceneMemberReconcileError,
+}
+
+// ObserveSceneMemberReconcile 记 count 个成员的对账结局。count 为 0 时什么都不做。
+func ObserveSceneMemberReconcile(outcome string, count int) {
+	if count <= 0 {
+		return
+	}
+	register()
+	sceneMemberReconcileMembersTotal.WithLabelValues(outcome).Add(float64(count))
+}
+
+// ObserveSceneMemberReconcilePass 记一次走完全部成员集合。
+func ObserveSceneMemberReconcilePass() {
+	register()
+	sceneMemberReconcilePassesTotal.Inc()
+}
+
 const (
 	DeadNodeReconcileOutcomeCompleted = "completed"
 	DeadNodeReconcileOutcomeRetry     = "retry"

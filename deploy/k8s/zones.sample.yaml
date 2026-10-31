@@ -28,7 +28,7 @@ zones:
       #                     instances created on demand.
       # Recommended baseline: world ~= 1.2x instance, scaling instance first when
       # dungeon/arena traffic rises. Monitor Redis keys
-      # scene_nodes:zone:{zoneId}:load and node:{id}:player_count.
+      # scene_nodes:zone:{zoneId}:load and node:zone:{zoneId}:{nodeId}:members (SCARD).
       #
       # 只要这两个键出现任意一个,就进入拆分模式:legacy 的 scene 键被忽略,
       # 也不会再生成名为 scene 的 Deployment。完整规则见

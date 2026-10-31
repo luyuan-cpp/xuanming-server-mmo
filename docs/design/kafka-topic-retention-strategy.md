@@ -25,7 +25,7 @@
 | `db_task_zone_<zone>`；世代 ≥2 带 `_g<N>` | 本机 Go 缺省 24 小时；K8s 按档位，见下节 | login 与 db 启动时共同声明相同的分区及保留配置。实际缓冲还受容量限制，投递、补投与盘预算见[DBTask 设计 §B](./db-task-delivery-and-retention.md)。 |
 | `transaction_log_topic_g<N>`、`player_snapshot_topic_g<N>` | 配置缺省 30 天 | 初始化脚本预建，data_service 的 `EnsureTopics` 再核对；当前配置分区数分别为 6、3。未单独配置 `retention.bytes`，仍受 broker 容量缺省限制，不能保证实际保留 30 天。 |
 | `match-results` | 显式 7 天 | match 与 guild 的结果消费入口声明；全球 SQL 模式还要求至少 3 副本、`min.insync.replicas≥2`、禁用非同步副本选主。见[战斗设计](./turn-based-battle-server.md)及[帮会试炼](./guild-phase2/06-activities.md)。 |
-| `match-rating-snapshot` | 旧兼容评分链缺省 168 小时 | 仅 `RatingEnabled && !GlobalMatch.Enabled` 时声明，缺省 3 分区、发布关闭；不能当作当前全球排行榜的恢复链。配置见 `go/match/etc/match_service.yaml`。 |
+| `match-rating-snapshot` | 已退役 | 2026-10-30 随 `go/match` 本地模式删除，代码与配置都不再声明它。 |
 
 player_inbox 没有独立的长保留 Kafka topic：内容在 SQL 中提交后，通过 `scene-cmd_g<N>` 提醒在线节点；
 提醒可丢，落地拉取与在线补拉负责恢复。见[玩家收件箱设计](./player-inbox-service.md)。

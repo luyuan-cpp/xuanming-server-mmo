@@ -19,9 +19,6 @@ import (
 // 解码之后捕获原件；SQL目录只在真实事务首锁复核，不给旧会话反查新owner补权。
 func originalRoleInterceptor(sc *svc.ServiceContext) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if sc.Authority == nil {
-			return handler(ctx, req)
-		}
 		detail, present := ctxkeys.GetSessionDetails(ctx)
 		if !present {
 			if strings.HasPrefix(info.FullMethod, "/match.MatchService/") || strings.HasPrefix(info.FullMethod, "/teampb.ClientPlayerTeam/") {

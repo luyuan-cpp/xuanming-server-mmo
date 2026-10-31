@@ -163,7 +163,7 @@ func TestListingRepoIntegration(t *testing.T) {
 
 	t.Run("分区过滤 + 排序 + 分页", func(t *testing.T) {
 		q := onSale
-		q.MarketZone = 1
+		q.MarketZones = []uint32{1}
 		q.Sort = tradepb.ListingSort_LISTING_SORT_PRICE_ASC
 		recs, err := repo.QueryListings(ctx, q, 0, 1)
 		require.NoError(t, err)

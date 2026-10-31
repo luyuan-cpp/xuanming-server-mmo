@@ -5,12 +5,14 @@ package main
 //
 //	O1 登录进场;
 //	O2 清场:GetQueueStatus(153)必须是 NOT_QUEUED;还在排队(上一轮残留)直接失败并说明,不自动取消;
-//	O3 重复 orderingSmokeRounds 轮:**不等回包**,连发 JoinQueue(157,1V1)→ CancelQueue(148,不带票号),
-//	   等两条回包都到,再查 GetQueueStatus。客户端的意图是「加入后取消」,所以最终必须不在队列里。
-//	   执行顺序被颠倒(Cancel 先执行、找不到票据回成功,Join 后执行入队)时,这一轮会停在 QUEUED;
-//	   本轮记为乱序,并带 Join 回包里的票号补一次 CancelQueue 收尾。
+//	O3 先走一次地域探测(network_probe.go),再重复 orderingSmokeRounds 轮:**不等回包**,连发 JoinQueue(157,1V1)
+//	   → CancelQueue(148,与这次 Join 共用同一个 request_id),等两条回包都到,再带 request_id 查 GetQueueStatus。
+//	   客户端的意图是「加入后取消」,所以最终必须不在队列里,且撤销墓碑已提交(request_cancelled)。
+//	   撤销在 SQL 留永久墓碑(go/match authority.CancelIntent):执行顺序被颠倒(Cancel 先提交,或插在 Join 的两段事务之间)时,
+//	   Join 被墓碑挡下、回 kMatchInternal,玩家同样不在队列里,所以这一轮不能靠「停在 QUEUED」发现,判据是
+//	   「Join 被拒 + request_cancelled」;本轮记为乱序。万一停在 QUEUED(墓碑没挡住),同样记乱序,并带 Join 回包里的票号收尾。
 //
-// 判据:任何一轮停在 QUEUED 即失败。gate 路由 lane(批次 C)上线之前,路由服按条随机选副本、业务服按条并发执行,
+// 判据:任何一轮 Join 被墓碑挡下或停在 QUEUED 即失败。gate 路由 lane(批次 C)上线之前,路由服按条随机选副本、业务服按条并发执行,
 // 本场景**预期会间歇失败**(这正是它要证明的缺陷);上线之后必须每轮都通过。单副本也可能失败:同一 HTTP/2 连接上的
 // 两个 unary 在服务端是两个 goroutine 并发执行(§1.2)。
 //
@@ -30,6 +32,7 @@ package main
 //     (client-request-ordering.md §7.2 第 1 条),O2 就会超时;直连模式本方案也不保序(O7);
 //   - 环境里不能有别的玩家在排 1V1:1V1 两人凑对,另一个人在队列里时,本机器人可能在 Join 与 Cancel 之间被凑走,
 //     Cancel 回「太迟」、状态变成 MATCHED,本场景按前置条件不满足失败(reason 里写明);
+//   - battle 公网端口要从 robot 所在机器可达:O3 入队前要探测,拨不通报 O3-pipeline;
 //   - 限流:157 / 148 / 153 都不在 MessageLimiter 表里,吃 gate 默认档(每个消息号滑动 1 秒内最多 3 次)。每轮每个号
 //     各发 1 次(乱序轮多 1 次 148),轮间隔 orderingSmokeRoundSpacing 保证不超限。
 
@@ -76,7 +79,10 @@ const (
 )
 
 // tip id 一律读导表器生成的枚举,不写字面量(AGENTS.md §7 不变量 5)。
-var tipOrderingAlreadyQueued = uint32(tiptable.MatchError_kMatchAlreadyQueued)
+var (
+	tipOrderingAlreadyQueued = uint32(tiptable.MatchError_kMatchAlreadyQueued)
+	tipOrderingMatchInternal = uint32(tiptable.MatchError_kMatchInternal)
+)
 
 var errOrderingSmokeTimeout = errors.New("在等待窗口内没有收到回包")
 
@@ -172,28 +178,39 @@ func RunOrderingSmoke(cfg *config.Config) {
 		if round > 1 {
 			time.Sleep(orderingSmokeRoundSpacing)
 		}
-		ticket, err := bot.pipelineJoinThenCancel()
+		pipeline, err := bot.pipelineJoinThenCancel()
 		if err != nil {
 			fail("O3-pipeline", "round=%d/%d: %v", round, orderingSmokeRounds, err)
 		}
-		state, err := bot.queueState()
+		status, err := bot.queueStatus(pipeline.requestId)
 		if err != nil {
 			fail("O3-status", "round=%d/%d GetQueueStatus: %v", round, orderingSmokeRounds, err)
 		}
-		switch state {
+		switch status.GetState() {
 		case match.QueueState_QUEUE_STATE_NOT_QUEUED, match.QueueState_QUEUE_STATE_UNSPECIFIED:
-			// 符合发送顺序:加入后取消。
+			// Cancel 带原请求编号,无论先后都留墓碑。查不到说明撤销没生效,Join 被拒也就不能归因于它。
+			if !status.GetRequestCancelled() {
+				fail("O3-status", "round=%d/%d Cancel replied but request_cancelled=false, join_error_code=%d (the cancel tombstone was not committed)",
+					round, orderingSmokeRounds, pipeline.joinErrorCode)
+			}
+			if pipeline.joinErrorCode != 0 {
+				// 墓碑先于 Join 提交,Join 被挡下:执行顺序与发送顺序相反。玩家不在队列里,不用收尾。
+				reordered = append(reordered, round)
+				zap.L().Warn("[ordering-smoke] Execution order reversed: Cancel committed before Join, the tombstone rejected Join",
+					zap.Int("round", round), zap.Uint32("join_error_code", pipeline.joinErrorCode))
+			}
+			// 否则符合发送顺序:加入后取消。
 		case match.QueueState_QUEUE_STATE_QUEUED:
-			// Cancel 先于 Join 执行。带 Join 回包里的票号收尾,下一轮才是干净的起点。
+			// 墓碑本该挡住 Join,仍在排队说明顺序或撤销出了问题。带 Join 回包里的票号收尾,下一轮才是干净的起点。
 			reordered = append(reordered, round)
-			zap.L().Warn("[ordering-smoke] Execution order reversed: Cancel ran before Join, player is still queued",
-				zap.Int("round", round), zap.String("ticket", ticket))
-			if err := bot.cancelWithTicket(ticket); err != nil {
-				fail("O3-cleanup", "round=%d/%d 乱序后收尾取消失败 ticket=%s: %v", round, orderingSmokeRounds, ticket, err)
+			zap.L().Warn("[ordering-smoke] Player is still queued after Join and Cancel both replied",
+				zap.Int("round", round), zap.String("ticket", pipeline.ticket))
+			if err := bot.cancelWithTicket(pipeline.ticket); err != nil {
+				fail("O3-cleanup", "round=%d/%d 乱序后收尾取消失败 ticket=%s: %v", round, orderingSmokeRounds, pipeline.ticket, err)
 			}
 		default:
 			fail("O3-status", "round=%d/%d 队列状态 %s:环境里有别的玩家在排 1V1,本机器人在 Join 与 Cancel 之间被凑走(前置条件不满足,见文件头)",
-				round, orderingSmokeRounds, state)
+				round, orderingSmokeRounds, status.GetState())
 		}
 	}
 	if len(reordered) > 0 {
@@ -404,45 +421,75 @@ func (b *orderingSmokeBot) callAll(requests ...orderingSmokeRequest) ([]ordering
 	return records, nil
 }
 
-// pipelineJoinThenCancel 不等回包连发 JoinQueue → CancelQueue(不带票号,模拟「点了匹配马上又点取消」),
-// 等两条各自的回包(按请求号认领)。返回 Join 回包里的票号(乱序时用来收尾)。
-func (b *orderingSmokeBot) pipelineJoinThenCancel() (string, error) {
-	replies, err := b.callAll(
-		orderingSmokeRequest{game.MatchServiceJoinQueueMessageId, &match.JoinQueueRequest{Mode: match.MatchMode_MATCH_MODE_1V1}},
-		orderingSmokeRequest{game.MatchServiceCancelQueueMessageId, &match.CancelQueueRequest{}})
+// orderingPipelineResult 是一轮 Join → Cancel 流水线的结局。
+type orderingPipelineResult struct {
+	requestId     string // Join 与 Cancel 共用的意图编号
+	ticket        string // Join 回包里的票号(仍在排队时用来收尾)
+	joinErrorCode uint32 // Join 的业务拒绝码,0 = 受理;非 0 只可能是 kMatchInternal,见 pipelineJoinThenCancel
+}
+
+// pipelineJoinThenCancel 不等回包连发 JoinQueue → CancelQueue(同一个 request_id,模拟「点了匹配马上又点取消」),
+// 等两条各自的回包(按请求号认领)。
+//
+// Join 回 kMatchInternal 不在这里判失败:撤销墓碑抢先提交时 Join 就回这个码(authority.ErrJoinCancelled 经 joinRejection),
+// 响应体分不出它和真的内部错误,由调用方查 GetQueueStatus 的 request_cancelled 判定。真的内部错误之后 Cancel 照样留墓碑,
+// 会被记成乱序,但结果同样是 ORDERING_SMOKE_FAIL,不会假绿。其余业务拒绝(已在队列中、探测失效等)直接报错。
+func (b *orderingSmokeBot) pipelineJoinThenCancel() (orderingPipelineResult, error) {
+	planId, err := ensureNetworkProbe(b.gc, b.stats, b.account)
 	if err != nil {
-		return "", err
+		return orderingPipelineResult{}, err
+	}
+	requestId := chatSmokeRequestId()
+	replies, err := b.callAll(
+		orderingSmokeRequest{game.MatchServiceJoinQueueMessageId, &match.JoinQueueRequest{
+			Mode:           match.MatchMode_MATCH_MODE_1V1,
+			BattleConfigId: crossZoneBattleConfigId,
+			RequestId:      requestId,
+			NetworkPlanId:  planId,
+		}},
+		orderingSmokeRequest{game.MatchServiceCancelQueueMessageId, &match.CancelQueueRequest{RequestId: requestId}})
+	if err != nil {
+		return orderingPipelineResult{}, err
 	}
 	join, cancel := replies[0], replies[1]
 	if join.envelopeTip != 0 || cancel.envelopeTip != 0 {
-		return "", fmt.Errorf("gate / 路由服拒绝:JoinQueue 信封 tip=%d,CancelQueue 信封 tip=%d", join.envelopeTip, cancel.envelopeTip)
+		return orderingPipelineResult{}, fmt.Errorf("gate / 路由服拒绝:JoinQueue 信封 tip=%d,CancelQueue 信封 tip=%d", join.envelopeTip, cancel.envelopeTip)
 	}
 	resp := &match.JoinQueueResponse{}
 	if err := proto.Unmarshal(join.body, resp); err != nil {
-		return "", fmt.Errorf("解析 JoinQueueResponse: %w", err)
+		return orderingPipelineResult{}, fmt.Errorf("解析 JoinQueueResponse: %w", err)
 	}
-	if resp.GetErrorCode() != 0 {
+	if code := resp.GetErrorCode(); code != 0 && code != tipOrderingMatchInternal {
 		hint := ""
-		if resp.GetErrorCode() == tipOrderingAlreadyQueued {
+		if code == tipOrderingAlreadyQueued {
 			hint = "(已在队列中:上一轮残留未清,见 O2)"
 		}
-		return "", fmt.Errorf("JoinQueue 业务拒绝 error_code=%d%s", resp.GetErrorCode(), hint)
+		return orderingPipelineResult{}, fmt.Errorf("JoinQueue 业务拒绝 error_code=%d%s", code, hint)
 	}
-	return resp.GetQueueTicket(), nil
+	return orderingPipelineResult{requestId: requestId, ticket: resp.GetQueueTicket(), joinErrorCode: resp.GetErrorCode()}, nil
 }
 
-// queueState 查一次权威队列状态(GetQueueStatus)。
-func (b *orderingSmokeBot) queueState() (match.QueueState, error) {
-	replies, err := b.callAll(orderingSmokeRequest{game.MatchServiceGetQueueStatusMessageId, &match.GetQueueStatusRequest{}})
+// queueStatus 查一次权威队列状态(GetQueueStatus)。requestId 非空时,回包的 request_cancelled 说明这次 Join 的撤销墓碑是否已提交。
+func (b *orderingSmokeBot) queueStatus(requestId string) (*match.GetQueueStatusResponse, error) {
+	replies, err := b.callAll(orderingSmokeRequest{game.MatchServiceGetQueueStatusMessageId, &match.GetQueueStatusRequest{RequestId: requestId}})
 	if err != nil {
-		return match.QueueState_QUEUE_STATE_UNSPECIFIED, err
+		return nil, err
 	}
 	if replies[0].envelopeTip != 0 {
-		return match.QueueState_QUEUE_STATE_UNSPECIFIED, fmt.Errorf("gate / 路由服拒绝 GetQueueStatus:信封 tip=%d", replies[0].envelopeTip)
+		return nil, fmt.Errorf("gate / 路由服拒绝 GetQueueStatus:信封 tip=%d", replies[0].envelopeTip)
 	}
 	resp := &match.GetQueueStatusResponse{}
 	if err := proto.Unmarshal(replies[0].body, resp); err != nil {
-		return match.QueueState_QUEUE_STATE_UNSPECIFIED, fmt.Errorf("解析 GetQueueStatusResponse: %w", err)
+		return nil, fmt.Errorf("解析 GetQueueStatusResponse: %w", err)
+	}
+	return resp, nil
+}
+
+// queueState 只要状态、不关心撤销墓碑时的 queueStatus。
+func (b *orderingSmokeBot) queueState() (match.QueueState, error) {
+	resp, err := b.queueStatus("")
+	if err != nil {
+		return match.QueueState_QUEUE_STATE_UNSPECIFIED, err
 	}
 	return resp.GetState(), nil
 }

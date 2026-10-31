@@ -215,18 +215,6 @@ func TestTiDBInitialCommitIsRequiredAndLegacyIsExplicit(t *testing.T) {
 	require.NoError(t, err)
 	requireInitialRowsForTest(t, db, schema, role.PlayerId)
 
-	legacy, err := NewLegacyAccountDirectoryStore(conf, authoritysql.BackendTiDB, 2, 4)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, legacy.Close()) })
-	_, err = legacy.CreateWithInitialCommit(ctx, "legacy", &base.AccountSimplePlayer{PlayerId: 3105})
-	require.NoError(t, err)
-	var marker uint64
-	require.NoError(t, db.QueryRow("SELECT initial_player_commit FROM account_role WHERE player_id=3105").Scan(&marker))
-	require.Zero(t, marker)
-	// 即便显式 Legacy 构造器，正式配置此能力之后也不能继续跳过初始提交。
-	require.NoError(t, legacy.ConfigureInitialPlayerCommit([]uint32{storage}))
-	_, err = legacy.CreateWithInitialCommit(ctx, "legacy", &base.AccountSimplePlayer{PlayerId: 3106, ZoneId: 1})
-	require.Error(t, err)
 }
 
 func TestTiDBInitialCommitProofNeedsInitialRowsAndNoHistoricalFloor(t *testing.T) {
@@ -265,28 +253,4 @@ func TestTiDBInitialCommitProofNeedsInitialRowsAndNoHistoricalFloor(t *testing.T
 			}
 		})
 	}
-}
-
-// Import/Restore 只管理目录，不把旧号数字或缺行误认成初始提交。
-func TestTiDBImportAndRestoreNeverSeedInitialPlayerRows(t *testing.T) {
-	s, db := accountDirectoryTiDB(t)
-	_, schema := initialPlayerSchemaForTest(t, s)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	role := &base.AccountSimplePlayer{PlayerId: 3109, ZoneId: 1}
-	_, err := s.ImportRole(ctx, "imported", role, false, roleImportTestID(31))
-	require.NoError(t, err)
-	require.NoError(t, s.Remove(ctx, "imported", []*dspb.AccountRoleVersion{{PlayerId: role.PlayerId, OwnerRevision: 1}}))
-	_, err = s.ImportRole(ctx, "imported", role, true, roleImportTestID(32))
-	require.NoError(t, err)
-	var marker uint64
-	require.NoError(t, db.QueryRow("SELECT initial_player_commit FROM account_role WHERE player_id=?", role.PlayerId).Scan(&marker))
-	require.Zero(t, marker)
-	var count int
-	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM `"+schema+"`.player_store WHERE player_id=?", role.PlayerId).Scan(&count))
-	require.Zero(t, count)
-	// 正式 Create 也不能复活或补发这个已导入角色的资格。
-	require.NoError(t, installInitialRouteForTest(s, ctx, role))
-	_, err = s.CreateWithInitialCommit(ctx, "imported", role)
-	require.NoError(t, err)
 }

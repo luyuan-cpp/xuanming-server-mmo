@@ -26,12 +26,19 @@ func getSessionDetailsForAction(ctx context.Context, action string) (*login_prot
 }
 
 // cleanupLoginSessionState 删本条 gate 连接的登录态(按 loginsession.RefOf 的连接身份,不按裸 session_id)。
-func cleanupLoginSessionState(ctx context.Context, svcCtx *svc.ServiceContext, details *login_proto_common.SessionDetails, logicTag string) {
-	loginsession.Cleanup(ctx, svcCtx.RedisClient, loginsession.RefOf(details), logicTag)
+func cleanupLoginSessionState(ctx context.Context, svcCtx *svc.ServiceContext, ref loginsession.Ref, logicTag string) {
+	loginsession.Cleanup(ctx, svcCtx.LoginRedis, ref, logicTag)
+}
+
+// logMissingConnectionIdentity 记一条「经 gate 转发的请求没有完整连接身份」。gate 每条连接都带实例号与会话代次,
+// 走到这里是接线缺陷,不是玩家行为。
+func logMissingConnectionIdentity(action string, details *login_proto_common.SessionDetails) {
+	logx.Errorf("%s rejected: incomplete gate connection identity session_id=%d gate_instance=%q incarnation=%d",
+		action, details.GetSessionId(), details.GetGateInstanceId(), details.GetSessionIncarnation())
 }
 
 // logGetAccountFailure 记 CreatePlayer / EnterGame 读不到本连接登录态的原因。redis.Nil = 本连接没有成功 Login 过
-// (或登录态已过期、已被 LeaveGame / Disconnect 清理);gate 重启撞号后跳过 Login 的请求也落在这里,不是服务端故障。
+// (或登录态已过期、已被 LeaveGame / Disconnect 清理);gate 重启后跳过 Login 的请求也落在这里,不是服务端故障。
 func logGetAccountFailure(action string, details *login_proto_common.SessionDetails, err error) {
 	if errors.Is(err, redis.Nil) {
 		logx.Infof("%s rejected: no login session on this gate connection session_id=%d gate_instance=%q incarnation=%d",

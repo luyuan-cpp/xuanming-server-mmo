@@ -7,6 +7,9 @@
 //
 // 本包只做纯计算，不读表、不碰 SQL、不看时钟。撮合（poolgroup）与提交点（authority.claimTx）
 // 用同一组函数判定，两处结论不会分叉。
+//
+// 这里的 zone 一律是解析合服之后的最终区，本包看不到合服：调用方（authority.admitScope、logic.poolUnitInput）
+// 把票上的原始区解析之后再查目录，大区也跟着最终区走。
 package scope
 
 import (

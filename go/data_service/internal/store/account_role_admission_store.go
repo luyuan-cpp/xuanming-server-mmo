@@ -23,30 +23,6 @@ const accountRoleAdmissionDDL = "CREATE TABLE IF NOT EXISTS account_role_admissi
 const accountRoleTradeHolderDDL = "CREATE TABLE IF NOT EXISTS account_role_trade_holder (listing_id BIGINT UNSIGNED NOT NULL COMMENT 'pb:1',scene_instance_id VARBINARY(36) NOT NULL COMMENT 'pb:2',seal_proto MEDIUMBLOB NOT NULL COMMENT 'pb:3',drained INT UNSIGNED NOT NULL COMMENT 'pb:4',ack_digest VARBINARY(32) NOT NULL COMMENT 'pb:5',updated_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:6',PRIMARY KEY(listing_id,scene_instance_id)) ENGINE=InnoDB"
 
 func ensureRoleAdmissionSchema(ctx context.Context, db *sql.DB, name string) error {
-	if err := assertColumnsPresent(ctx, db, name, &dbpb.AccountRoleImportReceipt{}, AccountRoleImportTableName); err != nil {
-		return err
-	}
-	importKeys, err := primaryKeyColumns(ctx, db, name, AccountRoleImportTableName)
-	if err != nil {
-		return err
-	}
-	if !slices.Equal(importKeys, []string{"request_id"}) {
-		return errors.New("维护导入收据主键不符")
-	}
-	for _, column := range []string{"request_id", "request_digest", "account"} {
-		var typ string
-		var width sql.NullInt64
-		if err = db.QueryRowContext(ctx, "SELECT DATA_TYPE,CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME=?", name, AccountRoleImportTableName, column).Scan(&typ, &width); err != nil {
-			return err
-		}
-		wantType, wantWidth := "binary", int64(32)
-		if column == "account" {
-			wantType, wantWidth = "varbinary", 191
-		}
-		if typ != wantType || !width.Valid || width.Int64 != wantWidth {
-			return errors.New("维护导入收据字符串／摘要列不符")
-		}
-	}
 	for _, model := range []proto.Message{&dbpb.AccountRoleAdmission{}, &dbpb.AccountRoleTradeHolder{}} {
 		table, key := AccountRoleAdmissionTableName, "player_id"
 		if _, ok := model.(*dbpb.AccountRoleTradeHolder); ok {

@@ -177,4 +177,15 @@ message GameConfig {
     }
 
     PlayerInboxConfig player_inbox = 8;
+
+    // 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;控制域仍是 zone_redis。
+    // 由 readGameConfig 手工逐键解析,yaml 键名 player_redis。**整段缺失时加载器显式取默认**:standalone,
+    // 地址与口令沿用 zone_redis,开发环境不用改配置。
+    message PlayerRedisConfig {
+        string mode = 1;             // standalone | cluster;取值由 scene 启动时校验,配错拒绝启动
+        repeated string seeds = 2;   // host:port。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
+        string password = 3;         // 空 = 不认证;可被环境变量 PLAYER_REDIS_PASSWORD 覆盖,值不进日志
+    }
+
+    PlayerRedisConfig player_redis = 9;
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import ipaddress
 import json
@@ -24,22 +25,57 @@ GO_CONFIGS = {
     "scene_manager": "scene_manager_service.yaml",
     "client_rpc_router": "client_rpc_router.yaml",
     "match": "match_service.yaml",
+    # 全球匹配成局的个人结算写进收件箱，scene 再从这里拉取。
+    "player_inbox": "player_inbox.yaml",
+    # 调试栈不常驻 guild，只用这份配置建表：match 启动要核对 guild 的历练表（compose 的 guild-migrate）。
+    "guild": "guild.yaml",
 }
 SERVICE_IP_OFFSETS = {
     "login": 10, "db": 11, "data_service": 12, "player_locator": 13,
-    "scene_manager": 14, "client_rpc_router": 15, "match": 16,
+    "scene_manager": 14, "client_rpc_router": 15, "match": 16, "player_inbox": 17,
     "gate": 30, "scene": 31, "battle": 32,
 }
-# 观战两把密钥和存盘接口密钥晚于已准备好的 .env 引入，也不写进任何数据卷，补生成不算轮换。
-ADDITIVE_SECRET_NAMES = ("SPECTATE_TOKEN_SECRET", "MATCH_OPS_CALLER_SECRET", "PLAYER_STORE_SCENE_SECRET")
+# 观战两把密钥、存盘接口密钥、匹配链路四把密钥和账号目录四把调用方密钥晚于已准备好的 .env 引入，也不写进任何数据卷，补生成不算轮换。
+ADDITIVE_SECRET_NAMES = ("SPECTATE_TOKEN_SECRET", "MATCH_OPS_CALLER_SECRET", "PLAYER_STORE_SCENE_SECRET",
+                         "MATCH_PROBE_SECRET", "RANK_PRODUCER_SECRET_MATCH", "MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "MMORPG_PLAYER_INBOX_SECRET_MATCH",
+                         "MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN", "MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE",
+                         "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE", "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER")
 SECRET_NAMES = (
-    "MYSQL_ROOT_PASSWORD", "MYSQL_PASSWORD", "GATE_TOKEN_SECRET",
+    "MYSQL_ROOT_PASSWORD", "GATE_TOKEN_SECRET",
     "QUEUE_TOKEN_SECRET", "INTERNAL_AUTH_SECRET", "BATTLE_TOKEN_SECRET",
     "LOGIN_DEV_PASSWORD_SHARED_SECRET", "GATEWAY_ADMIN_API_KEY",
     *ADDITIVE_SECRET_NAMES,
 )
 # 与 C++ kSpectateBroadcastTopicPartitions（node_command_topic.h）相等；分区数是不可变契约，改数走换代号。
 SPECTATE_BROADCAST_PARTITIONS = 16
+# 写者注册步骤（compose 的 sql-boot、<服务>-sql-boot）在容器里复用的脚本、角色模板和原件。按仓库相对路径复制：dot-source 和模板都按这个布局找。
+SQL_BOOT_SOURCES = (
+    "tools/scripts/lib/sql_boot_catalog_docker.ps1",
+    "tools/scripts/lib/sql_boot_catalog_local.ps1",
+    "tools/scripts/lib/release_common.ps1",
+    "tools/scripts/maintenance_drain.ps1",
+    "deploy/sql/authority_operator_role.sql",
+    "deploy/sql/authority_runtime_role.sql",
+    "deploy/mysql-init/gateway_tables.sql",
+    "java/gateway_node/src/main/resources/application.yaml",
+)
+# 常驻写者的容器入口（compose 的 entrypoint）。与 K8s 模板同一做法：grant 摘要和 SQL 变量从注册步骤写的私有卷读出来再 exec，凭据不经 compose 环境。
+# 部署身份和物理 authority 摘要在 K8s 上来自 Pod UID 和清单，这里同样由注册步骤写进卷。变量名由 writer_authority 按白名单核过。
+SQL_WRITER_ENTRY = r"""#!/bin/sh
+set -eu
+root=/run/sql-writer
+MMORPG_SQL_WRITER_GRANT_FILE="$root/grant/boot-grant.json"
+MMORPG_SQL_WRITER_GRANT_SHA256="$(cat "$root/grant/boot-grant.json.sha256")"
+MMORPG_SQL_WRITER_CONSUME_DIR="$root/consume"
+MMORPG_SQL_DEPLOYMENT_ID="$(cat "$root/grant/deployment-id")"
+MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256="$(cat "$root/grant/physical-authority-sha256")"
+export MMORPG_SQL_WRITER_GRANT_FILE MMORPG_SQL_WRITER_GRANT_SHA256 MMORPG_SQL_WRITER_CONSUME_DIR MMORPG_SQL_DEPLOYMENT_ID MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
+for value_file in "$root"/env/*; do
+  [ -f "$value_file" ] || continue
+  export "${value_file##*/}=$(cat "$value_file")"
+done
+exec "$@"
+"""
 
 
 def load_yaml(relative: str) -> dict:
@@ -233,7 +269,7 @@ def main() -> None:
     sql_dir.mkdir(exist_ok=True)
     source_paths = [f"go/{service}/etc/{filename}" for service, filename in GO_CONFIGS.items()]
     source_paths += ["bin/etc/base_deploy_config.yaml", "bin/etc/game_config.yaml",
-                     "bin/etc/battle_rewards.json", "java/gateway_node/src/main/resources/application.yaml"]
+                     "bin/etc/battle_rewards.json", *SQL_BOOT_SOURCES]
     configs = {service: container_addresses(load_yaml(f"go/{service}/etc/{filename}")) for service, filename in GO_CONFIGS.items()}
     for service, config in configs.items():
         # 这两个入口把 ListenOn 原样注册为 NodeInfo，并不读取 POD_IP；显式绑定本容器可达地址。
@@ -251,11 +287,16 @@ def main() -> None:
         ("GateToken", "GATE_TOKEN_SECRET"), ("QueueToken", "QUEUE_TOKEN_SECRET"), ("InternalAuth", "INTERNAL_AUTH_SECRET"))}
     login.pop("GateTokenSecret", None)
     login["RequireClientEndpoint"] = True
+    # 常驻配置不留账号：写者每 boot 一个账号，由注册步骤写进私有卷里的运行配置（sql_boot_catalog_local.ps1 的 Get-LocalSqlBootConfigPatch）。
     db = configs["db"]
     db["ServerConfig"]["JsonPath"] = "/app/data/mysql_database_table_list.json"
-    db["ServerConfig"]["Database"].update(Backend="mysql", User="appuser", Passwd=environment["MYSQL_PASSWORD"], AllowedDatabases=["zone_1_db"], AllowlistEnforcement="strict", AutoCreateDatabase=False, AutoMigrateSchema=False)
+    db["ServerConfig"]["Database"].update(Backend="mysql", AllowedDatabases=["zone_1_db"], AllowlistEnforcement="strict", AutoCreateDatabase=False, AutoMigrateSchema=False)
+    for key in ("User", "Passwd"):
+        db["ServerConfig"]["Database"].pop(key, None)
     data = configs["data_service"]
-    data["SnapshotMySQL"].update(Backend="mysql", Host="mysql:3306", User="appuser", Password=environment["MYSQL_PASSWORD"], DBName="testdb")
+    data["SnapshotMySQL"].update(Backend="mysql", Host="mysql:3306", DBName="testdb")
+    for key in ("User", "Password"):
+        data["SnapshotMySQL"].pop(key, None)
     data["Schema"]["AutoMigrate"] = False
     scene_manager = configs["scene_manager"]
     scene_manager["GateTokenSecret"] = environment["GATE_TOKEN_SECRET"]
@@ -263,22 +304,49 @@ def main() -> None:
     # 本机只需要一个主世界分线；显式避免沿用压测配置为出生图建立 16 份场景。
     scene_manager["WorldChannelCountByConfId"] = {}
     match = configs["match"]
-    match["GlobalMatch"]["Enabled"] = False
+    # 匹配只有 SQL 权威一条路径：连 compose 的 MySQL，库由 mysql-init 预建，表由 match-migrate 建；全局角色库与 data_service 同库。
+    match["GlobalMatch"].update(Backend="mysql", Host="mysql:3306", User="root", AccountRoleSchema=data["SnapshotMySQL"]["DBName"])
     match.pop("MatchRedis", None)
+    guild = configs["guild"]
+    # 连接串只走环境变量（compose 的 guild-migrate），root 口令不落这份配置。
+    guild["MySQL"].pop("DataSource", None)
+    guild["MySQL"].update(Backend="mysql", DataSourceEnv="MMORPG_GUILD_SQL_DSN")
+    player_inbox = configs["player_inbox"]
+    # 独占库由 mysql-init 预建，表由 player-inbox-migrate 建；常驻账号同样来自注册步骤写的运行配置。角色目录与 data_service 同库。
+    player_inbox["MySQL"].update(Backend="mysql", Host="mysql:3306")
+    for key in ("User", "Password"):
+        player_inbox["MySQL"].pop(key, None)
+    player_inbox["AccountRoleSchema"] = data["SnapshotMySQL"]["DBName"]
+    player_inbox["Schema"]["AutoMigrate"] = False
     # TicketSecret 与下面 C++ 的 SpectateTokenSecret 同值：match 签发、gate 验签。
     match["Spectate"].update(TicketSecret=environment["SPECTATE_TOKEN_SECRET"], OpsCallerSecret=environment["MATCH_OPS_CALLER_SECRET"])
     for service, config in configs.items():
         write_yaml(config_dir / f"{service}.yaml", config)
+    # 建表用 root（compose 的 db-migrate、data-migrate、player-inbox-migrate）：常驻账号没有 DDL。root 口令只落这三份忽略目录里的配置。
+    schema_db = copy.deepcopy(db)
+    schema_db["ServerConfig"]["Database"].update(User="root", Passwd=environment["MYSQL_ROOT_PASSWORD"])
+    write_yaml(config_dir / "db.schema.yaml", schema_db)
+    schema_data = copy.deepcopy(data)
+    schema_data["SnapshotMySQL"].update(User="root", Password=environment["MYSQL_ROOT_PASSWORD"])
+    write_yaml(config_dir / "data_service.schema.yaml", schema_data)
+    schema_inbox = copy.deepcopy(player_inbox)
+    schema_inbox["MySQL"].update(User="root", Password=environment["MYSQL_ROOT_PASSWORD"])
+    write_yaml(config_dir / "player_inbox.schema.yaml", schema_inbox)
     base = container_addresses(load_yaml("bin/etc/base_deploy_config.yaml"))
     base.update(TableDataDirectory="/app/generated/generated_tables/", DataRootDirectory="/app/", GateTokenSecret=environment["GATE_TOKEN_SECRET"], BattleTokenSecret=environment["BATTLE_TOKEN_SECRET"], SpectateTokenSecret=environment["SPECTATE_TOKEN_SECRET"])
     write_yaml(config_dir / "base_deploy_config.yaml", base)
     game = load_yaml("bin/etc/game_config.yaml")
     game["zoneredis"]["host"] = "redis"
+    # 这个栈常驻 player_inbox，scene 要真的拉取：入箱的结算只有消费之后才落到玩家身上。源配置的 false 是线上分步打开用的。
+    game["player_inbox"]["consumer_enabled"] = True
     write_yaml(config_dir / "game_config.yaml", game)
     # 奖励不派生第二份默认值，原样复制权威配置并纳入同批来源摘要。
     shutil.copyfile(REPO / "bin/etc/battle_rewards.json", config_dir / "battle_rewards.json")
     gateway = container_addresses(load_yaml("java/gateway_node/src/main/resources/application.yaml"))
-    gateway["spring"]["datasource"].update(url=gateway["spring"]["datasource"]["url"].replace("localhost:3306", "mysql:3306"), username="appuser", password=environment["MYSQL_PASSWORD"])
+    # 数据源账号同样每 boot 一个，来自注册步骤写的第二份 additional-location。
+    gateway["spring"]["datasource"].update(url=gateway["spring"]["datasource"]["url"].replace("localhost:3306", "mysql:3306"))
+    for key in ("username", "password"):
+        gateway["spring"]["datasource"].pop(key, None)
     gateway["spring"]["data"]["redis"]["host"] = "redis"
     gateway["login"]["grpc"]["endpoints"] = "1=login:53000"
     gateway["gate"]["token-secret"] = environment["GATE_TOKEN_SECRET"]
@@ -287,6 +355,11 @@ def main() -> None:
     for filename in ("00_init_zone_dbs.sql", "gateway_tables.sql"):
         shutil.copyfile(REPO / "deploy/mysql-init" / filename, sql_dir / filename)
     (output / "init-topics.sh").write_text(topic_script(base, data), encoding="utf-8", newline="\n")
+    for source in SQL_BOOT_SOURCES:
+        target = output / "sql-boot" / source
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO / source, target)
+    (output / "sql-writer-entry.sh").write_text(SQL_WRITER_ENTRY, encoding="utf-8", newline="\n")
     environment.update(DEBUG_RUN_DIR=output.as_posix(), COMPOSE_PROJECT_NAME=args.project, DEBUG_SUBNET=str(subnet), GATEWAY_PORT=str(args.gateway_port), GATE_PORT=str(args.gate_port), BATTLE_PORT=str(args.battle_port), KAFKA_COMMAND_TOPIC_GENERATION=str(base["Kafka"]["CommandTopicGeneration"]), KAFKA_COMMAND_TOPIC_PARTITIONS=str(base["Kafka"]["CommandTopicPartitions"]))
     for service, host_number in SERVICE_IP_OFFSETS.items():
         environment[f"{service.upper()}_IP"] = str(subnet.network_address + host_number)

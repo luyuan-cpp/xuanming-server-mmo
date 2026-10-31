@@ -1,6 +1,4 @@
 Name: db.rpc
-# 全球SQL为默认；仅历史dev/test夹具可显式true，不能靠Mode自行降级。
-LegacyNonGlobal: false
 ListenOn: 0.0.0.0:6000
 Etcd:
   Hosts:
@@ -67,35 +65,15 @@ ServerConfig:
                     # 契约测试钉住「规划峰值 ≤ deploy/k8s/manifests/infra/mysql.yaml 的 max_connections」。
     MaxIdleConn: 20
     Net: ""
-  RedisClient:
-    Hosts: "127.0.0.1:6379"
-    DefaultTTLSeconds: 3600
-    Password: ""
-    DB: 0
-    # go-redis 连接池上限(P0-E 第 3 批,共享 Redis 连接总账)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-    # 随 CPU limit 漂移(本机 Windows 上是 10 × 核数)。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值,显式写出后不再随 CPU limit 变。
-    # tools/scripts/k8s_deploy.ps1 把它镜像进 db ConfigMap(要求正整数),Redis 连接总账读同一个键:改它看部署时打印的
-    # "Redis connection ledger" 一行。下面 Placement.Redis 不写时落点句柄复用本客户端,不另开池。
-    PoolSize: 20
 
 # ── 玩家存储落点(docs/design/player-storage-placement.md §6)────────────────
-# 认领和释放按 player:placement:{id}(落点记录)与 player:zone:{id}(home_zone)选库:
-#   有记录 → 记录指向的库;无记录 → home_zone 的 zone 库;都没有 → 本 zone 库(旧语义)。记录冻结(搬库中)→ 暂不可用。
-# 全球服务必须显式满足下面三个权威开关，缺键/关闭拒启；不从旧Redis或本区推导权威。
+# 认领和实体已没的空行释放读全局库 player_route 的 storage_id 选库,全局库名取写者配置的 AuthoritySchema,这里不用配。
+# 没有路由行或 storage_id 为 NULL 一律拒绝,不回落 home_zone 或本 zone 库;行被冻结(搬库中)→ 暂不可用。
 Placement:
   # 允许按需打开 zone_{1..999999}_db / player_store_{>=1000000}_db 两个家族的库(不在上面的
   # 库名白名单里也行)。按需打开只 Ping + 只读 schema 闸,**从不建库**,白名单防「ZoneId 填错
   # 静默建新库」的语义不变。设 false 时,本 zone 库之外的每个落点库都必须写进白名单。
   AllowStoreFamilies: true
-  # true = 没有落点记录的玩家一律 fail-closed(认领和释放都拒绝)。
-  # 打开顺序(§13,反了会出事):全部 login 已 Placement.PinOnCreate=true,且各 zone 已
-  # `merge_zone -mode pin-placement` 钉完存量之后才能开。
-  Required: true
-  # D1 第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.3 / §13.2)。
-  # true = 只有 mapping Redis 的副本被判可信(mapping:route:ready 存在,且其中记下的 run_id / master_replid 就是本次读所在的
-  # 主实例)才按 player:placement / player:zone 选库;不可信时回「暂不可用」。
-  # 正式顺序：显式迁移/路由初始化→DS db_first强TiDB且reconcile arm→自然发布可信ready→DB/login。
-  RequireRouteReady: true
   # 额外落点库(本 zone 库之外)的连接池,**每个库一个池**,按库所属家族分两个旋钮(本 zone 库仍用上面的 Database.MaxOpenConn):
   #   ZoneStore*    —— zone 家族库 zone_{1..999999}_db:冷缓存访客读、合服 pin 后的源区库。最坏情形每个实例会打开其余全部
   #                    zone 的库,预算随 zone 数平方增长(总账见 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger)。
@@ -109,15 +87,6 @@ Placement:
   # 额外落点库池里空闲超过这么多秒的连接即关闭(SetConnMaxIdleTime):冷库的池回到 0 条,不按 MaxIdleConn 常驻。
   # ConnMaxLifetime 仍是 5 分钟,本值大于 300 等于不生效。
   ExtraStoreConnMaxIdleSeconds: 60
-  # 落点记录所在的 Redis = data_service 的 MappingRedis(player:zone 所在实例,DB 0)。
-  # 不写 = 复用上面的 RedisClient(本地与 K8s 两者同实例同 DB 0)。两者不同时**必须**显式填:
-  # 读错 Redis = 读不到任何记录与 home_zone,全员按本 zone 选库,被钉到别处的玩家会写错库。
-  # 必须指向主节点,不能是只读副本。
-  # Redis:
-  #   Hosts: "127.0.0.1:6379"
-  #   Password: ""
-  #   DB: 0
-  #   PoolSize: 20   # 同 ServerConfig.RedisClient.PoolSize;另开的落点客户端要进 Redis 连接总账
 
 # Prometheus /metrics endpoint. Dev default; disable for prod by setting
 # empty string. Exposes db_player_store_requests_total{op,result}, db_player_store_seconds{op},

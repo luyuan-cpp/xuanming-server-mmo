@@ -9,11 +9,13 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 	dspb "proto/data_service"
 	pb "proto/friend"
 	plpb "proto/player_locator"
+	"shared/playerredis"
+	"shared/redisslot"
 )
 
 // ErrInvalidDirectoryInput 只表示客户端参数不合法，其他错误均为依赖故障。
@@ -27,18 +29,21 @@ const (
 )
 
 // OnlineDirectory 只读 player_locator 的会话，展示资料经 data_service 读 player_store；不维护第二份在线真值。
-// 共享 Redis 是 node 模式（与 SessionReader 相同约束）。home zone 经 data_service
-// 查询，不能假定 player:zone:* 和会话同库。每页最多四次 SCAN，空页仍可有续页。
+// Redis 是玩家域句柄（与 SessionReader 相同约束），可以是 Cluster：逐主节点翻页（playerredis.ScanPage）。
+// home zone 经 data_service 查询，不能假定 player:zone:* 和会话同库。每页最多四次 SCAN，空页仍可有续页。
 type OnlineDirectory struct {
-	Redis       *redis.Redis
+	Redis       redis.UniversalClient
 	DataService dspb.DataServiceClient
 }
 
 // DirectoryCursor 的偏移保留 SCAN 最后一个批次的未消费部分，COUNT 只是提示，
 // 不能简单截取 limit 后丢弃该批剩余玩家。页内按 key 排序以便继续；上下线期间
 // SCAN 允许重复，客户端按 uint64 ID 去重，刷新从空游标开始。不承诺跨页快照。
+// 集群拓扑变化时游标失效、从头开始（playerredis.ScanPage），同样只会重复，客户端照常去重。
+//
+// 对客户端是不透明串：v2:<ScanCursor>:<偏移>，最长 43 字节。
 type directoryCursor struct {
-	scan   uint64
+	scan   playerredis.ScanCursor
 	offset int
 }
 
@@ -50,11 +55,11 @@ func parseDirectoryCursor(raw string) (directoryCursor, error) {
 		return directoryCursor{}, ErrInvalidDirectoryInput
 	}
 	parts := strings.Split(raw, ":")
-	if len(parts) != 3 || parts[0] != "v1" {
+	if len(parts) != 3 || parts[0] != "v2" {
 		return directoryCursor{}, ErrInvalidDirectoryInput
 	}
-	scan, err := strconv.ParseUint(parts[1], 10, 64)
-	if err != nil {
+	scan, err := playerredis.ParseScanCursor(parts[1])
+	if err != nil || scan.IsStart() {
 		return directoryCursor{}, ErrInvalidDirectoryInput
 	}
 	offset, err := strconv.ParseUint(parts[2], 10, 16)
@@ -64,11 +69,11 @@ func parseDirectoryCursor(raw string) (directoryCursor, error) {
 	return directoryCursor{scan: scan, offset: int(offset)}, nil
 }
 
-func encodeDirectoryCursor(scan uint64, offset int) string {
-	if scan == 0 && offset == 0 {
+func encodeDirectoryCursor(scan playerredis.ScanCursor, offset int) string {
+	if scan.IsStart() {
 		return ""
 	}
-	return fmt.Sprintf("v1:%d:%d", scan, offset)
+	return fmt.Sprintf("v2:%s:%d", scan.String(), offset)
 }
 
 // ValidateDirectoryInput 在限流计数、RPC 和 Redis 读取前执行。
@@ -114,15 +119,19 @@ func (d OnlineDirectory) List(ctx context.Context, caller uint64, cursor string,
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		keys, next, err := d.Redis.ScanCtx(ctx, pos.scan, playerSessionKeyPrefix+"*", directoryScanCount)
+		page, err := playerredis.ScanPage(ctx, d.Redis, pos.scan, redisslot.SessionKeyPattern, directoryScanCount)
 		if err != nil {
 			return nil, err
 		}
+		keys := page.Keys
 		if len(keys) > directoryMaxBatch {
 			return nil, errors.New("在线目录会话扫描批次超出安全上限")
 		}
 		sort.Strings(keys)
 		start := pos.offset
+		if page.Restarted {
+			start = 0 // 拓扑变了，游标里的偏移对应的是另一批键。
+		}
 		if start > len(keys) {
 			start = len(keys)
 		} // 上下线缩短当前批次，继续下一批。
@@ -139,15 +148,15 @@ func (d OnlineDirectory) List(ctx context.Context, caller uint64, cursor string,
 			result.Candidates = append(result.Candidates, entry)
 			if uint32(len(result.Candidates)) == limit {
 				if i+1 < len(keys) {
-					result.NextCursor = encodeDirectoryCursor(pos.scan, i+1)
+					result.NextCursor = encodeDirectoryCursor(page.Current, i+1)
 				} else {
-					result.NextCursor = encodeDirectoryCursor(next, 0)
+					result.NextCursor = encodeDirectoryCursor(page.Next, 0)
 				}
 				return result, nil
 			}
 		}
-		pos = directoryCursor{scan: next}
-		if next == 0 {
+		pos = directoryCursor{scan: page.Next}
+		if page.Next.IsStart() {
 			return result, nil
 		}
 	}
@@ -164,8 +173,8 @@ func (d OnlineDirectory) readEntries(ctx context.Context, keys []string, skip ma
 	readKeys := make([]string, 0, len(keys))
 	live := make([]uint64, 0, len(keys))
 	for i, key := range keys {
-		id, err := strconv.ParseUint(strings.TrimPrefix(key, playerSessionKeyPrefix), 10, 64)
-		if err != nil || id == 0 || skip[id] {
+		id, ok := redisslot.ParseSessionKey(key)
+		if !ok || skip[id] {
 			continue
 		}
 		ids[i] = id
@@ -175,7 +184,7 @@ func (d OnlineDirectory) readEntries(ctx context.Context, keys []string, skip ma
 	if len(readKeys) == 0 {
 		return entries, nil
 	}
-	values, err := d.Redis.MgetCtx(ctx, readKeys...)
+	values, err := playerredis.MGetBySlot(ctx, d.Redis, readKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +201,7 @@ func (d OnlineDirectory) readEntries(ctx context.Context, keys []string, skip ma
 		if id == 0 {
 			continue
 		}
-		sessionRaw := values[valueIndex]
+		sessionRaw, _ := values[valueIndex].(string)
 		valueIndex++
 		brief, known := displays[id]
 		if !known {

@@ -2,7 +2,6 @@ package notify
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -12,6 +11,7 @@ import (
 	"mail/generated/pb/game"
 	kafkapb "proto/contracts/kafka"
 	locator "proto/player_locator"
+	"shared/redisslot"
 )
 
 // capturePublisher只收下发布的消息、不连Kafka；真实broker的寻址与分区由notify_integration_test.go在显式开关下覆盖。
@@ -37,7 +37,7 @@ func TestPublishCarriesTargetPlayerIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = cache.Set(fmt.Sprintf("player:session:%d", player), string(raw)); err != nil {
+	if err = cache.Set(redisslot.SessionKey(player), string(raw)); err != nil {
 		t.Fatal(err)
 	}
 	publisher := &capturePublisher{}

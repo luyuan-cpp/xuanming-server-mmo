@@ -12,7 +12,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -97,11 +96,13 @@ func enterHolderReleaseSeed(t *testing.T, sc *svc.ServiceContext, mr *miniredis.
 	transfer := installReleaseDispatchRecorder(t, sc, nil)
 	seedSceneOnNode(mr, testZoneId, holderScene, "10", "1")
 	seedSceneOnNode(mr, testZoneId, targetScene, "20", "0")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "1")
+	seedNodeMembers(mr, testZoneId, "10", 1)
 	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: holderScene, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 3, UpdateTime: 100,
 		SessionId: locIdentity.sessionID, LoginGeneration: locIdentity.loginGeneration,
 	})
+	adoptSceneMember(mr, holderScene, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
 	return transfer
 }
 
@@ -220,7 +221,7 @@ func TestEnterScene_LoginBehindUnreleasedHolderRequestsReleaseOnce(t *testing.T)
 		"覆盖到这次登录自己的身份,不是 location 记的旧身份(§13.2)")
 	assert.Empty(t, leaveRequested(), "EnterScene 走同步请求,不走 LeaveScene 的异步派发")
 	assert.Equal(t, deliveredBefore+1, enterHolderReleaseCount(t, enterHolderReleaseOutcomeDelivered))
-	assert.Equal(t, "0", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, targetScene)), "拒绝不预占目标场景人数")
+	assert.Equal(t, "0", sceneMemberCount(mr, targetScene), "拒绝不预占目标场景人数")
 
 	// 持有节点按断线退出、存盘落地后 A1′ 写出当前代标记 → 重登放行并铸造 4,location 指向节点 20 与新登录。
 	writeHandoffMarker(t, sc, playerID, 3)

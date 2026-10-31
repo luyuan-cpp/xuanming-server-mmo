@@ -35,6 +35,7 @@
 # 可重复运行:S0 先把四个账号带出任何队伍;若上一轮死在开战途中,开战锁最长约 101s 后自然过期,等一会儿再跑。
 # 战斗走直连(turn-based §22 D73,直连是唯一战斗通路):每场按 battle_id 找 NotifyBattleAssigned 后直连 battle 节点,
 # 在直连上开自动战斗、从直连收回合结算;battle 客户端面端口须从 robot 所在机器可达(见 team_smoke_scenario.go 文件头)。
+# 开战前参战成员各自走地域探测(robot/network_probe.go),同样直连这个端口;探测失败算在 S7 / S8 / X2 对应步骤上。
 
 gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
 zone_id: 1 # 本模式不用此字段选区(A/B/D 登 team_smoke.zone_a,C 登 zone_b)

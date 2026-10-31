@@ -18,6 +18,17 @@ RedisClient:
   # 改它看部署时打印的 "Redis connection ledger" 一行。
   PoolSize: 20
 
+# 玩家域 Redis(会话、断线租约、gate 索引、分片登记),上线后是 Redis Cluster,设计见 docs/design/redis-player-store-cluster.md §5.7、§5.9。
+# 整段不写时指向上面 RedisClient 这个单实例,沿用它的 PoolSize,开发环境不用改。要拆开时写:
+# PlayerRedis:
+#   Addrs:
+#     - 127.0.0.1:7000     # Cluster 下是种子地址
+#   Cluster: true
+#   Password: ""           # 或 PasswordEnv: 环境变量名
+# PoolSizePerNode 是每个节点的连接池上限,tools/scripts/k8s_deploy.ps1 把它镜像进 ConfigMap,玩家域连接总账读同一个键。
+PlayerRedis:
+  PoolSizePerNode: 20
+
 Kafka:
   Brokers:
     - 127.0.0.1:9092
@@ -39,20 +50,23 @@ Lease:
   DefaultTTLSeconds: 30
   PollInterval: 1s
   BatchSize: 100
-  # 会话对账(全局单 leader + 按 gate 实例建的会话索引,docs/design/player-locator-gate-session-index.md)。
+  # ScanRoundSeconds: LeaseMonitor 探测完持有的全部 slot 用多久,默认 16,同样只写注释不写值。
+  #   全服的探测量是 2 × 16384 / 本值 条 ZCOUNT 每秒,与副本数无关;租约到期后最迟晚这么久才被认领。
+  # 会话对账(按 gate 实例建的会话索引,死 gate 清扫按段分给各副本,写者检查与补建 / 审计由一个 leader 跑,
+  # docs/design/player-locator-gate-session-index.md)。
   # 下面各项**刻意只写注释、不写值**:事实源是 internal/config/config.go 的默认值(Normalized),
-  # K8s ConfigMap 同样不写;leader 全服只有一个,这些项必须全服一致,改默认值就改代码。
+  # K8s ConfigMap 同样不写;这些项必须全服一致,改默认值就改代码。
   # config_test.go 的 TestEtcYamlLeavesReconcileToCodeDefaults 守着这条,往这里加值会红。
-  #   ReconcileIntervalSeconds: leader 每拍的周期,默认 60;-1 关闭整个对账。
-  #     它也是就绪标记租约(3.5 拍)与 leader 自我让位门槛(连续 3 拍失败或 3 拍无成功)的基准。
+  #   ReconcileIntervalSeconds: 清扫与 leader 每拍的周期,默认 60;-1 关闭整个对账。
+  #     它也是就绪标记租约(3.5 拍)与让位门槛(连续 3 拍失败或 3 拍无成功)的基准。
   #   Reconcile:
   #     AuditIntervalSeconds: 索引就绪后定期审计的周期,默认 86400;-1 = 就绪后不再审计(未就绪时照常补建)。
   #       审计 = 限速的全键 SCAN 补漏成员 + 各 gate 索引的脏成员清理,时机记在 Redis,换主不重置。
   #     ScanCount: 补建 / 审计每页 SCAN、SSCAN 的 COUNT,默认 1000。
   #     ScanPagesPerSecond: 补建 / 审计每秒最多几页,默认 200;负数不限速(只给本机与单测)。
-  #     MaxTransitionsPerSecond: 死 gate 上 ONLINE → DISCONNECTING 的速率上限,默认 1000;负数不限速。
-  #       每拍只用半个拍长去转换,大面积 gate 故障时的持续速率约为它的一半,估恢复时间按一半算(设计文档 §7)。
-  #     DeadGateMembersPerRound: 一拍最多检查多少个死 gate 索引成员,默认 30000,超出留到下一拍。
+  #     MaxTransitionsPerSecond: 每个副本把死 gate 上 ONLINE → DISCONNECTING 的速率上限,默认 1000;负数不限速。
+  #       每拍只用半个拍长去转换,大面积 gate 故障时每个副本的持续速率约为它的一半,估恢复时间按一半乘持段副本数(设计文档 §7)。
+  #     DeadGateMembersPerRound: 每个副本一拍最多检查多少个死 gate 索引成员,默认 30000,超出留到下一拍。
 
 # SceneManager gRPC client (via etcd discovery).
 # Used to call LeaveScene when a player's disconnect lease expires.
@@ -83,8 +97,8 @@ KillSwitchPrefix: ""
 # 所以 shared/serverbase 在这里主要提供统一的 rpc_duration_seconds{method,status},
 # 其中 status=transport_error 就是真实失败率。另外还有:
 #   safego_panic_total{point}  - 后台循环(租约监视 / 会话对账)被兜住的 panic,应恒 0
-#   player_locator_reconcile_* / player_locator_gate_index_* - 会话对账;gauge 只由 leader 产出,
-#     告警大多按 reconcile_is_leader 过滤,Stalled 例外(deploy/k8s/player-locator-alerts.yaml 文件头,设计文档 §9)
+#   player_locator_reconcile_* / player_locator_gate_index_* / player_locator_slot_shard_segments - 会话对账;
+#     口径见 internal/logic/reconcile_metrics.go 文件头与设计文档 §9
 Prometheus:
   Host: 127.0.0.1
   Port: 9190

@@ -723,7 +723,7 @@
         "${workspaceFolder}/tools/scripts/rebuild_docker_debug.py",
         "go",
         "--services",
-        "login,db,data-service,scene-manager,player-locator,client-rpc-router,match"
+        "login,db,data-service,scene-manager,player-locator,client-rpc-router,match,player-inbox"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

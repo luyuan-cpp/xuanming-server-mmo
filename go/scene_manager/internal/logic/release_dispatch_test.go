@@ -88,8 +88,9 @@ func releaseDispatchCrossNodeFixture(t *testing.T, sc *svc.ServiceContext, mr *m
 	t.Helper()
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetScene, "20", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
+	seedNodeMembers(mr, testZoneId, "20", 4)
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	if withMarker {
 		writeHandoffMarker(t, sc, playerID, 1)

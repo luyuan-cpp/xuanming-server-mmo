@@ -12,8 +12,9 @@ package main
 //	S5 D 申请 → A 拒绝 → D 收到 NotifyTeamEvent(APPLICATION_REJECTED);
 //	S6 跟随:A 换到同节点另一张地图(EnterSceneC2S,见 teamSmokeSwitchScene 注释)→ B 在 10s 内收到
 //	   scene_id 与 A 相同的 EnterSceneS2C;
-//	S7 整队开战:A 调 StartTeamMatch(回包 match_state=STARTING)→ B 收到 MATCH_STARTED(发起人 A 不收,
-//	   以回包为准)→ A、B 收到同一 battle_id 的 BattleStartS2C,自动战斗到终局;A、B 都收到 MATCH_ENDED
+//	S7 整队开战:A、B 先各自地域探测(network_probe.go,开局读每名成员自己的探测结果)→ A 调 StartTeamMatch
+//	   (带 request_id,回包 match_state=STARTING)→ B 收到 MATCH_STARTED(发起人 A 不收,以回包为准)
+//	   → A、B 收到同一 battle_id 的 BattleStartS2C,自动战斗到终局;A、B 都收到 MATCH_ENDED
 //	   (gather 开局成功、开战锁释放后即推,通常早于战斗结束,按 mark 扫描不会漏);
 //	S8 确定性拒绝:B 单人 PVE 开战、尚未出招(持 battle:lock)时 A 发起开战 → TeamMemberInBattle,parameters[0] == B;
 //	X1(cross_zone=true 且 expect_cross_zone_allowed=false)C 申请 A 的队伍、A 邀请 C → 都回 TeamCrossZoneDenied;
@@ -823,20 +824,44 @@ func (b *teamSmokeBot) enterSceneRejection(since int) uint32 {
 	return 0
 }
 
+// networkProbe 保证本机器人持有未临近过期的地域探测结果,返回 JoinQueue 要带的计划号。
+func (b *teamSmokeBot) networkProbe() (string, error) {
+	return ensureNetworkProbe(b.gc, b.stats, b.account)
+}
+
+// teamSmokeEnsureNetworkProbes 让 bots 都持有可用的地域探测结果。整队开局读的是每名成员自己存在服务端的结果,
+// StartTeamMatch 请求里不带计划号,所以发起之前全员都要探测过;缺一个,整单在服务端以内部错误失败。
+func teamSmokeEnsureNetworkProbes(bots ...*teamSmokeBot) error {
+	for _, bot := range bots {
+		if _, err := bot.networkProbe(); err != nil {
+			return fmt.Errorf("%s: %w", bot.name, err)
+		}
+	}
+	return nil
+}
+
 // startSoloBattle 让本机器人单人 PVE(PVE_SOLO)开战,返回扫描起点与对局 id;不开自动战斗。
-// 上一场结算落地前 battle:lock 仍在,JoinQueue 会被拒(过渡态):在 teamSmokeSettleTimeout 内重试。
+// 上一场结算落地前 battle:lock 仍在,JoinQueue 会被拒(过渡态):在 teamSmokeSettleTimeout 内重试,
+// 重试是同一次开战意图,复用同一份请求(request_id 不变);被拒的那几次服务端没有留下意图。
 func (b *teamSmokeBot) startSoloBattle(battleConfigId, zoneId uint32) (int, uint64, error) {
+	planId, err := b.networkProbe()
+	if err != nil {
+		return 0, 0, fmt.Errorf("%s: %w", b.name, err)
+	}
+	request := &match.JoinQueueRequest{
+		PlayerId:       b.gc.PlayerId,
+		Mode:           match.MatchMode_MATCH_MODE_PVE_SOLO,
+		BattleConfigId: battleConfigId,
+		ZoneId:         zoneId,
+		RequestId:      chatSmokeRequestId(),
+		NetworkPlanId:  planId,
+	}
 	deadline := time.Now().Add(teamSmokeSettleTimeout)
 	for {
 		// mark 必须在发 JoinQueue 之前:受理后的 BattleAssigned / BattleStart 推送可能先于回包到达。
 		since := b.mark()
 		resp := &match.JoinQueueResponse{}
-		if err := b.matchCall(game.MatchServiceJoinQueueMessageId, &match.JoinQueueRequest{
-			PlayerId:       b.gc.PlayerId,
-			Mode:           match.MatchMode_MATCH_MODE_PVE_SOLO,
-			BattleConfigId: battleConfigId,
-			ZoneId:         zoneId,
-		}, resp); err != nil {
+		if err := b.matchCall(game.MatchServiceJoinQueueMessageId, request, resp); err != nil {
 			return 0, 0, fmt.Errorf("%s JoinQueue(PVE_SOLO): %w", b.name, err)
 		}
 		if resp.GetErrorCode() == 0 && resp.GetErrorMessage().GetId() == 0 {
@@ -1003,9 +1028,10 @@ func teamSmokeWaitPush[T proto.Message](bot *teamSmokeBot, since int, messageId 
 // teamSmokeStartTeamMatch 队长发起整队开战直到受理,返回受理回包里的视图。
 // 上一场结算落地前队员仍持 battle:lock(TeamMemberInBattle)、上一场的 ready 票据未清(TeamMemberNotReady)
 // 都是有界过渡态:在 teamSmokeSettleTimeout 内重试;其它拒绝码立即失败。被拒时服务端不加锁,重试没有副作用。
+// request_id 必填(规范 UUID,否则 kInvalidParameter),一次发起一个,重试复用同一份请求。
 func teamSmokeStartTeamMatch(leader *teamSmokeBot, tid uint64, battleConfigId uint32) (*teampb.TeamView, error) {
 	deadline := time.Now().Add(teamSmokeSettleTimeout)
-	request := &teampb.StartTeamMatchRequest{BattleConfigId: battleConfigId, ExpectedTeamId: tid}
+	request := &teampb.StartTeamMatchRequest{BattleConfigId: battleConfigId, ExpectedTeamId: tid, RequestId: chatSmokeRequestId()}
 	for {
 		resp := &teampb.TeamResponse{}
 		tip, err := leader.rpc(game.ClientPlayerTeamStartTeamMatchMessageId, request, resp)
@@ -1031,7 +1057,7 @@ func teamSmokeStartTeamMatch(leader *teamSmokeBot, tid uint64, battleConfigId ui
 func teamSmokeExpectMemberInBattle(leader *teamSmokeBot, tid uint64, battleConfigId uint32, inBattle uint64) error {
 	want := strconv.FormatUint(inBattle, 10)
 	deadline := time.Now().Add(teamSmokeSettleTimeout)
-	request := &teampb.StartTeamMatchRequest{BattleConfigId: battleConfigId, ExpectedTeamId: tid}
+	request := &teampb.StartTeamMatchRequest{BattleConfigId: battleConfigId, ExpectedTeamId: tid, RequestId: chatSmokeRequestId()}
 	for {
 		resp := &teampb.TeamResponse{}
 		tip, err := leader.rpc(game.ClientPlayerTeamStartTeamMatchMessageId, request, resp)
@@ -1056,6 +1082,9 @@ func teamSmokeExpectMemberInBattle(leader *teamSmokeBot, tid uint64, battleConfi
 // teamSmokeTeamBattle 队长整队开战:队长以回包 STARTING 为准,其余队员等 MATCH_STARTED;全员等同一 battle_id 的
 // BattleStart、自动战斗到终局,最后全员(含队长)等 MATCH_ENDED。fighters 必须恰好是当前队伍全员(队长在内)。返回 battle_id。
 func teamSmokeTeamBattle(leader *teamSmokeBot, tid uint64, battleConfigId uint32, fighters []*teamSmokeBot) (uint64, error) {
+	if err := teamSmokeEnsureNetworkProbes(fighters...); err != nil {
+		return 0, err
+	}
 	marks := make([]int, len(fighters))
 	for i, fighter := range fighters {
 		marks[i] = fighter.mark()

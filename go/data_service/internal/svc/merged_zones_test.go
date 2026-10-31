@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"data_service/internal/config"
-	"data_service/internal/routing"
 	"data_service/internal/store"
+
+	"shared/placement"
 )
 
 type stubMergedZoneLister struct {
@@ -20,35 +21,26 @@ func (s stubMergedZoneLister) ListMergedInto(context.Context) ([]store.MergedInt
 	return s.rows, s.err
 }
 
-// db_first 而缓存没装配:main 必须拒启,不看 Store.Required;redis 模式没有合服,不算缺。
-func TestMergedZonesUnassembled(t *testing.T) {
-	dbFirst := config.Config{RouteStore: config.RouteStoreConfig{Mode: config.RouteStoreModeDBFirst}}
-	redisMode := config.Config{RouteStore: config.RouteStoreConfig{Mode: config.RouteStoreModeRedis}}
+// 编译期断言:装配层把 *store.RouteStore 直接当真源。
+var _ mergedIntoLister = (*store.RouteStore)(nil)
 
-	if err := (&ServiceContext{Config: dbFirst}).MergedZonesUnassembled(); err == nil {
-		t.Fatal("db_first without the cache must refuse to start")
+// 缓存没装配:main 必须拒启,不看 Store.Required。
+func TestMergedZonesUnassembled(t *testing.T) {
+	if err := (&ServiceContext{}).MergedZonesUnassembled(); err == nil {
+		t.Fatal("a missing cache must refuse to start")
 	}
-	if err := (&ServiceContext{Config: dbFirst, MergedZones: routing.NewStaticMergedZoneCache(nil)}).MergedZonesUnassembled(); err != nil {
+	cache := loadMergedZoneCache(stubMergedZoneLister{}, time.Second)
+	if cache == nil {
+		t.Fatal("cache not assembled")
+	}
+	if err := (&ServiceContext{MergedZones: cache}).MergedZonesUnassembled(); err != nil {
 		t.Fatalf("assembled cache: %v", err)
-	}
-	if err := (&ServiceContext{Config: redisMode}).MergedZonesUnassembled(); err != nil {
-		t.Fatalf("redis mode: %v", err)
 	}
 }
 
-func TestNewMergedZoneCache(t *testing.T) {
-	redisMode := config.Config{RouteStore: config.RouteStoreConfig{Mode: config.RouteStoreModeRedis}}
-	cache := newMergedZoneCache(redisMode, nil)
-	if cache == nil {
-		t.Fatal("redis mode gets an empty static cache")
-	}
-	if got, err := cache.Resolve(5); err != nil || got != 5 {
-		t.Fatalf("Resolve(5) = (%d, %v), want (5, nil)", got, err)
-	}
-
-	dbFirst := config.Config{RouteStore: config.RouteStoreConfig{Mode: config.RouteStoreModeDBFirst}}
-	if cache := newMergedZoneCache(dbFirst, nil); cache != nil {
-		t.Fatal("db_first without a route store has nothing to read: the cache stays nil")
+func TestNewMergedZoneCacheWithoutRouteStore(t *testing.T) {
+	if cache := newMergedZoneCache(config.Config{}, nil); cache != nil {
+		t.Fatal("without a route store there is nothing to read: the cache stays nil")
 	}
 }
 
@@ -56,11 +48,16 @@ func TestLoadMergedZoneCache(t *testing.T) {
 	if cache := loadMergedZoneCache(stubMergedZoneLister{err: errors.New("db down")}, time.Second); cache != nil {
 		t.Fatal("a failed first read leaves the cache nil, main refuses to start")
 	}
+	broken := []store.MergedIntoRow{{SrcZone: 5, DstZone: 6, RunID: "run", MergedAtMs: 1}, {SrcZone: 6, DstZone: 5, RunID: "run", MergedAtMs: 1}}
+	if cache := loadMergedZoneCache(stubMergedZoneLister{rows: broken}, time.Second); cache != nil {
+		t.Fatal("a cycle at startup leaves the cache nil, main refuses to start")
+	}
 	cache := loadMergedZoneCache(stubMergedZoneLister{rows: []store.MergedIntoRow{{SrcZone: 5, DstZone: 6, RunID: "run", MergedAtMs: 1}}}, time.Second)
 	if cache == nil {
 		t.Fatal("cache not assembled")
 	}
-	if got, err := cache.Resolve(5); err != nil || got != 6 {
-		t.Fatalf("Resolve(5) = (%d, %v), want (6, nil)", got, err)
+	var snapshot *placement.MergedZones = cache.Snapshot()
+	if got := snapshot.Final(5); got != 6 {
+		t.Fatalf("Final(5) = %d, want 6", got)
 	}
 }

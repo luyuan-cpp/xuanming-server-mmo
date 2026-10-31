@@ -529,6 +529,14 @@ func runGuildTrialSmoke(in actTrialInput, fail econFail) uint64 {
 		itemsBefore[i] = econItemCount(econBag(bot, fail, "S9-bag"), actTrialItem)
 	}
 
+	// 历练开局走 match 的点名成局,读每名参战者自己的地域探测结果(请求里不带计划号),缺一个就在 C 的最后一票上
+	// 变成 kGuildTrialServiceBusy。所以建房之前三人都探测;S12 的 [A, D] 被 D 拒绝、S13 的 [A, D] 被校验挡下,都走不到开局,D 不用测。
+	for _, bot := range fighters {
+		if _, err := ensureNetworkProbe(bot.gc, bot.stats, bot.account); err != nil {
+			fail("S9-network-probe", "%v", err)
+		}
+	}
+
 	// ---- S9:A 建邀请房间 [A, B, C] ----
 	roster := []uint64{a.gc.PlayerId, b.gc.PlayerId, c.gc.PlayerId}
 	// 清空留底必须在建房之前:房间一写进 Redis 服务端就推,晚清一步会把这条推送一起丢掉(同 S4)。
@@ -802,7 +810,7 @@ func actAwaitTrialSettled(bot *guildSmokeBot, battleID uint64, fail econFail, st
 		}
 		if !time.Now().Before(deadline) {
 			fail(step, "Trial remains unsettled %s after battle end (battle_id=%d): daily fund-eligible wins=%d personal today count=%d active battle=%d. "+
-				"Settlement path = battle writes SharedRedis battle:activity_result:{battle_id} -> Kafka match-results -> guild consumer group guild-trial; "+
+				"Settlement path = battle commits the outcome to match SQL -> match outbox -> Kafka match-results -> guild consumer group guild-trial; "+
 				"check guild [GuildTrial] logs and guild_trial_result_total metrics, and confirm Activity.TrialResult.Enabled=true in guild",
 				actTrialSettleTimeout, battleID, view.GetProgress(), view.GetMyUsedCount(), view.GetMyTrialBattleId())
 		}
@@ -965,7 +973,8 @@ func actTrialTipHint(tip uint32) string {
 			"(guild 启动日志里有一行原因);也可能是 GuildActivity 历练行未启用"
 	case tipGuildTrialServiceBusy:
 		return "kGuildTrialServiceBusy:guild 调 match 内部服务 MatchInternal.StartActivityBattle 出错 / 超时 / 被判内部错误 —— " +
-			"match 没起、没换上带 match_internal 的二进制,或 etcd 里没有 guild.yaml 的 MatchRpc.Etcd.Key;看 guild 日志 [GuildTrial] 与 match 日志"
+			"match 没起、没换上带 match_internal 的二进制,或 etcd 里没有 guild.yaml 的 MatchRpc.Etcd.Key;看 guild 日志 [GuildTrial] 与 match 日志" +
+			" (also possible: a fighter's network probe expired, or the fighters share no region within the latency limit)"
 	case tipGuildTrialTeamInvalid:
 		return "kGuildTrialTeamInvalid:参数为 [原因, player_id]。busy = 上一轮留下的邀请房间还没过期(至多 30 秒);" +
 			"in_battle = 上一轮的对局还没结算(battle:lock 还在);not_ready = match 里有在途票据或没有场景位置;offline = 会话不在线"

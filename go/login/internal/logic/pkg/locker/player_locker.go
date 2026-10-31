@@ -14,11 +14,12 @@ import (
 	"shared/safego"
 )
 
+// RedisLocker 不关心锁键在哪个域:玩家锁用玩家域句柄(PlayerRedis),账号锁与排队 dispatcher 选主用控制域句柄。
 type RedisLocker struct {
-	client *redis.Client
+	client redis.UniversalClient
 }
 
-func NewRedisLocker(client *redis.Client) *RedisLocker {
+func NewRedisLocker(client redis.UniversalClient) *RedisLocker {
 	return &RedisLocker{client: client}
 }
 
@@ -44,7 +45,7 @@ type Lock struct {
 	Value  string
 	TTL    time.Duration
 	locked bool
-	client *redis.Client
+	client redis.UniversalClient
 
 	// acquiredAt 是 SETNX **发出**的时刻:服务端写入不早于它,key 最早也在
 	// acquiredAt+TTL 才过期。心跳自我降级从这里起算,而不是从 StartHeartbeat
@@ -157,14 +158,14 @@ func (l *Lock) StartHeartbeat(interval time.Duration, ttl time.Duration, onLost 
 	//   - renewTimeout 只是续期 ctx 的超时,封不住一次调用:客户端没开 ContextTimeoutEnabled
 	//     时 socket 读写不认 ctx 截止时间,另受读写超时之和约束(生产默认 3s+3s);写之前的
 	//     连接池排队 / 重试退避 / 拨号又先吃掉最多 renewTimeout。所以 maxCall 取两段之和,
-	//     见 leader.CallBudget(GoRedisMaxCallDuration 返回 0 表示认 ctx,即 renewTimeout);
+	//     见 leader.CallBudget(UniversalMaxCallDuration 返回 0 表示认 ctx,即 renewTimeout);
 	//     新建连接时的 HELLO / AUTH 握手读写仍不在其内。
 	//   - 门槛公式与三条约束见 leader.FenceAfter:按 interval=ttl/3 且 ttl/3 > maxCall(留余量),
 	//     失联后第 1 个出错拍不降级、第 2 个出错拍必定降级且赶在 key 过期前;满足不了时退化为
 	//     任一续期出错即降级。生产客户端默认选项 maxCall = 2s+6s = 8s:PlayerLockTTL 120s → 80s,
 	//     DispatcherLockTTL 30s → 20s(降级最晚 28s 完成)。
 	renewTimeout := min(2*time.Second, ttl/8)
-	maxCall := leader.CallBudget(renewTimeout, leader.GoRedisMaxCallDuration(l.client.Options()))
+	maxCall := leader.CallBudget(renewTimeout, leader.UniversalMaxCallDuration(l.client))
 	fenceAfter, guaranteed := leader.FenceAfter(ttl, interval, maxCall)
 	if !guaranteed {
 		logx.Errorf("lock heartbeat key=%s ttl=%s interval=%s: ttl too short for redis client worst-case call %s, "+

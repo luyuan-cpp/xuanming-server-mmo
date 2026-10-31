@@ -18,12 +18,11 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
-	"google.golang.org/protobuf/proto"
 )
 
 // 观战档位与 L1 / L2 准入(battle-spectate-tiered-fanout.md §3、§15.6;spectate:* 只有 match 读写):
 //
-//	spectate:tier:{id}          string  档位数值(eSpectateTier),不存在 = DIRECT;只升不降,TTL 同观战记录
+//	spectate:tier:{id}          string  档位数值(eSpectateTier),不存在 = DIRECT;只升不降,TTL = spectateTTLSeconds
 //	spectate:relay_gates:{id}   hash    gate_node_id → gate_instance_id:本场已在 battle 挂上的中继 gate,TTL 同上
 //	spectate:featured:{id}      string  运营标记的赛事局,TTL 同上
 //	spectate:promote_try:{id}   string  升 L2 尝试的短租约,见 spectatePromoteLeaseSeconds
@@ -31,7 +30,7 @@ import (
 //	spectate:featured:active    zset    赛事局索引:member=battle_id,score=标记到期毫秒;只用来枚举,标记以上面的键为准
 //
 // 本场的键都带同一个 hash tag {id},落同一 slot,以后要合进一条 Lua 不用改键名。两个全服 ZSET 单独一个 slot,
-// 不与本场的键进同一条 Lua。档位一旦升起,这场的新观众就不再撞 L0(全局模式下撞一次 L0 要走事务、锁 formation 行、
+// 不与本场的键进同一条 Lua。档位一旦升起,这场的新观众就不再撞 L0(撞一次 L0 要走事务、锁 formation 行、
 // 发两次 gRPC,热门局不能让每个人都撞一次)。
 const (
 	spectateBroadcastActiveKey = "spectate:bcast:active"
@@ -39,7 +38,7 @@ const (
 )
 
 // spectatePromoteTimeout 单次 PromoteSpectateBroadcast 的时间预算。比 addObserverTimeout 短:升档只是顺带的优化,
-// 全局路径后面还要提交 SQL,不能让它吃光请求预算。超时后租约到期时的下一名观众会重试(battle 侧幂等)。
+// 后面还要提交 SQL,不能让它吃光请求预算。超时后租约到期时的下一名观众会重试(battle 侧幂等)。
 const spectatePromoteTimeout = time.Second
 
 // spectatePromoteLeaseSeconds 是升 L2 尝试的短租约时长:同一场每 3 秒至多一名观众去抢配额、调 battle,其余观众直接按 RELAY 签票。
@@ -89,7 +88,7 @@ return wanted
 
 // raiseSpectateTier 把本场档位升到 wanted(已不低于它就不动),返回写后的实际档位。
 func raiseSpectateTier(ctx context.Context, s *svc.ServiceContext, battleId uint64, wanted battlepb.ESpectateTier) (battlepb.ESpectateTier, error) {
-	res, err := s.MatchRedis.EvalCtx(ctx, raiseSpectateTierScript, []string{spectateTierKey(battleId)}, int(wanted), spectateTTLSeconds(s))
+	res, err := s.MatchRedis.EvalCtx(ctx, raiseSpectateTierScript, []string{spectateTierKey(battleId)}, int(wanted), spectateTTLSeconds)
 	if err != nil {
 		return battlepb.ESpectateTier_SPECTATE_TIER_DIRECT, fmt.Errorf("升观战档位失败: %w", err)
 	}
@@ -117,7 +116,7 @@ func readSpectateTier(ctx context.Context, s *svc.ServiceContext, battleId uint6
 	return battlepb.ESpectateTier(value), nil
 }
 
-// spectateAdmissionTier 是 WatchBattle 的档位判定(Redis 与全局两条路径共用):决定这名观众走 L0 还是 L1 / L2。
+// spectateAdmissionTier 是 WatchBattle 的档位判定:决定这名观众走 L0 还是 L1 / L2。
 // 中继不可用时一律 DIRECT,不看键:开关关掉就回到上一档的行为(§11),直连席满了回 16021。
 func spectateAdmissionTier(ctx context.Context, s *svc.ServiceContext, battleId uint64) (battlepb.ESpectateTier, error) {
 	if !s.Config.Spectate.RelayUsable() {
@@ -126,7 +125,7 @@ func spectateAdmissionTier(ctx context.Context, s *svc.ServiceContext, battleId 
 	return readSpectateTier(ctx, s, battleId)
 }
 
-// spectateDirectFullToRelay 处理 L0 回「直连席已满」(两条路径共用):中继可用就把本场升到 RELAY 并返回写后的实际档位,
+// spectateDirectFullToRelay 处理 L0 回「直连席已满」:中继可用就把本场升到 RELAY 并返回写后的实际档位,
 // 调用方继续做 L1 / L2 准入;中继不可用返回 DIRECT,调用方回 16021。
 func spectateDirectFullToRelay(ctx context.Context, s *svc.ServiceContext, battleId uint64) (battlepb.ESpectateTier, error) {
 	if !s.Config.Spectate.RelayUsable() {
@@ -146,7 +145,7 @@ func spectateTierLabel(tier battlepb.ESpectateTier) string {
 	}
 }
 
-// ---- battle RPC 缝(与 addObserverFn 同一模式:生产实现只做「建连 + 发一次请求」)----
+// ---- battle RPC 缝(生产实现只做「建连 + 发一次请求」)----
 
 var (
 	attachRelayGateFn          = attachRelayGateRPC
@@ -211,13 +210,13 @@ func recordRelayGate(ctx context.Context, s *svc.ServiceContext, battleId uint64
 	writeCtx, cancel := spectateBookkeepingContext(ctx)
 	defer cancel()
 	if _, err := s.MatchRedis.EvalCtx(writeCtx, recordRelayGateScript, []string{spectateRelayGatesKey(battleId)},
-		strconv.FormatUint(uint64(viewer.gateNodeId), 10), viewer.gateInstanceId, spectateTTLSeconds(s)); err != nil {
+		strconv.FormatUint(uint64(viewer.gateNodeId), 10), viewer.gateInstanceId, spectateTTLSeconds); err != nil {
 		logx.Errorf("[spectate] Failed to record relay gate (next viewer attaches again) battle=%d gate=%d: %v", battleId, viewer.gateNodeId, err)
 	}
 }
 
 // attachRelayGate 让 battle 把观众所在的 gate 挂进本场中继。broadcast=true 表示本场已是广播档,没有挂 gate。
-// battle 明确拒绝时 rejectTip≠0 且 err 同时非 nil(与 addObserver 同一约定)。
+// battle 明确拒绝时 rejectTip≠0 且 err 同时非 nil。
 func attachRelayGate(ctx context.Context, s *svc.ServiceContext, record *matchpb.SpectateBattleRecord, viewer spectateLobbyViewer) (source spectateSource, broadcast bool, rejectTip uint32, err error) {
 	battleId := record.GetSummary().GetBattleId()
 	if err = ctx.Err(); err != nil {
@@ -227,7 +226,7 @@ func attachRelayGate(ctx context.Context, s *svc.ServiceContext, record *matchpb
 		// 中继帧必须带 target_gate_id 与 target_instance_id(AGENTS §7.2),缺了 gate 收不到。
 		return spectateSource{}, false, 0, fmt.Errorf("观众会话缺 gate 路由 gate=%d", viewer.gateNodeId)
 	}
-	endpoint, instance, err := spectateTarget(ctx, s, record.GetBattleNodeId(), battleId)
+	endpoint, instance, err := spectateTargetFn(ctx, s, record.GetBattleNodeId(), battleId)
 	if err != nil {
 		return spectateSource{}, false, 0, fmt.Errorf("定位 battle 节点失败: %w", err)
 	}
@@ -285,19 +284,19 @@ func claimBroadcastQuota(ctx context.Context, s *svc.ServiceContext, battleId, e
 	return broadcastQuotaClaim(n), nil
 }
 
-// spectateQuotaExpiryMs 是抢配额时的到期时刻。战斗期限还不知道时(本地模式第一次升档)按记录的创建时刻 + TTL 估算:
+// spectateQuotaExpiryMs 是抢配额时的到期时刻。记录由成局现算,期限通常已有;缺失时按记录的创建时刻 + TTL 估算:
 // 只在 RPC 在途这一小段用,升档成功后换成 battle 回包里的真实期限;实例中途崩溃时占位最多白占到这个时刻。
-func spectateQuotaExpiryMs(s *svc.ServiceContext, record *matchpb.SpectateBattleRecord) uint64 {
+func spectateQuotaExpiryMs(record *matchpb.SpectateBattleRecord) uint64 {
 	if deadline := record.GetDeadlineMs(); deadline != 0 {
 		return deadline
 	}
-	return record.GetSummary().GetCreatedAtMs() + uint64(spectateTTLSeconds(s))*1000
+	return record.GetSummary().GetCreatedAtMs() + uint64(spectateTTLSeconds)*1000
 }
 
 // requestSpectateBroadcast 调 battle 升广播档(单向、幂等),返回 battle 回包里的来源。
 func requestSpectateBroadcast(ctx context.Context, s *svc.ServiceContext, record *matchpb.SpectateBattleRecord) (spectateSource, uint32, error) {
 	battleId := record.GetSummary().GetBattleId()
-	endpoint, instance, err := spectateTarget(ctx, s, record.GetBattleNodeId(), battleId)
+	endpoint, instance, err := spectateTargetFn(ctx, s, record.GetBattleNodeId(), battleId)
 	if err != nil {
 		return spectateSource{}, 0, fmt.Errorf("定位 battle 节点失败: %w", err)
 	}
@@ -337,7 +336,7 @@ func promoteSpectateBroadcast(ctx context.Context, s *svc.ServiceContext, record
 		metrics.ObserveSpectatePromote(metrics.SpectatePromoteThrottled)
 		return spectateSource{}, false, 0
 	}
-	claim, err := claimBroadcastQuota(ctx, s, battleId, spectateQuotaExpiryMs(s, record), nowMs())
+	claim, err := claimBroadcastQuota(ctx, s, battleId, spectateQuotaExpiryMs(record), nowMs())
 	if err != nil {
 		logx.Errorf("[spectate] Broadcast promotion failed to claim quota; staying on current tier battle=%d: %v", battleId, err)
 		metrics.ObserveSpectatePromote(metrics.SpectatePromoteRPCFailed)
@@ -361,7 +360,6 @@ func promoteSpectateBroadcast(ctx context.Context, s *svc.ServiceContext, record
 	writeCtx, cancel := spectateBookkeepingContext(ctx)
 	defer cancel()
 	recordBroadcastQuota(writeCtx, s, battleId, source.deadlineMs)
-	rememberSpectateSource(writeCtx, s, record, source)
 	if _, err := raiseSpectateTier(writeCtx, s, battleId, battlepb.ESpectateTier_SPECTATE_TIER_BROADCAST); err != nil {
 		// battle 已是广播档:下一名观众的 Attach 回 broadcast=true,或重试升档时同步过来。
 		logx.Errorf("[spectate] Battle promoted but tier not recorded; next viewer syncs it battle=%d: %v", battleId, err)
@@ -420,39 +418,6 @@ func spectatePromoteDue(ctx context.Context, s *svc.ServiceContext, battleId uin
 	return featured
 }
 
-// ---- 观战记录里的来源 ----
-
-// rememberSpectateSourceScript 只改写还存在的记录并保持 TTL:记录已被懒剔除时不能把它写回来。
-const rememberSpectateSourceScript = `
-if redis.call('EXISTS', KEYS[1]) == 0 then
-	return 0
-end
-redis.call('SET', KEYS[1], ARGV[1], 'KEEPTTL')
-return 1
-`
-
-// rememberSpectateSource 把 battle 回包里的实例与期限记进观战记录,之后的观众(已挂接的 gate、L2)不用再问 battle。
-// 全局模式的记录由成局原件现算(spectateRecordFromFormation),这两项本来就有,不写 Redis。
-// 写失败或被 gather 的补写盖掉都无害:字段缺失时下一名观众会再问 battle 一次(幂等)。
-func rememberSpectateSource(ctx context.Context, s *svc.ServiceContext, record *matchpb.SpectateBattleRecord, source spectateSource) {
-	if record.GetBattleInstanceId() == source.battleInstanceId && record.GetDeadlineMs() == source.deadlineMs {
-		return
-	}
-	record.BattleInstanceId, record.DeadlineMs = source.battleInstanceId, source.deadlineMs
-	if s.Authority != nil {
-		return
-	}
-	battleId := record.GetSummary().GetBattleId()
-	raw, err := proto.Marshal(record)
-	if err != nil {
-		logx.Errorf("[spectate] Failed to serialize spectator record with source battle=%d: %v", battleId, err)
-		return
-	}
-	if _, err := s.MatchRedis.EvalCtx(ctx, rememberSpectateSourceScript, []string{spectateBattleKey(battleId)}, string(raw)); err != nil {
-		logx.Errorf("[spectate] Failed to store battle source in spectator record battle=%d: %v", battleId, err)
-	}
-}
-
 // ---- 准入 ----
 
 // spectateLobbyViewer 是 L1 / L2 准入的观众:玩家身份与当前会话所在的 gate(中继要发到这台 gate)。
@@ -468,11 +433,11 @@ type spectateLobbyAdmission struct {
 	rejectTip uint32
 }
 
-// admitSpectateLobby 是 L1 / L2 准入(§15.6 第 3、4 步,两条路径共用),幂等:同一观众重复调用只是多签一张凭证。不写观战标记、
-// 不写 match_spectator、不锁 match_formation:L1 / L2 观众在 match 没有占用,互斥是软的(Q1 / §15.1),调用方在此之前做只读检查。
+// admitSpectateLobby 是 L1 / L2 准入(§15.6 第 3、4 步),幂等:同一观众重复调用只是多签一张凭证。不写 match_spectator、
+// 不锁 match_formation:L1 / L2 观众在 match 没有占用,互斥是软的(Q1 / §15.1),调用方在此之前做只读检查。
 //   - RELAY:本 gate 没挂过就调 AttachRelayGate,成功后再记账;随后判自动升档;
 //   - BROADCAST:不调任何 battle RPC,只签凭证;
-//   - 凭证的实例与期限取 battle 回包,或观战记录。
+//   - 凭证的实例与期限取 battle 回包,或观战记录(由成局原件现算,见 spectateRecordFromFormation)。
 func admitSpectateLobby(ctx context.Context, s *svc.ServiceContext, record *matchpb.SpectateBattleRecord, tier battlepb.ESpectateTier, viewer spectateLobbyViewer) (spectateLobbyAdmission, error) {
 	battleId := record.GetSummary().GetBattleId()
 	source := spectateSource{battleInstanceId: record.GetBattleInstanceId(), deadlineMs: record.GetDeadlineMs()}
@@ -490,7 +455,6 @@ func admitSpectateLobby(ctx context.Context, s *svc.ServiceContext, record *matc
 			source = attachedSource
 			writeCtx, cancel := spectateBookkeepingContext(ctx)
 			defer cancel()
-			rememberSpectateSource(writeCtx, s, record, source)
 			if broadcast {
 				// 本场已是广播档,这台 gate 没有挂上,不记 gate 账;档位同步失败无害:凭证照样有效,下一名观众再同步。
 				// 配额要补记:Promote 在 battle 已生效而回包超时时配额已被退还,此后没有观众再碰配额,这场会一直不计数。
@@ -513,15 +477,7 @@ func admitSpectateLobby(ctx context.Context, s *svc.ServiceContext, record *matc
 			}
 		}
 	case battlepb.ESpectateTier_SPECTATE_TIER_BROADCAST:
-		if !source.known() {
-			// 只有本地模式才可能走到这里:升档者记来源失败,或记录被 gather 的补写盖掉。升广播幂等,问一次就记下,不影响后面的观众。
-			fetched, rejectTip, err := requestSpectateBroadcast(ctx, s, record)
-			if err != nil {
-				return spectateLobbyAdmission{rejectTip: rejectTip}, err
-			}
-			source = fetched
-			rememberSpectateSource(ctx, s, record, source)
-		}
+		// 只签凭证。来源取自成局原件;缺失是原件损坏,由 issueSpectateTicket 报错(fail-closed),不再去问 battle。
 	default:
 		return spectateLobbyAdmission{}, fmt.Errorf("档位 %s 不走 L1 / L2 准入", tier.String())
 	}
@@ -541,14 +497,13 @@ func admitSpectateLobby(ctx context.Context, s *svc.ServiceContext, record *matc
 
 // ---- 赛事局标记 ----
 
-// markSpectateFeatured 写赛事局标记与索引,TTL 同观战记录。先写标记后写索引,取消时反过来:索引里有的一定有标记,
+// markSpectateFeatured 写赛事局标记与索引,TTL = spectateTTLSeconds。先写标记后写索引,取消时反过来:索引里有的一定有标记,
 // 列表不必逐个核对标记。
 func markSpectateFeatured(ctx context.Context, s *svc.ServiceContext, battleId uint64) error {
-	ttl := spectateTTLSeconds(s)
-	if err := s.MatchRedis.SetexCtx(ctx, spectateFeaturedKey(battleId), "1", ttl); err != nil {
+	if err := s.MatchRedis.SetexCtx(ctx, spectateFeaturedKey(battleId), "1", spectateTTLSeconds); err != nil {
 		return fmt.Errorf("写赛事局标记失败: %w", err)
 	}
-	expiryMs := int64(nowMs()) + int64(ttl)*1000
+	expiryMs := int64(nowMs()) + int64(spectateTTLSeconds)*1000
 	if _, err := s.MatchRedis.ZaddCtx(ctx, spectateFeaturedActiveKey, expiryMs, strconv.FormatUint(battleId, 10)); err != nil {
 		return fmt.Errorf("写赛事局索引失败: %w", err)
 	}

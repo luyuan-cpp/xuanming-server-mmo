@@ -40,7 +40,6 @@ const std::unordered_map<entt::id_type, std::string (*)(const void*)> kPersisted
     {entt::type_hash<PlayerPetComp>::value(), [](const void* value) { return static_cast<const PlayerPetComp*>(value)->ShortDebugString(); }},
     {entt::type_hash<PlayerProfileComp>::value(), [](const void* value) { return static_cast<const PlayerProfileComp*>(value)->ShortDebugString(); }},
     {entt::type_hash<PlayerAssetOpLedgerComp>::value(), [](const void* value) { return static_cast<const PlayerAssetOpLedgerComp*>(value)->ShortDebugString(); }},
-    {entt::type_hash<BattleSettlementLedgerComp>::value(), [](const void* value) { return static_cast<const BattleSettlementLedgerComp*>(value)->ShortDebugString(); }},
     {entt::type_hash<PlayerInboxLedgerComp>::value(), [](const void* value) { return static_cast<const PlayerInboxLedgerComp*>(value)->ShortDebugString(); }},
     {entt::type_hash<CurrencyComp>::value(), [](const void* value) { return static_cast<const CurrencyComp*>(value)->ShortDebugString(); }},
 };

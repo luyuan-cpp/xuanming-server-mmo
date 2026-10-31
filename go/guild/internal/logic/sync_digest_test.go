@@ -714,7 +714,6 @@ func TestTrialSettleBumps(t *testing.T) {
 		f.l.syncBumper = rec
 		ev := trialEvent(501, 42, 43)
 		ev.Outcome = battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN
-		f.putResult(t, ev)
 
 		outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 
@@ -734,7 +733,6 @@ func TestTrialSettleBumps(t *testing.T) {
 			}, nil
 		}
 		ev := trialEvent(504, 42, 43)
-		f.putResult(t, ev)
 
 		_, err := f.l.SettleTrialResult(context.Background(), ev)
 
@@ -753,7 +751,6 @@ func TestTrialSettleBumps(t *testing.T) {
 			}, nil
 		}
 		ev := trialEvent(502, 42, 43)
-		f.putResult(t, ev)
 
 		_, err := f.l.SettleTrialResult(context.Background(), ev)
 
@@ -772,7 +769,6 @@ func TestTrialSettleBumps(t *testing.T) {
 			return data.TrialSettleResult{Status: data.TrialSettleDuplicate}, nil
 		}
 		ev := trialEvent(503, 42, 43)
-		f.putResult(t, ev)
 
 		outcome, err := f.l.SettleTrialResult(context.Background(), ev)
 

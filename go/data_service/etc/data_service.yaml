@@ -18,7 +18,7 @@ Etcd:
 ZoneId: 1
 LeaseTTL: 60
 
-# 全球服务不允许缺失权威store时带病注册；历史MySQL/Redis工具仅显式LegacyNonGlobal。
+# 缺权威 store 时拒绝启动,不带病注册。
 Store:
   Required: true
 
@@ -47,18 +47,14 @@ AccountDirectory:
 # 必须保持顶层单行:go_services.ps1 -Zone 按与 ListenOn 相同的规则位移它。k8s ConfigMap 本批不镜像(07 §7.9.1 前提缺口)。
 MetricsListenAddr: ":9260"
 
-# Global mapping Redis: stores player_id → home_zone_id (player:zone:{id})。
+# 玩家名字读缓存(player:name:{id},internal/routing/player_name_cache.go)。
+# 这把 Redis 只放可丢弃的读缓存,里面没有任何权威数据:整个实例丢了,名字读路径回源一次全局库,
+# 建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
 #
 # ⚠ 这里**没有 DB 键**,而且不能加:go-zero 的 redis.RedisConf 只有
-#   Host / Type / User / Pass / Tls / NonBlock / PingTimeout,压根没有 DB 字段。
-#   以前这里写着 `DB: 15`,go-zero 的 unmarshaler 按结构体字段取值、不认多余键,
-#   于是那一行被**静默忽略**,映射实际一直落在 **DB 0**(已实测确认)。
-#   删掉它是为了让文件与运行时一致 —— 留着比没有更危险:
-#   tools/merge_zone 有 -mapping-redis-db 参数,运维照着这份 yaml 填 15,
-#   工具读写的就是一个 data_service 从来不看的库,却报"成功"。
-#   真要分库,得先给 config.Config 加一段自带 DB 的结构(不能用 go-zero 的 RedisConf),
-#   同时改 tools/merge_zone 与所有直连这把 Redis 的运维脚本。
-MappingRedis:
+#   Host / Type / User / Pass / Tls / NonBlock / PingTimeout,压根没有 DB 字段,
+#   写了也会被静默忽略,缓存实际一直落在 DB 0。
+NameCacheRedis:
   Host: 127.0.0.1:6379
   Type: node
 
@@ -103,83 +99,23 @@ PlayerName:
 # AdminToken: ""
 
 
-# 玩家归属 / 落点映射的提交点(docs/design/player-route-mapping-durability-proposal.md §4、§11.2)。
-# 当前全球默认db_first：TiDB player_route提交，再按maprev发布缓存。redis仅显式LegacyNonGlobal隔离工具。
-# 下述P1–P5是存量导入历史步骤；不能据此关闭现役global的SQL proof/Arm/read-ready。
-# 全新环境先迁移global及全部白名单玩家库，再起DS自然reconcile-ready，最后起DB/login；任何历史必须先正规导入/audit。
-# 存量从 redis 导入 db_first 的历史前提(缺一不可；全新空库仍须通过空库证明):
-#   1) 已在冻结窗口内(proposal §13.4 的 P1–P3):P4 之前不跑 merge_zone 任何写模式(merge/unmerge/relocate/pin-placement/backfill);
-#      P4 起只许第 2 批新版 merge_zone 并显式 -route-source=db -route-db-dsn,旧二进制禁用;Arm=true 之前 `audit -require-maprev`
-#      退出 0(P3);
-#   2) P1 导入完成且 audit 为 0:
-#        go run ./cmd/route_tool -f etc/data_service.yaml import-from-redis -dry-run=false
-#        go run ./cmd/route_tool -f etc/data_service.yaml audit
-#   3) mapping Redis 为 noeviction + appendonly yes、版本 ≥ 7.2(WAITAOF);
-#   4) 建角压测已出 W1 p99 与发布未确认率(AGENTS.md §6)。
-# 非法值 = 拒启。WAITAOF 两项都显式写 0 = 不等落盘(只给没有 AOF 的环境 / 单测用)。WaitAOFNumReplicas:K8s 上由
-# k8s_deploy.ps1 按共享 Redis 形态渲染(单实例 0、高可用 1,与 go/db 同一个函数),本文件保持 0 给本机 compose 单实例:
-# 写 1 时本机没有副本可等,db_first 下每次发布都确认不足(ErrRoutePublishNotDurable)。
-# K8s 上 k8s_deploy.ps1 渲染 Mode / ReadRequiresReady / Reconcile.ArmReadyMarker,
-#   取 -RouteStoreMode / -RouteReadRequiresReady / -RouteReconcileArm,不镜像本文件;MaxOpenConn / MaxIdleConn / WaitAOFTimeoutMs
-#   取本文件,这里改了下次部署就生效。
-# MergedZoneRefreshSec:定时重读 zone_merged_into 的周期(秒),[1, 60]。GetPlayerHomeZone / BatchGetPlayerHomeZone 用它把归属解析成
-#   最终区(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1),这个周期就是滞后上限;tools/merge_zone 写完映射后等 2 个周期
-#   再跑业务合并任务。启动时读不到拒启,之后读失败保留旧值、打 ERROR 与 data_service_merged_zone_refresh_total{result="error"}。
-# PublishRedisPoolSize(2026-10-20):db_first 下 W1 发布 + WAITAOF 专用 go-redis 客户端的池上限(连 MappingRedis 同一个实例,
-#   与读路径的 go-zero 客户端分池、不经熔断器);缺省 20 的论证见 internal/config DefaultRouteStorePublishRedisPoolSize。
-#   redis 模式不建、不开连接;db_first 下每个副本最多多占 mapping Redis 这么多条连接(进共享 Redis 连接总账)。
+# 玩家归属 / 落点映射(docs/design/player-route-mapping-durability-proposal.md §15):player_route 只在全局库一份,
+# data_service 直接 SQL 读写,提交即完成。
+# 首次启动:先迁移全局库与全部白名单玩家库,再起 data_service(SQL 空环境判据:路由空而目录或玩家库有历史时拒启),再起 go/db 与 login。
+# 非法值 = 拒启。K8s 上 MaxOpenConn / MaxIdleConn 取本文件,这里改了下次部署就生效。
+# MergedZoneRefreshSec:定时重读 zone_merged_into 的周期(秒),[1, 60]。GetPlayerHomeZone / BatchGetPlayerHomeZone / GetMergedZones 用它
+#   回答合服映射(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1),这个周期就是滞后上限。
+#   启动时读不到拒启,之后读失败保留旧值、打 ERROR 与 data_service_merged_zone_refresh_total{result="error"}。
 RouteStore:
-  Mode: db_first
   MaxOpenConn: 20
   MaxIdleConn: 5
-  PublishAttempts: 3
-  WaitAOFNumLocal: 1        # 本机 compose redis 开着 --appendonly yes(deploy/docker-compose.yml)
-  WaitAOFNumReplicas: 0
-  WaitAOFTimeoutMs: 1500
-  PublishRedisPoolSize: 20
   MergedZoneRefreshSec: 5
-  # 第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2):true 时归属查询只在就绪标记
-  # 绑定本实例身份时信任缓存,否则回源全局库 player_route(库故障回 Unavailable,绝不 NotFound)。只许 db_first(否则拒启)。
-  # 打开时启动期试跑一次读脚本:跑不起来、或 route store 没装配起来,不论 Store.Required 都拒启;探针结论是 not_master /
-  # identity_unavailable(MappingRedis 不是主、或脚本里取不到 INFO 身份)时照常启动但记 ERROR —— 标记对该实例永远挂不上,读全部回源库。
-  # 全球配置默认开启；历史 P5 描述存量导入顺序，不授权现役全球服务退回 redis 或绕开 ready 门禁。
-  ReadRequiresReady: true
-  # 对账 leader(第 1b-2 批,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §4、§13.1;internal/routereconcile)。
-  # 除全球显式开启 ArmReadyMarker 外，其余为组件默认值；非法值不论 Mode 都拒启(internal/config RouteReconcileConfig.validate)。
-  #   - 只在 Mode=db_first 时运行:redis 模式不构造 leader、不建它的 Redis 客户端、不碰任何控制键(mapping:route:ready / warm / watermark)。
-  #     db_first 下租约(route_reconcile)选出全服唯一的 leader:补发已提交未发布的孤儿行、每拍做库回档检测(水位键 M3)。
-  #   - ArmReadyMarker:全球默认 true，**全服同值**；存量仍须完成二次导入、audit -require-maprev，
-  #     全新环境须证明全部白名单玩家库无历史。此开关不跳过上述检查或水位回档检查。
-  #     共享同一全局库的所有 data_service 副本必须取同一个值；false 会撤掉现存就绪标记，不能作为全球降级开关。
-  #   - 在线清库(tools/scripts/currency_crash_window.ps1、stress_round19.ps1)之前,db_first 下**必须先停 data_service**:
-  #     那两个脚本先 FLUSHALL 再清表、复位 route_reconcile,运行中的 leader 会把将被清掉的行推回刚清空的 Redis,
-  #     或把水位复位误判成回档而冻结建角。
-  #   - Enabled: false 不构造 leader、不再检测回档，也**不撤**现存就绪标记；全球读方门禁开启时该组合拒启。
-  #     全球环境停机维护应先停依赖服务，不能关闭读方门禁以维持写入。RedisPoolSize 是 leader 独立 go-redis 池上限(进共享连接总账)。
-  Reconcile:
-    Enabled: true
-    ArmReadyMarker: true
-    LeaseMs: 10000
-    RenewIntervalMs: 3000
-    TickIntervalMs: 1000
-    IncrementalIntervalMs: 30000
-    IncrementalOverlapMs: 15000
-    RepairLookbackMs: 60000
-    RollbackToleranceMs: 0
-    PushBatch: 500
-    PushMaxRowsPerSec: 20000
-    RedisPoolSize: 4
-    AssumeNoEviction: false
-    FreezeTimeoutMs: 5000
-    RedisFailureReleaseMs: 10000
-    ArmingBlockedReportLimit: 1000
 
-# 全局库的建表策略:八张表都在 rollback_database_table.proto 里有 message:transaction_log / player_snapshot /
-# rollback_audit_log / player_name + 路由表(player_route / zone_merged_into / route_meta /
-# route_reconcile,映射持久化第 1a 批;proto 2026-10-19 补)。
+# 全局库的建表策略:七张表都在 rollback_database_table.proto 里有 message:transaction_log / player_snapshot /
+# rollback_audit_log / player_name + 路由表(player_route / zone_merged_into / route_meta)。
 # 其中 player_name 走 schema.go 里手写的 bootstrap DDL(proto2mysql 把 string 渲染成
 # MEDIUMTEXT,而 player_name 的唯一键必须建在 VARCHAR 上),迁移对它只做列漂移校验;
-# 路由表同样走手写 DDL,迁移按 proto 只守列名与主键,并种 route_meta / route_reconcile(id=1)。redis 模式同样依赖它们建成。
+# 路由表同样走手写 DDL,迁移按 proto 只守列名与主键,并种 route_meta(id=1)。
 # TiDB 上建表之后另跑 `route_tool -f <yaml> tidb-prepare -zones=<全部 zone> -dry-run=false` 预切路由表(MySQL 自动跳过)。
 # AutoMigrate=true:启动时按 proto(rollback_database_table.proto)用 proto2mysql 建表/补列。
 # 生产必须**显式**设 false(多副本并发 ALTER 会互相 MDL 阻塞),改在部署阶段跑一次:

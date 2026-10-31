@@ -11,6 +11,8 @@
 - 使用明确的 `ReleaseProfile=prod` 或 `staging`;默认 `dev` 不代表生产档。先完成该档位的 `release_preflight.ps1` 门禁。
 - 发布环境通过受控方式注入密钥,不把值写进本文、Git 文件、命令历史或日志。部署脚本使用 `MMORPG_GATE_TOKEN_SECRET`、`MMORPG_INTERNAL_AUTH_SECRET`、`MMORPG_BATTLE_TOKEN_SECRET`、`MMORPG_SPECTATE_TOKEN_SECRET`、`MMORPG_LOGIN_QUEUE_TOKEN_SECRET`、`MMORPG_GATEWAY_ADMIN_API_KEY`,以及 `MMORPG_MYSQL_USER/PASSWORD`、`MMORPG_GATEWAY_DB_USER/PASSWORD`、`MMORPG_REDIS_PASSWORD`。HMAC 与管理密钥至少 32 字符,数据库 / Redis 密码至少 12 字符;用途不同的密钥不得复用。数据库账号必须已在目标实例正确创建并授权,各业务服务的其他专用凭据按其配置准备。
 - `ZonesConfigPath` 要包含实际区服,不能把示例区服直接当成已审批规划;`ClusterId` 是部署级常量,已有环境不得随意改值。
+- go/db 认领前按全局库 `player_route` 选库,运行账号要有这张表的 SELECT。`maintenance_drain.ps1 render-roles` 的计划不会自动带它,运维在 `tables` 里写上 `{schema: <全局库>, table: player_route, operations: [SELECT]}`。没有授权时 go/db 启动读路由失败,拒绝启动。
+- match 同样直读全局库:它的运行账号在 `tables` 里要有 `player_route` 和 `zone_merged_into` 的 SELECT。没有 `zone_merged_into` 的读权限时 match 拒绝启动。合服工具的写权限在操作员角色 `deploy/sql/authority_operator_role.sql` 里,不进运行账号。
 
 `-DryRun` 会输出部分 ConfigMap / Secret 的渲染内容;只用不含真实密钥的离线输入检查结构,不要把真实密钥的 dry-run 输出归档。
 
@@ -75,6 +77,8 @@ kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig get nodes
 
 本步骤生成 MySQL 初始化 ConfigMap、预建审计 / 命令 topic,并在 infra namespace 部署全局 Go 服务(包括 client-rpc-router)与 battle。必须给出 `GoSvcRegistry` 且不带 `SkipGoSvc`;留空会跳过 Go 服务,不是自动复用节点镜像。上例 `Gateway*` 参数在 infra-up 只会提示被忽略,它们在下一步 zone-up 随 Java gateway 生效。
 
+全新集群上,全局服务里除 client-rpc-router 以外,本步骤只写 ConfigMap、跑迁移 Job,进程要等第一个 zone 的 data-service 就绪才能起(启动依赖见部署目录说明「全局服务的部署顺序」),输出里有告警 `[GlobalGoSvc]Deferred:`。第一个 zone 就绪之后再跑一次本节命令,它们才起来。第一次部署也可以直接用 `all-up`(不带 `SkipInfra`),顺序由脚本排好。
+
 先确认共享存储、topic 预建 Job、全局 router 与 battle 就绪,再发布 zone。gate 路由模式 1 依赖 router;只重跑 zone-up 不会补齐缺失的全局服务。存量环境的 etcd / Redis / Kafka 形态切换有单独迁移要求,先按部署目录说明审查,不得把第一次部署命令当成无影响升级。
 
 ## 6. 发布单个或全部区服
@@ -86,7 +90,7 @@ kubectl --context $Deploy.KubeContext --kubeconfig $Deploy.KubeConfig get nodes
   -ZoneName yesterday -ZoneId 101 @Deploy
 ```
 
-全部区服:已完成上一节 infra 时加 `SkipInfra`,避免无意再次更新共享资源。
+全部区服:已完成上一节 infra 时加 `SkipInfra`,避免无意再次更新共享资源。这两条命令都不起全局服务;全新集群上它们会告警 `[GlobalGoSvc]NotStarted:` 并点名没起的服务,这时再跑一次上一节的 `infra-up`。
 
 ```powershell
 & ./tools/scripts/k8s_deploy.ps1 -Command all-up -SkipInfra @Deploy

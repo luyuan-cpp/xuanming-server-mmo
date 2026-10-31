@@ -13,13 +13,15 @@ import (
 	"testing"
 	"time"
 
+	"shared/redisslot"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 )
 
 func familyData(t *testing.T, rdb *redis.Client, token string) TokenData {
 	t.Helper()
-	raw, err := rdb.Get(context.Background(), refreshTokenPrefix+token).Bytes()
+	raw, err := rdb.Get(context.Background(), refreshKeyOf(t, token)).Bytes()
 	if err != nil {
 		t.Fatal("读取本用例 refresh 失败", err)
 	}
@@ -62,9 +64,9 @@ func TestTokenFamily_IssueRotationAndAccountRevocation(t *testing.T) {
 	if err != nil || len(data.FamilyID) != 22 || len(rawID) != 16 {
 		t.Fatal("family 必须为 16 随机字节的规范 base64url")
 	}
-	key := refreshFamilyPrefix + data.FamilyID
+	key := familyKeyOf(testAccount, data.FamilyID)
 	fields, err := rdb.HGetAll(ctx, key).Result()
-	if err != nil || fields["account"] != testAccount || fields["head"] != old.RefreshToken || mr.TTL(key) != testConfig.RefreshTokenTTL {
+	if err != nil || fields["account"] != testAccount || fields["head"] != secretOf(t, old.RefreshToken) || mr.TTL(key) != testConfig.RefreshTokenTTL {
 		t.Fatal("新认证必须同时提交 family 归属、head 与 TTL")
 	}
 	other, err := m.Issue(ctx, "other-account", testAuthType, testDevice)
@@ -107,19 +109,21 @@ func TestTokenFamily_IssueRotationAndAccountRevocation(t *testing.T) {
 func TestTokenFamily_LegacyCompatibilityAndEnrollment(t *testing.T) {
 	m, rdb, mr := newTestManager(t)
 	ctx := context.Background()
-	access, _ := generateToken()
-	refresh, _ := generateToken()
+	tag := redisslot.AccountTag(testAccount)
+	accessSecret, _ := generateSecret()
+	refreshSecret, _ := generateSecret()
+	access, refresh := formatToken(tag, accessSecret), formatToken(tag, refreshSecret)
 	raw, err := json.Marshal(TokenData{Account: testAccount, AuthType: testAuthType, DeviceID: testDevice, CreatedAt: time.Now().Unix()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := rdb.Set(ctx, accessTokenPrefix+access, raw, testConfig.AccessTokenTTL).Err(); err != nil {
+	if err := rdb.Set(ctx, accessKeyOf(t, access), raw, testConfig.AccessTokenTTL).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if err := rdb.Set(ctx, refreshTokenPrefix+refresh, raw, testConfig.RefreshTokenTTL).Err(); err != nil {
+	if err := rdb.Set(ctx, refreshKeyOf(t, refresh), raw, testConfig.RefreshTokenTTL).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if err := rdb.ZAdd(ctx, accountRefreshKey+testAccount, redis.Z{Score: float64(time.Now().Add(testConfig.RefreshTokenTTL).Unix()), Member: refresh}).Err(); err != nil {
+	if err := rdb.ZAdd(ctx, testIndexKey, redis.Z{Score: float64(time.Now().Add(testConfig.RefreshTokenTTL).Unix()), Member: refreshSecret}).Err(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.ValidateAccess(ctx, access); err != nil {
@@ -135,7 +139,7 @@ func TestTokenFamily_LegacyCompatibilityAndEnrollment(t *testing.T) {
 	if _, err := m.Refresh(ctx, refresh); err == nil {
 		t.Fatal("旧 refresh 收编仍只准一次")
 	}
-	if len(keysWithPrefix(mr, refreshFamilyPrefix)) != 1 {
+	if len(keysWithPrefix(mr, "refresh_family:")) != 1 {
 		t.Fatal("不能伪造或重复收编 family")
 	}
 	if err := m.RevokeAll(ctx, testAccount); err != nil {
@@ -156,7 +160,7 @@ func TestTokenFamily_InvalidFamilyFailsClosedWithoutRotation(t *testing.T) {
 			ctx := context.Background()
 			pair := issueSeed(t, m)
 			data := familyData(t, rdb, pair.RefreshToken)
-			key := refreshFamilyPrefix + data.FamilyID
+			key := familyKeyOf(testAccount, data.FamilyID)
 			switch kind {
 			case "missing":
 				mr.Del(key)
@@ -168,13 +172,13 @@ func TestTokenFamily_InvalidFamilyFailsClosedWithoutRotation(t *testing.T) {
 				mr.Del(key)
 				mr.Set(key, "broken")
 			case "missing-head-token":
-				mr.Del(refreshTokenPrefix + pair.RefreshToken)
+				mr.Del(refreshKeyOf(t, pair.RefreshToken))
 			case "missing-index":
-				mr.Del(accountRefreshKey + testAccount)
+				mr.Del(testIndexKey)
 			case "persistent-family", "persistent-refresh":
 				persistentKey := key
 				if kind == "persistent-refresh" {
-					persistentKey = refreshTokenPrefix + pair.RefreshToken
+					persistentKey = refreshKeyOf(t, pair.RefreshToken)
 				}
 				if removed, err := rdb.Persist(ctx, persistentKey).Result(); err != nil || !removed {
 					t.Fatal("夹具必须移除原正 TTL", err)
@@ -185,16 +189,16 @@ func TestTokenFamily_InvalidFamilyFailsClosedWithoutRotation(t *testing.T) {
 					data.FamilyID = strings.Repeat("A", 21) + "B"
 				}
 				raw, _ := json.Marshal(data)
-				rdb.Set(ctx, accessTokenPrefix+pair.AccessToken, raw, testConfig.AccessTokenTTL)
-				rdb.Set(ctx, refreshTokenPrefix+pair.RefreshToken, raw, testConfig.RefreshTokenTTL)
+				rdb.Set(ctx, accessKeyOf(t, pair.AccessToken), raw, testConfig.AccessTokenTTL)
+				rdb.Set(ctx, refreshKeyOf(t, pair.RefreshToken), raw, testConfig.RefreshTokenTTL)
 			case "empty-id", "null-id":
 				fields := map[string]any{"account": data.Account, "auth_type": data.AuthType, "created_at": data.CreatedAt, "family_id": ""}
 				if kind == "null-id" {
 					fields["family_id"] = nil
 				}
 				raw, _ := json.Marshal(fields)
-				rdb.Set(ctx, accessTokenPrefix+pair.AccessToken, raw, testConfig.AccessTokenTTL)
-				rdb.Set(ctx, refreshTokenPrefix+pair.RefreshToken, raw, testConfig.RefreshTokenTTL)
+				rdb.Set(ctx, accessKeyOf(t, pair.AccessToken), raw, testConfig.AccessTokenTTL)
+				rdb.Set(ctx, refreshKeyOf(t, pair.RefreshToken), raw, testConfig.RefreshTokenTTL)
 			}
 			before := familySnapshot(t, mr)
 			if _, err := m.ValidateAccess(ctx, pair.AccessToken); err == nil {
@@ -215,7 +219,7 @@ func TestTokenFamily_ExpiredFamilyRejectsUnexpiredAccess(t *testing.T) {
 	m.cfg = Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Minute}
 	pair := issueSeed(t, m)
 	mr.FastForward(time.Minute + time.Millisecond)
-	if !mr.Exists(accessTokenPrefix + pair.AccessToken) {
+	if !mr.Exists(accessKeyOf(t, pair.AccessToken)) {
 		t.Fatal("夹具须保留尚未过期 access")
 	}
 	if _, err := m.ValidateAccess(context.Background(), pair.AccessToken); err == nil {
@@ -226,7 +230,7 @@ func TestTokenFamily_ExpiredFamilyRejectsUnexpiredAccess(t *testing.T) {
 		m, rdb, mr := newTestManager(t)
 		ctx := context.Background()
 		pair := issueSeed(t, m)
-		if removed, err := rdb.Persist(ctx, accessTokenPrefix+pair.AccessToken).Result(); err != nil || !removed {
+		if removed, err := rdb.Persist(ctx, accessKeyOf(t, pair.AccessToken)).Result(); err != nil || !removed {
 			t.Fatal("夹具必须移除 access 的原正 TTL", err)
 		}
 		before := familySnapshot(t, mr)
@@ -266,7 +270,7 @@ func TestTokenFamily_ConcurrentRefreshHasOneWinner(t *testing.T) {
 	if winners != 1 {
 		t.Fatalf("同一 refresh 只能有一个赢家，实际 %d", winners)
 	}
-	if n := rdb.ZCard(context.Background(), accountRefreshKey+testAccount).Val(); n != 1 {
+	if n := rdb.ZCard(context.Background(), testIndexKey).Val(); n != 1 {
 		t.Fatal("不能重复推进 head")
 	}
 }
@@ -282,21 +286,22 @@ func TestTokenFamily_TrimStaleMemberCannotDeleteRotatedFamily(t *testing.T) {
 	}
 	// 模拟旧候选残留；当前 head 已经推进，淘汰此旧成员不能删除新 head 的 family。
 	raw, _ := json.Marshal(oldData)
-	rdb.Set(ctx, refreshTokenPrefix+old.RefreshToken, raw, testConfig.RefreshTokenTTL)
-	rdb.ZAdd(ctx, accountRefreshKey+testAccount, redis.Z{Score: -1, Member: old.RefreshToken})
+	rdb.Set(ctx, refreshKeyOf(t, old.RefreshToken), raw, testConfig.RefreshTokenTTL)
+	rdb.ZAdd(ctx, testIndexKey, redis.Z{Score: -1, Member: secretOf(t, old.RefreshToken)})
 	legacy := oldData
 	legacy.FamilyID = ""
 	raw, _ = json.Marshal(legacy)
+	tag := redisslot.AccountTag(testAccount)
 	for i := 0; i < maxRefreshTokensPerAccount-1; i++ {
-		token, err := generateToken()
+		secret, err := generateSecret()
 		if err != nil {
 			t.Fatal(err)
 		}
-		rdb.Set(ctx, refreshTokenPrefix+token, raw, testConfig.RefreshTokenTTL)
-		rdb.ZAdd(ctx, accountRefreshKey+testAccount, redis.Z{Score: float64(i + 1), Member: token})
+		rdb.Set(ctx, redisslot.RefreshTokenKey(tag, secret), raw, testConfig.RefreshTokenTTL)
+		rdb.ZAdd(ctx, testIndexKey, redis.Z{Score: float64(i + 1), Member: secret})
 	}
 	m.trimRefreshSet(ctx, testAccount)
-	if n := rdb.ZCard(ctx, accountRefreshKey+testAccount).Val(); n != maxRefreshTokensPerAccount {
+	if n := rdb.ZCard(ctx, testIndexKey).Val(); n != maxRefreshTokensPerAccount {
 		t.Fatal("容量整理应在一个提交中完成")
 	}
 	if _, err := m.ValidateAccess(ctx, got.AccessToken); err != nil {
@@ -341,7 +346,14 @@ func TestTokenFamily_CrossAccountIndexCorruptionCannotDeleteForeignFamily(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	rdb.ZAdd(ctx, accountRefreshKey+testAccount, redis.Z{Score: 0, Member: other.RefreshToken})
+	// 脚本按本账号的 tag 现拼候选键,够不到别的账号的键。要构造这种损坏,得把别的账号的载荷写进本账号的键空间。
+	foreignPayload, err := rdb.Get(ctx, refreshKeyOf(t, other.RefreshToken)).Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrupted := secretOf(t, other.RefreshToken)
+	rdb.Set(ctx, redisslot.RefreshTokenKey(redisslot.AccountTag(testAccount), corrupted), foreignPayload, testConfig.RefreshTokenTTL)
+	rdb.ZAdd(ctx, testIndexKey, redis.Z{Score: 0, Member: corrupted})
 	before := familySnapshot(t, mr)
 	if err := m.RevokeAll(ctx, testAccount); err == nil {
 		t.Fatal("跨账号索引损坏必须拒绝")
@@ -358,8 +370,8 @@ func TestTokenFamily_WrongIndexTypeWritesNothing(t *testing.T) {
 	m, _, mr := newTestManager(t)
 	ctx := context.Background()
 	pair := issueSeed(t, m)
-	mr.Del(accountRefreshKey + testAccount)
-	if err := mr.Set(accountRefreshKey+testAccount, "broken-index"); err != nil {
+	mr.Del(testIndexKey)
+	if err := mr.Set(testIndexKey, "broken-index"); err != nil {
 		t.Fatal(err)
 	}
 	before := familySnapshot(t, mr)
@@ -385,16 +397,16 @@ func TestTokenFamily_DamagedRevocationCandidateWritesNothing(t *testing.T) {
 			issueSeed(t, m)
 			bad := issueSeed(t, m)
 			data := familyData(t, rdb, bad.RefreshToken)
-			key := refreshFamilyPrefix + data.FamilyID
+			key := familyKeyOf(testAccount, data.FamilyID)
 			// 保证损坏候选排在正常候选之后，仍不能先删除正常候选。
-			rdb.ZAdd(ctx, accountRefreshKey+testAccount, redis.Z{Score: float64(time.Now().Add(testConfig.RefreshTokenTTL).Unix() + 100), Member: bad.RefreshToken})
+			rdb.ZAdd(ctx, testIndexKey, redis.Z{Score: float64(time.Now().Add(testConfig.RefreshTokenTTL).Unix() + 100), Member: secretOf(t, bad.RefreshToken)})
 			switch kind {
 			case "foreign-head":
 				foreign, err := m.Issue(ctx, "foreign-head-account", testAuthType, testDevice)
 				if err != nil {
 					t.Fatal(err)
 				}
-				rdb.HSet(ctx, key, "head", foreign.RefreshToken)
+				rdb.HSet(ctx, key, "head", secretOf(t, foreign.RefreshToken))
 			case "wrong-type":
 				mr.Del(key)
 				if err := mr.Set(key, "broken-family"); err != nil {
@@ -403,11 +415,11 @@ func TestTokenFamily_DamagedRevocationCandidateWritesNothing(t *testing.T) {
 			case "missing-head":
 				rdb.HDel(ctx, key, "head")
 			case "malformed-payload":
-				rdb.Set(ctx, refreshTokenPrefix+bad.RefreshToken, "{", testConfig.RefreshTokenTTL)
+				rdb.Set(ctx, refreshKeyOf(t, bad.RefreshToken), "{", testConfig.RefreshTokenTTL)
 			case "persistent-refresh", "persistent-family":
 				persistentKey := key
 				if kind == "persistent-refresh" {
-					persistentKey = refreshTokenPrefix + bad.RefreshToken
+					persistentKey = refreshKeyOf(t, bad.RefreshToken)
 				}
 				if removed, err := rdb.Persist(ctx, persistentKey).Result(); err != nil || !removed {
 					t.Fatal("夹具必须移除撤销候选的原正 TTL", err)
@@ -418,7 +430,7 @@ func TestTokenFamily_DamagedRevocationCandidateWritesNothing(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				rdb.Set(ctx, refreshTokenPrefix+bad.RefreshToken, payload, testConfig.RefreshTokenTTL)
+				rdb.Set(ctx, refreshKeyOf(t, bad.RefreshToken), payload, testConfig.RefreshTokenTTL)
 			}
 			before := familySnapshot(t, mr)
 			if err := m.RevokeAll(ctx, testAccount); err == nil {
@@ -436,7 +448,7 @@ func TestTokenFamily_ReplacedRawValueCannotRotate(t *testing.T) {
 	ctx := context.Background()
 	pair := issueSeed(t, m)
 	data := familyData(t, rdb, pair.RefreshToken)
-	original, err := rdb.Get(ctx, refreshTokenPrefix+pair.RefreshToken).Bytes()
+	original, err := rdb.Get(ctx, refreshKeyOf(t, pair.RefreshToken)).Bytes()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,15 +459,15 @@ func TestTokenFamily_ReplacedRawValueCannotRotate(t *testing.T) {
 	}
 	other := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	defer other.Close()
-	if err := other.Set(ctx, refreshTokenPrefix+pair.RefreshToken, replacement, testConfig.RefreshTokenTTL).Err(); err != nil {
+	if err := other.Set(ctx, refreshKeyOf(t, pair.RefreshToken), replacement, testConfig.RefreshTokenTTL).Err(); err != nil {
 		t.Fatal(err)
 	}
 	expected := familySnapshot(t, mr)
-	if err := other.Set(ctx, refreshTokenPrefix+pair.RefreshToken, original, testConfig.RefreshTokenTTL).Err(); err != nil {
+	if err := other.Set(ctx, refreshKeyOf(t, pair.RefreshToken), original, testConfig.RefreshTokenTTL).Err(); err != nil {
 		t.Fatal(err)
 	}
 	rdb.AddHook(&afterFirstCommand{do: func() {
-		if err := other.Set(ctx, refreshTokenPrefix+pair.RefreshToken, replacement, testConfig.RefreshTokenTTL).Err(); err != nil {
+		if err := other.Set(ctx, refreshKeyOf(t, pair.RefreshToken), replacement, testConfig.RefreshTokenTTL).Err(); err != nil {
 			t.Fatal(err)
 		}
 	}})
@@ -494,7 +506,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 	}
 	account := "codex-token-family-it-" + suffix
 	m := NewManager(rdb, Config{AccessTokenTTL: 2 * time.Minute, RefreshTokenTTL: 5 * time.Minute})
-	keys := []string{accountRefreshKey + account}
+	keys := []string{redisslot.AccountRefreshKey(account)}
 	t.Cleanup(func() {
 		cleanup, done := context.WithTimeout(context.Background(), 3*time.Second)
 		defer done()
@@ -507,12 +519,12 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 		t.Fatal(err)
 	}
 	data := familyData(t, rdb, old.RefreshToken)
-	keys = append(keys, accessTokenPrefix+old.AccessToken, refreshTokenPrefix+old.RefreshToken, refreshFamilyPrefix+data.FamilyID)
+	keys = append(keys, accessKeyOf(t, old.AccessToken), refreshKeyOf(t, old.RefreshToken), familyKeyOf(account, data.FamilyID))
 	got, err := m.Refresh(ctx, old.RefreshToken)
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys = append(keys, accessTokenPrefix+got.AccessToken, refreshTokenPrefix+got.RefreshToken)
+	keys = append(keys, accessKeyOf(t, got.AccessToken), refreshKeyOf(t, got.RefreshToken))
 	if _, err := m.Refresh(ctx, old.RefreshToken); err == nil {
 		t.Fatal("真实 Redis 不得二次消费旧 refresh")
 	}
@@ -531,7 +543,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 	// 这项必须在真实后端运行，且不打印随机键、令牌或 DUMP 内容。
 	t.Run("null-retire-preserves-all-candidates", func(t *testing.T) {
 		nullAccount := account + "-null"
-		setKey := accountRefreshKey + nullAccount
+		setKey := redisslot.AccountRefreshKey(nullAccount)
 		keys = append(keys, setKey)
 		localKeys := []string{setKey}
 		var bad *TokenPair
@@ -541,7 +553,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 				t.Fatal(err)
 			}
 			data := familyData(t, rdb, pair.RefreshToken)
-			owned := []string{accessTokenPrefix + pair.AccessToken, refreshTokenPrefix + pair.RefreshToken, refreshFamilyPrefix + data.FamilyID}
+			owned := []string{accessKeyOf(t, pair.AccessToken), refreshKeyOf(t, pair.RefreshToken), familyKeyOf(nullAccount, data.FamilyID)}
 			keys = append(keys, owned...)
 			localKeys = append(localKeys, owned...)
 			bad = pair
@@ -551,10 +563,10 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := rdb.Set(ctx, refreshTokenPrefix+bad.RefreshToken, payload, m.cfg.RefreshTokenTTL).Err(); err != nil {
+		if err := rdb.Set(ctx, refreshKeyOf(t, bad.RefreshToken), payload, m.cfg.RefreshTokenTTL).Err(); err != nil {
 			t.Fatal(err)
 		}
-		if err := rdb.ZAdd(ctx, setKey, redis.Z{Score: float64(time.Now().Add(m.cfg.RefreshTokenTTL).Unix() + 100), Member: bad.RefreshToken}).Err(); err != nil {
+		if err := rdb.ZAdd(ctx, setKey, redis.Z{Score: float64(time.Now().Add(m.cfg.RefreshTokenTTL).Unix() + 100), Member: secretOf(t, bad.RefreshToken)}).Err(); err != nil {
 			t.Fatal(err)
 		}
 		snapshot := func() map[string]string {
@@ -579,13 +591,13 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 	for _, kind := range []string{"persistent-access", "persistent-head-refresh", "persistent-family"} {
 		t.Run(kind, func(t *testing.T) {
 			caseAccount := account + "-" + kind
-			keys = append(keys, accountRefreshKey+caseAccount)
+			keys = append(keys, redisslot.AccountRefreshKey(caseAccount))
 			pair, err := m.Issue(ctx, caseAccount, testAuthType, testDevice)
 			if err != nil {
 				t.Fatal(err)
 			}
 			data := familyData(t, rdb, pair.RefreshToken)
-			owned := []string{accessTokenPrefix + pair.AccessToken, refreshTokenPrefix + pair.RefreshToken, refreshFamilyPrefix + data.FamilyID, accountRefreshKey + caseAccount}
+			owned := []string{accessKeyOf(t, pair.AccessToken), refreshKeyOf(t, pair.RefreshToken), familyKeyOf(caseAccount, data.FamilyID), redisslot.AccountRefreshKey(caseAccount)}
 			keys = append(keys, owned[:3]...)
 			corrupted := owned[0]
 			if kind == "persistent-head-refresh" {

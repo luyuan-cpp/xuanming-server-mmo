@@ -1,6 +1,8 @@
 #include "player_team.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
+#include <hiredis/hiredis.h>
+
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
@@ -11,7 +13,7 @@
 
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
-#include "thread_context/redis_manager.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 
 #include "network/network_utils.h"
 #include "network/node_utils.h"
@@ -19,6 +21,7 @@
 
 #include "hexagons_grid.h" // Hex:实体是否已被 AoiSystem::Update 放进格子
 
+#include "battle/system/battle_lock_rules.h"
 #include "battle/system/player_battle.h"
 #include "core/security/service_call_auth.h"
 #include "grpc_client/team/team_authority_grpc_client.h"
@@ -66,12 +69,11 @@ namespace
 	}
 	// player:{id}:location 的键名与解析是共享的:player_ownership::LocationRedisKey /
 	// player_ownership::ParsePlayerLocationElement(player_ownership_comp.h / player_lifecycle.h)。
-	constexpr char kBattleLockKeyFmt[] = "battle:lock:%llu";
 
+	// 战斗锁与位置都是玩家域键,走 tlsPlayerRedis。这里为真只说明至少一个节点连着,具体 slot 可不可用要看 command() 的返回值。
 	bool RedisReady()
 	{
-		auto& redis = tlsRedis.GetZoneRedis();
-		return redis && redis->connected();
+		return tlsPlayerRedis.connected();
 	}
 
 	uint64_t GuidOf(entt::entity player)
@@ -216,7 +218,7 @@ void PlayerTeamSystem::RefreshMembership(entt::entity player, FollowMode mode)
             const auto* previous = tlsEcs.actorRegistry.try_get<TeamId>(player);
             if (previous != nullptr && previous->membership_epoch() == reply->membership_epoch()
                 && previous->team_id() != reply->team_id()) return;
-            ApplyMembership(player, reply->team_id(), reply->membership_epoch(), false);
+            ApplyMembership(player, reply->team_id(), reply->membership_epoch());
             tlsEcs.actorRegistry.emplace_or_replace<TeamSnapshotVersion>(player, reply->membership_epoch(), reply->version());
             if (mode == FollowMode::kRefreshOnly || reply->team_id() == 0) return;
             if (record.leader_id() != playerId) {
@@ -231,31 +233,30 @@ void PlayerTeamSystem::RefreshMembership(entt::entity player, FollowMode mode)
             }
         });
 }
-void PlayerTeamSystem::ApplyMembership(entt::entity player, uint64_t teamId, uint64_t epoch, bool keyMissing)
+void PlayerTeamSystem::ApplyMembership(entt::entity player, uint64_t teamId, uint64_t epoch)
 {
 	const auto* current = tlsEcs.actorRegistry.try_get<TeamId>(player);
 	const bool hasComponent = current != nullptr;
 	const uint64_t currentEpoch = hasComponent ? current->membership_epoch() : 0;
-	if (!ShouldApplyMembership(currentEpoch, hasComponent, epoch, keyMissing))
+	if (!ShouldApplyMembership(currentEpoch, hasComponent, epoch))
 	{
 		return;
 	}
 
 	// 先抄旧值:emplace_or_replace / remove 之后 current 指针失效
 	const uint64_t oldTeamId = hasComponent ? current->team_id() : 0;
-	const uint64_t newTeamId = keyMissing ? 0 : teamId;
 
 	// 无队也保留epoch墓碑，离队回包之后到达的旧入队回复不能复活成员关系。
 	{
 		auto& component = tlsEcs.actorRegistry.emplace_or_replace<TeamId>(player);
-		component.set_team_id(newTeamId);
+		component.set_team_id(teamId);
 		component.set_membership_epoch(epoch);
 	}
 
-	if (oldTeamId != newTeamId)
+	if (oldTeamId != teamId)
 	{
 		LOG_INFO << "[PlayerTeam] TeamId changed: player_id=" << GuidOf(player) << " old_team_id=" << oldTeamId
-				 << " new_team_id=" << newTeamId << " epoch=" << epoch << " key_missing=" << keyMissing;
+				 << " new_team_id=" << teamId << " epoch=" << epoch;
 		RefreshTeammateAoi(player);
 	}
 }
@@ -289,26 +290,53 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 		return;
 	}
 
-	// 一跳读两个 key:队长位置 + 自己的战斗锁。登录时 InBattleComp 由 PlayerBattleSystem 异步重建,
-	// 不依赖两条回调链的跳数先后,直接读锁 fail-closed(§F.2)。
-	const std::string leaderLocationKey = player_ownership::LocationRedisKey(leaderId);
-	tlsRedis.GetZoneRedis()->command(
+	// 两跳读:先读自己的战斗锁,再读队长位置。登录时 InBattleComp 由 PlayerBattleSystem 异步重建,
+	// 不依赖两条回调链的跳数先后,直接读锁 fail-closed(§F.2)。两把键属于不同玩家、不同 slot,不能并进一条 MGET
+	// (docs/design/redis-player-store-cluster.md §5.3)。顺序依赖只有「本人删锁先于本人读锁」
+	// (PlayerBattleSystem 先发条件删锁再摘组件、摘组件才触发这里),两条命令都在本人 slot。
+	const int ret = tlsPlayerRedis.command(
 		[player, playerId, leaderId](hiredis::Hiredis*, redisReply* reply) {
 			if (!IsSamePlayer(player, playerId))
 			{
 				return;
 			}
-			if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY || reply->elements != 2 ||
-				reply->element == nullptr || reply->element[1] == nullptr)
+			if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
 			{
 				LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
 				return;
 			}
-			const redisReply* lockElement = reply->element[1];
-			if (lockElement->type != REDIS_REPLY_NIL)
+			if (reply->type != REDIS_REPLY_NIL)
 			{
 				// 锁存在,或回复形状不认识:都按战斗在途 fail-closed
 				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=battle_lock player_id=" << playerId;
+				return;
+			}
+			ReadLeaderLocationForFollow(player, playerId, leaderId);
+		},
+		(std::string("GET ") + battle_lock::kBattleLockKeyFmt).c_str(), playerId);
+	if (ret != REDIS_OK)
+	{
+		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
+	}
+}
+
+void PlayerTeamSystem::ReadLeaderLocationForFollow(entt::entity player, uint64_t playerId, uint64_t leaderId)
+{
+	if (!RedisReady())
+	{
+		LOG_WARN << "[PlayerTeam] Leader location read skipped(Redis disconnected), player_id=" << playerId << " leader_id=" << leaderId;
+		return;
+	}
+	const std::string leaderLocationKey = player_ownership::LocationRedisKey(leaderId);
+	const int ret = tlsPlayerRedis.command(
+		[player, playerId, leaderId](hiredis::Hiredis*, redisReply* reply) {
+			if (!IsSamePlayer(player, playerId))
+			{
+				return;
+			}
+			if (reply == nullptr)
+			{
+				LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
 				return;
 			}
 			// 回调期间可能刚进入战斗 / 刚断线 / 刚被发起跨 zone 交接:重新核对
@@ -334,7 +362,7 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 			}
 
 			storage::PlayerLocation leaderLocation;
-			if (!player_ownership::ParsePlayerLocationElement(reply->element[0], leaderLocation))
+			if (!player_ownership::ParsePlayerLocationElement(reply, leaderLocation))
 			{
 				return; // 队长不在任何场景(或位置缺失/损坏):不跟随
 			}
@@ -413,7 +441,11 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 			LOG_INFO << "[PlayerTeam] Requesting scene change to follow leader: player_id=" << playerId << " leader_id=" << leaderId
 					 << " leader_scene_id=" << leaderSceneId << " corr=" << correlationId;
 		},
-		(std::string("MGET %s ") + kBattleLockKeyFmt).c_str(), leaderLocationKey.c_str(), playerId);
+		"GET %s", leaderLocationKey.c_str());
+	if (ret != REDIS_OK)
+	{
+		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
+	}
 }
 
 void PlayerTeamSystem::RegroupToLeader(entt::entity player, uint64_t leaderId)

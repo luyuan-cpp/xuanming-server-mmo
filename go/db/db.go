@@ -115,9 +115,6 @@ func main() {
 	metrics.RegisterSQLPools(stores.PoolSamples)
 	// 库级冷却(L-04):db_store_cooldown_stores 在每次抓取时按注册表现算,同样必须在 metrics.Start 之前注册。
 	metrics.RegisterStoreCooldown(stores.CooldownCounts)
-	// go-redis 连接池(db_redis_pool_*{redis_client=main|placement}):每次抓取时现取 PoolStats。Placement.Redis 缺省时
-	// PlacementRedis 就是 RedisClient 本身,按指针身份判断,同一对象只导出 main 一份(汇总脚本跨 redis_client 求和不翻倍)。
-	metrics.RegisterRedisPools(ctx.RedisClient, ctx.PlacementRedis)
 
 	if maintenanceRuntime != nil {
 		writerConfig, err := proto_sql.CurrentWriterConfig()
@@ -163,7 +160,7 @@ func main() {
 		rootAdmission = drainproof.NewPrepared()
 	}
 	// 存盘(docs/design/player-save-direct-commit.md)。
-	playerStoreServer, err := newPlayerStoreServer(&config.AppConfig, ctx, stores)
+	playerStoreServer, err := newPlayerStoreServer(&config.AppConfig, stores)
 	if err != nil {
 		panic(fmt.Sprintf("player store rejected: %v", err))
 	}
@@ -284,17 +281,11 @@ func main() {
 	if len(config.AppConfig.Etcd.Hosts) > 0 {
 		fmt.Printf("  etcd:        %v\n", config.AppConfig.Etcd.Hosts)
 	}
-	fmt.Printf("  redis:       %s\n", config.AppConfig.ServerConfig.RedisClient.Hosts)
-	placementRedisHosts := "(RedisClient)"
-	if pr := config.AppConfig.Placement.Redis; pr != nil {
-		placementRedisHosts = fmt.Sprintf("%s db=%d", pr.Hosts, pr.DB)
-	}
 	pc := config.AppConfig.Placement
-	fmt.Printf("  placement:   redis=%s required=%v storeFamilies=%v zoneStorePool=%d/%d nonZoneStorePool=%d/%d extraStoreIdleTimeout=%v requireRouteReady=%v\n",
-		placementRedisHosts, pc.Required, pc.StoreFamiliesAllowed(),
+	fmt.Printf("  placement:   storeFamilies=%v zoneStorePool=%d/%d nonZoneStorePool=%d/%d extraStoreIdleTimeout=%v\n",
+		pc.StoreFamiliesAllowed(),
 		pc.ZoneStoreMaxOpenConn, pc.ZoneStoreMaxIdleConn, pc.NonZoneStoreMaxOpenConn, pc.NonZoneStoreMaxIdleConn,
-		time.Duration(pc.ExtraStoreConnMaxIdleSeconds)*time.Second,
-		pc.RequireRouteReady)
+		time.Duration(pc.ExtraStoreConnMaxIdleSeconds)*time.Second)
 	fmt.Printf("  mysql:       %s@%s/%s\n", config.AppConfig.ServerConfig.Database.User, config.AppConfig.ServerConfig.Database.Hosts, config.AppConfig.ServerConfig.Database.DBName)
 	fmt.Println("=============================================================")
 	// 不要对 quit 调 signal.Stop / signal.Reset:Linux 上 go-zero 收到 SIGTERM 后会在约 5.5 秒后向自身重发一次

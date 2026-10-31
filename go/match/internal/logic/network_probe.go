@@ -19,9 +19,6 @@ func playerSessionStaleFor(ctx context.Context, s *svc.ServiceContext, pid uint6
 }
 
 func GetNetworkProbePlan(ctx context.Context, s *svc.ServiceContext) (*pb.GetNetworkProbePlanResponse, error) {
-	if s.Authority == nil {
-		return &pb.GetNetworkProbePlanResponse{Required: false}, nil
-	}
 	d, ok := ctxkeys.GetSessionDetails(ctx)
 	binding := authority.SessionBinding(ctx, d)
 	if !ok || binding == "" {
@@ -67,9 +64,6 @@ func GetNetworkProbePlan(ctx context.Context, s *svc.ServiceContext) (*pb.GetNet
 }
 
 func CommitNetworkProbe(ctx context.Context, s *svc.ServiceContext, in *pb.CommitNetworkProbeRequest) (*pb.CommitNetworkProbeResponse, error) {
-	if s.Authority == nil {
-		return &pb.CommitNetworkProbeResponse{}, nil
-	}
 	d, ok := ctxkeys.GetSessionDetails(ctx)
 	binding := authority.SessionBinding(ctx, d)
 	if !ok || binding == "" || in.PlanId == "" || len(in.Receipts) == 0 || len(in.Receipts) > authority.MaxProbeRegions {

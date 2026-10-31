@@ -65,18 +65,16 @@ func (s *AccountDirectoryStore) acquirePlayerStoreRead(ctx context.Context) (fun
 
 // playerStoreSchema 按权威路由给出玩家所在的库。不在白名单里的落点不读:白名单是部署声明的可访问范围。
 func (s *AccountDirectoryStore) playerStoreSchema(ctx context.Context, q routeQueryer, playerID uint64) (string, error) {
-	routes, err := loadRoutes(ctx, q, []uint64{playerID}, false)
+	routes, err := loadRoutes(ctx, q, []uint64{playerID})
 	if err != nil {
 		return "", err
 	}
 	row, ok := routes[playerID]
-	if !ok || row.IsTombstone() {
+	// 建角恒写落点,和 go/db 一样不回落 home_zone。
+	if !ok || !row.HasPlacement() {
 		return "", accountdirectory.ErrMissing
 	}
 	storage := row.StorageID
-	if !row.HasPlacement() {
-		storage = row.HomeZone
-	}
 	if !s.initialStores[storage] {
 		return "", accountdirectory.ErrUnavailable
 	}
@@ -165,19 +163,16 @@ func (s *AccountDirectoryStore) ReadPlayerDisplays(ctx context.Context, ids []ui
 		return nil, err
 	}
 	defer release()
-	routes, err := loadRoutes(ctx, s.db, unique, false)
+	routes, err := loadRoutes(ctx, s.db, unique)
 	if err != nil {
 		return nil, err
 	}
 	bySchema := make(map[string][]uint64)
 	for id, row := range routes {
-		if row.IsTombstone() {
+		if !row.HasPlacement() {
 			continue
 		}
 		storage := row.StorageID
-		if !row.HasPlacement() {
-			storage = row.HomeZone
-		}
 		schema, ok := placement.StoreDBName(storage)
 		if !ok || !s.initialStores[storage] {
 			logx.Errorf("[player-display] storage %d of player %d cannot be read here; skipped", storage, id)

@@ -181,7 +181,7 @@ E=0、实例为空在进事务前回 `INVALID`。
 
 ## 5. C++ 侧
 
-### 5.1 存盘状态机(替换 `SavePlayerToRedisImpl` 之后的部分)
+### 5.1 存盘状态机(替换 `SavePlayerImpl` 之后的部分)
 
 每个玩家一个 `PlayerStoreSaveState`,放在场景级的表里,以 Guid 为键,**不挂在实体上**:实体销毁时状态还在,存盘结果才有地方落。内容:`confirmed[kind]`(已确认提交的片段字节)、`uncertain`(结果未决的 kind 集合)、`inflight`、`pending`(最新一份完整快照及回调)。
 
@@ -207,7 +207,7 @@ Deadline:go/db 的 zrpc `Timeout` 显式配置并大于 SQL 锁等待 10s(今天
 
 ### 5.3 B4 落码时定下的细节
 
-- **主流程分流**:`SavePlayerToRedisImpl` 的校验、marshal、交接跳过、计数两条路径共用,之后分流到 `SavePlayerDirect`。下线、交接、疏散的判定逻辑不改,复用 `HandlePlayerAsyncSaved`、`HandlePlayerSaveRejected`、`HandlePlayerSaveSchemaRejected` 三个入口;确定性拒绝走新的 `HandlePlayerSaveRefused`,处置形状与世代拒绝相同(`DisposeRefusedSave`)。
+- **主流程分流**:`SavePlayerImpl` 的校验、marshal、交接跳过、计数两条路径共用,之后分流到 `SubmitPlayerSave`。下线、交接、疏散的判定逻辑不改,复用 `HandlePlayerAsyncSaved`、`HandlePlayerSaveRejected`、`HandlePlayerSaveSchemaRejected` 三个入口;确定性拒绝走新的 `HandlePlayerSaveRefused`,处置形状与世代拒绝相同(`DisposeRefusedSave`)。
 - **什么时候必须写一笔,哪怕没有脏行**:带 `release`;调用方要确定的提交(`allowSkipWhenPersisted=false`);快照上没有当前代次的提交(和旧路径同一个口径:资产、结算、收件箱拿快照当「已提交」的证据,加载之后第一笔不写,它们就等不到快照);上一次提交带了 `release`,要把 `released` 清掉;本地代次比库里新,要把代次抬上去。后两条由状态机自己判断,不依赖快照组件。
 - **退出被取消**:同节点重连(`EnterScene` 第 0 步之后)和退出被更新的会话取代(`HandlePlayerAsyncSaved`)都立刻写一笔,不等定时存盘,否则这段时间库里显示玩家已下线。
 - **关键进度**:`PlayerLifecycleSystem::RequestKeyProgressSave`。事件:任务完成、任务领奖、等级变化(目前只有 GM 设等级这一个入口)。每名玩家 1 秒节流,窗口内合并;存盘不在调用方的栈上发生,调用方可能正处在一连串状态变化的中间。总体方案 §4 列的另外几项:副本通关、充值到账走已有的资产、结算立即存盘;稀有掉落现在没有判定入口,留到掉落系统有品质规则时再接,定时存盘兜 60 秒。
@@ -258,7 +258,7 @@ Deadline:go/db 的 zrpc `Timeout` 显式配置并大于 SQL 锁等待 10s(今天
 - **C++ 命名空间**:投影的命名空间叫 `player_store_rows`,不能叫 `player_store`:`mysql_database_table.proto` 没有 package,`message player_store` 是全局类。
 - **账本和展示资料读的并发上限**:最多占账号目录池的一半(`acquirePlayerStoreRead`,缺省 4 条)。这些读和登录的悲观事务共用这个池,好友列表、在线目录、队伍视图原来走 Redis,读量一大进场就会等不到连接。等不到名额按调用方的截止时间失败。是否要单开只读池,压测再定。
 - **展示资料**:一个玩家的落点读不了只跳过他,不让整批失败。
-- **交易排空证据(10-30 评审)**:只有冻结发起之后提交的快照才算。提交时才知道结果,但「算不算」要按提交那一刻定:`FreezeRoleForTrade` 过了战斗检查才打标记,`SavePlayerDirect` 提交时读标记,带进完成回调。封存时已经在途的那笔不算(否则排队的冻结存盘被拒时,交易带着更旧的存档继续);局中结算自己的存盘也不算(否则重放封存不再冻结,交易一直停在 FREEZING)。冻结存盘被拒时不发 AckDrain,交易停住,这是告警级事件(`DbPlayerStorePayloadRejected`),`admission_recover` 摘掉之后才能走完。
+- **交易排空证据(10-30 评审)**:只有冻结发起之后提交的快照才算。提交时才知道结果,但「算不算」要按提交那一刻定:`FreezeRoleForTrade` 过了战斗检查才打标记,`SubmitPlayerSave` 提交时读标记,带进完成回调。封存时已经在途的那笔不算(否则排队的冻结存盘被拒时,交易带着更旧的存档继续);局中结算自己的存盘也不算(否则重放封存不再冻结,交易一直停在 FREEZING)。冻结存盘被拒时不发 AckDrain,交易停住,这是告警级事件(`DbPlayerStorePayloadRejected`),`admission_recover` 摘掉之后才能走完。
 
 ## 6. 等待点替换
 

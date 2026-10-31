@@ -24,7 +24,7 @@ import (
 // ───────────────────────── 落点库注册表(player-storage-placement.md §6.1)─────────────────────────
 //
 // 玩家主数据可以落在本 zone 库之外的库里(合服 pin 之后留在源区库、搬库之后在目标库、Phase 2 的全局库)。
-// 选库只在 go/db 一处发生(internal/kafka 按落点记录选),本文件负责把「落点编号」变成「一个已打开、
+// 选库只在 go/db 一处发生(internal/playerstore 读 player_route 选),本文件负责把「落点编号」变成「一个已打开、
 // 已核对过的库」:
 //   - 本 zone 库在启动期由 InitDB 打开并过全部既有断言,这里只登记为落点 ZoneId;
 //   - 其余库第一次被指向时按需打开(同一个库并发只打开一次),之后常驻;
@@ -227,8 +227,8 @@ func NewStoreRegistryFromConfig() (*StoreRegistry, error) {
 	if err != nil {
 		return nil, err
 	}
-	logx.Infof("[placement] store registry ready: zone=%d allowlist=%s storeFamilies=%v required=%v zoneStorePool=%d/%d nonZoneStorePool=%d/%d extraStoreIdleTimeout=%v",
-		config.AppConfig.ZoneId, allow.String(), pc.StoreFamiliesAllowed(), pc.Required,
+	logx.Infof("[placement] store registry ready: zone=%d allowlist=%s storeFamilies=%v zoneStorePool=%d/%d nonZoneStorePool=%d/%d extraStoreIdleTimeout=%v",
+		config.AppConfig.ZoneId, allow.String(), pc.StoreFamiliesAllowed(),
 		pools.Zone.MaxOpenConn, pools.Zone.MaxIdleConn, pools.NonZone.MaxOpenConn, pools.NonZone.MaxIdleConn, idleTimeout)
 	return registry, nil
 }
@@ -358,7 +358,7 @@ func (r *StoreRegistry) openOnce(storageID uint32) (*GameDB, error) {
 
 	name, ok := placement.StoreDBName(storageID)
 	if !ok {
-		// 落点记录解析时已拒绝 0,home_zone 与 ZoneId 也不会是 0;走到这里是编程错误,照样 fail-closed。
+		// 选库时已拒绝 0,ZoneId 也不会是 0;走到这里是编程错误,照样 fail-closed。
 		return nil, fmt.Errorf("%w: storage id 0 names no database", ErrStoreUnavailable)
 	}
 	via, admitted := AdmitStore(r.allow, r.allowFamilies, name)

@@ -40,8 +40,9 @@ func createInboxFixtureRouteTables(ctx context.Context, db *sql.DB, schema strin
 	if err != nil {
 		return fmt.Errorf("读取DS正规路由DDL: %w", err)
 	}
-	names := []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL"}
-	values := map[string]string{}
+	names := []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL"}
+	// route_meta 的 DDL 由 authoritysql 的目录持有,schema.go 只是引用它,解析不到常量。
+	values := map[string]string{"routeMetaBootstrapDDL": authoritysql.CatalogBootstrapStatements()["route_meta"]}
 	for _, decl := range f.Decls {
 		gd, ok := decl.(*ast.GenDecl)
 		if !ok || gd.Tok != token.CONST {
@@ -69,12 +70,13 @@ func createInboxFixtureRouteTables(ctx context.Context, db *sql.DB, schema strin
 			}
 		}
 	}
+	names = append(names, "routeMetaBootstrapDDL")
 	for _, name := range names {
 		if values[name] == "" {
 			return fmt.Errorf("DS正规路由DDL缺少%s", name)
 		}
 	}
-	for _, table := range []string{"route_reconcile", "route_meta", "zone_merged_into", "player_route"} {
+	for _, table := range []string{"route_meta", "zone_merged_into", "player_route"} {
 		if _, err = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
 			return err
 		}
@@ -84,10 +86,7 @@ func createInboxFixtureRouteTables(ctx context.Context, db *sql.DB, schema strin
 			return fmt.Errorf("执行DS正规路由DDL %s: %w", name, err)
 		}
 	}
-	if _, err = db.ExecContext(ctx, "INSERT INTO route_meta(id,generation,writable) VALUES(1,'inbox-fixture-route-v1',1)"); err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, "INSERT INTO route_reconcile(id) VALUES(1)")
+	_, err = db.ExecContext(ctx, "INSERT INTO route_meta(id,generation,writable) VALUES(1,'inbox-fixture-route-v1',1)")
 	return err
 }
 

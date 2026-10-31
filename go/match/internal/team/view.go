@@ -4,26 +4,30 @@ import (
 	"sort"
 
 	teampb "proto/team"
+	"shared/placement"
 )
 
 // 视图构建(设计文档 docs/design/team-system.md §B.1 TeamView、§C.4、§H.3)。
 //
-// 本文件只放纯函数:输入"记录 + 版本 + 接收者 epoch + Redis 时钟 + 展示缓存",输出下发给客户端的视图。
+// 本文件只放纯函数:输入"记录 + 版本 + 接收者 epoch + SQL 时钟 + 展示缓存",输出下发给客户端的视图。
 // 不做 I/O。
 //
-// 同源前提(§C.4,客户端按 (membership_epoch, version) 排序的正确性全靠它):
-// 一份视图里的 team_id / version / epoch / 记录必须出自同一次原子操作。
-// 所以只提供三个入口,各自对应一种原子来源:
+// 视图里的区(TeamView、TeamMemberView、TeamIncomingInviteView 的 zone_id)给最终区,和玩家归属、公会、聚宝斋同一口径:
+// 记录里存原始区,合服不改写,构建视图时按 zones 解析(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1)。
+// zones 是调用方取的一份映射快照,nil = 不解析。
 //
-//	viewFromSnapshot  S_READ(调用者自己的索引 + 记录)
-//	viewFromCommit    S_COMMIT(提交后每人的 tid/epoch)
-//	viewFromMembers   S_READ_MEMBERS(记录 + 每名成员的 tid/epoch)
+// 同源前提(§C.4,客户端按 (membership_epoch, version) 排序的正确性全靠它):
+// 一份视图里的 team_id / version / epoch / 记录必须出自同一个事务。
+// 所以只提供三个入口,各自对应一种来源:
+//
+//	viewFromSnapshot  一次读(调用者自己的索引 + 记录)
+//	viewFromCommit    一次提交(提交后每人的 tid/epoch)
+//	viewFromMembers   ReadMembers(记录 + 每名成员的 tid/epoch)
 //
 // 来源里接收者的 tid 与视图 team_id 对不上时一律返回 ok=false,调用方不推 / 改用自由读,
 // 绝不把"某时刻的记录"和"另一时刻的 epoch"拼在一起。
 
-// emptyTeamView 无队伍视图:team_id=0、version=0,epoch 为接收者最新值(§C.4;索引缺失时 S_READ 回报
-// Redis nowMs,保证整队过期后的空视图仍大于客户端手里的旧 epoch)。
+// emptyTeamView 无队伍视图:team_id=0、version=0,epoch 为接收者最新值(§C.4)。
 func emptyTeamView(epoch, nowMs uint64) *teampb.TeamView {
 	return &teampb.TeamView{
 		Capacity:        uint32(Capacity),
@@ -34,7 +38,7 @@ func emptyTeamView(epoch, nowMs uint64) *teampb.TeamView {
 
 // teamViewFor 为 viewer 构建 rec 的视图。rec 按 nowMs 过滤掉已过期的申请与邀请;
 // 申请与已发出邀请只下发给队长,application_count 所有人可见。
-func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs uint64, dc displayCache) *teampb.TeamView {
+func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs uint64, dc displayCache, zones *placement.MergedZones) *teampb.TeamView {
 	if rec == nil || rec.GetTeamId() == 0 {
 		return emptyTeamView(epoch, nowMs)
 	}
@@ -44,7 +48,7 @@ func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs ui
 		TeamId:           live.GetTeamId(),
 		LeaderId:         leader,
 		Capacity:         uint32(Capacity),
-		ZoneId:           live.GetZoneId(),
+		ZoneId:           zones.Final(live.GetZoneId()),
 		Version:          version,
 		MembershipEpoch:  epoch,
 		MatchState:       teampb.TeamMatchState_TEAM_MATCH_STATE_IDLE,
@@ -56,7 +60,7 @@ func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs ui
 	}
 	for _, pid := range MemberIds(live) { // join_seq 升序;客户端仍按 join_seq 字段排序(§11.6)
 		m := FindMember(live, pid)
-		view.Members = append(view.Members, memberView(pid, m.GetZoneId(), m.GetJoinSeq(), leader, dc))
+		view.Members = append(view.Members, memberView(pid, zones.Final(m.GetZoneId()), m.GetJoinSeq(), leader, dc))
 	}
 	if viewer == 0 || viewer != leader {
 		return view
@@ -70,7 +74,7 @@ func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs ui
 	})
 	for _, a := range apps {
 		view.Applications = append(view.Applications, &teampb.TeamApplicationView{
-			Player:      memberView(a.GetPlayerId(), a.GetZoneId(), 0, leader, dc),
+			Player:      memberView(a.GetPlayerId(), zones.Final(a.GetZoneId()), 0, leader, dc),
 			AppliedAtMs: a.GetAppliedAtMs(),
 			ExpireAtMs:  a.GetExpireAtMs(),
 		})
@@ -84,7 +88,7 @@ func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs ui
 	})
 	for _, inv := range invites {
 		view.PendingInvites = append(view.PendingInvites, &teampb.TeamOutgoingInviteView{
-			Invitee:    memberView(inv.GetInviteeId(), inv.GetZoneId(), 0, leader, dc),
+			Invitee:    memberView(inv.GetInviteeId(), zones.Final(inv.GetZoneId()), 0, leader, dc),
 			ExpireAtMs: inv.GetExpireAtMs(),
 		})
 	}
@@ -111,7 +115,7 @@ func memberView(playerId uint64, zone, joinSeq uint32, leader uint64, dc display
 }
 
 // incomingInviteView 被邀请人看到的"收到的邀请";rec 里没有给 invitee 的未过期邀请返回 nil。
-func incomingInviteView(rec *teampb.TeamRecord, invitee, nowMs uint64, dc displayCache) *teampb.TeamIncomingInviteView {
+func incomingInviteView(rec *teampb.TeamRecord, invitee, nowMs uint64, dc displayCache, zones *placement.MergedZones) *teampb.TeamIncomingInviteView {
 	if rec == nil {
 		return nil
 	}
@@ -124,10 +128,10 @@ func incomingInviteView(rec *teampb.TeamRecord, invitee, nowMs uint64, dc displa
 	inviter := FindMember(live, inv.GetInviterId()) // 邀请人可能已离队:zone / join_seq 取不到时为 0
 	return &teampb.TeamIncomingInviteView{
 		TeamId:      live.GetTeamId(),
-		Inviter:     memberView(inv.GetInviterId(), inviter.GetZoneId(), inviter.GetJoinSeq(), leader, dc),
+		Inviter:     memberView(inv.GetInviterId(), zones.Final(inviter.GetZoneId()), inviter.GetJoinSeq(), leader, dc),
 		LeaderId:    leader,
 		MemberCount: uint32(len(live.GetMembers())),
-		ZoneId:      live.GetZoneId(),
+		ZoneId:      zones.Final(live.GetZoneId()),
 		ExpireAtMs:  inv.GetExpireAtMs(),
 	}
 }
@@ -147,7 +151,7 @@ func rosterIds(rec *teampb.TeamRecord) []uint64 {
 	return uniqueIds(ids)
 }
 
-// snapshotViewable S_READ 快照能否为 snap.PlayerId 构建同源视图:
+// snapshotViewable 一次读的快照能否为 snap.PlayerId 构建同源视图:
 // 调用者无队(索引 tid=0 或缺失),或调用者索引正指向这次读到的、存在的记录。
 func snapshotViewable(snap *Snapshot) bool {
 	if snap == nil {
@@ -156,15 +160,15 @@ func snapshotViewable(snap *Snapshot) bool {
 	return snap.PlayerTeamId == 0 || (snap.PlayerTeamId == snap.TeamId && snap.Record != nil)
 }
 
-// viewFromSnapshot 由一次 S_READ 构建调用者视图;不可同源构建时 ok=false。
-func viewFromSnapshot(snap *Snapshot, dc displayCache) (*teampb.TeamView, bool) {
+// viewFromSnapshot 由一次读构建调用者视图;不可同源构建时 ok=false。
+func viewFromSnapshot(snap *Snapshot, dc displayCache, zones *placement.MergedZones) (*teampb.TeamView, bool) {
 	switch {
 	case !snapshotViewable(snap):
 		return nil, false
 	case snap.PlayerTeamId == 0:
 		return emptyTeamView(snap.PlayerEpoch, snap.NowMs), true
 	}
-	return teamViewFor(snap.PlayerId, snap.Record, snap.Version, snap.PlayerEpoch, snap.NowMs, dc), true
+	return teamViewFor(snap.PlayerId, snap.Record, snap.Version, snap.PlayerEpoch, snap.NowMs, dc, zones), true
 }
 
 // commitViewable 提交结果能否为 pid 构建同源视图(pid 在 J/K/L 里,且提交后 tid 为 0 或本队)。
@@ -179,9 +183,8 @@ func commitViewable(c *CommitResult, pid uint64) bool {
 	return idx.TeamId == 0 || (idx.TeamId == c.TeamId && c.Decision.Record != nil)
 }
 
-// viewFromCommit 由 S_COMMIT 返回的 (tid, epoch) 为 pid 构建视图;不可同源构建时 ok=false
-// (例如修复提交里被移出、索引已指向别队的成员)。
-func viewFromCommit(c *CommitResult, pid uint64, dc displayCache) (*teampb.TeamView, bool) {
+// viewFromCommit 由提交后的 (tid, epoch) 为 pid 构建视图;不可同源构建时 ok=false。
+func viewFromCommit(c *CommitResult, pid uint64, dc displayCache, zones *placement.MergedZones) (*teampb.TeamView, bool) {
 	if !commitViewable(c, pid) {
 		return nil, false
 	}
@@ -189,11 +192,11 @@ func viewFromCommit(c *CommitResult, pid uint64, dc displayCache) (*teampb.TeamV
 	if idx.TeamId == 0 {
 		return emptyTeamView(idx.Epoch, c.NowMs), true
 	}
-	return teamViewFor(pid, c.Decision.Record, c.Version, idx.Epoch, c.NowMs, dc), true
+	return teamViewFor(pid, c.Decision.Record, c.Version, idx.Epoch, c.NowMs, dc, zones), true
 }
 
-// viewFromMembers 由 S_READ_MEMBERS 为成员 pid 构建视图;只给索引 tid == 本队的成员(§C.5)。
-func viewFromMembers(m *MembersSnapshot, pid uint64, dc displayCache) (*teampb.TeamView, bool) {
+// viewFromMembers 由 ReadMembers 为成员 pid 构建视图;只给索引 tid == 本队的成员(§C.5)。
+func viewFromMembers(m *MembersSnapshot, pid uint64, dc displayCache, zones *placement.MergedZones) (*teampb.TeamView, bool) {
 	if m == nil || m.Record == nil {
 		return nil, false
 	}
@@ -201,5 +204,5 @@ func viewFromMembers(m *MembersSnapshot, pid uint64, dc displayCache) (*teampb.T
 	if !ok || idx.TeamId != m.TeamId {
 		return nil, false
 	}
-	return teamViewFor(pid, m.Record, m.Version, idx.Epoch, m.NowMs, dc), true
+	return teamViewFor(pid, m.Record, m.Version, idx.Epoch, m.NowMs, dc, zones), true
 }

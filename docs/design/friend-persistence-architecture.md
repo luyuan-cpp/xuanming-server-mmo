@@ -263,7 +263,7 @@ COMMIT;
 **存储(不是 friend 的,friend 只读)**:
 
 ```
-Redis Key: player:session:<playerID> -> proto PlayerSession(含 State / GateId / SessionId / last_active_ts)
+Redis Key: player:session:{<playerID>} -> proto PlayerSession(含 State / GateId / SessionId / last_active_ts)
 写者: login / player_locator / gate
 ```
 
@@ -275,7 +275,7 @@ Redis Key: player:session:<playerID> -> proto PlayerSession(含 State / GateId /
 ```
 GetFriendList / RecommendFriends
   -> 取好友(候选)列表
-  -> SharedRedis MGET player:session:<id> ...(按 ListReadHardLimit 分批)
+  -> SharedRedis MGET player:session:{<id>} ...(按 ListReadHardLimit 分批)
   -> proto.Unmarshal(PlayerSession);只有 State == SESSION_STATE_ONLINE 算在线
   -> last_active_ts 填 last_active_ms
 ```

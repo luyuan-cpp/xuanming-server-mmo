@@ -2,7 +2,7 @@
 # (docs/design/no-single-node-horizontal-scaling-20261001.md §5)。
 # **接入(2026-10-19)**:k8s_deploy.ps1 在 -RedisReplicas 3 时 apply 本文件,**代替** redis.yaml;-RedisReplicas 0(缺省)按档位:
 # -ReleaseProfile 不是 dev 或 -OpsProfile 不是 custom → 3(本文件),其余 → 1(redis.yaml)。两份清单里的对象同名,所以可以原地从单实例切过来。
-# 同一个拓扑还决定 WAITAOF 要几个副本确认(单实例 0、本形态 1),data-service 与 go/db 的 ConfigMap 都按它渲染(Get-RouteStoreWaitAOFNumReplicas)。
+# 同一个拓扑还决定 scene-manager 铸造 owner_epoch 时 WAITAOF 要几个副本确认(单实例 0、本形态 1,Get-OwnerEpochMintWaitAOFNumReplicas)。
 #
 # 连接上限(P0-E 的接入前置):
 #   - 每个 redis-server 显式 --maxclients,取值 MAXCLIENTS 写在 StatefulSet 的 Pod 模板里,与 redis.yaml 同值
@@ -274,8 +274,8 @@ data:
     # --min-replicas-*:见文件头「数据安全的边界」。
     # --repl-diskless-sync-delay:从要做全量同步时,主默认先等 5 秒「攒一批」再开始。这里只有两个从,
     #   攒批没有意义,而切主时哨兵要等从同步完才算切换结束,白等 5 秒。
-    # --enable-debug-command no:这组节点接入后同时是 mapping Redis。DEBUG RELOAD NOSAVE / LOADAOF 在同一进程里整库替换数据而
-    #   run_id / master_replid 不变,读方「就绪标记绑定实例身份」的判据认不出(spec_D1_batch1b2_2_3.md §13.1 第 5 条);Redis 7 缺省即 no,显式写出防改。
+    # --enable-debug-command no:DEBUG RELOAD NOSAVE / LOADAOF 在同一进程里整库替换数据而 run_id / master_replid 不变,
+    #   谁都认不出换过数据;Redis 7 缺省即 no,显式写出防改。
     set -- redis-server \
       --appendonly yes \
       --maxclients "$MAXCLIENTS" \

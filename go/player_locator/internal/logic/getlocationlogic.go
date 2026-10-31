@@ -2,10 +2,9 @@ package logic
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"google.golang.org/protobuf/proto"
 
 	"player_locator/internal/svc"
 	pb "proto/player_locator"
@@ -25,19 +24,11 @@ func NewGetLocationLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetLo
 	}
 }
 
+// GetLocation 已停用(fail-closed)。它读的是历史遗留的玩家位置键,生产入场链从不写那把键,全仓也没有生产调用方;
+// 键本身已删除(docs/design/redis-player-store-cluster.md §5.2)。协议里的方法留到下一次 proto 生成时一起删。
+// 位置权威是 scene_manager 的 player:{<id>}:location。
 func (l *GetLocationLogic) GetLocation(in *pb.PlayerId) (*pb.PlayerLocation, error) {
-	key := locationKey(in.Uid)
-	data, err := l.svcCtx.RedisClient.Get(l.ctx, key).Bytes()
-	if err == redis.Nil {
-		return &pb.PlayerLocation{Uid: in.Uid, Online: false}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	loc := &pb.PlayerLocation{}
-	if err := proto.Unmarshal(data, loc); err != nil {
-		return nil, err
-	}
-	return loc, nil
+	l.Errorf("GetLocation rejected: deprecated legacy endpoint (uid=%d); "+
+		"authoritative location is owned by scene_manager", in.GetUid())
+	return nil, fmt.Errorf("GetLocation is deprecated and disabled; authoritative location is owned by scene_manager")
 }

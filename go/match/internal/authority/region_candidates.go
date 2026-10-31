@@ -153,25 +153,27 @@ func (s *Store) replaceTicketRegions(ctx context.Context, tx *sql.Tx, ticket *pb
 // CandidatePeers 在LIMIT之前完成机房、lane、原代次、等待、容差与时效过滤。
 // 与锚点在全局扫描相距多少页无关；返回不足才能说明该次SQL观察中人数不足。
 func (s *Store) CandidatePeers(ctx context.Context, anchor *pb.MatchAuthorityTicketRecord, region uint32, local bool, now uint64, toleranceCenti float64) ([]*pb.MatchAuthorityTicketRecord, error) {
-	return s.candidatePeers(ctx, anchor, region, local, now, toleranceCenti, 0)
+	return s.candidatePeers(ctx, anchor, region, local, now, toleranceCenti, nil)
 }
 
 // CandidateTeamPeers 将最终整队的home资格放在LIMIT之前；网络机房与home是独立维度。
+// 同区按最终区算：候选的 home 落在锚点最终区的全部原始区里（别名合服）。
 func (s *Store) CandidateTeamPeers(ctx context.Context, anchor *pb.MatchAuthorityTicketRecord, region uint32, local bool, now uint64) ([]*pb.MatchAuthorityTicketRecord, error) {
 	if anchor == nil || !validTeamQueueMode(anchor.Mode) || anchor.TeamSize > config.TeamCapacity {
 		return nil, ErrDirectConflict
 	}
-	var home uint32
+	var homes []uint32
 	if !s.TeamConfig.AllowCrossZone {
 		if anchor.ZoneId == 0 {
 			return nil, ErrTeamRoute
 		}
-		home = anchor.ZoneId
+		homes = s.MergedZones().Members(anchor.ZoneId)
 	}
-	return s.candidatePeers(ctx, anchor, region, local, now, math.Inf(1), home)
+	return s.candidatePeers(ctx, anchor, region, local, now, math.Inf(1), homes)
 }
 
-func (s *Store) candidatePeers(ctx context.Context, anchor *pb.MatchAuthorityTicketRecord, region uint32, local bool, now uint64, toleranceCenti float64, home uint32) ([]*pb.MatchAuthorityTicketRecord, error) {
+// homes 为 nil 表示不按区过滤；非 nil 时候选的 home 必须落在其中。
+func (s *Store) candidatePeers(ctx context.Context, anchor *pb.MatchAuthorityTicketRecord, region uint32, local bool, now uint64, toleranceCenti float64, homes []uint32) ([]*pb.MatchAuthorityTicketRecord, error) {
 	if anchor == nil || anchor.TeamSize == 0 || anchor.TeamSize > 10 || region == 0 {
 		return nil, errors.New("候选组人数或目标机房无效")
 	}
@@ -186,9 +188,11 @@ func (s *Store) candidatePeers(ctx context.Context, anchor *pb.MatchAuthorityTic
 		AND t.team_id=0
 		AND t.preferred_region=r.preferred_region AND t.enqueued_ms=r.enqueued_ms AND t.rating_centi=r.rating_centi`
 	args := []any{region, anchor.Mode, anchor.ConfigId, anchor.TeamSize, anchor.PlayerId, s.Config.HardLatencyMs, now, now}
-	if home != 0 {
-		q += " AND r.home_zone=? AND t.zone_id=r.home_zone"
-		args = append(args, home)
+	if homes != nil {
+		// r 是 t 同事务写的投影（ticketRegionRows），两列抄的是同一个原始区：t.zone_id=r.home_zone 核的是投影没有过期，不是同区判定，不用解析。
+		clause, zoneArgs := zoneInSQL("r.home_zone", homes)
+		q += " AND " + clause + " AND t.zone_id=r.home_zone"
+		args = append(args, zoneArgs...)
 	}
 	if local {
 		q += " AND r.preferred_region=?"

@@ -7,7 +7,6 @@ package discovery
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -325,66 +324,18 @@ func (w *NodeWatcher) EntryOfNode(nodeId uint32) (NodeEntry, error) {
 	return found, nil
 }
 
-// EntryOfInstance 按实例 uuid 找节点的完整登记。实例 uuid 是进程级身份,同一实例的 gRPC 地址在其存活期内不变,
-// 所以取到的地址一定通向原实例,不受 node_id 被新实例占用的影响(观战原件固定了 target_instance_id,取消时用它定位)。
-// 查不到不代表实例已死:etcd 抖动、租约短暂失效时同样查不到,调用方不得据此推断对端状态。
-func (w *NodeWatcher) EntryOfInstance(instanceId string) (NodeEntry, error) {
-	if instanceId == "" {
-		return NodeEntry{}, errors.New("节点实例 uuid 为空")
-	}
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	for _, entry := range w.nodes {
-		if entry.NodeUuid == instanceId {
-			return entry, nil
-		}
-	}
-	return NodeEntry{}, fmt.Errorf("节点实例未注册 instance=%s", instanceId)
-}
-
-// EndpointOfNode 按 node_id 找节点 gRPC 地址;查找与歧义拒绝语义见 EntryOfNode。
-func (w *NodeWatcher) EndpointOfNode(nodeId uint32) (string, error) {
-	entry, err := w.EntryOfNode(nodeId)
-	if err != nil {
-		return "", err
-	}
-	return entry.Endpoint, nil
-}
-
-// PickRandom 随机取一个节点(battle 节点 v1 选法:随机,负载上报二期)。
-// 镜像为空返回 false。等价于不排除任何节点的 PickRandomExcept。
+// PickRandom 在镜像里等概率随机取一个节点;镜像为空返回 false。
 func (w *NodeWatcher) PickRandom() (NodeEntry, bool) {
-	return w.PickRandomExcept(nil)
-}
-
-// PickRandomExcept 在 Endpoint 不在 exclude 里的节点中等概率随机取一个;没有可选节点
-// (镜像为空或全被排除)返回 false。exclude 只读、可为 nil。
-//
-// exclude 以 NodeEntry.Endpoint(gRPC 地址)为键,不以 etcd key / node_id 为键:同一进程
-// 在租约重建窗口里可能留下多条注册(key 不同、endpoint 相同),按 endpoint 排除才能保证
-// 「换一个没试过的节点」不会又拨回同一个进程(CreateBattle 被 battle_not_allocatable 拒绝
-// 后换节点重试,k8s-client-entry D82)。
-func (w *NodeWatcher) PickRandomExcept(exclude map[string]bool) (NodeEntry, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	candidates := make([]NodeEntry, 0, len(w.nodes))
 	for _, entry := range w.nodes {
-		if exclude[entry.Endpoint] {
-			continue
-		}
 		candidates = append(candidates, entry)
 	}
 	if len(candidates) == 0 {
 		return NodeEntry{}, false
 	}
 	return candidates[rand.Intn(len(candidates))], true
-}
-
-// Count 返回镜像里的节点数量。
-func (w *NodeWatcher) Count() int {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	return len(w.nodes)
 }
 
 // ---------------------------------------------------------------------------

@@ -785,7 +785,6 @@ TEST(TravelOutcomeReset, NoRecordedEvidenceKeepsIncoming)
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/mission/comp/mission_comp.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
-#include "proto/common/component/battle_settlement_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"         // UnregisterPlayer
@@ -1007,7 +1006,6 @@ void CreatePersistedPlayerComps(entt::entity player)
     registry.emplace<PlayerBagsComp>(player);
     registry.emplace<MissionsContainerComp>(player);
     registry.emplace<PlayerAssetOpLedgerComp>(player);
-    registry.emplace<BattleSettlementLedgerComp>(player);
     registry.emplace<PlayerInboxLedgerComp>(player);
     registry.emplace<PlayerMysteryMerchantComp>(player);
     registry.emplace<CurrencyComp>(player);
@@ -1051,7 +1049,7 @@ PlayerAllData IdentifiedPlayerLoadData(Guid playerId)
     return data;
 }
 
-// 与 SavePlayerToRedis 写盘时同一个形状:走同一个统一入口(拼装 + 两张子表的 player_id + 持久 schema 世代)。
+// 与 SavePlayer 写盘时同一个形状:走同一个统一入口(拼装 + 两张子表的 player_id + 持久 schema 世代)。
 bool MarshalAsSaved(entt::entity player, PlayerAllData& data)
 {
     return player_persist::MarshalPlayerForPersist(player, kExitPlayerId, data);
@@ -1185,7 +1183,7 @@ TEST(ExitPersistEcs, MissingIntentFailsClosed)
 }
 
 // ── 退出入口(HandleExitGameNode)与重连取消(CancelExitOnReconnect)的接缝 ──
-// 宿主里没有 Redis:只能走不写盘的路径,所以用"快照 = 当前 marshal"让 SavePlayerToRedis 走快路径(返回 false)。
+// 宿主里没有 Redis:只能走不写盘的路径,所以用"快照 = 当前 marshal"让 SavePlayer 走快路径(返回 false)。
 namespace
 {
 // 一个在线(未退出)的玩家:绑定 session、写进 SessionMap。
@@ -1204,7 +1202,7 @@ entt::entity MakeOnlinePlayer(SessionId session)
     return player;
 }
 
-// 让下一次 SavePlayerToRedis 判"盘上已是同一份"(快路径,不碰 Redis)。
+// 让下一次 SavePlayer 判"盘上已是同一份"(快路径,不碰 Redis)。
 bool MarkPersisted(entt::entity player)
 {
     PlayerAllData saved;
@@ -1352,7 +1350,7 @@ TEST(ExitPersistEcs, LandedCallbackWithMissingComponentDiscardsWithoutReleaseMar
     PlayerAllData landed;
     ASSERT_TRUE(MarshalAsSaved(player, landed));
     const auto before = exit_release_stats::Read();
-    tlsEcs.actorRegistry.remove<BattleSettlementLedgerComp>(player);
+    tlsEcs.actorRegistry.remove<PlayerMysteryMerchantComp>(player);
 
     PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
 
@@ -1676,7 +1674,7 @@ TEST(PlayerStoreDirectEcs, CommitSubmittedBeforeTradeFreezeIsNotDrainEvidence)
     TradeSealFixture trade;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     ASSERT_EQ(1u, f.sent.size());
     TouchHotRow(player);
     ASSERT_TRUE(RoleAdmissionSystem::Seal(TradeSealFixture::Seal()));
@@ -1703,7 +1701,7 @@ TEST(PlayerStoreDirectEcs, SaveDuringBattleDoesNotReplaceTradeFreeze)
     EXPECT_FALSE(RoleAdmissionSystem::IsTradeFreezeSaving(kExitPlayerId));
 
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
 
     tlsEcs.actorRegistry.remove<InBattleComp>(player);
@@ -1738,7 +1736,7 @@ TEST(PlayerStoreDirectEcs, PendingSnapshotHoldsBackExitUntilItCommits)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     ASSERT_EQ(1u, f.sent.size());
     EXPECT_FALSE(f.sent.front().request.release());
 
@@ -1780,7 +1778,7 @@ TEST(PlayerStoreDirectEcs, CommitReplacesSnapshotAndUnchangedSaveSkips)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
 
     auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
@@ -1790,7 +1788,7 @@ TEST(PlayerStoreDirectEcs, CommitReplacesSnapshotAndUnchangedSaveSkips)
     // 这个宿主没有登记入场身份,提交证据记不上(CaptureSnapshotCommit 回空),这里按身份已确认时的结果补上。
     snapshot->committed_owner_epoch = kDirectEpoch;
     snapshot->committed_save_seq = 1;
-    EXPECT_FALSE(PlayerLifecycleSystem::SavePlayerToRedis(player)) << "没有变化不算排入写入";
+    EXPECT_FALSE(PlayerLifecycleSystem::SavePlayer(player)) << "没有变化不算排入写入";
     EXPECT_TRUE(f.sent.empty());
 
     EXPECT_TRUE(PlayerLifecycleSystem::SavePlayerForAssetCommit(player));
@@ -1804,7 +1802,7 @@ TEST(PlayerStoreDirectEcs, FirstSaveAfterLoadWritesEvenWithoutChanges)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
 
-    EXPECT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    EXPECT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     ASSERT_EQ(1u, f.sent.size());
     EXPECT_EQ(0, f.sent.front().request.rows_size());
 
@@ -1822,7 +1820,7 @@ TEST(PlayerStoreDirectEcs, StaleOwnerOnCurrentEpochDestroysTheEntity)
         PlayerStoreDirectFixture f;
         const auto player = MakeClaimedPlayer();
         TouchHotRow(player);
-        ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+        ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
         f.Reply(rejected, kDirectEpoch + 1, 1);
         EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << playerstore::SavePlayerResult_Name(rejected);
         EXPECT_TRUE(f.sent.empty());
@@ -1835,7 +1833,7 @@ TEST(PlayerStoreDirectEcs, StaleOwnerAfterEpochAdvanceSavesAgainWithTheNewEpoch)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = kDirectEpoch + 2;
 
     f.Reply(playerstore::SAVE_PLAYER_STALE_OWNER, kDirectEpoch + 1, 1);
@@ -1866,7 +1864,7 @@ TEST(PlayerStoreDirectEcs, RefusedSaveWithQueuedExitSaveWaitsForTheLastResult)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
     ASSERT_EQ(1u, f.sent.size());
 
@@ -1885,7 +1883,7 @@ TEST(PlayerStoreDirectEcs, RefusedLastExitSaveDiscardsTheEntity)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
 
     f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
@@ -1900,9 +1898,9 @@ TEST(PlayerStoreDirectEcs, CommitWithQueuedSnapshotStillReplacesTheSnapshot)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     ASSERT_EQ(1u, f.sent.size());
 
     f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
@@ -1919,13 +1917,13 @@ TEST(PlayerStoreDirectEcs, RefusedSaveOnOnlinePlayerKeepsTheEntityAndWritesAgain
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
 
     f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
 
     ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
     EXPECT_TRUE(f.sent.empty());
-    EXPECT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    EXPECT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     ASSERT_EQ(1u, f.sent.size());
     EXPECT_GT(f.sent.front().request.rows_size(), 0);
 }
@@ -1936,7 +1934,7 @@ TEST(PlayerStoreDirectEcs, NoOwnerKeepsTheEntityAndRetriesTheSameSave)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     const uint64_t firstSeq = f.sent.front().request.save_seq();
 
     f.Reply(playerstore::SAVE_PLAYER_NO_OWNER);
@@ -1956,7 +1954,7 @@ TEST(PlayerStoreDirectEcs, OlderSeqRaisesTheAllocatorAndSavesAgain)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     const uint64_t rowSeq = f.sent.front().request.save_seq() + 1000;
 
     f.Reply(playerstore::SAVE_PLAYER_OLDER_SEQ, kDirectEpoch, rowSeq);
@@ -1972,7 +1970,7 @@ TEST(PlayerStoreDirectEcs, OlderSeqBeyondBoundBecomesThePersonalFloor)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     constexpr uint64_t kBeyondBound = UINT64_MAX / 2;
 
     f.Reply(playerstore::SAVE_PLAYER_OLDER_SEQ, kDirectEpoch, kBeyondBound);
@@ -1988,7 +1986,7 @@ TEST(PlayerStoreDirectEcs, EntityDestroyedWhileInFlightIsForgottenOnSettle)
     PlayerStoreDirectFixture f;
     const auto player = MakeClaimedPlayer();
     TouchHotRow(player);
-    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayer(player));
     PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", std::to_string(kDirectEpoch));
     ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
 
@@ -2375,7 +2373,7 @@ TEST(ExitReleaseInheritClear, AbandonedLateReplyNeverRewritesOverANewerHolder)
     EXPECT_EQ(erm::DecideAbandonedRewrite(true, true), D::kDropNodeHolds) << "有实体一律不补写";
 }
 
-// ── ECS 级接缝(M15):宿主里没有 zone Redis(tlsRedis.GetZoneRedis() 为空)──
+// ── ECS 级接缝(M15):宿主里没有玩家域 Redis(tlsPlayerRedis 未连接)──
 namespace
 {
 constexpr Guid kReleasePlayerId = 950200002;
@@ -2494,8 +2492,6 @@ TEST(PlayerStoreDirectEcs, ClaimFillsTheMetadataBackIntoTheLoad)
     const auto& load = *pending.at(kReleasePlayerId).inheritClear.stashedLoad;
     EXPECT_EQ(kReleasePlayerId, load.player_database_data().player_id());
     EXPECT_EQ(kReleasePlayerId, load.player_database_1_data().player_id());
-    EXPECT_EQ(5u, load.player_database_data().fence_owner_epoch());
-    EXPECT_EQ(77u, load.player_database_data().fence_save_seq());
     EXPECT_EQ(77u, load.last_save_seq());
     EXPECT_EQ(persist_schema::kPersistSchemaGen, load.player_database_data().persist_schema_gen());
     EXPECT_EQ(persist_schema::kPersistSchemaGen, load.player_database_1_data().persist_schema_gen());
@@ -2674,7 +2670,7 @@ TEST(EnterSceneReplyRoute, RouteNamesCoverEveryValue)
 }
 
 // ── ECS 级接缝:直接驱动 PlayerLifecycleSystem::DispatchEnterSceneReply ──
-// 宿主里没有 zone Redis(tlsRedis.GetZoneRedis() 为空),除 ScopedFakeSceneManagerNode 存活期间(夹具自带 EventLoop)外也没有 EventLoop:ResolveTravelOutcome 判不清就保持冻结、
+// 宿主里没有玩家域 Redis(tlsPlayerRedis 未连接),除 ScopedFakeSceneManagerNode 存活期间(夹具自带 EventLoop)外也没有 EventLoop:ResolveTravelOutcome 判不清就保持冻结、
 // 计 verify_rearmed,看门狗挂不上(只打 WARN)。所以"应答进了交接裁决"的可观察结果是证据被记下 + verify_rearmed +1。
 // 例外:用了 ScopedFakeSceneManagerNode 的用例,夹具在测试线程自建 EventLoop,期间统计 / 冻结上限定时器会挂到它上面;
 // 控制它们的 static thread_local armed 置位后不复位,之后的用例即使有 loop 也不会再挂。现有用例都不依赖这些定时器。
@@ -2684,7 +2680,7 @@ constexpr uint32_t kReplyTestZone = 7;
 constexpr uint32_t kReplyTargetZone = 8;
 constexpr uint32_t kSmErrSomeRejection = 5; // 任意非 18 的 scene_manager 错误码
 
-// 在线玩家 + 本节点 zone + "盘上已是同一份"(SavePlayerToRedis 走快路径,不碰 Redis)。
+// 在线玩家 + 本节点 zone + "盘上已是同一份"(SavePlayer 走快路径,不碰 Redis)。
 // zone 由每例开始前的监听器清零,与 tlsEcs.Clear() 无关;这里显式设置本用例身份。
 // StartTravelHandoff 对 targetZoneId == 0 直接拒绝。
 bool MakeReplyTestPlayer(entt::entity& player)
@@ -2823,7 +2819,7 @@ TEST(TravelPersistEcs, LandedCallbackWithMissingComponentWaitsForQualificationRe
     travel.holderFence = tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).handoffFence;
     travel.frozenAtSteady = std::chrono::steady_clock::now();
     tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
-    tlsEcs.actorRegistry.remove<BattleSettlementLedgerComp>(player);
+    tlsEcs.actorRegistry.remove<PlayerMysteryMerchantComp>(player);
     const auto before = travel_handoff_stats::Read();
 
     g_handoffMarkComponentRefusedLines = 0;
@@ -2842,7 +2838,7 @@ TEST(TravelPersistEcs, LandedCallbackWithMissingComponentWaitsForQualificationRe
     EXPECT_FALSE(pending.cancelFence.empty());
     EXPECT_FALSE(pending.cancellationPending); // 未连接，没有接管任何Redis回调。
     EXPECT_EQ(travel_handoff_stats::Read().handoffFastpathForced, before.handoffFastpathForced);
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<BattleSettlementLedgerComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerMysteryMerchantComp>(player));
     EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), player);
 }
 
@@ -8213,7 +8209,7 @@ TEST(ReleaseFenceEcs, SessionEndedReleaseDuringHandoffIgnored)
 
 TEST(ReleaseFenceEcs, SessionEndedReleaseWithoutHolderReadsQualificationBeforeCredential)
 {
-    // 本节点完全不持有(实体已存盘销毁、A1′ 没写成或已过 TTL):判定表判 write 之后,凭证**先读** save_barrier.handoff_fence
+    // 本节点完全不持有(实体已存盘销毁、A1′ 没写成或已过 TTL):判定表判 write 之后,凭证**先读** handoff_fence
     // 的资格原件、核对之后才以它做 CAS(2026-10-23,r2-lc#2 之后;location-release-binding.md §3.3)。宿主里没有 zone Redis:
     // 读这一步就失败,记 credential_qualification_read_failed,不发任何标记命令、不按读到的 owner_epoch 现造资格去写
     // (那样会走到条件写、记成 credential_failed),也不是一律拒发(那样资格核对计数不会动)。

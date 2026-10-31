@@ -146,7 +146,7 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 	}
 
 	// 再入屏障:整组一起判、一起跳过。只要还有一个频道的属主节点刚判死
-	// (C++ 那边可能仍在 SavePlayerToRedis),就整组留到下一次 fullSync 再清 ——
+	// (C++ 那边可能仍在 SavePlayer),就整组留到下一次 fullSync 再清 ——
 	// 这里的清理会 Del 掉 scene:{id}:node 与人数键,属于"销毁"一类,同样受
 	// 屏障约束。整组跳过而不是逐条跳过,是因为 setKey 只能在全部成员都处理完
 	// 之后才删,半清理会留下一个指向已删映射的集合。
@@ -199,7 +199,7 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 		}
 		svcCtx.Redis.Del(nodeKey)
 		svcCtx.Redis.Del(sceneZoneKey(sceneId))
-		svcCtx.Redis.Del(fmt.Sprintf(InstancePlayerCountKey, sceneId))
+		svcCtx.Redis.Del(instanceMembersKey(sceneId))
 		svcCtx.Redis.Del(fmt.Sprintf(SceneMirrorFlagKeyFmt, sceneId))
 		svcCtx.Redis.Del(sceneSourceKey(sceneId))
 		svcCtx.Redis.Del(sceneMirrorsKey(sceneId))

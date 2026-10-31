@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"shared/playerredis"
 	"trade/internal/data"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -49,7 +50,7 @@ func TestEtcYamlContractValues(t *testing.T) {
 		t.Errorf("DataServiceRpc.Etcd.Key = %q, want dataservice.rpc", c.DataServiceRpc.Etcd.Key)
 	}
 	if !c.DataServiceRpc.NonBlock {
-		t.Error("DataServiceRpc.NonBlock must be true: data_service 暂未起时不阻塞 trade 起服")
+		t.Error("DataServiceRpc.NonBlock must be true: 建客户端不等 data_service,有上限的等待在 svc.LoadMergedZones")
 	}
 	if !c.IdSegment.Enabled {
 		t.Errorf("IdSegment = %+v, want Enabled=true", c.IdSegment)
@@ -179,7 +180,7 @@ func TestEtcYamlZoneRewriteAnchors(t *testing.T) {
 func validConfig() Config {
 	c := Config{
 		AccountRoleSchema: "global_fixture",
-		Rmb:               RmbConf{GlobalLoginSessions: true, LoginRedis: RedisConf{Host: "127.0.0.1:6379", PoolSize: 8}},
+		Rmb:               RmbConf{GlobalLoginSessions: true, LoginRedis: playerredis.LoginReaderConfig{Addrs: []string{"127.0.0.1:6379"}, PoolSizePerNode: 8}},
 		ZoneId:            1,
 		LeaseTTL:          60,
 		MySQL: MySQLConf{
@@ -380,5 +381,30 @@ func TestMarketScopeEnum(t *testing.T) {
 	}
 	if (MarketConf{Scope: ScopeGlobal}).ScopeEnum().String() != "MARKET_SCOPE_GLOBAL" {
 		t.Error("global 应映射为 MARKET_SCOPE_GLOBAL")
+	}
+}
+
+// 没写 PlayerRedis.Addrs:玩家域指向 SharedRedis 那一个实例;写了就完全按它来;Cluster 没写种子拒启。
+func TestEffectivePlayerRedis(t *testing.T) {
+	c := validConfig()
+	c.SharedRedis = RedisConf{Host: "shared:6379", Password: "shared-secret"}
+	got := c.EffectivePlayerRedis()
+	if len(got.Addrs) != 1 || got.Addrs[0] != "shared:6379" || got.Password != "shared-secret" || got.PoolSizePerNode != playerRedisFallbackPoolSize {
+		t.Fatalf("没写 Addrs 应指向 SharedRedis: %+v", got)
+	}
+	c.SharedRedis.PoolSize = 9
+	if got := c.EffectivePlayerRedis(); got.PoolSizePerNode != 9 {
+		t.Errorf("连接池应跟 SharedRedis.PoolSize: %+v", got)
+	}
+
+	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true}
+	got = c.EffectivePlayerRedis()
+	if len(got.Addrs) != 2 || !got.Cluster || got.Password != "" {
+		t.Fatalf("写了 Addrs 应完全按它来: %+v", got)
+	}
+
+	c.PlayerRedis = playerredis.Config{Cluster: true}
+	if err := c.Validate(); err == nil {
+		t.Error("Cluster=true 没写种子地址应拒绝")
 	}
 }

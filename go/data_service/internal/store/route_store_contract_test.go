@@ -1,14 +1,12 @@
 package store
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
 	"io"
-	pb "proto/common/database"
 	"reflect"
 	"strings"
 	"sync"
@@ -98,7 +96,7 @@ func routeStmtLabel(query string) string {
 	switch query {
 	case routeProbeSessionSQL:
 		return "PROBE"
-	case "SELECT VERSION()": // serverIsTiDB(schema.go)
+	case "SELECT VERSION(),@@version_comment": // serverIsTiDB(schema.go)
 		return "VERSION"
 	case routeProbeTiDBTxnModeSQL:
 		return "TXN_MODE"
@@ -112,36 +110,10 @@ func routeStmtLabel(query string) string {
 		return "R6a"
 	case routeFillHomePlacementSQL:
 		return "R6b"
-	case routeImportFillSQL:
-		return "R9"
-	case routeInsertMergedIntoSQL:
-		return "R10"
-	case routeLockMergedIntoSQL:
-		return "R11"
-	case routeReadMergedIntoSQL:
-		return "R11ro"
-	case routeScanSQL:
-		return "R12"
 	case routeListMergedIntoSQL:
 		return "R14"
 	case routeMetaSeedSQL:
 		return "R15"
-	case routeReconcileSeedSQL:
-		return "R16"
-	case routeRepairOverwriteSQL:
-		return "R17"
-	case routeReadMetaSQL:
-		return "R18"
-	case routeLockMetaSQL:
-		return "R18x"
-	case "SELECT generation,writable,writer_epoch,catalog_revision,freeze_run_id FROM route_meta WHERE id=1":
-		return "R18"
-	case "SELECT generation,writable,writer_epoch,catalog_revision,freeze_run_id FROM route_meta WHERE id=1 FOR UPDATE":
-		return "R18x"
-	case "SELECT request_digest,receipt_digest,kind,phase FROM sql_writer_maintenance_receipt WHERE request_id=?":
-		return "FREEZE_RECEIPT"
-	case "SELECT phase FROM sql_writer_drain_run WHERE operation_id=?":
-		return "FREEZE_RUN"
 	case routeLockProbeGuardSQL:
 		return "PROBE_GUARD"
 	case routeProbeShardCheckSQL:
@@ -152,12 +124,8 @@ func routeStmtLabel(query string) string {
 		return "PK_TYPE"
 	}
 	switch {
-	case strings.HasPrefix(query, routeImportInsertHeadSQL):
-		return "R7"
-	case strings.HasPrefix(query, routeSelectRowsHeadSQL) && strings.HasSuffix(query, " FOR UPDATE"):
-		return "R8"
 	case strings.HasPrefix(query, routeSelectRowsHeadSQL):
-		return "R8ro"
+		return "R13"
 	case strings.HasPrefix(query, "ALTER TABLE "): // tidb-prepare 的 T2(用例再逐字比对整段文本)
 		return "ALTER_ATTR"
 	case strings.HasPrefix(query, "SPLIT TABLE "): // tidb-prepare 的 T3
@@ -427,7 +395,7 @@ func r5Reply(home, storage uint32, version uint64, frozenRun string, rev uint64)
 	}}}
 }
 
-// routeRowValues 是 R8 / R12 / R13 读到的一行(最前面多两列聚簇键 route_shard, player_id;片按正确的算法给)。
+// routeRowValues 是 R13 读到的一行(最前面多两列聚簇键 route_shard, player_id;片按正确的算法给)。
 func routeRowValues(player uint64, home, storage uint32, version uint64, frozenRun string, rev uint64) []driver.Value {
 	return routeRowValuesWithShard(uint64(placement.RouteRowShard(player)), player, home, storage, version, frozenRun, rev)
 }
@@ -500,11 +468,10 @@ func assertRegisterArgs(t *testing.T, fake *fakeRouteDB, req RouteRegisterReques
 }
 
 // TestRegisterHomeOutcomeContract 钉住「库回什么 → RegisterHome 回什么、发了哪些语句」,一格都不许动:
-// 结局决定路由层发不发布、回哪个 gRPC 码(规格 c.1 / c.3)。
+// 结局决定路由层回哪个 gRPC 码。
 func TestRegisterHomeOutcomeContract(t *testing.T) {
 	withStorage := RouteRegisterRequest{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage}
 	noStorage := RouteRegisterRequest{PlayerID: contractPlayer, HomeZone: contractHome}
-	known := RouteRegisterRequest{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage, ExistingRowOnly: true}
 	boom := errors.New("connection reset during commit")
 
 	for _, tc := range []struct {
@@ -514,7 +481,6 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 		commitErrs   []error
 		rowRev       uint64
 		wantOutcome  RouteRegisterOutcome
-		wantRow      *RouteRow
 		wantExisting uint32
 		wantErr      error // 非 nil:errors.Is
 		anyErr       bool  // 只要求报错(没有专门的哨兵)
@@ -527,9 +493,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 				"R1": {replyWritable}, "R4": {replyAffected(1)},
 			},
 			wantOutcome: RouteRegisterInserted,
-			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage,
-				PlacementVersion: 1, Rev: 1, UpdatedBy: fakeRouteWriter},
-			wantLabels: []string{"BEGIN", "R1", "R4", "COMMIT"},
+			wantLabels:  []string{"BEGIN", "R1", "R4", "COMMIT"},
 		},
 		{
 			name: "R4插入1行_不带落点",
@@ -538,7 +502,6 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 				"R1": {replyWritable}, "R4": {replyAffected(1)},
 			},
 			wantOutcome: RouteRegisterInserted,
-			wantRow:     &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, Rev: 1, UpdatedBy: fakeRouteWriter},
 			wantLabels:  []string{"BEGIN", "R1", "R4", "COMMIT"},
 		},
 		{
@@ -549,9 +512,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 				"R5": {r5Reply(contractHome, contractStorage, 1, "", 3)},
 			},
 			wantOutcome: RouteRegisterAlreadySame,
-			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage, PlacementVersion: 1,
-				Rev: 3, UpdatedBy: fakeRouteOldWriter, CreatedAtMs: uint64(fakeRouteCreatedMs), UpdatedAtMs: uint64(fakeRouteUpdatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "ROLLBACK"},
+			wantLabels:  []string{"BEGIN", "R1", "R4", "R5", "ROLLBACK"},
 		},
 		{
 			name: "R4受影响2行_fail_closed",
@@ -572,16 +533,6 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			wantLabels: []string{"BEGIN", "R1", "R4", "ROLLBACK"},
 		},
 		{
-			name: "ExistingRowOnly_R5缺行_RowMissing_不插",
-			req:  known,
-			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R5": {replyNoRows},
-			},
-			wantOutcome: RouteRegisterRowMissing,
-			wantRow:     &RouteRow{},
-			wantLabels:  []string{"BEGIN", "R1", "R5", "ROLLBACK"},
-		},
-		{
 			name: "R4撞键后R5缺行_行消失",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
@@ -591,17 +542,6 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "ROLLBACK"},
 		},
 		{
-			name: "ExistingRowOnly_R5同home_AlreadySame",
-			req:  known,
-			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R5": {r5Reply(contractHome, 0, 0, "", 2)},
-			},
-			wantOutcome: RouteRegisterAlreadySame,
-			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, Rev: 2, UpdatedBy: fakeRouteOldWriter,
-				CreatedAtMs: uint64(fakeRouteCreatedMs), UpdatedAtMs: uint64(fakeRouteUpdatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R5", "ROLLBACK"},
-		},
-		{
 			name: "R5异home_Conflict_带既有值",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
@@ -609,7 +549,6 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 				"R5": {r5Reply(9, contractStorage, 1, "", 3)},
 			},
 			wantOutcome:  RouteRegisterConflict,
-			wantRow:      &RouteRow{},
 			wantExisting: 9,
 			wantLabels:   []string{"BEGIN", "R1", "R4", "R5", "ROLLBACK"},
 		},
@@ -622,9 +561,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHome,
-			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage, PlacementVersion: 1,
-				Rev: 5, UpdatedBy: fakeRouteWriter, CreatedAtMs: uint64(fakeRouteCreatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6b", "COMMIT"},
+			wantLabels:  []string{"BEGIN", "R1", "R4", "R5", "R6b", "COMMIT"},
 		},
 		{
 			name: "home为NULL_已有落点_请求带storage_R6a_落点保留",
@@ -635,12 +572,10 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHomePlacementKept,
-			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: 55, PlacementVersion: 3,
-				Rev: 5, UpdatedBy: fakeRouteWriter, CreatedAtMs: uint64(fakeRouteCreatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
+			wantLabels:  []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
 		},
 		{
-			name: "home为NULL_冻结落点_请求带storage_R6a_冻结态原样带回",
+			name: "home为NULL_冻结落点_请求带storage_R6a_落点保留",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
@@ -648,9 +583,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHomePlacementKept,
-			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: 55, PlacementVersion: 3, FrozenRunID: "run-x",
-				Rev: 5, UpdatedBy: fakeRouteWriter, CreatedAtMs: uint64(fakeRouteCreatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
+			wantLabels:  []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
 		},
 		{
 			name: "home为NULL_请求不带storage_R6a_FilledHome",
@@ -661,9 +594,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHome,
-			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: 55, PlacementVersion: 3,
-				Rev: 5, UpdatedBy: fakeRouteWriter, CreatedAtMs: uint64(fakeRouteCreatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
+			wantLabels:  []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
 		},
 		{
 			name: "R6a受影响0行_fail_closed",
@@ -723,7 +654,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 				}
 			case tc.anyErr:
 				if err == nil {
-					t.Fatalf("want error, got outcome=%s row=%+v", res.Outcome, res.Row)
+					t.Fatalf("want error, got outcome=%s", res.Outcome)
 				}
 			default:
 				if err != nil {
@@ -731,9 +662,6 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 				}
 				if res.Outcome != tc.wantOutcome {
 					t.Fatalf("outcome = %s, want %s", res.Outcome, tc.wantOutcome)
-				}
-				if tc.wantRow != nil && res.Row != *tc.wantRow {
-					t.Fatalf("row = %+v\nwant %+v", res.Row, *tc.wantRow)
 				}
 				if res.ExistingHome != tc.wantExisting {
 					t.Fatalf("ExistingHome = %d, want %d(只有 Conflict 才带)", res.ExistingHome, tc.wantExisting)
@@ -748,7 +676,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 }
 
 // TestRegisterHomeBindsNullForAbsentPlacement:不带落点时 R4 的 storage / version 两个实参都是 NULL(nil),
-// 带落点时是 uint64。绑定统一走 nullU32 / nullU64(「0 = NULL」的领域约定),不用 sql.Null[T]:后者的 Value()
+// 带落点时是 uint64。绑定走 nullU32(「0 = NULL」的领域约定),不用 sql.Null[T]:后者的 Value()
 // 随 Go 版本变化(见 route_store.go nullU32 的注释),这里只钉住生产代码实际交给驱动的形状。
 func TestRegisterHomeBindsNullForAbsentPlacement(t *testing.T) {
 	for _, tc := range []struct {
@@ -778,12 +706,12 @@ func TestRegisterHomeBindsNullForAbsentPlacement(t *testing.T) {
 		})
 	}
 
-	// nullU32 / nullU64 的产物在驱动的转换规则下原样放行:非零是 uint64(不经 int64,高位为 1 也不报错),零是 NULL。
+	// nullU32 的产物在驱动的转换规则下原样放行:非零是 uint64(不经 int64,高位为 1 也不报错),零是 NULL。
 	if v, err := mysqlLikeConvert(nullU32(7)); err != nil || v != uint64(7) {
 		t.Fatalf("nullU32(7) 转换后 = (%#v, %v), want uint64(7)", v, err)
 	}
-	if v, err := mysqlLikeConvert(nullU64(0)); err != nil || v != nil {
-		t.Fatalf("nullU64(0) 转换后 = (%#v, %v), want nil", v, err)
+	if v, err := mysqlLikeConvert(nullU32(0)); err != nil || v != nil {
+		t.Fatalf("nullU32(0) 转换后 = (%#v, %v), want nil", v, err)
 	}
 }
 
@@ -975,325 +903,20 @@ func TestRegisterHomeRetryStopsOnCanceledContext(t *testing.T) {
 	}
 }
 
-// ── 导入 ─────────────────────────────────────────────────────────────────────────
+// ── 只读接口 ─────────────────────────────────────────────────────────────────────
 
-// importContractRows 一批覆盖五种判定的导入行(player_id 升序)。
-// id 取 100..300(步长 50):64 片下行片依次是 36 / 22 / 8 / 58 / 44,聚簇键序与 id 序不同,行片也都不等于 id ——
-// 「按聚簇键排」与「行片在 player_id 之前」才测得出来(原先的 10..50 在 64 片下行片就是 id 本身,两件事都测不到)。
-func importContractRows() []RouteImportRow {
-	stable := func(s uint32, v uint64) *placement.Record { return &placement.Record{StorageID: s, Version: v} }
-	return []RouteImportRow{
-		{PlayerID: 100, HomeZone: 7, Placement: stable(1000000, 1), MapRev: 5}, // 库无行 → 插入,rev=5
-		{PlayerID: 150, HomeZone: 7, Placement: stable(7, 1)},                  // 库 home 为 NULL → 补列
-		{PlayerID: 200, HomeZone: 7},                                           // 相同 → match
-		{PlayerID: 250, HomeZone: 7},                                           // 库 home=8 → conflict,不写
-		{PlayerID: 300, HomeZone: 7, MapRev: 9},                                // 库 rev=2 < maprev → rev_regression,不写
-	}
-}
-
-// importContractExisting 是 R8 读到的已有行(对应 importContractRows 的 150..300)。
-func importContractExisting() [][]driver.Value {
-	return [][]driver.Value{
-		routeRowValues(150, 0, 7, 1, "", 2),
-		routeRowValues(200, 7, 0, 0, "", 3),
-		routeRowValues(250, 8, 0, 0, "", 1),
-		routeRowValues(300, 7, 0, 0, "", 2),
-	}
-}
-
-// TestImportRoutesStatementOrderAndAffectedMismatchRetries:R1 → R8(加锁)→ R7 → R9 → COMMIT,
-// 冲突与 rev 倒退的行一字不写;R7 行数对不上(R8 之后有并发插入)时整批回滚重来,不计锁冲突。
-// R8 的实参是按聚簇键 (route_shard, player_id) 升序交错的对。行片 = id % 64:
-// 100 → 36(100 − 64)、150 → 22(150 − 128)、200 → 8(200 − 192)、250 → 58(250 − 192)、300 → 44(300 − 256)。
-func TestImportRoutesStatementOrderAndAffectedMismatchRetries(t *testing.T) {
-	ids := []driver.Value{
-		uint64(8), uint64(200),
-		uint64(22), uint64(150),
-		uint64(36), uint64(100),
-		uint64(44), uint64(300),
-		uint64(58), uint64(250),
-	}
-	// 夹具自检:上面的片号是手算的字面量,这里用 placement.RouteRowShard 对一遍(模数若再变,先红在这里)。
-	for i := 0; i < len(ids); i += 2 {
-		if id := ids[i+1].(uint64); ids[i] != uint64(placement.RouteRowShard(id)) {
-			t.Fatalf("夹具的行片写错了:id %d 的行片是 %d,用例里写的是 %v", id, placement.RouteRowShard(id), ids[i])
-		}
-	}
-
-	t.Run("语句顺序与实参", func(t *testing.T) {
-		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R1": {replyWritable},
-			"R8": {{rows: importContractExisting()}},
-			"R7": {replyAffected(1)},
-			"R9": {replyAffected(1)},
-		}})
-		stats, err := st.ImportRoutes(context.Background(), importContractRows(), false)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if stats.Inserted != 1 || stats.Filled != 1 || stats.Matched != 1 || stats.DBAhead != 0 ||
-			len(stats.Conflicts) != 1 || len(stats.RevRegressions) != 1 {
-			t.Fatalf("stats = %+v, want inserted=1 filled=1 matched=1 conflicts=1 rev_regressions=1", stats)
-		}
-		if stats.Conflicts[0].PlayerID != 250 || stats.RevRegressions[0].PlayerID != 300 {
-			t.Fatalf("冲突 / 倒退归错了人:%+v", stats)
-		}
-		want := []string{"BEGIN", "R1", "R8", "R7", "R9", "COMMIT"}
-		if got := fake.labels(); !reflect.DeepEqual(got, want) {
-			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, want)
-		}
-
-		r8 := fake.callsWithLabel("R8")[0]
-		if r8.sql != routeSelectRowsSQL(5, true) || !reflect.DeepEqual(r8.args, ids) {
-			t.Fatalf("R8 = %q %#v, want %q %#v", r8.sql, r8.args, routeSelectRowsSQL(5, true), ids)
-		}
-		r7 := fake.callsWithLabel("R7")[0]
-		wantR7 := []driver.Value{uint64(36), uint64(100), uint64(7), uint64(1000000), uint64(1), nil, uint64(5), fakeRouteWriter}
-		if r7.sql != routeImportInsertSQL(1) || !reflect.DeepEqual(r7.args, wantR7) {
-			t.Fatalf("R7 = %q %#v, want %q %#v(行片 36 在最前、id 100 其次;rev 必须是 maprev)", r7.sql, r7.args, routeImportInsertSQL(1), wantR7)
-		}
-		r9 := fake.callsWithLabel("R9")[0]
-		wantR9 := []driver.Value{uint64(7), uint64(7), uint64(1), nil, fakeRouteWriter, uint64(22), uint64(150), uint64(2)}
-		if !reflect.DeepEqual(r9.args, wantR9) {
-			t.Fatalf("R9 实参 = %#v, want %#v(按聚簇键 (22, 150) 定位、按读到的 rev=2 做 CAS)", r9.args, wantR9)
-		}
-	})
-
-	t.Run("R7行数不等_回滚后重来", func(t *testing.T) {
-		rows := importContractRows()
-		rows[0].MapRev = 0 // 重来时那一行已被并发的 W1 以 rev=1 插入,maprev 为 0 才是 match
-		reread := append([][]driver.Value{routeRowValues(100, 7, 1000000, 1, "", 1)}, importContractExisting()...)
-		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R1": {replyWritable, replyWritable},
-			"R8": {{rows: importContractExisting()}, {rows: reread}},
-			"R7": {replyAffected(0)},
-			"R9": {replyAffected(1)},
-		}})
-		stats, err := st.ImportRoutes(context.Background(), rows, false)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if stats.Inserted != 0 || stats.Matched != 2 || stats.Filled != 1 {
-			t.Fatalf("stats = %+v, want 第二轮的判定(inserted=0 matched=2 filled=1)", stats)
-		}
-		want := []string{"BEGIN", "R1", "R8", "R7", "ROLLBACK", "BEGIN", "R1", "R8", "R9", "COMMIT"}
-		if got := fake.labels(); !reflect.DeepEqual(got, want) {
-			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, want)
-		}
-		if got := st.LockRetriesForTest(); got != 0 {
-			t.Fatalf("lockRetries = %d, want 0(并发插入不是锁冲突)", got)
-		}
-	})
-
-	t.Run("一直对不上_用尽预算报错", func(t *testing.T) {
-		writable := make([]fakeRouteReply, routeTxAttempts)
-		reads := make([]fakeRouteReply, routeTxAttempts)
-		short := make([]fakeRouteReply, routeTxAttempts)
-		for i := range writable {
-			writable[i], reads[i], short[i] = replyWritable, fakeRouteReply{rows: importContractExisting()}, replyAffected(0)
-		}
-		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R1": writable, "R8": reads, "R7": short,
-		}})
-		if _, err := st.ImportRoutes(context.Background(), importContractRows(), false); !errors.Is(err, errRouteImportRaced) {
-			t.Fatalf("err = %v, want errRouteImportRaced", err)
-		}
-		if got := len(fake.callsWithLabel("R7")); got != routeTxAttempts {
-			t.Fatalf("R7 发了 %d 次,want %d", got, routeTxAttempts)
-		}
-		if got := len(fake.callsWithLabel("R9")); got != 0 {
-			t.Fatalf("R7 对不上之后不该再补列:R9 发了 %d 次", got)
-		}
-	})
-}
-
-// TestImportRoutesInsertsAndFillsInRouteKeyOrder:入参按 player_id 升序({2, 65}),写入按聚簇键升序 ——
-// 65 的行片是 1(65 = 64 + 1)、2 的行片是 2,所以 R7 的 VALUES 与 R9 的发出顺序都是 65 在前。任何一次锁多行的
-// 语句都按聚簇键升序取锁(与 R8 同序),两个并发导入之间才不成环。
-func TestImportRoutesInsertsAndFillsInRouteKeyOrder(t *testing.T) {
-	rows := []RouteImportRow{{PlayerID: 2, HomeZone: 7}, {PlayerID: 65, HomeZone: 7}}
-
-	t.Run("两行都新插_R7按聚簇键排", func(t *testing.T) {
-		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R1": {replyWritable}, "R8": {replyNoRows}, "R7": {replyAffected(2)},
-		}})
-		stats, err := st.ImportRoutes(context.Background(), rows, false)
-		if err != nil || stats.Inserted != 2 {
-			t.Fatalf("ImportRoutes = (%+v, %v), want inserted=2", stats, err)
-		}
-		r8 := fake.callsWithLabel("R8")[0]
-		if want := []driver.Value{uint64(1), uint64(65), uint64(2), uint64(2)}; !reflect.DeepEqual(r8.args, want) {
-			t.Fatalf("R8 实参 = %#v, want %#v(按聚簇键升序)", r8.args, want)
-		}
-		r7 := fake.callsWithLabel("R7")[0]
-		want := []driver.Value{
-			uint64(1), uint64(65), uint64(7), nil, nil, nil, uint64(1), fakeRouteWriter,
-			uint64(2), uint64(2), uint64(7), nil, nil, nil, uint64(1), fakeRouteWriter,
-		}
-		if r7.sql != routeImportInsertSQL(2) || !reflect.DeepEqual(r7.args, want) {
-			t.Fatalf("R7 = %q %#v\nwant %q %#v(65 的行片 1 < 2 的行片 2,必须排在前面)", r7.sql, r7.args, routeImportInsertSQL(2), want)
-		}
-	})
-
-	t.Run("两行都补列_R9按聚簇键发", func(t *testing.T) {
-		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R1": {replyWritable},
-			// 库里两行都是 home 为 NULL 的墓碑(应答顺序随意,判定按 player_id 取)。
-			"R8": {{rows: [][]driver.Value{routeRowValues(2, 0, 0, 0, "", 3), routeRowValues(65, 0, 0, 0, "", 5)}}},
-			"R9": {replyAffected(1), replyAffected(1)},
-		}})
-		stats, err := st.ImportRoutes(context.Background(), rows, false)
-		if err != nil || stats.Filled != 2 {
-			t.Fatalf("ImportRoutes = (%+v, %v), want filled=2", stats, err)
-		}
-		if got, want := fake.labels(), []string{"BEGIN", "R1", "R8", "R9", "R9", "COMMIT"}; !reflect.DeepEqual(got, want) {
-			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, want)
-		}
-		r9 := fake.callsWithLabel("R9")
-		want := [][]driver.Value{
-			{uint64(7), nil, nil, nil, fakeRouteWriter, uint64(1), uint64(65), uint64(5)},
-			{uint64(7), nil, nil, nil, fakeRouteWriter, uint64(2), uint64(2), uint64(3)},
-		}
-		for i := range want {
-			if !reflect.DeepEqual(r9[i].args, want[i]) {
-				t.Fatalf("第 %d 次 R9 实参 = %#v, want %#v(补列按聚簇键升序:65 在前)", i, r9[i].args, want[i])
-			}
-		}
-	})
-}
-
-// TestImportRoutesDryRunIssuesNoWriteAndNoLockingRead:dry-run 只发一条不加锁的读,不开事务,统计与真跑相同。
-func TestImportRoutesDryRunIssuesNoWriteAndNoLockingRead(t *testing.T) {
-	st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-		"R8ro": {{rows: importContractExisting()}},
-	}})
-	stats, err := st.ImportRoutes(context.Background(), importContractRows(), true)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if stats.Inserted != 1 || stats.Filled != 1 || stats.Matched != 1 || len(stats.Conflicts) != 1 || len(stats.RevRegressions) != 1 {
-		t.Fatalf("dry-run stats = %+v", stats)
-	}
-	if got := fake.labels(); !reflect.DeepEqual(got, []string{"R8ro"}) {
-		t.Fatalf("dry-run 发了 %v,want 只有一条不加锁的读", got)
-	}
-	if got := fake.callsWithLabel("R8ro")[0].sql; got != routeSelectRowsSQL(5, false) || strings.Contains(got, "FOR UPDATE") {
-		t.Fatalf("dry-run 的读 = %q", got)
-	}
-}
-
-// TestImportRoutesRejectsInvalidBatchBeforeAnyStatement:批次不合法一条语句都不发。
-func TestImportRoutesRejectsInvalidBatchBeforeAnyStatement(t *testing.T) {
-	st, fake := newFakeRouteStore(t, fakeRouteScript{})
-	bad := []RouteImportRow{{PlayerID: 2, HomeZone: 7}, {PlayerID: 1, HomeZone: 7}}
-	for _, dryRun := range []bool{true, false} {
-		if _, err := st.ImportRoutes(context.Background(), bad, dryRun); !errors.Is(err, ErrRouteInvalidArgument) {
-			t.Fatalf("dryRun=%v: err = %v, want ErrRouteInvalidArgument", dryRun, err)
-		}
-	}
-	if got := fake.labels(); len(got) != 0 {
-		t.Fatalf("批次非法却发了语句:%v", got)
-	}
-}
-
-// TestImportMergedIntoOutcomeContract:插入 / 已有且相同 / 已有但不同 三种结局,以及 dry-run 只读。
-func TestImportMergedIntoOutcomeContract(t *testing.T) {
-	rows := []MergedIntoRow{
-		{SrcZone: 101, DstZone: 102, RunID: "101-102-a"},
-		{SrcZone: 103, DstZone: 102, RunID: "103-102-b"},
-		{SrcZone: 104, DstZone: 102, RunID: "104-102-c"},
-	}
-	st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-		"R1":  {replyWritable, replyWritable, replyWritable},
-		"R10": {replyAffected(1), replyAffected(0), replyAffected(0)},
-		"R11": {
-			{rows: [][]driver.Value{{int64(102), "103-102-b", int64(1)}}},
-			{rows: [][]driver.Value{{int64(105), "104-105-z", int64(2)}}},
-		},
-	}})
-	stats, err := st.ImportMergedInto(context.Background(), rows, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if stats.Inserted != 1 || stats.Matched != 1 || len(stats.Conflicts) != 1 {
-		t.Fatalf("stats = %+v, want inserted=1 matched=1 conflicts=1", stats)
-	}
-	wantConflict := MergedIntoConflict{
-		DB:    MergedIntoRow{SrcZone: 104, DstZone: 105, RunID: "104-105-z", MergedAtMs: 2},
-		Redis: rows[2],
-	}
-	if stats.Conflicts[0] != wantConflict {
-		t.Fatalf("conflict = %+v, want %+v", stats.Conflicts[0], wantConflict)
-	}
-	want := []string{
-		"BEGIN", "R1", "R10", "COMMIT",
-		"BEGIN", "R1", "R10", "R11", "ROLLBACK",
-		"BEGIN", "R1", "R10", "R11", "ROLLBACK",
-	}
-	if got := fake.labels(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, want)
-	}
-	if got := fake.callsWithLabel("R10")[0].args; !reflect.DeepEqual(got, []driver.Value{uint64(101), uint64(102), "101-102-a"}) {
-		t.Fatalf("R10 实参 = %#v", got)
-	}
-
-	dry, dryFake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-		"R11ro": {replyNoRows},
-	}})
-	dryStats, err := dry.ImportMergedInto(context.Background(), rows[:1], true)
-	if err != nil || dryStats.Inserted != 1 {
-		t.Fatalf("dry-run = (%+v, %v), want inserted=1", dryStats, err)
-	}
-	if got := dryFake.labels(); !reflect.DeepEqual(got, []string{"R11ro"}) {
-		t.Fatalf("dry-run 发了 %v,want 只有一条不加锁的读", got)
-	}
-
-	if _, err := dry.ImportMergedInto(context.Background(), []MergedIntoRow{{SrcZone: 1, DstZone: 1, RunID: "x"}}, true); !errors.Is(err, ErrRouteInvalidArgument) {
-		t.Fatalf("src == dst: err = %v, want ErrRouteInvalidArgument", err)
-	}
-}
-
-// TestRouteReadQueriesShapes:ScanRoutes / GetRoutes / ListMergedInto 的语句、实参与 NULL / 大数扫描。
+// TestRouteReadQueriesShapes:GetRoutes / ListMergedInto 的语句、实参与 NULL / 大数扫描。
 // placement_version 放一个超过 2^63 的值:NullInt64 装不下,这里钉住扫描用的是 sql.Null[uint64]。
 func TestRouteReadQueriesShapes(t *testing.T) {
 	const bigVersion uint64 = 1<<63 + 5
 	st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-		"R12": {{rows: [][]driver.Value{
-			{int64(6), int64(6), nil, int64(7), bigVersion, nil, int64(3), "w", int64(1), int64(2)},
-			routeRowValues(9, 7, 0, 0, "", 1),
-		}}},
-		"R8ro": {{rows: [][]driver.Value{routeRowValues(9, 7, 0, 0, "", 1)}}},
-		"R14":  {{rows: [][]driver.Value{{int64(101), int64(102), "101-102-a", int64(5)}}}},
+		"R13": {
+			{rows: [][]driver.Value{routeRowValues(9, 7, 0, 0, "", 1)}},
+			{rows: [][]driver.Value{{int64(6), int64(6), nil, int64(7), bigVersion, nil, int64(3), "w", int64(1), int64(2)}}},
+		},
+		"R14": {{rows: [][]driver.Value{{int64(101), int64(102), "101-102-a", int64(5)}}}},
 	}})
 	ctx := context.Background()
-
-	if _, err := st.ScanRoutes(ctx, RouteScanCursor{}, 0); !errors.Is(err, ErrRouteInvalidArgument) {
-		t.Fatalf("limit=0: err = %v, want ErrRouteInvalidArgument", err)
-	}
-	if _, err := st.ScanRoutes(ctx, RouteScanCursor{}, RouteBatchLimit+1); !errors.Is(err, ErrRouteInvalidArgument) {
-		t.Fatalf("limit 超限: err = %v, want ErrRouteInvalidArgument", err)
-	}
-	// 游标片越界:不拒绝的话查询静默回空页,audit 会当作已经扫完。
-	if _, err := st.ScanRoutes(ctx, RouteScanCursor{Shard: placement.RouteRowShards}, 1); !errors.Is(err, ErrRouteInvalidArgument) {
-		t.Fatalf("游标片 = %d: err = %v, want ErrRouteInvalidArgument", placement.RouteRowShards, err)
-	}
-	if got := fake.labels(); len(got) != 0 {
-		t.Fatalf("入参非法却发了语句:%v", got)
-	}
-	scanned, err := st.ScanRoutes(ctx, RouteScanCursor{Shard: 5, PlayerID: 5}, 2)
-	if err != nil {
-		t.Fatalf("ScanRoutes: %v", err)
-	}
-	want := []RouteRow{
-		{PlayerID: 6, StorageID: 7, PlacementVersion: bigVersion, Rev: 3, UpdatedBy: "w", CreatedAtMs: 1, UpdatedAtMs: 2},
-		{PlayerID: 9, HomeZone: 7, Rev: 1, UpdatedBy: fakeRouteOldWriter, CreatedAtMs: uint64(fakeRouteCreatedMs), UpdatedAtMs: uint64(fakeRouteUpdatedMs)},
-	}
-	if !reflect.DeepEqual(scanned, want) {
-		t.Fatalf("ScanRoutes = %+v\nwant %+v", scanned, want)
-	}
-	if got := fake.callsWithLabel("R12")[0].args; !reflect.DeepEqual(got, []driver.Value{uint64(5), uint64(5), uint64(5), int64(2)}) {
-		t.Fatalf("R12 实参 = %#v, want (游标片, 游标片, 游标 player_id, limit)", got)
-	}
 
 	if got, err := st.GetRoutes(ctx, []uint64{0, 0}); err != nil || len(got) != 0 {
 		t.Fatalf("全 0 入参应返回空且不查库: (%v, %v)", got, err)
@@ -1301,13 +924,21 @@ func TestRouteReadQueriesShapes(t *testing.T) {
 	if _, err := st.GetRoutes(ctx, make([]uint64, RouteBatchLimit+1)); !errors.Is(err, ErrRouteInvalidArgument) {
 		t.Fatalf("GetRoutes 超限: err = %v", err)
 	}
+	if got := fake.labels(); len(got) != 0 {
+		t.Fatalf("入参非法却发了语句:%v", got)
+	}
 	got, err := st.GetRoutes(ctx, []uint64{9, 0, 11})
 	if err != nil || len(got) != 1 || got[9].HomeZone != 7 {
 		t.Fatalf("GetRoutes = (%+v, %v), want 只有 9(11 没有行,必须缺席)", got, err)
 	}
-	r8 := fake.callsWithLabel("R8ro")[0]
-	if r8.sql != routeSelectRowsSQL(2, false) || !reflect.DeepEqual(r8.args, []driver.Value{uint64(9), uint64(9), uint64(11), uint64(11)}) {
-		t.Fatalf("GetRoutes 的读 = %q %#v(实参是交错的 (行片, player_id);0 不许进实参)", r8.sql, r8.args)
+	r13 := fake.callsWithLabel("R13")[0]
+	if r13.sql != routeSelectRowsSQL(2) || !reflect.DeepEqual(r13.args, []driver.Value{uint64(9), uint64(9), uint64(11), uint64(11)}) {
+		t.Fatalf("GetRoutes 的读 = %q %#v(实参是交错的 (行片, player_id);0 不许进实参)", r13.sql, r13.args)
+	}
+	got, err = st.GetRoutes(ctx, []uint64{6})
+	want := RouteRow{PlayerID: 6, StorageID: 7, PlacementVersion: bigVersion, Rev: 3, UpdatedBy: "w", CreatedAtMs: 1, UpdatedAtMs: 2}
+	if err != nil || got[6] != want {
+		t.Fatalf("GetRoutes(6) = (%+v, %v), want %+v", got, err, want)
 	}
 
 	merged, err := st.ListMergedInto(ctx)
@@ -1317,35 +948,16 @@ func TestRouteReadQueriesShapes(t *testing.T) {
 }
 
 // TestRouteReadsRejectShardMismatchRows:库里存的 route_shard 与 player_id % 64 不符的行(只有 CHECK 曾经不生效时
-// 被绕过 store 的写者写进来),读到就 ErrRouteShardMismatch、整页作废,不能当成正常行交给 audit / 发布。
+// 被绕过 store 的写者写进来),读到就 ErrRouteShardMismatch、整批作废。纵深防御:只有假驱动造得出这种应答,真库上 R13 按
+// 「正确片 + id」点查,库里的错片行对它不可见、表现为缺席。这里只钉住「万一 SQL 文本被改错、读回了错片行,也不会被当成正常行」。
 func TestRouteReadsRejectShardMismatchRows(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("ScanRoutes_错片行整页作废", func(t *testing.T) {
-		st, _ := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R12": {{rows: [][]driver.Value{
-				routeRowValues(1, 7, 0, 0, "", 1),
-				routeRowValuesWithShard(3, 6, 7, 0, 0, "", 1), // 6 % 64 = 6 ≠ 3
-			}}},
-		}})
-		rows, err := st.ScanRoutes(ctx, RouteScanCursor{}, 10)
-		if !errors.Is(err, ErrRouteShardMismatch) || rows != nil {
-			t.Fatalf("ScanRoutes = (%+v, %v), want (nil, ErrRouteShardMismatch)", rows, err)
-		}
-	})
-
-	// 纵深防御:只有假驱动造得出这种应答。真库上 R8 / R13 按「正确片 + id」点查,库里的错片行对它们不可见、
-	// 表现为缺席(见 GetRoutes 的注释与真库用例 TestRouteStore_ShardMismatchRowFailsClosed)。这里只钉住
-	// 「万一 SQL 文本被改错、读回了错片行,也不会被当成正常行」。
-	t.Run("GetRoutes_纵深防御", func(t *testing.T) {
-		st, _ := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R8ro": {{rows: [][]driver.Value{routeRowValuesWithShard(3, 6, 7, 0, 0, "", 1)}}},
-		}})
-		got, err := st.GetRoutes(ctx, []uint64{6})
-		if !errors.Is(err, ErrRouteShardMismatch) || got != nil {
-			t.Fatalf("GetRoutes = (%+v, %v), want (nil, ErrRouteShardMismatch)", got, err)
-		}
-	})
+	st, _ := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
+		"R13": {{rows: [][]driver.Value{routeRowValuesWithShard(3, 6, 7, 0, 0, "", 1)}}}, // 6 % 64 = 6 ≠ 3
+	}})
+	got, err := st.GetRoutes(context.Background(), []uint64{6})
+	if !errors.Is(err, ErrRouteShardMismatch) || got != nil {
+		t.Fatalf("GetRoutes = (%+v, %v), want (nil, ErrRouteShardMismatch)", got, err)
+	}
 }
 
 // ── 探针 ─────────────────────────────────────────────────────────────────────────
@@ -1355,8 +967,8 @@ func TestRouteReadsRejectShardMismatchRows(t *testing.T) {
 // 都被接受)时 store 可用、池不关。P5 自己的各个分支见 TestNewRouteStoreShardModulusProbeContract。
 func TestNewRouteStoreProbeFailClosed(t *testing.T) {
 	sessionOK := fakeRouteReply{rows: [][]driver.Value{{"READ-COMMITTED", int64(1)}}}
-	mysqlVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.36"}}}
-	tidbVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.11-TiDB-v7.5.0"}}}
+	mysqlVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.36", "MySQL Community Server - GPL"}}}
+	tidbVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.11-TiDB-v7.5.0", "TiDB Server (Apache License 2.0) Community Edition"}}}
 	goodOpts := RouteStoreOptions{Writer: fakeRouteWriter}
 	// P4 期望的应答:3819 且点名 chk_route_shard(MySQL 8.0 的原文格式)。
 	checkEnforced := replyErr(&mysql.MySQLError{Number: 3819, Message: "Check constraint 'chk_route_shard' is violated."})
@@ -1561,7 +1173,7 @@ func TestNewRouteStoreProbeFailClosed(t *testing.T) {
 // TestRouteShardModulusProbeDiscriminates 钉住,这里只证「库回什么 → 建池回什么」。
 func TestNewRouteStoreShardModulusProbeContract(t *testing.T) {
 	sessionOK := fakeRouteReply{rows: [][]driver.Value{{"READ-COMMITTED", int64(1)}}}
-	mysqlVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.36"}}}
+	mysqlVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.36", "MySQL Community Server - GPL"}}}
 	// 3819 且点名 chk_route_shard(MySQL 8.0 的原文格式):对 P4 是「CHECK 生效」,对 P5 是「模数不一致」。
 	shardCheckViolated := replyErr(&mysql.MySQLError{Number: 3819, Message: "Check constraint 'chk_route_shard' is violated."})
 	otherCheckViolated := replyErr(&mysql.MySQLError{Number: 3819, Message: "Check constraint 'chk_route_rev' is violated."})
@@ -1692,7 +1304,7 @@ func TestNewRouteStoreShardModulusProbeContract(t *testing.T) {
 // 不再开下一个事务。1205 不重试由 TestNewRouteStoreShardModulusProbeContract 的「1205锁等待超时_原样包装」钉住。
 func TestNewRouteStoreProbeRetriesLockConflict(t *testing.T) {
 	sessionOK := fakeRouteReply{rows: [][]driver.Value{{"READ-COMMITTED", int64(1)}}}
-	mysqlVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.36"}}}
+	mysqlVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.36", "MySQL Community Server - GPL"}}}
 	shardCheckViolated := replyErr(&mysql.MySQLError{Number: 3819, Message: "Check constraint 'chk_route_shard' is violated."})
 	deadlock := replyErr(mysqlErrNo(mysqlErrDeadlock))
 	opts := RouteStoreOptions{Writer: fakeRouteWriter}
@@ -1842,16 +1454,16 @@ func TestPrepareTiDBContract(t *testing.T) {
 	ctx := context.Background()
 	req := RouteTiDBPrepareRequest{Zones: []uint32{2, 1}, Storages: []uint32{1000000}}
 	wantSQL := routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000})
-	if len(wantSQL) != 8 {
-		t.Fatalf("2 个 zone + 1 个 storage 应生成 8 条语句,got %d", len(wantSQL))
+	if len(wantSQL) != 5 {
+		t.Fatalf("2 个 zone + 1 个 storage 应生成 5 条语句(ATTRIBUTES + 行数据 SPLIT + 3 条索引 SPLIT),got %d", len(wantSQL))
 	}
-	tidbVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.11-TiDB-v8.5.2"}}}
+	tidbVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.11-TiDB-v8.5.2", "TiDB Server (Apache License 2.0) Community Edition"}}}
 	clustered := fakeRouteReply{rows: [][]driver.Value{{"player_route", "CLUSTERED"}}}
 	splitReply := func(k int64) fakeRouteReply {
 		return fakeRouteReply{rows: [][]driver.Value{{k, float64(1)}}}
 	}
-	fiveSplits := func() []fakeRouteReply {
-		out := make([]fakeRouteReply, 5)
+	fourSplits := func() []fakeRouteReply {
+		out := make([]fakeRouteReply, 4)
 		for i := range out {
 			out[i] = splitReply(int64(i + 1))
 		}
@@ -1860,7 +1472,7 @@ func TestPrepareTiDBContract(t *testing.T) {
 
 	t.Run("MySQL_跳过", func(t *testing.T) {
 		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"VERSION": {{rows: [][]driver.Value{{"8.0.36"}}}},
+			"VERSION": {{rows: [][]driver.Value{{"8.0.36", "MySQL Community Server - GPL"}}}},
 		}})
 		rep, err := st.PrepareTiDB(ctx, req)
 		if err != nil || !rep.Skipped || rep.Engine != "mysql" || len(rep.Steps) != 0 {
@@ -1874,13 +1486,13 @@ func TestPrepareTiDBContract(t *testing.T) {
 	t.Run("TiDB_核对后逐条执行", func(t *testing.T) {
 		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 			"VERSION": {tidbVersion}, "PK_TYPE": {clustered},
-			"ALTER_ATTR": {replyAffected(0)}, "SPLIT": fiveSplits(),
+			"ALTER_ATTR": {replyAffected(0)}, "SPLIT": fourSplits(),
 		}})
 		rep, err := st.PrepareTiDB(ctx, req)
 		if err != nil || rep.Skipped || rep.Engine != "tidb" {
 			t.Fatalf("PrepareTiDB = (%+v, %v)", rep, err)
 		}
-		wantLabels := []string{"VERSION", "PK_TYPE", "ALTER_ATTR", "SPLIT", "SPLIT", "SPLIT", "SPLIT", "SPLIT"}
+		wantLabels := []string{"VERSION", "PK_TYPE", "ALTER_ATTR", "SPLIT", "SPLIT", "SPLIT", "SPLIT"}
 		if got := fake.labels(); !reflect.DeepEqual(got, wantLabels) {
 			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, wantLabels)
 		}
@@ -1901,8 +1513,8 @@ func TestPrepareTiDBContract(t *testing.T) {
 				t.Fatalf("第 %d 步 = %+v, want Executed 且 SQL 相同", i+1, step)
 			}
 		}
-		if got := rep.SplitRegions(); got != 1+2+3+4+5 {
-			t.Fatalf("SplitRegions() = %d, want 15(各条 SPLIT 首列之和;ALTER 记 0)", got)
+		if got := rep.SplitRegions(); got != 1+2+3+4 {
+			t.Fatalf("SplitRegions() = %d, want 10(各条 SPLIT 首列之和;ALTER 记 0)", got)
 		}
 	})
 
@@ -1939,16 +1551,16 @@ func TestPrepareTiDBContract(t *testing.T) {
 		}
 	})
 
-	t.Run("第4条SPLIT失败_报第几步且不再发", func(t *testing.T) {
-		splits := fiveSplits()
-		splits[3] = replyErr(mysqlErrNo(1105))
+	t.Run("第3条SPLIT失败_报第几步且不再发", func(t *testing.T) {
+		splits := fourSplits()
+		splits[2] = replyErr(mysqlErrNo(1105))
 		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 			"VERSION": {tidbVersion}, "PK_TYPE": {clustered},
 			"ALTER_ATTR": {replyAffected(0)}, "SPLIT": splits,
 		}})
 		rep, err := st.PrepareTiDB(ctx, req)
-		if err == nil || !strings.Contains(err.Error(), "step 5/6") {
-			t.Fatalf("err = %v, want 带 step 5/6", err)
+		if err == nil || !strings.Contains(err.Error(), "step 4/5") {
+			t.Fatalf("err = %v, want 带 step 4/5", err)
 		}
 		var me *mysql.MySQLError
 		if !errors.As(err, &me) || me.Number != 1105 {
@@ -1958,17 +1570,17 @@ func TestPrepareTiDBContract(t *testing.T) {
 			t.Fatalf("失败时 Steps 仍应是完整清单:%+v", rep.Steps)
 		}
 		for i, step := range rep.Steps {
-			if want := i < 4; step.Executed != want {
+			if want := i < 3; step.Executed != want {
 				t.Fatalf("第 %d 步 Executed = %t, want %t", i+1, step.Executed, want)
 			}
 		}
-		if got := len(fake.callsWithLabel("SPLIT")); got != 4 {
-			t.Fatalf("失败之后还在发:SPLIT 发了 %d 次,want 4", got)
+		if got := len(fake.callsWithLabel("SPLIT")); got != 3 {
+			t.Fatalf("失败之后还在发:SPLIT 发了 %d 次,want 3", got)
 		}
 	})
 
 	// SPLIT 的结果读不出「切了几个 Region」的三种形状(规格 §4.8):没有列、没有行、首列不是整数,一律 fail-closed ——
-	// 看不到结果就不能声称切过了。都放在第一条 SPLIT(8 条里的第 3 步)上:那一步不记 Executed,之后一条都不再发。
+	// 看不到结果就不能声称切过了。都放在第一条 SPLIT(5 条里的第 2 步)上:那一步不记 Executed,之后一条都不再发。
 	// 这三条错误不是 MySQLError,只能按文案认(文案出自 execRouteTiDBPrepareStep)。
 	for _, tc := range []struct {
 		name    string
@@ -1981,29 +1593,29 @@ func TestPrepareTiDBContract(t *testing.T) {
 		{name: "零行", reply: replyNoRows, wantErr: "SPLIT returned no rows"},
 		{name: "首列不是整数", reply: fakeRouteReply{rows: [][]driver.Value{{"n/a", float64(1)}}}, wantErr: "is not an integer"},
 	} {
-		t.Run("SPLIT结果"+tc.name+"_报第3步且不再发", func(t *testing.T) {
-			splits := sixSplits()
+		t.Run("SPLIT结果"+tc.name+"_报第2步且不再发", func(t *testing.T) {
+			splits := fourSplits()
 			splits[0] = tc.reply
 			st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 				"VERSION": {tidbVersion}, "PK_TYPE": {clustered},
 				"ALTER_ATTR": {replyAffected(0)}, "SPLIT": splits,
 			}})
 			rep, err := st.PrepareTiDB(ctx, req)
-			if err == nil || !strings.Contains(err.Error(), "step 3/8") || !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("err = %v, want 带 step 3/8 与 %q(读不到结果不许当成切了 0 个)", err, tc.wantErr)
+			if err == nil || !strings.Contains(err.Error(), "step 2/5") || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("err = %v, want 带 step 2/5 与 %q(读不到结果不许当成切了 0 个)", err, tc.wantErr)
 			}
 			if len(rep.Steps) != len(wantSQL) {
 				t.Fatalf("失败时 Steps 仍应是完整清单:%+v", rep.Steps)
 			}
 			for i, step := range rep.Steps {
-				if want := i < 2; step.Executed != want {
+				if want := i < 1; step.Executed != want {
 					t.Fatalf("第 %d 步 Executed = %t, want %t(读不到结果的那条 SPLIT 不算执行过)", i+1, step.Executed, want)
 				}
 			}
 			if got := rep.SplitRegions(); got != 0 {
 				t.Fatalf("SplitRegions() = %d, want 0", got)
 			}
-			wantLabels := []string{"VERSION", "PK_TYPE", "ALTER_ATTR", "ALTER_ATTR", "SPLIT"}
+			wantLabels := []string{"VERSION", "PK_TYPE", "ALTER_ATTR", "SPLIT"}
 			if got := fake.labels(); !reflect.DeepEqual(got, wantLabels) {
 				t.Fatalf("失败之后还在发:\n got=%v\nwant=%v", got, wantLabels)
 			}
@@ -2021,374 +1633,4 @@ func TestPrepareTiDBContract(t *testing.T) {
 			t.Fatalf("入参非法却发了语句:%v", got)
 		}
 	})
-}
-
-// ── 冻结、解冻与反向修库(第 1b-1 批)──────────────────────────────────────────────
-
-const fakeRouteGeneration = "0123456789abcdef0123456789abcdef"
-
-// replyMeta 是 R18 / R18x 读到的 route_meta 行(generation, writable)。
-func replyMeta(writable int64) fakeRouteReply {
-	return fakeRouteReply{rows: [][]driver.Value{{fakeRouteGeneration, writable}}}
-}
-
-// 正式 proto 仅用于 SQL contract 假驱动，不伪造真实数据库收据。
-// 真库用例必须通过独立 operator 执行完整 Catalog 链得到同形原件。
-func routeFreezeProofForTest() *pb.SqlWriterMaintenanceReceipt {
-	return &pb.SqlWriterMaintenanceReceipt{Kind: pb.SqlWriterMaintenanceReceipt_FREEZE,
-		Phase: pb.SqlWriterMaintenanceReceipt_FROZEN, RunPhase: pb.SqlWriterDrainRun_SQL_FROZEN,
-		Generation: fakeRouteGeneration, AfterEpoch: 8, CatalogRevision: 13, CommittedMs: 1,
-		RequestId: bytes.Repeat([]byte{1}, 16), RunId: bytes.Repeat([]byte{2}, 16),
-		RequestDigest: bytes.Repeat([]byte{3}, 32), ReceiptDigest: bytes.Repeat([]byte{4}, 32)}
-}
-
-func replyMaintenanceMeta(writable int64) fakeRouteReply {
-	p := routeFreezeProofForTest()
-	return fakeRouteReply{rows: [][]driver.Value{{p.Generation, writable, p.AfterEpoch, p.CatalogRevision, p.RunId}}}
-}
-
-// 只为显式维护用例补齐正式收据的两个固定强读；业务行脚本与断言由每个用例保留。
-func newFakeMaintenanceRouteStore(t *testing.T, script fakeRouteScript) (*RouteStore, *fakeRouteDB) {
-	t.Helper()
-	p := routeFreezeProofForTest()
-	replies := make(map[string][]fakeRouteReply, len(script.replies)+2)
-	for label, values := range script.replies {
-		replies[label] = append([]fakeRouteReply(nil), values...)
-	}
-	for _, label := range []string{"R18", "R18x"} {
-		for _, reply := range replies[label] {
-			if len(reply.rows) == 1 && len(reply.rows[0]) == 5 && reply.rows[0][1] == int64(0) {
-				replies["FREEZE_RECEIPT"] = append(replies["FREEZE_RECEIPT"], fakeRouteReply{rows: [][]driver.Value{{p.RequestDigest, p.ReceiptDigest, uint32(p.Kind), uint32(p.Phase)}}})
-				replies["FREEZE_RUN"] = append(replies["FREEZE_RUN"], fakeRouteReply{rows: [][]driver.Value{{uint32(p.RunPhase)}}})
-			}
-		}
-	}
-	script.replies = replies
-	st, fake := newFakeRouteStore(t, script)
-	st.maintenanceFreeze = p
-	return st, fake
-}
-
-// repairContractRows 一批覆盖反向修库五种判定的缓存行(player_id 升序;行片依次 36 / 22 / 8 / 58 / 44,同 importContractRows)。
-func repairContractRows() []RouteImportRow {
-	return []RouteImportRow{
-		// 库无行 → 插入,rev = maprev
-		{PlayerID: 100, HomeZone: 7, MapRev: 5},
-		// 库 rev 2 < maprev 4 → 整行覆盖
-		{PlayerID: 150, HomeZone: 8, Placement: &placement.Record{StorageID: 1000000, Version: 1}, MapRev: 4},
-		// 无 maprev、库 home 为 NULL → 退回导入语义补列
-		{PlayerID: 200, HomeZone: 7, Placement: &placement.Record{StorageID: 7, Version: 1}},
-		// 库 rev 3 = maprev、home 是 8 → 平局
-		{PlayerID: 250, HomeZone: 7, MapRev: 3},
-		// 库 rev 9 > maprev → 库领先,不动
-		{PlayerID: 300, HomeZone: 7, MapRev: 5},
-	}
-}
-
-// repairContractExisting 是 R8 读到的已有行(对应 150..300)。
-func repairContractExisting() [][]driver.Value {
-	return [][]driver.Value{
-		routeRowValues(150, 7, 0, 0, "", 2),
-		routeRowValues(200, 0, 7, 1, "", 2),
-		routeRowValues(250, 8, 0, 0, "", 3),
-		routeRowValues(300, 7, 0, 0, "", 9),
-	}
-}
-
-// TestRepairRoutesFromCacheRefusedWhenWritable:writable=1 时反向修库在第一句(R18x 加锁复核)就拒绝,回滚、零写入;
-// dry-run 同样拒绝(R18 普通读),不读玩家行。
-func TestRepairRoutesFromCacheRefusedWhenWritable(t *testing.T) {
-	ctx := context.Background()
-	st, fake := newFakeMaintenanceRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-		"R18x": {replyMaintenanceMeta(1)},
-		"R18":  {replyMaintenanceMeta(1)},
-	}})
-	if _, err := st.RepairRoutesFromCache(ctx, repairContractRows(), RouteRepairOptions{}); !errors.Is(err, ErrRouteNotFrozen) {
-		t.Fatalf("err = %v, want ErrRouteNotFrozen", err)
-	}
-	if _, err := st.RepairRoutesFromCache(ctx, repairContractRows(), RouteRepairOptions{DryRun: true}); !errors.Is(err, ErrRouteNotFrozen) {
-		t.Fatalf("dry-run err = %v, want ErrRouteNotFrozen", err)
-	}
-	want := []string{"BEGIN", "R18x", "ROLLBACK", "R18"}
-	if got := fake.labels(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("语句序列不对(可写时不许读写任何玩家行):\n got=%v\nwant=%v", got, want)
-	}
-}
-
-// TestRepairRoutesFromCacheStatementSequence:R18x(加锁复核冻结态,提交点复核)→ R8(按聚簇键升序加锁读)→ R7 → R9 → R17 → COMMIT;
-// 平局默认只报告不写,-resolve-ties=cache 时多一条 R17(rev 不变)。R17 的 rev 是 maprev、CAS 条件是读到的库 rev。
-func TestRepairRoutesFromCacheStatementSequence(t *testing.T) {
-	ctx := context.Background()
-	wantR8 := []driver.Value{
-		uint64(8), uint64(200),
-		uint64(22), uint64(150),
-		uint64(36), uint64(100),
-		uint64(44), uint64(300),
-		uint64(58), uint64(250),
-	}
-	wantR7 := []driver.Value{uint64(36), uint64(100), uint64(7), nil, nil, nil, uint64(5), fakeRouteWriter}
-	wantR9 := []driver.Value{uint64(7), uint64(7), uint64(1), nil, fakeRouteWriter, uint64(8), uint64(200), uint64(2)}
-	wantRestore := []driver.Value{uint64(8), uint64(1000000), uint64(1), nil, uint64(4), fakeRouteWriter, uint64(22), uint64(150), uint64(2)}
-	wantTie := []driver.Value{uint64(7), nil, nil, nil, uint64(3), fakeRouteWriter, uint64(58), uint64(250), uint64(3)}
-
-	for _, tc := range []struct {
-		name        string
-		resolveTies bool
-		wantLabels  []string
-		wantR17     [][]driver.Value
-	}{
-		{"平局只报告", false, []string{"BEGIN", "R18x", "FREEZE_RECEIPT", "FREEZE_RUN", "R8", "R7", "R9", "R17", "COMMIT"}, [][]driver.Value{wantRestore}},
-		{"平局按缓存覆盖", true, []string{"BEGIN", "R18x", "FREEZE_RECEIPT", "FREEZE_RUN", "R8", "R7", "R9", "R17", "R17", "COMMIT"}, [][]driver.Value{wantRestore, wantTie}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			r17 := make([]fakeRouteReply, len(tc.wantR17))
-			for i := range r17 {
-				r17[i] = replyAffected(1)
-			}
-			st, fake := newFakeMaintenanceRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-				"R18x": {replyMaintenanceMeta(0)},
-				"R8":   {{rows: repairContractExisting()}},
-				"R7":   {replyAffected(1)},
-				"R9":   {replyAffected(1)},
-				"R17":  r17,
-			}})
-			stats, err := st.RepairRoutesFromCache(ctx, repairContractRows(), RouteRepairOptions{ResolveTies: tc.resolveTies})
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if stats.Inserted != 1 || stats.Restored != 1 || stats.Filled != 1 || stats.DBAhead != 1 || stats.Matched != 0 || len(stats.Conflicts) != 0 {
-				t.Fatalf("stats = %+v", stats)
-			}
-			if tc.resolveTies {
-				if len(stats.Ties) != 0 || len(stats.TiesResolved) != 1 || stats.TiesResolved[0].PlayerID != 250 {
-					t.Fatalf("resolve-ties: ties=%+v resolved=%+v, want 250 已覆盖", stats.Ties, stats.TiesResolved)
-				}
-			} else if len(stats.Ties) != 1 || stats.Ties[0].PlayerID != 250 || len(stats.TiesResolved) != 0 {
-				t.Fatalf("ties=%+v resolved=%+v, want 250 只报告", stats.Ties, stats.TiesResolved)
-			}
-			if got := fake.labels(); !reflect.DeepEqual(got, tc.wantLabels) {
-				t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, tc.wantLabels)
-			}
-			if got := fake.callsWithLabel("R18x")[0].sql; got != "SELECT generation,writable,writer_epoch,catalog_revision,freeze_run_id FROM route_meta WHERE id=1 FOR UPDATE" || !strings.HasSuffix(got, " FOR UPDATE") {
-				t.Fatalf("修库事务的第一句必须是 route_meta 的加锁读(提交点复核冻结态):%q", got)
-			}
-			if r8 := fake.callsWithLabel("R8")[0]; r8.sql != routeSelectRowsSQL(5, true) || !reflect.DeepEqual(r8.args, wantR8) {
-				t.Fatalf("R8 = %q %#v, want %q %#v", r8.sql, r8.args, routeSelectRowsSQL(5, true), wantR8)
-			}
-			if r7 := fake.callsWithLabel("R7")[0]; r7.sql != routeImportInsertSQL(1) || !reflect.DeepEqual(r7.args, wantR7) {
-				t.Fatalf("R7 = %q %#v, want %#v(rev 必须是 maprev)", r7.sql, r7.args, wantR7)
-			}
-			if r9 := fake.callsWithLabel("R9")[0]; !reflect.DeepEqual(r9.args, wantR9) {
-				t.Fatalf("R9 实参 = %#v, want %#v(无 maprev 退回导入语义)", r9.args, wantR9)
-			}
-			got := fake.callsWithLabel("R17")
-			for i := range tc.wantR17 {
-				if !reflect.DeepEqual(got[i].args, tc.wantR17[i]) {
-					t.Fatalf("第 %d 次 R17 实参 = %#v\nwant %#v(rev 置为 maprev、按聚簇键升序、CAS 读到的库 rev)", i, got[i].args, tc.wantR17[i])
-				}
-			}
-		})
-	}
-
-	t.Run("R17不是恰好1行_回滚报错", func(t *testing.T) {
-		st, fake := newFakeMaintenanceRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R18x": {replyMaintenanceMeta(0)},
-			"R8":   {{rows: repairContractExisting()}},
-			"R7":   {replyAffected(1)},
-			"R9":   {replyAffected(1)},
-			"R17":  {replyAffected(0)},
-		}})
-		if _, err := st.RepairRoutesFromCache(ctx, repairContractRows(), RouteRepairOptions{}); err == nil || !strings.Contains(err.Error(), "CAS affected 0 rows") {
-			t.Fatalf("err = %v, want CAS affected 0 rows", err)
-		}
-		if got := fake.labels(); got[len(got)-1] != "ROLLBACK" {
-			t.Fatalf("CAS 不对必须整批回滚:%v", got)
-		}
-	})
-}
-
-// TestRepairRoutesFromCacheDryRunOpensNoTx:dry-run 只发 R18 与 R8 的不加锁形态,不开事务,统计与真跑相同。
-func TestRepairRoutesFromCacheDryRunOpensNoTx(t *testing.T) {
-	st, fake := newFakeMaintenanceRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-		"R18":  {replyMaintenanceMeta(0)},
-		"R8ro": {{rows: repairContractExisting()}},
-	}})
-	stats, err := st.RepairRoutesFromCache(context.Background(), repairContractRows(), RouteRepairOptions{DryRun: true})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if stats.Inserted != 1 || stats.Restored != 1 || stats.Filled != 1 || stats.DBAhead != 1 || len(stats.Ties) != 1 {
-		t.Fatalf("dry-run stats = %+v", stats)
-	}
-	if got := fake.labels(); !reflect.DeepEqual(got, []string{"R18", "FREEZE_RECEIPT", "FREEZE_RUN", "R8ro"}) {
-		t.Fatalf("dry-run 发了 %v,want 正式冻结三项强读再读业务行，全部不加锁", got)
-	}
-}
-
-// TestRepairMergedIntoRequiresFrozen:合走标记的反向修库与导入同一个循环,但开关反过来:可写时拒绝(写事务里 R18x 加锁复核,
-// dry-run 先 R18 普通读);冻结时照常插入 / 比对,永不删除。
-func TestRepairMergedIntoRequiresFrozen(t *testing.T) {
-	ctx := context.Background()
-	rows := []MergedIntoRow{{SrcZone: 101, DstZone: 102, RunID: "101-102-a"}}
-
-	t.Run("可写时拒绝", func(t *testing.T) {
-		st, fake := newFakeMaintenanceRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R18x": {replyMaintenanceMeta(1)},
-			"R18":  {replyMaintenanceMeta(1)},
-		}})
-		if _, err := st.RepairMergedIntoFromCache(ctx, rows, false); !errors.Is(err, ErrRouteNotFrozen) {
-			t.Fatalf("err = %v, want ErrRouteNotFrozen", err)
-		}
-		if _, err := st.RepairMergedIntoFromCache(ctx, rows, true); !errors.Is(err, ErrRouteNotFrozen) {
-			t.Fatalf("dry-run err = %v, want ErrRouteNotFrozen", err)
-		}
-		if got, want := fake.labels(), []string{"BEGIN", "R18x", "ROLLBACK", "R18"}; !reflect.DeepEqual(got, want) {
-			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, want)
-		}
-	})
-
-	t.Run("冻结时插入", func(t *testing.T) {
-		st, fake := newFakeMaintenanceRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R18x": {replyMaintenanceMeta(0)},
-			"R10":  {replyAffected(1)},
-		}})
-		stats, err := st.RepairMergedIntoFromCache(ctx, rows, false)
-		if err != nil || stats.Inserted != 1 {
-			t.Fatalf("RepairMergedIntoFromCache = (%+v, %v), want inserted=1", stats, err)
-		}
-		if got, want := fake.labels(), []string{"BEGIN", "R18x", "FREEZE_RECEIPT", "FREEZE_RUN", "R10", "COMMIT"}; !reflect.DeepEqual(got, want) {
-			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, want)
-		}
-	})
-
-	t.Run("导入仍要求可写", func(t *testing.T) {
-		// 抽出公共循环之后导入的开关不能跟着变:回归 ImportMergedInto 的第一句仍是 R1。
-		st, fake := newFakeMaintenanceRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R1": {fakeRouteReply{rows: [][]driver.Value{{int64(0)}}}},
-		}})
-		if _, err := st.ImportMergedInto(ctx, rows, false); !errors.Is(err, ErrRouteNotWritable) {
-			t.Fatalf("err = %v, want ErrRouteNotWritable", err)
-		}
-		if got, want := fake.labels(), []string{"BEGIN", "R1", "ROLLBACK"}; !reflect.DeepEqual(got, want) {
-			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, want)
-		}
-	})
-}
-
-// 旧业务接口必须明确退役；幂等维护、水位下限与并发解冻由正式 Catalog 链的真库用例覆盖。
-func TestFreezeRouteWritersIdempotent(t *testing.T) {
-	st, fake := newFakeRouteStore(t, fakeRouteScript{})
-	for i := 0; i < 2; i++ {
-		if changed, err := st.FreezeRouteWriters(context.Background()); changed || err == nil {
-			t.Fatalf("旧冻结入口必须拒绝: changed=%t err=%v", changed, err)
-		}
-	}
-	if got := fake.labels(); len(got) != 0 {
-		t.Fatalf("旧入口仍触碰 SQL: %v", got)
-	}
-}
-
-func TestUnfreezeRaisesWatermarkBeforeFlippingWritable(t *testing.T) {
-	st, fake := newFakeRouteStore(t, fakeRouteScript{})
-	for _, floor := range []uint64{0, 5_000, 9_000, ^uint64(0)} {
-		if changed, err := st.UnfreezeRouteWriters(context.Background(), floor); changed || err == nil {
-			t.Fatalf("无 ReleaseReadiness 不得解冻或抬水位: floor=%d changed=%t err=%v", floor, changed, err)
-		}
-	}
-	if got := fake.labels(); len(got) != 0 {
-		t.Fatalf("退役入口仍写水位: %v", got)
-	}
-}
-
-func TestUnfreezeAlreadyWritableIsNoop(t *testing.T) {
-	st, fake := newFakeRouteStore(t, fakeRouteScript{})
-	for i := 0; i < 2; i++ {
-		if changed, err := st.UnfreezeRouteWriters(context.Background(), 5_000); changed || err == nil {
-			t.Fatalf("不能凭调用者猜测已可写而成功: changed=%t err=%v", changed, err)
-		}
-	}
-	if got := fake.labels(); len(got) != 0 {
-		t.Fatalf("退役入口仍读取或改变 SQL: %v", got)
-	}
-}
-
-// TestReadRouteMetaMissingRow:R18 读不到行 → ErrRouteMetaMissing;读得到时原样返回 generation 与 writable。
-func TestReadRouteMetaMissingRow(t *testing.T) {
-	ctx := context.Background()
-	st, _ := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{"R18": {replyNoRows, replyMeta(0)}}})
-	if _, err := st.ReadRouteMeta(ctx); !errors.Is(err, ErrRouteMetaMissing) {
-		t.Fatalf("err = %v, want ErrRouteMetaMissing", err)
-	}
-	m, err := st.ReadRouteMeta(ctx)
-	if err != nil || m != (RouteMeta{Generation: fakeRouteGeneration, Writable: 0}) || !m.Frozen() {
-		t.Fatalf("ReadRouteMeta = (%+v, %v)", m, err)
-	}
-}
-
-// 正式冻结绑定的任一项漂移均须在业务行读取/写入前拒绝；假驱动不证明真实SQL锁资格。
-func TestMaintenanceRepairRejectsUnboundFreeze(t *testing.T) {
-	for _, name := range []string{"missing", "emergency", "wrong-phase", "wrong-run-phase", "generation", "epoch", "revision", "run", "missing-receipt", "request-digest", "receipt-digest", "sql-kind", "sql-phase", "sql-run-phase"} {
-		for _, dry := range []bool{false, true} {
-			for _, merged := range []bool{false, true} {
-				t.Run(fmt.Sprintf("%s/dry=%t/merged=%t", name, dry, merged), func(t *testing.T) {
-					proof := routeFreezeProofForTest()
-					meta := replyMaintenanceMeta(0)
-					receipt := fakeRouteReply{rows: [][]driver.Value{{proof.RequestDigest, proof.ReceiptDigest, uint32(proof.Kind), uint32(proof.Phase)}}}
-					run := fakeRouteReply{rows: [][]driver.Value{{uint32(proof.RunPhase)}}}
-					switch name {
-					case "missing":
-						proof = nil
-					case "emergency":
-						proof.Kind = pb.SqlWriterMaintenanceReceipt_EMERGENCY_FREEZE
-					case "wrong-phase":
-						proof.Phase = pb.SqlWriterMaintenanceReceipt_Phase(0)
-					case "wrong-run-phase":
-						proof.RunPhase = pb.SqlWriterDrainRun_DRAINING
-					case "generation":
-						meta.rows[0][0] = "fedcba9876543210fedcba9876543210"
-					case "epoch":
-						meta.rows[0][2] = uint64(9)
-					case "revision":
-						meta.rows[0][3] = uint64(14)
-					case "run":
-						meta.rows[0][4] = bytes.Repeat([]byte{9}, 16)
-					case "missing-receipt":
-						receipt.rows = nil
-					case "request-digest":
-						receipt.rows[0][0] = bytes.Repeat([]byte{9}, 32)
-					case "receipt-digest":
-						receipt.rows[0][1] = bytes.Repeat([]byte{9}, 32)
-					case "sql-kind":
-						receipt.rows[0][2] = uint32(pb.SqlWriterMaintenanceReceipt_EMERGENCY_FREEZE)
-					case "sql-phase":
-						receipt.rows[0][3] = uint32(0)
-					case "sql-run-phase":
-						run.rows[0][0] = uint32(pb.SqlWriterDrainRun_RELEASE_READY)
-					}
-					label := "R18x"
-					if dry {
-						label = "R18"
-					}
-					st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{label: {meta}, "FREEZE_RECEIPT": {receipt}, "FREEZE_RUN": {run}}})
-					st.maintenanceFreeze = proof
-					var err error
-					if merged {
-						_, err = st.RepairMergedIntoFromCache(context.Background(), []MergedIntoRow{{SrcZone: 201, DstZone: 202, RunID: "201-202-20261018T000000Z-abcd1234"}}, dry)
-					} else {
-						_, err = st.RepairRoutesFromCache(context.Background(), repairContractRows(), RouteRepairOptions{DryRun: dry})
-					}
-					if err == nil {
-						t.Fatal("冻结绑定漂移必须拒绝")
-					}
-					for _, call := range fake.labels() {
-						switch call {
-						case "BEGIN", "R18", "R18x", "FREEZE_RECEIPT", "FREEZE_RUN", "ROLLBACK":
-						default:
-							t.Fatalf("拒绝前触及业务SQL：%s", call)
-						}
-					}
-				})
-			}
-		}
-	}
 }

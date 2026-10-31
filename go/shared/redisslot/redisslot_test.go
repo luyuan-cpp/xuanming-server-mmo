@@ -123,13 +123,13 @@ func TestReservedPlayerKeySuffixes(t *testing.T) {
 	got := ReservedPlayerKeySuffixes()
 	sort.Strings(got)
 	want := []string{
-		"asset_sql_commit", "channel_switch_cooldown", "handoff", "leave_release_wait", "leave_tomb", "location",
-		"location_revision", "location_revision_floor", "login_generation", "owner_epoch", "save_barrier", "sync_digest",
+		"asset_sql_commit", "channel_switch_cooldown", "handoff", "handoff_fence", "leave_release_wait", "leave_tomb", "location",
+		"location_revision", "location_revision_floor", "login_generation", "owner_epoch", "sync_digest",
 	}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("保留后缀表 = %v, want %v(新增 player:{<id>}: 键必须登记,删除须同步 data_service)", got, want)
 	}
-	if !IsReservedPlayerKeySuffix("save_barrier") || IsReservedPlayerKeySuffix("hp") {
+	if !IsReservedPlayerKeySuffix("handoff") || IsReservedPlayerKeySuffix("hp") {
 		t.Fatal("IsReservedPlayerKeySuffix 判定错误")
 	}
 }

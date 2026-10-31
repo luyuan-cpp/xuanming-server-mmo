@@ -7,7 +7,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strconv"
 	"sync"
@@ -215,8 +214,8 @@ func TestLeaveScene_HolderNotReleasedKeepsLocationAndRequestsRelease(t *testing.
 	requireHolderReleasePending(t, err)
 
 	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)), "location 必须原样保留")
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)), "不删就不扣人数")
-	assert.Equal(t, "2", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID), "不删就不扣人数")
+	assert.Equal(t, "2", nodeMemberCount(mr, testZoneId, "10"))
 	assert.Equal(t, []leaveReleaseCall{{zoneID: testZoneId, nodeID: "10", playerID: playerID, expectedOwnerEpoch: 3,
 		covered: placementIdentity{11, identGenA}}}, calls(), "覆盖到被清理的会话(离场请求的身份,§13)")
 	assert.Equal(t, pendingBefore+1, leaveReleaseCount(t, "pending"))
@@ -271,8 +270,8 @@ func TestLeaveScene_CurrentEpochMarkerReleasesLocation(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
-	assert.Equal(t, "1", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
-	assert.Equal(t, "1", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
+	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 	assert.False(t, mr.Exists(leaveReleaseWaitKey(playerID)), "删 location 时一并删等待计时")
 	assert.Len(t, calls(), 1, "拿到证据之后不再请释放")
 	assert.Equal(t, releasedBefore+1, leaveReleaseCount(t, "released"))
@@ -323,7 +322,7 @@ func TestLeaveScene_MarkerWithdrawnBeforeDeleteKeepsLocation(t *testing.T) {
 	require.True(t, fired.Load(), "钩子没触发,用例空转")
 	requireHolderReleasePending(t, err)
 	assert.Equal(t, raw, leaveCasValue(t, mr, locKey), "证据消失时不得删除")
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 	assert.Len(t, calls(), 1, "按未释放处理,照样请持有节点释放")
 }
 
@@ -341,7 +340,7 @@ func TestLeaveScene_LegacyEpochZeroKeepsUnknown(t *testing.T) {
 	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
 	requireHolderReleasePending(t, err)
 	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 	assert.Empty(t, calls(), "不能向epoch未知持有者发无版本释放")
 	assert.Equal(t, before, leaveReleaseCount(t, "legacy_epoch0"))
 }
@@ -403,7 +402,7 @@ func TestLeaveScene_NegativeBudgetCannotDisableProof(t *testing.T) {
 	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
 	requireHolderReleasePending(t, err)
 	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 	assert.Len(t, calls(), 1)
 	assert.Equal(t, before, leaveReleaseCount(t, "disabled"))
 }
@@ -422,7 +421,7 @@ func TestLeaveScene_DevBypassCannotDeleteUnknownHolder(t *testing.T) {
 	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
 	requireHolderReleasePending(t, err)
 	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 }
 
 // 零值配置(代码里直接构造)不得把这道门关掉:0 取默认上限。
@@ -483,7 +482,7 @@ func TestLeaveScene_WaitBudgetExceededKeepsUnknown(t *testing.T) {
 	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
 	requireHolderReleasePending(t, err)
 	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 	assert.Len(t, calls(), 1)
 	assert.Equal(t, before, leaveReleaseCount(t, "forced"))
 }
@@ -538,7 +537,7 @@ func TestLeaveScene_WaitTimerUsesRedisClockNotReplicaClock(t *testing.T) {
 	_, err = NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
 	requireHolderReleasePending(t, err)
 	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)))
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 	assert.Equal(t, forcedBefore, leaveReleaseCount(t, "forced"))
 }
 
@@ -564,7 +563,7 @@ func TestLeaveScene_MissingLoadSetIsNotOwnerDead(t *testing.T) {
 	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
 	requireHolderReleasePending(t, err)
 	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)), "持有节点仍在注册表里:不得按已死删除")
-	assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+	assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 	assert.Equal(t, ownerDeadBefore, leaveReleaseCount(t, "owner_dead"))
 	assert.Len(t, calls(), 1, "按未释放处理,请持有节点释放")
 }
@@ -588,7 +587,7 @@ func TestLeaveScene_OwnerGoneFromRegistryDeletes(t *testing.T) {
 	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
 	require.NoError(t, err)
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
-	assert.Equal(t, "1", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
 	assert.Empty(t, calls())
 	assert.Equal(t, before+1, leaveReleaseCount(t, "owner_dead"))
 }
@@ -728,6 +727,8 @@ func TestLeaveScene_ReleaseVerdictCountedOnlyWhenDeleted(t *testing.T) {
 		playerID uint64
 		sceneID  uint64
 		verdict  string
+		// wantScene 是用例结束时的场景人数:成员身份跟着 location 走,新落点还在这个场景就保住,location 已不在就摘掉。
+		wantScene string
 		// arrange 摆出判定所需的证据 / 计时;race 在删除 Lua 执行前改动 location。
 		arrange func(t *testing.T, mr *miniredis.Miniredis, playerID uint64)
 		race    func(mr *miniredis.Miniredis, locKey string, sceneID uint64)
@@ -735,7 +736,7 @@ func TestLeaveScene_ReleaseVerdictCountedOnlyWhenDeleted(t *testing.T) {
 		wantLoc func(sceneID uint64) string
 	}{
 		{
-			name: "released then superseded", playerID: 8319, sceneID: 9419, verdict: "released",
+			name: "released then superseded", playerID: 8319, sceneID: 9419, verdict: "released", wantScene: "2",
 			arrange: func(t *testing.T, mr *miniredis.Miniredis, playerID uint64) {
 				require.NoError(t, mr.Set(ownerepoch.HandoffKey(playerID), "3:1700000000000"))
 			},
@@ -745,7 +746,7 @@ func TestLeaveScene_ReleaseVerdictCountedOnlyWhenDeleted(t *testing.T) {
 			wantLoc: newerRaw,
 		},
 		{
-			name: "released then already gone", playerID: 8320, sceneID: 9420, verdict: "released",
+			name: "released then already gone", playerID: 8320, sceneID: 9420, verdict: "released", wantScene: "1",
 			arrange: func(t *testing.T, mr *miniredis.Miniredis, playerID uint64) {
 				require.NoError(t, mr.Set(ownerepoch.HandoffKey(playerID), "3:1700000000000"))
 			},
@@ -779,7 +780,7 @@ func TestLeaveScene_ReleaseVerdictCountedOnlyWhenDeleted(t *testing.T) {
 			require.True(t, fired.Load(), "钩子没触发,用例空转")
 			require.NoError(t, err, "没删成也不是故障:location 已被别人处理")
 			assert.Equal(t, tc.wantLoc(tc.sceneID), leaveCasValue(t, mr, locKey))
-			assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, tc.sceneID)), "这一次没删,不扣人数")
+			assert.Equal(t, tc.wantScene, sceneMemberCount(mr, tc.sceneID))
 			assert.Equal(t, before, leaveReleaseCount(t, tc.verdict), "这一次没删,不计 %s", tc.verdict)
 		})
 	}
@@ -799,11 +800,13 @@ func TestLeaveGameQuickReloginGoesThroughHandoffGate(t *testing.T) {
 	)
 	seedSceneOnNode(mr, testZoneId, s1, "10", "1")
 	seedSceneOnNode(mr, testZoneId, s2, "20", "0")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "1")
+	seedNodeMembers(mr, testZoneId, "10", 1)
 	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 3, UpdateTime: 100,
 		SessionId: 11, LoginGeneration: identGenA,
 	})
+	adoptSceneMember(mr, s1, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
 	require.NoError(t, mr.Set(ownerepoch.OwnerEpochKey(playerID), "3"))
 
 	// 1. LeaveGame → MarkOffline → LeaveScene:持有节点还没落盘释放,location 保留。

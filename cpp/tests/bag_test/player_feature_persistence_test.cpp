@@ -23,7 +23,6 @@
 #include "proto/common/component/actor_combat_state_comp.pb.h"
 #include "proto/common/component/time_comp.pb.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
-#include "proto/common/component/battle_settlement_ledger_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"  // PlayerProfileComp
@@ -149,7 +148,6 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<PlayerBagsComp>(player);
     EmplaceIfAbsent<MissionsContainerComp>(player);
     EmplaceIfAbsent<PlayerAssetOpLedgerComp>(player);
-    EmplaceIfAbsent<BattleSettlementLedgerComp>(player);
     EmplaceIfAbsent<PlayerInboxLedgerComp>(player);
     EmplaceIfAbsent<PlayerMysteryMerchantComp>(player);
     EmplaceIfAbsent<CurrencyComp>(player);
@@ -633,7 +631,6 @@ TEST_F(PlayerFeaturePersistenceTest, MarshalRefusesWhenAnyPersistedComponentIsMi
     ExpectMarshalRefusedWithout<PlayerBagsComp>("PlayerBagsComp");
     ExpectMarshalRefusedWithout<MissionsContainerComp>("MissionsContainerComp");
     ExpectMarshalRefusedWithout<PlayerAssetOpLedgerComp>("PlayerAssetOpLedgerComp");
-    ExpectMarshalRefusedWithout<BattleSettlementLedgerComp>("BattleSettlementLedgerComp");
     ExpectMarshalRefusedWithout<PlayerInboxLedgerComp>("PlayerInboxLedgerComp");
     ExpectMarshalRefusedWithout<PlayerMysteryMerchantComp>("PlayerMysteryMerchantComp");
     ExpectMarshalRefusedWithout<CurrencyComp>("CurrencyComp");
@@ -652,7 +649,7 @@ TEST_F(PlayerFeaturePersistenceTest, SaveRefusesIncompletePlayerBeforeTouchingRe
 {
     const auto player = StockedPlayer();
     PlayerAllData persisted;
-    // 与 SavePlayerToRedis 比对时同一个形状:走同一个统一存盘入口(补两张子表的 player_id、盖持久 schema 世代)。
+    // 与 SavePlayer 比对时同一个形状:走同一个统一存盘入口(补两张子表的 player_id、盖持久 schema 世代)。
     // 不盖戳的话脏比较必然判「不同」,回归时会走到空的 Redis 客户端,而不是落在下面那条干净的断言上。
     ASSERT_TRUE(player_persist::MarshalPlayerForPersist(player, kPlayerId, persisted));
     auto& previousSnapshot = tlsEcs.actorRegistry.emplace<PlayerLastPersistedSnapshotComp>(player);
@@ -660,7 +657,7 @@ TEST_F(PlayerFeaturePersistenceTest, SaveRefusesIncompletePlayerBeforeTouchingRe
     const auto persistedBytes = previousSnapshot.snapshot->SerializeAsString();
     tlsEcs.actorRegistry.remove<PlayerAssetOpLedgerComp>(player);
 
-    EXPECT_FALSE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    EXPECT_FALSE(PlayerLifecycleSystem::SavePlayer(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerAssetOpLedgerComp>(player)) << "存盘只读,不得补建账本";
     const auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
     ASSERT_NE(nullptr, snapshot);
@@ -676,7 +673,7 @@ TEST_F(PlayerFeaturePersistenceTest, SaveWithoutGuidIsRefused)
     players.push_back(player);
     CompletePersistedComps(player); // 只缺 Guid,确保拒绝的原因就是它
 
-    EXPECT_FALSE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    EXPECT_FALSE(PlayerLifecycleSystem::SavePlayer(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerLastPersistedSnapshotComp>(player));
 }
 

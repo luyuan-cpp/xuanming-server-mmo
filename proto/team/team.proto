@@ -262,9 +262,9 @@ message TeamEventS2C {
   uint64 actor_id = 3;
 }
 
-// ---------------- 存储记录(SharedRedis team:rec:<tid> 的 pb 字段,不下发客户端) ----------------
+// ---------------- 存储记录(match 库的队伍行,不下发客户端) ----------------
 // 实例层:只描述"队伍是谁、成员是谁";不含在线态、站位、槽位(AGENTS §11.6)。
-// 版本号存 team:rec 的 hash 字段 ver,不在 pb 里重复。
+// 版本号是队伍行的单独一列,不在 pb 里重复。
 // 所有时间字段都是 SharedRedis TIME 口径的毫秒(§C.4 唯一时钟源),不用各实例 Go 墙钟。
 
 message TeamRecord {

@@ -14,8 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// sqlTeamStore 只替换现有Store的持久化接缝；业务规则仍由Apply/LockMatch统一定义。
-// Redis不得回填SQL。成员离队与队伍解散保留永久墓碑，旧副本只能读到SQL新版本。
+// sqlTeamStore 是组队的持久化实现；业务规则由Apply/LockMatch统一定义。
+// 成员离队与队伍解散保留永久墓碑，旧副本只能读到SQL新版本。
 type sqlTeamStore struct{ authority *authority.Store }
 
 func NewSQLStore(owner *authority.Store, sessions SessionLoader, cfg RuleConfig) *Store {

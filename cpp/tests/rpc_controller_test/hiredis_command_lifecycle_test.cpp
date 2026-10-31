@@ -340,6 +340,135 @@ TEST_F(HiredisCommandLifecycle, AcceptedCommandCallbackRunsExactlyOnceWithNullRe
     EXPECT_TRUE(sentinelWeak_.expired()) << "回调跑完后 commandCallback 必须 delete 那份拷贝";
 }
 
+// ---------------------------------------------------------------------------
+// formattedCommand:与 command() 同一释放约定,外加 NotExecutedPredicate 对维护前沿的影响。
+// ---------------------------------------------------------------------------
+
+constexpr char kFormattedPing[] = "*1\r\n$4\r\nPING\r\n";
+constexpr size_t kFormattedPingLength = sizeof(kFormattedPing) - 1;
+
+TEST_F(HiredisCommandLifecycle, FormattedCommandRejectedWhileDisconnectingReleasesCallbackCopy)
+{
+    std::optional<int> ret;
+    long useCount = -1;
+    RunInLoopAndWait([&] {
+        const hiredis::Hiredis::CommandCallback pending = [this](hiredis::Hiredis*, redisReply* r) {
+            if (r != nullptr) ++acceptedNonNullReplies_;
+            else ++acceptedNullReplies_;
+        };
+        ASSERT_EQ(REDIS_OK, redis_->formattedCommand(pending, kFormattedPing, kFormattedPingLength));
+        redis_->disconnect();
+        ASSERT_TRUE(redis_->connected()) << "前提:有挂起应答时 disconnect() 只置 DISCONNECTING,连接仍在";
+
+        const hiredis::Hiredis::CommandCallback cb = MakeSentinelCallback();
+        ret = redis_->formattedCommand(cb, kFormattedPing, kFormattedPingLength);
+        useCount = sentinelWeak_.use_count();
+    });
+
+    ASSERT_TRUE(ret.has_value());
+    EXPECT_EQ(*ret, REDIS_ERR);
+    EXPECT_EQ(useCount, 1) << "被拒之后只剩调用方那一份";
+    EXPECT_TRUE(sentinelWeak_.expired());
+
+    DestroyRedis();
+    EXPECT_EQ(acceptedNullReplies_, 1);
+    EXPECT_EQ(acceptedNonNullReplies_, 0);
+    EXPECT_EQ(rejectedRuns_, 0);
+}
+
+TEST_F(HiredisCommandLifecycle, FormattedCommandCallbackRunsExactlyOnceWithNullReplyOnFree)
+{
+    std::optional<int> ret;
+    RunInLoopAndWait([&] {
+        auto sentinel = std::make_shared<int>(0);
+        sentinelWeak_ = sentinel;
+        const hiredis::Hiredis::CommandCallback cb = [sentinel, this](hiredis::Hiredis*, redisReply* r) {
+            (void)sentinel;
+            if (r != nullptr) ++acceptedNonNullReplies_;
+            else ++acceptedNullReplies_;
+        };
+        sentinel.reset();
+        ret = redis_->formattedCommand(cb, kFormattedPing, kFormattedPingLength);
+    });
+
+    ASSERT_TRUE(ret.has_value());
+    EXPECT_EQ(*ret, REDIS_OK);
+    EXPECT_FALSE(sentinelWeak_.expired()) << "队列里那份必须活到应答(或连接释放)为止";
+
+    DestroyRedis();
+    EXPECT_EQ(acceptedNullReplies_, 1);
+    EXPECT_EQ(acceptedNonNullReplies_, 0);
+    EXPECT_TRUE(sentinelWeak_.expired());
+}
+
+TEST_F(HiredisCommandLifecycle, FormattedCommandReachesTheServerUnchangedAndDeliversTheReply)
+{
+    std::promise<void> replied;
+    auto done = replied.get_future();
+    std::string received;
+    std::string replyText;
+    RunInLoopAndWait([&] {
+        serverMessageCallback_ = [&](const muduo::net::TcpConnectionPtr& connection,
+                                     muduo::net::Buffer* input, muduo::Timestamp) {
+            received = input->retrieveAllAsString();
+            connection->send("+PONG\r\n");
+        };
+        ASSERT_EQ(redis_->formattedCommand([&](hiredis::Hiredis*, redisReply* reply) {
+            ASSERT_NE(reply, nullptr);
+            replyText.assign(reply->str, reply->len);
+            replied.set_value();
+        }, kFormattedPing, kFormattedPingLength), REDIS_OK);
+    });
+    ASSERT_EQ(done.wait_for(5s), std::future_status::ready);
+    RunInLoopAndWait([&] {
+        EXPECT_EQ(received, kFormattedPing);
+        EXPECT_EQ(replyText, "PONG");
+    });
+}
+
+// 路由层靠这条让 MOVED 之类的错误不留下 UNKNOWN:它们确定没有执行,一次 slot 迁移不该永久卡住维护排空。
+TEST_F(HiredisCommandLifecycle, NotExecutedPredicateKeepsErrorReplyOutOfUnknown)
+{
+    std::promise<void> replied;
+    auto done = replied.get_future();
+    RunInLoopAndWait([&] {
+        serverMessageCallback_ = [](const muduo::net::TcpConnectionPtr& connection,
+                                    muduo::net::Buffer* input, muduo::Timestamp) {
+            input->retrieveAll();
+            connection->send("-MOVED 1 127.0.0.1:1\r\n");
+        };
+        ASSERT_EQ(redis_->formattedCommand([&](hiredis::Hiredis*, redisReply* reply) {
+            ASSERT_NE(reply, nullptr);
+            EXPECT_EQ(reply->type, REDIS_REPLY_ERROR);
+            replied.set_value();
+        }, kFormattedPing, kFormattedPingLength, [](const redisReply*) { return true; }), REDIS_OK);
+    });
+    ASSERT_EQ(done.wait_for(5s), std::future_status::ready);
+    RunInLoopAndWait([] {});
+    std::string frontier;
+    EXPECT_TRUE(maintenance_->SettledFrontier(frontier));
+}
+
+TEST_F(HiredisCommandLifecycle, NotExecutedPredicateReturningFalseStaysUnknown)
+{
+    std::promise<void> replied;
+    auto done = replied.get_future();
+    RunInLoopAndWait([&] {
+        serverMessageCallback_ = [](const muduo::net::TcpConnectionPtr& connection,
+                                    muduo::net::Buffer* input, muduo::Timestamp) {
+            input->retrieveAll();
+            connection->send("-ERR boom\r\n");
+        };
+        ASSERT_EQ(redis_->formattedCommand([&](hiredis::Hiredis*, redisReply*) {
+            replied.set_value();
+        }, kFormattedPing, kFormattedPingLength, [](const redisReply*) { return false; }), REDIS_OK);
+    });
+    ASSERT_EQ(done.wait_for(5s), std::future_status::ready);
+    RunInLoopAndWait([] {});
+    std::string frontier;
+    EXPECT_FALSE(maintenance_->SettledFrontier(frontier));
+}
+
 // 用户回调可以同步撤掉最后一个业务 owner；一次 Channel 分发必须保住整个 wrapper/context，
 // 而不仅是 Channel。回调返回后再排空两轮，确认保活最终释放，没有把对象钉在事件循环里。
 TEST_F(HiredisCommandLifecycle, ConnectCallbackCanReleaseLastOwner)
@@ -584,6 +713,26 @@ TEST_F(HiredisCommandLifecycle, NullReplyOnDestructionJoinsButKeepsUnknown)
     EXPECT_TRUE(maintenance_->Joined());
     std::string frontier;
     EXPECT_FALSE(maintenance_->Frontier(frontier));
+}
+
+// 不改数据的命令在断线时拿到空应答也不留下 UNKNOWN:节点退场时在途的 AUTH、探测 PING 不能永久卡住维护排空。
+TEST_F(HiredisCommandLifecycle, NoSideEffectCommandNullReplyKeepsFrontierKnown)
+{
+    int callbacks = 0;
+    const std::string ping = "*1\r\n$4\r\nPING\r\n";
+    RunInLoopAndWait([&] {
+        ASSERT_EQ(redis_->formattedCommand([&](hiredis::Hiredis*, redisReply* reply) {
+            ++callbacks;
+            EXPECT_EQ(reply, nullptr);
+        }, ping.c_str(), ping.size(), &hiredis::Hiredis::hasNoSideEffect), REDIS_OK);
+        maintenance_->Close();
+    });
+    DestroyRedis();
+    RunInLoopAndWait([] {});
+    EXPECT_EQ(callbacks, 1);
+    EXPECT_TRUE(maintenance_->Joined());
+    std::string frontier;
+    EXPECT_TRUE(maintenance_->Frontier(frontier));
 }
 
 TEST_F(HiredisCommandLifecycle, ErrorReplyDoesNotBecomeSuccessfulFrontier)

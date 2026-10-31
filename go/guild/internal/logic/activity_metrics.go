@@ -169,7 +169,7 @@ var (
 		Subsystem: "trial",
 		Name:      "result_overdue",
 		Help: "巡检器本轮看到的、结果超时且尚无结果记录的在途对局数。只有持有巡检租约的副本上报真实值,其余副本报 0," +
-			"告警取各副本的最大值:持续大于 0 说明有对局的结果既没到 Kafka 也没落进 Redis。",
+			"告警取各副本的最大值:持续大于 0 说明有对局既没有结果事件也没有 SQL 终局。",
 	})
 
 	guildTrialOwedTotal = metric.NewCounterVec(&metric.CounterVecOpts{

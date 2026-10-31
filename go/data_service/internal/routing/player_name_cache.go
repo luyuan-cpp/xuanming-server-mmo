@@ -11,9 +11,8 @@ import (
 
 // 玩家名字读缓存(设计 docs/design/guild-phase2/03-names.md §3.5)。
 //
-// 为什么放在 routing 包:缓存键 player:name:{id} 必须与 player:zone:{id} 同库
-// ——两者都是"全服一份、与 zone 无关"的映射,而那个库的客户端 Router.mappingRedis
-// 是未导出字段。放别处就得把它导出,等于把"谁能往 mapping 库写"这件事敞开。
+// 【这把 Redis 只放可丢弃的读缓存】配置键 NameCacheRedis,里面没有任何权威数据:整个实例丢了,
+// 名字读路径回源一次全局库,建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
 //
 // 【真相在哪】名字的唯一真源是全局库的 player_name 表(store/player_name_store.go)。
 // 本文件里的一切都只是加速:缓存写失败**绝不能**让业务写失败,缓存读到的脏值最坏
@@ -25,7 +24,6 @@ import (
 // 负担没有收益了。
 
 const (
-	// playerNameKeyPrefix 与 mappingKeyPrefix("player:zone:")同库不同前缀。
 	playerNameKeyPrefix = "player:name:"
 
 	// playerNameAbsentSentinel 是负缓存的值:一个 NUL 字节。
@@ -45,6 +43,16 @@ func PlayerNameKey(playerID uint64) string {
 	return playerNameKeyPrefix + strconv.FormatUint(playerID, 10)
 }
 
+// PlayerNameCache 是 player:name:{id} 的读写。并发安全;底层 go-zero 客户端按地址共享,不归这里关闭。
+type PlayerNameCache struct {
+	rds *redis.Redis
+}
+
+// NewPlayerNameCache 按 NameCacheRedis 配置建缓存客户端(不拨号)。配置不合法就退出进程,与 go-zero 的 MustNewRedis 同口径。
+func NewPlayerNameCache(c redis.RedisConf) *PlayerNameCache {
+	return &PlayerNameCache{rds: redis.MustNewRedis(c)}
+}
+
 // MGetPlayerNames 一次查多个玩家的名字缓存。
 //
 // 三态,调用方必须分清:
@@ -57,7 +65,7 @@ func PlayerNameKey(playerID uint64) string {
 //
 // Redis 报错时返回 (nil, nil, err):调用方应当把它降级成"全部未命中"(缓存挂了
 // 不该让读接口整体失败),而不是把错误往上抛。
-func (r *Router) MGetPlayerNames(ctx context.Context, ids []uint64) (hits map[uint64]string, absent map[uint64]bool, err error) {
+func (c *PlayerNameCache) MGetPlayerNames(ctx context.Context, ids []uint64) (hits map[uint64]string, absent map[uint64]bool, err error) {
 	hits = make(map[uint64]string)
 	absent = make(map[uint64]bool)
 	if len(ids) == 0 {
@@ -84,7 +92,7 @@ func (r *Router) MGetPlayerNames(ctx context.Context, ids []uint64) (hits map[ui
 		return hits, absent, nil
 	}
 
-	vals, err := r.mappingRedis.MgetCtx(ctx, keys...)
+	vals, err := c.rds.MgetCtx(ctx, keys...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("player name cache mget (%d keys): %w", len(keys), err)
 	}
@@ -117,7 +125,7 @@ func (r *Router) MGetPlayerNames(ctx context.Context, ids []uint64) (hits map[ui
 //
 // 跳过 id==0 与空名字:空名字写进去会和"未命中"(MgetCtx 对缺键返回空串)混为一谈。
 // 全部被跳过时不发任何命令,直接返回 nil。
-func (r *Router) SetPlayerNames(ctx context.Context, names map[uint64]string, ttl time.Duration) error {
+func (c *PlayerNameCache) SetPlayerNames(ctx context.Context, names map[uint64]string, ttl time.Duration) error {
 	if len(names) == 0 {
 		return nil
 	}
@@ -138,7 +146,7 @@ func (r *Router) SetPlayerNames(ctx context.Context, names map[uint64]string, tt
 		return nil
 	}
 
-	return r.mappingRedis.PipelinedCtx(ctx, func(pipe redis.Pipeliner) error {
+	return c.rds.PipelinedCtx(ctx, func(pipe redis.Pipeliner) error {
 		for id, name := range writable {
 			pipe.Set(ctx, PlayerNameKey(id), name, ttl)
 		}
@@ -155,7 +163,7 @@ func (r *Router) SetPlayerNames(ctx context.Context, names map[uint64]string, tt
 //
 // 唯一残留的坏时序是"Reserve 的 SET 失败 + 本方法的 SETNX 成功",后果是名字被隐藏
 // ≤ NegativeCacheTTL(60s)。名字是展示数据,这个代价可以接受(§3.5)。
-func (r *Router) SetPlayerNamesAbsent(ctx context.Context, ids []uint64, ttl time.Duration) error {
+func (c *PlayerNameCache) SetPlayerNamesAbsent(ctx context.Context, ids []uint64, ttl time.Duration) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -174,7 +182,7 @@ func (r *Router) SetPlayerNamesAbsent(ctx context.Context, ids []uint64, ttl tim
 		return nil
 	}
 
-	return r.mappingRedis.PipelinedCtx(ctx, func(pipe redis.Pipeliner) error {
+	return c.rds.PipelinedCtx(ctx, func(pipe redis.Pipeliner) error {
 		for id := range seen {
 			pipe.SetNX(ctx, PlayerNameKey(id), playerNameAbsentSentinel, ttl)
 		}
@@ -187,10 +195,10 @@ func (r *Router) SetPlayerNamesAbsent(ctx context.Context, ids []uint64, ttl tim
 // 调用点只有一处:Release 成功删库**之后**。顺序不能反 —— 先删缓存再删库的话,
 // 两步之间的一次读会把库里那个即将消失的名字重新缓存起来,DEL 就白做了。
 // 本方法失败不算业务失败(库已经是真相),调用方记日志即可,脏值由 TTL 兜底。
-func (r *Router) DelPlayerName(ctx context.Context, playerID uint64) error {
+func (c *PlayerNameCache) DelPlayerName(ctx context.Context, playerID uint64) error {
 	if playerID == 0 {
 		return nil
 	}
-	_, err := r.mappingRedis.DelCtx(ctx, PlayerNameKey(playerID))
+	_, err := c.rds.DelCtx(ctx, PlayerNameKey(playerID))
 	return err
 }

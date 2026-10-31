@@ -16,10 +16,9 @@ import (
 
 // Redis key for the active-instance sorted set (score = create timestamp).
 const (
-	ActiveInstancesKeyFmt  = "instances:zone:%d:active"
-	InstancePlayerCountKey = "instance:%d:player_count"
-	SceneNodeKeyFmt        = "scene:%d:node"
-	SceneZoneKeyFmt        = "scene:%d:zone"
+	ActiveInstancesKeyFmt = "instances:zone:%d:active"
+	SceneNodeKeyFmt       = "scene:%d:node"
+	SceneZoneKeyFmt       = "scene:%d:zone"
 	// SceneMirrorFlagKeyFmt marks a scene as a mirror so the lifecycle
 	// manager can apply MirrorIdleTimeoutSeconds instead of the standard
 	// InstanceIdleTimeoutSeconds. Value is "1" when present, key absent
@@ -261,9 +260,6 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 		l.Logger.Errorf("[Instance] Failed to track instance %d: %v", sceneId, err)
 	}
 
-	// Initialize player count to 0.
-	l.svcCtx.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, sceneId), "0")
-
 	// Tag mirrors so the lifecycle manager can apply the shorter
 	// MirrorIdleTimeoutSeconds. Mirrors re-init NPCs on every entry, so
 	// lingering with 0 players is pure waste.
@@ -412,7 +408,7 @@ func (l *CreateSceneLogic) rollbackInstanceAllocation(
 
 	l.svcCtx.Redis.Del(sceneNodeKey(sceneId))
 	l.svcCtx.Redis.Del(sceneZoneKey(sceneId))
-	l.svcCtx.Redis.Del(fmt.Sprintf(InstancePlayerCountKey, sceneId))
+	l.svcCtx.Redis.Del(instanceMembersKey(sceneId))
 	l.svcCtx.Redis.Del(sceneMirrorFlagKey(sceneId))
 	l.svcCtx.Redis.Del(sceneSourceKey(sceneId))
 	l.svcCtx.Redis.Del(sceneAgonesGsKey(sceneId))

@@ -130,10 +130,12 @@ func placementIdentityCount(t *testing.T, site, verdict string) float64 {
 }
 
 // identSameNodeTwoScenes 摆两个同节点("10")场景:s1 人数 1(玩家在里面),s2 人数 0,节点人数 1。
-func identSameNodeTwoScenes(mr *miniredis.Miniredis, s1, s2 uint64) {
+func identSameNodeTwoScenes(mr *miniredis.Miniredis, playerID, s1, s2 uint64) {
 	seedSceneOnNode(mr, testZoneId, s1, "10", "1")
 	seedSceneOnNode(mr, testZoneId, s2, "10", "0")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "1")
+	seedNodeMembers(mr, testZoneId, "10", 1)
+	adoptSceneMember(mr, s1, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
 }
 
 // d1:B 走同落点重连先写下 (22, gB);陈旧登录链 A(11, gA < gB)随后要把玩家换到同节点的 S2 → 25,什么都不改。
@@ -145,7 +147,7 @@ func TestEnterScene_StaleLoginAfterNewerSamePlacementRejected(t *testing.T) {
 		s1       = uint64(7601)
 		s2       = uint64(7602)
 	)
-	identSameNodeTwoScenes(mr, s1, s2)
+	identSameNodeTwoScenes(mr, playerID, s1, s2)
 	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 11, LoginGeneration: identGenA,
@@ -167,9 +169,9 @@ func TestEnterScene_StaleLoginAfterNewerSamePlacementRejected(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrPlacementSessionSuperseded, respA.ErrorCode)
 	assert.Equal(t, afterB, identLocationRaw(t, sc, playerID), "陈旧登录不得改写 location")
-	assert.Equal(t, "1", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)))
-	assert.Equal(t, "0", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s2)))
-	assert.Equal(t, "1", identValue(t, sc, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "1", sceneCountText(sc, s1))
+	assert.Equal(t, "0", sceneCountText(sc, s2))
+	assert.Equal(t, "1", nodeCountText(sc, testZoneId, "10"))
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	assert.Len(t, *captured, 1, "陈旧登录不得发路由")
 }
@@ -183,7 +185,7 @@ func TestEnterScene_StaleSessionSceneChangeRejected(t *testing.T) {
 		s1       = uint64(7611)
 		s2       = uint64(7612)
 	)
-	identSameNodeTwoScenes(mr, s1, s2)
+	identSameNodeTwoScenes(mr, playerID, s1, s2)
 	before := identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 22, LoginGeneration: identGenB,
@@ -200,8 +202,8 @@ func TestEnterScene_StaleSessionSceneChangeRejected(t *testing.T) {
 	assert.Equal(t, constants.ErrPlacementSessionSuperseded, resp.ErrorCode)
 	assert.Equal(t, uint64(9001), resp.CorrelationId, "拒绝应答同样回显关联号,scene 据此对回发起方")
 	assert.Equal(t, before, identLocationRaw(t, sc, playerID))
-	assert.Equal(t, "1", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)))
-	assert.Equal(t, "0", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s2)))
+	assert.Equal(t, "1", sceneCountText(sc, s1))
+	assert.Equal(t, "0", sceneCountText(sc, s2))
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	assert.Empty(t, *captured)
 	assert.Equal(t, staleBefore+1, enterSceneRejectedCount(t, testZoneId, "session_stale"))
@@ -217,7 +219,7 @@ func TestEnterScene_SameSessionWithoutGenerationAdmittedPreservesGeneration(t *t
 		s1       = uint64(7621)
 		s2       = uint64(7622)
 	)
-	identSameNodeTwoScenes(mr, s1, s2)
+	identSameNodeTwoScenes(mr, playerID, s1, s2)
 	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 22, LoginGeneration: identGenB,
@@ -247,7 +249,7 @@ func TestEnterScene_UnversionedDifferentSessionAdmittedAsLegacy(t *testing.T) {
 		s1       = uint64(7631)
 		s2       = uint64(7632)
 	)
-	identSameNodeTwoScenes(mr, s1, s2)
+	identSameNodeTwoScenes(mr, playerID, s1, s2)
 	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100, SessionId: 11,
 	})
@@ -276,7 +278,7 @@ func TestEnterScene_LegacyAdmitDoesNotDowngradeIdentity(t *testing.T) {
 		s1       = uint64(7641)
 		s2       = uint64(7642)
 	)
-	identSameNodeTwoScenes(mr, s1, s2)
+	identSameNodeTwoScenes(mr, playerID, s1, s2)
 	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 22, LoginGeneration: identGenB,
@@ -305,13 +307,15 @@ func TestEnterScene_SamePlacementUpdatesIdentityPreservingOtherFields(t *testing
 		s1       = uint64(7651)
 	)
 	seedSceneOnNode(mr, testZoneId, s1, "10", "1")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "1")
+	seedNodeMembers(mr, testZoneId, "10", 1)
 	seeded := &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 3, UpdateTime: 12345,
 		PendingSceneConfId: 3300, RollbackReceipt: "3:1757000000000",
 		SessionId: 11, LoginGeneration: identGenA,
 	}
 	identSeedLocation(t, sc, playerID, seeded)
+	adoptSceneMember(mr, s1, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: s1, ZoneId: testZoneId, SessionId: 22, LoginGeneration: identGenB,
@@ -327,8 +331,8 @@ func TestEnterScene_SamePlacementUpdatesIdentityPreservingOtherFields(t *testing
 	require.NotNil(t, got)
 	assert.True(t, gproto.Equal(want, got), "只允许 8 / 9 号字段变化: want=%v got=%v", want, got)
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID), "身份写不铸造")
-	assert.Equal(t, "1", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)), "身份写不动人数")
-	assert.Equal(t, "1", identValue(t, sc, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "1", sceneCountText(sc, s1), "身份写不动人数")
+	assert.Equal(t, "1", nodeCountText(sc, testZoneId, "10"))
 	require.Len(t, *captured, 1)
 	event := decodeRoutePlayerEvent(t, (*captured)[0])
 	assert.Equal(t, uint64(3), event.OwnerEpoch)
@@ -348,6 +352,7 @@ func TestEnterScene_SamePlacementIdentityCASFailsWhenLocationDeleted(t *testing.
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 11, LoginGeneration: identGenA,
 	})
+	adoptSceneMember(mr, s1, playerID)
 	locKey := getPlayerLocationKey(playerID)
 	fired := identHookOnceBeforeEval(t, mr, locKey, func() { mr.Del(locKey) })
 
@@ -360,7 +365,7 @@ func TestEnterScene_SamePlacementIdentityCASFailsWhenLocationDeleted(t *testing.
 	assert.Equal(t, constants.ErrOwnerEpochConflict, resp.ErrorCode)
 	assert.False(t, mr.Exists(locKey), "身份写不得复活已删的 location")
 	assert.Empty(t, *captured, "CAS 失败不发路由")
-	assert.Equal(t, "1", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)))
+	assert.Equal(t, "1", sceneCountText(sc, s1))
 }
 
 // 常规 guard(present):同节点不铸造的落点,观察之后 location 的身份被另一次登录改写 → 19,不覆盖。
@@ -372,7 +377,7 @@ func TestEnterScene_PlacementRejectedWhenIdentityChangedSinceObservation(t *test
 		s1       = uint64(7671)
 		s2       = uint64(7672)
 	)
-	identSameNodeTwoScenes(mr, s1, s2)
+	identSameNodeTwoScenes(mr, playerID, s1, s2)
 	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 11, LoginGeneration: identGenA,
@@ -392,9 +397,9 @@ func TestEnterScene_PlacementRejectedWhenIdentityChangedSinceObservation(t *test
 	require.True(t, fired.Load(), "钩子没触发,用例空转")
 	assert.Equal(t, constants.ErrOwnerEpochConflict, resp.ErrorCode)
 	assert.Equal(t, concurrent, identLocationRaw(t, sc, playerID), "后写入的身份不得被覆盖")
-	assert.Equal(t, "0", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s2)), "目标场景预占必须退回")
-	assert.Equal(t, "1", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)))
-	assert.Equal(t, "1", identValue(t, sc, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "0", sceneCountText(sc, s2), "目标场景预占必须退回")
+	assert.Equal(t, "1", sceneCountText(sc, s1))
+	assert.Equal(t, "1", nodeCountText(sc, testZoneId, "10"))
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	assert.Empty(t, *captured)
 }
@@ -408,7 +413,7 @@ func TestEnterScene_FirstPlacementRejectedWhenLocationAppearedSinceObservation(t
 		s1       = uint64(7681)
 	)
 	seedSceneOnNode(mr, testZoneId, s1, "10", "0")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "0")
+	seedNodeMembers(mr, testZoneId, "10", 0)
 	appeared := identMarshalLocation(t, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, UpdateTime: 200, SessionId: 22, LoginGeneration: identGenB,
 	})
@@ -424,7 +429,7 @@ func TestEnterScene_FirstPlacementRejectedWhenLocationAppearedSinceObservation(t
 	assert.Equal(t, constants.ErrOwnerEpochConflict, resp.ErrorCode)
 	assert.Equal(t, appeared, identLocationRaw(t, sc, playerID))
 	assert.Equal(t, "", ownerEpochRaw(t, sc, playerID), "missing 期望不符时不得铸造")
-	assert.Equal(t, "0", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)), "预占必须退回")
+	assert.Equal(t, "1", sceneCountText(sc, s1), "新落点正指向这里:释放预占后按 location 核对加回")
 	assert.Empty(t, *captured)
 }
 
@@ -441,6 +446,7 @@ func TestEnterScene_CrossZoneFirstLegRejectedWhenLocationChangedSinceObservation
 		SceneId: s1, NodeId: "10", ZoneId: 1, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 11, LoginGeneration: identGenA,
 	})
+	adoptSceneMember(mr, s1, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
 	concurrent := identMarshalLocation(t, &scene_manager.PlayerLocation{
@@ -464,7 +470,7 @@ func TestEnterScene_CrossZoneFirstLegRejectedWhenLocationChangedSinceObservation
 	assert.Nil(t, resp.Redirect)
 	assert.Equal(t, concurrent, identLocationRaw(t, sc, playerID), "不得写等待落点")
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "不得铸造")
-	assert.Equal(t, "3", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)), "旧场景人数不动")
+	assert.Equal(t, "3", sceneCountText(sc, s1), "旧场景人数不动")
 	assert.Empty(t, *captured, "不发重定向")
 }
 
@@ -478,11 +484,13 @@ func TestEnterScene_SamePlacementRouteFailureKeepsIdentity(t *testing.T) {
 		s1       = uint64(7701)
 	)
 	seedSceneOnNode(mr, testZoneId, s1, "10", "1")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "1")
+	seedNodeMembers(mr, testZoneId, "10", 1)
 	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
 		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 11, LoginGeneration: identGenA,
 	})
+	adoptSceneMember(mr, s1, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: s1, ZoneId: testZoneId, SessionId: 22, LoginGeneration: identGenB,
@@ -496,8 +504,8 @@ func TestEnterScene_SamePlacementRouteFailureKeepsIdentity(t *testing.T) {
 	assert.Equal(t, identGenB, loc.LoginGeneration)
 	assert.Equal(t, s1, loc.SceneId)
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	assert.Equal(t, "1", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)))
-	assert.Equal(t, "1", identValue(t, sc, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "1", sceneCountText(sc, s1))
+	assert.Equal(t, "1", nodeCountText(sc, testZoneId, "10"))
 }
 
 // 跨区第一条腿:陈旧请求(11, gA < gB)在跨区分支之前就被拒,不写等待落点、不铸造、不发重定向。
@@ -513,6 +521,7 @@ func TestEnterScene_CrossZoneFirstLegStaleRejected(t *testing.T) {
 		SceneId: s1, NodeId: "10", ZoneId: 1, OwnerEpoch: 1, UpdateTime: 100,
 		SessionId: 22, LoginGeneration: identGenB,
 	})
+	adoptSceneMember(mr, s1, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
 
@@ -532,6 +541,6 @@ func TestEnterScene_CrossZoneFirstLegStaleRejected(t *testing.T) {
 	assert.False(t, assigned, "拒绝发生在跨区分支之前,不挑目标 gate")
 	assert.Equal(t, before, identLocationRaw(t, sc, playerID))
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
-	assert.Equal(t, "3", identValue(t, sc, fmt.Sprintf(InstancePlayerCountKey, s1)))
+	assert.Equal(t, "3", sceneCountText(sc, s1))
 	assert.Empty(t, *captured)
 }

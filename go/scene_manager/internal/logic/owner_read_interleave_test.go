@@ -25,7 +25,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -133,8 +132,8 @@ func TestOwnerReadInterleave_ReconcileSkipsSceneReassignedAfterOwnerRead(t *test
 	require.NoError(t, sc.Redis.Set(nodeSceneCountKey(interleaveZone, interleaveNodeDead), "1"))
 	_, err = sc.Redis.Zadd(activeInstancesKey(interleaveZone), nowUnix(), member)
 	require.NoError(t, err)
-	require.NoError(t, sc.Redis.Set(fmtInstancePlayerCountKey(sceneID), "2"))
-	require.NoError(t, sc.Redis.Set(nodePlayerCountKey(interleaveZone, interleaveNodeLive), "5"))
+	seedSceneMembersVia(sc, sceneID, 2)
+	seedNodeMembersVia(sc, interleaveZone, interleaveNodeLive, 5)
 
 	// 前提:dead 已判死、屏障放行,live 存活。
 	require.False(t, IsNodeAlive(sc, interleaveZone, interleaveNodeDead))
@@ -157,8 +156,8 @@ func TestOwnerReadInterleave_ReconcileSkipsSceneReassignedAfterOwnerRead(t *test
 	require.Equal(t, interleaveNodeLive, owner, "属主映射必须原样留给 live")
 	requireSceneIndexedOnlyOn(t, sc, interleaveZone, sceneID, interleaveNodeLive, interleaveNodeDead)
 	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(interleaveZone, interleaveNodeLive)), "新属主的 scene_count 不得被扣")
-	require.EqualValues(t, 5, readInt64(sc, nodePlayerCountKey(interleaveZone, interleaveNodeLive)), "新属主的 player_count 不得被扣")
-	require.EqualValues(t, 2, readInt64(sc, fmtInstancePlayerCountKey(sceneID)), "实例人数不得被抹")
+	require.Equal(t, "5", nodeCountText(sc, interleaveZone, interleaveNodeLive), "新属主的成员不得被摘")
+	require.Equal(t, "2", sceneCountText(sc, sceneID), "实例成员不得被抹")
 	requireActiveInstance(t, sc, interleaveZone, sceneID, true)
 }
 
@@ -203,9 +202,4 @@ func TestOwnerReadInterleave_ExplicitDestroyFollowsOwnerAtClaimTime(t *testing.T
 		require.False(t, in, "scene %d 不得留在 %s 的反向索引里", sceneID, n)
 		require.EqualValues(t, 0, readInt64(sc, nodeSceneCountKey(interleaveZone, n)), "%s 的 scene_count 必须恰好归零", n)
 	}
-}
-
-// fmtInstancePlayerCountKey 是 instance:{id}:player_count,与生产代码同一格式串。
-func fmtInstancePlayerCountKey(sceneID uint64) string {
-	return fmt.Sprintf(InstancePlayerCountKey, sceneID)
 }

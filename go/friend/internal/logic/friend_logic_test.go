@@ -59,6 +59,7 @@ import (
 	base "proto/common/base"
 	pb "proto/friend"
 	plpb "proto/player_locator"
+	"shared/playerredis"
 )
 
 // ── 假 store ────────────────────────────────────────────────────
@@ -278,7 +279,7 @@ type fixture struct {
 	store    *fakeFriendStore
 	sessions *fakeSessionStore
 	friendMr *miniredis.Miniredis // FriendRedis:friend 私有 key(频控计数器)
-	sharedMr *miniredis.Miniredis // SharedRedis:契约 key player:session:{id}
+	sharedMr *miniredis.Miniredis // PlayerRedis:契约 key player:session:{id}
 }
 
 // newFixture 直接构造 ServiceContext 与 Deps,不走 svc.NewServiceContext / NewDeps:
@@ -291,10 +292,13 @@ func newFixture(t *testing.T, tweak func(*config.Config)) *fixture {
 	}
 	friendMr := miniredis.RunT(t)
 	sharedMr := miniredis.RunT(t)
+	playerRedis, err := playerredis.New(playerredis.Config{Addrs: []string{sharedMr.Addr()}, PoolSizePerNode: 16})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = playerRedis.Close() })
 	sc := &svc.ServiceContext{
 		Config:      cfg,
 		FriendRedis: redis.MustNewRedis(redis.RedisConf{Host: friendMr.Addr(), Type: "node"}),
-		SharedRedis: redis.MustNewRedis(redis.RedisConf{Host: sharedMr.Addr(), Type: "node"}),
+		PlayerRedis: playerRedis,
 		// KafkaWriter 默认 nil = 本地没配 Brokers 的常态(svc 的注释写明了)。
 		// 要验"推没推"的用例自己调 withKafka 换成非 nil。
 		KafkaWriter:        nil,
@@ -347,7 +351,7 @@ func playerCtx(playerID uint64) context.Context {
 // (GET 未命中在业务上长得像"玩家离线")。复用生产 helper 的话,生产端改键名、
 // 测试跟着一起改,谁也发现不了。
 func testPlayerSessionKey(playerID uint64) string {
-	return "player:session:" + strconv.FormatUint(playerID, 10)
+	return "player:session:{" + strconv.FormatUint(playerID, 10) + "}"
 }
 
 func (f *fixture) writeSession(t *testing.T, s *plpb.PlayerSession) {

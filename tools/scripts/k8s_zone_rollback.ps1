@@ -28,7 +28,7 @@
         E1 -TargetTime 必须是 UTC 的 yyyy-MM-ddTHH:mm:ss[.fff]Z,且早于当前 UTC;
            -PitrRestoredTo 同一格式,给了就必须等于 -TargetTime。
         E2 -ConfirmFlushSharedRedis 与 -RedisPassword 传了即拒绝:回档不再 FLUSHDB;口令只经 -RedisPasswordEnv 指名的环境变量,不上命令行。
-        E3 -Apply 时必须显式给 -RedisHost(go/db 的共享 Redis,不按 db.yaml 缺省的 127.0.0.1 补)、-MySqlDsnEnv(该环境变量非空)
+        E3 -Apply 时必须显式给 -RedisHost(核心 Redis,不按服务 yaml 缺省的 127.0.0.1 补)、-MySqlDsnEnv(该环境变量非空)
            与 -RollbackDiscardTool(存在的文件);-SkipMySqlPause 必须配 -PitrRestoredTo。dry-run 缺这些时打印占位符。
         E4 不可变镜像、Ingress 参数成对;
            生成 rollback-id(z<id>-<T 紧凑格式>-<当前 UTC 紧凑格式>,-RollbackId 可显式给),报告目录 run/logs/zone-rollback/<rid>/。
@@ -62,16 +62,15 @@
          b. 静态预检:把 Step 6 将要传给 dev_tools.ps1 k8s-zone-up 的同一份参数加 -DryRun 执行一遍
             (k8s_deploy.ps1 -DryRun 只在本地渲染清单、不调 kubectl),非 0 即拒绝。参数组合、档位与密钥、发布门禁的
             规则只在 k8s_deploy.ps1 一处,这里不复制,拼错或矛盾的组合在停服之前就暴露。
-         c. 部署事实与回档工具预检(2026-10-18):一次只读 kubectl 取 zone namespace 里的 go-svc-db-config、go-svc-data-service-config
-            与 db / login Deployment,只折出非机密的拓扑(go/db RedisClient 的实例与 DB、Placement.Redis、data-service MappingRedis、
-            ZoneId、镜像),口令一概不读。逐项核对:ZoneId;-RedisDB 等于 RedisClient.DB;
-            Placement.Redis / MappingRedis 与 RedisClient 是同一实例同一 DB(工具的每玩家 Lua 跨这些键原子执行)。
+         c. 部署事实与回档工具预检(2026-10-18):一次只读 kubectl 取 zone namespace 里的 go-svc-db-config、go-svc-login-config
+            与 db / login Deployment,只折出非机密的拓扑(核心 Redis 的实例与 DB,取 login 的 Node.RedisClient;go/db 不连 Redis。
+            ZoneId、镜像),口令一概不读。逐项核对:ZoneId;-RedisDB 等于核心 Redis 的 DB。
             存为 <报告目录>/deploy-facts.json;同一 rid 重跑而 namespace 已删时复用它,
             namespace 还在时与存档逐项相同才放行。随后两项身份核对(2026-10-18,回档复核 [4][5]):
               - Redis 实例:用同一组 -KubeContext / -KubeConfig kubectl exec 进 infra namespace 的 redis-0(infra namespace 取 dev_tools.ps1 的默认值,
-                Step 6 就用它;口令取 Pod 自己的 REDIS_PASSWORD,不上本机命令行),对 deploy-facts 里 RedisClient 的地址读 INFO server 的 run_id,
+                Step 6 就用它;口令取 Pod 自己的 REDIS_PASSWORD,不上本机命令行),对 deploy-facts 里核心 Redis 的地址读 INFO server 的 run_id,
                 作为每次工具调用的 -expect-run-id;工具每个模式先读 -redis 的 run_id,不一致即以 3 拒绝 ——
-                -RedisHost(可以是端口转发)与 -KubeContext 由此绑到 go/db 用的同一个实例;
+                -RedisHost(可以是端口转发)与 -KubeContext 由此绑到线上用的同一个实例;
               - 工具版本:<tool> -version 报出的构建提交必须以线上 db 镜像的 tag(git sha)开头,且两边都不是脏树构建;db 镜像以 digest 部署、
                 tag 不是 git sha 时无从核对,同样拒绝。
             然后 <tool> -mode preflight。任一不过即在停服之前拒绝。
@@ -130,10 +129,15 @@
         -redis <host:port> -redis-db <n> [-redis-password-env <环境变量名>] -expect-run-id <40 位 hex> -mysql-dsn-env <环境变量名>
         -rollback-id <rid> -report-dir <报告目录> -mode <preflight|stopped|inventory|purge|verify>。
         口令与 DSN 只从这两个环境变量读,不上命令行、不进报告。
-        键名一律由 go/shared 的导出函数生成(shared/playersync、shared/assetop、shared/savebarrier、shared/ownerepoch 等),工具里不另拼键名字面量。
+        键名一律由 go/shared 的导出函数生成(shared/playersync、shared/assetop、shared/handofffence、shared/ownerepoch 等),工具里不另拼键名字面量。
+        玩家域(2026-10-31,docs/design/redis-player-store-cluster.md §5.2):sync_digest、handoff_fence、location 这些键都在玩家域。线上玩家域是 Redis Cluster 时
+        本脚本多传 -player-redis <种子,逗号分隔> -player-redis-cluster true [-player-redis-password-env <环境变量名>],工具用 shared/playerredis 构造客户端:
+        全键盘点走 ScanEachMaster(逐主节点,拓扑变化返回 ErrTopologyChanged,按 3 拒绝,不得据此断言键不存在),每玩家 Lua 只碰同一 {player_id} 的键。
+        -redis 这时只指控制域(scene_nodes:zone:<zone>:load 等),没传 -player-redis 时玩家域与控制域同一个实例。集群不能经端口转发访问(MOVED 指向 Service IP),
+        工具要在集群网络里跑。
         Redis 实例身份(回档复核 [4]):每个模式开始时先读 -redis 的 INFO server,cluster_enabled 必须为 0,run_id 必须等于 -expect-run-id,
-        否则以 3 拒绝、什么都不写。-expect-run-id 由本脚本第 0 步 c 经 kubectl exec 对线上 go/db RedisClient 的地址读出,
-        把 -RedisHost(可以是端口转发)与 -KubeContext 指向的集群绑到同一个实例;deploy-facts 只说明 go/db 用哪个地址,证明不了 -redis 就是它。
+        否则以 3 拒绝、什么都不写。-expect-run-id 由本脚本第 0 步 c 经 kubectl exec 对线上核心 Redis 的地址读出,
+        把 -RedisHost(可以是端口转发)与 -KubeContext 指向的集群绑到同一个实例;deploy-facts 只说明线上用哪个地址,证明不了 -redis 就是它。
       构建身份(回档复核 [5]):只带 -version 时打印恰好两行 commit=<40 位小写 hex> 与 dirty=<true|false> 后以 0 退出,commit 由构建时
         -ldflags "-X main.buildCommit=…" 嵌入。本脚本第 0 步 c 据此与线上 db 镜像的 tag 比对(Test-DiscardToolMatchesDbImage);
         preflight 另以同一规则复核 -deploy-facts 的 DbImage,不一致以 3 拒绝(键名与 Lua 契约只对同一提交的 go/db 成立)。
@@ -144,13 +148,13 @@
         <报告目录>/fingerprint-baseline.json [-acknowledge-no-post-t-writes]。三个模式对同一组参数做同一份判定,不各自取舍开关。
       续跑规则(purge、verify 与整脚本重跑同一条,回档复核 [3]):purge 幂等,已处理玩家的键已不在,同一 rid 重跑接着做;
         purge.json 累计全部轮次,已处理玩家名单是 verify 的输入。
-      preflight(停服前,只读):Redis 连得上且确实是 go/db 的库(run_id 见上);merge:merged_into:<zone>
-        不存在、merge:merged_into:* 里 dst = 本 zone 的一律拒绝(T 之后合入本 zone 的玩家会被当成 T 之后建角而清掉,负责人裁决 #6 之前
+      preflight(停服前,只读):Redis 连得上且确实是线上的核心 Redis(run_id 见上);全局库 zone_merged_into
+        里 src 或 dst = 本 zone 的一律拒绝(T 之后合入本 zone 的玩家会被当成 T 之后建角而清掉,负责人裁决 #6 之前
         fail-closed);zone_<id>_db 连得上、SELECT DATABASE() 正确、player_store 表可读;只靠 Redis 就能判出的拒绝
         (落点在别处、他区在线)在这里先判一次。preflight 不取行指纹基线(停服前 go/db 仍在落库,
         那时的基线没有意义,回档复核 [1])。zone 维护围栏(负责人裁决 #1)落地之前必须以 3 拒绝。
       stopped(停服后,-handoff-wait / -fingerprint-baseline):scene_nodes:zone:<zone>:load 为空;
-        player:<id>:location 要区分陈旧与他区在线(判据随工具落地一起定),
+        player:{<id>}:location 要区分陈旧与他区在线(判据随工具落地一起定),
         只看 home = 本 zone 的成员,他区在线即拒绝;handoff 另按 -handoff-wait(≥ HandoffTTL 300s)等待。以上都过了之后,最后一步把受影响玩家
         player_store 的行指纹基线写进 -fingerprint-baseline,文件里记 phase=stopped、rid、zone、取样时刻(Redis TIME 与 UTC)。本脚本保证调用它时
         namespace 已确认删除。同一 rid 已有 phase=stopped 的基线时不覆盖
@@ -160,7 +164,7 @@
         归类表穷举,兜底项 unclassified 按 blocked 处理;post_t_candidate / home_elsewhere 占比超过阈值即拒绝。
       purge(判定参数 + -confirm / -report,回档复核 [7]):先原样重跑 inventory 的全部前置检查与判定(同一组判定参数),任一不过即 3、什么都不写。
         删除范围只限本 zone:每玩家一段 Lua(白名单:home = 本 zone 且落点 = zone_<id>_db,KEYS 带映射与落点并原子复核)删除
-        sync_digest 与资产提交证据;绝不写 save_barrier(只剩交接资格 handoff_fence),绝不碰 owner_epoch、映射、account:*;
+        sync_digest 与资产提交证据;绝不写 player:{id}:handoff_fence(只有交接资格 handoff_fence),绝不碰 owner_epoch、映射、account:*;
         任何一段 Lua 出错即停止,以 1 退出;停止时与正常结束时都把计数(玩家 processed / skipped)打印到 stdout 并写进 -report(purge.json)。
       verify(判定参数 + -purge-report / -report,只读,回档复核 [6]):
           - 逐个复核 -purge-report(全部轮次累计)列为已处理的玩家:sync_digest、资产提交证据仍不存在;
@@ -177,7 +181,7 @@
         -NodeImage ghcr.io/luyuancpp/mmorpg-node:<回滚目标 sha>
 
 .EXAMPLE
-    # Run the destructive flow(-RedisHost 是 go/db 的共享 Redis;口令与 DSN 只放在环境变量里,参数只给变量名)
+    # Run the destructive flow(-RedisHost 是核心 Redis;口令与 DSN 只放在环境变量里,参数只给变量名)
     $env:MMORPG_ROLLBACK_MYSQL_DSN = '<zone_101_db 的 DSN>'
     pwsh -File tools/scripts/k8s_zone_rollback.ps1 `
         -ZoneName test1 -ZoneId 101 `
@@ -227,10 +231,10 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$TargetTime,
 
-    # go/db 的共享 Redis(go/db 的 ServerConfig.RedisClient;K8s 即 infra redis 的 DB 0,本机即唯一的那个 Redis)。
+    # 核心 Redis(login 的 Node.RedisClient;K8s 即 infra redis 的 DB 0,本机即唯一的那个 Redis)。go/db 不连 Redis。
     # 回档工具在这里盘点并丢弃 T 之后的状态,不做 FLUSHDB。-Apply 必填,不按 db.yaml 缺省的 127.0.0.1 补;
-    # 可以是端口转发地址:实例身份由第 0 步 c 经 kubectl exec 读出线上 go/db RedisClient 的 run_id,工具每个模式按 -expect-run-id 核对
-    # (不一致即拒,回档复核 [4]);-RedisDB 由第 0 步 c 与线上 RedisClient.DB 核对。
+    # 可以是端口转发地址:实例身份由第 0 步 c 经 kubectl exec 读出线上核心 Redis 的 run_id,工具每个模式按 -expect-run-id 核对
+    # (不一致即拒,回档复核 [4]);-RedisDB 由第 0 步 c 与线上核心 Redis 的 DB 核对。
     [string]$RedisHost = "",
     [string]$RedisPort = "6379",
     # Redis 口令所在的环境变量名(不是口令本身):原样交给工具的 -redis-password-env,本脚本不读口令值、不上命令行、不打印。
@@ -239,6 +243,16 @@ param(
     # 已废弃(2026-10-18,回档丢弃语义对抗复核 [12]):口令经命令行会进进程列表与 shell 历史。传了即在入口拒绝,改用 -RedisPasswordEnv。
     [string]$RedisPassword = "",
     [int]$RedisDB = 0,
+    # 玩家域 Redis Cluster(docs/design/redis-player-store-cluster.md)。线上 login ConfigMap 的 PlayerRedis.Cluster 为 true 时,第 0 步要求这几个都给,否则在停服之前拒绝:
+    #   -PlayerRedisMasters / -PlayerRedisReplicasPerMaster:转给 Step 6 的 zone-up。不粘滞,漏传的话 Step 6 会把 zone 渲染回单实例(staging / prod 被静态预检拒绝)。
+    #   -PlayerRedisSeeds:种子地址(host:port,逗号分隔),交给回档工具的 -player-redis。工具要在集群网络里跑,端口转发不行(MOVED 指向 Service IP)。
+    #   -PlayerRedisPasswordEnv:口令所在的环境变量名,同 -RedisPasswordEnv;集群没开认证时留空。
+    [ValidateRange(0, 512)]
+    [int]$PlayerRedisMasters = 0,
+    [ValidateRange(0, 2)]
+    [int]$PlayerRedisReplicasPerMaster = 0,
+    [string]$PlayerRedisSeeds = "",
+    [string]$PlayerRedisPasswordEnv = "",
 
     # Zone restart args.
     #
@@ -1241,17 +1255,17 @@ function Invoke-DiscardTool {
 
 <#
 .SYNOPSIS
-    第 0 步 c 的 kubectl 参数(只读):zone namespace 里 go/db 与 data-service 的 ConfigMap、db 与 login 的 Deployment。dry-run 打印的就是这一份。
+    第 0 步 c 的 kubectl 参数(只读):zone namespace 里 go/db 与 login 的 ConfigMap、db 与 login 的 Deployment。dry-run 打印的就是这一份。
 
 .DESCRIPTION
-    ConfigMap 名与数据键同 k8s_deploy.ps1 的 $GoSvcCatalogue(db → go-svc-db-config / db.yaml,data-service → go-svc-data-service-config /
-    data_service.yaml),Deployment 与容器名同 deploy/k8s/manifests/go-svc/db.yaml、login.yaml;那边改名时契约测试会报红。
+    ConfigMap 名与数据键同 k8s_deploy.ps1 的 $GoSvcCatalogue(db → go-svc-db-config / db.yaml,login → go-svc-login-config /
+    login.yaml),Deployment 与容器名同 deploy/k8s/manifests/go-svc/db.yaml、login.yaml;那边改名时契约测试会报红。
     --ignore-not-found:namespace 已被删(同一 rid 重跑)时无输出、退出码 0,由调用方改用报告目录里的存档。
 #>
 function Get-DeploySnapshotKubectlArgs {
     param([Parameter(Mandatory = $true)][string]$Namespace)
 
-    return , @('get', 'configmap/go-svc-db-config', 'configmap/go-svc-data-service-config', 'deployment/db', 'deployment/login',
+    return , @('get', 'configmap/go-svc-db-config', 'configmap/go-svc-login-config', 'deployment/db', 'deployment/login',
         '-n', $Namespace, '-o', 'json', '--ignore-not-found', '--request-timeout=15s')
 }
 
@@ -1261,12 +1275,15 @@ function Get-DeploySnapshotKubectlArgs {
     必需项读不出即 throw。
 
 .DESCRIPTION
-    只取白名单里的键,口令(RedisClient.Password、MySQL DSN 等)一律不读,结果可以落盘进报告目录、交给回档工具(-deploy-facts)。
-      - go-svc-db-config 的 data.db.yaml:ZoneId、ServerConfig.RedisClient.Hosts / DB(DB 缺省 0)、Placement.Redis.Hosts / DB(缺省 = 复用 RedisClient,记为 $null);
-      - go-svc-data-service-config 的 data.data_service.yaml:MappingRedis.Host(go-zero 的 redis 配置,固定 DB 0);
+    只取白名单里的键,口令(Redis 口令、MySQL DSN 等)一律不读,结果可以落盘进报告目录、交给回档工具(-deploy-facts)。
+      - go-svc-db-config 的 data.db.yaml:ZoneId;
+      - go-svc-login-config 的 data.login.yaml:Node.RedisClient.Host / DB(DB 缺省 0),这是核心 Redis。go/db 不连 Redis,映射在全局库;
+        PlayerRedis.Cluster 与第一个种子(缺省 false / 空):线上玩家域是不是 Redis Cluster,第 0 步据此要求 -PlayerRedis* 参数;
       - db Deployment 里名为 db 的容器镜像(必需,第 0 步 c 据它核对回档工具的构建提交);login Deployment 里名为 login 的容器镜像(只记录,可缺)。
     有输出但两份 ConfigMap 缺任一、缺数据键、缺 db 镜像,都 throw:namespace 还在却读不全,说明不是本仓生成的形状,不猜。
-    Schema 3(2026-10-30):存盘不再经 Kafka、go/db 没有 Fencing 与 OwnerEpochRedis 配置,对应字段删除;更早的存档与现读必然不同,同一 rid 重跑时按「部署事实与存档不同」拒绝。
+    Schema 4(2026-10-30):存盘不再经 Kafka、go/db 没有 Fencing、OwnerEpochRedis 与 Redis 配置,映射不再有 Redis 副本,对应字段删除;
+    更早的存档与现读必然不同,同一 rid 重跑时按「部署事实与存档不同」拒绝。
+    Schema 5(2026-10-31):多了 PlayerRedis。
 #>
 function ConvertFrom-ZoneDeploySnapshot {
     param(
@@ -1312,24 +1329,19 @@ function ConvertFrom-ZoneDeploySnapshot {
         if ($Map.Contains($Key) -and -not [string]::IsNullOrWhiteSpace([string]$Map[$Key])) { return ([string]$Map[$Key]).Trim() }
         return $Default
     }
-    $redisSection = {
-        param($Map, [string]$Prefix)
-        $hosts = & $scalar $Map "$Prefix.Hosts"
-        if ($null -eq $hosts) { return $null }
-        return [pscustomobject][ordered]@{ Hosts = $hosts; DB = (& $scalar $Map "$Prefix.DB" '0') }
-    }
-
     $db = (& $readConfigMapFile 'go-svc-db-config' 'db.yaml').Scalars
-    $dataService = (& $readConfigMapFile 'go-svc-data-service-config' 'data_service.yaml').Scalars
+    $login = (& $readConfigMapFile 'go-svc-login-config' 'login.yaml').Scalars
+    $redisHost = & $scalar $login 'Node.RedisClient.Host'
+    $redis = if ($null -eq $redisHost) { $null } else { [pscustomobject][ordered]@{ Hosts = $redisHost; DB = (& $scalar $login 'Node.RedisClient.DB' '0') } }
+    $playerRedis = [pscustomobject][ordered]@{ Cluster = (& $scalar $login 'PlayerRedis.Cluster' 'false'); FirstSeed = (& $scalar $login 'PlayerRedis.Addrs[0]' '') }
     return [pscustomobject][ordered]@{
-        Schema           = 3
-        Namespace        = $Namespace
-        ZoneId           = (& $scalar $db 'ZoneId')
-        Redis            = (& $redisSection $db 'ServerConfig.RedisClient')
-        PlacementRedis   = (& $redisSection $db 'Placement.Redis')
-        MappingRedisHost = (& $scalar $dataService 'MappingRedis.Host')
-        DbImage          = (& $readImage 'db' -Required)
-        LoginImage       = (& $readImage 'login')
+        Schema     = 5
+        Namespace  = $Namespace
+        ZoneId     = (& $scalar $db 'ZoneId')
+        Redis      = $redis
+        PlayerRedis = $playerRedis
+        DbImage    = (& $readImage 'db' -Required)
+        LoginImage = (& $readImage 'login')
     }
 }
 
@@ -1339,17 +1351,17 @@ function ConvertFrom-ZoneDeploySnapshot {
 
 .DESCRIPTION
       - ZoneId 必须等于 -ZoneId;
-      - RedisClient.Hosts 必须是单个 host:port(工具的每玩家 Lua 跨键原子执行,不支持 Cluster),DB 必须等于 -RedisDB;
-        主机名不在这里比对:-RedisHost 可以是端口转发地址,实例身份由 run_id 核对(Read-GoDbRedisRunId → 工具的 -expect-run-id,回档复核 [4]);
-      - Placement.Redis 要么缺省(复用 RedisClient),要么与 RedisClient 同 Hosts 同 DB;
-        data-service 的 MappingRedis.Host 必须等于 RedisClient.Hosts 且 RedisClient.DB 为 0(MappingRedis 固定 DB 0)——
-        映射、落点与协调键不在同一实例同一 DB 时,工具做不到「校验与删除在同一段 Lua 里」,只能拒绝(对抗复核 [1][9])。
+      - 核心 Redis 的地址必须是单个 host:port(工具的每玩家 Lua 跨键原子执行,不支持 Cluster),DB 必须等于 -RedisDB;
+        主机名不在这里比对:-RedisHost 可以是端口转发地址,实例身份由 run_id 核对(Read-CoreRedisRunId → 工具的 -expect-run-id,回档复核 [4]);
+      - 线上玩家域是 Redis Cluster 时必须给种子与主节点数:回档工具要丢弃的键都在那边,Step 6 的 zone-up 也要它(namespace 删掉之后读不到线上,不粘滞)。
 #>
 function Get-DeployFactsProblems {
     param(
         [Parameter(Mandatory = $true)]$Facts,
         [Parameter(Mandatory = $true)][int]$ZoneId,
-        [Parameter(Mandatory = $true)][int]$RedisDB
+        [Parameter(Mandatory = $true)][int]$RedisDB,
+        [AllowEmptyString()][string]$PlayerRedisSeeds = '',
+        [int]$PlayerRedisMasters = 0
     )
 
     $problems = [System.Collections.Generic.List[string]]::new()
@@ -1358,24 +1370,23 @@ function Get-DeployFactsProblems {
     }
     $redis = $Facts.Redis
     if ($null -eq $redis -or [string]::IsNullOrWhiteSpace([string]$redis.Hosts)) {
-        $problems.Add('线上 go-svc-db-config 读不到 ServerConfig.RedisClient.Hosts')
+        $problems.Add('线上 go-svc-login-config 读不到 Node.RedisClient.Host')
     }
     else {
         if ([string]$redis.Hosts -match '[,\s]') {
-            $problems.Add("线上 RedisClient.Hosts 是 '$($redis.Hosts)'(多个地址):回档工具的每玩家 Lua 跨键原子执行,只支持单实例")
+            $problems.Add("线上核心 Redis 的地址是 '$($redis.Hosts)'(多个地址):回档工具的每玩家 Lua 跨键原子执行,只支持单实例")
         }
         if ([string]$redis.DB -ne "$RedisDB") {
-            $problems.Add("线上 RedisClient.DB 是 '$($redis.DB)',不是 -RedisDB ${RedisDB}:工具会在别的 DB 里盘点与丢弃")
+            $problems.Add("线上核心 Redis 的 DB 是 '$($redis.DB)',不是 -RedisDB ${RedisDB}:工具会在别的 DB 里盘点与丢弃")
         }
-        $placement = $Facts.PlacementRedis
-        if ($null -ne $placement -and ([string]$placement.Hosts -ne [string]$redis.Hosts -or [string]$placement.DB -ne [string]$redis.DB)) {
-            $problems.Add("线上 Placement.Redis 是 $($placement.Hosts)/db$($placement.DB),与 RedisClient $($redis.Hosts)/db$($redis.DB) 不是同一实例同一 DB:回档工具做不到跨实例原子复核,拒绝(Redis 拆分后的回档另行设计)")
+    }
+    $playerRedisProperty = $Facts.PSObject.Properties['PlayerRedis']
+    if ($null -ne $playerRedisProperty -and $null -ne $playerRedisProperty.Value -and [string]$playerRedisProperty.Value.Cluster -eq 'true') {
+        if ([string]::IsNullOrWhiteSpace($PlayerRedisSeeds)) {
+            $problems.Add("线上玩家域是 Redis Cluster(种子 $($playerRedisProperty.Value.FirstSeed)),必须给 -PlayerRedisSeeds:回档工具要丢弃的键都在那边,只连 -RedisHost 会在控制域上盘点出空,然后什么都不丢")
         }
-        if ([string]::IsNullOrWhiteSpace([string]$Facts.MappingRedisHost)) {
-            $problems.Add('线上 go-svc-data-service-config 读不到 MappingRedis.Host')
-        }
-        elseif ([string]$Facts.MappingRedisHost -ne [string]$redis.Hosts -or [string]$redis.DB -ne '0') {
-            $problems.Add("data-service 的 MappingRedis 是 $($Facts.MappingRedisHost)/db0,与 go/db RedisClient $($redis.Hosts)/db$($redis.DB) 不是同一实例同一 DB:归属映射与玩家键不在一处,回档工具做不到原子复核归属,拒绝")
+        if ($PlayerRedisMasters -lt 3) {
+            $problems.Add('线上玩家域是 Redis Cluster,必须给 -PlayerRedisMasters(与 infra-up 同值):Step 6 的 zone-up 由它决定 player_redis,而 Step 1 删掉 namespace 之后读不到线上')
         }
     }
     return , $problems.ToArray()
@@ -1451,16 +1462,16 @@ function Resolve-ZoneDeployFacts {
 
 <#
 .SYNOPSIS
-    第 0 步 c 读 go/db 所用 Redis 实例 run_id 的 kubectl 参数(纯函数:只拼参数,不执行;回档复核 [4])。
+    第 0 步 c 读核心 Redis 实例 run_id 的 kubectl 参数(纯函数:只拼参数,不执行;回档复核 [4])。
 
 .DESCRIPTION
-    exec 进 infra namespace 的 redis-0(redis 容器),对 deploy-facts 里 go/db RedisClient.Hosts 的地址执行 redis-cli INFO server ——
-    走的是 go/db 自己连的那个地址(Service 名),HA 形态下由代理落到当前主库,与 go/db 看到的是同一个实例。
+    exec 进 infra namespace 的 redis-0(redis 容器),对 deploy-facts 里核心 Redis 的地址执行 redis-cli INFO server ——
+    走的是服务自己连的那个地址(Service 名),HA 形态下由代理落到当前主库,与服务看到的是同一个实例。
     口令取 Pod 自己的 REDIS_PASSWORD(Secret redis-auth),经 REDISCLI_AUTH 交给 redis-cli,不经本机命令行、不进日志;为空时不设
     (写法同 k8s_deploy.ps1 Test-RedisLiveMaxClients)。地址要拼进 sh -c,只收 <[A-Za-z0-9.-]+>:<端口>(单实例、无 IPv6),不合格即 throw。
     返回值交给 Invoke-ClientEntryKubectl 执行(带同一组 -KubeContext / -KubeConfig)。
 #>
-function Get-GoDbRedisRunIdExecArgs {
+function Get-CoreRedisRunIdExecArgs {
     param(
         [Parameter(Mandatory = $true)][string]$InfraNamespace,
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$RedisHosts
@@ -1468,7 +1479,7 @@ function Get-GoDbRedisRunIdExecArgs {
 
     $address = [regex]::Match($RedisHosts.Trim(), '^(?<host>[A-Za-z0-9.-]+):(?<port>\d{1,5})$')
     if (-not $address.Success) {
-        throw "go/db 的 RedisClient.Hosts '$RedisHosts' 不是单个 <主机名>:<端口>,不能拼进 redis-0 里的 sh -c 读 run_id。"
+        throw "核心 Redis 的地址 '$RedisHosts' 不是单个 <主机名>:<端口>,不能拼进 redis-0 里的 sh -c 读 run_id。"
     }
     $shell = 'if [ -n "$REDIS_PASSWORD" ]; then REDISCLI_AUTH=$REDIS_PASSWORD; export REDISCLI_AUTH; fi; exec redis-cli --raw -h ' +
         $address.Groups['host'].Value + ' -p ' + $address.Groups['port'].Value + ' INFO server'
@@ -1491,9 +1502,9 @@ function ConvertFrom-RedisInfoRunId {
 
 <#
 .SYNOPSIS
-    第 0 步 c(只在 -Apply 下、Step 1 之前):按 Get-GoDbRedisRunIdExecArgs 读出 go/db 所用 Redis 实例的 run_id;exec 失败或判不出即 throw。
+    第 0 步 c(只在 -Apply 下、Step 1 之前):按 Get-CoreRedisRunIdExecArgs 读出核心 Redis 实例的 run_id;exec 失败或判不出即 throw。
 #>
-function Read-GoDbRedisRunId {
+function Read-CoreRedisRunId {
     param(
         [Parameter(Mandatory = $true)][string]$InfraNamespace,
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$RedisHosts,
@@ -1503,7 +1514,7 @@ function Read-GoDbRedisRunId {
 
     $refusal = "k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:"
     try {
-        $execArgs = Get-GoDbRedisRunIdExecArgs -InfraNamespace $InfraNamespace -RedisHosts $RedisHosts
+        $execArgs = Get-CoreRedisRunIdExecArgs -InfraNamespace $InfraNamespace -RedisHosts $RedisHosts
         $result = Invoke-ClientEntryKubectl -KubectlArgs $execArgs -KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
         if ($result.ExitCode -ne 0) {
             throw "kubectl exec 以退出码 $($result.ExitCode) 结束:$($result.Stderr)"
@@ -1511,8 +1522,8 @@ function Read-GoDbRedisRunId {
         return (ConvertFrom-RedisInfoRunId -Text ([string]$result.Stdout))
     }
     catch {
-        throw ($refusal + "读不到 go/db 所用 Redis($RedisHosts)的 run_id(kubectl exec 进 $InfraNamespace 的 redis-0 执行 INFO server)," +
-            "无法证明 -RedisHost 与线上 go/db 是同一个实例:另一个环境里同 ZoneId 的 Redis 同样有这批键,工具会在那边丢弃、目标环境原封不动。" +
+        throw ($refusal + "读不到核心 Redis($RedisHosts)的 run_id(kubectl exec 进 $InfraNamespace 的 redis-0 执行 INFO server)," +
+            "无法证明 -RedisHost 与线上是同一个实例:另一个环境里同 ZoneId 的 Redis 同样有这批键,工具会在那边丢弃、目标环境原封不动。" +
             "检查部署账号对 $InfraNamespace 的 pods/exec 权限、redis-0 是否就绪、-KubeContext / -KubeConfig 是否指向目标集群后重跑。`n原因:$($_.Exception.Message)")
     }
 }
@@ -1636,7 +1647,7 @@ if ($AcceptBlockedPlayers -gt 0) {
         "legacy_owned / unclassified,以及 T 之后建角、合入或迁入本 zone 的玩家)的同步摘要、交接资格与资产证据是保留还是删除,T 之后建的角色" +
         "能否以空骨架继续使用,都没有定论。在裁决之前,Step 4a 盘点出 blocked 玩家时回档停在 Step 4b 之前(Redis 没动),按中止路径恢复。")
 }
-foreach ($envParam in @(@{ Name = 'RedisPasswordEnv'; Value = $RedisPasswordEnv }, @{ Name = 'MySqlDsnEnv'; Value = $MySqlDsnEnv })) {
+foreach ($envParam in @(@{ Name = 'RedisPasswordEnv'; Value = $RedisPasswordEnv }, @{ Name = 'PlayerRedisPasswordEnv'; Value = $PlayerRedisPasswordEnv }, @{ Name = 'MySqlDsnEnv'; Value = $MySqlDsnEnv })) {
     if (-not [string]::IsNullOrEmpty($envParam.Value) -and $envParam.Value -cnotmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
         # 不回显给的值:误把口令或 DSN 本身传进来时,它不能再进错误文本与日志。
         throw "k8s-zone-rollback 拒绝执行,尚未产生任何改动:-$($envParam.Name) 不是合法的环境变量名(只收 [A-Za-z_][A-Za-z0-9_]*,给的值不回显)。这里要的是变量名,不是口令或 DSN 本身。"
@@ -1677,7 +1688,7 @@ if ($ConfirmNoGatewayIngress -and -not [string]::IsNullOrWhiteSpace($GatewayIngr
 if ($Apply) {
     $missing = @()
     if ([string]::IsNullOrWhiteSpace($RedisHost)) {
-        $missing += '-RedisHost <go/db 的共享 Redis:K8s 即 infra redis 的 DB 0,可以是端口转发地址>'
+        $missing += '-RedisHost <核心 Redis:K8s 即 infra redis 的 DB 0,可以是端口转发地址>'
     }
     if ([string]::IsNullOrWhiteSpace($MySqlDsnEnv)) {
         $missing += "-MySqlDsnEnv <存放 zone_${ZoneId}_db DSN 的环境变量名>"
@@ -1687,6 +1698,9 @@ if ($Apply) {
     }
     if (-not [string]::IsNullOrEmpty($RedisPasswordEnv) -and [string]::IsNullOrEmpty([System.Environment]::GetEnvironmentVariable($RedisPasswordEnv))) {
         $missing += "环境变量 $RedisPasswordEnv 为空:-RedisPasswordEnv 指名的变量必须有值;Redis 没开认证时不要传 -RedisPasswordEnv"
+    }
+    if (-not [string]::IsNullOrEmpty($PlayerRedisPasswordEnv) -and [string]::IsNullOrEmpty([System.Environment]::GetEnvironmentVariable($PlayerRedisPasswordEnv))) {
+        $missing += "环境变量 $PlayerRedisPasswordEnv 为空:-PlayerRedisPasswordEnv 指名的变量必须有值;玩家域集群没开认证时不要传 -PlayerRedisPasswordEnv"
     }
     if ([string]::IsNullOrWhiteSpace($RollbackDiscardTool)) {
         $missing += '-RollbackDiscardTool <与线上 go/db 同一提交构建的 zone_rollback_discard 可执行文件>(工具尚未落地时 -Apply 到此为止)'
@@ -1729,7 +1743,7 @@ Write-Host "============================================================" -Foreg
 Write-Host "  zone        : $ZoneName (id=$ZoneId)"
 Write-Host "  target time : $TargetTime (UTC; rollback discards every write after it — owner decision 2026-10-17)"
 Write-Host "  rollback id : $rollbackId (report directory $reportDir; pass -RollbackId $rollbackId to re-run any step)"
-Write-Host "  redis       : $(if ($RedisHost) { "$RedisHost`:$RedisPort/db$RedisDB (go/db shared Redis)" } else { '(not set; -Apply requires -RedisHost: the go/db shared Redis)' })$(if ($RedisPasswordEnv) { " password from env $RedisPasswordEnv" })"
+Write-Host "  redis       : $(if ($RedisHost) { "$RedisHost`:$RedisPort/db$RedisDB (core Redis)" } else { '(not set; -Apply requires -RedisHost: the core Redis)' })$(if ($RedisPasswordEnv) { " password from env $RedisPasswordEnv" })"
 Write-Host "  mysql       : zone_${ZoneId}_db, DSN from env $(if ($MySqlDsnEnv) { $MySqlDsnEnv } else { '<not set; -Apply requires -MySqlDsnEnv>' })"
 Write-Host "  discard tool: $(if ($RollbackDiscardTool) { $RollbackDiscardTool } else { '(not set; -Apply requires -RollbackDiscardTool: a prebuilt zone_rollback_discard from the same commit as the live go/db)' })"
 Write-Host "  pitr        : $(if ($PitrRestoredTo) { "-PitrRestoredTo $PitrRestoredTo (operator declaration)" } elseif ($SkipMySqlPause) { '(-SkipMySqlPause without -PitrRestoredTo; -Apply refuses)' } else { '(Step 3 pauses until the operator confirms PITR)' })"
@@ -1792,6 +1806,9 @@ if ($ConfirmLoginAuthProviderChange) { $upArgs.ConfirmLoginAuthProviderChange = 
 if ($AllowDisruptiveSwitch) { $upArgs.AllowDisruptiveSwitch = $true }
 # 按用途拆实例(G4a 第 1a 批):非空才转发;以 queue 运行的 zone 必须显式给(见参数注释:Step 6 读不到线上,auto 只能落成 none)。
 if (-not [string]::IsNullOrWhiteSpace($RedisSplit)) { $upArgs.RedisSplit = $RedisSplit }
+# 玩家域 Redis Cluster:非 0 才转发;线上是集群时第 0 步已要求必给(Get-DeployFactsProblems)。
+if ($PlayerRedisMasters -gt 0) { $upArgs.PlayerRedisMasters = $PlayerRedisMasters }
+if ($PlayerRedisReplicasPerMaster -gt 0) { $upArgs.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }
 if (-not [string]::IsNullOrWhiteSpace($GatewayIngressHost)) { $upArgs.GatewayIngressHost = $GatewayIngressHost }
 if (-not [string]::IsNullOrWhiteSpace($GatewayIngressClassName)) { $upArgs.GatewayIngressClassName = $GatewayIngressClassName }
 if (-not [string]::IsNullOrWhiteSpace($GatewayIngressTlsSecret)) { $upArgs.GatewayIngressTlsSecret = $GatewayIngressTlsSecret }
@@ -2000,7 +2017,7 @@ $step6InfraText = if ([string]::IsNullOrWhiteSpace($step6InfraNamespace)) { '<un
 # 参数函数整体返回数组，先接收再拼接；统一格式化含空白的参数，保证预告命令可直接核对。
 $kubectlDisplayBaseArgs = Get-ClientEntryKubectlBaseArgs -KubeContext $KubeContext -KubeConfig $KubeConfig
 
-# 第 0 步 c(上半):部署事实、go/db 所用 Redis 的实例身份、回档工具的构建提交(只读,先于 Step 1)。部署对象只取非机密的拓扑与世代
+# 第 0 步 c(上半):部署事实、核心 Redis 的实例身份、回档工具的构建提交(只读,先于 Step 1)。部署对象只取非机密的拓扑与世代
 # (Get-DeploySnapshotKubectlArgs / ConvertFrom-ZoneDeploySnapshot),与本次参数、本机 db.yaml 核对后落盘;namespace 删掉之后(同一 rid 重跑)复用存档。
 # run_id 要进每次工具调用的公共参数(-expect-run-id),所以先于下面组装工具参数;工具 preflight 在组装之后(第 0 步 c 下半)。
 $toolShown = if ($RollbackDiscardTool) { $RollbackDiscardTool } else { '<zone_rollback_discard>' }
@@ -2010,26 +2027,26 @@ Write-Host "  Deploy facts (read-only, secrets are never read): $snapshotShown -
 $redisIdentityArgs = $kubectlDisplayBaseArgs + @('exec', '-n', $step6InfraText, 'pod/redis-0', '-c', 'redis', '--')
 $redisIdentityShown = Format-CommandLine -Program 'kubectl' -Arguments $redisIdentityArgs
 Write-Host ("  Redis identity (read-only): $redisIdentityShown sh -c '<REDISCLI_AUTH from the pod REDIS_PASSWORD>; " +
-    "redis-cli --raw -h <go/db RedisClient host> -p <port> INFO server' -> run_id, passed to every discard tool call as -expect-run-id")
+    "redis-cli --raw -h <core Redis host> -p <port> INFO server' -> run_id, passed to every discard tool call as -expect-run-id")
 Write-Host "  Discard tool build: $toolShown -version (must print commit=<40 hex> and dirty=false; the commit must start with the tag of the live db image)"
 $redisRunId = $null
 $toolVersion = $null
 if ($Apply) {
     if ([string]::IsNullOrWhiteSpace($step6InfraNamespace)) {
         throw ("k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:读不到 $devToolsPath 的 -InfraNamespace 默认值(不是字面常量或文件无法解析)," +
-            "不知道该去哪个 infra namespace 的 redis-0 读 go/db Redis 的 run_id。")
+            "不知道该去哪个 infra namespace 的 redis-0 读核心 Redis 的 run_id。")
     }
     New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
     $deployFacts = Resolve-ZoneDeployFacts -Namespace $zoneNamespace -FactsPath $factsPath -KubeContext $KubeContext -KubeConfig $KubeConfig
-    Write-Host ("  live go/db: RedisClient=$($deployFacts.Redis.Hosts)/db$($deployFacts.Redis.DB) image=$($deployFacts.DbImage);" +
+    Write-Host ("  live: core Redis=$($deployFacts.Redis.Hosts)/db$($deployFacts.Redis.DB) db image=$($deployFacts.DbImage);" +
         " the tool connects to $($RedisHost):$($RedisPort)/db$RedisDB (a port-forward is fine; the run_id below binds it to this instance)")
-    $factsProblems = Get-DeployFactsProblems -Facts $deployFacts -ZoneId $ZoneId -RedisDB $RedisDB
+    $factsProblems = Get-DeployFactsProblems -Facts $deployFacts -ZoneId $ZoneId -RedisDB $RedisDB -PlayerRedisSeeds $PlayerRedisSeeds -PlayerRedisMasters $PlayerRedisMasters
     if ($factsProblems.Count -gt 0) {
         throw ("k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:部署事实($factsPath)与本次参数不一致,$($factsProblems.Count) 项:`n  - " + ($factsProblems -join "`n  - "))
     }
-    # Redis 实例身份(回档复核 [4]):以前「目标就是 go/db 的库」只看 Redis 里有没有本 zone 的键,另一个环境里同 ZoneId 的 Redis 同样能过。
-    $redisRunId = Read-GoDbRedisRunId -InfraNamespace $step6InfraNamespace -RedisHosts ([string]$deployFacts.Redis.Hosts) -KubeContext $KubeContext -KubeConfig $KubeConfig
-    Write-Host "  go/db Redis $($deployFacts.Redis.Hosts): run_id=$redisRunId; every discard tool call requires the instance behind $($RedisHost):$($RedisPort) to report it (-expect-run-id)" -ForegroundColor Green
+    # Redis 实例身份(回档复核 [4]):以前「目标就是线上的库」只看 Redis 里有没有本 zone 的键,另一个环境里同 ZoneId 的 Redis 同样能过。
+    $redisRunId = Read-CoreRedisRunId -InfraNamespace $step6InfraNamespace -RedisHosts ([string]$deployFacts.Redis.Hosts) -KubeContext $KubeContext -KubeConfig $KubeConfig
+    Write-Host "  core Redis $($deployFacts.Redis.Hosts): run_id=$redisRunId; every discard tool call requires the instance behind $($RedisHost):$($RedisPort) to report it (-expect-run-id)" -ForegroundColor Green
     # 工具构建提交(回档复核 [5]):键名与 Lua 契约只对同一提交的 go/db 成立,以前只写进 deploy-facts、从不核对。
     try {
         $toolVersion = Get-DiscardToolVersion -ToolPath $RollbackDiscardTool
@@ -2050,10 +2067,14 @@ if ($Apply) {
 $toolCommon = [ordered]@{
     'deploy-facts'       = $factsPath
     'zone'               = "$ZoneId"
-    'redis'              = $(if ($RedisHost) { "${RedisHost}:${RedisPort}" } else { '<go/db shared redis host:port>' })
+    'redis'              = $(if ($RedisHost) { "${RedisHost}:${RedisPort}" } else { '<core redis host:port>' })
     'redis-db'           = "$RedisDB"
     'redis-password-env' = $RedisPasswordEnv
     'expect-run-id'      = $(if ($redisRunId) { $redisRunId } else { '<redis run_id read in step 0 c>' })
+    # 空值不输出(Get-DiscardToolArgs):玩家域没上集群时公共参数与以前逐字相同。
+    'player-redis'              = $PlayerRedisSeeds
+    'player-redis-cluster'      = $(if ($PlayerRedisSeeds) { 'true' } else { '' })
+    'player-redis-password-env' = $PlayerRedisPasswordEnv
     'mysql-dsn-env'      = $(if ($MySqlDsnEnv) { $MySqlDsnEnv } else { '<mysql dsn env var>' })
     'rollback-id'        = $rollbackId
     'report-dir'         = $reportDir
@@ -2114,7 +2135,7 @@ if ($Apply) {
     Add-Content -LiteralPath (Join-Path $reportDir 'run-log.jsonl') -Encoding utf8 -Value ($runRecord | ConvertTo-Json -Compress)
     $preflightCode = Invoke-DiscardTool -ToolPath $RollbackDiscardTool -Arguments $toolArgs.preflight
     if ($preflightCode -ne 0) {
-        $emptyHint = if ($preflightCode -eq 4) { "确认 -RedisHost / -RedisDB 指向 go/db 实际在用的 Redis;只有从未落过库的新 zone 才加 -AllowEmptyTarget。" } else { "原因见上面工具的输出与 $reportDir(run_id 不一致说明 -RedisHost 连到的不是 go/db 用的那个实例)。" }
+        $emptyHint = if ($preflightCode -eq 4) { "确认 -RedisHost / -RedisDB 指向线上实际在用的核心 Redis;只有从未落过库的新 zone 才加 -AllowEmptyTarget。" } else { "原因见上面工具的输出与 $reportDir(run_id 不一致说明 -RedisHost 连到的不是 go/db 用的那个实例)。" }
         throw ("k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:回档工具 preflight 以退出码 $preflightCode 结束($(Get-DiscardToolExitMeaning -ExitCode $preflightCode))。" + $emptyHint)
     }
     Write-Host "  Discard tool preflight passed" -ForegroundColor Green
@@ -2290,16 +2311,16 @@ if ($Apply) {
 Write-Host ""
 
 # ── Step 7: verification checklist ───────────────────────────────
-# 键名按现行实现写:同步摘要 player:<pid>:sync_digest(shared/playersync.KeyFormat);玩家存档只在 player_store,Redis 里没有。
+# 键名按现行实现写:同步摘要 player:{<pid>}:sync_digest(shared/playersync.KeyFormat);玩家存档只在 player_store,Redis 里没有。
 Write-Host "── Step 7: post-rollback verification ──" -ForegroundColor Cyan
 Write-Host "  Run these manually:"
 $verifyKubeArgs = "$(if ($KubeContext) { " --context $KubeContext" })$(if ($KubeConfig) { " --kubeconfig $KubeConfig" })"
-$redisShown = if ($RedisHost) { "-h $RedisHost -p $RedisPort -n $RedisDB" } else { "-h <go/db shared redis> -p $RedisPort -n $RedisDB" }
+$redisShown = if ($RedisHost) { "-h $RedisHost -p $RedisPort -n $RedisDB" } else { "-h <core redis> -p $RedisPort -n $RedisDB" }
 $redisAuthHint = if ($RedisPasswordEnv) { " (authenticate with the password in env $RedisPasswordEnv; never on the command line)" } else { '' }
 Write-Host "    1. kubectl get pods,sts,svc,ingress -n ${NamespacePrefix}-${ZoneName}$verifyKubeArgs (for external zones, confirm gate-<i> nodePort / Ingress host match their values before rollback)"
 Write-Host "    2. Robot smoke login: pwsh -File tools/scripts/dev_tools.ps1 -Command dev-robot-zones -Zones $ZoneId"
 Write-Host "    3. Before its first login, a player listed as processed in $purgeReportPath has no sync digest${redisAuthHint}:"
-Write-Host "       redis-cli $redisShown EXISTS 'player:<pid>:sync_digest'   (expect 0)"
+Write-Host "       redis-cli $redisShown EXISTS 'player:{<pid>}:sync_digest'   (expect 0)"
 Write-Host "       then log that player in once (LoadAndClaim from player_store in zone_${ZoneId}_db must succeed); if inventory.json lists blocked players, check one of them is refused with a clear message."
 Write-Host "    4. Metrics on the zone's db: db_player_store_requests_total{op,result} must show saves and claims succeeding, with no sustained failure result after the rollback."
 Write-Host "    5. Keep on record: the report directory $reportDir, including $(Join-Path $reportDir 'verify.json')."

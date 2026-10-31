@@ -20,32 +20,25 @@
 # battle / scene 进程没有 Prometheus 端点,结算类信号只存在于结构化日志(metric=...),
 # 而 Loki ruler 目前没有挂载规则目录、也没有 alertmanager_url。下列 LogQL 先作为值班固定查询,
 # ruler 接线(上线批 BK8s)之后转为规则:
-#   critical: count_over_time({app="battle"} |= "metric=battle_settlement_not_durable" [10m]) > 0
-#   critical: count_over_time({app="scene"}  |= "metric=battle_settlement_ledger_evicted" [10m]) > 0
-#   warning : count_over_time({app="battle"} |= "metric=battle_settlement_undelivered" |= "reason=not_acked" [10m]) > 5
-#   观察项  : 最近一条 {app="battle"} |= "metric=battle_settlement_pending_backlog" 的 count 增速与 oldest_age_s。
-#             玩家带着未应用的结算永久流失后,oldest_age_s 会单调增长(预期),所以它不转成规则;
-#             判异常看上一行的 reason=not_acked 与 count 增速(设计 §12 第 9 条)。
-#   info    : count_over_time({app="scene"} |= "metric=battle_settlement_freeze_expiry_pending_hit" [1h]) > 0(在线补读命中,观察用)
-#   critical: count_over_time({app="battle"} |= "metric=battle_activity_result_not_durable" [10m]) > 0
-#   critical: count_over_time({app="battle"} |= "metric=battle_activity_result_serialize_failed" [10m]) > 0
 #   critical: count_over_time({app="battle"} |= "metric=battle_personal_settlement_staging_exhausted_rooms" [10m]) > 0
-#             全球对局发结果之前的个人结算落库到总跨度上限(6 小时,审计 r2-battle#4,cross-zone-matchmaking.md §13.6
-#             「2026-10-22 修复」):结果不发、房间留在节点上,节点不会自然排空。积压报数定时器每 60s 报一行
-#             count=滞留房间数 node_rooms=本节点房间总数,正文列出 battle_id,房间清掉之前一直会响(2026-10-22 起按这条判,
-#             不再按每房间只响一次的 metric=battle_personal_settlement_staging_exhausted;那一行与紧随其后的
-#             "not staged after staging exhausted" 行仍保留,用来查没落库的成员)。
-#             处置:先排除 zone Redis 故障(OOM / NOAUTH / ACL / 键类型错),再分三步,不要直接删 Pod
+#             SQL 终局迟迟没有决定的房间(原件无效、或越过了快速重放跨度)留在节点上,节点不会自然排空(metric 名沿用已登记的值班查询)。
+#             滞留定时器每 60s 报一行 sql_unconfirmed=滞留房间数 stuck_total=同值 node_rooms=本节点房间总数,正文列出 battle_id,
+#             房间清掉之前一直会响。前因是一次性的 metric=battle_sql_outcome_unconfirmed(越过快速重放跨度)与
+#             metric=battle_sql_outcome_source_invalid(终局原件生成失败)。
+#             处置:先查 match 是否可达、CommitBattleOutcome 为什么没有决定,再分三步,不要直接删 Pod
 #             (会把同节点上正在打的房间一起作废):
 #               1. kubectl -n mmorpg-infra label gs <name> mmorpg.io/drain=true(进程 5s 内读到,拒绝新房间);
-#               2. 等提醒行的 node_rooms 降到与 stuck_total 相等(其余房间打完,单局上限 BattleMaxDurationSeconds 默认 300s);
+#               2. 等提醒行的 node_rooms 降到与 stuck_total 相等(其余房间打完,单局时长上限见 go/match/internal/catalog 的 MaxBattleSeconds,当前 3600s);
 #               3. kubectl -n mmorpg-infra delete gs <name>,优雅停机由 AbortAllRooms 清房。
-#             2026-10-22 评审补:这一行同时数另两类同样排不空的房间 —— sql_unconfirmed=(终局协议 v1 的 CommitBattleOutcome
-#             到上限仍没拿到 SQL 终局或终局原件生成失败,另有一次性的 metric=battle_sql_outcome_unconfirmed /
-#             battle_sql_outcome_source_invalid)与 placeholder=(结果序列化失败 /
-#             个人结算与成员对不上的占位,另有一次性的 battle_result_commit_serialization_failed /
-#             battle_personal_settlement_source_mismatch);stuck_total= 是 count + sql_unconfirmed + placeholder。
-#             第 2 步按 stuck_total 判(原写「与 count 相等」,同节点有另两类房间时永远等不到)。count=0 时这一行照样会打。
+#             慢速重放满跨度仍无决定时房间自己会删(metric=battle_sql_outcome_abandoned),不发布任何终局,由 match 凭持久原件裁决。
+#   critical: count_over_time({app="battle"} |= "metric=battle_sql_outcome_key_unavailable" [10m]) > 0
+#             没有终局提交密钥(MMORPG_MATCH_OUTCOME_SECRET_BATTLE),这个节点的终局协议停用,对局结果提交不了。
+#   critical: count_over_time({app="battle"} |~ "metric=battle_settlement_source_(invalid|missing|member_mismatch)" [10m]) > 0
+#             个人结算原件生成失败或与成员对不上:source_invalid 时终局保持未知;missing / member_mismatch 时不派发终局。正文没有玩家明细,按时间对 match 库。
+#   warning : count_over_time({app="battle"} |= "metric=battle_sql_outcome_unflushed_at_shutdown" [10m]) > 0
+#             节点停机时还有没落定的终局,逐局一行。出站通道已关,由 match 凭持久原件裁决;按 battle_id 核对 match_battle_completion。
+#   warning : count_over_time({app="scene"} |= "metric=battle_settlement_item_guid_shortage" [10m]) > 0
+#             物品号段不够发这局的掉落,整份结算延后到号段够用(不丢);持续出现查发号器与 data_service。
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[AssetOp]" |= "metric=persist_version_skew" [10m]) > 0
 #             (2026-10-30,混版本持久字段保护第 6 批)资产通道遇到本版本解释不了的东西,回 RETRY + reason 1006
 #             (kFeatureUnavailable)、不记账:where=asset_debit 是按数量扣出只有算上带更新版本字段的物品才够,
@@ -54,10 +47,6 @@
 #             不要人工终结这类行:入账没有 Abort 栅栏,人工终结还会在流上留下永久的洞(04 §4.38)。聚宝斋托管卡在这里时,
 #             卖家可以撤单收口。选择器按 player-inbox-alerts.yaml 的写法(C++ 日志 sidecar 不打 app 标签,本文件其余
 #             {app=...} 的查询待统一改写)。
-#   warning : count_over_time({app="battle"} |= "metric=battle_personal_settlement_staged_late" [1h]) > 0
-#             (2026-10-22 评审补)全球对局个人结算在低频重试阶段才落库:派发时冻结已解除,在线、无战斗锁的成员
-#             可能被 scene 直接销账而不应用(cross-service-assets#1 落地前)。正文列出 battle_id 与整局成员,
-#             按 scene 结算账本逐人核对是否到账,缺的走补偿流程;不得手写 pending 键补发。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -265,8 +254,8 @@ spec:
           annotations:
             summary: "帮会历练有超时未结算的对局"
             description: >-
-              {{ $value | printf "%.0f" }} 局登记超过阈值仍未拿到结果。检查 battle 的
-              battle:activity_result:{battle_id} 记录、Kafka match-results 消费与 guild 巡检器日志。
+              {{ $value | printf "%.0f" }} 局登记超过阈值仍未拿到结果。检查 match 库 match_battle_completion 的终局、
+              match 的终局发件箱(match_outcome_outbox_backlog_rows)、guild 对 Kafka match-results 的消费与巡检器日志。
               guild 停机超过 7 天的胜场不补发,属已接受偏差。
 
         - alert: GuildTrialOwedBacklog

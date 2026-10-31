@@ -104,10 +104,6 @@ func TestTiDBRoleTradeFreezeCancelDoesNotRefreezeOrClearNewListing(t *testing.T)
 	_, err = directory.Repair(ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11, ClassId: 3}, 1)
 	require.ErrorIs(t, err, accountdirectory.ErrConflict)
 	require.ErrorIs(t, directory.Remove(ctx, "seller", []*dspb.AccountRoleVersion{{PlayerId: 11, OwnerRevision: 1}}), accountdirectory.ErrConflict)
-	for _, restore := range []bool{false, true} {
-		_, err = directory.ImportRole(ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11}, restore, roleImportTestID(1))
-		require.ErrorIs(t, err, accountdirectory.ErrConflict)
-	}
 	wrong := proto.Clone(in).(*dspb.BeginAccountRoleTradeRequest)
 	wrong.ExpectedOwnerRevision = 2
 	_, err = s.Begin(ctx, wrong)

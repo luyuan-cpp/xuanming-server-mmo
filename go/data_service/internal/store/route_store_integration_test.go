@@ -4,15 +4,14 @@ package store_test
 
 // 映射持久化第 1a 批的路由表与 RouteStore 在真实 InnoDB 上的不变量。这几条只有真库能证明,
 // 假驱动(route_store_contract_test.go)一条都证不了:
-//  1. 迁移建出四张表、主键正确、route_meta / route_reconcile 各恰好种一行;第二次迁移零变更、generation 不换;
+//  1. 迁移建出三张表、主键正确、route_meta 恰好种一行;第二次迁移零变更、generation 不换;
 //  2. CHECK 约束真的生效(MySQL ≥ 8.0.16),含 G1a 的 chk_route_shard;形状守卫拦得住被改过的存量表与 G1a 之前的旧形状;
 //  3. RegisterHome 的各个分支落到库里的样子(含 NULL 绑定、冻结行);
 //  4. 并发:同一玩家 32 路并发恰好一个插入;同 zone 多玩家全部成功;
 //  5. 锁等待封顶(innodb_lock_wait_timeout=1):持锁者不放时建角最多等约 1s,不会被拖成 50s;
 //  6. meta 缺失 / 不可写一律 fail-closed;
-//  7. 导入的分类、幂等与 rev 规则;沿聚簇键 (route_shard, player_id) 的键集翻页无漏无重;
-//  8. G1a:建池探针 P4 拒绝 chk_route_shard 不生效的库、P5 拒绝按另一个模数建的表;P5 的探针键已被真实玩家占着时
-//     撞键照常通过、不改行,被持锁时以 1205 失败、不重试;错片行只有 ScanRoutes 看得见;
+//  7. G1a:建池探针 P4 拒绝 chk_route_shard 不生效的库、P5 拒绝按另一个模数建的表;P5 的探针键已被真实玩家占着时
+//     撞键照常通过、不改行,被持锁时以 1205 失败、不重试;
 //     按键读走 PRIMARY range;可选的真 TiDB 用例(聚簇、P4 / P5 含撞键分支、tidb-prepare 预切与幂等)。
 //
 // 前提:P4 让所有建 route store 的用例要求 MySQL ≥ 8.0.16(更老的版本上是 FAIL 不是 SKIP)。
@@ -37,7 +36,6 @@ import (
 	"data_service/internal/store/storetest"
 
 	"google.golang.org/protobuf/proto"
-	pb "proto/common/database"
 	"shared/authoritysql"
 	"shared/placement"
 
@@ -57,19 +55,6 @@ func routeTestOpts() store.RouteStoreOptions {
 func newRouteStore(t *testing.T, db *storetest.DB) *store.RouteStore {
 	t.Helper()
 	st, err := store.NewRouteStore(db.Cfg, routeTestOpts())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = st.Close() })
-	return st
-}
-
-// newMaintenanceRouteStore 使用真实Operator；普通业务池的权限与boot不改变。
-func newMaintenanceRouteStore(t *testing.T, db *storetest.DB, frozen *pb.SqlWriterMaintenanceReceipt) *store.RouteStore {
-	t.Helper()
-	cfg, err := db.MaintenanceCfg(context.Background())
-	require.NoError(t, err)
-	opts := routeTestOpts()
-	opts.MaintenanceFreeze = frozen
-	st, err := store.NewRouteStore(cfg, opts)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	return st
@@ -185,7 +170,6 @@ func TestRouteSchema_MigrationCreatesTablesSeedsMetaAndIsIdempotent(t *testing.T
 		store.PlayerRouteTableName:    {"route_shard", "player_id"},
 		store.ZoneMergedIntoTableName: {"src_zone"},
 		store.RouteMetaTableName:      {"id"},
-		store.RouteReconcileTableName: {"id"},
 	}
 	before := map[string]string{}
 	for table, pk := range wantPK {
@@ -203,28 +187,14 @@ func TestRouteSchema_MigrationCreatesTablesSeedsMetaAndIsIdempotent(t *testing.T
 	assert.Regexp(t, "^[0-9a-f]{32}$", generation, "generation 是 16 字节随机数的十六进制")
 	assert.Equal(t, 1, writable)
 
-	// G1a 拆表:常写的水位 / 租约只在 route_reconcile,开关表 route_meta 里没有它们。
-	for _, col := range []string{"watermark_ms", "cache_verified_ms", "leader", "lease_until_ms"} {
-		assert.Falsef(t, db.Columns(t, store.RouteMetaTableName)[col], "route_meta 不该再有 %s", col)
-	}
-	assert.EqualValues(t, 1, db.Count(t, store.RouteReconcileTableName, ""), "route_reconcile 必须恰好一行")
-	var watermark, verified uint64
-	var leader sql.NullString
-	require.NoError(t, db.Raw.QueryRow("SELECT watermark_ms, cache_verified_ms, leader FROM route_reconcile WHERE id = 1").
-		Scan(&watermark, &verified, &leader))
-	assert.Zero(t, watermark)
-	assert.Zero(t, verified)
-	assert.False(t, leader.Valid, "种出来的对账行没有 leader")
-
 	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration must be a no-op")
 	for table := range wantPK {
 		assert.Equalf(t, before[table], db.ShowCreateTable(t, table), "table %s DDL changed on second migration", table)
 	}
 	var again string
 	require.NoError(t, db.Raw.QueryRow("SELECT generation FROM route_meta WHERE id = 1").Scan(&again))
-	assert.Equal(t, generation, again, "二次迁移不许换 generation(它是库世代,只有回档恢复流程才换)")
+	assert.Equal(t, generation, again, "二次迁移不许换 generation(写者资格框架的每个事务都核它)")
 	assert.EqualValues(t, 1, db.Count(t, store.RouteMetaTableName, ""))
-	assert.EqualValues(t, 1, db.Count(t, store.RouteReconcileTableName, ""))
 }
 
 func TestRouteSchema_CheckConstraintsEnforced(t *testing.T) {
@@ -307,15 +277,6 @@ func TestRouteSchema_ShapeGuardRejectsTamperedTable(t *testing.T) {
 		cols := db.Columns(t, store.PlayerRouteTableName)
 		assert.True(t, cols["player_id"] && !cols["route_shard"], "迁移不许自己 DROP / 改写旧表:旧形状必须原样留着,等人处理")
 	})
-
-	t.Run("丢route_reconcile的列", func(t *testing.T) {
-		db := storetest.NewMigratedDB(t)
-		_, err := db.Raw.Exec("ALTER TABLE route_reconcile DROP COLUMN cache_verified_ms")
-		require.NoError(t, err)
-		err = db.Migrate(ctx, store.MigrateOptions{})
-		require.Error(t, err, "route_reconcile 缺列必须让迁移失败")
-		assert.Contains(t, err.Error(), "cache_verified_ms")
-	})
 }
 
 // preG1aPlayerRouteDDL 是 G1a 之前第 1a 批 player_route 的 DDL 原文(主键 player_id NONCLUSTERED、没有 route_shard)。
@@ -355,12 +316,12 @@ func TestRouteStore_RegisterHomeBranches(t *testing.T) {
 	res, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1001, HomeZone: home, StorageID: storage})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterInserted, res.Outcome)
-	assert.Equal(t, uint64(1), res.Row.Rev)
 	row, ok := readRoute(t, st, 1001)
 	require.True(t, ok)
 	assert.Equal(t, home, row.HomeZone)
 	assert.Equal(t, storage, row.StorageID)
 	assert.Equal(t, uint64(1), row.PlacementVersion)
+	assert.Equal(t, uint64(1), row.Rev)
 	assert.Equal(t, routeTestOpts().Writer, row.UpdatedBy)
 	assert.Positive(t, row.CreatedAtMs, "时间戳取库时钟")
 	assert.Equal(t, row.CreatedAtMs, row.UpdatedAtMs)
@@ -369,12 +330,8 @@ func TestRouteStore_RegisterHomeBranches(t *testing.T) {
 	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1001, HomeZone: home, StorageID: storage})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterAlreadySame, res.Outcome)
-	assert.Equal(t, row, res.Row, "AlreadySame 回的是加锁读读到的整行")
-
-	// ExistingRowOnly 同值:同样幂等
-	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1001, HomeZone: home, ExistingRowOnly: true})
-	require.NoError(t, err)
-	assert.Equal(t, store.RouteRegisterAlreadySame, res.Outcome)
+	same, _ := readRoute(t, st, 1001)
+	assert.Equal(t, row, same, "幂等不许改行")
 
 	// 冲突:不写,带出既有值
 	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1001, HomeZone: 8})
@@ -389,7 +346,6 @@ func TestRouteStore_RegisterHomeBranches(t *testing.T) {
 	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1002, HomeZone: home, StorageID: storage})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterFilledHome, res.Outcome)
-	assert.Equal(t, uint64(4), res.Row.Rev)
 	row, _ = readRoute(t, st, 1002)
 	assert.Equal(t, home, row.HomeZone)
 	assert.Equal(t, storage, row.StorageID)
@@ -416,18 +372,14 @@ func TestRouteStore_RegisterHomeBranches(t *testing.T) {
 	assert.Equal(t, uint64(3), row.PlacementVersion)
 	assert.Equal(t, uint64(3), row.Rev)
 
-	// 冻结行:补 home 时冻结态原样留着,回给发布的行里也是冻结态
+	// 冻结行:补 home 时冻结态原样留着
 	seedRouteRow(t, db, 1005, 0, 55, 3, "run-x", 2)
 	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1005, HomeZone: home, StorageID: storage})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterFilledHomePlacementKept, res.Outcome)
-	plc, err := res.Row.PlacementValue()
-	require.NoError(t, err)
-	assert.Equal(t, placement.FrozenValue(55, 3, "run-x"), plc)
-	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1005, HomeZone: home, ExistingRowOnly: true})
-	require.NoError(t, err)
-	assert.Equal(t, store.RouteRegisterAlreadySame, res.Outcome)
-	assert.Equal(t, "run-x", res.Row.FrozenRunID, "重读冻结行必须带回 run_id")
+	row, _ = readRoute(t, st, 1005)
+	assert.Equal(t, "run-x", row.FrozenRunID, "补 home 不许动冻结态")
+	assert.Equal(t, uint32(55), row.StorageID)
 }
 
 func TestRouteStore_NullPlacementBindsNull(t *testing.T) {
@@ -627,16 +579,6 @@ func TestRouteStore_MetaMissingAndNotWritableFailClosed(t *testing.T) {
 	assert.Equal(t, store.RouteRegisterInserted, res.Outcome)
 }
 
-func TestRouteStore_ExistingRowOnlyNeverInserts(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	res, err := st.RegisterHome(context.Background(),
-		store.RouteRegisterRequest{PlayerID: 7001, HomeZone: 7, StorageID: 1000000, ExistingRowOnly: true})
-	require.NoError(t, err)
-	assert.Equal(t, store.RouteRegisterRowMissing, res.Outcome)
-	assert.EqualValues(t, 0, db.Count(t, store.PlayerRouteTableName, ""), "缓存认得、库里没有:绝不新插")
-}
-
 // TestRouteStore_ProbeRejectsPoolWithoutSessionVariables:不经 buildRouteDSN 的池(服务端默认 RR + 50s)必须被探针拒绝。
 func TestRouteStore_ProbeRejectsPoolWithoutSessionVariables(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
@@ -652,134 +594,6 @@ func TestRouteStore_ProbeRejectsPoolWithoutSessionVariables(t *testing.T) {
 		t.Skip("服务端全局已是 READ-COMMITTED + innodb_lock_wait_timeout=1,本用例证不了探针(不代表通过)")
 	}
 	require.ErrorIs(t, err, store.ErrRouteSessionMisconfigured)
-}
-
-// ── 导入与只读接口 ───────────────────────────────────────────────────────────────
-
-func TestRouteStore_ImportClassifiesAndIsIdempotent(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-
-	_, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8001, HomeZone: 7})
-	require.NoError(t, err)
-	seedRouteRow(t, db, 8002, 0, 0, 0, "", 1)
-	_, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8003, HomeZone: 8})
-	require.NoError(t, err)
-	seedRouteRow(t, db, 8004, 7, 0, 0, "", 2)
-
-	rows := []store.RouteImportRow{
-		{PlayerID: 8000, HomeZone: 7, Placement: &placement.Record{StorageID: 1000000, Version: 1}, MapRev: 5}, // 新行,rev=maprev
-		{PlayerID: 8001, HomeZone: 7},            // match
-		{PlayerID: 8002, HomeZone: 7},            // fill
-		{PlayerID: 8003, HomeZone: 7},            // conflict(库是 8)
-		{PlayerID: 8004, HomeZone: 7, MapRev: 5}, // rev_regression(库 rev=2)
-	}
-	ids := []uint64{8000, 8001, 8002, 8003, 8004}
-	before, err := st.GetRoutes(ctx, ids)
-	require.NoError(t, err)
-
-	// dry-run:统计与真跑相同,零写入
-	stats, err := st.ImportRoutes(ctx, rows, true)
-	require.NoError(t, err)
-	assert.Equal(t, 1, stats.Inserted)
-	assert.Equal(t, 1, stats.Matched)
-	assert.Equal(t, 1, stats.Filled)
-	require.Len(t, stats.Conflicts, 1)
-	require.Len(t, stats.RevRegressions, 1)
-	afterDry, err := st.GetRoutes(ctx, ids)
-	require.NoError(t, err)
-	assert.Equal(t, before, afterDry, "dry-run 必须零写入")
-
-	// 真跑
-	stats, err = st.ImportRoutes(ctx, rows, false)
-	require.NoError(t, err)
-	assert.Equal(t, 1, stats.Inserted)
-	assert.Equal(t, 1, stats.Filled)
-	assert.Equal(t, uint64(8003), stats.Conflicts[0].PlayerID)
-	assert.Equal(t, uint64(8004), stats.RevRegressions[0].PlayerID)
-
-	after, err := st.GetRoutes(ctx, ids)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(5), after[8000].Rev, "新行的 rev 取 maprev")
-	assert.Equal(t, uint32(1000000), after[8000].StorageID)
-	assert.Equal(t, uint32(7), after[8002].HomeZone)
-	assert.Equal(t, uint64(2), after[8002].Rev, "补列 rev+1")
-	assert.Equal(t, before[8003], after[8003], "冲突行不许改")
-	assert.Equal(t, before[8004], after[8004], "rev 倒退的行不许改")
-
-	// 第二次:写入为 0
-	stats, err = st.ImportRoutes(ctx, rows, false)
-	require.NoError(t, err)
-	assert.Equal(t, 0, stats.Inserted)
-	assert.Equal(t, 0, stats.Filled)
-	assert.Equal(t, 3, stats.Matched)
-	again, err := st.GetRoutes(ctx, ids)
-	require.NoError(t, err)
-	assert.Equal(t, after, again, "二次导入零变更")
-
-	// merged_into:插入 → 幂等 → 冲突不覆盖
-	mi := []store.MergedIntoRow{{SrcZone: 101, DstZone: 102, RunID: "101-102-20261012T000000Z-abcd1234"}}
-	miStats, err := st.ImportMergedInto(ctx, mi, false)
-	require.NoError(t, err)
-	assert.Equal(t, 1, miStats.Inserted)
-	miStats, err = st.ImportMergedInto(ctx, mi, false)
-	require.NoError(t, err)
-	assert.Equal(t, 1, miStats.Matched)
-	miStats, err = st.ImportMergedInto(ctx, []store.MergedIntoRow{{SrcZone: 101, DstZone: 103, RunID: "101-103-x"}}, false)
-	require.NoError(t, err)
-	require.Len(t, miStats.Conflicts, 1)
-	listed, err := st.ListMergedInto(ctx)
-	require.NoError(t, err)
-	require.Len(t, listed, 1)
-	assert.Equal(t, uint32(102), listed[0].DstZone, "冲突不覆盖")
-	assert.Positive(t, listed[0].MergedAtMs, "merged_at_ms 取导入时刻的库时钟")
-}
-
-func TestRouteStore_ScanRoutesKeysetCoversAll(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-	const total = 2500
-	const first uint64 = 100001
-
-	for lo := 0; lo < total; lo += store.RouteBatchLimit {
-		hi := lo + store.RouteBatchLimit
-		if hi > total {
-			hi = total
-		}
-		batch := make([]store.RouteImportRow, 0, hi-lo)
-		for i := lo; i < hi; i++ {
-			batch = append(batch, store.RouteImportRow{PlayerID: first + uint64(i), HomeZone: 7})
-		}
-		stats, err := st.ImportRoutes(ctx, batch, false)
-		require.NoError(t, err)
-		require.Equal(t, len(batch), stats.Inserted)
-	}
-
-	seen := make(map[uint64]bool, total)
-	shardsSeen := make(map[uint32]bool)
-	var ordered []store.RouteScanCursor
-	var after store.RouteScanCursor
-	for {
-		page, err := st.ScanRoutes(ctx, after, 100)
-		require.NoError(t, err)
-		if len(page) == 0 {
-			break
-		}
-		for _, r := range page {
-			require.Falsef(t, seen[r.PlayerID], "player %d 出现了两次", r.PlayerID)
-			seen[r.PlayerID] = true
-			key := store.RouteScanCursorAt(r)
-			shardsSeen[key.Shard] = true
-			ordered = append(ordered, key)
-		}
-		after = store.RouteScanCursorAt(page[len(page)-1])
-	}
-	assert.Len(t, ordered, total, "翻页漏了行")
-	assert.True(t, sort.SliceIsSorted(ordered, func(i, j int) bool { return ordered[i].Less(ordered[j]) }),
-		"必须按聚簇键 (route_shard, player_id) 升序")
-	assert.Len(t, shardsSeen, int(placement.RouteRowShards), "2500 个连续 id 必然覆盖全部 64 个行片")
 }
 
 // ── G1a:建池探针、错片行、按键读的执行计划、真 TiDB ───────────────────────────────
@@ -958,16 +772,13 @@ func TestRouteStore_ProbesQueueOnMetaGuard(t *testing.T) {
 	assert.EqualValues(t, 0, db.Count(t, store.PlayerRouteTableName, ""), "探针行必须全部回滚")
 }
 
-// TestRouteStore_ShardMismatchRowFailsClosed(评审 M1):CHECK 关掉期间被写进来的错片行 (3, 6) ——
-//
-//	① 全表键集扫描 ScanRoutes 看得见它,报 ErrRouteShardMismatch;
-//	② 按 id 点读 GetRoutes([6]) 按正确片 (6, 6) 查,**看不见它、表现为缺席**(结构性局限,不是 bug);
-//	③ 于是导入会把 6 当新行再插一条 (6, 6):同一个 player_id 两行 —— 这就是 P4 必须在建池时 fail-closed 的理由;
-//	④ 之后 ScanRoutes 仍报错((3, 6) 排在 (6, 6) 之前)。
-func TestRouteStore_ShardMismatchRowFailsClosed(t *testing.T) {
+// TestRouteStore_ShardMismatchRowIsInvisibleToPointReads(评审 M1):CHECK 关掉期间被写进来的错片行 (3, 6),
+// 按 id 点读 GetRoutes([6]) 按正确片 (6, 6) 查,**看不见它、表现为缺席**(结构性局限,不是 bug):
+// 这就是 chk_route_shard 必须在启动时核验、P4 必须拒建 store 的理由。
+func TestRouteStore_ShardMismatchRowIsInvisibleToPointReads(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	skipUnlessMySQLEnforcesCheck(t, db)
-	st := newRouteStore(t, db) // CHECK 生效时建池,P4 通过
+	st := newRouteStore(t, db)
 	ctx := context.Background()
 
 	// 关掉之后保持关闭:存量违例行在,ALTER CHECK … ENFORCED 会失败。
@@ -977,21 +788,9 @@ func TestRouteStore_ShardMismatchRowFailsClosed(t *testing.T) {
 		" VALUES (3, 6, 7, 1, 'it-bad-shard', 1, 1)")
 	require.NoError(t, err)
 
-	_, err = st.ScanRoutes(ctx, store.RouteScanCursor{}, 100)
-	require.ErrorIs(t, err, store.ErrRouteShardMismatch, "① 全表扫描必须发现错片行")
-
 	got, err := st.GetRoutes(ctx, []uint64{6})
 	require.NoError(t, err)
-	assert.Empty(t, got, "② 点读按正确片查,错片行对它不可见(检测靠 ScanRoutes,防范靠 P4)")
-
-	stats, err := st.ImportRoutes(ctx, []store.RouteImportRow{{PlayerID: 6, HomeZone: 7}}, false)
-	require.NoError(t, err)
-	assert.Equal(t, 1, stats.Inserted, "③ 导入看不见错片行,把 6 当新行插入")
-	assert.EqualValues(t, 2, db.Count(t, store.PlayerRouteTableName, "player_id = 6"),
-		"③ CHECK 不生效时同一个 player_id 有了两行:这正是 P4 必须拒建 store 的原因")
-
-	_, err = st.ScanRoutes(ctx, store.RouteScanCursor{}, 100)
-	require.ErrorIs(t, err, store.ErrRouteShardMismatch, "④ 错片行仍在,全表扫描仍然报错")
+	assert.Empty(t, got, "点读按正确片查,错片行对它不可见")
 }
 
 // explainPlan 对一条已内联实参的语句跑 EXPLAIN FORMAT=TRADITIONAL,返回第一行(单表查询只有一行)的列 → 值。
@@ -1027,6 +826,17 @@ func inlineRouteArgs(t *testing.T, stmt string, args []uint64) string {
 	return stmt
 }
 
+// sortIDsByRouteKey 把 ids 按聚簇键 (route_shard, player_id) 升序排,与 loadRoutes 绑定实参的顺序相同。
+func sortIDsByRouteKey(ids []uint64) {
+	sort.Slice(ids, func(i, j int) bool {
+		a, b := placement.RouteRowShard(ids[i]), placement.RouteRowShard(ids[j])
+		if a != b {
+			return a < b
+		}
+		return ids[i] < ids[j]
+	})
+}
+
 // routeKeyArgs 返回 ids 的 (行片, player_id) 交错实参,与 loadRoutes 绑定的形状相同(调用方保证 ids 已按聚簇键升序)。
 func routeKeyArgs(ids []uint64) []uint64 {
 	out := make([]uint64, 0, 2*len(ids))
@@ -1036,17 +846,15 @@ func routeKeyArgs(ids []uint64) []uint64 {
 	return out
 }
 
-// TestRouteStore_KeyedReadsUsePrimaryRange:按聚簇键的读(R8 / R13 的行构造器 IN、R12 的键集翻页)必须走 PRIMARY 的
-// range,不能退化成全表 / 全索引扫描 —— R8 的 FOR UPDATE 形态一旦全表扫描,RC 下会逐行加锁再放,与 W1 互等成 1205。
+// TestRouteStore_KeyedReadsUsePrimaryRange:按聚簇键的读(R13 的行构造器 IN)必须走 PRIMARY 的 range,
+// 不能退化成全表 / 全索引扫描:登录与归属查询都走它。
 // 判据取否定式(拦住 index / ALL),同 player_name 的 EXPLAIN 用例;每份计划原样留档。
 //
 // 覆盖面:单个行构造器(MySQL 的行构造器 range 优化写明要求「多于一个」,单个时是否被改写成等值未核实)、3 个、
-// 1000 个 + FOR UPDATE(eq_range_index_dive_limit=200 之后改用统计估算;range_optimizer_max_mem_size 超限会静默退回
-// 全表并只给 3170 警告)、R12 的中段游标与零游标(覆盖全表,最容易退化成 ALL + filesort)。
+// 1000 个(eq_range_index_dive_limit=200 之后改用统计估算;range_optimizer_max_mem_size 超限会静默退回
+// 全表并只给 3170 警告)。
 //
-// 夹具取 20 批而不是刚够两批,原因见函数体。同一条成本规律对生产也成立(推算,未实跑):表还不到批量的几倍时,
-// 真实导入的 R8 同样会走全表 / 全索引扫描 + FOR UPDATE。P1 导入时全部副本是 redis 模式、库上没有并发 W1,无害;
-// P3 的 -allow-db-first 导入发生在表远大于批量之后。放大夹具后若仍是 index / ALL,连同 SELECT VERSION() 与五份计划
+// 夹具取 20 批而不是刚够两批,原因见函数体。放大夹具后若仍是 index / ALL,连同 SELECT VERSION() 与三份计划
 // 原样回报,不改 SQL、不改断言。
 func TestRouteStore_KeyedReadsUsePrimaryRange(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
@@ -1055,22 +863,21 @@ func TestRouteStore_KeyedReadsUsePrimaryRange(t *testing.T) {
 	if strings.Contains(strings.ToUpper(version), "TIDB") {
 		t.Skipf("TiDB %s:计划形状不同(期望 Batch_Point_Get),见 TestRouteStore_TiDBClusteredShardsAndPresplit", version)
 	}
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-
-	// 先导入 2 万行:1000 对的 IN 只占全表 5%。表太小时(行数不到批量的约 3.4 到 10 倍)全表扫描本来就比 1000 次
+	// 先灌 2 万行:1000 对的 IN 只占全表 5%。表太小时(行数不到批量的约 3.4 到 10 倍)全表扫描本来就比 1000 次
 	// 点查便宜,会掩盖要测的事 —— range 优化是否被 eq_range_index_dive_limit / range_optimizer_max_mem_size 打回。
 	// 倍数按 MySQL 8.0.36 的成本公式推算(未实跑):1000 个唯一区间约 1000×(0.25~1.0)+100,全表基线约 0.1×行数。
 	const first uint64 = 100001
 	const total = 20 * store.RouteBatchLimit
-	for lo := 0; lo < total; lo += store.RouteBatchLimit {
-		batch := make([]store.RouteImportRow, 0, store.RouteBatchLimit)
-		for i := lo; i < lo+store.RouteBatchLimit; i++ {
-			batch = append(batch, store.RouteImportRow{PlayerID: first + uint64(i), HomeZone: 7})
+	var values strings.Builder
+	for i := 0; i < total; i++ {
+		id := first + uint64(i)
+		if i > 0 {
+			values.WriteString(",")
 		}
-		_, err := st.ImportRoutes(ctx, batch, false)
-		require.NoError(t, err)
+		fmt.Fprintf(&values, "(%d,%d,7,1,'it-seed',1,1)", placement.RouteRowShard(id), id)
 	}
+	_, err := db.Raw.Exec("INSERT INTO player_route (route_shard, player_id, home_zone, rev, updated_by, created_at_ms, updated_at_ms) VALUES " + values.String())
+	require.NoError(t, err)
 	// ANALYZE 回一个结果集(Table / Op / Msg_type / Msg_text),用 Query 读完再关,不用 Exec。
 	analyzed, err := db.Raw.Query("ANALYZE TABLE player_route")
 	require.NoError(t, err)
@@ -1084,48 +891,35 @@ func TestRouteStore_KeyedReadsUsePrimaryRange(t *testing.T) {
 		for i := range ids {
 			ids[i] = first + uint64(i)
 		}
-		sort.Slice(ids, func(i, j int) bool {
-			return store.RouteScanCursorAt(store.RouteRow{PlayerID: ids[i]}).Less(store.RouteScanCursorAt(store.RouteRow{PlayerID: ids[j]}))
-		})
+		sortIDsByRouteKey(ids)
 		return ids
 	}
 
-	// R12 的中段游标落在正中间那一片(由 placement.RouteRowShards 算,不写片号字面量):游标之后约剩半张表。
-	// 16 片时这里写的是片 5;照抄到 64 片下,游标只跳过表头不到一成,算不上「中段」。
-	midShard := uint64(placement.RouteRowShards / 2)
-
 	for _, tc := range []struct {
-		name   string
-		stmt   string
-		noSort bool // R12:ORDER BY 必须由主键序满足,不许 filesort
+		name string
+		stmt string
 	}{
-		{name: "R13_单个行构造器", stmt: inlineRouteArgs(t, store.RouteSelectRowsSQLForTest(1, false), routeKeyArgs(sortedIDs(1)))},
-		{name: "R13_3个行构造器", stmt: inlineRouteArgs(t, store.RouteSelectRowsSQLForTest(3, false), routeKeyArgs(sortedIDs(3)))},
-		{name: "R8_1000个行构造器_FOR_UPDATE",
-			stmt: inlineRouteArgs(t, store.RouteSelectRowsSQLForTest(store.RouteBatchLimit, true), routeKeyArgs(sortedIDs(store.RouteBatchLimit)))},
-		{name: "R12_中段游标", stmt: inlineRouteArgs(t, store.RouteScanSQLForTest, []uint64{midShard, midShard, first, 100}), noSort: true},
-		{name: "R12_零游标", stmt: inlineRouteArgs(t, store.RouteScanSQLForTest, []uint64{0, 0, 0, 100}), noSort: true},
+		{name: "R13_单个行构造器", stmt: inlineRouteArgs(t, store.RouteSelectRowsSQLForTest(1), routeKeyArgs(sortedIDs(1)))},
+		{name: "R13_3个行构造器", stmt: inlineRouteArgs(t, store.RouteSelectRowsSQLForTest(3), routeKeyArgs(sortedIDs(3)))},
+		{name: "R13_1000个行构造器", stmt: inlineRouteArgs(t, store.RouteSelectRowsSQLForTest(store.RouteBatchLimit), routeKeyArgs(sortedIDs(store.RouteBatchLimit)))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			plan := explainPlan(t, db, tc.stmt)
 			t.Logf("%s 的执行计划: %v", tc.name, plan)
 			assert.Equalf(t, "PRIMARY", plan["key"], "%s 没有走聚簇主键。完整计划: %v", tc.name, plan)
 			assert.NotContainsf(t, []string{"index", "ALL"}, plan["type"],
-				"%s 的访问类型是 %q:index=全索引扫描 / ALL=全表扫描(FOR UPDATE 形态会逐行加锁)。完整计划: %v", tc.name, plan["type"], plan)
-			if tc.noSort {
-				assert.NotContainsf(t, plan["Extra"], "filesort", "%s 要 filesort:ORDER BY 没有由聚簇键序满足。完整计划: %v", tc.name, plan)
-			}
+				"%s 的访问类型是 %q:index=全索引扫描 / ALL=全表扫描。完整计划: %v", tc.name, plan["type"], plan)
 		})
 	}
 }
 
 // TestRouteStore_TiDBClusteredShardsAndPresplit 只在真 TiDB 上跑(本机 deploy/docker-compose.tidb.yml,且建表前
-// `SET GLOBAL tidb_enable_check_constraint=ON`):两张表是聚簇主键;P4 在 TiDB 上拿到 3819 + 约束名;注册后全表扫描覆盖;
+// `SET GLOBAL tidb_enable_check_constraint=ON`):表是聚簇主键;P4 在 TiDB 上拿到 3819 + 约束名;
 // 63 / 64 号已在库时再建池,P5 的撞键分支(1062 之后同一事务继续)在 TiDB 上也通过;
 // tidb-prepare 预切出 Region、再跑一次不报错(幂等)。二次预切期间并发建角的结果(是否出现 8028)只记录不断言(HR9 取证)。
 //
-// 末尾给按键读取证:R13(行构造器 IN)与 R12(键集翻页的中段游标 / 零游标)的 EXPLAIN 原样留档,R13 与 R12 中段游标
-// 不许全表扫描。MySQL 的 EXPLAIN 用例在 TiDB 上整体 Skip,这里是 TiDB 一侧唯一的取证。全表扫描的算子名凭记忆
+// 末尾给按键读取证:R13(行构造器 IN)的 EXPLAIN 原样留档,不许全表扫描。
+// MySQL 的 EXPLAIN 用例在 TiDB 上整体 Skip,这里是 TiDB 一侧唯一的取证。全表扫描的算子名凭记忆
 // 【未核实】,所以先用一条必然全表扫描的对照语句校准:对照里认不出它时用例报红,不让「不含」空过。
 //
 // 不能用 NewMigratedDB:全局库的整套迁移在 TiDB 上会因 player_snapshot 的可空唯一键失败,只建路由表。
@@ -1145,7 +939,7 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 	}
 
 	require.NoError(t, store.BootstrapRouteTablesOnlyForTest(ctx, db.Raw, db.Name))
-	require.NoError(t, db.Fixture().GrantTables(ctx, db.Name, "player_route", "zone_merged_into", "route_reconcile"))
+	require.NoError(t, db.Fixture().GrantTables(ctx, db.Name, "player_route", "zone_merged_into"))
 	pkTypes := map[string]string{}
 	rows, err := db.Raw.QueryContext(ctx, "SELECT TABLE_NAME, TIDB_PK_TYPE FROM information_schema.TABLES"+
 		" WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('player_route')", db.Name)
@@ -1169,21 +963,10 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, store.RouteRegisterInserted, res.Outcome)
 	}
-	var scanned int
-	var after store.RouteScanCursor
-	for {
-		page, err := st.ScanRoutes(ctx, after, 7)
-		require.NoError(t, err)
-		if len(page) == 0 {
-			break
-		}
-		scanned += len(page)
-		after = store.RouteScanCursorAt(page[len(page)-1])
-	}
-	assert.Equal(t, 40, scanned)
+	assert.EqualValues(t, 40, db.Count(t, store.PlayerRouteTableName, "home_zone = ?", zone))
 
 	// 生产常态在 TiDB 上的取证:63 / 64 号已建角时 P5 的两行都撞 1062,按「已接受」在同一事务里继续 —— TiDB 上撞键之后
-	// 事务能否继续用【未核实】,这里再建一个 store 就是取证;失败时原样回报报错文本。放在上面的全表扫描之后,不改它的 40 行口径。
+	// 事务能否继续用【未核实】,这里再建一个 store 就是取证;失败时原样回报报错文本。
 	probeN := uint64(placement.RouteRowShards)
 	for _, id := range []uint64{probeN, probeN - 1} {
 		res, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: id, HomeZone: zone})
@@ -1251,10 +1034,8 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 	}
 
 	ids := []uint64{7001, 7002, 7003}
-	sort.Slice(ids, func(i, j int) bool {
-		return store.RouteScanCursorAt(store.RouteRow{PlayerID: ids[i]}).Less(store.RouteScanCursorAt(store.RouteRow{PlayerID: ids[j]}))
-	})
-	stmt := inlineRouteArgs(t, store.RouteSelectRowsSQLForTest(len(ids), false), routeKeyArgs(ids))
+	sortIDsByRouteKey(ids)
+	stmt := inlineRouteArgs(t, store.RouteSelectRowsSQLForTest(len(ids)), routeKeyArgs(ids))
 
 	// explainTiDB 跑一次 EXPLAIN,把整份计划(每行的各列用 " | " 连起来)原样留档并返回。
 	// 不假设列名、列数与算子所在的列:判据只在整份文本上找子串。
@@ -1290,232 +1071,6 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 	const tidbFullScanOp = "FullScan"
 	assert.Containsf(t, explainTiDB("对照(无条件读全表)", "SELECT * FROM player_route"), tidbFullScanOp,
 		"对照语句必然全表扫描,计划里却没有 %q:这一版 TiDB 的 EXPLAIN 格式与用例的假设不同,"+
-			"下面两条「不含」不构成证据,请按留档的计划人工判读", tidbFullScanOp)
+			"下面的「不含」不构成证据,请按留档的计划人工判读", tidbFullScanOp)
 	assert.NotContains(t, explainTiDB("R13", stmt), tidbFullScanOp, "R13 不许全表扫描")
-
-	// R12(键集翻页)。中段游标取真实翻页会用到的那一个:从头翻 20 行(此时至少已有 40 行)的最后一行,
-	// 片由 RouteScanCursorAt(即 placement.RouteRowShard)算,不写片号字面量。实参顺序同 R12:游标片、游标片、
-	// 游标 player_id、limit。零游标本来就覆盖全表,只留档不断言。
-	firstHalf, err := st.ScanRoutes(ctx, store.RouteScanCursor{}, 20)
-	require.NoError(t, err)
-	require.Len(t, firstHalf, 20)
-	scanStmt := func(cursor store.RouteScanCursor) string {
-		return inlineRouteArgs(t, store.RouteScanSQLForTest, []uint64{uint64(cursor.Shard), uint64(cursor.Shard), cursor.PlayerID, 7})
-	}
-	assert.NotContains(t, explainTiDB("R12 中段游标", scanStmt(store.RouteScanCursorAt(firstHalf[len(firstHalf)-1]))), tidbFullScanOp,
-		"R12 中段游标不许全表扫描(否则键集翻页每页都从表头扫起,audit 方向 A 与全量预热是 O(N²/页大小))")
-	explainTiDB("R12 零游标", scanStmt(store.RouteScanCursor{}))
-}
-
-// ── 冻结、解冻与反向修库(第 1b-1 批)──────────────────────────────────────────────
-
-// freezeCtx 是冻结 / 解冻调用的时限(store.RouteFreezeTimeoutMin,见它的注释)。
-func freezeCtx(t *testing.T) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), store.RouteFreezeTimeoutMin)
-	t.Cleanup(cancel)
-	return ctx
-}
-
-// readReconcileWatermark 读 route_reconcile(id=1).watermark_ms。
-func readReconcileWatermark(t *testing.T, db *storetest.DB) uint64 {
-	t.Helper()
-	var wm uint64
-	require.NoError(t, db.Raw.QueryRow("SELECT watermark_ms FROM route_reconcile WHERE id = 1").Scan(&wm))
-	return wm
-}
-
-// TestRouteStore_RepairFromCacheRestoresRolledBackRows:模拟库回档 —— 库里是 rev 3 的旧值,缓存里是 rev 5 的新值。
-// 可写时修库拒绝;冻结后修库把缓存那一版连同 rev 写回库(rev = maprev,不是 +1),缓存有而库没有的玩家插入;
-// 原样重跑全部 Matched、updated_at_ms 不变(幂等);冻结期 W1 拒写;解冻之后 W1 恢复。只比较相等与相对大小,不依赖墙钟。
-func TestRouteStore_RepairFromCacheRestoresRolledBackRows(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-
-	seeded, err := st.ImportRoutes(ctx, []store.RouteImportRow{{PlayerID: 8101, HomeZone: 7, MapRev: 3}}, false)
-	require.NoError(t, err)
-	require.Equal(t, 1, seeded.Inserted)
-
-	cache := []store.RouteImportRow{
-		{PlayerID: 8101, HomeZone: 8, Placement: &placement.Record{StorageID: 1000000, Version: 1}, MapRev: 5},
-		{PlayerID: 8102, HomeZone: 7, MapRev: 2},
-	}
-	_, err = st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{})
-	require.Error(t, err, "NORMAL且没有正式冻结原件时不许反向修库")
-
-	normalBefore := st
-	frozenReceipt, err := db.Freeze(freezeCtx(t))
-	require.NoError(t, err)
-	require.Equal(t, pb.SqlWriterMaintenanceReceipt_FROZEN, frozenReceipt.Phase)
-	againReceipt, err := db.Freeze(freezeCtx(t))
-	require.NoError(t, err)
-	assert.True(t, proto.Equal(frozenReceipt, againReceipt), "二次冻结复用同一永久收据，不能生成新轮次")
-	_, err = normalBefore.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8199, HomeZone: 7})
-	require.ErrorIs(t, err, authoritysql.ErrWriterDenied, "冻结前boot已永久退役")
-	st = newMaintenanceRouteStore(t, db, frozenReceipt)
-
-	ids := []uint64{8101, 8102}
-	before, err := st.GetRoutes(ctx, ids)
-	require.NoError(t, err)
-	dry, err := st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{DryRun: true})
-	require.NoError(t, err)
-	assert.Equal(t, 1, dry.Restored)
-	assert.Equal(t, 1, dry.Inserted)
-	afterDry, err := st.GetRoutes(ctx, ids)
-	require.NoError(t, err)
-	assert.Equal(t, before, afterDry, "dry-run 必须零写入")
-
-	stats, err := st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, 1, stats.Restored)
-	assert.Equal(t, 1, stats.Inserted)
-	after, err := st.GetRoutes(ctx, ids)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(5), after[8101].Rev, "rev 置为 maprev,不是 +1")
-	assert.Equal(t, uint32(8), after[8101].HomeZone)
-	assert.Equal(t, uint32(1000000), after[8101].StorageID)
-	assert.Equal(t, uint64(2), after[8102].Rev, "新行 rev = maprev")
-	assert.Equal(t, before[8101].CreatedAtMs, after[8101].CreatedAtMs, "覆盖不动 created_at_ms")
-
-	again, err := st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{})
-	require.NoError(t, err)
-	assert.Equal(t, 2, again.Matched, "重跑幂等")
-	assert.Zero(t, again.Restored+again.Inserted+again.Filled+len(again.TiesResolved))
-	afterAgain, err := st.GetRoutes(ctx, ids)
-	require.NoError(t, err)
-	assert.Equal(t, after, afterAgain, "重跑零变更(含 updated_at_ms)")
-
-	mi := []store.MergedIntoRow{{SrcZone: 201, DstZone: 202, RunID: "201-202-20261018T000000Z-abcd1234"}}
-	miStats, err := st.RepairMergedIntoFromCache(ctx, mi, false)
-	require.NoError(t, err)
-	assert.Equal(t, 1, miStats.Inserted)
-	miStats, err = st.RepairMergedIntoFromCache(ctx, mi, false)
-	require.NoError(t, err)
-	assert.Equal(t, 1, miStats.Matched)
-
-	released, err := db.Release(freezeCtx(t), 0)
-	require.NoError(t, err)
-	require.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
-	_, err = st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{})
-	require.ErrorIs(t, err, store.ErrRouteNotFrozen, "解冻之后不许再修库")
-	_, err = normalBefore.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8199, HomeZone: 7})
-	require.ErrorIs(t, err, authoritysql.ErrWriterDenied, "释放不复活旧boot")
-	normalAfter := newRouteStore(t, db)
-	res, err := normalAfter.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 8199, HomeZone: 7})
-	require.NoError(t, err)
-	assert.Equal(t, store.RouteRegisterInserted, res.Outcome, "解冻之后 W1 恢复")
-}
-
-// TestRouteStore_RepairTieReportedUnlessResolved:同 rev 而值不同的平局默认只报告、不写;显式 ResolveTies 才用缓存覆盖(rev 不变);
-// 覆盖之后再跑就是 Matched。
-func TestRouteStore_RepairTieReportedUnlessResolved(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-
-	_, err := st.ImportRoutes(ctx, []store.RouteImportRow{{PlayerID: 8201, HomeZone: 7, MapRev: 4}}, false)
-	require.NoError(t, err)
-	frozenReceipt, err := db.Freeze(freezeCtx(t))
-	require.NoError(t, err)
-	st = newMaintenanceRouteStore(t, db, frozenReceipt)
-	before, ok := readRoute(t, st, 8201)
-	require.True(t, ok)
-
-	cache := []store.RouteImportRow{{PlayerID: 8201, HomeZone: 9, MapRev: 4}}
-	stats, err := st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{})
-	require.NoError(t, err)
-	require.Len(t, stats.Ties, 1)
-	assert.Empty(t, stats.TiesResolved)
-	unchanged, _ := readRoute(t, st, 8201)
-	assert.Equal(t, before, unchanged, "默认只报告平局,一个字节都不改")
-
-	stats, err = st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{ResolveTies: true})
-	require.NoError(t, err)
-	require.Len(t, stats.TiesResolved, 1)
-	resolved, _ := readRoute(t, st, 8201)
-	assert.Equal(t, uint32(9), resolved.HomeZone, "ResolveTies 用缓存覆盖")
-	assert.Equal(t, uint64(4), resolved.Rev, "平局覆盖 rev 不变")
-
-	stats, err = st.RepairRoutesFromCache(ctx, cache, store.RouteRepairOptions{ResolveTies: true})
-	require.NoError(t, err)
-	assert.Equal(t, 1, stats.Matched)
-}
-
-// TestRouteStore_FreezeUnfreezeRoundTrip:解冻按 GREATEST 抬水位(只增不减)、generation 不换;已可写时解冻是 no-op、水位不动。
-func TestRouteStore_FreezeUnfreezeRoundTrip(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-	meta0, err := st.ReadRouteMeta(ctx)
-	require.NoError(t, err)
-	require.False(t, meta0.Frozen())
-	wm0 := readReconcileWatermark(t, db)
-	// 无本轮票据的释放现在明确拒绝；既有可写状态和水位仍须不变。
-	missing, err := db.Fixture().Catalog.Release(freezeCtx(t), nil, nil)
-	require.Error(t, err)
-	assert.Nil(t, missing)
-	assert.Equal(t, wm0, readReconcileWatermark(t, db), "无正式释放权限不得抬水位")
-	_, err = db.Freeze(freezeCtx(t))
-	require.NoError(t, err)
-	frozen, err := st.ReadRouteMeta(ctx)
-	require.NoError(t, err)
-	require.True(t, frozen.Frozen())
-	ticket, request, err := db.PrepareRelease(freezeCtx(t), wm0+12345)
-	require.NoError(t, err)
-	released, err := db.Fixture().Catalog.Release(freezeCtx(t), ticket, request)
-	require.NoError(t, err)
-	require.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
-	assert.Equal(t, wm0+12345, readReconcileWatermark(t, db), "解冻先抬到请求绑定水位")
-	replay, err := db.Fixture().Catalog.Release(freezeCtx(t), ticket, request)
-	require.NoError(t, err)
-	assert.True(t, proto.Equal(released, replay), "同请求重放必须复用永久收据")
-	assert.Equal(t, wm0+12345, readReconcileWatermark(t, db), "重放不再次改水位")
-	require.NoError(t, db.ReopenAfterRelease(freezeCtx(t)))
-	meta1, err := st.ReadRouteMeta(ctx)
-	require.NoError(t, err)
-	assert.False(t, meta1.Frozen())
-	assert.Equal(t, meta0.Generation, meta1.Generation, "解冻不换generation")
-	_, err = db.Freeze(freezeCtx(t))
-	require.NoError(t, err)
-	released, err = db.Release(freezeCtx(t), wm0+100)
-	require.NoError(t, err)
-	require.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
-	assert.Equal(t, wm0+12345, readReconcileWatermark(t, db), "水位只增不减")
-}
-
-func TestRouteStore_UnfreezeWaitsForRepairMetaLock(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	_, err := db.Freeze(freezeCtx(t))
-	require.NoError(t, err)
-	wm0 := readReconcileWatermark(t, db)
-	ticket, request, err := db.PrepareRelease(freezeCtx(t), wm0+777)
-	require.NoError(t, err)
-
-	holder, err := db.Raw.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	require.NoError(t, err)
-	defer func() { _ = holder.Rollback() }()
-	var generation string
-	var writable uint64
-	require.NoError(t, holder.QueryRowContext(ctx, store.RouteLockMetaSQLForTest).Scan(&generation, &writable))
-	require.Zero(t, writable)
-
-	released, err := db.Fixture().Catalog.Release(freezeCtx(t), ticket, request)
-	var me *mysql.MySQLError
-	require.Truef(t, errors.As(err, &me) && me.Number == 1205, "解冻必须排在修库事务之后、等满 1s 以 1205 失败,got (%v, %v)", released, err)
-	assert.Nil(t, released)
-	meta, err := st.ReadRouteMeta(ctx)
-	require.NoError(t, err)
-	assert.True(t, meta.Frozen(), "1205 之后整笔回滚:仍冻结")
-	assert.Equal(t, wm0, readReconcileWatermark(t, db), "1205 之后整笔回滚:水位不动")
-
-	require.NoError(t, holder.Rollback())
-	released, err = db.Fixture().Catalog.Release(freezeCtx(t), ticket, request)
-	require.NoError(t, err)
-	assert.Equal(t, pb.SqlWriterMaintenanceReceipt_RELEASED, released.Phase)
-	require.NoError(t, db.ReopenAfterRelease(freezeCtx(t)))
 }

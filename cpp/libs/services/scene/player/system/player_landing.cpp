@@ -8,6 +8,7 @@
 
 #include "muduo/base/Logging.h"
 
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/redis_manager.h"
 // hiredis 应答类型(redisReply / REDIS_REPLY_* / REDIS_OK)。redis_manager.h 经 muduo 的 Hiredis.h 已带进来,
@@ -29,7 +30,8 @@ namespace
 		return guid != nullptr ? guid->value : 0;
 	}
 
-	bool ZoneRedisReady()
+	// 唤醒频道在控制域(玩家域不用 PUBLISH,redis-player-store-cluster.md §5.12)。同步摘要在玩家域,直接看 tlsPlayerRedis。
+	bool ControlRedisReady()
 	{
 		auto &redis = tlsRedis.GetZoneRedis();
 		return redis && redis->connected();
@@ -161,7 +163,7 @@ void PlayerLandingSystem::SendSyncDigest(entt::entity player)
 		return;
 	}
 	// 1. Redis 未就绪:立即推 UNAVAILABLE。
-	if (!ZoneRedisReady())
+	if (!tlsPlayerRedis.connected())
 	{
 		LOG_WARN << "[PlayerLanding] SendSyncDigest: Redis not connected;UNAVAILABLE pushed, player_id=" << playerId;
 		PushUnavailable(player);
@@ -169,7 +171,7 @@ void PlayerLandingSystem::SendSyncDigest(entt::entity player)
 	}
 
 	// 2. 只按值捕获 player_id:回调里重新找实体(第 3 步),不把实体句柄带进异步回调。
-	const int ret = tlsRedis.GetZoneRedis()->command(
+	const int ret = tlsPlayerRedis.command(
 		[playerId = playerId](hiredis::Hiredis *, redisReply *reply) {
 			// 3. 实体已销毁或槽位已换人:丢弃。客户端等不到推送会超时重试(设计 §4.3 第 2 步)。
 			const entt::entity current = FindSamePlayer(playerId);
@@ -243,7 +245,7 @@ void PlayerLandingSystem::PublishAssetWake(entt::entity player, AssetWakeReason 
 		return;
 	}
 
-	if (!ZoneRedisReady())
+	if (!ControlRedisReady())
 	{
 		LOG_WARN << "[PlayerLanding] asset wake not published(Redis disconnected);falls back to retry backoff, player_id="
 				 << playerId;

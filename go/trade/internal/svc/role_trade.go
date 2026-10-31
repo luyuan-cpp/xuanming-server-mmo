@@ -12,11 +12,10 @@ import (
 	smpb "proto/scene_manager"
 	"shared/accountdirectory"
 	"shared/loginsession"
+	"shared/playerredis"
 	"shared/scenenode"
 	"shared/serviceauth"
 	"trade/internal/commerce"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // RmbIdentity 先读原gate连接账号再核强SQL当前角色归属；当前owner不能替代会话账号。
@@ -86,7 +85,7 @@ func (sc *ServiceContext) initRmb() error {
 	if sc.Commerce == nil {
 		return nil
 	}
-	if sc.Assets == nil || !sc.Config.Rmb.GlobalLoginSessions || sc.Config.Rmb.LoginRedis.Host == "" {
+	if sc.Assets == nil || !sc.Config.Rmb.GlobalLoginSessions || !sc.Config.Rmb.LoginRedis.HasAddr() {
 		return errors.New("交易必须显式装配资产通道与全局login态Redis")
 	}
 	for _, c := range sc.Config.Rmb.CurrencyTypes {
@@ -99,12 +98,12 @@ func (sc *ServiceContext) initRmb() error {
 	if err := serviceauth.Sign(accountdirectory.MethodPrefix+"LookupAccountRole", probe, "trade", secret, uint64(time.Now().UnixMilli())); err != nil {
 		return errors.New("角色交易独立签名密钥未就绪")
 	}
-	c := sc.Config.Rmb.LoginRedis
-	pool := c.PoolSize
-	if pool == 0 {
-		pool = 8
+	rdb, err := playerredis.New(sc.Config.Rmb.LoginRedis.ClientConfig(playerredis.Config{
+		PoolSizePerNode: 8, DialTimeoutMs: 5000, ReadTimeoutMs: 3000, WriteTimeoutMs: 3000, PoolTimeoutMs: 1000,
+	}))
+	if err != nil {
+		return errors.New("全局登录态Redis配置非法")
 	}
-	rdb := redis.NewClient(&redis.Options{Addr: c.Host, Password: c.Password, DB: c.DB, PoolSize: pool, MaxActiveConns: pool, MaxIdleConns: pool, PoolTimeout: time.Second, MaxRetries: -1})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := rdb.Ping(ctx).Err(); err != nil {

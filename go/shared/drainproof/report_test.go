@@ -7,7 +7,6 @@ import (
 	"errors"
 	"google.golang.org/protobuf/proto"
 	pb "proto/common/database"
-	"shared/placement"
 	"testing"
 )
 
@@ -154,46 +153,13 @@ func TestParseConsumerReadinessRequiresFormalOriginal(t *testing.T) {
 	}
 }
 
-func TestRouteRecoverySnapshotBindsAtomicIdentityAndNonce(t *testing.T) {
+func TestRedisMaintenanceNonceKeyBindsTheRun(t *testing.T) {
 	run := bytes.Repeat([]byte{1}, 16)
-	nonce := bytes.Repeat([]byte{2}, 16)
-	redisRun := string(bytes.Repeat([]byte{'a'}, 40))
-	replica := string(bytes.Repeat([]byte{'b'}, 40))
 	key, err := RedisMaintenanceNonceKey(run)
 	if err != nil || key != "sql:writer:maintenance:"+hex.EncodeToString(run)+":nonce" {
 		t.Fatal("nonce键未绑定唯一run", err)
 	}
 	if _, err := RedisMaintenanceNonceKey(make([]byte, 16)); err == nil {
 		t.Fatal("零run被接受")
-	}
-	marker, err := placement.EncodeRouteReadyMarker(placement.RouteReadyMarker{Generation: "abc", RedisRunID: redisRun, MasterReplID: replica, SetAtMs: 1, WatermarkMs: 2, Leader: "fixture"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	target := &pb.SqlWriterMaintenanceReceipt_RedisTargetClosure{ServerRunId: []byte(redisRun), MaintenanceNonce: nonce}
-	raw := []any{"run_id:" + redisRun + "\r\n", "role:master\r\nmaster_replid:" + replica + "\r\n", marker, nil, hex.EncodeToString(nonce)}
-	snapshot, err := ParseRouteRecoverySnapshot(raw, run, target)
-	if err != nil || !bytes.Equal(snapshot.ReadyMarkerRaw, []byte(marker)) || snapshot.WatermarkRaw != nil {
-		t.Fatal("真实同批原件被拒绝", err)
-	}
-	for _, tc := range []struct {
-		name  string
-		index int
-		value any
-	}{
-		{"不同runid", 0, "run_id:" + string(bytes.Repeat([]byte{'c'}, 40)) + "\r\n"},
-		{"副本", 1, "role:slave\r\nmaster_replid:" + replica + "\r\n"},
-		{"丢完整marker", 2, nil},
-		{"缺nonce", 4, nil},
-		{"nonce已变化", 4, hex.EncodeToString(bytes.Repeat([]byte{3}, 16))},
-		{"类型错误", 4, int64(2)},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			bad := append([]any{}, raw...)
-			bad[tc.index] = tc.value
-			if _, err := ParseRouteRecoverySnapshot(bad, run, target); err == nil {
-				t.Fatal("跨实例或nonce不明的快照被接受")
-			}
-		})
 	}
 }

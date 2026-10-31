@@ -15,6 +15,7 @@ import (
 	"shared/assetopwake"
 	"shared/authoritysql"
 	"shared/idsegment"
+	"shared/playerredis"
 )
 
 // MaxRpcTimeoutMs:帮会二期契约 §2,Timeout ≤ 路由服 ForwardTimeoutMs(5000)− 1000。
@@ -46,27 +47,31 @@ type SchemaConf struct {
 
 type Config struct {
 	// 全局目录与帮会必须位于同一TiDB集群；成员新增事务跨schema锁同一角色行。
-	AccountRoleSchema    string    `json:",optional"`
-	MatchAuthoritySchema string    `json:",optional"`
-	GlobalLoginSessions  bool      `json:",optional"`
-	LoginRedis           RedisConf `json:",optional"`
+	AccountRoleSchema    string                        `json:",optional"`
+	MatchAuthoritySchema string                        `json:",optional"`
+	GlobalLoginSessions  bool                          `json:",optional"`
+	LoginRedis           playerredis.LoginReaderConfig `json:",optional"`
 	zrpc.RpcServerConf
-	RedisClient        RedisConf    `json:"RedisClient"`
-	PlayerLocatorRedis RedisConf    `json:"PlayerLocatorRedis"`
-	MySQL              MySQLConf    `json:"MySQL"`
-	Node               NodeConf     `json:"Node"`
-	Registry           RegistryConf `json:"Registry"`
-	Cache              CacheConf    `json:"Cache"`
-	Kafka              KafkaConf    `json:"Kafka"`
-	TableDir           string       `json:",default=../../generated/tables"`
+	RedisClient RedisConf `json:"RedisClient"`
+	// PlayerLocatorRedis 现在只承担控制域:scene 发布的 assetop:wake 频道与它的跨副本去重键。键名留着,部署配置不用跟着改。
+	PlayerLocatorRedis RedisConf `json:"PlayerLocatorRedis"`
+	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):会话、位置、战斗锁、同步摘要。
+	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 PlayerLocatorRedis 那一个实例,开发环境不用改。
+	PlayerRedis playerredis.Config `json:",optional"`
+	MySQL       MySQLConf          `json:"MySQL"`
+	Node        NodeConf           `json:"Node"`
+	Registry    RegistryConf       `json:"Registry"`
+	Cache       CacheConf          `json:"Cache"`
+	Kafka       KafkaConf          `json:"Kafka"`
+	TableDir    string             `json:",default=../../generated/tables"`
 	// 入帮申请尝试的每玩家固定 60 秒配额，包含重复刷新与仓储拒绝；不能用待审总量代替。
 	ApplicationQuotaPerMinute uint32 `json:"ApplicationQuotaPerMinute,default=10"`
 
 	// DataServiceRpc 是 data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc),
 	// 与 login 的 PlayerLocatorRpc / SceneManagerRpc 同一套 zrpc+etcd 写法。
-	// 用于查询角色归属区(GetPlayerHomeZone)及领取 guild_id 号段(AllocateIdSegment)。
-	// 配置目标即拨号,不受 IdSegment.Enabled 控制;缺失时客户端归属区查询不可用,
-	// 且 IdSegment.Enabled=true 会在启动时明确拒绝。
+	// 用于查询角色归属区(GetPlayerHomeZone)、读合服映射(GetMergedZones)及领取 guild_id 号段(AllocateIdSegment)。
+	// 配置目标即拨号,不受 IdSegment.Enabled 控制;常驻服务缺它拒绝启动(guild.go 读合服映射)。
+	// optional 只为 -migrate:只建表的形态不连 data_service。
 	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
 	// IdSegment 控制 guild_id 的号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
 	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 纯 snowflake 老路径**
@@ -118,11 +123,11 @@ type Config struct {
 // 也要跑(关之前结算留下的待入队物品、在途对局行仍要处理完),不能因为少抄一段配置就起不来或不跑。
 // TrialResult 相反:整段缺失 = Enabled 为 false = 历练未开放(见 TrialResultConf)。
 type ActivityConf struct {
-	// TrialResultOverdueSeconds:对局登记多久之后仍没有结果,巡检器就去读 battle 落下的结果记录兜底。
-	// 默认 420 = match 的 BattleMaxDurationSeconds(300)+ 120。
+	// TrialResultOverdueSeconds:对局登记多久之后仍没有结果,巡检器就去读 match 权威库的 SQL 终局兜底。
+	// 默认 420:常规战斗时长之外留出终局提交与发件箱投递的余量。
 	TrialResultOverdueSeconds uint32 `json:",default=420"`
-	// TrialAbandonSeconds:登记多久之后仍没有结果、也没有结果记录,就判 EXPIRED(迟到的结果仍可结算)。
-	// 必须 ≥ TrialResultOverdueSeconds + 600:battle 的重发窗口(10s × 30 次 = 300s)之外再留余量。
+	// TrialAbandonSeconds:登记多久之后仍没有结果、也没有 SQL 终局,就判 EXPIRED(迟到的结果仍可结算)。
+	// 必须 ≥ TrialResultOverdueSeconds + 600:给终局提交与发件箱重投留余量。
 	TrialAbandonSeconds uint32 `json:",default=3600"`
 	// TrialSweepIntervalSeconds:巡检器两轮的间隔。多副本靠 guild 全局 Redis 上的租约互斥,租约略短于它。
 	TrialSweepIntervalSeconds uint32 `json:",default=60"`
@@ -172,9 +177,9 @@ const (
 
 	// 下限 60:比它更短,正常打着的对局也会被当成"结果超时"去读记录,每轮白读一遍 Redis。
 	minTrialResultOverdueSeconds uint32 = 60
-	// battle 重发窗口 300s 之外再留 300s 余量(06 §6.22)。
+	// 终局提交与发件箱重投的余量(06 §6.22)。
 	trialAbandonHeadroomSeconds uint32 = 600
-	// 上限 7 天 = battle 结果记录与 Kafka match-results 的保留期:过了它结果不可能再来,再等没有意义,
+	// 上限 7 天 = Kafka match-results 的保留期:再等没有意义,
 	// 而行一直停在 STARTED 会占着巡检器每轮的候选名额。
 	maxTrialAbandonSeconds uint32 = 7 * 24 * 3600
 	// 巡检间隔下限 10:租约取"间隔 − 5s",再短租约就没有意义;上限 600:结果丢失后最多多等这么久才兜底。
@@ -222,7 +227,7 @@ func (a ActivityConf) validate() error {
 	headroom := time.Duration(trialAbandonHeadroomSeconds) * time.Second
 	if abandon < overdue+headroom || abandon > time.Duration(maxTrialAbandonSeconds)*time.Second {
 		return fmt.Errorf("Activity.TrialAbandonSeconds(生效值 %d)必须在 [TrialResultOverdueSeconds + %d = %d, %d] 内:"+
-			"下限留出 battle 的重发窗口,上限是结果记录与 Kafka 的 7 天保留期",
+			"下限留出终局提交与发件箱重投的余量,上限是 Kafka 的 7 天保留期",
 			int64(abandon/time.Second), trialAbandonHeadroomSeconds, int64((overdue+headroom)/time.Second), maxTrialAbandonSeconds)
 	}
 	if v := a.TrialSweepInterval(); v < time.Duration(minTrialSweepIntervalSeconds)*time.Second ||
@@ -593,7 +598,7 @@ func (c *Config) Validate() error {
 	if c.AccountRoleSchema != "" && strings.TrimSpace(c.MatchAuthoritySchema) == "" {
 		return errors.New("MatchAuthoritySchema必须显式指向同事务域的Match/Team权威库")
 	}
-	if c.AccountRoleSchema != "" && (!c.GlobalLoginSessions || strings.TrimSpace(c.LoginRedis.Host) == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize < 0) {
+	if c.AccountRoleSchema != "" && (!c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 0) {
 		return errors.New("角色归属互锁须显式声明全局LoginRedis，同库登录态缺失拒绝")
 	}
 	if maxOpen, _ := c.MySQL.EffectivePool(); maxOpen < 1 || maxOpen > 128 {
@@ -610,6 +615,9 @@ func (c *Config) Validate() error {
 		if pool.size < 0 {
 			return fmt.Errorf("%s.PoolSize(%d)不能为负:0 = go-redis 缺省 10 × GOMAXPROCS", pool.name, pool.size)
 		}
+	}
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("PlayerRedis: %w", err)
 	}
 	if c.ApplicationQuotaPerMinute < 1 || c.ApplicationQuotaPerMinute > MaxApplicationQuotaPerMinute {
 		return fmt.Errorf("ApplicationQuotaPerMinute(%d)必须在 [1, %d] 内", c.ApplicationQuotaPerMinute, MaxApplicationQuotaPerMinute)
@@ -682,6 +690,33 @@ func (c *Config) Validate() error {
 			c.MatchRpc.Timeout, MinMatchRpcTimeoutMs, MaxMatchRpcTimeoutMs)
 	}
 	return c.Activity.validate()
+}
+
+// playerRedisFallbackPoolSize / IOTimeoutMs:没写 PlayerRedis.Addrs 且 PlayerLocatorRedis.PoolSize 也没写时的连接池,以及读写超时。
+// 与换句柄之前的 go-redis 缺省同量级(K8s 上 GOMAXPROCS 按 2 算),写成常量,不随 CPU limit 漂移。
+const (
+	playerRedisFallbackPoolSize  = 20
+	playerRedisFallbackIOTimeout = 3000
+)
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 PlayerLocatorRedis 那一个实例
+// (它没写 Host 时再回落 RedisClient,与 svc.NewServiceContext 的回落同口径)。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	locator := c.PlayerLocatorRedis
+	if locator.Host == "" {
+		locator = c.RedisClient
+	}
+	pool := locator.PoolSize
+	if pool == 0 {
+		pool = playerRedisFallbackPoolSize
+	}
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{locator.Host},
+		Password:        locator.Password,
+		PoolSizePerNode: min(pool, playerredis.MaxPoolSizePerNode),
+		ReadTimeoutMs:   playerRedisFallbackIOTimeout,
+		WriteTimeoutMs:  playerRedisFallbackIOTimeout,
+	})
 }
 
 type RedisConf struct {

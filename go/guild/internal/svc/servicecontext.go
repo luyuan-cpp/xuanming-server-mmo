@@ -27,6 +27,7 @@ import (
 	"shared/idsegment"
 	"shared/kafkacmd"
 	"shared/kafkautil"
+	"shared/playerredis"
 	"shared/playersync"
 )
 
@@ -38,33 +39,36 @@ const (
 	// playerSyncRedisPoolSize:bump 是提交后的异步提示,串行逐人发,正常一批只占一条连接;
 	// 给小池子是为了 Redis 卡住时堆积的 bump 协程只占这几条连接,不去挤在线查询与推送路由的连接池。
 	playerSyncRedisPoolSize = 4
-	// playerSyncRedisIOTimeout:拨号与单次读写的兜底上限,与 logic 的整批预算 guildSyncBumpBudget 同为 2s。
-	// 开了 ContextTimeoutEnabled 之后套接字截止取 ctx 截止与它两者中较早的一个,所以真正起作用的是整批预算。
-	playerSyncRedisIOTimeout = 2 * time.Second
+	// playerSyncRedisIOTimeoutMs:拨号与单次读写的兜底上限(毫秒),与 logic 的整批预算 guildSyncBumpBudget 同为 2s。
+	// ctx 截止约束套接字读写,套接字截止取 ctx 截止与它两者中较早的一个,所以真正起作用的是整批预算。
+	playerSyncRedisIOTimeoutMs = 2000
 )
 
 type ServiceContext struct {
 	ConsumerOwner *kafkautil.BoundConsumerGroup
 	// 同一 boot 的 SQL 身份与两个独立角色；P1 不关闭 RELAY 或 SQL 池。
-	WriterConfig             authoritysql.WriterConfig
-	RootAdmission            *drainproof.Session
-	RelayAdmission           *drainproof.Session
-	RelayIngress             *drainproof.Session
-	DrainRuntime             *drainproof.Runtime
-	lifecycleMu              sync.Mutex
-	sourceMu                 sync.Mutex
-	relayStop                func(context.Context) error
-	publicationRepo          *data.GuildRepo
-	resourcesClosed          bool
-	resourceCloseErr         error
-	sourceStop               func(context.Context) error
-	sourceClosed             bool
-	Config                   config.Config
-	RedisClient              *redis.Client
+	WriterConfig     authoritysql.WriterConfig
+	RootAdmission    *drainproof.Session
+	RelayAdmission   *drainproof.Session
+	RelayIngress     *drainproof.Session
+	DrainRuntime     *drainproof.Runtime
+	lifecycleMu      sync.Mutex
+	sourceMu         sync.Mutex
+	relayStop        func(context.Context) error
+	publicationRepo  *data.GuildRepo
+	resourcesClosed  bool
+	resourceCloseErr error
+	sourceStop       func(context.Context) error
+	sourceClosed     bool
+	Config           config.Config
+	RedisClient      *redis.Client
+	// PlayerLocatorRedisClient 只剩控制域:订阅 assetop:wake,写唤醒去重键。玩家键一律走 PlayerRedis。
 	PlayerLocatorRedisClient *redis.Client
-	DB                       *sql.DB
-	KafkaWriter              *kafkago.Writer
-	GateCommandBuilder       kafkautil.GateCommandBuilder
+	// PlayerRedis 是玩家域句柄(shared/playerredis):会话、位置、战斗锁。键一律带 {player_id},发送前经守卫核对。
+	PlayerRedis        redis.UniversalClient
+	DB                 *sql.DB
+	KafkaWriter        *kafkago.Writer
+	GateCommandBuilder kafkautil.GateCommandBuilder
 	// DataServiceClient 用于查询角色归属区及领取 guild_id 号段。
 	// 配置了 DataServiceRpc 就拨号,与 IdSegment.Enabled 无关。
 	DataServiceClient dspb.DataServiceClient
@@ -85,14 +89,12 @@ type ServiceContext struct {
 	// GUILD_ACTIVITY 四个域)。guild.go 经 logic.WithSyncBumper(logic.NewGuildSyncBumper(...)) 交给 logic,
 	// 由它在提交之后异步调用。
 	//
-	// 摘要必须写在 C++ scene 读得到的那个 Redis 上(scene 只连 zone Redis,且不发 AUTH / SELECT,只读得到 DB 0),
-	// 也就是与 scene / scene_manager 写 player:{id}:location 的**同一实例同一 DB**:
-	// 本服务里就是 PlayerLocatorRedis 那一份配置(本地缺省回落到 RedisClient 的 DB 0;K8s 指向 SharedRedis)。
-	// 指错的表现是 scene 读到的摘要永不变化 —— 客户端退化为"打开帮会界面才拉",且不报错。
-	// 底下是专用客户端 PlayerSyncRedisClient(同址同 DB、单独连接池),理由见 newPlayerSyncRedis。
+	// 摘要是玩家域键,必须写在 C++ scene 读得到的那个存储域上,也就是与 scene / scene_manager 写 player:{id}:location 的同一个域:
+	// 本服务里就是 PlayerRedis 那一份配置。指错的表现是 scene 读到的摘要永不变化 —— 客户端退化为"打开帮会界面才拉",且不报错。
+	// 底下是专用客户端 PlayerSyncRedisClient(同一份玩家域配置、单独连接池),理由见 newPlayerSyncRedis。
 	PlayerSyncBumper *playersync.Bumper
-	// PlayerSyncRedisClient 是 PlayerSyncBumper 专用的 go-redis 客户端,只由 Stop 关闭;别的代码不要拿它发命令。
-	PlayerSyncRedisClient *redis.Client
+	// PlayerSyncRedisClient 是 PlayerSyncBumper 专用的玩家域客户端,只由 Stop 关闭;别的代码不要拿它发命令。
+	PlayerSyncRedisClient redis.UniversalClient
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -137,6 +139,15 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	if err := plRdb.Ping(context.Background()).Err(); err != nil {
 		panic(fmt.Errorf("failed to connect player locator Redis: %w", err))
 	}
+	playerRedisConf := c.EffectivePlayerRedis()
+	playerRdb, err := playerredis.New(playerRedisConf)
+	if err != nil {
+		panic(fmt.Errorf("invalid PlayerRedis config: %w", err))
+	}
+	if err := playerRdb.Ping(context.Background()).Err(); err != nil {
+		panic(fmt.Errorf("failed to connect player Redis (%s): %w", playerRedisConf.Describe(), err))
+	}
+	logx.Infof("[ServiceContext] player redis %s", playerRedisConf.Describe())
 
 	// 帮会写事务的锁等待封顶(设计 docs/design/guild-phase2/02-management.md §6.2a):
 	// InnoDB 默认 innodb_lock_wait_timeout=50,而 RPC 的 ctx 到期后 go-sql-driver 只是关掉连接 ——
@@ -185,7 +196,10 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		}
 	}
 
-	syncRdb := newPlayerSyncRedis(plRedisConf)
+	syncRdb, err := newPlayerSyncRedis(playerRedisConf)
+	if err != nil {
+		panic(fmt.Errorf("invalid PlayerRedis config: %w", err))
+	}
 	sc := &ServiceContext{
 		WriterConfig:             writer,
 		RootAdmission:            root,
@@ -194,6 +208,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		Config:                   c,
 		RedisClient:              rdb,
 		PlayerLocatorRedisClient: plRdb,
+		PlayerRedis:              playerRdb,
 		DB:                       db,
 		KafkaWriter:              w,
 		GateCommandBuilder:       guildkafka.NewGateCommandBuilder(),
@@ -273,30 +288,19 @@ func (s *ServiceContext) initMatchInternalClient() {
 	logx.Infof("[ServiceContext] MatchInternal client created (nonblocking dial): timeout=%dms", rpcConf.Timeout)
 }
 
-// newPlayerSyncRedis 建落地恢复摘要 bump 专用的 go-redis 客户端。地址、口令、DB 与 locator 客户端完全相同
-// (conf 就是 NewServiceContext 里回落之后的 plRedisConf,摘要必须写在 scene 读得到的核心实例上),
-// 但单独一个客户端,因为 bump 需要 locator 客户端没有的两样东西:
+// newPlayerSyncRedis 建落地恢复摘要 bump 专用的玩家域客户端。地址、口令与 PlayerRedis 完全相同(conf 就是生效的玩家域配置),
+// 但单独一个客户端:小连接池(playerSyncRedisPoolSize)不和在线查询、资产循环、推送路由抢连接。
+// logic.AsyncGuildSyncBumper 的整批预算(2s)要封住**单条**命令,靠的是 playerredis 缺省打开的 ContextTimeoutEnabled。
 //
-//   - ContextTimeoutEnabled:go-redis v9(按 v9.16.0 核对)不开它时 baseClient.context() 换成 context.Background(),
-//     套接字读写只受 ReadTimeout(默认 3s)约束;logic.AsyncGuildSyncBumper 的整批预算(2s)要封住**单条**命令,
-//     靠的是这一项。取连接排队(ConnPool.waitTurn)与拨号(net.Dialer.DialContext)本来就看 ctx。
-//     不直接给 locator 客户端开它:那个客户端被在线查询、资产循环、推送路由、历练结果记录等多处共用,
-//     开了会让各调用方的 ctx 截止开始截断套接字读,超时语义整体改变,要逐个复核,不在本批范围。
-//   - 小连接池(playerSyncRedisPoolSize):不和在线查询、资产循环、推送路由抢 locator 客户端的连接池。
-//
-// 不在启动时 Ping:同址同 DB 的 locator 客户端刚 Ping 过;摘要是可丢的提示,运行期不可达只计
+// 不在启动时 Ping:同一份配置的 PlayerRedis 刚 Ping 过;摘要是可丢的提示,运行期不可达只计
 // player_sync_bump_total{result="error"},不该为它多一个拒启点。
-func newPlayerSyncRedis(conf config.RedisConf) *redis.Client {
-	return redis.NewClient(&redis.Options{
-		Addr:                  conf.Host,
-		Password:              conf.Password,
-		DB:                    conf.DB,
-		ContextTimeoutEnabled: true,
-		DialTimeout:           playerSyncRedisIOTimeout,
-		ReadTimeout:           playerSyncRedisIOTimeout,
-		WriteTimeout:          playerSyncRedisIOTimeout,
-		PoolSize:              playerSyncRedisPoolSize,
-	})
+func newPlayerSyncRedis(conf playerredis.Config) (redis.UniversalClient, error) {
+	conf.PoolSizePerNode = playerSyncRedisPoolSize
+	conf.DialTimeoutMs = playerSyncRedisIOTimeoutMs
+	conf.ReadTimeoutMs = playerSyncRedisIOTimeoutMs
+	conf.WriteTimeoutMs = playerSyncRedisIOTimeoutMs
+	conf.DisableContextTimeout = false
+	return playerredis.New(conf)
 }
 
 // BindDrainRuntime 将维护原件绑定到已经消费的同一 SQL boot，不重新读 grant。
@@ -436,6 +440,9 @@ func (s *ServiceContext) StopAndReport(ctx context.Context) error {
 	var result error
 	if s.PlayerSyncRedisClient != nil {
 		result = errors.Join(result, s.PlayerSyncRedisClient.Close())
+	}
+	if s.PlayerRedis != nil {
+		result = errors.Join(result, s.PlayerRedis.Close())
 	}
 	if s.PlayerLocatorRedisClient != nil {
 		result = errors.Join(result, s.PlayerLocatorRedisClient.Close())

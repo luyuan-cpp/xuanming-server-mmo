@@ -7,8 +7,9 @@ import (
 
 	dspb "proto/data_service"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	"shared/playerredis"
 )
 
 // 在线态与展示信息(设计文档 docs/design/team-system.md §G.1 / §G.2)。
@@ -16,8 +17,8 @@ import (
 // 这些都是显示层数据:每次构建视图或做惰性转让判定时按需批量读,绝不写进 TeamRecord
 // (AGENTS §11.6)。只读,写者都不是 match:
 //
-//	player:session:<id>      player_locator  在线态唯一真值(只有 SESSION_STATE_ONLINE 算在线)
-//	battle:lock:<id>         C++ scene       咨询性"战斗中"(值是 battle_id,非空)
+//	player:session:{<id>}    player_locator  在线态唯一真值(只有 SESSION_STATE_ONLINE 算在线)
+//	battle:lock:{<id>}       C++ scene       咨询性"战斗中"(值是 battle_id,非空)
 //	data_service             player_store    等级、职业、昵称、外观、性别(尽力而为,缺失或读失败填零值)
 //
 // 失败语义:任何一次 MGET 失败只让对应字段按"离线 / 不在战斗 / 0"处理并记日志,
@@ -40,7 +41,7 @@ type displayCache map[uint64]memberDisplay
 
 // presenceReader 批量读取在线态与展示信息。无可变状态,可并发使用。
 type presenceReader struct {
-	rds      *redis.Redis // svcCtx.SharedRedis
+	rds      redis.UniversalClient // svcCtx.PlayerRedis
 	displays dspb.DataServiceClient
 }
 
@@ -109,7 +110,8 @@ func (p presenceReader) loadStoreDisplays(ctx context.Context, ids []uint64) map
 	return resp.GetPlayers()
 }
 
-// mget 按 keyOf 拼 key 批量读;失败或返回长度不符时记日志返回 nil(调用方按"全部缺失"处理)。
+// mget 按 keyOf 拼 key 批量读,缺键是空串;失败或返回长度不符时记日志返回 nil(调用方按"全部缺失"处理)。
+// 这些键分属不同玩家、不同 slot,按 slot 分组读。
 func (p presenceReader) mget(ctx context.Context, ids []uint64, keyOf func(uint64) string, what string) []string {
 	if len(ids) == 0 || p.rds == nil {
 		return nil
@@ -118,14 +120,18 @@ func (p presenceReader) mget(ctx context.Context, ids []uint64, keyOf func(uint6
 	for _, id := range ids {
 		keys = append(keys, keyOf(id))
 	}
-	values, err := p.rds.MgetCtx(ctx, keys...)
+	raw, err := playerredis.MGetBySlot(ctx, p.rds, keys)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("[team] Failed to batch-read %s (treating as missing) n=%d: %v", what, len(ids), err)
 		return nil
 	}
-	if len(values) != len(ids) {
-		logx.WithContext(ctx).Errorf("[team] Batch-read %s returned length %d, expected %d (treating as missing)", what, len(values), len(ids))
+	if len(raw) != len(ids) {
+		logx.WithContext(ctx).Errorf("[team] Batch-read %s returned length %d, expected %d (treating as missing)", what, len(raw), len(ids))
 		return nil
+	}
+	values := make([]string, len(raw))
+	for i, value := range raw {
+		values[i], _ = value.(string)
 	}
 	return values
 }

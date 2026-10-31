@@ -9,7 +9,7 @@ import (
 	base "proto/common/base"
 	mailpb "proto/mail"
 	"shared/domainhost"
-	"shared/loginsession"
+	"shared/redisslot"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -22,7 +22,7 @@ func TestMailRejectsIncompleteOrRevokedSessionBeforeRepository(t *testing.T) {
 	cache := miniredis.RunT(t)
 	reader := redis.NewClient(&redis.Options{Addr: cache.Addr()})
 	t.Cleanup(func() { _ = reader.Close() })
-	cache.Set(loginsession.KeyFromMember("gate-original:19"), "原卖家")
+	cache.Set(redisslot.LoginSessionKey("gate-original:19"), "原卖家")
 	for _, tc := range []struct {
 		name    string
 		session *base.SessionDetails

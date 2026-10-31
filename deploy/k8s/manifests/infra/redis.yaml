@@ -1,4 +1,4 @@
-# 共享 Redis:player:session / player:location / 登录锁 / 玩家锁 / scene_manager 选主锁 /
+# 共享 Redis:player:session:{id} / player:{id}:location / 登录锁 / 玩家锁 / scene_manager 选主锁 /
 # 场景路由(scene:{id}:node)/ battle:lock / 战斗结算待销账记录都在这一个实例里,而且它在
 # **同步登录路径**上(login 拿不到锁即拒绝 EnterGame)。
 #
@@ -122,10 +122,8 @@ spec:
           # (不持久,重启后回到清单值),步骤见 deploy/k8s/README.md「Redis 连接上限与总账」。
           # redis-ha.yaml 接入时要同样显式 --maxclients,节点上限 ≥(代理副本数 + maxSurge)× haproxy maxconn + 余量,并重算总账。
           #
-          # --enable-debug-command no(D1 第 1b-3 批,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §13.1 第 5 条):
-          # 这个实例同时是 mapping Redis(player:zone / player:placement / mapping:route:ready …)。DEBUG RELOAD NOSAVE / DEBUG LOADAOF
-          # 会在同一进程里整库替换数据而 run_id / master_replid 不变,读方「就绪标记绑定实例身份」的判据(M1)认不出,会把替换后的旧值当权威。
-          # Redis 7 缺省就是 no,这里显式写出来防止被改;对账 leader 每拍 CONFIG GET enable-debug-command,不是 no 就拒绝挂标记并撤掉现有标记。
+          # --enable-debug-command no:DEBUG RELOAD NOSAVE / DEBUG LOADAOF 会在同一进程里整库替换数据而 run_id / master_replid 不变,
+          # 谁都认不出换过数据。Redis 7 缺省就是 no,这里显式写出来防止被改。
           # 改它同样改了 Pod 模板:下一次 infra-up 要 -ConfirmRedisCoreRestart(重启 redis-0),放进维护窗口。
           command:
             - sh

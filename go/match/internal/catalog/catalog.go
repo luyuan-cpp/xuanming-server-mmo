@@ -243,6 +243,7 @@ func (c *Catalog) Pools() []Pool {
 }
 
 // ZoneNode 返回 home zone 在范围树上的位置；nil 目录下所有 zone 都未分大区。
+// 调用方传解析合服之后的最终区（票上存的是原始区）。
 func (c *Catalog) ZoneNode(zone uint32) scope.Node {
 	if c == nil {
 		return scope.Node{Zone: zone}

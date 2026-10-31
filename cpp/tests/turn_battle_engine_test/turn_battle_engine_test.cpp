@@ -17,7 +17,6 @@
 #include "modules/currency/constants/currency.h"
 #include "system/combat_damage_rules.h"
 #include "system/turn_battle_engine.h"
-#include "../../libs/services/scene/battle/system/battle_settlement_application_cache.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
 
@@ -2274,68 +2273,6 @@ TEST(TurnBattleEngineTest, SettlementDoesNotCreditUnknownOrMonsterSourceDeath) {
         EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), xId);
         EXPECT_EQ(CurrencyReward(settlement, kCurrencyGold), kConfiguredGold);
     }
-}
-
-// 以两个已取得相同 Redis 锁结果的回调模拟 DEL 尚未完成的重复投递窗口。
-TEST(SettlementApplicationCacheTest, DuplicateCallbacksAndReloginDoNotRepeatSideEffects) {
-    using Cache = battle_settlement::SettlementApplicationCache;
-    Cache cache;
-    const auto now = Cache::Clock::time_point{};
-    int gold = 0, missionKills = 0;
-    auto apply = [&] { gold += 12; missionKills += 2; return true; };
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, apply), Cache::Result::Applied);
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, apply), Cache::Result::Duplicate);
-    // 缓存键独立于 entt::entity，下线重建并再收到旧 pending 仍是同一笔。
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now + std::chrono::seconds(2), apply), Cache::Result::Duplicate);
-    EXPECT_EQ(gold, 12);
-    EXPECT_EQ(missionKills, 2);
-    // 新局 id 不要求单调增大；同局其他玩家也不应被吞。
-    EXPECT_EQ(cache.Apply(kPlayerA, 99, now, apply), Cache::Result::Applied);
-    EXPECT_EQ(cache.Apply(kPlayerB, 100, now, apply), Cache::Result::Applied);
-    EXPECT_EQ(gold, 36);
-    EXPECT_EQ(missionKills, 6);
-}
-
-TEST(SettlementApplicationCacheTest, ReentryIsBlockedAndFailedApplicationCanRetry) {
-    using Cache = battle_settlement::SettlementApplicationCache;
-    Cache cache;
-    const auto now = Cache::Clock::time_point{};
-    int effects = 0;
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [&] {
-        EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [&] { ++effects; return true; }), Cache::Result::InFlight);
-        return false; // 模拟金币入口在产生任何副作用之前拒绝。
-    }), Cache::Result::Failed);
-    EXPECT_EQ(effects, 0);
-    EXPECT_EQ(cache.Size(), 0u);
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [&] { ++effects; return true; }), Cache::Result::Applied);
-    EXPECT_EQ(effects, 1);
-}
-
-TEST(SettlementApplicationCacheTest, ExceptionBeforeEffectsReleasesReservation) {
-    using Cache = battle_settlement::SettlementApplicationCache;
-    Cache cache;
-    const auto now = Cache::Clock::time_point{};
-    EXPECT_THROW(cache.Apply(kPlayerA, 100, now, []() -> bool {
-        throw std::runtime_error("测试前置检查异常");
-    }), std::runtime_error);
-    EXPECT_EQ(cache.Size(), 0u);
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [] { return true; }), Cache::Result::Applied);
-}
-
-TEST(SettlementApplicationCacheTest, CapacityNeverEvictsInflightAndRetentionIsFinite) {
-    using Cache = battle_settlement::SettlementApplicationCache;
-    Cache cache(1, std::chrono::seconds(10));
-    const auto now = Cache::Clock::time_point{};
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [&] {
-        EXPECT_EQ(cache.Apply(kPlayerB, 100, now, [] { return true; }), Cache::Result::Full);
-        EXPECT_EQ(cache.Size(), 1u);
-        return true;
-    }), Cache::Result::Applied);
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now + std::chrono::seconds(9), [] { return true; }), Cache::Result::Duplicate);
-    EXPECT_EQ(cache.Apply(kPlayerA, 100, now + std::chrono::seconds(10), [] { return true; }), Cache::Result::Applied);
-    // 满容量淘汰已完成旧项，不阻止合法新局，也不增长内存。
-    EXPECT_EQ(cache.Apply(kPlayerA, 101, now + std::chrono::seconds(11), [] { return true; }), Cache::Result::Applied);
-    EXPECT_EQ(cache.Size(), 1u);
 }
 
 // ---------------------------------------------------------------------------

@@ -21,7 +21,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "proto/common/database"
 	"shared/authoritysql"
-	"shared/placement"
 )
 
 var ErrClosed = errors.New("排空入口已永久关闭")
@@ -799,76 +798,10 @@ func WaitRuntime(ctx context.Context, directory string) (*Runtime, error) {
 	}
 }
 
-// RedisMaintenanceNonceKey 是P0单次建立、P4/P7只读的同run唯一nonce键。
+// RedisMaintenanceNonceKey 是P0单次建立、P4只读的同run唯一nonce键。
 func RedisMaintenanceNonceKey(runID []byte) (string, error) {
 	if len(runID) != 16 || bytes.Equal(runID, make([]byte, 16)) {
 		return "", ErrHold
 	}
 	return "sql:writer:maintenance:" + hex.EncodeToString(runID) + ":nonce", nil
-}
-
-// RouteRecoveryReadScript 在一次Redis执行中读取身份、完整性标记、水位及永久nonce，防止跨重启拼接。
-// KEYS依次是nonce、ready、watermark；仅调用只读命令，不重建丢失的nonce。
-const RouteRecoveryReadScript = `
-if #KEYS ~= 3 then return redis.error_reply('invalid recovery read keys') end
-if redis.call('TYPE', KEYS[1]).ok ~= 'string' or redis.call('PTTL', KEYS[1]) ~= -1 then
-  return redis.error_reply('maintenance nonce missing or expiring')
-end
-return {redis.call('INFO', 'server'), redis.call('INFO', 'replication'),
-  redis.call('GET', KEYS[2]) or false, redis.call('GET', KEYS[3]) or false,
-  redis.call('GET', KEYS[1])}
-`
-
-// ParseRouteRecoverySnapshot返回正式审计的采样部分；业务计数、冻结身份和水位推导由实际审核owner填写。
-func ParseRouteRecoverySnapshot(reply any, runID []byte, target *pb.SqlWriterMaintenanceReceipt_RedisTargetClosure) (*pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit, error) {
-	if _, err := RedisMaintenanceNonceKey(runID); err != nil {
-		return nil, err
-	}
-	if target == nil || len(target.MaintenanceNonce) != 16 || len(target.ServerRunId) != 40 {
-		return nil, ErrHold
-	}
-	values, ok := reply.([]any)
-	if !ok || len(values) != 5 {
-		return nil, ErrHold
-	}
-	text := func(value any, optional bool) ([]byte, error) {
-		if value == nil && optional {
-			return nil, nil
-		}
-		switch raw := value.(type) {
-		case string:
-			if len(raw) > 65536 {
-				return nil, ErrHold
-			}
-			return []byte(raw), nil
-		case []byte:
-			if len(raw) > 65536 {
-				return nil, ErrHold
-			}
-			return bytes.Clone(raw), nil
-		default:
-			return nil, ErrHold
-		}
-	}
-	raw := make([][]byte, 5)
-	for index, value := range values {
-		var err error
-		raw[index], err = text(value, index == 2 || index == 3)
-		if err != nil {
-			return nil, err
-		}
-	}
-	nonce, err := hex.DecodeString(string(raw[4]))
-	if err != nil || len(nonce) != 16 || hex.EncodeToString(nonce) != string(raw[4]) || !bytes.Equal(nonce, target.MaintenanceNonce) {
-		return nil, ErrHold
-	}
-	identity, err := placement.ParseRedisInstanceIdentity(string(raw[0]), string(raw[1]))
-	if err != nil || identity.Role != "master" || identity.RunID != string(target.ServerRunId) {
-		return nil, ErrHold
-	}
-	verdict, _ := placement.VerifyRouteReady(placement.RouteReadyRead{MarkerPresent: raw[2] != nil, MarkerRaw: string(raw[2]), Identity: identity})
-	if verdict != placement.RouteReadyTrusted {
-		return nil, ErrHold
-	}
-	return &pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit{MappingTarget: proto.Clone(target).(*pb.SqlWriterMaintenanceReceipt_RedisTargetClosure), InfoServerRaw: raw[0], InfoReplicationRaw: raw[1], ReadyMarkerRaw: raw[2], WatermarkRaw: raw[3]}, nil
 }

@@ -96,7 +96,7 @@ func TestAutoscale_DrainCascadesMirrorsBornDuringTheDrainWindow(t *testing.T) {
 	require.NoError(t, sc.Redis.Set(sceneSourceKey(mirrorID), "101"))
 
 	// 人走干净,下一拍收尾。
-	require.NoError(t, sc.Redis.Set("instance:101:player_count", "0"))
+	seedSceneMembersVia(sc, 101, 0)
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 
 	mirrorNode, _ := sc.Redis.Get(sceneNodeKey(mirrorID))

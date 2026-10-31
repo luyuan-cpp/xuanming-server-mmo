@@ -29,6 +29,12 @@ func (r *resultReaderFixture) CommitMessages(ctx context.Context, _ ...kafkago.M
 	r.cancel()
 	return nil
 }
+
+// noArchive 是不关心来源归档的用例用的空操作;生产的归档处理器必需。
+func noArchive(context.Context, *kafkapb.BattleResultEvent, []byte, string, int, int64) error {
+	return nil
+}
+
 func TestGlobalResultsNeverCommitAfterSqlRetryBudgetIsExhausted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -39,7 +45,7 @@ func TestGlobalResultsNeverCommitAfterSqlRetryBudgetIsExhausted(t *testing.T) {
 	runResultConsumer(ctx, r, func(context.Context, *kafkapb.BattleResultEvent) error {
 		attempts++
 		return errors.New("SQL结果未知")
-	}, true, func(context.Context, time.Duration) bool { return true })
+	}, func(context.Context, time.Duration) bool { return true }, noArchive)
 	require.Equal(t, 3, attempts)
 	require.Equal(t, 1, r.fetched)
 	require.Zero(t, r.committed)
@@ -58,7 +64,7 @@ func TestGlobalResultsRetrySameMessageAndCommitOnlyAfterSuccess(t *testing.T) {
 			return errors.New("SQL暂不可用")
 		}
 		return nil
-	}, true, func(context.Context, time.Duration) bool { return true })
+	}, func(context.Context, time.Duration) bool { return true }, noArchive)
 	require.Equal(t, 3, attempts)
 	require.Equal(t, 1, r.committed)
 }
@@ -66,19 +72,9 @@ func TestGlobalMalformedResultCannotAdvanceOffset(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	r := &resultReaderFixture{message: kafkago.Message{Value: []byte{255}}, cancel: cancel}
-	runResultConsumer(ctx, r, func(context.Context, *kafkapb.BattleResultEvent) error { t.Fatal("坏消息不能入账"); return nil }, true, func(context.Context, time.Duration) bool { return true })
+	runResultConsumer(ctx, r, func(context.Context, *kafkapb.BattleResultEvent) error { t.Fatal("坏消息不能入账"); return nil }, func(context.Context, time.Duration) bool { return true }, noArchive)
 	require.Zero(t, r.committed)
 }
-func TestLegacyResultConsumerRetainsExplicitSoftDataPolicy(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	body, e := proto.Marshal(&kafkapb.BattleResultEvent{BattleId: 7})
-	require.NoError(t, e)
-	r := &resultReaderFixture{message: kafkago.Message{Value: body}, cancel: cancel}
-	runResultConsumer(ctx, r, func(context.Context, *kafkapb.BattleResultEvent) error { return errors.New("旧软数据兼容") }, false, func(context.Context, time.Duration) bool { return true })
-	require.Equal(t, 1, r.committed)
-}
-
 func TestGlobalCompletionArchiveFailureDoesNotRateOrCommit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -88,7 +84,7 @@ func TestGlobalCompletionArchiveFailureDoesNotRateOrCommit(t *testing.T) {
 	runResultConsumer(ctx, r, func(context.Context, *kafkapb.BattleResultEvent) error {
 		t.Fatal("来源归档失败时不能先评分")
 		return nil
-	}, true, func(context.Context, time.Duration) bool { return true }, func(_ context.Context, got *kafkapb.BattleResultEvent, raw []byte, topic string, partition int, offset int64) error {
+	}, func(context.Context, time.Duration) bool { return true }, func(_ context.Context, got *kafkapb.BattleResultEvent, raw []byte, topic string, partition int, offset int64) error {
 		archived++
 		require.True(t, proto.Equal(event, got))
 		require.Equal(t, r.message.Value, raw)
@@ -114,7 +110,7 @@ func TestCompletionArchiveRetryUsesSameRawBeforeRatingAndCommit(t *testing.T) {
 		require.Zero(t, r.committed)
 		rated++
 		return nil
-	}, true, func(context.Context, time.Duration) bool { return true }, func(_ context.Context, _ *kafkapb.BattleResultEvent, got []byte, _ string, _ int, _ int64) error {
+	}, func(context.Context, time.Duration) bool { return true }, func(_ context.Context, _ *kafkapb.BattleResultEvent, got []byte, _ string, _ int, _ int64) error {
 		archived++
 		require.Equal(t, raw, got)
 		if archived < 3 {
@@ -139,7 +135,7 @@ func TestCompletionArchiveReplaysBeforeRetryingRating(t *testing.T) {
 			return errors.New("评分提交未知")
 		}
 		return nil
-	}, true, func(context.Context, time.Duration) bool { return true }, func(context.Context, *kafkapb.BattleResultEvent, []byte, string, int, int64) error {
+	}, func(context.Context, time.Duration) bool { return true }, func(context.Context, *kafkapb.BattleResultEvent, []byte, string, int, int64) error {
 		archived++
 		return nil
 	})
@@ -150,11 +146,9 @@ func TestCompletionArchiveReplaysBeforeRetryingRating(t *testing.T) {
 func TestGlobalResultStartupRequiresCompletionRecorderBeforeKafka(t *testing.T) {
 	handle := func(context.Context, *kafkapb.BattleResultEvent) error { return nil }
 	recorder := func(context.Context, *kafkapb.BattleResultEvent, []byte, string, int, int64) error { return nil }
-	config := ResultConsumerConfig{RequireSQLCommit: true}
-	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle), "完整来源归档")
+	config := ResultConsumerConfig{RequireDurability: true}
 	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle, nil), "完整来源归档")
 	require.ErrorContains(t, StartResultConsumer(context.Background(), config, nil, recorder), "完整来源归档")
-	require.ErrorContains(t, StartResultConsumer(context.Background(), config, handle, recorder, recorder), "完整来源归档")
 }
 
 func mustResultBytes(t *testing.T, event *kafkapb.BattleResultEvent) []byte {

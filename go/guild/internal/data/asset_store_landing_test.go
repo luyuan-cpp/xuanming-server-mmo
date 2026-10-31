@@ -28,6 +28,7 @@ import (
 	pb "proto/guild"
 
 	"shared/assetop"
+	"shared/assetop/assetoptest"
 
 	"guild/internal/constants"
 )
@@ -228,8 +229,11 @@ func (landingLedger) ReadStoreLedger(context.Context, uint64) (assetop.StoreLedg
 	return assetop.StoreLedger{Found: true, Released: true, Ledger: &componentpb.PlayerAssetOpLedgerComp{}}, nil
 }
 
-// landingApplier 记下每一次投递并一律回"已落盘的全额应用"。WakePlayer 逐行串行,锁只为让读取方不与写入竞争。
+// landingApplier 记下每一次投递并一律回"已落盘的全额应用",结局同时记进自己的已提交账本(Loop 终结前核对它)。
+// WakePlayer 逐行串行,锁只为让读取方不与写入竞争。
 type landingApplier struct {
+	assetoptest.CommittedLedger
+
 	mu    sync.Mutex
 	calls []*assetpb.AssetOpRequest
 }
@@ -238,7 +242,11 @@ func (a *landingApplier) Do(_ context.Context, _ assetop.RPC, req *assetpb.Asset
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.calls = append(a.calls, req)
-	return assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED, Durable: true}, nil
+	res := assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED, Durable: true}
+	if err := a.Commit(req, res); err != nil {
+		return assetop.Result{}, err
+	}
+	return res, nil
 }
 
 func (a *landingApplier) requests() []*assetpb.AssetOpRequest {
@@ -571,6 +579,7 @@ func TestWakePlayer_EndToEndWithGuildStore(t *testing.T) {
 	loop, err := assetop.NewLoop(assetop.DefaultLoopConfig(), f.store, applier, nil,
 		func() time.Time { return time.UnixMilli(int64(testNowMs)) })
 	require.NoError(t, err)
+	loop.Ledger = applier
 
 	ctx, cancel := context.WithTimeout(f.ctx, 10*time.Second)
 	defer cancel()

@@ -89,3 +89,28 @@ func TestGoRedisMaxCallDuration(t *testing.T) {
 		})
 	}
 }
+
+// 单实例与 Cluster 句柄走同一套判定。只构造客户端,不拨号。
+func TestUniversalMaxCallDuration(t *testing.T) {
+	addrs := []string{"127.0.0.1:0"}
+	cases := []struct {
+		name   string
+		client redis.UniversalClient
+		want   time.Duration
+	}{
+		{"单实例认 ctx", redis.NewClient(&redis.Options{Addr: addrs[0], ContextTimeoutEnabled: true}), 0},
+		{"单实例默认读写超时", redis.NewClient(&redis.Options{Addr: addrs[0]}), 6 * time.Second},
+		{"Cluster 认 ctx", redis.NewClusterClient(&redis.ClusterOptions{Addrs: addrs, ContextTimeoutEnabled: true}), 0},
+		{"Cluster 默认读写超时", redis.NewClusterClient(&redis.ClusterOptions{Addrs: addrs}), 6 * time.Second},
+		{"Cluster 显式读写超时", redis.NewClusterClient(&redis.ClusterOptions{Addrs: addrs, ReadTimeout: 500 * time.Millisecond, WriteTimeout: 250 * time.Millisecond}), 750 * time.Millisecond},
+		{"Cluster 禁用读截止", redis.NewClusterClient(&redis.ClusterOptions{Addrs: addrs, ContextTimeoutEnabled: true, ReadTimeout: -2}), UnboundedCall},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() { _ = tc.client.Close() }()
+			if got := UniversalMaxCallDuration(tc.client); got != tc.want {
+				t.Fatalf("UniversalMaxCallDuration = %s,期望 %s", got, tc.want)
+			}
+		})
+	}
+}

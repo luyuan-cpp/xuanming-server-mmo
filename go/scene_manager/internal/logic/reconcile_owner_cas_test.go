@@ -48,7 +48,7 @@ const (
 	reconcileNodeLive = "8960"
 )
 
-// 新节点上已有的玩家数(含刚进这个实例的两个);修复前收尾会把实例人数从它身上扣掉。
+// 新节点上已有的玩家数(含刚进这个实例的两个);修复前收尾会把实例成员从它身上摘掉。
 const (
 	reconcileLiveNodePlayers = "5"
 	reconcileScenePlayers    = "2"
@@ -80,7 +80,7 @@ func newReconcileDeadOwnerCase(t *testing.T, sceneID uint64) *reconcileDeadOwner
 	seedSceneOwnedBy(t, mr, reconcileCASZone, sceneID, reconcileNodeDead)
 	_, err := mr.ZAdd(activeInstancesKey(reconcileCASZone), float64(nowUnix()), member)
 	require.NoError(t, err)
-	require.NoError(t, mr.Set(fmtInstancePlayerCountKey(sceneID), reconcileScenePlayers))
+	seedSceneMembers(mr, sceneID, mustAtoi(reconcileScenePlayers))
 
 	// 前提:dead 已判死、屏障放行,live 存活。
 	require.False(t, IsNodeAlive(sc, reconcileCASZone, reconcileNodeDead))
@@ -97,7 +97,7 @@ func newReconcileDeadOwnerCase(t *testing.T, sceneID uint64) *reconcileDeadOwner
 func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *testing.T) {
 	c := newReconcileDeadOwnerCase(t, 89501)
 	ctx := context.Background()
-	require.NoError(t, c.mr.Set(nodePlayerCountKey(reconcileCASZone, reconcileNodeLive), reconcileLiveNodePlayers))
+	seedNodeMembers(c.mr, reconcileCASZone, reconcileNodeLive, mustAtoi(reconcileLiveNodePlayers))
 	// 改派成功的写者已把名额转到 live 的 GameServer(TransferAgonesRoomForScene),映射指向新名额。
 	require.NoError(t, c.mr.Set(sceneAgonesGsKey(c.sceneID), "gs-live"))
 
@@ -119,12 +119,12 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 	require.Equal(t, reconcileNodeLive, owner, "属主映射必须原样留给 live")
 	requireSceneIndexedOnlyOn(t, c.sc, reconcileCASZone, c.sceneID, reconcileNodeLive, reconcileNodeDead)
 	require.EqualValues(t, 1, readInt64(c.sc, nodeSceneCountKey(reconcileCASZone, reconcileNodeLive)), "新节点的 scene_count 不得被扣")
-	require.Equal(t, reconcileLiveNodePlayers, mustGet(t, c.mr, nodePlayerCountKey(reconcileCASZone, reconcileNodeLive)),
-		"新节点的 player_count 不得被扣掉实例人数")
+	require.Equal(t, reconcileLiveNodePlayers, nodeMemberCount(c.mr, reconcileCASZone, reconcileNodeLive),
+		"新节点的成员不得被摘掉实例成员")
 	require.EqualValues(t, 0, c.live.fake.destroyCalls.Load(), "不得向新节点发 DestroyScene")
 
 	// 其余场景键一个都没动。
-	require.Equal(t, reconcileScenePlayers, mustGet(t, c.mr, fmtInstancePlayerCountKey(c.sceneID)))
+	require.Equal(t, reconcileScenePlayers, sceneMemberCount(c.mr, c.sceneID))
 	require.Equal(t, "gs-live", mustGet(t, c.mr, sceneAgonesGsKey(c.sceneID)))
 	require.Equal(t, strconv.FormatUint(uint64(reconcileCASZone), 10), mustGet(t, c.mr, sceneZoneKey(c.sceneID)))
 	requireActiveInstance(t, c.sc, reconcileCASZone, c.sceneID, true)
@@ -134,8 +134,8 @@ func TestReconcileDeadNode_ReassignedAfterOwnerRead_LeavesNewOwnerIntact(t *test
 func TestReconcileDeadNode_StillOwnedByDeadNode_Destroys(t *testing.T) {
 	c := newReconcileDeadOwnerCase(t, 89502)
 	ctx := context.Background()
-	require.NoError(t, c.mr.Set(nodePlayerCountKey(reconcileCASZone, reconcileNodeDead), reconcileScenePlayers))
-	require.NoError(t, c.mr.Set(nodePlayerCountKey(reconcileCASZone, reconcileNodeLive), reconcileLiveNodePlayers))
+	seedNodeMembers(c.mr, reconcileCASZone, reconcileNodeDead, mustAtoi(reconcileScenePlayers))
+	seedNodeMembers(c.mr, reconcileCASZone, reconcileNodeLive, mustAtoi(reconcileLiveNodePlayers))
 
 	ok, err := destroyOrphanOfDeadNode(ctx, c.sc, reconcileCASZone, c.sceneID, reconcileNodeDead)
 	require.NoError(t, err)
@@ -143,17 +143,17 @@ func TestReconcileDeadNode_StillOwnedByDeadNode_Destroys(t *testing.T) {
 
 	member := strconv.FormatUint(c.sceneID, 10)
 	require.False(t, c.mr.Exists(sceneNodeKey(c.sceneID)))
-	require.False(t, c.mr.Exists(fmtInstancePlayerCountKey(c.sceneID)))
+	require.False(t, c.mr.Exists(instanceMembersKey(c.sceneID)))
 	require.False(t, c.mr.Exists(sceneZoneKey(c.sceneID)))
 	requireActiveInstance(t, c.sc, reconcileCASZone, c.sceneID, false)
 	in, err := c.sc.Redis.Sismember(nodeScenesKey(reconcileCASZone, reconcileNodeDead), member)
 	require.NoError(t, err)
 	require.False(t, in)
 	require.EqualValues(t, 0, readInt64(c.sc, nodeSceneCountKey(reconcileCASZone, reconcileNodeDead)))
-	require.EqualValues(t, 0, readInt64(c.sc, nodePlayerCountKey(reconcileCASZone, reconcileNodeDead)))
+	require.Equal(t, "0", nodeMemberCount(c.mr, reconcileCASZone, reconcileNodeDead))
 
 	require.False(t, c.mr.Exists(nodeSceneCountKey(reconcileCASZone, reconcileNodeLive)), "活节点不得被记账")
-	require.Equal(t, reconcileLiveNodePlayers, mustGet(t, c.mr, nodePlayerCountKey(reconcileCASZone, reconcileNodeLive)))
+	require.Equal(t, reconcileLiveNodePlayers, nodeMemberCount(c.mr, reconcileCASZone, reconcileNodeLive))
 	require.EqualValues(t, 0, c.live.fake.destroyCalls.Load())
 }
 
@@ -165,7 +165,7 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 	const reassigned, unmapped uint64 = 89503, 89504
 	for _, id := range []uint64{reassigned, unmapped} {
 		require.NoError(t, mr.Set(sceneZoneKey(id), "1"))
-		require.NoError(t, mr.Set(fmtInstancePlayerCountKey(id), "3"))
+		seedSceneMembers(mr, id, 3)
 		require.NoError(t, mr.Set(sceneMirrorFlagKey(id), "1"))
 		require.NoError(t, mr.Set(sceneSourceKey(id), "77"))
 		require.NoError(t, mr.Set(sceneAgonesGsKey(id), "gs-x"))
@@ -175,15 +175,15 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 	require.NoError(t, mr.Set(sceneNodeKey(reassigned), reconcileNodeLive))
 
 	for _, id := range []uint64{reassigned, unmapped} {
-		node, gs, pc, err := AtomicDestroyForce(sc, reconcileCASZone, id, reconcileNodeDead)
+		node, gs, members, err := AtomicDestroyForce(sc, reconcileCASZone, id, reconcileNodeDead)
 		require.NoError(t, err)
 		require.Empty(t, node)
 		require.Empty(t, gs)
-		require.Zero(t, pc)
+		require.Empty(t, members)
 	}
 	for _, id := range []uint64{reassigned, unmapped} {
 		require.Equal(t, "1", mustGet(t, mr, sceneZoneKey(id)))
-		require.Equal(t, "3", mustGet(t, mr, fmtInstancePlayerCountKey(id)))
+		require.Equal(t, "3", sceneMemberCount(mr, id))
 		require.Equal(t, "1", mustGet(t, mr, sceneMirrorFlagKey(id)))
 		require.Equal(t, "77", mustGet(t, mr, sceneSourceKey(id)))
 		require.Equal(t, "gs-x", mustGet(t, mr, sceneAgonesGsKey(id)))
@@ -194,26 +194,26 @@ func TestAtomicDestroyForce_ExpectedOwnerMismatchTouchesNothing(t *testing.T) {
 }
 
 // 脚本层:期望属主为空串时不比对,与修复前同一语义 —— explicit / cascade / source_migrated / source_scaled_in
-// (都经 destroyInstanceForce)依赖它,属主是谁都照抹,返回抹除前的 (属主, 名额, 人数)。
+// (都经 destroyInstanceForce)依赖它,属主是谁都照抹,返回抹除前的 (属主, 名额, 成员)。
 func TestAtomicDestroyForce_NoExpectedOwnerWipesWhoeverOwnsIt(t *testing.T) {
 	sc, mr := newIntegrationSvcCtx(t)
 	const sceneID, bystander uint64 = 89505, 89506
 	require.NoError(t, mr.Set(sceneNodeKey(sceneID), reconcileNodeLive))
-	require.NoError(t, mr.Set(fmtInstancePlayerCountKey(sceneID), "4"))
+	seedSceneMembers(mr, sceneID, 4)
 	require.NoError(t, mr.Set(sceneAgonesGsKey(sceneID), "gs-live"))
 	for _, id := range []uint64{sceneID, bystander} {
 		_, err := mr.ZAdd(activeInstancesKey(reconcileCASZone), 1, strconv.FormatUint(id, 10))
 		require.NoError(t, err)
 	}
 
-	node, gs, pc, err := AtomicDestroyForce(sc, reconcileCASZone, sceneID, "")
+	node, gs, members, err := AtomicDestroyForce(sc, reconcileCASZone, sceneID, "")
 	require.NoError(t, err)
 	require.Equal(t, reconcileNodeLive, node)
 	require.Equal(t, "gs-live", gs)
-	require.EqualValues(t, 4, pc)
+	require.Len(t, members, 4)
 
 	require.False(t, mr.Exists(sceneNodeKey(sceneID)))
-	require.False(t, mr.Exists(fmtInstancePlayerCountKey(sceneID)))
+	require.False(t, mr.Exists(instanceMembersKey(sceneID)))
 	require.False(t, mr.Exists(sceneAgonesGsKey(sceneID)))
 	requireActiveInstance(t, sc, reconcileCASZone, sceneID, false)
 	requireActiveInstance(t, sc, reconcileCASZone, bystander, true)

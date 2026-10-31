@@ -24,6 +24,7 @@ import (
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
 	"shared/ownerepoch"
+	"shared/redisslot"
 )
 
 // ---------------------------------------------------------------------------
@@ -87,7 +88,7 @@ func seedSceneOnNode(mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, nod
 	mr.ZAdd(nodeLoadKey(zoneID), 0, nodeID)
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneID), nodeID)
 	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, sceneID), fmt.Sprintf("%d", zoneID))
-	mr.Set(fmt.Sprintf(InstancePlayerCountKey, sceneID), playerCount)
+	seedSceneMembers(mr, sceneID, mustAtoi(playerCount))
 }
 
 // defaultWorldTestConf 是单测里顶替「World 表第一行」的默认大世界 conf。
@@ -175,6 +176,7 @@ func TestEnterScene_SamePlacementReconnectDoesNotMintEpoch(t *testing.T) {
 	)
 	seedSceneOnNode(mr, testZoneId, sceneID, "10", "1")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, "10", testZoneId))
+	adoptSceneMember(mr, sceneID, playerID)
 	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	beforeRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 
@@ -191,7 +193,7 @@ func TestEnterScene_SamePlacementReconnectDoesNotMintEpoch(t *testing.T) {
 	require.Len(t, *captured, 1)
 	event := decodeRoutePlayerEvent(t, (*captured)[0])
 	assert.Equal(t, uint64(1), event.OwnerEpoch, "重连事件原样带当前 epoch")
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneID))
+	count := sceneCountText(sc, sceneID)
 	assert.Equal(t, "1", count, "重连不重复计人数")
 }
 
@@ -406,8 +408,9 @@ func TestEnterScene_CrossNodeWithStaleMarkerIsRejectedAsHandoffPending(t *testin
 	)
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
+	seedNodeMembers(mr, testZoneId, "20", 4)
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	// 标记来自更早一代(epoch 0):不能证明当前持有者已落盘。
 	writeHandoffMarker(t, sc, playerID, 0)
@@ -423,9 +426,9 @@ func TestEnterScene_CrossNodeWithStaleMarkerIsRejectedAsHandoffPending(t *testin
 	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
 	require.NotNil(t, loc)
 	assert.Equal(t, oldScene, loc.SceneId)
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
-	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "20"))
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	targetCount := sceneCountText(sc, targetID)
+	nodeCount := nodeCountText(sc, testZoneId, "20")
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "4", targetCount)
 	assert.Equal(t, "4", nodeCount)
 	assert.Equal(t, "3", oldCount)
@@ -442,8 +445,9 @@ func TestEnterScene_CrossNodeWithCurrentMarkerIsAllowedAndMintsNextEpoch(t *test
 	)
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
+	seedNodeMembers(mr, testZoneId, "20", 4)
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	// 源 scene 已为当前 epoch(1)落盘并写标记。
 	writeHandoffMarker(t, sc, playerID, 1)
 	withReachableSceneNode(t, sc, "10", "20")
@@ -463,8 +467,8 @@ func TestEnterScene_CrossNodeWithCurrentMarkerIsAllowedAndMintsNextEpoch(t *test
 	assert.Equal(t, uint64(2), loc.OwnerEpoch)
 	require.Len(t, *captured, 1)
 	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	targetCount := sceneCountText(sc, targetID)
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "5", targetCount)
 	assert.Equal(t, "2", oldCount)
 	// 标记由 scene_manager 只读不删,靠 TTL 过期。
@@ -482,6 +486,7 @@ func TestEnterScene_CrossZoneWithCurrentMarkerReleasesToAwaitingPlacement(t *tes
 	)
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	// 请求不指定地图(conf=0):第一条腿预检目标 zone 的默认大世界,这里让它开着。
 	seedDefaultWorldChannel(t, mr, 2)
@@ -508,7 +513,7 @@ func TestEnterScene_CrossZoneWithCurrentMarkerReleasesToAwaitingPlacement(t *tes
 	assert.Equal(t, "", loc.NodeId)
 	assert.Equal(t, uint64(0), loc.SceneId)
 	assert.Equal(t, uint64(2), loc.OwnerEpoch)
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "2", oldCount, "源 scene 收到应答后销毁实体,旧场景人数在放行时释放")
 	require.Len(t, *captured, 1, "RedirectToGateEvent 推给当前 Gate")
 }
@@ -527,6 +532,7 @@ func TestEnterScene_CrossZoneRedirectKafkaFailureBumpsEpochAndLeavesReceipt(t *t
 	)
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
 	marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
@@ -556,7 +562,7 @@ func TestEnterScene_CrossZoneRedirectKafkaFailureBumpsEpochAndLeavesReceipt(t *t
 	assert.Equal(t, marker, loc.RollbackReceipt, "回执 = 本次所凭标记原文")
 	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
 	assert.Equal(t, "3:1757000000000", forwarded, "标记转写到新 epoch,saved_at_ms 后缀不变")
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "3", oldCount, "旧场景人数退回")
 }
 
@@ -593,7 +599,7 @@ func TestEnterScene_AwaitingPlacementSecondLegIsAllowedWithoutMarker(t *testing.
 	require.Len(t, *captured, 1)
 	event := decodeRoutePlayerEvent(t, (*captured)[0])
 	assert.Equal(t, uint64(2), event.OwnerEpoch)
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	count := sceneCountText(sc, targetID)
 	assert.Equal(t, "1", count)
 }
 
@@ -647,9 +653,11 @@ func TestEnterScene_RouteFailureAfterHandoffBumpsEpochAndLeavesReceipt(t *testin
 	)
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "3")
-	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
+	seedNodeMembers(mr, testZoneId, "10", 3)
+	seedNodeMembers(mr, testZoneId, "20", 4)
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
+	adoptNodeMember(mr, testZoneId, "10", playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	withReachableSceneNode(t, sc, "10", "20")
 
@@ -673,10 +681,10 @@ func TestEnterScene_RouteFailureAfterHandoffBumpsEpochAndLeavesReceipt(t *testin
 	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
 	assert.Equal(t, "3:1757000000000", forwarded)
 	assert.Greater(t, mr.TTL(ownerepoch.HandoffKey(playerID)), time.Duration(0), "转写标记必须带 TTL")
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
-	targetNode, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "20"))
-	oldNode, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	targetCount := sceneCountText(sc, targetID)
+	oldCount := sceneCountText(sc, oldScene)
+	targetNode := nodeCountText(sc, testZoneId, "20")
+	oldNode := nodeCountText(sc, testZoneId, "10")
 	assert.Equal(t, "4", targetCount)
 	assert.Equal(t, "3", oldCount)
 	assert.Equal(t, "4", targetNode)
@@ -725,6 +733,7 @@ func TestEnterScene_RouteFailureKeepsPlacementWhenMarkerAlreadyConsumed(t *testi
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	withReachableSceneNode(t, sc, "10", "20")
 	markerGoneBefore := enterSceneRollbackCount(t, rollbackOutcomeMarkerGone)
@@ -747,8 +756,8 @@ func TestEnterScene_RouteFailureKeepsPlacementWhenMarkerAlreadyConsumed(t *testi
 	assert.Empty(t, loc.RollbackReceipt)
 	assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "回 3 时不得写出转写标记")
 	assert.Equal(t, markerGoneBefore+1, enterSceneRollbackCount(t, rollbackOutcomeMarkerGone))
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	targetCount := sceneCountText(sc, targetID)
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "5", targetCount, "落点保留:目标场景的预占不退")
 	assert.Equal(t, "2", oldCount, "落点保留:旧场景的扣减不还")
 }
@@ -768,6 +777,7 @@ func TestEnterScene_CrossZoneRedirectFailureAfterMarkerWithdrawnKeepsAwaitingPla
 	sc.Config.KafkaWriteTimeoutSeconds = 1
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
 	markerGoneBefore := enterSceneRollbackCount(t, rollbackOutcomeMarkerGone)
@@ -794,7 +804,7 @@ func TestEnterScene_CrossZoneRedirectFailureAfterMarkerWithdrawnKeepsAwaitingPla
 	assert.Equal(t, uint64(2), loc.OwnerEpoch)
 	assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)))
 	assert.Equal(t, markerGoneBefore+1, enterSceneRollbackCount(t, rollbackOutcomeMarkerGone))
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "2", oldCount, "没回滚:旧场景人数不还")
 }
 
@@ -841,7 +851,7 @@ func TestEnterScene_SecondLegRouteFailureBumpsEpochAndStaysAwaiting(t *testing.T
 	now := time.Now()
 	assert.Equal(t, awaitingPlacementExpired(awaiting, now), awaitingPlacementExpired(loc, now), "票据有效期判断不受回滚影响")
 	assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "不凭标记:不写转写标记")
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	count := sceneCountText(sc, targetID)
 	assert.Equal(t, "0", count, "目标场景的预占退回")
 }
 
@@ -909,6 +919,7 @@ func TestEnterScene_ForwardedMarkerReopensHandoffGateAfterRollback(t *testing.T)
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	withReachableSceneNode(t, sc, "10", "20")
 	request := func() *scene_manager.EnterSceneRequest {
@@ -988,6 +999,7 @@ func TestEnterScene_DevBypassWithoutMarkerDoesNotMintEpoch(t *testing.T) {
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	// 没有任何 handoff 标记。
 	withReachableSceneNode(t, sc, "10", "20")
 
@@ -1020,6 +1032,7 @@ func TestEnterScene_DevBypassWithCurrentMarkerStillMints(t *testing.T) {
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	withReachableSceneNode(t, sc, "10", "20")
 
@@ -1050,6 +1063,7 @@ func TestEnterScene_SameNodeSceneSwitchDoesNotMintEpoch(t *testing.T) {
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
@@ -1084,6 +1098,7 @@ func TestEnterScene_SameNodeSceneSwitchMintsWhenEpochIsZero(t *testing.T) {
 	// 存量 location:落在节点 10 上、epoch 0,owner_epoch 键从未写过。
 	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
 	require.NoError(t, err)
+	adoptSceneMember(mr, oldScene, playerID)
 	require.False(t, mr.Exists(ownerepoch.OwnerEpochKey(playerID)))
 	fake := withReachableSceneNode(t, sc, "10")
 	releasesBefore := fake.releaseCalls.Load()
@@ -1103,8 +1118,8 @@ func TestEnterScene_SameNodeSceneSwitchMintsWhenEpochIsZero(t *testing.T) {
 	require.Len(t, *captured, 1)
 	assert.Equal(t, uint64(1), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch, "路由事件带铸出的值,持有节点据此把缓存从 0 抬上来")
 	assert.Equal(t, releasesBefore, fake.releaseCalls.Load(), "持有者没换:同节点不得调用 ReleasePlayer")
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	oldCount := sceneCountText(sc, oldScene)
+	targetCount := sceneCountText(sc, targetID)
 	assert.Equal(t, "2", oldCount)
 	assert.Equal(t, "5", targetCount)
 }
@@ -1179,8 +1194,8 @@ func TestEnterScene_SameNodeReseedBlockedByZeroKeyRejectsWithoutErasingLocationE
 	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	assert.Equal(t, string(raw), after, "location 里的 5 不得被抹成 0")
 	assert.Empty(t, *captured, "拒绝时不发路由")
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	oldCount := sceneCountText(sc, oldScene)
+	targetCount := sceneCountText(sc, targetID)
 	assert.Equal(t, "3", oldCount)
 	assert.Equal(t, "4", targetCount)
 }
@@ -1202,6 +1217,7 @@ func TestEnterScene_SameNodeZeroEpochMintRouteFailureKeepsMintedEpoch(t *testing
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
 	_, err := placePlayerLocation(sc, playerID, oldScene, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
 	require.NoError(t, err)
+	adoptSceneMember(mr, oldScene, playerID)
 	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	withReachableSceneNode(t, sc, "10")
 
@@ -1216,8 +1232,8 @@ func TestEnterScene_SameNodeZeroEpochMintRouteFailureKeepsMintedEpoch(t *testing
 	restoredRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	assert.Equal(t, oldRaw, restoredRaw, "location 照常退回")
 	assert.False(t, mr.Exists(ownerepoch.HandoffKey(playerID)), "keep 不写转写标记")
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	oldCount := sceneCountText(sc, oldScene)
+	targetCount := sceneCountText(sc, targetID)
 	assert.Equal(t, "3", oldCount)
 	assert.Equal(t, "4", targetCount)
 }
@@ -1304,6 +1320,7 @@ func TestEnterScene_TravelTargetMapIsCarriedByAwaitingPlacement(t *testing.T) {
 	)
 	seedSceneOnNode(mr, 1, oldScene, "10", "1")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	// 这张图在目标 zone 开着(频道集合非空):第一条腿的只读地图预检只看这一点,不解析、不预占。
 	mr.SAdd(worldChannelsKey(2, confID), "7226")
@@ -1323,9 +1340,7 @@ func TestEnterScene_TravelTargetMapIsCarriedByAwaitingPlacement(t *testing.T) {
 	require.NotNil(t, loc)
 	assert.Equal(t, "", loc.NodeId)
 	assert.Equal(t, confID, loc.PendingSceneConfId, "目标地图必须随等待落点一起记下")
-	reservedCount, countErr := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, uint64(7226)))
-	require.NoError(t, countErr)
-	assert.Equal(t, "", reservedCount, "第一条腿的地图预检是只读的,不得预占目标频道人数")
+	assert.Equal(t, "0", sceneCountText(sc, uint64(7226)), "第一条腿的地图预检是只读的,不得预占目标频道人数")
 
 	// 常规落点不得带着 pending 地图(它只属于等待落点)。
 	placed, err := placePlayerLocation(sc, playerID, 7226, "20", 2, placementGuard{observedEpoch: 2, mint: true})
@@ -1349,6 +1364,7 @@ func TestEnterScene_TravelToUnopenedMapIsRejectedBeforeReleasingOwnership(t *tes
 	)
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 
@@ -1369,7 +1385,7 @@ func TestEnterScene_TravelToUnopenedMapIsRejectedBeforeReleasingOwnership(t *tes
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "3", oldCount)
 	assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
 }
@@ -1398,6 +1414,7 @@ func TestEnterScene_TravelWithoutMapRejectedWhenTargetDefaultWorldUnavailable(t 
 
 			seedSceneOnNode(mr, 1, tc.oldScene, "10", "3")
 			require.NoError(t, UpdatePlayerLocation(context.Background(), sc, tc.playerID, tc.oldScene, "10", 1))
+			adoptSceneMember(mr, tc.oldScene, tc.playerID)
 			writeHandoffMarker(t, sc, tc.playerID, 1)
 			oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
 			markerRaw, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
@@ -1424,10 +1441,10 @@ func TestEnterScene_TravelWithoutMapRejectedWhenTargetDefaultWorldUnavailable(t 
 			assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
 			markerAfter, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
 			assert.Equal(t, markerRaw, markerAfter)
-			oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, tc.oldScene))
+			oldCount := sceneCountText(sc, tc.oldScene)
 			assert.Equal(t, "3", oldCount)
 			assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
-			exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:travel-no-default-world", tc.playerID))
+			exists, existsErr := sc.Redis.Exists(redisslot.EnterSceneDedupKey(tc.playerID, "travel-no-default-world"))
 			require.NoError(t, existsErr)
 			assert.False(t, exists, "拒绝必须释放 request_id 占位")
 		})
@@ -1446,6 +1463,7 @@ func TestEnterScene_TravelWithoutMapReleasesWhenTargetDefaultWorldIsOpen(t *test
 	)
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
 	before := enterSceneRejectedCount(t, 2, rejectReasonTravelMapUnavailable)
@@ -1469,8 +1487,8 @@ func TestEnterScene_TravelWithoutMapReleasesWhenTargetDefaultWorldIsOpen(t *test
 	assert.Equal(t, uint32(2), loc.ZoneId)
 	assert.Equal(t, "", loc.NodeId)
 	assert.Equal(t, uint64(0), loc.PendingSceneConfId, "没指定地图:等待落点不记 pending,由第二条腿按默认大世界口径解析")
-	reservedCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, uint64(7300)))
-	assert.Equal(t, "", reservedCount, "地图预检是只读的,不得预占默认大世界频道人数")
+	reservedCount := sceneCountText(sc, uint64(7300))
+	assert.Equal(t, "0", reservedCount, "地图预检是只读的,不得预占默认大世界频道人数")
 	require.Len(t, *captured, 1, "RedirectToGateEvent 推给当前 Gate")
 }
 
@@ -1491,7 +1509,7 @@ func TestEnterScene_TravelSecondLegFallsBackToDefaultWorldWhenPendingMapIsUnavai
 	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
 	mr.SAdd(worldChannelsKey(2, defaultConf), fmt.Sprintf("%d", defaultID))
 	seedSceneOnNode(mr, 2, defaultID, "10", "0")
-	mr.Set(nodePlayerCountKey(2, "10"), "0")
+	seedNodeMembers(mr, 2, "10", 0)
 	// 第一条腿留下的等待落点:zone 2、无节点、epoch 1,目标地图 missingConf 在 zone 2 没有任何频道。
 	placed, err := placePlayerLocation(sc, playerID, 0, "", 2,
 		placementGuard{observedEpoch: 0, mint: true, pendingSceneConfID: missingConf})
@@ -1514,7 +1532,7 @@ func TestEnterScene_TravelSecondLegFallsBackToDefaultWorldWhenPendingMapIsUnavai
 	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "落点照常铸造下一代")
 	require.Len(t, *captured, 1)
 	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, defaultID))
+	count := sceneCountText(sc, defaultID)
 	assert.Equal(t, "1", count)
 }
 
@@ -1533,7 +1551,7 @@ func TestEnterScene_ExplicitMapIsNotSubjectToPendingMapFallback(t *testing.T) {
 	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
 	mr.SAdd(worldChannelsKey(2, defaultConf), fmt.Sprintf("%d", defaultID))
 	seedSceneOnNode(mr, 2, defaultID, "10", "0")
-	mr.Set(nodePlayerCountKey(2, "10"), "0")
+	seedNodeMembers(mr, 2, "10", 0)
 	_, err := placePlayerLocation(sc, playerID, 0, "", 2,
 		placementGuard{observedEpoch: 0, mint: true, pendingSceneConfID: defaultConf})
 	require.NoError(t, err)
@@ -1544,7 +1562,7 @@ func TestEnterScene_ExplicitMapIsNotSubjectToPendingMapFallback(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrNoAvailableNode, resp.ErrorCode)
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, defaultID))
+	count := sceneCountText(sc, defaultID)
 	assert.Equal(t, "0", count, "硬拒的请求不得占用默认大世界的人数")
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "硬拒不改归属")
 }
@@ -1619,7 +1637,7 @@ func TestEnterScene_ResponseEchoesCorrelationID(t *testing.T) {
 	}
 	fingerprint, err := enterSceneRequestFingerprint(pendingReq)
 	require.NoError(t, err)
-	pendingKey := fmt.Sprintf("enter_scene:dedup:%d:%s", playerID, pendingReq.RequestId)
+	pendingKey := redisslot.EnterSceneDedupKey(playerID, pendingReq.RequestId)
 	mr.Set(pendingKey, "pending:"+fingerprint+":first-owner")
 	mr.SetTTL(pendingKey, time.Minute)
 	pendingReq.CorrelationId = 7003
@@ -1634,7 +1652,7 @@ func TestEnterScene_ResponseEchoesCorrelationID(t *testing.T) {
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId, RequestId: "corr-echo-conflict",
 		CorrelationId: 7004,
 	}
-	conflictKey := fmt.Sprintf("enter_scene:dedup:%d:%s", playerID, conflictReq.RequestId)
+	conflictKey := redisslot.EnterSceneDedupKey(playerID, conflictReq.RequestId)
 	mr.Set(conflictKey, "pending:some-other-fingerprint:other-owner")
 	mr.SetTTL(conflictKey, time.Minute)
 	conflict, err := NewEnterSceneLogic(ctx, sc).EnterScene(conflictReq)
@@ -1646,7 +1664,7 @@ func TestEnterScene_ResponseEchoesCorrelationID(t *testing.T) {
 	// 跨 zone 重定向(另一名没有位置记录的玩家,只送连接)。
 	mr.SAdd(worldChannelsKey(2, remoteConf), fmt.Sprintf("%d", remoteID))
 	seedSceneOnNode(mr, 2, remoteID, "20", "2")
-	mr.Set(nodePlayerCountKey(2, "20"), "2")
+	seedNodeMembers(mr, 2, "20", 2)
 	redirectLogic := NewEnterSceneLogic(ctx, sc)
 	redirectLogic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
 		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
@@ -1696,6 +1714,7 @@ func TestEnterScene_CrossZoneRedirectIntoOwnZoneLeavesOwnershipUntouched(t *test
 	seedSceneOnNode(mr, 2, sceneID, "10", "1")
 	mr.ZAdd(nodeLoadKey(2), 0, "10")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, "10", 2))
+	adoptSceneMember(mr, sceneID, playerID)
 	before, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
@@ -1756,7 +1775,7 @@ func TestEnterScene_FreshAwaitingPlacementWithoutZoneLandsInGateZone(t *testing.
 	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
 	mr.SAdd(worldChannelsKey(testZoneId, defaultConf), fmt.Sprintf("%d", defaultID))
 	seedSceneOnNode(mr, testZoneId, defaultID, "10", "0")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "0")
+	seedNodeMembers(mr, testZoneId, "10", 0)
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
 	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -1802,7 +1821,7 @@ func TestEnterScene_FreshAwaitingPlacementWithoutZoneRejectsUnmappedHomeZone(t *
 	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
 	mr.SAdd(worldChannelsKey(testZoneId, defaultConf), fmt.Sprintf("%d", defaultID))
 	seedSceneOnNode(mr, testZoneId, defaultID, "10", "0")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "0")
+	seedNodeMembers(mr, testZoneId, "10", 0)
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
 	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -1820,8 +1839,8 @@ func TestEnterScene_FreshAwaitingPlacementWithoutZoneRejectsUnmappedHomeZone(t *
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	assert.Equal(t, awaitingRaw, raw)
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, defaultID))
-	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	count := sceneCountText(sc, defaultID)
+	nodeCount := nodeCountText(sc, testZoneId, "10")
 	assert.Equal(t, "0", count, "预占人数必须成对退回")
 	assert.Equal(t, "0", nodeCount)
 }
@@ -1859,8 +1878,10 @@ func TestEnterScene_ZeroZoneOverLocationInGateZoneBehavesLikeExplicitGateZone(t 
 		t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
 		mr.SAdd(worldChannelsKey(testZoneId, defaultConf), fmt.Sprintf("%d", defaultID))
 		seedSceneOnNode(mr, testZoneId, defaultID, "10", "1")
-		mr.Set(nodePlayerCountKey(testZoneId, "10"), "1")
+		seedNodeMembers(mr, testZoneId, "10", 1)
 		require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, defaultID, "10", testZoneId))
+		adoptSceneMember(mr, defaultID, playerID)
+		adoptNodeMember(mr, testZoneId, "10", playerID)
 
 		logic := NewEnterSceneLogic(context.Background(), sc)
 		logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -1875,7 +1896,7 @@ func TestEnterScene_ZeroZoneOverLocationInGateZoneBehavesLikeExplicitGateZone(t 
 		require.Len(t, *captured, 1)
 		event := decodeRoutePlayerEvent(t, (*captured)[0])
 		locRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
-		count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, defaultID))
+		count := sceneCountText(sc, defaultID)
 		return outcome{
 			errorCode:   resp.ErrorCode,
 			redirected:  resp.Redirect != nil,
@@ -2041,6 +2062,7 @@ func TestEnterScene_HomeZoneUnmappedSameZoneSceneSwitchStillFallsBackToGateZone(
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
@@ -2079,6 +2101,7 @@ func TestEnterScene_TravelFirstLegRejectsUnmappedHomeZoneWithoutSideEffects(t *t
 
 			seedSceneOnNode(mr, 1, tc.oldScene, "10", "3")
 			require.NoError(t, UpdatePlayerLocation(context.Background(), sc, tc.playerID, tc.oldScene, "10", 1))
+			adoptSceneMember(mr, tc.oldScene, tc.playerID)
 			writeHandoffMarker(t, sc, tc.playerID, 1)
 			// 地图预检(先于归属检查)要过:目标 zone 开着默认大世界,能挡住这次放行的只剩归属。
 			seedDefaultWorldChannel(t, mr, 2)
@@ -2105,10 +2128,10 @@ func TestEnterScene_TravelFirstLegRejectsUnmappedHomeZoneWithoutSideEffects(t *t
 			assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
 			markerAfter, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
 			assert.Equal(t, markerRaw, markerAfter)
-			oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, tc.oldScene))
+			oldCount := sceneCountText(sc, tc.oldScene)
 			assert.Equal(t, "3", oldCount)
 			assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
-			exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:travel-unmapped", tc.playerID))
+			exists, existsErr := sc.Redis.Exists(redisslot.EnterSceneDedupKey(tc.playerID, "travel-unmapped"))
 			require.NoError(t, existsErr)
 			assert.False(t, exists, "拒绝必须释放 request_id 占位")
 		})
@@ -2128,6 +2151,7 @@ func TestEnterScene_TravelFirstLegWithMappedHomeZoneStillReleases(t *testing.T) 
 	)
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
 
@@ -2195,7 +2219,7 @@ func TestEnterScene_TravelSecondLegRejectsUnmappedHomeZone(t *testing.T) {
 			sc.HomeZone = tc.homeZone
 
 			seedSceneOnNode(mr, 2, tc.targetID, "10", "4")
-			mr.Set(nodePlayerCountKey(2, "10"), "4")
+			seedNodeMembers(mr, 2, "10", 4)
 			// 第一条腿留下的等待落点:zone 2、无节点、epoch 1。
 			placed, err := placePlayerLocation(sc, tc.playerID, 0, "", 2, placementGuard{observedEpoch: 0, mint: true})
 			require.NoError(t, err)
@@ -2212,8 +2236,8 @@ func TestEnterScene_TravelSecondLegRejectsUnmappedHomeZone(t *testing.T) {
 			assert.Equal(t, "1", ownerEpochRaw(t, sc, tc.playerID))
 			raw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
 			assert.Equal(t, awaitingRaw, raw, "等待落点原样留着,映射补上后重试即可落地")
-			count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, tc.targetID))
-			nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(2, "10"))
+			count := sceneCountText(sc, tc.targetID)
+			nodeCount := nodeCountText(sc, 2, "10")
 			assert.Equal(t, "4", count)
 			assert.Equal(t, "4", nodeCount)
 		})
@@ -2237,7 +2261,7 @@ func TestEnterScene_ExpiredAwaitingPlacementStillRejectsUnmappedHomeZone(t *test
 	seedAwaitingPlacement(t, sc, mr, playerID, time.Now().Add(-(redirectTokenTTLSeconds+60)*time.Second))
 	awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "4")
+	seedNodeMembers(mr, testZoneId, "10", 4)
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
@@ -2251,8 +2275,8 @@ func TestEnterScene_ExpiredAwaitingPlacementStillRejectsUnmappedHomeZone(t *test
 	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
 	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	assert.Equal(t, awaitingRaw, raw)
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
-	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	count := sceneCountText(sc, targetID)
+	nodeCount := nodeCountText(sc, testZoneId, "10")
 	assert.Equal(t, "4", count)
 	assert.Equal(t, "4", nodeCount)
 }
@@ -2294,7 +2318,7 @@ func TestEnterScene_SceneDestroyedWhileEnteringIsCountedAsSceneGone(t *testing.T
 		targetID = uint64(7150)
 	)
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "4")
+	seedNodeMembers(mr, testZoneId, "10", 4)
 	sc.HomeZone = &fakeHomeZoneClient{zone: testZoneId, onCall: func() {
 		mr.Del(fmt.Sprintf(SceneNodeKeyFmt, targetID))
 	}}
@@ -2312,8 +2336,8 @@ func TestEnterScene_SceneDestroyedWhileEnteringIsCountedAsSceneGone(t *testing.T
 	require.NoError(t, locErr)
 	assert.Nil(t, loc)
 	assert.Equal(t, "", ownerEpochRaw(t, sc, playerID))
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
-	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	count := sceneCountText(sc, targetID)
+	nodeCount := nodeCountText(sc, testZoneId, "10")
 	assert.Equal(t, "4", count, "场景已不存在:不得再 INCR 出人数")
 	assert.Equal(t, "4", nodeCount)
 }
@@ -2328,7 +2352,7 @@ func TestEnterScene_HomeZoneUnavailableIsRejectedWithoutSideEffects(t *testing.T
 		targetID = uint64(7117)
 	)
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "4")
+	seedNodeMembers(mr, testZoneId, "10", 4)
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
@@ -2341,11 +2365,11 @@ func TestEnterScene_HomeZoneUnavailableIsRejectedWithoutSideEffects(t *testing.T
 	require.NoError(t, locErr)
 	assert.Nil(t, loc, "拒绝前不得写位置")
 	assert.Equal(t, "", ownerEpochRaw(t, sc, playerID), "拒绝前不得铸造 epoch")
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
-	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	count := sceneCountText(sc, targetID)
+	nodeCount := nodeCountText(sc, testZoneId, "10")
 	assert.Equal(t, "4", count)
 	assert.Equal(t, "4", nodeCount)
-	exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:home-zone-down", playerID))
+	exists, existsErr := sc.Redis.Exists(redisslot.EnterSceneDedupKey(playerID, "home-zone-down"))
 	require.NoError(t, existsErr)
 	assert.False(t, exists, "可重试拒绝必须释放 request_id 占位")
 }
@@ -2363,7 +2387,7 @@ func TestEnterScene_HomeZoneUnavailableReleasesAutoReservedChannel(t *testing.T)
 	// 自动选频道会在解析时预占人数,拒绝时必须成对释放。
 	mr.SAdd(worldChannelsKey(testZoneId, confID), fmt.Sprintf("%d", targetID))
 	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
-	mr.Set(nodePlayerCountKey(testZoneId, "10"), "4")
+	seedNodeMembers(mr, testZoneId, "10", 4)
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneConfId: confID, ZoneId: testZoneId,
@@ -2371,8 +2395,8 @@ func TestEnterScene_HomeZoneUnavailableReleasesAutoReservedChannel(t *testing.T)
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode)
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
-	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	count := sceneCountText(sc, targetID)
+	nodeCount := nodeCountText(sc, testZoneId, "10")
 	assert.Equal(t, "4", count, "拒绝后必须回滚频道预占")
 	assert.Equal(t, "4", nodeCount, "拒绝后必须回滚节点预占")
 }
@@ -2461,6 +2485,7 @@ func seedPlayerOnDeadNode(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Mi
 	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
 	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	adoptSceneMember(mr, oldScene, playerID)
 	mr.ZRem(nodeLoadKey(testZoneId), "10")
 	withReachableSceneNode(t, sc, "20")
 }
@@ -2499,7 +2524,7 @@ func TestEnterScene_DeadOwnerAfterBarrierIsTakenOverWithoutMarker(t *testing.T) 
 
 	// 旧场景还在(大世界频道会沿用同一个 scene_id 迁到活节点,人数原值保留、没有任何重算路径):
 	// 接管成功后必须把这名玩家占的那一个人数还回去,否则那个频道永久虚高。
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "2", oldCount)
 }
 
@@ -2517,7 +2542,7 @@ func TestEnterScene_DeadOwnerTakeoverDoesNotRecreateCountOfDestroyedScene(t *tes
 	)
 	seedPlayerOnDeadNode(t, sc, mr, playerID, oldScene, targetID)
 	mr.Del(fmt.Sprintf(SceneNodeKeyFmt, oldScene))
-	mr.Del(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	mr.Del(instanceMembersKey(oldScene))
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
@@ -2525,7 +2550,7 @@ func TestEnterScene_DeadOwnerTakeoverDoesNotRecreateCountOfDestroyedScene(t *tes
 	})
 	require.NoError(t, err)
 	require.Equal(t, uint32(0), resp.ErrorCode)
-	assert.False(t, mr.Exists(fmt.Sprintf(InstancePlayerCountKey, oldScene)))
+	assert.False(t, mr.Exists(instanceMembersKey(oldScene)))
 }
 
 // leader 缺位时节点丢了租约:没有人写 Redis 的 death_at。本副本亲眼看到它从注册表消失,
@@ -2581,7 +2606,7 @@ func TestEnterScene_DeadOwnerWithinBarrierIsStillRejected(t *testing.T) {
 	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 	assert.Equal(t, before, after)
 	assert.Empty(t, *captured)
-	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	targetCount := sceneCountText(sc, targetID)
 	assert.Equal(t, "4", targetCount, "拒绝时不得留下目标场景预占")
 
 	// 屏障过后(死亡标记消失)同一请求放行。
@@ -2959,6 +2984,7 @@ func TestEnterScene_CrossZoneRedirectKafkaAndRollbackFailureLeavesAwaitingPlacem
 	)
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	adoptSceneMember(mr, oldScene, playerID)
 	writeHandoffMarker(t, sc, playerID, 1)
 	seedDefaultWorldChannel(t, mr, 2)
 
@@ -2984,7 +3010,7 @@ func TestEnterScene_CrossZoneRedirectKafkaAndRollbackFailureLeavesAwaitingPlacem
 	assert.Equal(t, uint32(2), loc.ZoneId)
 	assert.Equal(t, "", loc.NodeId, "location 停在目标 zone 的等待落点")
 	assert.Equal(t, uint64(2), loc.OwnerEpoch)
-	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	oldCount := sceneCountText(sc, oldScene)
 	assert.Equal(t, "2", oldCount, "回滚没确认生效,旧场景人数不还")
 	assert.Equal(t, redisErrBefore+1, enterSceneRollbackCount(t, rollbackOutcomeRedisError))
 	assert.Equal(t, rolledBefore, enterSceneRollbackCount(t, rollbackOutcomeRolledBack))
@@ -3054,7 +3080,7 @@ func TestEnterScene_LoginAtSourceZoneOverUnrolledAwaitingPlacement(t *testing.T)
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
 		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 		assert.Equal(t, awaitingRaw, raw)
-		count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneID))
+		count := sceneCountText(sc, sceneID)
 		assert.Equal(t, "0", count)
 	})
 }

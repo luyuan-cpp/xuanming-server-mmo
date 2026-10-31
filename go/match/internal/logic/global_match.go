@@ -27,7 +27,7 @@ import (
 	"shared/serviceauth"
 )
 
-// globalJoin 是全球模式的入队（docs/design/global-match-hierarchical-pools.md §3、§5.4）：
+// globalJoin 是入队的提交路径（docs/design/global-match-hierarchical-pools.md §3、§5.4）：
 //   - 票据记 home zone（角色归属），范围树按它逐级放宽；
 //   - 计分模式（1V1 / 5V5）读不到评分就拒绝入队，不按默认分进池（计分池不能混进错误的分数）；
 //   - 单人档（PVE_SOLO、PVE_TEAM 1 人档）入队提交后立即尝试成局，失败的票留给池写者兜底。
@@ -101,7 +101,15 @@ func joinRejection(err error, fallback string) *pb.JoinQueueResponse {
 	}
 }
 
-func reserveGlobalDirect(ctx context.Context, s *svc.ServiceContext, key *pb.MatchDirectIntentRecord, payload []byte, mode pb.MatchMode, config uint32, members []uint64, tickets map[uint64]string, opts gatherOptions) (*pb.MatchFormationRecord, error) {
+// directOptions 点名成局(切磋、活动、整队直接开战)的附加参数。
+type directOptions struct {
+	// teamID 整队直接开战的队伍 id,写进每名成员的票据。
+	teamID uint64
+	// activityContext 非空:写进成局原件,建房时原样放进 CreateBattleRequest.activity_context。
+	activityContext *battlepb.BattleActivityContext
+}
+
+func reserveGlobalDirect(ctx context.Context, s *svc.ServiceContext, key *pb.MatchDirectIntentRecord, payload []byte, mode pb.MatchMode, config uint32, members []uint64, opts directOptions) (*pb.MatchFormationRecord, error) {
 	if old, original, e := s.Authority.FindDirect(ctx, key); e != nil {
 		return nil, e
 	} else if old != nil {
@@ -117,7 +125,7 @@ func reserveGlobalDirect(ctx context.Context, s *svc.ServiceContext, key *pb.Mat
 	var f *pb.MatchFormationRecord
 	var group []*pb.MatchAuthorityTicketRecord
 	if prepared == nil || !prepared.ExitPrepared {
-		f, group, err = buildGlobalDirect(ctx, s, mode, config, members, tickets, opts)
+		f, group, err = buildGlobalDirect(ctx, s, mode, config, members, nil, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +137,7 @@ func reserveGlobalDirect(ctx context.Context, s *svc.ServiceContext, key *pb.Mat
 	return resumeGlobalDirectAdmission(ctx, s, prepared)
 }
 
-func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.MatchMode, config uint32, members []uint64, tickets map[uint64]string, opts gatherOptions) (*pb.MatchFormationRecord, []*pb.MatchAuthorityTicketRecord, error) {
+func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.MatchMode, config uint32, members []uint64, tickets map[uint64]string, opts directOptions) (*pb.MatchFormationRecord, []*pb.MatchAuthorityTicketRecord, error) {
 	n, e := s.Authority.Now(ctx)
 	if e != nil {
 		return nil, nil, e
@@ -170,12 +178,9 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 	if region == 0 || !found {
 		return nil, nil, errors.New("没有满足全员硬延迟的共同机房")
 	}
-	id := opts.presetBattleID
-	if id == 0 {
-		id, e = s.BattleIDGen.Generate()
-		if e != nil {
-			return nil, nil, e
-		}
+	id, e := s.BattleIDGen.Generate()
+	if e != nil {
+		return nil, nil, e
 	}
 	f := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: target.PhysicalRegion, TargetNodeId: target.NodeId, TargetInstanceId: target.NodeUuid, TargetEndpoint: target.Endpoint, Mode: uint32(mode), ConfigId: config}
 	if opts.activityContext != nil {
@@ -190,45 +195,9 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 		if ticket == "" {
 			ticket = uuid.NewString()
 		}
-		group = append(group, &pb.MatchAuthorityTicketRecord{PlayerId: pid, Ticket: ticket, RequestId: f.OperationId, Mode: uint32(mode), ConfigId: config, TeamSize: uint32(len(members)), TeamId: opts.directTeamID, OwnerAccount: profiles[pid].OwnerAccount, OwnerRevision: profiles[pid].OwnerRevision, RatingCenti: int64(math.Round(loadRatingOrDefault(s, pid) * 100))})
+		group = append(group, &pb.MatchAuthorityTicketRecord{PlayerId: pid, Ticket: ticket, RequestId: f.OperationId, Mode: uint32(mode), ConfigId: config, TeamSize: uint32(len(members)), TeamId: opts.teamID, OwnerAccount: profiles[pid].OwnerAccount, OwnerRevision: profiles[pid].OwnerRevision, RatingCenti: int64(math.Round(loadRatingOrDefault(s, pid) * 100))})
 	}
 	return f, group, nil
-}
-
-// 后台入口只能恢复已经在业务成功回包之前提交的成局，绝不现场再发一个 operation。
-func globalDirectGather(s *svc.ServiceContext, mode pb.MatchMode, config uint32, members []uint64, tickets map[uint64]string, opts gatherOptions) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	var f *pb.MatchFormationRecord
-	var e error
-	if opts.presetBattleID != 0 {
-		f, e = s.Authority.Formation(ctx, opts.presetBattleID)
-	} else if len(members) > 0 {
-		t, err := s.Authority.Ticket(ctx, members[0])
-		e = err
-		if err == nil && t != nil && t.FormationId != 0 && t.Ticket == tickets[members[0]] {
-			f, e = s.Authority.Formation(ctx, t.FormationId)
-		}
-	}
-	if e != nil || f == nil || f.Mode != uint32(mode) || f.ConfigId != config || len(f.Members) != len(members) {
-		return false
-	}
-	for i, m := range f.Members {
-		if m.PlayerId != members[i] || (len(tickets) > 0 && m.Ticket != tickets[m.PlayerId]) {
-			return false
-		}
-	}
-	if f.State == 4 {
-		return true
-	}
-	if f.State == 5 {
-		return false
-	}
-	runGlobalFormation(s, f)
-	read, stop := context.WithTimeout(context.Background(), 3*time.Second)
-	defer stop()
-	f, e = s.Authority.Formation(read, f.BattleId)
-	return e == nil && f.State == 4
 }
 
 func releaseGlobalFinished(ctx context.Context, s *svc.ServiceContext, t *pb.MatchAuthorityTicketRecord) (bool, error) {
@@ -305,12 +274,6 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 		return
 	}
 	if f.State == 1 {
-		members := make([]uint64, 0, len(f.Members))
-		tickets := map[uint64]string{}
-		for _, m := range f.Members {
-			members = append(members, m.PlayerId)
-			tickets[m.PlayerId] = m.Ticket
-		}
 		var actx *battlepb.BattleActivityContext
 		if len(f.ActivityContext) > 0 {
 			actx = &battlepb.BattleActivityContext{}
@@ -318,7 +281,7 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 				return
 			}
 		}
-		runGatherWithOptions(s, pb.MatchMode(f.Mode), f.ConfigId, members, false, true, tickets, gatherOptions{presetBattleID: f.BattleId, formation: f, activityContext: actx})
+		runFormationGather(s, f, actx)
 		return
 	}
 	if len(f.CreateRequest) == 0 {
@@ -462,8 +425,8 @@ func CommitBattleOutcome(ctx context.Context, s *svc.ServiceContext, in *pb.Comm
 	if details, client := ctxkeys.GetSessionDetails(ctx); client && details != nil {
 		return nil, status.Error(codes.PermissionDenied, "客户端不能提交内部战斗终局")
 	}
-	if s == nil || s.Authority == nil || s.BattleOutcomeAuth == nil {
-		return nil, status.Error(codes.Unavailable, "战斗终局权威或独立签名未装配")
+	if s == nil || s.BattleOutcomeAuth == nil {
+		return nil, status.Error(codes.Unavailable, "战斗终局独立签名未装配")
 	}
 	method := pb.MatchInternal_CommitBattleOutcome_FullMethodName
 	caller, err := s.BattleOutcomeAuth.Verify(ctx, method, in)
@@ -492,7 +455,7 @@ func CommitBattleOutcome(ctx context.Context, s *svc.ServiceContext, in *pb.Comm
 	return out, nil
 }
 
-// 全球模式补签只读持久创建意图，Redis投影丢失不构成“战斗已结束”的证据。
+// 补签只读持久创建意图，Redis投影丢失不构成“战斗已结束”的证据。
 func globalRequestBattleTicket(ctx context.Context, s *svc.ServiceContext, pid, id uint64) (*battlepb.RequestBattleTicketResponse, error) {
 	observerOperation, authErr := s.Authority.AuthorizeBattleTicket(ctx, pid, id)
 	if authErr != nil {
@@ -535,6 +498,7 @@ func globalRequestBattleTicket(ctx context.Context, s *svc.ServiceContext, pid, 
 	}
 	return &battlepb.RequestBattleTicketResponse{ErrorMessage: r.ErrorMessage, Assignment: r.Assignment}, nil
 }
+
 // globalAbortPrepared 收尾发房前失败的成局。culprits 是确定由自己导致失败的成员(0 忽略):
 // 没有 Create 原件时,单排肇事者的票终止、其余成员回队(authority.FinishFailed);有原件时等唯一 SQL 终局。
 func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culprits ...uint64) {

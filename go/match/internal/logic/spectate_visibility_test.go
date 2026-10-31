@@ -1,8 +1,8 @@
 package logic
 
 // 观战可见性策略(spectate_visibility.go)的纯函数测试:建房时的单一决策表、表外值 fail-closed、
-// 全局成局原件的可见性读取。执法点的行为另见:登记与公开 gather_spectate_index_test.go
-// TestGatherFreezesSpectateVisibility;WatchBattle 与列表 spectate_test.go;全局路径
+// 成局原件的可见性读取。执法点的行为另见:登记与公开 gather_spectate_index_test.go
+// TestPublishSpectateBattleFollowsFrozenVisibility;列表 spectate_test.go;WatchBattle
 // global_spectator_verdict_test.go TestGlobalFormationWatchable。
 
 import (

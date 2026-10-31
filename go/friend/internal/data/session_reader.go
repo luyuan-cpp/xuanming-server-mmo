@@ -6,12 +6,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/protobuf/proto"
 
 	"friend/internal/metrics"
 	plpb "proto/player_locator"
+	"shared/playerredis"
+	"shared/redisslot"
 )
 
 // session_reader.go —— 好友在线状态的唯一读法(F2 §3.9)。
@@ -25,16 +27,13 @@ import (
 //
 // # 契约约束(契约 §4,一条都不能破)
 //
-//   - key 形状 `player:session:<id>`,值是 proto 编码的 plpb.PlayerSession,**写者是 player_locator**。
-//     friend 只读,不写、不删、不设 TTL。
-//   - 只能经 **SharedRedis** 读。FriendRedis 是 friend 的私有库(可以是另一套实例、甚至 Cluster),
+//   - key 形状 `player:session:{<id>}`(唯一构造点 shared/redisslot.SessionKey),值是 proto 编码的
+//     plpb.PlayerSession,**写者是 player_locator**。friend 只读,不写、不删、不设 TTL。
+//   - 只能经 **PlayerRedis** 读。FriendRedis 是 friend 的私有库(可以是另一套实例),
 //     那里根本没有这个 key。
-//   - 这个 key **不许加 friend 自己的 hash tag 或版本前缀**:它的拼法是跨运行时约定,
-//     改一个字符就读不到(而且是静默读不到 —— 看起来只是"所有人都离线")。
-//     正因为没有 hash tag,一次 MGET 的多个 key 会散落在不同 slot,所以共享库禁 Cluster;
-//     这也是 SharedRedis 必须保持 node 形态的又一条理由。
-//     (internal/logic/push.go 有同一个 key 的单条读法,两处刻意各写一份短 fmt.Sprintf,
-//     而不是抽一个跨包常量 —— 抽了反而会让人以为 friend 拥有这个 key 的定义权。)
+//   - 这个 key 的拼法是跨运行时约定,改一个字符就读不到(而且是静默读不到 —— 看起来只是"所有人都离线")。
+//     它按玩家带 hash tag,一批玩家的 key 散落在不同 slot,所以批量读按 slot 分组
+//     (playerredis.MGetBySlot),不发跨槽 MGET。
 //
 // # 失败语义:可靠查询与可降级展示分开
 //
@@ -42,9 +41,6 @@ import (
 // 邀请入口不能把未知状态标成离线并禁邀。FillOnlineStatus 保留普通推荐的原有
 // 降级：忽略错误并使用仍然健康的条目。计数与限流日志只在本实现记录。
 // 无论走哪个入口,调用方都**不要**再计指标(会双计)。
-
-// playerSessionKeyPrefix 见文件头的契约说明:写者是 player_locator,friend 只读。
-const playerSessionKeyPrefix = "player:session:"
 
 // defaultSessionBatchSize 是 batchSize 传 0 时的兜底分批大小。
 // 生产不会走到(config.Validate 拒收 ListReadHardLimit=0),但单测可能手工构造 0 ——
@@ -69,10 +65,10 @@ type OnlineStatus struct {
 	LastActiveMs int64
 }
 
-// SessionReader 批量读 player:session:<id>。无状态(只持有句柄 + 一个日志限流时间戳),
+// SessionReader 批量读 player:session:{<id>}。无状态(只持有句柄 + 一个日志限流时间戳),
 // 可被多个请求并发使用。
 type SessionReader struct {
-	rdb *redis.Redis
+	rdb redis.UniversalClient
 	// batchSize 是一次 MGET 的 key 数上限,取 Friend.ListReadHardLimit:
 	// 与列表读同源,因为它本来就是"一次请求最多处理多少个好友"的那个数。
 	// 有上限是硬要求 —— 一次 MGET 发几千个 key 会做出一个巨大的请求包,
@@ -84,13 +80,13 @@ type SessionReader struct {
 	lastLogUnixNano atomic.Int64
 }
 
-// NewSessionReader 构造。sharedRdb **必须**是 svcCtx.SharedRedis(见文件头契约)。
-func NewSessionReader(sharedRdb *redis.Redis, batchSize uint32) *SessionReader {
+// NewSessionReader 构造。playerRdb **必须**是 svcCtx.PlayerRedis(见文件头契约)。
+func NewSessionReader(playerRdb redis.UniversalClient, batchSize uint32) *SessionReader {
 	size := int(batchSize)
 	if size <= 0 {
 		size = defaultSessionBatchSize
 	}
-	return &SessionReader{rdb: sharedRdb, batchSize: size}
+	return &SessionReader{rdb: playerRdb, batchSize: size}
 }
 
 // BatchOnlineStatus 返回这批玩家的在线态。
@@ -159,13 +155,12 @@ func (s *SessionReader) FillOnlineStatus(ctx context.Context, playerIDs []uint64
 func (s *SessionReader) readChunk(ctx context.Context, ids []uint64, states map[uint64]OnlineStatus) error {
 	keys := make([]string, len(ids))
 	for i, id := range ids {
-		keys[i] = fmt.Sprintf("%s%d", playerSessionKeyPrefix, id)
+		keys[i] = redisslot.SessionKey(id)
 	}
 
-	// go-zero 的 MgetCtx 把 go-redis 的 []any 结果统一成 []string:**未命中的 key 变成空串**
-	// (core/stores/redis/redis.go 的 toStrings),不会像单 key 的 GetCtx 那样需要另外判 redis.Nil。
-	// 所以下面只需要"空串 = 没有会话";而真故障一定从 err 出来。
-	values, err := s.rdb.MgetCtx(ctx, keys...)
+	// MGetBySlot 按输入顺序还原结果,**未命中的 key 是 nil**,不会像单 key 读那样需要另外判 redis.Nil。
+	// 所以下面只需要"不是字符串 = 没有会话";而真故障一定从 err 出来。
+	values, err := playerredis.MGetBySlot(ctx, s.rdb, keys)
 	if err != nil {
 		for range ids {
 			metrics.ObserveOnlineLookup(metrics.OutcomeError)
@@ -186,8 +181,9 @@ func (s *SessionReader) readChunk(ctx context.Context, ids []uint64, states map[
 	}
 
 	var firstErr error
-	for i, raw := range values {
+	for i, value := range values {
 		playerID := ids[i]
+		raw, _ := value.(string)
 		if raw == "" {
 			// 没有会话 = 没登录(player_locator 正常删除,或从未登录过)。这是**最常见**的分支,
 			// 不是错误。

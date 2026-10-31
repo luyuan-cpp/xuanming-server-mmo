@@ -195,7 +195,7 @@ func TestTrialConsumer_NonTrialResultsAreCommittedWithoutHandling(t *testing.T) 
 	assert.Equal(t, []string{"commit:20", "commit:21", "commit:22"}, h.events)
 }
 
-// 上下文残缺但 kind 是历练的结果仍交给 handler(由它判成"上下文不可用"并销账),消费者不悄悄吞掉。
+// 上下文残缺但 kind 是历练的结果仍交给 handler(由它判成"上下文不可用"),消费者不悄悄吞掉。
 func TestTrialConsumer_TrialWithBrokenContextStillReachesHandler(t *testing.T) {
 	h := newConsumerHarness(t, resultMessage(t, 30, &kafkapb.BattleResultEvent{BattleId: 503,
 		ActivityContext: &battlepb.BattleActivityContext{Kind: battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL}}))

@@ -17,10 +17,10 @@ WorldChannelCount: 3   # 每个主世界场景的线数，默认 1（向后兼�
 | Key | Type | 说明 |
 |-----|------|------|
 | `world_channels:zone:{zoneId}:{confId}` | SET | 该地图所有线的 sceneId |
-| `instance:{sceneId}:player_count` | STRING | 每条线的玩家数（与副本共用） |
+| `instance:{sceneId}:members` | SET | 这条线上的玩家；人数 = SCARD（与副本共用） |
 | `scene:{sceneId}:node` | STRING | sceneId → nodeId 映射 |
 | `scene:{sceneId}:zone` | STRING | sceneId → zoneId 映射 |
-| `node:zone:{zoneId}:{nodeId}:player_count` | STRING | 节点玩家聚合（nodeId 仅 zone 内唯一） |
+| `node:zone:{zoneId}:{nodeId}:members` | SET | 节点上的玩家；人数 = SCARD（nodeId 仅 zone 内唯一） |
 
 ## 核心流程
 
@@ -33,7 +33,6 @@ initWorldScenesForZone(zoneId, confIds)
       sceneId = SceneIDGen.Generate()  # etcd 租约保护的 Snowflake；失租后 fail-closed
       SET scene:{sceneId}:node = assignNodeByHash(confId*1000+i, nodes)
       SADD world_channels:zone:{zoneId}:{confId} sceneId
-      SET instance:{sceneId}:player_count = 0
     for each sceneId in all lines:
       RPC → C++ CreateScene(config_id, scene_id)   // 幂等
 ```
@@ -43,13 +42,13 @@ initWorldScenesForZone(zoneId, confIds)
 GetBestWorldChannel(confId, zoneId)
   members = SMEMBERS(world_channels:zone:{zoneId}:{confId})
   for each sceneId in members:
-    count = GET(instance:{sceneId}:player_count)
+    count = SCARD(instance:{sceneId}:members)
   return sceneId with lowest count
 ```
 
 ### 玩家进出
-- `EnterScene` → `IncrInstancePlayerCount(zoneId, sceneId)`；自动选线走原子预留
-- `LeaveScene` → `DecrInstancePlayerCount(zoneId, sceneId)`
+- `EnterScene` → 预占时 SADD（指定场景 `AtomicAddSceneMemberIfSceneExists`，自动选线 `ReserveBestWorldChannel`），落点提交后再 SADD 一次
+- `LeaveScene` → 删 location 之后 SREM，失败回错误重试（[玩家态 Redis 集群化](redis-player-store-cluster.md) §5.10）
 
 有在线玩家的频道不会在活节点之间热迁移；当前没有跨节点玩家状态传输协议。
 节点确认死亡后的 urgent 路径只重建场景映射，玩家仍需走重连恢复。

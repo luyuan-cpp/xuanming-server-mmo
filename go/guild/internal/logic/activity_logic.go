@@ -51,10 +51,15 @@ import (
 
 // ── 依赖 ──────────────────────────────────────────────────────
 
+// TrialResultSource 读一局对局的结果原字节。found=false = 还没有结果;error = 读取故障,调用方不得当成没有结果。
+type TrialResultSource interface {
+	Load(ctx context.Context, battleID uint64) (payload []byte, found bool, err error)
+}
+
 // ActivityDeps 是帮会活动 RPC 的全部外部依赖,由 guild.go 经 WithActivities 一次装配(90 Y-02)。
 //
 // 与 06 §6.6 原稿的差异:删 Notifier(推送走 l.notify,Y-02)、删 HandlerBudget(裁决 K:预算一律从 ctx 截止时间倒推);
-// LocatorRedis 拆成 Results(结果记录的读与销账,data 层封装)与 BattleLocks(只读战斗锁)两个字段,各管一件事。
+// LocatorRedis 只剩 BattleLocks(只读战斗锁);巡检器的结果来源是 Results(match 权威库的 SQL 终局)。
 type ActivityDeps struct {
 	// Repo 是活动事务与读查询的唯一入口。nil → WithActivities 不装配(五个 RPC 回 kGuildActivityNotOpen,见 activitiesNotWiredTip)。
 	Repo *data.ActivityRepo
@@ -85,12 +90,12 @@ type ActivityDeps struct {
 	// 第一次开战就 nil 解引用)。svc.ServiceContext.MatchInternal 本身就是接口类型,原样赋值即可。
 	Match        TrialBattleStarter
 	Cancellation TrialCancellation
-	// Results 读、销 battle 落在 PlayerLocatorRedis(K8s 的 SharedRedis)上的对局结果记录:结算有了定论之后销账,
-	// 巡检器靠它兜住"Kafka 把事件弄丢了"。
-	Results *data.TrialResultRecords
-	// BattleLocks 是 PlayerLocatorRedis,本包只读一把键 battle:lock:{player_id}(scene 写,值 = battle_id),
+	// Results 读 match 权威库里一局的 SQL 终局(生产实现 data.TrialResultRecords),巡检器靠它兜住
+	// "结果事件没到或消费卡住"。同样要传 nil 接口,不能装 nil 指针。
+	Results TrialResultSource
+	// BattleLocks 是玩家域句柄(PlayerRedis),本包只读一把键 battle:lock:{player_id}(scene 写,值 = battle_id),
 	// 给视图判"本人是否正在一局历练里"。nil → 视图的 my_trial_battle_id 恒为 0,不影响开战与结算。
-	BattleLocks *redis.Client
+	BattleLocks redis.UniversalClient
 	// MatchBudget 是调 match 的单次上限(= MatchRpc.Timeout);实际预算还会被请求剩余时间截短(matchBudgetFor)。0 → 1500ms。
 	MatchBudget time.Duration
 
@@ -226,7 +231,7 @@ func (l *GuildLogic) activityPrelude(ctx context.Context, readPath bool) (activi
 		g = fresh
 	}
 	// 别区的帮会与没有帮会同一答复(与 GetGuild 的口径一致:不向客户端透露"它在别的区")。
-	if readPath && !visibleIn(g, zoneID) {
+	if readPath && !l.visibleIn(g, zoneID) {
 		return activityActor{}, tipErr(constants.ErrNotInGuild, "guild not visible in home zone"), nil
 	}
 	return activityActor{playerID: who.playerID, guild: g, member: member}, nil, nil

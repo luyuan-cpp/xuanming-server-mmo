@@ -3,16 +3,15 @@ package data
 // SessionReader 的四条行为回归(handoff §3 第 6a 条):分批、MGET 空串 = 离线、proto 解码失败降级、
 // 只认 SESSION_STATE_ONLINE。
 //
-// 本文件**不需要 MySQL**:SessionReader 只读共享 Redis 的 player:session:<id>,miniredis 足够。
+// 本文件**不需要 MySQL**:SessionReader 只读共享 Redis 的 player:session:{<id>},miniredis 足够。
 // 所以这里不挂 FRIEND_TEST_MYSQL_DSN、也不 Skip。
 //
 // 会话值由测试用 proto.Marshal(plpb.PlayerSession) 直接写进 miniredis —— 与真正的写者
-// player_locator 同一种编码。键名刻意用 playerSessionKeyPrefix 拼而不是再抄一份字面量:
-// 这里要验的是读法,不是键的拼写(拼写是跨运行时契约,由 session_reader.go 文件头钉着)。
+// player_locator 同一种编码。键名刻意用 redisslot.SessionKey 拼而不是再抄一份字面量:
+// 这里要验的是读法,不是键的拼写(拼写是跨运行时契约,金样在 shared/redisslot)。
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -20,10 +19,11 @@ import (
 	"github.com/alicebob/miniredis/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/protobuf/proto"
 
 	plpb "proto/player_locator"
+	"shared/playerredis"
+	"shared/redisslot"
 )
 
 // newSessionReaderOnMiniredis 给一个挂在 miniredis 上的 SessionReader。
@@ -31,7 +31,9 @@ import (
 func newSessionReaderOnMiniredis(t *testing.T, batchSize uint32) (*SessionReader, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	rdb := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	rdb, err := playerredis.New(playerredis.Config{Addrs: []string{mr.Addr()}, PoolSizePerNode: 16})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rdb.Close() })
 	return NewSessionReader(rdb, batchSize), mr
 }
 
@@ -48,14 +50,18 @@ func putPlayerSession(t *testing.T, mr *miniredis.Miniredis, playerID uint64, st
 }
 
 func sessionKeyForTest(playerID uint64) string {
-	return fmt.Sprintf("%s%d", playerSessionKeyPrefix, playerID)
+	return redisslot.SessionKey(playerID)
 }
 
-// sequentialPlayerIDs 返回 [first, first+n) 的连续 id。
-func sequentialPlayerIDs(first uint64, n int) []uint64 {
-	ids := make([]uint64, n)
-	for i := range ids {
-		ids[i] = first + uint64(i)
+// sameSlotPlayerIDs 返回 n 个落在 first 所在 slot 的玩家 id(含 first)。批量读按 slot 分组,同 slot 的键才会并进
+// 一条 MGET,分批的边界才看得见。平均每 16384 个 id 命中一个,600 个 id 也只是不到一秒的纯计算。
+func sameSlotPlayerIDs(first uint64, n int) []uint64 {
+	slot := redisslot.PlayerSlot(first)
+	ids := make([]uint64, 0, n)
+	for id := first; len(ids) < n; id++ {
+		if redisslot.PlayerSlot(id) == slot {
+			ids = append(ids, id)
+		}
 	}
 	return ids
 }
@@ -106,7 +112,7 @@ func TestSessionReader_ZeroBatchSizeFallsBackToDefaultAndSplits(t *testing.T) {
 
 	const first uint64 = 1000
 	const total = 2*defaultSessionBatchSize + 88 // 600:两个满批 + 一个不足额的尾批
-	ids := sequentialPlayerIDs(first, total)
+	ids := sameSlotPlayerIDs(first, total)
 
 	// 下标 → 所在批:0/255 在第 1 批,256/511 在第 2 批,512/599 在第 3 批。
 	onlineIndexes := []int{
@@ -139,7 +145,7 @@ func TestSessionReader_ZeroBatchSizeFallsBackToDefaultAndSplits(t *testing.T) {
 // 5 个 id、每批 2 → 3 批(2+2+1)。最后那个落单的 id 是唯一在线的:尾批被丢就读不到它。
 func TestSessionReader_SmallBatchSizeIssuesExactBatches(t *testing.T) {
 	reader, mr := newSessionReaderOnMiniredis(t, 2)
-	ids := sequentialPlayerIDs(2000, 5)
+	ids := sameSlotPlayerIDs(2000, 5)
 	putPlayerSession(t, mr, ids[4], plpb.PlayerSessionState_SESSION_STATE_ONLINE, 77)
 
 	rec := recordMGetBatches(mr)
@@ -154,20 +160,38 @@ func TestSessionReader_SmallBatchSizeIssuesExactBatches(t *testing.T) {
 // 重复 id 让同一个 key 在一次 MGET 里出现两次(浪费带宽、指标偏高);0 不是合法 player_id。
 func TestSessionReader_DeduplicatesAndSkipsZeroID(t *testing.T) {
 	reader, mr := newSessionReaderOnMiniredis(t, 2)
-	putPlayerSession(t, mr, 7, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 5)
+	ids := sameSlotPlayerIDs(7, 2)
+	putPlayerSession(t, mr, ids[0], plpb.PlayerSessionState_SESSION_STATE_ONLINE, 5)
 
 	rec := recordMGetBatches(mr)
-	states, err := reader.BatchOnlineStatus(context.Background(), []uint64{0, 7, 7, 8, 0, 8})
+	states, err := reader.BatchOnlineStatus(context.Background(), []uint64{0, ids[0], ids[0], ids[1], 0, ids[1]})
 	require.NoError(t, err)
 
-	assert.Equal(t, []int{2}, rec.batches(), "去重并剔掉 0 之后只剩 {7, 8},每批 2 → 1 次 MGET、2 个 key")
-	assert.Equal(t, map[uint64]OnlineStatus{7: {Online: true, LastActiveMs: 5}}, states)
+	assert.Equal(t, []int{2}, rec.batches(), "去重并剔掉 0 之后只剩两个同 slot 的 id,每批 2 → 1 次 MGET、2 个 key")
+	assert.Equal(t, map[uint64]OnlineStatus{ids[0]: {Online: true, LastActiveMs: 5}}, states)
 
 	// 全是非法 id 时一次 MGET 都不该发。
 	got, err := reader.BatchOnlineStatus(context.Background(), []uint64{0, 0})
 	require.NoError(t, err)
 	assert.Empty(t, got)
 	assert.Len(t, rec.batches(), 1, "入参里没有合法 id 时不得再发 MGET")
+}
+
+// TestSessionReader_DifferentSlotsNeverShareOneMGet:不同 slot 的键不得并进一条 MGET(Cluster 上是 CROSSSLOT),
+// 结果仍按玩家对得上。
+func TestSessionReader_DifferentSlotsNeverShareOneMGet(t *testing.T) {
+	reader, mr := newSessionReaderOnMiniredis(t, 64)
+	const a, b uint64 = 1, 42
+	require.NotEqual(t, redisslot.PlayerSlot(a), redisslot.PlayerSlot(b), "用例前提:两名玩家不同 slot")
+	putPlayerSession(t, mr, a, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 1)
+	putPlayerSession(t, mr, b, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 2)
+
+	rec := recordMGetBatches(mr)
+	states, err := reader.BatchOnlineStatus(context.Background(), []uint64{a, b})
+	require.NoError(t, err)
+
+	assert.Equal(t, []int{1, 1}, rec.batches())
+	assert.Equal(t, map[uint64]OnlineStatus{a: {Online: true, LastActiveMs: 1}, b: {Online: true, LastActiveMs: 2}}, states)
 }
 
 // TestSessionReader_MissingOrEmptyValueMeansOffline:key 缺席与值为空串都是"没有会话 = 离线",

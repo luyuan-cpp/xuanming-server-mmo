@@ -66,7 +66,8 @@ MySQL:
 Schema:
   AutoMigrate: false
 
-# data_service 客户端:查玩家 home_zone(BatchGetPlayerHomeZone)与领 listing_id 号段(AllocateIdSegment)。
+# data_service 客户端:查玩家 home_zone(BatchGetPlayerHomeZone)、读合服映射(GetMergedZones)与领 listing_id 号段(AllocateIdSegment)。
+# NonBlock: true 只是建客户端不等它;启动时读合服映射最多等 60 秒,读不到拒绝启动。
 # 无条件拨号,是 P1 的硬依赖。这里写 Key: dataservice.rpc 不违反 D-13:D-13 禁止的是指向**全局服务**的
 # RpcClient Key,data_service 按 zone 部署(port-decisions D-13 原文)。
 # -Zone N 时本行会被改写为 dataservice.rpc.zN,连本 zone 的 data_service;映射存储是全局 Redis,行为等价。
@@ -118,6 +119,14 @@ SharedRedis:
   # 落地唤醒的 Pub/Sub 连接不占池名额。tools/scripts/k8s_deploy.ps1 把它镜像进 trade ConfigMap(要求正整数),
   # Redis 连接总账读同一个键:改它看部署时打印的 "Redis connection ledger" 一行。
   PoolSize: 20
+
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):资产通道读 player:{id}:location。
+# 上面的 SharedRedis 留给控制域(唤醒频道与去重键、维护选主锁)。不写 Addrs = 指向 SharedRedis。集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
+#   Cluster: true
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。
+PlayerRedis:
+  PoolSizePerNode: 20
 
 # ---- 通用资产通道开关(guild-phase2/04-asset-channel.md §S4)----
 # **默认关闭,整段缺失也是关闭**(go-zero 不给缺席的 optional 嵌套段回填 default)。
@@ -200,8 +209,8 @@ Rmb:
   Enabled: false
   GlobalLoginSessions: false
   LoginRedis:
-    Host: ""
+    Addrs: []
     DB: 0
-    PoolSize: 8
+    PoolSizePerNode: 8
   # 默认仅金币0；钻石1需显式开启；绑定币2永远禁售。
   CurrencyTypes: [0]

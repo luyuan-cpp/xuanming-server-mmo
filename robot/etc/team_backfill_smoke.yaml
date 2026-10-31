@@ -12,6 +12,7 @@
 #   2. gate 以路由服模式启动(GATE_CLIENT_RPC_ROUTER=1,start_game.ps1 默认已开);MessageLimiter 表已导出 team 额度。
 #   3. 3 人档队列里没有别人在排(否则路人可能是别人而不是 C,P4 的「同一场」断言会失败)。
 #   4. 从 robot/ 目录运行(table_dir 是相对路径)。
+#   5. battle 公网端口从 robot 所在机器可达:进队列前三人各自走地域探测(robot/network_probe.go),战斗也走这个端口直连。
 #
 # 用法(robot/ 目录下):
 #   .\robot.exe -c etc/team_backfill_smoke.yaml

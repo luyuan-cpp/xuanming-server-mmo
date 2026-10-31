@@ -26,10 +26,10 @@ type roleOriginalRoute struct {
 //
 // 每名玩家只锁自己的路由行,互不排队,这条路径不再有全局或按区共享的热点:
 //   - 合服不改路由行(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1),所以不需要围栏:
-//     合服过程中在源区建号也不丢,归属按 ResolveMergedZone 解析到目标区;
-//   - route_meta 也移出了这条路径:可写开关管的是路由写者(RegisterHome、导入、修库),这里只读路由行、不改。
+//     合服过程中在源区建号也不丢,归属按 MergedZones.Final 解析到目标区;
+//   - route_meta 也移出了这条路径:可写开关管的是路由写者(RegisterHome),这里只读路由行、不改。
 //
-// 拿到的 home 是原始值。按区分组必须先解析成最终区,见 ResolveMergedZone / ResolveMergedZoneSQL。
+// 拿到的 home 是原始值。按区分组必须先解析成最终区,见 MergedZones.Final。
 //
 // 拒绝一律回 ErrRoleRouteFenced:没有归属、被冻结(搬库中)、预读与锁住之后不一致。SQL 错误(含缺行)原样返回。
 // 同一事务重入只允许同一完整玩家集合;禁止调用者持 P 之后再锁新的路由行或新增参与者(锁序会倒置)。
@@ -85,12 +85,17 @@ func allowedRoleRoute(home sql.NullInt64, revision uint64, frozen sql.NullString
 	return home.Valid && home.Int64 > 0 && home.Int64 <= int64(^uint32(0)) && revision != 0 && !frozen.Valid
 }
 
+// RoleRouteQueryer 是 *sql.DB 与 *sql.Tx 共有的单行读接口。
+type RoleRouteQueryer interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // CheckRoleRoute 是 LockRoleRoutes 的不加锁形态:普通读这名玩家的路由行,判据相同(allowedRoleRoute)。
 // 给不写角色资产的身份校验用(聊天)。它不和任何写者串行,读到的只是语句开始时已提交的值,提交点也不再复核,
 // 所以不能拿它保护资产,要保护资产用 LockRoleRoutes。
 //
 // 拒绝回 ErrRoleRouteFenced;SQL 错误(含缺行)原样返回,与 LockRoleRoutes 同口径。
-func CheckRoleRoute(ctx context.Context, q MergedZoneQueryer, schema string, player uint64) error {
+func CheckRoleRoute(ctx context.Context, q RoleRouteQueryer, schema string, player uint64) error {
 	if q == nil || !roleRouteSchemaPattern.MatchString(schema) || player == 0 {
 		return ErrRoleRouteFenced
 	}

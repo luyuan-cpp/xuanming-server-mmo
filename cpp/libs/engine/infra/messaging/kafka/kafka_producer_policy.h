@@ -2,7 +2,7 @@
 #include <exception>
 
 // KafkaProducer 的纯决策逻辑:produce() 的返回码该怎么处置、重建生产者的最小间隔、
-// 失败日志的限流、逐条回执的关联号登记(DeliveryTracker)。刻意做成 header-only、只依赖 RdKafka::ErrorCode 这一个枚举、不调用
+// 失败日志的限流、发送账本。刻意做成 header-only、只依赖 RdKafka::ErrorCode 这一个枚举、不调用
 // librdkafka 的任何函数,也不读墙钟(时间点一律由调用方传入)——这样不连 broker、
 // 不链接 C++ 包装层就能单测,与 node_command_route.h 那一组是同一种组织方式。
 // 用例在 cpp/tests/kafka_command_test/kafka_producer_policy_test.cpp。
@@ -18,7 +18,6 @@
 #include <limits>
 #include <memory>
 #include <mutex>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <rdkafkacpp.h>
@@ -158,15 +157,7 @@ private:
 	std::uint64_t suppressed_ = 0;
 };
 
-// 逐条回执的关联号登记簿(KafkaProducer::sendTracked 用)。
-// 契约:每个 Accept 过的非 0 id **恰好一次**经下面两个出口之一离开 ——
-//   Resolve:librdkafka 的投递回执到了(成功或失败);
-//   TakeAll:实例因 fatal 被重建,旧实例里来不及派发回执的消息由调用方合成失败回执。
-// 离开之后同一个 id 再到的回执(例如重建合成之后原回执迟到)Resolve 返回 false,调用方据此不二次通知。
-// 0 表示「不跟踪」(普通 send()),Accept(0) 忽略、Resolve(0) 恒为 false。
-// id 的唯一性由调用方保证;这里不做去重以外的校验。
-// 线程模型同 KafkaProducer:只在拥有它的那个线程上读写,不加锁。
-// 每个producer线程的全部发送账本，普通send与sendTracked都计入。只读快照不解除准入。
+// 每个producer线程的全部发送账本。只读快照不解除准入。
 // 失败/超时/purge一律保留UNKNOWN；重建生产者不清账，不能由outq_len==0推断永久闭合。
 class PublicationFrontier {
 public:
@@ -279,36 +270,6 @@ public:
     PublicationCallbackScope& operator=(const PublicationCallbackScope&)=delete;
 private:
     std::shared_ptr<PublicationRegistry> registry_;PublicationRegistry::OwnerPtr owner_;int exceptions_;bool active_;
-};
-
-class DeliveryTracker {
-public:
-	void Accept(std::uint64_t id) {
-		if (id == 0) {
-			return;
-		}
-		ids_.insert(id);
-	}
-
-	// 回执到达:id 之前在跟踪中则摘掉并返回 true;不认识(未跟踪 / 已离开)返回 false。
-	bool Resolve(std::uint64_t id) {
-		if (id == 0) {
-			return false;
-		}
-		return ids_.erase(id) > 0;
-	}
-
-	// 取出全部仍在跟踪的 id 并清空。返回顺序不作保证。
-	std::vector<std::uint64_t> TakeAll() {
-		std::vector<std::uint64_t> taken(ids_.begin(), ids_.end());
-		ids_.clear();
-		return taken;
-	}
-
-	std::size_t Size() const { return ids_.size(); }
-
-private:
-	std::unordered_set<std::uint64_t> ids_;
 };
 
 } // namespace kafka_producer_policy

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"shared/playerredis"
+
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -17,7 +19,7 @@ type Config struct {
 	}
 
 	// AllowUnsafeCrossNodeHandoff 是**开发旁路**:true 时跨节点切场景 / 已有位置的
-	// 跨区重定向不再要求源 scene 先写出「已落盘」标记(player:{id}:handoff),
+	// 跨区重定向不再要求源 scene 先写出「已落盘」标记(player:<id>:handoff),
 	// 让本地联调在 C++ 侧标记链路(收到 18 → 冻结 → 存盘 → 写标记 → 重发,已落码、
 	// 尚未编译验证,cross-zone-scene-travel.md §11.2)验证通过之前也能切场景。
 	// 旁路放行(无标记)时**不铸造**新 owner_epoch,只做「epoch 没被并发推进才写 location」
@@ -172,6 +174,14 @@ type Config struct {
 	// 整块可缺省,缺省即「本地 AOF 落盘 1 份、不等副本、最多等 1500ms」。
 	OwnerEpochMint OwnerEpochMintConfig `json:",optional"`
 
+	// PlayerRedis: 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.10):location、位置修订、离场等待、
+	// 切线冷却、进场去重、owner_epoch、handoff、handoff_fence。嵌入的 Redis 段只剩控制域(场景路由、成员集合、选主锁)。
+	// 一段脚本不能跨这两个域。读取走 EffectivePlayerRedis():没写 Addrs 时指向 Redis 段那一个实例,开发环境不用改。
+	PlayerRedis playerredis.Config `json:",optional"`
+
+	// SceneMemberReconcile: 成员集合对账的节奏与预算(logic/scene_member_reconcile.go)。整块可缺省。
+	SceneMemberReconcile SceneMemberReconcileConfig `json:",optional"`
+
 	// MirrorSourceNodeLoadCap: soft cap on the source node's scene_count
 	// above which mirror requests fall back to GetBestNode instead of
 	// co-locating with the source scene. 0 disables the cap (always
@@ -210,7 +220,7 @@ type Config struct {
 
 	// MaxRebalanceMigrationsPerTick bounds the number of world-channel
 	// migrations executed per world-node-set change event. Rebalancing
-	// moves empty channels (player_count == 0) toward a more uniform hash
+	// moves empty channels (no members) toward a more uniform hash
 	// distribution; large values can thrash the cluster on scale events,
 	// small values slow convergence. Default 10 balances responsiveness
 	// with safety. Set to 0 to disable proactive rebalancing (channels on
@@ -247,7 +257,7 @@ type Config struct {
 	// constants.SceneReentryBarrier(= C++ drain 预算 + 时钟余量)。
 	//
 	// 这个值**只能调高不能调低**:它对应的是 C++ 老节点丢租约后仍在
-	// SavePlayerToRedis 的那段 drain,调低等于把双写窗口重新打开。低于安全
+	// SavePlayer 的那段 drain,调低等于把双写窗口重新打开。低于安全
 	// 下限的配置会在启动时被钳回下限并打一条 Error 日志。
 	// 只有在 C++ 侧真的把 kDrainBudget 调大之后,才需要在这里跟着调。
 	SceneReentryBarrierSeconds int64 `json:",optional"`
@@ -324,7 +334,7 @@ type AgonesConfig struct {
 
 // WorldAutoscaleConfig 控制大世界频道按人数自动扩缩容。
 //
-// 口径全部**按频道**算(`instance:{sceneId}:player_count`),不是按进程。
+// 口径全部**按频道**算(`instance:{sceneId}:members` 的 SCARD),不是按进程。
 // 进程数量由 Agones FleetAutoscaler 管,两件事分开。
 type WorldAutoscaleConfig struct {
 	Enabled bool `json:",default=false"`
@@ -580,6 +590,86 @@ func (c *Config) EffectiveKafkaWriteTimeout() time.Duration {
 		seconds = defaultKafkaWriteTimeoutSeconds
 	}
 	return time.Duration(seconds) * time.Second
+}
+
+// 没写 PlayerRedis.Addrs 时玩家域连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,读写 3s,
+// 取连接 4s,拨号 5s)。这里写成常量,不随 CPU limit 漂移。
+const (
+	playerRedisFallbackPoolSize      = 20
+	playerRedisFallbackIOTimeoutMs   = 3000
+	playerRedisFallbackPoolTimeoutMs = 4000
+	playerRedisFallbackDialTimeoutMs = 5000
+)
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 Redis 段那一个实例。
+// PlayerRedis 段里单独写的池与超时在两种情况下都生效。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{c.Redis.Host},
+		Username:        c.Redis.User,
+		Password:        c.Redis.Pass,
+		TLS:             c.Redis.Tls,
+		PoolSizePerNode: playerRedisFallbackPoolSize,
+		DialTimeoutMs:   playerRedisFallbackDialTimeoutMs,
+		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
+		PoolTimeoutMs:   playerRedisFallbackPoolTimeoutMs,
+	})
+}
+
+// SceneMemberReconcileConfig 控制成员集合对账:只有领导者跑,每轮最多读 MembersPerRound 个成员的 location、
+// 最多发 ScansPerRound 条 SSCAN,下一轮接着上一轮的位置走。详见 logic/scene_member_reconcile.go。
+type SceneMemberReconcileConfig struct {
+	// Disabled: true = 不对账。残留的成员没有路径会摘,实例不销毁、选线躲着它。
+	Disabled bool `json:",optional"`
+	// IntervalSeconds: 两轮的间隔。0 = 10,否则钳到 [1, 3600]。
+	IntervalSeconds int64 `json:",optional"`
+	// MembersPerRound: 每轮读 location 的成员数上限。0 = 2000,否则钳到 [1, 100000]。
+	MembersPerRound int `json:",optional"`
+	// ScansPerRound: 每轮 SSCAN 的条数上限(空集合也占一条)。0 = 512,否则钳到 [1, 100000]。
+	ScansPerRound int `json:",optional"`
+}
+
+// 成员集合对账的缺省值与上下界。
+const (
+	defaultSceneMemberReconcileIntervalSeconds int64 = 10
+	maxSceneMemberReconcileIntervalSeconds     int64 = 3600
+	defaultSceneMemberReconcileMembersPerRound       = 2000
+	defaultSceneMemberReconcileScansPerRound         = 512
+	maxSceneMemberReconcilePerRound                  = 100000
+)
+
+// EffectiveInterval 返回两轮的间隔。
+func (c SceneMemberReconcileConfig) EffectiveInterval() time.Duration {
+	seconds := c.IntervalSeconds
+	switch {
+	case seconds <= 0:
+		seconds = defaultSceneMemberReconcileIntervalSeconds
+	case seconds > maxSceneMemberReconcileIntervalSeconds:
+		seconds = maxSceneMemberReconcileIntervalSeconds
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+// EffectiveMembersPerRound 返回每轮读 location 的成员数上限。
+func (c SceneMemberReconcileConfig) EffectiveMembersPerRound() int {
+	return clampSceneMemberBudget(c.MembersPerRound, defaultSceneMemberReconcileMembersPerRound)
+}
+
+// EffectiveScansPerRound 返回每轮 SSCAN 的条数上限。
+func (c SceneMemberReconcileConfig) EffectiveScansPerRound() int {
+	return clampSceneMemberBudget(c.ScansPerRound, defaultSceneMemberReconcileScansPerRound)
+}
+
+func clampSceneMemberBudget(value, def int) int {
+	switch {
+	case value <= 0:
+		return def
+	case value > maxSceneMemberReconcilePerRound:
+		return maxSceneMemberReconcilePerRound
+	default:
+		return value
+	}
 }
 
 // OwnerEpochMintConfig 是铸造 owner_epoch 之后的落盘确认(WAITAOF)参数

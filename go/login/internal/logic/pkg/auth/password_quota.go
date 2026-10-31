@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"shared/redisslot"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/metric"
@@ -19,7 +21,6 @@ import (
 const (
 	PasswordQuotaBudget  = 250 * time.Millisecond
 	PasswordAttemptLease = 30 * time.Second
-	passwordQuotaPrefix  = "login:password:quota:v1:"
 )
 
 type PasswordAccountKind string
@@ -140,13 +141,13 @@ var passwordQuotaTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 })
 
 type RedisPasswordFailureQuota struct {
-	prefix, fingerprint string
-	limit               int
-	window, lock        time.Duration
-	run                 func(context.Context, *redis.Script, string, ...any) (any, error)
-	now                 func() time.Time
-	warnMu              sync.Mutex
-	lastWarn            time.Time
+	fingerprint  string
+	limit        int
+	window, lock time.Duration
+	run          func(context.Context, *redis.Script, string, ...any) (any, error)
+	now          func() time.Time
+	warnMu       sync.Mutex
+	lastWarn     time.Time
 }
 
 func NewRedisPasswordFailureQuota(rdb redis.UniversalClient, limit int, window, lock time.Duration) (*RedisPasswordFailureQuota, error) {
@@ -154,7 +155,7 @@ func NewRedisPasswordFailureQuota(rdb redis.UniversalClient, limit int, window, 
 		return nil, errors.New("口令配额要求Redis、1..100阈值及1s..1h的整毫秒窗口和锁窗")
 	}
 	return &RedisPasswordFailureQuota{
-		prefix: passwordQuotaPrefix, limit: limit, window: window, lock: lock,
+		limit: limit, window: window, lock: lock,
 		fingerprint: fmt.Sprintf("v1:%d:%d:%d:30000", limit, window.Milliseconds(), lock.Milliseconds()),
 		now:         time.Now,
 		run: func(ctx context.Context, script *redis.Script, key string, args ...any) (any, error) {
@@ -172,7 +173,7 @@ func (q *RedisPasswordFailureQuota) Begin(ctx context.Context, kind PasswordAcco
 		return PasswordAttempt{}, q.failure("begin", "random")
 	}
 	digest := sha256.Sum256([]byte(identity))
-	attempt := PasswordAttempt{key: q.prefix + "{" + string(kind) + ":" + hex.EncodeToString(digest[:]) + "}", token: hex.EncodeToString(random[:]), deadline: q.now().Add(PasswordAttemptLease)}
+	attempt := PasswordAttempt{key: redisslot.PasswordQuotaKey(string(kind) + ":" + hex.EncodeToString(digest[:])), token: hex.EncodeToString(random[:]), deadline: q.now().Add(PasswordAttemptLease)}
 	code, err := q.execute(ctx, "begin", passwordQuotaBeginScript, attempt, "")
 	if err != nil {
 		return PasswordAttempt{}, err

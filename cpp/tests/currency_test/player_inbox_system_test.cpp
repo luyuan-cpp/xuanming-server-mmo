@@ -659,7 +659,7 @@ TEST_F(PlayerInboxSystemTest, SnapshotCommitCheckRejectsMismatchedRows)
 {
 	CompleteFakeSave(player_);
 	PlayerAllData wrong = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
-	wrong.mutable_player_database_1_data()->set_fence_save_seq(g_snapshotSeq + 1);
+	wrong.mutable_player_database_1_data()->set_player_id(wrong.player_database_1_data().player_id() + 1);
 	tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).Replace(wrong);
 	EXPECT_FALSE(RoleAdmissionSystem::IsSnapshotCommitted(player_,
 		*tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot));
@@ -696,8 +696,6 @@ TEST_F(PlayerInboxSystemTest, CommitProofRequiresOriginalHookBeforeSamePayloadSa
 	EXPECT_EQ(kEpoch, snap.committed_owner_epoch);
 	EXPECT_EQ(g_snapshotSeq, snap.committed_save_seq);
 	EXPECT_EQ(0u, snap.snapshot->last_save_seq());
-	EXPECT_EQ(0u, snap.snapshot->player_database_data().fence_owner_epoch());
-	EXPECT_EQ(0u, snap.snapshot->player_database_1_data().fence_save_seq());
 }
 
 TEST_F(PlayerInboxSystemTest, OldCommitHookCannotAuthorizeNewAdmissionOrRecreatedEntity)

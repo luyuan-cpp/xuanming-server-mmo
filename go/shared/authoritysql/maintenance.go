@@ -171,9 +171,6 @@ func (c *Catalog) Advance(ctx context.Context, next *pb.SqlWriterDrainRun, input
 	}
 	var result *pb.SqlWriterMaintenanceReceipt
 	err := c.transaction(ctx, func(tx *sql.Tx) error {
-		if err := c.lockReconcile(ctx, tx); err != nil {
-			return err
-		}
 		meta, err := c.meta(ctx, tx, true)
 		if err != nil {
 			return err
@@ -342,9 +339,6 @@ func (c *Catalog) GrantTicket(ctx context.Context, ticket *pb.SqlWriterFreezeTic
 	}
 	var result *pb.SqlWriterMaintenanceReceipt
 	err = c.transaction(ctx, func(tx *sql.Tx) error {
-		if err := c.lockReconcile(ctx, tx); err != nil {
-			return err
-		}
 		meta, err := c.meta(ctx, tx, true)
 		if err != nil {
 			return err
@@ -439,9 +433,6 @@ func (c *Catalog) RevokeTicket(ctx context.Context, ticketID []byte, input *pb.S
 	}
 	var result *pb.SqlWriterMaintenanceReceipt
 	err := c.transaction(ctx, func(tx *sql.Tx) error {
-		if err := c.lockReconcile(ctx, tx); err != nil {
-			return err
-		}
 		meta, err := c.meta(ctx, tx, true)
 		if err != nil {
 			return err
@@ -797,7 +788,7 @@ func (c *Catalog) authorizeRunRetirement(ctx context.Context, tx *sql.Tx, run *p
 	return ErrWriterDenied
 }
 
-// Freeze唯有SQLticket可达；先全slot，再reconcile→meta→run→ticket，锁内外部IO为零。
+// Freeze唯有SQLticket可达；先全slot，再meta→run→ticket，锁内外部IO为零。
 func (c *Catalog) Freeze(ctx context.Context, ticketID []byte, input *pb.SqlWriterMaintenanceReceipt) (*pb.SqlWriterMaintenanceReceipt, error) {
 	return c.changeWritable(ctx, ticketID, input, false)
 }
@@ -857,9 +848,6 @@ func (c *Catalog) changeWritable(ctx context.Context, ticketID []byte, input *pb
 		if err := c.lockSlots(ctx, tx, plannedKeys, input.BeforeEpoch); err != nil {
 			return err
 		}
-		if err := c.lockReconcile(ctx, tx); err != nil {
-			return err
-		}
 		meta, err := c.meta(ctx, tx, true)
 		if err != nil {
 			return err
@@ -904,13 +892,10 @@ func (c *Catalog) changeWritable(ctx context.Context, ticketID []byte, input *pb
 				return err
 			}
 			proof := ready.Evidence.GetReleaseReadiness()
-			if ready.RunPhase != pb.SqlWriterDrainRun_RELEASE_READY || !bytes.Equal(ready.ReceiptDigest, run.LatestReceiptDigest) || proof == nil || len(proof.RecoveryAudit) == 0 || !bytes.Equal(proof.OriginalFreezeReceiptId, run.FrozenRequestId) {
+			if ready.RunPhase != pb.SqlWriterDrainRun_RELEASE_READY || !bytes.Equal(ready.ReceiptDigest, run.LatestReceiptDigest) || proof == nil || !bytes.Equal(proof.OriginalFreezeReceiptId, run.FrozenRequestId) {
 				return ErrWriterDenied
 			}
 			if !proto.Equal(proof, input.Evidence.GetReleaseReadiness()) {
-				return ErrWriterDenied
-			}
-			if !c.config.RequireReconcile && proof.RouteWatermarkFloorMs != 0 {
 				return ErrWriterDenied
 			}
 			frozen, err := c.readReceipt(ctx, tx, run.FrozenRequestId)
@@ -981,11 +966,6 @@ func (c *Catalog) changeWritable(ctx context.Context, ticketID []byte, input *pb
 				return err
 			}
 		}
-		if release && c.config.RequireReconcile {
-			if _, err = tx.ExecContext(ctx, "UPDATE "+c.table("route_reconcile")+" SET watermark_ms=GREATEST(watermark_ms,?) WHERE id=1", input.Evidence.GetReleaseReadiness().RouteWatermarkFloorMs); err != nil {
-				return err
-			}
-		}
 		writable := 0
 		if release {
 			writable = 1
@@ -1016,7 +996,7 @@ func (c *Catalog) changeWritable(ctx context.Context, ticketID []byte, input *pb
 }
 
 // VerifyPublicationPrestart只允许同run永久释放后的prepare-only启动；调用者不能据此开放SOURCE。
-// 校验锁与SQL转换共用reconcile→meta→run顺序，结束后由控制器保持同run launcher围栏。
+// 校验锁与SQL转换共用meta→run顺序，结束后由控制器保持同run launcher围栏。
 func (c *Catalog) VerifyPublicationPrestart(ctx context.Context, released *pb.SqlWriterMaintenanceReceipt) (*pb.SqlWriterMaintenanceReceipt, error) {
 	if released == nil || hasUnknownControl(released) || c.checkRequest(released) != nil {
 		return nil, ErrWriterDenied
@@ -1102,9 +1082,6 @@ func (c *Catalog) VerifyPublicationRuntime(ctx context.Context, runtime *pb.SqlW
 func (c *Catalog) publicationReleased(ctx context.Context, tx *sql.Tx, runID []byte) (*pb.SqlWriterMaintenanceReceipt, *pb.RouteMeta, error) {
 	if len(runID) != 16 {
 		return nil, nil, ErrWriterDenied
-	}
-	if err := c.lockReconcile(ctx, tx); err != nil {
-		return nil, nil, err
 	}
 	meta, err := c.meta(ctx, tx, true)
 	if err != nil {

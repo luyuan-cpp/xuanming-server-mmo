@@ -15,6 +15,8 @@ import (
 	"player_locator/internal/svc"
 	pb "proto/player_locator"
 	smpb "proto/scene_manager"
+	"shared/playerredis"
+	"shared/redisslot"
 )
 
 // ---------------------------------------------------------------------------
@@ -26,12 +28,17 @@ func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { rdb.Close() })
+	// 玩家域走生产的构造函数:挂着发送前守卫,键没带 tag 或跨 slot 的脚本在任何用例里都当场失败。
+	player, err := playerredis.New(playerredis.Config{Addrs: []string{mr.Addr()}})
+	require.NoError(t, err)
+	t.Cleanup(func() { player.Close() })
 
 	return &svc.ServiceContext{
 		Config: config.Config{
 			Lease: config.LeaseConf{DefaultTTLSeconds: 30},
 		},
 		RedisClient: rdb,
+		PlayerRedis: player,
 	}, mr
 }
 
@@ -39,86 +46,27 @@ func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 // Location tests
 // ---------------------------------------------------------------------------
 
-// seedLegacyLocation 直接往 Redis 种历史遗留的 player:location:{uid} 键。
-// SetLocation RPC 已停用(绕过 CAS 链的裸写,见 setlocationlogic.go),
-// 但 MarkOffline/commitLeaseExpiry 仍会原子清掉这个 legacy 键,相关断言
-// 需要它在场 —— 测试改为直接种键,不再经由被禁用的端点。
-func seedLegacyLocation(t *testing.T, sc *svc.ServiceContext, loc *pb.PlayerLocation) {
-	t.Helper()
-	loc.Online = true
-	if loc.Ts == 0 {
-		loc.Ts = time.Now().Unix()
-	}
-	data, err := proto.Marshal(loc)
-	require.NoError(t, err)
-	require.NoError(t, sc.RedisClient.Set(context.Background(), locationKey(loc.Uid), data, 0).Err())
-}
-
-func TestSetLocation_DeprecatedRejected(t *testing.T) {
-	sc, _ := newTestSvcCtx(t)
+// 两个历史位置端点都 fail-closed,读写都不碰 Redis:位置权威在 scene_manager。
+func TestLegacyLocationEndpoints_DeprecatedRejected(t *testing.T) {
+	sc, mr := newTestSvcCtx(t)
 	ctx := context.Background()
 
-	// 端点必须 fail-closed:它是绕过会话 CAS 链的裸写,与 MarkOffline 的
-	// 原子删除存在复活竞态,不允许再有任何调用方成功写入。
-	setLogic := NewSetLocationLogic(ctx, sc)
-	_, err := setLogic.SetLocation(&pb.PlayerLocation{
+	_, err := NewSetLocationLogic(ctx, sc).SetLocation(&pb.PlayerLocation{
 		Uid:      1001,
 		ServerId: "scene-node-1",
 		SceneId:  42,
 	})
 	require.Error(t, err)
 
-	// 拒绝必须发生在任何写入之前。
-	getLogic := NewGetLocationLogic(ctx, sc)
-	loc, err := getLogic.GetLocation(&pb.PlayerId{Uid: 1001})
-	require.NoError(t, err)
-	assert.False(t, loc.Online)
-}
+	_, err = NewGetLocationLogic(ctx, sc).GetLocation(&pb.PlayerId{Uid: 1001})
+	require.Error(t, err)
 
-func TestSeededLegacyLocationRoundtrip(t *testing.T) {
-	sc, _ := newTestSvcCtx(t)
-	ctx := context.Background()
-
-	seedLegacyLocation(t, sc, &pb.PlayerLocation{
-		Uid:      1001,
-		ServerId: "scene-node-1",
-		SceneId:  42,
-	})
-
-	getLogic := NewGetLocationLogic(ctx, sc)
-	loc, err := getLogic.GetLocation(&pb.PlayerId{Uid: 1001})
-	require.NoError(t, err)
-
-	assert.Equal(t, int64(1001), loc.Uid)
-	assert.True(t, loc.Online)
-	assert.Equal(t, "scene-node-1", loc.ServerId)
-	assert.Equal(t, int32(42), loc.SceneId)
-	assert.True(t, loc.Ts > 0, "timestamp should be set")
-}
-
-func TestGetLocation_NotFound(t *testing.T) {
-	sc, _ := newTestSvcCtx(t)
-	ctx := context.Background()
-
-	logic := NewGetLocationLogic(ctx, sc)
-	loc, err := logic.GetLocation(&pb.PlayerId{Uid: 9999})
-	require.NoError(t, err)
-
-	assert.Equal(t, int64(9999), loc.Uid)
-	assert.False(t, loc.Online)
+	assert.Empty(t, mr.Keys(), "拒绝必须发生在任何写入之前")
 }
 
 func TestMarkOffline(t *testing.T) {
-	sc, _ := newTestSvcCtx(t)
+	sc, mr := newTestSvcCtx(t)
 	ctx := context.Background()
-
-	// Seed legacy location first
-	seedLegacyLocation(t, sc, &pb.PlayerLocation{Uid: 2001, ServerId: "node-1"})
-
-	// Verify it exists
-	getLogic := NewGetLocationLogic(ctx, sc)
-	loc, _ := getLogic.GetLocation(&pb.PlayerId{Uid: 2001})
-	assert.True(t, loc.Online)
 
 	_, err := NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{
 		Session: makeTestSession(2001),
@@ -135,20 +83,13 @@ func TestMarkOffline(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify it's gone
-	loc, _ = getLogic.GetLocation(&pb.PlayerId{Uid: 2001})
-	assert.False(t, loc.Online)
+	assert.False(t, mr.Exists(sessionKey(2001)))
 }
 
 func TestMarkOffline_DelayedOldLeaveGameDoesNotDeleteReplacement(t *testing.T) {
 	sc, _ := newTestSvcCtx(t)
 	ctx := context.Background()
 	playerID := uint64(2002)
-
-	seedLegacyLocation(t, sc, &pb.PlayerLocation{
-		Uid:      int64(playerID),
-		ServerId: "scene-new",
-		SceneId:  88,
-	})
 
 	oldSession := makeTestSession(playerID)
 	_, err := NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{Session: oldSession})
@@ -173,10 +114,6 @@ func TestMarkOffline_DelayedOldLeaveGameDoesNotDeleteReplacement(t *testing.T) {
 	require.True(t, got.Found)
 	assert.Equal(t, uint32(200), got.Session.SessionId)
 	assert.Equal(t, uint32(2), got.Session.SessionVersion)
-
-	loc, err := NewGetLocationLogic(ctx, sc).GetLocation(&pb.PlayerId{Uid: int64(playerID)})
-	require.NoError(t, err)
-	assert.True(t, loc.Online, "旧 LeaveGame 也不能删除新会话对应的位置")
 }
 
 // ---------------------------------------------------------------------------
@@ -272,8 +209,7 @@ func TestSetDisconnecting_HappyPath(t *testing.T) {
 	assert.Equal(t, uint32(2), resp.Session.SessionVersion)
 
 	// Verify lease ZSET entry exists
-	members, _ := mr.ZMembers(LeaseZSetKey)
-	assert.Contains(t, members, "4001")
+	assert.Contains(t, leaseMembers(t, mr), "4001")
 }
 
 func TestSetDisconnecting_SessionMismatch_Ignored(t *testing.T) {
@@ -346,8 +282,7 @@ func TestReconnect_HappyPath(t *testing.T) {
 	assert.Equal(t, uint32(3), resp.Session.SessionVersion) // disconnect + reconnect each advance once
 
 	// Lease ZSET entry should be removed
-	members, _ := mr.ZMembers(LeaseZSetKey)
-	assert.NotContains(t, members, "6001")
+	assert.NotContains(t, leaseMembers(t, mr), "6001")
 }
 
 func TestReconnect_NoSession(t *testing.T) {
@@ -374,14 +309,7 @@ func TestFullSessionLifecycle(t *testing.T) {
 
 	playerID := uint64(10001)
 
-	// 1. Set location (player enters game)
-	seedLegacyLocation(t, sc, &pb.PlayerLocation{
-		Uid:      int64(playerID),
-		ServerId: "scene-1",
-		SceneId:  100,
-	})
-
-	// 2. Set session (gate binds session)
+	// 1. Set session (gate binds session)
 	setSessionLogic := NewSetSessionLogic(ctx, sc)
 	_, err := setSessionLogic.SetSession(&pb.SetSessionRequest{
 		Session: &pb.PlayerSession{
@@ -395,7 +323,7 @@ func TestFullSessionLifecycle(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// 3. Player disconnects
+	// 2. Player disconnects
 	dcLogic := NewSetDisconnectingLogic(ctx, sc)
 	_, err = dcLogic.SetDisconnecting(&pb.SetDisconnectingRequest{
 		PlayerId:        playerID,
@@ -409,10 +337,9 @@ func TestFullSessionLifecycle(t *testing.T) {
 	resp, _ := getSession.GetSession(&pb.GetSessionRequest{PlayerId: playerID})
 	assert.Equal(t, pb.PlayerSessionState_SESSION_STATE_DISCONNECTING, resp.Session.State)
 
-	members, _ := mr.ZMembers(LeaseZSetKey)
-	assert.Contains(t, members, "10001")
+	assert.Contains(t, leaseMembers(t, mr), "10001")
 
-	// 4. Player reconnects
+	// 3. Player reconnects
 	rcLogic := NewReconnectLogic(ctx, sc)
 	rcResp, err := rcLogic.Reconnect(&pb.ReconnectRequest{
 		PlayerId:       playerID,
@@ -425,15 +352,9 @@ func TestFullSessionLifecycle(t *testing.T) {
 	assert.Equal(t, pb.PlayerSessionState_SESSION_STATE_ONLINE, rcResp.Session.State)
 
 	// Lease entry should be gone
-	members, _ = mr.ZMembers(LeaseZSetKey)
-	assert.NotContains(t, members, "10001")
+	assert.NotContains(t, leaseMembers(t, mr), "10001")
 
-	// 5. Location still exists
-	getLoc := NewGetLocationLogic(ctx, sc)
-	loc, _ := getLoc.GetLocation(&pb.PlayerId{Uid: int64(playerID)})
-	assert.True(t, loc.Online)
-
-	// 6. Player goes offline for real
+	// 4. Player goes offline for real
 	offLogic := NewMarkOfflineLogic(ctx, sc)
 	_, _ = offLogic.MarkOffline(&pb.MarkOfflineRequest{
 		PlayerId:               playerID,
@@ -441,8 +362,7 @@ func TestFullSessionLifecycle(t *testing.T) {
 		ExpectedSessionVersion: rcResp.Session.SessionVersion,
 	})
 
-	loc, _ = getLoc.GetLocation(&pb.PlayerId{Uid: int64(playerID)})
-	assert.False(t, loc.Online)
+	assert.False(t, mr.Exists(sessionKey(playerID)))
 }
 
 // ---------------------------------------------------------------------------
@@ -450,8 +370,25 @@ func TestFullSessionLifecycle(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestKeyFormats(t *testing.T) {
-	assert.Equal(t, "player:location:42", locationKey(42))
-	assert.Equal(t, "player:session:99", sessionKey(99))
+	assert.Equal(t, "player:{42}:location", sceneManagerLocationKey(42))
+	assert.Equal(t, "player:session:{99}", sessionKey(99))
+	assert.Equal(t, "player:afk_pass:{99}", afkPassKey(99))
+
+	// 按 slot 分桶的键形:金样用 SlotTag(0) = afps(redisslot 的金样)。清库脚本、运维手册也按这个形状写。
+	lease := leaseKeysForSlot(0)
+	assert.Equal(t, "player:leases:{afps}", lease.ready)
+	assert.Equal(t, "player:leases:{afps}:processing", lease.processing)
+	assert.Equal(t, "player:leases:{afps}:claim_tokens", lease.claimTokens)
+	assert.Equal(t, "player:leases:{afps}:claim_payloads", lease.claimPayloads)
+	assert.Equal(t, "player:gate_index:{afps}:gates", gateRegistryKey(0))
+	assert.Equal(t, "player:gate_index:{afps}:sessions:inst-1", gateSessionIndexKey(0, "inst-1"))
+	assert.Equal(t, "player:locator_shard:gate_sweep:members:{afps}", shardMembersKey(shardRoleGateSweep))
+	assert.Equal(t, "player:locator_shard:lease_monitor:segment:{afps}", shardSegmentKey(shardRoleLeaseMonitor, 0))
+
+	// 一名玩家的租约键与索引键带它那个 slot 的 tag。
+	tag := redisslot.PlayerIndexTag(99)
+	assert.Equal(t, "player:leases:"+tag, leaseKeysForPlayer(99).ready)
+	assert.Equal(t, "player:gate_index:"+tag+":gates", gateRegistryKey(redisslot.PlayerSlot(99)))
 }
 
 // ---------------------------------------------------------------------------
@@ -477,14 +414,12 @@ func TestSetDisconnecting_DefaultTTL(t *testing.T) {
 
 	// 会话载荷没有独立 TTL；只有 monitor 完成外部副作用并 ack 后才显式删除。
 	// 这样批量积压或 monitor 停机不会先吃掉 Gate/Scene 通知所需的载荷。
-	ttl, err := sc.RedisClient.TTL(ctx, sessionKey(11001)).Result()
+	ttl, err := sc.PlayerRedis.TTL(ctx, sessionKey(11001)).Result()
 	require.NoError(t, err)
 	assert.Equal(t, time.Duration(-1), ttl)
 
 	// 租约本身仍按 30s 到期(宽限期只延长载荷寿命,不推迟清理时机)。
-	scores, err := mr.ZMembers(LeaseZSetKey)
-	require.NoError(t, err)
-	require.Contains(t, scores, "11001")
+	require.Contains(t, leaseMembers(t, mr), "11001")
 
 	// Verify session is stored correctly despite TTL
 	data, _ := mr.Get(sessionKey(11001))
@@ -506,21 +441,21 @@ func TestLeaseClaimTimeout_RequeuesWithoutLosingPayload(t *testing.T) {
 	require.NoError(t, err)
 
 	now := time.Now().Add(2 * time.Second)
-	claims, err := claimExpiredLeases(ctx, sc, now, 10, 5*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), now, 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 	require.NotEmpty(t, claims[0].payload)
 	firstToken := claims[0].token
 
 	// 模拟 worker 在处理前崩溃：不 ack，直接越过 processing deadline。
-	claims, err = claimExpiredLeases(ctx, sc, now.Add(6*time.Second), 10, 5*time.Second)
+	claims, err = claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), now.Add(6*time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 	assert.NotEqual(t, firstToken, claims[0].token)
 	assert.Equal(t, playerID, claims[0].playerID)
 	assert.NotEmpty(t, claims[0].payload)
 
-	processing, err := mr.ZMembers(LeaseProcessingZSetKey)
+	processing, err := mr.ZMembers(leaseKeysForPlayer(playerID).processing)
 	require.NoError(t, err)
 	assert.Contains(t, processing, "12001")
 }
@@ -537,7 +472,7 @@ func TestLeaseClaimHeartbeat_PreventsPrematureRecovery(t *testing.T) {
 		PlayerId: playerID, SessionId: 100, LeaseTtlSeconds: 1,
 	})
 	require.NoError(t, err)
-	claims, err := claimExpiredLeases(ctx, sc, base.Add(2*time.Second), 10, 30*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), base.Add(2*time.Second), 10, 30*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 
@@ -547,12 +482,12 @@ func TestLeaseClaimHeartbeat_PreventsPrematureRecovery(t *testing.T) {
 	assert.Equal(t, 1, renewed)
 
 	// 已越过原 deadline(base+32s)，但尚未越过心跳后的 deadline，不得被新 worker 回收。
-	recovered, err := claimExpiredLeases(ctx, sc, base.Add(33*time.Second), 10, 30*time.Second)
+	recovered, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), base.Add(33*time.Second), 10, 30*time.Second)
 	require.NoError(t, err)
 	assert.Empty(t, recovered)
 
 	// 心跳真正失效后仍可恢复，保证 worker 崩溃不会永久卡住任务。
-	recovered, err = claimExpiredLeases(ctx, sc, base.Add(51*time.Second), 10, 30*time.Second)
+	recovered, err = claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), base.Add(51*time.Second), 10, 30*time.Second)
 	require.NoError(t, err)
 	require.Len(t, recovered, 1)
 	assert.NotEqual(t, claims[0].token, recovered[0].token)
@@ -569,7 +504,7 @@ func TestReconnect_CancelsAlreadyClaimedExpiry(t *testing.T) {
 		PlayerId: playerID, SessionId: 100, LeaseTtlSeconds: 1,
 	})
 	require.NoError(t, err)
-	claims, err := claimExpiredLeases(ctx, sc, time.Now().Add(2*time.Second), 10, 30*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), time.Now().Add(2*time.Second), 10, 30*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 
@@ -579,7 +514,7 @@ func TestReconnect_CancelsAlreadyClaimedExpiry(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reconnected.Success)
 
-	processingCount, err := sc.RedisClient.ZCard(ctx, LeaseProcessingZSetKey).Result()
+	processingCount, err := sc.PlayerRedis.ZCard(ctx, leaseKeysForPlayer(playerID).processing).Result()
 	require.NoError(t, err)
 	assert.Zero(t, processingCount)
 
@@ -605,7 +540,7 @@ func TestSetSession_RejectsMissingSessionWhileExpiryCleanupPending(t *testing.T)
 		PlayerId: playerID, SessionId: 100, LeaseTtlSeconds: 1,
 	})
 	require.NoError(t, err)
-	claims, err := claimExpiredLeases(ctx, sc, time.Now().Add(2*time.Second), 10, 30*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), time.Now().Add(2*time.Second), 10, 30*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 
@@ -621,7 +556,7 @@ func TestSetSession_RejectsMissingSessionWhileExpiryCleanupPending(t *testing.T)
 	_, err = NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{Session: replacement})
 	require.ErrorIs(t, err, ErrSessionCleanupPending)
 	assert.False(t, mr.Exists(sessionKey(playerID)), "cleanup pending 时不得建立新会话")
-	processing, err := mr.ZMembers(LeaseProcessingZSetKey)
+	processing, err := mr.ZMembers(leaseKeysForPlayer(playerID).processing)
 	require.NoError(t, err)
 	assert.Contains(t, processing, "13501", "失败的新登录不得撤销旧清理 claim")
 
@@ -641,7 +576,7 @@ func TestResolveSceneManagerSceneID_FallsBackToAuthorityKey(t *testing.T) {
 	const playerID uint64 = 14001
 	data, err := proto.Marshal(&smpb.PlayerLocation{SceneId: 9876, NodeId: "scene-9"})
 	require.NoError(t, err)
-	require.NoError(t, sc.RedisClient.Set(ctx, sceneManagerLocationKey(playerID), data, 0).Err())
+	require.NoError(t, sc.PlayerRedis.Set(ctx, sceneManagerLocationKey(playerID), data, 0).Err())
 
 	sceneID, err := resolveSceneManagerSceneID(ctx, sc, playerID)
 	require.NoError(t, err)
@@ -662,7 +597,7 @@ func TestLeaseExpiry_MissingSceneManagerRetainsReceiptForRetry(t *testing.T) {
 	session.SceneId = 0
 	location, err := proto.Marshal(&smpb.PlayerLocation{SceneId: 50, NodeId: "scene-1"})
 	require.NoError(t, err)
-	require.NoError(t, sc.RedisClient.Set(ctx, sceneManagerLocationKey(playerID), location, 0).Err())
+	require.NoError(t, sc.PlayerRedis.Set(ctx, sceneManagerLocationKey(playerID), location, 0).Err())
 	_, err = NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{Session: session})
 	require.NoError(t, err)
 	_, err = NewSetDisconnectingLogic(ctx, sc).SetDisconnecting(&pb.SetDisconnectingRequest{
@@ -670,7 +605,7 @@ func TestLeaseExpiry_MissingSceneManagerRetainsReceiptForRetry(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	claims, err := claimExpiredLeases(ctx, sc, base.Add(2*time.Second), 10, 5*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), base.Add(2*time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 	first := claims[0]
@@ -679,19 +614,19 @@ func TestLeaseExpiry_MissingSceneManagerRetainsReceiptForRetry(t *testing.T) {
 	// 外部副作用失败，不能 ACK processing receipt。
 	handleLeaseExpiry(ctx, sc, first)
 	assert.False(t, mr.Exists(sessionKey(playerID)))
-	processing, err := mr.ZMembers(LeaseProcessingZSetKey)
+	processing, err := mr.ZMembers(leaseKeysForPlayer(playerID).processing)
 	require.NoError(t, err)
 	assert.Contains(t, processing, "14501")
-	token, err := sc.RedisClient.HGet(ctx, leaseClaimTokenHashKey, "14501").Result()
+	token, err := sc.PlayerRedis.HGet(ctx, leaseKeysForPlayer(playerID).claimTokens, "14501").Result()
 	require.NoError(t, err)
 	assert.Equal(t, first.token, token)
-	payload, err := sc.RedisClient.HGet(ctx, leaseClaimPayloadHashKey, "14501").Bytes()
+	payload, err := sc.PlayerRedis.HGet(ctx, leaseKeysForPlayer(playerID).claimPayloads, "14501").Bytes()
 	require.NoError(t, err)
 	assert.Equal(t, first.payload, payload)
 
 	// worker/配置恢复后，deadline 回收应换 token 并带回同一份 payload，
 	// 从而能够重新执行 SceneManager.LeaveScene。
-	reclaimed, err := claimExpiredLeases(ctx, sc, base.Add(8*time.Second), 10, 5*time.Second)
+	reclaimed, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), base.Add(8*time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, reclaimed, 1)
 	assert.NotEqual(t, first.token, reclaimed[0].token)
@@ -720,30 +655,30 @@ func TestLeaseExpiry_PlayerIDMismatchRetainsReceiptForRetry(t *testing.T) {
 
 	// 模拟 key member 与 protobuf 内身份发生数据损坏。不能信任 payload 去通知
 	// 另一个玩家，也不能直接 ACK 后永久丢掉清理责任。
-	data, err := sc.RedisClient.Get(ctx, sessionKey(playerID)).Bytes()
+	data, err := sc.PlayerRedis.Get(ctx, sessionKey(playerID)).Bytes()
 	require.NoError(t, err)
 	corrupt := &pb.PlayerSession{}
 	require.NoError(t, proto.Unmarshal(data, corrupt))
 	corrupt.PlayerId = 99999
 	data, err = proto.Marshal(corrupt)
 	require.NoError(t, err)
-	require.NoError(t, sc.RedisClient.Set(ctx, sessionKey(playerID), data, 0).Err())
+	require.NoError(t, sc.PlayerRedis.Set(ctx, sessionKey(playerID), data, 0).Err())
 
-	claims, err := claimExpiredLeases(ctx, sc, base.Add(2*time.Second), 10, 5*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), base.Add(2*time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 	first := claims[0]
 	handleLeaseExpiry(ctx, sc, first)
 
 	assert.True(t, mr.Exists(sessionKey(playerID)), "身份不匹配时不得删除或改写不可信 session")
-	processing, err := mr.ZMembers(LeaseProcessingZSetKey)
+	processing, err := mr.ZMembers(leaseKeysForPlayer(playerID).processing)
 	require.NoError(t, err)
 	assert.Contains(t, processing, "15001")
-	token, err := sc.RedisClient.HGet(ctx, leaseClaimTokenHashKey, "15001").Result()
+	token, err := sc.PlayerRedis.HGet(ctx, leaseKeysForPlayer(playerID).claimTokens, "15001").Result()
 	require.NoError(t, err)
 	assert.Equal(t, first.token, token)
 
-	reclaimed, err := claimExpiredLeases(ctx, sc, base.Add(8*time.Second), 10, 5*time.Second)
+	reclaimed, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), base.Add(8*time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, reclaimed, 1)
 	assert.NotEqual(t, first.token, reclaimed[0].token)
@@ -757,7 +692,7 @@ func TestLeaseExpiry_PlayerIDMismatchRetainsReceiptForRetry(t *testing.T) {
 // readSessionBytes 读会话键原始字节。"被拒后记录不变"按整字节比较,与提交点的整字节 CAS 同一口径。
 func readSessionBytes(t *testing.T, sc *svc.ServiceContext, playerID uint64) []byte {
 	t.Helper()
-	data, err := sc.RedisClient.Get(context.Background(), sessionKey(playerID)).Bytes()
+	data, err := sc.PlayerRedis.Get(context.Background(), sessionKey(playerID)).Bytes()
 	require.NoError(t, err)
 	return data
 }
@@ -936,9 +871,7 @@ func TestReconnect_RejectsNonIncreasingLoginGeneration(t *testing.T) {
 			assert.Equal(t, disconnected, readSessionBytes(t, sc, playerID), "被拒的重连不得改动记录")
 		})
 	}
-	members, err := mr.ZMembers(LeaseZSetKey)
-	require.NoError(t, err)
-	assert.Contains(t, members, "16401", "被拒的重连不得撤销断线租约")
+	assert.Contains(t, leaseMembers(t, mr), "16401", "被拒的重连不得撤销断线租约")
 
 	resp, err := NewReconnectLogic(ctx, sc).Reconnect(&pb.ReconnectRequest{
 		PlayerId: playerID, NewSessionId: 300, GateId: "gate-2", RequestId: "req-newer", LoginGeneration: 101,

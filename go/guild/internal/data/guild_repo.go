@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math"
 	"shared/drainproof"
+	"shared/placement"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -129,6 +131,8 @@ type GuildRepo struct {
 	cacheLoadMu      sync.Mutex
 	roleAuthority    string
 	matchAuthority   string
+	// zones 是合服映射缓存,BindMergedZones 在 repo 交给任何调用方之前写一次,之后只读。
+	zones *placement.MergedZoneCache
 }
 
 func NewGuildRepo(rdb *redis.Client, db *sql.DB, defaultTTL time.Duration) *GuildRepo {
@@ -137,6 +141,41 @@ func NewGuildRepo(rdb *redis.Client, db *sql.DB, defaultTTL time.Duration) *Guil
 		db:         db,
 		defaultTTL: defaultTTL,
 	}
+}
+
+// ── 合服解析 ──────────────────────────────────────────────────
+//
+// 合服只写一条映射,不改写 guild.zone_id(docs/design/player-data-tidb-scaling-plan.md §7.1)。公会行记的是建帮时的原始区,
+// 比较两边都先解析到最终区,按区查询用 zone_id IN (ZoneMembers(z))。映射缓存可能滞后一个刷新周期,最坏结果是一次可重试的
+// 「不同区」拒绝,记录里存的原始区窗口过后都解析到同一个最终区,不会留下错误状态。
+
+// BindMergedZones 接入合服映射缓存。guild.go 启动时绑定,读不到映射已经拒绝启动;没绑(单测、不看区的工具)等于没有任何合服。
+func (r *GuildRepo) BindMergedZones(zones *placement.MergedZoneCache) {
+	r.zones = zones
+}
+
+// mergedZones 返回当前快照。nil 快照的 Final、Members 按「没有合服」回答;nil repo 只出现在不碰存储的单测里。
+func (r *GuildRepo) mergedZones() *placement.MergedZones {
+	if r == nil {
+		return nil
+	}
+	return r.zones.Snapshot()
+}
+
+// FinalZone 返回 zone 解析合服映射之后的最终区。
+func (r *GuildRepo) FinalZone(zone uint32) uint32 {
+	return r.mergedZones().Final(zone)
+}
+
+// SameZone 报告两个原始区是否解析到同一个最终区。两边用同一份快照解析,不会被一次映射刷新夹在中间。
+func (r *GuildRepo) SameZone(a, b uint32) bool {
+	zones := r.mergedZones()
+	return zones.Final(a) == zones.Final(b)
+}
+
+// ZoneMembers 返回解析到 zone 所在最终区的全部原始区,含最终区自己,升序。按区查询用它拼 IN。
+func (r *GuildRepo) ZoneMembers(zone uint32) []uint32 {
+	return r.mergedZones().Members(zone)
 }
 
 // ── Redis key helpers ──────────────────────────────────────────
@@ -597,7 +636,7 @@ func (r *GuildRepo) UpdateGuildScore(ctx context.Context, guildID uint64, zoneID
 	}); err != nil {
 		return err
 	}
-	if zoneID != 0 && zoneID != authoritativeZoneID {
+	if zoneID != 0 && !r.SameZone(zoneID, authoritativeZoneID) {
 		logx.Errorf("UpdateGuildScore: caller zone %d ignored; guild %d belongs to zone %d",
 			zoneID, guildID, authoritativeZoneID)
 	}
@@ -609,7 +648,7 @@ func (r *GuildRepo) UpdateGuildScore(ctx context.Context, guildID uint64, zoneID
 	pipe := r.rdb.Pipeline()
 	pipe.ZAdd(ctx, guildRankKey, z)
 	if authoritativeZoneID > 0 {
-		pipe.ZAdd(ctx, zoneRankKey(authoritativeZoneID), z)
+		pipe.ZAdd(ctx, zoneRankKey(r.FinalZone(authoritativeZoneID)), z)
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("update rank cache for guild %d: %w", guildID, err)
@@ -619,7 +658,8 @@ func (r *GuildRepo) UpdateGuildScore(ctx context.Context, guildID uint64, zoneID
 
 // RebuildRanks 始终从 MySQL 权威快照重建全局榜和所有 zone 榜，而不是只在
 // ZCARD==0 时运行。临时 key 构造完成后用 MULTI/EXEC 一次切换，因此能修复单项
-// 缺失、旧值、zone 榜丢失与解散后的幽灵条目。
+// 缺失、旧值、zone 榜丢失与解散后的幽灵条目。分区榜按当前映射的最终区重建,
+// 合服、撤销合服之后重启一次就回到与映射一致的状态。
 func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 	release, err := r.acquireRankLock(ctx)
 	if err != nil {
@@ -639,6 +679,7 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 	tempKeys := []string{tempGlobalKey}
 	pipe := r.rdb.Pipeline()
 	rebuilt := 0
+	zones := r.mergedZones()
 	for rows.Next() {
 		var guildID uint64
 		var zoneID uint32
@@ -649,10 +690,11 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 		z := redis.Z{Score: float64(score), Member: guildID}
 		pipe.ZAdd(ctx, tempGlobalKey, z)
 		if zoneID > 0 {
-			tempKey, ok := tempZoneKeys[zoneID]
+			final := zones.Final(zoneID)
+			tempKey, ok := tempZoneKeys[final]
 			if !ok {
-				tempKey = fmt.Sprintf("guild_rank:rebuild:%s:zone:%d", token, zoneID)
-				tempZoneKeys[zoneID] = tempKey
+				tempKey = fmt.Sprintf("guild_rank:rebuild:%s:zone:%d", token, final)
+				tempZoneKeys[final] = tempKey
 				tempKeys = append(tempKeys, tempKey)
 			}
 			pipe.ZAdd(ctx, tempKey, z)
@@ -708,9 +750,8 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 //     DisbandResult.ZoneID(解散事务内 FOR UPDATE 读到的),不能是 guild:v2:{id} 缓存。
 //
 // 无论走哪条,最后都再扫一遍 guild_rank:zone:* 把该 guildID 从**每一个**分区榜里
-// 摘掉。这一刀是给存量数据的:在本次修复之前,清榜用的是可能过期 30 分钟的缓存
-// zone,合服后解散的公会会在真正的分区榜里留下一个查不到名字的幽灵条目;
-// 只修新写入的路径,那些已经留下的条目永远不会自己消失。代价是一次 SCAN
+// 摘掉:合服之后条目可能还在源区的旧键上(还没折叠),撤销合服之后可能还在目标区的键上(还没重建),
+// 只摘最终区那一张会留下一个查不到名字的幽灵条目。代价是一次 SCAN
 // (zone 数量级,而且整段已经在榜维护锁里),换"解散即从所有榜上消失"的确定性。
 func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zoneID uint32) error {
 	release, err := r.acquireRankLock(ctx)
@@ -722,7 +763,7 @@ func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zon
 	effectiveZone := zoneID
 	switch authoritativeZone, err := r.authoritativeZoneID(ctx, guildID); {
 	case err == nil:
-		if zoneID != 0 && zoneID != authoritativeZone {
+		if zoneID != 0 && !r.SameZone(zoneID, authoritativeZone) {
 			logx.Errorf("RemoveGuildFromRank: caller zone %d ignored; guild %d belongs to zone %d",
 				zoneID, guildID, authoritativeZone)
 		}
@@ -739,7 +780,7 @@ func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zon
 	}
 	if effectiveZone > 0 {
 		// 分区榜可能因为没人推过分而还不存在;显式带上它,ZREM 对不存在的键是 no-op。
-		zoneKeys[zoneRankKey(effectiveZone)] = struct{}{}
+		zoneKeys[zoneRankKey(r.FinalZone(effectiveZone))] = struct{}{}
 	}
 
 	pipe := r.rdb.Pipeline()
@@ -751,12 +792,10 @@ func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zon
 	return err
 }
 
-// authoritativeZoneID 读公会当前的 zone_id;行不存在返回 ErrGuildGone。
-// MySQL 是归属的唯一真源:guild:v2:{id} 缓存(TTL 30 分钟)在合服之后会有整整一个 TTL 指向旧 zone。
+// authoritativeZoneID 读公会当前的 zone_id(建帮时的原始区,合服不改写);行不存在返回 ErrGuildGone。
 //
-// 这里是**非锁定读**:调用方只是拿这个值做归属判断,读完就用,加 FOR UPDATE 既不能
-// 阻止它下一毫秒被合服改掉(那是另一个事务的事),又会在 innodb_lock_wait_timeout=1 下
-// 把一次只读查询变成可能抛 1205 的写路径,还平白开了一个事务。
+// 这里是**非锁定读**:调用方只是拿这个值做归属判断,读完就用,加 FOR UPDATE 会在
+// innodb_lock_wait_timeout=1 下把一次只读查询变成可能抛 1205 的写路径,还平白开了一个事务。
 func (r *GuildRepo) authoritativeZoneID(ctx context.Context, guildID uint64) (uint32, error) {
 	var zoneID uint32
 	if err := r.db.QueryRowContext(ctx,
@@ -781,6 +820,93 @@ func (r *GuildRepo) allZoneRankKeys(ctx context.Context) (map[string]struct{}, e
 		return nil, fmt.Errorf("scan per-zone rank keys: %w", err)
 	}
 	return keys, nil
+}
+
+// rankFoldPageSize 是折叠旧榜时一次 ZSCAN 建议返回的成员数,也是一条 pipeline 的量级。
+const rankFoldPageSize = 500
+
+// FoldMergedZoneRanks 把已合走区的旧榜 guild_rank:zone:{src} 并进最终区的榜,再删掉旧键,返回这次处理的成员数。
+//
+// 为什么要有这一步:合服不动公会行,新分数按 Final(guild.zone_id) 写进最终区的榜,但合服之前写的条目还留在源区的键上,
+// 没有人再读它。榜是可重建的缓存,权威分在 guild.score;周期任务逐步并过去,不必为一次合服全量重建。
+//
+// 正确性:
+//   - 持 guild_rank:maintenance_lock,与 UpdateGuildScore、RemoveGuildFromRank、RebuildRanks 互斥,折叠途中没有人改这两个键。
+//   - ZADD NX:最终区榜上已有的条目是合服之后写的,比旧榜新,不能被旧分数盖掉。
+//   - 逐成员写,不用 ZUNIONSTORE:Redis Cluster 下两个键不在同一个 slot,多键命令会被拒绝。
+//   - 全部写完才删旧键。中途失败或进程退出,旧键还在,下一轮从头再并一遍,NX 保证幂等。
+//   - 映射缓存滞后时,还没刷新的副本可能又往源区的键写一次,下一轮接着折。如果最终区榜上已经有这个公会,NX 留下的分数
+//     可能比那一次旧,要等下一次推分或重启的 RebuildRanks 才纠正;只影响榜上的显示,权威分不受影响。
+//
+// 稳态下旧键都不存在:先无锁探测,不为空转去抢维护锁(UpdateGuildScore 也在等这把锁)。
+func (r *GuildRepo) FoldMergedZoneRanks(ctx context.Context) (int, error) {
+	zones := r.mergedZones()
+	var pending []uint32
+	for src := range zones.Merges() {
+		exists, err := r.rdb.Exists(ctx, zoneRankKey(src)).Result()
+		if err != nil {
+			return 0, fmt.Errorf("check rank key of merged zone %d: %w", src, err)
+		}
+		if exists > 0 {
+			pending = append(pending, src)
+		}
+	}
+	if len(pending) == 0 {
+		return 0, nil
+	}
+	slices.Sort(pending)
+
+	release, err := r.acquireRankLock(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer release()
+
+	folded := 0
+	for _, src := range pending {
+		n, err := r.foldZoneRank(ctx, src, zones.Final(src))
+		folded += n
+		if err != nil {
+			return folded, err
+		}
+	}
+	return folded, nil
+}
+
+// foldZoneRank 把 src 榜逐成员并进 dst 榜,然后删 src 键。调用方持榜维护锁。
+func (r *GuildRepo) foldZoneRank(ctx context.Context, src, dst uint32) (int, error) {
+	srcKey, dstKey := zoneRankKey(src), zoneRankKey(dst)
+	folded := 0
+	var cursor uint64
+	for {
+		// ZSCAN 的一页是 member、score 交替的扁平列表。
+		page, next, err := r.rdb.ZScan(ctx, srcKey, cursor, "", rankFoldPageSize).Result()
+		if err != nil {
+			return folded, fmt.Errorf("scan %s: %w", srcKey, err)
+		}
+		if len(page) > 0 {
+			pipe := r.rdb.Pipeline()
+			for i := 0; i+1 < len(page); i += 2 {
+				score, err := strconv.ParseFloat(page[i+1], 64)
+				if err != nil {
+					return folded, fmt.Errorf("parse score of %s in %s: %w", page[i], srcKey, err)
+				}
+				pipe.ZAddNX(ctx, dstKey, redis.Z{Score: score, Member: page[i]})
+			}
+			if _, err := pipe.Exec(ctx); err != nil {
+				return folded, fmt.Errorf("fold %s into %s: %w", srcKey, dstKey, err)
+			}
+			folded += len(page) / 2
+		}
+		if next == 0 {
+			break
+		}
+		cursor = next
+	}
+	if err := r.rdb.Del(ctx, srcKey).Err(); err != nil {
+		return folded, fmt.Errorf("delete folded rank key %s: %w", srcKey, err)
+	}
+	return folded, nil
 }
 
 func (r *GuildRepo) acquireRankLock(ctx context.Context) (func(), error) {
@@ -836,11 +962,11 @@ return {rank, redis.call("ZSCORE", KEYS[1], ARGV[1])}
 `)
 
 // GetGuildRankPage returns a page of guilds sorted by score descending.
-// page is 1-based; zoneID=0 means global ranking.
+// page is 1-based; zoneID=0 means global ranking. A merged-away zone reads the rank of its final zone.
 func (r *GuildRepo) GetGuildRankPage(ctx context.Context, zoneID, page, pageSize uint32) ([]RankEntry, uint32, error) {
 	key := guildRankKey
 	if zoneID > 0 {
-		key = zoneRankKey(zoneID)
+		key = zoneRankKey(r.FinalZone(zoneID))
 	}
 
 	// uint32 页码和页长先按 uint64 相乘，超大起点在脚本内先与榜长比较，
@@ -889,10 +1015,11 @@ func (r *GuildRepo) GetGuildRankPage(ctx context.Context, zoneID, page, pageSize
 }
 
 // GetGuildRank returns a single guild's rank and score. zoneID=0 means global. Rank is 1-based (0 = not ranked).
+// A merged-away zone reads the rank of its final zone.
 func (r *GuildRepo) GetGuildRank(ctx context.Context, guildID uint64, zoneID uint32) (RankEntry, error) {
 	key := guildRankKey
 	if zoneID > 0 {
-		key = zoneRankKey(zoneID)
+		key = zoneRankKey(r.FinalZone(zoneID))
 	}
 
 	member := fmt.Sprintf("%d", guildID)

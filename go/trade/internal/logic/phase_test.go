@@ -8,6 +8,8 @@ import (
 	"trade/internal/constants"
 
 	tradepb "proto/trade"
+
+	"shared/placement"
 )
 
 func listingRec(status tradepb.ListingStatus, noticeEnd, saleEnd uint64, zone uint32) *tradepb.TradeListingRecord {
@@ -63,7 +65,35 @@ func TestVisibleToBuyer(t *testing.T) {
 		{"scope 未指定 fail-closed", listingRec(listed, 0, 3000, 1), tradepb.MarketScope_MARKET_SCOPE_UNSPECIFIED, 1, false},
 	}
 	for _, tc := range cases {
-		if got := VisibleToBuyer(tc.rec, now, tc.scope, tc.caller); got != tc.want {
+		if got := VisibleToBuyer(tc.rec, now, tc.scope, tc.caller, nil); got != tc.want {
+			t.Errorf("%s: VisibleToBuyer = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// 合服不改写 market_zone:商品还记着 5,5 区合进 6 区之后,两边都解析到 6。
+func TestVisibleToBuyer_MergedZones(t *testing.T) {
+	const now = uint64(1000)
+	listed := tradepb.ListingStatus_LISTING_STATUS_LISTED
+	zoneScope := tradepb.MarketScope_MARKET_SCOPE_ZONE
+	zones, err := placement.NewMergedZones(map[uint32]uint32{4: 5, 5: 6})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name   string
+		market uint32
+		caller uint32
+		want   bool
+	}{
+		{"源区商品,目标区买家", 5, 6, true},
+		{"目标区商品,源区买家(归属读滞后)", 6, 5, true},
+		{"链上第一跳的商品", 4, 6, true},
+		{"没合服的别区", 5, 7, false},
+		{"调用者 home_zone=0 一律不可见", 5, 0, false},
+	}
+	for _, tc := range cases {
+		if got := VisibleToBuyer(listingRec(listed, 0, 3000, tc.market), now, zoneScope, tc.caller, zones); got != tc.want {
 			t.Errorf("%s: VisibleToBuyer = %v, want %v", tc.name, got, tc.want)
 		}
 	}

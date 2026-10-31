@@ -8,7 +8,7 @@ import (
 	matchpb "proto/match"
 )
 
-// 仅供既有受信结果消费者/结果记录恢复器：在任何Poison或销账前核完整终局与固定原launch。
+// 仅供既有受信结果消费者/结果记录恢复器：在任何Poison前核完整终局与固定原launch。
 // 这不替代Kafka/结果存储的部署认证；字段残缺不是“确定性失败后可以解除角色占用”。
 func (r *ActivityRepo) ValidateTrialTerminal(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
 	if !r.TrialLaunchEnabled() {

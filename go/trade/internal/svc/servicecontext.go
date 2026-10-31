@@ -24,6 +24,8 @@ import (
 	"shared/authoritysql"
 	"shared/drainproof"
 	"shared/idsegment"
+	"shared/mergedzone"
+	"shared/placement"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
@@ -58,9 +60,13 @@ type ServiceContext struct {
 	// DB 是 mmorpg_trade 的连接池。表由 schemamigrate 建(trade.go 启动期或 -migrate),本包不碰 DDL。
 	DB *sql.DB
 
-	// DataServiceClient 查 home_zone(BatchGetPlayerHomeZone)与领号段(AllocateIdSegment)。
-	// 无条件拨号(Validate 已保证有目标);NonBlock 下 data_service 暂未起时不阻塞起服。
+	// DataServiceClient 查 home_zone(BatchGetPlayerHomeZone)、读合服映射(GetMergedZones)与领号段(AllocateIdSegment)。
+	// 无条件拨号(Validate 已保证有目标);NonBlock 下建客户端不等 data_service,等待由 LoadMergedZones 负责且有上限。
 	DataServiceClient dspb.DataServiceClient
+
+	// MergedZones 是合服映射缓存。market_zone 不改写,比较和按区查询都按它解析(logic.Deps.Zones)。
+	// LoadMergedZones 之前是 nil。
+	MergedZones *placement.MergedZoneCache
 
 	// ListingIDSegment 是 listing_id 号段客户端(biz_tag=trade_listing)。没有 snowflake 回退:
 	// 号段失败 = 本次上架失败(in-band kServiceUnavailable),绝不自造 id。
@@ -77,7 +83,7 @@ type ServiceContext struct {
 	Mall          *commerce.Mall
 	Rmb           *commerce.RmbConsignments
 	RmbIdentity   *RmbIdentity
-	rmbLoginRedis *redis.Client
+	rmbLoginRedis redis.UniversalClient
 
 	// 同一 boot 的 SQL 身份与两个独立角色；P1 不关闭 RELAY 或 SQL 池。
 	WriterConfig     authoritysql.WriterConfig
@@ -222,6 +228,34 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic(err)
 	}
 	return sc
+}
+
+// LoadMergedZones 从 data_service 取合服映射建缓存,并开始定时重读;StopAndReport 里停。
+// 读不到返回错误,trade.go 拒绝启动:分不清「没有合服」和「读不到」的实例不能对外服务。
+// 必须早于 logic.NewDeps:逻辑层的缓存引用是在那里交出去的。
+func (sc *ServiceContext) LoadMergedZones(ctx context.Context) error {
+	zones, err := mergedzone.Load(ctx, sc.DataServiceClient, placement.MergedZoneCacheOptions{
+		OnRefresh: observeMergedZoneRefresh,
+		OnChange: func(zones *placement.MergedZones) {
+			logx.Infof("[trade] merged zone mapping changed: %d merged zone(s)", len(zones.Merges()))
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("trade: load merged zones from data_service: %w", err)
+	}
+	sc.MergedZones = zones
+	zones.Start()
+	return nil
+}
+
+// observeMergedZoneRefresh 记一次定时重读的结局。失败时缓存保留旧值继续回答,这里只留痕。
+func observeMergedZoneRefresh(err error) {
+	if err != nil {
+		mergedZoneRefreshTotal.WithLabelValues(ResultError).Inc()
+		logx.Errorf("[trade] merged zone refresh failed, keeping the previous mapping: %v", err)
+		return
+	}
+	mergedZoneRefreshTotal.WithLabelValues(ResultOK).Inc()
 }
 
 // StartAssetChannel 起 scene 节点镜像与资产重投循环。ctx 取消即退出。
@@ -406,6 +440,8 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 		return err
 	}
 	sc.WriterConfig.Seal()
+	// 先停合服映射的定时重读:它走 directoryConn,连接关了之后的那一拍只会报假故障。
+	sc.MergedZones.Stop()
 	var result error
 	if sc.directoryConn != nil {
 		result = errors.Join(result, sc.directoryConn.Close())
@@ -488,6 +524,12 @@ var (
 		Help:      "TradeAdmin.SeedListing calls by result (ok|rejected|error).",
 	}, []string{"result"})
 
+	mergedZoneRefreshTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "trade",
+		Name:      "merged_zone_refresh_total",
+		Help:      "Periodic reads of the merged zone mapping from data_service by result (ok|error). On error the previous mapping stays in use.",
+	}, []string{"result"})
+
 	registerMetricsOnce sync.Once
 )
 
@@ -509,13 +551,16 @@ func StartMetrics(addr string) {
 		return
 	}
 	registerMetricsOnce.Do(func() {
-		prometheus.MustRegister(homeZoneLookupTotal, seedListingTotal)
+		prometheus.MustRegister(homeZoneLookupTotal, seedListingTotal, mergedZoneRefreshTotal)
 		// 预建全部 result 序列(值 0):否则"从未出错"与"指标不存在"在告警规则里长得一样。
 		for _, r := range []string{ResultOK, ResultUnmapped, ResultError} {
 			homeZoneLookupTotal.WithLabelValues(r)
 		}
 		for _, r := range []string{ResultOK, ResultRejected, ResultError} {
 			seedListingTotal.WithLabelValues(r)
+		}
+		for _, r := range []string{ResultOK, ResultError} {
+			mergedZoneRefreshTotal.WithLabelValues(r)
 		}
 	})
 	mux := http.NewServeMux()

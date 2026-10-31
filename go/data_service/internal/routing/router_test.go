@@ -1,224 +1,321 @@
 package routing
 
+// 路由器的编排与错误分流:假 RouteStore,不连库。SQL 本身的判定由 store 包的契约用例与真库用例钉住。
+
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
-	"data_service/internal/config"
+	"data_service/internal/store"
 
-	"shared/placement"
-
-	"github.com/alicebob/miniredis/v2"
-	goredis "github.com/redis/go-redis/v9"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
-func newTestRouter(t *testing.T) (*Router, *miniredis.Miniredis) {
+// 编译期断言:装配层把 *store.RouteStore 直接注入。
+var _ RouteStore = (*store.RouteStore)(nil)
+
+// fakeRouteStore 按预置结果回答,并记下每次调用。
+type fakeRouteStore struct {
+	registerResult store.RouteRegisterResult
+	registerErr    error
+	registerReqs   []store.RouteRegisterRequest
+
+	rows      map[uint64]store.RouteRow
+	readErr   error
+	readCalls [][]uint64
+}
+
+func (f *fakeRouteStore) RegisterHome(_ context.Context, req store.RouteRegisterRequest) (store.RouteRegisterResult, error) {
+	f.registerReqs = append(f.registerReqs, req)
+	return f.registerResult, f.registerErr
+}
+
+func (f *fakeRouteStore) GetRoutes(_ context.Context, ids []uint64) (map[uint64]store.RouteRow, error) {
+	f.readCalls = append(f.readCalls, append([]uint64(nil), ids...))
+	if f.readErr != nil {
+		return nil, f.readErr
+	}
+	out := make(map[uint64]store.RouteRow, len(ids))
+	for _, id := range ids {
+		if row, ok := f.rows[id]; ok {
+			out[id] = row
+		}
+	}
+	return out, nil
+}
+
+// routeMetric 读默认注册表里一条计数器序列的当前值;序列不存在回 0。计数是进程级累加的,用例一律比较增量。
+func routeMetric(t *testing.T, family string, labels map[string]string) float64 {
 	t.Helper()
-	mr := miniredis.RunT(t)
-
-	c := config.Config{
-		MappingRedis: redis.RedisConf{
-			Host: mr.Addr(),
-			Type: "node",
-		},
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range families {
+		if mf.GetName() != family {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			match := 0
+			for _, l := range m.GetLabel() {
+				if labels[l.GetName()] == l.GetValue() {
+					match++
+				}
+			}
+			if match == len(labels) {
+				return m.GetCounter().GetValue()
+			}
+		}
 	}
-	r := NewRouter(c)
-	t.Cleanup(func() { r.Close() })
-	return r, mr
+	return 0
 }
 
-func TestRegisterAndGetPlayerZone(t *testing.T) {
-	r, _ := newTestRouter(t)
-	ctx := context.Background()
+func registerCount(t *testing.T, outcome string) float64 {
+	t.Helper()
+	return routeMetric(t, "data_service_route_register_total", map[string]string{"outcome": outcome})
+}
 
-	err := r.RegisterPlayerZone(ctx, 1001, 5, 0)
-	assert.NoError(t, err)
+func readCount(t *testing.T, path, result string) float64 {
+	t.Helper()
+	return routeMetric(t, "data_service_route_read_total", map[string]string{"path": path, "result": result})
+}
 
-	zone, err := r.GetPlayerHomeZone(ctx, 1001)
-	assert.NoError(t, err)
+func TestRegisterPlayerZone_Outcomes(t *testing.T) {
+	boom := errors.New("Error 1205")
+	for _, tc := range []struct {
+		name         string
+		result       store.RouteRegisterResult
+		storeErr     error
+		wantLabel    string
+		wantConflict uint32
+		wantStoreErr bool
+	}{
+		{name: "新行", result: store.RouteRegisterResult{Outcome: store.RouteRegisterInserted}, wantLabel: "inserted"},
+		{name: "补 home", result: store.RouteRegisterResult{Outcome: store.RouteRegisterFilledHome}, wantLabel: "filled_home"},
+		{name: "落点不覆盖", result: store.RouteRegisterResult{Outcome: store.RouteRegisterFilledHomePlacementKept}, wantLabel: "filled_home_placement_kept"},
+		{name: "幂等", result: store.RouteRegisterResult{Outcome: store.RouteRegisterAlreadySame}, wantLabel: "already_same"},
+		{name: "冲突", result: store.RouteRegisterResult{Outcome: store.RouteRegisterConflict, ExistingHome: 8}, wantLabel: "conflict", wantConflict: 8},
+		{name: "库故障", storeErr: boom, wantLabel: "store_error", wantStoreErr: true},
+		{name: "未知结局按库故障", result: store.RouteRegisterResult{Outcome: store.RouteRegisterOutcome(99)}, wantLabel: "store_error", wantStoreErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeRouteStore{registerResult: tc.result, registerErr: tc.storeErr}
+			before := registerCount(t, tc.wantLabel)
+
+			err := NewRouter(fake).RegisterPlayerZone(context.Background(), 42, 5, 1000000)
+
+			assert.Equal(t, before+1, registerCount(t, tc.wantLabel), "每次调用恰好计一次结局")
+			require.Len(t, fake.registerReqs, 1)
+			assert.Equal(t, store.RouteRegisterRequest{PlayerID: 42, HomeZone: 5, StorageID: 1000000}, fake.registerReqs[0])
+			var conflict *HomeZoneConflictError
+			switch {
+			case tc.wantConflict != 0:
+				require.ErrorAs(t, err, &conflict)
+				assert.Equal(t, HomeZoneConflictError{PlayerID: 42, Existing: tc.wantConflict, Requested: 5}, *conflict)
+			case tc.wantStoreErr:
+				require.ErrorIs(t, err, ErrRouteStore)
+				if tc.storeErr != nil {
+					require.ErrorIs(t, err, tc.storeErr, "原始错误要留在链上,运维才查得到")
+				}
+			default:
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// 参数非法不碰库:player_id 为 0、home 为 0 或越界、没有落点。
+func TestRegisterPlayerZone_InvalidArgsNeverReachStore(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		player  uint64
+		home    uint32
+		storage uint32
+	}{
+		{"player 0", 0, 5, 1000000},
+		{"home 0", 42, 0, 1000000},
+		{"home 越界", 42, store.RouteHomeZoneMax + 1, 1000000},
+		{"没有落点", 42, 5, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeRouteStore{}
+			before := registerCount(t, "invalid")
+			err := NewRouter(fake).RegisterPlayerZone(context.Background(), tc.player, tc.home, tc.storage)
+			require.ErrorIs(t, err, ErrInvalidRegistration)
+			assert.Empty(t, fake.registerReqs)
+			assert.Equal(t, before+1, registerCount(t, "invalid"))
+		})
+	}
+}
+
+// route store 没装配:读写都 fail-closed,读绝不说「没有归属」。
+func TestRouter_MissingStoreFailsClosed(t *testing.T) {
+	r := NewRouter(nil)
+
+	before := registerCount(t, "store_error")
+	require.ErrorIs(t, r.RegisterPlayerZone(context.Background(), 42, 5, 1000000), ErrRouteStore)
+	assert.Equal(t, before+1, registerCount(t, "store_error"))
+
+	beforeRead := readCount(t, "home", "error")
+	_, err := r.GetPlayerHomeZone(context.Background(), 42)
+	require.ErrorIs(t, err, ErrRouteStore)
+	require.NotErrorIs(t, err, ErrHomeZoneNotMapped)
+	assert.Equal(t, beforeRead+1, readCount(t, "home", "error"))
+
+	beforeBatch := readCount(t, "batch", "error")
+	_, err = r.BatchGetPlayerHomeZone(context.Background(), []uint64{42})
+	require.ErrorIs(t, err, ErrRouteStore)
+	assert.Equal(t, beforeBatch+1, readCount(t, "batch", "error"))
+}
+
+func TestGetPlayerHomeZone(t *testing.T) {
+	fake := &fakeRouteStore{rows: map[uint64]store.RouteRow{
+		42: {PlayerID: 42, HomeZone: 5, Rev: 1},
+		// home_zone 为 NULL 的行(只钉了落点):对归属读来说就是没有。
+		43: {PlayerID: 43, StorageID: 1000000, PlacementVersion: 1, Rev: 1},
+	}}
+	r := NewRouter(fake)
+
+	okBefore := readCount(t, "home", "ok")
+	zone, err := r.GetPlayerHomeZone(context.Background(), 42)
+	require.NoError(t, err)
 	assert.Equal(t, uint32(5), zone)
-}
+	assert.Equal(t, okBefore+1, readCount(t, "home", "ok"))
+	assert.Equal(t, []uint64{42}, fake.readCalls[0], "单查走一个 id 的点查")
 
-// ── SETNX 语义 ───────────────────────────────────────
-
-// TestRegisterPlayerZone_NeverOverwritesDifferentZone 是本次修复的核心:
-// 已登记的归属不许被任何"按建角 zone 重新登记"的路径改写。
-func TestRegisterPlayerZone_NeverOverwritesDifferentZone(t *testing.T) {
-	r, _ := newTestRouter(t)
-	ctx := context.Background()
-
-	require.NoError(t, r.RegisterPlayerZone(ctx, 7001, 3, 0))
-
-	err := r.RegisterPlayerZone(ctx, 7001, 9, 0)
-	require.Error(t, err)
-	var conflict *HomeZoneConflictError
-	require.ErrorAs(t, err, &conflict, "冲突必须是可判定的类型,调用方才能翻成专属错误码")
-	assert.Equal(t, uint64(7001), conflict.PlayerID)
-	assert.Equal(t, uint32(3), conflict.Existing, "错误里必须带上既有 zone")
-	assert.Equal(t, uint32(9), conflict.Requested)
-	assert.Contains(t, conflict.Error(), "already mapped to home zone 3")
-
-	// 拒绝必须是零变更
-	zone, err := r.GetPlayerHomeZone(ctx, 7001)
-	require.NoError(t, err)
-	assert.Equal(t, uint32(3), zone)
-}
-
-// TestRegisterPlayerZone_SameZoneIsIdempotent:login 的 CreatePlayer 允许重试,
-// 重复登记同一个 zone 不能变成失败。
-func TestRegisterPlayerZone_SameZoneIsIdempotent(t *testing.T) {
-	r, _ := newTestRouter(t)
-	ctx := context.Background()
-
-	require.NoError(t, r.RegisterPlayerZone(ctx, 7002, 4, 0))
-	require.NoError(t, r.RegisterPlayerZone(ctx, 7002, 4, 0))
-
-	zone, err := r.GetPlayerHomeZone(ctx, 7002)
-	require.NoError(t, err)
-	assert.Equal(t, uint32(4), zone)
-}
-
-// ── 落点记录(player-storage-placement.md §8.1)────────────────────
-
-// TestKeyContractsMatchSharedPlacement:本包自己拼的 player:zone 键
-// 必须与 shared/placement 逐字节相同 —— go/db 与搬库工具按那一份读,两边一旦分叉,
-// 落点选库就看错键,且全程零报错。
-func TestKeyContractsMatchSharedPlacement(t *testing.T) {
-	for _, pid := range []uint64{1, 7001, 18446744073709551615} {
-		assert.Equal(t, placement.HomeZoneKey(pid), mappingKey(pid))
+	for _, id := range []uint64{43, 44} {
+		nfBefore := readCount(t, "home", "not_found")
+		_, err = r.GetPlayerHomeZone(context.Background(), id)
+		require.ErrorIs(t, err, ErrHomeZoneNotMapped)
+		require.NotErrorIs(t, err, ErrRouteStore)
+		assert.Equal(t, nfBefore+1, readCount(t, "home", "not_found"))
 	}
-}
-
-// TestRegisterPlayerZone_WithStorageIDPinsPlacement:storage_id 非 0 时,映射与稳定态落点
-// "{storage_id}:1" 一起写下。
-func TestRegisterPlayerZone_WithStorageIDPinsPlacement(t *testing.T) {
-	r, mr := newTestRouter(t)
-	ctx := context.Background()
-
-	require.NoError(t, r.RegisterPlayerZone(ctx, 8001, 5, placement.DefaultGlobalStorageID))
-
-	home, err := mr.Get(mappingKey(8001))
-	require.NoError(t, err)
-	assert.Equal(t, "5", home)
-	raw, err := mr.Get(placement.Key(8001))
-	require.NoError(t, err)
-	assert.Equal(t, placement.StableValue(placement.DefaultGlobalStorageID, 1), raw)
-	rec, err := placement.Parse(raw)
-	require.NoError(t, err, "写下的值必须能被 go/db 用同一份契约解析")
-	assert.Equal(t, placement.Record{StorageID: placement.DefaultGlobalStorageID, Version: 1}, rec)
-}
-
-// TestRegisterPlayerZone_WithoutStorageIDWritesNoPlacement:storage_id=0 是旧行为,
-// 不许顺手留下落点记录(有效落点应回落 home_zone)。
-func TestRegisterPlayerZone_WithoutStorageIDWritesNoPlacement(t *testing.T) {
-	r, mr := newTestRouter(t)
-	ctx := context.Background()
-
-	require.NoError(t, r.RegisterPlayerZone(ctx, 8002, 5, 0))
-	assert.True(t, mr.Exists(mappingKey(8002)))
-	assert.False(t, mr.Exists(placement.Key(8002)))
-}
-
-// TestRegisterPlayerZone_ExistingHomeLeavesPlacementUntouched 是原子性的核心:home 已存在时,
-// 无论同值幂等还是冲突,落点键都不许被写 —— 否则一次带 storage_id 的重试或误登记
-// 就能把玩家的数据指针挪走。
-func TestRegisterPlayerZone_ExistingHomeLeavesPlacementUntouched(t *testing.T) {
-	r, mr := newTestRouter(t)
-	ctx := context.Background()
-
-	// 旧号(登记时没钉落点)被带 storage_id 的请求重登:幂等成功,落点仍缺席。
-	require.NoError(t, r.RegisterPlayerZone(ctx, 8003, 5, 0))
-	require.NoError(t, r.RegisterPlayerZone(ctx, 8003, 5, placement.DefaultGlobalStorageID))
-	assert.False(t, mr.Exists(placement.Key(8003)), "home 已存在时同值重试不得补写落点")
-
-	// 冲突:拒绝且两键零变更。
-	err := r.RegisterPlayerZone(ctx, 8003, 9, placement.DefaultGlobalStorageID)
-	var conflict *HomeZoneConflictError
-	require.ErrorAs(t, err, &conflict)
-	assert.False(t, mr.Exists(placement.Key(8003)), "冲突的登记不得留下落点")
-	home, err := mr.Get(mappingKey(8003))
-	require.NoError(t, err)
-	assert.Equal(t, "5", home)
-
-	// 已钉过落点的号用另一个 storage_id 重试:幂等成功,原落点原样保留。
-	require.NoError(t, r.RegisterPlayerZone(ctx, 8004, 5, 102))
-	require.NoError(t, r.RegisterPlayerZone(ctx, 8004, 5, placement.DefaultGlobalStorageID))
-	raw, err := mr.Get(placement.Key(8004))
-	require.NoError(t, err)
-	assert.Equal(t, "102:1", raw)
-}
-
-// TestRegisterPlayerZone_KeepsPreexistingPlacement:home 缺席但落点记录已在(映射曾被删),
-// home 照常写入,落点不被请求里的 storage_id 覆盖 —— 那条记录指向数据真正所在的库。
-func TestRegisterPlayerZone_KeepsPreexistingPlacement(t *testing.T) {
-	r, mr := newTestRouter(t)
-	ctx := context.Background()
-	require.NoError(t, mr.Set(placement.Key(8006), "7:3"))
-
-	require.NoError(t, r.RegisterPlayerZone(ctx, 8006, 5, placement.DefaultGlobalStorageID))
-	home, err := mr.Get(mappingKey(8006))
-	require.NoError(t, err)
-	assert.Equal(t, "5", home)
-	raw, err := mr.Get(placement.Key(8006))
-	require.NoError(t, err)
-	assert.Equal(t, "7:3", raw)
-}
-
-func TestGetPlayerHomeZone_NotFound(t *testing.T) {
-	r, _ := newTestRouter(t)
-	ctx := context.Background()
-
-	_, err := r.GetPlayerHomeZone(ctx, 9999)
-	assert.Error(t, err)
+	// 文案是 login homezone.IsUnmapped 的契约,改了调用方会把「没有映射」当成故障。
 	assert.Contains(t, err.Error(), "no home zone mapping")
 }
 
+// 一次 SQL 故障绝不能被报成「这名玩家没有归属」:login 会据此退回建角 zone。
+func TestGetPlayerHomeZone_SQLFailureIsNotNotFound(t *testing.T) {
+	boom := errors.New("Error 2013: lost connection")
+	before := readCount(t, "home", "error")
+	_, err := NewRouter(&fakeRouteStore{readErr: boom}).GetPlayerHomeZone(context.Background(), 42)
+	require.ErrorIs(t, err, ErrRouteStore)
+	require.ErrorIs(t, err, boom)
+	require.NotErrorIs(t, err, ErrHomeZoneNotMapped)
+	assert.Equal(t, before+1, readCount(t, "home", "error"))
+}
+
 func TestBatchGetPlayerHomeZone(t *testing.T) {
-	r, _ := newTestRouter(t)
-	ctx := context.Background()
-
-	_ = r.RegisterPlayerZone(ctx, 1, 10, 0)
-	_ = r.RegisterPlayerZone(ctx, 2, 20, 0)
-	_ = r.RegisterPlayerZone(ctx, 3, 30, 0)
-
-	result, err := r.BatchGetPlayerHomeZone(ctx, []uint64{1, 2, 3, 999})
-	assert.NoError(t, err)
-	assert.Equal(t, uint32(10), result[1])
-	assert.Equal(t, uint32(20), result[2])
-	assert.Equal(t, uint32(30), result[3])
-	_, exists := result[999]
-	assert.False(t, exists)
+	fake := &fakeRouteStore{rows: map[uint64]store.RouteRow{
+		42: {PlayerID: 42, HomeZone: 5, Rev: 1},
+		43: {PlayerID: 43, StorageID: 1000000, PlacementVersion: 1, Rev: 1}, // home 为 NULL:不进结果
+	}}
+	before := readCount(t, "batch", "ok")
+	got, err := NewRouter(fake).BatchGetPlayerHomeZone(context.Background(), []uint64{42, 43, 44})
+	require.NoError(t, err)
+	assert.Equal(t, map[uint64]uint32{42: 5}, got, "缺席的 id 不出现在结果里,不是错误")
+	assert.Equal(t, before+1, readCount(t, "batch", "ok"))
 }
 
-// 畸形值不再被当成缺席静默跳过:整批报错,与单查 GetPlayerHomeZone 同口径。
-func TestBatchGetPlayerHomeZone_MalformedValueFailsTheBatch(t *testing.T) {
-	r, mr := newTestRouter(t)
-	ctx := context.Background()
-
-	_ = r.RegisterPlayerZone(ctx, 1, 10, 0)
-	require.NoError(t, mr.Set(mappingKey(2), "not-a-zone"))
-
-	result, err := r.BatchGetPlayerHomeZone(ctx, []uint64{1, 2, 999})
-	require.Error(t, err)
-	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "invalid zone mapping for player 2")
-
-	_, singleErr := r.GetPlayerHomeZone(ctx, 2)
-	require.Error(t, singleErr)
-	assert.NotErrorIs(t, singleErr, ErrHomeZoneNotMapped, "畸形值不是缺席")
+func TestBatchGetPlayerHomeZone_EmptyIssuesNoSQL(t *testing.T) {
+	fake := &fakeRouteStore{}
+	got, err := NewRouter(fake).BatchGetPlayerHomeZone(context.Background(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+	assert.NotNil(t, got)
+	assert.Empty(t, fake.readCalls)
 }
 
-// cancelOnSetNXClient 在数据侧 SETNX 之前取消请求 ctx,模拟「mapping 锁已拿到、第二把锁之前请求超时」。
-type cancelOnSetNXClient struct {
-	*goredis.Client
-	cancel context.CancelFunc
+// 按 RouteBatchLimit 分块,每块一条 SQL、记一次指标,结果合并。
+func TestBatchGetPlayerHomeZone_Chunks(t *testing.T) {
+	total := 2*store.RouteBatchLimit + 1
+	ids := make([]uint64, total)
+	rows := make(map[uint64]store.RouteRow, total)
+	for i := range ids {
+		ids[i] = uint64(i + 1)
+		rows[ids[i]] = store.RouteRow{PlayerID: ids[i], HomeZone: 7, Rev: 1}
+	}
+	fake := &fakeRouteStore{rows: rows}
+	before := readCount(t, "batch", "ok")
+
+	got, err := NewRouter(fake).BatchGetPlayerHomeZone(context.Background(), ids)
+
+	require.NoError(t, err)
+	assert.Len(t, got, total)
+	require.Len(t, fake.readCalls, 3)
+	assert.Len(t, fake.readCalls[0], store.RouteBatchLimit)
+	assert.Len(t, fake.readCalls[1], store.RouteBatchLimit)
+	assert.Len(t, fake.readCalls[2], 1)
+	assert.Equal(t, before+3, readCount(t, "batch", "ok"))
 }
 
-func (c *cancelOnSetNXClient) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *goredis.BoolCmd {
-	c.cancel()
-	return c.Client.SetNX(ctx, key, value, expiration)
+// 任一块失败整批报错,不回半份结果:半份会被调用方当成「这些人没有归属」。
+func TestBatchGetPlayerHomeZone_AnyChunkFailureFailsWholeBatch(t *testing.T) {
+	boom := errors.New("Error 2013: lost connection")
+	ids := make([]uint64, store.RouteBatchLimit+1)
+	for i := range ids {
+		ids[i] = uint64(i + 1)
+	}
+	fake := &failingAfterStore{okCalls: 1, err: boom}
+
+	got, err := NewRouter(fake).BatchGetPlayerHomeZone(context.Background(), ids)
+
+	require.ErrorIs(t, err, ErrRouteStore)
+	require.ErrorIs(t, err, boom)
+	assert.Nil(t, got)
+	assert.Equal(t, 2, fake.calls)
+}
+
+// failingAfterStore 前 okCalls 次读成功(回空),之后失败。
+type failingAfterStore struct {
+	fakeRouteStore
+	okCalls int
+	calls   int
+	err     error
+}
+
+func (f *failingAfterStore) GetRoutes(context.Context, []uint64) (map[uint64]store.RouteRow, error) {
+	f.calls++
+	if f.calls > f.okCalls {
+		return nil, f.err
+	}
+	return map[uint64]store.RouteRow{}, nil
+}
+
+// 调用方已放弃(ctx 取消 / 超时):不计 error、不包 ErrRouteStore,错误链带 ctx 的错误。
+// 记成 error 会触发全局库故障告警,把值班引去查一个正常的全局库。
+func TestRouter_CallerAbandonedIsNotAFault(t *testing.T) {
+	boom := errors.New("context canceled by driver")
+	deadlineCtx, cancelDeadline := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelDeadline()
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	for _, tc := range []struct {
+		name string
+		ctx  context.Context
+		want error
+	}{
+		{"取消", canceledCtx, context.Canceled},
+		{"超时", deadlineCtx, context.DeadlineExceeded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := NewRouter(&fakeRouteStore{readErr: boom})
+
+			homeBefore, batchBefore := readCount(t, "home", "error"), readCount(t, "batch", "error")
+			_, err := r.GetPlayerHomeZone(tc.ctx, 42)
+			require.ErrorIs(t, err, tc.want)
+			require.NotErrorIs(t, err, ErrRouteStore)
+			require.NotErrorIs(t, err, ErrHomeZoneNotMapped)
+
+			_, err = r.BatchGetPlayerHomeZone(tc.ctx, []uint64{42})
+			require.ErrorIs(t, err, tc.want)
+			require.NotErrorIs(t, err, ErrRouteStore)
+
+			assert.Equal(t, homeBefore, readCount(t, "home", "error"))
+			assert.Equal(t, batchBefore, readCount(t, "batch", "error"))
+		})
+	}
 }

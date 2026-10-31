@@ -5,20 +5,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 
 	"shared/accountdirectory"
 	"shared/idsegment"
+	"shared/playerredis"
 	"shared/serviceauth"
 )
 
 // Config is the top-level configuration.
 type Config struct {
-	zrpc.RpcServerConf // Embedded go-zero RPC config (ListenOn, Etcd, etc.)
-	// LegacyNonGlobal仅供显式dev/test历史夹具；缺省和普通dev配置仍须满足全球SQL契约。
-	LegacyNonGlobal  bool               `json:"LegacyNonGlobal,optional"`
-	Node             NodeConfig         `json:"Node"`
+	zrpc.RpcServerConf            // Embedded go-zero RPC config (ListenOn, Etcd, etc.)
+	Node               NodeConfig `json:"Node"`
+	// PlayerRedis 是玩家域(player_locker、login_idempotent、login_generation),LoginRedis 是登录域(连接栅栏、登录态、设备集、
+	// 账号索引、令牌、令牌家族、口令配额;docs/design/redis-player-store-cluster.md §10.2)。结构相同,部署上可以共用一个 Redis Cluster。
+	// 没写 Addrs 时都指向 Node.RedisClient 那一个实例,开发环境不用改(EffectivePlayerRedis / EffectiveLoginRedis)。
+	PlayerRedis      playerredis.Config `json:"PlayerRedis,optional"`
+	LoginRedis       playerredis.Config `json:"LoginRedis,optional"`
 	Snowflake        SnowflakeConf      `json:"Snowflake"`
 	Locker           LockerConf         `json:"Locker"`
 	Account          AccountConf        `json:"Account"`
@@ -106,8 +109,7 @@ type Config struct {
 	// 进游戏重定向关(见 HomeZoneConf 各字段)。
 	HomeZone HomeZoneConf `json:"HomeZone,optional"`
 
-	// Placement 控制建角时是否顺手钉「存储落点」(docs/design/player-storage-placement.md §8.3)。
-	// 全球服务必须显式PinOnCreate=true；整块缺省保留零值，启动门禁拒绝而不静默补权。
+	// Placement 决定新角色的存档落点(docs/design/player-storage-placement.md §8.3)。整块可缺省:落在本 login 所在 zone。
 	Placement PlacementConf `json:"Placement,optional"`
 
 	// RequireClientEndpoint 控制下发 gate 地址时是否**必须**用 gate 自报的客户端可达地址
@@ -152,47 +154,81 @@ type GateDrainConf struct {
 	Deadline time.Duration `json:"Deadline,default=25m"`
 }
 
-// PlacementConf 是建角钉落点的开关(docs/design/player-storage-placement.md §8.3 / §13)。
-//
-// go-zero对缺失optional块不填内层default，因此保留字段零值，不猜测调用者是否想降级。
-// 全球启动门禁要求显式PinOnCreate=true；旧关闭形状只供LegacyNonGlobal且Mode=dev/test的历史夹具。
-// 正式顺序是迁移/路由初始化→DS强TiDB/db_first及对账arm→可信ready→DB/Login。
-// 旧Redis目录须先正规import/audit，不能通过关闭PinOnCreate接管空SQL；新号storage0只取正规Node.ZoneId。
+// PlacementConf 决定新角色的存档落点(docs/design/player-storage-placement.md §8.3)。
+// 建角恒在同一次 RegisterPlayerZone 里写落点:go/db 对没有落点的角色一律拒绝认领。
 type PlacementConf struct {
-	// PinOnCreate=true:建角时在同一次 RegisterPlayerZone 里原子钉 player:placement = "{storage}:1"。
-	PinOnCreate bool `json:"PinOnCreate,optional"`
 	// NewPlayerStorageId 是新角色钉到的落点库编号(§4.2):0 = 本 login 所在 zone(Node.ZoneId);
-	// 1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db(Phase 2 全局库填 1000000)。
-	// 只在 PinOnCreate=true 时生效。
+	// 1..999999 = zone_{id}_db;>=1000000 = player_store_{id}_db。
 	NewPlayerStorageId uint32 `json:"NewPlayerStorageId,optional"`
 }
 
 // StorageIDForNewPlayer 返回建角时要传给 RegisterPlayerZone 的 storage_id。
-// 返回 0 表示「不钉」(开关关着)—— 这是 data_service 侧约定的缺省语义,不是错误。
-// loginZone 为本 login 的 Node.ZoneId,NewPlayerStorageId 为 0 时用它兜底,
-// 与「建角 home = login 所在 zone」的既有约定一致,钉下去的有效落点与不钉时相同。
+// loginZone 为本 login 的 Node.ZoneId,NewPlayerStorageId 为 0 时用它,与「建角 home = login 所在 zone」的约定一致。
 func (c PlacementConf) StorageIDForNewPlayer(loginZone uint32) uint32 {
-	if !c.PinOnCreate {
-		return 0
-	}
 	if c.NewPlayerStorageId != 0 {
 		return c.NewPlayerStorageId
 	}
 	return loginZone
 }
 
+// 没写 Addrs、Node.RedisClient 也没写对应项时,玩家域与登录域连接的口径:go-redis 对单实例的缺省值
+// (读写 3s、取连接 4s、拨号 5s),池按 K8s 上 GOMAXPROCS = 2 算。写成常量,不随 CPU limit 漂移。
+const (
+	redisDomainFallbackPoolSize      = 20
+	redisDomainFallbackIOTimeoutMs   = 3000
+	redisDomainFallbackPoolTimeoutMs = 4000
+	redisDomainFallbackDialTimeoutMs = 5000
+)
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 Node.RedisClient 那一个实例。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	return c.PlayerRedis.OrDefault(c.redisDomainFallback())
+}
+
+// EffectiveLoginRedis 返回生效的登录域配置:写了 LoginRedis.Addrs 就用它,否则指向 Node.RedisClient 那一个实例。
+func (c *Config) EffectiveLoginRedis() playerredis.Config {
+	return c.LoginRedis.OrDefault(c.redisDomainFallback())
+}
+
+func (c *Config) redisDomainFallback() playerredis.Config {
+	r := c.Node.RedisClient
+	poolSize := r.PoolSize
+	if poolSize == 0 {
+		poolSize = redisDomainFallbackPoolSize
+	}
+	return playerredis.Config{
+		Addrs:           []string{r.Host},
+		Password:        r.Password,
+		DB:              int(r.DB),
+		PoolSizePerNode: poolSize,
+		DialTimeoutMs:   durationMsOr(r.DialTimeout, redisDomainFallbackDialTimeoutMs),
+		ReadTimeoutMs:   durationMsOr(r.ReadTimeout, redisDomainFallbackIOTimeoutMs),
+		WriteTimeoutMs:  durationMsOr(r.WriteTimeout, redisDomainFallbackIOTimeoutMs),
+		PoolTimeoutMs:   redisDomainFallbackPoolTimeoutMs,
+	}
+}
+
+func durationMsOr(d time.Duration, fallbackMs int) int {
+	if d <= 0 {
+		return fallbackMs
+	}
+	return int(d.Milliseconds())
+}
+
+// ValidateRedisDomains 校验配置文件里写出来的 PlayerRedis / LoginRedis 两段,在任何外部连接之前调用。
+func (c *Config) ValidateRedisDomains() error {
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("PlayerRedis: %w", err)
+	}
+	if err := c.LoginRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("LoginRedis: %w", err)
+	}
+	return nil
+}
+
 // ValidateGlobalAuthority在任何外部连接之前校验全球建角与SQL目录调用前提。
 // Login不另造TiDB开关：真实强SQL/已核ready由DS正式门禁负责，Login必须指向该DS而不能静默降级。
 func (c *Config) ValidateGlobalAuthority(getenv func(string) string) error {
-	if c.LegacyNonGlobal {
-		if c.Mode != service.DevMode && c.Mode != service.TestMode {
-			return fmt.Errorf("LegacyNonGlobal仅允许显式Mode=dev/test的历史非全球夹具")
-		}
-		return nil
-	}
-	if !c.Placement.PinOnCreate {
-		return fmt.Errorf("全球Login必须配置Placement.PinOnCreate=true")
-	}
 	if c.Node.ZoneId == 0 {
 		return fmt.Errorf("全球Login必须配置非零Node.ZoneId，NewPlayerStorageId=0才可取正规本区落点")
 	}

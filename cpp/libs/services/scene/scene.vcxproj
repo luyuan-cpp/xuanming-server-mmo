@@ -20,7 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="actor\actor_net_id.h" />
-    <ClInclude Include="battle\system\battle_settlement_application_cache.h" />
+    <ClInclude Include="battle\system\battle_lock_reply_shape.h" />
+    <ClInclude Include="battle\system\battle_lock_rules.h" />
     <ClInclude Include="actor\action_state\constants\actor_effect_state.h" />
     <ClInclude Include="actor\action_state\constants\actor_state.h" />
     <ClInclude Include="actor\action_state\system\actor_action_state.h" />
@@ -75,7 +76,6 @@
     <ClInclude Include="player\system\enter_fence.h" />
     <ClInclude Include="player\system\release_fence.h" />
     <ClInclude Include="player\system\save_seq.h" />
-    <ClInclude Include="player\system\save_seq_floor.h" />
     <ClInclude Include="player\system\player_data_loader.h" />
     <ClInclude Include="player\system\player_exit_intent.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />

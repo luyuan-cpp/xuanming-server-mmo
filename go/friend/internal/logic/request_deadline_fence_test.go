@@ -8,7 +8,7 @@ package logic
 //
 // data 包的 request_deadline_fence_test.go 只证明 repo 收到已截止的 ctx 时不发语句;它证明不了 logic 真的把
 // 请求 ctx 交给了 repo。这里用**真** data.FriendRepo 装配:MySQL 换成只数「有没有人来取连接」的 connector,
-// FriendRedis / SharedRedis 是 miniredis,摘要 bump 是记录型假 Evaler。logic → repo → database/sql 这条链上
+// FriendRedis / PlayerRedis 是 miniredis,摘要 bump 是记录型假 Evaler。logic → repo → database/sql 这条链上
 // 任何一处改用 context.Background() / WithoutCancel,截止之后就会有人来取连接或写 Redis,用例判红。
 
 import (

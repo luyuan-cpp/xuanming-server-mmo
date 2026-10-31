@@ -25,7 +25,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// 全球模式的按池撮合（docs/design/global-match-hierarchical-pools.md §5）。
+// 按池撮合（docs/design/global-match-hierarchical-pools.md §5）。
 //
 //   - 池 = (模式, 怪物战斗模板, 人数档)，来自模板目录（PlayMode 表）。同一模板的各人数档由同一个副本负责，
 //     副本之间按 match 实例注册表做最高随机权重哈希分工（poolowner），不再抢同一批票。
@@ -41,11 +41,8 @@ const (
 	immediateClaimBudget = 3 * time.Second
 )
 
-// StartGlobalPoolMatcher 启动按池撮合循环。只在全球模式（有权威库与模板目录）下运行。
+// StartGlobalPoolMatcher 启动按池撮合循环。
 func StartGlobalPoolMatcher(ctx context.Context, s *svc.ServiceContext) {
-	if s.Authority == nil || s.Catalog == nil {
-		return
-	}
 	interval := time.Duration(s.Config.MatcherIntervalMs) * time.Millisecond
 	if interval <= 0 {
 		interval = 500 * time.Millisecond
@@ -329,13 +326,14 @@ func poolPolicy(s *svc.ServiceContext, pool catalog.Pool) poolgroup.Policy {
 	}
 }
 
-// poolUnitInput 把一个单位的原票换算成撮合输入：范围树位置取票上的 home zone，
+// poolUnitInput 把一个单位的原票换算成撮合输入：范围树位置取票上的 home zone 解析到的最终区（合服后两个原始区算同一个 zone），
 // 可放置机房是全体成员都在硬延迟内的机房（取成员中的最大 RTT），首选机房取全员一致的那个。
 func poolUnitInput(s *svc.ServiceContext, unit poolUnit, now uint64) (poolgroup.Unit, bool) {
 	input := poolgroup.Unit{ID: unit.tickets[0].PlayerId, EnqueuedMs: unit.tickets[0].EnqueuedMs}
 	if unit.launch != nil {
 		input.ID, input.EnqueuedMs = unit.launch.ActorId, unit.launch.EnqueuedMs
 	}
+	zones := s.Authority.MergedZones()
 	hard := s.Config.GlobalMatch.HardLatencyMs
 	for index, ticket := range unit.tickets {
 		profile, err := authority.DecodeProfile(ticket.NetworkProfile)
@@ -360,7 +358,7 @@ func poolUnitInput(s *svc.ServiceContext, unit poolUnit, now uint64) (poolgroup.
 			}
 		}
 		input.Players = append(input.Players, ticket.PlayerId)
-		input.Members = append(input.Members, scope.Member{Node: s.Catalog.ZoneNode(ticket.ZoneId), EnqueuedMs: ticket.EnqueuedMs})
+		input.Members = append(input.Members, scope.Member{Node: s.Catalog.ZoneNode(zones.Final(ticket.ZoneId)), EnqueuedMs: ticket.EnqueuedMs})
 	}
 	if len(unit.tickets) == 1 {
 		input.RatingCenti = unit.tickets[0].RatingCenti

@@ -28,7 +28,7 @@ namespace player_mutability
 	{
 		kMutable,
 		kFrozen,            // PlayerFrozenComp:归属交接冻结输入
-		kTravelHandoff,     // PlayerTravelHandoffComp:交接已挂,存盘会被 SavePlayerToRedis 直接跳过
+		kTravelHandoff,     // PlayerTravelHandoffComp:交接已挂,存盘会被 SavePlayer 直接跳过
 		kExiting,           // UnregisterPlayer:退出存盘在途,退出优先
 		kOwnerEpochUnknown, // PlayerOwnerEpochComp 缺失或 epoch == 0:本实体的存盘没有归属围栏
 		kCount
@@ -48,7 +48,7 @@ namespace player_mutability
 	// 本实体的存盘是否受 owner_epoch 围栏保护(docs/design/guild-phase2/08-save-owner-fence.md §8.2.1)。
 	//
 	// epoch 由 scene_manager 铸造、随路由事件下发(PlayerOwnerEpochComp)。epoch == 0 是滚动升级的兼容窗口:
-	// SavePlayerToRedis 走**无守卫**的旧 Save,db 侧按 legacy_zero 放行。此时若记账并上报 durable,
+	// SavePlayer 走**无守卫**的旧 Save,db 侧按 legacy_zero 放行。此时若记账并上报 durable,
 	// 旧节点晚到的退出存盘能原样盖掉这笔改动 —— 帮会已据 durable 记了资金,玩家侧的扣款却被抹掉(04 K1)。
 	// 所以资产通道(以及同样"据落盘事实向外确认"的收件箱)在无围栏的实体上不引发任何写入。
 	// 组件缺失与 epoch == 0 一律按无围栏处理(fail-closed)。
@@ -61,9 +61,9 @@ namespace player_mutability
 	// 该实体此刻为什么不能被改(不变量 I1 单写者的本地一侧)。
 	//
 	// **刻意不复用 PlayerLifecycleSystem::IsCrossZoneFrozen**:它只看 PlayerFrozenComp,
-	// 漏掉"归属交接已挂但存盘还没落地"的窗口。而 SavePlayerToRedis 在
+	// 漏掉"归属交接已挂但存盘还没落地"的窗口。而 SavePlayer 在
 	// `PlayerTravelHandoffComp.requestedAtMs != 0` 时直接跳过写盘并返回 false
-	// (player_lifecycle.cpp 的 SavePlayerToRedis 开头,日志 "skip: zone travel handoff already
+	// (player_lifecycle.cpp 的 SavePlayer 开头,日志 "skip: zone travel handoff already
 	// requested" 那一支;不写行号,该文件改动频繁)—— 与"脏比较相等、盘上已是最新"共用同一个返回值。
 	// 若在交接在途时记账,这个 false 会被误当成"结局已在盘上",把没落地的结局报成 durable,
 	// 对端随即终结,而这份内存态马上会随实体销毁一起丢。所以交接一挂上就必须在**记账之前**拦住。

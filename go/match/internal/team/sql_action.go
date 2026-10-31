@@ -36,9 +36,6 @@ func teamActor(ctx context.Context, caller uint64) (*teampb.TeamOriginalRole, er
 }
 
 func (s *Service) sqlAction(ctx context.Context, caller uint64, method uint32, in proto.Message, call func(context.Context) *teampb.TeamResponse) *teampb.TeamResponse {
-	if s.store.sql == nil {
-		return call(ctx)
-	}
 	request, ok := in.(interface{ GetRequestId() string })
 	if !ok {
 		return s.respond(ctx, caller, uint32(table.CommonError_kInvalidParameter), 0)
@@ -105,16 +102,20 @@ func (s *Service) decorateSQLReplay(ctx context.Context, response *teampb.TeamRe
 		players = append(players, invite.GetInvitee().GetPlayerId())
 	}
 	display := s.presence.loadDisplay(ctx, uniqueIds(players))
+	// 改过名册的回执存原始区(sqlMutationResponse),无变更回执存的是当时的视图。这里都按当前映射再解析一次,和其余视图出口同一口径;
+	// 撤销合服之后重放无变更回执,回包可能显示旧的最终区,只影响显示。
+	zones := s.mergedZones()
+	view.ZoneId = zones.Final(view.ZoneId)
 	for index, member := range view.Members {
-		view.Members[index] = memberView(member.PlayerId, member.ZoneId, member.JoinSeq, view.LeaderId, display)
+		view.Members[index] = memberView(member.PlayerId, zones.Final(member.ZoneId), member.JoinSeq, view.LeaderId, display)
 	}
 	for _, application := range view.Applications {
 		member := application.GetPlayer()
-		application.Player = memberView(member.GetPlayerId(), member.GetZoneId(), member.GetJoinSeq(), view.LeaderId, display)
+		application.Player = memberView(member.GetPlayerId(), zones.Final(member.GetZoneId()), member.GetJoinSeq(), view.LeaderId, display)
 	}
 	for _, invite := range view.PendingInvites {
 		member := invite.GetInvitee()
-		invite.Invitee = memberView(member.GetPlayerId(), member.GetZoneId(), member.GetJoinSeq(), view.LeaderId, display)
+		invite.Invitee = memberView(member.GetPlayerId(), zones.Final(member.GetZoneId()), member.GetJoinSeq(), view.LeaderId, display)
 	}
 	s.markFillSupported(view)
 	if original, ok := roleidentity.Original(ctx); ok {

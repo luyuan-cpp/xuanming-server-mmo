@@ -8,7 +8,7 @@ import (
 	"shared/placement"
 )
 
-// HasAnyRoute只判正规SQL是否为空；不以缓存、进程记忆或本实例zone替代历史导入证明。
+// HasAnyRoute只判正规SQL是否为空；不以进程记忆或本实例zone代替。
 func (s *RouteStore) HasAnyRoute(ctx context.Context) (bool, error) {
 	var present int
 	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM player_route LIMIT 1").Scan(&present)

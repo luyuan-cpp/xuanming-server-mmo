@@ -14,7 +14,7 @@ import (
 // 这期间 location 仍指向挂着僵尸实体的持有节点 X。登录被派到别的节点时,换手门要求 X 写出当前代标记,而僵尸没人通知、
 // 永远不写 —— 每次重登都回 18,直到旧会话清理到期。这里让登录在换手门拒绝时直接请 X 按会话结束释放(与 LeaveScene 的
 // pending 同一个 RPC):X 持有 → 按客户端断线退出、存盘落地后写 A1′ 标记;不持有 → 补写凭证。2026-10-23 起凭证带围栏
-// (r2-lc#2,location-release-binding.md §3.3):X 先读 save_barrier.handoff_fence,确认是本进程实例在该 E 下登记的资格、
+// (r2-lc#2,location-release-binding.md §3.3):X 先读 handoff_fence,确认是本进程实例在该 E 下登记的资格、
 // 自己仍完全不持有,才以读到的原件做 CAS 写标记;拿不出资格时不写(计 credential_qualification_no_qualification 并 WARN)。
 // 下一次重登拿到标记即放行并铸造。
 //

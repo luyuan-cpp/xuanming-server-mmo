@@ -3,9 +3,9 @@ package main
 // battle-smoke 场景:两个机器人对本地服务端做"回合制战斗 + 观战"端到端冒烟。
 //
 // 兑现 docs/design/turn-based-battle-server.md §9 预留的 "robot battle 动作":
-//   机器人 A(参战):JoinQueue(PVE_SOLO) → NotifyBattleStart → [直连 battle 节点 + GetBattleState 补拉]
+//   机器人 A(参战):地域探测 → JoinQueue(PVE_SOLO) → NotifyBattleStart → [直连 battle 节点 + GetBattleState 补拉]
 //                   → 等观战就绪屏障 → [直连上 SetAutoBattle] → 等 NotifyBattleEnd;
-//   机器人 B(观战):等 A 开战 → WatchBattle(battle_id=0,观战匹配随机对局)
+//   机器人 B(观战):等 A 开战 → WatchBattle(battle_id=0,观战匹配随机对局;带 request_id,观战不要探测)
 //                   → NotifyBattleAssigned(role=OBSERVER,断言对局 == A 的对局) → [直连 battle 节点]
 //                   → 握手快照 NotifySpectateState(断言从直连到达) → 等 NotifySpectateEnd
 //                   → 断言观战回合数 ≥ 1。
@@ -13,6 +13,8 @@ package main
 // 方括号是战斗直连(docs/design/turn-based-battle-server.md §18;收缩后见 turn-based §22 D73):
 // 直连是战斗唯一通路 —— gate 拒绝战斗上行(D66),战斗帧只走直连(D68),所以拨号失败即 FAIL,
 // 没有经 gate 的回落可跑。观众首帧由 battle 在握手成功时经直连推送(D69)。
+//
+// 地域探测同样直连 battle 公网端口(network_probe.go):端口不可达或回执被拒 = FAIL step=a-network-probe。
 //
 // 结果约定(供外层脚本消费):
 //   全部断言通过 → 日志一行 `BATTLE_SMOKE_OK battle_id=… a_turns=… b_spectate_turns=…
@@ -339,6 +341,8 @@ func battleSmokeWaitStart(player *gameobject.Player, timeout time.Duration, figh
 // 每次现建一个 smokeCaller:它同一时刻只服务一次等待,不与场景里别的 caller(如 rank-smoke 的)共用等待槽。
 // 必须在大厅连接的 RecvLoop 已经起来之后、且不在 RecvLoop goroutine 上调用(prepareBehaviorClient /
 // rankSmokeLogin 起 RecvLoop,调用方是参战 goroutine)。
+//
+// request 里的 request_id 与 network_plan_id 由调用方填:探测放在开战预算之外(ensureNetworkProbe),失败步骤单独报。
 func battleSmokeJoinQueue(bot *battleSmokeBot, stats *metrics.Stats, request *match.JoinQueueRequest, timeout time.Duration) (err error) {
 	defer func() {
 		if err != nil {
@@ -379,6 +383,9 @@ func battleSmokeJoinQueue(bot *battleSmokeBot, stats *metrics.Stats, request *ma
 // 迁移前回包按消息号落进 MatchServiceWatchBattleHandler,它只打日志、不写 Player 状态,所以这里直接解析回包。
 // 拒绝(信封,或响应体 error_message,如对局已销毁时回的 kMatchBattleNotWatchable)立即返回 error,不必等满观众
 // 分配的预算才看到一条笼统的超时;观众分配仍等 NotifyBattleAssigned 推送。调用约束同 battleSmokeJoinQueue。
+//
+// request_id 是这次观战意图的幂等键(match 要求规范小写 UUID,否则直接回 kMatchInternal)。本函数只发一次,所以现生成;
+// 要加重试必须复用同一个值,且要注意意图关闭后同一个值只会重放原结论,换场得换新值。
 func battleSmokeWatchBattle(bot *battleSmokeBot, stats *metrics.Stats, timeout time.Duration) (battleId uint64, err error) {
 	defer func() {
 		if err != nil {
@@ -389,7 +396,7 @@ func battleSmokeWatchBattle(bot *battleSmokeBot, stats *metrics.Stats, timeout t
 		}
 	}()
 
-	request := &match.WatchBattleRequest{PlayerId: bot.gc.PlayerId, BattleId: 0}
+	request := &match.WatchBattleRequest{PlayerId: bot.gc.PlayerId, BattleId: 0, RequestId: chatSmokeRequestId()}
 	resp := &match.WatchBattleResponse{}
 	caller := newSmokeCaller(bot.gc, stats, bot.account, timeout, nil)
 	envelopeTip, err := caller.call(game.MatchServiceWatchBattleMessageId, request, resp)
@@ -410,12 +417,17 @@ func battleSmokeWatchBattle(bot *battleSmokeBot, stats *metrics.Stats, timeout t
 }
 
 // runBattleSmokeFighter 是参战方(A)的完整流程:
-// JoinQueue(PVE_SOLO) → 等 NotifyBattleStart → 直连(含 GetBattleState 补拉)→ 等观战屏障
+// 地域探测 → JoinQueue(PVE_SOLO) → 等 NotifyBattleStart → 直连(含 GetBattleState 补拉)→ 等观战屏障
 // → 直连上 SetAutoBattle → 等 NotifyBattleEnd。
 func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metrics.Stats) battleSmokeFighterResult {
 	zap.L().Info("[battle-smoke] step 2: A join queue",
 		zap.String("account", bot.account),
 		zap.String("mode", match.MatchMode_MATCH_MODE_PVE_SOLO.String()))
+
+	planId, err := ensureNetworkProbe(bot.gc, stats, bot.account)
+	if err != nil {
+		return battleSmokeFighterResult{step: "a-network-probe", err: err}
+	}
 
 	// 开战预算从发 JoinQueue 起算,回包与 NotifyBattleStart 推送共用(与迁移前同口径)。
 	startCtx, startCancel := context.WithTimeout(context.Background(), battleSmokeStartTimeout)
@@ -425,6 +437,8 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 		Mode:           match.MatchMode_MATCH_MODE_PVE_SOLO,
 		BattleConfigId: 1,
 		ZoneId:         cfg.ZoneID,
+		RequestId:      chatSmokeRequestId(),
+		NetworkPlanId:  planId,
 	}, battleSmokeStartTimeout); err != nil {
 		startCancel()
 		return battleSmokeFighterResult{step: "a-join-queue", err: err}

@@ -70,7 +70,7 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 	require.NoError(t, err)
 	require.NoError(t, Migrate(ctx, db))
 	loadFormalRoleFixtures(t, ctx, db)
-	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy", "account_role", "player_route", "zone_merged_into", "route_meta", "route_reconcile"))
+	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy", "account_role", "player_route", "zone_merged_into", "route_meta"))
 	runtimeDB, err := fixture.Open(ctx, name, 8)
 	require.NoError(t, err)
 	rules := fixtureRules()
@@ -91,7 +91,7 @@ func loadFormalRoleFixtures(t *testing.T, ctx context.Context, db *sql.DB) {
 	root := filepath.Join(filepath.Dir(source), "..", "..", "..", "data_service", "internal", "store")
 	wanted := map[string]bool{"playerRouteBootstrapDDL": true, "zoneMergedIntoBootstrapDDL": true, "accountRoleDDL": true}
 	catalogDDL := authoritysql.CatalogBootstrapStatements()
-	values := map[string]string{"routeMetaBootstrapDDL": catalogDDL["route_meta"], "routeReconcileBootstrapDDL": catalogDDL["route_reconcile"]}
+	values := map[string]string{"routeMetaBootstrapDDL": catalogDDL["route_meta"]}
 	var literal func(ast.Expr) string
 	literal = func(e ast.Expr) string {
 		switch v := e.(type) {
@@ -130,15 +130,13 @@ func loadFormalRoleFixtures(t *testing.T, ctx context.Context, db *sql.DB) {
 			}
 		}
 	}
-	for _, name := range []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL", "accountRoleDDL"} {
+	for _, name := range []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "accountRoleDDL"} {
 		ddl, ok := values[name]
 		require.True(t, ok, "缺正规DDL %s", name)
 		_, err := db.ExecContext(ctx, ddl)
 		require.NoError(t, err)
 	}
 	_, err := db.ExecContext(ctx, "INSERT INTO route_meta(id,generation,writable) VALUES(1,'636861742d6974',1)")
-	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, "INSERT INTO route_reconcile(id) VALUES(1)")
 	require.NoError(t, err)
 	for _, player := range []uint64{11, 22, ^uint64(0)} {
 		_, err = db.ExecContext(ctx, "INSERT INTO player_route(route_shard,player_id,home_zone,rev,updated_by,created_at_ms,updated_at_ms) VALUES(?,?,1,1,'chat-it',1,1)", placement.RouteRowShard(player), player)

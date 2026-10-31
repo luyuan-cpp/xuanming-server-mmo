@@ -8,9 +8,9 @@ import (
 	componentpb "proto/common/component"
 )
 
-// receiptDigest 与场景端的稳定业务身份信封一致。固定 debit 并清掉时间/签名，
+// ReceiptDigest 与场景端的稳定业务身份信封一致。固定 debit 并清掉时间/签名，
 // 使 credit、重查和超时 abort 始终核对同一原请求；caller 仍按流的唯一号源绑定。
-func receiptDigest(op Op) ([sha256.Size]byte, bool) {
+func ReceiptDigest(op Op) ([sha256.Size]byte, bool) {
 	var caller string
 	switch op.Stream {
 	case assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_DEBIT, assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT:
@@ -33,7 +33,7 @@ func receiptDigest(op Op) ([sha256.Size]byte, bool) {
 // matchingReceipt 只给出唯一且与原请求逐字节身份相同的收据。旧账本缺摘要、
 // 重复流/收据和同 seq 改载荷都不能靠位图冒充本业务的 SQL 提交证明。
 func matchingReceipt(ledger *componentpb.PlayerAssetOpLedgerComp, op Op) *componentpb.AssetOpReceipt {
-	digest, ok := receiptDigest(op)
+	digest, ok := ReceiptDigest(op)
 	if !ok {
 		return nil
 	}

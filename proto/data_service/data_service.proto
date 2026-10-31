@@ -43,6 +43,9 @@ service DataService {
   rpc RegisterPlayerZone(RegisterPlayerZoneRequest) returns (google.protobuf.Empty) {}
   rpc GetPlayerHomeZone(GetPlayerHomeZoneRequest) returns (GetPlayerHomeZoneResponse) {}
   rpc BatchGetPlayerHomeZone(BatchGetPlayerHomeZoneRequest) returns (BatchGetPlayerHomeZoneResponse) {}
+  // 全部合服映射。没有全局库连接的服务(guild、trade)用它重建 placement.MergedZones,定时重读
+  // (docs/design/player-data-tidb-scaling-plan.md §7.1)。映射还没读到时回 Unavailable。
+  rpc GetMergedZones(google.protobuf.Empty) returns (GetMergedZonesResponse) {}
 
   // ── Snapshot ──────────────────────────────────────
   rpc ListPlayerSnapshots(ListPlayerSnapshotsRequest) returns (ListPlayerSnapshotsResponse) {}
@@ -234,8 +237,8 @@ message AckRoleTradeDrainRequest {
 message RegisterPlayerZoneRequest {
   uint64 player_id = 1;
   uint32 home_zone_id = 2;
-  // 非 0:与 player:zone 同一段 Lua 原子钉上 player:placement:{id} = "{storage_id}:1"
-  // (player-storage-placement.md §8.1);0 = 不钉落点(旧行为,有效落点 = home_zone)。
+  // 与归属在 player_route 的同一行里原子钉上落点(storage_id,placement_version = 1)
+  // (player-storage-placement.md §8.1)。必填:go/db 对没有落点的角色一律拒绝认领。
   uint32 storage_id = 3;
 }
 
@@ -256,6 +259,10 @@ message BatchGetPlayerHomeZoneRequest {
 
 message BatchGetPlayerHomeZoneResponse {
   map<uint64, uint32> player_zone_map = 2; // player_id → home_zone_id(同 GetPlayerHomeZoneResponse,已解析到最终区)
+}
+
+message GetMergedZonesResponse {
+  map<uint32, uint32> merged_into = 1; // 源区 → 目标区(zone_merged_into 的原始映射,没有沿链解析)
 }
 
 // ── Snapshot ────────────────────────────────────────

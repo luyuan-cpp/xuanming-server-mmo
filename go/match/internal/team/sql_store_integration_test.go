@@ -16,18 +16,24 @@ import (
 	"match/internal/authority"
 	"match/internal/catalog"
 	"match/internal/config"
+	"match/internal/constants"
+	"match/internal/playercontract"
 	"match/internal/scope"
+	"match/internal/svc"
 
 	battlepb "proto/battle"
 	base "proto/common/base"
 	dspb "proto/data_service"
 	guildpb "proto/guild"
 	matchpb "proto/match"
+	plpb "proto/player_locator"
 	teampb "proto/team"
 	"schemamigrate"
 	"shared/placement"
+	"shared/playerredis"
 	"shared/roleidentity"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -177,9 +183,8 @@ func TestTeamTiDBOriginalUUIDReplayAfterLeaveAndRestart(t *testing.T) {
 	_, err = f.store.Mutate(fixtureTeamAction(t, f.actor(t, 1), 1, OpCreate, request), BindCreate(1, 303), CreateOp(1, 303, 1))
 	require.NoError(t, err)
 	restarted := NewSQLStore(f.owner, nil, RuleConfig{AllowCrossZone: true})
-	snap, healed, err := restarted.ReadFree(f.actor(t, 1), 1)
+	snap, err := restarted.ReadFree(f.actor(t, 1), 1)
 	require.NoError(t, err)
-	require.False(t, healed)
 	require.Zero(t, snap.PlayerTeamId)
 	require.Equal(t, left.Commit.Indexes[1].Epoch, snap.PlayerEpoch)
 	var count int
@@ -203,9 +208,9 @@ func TestTeamTiDBOldInvitationCannotAuthorizeNewOwner(t *testing.T) {
 		_, err = f.store.Mutate(fixtureTeamAction(t, actor, 2, OpRespondInvite, request), BindTarget(2, 101), RespondInviteOp(2, true))
 		require.ErrorIs(t, err, authority.ErrOriginalPlayer)
 	}
-	_, _, err = f.store.ReadFree(f.actor(t, 2), 2)
+	_, err = f.store.ReadFree(f.actor(t, 2), 2)
 	require.ErrorIs(t, err, authority.ErrOriginalPlayer)
-	snap, _, err := f.store.ReadFree(buyer, 2)
+	snap, err := f.store.ReadFree(buyer, 2)
 	require.NoError(t, err)
 	require.Zero(t, snap.PlayerTeamId)
 }
@@ -254,13 +259,89 @@ func TestTeamTiDBConcurrentAcceptHasOneMembership(t *testing.T) {
 	require.Equal(t, 1, committed)
 	memberships := 0
 	for _, teamID := range []uint64{101, 303} {
-		snap, err := f.store.ReadMembers(context.Background(), teamID, nil)
+		snap, err := f.store.ReadMembers(context.Background(), teamID)
 		require.NoError(t, err)
 		if FindMember(snap.Record, 2) != nil {
 			memberships++
 		}
 	}
 	require.Equal(t, 1, memberships)
+}
+
+// 请求截止之后不再提交(docs/design/client-request-ordering.md §6.1 / O11):事务开不出来,名册一个字节都不变。
+func TestTeamTiDBExpiredRequestDeadlineWritesNothing(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.create(t, 1, 101)
+	request := &teampb.LeaveTeamRequest{ExpectedTeamId: 101, RequestId: uuid.NewString()}
+	ctx, cancel := context.WithCancel(fixtureTeamAction(t, f.actor(t, 1), 1, OpLeave, request))
+	cancel()
+	_, err := f.store.Mutate(ctx, BindCaller(1, 101), LeaveOp(1))
+	require.Error(t, err)
+	snap, err := f.store.ReadFree(f.actor(t, 1), 1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(101), snap.PlayerTeamId)
+}
+
+// CheckParty:整队成局前的复核。队伍名单读 SQL,在线态读 PlayerRedis。
+func TestTeamTiDBCheckParty(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.create(t, 1, 101)
+	f.inviteAndAccept(t, 1, 2, 101)
+	f.inviteAndAccept(t, 1, 3, 101)
+	mr := miniredis.RunT(t)
+	playerRedis, err := playerredis.New(playerredis.Config{Addrs: []string{mr.Addr()}})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = playerRedis.Close() })
+	service := &Service{svcCtx: &svc.ServiceContext{PlayerRedis: playerRedis}, store: f.store}
+	setSession := func(player uint64, state plpb.PlayerSessionState) {
+		t.Helper()
+		raw, err := proto.Marshal(&plpb.PlayerSession{PlayerId: player, State: state})
+		require.NoError(t, err)
+		require.NoError(t, mr.Set(playercontract.SessionKey(player), string(raw)))
+	}
+	for _, player := range []uint64{1, 2, 3, 4} {
+		setSession(player, plpb.PlayerSessionState_SESSION_STATE_ONLINE)
+	}
+	ctx := context.Background()
+	check := func(teamID uint64, members ...uint64) (uint32, uint64) {
+		t.Helper()
+		reason, culprit, err := service.CheckParty(ctx, teamID, members)
+		require.NoError(t, err)
+		return reason, culprit
+	}
+
+	reason, culprit := check(101, 1, 2, 3)
+	require.Equal(t, constants.PartyEndNone, reason)
+	require.Zero(t, culprit)
+	reason, _ = check(101, 3, 1, 2)
+	require.Equal(t, constants.PartyEndNone, reason, "集合语义,顺序无关")
+
+	reason, _ = check(101, 1, 2)
+	require.Equal(t, constants.PartyEndRosterChanged, reason, "队里多了人")
+	reason, _ = check(101, 1, 2, 3, 4)
+	require.Equal(t, constants.PartyEndRosterChanged, reason, "名单里有人已不在队")
+	reason, _ = check(999, 1, 2, 3)
+	require.Equal(t, constants.PartyEndRosterChanged, reason, "队伍不存在")
+
+	// 断线等重连的宽限期:放行(没连回来的人会在开局时备战失败)。
+	setSession(2, plpb.PlayerSessionState_SESSION_STATE_DISCONNECTING)
+	reason, _ = check(101, 1, 2, 3)
+	require.Equal(t, constants.PartyEndNone, reason)
+
+	// 明确下线 / 会话已不存在:掉线,带出是谁。
+	setSession(2, plpb.PlayerSessionState_SESSION_STATE_OFFLINE)
+	reason, culprit = check(101, 1, 2, 3)
+	require.Equal(t, constants.PartyEndMemberOffline, reason)
+	require.Equal(t, uint64(2), culprit)
+	mr.Del(playercontract.SessionKey(2))
+	reason, culprit = check(101, 1, 2, 3)
+	require.Equal(t, constants.PartyEndMemberOffline, reason)
+	require.Equal(t, uint64(2), culprit)
+
+	// 会话读不出来(解析失败):不做失效判定,返回 err 让调用方把这一单本轮搁置。
+	require.NoError(t, mr.Set(playercontract.SessionKey(2), "not-a-session"))
+	_, _, err := service.CheckParty(ctx, 101, []uint64{1, 2, 3})
+	require.Error(t, err)
 }
 
 func (f *nativeTeamFixture) profile(t *testing.T, player uint64) {
@@ -273,18 +354,14 @@ func (f *nativeTeamFixture) profile(t *testing.T, player uint64) {
 
 func (f *nativeTeamFixture) queued(t *testing.T, leader, teamID uint64) *teampb.TeamLaunchRecord {
 	t.Helper()
-	snap, _, err := f.store.ReadFree(f.actor(t, leader), leader)
+	snap, err := f.store.ReadFree(f.actor(t, leader), leader)
 	require.NoError(t, err)
 	roster := MatchRoster(snap.Record)
-	zones := map[uint64]uint32{}
 	for _, player := range roster {
 		f.profile(t, player)
-		var home uint32
-		require.NoError(t, f.owner.DB.QueryRow("SELECT home_zone FROM player_route WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player).Scan(&home))
-		zones[player] = home
 	}
 	request := &teampb.StartTeamMatchRequest{BattleConfigId: 1, ExpectedTeamId: teamID, TargetTeamSize: 5, RequestId: uuid.NewString()}
-	pinned, launch, err := f.store.sql.createLaunch(f.actor(t, leader), snap, leader, request, uuid.NewString(), roster, zones, 100)
+	pinned, launch, err := f.store.sql.createLaunch(f.actor(t, leader), snap, leader, request, uuid.NewString(), roster, 100)
 	require.NoError(t, err)
 	require.NotNil(t, pinned.Commit)
 	require.Equal(t, uint32(2), launch.State)
@@ -309,17 +386,17 @@ func TestTeamTiDBFirstFullLaunchAndPendingSoloUseTheSamePCommitFence(t *testing.
 				require.NoError(t, err)
 				require.True(t, pending)
 			}
-			snap, _, err := f.store.ReadFree(f.actor(t, 1), 1)
+			snap, err := f.store.ReadFree(f.actor(t, 1), 1)
 			require.NoError(t, err)
 			start := &teampb.StartTeamMatchRequest{ExpectedTeamId: 101, BattleConfigId: 1, TargetTeamSize: 2, RequestId: uuid.NewString()}
-			_, launch, err := f.store.sql.createLaunch(f.actor(t, 1), snap, 1, start, uuid.NewString(), []uint64{1, 2}, map[uint64]uint32{1: 1, 2: 1}, 100)
+			_, launch, err := f.store.sql.createLaunch(f.actor(t, 1), snap, 1, start, uuid.NewString(), []uint64{1, 2}, 100)
 			if first == "solo" {
 				require.ErrorIs(t, err, authority.ErrMatchEntryOccupied)
 				require.Nil(t, launch)
 				var count int
 				require.NoError(t, f.owner.DB.QueryRow("SELECT COUNT(*) FROM team_launch").Scan(&count))
 				require.Zero(t, count, "失败的首次整队提交不能留下原launch")
-				after, _, readErr := f.store.ReadFree(f.actor(t, 1), 1)
+				after, readErr := f.store.ReadFree(f.actor(t, 1), 1)
 				require.NoError(t, readErr)
 				require.Equal(t, snap.Version, after.Version)
 				require.True(t, proto.Equal(snap.Record, after.Record))
@@ -371,7 +448,7 @@ func TestTeamTiDBWholeUnitsCrossWaitUnknownAndRecovery(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, EndMatchDeadline, stop)
 	require.Nil(t, pinned)
-	snap, _, err := f.store.ReadFree(f.actor(t, 1), 1)
+	snap, err := f.store.ReadFree(f.actor(t, 1), 1)
 	require.NoError(t, err)
 	require.True(t, MatchLockActive(snap.Record, stamp+365*24*3600000), "SQL持久launch锁不按TTL复活名册")
 	work, err := f.owner.AcquireWork(context.Background(), 900)
@@ -524,20 +601,398 @@ func TestTeamTiDBFailedFormationRequeuesWholeOriginalUnit(t *testing.T) {
 	}
 }
 
-// 别名合服:路由行的 home_zone 还是源区,PlayerHomeZone 与提交点复核都按解析后的最终区(5→6→7 这样的链也沿到底)。
+// setMergedZones 改写 zone_merged_into 并重读一次:走真表、真读数函数、真缓存,和启动时同一条路径。
+// 不 Start,映射什么时候生效由用例自己掌握。
+func (f *nativeTeamFixture) setMergedZones(t *testing.T, merges map[uint32]uint32) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := f.owner.DB.ExecContext(ctx, "DELETE FROM zone_merged_into")
+	require.NoError(t, err)
+	for src, dst := range merges {
+		_, err = f.owner.DB.ExecContext(ctx, "INSERT INTO zone_merged_into(src_zone,dst_zone,run_id,merged_at_ms) VALUES(?,?,?,1)", src, dst, fmt.Sprintf("fixture-merge-%d", src))
+		require.NoError(t, err)
+	}
+	cache, err := f.owner.LoadMergedZones(ctx, placement.MergedZoneCacheOptions{})
+	require.NoError(t, err)
+	f.owner.BindMergedZones(cache)
+}
+
+func (f *nativeTeamFixture) setHome(t *testing.T, player uint64, zone uint32) {
+	t.Helper()
+	_, err := f.owner.DB.Exec("UPDATE player_route SET home_zone=?,rev=rev+1 WHERE route_shard=? AND player_id=?", zone, placement.RouteRowShard(player), player)
+	require.NoError(t, err)
+}
+
+// launchRegionHome 读 unit 的候选投影上的 home;投影按机房一行,同一个 unit 每行的 home 相同。
+func (f *nativeTeamFixture) launchRegionHome(t *testing.T, actor uint64) uint32 {
+	t.Helper()
+	var home uint32
+	require.NoError(t, f.owner.DB.QueryRow("SELECT home_zone FROM team_launch_region WHERE actor_id=? LIMIT 1", actor).Scan(&home))
+	return home
+}
+
+// 别名合服:路由行和记录里都是原始区,PlayerHomeZone 不解析,提交点复核两边解析到最终区(5→6→7 这样的链也沿到底)。
 func TestTeamTiDBHomeZoneResolvesMergedZone(t *testing.T) {
 	f := newNativeTeamFixture(t)
-	_, err := f.owner.DB.Exec("INSERT INTO zone_merged_into(src_zone,dst_zone,run_id,merged_at_ms) VALUES(1,2,'fixture-merge-1',1),(2,3,'fixture-merge-2',2)")
-	require.NoError(t, err)
 	ctx := context.Background()
+	check := func(expected uint32) error {
+		t.Helper()
+		tx, err := f.owner.DB.BeginTx(ctx, nil)
+		require.NoError(t, err)
+		defer tx.Rollback()
+		return f.owner.RequireTeamHomeZoneTx(ctx, tx, 1, expected)
+	}
+	require.NoError(t, check(1))
+	require.ErrorIs(t, check(3), authority.ErrTeamRoute, "没合服,3 区和路由行的 1 区不同区")
+
+	f.setMergedZones(t, map[uint32]uint32{1: 2, 2: 3})
 	home, err := f.owner.PlayerHomeZone(ctx, 1)
 	require.NoError(t, err)
-	require.Equal(t, uint32(3), home)
-	tx, err := f.owner.DB.BeginTx(ctx, nil)
+	require.Equal(t, uint32(1), home, "写进记录的是原始区,合服不改")
+	require.NoError(t, check(1), "合服前记下的原始区继续有效")
+	require.NoError(t, check(2))
+	require.NoError(t, check(3))
+	require.ErrorIs(t, check(9), authority.ErrTeamRoute, "没参与合服的区还是别的区")
+
+	// 组队查归属读的也是路由行上的原始区;没有路由行不是故障,缺项交给调用方回 ErrHomeZoneUnknown。
+	zones, err := NewAuthorityHomeZone(f.owner, 0).HomeZones(ctx, []uint64{1, 9999})
 	require.NoError(t, err)
-	defer tx.Rollback()
-	require.NoError(t, f.owner.RequireTeamHomeZoneTx(ctx, tx, 1, 3))
-	require.ErrorIs(t, f.owner.RequireTeamHomeZoneTx(ctx, tx, 1, 1), authority.ErrTeamRoute, "合服前记下的旧区要被拒")
+	require.Equal(t, map[uint64]uint32{1: 1}, zones)
+
+	f.setMergedZones(t, nil)
+	require.NoError(t, check(1), "撤销后原始区照样对得上,在途的票不会卡死")
+	require.ErrorIs(t, check(3), authority.ErrTeamRoute)
+}
+
+// 启动门禁:映射表写坏(成环)和读不到一样拒绝启动,坏映射不能进快照。
+func TestTeamTiDBLoadMergedZonesRejectsABrokenTable(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	_, err := f.owner.DB.Exec("INSERT INTO zone_merged_into(src_zone,dst_zone,run_id,merged_at_ms) VALUES(1,2,'fixture-merge-1',1),(2,1,'fixture-merge-2',2)")
+	require.NoError(t, err)
+	cache, err := f.owner.LoadMergedZones(context.Background(), placement.MergedZoneCacheOptions{})
+	require.ErrorIs(t, err, placement.ErrMergedZoneUnresolvable)
+	require.Nil(t, cache)
+}
+
+// 名册的四个入口:合服后两个原始区算同区,没合服仍然不同区;记录里一直是原始区;
+// 撤销合服之后,合服期间留下的申请、邀请按各自的原始区重判,不造出新的跨区成员。
+func TestTeamTiDBRosterZoneCheckResolvesMergedZones(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	deny := NewSQLStore(f.owner, nil, RuleConfig{}) // f.store 允许跨区,这里要验证禁止跨区的判定
+	f.create(t, 1, 101)
+	f.setHome(t, 2, 2)
+	f.setHome(t, 3, 2)
+	apply := func(player uint64) *MutateResult {
+		t.Helper()
+		request := &teampb.ApplyJoinTeamRequest{TargetPlayerId: 1, RequestId: uuid.NewString()}
+		result, err := deny.Mutate(fixtureTeamAction(t, f.actor(t, player), player, OpApply, request), BindTarget(player, 101), ApplyOp(player, 2))
+		require.NoError(t, err)
+		return result
+	}
+	approve := func(player uint64) *MutateResult {
+		t.Helper()
+		request := &teampb.HandleApplicationRequest{ApplicantId: player, Approve: true, ExpectedTeamId: 101, RequestId: uuid.NewString()}
+		result, err := deny.Mutate(fixtureTeamAction(t, f.actor(t, 1), 1, OpHandleApplication, request), BindCaller(1, 101), HandleApplicationOp(1, player, true))
+		require.NoError(t, err)
+		return result
+	}
+	invite := func(player uint64) *MutateResult {
+		t.Helper()
+		request := &teampb.InviteToTeamRequest{TargetPlayerId: player, ExpectedTeamId: 101, RequestId: uuid.NewString()}
+		result, err := deny.Mutate(fixtureTeamAction(t, f.actor(t, 1), 1, OpInvite, request), BindCaller(1, 101), InviteOp(1, player, 2))
+		require.NoError(t, err)
+		return result
+	}
+	accept := func(player uint64) *MutateResult {
+		t.Helper()
+		request := &teampb.RespondInviteRequest{TeamId: 101, Accept: true, RequestId: uuid.NewString()}
+		result, err := deny.Mutate(fixtureTeamAction(t, f.actor(t, player), player, OpRespondInvite, request), BindTarget(player, 101), RespondInviteOp(player, true))
+		require.NoError(t, err)
+		return result
+	}
+	requireDenied := func(result *MutateResult) {
+		t.Helper()
+		require.Equal(t, OutcomeRejected, result.Outcome)
+		require.Equal(t, ErrCrossZoneDenied, result.Code)
+	}
+
+	requireDenied(apply(2))
+	requireDenied(invite(3))
+
+	f.setMergedZones(t, map[uint32]uint32{2: 1})
+	applied := apply(2)
+	require.Equal(t, OutcomeCommitted, applied.Outcome)
+	require.Equal(t, uint32(2), findApplication(applied.Commit.Decision.Record, 2).GetZoneId(), "申请记录存原始区")
+	invited := invite(3)
+	require.Equal(t, OutcomeCommitted, invited.Outcome)
+	require.Equal(t, uint32(2), findInvite(invited.Commit.Decision.Record, 3).GetZoneId(), "邀请记录存原始区")
+
+	f.setMergedZones(t, nil)
+	requireDenied(approve(2))
+	requireDenied(accept(3))
+
+	f.setMergedZones(t, map[uint32]uint32{2: 1})
+	approved := approve(2)
+	require.Equal(t, OutcomeCommitted, approved.Outcome)
+	require.Equal(t, uint32(2), FindMember(approved.Commit.Decision.Record, 2).GetZoneId(), "成员记录存原始区")
+	accepted := accept(3)
+	require.Equal(t, OutcomeCommitted, accepted.Outcome)
+	require.Equal(t, uint32(1), accepted.Commit.Decision.Record.GetZoneId(), "队伍的区不改写")
+	view, ok := viewFromCommit(accepted.Commit, 3, nil, f.owner.MergedZones())
+	require.True(t, ok)
+	require.Equal(t, uint32(1), view.GetZoneId())
+	for _, member := range view.GetMembers() {
+		require.Equal(t, uint32(1), member.GetZoneId(), "给客户端的是最终区")
+	}
+}
+
+// 单排候选:成员集合展开成 IN,在 LIMIT 之前过滤。合服后两个原始区是同一个候选池,票上还是原始区。
+func TestTeamTiDBSoloPeersResolveMergedZones(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.owner.TeamConfig.AllowCrossZone = false
+	ctx := context.Background()
+	homes := map[uint64]uint32{1: 1, 2: 2, 3: 2, 4: 1, 5: 3}
+	var anchor *matchpb.MatchAuthorityTicketRecord
+	for player := uint64(1); player <= 5; player++ {
+		f.setHome(t, player, homes[player])
+		f.profile(t, player)
+		profile, _, err := f.owner.Profile(ctx, player)
+		require.NoError(t, err)
+		ticket, created, err := f.owner.Join(f.actor(t, player), &matchpb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: uuid.NewString(), RequestId: uuid.NewString(), Mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1, TeamSize: 5, ZoneId: homes[player]}, profile.PlanId, profile.SessionBinding)
+		require.NoError(t, err)
+		require.True(t, created)
+		if player == 1 {
+			anchor = ticket
+		}
+	}
+	peers := func() []uint64 {
+		t.Helper()
+		stamp, err := f.owner.Now(ctx)
+		require.NoError(t, err)
+		found, err := f.owner.CandidateTeamPeers(ctx, anchor, 1, true, stamp)
+		require.NoError(t, err)
+		ids := make([]uint64, 0, len(found))
+		for _, peer := range found {
+			require.Equal(t, homes[peer.PlayerId], peer.ZoneId, "票上还是原始区")
+			ids = append(ids, peer.PlayerId)
+		}
+		return ids
+	}
+	require.ElementsMatch(t, []uint64{4}, peers(), "没合服:只有同一个原始区")
+
+	f.setMergedZones(t, map[uint32]uint32{2: 1})
+	require.ElementsMatch(t, []uint64{2, 3, 4}, peers(), "2 区合进 1 区;3 区没参与")
+
+	f.setMergedZones(t, map[uint32]uint32{3: 2, 2: 1})
+	require.ElementsMatch(t, []uint64{2, 3, 4, 5}, peers(), "连续合服沿链解析")
+
+	f.setMergedZones(t, nil)
+	require.ElementsMatch(t, []uint64{4}, peers(), "撤销后回到各自的区")
+}
+
+// 整队候选:同上,投影上的 home 是原始区,按成员集合查。
+func TestTeamTiDBWholeUnitPeersResolveMergedZones(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.owner.TeamConfig.AllowCrossZone = false
+	ctx := context.Background()
+	for leader, teamID := range map[uint64]uint64{1: 101, 4: 404, 6: 606} {
+		f.create(t, leader, teamID)
+		f.inviteAndAccept(t, leader, leader+1, teamID)
+	}
+	for _, player := range []uint64{4, 5} {
+		f.setHome(t, player, 2)
+	}
+	for _, player := range []uint64{6, 7} {
+		f.setHome(t, player, 3)
+	}
+	anchor := f.queued(t, 1, 101)
+	source := f.queued(t, 4, 404)
+	f.queued(t, 6, 606)
+	left, err := f.owner.TeamLaunchTickets(ctx, anchor)
+	require.NoError(t, err)
+	peers := func() []uint64 {
+		t.Helper()
+		stamp, err := f.owner.Now(ctx)
+		require.NoError(t, err)
+		found, err := f.owner.TeamLaunchPeers(ctx, left[0], anchor, 1, 2, true, stamp)
+		require.NoError(t, err)
+		ids := make([]uint64, 0, len(found))
+		for _, peer := range found {
+			ids = append(ids, peer.ActorId)
+		}
+		return ids
+	}
+	require.Empty(t, peers(), "没合服:别的原始区的整队进不了候选")
+
+	f.setMergedZones(t, map[uint32]uint32{2: 1})
+	require.Equal(t, []uint64{source.ActorId}, peers(), "2 区合进 1 区;3 区没参与")
+	require.Equal(t, uint32(2), f.launchRegionHome(t, source.ActorId), "投影上还是原始区")
+
+	f.setMergedZones(t, nil)
+	require.Empty(t, peers(), "撤销后回到各自的区")
+}
+
+// 开战原件在 launch 诞生时判一次同区,记路由行上的原始区(不是玩家当前位置的物理 zone)。
+// 名单跨两个原始区、禁止跨区时:没合服回业务拒绝,不留任何东西;合服后放行。撤销合服之后再开战和「没合服」是同一条路径。
+func TestTeamTiDBStartLaunchRequiresSameFinalZone(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.owner.TeamConfig.AllowCrossZone = false
+	ctx := context.Background()
+	f.create(t, 1, 101)
+	f.inviteAndAccept(t, 1, 2, 101)
+	f.setHome(t, 2, 2)
+	f.profile(t, 1)
+	f.profile(t, 2)
+	start := func() (*Snapshot, *PinnedResult, *teampb.TeamLaunchRecord) {
+		t.Helper()
+		snap, err := f.store.ReadFree(f.actor(t, 1), 1)
+		require.NoError(t, err)
+		request := &teampb.StartTeamMatchRequest{ExpectedTeamId: 101, BattleConfigId: 1, TargetTeamSize: 5, RequestId: uuid.NewString()}
+		pinned, launch, err := f.store.sql.createLaunch(f.actor(t, 1), snap, 1, request, uuid.NewString(), MatchRoster(snap.Record), 100)
+		require.NoError(t, err)
+		return snap, pinned, launch
+	}
+
+	snap, pinned, launch := start()
+	require.Equal(t, ErrCrossZoneDenied, pinned.Code)
+	require.Nil(t, pinned.Commit)
+	require.Nil(t, launch)
+	var count int
+	require.NoError(t, f.owner.DB.QueryRow("SELECT COUNT(*) FROM team_launch").Scan(&count))
+	require.Zero(t, count, "被拒的开战不留原 launch")
+	after, err := f.store.ReadFree(f.actor(t, 1), 1)
+	require.NoError(t, err)
+	require.Equal(t, snap.Version, after.Version, "名册和开战锁都没动")
+	require.True(t, proto.Equal(snap.Record, after.Record))
+
+	f.setMergedZones(t, map[uint32]uint32{2: 1})
+	_, pinned, launch = start()
+	require.NotNil(t, pinned.Commit)
+	require.Equal(t, uint32(2), launch.State)
+	data, err := authority.DecodeTeamLaunch(launch)
+	require.NoError(t, err)
+	require.Equal(t, map[uint64]uint32{1: 1, 2: 2}, data.Original.Zones, "原件记原始区")
+	tickets, err := f.owner.TeamLaunchTickets(ctx, launch)
+	require.NoError(t, err)
+	for _, ticket := range tickets {
+		require.Equal(t, data.Original.Zones[ticket.PlayerId], ticket.ZoneId, "票上是原始区")
+	}
+	require.Equal(t, uint32(1), f.launchRegionHome(t, 1), "两个原始区的 unit,投影记最终区")
+}
+
+// 合服提交时已经在队列里的整队:提交点按最终区判范围,不用重新排队;维护循环不报错。
+func TestTeamTiDBQueuedUnitsCrossTheMergeWithoutRequeue(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.owner.TeamConfig.AllowCrossZone = false
+	ctx := context.Background()
+	f.create(t, 1, 101)
+	f.inviteAndAccept(t, 1, 2, 101)
+	f.inviteAndAccept(t, 1, 3, 101)
+	f.create(t, 4, 404)
+	f.inviteAndAccept(t, 4, 5, 404)
+	for _, player := range []uint64{4, 5} {
+		f.setHome(t, player, 2)
+	}
+	a, b := f.queued(t, 1, 101), f.queued(t, 4, 404)
+	left, err := f.owner.TeamLaunchTickets(ctx, a)
+	require.NoError(t, err)
+	right, err := f.owner.TeamLaunchTickets(ctx, b)
+	require.NoError(t, err)
+	group := append(left, right...)
+	matchCatalog, err := catalog.New(catalog.Rows{
+		Dungeons:  []catalog.DungeonRow{{Id: 1, MaxTeamSize: 5, MonsterCount: 1}},
+		PlayModes: []catalog.PlayModeRow{{Id: 1, Mode: matchpb.MatchMode_MATCH_MODE_PVE_TEAM, ConfigId: 1, Enabled: true, TeamSizeMax: 5}},
+	})
+	require.NoError(t, err)
+	require.NoError(t, f.owner.ConfigureMatchCatalog(matchCatalog, scope.Schedule{GroupAfterMs: 600_000, GlobalAfterMs: 600_000}))
+	formation := &matchpb.MatchFormationRecord{BattleId: 905, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1}
+	require.ErrorIs(t, f.owner.ClaimTeamUnits(ctx, formation, group, []*teampb.TeamLaunchRecord{a, b}), authority.ErrScopeWait, "没合服:两个区要等满放宽阈值")
+
+	f.setMergedZones(t, map[uint32]uint32{2: 1})
+	for _, launch := range []*teampb.TeamLaunchRecord{a, b} {
+		closed, err := f.owner.MaintainQueuedTeam(ctx, launch)
+		require.NoError(t, err)
+		require.False(t, closed)
+	}
+	require.NoError(t, f.owner.ClaimTeamUnits(ctx, formation, group, []*teampb.TeamLaunchRecord{a, b}), "合服后算同一个 zone,在途的票不用重排")
+	for _, ticket := range right {
+		var zone uint32
+		require.NoError(t, f.owner.DB.QueryRow("SELECT zone_id FROM match_authority_ticket WHERE player_id=?", ticket.PlayerId).Scan(&zone))
+		require.Equal(t, uint32(2), zone, "历史行不改写")
+	}
+}
+
+// 撤销合服留下的跨原始区 unit:在途的走完这一局,维护、成局、失败重排都不报错、不卡死(docs/ops/merge-zone-runbook.md §7)。
+func TestTeamTiDBUnmergeLeavesInFlightUnitsRunning(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.owner.TeamConfig.AllowCrossZone = false
+	ctx := context.Background()
+	f.create(t, 1, 101)
+	f.inviteAndAccept(t, 1, 2, 101)
+	f.inviteAndAccept(t, 1, 3, 101)
+	f.create(t, 4, 404)
+	f.inviteAndAccept(t, 4, 5, 404)
+	f.setHome(t, 3, 2)
+	f.setMergedZones(t, map[uint32]uint32{2: 1})
+	a, b := f.queued(t, 1, 101), f.queued(t, 4, 404)
+	require.Equal(t, uint32(1), f.launchRegionHome(t, 1))
+
+	f.setMergedZones(t, nil)
+	closed, err := f.owner.MaintainQueuedTeam(ctx, a)
+	require.NoError(t, err, "映射变化不能让维护循环报错")
+	require.False(t, closed, "也不拆队、不撤单")
+	require.Zero(t, f.launchRegionHome(t, 1), "撤销后是混合 unit,按区候选不再选它")
+
+	left, err := f.owner.TeamLaunchTickets(ctx, a)
+	require.NoError(t, err)
+	right, err := f.owner.TeamLaunchTickets(ctx, b)
+	require.NoError(t, err)
+	formation := &matchpb.MatchFormationRecord{BattleId: 906, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1}
+	require.NoError(t, f.owner.ClaimTeamUnits(ctx, formation, append(left, right...), []*teampb.TeamLaunchRecord{a, b}), "票上的原始区和路由行照样对得上")
+	work, err := f.owner.AcquireWork(ctx, 906)
+	require.NoError(t, err)
+	require.NoError(t, f.owner.Finish(ctx, work, false))
+	_, pinned, err := f.store.sql.endMatch(ctx, 101, a.LockToken)
+	require.NoError(t, err)
+	require.NotNil(t, pinned.Commit, "这一局失败,整队原样回队列")
+	data, err := authority.DecodeTeamLaunch(a)
+	require.NoError(t, err)
+	current, err := f.owner.TeamLaunch(f.actor(t, 1), 1, data.Original.Request.RequestId)
+	require.NoError(t, err)
+	require.Equal(t, uint32(2), current.State)
+}
+
+// 满队直接开战:prepared 原件跨过撤销合服,提交点核对的是原件里的原始区,不重判同区。
+func TestTeamTiDBFullLaunchReservesWithOriginalZones(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.owner.TeamConfig.AllowCrossZone = false
+	ctx := context.Background()
+	f.create(t, 1, 101)
+	f.inviteAndAccept(t, 1, 2, 101)
+	f.setHome(t, 2, 2)
+	f.setMergedZones(t, map[uint32]uint32{2: 1})
+	f.profile(t, 1)
+	f.profile(t, 2)
+	snap, err := f.store.ReadFree(f.actor(t, 1), 1)
+	require.NoError(t, err)
+	request := &teampb.StartTeamMatchRequest{ExpectedTeamId: 101, BattleConfigId: 1, TargetTeamSize: 2, RequestId: uuid.NewString()}
+	_, launch, err := f.store.sql.createLaunch(f.actor(t, 1), snap, 1, request, uuid.NewString(), MatchRoster(snap.Record), 100)
+	require.NoError(t, err)
+	require.Equal(t, uint32(1), launch.State)
+	data, err := authority.DecodeTeamLaunch(launch)
+	require.NoError(t, err)
+
+	f.setMergedZones(t, nil)
+	mode := uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM)
+	formation := &matchpb.MatchFormationRecord{BattleId: 907, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: mode, ConfigId: 1}
+	var group []*matchpb.MatchAuthorityTicketRecord
+	for _, member := range data.Members {
+		player := member.Original.PlayerId
+		group = append(group, &matchpb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: member.Ticket, RequestId: formation.OperationId, Mode: mode, ConfigId: 1, TeamSize: 2, TeamId: 101, OwnerAccount: member.Original.OwnerAccount, OwnerRevision: member.Original.OwnerRevision, ZoneId: data.Original.Zones[player]})
+	}
+	reserved, err := f.owner.ReserveTeamLaunch(ctx, launch, formation, group)
+	require.NoError(t, err)
+	require.Equal(t, uint64(907), reserved.BattleId)
 }
 
 func TestTeamTiDBFrozenRouteRejectsBeforeMembership(t *testing.T) {
@@ -616,12 +1071,12 @@ func TestTeamTiDBPreparedLaunchCapturesOnlyOriginalSpectatorAndResumesWholeQueue
 	ok, err := f.owner.AdvanceSpectator(f.actor(t, 1), original, 2)
 	require.NoError(t, err)
 	require.True(t, ok)
-	snap, _, err := f.store.ReadFree(f.actor(t, 1), 1)
+	snap, err := f.store.ReadFree(f.actor(t, 1), 1)
 	require.NoError(t, err)
 	f.profile(t, 1)
 	f.profile(t, 2)
 	request := &teampb.StartTeamMatchRequest{ExpectedTeamId: 101, BattleConfigId: 1, TargetTeamSize: 5, RequestId: uuid.NewString()}
-	_, launch, err := f.store.sql.createLaunch(f.actor(t, 1), snap, 1, request, uuid.NewString(), []uint64{1, 2}, map[uint64]uint32{1: 1, 2: 1}, 100)
+	_, launch, err := f.store.sql.createLaunch(f.actor(t, 1), snap, 1, request, uuid.NewString(), []uint64{1, 2}, 100)
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), launch.State)
 	data, err := authority.DecodeTeamLaunch(launch)

@@ -264,7 +264,7 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 		return nil, err
 	}
 	f.Operator = operator
-	f.Catalog, err = authoritysql.NewCatalog(operator, authoritysql.CatalogConfig{AuthoritySchema: opts.AuthoritySchema, Generation: generation, ProtectedSchemas: schemas, PhysicalAuthoritySHA256: opts.PhysicalAuthoritySHA256, Principal: principal, RequireReconcile: true})
+	f.Catalog, err = authoritysql.NewCatalog(operator, authoritysql.CatalogConfig{AuthoritySchema: opts.AuthoritySchema, Generation: generation, ProtectedSchemas: schemas, PhysicalAuthoritySHA256: opts.PhysicalAuthoritySHA256, Principal: principal})
 	if err != nil {
 		return nil, err
 	}
@@ -782,27 +782,20 @@ func (f *Fixture) Freeze(ctx context.Context) (*pb.SqlWriterMaintenanceReceipt, 
 	m.latest = m.frozen
 	return proto.Clone(m.frozen).(*pb.SqlWriterMaintenanceReceipt), nil
 }
-func (f *Fixture) PrepareRelease(ctx context.Context, floor uint64) ([]byte, *pb.SqlWriterMaintenanceReceipt, error) {
+func (f *Fixture) PrepareRelease(ctx context.Context) ([]byte, *pb.SqlWriterMaintenanceReceipt, error) {
 	f.controlMu.Lock()
 	defer f.controlMu.Unlock()
-	return f.prepareRelease(ctx, floor)
+	return f.prepareRelease(ctx)
 }
-func (f *Fixture) prepareRelease(ctx context.Context, floor uint64) ([]byte, *pb.SqlWriterMaintenanceReceipt, error) {
+func (f *Fixture) prepareRelease(ctx context.Context) ([]byte, *pb.SqlWriterMaintenanceReceipt, error) {
 	m := f.maintenance
 	if m == nil || m.frozen == nil || m.reopened {
 		return nil, nil, errors.New("fixture缺少本轮正式冻结")
 	}
 	if m.releaseInput != nil {
-		if m.releaseInput.Evidence.GetReleaseReadiness().RouteWatermarkFloorMs != floor {
-			return nil, nil, errors.New("fixture释放请求水位已固定")
-		}
 		return bytes.Clone(m.ticketID), proto.Clone(m.releaseInput).(*pb.SqlWriterMaintenanceReceipt), nil
 	}
-	pin, err := f.controlPin([]byte("仅SQL隔离用例；没有历史非SQL队列；恢复业务断言由调用测试验证。"))
-	if err != nil {
-		return nil, nil, err
-	}
-	proof := &pb.SqlWriterMaintenanceReceipt_ReleaseReadiness{OriginalFreezeReceiptId: m.frozen.RequestId, OriginalFreezeReceiptDigest: m.frozen.ReceiptDigest, RecoveryAudit: []*pb.SqlWriterMaintenanceReceipt_SourcePin{pin}, NonSqlClosedReceiptId: m.nonSQL.RequestId, NonSqlClosedReceiptDigest: m.nonSQL.ReceiptDigest, RouteWatermarkFloorMs: floor}
+	proof := &pb.SqlWriterMaintenanceReceipt_ReleaseReadiness{OriginalFreezeReceiptId: m.frozen.RequestId, OriginalFreezeReceiptDigest: m.frozen.ReceiptDigest, NonSqlClosedReceiptId: m.nonSQL.RequestId, NonSqlClosedReceiptDigest: m.nonSQL.ReceiptDigest}
 	ready, err := f.maintenanceRequest(ctx, m, pb.SqlWriterDrainRun_RELEASE_READY, pb.SqlWriterMaintenanceReceipt_PHASE_EVENT)
 	if err != nil {
 		return nil, nil, err
@@ -824,10 +817,10 @@ func (f *Fixture) prepareRelease(ctx context.Context, floor uint64) ([]byte, *pb
 	}
 	return bytes.Clone(m.ticketID), proto.Clone(m.releaseInput).(*pb.SqlWriterMaintenanceReceipt), nil
 }
-func (f *Fixture) Release(ctx context.Context, floor uint64) (*pb.SqlWriterMaintenanceReceipt, error) {
+func (f *Fixture) Release(ctx context.Context) (*pb.SqlWriterMaintenanceReceipt, error) {
 	f.controlMu.Lock()
 	defer f.controlMu.Unlock()
-	ticket, input, err := f.prepareRelease(ctx, floor)
+	ticket, input, err := f.prepareRelease(ctx)
 	if err != nil {
 		return nil, err
 	}

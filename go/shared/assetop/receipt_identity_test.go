@@ -68,7 +68,7 @@ func TestSQLProofBindsEveryOutcomeToOriginalRequest(t *testing.T) {
 						}
 						return Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_REJECTED, Durable: true}, nil
 					}}
-					loop, _ := newTestLoop(t, newFakeStore(op), applier, requireSQLCommit)
+					loop, _ := newTestLoop(t, newFakeStore(op), applier, nil)
 					loop.Ledger = reader
 					got, err := loop.ProcessOne(context.Background(), op)
 					if err != nil || got.Finalized != tc.want {
@@ -137,7 +137,7 @@ func TestSQLProofRejectsChangedPayloadForSameSequence(t *testing.T) {
 			op := original
 			op.Bundle = proto.Clone(original.Bundle).(*assetpb.AssetBundle)
 			tc.edit(&op)
-			loop, _ := newTestLoop(t, newFakeStore(op), appliedApplier(), requireSQLCommit)
+			loop, _ := newTestLoop(t, newFakeStore(op), appliedApplier(), nil)
 			loop.Ledger = reader
 			got, err := loop.ProcessOne(context.Background(), op)
 			if err != nil || got.Finalized || got.Result.SQLCommitted || got.Result.Outcome != assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN {
@@ -154,13 +154,13 @@ func TestOfflineLegacyBitmapCannotFinalizeOrAbandon(t *testing.T) {
 	reader.ledger.Streams[0].Receipts = nil
 	loop, _ := newTestLoop(t, newFakeStore(op), &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
 		return Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE, Local: true}, nil
-	}}, requireSQLCommit)
+	}}, nil)
 	loop.Ledger = reader
 	got, err := loop.ProcessOne(context.Background(), op)
 	if err != nil || got.Finalized || got.Result.Outcome != assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN {
 		t.Fatalf("离线旧位图没有身份不能终结: %+v %v", got, err)
 	}
-	skip, res := seenForFinalize(reader.ledger, op, true)
+	skip, res := seenForFinalize(reader.ledger, op)
 	if skip != abandonSkipLedgerUnknown || res.Durable || res.SQLCommitted {
 		t.Fatalf("已见位图不可当未见放弃或已证明终结: %v %+v", skip, res)
 	}

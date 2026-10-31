@@ -1,20 +1,22 @@
 Name: matchservice.rpc
 Mode: dev
-GlobalLoginSessions: false
+# 客户端请求的原角色身份只从 login 同一实例 / DB 核对,必须开启。本机 go_services.ps1 按 login 的配置派生这两项。
+GlobalLoginSessions: true
 LoginRedis:
-  Host: ""
+  Addrs: [127.0.0.1:6379]
   DB: 0
   PasswordEnv: MMORPG_LOGIN_REDIS_PASSWORD
-  PoolSize: 8
-# 本地兼容模式显式关闭；生产必须启用，所有副本连接同一TiDB库。
-# 密钥只从环境读取，MATCH_PROBE_SECRET须与各机房battle一致且至少32字节。
+  PoolSizePerNode: 8
+# 排队、占用、成局、评分与组队的权威都在这个 SQL 库,开发环境与生产同一份代码,所有副本连接同一库,缺配置不能起服。
+# 这里写的是 TiDB 入口;本机起 go_services.ps1 / start_game.ps1 默认连 MySQL 容器(Backend: mysql,派生配置改写)。
+# 库、表与开发密钥由启动脚本准备:库 mmorpg_match 预建,表用 match -migrate 迁移(与 guild 互相核对对方的表)。
+# 密钥只从环境读取,MATCH_PROBE_SECRET 须与各机房 battle 一致且至少 32 字节。
 GlobalMatch:
-  Enabled: false
   Backend: tidb
   Host: 127.0.0.1:4000
   User: root
   Database: mmorpg_match
-  AccountRoleSchema: testdb
+  AccountRoleSchema: mmorpg_global
   GuildTrialSchema: mmorpg_guild
   PasswordEnv: MATCH_MYSQL_PASSWORD
   ProbeSecretEnv: MATCH_PROBE_SECRET
@@ -42,8 +44,8 @@ ListenOn: 127.0.0.1:50500
 # zrpc 服务端超时(毫秒),对同一 server 上的 MatchService 与 ClientPlayerTeam 都生效。2026-10-14 由 5000 改为 4000
 # (docs/design/client-request-ordering.md O10 / §5):预算链要求「目标 Timeout + 1000 ≤ 路由服 ForwardTimeoutMs(5000)」。
 # 路由服先回超时、match handler 却还在跑,gate 会放行同一会话的下一条请求,这一条的写晚落地就会乱序。
-# 客户端请求路径上的写一律用请求 ctx(建票 / 入队 / 取消 / 挑战 / 观战绑定),截止之后不再发出;
-# WatchBattle 的 addObserver 也从请求 ctx 派生截止时间,不再在客户端收到失败之后继续绑定观战(原「保持 5000」的理由见
+# 客户端请求路径上的写一律用请求 ctx(入队 / 取消 / 挑战 / 观战),截止之后不再发出;
+# WatchBattle 的 AddObserver 也从请求 ctx 派生截止时间,不再在客户端收到失败之后继续绑定观战(原「保持 5000」的理由见
 # team-system.md §A.3 第 7 条及其 2026-10-14 更正)。K8s ConfigMap 从这里镜像;部署门禁 Assert-RouterForwardBudget 核对。
 Timeout: 4000
 # 终局原事件、原账号与签名不进入请求体日志；保留方法和耗时。
@@ -59,16 +61,22 @@ Etcd:
   Key: matchservice.rpc
 
 # ---- 双存储(设计文档 cross-zone-matchmaking.md D2)----
-# Redis:既有共享库。跨运行时契约 key(player:{id}:location / player:session:{id} /
-#   battle:lock:{id})只在这里,写者是 scene_manager / player_locator / C++ scene,
-#   match 只读。C++ 侧 hiredis 无集群客户端,这一库不能集群化。
-# MatchRedis:match 私有 key(match:* / challenge:* / spectate:*)的存储,可指向
-#   Redis Cluster。不配即回落到 Redis(两类 key 同一实例,本地单库形态,行为与
-#   改前一致)。队列相关 key 共用 {mq} hash tag 落同一 slot,入队/剔除都是单 slot Lua。
+# Redis:既有共享库。MatchRedis 不配时私有 key 的回落目标,PlayerRedis 不写 Addrs 时玩家域的落点。
+# MatchRedis:match 私有协调 key(spectate:* 观战索引、档位与配额)的存储,可指向
+#   Redis Cluster。不配即回落到 Redis(两类 key 同一实例,本地单库形态)。
 Redis:
   Host: 127.0.0.1:6379
   Type: node
   Key: matchservice
+
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):跨运行时契约 key(player:{id}:location /
+#   player:session:{id} / battle:lock:{id}),写者是 scene_manager / player_locator / C++ scene,match 只读;
+#   player:{id}:sync_digest 由组队 bump。不写 Addrs = 指向上面的 Redis 实例。集群部署写种子地址并打开 Cluster:
+#     Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
+#     Cluster: true
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。读写 3s、取连接 4s、拨号 5s 沿用这条路径换句柄之前的口径。
+PlayerRedis:
+  PoolSizePerNode: 20
 
 # 本地集群样例(docker compose --profile redis-cluster,6 节点 3 主 3 从):
 # Host 逗号分隔多个种子地址,Type 必须是 cluster。
@@ -96,44 +104,27 @@ Kafka:
     - 127.0.0.1:9092
 
 # 挑战邀请/结果 S2C 走 Kafka gate-{id} 推送时 writer 侧的一次同步 produce 超时(秒)。
-# 推送不受请求截止约束(有意,2026-10-15 记):ChallengePlayer / RespondChallenge 在提交点(挑战记录已原子写入)
+# 推送不受请求截止约束(有意,2026-10-15 记):ChallengePlayer / RespondChallenge 在提交点(挑战记录已在 SQL 提交)
 # 之后才推,推送用独立的 pushTimeout(5s,push.go),与本值一样大于上面的 Timeout 4000。所以可能出现「路由服已向
 # 客户端回超时、邀请随后仍推到目标」,推送失败的 cleanup 也可能在截止之后执行。记录在截止前已合法提交,这只是
 # 回执与推送的先后不一致,不破坏数据;改成跟随请求 ctx 会让「已提交的挑战」反而推不出去,代价更大。
 # 见 docs/design/client-request-ordering.md §5。
 KafkaWriteTimeoutSeconds: 5
 
-# matcher loop 扫队列的间隔(毫秒)。
+# 按池撮合循环的间隔(毫秒)。
 MatcherIntervalMs: 500
-
-# 每个 (mode, battle_config_id) 队列凑单临界区的 Redis 锁 TTL(秒)。
-# 多实例部署时拿不到锁的实例跳过本轮,锁只保护弹出成组这一小段。
-MatcherLockTTLSeconds: 10
-
-# 战斗最长时限(秒)。gather 把 now + 该值作为 deadline_ms 下发给
-# scene(InBattleComp 作废期限)与 battle(强制收尾期限)。
-BattleMaxDurationSeconds: 300
 
 # 场景发起 PK(切磋)记录的 TTL(秒),超时未应答自动作废(设计文档 §3.1b)。
 ChallengeTTLSeconds: 60
 
-# 排队 ticket 的兜底 TTL(秒)。正常路径由取消/开战删除,TTL 只挡异常残留。
-TicketTTLSeconds: 21600
-
-# ticket 被 matcher 弹出进入 MATCHED 态后的 TTL(秒)。弹组实例在 gather 中崩溃
-# 时票据在该窗口后自灭,玩家可重排(容错不降级,决策 D5);失败回队首恢复
-# TicketTTLSeconds,成功走 ReadyTicketTTLSeconds。
+# 一局备战预算的下限(秒)。实际预算取 max(该值, 按组大小算的最坏链路),决定 scene 侧 PREPARING 的作废期限与组队开战锁时长(决策 D5)。
 MatchedTicketTTLSeconds: 30
-
-# 开局成功后 ticket 停留在 READY 态的 TTL(秒),过期即视为 NOT_QUEUED
-# (战斗内状态由 battle:lock / InBattleComp 权威表达,不再看 ticket)。
-ReadyTicketTTLSeconds: 60
 
 # 战斗配表指纹比对策略(设计决策 D14):scene 在 PrepareBattle 响应里回报本节点六张
 # 战斗表的内容指纹,gather 收齐后比对全员一致才透传给 battle。
 #   off     不比对、不透传;
 #   warn    不一致 / 部分为空只记 Error 日志 + match_table_fingerprint_mismatch_total,照常开局;
-#   enforce 不一致视为 prepare 失败:与多数派不一致者出局删票,幸存者回队首,已冻结者解冻。
+#   enforce 不一致视为 prepare 失败:与多数派不一致者的单排票终止,其余成员保留原入队时刻回队,已冻结者解冻。
 # 灰度期用 warn 观察指标,各 zone 表版本对齐后再切 enforce。
 TableFingerprintMode: warn
 
@@ -147,11 +138,7 @@ TableDir: ../../generated/tables
 MetricsListenAddr: ":9170"
 
 # ---- 评分匹配(设计文档 cross-zone-matchmaking.md §11)----
-# 评分存 MatchRedis 的 match:rating:{player_id}(无 TTL,默认 1500)。GlobalMatch.Enabled=true 时评分改由
-# TiDB 权威库读写(rating.go 的 Authority 分支;非 dev / test 档强制开启),下面的风险只在关闭时成立。⚠ MatchRedis 缺省
-# 回落共享库时,评分能否存活取决于共享库的淘汰策略(compose 自 2026-10-12 起与 K8s 同为 noeviction):
-# 一旦配成 allkeys-* 之类的淘汰型,评分可能被淘汰回落 1500;即使不淘汰,无 TTL 的评分也在与契约 key 争内存。
-# 生产必须配独立 MatchRedis。
+# 评分存 SQL 权威库的 match_rating(默认 1500),入账幂等靠 match_rating_applied。
 # RatingEnabled:消费 Kafka 对局结果更新 Elo;关闭后评分停在 1500,匹配退化为纯等待序。
 RatingEnabled: true
 # battle 节点发 BattleResultEvent 的 topic(全局无 zone 段,key=battle_id),与 C++
@@ -194,7 +181,7 @@ Team:
 #   本机只有一个 Kafka,打开;K8s 上不镜像本行,由 k8s_deploy.ps1 的 New-MatchSpectateYaml 按部署拓扑写。
 # BroadcastMaxConcurrent:全服同时处于 L2 的场次上限 B,0 = 不开 L2。
 # BroadcastAutoGateThreshold:本场中继 gate 数达到它就自动升 L2(G_min),0 = 只认运营标记(featured)。
-# TicketTTLSeconds:观战凭证有效期(秒),与顶层排队票据的 TicketTTLSeconds 无关。
+# TicketTTLSeconds:观战凭证有效期(秒)。
 # TicketSecret:观战凭证 HMAC 密钥,必须与 bin/etc/base_deploy_config.yaml 的 SpectateTokenSecret 同值,否则订阅全部被 gate 拒绝;
 #   至少 32 字节、不许含空白,且与 gate / battle 令牌密钥都不同。
 # OpsCallerSecret:运营入口 SetSpectateFeatured 的调用方验签密钥(serviceauth 调用方 ops)。空 = 入口关闭,一律 PermissionDenied;非空至少 32 字节。
@@ -207,11 +194,11 @@ Spectate:
   TicketSecret: "local-dev-spectate-token-secret-a1b2c3d4e5f60718"
   OpsCallerSecret: "local-dev-match-ops-caller-secret-0f1e2d3c4b5a6978"
 
-# data_service gRPC 客户端(etcd 发现):team 用 BatchGetPlayerHomeZone 查玩家 home zone,
-# 查询失败组队 fail-closed(TeamInternal),查不到映射回 TeamHomeZoneUnknown。
+# data_service gRPC 客户端(etcd 发现):领号段、查玩家昵称与展示资料。
+# 玩家归属和合服映射不走这里,直接读全局库(GlobalMatch.AccountRoleSchema 的 player_route、zone_merged_into)。
 # NonBlock: true 是硬要求:客户端在 ServiceContext 里构造,早于节点注册与起服;阻塞建连会让
 #   data_service 没起时整个 match(排队 / 切磋 / 观战)起不来。Go 侧对 false 也会强制改成 true。
-# Timeout: 1500 与 guild 的 home zone 查询预算同值,小于 team 自己的 3500ms 请求预算。
+# Timeout: 1500 小于 team 自己的 3500ms 请求预算。
 # 注意:顶层 Timeout 原先「保持 5000 不改」(WatchBattle 同步链最坏 >4s,team-system.md §A.3 第 7 条);
 # 2026-10-14 已改为 4000,理由见文件顶部 Timeout 注释。
 # 本地 -Zone 派生会把 Key 改成 dataservice.rpc.z<N>(go_services.ps1),与同 zone 的 data_service 配对,

@@ -4,46 +4,107 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/proc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"player_locator/internal/config"
 	"player_locator/internal/svc"
 	kafkapb "proto/contracts/kafka"
 	pb "proto/player_locator"
 	smpb "proto/scene_manager"
 	"shared/kafkacmd"
+	"shared/redisslot"
 	"shared/safego"
 )
 
 const (
 	leaseClaimTTL               = 30 * time.Second
 	leaseClaimHeartbeatInterval = 10 * time.Second
+	// leaseProbeSlotsPerPipeline 是探测到期租约时一个 pipeline 里的 slot 数。
+	leaseProbeSlotsPerPipeline = 64
+	// leaseScanStallIntervals:一拍没走完超过这么多个 PollInterval(且超过段租约周期)就算停扫,让出段。
+	leaseScanStallIntervals = 3
 )
 
-// StartLeaseMonitor polls for expired disconnect leases and publishes cleanup events.
-func StartLeaseMonitor(ctx context.Context, svcCtx *svc.ServiceContext, pollInterval time.Duration, batchSize int) {
-	if pollInterval <= 0 {
-		pollInterval = time.Second
-	}
-	if batchSize <= 0 {
-		batchSize = 100
-	}
+// LeaseMonitorParams 是 StartLeaseMonitor 的装配参数。
+type LeaseMonitorParams struct {
+	// InstanceID 是本副本在分片里的身份(成员登记与段租约的值)。
+	InstanceID string
+	// PollInterval 即 Lease.PollInterval:拍长,0 = 1s。
+	PollInterval time.Duration
+	// BatchSize 即 Lease.BatchSize:一拍最多认领的租约数,0 = 100。
+	BatchSize int
+	// ScanRound 即 Lease.ScanRound():探测完持有的全部 slot 用多久,0 = config.DefaultLeaseScanRoundSeconds。
+	ScanRound time.Duration
+}
 
-	ticker := time.NewTicker(pollInterval)
+// StartLeaseMonitor 按段租约分到的 slot 轮转探测到期的断线租约,认领并处理。阻塞到 ctx 结束,调用方 go 出去。
+//
+// 分片只分担负载,认领脚本才是互斥手段:没有段的副本也能认领,这正是 MarkOffline 叫醒本进程处理一个 slot 的做法。
+func StartLeaseMonitor(ctx context.Context, svcCtx *svc.ServiceContext, p LeaseMonitorParams) {
+	monitor := newLeaseMonitor(svcCtx, nil, p)
+	shard := newSlotShard(svcCtx.PlayerRedis, shardRoleLeaseMonitor, p.InstanceID, monitor.scanFresh)
+	monitor.owner = shard
+	proc.AddShutdownListener(shard.Stop)
+	safego.Go("player_locator.lease_monitor_shard", func() { shard.Run(ctx) })
+
+	logx.Infof("LeaseMonitor started: poll=%v batch=%d scan_round=%v", monitor.poll, monitor.batchSize, monitor.scanRound)
+	monitor.run(ctx)
+	logx.Info("LeaseMonitor stopped")
+}
+
+// leaseMonitor 是一个副本上的租约监视。nextSlot 只由 run 所在的 goroutine 访问。
+type leaseMonitor struct {
+	svcCtx    *svc.ServiceContext
+	owner     slotOwner
+	poll      time.Duration
+	batchSize int
+	scanRound time.Duration
+	now       func() time.Time
+
+	// nextSlot 是轮转探测的游标:下一拍从不小于它的第一个持有 slot 开始。按 slot 值记,不按下标记,持有的段变了也接得上。
+	nextSlot int
+	// lastTickNanos 是最近一拍走完的时刻(unix 纳秒),分片的 goroutine 读。
+	lastTickNanos atomic.Int64
+}
+
+func newLeaseMonitor(svcCtx *svc.ServiceContext, owner slotOwner, p LeaseMonitorParams) *leaseMonitor {
+	m := &leaseMonitor{
+		svcCtx:    svcCtx,
+		owner:     owner,
+		poll:      p.PollInterval,
+		batchSize: p.BatchSize,
+		scanRound: p.ScanRound,
+		now:       time.Now,
+	}
+	if m.poll <= 0 {
+		m.poll = time.Second
+	}
+	if m.batchSize <= 0 {
+		m.batchSize = 100
+	}
+	if m.scanRound <= 0 {
+		m.scanRound = config.DefaultLeaseScanRoundSeconds * time.Second
+	}
+	m.lastTickNanos.Store(m.now().UnixNano())
+	return m
+}
+
+func (m *leaseMonitor) run(ctx context.Context) {
+	ticker := time.NewTicker(m.poll)
 	defer ticker.Stop()
-
-	logx.Infof("LeaseMonitor started: poll=%v batch=%d", pollInterval, batchSize)
-
 	for {
 		select {
 		case <-ctx.Done():
-			logx.Info("LeaseMonitor stopped")
 			return
 		case <-ticker.C:
 			// recover 的作用域精确到"一轮":某一轮 panic(例如某条 claim 的载荷
@@ -51,24 +112,136 @@ func StartLeaseMonitor(ctx context.Context, svcCtx *svc.ServiceContext, pollInte
 			// 不包的话,整条 LeaseMonitor 会永久停摆 —— 进程还活着、日志不再有新行,
 			// 所有断线玩家的会话从此没人清理,是最难被发现的一类故障。
 			safego.Run("player_locator.lease_monitor.round", func() {
-				processExpiredLeases(ctx, svcCtx, batchSize)
+				m.tick(ctx)
+			})
+		case slot := <-m.svcCtx.LeaseCleanupWake:
+			safego.Run("player_locator.lease_monitor.wake", func() {
+				m.processSlots(ctx, []uint16{slot})
 			})
 		}
 	}
 }
 
-func processExpiredLeases(ctx context.Context, svcCtx *svc.ServiceContext, batchSize int) {
-	claims, err := claimExpiredLeases(ctx, svcCtx, time.Now(), batchSize, leaseClaimTTL)
-	if err != nil {
-		logx.Errorf("LeaseMonitor: claim expired leases failed: %v", err)
-		return
+// scanFresh 是分片的健康判定:最近一拍走完得够近。一拍可能卡在下游(LeaveScene、Kafka),卡得比段租约周期还久就让出段,
+// 让别的副本扫。拍长配置得很长时按拍长放宽,否则永远算停扫。
+func (m *leaseMonitor) scanFresh() bool {
+	stallAfter := max(shardLeaseTTL, leaseScanStallIntervals*m.poll)
+	return m.now().UnixNano()-m.lastTickNanos.Load() <= stallAfter.Nanoseconds()
+}
+
+// tick 是一拍:探测下一批持有的 slot,认领到期的租约并处理。走完才记 lastTickNanos,panic 的拍不算。
+func (m *leaseMonitor) tick(ctx context.Context) {
+	slots := m.nextSlots(m.owner.OwnedSlots())
+	if resumeAt, budgetUsed := m.processSlots(ctx, slots); budgetUsed {
+		m.nextSlot = resumeAt
 	}
-	stopHeartbeat := startLeaseClaimHeartbeat(ctx, svcCtx, claims, leaseClaimHeartbeatInterval, leaseClaimTTL)
+	m.lastTickNanos.Store(m.now().UnixNano())
+}
+
+// nextSlots 从游标开始取这一拍要探测的持有 slot,取的数量让持有的 slot 在一个 scanRound 内走完一遍。
+// 所以全服的探测量是常数(两个 ZSET × 16384 / scanRound),与副本数无关。
+func (m *leaseMonitor) nextSlots(owned []uint16) []uint16 {
+	if len(owned) == 0 {
+		return nil
+	}
+	count := min(max(int((int64(len(owned))*int64(m.poll)+int64(m.scanRound)-1)/int64(m.scanRound)), 1), len(owned))
+	start := sort.Search(len(owned), func(i int) bool { return int(owned[i]) >= m.nextSlot })
+	slots := make([]uint16, 0, count)
+	for i := 0; i < count; i++ {
+		slots = append(slots, owned[(start+i)%len(owned)])
+	}
+	m.nextSlot = int(slots[count-1]) + 1
+	return slots
+}
+
+// processSlots 探测 slots、认领到期的租约并逐个处理。一拍最多认领 batchSize 个;用完时返回 (那个 slot, true),
+// 下一拍从它接着来,轮转不跳过还没认领完的 slot。
+func (m *leaseMonitor) processSlots(ctx context.Context, slots []uint16) (resumeAt int, budgetUsed bool) {
+	if len(slots) == 0 {
+		return 0, false
+	}
+	now := m.now()
+	due, err := probeDueLeaseSlots(ctx, m.svcCtx.PlayerRedis, slots, now)
+	if err != nil {
+		// 能探测到的 slot 照常处理:读失败的那些下一轮再来。
+		logx.Errorf("LeaseMonitor: probe due leases failed for some slots: %v", err)
+	}
+	budget := m.batchSize
+	var claims []leaseClaim
+	for _, slot := range due {
+		got, err := claimExpiredLeases(ctx, m.svcCtx, slot, now, budget, leaseClaimTTL)
+		if err != nil {
+			logx.Errorf("LeaseMonitor: claim expired leases slot=%d failed: %v", slot, err)
+		}
+		claims = append(claims, got...)
+		budget -= len(got)
+		if budget <= 0 {
+			resumeAt, budgetUsed = int(slot), true
+			break
+		}
+	}
+	stopHeartbeat := startLeaseClaimHeartbeat(ctx, m.svcCtx, claims, leaseClaimHeartbeatInterval, leaseClaimTTL)
 	defer stopHeartbeat()
 
 	for _, claim := range claims {
-		handleLeaseExpiry(ctx, svcCtx, claim)
+		handleLeaseExpiry(ctx, m.svcCtx, claim)
 	}
+	return resumeAt, budgetUsed
+}
+
+// probeDueLeaseSlots 返回 slots 里有到期租约(ready 到期,或 processing 超时要回收)的那些,保持输入顺序。
+// 探测只读,按 leaseProbeSlotsPerPipeline 分批走 pipeline(Cluster 下按节点拆)。读失败的 slot 跳过,合并后的错误一并返回。
+func probeDueLeaseSlots(ctx context.Context, rdb redis.UniversalClient, slots []uint16, now time.Time) ([]uint16, error) {
+	maxScore := strconv.FormatInt(now.Unix(), 10)
+	var due []uint16
+	var firstErr error
+	failed := 0
+	for start := 0; start < len(slots); start += leaseProbeSlotsPerPipeline {
+		chunk := slots[start:min(start+leaseProbeSlotsPerPipeline, len(slots))]
+		ready := make([]*redis.IntCmd, len(chunk))
+		processing := make([]*redis.IntCmd, len(chunk))
+		_, _ = rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
+			for i, slot := range chunk {
+				keys := leaseKeysForSlot(slot)
+				ready[i] = p.ZCount(ctx, keys.ready, "-inf", maxScore)
+				processing[i] = p.ZCount(ctx, keys.processing, "-inf", maxScore)
+			}
+			return nil
+		})
+		for i, slot := range chunk {
+			err := errors.Join(ready[i].Err(), processing[i].Err())
+			if err != nil {
+				failed++
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			if ready[i].Val() > 0 || processing[i].Val() > 0 {
+				due = append(due, slot)
+			}
+		}
+	}
+	if firstErr != nil {
+		return due, fmt.Errorf("%d slot(s) failed, first: %w", failed, firstErr)
+	}
+	return due, nil
+}
+
+// wakeLeaseMonitorAt 让本进程的 LeaseMonitor 到点处理这名玩家的 slot,不等常规轮转。给登出清理的首拍用:清理在途期间
+// 同账号首次登录被拒(replaceSessionCleanupPending),这段时间不该再加上一个探测周期。叫不醒(通道满了)也无妨,常规轮转兜底。
+func wakeLeaseMonitorAt(svcCtx *svc.ServiceContext, playerID uint64, readyAt time.Time) {
+	wake := svcCtx.LeaseCleanupWake
+	if wake == nil {
+		return
+	}
+	slot := redisslot.PlayerSlot(playerID)
+	time.AfterFunc(time.Until(readyAt), func() {
+		select {
+		case wake <- slot:
+		default:
+		}
+	})
 }
 
 func startLeaseClaimHeartbeat(
@@ -164,7 +337,7 @@ func handleLeaseExpiry(ctx context.Context, svcCtx *svc.ServiceContext, claim le
 	// claim 走 rearm,Lua 会因 `not current` 判成换代把 claim 静默丢弃,
 	// 清理就永久丢了。所以只在会话键仍然存在时才走 AFK 探测;读键失败
 	// (非 Nil)按"存在"处理 —— 宁可多探一次,不能误清月卡玩家。
-	if _, sessErr := svcCtx.RedisClient.Get(ctx, sessionKey(claim.playerID)).Result(); !errors.Is(sessErr, redis.Nil) {
+	if _, sessErr := svcCtx.PlayerRedis.Get(ctx, sessionKey(claim.playerID)).Result(); !errors.Is(sessErr, redis.Nil) {
 		switch afkState := afkPassState(ctx, svcCtx, claim.playerID); afkState {
 		case afkPassActive:
 			if err := rearmLeaseClaim(ctx, svcCtx, claim, afkPassLeaseTTLSeconds); err != nil {
@@ -363,7 +536,7 @@ func isOnlyHolderReleasePending(err error) bool {
 // resolveSceneManagerSceneID 从 SceneManager 已有的 Redis 权威位置键回退读取。
 // 这关闭了首次登录 session.SceneId 恒为 0 的现状缺口，同时不要求复制另一份位置。
 func resolveSceneManagerSceneID(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64) (uint64, error) {
-	data, err := svcCtx.RedisClient.Get(ctx, sceneManagerLocationKey(playerID)).Bytes()
+	data, err := svcCtx.PlayerRedis.Get(ctx, sceneManagerLocationKey(playerID)).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
@@ -380,7 +553,6 @@ func resolveSceneManagerSceneID(ctx context.Context, svcCtx *svc.ServiceContext,
 // --- AFK Pass (挂机月卡) ---
 
 const (
-	afkPassKeyPrefix       = "player:afk_pass:"
 	afkPassLeaseTTLSeconds = 300 // re-lease for 5 minutes when AFK pass is active
 	// afkPassProbeRetrySeconds 是月卡探测失败时把租约顺延的时长。
 	// 短到不至于让真掉线玩家的清理拖太久,长到能跨过一次 Redis 抖动。
@@ -399,13 +571,13 @@ const (
 )
 
 func afkPassKey(playerID uint64) string {
-	return fmt.Sprintf("%s%d", afkPassKeyPrefix, playerID)
+	return redisslot.AfkPassKey(playerID)
 }
 
 // afkPassState checks whether the player has a valid AFK pass in Redis.
-// Key: player:afk_pass:{player_id} -> expiry unix timestamp (set by purchase/activation flow).
+// Key: player:afk_pass:{<player_id>} -> expiry unix timestamp (set by purchase/activation flow).
 func afkPassState(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64) afkPassProbeResult {
-	val, err := svcCtx.RedisClient.Get(ctx, afkPassKey(playerID)).Result()
+	val, err := svcCtx.PlayerRedis.Get(ctx, afkPassKey(playerID)).Result()
 	if errors.Is(err, redis.Nil) {
 		return afkPassInactive // 确定没有月卡
 	}

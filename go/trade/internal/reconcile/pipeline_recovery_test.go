@@ -19,11 +19,22 @@ import (
 // 编译期:Pipeline 必须满足唤醒订阅的落点接口,svc 才能把它直接交给 assetopwake.New。
 var _ assetopwake.Waker = (*Pipeline)(nil)
 
-// fakeLedger 是假的已落盘账本读取器;本文件只关心它有没有被挂上,不会真被调用。
+// fakeLedger 是假的已提交账本读取器;本包只关心它有没有被挂上,不会真被调用。
 type fakeLedger struct{}
 
 func (fakeLedger) ReadPersistedLedger(context.Context, uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
 	return nil, errors.New("fakeLedger 不该被调用")
+}
+
+func (fakeLedger) ReadSQLCommittedLedger(context.Context, uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
+	return nil, errors.New("fakeLedger 不该被调用")
+}
+
+// persistedOnlyLedger 没实现 assetop.SQLCommitLedgerReader:装错读取器的样子。
+type persistedOnlyLedger struct{}
+
+func (persistedOnlyLedger) ReadPersistedLedger(context.Context, uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
+	return nil, errors.New("persistedOnlyLedger 不该被调用")
 }
 
 // fakeResolver 是假的位置解析器;同样只验证挂载。
@@ -78,7 +89,7 @@ func TestLoopConfigCarriesRecovery(t *testing.T) {
 // 每小时、对账 24 小时)必须被 assetop.NewLoop 接受 —— 尤其要与 trade 自己的 Lease(10s)、MaxBackoff(60s)
 // 常量相容(安全间隔 ≥ Lease、停放间隔 ≥ MaxBackoff)。不相容的表现是开了通道就起不来。
 func TestNewAcceptsDefaultRecovery(t *testing.T) {
-	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Recovery: defaultRecovery()})
+	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: fakeLedger{}, Recovery: defaultRecovery()})
 	if err != nil {
 		t.Fatalf("默认落地恢复参数被拒: %v", err)
 	}
@@ -103,21 +114,15 @@ func TestNewRejectsRecoveryBeyondAssetopBounds(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := defaultRecovery()
 			tc.mutate(&r)
-			if _, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Recovery: r}); err == nil {
+			if _, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: fakeLedger{}, Recovery: r}); err == nil {
 				t.Fatalf("越界的 Recovery %+v 必须被拒绝", r)
 			}
 		})
 	}
 }
 
-// TestNewAttachesLedgerOnlyWhenGiven:Ledger 是自动放弃的唯一证据来源;给了就必须挂上,没给就保持 nil
-// (assetop 据此 fail-closed、不运行放弃)。
-func TestNewAttachesLedgerOnlyWhenGiven(t *testing.T) {
-	bare := newTestPipeline(t, &fakeIDs{})
-	if bare.loop.Ledger != nil {
-		t.Errorf("没给 Ledger 时必须保持 nil,得到 Ledger=%v", bare.loop.Ledger)
-	}
-
+// TestNewAttachesLedger:Ledger 是在线 / 离线终结与自动放弃的唯一证据来源,给了就必须挂上。
+func TestNewAttachesLedger(t *testing.T) {
 	ledger := fakeLedger{}
 	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: ledger})
 	if err != nil {
@@ -131,30 +136,24 @@ func TestNewAttachesLedgerOnlyWhenGiven(t *testing.T) {
 	}
 }
 
-// TestNewRequireSQLCommitNeedsSQLLedger:资产 SQL 提交证据开关打开时,没有能读证据的 Ledger 必须拒绝构造
-// (否则每笔终结都静默停在 AwaitDurable,fence-inflight.md F6 (b));开关原样进循环。关闭时 Ledger 照旧可选。
-func TestNewRequireSQLCommitNeedsSQLLedger(t *testing.T) {
+// TestNewRequiresSQLLedger:没有能读已提交账本的 Ledger 必须拒绝构造
+// (否则每笔终结都静默停在 AwaitDurable,fence-inflight.md F6 (b))。
+func TestNewRequiresSQLLedger(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		ledger assetop.LedgerReader
 		ok     bool
 	}{
 		{"没挂 Ledger", nil, false},
-		{"只会读父键 blob", fakeLedger{}, false},
+		{"读不了已提交账本", persistedOnlyLedger{}, false},
 		{"DataServiceLedger", &assetop.DataServiceLedger{}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: tc.ledger, RequireSQLCommit: true})
+			_, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: tc.ledger})
 			if (err == nil) != tc.ok {
 				t.Fatalf("New err=%v,期望通过=%t", err, tc.ok)
 			}
-			if tc.ok && !p.loop.RequireSQLCommit() {
-				t.Fatal("Deps.RequireSQLCommit 必须原样进 assetop.LoopConfig")
-			}
 		})
-	}
-	if p := newTestPipeline(t, &fakeIDs{}); p.loop.RequireSQLCommit() {
-		t.Fatal("开关缺省必须关闭(HEAD 口径)")
 	}
 }
 
@@ -172,7 +171,7 @@ func TestMaintenanceEnabled(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Recovery: tc.r})
+			p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: fakeLedger{}, Recovery: tc.r})
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
@@ -244,7 +243,7 @@ func TestRunBlocksUntilCancel(t *testing.T) {
 // 所以新行的 last_send_ms 必须不小于 created_ms(这里取同一时刻)。写 0 会让这一行在第一次被领取之前没有任何安全依据。
 func TestNewEscrowRecordWritesLastSendMs(t *testing.T) {
 	fixed := time.UnixMilli(1_760_000_000_000)
-	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Now: func() time.Time { return fixed }})
+	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: fakeLedger{}, Now: func() time.Time { return fixed }})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

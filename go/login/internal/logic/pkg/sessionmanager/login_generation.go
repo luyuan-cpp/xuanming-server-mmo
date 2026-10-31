@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"shared/redisslot"
 )
 
 // 登录代次(login_generation)的铸造。规格:docs/design/scene-enter-session-fence.md §3。
@@ -29,10 +30,9 @@ import (
 // (命令 topic 保留 1h、gate 补发预算 20s)与合理的时钟偏差;过期后重建不回退,见包注释。
 const LoginGenerationTTL = 7 * 24 * time.Hour
 
-// LoginGenerationKey 返回 player_id 的铸造键。与 player_locker、player:session 同在 login 的
-// Node.RedisClient(核心实例,shared-redis-split-by-purpose.md §2.2)。
+// LoginGenerationKey 返回 player_id 的铸造键。与 player_locker 同在玩家域(login 的 PlayerRedis)。
 func LoginGenerationKey(playerID uint64) string {
-	return "player:" + strconv.FormatUint(playerID, 10) + ":login_generation"
+	return redisslot.LoginGenerationKey(playerID)
 }
 
 // mintLoginGenerationScript 与设计文档 §3.2 逐字一致,改动须同步文档。
@@ -58,7 +58,7 @@ return s
 // 被 scene 上残留的身份判成陈旧。
 //
 // 返回的错误一律视为登录链失败;成功时返回值恒非 0 且严格大于 sessionFloor。
-func MintLoginGeneration(ctx context.Context, rdb *redis.Client, playerID uint64, sessionFloor uint64, now time.Time) (uint64, error) {
+func MintLoginGeneration(ctx context.Context, rdb redis.UniversalClient, playerID uint64, sessionFloor uint64, now time.Time) (uint64, error) {
 	if rdb == nil {
 		return 0, fmt.Errorf("mint login generation for player %d: redis client not wired", playerID)
 	}

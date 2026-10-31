@@ -23,9 +23,12 @@ Test-Case 'Chat渲染必须携原会话与同域目录，账号值不进ConfigMa
     $stop=$source.IndexOf('"client-rpc-router" {',$start)
     Assert-True ($start-ge 0-and $stop-gt $start) '能够定位正式Chat渲染分支'
     $chat=$source.Substring($start,$stop-$start)
-    foreach($pattern in @('DSNEnv: \$\{chatSqlDsnEnv\}','Backend: \$\{DatabaseBackend\}','MaxOpenConns: \$\{chatSqlMaxOpen\}','AccountRoleSchema: \$\{GlobalDbName\}','GlobalLoginSessions: true','PasswordEnv: LOGIN_REDIS_PASSWORD','PoolSize: \$\{chatLoginPool\}',"go/login/etc/login.yaml' -KeyPath 'Node.RedisClient.DB")) {
+    foreach($pattern in @('DSNEnv: \$\{chatSqlDsnEnv\}','Backend: \$\{DatabaseBackend\}','MaxOpenConns: \$\{chatSqlMaxOpen\}','AccountRoleSchema: \$\{GlobalDbName\}','GlobalLoginSessions: true','\$\{loginRedisBlock\}')) {
         Assert-Match $chat $pattern '不能遗漏正式SQL或原登录态字段'
     }
+    # 登录态段由公共准备段渲染(New-PlayerRedisConfigYaml):不建玩家域集群时指向 login 的实例与 DB,口令只写环境变量名。
+    Assert-Match $source "'chat' \{ \`$loginRedisArgs\.StandalonePasswordEnv = 'LOGIN_REDIS_PASSWORD' \}" '单实例时口令走环境变量'
+    Assert-Match $source "loginRedisArgs\.StandaloneDb = \[int\]\(Get-AuthoritativeScalar -RelativePath 'go/login/etc/login\.yaml' -KeyPath 'Node\.RedisClient\.DB'\)" '库号与 login 相同'
     Assert-NotMatch $chat '(?m)^ChatRedis:|^\s+(?:Pass|Password):' '旧缓存不能恢复成聊天权威，也不在兼容配置内写密码值'
     $config=Join-Path $chatRepo 'go/chat/etc/chat.yaml'
     Assert-Equal 'CHAT_AUTHORITY_DSN' (Get-YamlScalar -Path $config -KeyPath 'DSNEnv').Value '镜像正规环境名'

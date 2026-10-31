@@ -1,47 +1,117 @@
 package team
 
-// 队伍补位匹配的组队域测试(设计文档 docs/design/team-backfill-matching.md §4.1 / §4.3 / §4.5)。
-//
-// 票据域用 fakeBattlePort 的补位部分(内存里的「谁持有哪支队伍的补位票」);真实实现
-// logic.TeamBattleStarter 的入队 / 撤单 / 成组用例在 internal/logic/party_test.go。
-// 队伍记录走真 Store + miniredis。沿用 battleHarness:asyncFn 同步、推送 / scene 桩。测试之间不并行。
+// 整队开战与排队里不经存储的部分:成员预检、视图匹配态装饰及其熔断、能力位、模式归一。
+// 票据域用假端口 fakeBattlePort;经存储的流程(launch 原件、入队、撤单)在 sql_store_integration_test.go(真 TiDB)。
 
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
+	"match/internal/config"
 	"match/internal/constants"
 	"match/internal/playercontract"
 
+	matchpb "proto/match"
 	plpb "proto/player_locator"
+	smpb "proto/scene_manager"
 	teampb "proto/team"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
 
-func (b *battleHarness) startTarget(caller uint64, target uint32) *teampb.TeamResponse {
-	b.t.Helper()
-	return b.ok(b.server.StartTeamMatch(asPlayer(caller), &teampb.StartTeamMatchRequest{
-		BattleConfigId: testBattleConfig, ExpectedTeamId: b.teamId, TargetTeamSize: target,
-	}))
+const (
+	testBattleConfig    uint32 = 1
+	fakePartyQueuedAtMs uint64 = 1_700_000_123_000
+)
+
+type fakePartyTicket struct {
+	teamId     uint64
+	state      uint32
+	targetSize uint32
+	configId   uint32
+	queuedAtMs uint64
+	mode       uint32
 }
 
-func (b *battleHarness) myTeam(playerId uint64) *teampb.TeamView {
-	b.t.Helper()
-	resp := b.ok(b.server.GetMyTeam(asPlayer(playerId), &teampb.GetMyTeamRequest{}))
-	requireCode(b.t, 0, resp)
-	return resp.GetTeam()
+// fakeBattlePort 假票据域端口:一份内存里的「谁持有哪支队伍的排队票」,并记录读票次数。
+type fakeBattlePort struct {
+	mu         sync.Mutex
+	blocked    map[uint64]bool
+	party      map[uint64]fakePartyTicket // player_id → 排队票
+	stateErr   error                      // 非 nil:PartyQueueState 回 err
+	modeErr    error                      // 非 nil:PartyQueueMode 回 err
+	stateCalls int                        // PartyQueueState 被调用的次数
+	stateDelay time.Duration              // >0:PartyQueueState 先睡这么久再返回(模拟票据库慢,不看 ctx)
+}
+
+var _ BattleStarter = (*fakeBattlePort)(nil)
+
+func (f *fakeBattlePort) TeamSizeFor(_, _ uint32) uint32 { return Capacity }
+
+func (f *fakeBattlePort) MatchLockTTLSeconds(int) int { return 83 }
+
+func (f *fakeBattlePort) TicketBlocked(_ context.Context, playerId uint64) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.blocked[playerId], nil
+}
+
+func (f *fakeBattlePort) PartyQueueState(_ context.Context, playerId, teamId uint64) (uint32, uint32, uint32, uint64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stateCalls++
+	if f.stateDelay > 0 {
+		time.Sleep(f.stateDelay)
+	}
+	if f.stateErr != nil {
+		return constants.PartyQueueNone, 0, 0, 0, f.stateErr
+	}
+	ticket, ok := f.party[playerId]
+	if !ok || ticket.teamId != teamId {
+		return constants.PartyQueueNone, 0, 0, 0, nil
+	}
+	if ticket.state != constants.PartyQueueQueued {
+		return ticket.state, 0, 0, 0, nil
+	}
+	return ticket.state, ticket.targetSize, ticket.configId, ticket.queuedAtMs, nil
+}
+
+func (f *fakeBattlePort) PartyQueueMode(_ context.Context, playerId, _ uint64) (uint32, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.modeErr != nil {
+		return 0, f.modeErr
+	}
+	return f.party[playerId].mode, nil
+}
+
+func (f *fakeBattlePort) ReserveSQLTeamMatch(context.Context, *teampb.TeamLaunchRecord) (*matchpb.MatchFormationRecord, error) {
+	return nil, errors.New("用例不应走到成局")
+}
+
+func (f *fakeBattlePort) stateReads() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.stateCalls
+}
+
+func queuedTicket(mode matchpb.MatchMode, target uint32) fakePartyTicket {
+	return fakePartyTicket{
+		teamId: ruleTid, state: constants.PartyQueueQueued, targetSize: target, configId: testBattleConfig,
+		queuedAtMs: fakePartyQueuedAtMs, mode: uint32(mode),
+	}
 }
 
 func requireQueuedView(t *testing.T, view *teampb.TeamView, target uint32) {
 	t.Helper()
 	require.Equal(t, teampb.TeamMatchState_TEAM_MATCH_STATE_QUEUED, view.GetMatchState())
 	require.Equal(t, target, view.GetMatchTargetSize())
-	require.Equal(t, testBattleConfig, view.GetMatchBattleConfigId())
 	require.Equal(t, fakePartyQueuedAtMs, view.GetMatchQueuedAtMs())
+	require.Equal(t, testBattleConfig, view.GetMatchBattleConfigId())
 }
 
 func requireIdleView(t *testing.T, view *teampb.TeamView) {
@@ -52,549 +122,221 @@ func requireIdleView(t *testing.T, view *teampb.TeamView) {
 	require.Zero(t, view.GetMatchBattleConfigId())
 }
 
-// 目标人数大于当前人数:整队进队列。不加开战锁、不建 matched 票、不跑 gather、队伍记录不写;
-// 回包与推给其余队员的视图都是 QUEUED。
-func TestStartTeamMatchBackfillEnqueuesParty(t *testing.T) {
-	b := newBattleHarness(t, 101, 102)
-	ver0 := b.versionOf(b.teamId)
-
-	resp := b.startTarget(101, 4)
-
-	requireCode(t, 0, resp)
-	requireQueuedView(t, resp.GetTeam(), 4)
-	require.Equal(t, ver0, resp.GetTeam().GetVersion(), "补位不写队伍记录,version 不变")
-	require.Equal(t, []partyEnqueue{{configId: testBattleConfig, targetSize: 4, teamId: b.teamId, roster: []uint64{101, 102}}},
-		b.port.enqueues, "名单:队长在前再按 join_seq")
-	require.Empty(t, b.port.ticketCalls, "不走直接开战的建票")
-	require.Empty(t, b.port.gathers)
-	rec := loadRecord(t, b.mr, b.teamId)
-	require.Empty(t, rec.GetMatchLockToken(), "补位不加开战锁")
-	require.Equal(t, ver0, b.versionOf(b.teamId))
-
-	pushes := b.takePushes()
-	queued := snapshotsByReason(t, pushes, teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_QUEUED)
-	require.ElementsMatch(t, []uint64{102}, pushedTo(queued), "调用者不收推送(回包里已有)")
-	require.Equal(t, uint64(101), queued[102].GetActorId())
-	requireQueuedView(t, queued[102].GetTeam(), 4)
-	require.Len(t, pushes, 1)
-
-	// 断线重连后靠 GetMyTeam 恢复「匹配中」。
-	requireQueuedView(t, b.myTeam(102), 4)
-	requireQueuedView(t, b.myTeam(101), 4)
+// decorated 为 viewer 现算一份视图的匹配态。
+func (h *serviceHarness) decorated(viewer uint64) *teampb.TeamView {
+	view := &teampb.TeamView{TeamId: ruleTid}
+	h.service.decorateQueueState(context.Background(), viewer, view)
+	return view
 }
 
-// 目标人数规则:0 或等于当前人数 = 直接开战(原路径);小于当前人数 / 超过副本上限 = 人数不符;
-// 关了开关 = 未开放(直接开战不受影响)。
-func TestStartTeamMatchTargetSizeRules(t *testing.T) {
-	t.Run("等于当前人数走直接开战", func(t *testing.T) {
-		b := newBattleHarness(t, 101, 102, 103)
-		resp := b.startTarget(101, 3)
-		requireCode(t, 0, resp)
-		require.Equal(t, teampb.TeamMatchState_TEAM_MATCH_STATE_STARTING, resp.GetTeam().GetMatchState())
-		require.Len(t, b.port.ticketCalls, 1)
-		require.Empty(t, b.port.enqueues)
-	})
-	t.Run("小于当前人数", func(t *testing.T) {
-		b := newBattleHarness(t, 101, 102, 103)
-		requireTip(t, b.startTarget(101, 2), ErrSizeExceeded, 0)
-		require.Empty(t, b.port.enqueues)
-		require.Empty(t, b.port.ticketCalls)
-	})
-	t.Run("超过副本上限", func(t *testing.T) {
-		b := newBattleHarness(t, 101, 102)
-		b.port.sizes[testBattleConfig] = 3
-		requireTip(t, b.startTarget(101, 4), ErrSizeExceeded, 0)
-		require.Empty(t, b.port.enqueues)
-	})
-	t.Run("非队长", func(t *testing.T) {
-		b := newBattleHarness(t, 101, 102)
-		requireTip(t, b.startTarget(102, 4), ErrNotLeader, 0)
-		require.Empty(t, b.port.enqueues)
-	})
-	t.Run("开关关闭", func(t *testing.T) {
-		b := newBattleHarness(t, 101, 102)
-		b.svcCtx.Config.Team.FillQueueDisabled = true
-		requireTip(t, b.startTarget(101, 4), ErrDungeonNotOpen, 0)
-		require.Empty(t, b.port.enqueues)
-		// 直接开战不受开关影响。
-		requireCode(t, 0, b.startTarget(101, 0))
-		require.Len(t, b.port.ticketCalls, 1)
-	})
-	t.Run("单人队伍也可以补位", func(t *testing.T) {
-		b := newBattleHarness(t, 101)
-		resp := b.startTarget(101, 3)
-		requireCode(t, 0, resp)
-		requireQueuedView(t, resp.GetTeam(), 3)
-		require.Equal(t, []uint64{101}, b.port.enqueues[0].roster)
-	})
-}
+// 视图里的匹配态按接收者自己的票据现算。
+func TestViewQueueStateFollowsViewerTicket(t *testing.T) {
+	h := newServiceHarness(t)
+	requireIdleView(t, h.decorated(101))
 
-// 已经在补位时再点开战(不管带不带目标人数):按「进行中」回 TeamInMatch + 当前视图,不重复入队。
-func TestStartTeamMatchWhileQueuedIsInMatch(t *testing.T) {
-	b := newBattleHarness(t, 101, 102)
-	requireCode(t, 0, b.startTarget(101, 4))
-	b.takePushes()
-
-	for _, target := range []uint32{4, 5, 0} {
-		resp := b.startTarget(101, target)
-		requireTip(t, resp, ErrInMatch, 0)
-		requireQueuedView(t, resp.GetTeam(), 4)
+	other := queuedTicket(matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 4)
+	other.teamId = ruleTid + 1
+	// 只有 101、102 持有本队的票;103 的票属于别的队伍,与本队无关。
+	h.port.party = map[uint64]fakePartyTicket{
+		101: queuedTicket(matchpb.MatchMode_MATCH_MODE_PVP_TEAM, 5),
+		102: {teamId: ruleTid, state: constants.PartyQueueMatched, mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM)},
+		103: other,
 	}
-	require.Len(t, b.port.enqueues, 1)
-	require.Empty(t, b.port.ticketCalls)
-	require.Empty(t, b.takePushes())
+	queued := h.decorated(101)
+	requireQueuedView(t, queued, 5)
+	require.Equal(t, matchpb.MatchMode_MATCH_MODE_PVP_TEAM, queued.GetMatchMode(), "模式来自本人的票据")
+	matched := h.decorated(102)
+	require.Equal(t, teampb.TeamMatchState_TEAM_MATCH_STATE_STARTING, matched.GetMatchState(), "已成局:集合中")
+	require.Equal(t, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, matched.GetMatchMode())
+	require.Zero(t, matched.GetMatchTargetSize())
+	requireIdleView(t, h.decorated(103))
 
-	// 排队态读不到:不放行第二次入队,原样回预检的拒绝原因(票据项拦下的是队长自己)。
-	b.port.stateErr = errors.New("match redis down")
-	requireTip(t, b.startTarget(101, 4), ErrMemberNotReady, 101)
-	require.Len(t, b.port.enqueues, 1)
+	// 开战锁已经让视图是 STARTING 时不读票、不动。
+	starting := &teampb.TeamView{TeamId: ruleTid, MatchState: teampb.TeamMatchState_TEAM_MATCH_STATE_STARTING}
+	before := h.port.stateReads()
+	h.service.decorateQueueState(context.Background(), 101, starting)
+	require.Equal(t, before, h.port.stateReads())
+	require.Equal(t, teampb.TeamMatchState_TEAM_MATCH_STATE_STARTING, starting.GetMatchState())
+
+	// 无队伍的空视图不读票。
+	h.service.decorateQueueState(context.Background(), 101, &teampb.TeamView{})
+	require.Equal(t, before, h.port.stateReads())
+
+	// 读票失败:视图照常下发,按没在排处理。
+	h.port.stateErr = errors.New("ticket store down")
+	requireIdleView(t, h.decorated(101))
 }
 
-// 只有队员(不是队长)还留着本队的补位票 —— 例如队长那张已被取消路径删掉、撤到队员时出了错:
-// 预检照常在该队员的票据项上拦下,回的是「该队员未准备好」,不是「进行中」。
-// (真实实现里这一步会先尝试自愈半撤的补位票,见 logic.healPartyTicket;假端口不模拟自愈。)
-func TestStartTeamMatchBlockedByMemberPartyTicket(t *testing.T) {
-	b := newBattleHarness(t, 101, 102)
-	b.port.party = map[uint64]fakePartyTicket{
-		102: {teamId: b.teamId, state: constants.PartyQueueQueued, targetSize: 4, configId: testBattleConfig, queuedAtMs: fakePartyQueuedAtMs},
-	}
-	requireTip(t, b.startTarget(101, 4), ErrMemberNotReady, 102)
-	require.Empty(t, b.port.enqueues)
-}
-
-// 入队失败:有队员已有票据 → MemberNotReady + 该成员;其它故障 → Internal。都不推送。
-func TestBackfillEnqueueFailures(t *testing.T) {
-	b := newBattleHarness(t, 101, 102)
-	b.port.enqueueFail = 102
-	requireTip(t, b.startTarget(101, 4), ErrMemberNotReady, 102)
-	requireIdleView(t, b.myTeam(101))
-
-	b.port.enqueueFail = 0
-	b.port.enqueueErr = errors.New("lua timeout")
-	requireTip(t, b.startTarget(101, 4), ErrInternal, 0)
-	require.Empty(t, b.takePushes())
-	require.Empty(t, b.port.party)
-
-	// 预检不过(队员离线)根本不会走到入队。
-	b.port.enqueueErr = nil
-	b.mr.Del(playercontract.SessionKey(102))
-	requireTip(t, b.startTarget(101, 4), ErrMemberOffline, 102)
-	require.Len(t, b.port.enqueues, 2)
-}
-
-// 预检之后、入队期间名单变了:入队后的复核发现成员集合对不上 → 撤单,回 StateChanged,不推「开始匹配」。
-func TestBackfillWithdrawnWhenRosterChangesDuringEnqueue(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	b.port.onEnqueue = func(partyEnqueue) {
-		requireCode(t, 0, b.ok(b.server.LeaveTeam(asPlayer(103), &teampb.LeaveTeamRequest{ExpectedTeamId: b.teamId})))
-	}
-
-	resp := b.startTarget(101, 5)
-
-	requireTip(t, resp, ErrStateChanged, 0)
-	require.Empty(t, b.port.party, "这一单必须撤干净")
-	queued := snapshotsByReason(t, b.takePushes(), teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_QUEUED)
-	require.Empty(t, queued)
-	requireIdleView(t, b.myTeam(101))
-}
-
-// 名单一变,在排的补位单整单撤出;队长转让不改成员集合,不撤。
-func TestRosterChangeCancelsQueuedParty(t *testing.T) {
-	cases := []struct {
-		name   string
-		change func(b *battleHarness)
-		cancel bool
-		// remaining 操作之后仍在队里的原成员(用来核对视图)。
-		remaining []uint64
-	}{
-		{name: "队员离队", cancel: true, remaining: []uint64{101, 102}, change: func(b *battleHarness) {
-			requireCode(b.t, 0, b.ok(b.server.LeaveTeam(asPlayer(103), &teampb.LeaveTeamRequest{ExpectedTeamId: b.teamId})))
-		}},
-		{name: "队长踢人", cancel: true, remaining: []uint64{101, 103}, change: func(b *battleHarness) {
-			requireCode(b.t, 0, b.ok(b.server.KickMember(asPlayer(101),
-				&teampb.KickMemberRequest{TargetPlayerId: 102, ExpectedTeamId: b.teamId})))
-		}},
-		{name: "新人加入", cancel: true, remaining: []uint64{101, 102, 103}, change: func(b *battleHarness) {
-			b.addPlayers(testZone, 104)
-			b.join(101, b.teamId, 104)
-		}},
-		{name: "解散", cancel: true, change: func(b *battleHarness) {
-			requireCode(b.t, 0, b.ok(b.server.DisbandTeam(asPlayer(101), &teampb.DisbandTeamRequest{ExpectedTeamId: b.teamId})))
-		}},
-		{name: "队长转让", cancel: false, remaining: []uint64{101, 102, 103}, change: func(b *battleHarness) {
-			requireCode(b.t, 0, b.ok(b.server.TransferLeader(asPlayer(101),
-				&teampb.TransferLeaderRequest{TargetPlayerId: 102, ExpectedTeamId: b.teamId})))
-		}},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			b := newBattleHarness(t, 101, 102, 103)
-			requireCode(t, 0, b.startTarget(101, 5))
-			b.takePushes()
-
-			c.change(b)
-
-			if !c.cancel {
-				for _, call := range b.port.partyCancels {
-					require.Empty(t, call.canceled)
-				}
-				require.Len(t, b.port.party, 3, "补位票还在")
-				for _, pid := range c.remaining {
-					requireQueuedView(t, b.myTeam(pid), 5)
-				}
-				return
-			}
-			require.Empty(t, b.port.party, "整单撤出")
-			var hit *partyCancel
-			for i := range b.port.partyCancels {
-				if len(b.port.partyCancels[i].canceled) > 0 {
-					require.Nil(t, hit, "只应撤一次")
-					hit = &b.port.partyCancels[i]
-				}
-			}
-			require.NotNil(t, hit)
-			require.Equal(t, b.teamId, hit.teamId)
-			require.Equal(t, constants.PartyEndRosterChanged, hit.reason)
-			require.ElementsMatch(t, []uint64{101, 102, 103}, hit.canceled)
-			for _, pid := range c.remaining {
-				requireIdleView(t, b.myTeam(pid))
-			}
-		})
-	}
-}
-
-// 改了成员集合的提交,回包与推送都不装饰成「匹配中」—— 即使主动撤单失败、票据一时还在。
-// 之后的普通读取如实反映票据(仍是 QUEUED),等弹组前复核 / 自愈把这一单撤掉。
-func TestRosterChangeViewsAreNotDecoratedEvenIfCancelFails(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	requireCode(t, 0, b.startTarget(101, 5))
-	b.takePushes()
-	b.port.cancelErr = errors.New("match redis down")
-
-	resp := b.ok(b.server.KickMember(asPlayer(101), &teampb.KickMemberRequest{TargetPlayerId: 103, ExpectedTeamId: b.teamId}))
-
-	requireCode(t, 0, resp)
-	requireIdleView(t, resp.GetTeam())
-	kicked := snapshotsByReason(t, b.takePushes(), teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_KICKED)
-	require.Contains(t, kicked, uint64(102))
-	requireIdleView(t, kicked[102].GetTeam())
-	require.Len(t, b.port.party, 3, "撤单失败:票据还在")
-	requireQueuedView(t, b.myTeam(102), 5)
-}
-
-// 入队之后复读成员失败:复核不了就不留单(fail-closed)。
-func TestBackfillWithdrawnWhenMembersCannotBeReReadAfterEnqueue(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	b.port.onEnqueue = func(partyEnqueue) { b.mr.SetError("ERR injected") }
-	t.Cleanup(func() { b.mr.SetError("") })
-
-	resp := b.startTarget(101, 5)
-	b.mr.SetError("")
-
-	requireTip(t, resp, ErrInternal, 0)
-	require.Empty(t, b.port.party, "这一单必须撤干净")
-	queued := snapshotsByReason(t, b.takePushes(), teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_QUEUED)
-	require.Empty(t, queued)
-}
-
-// 入队期间某名成员的索引改指别的队伍(索引丢失后被拉进别队,本队记录里还挂着他):与 CheckParty 同口径,撤单。
-func TestBackfillWithdrawnWhenMemberIndexPointsElsewhere(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	b.port.onEnqueue = func(partyEnqueue) {
-		b.mr.HSet(playerIndexKey(103), indexFieldTid, u64s(b.teamId+1))
-	}
-
-	resp := b.startTarget(101, 5)
-
-	requireTip(t, resp, ErrStateChanged, 0)
-	require.Empty(t, b.port.party, "这一单必须撤干净")
-}
-
-// CheckParty:名单里有人的索引不指向本队 → 名单变化(记录里还挂着他,但他已经不算本队的人)。
-func TestCheckPartyRejectsMemberWhoseIndexPointsElsewhere(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	b.mr.HSet(playerIndexKey(103), indexFieldTid, u64s(b.teamId+1))
-
-	reason, _, err := b.service.CheckParty(context.Background(), b.teamId, []uint64{101, 102, 103})
-
-	require.NoError(t, err)
-	require.Equal(t, constants.PartyEndRosterChanged, reason)
-}
-
-// 能力位 match_fill_supported:有队伍的视图都要标(回包、推送、名单变化的提交都一样);关了开关就是 false;
-// 无队伍的空视图不标。客户端只在它为 true 时给出目标人数选项。
-func TestViewsCarryFillSupportedFlag(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	require.True(t, b.myTeam(101).GetMatchFillSupported())
-	require.True(t, b.myTeam(103).GetMatchFillSupported())
-
-	// 名单变化的提交(不做匹配态装饰)同样带能力位:回包与推给其他人的视图。
-	resp := b.ok(b.server.KickMember(asPlayer(101), &teampb.KickMemberRequest{TargetPlayerId: 103, ExpectedTeamId: b.teamId}))
-	requireCode(t, 0, resp)
-	require.True(t, resp.GetTeam().GetMatchFillSupported())
-	kicked := snapshotsByReason(t, b.takePushes(), teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_KICKED)
-	require.True(t, kicked[102].GetTeam().GetMatchFillSupported())
-	require.Zero(t, kicked[103].GetTeam().GetTeamId(), "被踢者收到的是空视图")
-	require.False(t, kicked[103].GetTeam().GetMatchFillSupported(), "无队伍的空视图不标")
-
-	// 入队成功的回包与推送。
-	queued := b.startTarget(101, 4)
-	requireCode(t, 0, queued)
-	require.True(t, queued.GetTeam().GetMatchFillSupported())
-	pushed := snapshotsByReason(t, b.takePushes(), teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_QUEUED)
-	require.True(t, pushed[102].GetTeam().GetMatchFillSupported())
-
-	// 关掉开关:视图如实反映,客户端不再给出选项。
-	b.svcCtx.Config.Team.FillQueueDisabled = true
-	require.False(t, b.myTeam(101).GetMatchFillSupported())
-	requireQueuedView(t, b.myTeam(101), 4) // 已在排的单不受开关影响,照常显示
+// 读到票却读不到模式:不把模式未知的状态发给客户端,视图按没在排下发。
+func TestViewQueueStateSkipsWhenModeUnreadable(t *testing.T) {
+	h := newServiceHarness(t)
+	h.port.party = map[uint64]fakePartyTicket{101: queuedTicket(matchpb.MatchMode_MATCH_MODE_PVP_TEAM, 5)}
+	h.port.modeErr = errors.New("ticket store down")
+	requireIdleView(t, h.decorated(101))
 }
 
 // 视图装饰读票的熔断:读票出错之后的一小段时间里不再读,一律按没在排下发 ——
 // 一批推送逐个接收者各读一次,不熔断的话票据库一慢,与匹配无关的队伍推送也会被拖到超时。
 func TestQueueStateReadBreakerSkipsFurtherReads(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	requireCode(t, 0, b.startTarget(101, 5))
-	b.takePushes()
-	requireQueuedView(t, b.myTeam(102), 5)
+	h := newServiceHarness(t)
+	h.port.party = map[uint64]fakePartyTicket{
+		101: queuedTicket(matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 5),
+		102: queuedTicket(matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 5),
+	}
+	requireQueuedView(t, h.decorated(102), 5)
 
-	b.port.stateErr = errors.New("match redis down")
-	requireIdleView(t, b.myTeam(102)) // 这一次读失败,熔断开始
-	before := b.port.stateReads()
-	b.port.stateErr = nil
-	requireIdleView(t, b.myTeam(102)) // 票据库已恢复,但熔断期内不读:仍按没在排
-	requireIdleView(t, b.myTeam(101))
-	require.Equal(t, before, b.port.stateReads(), "熔断期内不再读票")
-	require.True(t, b.myTeam(101).GetMatchFillSupported(), "能力位不受熔断影响")
+	h.port.stateErr = errors.New("ticket store down")
+	requireIdleView(t, h.decorated(102)) // 这一次读失败,熔断开始
+	before := h.port.stateReads()
+	h.port.stateErr = nil
+	requireIdleView(t, h.decorated(102)) // 票据库已恢复,但熔断期内不读:仍按没在排
+	requireIdleView(t, h.decorated(101))
+	require.Equal(t, before, h.port.stateReads(), "熔断期内不再读票")
+	require.True(t, h.decorated(101).GetMatchFillSupported(), "能力位不受熔断影响")
 
 	// 熔断到期后恢复。
-	b.service.queueStateBreakerUntil.Store(0)
-	requireQueuedView(t, b.myTeam(102), 5)
+	h.service.queueStateBreakerUntil.Store(0)
+	requireQueuedView(t, h.decorated(102), 5)
 }
 
 // 熔断只认票据库自己的问题:调用方的时间预算已经用完时不读、也不熔断,之后的正常读取照常。
 func TestQueueStateBreakerIgnoresCallerDeadline(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	requireCode(t, 0, b.startTarget(101, 5))
-	b.takePushes()
+	h := newServiceHarness(t)
+	h.port.party = map[uint64]fakePartyTicket{102: queuedTicket(matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 5)}
 
 	expired, cancel := context.WithCancel(context.Background())
 	cancel()
-	b.port.stateErr = context.Canceled // 即使读了也只会得到这个错误
-	view := &teampb.TeamView{TeamId: b.teamId}
-	before := b.port.stateReads()
-	b.service.decorateQueueState(expired, 102, view)
+	h.port.stateErr = context.Canceled // 即使读了也只会得到这个错误
+	view := &teampb.TeamView{TeamId: ruleTid}
+	before := h.port.stateReads()
+	h.service.decorateQueueState(expired, 102, view)
 
 	require.Equal(t, teampb.TeamMatchState_TEAM_MATCH_STATE_IDLE, view.GetMatchState())
-	require.Equal(t, before, b.port.stateReads(), "预算已用完:不读票")
-	require.Zero(t, b.service.queueStateBreakerUntil.Load(), "不算票据库故障")
-	b.port.stateErr = nil
-	requireQueuedView(t, b.myTeam(102), 5)
+	require.Equal(t, before, h.port.stateReads(), "预算已用完:不读票")
+	require.Zero(t, h.service.queueStateBreakerUntil.Load(), "不算票据库故障")
+	h.port.stateErr = nil
+	requireQueuedView(t, h.decorated(102), 5)
 }
 
 // 读后的判断按这一次读自己的耗时:读得不慢、只是调用方预算到期 → 不熔断;
 // 读得慢(票据库慢到把调用方拖到期)→ 熔断,这正是熔断要防的情形。
 func TestQueueStateBreakerJudgesTheReadItself(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	requireCode(t, 0, b.startTarget(101, 5))
-	b.takePushes()
+	h := newServiceHarness(t)
+	h.port.party = map[uint64]fakePartyTicket{102: queuedTicket(matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 5)}
 
 	fastCtx, cancelFast := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancelFast()
-	b.port.stateDelay = 40 * time.Millisecond
-	b.port.stateErr = context.DeadlineExceeded
-	b.service.decorateQueueState(fastCtx, 102, &teampb.TeamView{TeamId: b.teamId})
-	require.Zero(t, b.service.queueStateBreakerUntil.Load(), "读得不慢,只是调用方预算到期:不熔断")
+	h.port.stateDelay = 40 * time.Millisecond
+	h.port.stateErr = context.DeadlineExceeded
+	h.service.decorateQueueState(fastCtx, 102, &teampb.TeamView{TeamId: ruleTid})
+	require.Zero(t, h.service.queueStateBreakerUntil.Load(), "读得不慢,只是调用方预算到期:不熔断")
 
 	slowCtx, cancelSlow := context.WithTimeout(context.Background(), queueStateSlowThreshold/3)
 	defer cancelSlow()
-	b.port.stateDelay = 2 * queueStateSlowThreshold
-	view := &teampb.TeamView{TeamId: b.teamId}
-	b.service.decorateQueueState(slowCtx, 102, view)
+	h.port.stateDelay = 2 * queueStateSlowThreshold
+	view := &teampb.TeamView{TeamId: ruleTid}
+	h.service.decorateQueueState(slowCtx, 102, view)
 	require.Equal(t, teampb.TeamMatchState_TEAM_MATCH_STATE_IDLE, view.GetMatchState())
-	require.NotZero(t, b.service.queueStateBreakerUntil.Load(), "读得慢:熔断,哪怕调用方预算因此到期")
+	require.NotZero(t, h.service.queueStateBreakerUntil.Load(), "读得慢:熔断,哪怕调用方预算因此到期")
 
-	b.port.stateDelay = 0
-	b.port.stateErr = nil
-	b.service.queueStateBreakerUntil.Store(0)
-	requireQueuedView(t, b.myTeam(102), 5)
+	h.port.stateDelay = 0
+	h.port.stateErr = nil
+	h.service.queueStateBreakerUntil.Store(0)
+	requireQueuedView(t, h.decorated(102), 5)
 }
 
-// 名单变化的撤单读不到票据库时,不影响这次提交自己的推送。
-func TestRosterChangePushesSurviveCancelFailure(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	requireCode(t, 0, b.startTarget(101, 5))
-	b.takePushes()
-	b.port.cancelErr = errors.New("match redis down")
+// 能力位 match_fill_supported:有队伍的视图都要标;关了开关就是 false;无队伍的空视图不标。
+// 客户端只在它为 true 时给出目标人数选项。PVP 能力位同样由服务端声明。
+func TestViewsCarryFillSupportedFlag(t *testing.T) {
+	h := newServiceHarness(t)
 
-	requireCode(t, 0, b.ok(b.server.LeaveTeam(asPlayer(103), &teampb.LeaveTeamRequest{ExpectedTeamId: b.teamId})))
+	view := &teampb.TeamView{TeamId: ruleTid}
+	h.service.markFillSupported(view)
+	require.True(t, view.GetMatchFillSupported())
+	require.True(t, view.GetPvpMatchSupported())
 
-	left := snapshotsByReason(t, b.takePushes(), teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_LEFT)
-	require.Contains(t, left, uint64(101))
-	require.Contains(t, left, uint64(102))
-	require.Len(t, left[101].GetTeam().GetMembers(), 2)
-	require.Len(t, b.port.party, 3, "撤单失败:票据还在,等弹组前复核 / 自愈收尾")
+	empty := &teampb.TeamView{}
+	h.service.markFillSupported(empty)
+	require.False(t, empty.GetMatchFillSupported(), "无队伍的空视图不标")
+	require.False(t, empty.GetPvpMatchSupported())
+	h.service.markFillSupported(nil)
+
+	h.svcCtx.Config = config.Config{Team: config.TeamConf{FillQueueDisabled: true}}
+	view = &teampb.TeamView{TeamId: ruleTid}
+	h.service.markFillSupported(view)
+	require.False(t, view.GetMatchFillSupported(), "关掉开关:视图如实反映,客户端不再给出选项")
+	require.True(t, view.GetPvpMatchSupported(), "开关只管 PVE 补位,不关闭独立声明能力的真人 PVP")
 }
 
-// 视图里的匹配态按接收者自己的票据现算。
-func TestViewQueueStateFollowsViewerTicket(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	requireIdleView(t, b.myTeam(101))
+// rosterChanged:有人加入或移出才算,只改队长或开战状态不算。
+func TestRosterChanged(t *testing.T) {
+	require.False(t, rosterChanged(nil))
+	require.False(t, rosterChanged(&CommitResult{Decision: Decision{Kept: []uint64{1, 2}}}))
+	require.True(t, rosterChanged(&CommitResult{Decision: Decision{Joined: []uint64{3}, Kept: []uint64{1}}}))
+	require.True(t, rosterChanged(&CommitResult{Decision: Decision{Left: []uint64{1, 2}}}), "解散时移出者即全员")
+}
 
-	// 只有 101、102 持有本队的补位票(103 没有):各看各的。
-	b.port.party = map[uint64]fakePartyTicket{
-		101: {teamId: b.teamId, state: constants.PartyQueueQueued, targetSize: 5, configId: testBattleConfig, queuedAtMs: fakePartyQueuedAtMs},
-		102: {teamId: b.teamId, state: constants.PartyQueueMatched},
-		// 104 的票属于别的队伍,与本队无关。
-		103: {teamId: b.teamId + 1, state: constants.PartyQueueQueued, targetSize: 4, configId: testBattleConfig, queuedAtMs: fakePartyQueuedAtMs},
+func TestNormalizeTeamMatchMode(t *testing.T) {
+	mode, ok := normalizeTeamMatchMode(uint32(matchpb.MatchMode_MATCH_MODE_UNSPECIFIED))
+	require.True(t, ok)
+	require.Equal(t, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, mode, "未填模式按组队 PVE,兼容不填模式的开战请求")
+	mode, ok = normalizeTeamMatchMode(uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM))
+	require.True(t, ok)
+	require.Equal(t, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, mode)
+	mode, ok = normalizeTeamMatchMode(uint32(matchpb.MatchMode_MATCH_MODE_PVP_TEAM))
+	require.True(t, ok)
+	require.Equal(t, matchpb.MatchMode_MATCH_MODE_PVP_TEAM, mode)
+	for _, invalid := range []matchpb.MatchMode{matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE} {
+		_, ok = normalizeTeamMatchMode(uint32(invalid))
+		require.False(t, ok, invalid.String())
 	}
-	requireQueuedView(t, b.myTeam(101), 5)
-	matched := b.myTeam(102)
-	require.Equal(t, teampb.TeamMatchState_TEAM_MATCH_STATE_STARTING, matched.GetMatchState(), "已凑满弹出:集合中")
-	require.Zero(t, matched.GetMatchTargetSize())
-	requireIdleView(t, b.myTeam(103))
-
-	// 读票失败:视图照常下发,按没在排处理。
-	b.port.stateErr = errors.New("match redis down")
-	requireIdleView(t, b.myTeam(101))
 }
 
-// CheckParty:弹组前 / 自愈时的复核。
-func TestCheckParty(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	ctx := context.Background()
-	check := func(members ...uint64) (uint32, uint64) {
-		t.Helper()
-		reason, culprit, err := b.service.CheckParty(ctx, b.teamId, members)
-		require.NoError(t, err)
-		return reason, culprit
+// ---- 开战预检(§E.1 第 5 步):按 roster 顺序,第一个不满足的人带进 parameters[0] ----
+
+func TestPreflightMatch(t *testing.T) {
+	roster := []uint64{101, 102, 103}
+	cases := []struct {
+		name  string
+		setup func(h *serviceHarness)
+		code  uint32
+		param uint64
+	}{
+		{name: "队员离线", setup: func(h *serviceHarness) { h.mr.Del(playercontract.SessionKey(103)) }, code: ErrMemberOffline, param: 103},
+		{name: "队员断线等重连也不算在线", setup: func(h *serviceHarness) {
+			raw, err := proto.Marshal(&plpb.PlayerSession{PlayerId: 102, State: plpb.PlayerSessionState_SESSION_STATE_DISCONNECTING})
+			require.NoError(h.t, err)
+			require.NoError(h.t, h.mr.Set(playercontract.SessionKey(102), string(raw)))
+		}, code: ErrMemberOffline, param: 102},
+		{name: "队员在战斗中", setup: func(h *serviceHarness) {
+			require.NoError(h.t, h.mr.Set(playercontract.BattleLockKey(102), "777"))
+		}, code: ErrMemberInBattle, param: 102},
+		{name: "队员不在场景", setup: func(h *serviceHarness) { h.mr.Del(playercontract.LocationKey(103)) }, code: ErrMemberNotReady, param: 103},
+		{name: "队员跨 zone 交接中", setup: func(h *serviceHarness) {
+			raw, err := proto.Marshal(&smpb.PlayerLocation{SceneId: 1, ZoneId: testZone})
+			require.NoError(h.t, err)
+			require.NoError(h.t, h.mr.Set(playercontract.LocationKey(103), string(raw)))
+		}, code: ErrMemberNotReady, param: 103},
+		{name: "队员已有在途票据", setup: func(h *serviceHarness) { h.port.blocked = map[uint64]bool{102: true} }, code: ErrMemberNotReady, param: 102},
+		{name: "会话读不出来", setup: func(h *serviceHarness) {
+			require.NoError(h.t, h.mr.Set(playercontract.SessionKey(101), "not-a-session"))
+		}, code: ErrInternal},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newServiceHarness(t)
+			h.addPlayers(roster...)
+			tc.setup(h)
 
-	reason, culprit := check(101, 102, 103)
-	require.Equal(t, constants.PartyEndNone, reason)
-	require.Zero(t, culprit)
-	reason, _ = check(103, 101, 102)
-	require.Equal(t, constants.PartyEndNone, reason, "集合语义,顺序无关")
-
-	reason, _ = check(101, 102)
-	require.Equal(t, constants.PartyEndRosterChanged, reason, "队里多了人")
-	reason, _ = check(101, 102, 103, 104)
-	require.Equal(t, constants.PartyEndRosterChanged, reason, "名单里有人已不在队")
-	reason, _, err := b.service.CheckParty(ctx, b.teamId+999, []uint64{101, 102, 103})
-	require.NoError(t, err)
-	require.Equal(t, constants.PartyEndRosterChanged, reason, "队伍不存在")
-
-	setSession := func(pid uint64, state plpb.PlayerSessionState) {
-		t.Helper()
-		raw, err := proto.Marshal(&plpb.PlayerSession{PlayerId: pid, State: state})
-		require.NoError(t, err)
-		require.NoError(t, b.mr.Set(playercontract.SessionKey(pid), string(raw)))
-	}
-
-	// 断线等重连的宽限期:放行(单人排队本来就不看会话;没连回来的人会在开局时备战失败)。
-	setSession(102, plpb.PlayerSessionState_SESSION_STATE_DISCONNECTING)
-	reason, _ = check(101, 102, 103)
-	require.Equal(t, constants.PartyEndNone, reason)
-
-	// 明确下线 / 会话已不存在:掉线,带出是谁。
-	setSession(102, plpb.PlayerSessionState_SESSION_STATE_OFFLINE)
-	reason, culprit = check(101, 102, 103)
-	require.Equal(t, constants.PartyEndMemberOffline, reason)
-	require.Equal(t, uint64(102), culprit)
-	b.mr.Del(playercontract.SessionKey(102))
-	reason, culprit = check(101, 102, 103)
-	require.Equal(t, constants.PartyEndMemberOffline, reason)
-	require.Equal(t, uint64(102), culprit)
-
-	// 会话读不出来(解析失败):不做失效判定,返回 err 让调用方把这一单本轮搁置。
-	require.NoError(t, b.mr.Set(playercontract.SessionKey(102), "not-a-session"))
-	_, _, err = b.service.CheckParty(ctx, b.teamId, []uint64{101, 102, 103})
-	require.Error(t, err)
-}
-
-// 名单变化的撤单带着「提交后的成员集合」:它是提交之后才异步执行的,不能误杀队长已按新名单重新入队的单。
-func TestRosterChangeCancelPassesCommittedRoster(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	requireCode(t, 0, b.startTarget(101, 5))
-	b.takePushes()
-	b.port.partyCancels = nil // 建队时两次入队提交也会各问一次(没有在排的单),不算在本用例里
-
-	requireCode(t, 0, b.ok(b.server.LeaveTeam(asPlayer(103), &teampb.LeaveTeamRequest{ExpectedTeamId: b.teamId})))
-
-	require.Len(t, b.port.partyCancels, 1)
-	call := b.port.partyCancels[0]
-	require.ElementsMatch(t, []uint64{101, 102, 103}, call.candidates, "候选是提交前就在队里的人")
-	require.ElementsMatch(t, []uint64{101, 102}, call.keep, "提交后的成员集合")
-	require.ElementsMatch(t, []uint64{101, 102, 103}, call.canceled, "旧名单的单被撤掉")
-
-	// (「名单等于提交后集合的单不撤」这条判定本身在票据域,用例是 logic.TestCancelPartyByTeam;这里只核对 team 传出的参数。)
-	requireCode(t, 0, b.startTarget(101, 5))
-	require.Len(t, b.port.party, 2)
-
-	// 解散:提交后没有成员,无条件撤。
-	requireCode(t, 0, b.ok(b.server.DisbandTeam(asPlayer(101), &teampb.DisbandTeamRequest{ExpectedTeamId: b.teamId})))
-	require.Empty(t, b.port.party)
-	last := b.port.partyCancels[len(b.port.partyCancels)-1]
-	require.Empty(t, last.keep)
-}
-
-// PartyEnded:只推给这一单里仍在本队的人;主动取消带取消者、其余原因带 tip。
-func TestPartyEndedPushesToPartyMembersStillInTeam(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-	canceledReason := teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_QUEUE_CANCELED
-
-	// 这一单是 [101, 102](103 是入队之后才加入的人,不在单里)。
-	b.service.PartyEnded(b.teamId, []uint64{101, 102}, constants.PartyEndCanceled, 102)
-	pushes := snapshotsByReason(t, b.takePushes(), canceledReason)
-	require.ElementsMatch(t, []uint64{101, 102}, pushedTo(pushes), "不在这一单里的队员不收")
-	for _, snap := range pushes {
-		require.Equal(t, uint64(102), snap.GetActorId())
-		require.Nil(t, snap.GetTip())
-		requireIdleView(t, snap.GetTeam())
-		require.Equal(t, b.teamId, snap.GetTeam().GetTeamId())
+			code, param := h.service.preflightMatch(context.Background(), roster)
+			require.Equal(t, tc.code, code)
+			require.Equal(t, tc.param, param)
+		})
 	}
 
-	b.service.PartyEnded(b.teamId, []uint64{101, 102}, constants.PartyEndMemberOffline, 102)
-	pushes = snapshotsByReason(t, b.takePushes(), canceledReason)
-	require.Zero(t, pushes[101].GetActorId())
-	require.Equal(t, ErrMemberOffline, pushes[101].GetTip().GetId())
-	require.Equal(t, []string{"102"}, pushes[101].GetTip().GetParameters())
-
-	b.service.PartyEnded(b.teamId, []uint64{101, 102}, constants.PartyEndMemberNotReady, 0)
-	pushes = snapshotsByReason(t, b.takePushes(), canceledReason)
-	require.Equal(t, ErrMemberNotReady, pushes[101].GetTip().GetId())
-	require.Empty(t, pushes[101].GetTip().GetParameters())
-
-	b.service.PartyEnded(b.teamId, []uint64{101, 102}, constants.PartyEndRosterChanged, 0)
-	pushes = snapshotsByReason(t, b.takePushes(), canceledReason)
-	require.Equal(t, ErrStateChanged, pushes[102].GetTip().GetId())
-
-	// 单里的人已经离队:不给他推本队视图(他离队时已收到空视图)。
-	requireCode(t, 0, b.ok(b.server.LeaveTeam(asPlayer(102), &teampb.LeaveTeamRequest{ExpectedTeamId: b.teamId})))
-	b.takePushes()
-	b.service.PartyEnded(b.teamId, []uint64{101, 102}, constants.PartyEndRosterChanged, 0)
-	pushes = snapshotsByReason(t, b.takePushes(), canceledReason)
-	require.ElementsMatch(t, []uint64{101}, pushedTo(pushes))
-
-	// 队伍已不存在:不推。
-	b.service.PartyEnded(b.teamId+999, []uint64{101}, constants.PartyEndRosterChanged, 0)
-	require.Empty(t, b.takePushes())
-}
-
-// PartyStarted:补位凑满开局成功后,给这一单里仍在本队的人推一次当前视图(MATCH_ENDED),面板从「匹配中」归位。
-func TestPartyStartedPushesMatchEndedToPartyMembers(t *testing.T) {
-	b := newBattleHarness(t, 101, 102, 103)
-
-	b.service.PartyStarted(b.teamId, []uint64{101, 102})
-
-	pushes := snapshotsByReason(t, b.takePushes(), teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_ENDED)
-	require.ElementsMatch(t, []uint64{101, 102}, pushedTo(pushes), "不在这一单里的队员不收")
-	for _, snap := range pushes {
-		requireIdleView(t, snap.GetTeam())
-		require.Nil(t, snap.GetTip())
-	}
-
-	// 队伍已不存在:不推。
-	b.service.PartyStarted(b.teamId+999, []uint64{101})
-	require.Empty(t, b.takePushes())
+	h := newServiceHarness(t)
+	h.addPlayers(roster...)
+	code, param := h.service.preflightMatch(context.Background(), roster)
+	require.Zero(t, code)
+	require.Zero(t, param)
 }

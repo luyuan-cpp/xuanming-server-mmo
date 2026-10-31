@@ -12,7 +12,6 @@ import (
 	dspb "proto/data_service"
 	"shared/accountdirectory"
 	"shared/generated/persistschema"
-	"shared/savebarrier"
 )
 
 // player_store 上的交易冻结证据(docs/design/player-save-direct-commit.md §6)。
@@ -79,7 +78,7 @@ func digestPlayerStoreRows(schema string, rows []playerStoreProofRow) []byte {
 // isInitialPlayerStore:写权行还是建角时的 (1, 1),而且只有建角写的那几行。认领会抬 E,存盘会抬 q,所以这名玩家从没进过场。
 func isInitialPlayerStore(rows []playerStoreProofRow) bool {
 	for _, row := range rows {
-		if row.ownerEpoch != savebarrier.InitialOwnerEpoch || row.saveSeq != savebarrier.InitialSaveSeq {
+		if row.ownerEpoch != accountdirectory.InitialOwnerEpoch || row.saveSeq != accountdirectory.InitialSaveSeq {
 			return false
 		}
 	}
@@ -102,7 +101,7 @@ func (v *SQLRoleFreezeVerifier) verifyFrozenPlayerStore(ctx context.Context, tx 
 		return nil, accountdirectory.ErrConflict
 	}
 	kind := dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE
-	if owner.ownerEpoch == savebarrier.InitialOwnerEpoch && owner.saveSeq == savebarrier.InitialSaveSeq {
+	if owner.ownerEpoch == accountdirectory.InitialOwnerEpoch && owner.saveSeq == accountdirectory.InitialSaveSeq {
 		if r.RequiredOwnerEpoch != 0 || r.RequiredSaveSeq != 0 || holders != 0 || !isInitialPlayerStore(rows) {
 			return nil, accountdirectory.ErrConflict
 		}

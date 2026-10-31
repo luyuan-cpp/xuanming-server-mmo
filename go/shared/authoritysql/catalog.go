@@ -23,7 +23,6 @@ type CatalogConfig struct {
 	ProtectedSchemas        []string
 	PhysicalAuthoritySHA256 []byte
 	Principal               string
-	RequireReconcile        bool
 }
 type Catalog struct {
 	db     *sql.DB
@@ -113,13 +112,6 @@ func (c *Catalog) transaction(ctx context.Context, call func(*sql.Tx) error) err
 		return unknown("catalog提交", err)
 	}
 	return nil
-}
-func (c *Catalog) lockReconcile(ctx context.Context, tx *sql.Tx) error {
-	if !c.config.RequireReconcile {
-		return nil
-	}
-	var id uint32
-	return tx.QueryRowContext(ctx, "SELECT id FROM "+c.table("route_reconcile")+" WHERE id=1 FOR UPDATE").Scan(&id)
 }
 func (c *Catalog) meta(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
@@ -507,7 +499,6 @@ func sortedWriterKeys(values [][]byte) [][]byte {
 func CatalogBootstrapStatements() map[string]string {
 	return map[string]string{
 		"route_meta":                     catalogRouteMetaBootstrapDDL,
-		"route_reconcile":                catalogRouteReconcileBootstrapDDL,
 		"writer_registry":                catalogWriterRegistryBootstrapDDL,
 		"writer_slot":                    catalogWriterSlotBootstrapDDL,
 		"writer_lifecycle_receipt":       catalogWriterLifecycleReceiptBootstrapDDL,
@@ -551,9 +542,6 @@ func PrepareCatalogSchema(ctx context.Context, db *sql.DB, schema, generation st
 		}
 	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO route_meta(id,generation,writable,writer_epoch,catalog_revision,freeze_run_id) VALUES(1,?,1,1,1,?)", generation, []byte{}); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, "INSERT INTO route_reconcile(id,leader,lease_until_ms,watermark_ms,cache_verified_ms) VALUES(1,NULL,NULL,0,0)"); err != nil {
 		return err
 	}
 	return VerifyCatalogSchema(ctx, db, schema)
@@ -709,15 +697,6 @@ const catalogRouteMetaBootstrapDDL = "CREATE TABLE IF NOT EXISTS `route_meta` (\
 	"  `freeze_run_id` varbinary(16) NOT NULL DEFAULT '' COMMENT 'pb:6',\n" +
 	"  PRIMARY KEY (`id`)\n" +
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='route_meta';"
-
-const catalogRouteReconcileBootstrapDDL = "CREATE TABLE IF NOT EXISTS `route_reconcile` (\n" +
-	"  `id` tinyint unsigned NOT NULL COMMENT 'pb:1',\n" +
-	"  `leader` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NULL COMMENT 'pb:2',\n" +
-	"  `lease_until_ms` bigint unsigned NULL COMMENT 'pb:3',\n" +
-	"  `watermark_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:4',\n" +
-	"  `cache_verified_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:5',\n" +
-	"  PRIMARY KEY (`id`)\n" +
-	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='route_reconcile';"
 
 const catalogWriterRegistryBootstrapDDL = `CREATE TABLE IF NOT EXISTS writer_registry (
  writer_key BINARY(16) NOT NULL COMMENT 'pb:1',

@@ -5,8 +5,8 @@ package main
 //
 //	P0 预备:三人各自离队 / 解散,并撤掉可能残留的排队(同账号可反复跑);
 //	P1 A 建队 → B 申请 → A 同意;视图必须带能力位 match_fill_supported(否则 match 不是补位版本,或开关已关);
-//	P2 队员取消 = 整队退出:A 选「凑满 3 人」开战 → 回包 QUEUED(目标 3 人、入队时刻非 0);B 收到 MATCH_QUEUED;
-//	   两人 GetQueueStatus 都是 QUEUED → B 取消 → A 收到 MATCH_QUEUE_CANCELED(actor=B)→ 两人都 NOT_QUEUED;
+//	P2 队员取消 = 整队退出:A、B 先各自地域探测(network_probe.go)→ A 选「凑满 3 人」开战 → 回包 QUEUED(目标 3 人、入队时刻非 0);
+//	   B 收到 MATCH_QUEUED;两人 GetQueueStatus 都是 QUEUED → B 带查到的票号取消 → A 收到 MATCH_QUEUE_CANCELED(actor=B)→ 两人都 NOT_QUEUED;
 //	P3 名单变化 = 整队退出:A 再发起 → B 离队 → A 收到 MATCH_QUEUE_CANCELED(原因:队伍状态已变化)→ A NOT_QUEUED;
 //	   B 重新入队;
 //	P4 补位成组:A 再发起 → C 单排同一副本的 3 人档 → 三人收到同一 battle_id 的 BattleStart,直连自动战斗到终局;
@@ -149,8 +149,9 @@ func RunTeamBackfillSmoke(cfg *config.Config) {
 	zap.L().Info("[team-backfill-smoke] P1: team ready", zap.Uint64("team_id", tid), zap.Int("members", len(view.GetMembers())))
 
 	// ---- P2:进队列 → 队员取消 = 整队退出 ----
+	party := []*teamSmokeBot{a, b}
 	bMark := b.mark()
-	queued, err := backfillStartQueue(a, tid, sc.BattleConfigId)
+	queued, err := backfillStartQueue(a, party, tid, sc.BattleConfigId)
 	if err != nil {
 		fail("P2-start", "%v", err)
 	}
@@ -161,7 +162,7 @@ func RunTeamBackfillSmoke(cfg *config.Config) {
 	}); err != nil {
 		fail("P2-queued-push", "%v", err)
 	}
-	for _, bot := range []*teamSmokeBot{a, b} {
+	for _, bot := range party {
 		if err := backfillExpectQueueState(bot, match.QueueState_QUEUE_STATE_QUEUED, 0); err != nil {
 			fail("P2-status", "%v", err)
 		}
@@ -182,7 +183,7 @@ func RunTeamBackfillSmoke(cfg *config.Config) {
 	if canceled.GetTeam().GetMatchState() != teampb.TeamMatchState_TEAM_MATCH_STATE_IDLE {
 		fail("P2-canceled-push", "MATCH_QUEUE_CANCELED view match_state=%s, expected IDLE", canceled.GetTeam().GetMatchState())
 	}
-	for _, bot := range []*teamSmokeBot{a, b} {
+	for _, bot := range party {
 		if err := backfillExpectQueueState(bot, match.QueueState_QUEUE_STATE_NOT_QUEUED, 0); err != nil {
 			fail("P2-not-queued", "%v", err)
 		}
@@ -190,7 +191,7 @@ func RunTeamBackfillSmoke(cfg *config.Config) {
 	zap.L().Info("[team-backfill-smoke] P2: member cancel withdrew the whole party")
 
 	// ---- P3:进队列 → 名单变化 = 整队退出 ----
-	if _, err := backfillStartQueue(a, tid, sc.BattleConfigId); err != nil {
+	if _, err := backfillStartQueue(a, party, tid, sc.BattleConfigId); err != nil {
 		fail("P3-start", "%v", err)
 	}
 	aMark = a.mark()
@@ -206,7 +207,7 @@ func RunTeamBackfillSmoke(cfg *config.Config) {
 	if got := rosterCanceled.GetTip().GetId(); got != tipTeamStateChanged {
 		fail("P3-canceled-push", "MATCH_QUEUE_CANCELED tip=%d, expected TeamStateChanged=%d", got, tipTeamStateChanged)
 	}
-	for _, bot := range []*teamSmokeBot{a, b} {
+	for _, bot := range party {
 		if err := backfillExpectQueueState(bot, match.QueueState_QUEUE_STATE_NOT_QUEUED, backfillSmokeAsyncCancelTimeout); err != nil {
 			fail("P3-not-queued", "%v", err)
 		}
@@ -222,7 +223,12 @@ func RunTeamBackfillSmoke(cfg *config.Config) {
 	for i, bot := range fighters {
 		marks[i] = bot.mark()
 	}
-	if _, err := backfillStartQueue(a, tid, sc.BattleConfigId); err != nil {
+	// C 的探测放在 A 发起之前:A 一进队列,补位的票就该跟上,不让探测夹在两者之间。
+	cPlanId, err := c.networkProbe()
+	if err != nil {
+		fail("P4-network-probe", "%v", err)
+	}
+	if _, err := backfillStartQueue(a, party, tid, sc.BattleConfigId); err != nil {
 		fail("P4-start", "%v", err)
 	}
 	// C 的推送扫描起点 marks[2] 已在 A 发起之前记下:成组后的 BattleAssigned / BattleStart 可能先于 JoinQueue 回包到达。
@@ -233,6 +239,8 @@ func RunTeamBackfillSmoke(cfg *config.Config) {
 		BattleConfigId: sc.BattleConfigId,
 		TeamSize:       backfillSmokeTargetSize,
 		ZoneId:         sc.Zone,
+		RequestId:      chatSmokeRequestId(),
+		NetworkPlanId:  cPlanId,
 	}, joinResp); err != nil {
 		fail("P4-solo-join", "%v", err)
 	}
@@ -281,7 +289,7 @@ func RunTeamBackfillSmoke(cfg *config.Config) {
 				fighters[i].name, result.battleId, battleId)
 		}
 	}
-	for i, bot := range []*teamSmokeBot{a, b} {
+	for i, bot := range party {
 		if _, err := bot.waitSnapshot(marks[i], teamSmokePushTimeout, bot.name+" MATCH_ENDED", func(s *teampb.TeamSnapshotS2C) bool {
 			return s.GetReason() == teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_ENDED && s.GetTeam().GetTeamId() == tid
 		}); err != nil {
@@ -325,11 +333,15 @@ func backfillJoin(leader, member *teamSmokeBot, tid uint64) (*teampb.TeamView, e
 	return resp.GetTeam(), nil
 }
 
-// backfillStartQueue:队长选「凑满 3 人」发起,断言回包是 QUEUED(目标人数、副本、入队时刻)。
-// 上一场结算落地前的过渡态(队员仍持 battle:lock、ready 票据未清)在 teamSmokeSettleTimeout 内重试。
-func backfillStartQueue(leader *teamSmokeBot, tid uint64, battleConfigId uint32) (*teampb.TeamView, error) {
+// backfillStartQueue:队长选「凑满 3 人」发起,断言回包是 QUEUED(目标人数、副本、入队时刻)。party 是当前队伍全员(队长在内):
+// 进队列要读每名成员自己的探测结果,发起之前都要探测过。一次调用是一次发起意图,request_id 只生成一次;
+// 上一场结算落地前的过渡态(队员仍持 battle:lock、ready 票据未清)在 teamSmokeSettleTimeout 内重试,重试复用同一份请求。
+func backfillStartQueue(leader *teamSmokeBot, party []*teamSmokeBot, tid uint64, battleConfigId uint32) (*teampb.TeamView, error) {
+	if err := teamSmokeEnsureNetworkProbes(party...); err != nil {
+		return nil, err
+	}
 	deadline := time.Now().Add(teamSmokeSettleTimeout)
-	request := &teampb.StartTeamMatchRequest{BattleConfigId: battleConfigId, ExpectedTeamId: tid, TargetTeamSize: backfillSmokeTargetSize}
+	request := &teampb.StartTeamMatchRequest{BattleConfigId: battleConfigId, ExpectedTeamId: tid, TargetTeamSize: backfillSmokeTargetSize, RequestId: chatSmokeRequestId()}
 	for {
 		resp := &teampb.TeamResponse{}
 		tip, err := leader.rpc(game.ClientPlayerTeamStartTeamMatchMessageId, request, resp)
@@ -357,10 +369,19 @@ func backfillStartQueue(leader *teamSmokeBot, tid uint64, battleConfigId uint32)
 	}
 }
 
-// backfillCancelQueue 发 CancelQueue(票据留空:服务端按本人身份撤;持补位票时撤整单),等回包。
-// 响应是 Empty:经路由服 / 直连 gRPC 时 gate 照样回一个带请求号的包(见 matchCall 注释)。
+// backfillCancelQueue 撤掉 bot 当前的排队:先 GetQueueStatus 拿票号,再带票号发 CancelQueue,等回包;持补位票时撤整单。
+// 撤销必须带原请求编号或票号(两个都空服务端回 InvalidArgument);队员手里没有队长那次发起的 request_id,票号是他能拿到的凭据。
+// 查不到票号说明不在排,什么也不发。响应是 Empty:经路由服 / 直连 gRPC 时 gate 照样回一个带请求号的包(见 matchCall 注释)。
 func backfillCancelQueue(bot *teamSmokeBot) error {
-	if err := bot.matchCall(game.MatchServiceCancelQueueMessageId, &match.CancelQueueRequest{PlayerId: bot.gc.PlayerId}, &base.Empty{}); err != nil {
+	status := &match.GetQueueStatusResponse{}
+	if err := bot.matchCall(game.MatchServiceGetQueueStatusMessageId, &match.GetQueueStatusRequest{PlayerId: bot.gc.PlayerId}, status); err != nil {
+		return fmt.Errorf("%s GetQueueStatus before cancel: %w", bot.name, err)
+	}
+	if status.GetQueueTicket() == "" {
+		return nil
+	}
+	cancel := &match.CancelQueueRequest{PlayerId: bot.gc.PlayerId, QueueTicket: status.GetQueueTicket()}
+	if err := bot.matchCall(game.MatchServiceCancelQueueMessageId, cancel, &base.Empty{}); err != nil {
 		return fmt.Errorf("%s CancelQueue: %w", bot.name, err)
 	}
 	return nil

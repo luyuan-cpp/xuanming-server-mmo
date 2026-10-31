@@ -36,7 +36,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // NodeDeathAtKeyFmt 是节点死亡时刻标记的 Redis 键格式,值是 Unix 毫秒。
-// 与 NodeSceneCountKey / NodePlayerCountKey 同一命名族,便于按节点前缀清理。
+// 与 NodeSceneCountKey / NodeMembersKeyFmt 同一命名族,便于按节点前缀清理。
 const NodeDeathAtKeyFmt = "node:zone:%d:%s:death_at"
 
 // 再入屏障判定点位名。**必须是常量**:它们会直接变成 Prometheus label,
@@ -216,7 +216,7 @@ func reentryBarrierBlocks(svcCtx *svc.ServiceContext, zoneID uint32, nodeID, sit
 //	R1-I2 收尾范围是判死时刻的快照,入队之后不再从反向索引补抄:屏障窗口里新化身建到同一 node_id 上的场景不属于
 //	      这次死亡,补抄会把它们一起强制销毁(属主比对拦不住,它们的属主就是这个 node_id)。同一 node_id 在上一条
 //	      任务做完之前再次判死时,两次的快照取并集。
-//	R1-I3 死节点的计数键(scene_count / player_count)只在收尾范围已空时、与出队在同一次 Lua 里删掉(放弃时强制删),
+//	R1-I3 死节点的计数键(scene_count / members)只在收尾范围已空时、与出队在同一次 Lua 里删掉(放弃时强制删),
 //	      理由见 finishDeadNodeReconcile。
 //	R1-I4 只有领导者读写任务;降级即停,一个字节不写回。旧领导者没做完的,新领导者照 Redis 里剩下的接着做。每个
 //	      场景的销毁是 Lua 原子认领(destroyOrphanOfDeadNode),新旧领导者短暂重叠时副作用也只执行一次;重做已处理
@@ -278,7 +278,7 @@ return redis.call('SCARD', KEYS[2])
 // luaFinishDeadNodeReconcile 结束一条收尾任务:收尾范围已空时删死节点的计数键并出队(R1-I3);
 // ARGV[2] == '1'(放弃)时不看收尾范围,连同它一起删。
 //
-// KEYS[1] = 收尾范围  KEYS[2] = scene_count  KEYS[3] = player_count  KEYS[4] = 任务表
+// KEYS[1] = 收尾范围  KEYS[2] = scene_count  KEYS[3] = members  KEYS[4] = 任务表
 // ARGV[1] = 任务成员  ARGV[2] = '1' 表示放弃
 // 返回 1 = 已出队;0 = 收尾范围不空,任务原样留着。
 const luaFinishDeadNodeReconcile = `
@@ -493,19 +493,19 @@ func retryOrAbandonDeadNodeReconcile(svcCtx *svc.ServiceContext, task deadNodeRe
 // finishDeadNodeReconcile 结束一条任务:收尾范围已空时删死节点的计数键并出队;abandon=true 时不看收尾范围,
 // 连同它一起删。返回 true = 已出队;false = 收尾范围不空,任务原样留着。
 //
-// 为什么要删计数(R1-I3):这两个键全仓只有 Incr/Decr,没有任何「节点重新上线时归零」的路径,死节点残留的正计数
+// 为什么要删计数(R1-I3):这两个键全仓没有任何「节点重新上线时归零」的路径,死节点残留的正计数与成员
 // 会被复用同 id 的新节点原样继承,负载分永久虚高,调度一直躲着它。
 //
-// 为什么等收尾范围空了才删:destroyOrphanOfDeadNode 认领成功时还会对死节点的这两个键做减法(脚本比对期望属主,
-// 对死节点计数的减法只来自这里;级联到别的节点上的镜像时扣的是镜像属主的计数,与这里无关),先删会被它们重新建
-// 出来。放弃之后剩下的成员若由空闲回收销毁,会把键重建成小负数:player_count 有 <0 归零钳制,scene_count 的 -1 会被
-// 新节点的第一次 Incr 冲平 —— 有界,与无界的正残留不同。删计数与出队在同一次脚本里,不会出现「任务出队了、计数
+// 为什么等收尾范围空了才删:destroyOrphanOfDeadNode 认领成功时还会对死节点的 scene_count 做减法(脚本比对期望属主,
+// 对死节点计数的减法只来自这里;级联到别的节点上的镜像时扣的是镜像属主的计数,与这里无关),先删会被它重新建
+// 出来。放弃之后剩下的场景若由空闲回收销毁,会把 scene_count 重建成 -1,被新节点的第一次 Incr 冲平 —— 有界,
+// 与无界的正残留不同;成员集合的 SREM 不会重建键。删计数与出队在同一次脚本里,不会出现「任务出队了、计数
 // 没删」,也不会出现反过来的半截。
 func finishDeadNodeReconcile(svcCtx *svc.ServiceContext, task deadNodeReconcileTask, abandon bool) (bool, error) {
 	keys := []string{
 		nodeReconcileScenesKey(task.zoneID, task.nodeID),
 		nodeSceneCountKey(task.zoneID, task.nodeID),
-		nodePlayerCountKey(task.zoneID, task.nodeID),
+		nodeMembersKey(task.zoneID, task.nodeID),
 		deadNodeReconcileTasksKey,
 	}
 	abandonFlag := "0"
@@ -626,7 +626,7 @@ func stringsAsArgs(ss []string) []any {
 //
 // 以前 removeNodeFromRedis / fullSync 陈旧清扫在 markNodeDeath 的 Setex 失败后照样 ZREM,
 // 读者于是看到「不在负载集(IsNodeAlive=false)+ 没有 death_at(屏障放行)」,在老节点
-// 15s emergency drain 还在 SavePlayerToRedis 时就改派 / 接管 —— 正是再入屏障要防的双写回档。
+// 15s emergency drain 还在 SavePlayer 时就改派 / 接管 —— 正是再入屏障要防的双写回档。
 //
 // 不变量:
 //

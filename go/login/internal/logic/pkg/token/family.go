@@ -6,14 +6,16 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const (
-	refreshFamilyPrefix = "refresh_family:"
-	familyByteLen       = 16
-)
+const familyByteLen = 16
 
 func validFamilyID(id string) bool {
-	raw, err := base64.RawURLEncoding.DecodeString(id)
-	return err == nil && len(raw) == familyByteLen && base64.RawURLEncoding.EncodeToString(raw) == id
+	return validOpaque(id, familyByteLen)
+}
+
+// validOpaque 报告 s 是不是 size 字节随机数的规范 base64url 编码。
+func validOpaque(s string, size int) bool {
+	raw, err := base64.RawURLEncoding.DecodeString(s)
+	return err == nil && len(raw) == size && base64.RawURLEncoding.EncodeToString(raw) == s
 }
 
 // 新认证的 token、family 与账号索引同次提交；所有类型检查都在首次写入前。
@@ -107,6 +109,7 @@ return 1
 
 // 淘汰与整账号撤销共用同一原子提交。先核全部候选，再删除；仅 head 仍指向该候选时撤 family。
 // ARGV：账号、保留数量（0 表示全撤销）、refresh 前缀、family 前缀。
+// 候选键由前缀现拼、不在 KEYS 里；两个前缀都带账号 tag，现拼的键与 KEYS[1] 同槽（Manager.retire）。
 var retireRefreshScript = redis.NewScript(`
 local kind = redis.call("TYPE", KEYS[1]).ok
 if kind == "none" then return 0 end

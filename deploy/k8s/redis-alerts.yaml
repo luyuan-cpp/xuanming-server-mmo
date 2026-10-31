@@ -1,7 +1,8 @@
 # Prometheus alert rules for the control-domain Redis instances(控制域 Redis:核心 redis / redis-ha、redis-match-cluster)。
 #
 # 来源:shared-redis-split-by-purpose.md §25.3(2026-10-23 拍板记录,原 §13 第 6 条「Redis 监控直接上 redis_exporter」)。
-#       玩家域 Redis Cluster 的告警归 docs/design/redis-player-store-cluster.md 那条线,不在本文件。
+#       玩家域 Redis Cluster 的告警在 deploy/k8s/redis-player-alerts.yaml,不在本文件。这里的规则不限定 pod,exporter 指标同样会落到 redis-player 的 Pod 上:
+#       RedisDown 等几条会和玩家域那一份同时响,名字不同、处置看各自的 description。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 mysql-connection-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/redis-alerts.yaml

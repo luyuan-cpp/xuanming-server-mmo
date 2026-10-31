@@ -137,8 +137,8 @@ func (r *AssetOpRepo) bounded(ctx context.Context) (context.Context, context.Can
 //
 // 这里曾有一行哨兵 (player_id=0, stream=0),所有首次建行者先排在它上面来消掉这个环。代价是开服首日几乎每一次上架都是
 // 首次建行,全服托管入队在这一行上串行。现在撤掉了:唯一性由主键裁决;TiDB 没有间隙锁,这个环本来就不存在;
-// MySQL 档上这个环只在首插者回滚时才碰得上。生产连接走 authoritysql,写者闸门把 1213 变成不可重试的结果未知(事务已回滚),
-// assetop.WithTxRetry 认不出,这次上架直接失败,玩家重试即可(INSERT IGNORE 幂等、不改纪元、没有内存副作用)。
+// MySQL 档上这个环只在首插者回滚时才碰得上,由 assetop.WithTxRetry 整事务重跑吸收(INSERT IGNORE 幂等、不改纪元、
+// 没有内存副作用),重试用尽就是本次上架失败,玩家重试即可。
 //
 // # 为什么建行放在独立的短事务里
 //
@@ -269,9 +269,9 @@ func (r *AssetOpRepo) missingSeqRows(ctx context.Context, q seqRowReader, keys [
 //     —— 这是稳态路径(每玩家每流只有第一笔会缺行)。
 //  2. 有缺行才开短事务:按升序逐个 INSERT IGNORE → 提交。
 //
-// 这里用 assetop.WithTxRetry(RC + 有界重试)。裸连接上它吸收 1213(首插者回滚,见上文"为什么没有全局守卫行")、
-// 1205(锁等待超时)与 9007(TiDB 写冲突);走 authoritysql 的生产连接上这些错误已经是结果未知,不重试。
-// INSERT IGNORE 撞行是空操作、不改纪元,没有任何内存副作用要复位,所以整体重跑安全。
+// 这里用 assetop.WithTxRetry(RC + 有界重试)吸收 1213(首插者回滚,见上文"为什么没有全局守卫行")、
+// 1205(锁等待超时)与 9007(TiDB 写冲突)。INSERT IGNORE 撞行是空操作、不改纪元,没有任何内存副作用要复位,
+// 所以整体重跑安全。
 //
 // 预算:自带 opTimeout(constants.StoreOpTimeout),调用方 ctx 更早到期时以 ctx 为准。超时按失败返回,本次上架失败。
 func (r *AssetOpRepo) EnsureSeqRows(ctx context.Context, nowMs uint64, keys ...SeqKey) error {

@@ -12,6 +12,7 @@ import (
 
 	"proto/scene_manager"
 	"scene_manager/internal/constants"
+	"shared/redisslot"
 )
 
 // ---------------------------------------------------------------------------
@@ -114,7 +115,7 @@ func TestEnterScene_SameRequestIDDifferentLoginGenerationReplaysCachedSuccess(t 
 	const targetID = uint64(7403)
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, targetID), "10")
-	mr.Set(fmt.Sprintf(InstancePlayerCountKey, targetID), "0")
+	seedSceneMembers(mr, targetID, 0)
 	first := &scene_manager.EnterSceneRequest{OwnerRevision: 1,
 		PlayerId: 6403, SceneId: targetID, ZoneId: testZoneId, SessionId: 44,
 		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
@@ -140,7 +141,7 @@ func TestEnterScene_SameRequestIDDifferentLoginGenerationReplaysCachedSuccess(t 
 	// 重放不补发路由:scene 上的已放行代次允许落后于会话记录(G4),新代次由 Bind 带给 gate。
 	require.Len(t, *captured, 1, "重放不得再次发送 Gate 路由")
 	assert.Equal(t, uint64(100), decodeRoutePlayerEvent(t, (*captured)[0]).LoginGeneration)
-	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	count := sceneCountText(sc, targetID)
 	assert.Equal(t, "1", count, "重放不得再次增加目标场景人数")
 }
 
@@ -152,7 +153,7 @@ func TestEnterScene_SameRequestIDDifferentLoginGenerationIsInProgressNotConflict
 	}
 	fingerprint, err := enterSceneRequestFingerprint(base)
 	require.NoError(t, err)
-	key := fmt.Sprintf("enter_scene:dedup:%d:%s", base.PlayerId, base.RequestId)
+	key := redisslot.EnterSceneDedupKey(base.PlayerId, base.RequestId)
 	owner := "pending:" + fingerprint + ":first-owner"
 	mr.Set(key, owner)
 	mr.SetTTL(key, time.Minute)

@@ -22,11 +22,14 @@ ROOT = Path(__file__).resolve().parents[2]
 CATALOGUE = {
     "login": ("login", "login.go"),
     "data-service": ("data_service", "data_service.go"),
-    "db": ("db", "db.go"),
+    "db": ("db", "."),
     "player-locator": ("player_locator", "player_locator.go"),
     "scene-manager": ("scene_manager", "scene_manager_service.go"),
     "client-rpc-router": ("client_rpc_router", "client_rpc_router_service.go"),
-    "match": ("match", "match_service.go"),
+    "match": ("match", "."),
+    "player-inbox": ("player_inbox", "."),
+    # 写者注册的一次性容器（compose 的 sql-boot、<服务>-sql-boot）：基础镜像是 deploy/debug/Dockerfile.sql-boot，/app/service 是 writer_authority。
+    "sql-boot": ("data_service", "./cmd/writer_authority"),
 }
 DELVE_VERSION = "v1.27.2"
 GO_VERSION = "go1.27.2"
@@ -234,7 +237,7 @@ def main() -> int:
     args = parser.parse_args()
     requested = list(CATALOGUE) if args.services == "all" else list(dict.fromkeys(args.services.split(",")))
     if not requested or any(name not in CATALOGUE for name in requested):
-        parser.error("services 只能是当前七个常驻 Go 服务")
+        parser.error("services 只能是当前八个常驻 Go 服务或 sql-boot")
     services = [name for name in CATALOGUE if name in requested]
     if not args.output.is_absolute():
         parser.error("output 必须为绝对路径")

@@ -297,7 +297,7 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 - **2026-10-16**:§4.1 加第 7c 步、§5.2 加一句:回档后删除受影响玩家的资产 SQL 提交证据键 `player:{id}:asset_sql_commit`(db-write-fencing-mysql.md §6.6、§9.2)。仅修订手册,未演练。
 - **2026-10-30**:玩家存档只在 `player_store`,§4.1 第 7c 步和 §4.2 的两张表抽取随旧路径删除。仅修订手册,未演练。
 
-> **2026-10-30:本节以下到文末全部作废,只作历史保留。** 玩家存档已不在 Redis,恢复之后不需要重建存盘屏障,也没有 outbox 要裁决。`save_barrier_restore` 现在只剩 `-authority-phase`,其余模式退出码 2。恢复玩家数据只需要按 §4 恢复 `player_store`,放流前清掉 Redis 里的 `location`、`handoff` 这些协调键或等 scene_manager 判死,玩家下次认领时代次比库里新,按正常流程进场。
+> **2026-10-30:本节以下到文末全部作废,只作历史保留。** 玩家存档已不在 Redis,恢复之后不需要重建存盘屏障,也没有 outbox 要裁决。工具 `save_barrier_restore` 已改名 `go/db/cmd/maintenance_phase`,只剩 `-authority-phase`,下文的 `-mode` 都不存在了。恢复玩家数据只需要按 §4 恢复 `player_store`,放流前清掉 Redis 里的 `location`、`handoff` 这些协调键或等 scene_manager 判死,玩家下次认领时代次比库里新,按正常流程进场。
 
 ### 2026-10-17 父快照屏障的追加恢复要求
 

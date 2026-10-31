@@ -101,7 +101,7 @@
 - **补充(原稿无)**:
   - 准入闸覆盖两个窗口。启动窗口:etcd 已发布、但 SetAfterStart 还没完成时,lifecycle 默认是 Disabled,会不经 allocate 放行许可。停机窗口:关闸与 AbortAllRooms 在同一个 loop 任务里。
   - 观战记录 `spectate:battle:{id}` 改在 CreateBattle **之前**写(fail-closed:写失败无副作用,记 `index_failed`);D82 换节点之前改写一次;建成后 best-effort 再写一次。
-- 时长口径随之变更:matched ticket TTL = ⌈N×6 + 2×(W+C) + R⌉ + 10(`go/match/internal/logic/queue.go:342/367`)。其中 W = 6.1s(记录写入最坏值)、C = 5s(createBattleTimeout)、R = 3s。1/2/5/10 人依次为 42/48/66/96s;5 人开战锁 101s;team 的 EndMatch 兜底上限由锁时长推出(2026-10-12 起，原写死 110s);battle 确认补发窗口 180s(≥ 96 + 60 = 156s)。
+- 时长口径随之变更:matched ticket TTL = ⌈N×6 + 2×(W+C) + R⌉ + 10(`go/match/internal/logic/queue.go:342/367`)。其中 W = 6.1s(记录写入最坏值)、C = 5s(createBattleTimeout)、R = 3s。1/2/5/10 人依次为 42/48/66/96s;5 人开战锁 101s;team 的 EndMatch 兜底上限由锁时长推出(2026-10-12 起，原写死 110s);battle 确认补发窗口 180s(≥ 96 + 60 = 156s)。(2026-10-31 更正:观战记录键已删,W = 0,1/2/5/10 人依次为 30/35/53/83s,一人取配置下限;5 人开战锁 88s;补发窗口仍 ≥ 83 + 60 = 143s;公式见 cross-zone-matchmaking.md D5 更正。)
 - Agones 晚到分配:如果所有等待方都已超时离开,allocate 才成功,那么零单元时自动回 Ready,并打 WARN `[Agones] allocate confirmed after every waiter gave up`(`agones_gameserver_lifecycle.cpp:525`)。
 
 ### D83 battle 排空

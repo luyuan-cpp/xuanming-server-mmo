@@ -67,9 +67,6 @@ func (s *sqlTeamStore) endMatch(ctx context.Context, teamID uint64, token string
 
 // 可重建公平游标；某个成局UNKNOWN不占住后续条目。业务锁只依赖SQL确证，不依赖游标或TTL。
 func (s *Service) StartSQLMaintenance(ctx context.Context) {
-	if s.store.sql == nil {
-		return
-	}
 	// 四种恢复独立预算，持续新prepared或前列UNKNOWN不能饿死结案/到期清理。
 	start := func(state uint32, point string) {
 		cursor := authority.TeamLaunchCursor{}
@@ -99,11 +96,9 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 				cursor = authority.TeamLaunchCursor{EnqueuedMs: launch.EnqueuedMs, ActorId: launch.ActorId, RequestHigh: launch.RequestHigh, RequestLow: launch.RequestLow}
 				switch state {
 				case 1:
-					if starter, ok := s.starter.(sqlTeamBattleStarter); ok {
-						_, err = starter.ReserveSQLTeamMatch(call, launch)
-						s.svcCtx.HoldRelay(err)
-						warn(err)
-					}
+					_, err = s.starter.ReserveSQLTeamMatch(call, launch)
+					s.svcCtx.HoldRelay(err)
+					warn(err)
 				case 2:
 					closed, err := s.svcCtx.Authority.MaintainQueuedTeam(call, launch)
 					s.svcCtx.HoldRelay(err)
@@ -123,7 +118,7 @@ func (s *Service) StartSQLMaintenance(ctx context.Context) {
 					s.svcCtx.HoldRelay(err)
 					warn(err)
 					if err == nil && pinned != nil && pinned.Commit != nil {
-						s.publish(0, []*CommitResult{pinned.Commit}, nil)
+						s.publish(0, []*CommitResult{pinned.Commit})
 					}
 				case 4:
 					err := s.svcCtx.Authority.CloseCompletedTeamLaunch(call, launch)
@@ -175,7 +170,7 @@ func (s *Service) expireSQLTeams(ctx context.Context, afterExpiry, afterTeam uin
 		commit, err := s.store.sql.expireIdle(ctx, team.id)
 		s.svcCtx.HoldRelay(err)
 		if err == nil && commit != nil {
-			s.publish(0, []*CommitResult{commit}, nil)
+			s.publish(0, []*CommitResult{commit})
 		}
 	}
 	return afterExpiry, afterTeam

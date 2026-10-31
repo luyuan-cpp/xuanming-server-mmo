@@ -27,13 +27,12 @@ const accountRoleDDL = "CREATE TABLE IF NOT EXISTS account_role (player_id BIGIN
 
 // AccountDirectoryStore 只拥有全局目录；与快照池隔离，不访问认证 password 或 Redis。
 type AccountDirectoryStore struct {
-	db              *sql.DB
-	backend         authoritysql.Backend
-	maxRoles        int
-	contracts       *roleAssetContractGuard
-	schema          string
-	initialRequired bool
-	initialStores   map[uint32]bool
+	db            *sql.DB
+	backend       authoritysql.Backend
+	maxRoles      int
+	contracts     *roleAssetContractGuard
+	schema        string
+	initialStores map[uint32]bool
 	// 账本和展示资料读的名额,见 acquirePlayerStoreRead。
 	playerStoreReads chan struct{}
 }
@@ -41,17 +40,6 @@ type AccountDirectoryStore struct {
 // maxOpenConn 是本池的连接上限(config.AccountDirectoryConfig.PoolMaxOpenConn),显式传入而不读 cfg.MaxOpenConn:
 // cfg 是共用的全局库连接参数,那里的 MaxOpenConn 属于快照池。越界由 authoritysql.Open 拒绝。
 func NewAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, maxRoles, maxOpenConn int) (*AccountDirectoryStore, error) {
-	// 正式目录安全语义不由后端档位或运行模式开关决定。
-	return newAccountDirectoryStore(cfg, backend, maxRoles, maxOpenConn, true)
-}
-
-// NewLegacyAccountDirectoryStore 只供显式 LegacyNonGlobal 隔离模式装配。
-// 不产生初始提交回执；普通构造器永不按后端档位隐式进入此模式。
-func NewLegacyAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, maxRoles, maxOpenConn int) (*AccountDirectoryStore, error) {
-	return newAccountDirectoryStore(cfg, backend, maxRoles, maxOpenConn, false)
-}
-
-func newAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, maxRoles, maxOpenConn int, initialRequired bool) (*AccountDirectoryStore, error) {
 	if maxRoles < 1 || maxRoles > 100 {
 		return nil, accountdirectory.ErrInvalid
 	}
@@ -65,7 +53,7 @@ func newAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, max
 		_ = db.Close()
 		return nil, err
 	}
-	return &AccountDirectoryStore{db: db, backend: backend, maxRoles: maxRoles, schema: cfg.DBName, initialRequired: initialRequired,
+	return &AccountDirectoryStore{db: db, backend: backend, maxRoles: maxRoles, schema: cfg.DBName,
 		playerStoreReads: make(chan struct{}, playerStoreReadLimit(maxOpenConn))}, nil
 }
 func (s *AccountDirectoryStore) Close() error { return s.db.Close() }
@@ -261,34 +249,16 @@ func (s *AccountDirectoryStore) Create(ctx context.Context, account string, role
 
 // CreateWithInitialCommit 严格新建:同一事务写角色目录和 player_store 初始行。未知提交由原 Lookup 恢复。
 func (s *AccountDirectoryStore) CreateWithInitialCommit(ctx context.Context, account string, role *base.AccountSimplePlayer) (*dspb.AccountDirectoryResponse, error) {
-	players, err := s.createRole(ctx, account, role, roleCreateNormal, nil, true)
+	players, err := s.createRoleWithInitialRows(ctx, account, role)
 	if err != nil {
 		return nil, err
 	}
 	return &dspb.AccountDirectoryResponse{Players: players}, nil
 }
 
-// ImportRole 只供受本地目标／离线检查约束的调试导入工具使用；普通 RPC 永不复活删除墓碑。
-func (s *AccountDirectoryStore) ImportRole(ctx context.Context, account string, role *base.AccountSimplePlayer, allowRestore bool, requestID []byte) (*base.AccountSimplePlayerList, error) {
-	mode := roleImportExisting
-	if allowRestore {
-		mode = roleImportRestore
-	}
-	if len(requestID) != 32 {
-		return nil, accountdirectory.ErrInvalid
-	}
-	return s.createRole(ctx, account, role, mode, requestID, false)
-}
-
-type roleCreateMode uint8
-
-const (
-	roleCreateNormal roleCreateMode = iota
-	roleImportExisting
-	roleImportRestore
-)
-
-func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, role *base.AccountSimplePlayer, mode roleCreateMode, requestID []byte, strictInitial bool) (*base.AccountSimplePlayerList, error) {
+// createRoleWithInitialRows 在一个事务里写角色目录行和 player_store 初始行。同账号同角色的重放只读回列表;
+// 归属不同、已挂寄售或已删除(墓碑)一律冲突,删除后的角色不能复活。
+func (s *AccountDirectoryStore) createRoleWithInitialRows(ctx context.Context, account string, role *base.AccountSimplePlayer) (*base.AccountSimplePlayerList, error) {
 	if !validRole(role) {
 		return nil, accountdirectory.ErrInvalid
 	}
@@ -301,28 +271,10 @@ func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, 
 		if err := lockDirectory(ctx, tx, account, true); err != nil {
 			return err
 		}
-		if mode == roleCreateNormal {
-			if err := s.lockInitialPlayerRoute(ctx, tx, role); err != nil {
-				return err
-			}
-		}
-		var imported *dbpb.AccountRoleImportReceipt
-		if mode != roleCreateNormal {
-			var err error
-			imported, err = beginRoleImport(ctx, tx, requestID, account, role.PlayerId, raw, mode)
-			if err != nil {
-				return err
-			}
+		if err := s.lockInitialPlayerRoute(ctx, tx, role); err != nil {
+			return err
 		}
 		old, err := scanOwnership(tx.QueryRowContext(ctx, "SELECT account,role_proto,owner_revision,trade_listing_id FROM account_role WHERE player_id=? FOR UPDATE", role.PlayerId), role.PlayerId)
-		if mode != roleCreateNormal && (err == nil || errors.Is(err, accountdirectory.ErrMissing)) {
-			if err := requireClosedAdmissions(ctx, tx, role.PlayerId); err != nil {
-				return err
-			}
-			if err := s.requireNoAssetContracts(ctx, tx, role.PlayerId); err != nil {
-				return err
-			}
-		}
 		if err == nil && old.Account != "" {
 			if old.TradeListingId != 0 {
 				return accountdirectory.ErrConflict
@@ -330,33 +282,13 @@ func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, 
 			if old.Account != account || !proto.Equal(old.Role, role) {
 				return accountdirectory.ErrConflict
 			}
-			if imported != nil {
-				if imported.OwnerRevision != 0 {
-					if old.OwnerRevision != imported.OwnerRevision {
-						return accountdirectory.ErrConflict
-					}
-				} else {
-					if old.OwnerRevision == math.MaxUint64 {
-						return errors.New("角色归属修订号耗尽")
-					}
-					if _, err = tx.ExecContext(ctx, "UPDATE account_role SET owner_revision=owner_revision+1,updated_ms="+dbNowMsSQL+" WHERE player_id=?", role.PlayerId); err != nil {
-						return err
-					}
-					if err = finishRoleImport(ctx, tx, imported, old.OwnerRevision+1); err != nil {
-						return err
-					}
-				}
-			}
 			out, err = readRoles(ctx, tx, account)
 			return err
 		}
 		if err != nil && !errors.Is(err, accountdirectory.ErrMissing) {
 			return err
 		}
-		if imported != nil && imported.OwnerRevision != 0 {
-			return accountdirectory.ErrConflict // 原请求已提交过，不能复活后来删除的目录。
-		}
-		if old != nil && mode != roleImportRestore {
+		if old != nil {
 			return accountdirectory.ErrConflict
 		}
 		out, err = readRoles(ctx, tx, account)
@@ -366,38 +298,15 @@ func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, 
 		if len(out.Players) >= s.maxRoles {
 			return accountdirectory.ErrFull
 		}
-		wroteInitial := false
-		if old == nil && mode == roleCreateNormal {
-			wrote, err := s.insertInitialPlayerRows(ctx, tx, role)
-			if err != nil {
-				return err
-			}
-			wroteInitial = wrote
+		if err = s.insertInitialPlayerRows(ctx, tx, role); err != nil {
+			return err
 		}
-		if old != nil {
-			if old.OwnerRevision == math.MaxUint64 {
-				return errors.New("角色归属修订号耗尽")
-			}
-			_, err = tx.ExecContext(ctx, "UPDATE account_role SET account=?,role_proto=?,owner_revision=?,updated_ms=UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 WHERE player_id=?", []byte(account), raw, old.OwnerRevision+1, role.PlayerId)
-		} else {
-			initialMarker := uint64(0)
-			if strictInitial && wroteInitial {
-				initialMarker = 1
-			}
-			_, err = tx.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,initial_player_commit) VALUES (?,?,?,1,UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000,?)", role.PlayerId, []byte(account), raw, initialMarker)
-		}
+		_, err = tx.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,initial_player_commit) VALUES (?,?,?,1,UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000,1)", role.PlayerId, []byte(account), raw)
 		if err != nil {
 			var duplicate *mysql.MySQLError
 			if errors.As(err, &duplicate) && duplicate.Number == 1062 {
 				return accountdirectory.ErrConflict
 			}
-			return err
-		}
-		revision := uint64(1)
-		if old != nil {
-			revision = old.OwnerRevision + 1
-		}
-		if err = finishRoleImport(ctx, tx, imported, revision); err != nil {
 			return err
 		}
 		out.Players = append(out.Players, proto.Clone(role).(*base.AccountSimplePlayer))
@@ -513,7 +422,7 @@ func (s *AccountDirectoryStore) Remove(ctx context.Context, account string, role
 			if err := s.requireNoAssetContracts(ctx, tx, r.PlayerId); err != nil {
 				return err
 			}
-			// 保留墓碑与单调修订号；恢复同 player_id 后旧登录链也不能通过 ABA 重获修改权。
+			// 保留墓碑与单调修订号:删除后这个 player_id 不能再建角,旧登录链也不能通过 ABA 重获修改权。
 			if _, err = tx.ExecContext(ctx, "UPDATE account_role SET account='',owner_revision=owner_revision+1,updated_ms=UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 WHERE player_id=? AND account=? AND owner_revision=?", r.PlayerId, []byte(account), r.OwnerRevision); err != nil {
 				return err
 			}

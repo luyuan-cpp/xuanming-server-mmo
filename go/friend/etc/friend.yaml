@@ -28,10 +28,10 @@ Mode: dev
 #   ZoneId,嵌套段里将来若出现同名键会把改写吃掉。行尾也不能加注释(改写正则要求 `ZoneId: <数字>$`)。
 ZoneId: 1
 LoginRedis:
-  Host: ""
+  Addrs: []
   Password: ""
   DB: 0
-  PoolSize: 8
+  PoolSizePerNode: 8
 
 # etcd 节点注册租约 TTL(秒)= 崩溃场景的切换窗口:路由服 PickRandom 不看连接状态,
 # 进程崩掉后最多这么久还会被选中(契约 §2)。原值 500 意味着挂掉后 8 分钟仍在被路由。
@@ -71,8 +71,7 @@ Etcd:
 # ---- 双存储(契约 §4)----
 # Redis:既有共享库。两个用途:
 #   1) FriendRedis 未配置时私有 key 的回落目标;
-#   2) 跨运行时契约 key player:session:{id}(判好友在不在线)的**唯一**句柄 ——
-#      写者含 C++ scene / login,hiredis 没有集群客户端,所以共享库不许集群化。
+#   2) PlayerRedis 没写 Addrs 时玩家域的落点。
 # 这是 zrpc.RpcServerConf 自带的 Redis(RedisKeyConf)段:Key 仅在 Auth=true 时使用,
 # 但字段不是 optional,Redis 段存在时必须显式写(空串即可),否则加载报 "Redis.Key" is not set。
 # 不写 DB(契约 §4):契约 key 由多个运行时共写,DB 号必须全仓一致 = 默认 0。
@@ -80,6 +79,14 @@ Redis:
   Host: 127.0.0.1:6379
   Type: node
   Key: ""
+
+# 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):player:session:{id}(判在线、推送路由、在线目录)
+# 与 player:{id}:sync_digest。不写 Addrs = 指向上面的 Redis 实例。集群部署写种子地址并打开 Cluster:
+#   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
+#   Cluster: true
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。读写 3s、取连接 4s、拨号 5s 沿用这条路径换句柄之前的口径。
+PlayerRedis:
+  PoolSizePerNode: 20
 
 # FriendRedis:friend 私有 key(好友列表缓存 / 申请配额 / 限流)的存储。
 # 全部单 key 操作,Redis Cluster 安全;Host 逗号分隔种子地址,Type 必须是 cluster。

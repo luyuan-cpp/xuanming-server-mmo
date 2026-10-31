@@ -11,14 +11,20 @@ import (
 	"scene_manager/internal/svc"
 	"shared/kafkacmd"
 	"shared/ownerepoch"
+	"shared/redisslot"
 
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 )
 
+// placementKeys 是落点脚本(铸造与不铸造两段)的 KEYS,全部在玩家自己的 slot 上(scene_keys_contract_test.go)。
+func placementKeys(playerId uint64) []string {
+	return []string{ownerepoch.OwnerEpochKey(playerId), getPlayerLocationKey(playerId), ownerepoch.HandoffKey(playerId), locationRevisionKey(playerId), locationRevisionFloorKey(playerId)}
+}
+
 func getPlayerLocationKey(playerId uint64) string {
-	return fmt.Sprintf("player:%d:location", playerId)
+	return redisslot.LocationKey(playerId)
 }
 
 // GateTopicName returns the Kafka topic name for gate control-plane commands.
@@ -192,7 +198,7 @@ func placePlayerLocation(svcCtx *svc.ServiceContext, playerId uint64, sceneId ui
 //     调用方按通用落点错误回 3。
 //
 // 铸造 EVAL 结果未知(传输错误重发耗尽)时返回普通错误:首发可能已生效,与以前 go-zero 自动重发耗尽同一语义。
-// mint=false 的 CAS 写不铸造新 epoch,不发 WAITAOF,仍走 svcCtx.Redis。
+// mint=false 的 CAS 写不铸造新 epoch,不发 WAITAOF,走 svcCtx.PlayerRedis。
 func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64, sceneId uint64, nodeId string, zoneId uint32,
 	guard placementGuard) (placedLocation, error) {
 	observedEpoch, mint := guard.observedEpoch, guard.mint
@@ -231,7 +237,7 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 	}
 	raw := string(data)
 
-	keys := []string{ownerepoch.OwnerEpochKey(playerId), getPlayerLocationKey(playerId), ownerepoch.HandoffKey(playerId), locationRevisionKey(playerId), locationRevisionFloorKey(playerId)}
+	keys := placementKeys(playerId)
 	args := []any{strconv.FormatUint(observedEpoch, 10), raw, guard.requiredMarker,
 		guard.expectLoc.mode.luaArg(), guard.expectLoc.raw, optionalRevisionText(guard.ownerRevision), locationRevisionTag(guard.ownerRevision, raw), guard.observedTag}
 	var result any
@@ -246,7 +252,7 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 		}
 		result = minted.Reply
 	} else {
-		result, err = svcCtx.Redis.Eval(script, keys, args...)
+		result, err = playerRedisEval(svcCtx, script, keys, args...)
 		if err != nil {
 			return placedLocation{}, err
 		}
@@ -338,8 +344,8 @@ func setLocationIdentityIfUnchanged(svcCtx *svc.ServiceContext, playerId uint64,
 	if observedTag != "" {
 		newTag = locationRevisionTag(ownerRevision, string(data))
 	}
-	result, err := svcCtx.Redis.Eval(luaSetLocationIfEpoch,
-		[]string{ownerepoch.OwnerEpochKey(playerId), getPlayerLocationKey(playerId), ownerepoch.HandoffKey(playerId), locationRevisionKey(playerId), locationRevisionFloorKey(playerId)},
+	result, err := playerRedisEval(svcCtx, luaSetLocationIfEpoch,
+		placementKeys(playerId),
 		strconv.FormatUint(observedEpoch, 10), string(data), "", expect.mode.luaArg(), expect.raw, optionalRevisionText(ownerRevision), newTag, observedTag)
 	if err != nil {
 		return err
@@ -359,9 +365,7 @@ func setLocationIdentityIfUnchanged(svcCtx *svc.ServiceContext, playerId uint64,
 // 刻意**不删** player:{id}:owner_epoch:epoch 是单调递增的归属代际,删掉再从 1
 // 开始铸造会让一个旧节点手里的旧值重新"合法";下一次 EnterScene 在它之上继续铸造(至少 +1)。
 func DeletePlayerLocation(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64) error {
-	key := getPlayerLocationKey(playerId)
-	_, err := svcCtx.Redis.Del(key)
-	return err
+	return svcCtx.PlayerRedis.Del(ctx, getPlayerLocationKey(playerId)).Err()
 }
 
 // GetSceneZone looks up the zone_id for a scene from Redis (scene:{id}:zone).

@@ -1,28 +1,26 @@
 package team
 
-// 服务层测试(设计文档 docs/design/team-system.md §I.3 #12-#15、#23-#27)。
+// 服务层不经存储的部分(设计文档 docs/design/team-system.md §I.3 #12-#14):home zone 查询 fail-closed、
+// 缺 session 拒绝、推送收件人与 scene 信号、归队信号、展示资料。经存储的流程在 sql_store_integration_test.go(真 TiDB)。
 //
-// 确定性:miniredis 时钟固定在 storeBase(store_test.go),不读 Go 墙钟;异步副作用经 asyncFn
-// 同步执行,推送与 scene 信号由桩(pushFn / sceneRefreshFn)记录;并发时序用 afterReadHook /
-// beforeInvitePruneHook 在固定点插入。测试之间不并行(包级测试缝)。
+// 确定性:提交由纯函数规则算出(teamLedger),不起 SQL;会话与位置放 miniredis,时钟固定在 ruleNow;异步副作用经 asyncFn
+// 同步执行,推送与 scene 信号由桩(pushFn / sceneRefreshFn)记录。测试之间不并行(包级测试缝)。
 
 import (
 	"context"
 	"errors"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"match/generated/pb/game"
-	"match/internal/config"
 	"match/internal/discovery"
 	"match/internal/metrics"
 	"match/internal/pkg/ctxkeys"
 	"match/internal/playercontract"
 	"match/internal/svc"
 	"shared/drainproof"
+	"shared/playerredis"
 
 	base "proto/common/base"
 	event "proto/common/event"
@@ -42,7 +40,7 @@ import (
 )
 
 const (
-	testZone         uint32 = 1
+	testZone         uint32 = ruleZone
 	testSceneNodeKey        = "SceneNodeService.rpc/zone/1/node_type/3/node_id/1"
 	testSceneUuid           = "scene-node-uuid-1"
 )
@@ -73,38 +71,6 @@ func (f *fakeHomeZones) HomeZones(_ context.Context, ids []uint64) (map[uint64]u
 	return out, nil
 }
 
-// fakeDataService 只实现 BatchGetPlayerHomeZone;嵌入的接口为 nil,误调其它方法会直接 panic。
-type fakeDataService struct {
-	dspb.DataServiceClient
-	zones map[uint64]uint32
-	err   error
-}
-
-func (f *fakeDataService) BatchGetPlayerHomeZone(_ context.Context, in *dspb.BatchGetPlayerHomeZoneRequest, _ ...grpc.CallOption) (*dspb.BatchGetPlayerHomeZoneResponse, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	out := map[uint64]uint32{}
-	for _, id := range in.GetPlayerIds() {
-		if zone, ok := f.zones[id]; ok {
-			out[id] = zone
-		}
-	}
-	return &dspb.BatchGetPlayerHomeZoneResponse{PlayerZoneMap: out}, nil
-}
-
-type seqIds struct {
-	mu   sync.Mutex
-	next uint64
-}
-
-func (g *seqIds) Generate() (uint64, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.next++
-	return g.next, nil
-}
-
 // ---- 夹具 ----
 
 type serviceHarness struct {
@@ -112,37 +78,35 @@ type serviceHarness struct {
 	mr      *miniredis.Miniredis
 	svcCtx  *svc.ServiceContext
 	service *Service
-	server  *Server
-	zones   *fakeHomeZones
+	port    *fakeBattlePort
 
 	mu     sync.Mutex
 	pushes []pushRecord
 	scenes []*kafkapb.SceneCommand
 }
 
-func newServiceHarness(t *testing.T, teamConf config.TeamConf) *serviceHarness {
+func newServiceHarness(t *testing.T) *serviceHarness {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	mr.SetTime(storeBase)
+	mr.SetTime(time.UnixMilli(int64(ruleNow)).UTC())
 	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	playerRedis, err := playerredis.New(playerredis.Config{Addrs: []string{mr.Addr()}, PoolSizePerNode: 16})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = playerRedis.Close() })
 	svcCtx := &svc.ServiceContext{
 		RelayAdmission: drainproof.New(),
-		Config:         config.Config{Team: teamConf},
 		MatchRedis:     rds,
-		SharedRedis:    rds,
-		Redis:          rds,
+		PlayerRedis:    playerRedis,
 		SceneNodes:     discovery.NewNodeWatcher("scene", svc.SceneNodeRpcPrefix, nil, nil),
 	}
 	svcCtx.SceneNodes.Upsert(testSceneNodeKey, discovery.NodeEntry{
 		NodeId: 1, ZoneId: testZone, NodeUuid: testSceneUuid, Endpoint: "127.0.0.1:1",
 	})
-	h := &serviceHarness{t: t, mr: mr, svcCtx: svcCtx, zones: &fakeHomeZones{zones: map[uint64]uint32{}}}
-	h.service = NewService(svcCtx, h.zones, nil)
-	h.service.ids = &seqIds{next: 9_000_000}
-	h.server = NewServer(h.service)
+	port := &fakeBattlePort{}
+	h := &serviceHarness{t: t, mr: mr, svcCtx: svcCtx, port: port}
+	h.service = &Service{svcCtx: svcCtx, presence: presenceReader{rds: playerRedis}, starter: port}
 
 	prevPush, prevScene, prevAsync := pushFn, sceneRefreshFn, asyncFn
-	prevRead, prevPrune := afterReadHook, beforeInvitePruneHook
 	pushFn = func(_ context.Context, _ *svc.ServiceContext, playerId uint64, messageId uint32, msg proto.Message) error {
 		h.mu.Lock()
 		defer h.mu.Unlock()
@@ -156,62 +120,25 @@ func newServiceHarness(t *testing.T, teamConf config.TeamConf) *serviceHarness {
 		return nil
 	}
 	asyncFn = func(_ string, fn func()) { fn() }
-	t.Cleanup(func() {
-		pushFn, sceneRefreshFn, asyncFn = prevPush, prevScene, prevAsync
-		afterReadHook, beforeInvitePruneHook = prevRead, prevPrune
-	})
+	t.Cleanup(func() { pushFn, sceneRefreshFn, asyncFn = prevPush, prevScene, prevAsync })
 	return h
 }
 
-// addPlayers 铺 ONLINE 会话、场景位置(节点 1)与 home zone。
-func (h *serviceHarness) addPlayers(zone uint32, ids ...uint64) {
+// addPlayers 铺 ONLINE 会话与场景位置(节点 1)。
+func (h *serviceHarness) addPlayers(ids ...uint64) {
 	h.t.Helper()
 	for _, id := range ids {
 		session, err := proto.Marshal(&plpb.PlayerSession{PlayerId: id, State: plpb.PlayerSessionState_SESSION_STATE_ONLINE})
 		require.NoError(h.t, err)
 		require.NoError(h.t, h.mr.Set(playercontract.SessionKey(id), string(session)))
-		location, err := proto.Marshal(&smpb.PlayerLocation{SceneId: 1, NodeId: "1", ZoneId: zone})
+		location, err := proto.Marshal(&smpb.PlayerLocation{SceneId: 1, NodeId: "1", ZoneId: testZone})
 		require.NoError(h.t, err)
 		require.NoError(h.t, h.mr.Set(playercontract.LocationKey(id), string(location)))
-		h.zones.zones[id] = zone
 	}
 }
 
 func asPlayer(playerId uint64) context.Context {
 	return ctxkeys.WithSessionDetails(context.Background(), &base.SessionDetails{PlayerId: playerId})
-}
-
-func (h *serviceHarness) ok(resp *teampb.TeamResponse, err error) *teampb.TeamResponse {
-	h.t.Helper()
-	require.NoError(h.t, err)
-	require.NotNil(h.t, resp)
-	return resp
-}
-
-func requireCode(t *testing.T, want uint32, resp *teampb.TeamResponse) {
-	t.Helper()
-	require.Equal(t, want, resp.GetErrorMessage().GetId(), "resp=%v", resp)
-}
-
-func (h *serviceHarness) create(leader uint64) uint64 {
-	h.t.Helper()
-	resp := h.ok(h.server.CreateTeam(asPlayer(leader), &teampb.CreateTeamRequest{}))
-	requireCode(h.t, 0, resp)
-	require.NotZero(h.t, resp.GetTeam().GetTeamId())
-	return resp.GetTeam().GetTeamId()
-}
-
-func (h *serviceHarness) apply(applicant, target uint64) *teampb.TeamResponse {
-	h.t.Helper()
-	return h.ok(h.server.ApplyJoinTeam(asPlayer(applicant), &teampb.ApplyJoinTeamRequest{TargetPlayerId: target}))
-}
-
-// join 走真实路径入队:申请 → 队长同意。
-func (h *serviceHarness) join(leader, teamId, playerId uint64) {
-	h.t.Helper()
-	requireCode(h.t, 0, h.apply(playerId, leader))
-	requireCode(h.t, 0, h.ok(h.server.HandleApplication(asPlayer(leader),
-		&teampb.HandleApplicationRequest{ApplicantId: playerId, Approve: true, ExpectedTeamId: teamId})))
 }
 
 func (h *serviceHarness) takePushes() []pushRecord {
@@ -228,14 +155,6 @@ func (h *serviceHarness) takeScenes() []*kafkapb.SceneCommand {
 	out := h.scenes
 	h.scenes = nil
 	return out
-}
-
-func (h *serviceHarness) epochOf(playerId uint64) uint64 {
-	return parseUint(h.mr.HGet(playerIndexKey(playerId), indexFieldEpoch))
-}
-
-func (h *serviceHarness) versionOf(teamId uint64) uint64 {
-	return parseUint(h.mr.HGet(recordKey(teamId), recFieldVer))
 }
 
 // requireSceneRefresh 断言这一段操作发出的 scene 信号恰好发给 want,且每条都满足 §F.3 契约。
@@ -275,86 +194,86 @@ func requireEvent(t *testing.T, p pushRecord, to uint64, kind teampb.TeamEventTy
 	return ev
 }
 
-func requireNoTeamKeys(t *testing.T, mr *miniredis.Miniredis) {
-	t.Helper()
-	for _, key := range mr.Keys() {
-		require.False(t, strings.HasPrefix(key, "team:"), "不应写入组队 key: %s", key)
+// teamLedger 用纯函数规则算出一连串提交,代替存储层:version 每次提交 +1,进出队的人 epoch 前进,
+// 与 sqlTeamStore.commitDecision 同口径。集合契约由 validateCommitSets 把关,和真实提交走同一道校验。
+type teamLedger struct {
+	t        *testing.T
+	rec      *teampb.TeamRecord
+	version  uint64
+	epochs   map[uint64]uint64
+	sessions Sessions
+	now      uint64
+}
+
+func newTeamLedger(t *testing.T, sessions Sessions) *teamLedger {
+	return &teamLedger{t: t, epochs: map[uint64]uint64{}, sessions: sessions, now: ruleNow}
+}
+
+func (l *teamLedger) commit(op Op) *CommitResult {
+	l.t.Helper()
+	if l.rec != nil && FindMember(l.rec, op.Caller) != nil {
+		op.CallerTeamId = l.rec.GetTeamId()
 	}
+	d := Apply(op, l.rec, l.now, l.sessions, RuleConfig{})
+	require.Zero(l.t, d.Code)
+	require.True(l.t, d.Changed)
+	require.NoError(l.t, validateCommitSets(ruleTid, d))
+	l.version++
+	indexes := make(map[uint64]IndexEntry, len(d.Joined)+len(d.Kept)+len(d.Left))
+	for _, pid := range d.Joined {
+		l.epochs[pid]++
+		indexes[pid] = IndexEntry{TeamId: ruleTid, Epoch: l.epochs[pid]}
+	}
+	for _, pid := range d.Kept {
+		indexes[pid] = IndexEntry{TeamId: ruleTid, Epoch: l.epochs[pid]}
+	}
+	for _, pid := range d.Left {
+		l.epochs[pid]++
+		indexes[pid] = IndexEntry{Epoch: l.epochs[pid]}
+	}
+	l.rec = d.Record
+	return &CommitResult{TeamId: ruleTid, Version: l.version, Decision: d, Indexes: indexes, NowMs: l.now}
 }
 
 // ---- #12 / #27:home zone 查询 fail-closed ----
 
-func TestHomeZoneMissingFailsClosed(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1)
-	delete(h.zones.zones, 1)
-
-	resp := h.ok(h.server.CreateTeam(asPlayer(1), &teampb.CreateTeamRequest{}))
-	requireCode(t, ErrHomeZoneUnknown, resp)
-	require.Zero(t, resp.GetTeam().GetTeamId())
-	requireNoTeamKeys(t, h.mr)
-}
-
-func TestHomeZoneLookupErrorIsInternal(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1)
-	// NonBlock 客户端在 data_service 未起时返回 Unavailable(§I.3 #27)。
-	h.zones.err = status.Error(codes.Unavailable, "connection refused")
-
-	requireCode(t, ErrInternal, h.ok(h.server.CreateTeam(asPlayer(1), &teampb.CreateTeamRequest{})))
-	requireNoTeamKeys(t, h.mr)
-}
-
-func TestDataServiceHomeZone(t *testing.T) {
+func TestHomeZoneOfFailsClosed(t *testing.T) {
 	ctx := context.Background()
+	zones := &fakeHomeZones{zones: map[uint64]uint32{1: testZone}}
+	s := &Service{homeZones: zones}
 
-	lookup := NewDataServiceHomeZone(&fakeDataService{zones: map[uint64]uint32{1: 3}}, 0)
-	zones, err := lookup.HomeZones(ctx, []uint64{1, 2})
-	require.NoError(t, err)
-	require.Equal(t, uint32(3), zones[1])
-	_, mapped := zones[2]
-	require.False(t, mapped, "batch 回包缺项 = 未映射,原样交给调用方")
+	zone, code := s.homeZoneOf(ctx, 1)
+	require.Zero(t, code)
+	require.Equal(t, testZone, zone)
 
-	down := NewDataServiceHomeZone(&fakeDataService{err: status.Error(codes.Unavailable, "down")}, 0)
-	_, err = down.HomeZones(ctx, []uint64{1})
-	require.Error(t, err)
-	require.Equal(t, codes.Unavailable, status.Code(err))
+	_, code = s.homeZoneOf(ctx, 2)
+	require.Equal(t, ErrHomeZoneUnknown, code, "未映射不是故障,按业务拒绝")
 
-	_, err = NewDataServiceHomeZone(nil, 0).HomeZones(ctx, []uint64{1})
-	require.ErrorIs(t, err, errHomeZoneClientMissing)
+	// 查询失败按故障处理(§I.3 #27)。
+	zones.err = status.Error(codes.Unavailable, "connection refused")
+	_, code = s.homeZoneOf(ctx, 1)
+	require.Equal(t, ErrInternal, code)
 
-	// DataServiceRpc 未配置(客户端为 nil):建队回 Internal,而不是 panic 或拖垮进程。
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1)
-	h.service.homeZones = NewDataServiceHomeZone(nil, 0)
-	requireCode(t, ErrInternal, h.ok(h.server.CreateTeam(asPlayer(1), &teampb.CreateTeamRequest{})))
-	requireNoTeamKeys(t, h.mr)
+	_, code = (&Service{}).homeZoneOf(ctx, 1)
+	require.Equal(t, ErrInternal, code, "未注入查询端口按故障处理,不 panic")
 }
 
-func TestApplyAndInviteHomeZoneFailClosed(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2, 3)
-	tid := h.create(1)
+// 真读路由行的用例在 sql_store_integration_test.go(TestTeamTiDBHomeZoneResolvesMergedZone)。
+func TestAuthorityHomeZoneWithoutStoreFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	_, err := NewAuthorityHomeZone(nil, 0).HomeZones(ctx, []uint64{1})
+	require.ErrorIs(t, err, errHomeZoneStoreMissing)
 
-	delete(h.zones.zones, 2)
-	requireCode(t, ErrHomeZoneUnknown, h.apply(2, 1))
-
-	delete(h.zones.zones, 3)
-	requireCode(t, ErrHomeZoneUnknown, h.ok(h.server.InviteToTeam(asPlayer(1),
-		&teampb.InviteToTeamRequest{TargetPlayerId: 3, ExpectedTeamId: tid})))
-
-	rec := loadRecord(t, h.mr, tid)
-	require.Empty(t, rec.GetApplications())
-	require.Empty(t, rec.GetInvites())
+	// 存储没装配:回 Internal,而不是 panic 或拖垮进程。
+	_, code := (&Service{homeZones: NewAuthorityHomeZone(nil, 0)}).homeZoneOf(ctx, 1)
+	require.Equal(t, ErrInternal, code)
 }
 
 // ---- #13:缺 session fail-closed;Notify* 无副作用 ----
 
+// 外壳在进 Service 之前就拒绝,所以这里的 Service 没有存储、端口与任何依赖:一旦越过外壳就会 panic。
 func TestMissingSessionFailsClosed(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1)
-	before := h.mr.Dump()
-
+	server := NewServer(&Service{})
 	contexts := map[string]context.Context{
 		"无 session":   context.Background(),
 		"player_id=0": ctxkeys.WithSessionDetails(context.Background(), &base.SessionDetails{}),
@@ -362,37 +281,37 @@ func TestMissingSessionFailsClosed(t *testing.T) {
 	for name, ctx := range contexts {
 		calls := map[string]func() (*teampb.TeamResponse, error){
 			methodCreateTeam: func() (*teampb.TeamResponse, error) {
-				return h.server.CreateTeam(ctx, &teampb.CreateTeamRequest{})
+				return server.CreateTeam(ctx, &teampb.CreateTeamRequest{})
 			},
 			methodGetMyTeam: func() (*teampb.TeamResponse, error) {
-				return h.server.GetMyTeam(ctx, &teampb.GetMyTeamRequest{NotifyOnline: true})
+				return server.GetMyTeam(ctx, &teampb.GetMyTeamRequest{NotifyOnline: true})
 			},
 			methodApplyJoinTeam: func() (*teampb.TeamResponse, error) {
-				return h.server.ApplyJoinTeam(ctx, &teampb.ApplyJoinTeamRequest{TargetPlayerId: 1})
+				return server.ApplyJoinTeam(ctx, &teampb.ApplyJoinTeamRequest{TargetPlayerId: 1})
 			},
 			methodHandleApplication: func() (*teampb.TeamResponse, error) {
-				return h.server.HandleApplication(ctx, &teampb.HandleApplicationRequest{ApplicantId: 1, Approve: true, ExpectedTeamId: 1})
+				return server.HandleApplication(ctx, &teampb.HandleApplicationRequest{ApplicantId: 1, Approve: true, ExpectedTeamId: 1})
 			},
 			methodInviteToTeam: func() (*teampb.TeamResponse, error) {
-				return h.server.InviteToTeam(ctx, &teampb.InviteToTeamRequest{TargetPlayerId: 1, ExpectedTeamId: 1})
+				return server.InviteToTeam(ctx, &teampb.InviteToTeamRequest{TargetPlayerId: 1, ExpectedTeamId: 1})
 			},
 			methodRespondInvite: func() (*teampb.TeamResponse, error) {
-				return h.server.RespondInvite(ctx, &teampb.RespondInviteRequest{TeamId: 1, Accept: true})
+				return server.RespondInvite(ctx, &teampb.RespondInviteRequest{TeamId: 1, Accept: true})
 			},
 			methodLeaveTeam: func() (*teampb.TeamResponse, error) {
-				return h.server.LeaveTeam(ctx, &teampb.LeaveTeamRequest{ExpectedTeamId: 1})
+				return server.LeaveTeam(ctx, &teampb.LeaveTeamRequest{ExpectedTeamId: 1})
 			},
 			methodKickMember: func() (*teampb.TeamResponse, error) {
-				return h.server.KickMember(ctx, &teampb.KickMemberRequest{TargetPlayerId: 1, ExpectedTeamId: 1})
+				return server.KickMember(ctx, &teampb.KickMemberRequest{TargetPlayerId: 1, ExpectedTeamId: 1})
 			},
 			methodTransferLeader: func() (*teampb.TeamResponse, error) {
-				return h.server.TransferLeader(ctx, &teampb.TransferLeaderRequest{TargetPlayerId: 1, ExpectedTeamId: 1})
+				return server.TransferLeader(ctx, &teampb.TransferLeaderRequest{TargetPlayerId: 1, ExpectedTeamId: 1})
 			},
 			methodDisbandTeam: func() (*teampb.TeamResponse, error) {
-				return h.server.DisbandTeam(ctx, &teampb.DisbandTeamRequest{ExpectedTeamId: 1})
+				return server.DisbandTeam(ctx, &teampb.DisbandTeamRequest{ExpectedTeamId: 1})
 			},
 			methodStartTeamMatch: func() (*teampb.TeamResponse, error) {
-				return h.server.StartTeamMatch(ctx, &teampb.StartTeamMatchRequest{BattleConfigId: 1, ExpectedTeamId: 1})
+				return server.StartTeamMatch(ctx, &teampb.StartTeamMatchRequest{BattleConfigId: 1, ExpectedTeamId: 1})
 			},
 		}
 		for method, call := range calls {
@@ -403,167 +322,131 @@ func TestMissingSessionFailsClosed(t *testing.T) {
 			require.Nil(t, resp.GetTeam(), "%s/%s:没有身份不回任何视图", name, method)
 			require.Equal(t, rejectedBefore+1, metrics.TeamRPCValue(method, rpcOutcomeNoSession), "%s/%s", name, method)
 		}
-		invites, err := h.server.ListMyInvites(ctx, &teampb.ListMyInvitesRequest{})
+		invites, err := server.ListMyInvites(ctx, &teampb.ListMyInvitesRequest{})
 		require.NoError(t, err)
 		require.Equal(t, ErrPlayerId, invites.GetErrorMessage().GetId(), name)
 	}
 
 	// 客户端误调推送占位方法:返回 Empty,不读不写。
-	_, err := h.server.NotifyTeamSnapshot(asPlayer(1), &teampb.TeamSnapshotS2C{Team: &teampb.TeamView{TeamId: 1}})
+	_, err := server.NotifyTeamSnapshot(asPlayer(1), &teampb.TeamSnapshotS2C{Team: &teampb.TeamView{TeamId: 1}})
 	require.NoError(t, err)
-	_, err = h.server.NotifyTeamInvite(asPlayer(1), &teampb.TeamInviteS2C{Invite: &teampb.TeamIncomingInviteView{TeamId: 1}})
+	_, err = server.NotifyTeamInvite(asPlayer(1), &teampb.TeamInviteS2C{Invite: &teampb.TeamIncomingInviteView{TeamId: 1}})
 	require.NoError(t, err)
-	_, err = h.server.NotifyTeamEvent(asPlayer(1), &teampb.TeamEventS2C{TeamId: 1})
+	_, err = server.NotifyTeamEvent(asPlayer(1), &teampb.TeamEventS2C{TeamId: 1})
 	require.NoError(t, err)
-
-	require.Equal(t, before, h.mr.Dump())
-	require.Empty(t, h.takePushes())
-	require.Empty(t, h.takeScenes())
 }
 
 // ---- #14:推送收件人、reason、队长可见性、各人 epoch、scene 信号 ----
 
 func TestPushAndSceneRecipients(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2, 3, 4)
+	h := newServiceHarness(t)
+	h.addPlayers(1, 2, 3, 4)
+	l := newTeamLedger(t, allOnline(1, 2, 3, 4))
 
 	// 建队:回包即视图,不推送;scene 只通知队长。
-	tid := h.create(1)
+	h.service.publish(1, []*CommitResult{l.commit(CreateOp(1, ruleTid, testZone))})
 	require.Empty(t, h.takePushes())
 	h.requireSceneRefresh(1)
 
 	// 申请:只推队长 APPLICATION_CHANGED,队长视图带申请;成员关系没变,不发 scene。
-	requireCode(t, 0, h.apply(2, 1))
+	h.service.publish(2, []*CommitResult{l.commit(ApplyOp(2, testZone))})
 	pushes := h.takePushes()
 	require.Len(t, pushes, 1)
 	snap := requireSnapshot(t, pushes[0], 1, teampb.TeamChangeReason_TEAM_CHANGE_REASON_APPLICATION_CHANGED)
 	require.Len(t, snap.GetTeam().GetApplications(), 1)
 	require.Equal(t, uint64(2), snap.GetTeam().GetApplications()[0].GetPlayer().GetPlayerId())
 	h.requireSceneRefresh()
-	requireCode(t, 0, h.apply(3, 1))
+	h.service.publish(3, []*CommitResult{l.commit(ApplyOp(3, testZone))})
 	h.takePushes()
 
 	// 同意 2:新人收 MEMBER_JOINED(队长是调用者,看回包);非队长看不到申请列表,只看到计数;
 	// 各人 epoch 取自同一次提交;scene 只通知新人。
-	resp := h.ok(h.server.HandleApplication(asPlayer(1),
-		&teampb.HandleApplicationRequest{ApplicantId: 2, Approve: true, ExpectedTeamId: tid}))
-	requireCode(t, 0, resp)
-	require.Len(t, resp.GetTeam().GetApplications(), 1, "队长回包带剩余申请")
-	require.Equal(t, h.epochOf(1), resp.GetTeam().GetMembershipEpoch())
-	require.Equal(t, h.versionOf(tid), resp.GetTeam().GetVersion())
+	h.service.publish(1, []*CommitResult{l.commit(HandleApplicationOp(1, 2, true))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	snap = requireSnapshot(t, pushes[0], 2, teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_JOINED)
 	require.Equal(t, uint64(2), snap.GetActorId())
-	require.Equal(t, tid, snap.GetTeam().GetTeamId())
+	require.Equal(t, ruleTid, snap.GetTeam().GetTeamId())
 	require.Empty(t, snap.GetTeam().GetApplications(), "申请只下发给队长")
 	require.Empty(t, snap.GetTeam().GetPendingInvites())
 	require.Equal(t, uint32(1), snap.GetTeam().GetApplicationCount())
-	require.Equal(t, h.epochOf(2), snap.GetTeam().GetMembershipEpoch())
-	require.Equal(t, h.versionOf(tid), snap.GetTeam().GetVersion())
+	require.Equal(t, l.epochs[2], snap.GetTeam().GetMembershipEpoch())
+	require.Equal(t, l.version, snap.GetTeam().GetVersion())
 	require.Len(t, snap.GetTeam().GetMembers(), 2)
 	h.requireSceneRefresh(2)
 
 	// 拒绝 3:申请人不在队里、收不到视图,只收 APPLICATION_REJECTED;队长是调用者,不另推快照。
-	requireCode(t, 0, h.ok(h.server.HandleApplication(asPlayer(1),
-		&teampb.HandleApplicationRequest{ApplicantId: 3, Approve: false, ExpectedTeamId: tid})))
+	h.service.publish(1, []*CommitResult{l.commit(HandleApplicationOp(1, 3, false))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	ev := requireEvent(t, pushes[0], 3, teampb.TeamEventType_TEAM_EVENT_TYPE_APPLICATION_REJECTED)
-	require.Equal(t, tid, ev.GetTeamId())
+	require.Equal(t, ruleTid, ev.GetTeamId())
 	require.Equal(t, uint64(1), ev.GetActorId())
 	h.requireSceneRefresh()
 
-	// 邀请 4:被邀请人收 NotifyTeamInvite;队长回包带已发出的邀请。
-	resp = h.ok(h.server.InviteToTeam(asPlayer(1), &teampb.InviteToTeamRequest{TargetPlayerId: 4, ExpectedTeamId: tid}))
-	requireCode(t, 0, resp)
-	require.Len(t, resp.GetTeam().GetPendingInvites(), 1)
+	// 邀请 4:被邀请人收 NotifyTeamInvite。
+	h.service.publish(1, []*CommitResult{l.commit(InviteOp(1, 4, testZone))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	require.Equal(t, uint64(4), pushes[0].playerId)
 	require.Equal(t, uint32(game.ClientPlayerTeamNotifyTeamInviteMessageId), pushes[0].messageId)
 	invite, isInvite := pushes[0].msg.(*teampb.TeamInviteS2C)
 	require.True(t, isInvite)
-	require.Equal(t, tid, invite.GetInvite().GetTeamId())
+	require.Equal(t, ruleTid, invite.GetInvite().GetTeamId())
 	require.Equal(t, uint64(1), invite.GetInvite().GetInviter().GetPlayerId())
 	require.Equal(t, uint64(1), invite.GetInvite().GetLeaderId())
 	require.Equal(t, uint32(2), invite.GetInvite().GetMemberCount())
-	require.Equal(t, baseMs()+InviteTTLMs, invite.GetInvite().GetExpireAtMs())
-	require.Equal(t, baseMs(), invite.GetServerTimeMs())
+	require.Equal(t, ruleNow+InviteTTLMs, invite.GetInvite().GetExpireAtMs())
+	require.Equal(t, ruleNow, invite.GetServerTimeMs())
 	h.requireSceneRefresh()
 
 	// 踢 2:被踢者收 team_id=0 的空视图 MEMBER_KICKED,epoch 为提交后的新值;scene 只通知被踢者。
-	requireCode(t, 0, h.ok(h.server.KickMember(asPlayer(1), &teampb.KickMemberRequest{TargetPlayerId: 2, ExpectedTeamId: tid})))
+	h.service.publish(1, []*CommitResult{l.commit(KickOp(1, 2))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	snap = requireSnapshot(t, pushes[0], 2, teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_KICKED)
 	require.Zero(t, snap.GetTeam().GetTeamId())
 	require.Zero(t, snap.GetTeam().GetVersion())
-	require.Equal(t, h.epochOf(2), snap.GetTeam().GetMembershipEpoch())
-	require.Equal(t, "0", h.mr.HGet(playerIndexKey(2), indexFieldTid))
+	require.Equal(t, l.epochs[2], snap.GetTeam().GetMembershipEpoch())
 	h.requireSceneRefresh(2)
 
 	// 解散:未过期邀请的被邀请人收 INVITE_REVOKED;scene 通知全体成员(此时只剩队长)。
-	resp = h.ok(h.server.DisbandTeam(asPlayer(1), &teampb.DisbandTeamRequest{ExpectedTeamId: tid}))
-	requireCode(t, 0, resp)
-	require.Zero(t, resp.GetTeam().GetTeamId())
-	require.Equal(t, h.epochOf(1), resp.GetTeam().GetMembershipEpoch())
+	h.service.publish(1, []*CommitResult{l.commit(DisbandOp(1))})
 	pushes = h.takePushes()
 	require.Len(t, pushes, 1)
 	ev = requireEvent(t, pushes[0], 4, teampb.TeamEventType_TEAM_EVENT_TYPE_INVITE_REVOKED)
-	require.Equal(t, tid, ev.GetTeamId())
+	require.Equal(t, ruleTid, ev.GetTeamId())
 	h.requireSceneRefresh(1)
-	require.False(t, h.mr.Exists(recordKey(tid)))
-	require.False(t, h.mr.Exists(projectionKey(tid)))
 }
 
-// ---- #7 / §H.3:整队 24h 空闲过期后,GetMyTeam 与未绑定回包的空视图能被客户端接受 ----
+// 冲突次数进 team_commit_retry_total;只有提交了才派发副作用(被拒的写不推送、不发 scene、不 bump)。
+func TestMutateEffects(t *testing.T) {
+	h := newServiceHarness(t)
+	h.addPlayers(1)
+	l := newTeamLedger(t, allOnline(1))
+	digest := h.withDigestRecorder()
 
-func TestExpiredTeamEmptyViewIsAcceptedByClient(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2)
-	tid := h.create(1)
-	h.join(1, tid, 2)
-	h.takePushes()
-	h.takeScenes()
-	// 客户端当前值 = 最后一次提交后各人的 (epoch, version)(队长看回包,2 看 MEMBER_JOINED 推送)。
-	ver := h.versionOf(tid)
-	curEpoch := map[uint64]uint64{1: h.epochOf(1), 2: h.epochOf(2)}
-
-	// 全队挂机 24h 无提交、无人打开面板:记录、投影、全员索引同批过期(Redis 时钟同步前进)。
-	setRedisMs(h.mr, baseMs()+25*3600*1000)
-	h.mr.FastForward(25 * time.Hour)
-	require.False(t, h.mr.Exists(playerIndexKey(2)))
-
-	requireAccepted := func(pid uint64, resp *teampb.TeamResponse) {
-		t.Helper()
-		require.Zero(t, resp.GetTeam().GetTeamId())
-		require.True(t, clientAccepts(curEpoch[pid], ver, resp.GetTeam().GetMembershipEpoch(), resp.GetTeam().GetVersion()),
-			"player %d 当前 epoch=%d,空视图 epoch=%d 被 §H.3 丢弃", pid, curEpoch[pid], resp.GetTeam().GetMembershipEpoch())
-	}
-	mine := h.ok(h.server.GetMyTeam(asPlayer(2), &teampb.GetMyTeamRequest{}))
-	requireCode(t, 0, mine)
-	requireAccepted(2, mine)
-	left := h.ok(h.server.LeaveTeam(asPlayer(2), &teampb.LeaveTeamRequest{ExpectedTeamId: tid}))
-	requireCode(t, 0, left)
-	requireAccepted(2, left)
-	disband := h.ok(h.server.DisbandTeam(asPlayer(1), &teampb.DisbandTeamRequest{ExpectedTeamId: tid}))
-	requireCode(t, ErrNoTeam, disband)
-	requireAccepted(1, disband)
-
-	requireNoTeamKeys(t, h.mr) // 读路径与未绑定分支都不写
+	retries := metrics.TeamCommitRetryValue(methodKickMember)
+	h.service.mutateEffects(1, methodKickMember, &MutateResult{Outcome: OutcomeRejected, Code: ErrStateChanged, Conflicts: CommitRetries})
+	require.Equal(t, retries+float64(CommitRetries), metrics.TeamCommitRetryValue(methodKickMember))
 	require.Empty(t, h.takePushes())
 	h.requireSceneRefresh()
+	require.Empty(t, digest.take(t))
+
+	h.service.mutateEffects(1, methodCreateTeam, &MutateResult{Outcome: OutcomeCommitted, Commit: l.commit(CreateOp(1, ruleTid, testZone))})
+	h.requireSceneRefresh(1)
+	require.Equal(t, []uint64{1}, digest.take(t)[domTeam])
 }
 
 func TestSceneRefreshFailsClosed(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2)
+	h := newServiceHarness(t)
+	h.addPlayers(1, 2)
+	ctx := context.Background()
 
 	// 节点 uuid 为空:不发(AGENTS §7 #2),只记指标。
 	h.svcCtx.SceneNodes.Upsert(testSceneNodeKey, discovery.NodeEntry{NodeId: 1, ZoneId: testZone, Endpoint: "127.0.0.1:1"})
 	emptyUuid := metrics.TeamSceneRefreshValue(sceneOutcomeEmptyUuid)
-	h.create(1)
+	h.service.refreshScene(ctx, 1)
 	h.requireSceneRefresh()
 	require.Equal(t, emptyUuid+1, metrics.TeamSceneRefreshValue(sceneOutcomeEmptyUuid))
 
@@ -573,276 +456,46 @@ func TestSceneRefreshFailsClosed(t *testing.T) {
 	})
 	h.mr.Del(playercontract.LocationKey(2))
 	noLocation := metrics.TeamSceneRefreshValue(sceneOutcomeNoLocation)
-	h.create(2)
+	h.service.refreshScene(ctx, 2)
 	h.requireSceneRefresh()
 	require.Equal(t, noLocation+1, metrics.TeamSceneRefreshValue(sceneOutcomeNoLocation))
-}
 
-// ---- #15:3 次冲突耗尽回 TeamStateChanged ----
-
-func TestCommitConflictsExhaustReturnStateChanged(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2)
-	tid := h.create(1)
-	h.join(1, tid, 2)
-	h.takePushes()
-	h.takeScenes()
-
-	retries := metrics.TeamCommitRetryValue(methodKickMember)
-	rounds := 0
-	afterReadHook = func(bind Binding) {
-		if bind.PlayerId() != 1 || bind.TeamId() != tid {
-			return
-		}
-		rounds++
-		// 每轮读完都有别的实例抢先提交:ver 前移,本轮 S_COMMIT 必然 {0}。
-		h.mr.HSet(recordKey(tid), recFieldVer, strconv.FormatUint(h.versionOf(tid)+1, 10))
-	}
-	resp := h.ok(h.server.KickMember(asPlayer(1), &teampb.KickMemberRequest{TargetPlayerId: 2, ExpectedTeamId: tid}))
-	afterReadHook = nil
-
-	requireCode(t, ErrStateChanged, resp)
-	require.Equal(t, CommitRetries, rounds)
-	require.Equal(t, retries+float64(CommitRetries), metrics.TeamCommitRetryValue(methodKickMember))
-	require.NotNil(t, FindMember(loadRecord(t, h.mr, tid), 2), "冲突耗尽不得写入")
-	require.Equal(t, u64s(tid), h.mr.HGet(playerIndexKey(2), indexFieldTid))
-	require.Equal(t, tid, resp.GetTeam().GetTeamId(), "失败回包带调用者自由读视图")
-	require.Empty(t, h.takePushes())
-	h.requireSceneRefresh()
-}
-
-// ---- #24:迟到执行不误伤新队伍 ----
-
-func TestLateLeaveDoesNotHurtNewTeam(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2, 3)
-	teamA := h.create(1)
-	h.join(1, teamA, 2)
-	teamB := h.create(3)
-
-	fired := false
-	var afterHook string
-	afterReadHook = func(bind Binding) {
-		if fired || bind.PlayerId() != 2 || bind.TeamId() != teamA {
-			return
-		}
-		fired = true
-		// 旧 LeaveTeam 挂在 S_READ 之后;期间玩家经别的实例离开 A、接受 B 的邀请。
-		requireCode(t, 0, h.ok(h.server.LeaveTeam(asPlayer(2), &teampb.LeaveTeamRequest{ExpectedTeamId: teamA})))
-		requireCode(t, 0, h.ok(h.server.InviteToTeam(asPlayer(3), &teampb.InviteToTeamRequest{TargetPlayerId: 2, ExpectedTeamId: teamB})))
-		requireCode(t, 0, h.ok(h.server.RespondInvite(asPlayer(2), &teampb.RespondInviteRequest{TeamId: teamB, Accept: true})))
-		afterHook = h.mr.Dump()
-	}
-	resp := h.ok(h.server.LeaveTeam(asPlayer(2), &teampb.LeaveTeamRequest{ExpectedTeamId: teamA}))
-	afterReadHook = nil
-
-	require.True(t, fired)
-	requireCode(t, 0, resp)
-	require.Equal(t, teamB, resp.GetTeam().GetTeamId(), "回调用者当前(B)的视图")
-	require.Equal(t, afterHook, h.mr.Dump(), "迟到的旧请求不得写入")
-	require.Equal(t, u64s(teamB), h.mr.HGet(playerIndexKey(2), indexFieldTid))
-	require.NotNil(t, FindMember(loadRecord(t, h.mr, teamB), 2))
-}
-
-func TestLateDisbandDoesNotHurtNewTeam(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 4)
-	teamA := h.create(4)
-
-	fired := false
-	var teamB uint64
-	var afterHook string
-	afterReadHook = func(bind Binding) {
-		if fired || bind.PlayerId() != 4 || bind.TeamId() != teamA {
-			return
-		}
-		fired = true
-		requireCode(t, 0, h.ok(h.server.DisbandTeam(asPlayer(4), &teampb.DisbandTeamRequest{ExpectedTeamId: teamA})))
-		teamB = h.create(4)
-		afterHook = h.mr.Dump()
-	}
-	resp := h.ok(h.server.DisbandTeam(asPlayer(4), &teampb.DisbandTeamRequest{ExpectedTeamId: teamA}))
-	afterReadHook = nil
-
-	require.True(t, fired)
-	requireCode(t, ErrNoTeam, resp)
-	require.Equal(t, teamB, resp.GetTeam().GetTeamId(), "4013 + 调用者当前(B)的视图")
-	require.Equal(t, afterHook, h.mr.Dump(), "迟到的旧请求不得写入")
-	require.Equal(t, uint64(4), loadRecord(t, h.mr, teamB).GetLeaderId())
-}
-
-// ---- #25:ctx 已过期时不提交 ----
-
-func TestExpiredContextSkipsCommit(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2)
-	tid := h.create(1)
-	h.join(1, tid, 2)
-	h.takePushes()
-	h.takeScenes()
-
-	ctx, cancel := context.WithCancel(asPlayer(1))
-	defer cancel()
-	var beforeCommit string
-	afterReadHook = func(bind Binding) {
-		if bind.PlayerId() != 1 {
-			return
-		}
-		// 请求预算在读完之后耗尽:go-zero 超时拦截器已回错,handler 仍在跑(§D.6 迟到执行)。
-		cancel()
-		beforeCommit = h.mr.Dump()
-	}
-	resp := h.ok(h.server.KickMember(ctx, &teampb.KickMemberRequest{TargetPlayerId: 2, ExpectedTeamId: tid}))
-	afterReadHook = nil
-
-	requireCode(t, ErrStateChanged, resp)
-	require.Equal(t, beforeCommit, h.mr.Dump(), "不得执行 S_COMMIT")
-	require.NotNil(t, FindMember(loadRecord(t, h.mr, tid), 2))
-	require.Empty(t, h.takePushes())
-	h.requireSceneRefresh()
-}
-
-// ---- #26:GetMyTeam{notify_online} 只推同源 tid==本队 的在线队员 ----
-
-func TestGetMyTeamNotifyOnlineSkipsForeignIndex(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2, 3, 4)
-	tid := h.create(1)
-	for _, pid := range []uint64{2, 3, 4} {
-		h.join(1, tid, pid)
-	}
-	h.takePushes()
-	h.takeScenes()
-
-	// 3 的索引已指向别的队(淘汰后去了别处);4 已下线(会话不存在,非队长不触发转让)。
-	h.mr.HSet(playerIndexKey(3), indexFieldTid, "424242")
-	h.mr.Del(playercontract.SessionKey(4))
-
-	resp := h.ok(h.server.GetMyTeam(asPlayer(1), &teampb.GetMyTeamRequest{NotifyOnline: true}))
-	requireCode(t, 0, resp)
-	require.Equal(t, tid, resp.GetTeam().GetTeamId())
-
-	pushes := h.takePushes()
-	require.Len(t, pushes, 1, "只推 tid==本队 且在线的其他队员")
-	snap := requireSnapshot(t, pushes[0], 2, teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_ONLINE)
-	require.Equal(t, uint64(1), snap.GetActorId())
-	require.Equal(t, h.epochOf(2), snap.GetTeam().GetMembershipEpoch(), "epoch 取自同一次 S_READ_MEMBERS")
-	require.Equal(t, h.versionOf(tid), snap.GetTeam().GetVersion())
-	require.Equal(t, resp.GetTeam().GetVersion(), snap.GetTeam().GetVersion(), "在线态刷新不改 version")
-	online := map[uint64]bool{}
-	for _, m := range snap.GetTeam().GetMembers() {
-		online[m.GetPlayerId()] = m.GetIsOnline()
-	}
-	require.Equal(t, map[uint64]bool{1: true, 2: true, 3: true, 4: false}, online)
-	h.requireSceneRefresh()
+	// 位置与 uuid 都在:发。
+	h.service.refreshScene(ctx, 1)
+	h.requireSceneRefresh(1)
 }
 
 // ---- 组队跟随 v1.1 V.9:GetMyTeam{regroup} 只给请求归队的队员本人发 scene 信号 ----
 
-func TestGetMyTeamRegroupSignalsOnlyTheCallingMember(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2, 3, 9)
-	tid := h.create(1)
-	for _, pid := range []uint64{2, 3} {
-		h.join(1, tid, pid)
-	}
-	h.takePushes()
-	h.takeScenes()
+func TestRegroupSignalsOnlyTheCallingMember(t *testing.T) {
+	h := newServiceHarness(t)
+	h.addPlayers(1, 2, 9)
+	team := &teampb.TeamView{TeamId: ruleTid, LeaderId: 1}
 
-	// 队员请求归队:只给他自己发,队长与其他队员不动;不推任何快照(视图没变)。
-	resp := h.ok(h.server.GetMyTeam(asPlayer(2), &teampb.GetMyTeamRequest{Regroup: true}))
-	requireCode(t, 0, resp)
-	require.Equal(t, tid, resp.GetTeam().GetTeamId())
+	// 队员请求归队:只给他自己发;不推任何快照(视图没变)。
+	h.service.publishRegroup(2, team)
 	h.requireSceneRefresh(2)
 	require.Empty(t, h.takePushes())
 
-	// 不带 regroup 的普通拉取:不发。
-	requireCode(t, 0, h.ok(h.server.GetMyTeam(asPlayer(3), &teampb.GetMyTeamRequest{})))
-	h.requireSceneRefresh()
-
 	// 队长自己请求归队:没有可归的队长,不发。
-	requireCode(t, 0, h.ok(h.server.GetMyTeam(asPlayer(1), &teampb.GetMyTeamRequest{Regroup: true})))
+	h.service.publishRegroup(1, team)
 	h.requireSceneRefresh()
 
-	// 不在任何队伍里:不发。
-	resp = h.ok(h.server.GetMyTeam(asPlayer(9), &teampb.GetMyTeamRequest{Regroup: true}))
-	requireCode(t, 0, resp)
-	require.Zero(t, resp.GetTeam().GetTeamId())
+	// 不在任何队伍里(空视图)或读失败没带视图:不发。
+	h.service.publishRegroup(9, &teampb.TeamView{})
 	h.requireSceneRefresh()
-
-	// 与 notify_online 同时带:两件事各做各的(上线推给其他在线队员,归队信号只发给自己)。
-	requireCode(t, 0, h.ok(h.server.GetMyTeam(asPlayer(3), &teampb.GetMyTeamRequest{NotifyOnline: true, Regroup: true})))
-	h.requireSceneRefresh(3)
-	pushed := map[uint64]bool{}
-	for _, p := range h.takePushes() {
-		requireSnapshot(t, p, p.playerId, teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_ONLINE)
-		pushed[p.playerId] = true
-	}
-	require.Equal(t, map[uint64]bool{1: true, 2: true}, pushed)
+	h.service.publishRegroup(9, nil)
+	h.requireSceneRefresh()
 }
 
 // 归队信号照常遵守 §F.3:请求者不在任何场景(没有位置记录)时不发,也不报错。
-func TestGetMyTeamRegroupWithoutLocationSendsNothing(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 2)
-	tid := h.create(1)
-	h.join(1, tid, 2)
-	h.takePushes()
-	h.takeScenes()
+func TestRegroupWithoutLocationSendsNothing(t *testing.T) {
+	h := newServiceHarness(t)
+	h.addPlayers(2)
 	h.mr.Del(playercontract.LocationKey(2))
 
-	requireCode(t, 0, h.ok(h.server.GetMyTeam(asPlayer(2), &teampb.GetMyTeamRequest{Regroup: true})))
+	h.service.publishRegroup(2, &teampb.TeamView{TeamId: ruleTid, LeaderId: 1})
 	h.requireSceneRefresh()
-}
-
-// ---- #23:ListMyInvites 清理残留索引不误删队长刚重邀写入的新项 ----
-
-func TestListMyInvitesPruneKeepsReinvitedIndex(t *testing.T) {
-	h := newServiceHarness(t, config.TeamConf{})
-	h.addPlayers(testZone, 1, 5)
-	tid := h.create(1)
-	key := inviteIndexKey(5)
-	// 残留索引项:记录里没有给 5 的邀请,score 与之后的重邀不同。
-	_, err := h.mr.ZAdd(key, float64(baseMs()+30_000), u64s(tid))
-	require.NoError(t, err)
-
-	fired := false
-	beforeInvitePruneHook = func(playerId, teamId uint64) {
-		if fired || playerId != 5 || teamId != tid {
-			return
-		}
-		fired = true
-		// S_INVITE_LIST 之后、S_INVITE_PRUNE 之前,队长重邀:索引 score 被刷新。
-		requireCode(t, 0, h.ok(h.server.InviteToTeam(asPlayer(1), &teampb.InviteToTeamRequest{TargetPlayerId: 5, ExpectedTeamId: tid})))
-	}
-	listed, err := h.server.ListMyInvites(asPlayer(5), &teampb.ListMyInvitesRequest{})
-	beforeInvitePruneHook = nil
-	require.NoError(t, err)
-	require.True(t, fired)
-	require.Zero(t, listed.GetErrorMessage().GetId())
-	members, err := h.mr.ZMembers(key)
-	require.NoError(t, err)
-	require.Contains(t, members, u64s(tid), "score 已变,旧的清理不得删掉新索引项")
-	score, err := h.mr.ZScore(key, u64s(tid))
-	require.NoError(t, err)
-	require.Equal(t, float64(baseMs()+InviteTTLMs), score)
-
-	// 再列一次:正文与索引一致,正常列出;没有正文的残留项被清理。
-	_, err = h.mr.ZAdd(key, float64(baseMs()+30_000), "777")
-	require.NoError(t, err)
-	listed, err = h.server.ListMyInvites(asPlayer(5), &teampb.ListMyInvitesRequest{})
-	require.NoError(t, err)
-	require.Len(t, listed.GetInvites(), 1)
-	got := listed.GetInvites()[0]
-	require.Equal(t, tid, got.GetTeamId())
-	require.Equal(t, uint64(1), got.GetInviter().GetPlayerId())
-	require.True(t, got.GetInviter().GetIsLeader())
-	require.Equal(t, uint32(1), got.GetMemberCount())
-	require.Equal(t, baseMs()+InviteTTLMs, got.GetExpireAtMs())
-	require.Equal(t, baseMs(), listed.GetServerTimeMs())
-	members, err = h.mr.ZMembers(key)
-	require.NoError(t, err)
-	require.Equal(t, []string{u64s(tid)}, members)
 }
 
 // displayDataService 只实现 BatchGetPlayerDisplay。

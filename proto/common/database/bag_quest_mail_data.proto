@@ -20,7 +20,7 @@ import "proto/common/component/mission_comp.proto";
 //   the Bag class), so:
 //     • cross-zone migration silently dropped bag every transition
 //       (historical: that migration chain was removed later, CZ-1)
-//     • normal logout dropped bag (HandleExitGameNode → SavePlayerToRedis
+//     • normal logout dropped bag (HandleExitGameNode → SavePlayer
 //       marshalled the same 7 components, no bag)
 //     • rollback could not restore bag (snapshot had no bag bytes)
 //

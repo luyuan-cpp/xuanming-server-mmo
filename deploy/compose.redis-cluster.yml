@@ -1,0 +1,179 @@
+# 玩家域 Redis Cluster 的本机开发版:3 主 3 从,版本与 K8s 清单(deploy/k8s/manifests/infra/redis-player-cluster.yaml)同一个镜像摘要。
+# 真集群验证用(docs/design/redis-player-store-cluster.md §14.2),开发时不需要它:不写 PlayerRedis / player_redis 就是单实例。
+#
+#   docker --context desktop-linux compose -f deploy/compose.redis-cluster.yml up -d
+#   docker --context desktop-linux wait redis-player-cluster-init     # 打印 0 才算建好;不要用 up --wait,一次性容器退出会被它判成失败
+#   docker --context desktop-linux logs redis-player-cluster-init
+#   docker --context desktop-linux compose -f deploy/compose.redis-cluster.yml down -v
+#
+# 怎么把服务指过来,见 tools/scripts/README.md「compose.redis-cluster.yml」。
+#
+# 独立的 compose 项目:与 deploy/docker-compose.yml 的 redis-cluster profile 不是一套。那一套是 match 私有的 redis:7.2(7000-7005),
+# 这一套是玩家域(7100-7105),要 8.4 以上才有原子迁移。项目名单独写,down 不会误伤主 compose 的容器。
+#
+# 六个节点共用一个网络命名空间,理由同主 compose 的 redis-cluster 那段:集群客户端跟随节点宣告的地址,节点必须宣告宿主机可达的
+# 127.0.0.1:710N;这个地址同时是节点之间 gossip 用的,容器各有网络时 127.0.0.1 指向自己,握手必然失败。端口映射只能写在命名空间持有者上。
+# 容器里的服务连不上这里(它们看到的 127.0.0.1 是自己),所以 deploy/debug 的调试栈不接这个集群。
+name: mmorpg-redis-player-cluster
+
+x-node: &node
+  image: redis:8.10.2@sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee
+  restart: unless-stopped
+
+services:
+  redis-player-cluster-0:
+    <<: *node
+    container_name: redis-player-cluster-0
+    ports:
+      - "127.0.0.1:7100:7100"
+      - "127.0.0.1:7101:7101"
+      - "127.0.0.1:7102:7102"
+      - "127.0.0.1:7103:7103"
+      - "127.0.0.1:7104:7104"
+      - "127.0.0.1:7105:7105"
+    command: [redis-server, --port, "7100", --cluster-enabled, "yes", --cluster-config-file, nodes.conf, --cluster-node-timeout, "5000", --cluster-require-full-coverage, "no", --appendonly, "yes", --appendfsync, everysec, --save, "", --maxmemory, 256mb, --maxmemory-policy, noeviction, --cluster-announce-ip, 127.0.0.1, --cluster-announce-port, "7100", --cluster-announce-bus-port, "17100"]
+    volumes:
+      - redis-player-cluster-0-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7100", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis-player-cluster-1:
+    <<: *node
+    container_name: redis-player-cluster-1
+    network_mode: "service:redis-player-cluster-0"
+    depends_on:
+      - redis-player-cluster-0
+    command: [redis-server, --port, "7101", --cluster-enabled, "yes", --cluster-config-file, nodes.conf, --cluster-node-timeout, "5000", --cluster-require-full-coverage, "no", --appendonly, "yes", --appendfsync, everysec, --save, "", --maxmemory, 256mb, --maxmemory-policy, noeviction, --cluster-announce-ip, 127.0.0.1, --cluster-announce-port, "7101", --cluster-announce-bus-port, "17101"]
+    volumes:
+      - redis-player-cluster-1-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7101", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis-player-cluster-2:
+    <<: *node
+    container_name: redis-player-cluster-2
+    network_mode: "service:redis-player-cluster-0"
+    depends_on:
+      - redis-player-cluster-0
+    command: [redis-server, --port, "7102", --cluster-enabled, "yes", --cluster-config-file, nodes.conf, --cluster-node-timeout, "5000", --cluster-require-full-coverage, "no", --appendonly, "yes", --appendfsync, everysec, --save, "", --maxmemory, 256mb, --maxmemory-policy, noeviction, --cluster-announce-ip, 127.0.0.1, --cluster-announce-port, "7102", --cluster-announce-bus-port, "17102"]
+    volumes:
+      - redis-player-cluster-2-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7102", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis-player-cluster-3:
+    <<: *node
+    container_name: redis-player-cluster-3
+    network_mode: "service:redis-player-cluster-0"
+    depends_on:
+      - redis-player-cluster-0
+    command: [redis-server, --port, "7103", --cluster-enabled, "yes", --cluster-config-file, nodes.conf, --cluster-node-timeout, "5000", --cluster-require-full-coverage, "no", --appendonly, "yes", --appendfsync, everysec, --save, "", --maxmemory, 256mb, --maxmemory-policy, noeviction, --cluster-announce-ip, 127.0.0.1, --cluster-announce-port, "7103", --cluster-announce-bus-port, "17103"]
+    volumes:
+      - redis-player-cluster-3-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7103", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis-player-cluster-4:
+    <<: *node
+    container_name: redis-player-cluster-4
+    network_mode: "service:redis-player-cluster-0"
+    depends_on:
+      - redis-player-cluster-0
+    command: [redis-server, --port, "7104", --cluster-enabled, "yes", --cluster-config-file, nodes.conf, --cluster-node-timeout, "5000", --cluster-require-full-coverage, "no", --appendonly, "yes", --appendfsync, everysec, --save, "", --maxmemory, 256mb, --maxmemory-policy, noeviction, --cluster-announce-ip, 127.0.0.1, --cluster-announce-port, "7104", --cluster-announce-bus-port, "17104"]
+    volumes:
+      - redis-player-cluster-4-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7104", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis-player-cluster-5:
+    <<: *node
+    container_name: redis-player-cluster-5
+    network_mode: "service:redis-player-cluster-0"
+    depends_on:
+      - redis-player-cluster-0
+    command: [redis-server, --port, "7105", --cluster-enabled, "yes", --cluster-config-file, nodes.conf, --cluster-node-timeout, "5000", --cluster-require-full-coverage, "no", --appendonly, "yes", --appendfsync, everysec, --save, "", --maxmemory, 256mb, --maxmemory-policy, noeviction, --cluster-announce-ip, 127.0.0.1, --cluster-announce-port, "7105", --cluster-announce-bus-port, "17105"]
+    volumes:
+      - redis-player-cluster-5-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7105", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # 建群一次性容器。重跑幂等:全部节点空白才建群,否则只核对;做法与 K8s 的 redis-player-cluster-init 相同。
+  redis-player-cluster-init:
+    image: redis:8.10.2@sha256:6f81e8915c60b065a524e6967e0ad1c639ba6efa84d669f823683ea04d9150ee
+    container_name: redis-player-cluster-init
+    network_mode: "service:redis-player-cluster-0"
+    depends_on:
+      redis-player-cluster-0: { condition: service_healthy }
+      redis-player-cluster-1: { condition: service_healthy }
+      redis-player-cluster-2: { condition: service_healthy }
+      redis-player-cluster-3: { condition: service_healthy }
+      redis-player-cluster-4: { condition: service_healthy }
+      redis-player-cluster-5: { condition: service_healthy }
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        ports="7100 7101 7102 7103 7104 7105"
+        info_field() {
+          redis-cli -p "$$1" cluster info | tr -d '\r' | sed -n "s/^$$2://p"
+        }
+        joined=0
+        for port in $$ports; do
+          if [ "$$(info_field "$$port" cluster_known_nodes)" != "1" ] || [ "$$(info_field "$$port" cluster_slots_assigned)" != "0" ]; then
+            joined=$$((joined + 1))
+          fi
+        done
+        if [ "$$joined" -eq 0 ]; then
+          nodes=""
+          for port in $$ports; do nodes="$$nodes 127.0.0.1:$$port"; done
+          redis-cli --cluster create $$nodes --cluster-replicas 1 --cluster-yes
+        else
+          echo "cluster already formed ($$joined of 6 nodes have cluster state), skipping create"
+        fi
+        attempt=0
+        while :; do
+          settled=true
+          for port in $$ports; do
+            if [ "$$(info_field "$$port" cluster_state)" != "ok" ] || [ "$$(info_field "$$port" cluster_slots_assigned)" != "16384" ] || [ "$$(info_field "$$port" cluster_slots_ok)" != "16384" ]; then
+              settled=false
+            fi
+          done
+          if [ "$$settled" = "true" ]; then break; fi
+          attempt=$$((attempt + 1))
+          if [ "$$attempt" -ge 60 ]; then
+            echo "ERROR: cluster did not settle within 120s" >&2
+            redis-cli -p 7100 cluster info | tr -d '\r' >&2
+            exit 1
+          fi
+          sleep 2
+        done
+        redis-cli --cluster check 127.0.0.1:7100
+        echo "redis player cluster verified: 16384 slots covered"
+
+volumes:
+  redis-player-cluster-0-data:
+  redis-player-cluster-1-data:
+  redis-player-cluster-2-data:
+  redis-player-cluster-3-data:
+  redis-player-cluster-4-data:
+  redis-player-cluster-5-data:

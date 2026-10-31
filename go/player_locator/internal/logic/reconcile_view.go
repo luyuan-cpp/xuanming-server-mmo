@@ -144,7 +144,7 @@ func legacyWriters(all, capable map[string]struct{}) []string {
 }
 
 // pacer 给一条循环限速:每次动作前 Wait。实现不必并发安全 —— 每个 pacer 只给一个 goroutine 用
-// (transitionPacer 归索引循环,scanPacer 归补建 / 审计循环)。
+// (transitionPacer 归死 gate 清扫,scanPacer 归补建 / 审计循环)。
 type pacer interface {
 	Wait(ctx context.Context) error
 }

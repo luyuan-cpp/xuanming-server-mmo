@@ -26,11 +26,10 @@
 #          COMMERCE_MOCK_PAYMENT_ENABLED=true，COMMERCE_ALLOWED_PAYMENT_CHANNELS保持空；
 #          COMMERCE_GATEWAY_SECRET / COMMERCE_PAYMENT_SECRET / COMMERCE_DELIVERY_SECRET(三把互不相同、各 ≥ 32 字节;
 #          **不配 delivery 密钥,trade 的发货 poll 永远 401**)。
-#   3. trade 按下面三处改动重启(只改本机运行用的那份 go/trade/etc/trade.yaml,改完别提交):
-#        AssetOp.Enabled: true、AssetOp.RequireSQLCommit: true、Mall.URL: "http://127.0.0.1:18120";
+#   3. trade 按下面两处改动重启(只改本机运行用的那份 go/trade/etc/trade.yaml,改完别提交):
+#        AssetOp.Enabled: true、Mall.URL: "http://127.0.0.1:18120";
 #      trade 进程的环境变量 COMMERCE_GATEWAY_SECRET / COMMERCE_DELIVERY_SECRET 与商城同值,
 #      MMORPG_ASSET_OP_SECRET_TRADE 与 scene 同值(start_game.ps1 注入的本机开发值)。
-#      配了 Mall.URL 却没开 RequireSQLCommit,trade 会拒启(config.Validate)。
 #   4. 运行 robot 的终端里设 COMMERCE_PAYMENT_SECRET,与商城同值(密钥只从环境变量读,不写进本文件)。
 #   5. robot_9925 的主背包能再放下 count_per_unit × quantity 瓶物品 10(可叠加到 999;全新账号没问题)。
 #      前缀必须是 robot_ 才会命中 login 侧 DevPasswordAuth;9921-9922 归摆摊冒烟、9931-9934 留给人民币寄售冒烟,别占。

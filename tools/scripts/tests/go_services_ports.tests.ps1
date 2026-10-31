@@ -20,6 +20,8 @@ foreach ($definition in $ast.FindAll({ param($node) $node -is [System.Management
 }
 # go_services.ps1 顶层 dot-source 的 MailAdmin 本机令牌库(只加载函数):AST 只抽本文件的函数,不执行顶层语句,mail 用例要它。
 . (Join-Path $PSScriptRoot '../lib/mail_admin_dev_token.ps1')
+. (Join-Path $PSScriptRoot '../lib/producer_dev_secret.ps1')
+. (Join-Path $PSScriptRoot '../lib/assetop_dev_secret.ps1')
 . (Join-Path $PSScriptRoot '../lib/account_directory_dev_secret.ps1')
 . (Join-Path $PSScriptRoot '../lib/release_common.ps1')
 
@@ -73,6 +75,16 @@ function Stop-Process { throw '测试禁止终止进程' }
 function netsh { return @('开始端口 结束端口', ' 50700 50848 ') }
 function Get-Command { param([string]$Name) if ($Name -eq 'go') { return [pscustomobject]@{ Source = 'C:\test-go\go.exe' } }; throw "未预期的工具查询: $Name" }
 function Wait-ForStartupBanner { param($LogFile, $ServiceName) }
+# 写者启动授权另有 maintenance_drain 回归;这里只认每 boot 配置就是实例自己的配置($cfg 来自调用方 Start-ServiceInstance 的作用域),不碰真实授权原件。
+function Get-SqlWriterBootEnvironment {
+    param($InstanceKey, $RepoRoot, $ServiceName, [ref]$SelectedRuntimeConfigFile, [ref]$PreparedRuntimeArguments, [switch]$PrepareOnlySupported)
+    $SelectedRuntimeConfigFile.Value = $cfg.FullPath
+    return [ordered]@{}
+}
+function Enter-SqlWriterBootEnvironment { param($Environment) return @{} }
+function Restore-SqlWriterBootEnvironment { param($Saved) }
+function Assert-PublicationStartAllowed { param($RepoRoot) }
+function Get-MaintenanceSha256 { param($Path) return 'fixture-sha256' }
 function Reset-TestState {
     $script:ExcludedPortRanges = @(,@(50700, 50848))
     $script:Listeners = @()
@@ -105,7 +117,7 @@ try {
     foreach ($configName in @('login','data_service')) { New-Item -ItemType Directory -Path (Join-Path $GoRoot "$configName/etc") -Force | Out-Null }
     Set-Content -LiteralPath (Join-Path $GoRoot 'login/etc/login.yaml') -Value "Node:`n  RedisClient:`n    Host: 127.0.0.1:26379`n    DB: 0"
     Set-Content -LiteralPath (Join-Path $GoRoot 'data_service/etc/data_service.yaml') -Value "SnapshotMySQL:`n  DBName: testdb"
-    Add-Content -LiteralPath (Join-Path $GoRoot 'chat/etc/chat.yaml') -Value "`nDSNEnv: CHAT_AUTHORITY_DSN`nBackend: tidb`nGlobalLoginSessions: true`nMaxOpenConns: 16`nAccountRoleSchema: mmorpg_global`nLoginRedis:`n  Host: 127.0.0.1:6379`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: 0`n  PoolSize: 4"
+    Add-Content -LiteralPath (Join-Path $GoRoot 'chat/etc/chat.yaml') -Value "`nDSNEnv: CHAT_AUTHORITY_DSN`nBackend: tidb`nGlobalLoginSessions: true`nMaxOpenConns: 16`nAccountRoleSchema: mmorpg_global`nLoginRedis:`n  Addrs: [127.0.0.1:6379]`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: 0`n  PoolSizePerNode: 4"
 
     New-Item -ItemType Directory -Path $GoBinDir, $DerivedEtcDir -Force | Out-Null
     foreach ($name in $ServiceCatalogue.Keys) { Set-Content -LiteralPath (Join-Path $GoBinDir "$name.exe") -Value '进程桩占位文件' }
@@ -154,7 +166,7 @@ try {
         Reset-TestState
         $cfg = Resolve-InstanceConfig -Name chat -Info $ServiceCatalogue.chat -Index 1 -Total 1
         Assert-Equal 'testdb' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'AccountRoleSchema').Value '本地角色目录取data_service全局库'
-        Assert-Equal '127.0.0.1:26379' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'LoginRedis.Host').Value '地址与login一致'
+        Assert-Equal '[127.0.0.1:26379]' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'LoginRedis.Addrs').Value '地址与login一致'
         Assert-Equal '0' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'LoginRedis.DB').Value 'DB与login一致'
         Assert-Equal 'tidb' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'Backend').Value '本机也不能降级旧Redis权威'
     }

@@ -63,16 +63,16 @@
 
 | 用途 | 键族(举例) | 写方 → 读方 | 为什么放 Redis |
 |---|---|---|---|
-| 在线位置与换场景 | `player:<pid>:location` 及修订号 / 下限、离场等待、换线冷却、进场去重 | scene_manager → C++、player_locator、login、guild、trade、mail、match、player_inbox | 高频读写、需要 Lua 原子比较;丢了玩家重新进场即重建 |
-| 交接标记 | `player:<pid>:handoff` | C++ ↔ scene_manager | 交接过程中的短期协调;正确性由 TiDB 写权行兜底(§3.2) |
-| 写权代次的投影 | `player:<pid>:owner_epoch` | scene_manager → C++、login、player_inbox | 路由与快速拒绝用;**权威在 TiDB**(§3.2),这一点与 TiDB 决策 §9.3 表 C「铸造照旧在 Redis」不同,以本文为准推进,落码前在第 1 批规格里定稿 |
+| 在线位置与换场景 | `player:{<pid>}:location` 及修订号 / 下限、离场等待、换线冷却、进场去重 | scene_manager → C++、player_locator、login、guild、trade、mail、match、player_inbox | 高频读写、需要 Lua 原子比较;丢了玩家重新进场即重建 |
+| 交接标记 | `player:{<pid>}:handoff` | C++ ↔ scene_manager | 交接过程中的短期协调;正确性由 TiDB 写权行兜底(§3.2) |
+| 写权代次的投影 | `player:{<pid>}:owner_epoch` | scene_manager → C++、login、player_inbox | 路由与快速拒绝用;**权威在 TiDB**(§3.2),这一点与 TiDB 决策 §9.3 表 C「铸造照旧在 Redis」不同,以本文为准推进,落码前在第 1 批规格里定稿 |
 | 会话与登录 | `player:session:*`、会话租约、gate 索引、AFK 通行、`player_locker:*`、`login_generation`、登录幂等 | player_locator、login → friend、guild、mail、match、login | 有 TTL 的短期状态,丢了重新登录即可 |
 | 登录排队、准入与限流 | `queue:*`、`admit:*`、gate 排空标记;Java 网关 Bucket4j 令牌桶;sa-token 会话 | login、Java 网关 | 高频计数与过期,天然适合 Redis |
 | 战斗互斥 | `battle:lock:*`、`battle:ctx:*` | C++ → guild、match 只读 | 短期互斥,有 TTL 与 reaper 兜底 |
 | 场景路由与节点负载 | 场景路由、人数计数 | scene_manager、C++ | 可从运行中的节点重算 |
 | 选主锁与短租约 | 排队调度、对账、补偿等单例任务的锁 | 各服务 | 租约天然要 TTL |
 | 跨进程通知 | Pub/Sub:`assetop:wake`、`task:result:notify*` 等 | 各服务 | 只是唤醒信号,丢了靠轮询补 |
-| 同步摘要 | `player:<pid>:sync_digest` | friend、guild、match → C++ | 只是提示,丢失或过期时客户端全量拉一次 |
+| 同步摘要 | `player:{<pid>}:sync_digest` | friend、guild、match → C++ | 只是提示,丢失或过期时客户端全量拉一次 |
 | 匹配排队 | MatchRedis 排队池与匹配锁 | match | 排队状态短命,可重建 |
 | 各服务私有的协调用途 | chat、friend、guild、match 的限流、配额、排队 | 各服务 | 同上 |
 | 能从 TiDB 重建的展示缓存 | 好友档案摘要、在线目录、公会展示缓存(cache-aside) | friend、guild | 只做加速;必须能从 TiDB 重算,不得成为唯一来源 |
@@ -217,6 +217,25 @@
 
 证明要用真 TiDB 加故障注入(由 Codex 执行,AGENTS §10.1):存盘中途 `kill -9` scene;请求超时后重试;旧存盘晚到;被顶号的 scene 继续写;TiDB 切主;两地同时登录;跨节点交接时回包丢失;停机排空被打断。仓库已有的 L1–L4 一致性测试与混沌测试([数据一致性压测](./data-consistency-stress-testing.md))要在新路径上重跑通过。没有这些运行证据之前,不宣称「已保证」。
 
+### 5.4 战斗结算与本地模式(2026-10-30 定)
+
+全球匹配成局的结算只走一条路:battle 把终局提交 match SQL(`CommitBattleOutcome`),match 的发件箱投给 player_inbox,scene 应用后随存档提交,确认之后才销账。Redis 里的 `battle:settlement:pending:*` 和 `battle:activity_result:*` 只有旧协议 0 才写,而旧协议 0 只有本地模式(`GlobalMatch.Enabled=false`,仅 dev / test)才产生。
+
+两种模式意味着两条结算路径、两套票据和两份测试,而生产从不走本地模式,开发环境测到的也不是生产路径。所以删掉本地模式和旧协议 0:
+
+- `go/match` 只剩 SQL 权威一条路径,`GlobalMatch.Enabled` 配置删除。开发环境连本地 TiDB,或者用 `Backend: mysql` 连本地 MySQL(§9.1),走和生产相同的代码。
+- battle 节点只产生协议 1 的房间,创建请求版本不是 1 就拒绝。
+- scene 删除 `battle:settlement:pending` 的读写和登录补应用,结算只经 `ApplyInboxSettlement`。
+- 活动局(帮会历练)的结果由 match 发件箱投 Kafka,guild 的超时巡检读 match 的 SQL 记录,不再读 Redis。
+- `battle:lock`、`battle:ctx` 是协调键,留在 Redis(TiDB 决策 §9.3 表 C)。
+
+**`go/match`、guild、启动脚本已落码(2026-10-30,未编译,待 Codex 验证)**:
+
+- 本机起 match:`start_game.ps1` 第 3 步跑写者启动目录生成器(`dev_tools -Command sql-boot-catalog-local`,10-31 补,未运行),它用 root 幂等建库建表(match 与 guild 启动时互相核对对方的表,所以 guild 从可选变成必需),`GlobalMatch` 改连本机数据库写进每 boot 配置。开发密钥在 `run/secrets/match-dev.env`(`lib/match_dev_secret.ps1`),battle 与 match 同值。连本地 TiDB 用 `MMORPG_GLOBAL_AUTHORITY_TIDB_HOST` 改入口,同一条命令。
+- **写者授权**:常驻 match 的 `MATCH_MYSQL_PASSWORD` 和写者资格只能来自写者启动目录(`MMORPG_SQL_BOOT_CATALOG`),`db`、`data_service`、`login`、`chat`、`guild`、网关等都一样。本机由上面的命令生成,用法见 `tools/scripts/README.md` 的 start_game.ps1 一节。docker 调试栈在 compose 的一次性注册步骤里发授权(10-31 补,未运行),见同文件 prepare_docker_debug.py 一节。
+- K8s 所有档位都要 SQL 入口;机房号 staging / prod 必须显式,dev 缺省 1;dev 的 `domain-service-secrets` 也要有 `match-probe`、`match-outcome-battle`、`player-inbox-match`、`rank-producer-match`。
+- 客户端与 robot 进匹配要先走 `GetNetworkProbePlan`,观战要带 `request_id`。robot 的战斗冒烟还没改。
+
 ## 6. 发号:不依赖 TiDB / MySQL
 
 ### 6.1 机制
@@ -344,10 +363,40 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 
 **代价与待验证**:所有按区分组的入口都要走解析函数,漏一处就会分错组,要用契约测试钉住;映射缓存滞后窗口内的写,由业务合并任务兜底;拆多集群时映射放在控制面,不再需要逐集群写围栏。
 
+**不停服合服(2026-10-30 用户确认接着做,本段取代下面「落码口径」里的合服顺序和第 5 条的维护窗口)**:
+
+做法只有一句:**合服只写一条映射,不动任何数据,所有按区比较和查询在读的时候解析。** 这是路由表合并的标准做法,没有数据搬动就没有「搬动期间的一致性」问题。
+
+| 按区的东西 | 怎么处理 |
+|---|---|
+| 玩家 `home_zone` | 不动。`GetPlayerHomeZone` 已经返回最终区 |
+| `guild.zone_id`、`trade_listing.market_zone`、队伍 `zone_id`、匹配票 `zone_id` | 不改写。记录里存的是原始区,比较两边都先 `Final()`;按区查询用 `zone IN Members(z)` |
+| 公会榜 `guild_rank:zone:{z}`(可重建缓存) | 写入按 `Final(guild.zone_id)`;guild 的周期任务把已合走区的旧榜折进最终区(`ZADD NX` 后删,新分数不被旧分数盖) |
+| 玩家存档、资产、在途结算、邮件、收件箱 | 都按 `player_id` 存,与区无关,不受影响 |
+| 场景节点、gate(物理资源) | 合服不碰。在线玩家留在原节点继续玩,新登录按最终区分配 gate。源区节点的下线是运维之后单独做的排空,和合服解耦 |
+
+**接口**:`placement.MergedZones` 是一份不可变快照,`Final(z)` 沿链解析,`Members(z)` 返回最终解析到 z 的所有原始区(含 z 自己)。`placement.MergedZoneCache` 定时重读(默认 5 秒),启动读不到拒绝启动,刷新失败继续用旧值并计指标(告警 `DataServiceMergedZoneRefreshFailing`)。data_service 从 `zone_merged_into` 读,新增 RPC `GetMergedZones` 给 guild、trade;match 已有全局库连接,直接读表(2026-10-30 已落码,未编译)。
+
+**match 的口径(2026-10-30)**:票、队伍、申请、邀请、开战原件都记路由行上的原始区(所以队伍的归属改读 `player_route`,不再问 data_service,它回的是最终区)。同区判定、范围树、按区候选都按最终区算;票和投影之间的相等比较核的是抄写有没有过期,不解析。同区只在 launch 诞生时判一次:合服提交、撤销都不重判在途的票和队伍,它们走完这一局,记录和路由行始终对得上,恢复循环不会因为映射变化报错。撤销的边界见 [手册 §7](../ops/merge-zone-runbook.md)。
+
+**为什么缓存滞后不影响一致性**:映射只放宽「同区」判定,不决定任何资产。滞后窗口里各服务看到的最终区可能短暂不同,最坏结果是一次可重试的「不同区」拒绝;记录里存的原始区,窗口过后都解析到同一个最终区,不会留下错误状态。
+
+**工具**:`tools/merge_zone` 只剩三个模式:`merge`(前置校验后在一个事务里写映射)、`unmerge`(删映射)、`audit`(只读,列映射和解析结果)。不要清单、不要停服证据、不要 zone-down、不踢人、不解散队伍。
+
+**完成条件**:
+
+- 归属合并:映射提交即完成,各服务 2 个刷新周期内全部生效。
+- 数据归并:不需要。玩家存档留在原来的库,靠 `player_route.storage_id` 找到。
+- 源资源退役:场景节点、gate 按现有排空流程随时下线,在线玩家被踢后重连到目标区,战斗结算走收件箱,不丢。源库不退役:单集群里只是一个 schema;要回收属于阶段 C 的分区搬迁。
+
+**撤销**:删映射即可,不用写回任何东西。合服期间新建的公会、商品记的是目标区,撤销后留在目标区(只影响这些对象在哪个区展示,不影响资产),手册里写明。
+
+**前提**:`player_store` 写权判定与区无关(B8 已完成);匹配、队伍、公会、交易的同区判定全部改成解析后比较(2026-10-30 已落码,未编译,验证见手册 §11)。
+
 **落码口径(2026-10-30,A6b)**:
 
-- **解析收口**:`placement.ResolveMergedZone(merges, zone)` 是唯一的解析函数,沿链解析(5→6→7),跳数上限 16,成环报错。按区分组的调用方几乎都经 `data_service.GetPlayerHomeZone` / `BatchGetPlayerHomeZone` 取归属,所以在这两个 RPC 的出口解析:它们返回的 `home_zone_id` 就是最终区。少数直接读 `player_route.home_zone` 做分组的(`go/match/internal/authority`),读完调同一个函数。
-- **原始归属只有三处用**:go/db 按 `home_zone` 选库(玩家数据不搬,原值才找得到库)、`RegisterPlayerZone` 写入、路由工具。这三处不解析。
+- **解析收口**:解析规则只有一份,对外只通过 `placement.MergedZones`(`Final`、`Members`),沿链解析(5→6→7),跳数上限 16,成环报错。按区分组的调用方几乎都经 `data_service.GetPlayerHomeZone` / `BatchGetPlayerHomeZone` 取归属,所以在这两个 RPC 的出口解析:它们返回的 `home_zone_id` 就是最终区。`go/match/internal/authority` 直接读 `player_route.home_zone` 和 `zone_merged_into`,记录写原始区,比较时两边解析。
+- **原始归属这几处用,不解析**:go/db 按 `home_zone` 选库(玩家数据不搬,原值才找得到库)、`RegisterPlayerZone` 写入、路由工具、match 写进票和队伍记录的区(比较时才解析)。
 - **缓存**:data_service 启动时读一次 `zone_merged_into`,读不到拒绝启动;之后定时重读(默认 5 秒)。方案里说的「变更通知加版本号」先不做:合服频率极低,只靠定时重读,滞后上限是一个周期,`merge_zone` 写完映射后等 2 个周期再跑业务合并任务。
 - **合服顺序**:前置检查 → 映射冲突检查 → 公会重名检查 → 清单落盘 → **写映射** → 等缓存 → 公会合并 → 交易合并 → 公会榜。映射先写,新建的号、新建的公会从这一刻起都归到目标区,不会有漏网的行,所以不需要任何闸门。清单仍在第一次写之前落盘,撤销靠它。
 - **删除**:`zone_merge_fence` 表、`merge:in_progress:{zone}` 键及其镜像、`GetPlayerHomeZoneResponse.home_zone_merging`、scene_manager 的可重试码 21、guild 的 `MergeFence`、`RemapHomeZoneForMerge`、`merge_zone` 的玩家映射改写、玩家行拷贝、落点钉住、回填、搬库。`LockRoleRoutes` 只锁每个玩家自己的路由行并复核 home / rev / frozen,`route_meta` 一并移出这条路径。
@@ -372,7 +421,7 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 2. **单行热点**(一行只在一个 Region leader 上,悲观锁排队)。清单:
    - 聊天每发一条消息,都在同一个事务里锁角色路由,再对 `account_role` 加 `FOR UPDATE`(`go/chat/internal/authority/store.go` 的 `lockActor` [C]),是事务量最大的一项 → 改成会话级令牌,在聊天自己的库里复核。**已落码,未编译**:校验挪到发送事务之外,普通读 `player_route` 和 `account_role`,结果按 (actor, account, owner_revision) 在进程内缓存(`ActorVerifyTTLSeconds`,生产 30 秒,0 = 每次都校验),发送和拉取事务里只剩聊天自己的表;代价:角色被挂牌或过户后旧会话最多还能发 TTL 秒的聊天,限流从精确变成近似(超额上限是这名玩家同时在途的请求数,gate 还有第一道限频),同一 request_id 的并发首发改由主键裁决、输家撞 1062 转读原件;
    - 评级游标 `match_rank_source` 每局 `FOR UPDATE` 一次 → 拆片。**已落码,未编译**:来源表和 outbox 主键加 `shard`(`battle_id % 64`),每局只锁一片,发布循环按片推进,停写逐片取锁;榜的幂等和连续改成按 (shard, cursor),`rank_board.committed_cursor` 改存各片批次总数,封榜按总数核齐。拆片破坏了「批次全局有序」,而批次是绝对分,旧批次晚到会把榜分退回旧值,所以批次带 `score_version`(这名玩家第几局,在玩家行锁下递增),榜上旧版本迟到直接跳过;代价:榜多一列、每批多一条取本片游标的读,榜分在投递途中不保证与全局提交顺序一致,只保证每名玩家最终落在最新版本;
-   - guild、trade、mail 的哨兵守卫行 → 撤掉,状态行在首次提交时预建。**已落码,未编译**:`guild_player_state(0)`、`trade_player_op_seq(0,0)`、`mail_box(0)` 都撤了,状态行在业务事务之前的短事务里 `INSERT IGNORE` 预建,查重靠唯一索引撞 1062。它们防的都是 MySQL 上的 1213(唯一索引查重的 S next-key、首插者回滚的间隙继承),不管对错;TiDB 没有这些环。MySQL 档上写者闸门把 1213 变成不可重试的结果未知(§9.3),`retryOnDeadlock` / `WithTxRetry` 认不出,这一笔直接失败,事务已回滚,玩家重试。代价:MySQL 档这几条路径从没有死锁变成偶发失败;mail 的 `MaxActiveSystemMails` 变成软上限,并发发件可能略超(读侧有 LIMIT,发件方只有运维和帮会公告)。trade 的 `trade_commerce_guard` 没动:它按拍品、按盘口各一行,串行的是撮合本身,不是全服排队;
+   - guild、trade、mail 的哨兵守卫行 → 撤掉,状态行在首次提交时预建。**已落码,未编译**:`guild_player_state(0)`、`trade_player_op_seq(0,0)`、`mail_box(0)` 都撤了,状态行在业务事务之前的短事务里 `INSERT IGNORE` 预建,查重靠唯一索引撞 1062。它们防的都是 MySQL 上的 1213(唯一索引查重的 S next-key、首插者回滚的间隙继承),不管对错;TiDB 没有这些环,MySQL 档由 `retryOnDeadlock` / `WithTxRetry` 吸收。代价:MySQL 档这几条路径的死锁从 0 变成偶发;mail 的 `MaxActiveSystemMails` 变成软上限,并发发件可能略超(读侧有 LIMIT,发件方只有运维和帮会公告)。trade 的 `trade_commerce_guard` 没动:它按拍品、按盘口各一行,串行的是撮合本身,不是全服排队;
    - 登录读账号目录 → 命中即只读。**已落码,未编译**:`Read` 先无锁读,命中只读返回,只有 create=true 且没命中才进加锁建行路径(锁内复核);代价:Read 不再排在同账号在途的建角后面,提交前读到的是提交前的列表,调用方都不依赖那次排队(改归属的操作按 owner_revision 复核);
    - `route_meta` → 移出提交路径。**已落码,未编译**:建角的 `lockInitialPlayerRoute` 改普通读 `writable`,`FOR UPDATE` 只留在修库、解冻、建池探针这些低频路径;读到旧值不是问题,提交点的保证靠写者闸门:事务持着 `writer_slot` 行锁并在持锁后复核过 `route_meta`,`Catalog.Freeze` 拿到全部 slot 锁才能推进 epoch,冻结只能排在在途事务提交之后,`route_tool` 的冻结流程不用改。写者闸门每笔事务还要普通读这一行两次,读负载靠缓存表(TiDB 运维步骤,S2 档起必选);
    - 合服围栏 `zone_merge_fence`(聊天、公会、匹配组队、收件箱、建角每次都锁一行)→ 改别名合服后删除(§7.1);
@@ -392,9 +441,9 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 
 ### 8.4 其他「加机器没用」的单主(不在上面四类里)
 
-- Redis 控制域:登录令牌、会话、排队现在都在一个主节点上 → 按用途和 zone 拆([玩家态 Redis 集群化](./redis-player-store-cluster.md) §10.2)。
-- data_service 写门禁用的 MappingRedis(映射提案 §15.4 保留)。
-- 玩家态 Redis 集群化:存档相关批次(父快照、补投索引与补投器、子表缓存与 go/db 句柄)作废;位置、会话、战斗锁等协调键的分片(第 3、5、6、7 批)仍要做,规模按剩下的键重算(TiDB 决策 §9.5)。
+- Redis 登录域和玩家域:令牌、登录态、连接栅栏、位置、会话、战斗锁进 Redis Cluster,加主节点就扩。2026-10-31 已落码,未编译([玩家态 Redis 集群化](./redis-player-store-cluster.md) §13,存档相关批次作废)。规模按剩下的键重算(TiDB 决策 §9.5)。
+- Redis 控制域:选线、场景索引、成员集合、排队按 zone 组分实例,一个组内是单主。这是已知残余,实际压力看压测。
+- data_service 写门禁用的 MappingRedis 随映射直读 TiDB 删除(映射提案 §15.9),配置段只留名字缓存,改名 `NameCacheRedis`。
 
 ## 9. 按预算分三档部署
 
@@ -418,7 +467,7 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 | db | `ServerConfig.Database.Backend` |
 | guild(含 assetopfix)、trade、player_inbox | `MySQL.Backend` |
 | match | `GlobalMatch.Backend` |
-| writer_authority、admission_recover、save_barrier_restore、password_admin、merge_zone | 环境变量 `MMORPG_SQL_BACKEND`(这些工具不读服务 yaml;`-local-mysql` 与 `LOGIN_PASSWORD_MIGRATION_ALLOW_LOCAL_MYSQL` 已删) |
+| writer_authority、admission_recover、maintenance_phase、password_admin、merge_zone | 环境变量 `MMORPG_SQL_BACKEND`(这些工具不读服务 yaml;`-local-mysql` 与 `LOGIN_PASSWORD_MIGRATION_ALLOW_LOCAL_MYSQL` 已删) |
 
 `go/shared/authoritysql` 是唯一判定点:`ParseBackend`(空串 = tidb),`Open`、`OpenForMigration`、`PinCurrentSession`、`AssertCurrentSession` 收 `Backend`,零值按 tidb,非法值在碰服务器之前就拒绝。
 
@@ -457,7 +506,7 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 
 - **间隙锁**:TiDB 没有间隙锁,MySQL 有。全部池子固定 RC,RC 下基本只剩记录锁,但 match 的三处读事务显式用 RR,里面的 `FOR UPDATE` 在 MySQL 上可能带 next-key 锁;`snapshot_store` 的 `NOT EXISTS` 退路本来就靠 RR 间隙锁,只在唯一键缺失时走,mysql 档上线前必须跑过 `-migrate`。
 - **共享锁**:TiDB 默认把 `FOR SHARE` 当空操作(Java 版真库测试踩过,PROGRESS 有记录),MySQL 是真锁。Go 版业务代码没有显式共享锁读,但 MySQL 撞唯一键时隐式取 S 锁,S → X 升级在 8.0.29 之前会成环,所以 guild 启动时要求 MySQL ≥ 8.0.29(`CheckServerVersion`)。
-- **死锁与锁等待**:MySQL 上 1213、1205 会比 TiDB 常见。写者池的 `guardedConn` 只把 1062 当确定失败,其余一律变成不可重试的 `ErrOutcomeUnknown` 并隔离连接(`mysqlStatementPolicy`,TiDB 上同样如此),所以 `WithTxRetry` 看不到它们。这在 TiDB 上影响小,在 MySQL 上可能放大成错误率和连接抖动,要在回归里量。
+- **死锁与锁等待**:MySQL 上 1213、1205 会比 TiDB 常见。写者池的 `guardedConn` 把业务语句上的 1213、1205、9007 判为确定回滚(COMMIT 还没发,回滚后这笔不可能提交),保留原错误、不隔离连接,所以 `retryOnDeadlock`、`WithTxRetry` 能整笔重试(10-30 修正,此前一律变成结果未知,重试永远不触发)。COMMIT 上的错误仍是结果未知。回归里要量重试率。
 - **锁权限**:MySQL 的 `SELECT … FOR UPDATE` 除 SELECT 外还要 UPDATE、DELETE 或 LOCK TABLES 之一。写者门的 `SELECT_ONLY` 锁原语在只授 SELECT 的账号上过不了,mysql 档应选 `LOCK_TOUCH`;跨 schema 的 `account_role … FOR UPDATE` 也要按 MySQL 重核授权。
 - **丢数据窗口**:TiDB 多数派提交,MySQL 异步复制切主可能丢已提交事务。本批只保证连到主库,不保证切主不丢;mysql 档上生产要半同步或等价方案,切主后旧主要置只读。发号不依赖 MySQL(§6),但写权代次和玩家存档都在 SQL 里,异步复制切主丢事务时都可能回退,§5 的「不回档」承诺不成立 [I]。
 - **DDL**:TiDB 在线 DDL,MySQL 的部分 ALTER 会锁表或重建表,迁移时长另算。
@@ -472,7 +521,7 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 2. 各服务全套迁移在 MySQL 8.0.29+ 上跑通:data_service `-migrate`、db `cmd/migrate`、guild、trade、friend、mail、rank、chat、match、player_inbox,确认 `/*T! */` 表结构和 CHECK 约束 `chk_route_shard` 生效。
 3. 写者注册与排空:`writer_authority` 配 `MMORPG_SQL_BACKEND=mysql` 走注册、退休、冻结、释放;`LOCK_TOUCH` 用最小权限账号核对。
 4. 既有 `AllowMySQL` 集成测试(`storetest`、guild 经济流)在 MySQL 和 TiDB 端点各跑一遍;`_tidb_test` 里锁语义相关的用例挑出来在 MySQL 上补一份:组队三处读事务(含 RR 下的 next-key 影响)、帮会成员 S → X 升级、公会并发、资产通道。
-5. 全链路压测对比两档的 1213、1205、`ErrOutcomeUnknown` 比例和连接重建次数,判定 §9.3 第 3 条要不要改写者门的错误分类。
+5. 全链路压测对比两档的 1213、1205 比例和重试次数。
 6. `merge_zone` 配 `MMORPG_SQL_BACKEND=mysql` 跑合服、撤销、审计。
 7. 主从切换演练:切主期间业务报错而不写从库,切主后恢复;确认异步复制下的丢失窗口。
 
@@ -510,10 +559,10 @@ SLG 补充:
 |---|---|---|
 | 1 | 存盘路径:直接提交 TiDB | 按用户 10-30「开始做」推进;要保留 Kafka 需重写 §3 |
 | 2 | ID 值是否保留最高位为 0 | 用户 10-30 定 64 位;默认只用低 63 位写(§6.1),用户未否决,发第一个正式号之前还能改。打散用公开标准算法,不需要拍板常量 |
-| 3 | 合服围栏去留 | 已定:去掉,改别名合服(§7.1)。2026-10-30 已落码,未编译 |
+| 3 | 合服围栏去留 | 已定:去掉,改别名合服;10-30 用户接着要不停服合服(§7.1)。都已落码,未编译 |
 | 4 | 存盘服务放 go/db 还是 data_service | 已定:放 go/db(用户 10-30) |
 | 5 | 热行字段与分组、立即存盘事件清单、短间隔初值 | 第 1 批规格里定,间隔压测后定 |
-| 6 | 战斗结算原件新路径的覆盖范围 | 读代码 [I]:每局结果都带格式版本 1 提交 match SQL 并进收件箱,同时仍写 `battle:settlement:pending`,scene 按 battle_id 幂等,两条路径并存。真库核实之前旧路径不删(TiDB 决策 §9.3),本轮没动,是「玩家数据不进 Redis」剩下的一项 |
+| 6 | 战斗结算原件新路径的覆盖范围 | 已定并落码(未编译):全球成局一律协议 1,结算只走 match SQL + 收件箱;本地模式和协议 0 删除,`battle:settlement:pending` 不再有读写者(§5.4) |
 | 7 | MySQL 档何时实现 | 2026-10-30 已落码,未编译(§9.1~§9.4);生产 mysql 档要 3 个 Kafka broker(历练结果 topic 的 RF3 门禁不放开),与省钱档有冲突,待用户定 |
 | 8 | 发号与多集群的正确性评审 | 发号部分 10-30 已补,否决了 v1.3,按 v1.4 重写(§6);多集群部分落 §7、§8.2 的代码前补做 |
 | 9 | 第二套 etcd | 按 §6.3 推荐,多一个 3 节点小集群;待用户确认 |
@@ -527,7 +576,7 @@ SLG 补充:
 | 批 | 内容 | 依赖 |
 |---|---|---|
 | A0 | 本文;第 1 批规格:存盘 RPC 协议、写权行与整笔序号、拆行后的表结构、加载与交接 | — |
-| A1 | 写权进 TiDB + 存盘 RPC 服务端(Go)。**代码已写,未编译,待 Codex 验证** | A0;映射提案 §15 先落码(同批文件相交,与「D1 剩余收尾交接」会话对齐) |
+| A1 | 写权进 TiDB + 存盘 RPC 服务端(Go)。**代码已写,未编译,待 Codex 验证** | A0 |
 | A2 | 玩家表拆行:proto 源、生成器、建表(生成由 Codex 执行,AGENTS §4)。**代码已写,未编译,待 Codex 验证** | A0 |
 | A3 | C++ 存盘改走新 RPC;关键变化立即存;定时只存脏行。**代码已写,未编译,待 Codex 验证** | A1、A2 |
 | A4 | 加载与交接改 TiDB(login、scene、跨 zone 传送)。**代码已写,未编译,待 Codex 验证** | A1、A2 |
@@ -539,6 +588,11 @@ SLG 补充:
 | A7b | Kafka 清理:关闭并删除旧单节点 topic,确认后删除 `match-rating-snapshot`、`game-events`,按剩余 topic 重算分区与磁盘预算(§3.5)。**代码已写,未编译,待 Codex 验证** | A6 |
 | A8 | 单行热点清理(§8.1 第 2 条)。**代码已写,未编译,待 Codex 验证** | 合服围栏一项等 §12 第 3 项 |
 | A9 | 后端档位化(§9)。**代码已写,未编译,待 Codex 验证** | — |
+| A10 | 映射直读 TiDB(映射提案 §15、§15.9):删 Redis 副本、对账 leader、就绪标记、水位;go/db 认领前强读路由;建角恒写落点。**代码已写,未编译,待 Codex 验证** | A6 |
+| A11 | 不停服合服(§7.1):只写映射,读时解析;guild、trade、match 的同区判定;工具重写。**代码已写,未编译,待 Codex 验证** | A6b、A10 |
+| A12 | 战斗结算只剩协议 1,匹配本地模式删除(§5.4)。**代码已写,未编译,待 Codex 验证** | A5 |
+| A13 | 收尾:改名、死字段和开关清理、`debug_fetch` 与 `debug_import` 重写、本机写者授权脚本、robot 走地域探测、部署与告警同步。**代码已写,未编译,待 Codex 验证** | A10~A12 |
+| A14 | 玩家态 Redis 协调键集群化:键带 hash tag、C++ 路由层、Go 客户端、人数改成员集合、player_locator 按 slot、登录域、K8s 集群清单与工具([玩家态 Redis 集群化](./redis-player-store-cluster.md) §13)。**代码已写,未编译,待 Codex 验证** | A6、A10 |
 
 **阶段 B:压测**——TiDB 写入与事务数、PD 时间戳吞吐、冷读与热加载 P99、Redis、Kafka 的实际上限,按 AGENTS §6 出对比表,据此定短间隔与集群数。
 

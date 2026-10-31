@@ -21,8 +21,8 @@
 // 两段都在同一个 Redis 上原子执行,天然可串行化:关闭在前,绑定一定看到 closed,由后台链补发断线租约;
 // 绑定在前,关闭一定读到 player,由 Disconnect 补发。两种顺序都收敛到「带租约的 DISCONNECTING」。
 //
-// 约束:CommitLogin 是多键脚本(栅栏 + login_session + 设备集),要求 login 的 Redis 是单节点(现状是
-// *redis.Client)。将来切 Redis Cluster 时必须给这些键加同一个 hash tag。
+// 记录在登录域(LoginRedis,生产是 Redis Cluster)。键带连接身份的 hash tag,所以 CommitLogin 只能碰本连接的栅栏与
+// login_session;账号设备集按账号分布,在另一个槽,由调用方在 CommitLogin 成功之后单独写(docs/design/redis-player-store-cluster.md §10.2)。
 package sessionfence
 
 import (
@@ -33,6 +33,7 @@ import (
 	"time"
 
 	login_proto_common "proto/common/base"
+	"shared/redisslot"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -43,8 +44,8 @@ type Key struct {
 	Incarnation    uint64
 }
 
-// KeyOf 从 gate 带来的 SessionDetails 取栅栏键。旧版 gate(session_incarnation = 0)或缺 gate_instance_id 时
-// 返回 ok = false,调用方跳过栅栏、沿用旧行为(兼容窗口,client-request-ordering.md §6.2)。
+// KeyOf 从 gate 带来的 SessionDetails 取栅栏键。没有 session_incarnation 或缺 gate_instance_id 时返回 ok = false:
+// 这种连接没有全局唯一的身份,调用方必须拒绝,不存在跳过栅栏的路径。
 func KeyOf(details *login_proto_common.SessionDetails) (Key, bool) {
 	if details == nil || details.GetSessionIncarnation() == 0 || details.GetGateInstanceId() == "" {
 		return Key{}, false
@@ -52,14 +53,13 @@ func KeyOf(details *login_proto_common.SessionDetails) (Key, bool) {
 	return Key{GateInstanceID: details.GetGateInstanceId(), Incarnation: details.GetSessionIncarnation()}, true
 }
 
-// String 返回这条 gate 连接的全局唯一标识 "{gate_instance_id}:{incarnation}"。栅栏键与 login_session 的新键
-// (loginsession.RefOf)共用这一种拼法,同一条连接的两份记录始终指向同一个身份。
+// String 返回这条 gate 连接的全局唯一标识。栅栏键、login_session 键与设备集成员都用它,同一条连接的记录始终指向同一个身份。
 func (k Key) String() string {
-	return k.GateInstanceID + ":" + strconv.FormatUint(k.Incarnation, 10)
+	return redisslot.LoginConnectionID(k.GateInstanceID, k.Incarnation)
 }
 
 func (k Key) redisKey() string {
-	return "login:sessfence:" + k.String()
+	return redisslot.SessionFenceKey(k.String())
 }
 
 // TTLFor 由 EnterGame 后台链的总预算派生栅栏记录的寿命:记录必须比所有还可能读它的操作活得久,
@@ -99,42 +99,27 @@ func (o Outcome) String() string {
 // ErrClosed:CommitLogin 时连接已断开,Login 不写任何状态。
 var ErrClosed = errors.New("gate connection already closed")
 
-// KEYS = {栅栏, 设备集, login_session 键...};ARGV = {account, sessionTTL(ms), 设备集成员, deviceSetTTL(ms)}。
+// KEYS = {栅栏, login_session};ARGV = {account, sessionTTL(ms)}。两个键带同一个连接 tag,必然同槽。
 var commitLoginScript = redis.NewScript(`
 if redis.call('HGET', KEYS[1], 'closed') == '1' then
   return 0
 end
-for i = 3, #KEYS do
-  redis.call('SET', KEYS[i], ARGV[1], 'PX', ARGV[2])
-end
-redis.call('SADD', KEYS[2], ARGV[3])
-redis.call('PEXPIRE', KEYS[2], ARGV[4])
+redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
 return 1
 `)
 
-// CommitLogin 原子地「检查连接未关闭 → 写 login_session → 登记设备集」,取代原先 Save 与 SAdd/Expire 两步。
-// 检查与写入必须在同一段脚本里,否则仍有「检查通过、Disconnect 插进来、再写入」的窗口。
-// 连接已关闭返回 ErrClosed,什么都不写。
+// CommitLogin 原子地「检查连接未关闭 → 写 login_session」。检查与写入必须在同一段脚本里,否则仍有
+// 「检查通过、Disconnect 插进来、再写入」的窗口。连接已关闭返回 ErrClosed,什么都不写。
 //
-// loginSessionKeys(至少一个,全部写同一个账号与 TTL)/ deviceSetKey / deviceMember 由调用方给
-// (与 loginsession.Ref、constants.GenerateSessionKey 的键格式同源),这里不复制键格式。
-func CommitLogin(ctx context.Context, rdb *redis.Client, key Key,
-	loginSessionKeys []string, account string, sessionTTL time.Duration,
-	deviceSetKey, deviceMember string, deviceSetTTL time.Duration,
-) error {
-	// 脚本里是 SET ... PX,0 / 负值会被 Redis 以 invalid expire time 拒绝;旧路径 loginsession.Save 的 ttl = 0
-	// 表示永不过期,两条路径在误配置下行为分叉。这里显式报错,让误配置在第一次登录时就暴露,而不是静默写永久键。
-	if sessionTTL <= 0 || deviceSetTTL <= 0 {
-		return fmt.Errorf("session fence commit login: non-positive ttl session=%s device=%s", sessionTTL, deviceSetTTL)
+// 设备集按账号分布、不同槽,进不了这段脚本,由调用方在成功之后写(loginsession.RegisterDevice)。两步之间的结局见
+// loginsession 包注释,都能自愈。
+func CommitLogin(ctx context.Context, rdb redis.UniversalClient, key Key, account string, sessionTTL time.Duration) error {
+	// 脚本里是 SET ... PX,0 / 负值会被 Redis 以 invalid expire time 拒绝。这里显式报错,让误配置在第一次登录时就暴露。
+	if sessionTTL <= 0 {
+		return fmt.Errorf("session fence commit login: non-positive session ttl %s", sessionTTL)
 	}
-	if len(loginSessionKeys) == 0 {
-		return errors.New("session fence commit login: no login_session key")
-	}
-	keys := make([]string, 0, 2+len(loginSessionKeys))
-	keys = append(keys, key.redisKey(), deviceSetKey)
-	keys = append(keys, loginSessionKeys...)
-	res, err := commitLoginScript.Run(ctx, rdb, keys,
-		account, sessionTTL.Milliseconds(), deviceMember, deviceSetTTL.Milliseconds(),
+	res, err := commitLoginScript.Run(ctx, rdb, []string{key.redisKey(), redisslot.LoginSessionKey(key.String())},
+		account, sessionTTL.Milliseconds(),
 	).Int64()
 	if err != nil {
 		return err
@@ -157,7 +142,7 @@ return '0'
 
 // Close 标记连接已断开,并返回这条连接上已绑定的玩家(没有为 0)。Disconnect 在清理 login_session 之前调用;
 // 会话里的 player_id 为 0(BindSession 还没到 gate)时,用这里返回的玩家补发断线租约。
-func Close(ctx context.Context, rdb *redis.Client, key Key, ttl time.Duration) (uint64, error) {
+func Close(ctx context.Context, rdb redis.UniversalClient, key Key, ttl time.Duration) (uint64, error) {
 	raw, err := closeScript.Run(ctx, rdb, []string{key.redisKey()}, ttl.Milliseconds()).Text()
 	if err != nil {
 		return 0, err
@@ -178,7 +163,7 @@ return {v[1] or '', v[2] or '0', v[3] or ''}
 
 // CheckEnterGame 是 EnterGame 入口的判定:连接已关闭、或已经绑定了别的角色就拒绝;否则返回当前的 gen,
 // 后台链绑定时用它识别「期间已离开游戏」。ttl 与其余操作同一个值(TTLFor 派生),入口会把记录续期到 ttl。
-func CheckEnterGame(ctx context.Context, rdb *redis.Client, key Key, playerID uint64, ttl time.Duration) (Outcome, uint64, error) {
+func CheckEnterGame(ctx context.Context, rdb redis.UniversalClient, key Key, playerID uint64, ttl time.Duration) (Outcome, uint64, error) {
 	vals, err := checkEnterGameScript.Run(ctx, rdb, []string{key.redisKey()}, ttl.Milliseconds()).StringSlice()
 	if err != nil {
 		return OutcomeOK, 0, err
@@ -225,7 +210,7 @@ return 'ok'
 //
 //	OutcomeClosed:连接已断开 → 补发断线租约(markPlayerSessionDisconnecting)后中止;
 //	OutcomeLeft / OutcomeOtherPlayer → 删除本次写入的会话(MarkOffline CAS)后中止。
-func BindPlayer(ctx context.Context, rdb *redis.Client, key Key, playerID, expectGen uint64, ttl time.Duration) (Outcome, error) {
+func BindPlayer(ctx context.Context, rdb redis.UniversalClient, key Key, playerID, expectGen uint64, ttl time.Duration) (Outcome, error) {
 	raw, err := bindPlayerScript.Run(ctx, rdb, []string{key.redisKey()},
 		strconv.FormatUint(expectGen, 10), strconv.FormatUint(playerID, 10), ttl.Milliseconds(),
 	).Text()
@@ -237,7 +222,7 @@ func BindPlayer(ctx context.Context, rdb *redis.Client, key Key, playerID, expec
 
 // Recheck 是后台链发 EnterScene 之前的复查:连接已关闭或期间离开过游戏就不再进场,
 // 防止在 DISCONNECTING / 已离线之后再写入位置。
-func Recheck(ctx context.Context, rdb *redis.Client, key Key, expectGen uint64) (Outcome, error) {
+func Recheck(ctx context.Context, rdb redis.UniversalClient, key Key, expectGen uint64) (Outcome, error) {
 	vals, err := rdb.HMGet(ctx, key.redisKey(), "closed", "gen").Result()
 	if err != nil {
 		return OutcomeOK, err
@@ -268,7 +253,7 @@ return '0'
 
 // Leave 记一次离开游戏(gen + 1)并解除绑定,返回原先绑定的玩家(没有为 0)。LeaveGame 在清理会话之前调用;
 // 会话里的 player_id 为 0 时,用这里返回的玩家删除会话。
-func Leave(ctx context.Context, rdb *redis.Client, key Key, ttl time.Duration) (uint64, error) {
+func Leave(ctx context.Context, rdb redis.UniversalClient, key Key, ttl time.Duration) (uint64, error) {
 	raw, err := leaveScript.Run(ctx, rdb, []string{key.redisKey()}, ttl.Milliseconds()).Text()
 	if err != nil {
 		return 0, err

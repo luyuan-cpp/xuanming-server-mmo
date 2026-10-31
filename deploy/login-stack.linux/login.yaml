@@ -138,13 +138,11 @@ IdSegment:
 # ─────────────────────────────────────────────────────────────────────────
 # 建角钉存储落点(docs/design/player-storage-placement.md §8.3 / §13)
 #
-# PinOnCreate:true = CreatePlayer 在同一次 RegisterPlayerZone 里让 data_service 与 player:zone
-#   原子一起写 player:placement = "{storage}:1"。全球服务必须显式 true,缺键或 false 拒启。
+# CreatePlayer 在同一次 RegisterPlayerZone 里把归属和落点写进 player_route 的同一行。
 # NewPlayerStorageId:新号钉到哪个落点库;0 = 本 login 所在 zone(Node.ZoneId);
-#   1..999999 = zone_{id}_db,>=1000000 = player_store_{id}_db(Phase 2 全局库填 1000000)。
-#   启动日志 "[placement] pin_on_create=..." 是核对依据。
+#   1..999999 = zone_{id}_db,>=1000000 = player_store_{id}_db。
+#   启动日志 "[placement] new_player_storage_id=..." 是核对依据。
 Placement:
-  PinOnCreate: true
   NewPlayerStorageId: 0
 
 GateTokenSecret: "change-me-in-production-use-a-strong-random-key"

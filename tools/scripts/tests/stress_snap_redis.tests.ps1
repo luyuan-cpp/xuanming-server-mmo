@@ -7,7 +7,8 @@
     用 -RedisInfoProvider 注入 INFO 文本,不起 docker / kubectl,不访问任何 Redis。覆盖:
       - target 名与 spec 的校验在任何抓取、建目录之前完成;保留名(会撞 prom 快照后缀)与非法写法一律拒绝;
       - 成功时写 t<N>m_redis_<name>.txt,首行是 '# stress_snap target=… spec=… captured_at=…' 元信息,之后是 INFO 原文;
-      - 某个 target 回了错误回复或抛异常:只在 job.log 记 FAIL、不写文件,后面的 target 照抓。
+      - 某个 target 回了错误回复或抛异常:只在 job.log 记 FAIL、不写文件,后面的 target 照抓;
+      - Redis Cluster 的 spec:按 CLUSTER NODES 现列主节点,每个主节点一份文件,元信息行带 cluster=<name>。
 .EXAMPLE
     pwsh -NoProfile -File tools/scripts/tests/stress_snap_redis.tests.ps1
 #>
@@ -112,6 +113,36 @@ Test-Case '失败不中断:错误回复与异常只记 FAIL、不写文件,后�
     $log = Get-Content -LiteralPath (Join-Path $snapDir 'job.log') -Raw
     Assert-Match -Text $log -Pattern 'redis_alpha FAIL' -Because '错误回复记 FAIL'
     Assert-Match -Text $log -Pattern 'redis_beta FAIL' -Because '异常记 FAIL'
+}
+
+Test-Case 'Redis Cluster spec:只抓持有 slot 的主节点,逐节点落盘,元信息带 cluster=<name>;spec 写错照样在抓取之前拒绝' {
+    foreach ($spec in @('k8s-cluster:infra', 'k8s-cluster:Infra/redis', 'docker-cluster:redis', 'docker-cluster:redis:99999')) {
+        $dir = New-RunDir
+        Assert-RejectedBeforeCapture -RunDir $dir -Action { Invoke-Snap -RunDir $dir -Targets @{ player = $spec } } `
+            -MessagePattern 'spec|端口' -Because "spec '$spec' 必须拒绝"
+    }
+    $dir = New-RunDir
+    $nodes = @(
+        ('a' * 40) + ' 10.0.0.1:6379@16379 myself,master - 0 0 1 connected 0-8000',
+        ('b' * 40) + ' 10.0.0.2:6379@16379 master - 0 0 2 connected 8001-16383',
+        ('c' * 40) + ' 10.0.0.3:6379@16379 slave ' + ('a' * 40) + ' 0 0 1 connected',
+        ('d' * 40) + ' 10.0.0.4:6379@16379 master - 0 0 3 connected'
+    ) -join "`n"
+    $nodesProvider = [scriptblock]::Create("param(`$name, `$spec) @'`n$nodes`n'@")
+    & $snapScript -RunDir $dir -StartTime $pastStart -Stages '0' -Endpoints @{} -RedisTargets @{ player = 'k8s-cluster:mmorpg-infra/redis-player' } `
+        -RedisInfoSections @('server', 'stats') -RedisClusterNodesProvider $nodesProvider `
+        -RedisInfoProvider { param($name, $spec) "# Server`nrun_id:$name`nuptime_in_seconds:10" }
+    $snapDir = Join-Path $dir 'prom-snapshots'
+    $files = @(Get-ChildItem -LiteralPath $snapDir -Filter 't0m_redis_*.txt' | ForEach-Object { $_.Name } | Sort-Object)
+    Assert-Equal -Expected 't0m_redis_player-aaaaaaaa.txt,t0m_redis_player-bbbbbbbb.txt' -Actual ($files -join ',') -Because '只抓持有 slot 的主节点:副本与没有 slot 的主不算,否则 R1 把副本的 ops 算进合计'
+    $first = @(Get-Content -LiteralPath (Join-Path $snapDir $files[0]))[0]
+    Assert-Match -Text $first -Pattern '^# stress_snap target=player-aaaaaaaa spec=k8s-cluster:mmorpg-infra/redis-player@10\.0\.0\.1:6379 cluster=player captured_at=\S+$' -Because '汇总脚本按 cluster= 合成集群总行'
+
+    $bad = New-RunDir
+    & $snapScript -RunDir $bad -StartTime $pastStart -Stages '0' -Endpoints @{} -RedisTargets @{ player = 'docker-cluster:redis-player-cluster-0:7100' } `
+        -RedisInfoSections @('server', 'stats') -RedisClusterNodesProvider { param($name, $spec) 'NOAUTH Authentication required.' } `
+        -RedisInfoProvider { param($name, $spec) "# Server`nrun_id:x`nuptime_in_seconds:10" }
+    Assert-Match -Text (Get-Content -LiteralPath (Join-Path $bad 'prom-snapshots/job.log') -Raw) -Pattern 'redis_player FAIL' -Because '列不出主节点只记 FAIL,不当成没有节点'
 }
 
 Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue

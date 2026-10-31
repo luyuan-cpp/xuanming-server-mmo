@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"strings"
 	"testing"
 
@@ -16,7 +15,6 @@ import (
 func globalLoginConfigForTest() Config {
 	c := Config{}
 	c.Node.ZoneId = 7
-	c.Placement.PinOnCreate = true
 	c.DataServiceRpc.Target = "direct:///127.0.0.1:1"
 	return c
 }
@@ -35,7 +33,6 @@ func TestGlobalLoginAuthorityGuard(t *testing.T) {
 			mutate func(*Config)
 			key    string
 		}{
-			{"不钉落点", func(c *Config) { c.Placement.PinOnCreate = false }, "Placement.PinOnCreate"},
 			{"归属区为空", func(c *Config) { c.Node.ZoneId = 0 }, "Node.ZoneId"},
 			{"无DS", func(c *Config) { c.DataServiceRpc.Target = "" }, "DataServiceRpc"},
 			{"空白DS目标", func(c *Config) {
@@ -55,15 +52,6 @@ func TestGlobalLoginAuthorityGuard(t *testing.T) {
 					t.Fatalf("必须拒绝%s: %v", tc.key, err)
 				}
 			})
-		}
-	}
-	for _, mode := range []string{"", "pro", "DEV", service.DevMode, service.TestMode} {
-		c := Config{LegacyNonGlobal: true}
-		c.Mode = mode
-		err := c.ValidateGlobalAuthority(nil)
-		allowed := mode == service.DevMode || mode == service.TestMode
-		if allowed != (err == nil) {
-			t.Fatalf("显式legacy模式=%q，错误=%v", mode, err)
 		}
 	}
 	// 目标配置沿go-zero既有三种形式，不能因为号段关闭而静默丢失DS目录接缝。
@@ -117,23 +105,8 @@ func TestGlobalLoginYamlPinsFormalHome(t *testing.T) {
 	if err := c.ValidateGlobalAuthority(globalDirectoryTestEnv); err != nil {
 		t.Fatal(err)
 	}
-	if c.LegacyNonGlobal || !c.Placement.PinOnCreate || c.Placement.NewPlayerStorageId != 0 || c.Placement.StorageIDForNewPlayer(c.Node.ZoneId) != c.Node.ZoneId {
+	if c.Placement.NewPlayerStorageId != 0 || c.Placement.StorageIDForNewPlayer(c.Node.ZoneId) != c.Node.ZoneId {
 		t.Fatal("正规默认必须全球钉落点，storage0仅取已配置Node.ZoneId")
-	}
-	raw, err := os.ReadFile("../../etc/login.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(raw)
-	if strings.Count(text, "  PinOnCreate: true") != 1 {
-		t.Fatal("正规PinOnCreate键必须唯一显式true")
-	}
-	var rejected Config
-	if err := conf.LoadFromYamlBytes([]byte(strings.Replace(text, "  PinOnCreate: true", "  PinOnCreate: false", 1)), &rejected); err != nil {
-		t.Fatal(err)
-	}
-	if err := rejected.ValidateGlobalAuthority(globalDirectoryTestEnv); err == nil {
-		t.Fatal("样例dev模式也不能授权关闭PinOnCreate")
 	}
 }
 

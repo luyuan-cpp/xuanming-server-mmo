@@ -343,8 +343,10 @@ func runFriend(c config.Config) (runErr error) {
 	fmt.Printf("  mysql:         %s\n", svc.MySQLTarget(c.MySQL))
 	fmt.Printf("  schema:        %s\n", schemaModeLabel(c))
 	// 两个 Redis 句柄不同源时必须一眼看出来:FriendRedis 未配置会回落到共享库,
-	// 那种形态下 friend 的私有 key 与 player:session:{id} 挤在同一个实例上。
+	// 那种形态下 friend 的私有 key 与 player:session:{id} 可能挤在同一个实例上。
 	fmt.Printf("  friend_redis:  %s\n", svcCtx.FriendRedisTarget)
+	playerRedisConf := c.EffectivePlayerRedis()
+	fmt.Printf("  player_redis:  %s\n", playerRedisConf.Describe())
 	fmt.Printf("  quota:         friends=%d blocks=%d pending_out=%d pending_in=%d\n",
 		c.Friend.MaxFriends, c.Friend.MaxBlocks, c.Friend.MaxPendingRequests, c.Friend.MaxIncomingRequests)
 	fmt.Printf("  sweep:         mode=%s interval=%v retention=%dd\n",

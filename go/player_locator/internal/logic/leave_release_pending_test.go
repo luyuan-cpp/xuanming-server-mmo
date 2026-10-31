@@ -21,6 +21,7 @@ import (
 
 	"player_locator/internal/svc"
 	pb "proto/player_locator"
+	"shared/redisslot"
 )
 
 // leaveReleaseSetup 装上 SceneManager 假实现,写一条带 gate 的 ONLINE 会话(模拟停在选角界面、连接还在的登出)。
@@ -80,18 +81,18 @@ func TestMarkOffline_HolderReleasePendingEnqueuesDelayedCleanupWithoutGate(t *te
 	})
 	require.NoError(t, err, "等持有者释放不是 MarkOffline 的失败")
 	require.Len(t, fake.leaveCalls(), 1)
-	exists, err := sc.RedisClient.Exists(ctx, sessionKey(playerID)).Result()
+	exists, err := sc.PlayerRedis.Exists(ctx, sessionKey(playerID)).Result()
 	require.NoError(t, err)
 	assert.Zero(t, exists, "会话照删")
 
 	// ready 分数延后 2s:1s 之后还领不到,3s 之后能领到。
-	score, err := sc.RedisClient.ZScore(ctx, LeaseZSetKey, strconv.FormatUint(playerID, 10)).Result()
+	score, err := sc.PlayerRedis.ZScore(ctx, leaseKeysForPlayer(playerID).ready, strconv.FormatUint(playerID, 10)).Result()
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, int64(score), start.Add(holderReleaseFirstRetryDelay).Unix()-1)
-	early, err := claimExpiredLeases(ctx, sc, start.Add(holderReleaseFirstRetryDelay-time.Second), 10, 5*time.Second)
+	early, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), start.Add(holderReleaseFirstRetryDelay-time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	assert.Empty(t, early, "首拍要延后,给持有节点落盘写标记的时间")
-	claims, err := claimExpiredLeases(ctx, sc, start.Add(holderReleaseFirstRetryDelay+time.Second), 10, 5*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), start.Add(holderReleaseFirstRetryDelay+time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 
@@ -116,7 +117,7 @@ func TestMarkOffline_LeaveSceneFailureEnqueuesImmediatelyWithoutGate(t *testing.
 	})
 	require.NoError(t, err)
 
-	claims, err := claimExpiredLeases(ctx, sc, start.Add(time.Second), 10, 5*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), start.Add(time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1, "故障类失败不延后")
 	queued := &pb.PlayerSession{}
@@ -136,12 +137,12 @@ func TestLeaseExpiry_HolderReleasePendingRetainsClaimUntilReleased(t *testing.T)
 	})
 	require.NoError(t, err)
 
-	claims, err := claimExpiredLeases(ctx, sc, start.Add(holderReleaseFirstRetryDelay+time.Second), 10, 5*time.Second)
+	claims, err := claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), start.Add(holderReleaseFirstRetryDelay+time.Second), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 	handleLeaseExpiry(ctx, sc, claims[0])
 	require.Len(t, fake.leaveCalls(), 2)
-	processing, err := sc.RedisClient.ZRange(ctx, LeaseProcessingZSetKey, 0, -1).Result()
+	processing, err := sc.PlayerRedis.ZRange(ctx, leaseKeysForPlayer(playerID).processing, 0, -1).Result()
 	require.NoError(t, err)
 	assert.Contains(t, processing, strconv.FormatUint(playerID, 10), "等持有者释放时 claim 必须保留重试")
 
@@ -152,11 +153,11 @@ func TestLeaseExpiry_HolderReleasePendingRetainsClaimUntilReleased(t *testing.T)
 
 	// claim 超时回 ready 后再领,这次 scene_manager 拿到了释放证据、删掉 location → ack。
 	fake.setLeaveErr(nil)
-	claims, err = claimExpiredLeases(ctx, sc, start.Add(time.Minute), 10, 5*time.Second)
+	claims, err = claimExpiredLeases(ctx, sc, redisslot.PlayerSlot(playerID), start.Add(time.Minute), 10, 5*time.Second)
 	require.NoError(t, err)
 	require.Len(t, claims, 1)
 	handleLeaseExpiry(ctx, sc, claims[0])
-	processing, err = sc.RedisClient.ZRange(ctx, LeaseProcessingZSetKey, 0, -1).Result()
+	processing, err = sc.PlayerRedis.ZRange(ctx, leaseKeysForPlayer(playerID).processing, 0, -1).Result()
 	require.NoError(t, err)
 	assert.NotContains(t, processing, strconv.FormatUint(playerID, 10))
 	_, err = NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{Session: makeTestSession(playerID)})

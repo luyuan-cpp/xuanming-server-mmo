@@ -10,7 +10,7 @@ import (
 )
 
 // loadPlayerLocation 读 player:{id}:location(scene_manager 写的 protobuf
-// PlayerLocation,跨运行时契约 key,只经 SharedRedis 读)。键不存在返回 (nil, nil):
+// PlayerLocation,跨运行时契约 key,只经 PlayerRedis 读)。键不存在返回 (nil, nil):
 // 玩家不在线或未进场。JoinQueue 取 zone、gather 定位 scene 节点、观战取观众 zone
 // 三处共用一份解析。
 //

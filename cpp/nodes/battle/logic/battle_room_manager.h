@@ -24,8 +24,6 @@
 // 回合引擎(cpp/libs/services/battle,纯逻辑库,API 见设计文档 §5.1)
 #include "system/turn_battle_engine.h"
 #include "system/result_commit.h"
-// 结算发件箱的判定与 Redis 契约(PendingIndexSweepCursor 作为成员类型)
-#include "settlement/settlement_outbox.h"
 
 #include "proto/battle/battle_data.pb.h"
 #include "proto/battle/battle_node.pb.h"
@@ -45,7 +43,11 @@
 // 补偿全部由 scene 侧 reaper 按 InBattleComp.deadline_ms 兜底(§3.2),
 // 本类不做任何持久化,对玩家权威数据零写权(宪法 §7 新增不变量 4)。
 //
-// 出站(除客户端直连外全走 Kafka producer,设计文档 D6;寻址方式见
+// 终局(只有终局协议 v1,player-data-tidb-scaling-plan.md §5.4):打完之后把冻结的完整原件(含全员个人结算)经 gRPC
+// CommitBattleOutcome 提交 match SQL,只有拿到持久决定才公布终局、删房。个人结算由 match 发件箱投 player_inbox,
+// scene 应用后随存档提交;对局结果(评分、活动局)也由 match 发件箱投 Kafka。battle 不写 Redis,不直接发结果。
+//
+// 其余出站(除客户端直连外全走 Kafka producer,设计文档 D6;寻址方式见
 // docs/design/control-plane-topic-partitioning-20260908.md,由 ResolveCommandRoute 统一给出):
 //   大厅公告 → 无活直连时 GateCommand{PushToPlayerEvent},topic=gate-cmd_g<N> 的
 //             gate_node_id % P 号分区,key=player_id,
@@ -54,15 +56,10 @@
 //             会话当前玩家,session_id 回绕 / gate node_id 复用时不会写进别人的连接),0 在本侧拒发;
 //             只有 NotifyBattleAssigned / NotifyBattleStart 走这里(turn-based §22 D68),
 //             战斗帧不回落。battle 不再发任何 gate 绑定事件(§22 D67:gate 不中继战斗);
-//   结算     → SceneCommand{DispatchEvent, BattleSettlementEvent},
+//   确认     → SceneCommand{DispatchEvent, BattleConfirmedEvent}(CreateBattle 成功后每玩家一条,
+//             scene 据此 PREPARING→FIGHTING 并把作废期限切到正式 deadline),
 //             topic=scene-cmd_g<N> 的 scene_node_id % P 号分区,key=player_id,
 //             target_scene_id=scene_node_id + target_instance_id=BattleRouting.scene_instance_id;
-//   确认     → SceneCommand{DispatchEvent, BattleConfirmedEvent}(CreateBattle 成功后每玩家一条,
-//             scene 据此 PREPARING→FIGHTING 并把作废期限切到正式 deadline,同上信封);
-//   对局结果 → contracts.kafka.BattleResultEvent,topic=match-results(全局无 zone 段),
-//             key=battle_id;只在真实打完(FinishBattle)时发,Destroy/Abort 作废不发。
-//             带活动上下文(帮会同道历练)的局先落 zone Redis battle:activity_result:{battle_id}
-//             再发,guild 销账前每 10s 重发(docs/design/guild-phase2/06-activities.md §6.19–§6.21);
 //   观战帧   → 直连席之外的观众(battle-spectate-tiered-fanout.md §15.4):SpectateFrameEvent,不套信封。
 //             L1 给房间挂接的每台 gate 各一条,L2 只往全服广播 topic 发一条;topic / 分区 / key 与失败语义见
 //             battle_spectate_relay.h。这是 §22 D68 的显式例外(D94),参战帧仍然只走直连。
@@ -81,6 +78,9 @@ class BattleClientEdge;
 
 class BattleRoomManager
 {
+    // 单测直接驱动「Match 回了持久决定」并清房,不启动 match(房间按生产合同只由 Match 的决定收尾,DestroyBattle 删不掉)。
+    friend class BattleRoomManagerTestAccess;
+
 public:
     // 房间及重试回调捕获管理器 this,单例的地址必须固定。
     BattleRoomManager(const BattleRoomManager&) = delete;
@@ -154,13 +154,16 @@ public:
 
     // 节点级准入(建房准入闸、Agones 分配许可)在调用方 BattleNodeImpl::CreateBattle,先于本函数;
     // 本函数只剩业务判定。
+    // 只接受终局协议 v1:outcome_protocol_version 不是 turnbattle::kOutcomeProtocolVersion,或缺放置操作 / 目标实例,
+    // 一律回 kInvalidParameter;本节点没有终局签名密钥时回 kFeatureUnavailable。
     // 幂等:同 battle_id 重复创建直接回 OK(match 补偿路径可能重试)。
     // fail-closed(turn-based §22 D70):插表、装定时器、发任何事件之前先为全体参战者预签票据,
     // 任一人签不出即回 kServiceUnavailable —— 此时保证没有建房、没有推送、没有确认事件,
     // match 走通用补偿(DestroyBattle 幂等 → CancelBattlePrepare)。
     void HandleCreateBattle(const ::CreateBattleRequest &request, ::CreateBattleResponse &response);
 
-    // 幂等:房间不存在视为已销毁。销毁不发结算(补偿/回滚路径),推观众终局并关闭直连。
+    // 房间还在就什么都不做:房间只由 Match 的持久决定收尾(COMPLETE / ABORT),过期的补偿不能把一局在打的房间作废。
+    // 房间不存在时幂等成功;带放置操作的请求同时立一条操作墓碑,挡住同 battle_id 迟到的 CreateBattle。
     void HandleDestroyBattle(const ::DestroyBattleRequest &request);
     void HandleQueryBattleCreation(const ::QueryBattleCreationRequest&, ::QueryBattleCreationResponse&);
     bool AcceptsPlacementOperation(uint64_t,const std::string&,const std::string&) const;
@@ -243,29 +246,23 @@ public:
                              const ::SetAutoBattleRequest &request,
                              ::SetAutoBattleResponse &response);
 
-    // 停机收尾:全部房间作废(不结算;观众收 ABORTED,关闭房间直连),供 SetBeforeShutdown 调用。
-    // 例外是等结果回执的确认模式房间:它的个人结算在结果发出之前已写进 pending,清房不删 pending,
-    // 结果无论是否最终到达 broker,都由 scene 登录钩子 / 冻结到期补读应用(审计 social-match-battle#2)。
-    // 还在落库或落库已到总跨度上限的房间同样清掉:已落定成员的 pending 留着照常应用,没落定的成员这一局按作废处理
-    // (scene reaper 按 deadline 解冻),结果不发 —— 同局成员不对称,是审计 r2-battle#2 的既有残余。
-    // 落库到总跨度上限(turnbattle::kMaxStagingSpan)的房间不会自然消失,节点因此排不空。值班按
-    // staging_exhausted_rooms 周期提醒排除 zone Redis 故障后分三步收尾,不要直接删 Pod(会把同节点上正在打的房间一起作废):
+    // 停机收尾,供 SetBeforeShutdown 调用:停掉房间定时器、关闭房间直连,不铸造任何终局(观众不收 SpectateEnd:
+    // 此刻发 ABORTED 可能与 Match 的真实决定矛盾,中继观众靠 gate 的空闲超时收尾)。
+    // 已算出、还没拿到 SQL 决定的终局不在这里作废,而是立即再提交一轮(2026-10-23 修复,审计 r2-battle#2,
+    // turnbattle::NeedsShutdownOutcomeFlush),由 SqlOutcomesFlushed / StopSqlOutcomes 在停机排空窗口内收口;
+    // 还在打的房间没有终局可交,按作废处理,match 在权威截止后原子判 ABORT,全员作废。
+    // 房间保留在表里直到拿到决定或 manager 销毁,不回 Ready(终局未知的房间不能算已移除)。
+    // 调用方必须在同一个 loop 任务里先关建房准入闸(BattleNodeImpl::CloseAdmission):gRPC 排空
+    // 期间已收完的 CreateBattle 仍会派发(等许可的回调也可能排在关闸之后),不关闸它们会在此之后照常建房。
+    //
+    // SQL 终局迟迟拿不到决定的房间(滞留提醒里的 sql_unconfirmed)不会自然消失,节点因此排不空。值班按提醒排除 Match / TiDB 故障后
+    // 分三步收尾,不要直接删 Pod(会把同节点上正在打的房间一起作废):
     //   1. 给该 GameServer 打排空标签:kubectl -n mmorpg-infra label gs <name> mmorpg.io/drain=true(main.cpp kAgonesDrainLabelKey),
     //      进程 5s 内读到后拒绝新房间;
-    //   2. 等其余房间自然打完:提醒行的 node_rooms 降到与 stuck_total 相等(单局上限 = match 的 BattleMaxDurationSeconds,
-    //      默认 300s)。stuck_total 含 v1 SQL 终局未确认与占位房间,它们同样不会自然消失(2026-10-22 评审补;原写「与 count 相等」,
-    //      同节点有这两类房间时永远等不到);
+    //   2. 等其余房间自然打完:提醒行的 node_rooms 降到与 stuck_total 相等(单局上限 = match 的 BattleMaxDurationSeconds,默认 300s);
     //   3. kubectl -n mmorpg-infra delete gs <name>,优雅停机走这里收尾。
     // 非 Agones 的 Deployment 形态(只用于验证 / 回退)没有排空标签,新房间会继续进来,第 2 步等不到;
     // 只能择低峰删 Pod,并接受同节点在打的房间被作废。
-    // 调用方必须在同一个 loop 任务里先关建房准入闸(BattleNodeImpl::CloseAdmission):gRPC 排空
-    // 期间已收完的 CreateBattle 仍会派发(等许可的回调也可能排在关闸之后),不关闸它们会在作废之后照常建房。关闸之后房间表
-    // 保持为空,AddObserver / IssueBattleTicket 因房间不存在自然被拒(kEntityIsNull / kInvalidParameter)。
-    // 上面「等结果回执 / 落库」与「同局成员不对称」两段只适用于旧协议(outcome_protocol 0)确认模式房间;
-    // match 的全球成局一律发 v1,这类房间不再产生(2026-10-23 核对,cross-zone-matchmaking.md §13.6)。
-    // v1 房间(2026-10-23 修复,审计 r2-battle#2):已算出、还没拿到 SQL 决定的终局不在这里作废,而是立即再提交一轮
-    // (turnbattle::NeedsShutdownOutcomeFlush),由 SqlOutcomesFlushed / StopSqlOutcomes 在停机排空窗口内收口;
-    // 还在打的 v1 房间没有终局可交,按作废处理,match 在权威截止后原子判 ABORT,全员作废。
     void AbortAllRooms(const std::string &reason);
 
     // 停机排空谓词(main.cpp 的 Node::SetShutdownDrainComplete):AbortAllRooms 补提交的 v1 终局都拿到 COMPLETE / ABORT
@@ -273,40 +270,17 @@ public:
     // 预算到了 Node 照常收尾。没有待提交终局的停机(常态)立即为真。
     bool SqlOutcomesFlushed() const;
 
-    // 拆除前钩子(main.cpp 的 Node::SetBeforeTeardown):装 v1 终局的停止闸(此后到达的回复只打日志、不产生任何副作用),
+    // 拆除前钩子(main.cpp 的 Node::SetBeforeTeardown):装终局的停止闸(此后到达的回复只打日志、不产生任何副作用),
     // 停掉重试定时器,并把仍没落定的终局逐局打 metric=battle_sql_outcome_unflushed_at_shutdown。此刻出站通道已关、
     // 在途调用的失败回调已跑完。原来停止闸在 AbortAllRooms 里装,排空窗口内拿不到任何终局(2026-10-23 修复)。
     void StopSqlOutcomes();
 
-    // ---- 结算重投的调参(测试与运维需要看得见,故放公开区)----
+    // ---- 滞留房间提醒 ----
     //
-    // 重投窗口 = kSettlementRetryIntervalSec × kSettlementRetryMaxAttempts = 120s。
-    // 上界取自"要覆盖一次 scene 进程重启 + 服务发现补齐"的时间尺度;再长没有意义:
-    // 持久记录仍在(不再过期,landing-recovery-sync-digest.md §7),玩家下次进场景会由登录钩子补应用,
-    // 在线玩家战斗冻结到期时 scene reaper 也会补读一次。
-    // 原来的 kPendingSettlementTtlSec(与 scene 侧同值的 7 天)随 TTL 一起删除。
-    static constexpr double kSettlementRetryIntervalSec = 10.0;
-    static constexpr uint32_t kSettlementRetryMaxAttempts = 12;
-    // 探测「没问到」(命令发出去了,应答是空应答 / ERROR)的轮次上限:这类轮次不消耗 kSettlementRetryMaxAttempts
-    // (一次断线不该烧掉重投窗口),但也不能无限挂着 —— 持续 ERROR(口令轮换后 NOAUTH、ACL 拒绝、长时间 LOADING)时,
-    // 每局结算都会进 outbox 却永远到不了次数用尽,payload 随对局数无界增长(AGENTS §11.3 重试必须有上限)。
-    // 按条目寿命**累计**计数(问到的轮次不清零;问到的轮次另有 kSettlementRetryMaxAttempts 上限,条目寿命两头都有界)。
-    // 60 轮 × 10s ≈ 10 分钟,远大于一次主切换;Redis 未连接的轮次 RetryPendingSettlements 直接跳过,不计在内。
-    // 10 分钟只是墙钟时间的上界:连接卡住、等存活探测摘连接时,同一条目可能叠着两条在途探测,摘连接时各拿一次空应答、计数 +2。
-    // 到上限摘条目并打 metric=battle_settlement_undelivered reason=probe_undetermined;记录若已落库仍由登录钩子兜底。
-    static constexpr uint32_t kSettlementProbeUndeterminedMaxRounds = 60;
-
-    // ---- 待结算积压报数(landing-recovery-sync-digest.md §7)----
-    //
-    // 每 kSettlementBacklogReportIntervalSec 秒一轮:查积压索引里一批 kSettlementBacklogSweepBatch 个成员、
-    // 清掉其中的孤儿(头部与轮转窗口交替,见 settlement_outbox.h 的 PendingIndexSweepCursor),
-    // 再打一行 metric=battle_settlement_pending_backlog count= oldest_age_s= orphans_removed=。
-    // battle / scene 进程没有 Prometheus 端点,这一行就是积压的唯一信号(值班 LogQL 登记在
-    // deploy/k8s/asset-channel-alerts.yaml 文件头,设计 §6.5)。
-    // 同一定时器每轮先报终局卡住、滞留在本节点的房间(ReportExhaustedStagingRooms,2026-10-22),
-    // 不为 0 时打 metric=battle_personal_settlement_staging_exhausted_rooms count= sql_unconfirmed= placeholder= stuck_total= node_rooms=。
-    static constexpr double kSettlementBacklogReportIntervalSec = 60.0;
-    static constexpr uint32_t kSettlementBacklogSweepBatch = 10;
+    // 每 kStuckRoomReportIntervalSec 秒从房间表数一遍 SQL 终局迟迟没有决定的房间(ReportStuckOutcomeRooms),
+    // 不为 0 时打 metric=battle_personal_settlement_staging_exhausted_rooms sql_unconfirmed= stuck_total= node_rooms=。
+    // battle 进程没有 Prometheus 端点,这一行就是唯一信号(值班 LogQL 登记在 deploy/k8s/asset-channel-alerts.yaml)。
+    static constexpr double kStuckRoomReportIntervalSec = 60.0;
 
     // ---- 观众席上限与回收(设计文档 §10.5)----
     //
@@ -362,14 +336,13 @@ private:
         uint32_t matchMode = 0;
         uint32_t battleConfigId = 0;
         // CreateBattleRequest.activity_context 原样副本(缺省 = kind NONE = 普通对局)。
-        // battle 不解释业务字段,只在 FinishBattle 回显进 BattleResultEvent 并据 kind 选结果通道。
+        // battle 不解释业务字段,只回显进 BattleResultEvent,活动局的结果通道在 match。
         ::BattleActivityContext activityContext;
         // CreateBattleRequest.spectate_visibility 原样副本:建房时赋值一次,整场不变,只供观战准入
         // (AddObserver 的第二道闸与 AttachRelayGate / PromoteSpectateBroadcast)读,只放行 PUBLIC。
         // 缺省 UNSPECIFIED 与 PRIVATE 一样不可观战(默认拒绝)。
         ::eSpectateVisibility spectateVisibility = ::SPECTATE_VISIBILITY_UNSPECIFIED;
-        bool requiresResultConfirmation = false;
-        // 原Create采用值，不以当前节点support替代采用证明。v1绝不进入旧Redis/Kafka个人直投。
+        // 原Create采用值，不以当前节点support替代采用证明。建房时已校验等于 kOutcomeProtocolVersion,只回显给 match。
         uint32_t outcomeProtocol = 0;
         std::string placementOperation;
         std::string targetInstance;
@@ -382,11 +355,7 @@ private:
         std::string outcomeRequestDigest;
         std::chrono::steady_clock::time_point outcomeSince{};
         std::chrono::steady_clock::time_point nextOutcomeAttempt{};
-        std::optional<turnbattle::ResultCommit> resultCommit;
         ::contracts::kafka::BattleResultEvent pendingResult;
-        // 确认模式下每名成员的 R07 个人结算字节(BuildPersonalSettlementPayloads),BeginResultCommit 时
-        // 从冻结原件算一次:结果发送前落 pending、回执后派发都用这一份,两处字节必然相同。
-        std::map<uint64_t, std::string> personalSettlementPayloads;
         std::optional<::TurnResultS2C> pendingFinalTurn;
         std::optional<::BattleStateS2C> pendingVisibleState;
         ::eSpectateEndReason pendingSpectateReason = ::SPECTATE_END_BATTLE_FINISHED;
@@ -430,7 +399,7 @@ private:
         // 向全部参战玩家重发一次(scene 幂等)。没有 scene→battle 的确认回执通道(proto 已定),
         // 用有界周期补发覆盖"首发 produce 失败 / Kafka 积压 / scene 消费者 rebalance"这类
         // 单次投递丢失或迟到;窗口按 scene 侧锁保留期取 180s:prepare TTL(match matchedTicketTTLFor,
-        // 最长 10 人 96s)+ kLockExtraTtlSec 60s = 156s,再留余量(推导见 .cpp kConfirmResendWindowMs)。
+        // 最长 10 人 83s)+ kLockExtraTtlSec 60s = 143s,再留余量(推导见 .cpp kConfirmResendWindowMs)。
         TimerTaskComp confirmResendTimer;
         uint64_t confirmResendUntilMs = 0;
         // player_id(参战者或观众)→ 已验证的客户端直连;缺项 = 该玩家没有活直连:
@@ -469,41 +438,26 @@ private:
     // 整场 deadline 到期:引擎仍未分出胜负按平局强制收尾(battle_node.proto 契约)。
     void OnBattleDeadline(uint64_t battleId);
 
-    // 战斗收尾:确认模式先固定含全部个人结算的结果、把个人结算写进 pending,再取得Kafka all ACK，随后
-    // 每参与者 BattleEndS2C(战斗帧,只走直连)→ 旧R07 BattleSettlementEvent(确认模式只投命令,不再改写 pending)。
-    // 观众按 spectateReason 推 SpectateEndS2C(§10.5);终局包排队后关闭房间全部直连;
-    // 旧模式最后发送评分事件；确认模式复用ACK前原件，不重新计算个人奖励。
-    // 只组装与发送,不动 rooms_；返回true才能由调用方EraseRoom，校验失败保留房间。
-    bool FinishBattle(BattleRoom &room, ::eBattleOutcome outcome,
-                      ::eSpectateEndReason spectateReason,
-                      const contracts::kafka::BattleResultEvent* committedResult = nullptr);
+    // 公布公共终局:最后一回合帧 → 观众按 pendingSpectateReason 收 SpectateEndS2C(§10.5)→ 终局包排队后关闭房间全部直连。
+    // 只在 Match 持久 COMPLETE 之后调用,终局一律取冻结的原件 pendingResult,不重新计算。
+    // 参战者个人的 BattleEndS2C 与资产可见性由 scene 在结算随存档提交之后通知,battle 不发;对局结果由 match 发件箱投递。
+    // 只组装与发送,不动 rooms_;返回 true 才能由调用方删房,校验失败保留房间。
+    bool FinishBattle(BattleRoom &room);
     contracts::kafka::BattleResultEvent BuildResult(const BattleRoom&, ::eBattleOutcome) const;
+    // 打完之后冻结可见状态与终局原件(只计算一次,未知回执不允许重新取掉落、时间或目标 UUID),开始提交 match SQL。
+    // 原件无效时置 outcomeExhausted:终局保持未知,房间滞留,由 match 在权威截止后裁决。
     void BeginResultCommit(BattleRoom&, ::eBattleOutcome, ::eSpectateEndReason,
                            std::optional<::TurnResultS2C>, ::BattleStateS2C);
-    static bool TerminalPending(const BattleRoom& room) { return room.resultCommit.has_value() || room.outcomePending; }
-    void BeginSqlOutcome(BattleRoom& room, ::eBattleOutcome outcome, ::eSpectateEndReason reason,
-                         std::optional<::TurnResultS2C> finalTurn, ::BattleStateS2C visibleBefore);
+    static bool TerminalPending(const BattleRoom& room) { return room.outcomePending; }
     void PumpSqlOutcomes();
+    // Match 回了持久决定之后的收尾(PumpSqlOutcomes 的回复回调调用)。调用之后 room 引用可能已悬空。
+    // COMPLETE:FinishBattle 通过才删房,不通过时房间保留、继续重放。ABORT:观众收 ABORTED + ONGOING,不生成任何个人效果。
+    void OnSqlOutcomeComplete(BattleRoom &room);
+    void OnSqlOutcomeAbort(BattleRoom &room);
+    // 把房间移出待提交集合并删房,集合空了就停重放定时器。
+    void RetireSqlOutcomeRoom(uint64_t battleId);
     // 与正式请求签名相同的密钥就绪门；只在本节点生命周期首次缺失时报警。
     bool OutcomeSigningKeyReady(std::string_view secret);
-    void PumpResultCommits();
-    void StopResultCommits();
-    // 结果第一次发往 broker 之前,把全部成员的个人结算写进 R07 pending(审计 social-match-battle#2)。
-    // 由 PumpResultCommits 驱动,每轮只对还没落定的成员(ResultCommit::UnstagedMembers)各 EVAL 一次
-    // kStagePendingSettlementOnceScript,回复到齐后经 OnPersonalSettlementsStaged 交给 ResultCommit::FinishStaging;
-    // 没落完不发结果。已落定的成员不再重写:scene 可能已应用并销账,重写会让 pending 复活(审计 r2-battle#1)。
-    // Redis 未连上时不开新一轮(不消耗退避与轮次),等下一次 pump;总跨度照常计时(ExhaustStagingIfOverdue 先于连通性检查)。
-    // 与本地模式不同,这里不降级为「不落库直接发」:不落库就发,恰好重现停机 / 崩溃丢个人结算的缺陷。
-    // 总跨度用尽(turnbattle::kMaxStagingSpan,审计 r2-battle#4)在这里判出,交给 RetireExhaustedStaging。
-    void StagePersonalSettlements(BattleRoom &room, turnbattle::ResultCommit::Clock::time_point now);
-    // 一轮落库的回复全部到齐。settledMembers = 本轮拿到确定结论的成员(StageVerdict 前三种)。
-    // 房间已不在(停机清房)或轮次过期时丢弃;已写下的 pending 留给 scene 裁决。
-    // 全部落定:删本局落库标记(fire-and-forget)。没全落定:什么都不做,下一次 pump 再判跨度、按退避开轮。
-    void OnPersonalSettlementsStaged(uint64_t battleId, uint64_t attempt, std::set<uint64_t> settledMembers);
-    // 总跨度用尽:打一条 metric=battle_personal_settlement_staging_exhausted,房间移出 resultRooms_ 不再 pump,
-    // 但**保留在房间表里**(终局未知:结果不发、DestroyBattle 不作废、新行动照旧拒绝),直到停机 AbortAllRooms。
-    // 之后的周期提醒见 ReportExhaustedStagingRooms。
-    void RetireExhaustedStaging(BattleRoom &room);
 
     void BroadcastTurnResult(const BattleRoom &room, const ::TurnResultS2C &result);
 
@@ -640,110 +594,18 @@ private:
     // FinishBattle,它的应答此刻还没写。
     void CloseDirectConnections(BattleRoom &room, const char *reason);
 
-    // ---- 结算发件箱(R07:结算必须可重投,且重投要重新解析目标)----
-    //
-    // 判定逻辑在 services/battle/settlement/settlement_outbox.h(纯函数,单测直接盯)。
-    // 这里只放"条目 + 一个节点级定时器",房间在 FinishBattle 之后就被销毁了,
-    // 定时器不能挂在房间上。
-    struct PendingSettlement
-    {
-        uint64_t battleId = 0;
-        uint64_t playerId = 0;
-        // 序列化好的 BattleSettlementEvent(重投时原样再发,不重算 —— 结算必须幂等且一致)。
-        std::string payload;
-        // 开局时抓到的 scene 落点,只用于日志对照:重投**一律**用重新解析出来的 node_id。
-        uint32_t originalSceneNodeId = 0;
-        uint32_t attempts = 0;
-        // 探测没问到的轮次,条目寿命内累计、不清零(不计入 attempts,上限 kSettlementProbeUndeterminedMaxRounds)。
-        uint32_t undeterminedRounds = 0;
-    };
+    // 保证滞留房间提醒的定时器已装填(幂等)。房间第一次滞留时装填(原件无效 / SQL 终局越过快速跨度),之后常驻:
+    // 房间被清掉后 ReportStuckOutcomeRooms 自然不再打行。
+    void EnsureStuckRoomReporter();
+    // 定时器回调:从房间表现数 SQL 终局迟迟没有决定的房间(原件无效、或越过了快速重放跨度),不为 0 就打一行
+    // metric=battle_personal_settlement_staging_exhausted_rooms sql_unconfirmed= stuck_total= node_rooms=,
+    // battle_id 列表只放正文。metric 名沿用已登记的值班查询。
+    void ReportStuckOutcomeRooms();
 
-    // 本地(非确认)模式结算的**唯一**出口(R07;确认模式见下方 DispatchStagedSettlement,顺序同样成立)。
-    // 顺序是硬要求:
-    //   Redis 落库 → (落库回调里)投 SceneCommand → 登记进 outbox 等销账。
-    // 不能反过来先投再落库:投递可能比 Redis 的 SET 先到,scene 应用结算后销账
-    // (此刻记录还不存在,销账是空操作),随后迟到的 SET 落地就留下一条孤儿记录,
-    // 玩家下次登录会被**重复发一次奖励**。
-    // Redis 不可用或命令未发出时降级为直接投递并报 ERROR；已发出但落库应答不确定时仍登记重投，交探测裁决。
-    // 只用于本地(非确认)模式;确认模式的 pending 在发结果之前已由 StagePersonalSettlements 写好,
-    // 回执后走 DispatchStagedSettlement。
-    void DispatchSettlementDurably(const ::BattleRouting &routing, uint64_t playerId,
-                                   const ::BattleSettlementData &settlement);
-
-    // 确认模式回执之后的派发:pending 已在发结果之前落库,这里只投 SceneCommand 并登记 outbox 等销账。
-    // **绝不**再写 pending:回执之前 scene 可能已经按登录钩子 / 冻结到期补读应用并销账,
-    // 再写一次会让已销账的 pending 复活,玩家下次登录重复发奖(BuildPersonalSettlementPayloads 的说明)。
-    void DispatchStagedSettlement(const ::BattleRouting &routing, uint64_t playerId, uint64_t battleId,
-                                  const std::string &payload);
-
-    // 落库回调里登记待销账记录并保证重投定时器已装填；落库应答不确定时也登记。
-    void EnqueuePendingSettlement(uint64_t battleId, uint64_t playerId, std::string payload,
-                                  uint32_t originalSceneNodeId);
-    // 定时器回调:对每条未销账的记录探测 ACK、重新解析目标、按判定重投或收尾。
-    void RetryPendingSettlements();
-    // 单条记录的一轮处理(Redis 回调链的入口)。
-    void ProbeAndRetryOne(uint64_t battleId, uint64_t playerId);
-    // 一轮探测没问到(两跳任一跳的应答是空应答 / ERROR / 意外类型):不动 attempts,undeterminedRounds 加一;
-    // 到 kSettlementProbeUndeterminedMaxRounds 摘条目并响一声。stage 只进日志("ack" / "location")。
-    // 只改 outbox,不发 Redis 命令(会在 hiredis 释放连接的回调栈里被调到)。
-    void NoteUndeterminedSettlementProbe(uint64_t battleId, uint64_t playerId, const char *stage,
-                                         battle_settlement::ReplyShape shape);
-    // outbox 空了就停表:battle 常态下没有未销账记录,不该留一个每 10s 空转的定时器。
-    void StopSettlementRetryTimerIfIdle();
-    // 保证积压报数定时器已装填(幂等)。由 DispatchSettlementDurably 在本节点第一次结算时装填,
-    // 之后常驻:积压是全局的(记录不过期),不随本节点的 outbox 清空而停。
-    // 本节点从没结算过就不报 —— 多个 battle 节点报的是同一个全局数,有一个在打的节点报就够了。
-    // 确认模式开出落库轮(StagePersonalSettlements)与落库判用尽(RetireExhaustedStaging)时同样装填:
-    // 后者可能发生在 Redis 一直没连上、从没开过轮的节点上,滞留房间的周期提醒(ReportExhaustedStagingRooms)要靠它。
-    // 占位房间(BeginResultCommit 序列化失败 / 成员对不上)与 v1 SQL 终局判用尽(BeginSqlOutcome / PumpSqlOutcomes)时
-    // 同样装填:v1 房间不走 R07 落库,只跑 v1 的节点此前从不装填(2026-10-22 评审补)。
-    void EnsureSettlementBacklogReporter();
-    // 定时器回调:按 settlementBacklogCursor_ 选一批索引成员清孤儿,再打一行积压 metric。
-    // 回调链只以 weak_ptr<自己> 回到本对象推进游标,其余只捕获值(AGENTS.md §11.7)。
-    void ReportPendingSettlementBacklog();
-    // 定时器回调(与上面同一个定时器,先于它调用):从房间表现数终局卡住的房间(turnbattle::ClassifyStuckTerminal:
-    // 落库到总跨度上限 / v1 SQL 终局未确认 / 占位),不为 0 就打一行 metric=battle_personal_settlement_staging_exhausted_rooms
-    // count=(落库用尽) sql_unconfirmed= placeholder= stuck_total=(三者之和) node_rooms=,battle_id 列表只放正文。
-    // metric 名沿用已登记的值班查询(2026-10-22 评审补:原先只数落库用尽一类)。
-    // 只读房间表、不碰 Redis,Redis 断着也照报;房间被清掉后自然停报。
-    void ReportExhaustedStagingRooms();
-
-    // ---- 活动结果发件箱(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.19–§6.21)----
-    //
-    // 与上面的 R07 结算发件箱同一纪律(先落库、后投递、未销账则重投),区别只在销账方:
-    // 这里由 guild 在该局进入终态后 DEL battle:activity_result:{battle_id}。
-    // 判定与常量在 services/battle/system/battle_result_activity.h(纯函数,单测直接盯)。
-    struct PendingActivityResult
-    {
-        // 序列化好的 BattleResultEvent:与 Redis 里的记录逐字节相同,重发原样再发、不重算。
-        std::string payload;
-        // 已重发的次数(首发不计)。
-        uint32_t attempts = 0;
-    };
-
-    // 活动局结果的唯一出口。顺序是硬要求:SET 记录 → (成功回调里)发 Kafka → 登记待销账。
-    // 反过来先发后写,guild 可能先结算并 DEL(此刻记录还不存在,DEL 是空操作),迟到的 SET
-    // 落地后就留下一条孤儿记录,battle 会对一局已结算的对局一直重发到次数用尽。
-    // Redis 不可用 / SET 未发出时只发一次并报 ERROR；已发出但应答不确定时仍登记重投，由 EXISTS 探测裁决。
-    void DispatchActivityResultDurably(const contracts::kafka::BattleResultEvent &result, bool brokerCommitted = false);
-    // SET 回调里登记待销账记录并保证重发定时器已装填；落库应答不确定时也登记。
-    void EnqueuePendingActivityResult(uint64_t battleId, std::string payload);
-    // 定时器回调:对每条未销账的记录探测一次。
-    void RetryPendingActivityResults();
-    // 单条记录的一轮处理:EXISTS → 按判定重发 / 摘除。
-    void ProbeActivityResultOne(uint64_t battleId);
-    // outbox 空了就停表(常态下没有进行中的活动局结果)。
-    void StopActivityResultRetryTimerIfIdle();
-
-    // 绑进定时器 / hiredis 回调的 weak_ptr<自己>(AGENTS.md §11.7)。
+    // 绑进定时器与 gRPC 回调的 weak_ptr<自己>(AGENTS.md §11.7)。
     // 本类是进程级单例(Instance() 里的函数静态对象),不由 shared_ptr 持有,拿不到 weak_from_this();
     // 这里用别名构造把 this 挂在 lifeToken_ 的控制块上:lifeToken_ 随本对象析构,之后 lock() 必然失败。
-    // 实际上单例寿命覆盖整个 loop(tlsRedis 是 thread_local,先于静态对象析构),这层是按 §11.7
-    // "只绑 weak_ptr<自己>"写的防线,不是在修某个已知的悬垂路径。
-    // 2026-10-16 核对过停机顺序:tlsRedis.Shutdown() 在 Node::FinalizeTeardownInLoop 里执行(入口兜底在
-    // RunNodeMain 返回前),都早于本函数静态对象析构,所以停机时以空应答进来的在途回调看到的本对象仍然活着。
-    // R07 结算发件箱的三个 hiredis 回调同日改绑 weak(与活动结果发件箱同一写法);重投定时器 settlementRetryTimer_
-    // 仍绑裸 this:TimerTaskComp 是本类成员,析构时取消定时器,属于 §11.7 的同寿命成员例外。
+    // 实际上单例寿命覆盖整个 loop,这层是按 §11.7 "只绑 weak_ptr<自己>"写的防线,不是在修某个已知的悬垂路径。
     std::weak_ptr<BattleRoomManager> WeakSelf() { return std::shared_ptr<BattleRoomManager>(lifeToken_, this); }
 
     // 仅借用运行时上下文持有的直连面；清空借用不销毁对象。
@@ -766,31 +628,12 @@ private:
     std::map<SpectatorKey, SpectatorOperation> spectatorOperations_;
     std::multimap<uint64_t, SpectatorKey> spectatorDeadlines_;
     void PruneSpectatorOperations(uint64_t now);
-    // producer listener 只登记回执，pump 在 poll 返回后才执行终局副作用，禁止回执栈递归 send。
-    bool resultListenerInstalled_ = false;
-    uint64_t nextResultCorrelation_ = 0;
-    std::map<uint64_t, uint64_t> resultAttempts_;
-    std::set<uint64_t> resultRooms_;
-    std::vector<std::pair<uint64_t, bool>> resultReports_;
-    TimerTaskComp resultCommitTimer_;
     bool outcomeStopping_ = false;
     bool outcomeKeyUnavailableLogged_ = false;
     std::set<uint64_t> sqlOutcomeRooms_;
     TimerTaskComp sqlOutcomeTimer_;
-
-    // key = (battle_id, player_id);量级 = 未销账的结算条数,常态为 0。
-    std::map<std::pair<uint64_t, uint64_t>, PendingSettlement> settlementOutbox_;
-    TimerTaskComp settlementRetryTimer_;
-    // 积压报数(EnsureSettlementBacklogReporter);装填后常驻。
-    TimerTaskComp settlementBacklogTimer_;
-    // 孤儿清理的扫描窗口(头部 / 轮转交替,见 settlement_outbox.h 的 PendingIndexSweepCursor)。
-    // 纯进程内状态:节点重启从头部开始,不影响正确性。
-    battle_settlement::PendingIndexSweepCursor settlementBacklogCursor_;
-
-    // key = battle_id;量级 = 未被 guild 销账的活动局结果数,常态为 0。
-    // 有序容器:与 settlementOutbox_ 同口径,重发遍历与日志顺序稳定。
-    std::map<uint64_t, PendingActivityResult> activityResultOutbox_;
-    TimerTaskComp activityResultRetryTimer_;
+    // 滞留房间提醒(EnsureStuckRoomReporter);装填后常驻。
+    TimerTaskComp stuckRoomReportTimer_;
 
     // WeakSelf() 的存活令牌。声明在最后 = 最先析构:析构期间任何迟到回调都已 lock 不到本对象。
     std::shared_ptr<char> lifeToken_ = std::make_shared<char>();

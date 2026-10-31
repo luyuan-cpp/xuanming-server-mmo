@@ -168,6 +168,7 @@
     <ClCompile Include="player_inbox_reply_test.cpp" />
     <ClCompile Include="gm_sanction_inbox_executor_test.cpp" />
     <ClCompile Include="player_inbox_system_test.cpp" />
+    <ClCompile Include="player_redis_route_contract_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>

@@ -53,13 +53,21 @@ for n in "${TIERS[@]}"; do
   # Failing this leaves residual sessions and skews avg_login (#B-1).
   echo "[wipe] redis test residue..."
   # player:gate_index:* = player_locator 按 gate 建的会话索引与就绪标记 / 代次,与会话一起清,
-  # 否则留下脏成员与幽灵 gate(对账能自愈,但会拖慢下一阶梯的首轮)。
-  for p in 'player:session:*' 'player:gate_index:*' 'player:*:location' 'player_to_account:*' \
-           'access_token:*' 'refresh_token:*' 'login_session:*' \
+  # 否则留下脏成员与幽灵 gate(对账能自愈,但会拖慢下一阶梯的首轮)。player:leases:*、player:locator_shard:* 同理。
+  # REDIS_PLAYER_NODES:玩家域在 Redis Cluster 上时,写集群全部节点的 host:port(空格分隔)。SCAN 只看本节点,所以逐个主节点扫,副本跳过。
+  for p in 'player:session:*' 'player:gate_index:*' 'player:leases:*' 'player:locator_shard:*' 'player:*:location' 'player_to_account:*' \
+           'access_token:*' 'refresh_token:*' 'refresh_family:*' 'account_refresh:*' \
+           'login_session:*' 'login:sessfence:*' 'login_account_sessions:*' \
            'login_step:*' 'account_data:*' 'account_lock:*' \
            'player_locker:*'; do
     redis-cli --scan --pattern "$p" 2>/dev/null \
       | while read -r k; do [[ -n "$k" ]] && redis-cli DEL "$k" >/dev/null; done
+    for node in ${REDIS_PLAYER_NODES:-}; do
+      node_host="${node%:*}"; node_port="${node##*:}"
+      [[ "$(redis-cli -h "$node_host" -p "$node_port" --raw role 2>/dev/null | head -n 1)" == "slave" ]] && continue
+      redis-cli -h "$node_host" -p "$node_port" --scan --pattern "$p" 2>/dev/null \
+        | while read -r k; do [[ -n "$k" ]] && redis-cli -h "$node_host" -p "$node_port" DEL "$k" >/dev/null; done
+    done
   done
 
   # Materialize a tier-specific config from the template.

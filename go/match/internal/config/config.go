@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,27 +9,34 @@ import (
 
 	"shared/authoritysql"
 	"shared/idsegment"
+	"shared/playerredis"
 
+	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	// 全球模式权威在同一个 TiDB 事务域；Redis 只保存候选索引和通知。
-	GlobalMatch         GlobalMatchConf `json:",optional"`
-	GlobalLoginSessions bool            `json:",optional"`
-	LoginRedis          LoginRedisConf  `json:",optional"`
+	// 排队、占用、成局、评分与组队的权威都在同一个 SQL 事务域,开发环境与生产走同一条路径(玩家数据方案 §5.4)。
+	// 不标 optional:整段缺席或缺 Host / User / 两个跨域 schema 时加载期就失败,缺配置不能起服。
+	GlobalMatch GlobalMatchConf
+	// GlobalLoginSessions 必须为 true,LoginRedis 必须指向 login 同一实例 / DB:客户端请求的原角色身份只从这里核(Validate)。
+	GlobalLoginSessions bool                          `json:",optional"`
+	LoginRedis          playerredis.LoginReaderConfig `json:",optional"`
 	Kafka               struct {
 		Brokers []string
 	}
 
-	// MatchRedis:match 私有 key(match:* / challenge:* / spectate:*)的存储,
+	// MatchRedis:match 私有协调 key(spectate:* 观战索引、档位与配额)的存储,
 	// 可配 Type: cluster(设计文档 cross-zone-matchmaking.md D2 双存储)。
-	// 留空则回落到 Redis —— 私有 key 与契约 key 同一实例(本地单库形态)。
-	// 契约 key(player:*:location / player:session:* / battle:lock:*)永远走
-	// Redis:写者含 C++ scene,hiredis 无集群客户端,共享库不能集群化。
+	// 留空则回落到 Redis 段(本地单库形态)。
 	MatchRedis redis.RedisConf `json:",optional"`
+
+	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):契约 key(player:{id}:location /
+	// player:session:{id} / battle:lock:{id})与 player:{id}:sync_digest。
+	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 Redis 段那一个实例,开发环境不用改。
+	PlayerRedis playerredis.Config `json:",optional"`
 
 	// ZoneId:C++ 约定 etcd 注册路径用的 zone id。MatchNodeService 不是
 	// zone-scoped 节点类型,gate 连的是全 zone 的 match 实例;zone 只影响
@@ -47,40 +55,17 @@ type Config struct {
 	// 不用 caller context 取消,避免 WriteMessages 返回后批次仍在投递。
 	KafkaWriteTimeoutSeconds int64 `json:",default=5"`
 
-	// MatcherIntervalMs:matcher loop 扫队列的间隔(毫秒)。
+	// MatcherIntervalMs:按池撮合循环的间隔(毫秒)。
 	MatcherIntervalMs int64 `json:",default=500"`
-
-	// MatcherLockTTLSeconds:每个 (mode, battle_config_id) 队列凑单临界区
-	// 的 Redis SETNX 锁 TTL(秒)。多实例部署的安全性由该锁保证:
-	// 拿不到锁的实例跳过本轮,不会双弹同一批玩家。
-	MatcherLockTTLSeconds int64 `json:",default=10"`
-
-	// BattleMaxDurationSeconds:战斗最长时限(秒)。gather 用
-	// now + 该值 生成 deadline_ms,同时下发给 scene(InBattleComp 作废
-	// 期限,reaper 依据)与 battle(强制收尾期限)。
-	BattleMaxDurationSeconds int64 `json:",default=300"`
 
 	// ChallengeTTLSeconds:切磋挑战记录的 TTL(秒),超时未应答自动作废。
 	ChallengeTTLSeconds int64 `json:",default=60"`
 
-	// TicketTTLSeconds:排队 ticket 的兜底 TTL(秒)。正常路径由
-	// 取消/开战收尾,TTL 只负责清理异常残留(进程崩溃等)。
-	TicketTTLSeconds int64 `json:",default=21600"`
-
-	// MatchedTicketTTLSeconds:ticket 被 matcher 弹出进入 MATCHED 态后的 TTL(秒)。
-	// gather 在弹组实例的 goroutine 里跑,实例中途崩溃时票据不能留 6 小时
-	// (玩家会一直被 ErrAlreadyQueued 拒绝);短 TTL 让玩家在该窗口后可重排,
-	// scene 侧冻结由 InBattleComp.deadline_ms reaper 兜底(设计决策 D5)。
-	// 开局成功走 ReadyTicketTTLSeconds,失败回队首恢复 TicketTTLSeconds。
-	// 该值只是下限:实际 TTL 取 max(该值, 按组大小算的 gather 最坏链路),见 logic/queue.go
-	// matchedTicketTTLFor。缺省 30s 已低于公式最小值 42s(1 人组),所以按缺省配置不起作用,
+	// MatchedTicketTTLSeconds:一局备战预算的下限(秒)。实际预算取 max(该值, 按组大小算的 gather 最坏链路),
+	// 见 logic/queue.go matchedTicketTTLFor;它决定 scene 侧 PREPARING 的作废期限与组队开战锁时长。
+	// 缺省 30s 已低于公式最小值 42s(1 人组),所以按缺省配置不起作用,
 	// 只有往上调(超过对应组大小的公式值)时才生效;上调还会拉长组队开战锁与 battle 补发窗口的要求。
 	MatchedTicketTTLSeconds int64 `json:",default=30"`
-
-	// ReadyTicketTTLSeconds:开局成功后 ticket 停留在 READY 态的 TTL(秒)。
-	// 过期后 GetQueueStatus 返回 NOT_QUEUED —— 战斗内状态由
-	// battle:lock / scene 的 InBattleComp 权威表达,不再依赖 ticket。
-	ReadyTicketTTLSeconds int64 `json:",default=60"`
 
 	// TableFingerprintMode:战斗配表指纹比对策略(设计决策 D14)。scene 在
 	// PrepareBattleResponse.table_fingerprint 回报本节点六张战斗表的内容指纹,
@@ -103,9 +88,9 @@ type Config struct {
 
 	// ---- 评分匹配(设计文档 cross-zone-matchmaking.md §11)----
 
-	// RatingEnabled:是否消费 Kafka 对局结果(ResultTopic)更新 Elo 评分。
-	// 关闭后评分停留在默认 1500,评分匹配退化为纯等待序;队列的评分镜像
-	// ZSET 仍然维护,随时可以打开。Kafka 地址复用 Kafka.Brokers。
+	// RatingEnabled:消费 Kafka 对局结果(ResultTopic)时是否更新 Elo 评分。
+	// 关闭后评分停留在默认 1500,评分匹配退化为纯等待序;结果来源归档不受它影响,照常消费。
+	// Kafka 地址复用 Kafka.Brokers。
 	RatingEnabled bool `json:",default=true"`
 
 	// ResultTopic:battle 节点发对局结果(contracts.kafka.BattleResultEvent)的
@@ -154,11 +139,11 @@ type Config struct {
 	Team TeamConf
 
 	// DataServiceRpc:data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc),
-	// team 用 BatchGetPlayerHomeZone 查玩家 home zone(§D.3)。结构照 guild config。
+	// 用来领号段、查玩家昵称与展示资料。结构照 guild config。
 	// **必须 NonBlock**:客户端在 svc.NewServiceContext 里构造,早于节点注册与 s.Start();
 	// 阻塞建连会让"data_service 没起 / etcd 里没有 dataservice.rpc"拖垮排队 / 切磋 / 观战。
 	// svc.NewDataServiceClient 对 NonBlock=false 记错误日志并强制改为 true。
-	// optional:没配任何目标时不建客户端,team 需要 home zone 的请求一律 fail-closed。
+	// optional:没配任何目标时不建客户端,号段装配(svc.NewBattleIDSegment)随之拒绝启动。
 	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
 
 	// ---- 观战分级(docs/design/battle-spectate-tiered-fanout.md §15.6)----
@@ -169,14 +154,13 @@ type Config struct {
 }
 
 type GlobalMatchConf struct {
-	Enabled                bool   `json:",optional"`
-	Backend                string `json:",default=tidb"` // tidb | mysql,不写就是 tidb;整段缺席时是空串,同样按 tidb
-	Host                   string `json:",optional"`
-	User                   string `json:",optional"`
+	Backend                string `json:",default=tidb"` // tidb | mysql,不写就是 tidb
+	Host                   string
+	User                   string
 	PasswordEnv            string `json:",default=MATCH_MYSQL_PASSWORD"`
 	Database               string `json:",default=mmorpg_match"`
-	AccountRoleSchema      string `json:",optional"`
-	GuildTrialSchema       string `json:",optional"`
+	AccountRoleSchema      string
+	GuildTrialSchema       string
 	ProbeSecretEnv         string `json:",default=MATCH_PROBE_SECRET"`
 	CrossRegionWaitSeconds uint32 `json:",default=30"`
 	HardLatencyMs          uint32 `json:",default=180"`
@@ -231,11 +215,28 @@ func (g GlobalMatchConf) PoolPage() int {
 	return g.PoolPageSize
 }
 
-type LoginRedisConf struct {
-	Host        string `json:",optional"`
-	PasswordEnv string `json:",default=MMORPG_LOGIN_REDIS_PASSWORD"`
-	DB          int    `json:",optional"`
-	PoolSize    int    `json:",optional"`
+// 没写 PlayerRedis.Addrs 时玩家域连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,读写 3s,
+// 取连接 4s,拨号 5s)。这里写成常量,不随 CPU limit 漂移。
+const (
+	playerRedisFallbackPoolSize      = 20
+	playerRedisFallbackIOTimeoutMs   = 3000
+	playerRedisFallbackPoolTimeoutMs = 4000
+	playerRedisFallbackDialTimeoutMs = 5000
+)
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 Redis 段那一个实例。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{c.Redis.Host},
+		Username:        c.Redis.User,
+		Password:        c.Redis.Pass,
+		TLS:             c.Redis.Tls,
+		PoolSizePerNode: playerRedisFallbackPoolSize,
+		DialTimeoutMs:   playerRedisFallbackDialTimeoutMs,
+		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
+		PoolTimeoutMs:   playerRedisFallbackPoolTimeoutMs,
+	})
 }
 
 // TeamConf 组队配置(team-system.md §D.1 / §D.3)。
@@ -308,7 +309,7 @@ func (c SpectateConf) TicketTTL() time.Duration {
 	return time.Duration(c.TicketTTLSeconds) * time.Second
 }
 
-// validateSpectate 校验观战配置:prod(非 dev / test,与 svc.NewServiceContextWithAdmission 同一判据)打开中继时
+// validateSpectate 校验观战配置:prod(非 dev / test)打开中继时
 // 凭证密钥必须够长,否则拒启;运营密钥一旦配了就必须够长(serviceauth 的硬要求,提前到加载期报)。
 func (c *Config) validateSpectate() error {
 	spectate := c.Spectate
@@ -328,8 +329,14 @@ func (c *Config) validateSpectate() error {
 	return nil
 }
 
-// Validate 由 conf.MustLoad 自动调用(go-zero v1.10.0)。只校验排行榜快照这一组新字段;
-// 其余字段沿用各自的"0 / 漏配按默认"约定,不在这里收紧(收紧会让既有部署在升级时启动失败)。
+// ResultTopicRequiresDurability 报告结果 topic 是否要核验 RF3 严格策略:只有 dev / test 档放行(本地 Kafka 通常单 broker),
+// 其余档一律严格。结算要不要耐久和 SQL 用哪一档无关,所以这里不看 Backend。
+func (c *Config) ResultTopicRequiresDurability() bool {
+	return c.Mode != service.DevMode && c.Mode != service.TestMode
+}
+
+// Validate 由 conf.MustLoad 自动调用(go-zero v1.10.0)。SQL 权威是唯一路径,它的必需配置在这里挡住,缺配置不能起服;
+// 其余字段沿用各自的"0 / 漏配按默认"约定。
 // 先调内嵌 RpcServerConf 的 Validate:本方法会遮蔽那个被提升的方法,不显式调用的话加载期就少了它那项校验
 // (Auth=true 时要求 Redis),失败时间点会推迟到 zrpc.NewServer、而那时 matcher 与消费者都已经起来了。
 func (c *Config) Validate() error {
@@ -338,6 +345,15 @@ func (c *Config) Validate() error {
 	}
 	if _, err := authoritysql.ParseBackend(c.GlobalMatch.Backend); err != nil {
 		return fmt.Errorf("GlobalMatch.Backend: %w", err)
+	}
+	if strings.TrimSpace(c.GlobalMatch.Host) == "" || strings.TrimSpace(c.GlobalMatch.User) == "" {
+		return errors.New("GlobalMatch.Host 与 GlobalMatch.User 必须显式配置:匹配只有 SQL 权威一条路径")
+	}
+	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() {
+		return errors.New("GlobalLoginSessions 必须为 true 且 LoginRedis 的地址必须显式配置:客户端请求的原角色身份只从 login 同一实例核对")
+	}
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("PlayerRedis: %w", err)
 	}
 	if c.GlobalMatch.ScopeGroupAfterSeconds > c.GlobalMatch.ScopeGlobalAfterSeconds {
 		return fmt.Errorf("GlobalMatch.ScopeGroupAfterSeconds(%d) 不能大于 ScopeGlobalAfterSeconds(%d):先放宽到大区,再放宽到全服",

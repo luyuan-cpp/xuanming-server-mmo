@@ -33,8 +33,8 @@ import (
 	"scene_manager/internal/config"
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
+	"shared/handofffence"
 	"shared/ownerepoch"
-	"shared/savebarrier"
 )
 
 // unqualifiedRevokeFence 按 C++ 原文格式 "E|S|N|A|K|T" 拼一个资格原件(admission / token 各取一个十六进制字符重复 32 次)。
@@ -44,7 +44,7 @@ func unqualifiedRevokeFence(epoch uint64, instance, generation, admission, state
 }
 
 // unqualifiedRevokePreviousFence 是上一任在 epoch-1 下登记、已冻结发布的资格原件:location 记着 (节点 10, epoch),
-// 节点 10 却从未在 epoch 下登记成功时 save_barrier 里留着的就是它(§17.1 的典型形态)。
+// 节点 10 却从未在 epoch 下登记成功时 handoff hash 里留着的就是它(§17.1 的典型形态)。
 func unqualifiedRevokePreviousFence(epoch uint64) string {
 	return unqualifiedRevokeFence(epoch-1, "scene-previous", "4", "a", "F", "b")
 }
@@ -53,11 +53,11 @@ func unqualifiedRevokePreviousFence(epoch uint64) string {
 var unqualifiedRevokeGrace = time.Duration(config.DefaultUnqualifiedHolderRevokeGraceSeconds) * time.Second
 
 func unqualifiedRevokeSetFence(mr *miniredis.Miniredis, playerID uint64, raw string) {
-	mr.HSet(savebarrier.Key(playerID), savebarrier.HandoffFenceField, raw)
+	mr.HSet(handofffence.Key(playerID), handofffence.HandoffFenceField, raw)
 }
 
 func unqualifiedRevokeFenceValue(mr *miniredis.Miniredis, playerID uint64) string {
-	return mr.HGet(savebarrier.Key(playerID), savebarrier.HandoffFenceField)
+	return mr.HGet(handofffence.Key(playerID), handofffence.HandoffFenceField)
 }
 
 // unqualifiedRevokeStartTimer 把等待计时的起点摆在 Redis 时钟 now 之前 waited:location 身份是 leaveReleaseSeed /
@@ -202,9 +202,9 @@ func unqualifiedRevokeLuaSeed(t *testing.T, mr *miniredis.Miniredis, playerID, s
 	fence := unqualifiedRevokePreviousFence(7)
 	unqualifiedRevokeSetFence(mr, playerID, fence)
 	require.NoError(t, mr.Set(leaveReleaseWaitKey(playerID), leaveReleaseWaitScope(7, loc)+":1790000000000"))
-	require.NoError(t, mr.Set(fmt.Sprintf(InstancePlayerCountKey, sceneID), "2"))
+	seedSceneMembers(mr, sceneID, 2, playerID)
 	require.NoError(t, mr.Set(sceneNodeKey(sceneID), "10"))
-	require.NoError(t, mr.Set(nodePlayerCountKey(testZoneId, "10"), "2"))
+	seedNodeMembers(mr, testZoneId, "10", 2, playerID)
 	return unqualifiedRevokeTarget{playerID: playerID, loc: loc, locationRaw: raw, revisionTag: tag, ownerRevision: 1,
 		zoneID: testZoneId, epoch: 7}, fence
 }
@@ -220,7 +220,7 @@ func TestRevokeUnqualifiedHolderLua_Outcomes(t *testing.T) {
 	}{
 		{"原件属于上一代", nil, unqualifiedRevokeOutcomeRevoked},
 		{"原件缺失(从未有人登记过)", func(_ *testing.T, mr *miniredis.Miniredis, playerID, _ uint64) (string, bool) {
-			mr.HDel(savebarrier.Key(playerID), savebarrier.HandoffFenceField)
+			mr.HDel(handofffence.Key(playerID), handofffence.HandoffFenceField)
 			return "", true
 		}, unqualifiedRevokeOutcomeRevoked},
 		{"更早一代的标记不挡", func(t *testing.T, mr *miniredis.Miniredis, playerID, _ uint64) (string, bool) {
@@ -301,6 +301,18 @@ func TestRevokeUnqualifiedHolderLua_Outcomes(t *testing.T) {
 			outcome, err := runUnqualifiedRevoke(sc, target, observed)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, outcome)
+			if tc.want == unqualifiedRevokeOutcomeAlreadyGone {
+				// 第一步别的调用已做完,这里只补第二步:摘掉成员,其余一个字节都不写。
+				assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
+				assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
+				member := strconv.FormatUint(playerID, 10)
+				_, err = mr.SetAdd(instanceMembersKey(sceneID), member)
+				require.NoError(t, err)
+				_, err = mr.SetAdd(nodeMembersKey(testZoneId, "10"), member)
+				require.NoError(t, err)
+				assert.Equal(t, before, mr.Dump(), "除成员之外一个字节都不写")
+				return
+			}
 			if tc.want != unqualifiedRevokeOutcomeRevoked {
 				assert.Equal(t, before, mr.Dump(), "没撤销就一个字节都不写")
 				return
@@ -310,11 +322,11 @@ func TestRevokeUnqualifiedHolderLua_Outcomes(t *testing.T) {
 			assert.False(t, mr.Exists(leaveReleaseWaitKey(playerID)), "等待计时随 location 一起删")
 			assert.False(t, mr.Exists(locationRevisionKey(playerID)), "§16 侧车随 location 一起删")
 			assert.Equal(t, revisionText(1), leaveCasValue(t, mr, locationRevisionFloorKey(playerID)), "floor 不随位置删除")
-			assert.Equal(t, "1", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+			assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
 			if nodeMapped {
-				assert.Equal(t, "1", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")))
+				assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 			} else {
-				assert.Equal(t, "2", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")), "找不到节点就不扣节点人数")
+				assert.Equal(t, "2", nodeMemberCount(mr, testZoneId, "10"), "找不到节点就不扣节点人数")
 			}
 			assert.Equal(t, fenceBefore, unqualifiedRevokeFenceValue(mr, playerID), "资格原件一个字节都不动")
 
@@ -347,7 +359,7 @@ func TestRevokeUnqualifiedHolderLua_RejectsMalformedArguments(t *testing.T) {
 func TestRevokeUnqualifiedHolderRacesWithRegistration(t *testing.T) {
 	register := func(t *testing.T, sc *svc.ServiceContext, playerID uint64, candidate, prior string) string {
 		t.Helper()
-		keys := []string{ownerepoch.OwnerEpochKey(playerID), savebarrier.Key(playerID), ownerepoch.HandoffKey(playerID)}
+		keys := []string{ownerepoch.OwnerEpochKey(playerID), handofffence.Key(playerID), ownerepoch.HandoffKey(playerID)}
 		v, err := sc.Redis.Eval(cppLuaRegisterFence, keys, "7", candidate, prior)
 		require.NoError(t, err)
 		return fmt.Sprint(v)
@@ -404,7 +416,7 @@ func TestRevokeUnqualifiedHolderRacesWithTravelAdoption(t *testing.T) {
 	}
 	resume := func(t *testing.T, sc *svc.ServiceContext, playerID uint64, revoked, next, raw string) string {
 		t.Helper()
-		keys := []string{ownerepoch.OwnerEpochKey(playerID), savebarrier.Key(playerID), ownerepoch.HandoffKey(playerID),
+		keys := []string{ownerepoch.OwnerEpochKey(playerID), handofffence.Key(playerID), ownerepoch.HandoffKey(playerID),
 			getPlayerLocationKey(playerID)}
 		v, err := sc.Redis.Eval(cppLuaResumeFence, keys, revoked, next, "9", raw)
 		require.NoError(t, err)
@@ -471,8 +483,8 @@ func TestLeaveScene_UnqualifiedHolderRevokedAfterGrace(t *testing.T) {
 	require.NoError(t, leave(), "撤销之后这次清理完成")
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
 	assert.Equal(t, "4", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)))
-	assert.Equal(t, "1", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
-	assert.Equal(t, "1", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")))
+	assert.Equal(t, "1", sceneMemberCount(mr, sceneID))
+	assert.Equal(t, "1", nodeMemberCount(mr, testZoneId, "10"))
 	assert.False(t, mr.Exists(leaveReleaseWaitKey(playerID)))
 	assert.True(t, mr.Exists(locationRevisionFloorKey(playerID)), "floor 不随位置删除")
 	assert.Equal(t, fence, unqualifiedRevokeFenceValue(mr, playerID), "资格原件不动")
@@ -485,7 +497,7 @@ func TestLeaveScene_UnqualifiedHolderRevokedAfterGrace(t *testing.T) {
 	assert.Equal(t, revokedBefore+1, leaveReleaseCount(t, unqualifiedRevokeMetricVerdict))
 }
 
-// 资格原件缺失(新角色第一次落点就没登记成功,save_barrier 里从来没有资格)与「属于上一代」同理:撤销。
+// 资格原件缺失(新角色第一次落点就没登记成功,handoff hash 里从来没有资格)与「属于上一代」同理:撤销。
 func TestLeaveScene_UnqualifiedHolderWithoutAnyFenceRevoked(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	installLeaveReleaseRecorder(t)
@@ -500,7 +512,7 @@ func TestLeaveScene_UnqualifiedHolderWithoutAnyFenceRevoked(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
 	assert.Equal(t, "4", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)))
-	assert.False(t, mr.Exists(savebarrier.Key(playerID)), "撤销不替任何进程写资格")
+	assert.False(t, mr.Exists(handofffence.Key(playerID)), "撤销不替任何进程写资格")
 }
 
 // 宽限走完也不撤销的情形:资格原件证明有进程在 E 下登记过(正常持有 / 已释放而标记过期 / 登记被撤销 —— 都交给凭证与 GO-3)、
@@ -526,7 +538,7 @@ func TestLeaveScene_UnqualifiedRevokeRequiresProof(t *testing.T) {
 			unqualifiedRevokeSetFence(mr, playerID, "garbage")
 		}, wantReleases: 1},
 		{name: "屏障键类型不对:读不出资格", arrange: func(t *testing.T, mr *miniredis.Miniredis, playerID uint64) {
-			require.NoError(t, mr.Set(savebarrier.Key(playerID), "not-a-hash"))
+			require.NoError(t, mr.Set(handofffence.Key(playerID), "not-a-hash"))
 		}, wantReleases: 1},
 		{name: "legacy 离场身份:没请过释放", arrange: func(*testing.T, *miniredis.Miniredis, uint64) {},
 			request: func(playerID, sceneID uint64) *scene_manager.LeaveSceneRequest {
@@ -551,7 +563,7 @@ func TestLeaveScene_UnqualifiedRevokeRequiresProof(t *testing.T) {
 			requireHolderReleasePending(t, err)
 			assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)), "没有正证:location 原样保留")
 			assert.Equal(t, "3", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)), "没有正证:不推进围栏")
-			assert.Equal(t, "2", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
+			assert.Equal(t, "2", sceneMemberCount(mr, sceneID))
 			assert.Len(t, calls(), tc.wantReleases)
 			assert.Equal(t, revokedBefore, leaveReleaseCount(t, unqualifiedRevokeMetricVerdict))
 		})
@@ -571,15 +583,15 @@ func TestLeaveScene_UnqualifiedRevokeLosesToRegistrationLandingFirst(t *testing.
 	unqualifiedRevokeSetFence(mr, playerID, unqualifiedRevokePreviousFence(3))
 	unqualifiedRevokeStartTimer(t, mr, playerID, 3, leaveReleaseRedisNow, unqualifiedRevokeGrace)
 	held := unqualifiedRevokeFence(3, "scene-x", "5", "c", "H", "d")
-	barrierKey := savebarrier.Key(playerID)
+	handoffKey := handofffence.Key(playerID)
 
-	// 只有撤销 Lua 的 KEYS 里有屏障键;钩子在它执行之前把登记的效果摆上(先消费一次性标志再改数据,做法同 leave_release_test.go)。
+	// 只有撤销 Lua 的 KEYS 里有 handoff hash 这个键;钩子在它执行之前把登记的效果摆上(先消费一次性标志再改数据,做法同 leave_release_test.go)。
 	var fired atomic.Bool
 	mr.Server().SetPreHook(func(_ *server.Peer, cmd string, args ...string) bool {
-		if (cmd != "EVAL" && cmd != "EVALSHA") || !slices.Contains(args, barrierKey) || !fired.CompareAndSwap(false, true) {
+		if (cmd != "EVAL" && cmd != "EVALSHA") || !slices.Contains(args, handoffKey) || !fired.CompareAndSwap(false, true) {
 			return false
 		}
-		mr.HSet(barrierKey, savebarrier.HandoffFenceField, held)
+		mr.HSet(handoffKey, handofffence.HandoffFenceField, held)
 		return false
 	})
 	t.Cleanup(func() { mr.Server().SetPreHook(nil) })
@@ -630,9 +642,9 @@ func TestEnterScene_LoginRevokesUnqualifiedHolderAfterGrace(t *testing.T) {
 	assert.Len(t, requested(), 3, "撤销之前照常请过一次释放")
 	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
 	assert.Equal(t, "4", leaveCasValue(t, mr, ownerepoch.OwnerEpochKey(playerID)))
-	assert.Equal(t, "0", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, holderScene)), "旧场景人数随 location 扣掉")
-	assert.Equal(t, "0", leaveCasValue(t, mr, nodePlayerCountKey(testZoneId, "10")))
-	assert.Equal(t, "0", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, targetScene)), "拒绝不预占目标场景人数")
+	assert.Equal(t, "0", sceneMemberCount(mr, holderScene), "旧场景人数随 location 扣掉")
+	assert.Equal(t, "0", nodeMemberCount(mr, testZoneId, "10"))
+	assert.Equal(t, "0", sceneMemberCount(mr, targetScene), "拒绝不预占目标场景人数")
 	assert.Equal(t, fence, unqualifiedRevokeFenceValue(mr, playerID))
 	assert.Equal(t, revokedBefore+1, enterHolderReleaseCount(t, unqualifiedRevokeMetricVerdict))
 

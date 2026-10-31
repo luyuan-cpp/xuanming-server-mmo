@@ -84,31 +84,9 @@ namespace kafka_producer_stats {
 //    把一份过期载荷补发到更新的载荷之后,比丢掉它更糟。补救靠调用方重发**当前**状态。
 //  - 幂等生产者遇到不可恢复的序列错误会进入 fatal,此后该实例的 produce() 一律返回 ERR__FATAL。
 //    send() 识别后重建实例并把当前这条消息在新实例上重试一次;旧实例队列里的消息按丢失计数。
-//
-// 逐条回执契约(sendTracked + setDeliveryListener,2026-10 起;battle 的结果日志用它确认 acks=all,
-// 见 cpp/nodes/battle/logic/battle_room_manager.cpp):
-//  - sendTracked 带一个非 0 关联号,经 msg_opaque 随消息进 librdkafka,回执时原样带回。0 等价于 send()。
-//  - 返回值不是 ERR_NO_ERROR = 没有入队,**永远不会**有回执;返回 ERR_NO_ERROR = 之后恰好一次 DeliveryReport,
-//    来源三选一:librdkafka 的投递回执;实例因 fatal 重建时为旧实例里来不及派发的消息合成的 ERR__PURGE_QUEUE
-//    (synthesized = true);调用方自己的超时兜底。
-//  - 监听器只在本线程的 poll() / flush() / send()(队列满重试与重建路径)调用栈里**同步**回调。监听器只许记账:
-//    不得再调 send / sendTracked / poll / flush,不得在回调里换监听器,也不得改 ECS 组件集合 —— 后续处理由调用方
-//    在自己的 loop 顶层做。
-//  - ERR_NO_ERROR 表示 acks=all 已确认(幂等生产者隐含 acks=all);非零表示没送到或可能没送到(ERR__MSG_TIMED_OUT
-//    属于后者)。调用方的补救只能是重发**当前**状态,不能重发旧载荷(理由见上面「投递语义」)。
-//  - 析构时第一件事是注销监听器,之后 flush 派发的回执不再回调 —— 不依赖 thread_local 的析构顺序。
 class KafkaProducer : public RdKafka::DeliveryReportCb {
 public:
 	using DeliveryCallback = std::function<void(const std::string& topic, int32_t partition, int64_t offset, const std::string& message)>;
-
-	// 一条被跟踪消息的投递结局。err == ERR_NO_ERROR = acks=all 已确认。
-	// synthesized = 不是 librdkafka 给的回执,而是实例重建时为来不及派发的消息合成的失败。
-	struct DeliveryReport {
-		std::uint64_t correlationId = 0;
-		RdKafka::ErrorCode err = RdKafka::ERR_NO_ERROR;
-		bool synthesized = false;
-	};
-	using DeliveryListener = std::function<void(const DeliveryReport&)>;
 
 	KafkaProducer();
 	~KafkaProducer();
@@ -145,16 +123,6 @@ public:
 	//    故障同时出现)。彻底有界的做法是把旧实例交给后台线程销毁,前置条件是能编译并实测,见 PROGRESS。
 	RdKafka::ErrorCode send(const std::string& topic, const std::string& message, const std::string& key = "", int32_t partition = RdKafka::Topic::PARTITION_UA);
 
-	// 与 send() 相同,另外按类注释「逐条回执契约」为这条消息登记 correlationId(0 = 不跟踪,等价于 send())。
-	// 阻塞契约同 send()。correlationId 的唯一性由调用方保证。
-	RdKafka::ErrorCode sendTracked(const std::string& topic, const std::string& message, const std::string& key,
-		std::uint64_t correlationId, int32_t partition = RdKafka::Topic::PARTITION_UA);
-
-	// 登记(或传 nullptr 注销)逐条回执的监听器。一个线程的生产者只有一个监听器,后登记的覆盖先登记的。
-	void setDeliveryListener(DeliveryListener listener);
-
-	// 已入队、还没拿到回执的被跟踪消息条数。诊断与单测用。
-	std::size_t trackedInFlight() const;
 	// 包含普通send；UNKNOWN永久保留到该boot结束，调用者仍须先封准入和join全部producer线程。
 	bool publicationsSettled() const { return publicationRegistry_->OwnerSettled(publicationOwner_); }
 
@@ -170,14 +138,8 @@ private:
 	bool ensureInitialized();
 	// 按当前投递语义建一个新的底层生产者;失败时 producer_ 保持为空。
 	bool createProducer(const std::string& brokers);
-	// send() / sendTracked() 的共同本体。correlationId = 0 不跟踪。
-	RdKafka::ErrorCode sendImpl(const std::string& topic, const std::string& message, const std::string& key,
-		int32_t partition, std::uint64_t correlationId);
-	// msgOpaque 原样交给 librdkafka,回执里经 Message::msg_opaque() 带回(关联号编码在指针值里,不指向任何对象)。
 	RdKafka::ErrorCode produceOnce(const std::string& topic, const std::string& message,
-		const std::string& key, int32_t partition, void* msgOpaque);
-	// 监听器非空才回调。只在本线程的 poll / flush / send 栈里调用。
-	void notifyDelivery(const DeliveryReport& report);
+		const std::string& key, int32_t partition);
 	// 销毁已进入 fatal 的实例并重建。只能在 librdkafka 的调用栈之外调用(不能在 dr_cb 里)。
 	// 返回 true = 新实例可用;false = 处于重建冷却期,或重建失败(留给下次 send() 惰性重试)。
 	bool rebuildAfterFatal(const char* trigger);
@@ -197,14 +159,7 @@ private:
 	bool rebuilding_ = false;
 	kafka_producer_policy::RebuildGate rebuildGate_{std::chrono::seconds(5)};
 	kafka_producer_policy::FailureLogThrottle failureLogThrottle_{20, std::chrono::seconds(10)};
-	// 已入队、还没拿到回执的被跟踪关联号(只属于当前实例;重建时 TakeAll 合成失败回执后清空)。
-	kafka_producer_policy::DeliveryTracker deliveryTracker_;
 	std::shared_ptr<kafka_producer_policy::PublicationRegistry> publicationRegistry_;
 	kafka_producer_policy::PublicationRegistry::OwnerPtr publicationOwner_;
 	bool publicationClosed_ = false;
-	DeliveryListener deliveryListener_;
-
-	// 关联号经 msg_opaque(void*)往返:指针宽度必须装得下 64 位关联号,否则高位被截断、回执对不上号。
-	static_assert(sizeof(std::uintptr_t) >= sizeof(std::uint64_t),
-		"KafkaProducer::sendTracked carries a 64-bit correlation id in msg_opaque");
 };

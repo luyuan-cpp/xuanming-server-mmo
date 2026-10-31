@@ -141,13 +141,13 @@ $DockerCommand = Resolve-ReleaseDockerCommand
 $Catalogue = [ordered]@{
     # 独立registrar工件：复用data_service模块与既有Dockerfile，ENTRY编译完整cmd包。
     "writer-authority" = @{ Dir = "data_service"; Entry = "./cmd/writer_authority"; ImageName = "mmorpg-writer-authority" }
-    db              = @{ Dir = "db";              Entry = "db.go";                  ImageName = "mmorpg-db" }
+    db              = @{ Dir = "db";              Entry = ".";                      ImageName = "mmorpg-db" }
     "data-service"  = @{ Dir = "data_service";    Entry = "data_service.go";         ImageName = "mmorpg-data-service" }
     login           = @{ Dir = "login";           Entry = "login.go";               ImageName = "mmorpg-login" }
     "player-locator"= @{ Dir = "player_locator";  Entry = "player_locator.go";      ImageName = "mmorpg-player-locator" }
     "scene-manager" = @{ Dir = "scene_manager";   Entry = "scene_manager_service.go"; ImageName = "mmorpg-scene-manager" }
     # 与 k8s_deploy.ps1 $GoSvcCatalogue 的 match 条目配对(ImageName 必须一致,否则 infra-up 拉不到镜像)
-    match           = @{ Dir = "match";           Entry = "match_service.go";       ImageName = "mmorpg-match" }
+    match           = @{ Dir = "match";           Entry = ".";                      ImageName = "mmorpg-match" }
     # 全局聊天 chat v1:与 k8s_deploy.ps1 $GoSvcCatalogue 的 chat 条目配对(ImageName 必须一致,理由同 match)。
     # chat 只承诺经 gate → 路由服可达(docs/design/client-rpc-router.md D34;
     # docs/design/xuanming-port-decisions-20260910.md D-12),所以镜像必须和下面的路由服成对发布。

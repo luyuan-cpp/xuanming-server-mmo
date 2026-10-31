@@ -33,6 +33,7 @@ import (
 	pbbase "proto/common/base"
 	loginpb "proto/login"
 	"shared/generated/pb/table"
+	"shared/redisslot"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -105,38 +106,34 @@ func newKillSwitchEnv(t *testing.T, legacyGateLoginEnabled bool, account string)
 	return &killSwitchEnv{
 		mr:             mr,
 		rdb:            rdb,
-		svcCtx:         &svc.ServiceContext{RedisClient: rdb, AccountDirectory: fixtureDirectory(t, rdb), TokenManager: tokens},
+		svcCtx:         &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), TokenManager: tokens},
 		thirdPartyType: thirdPartyType,
 		thirdParty:     thirdParty,
 	}
 }
 
 // killSwitchGateCtx 模拟 cpp gate HandleGrpcNodeMessage 转发来的请求上下文。
-// fenced=true 是带会话代次的新版 gate(走 sessionfence.CommitLogin),false 是旧版 gate(两步写)。
-func killSwitchGateCtx(fenced bool) context.Context {
-	details := &pbbase.SessionDetails{SessionId: killSwitchSessionID}
-	if fenced {
-		details.GateInstanceId = "gate-uuid-killswitch"
-		details.SessionIncarnation = 9
-	}
-	return ctxkeys.WithSessionDetails(context.Background(), details)
+func killSwitchGateCtx() context.Context {
+	return ctxkeys.WithSessionDetails(context.Background(), &pbbase.SessionDetails{
+		SessionId: killSwitchSessionID, GateInstanceId: "gate-uuid-killswitch", SessionIncarnation: 9,
+	})
 }
 
 func killSwitchSessionRef(t *testing.T, ctx context.Context) loginsession.Ref {
 	t.Helper()
 	details, found := ctxkeys.GetSessionDetails(ctx)
 	require.True(t, found, "测试上下文必须包含本连接身份")
-	return loginsession.RefOf(details)
+	ref, ok := loginsession.RefOf(details)
+	require.True(t, ok, "测试上下文的连接身份必须完整")
+	return ref
 }
 
-// requireNoSessionWritten 断言 Login 没有留下任何会话状态:新键与兼容键均未写入,设备集也没有这条连接。
+// requireNoSessionWritten 断言 Login 没有留下任何会话状态:登录态未写入,设备集也没有这条连接。
 func requireNoSessionWritten(t *testing.T, env *killSwitchEnv, ctx context.Context, account string) {
 	t.Helper()
 	ref := killSwitchSessionRef(t, ctx)
-	for _, key := range ref.WriteKeys() {
-		require.False(t, env.mr.Exists(key), "被拒的请求不得写 login_session")
-	}
-	member, err := env.rdb.SIsMember(ctx, constants.GenerateSessionKey(account), ref.DeviceMember()).Result()
+	require.False(t, env.mr.Exists(ref.Key()), "被拒的请求不得写 login_session")
+	member, err := env.rdb.SIsMember(ctx, redisslot.AccountDeviceSetKey(account), ref.DeviceMember()).Result()
 	require.NoError(t, err)
 	require.False(t, member, "被拒的请求不得登记设备集")
 }
@@ -154,40 +151,36 @@ func requireRejectedBeforeAuth(t *testing.T, env *killSwitchEnv, account string)
 // 新流程(robot/main.go loginAndEnterViaHttpGateway 同序):/api/login 首认证拿 access_token →
 // gate 上 Login{access_token} 绑定会话。开关关闭时第二步必须照常成功,并写下 CreatePlayer / EnterGame 要读的 login_session。
 func TestLegacyGateLoginDisabled_GateAccessTokenLoginStillBindsSession(t *testing.T) {
-	for _, fenced := range []bool{false, true} {
-		t.Run(fmt.Sprintf("fenced_gate=%v", fenced), func(t *testing.T) {
-			const account = "killswitch-new-flow"
-			env := newKillSwitchEnv(t, false, account)
+	const account = "killswitch-new-flow"
+	env := newKillSwitchEnv(t, false, account)
 
-			// 第 1 步:Java Gateway POST /api/login 直调 login(不带会话),第三方凭据首认证。
-			httpResp, err := NewLoginLogic(context.Background(), env.svcCtx).Login(&loginpb.LoginRequest{
-				AuthType: env.thirdPartyType, AuthToken: "oauth-code",
-			})
-			require.NoError(t, err)
-			require.Zero(t, httpResp.GetErrorMessage().GetId(), "开关只管 gate 上的凭据登录,HTTP 入口不受影响")
-			require.NotEmpty(t, httpResp.GetAccessToken(), "HTTP 首认证要签 access_token,供 gate 上绑定会话")
+	// 第 1 步:Java Gateway POST /api/login 直调 login(不带会话),第三方凭据首认证。
+	httpResp, err := NewLoginLogic(context.Background(), env.svcCtx).Login(&loginpb.LoginRequest{
+		AuthType: env.thirdPartyType, AuthToken: "oauth-code",
+	})
+	require.NoError(t, err)
+	require.Zero(t, httpResp.GetErrorMessage().GetId(), "开关只管 gate 上的凭据登录,HTTP 入口不受影响")
+	require.NotEmpty(t, httpResp.GetAccessToken(), "HTTP 首认证要签 access_token,供 gate 上绑定会话")
 
-			// 第 2 步:连上 gate 后在 TCP 上发 Login{access_token}。
-			gateCtx := killSwitchGateCtx(fenced)
-			gateResp, err := NewLoginLogic(gateCtx, env.svcCtx).Login(&loginpb.LoginRequest{
-				AuthType: "access_token", AuthToken: httpResp.GetAccessToken(),
-			})
-			require.NoError(t, err)
-			require.Zero(t, gateResp.GetErrorMessage().GetId(),
-				"LegacyGateLoginEnabled=false 不得拒绝 gate 上的 access_token 绑定,否则谁都进不了游戏")
-			require.Empty(t, gateResp.GetAccessToken(), "access_token 绑定不轮换 token")
-			require.Equal(t, int32(1), env.thirdParty.calls.Load(), "gate 上的绑定只验自家 token,不再回源第三方")
+	// 第 2 步:连上 gate 后在 TCP 上发 Login{access_token}。
+	gateCtx := killSwitchGateCtx()
+	gateResp, err := NewLoginLogic(gateCtx, env.svcCtx).Login(&loginpb.LoginRequest{
+		AuthType: "access_token", AuthToken: httpResp.GetAccessToken(),
+	})
+	require.NoError(t, err)
+	require.Zero(t, gateResp.GetErrorMessage().GetId(),
+		"LegacyGateLoginEnabled=false 不得拒绝 gate 上的 access_token 绑定,否则谁都进不了游戏")
+	require.Empty(t, gateResp.GetAccessToken(), "access_token 绑定不轮换 token")
+	require.Equal(t, int32(1), env.thirdParty.calls.Load(), "gate 上的绑定只验自家 token,不再回源第三方")
 
-			// CreatePlayer / EnterGame 的第一步就是按会话取账号:取得到才进得了游戏。
-			ref := killSwitchSessionRef(t, gateCtx)
-			bound, err := loginsession.GetAccount(gateCtx, env.rdb, ref)
-			require.NoError(t, err, "login_session 必须由 gate 上的 access_token Login 写入")
-			require.Equal(t, account, bound)
-			member, err := env.rdb.SIsMember(gateCtx, constants.GenerateSessionKey(account), ref.DeviceMember()).Result()
-			require.NoError(t, err)
-			require.True(t, member, "设备集必须登记这条会话(设备数上限靠它)")
-		})
-	}
+	// CreatePlayer / EnterGame 的第一步就是按会话取账号:取得到才进得了游戏。
+	ref := killSwitchSessionRef(t, gateCtx)
+	bound, err := loginsession.GetAccount(gateCtx, env.rdb, ref)
+	require.NoError(t, err, "login_session 必须由 gate 上的 access_token Login 写入")
+	require.Equal(t, account, bound)
+	member, err := env.rdb.SIsMember(gateCtx, redisslot.AccountDeviceSetKey(account), ref.DeviceMember()).Result()
+	require.NoError(t, err)
+	require.True(t, member, "设备集必须登记这条会话(设备数上限靠它)")
 }
 
 // gate 上直接用第三方凭据首认证是要关掉的旧路径:开关打开时照常服务(对照组,证明用例不是空转),
@@ -207,7 +200,7 @@ func TestLegacyGateLoginDisabled_GateThirdPartyFirstAuthRejected(t *testing.T) {
 			env := newKillSwitchEnv(t, tc.enabled, account)
 
 			legacyBefore := legacyLoginCount.Load()
-			gateCtx := killSwitchGateCtx(true)
+			gateCtx := killSwitchGateCtx()
 			resp, err := NewLoginLogic(gateCtx, env.svcCtx).Login(&loginpb.LoginRequest{
 				AuthType: env.thirdPartyType, AuthToken: "oauth-code",
 			})
@@ -243,7 +236,7 @@ func TestLegacyGateLoginDisabled_RejectedBeforeAccountLock(t *testing.T) {
 	require.NoError(t, env.mr.Set(lockKey, holder))
 	env.mr.SetTTL(lockKey, 10*time.Second)
 
-	resp, err := NewLoginLogic(killSwitchGateCtx(true), env.svcCtx).Login(&loginpb.LoginRequest{
+	resp, err := NewLoginLogic(killSwitchGateCtx(), env.svcCtx).Login(&loginpb.LoginRequest{
 		AuthType: env.thirdPartyType, AuthToken: "oauth-code",
 	})
 	require.NoError(t, err)
@@ -268,7 +261,7 @@ func TestLegacyGateLoginDisabled_GatePasswordLoginRejected(t *testing.T) {
 			const account = "killswitch-legacy-password"
 			env := newKillSwitchEnv(t, false, account)
 
-			gateCtx := killSwitchGateCtx(true)
+			gateCtx := killSwitchGateCtx()
 			resp, err := NewLoginLogic(gateCtx, env.svcCtx).Login(&loginpb.LoginRequest{
 				AuthType: authType, Account: account, Password: "anything",
 			})

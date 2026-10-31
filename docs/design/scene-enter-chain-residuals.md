@@ -1323,7 +1323,7 @@ README §4 的同步由主线做(本文只改设计稿)。
    - `routing_identity_test.exe --gtest_filter=KickFence.*:GateIdentityFence.*:LoginGeneration.*`,然后全量;
    - `cross_zone_test.exe --gtest_filter=ReleaseFence*:ActingLoginGeneration*:EnterFence*:*Travel*:*Relocate*`,然后全量。
 5. 可选联机(一区、路由模式):
-   - robot 做「LeaveGame 后立即同角色重进、落在同一频道」,检查 `player:{id}:location` 仍在、`instance:{sid}:player_count` = 1;
+   - robot 做「LeaveGame 后立即同角色重进、落在同一频道」,检查 `player:{id}:location` 仍在、`SCARD instance:<sid>:members` = 1;
    - 回归 `travel_smoke` 与 `channel_smoke`;
    - 观察 scene 日志的 `[ReleaseFence]`、`[EnterFence]` 与 scene_manager 的 `scene_manager_placement_identity_total`。
 

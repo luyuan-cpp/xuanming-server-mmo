@@ -96,6 +96,29 @@ func TestPhysicalTiDBConnectionsPinStrongSession(t *testing.T) {
 	}
 }
 
+// 解冻只核原冻结、nonSQL闭合和维护工具闭合，不要恢复审计原件。
+func TestTiDBReleaseNeedsNoRecoveryAudit(t *testing.T) {
+	ctx, fixture, _ := authorityFixture(t)
+	if _, err := fixture.Freeze(ctx); err != nil {
+		t.Fatal(err)
+	}
+	frozen, err := fixture.Catalog.CurrentMeta(ctx)
+	if err != nil || frozen.Writable != 0 {
+		t.Fatalf("冻结后 meta=%+v err=%v", frozen, err)
+	}
+	released, err := fixture.Release(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if released.Phase != pb.SqlWriterMaintenanceReceipt_RELEASED || released.Evidence.GetReleaseReadiness() == nil {
+		t.Fatalf("释放收据=%+v", released)
+	}
+	current, err := fixture.Catalog.CurrentMeta(ctx)
+	if err != nil || current.Writable != 1 {
+		t.Fatalf("解冻后 meta=%+v err=%v", current, err)
+	}
+}
+
 // 仅验证SQL控制协议。唯一发行者由本测试同步拥有，无外部Kafka/Redis队列；不能充当生产排空证据。
 func TestTiDBSameRunRetirementAndFreeze(t *testing.T) {
 	for _, withRelay := range []bool{false, true} {

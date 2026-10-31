@@ -32,13 +32,12 @@ const (
 )
 
 // kMaxBattleTeamSize 队伍上限 5(设计决策 D14,双侧强制):引擎 Initialize
-// 同步校验每队 ≤ 5;match 侧 PVE_TEAM 人数上限按 min(配置值, 5) 收口 ——
+// 同步校验每队 ≤ 5;match 侧组队人数上限按 min(配置值, 5) 收口 ——
 // DungeonTable 存在 max_team_size=10 的历史行,代码收口比改表重导安全。
 // 与引擎 constants/turn_battle_constants.h 的同名常量保持一致。
 const kMaxBattleTeamSize = 5
 
-// required5v5Players 5v5 凑满人数(设计决策 D15:FIFO 凑 10 人,
-// 弹出序前 5 人 team 0、后 5 人 team 1)。
+// required5v5Players 5v5 凑满人数(设计决策 D15)。
 const required5v5Players = kMaxBattleTeamSize * 2
 
 // TableFingerprintMode 的三个取值(config.TableFingerprintMode,设计决策 D14)。
@@ -67,233 +66,77 @@ type preparedMember struct {
 const battleNotAllocatableMessage = "battle_not_allocatable"
 
 // errBattleNotAllocatable 由 createBattle 包装返回,标记"节点级准入拒绝、房间必未建成"
-// (调用方用 errors.Is 判定,据此跳过 DestroyBattle、换节点重试)。
+// (调用方用 errors.Is 判定,据此短时熔断这个实例)。
 var errBattleNotAllocatable = errors.New("battle 节点暂不可分配(" + battleNotAllocatableMessage + ")")
 
 // errPrepareRejected 标记确定由玩家自身状态导致的备战失败:不在线或未进场、scene 以业务码(非故障码)拒绝。
-// 全球成局只凭它给玩家定罪(终止其单排票);读位置失败、RPC 超时或断连、scene 内部故障码等结果未知的
+// 成局只凭它给玩家定罪(终止其单排票);读位置失败、RPC 超时或断连、scene 内部故障码等结果未知的
 // 失败不定罪(docs/design/global-match-hierarchical-pools.md §5.5)。
 var errPrepareRejected = errors.New("玩家当前不能备战")
 
-// gather 对 scene / battle 节点的四个 gRPC 调用抽成包级函数变量:生产走
-// *RPC 实现(DialEndpoint 连接缓存 + 各自超时),测试换成 fake —— 现有
-// runGatherFn 只能绕开整条 gather,验证指纹比对 / 补偿路径要让 gather 真跑。
+// gather 对 scene / battle 节点的 gRPC 调用抽成包级函数变量:生产走
+// *RPC 实现(DialEndpoint 连接缓存 + 各自超时),测试换成 fake。
 var (
 	prepareBattleFn       = prepareBattleRPC
 	cancelBattlePrepareFn = cancelBattlePrepareRPC
 	createBattleFn        = createBattleRPC
-	destroyBattleFn       = destroyBattleRPC
 )
 
-// RunGather 执行开局管线(设计文档 §3.1/§3.2):
+// runFormationGather 推进一局已在 SQL 提交的成局,执行开局管线(设计文档 §3.1/§3.2):
 //
-//	battle_id = 向发号器申请(biz_tag = battle)
-//	→ 选 battle 节点(etcd watch 缓存,v1 随机)
-//	→ 逐参与者:读 player:{id}:location 定位 scene 节点 → gRPC Scene.PrepareBattle 收快照
-//	→ 全齐后 gRPC BattleNode.CreateBattle(seed 用 crypto/rand)
+//	逐参与者:读 player:{id}:location 定位 scene 节点 → 持久化端点 → gRPC Scene.PrepareBattle 收快照
+//	→ 全齐后证明目标实例支持 SQL 终局协议、把建房原件写进成局(SaveSupportedIntent)
+//	→ gRPC BattleNode.CreateBattle(seed 用 crypto/rand)→ 记采用版本并提交 state 4
 //
-// 失败补偿(§3.2 补偿矩阵):
-//   - 任一步失败 → 对已冻结者逐个 Scene.CancelBattlePrepare;
-//   - CreateBattle 半成功 → BattleNode.DestroyBattle(尽力而为);
-//   - CreateBattle 被节点级准入拒绝(Unavailable + battle_not_allocatable,k8s-client-entry D82)
-//     → 不发 DestroyBattle,换一个没试过的节点重试一次;仍被拒 / 无节点可换则直接补偿;
-//   - 观战记录(丢票补签定位 battle 节点的唯一来源)在 CreateBattle **之前**写,有界重试后仍写不进去
-//     → 不建房,直接补偿(集群外入口 2b 第 9 条,理由见 writeSpectateRecord);建房失败路径在补偿
-//     之后尽力删掉预写的记录;
-//   - requeueOnFail=true 时(队列凑单场景)幸存成员按原序回队首,
-//     肇事成员删票出局;false 时(solo/切磋)统一删票收场。
+// battle_id、机房、目标实例在成局事务里已固定,这里不换节点、不重选。失败时:
+//   - 发房之前失败且能证明原 operation 不会建房(globalDestroy)→ globalAbortPrepared 解冻并收尾,
+//     肇事者(掉线、不在场景、配表不一致)的单排票终止,其余成员保留原入队时刻回队;
+//   - 证明不了,或 Create 结果未知 → 标记 Unknown,由工作租约到期后的恢复与唯一 SQL 终局收尾。
 //
-// tickets 是弹组 / 入队时读到的各成员 ticket id(设计决策 D5):票据的 ready /
-// 回队首 / 删票全部带它做 CAS,matched TTL 到期后玩家重排拿到的新票据不会被
-// 迟到的旧 gather 写脏。withTickets=false 用于切磋:参与者从未入队,没有 ticket 可推进。
-func RunGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigId uint32,
-	members []uint64, requeueOnFail bool, tickets map[uint64]string,
-) {
-	runGather(svcCtx, mode, battleConfigId, members, requeueOnFail, true, tickets)
-}
-
-// RunChallengeGather 是切磋入口的 gather:与队列匹配汇入同一条管线,
-// 仅参与者没有排队票据(设计决策 D3:gather/补偿逻辑只存在一份)。
-func RunChallengeGather(svcCtx *svc.ServiceContext, battleConfigId uint32, challengerId, responderId uint64) bool {
-	return runGather(svcCtx, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, battleConfigId,
-		[]uint64{challengerId, responderId}, false, false, nil)
-}
-
-// RunTeamGather 是整队开战(team-system.md §E.1 第 8 步)的 gather:roster 整组进同一条
-// 管线、一个 battle_id(不经 matcher 弹组)。模式固定 PVE_TEAM(全员 team_index=0),
-// requeueOnFail=false —— 失败时对**全员**按 tickets 做 CAS 删票,整队出局、不回队列
-// (§E.2 "不可拆分")。
-//
-// 契约:roster 由调用方排好序(队长在前,其余按 join_seq 升序),本函数原样作为
-// PrepareBattle / 快照顺序,不重排;tickets 是建票时记下的每人 ticket id。
-// 同步执行,返回是否开局成功;调用方负责放进后台 goroutine。
-func RunTeamGather(svcCtx *svc.ServiceContext, battleConfigId uint32, roster []uint64, tickets map[uint64]string) bool {
-	return runGather(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, battleConfigId, roster, false, true, tickets)
-}
-
-// RunActivityGather 是活动开局(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.18)的 gather,
-// 与 RunChallengeGather / RunTeamGather 同级,由 MatchInternal.StartActivityBattle 异步调用:
-//   - battleID 由调用方预先生成并已同步回给 guild(guild 据此登记 guild_trial_battle),gather 不再发号;
-//   - actx 原样放进 CreateBattleRequest.activity_context,battle 结算时回显进 BattleResultEvent;
-//     调用方负责先深拷贝(本函数与 battle 节点都不改它);
-//   - 模式固定 PVE_TEAM(全员 team 0),requeueOnFail=false:失败时全员按 tickets 做 CAS 删票、不回队列。
-//
-// 契约:members 原样作为站位 / 快照顺序(发起人在首位),不重排;tickets 是建 matched 票时记下的
-// 每人 ticket id。同步执行,返回是否开局成功;调用方负责放进后台 goroutine。
-func RunActivityGather(svcCtx *svc.ServiceContext, battleConfigId uint32, members []uint64,
-	tickets map[uint64]string, battleID uint64, actx *battlepb.BattleActivityContext,
-) bool {
-	return runGatherWithOptions(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, battleConfigId, members,
-		false, true, tickets, gatherOptions{presetBattleID: battleID, activityContext: actx})
-}
-
-// gatherOptions 活动开局的附加参数(§6.18.1)。零值 = 原有行为:gather 自己发 battle_id、
-// CreateBattleRequest 不带活动上下文。
-type gatherOptions struct {
-	directTeamID uint64
-	// PVP分边由撮合提交点决定；完整队伍不能在收快照时重新蛇形分配。
-	teamByPlayer map[uint64]uint32
-	// 非nil时地域、实例与battle_id均已在TiDB成局事务固定，禁止随机重选。
-	formation *matchpb.MatchFormationRecord
-	// presetBattleID 非 0:调用方已用 svcCtx.BattleIDGen 生成 battle_id,gather 直接用它。
-	presetBattleID uint64
-	// activityContext 非空:原样放进 CreateBattleRequest.activity_context。
-	activityContext *battlepb.BattleActivityContext
-}
-
-// runGather 是原有全部入口(队列 / PVE_SOLO / 切磋 / 整队)的 gather,签名与行为不变:
-// 等价于零值 gatherOptions 的 runGatherWithOptions。
-func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigId uint32,
-	members []uint64, requeueOnFail bool, withTickets bool, tickets map[uint64]string,
-) bool {
-	return runGatherWithOptions(svcCtx, mode, battleConfigId, members, requeueOnFail, withTickets, tickets, gatherOptions{})
-}
-
-// runGatherWithOptions 是 gather 管线本体(步骤与补偿见 RunGather 注释)。opts 只影响两处:
-// 第 1 步 battle_id 的来源(presetBattleID 非 0 时不发号)与第 4 步 CreateBattleRequest.activity_context。
-func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigId uint32,
-	members []uint64, requeueOnFail bool, withTickets bool, tickets map[uint64]string, opts gatherOptions,
-) bool {
-	if svcCtx.Authority != nil && opts.formation == nil {
-		return globalDirectGather(svcCtx, mode, battleConfigId, members, tickets, opts)
-	}
+// 同步执行,返回是否开局成功;调用方负责放进后台任务并持有工作租约。
+func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRecord, activityContext *battlepb.BattleActivityContext) bool {
 	start := time.Now()
+	mode := matchpb.MatchMode(f.Mode)
 	modeName := mode.String()
+	battleId := f.BattleId
+	members := make([]uint64, 0, len(f.Members))
+	for _, member := range f.Members {
+		members = append(members, member.PlayerId)
+	}
 
-	fail := func(outcome string, failedPlayer uint64, prepared []preparedMember, battleId uint64) bool {
-		if opts.formation != nil {
-			if globalDestroy(svcCtx.Authority, opts.formation) {
-				// 肇事者(掉线、不在场景、配表不一致)的单排票直接终止,其余成员保留原入队时刻回队,
-				// 与 Redis 路径"肇事者出局删票、幸存者回队首"同语义。
-				globalAbortPrepared(svcCtx, opts.formation, failedPlayer)
-			} else {
-				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				_ = svcCtx.Authority.Unknown(ctx, opts.formation)
-				cancel()
-			}
-			metrics.ObserveGather(modeName, outcome, time.Since(start))
-			return false
-		}
-		if withTickets && requeueOnFail {
-			// 进补偿前先给幸存者票据续期(CAS):matched TTL 只覆盖到这里为止的
-			// 链路(matchedTicketTTLFor),逐人 CancelBattlePrepare 每人最长
-			// rollbackTimeout,不续期 10 人组会在 requeueFront 之前全部过期、
-			// 整组从队列消失且没有票据。
-			extendMatchedTickets(svcCtx, members, tickets, compensationTicketTTLFor(len(prepared)))
-		}
-		cancelPrepared(svcCtx, prepared, battleId)
-		if withTickets {
-			if requeueOnFail {
-				// 肇事成员出局删票,其余成员回队首(补偿矩阵 todo #7)。
-				var survivors []uint64
-				for _, pid := range members {
-					if pid == failedPlayer {
-						deleteTicketIfOwned(svcCtx, pid, tickets[pid])
-						continue
-					}
-					survivors = append(survivors, pid)
-				}
-				// 兜底队列 key(票据没有 queue_key 时才用,也是汇总日志里印的那个):回队首只发生在
-				// 队列凑单的组上,组大小就是那条队列的凑满人数,所以 PVE 人数档能还原出带人数段的 key。
-				// battleId 记进回队票据:这些人刚被这一局冻结过,解冻若丢了,matcher 要认得出那把残留的备战锁。
-				requeueFrontAfterBattle(svcCtx, queueKeyForJoin(mode, battleConfigId, uint32(len(members))),
-					survivors, tickets, battleId)
-			} else {
-				for _, pid := range members {
-					deleteTicketIfOwned(svcCtx, pid, tickets[pid])
-				}
-			}
+	fail := func(outcome string, failedPlayer uint64) bool {
+		if globalDestroy(svcCtx.Authority, f) {
+			globalAbortPrepared(svcCtx, f, failedPlayer)
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_ = svcCtx.Authority.Unknown(ctx, f)
+			cancel()
 		}
 		metrics.ObserveGather(modeName, outcome, time.Since(start))
 		return false
 	}
 
-	// 1. battle_id:向发号器申请(biz_tag = battle)。
-	//    发号失败一律 fail-closed,不得用 0 顶替。
-	//    活动开局由调用方预先发号(opts.presetBattleID,同一个生成器),这里不再发。
-	battleId := opts.presetBattleID
-	if battleId == 0 {
-		var err error
-		battleId, err = svcCtx.BattleIDGen.Generate()
-		if err != nil {
-			logx.Errorf("[gather] Failed to generate battle_id mode=%s members=%v: %v", modeName, members, err)
-			return fail("internal", 0, nil, 0)
-		}
-	}
-
-	// 2. 选 battle 节点(全局池,v1 随机;负载上报二期)。
-	battleNode, ok := svcCtx.BattleNodes.PickRandom()
-	if opts.formation != nil {
-		f := opts.formation
-		battleNode = discovery.NodeEntry{NodeId: f.TargetNodeId, NodeUuid: f.TargetInstanceId, Endpoint: f.TargetEndpoint, PhysicalRegion: f.PhysicalRegion}
-		ok = true
-	}
-	if !ok {
-		logx.Errorf("[gather] No available battle node battle=%d mode=%s members=%v", battleId, modeName, members)
-		return fail("no_battle_node", 0, nil, 0)
-	}
-	teams, err := gatherTeamAssignment(svcCtx, mode, battleId, members, opts)
+	battleNode := discovery.NodeEntry{NodeId: f.TargetNodeId, NodeUuid: f.TargetInstanceId, Endpoint: f.TargetEndpoint, PhysicalRegion: f.PhysicalRegion}
+	teams, err := gatherTeamAssignment(svcCtx, f, members)
 	if err != nil {
 		logx.Errorf("[gather] Invalid explicit team assignment battle=%d: %v", battleId, err)
-		return fail("internal", 0, nil, battleId)
+		return fail("internal", 0)
 	}
 
-	deadlineMs := nowMs() + uint64(svcCtx.Config.BattleMaxDurationSeconds)*1000
-	// prepare_deadline_ms:备战作废期限,与本组票据的 matched TTL 对齐
-	// (matchedTicketTTLFor 按组大小算的最坏 gather 耗时)。弹组实例在 gather
-	// 中崩溃时,未冻结者靠票据过期自愈,已冻结者靠 scene 在 PREPARING 态按这个
-	// 期限解冻并把 battle:lock 收窄到同一窗口 —— 两边同一时刻放行,玩家不再等
-	// BattleMaxDurationSeconds+60s 的战斗锁(设计决策 D13;deadline_ms 语义不变,
-	// CreateBattle 成功后仍是战斗本身的作废期限)。
-	prepareDeadlineMs := nowMs() + uint64(matchedTicketTTLFor(svcCtx, uint32(len(members))))*1000
-	if opts.formation != nil {
-		deadlineMs = opts.formation.DeadlineMs
-		prepareDeadlineMs = min(opts.formation.CreatedMs+uint64(matchedTicketTTLFor(svcCtx, uint32(len(members))))*1000, opts.formation.RetryAtMs-1000)
-	}
+	// prepare_deadline_ms:备战作废期限(matchedTicketTTLFor 按组大小算的最坏 gather 耗时),且不晚于工作租约。
+	// 进程在 gather 中崩溃时,已冻结者靠 scene 在 PREPARING 态按这个期限解冻并把 battle:lock 收窄到同一窗口
+	// (设计决策 D13;deadline_ms 语义不变,CreateBattle 成功后仍是战斗本身的作废期限)。
+	deadlineMs := f.DeadlineMs
+	prepareDeadlineMs := min(f.CreatedMs+uint64(matchedTicketTTLFor(svcCtx, uint32(len(members))))*1000, f.RetryAtMs-1000)
 
-	// 2.5 观战互斥清退(设计决策 D11 / 不变量 8):进 gather 的玩家必须先从
-	//     观战中摘除 —— 一名玩家同一时刻只保留一条 battle 直连(客户端单条链路,
-	//     battle 房间 directConnByPlayer 按 player_id 单槽),观战直连与随后的参战
-	//     直连不能并存;尽力而为,失败只记日志不阻断开局。
-	for _, playerId := range members {
-		stopWatchingIfAny(svcCtx, playerId, "enter_gather")
-	}
-
-	// 2.6 分队:5v5 按评分蛇形平衡(§11),其余模式按弹出序(teamIndexFor)。
-
-	// 3. 逐参与者冻结收快照。
+	// 逐参与者冻结收快照。
 	var prepared []preparedMember
 	for i, playerId := range members {
-		var before func(string) error
-		if opts.formation != nil {
-			before = func(endpoint string) error {
-				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				defer cancel()
-				return svcCtx.Authority.Prepared(ctx, opts.formation, playerId, endpoint)
-			}
-		}
-		endpoint, resp, err := preparePlayerFenced(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, before)
-
+		endpoint, resp, err := preparePlayerFenced(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, func(endpoint string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			return svcCtx.Authority.Prepared(ctx, f, playerId, endpoint)
+		})
 		if err != nil {
 			logx.Errorf("[gather] PrepareBattle failed battle=%d player=%d (member %d/%d): %v",
 				battleId, playerId, i+1, len(members), err)
@@ -301,11 +144,11 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 			if endpoint == "" {
 				outcome = "no_location"
 			}
-			culprit := playerId
-			if opts.formation != nil && !errors.Is(err, errPrepareRejected) {
-				culprit = 0 // 全球成局:结果未知的失败不定罪,全员保留原入队时刻回队
+			culprit := uint64(0) // 结果未知的失败不定罪,全员保留原入队时刻回队
+			if errors.Is(err, errPrepareRejected) {
+				culprit = playerId
 			}
-			return fail(outcome, culprit, prepared, battleId)
+			return fail(outcome, culprit)
 		}
 		snapshot := resp.GetSnapshot()
 		snapshot.TeamIndex = teams[i]
@@ -317,234 +160,122 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 		})
 	}
 
-	// 3.5 组内 zone 组成(可观测性,设计决策 D8):匹配不看 zone,只在这里
-	//     统计"跨 zone 对局占比"并把 zone 打进对局日志。
+	// 组内 zone 组成(可观测性,设计决策 D8)。
 	observeZoneMix(modeName, battleId, prepared)
 
-	// 3.6 配表指纹比对(设计决策 D14):全员非空且两两一致才透传给 battle;
-	//     不一致按 TableFingerprintMode 处理,enforce 下与 prepare 失败同路径补偿,
-	//     肇事者 = 与多数派不一致者(出局删票),幸存者回队首。
+	// 配表指纹比对(设计决策 D14):全员非空且两两一致才透传给 battle;
+	// 不一致按 TableFingerprintMode 处理,enforce 下肇事者 = 与多数派不一致者,其余成员回队。
 	tableFingerprint, offender, ok := checkTableFingerprints(svcCtx, modeName, battleId, prepared)
 	if !ok {
-		return fail("fingerprint_mismatch", offender, prepared, battleId)
+		return fail("fingerprint_mismatch", offender)
 	}
 
-	// 4. CreateBattle。seed 用 crypto/rand 生成 uint64(引擎确定性 RNG 的种子)。
+	// seed 用 crypto/rand 生成 uint64(引擎确定性 RNG 的种子)。
 	seed, err := randomSeed()
 	if err != nil {
 		logx.Errorf("[gather] Failed to generate random seed battle=%d: %v", battleId, err)
-		return fail("internal", 0, prepared, battleId)
+		return fail("internal", 0)
 	}
 	snapshots := make([]*battlepb.BattlePlayerSnapshot, 0, len(prepared))
-	playerNames := make([]string, 0, len(prepared))
 	for _, p := range prepared {
 		snapshots = append(snapshots, p.snapshot)
-		playerNames = append(playerNames, p.snapshot.GetPlayerName())
 	}
 	createdAtMs := nowMs()
 	createReq := &battlepb.CreateBattleRequest{
-		BattleId:           battleId,
-		BattleConfigId:     battleConfigId,
-		Players:            snapshots,
-		Seed:               seed,
-		MatchMode:          uint32(mode),
-		CreatedAtMs:        createdAtMs,
-		DeadlineMs:         deadlineMs,
-		TableFingerprint:   tableFingerprint,
-		ActivityContext:    opts.activityContext,
-		SpectateVisibility: spectateVisibilityFor(mode, opts.activityContext),
+		BattleId:               battleId,
+		BattleConfigId:         f.ConfigId,
+		Players:                snapshots,
+		Seed:                   seed,
+		MatchMode:              uint32(mode),
+		CreatedAtMs:            createdAtMs,
+		DeadlineMs:             deadlineMs,
+		TableFingerprint:       tableFingerprint,
+		ActivityContext:        activityContext,
+		SpectateVisibility:     spectateVisibilityFor(mode, activityContext),
+		RequiredPhysicalRegion: f.PhysicalRegion,
+		PlacementOperationId:   f.OperationId,
+		TargetInstanceId:       f.TargetInstanceId,
+		AdmitBeforeMs:          prepareDeadlineMs,
+		OutcomeProtocolVersion: 1,
 	}
-	if opts.formation != nil {
-		f := opts.formation
-		createReq.RequiredPhysicalRegion = f.PhysicalRegion
-		createReq.PlacementOperationId = f.OperationId
-		createReq.TargetInstanceId = f.TargetInstanceId
-		createReq.AdmitBeforeMs = prepareDeadlineMs
-		createReq.OutcomeProtocolVersion = 1
-		// 先证明原UUID支持SQL终局门禁；旧节点会忽略Create新字段，因此不能直接试发。
-		capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)
-		capability, cerr := queryOutcomeCapability(capctx, battleNode, createReq)
-		capcancel()
-		if cerr != nil {
-			return fail("outcome_capability_missing", 0, prepared, battleId)
-		}
-		payload, merr := proto.MarshalOptions{Deterministic: true}.Marshal(createReq)
-		if merr != nil {
-			return fail("intent_failed", 0, prepared, battleId)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		canonical, merr := svcCtx.Authority.SaveSupportedIntent(ctx, opts.formation, payload, capability)
-		cancel()
-		if merr != nil {
-			return fail("intent_failed", 0, prepared, battleId)
-		}
-		if merr = proto.Unmarshal(canonical, createReq); merr != nil {
-			return fail("intent_failed", 0, prepared, battleId)
-		}
+	// 先证明原UUID支持SQL终局门禁；不支持的节点会忽略Create新字段，因此不能直接试发。
+	capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)
+	capability, cerr := queryOutcomeCapability(capctx, battleNode, createReq)
+	capcancel()
+	if cerr != nil {
+		return fail("outcome_capability_missing", 0)
+	}
+	payload, merr := proto.MarshalOptions{Deterministic: true}.Marshal(createReq)
+	if merr != nil {
+		return fail("intent_failed", 0)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	canonical, merr := svcCtx.Authority.SaveSupportedIntent(ctx, f, payload, capability)
+	cancel()
+	if merr != nil {
+		return fail("intent_failed", 0)
+	}
+	if merr = proto.Unmarshal(canonical, createReq); merr != nil {
+		return fail("intent_failed", 0)
 	}
 
-	// failDropRecord 是"房间必未建成 / 已确认销毁"时的失败出口:按 outcome 补偿(解冻、回队首或删票;
-	// 没有肇事者 —— 节点不可分配、Redis 故障、battle 拒绝都不是玩家的错),之后尽力删掉 4.1 预写的
-	// 观战记录。删记录放在补偿之后,不占 matched 票据的关键路径;删不掉也无害(见 dropSpectateRecord)。
-	failDropRecord := func(outcome string) bool {
-		fail(outcome, 0, prepared, battleId)
-		dropSpectateRecord(svcCtx, battleId)
+	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+	workErr := svcCtx.Authority.CheckWork(ctx, f)
+	cancel()
+	if workErr != nil {
+		return false
+	}
+	err = createBattle(battleNode, createReq)
+	if err != nil {
+		if errors.Is(err, errBattleNotAllocatable) && svcCtx.Placement != nil {
+			// 节点级准入拒绝:本副本短时熔断这个实例,后续成局在同机房换节点。
+			// 原件仍按下面的 UNKNOWN 走唯一 SQL 终局,不因"房间必未建成"提前释放。
+			svcCtx.Placement.MarkUnavailable(f.TargetInstanceId)
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		var adoption *outcomeAdoptionError
+		if errors.As(err, &adoption) {
+			if observationErr := svcCtx.Authority.RecordBattleAdopted(ctx, f, adoption.instance, adoption.version); observationErr != nil {
+				logx.Error("[gather] Adopted outcome protocol version not persisted yet; keeping original for recovery")
+			}
+		}
+		_ = svcCtx.Authority.Unknown(ctx, f)
+		cancel()
 		return false
 	}
 
-	// 4.1 先写观战记录,再建房(集群外入口 2b 第 9 条)。spectate:battle:{id} 是丢票补签定位 battle 节点
-	//     的唯一来源,写不进去就不开这局(理由见 writeSpectateRecord)。必须写在建房**之前**:battle 在
-	//     CreateBattle 回包之前就已向各参战者的 scene 发出 BattleConfirmedEvent 并周期补发,scene 升到
-	//     FIGHTING 后拒绝 CancelBattlePrepare(metric=battle_cancel_rejected_fighting)—— 建房之后才发现
-	//     写不进去,解冻基本不生效:冻结拖到 deadline_ms,回队首的人下一轮 PrepareBattle 被拒、被误判为
-	//     肇事者删票。建房之前失败则是无副作用的干净失败:不发 DestroyBattle,解冻必然有效(outcome=index_failed)。
-	//     记录先于房间存在的窗口:活跃集合要等开局成功才加入(第 6 步),battle_id 此刻只有活动开局的
-	//     调用方知道;窗口里被按 battle_id 观战懒剔除的记录由第 6 步补写。
-	record := newSpectateRecord(battleId, battleNode.NodeId, mode, battleConfigId, playerNames, createdAtMs,
-		createReq.GetSpectateVisibility())
-	if err := writeSpectateRecord(svcCtx, record); err != nil {
-		if opts.formation != nil {
-			logx.Errorf("[gather] 全球 SQL 落点已持久化，观战展示投影待恢复 battle=%d: %v", battleId, err)
-		} else {
-			logx.Errorf("[gather] Failed to write spectator record; not creating room battle=%d node=%d(%s) members=%v: %v",
-				battleId, battleNode.NodeId, battleNode.Endpoint, members, err)
-			return failDropRecord("index_failed")
-		}
+	// 成功收尾:提交 state 4,后续状态由 battle 节点的 BattleStartS2C / 结算链路接管。
+	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+	e := svcCtx.Authority.RecordBattleAdopted(ctx, f, createReq.TargetInstanceId, 1)
+	if e == nil {
+		e = svcCtx.Authority.Finish(ctx, f, true)
+	}
+	cancel()
+	if e != nil {
+		logx.Error("[gather] Battle created but authority commit unconfirmed; keeping original intent for recovery")
+		return false
 	}
 
-	if opts.formation != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		e := svcCtx.Authority.CheckWork(ctx, opts.formation)
-		cancel()
-		if e != nil {
-			return false
-		}
-	}
-	err = createBattle(battleNode, createReq)
-	if opts.formation == nil && errors.Is(err, errBattleNotAllocatable) {
-		// 4.2 节点级准入拒绝(k8s-client-entry D82):battle 在 gRPC 线程上、runInLoop 之前取分配
-		//     许可,拿不到即回 Unavailable + battle_not_allocatable,保证没插表、没发确认事件。
-		//     所以不发 DestroyBattle,换一个没试过的节点重试**一次**:一次足以绕开正在排空 / 缩容
-		//     的那台;整池都不可分配时多试只会把 gather 拖出 matched 票据 TTL 的预算。
-		//     观战记录先改指到重试节点再建房(同样 fail-closed,改写失败即干净失败):建成之后才改,
-		//     中间窗口里的补签会被导向首选节点。这条路径比常规路径多一次 CreateBattle 与一次记录改写,
-		//     matched 票据 TTL 预算要计入 createBattleTimeout + spectateRecordWriteWorst。
-		//     PrepareBattle 已把首选节点 id 写进 scene InBattleComp.battle_node_id,那里只作日志 /
-		//     排障(turn-based §22 D72),换节点不影响路由;观战记录指的是实际建房的节点。
-		next, found := svcCtx.BattleNodes.PickRandomExcept(map[string]bool{battleNode.Endpoint: true})
-		if found {
-			logx.Infof("[gather] Battle node temporarily unavailable for allocation; retrying once on another node battle=%d from=%d(%s) to=%d(%s)",
-				battleId, battleNode.NodeId, battleNode.Endpoint, next.NodeId, next.Endpoint)
-			record.BattleNodeId = next.NodeId
-			if werr := writeSpectateRecord(svcCtx, record); werr != nil {
-				logx.Errorf("[gather] Failed to rewrite spectator record before switching nodes; no room creation retry battle=%d to=%d(%s) members=%v: %v",
-					battleId, next.NodeId, next.Endpoint, members, werr)
-				return failDropRecord("index_failed")
-			}
-			battleNode = next
-			err = createBattle(battleNode, createReq)
-		} else {
-			logx.Errorf("[gather] Battle node temporarily unavailable for allocation and no alternative node available battle=%d node=%d(%s)",
-				battleId, battleNode.NodeId, battleNode.Endpoint)
-		}
-	}
-	if err != nil {
-		if opts.formation != nil {
-			if errors.Is(err, errBattleNotAllocatable) && svcCtx.Placement != nil {
-				// 节点级准入拒绝:本副本短时熔断这个实例,后续成局在同机房换节点。
-				// 原件仍按下面的 UNKNOWN 走唯一 SQL 终局,不因"房间必未建成"提前释放。
-				svcCtx.Placement.MarkUnavailable(opts.formation.TargetInstanceId)
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			var adoption *outcomeAdoptionError
-			if errors.As(err, &adoption) {
-				if observationErr := svcCtx.Authority.RecordBattleAdopted(ctx, opts.formation, adoption.instance, adoption.version); observationErr != nil {
-					logx.Error("原Battle采用版本事实尚未持久，保留原件等待恢复")
-				}
-			}
-			_ = svcCtx.Authority.Unknown(ctx, opts.formation)
-			cancel()
-			return false
-		}
-		logx.Errorf("[gather] CreateBattle failed battle=%d node=%d(%s): %v",
-			battleId, battleNode.NodeId, battleNode.Endpoint, err)
-		if errors.Is(err, errBattleNotAllocatable) {
-			// 最后一次尝试仍是准入拒绝:房间必未建成,跳过 DestroyBattle,直接补偿。
-			return failDropRecord("not_allocatable")
-		}
-		// 半成功兜底:RPC 超时时战斗可能已建成,先尽力 DestroyBattle 再解冻。
-		// battle 明确拒绝(tip≠0,如 turn-based §22 D70 预签票失败回 kServiceUnavailable)
-		// 时房间必未建成,DestroyBattle 送达时在 battle 侧幂等命中,随后照常解冻、回队首或删票;
-		// 若 DestroyBattle 本身失败(createBattle 不区分 RPC 失败与明确拒绝),仍走下方
-		// 保守分支:不解冻、不回队,冻结等 scene 侧期限到期解除,票据留 matched 由 TTL 自愈。
-		if !destroyBattle(battleNode, battleId, "gather_rollback") {
-			// DestroyBattle 也失败 → 房间可能仍活着且已向 scene 发出 BattleConfirmedEvent。
-			// 此时再逐人 CancelBattlePrepare 会出现"Cancel 先于 Confirm 到达、锁被删、随后
-			// Confirm 因锁不在无法重建冻结"的交错(C++ 复审),留下"房间活着、玩家无冻结"。
-			// 所以不解冻、不回队:scene 侧 FIGHTING 态由 Confirm 升级并按正式 deadline 收尾,
-			// 房间按 deadline_ms 强制结束并回流结算;票据留 matched 由 TTL 自愈。
-			// 预写的观战记录保留:房间若真活着,丢票补签靠它回到本局;若没活着,补签拿到
-			// "房间不存在",语义正确,随 TTL 自清(它不在活跃集合里,不进观战列表)。
-			logx.Errorf("[gather] CreateBattle and DestroyBattle both failed; room may still be alive, leaving unfreeze to scene/battle deadline cleanup battle=%d members=%v",
-				battleId, members)
-			metrics.ObserveGather(modeName, "create_failed_room_alive", time.Since(start))
-			return false
-		}
-		return failDropRecord("create_failed")
-	}
-
-	// 5. 成功收尾:ticket 推进 ready(短 TTL 自清),后续状态由
-	//    battle 节点的 BattleStartS2C / 结算链路接管。
-	if opts.formation != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		e := svcCtx.Authority.RecordBattleAdopted(ctx, opts.formation, createReq.TargetInstanceId, 1)
-		if e == nil {
-			e = svcCtx.Authority.Finish(ctx, opts.formation, true)
-		}
-		cancel()
-		if e != nil {
-			logx.Error("建房成功但全球权威提交未确认，保留原意图恢复")
-			return false
-		}
-	} else if withTickets {
-		for _, pid := range members {
-			markTicketReady(svcCtx, pid, tickets[pid], battleId)
-		}
-		if requeueOnFail {
-			// 队列凑出来的组里可能有队伍补位单:告诉 team 它们开局了(推一次视图,面板从「匹配中」归位)。
-			notifyPartiesStarted(svcCtx, members)
-		}
-	} else {
-		// 不带票据的入口(切磋):参战者若还挂着排队票据,立即退出排队。放在开局成功之后 ——
-		// 开局失败时排队原样保留,客户端那边的相位也还停在排队态,两边一致。
-		for _, pid := range members {
-			leaveQueueForOtherBattle(svcCtx, pid)
-		}
-	}
-
-	// 6. 公开这场战斗:同值补写记录 + 入活跃集合(best-effort,见 publishSpectateBattle)。
-	//    放在推进 ready 之后,不占 matched 票据的关键路径。
-	publishSpectateBattle(svcCtx, record)
+	// 公开这场战斗:入活跃集合(best-effort;补签与按 battle_id 观战都读成局原件,不靠这一步)。
+	addSpectateActive(svcCtx, battleId, createdAtMs, createReq.GetSpectateVisibility())
 	logx.Infof("[gather] Battle started successfully battle=%d mode=%s config=%d node=%d members=%v elapsed=%s",
-		battleId, modeName, battleConfigId, battleNode.NodeId, members, time.Since(start))
+		battleId, modeName, f.ConfigId, battleNode.NodeId, members, time.Since(start))
 	metrics.ObserveGather(modeName, "success", time.Since(start))
 	return true
 }
 
-func gatherTeamAssignment(s *svc.ServiceContext, mode matchpb.MatchMode, battleID uint64,
-	members []uint64, opts gatherOptions) ([]uint32, error) {
+// gatherTeamAssignment 给成局成员分队。PVP_TEAM 的分边在提交点已写进成局原件,不重新计算;其余模式按 teamAssignment。
+func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord, members []uint64) ([]uint32, error) {
+	mode := matchpb.MatchMode(f.Mode)
 	if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
-		return teamAssignment(s, mode, battleID, members), nil
+		return teamAssignment(s, mode, f.BattleId, members), nil
 	}
-	assignments := opts.teamByPlayer
-	if opts.formation != nil {
-		assignments = make(map[uint64]uint32, len(opts.formation.Members))
-		for _, member := range opts.formation.Members {
-			if _, duplicate := assignments[member.PlayerId]; duplicate {
-				return nil, fmt.Errorf("成局原件成员重复")
-			}
-			assignments[member.PlayerId] = member.TeamIndex
+	assignments := make(map[uint64]uint32, len(f.Members))
+	for _, member := range f.Members {
+		if _, duplicate := assignments[member.PlayerId]; duplicate {
+			return nil, fmt.Errorf("成局原件成员重复")
 		}
+		assignments[member.PlayerId] = member.TeamIndex
 	}
 	if len(assignments) != len(members) {
 		return nil, fmt.Errorf("PVP分边名单不完整")
@@ -567,16 +298,10 @@ func gatherTeamAssignment(s *svc.ServiceContext, mode matchpb.MatchMode, battleI
 	return teams, nil
 }
 
-// preparePlayer 定位玩家所在 scene 节点并调 PrepareBattle,返回校验过的响应
+// preparePlayerFenced 定位玩家所在 scene 节点并调 PrepareBattle,返回校验过的响应
 // (快照非空;调用方另取 table_fingerprint)。返回的 endpoint 为空表示还没定位
 // 到对端(位置缺失/节点未注册),用于区分 no_location 与 prepare_failed 两类指标。
-func preparePlayer(svcCtx *svc.ServiceContext, playerId, battleId uint64,
-	battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64,
-) (string, *scenepb.PrepareBattleResponse, error) {
-	return preparePlayerFenced(svcCtx, playerId, battleId, battleNodeId, deadlineMs, prepareDeadlineMs, nil)
-}
-
-// 全球模式在冻结 RPC 之前持久化精确端点，并校验本代工作租约。
+// before 在冻结 RPC 之前持久化精确端点，并校验本代工作租约。
 func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
 	// player:{id}:location 由 scene_manager 写(protobuf PlayerLocation),
 	// 是玩家 scene 定位的共享契约(设计文档 §5.4 / go/scene_manager changesceneutil.go);
@@ -642,7 +367,7 @@ func prepareBattleRPC(endpoint string, req *scenepb.PrepareBattleRequest) (*scen
 //   - 不一致或部分为空:warn → 记 Error 日志 + 指标后放行 ("", 0, true);
 //     enforce → ("", 肇事者, false),调用方按 prepare 失败补偿。
 //
-// 肇事者 = 与多数派不一致者(弹出序里第一个):多数派只在非空指纹里选(空 =
+// 肇事者 = 与多数派不一致者(成员序里第一个):多数派只在非空指纹里选(空 =
 // 该 scene 没回报,本身就是可疑方,不能靠"空"凑成多数);全员皆空时没有
 // 多数派可言,记第一位成员 —— enforce 下这等于拒绝所有不回报指纹的 scene,
 // 是开 enforce 的前提(灰度期用 warn)。
@@ -657,7 +382,7 @@ func checkTableFingerprints(svcCtx *svc.ServiceContext, modeName string, battleI
 		return "", 0, true
 	}
 
-	// 多数派:非空指纹按出现次数取最多,平票取弹出序靠前者。
+	// 多数派:非空指纹按出现次数取最多,平票取成员序靠前者。
 	counts := make(map[string]int, len(prepared))
 	majority := ""
 	for _, p := range prepared {
@@ -695,8 +420,7 @@ func checkTableFingerprints(svcCtx *svc.ServiceContext, modeName string, battleI
 
 // observeZoneMix 统计一组已冻结成员的 zone 去重数:1 个 zone 记 single,否则 cross
 // (gather_zone_mix_total{mode,mix}),并把每人 zone 打进日志。zone 取自快照的
-// BattleRouting.zone_id —— 它是 scene 在 PrepareBattle 时从自身配置填的,比
-// 票据里入队时刻的快照更权威。
+// BattleRouting.zone_id —— 它是 scene 在 PrepareBattle 时从自身配置填的。
 func observeZoneMix(modeName string, battleId uint64, prepared []preparedMember) {
 	zones := make(map[uint32]struct{}, len(prepared))
 	perMember := make([]string, 0, len(prepared))
@@ -745,8 +469,8 @@ func cancelBattlePrepareRPC(endpoint string, req *scenepb.CancelBattlePrepareReq
 
 // createBattle 调 battle 节点建房。返回的错误分三类:
 //   - 包装了 errBattleNotAllocatable(errors.Is 可判):节点级准入拒绝,battle 侧无副作用;
-//   - 其余 RPC 失败:请求可能已送达、房间可能已建成,调用方必须 DestroyBattle 兜底;
-//   - battle 业务拒绝(tip≠0):房间未建成,仍走通用补偿(DestroyBattle 在 battle 侧幂等命中)。
+//   - 其余 RPC 失败:请求可能已送达、房间可能已建成,结果未知;
+//   - battle 业务拒绝(tip≠0)或回执不符 / 明确未采用协议 1(outcomeAdoptionError)。
 func createBattle(node discovery.NodeEntry, req *battlepb.CreateBattleRequest) error {
 	resp, err := createBattleFn(node.Endpoint, req)
 	if err != nil {
@@ -758,13 +482,11 @@ func createBattle(node discovery.NodeEntry, req *battlepb.CreateBattleRequest) e
 	if resp.GetErrorMessage().GetId() != 0 {
 		return fmt.Errorf("battle 节点拒绝建房 tip_id=%d", resp.GetErrorMessage().GetId())
 	}
-	if req.OutcomeProtocolVersion == 1 {
-		if resp.GetBattleId() != req.BattleId || resp.GetTargetInstanceId() != req.TargetInstanceId {
-			return errors.New("Battle创建回执原局或原UUID不符")
-		}
-		if resp.GetAdoptedOutcomeProtocolVersion() != 1 {
-			return &outcomeAdoptionError{instance: resp.TargetInstanceId, version: resp.AdoptedOutcomeProtocolVersion}
-		}
+	if resp.GetBattleId() != req.BattleId || resp.GetTargetInstanceId() != req.TargetInstanceId {
+		return errors.New("Battle创建回执原局或原UUID不符")
+	}
+	if resp.GetAdoptedOutcomeProtocolVersion() != 1 {
+		return &outcomeAdoptionError{instance: resp.TargetInstanceId, version: resp.AdoptedOutcomeProtocolVersion}
 	}
 	return nil
 }
@@ -795,8 +517,7 @@ func queryOutcomeCapability(ctx context.Context, node discovery.NodeEntry, req *
 
 // isBattleNotAllocatable 判定 CreateBattle 的 gRPC 错误是否为节点级准入拒绝(k8s-client-entry D82):
 // 状态码 Unavailable 与消息 battle_not_allocatable 必须**同时精确**匹配。只看 Unavailable 不够 ——
-// 连接断开、对端重启同样回 Unavailable,那时请求可能已送达、房间可能已建成,必须走 DestroyBattle。
-// 判不中一律按普通 RPC 失败处理(多发一次幂等的 DestroyBattle),偏向安全一侧。
+// 连接断开、对端重启同样回 Unavailable,那时请求可能已送达、房间可能已建成。
 func isBattleNotAllocatable(err error) bool {
 	st, ok := status.FromError(err)
 	return ok && st.Code() == codes.Unavailable && st.Message() == battleNotAllocatableMessage
@@ -814,35 +535,9 @@ func createBattleRPC(endpoint string, req *battlepb.CreateBattleRequest) (*battl
 	return battlepb.NewBattleNodeClient(conn).CreateBattle(ctx, req)
 }
 
-// destroyBattle 半成功回滚:CreateBattle 出错时战斗可能已建成,尽力销毁。
-// 返回是否确认销毁成功;失败时调用方不得再解冻参战者(见 CreateBattle 失败分支)。
-func destroyBattle(node discovery.NodeEntry, battleId uint64, reason string) bool {
-	if err := destroyBattleFn(node.Endpoint, &battlepb.DestroyBattleRequest{
-		BattleId: battleId,
-		Reason:   reason,
-	}); err != nil {
-		// 销毁失败不致命:battle 房间收不到指令会按 deadline_ms 强制收尾。
-		logx.Errorf("[gather] DestroyBattle failed battle=%d reason=%s: %v", battleId, reason, err)
-		return false
-	}
-	return true
-}
-
-// destroyBattleRPC 是 destroyBattleFn 的生产实现。
-func destroyBattleRPC(endpoint string, req *battlepb.DestroyBattleRequest) error {
-	conn, err := discovery.DialEndpoint(endpoint)
-	if err != nil {
-		return fmt.Errorf("连接 battle 节点失败: %w", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), rollbackTimeout)
-	defer cancel()
-	_, err = battlepb.NewBattleNodeClient(conn).DestroyBattle(ctx, req)
-	return err
-}
-
 // teamAssignment 给一组成员分队,返回与 members 同下标的队号。5v5 读各成员
 // 评分后按 assignBalancedTeams 蛇形平衡(§11;评分读失败者按默认分参与),
-// 其余模式走 teamIndexFor 的弹出序语义;1v1 再按 battle_id 决定两人是否对调。
+// 其余模式走 teamIndexFor 的成员序语义;1v1 再按 battle_id 决定两人是否对调。
 func teamAssignment(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleId uint64, members []uint64) []uint32 {
 	if mode == matchpb.MatchMode_MATCH_MODE_5V5 {
 		ratings := loadRatings(svcCtx, members)
@@ -878,7 +573,7 @@ func sideFlip(battleId uint64) uint32 {
 
 // teamIndexFor 决定参与者的队伍编号:1v1/切磋语义不变(memberIndex 即队号,
 // 前后两人各一队);5v5 不走这里(teamAssignment 按评分蛇形分队,§11;
-// 这里保留"前半 team 0、后半 team 1"作为无评分时的弹出序语义,D15);
+// 这里保留"前半 team 0、后半 team 1"作为无评分时的成员序语义,D15);
 // PVE 全员 0 队(怪物侧由 battle 节点按 DungeonTable 生成,恒为 1 队对手)。
 func teamIndexFor(mode matchpb.MatchMode, memberIndex int, required int) uint32 {
 	switch mode {

@@ -362,7 +362,7 @@ func (l *Loop) judgeWithPlayerStore(op Op, snapshot StoreLedger, nowMs uint64) (
 	case ledgerUnseen:
 		return 0, Result{}
 	case ledgerSeen:
-		return seenForFinalize(snapshot.Ledger, op, true)
+		return seenForFinalize(snapshot.Ledger, op)
 	default:
 		logx.Infof("[AssetOp] Abandon skipped: persisted ledger cannot prove seq unseen op_id=%d stream=%d seq=%d epoch=%d state=%s",
 			op.OpID, op.Stream, op.Seq, op.StreamEpoch, state)
@@ -397,12 +397,12 @@ func abandonVerdict(ledger *componentpb.PlayerAssetOpLedgerComp, op Op) (ledgerV
 	}
 }
 
-// seenForFinalize 把账本里已见的结局交给 finalizeSeen(durable 已置;sqlCommitted 表示这份账本是 SQL 证据)。
+// seenForFinalize 把账本里已见的结局交给 finalizeSeen(durable 已置)。
 // 托管扣出缺可用原件时既不能终结(托管方拿不到完整实例),也不能放弃(scene 已应用),只能跳过并打 ERROR,
 // 与 tryPersistedLedger 的同一判据(resultWithReceipt)一致。
-func seenForFinalize(ledger *componentpb.PlayerAssetOpLedgerComp, op Op, sqlCommitted bool) (abandonSkip, Result) {
+func seenForFinalize(ledger *componentpb.PlayerAssetOpLedgerComp, op Op) (abandonSkip, Result) {
 	outcome, partial, reason := ClassifyPersisted(ledger, op.Stream, op.StreamEpoch, op.Seq)
-	res := resultWithReceipt(ledger, op, Result{Outcome: outcome, Reason: reason, Durable: true, SQLCommitted: sqlCommitted, Partial: partial})
+	res := resultWithReceipt(ledger, op, Result{Outcome: outcome, Reason: reason, Durable: true, SQLCommitted: true, Partial: partial})
 	if !res.Durable {
 		logx.Errorf("[AssetOp] Abandon skipped: persisted outcome lacks matching request identity or escrow instance; manual handling required op_id=%d stream=%d seq=%d corr=%d",
 			op.OpID, op.Stream, op.Seq, op.CorrelationID)

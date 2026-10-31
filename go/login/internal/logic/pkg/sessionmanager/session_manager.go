@@ -12,6 +12,7 @@ import (
 
 	comppb "proto/common/component"
 	plpb "proto/player_locator"
+	"shared/redisslot"
 )
 
 // PlayerSession is the Login-side view of a player session.
@@ -47,8 +48,7 @@ const (
 	StateDisconnecting int32 = 2
 	StateOffline       int32 = 3
 
-	idempotencyKeyPrefix = "login_idempotent:"
-	idempotencyTTL       = 5 * time.Minute
+	idempotencyTTL = 5 * time.Minute
 )
 
 // EnterGsType values derived from proto EnterGsType enum (player_login_comp.proto).
@@ -86,7 +86,7 @@ type OnlineSessionInput struct {
 }
 
 func idempotencyKey(playerID uint64, requestID string) string {
-	return fmt.Sprintf("%s%d:%s", idempotencyKeyPrefix, playerID, requestID)
+	return redisslot.LoginIdempotentKey(playerID, requestID)
 }
 
 // ---- I/O functions (delegate to player_locator gRPC) ----
@@ -220,7 +220,7 @@ func NewOnlineSession(existing *PlayerSession, input OnlineSessionInput) *Player
 
 // ---- Idempotency (stays in Redis — not session-related) ----
 
-func SetIdempotency(ctx context.Context, rdb *redis.Client, playerID uint64, requestID string) error {
+func SetIdempotency(ctx context.Context, rdb redis.UniversalClient, playerID uint64, requestID string) error {
 	if requestID == "" {
 		return nil
 	}

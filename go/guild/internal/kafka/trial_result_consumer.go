@@ -9,13 +9,12 @@ package kafka
 // 分工(只有一处权威,别在这里重复实现):
 //
 //	本文件   拉取 → 反序列化 → 过滤(是不是帮会历练)→ 调 handler → 决定"提交位点"还是"退避后重调"
-//	handler  logic.GuildLogic.SettleTrialResult:结算事务、幂等闸门、毒消息标记、**销账**(删 SharedRedis 上的
-//	         battle:activity_result:{battle_id})全在它里面。本文件不碰 MySQL、不碰 Redis、不删结果键。
+//	handler  logic.GuildLogic.SettleTrialResult:结算事务、幂等闸门、毒消息标记全在它里面。本文件不碰 MySQL、不碰 Redis。
 //
 // 四条纪律:
 //
 //  1. **至少一次 + 幂等**。位点在 handler 回 nil 之后才提交(CommitInterval=0,逐条同步提交)。提交前崩溃、
-//     重平衡、battle 未销账的重发(每 10s 一次,至多 30 次)都会让同一局再来一遍,由 handler 的幂等闸门
+//     重平衡、match 发件箱的重投都会让同一局再来一遍,由 handler 的幂等闸门
 //     (对局行 SETTLED)挡住,回"已结算过",照常提交。
 //  2. **暂时性失败不提交、不跳过、不设次数上限**(与 AGENTS §11.3"重试要有次数上限"的偏离,理由如下)。
 //     handler 回 error = MySQL / Redis 故障、写冲突、号段不可用。这些都会自己好,而跳过 = 这一局的
@@ -26,18 +25,18 @@ package kafka
 //     FetchMessage —— 卡住期间一条也不再取,别的分区、别的 zone、别的帮的结果都跟着等。只有一个 guild 副本时
 //     (它独占全部分区)等的是全服的历练结算;多副本时是这个副本名下的那几个分区(reader 的心跳在它自己的协程里
 //     照常发,卡住不会触发重平衡把分区让给别的副本)。这段时间里:
-//       - 已登记的对局,由巡检器在登记 ResultOverdue(默认 420s)之后从 battle 落下的结果记录兜底结算
+//       - 已登记的对局,由巡检器在登记 ResultOverdue(默认 420s)之后从 match 权威库的 SQL 终局兜底结算
 //         (巡检器在另一个协程,走同一个 SettleTrialResult);
 //       - 没有登记行的对局(开战时登记失败、或 match 超时而实际已开战)只能等这里恢复。
 //     不丢奖,只是晚到。它是可见的:guild_trial_result_total{result="handler_retry"} 持续上涨、消费组在本进程
 //     名下**各个分区**的 lag 一起上涨,每次重调一条 ERROR。人工出口见 06 §6.35a 场景一。
-//     为什么不按分区隔离(v1 的取舍):topic 的 key 是 battle_id,分区与 zone / 帮会没有对应关系 —— 最现实的
-//     长时间卡住是某个 zone 合服,它的在途对局散在每一个分区上,隔离换不来"别的 zone 不受影响";而 kafka-go 的
+//     为什么不按分区隔离(v1 的取舍):topic 的 key 是 battle_id,分区与 zone / 帮会没有对应关系,
+//     一个帮会的在途对局散在每一个分区上,隔离换不来"别的帮不受影响";而 kafka-go 的
 //     消费组 reader 不能按分区暂停,要隔离就得在进程内无上限地缓存被卡分区的后续消息。
 //     不加抖动:每个进程同一时刻至多在重调 1 条,形不成惊群。
 //     确定性失败(溢出、奖励包坏、上下文畸形)由 handler 自己标成毒消息并回 nil,不会走到这条路上。
 //  3. **与 guild 无关的消息只提交、不处理**。match-results 里绝大多数是普通对局(没有活动上下文)或别的活动类型;
-//     它们的结果记录也不归 guild 销账。
+//     它们的终局与 guild 无关。
 //  4. **单次 handler 的 panic 只算一次暂时性失败**(safego.Run)。让它把消费 goroutine 带走的后果更糟:
 //     reader 关闭 → 重平衡 → 别的副本接手同一条消息 → 同样 panic,最后全服没有消费者,而进程都还活着。
 //
@@ -109,7 +108,7 @@ type TrialResultCounters struct {
 }
 
 const (
-	// trialResultTopicRetentionMs:topic 保留 7 天。与 match 的 resultTopicRetentionMs、battle 结果记录的 TTL 同值 ——
+	// trialResultTopicRetentionMs:topic 保留 7 天。与 match 的 resultTopicRetentionMs 同值 ——
 	// 两个服务启动时都会把这个 topic 的 retention.ms 设成自己的值,不同值会互相覆盖。
 	trialResultTopicRetentionMs = 7 * 24 * 3600 * 1000
 	// trialResultFetchBackoff:拉取失败(broker 抖动、重平衡)后的固定退避。
@@ -291,7 +290,7 @@ func (c *TrialResultConsumer) waitForTopic(ctx context.Context) bool {
 		if ctx.Err() != nil {
 			return false
 		}
-		// 这段时间里历练照常能开战,结果先落在 topic 与 battle 的结果记录里,消费者起来后从最早位点补上。
+		// 这段时间里历练照常能开战,结果先落在 topic 与 SQL 终局里,消费者起来后从最早位点补上。
 		logx.Errorf("[GuildTrial] Failed to ensure trial result topic %s(partitions=%d); result consumption not started, retrying after %v (attempt %d): %v",
 			c.cfg.Topic, c.cfg.Partitions, trialResultStartRetryInterval, attempt, err)
 		if !c.sleep(ctx, trialResultStartRetryInterval) {
@@ -387,7 +386,7 @@ func (c *TrialResultConsumer) processRecord(ctx context.Context, msg kafkago.Mes
 	ev := &kafkapb.BattleResultEvent{}
 	if err := proto.Unmarshal(msg.Value, ev); err != nil {
 		// 坏消息跳过并提交:留在 topic 里只会每次重启都撞一遍(match 的消费者对同一条消息也是这样处理)。
-		// 它若真是一局历练,battle 落在 Redis 的结果记录还在,巡检器会在结果超时后从那里取回来处理。
+		// 它若真是一局历练,match 权威库的 SQL 终局还在,巡检器会在结果超时后从那里取回来处理。
 		logx.Errorf("[GuildTrial] Failed to deserialize battle result; skipping partition=%d offset=%d key=%s: %v",
 			msg.Partition, msg.Offset, string(msg.Key), err)
 		countIfSet(c.counters.DecodeError)
@@ -408,7 +407,7 @@ func (c *TrialResultConsumer) processRecord(ctx context.Context, msg kafkago.Mes
 }
 
 // isGuildTrialResult 报告一条结果是否属于帮会同道历练。没有活动上下文(普通对局)、或是别的活动类型 → false。
-// 上下文残缺(各 id 为 0)但 kind 是历练的仍算:交给 handler 判成"上下文不可用"并销账,不在这里悄悄吞掉。
+// 上下文残缺(各 id 为 0)但 kind 是历练的仍算:交给 handler 判成"上下文不可用",不在这里悄悄吞掉。
 func isGuildTrialResult(ev *kafkapb.BattleResultEvent) bool {
 	return ev.GetActivityContext().GetKind() == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL
 }

@@ -10,9 +10,9 @@ import (
 	"proto/scene_manager"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
-	"shared/savebarrier"
+	"shared/handofffence"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
+	goredis "github.com/redis/go-redis/v9"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -25,7 +25,7 @@ import (
 // kRegisterFenceLua 对「同 E、不同实例」一律拒绝(防止两个进程同持一代),新进程永远进不了这名玩家;
 // LeaveScene 也拿不到释放证据,等待预算不授权删除。结果是崩溃节点上的玩家被永久挡在门外。
 //
-// 判据用持有进程**自己盖的章**:交接资格(save_barrier 的 handoff_fence)里的 SceneInstance 是登记成功、
+// 判据用持有进程**自己盖的章**:交接资格(handoff hash 的 handoff_fence)里的 SceneInstance 是登记成功、
 // 真正开始持有这名玩家的那个进程的启动 UUID(role_admission_system.cpp ReadLocalNode = NodeInfo.node_uuid)。
 // 它回答「此刻谁持有」,不回答「路由当时想派给谁」—— 后者就是旧方案 R1 的毛病:滞留的路由事件
 // 投给了同号新进程,按路由时的实例号判定会冤枉一个健康的持有者。这里没有这个问题:新进程若真的
@@ -257,17 +257,17 @@ func freshRegistryInstances(ctx context.Context, svcCtx *svc.ServiceContext) (ma
 }
 
 // readHandoffFence 读玩家屏障 hash 里的交接资格。没有该字段返回 ok=false、err=nil;原文不规范返回错误。
-func readHandoffFence(svcCtx *svc.ServiceContext, playerID uint64) (savebarrier.HandoffFence, bool, error) {
-	raw, err := svcCtx.Redis.Hget(savebarrier.Key(playerID), savebarrier.HandoffFenceField)
-	if errors.Is(err, redis.Nil) {
-		return savebarrier.HandoffFence{}, false, nil
+func readHandoffFence(svcCtx *svc.ServiceContext, playerID uint64) (handofffence.HandoffFence, bool, error) {
+	raw, err := playerRedisHget(svcCtx, handofffence.Key(playerID), handofffence.HandoffFenceField)
+	if errors.Is(err, goredis.Nil) {
+		return handofffence.HandoffFence{}, false, nil
 	}
 	if err != nil {
-		return savebarrier.HandoffFence{}, false, err
+		return handofffence.HandoffFence{}, false, err
 	}
-	fence, err := savebarrier.ParseHandoffFence(raw)
+	fence, err := handofffence.ParseHandoffFence(raw)
 	if err != nil {
-		return savebarrier.HandoffFence{}, false, fmt.Errorf("%w: %q", err, raw)
+		return handofffence.HandoffFence{}, false, fmt.Errorf("%w: %q", err, raw)
 	}
 	return fence, true, nil
 }
@@ -352,7 +352,7 @@ func (l *EnterSceneLogic) playerLocationOwnerReplaced(playerID uint64, loc *scen
 		return ownerNotReplaced
 	}
 	holder := fence.SceneInstance
-	frozenWithMarker := fence.State == savebarrier.HandoffFenceFrozen
+	frozenWithMarker := fence.State == handofffence.HandoffFenceFrozen
 
 	barrier := sceneReentryBarrier(l.svcCtx)
 	observedAt, observed := instanceGoneObservedSince(holder)

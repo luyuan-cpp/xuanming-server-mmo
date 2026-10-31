@@ -1,14 +1,11 @@
-# data-service-route-tool:映射持久化运维工具 route-tool 的一次性 Job 模板
-# (D1 第 1b-3 批;docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §7 第 3 条、§13.4 第 3 条;形状照 data-service-migrate.yaml)。
+# data-service-route-tool:路由运维工具 route-tool(tidb-prepare / freeze / unfreeze)的一次性 Job 模板(形状照 data-service-migrate.yaml)。
 #
 # 与 manifests/go-svc/data-service.yaml 同一镜像、同一 ConfigMap(go-svc-data-service-config),跑服务二进制自带的工具入口:
 #   /app/service -f /app/etc/data_service.yaml -route-tool <子命令> [子命令参数]
 # (go/data_service/data_service.go 的 -route-tool;子命令与退出码见 go/data_service/internal/routetoolcli/cli.go 的 usage:
-#  0 干净 / 1 完成但需要人工处理 / 2 失败 / 3 有生效的合服围栏)。
+#  0 完成 / 2 失败)。
 #
-# 为什么是独立 Job,不 kubectl exec 进在役 Pod:data-service 容器的内存 limit 是 512Mi,import / audit 的已见集合是 O(N)
-# (百万行约几十 MB,千万行几百 MB);在役容器里跑可能触发 cgroup OOM,把正在服务的 data_service 一起杀掉。
-# exec 只限 -dry-run 或小库(runbook §9.4)。这里的资源单独设,按行数调大。
+# 为什么是独立 Job,不 kubectl exec 进在役 Pod:不占在役进程的资源,输出按运行号留档。
 #
 # 调用:只经 tools/scripts/k8s_route_tool.ps1(渲染 → apply → 等完成 → 存 stdout / stderr 到报告目录 → 按容器退出码原样返回)。
 # 本文件里的占位(全大写、带 PLACEHOLDER 加下划线的前缀;下面列出时省略前缀,免得注释也被替换)由该脚本替换,漏替换即拒绝 apply;
@@ -19,7 +16,7 @@
 #   ACTIVE_DEADLINE_SECONDS  脚本的 -TimeoutSeconds:到点 K8s 杀掉 Pod、Job 判 Failed(DeadlineExceeded)
 #   ROUTE_TOOL_ARGS          ["-f", "/app/etc/data_service.yaml", "-route-tool", <子命令>, <参数>…](JSON 数组,逐项转义)
 #
-# 不自动重试:backoffLimit 0、restartPolicy Never。子命令大多幂等,但 unfreeze / reconcile-from-cache 这类写操作重跑与否
+# 不自动重试:backoffLimit 0、restartPolicy Never。子命令都幂等,但 freeze / unfreeze 这类写操作重跑与否
 # 要由人看过上一次的输出再定;节点排空 / 抢占导致的驱逐同样直接判 Failed,由运维重跑。
 # ttlSecondsAfterFinished 留一天:之后 K8s 自己删 Job 与 Pod;报告目录里的 stdout / stderr 才是长期留档。
 #
@@ -77,7 +74,7 @@ spec:
               printf '\n%s\n' "@@ROUTE_TOOL_STDOUT_END ${ROUTE_TOOL_RUN_ID}@@"
               exit "$rc"
             - route-tool
-          # 与 data-service.yaml 的 args 只差 -route-tool 及其后的子命令:同一份 ConfigMap,库名 / 账号 / mapping Redis 与服务完全一致。
+          # 与 data-service.yaml 的 args 只差 -route-tool 及其后的子命令:同一份 ConfigMap,库名 / 账号与服务完全一致。
           args: PLACEHOLDER_ROUTE_TOOL_ARGS
           volumeMounts:
             - name: svc-config
@@ -85,7 +82,7 @@ spec:
               readOnly: true
             - name: scratch
               mountPath: /tmp/route-tool
-          # 资源与在役 data-service(512Mi)分开:import / audit 的已见集合随行数线性增长,千万行要几百 MB。
+          # 资源与在役 data-service(512Mi)分开。
           # 行数更大时先调大 limits 再跑;OOMKilled(退出码 137)由 k8s_route_tool.ps1 报成失败(2)。
           resources:
             requests:

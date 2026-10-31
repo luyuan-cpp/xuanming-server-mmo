@@ -12,7 +12,7 @@ import (
 // tidb-prepare(TiDB-only,2026-10-12 G1a):对全局库的路由表设防合并并按片 / 按 zone 预切 Region
 // (docs/design/player-route-mapping-durability-proposal.md §11.2「第 1a 批热点修复」)。
 //
-// 只碰全局库,不连 mapping Redis。MySQL 上整步跳过(没有 Region),退出码 0。语句与执行都在
+// 只碰全局库。MySQL 上整步跳过(没有 Region),退出码 0。语句与执行都在
 // store.RouteStore.PrepareTiDB;这里只做输出与退出码。
 //
 // 真执行只能使用独立 schema 主体，在服务启动前完成；normal / operator 不借用 DDL 能力。
@@ -20,7 +20,7 @@ import (
 // TiDB 建表、恢复或重建后，先预切再启动业务 writer。
 // 漏跑只影响性能(回到单尾热点),不影响正确性。全部语句幂等,重跑即可。
 
-// tidbPreparer 是本子命令对全局库的全部依赖,*store.RouteStore 天然满足(编译期断言在 routetool_test.go)。
+// tidbPreparer 是本子命令对全局库的全部依赖,*store.RouteStore 天然满足(编译期断言在 tidb_prepare_test.go)。
 type tidbPreparer interface {
 	PrepareTiDB(ctx context.Context, req store.RouteTiDBPrepareRequest) (store.RouteTiDBPrepareReport, error)
 }

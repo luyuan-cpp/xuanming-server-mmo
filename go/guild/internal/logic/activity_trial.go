@@ -10,7 +10,7 @@ package logic
 //	StartGuildTrial          发起人建邀请房间(只写 guild 全局 Redis),推送给被邀请人
 //	RespondGuildTrialInvite  被邀请人同意 / 拒绝(发起人拒绝 = 取消);凑齐最后一票的那一次调用负责开战(launchTrial)
 //	launchTrial              复核名单 → 调 match 内部服务拿 battle_id → 登记对局行 → 房间进 LAUNCHED
-//	SettleTrialResult        对局结果到达(Kafka 消费者,或巡检器从结果记录取回):发帮贡 / 资金 / 物品,销账
+//	SettleTrialResult        对局结果到达(Kafka 消费者,或巡检器从 SQL 终局取回):发帮贡 / 资金 / 物品
 //
 // 沿用 activity_logic.go 文件头的四条纪律,历练另有四条:
 //
@@ -18,12 +18,11 @@ package logic
 //     整个帮会界面当传输故障进重连隔离。gRPC 错误只留给 guild 自己的 MySQL / Redis 故障。
 //  2. **开战成功之后不再失败**:match 一旦回了 battle_id,战斗已是事实。登记对局行、改房间状态失败都只打日志、
 //     计指标,本次 RPC 照常成功 —— 结算会补登记(06 §6.27 L4)。这两步用不继承请求取消的独立预算。
-//  3. **结算幂等,且只有"有了定论"才销账**:同一局的结果会被重复投递(battle 未销账就重发、Kafka 重放、
-//     巡检器与消费者同时处理)。幂等闸门在仓储的对局行上;SharedRedis 的结果记录只在事务提交之后删。
-//     闸门有两道:入口处一次不持锁的终态预读(对局行已是 SETTLED 就直接销账,不构建奖励、不发号、不开事务),
+//  3. **结算幂等**:同一局的结果会被重复投递(发件箱重投、Kafka 重放、巡检器与消费者同时处理)。幂等闸门在仓储的对局行上。
+//     闸门有两道:入口处一次不持锁的终态预读(对局行已是 SETTLED 就直接回 Duplicate,不构建奖励、不发号、不开事务),
 //     与事务里持着帮会行锁的权威判定。前一道让重复副本便宜地走掉,也是"卡住的消息"的人工出口(06 §6.35a 做法 A)。
-//     暂时性错误(库 / Redis 故障、写冲突、号段不可用)原样返回让调用方退避重试,**不销账**;
-//     确定性错误(溢出、奖励包坏、上下文畸形)标成毒消息后销账,不卡住分区(06 §6.31)。
+//     暂时性错误(库 / Redis 故障、写冲突、号段不可用)原样返回让调用方退避重试;
+//     确定性错误(溢出、奖励包坏、上下文畸形)标成毒消息,不卡住分区(06 §6.31)。
 //  4. **名单先判帮会归属、再判在线**:在线状态只对"确认是本帮成员"的人作答,否则任何人都能把陌生玩家的 id
 //     塞进名单来探测他在不在线。
 
@@ -55,6 +54,7 @@ import (
 	scenepb "proto/scene"
 	"shared/assetop"
 	tablepb "shared/generated/pb/table"
+	"shared/redisslot"
 	"shared/safego"
 )
 
@@ -110,8 +110,6 @@ const (
 	// trialLockReadTimeout:视图读战斗锁的独立上限。理由同 DefaultStrictOnlineLookupTimeout:会话 Redis 的客户端没开
 	// ContextTimeoutEnabled,ctx 截止管不住套接字读;这一读只是展示,宁可少显示一次"进行中"也不拖住整页。
 	trialLockReadTimeout = 500 * time.Millisecond
-	// battleLockKeyPrefix:战斗锁键(跨运行时契约,C++ scene 写,值 = 十进制 battle_id;match 也只读它)。
-	battleLockKeyPrefix = "battle:lock:"
 )
 
 // 名单不合法的原因:kGuildTrialTeamInvalid 的第一个参数,客户端按它选文案(06 §6.24 末段的全集)。
@@ -358,12 +356,13 @@ func (l *GuildLogic) myTrialBattleID(ctx context.Context, d *ActivityDeps, playe
 	return battleID, nil
 }
 
-// lockedBattleID 读 battle:lock:{player_id}。键不存在、值不是非 0 的十进制整数 → 0(不是历练关心的锁)。
+// lockedBattleID 读战斗锁(跨运行时契约,C++ scene 写,值 = 十进制 battle_id;match 也只读它)。
+// 键不存在、值不是非 0 的十进制整数 → 0(不是历练关心的锁)。
 // rdb 为 nil(未接线)→ 0。
 //
 // 有独立上限,写法同 OnlineStatusResolver.mgetWithin:GET 放进单独的协程,本协程在"结果到达"与"上限到期"之间择先。
 // 被丢下的协程不会泄漏:通道带 1 格缓冲,它最迟在一次套接字读超时后返回。
-func lockedBattleID(ctx context.Context, rdb *redis.Client, playerID uint64) (uint64, error) {
+func lockedBattleID(ctx context.Context, rdb redis.UniversalClient, playerID uint64) (uint64, error) {
 	if rdb == nil || playerID == 0 {
 		return 0, nil
 	}
@@ -375,7 +374,7 @@ func lockedBattleID(ctx context.Context, rdb *redis.Client, playerID uint64) (ui
 		err error
 	}
 	done := make(chan lockRead, 1)
-	key := battleLockKeyPrefix + strconv.FormatUint(playerID, 10)
+	key := redisslot.BattleLockKey(playerID)
 	safego.Go("guild.trial_battle_lock_get", func() {
 		raw, err := rdb.Get(lookupCtx, key).Result()
 		done <- lockRead{raw: raw, err: err}
@@ -820,27 +819,26 @@ func (l *GuildLogic) recordTrialLaunched(ctx context.Context, d *ActivityDeps, l
 type TrialSettleOutcome uint8
 
 const (
-	// TrialOutcomeSettled:本次把这一局结算了(胜 / 负 / 配表缺行都算),结果记录已销账。
+	// TrialOutcomeSettled:本次把这一局结算了(胜 / 负 / 配表缺行都算)。
 	TrialOutcomeSettled TrialSettleOutcome = iota + 1
-	// TrialOutcomeDuplicate:这一局此前已结算(重复投递),什么都没改,已销账。
+	// TrialOutcomeDuplicate:这一局此前已结算(重复投递),什么都没改。
 	TrialOutcomeDuplicate
-	// TrialOutcomeGuildGone:帮会已解散,不发奖,已销账。
+	// TrialOutcomeGuildGone:帮会已解散,不发奖。
 	TrialOutcomeGuildGone
-	// TrialOutcomeBadContext:是历练的结果,但活动上下文残缺或对局模式不对,无法处理;battle_id 非 0 时已销账。
+	// TrialOutcomeBadContext:是历练的结果,但活动上下文残缺或对局模式不对,无法处理。
 	TrialOutcomeBadContext
-	// TrialOutcomeContextMismatch:这一局登记在别的帮名下,什么都没改,已销账。
+	// TrialOutcomeContextMismatch:这一局登记在别的帮名下,什么都没改。
 	TrialOutcomeContextMismatch
 	// TrialOutcomePoison:确定性失败(帮贡 / 资金溢出、奖励包坏、结果过旧、输入畸形),对局标成 POISON,
-	// 不发奖、已销账;需要运维按 ERROR 日志人工补发。
+	// 不发奖;需要运维按 ERROR 日志人工补发。
 	TrialOutcomePoison
-	// TrialOutcomeSkipped:不是帮会历练的结果(没有活动上下文,或是别的活动类型)。什么都没读、什么都没改,
-	// **也不销账** —— 别的活动类型的结果记录不归 guild 删。
+	// TrialOutcomeSkipped:不是帮会历练的结果(没有活动上下文,或是别的活动类型)。什么都没读、什么都没改。
 	TrialOutcomeSkipped
 )
 
-// errTrialNotWired:结算被调用时历练的仓储或结果记录没有接线。只可能是装配错误;按暂时性错误返回,
+// errTrialNotWired:结算被调用时历练的仓储没有接线。只可能是装配错误;按暂时性错误返回,
 // 让消费者停在这条消息上重试并持续报错(fail-closed:宁可卡住也不把结果丢掉)。
-var errTrialNotWired = errors.New("guild trial settlement not wired (ActivityDeps.Repo / Results missing)")
+var errTrialNotWired = errors.New("guild trial settlement not wired (ActivityDeps.Repo missing)")
 
 // errTrialDeterministic 标记 logic 自己发现的确定性失败(奖励包序列化不了),与仓储的两个确定性哨兵同样走毒消息。
 var errTrialDeterministic = errors.New("guild trial: deterministic failure")
@@ -857,10 +855,10 @@ const trialSyncDeliveryReserve = syncTailReserve
 //   - error 为 nil:这条消息处理完了 —— 已结算、判为重复 / 帮会已解散 / 上下文不可用 / 毒消息,或与 guild 无关。
 //     消费者**提交 offset**。outcome 说明是哪一种,只用于日志与测试。
 //   - error 非 nil:**暂时性失败**(MySQL / Redis 故障、写冲突、号段不可用、未接线)。什么都没提交,
-//     结果记录没有销账;消费者**不提交**,退避后带同一条消息重调。每次调用都会重取"现在"。
+//     消费者**不提交**,退避后带同一条消息重调。每次调用都会重取"现在"。
 //
 // 幂等:同一条消息可以调任意多次、可以与巡检器并发调,发奖至多一次。幂等闸门在对局行上,有两道:
-// 入口处不持锁的终态预读(trialSettledBefore,已是 SETTLED 就直接销账回 Duplicate),与事务里持帮会行锁的权威判定(data 层)。
+// 入口处不持锁的终态预读(trialSettledBefore,已是 SETTLED 就直接回 Duplicate),与事务里持帮会行锁的权威判定(data 层)。
 // 线程模型:可并发调用;本方法不持有任何跨调用的状态。ctx 取消时尽快返回(事务回滚,返回 error)。
 //
 // 发奖名单 = team 0 的玩家 − 逃跑者(用户决策 U2:阵亡者也得奖)∩ 结算时仍在本帮 ∩ 开战那个游戏日次数未满;
@@ -871,7 +869,7 @@ func (l *GuildLogic) SettleTrialResult(ctx context.Context, ev *kafkapb.BattleRe
 		return TrialOutcomeSkipped, nil
 	}
 	d := l.activities
-	if d == nil || d.trials == nil || d.Results == nil {
+	if d == nil || d.trials == nil {
 		return 0, errTrialNotWired
 	}
 	if launch, ok := d.trials.(trialLaunchStore); ok && launch.TrialLaunchEnabled() {
@@ -902,14 +900,11 @@ func (l *GuildLogic) SettleTrialResult(ctx context.Context, ev *kafkapb.BattleRe
 		logx.Errorf("[GuildTrial] result with unusable activity context dropped (battle %d guild %d activity %d period %d guild_period %d match_mode %d)",
 			battle.BattleID, battle.GuildID, battle.ActivityID, battle.PeriodKey, battle.GuildPeriodKey, ev.GetMatchMode())
 		guildTrialResultTotal.Inc(trialResultBadContext)
-		if battle.BattleID != 0 {
-			l.ackTrialResult(ctx, d, battle.BattleID)
-		}
 		return TrialOutcomeBadContext, nil
 	}
 
-	// 幂等短路:这一局已有终态 → 这是一份重复的结果,销账了事。排在构建奖励包、发号、开事务**之前**,为的是两件事:
-	//   - battle 在结果记录被销账之前每 10s 按原字节重发一次(至多 30 次,key = battle_id,同一分区)。这些副本不必各烧
+	// 幂等短路:这一局已有终态 → 这是一份重复的结果。排在构建奖励包、发号、开事务**之前**,为的是两件事:
+	//   - match 的发件箱确认之前会按原字节重发(key = battle_id,同一分区),Kafka 也可能重放。这些副本不必各烧
 	//     一批指令号、各抢一次帮会行锁。
 	//   - 它是"卡住的消息"的人工出口(06 §6.35a 做法 A):运维把对局行手工写成终态之后,不论原先失败在这一步之后的
 	//     哪个位置(奖励包、发号、事务里的任何一步,包括在那些位置上 panic),这条消息连同排在它后面的全部
@@ -920,7 +915,6 @@ func (l *GuildLogic) SettleTrialResult(ctx context.Context, ev *kafkapb.BattleRe
 		return 0, fmt.Errorf("read trial battle %d of guild %d before settling: %w", battle.BattleID, battle.GuildID, err)
 	}
 	if settled {
-		l.ackTrialResult(ctx, d, battle.BattleID)
 		guildTrialResultTotal.Inc(trialResultDuplicate)
 		return TrialOutcomeDuplicate, nil
 	}
@@ -970,26 +964,22 @@ func (l *GuildLogic) SettleTrialResult(ctx context.Context, ev *kafkapb.BattleRe
 	switch res.Status {
 	case data.TrialSettleSettled:
 	case data.TrialSettleDuplicate:
-		l.ackTrialResult(ctx, d, battle.BattleID)
 		guildTrialResultTotal.Inc(trialResultDuplicate)
 		return TrialOutcomeDuplicate, nil
 	case data.TrialSettleGuildGone:
 		logx.Infof("[GuildTrial] guild %d no longer exists, battle %d settles without reward", battle.GuildID, battle.BattleID)
-		l.ackTrialResult(ctx, d, battle.BattleID)
 		guildTrialResultTotal.Inc(trialResultGuildGone)
 		return TrialOutcomeGuildGone, nil
 	case data.TrialSettleContextMismatch:
 		logx.Errorf("[GuildTrial] battle %d is registered to another guild than the result says (%d), nothing settled",
 			battle.BattleID, battle.GuildID)
-		l.ackTrialResult(ctx, d, battle.BattleID)
 		guildTrialResultTotal.Inc(trialResultContextMismatch)
 		return TrialOutcomeContextMismatch, nil
 	default:
 		return 0, fmt.Errorf("settle trial battle %d of guild %d: repo returned unknown status %d", battle.BattleID, battle.GuildID, res.Status)
 	}
 
-	// 已提交。此后全部 best-effort(activity_logic.go 纪律 3):销账最先 —— 它决定 battle 还要不要重发。
-	l.ackTrialResult(ctx, d, battle.BattleID)
+	// 已提交。此后全部 best-effort(activity_logic.go 纪律 3)。
 	countTrialSettled(res, in.FinishedAtMs, nowMs, bundle != nil)
 	l.notifyTrialSettled(ctx, battle, ev, res)
 	l.deliverTrialRewards(ctx, d, battle, bundle, res.Enqueued)
@@ -1082,15 +1072,7 @@ func prepareTrialReward(ctx context.Context, d *ActivityDeps, candidates []uint6
 	return &data.TrialReward{Payload: payload, LeaseUntilMs: nowMs + durationMs(lease), Ops: ops}, nil
 }
 
-// ackTrialResult 销账:删掉 battle 落在 SharedRedis 上的结果记录,battle 的重发随之停止。
-// 失败只记日志:battle 重发后 guild 再走一遍幂等闸门回 Duplicate,然后再销一次;最坏由 7 天 TTL 兜底。
-func (l *GuildLogic) ackTrialResult(ctx context.Context, d *ActivityDeps, battleID uint64) {
-	if err := d.Results.Ack(ctx, battleID); err != nil {
-		logx.Errorf("[GuildTrial] ack result record of battle %d failed, battle will resend and get a duplicate answer: %v", battleID, err)
-	}
-}
-
-// poisonTrialBattle 把一局标成"确定性失败、不发奖"并销账(06 §6.31)。结算与巡检器共用;
+// poisonTrialBattle 把一局标成"确定性失败、不发奖"(06 §6.31)。结算与巡检器共用;
 // battle 至少要有 BattleID 与 GuildID(巡检器只有这两个),结算会把上下文的其余字段也带上,
 // 这样连登记都没成功的局也能留下一行可查。cause 只进日志。
 //
@@ -1099,7 +1081,7 @@ func (l *GuildLogic) ackTrialResult(ctx context.Context, d *ActivityDeps, battle
 //   - 发现它其实早已结算 → TrialOutcomeDuplicate(这次的"坏"只是一条重复消息的坏,什么都不用补);
 //   - 帮会已解散 → TrialOutcomeGuildGone;登记在别的帮名下 → TrialOutcomeContextMismatch。
 //
-// 标记本身遇到库故障 / 写冲突时返回暂时性 error,调用方下一轮再来,不销账。
+// 标记本身遇到库故障 / 写冲突时返回暂时性 error,调用方下一轮再来。
 func (l *GuildLogic) poisonTrialBattle(ctx context.Context, d *ActivityDeps, battle data.TrialBattleKey,
 	finishedAtMs, nowMs uint64, cause string) (TrialSettleOutcome, error) {
 	mark, err := d.trials.MarkTrialBattlePoison(ctx, battle, finishedAtMs, nowMs)
@@ -1127,9 +1109,6 @@ func (l *GuildLogic) poisonTrialBattle(ctx context.Context, d *ActivityDeps, bat
 	default:
 		logx.Errorf("[GuildTrial] POISON battle %d of guild %d (activity %d period %d) marked, no reward granted, manual compensation needed: %s",
 			battle.BattleID, battle.GuildID, battle.ActivityID, battle.PeriodKey, cause)
-	}
-	if battle.BattleID != 0 {
-		l.ackTrialResult(ctx, d, battle.BattleID)
 	}
 	guildTrialResultTotal.Inc(label)
 	return outcome, nil

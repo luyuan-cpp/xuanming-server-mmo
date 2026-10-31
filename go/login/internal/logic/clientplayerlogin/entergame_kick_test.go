@@ -7,7 +7,7 @@ package clientplayerloginlogic
 // 同一连接 / 跨实例同号 / 本链实例号为空三种情形按 §2.2 ⑤ 不踢并计数。
 //
 // 本文件自带 harness,不复用、也不改 newEnterWiringHarness(player_identity_backfill_test.go):后者的假 locator
-// SetSession / Reconnect 恒报错、GetSession 只回固定记录、SessionDetails 只有 SessionId,满足不了下面的用例(§2.7)。
+// SetSession / Reconnect 恒报错、GetSession 只回固定记录、SessionDetails 不带 gate_node_id,满足不了下面的用例(§2.7)。
 //   - 直接驱动 applyLoadedPlayerSession(异步链的 apply 段),链 ctx 由用例掌握,才能模拟 onLost 取消;
 //   - state 由生产的 buildEnterGameSessionState 从 SessionDetails 构造:gate_instance_id 非空、gate_node_id = 0。
 //     这样 SetSession 成功之后本链的 Bind 在 buildGateCommandMessage 守卫三(node id 0)报错返回,碰不到 KafkaClient
@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"login/internal/logic/pkg/sessionfence"
 	"login/internal/logic/pkg/sessionmanager"
 	"login/internal/svc"
 	pbbase "proto/common/base"
@@ -238,7 +239,7 @@ func newKickHarness(t *testing.T, existing *plpb.PlayerSession, chainInstance st
 	}
 	kicker := &kickRecorder{events: events}
 	l := NewEnterGameLogic(context.Background(), &svc.ServiceContext{
-		RedisClient: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+		RedisClient: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 		PlayerLocatorClient: locator,
 	})
 	l.kicker = kicker
@@ -250,6 +251,7 @@ func newKickHarness(t *testing.T, existing *plpb.PlayerSession, chainInstance st
 	)
 	fixtureDirectory(t, rdb).seed(kickAccount, &pbbase.AccountSimplePlayer{PlayerId: kickPlayerID})
 	state.ownerRevision = 1
+	state.fenceKey = sessionfence.Key{GateInstanceID: "gate-kick-fence", Incarnation: 1}
 	return &kickHarness{l: l, rdb: rdb, locator: locator, kicker: kicker, events: events, state: state}
 }
 

@@ -8,7 +8,7 @@ import (
 )
 
 // 直接用本服务的真实描述符生成 DDL,防止代理缓存或依赖回退静默丢掉 TiDB 选项。
-// bootstrapTables 里的表(player_name 与四张路由表)走手写 DDL,proto2mysql 生成的建表语句
+// bootstrapTables 里的表(player_name 与路由表)走手写 DDL,proto2mysql 生成的建表语句
 // 对它们不作数;这里只验证它们能通过迁移前的表名守卫。
 //
 // 豁免判据必须用同包的 isBootstrapTable,不能写死成某一张表的名字:

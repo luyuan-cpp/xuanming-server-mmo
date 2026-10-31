@@ -89,7 +89,7 @@ uint32_t BagService::AddItem(
 	// 冻结 = 归属交接在途(PlayerLifecycleSystem::StartTravelHandoff:跨 zone 传送,或同 zone
 	// 跨节点换图);PlayerFrozenComp 只与 PlayerTravelHandoffComp 成对出现,已没有 Kafka
 	// 迁移包 / ACK / reaper。背包随冻结那一次存盘落盘,目标节点从盘上加载;此后源端再加的
-	// 物品不会再被存盘(handoff 标记写出后 SavePlayerToRedis 直接跳过),放行后随
+	// 物品不会再被存盘(handoff 标记写出后 SavePlayer 直接跳过),放行后随
 	// DestroyDeposedPlayer 不存盘销毁。Reject early — also
 	// avoids polluting transaction_log with TX_SYSTEM_GRANT entries for items
 	// that effectively don't exist.

@@ -59,7 +59,7 @@ func newTestCaller(t *testing.T) *assetop.Caller {
 // newTestPipeline 建一条装配完整的管线,并把假号段一并交回给调用方核对发号次数。
 func newTestPipeline(t *testing.T, ids *fakeIDs) *Pipeline {
 	t.Helper()
-	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: ids})
+	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: ids, Ledger: fakeLedger{}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -86,6 +86,8 @@ func TestNewRejectsIncompleteDeps(t *testing.T) {
 		// 于是每行无限重投、永不终结 —— 一条"收得下托管、就是投不出去"的管线。
 		{"Caller 没带 Signer", Deps{Ops: repo, Caller: &assetop.Caller{}, OpIDs: &fakeIDs{}}, ErrSignerMissing},
 		{"缺号段客户端", Deps{Ops: repo, Caller: newTestCaller(t)}, nil},
+		// 没有已提交账本:每笔终结都只能停在 AwaitDurable。
+		{"缺已提交账本", Deps{Ops: repo, Caller: newTestCaller(t), OpIDs: &fakeIDs{}}, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -104,7 +106,7 @@ func TestNewRejectsIncompleteDeps(t *testing.T) {
 }
 
 func TestNewAcceptsCompleteDeps(t *testing.T) {
-	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}})
+	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: fakeLedger{}})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -263,7 +265,7 @@ func TestLeaseTokenOfIsNonZeroAndDistinct(t *testing.T) {
 // TestLoopConstantsSatisfyAssetopValidation:循环参数与 scene 的 1024 seq 窗口、租约是一条
 // 正确性证明。改坏其中一项(比如 Lease < OpBudget + 余量)会让同一行被两个副本同时处理。
 func TestLoopConstantsSatisfyAssetopValidation(t *testing.T) {
-	if _, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}}); err != nil {
+	if _, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: fakeLedger{}}); err != nil {
 		t.Fatalf("本包的循环常量不被 assetop.NewLoop 接受: %v", err)
 	}
 	if loopOpBudget >= loopLease {

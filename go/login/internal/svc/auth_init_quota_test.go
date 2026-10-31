@@ -16,19 +16,28 @@ import (
 
 	"login/internal/config"
 	"login/internal/logic/pkg/auth"
+	"shared/playerredis"
 )
 
 func TestPasswordQuotaFactoryRejectsBadConfigBeforeOpeningDependencies(t *testing.T) {
-	_, _, err := productionPasswordProviderFromConfig(config.PasswordAuthConf{}, config.RedisConf{}, func(string) (string, bool) { t.Fatal("无效配额不得读DSN或开连接"); return "", false })
+	_, _, err := productionPasswordProviderFromConfig(config.PasswordAuthConf{}, playerredis.Config{}, func(string) (string, bool) { t.Fatal("无效配额不得读DSN或开连接"); return "", false })
 	if err == nil {
 		t.Fatal("无效配置被接受")
 	}
 }
 
 func TestPasswordQuotaPoolHasHardBoundAndNoRetries(t *testing.T) {
-	opts := passwordQuotaRedisOptions(config.RedisConf{Host: "127.0.0.1:13379", DB: 14})
-	if opts.PoolSize != 4 || opts.MaxActiveConns != 4 || opts.MaxRetries != -1 || opts.DialerRetries != 1 || !opts.ContextTimeoutEnabled || opts.DialTimeout != auth.PasswordQuotaBudget || opts.ReadTimeout != auth.PasswordQuotaBudget || opts.WriteTimeout != auth.PasswordQuotaBudget || opts.PoolTimeout != auth.PasswordQuotaBudget {
-		t.Fatal("生产专用池缺少硬边界")
+	loginRedis := playerredis.Config{Addrs: []string{"redis-a:6379", "redis-b:6379"}, Cluster: true, PasswordEnv: "LOGIN_REDIS_PASSWORD", PoolSizePerNode: 20, ReadTimeoutMs: 3000, DisableContextTimeout: true}
+	got := passwordQuotaRedisConfig(loginRedis)
+	budgetMs := int(auth.PasswordQuotaBudget.Milliseconds())
+	if got.PoolSizePerNode != 4 || got.DisableContextTimeout || got.DialTimeoutMs != budgetMs || got.ReadTimeoutMs != budgetMs || got.WriteTimeoutMs != budgetMs || got.PoolTimeoutMs != budgetMs {
+		t.Fatalf("生产专用池缺少硬边界: %+v", got)
+	}
+	if !got.Cluster || len(got.Addrs) != 2 || got.PasswordEnv != "LOGIN_REDIS_PASSWORD" {
+		t.Fatalf("地址、口令、集群形态必须随登录域: %+v", got)
+	}
+	if err := got.Validate(); err != nil {
+		t.Fatalf("专用池配置必须合法: %v", err)
 	}
 }
 
@@ -101,7 +110,7 @@ func TestInitAuthProvidersRealSQLCanonicalQuotaAcrossReplicas(t *testing.T) {
 	if first == nil {
 		t.Fatal("生产工厂未注册")
 	}
-	second, closeSecond, err := productionPasswordProviderFromConfig(config.AppConfig.PasswordAuth, config.AppConfig.Node.RedisClient, os.LookupEnv)
+	second, closeSecond, err := productionPasswordProviderFromConfig(config.AppConfig.PasswordAuth, config.AppConfig.EffectiveLoginRedis(), os.LookupEnv)
 	if err != nil {
 		t.Fatal(err)
 	}

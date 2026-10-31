@@ -72,13 +72,13 @@ func isHomeZoneUnmapped(err error) bool {
 // GET player:{id}:owner_epoch按shared/ownerepoch解析。
 // 键不存在按 0 返回(ownerepoch.ParseEpoch 的约定);非十进制整数是错误(数据面事故,不折成 0)。
 type RedisEpochs struct {
-	Client *redis.Client
+	Client redis.UniversalClient
 }
 
 // OwnerEpoch 实现 inbox.EpochReader。
 func (r *RedisEpochs) OwnerEpoch(ctx context.Context, playerID uint64) (uint64, error) {
 	if r == nil || r.Client == nil {
-		return 0, errors.New("player_inbox: core Redis client is not wired")
+		return 0, errors.New("player_inbox: player Redis client is not wired")
 	}
 	raw, err := r.Client.Get(ctx, ownerepoch.OwnerEpochKey(playerID)).Result()
 	if errors.Is(err, redis.Nil) {

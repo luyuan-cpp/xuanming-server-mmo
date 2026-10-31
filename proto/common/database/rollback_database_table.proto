@@ -240,7 +240,7 @@ message player_route
   uint32 storage_id        = 3;  // 0 = NULL;与 placement_version 同 NULL(chk_route_place)
   uint64 placement_version = 4;  // 0 = NULL;有落点时 >= 1
   string frozen_run_id     = 5;  // 空串 = NULL;非空 = 搬库冻结态
-  uint64 rev               = 6;  // 本行任一列变化 +1,只供缓存排序(player:maprev)
+  uint64 rev               = 6;  // 本行任一列变化 +1,是行版本
   string updated_by        = 7;  // 写者标识(ASCII,<= 96)
   uint64 created_at_ms     = 8;  // 库时钟 Unix 毫秒
   uint64 updated_at_ms     = 9;  // 库时钟 Unix 毫秒
@@ -271,19 +271,6 @@ message route_meta
   uint64 writer_epoch = 4;
   uint64 catalog_revision = 5;
   bytes freeze_run_id = 6;
-}
-
-// route_reconcile:对账表,单行(id=1),对账 leader 的租约、水位与缓存校验时刻。
-message route_reconcile
-{
-  option(OptionTableName) = "route_reconcile";
-  option(OptionPrimaryKey) = "id";
-
-  uint32 id                = 1;
-  string leader            = 2;  // 空串 = NULL
-  uint64 lease_until_ms    = 3;  // 0 = NULL;库时钟 Unix 毫秒
-  uint64 watermark_ms      = 4;
-  uint64 cache_verified_ms = 5;
 }
 
 // 全局账号角色目录；不含认证凭据。短字符串主键由 data_service 的 bootstrap
@@ -377,22 +364,6 @@ message account_role_trade_holder {
   bytes ack_digest = 5;
   uint64 updated_ms = 6;
 }
-
-// 本地受控导入的永久请求收据；先换目录修订阻旧路由，再写两玩家 SQL。
-// 同请求只回原修订，后续归属已变化时拒绝恢复旧导入，不循环 bump 修订。
-message account_role_import_receipt {
-  option(OptionTableName) = "account_role_import_receipt";
-  option(OptionPrimaryKey) = "request_id";
-  bytes request_id = 1;
-  bytes request_digest = 2;
-  uint64 player_id = 3;
-  string account = 4;
-  uint64 owner_revision = 5;
-  bytes role_proto = 6;
-  uint32 allow_restore = 7;
-  uint64 created_ms = 8;
-}
-
 
 // 永久SQL写资格；本段只作正规typed原件及DDL形状守卫，不交通用proto2mysql建表。
 message sql_writer_registry {
@@ -583,7 +554,7 @@ message sql_writer_maintenance_receipt {
     uint64 catalog_revision = 6;
     bytes run_id = 7;
     bytes prior_freeze_request_id = 8;
-    bytes recovery_audit_digest = 9;
+    reserved 9; // 原 recovery_audit_digest:恢复审计原件已删除。
     repeated IssuerClosure root_issuers = 10; // P0精确预期logical role/boot，不是事后发现。
     repeated IssuerClosure queue_mutators = 11;
     repeated KafkaPartitionClosure kafka_partitions = 12; // 全历史topic ID/group/partition/baseline全集。
@@ -681,90 +652,12 @@ message sql_writer_maintenance_receipt {
     repeated SourcePin source_evidence = 4;
     TicketEvidence authorization = 5; // 只在紧急grant绑定完整ticket请求；freeze用SQL ticket原freeze_request_id/digest，避免摘要自引用。
   }
-  // 解冻前原件独立于不可变P0计划；不回填Plan里的历史before_epoch/原freeze字段。
-  message MergeRecoveryAudit {
-    bytes audit_instance_id = 1; // 只读审核进程本次nonce，不是可复活的MAINTENANCE身份。
-    bytes run_id = 2;
-    string generation = 3;
-    uint64 attempt_revision = 4;
-    bytes plan_digest = 5;
-    bytes original_freeze_receipt_id = 6;
-    bytes original_freeze_receipt_digest = 7;
-    PublicationEvidence maintenance_publication = 8; // P0维护boot全集的实际永久closure及文件pins。
-    SourcePin merge_manifest = 9; // 原mergeManifest JSON原始字节摘要；审核前后重pin。
-    string merge_run_id = 10;
-    uint32 source_zone = 11;
-    uint32 target_zone = 12;
-    bool verify_merged = 13; // P7必须true。
-    uint64 observed_start_ms = 14;
-    uint64 observed_end_ms = 15;
-    repeated MergeRecoveryCheck checks = 16;
-    repeated SourcePin audit_source_pins = 17; // 实际auditor/查询实现来源，必须在P0 source_pins全集。
-  }
-  message MergeRecoveryCheck {
-    enum Kind { KIND_UNSPECIFIED = 0; OBSERVATION = 1; RULE = 2; }
-    enum Status { STATUS_UNSPECIFIED = 0; COMPLETE = 1; INCOMPLETE = 2; }
-    string name = 1;
-    int64 source_count = 2;
-    int64 target_count = 3;
-    string unique_scope = 4;
-    int64 conflict_count = 5;
-    string severity = 6; // 原runAuditMode原样info/warn/block；P7只放info。
-    Status status = 7;
-    string notes = 8; // 原始结论与读取错误，不以notes代替结构化status。
-    repeated SourcePin query_source_pins = 9;
-    Kind kind = 10; // player.name(global)仅RULE，不能冒称实际查询或抵扣缺失OBSERVATION。
-  }
-  
-  // 既有route_tool audit -frozen-recovery的正式只读P7原件；不以MAINTENANCE闭合代替数据审核。
-  message RouteRecoveryAudit {
-    bytes audit_instance_id = 1;
-    bytes run_id = 2;
-    string generation = 3;
-    uint64 attempt_revision = 4;
-    bytes plan_digest = 5;
-    bytes original_freeze_receipt_id = 6;
-    bytes original_freeze_receipt_digest = 7;
-    PublicationEvidence maintenance_publication = 8;
-    string authority_schema = 9;
-    RedisTargetClosure mapping_target = 10; // 同P0具名物理实例；审计前后实际核INFO与nonce。
-    uint64 observed_start_ms = 11;
-    uint64 observed_end_ms = 12;
-    RouteRecoveryStats stats = 13;
-    bytes ready_marker_raw = 14; // 实际只读原值，按placement正式契约验证完整缓存身份。
-    bytes watermark_raw = 15; // 缺失为空；不能由命令行手填水位。
-    bytes info_server_raw = 16;
-    bytes info_replication_raw = 17;
-    uint64 route_watermark_floor_ms = 18;
-    repeated SourcePin audit_source_pins = 19; // 实际auditor和查询来源，属于P0 source_pins。
-  }
-  message RouteRecoveryStats {
-    uint64 db_rows = 1;
-    uint64 redis_players = 2;
-    uint64 db_only_unpublished = 3;
-    uint64 missing_in_redis = 4;
-    uint64 missing_in_db = 5;
-    uint64 value_mismatch = 6;
-    uint64 redis_malformed = 7;
-    uint64 db_invalid = 8;
-    uint64 redis_rev_ahead = 9;
-    uint64 redis_rev_behind = 10;
-    uint64 merged_into_missing_in_redis = 11;
-    uint64 merged_into_missing_in_db = 12;
-    uint64 merged_into_mismatch = 13;
-    reserved 14; // 原 redis_fences_active:合服围栏已删除
-    uint64 transient_cleared = 15;
-    bool frozen_recovery = 16;
-    bool require_map_rev = 17;
-    bool completed = 18; // 仅实际Audit完整成功且资源关闭成功后填写。
-  }
   message ReleaseReadiness {
     bytes original_freeze_receipt_id = 1;
     bytes original_freeze_receipt_digest = 2;
-    repeated SourcePin recovery_audit = 3;
+    reserved 3, 6; // 原 recovery_audit 与 route_watermark_floor_ms:路由表只有 SQL 一份,解冻不需要比对别的副本。
     bytes non_sql_closed_receipt_id = 4;
     bytes non_sql_closed_receipt_digest = 5;
-    uint64 route_watermark_floor_ms = 6; // 仅R有reconcile时由正式路由审核原件绑定，同释放事务GREATEST推进；J必须0。
     // 同P0维护工具全集逐个永久关闭、真实SQL/Redis/回调join，并pin实际应用报告。
     PublicationEvidence maintenance_publication = 7;
   }

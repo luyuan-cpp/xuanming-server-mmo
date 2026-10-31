@@ -30,7 +30,7 @@ func NewReconnectLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Reconne
 func (l *ReconnectLogic) Reconnect(in *pb.ReconnectRequest) (*pb.ReconnectResponse, error) {
 	key := sessionKey(in.PlayerId)
 
-	data, err := l.svcCtx.RedisClient.Get(l.ctx, key).Bytes()
+	data, err := l.svcCtx.PlayerRedis.Get(l.ctx, key).Bytes()
 	if err == redis.Nil {
 		return &pb.ReconnectResponse{
 			Success:      false,

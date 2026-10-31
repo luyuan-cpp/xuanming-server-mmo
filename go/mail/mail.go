@@ -14,7 +14,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -35,6 +34,7 @@ import (
 	"shared/domainhost"
 	tables "shared/generated/table"
 	"shared/kafkacmd"
+	"shared/playerredis"
 	"shared/scenenode"
 	"shared/serviceauth"
 )
@@ -45,15 +45,27 @@ type config struct {
 	Sweep                  maintenance.Config `json:"Sweep"`
 	SharedRedisAddr        string             `json:"SharedRedisAddr"`
 	SharedRedisPasswordEnv string             `json:"SharedRedisPasswordEnv,optional"`
-	AssetSecretEnv         string             `json:"AssetSecretEnv"`
-	KafkaBrokers           []string           `json:"KafkaBrokers"`
-	AccountRoleSchema      string             `json:"AccountRoleSchema"`
-	GlobalLoginSessions    bool               `json:"GlobalLoginSessions"`
-	LoginRedis             struct {
-		Host        string `json:"Host"`
-		DB          int    `json:"DB,default=0"`
-		PasswordEnv string `json:"PasswordEnv,optional"`
-	} `json:"LoginRedis"`
+	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):提醒读会话,资产定位读位置。
+	// 没写 Addrs 时指向 SharedRedisAddr 那一个实例(playerRedisConfig),开发环境不用改。
+	PlayerRedis         playerredis.Config            `json:",optional"`
+	AssetSecretEnv      string                        `json:"AssetSecretEnv"`
+	KafkaBrokers        []string                      `json:"KafkaBrokers"`
+	AccountRoleSchema   string                        `json:"AccountRoleSchema"`
+	GlobalLoginSessions bool                          `json:"GlobalLoginSessions"`
+	LoginRedis          playerredis.LoginReaderConfig `json:"LoginRedis"`
+}
+
+// playerRedisConfig 返回生效的玩家域配置。没写 PlayerRedis.Addrs 时指向 SharedRedisAddr 那一个实例,池与超时沿用这条路径原来的口径。
+func (c config) playerRedisConfig() playerredis.Config {
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{c.SharedRedisAddr},
+		Password:        os.Getenv(c.SharedRedisPasswordEnv),
+		PoolSizePerNode: 8,
+		DialTimeoutMs:   1000,
+		ReadTimeoutMs:   300,
+		WriteTimeoutMs:  300,
+		PoolTimeoutMs:   300,
+	})
 }
 
 var errManualSchema = errors.New("领域结构需人工处理")
@@ -155,7 +167,7 @@ func run(c config, migrate bool) (runErr error) {
 	if migrate {
 		return nil
 	}
-	if !c.GlobalLoginSessions || c.LoginRedis.Host == "" || c.LoginRedis.DB < 0 {
+	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 {
 		return errors.New("邮件必须显式装配同SQL事务域角色权威与全局登录态Redis")
 	}
 	// 同一物理连接跨库只读；不同集群或未授SELECT权限会启动失败，不降级成缓存资格。
@@ -178,6 +190,9 @@ func run(c config, migrate bool) (runErr error) {
 	}
 	if c.SharedRedisAddr == "" {
 		return errors.New("邮箱共享Redis地址未配置")
+	}
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("invalid PlayerRedis config: %w", err)
 	}
 	if err = tables.ItemTableManagerInstance.Load(c.TableDir, false); err != nil {
 		return err
@@ -202,14 +217,17 @@ func run(c config, migrate bool) (runErr error) {
 		return err
 	}
 	metrics.Register()
-	sharedRedis := redis.NewClient(&redis.Options{Addr: c.SharedRedisAddr, Password: os.Getenv(c.SharedRedisPasswordEnv), PoolSize: 8, MaxActiveConns: 8, MaxRetries: -1, DialerRetries: 1, DialTimeout: time.Second, ReadTimeout: 300 * time.Millisecond, WriteTimeout: 300 * time.Millisecond, PoolTimeout: 300 * time.Millisecond, ContextTimeoutEnabled: true})
+	playerRedis, err := playerredis.New(c.playerRedisConfig())
+	if err != nil {
+		return fmt.Errorf("invalid PlayerRedis config: %w", err)
+	}
 	defer func() {
 		if !resourcesTransferred {
-			runErr = errors.Join(runErr, sharedRedis.Close())
+			runErr = errors.Join(runErr, playerRedis.Close())
 		}
 	}()
 	check, cancelCheck := context.WithTimeout(ctx, time.Second)
-	err = sharedRedis.Ping(check).Err()
+	err = playerRedis.Ping(check).Err()
 	cancelCheck()
 	if err != nil {
 		return errors.New("邮箱玩家位置Redis不可达")
@@ -228,10 +246,12 @@ func run(c config, migrate bool) (runErr error) {
 			runErr = errors.Join(runErr, writer.Close())
 		}
 	}()
-	loginRedis := redis.NewClient(&redis.Options{Addr: c.LoginRedis.Host, DB: c.LoginRedis.DB,
-		Password: os.Getenv(c.LoginRedis.PasswordEnv), PoolSize: 8, MaxActiveConns: 8, MaxRetries: -1,
-		DialerRetries: 1, DialTimeout: time.Second, ReadTimeout: 300 * time.Millisecond,
-		WriteTimeout: 300 * time.Millisecond, PoolTimeout: 300 * time.Millisecond, ContextTimeoutEnabled: true})
+	loginRedis, err := playerredis.New(c.LoginRedis.ClientConfig(playerredis.Config{
+		PoolSizePerNode: 8, DialTimeoutMs: 1000, ReadTimeoutMs: 300, WriteTimeoutMs: 300, PoolTimeoutMs: 300,
+	}))
+	if err != nil {
+		return fmt.Errorf("invalid LoginRedis config: %w", err)
+	}
 	defer func() {
 		if !resourcesTransferred {
 			runErr = errors.Join(runErr, loginRedis.Close())
@@ -243,7 +263,7 @@ func run(c config, migrate bool) (runErr error) {
 	if err != nil {
 		return errors.New("邮件全局登录态Redis不可用")
 	}
-	handler := server.New(repo, auth, &notify.Notifier{Redis: sharedRedis, Publisher: &relayPublisher{gate: relay, writer: writer}}).WithLoginSessions(loginRedis)
+	handler := server.New(repo, auth, &notify.Notifier{Redis: playerRedis, Publisher: &relayPublisher{gate: relay, writer: writer}}).WithLoginSessions(loginRedis)
 	etcd, err := clientv3.New(clientv3.Config{Endpoints: c.Etcd.Hosts, DialTimeout: 3 * time.Second})
 	if err != nil {
 		return err
@@ -260,15 +280,12 @@ func run(c config, migrate bool) (runErr error) {
 		}
 	}()
 	watcher := scenenode.NewWatcher("mail_scene", scenenode.SceneNodeRpcPrefix, nil, func(entry scenenode.NodeEntry) { conns.Remove(entry.Endpoint) })
-	locator := &scenenode.Locator{Reader: scenenode.GoRedisReader{Client: sharedRedis}, Watcher: watcher, Conns: conns}
+	locator := &scenenode.Locator{Reader: scenenode.GoRedisReader{Client: playerRedis}, Watcher: watcher, Conns: conns}
 	loopConfig := assetop.DefaultLoopConfig()
 	loopConfig.Streams = []assetpb.AssetOpStream{assetpb.AssetOpStream_ASSET_OP_STREAM_SYSTEM_CREDIT}
 	loopConfig.AbandonAfter = 0
 	loopConfig.AuditInterval = 0
 	loopConfig.OfflineAfterAttempts = 0
-	// 邮件发奖的终结只认 SQL 提交证据(data.Repo.Finalize 对 SQLCommitted 强制),与 assetop 的开关缺省值无关:
-	// 固定打开,只部署到已切 go/db dual、已上新版 C++ 的 zone(docs/design/db-write-fencing-mysql.md §6.6 / §8.7)。
-	loopConfig.RequireSQLCommit = true
 	loop, err := assetop.NewLoop(loopConfig, data.StoreAdapter{Repo: repo}, &assetop.Caller{Resolver: locator, Signer: signer}, nil, nil)
 	if err != nil {
 		return err
@@ -356,7 +373,7 @@ func run(c config, migrate bool) (runErr error) {
 		}
 		sqlWriter.Seal()
 		conns.Close()
-		relayErr = errors.Join(ids.RPC.Conn().Close(), loginRedis.Close(), sharedRedis.Close(), etcd.Close(), db.Close())
+		relayErr = errors.Join(ids.RPC.Conn().Close(), loginRedis.Close(), playerRedis.Close(), etcd.Close(), db.Close())
 		relayClosed = true
 		if relayErr != nil {
 			relay.Hold()

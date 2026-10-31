@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/redis/go-redis/v9"
 )
 
 // TestSQLPoolCollectorDeclaresDbPools 钉住 go/db 的连接池类别:没有任何池时(nil source)三类各输出一组序列,
@@ -118,83 +117,6 @@ func TestStoreCooldownCollector_EmitsAllPools(t *testing.T) {
 	}
 }
 
-// fakeRedisPoolClient 返回固定的 PoolStats 与 Options。
-type fakeRedisPoolClient struct {
-	stats redis.PoolStats
-	opts  redis.Options
-}
-
-func (f *fakeRedisPoolClient) PoolStats() *redis.PoolStats { s := f.stats; return &s }
-func (f *fakeRedisPoolClient) Options() *redis.Options     { return &f.opts }
-
-var redisPoolFamilies = []string{
-	"db_redis_pool_hits_total", "db_redis_pool_misses_total", "db_redis_pool_timeouts_total", "db_redis_pool_wait_total",
-	"db_redis_pool_wait_seconds_total", "db_redis_pool_unusable_total", "db_redis_pool_stale_conns_total",
-	"db_redis_pool_conns", "db_redis_pool_idle_conns", "db_redis_pool_pending_requests", "db_redis_pool_max_conns",
-}
-
-// placement 与 main 是同一个对象(Placement.Redis 缺省)时只导出 redis_client=main 一份:汇总脚本跨 redis_client
-// 求和,导出两份会把等待次数翻倍。
-func TestRedisPoolCollector_SharedClientExportedOnce(t *testing.T) {
-	shared := &fakeRedisPoolClient{stats: redis.PoolStats{Hits: 3, WaitCount: 5}, opts: redis.Options{PoolSize: 10}}
-	reg := prometheus.NewPedanticRegistry()
-	if err := reg.Register(NewRedisPoolCollector(shared, shared)); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	for _, family := range redisPoolFamilies {
-		got := gatherByLabel(t, reg, family, "redis_client")
-		if len(got) != 1 {
-			t.Fatalf("%s = %v, want exactly one series (redis_client=main)", family, got)
-		}
-		if _, ok := got[RedisClientMain]; !ok {
-			t.Fatalf("%s = %v, want the series labelled redis_client=main", family, got)
-		}
-	}
-	if v := gatherByLabel(t, reg, "db_redis_pool_wait_total", "redis_client")[RedisClientMain]; v != 5 {
-		t.Fatalf("db_redis_pool_wait_total{main} = %v, want 5 (not doubled)", v)
-	}
-}
-
-// 两个不同的 client 各出一组;计数、等待秒数(纳秒换算成秒)、池大小都按快照导出。nil 的 placement 不导出。
-func TestRedisPoolCollector_SeparatePlacementClient(t *testing.T) {
-	mainClient := &fakeRedisPoolClient{
-		stats: redis.PoolStats{Hits: 7, Misses: 2, Timeouts: 1, WaitCount: 4, WaitDurationNs: 1_500_000_000,
-			Unusable: 1, StaleConns: 3, TotalConns: 9, IdleConns: 6, PendingRequests: 2},
-		opts: redis.Options{PoolSize: 10},
-	}
-	placementClient := &fakeRedisPoolClient{stats: redis.PoolStats{Hits: 11, WaitDurationNs: 250_000_000}, opts: redis.Options{PoolSize: 4}}
-	reg := prometheus.NewPedanticRegistry()
-	if err := reg.Register(NewRedisPoolCollector(mainClient, placementClient)); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	expect := func(family, client string, want float64) {
-		t.Helper()
-		got, ok := gatherByLabel(t, reg, family, "redis_client")[client]
-		if !ok || got != want {
-			t.Fatalf("%s{redis_client=%q} = %v (present=%v), want %v", family, client, got, ok, want)
-		}
-	}
-	expect("db_redis_pool_hits_total", RedisClientMain, 7)
-	expect("db_redis_pool_hits_total", RedisClientPlacement, 11)
-	expect("db_redis_pool_wait_seconds_total", RedisClientMain, 1.5)
-	expect("db_redis_pool_wait_seconds_total", RedisClientPlacement, 0.25)
-	expect("db_redis_pool_max_conns", RedisClientMain, 10)
-	expect("db_redis_pool_max_conns", RedisClientPlacement, 4)
-	expect("db_redis_pool_conns", RedisClientMain, 9)
-	expect("db_redis_pool_idle_conns", RedisClientMain, 6)
-	expect("db_redis_pool_pending_requests", RedisClientMain, 2)
-	expect("db_redis_pool_stale_conns_total", RedisClientMain, 3)
-
-	var nilPlacement *fakeRedisPoolClient
-	reg2 := prometheus.NewPedanticRegistry()
-	if err := reg2.Register(NewRedisPoolCollector(mainClient, nilPlacement)); err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	if got := gatherByLabel(t, reg2, "db_redis_pool_hits_total", "redis_client"); len(got) != 1 {
-		t.Fatalf("a nil placement client must not be exported, got %v", got)
-	}
-}
-
 // seriesValues 从默认注册表取 family 的全部序列,键是按 labels 顺序取出的 label 值用 "|" 连接(无 label 时为 ""),
 // 值取计数器或仪表。family 不存在时 found=false。
 func seriesValues(t *testing.T, family string, labels ...string) (values map[string]float64, found bool) {
@@ -258,21 +180,6 @@ func assertExactSeries(t *testing.T, family string, labels []string, want []stri
 		if requireZero && v != 0 {
 			t.Fatalf("%s{%s} = %v, want a pre-created 0", family, key, v)
 		}
-	}
-}
-
-func TestRouteReadySeriesPrimed(t *testing.T) {
-	verdicts := []string{"trusted", "absent", "malformed", "newer_version", "identity_unavailable", "not_master", "identity_mismatch", RouteReadyVerdictScriptError}
-	PrimeRouteReady(verdicts)
-	PrimeRouteReady(verdicts) // 可重复调用
-	assertExactSeries(t, "db_route_ready_verdict_total", []string{"verdict"}, verdicts, false)
-
-	before, _ := seriesValues(t, "db_route_ready_verdict_total", "verdict")
-	CountRouteReadyVerdict("absent")
-	CountRouteReadyVerdict("absent")
-	got, _ := seriesValues(t, "db_route_ready_verdict_total", "verdict")
-	if got["absent"] != before["absent"]+2 || got["trusted"] != before["trusted"] {
-		t.Fatalf("verdict counts = %v (before %v), want absent +2 and trusted unchanged", got, before)
 	}
 }
 

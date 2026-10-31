@@ -19,7 +19,6 @@ import (
 	"login/internal/constants"
 	"login/internal/logic/pkg/ctxkeys"
 	"login/internal/logic/pkg/homezone"
-	"login/internal/logic/pkg/loginsession"
 	"login/internal/logic/pkg/playernamereg"
 	"login/internal/svc"
 	pbbase "proto/common/base"
@@ -137,11 +136,9 @@ func newCreatePlayerHarnessWithNames(t *testing.T, resolver *homezone.Resolver, 
 	config.AppConfig.Account.MaxPlayersPerAccount = 5
 	config.AppConfig.Account.CacheExpire = time.Hour
 
-	details := &pbbase.SessionDetails{SessionId: hzSessionID}
+	details := &pbbase.SessionDetails{SessionId: hzSessionID, GateInstanceId: "gate-create-player", SessionIncarnation: 1}
 	ctx := ctxkeys.WithSessionDetails(context.Background(), details)
-	if err := loginsession.Save(ctx, rdb, loginsession.RefOf(details), hzAccount); err != nil {
-		t.Fatalf("seed session: %v", err)
-	}
+	seedLoginSession(t, ctx, rdb, details, hzAccount)
 	blob, err := proto.Marshal(&pbdb.UserAccounts{})
 	if err != nil {
 		t.Fatalf("marshal empty account: %v", err)
@@ -151,7 +148,7 @@ func newCreatePlayerHarnessWithNames(t *testing.T, resolver *homezone.Resolver, 
 	}
 
 	l := NewCreatePlayerLogic(ctx, &svc.ServiceContext{
-		RedisClient: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+		RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 		PlayerIDMinter: &idsegment.Minter{Name: "player_id", Segment: &fakeSegment{id: hzPlayerID}},
 		HomeZone:       resolver,
 		PlayerNames:    playernamereg.New(names),
@@ -285,9 +282,8 @@ func TestCreatePlayer_ReleasesLockOnHomeZoneFailure(t *testing.T) {
 	}
 }
 
-// registerHomeZone 带的 storage_id 由 Placement 开关决定(player-storage-placement.md §8.3):
-// 关 → 0(与落点设计之前逐字节相同);开且 NewPlayerStorageId=0 → 本 login 的 Node.ZoneId;
-// 开且显式填了 → 原样透传(Phase 2 全局库 1000000)。home_zone 在三种情形下都不变。
+// registerHomeZone 恒带 storage_id(player-storage-placement.md §8.3):NewPlayerStorageId=0 → 本 login 的 Node.ZoneId;
+// 显式填了 → 原样透传。home_zone 在两种情形下都不变。
 func TestRegisterHomeZonePlacementStorageID(t *testing.T) {
 	savedZone, savedPlacement := config.AppConfig.Node.ZoneId, config.AppConfig.Placement
 	t.Cleanup(func() {
@@ -300,10 +296,8 @@ func TestRegisterHomeZonePlacementStorageID(t *testing.T) {
 		placement   config.PlacementConf
 		wantStorage uint32
 	}{
-		"pin off":                           {placement: config.PlacementConf{}, wantStorage: 0},
-		"pin off ignores storage id":        {placement: config.PlacementConf{NewPlayerStorageId: 1000000}, wantStorage: 0},
-		"pin on, storage 0 uses login zone": {placement: config.PlacementConf{PinOnCreate: true}, wantStorage: hzZoneID},
-		"pin on, global storage 1000000":    {placement: config.PlacementConf{PinOnCreate: true, NewPlayerStorageId: 1000000}, wantStorage: 1000000},
+		"storage 0 uses login zone": {placement: config.PlacementConf{}, wantStorage: hzZoneID},
+		"global storage 1000000":    {placement: config.PlacementConf{NewPlayerStorageId: 1000000}, wantStorage: 1000000},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

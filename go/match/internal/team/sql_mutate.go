@@ -160,6 +160,7 @@ func (s *sqlTeamStore) mutateTx(ctx context.Context, tx *sql.Tx, bind Binding, o
 				break
 			}
 		}
+		cfg.Zones = s.authority.MergedZones()
 		decision := Apply(op, row.data.Record, stamp, sessions, cfg)
 		result.Decision = decision
 		if decision.Code != 0 {
@@ -224,6 +225,8 @@ func nextSQLTeamData(old *teampb.TeamAuthorityData, decision Decision, op Op, or
 	return data, nil
 }
 
+// sqlMutationResponse 组回执里存的回包。视图的区留原始区(zones 传 nil):回执要存很久,映射会变,
+// 给客户端之前由 decorateSQLReplay 按当时的映射解析。
 func sqlMutationResponse(caller uint64, kind OpKind, result *MutateResult) *teampb.TeamResponse {
 	code := result.Code
 	if result.Outcome == OutcomeNotBound || result.Outcome == OutcomeRecordMissing {
@@ -233,10 +236,10 @@ func sqlMutationResponse(caller uint64, kind OpKind, result *MutateResult) *team
 		}
 	}
 	if result.Commit != nil {
-		view, _ := viewFromCommit(result.Commit, caller, nil)
+		view, _ := viewFromCommit(result.Commit, caller, nil, nil)
 		return &teampb.TeamResponse{ErrorMessage: tipOf(code, result.CodeParam), Team: view}
 	}
-	view, _ := viewFromSnapshot(&result.Snapshot, nil)
+	view, _ := viewFromSnapshot(&result.Snapshot, nil, nil)
 	return &teampb.TeamResponse{ErrorMessage: tipOf(code, result.CodeParam), Team: view}
 }
 

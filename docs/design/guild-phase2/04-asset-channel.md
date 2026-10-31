@@ -36,7 +36,7 @@
 | `TransactionType` 最大值 23(TX_BUFF_GAIN);`TransactionLogEntry.correlation_id=13` | `transaction_log.proto:20-69,96-97` |
 | GM 货币消息客户端可发、无鉴权 | `player_currency_handler.cpp:14-49` |
 | tip 段已占到 26000(pet);27000 空闲 | `go/shared/generated/tip/segments.go:30-48` |
-| match 的 Go→scene 定位:SharedRedis 读 `player:%d:location`(`PlayerLocation{scene_id,node_id,update_time,zone_id}`)→ etcd 前缀 `SceneNodeService.rpc/` 的 NodeWatcher `EndpointOf(zone,node)` → 拨号 | `go/match/internal/logic/location.go:17-30`、`keys.go:140`、`gather.go:263-313`;`discovery/node_watcher.go`;`storage.proto:17-24` |
+| match 的 Go→scene 定位:SharedRedis 读 `player:{%d}:location`(`PlayerLocation{scene_id,node_id,update_time,zone_id}`)→ etcd 前缀 `SceneNodeService.rpc/` 的 NodeWatcher `EndpointOf(zone,node)` → 拨号 | `go/match/internal/logic/location.go:17-30`、`keys.go:140`、`gather.go:263-313`;`discovery/node_watcher.go`;`storage.proto:17-24` |
 | `go/shared/go.mod` 目前**不依赖** `proto` 模块;所有依赖 shared 的服务 go.mod 都已有 `replace proto => ../proto` | shared/go.mod;chat/client_rpc_router/data_service/db/friend/guild/login/match/player_locator/scene_manager/trade 的 go.mod |
 
 ## 4.2 不变量(违反即拒合)
@@ -711,7 +711,7 @@ func (c *ConnCache) Close()
 
 ```go
 const SceneNodeRpcPrefix = "SceneNodeService.rpc/"
-func LocationKey(playerID uint64) string { return fmt.Sprintf("player:%d:location", playerID) }
+func LocationKey(playerID uint64) string { return fmt.Sprintf("player:{%d}:location", playerID) }
 
 // 键不存在返回 (nil, nil)
 type LocationReader interface {
@@ -1020,7 +1020,7 @@ B4a 的 proto 生成必须先完成,`go/proto/common/asset` 要已存在。
 
 > **已作废**:本节原用 `robot_9219`(帮会冒烟段)在 GUILD_* 流上以 Unix 秒作 seq,会把该账号账本下沿永久推到约 1.79e9,B5 之后 guild 从 seq 1 发起的操作全部 UNKNOWN,且测试抢占了 guild 独占的流。改为专用账号 `robot_9501` + 每次运行新纪元,步骤以第 11 部分 4.40 为准。下文仅留作对照。
 
-1. **起全栈**:按"xuanming 本地开机 runbook"启动;scene 经 `cpp_nodes.ps1` 启动时运行模式兜底 dev,GM 客户端消息因此放行(**不是**靠 `MMORPG_ALLOW_CLIENT_GM`,那个变量不存在;见 `cpp/nodes/gate/SECURITY.md` §3)。启动前 `redis-cli GET player:<id>:location` 应为空。
+1. **起全栈**:按"xuanming 本地开机 runbook"启动;scene 经 `cpp_nodes.ps1` 启动时运行模式兜底 dev,GM 客户端消息因此放行(**不是**靠 `MMORPG_ALLOW_CLIENT_GM`,那个变量不存在;见 `cpp/nodes/gate/SECURITY.md` §3)。启动前 `redis-cli GET player:{<id>}:location` 应为空。
 2. **准备玩家**:robot 账号 `robot_9219`(契约 §6 的帮会冒烟段)登录进场并**保持在线**(Codex 选用能保持在线的 robot 模式,记录实际命令),经 GmAddCurrency 加金币 1000。记下 player_id 与余额 B0。
 3. **跑冒烟**:
    ```

@@ -20,8 +20,8 @@
 #include "muduo/base/Logging.h"
 #include "network/broadcast_target_codec.h"
 #include "node/system/node/node_util.h"
-#include "services/battle/settlement/settlement_outbox.h"
-#include "services/battle/settlement/settlement_reply_shape.h"
+#include "services/scene/battle/system/battle_lock_reply_shape.h"
+#include "services/scene/battle/system/battle_lock_rules.h"
 #include "services/gate/session/system/session_identity_fence.h"
 #include "thread_context/node_context_manager.h"
 
@@ -580,82 +580,7 @@ TEST(NodeContextManagerBoundsDeathTest, OutOfRangeNodeTypeIsFatalInEveryBuild)
 #endif // GTEST_HAS_DEATH_TEST
 
 // ===========================================================================
-// R07:结算发件箱的重投判定
-// ===========================================================================
-
-namespace
-{
-	battle_settlement::RetryInput MakeRetryInput(bool stillOurs, bool located, uint32_t attempts,
-												 uint32_t maxAttempts = 12)
-	{
-		battle_settlement::RetryInput input;
-		input.pendingRecordStillOurs = stillOurs;
-		input.locationResolved = located;
-		input.attemptsSoFar = attempts;
-		input.maxAttempts = maxAttempts;
-		return input;
-	}
-} // namespace
-
-// scene 应用结算后条件销账 —— 伴生 id 键不再指向本局,battle 停止重投。
-TEST(SettlementOutbox, StopsRetryingOnceSceneHasSettledTheRecord)
-{
-	EXPECT_EQ(battle_settlement::ClassifyRetry(MakeRetryInput(/*stillOurs=*/false, true, 0)),
-			  battle_settlement::RetryAction::kDone);
-}
-
-// R07 的核心用例:scene 进程中途重启,首投被继任者按代次校验丢掉。
-// 记录仍未销账、玩家当前所在的 scene 能解析出来 -> 必须重投(且目标是重新解析出来的那个)。
-TEST(SettlementOutbox, ResendsAgainstAReResolvedTargetWhenStillUnacknowledged)
-{
-	EXPECT_EQ(battle_settlement::ClassifyRetry(MakeRetryInput(/*stillOurs=*/true,
-															  /*located=*/true, 0)),
-			  battle_settlement::RetryAction::kResend);
-	EXPECT_EQ(battle_settlement::ClassifyRetry(MakeRetryInput(true, true, 11, 12)),
-			  battle_settlement::RetryAction::kResend);
-}
-
-// 玩家此刻不在任何场景里(离线 / 还没落场景):没有目标可投。
-// 不是失败 —— 持久记录仍在,scene 的登录钩子会补应用。
-TEST(SettlementOutbox, WaitsInsteadOfBlindResendWhenPlayerLocationIsUnknown)
-{
-	EXPECT_EQ(battle_settlement::ClassifyRetry(MakeRetryInput(true, /*located=*/false, 3)),
-			  battle_settlement::RetryAction::kSkipNoTarget);
-}
-
-// 次数用尽:摘条目 + 响一声。持久记录保留(TTL 7 天)。
-TEST(SettlementOutbox, ExhaustionIsLoudButNotDataLoss)
-{
-	EXPECT_EQ(battle_settlement::ClassifyRetry(MakeRetryInput(true, true, 12, 12)),
-			  battle_settlement::RetryAction::kExhausted);
-	EXPECT_EQ(battle_settlement::ClassifyRetry(MakeRetryInput(true, false, 99, 12)),
-			  battle_settlement::RetryAction::kExhausted);
-}
-
-// 判定顺序:最后一轮恰好读到"已销账"时应当算成功收尾,而不是打一条假的"未送达"警报。
-TEST(SettlementOutbox, AcknowledgementWinsOverExhaustionOnTheLastRound)
-{
-	EXPECT_EQ(battle_settlement::ClassifyRetry(MakeRetryInput(/*stillOurs=*/false,
-															  /*located=*/false, 12, 12)),
-			  battle_settlement::RetryAction::kDone);
-}
-
-// 两个 key 必须是不同的 key,且都按 player_id 取值:blob 与伴生 id 撞成同一个 key
-// 会让"条件销账"变成"读 blob 当 battle_id 比",永远不匹配 -> 永远不销账。
-TEST(SettlementOutbox, PendingRecordKeysAreDistinctAndPlayerScoped)
-{
-	const std::string blobKey = battle_settlement::kPendingSettlementKeyFmt;
-	const std::string idKey = battle_settlement::kPendingSettlementIdKeyFmt;
-	EXPECT_NE(blobKey, idKey);
-	EXPECT_NE(blobKey.find("%llu"), std::string::npos);
-	EXPECT_NE(idKey.find("%llu"), std::string::npos);
-	// 伴生键必须是 blob 键的独立命名空间,不能是它的前缀(否则 SCAN/DEL 会互相波及)。
-	EXPECT_EQ(idKey.rfind("battle:settlement:pending:id:", 0), 0u);
-	EXPECT_NE(blobKey.rfind("battle:settlement:pending:id:", 0), 0u);
-}
-
-// ===========================================================================
-// 2026-10-16:zone Redis 空应答 / ERROR 不是业务结论
+// 2026-10-16:zone Redis 空应答 / ERROR 不是业务结论(scene 读战斗锁)
 // ===========================================================================
 //
 // hiredis 在连接断开或被释放时(主切换掐连接、存活探测摘连接、停机)把在途命令的回调以空应答调用一次。
@@ -663,7 +588,7 @@ TEST(SettlementOutbox, PendingRecordKeysAreDistinctAndPlayerScoped)
 
 namespace
 {
-	using battle_settlement::ReplyShape;
+	using battle_lock::ReplyShape;
 
 	redisReply MakeReply(const int type, const char *text = nullptr)
 	{
@@ -679,10 +604,9 @@ namespace
 } // namespace
 
 // 适配层:空应答必须映射成 kNoReply,绝不能与 NIL 混为一谈 —— 后者是「键不存在」这个结论。
-TEST(SettlementReplyShape, NullReplyIsNoReplyNotNil)
+TEST(BattleLockReplyShape, NullReplyIsNoReplyNotNil)
 {
-	EXPECT_EQ(battle_settlement::ReplyShapeOf(nullptr), ReplyShape::kNoReply);
-	EXPECT_TRUE(battle_settlement::ReplyText(nullptr).empty());
+	EXPECT_EQ(battle_lock::ReplyShapeOf(nullptr), ReplyShape::kNoReply);
 
 	auto nil = MakeReply(REDIS_REPLY_NIL);
 	auto str = MakeReply(REDIS_REPLY_STRING, "701");
@@ -691,177 +615,54 @@ TEST(SettlementReplyShape, NullReplyIsNoReplyNotNil)
 	auto array = MakeReply(REDIS_REPLY_ARRAY);
 	auto error = MakeReply(REDIS_REPLY_ERROR, "LOADING Redis is loading the dataset in memory");
 	auto dbl = MakeReply(REDIS_REPLY_DOUBLE);
-	EXPECT_EQ(battle_settlement::ReplyShapeOf(&nil), ReplyShape::kNil);
-	EXPECT_EQ(battle_settlement::ReplyShapeOf(&str), ReplyShape::kString);
-	EXPECT_EQ(battle_settlement::ReplyShapeOf(&status), ReplyShape::kStatus);
-	EXPECT_EQ(battle_settlement::ReplyShapeOf(&integer), ReplyShape::kInteger);
-	EXPECT_EQ(battle_settlement::ReplyShapeOf(&array), ReplyShape::kArray);
-	EXPECT_EQ(battle_settlement::ReplyShapeOf(&error), ReplyShape::kError);
-	EXPECT_EQ(battle_settlement::ReplyShapeOf(&dbl), ReplyShape::kOther);
-
-	EXPECT_EQ(battle_settlement::ReplyText(&str), std::string_view("701"));
-	EXPECT_EQ(battle_settlement::ReplyText(&error), std::string_view("LOADING Redis is loading the dataset in memory"));
-	EXPECT_TRUE(battle_settlement::ReplyText(&nil).empty());
-	EXPECT_TRUE(battle_settlement::ReplyText(&integer).empty());
+	EXPECT_EQ(battle_lock::ReplyShapeOf(&nil), ReplyShape::kNil);
+	EXPECT_EQ(battle_lock::ReplyShapeOf(&str), ReplyShape::kString);
+	EXPECT_EQ(battle_lock::ReplyShapeOf(&status), ReplyShape::kStatus);
+	EXPECT_EQ(battle_lock::ReplyShapeOf(&integer), ReplyShape::kInteger);
+	EXPECT_EQ(battle_lock::ReplyShapeOf(&array), ReplyShape::kArray);
+	EXPECT_EQ(battle_lock::ReplyShapeOf(&error), ReplyShape::kError);
+	EXPECT_EQ(battle_lock::ReplyShapeOf(&dbl), ReplyShape::kOther);
 }
 
-// 缺陷 1(高):发件箱第一跳把空应答 / ERROR 当成「已销账」并删条目。一次断线,在线玩家就收不到重投。
-TEST(SettlementOutbox, AckProbeWithoutUsableReplyIsUndeterminedNotAcknowledged)
+// 登录重建读锁把空应答当「无锁」时,战斗闸失效。空应答进复查;ERROR 按无锁是既有取舍(保留)。
+TEST(BattleLockLoginHook, LockReadNoReplyIsRecheckWhileErrorKeepsLegacyNoLock)
 {
-	for (const auto shape : {ReplyShape::kNoReply, ReplyShape::kError, ReplyShape::kStatus, ReplyShape::kInteger,
-							 ReplyShape::kArray, ReplyShape::kOther})
-	{
-		EXPECT_EQ(battle_settlement::ClassifyAckProbe(shape, "", 701), battle_settlement::AckProbeVerdict::kUndetermined)
-			<< battle_settlement::ReplyShapeName(shape);
-		// 即使文本恰好等于本局 id,形状不对也不能下结论。
-		EXPECT_EQ(battle_settlement::ClassifyAckProbe(shape, "701", 701), battle_settlement::AckProbeVerdict::kUndetermined)
-			<< battle_settlement::ReplyShapeName(shape);
-	}
-}
-
-// 只有 NIL,或 STRING 且不等于本局,才算销账;STRING 且等于本局才进第二跳。比较是十进制字符串逐字节。
-TEST(SettlementOutbox, AckProbeOnlyNilOrForeignIdCountsAsAcknowledged)
-{
-	using battle_settlement::AckProbeVerdict;
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(ReplyShape::kNil, "", 701), AckProbeVerdict::kAcknowledged);
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(ReplyShape::kString, "702", 701), AckProbeVerdict::kAcknowledged);
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(ReplyShape::kString, "0701", 701), AckProbeVerdict::kAcknowledged);
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(ReplyShape::kString, "", 701), AckProbeVerdict::kAcknowledged);
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(ReplyShape::kString, "701", 701), AckProbeVerdict::kStillOurs);
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(ReplyShape::kString, "18446744073709551615",
-												  std::numeric_limits<uint64_t>::max()),
-			  AckProbeVerdict::kStillOurs);
-}
-
-// 调用点实际走的是「适配 + 判定」这条链:空应答进来,结论必须是 undetermined。
-TEST(SettlementOutbox, AckProbeChainTreatsHiredisNullCallbackAsUndetermined)
-{
-	using battle_settlement::AckProbeVerdict;
-	const redisReply *disconnected = nullptr;
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(battle_settlement::ReplyShapeOf(disconnected),
-												  battle_settlement::ReplyText(disconnected), 701),
-			  AckProbeVerdict::kUndetermined);
-	auto ours = MakeReply(REDIS_REPLY_STRING, "701");
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(battle_settlement::ReplyShapeOf(&ours),
-												  battle_settlement::ReplyText(&ours), 701),
-			  AckProbeVerdict::kStillOurs);
-	auto noAuth = MakeReply(REDIS_REPLY_ERROR, "NOAUTH Authentication required.");
-	EXPECT_EQ(battle_settlement::ClassifyAckProbe(battle_settlement::ReplyShapeOf(&noAuth),
-												  battle_settlement::ReplyText(&noAuth), 701),
-			  AckProbeVerdict::kUndetermined);
-}
-
-// 缺陷 2(中):第二跳读位置拿到空应答 / ERROR 时走 kSkipNoTarget 并 ++attempts,白烧一轮;
-// 耗尽时还会误记成 reason=no_target。没问到就不能进 ClassifyRetry。
-TEST(SettlementOutbox, LocationReadWithoutUsableReplyIsNotADecision)
-{
-	EXPECT_FALSE(battle_settlement::IsLocationReplyDecisive(ReplyShape::kNoReply));
-	EXPECT_FALSE(battle_settlement::IsLocationReplyDecisive(ReplyShape::kError));
-	EXPECT_FALSE(battle_settlement::IsLocationReplyDecisive(ReplyShape::kInteger));
-	EXPECT_FALSE(battle_settlement::IsLocationReplyDecisive(ReplyShape::kOther));
-	// NIL = 玩家不在任何场景(真的无目标);STRING = 有位置记录(内容解析失败仍按无目标)。
-	EXPECT_TRUE(battle_settlement::IsLocationReplyDecisive(ReplyShape::kNil));
-	EXPECT_TRUE(battle_settlement::IsLocationReplyDecisive(ReplyShape::kString));
-}
-
-// 「没问到」不消耗重投次数,但单独有上限:持续 ERROR 时不设上限,发件箱随对局数无界增长、永远不响 undelivered。
-TEST(SettlementOutbox, UndeterminedProbeRoundsAreBoundedSeparately)
-{
-	using battle_settlement::UndeterminedProbeAction;
-	EXPECT_EQ(battle_settlement::ClassifyUndeterminedProbeRound(1, 60), UndeterminedProbeAction::kWaitNextRound);
-	EXPECT_EQ(battle_settlement::ClassifyUndeterminedProbeRound(59, 60), UndeterminedProbeAction::kWaitNextRound);
-	EXPECT_EQ(battle_settlement::ClassifyUndeterminedProbeRound(60, 60), UndeterminedProbeAction::kGiveUp);
-	EXPECT_EQ(battle_settlement::ClassifyUndeterminedProbeRound(61, 60), UndeterminedProbeAction::kGiveUp);
-	// 上限配成 0 是调用方缺陷:立即放弃,保证有界。
-	EXPECT_EQ(battle_settlement::ClassifyUndeterminedProbeRound(1, 0), UndeterminedProbeAction::kGiveUp);
-	EXPECT_STREQ(battle_settlement::UndeliveredReasonName(battle_settlement::UndeliveredReason::kProbeUndetermined),
-				 "probe_undetermined");
-}
-
-// 缺陷 5 / 6(中 / 中低):落库应答没确认时只投一次、不进发件箱。没确认 ≠ 没落库,结论只能是 kUnconfirmed,
-// 调用点据此照样登记发件箱(结算 EVAL 成功是整数,活动局 SET 成功是状态 OK)。
-TEST(SettlementOutbox, PersistReplyWithoutConfirmationIsUnconfirmedNotFailed)
-{
-	using battle_settlement::PersistVerdict;
-	EXPECT_EQ(battle_settlement::ClassifyPersistReply(ReplyShape::kInteger, ReplyShape::kInteger), PersistVerdict::kStored);
-	EXPECT_EQ(battle_settlement::ClassifyPersistReply(ReplyShape::kStatus, ReplyShape::kStatus), PersistVerdict::kStored);
-	for (const auto actual : {ReplyShape::kNoReply, ReplyShape::kError, ReplyShape::kNil, ReplyShape::kString,
-							  ReplyShape::kArray, ReplyShape::kOther})
-	{
-		EXPECT_EQ(battle_settlement::ClassifyPersistReply(actual, ReplyShape::kInteger), PersistVerdict::kUnconfirmed)
-			<< battle_settlement::ReplyShapeName(actual);
-	}
-	EXPECT_EQ(battle_settlement::ClassifyPersistReply(ReplyShape::kInteger, ReplyShape::kStatus), PersistVerdict::kUnconfirmed);
-	// 防呆:空应答永远不是「成功形状」,哪怕调用方把期望形状写错成 kNoReply。
-	EXPECT_EQ(battle_settlement::ClassifyPersistReply(ReplyShape::kNoReply, ReplyShape::kNoReply), PersistVerdict::kUnconfirmed);
-}
-
-// 缺陷 3(高):scene 登录钩子把空应答与 NIL 一起当「没有挂起结算」,转去按锁重建 —— 这次登录漏补发奖励。
-TEST(SettlementLoginHook, PendingReadWithoutUsableReplyIsRecheckNotNoPending)
-{
-	using battle_settlement::LoginPendingRead;
-	EXPECT_EQ(battle_settlement::ClassifyLoginPendingRead(ReplyShape::kNil), LoginPendingRead::kNoPending);
-	EXPECT_EQ(battle_settlement::ClassifyLoginPendingRead(ReplyShape::kString), LoginPendingRead::kPending);
-	for (const auto shape : {ReplyShape::kNoReply, ReplyShape::kError, ReplyShape::kStatus, ReplyShape::kInteger,
-							 ReplyShape::kArray, ReplyShape::kOther})
-	{
-		EXPECT_EQ(battle_settlement::ClassifyLoginPendingRead(shape), LoginPendingRead::kRecheck)
-			<< battle_settlement::ReplyShapeName(shape);
-	}
-	EXPECT_EQ(battle_settlement::ClassifyLoginPendingRead(battle_settlement::ReplyShapeOf(nullptr)),
-			  LoginPendingRead::kRecheck);
-}
-
-// 缺陷 4(中低):登录重建读锁把空应答当「无锁」,战斗闸失效。空应答进复查;ERROR 按无锁是既有取舍(保留)。
-TEST(SettlementLoginHook, LockReadNoReplyIsRecheckWhileErrorKeepsLegacyNoLock)
-{
-	using battle_settlement::LoginLockRead;
-	EXPECT_EQ(battle_settlement::ClassifyLoginLockRead(ReplyShape::kNoReply), LoginLockRead::kRecheck);
-	EXPECT_EQ(battle_settlement::ClassifyLoginLockRead(ReplyShape::kArray), LoginLockRead::kLock);
-	EXPECT_EQ(battle_settlement::ClassifyLoginLockRead(ReplyShape::kNil), LoginLockRead::kNoLock);
-	EXPECT_EQ(battle_settlement::ClassifyLoginLockRead(ReplyShape::kError), LoginLockRead::kNoLock);
-	EXPECT_EQ(battle_settlement::ClassifyLoginLockRead(ReplyShape::kOther), LoginLockRead::kNoLock);
+	using battle_lock::LoginLockRead;
+	EXPECT_EQ(battle_lock::ClassifyLoginLockRead(ReplyShape::kNoReply), LoginLockRead::kRecheck);
+	EXPECT_EQ(battle_lock::ClassifyLoginLockRead(ReplyShape::kArray), LoginLockRead::kLock);
+	EXPECT_EQ(battle_lock::ClassifyLoginLockRead(ReplyShape::kNil), LoginLockRead::kNoLock);
+	EXPECT_EQ(battle_lock::ClassifyLoginLockRead(ReplyShape::kError), LoginLockRead::kNoLock);
+	EXPECT_EQ(battle_lock::ClassifyLoginLockRead(ReplyShape::kOther), LoginLockRead::kNoLock);
 }
 
 // 2026-10-19(第二、三轮评审 P3):reaper 判作废的局,删锁没落地时锁还指向它;按锁重建的入口必须认出它、不重建。
-// 读到它的路径有三条(冻结到期补读没读到挂的复查、补应用另一局挂起结算之后的重建、登录挂的复查赶上冻结到期),
-// 裁决放在重建入口,一处盖住。
-TEST(SettlementLoginHook, LockRebuildSkipsTheBattleThisEntityAlreadyExpired)
+// 裁决放在重建入口,一处盖住所有路径(登录挂的复查赶上冻结到期、迟到的确认事件)。
+TEST(BattleLockLoginHook, LockRebuildSkipsTheBattleThisEntityAlreadyExpired)
 {
-	using battle_settlement::LockRebuildDecision;
-	// 锁指向刚作废的 X,账本里没有 X:不重建(调用方补一次条件删锁)。
-	EXPECT_EQ(battle_settlement::ClassifyLockRebuild(701, 701, false), LockRebuildDecision::kSkipExpired);
+	using battle_lock::LockRebuildDecision;
+	// 锁指向刚作废的 X:不重建(调用方补一次条件删锁)。
+	EXPECT_EQ(battle_lock::ClassifyLockRebuild(701, 701), LockRebuildDecision::kSkipExpired);
 	// 锁指向另一局(真在打的下一局 / 别处的战斗):照常重建。
-	EXPECT_EQ(battle_settlement::ClassifyLockRebuild(702, 701, false), LockRebuildDecision::kRebuild);
+	EXPECT_EQ(battle_lock::ClassifyLockRebuild(702, 701), LockRebuildDecision::kRebuild);
 	// 本实体没有作废局(expiredBattleId 为 0):照常重建。
-	EXPECT_EQ(battle_settlement::ClassifyLockRebuild(701, 0, false), LockRebuildDecision::kRebuild);
+	EXPECT_EQ(battle_lock::ClassifyLockRebuild(701, 0), LockRebuildDecision::kRebuild);
 	// 槽位为 0 是「没有作废局」,不是一个能匹配的 battle_id:锁值碰巧也读成 0 时(解析异常的上游已拦,这里纵深防御)
 	// 仍按重建处理,不能因为 0 == 0 判成「已作废」去补删锁。去掉 expiredBattleId != 0 这道守卫,这一条就会红。
-	EXPECT_EQ(battle_settlement::ClassifyLockRebuild(0, 0, false), LockRebuildDecision::kRebuild);
-}
-
-// 顺序:已应用 > 已作废。作废之后删锁没落地,迟到的结算会按锁匹配应用;锁要留到它落盘销账才删,
-// 这时只能推进销账,补删锁会提前放开排队。
-TEST(SettlementLoginHook, LockRebuildAppliedBeatsExpired)
-{
-	using battle_settlement::LockRebuildDecision;
-	EXPECT_EQ(battle_settlement::ClassifyLockRebuild(701, 701, true), LockRebuildDecision::kAdvanceAck);
-	EXPECT_EQ(battle_settlement::ClassifyLockRebuild(701, 0, true), LockRebuildDecision::kAdvanceAck);
-	EXPECT_EQ(battle_settlement::ClassifyLockRebuild(702, 701, true), LockRebuildDecision::kAdvanceAck);
+	EXPECT_EQ(battle_lock::ClassifyLockRebuild(0, 0), LockRebuildDecision::kRebuild);
 }
 
 // reaper 节拍对一个复查标记的处理,全部 8 种状态:退出中 > 交接中 > Redis 不可用 > 重跑。
 // bag_test 里 Redis 恒不可用,分不清「交接中保留」与「Redis 不可用保留」,这里逐格盯住。
-TEST(SettlementLoginHook, RecheckEntryDecisionCoversEveryState)
+TEST(BattleLockLoginHook, RecheckEntryDecisionCoversEveryState)
 {
-	using battle_settlement::LoginRecheckStep;
+	using battle_lock::LoginRecheckStep;
 	const auto classify = [](const bool exiting, const bool handoff, const bool redisReady)
 	{
-		battle_settlement::LoginRecheckEntryState state;
+		battle_lock::LoginRecheckEntryState state;
 		state.exitingOrNoIdentity = exiting;
 		state.travelHandoffOrFrozen = handoff;
 		state.redisReady = redisReady;
-		return battle_settlement::ClassifyLoginRecheckEntry(state);
+		return battle_lock::ClassifyLoginRecheckEntry(state);
 	};
 	// 退出中:不论其它条件一律摘标记、不重跑。
 	for (const bool handoff : {false, true})

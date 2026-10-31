@@ -29,7 +29,7 @@ import (
 	mailpb "proto/mail"
 	"schemamigrate"
 	"shared/domainhost"
-	"shared/loginsession"
+	"shared/redisslot"
 	"shared/serviceauth"
 )
 
@@ -131,7 +131,7 @@ func TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection(t *testing.T) {
 		t.Fatal(err)
 	}
 	loginCache := miniredis.RunT(t)
-	loginCache.Set(loginsession.KeyFromMember("mail-rpc-original:19"), "邮件原账号")
+	loginCache.Set(redisslot.LoginSessionKey("mail-rpc-original:19"), "邮件原账号")
 	loginReader := redis.NewClient(&redis.Options{Addr: loginCache.Addr()})
 	t.Cleanup(func() { _ = loginReader.Close() })
 	const secret = "mail-rpc-integration-only-never-a-real-secret"

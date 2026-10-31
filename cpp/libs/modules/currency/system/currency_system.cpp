@@ -113,7 +113,7 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     // 冻结 = 归属交接在途(PlayerLifecycleSystem::StartTravelHandoff:跨 zone 传送,或同 zone
     // 跨节点换图)。PlayerFrozenComp 只与 PlayerTravelHandoffComp 成对出现;已没有 Kafka
     // 迁移包、目的端 ACK 与 reaper —— 目标节点从盘上加载,依据就是冻结那一次存盘。
-    // 此时 AddCurrency 只会写进源端 CurrencyComp:handoff 标记写出后 SavePlayerToRedis 直接
+    // 此时 AddCurrency 只会写进源端 CurrencyComp:handoff 标记写出后 SavePlayer 直接
     // 跳过,scene_manager 放行后实体随 DestroyDeposedPlayer 不存盘销毁,目标节点永远读不到。
     // 交接未成则由 AbortTravelHandoff 解冻,之后可正常写。
     // 写入类拦截目录见 docs/design/cross-zone-readiness-audit.md §11.1(该文只有 §11 仍有效)。

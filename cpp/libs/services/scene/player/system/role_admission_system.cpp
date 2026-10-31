@@ -29,7 +29,7 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
-#include "thread_context/redis_manager.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "time/system/time.h"
 
 struct RoleAdmissionState {
@@ -114,30 +114,28 @@ bool RegisterFence(Guid player, std::string candidate, std::optional<std::string
     if (!parsed || parsed->state != handoff_sql_barrier::FenceState::kHeld) return false;
     auto submit = [player, candidate, stillQualified, completed](std::string prior) {
         if (!stillQualified(prior)) { completed(false, prior); return; }
-        auto& redis = tlsRedis.GetZoneRedis();
-        if (!redis || !redis->connected()) { completed(false, prior); return; }
+        if (!tlsPlayerRedis.connected()) { completed(false, prior); return; }
         const auto record = handoff_sql_barrier::ParseFence(candidate);
         const std::string owner = player_ownership::OwnerEpochRedisKey(player);
-        const std::string barrier = "player:{" + std::to_string(player) + "}:save_barrier";
-        const std::string mark = "player:" + std::to_string(player) + ":handoff";
+        const std::string handoffFenceKey = player_ownership::HandoffFenceRedisKey(player);
+        const std::string mark = player_ownership::HandoffRedisKey(player);
         const auto epoch = std::to_string(record->ownerEpoch);
-        const int sent = redis->command([completed, prior](hiredis::Hiredis*, redisReply* reply) {
+        const int sent = tlsPlayerRedis.command([completed, prior](hiredis::Hiredis*, redisReply* reply) {
             completed(reply && reply->type == REDIS_REPLY_INTEGER && reply->integer == 1, prior);
         }, "EVAL %s 3 %b %b %b %b %b %b", handoff_sql_barrier::kRegisterFenceLua.c_str(),
-            owner.data(), owner.size(), barrier.data(), barrier.size(), mark.data(), mark.size(),
+            owner.data(), owner.size(), handoffFenceKey.data(), handoffFenceKey.size(), mark.data(), mark.size(),
             epoch.data(), epoch.size(), candidate.data(), candidate.size(), prior.data(), prior.size());
         if (sent != REDIS_OK) completed(false, prior);
     };
     if (expected) { submit(*expected); return true; }
-    auto& redis = tlsRedis.GetZoneRedis();
-    if (!redis || !redis->connected()) return false;
-    const std::string barrier = "player:{" + std::to_string(player) + "}:save_barrier";
-    return redis->command([submit, completed](hiredis::Hiredis*, redisReply* reply) {
+    if (!tlsPlayerRedis.connected()) return false;
+    const std::string handoffFenceKey = player_ownership::HandoffFenceRedisKey(player);
+    return tlsPlayerRedis.command([submit, completed](hiredis::Hiredis*, redisReply* reply) {
         if (reply && reply->type == REDIS_REPLY_NIL) submit("");
         else if (reply && reply->type == REDIS_REPLY_STRING && reply->str)
             submit(std::string(reply->str, reply->len));
         else completed(false, std::nullopt);
-    }, "HGET %b handoff_fence", barrier.data(), barrier.size()) == REDIS_OK;
+    }, "HGET %b handoff_fence", handoffFenceKey.data(), handoffFenceKey.size()) == REDIS_OK;
 }
 void CancelPendingFence(Guid playerId) {
     auto found = state->roles.find(playerId);
@@ -171,13 +169,13 @@ void CancelPendingFence(Guid playerId) {
     bool sent = false;
     if (state->dependencies.revokeHandoffFence) {
         sent = state->dependencies.revokeHandoffFence(playerId, candidate, prior, revoked, completed);
-    } else if (auto& redis = tlsRedis.GetZoneRedis(); redis && redis->connected()) {
-        sent = redis->command([completed](hiredis::Hiredis*, redisReply* reply) {
+    } else if (tlsPlayerRedis.connected()) {
+        sent = tlsPlayerRedis.command([completed](hiredis::Hiredis*, redisReply* reply) {
             completed(reply && reply->type == REDIS_REPLY_INTEGER && (reply->integer == 0 || reply->integer == 1));
         }, "EVAL %s 3 %s %s %s %s %b %b %b", handoff_sql_barrier::kCancelRegistrationLua.c_str(),
             player_ownership::OwnerEpochRedisKey(playerId).c_str(),
-            ("player:{" + std::to_string(playerId) + "}:save_barrier").c_str(),
-            ("player:" + std::to_string(playerId) + ":handoff").c_str(), epoch.c_str(),
+            player_ownership::HandoffFenceRedisKey(playerId).c_str(),
+            player_ownership::HandoffRedisKey(playerId).c_str(), epoch.c_str(),
             candidate.data(), candidate.size(), prior.data(), prior.size(), revoked.data(), revoked.size()) == REDIS_OK;
     }
     if (!sent) { role.fenceRevokeInFlight = false; --role.callbacks; }
@@ -462,9 +460,7 @@ std::function<void()> RoleAdmissionSystem::CaptureSnapshotCommit(entt::entity pl
     if (playerId == 0 || tlsEcs.GetPlayer(playerId) != player || !identity || identity->scene_instance_id().empty()
         || owner == nullptr || owner->epoch != epoch || admission == nullptr
         || admission->generation != identity->generation() || admission->ownerRevision != identity->owner_revision()
-        || source->player_database_data().player_id() != playerId || source->player_database_1_data().player_id() != playerId
-        || source->player_database_data().fence_owner_epoch() != 0 || source->player_database_data().fence_save_seq() != 0
-        || source->player_database_1_data().fence_owner_epoch() != 0 || source->player_database_1_data().fence_save_seq() != 0) return {};
+        || source->player_database_data().player_id() != playerId || source->player_database_1_data().player_id() != playerId) return {};
     const auto expectedIdentity = identity->SerializeAsString();
     const std::weak_ptr<RoleAdmissionState> original = state;
     const std::weak_ptr<const PlayerAllData> originalSource = source;
@@ -497,8 +493,7 @@ bool RoleAdmissionSystem::IsSnapshotCommitted(entt::entity player, const PlayerA
         && identity && identity->player_id() == playerId && !identity->scene_instance_id().empty()
         && admission->generation == identity->generation() && admission->ownerRevision == identity->owner_revision()
         && first.player_id() == playerId && second.player_id() == playerId && epoch != 0 && seq != 0
-        && owner->epoch == epoch && first.fence_owner_epoch() == 0 && first.fence_save_seq() == 0
-        && second.fence_owner_epoch() == 0 && second.fence_save_seq() == 0;
+        && owner->epoch == epoch;
 }
 bool RoleAdmissionSystem::Seal(const common::base::RoleTradeSeal& seal) {
     const auto local = ReadLocalNode();

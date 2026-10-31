@@ -1,34 +1,78 @@
 package logic
 
-import "fmt"
+import "shared/redisslot"
 
+// 玩家域的键(docs/design/redis-player-store-cluster.md §5.2、§5.9):全部带 hash tag,经 ServiceContext.PlayerRedis 访问。
+//
+// 会话键带玩家 tag {<pid>};租约与 gate 索引按「会话 pid 所在 slot 的 slot-tag」分桶,与该玩家的 {<pid>} 键必然同槽,
+// 所以一次会话 CAS 能在同一段 Lua 里原子维护本 slot 的租约和索引(不变量 I1)。这些键只在本服务内访问,
+// 别的服务只读会话键(redisslot.SessionKey)。
 const (
-	locationKeyPrefix        = "player:location:"
-	sessionKeyPrefix         = "player:session:"
-	sceneLocationKeyPrefix   = "player:"
-	LeaseZSetKey             = "player:leases"
-	LeaseProcessingZSetKey   = "player:leases:processing"
-	leaseClaimTokenHashKey   = "player:leases:claim_tokens"
-	leaseClaimPayloadHashKey = "player:leases:claim_payloads"
+	leaseKeyPrefix     = "player:leases:"
+	gateIndexKeyPrefix = "player:gate_index:"
 )
 
-// 会话按 gate 实例建的派生索引与对账控制面(docs/design/player-locator-gate-session-index.md)。
-//
-// 为什么用 player: 前缀而不是容量文档建议的 gate:{uuid}:sessions:gate:{id}:draining / drained 属于排队族,
-// G4a 第 1 批要整体搬到 redis-queue;索引必须和会话一起留在核心闭包里(同一段会话 Lua 内原子维护),
-// 用 player: 前缀让拆分工具与清库守卫按族识别。
-// 为什么现在不加 hash tag:索引只在会话 Lua 内和会话键一起被访问,而这些脚本本来就因全局 player:leases* 跨槽,
-// 加 tag 换不来任何原子性;上 Cluster 时按 slot 分桶改形,见设计文档「Cluster 前瞻」。
+// leaseKeys 是一个 slot 的四把租约键,带同一个 slot-tag。
+type leaseKeys struct {
+	ready         string // ZSET:成员是十进制 player_id,分数是到期 unix 秒
+	processing    string // ZSET:已被认领的成员,分数是认领截止 unix 秒
+	claimTokens   string // HASH:player_id → 认领令牌
+	claimPayloads string // HASH:player_id → 清理时要用的会话字节
+}
+
+func leaseKeysForSlot(slot uint16) leaseKeys {
+	ready := leaseKeyPrefix + redisslot.SlotIndexTag(slot)
+	return leaseKeys{
+		ready:         ready,
+		processing:    ready + ":processing",
+		claimTokens:   ready + ":claim_tokens",
+		claimPayloads: ready + ":claim_payloads",
+	}
+}
+
+func leaseKeysForPlayer(playerID uint64) leaseKeys {
+	return leaseKeysForSlot(redisslot.PlayerSlot(playerID))
+}
+
+// gateRegistryKey 是一个 slot 的 gate 登记集:SET,成员是 gate 实例 uuid。
+// 不变量 I2:本 slot 的索引非空 ⇒ gate uuid 在本 slot 的登记集里。
+func gateRegistryKey(slot uint16) string {
+	return gateIndexKeyPrefix + redisslot.SlotIndexTag(slot) + ":gates"
+}
+
+// gateSessionIndexKey 是一个 slot 上 gate 实例的会话索引:SET,成员是十进制 player_id,这些玩家都在这个 slot 上。
+// 不变量 I1:会话 ONLINE 且 gate_instance_id 非空 ⇔ player_id 是「它的 slot + 它的 gate」这把索引的成员。
+func gateSessionIndexKey(slot uint16, gateUUID string) string {
+	return gateIndexKeyPrefix + redisslot.SlotIndexTag(slot) + ":sessions:" + gateUUID
+}
+
+func sessionKey(playerID uint64) string {
+	return redisslot.SessionKey(playerID)
+}
+
+// sceneManagerLocationKey 是 SceneManager 的位置权威键。
+func sceneManagerLocationKey(playerID uint64) string {
+	return redisslot.LocationKey(playerID)
+}
+
+// 分片用的成员登记与段租约(slot_shard.go),role 区分 LeaseMonitor 与死 gate 清扫各自的一套。
+// 它们也是玩家域的普通键,随所在 slot 迁移。成员登记固定在 slot 0 的 tag 上,段 c 的租约带第 64c 个 slot 的 tag。
+func shardMembersKey(role string) string {
+	return "player:locator_shard:" + role + ":members:" + redisslot.SlotIndexTag(0)
+}
+
+func shardSegmentKey(role string, segment int) string {
+	return "player:locator_shard:" + role + ":segment:" + redisslot.SlotIndexTag(uint16(segment*slotsPerSegment))
+}
+
+// 控制域的键(ServiceContext.RedisClient,不带 hash tag,不和玩家键进同一段脚本):
+// 就绪、代次、审计时间与选主锁都是全服一份,只由对账 leader 读写。
 const (
-	// gateIndexSessionsKeyPrefix + <gate 实例 uuid>:SET,成员为十进制 player_id。
-	// 不变量 I1:会话 ONLINE 且 gate_instance_id 非空 ⇔ player_id 是该 gate 索引的成员。
-	gateIndexSessionsKeyPrefix = "player:gate_index:sessions:"
-	// GateIndexRegistryKey:SET,成员为 gate 实例 uuid。不变量 I2:索引非空 ⇒ uuid 在登记集里。
-	GateIndexRegistryKey = "player:gate_index:gates"
-	// gateIndexReadyKey:就绪标记(值 v1:<设置时刻 unix 秒>,带 PX 租约)。存在 = 最近一次完整补建开始之后
+	// gateIndexReadyKey:就绪标记(值 v2:<设置时刻 unix 秒>,带 PX 租约)。存在 = 最近一次完整补建开始之后
 	// 没有观察到旧写者,且此后每拍都有 leader 在成功的 etcd 读里确认零旧写者并续期。只由 leader 写。
-	gateIndexReadyKey         = "player:gate_index:ready"
-	gateIndexReadyValuePrefix = "v1:"
+	gateIndexReadyKey = "player:gate_index:ready"
+	// gateIndexReadyValuePrefix 随索引形状走:v1 是全局索引,v2 是按 slot 分桶。
+	gateIndexReadyValuePrefix = "v2:"
 	// gateIndexGenKey:代次计数器。leader 在一次成功的 etcd 读里看到旧写者就 INCR;补建结束时
 	// 「代次未变才设就绪标记」,跨 leader 守住「补建期间出现过旧写者」这件事。
 	gateIndexGenKey = "player:gate_index:gen"
@@ -36,30 +80,6 @@ const (
 	gateIndexLastAuditKey = "player:gate_index:last_audit"
 	// gateIndexAuditCooldownKey:审计失败后的冷却键(值 1,带 EX)。存在时审计不到期,换主不重置。
 	gateIndexAuditCooldownKey = "player:gate_index:audit_cooldown"
-	// reconcilerLeaderKey:会话对账的选主锁(shared/leader,带 TTL)。作用域 = 一个会话 Redis 域,
-	// 今天所有 zone 的 locator 共用一个 Redis(D12),所以全服一个 leader。
+	// reconcilerLeaderKey:写者检查与补建 / 审计的选主锁(shared/leader,带 TTL)。全服一个 leader。
 	reconcilerLeaderKey = "player_locator:session_reconciler:leader"
 )
-
-// gateSessionIndexKey 返回 gate 实例的会话索引键;gateUUID 为空时返回空串。
-// 空串是会话 Lua 里「这一侧没有索引」的哨兵,脚本以 ~= "" 守卫,保证永不写入名为 "" 的键。
-func gateSessionIndexKey(gateUUID string) string {
-	if gateUUID == "" {
-		return ""
-	}
-	return gateIndexSessionsKeyPrefix + gateUUID
-}
-
-func locationKey(uid int64) string {
-	return fmt.Sprintf("%s%d", locationKeyPrefix, uid)
-}
-
-func sessionKey(playerID uint64) string {
-	return fmt.Sprintf("%s%d", sessionKeyPrefix, playerID)
-}
-
-// sceneManagerLocationKey 是 SceneManager 的位置权威键。player_locator 自己的
-// player:location:{id} 是历史 RPC 的另一套 key，生产入场链不会写它。
-func sceneManagerLocationKey(playerID uint64) string {
-	return fmt.Sprintf("%s%d:location", sceneLocationKeyPrefix, playerID)
-}

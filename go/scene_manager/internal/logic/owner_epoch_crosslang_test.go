@@ -103,12 +103,6 @@ local function prior()
     if not parsed then return nil,nil end
     return raw,parsed
 end
-local function version(s)
-    return type(s)=='string' and #s==41 and string.sub(s,21,21)==':'
-        and string.match(s,'^%d+:%d+$')~=nil
-        and bytecmp(string.sub(s,1,20),'18446744073709551615')<=0
-        and bytecmp(string.sub(s,22),'18446744073709551615')<=0 and string.sub(s,22)~=string.rep('0',20)
-end
 local function marker(s,e)
     local owner,time=string.match(s or '','^(%d+):(%d+)$')
     return owner==e and uint(time)
@@ -233,11 +227,6 @@ if not held or not next or raw==nil or held.k~='H' or next.k~='F' or not samehol
 if redis.call('GET',KEYS[1])~=ARGV[1] then return -1 end
 if raw==ARGV[5] then return 1 end
 if raw~=ARGV[4] then return -2 end
-local ack=redis.call('HMGET',KEYS[2],'pending','player_database','player_database_1')
-if not version(ack[1]) or (ack[2] and not version(ack[2])) or (ack[3] and not version(ack[3]))
-    or string.sub(ack[1],1,20)~=string.rep('0',20-#ARGV[1])..ARGV[1] then
-    return redis.error_reply('HANDOFF_SQL stored version') end
-if ack[2]~=ack[1] or ack[3]~=ack[1] then return 0 end
 redis.call('HSET',KEYS[2],'handoff_fence',ARGV[5])
 redis.call('SET',KEYS[3],ARGV[2],'EX',ARGV[3])
 return 1
@@ -317,7 +306,7 @@ func TestSourceJudgeScriptAndInheritClearCopiesMatchCpp(t *testing.T) {
 	require.Equal(t, cppLuaRevokeFence, prefix+cppFenceRaw(t, source, "kRevokeFenceLua"), "kRevokeFenceLua")
 	require.Equal(t, cppLuaReleaseFence, prefix+cppFenceRaw(t, source, "kReleaseMarkLua"), "kReleaseMarkLua")
 	require.Equal(t, cppLuaCredentialFence, prefix+cppFenceRaw(t, source, "kCredentialMarkLua"), "kCredentialMarkLua")
-	require.Equal(t, cppLuaPublishFence, prefix+cppFenceRaw(t, source, "kPublishMarkLua"), "kPublishMarkLua")
+	require.Equal(t, cppLuaPublishFence, prefix+cppFenceRaw(t, source, "kPublishMarkDirectLua"), "kPublishMarkDirectLua")
 	require.Equal(t, cppLuaResumeFence, prefix+cppFenceRaw(t, source, "kResumeFenceLua"), "kResumeFenceLua")
 }
 
@@ -350,10 +339,10 @@ func TestRollbackAndInheritClearAreMutuallyExclusive(t *testing.T) {
 	inheritClear := func(t *testing.T, sc *svc.ServiceContext, playerID uint64, n uint64) string {
 		t.Helper()
 		owner := strconv.FormatUint(n, 10)
-		barrier := fmt.Sprintf("player:{%d}:save_barrier", playerID)
+		fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", playerID)
 		held := owner + "|destination|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
-		prior, _ := sc.Redis.Hget(barrier, "handoff_fence")
-		keys := []string{ownerepoch.OwnerEpochKey(playerID), barrier, ownerepoch.HandoffKey(playerID)}
+		prior, _ := sc.Redis.Hget(fenceKey, "handoff_fence")
+		keys := []string{ownerepoch.OwnerEpochKey(playerID), fenceKey, ownerepoch.HandoffKey(playerID)}
 		result, err := sc.Redis.Eval(cppLuaRegisterFence, keys, owner, held, prior)
 		require.NoError(t, err)
 		if fmt.Sprint(result) != "1" {
@@ -410,16 +399,16 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 	const savedAt = "1757000000000"
 	judge := func(t *testing.T, playerID uint64) []any {
 		t.Helper()
-		barrier := fmt.Sprintf("player:{%d}:save_barrier", playerID)
+		fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", playerID)
 		held := "5|source|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
 		published := strings.Replace(held, "|H|"+strings.Repeat("b", 32), "|F|"+strings.Repeat("c", 32), 1)
 		revoked := strings.Replace(held, "|H|"+strings.Repeat("b", 32), "|R|"+strings.Repeat("d", 32), 1)
 		if !mr.Exists(ownerepoch.OwnerEpochKey(playerID)) {
 			require.NoError(t, mr.Set(ownerepoch.OwnerEpochKey(playerID), "5"))
 		}
-		mr.HSet(barrier, "handoff_fence", published)
+		mr.HSet(fenceKey, "handoff_fence", published)
 		result, err := sc.Redis.Eval(cppLuaJudgeTravelOutcome,
-			[]string{ownerepoch.OwnerEpochKey(playerID), barrier, ownerepoch.HandoffKey(playerID), getPlayerLocationKey(playerID)},
+			[]string{ownerepoch.OwnerEpochKey(playerID), fenceKey, ownerepoch.HandoffKey(playerID), getPlayerLocationKey(playerID)},
 			held, published, revoked, savedAt)
 		require.NoError(t, err)
 		reply, ok := result.([]any)
@@ -504,8 +493,8 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 func TestHandoffFenceRejectsLateRegistrationPublishAndRevocation(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	const id = uint64(63991)
-	barrier := fmt.Sprintf("player:{%d}:save_barrier", id)
-	keys := []string{ownerepoch.OwnerEpochKey(id), barrier, ownerepoch.HandoffKey(id)}
+	fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", id)
+	keys := []string{ownerepoch.OwnerEpochKey(id), fenceKey, ownerepoch.HandoffKey(id)}
 	require.NoError(t, mr.Set(keys[0], "7"))
 	makeFence := func(e, s, n, a, k, token string) string {
 		return strings.Join([]string{e, s, n, strings.Repeat(a, 32), k, strings.Repeat(token, 32)}, "|")
@@ -537,7 +526,7 @@ func TestHandoffFenceRejectsLateRegistrationPublishAndRevocation(t *testing.T) {
 	require.Equal(t, before, mr.Dump(), "mark缺席时撤资格也须挡住迟到SET")
 	// 已知恢复floor保N；未知floor同E无资格，新SM owner推进后才可建立新instance。
 	unknown := "7||0|" + strings.Repeat("0", 32) + "|R|" + strings.Repeat("a", 32)
-	mr.HSet(barrier, "handoff_fence", unknown)
+	mr.HSet(fenceKey, "handoff_fence", unknown)
 	require.Equal(t, "-2", eval(cppLuaRegisterFence, "7", makeFence("7", "scene", "99", "a", "H", "b"), unknown))
 	require.NoError(t, mr.Set(keys[0], "8"))
 	require.Equal(t, "1", eval(cppLuaRegisterFence, "8", makeFence("8", "new-instance", "1", "a", "H", "b"), unknown))
@@ -546,8 +535,8 @@ func TestHandoffFenceRejectsLateRegistrationPublishAndRevocation(t *testing.T) {
 func TestPendingRegistrationCancellationPreventsLateRegisterEvenWithoutMark(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	const id = uint64(63992)
-	barrier := fmt.Sprintf("player:{%d}:save_barrier", id)
-	keys := []string{ownerepoch.OwnerEpochKey(id), barrier, ownerepoch.HandoffKey(id)}
+	fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", id)
+	keys := []string{ownerepoch.OwnerEpochKey(id), fenceKey, ownerepoch.HandoffKey(id)}
 	require.NoError(t, mr.Set(keys[0], "7"))
 	held := "7|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
 	revoked := "7|scene|1|" + strings.Repeat("a", 32) + "|R|" + strings.Repeat("c", 32)
@@ -560,12 +549,12 @@ func TestPendingRegistrationCancellationPreventsLateRegisterEvenWithoutMark(t *t
 	require.Equal(t, "-2", fmt.Sprint(v))
 	require.Equal(t, before, mr.Dump())
 	require.False(t, mr.Exists(keys[2]))
-	require.Equal(t, revoked, mr.HGet(barrier, "handoff_fence"))
+	require.Equal(t, revoked, mr.HGet(fenceKey, "handoff_fence"))
 }
 
 // 墙钟地板(zone-redis-regression-guard-20261022.md §4.3.1)之后,B5 的回滚 epoch 只保证 ≥ 原 epoch + 2(铸出毫秒值、
 // 回滚再 +1)。恢复脚本(C++ kResumeFenceLua 副本)必须接受 ≥ +2 的目标、拒绝 +1 及更小(不可能是回滚值),
-// 拒绝时 save_barrier.handoff_fence 一个字节都不改。比较按十进制串(cmp),不经 Lua double。
+// 拒绝时 handoff_fence 一个字节都不改。比较按十进制串(cmp),不经 Lua double。
 func TestResumeFenceAcceptsRollbackEpochAtLeastPlusTwo(t *testing.T) {
 	for _, tc := range []struct {
 		target string
@@ -579,24 +568,24 @@ func TestResumeFenceAcceptsRollbackEpochAtLeastPlusTwo(t *testing.T) {
 		t.Run(tc.target, func(t *testing.T) {
 			sc, mr := newTestSvcCtxWithWorldScenes(t)
 			const id = uint64(63995)
-			barrier := fmt.Sprintf("player:{%d}:save_barrier", id)
-			keys := []string{ownerepoch.OwnerEpochKey(id), barrier, ownerepoch.HandoffKey(id), getPlayerLocationKey(id)}
+			fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", id)
+			keys := []string{ownerepoch.OwnerEpochKey(id), fenceKey, ownerepoch.HandoffKey(id), getPlayerLocationKey(id)}
 			require.NoError(t, mr.Set(keys[0], tc.target))
 			require.NoError(t, mr.Set(keys[3], "original-location"))
 			revoked := "7|scene|1|" + strings.Repeat("a", 32) + "|R|" + strings.Repeat("d", 32)
 			candidate := tc.target + "|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("e", 32)
-			mr.HSet(barrier, "handoff_fence", revoked)
+			mr.HSet(fenceKey, "handoff_fence", revoked)
 
 			v, err := sc.Redis.Eval(cppLuaResumeFence, keys, revoked, candidate, tc.target, "original-location")
 			if tc.ok {
 				require.NoError(t, err)
 				assert.Equal(t, "1", fmt.Sprint(v))
-				assert.Equal(t, candidate, mr.HGet(barrier, "handoff_fence"))
+				assert.Equal(t, candidate, mr.HGet(fenceKey, "handoff_fence"))
 				return
 			}
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "HANDOFF resume record")
-			assert.Equal(t, revoked, mr.HGet(barrier, "handoff_fence"), "拒绝时不改资格")
+			assert.Equal(t, revoked, mr.HGet(fenceKey, "handoff_fence"), "拒绝时不改资格")
 		})
 	}
 }
@@ -606,15 +595,15 @@ func TestStableHandoffTransitionCandidateRecoversLostReplies(t *testing.T) {
 		t.Run(target, func(t *testing.T) {
 			sc, mr := newTestSvcCtxWithWorldScenes(t)
 			const id = uint64(63993)
-			barrier := fmt.Sprintf("player:{%d}:save_barrier", id)
-			keys := []string{ownerepoch.OwnerEpochKey(id), barrier, ownerepoch.HandoffKey(id), getPlayerLocationKey(id)}
+			fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", id)
+			keys := []string{ownerepoch.OwnerEpochKey(id), fenceKey, ownerepoch.HandoffKey(id), getPlayerLocationKey(id)}
 			require.NoError(t, mr.Set(keys[0], target))
 			require.NoError(t, mr.Set(keys[3], "original-location"))
 			held := "7|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
 			frozen := "7|scene|1|" + strings.Repeat("a", 32) + "|F|" + strings.Repeat("c", 32)
 			revoked := "7|scene|1|" + strings.Repeat("a", 32) + "|R|" + strings.Repeat("d", 32)
 			candidate := target + "|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("e", 32)
-			mr.HSet(barrier, "handoff_fence", revoked)
+			mr.HSet(fenceKey, "handoff_fence", revoked)
 			for i := 0; i < 2; i++ {
 				v, err := sc.Redis.Eval(cppLuaResumeFence, keys, revoked, candidate, target, "original-location")
 				require.NoError(t, err)
@@ -640,13 +629,13 @@ func TestHandoffDamagedOwnershipAndMarkerRejectBeforeAnyMutation(t *testing.T) {
 		t.Run(bad, func(t *testing.T) {
 			sc, mr := newTestSvcCtxWithWorldScenes(t)
 			const id = uint64(63994)
-			barrier := fmt.Sprintf("player:{%d}:save_barrier", id)
-			keys := []string{ownerepoch.OwnerEpochKey(id), barrier, ownerepoch.HandoffKey(id), getPlayerLocationKey(id)}
+			fenceKey := fmt.Sprintf("player:{%d}:handoff_fence", id)
+			keys := []string{ownerepoch.OwnerEpochKey(id), fenceKey, ownerepoch.HandoffKey(id), getPlayerLocationKey(id)}
 			held := "7|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("b", 32)
 			frozen := "7|scene|1|" + strings.Repeat("a", 32) + "|F|" + strings.Repeat("c", 32)
 			revoked := "7|scene|1|" + strings.Repeat("a", 32) + "|R|" + strings.Repeat("d", 32)
 			require.NoError(t, mr.Set(keys[0], "7"))
-			mr.HSet(barrier, "handoff_fence", frozen)
+			mr.HSet(fenceKey, "handoff_fence", frozen)
 			published := frozen
 			switch bad {
 			case "owner":
@@ -660,7 +649,7 @@ func TestHandoffDamagedOwnershipAndMarkerRejectBeforeAnyMutation(t *testing.T) {
 			case "same-token-published":
 				published = "7|scene|1|" + strings.Repeat("a", 32) + "|F|" + strings.Repeat("b", 32)
 			}
-			mr.HSet(barrier, "handoff_fence", published)
+			mr.HSet(fenceKey, "handoff_fence", published)
 			before := mr.Dump()
 			_, err := sc.Redis.Eval(cppLuaJudgeTravelOutcome, keys, held, published, revoked, "1000")
 			require.Error(t, err)
@@ -675,7 +664,7 @@ func TestHandoffDamagedOwnershipAndMarkerRejectBeforeAnyMutation(t *testing.T) {
 // r2-lc#1 / r2-lc#2(data-overwrite-rollback-audit-r2-20261019.md §3.6):zone Redis 存活探测摘掉无应答的旧连接后,
 // 内核仍可能把旧连接上未确认的标记写重传到 Redis,晚于新连接上的取证 / 同节点重载登记才执行。这里按 Redis 实际执行
 // 顺序重放(迟到的那一条最后执行),断言 scene_manager 的两个消费方 —— 换手门 checkHandoffCommitted 与 LeaveScene
-// 的释放证据 markerReleasesEpoch —— 在新持有期间都拿不到当前代际的标记。拒绝只靠 save_barrier.handoff_fence 原件的
+// 的释放证据 markerReleasesEpoch —— 在新持有期间都拿不到当前代际的标记。拒绝只靠 handoff_fence 原件的
 // CAS,不看墙钟、不看连接顺序。C++ 侧用两条真实连接的同序复现见
 // CurrencyTest.HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCredentialAgainstRealRedis。
 func TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate(t *testing.T) {
@@ -686,7 +675,7 @@ func TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate(t *testing.T) 
 	setup := func(t *testing.T, id uint64) (*svc.ServiceContext, *miniredis.Miniredis, []string) {
 		t.Helper()
 		sc, mr := newTestSvcCtxWithWorldScenes(t)
-		keys := []string{ownerepoch.OwnerEpochKey(id), fmt.Sprintf("player:{%d}:save_barrier", id),
+		keys := []string{ownerepoch.OwnerEpochKey(id), fmt.Sprintf("player:{%d}:handoff_fence", id),
 			ownerepoch.HandoffKey(id), getPlayerLocationKey(id)}
 		require.NoError(t, mr.Set(keys[0], "5"))
 		return sc, mr, keys
@@ -710,12 +699,11 @@ func TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate(t *testing.T) 
 	t.Run("lc1_publish_lands_after_judge_unchanged", func(t *testing.T) {
 		const id = uint64(63995)
 		sc, mr, keys := setup(t, id)
-		version := "00000000000000000005:00000000000000000001"
 		held, published := makeFence("1", "a", "H", "b"), makeFence("1", "a", "F", "c")
 		revoked, resumed := makeFence("1", "a", "R", "d"), makeFence("1", "a", "H", "e")
-		mr.HSet(keys[1], "pending", version, "player_database", version, "player_database_1", version, "handoff_fence", held)
+		mr.HSet(keys[1], "handoff_fence", held)
 		require.NoError(t, mr.Set(keys[3], "location-bytes"))
-		// ① 双 SQL ACK 已齐,BeginTravelHandoff 的 kPublishMarkLua("5:1000")还滞留在旧连接里。
+		// ① 最终存盘已提交,BeginTravelHandoff 的 kPublishMarkDirectLua("5:1000")还滞留在旧连接里。
 		// ② 重连后看门狗在新连接上取证:标记尚未到达、owner 未变 → kUnchanged;同一脚本已把资格原子撤成 R。
 		reply, ok := eval(t, sc, cppLuaJudgeTravelOutcome, keys, held, published, revoked, "1000").([]any)
 		require.True(t, ok)

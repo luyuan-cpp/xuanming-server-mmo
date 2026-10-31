@@ -10,11 +10,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"shared/savebarrier"
+	"shared/handofffence"
 )
 
 // GO-3(cross-zone-scene-travel.md §13.10)判「持有进程已被顶替」的前提是三件跨语言的事实,这里把它们钉住:
-//  1. 交接资格存在 save_barrier hash 的 handoff_fence 字段(C++ handoff_sql_barrier::kFenceField);
+//  1. 交接资格存在 handoff hash 的 handoff_fence 字段(C++ handoff_sql_barrier::kFenceField);
 //  2. 资格原文第二段写的是本进程的 NodeInfo.node_uuid(role_admission_system.cpp 的 ReadLocalNode 取
 //     GetNodeInfo().node_uuid(),登记候选按 {ownerEpoch, local.instanceId, ...} 编码);
 //  3. 同一个 node_uuid 以 nodeUuid 出现在 etcd 注册 JSON 里(NodeInfo 的 MessageToJsonString,字段 node_uuid)。
@@ -32,8 +32,8 @@ func TestOwnerReplacedEvidenceMatchesCppFenceStamp(t *testing.T) {
 		return string(src)
 	}
 	barrier := read("cpp/libs/services/scene/player/system/handoff_sql_barrier.h")
-	require.Regexp(t, regexp.MustCompile(`kFenceField\s*=\s*"`+regexp.QuoteMeta(savebarrier.HandoffFenceField)+`"`), barrier,
-		"C++ 交接资格字段名与 savebarrier.HandoffFenceField 不一致")
+	require.Regexp(t, regexp.MustCompile(`kFenceField\s*=\s*"`+regexp.QuoteMeta(handofffence.HandoffFenceField)+`"`), barrier,
+		"C++ 交接资格字段名与 handofffence.HandoffFenceField 不一致")
 
 	admission := read("cpp/libs/services/scene/player/system/role_admission_system.cpp")
 	require.Regexp(t, regexp.MustCompile(`return\s*\{\s*GetNodeInfo\(\)\.node_uuid\(\)\s*,`), admission,

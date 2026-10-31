@@ -12,7 +12,6 @@ func globalAuthorityFixture() Config {
 	c := Config{}
 	c.Store.Required = true
 	c.SnapshotMySQL.Backend = "tidb"
-	c.RouteStore = RouteStoreConfig{Mode: RouteStoreModeDBFirst, ReadRequiresReady: true, Reconcile: RouteReconcileConfig{ArmReadyMarker: true}}
 	c.AccountDirectory.RoleTradeSQLProof.Enabled = true
 	return c
 }
@@ -37,8 +36,8 @@ func TestGlobalAuthorityUsesIndependentPlayerDatabaseAllowlist(t *testing.T) {
 	require.Error(t, err, "两个来源分叉不得静默择一")
 }
 
-func TestGlobalAuthorityCannotSilentlyDisableSQLOrReadyAndLegacyIsExplicit(t *testing.T) {
-	mutations := []func(*Config){func(c *Config) { c.Store.Required = false }, func(c *Config) { c.SnapshotMySQL.Backend = "oracle" }, func(c *Config) { c.RouteStore.Mode = RouteStoreModeRedis }, func(c *Config) { c.RouteStore.ReadRequiresReady = false }, func(c *Config) { c.RouteStore.Reconcile.ArmReadyMarker = false }, func(c *Config) { v := false; c.RouteStore.Reconcile.Enabled = &v }, func(c *Config) { c.AccountDirectory.RoleTradeSQLProof.Enabled = false }}
+func TestGlobalAuthorityCannotSilentlyDisableSQLAndLegacyIsExplicit(t *testing.T) {
+	mutations := []func(*Config){func(c *Config) { c.Store.Required = false }, func(c *Config) { c.SnapshotMySQL.Backend = "oracle" }, func(c *Config) { c.RouteStore.MergedZoneRefreshSec = 61 }, func(c *Config) { c.AccountDirectory.RoleTradeSQLProof.Enabled = false }}
 	for n, change := range mutations {
 		t.Run(string(rune('a'+n)), func(t *testing.T) {
 			c := globalAuthorityFixture()
@@ -47,18 +46,6 @@ func TestGlobalAuthorityCannotSilentlyDisableSQLOrReadyAndLegacyIsExplicit(t *te
 			require.Error(t, err)
 		})
 	}
-	c := Config{}
-	c.LegacyNonGlobal = true
-	c.Mode = "dev"
-	_, err := c.ResolveGlobalAuthority(func(string) string { t.Fatal("隔离工具无需读取全球白名单"); return "" })
-	require.NoError(t, err)
-	c.Mode = "pro"
-	_, err = c.ResolveGlobalAuthority(func(string) string { return "" })
-	require.Error(t, err)
-	c.Mode = "dev"
-	c.SnapshotMySQL.Backend = "oracle"
-	_, err = c.ResolveGlobalAuthority(func(string) string { return "" })
-	require.Error(t, err, "隔离夹具也不能带非法档位")
 }
 
 // 门禁只看档位是否合法:两档都能走完正式全球装配(player-data-tidb-scaling-plan.md §9)。

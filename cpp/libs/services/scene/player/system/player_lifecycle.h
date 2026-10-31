@@ -550,7 +550,7 @@ namespace exit_persist_stats
 //   inherit_rewrite_handed_over         同上,但更新的一轮还在载入:补写责任移交给它(它建出实体即作废,
 //                         它也放弃时由它补写,计入 inherit_rewritten / skipped / superseded / failed)
 //   superseded / inherit_rewrite_superseded  A1′ / A2′ 放弃补写的条件写返回 -2:本次消费的原 H 已被更新的登记 / 撤销 /
-//                         发布轮换(save_barrier.handoff_fence),不写是对的。追加在行尾(2026-10-23),原有 key 的位置不变
+//                         发布轮换(handoff_fence),不写是对的。追加在行尾(2026-10-23),原有 key 的位置不变
 namespace exit_release_stats
 {
 	struct Counters
@@ -762,7 +762,7 @@ namespace relocate_confirm_stats
 namespace player_exit
 {
 	// 刚落地的 PlayerAllData 是否就是当前内存(M1 "比对后才销毁")。比对前把两边 player_database /
-	// player_database_1 的 stress_test_probe 剔掉:压测探针只在真正写盘的那份上打(SavePlayerToRedis 在快路径
+	// player_database_1 的 stress_test_probe 剔掉:压测探针只在真正写盘的那份上打(SavePlayer 在快路径
 	// 比对之后才 Stamp),落地的 message 带着 test_seq / test_sig,而新 marshal 的不带;不剔的话开了
 	// STRESS_TEST_PROBE 的构建永远判"不一致",退出永不收敛。其余字段用 dirty_save::IsEqual(与快路径同一把尺子)。
 	// 同样剔掉存盘元数据 last_save_seq 与两张子表的 fence_*(db-write-fencing-mysql.md §7.3):落地的那份带着发号写入的
@@ -870,8 +870,8 @@ namespace travel_outcome
 	//   之后每 30s 重挂一次、永远出不来。
 	// 为什么是一段脚本(不变量 I0 机制 2):删除与读取在同一段原子脚本里,"拿到有效应答 ⇒ 本族标记已删、读数是删除之后
 	//   那一刻的",不依赖连接的执行顺序。它**取代**了改动前"同一条不重放连接上先 DEL 后 MGET"的顺序保证。以后若拆回
-	//   两条命令,**必须**走不重放的同一连接(tlsRedis.GetZoneRedis() 的 muduo hiredis::Hiredis:command() 是
-	//   redisvAsyncCommand 的薄封装,无队列、无重放);改走带重试队列的接口会无声地打破这条保证。
+	//   两条命令,**必须**同 slot 且不重放(tlsPlayerRedis 的路由层:同 slot 停等,结果未知的命令绝不重放);
+	//   改走会重放的接口会无声地打破这条保证。
     // 新金样复制 handoff_sql_barrier 的共享校验与具名脚本；取证先H/F→R撤资格、条件删本族，再读原owner/location。
 
 	inline const std::string& kLuaJudgeTravelOutcome = handoff_sql_barrier::kJudgeOutcomeLua;
@@ -1215,10 +1215,10 @@ public:
 	// 返回 true 表示"确实排入了一次提交,稍后会有 HandlePlayerAsyncSaved 回调";
 	// 返回 false 只表示本次没有排入写入,包括已落盘相等、交接已发起以及校验拒绝。
 	// 本接口保留资产/结算的 bool 函数指针契约;false 不能作为销毁实体或交接的成功凭据。
-	// 生命周期内部通过 SavePlayerToRedisImpl 的 SaveResult 区分这些结果。
+	// 生命周期内部通过 SavePlayerImpl 的 SaveResult 区分这些结果。
 	//
 	// 直接提交 player_store,落点用认领时返回的那个,写权在 go/db 的提交事务里判定(player-save-direct-commit.md §4)。
-	static bool SavePlayerToRedis(entt::entity player);
+	static bool SavePlayer(entt::entity player);
 	// 资产重查要求这一笔真的提交，必须重投当前整份载荷，不能被快照相等跳过。
 	static bool SavePlayerForAssetCommit(entt::entity player);
 
@@ -1438,7 +1438,7 @@ public:
 	//      同代异会话 → 忽略并 WARN);都放行 → HandleExitGameNode(kClientDisconnect),存盘落地后由 A1′ 按既有判定写断线
 	//      释放标记;已在退出中只合并原因;
 	//   2. 本节点完全不持有(playerList 没有、没有待入场条目、没有改派待确认条目、没有在途的入场登记、没有未落地的存盘):
-	//      release_fence::DecideSessionEndedCredential 判 write 之后,HGET save_barrier.handoff_fence 读现任资格原件;回调里
+	//      release_fence::DecideSessionEndedCredential 判 write 之后,HGET handoff_fence 读现任资格原件;回调里
 	//      重采判定并按 release_fence::DecideCredentialQualification 核对(仍完全不持有、原件是本进程实例在期望 E 下的资格),
 	//      合格才以读到的原件做 CAS 写凭证标记(handoff_sql_barrier::kCredentialMarkLua,2026-10-23 起);覆盖身份不参与;
 	//   3. playerList 里留着无效句柄:不写凭证(表不一致,fail-closed)。
@@ -1478,8 +1478,8 @@ public:
 	// AbortTravelHandoff;代际不符 / 组件不在 / 实体不在一律只记日志、什么都不动。
 	// 为什么必须比代际:冻结硬上限让"销毁后同节点重登、再发起新一代交接"成为可能。旧一代 SET 的 ERROR 应答迟到时,
 	// 新一代的 SET 可能已经发出 —— 不看代际就 Abort 会把新一代错误解冻(违反骨架 I2 / I3),还会按新一代的
-	// markEpoch 登记撤回、删掉它刚写下的标记。今天 SET、A2′ 与取证走同一条 FIFO 连接,旧 ERROR 应当先于新实体的 A2′
-	// 应答到达(新实体还建不出来),但那是连接实现的性质,不是这里可以依赖的契约。
+	// markEpoch 登记撤回、删掉它刚写下的标记。今天 SET、A2′ 与取证都在该玩家的 slot 上停等,旧 ERROR 应当先于新实体的 A2′
+	// 应答到达(新实体还建不出来),但那是路由层实现的性质,不是这里可以依赖的契约。
 	static void HandleTravelMarkWriteRejected(Guid playerId, uint64_t requestedAtMs, const char *err);
 
 	// ── 节点身份冲突时的紧急疏散 ────────────────────────────────────────────
@@ -1555,7 +1555,7 @@ public:
 	// 只读:取某个玩家当前条目的副本,没有则为空。只供单测与排障(先例:GetPendingEnterMap),业务代码不要依赖它。
 	static std::optional<relocate_confirm::Entry> PeekRelocateConfirm(Guid playerId);
 
-	// True iff this player has an in-flight HandleExitGameNode → SavePlayerToRedis
+	// True iff this player has an in-flight HandleExitGameNode → SavePlayer
 	// cycle that has not yet seen its HandlePlayerAsyncSaved completion. Detected
 	// by the presence of the UnregisterPlayer ECS marker on the player's entity.
 	//
@@ -1620,7 +1620,7 @@ private:
 		kCount,
 	};
 
-	// SavePlayerToRedis 的本体。allowSkipWhenPersisted = false 时跳过 dirty-save 快路径,
+	// SavePlayer 的本体。allowSkipWhenPersisted = false 时跳过 dirty-save 快路径,
 	// 但持久组件缺失仍拒绝,交接已发起时的"不得再写"仍然生效。快路径判"盘上已是同一份",但同 key 还有在途 / 排队中的存盘时,
 	// 必须改走一次真实存盘、等落地回调收尾。调用方:
 	//   * 退出流程的 M4 分支(HandleExitGameNode,exit_fastpath_deferred,§12.6.4 M4);
@@ -1630,14 +1630,14 @@ private:
 	//     一是把写权行抬到 E+2,挡住幽灵持有者可能落下的 E+1;二是恢复"快照 == 库"的前提 ——
 	//     目标节点若在回滚前提交过一份,不强制写的话 dirty-save 快路径会误判"盘上已是同一份"。
 	//   * SavePlayerForAssetCommit:资产重查要求这一笔真的提交,即使快照相等也必须重投整份载荷。
-	// 不给 SavePlayerToRedis 加默认参数:它以函数指针形式被引用(asset_op_system.cpp 的 PersistFn)。
-	static SaveResult SavePlayerToRedisImpl(entt::entity player, bool allowSkipWhenPersisted);
+	// 不给 SavePlayer 加默认参数:它以函数指针形式被引用(asset_op_system.cpp 的 PersistFn)。
+	static SaveResult SavePlayerImpl(entt::entity player, bool allowSkipWhenPersisted);
 
 	// 存盘的后半段(docs/design/player-save-direct-commit.md §5.1):校验、marshal、交接跳过
-	// 都在 SavePlayerToRedisImpl 里;这里投影成行、交给状态机。是否跳过由状态机比对库里已确认的字节决定:
+	// 都在 SavePlayerImpl 里;这里投影成行、交给状态机。是否跳过由状态机比对库里已确认的字节决定:
 	// allowSkipWhenPersisted = false 或快照上没有当前代次的提交时强制写一笔;退出中的每一笔都带 release,
 	// 所以挂机下线也会真的发出去、等到回调。
-	static SaveResult SavePlayerDirect(entt::entity player, Guid playerId, const std::shared_ptr<PlayerAllData>& message,
+	static SaveResult SubmitPlayerSave(entt::entity player, Guid playerId, const std::shared_ptr<PlayerAllData>& message,
 									   bool allowSkipWhenPersisted);
 
 	// 状态机的回调。提交成功走 HandlePlayerAsyncSaved(有排队的快照时不走:这份不是最终态);
@@ -1711,7 +1711,7 @@ private:
 	//                         (kSucceeded 静默,其余回失败 tip)。
 	//   B5  kRolledBackToSelf 回执 == 本次标记原文、markEpoch == 缓存值、epoch ≥ markEpoch+2 且 == location.owner_epoch、
 	//                         location 指回本节点本 zone → 正向证据二:采纳 epoch(PlayerOwnerEpochComp 取 max)→ markEpoch 清 0
-	//                         → rolled_back_adopted +1 → AbortTravelHandoff 解冻 → SavePlayerToRedisImpl(强制写一次)。
+	//                         → rolled_back_adopted +1 → AbortTravelHandoff 解冻 → SavePlayerImpl(强制写一次)。
 	//                         这是"节点不得自己读 Redis 取 epoch"(CZ-3)的唯一例外,三条前提写死:原子脚本先删本族标记;
 	//                         回执逐字节等于本次标记原文;location 指回本节点本 zone。
 	//   B6  kReceiptAnomaly   回执是本次原文,B5 其余条件任一不成立(键被淘汰后补种 / 新旧 SM 混跑 / 数据写坏)→ 判不清:

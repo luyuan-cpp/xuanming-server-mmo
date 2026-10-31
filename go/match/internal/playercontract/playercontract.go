@@ -10,18 +10,16 @@
 // **不得** import logic 或 team。本包不记任何指标:推送结果由调用方记在各自的指标上
 // (logic 记 match_kafka_push_total,team 记 team_push_total),互不串口径。
 //
-// 契约 key(写者都不是 match;match 只读,并且只经 svcCtx.SharedRedis 读):
+// 契约 key(写者都不是 match;match 只读,并且只经 svcCtx.PlayerRedis 读):
 //
-//	player:session:{id}    player_locator 写  PlayerSession protobuf
-//	player:{id}:location   scene_manager 写   PlayerLocation protobuf
-//	battle:lock:{id}       C++ scene 写       咨询性"是否在战斗中"(权威在 scene 的 InBattleComp)
+//	player:session:{<id>}    player_locator 写  PlayerSession protobuf
+//	player:{<id>}:location   scene_manager 写   PlayerLocation protobuf
+//	battle:lock:{<id>}       C++ scene 写       咨询性"是否在战斗中"(权威在 scene 的 InBattleComp)
 //
-// key 字面量是跨进程契约(C++ scene / scene_manager / player_locator 各自拼同一串),
-// 改这里等于单方面改协议;playercontract_test.go 钉住了字面量。
+// key 的唯一构造点在 shared/redisslot,跨语言金样也在那里;playercontract_test.go 再钉一遍 match 看到的字面量。
 //
 // 所有读函数都收 ctx:调用方的超时预算(team 的请求预算、推送批次预算)必须能截断
-// Redis 往返。不关心预算的旧调用点传 context.Background(),行为与 go-zero 无 ctx 版本
-// 完全一致(go-zero 的 Get(key) 就是 GetCtx(context.Background(), key))。
+// Redis 往返。不关心预算的旧调用点传 context.Background(),单次读写受句柄的读写超时约束。
 package playercontract
 
 import (
@@ -34,25 +32,27 @@ import (
 	plpb "proto/player_locator"
 	smpb "proto/scene_manager"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 	"shared/kafkautil"
+	"shared/redisslot"
 )
 
 // SessionKey 返回 player_locator 维护的会话键(值为 PlayerSession protobuf)。
 func SessionKey(playerId uint64) string {
-	return fmt.Sprintf("player:session:%d", playerId)
+	return redisslot.SessionKey(playerId)
 }
 
 // LocationKey 返回 scene_manager 维护的玩家位置权威键(值为 PlayerLocation protobuf;
 // 写者 go/scene_manager changesceneutil.go,契约记录见 cross-zone-matchmaking.md §5.4)。
 func LocationKey(playerId uint64) string {
-	return fmt.Sprintf("player:%d:location", playerId)
+	return redisslot.LocationKey(playerId)
 }
 
-// BattleLockKey 返回 C++ scene 写的战斗锁键(值是 battle_id);match 只做咨询性读取(IsBattleLocked / BattleLockValue)。
+// BattleLockKey 返回 C++ scene 写的战斗锁键(值是 battle_id);match 只做咨询性读取(IsBattleLocked)。
 func BattleLockKey(playerId uint64) string {
-	return fmt.Sprintf("battle:lock:%d", playerId)
+	return redisslot.BattleLockKey(playerId)
 }
 
 // ErrPlayerOffline 表示推送目标没有 ONLINE 会话(键不存在,或处于断线 / 离线态)。
@@ -73,15 +73,23 @@ func ParseSession(raw string) (*plpb.PlayerSession, error) {
 	return session, nil
 }
 
-// LoadSession 读 player:session:{id}(照 guild online_status_resolver 的读法,
-// 这里走 go-zero redis)。键不存在返回 (nil, nil);Redis 错误原样返回、不包装,
-// 由调用方各自补上下文;反序列化失败返回错误。
+// LoadSession 读 player:session:{id}(照 guild online_status_resolver 的读法)。
+// 键不存在返回 (nil, nil);Redis 错误原样返回、不包装,由调用方各自补上下文;反序列化失败返回错误。
 func LoadSession(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64) (*plpb.PlayerSession, error) {
-	raw, err := svcCtx.SharedRedis.GetCtx(ctx, SessionKey(playerId))
+	raw, err := getContractKey(ctx, svcCtx, SessionKey(playerId))
 	if err != nil {
 		return nil, err
 	}
 	return ParseSession(raw)
+}
+
+// getContractKey 读一个契约 key,键不存在返回 ("", nil)。
+func getContractKey(ctx context.Context, svcCtx *svc.ServiceContext, key string) (string, error) {
+	raw, err := svcCtx.PlayerRedis.Get(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return raw, err
 }
 
 // IsSessionOnline 判定会话在线:只有 SESSION_STATE_ONLINE 算在线。断线等重连
@@ -95,7 +103,7 @@ func IsSessionOnline(session *plpb.PlayerSession) bool {
 // Redis 错误与反序列化失败都包装后返回。JoinQueue 取 zone、gather 定位 scene 节点、
 // 观战取观众 zone、组队开战预检共用这一份解析。
 func LoadLocation(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64) (*smpb.PlayerLocation, error) {
-	raw, err := svcCtx.SharedRedis.GetCtx(ctx, LocationKey(playerId))
+	raw, err := getContractKey(ctx, svcCtx, LocationKey(playerId))
 	if err != nil {
 		return nil, fmt.Errorf("读玩家位置失败: %w", err)
 	}
@@ -113,22 +121,11 @@ func LoadLocation(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint
 // 这里只是提前挡住明显不合法的请求。Redis 出错时返回 (true, err):fail-closed,
 // 宁可拒绝排队 / 开战,也不能放进双战斗。
 func IsBattleLocked(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64) (bool, error) {
-	ok, err := svcCtx.SharedRedis.ExistsCtx(ctx, BattleLockKey(playerId))
+	n, err := svcCtx.PlayerRedis.Exists(ctx, BattleLockKey(playerId)).Result()
 	if err != nil {
 		return true, fmt.Errorf("查询 battle:lock 失败: %w", err)
 	}
-	return ok, nil
-}
-
-// BattleLockValue 读 battle:lock:{player_id} 的值:scene 写的 battle_id,没有锁返回空串。
-// 一次读同时回答「在不在战斗里」和「是哪一局」,给需要区分这两件事的调用方用(matcher 校验排队成员)。
-// 与 IsBattleLocked 一样只是咨询;Redis 出错返回 err,由调用方 fail-closed。
-func BattleLockValue(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64) (string, error) {
-	value, err := svcCtx.SharedRedis.GetCtx(ctx, BattleLockKey(playerId))
-	if err != nil {
-		return "", fmt.Errorf("读 battle:lock 失败: %w", err)
-	}
-	return value, nil
+	return n == 1, nil
 }
 
 // PushToPlayer 把 S2C 消息经 Kafka gate-cmd_g<N> 的 gate_node_id % P 号分区推给玩家客户端

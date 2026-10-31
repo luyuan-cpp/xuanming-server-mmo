@@ -89,15 +89,15 @@ func locatedSceneID(t *testing.T, sc *svc.ServiceContext, playerID uint64) uint6
 
 func scenePlayerCountRaw(t *testing.T, sc *svc.ServiceContext, sceneID uint64) string {
 	t.Helper()
-	raw, err := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneID))
-	require.NoError(t, err)
-	return raw
+	return sceneCountText(sc, sceneID)
 }
 
 // placePlayerOnLine 把玩家摆在一条线上(铸出 owner_epoch 1)。
 func placePlayerOnLine(t *testing.T, sc *svc.ServiceContext, playerID, sceneID uint64, nodeID string) {
 	t.Helper()
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, nodeID, testZoneId))
+	adoptSeedMemberVia(sc, instanceMembersKey(sceneID), playerID)
+	adoptSeedMemberVia(sc, nodeMembersKey(testZoneId, nodeID), playerID)
 }
 
 // ── 不置位:行为不变 ──────────────────────────────────────────────────────
@@ -259,7 +259,7 @@ func TestChannelPick_FullChannelIsRejected(t *testing.T) {
 	seedPickChannel(t, mr, pickTestConf, lineOld, "10", "1")
 	seedPickChannel(t, mr, pickTestConf, lineFull, "10", "5")
 	seedPickChannel(t, mr, pickTestConf, lineAlmost, "10", "4")
-	require.NoError(t, mr.Set(nodePlayerCountKey(testZoneId, "10"), "10"))
+	seedNodeMembers(mr, testZoneId, "10", 10)
 	placePlayerOnLine(t, sc, playerID, lineOld, "10")
 	before := enterSceneRejectedCount(t, testZoneId, rejectReasonChannelFull)
 
@@ -268,9 +268,7 @@ func TestChannelPick_FullChannelIsRejected(t *testing.T) {
 	assert.Equal(t, constants.ErrChannelFull, resp.ErrorCode, "人数恰等于上限就算满")
 	assert.Equal(t, before+1, enterSceneRejectedCount(t, testZoneId, rejectReasonChannelFull))
 	assertPickRejectedCleanly(t, sc, mr, captured, playerID, lineOld, lineFull, "5")
-	nodeCount, err := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
-	require.NoError(t, err)
-	assert.Equal(t, "10", nodeCount, "节点人数同样不得被改动")
+	assert.Equal(t, "10", nodeCountText(sc, testZoneId, "10"), "节点人数同样不得被改动")
 	assert.Equal(t, "1", scenePlayerCountRaw(t, sc, lineOld), "旧线人数不得被扣")
 
 	resp = enterChannelPick(t, sc, channelPickRequest(playerID, lineAlmost, pickTestConf, true))
@@ -602,8 +600,7 @@ func TestChannelErrorCodes(t *testing.T) {
 	assert.Equal(t, uint32(22), constants.ErrChannelUnavailable)
 	assert.Equal(t, uint32(23), constants.ErrChannelFull)
 	assert.Equal(t, uint32(24), constants.ErrChannelSwitchCooldown)
-	assert.Equal(t, "player:%d:channel_switch_cooldown", ChannelSwitchCooldownKeyFmt)
-	assert.Equal(t, "player:42:channel_switch_cooldown", channelSwitchCooldownKey(42))
+	assert.Equal(t, "player:{42}:channel_switch_cooldown", channelSwitchCooldownKey(42))
 }
 
 // client_channel_pick 是业务语义,必须进去重指纹(同一 request_id 带与不带是两条不同的请求);

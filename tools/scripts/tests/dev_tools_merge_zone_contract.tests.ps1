@@ -1,15 +1,12 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    dev_tools.ps1 的 merge-zone 系列命令转发契约测试(合服 / 撤销 / 审计,与 tools/merge_zone 现有的三个模式一一对应)。
+    dev_tools.ps1 的 merge-zone 系列命令转发契约测试(合服 / 撤销 / 审计,与 tools/merge_zone 的三个模式一一对应)。
 .DESCRIPTION
-    背景:dev_tools.ps1 是 runbook 里的合服入口,它漏转一个 flag 不会报任何错,只会让 tools/merge_zone
-    静默用默认值 —— 历史上审计恒绿、撤销从 ps1 跑不起来、没部署 guild 的环境只能绕过 ps1 手敲 go run,
-    都是这一类(server-merge-gap-fixes.md B4 / B6,player-storage-placement.md §12 A12)。
+    dev_tools.ps1 是手册里的合服入口。它多转一个工具已删的 flag,整条命令会被 flag 包拒绝;漏转一个 flag,工具不是拒绝就是做错事。
 
-    做法:只从 AST 加载参数组装函数,参数默认值从 dev_tools.ps1 的 param 块现取(不在测试里抄第二份),
-    仓库根换成临时目录里的假 yaml。不起 go、不连任何 Redis / MySQL / Kafka。
-    退出码透传一条在子进程里 `pwsh -File` 真跑 Invoke-MergeZoneGo,`go` 与编译产物均为假替身。
+    做法:只从 AST 加载参数组装函数,参数默认值从 dev_tools.ps1 的 param 块现取(不在测试里抄第二份)。
+    不起 go、不连任何库。退出码透传一条在子进程里 `pwsh -File` 真跑 Invoke-MergeZoneGo,`go` 与编译产物均为假替身。
 .EXAMPLE
     pwsh -File tools/scripts/tests/dev_tools_merge_zone_contract.tests.ps1
 #>
@@ -22,7 +19,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile($devToolsPath, 
 if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
 $devToolsSource = Get-Content -LiteralPath $devToolsPath -Raw
 
-$functionNames = @('Get-MergeMappingRedis', 'Get-MergeZoneArgs', 'Get-MergeRouteDbArgs', 'Resolve-MergeFullPath', 'Get-MergeZoneCommandArgs', 'Get-K8sRouteToolArgs')
+$functionNames = @('Get-MergeRouteDbArgs', 'Get-MergeZoneCommandArgs', 'Get-K8sRouteToolArgs')
 $loaded = @()
 foreach ($definition in $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $functionNames }, $false)) {
     . ([scriptblock]::Create($definition.Extent.Text))
@@ -32,9 +29,9 @@ foreach ($name in $functionNames) {
     if ($name -notin $loaded) { throw "dev_tools.ps1 里找不到函数 $name(契约测试的前提被改掉了)" }
 }
 
-# 被测函数按 PowerShell 的动态作用域读 $Merge* / $DryRun / $VerifyMerged / $ScriptDir,
-# 这里把它们放在本脚本作用域。默认值一律取 dev_tools.ps1 param 块的真实默认值。
-$mergeParams = @($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -match '^(Merge|VerifyMerged$|DryRun$)' })
+# 被测函数按 PowerShell 的动态作用域读 $Merge* / $DryRun,这里把它们放在本脚本作用域。
+# 默认值一律取 dev_tools.ps1 param 块的真实默认值。
+$mergeParams = @($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -match '^(Merge|DryRun$)' })
 # -RouteDbDsn:-MergeZoneRouteDbDsn 在 param 块里没有缺省值(必填)。别的用例钉的是别的转发,
 # 复位时缺省填一个假 DSN 让它们照常组装;专测必填的用例显式传 -RouteDbDsn ''。
 function Reset-MergeParams([string]$RouteDbDsn = 'route:secret@tcp(10.0.0.9:3306)/testdb') {
@@ -75,18 +72,11 @@ $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-merge-zone-contract-te
 $script:ScriptDir = Join-Path $testRoot 'tools/scripts'
 
 function Get-CmdArgs([string]$MergeCommand) {
-    return @(Get-MergeZoneCommandArgs -MergeCommand $MergeCommand -RepoRoot $testRoot)
+    return @(Get-MergeZoneCommandArgs -MergeCommand $MergeCommand)
 }
 
 try {
     New-Item -ItemType Directory -Path $script:ScriptDir -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $testRoot 'go/data_service/etc') -Force | Out-Null
-    # 与真实 data_service.yaml 同形:MappingRedis 不写 DB 键(go-zero RedisConf 没有 DB 字段)。
-    Set-Content -LiteralPath (Join-Path $testRoot 'go/data_service/etc/data_service.yaml') -Encoding utf8 -Value @(
-        'MappingRedis:', '  Host: 10.9.9.9:6379', '  Type: node')
-    $manifestFile = Join-Path $testRoot 'merge_1_to_2_fixture.json'
-    Set-Content -LiteralPath $manifestFile -Encoding utf8 -Value '{}'
-    $missingManifest = Join-Path $testRoot 'no_such_manifest.json'
 
     Test-Case '入口:ValidateSet、分发与帮助只有工具现有的三个模式;工具已删的命令与参数不再接受' {
         $commandParam = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Command' }
@@ -101,37 +91,19 @@ try {
         foreach ($cmd in @('merge-zone-relocate', 'merge-zone-relocate-abort', 'merge-zone-pin-placement', 'merge-zone-storage-audit', 'merge-zone-capability-check')) {
             Assert-True (-not ($cmd -in $allowed)) "tools/merge_zone 已删掉对应模式,-Command 不再接受 $cmd"
         }
-        foreach ($name in @('MergeSkipGuildMySql', 'MergeSkipGuildRank', 'MergeSkipTradeMySql', 'MergeZoneRouteDbDsn', 'MergeZoneWaitAofLocal', 'MergeZoneWaitAofReplicas', 'MergeZoneWaitAofTimeoutMs')) {
-            Assert-True ($name -in $paramNames) "param 块必须有 -$name"
-        }
-        foreach ($name in @('MergeZoneRouteSource', 'MergeZoneTakeOverFence', 'MergePlayerRowsMode', 'MergeDbCapabilityZones', 'MergePinPlacementZone', 'MergeBackfillZone',
-                            'MergeRelocateSourceStorage', 'MergeRelocateTargetStorage', 'MergeRelocatePlayerIds', 'MergeRelocateBatchSize', 'MergeRelocateLockWait', 'MergeAuditStorage',
-                            'MergeKafkaConsumerGroupsCmd', 'MergeKafkaBootstrap', 'MergeKafkaGroup', 'MergeKafkaTopicGeneration', 'MergeAssumeKafkaDrained',
-                            'MergeMigratePlayerBlobs', 'MergeClearSourceHotState', 'MergeSourceDataRedis', 'MergeTargetDataRedis', 'MergeDataRedisPassword',
-                            'MergeSourceDataRedisDB', 'MergeTargetDataRedisDB', 'MergeExpectedSrcPlayers', 'MergeAllowEmptySource', 'MergeTableListJson')) {
-            Assert-True (-not ($name -in $paramNames)) "-$name 对应的 tools/merge_zone 旗标已删除"
-        }
-    }
-
-    Test-Case '公共参数:mapping 取 data_service.yaml 的 Host、DB 缺省 0' {
-        Reset-MergeParams
-        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
-        $a = Get-CmdArgs 'merge-zone'
-        Assert-Equal '10.9.9.9:6379' (Get-ArgValue $a '-mapping-redis-addr') 'mapping 地址必须现读 data_service.yaml'
-        Assert-Equal '0' (Get-ArgValue $a '-mapping-redis-db') 'yaml 里没有 DB 键时 mapping DB 必须兜底为 0(不是 15)'
-        Assert-NotMatch $devToolsSource '今天是 15' '参数说明里不得再把 mapping DB 写成 15(gap-fixes B6)'
+        # 合服参数只留这三个(-DryRun 与其它命令共用):多一个就是工具不认的旗标,或者一个没人读的开关。
+        $mergeNames = @($paramNames | Where-Object { $_ -like 'Merge*' } | Sort-Object)
+        Assert-Equal 'MergeSourceZone|MergeTargetZone|MergeZoneRouteDbDsn' ($mergeNames -join '|') '合服参数只留源区、目标区和全局库 DSN'
+        Assert-True (-not ('VerifyMerged' -in $paramNames)) '-VerifyMerged 对应的合服后复核已删除'
     }
 
     # 工具用 flag 包解析:多一个未声明的旗标,整条命令在做任何事之前退出。旗标清单从 main.go 现读,不在测试里抄第二份。
-    Test-Case '转发的旗标都由 tools/merge_zone/main.go 声明(开关全打开时逐个核对)' {
+    Test-Case '转发的旗标都由 tools/merge_zone/main.go 声明' {
         $toolSource = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../merge_zone/main.go') -Raw
-        $declared = @([regex]::Matches($toolSource, 'flag\.[A-Za-z0-9]+\((?:&[A-Za-z0-9_.]+,\s*)?"(?<n>[a-z0-9-]+)"') | ForEach-Object { $_.Groups['n'].Value })
-        Assert-True ('route-db-dsn' -in $declared -and 'source-zone' -in $declared) '夹具前提:main.go 的旗标声明写法认得出来(换了写法要同步本用例的正则)'
+        $declared = @([regex]::Matches($toolSource, '\bfs\.[A-Z][A-Za-z0-9]+\((?:&[A-Za-z0-9_.]+,\s*)?"(?<n>[a-z0-9-]+)"') | ForEach-Object { $_.Groups['n'].Value })
+        Assert-True ('route-db-dsn' -in $declared -and 'source-zone' -in $declared -and 'mode' -in $declared) '夹具前提:main.go 的旗标声明写法认得出来(换了写法要同步本用例的正则)'
         Reset-MergeParams
-        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2; $script:MergeManifestPath = $manifestFile
-        $script:MergeRedisPassword = 'x'; $script:MergeMappingRedisPassword = 'x'; $script:MergeNoticeRedisAddr = 'h:1'; $script:MergeSceneRedisAddr = 'h:1'
-        $script:MergeEtcdEndpoints = 'http://127.0.0.1:2379'; $script:MergeSkipTradeMySql = $true; $script:MergeSkipGuildMySql = $true; $script:MergeSkipGuildRank = $true
-        $script:MergeZoneWaitAofLocal = 1; $script:MergeZoneWaitAofReplicas = 1; $script:MergeZoneWaitAofTimeoutMs = 1200; $script:VerifyMerged = $true
+        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
         foreach ($intentDry in @($false, $true)) {
             $script:DryRun = $intentDry
             foreach ($cmd in @('merge-zone', 'merge-zone-unmerge', 'merge-zone-audit')) {
@@ -140,17 +112,6 @@ try {
                 }
             }
         }
-    }
-
-    Test-Case '公共参数:-MergeEtcdEndpoints 原样转发为 -etcd-endpoints,没给就不转发(缺参数由 merge_zone 在任何写入之前拒绝)' {
-        Reset-MergeParams
-        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
-        Assert-True (-not ((Get-CmdArgs 'merge-zone') -contains '-etcd-endpoints')) '没给 -MergeEtcdEndpoints 时不得转发空值'
-        $script:MergeEtcdEndpoints = 'http://127.0.0.1:2379'
-        foreach ($cmd in @('merge-zone', 'merge-zone-audit')) {
-            Assert-Equal 'http://127.0.0.1:2379' (Get-ArgValue (Get-CmdArgs $cmd) '-etcd-endpoints') "${cmd}:-MergeEtcdEndpoints 必须原样转发(preflight P2 与审计要 etcd 注册表的正证,tools/merge_zone/scene_registry.go)"
-        }
-        $script:MergeEtcdEndpoints = ''
     }
 
     # 源码断言:dev_tools.ps1 与回滚脚本 / kafka_offset_reset.ps1 的透传口径(2026-10-30:存盘不再经 Kafka,相关参数全部删除)。
@@ -185,102 +146,55 @@ try {
         Assert-NotMatch $deploy.Extent.Text 'DbConsumerGroup|MatchRatingSnapshotPublish' 'k8s_deploy.ps1 已不声明这两个参数,再透传会以「找不到参数」失败'
     }
 
-    Test-Case '帮会跳过开关:默认不转发,给了就对合服 / 撤销 / 审计同口径转发' {
-        Reset-MergeParams
-        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2; $script:MergeManifestPath = $manifestFile
-        foreach ($cmd in @('merge-zone', 'merge-zone-unmerge', 'merge-zone-audit')) {
-            $a = Get-CmdArgs $cmd
-            Assert-True (-not ($a -contains '-skip-guild-mysql')) "$cmd 默认不得跳过 guild MySQL 步骤"
-            Assert-True (-not ($a -contains '-skip-guild-rank')) "$cmd 默认不得跳过 guild 榜步骤"
+    foreach ($spec in @(@{ Command = 'merge-zone'; Mode = 'merge' }, @{ Command = 'merge-zone-unmerge'; Mode = 'unmerge' })) {
+        Test-Case "$($spec.Command):两个 zone 必填;转发模式与 zone;只有 -DryRun 才转发 -dry-run" {
+            Reset-MergeParams
+            Assert-Match (Get-ThrownMessage { Get-CmdArgs $spec.Command }) 'MergeSourceZone' '缺 zone 必须点名报错'
+            $script:MergeSourceZone = 1
+            Assert-Match (Get-ThrownMessage { Get-CmdArgs $spec.Command }) 'MergeTargetZone' '缺目标区必须点名报错'
+            $script:MergeTargetZone = 2
+            $a = Get-CmdArgs $spec.Command
+            Assert-Equal $spec.Mode (Get-ArgValue $a '-mode') '模式'
+            Assert-Equal '1' (Get-ArgValue $a '-source-zone') '源区'
+            Assert-Equal '2' (Get-ArgValue $a '-target-zone') '目标区'
+            Assert-True (-not ($a -contains '-dry-run')) '不带 -DryRun 不转发 -dry-run'
+            Assert-True (-not ($a -contains '-apply')) '工具已没有 -apply'
+            $script:DryRun = $true
+            Assert-True ((Get-CmdArgs $spec.Command) -contains '-dry-run') '-DryRun 转发 -dry-run'
         }
-        $script:MergeSkipGuildMySql = $true; $script:MergeSkipGuildRank = $true
-        foreach ($cmd in @('merge-zone', 'merge-zone-unmerge', 'merge-zone-audit')) {
-            $a = Get-CmdArgs $cmd
-            Assert-True ($a -contains '-skip-guild-mysql') "$cmd 必须转发 -skip-guild-mysql"
-            Assert-True ($a -contains '-skip-guild-rank') "$cmd 必须转发 -skip-guild-rank(审计只在两个都给时才记 SKIPPED)"
-        }
     }
 
-    Test-Case 'merge-zone:两个 zone 必填;缺省清单落在仓库根、绝对路径;不带 -DryRun 写意图是 -apply,-DryRun 只转发 -dry-run' {
+    Test-Case 'merge-zone-audit:只读,不转发 zone 和 -dry-run(工具拒绝这些组合)' {
         Reset-MergeParams
-        Assert-Match (Get-ThrownMessage { Get-CmdArgs 'merge-zone' }) 'MergeSourceZone' '缺源区必须点名报错'
-        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
-        $a = Get-CmdArgs 'merge-zone'
-        Assert-Equal '1' (Get-ArgValue $a '-source-zone') '源区'
-        Assert-Equal '2' (Get-ArgValue $a '-target-zone') '目标区'
-        Assert-Equal '-apply' ([string]$a[-1]) '不带 -DryRun 时写意图是 -apply'
-        Assert-Match (Get-ArgValue $a '-manifest-path') ('^' + [regex]::Escape($testRoot) + '[\\/]merge_1_to_2_\d{8}T\d{6}Z\.json$') '默认清单落在仓库根、绝对路径'
-        $script:DryRun = $true
-        $a = Get-CmdArgs 'merge-zone'
-        Assert-True ($a -contains '-dry-run' -and -not ($a -contains '-apply')) '-DryRun 只转发 -dry-run'
-    }
-
-    Test-Case 'merge-zone-unmerge:要求清单存在;zone 从清单读,不转发 -source-zone / -target-zone' {
-        Reset-MergeParams
-        Assert-Match (Get-ThrownMessage { Get-CmdArgs 'merge-zone-unmerge' }) 'MergeManifestPath' '不给清单必须点名报错'
-        $script:MergeManifestPath = $missingManifest
-        Assert-Match (Get-ThrownMessage { Get-CmdArgs 'merge-zone-unmerge' }) 'manifest not found' '清单不存在必须拒绝'
-
-        $script:MergeManifestPath = $manifestFile
-        $a = Get-CmdArgs 'merge-zone-unmerge'
-        Assert-Equal 'unmerge' (Get-ArgValue $a '-mode') '撤销模式'
-        Assert-Equal $manifestFile (Get-ArgValue $a '-manifest-path') '清单绝对路径'
-        Assert-Equal $null (Get-ArgValue $a '-source-zone') 'zone 从清单读:工具的约定是撤销的对象必须与当初合的一致'
-        Assert-Equal '-apply' ([string]$a[-1]) '写意图'
-    }
-
-    Test-Case 'merge-zone-audit -VerifyMerged:必须带清单并转发 -manifest-path;普通审计不带写意图' {
-        Reset-MergeParams
-        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
+        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2; $script:DryRun = $true
         $a = Get-CmdArgs 'merge-zone-audit'
         Assert-Equal 'audit' (Get-ArgValue $a '-mode') '审计模式'
-        Assert-True (-not ($a -contains '-apply' -or $a -contains '-dry-run')) '审计只读,不带写意图'
-        Assert-True (-not ($a -contains '-verify-merged')) '默认是合服前审计'
-
-        $script:VerifyMerged = $true
-        Assert-Match (Get-ThrownMessage { Get-CmdArgs 'merge-zone-audit' }) 'MergeManifestPath' '合服后复核逐 id 核对清单,没有清单必须点名报错'
-        $script:MergeManifestPath = $manifestFile
-        $a = Get-CmdArgs 'merge-zone-audit'
-        Assert-True ($a -contains '-verify-merged') '转发复核开关'
-        Assert-Equal $manifestFile (Get-ArgValue $a '-manifest-path') '复核必须转发清单'
+        foreach ($flag in @('-source-zone', '-target-zone', '-dry-run')) {
+            Assert-True (-not ($a -contains $flag)) "审计不转发 $flag"
+        }
     }
 
-    # ── 路由库(工具的 checkRouteFlags:三个模式都读路由库,-route-db-dsn 必填)────────
-    $routeCommands = [ordered]@{
-        'merge-zone'         = { $script:MergeSourceZone = 1; $script:MergeTargetZone = 2 }
-        'merge-zone-unmerge' = { $script:MergeManifestPath = $manifestFile }
-        'merge-zone-audit'   = { $script:MergeSourceZone = 1; $script:MergeTargetZone = 2 }
-    }
-
-    Test-Case '路由库:-MergeZoneRouteDbDsn 没有缺省值,三个命令缺了都点名拒绝;给了原样转发;WAITAOF 只在给出时转发;DSN 不打到控制台' {
+    Test-Case '全局库:-MergeZoneRouteDbDsn 没有缺省值,三个命令缺了都点名拒绝;给了原样转发;DSN 不打到控制台' {
         $param = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'MergeZoneRouteDbDsn' }
         Assert-True ($null -ne $param) 'param 块必须有 -MergeZoneRouteDbDsn'
         Assert-Equal '' $param.DefaultValue.Value '缺省必须为空(必填),不能偷偷给一个库'
         $dsn = 'route:secret@tcp(10.0.0.9:3306)/testdb'
-        foreach ($label in $routeCommands.Keys) {
+        foreach ($cmd in @('merge-zone', 'merge-zone-unmerge', 'merge-zone-audit')) {
             Reset-MergeParams -RouteDbDsn ''
-            & $routeCommands[$label]
-            Assert-Match (Get-ThrownMessage { Get-CmdArgs $label }) 'MergeZoneRouteDbDsn' "$label 缺 -MergeZoneRouteDbDsn 必须点名拒绝"
+            $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
+            Assert-Match (Get-ThrownMessage { Get-CmdArgs $cmd }) 'MergeZoneRouteDbDsn' "$cmd 缺 -MergeZoneRouteDbDsn 必须点名拒绝"
 
             Reset-MergeParams -RouteDbDsn $dsn
-            & $routeCommands[$label]
-            $a = Get-CmdArgs $label
-            Assert-Equal $dsn (Get-ArgValue $a '-route-db-dsn') "$label 必须原样转发 -route-db-dsn"
-            Assert-True (-not ($a -contains '-route-source')) "$label 不再转发 -route-source(工具已删,路由库是唯一真源)"
-            foreach ($flag in @('-waitaof-local', '-waitaof-replicas', '-waitaof-timeout-ms')) {
-                Assert-Equal $null (Get-ArgValue $a $flag) "$label 没给 $flag 对应的参数就不转发"
-            }
-            $script:MergeZoneWaitAofLocal = 1; $script:MergeZoneWaitAofReplicas = 1; $script:MergeZoneWaitAofTimeoutMs = 1200
-            $a = Get-CmdArgs $label
-            Assert-Equal '1' (Get-ArgValue $a '-waitaof-local') "$label 转发 -waitaof-local"
-            Assert-Equal '1' (Get-ArgValue $a '-waitaof-replicas') "$label 转发 -waitaof-replicas(redis-ha 档)"
-            Assert-Equal '1200' (Get-ArgValue $a '-waitaof-timeout-ms') "$label 转发 -waitaof-timeout-ms"
+            $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
+            Assert-Equal $dsn (Get-ArgValue (Get-CmdArgs $cmd) '-route-db-dsn') "$cmd 必须原样转发 -route-db-dsn"
         }
-        $fn = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-MergeRouteDbArgs' }, $true)
-        Assert-NotMatch $fn.Extent.Text 'Write-Host' 'Get-MergeRouteDbArgs 不得 Write-Host(DSN 含口令)'
+        foreach ($name in @('Get-MergeRouteDbArgs', 'Get-MergeZoneCommandArgs', 'Invoke-MergeZoneGo')) {
+            $fn = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
+            Assert-NotMatch $fn.Extent.Text 'Write-Host' "$name 不得 Write-Host(DSN 含口令)"
+        }
     }
 
-    # ── k8s-route-tool(D1 第 1b-3 批,§13.4 第 3 条)───────────────────
+    # ── k8s-route-tool ───────────────────
     $routeToolPath = Join-Path $PSScriptRoot '../k8s_route_tool.ps1'
     $routeToolErrors = $null
     $routeToolAst = [System.Management.Automation.Language.Parser]::ParseFile($routeToolPath, [ref]$null, [ref]$routeToolErrors)
@@ -302,10 +216,10 @@ try {
         }
 
         Reset-RouteToolParams
-        $script:ZoneName = 'z1'; $script:RouteToolArgs = @('audit', '-frozen-recovery')
+        $script:ZoneName = 'z1'; $script:RouteToolArgs = @('tidb-prepare', '-zones=1')
         $h = Get-K8sRouteToolArgs
         Assert-Equal 'NamespacePrefix|RouteToolArgs|ZoneName' ((@($h.Keys) | Sort-Object) -join '|') '缺省只转发 zone / 子命令 / namespace 前缀,其余默认值只在 k8s_route_tool.ps1'
-        Assert-Equal 'audit|-frozen-recovery' (@($h.RouteToolArgs) -join '|') '子命令与参数逐项原样转发(不拼成一个字符串)'
+        Assert-Equal 'tidb-prepare|-zones=1' (@($h.RouteToolArgs) -join '|') '子命令与参数逐项原样转发(不拼成一个字符串)'
         Assert-Equal 'mmorpg-zone' $h.NamespacePrefix 'namespace 前缀取本脚本的 -NamespacePrefix'
 
         $script:RouteToolReportDir = 'C:\reports'; $script:RouteToolTimeoutSeconds = 4200; $script:RouteToolImage = 'ghcr.io/x/data-service:abc'
@@ -352,7 +266,7 @@ try {
         $saved = @{ RT_TEST_RECORD = $env:RT_TEST_RECORD; RT_TEST_EXIT = $env:RT_TEST_EXIT; RT_TEST_THROW = $env:RT_TEST_THROW }
         try {
             $env:RT_TEST_THROW = ''
-            & $writeChild "@('audit', '-frozen-recovery')"
+            & $writeChild "@('tidb-prepare', '-zones=1')"
             foreach ($code in @(0, 1, 2, 3)) {
                 Remove-Item -LiteralPath $record -Force -ErrorAction SilentlyContinue
                 $env:RT_TEST_RECORD = $record; $env:RT_TEST_EXIT = [string]$code
@@ -364,7 +278,7 @@ try {
             }
             $rec = @(Get-Content -LiteralPath $record)
             Assert-Equal 'zone=z1' $rec[0] 'zone 原样转发'
-            Assert-Equal 'args=audit|-frozen-recovery' $rec[1] '子命令数组逐项转发'
+            Assert-Equal 'args=tidb-prepare|-zones=1' $rec[1] '子命令数组逐项转发'
             Assert-Equal 'dry=False' $rec[2] '没给 -DryRun 不转发'
 
             Remove-Item -LiteralPath $record -Force -ErrorAction SilentlyContinue
@@ -378,7 +292,7 @@ try {
             Assert-True (-not (Test-Path -LiteralPath $record)) '没给子命令时不得调用 k8s_route_tool.ps1'
 
             # 下游抛出未捕获的异常(真脚本的入口已兜成 2,这里防的是包装层这一跳):进程退出码必须是 2,不是 pwsh 的 1。
-            & $writeChild "@('audit')"
+            & $writeChild "@('tidb-prepare')"
             $env:RT_TEST_THROW = '1'; $env:RT_TEST_EXIT = '0'
             $ErrorActionPreference = 'Continue'
             $out = & $pwshPath -NoProfile -NonInteractive -File $childPath 2>&1 | Out-String
@@ -397,7 +311,7 @@ try {
     # 这里在子进程里用 `pwsh -File` 真跑 Invoke-MergeZoneGo:`go` 换成假函数(记录调用、按环境变量决定
     # 编译成败,并把 -o 指向的「产物」写成一个按环境变量 exit 的脚本),产物路径经 New-MergeZoneExePath 接缝换掉。
     # 子脚本在 Invoke-MergeZoneGo 之后 `exit 99`:函数若正常返回(漏了 exit)就会被这个哨兵值抓住。
-    Test-Case '退出码:pwsh -File 下原样透传工具的 0/1/2/4;编译失败给 2 且不运行工具;不走 go run' {
+    Test-Case '退出码:pwsh -File 下原样透传工具的 0/1/2;编译失败给 2 且不运行工具;不走 go run' {
         $runnerNames = $functionNames + @('New-MergeZoneExePath', 'Invoke-MergeZoneGo')
         $definitions = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in $runnerNames }, $false))
         foreach ($name in $runnerNames) {
@@ -429,7 +343,7 @@ function go {
             @($definitions | ForEach-Object { $_.Extent.Text }) +
             @($paramAssignments) +
             @(('$ScriptDir = ''{0}''' -f $script:ScriptDir.Replace("'", "''")), '$MergeSourceZone = 1', '$MergeTargetZone = 2', '$MergeZoneRouteDbDsn = ''route:x@tcp(h:1)/db''', $fakeGo,
-              'Invoke-MergeZoneGo -MergeCommand ''merge-zone-audit''', 'exit 99'))
+              'Invoke-MergeZoneGo -MergeCommand ''merge-zone''', 'exit 99'))
 
         $pwshPath = (Get-Process -Id $PID).Path
         $fakeExe = Join-Path $childDir 'fake_merge_zone.ps1'
@@ -448,7 +362,7 @@ function go {
             return [pscustomobject]@{ Code = $LASTEXITCODE; Output = $output }
         }
         try {
-            foreach ($toolExit in @(0, 1, 2, 4)) {
+            foreach ($toolExit in @(0, 1, 2)) {
                 $r = Invoke-Child -BuildExit 0 -ToolExit $toolExit
                 Assert-Equal $toolExit $r.Code "工具退出 $toolExit 时 pwsh -File 的进程退出码必须原样是 $toolExit(99 = 函数正常返回、漏了 exit)。子进程输出: $($r.Output)"
                 Assert-True (-not (Test-Path -LiteralPath $fakeExe)) '跑完必须删掉临时编译产物'
@@ -465,10 +379,10 @@ function go {
             $toolCall = @(Get-Content -LiteralPath $toolRecord)
             Assert-Equal "cwd=$expectedCwd" $toolCall[0] '工具在 tools/merge_zone 里运行(与旧 go run 的工作目录一致)'
             $toolArgs = @($toolCall | Select-Object -Skip 1)
-            Assert-Equal '-mode' $toolArgs[0] '执行产物时必须去掉 "run", "." 前缀,首个参数就是工具 flag'
-            Assert-Equal 'audit' (Get-ArgValue $toolArgs '-mode') '参数原样转发'
+            Assert-Equal '-mode' $toolArgs[0] '首个参数就是工具 flag,没有 go run 的前缀'
+            Assert-Equal 'merge' (Get-ArgValue $toolArgs '-mode') '参数原样转发'
             Assert-Equal '1' (Get-ArgValue $toolArgs '-source-zone') '参数原样转发'
-            Assert-Equal '0' (Get-ArgValue $toolArgs '-mapping-redis-db') '公共参数同一份组装'
+            Assert-Equal 'route:x@tcp(h:1)/db' (Get-ArgValue $toolArgs '-route-db-dsn') '参数原样转发'
 
             $r = Invoke-Child -BuildExit 1 -ToolExit 0
             Assert-Equal 2 $r.Code "编译失败时工具一行没跑,退出码必须是 2(没做成 / 结论不可信),不得是 0。子进程输出: $($r.Output)"
@@ -506,15 +420,6 @@ function go {
         Assert-Equal 1 $got "merge-zone 缺 zone:参数错误往上抛,进程退出码 1(99 = 函数正常返回、漏了 exit)。子进程输出: $out"
         Assert-Match $out 'MergeSourceZone' '报错点名缺的参数'
         Assert-True (-not (Test-Path -LiteralPath $goRecord)) '参数没给齐时不编译、不运行工具'
-    }
-
-    Test-Case '相对清单路径按调用者的当前目录解析(在切进 tools/merge_zone 之前)' {
-        Reset-MergeParams
-        $script:MergeSourceZone = 1; $script:MergeTargetZone = 2; $script:MergeManifestPath = 'rel_manifest.json'
-        Push-Location $testRoot
-        try { $a = Get-CmdArgs 'merge-zone' }
-        finally { Pop-Location }
-        Assert-Equal (Join-Path $testRoot 'rel_manifest.json') (Get-ArgValue $a '-manifest-path') '相对路径必须按调用者目录转成绝对路径'
     }
 }
 finally {

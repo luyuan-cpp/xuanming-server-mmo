@@ -11,6 +11,7 @@ import (
 	"chat/internal/constants"
 	"chat/internal/textfilter"
 	"shared/authoritysql"
+	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -41,9 +42,9 @@ type Config struct {
 	AccountRoleSchema string `json:",optional"`
 	// ActorVerifyTTLSeconds:身份校验结果的进程内缓存秒数,0 = 每次都校验。
 	// 代价:角色被挂牌或过户之后,旧会话最多还能发这么久的聊天(authority/actor_verify.go)。
-	ActorVerifyTTLSeconds int              `json:",default=30"`
-	GlobalLoginSessions   bool             `json:",default=true"`
-	LoginRedis            LoginRedisConfig `json:",optional"`
+	ActorVerifyTTLSeconds int                           `json:",default=30"`
+	GlobalLoginSessions   bool                          `json:",default=true"`
+	LoginRedis            playerredis.LoginReaderConfig `json:",optional"`
 
 	// ChatRedis保留既有可丢缓存配置；正式Send/Pull只用SQL原件，不读写旧LIST或授权键。
 	ChatRedis redis.RedisConf `json:",optional"`
@@ -92,13 +93,6 @@ type Config struct {
 	KillSwitchPrefix string `json:",optional"`
 }
 
-type LoginRedisConfig struct {
-	Host        string
-	PasswordEnv string `json:",optional"`
-	DB          int
-	PoolSize    int `json:",default=4"`
-}
-
 // ListenHostPort 把 ListenOn 拆成 host 与端口号。用 net.SplitHostPort 以正确处理 "[::]:50700"。
 func (c *Config) ListenHostPort() (string, uint32, error) {
 	host, portStr, err := net.SplitHostPort(c.ListenOn)
@@ -127,7 +121,7 @@ func (c *Config) Validate() error {
 	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
 		return err
 	}
-	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.DSNEnv) || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 || !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) || !c.GlobalLoginSessions || c.LoginRedis.Host == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize < 1 || c.LoginRedis.PoolSize > 128 {
+	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.DSNEnv) || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 || !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) || !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 1 || c.LoginRedis.PoolSizePerNode > 128 {
 		return errors.New("聊天必须显式配置SQL原件库、同域角色目录与全局原登录态只读句柄")
 	}
 	if c.ActorVerifyTTLSeconds < 0 || c.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds {

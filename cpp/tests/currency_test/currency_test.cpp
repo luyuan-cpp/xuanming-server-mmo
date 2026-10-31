@@ -27,7 +27,9 @@
 #include "modules/currency/system/currency_system.h"
 #include "modules/transaction_log/anomaly_detector.h"
 #include "player/comp/player_frozen_comp.h" // 冻结用例:IsCrossZoneFrozen 就是 any_of<PlayerFrozenComp>
-#include "player/comp/player_ownership_comp.h" // 玩家域键形金样:OwnerEpochRedisKey
+#include "battle/system/battle_lock_rules.h" // 玩家域键形金样:战斗锁与上下文的格式串
+#include "player/comp/player_ownership_comp.h" // 玩家域键形金样
+#include "player/system/player_landing.h" // 玩家域键形金样:同步摘要的格式串
 #include "player/system/handoff_sql_barrier.h"
 #include "proto/common/base/currency_type.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
@@ -536,11 +538,11 @@ TEST(CurrencyTest, PlayerStoreDirectPathSourceContract)
     ASSERT_FALSE(source.empty());
 
     // 交给状态机在 marshal、交接跳过之后。在发号之前:号只由状态机在确定要写时取。
-    const auto save = source.find("PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerToRedisImpl(");
+    const auto save = source.find("PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerImpl(");
     ASSERT_NE(std::string::npos, save);
     const auto marshal = source.find("MarshalPlayerForSave(player, playerId, *message)", save);
     const auto handoffSkip = source.find("return SaveResult::kHandoffAlreadyRequested;", save);
-    const auto divert = source.find("return SavePlayerDirect(player, playerId, message, allowSkipWhenPersisted);", save);
+    const auto divert = source.find("return SubmitPlayerSave(player, playerId, message, allowSkipWhenPersisted);", save);
     ASSERT_NE(std::string::npos, divert);
     EXPECT_LT(marshal, handoffSkip);
     EXPECT_LT(handoffSkip, divert);
@@ -566,17 +568,35 @@ TEST(CurrencyTest, PlayerStoreDirectPathSourceContract)
     EXPECT_EQ(std::string::npos, handoff_sql_barrier::kPublishMarkDirectLua.find("HMGET"));
 }
 
-// 玩家域键形的跨语言金样(离线):与 go/shared/ownerepoch 的 TestKeyFormats 钉同一组字面量,
+// 玩家域键形的跨语言金样(离线):与 go/shared/ownerepoch 的 TestKeyFormats、go/shared/handofffence 的键测试、
+// go/shared/redisslot 的 TestPlayerKeyGoldenVectors、go/shared/playersync 的 TestKeyFormatMatchesCpp 钉同一组字面量,
 // 改任何一侧都要同批改另一侧(docs/design/redis-player-store-cluster.md §5.2)。
 TEST(CurrencyTest, PlayerDomainRedisKeysMatchGoContract)
 {
     EXPECT_EQ("player:{12345}:owner_epoch", player_ownership::OwnerEpochRedisKey(12345));
     EXPECT_EQ("player:{18446744073709551615}:owner_epoch",
               player_ownership::OwnerEpochRedisKey(std::numeric_limits<Guid>::max()));
+    EXPECT_EQ("player:{12345}:handoff", player_ownership::HandoffRedisKey(12345));
+    EXPECT_EQ("player:{42}:handoff_fence", player_ownership::HandoffFenceRedisKey(42));
+    EXPECT_EQ("player:{42}:location", player_ownership::LocationRedisKey(42));
+    EXPECT_EQ("player:{18446744073709551615}:location",
+              player_ownership::LocationRedisKey(std::numeric_limits<Guid>::max()));
+    EXPECT_STREQ("battle:lock:{%llu}", battle_lock::kBattleLockKeyFmt);
+    EXPECT_STREQ("battle:ctx:{%llu}", battle_lock::kBattleCtxKeyFmt);
+    EXPECT_STREQ("player:{%llu}:sync_digest", player_landing::kSyncDigestKeyFmt);
 
+    // 同一段 Lua 里出现的键必须同 slot:交接与归属脚本(owner_epoch、handoff_fence、handoff、location)、战斗锁脚本(lock、ctx)。
     for (const Guid playerId : {Guid{1}, Guid{42}, Guid{12345}, std::numeric_limits<Guid>::max()})
     {
-        EXPECT_EQ(redis_slot::PlayerSlot(playerId), redis_slot::HashSlot(player_ownership::OwnerEpochRedisKey(playerId)));
+        const auto slot = redis_slot::PlayerSlot(playerId);
+        EXPECT_EQ(slot, redis_slot::HashSlot(player_ownership::OwnerEpochRedisKey(playerId)));
+        EXPECT_EQ(slot, redis_slot::HashSlot(player_ownership::HandoffRedisKey(playerId)));
+        EXPECT_EQ(slot, redis_slot::HashSlot(player_ownership::HandoffFenceRedisKey(playerId)));
+        EXPECT_EQ(slot, redis_slot::HashSlot(player_ownership::LocationRedisKey(playerId)));
+        const std::string tag = redis_slot::PlayerTag(playerId);
+        EXPECT_EQ(slot, redis_slot::HashSlot("battle:lock:" + tag));
+        EXPECT_EQ(slot, redis_slot::HashSlot("battle:ctx:" + tag));
+        EXPECT_EQ(slot, redis_slot::HashSlot("player:" + tag + ":sync_digest"));
     }
 }
 
@@ -684,23 +704,23 @@ TEST(CurrencyTest, TravelPublishMarkDirectAgainstRealRedis)
     ASSERT_TRUE(sync.Connect(host, port));
     const auto member = std::to_string(IsolatedRedisPlayerIdForTest());
     const std::string ownerKey = "player:{" + member + "}:owner_epoch";
-    const std::string barrierKey = "player:{" + member + "}:save_barrier";
-    const std::string markKey = "player:" + member + ":handoff";
+    const std::string handoffKey = "player:{" + member + "}:handoff_fence";
+    const std::string markKey = "player:{" + member + "}:handoff";
     ASSERT_EQ(0LL, sync.Exists(ownerKey));
-    ASSERT_EQ(0LL, sync.Exists(barrierKey));
+    ASSERT_EQ(0LL, sync.Exists(handoffKey));
     ASSERT_EQ(0LL, sync.Exists(markKey));
     struct Cleanup
     {
         SyncRedisForTest& sync;
         const std::string& owner;
-        const std::string& barrier;
+        const std::string& handoff;
         const std::string& mark;
-        ~Cleanup() { sync.Del(owner); sync.Del(barrier); sync.Del(mark); }
-    } cleanup{sync, ownerKey, barrierKey, markKey};
+        ~Cleanup() { sync.Del(owner); sync.Del(handoff); sync.Del(mark); }
+    } cleanup{sync, ownerKey, handoffKey, markKey};
     using Reply = std::unique_ptr<redisReply, decltype(&freeReplyObject)>;
     const auto setFence = [&](const std::string& value) {
         Reply reply(static_cast<redisReply*>(redisCommand(sync.context.get(), "HSET %b handoff_fence %b",
-            barrierKey.data(), barrierKey.size(), value.data(), value.size())), &freeReplyObject);
+            handoffKey.data(), handoffKey.size(), value.data(), value.size())), &freeReplyObject);
         ASSERT_NE(nullptr, reply);
         ASSERT_EQ(REDIS_REPLY_INTEGER, reply->type);
     };
@@ -708,7 +728,7 @@ TEST(CurrencyTest, TravelPublishMarkDirectAgainstRealRedis)
     const std::string published = "5|sql-barrier-test|1|" + std::string(32, 'a') + "|F|" + std::string(32, 'c');
     const auto publish = [&](const std::string& marker) {
         Reply reply(static_cast<redisReply*>(redisCommand(sync.context.get(), "EVAL %s 3 %b %b %b 5 %b 300 %b %b",
-            handoff_sql_barrier::kPublishMarkDirectLua.c_str(), ownerKey.data(), ownerKey.size(), barrierKey.data(), barrierKey.size(),
+            handoff_sql_barrier::kPublishMarkDirectLua.c_str(), ownerKey.data(), ownerKey.size(), handoffKey.data(), handoffKey.size(),
             markKey.data(), markKey.size(), marker.data(), marker.size(), held.data(), held.size(), published.data(), published.size())), &freeReplyObject);
         if (reply == nullptr || reply->type != REDIS_REPLY_INTEGER) return -99LL;
         return static_cast<long long>(reply->integer);
@@ -1019,9 +1039,9 @@ TEST(CurrencyTest, HandoffQualificationCASRevokesLateWritersAndReplaysLostReplie
     if (!TestRedisAddr(host,port)) GTEST_SKIP() << "需要专用MMORPG_TEST_REDIS_ADDR";
     SyncRedisForTest sync; ASSERT_TRUE(sync.Connect(host,port));
     const auto id=std::to_string(IsolatedRedisPlayerIdForTest());
-    const std::string owner="player:{"+id+"}:owner_epoch", barrier="player:{"+id+"}:save_barrier", mark="player:"+id+":handoff";
-    ASSERT_EQ(0LL,sync.Exists(owner));ASSERT_EQ(0LL,sync.Exists(barrier));ASSERT_EQ(0LL,sync.Exists(mark));
-    struct Cleanup { SyncRedisForTest& sync;std::vector<std::string> keys;~Cleanup(){ for(const auto& key:keys) sync.Del(key); } } cleanup{sync,{owner,barrier,mark}};
+    const std::string owner="player:{"+id+"}:owner_epoch", handoff="player:{"+id+"}:handoff_fence", mark="player:{"+id+"}:handoff";
+    ASSERT_EQ(0LL,sync.Exists(owner));ASSERT_EQ(0LL,sync.Exists(handoff));ASSERT_EQ(0LL,sync.Exists(mark));
+    struct Cleanup { SyncRedisForTest& sync;std::vector<std::string> keys;~Cleanup(){ for(const auto& key:keys) sync.Del(key); } } cleanup{sync,{owner,handoff,mark}};
     using Reply=std::unique_ptr<redisReply,decltype(&freeReplyObject)>;
     const auto command=[&](std::vector<std::string> args) {
         std::vector<const char*> values;std::vector<size_t> sizes;
@@ -1029,7 +1049,7 @@ TEST(CurrencyTest, HandoffQualificationCASRevokesLateWritersAndReplaysLostReplie
         return Reply(static_cast<redisReply*>(redisCommandArgv(sync.context.get(),static_cast<int>(args.size()),values.data(),sizes.data())),&freeReplyObject);
     };
     const auto eval=[&](const std::string& lua,std::vector<std::string> args) {
-        std::vector<std::string> all{"EVAL",lua,"3",owner,barrier,mark};all.insert(all.end(),args.begin(),args.end());
+        std::vector<std::string> all{"EVAL",lua,"3",owner,handoff,mark};all.insert(all.end(),args.begin(),args.end());
         return command(std::move(all));
     };
     const auto expectInteger=[&](const Reply& reply,long long value){ ASSERT_NE(nullptr,reply);ASSERT_EQ(REDIS_REPLY_INTEGER,reply->type);EXPECT_EQ(value,reply->integer); };
@@ -1046,7 +1066,7 @@ TEST(CurrencyTest, HandoffQualificationCASRevokesLateWritersAndReplaysLostReplie
     expectInteger(eval(handoff_sql_barrier::kReleaseMarkLua,{"7","7:1000","300",held,frozen}),-2);
     EXPECT_EQ(0LL,sync.Exists(mark));
     auto location=owner+":location-fixture";ASSERT_EQ(0LL,sync.Exists(location));cleanup.keys.push_back(location);
-    const auto resume=[&]{return command({"EVAL",handoff_sql_barrier::kResumeFenceLua,"4",owner,barrier,mark,location,revoked,resumed,"7",""});};
+    const auto resume=[&]{return command({"EVAL",handoff_sql_barrier::kResumeFenceLua,"4",owner,handoff,mark,location,revoked,resumed,"7",""});};
     // 忽略第一次已提交应答，第二次只能重放完全相同H，不能临时重造资格。
     auto lost=resume();ASSERT_NE(nullptr,lost);ASSERT_EQ(REDIS_REPLY_INTEGER,lost->type);ASSERT_EQ(1,lost->integer);lost.reset();
     expectInteger(resume(),1);
@@ -1054,11 +1074,11 @@ TEST(CurrencyTest, HandoffQualificationCASRevokesLateWritersAndReplaysLostReplie
     const auto newer=makeFence("2",'f','H','1');
     expectInteger(eval(handoff_sql_barrier::kRegisterFenceLua,{"7",newer,resumed}),1);
     expectInteger(eval(handoff_sql_barrier::kRegisterFenceLua,{"7",held,newer}),-2); // 旧N读到新prior仍不可接任
-    const auto before=command({"HGET",barrier,"handoff_fence"});ASSERT_NE(nullptr,before);ASSERT_EQ(REDIS_REPLY_STRING,before->type);
+    const auto before=command({"HGET",handoff,"handoff_fence"});ASSERT_NE(nullptr,before);ASSERT_EQ(REDIS_REPLY_STRING,before->type);
     sync.Set(mark,"malformed");
     auto bad=eval(handoff_sql_barrier::kRevokeFenceLua,{newer,newer,makeFence("2",'f','R','2'),"1000"});
     ASSERT_NE(nullptr,bad);EXPECT_EQ(REDIS_REPLY_ERROR,bad->type);
-    auto after=command({"HGET",barrier,"handoff_fence"});ASSERT_NE(nullptr,after);ASSERT_EQ(REDIS_REPLY_STRING,after->type);
+    auto after=command({"HGET",handoff,"handoff_fence"});ASSERT_NE(nullptr,after);ASSERT_EQ(REDIS_REPLY_STRING,after->type);
     EXPECT_EQ(std::string(before->str,before->len),std::string(after->str,after->len));
     EXPECT_EQ("malformed",sync.Get(mark)) << "损坏mark不准先写R再报错";
 }
@@ -1067,7 +1087,7 @@ TEST(CurrencyTest, HandoffQualificationCASRevokesLateWritersAndReplaysLostReplie
 // zone Redis 存活探测(RedisManager::DropUnresponsive)摘掉无应答的旧连接后,内核仍可能把旧连接上未确认的 EVAL 重传到 Redis,
 // 晚于新连接上的取证 / 同节点重载登记才执行。这里用两条真实连接复现这个到达顺序:旧连接只 redisAppendCommandArgv(帧留在
 // 本地输出缓冲、尚未发出),新连接先跑完取证 / 重载,再 redisGetReply 把旧帧真正发出去。断言迟到的标记写被
-// save_barrier.handoff_fence 的原件 CAS 拒绝:新持有期间 handoff 键没有当前代际的标记,资格仍是新持有者的。
+// handoff_fence 的原件 CAS 拒绝:新持有期间 handoff 键没有当前代际的标记,资格仍是新持有者的。
 // 不依赖墙钟、时钟同步或连接顺序;Lua 层的同序重放与 scene_manager 消费方断言见
 // Go TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate。
 TEST(CurrencyTest, HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCredentialAgainstRealRedis)
@@ -1111,8 +1131,8 @@ TEST(CurrencyTest, HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCrede
         ASSERT_EQ(REDIS_REPLY_INTEGER, reply->type) << (reply->type == REDIS_REPLY_ERROR ? reply->str : "");
         EXPECT_EQ(value, reply->integer);
     };
-    const auto fenceOf = [&](const std::string& barrier) {
-        auto reply = send(live, {"HGET", barrier, "handoff_fence"});
+    const auto fenceOf = [&](const std::string& handoff) {
+        auto reply = send(live, {"HGET", handoff, "handoff_fence"});
         return reply != nullptr && reply->type == REDIS_REPLY_STRING ? std::string(reply->str, reply->len) : std::string("(nil)");
     };
     // E=5、同一场景实例 S;generation / admission / state / token 由各步给出。
@@ -1121,24 +1141,24 @@ TEST(CurrencyTest, HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCrede
     };
     struct Keys
     {
-        std::string owner, barrier, mark, location;
+        std::string owner, handoff, mark, location;
     };
     const auto isolatedKeys = [] {
         const auto id = std::to_string(IsolatedRedisPlayerIdForTest());
-        return Keys{"player:{" + id + "}:owner_epoch", "player:{" + id + "}:save_barrier", "player:" + id + ":handoff",
-                    "player:" + id + ":location-fixture"};
+        return Keys{"player:{" + id + "}:owner_epoch", "player:{" + id + "}:handoff_fence", "player:{" + id + "}:handoff",
+                    "player:{" + id + "}:location-fixture"};
     };
     struct Cleanup
     {
         SyncRedisForTest& sync;
         Keys keys;
-        ~Cleanup() { sync.Del(keys.owner); sync.Del(keys.barrier); sync.Del(keys.mark); sync.Del(keys.location); }
+        ~Cleanup() { sync.Del(keys.owner); sync.Del(keys.handoff); sync.Del(keys.mark); sync.Del(keys.location); }
     };
 
     // r2-lc#1:BeginTravelHandoff 的发布帧晚于新连接上判 kUnchanged 的取证与解冻。
     {
         const Keys k = isolatedKeys();
-        ASSERT_EQ(0LL, live.Exists(k.owner)); ASSERT_EQ(0LL, live.Exists(k.barrier));
+        ASSERT_EQ(0LL, live.Exists(k.owner)); ASSERT_EQ(0LL, live.Exists(k.handoff));
         ASSERT_EQ(0LL, live.Exists(k.mark)); ASSERT_EQ(0LL, live.Exists(k.location));
         Cleanup cleanup{live, k};
         const std::string locationBytes = "location-bytes-on-this-node";
@@ -1148,12 +1168,12 @@ TEST(CurrencyTest, HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCrede
         const auto resumed = makeFence("1", 'a', 'H', 'e');
         live.Set(k.owner, "5");
         live.Set(k.location, locationBytes);
-        expectInteger(send(live, {"HSET", k.barrier, "handoff_fence", held}), 1);
+        expectInteger(send(live, {"HSET", k.handoff, "handoff_fence", held}), 1);
         // ① 冻结快照已提交,在旧连接上发 kPublishMarkDirectLua("5:1000"),帧还没到 Redis。
-        ASSERT_EQ(REDIS_OK, hold(stale, {"EVAL", handoff_sql_barrier::kPublishMarkDirectLua, "3", k.owner, k.barrier, k.mark,
+        ASSERT_EQ(REDIS_OK, hold(stale, {"EVAL", handoff_sql_barrier::kPublishMarkDirectLua, "3", k.owner, k.handoff, k.mark,
                                          "5", "5:1000", "300", held, published}));
         // ② 存活探测摘连接,回调收到空应答 → kMarkWriteUnknown;重连后看门狗在新连接上取证:标记尚未到达、owner 未变。
-        auto judged = send(live, {"EVAL", handoff_sql_barrier::kJudgeOutcomeLua, "4", k.owner, k.barrier, k.mark, k.location,
+        auto judged = send(live, {"EVAL", handoff_sql_barrier::kJudgeOutcomeLua, "4", k.owner, k.handoff, k.mark, k.location,
                                   held, published, revoked, "1000"});
         ASSERT_NE(nullptr, judged);
         ASSERT_EQ(REDIS_REPLY_ARRAY, judged->type) << (judged->type == REDIS_REPLY_ERROR ? judged->str : "");
@@ -1161,14 +1181,14 @@ TEST(CurrencyTest, HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCrede
         ASSERT_EQ(REDIS_REPLY_STRING, judged->element[0]->type);
         EXPECT_EQ("5", std::string(judged->element[0]->str, judged->element[0]->len)) << "kUnchanged:owner 仍是 E";
         // ③ ResumeTravelAfterRevocation:R → 新 H,确认后才解冻。
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kResumeFenceLua, "4", k.owner, k.barrier, k.mark, k.location,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kResumeFenceLua, "4", k.owner, k.handoff, k.mark, k.location,
                                   revoked, resumed, "5", locationBytes}), 1);
         // ④ 旧帧此刻才到:原 H 已不是现任资格,必须被拒。
         expectInteger(deliver(stale), -2);
         EXPECT_EQ(0LL, live.Exists(k.mark)) << "解冻后的新持有期间不得出现当前代际的有效标记";
-        EXPECT_EQ(resumed, fenceOf(k.barrier));
+        EXPECT_EQ(resumed, fenceOf(k.handoff));
         // 新持有者自己的下一次交接照常:围栏只拒旧资格,不伤活性。
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kPublishMarkDirectLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kPublishMarkDirectLua, "3", k.owner, k.handoff, k.mark,
                                   "5", "5:2000", "300", resumed, makeFence("1", 'a', 'F', 'f')}), 1);
         EXPECT_EQ("5:2000", live.Get(k.mark));
     }
@@ -1177,26 +1197,26 @@ TEST(CurrencyTest, HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCrede
     // 走同一段 kReleaseMarkLua、只消费各自缓存的原 H,迟到时同样被拒。
     {
         const Keys k = isolatedKeys();
-        ASSERT_EQ(0LL, live.Exists(k.owner)); ASSERT_EQ(0LL, live.Exists(k.barrier)); ASSERT_EQ(0LL, live.Exists(k.mark));
+        ASSERT_EQ(0LL, live.Exists(k.owner)); ASSERT_EQ(0LL, live.Exists(k.handoff)); ASSERT_EQ(0LL, live.Exists(k.mark));
         Cleanup cleanup{live, k};
         const auto held = makeFence("1", 'a', 'H', 'b');
         const auto released = makeFence("1", 'a', 'F', 'c');
         const auto reloaded = makeFence("2", '7', 'H', '8'); // SQL 确认的新 admission generation,同 E、同 S
         live.Set(k.owner, "5");
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kRegisterFenceLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kRegisterFenceLua, "3", k.owner, k.handoff, k.mark,
                                   "5", held, ""}), 1);
         // ① 退出存盘落地,在旧连接上发 A1′("5:1000"),帧还没到 Redis;实体随即销毁。
-        ASSERT_EQ(REDIS_OK, hold(stale, {"EVAL", handoff_sql_barrier::kReleaseMarkLua, "3", k.owner, k.barrier, k.mark,
+        ASSERT_EQ(REDIS_OK, hold(stale, {"EVAL", handoff_sql_barrier::kReleaseMarkLua, "3", k.owner, k.handoff, k.mark,
                                          "5", "5:1000", "300", held, released}));
         // ② 玩家短重连回同一节点:新连接上登记 N=2(原子清继承标记)并确认。
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kRegisterFenceLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kRegisterFenceLua, "3", k.owner, k.handoff, k.mark,
                                   "5", reloaded, held}), 1);
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kConfirmFenceLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kConfirmFenceLua, "3", k.owner, k.handoff, k.mark,
                                   "5", reloaded}), 0);
         // ③ 旧 A1′ 此刻才到:-2 = 原 H 已被新登记轮换,未写。
         expectInteger(deliver(stale), -2);
         EXPECT_EQ(0LL, live.Exists(k.mark)) << "新持有期间不得出现当前代际的有效标记";
-        EXPECT_EQ(reloaded, fenceOf(k.barrier));
+        EXPECT_EQ(reloaded, fenceOf(k.handoff));
     }
 
     // 会话结束凭证(location-release-binding.md §3.3,2026-10-23):本节点完全不持有时没有缓存的原 H,先 HGET 读现任原件、
@@ -1206,61 +1226,61 @@ TEST(CurrencyTest, HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCrede
     // (c) 原件是 R(登记已落地又被撤销,继承标记已被登记删掉)也能写出凭证;(d) owner 已推进时回 0。
     {
         const Keys k = isolatedKeys();
-        ASSERT_EQ(0LL, live.Exists(k.owner)); ASSERT_EQ(0LL, live.Exists(k.barrier)); ASSERT_EQ(0LL, live.Exists(k.mark));
+        ASSERT_EQ(0LL, live.Exists(k.owner)); ASSERT_EQ(0LL, live.Exists(k.handoff)); ASSERT_EQ(0LL, live.Exists(k.mark));
         Cleanup cleanup{live, k};
         const auto held = makeFence("1", 'a', 'H', 'b');
         const auto released = makeFence("1", 'a', 'F', 'c');
         live.Set(k.owner, "5");
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kRegisterFenceLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kRegisterFenceLua, "3", k.owner, k.handoff, k.mark,
                                   "5", held, ""}), 1);
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kReleaseMarkLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kReleaseMarkLua, "3", k.owner, k.handoff, k.mark,
                                   "5", "5:1000", "300", held, released}), 1);
         live.Del(k.mark); // A1′ 的标记 TTL 到期
 
         // (a)
-        const std::string observedFrozen = fenceOf(k.barrier);
+        const std::string observedFrozen = fenceOf(k.handoff);
         ASSERT_EQ(released, observedFrozen);
         const auto credential = makeFence("1", 'a', 'F', 'd');
         const std::vector<std::string> credentialWrite{"EVAL", handoff_sql_barrier::kCredentialMarkLua, "3", k.owner,
-                                                       k.barrier, k.mark, "5", "5:2000", "300", observedFrozen, credential};
+                                                       k.handoff, k.mark, "5", "5:2000", "300", observedFrozen, credential};
         expectInteger(send(live, credentialWrite), 1);
         EXPECT_EQ("5:2000", live.Get(k.mark)) << "持有节点活着而不持有:凭证让 LeaveScene / 换手门拿到 E 代释放证据";
-        EXPECT_EQ(credential, fenceOf(k.barrier));
+        EXPECT_EQ(credential, fenceOf(k.handoff));
         expectInteger(send(live, credentialWrite), 1); // 同一 F 已在:幂等
         EXPECT_EQ("5:2000", live.Get(k.mark));
 
         // (b)
         live.Del(k.mark);
-        const std::string observed = fenceOf(k.barrier);
+        const std::string observed = fenceOf(k.handoff);
         ASSERT_EQ(credential, observed);
-        ASSERT_EQ(REDIS_OK, hold(stale, {"EVAL", handoff_sql_barrier::kCredentialMarkLua, "3", k.owner, k.barrier, k.mark,
+        ASSERT_EQ(REDIS_OK, hold(stale, {"EVAL", handoff_sql_barrier::kCredentialMarkLua, "3", k.owner, k.handoff, k.mark,
                                          "5", "5:3000", "300", observed, makeFence("1", 'a', 'F', 'e')}));
         const auto reloaded = makeFence("2", '7', 'H', '8');
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kRegisterFenceLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kRegisterFenceLua, "3", k.owner, k.handoff, k.mark,
                                   "5", reloaded, observed}), 1);
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kConfirmFenceLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kConfirmFenceLua, "3", k.owner, k.handoff, k.mark,
                                   "5", reloaded}), 0);
         expectInteger(deliver(stale), -2);
         EXPECT_EQ(0LL, live.Exists(k.mark)) << "新持有期间迟到的凭证帧不得留下当前代际的有效标记";
-        EXPECT_EQ(reloaded, fenceOf(k.barrier));
+        EXPECT_EQ(reloaded, fenceOf(k.handoff));
 
         // (c)
         const auto revokedReload = makeFence("2", '7', 'R', 'a');
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kCancelRegistrationLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kCancelRegistrationLua, "3", k.owner, k.handoff, k.mark,
                                   "5", reloaded, observed, revokedReload}), 1);
-        const std::string observedRevoked = fenceOf(k.barrier);
+        const std::string observedRevoked = fenceOf(k.handoff);
         ASSERT_EQ(revokedReload, observedRevoked);
         const auto credentialAfterRevoke = makeFence("2", '7', 'F', 'b');
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kCredentialMarkLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kCredentialMarkLua, "3", k.owner, k.handoff, k.mark,
                                   "5", "5:3500", "300", observedRevoked, credentialAfterRevoke}), 1);
         EXPECT_EQ("5:3500", live.Get(k.mark));
 
         // (d)
         live.Del(k.mark);
         live.Set(k.owner, "6"); // 跨节点接手铸了 E+1
-        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kCredentialMarkLua, "3", k.owner, k.barrier, k.mark,
+        expectInteger(send(live, {"EVAL", handoff_sql_barrier::kCredentialMarkLua, "3", k.owner, k.handoff, k.mark,
                                   "5", "5:4000", "300", credentialAfterRevoke, makeFence("2", '7', 'F', 'c')}), 0);
         EXPECT_EQ(0LL, live.Exists(k.mark));
-        EXPECT_EQ(credentialAfterRevoke, fenceOf(k.barrier));
+        EXPECT_EQ(credentialAfterRevoke, fenceOf(k.handoff));
     }
 }

@@ -142,7 +142,7 @@ function Invoke-JavaService {
 }
 
 switch ($Command) {
-    "go-db" { Invoke-GoService -Dir "db" -Entry "db.go" -ExeName "db" }
+    "go-db" { Invoke-GoService -Dir "db" -Entry "." -ExeName "db" }
     "go-data-service" { Invoke-GoService -Dir "data_service" -Entry "data_service.go" -ExeName "data_service" }
     "go-player-locator" { Invoke-GoService -Dir "player_locator" -Entry "player_locator.go" -ExeName "player_locator" }
     "go-login" { Invoke-GoService -Dir "login" -Entry "login.go" -ExeName "login" }

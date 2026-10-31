@@ -9,7 +9,7 @@ import (
 )
 
 // DatabaseName 是帮会独占的逻辑库名,本地与 K8s 同名。config.Validate 断言 DSN 库名等于它,
-// schemamigrate 连接后再断言 SELECT DATABASE() 等于它;tools/merge_zone 的 defaultGuildSchema 镜像本常量。
+// schemamigrate 连接后再断言 SELECT DATABASE() 等于它。
 const DatabaseName = "mmorpg_guild"
 
 // Tables 返回本库全部表,顺序即全库表间锁序:docs/design/guild-phase2/01-storage.md §2.1 的加锁位置,

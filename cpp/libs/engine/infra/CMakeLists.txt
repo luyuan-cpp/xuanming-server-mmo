@@ -82,6 +82,10 @@ set(SOURCE_FILES
     messaging/kafka/kafka_consumer.cpp
     messaging/kafka/kafka_manager.cpp
     messaging/kafka/kafka_producer.cpp
+    storage/redis_cluster/redis_cluster_client.cpp
+    storage/redis_cluster/redis_cluster_topology.cpp
+    storage/redis_cluster/redis_command_route.cpp
+    storage/redis_cluster/redis_reply_classifier.cpp
 )
 
 add_library(infra STATIC ${SOURCE_FILES})

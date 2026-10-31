@@ -14,9 +14,11 @@ import (
 	dspb "proto/data_service"
 	"shared/generated/table"
 	"shared/kafkacmd"
+	"shared/playerredis"
 	"shared/snowflake"
 	"shared/snowflakealloc"
 
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -41,9 +43,15 @@ type HomeZoneClient interface {
 
 type ServiceContext struct {
 	Config config.Config
-	Redis  *redis.Redis
-	Kafka  KafkaWriter
-	Etcd   *clientv3.Client
+	// Redis 是控制域句柄:场景路由(scene:*、node:zone:*)、成员集合(instance:*:members、node:zone:*:members)、
+	// 世界频道、选主锁。这个域不分片,键一律不带 hash tag。
+	Redis *redis.Redis
+	// PlayerRedis 是玩家域句柄(shared/playerredis,生产可以是 Redis Cluster):location、位置修订、离场等待、切线冷却、
+	// 进场去重、owner_epoch、handoff、handoff_fence。键一律带 {player_id},发送前经守卫核对。
+	// 一段脚本不能跨这两个域,离场与摘成员是两步(docs/design/redis-player-store-cluster.md §5.10)。
+	PlayerRedis goredis.UniversalClient
+	Kafka       KafkaWriter
+	Etcd        *clientv3.Client
 	// HomeZone 查 data_service 的 player:zone 映射,EnterScene 用它填
 	// RoutePlayerEvent.home_zone_id。yaml 没配 DataServiceRpc 时为 nil,
 	// 调用方按「本地单区联调」处理(归属 = gate zone,WARN 计数)。
@@ -74,6 +82,15 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err := c.ValidateUnqualifiedHolderRevokeGrace(); err != nil {
 		panic("scene_manager 配置非法: " + err.Error())
 	}
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		panic("scene_manager 配置非法: PlayerRedis: " + err.Error())
+	}
+	playerRedisConf := c.EffectivePlayerRedis()
+	playerRedis, err := playerredis.New(playerRedisConf)
+	if err != nil {
+		panic("scene_manager 配置非法: " + err.Error())
+	}
+	logx.Infof("[scene_manager] player redis %s", playerRedisConf.Describe())
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
 		DialTimeout: 5 * time.Second,
@@ -117,9 +134,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	logx.Infof("[scene_manager] snowflake %s worker_id=%d (node=%s)", hd.LogFields(), hd.WorkerID, nodeName)
 
 	sc := &ServiceContext{
-		Config: c,
-		Redis:  redis.MustNewRedis(c.Redis.RedisConf),
-		Etcd:   etcdCli,
+		Config:      c,
+		Redis:       redis.MustNewRedis(c.Redis.RedisConf),
+		PlayerRedis: playerRedis,
+		Etcd:        etcdCli,
 		// Handle.NewNode 会注入前任高水位作地板(见 snowflakealloc),
 		// 裸 snowflake.NewNode 只有"不在构造秒发号"的点排除,顶不住时钟偏斜接管。
 		SceneIDGen:  hd.NewNode(),
@@ -176,7 +194,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // 首登 / 换节点都因「铸造未落盘」回滚失败。两项都配 0 时不探、只打一行 ERROR:这时铸造出来的 epoch 没有落盘确认,
 // Redis 崩溃 / 切主丢掉它会让现任持有者被当成废黜(设计 §3 player-save#2),只许没有 AOF 的环境这样配。
 func mustStartOwnerEpochMinter(c config.Config) *RedisOwnerEpochMinter {
-	minter, err := NewRedisOwnerEpochMinter(c.Redis.RedisConf, c.OwnerEpochMint, WallClockMs)
+	minter, err := NewRedisOwnerEpochMinter(c.EffectivePlayerRedis(), c.OwnerEpochMint, WallClockMs)
 	if err != nil {
 		panic("owner epoch mint client init failed: " + err.Error())
 	}
@@ -257,6 +275,11 @@ func (sc *ServiceContext) Stop() {
 		if sc.ownerEpochMintRedis != nil {
 			if err := sc.ownerEpochMintRedis.Close(); err != nil {
 				logx.Errorf("[OwnerEpochMint] mint redis client close failed: %v", err)
+			}
+		}
+		if sc.PlayerRedis != nil {
+			if err := sc.PlayerRedis.Close(); err != nil {
+				logx.Errorf("[scene_manager] player redis client close failed: %v", err)
 			}
 		}
 		if sc.snowflakeHd != nil {

@@ -234,6 +234,7 @@ func newIntegrationSvcCtxWithRedisOptions(t *testing.T, opts ...redis.Option) (*
 	return &svc.ServiceContext{
 		Config:         c,
 		Redis:          rds,
+		PlayerRedis:    newTestPlayerRedis(t, mr),
 		RoleDirectory:  testRoleDirectory(1),
 		OwnerEpochMint: newFakeOwnerEpochMinter(rds),
 		SceneIDGen:     snowflake.NewNode(0),
@@ -624,7 +625,7 @@ func TestIntegration_Rebalance_ActivePlayersBlockMigration(t *testing.T) {
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sceneId, 10))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
 	// 5 players online -> PlanWorldChannelRebalance must skip this channel.
-	require.NoError(t, sc.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, sceneId), "5"))
+	seedSceneMembersVia(sc, sceneId, 5)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -35,6 +35,8 @@ mode: "battle-smoke"
 # 战斗直连(docs/design/turn-based-battle-server.md §18,收缩后见 §22 D73)没有开关:
 # 收到 NotifyBattleAssigned 即凭票据直连 battle 节点客户端面,并断言观众握手快照、
 # 回合结果与终局包从直连到达;直连建不起来 = BATTLE_SMOKE_FAIL step=*-direct-connect。
+# 入队前的地域探测(robot/network_probe.go)同样直连 battle 公网端口:
+# 不可达或回执被拒 = BATTLE_SMOKE_FAIL step=a-network-probe。
 
 # 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)
 auth_type: "password"

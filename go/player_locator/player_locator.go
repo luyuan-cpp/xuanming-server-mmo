@@ -91,13 +91,15 @@ func main() {
 	// ticker、通道收尾)panic,裸 goroutine 会把整个进程当场打死,而租约清理与
 	// 会话对账正是"进程活着但后台已停摆"最难被发现的两处。兜住之后至少留下
 	// 稳定事件名 + safego_panic_total{point} 可以告警。
+	// 实例身份同时是选主锁值前缀和两套分片(LeaseMonitor、死 gate 清扫)的成员 / 段租约值,排障时一眼看出是哪个 Pod。
+	instanceID := reconcilerLeaderID(n.Info.NodeUuid)
 	safego.Go("player_locator.lease_monitor", func() {
-		logic.StartLeaseMonitor(
-			leaseCtx,
-			svcCtx,
-			config.AppConfig.Lease.PollInterval,
-			config.AppConfig.Lease.BatchSize,
-		)
+		logic.StartLeaseMonitor(leaseCtx, svcCtx, logic.LeaseMonitorParams{
+			InstanceID:   instanceID,
+			PollInterval: config.AppConfig.Lease.PollInterval,
+			BatchSize:    config.AppConfig.Lease.BatchSize,
+			ScanRound:    config.AppConfig.Lease.ScanRound(),
+		})
 	})
 
 	// Start gRPC server
@@ -111,7 +113,7 @@ func main() {
 	defer s.Stop()
 
 	// 会话对账:兜住 gate 整机崩溃(断线回调不执行)导致的永久 ONLINE 会话,
-	// 恢复「所有会话终点必经租约链」的闭环。全服单 leader + 按 gate 实例建的会话索引,
+	// 恢复「所有会话终点必经租约链」的闭环。死 gate 清扫按段分给各副本,写者检查与补建 / 审计由一个 leader 跑,
 	// 见 session_reconciler.go 顶部注释。
 	//
 	// 必须排在 zrpc.MustNewServer 之后:go-zero 在那里启动 Prometheus agent,之前的指标写入一律丢弃,
@@ -122,7 +124,8 @@ func main() {
 			EtcdClient:      n.EtcdClient(),
 			IntervalSeconds: config.AppConfig.Lease.ReconcileIntervalSeconds,
 			Reconcile:       config.AppConfig.Lease.Reconcile.Normalized(),
-			LeaderID:        reconcilerLeaderID(n.Info.NodeUuid),
+			LeaderID:        instanceID,
+			InstanceID:      instanceID,
 		})
 	})
 
@@ -177,8 +180,8 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 	}
 }
 
-// reconcilerLeaderID 是会话对账选主锁值的前缀:主机名(K8s 上即 Pod 名)+ 节点 uuid,只用于排障
-// (redis-cli GET player_locator:session_reconciler:leader 一眼看出 leader 是谁)。
+// reconcilerLeaderID 是本副本的实例身份:主机名(K8s 上即 Pod 名)+ 节点 uuid。用作选主锁值的前缀与分片的成员、段租约值,
+// 只用于排障,不解析(redis-cli GET player_locator:session_reconciler:leader 一眼看出 leader 是谁)。
 func reconcilerLeaderID(nodeUUID string) string {
 	host, err := os.Hostname()
 	if err != nil || host == "" {

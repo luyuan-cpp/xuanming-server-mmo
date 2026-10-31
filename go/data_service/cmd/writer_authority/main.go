@@ -260,7 +260,7 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 		return err
 	}
 	defer db.Close()
-	catalog, err := authoritysql.NewCatalog(db, authoritysql.CatalogConfig{AuthoritySchema: first.AuthoritySchema, Generation: first.Writer.Generation, ProtectedSchemas: first.ProtectedSchemas, PhysicalAuthoritySHA256: physical, Principal: getenv("MMORPG_SQL_OPERATOR_PRINCIPAL"), RequireReconcile: true})
+	catalog, err := authoritysql.NewCatalog(db, authoritysql.CatalogConfig{AuthoritySchema: first.AuthoritySchema, Generation: first.Writer.Generation, ProtectedSchemas: first.ProtectedSchemas, PhysicalAuthoritySHA256: physical, Principal: getenv("MMORPG_SQL_OPERATOR_PRINCIPAL")})
 	if err != nil {
 		return err
 	}
@@ -713,7 +713,7 @@ func runPublicationValidation(ctx context.Context, command, requestPath, request
 		return err
 	}
 	defer db.Close()
-	catalog, err := authoritysql.NewCatalog(db, authoritysql.CatalogConfig{AuthoritySchema: plan.AuthoritySchema, Generation: request.Generation, ProtectedSchemas: plan.ProtectedSchemas, PhysicalAuthoritySHA256: physical, Principal: getenv("MMORPG_SQL_OPERATOR_PRINCIPAL"), RequireReconcile: true})
+	catalog, err := authoritysql.NewCatalog(db, authoritysql.CatalogConfig{AuthoritySchema: plan.AuthoritySchema, Generation: request.Generation, ProtectedSchemas: plan.ProtectedSchemas, PhysicalAuthoritySHA256: physical, Principal: getenv("MMORPG_SQL_OPERATOR_PRINCIPAL")})
 	if err != nil {
 		return err
 	}

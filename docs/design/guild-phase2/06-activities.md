@@ -44,7 +44,7 @@
   1. `StartGuildTrial` 只建一个 Redis 待确认房间(TTL 30s),推送给被选中的人;
   2. 每个被邀请人调新增的 `RespondGuildTrialInvite{lobby_id, accept}`;任何人拒绝或超时,房间解散;
   3. 全员同意的那次调用里,guild 复核后调 match 内部服务 `MatchInternal.StartActivityBattle`,拿到 battle_id 并登记 `guild_trial_battle`;
-  4. 结果:battle 先把带活动上下文的 `BattleResultEvent` 落到 SharedRedis `battle:activity_result:{battle_id}` 再发 Kafka,未销账就重发;guild 消费组 `guild-trial` 结算后删键销账;guild 巡检器兜底"事件丢失"。
+  4. 结果:~~battle 先把带活动上下文的 `BattleResultEvent` 落到 SharedRedis `battle:activity_result:{battle_id}` 再发 Kafka,未销账就重发;guild 消费组 `guild-trial` 结算后删键销账~~ **2026-10-30 更正:battle 把终局提交 match SQL,match 的发件箱投 Kafka(至少一次);guild 消费组 `guild-trial` 结算,不再有结果记录要销账**;guild 巡检器读 match 的 `match_battle_completion` 兜底"事件丢失"。
 - **奖励三类**:
   1. 帮贡:更新 `guild_member`,与计数同一事务;
   2. 帮会资金:更新 `guild.funds`,同一事务;
@@ -852,6 +852,8 @@ func (l *StartActivityBattleLogic) StartActivityBattle(in *matchpb.StartActivity
 
 ## 6.19 为什么要持久化
 
+> **2026-10-30 更正(未编译,待 Codex 验证)**:`battle:activity_result:*` 整条通道已删除,本节到 §6.20 以及后文所有「结果记录」「销账」「battle 每 10s 重发」都按历史设计读。现在的做法:battle 把终局提交 match SQL(`CommitBattleOutcome`),match 的发件箱投 Kafka,投递至少一次,重复由 guild 的幂等闸门回 Duplicate;巡检器读 `<MatchAuthoritySchema>.match_battle_completion`,`decision=1`(COMPLETE)时取 `raw_payload` 结算,`decision=2`(ABORT)或没有行都算没有结果,走原来的超时语义;SQL 读失败下一轮再来。见 `go/guild/internal/data/trial_result_record.go`。
+
 现状 `SendBattleResultEvent`(`battle_room_manager.cpp:287-296`)发送失败只打日志;battle 进程在 librdkafka 缓冲 flush 前崩溃,事件同样丢失。普通对局丢一条只影响评分;历练丢一条就是**一整局的帮贡、资金、物品永久丢失**,`guild_trial_battle` 永远停在 STARTED。个人结算已有 R07 发件箱(先落 Redis、后投递、未销账重投,`:1406-1600`),活动结果照同一纪律做,但销账方是 guild。
 
 **通道契约**(跨语言,C++ 头文件与 Go 常量各写一份并互相引用注释):
@@ -1571,7 +1573,7 @@ COMMIT;
 | 结算去向 | 指标 `guild_trial_result_total{result}` | `settled_win` / `settled_loss` 随对局增长;`duplicate` 偶尔增长属正常(battle 在 guild 销账之前的重发);`poison`、`handler_retry`、`bad_context`、`context_mismatch`、`decode_error` 恒为 0 |
 | 一局的状态 | `SELECT * FROM mmorpg_guild.guild_trial_battle WHERE battle_id = <id>;` | `state`:1 进行中 / 2 已结算 / 3 已判过期;`settle_result`:1 胜 / 2 负或平 / 4 配表缺行 / 5 毒消息(3 保留不写) |
 
-结果记录在 guild 的 **PlayerLocatorRedis**(K8s 的 SharedRedis):`EXISTS battle:activity_result:<battle_id>`。键还在 = guild 还没给这一局下定论。
+结果记录在 match 的 SQL 库:`SELECT decision FROM mmorpg_match.match_battle_completion WHERE battle_id = <id>;`,1 = 打完有结果,2 = 中止,没有行 = battle 还没提交。(2026-10-30 更正:原来的 Redis 键 `battle:activity_result:<battle_id>` 已删除,这一节后面提到的键和重发都按历史记录读。)
 
 ### 场景一:结果消费卡住(`handler_retry` 持续上涨、LAG 上涨)
 
@@ -1701,7 +1703,7 @@ SELECT op_id, kind, attempts, last_outcome, last_reason, FROM_UNIXTIME(created_m
 1. **补给谁**:己方(team 0)参战者 − 逃跑者(阵亡者也算,U2)∩ 结算时仍在本帮 ∩ 开战那个游戏日的历练次数未满。参战名单以结果事件为准:Kafka `match-results`,key = battle_id,保留 7 天;battle 节点日志里同一 battle_id 的结算记录可以交叉核对。
 2. **补多少**:按开战时的 `GuildActivity` 行。每人 `personal_contribution` 帮贡;物品按 `reward_id`;帮会资金 `guild_funds`,但同一帮同一游戏日计资金的胜场不超过 `guild_threshold`。
 3. **怎么补**:
-   - 首选**重放**:把对局行改回 `state=1`,再把原始结果事件重新送进结算(发回 Kafka,或写回 `battle:activity_result:<id>` 让巡检器取)。这样次数、上限、推送、物品通道全部走正常路径,幂等闸门保证只发一次。**重放工具未做**;在它做出来之前,这一步需要开发协助。结果已超过 7 天的无法重放。
+   - 首选**重放**:把对局行改回 `state=1`,再把原始结果事件重新送进结算(发回 Kafka,或等巡检器从 `match_battle_completion` 读,2026-10-30 起不再有 Redis 键可写回)。这样次数、上限、推送、物品通道全部走正常路径,幂等闸门保证只发一次。**重放工具未做**;在它做出来之前,这一步需要开发协助。结果已超过 7 天的无法重放。
    - 不能重放时由开发出一次性脚本:帮贡改 `guild_member.contribution_total / contribution_balance`、资金改 `guild.funds`,必须在同一事务里按"先帮会行、后成员行"的顺序加锁,提交后失效帮会缓存;物品必须走资产通道(插 `guild_asset_op` 行),不能直接改背包。
    - **不要**直接 `UPDATE` 这两张表了事:帮会缓存不会失效,界面上的数字要等缓存过期才变,而且绕过了取锁顺序。
 4. 补发前后都在工单里记下 battle_id、名单、数额与依据。

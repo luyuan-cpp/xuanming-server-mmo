@@ -49,16 +49,16 @@ func TestIntegrationTestsCallRequireIT(t *testing.T) {
 			}
 		}
 	}
-	// integration_test.go、route_store_integration_test.go、team_authority_integration_test.go、tidb_fixture_integration_test.go。
-	if files < 3 {
-		t.Fatalf("found %d merge_integration test files, want at least 3: the build-tag detection is broken", files)
+	// merge_integration_test.go。
+	if files < 1 {
+		t.Fatalf("found %d merge_integration test files, want at least 1: the build-tag detection is broken", files)
 	}
 	if tests == 0 {
 		t.Fatal("no integration test functions found: the guard checks nothing")
 	}
 }
 
-// itRequireEnvName 与 integration_test.go 的 itRequireEnv 同值(那个常量带 merge_integration 标签,普通构建里不存在)。
+// itRequireEnvName:设成 1 时,集成用例在依赖缺失时 FAIL 而不是 SKIP(merge_integration_test.go 的 requireIT 读它)。
 const itRequireEnvName = "MERGE_ZONE_IT_REQUIRE"
 
 // isMergeIntegrationFile 报告文件的 //go:build 约束是否「只在 merge_integration 标签下才编译」。

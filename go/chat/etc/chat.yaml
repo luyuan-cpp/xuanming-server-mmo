@@ -14,10 +14,10 @@ AccountRoleSchema: mmorpg_global
 ActorVerifyTTLSeconds: 30
 GlobalLoginSessions: true
 LoginRedis:
-  Host: 127.0.0.1:6379
+  Addrs: [127.0.0.1:6379]
   PasswordEnv: LOGIN_REDIS_PASSWORD
   DB: 0
-  PoolSize: 4
+  PoolSizePerNode: 4
 
 # zrpc 服务端整体超时(毫秒)。必须 ≤ 路由服 ForwardTimeoutMs(5000)− 1000:
 # chat 要先于路由服超时把 in-band 结果回去,否则"写入已生效 + 客户端看到失败"会诱发重发。

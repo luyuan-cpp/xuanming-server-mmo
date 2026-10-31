@@ -12,7 +12,7 @@ func TestKeyFormats(t *testing.T) {
 	if got := OwnerEpochKey(12345); got != "player:{12345}:owner_epoch" {
 		t.Fatalf("OwnerEpochKey = %q", got)
 	}
-	if got := HandoffKey(12345); got != "player:12345:handoff" {
+	if got := HandoffKey(12345); got != "player:{12345}:handoff" {
 		t.Fatalf("HandoffKey = %q", got)
 	}
 }
@@ -23,6 +23,9 @@ func TestOwnerEpochKeyInPlayerSlot(t *testing.T) {
 		key := OwnerEpochKey(pid)
 		if !redisslot.HasHashTag(key) || redisslot.HashSlot(key) != redisslot.PlayerSlot(pid) {
 			t.Fatalf("OwnerEpochKey(%d) = %q 不在玩家 slot %d", pid, key, redisslot.PlayerSlot(pid))
+		}
+		if handoff := HandoffKey(pid); redisslot.HashSlot(handoff) != redisslot.PlayerSlot(pid) {
+			t.Fatalf("HandoffKey(%d) = %q 不在玩家 slot %d", pid, handoff, redisslot.PlayerSlot(pid))
 		}
 	}
 }

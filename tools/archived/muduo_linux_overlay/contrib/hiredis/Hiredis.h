@@ -86,6 +86,21 @@ class Hiredis : public std::enable_shared_from_this<Hiredis>,
 
   int command(const CommandCallback& cb, muduo::StringArg cmd, ...);
 
+  // 这条应答是否表示「服务端确定没有执行」(MOVED、LOADING 等)。只影响维护前沿的记账:
+  // 判定为真的错误应答不算 UNKNOWN,否则一次普通的 slot 迁移就会永久卡住进程的维护排空。
+  // 连接断开时 reply 为空,同样会问它:结果未知的命令必须回 false。
+  typedef bool (*NotExecutedPredicate)(const redisReply*);
+
+  // 给不改数据的命令用(AUTH、PING、CLUSTER SLOTS、ASKING):任何结局都不留下 UNKNOWN,包括断线时的空应答。
+  // 否则节点退场时在途的握手或探测会永久卡住进程的维护排空。
+  static bool hasNoSideEffect(const redisReply*) { return true; }
+
+  // 发送已格式化好的 RESP 命令(redisAsyncFormattedCommand)。返回值、回调次数与 privdata 释放约定都同 command()。
+  // cmd 必须以 NUL 结尾(hiredis 的 nextArgument 会读到结尾后一字节);内容在返回前已拷进输出缓冲,调用方不必继续保留。
+  // notExecuted 为空时错误应答与空应答一律记 UNKNOWN,同 command()。
+  int formattedCommand(const CommandCallback& cb, const char* cmd, size_t len,
+                       NotExecutedPredicate notExecuted = NULL);
+
   int ping();
 
  private:

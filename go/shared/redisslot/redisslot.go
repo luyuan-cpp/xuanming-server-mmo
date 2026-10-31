@@ -3,7 +3,7 @@
 // 逐字一致,两侧金样测试钉住同一组向量(docs/design/redis-player-store-cluster.md §5.2)。
 //
 // 玩家域的键形规则:键里的玩家 id 用花括号包起来(PlayerTag),跨玩家的按 slot 索引用 PlayerIndexTag,
-// 二者必然同槽,所以一名玩家的键与它所在 slot 的索引可以放进同一段 Lua。
+// 二者必然同槽,所以一名玩家的键与它所在 slot 的索引可以放进同一段 Lua。键的构造函数见 player_keys.go。
 package redisslot
 
 import (
@@ -141,12 +141,11 @@ func SlotIndexTag(slot uint16) string {
 // reservedPlayerKeySuffixes 是落进 player:{<id>}: 前缀、但不归 data_service 字段接口所有的后缀。
 // data_service 以 player:{<id>}:<字段> 存自己的玩家字段,并按该前缀 SCAN 未索引玩家的字段;任何模块新增
 // player:{<id>}: 键都必须登记到这里,否则 data_service 可能把它当字段读出或覆盖(设计 §5.2)。
-// tools/merge_zone 是独立 module,在 player_blob_migrate.go 镜像了这张表(合服拷 blob 时跳过),两边测试钉同一份字面量。
 var reservedPlayerKeySuffixes = map[string]struct{}{
-	"save_barrier":            {}, // 交接资格(shared/savebarrier)
 	"asset_sql_commit":        {}, // go/db 资产 SQL 提交证据(shared/assetop)
-	"owner_epoch":             {}, // 归属代次
-	"handoff":                 {}, // 交接标记
+	"owner_epoch":             {}, // 归属代次(shared/ownerepoch)
+	"handoff":                 {}, // 已落盘标记(shared/ownerepoch)
+	"handoff_fence":           {}, // 交接资格(shared/handofffence)
 	"location":                {}, // 位置
 	"location_revision":       {}, // 位置修订
 	"location_revision_floor": {}, // 位置修订下限

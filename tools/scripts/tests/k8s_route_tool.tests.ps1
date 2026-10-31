@@ -45,7 +45,7 @@ function New-TestManifest {
         [string]$RunId = '20261019-120000-00ab',
         [string]$Image = 'ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab',
         [string]$PullPolicy = 'IfNotPresent',
-        [string[]]$Arguments = @('audit', '-frozen-recovery'),
+        [string[]]$Arguments = @('tidb-prepare', '-zones=1,2'),
         [int]$TimeoutSeconds = 2400,
         [string]$TemplateText = (Read-RepoText (Get-RouteToolContract).JobTemplate)
     )
@@ -97,7 +97,7 @@ Test-Case '契约字面量与源头一致:固定 args 前缀 == data-service.yam
     Assert-Match -Text (Read-RepoText 'tools/scripts/k8s_deploy.ps1') -Pattern ('"data-service"\s*=\s*@\{\s*ConfigMap\s*=\s*"' + [regex]::Escape($c.ConfigMapName) + '"') -Because 'ConfigMap 名来自部署目录 $GoSvcCatalogue."data-service"'
     $cli = Read-RepoText 'go/data_service/internal/routetoolcli/cli.go'
     $subs = @([regex]::Matches($cli, '(?m)^\s*sub[A-Z][A-Za-z0-9]*\s*=\s*"(?<s>[a-z][a-z0-9-]*)"') | ForEach-Object { $_.Groups['s'].Value })
-    Assert-True -Condition ($subs.Count -ge 6) -Because "cli.go 里应当至少有 6 个 sub* 子命令常量(实际 $($subs.Count) 个),正则失配时这条先红"
+    Assert-True -Condition ($subs.Count -ge 3) -Because "cli.go 里应当至少有 3 个 sub* 子命令常量(实际 $($subs.Count) 个),正则失配时这条先红"
     foreach ($sub in $subs) {
         Assert-True -Condition ($c.Subcommands -ccontains $sub) -Because "cli.go 的子命令 '$sub' 必须在 Get-RouteToolContract.Subcommands 里,否则 K8s 上跑不了它"
     }
@@ -106,27 +106,27 @@ Test-Case '契约字面量与源头一致:固定 args 前缀 == data-service.yam
 
 Test-Case 'Get-RouteToolArgErrors:合法组合放行;空、未知子命令、入口参数、控制字符、整条命令行塞成一项都拒绝并点名' {
     foreach ($ok in @(
-            @('audit'), @('audit', '-frozen-recovery', '-timeout=60m'), @('import-from-redis', '-dry-run=false', '-allow-db-first'),
-            @('tidb-prepare', '-zones=1,2,3', '-dry-run=false'), @('freeze', '-reason=全局库回档 2026-10-19'), @('reconcile-from-cache', '-dry-run=true'),
-            @('unfreeze', '-confirm-audited'), @('rewarm', '-wait=0'), @('audit', '-max-report', '50')
+            @('tidb-prepare'), @('tidb-prepare', '-zones=1,2,3', '-dry-run=false'), @('tidb-prepare', '-timeout', '60m'),
+            @('freeze', '-reason=全局库回档 2026-10-19'), @('unfreeze', '-ticket-id=00112233445566778899aabbccddeeff')
         )) {
         $errors = @(Get-RouteToolArgErrors -Arguments $ok)
         Assert-Equal -Expected 0 -Actual $errors.Count -Because "合法参数 '$($ok -join ' ')' 不该被拒:$($errors -join ';')"
     }
     foreach ($case in @(
             @{ Args = @(); Pattern = '为空' }
-            @{ Args = @('audit -frozen-recovery'); Pattern = '整条命令行塞成了一个字符串' }
-            @{ Args = @('audit,-frozen-recovery'); Pattern = '整条命令行塞成了一个字符串' }
-            @{ Args = @('Audit'); Pattern = "'Audit' 不是已知子命令" }
-            @{ Args = @('-frozen-recovery', 'audit'); Pattern = '不是已知子命令' }
-            @{ Args = @('audit', '-f', 'other.yaml'); Pattern = "'-f' 是入口参数" }
-            @{ Args = @('audit', '--f=other.yaml'); Pattern = "'--f=other.yaml' 是入口参数" }
-            @{ Args = @('audit', '-route-tool'); Pattern = '是入口参数' }
-            @{ Args = @('audit', '-migrate'); Pattern = '是入口参数' }
-            @{ Args = @('audit', '-version'); Pattern = '是入口参数' }
-            @{ Args = @('audit', ''); Pattern = '第 2 项是空串' }
-            @{ Args = @('audit', "-reason=a`nb"); Pattern = '控制字符' }
-            @{ Args = @('audit', "-reason=a`tb"); Pattern = '控制字符' }
+            @{ Args = @('tidb-prepare -zones=1'); Pattern = '整条命令行塞成了一个字符串' }
+            @{ Args = @('tidb-prepare,-zones=1'); Pattern = '整条命令行塞成了一个字符串' }
+            @{ Args = @('Freeze'); Pattern = "'Freeze' 不是已知子命令" }
+            @{ Args = @('-zones=1', 'tidb-prepare'); Pattern = '不是已知子命令' }
+            @{ Args = @('audit'); Pattern = "'audit' 不是已知子命令" }
+            @{ Args = @('tidb-prepare', '-f', 'other.yaml'); Pattern = "'-f' 是入口参数" }
+            @{ Args = @('tidb-prepare', '--f=other.yaml'); Pattern = "'--f=other.yaml' 是入口参数" }
+            @{ Args = @('tidb-prepare', '-route-tool'); Pattern = '是入口参数' }
+            @{ Args = @('tidb-prepare', '-migrate'); Pattern = '是入口参数' }
+            @{ Args = @('tidb-prepare', '-version'); Pattern = '是入口参数' }
+            @{ Args = @('tidb-prepare', ''); Pattern = '第 2 项是空串' }
+            @{ Args = @('freeze', "-reason=a`nb"); Pattern = '控制字符' }
+            @{ Args = @('freeze', "-reason=a`tb"); Pattern = '控制字符' }
         )) {
         $errors = @(Get-RouteToolArgErrors -Arguments $case.Args)
         Assert-True -Condition ($errors.Count -gt 0) -Because "非法参数 '$($case.Args -join '|')' 必须被拒"
@@ -162,7 +162,7 @@ Test-Case 'New-RouteToolJobManifest:Job 名 / 运行号 / 镜像 / 拉取策略 
     Assert-Match -Text $manifest -Pattern ('(?m)^    app: ' + [regex]::Escape($c.JobAppLabel) + '$') -Because '查在途 Job 按 app=data-service-route-tool'
     Assert-NotMatch -Text $manifest -Pattern 'PLACEHOLDER_|__[A-Z][A-Z0-9_]*__' -Because '不残留任何占位'
     $renderedArgs = Get-ManifestArgs -Manifest $manifest
-    Assert-Equal -Expected '-f|/app/etc/data_service.yaml|-route-tool|audit|-frozen-recovery' -Actual ($renderedArgs -join '|') -Because 'args = -f /app/etc/data_service.yaml -route-tool <子命令与参数>'
+    Assert-Equal -Expected '-f|/app/etc/data_service.yaml|-route-tool|tidb-prepare|-zones=1,2' -Actual ($renderedArgs -join '|') -Because 'args = -f /app/etc/data_service.yaml -route-tool <子命令与参数>'
 }
 
 Test-Case 'args 逐项 JSON 转义:引号、反斜杠、中文、逗号、等号原样往返;镜像里的说明文字(含空格与括号)也是合法 YAML 字符串' {
@@ -193,7 +193,7 @@ Test-Case 'Job 模板的 sh 包装:标记行与 Get-RouteToolContract 的格式�
     Assert-Match -Text $template -Pattern '(?m)^\s+/app/service "\$@" >"\$out"$' -Because 'stdout 先写进文件;stderr 直接进容器日志'
     Assert-Match -Text $template -Pattern '(?m)^\s+out=/tmp/route-tool/stdout$' -Because 'stdout 文件在 emptyDir 里'
     Assert-Match -Text $template -Pattern '(?m)^\s+mountPath: /tmp/route-tool$' -Because 'emptyDir 挂在 /tmp/route-tool'
-    Assert-Match -Text $template -Pattern '(?m)^\s+exit "\$rc"$' -Because '容器以 route-tool 自己的退出码退出(本脚本原样返回 0/1/2/3)'
+    Assert-Match -Text $template -Pattern '(?m)^\s+exit "\$rc"$' -Because '容器以 route-tool 自己的退出码退出(本脚本原样返回 0 / 2)'
     Assert-Match -Text $template -Pattern '(?m)^\s+- name: ROUTE_TOOL_RUN_ID$' -Because '运行号经环境变量交给包装'
 }
 
@@ -203,8 +203,8 @@ Test-Case 'Split-RouteToolLog:统计行末尾有无换行都原样还原;stdout 
     $b = $c.StdoutBeginFormat -f $run
     $e = $c.StdoutEndFormat -f $run
     $cases = @(
-        @{ Why = '统计行带换行'; Log = "NOTE x`nTarget host=mysql db=g`n$b`nroute_audit total=3`n`n$e`n"; Out = "route_audit total=3`n"; Err = "NOTE x`nTarget host=mysql db=g`n"; Found = $true }
-        @{ Why = '统计行不带换行'; Log = "e1`n$b`nroute_audit total=3`n$e`n"; Out = 'route_audit total=3'; Err = "e1`n"; Found = $true }
+        @{ Why = '统计行带换行'; Log = "NOTE x`nTarget host=mysql db=g`n$b`nroute_tidb_prepare zones=2`n`n$e`n"; Out = "route_tidb_prepare zones=2`n"; Err = "NOTE x`nTarget host=mysql db=g`n"; Found = $true }
+        @{ Why = '统计行不带换行'; Log = "e1`n$b`nroute_tidb_prepare zones=2`n$e`n"; Out = 'route_tidb_prepare zones=2'; Err = "e1`n"; Found = $true }
         @{ Why = 'stdout 为空'; Log = "e1`ne2`n$b`n`n$e`n"; Out = ''; Err = "e1`ne2`n"; Found = $true }
         @{ Why = 'CRLF'; Log = "e1`r`n$b`r`nline`r`n`r`n$e`r`n"; Out = "line`n"; Err = "e1`n"; Found = $true }
         @{ Why = '进程被杀,没有标记'; Log = "e1`ne2`n"; Out = ''; Err = "e1`ne2`n"; Found = $false }
@@ -219,14 +219,14 @@ Test-Case 'Split-RouteToolLog:统计行末尾有无换行都原样还原;stdout 
     }
 }
 
-Test-Case 'Resolve-RouteToolExitCode:0/1/2/3 原样返回;取不到退出码、OOMKilled 137、127 一律 2' {
-    foreach ($pair in @(@(0, 0, 'clean'), @(1, 1, 'needs-attention'), @(2, 2, 'failed'), @(3, 3, 'merge-fence-active'))) {
+Test-Case 'Resolve-RouteToolExitCode:0 / 2 原样返回;取不到退出码、OOMKilled 137、127、route-tool 没有的 1 / 3 一律 2' {
+    foreach ($pair in @(@(0, 0, 'clean'), @(2, 2, 'failed'))) {
         $r = Resolve-RouteToolExitCode -ContainerExitCode $pair[0]
         Assert-Equal -Expected "$($pair[1])/$($pair[2])" -Actual "$($r.ExitCode)/$($r.Verdict)" -Because "容器退出码 $($pair[0]) 原样返回"
     }
-    foreach ($code in @(137, 127, 143, -1, 4)) {
+    foreach ($code in @(137, 127, 143, -1, 4, 1, 3)) {
         $r = Resolve-RouteToolExitCode -ContainerExitCode $code
-        Assert-Equal -Expected 2 -Actual $r.ExitCode -Because "容器退出码 $code 不在 route-tool 的 0..3 里,按失败(2)报"
+        Assert-Equal -Expected 2 -Actual $r.ExitCode -Because "容器退出码 $code 不是 route-tool 的 0 / 2,按失败(2)报"
         Assert-Match -Text $r.Verdict -Pattern "unexpected-exit-code-$code" -Because '判定里点名原始退出码'
     }
     $none = Resolve-RouteToolExitCode -ContainerExitCode $null
@@ -272,18 +272,18 @@ Test-Case '子进程 -DryRun:退出码 0,打印 BEGIN / END MANIFEST 之间的 J
         $report = Join-Path $fake 'report-should-not-exist'
         $fakeEnv = @{ PATH = "$fake$([IO.Path]::PathSeparator)$env:PATH" }
         $withImage = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments @(
-            '-ZoneName', 'z1', '-RouteToolArgs', 'audit', '-Image', 'ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab', '-DryRun', '-ReportDir', $report, '-KubeContext', 'contract-bogus')
+            '-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare', '-Image', 'ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab', '-DryRun', '-ReportDir', $report, '-KubeContext', 'contract-bogus')
         Assert-Equal -Expected 0 -Actual $withImage.ExitCode -Because "DryRun 应当成功。输出: $($withImage.Output)"
         $blocks = @(Get-ManifestBlocks -Output $withImage.Output)
         Assert-Equal -Expected 1 -Actual $blocks.Count -Because 'DryRun 打印恰好一份清单(与 k8s_deploy.ps1 同一对标记)'
         Assert-Match -Text $blocks[0] -Pattern '(?m)^kind: Job\s*$' -Because '打印的是 Job'
         Assert-Match -Text $blocks[0] -Pattern 'mmorpg-data-service:0123456789ab' -Because '给了 -Image 就用它'
         $renderedArgs = Get-ManifestArgs -Manifest ($blocks[0] -replace "`r`n", "`n")
-        Assert-Equal -Expected '-f|/app/etc/data_service.yaml|-route-tool|audit' -Actual ($renderedArgs -join '|') -Because 'args 原样'
+        Assert-Equal -Expected '-f|/app/etc/data_service.yaml|-route-tool|tidb-prepare' -Actual ($renderedArgs -join '|') -Because 'args 原样'
         Assert-Match -Text $withImage.Output -Pattern 'namespace=mmorpg-zone-z1 ' -Because 'namespace = <NamespacePrefix>-<ZoneName>'
         Assert-NotMatch -Text $withImage.Output -Pattern '(?i)password|Mmorpg#' -Because 'DryRun 不读 ConfigMap,输出里不会有口令'
 
-        $noImage = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments @('-ZoneName', 'z1', '-RouteToolArgs', 'audit', '-DryRun', '-ReportDir', $report)
+        $noImage = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare', '-DryRun', '-ReportDir', $report)
         Assert-Equal -Expected 0 -Actual $noImage.ExitCode -Because "没给 -Image 的 DryRun 也应当成功。输出: $($noImage.Output)"
         Assert-Match -Text $noImage.Output -Pattern 'resolved at run time from deployment/data-service in mmorpg-zone-z1' -Because '清单里的镜像写成说明文字'
         Assert-Match -Text $noImage.Output -Pattern '-Image not given' -Because '提示真跑时从 deployment/data-service 读镜像'
@@ -302,8 +302,8 @@ Test-Case '子进程非法参数:退出码 2、点名原因,在任何 kubectl �
     try {
         $fakeEnv = @{ PATH = "$fake$([IO.Path]::PathSeparator)$env:PATH" }
         foreach ($case in @(
-                @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'audit -frozen-recovery'); Pattern = '整条命令行塞成了一个字符串' }
-                @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'audit,-frozen-recovery'); Pattern = '整条命令行塞成了一个字符串' }
+                @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare -zones=1'); Pattern = '整条命令行塞成了一个字符串' }
+                @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'tidb-prepare,-zones=1'); Pattern = '整条命令行塞成了一个字符串' }
                 @{ Args = @('-ZoneName', 'z1', '-RouteToolArgs', 'drop-everything'); Pattern = "'drop-everything' 不是已知子命令" }
             )) {
             $run = Invoke-ToolScript -ScriptName 'k8s_route_tool.ps1' -Env $fakeEnv -Arguments $case.Args
@@ -323,7 +323,7 @@ Test-Case '脚本入口:函数之外只有参数、$ErrorActionPreference、两�
     Assert-Equal -Expected 6 -Actual $statements.Count -Because "函数之外只有 6 条语句(主流程不得漏在入口里,测不到):$($texts -join ' || ')"
     Assert-Match -Text $texts[4] -Pattern '^try\s*\{\s*\$exitCode = Invoke-RouteTool\s*\}\s*catch\s*\{' -Because '入口调用 Invoke-RouteTool,外面包一层 try(review B3-7 / OPS-5)'
     Assert-Match -Text $texts[4] -Pattern '\$exitCode = \(Get-RouteToolContract\)\.ExitFailed' -Because '未预料的异常按本脚本自己的失败(2)退出:pwsh -File 下未捕获异常是 1,与「完成但需要人工处理」撞号'
-    Assert-Equal -Expected 'exit ([int]$exitCode)' -Actual $texts[5] -Because '以主流程返回值作退出码(0/1/2/3 原样)'
+    Assert-Equal -Expected 'exit ([int]$exitCode)' -Actual $texts[5] -Because '以主流程返回值作退出码(0 / 2 原样)'
 }
 
 # ─── 退出码兜底(review B3-7 / OPS-5):本脚本自己的失败一律 2,Job 之后的落盘失败不盖掉容器退出码 ───
@@ -346,7 +346,7 @@ Test-Case 'Invoke-RouteTool:Job 模板读不到时返回 2 并点名原因,不 t
     function Invoke-RouteToolKubectlChecked { param([string[]]$Arguments, [string]$What) $kubectlCalls.Add($Arguments -join ' '); return '' }
     function Invoke-RouteToolKubectl { param([string[]]$Arguments, [int]$TimeoutSeconds) $kubectlCalls.Add($Arguments -join ' '); return [pscustomobject]@{ TimedOut = $false; ExitCode = 0; Output = ''; ErrorOutput = '' } }
     foreach ($dry in @($true, $false)) {
-        $r = Invoke-RouteToolInProcess -Variables @{ RepoRoot = $missingRoot; RouteToolArgs = @('audit'); ZoneName = 'z1'; NamespacePrefix = 'mmorpg-zone'; Image = ''
+        $r = Invoke-RouteToolInProcess -Variables @{ RepoRoot = $missingRoot; RouteToolArgs = @('tidb-prepare'); ZoneName = 'z1'; NamespacePrefix = 'mmorpg-zone'; Image = ''
             TimeoutSeconds = 2400; ReportDir = ''; DryRun = $dry; KubeContext = ''; KubeConfig = '' }
         Assert-Equal -Expected '2' -Actual $r.Codes -Because "DryRun=${dry}:模板读不到是本脚本自己的失败,返回 2(以前 throw 出去,pwsh -File 下是 1)。输出: $($r.Text)"
         Assert-Match -Text $r.Text -Pattern 'cannot read the Job template, nothing was created' -Because "DryRun=${dry}:点名原因,并说明什么都没建"
@@ -368,24 +368,24 @@ Test-Case 'Invoke-RouteTool:Job 跑完、容器退出 3 之后 stdout.txt / stde
     function Invoke-RouteToolKubectlChecked { param([string[]]$Arguments, [string]$What) $kubectlCalls.Add($Arguments -join ' '); return '' }
     function Get-ActiveRouteToolJobs { return @() }
     function Get-RouteToolJobState { param($Namespace, $JobName) return [pscustomobject]@{ Phase = 'complete'; Reason = ''; Uid = 'uid-1' } }
-    function Get-RouteToolPodResult { param($Namespace, $JobName, $JobUid) return [pscustomobject]@{ PodName = 'route-tool-pod'; ExitCode = 3; Reason = 'Completed' } }
+    function Get-RouteToolPodResult { param($Namespace, $JobName, $JobUid) return [pscustomobject]@{ PodName = 'route-tool-pod'; ExitCode = 0; Reason = 'Completed' } }
     function Invoke-RouteToolKubectl {
         param([string[]]$Arguments, [int]$TimeoutSeconds)
         $kubectlCalls.Add($Arguments -join ' ')
-        $log = "merge fence active`n" + ($c.StdoutBeginFormat -f $runId) + "`nroute_audit total=3`n`n" + ($c.StdoutEndFormat -f $runId) + "`n"
+        $log = "prepare note`n" + ($c.StdoutBeginFormat -f $runId) + "`nroute_tidb_prepare zones=2`n`n" + ($c.StdoutEndFormat -f $runId) + "`n"
         return [pscustomobject]@{ TimedOut = $false; ExitCode = 0; Output = $log; ErrorOutput = '' }
     }
     $savedPath = $env:PATH
     try {
         $env:PATH = "$fake$([IO.Path]::PathSeparator)$env:PATH"
-        $r = Invoke-RouteToolInProcess -Variables @{ RepoRoot = (Get-RepoRoot); RouteToolArgs = @('audit'); ZoneName = 'z1'; NamespacePrefix = 'mmorpg-zone'
+        $r = Invoke-RouteToolInProcess -Variables @{ RepoRoot = (Get-RepoRoot); RouteToolArgs = @('tidb-prepare'); ZoneName = 'z1'; NamespacePrefix = 'mmorpg-zone'
             Image = 'ghcr.io/luyuancpp/mmorpg-data-service:0123456789ab'; TimeoutSeconds = 2400; ReportDir = $report; DryRun = $false; KubeContext = ''; KubeConfig = '' }
-        Assert-Equal -Expected '3' -Actual $r.Codes -Because "容器退出码 3(有生效的合服围栏)必须原样返回,报告写不了也不能盖成 2 或 1。输出: $($r.Text)"
+        Assert-Equal -Expected '0' -Actual $r.Codes -Because "容器退出码 0 必须原样返回,报告写不了也不能盖成 2。输出: $($r.Text)"
         Assert-Match -Text $r.Text -Pattern 'could not write [^\n]*stdout\.txt' -Because 'stdout.txt 写不了要告警'
         Assert-Match -Text $r.Text -Pattern 'could not write [^\n]*stderr\.txt' -Because 'stderr.txt 写不了要告警'
         Assert-Match -Text $r.Text -Pattern 'could not write [^\n]*summary\.txt' -Because 'summary.txt 写不了要告警'
-        Assert-Match -Text $r.Text -Pattern 'done: job_phase=complete container_exit=3 verdict=merge-fence-active exit=3 ' -Because 'done 一行照常打出,运维在控制台看得到 3'
-        Assert-Match -Text $r.Text -Pattern 'route_audit total=3' -Because '统计行照常打到控制台'
+        Assert-Match -Text $r.Text -Pattern 'done: job_phase=complete container_exit=0 verdict=clean exit=0 ' -Because 'done 一行照常打出,运维在控制台看得到结局'
+        Assert-Match -Text $r.Text -Pattern 'route_tidb_prepare zones=2' -Because '统计行照常打到控制台'
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $report 'manifest.yaml') -PathType Leaf) -Because 'apply 之前写的清单照常落盘(apply 读的就是它)'
         Assert-Equal -Expected 1 -Actual @($kubectlCalls | Where-Object { $_ -like 'apply -n mmorpg-zone-z1 -f *' }).Count -Because '夹具前提:走到了 apply'
         Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $fake 'calls.txt'))) -Because '夹具前提:kubectl 调用全部经替身函数,假 kubectl 没被直接调用'

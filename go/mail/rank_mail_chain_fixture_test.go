@@ -27,7 +27,7 @@ import (
 	"schemamigrate"
 	"shared/authoritysql"
 	"shared/domainhost"
-	"shared/loginsession"
+	"shared/redisslot"
 	"shared/serviceauth"
 )
 
@@ -123,7 +123,7 @@ func TestRankMailChainFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	loginCache := miniredis.RunT(t)
-	loginCache.Set(loginsession.KeyFromMember("mail-rank-chain-original:19"), "整链原账号")
+	loginCache.Set(redisslot.LoginSessionKey("mail-rank-chain-original:19"), "整链原账号")
 	loginReader := redis.NewClient(&redis.Options{Addr: loginCache.Addr()})
 	t.Cleanup(func() { _ = loginReader.Close() })
 	auth, err := serviceauth.New(map[string]string{"rank": secret})

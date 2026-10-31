@@ -8,6 +8,7 @@ import (
 	"scene_manager/internal/constants"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/redisslot"
 )
 
 // 玩家主动选线的预检(docs/design/world-channel-switch.md §4.4)。
@@ -45,12 +46,10 @@ const (
 	rejectReasonChannelSwitchCooldown = "channel_switch_cooldown"
 )
 
-// ChannelSwitchCooldownKeyFmt:STRING "1",存在 = 该玩家的切线冷却未过;TTL = 冷却秒数。
+// channelSwitchCooldownKey:STRING "1",存在 = 该玩家的切线冷却未过;TTL = 冷却秒数。
 // 由 scene_manager 独占读写(预检只读判存在,EnterScene 收尾时写),不删,靠 TTL 过期。
-const ChannelSwitchCooldownKeyFmt = "player:%d:channel_switch_cooldown"
-
 func channelSwitchCooldownKey(playerID uint64) string {
-	return fmt.Sprintf(ChannelSwitchCooldownKeyFmt, playerID)
+	return redisslot.ChannelSwitchCooldownKey(playerID)
 }
 
 // worldChannelMembership 是一个 scene_id 相对于「某 zone 的大世界分线」的身份。
@@ -115,21 +114,9 @@ func locateWorldChannel(svcCtx *svc.ServiceContext, zoneID uint32, sceneID, hint
 }
 
 // readScenePlayerCountChecked 与 readScenePlayerCount 只差一条:Redis 读失败时返回 error 而不是当 0。
-// 选线预检要 fail-closed —— 读不到人数就当 0 放行,等于 Redis 抖动时上限失效。
-// 键不存在、负数、非数字仍按 0(与目录展示同口径)。
+// 选线预检要 fail-closed —— 读不到人数就当 0 放行,等于 Redis 抖动时上限失效。键不存在按 0。
 func readScenePlayerCountChecked(svcCtx *svc.ServiceContext, sceneID uint64) (int64, error) {
-	raw, err := svcCtx.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneID))
-	if err != nil {
-		return 0, err
-	}
-	if raw == "" {
-		return 0, nil
-	}
-	n, parseErr := strconv.ParseInt(raw, 10, 64)
-	if parseErr != nil || n < 0 {
-		return 0, nil
-	}
-	return n, nil
+	return svcCtx.Redis.Scard(instanceMembersKey(sceneID))
 }
 
 // isChannelSwitch 判定这次选线是不是一次「真正的切换」:玩家此刻落在某个具体节点的某个场景里,
@@ -203,7 +190,7 @@ func (l *EnterSceneLogic) checkClientChannelPick(in *scene_manager.EnterSceneReq
 	if cooldownSeconds <= 0 {
 		return nil, false
 	}
-	cooling, err := l.svcCtx.Redis.Exists(channelSwitchCooldownKey(in.PlayerId))
+	cooling, err := playerRedisExists(l.svcCtx, channelSwitchCooldownKey(in.PlayerId))
 	if err != nil {
 		l.Logger.Errorf("[ChannelSwitch] Failed to read channel switch cooldown; rejecting fail-closed: player=%d err=%v", in.PlayerId, err)
 		return errResp(constants.ErrRedis, fmt.Sprintf("读取切线冷却失败，已拒绝切线: %v", err)), false
@@ -253,7 +240,7 @@ func (l *EnterSceneLogic) startChannelSwitchCooldown(playerID uint64) {
 	if cooldownSeconds <= 0 {
 		return
 	}
-	if err := l.svcCtx.Redis.Setex(channelSwitchCooldownKey(playerID), "1", int(cooldownSeconds)); err != nil {
+	if err := playerRedisSetex(l.svcCtx, channelSwitchCooldownKey(playerID), "1", int(cooldownSeconds)); err != nil {
 		l.Logger.Errorf("[ChannelSwitch] Failed to write channel switch cooldown; this switch will not count toward cooldown: player=%d cooldown=%ds err=%v",
 			playerID, cooldownSeconds, err)
 	}

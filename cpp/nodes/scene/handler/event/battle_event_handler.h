@@ -5,6 +5,5 @@
 class BattleEventHandler
 {
 public:
-    static void BattleSettlementEventHandler(const BattleSettlementEvent& event);
     static void BattleConfirmedEventHandler(const BattleConfirmedEvent& event);
 };

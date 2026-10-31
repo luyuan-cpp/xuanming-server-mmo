@@ -10,7 +10,6 @@ package logic
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -67,7 +66,7 @@ func seedDirectoryChannel(t *testing.T, mr *miniredis.Miniredis, sceneID uint64,
 	if nodeID != "" {
 		require.NoError(t, mr.Set(sceneNodeKey(sceneID), nodeID))
 	}
-	require.NoError(t, mr.Set(fmt.Sprintf(InstancePlayerCountKey, sceneID), strconv.FormatInt(players, 10)))
+	seedSceneMembers(mr, sceneID, int(players))
 }
 
 // moveChannelToDraining 模拟 autoscaler 开始排空一条线:从在役集合摘掉,放进回收中集合。
@@ -474,7 +473,7 @@ func TestPublishWorldChannelDirectory_DrainedLineReleasesItsNumber(t *testing.T)
 	_, err := mr.SRem(worldDrainingSetKey(testZoneId, directoryTestConfID), sceneKey(lineSceneB))
 	require.NoError(t, err)
 	mr.Del(sceneNodeKey(lineSceneB))
-	mr.Del(fmt.Sprintf(InstancePlayerCountKey, lineSceneB))
+	mr.Del(instanceMembersKey(lineSceneB))
 	seedDirectoryChannel(t, mr, lineSceneD, "10", 0)
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(ctx, sc, testZoneId, directoryTestNow))
 
@@ -509,7 +508,7 @@ func TestPublishWorldChannelDirectory_MoveToDrainingBetweenTheTwoReadsKeepsLineA
 	_, err := mr.SRem(activeKey, sceneKey(lineSceneA))
 	require.NoError(t, err)
 	mr.Del(sceneNodeKey(lineSceneA))
-	mr.Del(fmt.Sprintf(InstancePlayerCountKey, lineSceneA))
+	mr.Del(instanceMembersKey(lineSceneA))
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(ctx, sc, testZoneId, directoryTestNow))
 	wantLineNos := map[string]string{sceneKey(lineSceneB): "2", sceneKey(lineSceneC): "3"}
 	require.Equal(t, wantLineNos, lineNoTable(t, sc))
@@ -573,14 +572,14 @@ func TestPublishWorldChannelDirectory_ReflectsEffectiveConfig(t *testing.T) {
 		"30s 周期、60s 选主锁:TTL = 3 × 30 + 60 / 3 秒")
 }
 
-// 人数键写坏 / 为负 / 不存在都按 0 展示,不影响发布。
+// 成员键写坏 / 不存在都按 0 展示,不影响发布。
 func TestPublishWorldChannelDirectory_BadPlayerCountShowsZero(t *testing.T) {
 	sc, mr := newChannelDirectoryCtx(t)
-	seedDirectoryChannel(t, mr, lineSceneA, "10", -5)
+	seedDirectoryChannel(t, mr, lineSceneA, "10", 0)
 	seedDirectoryChannel(t, mr, lineSceneB, "10", 0)
-	require.NoError(t, mr.Set(fmt.Sprintf(InstancePlayerCountKey, lineSceneB), "not-a-number"))
+	require.NoError(t, mr.Set(instanceMembersKey(lineSceneB), "not-a-set"))
 	seedDirectoryChannel(t, mr, lineSceneC, "10", 0)
-	mr.Del(fmt.Sprintf(InstancePlayerCountKey, lineSceneC))
+	mr.Del(instanceMembersKey(lineSceneC))
 
 	require.Equal(t, 1, PublishWorldChannelDirectoriesForZone(context.Background(), sc, testZoneId, directoryTestNow))
 

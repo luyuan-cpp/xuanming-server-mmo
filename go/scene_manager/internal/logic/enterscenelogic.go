@@ -18,6 +18,7 @@ import (
 	"proto/scene_manager"
 	"scene_manager/internal/svc"
 	"shared/ownerepoch"
+	"shared/redisslot"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
@@ -66,7 +67,7 @@ const (
 	// 第二条腿:第一条腿记下的目标地图解析失败,已回落默认大世界(人照常落地,不是拒绝整个请求;
 	// 记在这条指标上是因为"玩家指定的那张图"确实被拒了,而且它不该有稳定速率)。
 	rejectReasonPendingMapFallback = "pending_map_fallback"
-	// destroy-while-entering:场景解析出来之后、预占人数之前被销毁(AtomicIncrPlayerCountIfSceneExists
+	// destroy-while-entering:场景解析出来之后、预占人数之前被销毁(AtomicAddSceneMemberIfSceneExists
 	// 返回 <0)。请求指定 scene_id 的进入才走这条预占路径;稳态应≈0,持续非 0 = 副本回收与进入在抢。
 	rejectReasonSceneGone = "scene_gone"
 	// 落点会话身份裁决(decidePlacementIdentity,scene-enter-chain-residuals.md §5.2 ①)拒绝,回私有码 25:
@@ -215,7 +216,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			return
 		}
 		cached := enterSceneDedupeDonePrefix + "v2:" + revisionText(in.OwnerRevision) + ":" + dedupeFingerprint + ":" + base64.StdEncoding.EncodeToString(payload)
-		if _, err := l.svcCtx.Redis.Eval(luaCompleteEnterSceneDedupe, []string{dedupeKey, locationRevisionFloorKey(in.PlayerId)},
+		if _, err := playerRedisEval(l.svcCtx, luaCompleteEnterSceneDedupe, enterSceneDedupeCompleteKeys(in.PlayerId, in.RequestId),
 			dedupeOwner, cached, enterSceneDedupeTTLSeconds, revisionText(in.OwnerRevision)); err != nil {
 			l.Logger.Errorf("Failed to cache complete EnterScene success response: key=%s err=%v", dedupeKey, err)
 		}
@@ -233,10 +234,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		}
 		// request_id 的唯一性只在玩家作用域内成立；不同玩家可能由不同客户端
 		// 生成相同值，绝不能因此重放另一名玩家的路由或 redirect token。
-		dedupeKey = fmt.Sprintf("enter_scene:dedup:%d:%s", in.PlayerId, in.RequestId)
+		dedupeKey = redisslot.EnterSceneDedupKey(in.PlayerId, in.RequestId)
 		dedupeOwner = enterSceneDedupePendingPrefix + dedupeFingerprint + ":" + uuid.NewString()
 		for attempt := 0; attempt < 2 && !dedupeOwned; attempt++ {
-			ok, err := l.svcCtx.Redis.SetnxEx(dedupeKey, dedupeOwner, enterSceneDedupeTTLSeconds)
+			ok, err := playerRedisSetnxEx(l.svcCtx, dedupeKey, dedupeOwner, enterSceneDedupeTTLSeconds)
 			if err != nil {
 				metrics.ObserveEnterSceneStage(in.GateZoneId, metrics.EnterSceneStageDedup, time.Since(dedupStart))
 				return errResp(constants.ErrRedis, fmt.Sprintf("EnterScene dedupe unavailable: %v", err)), nil
@@ -246,7 +247,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				break
 			}
 
-			existing, getErr := l.svcCtx.Redis.Get(dedupeKey)
+			existing, getErr := playerRedisGet(l.svcCtx, dedupeKey)
 			if getErr != nil {
 				// 键可能恰好在 SETNX 与 GET 之间过期；再尝试一次 SETNX。
 				continue
@@ -375,7 +376,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		l.Logger.Infof("Location owner node confirmed dead and reentry barrier elapsed; treating as unowned: player=%d dead_zone=%d dead_node=%s dead_scene=%d owner_epoch=%d gate_zone=%d target_zone=%d",
 			in.PlayerId, currentZoneID, currentLoc.GetNodeId(), currentLoc.GetSceneId(), observedEpoch, in.GateZoneId, targetZoneId)
 		// 与上面同理把 raw 清空。旧场景的人数留到本次落点**成功之后**再还(见函数末尾的
-		// releaseTakenOverSceneCount):拒绝 / 回滚路径上不能动它。
+		// 接管收尾的 releaseSceneMember):拒绝 / 回滚路径上不能动它。
 		takenOverLoc, takenOverZone = currentLoc, currentZoneID
 		currentLoc, currentLocRaw, currentZoneID = nil, "", 0
 	}
@@ -541,7 +542,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		confFromPending = sceneConfID != 0
 	}
 	resolveStart := time.Now()
-	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(in.SceneId, sceneConfID, targetZoneId)
+	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(in.SceneId, sceneConfID, targetZoneId, in.PlayerId)
 	if err != nil && confFromPending {
 		// 等待落点里记的地图解析不出来(两条腿之间频道被回收 / 节点全挂 / 满员,或第一条腿的只读检查
 		// 因 Redis 抖动放过了一张没开的图):回落到默认大世界再试一次,**人必须能落地**。
@@ -553,7 +554,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonPendingMapFallback)
 		l.Logger.Errorf("[Travel] Pending destination map unavailable; falling back to default world: player=%d target_zone=%d pending_scene_conf_id=%d err=%v",
 			in.PlayerId, targetZoneId, sceneConfID, err)
-		sceneId, nodeId, reserved, err = l.resolveSceneForEnter(0, 0, targetZoneId)
+		sceneId, nodeId, reserved, err = l.resolveSceneForEnter(0, 0, targetZoneId, in.PlayerId)
 	}
 	metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageSceneResolve, time.Since(resolveStart))
 	if err != nil {
@@ -567,7 +568,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	if in.GateId != "" {
 		if _, parseErr := strconv.ParseUint(nodeId, 10, 32); parseErr != nil {
 			if reserved {
-				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
 			}
 			return errResp(constants.ErrInvalidNodeID,
 				fmt.Sprintf("invalid scene node id %q: %v", nodeId, parseErr)), nil
@@ -605,7 +606,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			// 自动选择大世界频道会在 resolveSceneForEnter 内原子预占人数；拒绝
 			// 请求时必须成对释放，不能让失败请求污染调度负载。
 			if reserved {
-				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
 			}
 			// 登录撞上未释放的持有者(gate 崩溃后立刻从别的 gate 重登,location 指向挂着僵尸的旧节点):18 照回,
 			// 回之前请持有节点按会话结束释放,否则要等旧会话清理到期才有人请它(location-release-binding.md §12)。
@@ -647,7 +648,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		hz, hzResp := l.resolveHomeZone(in, unmappedPolicy)
 		if hzResp != nil {
 			if reserved {
-				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
 			}
 			return hzResp, nil
 		}
@@ -693,10 +694,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 键丢失时它下发补种后的 N。
 	if samePhysicalNode && observedEpoch == 0 && currentLoc.GetOwnerEpoch() != 0 {
 		recordedEpoch := currentLoc.GetOwnerEpoch()
-		reseeded, reseedErr := l.svcCtx.Redis.Setnx(ownerepoch.OwnerEpochKey(in.PlayerId), strconv.FormatUint(recordedEpoch, 10))
+		reseeded, reseedErr := playerRedisSetnx(l.svcCtx, ownerepoch.OwnerEpochKey(in.PlayerId), strconv.FormatUint(recordedEpoch, 10))
 		if reseedErr != nil {
 			if reserved {
-				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
 			}
 			l.Logger.Errorf("[OwnerEpoch] owner_epoch key missing and backfill failed; rejecting same-node arrival: player=%d location_epoch=%d err=%v",
 				in.PlayerId, recordedEpoch, reseedErr)
@@ -704,7 +705,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		}
 		if !reseeded {
 			if reserved {
-				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+				l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
 			}
 			metrics.ObserveEnterSceneRejected(targetZoneId, "epoch_conflict")
 			l.Logger.Errorf("[OwnerEpoch] Observed owner_epoch=0 while location records %d; key already exists during backfill, rejecting same-node arrival: player=%d node=%s",
@@ -732,13 +733,13 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//    session/connection is wired to the correct scene node.
 	if currentLoc != nil {
 		if samePlacement {
-			if reserved {
-				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
-			}
+			// 预占碰巧选中了玩家已在的频道时,预占与已有的成员身份是同一个成员,不释放。这里顺手补一次:
+			// 成员身份此前若被并发请求的释放摘掉过,重连时收敛回来。
+			l.commitSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
 			// 会话身份(scene-enter-chain-residuals.md §5.2 ②):应写入的身份与 location 记的不同(新登录顶号、
 			// 同会话代次抬高)时,在发路由之前把它写进 location —— 不写的话,迟到的旧会话 LeaveScene 看到的仍是
 			// 旧身份,会把这次新登录的 location 删掉(b1),旧会话在途的同节点换图也照样放行(d1 / d2)。
-			// 走到这里 currentLoc 没被过滤,与观察值是同一份;只改身份,人数与 owner_epoch 键都不动。
+			// 走到这里 currentLoc 没被过滤,与观察值是同一份;只改身份,owner_epoch 键不动。
 			// CAS 失败(epoch 或 location 在观察之后被改写 / 删除)回 19、不发路由。身份没变则一个字节都不写。
 			if identityRecord != identityOfLocation(currentLoc) {
 				if err := setLocationIdentityIfUnchanged(l.svcCtx, in.PlayerId, currentLoc, currentLocRaw,
@@ -776,7 +777,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 
 	if !reserved {
 		reserveStart := time.Now()
-		count, err := AtomicIncrPlayerCountIfSceneExists(l.svcCtx, sceneId)
+		count, err := AtomicAddSceneMemberIfSceneExists(l.svcCtx, sceneId, targetZoneId, nodeId, in.PlayerId)
 		if err != nil {
 			metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageReserve, time.Since(reserveStart))
 			return errResp(constants.ErrUpdateLocation, fmt.Sprintf("reserve scene player count failed: %v", err)), nil
@@ -785,15 +786,6 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageReserve, time.Since(reserveStart))
 			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonSceneGone)
 			return errResp(constants.ErrNoAvailableNode, fmt.Sprintf("scene %d disappeared during enter", sceneId)), nil
-		}
-		// AtomicIncrPlayerCountIfSceneExists only bumps the per-scene
-		// counter — bump the per-node aggregate to match what
-		// IncrInstancePlayerCount/ReserveBestWorldChannel do, so the
-		// composite-load score stays consistent across both reservation
-		// paths. Don't double-call IncrInstancePlayerCount here: that
-		// would re-INCR the per-scene counter the Lua already moved.
-		if nodeId != "" {
-			l.svcCtx.Redis.Incr(nodePlayerCountKey(targetZoneId, nodeId))
 		}
 		metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageReserve, time.Since(reserveStart))
 	}
@@ -812,7 +804,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 「推路由失败」同一套回滚收尾(回滚确认生效后 rollbackEnterSceneAfterRouteFailure 把两边人数还回去)。
 	mintNotDurable := errors.Is(updateErr, errOwnerEpochMintNotDurable)
 	if updateErr != nil && !mintNotDurable {
-		DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+		l.releaseSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
 		if errors.Is(updateErr, errHandoffWithdrawn) {
 			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonHandoffWithdrawn)
 			l.Logger.Errorf("[Handoff] Source scene withdrew handoff marker during arrival; no route sent for this request: player=%d target_scene=%d target_node=%s",
@@ -830,10 +822,14 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		return errResp(constants.ErrUpdateLocation, "Failed to update location"), nil
 	}
 
-	// 6b. Decrement old scene instance count after the new reservation is
+	// 6a. 落点已提交,再确认一次成员身份:预占之后、落点之前,别的请求可能把它摘掉过(scene_membership.go)。
+	l.commitSceneMember(in.PlayerId, sceneId, targetZoneId, nodeId)
+
+	// 6b. Remove the player from the old scene after the new reservation is
 	// committed so concurrent world-channel selection sees the in-flight enter.
-	if currentLoc != nil && currentLoc.SceneId != 0 && currentLoc.SceneId != sceneId {
-		DecrInstancePlayerCount(l.svcCtx, currentZoneID, currentLoc.SceneId)
+	// 同节点换图、同场景换节点时重叠的那部分成员身份由 removeSceneMember 按 location 保留。
+	if currentLoc != nil && currentLoc.SceneId != 0 {
+		l.releaseSceneMember(in.PlayerId, currentLoc.SceneId, currentZoneID, currentLoc.NodeId)
 	}
 
 	// 6c. 铸造没确认落盘(上面第 6 步的 errOwnerEpochMintNotDurable):新 epoch 不交给任何节点,不推路由,按推路由失败
@@ -844,7 +840,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			in.PlayerId, placed.epoch, sceneId, nodeId, updateErr)
 		resp := errResp(constants.ErrKafkaRoute, fmt.Sprintf("owner epoch mint not durable: %v", updateErr))
 		_, echo := l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, currentZoneID,
-			placed, guard.requiredMarker, sameNodeZeroMint, targetZoneId, sceneId)
+			placed, guard.requiredMarker, sameNodeZeroMint, targetZoneId, sceneId, nodeId)
 		resp.OwnerEpochAfterRollback = echo
 		return resp, nil
 	}
@@ -864,7 +860,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			// 回显只在 bump 回滚确认生效时非 0,只供源端日志,不是采纳凭证。
 			resp := errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err))
 			_, echo := l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, currentZoneID,
-				placed, guard.requiredMarker, sameNodeZeroMint, targetZoneId, sceneId)
+				placed, guard.requiredMarker, sameNodeZeroMint, targetZoneId, sceneId, nodeId)
 			resp.OwnerEpochAfterRollback = echo
 			metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageRouteGate, time.Since(routeStart))
 			return resp, nil
@@ -918,7 +914,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			metrics.ObserveEnterSceneOwnerDeadTakeover(takenOverZone)
 		}
 	}
-	l.releaseTakenOverSceneCount(takenOverLoc, takenOverZone)
+	if takenOverLoc != nil {
+		l.releaseSceneMember(in.PlayerId, takenOverLoc.GetSceneId(), takenOverZone, takenOverLoc.GetNodeId())
+	}
 	// 凭标记放行的交接已提交:handoff_pending_no_marker 比值告警的分母(口径 B)。
 	if guard.requiredMarker != "" {
 		metrics.ObserveEnterSceneHandoffAdmitted(targetZoneId)
@@ -936,7 +934,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 // 一次);false 是 dev 旁路放行(不铸造)。
 //
 // 拒绝是可重试的瞬时状态(与 ErrSceneReentryBarrier 同款):源 scene 的
-// SavePlayerToRedis 落地回调之后才写标记,上游退避重试就会放行;它不改任何状态。
+// SavePlayer 落地回调之后才写标记,上游退避重试就会放行;它不改任何状态。
 // site 只进日志,不进指标 label。指标 reason 按「预检时有没有读到标记」分成
 // handoff_pending_no_marker / handoff_pending_stale_marker(含义与各自的基线见文件头的常量说明)。
 //
@@ -1002,25 +1000,31 @@ func (l *EnterSceneLogic) rejectSupersededPlacement(in *scene_manager.EnterScene
 		fmt.Sprintf("落点会话已被更新的登录取代(%s)，未修改玩家状态；请勿以同一会话重试", verdict))
 }
 
-// releaseTakenOverSceneCount 在「从已死节点接管玩家」的落点成功之后,把玩家在旧场景里占的那
-// 一个人数还回去。
+// enterSceneDedupeCompleteKeys 是 luaCompleteEnterSceneDedupe 的 KEYS,全部在玩家自己的 slot 上(scene_keys_contract_test.go)。
+func enterSceneDedupeCompleteKeys(playerID uint64, requestID string) []string {
+	return []string{redisslot.EnterSceneDedupKey(playerID, requestID), locationRevisionFloorKey(playerID)}
+}
+
+// releaseSceneMember 把玩家摘出场景与节点的成员集合(释放预占、离开旧场景、接管后摘旧场景)。
+// 失败只记日志:这些路径的主结果已经定了,不能因为它改判;代价是该场景多留一个成员,直到这名玩家下一次离开它。
 //
-// 为什么必须还:dead-node reconcile 只销毁**副本实例**;大世界频道会沿用同一个 scene_id 迁到
-// 活节点上,instance:{id}:player_count 原值保留,全仓没有任何重算路径。不还的话,死节点上
-// 当时有 N 个玩家,这 N 个人陆续回来后那个频道的人数就永久多 N —— 按最小人数选频道时一直
-// 躲着它,autoscale 也永远排不空它。(接管落回同一个频道时,前面的预占已经 +1,这里 -1,净 0。)
-//
-// 为什么先看 scene:{id}:node 还在不在:副本实例已被 reconcile 销毁时计数键也删了,直接
-// Incrby(-1) 会把键重新建出来(钳成 0 后留下一条垃圾)。场景还在才还,DecrInstancePlayerCount
-// 自带 <0 归零钳制。
-func (l *EnterSceneLogic) releaseTakenOverSceneCount(loc *scene_manager.PlayerLocation, zoneID uint32) {
-	if loc == nil || loc.GetSceneId() == 0 {
-		return
+// 接管为什么也要摘:dead-node reconcile 只销毁**副本实例**;大世界频道会沿用同一个 scene_id 迁到
+// 活节点上,成员集合原样保留。不摘的话,死节点上当时有 N 个玩家,这 N 个人陆续回来后那个频道的人数就
+// 永久多 N —— 按最小人数选频道时一直躲着它,autoscale 也永远排不空它。接管落回同一个频道时,location 指向它,成员身份保留。
+func (l *EnterSceneLogic) releaseSceneMember(playerID, sceneID uint64, zoneID uint32, nodeID string) {
+	if err := removeSceneMember(l.svcCtx, playerID, sceneID, zoneID, nodeID); err != nil {
+		l.Logger.Errorf("[SceneMembers] Failed to remove player from scene members; player count stays high until the player leaves that scene: player=%d scene=%d zone=%d node=%s err=%v",
+			playerID, sceneID, zoneID, nodeID, err)
 	}
-	if lookupSceneNode(l.svcCtx, loc.GetSceneId()) == "" {
-		return
+}
+
+// commitSceneMember 确认玩家是场景与节点的成员(落点已提交、回滚恢复旧落点)。
+// 失败只记日志,理由同 releaseSceneMember;代价是人数少算一个,直到这名玩家重连或再次进场。
+func (l *EnterSceneLogic) commitSceneMember(playerID, sceneID uint64, zoneID uint32, nodeID string) {
+	if err := addSceneMember(l.svcCtx, playerID, sceneID, zoneID, nodeID); err != nil {
+		l.Logger.Errorf("[SceneMembers] Failed to add player to scene members; player count stays low until the player re-enters: player=%d scene=%d zone=%d node=%s err=%v",
+			playerID, sceneID, zoneID, nodeID, err)
 	}
-	DecrInstancePlayerCount(l.svcCtx, zoneID, loc.GetSceneId())
 }
 
 // playerLocationOwnerDead 判定 loc 记录的**那一个节点**是否已经确认死亡且再入屏障已过
@@ -1106,7 +1110,7 @@ func (l *EnterSceneLogic) playerLocationOwnerDead(loc *scene_manager.PlayerLocat
 //     当作存活,正好补上 3 与本调用之间的状态变化窗口。
 //  5. 再入屏障已过(node:zone:{z}:{n}:death_at 不存在或已超过屏障时长)——
 //     节点刚从 etcd 消失时 C++ 老进程还有 kDrainBudget 的 emergency relocate
-//     在 SavePlayerToRedis;这段时间内它虽已不在负载集,却仍在写。屏障就是
+//     在 SavePlayer;这段时间内它虽已不在负载集,却仍在写。屏障就是
 //     为这段窗口设的,这里不能绕过它。
 //
 // 有持有节点的位置,1 蕴含该节点不在注册表、也不可能身份歧义,1–5 合起来不弱于
@@ -1242,7 +1246,7 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 		restored, echo := rollbackPlacementAfterPushFailure(l.svcCtx, l.Logger, in.PlayerId,
 			currentLoc, currentLocRaw, currentZoneID, placed, placement.guard.requiredMarker, false)
 		if restored && currentLoc != nil && currentLoc.SceneId != 0 {
-			IncrInstancePlayerCount(l.svcCtx, currentZoneID, currentLoc.SceneId)
+			l.commitSceneMember(in.PlayerId, currentLoc.SceneId, currentZoneID, currentLoc.NodeId)
 		}
 		resp.OwnerEpochAfterRollback = echo
 	}
@@ -1272,7 +1276,7 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 			return errResp(constants.ErrUpdateLocation, "Failed to update location"), nil
 		}
 		if currentLoc != nil && currentLoc.SceneId != 0 {
-			DecrInstancePlayerCount(l.svcCtx, currentZoneID, currentLoc.SceneId)
+			l.releaseSceneMember(in.PlayerId, currentLoc.SceneId, currentZoneID, currentLoc.NodeId)
 		}
 	}
 
@@ -1322,24 +1326,25 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 // EnterSceneResponse.owner_epoch_after_rollback。
 func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, old *scene_manager.PlayerLocation, oldRaw string,
 	oldZoneID uint32, placed placedLocation, requiredMarker string, keepMintedEpoch bool,
-	newZoneID uint32, newSceneID uint64) (bool, uint64) {
+	newZoneID uint32, newSceneID uint64, newNodeID string) (bool, uint64) {
 	restored, echo := rollbackPlacementAfterPushFailure(l.svcCtx, l.Logger, playerID, old, oldRaw, oldZoneID,
 		placed, requiredMarker, keepMintedEpoch)
 	if !restored {
 		return false, echo
 	}
 
-	DecrInstancePlayerCount(l.svcCtx, newZoneID, newSceneID)
-	if old != nil && old.SceneId != 0 && old.SceneId != newSceneID {
+	// location 已退回旧值:摘新落点时重叠的成员身份保留,再确认旧落点的成员身份。
+	l.releaseSceneMember(playerID, newSceneID, newZoneID, newNodeID)
+	if old != nil && old.SceneId != 0 {
 		// 旧 PlayerLocation.zone_id 可能来自历史数据而为 0；调用方已经按
-		// scene:{id}:zone 解析出旧 zone，必须用解析结果恢复 zone-scoped aggregate。
-		IncrInstancePlayerCount(l.svcCtx, oldZoneID, old.SceneId)
+		// scene:{id}:zone 解析出旧 zone，必须用解析结果恢复节点成员集合。
+		l.commitSceneMember(playerID, old.SceneId, oldZoneID, old.NodeId)
 	}
 	return true, echo
 }
 
 func (l *EnterSceneLogic) deleteEnterSceneDedupeIfValue(key, expected string) error {
-	_, err := l.svcCtx.Redis.Eval(luaDeleteEnterSceneDedupeIfValue, []string{key}, expected)
+	_, err := playerRedisEval(l.svcCtx, luaDeleteEnterSceneDedupeIfValue, []string{key}, expected)
 	return err
 }
 
@@ -1421,9 +1426,9 @@ func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneI
 		// 被当成「场景活着但它所在的节点死了」，于是进 dead-node 自愈分支，
 		// 挑一个活节点并 Set(scene:{id}:node, newNode) 把映射无 TTL 地写出来。
 		// 而 CreateScene 又被 sceneConfId==0 挡掉（follow / 客户端路径正是 0），
-		// 结果是：映射有了、ECS 实体没有。随后 AtomicIncrPlayerCountIfSceneExists
+		// 结果是：映射有了、ECS 实体没有。随后 AtomicAddSceneMemberIfSceneExists
 		// 的存在性守卫（EXISTS scene:{id}:node）正好看到这把刚被伪造出来的 key，
-		// 守卫失效并继续 INCR 出 player_count —— 一个不在任何活跃集合里、
+		// 守卫失效并继续加出成员 —— 一个不在任何活跃集合里、
 		// 永远不会被回收的幽灵场景，玩家被派进去后无人接收。
 		if nodeId == "" {
 			return 0, "", fmt.Errorf("scene %d does not exist", sceneId)
@@ -1502,7 +1507,7 @@ func (l *EnterSceneLogic) reassignSceneOffDeadNode(sceneId, sceneConfId uint64, 
 	}
 	// 再入屏障:节点刚从 etcd 消失不代表它已经停笔。C++ 老节点丢租约后
 	// 还有 kDrainBudget(15s)的 emergency relocate,期间仍在
-	// SavePlayerToRedis。此刻改写 scene:{id}:node 并让新节点
+	// SavePlayer。此刻改写 scene:{id}:node 并让新节点
 	// CreateScene + load,就是同一玩家双写 / 回档。
 	// 屏障没走完时**一个字节都不改**,返回可重试错误让上游带着同样的
 	// scene_conf_id 退避重试。见 docs/design/scene-owner-reentry-barrier.md §3.2。
@@ -1609,7 +1614,7 @@ func (l *EnterSceneLogic) transferAgonesRoomAfterReassign(sceneId uint64, zoneId
 	TransferAgonesRoomForScene(ctx, l.svcCtx, sceneId, newNode, zoneId)
 }
 
-func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint64, zoneId uint32) (uint64, string, bool, error) {
+func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint64, zoneId uint32, playerId uint64) (uint64, string, bool, error) {
 	if sceneId != 0 {
 		sid, nid, err := l.resolveScene(sceneId, sceneConfId, zoneId)
 		return sid, nid, false, err
@@ -1623,7 +1628,7 @@ func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint6
 		sceneConfId = defaultConf
 	}
 
-	sid, nid, err := ReserveBestWorldChannelForEnter(l.ctx, l.svcCtx, sceneConfId, zoneId)
+	sid, nid, err := ReserveBestWorldChannelForEnter(l.ctx, l.svcCtx, sceneConfId, zoneId, playerId)
 	if err != nil || sid == 0 {
 		return 0, "", false, fmt.Errorf("no available channel for conf %d in zone %d", sceneConfId, zoneId)
 	}

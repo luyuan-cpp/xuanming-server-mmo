@@ -10,6 +10,7 @@
 | `docker-compose.observability.yml` | 日志查看:Loki、Alloy、Grafana(`dev.bat obs`) |
 | `docker-compose.tidb.yml` | 单节点 TiDB,与 MySQL 并存,用于验证 TiDB 兼容性 |
 | `docker-compose.login-stack.yml` | 登录链路的 Linux 容器版:第三方登录 mock、login、网关 |
+| `compose.redis-cluster.yml` | 玩家域 Redis Cluster 的本机开发版(3 主 3 从,端口 7100-7105),真集群验证用;用法见 `tools/scripts/README.md` |
 
 ```powershell
 dev.bat infra         # 起基础设施
@@ -47,6 +48,9 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-infra-up
 pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up -ZoneName <name> -ZoneId <id> -WaitReady
 pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-status -ZoneName <name>
 ```
+
+全局服务(match、guild、trade、chat 等)要读第一个 zone 的迁移 Job 建的全局库表,进程排在 data-service 之后。
+全新集群分开跑时,`k8s-zone-up` 之后要再跑一次 `k8s-infra-up`,它们才会起来;`k8s-all-up` 自动按这个顺序。
 
 完整用法见 [k8s/README.md](k8s/README.md),开服操作步骤见
 [docs/ops/k8s-open-server-runbook.md](../docs/ops/k8s-open-server-runbook.md),

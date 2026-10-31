@@ -327,6 +327,8 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	fmt.Printf("  mysql:         %s\n", svc.MySQLTarget(c.MySQL))
 	fmt.Printf("  schema:        %s\n", schemaModeLabel(c))
 	fmt.Printf("  core_redis:    %s (DB %d)\n", c.CoreRedis.Host, c.CoreRedis.DB)
+	playerRedisConf := c.EffectivePlayerRedis()
+	fmt.Printf("  player_redis:  %s\n", playerRedisConf.Describe())
 	fmt.Printf("  kafka:         %v\n", c.Kafka.Brokers)
 	fmt.Printf("  enqueue_types: %v (empty = all disabled)\n", c.PlayerInbox.EnqueueTypes)
 	fmt.Printf("  battle_producer: %s\n", battleProducerLabel(matchProducer.Ready()))

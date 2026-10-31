@@ -275,7 +275,7 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
   - **Java 已修**：`add334cb`（`LocalObserverOperation`，回环用例 `LocalObserverRpcLoopbackTest`）。Java 只剩 robot 走 dev 口的待做项，登记在 Java 仓 `PARITY.md`「观战 P0 缺陷」行。
   - **本地 robot 观战冒烟**（`robot/battle_smoke_scenario.go`：B 随机观战 A）的阻塞点：
     1. Go 改动尚未编译和测试，要等 Codex 跑完 [specs/85](../handoff/spectate-tiered-fanout-20261030/specs/85-local-mark-consistency.md) 第 6 节的命令。
-    2. 必须走本地模式（`GlobalMatch.Enabled=false`，`match_service.yaml` 默认值）。全局模式下 robot 的 WatchBattle 不带 `request_id`，会在入口回 16004「观战请求参数无效」。
+    2. ~~必须走本地模式（`GlobalMatch.Enabled=false`，`match_service.yaml` 默认值）。~~ **2026-10-30 更正**：本地模式已删除，只剩 SQL 权威路径。robot 的 WatchBattle 不带 `request_id`，会在入口回 16004「观战请求参数无效」，robot 要先补上这个字段才能跑这条冒烟（未改）。本节其余提到本地模式、标记的内容按历史记录读。
     3. battle 节点在 etcd 的注册里要有 `nodeUuid` 和 `grpcEndpoint`（C++ NodeInfo 默认会带），并且与 battle 进程内 `gNode->GetNodeInfo().node_uuid()` 是同一个值；否则 match 回 16018，或者 battle 回 kInvalidParameter。
     4. match 的墙钟不能比 battle 快 5s 以上（battle 跑在 WSL / Docker 而 match 跑在宿主机时要留意），否则 Add 会因截止过远被拒。
     5. 跑之前要清 Redis（AGENTS §6.2），让 `spectate:battles:active` 里只剩 A 这一场；随机选场挑到残留的场会在 `b-watch-battle-id` 失败。

@@ -34,28 +34,23 @@ func NewDataServiceServer(svcCtx *svc.ServiceContext) *DataServiceServer {
 	return &DataServiceServer{svcCtx: svcCtx}
 }
 
-// RegisterPlayerZone 登记 player → home_zone 映射,SETNX 语义(见 routing.RegisterPlayerZone)。
+// RegisterPlayerZone 登记 player → home_zone 映射,绝不覆盖(见 routing.Router.RegisterPlayerZone)。
 //
 // 本 RPC 的响应体是 emptypb.Empty,没有 error_code 字段可放码,所以失败一律走 gRPC
 // status;码用 constants 里的常量拼进 message(`error_code=<n>`),运维按同一根轴排障。
 //
-//   - 映射不存在 / 已存在且相同 → OK(幂等)
-//   - 已存在且不同             → AlreadyExists + ErrCodeZoneMappingConflict,消息带既有 zone
-//   - mapping Redis 故障        → Unavailable + ErrCodeRedis
+//   - 映射不存在 / 已存在且相同    → OK(幂等)
+//   - 已存在且不同                 → AlreadyExists + ErrCodeZoneMappingConflict,消息带既有 zone
+//   - player_id 或 storage_id 为 0、home 越界 → Unavailable + ErrCodeInvalidRequest
+//   - 库这一段故障(store 没装配、SQL / 锁等待、route_meta 缺失或冻结)→ Unavailable + ErrCodeRouteStoreError
+//
+// 提交点是全局库 player_route 的事务,提交即完成。login 失败时照常 fail-closed 并释放名字,重试落到幂等分支。
 //
 // 不看合服状态(docs/design/player-data-tidb-scaling-plan.md §7.1):合服过程中在源区建号是允许的,
 // 他的 home_zone 就是源区,GetPlayerHomeZone 解析之后落到目标区。这里写入的永远是原始 home_zone。
 //
-// storage_id != 0 时与映射同一段 Lua 原子钉落点记录(player-storage-placement.md §8.1);
-// 上面几种结果的语义不变 —— 只有映射这次真的写成才会写落点,幂等 / 冲突都不碰它。
-//
-// RouteStore.Mode=db_first(docs/design/player-route-mapping-durability-proposal.md §4)时上面几条照旧,另多两种 Unavailable,
-// **gRPC code 的集合不变**(OK / AlreadyExists / Unavailable),新码只体现在 message 里:
-//   - 库这一段故障(store 没装配、SQL / 锁等待、route_meta 缺失或冻结、缓存认得玩家而库里没行)→ Unavailable + ErrCodeRouteStoreError
-//   - player_id 为 0 或 home_zone 越界 → Unavailable + ErrCodeInvalidRequest
-//
-// 已提交但发布失败 / 未确认落盘、发布脚本发现缓存里是另一份映射,都是 Unavailable + ErrCodeRedis:
-// login 照常 fail-closed 并释放名字,重试落到幂等分支补发。login 只看有没有 err。
+// storage_id 与映射在同一行里原子钉落点(player-storage-placement.md §8.1);
+// 只有映射这次真的写成才会写落点,幂等 / 冲突都不碰它。
 func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_service.RegisterPlayerZoneRequest) (*emptypb.Empty, error) {
 	err := s.svcCtx.Router.RegisterPlayerZone(ctx, req.GetPlayerId(), req.GetHomeZoneId(), req.GetStorageId())
 	if err == nil {
@@ -65,51 +60,40 @@ func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_se
 	var conflict *routing.HomeZoneConflictError
 	switch {
 	case errors.As(err, &conflict):
-		// 有人试图把一名已有归属的玩家写到另一个 zone。合服之后这通常意味着
-		// 「按建角 zone 重新登记」的老路径又被走了一遍,必须留下证据。
+		// 有人试图把一名已有归属的玩家写到另一个 zone,必须留下证据。
 		logx.Errorf("[RegisterPlayerZone] refused overwrite: player=%d existing_zone=%d requested_zone=%d",
 			conflict.PlayerID, conflict.Existing, conflict.Requested)
 		return nil, status.Errorf(codes.AlreadyExists, "error_code=%d: %s",
 			constants.ErrCodeZoneMappingConflict, conflict.Error())
 	case errors.Is(err, routing.ErrInvalidRegistration):
-		// 只有 db_first 可达。刻意不用 InvalidArgument:gRPC code 集合保持与 redis 模式相同(规格 g.2 第 14 条),靠码 14 区分。
+		// 刻意不用 InvalidArgument:login 只看有没有 err,靠码 14 区分。
 		logx.Errorf("[RegisterPlayerZone] refused invalid registration: player=%d zone=%d: %v", req.PlayerId, req.HomeZoneId, err)
 		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeInvalidRequest, err)
-	case errors.Is(err, routing.ErrRouteStore):
+	default:
 		logx.Errorf("[RegisterPlayerZone] route store failure: player=%d zone=%d: %v", req.PlayerId, req.HomeZoneId, err)
 		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
-	default:
-		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRedis, err)
 	}
 }
 
 // GetPlayerHomeZone 的线上契约(proto 注释不归本服务改,以此处为准):
 //   - 映射存在           → HomeZoneId=**已解析到最终区**的归属 zone, err=nil
 //   - 映射不存在         → codes.NotFound,消息含 "no home zone mapping"
-//   - mapping Redis 故障 → codes.Unavailable
-//   - 合服映射解析失败(成环、缓存没装配)→ codes.Unavailable + ErrCodeRouteStoreError(fail-closed)
+//   - 全局库故障         → codes.Unavailable + ErrCodeRouteStoreError(绝不 NotFound)
+//   - 合服映射缓存没装配 → codes.Unavailable + ErrCodeRouteStoreError(fail-closed)
+//   - 调用方已放弃       → 如实回它的取消原因(Canceled / DeadlineExceeded),不报成 Unavailable + 码 30:
+//     那是全局库的故障口径,调用方自己的截止时间不该触发它(同 logic/persisted_player_database.go)
 //
 // 为什么在出口解析(docs/design/player-data-tidb-scaling-plan.md §7.1):合服只写 zone_merged_into,玩家行和路由行都不动,
 // home_zone 还是源区;而按区分组的调用方(榜单、频道、市场、公会、进场判断)几乎都经这两个 RPC 取归属,要的是最终区。
-// 要原始 home_zone 的只有 go/db 选库、登记写入和路由工具,它们都不走这里。
+// 要原始 home_zone 的只有登记写入和路由工具,它们都不走这里;go/db 选库读 storage_id,不看 home_zone。
 //
 // 为什么「不存在」要用一个**专门的码**而不是 HomeZoneId=0 + nil:调用方必须能把
-// 「这名玩家确实没有映射」和「我没查到,因为 Redis 挂了」分开。前者是数据状态
-// (存量玩家建号早于 CreatePlayer 注册映射,或合服回填还没跑),正确处理是回退到
+// 「这名玩家确实没有映射」和「我没查到,因为库挂了」分开。前者是数据状态,正确处理是回退到
 // 账号 blob 里的建角 zone;后者是故障,回退同样发生但必须被告警看见。用同一个
-// (0, nil) 表示两者,等于让每一次 mapping Redis 故障都伪装成一批"老玩家",
-// 合服当天最需要这条信号时它恰好是哑的。
+// (0, nil) 表示两者,等于让每一次库故障都伪装成一批"老玩家"。
 //
-// login 侧(go/login/internal/logic/pkg/homezone.IsUnmapped)同时认 NotFound 与
-// 老版本的 Unknown + 文案,两种服务端可以在滚动升级期间并存;所以 NotFound 的
-// 消息必须继续包含 "no home zone mapping" 这段文本,不能改写。
-//
-// RouteStore.ReadRequiresReady=true(第 3 批读方门禁,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2)
-// 时多一种失败,**gRPC code 的集合不变**:缓存不可信、回源全局库又失败 → Unavailable + ErrCodeRouteStoreError(码 30,与
-// mapping Redis 的码 1 分开,值班一眼分清是全局库坏了)。库里没有这名玩家 → 照旧 NotFound(那是库的权威缺席)。
-// 判定顺序是先 ErrRouteReadUnavailable 再 NotFound:一次库故障绝不能被报成「这名玩家没有归属」。
-// 再之前先看调用方是否已放弃(ctx 取消 / 超时,M1-2,2026-10-21):如实回它的取消原因(Canceled / DeadlineExceeded),
-// 不报成 Unavailable + 码 1 / 30 —— 那是本服务或全局库的故障口径,调用方自己的截止时间不该触发它(同 logic/persisted_player_database.go)。
+// login 侧(go/login/internal/logic/pkg/homezone.IsUnmapped)同时认 NotFound 与文案;
+// 所以 NotFound 的消息必须继续包含 "no home zone mapping" 这段文本,不能改写。
 //
 // 每次调用记 data_service_home_zone_read_seconds{rpc="home"},结局按返回的 gRPC code 归类(homeZoneReadResult)。
 func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_service.GetPlayerHomeZoneRequest) (_ *data_service.GetPlayerHomeZoneResponse, err error) {
@@ -119,54 +103,64 @@ func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_ser
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, status.FromContextError(ctxErr).Err()
 		}
-		if errors.Is(err, routing.ErrRouteReadUnavailable) {
-			return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
-		}
 		if errors.Is(err, routing.ErrHomeZoneNotMapped) {
 			// err.Error() 形如 "no home zone mapping for player 42";文案是契约,见上。
 			return nil, status.Errorf(codes.NotFound, "error_code=%d: %v", constants.ErrCodeNotFound, err)
 		}
-		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRedis, err)
-	}
-	zoneID, err := s.svcCtx.MergedZones.Resolve(home)
-	if err != nil {
-		logx.Errorf("[GetPlayerHomeZone] merged zone resolve failed: player=%d home_zone=%d: %v", req.GetPlayerId(), home, err)
+		logx.Errorf("[DataRoute] GetPlayerHomeZone player=%d: %v", req.GetPlayerId(), err)
 		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
 	}
-	return &data_service.GetPlayerHomeZoneResponse{HomeZoneId: zoneID}, nil
+	zones := s.svcCtx.MergedZones.Snapshot()
+	if zones == nil {
+		logx.Errorf("[DataRoute] GetPlayerHomeZone player=%d: merged zone cache not assembled", req.GetPlayerId())
+		return nil, errMergedZonesUnavailable()
+	}
+	return &data_service.GetPlayerHomeZoneResponse{HomeZoneId: zones.Final(home)}, nil
 }
 
 // BatchGetPlayerHomeZone 与单查刻意不同:**缺席的 id 直接不出现在 map 里**,不是错误。
 // 批量查的调用方(login 的角色列表)天然要处理"部分有部分没有",给整批返回 NotFound
 // 会把一个正常状态升级成整批失败;单查只有一个 id,没有"部分"可言,所以那边用 NotFound。
-// 值畸形与单查同口径,整批回 Unavailable(2026-10-12 起;此前畸形值被当成缺席静默跳过)。
-// ReadRequiresReady=true 时缓存不可信的块回源全局库,任一块回源失败整批 Unavailable + ErrCodeRouteStoreError(码 30),
-// 不回半份结果(半份会被调用方当成「这些人没有归属」)。调用方已放弃(ctx 取消 / 超时)时同单查,回它的取消原因(M1-2)。
-// 结果同单查解析到最终区;任一 id 解析失败整批 Unavailable + ErrCodeRouteStoreError,同样不回半份。
+// 任一块读库失败整批 Unavailable + ErrCodeRouteStoreError,不回半份结果(半份会被调用方当成「这些人没有归属」)。
+// 调用方已放弃(ctx 取消 / 超时)时同单查,回它的取消原因。结果同单查解析到最终区。
 //
 // 每次调用记 data_service_home_zone_read_seconds{rpc="batch"}(结局同单查归类,批量查不会有 not_found)与本批 id 个数。
 func (s *DataServiceServer) BatchGetPlayerHomeZone(ctx context.Context, req *data_service.BatchGetPlayerHomeZoneRequest) (_ *data_service.BatchGetPlayerHomeZoneResponse, err error) {
 	metrics.ObserveHomeZoneBatchIDs(len(req.GetPlayerIds()))
 	defer observeHomeZoneRead(metrics.HomeZoneRPCBatch, time.Now(), &err)
-	mapping, err := s.svcCtx.Router.BatchGetPlayerHomeZone(ctx, req.PlayerIds)
+	mapping, err := s.svcCtx.Router.BatchGetPlayerHomeZone(ctx, req.GetPlayerIds())
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, status.FromContextError(ctxErr).Err()
 		}
-		if errors.Is(err, routing.ErrRouteReadUnavailable) {
-			return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
-		}
-		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRedis, err)
+		logx.Errorf("[DataRoute] BatchGetPlayerHomeZone ids=%d: %v", len(req.GetPlayerIds()), err)
+		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
+	}
+	zones := s.svcCtx.MergedZones.Snapshot()
+	if zones == nil {
+		logx.Errorf("[DataRoute] BatchGetPlayerHomeZone ids=%d: merged zone cache not assembled", len(req.GetPlayerIds()))
+		return nil, errMergedZonesUnavailable()
 	}
 	for playerID, home := range mapping {
-		zoneID, err := s.svcCtx.MergedZones.Resolve(home)
-		if err != nil {
-			logx.Errorf("[BatchGetPlayerHomeZone] merged zone resolve failed: player=%d home_zone=%d: %v", playerID, home, err)
-			return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
-		}
-		mapping[playerID] = zoneID
+		mapping[playerID] = zones.Final(home)
 	}
 	return &data_service.BatchGetPlayerHomeZoneResponse{PlayerZoneMap: mapping}, nil
+}
+
+// GetMergedZones 回答全部合服映射(源区 → 目标区,没有沿链解析),读的是缓存里的快照。没有全局库连接的服务(guild、trade)
+// 用它重建 placement.MergedZones。缓存不可用回 Unavailable:调用方不能把「读不到」当成「没有合服」。
+func (s *DataServiceServer) GetMergedZones(context.Context, *emptypb.Empty) (*data_service.GetMergedZonesResponse, error) {
+	zones := s.svcCtx.MergedZones.Snapshot()
+	if zones == nil {
+		logx.Errorf("[DataRoute] GetMergedZones: merged zone cache not assembled")
+		return nil, errMergedZonesUnavailable()
+	}
+	return &data_service.GetMergedZonesResponse{MergedInto: zones.Merges()}, nil
+}
+
+// errMergedZonesUnavailable 是合服映射缓存没装配时的回复。
+func errMergedZonesUnavailable() error {
+	return status.Errorf(codes.Unavailable, "error_code=%d: merged zone cache not assembled", constants.ErrCodeRouteStoreError)
 }
 
 // observeHomeZoneRead 在两个归属读 handler 的 defer 里记耗时与结局;start 在 defer 语句处求值,即 handler 入口,
@@ -176,7 +170,7 @@ func observeHomeZoneRead(rpc string, start time.Time, err *error) {
 }
 
 // homeZoneReadResult 按 handler 实际回给调用方的 gRPC code 归类,与上面两段契约同口径:只有映射的权威缺席(NotFound)
-// 算 not_found;mapping Redis / 全局库故障(Unavailable)与调用方取消 / 超时(Canceled / DeadlineExceeded)都是 error ——
+// 算 not_found;全局库故障(Unavailable)与调用方取消 / 超时(Canceled / DeadlineExceeded)都是 error ——
 // 后者同样是一次没拿到归属的读,压测里要看见它的尾延迟。
 func homeZoneReadResult(err error) string {
 	switch status.Code(err) {

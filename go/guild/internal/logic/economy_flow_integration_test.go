@@ -35,7 +35,6 @@ import (
 	"os"
 	"regexp"
 	"shared/authoritysql/sqltest"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -46,16 +45,15 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
 	"guild/internal/constants"
 	"guild/internal/data"
 	assetpb "proto/common/asset"
-	componentpb "proto/common/component"
 	pb "proto/guild"
 	scenepb "proto/scene"
 	"schemamigrate"
 	"shared/assetop"
+	"shared/assetop/assetoptest"
 	"shared/gameday"
 	tablepb "shared/generated/pb/table"
 )
@@ -227,10 +225,11 @@ type sceneCall struct {
 
 // scriptedScene 实现 assetop.Applier:按脚本作答并记下每次调用。加锁:重投循环的 worker 并发调用。
 type scriptedScene struct {
-	mu        sync.Mutex
-	respond   func(rpc assetop.RPC, req *assetpb.AssetOpRequest) assetop.Result
-	calls     []sceneCall
-	committed map[uint64]*componentpb.PlayerAssetOpLedgerComp
+	assetoptest.CommittedLedger
+
+	mu      sync.Mutex
+	respond func(rpc assetop.RPC, req *assetpb.AssetOpRequest) assetop.Result
+	calls   []sceneCall
 }
 
 var _ assetop.Applier = (*scriptedScene)(nil)
@@ -245,59 +244,10 @@ func (s *scriptedScene) Do(_ context.Context, rpc assetop.RPC, req *assetpb.Asse
 	res := s.respond(rpc, req)
 	// 此替身模拟scene将资产与账本一起提交；Loop仍经独立读取面核对，
 	// 不向回包填SQLCommitted。真实玩家SQL提交由db/assetop集成测试覆盖。
-	if res.Durable && (res.Outcome == assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED || res.Outcome == assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_REJECTED) {
-		if s.committed == nil {
-			s.committed = make(map[uint64]*componentpb.PlayerAssetOpLedgerComp)
-		}
-		ledger := s.committed[req.GetPlayerId()]
-		if ledger == nil {
-			ledger = &componentpb.PlayerAssetOpLedgerComp{}
-			s.committed[req.GetPlayerId()] = ledger
-		}
-		var stream *componentpb.AssetOpStreamLedger
-		for _, candidate := range ledger.Streams {
-			if candidate.Stream == req.GetStream() && candidate.StreamEpoch == req.GetStreamEpoch() {
-				stream = candidate
-			}
-		}
-		if stream == nil {
-			stream = &componentpb.AssetOpStreamLedger{Stream: req.GetStream(), StreamEpoch: req.GetStreamEpoch(), SeenBits: make([]uint64, 16), AppliedBits: make([]uint64, 16)}
-			ledger.Streams = append(ledger.Streams, stream)
-		}
-		if req.GetSeq() == 0 || req.GetSeq() > 1024 {
-			return assetop.Result{}, fmt.Errorf("流程夹具序号超出窗口")
-		}
-		index := req.GetSeq() - 1
-		stream.SeenBits[index/64] |= uint64(1) << (index % 64)
-		if req.GetSeq() > stream.MaxSeq {
-			stream.MaxSeq = req.GetSeq()
-		}
-		if res.Outcome == assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED {
-			stream.AppliedBits[index/64] |= uint64(1) << (index % 64)
-		} else {
-			found := false
-			for _, rejection := range stream.Rejections {
-				if rejection.Seq == req.GetSeq() {
-					found = true
-				}
-			}
-			if !found {
-				stream.Rejections = append(stream.Rejections, &componentpb.AssetOpRejection{Seq: req.GetSeq(), ReasonTipId: res.Reason})
-				sort.Slice(stream.Rejections, func(i, j int) bool { return stream.Rejections[i].Seq < stream.Rejections[j].Seq })
-			}
-		}
+	if err := s.Commit(req, res); err != nil {
+		return assetop.Result{}, err
 	}
 	return res, nil
-}
-
-func (s *scriptedScene) ReadPersistedLedger(_ context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	ledger := s.committed[playerID]
-	if ledger == nil {
-		return nil, nil
-	}
-	return proto.Clone(ledger).(*componentpb.PlayerAssetOpLedgerComp), nil
 }
 
 func (s *scriptedScene) answer(fn func(assetop.RPC, *assetpb.AssetOpRequest) assetop.Result) {

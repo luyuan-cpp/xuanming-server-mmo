@@ -92,6 +92,12 @@ add_executable(redis_lifecycle_test
     hiredis_event_batch_test.cpp
     "${MMORPG_SOURCE_ROOT}/cpp/tests/rpc_controller_test/hiredis_command_lifecycle_test.cpp"
     "${MMORPG_SOURCE_ROOT}/cpp/tests/rpc_controller_test/redis_manager_auth_test.cpp"
+    "${MMORPG_SOURCE_ROOT}/cpp/tests/rpc_controller_test/redis_cluster_logic_test.cpp"
+    "${MMORPG_SOURCE_ROOT}/cpp/tests/rpc_controller_test/redis_cluster_client_test.cpp"
+    "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/infra/storage/redis_cluster/redis_cluster_client.cpp"
+    "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/infra/storage/redis_cluster/redis_cluster_topology.cpp"
+    "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/infra/storage/redis_cluster/redis_command_route.cpp"
+    "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/infra/storage/redis_cluster/redis_reply_classifier.cpp"
     "${MMORPG_SOURCE_ROOT}/cpp/libs/engine/thread_context/redis_manager.cpp")
 target_include_directories(redis_lifecycle_test PRIVATE
     "${MMORPG_SOURCE_ROOT}/cpp/libs"

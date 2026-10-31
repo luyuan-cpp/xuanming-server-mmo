@@ -130,15 +130,13 @@ func main() {
 		RelayAdmission: relay, BindOwner: svcCtx.BindConsumerOwner,
 		Brokers: c.Kafka.Brokers, Topic: c.ResultTopic,
 		GroupID: c.ResultConsumerGroup, Partitions: c.ResultTopicPartitions,
-		RequireSQLCommit: c.GlobalMatch.Enabled,
+		RequireDurability: c.ResultTopicRequiresDurability(),
 	}
-	// 成局之后 battle 会写结果，不能等到可选的评分消费者启动时才发现主题不耐久。
+	// 成局之后 battle 会写结果，不能等到消费者启动时才发现主题不耐久。
 	// 此门禁先于 matcher、节点发现和 RPC 注册；失败直接拒绝本进程启动。
-	if c.GlobalMatch.Enabled {
-		if err := matchkafka.EnsureResultTopic(resultConfig); err != nil {
-			cancel()
-			panic(fmt.Errorf("全球匹配结果主题未满足耐久契约，拒绝启动: %w", err))
-		}
+	if err := matchkafka.EnsureResultTopic(resultConfig); err != nil {
+		cancel()
+		panic(fmt.Errorf("全球匹配结果主题未满足耐久契约，拒绝启动: %w", err))
 	}
 
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。
@@ -154,58 +152,26 @@ func main() {
 	// match 实例自身的注册:按池撮合用它作成员表,决定每个池由哪个副本负责(internal/poolowner)。
 	svcCtx.LaunchRelayTask("match.watch.match", func() { svcCtx.MatchNodes.Run(ctx, svcCtx.Etcd) })
 
-	// 全球结果来源归档独立于评分开关，PVE与不计分局也必须保全完整个人原件。
-	// 启动接线先于matcher与RPC注册；旧兼容模式仍只在启用评分时消费。
-	if c.GlobalMatch.Enabled || c.RatingEnabled {
-		startResults := func() error {
-			var recorder []matchkafka.ResultRecordHandler
-			if c.GlobalMatch.Enabled {
-				if svcCtx.Authority == nil {
-					return fmt.Errorf("全球匹配完整结算来源数据库未装配")
-				}
-				recorder = append(recorder, svcCtx.Authority.ArchiveCompletion)
-			}
-			return matchkafka.StartResultConsumer(ctx, resultConfig, func(_ context.Context, event *kafkapb.BattleResultEvent) error {
-				if !c.RatingEnabled {
-					return nil
-				}
-				_, err := matchlogic.ApplyBattleResult(svcCtx, event)
-				return err
-			}, recorder...)
+	// 结果来源归档独立于评分开关，PVE与不计分局也必须保全完整个人原件。
+	// 启动接线先于matcher与RPC注册；来源归档必须同步装配成功。
+	if err := matchkafka.StartResultConsumer(ctx, resultConfig, func(_ context.Context, event *kafkapb.BattleResultEvent) error {
+		if !c.RatingEnabled {
+			return nil
 		}
-		// 全球来源归档必须同步装配成功；只有显式旧兼容模式的软评分允许告警后后台重试。
-		if err := startResults(); err != nil {
-			if c.GlobalMatch.Enabled {
-				cancel()
-				panic(fmt.Errorf("全球匹配完整结算来源消费者未就绪，拒绝启动: %w", err))
-			}
-			logx.Errorf("[rating] Failed to start battle result consumer; rating updates paused, retrying in the background after 30s: %v", err)
-			svcCtx.LaunchRelayTask("match.kafka.results.retry", func() {
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(30 * time.Second):
-					}
-					if err := startResults(); err != nil {
-						logx.Errorf("[rating] Failed to restart battle result consumer; retrying after 30s: %v", err)
-						continue
-					}
-					logx.Info("[rating] Battle result consumer restarted successfully")
-					return
-				}
-			})
-		}
+		_, err := matchlogic.ApplyBattleResult(svcCtx, event)
+		return err
+	}, svcCtx.Authority.ArchiveCompletion); err != nil {
+		cancel()
+		panic(fmt.Errorf("全球匹配完整结算来源消费者未就绪，拒绝启动: %w", err))
 	}
 
 	// 组队(team-system.md §A.3,port-decisions D-2 / feasibility D7):与 match 同进程、同一个
 	// zrpc server,协议独立(ClientPlayerTeam service + TeamNodeService 第二次节点注册)。
-	//   - home zone 查询走 data_service(DataServiceRpc 未配置时 DataServiceClient 为 nil,
-	//     team 需要 home zone 的请求一律回 TeamInternal,不拒绝起服);
+	//   - home zone 查询读全局库 player_route(记录要写原始区,data_service 回的是最终区);
 	//   - 整队开战的票据域端口由 logic.TeamBattleStarter 实现,这一行同时是
 	//     *logic.TeamBattleStarter 满足 team.BattleStarter 的编译期保证(team 与 logic 互不 import)。
 	teamService := team.NewService(svcCtx,
-		team.NewDataServiceHomeZone(svcCtx.DataServiceClient, team.DefaultHomeZoneLookupTimeout),
+		team.NewAuthorityHomeZone(svcCtx.Authority, team.DefaultHomeZoneLookupTimeout),
 		matchlogic.NewTeamBattleStarter(svcCtx))
 	svcCtx.SetPartyTeam(teamService)
 	teamAuthority, teamAuthorityErr := team.NewAuthorityServer(svcCtx)
@@ -226,9 +192,7 @@ func main() {
 		// 客户端来源由 sessionInterceptor 拒绝(PermissionDenied)。
 		matchpb.RegisterMatchInternalServer(grpcServer, server.NewMatchInternalServer(svcCtx))
 		teampb.RegisterClientPlayerTeamServer(grpcServer, team.NewServer(teamService))
-		if teamAuthority != nil {
-			teampb.RegisterTeamAuthorityServer(grpcServer, teamAuthority)
-		}
+		teampb.RegisterTeamAuthorityServer(grpcServer, teamAuthority)
 
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)
@@ -281,27 +245,21 @@ func main() {
 		defer close(controlDone)
 		prepared := func(prepareCtx context.Context) (*serverbase.PreparedPublication, error) {
 			bound := svcCtx.DrainRuntime
-			if bound == nil || root.Pending() != 0 || svcCtx.Authority == nil {
+			owner := svcCtx.ConsumerOwner
+			if bound == nil || root.Pending() != 0 || owner == nil {
 				return nil, drainproof.ErrHold
 			}
-			owner := svcCtx.ConsumerOwner
-			if c.GlobalMatch.Enabled || c.RatingEnabled {
-				if owner == nil {
-					return nil, drainproof.ErrHold
-				}
-				expected, err := owner.ExpectedPartitions(bound)
-				if err != nil {
-					return nil, err
-				}
-				digest, raw, err := owner.PreparedFrontier(prepareCtx, bound, "SOURCE", expected)
-				if err != nil {
-					return nil, err
-				}
-				return &serverbase.PreparedPublication{Digest: digest, Raw: raw, WithReady: func(openCtx context.Context, commit func() ([]byte, error)) ([]byte, error) {
-					return kafkautil.WithConsumerReadiness(openCtx, raw, []*kafkautil.BoundConsumerGroup{owner}, commit)
-				}}, nil
+			expected, err := owner.ExpectedPartitions(bound)
+			if err != nil {
+				return nil, err
 			}
-			return &serverbase.PreparedPublication{NoConsumers: true}, nil
+			digest, raw, err := owner.PreparedFrontier(prepareCtx, bound, "SOURCE", expected)
+			if err != nil {
+				return nil, err
+			}
+			return &serverbase.PreparedPublication{Digest: digest, Raw: raw, WithReady: func(openCtx context.Context, commit func() ([]byte, error)) ([]byte, error) {
+				return kafkautil.WithConsumerReadiness(openCtx, raw, []*kafkautil.BoundConsumerGroup{owner}, commit)
+			}}, nil
 		}
 		if err := serverbase.DriveDrainRuntime(controlCtx, runtime, *maintenanceControlDir, root, relay, svcCtx.BindDrainRuntime, svcCtx.CloseSource, svcCtx.StopAndReport, prepared); err != nil && controlCtx.Err() == nil {
 			logx.Errorf("匹配排空 HOLD: %v", err)
@@ -364,10 +322,6 @@ func validateMigrationFlags(migrateOnly, allowModify bool) error {
 
 // runMigration 不构造ServiceContext，因此不申请号源、不连接etcd/Redis/Kafka、不监听RPC。
 func runMigration(c config.Config, allowModify bool, migrate func(context.Context, config.GlobalMatchConf, bool) (schemamigrate.Report, error)) int {
-	if !c.GlobalMatch.Enabled {
-		fmt.Fprintln(os.Stderr, "匹配迁移必须显式启用全球SQL权威")
-		return schemamigrate.ExitFailed
-	}
 	if _, err := authoritysql.ParseBackend(c.GlobalMatch.Backend); err != nil {
 		fmt.Fprintf(os.Stderr, "GlobalMatch.Backend: %v\n", err)
 		return schemamigrate.ExitFailed

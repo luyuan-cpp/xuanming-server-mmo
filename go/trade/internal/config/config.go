@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"shared/playerredis"
 	"trade/internal/data"
 
 	tradepb "proto/trade"
@@ -89,7 +90,7 @@ type Config struct {
 	// Schema:建表策略,见 SchemaConf.AutoMigrate。整段可缺失。
 	Schema SchemaConf `json:",optional"`
 
-	// DataServiceRpc:查 home_zone 与领号段的 data_service 客户端。不标 optional:
+	// DataServiceRpc:查 home_zone、读合服映射与领号段的 data_service 客户端。不标 optional:
 	// P1 的浏览 / 详情 / 收藏 / 种子都依赖它,缺这段就该在加载期失败。
 	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc"`
 
@@ -101,8 +102,7 @@ type Config struct {
 	Market MarketConf `json:"Market"`
 
 	// SharedRedis:**共享单库** Redis。资产通道在这一实例上:
-	//   - 读跨运行时契约键 player:{id}:location(scene_manager 写,值是 PlayerLocation protobuf),据此找到玩家当前所在的
-	//     scene 节点(go/shared/scenenode.Locator),没有它就发不出 AssetDebit / AssetCredit;
+	//   - 没写 PlayerRedis.Addrs 时,玩家域的 player:{id}:location 也在这里(见下面的 PlayerRedis);
 	//   - 订阅 scene 发布的落地唤醒频道 assetop:wake,另写两类本服务自己的键:唤醒的跨副本去重键
 	//     assetop:wake:trade:{player_id}(shared/assetopwake)与维护选主锁 trade:assetop:maintenance:leader(shared/leader)。
 	//
@@ -118,6 +118,11 @@ type Config struct {
 	// 但仍要求填写:留着它才能一眼看出"打开开关要连哪份 Redis",也避免放松一条既有守卫。
 	SharedRedis RedisConf `json:"SharedRedis"`
 
+	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.8):资产通道读 player:{id}:location。
+	// SharedRedis 留给控制域(唤醒频道与去重键、选主锁)。读取走 EffectivePlayerRedis():没写 Addrs 时指向 SharedRedis 那一个实例,
+	// 开发环境不用改。与 SharedRedis 一样,只有 AssetOp.Enabled=true 时才会真的去拨它。
+	PlayerRedis playerredis.Config `json:",optional"`
+
 	// AssetOp:通用资产通道的开关与密钥来源。**整段可缺失,缺失即关闭**(见 AssetOpConf)。
 	AssetOp AssetOpConf `json:"AssetOp,optional"`
 	// 服务端准入白名单，默认空；实例config只信scene扣出快照，不信玩家声明。
@@ -131,9 +136,9 @@ type Config struct {
 type RmbConf struct {
 	Enabled bool `json:",optional"`
 	// 必须由所有参与zone的login共用，不从SharedRedis/ZoneId推测或回落。
-	GlobalLoginSessions bool      `json:",optional"`
-	LoginRedis          RedisConf `json:",optional"`
-	CurrencyTypes       []uint32  `json:",optional"`
+	GlobalLoginSessions bool                          `json:",optional"`
+	LoginRedis          playerredis.LoginReaderConfig `json:",optional"`
+	CurrencyTypes       []uint32                      `json:",optional"`
 }
 type MallConf struct {
 	URL               string `json:",optional"`
@@ -374,6 +379,28 @@ type RedisConf struct {
 	PoolSize int `json:"PoolSize,optional"`
 }
 
+// playerRedisFallbackPoolSize / IOTimeoutMs:没写 PlayerRedis.Addrs 且 SharedRedis.PoolSize 也没写时的连接池,以及读写超时。
+// 与换句柄之前的 go-redis 缺省同量级(K8s 上 GOMAXPROCS 按 2 算),写成常量,不随 CPU limit 漂移。
+const (
+	playerRedisFallbackPoolSize    = 20
+	playerRedisFallbackIOTimeoutMs = 3000
+)
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 SharedRedis 那一个实例。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	pool := c.SharedRedis.PoolSize
+	if pool == 0 {
+		pool = playerRedisFallbackPoolSize
+	}
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{c.SharedRedis.Host},
+		Password:        c.SharedRedis.Password,
+		PoolSizePerNode: min(pool, playerredis.MaxPoolSizePerNode),
+		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
+	})
+}
+
 // MySQLConf 是 mmorpg_trade 的连接参数。
 type MySQLConf struct {
 	Host string `json:"Host"`
@@ -548,6 +575,9 @@ func (c *Config) Validate() error {
 	if c.SharedRedis.PoolSize < 0 {
 		return fmt.Errorf("SharedRedis.PoolSize(%d)不能为负:0 = go-redis 缺省 10 × GOMAXPROCS", c.SharedRedis.PoolSize)
 	}
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("PlayerRedis: %w", err)
+	}
 
 	// 资产通道开关(§S4)。整段缺失 = 关闭,是刻意的默认拒绝,见 AssetOpConf。
 	//
@@ -568,10 +598,10 @@ func (c *Config) Validate() error {
 	}
 	// 落地恢复参数只在通道开着时有消费者(停放 / 放弃 / 对账 / 唤醒都挂在重投循环上),关着时一概不查。
 	if c.AssetOp.Enabled {
-		if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) || !c.Rmb.GlobalLoginSessions || c.Rmb.LoginRedis.Host == "" {
+		if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) || !c.Rmb.GlobalLoginSessions || !c.Rmb.LoginRedis.HasAddr() {
 			return errors.New("交易写面必须显式配置全局角色schema与全局login会话Redis，不允许从SharedRedis推测")
 		}
-		if c.Rmb.LoginRedis.DB < 0 || c.Rmb.LoginRedis.PoolSize < 0 {
+		if c.Rmb.LoginRedis.DB < 0 || c.Rmb.LoginRedis.PoolSizePerNode < 0 {
 			return errors.New("登录态Redis库号/连接池非法")
 		}
 		if c.Market.Scope != ScopeGlobal {

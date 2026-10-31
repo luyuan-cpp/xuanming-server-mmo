@@ -1218,25 +1218,53 @@ func TestReview_ApproveDeletesAllApplicantRows(t *testing.T) {
 	assert.EqualValues(t, 0, repo.rdb.Exists(ctx, playerGuildKey(applicant)).Val(), "映射键必须失效")
 }
 
-// TestReview_ZoneMismatchDeletesApplication:unmerge 只改 guild.zone_id、不动申请表,
-// 回滚后残留的跨区申请一旦被批就造出跨区成员。锁内复核 zone 是这条防线。
-func TestReview_ZoneMismatchDeletesApplication(t *testing.T) {
+// TestReview_ZoneMismatchKeepsApplication:判成不同区只拒绝这一次,申请行留着。映射缓存滞后时这种判定可能是错的,
+// 删掉就把合法申请弄丢了;映射追上之后同一条申请能批。
+func TestReview_ZoneMismatchKeepsApplication(t *testing.T) {
 	ctx, db, repo := openGuildIntegrationRepo(t)
 	const (
 		guildID   uint64 = 7291
 		leader    uint64 = 8291
 		applicant uint64 = 8292
 	)
-	seedManagedGuild(t, ctx, db, guildID, 2, 1, 50, leader, nil)
+	seedManagedGuild(t, ctx, db, guildID, 3, 1, 50, leader, nil)
+	bindMergedZones(t, repo, map[uint32]uint32{3: 2}) // 3 区合进 2 区:2 区的玩家能申请 3 区的帮
 	_, err := repo.ApplyToGuild(ctx, guildID, applicant, 2, testNowMs, testRules)
 	require.NoError(t, err)
 
-	mustExec(t, ctx, db, "UPDATE guild SET zone_id=3 WHERE guild_id=?", guildID) // 模拟 unmerge 回滚
-
+	bindMergedZones(t, repo, nil) // 映射不见了:合服被撤销,或者这个副本还没刷新到
 	_, err = repo.ReviewApplication(ctx, guildID, leader, applicant, true, 2, testNowMs)
-	assert.ErrorIs(t, err, ErrApplicationNotFound)
-	assert.Zero(t, guildApplicationCount(t, ctx, db, guildID, applicant), "跨区申请必须被删掉,不能留着等下次再批")
+	assert.ErrorIs(t, err, ErrGuildZoneMismatch)
+	assert.Equal(t, 1, guildApplicationCount(t, ctx, db, guildID, applicant), "判成不同区不能删申请")
 	assert.Zero(t, memberCount(t, ctx, db, applicant))
+
+	bindMergedZones(t, repo, map[uint32]uint32{3: 2}) // 映射追上
+	res, err := repo.ReviewApplication(ctx, guildID, leader, applicant, true, 2, testNowMs)
+	require.NoError(t, err)
+	assert.True(t, res.Approved)
+	assert.Equal(t, 1, memberCount(t, ctx, db, applicant))
+}
+
+// 合服之后两边解析到同一个最终区:审批人按原始区看不一样,也要能批。公会行的 zone_id 不变。
+func TestReview_MergedZonesAreTheSameZone(t *testing.T) {
+	ctx, db, repo := openGuildIntegrationRepo(t)
+	const (
+		guildID   uint64 = 7293
+		leader    uint64 = 8293
+		applicant uint64 = 8294
+	)
+	seedManagedGuild(t, ctx, db, guildID, 3, 1, 50, leader, nil)
+	bindMergedZones(t, repo, map[uint32]uint32{3: 2})
+	_, err := repo.ApplyToGuild(ctx, guildID, applicant, 2, testNowMs, testRules)
+	require.NoError(t, err)
+
+	res, err := repo.ReviewApplication(ctx, guildID, leader, applicant, true, 2, testNowMs)
+	require.NoError(t, err)
+	assert.True(t, res.Approved)
+	assert.Equal(t, 1, memberCount(t, ctx, db, applicant))
+	var zone uint32
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT zone_id FROM guild WHERE guild_id=?", guildID).Scan(&zone))
+	assert.Equal(t, uint32(3), zone, "合服不改写 zone_id")
 }
 
 // TestReview_Reject:拒绝删申请行、不加成员,并回带快照供客户端刷新。

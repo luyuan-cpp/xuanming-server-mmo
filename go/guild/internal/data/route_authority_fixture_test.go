@@ -23,7 +23,7 @@ func createGuildRouteFixture(t *testing.T, ctx context.Context, db *sql.DB) {
 	path := filepath.Join(filepath.Dir(source), "..", "..", "..", "data_service", "internal", "store", "schema.go")
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
 	require.NoError(t, err)
-	names := []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL"}
+	names := []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL"}
 	wanted := map[string]bool{}
 	for _, name := range names {
 		wanted[name] = true
@@ -70,8 +70,6 @@ func createGuildRouteFixture(t *testing.T, ctx context.Context, db *sql.DB) {
 		require.NoError(t, err)
 	}
 	_, err = db.ExecContext(ctx, "INSERT INTO route_meta(id,generation,writable) VALUES(1,'6775696c64747269616c',1)")
-	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, "INSERT INTO route_reconcile(id) VALUES(1)")
 	require.NoError(t, err)
 	for _, player := range []uint64{11, 22} {
 		_, err = db.ExecContext(ctx, "INSERT INTO player_route(route_shard,player_id,home_zone,rev,updated_by,created_at_ms,updated_at_ms) VALUES(?,?,1,1,'guild-trial-it',1,1)", placement.RouteRowShard(player), player)

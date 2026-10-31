@@ -1,7 +1,5 @@
 # Base RPC service config
 Name: login.rpc
-# 默认全球SQL；只有历史dev/test夹具可以显式true，Mode=dev本身不放宽全球门禁。
-LegacyNonGlobal: false
 # dev:本地联调配置。DevPasswordAuth 的启动门禁要求 Mode=dev/test;
 # 生产部署走 deploy/ 下的受管配置,不复用本文件。
 Mode: dev
@@ -70,6 +68,16 @@ Node:
   # QueueRedis(可选,G4a 第 1a 批):排队、准入与放行锁所在的 Redis。本机单实例不写,即与上面 RedisClient 共用同一个 client;
   # K8s 上由 tools/scripts/k8s_deploy.ps1 -RedisSplit queue 整段渲染(字段同 RedisClient,全部必填,含 PoolSize)。
   # gate 排空标记不在这里,始终在 RedisClient(shared-redis-split-by-purpose.md §25.3)。
+
+# 玩家域与登录域(docs/design/redis-player-store-cluster.md §5.7、§10.2)。上面的 Node.RedisClient 只剩控制域:账号锁、gate 排空标记。
+#   PlayerRedis:player_locker、login_idempotent、login_generation。
+#   LoginRedis:连接栅栏、登录态、设备集、账号索引、令牌、令牌家族、口令配额。
+# 没写 Addrs 时都指向 Node.RedisClient 那一个实例,地址、口令、库号、超时跟着它。上 Redis Cluster 时写 Addrs(集群种子)+ Cluster: true,
+# 两段结构相同,可以指向同一个集群,也可以拆开。这里只把连接池上限写明:每节点每句柄(单实例即总数),沿用单实例阶段的现值。
+PlayerRedis:
+  PoolSizePerNode: 20
+LoginRedis:
+  PoolSizePerNode: 20
 
 # Snowflake ID config
 Snowflake:
@@ -252,17 +260,12 @@ HomeZone:
 # ─────────────────────────────────────────────────────────────────────────
 # 建角钉存储落点(docs/design/player-storage-placement.md §8.3 / §13)
 #
-# PinOnCreate:true = CreatePlayer 在同一次 RegisterPlayerZone 里让 data_service 与 player:zone
-#   原子登记SQL路由与落点；全球服务必须显式true，缺键或false拒启。
+# CreatePlayer 在同一次 RegisterPlayerZone 里把归属和落点写进 player_route 的同一行。
 # NewPlayerStorageId:新号钉到哪个落点库;0 = 本 login 所在 zone(Node.ZoneId);
-#   1..999999 = zone_{id}_db,>=1000000 = player_store_{id}_db(Phase 2 全局库填 1000000)。
-#   只在 PinOnCreate=true 时生效。
-# 正式顺序：显式迁移/路由初始化→DS db_first强TiDB与reconcile arm→自然ready→DB/login。
-# 历史Redis必须先正规import/audit，不能用空SQL覆盖；Login只连明确DS目标，不造第二套TiDB开关。
+#   1..999999 = zone_{id}_db,>=1000000 = player_store_{id}_db。
 # 启动还需独立MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN环境凭据，沿serviceauth正规格式校验，不记录其值。
-#   启动日志 "[placement] pin_on_create=..." 是核对依据。
+#   启动日志 "[placement] new_player_storage_id=..." 是核对依据。
 Placement:
-  PinOnCreate: true
   NewPlayerStorageId: 0
 
 # ─────────────────────────────────────────────────────────────────────────

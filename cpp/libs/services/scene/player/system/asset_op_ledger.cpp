@@ -268,7 +268,7 @@ AssetOpStreamLedger& MutableAssetOpStream(PlayerAssetOpLedgerComp& comp, AssetOp
     added->set_stream_epoch(0);
     EnsureWindowWords(*added);
     // 按 stream 升序落位。每玩家至多 5 条流,冒泡代价可忽略;好处是存档里顺序稳定,
-    // SavePlayerToRedis 那套"与上次落盘快照逐字段相等就不写"的判定不会因顺序抖动误判为变更。
+    // SavePlayer 那套"与上次落盘快照逐字段相等就不写"的判定不会因顺序抖动误判为变更。
     int pos = list->size() - 1;
     while (pos > 0 && list->Get(pos - 1).stream() > list->Get(pos).stream()) {
         list->SwapElements(pos - 1, pos);

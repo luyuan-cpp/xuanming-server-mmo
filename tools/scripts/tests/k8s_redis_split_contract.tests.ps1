@@ -9,7 +9,7 @@
       1. 不带 -RedisSplit(缺省 auto,DryRun 按 none)时 zone-up / infra-up 的产物里没有 QueueRedis、没有 redis-queue-g 字样,
          gateway 的 spring.data.redis.host 仍是核心 redis.<infra>;
       2. -RedisSplit queue:login 整段写 Node.QueueRedis(Host = redis-queue-g0.<infra>:6379,其余字段与 RedisClient 逐项同值),
-         gateway 指向 redis-queue-g0.<infra>;C++ zoneredis、go/db RedisClient、data-service MappingRedis 仍是核心;
+         gateway 指向 redis-queue-g0.<infra>;C++ zoneredis、data-service NameCacheRedis 仍是核心,go/db 不连 Redis;
       3. zones 配置的 redisQueueGroup: 2 → redis-queue-g2;非法值(负数、小数、字符串)在任何写操作之前 throw;
       4. infra-up -RedisSplit queue 渲染 redis-queue-g0:不带 app: redis、noeviction + maxmemory、MAXCLIENTS 只定义一次、
          --enable-debug-command no、redis-exporter sidecar、没有未替换的占位,且排在核心 Redis 之后;
@@ -34,7 +34,11 @@ Write-Host "=== k8s_deploy.ps1 shared Redis split (G4a batch 1a) contract tests 
 function Invoke-SplitDryRun {
     param([Parameter(Mandatory = $true)][string[]]$Arguments, [hashtable]$Env = @{})
     if ($Arguments -notcontains '-DryRun') { throw '本套夹具只允许显式 -DryRun,禁止连接或写集群。' }
-    $fixtureEnv = @{ MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db,zone_101_db,zone_102_db' }
+    $fixtureEnv = @{
+        MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db,zone_101_db,zone_102_db'
+        # zone-up 渲染 SQL 写者要写者计划。
+        MMORPG_SQL_K8S_BOOT_CATALOG = (New-SqlWriterCatalogFixture -Root (Join-Path $TempRoot 'sql-writer-catalog') -Namespaces @('mmorpg-zone-split-test', 'mmorpg-infra', 'split-infra'))
+    }
     foreach ($key in $Env.Keys) { $fixtureEnv[$key] = $Env[$key] }
     $fixtureArgs = @($Arguments)
     if (-not ($fixtureArgs | Where-Object { $_ -match '^-GlobalAuthorityTiDBHost(?::|$)' })) {
@@ -131,12 +135,11 @@ Test-Case '-RedisSplit queue:gateway 的 spring.data.redis.host = redis-queue-g0
     Assert-Equal -Expected '6379' -Actual (Get-ConfigValue -Output $out -ConfigMap 'java-svc-gateway-config' -KeyPath 'data.application.yaml.spring.data.redis.port') -Because '端口行不变'
 }
 
-Test-Case '-RedisSplit queue:C++ zoneredis、go/db RedisClient、data-service MappingRedis 仍是核心 redis.<infra>:6379' {
+Test-Case '-RedisSplit queue:C++ zoneredis、data-service NameCacheRedis 仍是核心 redis.<infra>:6379' {
     $out = $queueZoneRun.Output
     $zoneRedis = '{0}:{1}' -f (Get-ConfigValue -Output $out -ConfigMap 'node-config' -KeyPath 'data.game_config.yaml.zoneredis.host'), (Get-ConfigValue -Output $out -ConfigMap 'node-config' -KeyPath 'data.game_config.yaml.zoneredis.port')
     Assert-Equal -Expected "redis.${Infra}:6379" -Actual $zoneRedis -Because 'C++ 的归属与会话协调恒在核心,永不指向拆出去的实例'
-    Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-ConfigValue -Output $out -ConfigMap 'go-svc-db-config' -KeyPath 'data.db.yaml.ServerConfig.RedisClient.Hosts') -Because 'go/db 的 RedisClient(落点记录与归属协调)恒在核心'
-    Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-ConfigValue -Output $out -ConfigMap 'go-svc-data-service-config' -KeyPath 'data.data_service.yaml.MappingRedis.Host') -Because 'data-service 的映射镜像与 go/db 读的落点记录在同一实例,恒在核心'
+    Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-ConfigValue -Output $out -ConfigMap 'go-svc-data-service-config' -KeyPath 'data.data_service.yaml.NameCacheRedis.Host') -Because 'data-service 的名字读缓存恒在核心'
 }
 
 Test-Case '-RedisSplit queue:核心总账去掉 gateway,另打 queue 实例的总账一行;DryRun 打出 resolved=queue' {
@@ -419,7 +422,7 @@ Test-Case 'redis-wipe DryRun:非压测 namespace 或缺确认即拒绝;两条都
     Assert-Match -Text $noConfirm.Output -Pattern '没给 -ConfirmWipeAllRedis' -Because '错误点名缺确认'
     $plan = Invoke-SplitDryRun -Arguments @('-Command', 'redis-wipe', '-DryRun', '-InfraNamespace', 'mmorpg-stress-contract', '-ConfirmWipeAllRedis')
     Assert-Equal -Expected 0 -Actual $plan.ExitCode -Because "准入满足时 DryRun 成功。输出: $($plan.Output)"
-    Assert-Match -Text $plan.Output -Pattern '\[dry-run\] redis-wipe would list StatefulSets redis / redis-queue-g<N> / redis-match-cluster' -Because 'DryRun 只打计划'
+    Assert-Match -Text $plan.Output -Pattern '\[dry-run\] redis-wipe would list StatefulSets redis / redis-queue-g<N> / redis-match-cluster / redis-player ' -Because 'DryRun 只打计划;玩家域集群的每个主节点也要清'
     Assert-NotMatch -Text $plan.Output -Pattern '\[dry-run\] kubectl ' -Because 'DryRun 不发任何 kubectl'
 }
 

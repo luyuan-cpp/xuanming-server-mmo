@@ -358,21 +358,20 @@ int main(int argc, char *argv[])
             //      它们会在作废之后照常建房、发确认事件,房间随进程退出无声丢失。关闸与作废在同一个 loop 任务里,
             //      排在后面的建房在守护段第 1 道闸或许可回调里的复核时必被拒
             //      (UNAVAILABLE battle_not_allocatable,match 换节点),与 lifecycle 当时的状态无关;
-            //      房间表从此保持为空,AddObserver / IssueBattleTicket 因房间不存在自然被拒;
-            //   1) 所有在打战斗作废(不发结算;观众收 ABORTED;scene 侧 reaper 按 InBattleComp.deadline_ms
-            //      解冻,设计文档 §3.2)。等结果回执的全球房间,个人结算在结果发出前已落 pending,
-            //      作废不删它,由 scene 补读应用(cross-zone-matchmaking.md §13.6)。每个房间经 EraseRoom 通知 lifecycle 单元销毁;
+            //      房间不再增加;
+            //   1) 所有房间停定时器、关直连,不铸造任何终局(观众不收 SpectateEnd,scene 侧 reaper 按冻结到期解冻,
+            //      设计文档 §3.2)。已算出、还没拿到 SQL 决定的终局立即再提交一轮,还在打的房间由 match 在权威截止后判 ABORT;
+            //      房间留在表里,拿到决定才删,不回 Ready;
             //   2) 断开全部客户端直连;
-            //   3) 停 Agones lifecycle worker 并 join(Stop 幂等)。放在最后,让单元计数先归零;
-            //      归零可能让 worker 发一次 POST /ready;Stop 经取消令牌中止它(以及在途的 allocate / health 等),
+            //   3) 停 Agones lifecycle worker 并 join(Stop 幂等)。
+            //      Stop 经取消令牌中止在途的 allocate / health 等,
             //      不等满超时,通常毫秒级、最坏约 1s(libcurl 空闲期进度回调粒度;grpc-muduo-transport.md §15.16)。
             //      Stop 同时把还在等许可的 CreateBattle 以「拒绝」投进 loop 队列(本任务之后执行,回 battle_not_allocatable)。
             //      刻意**不**调 /shutdown:SIGTERM 通常就是 Agones 删 Pod 发来的,再回敬 /shutdown 是递归删除。
             // 框架随后进入 gRPC 排空(全部在 loop 内:停听、两段 GOAWAY、已收完的调用照常派发,约 3s 硬上限;
             // docs/design/grpc-muduo-transport.md §15.10),并 flush Kafka producer。
-            // 2026-10-23 修复(审计 r2-battle#2):第 1) 步对全球(v1)房间另有分支 —— 已算出、还没拿到 SQL 决定的终局
-            // 不作废,立即再提交一轮;下面的排空谓词等它们落定,拆除前钩子才装停止闸。上面「个人结算在结果发出前已落 pending」
-            // 只适用于旧协议确认模式房间,match 的全球成局已一律走 v1(cross-zone-matchmaking.md §13.6)。
+            // 2026-10-23 修复(审计 r2-battle#2):第 1) 步已算出、还没拿到 SQL 决定的终局不作废,立即再提交一轮;
+            // 下面的排空谓词等它们落定,拆除前钩子才装停止闸。
             auto closeSource = [&context](Node &n)
                                    {
                 // 只替换后续新连接的回调；既有连接保留原 DOWN 回调，ConnectionCount 归零前不能签 P1。

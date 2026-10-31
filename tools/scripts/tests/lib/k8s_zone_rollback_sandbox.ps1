@@ -23,37 +23,34 @@ $script:RollbackSandboxTargetTime = '2026-05-15T14:23:00Z'
 $script:RollbackSandboxDsnEnv = 'MMORPG_CONTRACT_ROLLBACK_DSN'
 $script:RollbackSandboxDbImage = 'ghcr.io/luyuancpp/mmorpg-db:0123456789ab'
 $script:RollbackSandboxLiveRedis = 'redis.mmorpg-infra.svc.cluster.local:6379'
-# 第 0 步 c 经 kubectl exec 读到的 go/db Redis run_id(回档复核 [4]),与假工具缺省「看到」的 run_id 相同。
+# 第 0 步 c 经 kubectl exec 读到的核心 Redis run_id(回档复核 [4]),与假工具缺省「看到」的 run_id 相同。
 $script:RollbackSandboxRedisRunId = 'aa11bb22cc33dd44ee55ff6677889900aabbccdd'
 # 假工具 -version 缺省报的构建提交:以沙箱 db 镜像的 tag 0123456789ab 开头(回档复核 [5])。
 $script:RollbackSandboxToolCommit = '0123456789ab' + ('0' * 28)
 
 <#
 .SYNOPSIS
-    第 0 步 c 那次 kubectl(部署快照)的假回应:go-svc-db-config / go-svc-data-service-config 与 db / login Deployment 合成一个 List。
-    db.yaml 里带一个假口令,用来断言回档脚本从不读它、不落盘。
+    第 0 步 c 那次 kubectl(部署快照)的假回应:go-svc-db-config / go-svc-login-config 与 db / login Deployment 合成一个 List。
+    login.yaml 里带一个假口令,用来断言回档脚本从不读它、不落盘。
 #>
 function New-RollbackDeploySnapshotReply {
     param(
         [string]$ZoneId = '101',
         [string]$RedisDB = '0',
-        [string]$MappingHost = $script:RollbackSandboxLiveRedis,
-        [string[]]$ExtraDbYaml = @(),
         [string]$DbImage = $script:RollbackSandboxDbImage
     )
 
-    $dbYaml = @(
-        "ZoneId: $ZoneId",
-        'ServerConfig:',
+    $dbYaml = @("ZoneId: $ZoneId")
+    $loginYaml = @(
+        'Node:',
         '  RedisClient:',
-        "    Hosts: `"$($script:RollbackSandboxLiveRedis)`"",
+        "    Host: $($script:RollbackSandboxLiveRedis)",
         '    Password: "contract-live-secret-never-read"',
         "    DB: $RedisDB"
-    ) + $ExtraDbYaml
-    $dataServiceYaml = @('MappingRedis:', "  Host: $MappingHost", '  Type: node')
+    )
     $items = @(
         [ordered]@{ apiVersion = 'v1'; kind = 'ConfigMap'; metadata = [ordered]@{ name = 'go-svc-db-config' }; data = [ordered]@{ 'db.yaml' = ($dbYaml -join "`n") } },
-        [ordered]@{ apiVersion = 'v1'; kind = 'ConfigMap'; metadata = [ordered]@{ name = 'go-svc-data-service-config' }; data = [ordered]@{ 'data_service.yaml' = ($dataServiceYaml -join "`n") } },
+        [ordered]@{ apiVersion = 'v1'; kind = 'ConfigMap'; metadata = [ordered]@{ name = 'go-svc-login-config' }; data = [ordered]@{ 'login.yaml' = ($loginYaml -join "`n") } },
         [ordered]@{ apiVersion = 'apps/v1'; kind = 'Deployment'; metadata = [ordered]@{ name = 'db' }; spec = [ordered]@{ template = [ordered]@{ spec = [ordered]@{ containers = @([ordered]@{ name = 'db'; image = $DbImage }) } } } },
         [ordered]@{ apiVersion = 'apps/v1'; kind = 'Deployment'; metadata = [ordered]@{ name = 'login' }; spec = [ordered]@{ template = [ordered]@{ spec = [ordered]@{ containers = @([ordered]@{ name = 'login'; image = 'ghcr.io/luyuancpp/mmorpg-login:0123456789ab' }) } } } }
     )
@@ -121,7 +118,7 @@ function New-RollbackLoginConfigMapReply {
     跑之前写进报告目录的文件 @{ 文件名 = 内容 };需同时用 ExtraArgs 给定 RollbackId。
 
 .PARAMETER RedisInfoReply
-    第 0 步 c 读 go/db Redis run_id 那次 kubectl exec(redis-0)的回应 @{ ExitCode; Output };缺省 = INFO server 带 $script:RollbackSandboxRedisRunId。
+    第 0 步 c 读核心 Redis run_id 那次 kubectl exec(redis-0)的回应 @{ ExitCode; Output };缺省 = INFO server 带 $script:RollbackSandboxRedisRunId。
     这次调用单独记账(RedisExecCalls,时间线 "kubectl:redis"),不进 KubectlCalls。
 
 .PARAMETER ToolRedisRunId
@@ -232,7 +229,7 @@ param($Command, $ZoneName, $ZoneId, $NodeImage, $NamespacePrefix, [switch]$WaitR
     $RequireClientEndpoint, [switch]$LoginDevPasswordAuth, [switch]$AllowDisruptiveSwitch, $GatewayIngressHost, $GatewayIngressClassName,
     $GatewayIngressTlsSecret, $GatewayTrustedProxies, $KubeContext, $KubeConfig,
     $LoginWeChatAppId, $LoginWeChatEndpoint, [switch]$LoginWeChatAllowOpenId, $LoginQQAppId, $LoginQQEndpoint, [switch]$LoginQQAllowOpenId,
-    [switch]$ConfirmLoginAuthProviderChange, $NodeOpenFileLimitMode, __INFRA_PARAM__[switch]$DryRun)
+    [switch]$ConfirmLoginAuthProviderChange, $NodeOpenFileLimitMode, $PlayerRedisMasters, $PlayerRedisReplicasPerMaster, __INFRA_PARAM__[switch]$DryRun)
 $label = if ($DryRun) { "$Command/dry-run" } else { $Command }
 Add-Content -LiteralPath '__CALLS__' -Encoding utf8 -Value "$label GateRouterMode=$GateRouterMode"
 Add-Content -LiteralPath '__TIMELINE__' -Encoding utf8 -Value "dev_tools:$label"
@@ -311,7 +308,7 @@ exit $code
         }
         function kubectl {
             $kubectlArgList = @($args | ForEach-Object { "$_" })
-            # 第 0 步 c:exec 进 infra 的 redis-0 读 go/db Redis 的 INFO server(run_id)。单独记账。
+            # 第 0 步 c:exec 进 infra 的 redis-0 读核心 Redis 的 INFO server(run_id)。单独记账。
             if ($kubectlArgList -ccontains 'pod/redis-0') {
                 $fakeRedisExecCalls.Add(($kubectlArgList -join ' '))
                 Add-Content -LiteralPath $timeline -Encoding utf8 -Value 'kubectl:redis'

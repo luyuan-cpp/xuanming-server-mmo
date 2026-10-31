@@ -275,7 +275,7 @@ func RunSyncSmoke(cfg *config.Config) {
 	if d2.generation == 0 {
 		fail("S2-baseline", "A Unblock(B) was accepted, but A's digest still does not exist (g=0). friend's Unblock always bumps FRIEND_BLOCK for the caller: "+
 			"friend is not running a binary with sync-digest bumps; friend's SharedRedis is not the same Redis/DB the scene reads digests from; or the bump failed "+
-			"(friend log [playersync] WARN / metric player_sync_bump_total{service=\"friend\",result=\"error\"}). Check manually: redis-cli HGETALL player:%d:sync_digest",
+			"(friend log [playersync] WARN / metric player_sync_bump_total{service=\"friend\",result=\"error\"}). Check manually: redis-cli HGETALL player:{%d}:sync_digest",
 			subject.homePlayer)
 	}
 	if err := syncSmokeCheckGenerationStable(d1, d2); err != nil {
@@ -790,7 +790,7 @@ func (b *syncSmokeBot) fetchDigest() (syncSmokeDigest, error) {
 	}
 	if digest.status != scene.SyncDigestStatus_SYNC_DIGEST_STATUS_OK {
 		return digest, fmt.Errorf("NotifySyncDigest status=%s, expected OK: the scene could not read the digest (zone Redis not connected, HGETALL not sent, "+
-			"or a malformed reply such as a non-decimal field value). Check the scene log [PlayerLanding]; inspect manually: redis-cli HGETALL player:%d:sync_digest",
+			"or a malformed reply such as a non-decimal field value). Check the scene log [PlayerLanding]; inspect manually: redis-cli HGETALL player:{%d}:sync_digest",
 			digest.status, b.homePlayer)
 	}
 	return digest, nil

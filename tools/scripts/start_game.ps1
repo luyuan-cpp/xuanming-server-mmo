@@ -28,39 +28,37 @@ $logDir = Join-Path $serverRoot "run/logs/game-launcher/$stamp"
 $services = @('db','data_service','client_rpc_router','scene_manager','player_locator','login','match','chat','guild')
 # 可选服务：缺 exe 时只告警并跳过，不拒绝整个启动。chat 是新服务，本机 bin/go_services 可能还没有它的 exe
 #（Go 工具链不在本机时由 Codex 构建）；为一个聊天服务拒启会让登录、匹配一起不可用。chat 缺席时玩家的聊天请求
-# 得到“服务不可用”，其余功能不受影响。guild 同理：它和 chat 同一天才加进一键启动，本机同样可能还没有 exe。
+# 得到“服务不可用”，其余功能不受影响。
 # 已有服务（db / login / match 等）仍是必需的：它们缺 exe 说明环境本身不完整，应当在第 1 步就拒启。
-$optionalServices = @('chat','guild')
+# guild 也是必需的：match 启动时核对 guild 的表，这些表只能由 guild -migrate 建，缺 guild.exe 时 match 同样起不来。
+$optionalServices = @('chat')
 # 聚宝斋 trade(P1)：新服务，按可选处理，以下两种情况跳过它、其余服务照常启动（缺席时只影响聚宝斋请求）：
-#   1. 缺 exe（第 1 步，与 chat / guild 同一逻辑）；
-#   2. MySQL 独占库 mmorpg_trade 未就绪（第 2 步 MySQL 健康后预检：库不存在或 appuser 无权限）。
-# 第 2 条的取舍依据（AGENTS §11.3）：已初始化过的本机 MySQL 数据卷不会重跑 initdb，必然没有这个新库；
-# trade 连不上库会在启动期直接退出，Start-LocalGoServices 随即抛错，整个一键启动会停在网关之前，
-# 为聚宝斋拖垮登录 / 匹配不可接受。fail-closed 仍在 trade 进程自身（库不在即拒启），这里只是不让它连坐。
-# exe 与库都就绪、但 trade 因其他原因（建表需人工、data_service 不可达等）起不来时，仍按原逻辑中止启动。
-# -CheckOnly 不启动 Docker，不做库预检。trade 还依赖 data_service（第 3 步已起）。
+#   1. 缺 exe（第 1 步，与 chat 同一逻辑）；
+#   2. 第 3 步生成写者启动目录时建表失败（lib/sql_boot_catalog_local.ps1 记进 last-run.json 的 skipped）。
+# 第 2 条的取舍依据（AGENTS §11.3）：trade 缺表会在启动期直接退出，Start-LocalGoServices 随即抛错，整个一键启动会停在网关之前，
+# 为聚宝斋拖垮登录 / 匹配不可接受。fail-closed 仍在 trade 进程自身（表不在即拒启），这里只是不让它连坐。
+# exe 与表都就绪、但 trade 因其他原因（data_service 不可达等）起不来时，仍按原逻辑中止启动。
+# -CheckOnly 不启动 Docker，不建表。trade 还依赖 data_service（第 3 步已起）。
 # 与 chat / guild 一样只承诺路由服模式可达。单独追加，不改上面两行数组。
 $services += 'trade'
 $optionalServices += 'trade'
 # 好友 friend（docs/design/friend-port-20260918.md）：与 trade 同形态的新服务，同样按可选处理，两种情况跳过它：
-#   1. 缺 exe（第 1 步，与 chat / guild / trade 同一逻辑）；
-#   2. MySQL 独占库 mmorpg_friend 未就绪（第 2 步 MySQL 健康后预检：库不存在或 appuser 无权限）。
-# 取舍依据与 trade 逐字相同（AGENTS §11.3）：已初始化过的本机 MySQL 数据卷不会重跑 deploy/mysql-init，必然没有这个新库；
-# friend 连不上库会在启动期直接退出，Start-LocalGoServices 随即抛错，整个一键启动会停在网关之前 ——
-# 为好友功能拖垮登录 / 匹配不可接受。fail-closed 仍在 friend 进程自身（库不在即拒启），这里只是不让它连坐。
+#   1. 缺 exe（第 1 步，与 chat / trade 同一逻辑）；
+#   2. 第 3 步生成写者启动目录时建表失败。
+# 取舍依据与 trade 相同（AGENTS §11.3）：为好友功能拖垮登录 / 匹配不可接受。fail-closed 仍在 friend 进程自身（表不在即拒启），这里只是不让它连坐。
 # 与 chat / guild / trade 一样只承诺路由服模式可达（D-12）。单独追加，不改上面两行数组。
 $services += 'friend'
 $optionalServices += 'friend'
 # 玩家持久收件箱 player_inbox（docs/design/player-inbox-service.md）：与 trade / friend 同形态的新服务，同样按可选处理，两种情况跳过它：
-#   1. 缺 exe（第 1 步，与 chat / guild / trade / friend 同一逻辑）；
-#   2. MySQL 独占库 mmorpg_player_inbox 未就绪（第 2 步 MySQL 健康后预检：库不存在或 appuser 无权限）。
+#   1. 缺 exe（第 1 步，与 chat / trade / friend 同一逻辑）；
+#   2. 第 3 步生成写者启动目录时建表失败。
 # 取舍依据与 trade 相同（AGENTS §11.3），且更强：收件箱本来就是弱依赖 —— scene 不等它（不进 DependencyGate，IB-7），
 # 缺席时只是 GM 处置不生效、scene 的拉取退避，登录 / 匹配 / 进场都不受影响。fail-closed 仍在 player_inbox 进程自身。
 # 调用方是 scene 与运维，不经路由服，与 -GateRouterMode 无关。它向 scene-cmd 发在线提醒，所以登记为 Kafka 命令契约生产者
 #（Test-UsesKafkaCommandContract）。单独追加，不改上面的数组。
 $services += 'player_inbox'
 $optionalServices += 'player_inbox'
-# 邮件和排行榜仍严格检查TiDB与签名密钥；启动器只在没有部署配置时跳过这两个可选域。
+# 邮件和排行榜的生产者签名密钥由 go_services.ps1 注入本机开发值（lib/producer_dev_secret.ps1）；SQL 连接来自写者启动目录。
 $services += @('mail','rank')
 $optionalServices += @('mail','rank')
 $skippedServices = @()
@@ -74,6 +72,8 @@ $oldGateClientRpcRouter = $env:GATE_CLIENT_RPC_ROUTER
 $oldGateRunMode = $env:GATE_RUN_MODE
 $oldSceneRunMode = $env:SCENE_RUN_MODE
 $oldBattleRunMode = $env:BATTLE_RUN_MODE
+$oldSqlBootCatalog = $env:MMORPG_SQL_BOOT_CATALOG
+$oldAllowedDatabases = $env:MMORPG_DB_ALLOWED_DATABASES
 # 资产通道（docs/design/guild-phase2/04-asset-channel.md §4.32）的本机开发密钥来源。
 # scene 验签、guild / trade 签名用的是同名环境变量，值必须一致，否则每次资产 RPC 都回 27008。
 # 值不写进仓库：由该库在 run/secrets/assetop-dev.env（已被 .gitignore 覆盖）生成一次并复用。
@@ -342,7 +342,7 @@ function Wait-LocalNode([string]$Name) {
 }
 function Start-LocalGoServices([string[]]$Names) {
     $env:RPC_PORT = $null
-        # 此入口固定使用本机 Docker MySQL；只有 db 派生运行副本，生产源的 TiDB 要求不变。
+        # 此入口固定使用本机 Docker MySQL；只有 db 与 match 派生运行副本，生产源的 TiDB 要求不变。
         Invoke-Dev ('go-' + ($Names -join '-')) @('-Command','go-svc-start-exe','-GoServices',($Names -join ','),'-TierReadySeconds','30','-LocalMySQL')
         $goRecords = Get-Content -LiteralPath (Join-Path $serverRoot 'run/pids/go_services.pid.json') -Raw | ConvertFrom-Json -AsHashtable
         foreach ($service in $Names) {
@@ -365,6 +365,8 @@ try {
     $transcribing = $true
     Write-Step '1/6 Check the local game runtime environment'
     . (Join-Path $PSScriptRoot 'lib/release_common.ps1')
+    # 网关的写者授权走和 Go 服务同一个闸门（Get-SqlWriterBootEnvironment）。
+    . (Join-Path $PSScriptRoot 'maintenance_drain.ps1')
     $kafkaContract = Get-LocalKafkaContract
     $script:docker = Find-Program 'docker.exe' @((Join-Path $env:LOCALAPPDATA 'Programs/DockerDesktop/resources/bin/docker.exe'),(Join-Path $env:ProgramFiles 'Docker/Docker/resources/bin/docker.exe'))
     $desktop = Find-Program 'Docker Desktop.exe' @((Join-Path $env:LOCALAPPDATA 'Programs/DockerDesktop/Docker Desktop.exe'),(Join-Path $env:ProgramFiles 'Docker/Docker/Docker Desktop.exe'))
@@ -387,17 +389,9 @@ try {
     foreach ($node in @('gate','scene','battle')) {
         if (-not (Test-Path -LiteralPath (Join-Path $serverRoot "bin/$node.exe"))) { throw "缺少 bin/$node.exe。" }
     }
-    $domainRequiredEnvs = @{
-        mail = @('MMORPG_MAIL_SQL_DSN','MAIL_PRODUCER_SECRET_ADMIN','MAIL_PRODUCER_SECRET_RANK','MAIL_PRODUCER_SECRET_GUILD','MMORPG_ASSET_OP_SECRET_MAIL')
-        rank = @('MMORPG_RANK_SQL_DSN','MAIL_PRODUCER_SECRET_RANK','RANK_PRODUCER_SECRET_MATCH','RANK_PRODUCER_SECRET_ADMIN')
-    }
-    foreach ($domain in @('mail','rank')) {
-        if ($domain -in $skippedServices) { continue }
-        $missingEnvironment = @($domainRequiredEnvs[$domain] | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
-        if ($missingEnvironment.Count -gt 0) {
-            Write-Warning "$domain 缺少本机领域配置，已跳过；请配置TiDB连接与生产者签名环境变量后重新启动。"
-            $skippedServices += $domain
-        }
+    # 写者启动目录的工具：go-svc-build 不带 -GoServices 时一并编出；日常启动不构建。
+    foreach ($tool in @('writer_authority','db_migrate','private_control_file')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $serverRoot "bin/go_services/$tool.exe"))) { throw "Missing bin/go_services/$tool.exe; run: pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-build" }
     }
     if (-not $ClientPath) { $ClientPath = Join-Path (Split-Path -Parent $serverRoot) 'mmorpg-client/Builds/showcase_player/mmorpg.exe' }
     $ClientPath = [IO.Path]::GetFullPath($ClientPath)
@@ -468,114 +462,6 @@ try {
         Wait-Ready 'Redis' { (Invoke-Docker @('exec','redis','redis-cli','ping')).Out.Trim() -eq 'PONG' }
         Wait-Ready 'Redis Cluster' { (Invoke-Docker @('exec','redis-cluster-0','redis-cli','-p','7000','cluster','info')).Out -match 'cluster_state:ok' }
         Wait-Ready 'Kafka' { (Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 60).Code -eq 0 }
-        if ('trade' -notin $skippedServices) {
-            # 聚宝斋 trade 的库预检（为什么跳过而不是拒启，见脚本顶部 $optionalServices 处）。
-            # 以 appuser 身份查询：容器环境变量 MYSQL_USER / MYSQL_PASSWORD 就是 deploy/docker-compose.yml 给 appuser 的账号，
-            # 与 go/trade/etc/trade.yaml 的 MySQL.User 相同；information_schema.SCHEMATA 只列出该账号有权限的库，
-            # 所以一次查询同时覆盖“库存在”和“已授权”。密码只在容器内由 sh 展开，不出现在本机命令行和启动日志里。
-            $tradeDbProblem = ''
-            try {
-                $tradeDbProbe = Invoke-Docker @('exec','mysql','sh','-c','mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ''mmorpg_trade''"')
-                if ($tradeDbProbe.Code -ne 0) {
-                    $tradeDbProblem = "Query failed (docker exec exit code $($tradeDbProbe.Code))"
-                } elseif ($tradeDbProbe.Out.Trim() -cne 'mmorpg_trade') {
-                    $tradeDbProblem = 'Database missing or appuser lacks permission'
-                }
-            } catch {
-                $tradeDbProblem = "Query exception: $($_.Exception.Message)"
-            }
-            if ($tradeDbProblem) {
-                $skippedServices += 'trade'
-                # 补建命令：PowerShell 7 里整行粘贴执行；root 密码取自容器环境变量，不回显。
-                $tradeDbFixCommand = @'
-  docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_trade DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_trade.* TO appuser@''%''; FLUSH PRIVILEGES;"'
-'@
-                Write-Warning "Jubaozhai database mmorpg_trade is not ready ($tradeDbProblem); skipping trade (Jubaozhai requests will return service unavailable). Other services will start normally."
-                Write-Host '  Existing MySQL volumes do not rerun deploy/mysql-init. Use root to create the missing database and grant access once (run the following command in PowerShell 7):' -ForegroundColor Yellow
-                Write-Host $tradeDbFixCommand -ForegroundColor Yellow
-                Write-Host '  Rerun this startup script after creating the database.'
-            }
-        }
-        if ('guild' -notin $skippedServices) {
-            # 帮会 guild 的独占库预检（帮会二期 B1：帮会表已迁入 mmorpg_guild，由 go/schemamigrate 建表）。
-            # 探测方式与上面 trade 相同：以 appuser 身份查 information_schema.SCHEMATA，一次覆盖“库存在”和“已授权”。
-            $guildDbProblem = ''
-            try {
-                $guildDbProbe = Invoke-Docker @('exec','mysql','sh','-c','mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ''mmorpg_guild''"')
-                if ($guildDbProbe.Code -ne 0) {
-                    $guildDbProblem = "Query failed (docker exec exit code $($guildDbProbe.Code))"
-                } elseif ($guildDbProbe.Out.Trim() -cne 'mmorpg_guild') {
-                    $guildDbProblem = 'Database missing or appuser lacks permission'
-                }
-            } catch {
-                $guildDbProblem = "Query exception: $($_.Exception.Message)"
-            }
-            if ($guildDbProblem) {
-                $skippedServices += 'guild'
-                $guildDbFixCommand = @'
-  docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_guild DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_guild.* TO appuser@''%''; FLUSH PRIVILEGES;"'
-'@
-                Write-Warning "Guild database mmorpg_guild is not ready ($guildDbProblem); skipping guild (guild requests will return service unavailable). Other services will start normally."
-                Write-Host '  Existing MySQL volumes do not rerun deploy/mysql-init. Use root to create the missing database and grant access once (run the following command in PowerShell 7):' -ForegroundColor Yellow
-                Write-Host $guildDbFixCommand -ForegroundColor Yellow
-                Write-Host '  Rerun this startup script after creating the database.'
-            }
-        }
-
-        if ('friend' -notin $skippedServices) {
-            # 好友 friend 的库预检，与上面 trade 那段同一套做法与同一条取舍依据（见脚本顶部 $optionalServices 处）。
-            # 同样以 appuser 身份查 information_schema.SCHEMATA：它只列出该账号有权限的库，一次查询同时覆盖
-            # 「库存在」和「已授权」；密码只在容器内由 sh 展开，不出现在本机命令行和启动日志里。
-            $friendDbProblem = ''
-            try {
-                $friendDbProbe = Invoke-Docker @('exec','mysql','sh','-c','mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ''mmorpg_friend''"')
-                if ($friendDbProbe.Code -ne 0) {
-                    $friendDbProblem = "Query failed (docker exec exit code $($friendDbProbe.Code))"
-                } elseif ($friendDbProbe.Out.Trim() -cne 'mmorpg_friend') {
-                    $friendDbProblem = 'Database missing or appuser lacks permission'
-                }
-            } catch {
-                $friendDbProblem = "Query exception: $($_.Exception.Message)"
-            }
-            if ($friendDbProblem) {
-                $skippedServices += 'friend'
-                # 补建命令：PowerShell 7 里整行粘贴执行；root 密码取自容器环境变量，不回显。
-                $friendDbFixCommand = @'
-  docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_friend DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_friend.* TO appuser@''%''; FLUSH PRIVILEGES;"'
-'@
-                Write-Warning "Friend database mmorpg_friend is not ready ($friendDbProblem); skipping friend (friend requests will return service unavailable). Other services will start normally."
-                Write-Host '  Existing MySQL volumes do not rerun deploy/mysql-init. Use root to create the missing database and grant access once (run the following command in PowerShell 7):' -ForegroundColor Yellow
-                Write-Host $friendDbFixCommand -ForegroundColor Yellow
-                Write-Host '  Rerun this startup script after creating the database.'
-            }
-        }
-        if ('player_inbox' -notin $skippedServices) {
-            # 玩家收件箱 player_inbox 的库预检，与上面 trade / friend 同一套做法（取舍依据见脚本顶部 $optionalServices 处）。
-            # 以 appuser 身份查 information_schema.SCHEMATA，一次覆盖「库存在」和「已授权」；密码只在容器内由 sh 展开。
-            $inboxDbProblem = ''
-            try {
-                $inboxDbProbe = Invoke-Docker @('exec','mysql','sh','-c','mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ''mmorpg_player_inbox''"')
-                if ($inboxDbProbe.Code -ne 0) {
-                    $inboxDbProblem = "Query failed (docker exec exit code $($inboxDbProbe.Code))"
-                } elseif ($inboxDbProbe.Out.Trim() -cne 'mmorpg_player_inbox') {
-                    $inboxDbProblem = 'Database missing or appuser lacks permission'
-                }
-            } catch {
-                $inboxDbProblem = "Query exception: $($_.Exception.Message)"
-            }
-            if ($inboxDbProblem) {
-                $skippedServices += 'player_inbox'
-                # 补建命令：PowerShell 7 里整行粘贴执行；root 密码取自容器环境变量，不回显。
-                $inboxDbFixCommand = @'
-  docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_player_inbox DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_player_inbox.* TO appuser@''%''; FLUSH PRIVILEGES;"'
-'@
-                Write-Warning "Player inbox database mmorpg_player_inbox is not ready ($inboxDbProblem); skipping player_inbox (GM sanctions stay pending; scenes back off and players enter normally). Other services will start normally."
-                Write-Host '  Existing MySQL volumes do not rerun deploy/mysql-init. Use root to create the missing database and grant access once (run the following command in PowerShell 7):' -ForegroundColor Yellow
-                Write-Host $inboxDbFixCommand -ForegroundColor Yellow
-                Write-Host '  Rerun this startup script after creating the database.'
-            }
-        }
-        # mail/rank 的 DSN 可能指向独立 TiDB；不探测本机默认 MySQL，真实连接与结构由现役服务 fail-closed 校验。
         Write-Step '3/6 启动存档服务'
         # 所有 Go 命令生产者须继承与 C++、主题预建相同的契约；运行中的进程不能事后改环境。
         $env:KAFKA_COMMAND_TOPIC_PARTITIONS = [string]$kafkaContract.Partitions
@@ -591,6 +477,20 @@ try {
             if ($name -in @('gate','scene','battle') -and -not ($cppRecords.Values -contains $item.ProcessId)) { throw "$name 正在运行但缺少有效记录，请检查 run/pids。" }
         }
         Initialize-LocalKafkaTopics $kafkaContract $compose
+        # 写者启动目录：建库建表、给每个实例建独立账号、发单次启动授权。授权启动即消费，所以每次启动都重新生成。
+        # 只接受回环数据库；已在运行的实例不重发（go_services 会 skip 它们）。详见 lib/sql_boot_catalog_local.ps1。
+        # 玩家库白名单：全球 DS/DB 不从 Zone 推导，本机一区显式给 zone_1_db，调用方已设置时不覆盖。
+        if ([string]::IsNullOrWhiteSpace($env:DB_ALLOWED_DATABASES) -and [string]::IsNullOrWhiteSpace($env:MMORPG_DB_ALLOWED_DATABASES)) { $env:MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db' }
+        Invoke-Dev 'sql-boot-catalog' @('-Command','sql-boot-catalog-local','-GoServices',((@($services | Where-Object { $_ -notin $skippedServices }) + 'gateway') -join ','))
+        $sqlBootRoot = [IO.Path]::GetFullPath((Join-Path $serverRoot 'run/secrets/sql-boot-local'))
+        $sqlBootSummary = Get-Content -LiteralPath (Join-Path $sqlBootRoot 'last-run.json') -Raw | ConvertFrom-Json
+        $env:MMORPG_SQL_BOOT_CATALOG = $sqlBootSummary.catalog
+        foreach ($service in @($sqlBootSummary.skipped)) {
+            if ($service -in $optionalServices -and $service -notin $skippedServices) {
+                Write-Warning "$service schema step failed; skipping $service. Details: $logDir/sql-boot-catalog.stdout.log"
+                $skippedServices += $service
+            }
+        }
         Start-LocalGoServices @('db','data_service')
         Write-Step '4/6 Start zone 1 Kafka consumers and battle server'
         $env:PATH = (Join-Path $serverRoot 'third_party/protobuf/install_vs2026_dbg/bin') + ';' + $oldPath
@@ -639,6 +539,7 @@ try {
         # chat / guild 与路由服同为 Tier 1（chat 只依赖 etcd + Redis；guild 另依赖 MySQL 与 data_service）；
         # 直连模式下它们也照样起，只是玩家不可达（见 -GateRouterMode）。
         # 第 1 步因缺 exe 跳过的可选服务不在这里启动，否则 Start-LocalGoServices 会因“没有启动记录”抛错。
+        # match 与 guild 启动时互相核对对方的表：两边的表已在第 3 步生成写者启动目录时建好。
         Start-LocalGoServices @(@('client_rpc_router','scene_manager','player_locator','login','match','chat','guild') | Where-Object { $_ -notin $skippedServices })
         # 聚宝斋 trade 单独一批：被跳过（缺 exe，或第 2 步预检发现 mmorpg_trade 未就绪）时不调用，避免把空列表传给 -GoServices（空 = 全部服务）。
         if ('trade' -notin $skippedServices) { Start-LocalGoServices @('trade') }
@@ -655,7 +556,18 @@ try {
             if (Test-Tcp 8081) { throw '8081 端口被其他程序占用，未启动重复网关。' }
             $javaTmp = Join-Path $serverRoot "run/java-tmp-$stamp"
             New-Item -ItemType Directory -Path $javaTmp | Out-Null
-            $gatewayProcess = Start-Process -FilePath $java -WorkingDirectory (Join-Path $serverRoot 'java/gateway_node') -ArgumentList @("`"-Djdk.net.unixdomain.tmpdir=$javaTmp`"",'-jar',"`"$($jar.FullName)`"") -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir 'gateway.stdout.log') -RedirectStandardError (Join-Path $logDir 'gateway.stderr.log') -PassThru
+            # 网关和 Go 服务一样消费单次启动授权（WriterAuthority），账号和本机档位在每 boot 配置里。
+            # Windows 上 Java 经 private_control_file 读写私有文件，路径与 SHA 由目录生成器固定。
+            $gatewayConfig = ''
+            $gatewayEnvironment = Get-SqlWriterBootEnvironment -InstanceKey 'gateway' -RepoRoot $serverRoot -ServiceName 'gateway' -SelectedRuntimeConfigFile ([ref]$gatewayConfig)
+            $gatewayEnvironment['MMORPG_SQL_PRIVATE_FILE_HELPER'] = $sqlBootSummary.privateFileHelper.path
+            $gatewayEnvironment['MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256'] = $sqlBootSummary.privateFileHelper.sha256
+            $savedGatewayEnvironment = Enter-SqlWriterBootEnvironment -Environment $gatewayEnvironment
+            try {
+                $gatewayProcess = Start-Process -FilePath $java -WorkingDirectory (Join-Path $serverRoot 'java/gateway_node') -ArgumentList @("`"-Djdk.net.unixdomain.tmpdir=$javaTmp`"",'-jar',"`"$($jar.FullName)`"","`"--spring.config.additional-location=file:$($gatewayConfig.Replace('\','/'))`"") -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir 'gateway.stdout.log') -RedirectStandardError (Join-Path $logDir 'gateway.stderr.log') -PassThru
+            } finally {
+                Restore-SqlWriterBootEnvironment -Saved $savedGatewayEnvironment
+            }
         }
         Wait-Ready 'Gateway health check' { try { (Invoke-RestMethod "$gatewayUrl/actuator/health" -TimeoutSec 5).status -eq 'UP' } catch { $false } }
         Save-GatewayPid $jar.FullName
@@ -685,6 +597,8 @@ try {
     $env:GATE_RUN_MODE = $oldGateRunMode
     $env:SCENE_RUN_MODE = $oldSceneRunMode
     $env:BATTLE_RUN_MODE = $oldBattleRunMode
+    $env:MMORPG_SQL_BOOT_CATALOG = $oldSqlBootCatalog
+    $env:MMORPG_DB_ALLOWED_DATABASES = $oldAllowedDatabases
     Restore-AssetOpDevSecrets $oldAssetOpSecrets
     if ($transcribing) { Stop-Transcript | Out-Null }
     if ($ownsMutex) { $mutex.ReleaseMutex() }

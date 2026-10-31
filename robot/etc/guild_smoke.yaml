@@ -57,6 +57,8 @@
 #   g. 默认配表:GuildActivity 历练行(帮贡 50 / 资金 300 / 每日计资金胜场 3 / 每人每日 2 次 / 2–5 人 / 副本 1 / 物品 1 ×4),
 #      GuildRule.trial_invite_ttl_seconds=30、trial_invite_cooldown_seconds=10(S12 之前会等过这 10 秒冷却)。
 #      历练的 2 个消息号已含在 d 的 5 个里。
+#   h. battle 公网端口从 robot 所在机器可达:建房前 A、B、C 各自走地域探测(robot/network_probe.go),开局读的是这份结果,战斗也走这个端口直连;
+#      探测失败 = GUILD_SMOKE 失败步骤 S9-network-probe。
 #   上一轮中途失败会留下两样会自己过期的状态,等一等再跑:邀请房间(至多 30 秒,期间建房回 [busy, …])、
 #   没打完的对局的 battle:lock(结算后释放,期间开战回 [in_battle, …])。
 #   trial: false = 只跑 S1–S8,并期望历练卡片为"未开放";被测 guild 没配历练依赖(上面的 e)时用它。

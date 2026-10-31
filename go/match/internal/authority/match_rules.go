@@ -80,20 +80,23 @@ func singleUnit(group []*pb.MatchAuthorityTicketRecord) bool {
 }
 
 // admitScope 用加锁读出的原票（home zone、原始入队时刻）与数据库时钟判定范围树双向同意。
+// 票上存的是原始区，范围树上的位置按最终区算：合服之后两个原始区的人在同一棵 zone 子树里，大区也跟着最终区走。
 func (s *Store) admitScope(group []*pb.MatchAuthorityTicketRecord, nowMs uint64) (scope.Level, bool) {
+	zones := s.MergedZones()
 	units := queueUnits(group)
 	members := make([][]scope.Member, len(units))
 	for i, unit := range units {
 		for _, ticket := range unit {
-			members[i] = append(members[i], scope.Member{Node: s.catalog.ZoneNode(ticket.ZoneId), EnqueuedMs: ticket.EnqueuedMs})
+			members[i] = append(members[i], scope.Member{Node: s.catalog.ZoneNode(zones.Final(ticket.ZoneId)), EnqueuedMs: ticket.EnqueuedMs})
 		}
 	}
 	return scope.Admit(s.schedule, members, nowMs)
 }
 
-// PlayerHomeZone 读玩家的 home zone（角色归属，不是当前所在场景的 zone），已解析到最终区
-// （别名合服，docs/design/player-data-tidb-scaling-plan.md §7.1）。入队时写进票据，
-// 之后撮合与提交点都读票上的值；整队提交另在 route 锁内逐人复核当前 home。
+// PlayerHomeZone 读玩家的 home zone（角色归属，不是当前所在场景的 zone）：路由行上的原始区，不解析。
+// 票和队伍记录写的就是它，合服不改写，比较时才解析到最终区（别名合服，docs/design/player-data-tidb-scaling-plan.md §7.1）。
+// 写原始区还是最终区决定撤销合服之后的结局：记原始区，撤销后票上的 home 和路由行照样对得上，在途的票不会卡死。
+// 没有归属回 ErrTeamRoute。
 func (s *Store) PlayerHomeZone(ctx context.Context, player uint64) (uint32, error) {
 	var home sql.NullInt64
 	err := s.DB.QueryRowContext(ctx, "SELECT home_zone FROM `"+s.roleSchema+"`.player_route WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player).Scan(&home)
@@ -103,13 +106,13 @@ func (s *Store) PlayerHomeZone(ctx context.Context, player uint64) (uint32, erro
 	if err != nil {
 		return 0, err
 	}
-	return placement.ResolveMergedZoneSQL(ctx, s.DB, s.roleSchema, uint32(home.Int64))
+	return uint32(home.Int64), nil
 }
 
-// requireTicketHomesTx 在调用方已锁住的 route 前缀下，逐人核对票上的 home zone 仍是解析后的当前 home。
-// 不要求全组同 home：跨 home 成局由范围树双向同意决定（admitScope），这里只防迁移或合服后的旧 home。
+// requireTicketHomesTx 在调用方已锁住的 route 前缀下，逐人核对票上的 home zone 解析后仍是当前 home 的最终区。
+// 不要求全组同 home：跨 home 成局由范围树双向同意决定（admitScope），这里只防归属真的变了。
 func (s *Store) requireTicketHomesTx(ctx context.Context, tx *sql.Tx, group []*pb.MatchAuthorityTicketRecord) error {
-	if _, err := TeamUnitHomeZone(group); err != nil {
+	if _, err := TeamUnitHomeZone(group, nil); err != nil {
 		return err
 	}
 	for _, ticket := range group {

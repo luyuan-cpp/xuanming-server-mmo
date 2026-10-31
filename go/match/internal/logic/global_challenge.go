@@ -108,7 +108,7 @@ func (l *ChallengeLogic) respondGlobalChallenge(in *pb.RespondChallengeRequest, 
 				return &pb.RespondChallengeResponse{ErrorMessage: tipErr(constants.ErrChallengeSelfBusy, "成员仍在其它战斗中")}, nil
 			}
 		}
-		formation, group, err = buildGlobalDirect(l.ctx, l.svcCtx, pb.MatchMode_MATCH_MODE_PVP_CHALLENGE, invitation.ConfigId, []uint64{invitation.ChallengerPlayerId, invitation.TargetPlayerId}, nil, gatherOptions{})
+		formation, group, err = buildGlobalDirect(l.ctx, l.svcCtx, pb.MatchMode_MATCH_MODE_PVP_CHALLENGE, invitation.ConfigId, []uint64{invitation.ChallengerPlayerId, invitation.TargetPlayerId}, nil, directOptions{})
 		if err != nil {
 			return l.globalChallengeFailure(err)
 		}

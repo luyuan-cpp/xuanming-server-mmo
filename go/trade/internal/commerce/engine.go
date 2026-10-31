@@ -820,7 +820,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			}
 			// 已扣出的托管迟早要原样转给对方或退回(Transfer),在记下结局的这一刻就核对它转得动。
 			// 典型是人工终结为 APPLIED 的实例扣款:ResolveManually 不写 escrow_snapshot,自动路径缺原件则根本不终结
-			// (assetop escrowAwaitsReceipt)。若不在这里拦,寄售 / 拍品会照常上架,等买家付了款才在发货时判错,
+			// (assetop resultWithReceipt)。若不在这里拦,寄售 / 拍品会照常上架,等买家付了款才在发货时判错,
 			// 把第二个玩家的钱也一起压进人工单;在这里拦则在别人付款之前就隔离。隔离时合同名下仍在途的托管扣款
 			// 一并截止(quarantineLockedTx),已经扣到的留证据、没扣到的不再扣(2026-10-22 起;此前只改合同行,在途扣款照常落地)。
 			if l.Stream == 3 && applied(l) {

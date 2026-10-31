@@ -39,7 +39,7 @@ func overdueRow(battleID uint64, age time.Duration) data.OverdueTrialBattle {
 // ── 巡检器 ────────────────────────────────────────────────────
 
 // TestTrialSweepRound(06 §6.40):三条超时仍为 STARTED 的对局 ——
-// 有结果记录的按记录结算(并销账);没有记录且登记已超过放弃时限的判 EXPIRED;没有记录但还没到时限的只计入 overdue。
+// 有 SQL 终局的按它结算;没有终局且登记已超过放弃时限的判 EXPIRED;没有终局但还没到时限的只计入 overdue。
 func TestTrialSweepRound(t *testing.T) {
 	useTrialTables(t, nil, nil)
 	f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
@@ -56,7 +56,6 @@ func TestTrialSweepRound(t *testing.T) {
 	require.Equal(t, []uint64{activityTestNowMs() - 420_000}, f.store.overdueBefore, "候选 = 登记早于 now − ResultOverdue")
 	require.Len(t, f.store.settleInputs, 1)
 	assert.Equal(t, uint64(1001), f.store.settleInputs[0].Battle.BattleID, "从结果记录取回的事件走同一条结算路径")
-	assert.False(t, f.hasResult(1001), "结算后销账")
 	assert.Equal(t, []uint64{1002}, f.store.expired)
 }
 
@@ -119,13 +118,13 @@ func TestSweepLeaseTTL(t *testing.T) {
 	assert.Equal(t, 3*time.Second, sweepLeaseTTL(6*time.Second))
 }
 
-// TestTrialSweepNeverExpiresOnFailedRead:结果记录读不到(Redis 故障)时本轮到此为止 ——
-// 读不到不等于没有记录,绝不能据此把一局早该过期的对局判成过期(它的结果可能就躺在那台读不到的 Redis 里)。
+// TestTrialSweepNeverExpiresOnFailedRead:SQL 终局读不到(库故障)时本轮到此为止 ——
+// 读不到不等于没有结果,绝不能据此把一局早该过期的对局判成过期(它的结果可能就躺在那个读不到的库里)。
 func TestTrialSweepNeverExpiresOnFailedRead(t *testing.T) {
 	useTrialTables(t, nil, nil)
 	f := newTrialFixture(t, activityGuild(1, 42, 43), func(d *ActivityDeps) { d.Lobby, d.Match = nil, nil })
 	f.store.overdue = []data.OverdueTrialBattle{overdueRow(1002, 4000*time.Second)}
-	f.locator.Close()
+	f.results.err = errors.New("match authority sql down")
 
 	stats := f.l.trialSweepRound(context.Background(), f.deps, trialSweepConf())
 
@@ -145,7 +144,7 @@ func TestTrialSweepNeverExpiresOnFailedRead(t *testing.T) {
 }
 
 // TestTrialSweepPoisonsUnusableRecords:结果记录解不开,或它描述的不是这一局(battle_id 不符 / 不是历练的上下文)——
-// 确定性的坏数据。把这一局标成 POISON 并销账;否则它永远停在候选里(有记录就不会被判过期)。
+// 确定性的坏数据。把这一局标成 POISON;否则它永远停在候选里(有记录就不会被判过期)。
 func TestTrialSweepPoisonsUnusableRecords(t *testing.T) {
 	foreign := trialEvent(4444, 42, 43) // 记录里写的是另一局
 	noContext := trialEvent(1001, 42, 43)
@@ -157,13 +156,13 @@ func TestTrialSweepPoisonsUnusableRecords(t *testing.T) {
 	}{
 		{"记录解不开", func(t *testing.T, f *trialFixture) {
 			// 0x08 = 字段 1 的 varint 标签后面什么都没有,proto.Unmarshal 必定失败。
-			require.NoError(t, f.locator.Set(trialResultKey(1001), string([]byte{0x08})))
+			f.results.payloads[1001] = []byte{0x08}
 		}},
 		{"记录是另一局的", func(t *testing.T, f *trialFixture) {
-			// 把另一局(4444)的字节放到本局(1001)的键下。
+			// 把另一局(4444)的字节放到本局(1001)名下。
 			raw, err := proto.Marshal(foreign)
 			require.NoError(t, err)
-			require.NoError(t, f.locator.Set(trialResultKey(1001), string(raw)))
+			f.results.payloads[1001] = raw
 		}},
 		{"记录没有历练上下文", func(t *testing.T, f *trialFixture) { f.putResult(t, noContext) }},
 	}
@@ -180,13 +179,12 @@ func TestTrialSweepPoisonsUnusableRecords(t *testing.T) {
 			assert.Zero(t, f.store.settleCount(), "坏记录不进结算")
 			assert.Equal(t, []data.TrialBattleKey{{BattleID: 1001, GuildID: trialTestGuildID}}, f.store.marked,
 				"巡检器只有登记行的键,按它标毒")
-			assert.False(t, f.hasResult(1001), "标毒后销账")
 		})
 	}
 }
 
 // TestTrialSweepKeepsRecordOnTemporaryFailure:从记录结算时遇到暂时性失败 → 这一局本轮不算处理完,
-// 记录原样留着,下一轮再来。
+// 不标毒,下一轮再来。
 func TestTrialSweepKeepsRecordOnTemporaryFailure(t *testing.T) {
 	useTrialTables(t, nil, nil)
 	f := newTrialFixture(t, activityGuild(1, 42, 43), nil)
@@ -199,11 +197,10 @@ func TestTrialSweepKeepsRecordOnTemporaryFailure(t *testing.T) {
 	stats := f.l.trialSweepRound(context.Background(), f.deps, trialSweepConf())
 
 	assert.Equal(t, trialSweepStats{ran: true}, stats)
-	assert.True(t, f.hasResult(1001))
 	assert.Empty(t, f.store.marked)
 }
 
-// TestTrialSweepSurvivesPanicInOneBattle:从结果记录结算某一局时 panic,只丢这一局(本轮不算处理完,记录原样留着),
+// TestTrialSweepSurvivesPanicInOneBattle:从结果记录结算某一局时 panic,只丢这一局(本轮不算处理完),
 // 排在它后面的候选照常结算、照常判过期。候选按登记时刻升序,出问题的局每轮都排在同一个位置;
 // 让它中断整轮,后面的局就永远得不到兜底(06 §6.35a 场景一"被跳过的那一局不再挡住别的对局"靠的就是这一条)。
 func TestTrialSweepSurvivesPanicInOneBattle(t *testing.T) {
@@ -226,8 +223,6 @@ func TestTrialSweepSurvivesPanicInOneBattle(t *testing.T) {
 	stats := f.l.trialSweepRound(context.Background(), f.deps, trialSweepConf())
 
 	assert.Equal(t, trialSweepStats{ran: true, recovered: 1, expired: 1}, stats)
-	assert.True(t, f.hasResult(1001), "panic 的那一局没有定论,记录留着下一轮再试")
-	assert.False(t, f.hasResult(1004), "排在后面的局照常结算并销账")
 	assert.Equal(t, []uint64{1002}, f.store.expired)
 }
 

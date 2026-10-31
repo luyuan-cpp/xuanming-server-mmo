@@ -18,6 +18,7 @@ import (
 
 	inboxpb "proto/player_inbox"
 	"shared/authoritysql"
+	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -92,12 +93,16 @@ type Config struct {
 	// Schema:建表策略,见 SchemaConf.AutoMigrate。整段可缺失。
 	Schema SchemaConf `json:",optional"`
 
-	// CoreRedis:**核心** Redis(与 C++ scene / scene_manager 同一实例,DB 0),只读三类东西:
-	//   - player:{id}:owner_epoch:仅STALE分类诊断，不是消费授权上界；
-	//   - player:{id}:location:在线提醒定位玩家所在 scene 节点;
-	//   - 维护选主锁 player_inbox:maintenance:leader(清理 / 补发提醒 / gauge / 对账只在领导者上跑)。
-	// 指错实例的表现是 R 永远是 0(所有 Fetch 判 EPOCH_AHEAD)、提醒永远发不出,所以 Validate 拒绝空 Host。
+	// CoreRedis:控制域 Redis,只放维护选主锁 player_inbox:maintenance:leader(清理 / 补发提醒 / gauge / 对账只在领导者上跑)。
+	// 没写 PlayerRedis.Addrs 时玩家键也在这一实例上,所以 Validate 拒绝空 Host。
 	CoreRedis RedisConf `json:"CoreRedis"`
+
+	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8),只读两类东西:
+	//   - player:{id}:owner_epoch:仅STALE分类诊断，不是消费授权上界；
+	//   - player:{id}:location:在线提醒定位玩家所在 scene 节点。
+	// 指错实例的表现是 R 永远是 0(所有 Fetch 判 EPOCH_AHEAD)、提醒永远发不出。
+	// 读取走 EffectivePlayerRedis():没写 Addrs 时指向 CoreRedis 那一个实例,开发环境不用改。
+	PlayerRedis playerredis.Config `json:",optional"`
 
 	// Kafka:在线提醒写 scene-cmd_g<N>(kafkacmd 寻址)。只是提醒,丢了由落地拉取与在线兜底补上。
 	Kafka KafkaConf `json:"Kafka"`
@@ -158,6 +163,20 @@ type RedisConf struct {
 	// 从 etc/player_inbox.yaml 镜像 CoreRedis.PoolSize 并要求正整数,Redis 连接总账读同一个键。
 	// 围栏上界、在线提醒与选主锁共用这一个池。
 	PoolSize int `json:"PoolSize,optional"`
+}
+
+// playerRedisFallbackIOTimeoutMs:没写 PlayerRedis.Addrs 时的读写超时,与 CoreRedis 客户端的 1s 同口径(svc.coreRedisOptions)。
+const playerRedisFallbackIOTimeoutMs = 1000
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 CoreRedis 那一个实例,连接池同 CoreRedis.PoolSize。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{c.CoreRedis.Host},
+		Password:        c.CoreRedis.Password,
+		PoolSizePerNode: min(c.CoreRedis.PoolSize, playerredis.MaxPoolSizePerNode),
+		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
+	})
 }
 
 // KafkaConf 是在线提醒用的 Kafka 生产者参数。
@@ -325,6 +344,9 @@ func (c *Config) Validate() error {
 	if c.CoreRedis.PoolSize <= 0 {
 		return fmt.Errorf("CoreRedis.PoolSize(%d)必须显式写正整数:0 在 go-redis 里是缺省 10 × GOMAXPROCS,"+
 			"随 CPU limit 漂移,Redis 连接总账(k8s_deploy.ps1 镜像同一个键)就对不上", c.CoreRedis.PoolSize)
+	}
+	if err := c.PlayerRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("PlayerRedis: %w", err)
 	}
 	if len(c.Kafka.Brokers) == 0 {
 		return errors.New("Kafka.Brokers 不能为空:在线提醒经 scene-cmd 写 Kafka")

@@ -28,7 +28,7 @@ func (s *Store) ClaimTeamUnits(ctx context.Context, formation *pb.MatchFormation
 	if err := validatePvpTeamFormation(formation, group); err != nil {
 		return err
 	}
-	if _, err := TeamUnitHomeZone(group); err != nil {
+	if _, err := TeamUnitHomeZone(group, nil); err != nil {
 		return err
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
@@ -54,7 +54,7 @@ func (s *Store) ClaimTeamUnits(ctx context.Context, formation *pb.MatchFormation
 	if err = s.RequireNoSpectators(ctx, tx, players); err != nil {
 		return err
 	}
-	// 逐人核对票上的 home 仍是当前 home；跨 home 成局由 claimTx 里的范围树双向同意决定，
+	// 逐人核对票上的 home 解析后仍是当前 home 的最终区；跨 home 成局由 claimTx 里的范围树双向同意决定，
 	// 不再要求补位后的整组同 home（负责人 2026-10-24 D2，覆盖 team-system.md:2539 对匹配组的适用范围）。
 	if err = s.requireTicketHomesTx(ctx, tx, group); err != nil {
 		return err

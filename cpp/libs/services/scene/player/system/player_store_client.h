@@ -119,7 +119,7 @@ public:
     PlayerStoreClient &operator=(const PlayerStoreClient &) = delete;
 
     // 认领成功后调用。confirmed 必须是库里的原字节,不能是加载后重新序列化的结果:否则加载时改过的字段
-    // 不会被写回,Uncarried 的 merge_state 也永远清不掉。存盘未落定时返回 false,调用方要等落定再加载。
+    // 不会被写回。存盘未落定时返回 false,调用方要等落定再加载。
     // committedSaveSeq 是响应里的 save_seq,新号是 0。
     bool Seed(Guid playerId, uint32_t storageId, uint64_t ownerEpoch, uint64_t committedSaveSeq, player_store_rows::KindBytes confirmed);
 

@@ -60,7 +60,6 @@ func TestDefaultLoopConfigGolden(t *testing.T) {
 		{"AbandonBatch(落地恢复 §6.3 执行者 = 200)", cfg.AbandonBatch, 200},
 		{"AbandonInterval(落地恢复 §6.3 执行者 = 1 小时)", cfg.AbandonInterval, time.Hour},
 		{"AuditInterval(落地恢复 §6.2 = 24 小时)", cfg.AuditInterval, 24 * time.Hour},
-		{"RequireSQLCommit(零值只给单测,生产装配写死 true)", cfg.RequireSQLCommit, false},
 	}
 	for _, c := range checks {
 		if c.got != c.want {

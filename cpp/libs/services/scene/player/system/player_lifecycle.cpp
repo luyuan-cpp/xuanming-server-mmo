@@ -12,7 +12,7 @@
 #include "proto/common/component/player_login_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
 
-#include "thread_context/redis_manager.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "time/system/time.h"
 #include "type_alias/player_session_type_alias.h"
 #include "core/utils/defer/defer.h"
@@ -28,7 +28,6 @@
 #include "player/comp/player_key_progress_save_comp.h"
 #include "core/system/id_generator.h"              // tlsIdGeneratorManager.saveSeq:进程级存盘序号发号器
 #include "player/system/save_seq.h"
-#include "player/system/save_seq_floor.h"
 #include "player/system/dirty_save_stats.h"
 #include "player/system/handoff_mark_withdraw.h"
 #include "player/system/handoff_sql_barrier.h"
@@ -666,7 +665,8 @@ namespace
 	//
 	// 不能只判 connected():hiredis 在连接断开时用空 reply 逐个回调挂起命令,那段时间 REDIS_CONNECTED
 	// 标志还没清、connected() 仍为真,而 redisvAsyncCommand 已因 DISCONNECTING / FREEING 返回 ERR ——
-	// 退出流程恰恰可能就跑在那样一个回调里。所以 command() 的返回值必须一并检查。
+	// 退出流程恰恰可能就跑在那样一个回调里。玩家域句柄的 connected() 还要更弱:只说明至少一个节点连着,这条命令所在的
+	// slot 不一定可用。所以 command() 的返回值必须一并检查。
 	//
 	// withdraw_deferred 是趋势类计数,不是"未撤回的条数":同一条目可能先发送失败、重试后应答又失败,
 	// 各计一次。回调只按值捕获 id、标记原文与"是否首发",不绑对象、不持连接(AGENTS §11.7)。
@@ -684,15 +684,14 @@ namespace
 		const Guid playerId = entry.playerId;
 		const bool firstAttempt = entry.attempts <= 1; // CollectDue 取走时已加一:1 = 首发
 		const char *deferredReason = nullptr;
-		auto &redis = tlsRedis.GetZoneRedis();
-		if (!redis || !redis->connected())
+		if (!tlsPlayerRedis.connected())
 		{
 			deferredReason = "redis_unavailable";
 		}
 		else
 		{
 			const std::string key = player_ownership::HandoffRedisKey(playerId);
-			const int ret = redis->command(
+			const int ret = tlsPlayerRedis.command(
 				[playerId, firstAttempt, markValue = entry.markValue, holderFence = entry.holderFence](hiredis::Hiredis *, redisReply *reply)
 				{
 					if (reply != nullptr && reply->type == REDIS_REPLY_INTEGER && (reply->integer == 0 || reply->integer == 1))
@@ -731,7 +730,7 @@ namespace
 				},
 				"EVAL %s 3 %s %s %s %b %b %b %b", handoff_mark_withdraw::kLuaDelIfEqual.c_str(),
                 player_ownership::OwnerEpochRedisKey(playerId).c_str(),
-                ("player:{" + std::to_string(playerId) + "}:save_barrier").c_str(), key.c_str(),
+                player_ownership::HandoffFenceRedisKey(playerId).c_str(), key.c_str(),
                 entry.holderFence.data(), entry.holderFence.size(), entry.publishedFence.data(), entry.publishedFence.size(),
                 entry.revokedFence.data(), entry.revokedFence.size(),
                 entry.markValue.substr(entry.markValue.find(':') + 1).data(), entry.markValue.substr(entry.markValue.find(':') + 1).size());
@@ -796,10 +795,10 @@ namespace
 
 	// 存盘要写的那份 PlayerAllData:统一入口 player_persist::MarshalPlayerForPersist 拼装全部字段、补两张子表的
 	// player_id,并盖持久 schema 世代(docs/design/mixed-version-persist-field-protection.md §4.2)。
-	// SavePlayerToRedisImpl 与退出分支的收敛比对共用,保证"比的"与"写的"是同一个形状;盖戳在快路径比较之前完成。
-	// 不打压测探针:探针只在真正写盘的路径上打(见 SavePlayerToRedisImpl)。
-	// 也不写存盘元数据(db-write-fencing-mysql.md §7.2、§7.3):last_save_seq 由 SavePlayerToRedisImpl 在快路径判定之后
-	// 才发号写入(快路径比较时两侧都不带它);fence_owner_epoch / fence_save_seq 恒为 0,代次和序号在 player_store 的写权行上。
+	// SavePlayerImpl 与退出分支的收敛比对共用,保证"比的"与"写的"是同一个形状;盖戳在快路径比较之前完成。
+	// 不打压测探针:探针只在真正写盘的路径上打(见 SavePlayerImpl)。
+	// 也不写存盘元数据(db-write-fencing-mysql.md §7.2、§7.3):last_save_seq 由 SavePlayerImpl 在快路径判定之后
+	// 才发号写入(快路径比较时两侧都不带它);代次和序号在 player_store 的写权行上。
 	// 返回 false = 持久化组件缺失(marshal 已打 ERROR 写明缺哪个),不得写盘或用于收敛判定。
 	bool MarshalPlayerForSave(entt::entity player, Guid playerId, PlayerAllData &out)
 	{
@@ -809,7 +808,7 @@ namespace
 	// 为一次确定要写的存盘发 save_seq(db-write-fencing-mysql.md §7.2)。进程级发号器 Next;该玩家挂着个人下限
 	// (PlayerSaveSeqFloorComp,加载时种子超界才有)时再取 max(进程 Next, 个人下限 + 1),并把个人下限推进到发出的值。
 	// 饱和(进程水位或个人下限到了 UINT64_MAX)返回 nullopt:调用方拒绝本次存盘,不回绕。
-	// 只在 SavePlayerToRedisImpl 的快路径之后调:被快路径跳过的存盘不消耗序号。个人下限只经 try_get 读写,这里不创建它
+	// 只在 SavePlayerImpl 的快路径之后调:被快路径跳过的存盘不消耗序号。个人下限只经 try_get 读写,这里不创建它
 	// (创建入口见 PlayerSaveSeqFloorComp 的说明)。实体已经没了时查不到下限,只用进程发号器。
 	std::optional<uint64_t> IssueSaveSeq(entt::entity player, Guid playerId)
 	{
@@ -898,12 +897,8 @@ bool player_exit::IsPersistedPayloadCurrent(const PlayerAllData &landed, const P
 		payload->mutable_player_database_data()->clear_stress_test_probe();
 		payload->mutable_player_database_1_data()->clear_stress_test_probe();
 		// 存盘元数据不参与收敛比较(db-write-fencing-mysql.md §7.3):落地的那份带着发号写入的 last_save_seq,
-		// 当前 marshal 不带;两笔存盘在途时落地的与当前的序号也不同。子表 fence_* 的清除是防御:C++ 不写它们。
+		// 当前 marshal 不带;两笔存盘在途时落地的与当前的序号也不同。
 		payload->clear_last_save_seq();
-		payload->mutable_player_database_data()->clear_fence_owner_epoch();
-		payload->mutable_player_database_data()->clear_fence_save_seq();
-		payload->mutable_player_database_1_data()->clear_fence_owner_epoch();
-		payload->mutable_player_database_1_data()->clear_fence_save_seq();
 	}
 	return dirty_save::IsEqual(landedStripped, currentStripped);
 }
@@ -1110,7 +1105,7 @@ namespace
 	// 条件写 player:{id}:handoff "E:now_ms":把调用方给的原资格 CAS 到本轮 F 并写标记,owner_epoch 仍等于 E 才写。
 	// A1′、A2′ 放弃补写、改派踢线前的凭证补写(MarkWriteSite::kRelocateRefresh)消费缓存的原 H(kLuaWriteIfOwnerEpoch);
 	// 会话结束凭证消费 SendSessionEndedCredential 观察并核对过的原件(kCredentialMarkLua,H / F / R 皆可)。
-	// 走 tlsRedis.GetZoneRedis()。"排在退出存盘之后"来自回调链的因果:退出存盘的落地回调到了才调到这里,不靠连接 FIFO。
+	// 走 tlsPlayerRedis。"排在退出存盘之后"来自回调链的因果:退出存盘的落地回调到了才调到这里,不靠连接 FIFO。
 	// 防迟到也**不靠** FIFO(r2-lc#2):存活探测摘掉旧连接后,这条 EVAL 可能仍在内核重传、晚于新连接上的同节点重载登记
 	// 才执行。脚本只认调用方给的原件,新登记 / 撤销 / 发布已换掉 handoff_fence 时返回 -2、一个字节都不写。
 	// **一律不重试**(R7):写不成的后果只是这一次重登可能回 18、下一次重试放行;重试会把"这一刻已落盘"的
@@ -1131,8 +1126,7 @@ namespace
                                                            : exit_release_mark::kLuaWriteIfOwnerEpoch;
 
 		const std::string markValue = player_ownership::HandoffRedisValue(epoch, TimeSystem::NowMillisecondsUTC());
-		auto &redis = tlsRedis.GetZoneRedis();
-		if (!redis || !redis->connected())
+		if (!tlsPlayerRedis.connected())
 		{
 			CountMarkWrite(site, exit_release_mark::MarkWriteResult::kFailed);
 			LOG_WARN << "[ExitRelease] mark write failed player=" << playerId << " mark=" << markValue
@@ -1144,7 +1138,7 @@ namespace
 		const std::string epochText = std::to_string(epoch);
 		++tlsExitReleaseMarksInFlight;
 		// 脚本串作为一个 %s 参数传入是安全的:hiredis 只按**格式串**里的空格切参数(同 SendHandoffWithdraw)。
-		const int ret = redis->command(
+		const int ret = tlsPlayerRedis.command(
 			[playerId, markValue, site](hiredis::Hiredis *, redisReply *reply)
 			{
 				if (tlsExitReleaseMarksInFlight > 0)
@@ -1176,7 +1170,7 @@ namespace
 				}
 			},
 			"EVAL %s 3 %s %s %s %s %s %d %b %b", script.c_str(), ownerEpochKey.c_str(),
-            ("player:{" + std::to_string(playerId) + "}:save_barrier").c_str(), handoffKey.c_str(), epochText.c_str(),
+            player_ownership::HandoffFenceRedisKey(playerId).c_str(), handoffKey.c_str(), epochText.c_str(),
             markValue.c_str(), player_ownership::kHandoffMarkTtlSec,
             holderFence.data(), holderFence.size(), published->data(), published->size());
 		if (ret != REDIS_OK)
@@ -1307,24 +1301,23 @@ namespace
 	}
 
 	// 会话结束凭证(docs/design/location-release-binding.md §3.3;2026-10-23 起带围栏):本节点完全不持有该玩家,没有缓存的
-	// 原 H。先 HGET save_barrier.handoff_fence 读现任资格原件,回调里重采判定、核对原件(OnSessionEndedQualificationRead),
+	// 原 H。先 HGET handoff_fence 读现任资格原件,回调里重采判定、核对原件(OnSessionEndedQualificationRead),
 	// 合格才以读到的原件做 CAS。读与 CAS 之间本节点若开始新的持有,登记会先轮换原件,CAS 回 -2;CAS 帧迟到同理 ——
 	// 不靠连接顺序、不靠墙钟。不能干脆拒发:§15 起等待超时不再授权删 location,持有节点活着而不持有时没有凭证就永远删不掉。
 	// 读失败不重试(同 R7):scene_manager 的下一次 LeaveScene 重试 / 下一次登录撞门会再请一次。读也计入在途标记命令
 	// (R6):回调里才发 CAS,停机排空要等到它。回调只按值捕获玩家号与期望 E,不绑对象、不持连接(AGENTS §11.7)。
 	void SendSessionEndedCredential(Guid playerId, uint64_t expectedOwnerEpoch)
 	{
-		auto &redis = tlsRedis.GetZoneRedis();
-		if (!redis || !redis->connected())
+		if (!tlsPlayerRedis.connected())
 		{
 			release_fence_stats::IncCredentialQualification(release_fence::CredentialQualification::kReadFailed);
 			LOG_WARN << "[ReleaseFence] session-ended credential: player=" << playerId << " owner_epoch=" << expectedOwnerEpoch
 					 << " qualification=read_failed reason=redis_unavailable; not writing (not retried)";
 			return;
 		}
-		const std::string barrierKey = "player:{" + std::to_string(playerId) + "}:save_barrier";
+		const std::string handoffFenceKey = player_ownership::HandoffFenceRedisKey(playerId);
 		++tlsExitReleaseMarksInFlight;
-		const int ret = redis->command(
+		const int ret = tlsPlayerRedis.command(
 			[playerId, expectedOwnerEpoch](hiredis::Hiredis *, redisReply *reply)
 			{
 				if (tlsExitReleaseMarksInFlight > 0)
@@ -1333,7 +1326,7 @@ namespace
 				}
 				OnSessionEndedQualificationRead(playerId, expectedOwnerEpoch, reply);
 			},
-			"HGET %b handoff_fence", barrierKey.data(), barrierKey.size());
+			"HGET %b handoff_fence", handoffFenceKey.data(), handoffFenceKey.size());
 		if (ret != REDIS_OK)
 		{
 			// 命令没发出去,回调不会来:自己把计数还回去。
@@ -1618,8 +1611,7 @@ namespace
 		const uint64_t lifecycle = state.lifecycle;
 		const uint32_t seq = state.attemptSeq;
 
-		auto &redis = tlsRedis.GetZoneRedis();
-		if (!redis || !redis->connected())
+		if (!tlsPlayerRedis.connected())
 		{
 			exit_release_stats::Inc(exit_release_stats::Get().inheritFailed);
 			ScheduleInheritClearRetry(playerId, "redis_unavailable");
@@ -1640,9 +1632,9 @@ namespace
 		};
 		// epoch == 0:路由不带 owner_epoch(兼容窗口),无从核对,改删 ≤ 当前 owner_epoch 的标记(见 exit_release_mark.h)。
         const auto& holder = pendingIt->second.handoffFence;
-        const std::string barrierKey = "player:{" + std::to_string(playerId) + "}:save_barrier";
-        const int ret = redis->command(onReply, "EVAL %s 3 %s %s %s %s %b", exit_release_mark::kLuaInheritClear.c_str(),
-            ownerEpochKey.c_str(), barrierKey.c_str(), handoffKey.c_str(), epochText.c_str(), holder.data(), holder.size());
+        const std::string handoffFenceKey = player_ownership::HandoffFenceRedisKey(playerId);
+        const int ret = tlsPlayerRedis.command(onReply, "EVAL %s 3 %s %s %s %s %b", exit_release_mark::kLuaInheritClear.c_str(),
+            ownerEpochKey.c_str(), handoffFenceKey.c_str(), handoffKey.c_str(), epochText.c_str(), holder.data(), holder.size());
 		if (ret != REDIS_OK)
 		{
 			// 命令没发出去,回调不会来。command() 期间没有改过待入场表,state 引用仍有效。
@@ -1994,10 +1986,10 @@ namespace
 
 	// 发一次核实读。条目必须在 kVerifying 且没有命令在途,否则 no-op。
 	// 命令是只读脚本 relocate_confirm::kLuaReadPlacement(一次读回 owner_epoch / location / handoff,为什么带 shebang、
-	// 为什么不删任何键见它的注释)。走 tlsRedis.GetZoneRedis():muduo hiredis::Hiredis::command 是
-	// redisvAsyncCommand 的薄封装,无队列、无重放 —— 读数之后的凭证补写不会被重放到一个不再成立的时刻(R7)。
+	// 为什么不删任何键见它的注释)。走 tlsPlayerRedis:路由层只重试确定没执行的命令,结果未知的绝不重放,
+	// 所以读数之后的凭证补写不会被重放到一个不再成立的时刻(R7)。
 	// 2026-10-23 更正(r2-lc#2):给活持有者发放行证的风险不再由"同一条 FIFO 连接 / 不重放"挡,同一条连接在存活探测
-	// 摘连接重连时本来也保证不了跨连接顺序。补写在 Lua 里只消费条目缓存的原 H(save_barrier.handoff_fence 的 CAS),
+	// 摘连接重连时本来也保证不了跨连接顺序。补写在 Lua 里只消费条目缓存的原 H(handoff_fence 的 CAS),
 	// 之后任何一次载入登记都会先轮换原件,迟到或被重放的补写只能回 -2、不写。
 	// settle 之前不许读的情形(结果未知 / 还有请求结局未定,relocate_confirm::MustReadAfterSettle)在这里拦:
 	// 不发命令,把下一次核实排到 settleAt。
@@ -2025,8 +2017,7 @@ namespace
 
 		// 上一次没读到、这次是重试:只决定"又没读到"时的日志级别。MarkVerifySent 会清掉这个位,先抄下来。
 		const bool wasRetry = entry->retryPending;
-		auto &redis = tlsRedis.GetZoneRedis();
-		if (!redis || !redis->connected())
+		if (!tlsPlayerRedis.connected())
 		{
 			DeferRelocateVerify(*entry, "redis_unavailable", /*firstAttempt=*/!wasRetry, now);
 			return;
@@ -2037,7 +2028,7 @@ namespace
 		const std::string handoffKey = player_ownership::HandoffRedisKey(playerId);
 		// 不能只判 connected():连接正在断开时它仍为真,而命令已经发不出去(理由见 SendHandoffWithdraw 上方的注释),
 		// command() 的返回值必须一并检查。脚本串作为一个 %s 参数传入是安全的(同 SendHandoffWithdraw)。
-		const int ret = redis->command(
+		const int ret = tlsPlayerRedis.command(
 			[playerId, seq, gen, wasRetry](hiredis::Hiredis *, redisReply *reply)
 			{
 				HandleRelocateVerifyReply(playerId, seq, gen, wasRetry, reply);
@@ -2259,12 +2250,6 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoaded(Guid playerId, const PlayerA
 	if (!RoleAdmissionSystem::Allows(playerId, pendingIt->second.roleAdmissionGeneration, pendingIt->second.ownerRevision))
 	{
 		// 封存时保留上下文到真实GET/A2回调结束，Tick再清理，不能让迟到载入激活资产。
-		if (playerId != 0 && message.player_database_data().player_id() == playerId
-			&& message.player_database_1_data().player_id() == playerId)
-		{
-			RoleAdmissionSystem::ObserveSave(playerId, message.player_database_data().fence_owner_epoch(), message.player_database_data().fence_save_seq());
-			RoleAdmissionSystem::ObserveSave(playerId, message.player_database_1_data().fence_owner_epoch(), message.player_database_1_data().fence_save_seq());
-		}
 		return;
 	}
 
@@ -2510,7 +2495,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 						 << static_cast<uint32_t>(exitIntent->resaveRounds) << "/"
 						 << static_cast<uint32_t>(player_exit::kMaxExitResaveRounds) << " (metric=exit_resave)";
 				tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(playerEntity).Replace(message);
-				const auto saveResult = SavePlayerToRedisImpl(playerEntity, /*allowSkipWhenPersisted=*/true);
+				const auto saveResult = SavePlayerImpl(playerEntity, /*allowSkipWhenPersisted=*/true);
 				if (saveResult == SaveResult::kQueued)
 				{
 					return; // 等这次存盘的落地回调
@@ -2562,7 +2547,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 
 	// Update last-persisted snapshot (todo.md #204 / #226 slice B).
 	// Successful save means the bytes in `message` are now what's in
-	// Redis; record them so the next SavePlayerToRedis can do a
+	// Redis; record them so the next SavePlayer can do a
 	// dirty-equality fast-path check. Skip if the entity was already
 	// destroyed above (UnregisterPlayer + DestroyPlayer path) — there's
 	// nothing to attach the component to.
@@ -2573,7 +2558,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 		// 新路径:这一笔带着 release 提交了,玩家却还在这里,写一笔把 released 清掉(同 EnterScene 取消退出)。
 		if (exitAbandoned)
 		{
-			SavePlayerToRedisImpl(playerEntity, /*allowSkipWhenPersisted=*/true);
+			SavePlayerImpl(playerEntity, /*allowSkipWhenPersisted=*/true);
 		}
 	}
 
@@ -2846,8 +2831,8 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 	tlsPendingEnterMap[playerId] = std::move(ctx);
 
 	// 6. A2′:载入之前"先核归属再删"继承来的 handoff 标记(owner_epoch ≠ ctx.ownerEpoch 一个都不删)。
-	//    必须在登记待入场上下文之后(应答按 player_id 找它)、调用方发 AsyncLoad 之前(同一条 zone Redis 连接 FIFO,
-	//    EVAL 排在 GET 前面)。结果决定 HandlePlayerAsyncLoaded 建不建实体;ctx.ownerEpoch == 0(旧版路由)
+	//    必须在登记待入场上下文之后(应答按 player_id 找它)。与调用方随后发的载入(go/db 的 gRPC)之间没有顺序保证,也不靠它:
+	//    载入先回来就暂存,等这条应答。结果决定 HandlePlayerAsyncLoaded 建不建实体;ctx.ownerEpoch == 0(旧版路由)
 	//    改为不核对归属、删 ≤ 当前 owner_epoch 的标记,闸门同样等它确认。
 	BeginInheritedMarkClear(playerId);
 	return EnterGameNodeOutcome::kLoadRequired;
@@ -2965,7 +2950,7 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	// 放弃等判定会把在线玩家当成离线(规格 §4「释放不是终态」)。放在采纳代次之后:这一笔要带本次路由的 E。
 	if (exitCancelled)
 	{
-		SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/true);
+		SavePlayerImpl(player, /*allowSkipWhenPersisted=*/true);
 	}
 
 	// 1. Bind session: map session_id -> player_id on this Scene node
@@ -3221,7 +3206,7 @@ void PlayerLifecycleSystem::FreezeRoleForTrade(Guid playerId)
 	// 算上的话,排队的冻结存盘被拒时交易会带着更旧的存档继续,局中封存则再也不会真的冻结。
 	RoleAdmissionSystem::SetTradeFreezeSaving(playerId, true);
 	// 即使业务快照没变也产生一次严格双表版本；SQL拒绝/不可用时封存持续等待。
-	if (SavePlayerToRedisImpl(player, false) != SaveResult::kQueued)
+	if (SavePlayerImpl(player, false) != SaveResult::kQueued)
 	{
 		RoleAdmissionSystem::SetTradeFreezeSaving(playerId, false);
 		// 拒存不能转为“实体已销毁”的排空证明；保留冻结原件，重放同一封存继续恢复。
@@ -3308,7 +3293,7 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player, ExitCause ca
 						 << " was retained after exhausting its exit re-saves; saving once more"
 						 << " (incoming cause=" << player_exit::ExitCauseName(cause) << ", metric=exit_exhausted_rekick)";
 				StopMotionForExit(player); // 纵深防御:退出发起时已清过,这里再清一次不改变语义
-				const auto saveResult = SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/true);
+				const auto saveResult = SavePlayerImpl(player, /*allowSkipWhenPersisted=*/true);
 				if (saveResult == SaveResult::kRejected)
 				{
 					LOG_ERROR << "HandleExitGameNode: retained player " << retainedPlayerId
@@ -3378,7 +3363,7 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player, ExitCause ca
 	// Capture a logout snapshot before persisting (safety net for rollback).
 	SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGOUT);
 
-	auto saveResult = SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/true);
+	auto saveResult = SavePlayerImpl(player, /*allowSkipWhenPersisted=*/true);
 	if (saveResult == SaveResult::kRejected)
 	{
 		LOG_ERROR << "HandleExitGameNode: save refused for player " << exitingPlayerId
@@ -3397,7 +3382,7 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player, ExitCause ca
 		LOG_INFO << "HandleExitGameNode: player " << exitingPlayerId
 				 << " matches its last persisted snapshot but still has an unsettled save; forcing a real save"
 				 << " before finishing exit (metric=exit_fastpath_deferred)";
-		saveResult = SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/false);
+		saveResult = SavePlayerImpl(player, /*allowSkipWhenPersisted=*/false);
 		if (saveResult != SaveResult::kQueued)
 		{
 			if (saveResult == SaveResult::kRejected)
@@ -3431,7 +3416,7 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player, ExitCause ca
 	}
 
 	// Re-login race protection (todo.md #280). The save is now in flight.
-	// THREE layers cover the read-stale-data window between SavePlayerToRedis
+	// THREE layers cover the read-stale-data window between SavePlayer
 	// being enqueued here and HandlePlayerAsyncSaved firing:
 	//
 	//   1. Same-node reconnect — EnterScene() clears the UnregisterPlayer tag
@@ -3499,7 +3484,7 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 		// 新标记 ms 取自墙钟、正常情况下与旧标记不同,迟到 / 重发的撤回删不到它(同一毫秒 / 墙钟回拨的
 		// 同值碰撞不排除,后果只是改派被 18 拒回、玩家重登,不回档)。Redis 不通或应答丢失时不再只靠 TTL
 		// 兜底:条目留在待撤回表里重试,期间该玩家重连回本节点也发不出 EnterScene(IsSceneChangeBusy)。
-		// HandlePlayerAsyncSaved 里同名的"退出优先"分支也做同样的撤回:交接发起之后 SavePlayerToRedis 虽然
+		// HandlePlayerAsyncSaved 里同名的"退出优先"分支也做同样的撤回:交接发起之后 SavePlayer 虽然
 		// 直接跳过,但 HandleExitGameNode 的 M4 分支会在那时改为等一笔更早的未落地存盘,它落地时
 		// requestedAtMs 可能已非 0(标记已写)。
 		// GO-2(§12.8):scene_manager 推路由失败后的单调回滚会把 "E:t" 转写成 "E+2:t"。按原文撤回删不到它(条件删
@@ -3757,11 +3742,10 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId, bool earlie
 	// 不写的话生产配置(AllowUnsafeCrossNodeHandoff=false)下疏散 / 排空的每一个玩家都会被
 	// ErrHandoffPending 挡回来,而本地实体马上就要销毁,玩家只能自己重登。
 	// 标记落地之后再发 EnterScene;实体此后立刻销毁,回调只用按值捕获的票据与条目号。
-	auto &redis = tlsRedis.GetZoneRedis();
 	const auto* originalHolder = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(playerEntity);
     const std::string holderFence = originalHolder ? originalHolder->handoffFence : "";
     const auto publishedFence = handoff_sql_barrier::RotateFence(holderFence, handoff_sql_barrier::FenceState::kFrozen);
-    const bool writeMark = ownerEpoch != 0 && redis && redis->connected() && publishedFence.has_value();
+    const bool writeMark = ownerEpoch != 0 && tlsPlayerRedis.connected() && publishedFence.has_value();
 	// 本次**尝试**写的标记原文;不写时为空。只记到条目上进日志。
 	const std::string value =
 		writeMark ? player_ownership::HandoffRedisValue(ownerEpoch, TimeSystem::NowMillisecondsUTC()) : std::string();
@@ -3864,7 +3848,7 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId, bool earlie
 	// 脚本串作为一个 %s 参数传入是安全的:hiredis 只按**格式串**里的空格切参数(同 SendConditionalMarkWrite)。
 	// 回调只按值捕获 id、条目号、票据与标记原文(AGENTS §11.7);回调到达时凭 (playerId, seq) 对号,条目已结清 /
 	// 已落回本节点 / 已超时转核实的不再发(TrackRelocateDispatch)。
-	const int ret = redis->command(
+	const int ret = tlsPlayerRedis.command(
 		[playerId, seq, ticket, value](hiredis::Hiredis *, redisReply *reply)
 		{
 			--tlsRelocateHandoffMarksInFlight;
@@ -3897,7 +3881,7 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId, bool earlie
 			TrackRelocateDispatch(playerId, seq, ticket, markWrite);
 		},
 		"EVAL %s 3 %s %s %s %s %s %d %b %b", exit_release_mark::kLuaWriteIfOwnerEpoch.c_str(), ownerEpochKey.c_str(),
-        ("player:{" + std::to_string(playerId) + "}:save_barrier").c_str(), key.c_str(), epochText.c_str(), value.c_str(),
+        player_ownership::HandoffFenceRedisKey(playerId).c_str(), key.c_str(), epochText.c_str(), value.c_str(),
         player_ownership::kHandoffMarkTtlSec, holderFence.data(), holderFence.size(), publishedFence->data(), publishedFence->size());
 	if (ret != REDIS_OK)
 	{
@@ -4199,8 +4183,6 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 	}
 
 	if (!RoleAdmissionSystem::Allows(playerId, ctx.roleAdmissionGeneration, ctx.ownerRevision)) return entt::null;
-	RoleAdmissionSystem::ObserveSave(playerId, playerAllData.player_database_data().fence_owner_epoch(), playerAllData.player_database_data().fence_save_seq());
-	RoleAdmissionSystem::ObserveSave(playerId, playerAllData.player_database_1_data().fence_owner_epoch(), playerAllData.player_database_1_data().fence_save_seq());
 	LOG_INFO << "[InitPlayerFromAllData] Init player: " << playerId;
 
 	// 先查重再建实体:旧写法先 create 再 emplace 进 playerList,重复时直接返回,刚建的实体
@@ -4243,18 +4225,16 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 	tlsEcs.actorRegistry.emplace<PlayerHomeZoneComp>(player);
 	tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player);
 
-	// 存盘序号播种(db-write-fencing-mysql.md §7.2):三路 max 经 Observe 进进程级发号器。种子超界(超过「(now + 60s) << 10」)
+	// 存盘序号播种(db-write-fencing-mysql.md §7.2):写权行的序号经 Observe 进进程级发号器。种子超界(超过「(now + 60s) << 10」)
 	// 时不抬进程水位,只给这名玩家挂个人下限 —— PlayerSaveSeqFloorComp 在加载链上的创建入口就在这里。
-	const uint64_t saveSeqSeed = save_seq::SaveSeqFloorFrom(playerAllData);
+	const uint64_t saveSeqSeed = playerAllData.last_save_seq();
 	const uint64_t saveSeqNowMs = TimeSystem::NowMillisecondsUTC();
 	if (tlsIdGeneratorManager.saveSeq.Observe(saveSeqSeed, saveSeqNowMs) == save_seq::ObserveResult::kBeyondBound)
 	{
 		tlsEcs.actorRegistry.emplace<PlayerSaveSeqFloorComp>(player).floor = saveSeqSeed;
 		save_seq_stats::Inc(save_seq_stats::Counter::kObserveBeyondBound);
 		LOG_ERROR << "[SaveSeq] loaded save_seq seed of player " << playerId << " is beyond the bound (seed=" << saveSeqSeed
-				  << " bound=" << save_seq::ObserveUpperBound(saveSeqNowMs) << " last_save_seq=" << playerAllData.last_save_seq()
-				  << " fence_save_seq=" << playerAllData.player_database_data().fence_save_seq() << "/"
-				  << playerAllData.player_database_1_data().fence_save_seq()
+				  << " bound=" << save_seq::ObserveUpperBound(saveSeqNowMs)
 				  << "); kept as this player's personal floor, process allocator not raised (metric=observe_beyond_bound)";
 	}
 
@@ -4306,14 +4286,14 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 	return player;
 }
 
-bool PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
+bool PlayerLifecycleSystem::SavePlayer(entt::entity player)
 {
-	return SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/true) == SaveResult::kQueued;
+	return SavePlayerImpl(player, /*allowSkipWhenPersisted=*/true) == SaveResult::kQueued;
 }
 
 bool PlayerLifecycleSystem::SavePlayerForAssetCommit(entt::entity player)
 {
-	return SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/false) == SaveResult::kQueued;
+	return SavePlayerImpl(player, /*allowSkipWhenPersisted=*/false) == SaveResult::kQueued;
 }
 
 // ── 存盘直接提交 TiDB(docs/design/player-save-direct-commit.md)─────────────────────
@@ -4436,6 +4416,11 @@ void PlayerLifecycleSystem::HandlePlayerStoreClaimed(Guid playerId, const player
 		return;
 	}
 
+	// 认领已经把写权行推到响应里的版本:不管后面建不建实体,交易排空都要看到这个版本才算数。
+	// 代次取响应,不取待入场上下文:认领在途时新路由可能把上下文覆盖成更高的代次,写权行上仍是这次认领的代次,
+	// 排空下限记高了就再也等不到(没有实体、不会再有存盘)。
+	RoleAdmissionSystem::ObserveSave(playerId, response->owner_epoch(), response->save_seq());
+
 	PlayerAllData data;
 	auto *db = data.mutable_player_database_data();
 	auto *db1 = data.mutable_player_database_1_data();
@@ -4448,12 +4433,8 @@ void PlayerLifecycleSystem::HandlePlayerStoreClaimed(Guid playerId, const player
 	}
 	// 元数据不在片段里,从写权行填回来。InitPlayerFromAllData 按它们播种序号、记加载世代。
 	db->set_player_id(playerId);
-	db->set_fence_owner_epoch(response->owner_epoch());
-	db->set_fence_save_seq(response->save_seq());
 	db->set_persist_schema_gen(response->schema_gen());
 	db1->set_player_id(playerId);
-	db1->set_fence_owner_epoch(response->owner_epoch());
-	db1->set_fence_save_seq(response->save_seq());
 	db1->set_persist_schema_gen(response->schema_gen());
 	data.set_last_save_seq(response->save_seq());
 
@@ -4515,11 +4496,11 @@ void PlayerLifecycleSystem::RequestKeyProgressSave(entt::entity player, const ch
 		}
 		current->armed = false;
 		current->lastSaveAt = PlayerKeyProgressSaveComp::Clock::now();
-		SavePlayerToRedisImpl(entity, /*allowSkipWhenPersisted=*/true);
+		SavePlayerImpl(entity, /*allowSkipWhenPersisted=*/true);
 	});
 }
 
-PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerDirect(entt::entity player, Guid playerId,
+PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SubmitPlayerSave(entt::entity player, Guid playerId,
 	const std::shared_ptr<PlayerAllData> &message, bool allowSkipWhenPersisted)
 {
 	// 新路径没有「不带代次」的写法(规格 §4),go/db 也会回 INVALID。路由总带 E,走到这里说明入场链出了问题。
@@ -4651,7 +4632,7 @@ void PlayerLifecycleSystem::OnPlayerStoreSaveDone(Guid playerId, const std::shar
 		{
 			return;
 		}
-		const auto saveResult = SavePlayerToRedisImpl(entity, /*allowSkipWhenPersisted=*/false);
+		const auto saveResult = SavePlayerImpl(entity, /*allowSkipWhenPersisted=*/false);
 		if (saveResult == SaveResult::kRejected && tlsEcs.actorRegistry.any_of<UnregisterPlayer>(entity))
 		{
 			DestroyDeposedPlayer(playerId, "exit_save_refused");
@@ -4667,12 +4648,12 @@ void PlayerLifecycleSystem::OnPlayerStoreSaveDone(Guid playerId, const std::shar
 	}
 }
 
-PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerToRedisImpl(
+PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerImpl(
 	entt::entity player, bool allowSkipWhenPersisted)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
-		LOG_ERROR << "[SavePlayerToRedis] Invalid player entity";
+		LOG_ERROR << "[SavePlayer] Invalid player entity";
 		return SaveResult::kRejected;
 	}
 
@@ -4681,7 +4662,7 @@ PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerToRedisImpl(
 	if (guid == nullptr || guid->value == kInvalidGuid)
 	{
 		dirty_save_stats::IncMarshalRefused();
-		LOG_ERROR << "[SavePlayerToRedis] PlayerGuidComp missing or invalid; not saving: entity="
+		LOG_ERROR << "[SavePlayer] PlayerGuidComp missing or invalid; not saving: entity="
 				  << entt::to_integral(player);
 		return SaveResult::kRejected;
 	}
@@ -4698,7 +4679,7 @@ PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerToRedisImpl(
 		// 不碰落盘快照,盘上保留最后一次成功落盘的那份,绝不被零值覆盖。不重试:缺的组件也不会自己回来。
 		// 只增加独立拒存计数,不进入快路径尝试/跳过率的分母。
 		// 内部显式返回拒绝,退出与交接必须保留源状态;对外 bool facade 仍只回答有没有排入写入。
-		LOG_ERROR << "[SavePlayerToRedis] Save refused (persisted component missing; nothing written, disk keeps the"
+		LOG_ERROR << "[SavePlayer] Save refused (persisted component missing; nothing written, disk keeps the"
 				  << " last successful save): entity=" << entt::to_integral(player) << " player_id=" << playerId
 				  << " allow_skip_when_persisted=" << allowSkipWhenPersisted
 				  << " exiting=" << tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player)
@@ -4711,7 +4692,7 @@ PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerToRedisImpl(
 	if (const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
 		travel != nullptr && travel->requestedAtMs != 0)
 	{
-		LOG_INFO << "[SavePlayerToRedis] skip: zone travel handoff already requested for player "
+		LOG_INFO << "[SavePlayer] skip: zone travel handoff already requested for player "
 				 << playerId << " (target_zone=" << travel->targetZoneId << ")";
 		return SaveResult::kHandoffAlreadyRequested;
 	}
@@ -4723,7 +4704,7 @@ PlayerLifecycleSystem::SaveResult PlayerLifecycleSystem::SavePlayerToRedisImpl(
 	// effectiveness.
 	dirty_save_stats::IncTotal();
 
-	return SavePlayerDirect(player, playerId, message, allowSkipWhenPersisted);
+	return SubmitPlayerSave(player, playerId, message, allowSkipWhenPersisted);
 }
 
 void PlayerLifecycleSystem::HandlePlayerSaveRejected(Guid playerId, const std::string &redisKey, const std::string &rejectedEpoch)
@@ -4741,7 +4722,7 @@ void PlayerLifecycleSystem::HandlePlayerSaveRejected(Guid playerId, const std::s
 			LOG_WARN << "HandlePlayerSaveRejected: stale in-flight save rejected for player " << playerId
 					 << " key=" << redisKey << " rejected_epoch=" << rejectedEpoch
 					 << " current_epoch=" << currentEpoch << " — still the owner, re-saving with current epoch";
-			const auto saveResult = SavePlayerToRedisImpl(playerEntity, /*allowSkipWhenPersisted=*/true);
+			const auto saveResult = SavePlayerImpl(playerEntity, /*allowSkipWhenPersisted=*/true);
 			if (saveResult == SaveResult::kQueued)
 			{
 				return;
@@ -4845,7 +4826,7 @@ void PlayerLifecycleSystem::DisposeRefusedSave(Guid playerId, const char *exitRe
 		AbortTravelHandoff(playerId, handoffAbortReason);
 		return;
 	}
-	// 在线:保留实体,本次不落盘。标记已发出的交接不会走到这里:那之后 SavePlayerToRedisImpl 一律跳过存盘。
+	// 在线:保留实体,本次不落盘。标记已发出的交接不会走到这里:那之后 SavePlayerImpl 一律跳过存盘。
 }
 
 void PlayerLifecycleSystem::DestroyDeposedPlayer(Guid playerId, const char *reasonTag, bool routine)
@@ -4903,7 +4884,7 @@ void PlayerLifecycleSystem::DestroyDeposedPlayer(Guid playerId, const char *reas
 //                       ──▶ DispatchEnterSceneReply(号匹配在途换图)──▶ HandleSceneChangeEnterSceneReply
 //                       ──▶ StartTravelHandoff(目标 = 本 zone)
 //
-//   StartTravelHandoff:挂 PlayerTravelHandoffComp + PlayerFrozenComp ──▶ SavePlayerToRedis
+//   StartTravelHandoff:挂 PlayerTravelHandoffComp + PlayerFrozenComp ──▶ SavePlayer
 	//   最终存盘提交 ──▶ BeginTravelHandoff:同 Lua 把原 H 换成 F 并 SET handoff "{epoch}:{now}" EX 300
 //            ──▶ RequestTravelEnterScene:取号记到交接组件 → scene_manager.EnterScene(ZoneId=目标, SceneId, SceneConfId)
 //            ──▶ DispatchEnterSceneReply(调用捕获的身份匹配本代交接;非 0 回显逐字段核对)
@@ -5104,7 +5085,7 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	// 先冻结再存盘:冻结之后状态不再变,这次存盘(或快路径判定的"盘上已是同一份")才代表
 	// 玩家交接那一刻的最终态。同一玩家只发布最新快照的完成回调(PlayerStoreClient::Submit /
 	// OnSaved),所以冻结前还在途的周期存盘不会抢先触发 BeginTravelHandoff。
-	// frozenAtMs 另存一份局部值:下面存盘阶段看门狗要用它当代际,不隔着 SavePlayerToRedis 去读组件引用。
+	// frozenAtMs 另存一份局部值:下面存盘阶段看门狗要用它当代际,不隔着 SavePlayer 去读组件引用。
 	const int64_t frozenAtMs = static_cast<int64_t>(TimeSystem::NowMillisecondsUTC());
 	auto &frozen = tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	frozen.frozenAtMs = frozenAtMs;
@@ -5127,7 +5108,7 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	// 已排队由落地回调接手;只有已确认落盘相等才直接交接。拒绝保存不能借无回调分支写标记。
 	// BeginTravelHandoff 内部的失败分支(无 epoch / Redis 断连)会同步解冻并回 tip,这里仍返回
 	// "已受理":对调用方而言就是"受理后未成",与异步失败同一种形态。
-	auto saveResult = SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/true);
+	auto saveResult = SavePlayerImpl(player, /*allowSkipWhenPersisted=*/true);
 	if (saveResult == SaveResult::kRejected)
 	{
 		AbortTravelHandoff(playerId, "handoff save refused (persisted component missing)");
@@ -5138,7 +5119,7 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	// 重试,从不放弃):这时直接写标记,X 之后仍可能以当前 epoch 落地 —— 放行前落地,目标节点读到的就是 X;交接未成
 	// 而实体被不存盘销毁时,X 就成了永久状态。改走一次真实存盘:新值排在 X 之后(同 key 排队值永远比在途值新,完成回调
 	// 只对最新值发布),只有它落地才回调 HandlePlayerAsyncSaved → BeginTravelHandoff。这保证了"SET 发出 ⇒ Redis ⊇
-	// 冻结内存"(骨架 I1),放行路径也跟着受益。此刻 requestedAtMs 仍为 0,不会被 SavePlayerToRedisImpl 的
+	// 冻结内存"(骨架 I1),放行路径也跟着受益。此刻 requestedAtMs 仍为 0,不会被 SavePlayerImpl 的
 	// "交接已发起不得再写"跳过。
 	if (saveResult == SaveResult::kAlreadyPersisted && HasUnsettledPlayerSave(playerId))
 	{
@@ -5146,7 +5127,7 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 		LOG_INFO << "[ZoneTravel] handoff of player " << playerId
 				 << " matches its last persisted snapshot but still has an unsettled save; forcing a real save"
 				 << " before writing the handoff mark (metric=handoff_fastpath_forced)";
-		saveResult = SavePlayerToRedisImpl(player, /*allowSkipWhenPersisted=*/false);
+		saveResult = SavePlayerImpl(player, /*allowSkipWhenPersisted=*/false);
 		if (saveResult != SaveResult::kQueued)
 		{
 			// 包括持久组件缺失的拒绝:有未落地的存盘就不许写标记;
@@ -5691,7 +5672,7 @@ void PlayerLifecycleSystem::HandleSessionEndedRelease(Guid playerId, uint64_t ex
 				 << ")";
 		return;
 	}
-	// 标记写只能消费 save_barrier.handoff_fence 原件的 CAS(r2-lc#2,2026-10-23)。本节点完全不持有,手里没有缓存的原 H:
+	// 标记写只能消费 handoff_fence 原件的 CAS(r2-lc#2,2026-10-23)。本节点完全不持有,手里没有缓存的原 H:
 	// 先读现任原件,回调里确认它是本进程实例在期望 E 下的资格、且本节点仍完全不持有,才以它为原件写凭证
 	// (SendSessionEndedCredential;不按读到的 owner_epoch 现造资格)。
 	LOG_INFO << "[ReleaseFence] session-ended release: player " << playerId
@@ -5831,8 +5812,7 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
 		return;
 	}
 
-	auto &redis = tlsRedis.GetZoneRedis();
-	if (!redis || !redis->connected())
+	if (!tlsPlayerRedis.connected())
 	{
 		// 标记写不进去就等于没落盘凭证,fail-closed:不发 EnterScene,让玩家留在本节点重试。
 		AbortTravelHandoff(playerId, "zone redis not connected");
@@ -5848,7 +5828,7 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
 	const std::string key = player_ownership::HandoffRedisKey(playerId);
 	const std::string value = player_ownership::HandoffRedisValue(ownerEpoch, nowMs);
 	const std::string ownerKey = player_ownership::OwnerEpochRedisKey(playerId);
-	const std::string barrierKey = "player:{" + std::to_string(playerId) + "}:save_barrier";
+	const std::string handoffFenceKey = player_ownership::HandoffFenceRedisKey(playerId);
 	const std::string epochText = std::to_string(ownerEpoch);
 	const auto frozenAt = travel->frozenAtSteady;
 
@@ -5860,7 +5840,7 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
     }
     travel->requestedAtMs = nowMs;
 
-	const int ret = redis->command(
+	const int ret = tlsPlayerRedis.command(
 		[playerId, nowMs, frozenAt, originalHolder = travel->holderFence](hiredis::Hiredis *, redisReply *reply)
 		{
 			// 墙钟请求号之外再比单调冻结代次,旧连接 / 已退出 / 已重建的回包不能修改新交接。
@@ -5913,7 +5893,7 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
 		},
 		"EVAL %s 3 %b %b %b %b %b %d %b %b",
 		handoff_sql_barrier::kPublishMarkDirectLua.c_str(),
-		ownerKey.data(), ownerKey.size(), barrierKey.data(), barrierKey.size(), key.data(), key.size(),
+		ownerKey.data(), ownerKey.size(), handoffFenceKey.data(), handoffFenceKey.size(), key.data(), key.size(),
 		epochText.data(), epochText.size(), value.data(), value.size(), player_ownership::kHandoffMarkTtlSec,
         travel->holderFence.data(), travel->holderFence.size(), travel->publishedFence.data(), travel->publishedFence.size());
 	if (ret != REDIS_OK)
@@ -6140,8 +6120,7 @@ void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t request
 		cachedEpoch = epochComp->epoch;
 	}
 
-	auto &redis = tlsRedis.GetZoneRedis();
-	if (!redis || !redis->connected())
+	if (!tlsPlayerRedis.connected())
 	{
 		// 判不清就不解冻。玩家保持冻结(他可以断线,退出优先),Redis 恢复后下一轮看门狗再判。
 		LOG_ERROR << "[ZoneTravel] cannot verify travel outcome for player " << playerId << " (" << reason
@@ -6158,7 +6137,7 @@ void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t request
 	const std::string reasonText = reason;
 	// 一次 EVAL 完成取证:只删本次交接这一族标记 → 读 owner_epoch 与 location(脚本与"为什么"见
 	// travel_outcome::kLuaJudgeTravelOutcome)。删除与读取在同一段原子脚本里,取代了改动前"同一条不重放连接上先 DEL
-	// 后 MGET"的顺序保证(不变量 I0 机制 2);以后若拆回两条命令,必须走不重放的同一连接。
+	// 后 MGET"的顺序保证(不变量 I0 机制 2);以后若拆回两条命令,必须同 slot 且不重放(tlsPlayerRedis 的路由层满足这两条)。
 	// 回调只按值捕获 id + 代际 + 缓存 epoch + 原因文本 + 证据,回调里按 id 回查实体(§11.7,不绑对象)。
 	// 脚本串作为一个 %s 参数传入是安全的:hiredis 只按**格式串**里的空格切参数(同 SendHandoffWithdraw);
 	// 脚本里的 %d 是 Lua 的模式字符,不经 hiredis 格式化。
@@ -6169,15 +6148,15 @@ void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t request
     }
     const auto originalHolder = travel->holderFence;
     const auto published = travel->publishedFence.empty() ? originalHolder : travel->publishedFence;
-    const std::string barrierKey = "player:{" + std::to_string(playerId) + "}:save_barrier";
-    const int ret = redis->command(
+    const std::string handoffFenceKey = player_ownership::HandoffFenceRedisKey(playerId);
+    const int ret = tlsPlayerRedis.command(
         [playerId, requestedAtMs, cachedEpoch, reasonText, originalHolder, dispatchedEvidence = evidence](hiredis::Hiredis*, redisReply* reply) {
             const auto entity = tlsEcs.GetPlayer(playerId);
             const auto* pending = tlsEcs.actorRegistry.valid(entity) ? tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(entity) : nullptr;
             if (!pending || pending->holderFence != originalHolder) return;
             JudgeTravelOutcomeReply(playerId, requestedAtMs, cachedEpoch, reasonText, dispatchedEvidence, reply);
         }, "EVAL %s 4 %s %s %s %s %b %b %b %s", travel_outcome::kLuaJudgeTravelOutcome.c_str(),
-        epochKey.c_str(), barrierKey.c_str(), handoffKey.c_str(), locationKey.c_str(),
+        epochKey.c_str(), handoffFenceKey.c_str(), handoffKey.c_str(), locationKey.c_str(),
         originalHolder.data(), originalHolder.size(), published.data(), published.size(),
         travel->revokedFence.data(), travel->revokedFence.size(), requestedAtText.c_str());
 	if (ret != REDIS_OK)
@@ -6833,13 +6812,12 @@ void PlayerLifecycleSystem::ResumeTravelAfterRevocation(Guid playerId, uint64_t 
     }
     if (targetEpoch != travel->resumeOwnerEpoch || originalLocation != travel->resumeLocation) return;
     const auto next = std::optional<std::string>(travel->resumeFence);
-    auto& redis = tlsRedis.GetZoneRedis();
-    if (!next || !redis || !redis->connected()) return;
+    if (!next || !tlsPlayerRedis.connected()) return;
     const auto original = travel->holderFence;
     const auto revoked = travel->revokedFence;
     const auto frozenAt = travel->frozenAtSteady;
     travel->cancellationPending = true;
-    const int sent = redis->command([playerId, entity, original, frozenAt, targetEpoch, oldEpoch, next = *next, reason, evidence]
+    const int sent = tlsPlayerRedis.command([playerId, entity, original, frozenAt, targetEpoch, oldEpoch, next = *next, reason, evidence]
         (hiredis::Hiredis*, redisReply* reply) {
         if (tlsEcs.GetPlayer(playerId) != entity || !tlsEcs.actorRegistry.valid(entity)) return;
         auto* pending = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(entity);
@@ -6851,9 +6829,9 @@ void PlayerLifecycleSystem::ResumeTravelAfterRevocation(Guid playerId, uint64_t 
         pending->revokedFence = next; pending->markEpoch = 0;
         if (targetEpoch != oldEpoch) travel_handoff_stats::Inc(travel_handoff_stats::Get().rolledBackAdopted);
         AbortTravelHandoff(playerId, reason.c_str(), evidence != travel_outcome::Evidence::kSucceeded);
-        if (targetEpoch != oldEpoch) SavePlayerToRedisImpl(entity, false);
+        if (targetEpoch != oldEpoch) SavePlayerImpl(entity, false);
     }, "EVAL %s 4 %s %s %s %s %b %b %s %b", handoff_sql_barrier::kResumeFenceLua.c_str(),
-        player_ownership::OwnerEpochRedisKey(playerId).c_str(), ("player:{" + std::to_string(playerId) + "}:save_barrier").c_str(),
+        player_ownership::OwnerEpochRedisKey(playerId).c_str(), player_ownership::HandoffFenceRedisKey(playerId).c_str(),
         player_ownership::HandoffRedisKey(playerId).c_str(), player_ownership::LocationRedisKey(playerId).c_str(),
         revoked.data(), revoked.size(), next->data(), next->size(), std::to_string(targetEpoch).c_str(),
         originalLocation.data(), originalLocation.size());
@@ -6887,8 +6865,7 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
             mutableTravel->cancellationNotifyFailure = notifyFailure;
         }
         const auto next = std::optional<std::string>(mutableTravel->cancelFence);
-        auto& redis = tlsRedis.GetZoneRedis();
-        if (!next || !redis || !redis->connected()) return; // 保持冻结，不以TTL推断撤销成功。
+        if (!next || !tlsPlayerRedis.connected()) return; // 保持冻结，不以TTL推断撤销成功。
         mutableTravel->cancellationPending = true;
         const auto original = travel->holderFence;
         const auto published = travel->publishedFence.empty() ? original : travel->publishedFence;
@@ -6896,7 +6873,7 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
         const auto frozenAt = travel->frozenAtSteady;
         const std::string reasonText = mutableTravel->cancellationReason;
         notifyFailure = mutableTravel->cancellationNotifyFailure;
-        const int sent = redis->command([playerId, playerEntity, original, next = *next, frozenAt, reasonText, notifyFailure]
+        const int sent = tlsPlayerRedis.command([playerId, playerEntity, original, next = *next, frozenAt, reasonText, notifyFailure]
             (hiredis::Hiredis*, redisReply* reply) {
             if (tlsEcs.GetPlayer(playerId) != playerEntity || !tlsEcs.actorRegistry.valid(playerEntity)) return;
             auto* pending = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
@@ -6910,7 +6887,7 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
             AbortTravelHandoff(playerId, reasonText.c_str(), notifyFailure);
         }, "EVAL %s 3 %s %s %s %b %b %b %s", handoff_sql_barrier::kRevokeFenceLua.c_str(),
             player_ownership::OwnerEpochRedisKey(playerId).c_str(),
-            ("player:{" + std::to_string(playerId) + "}:save_barrier").c_str(), player_ownership::HandoffRedisKey(playerId).c_str(),
+            player_ownership::HandoffFenceRedisKey(playerId).c_str(), player_ownership::HandoffRedisKey(playerId).c_str(),
             original.data(), original.size(), published.data(), published.size(), next->data(), next->size(), std::to_string(stamp).c_str());
         if (sent != REDIS_OK) mutableTravel->cancellationPending = false;
         return;

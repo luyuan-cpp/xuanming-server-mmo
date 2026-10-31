@@ -96,9 +96,12 @@ Client must redo WeChat/QQ OAuth flow from scratch.
 
 | Key Pattern | Value | TTL | Purpose |
 |-------------|-------|-----|---------|
-| `access_token:{token}` | JSON `{account, auth_type, device_id, created_at}` | 2h | Access token lookup |
-| `refresh_token:{token}` | JSON `{account, auth_type, device_id, created_at}` | 30d | Refresh token lookup |
-| `account_refresh:{account}` | SET of refresh token strings | 30d | Bulk revocation (password change) |
+| `access_token:{<tag>}:<secret>` | JSON `{account, auth_type, device_id, created_at, family_id}` | 2h | Access token lookup |
+| `refresh_token:{<tag>}:<secret>` | JSON `{account, auth_type, device_id, created_at, family_id}` | 30d | Refresh token lookup |
+| `refresh_family:{<tag>}:<id>` | HASH `{account, head, created_at, rotated_at}` | 30d | Family revocation |
+| `account_refresh:{<tag>}:<account>` | ZSET of refresh secrets, score = expiry | 30d | Bulk revocation (password change) |
+
+2026-10-31 起令牌字符串是 `<tag>.<secret>`,`<tag>` 是账号的 `AccountTag`,一个账号的键全部同槽,见 [redis-player-store-cluster.md](./redis-player-store-cluster.md) §10.2。对客户端仍是不透明串。
 
 ## Security Properties
 

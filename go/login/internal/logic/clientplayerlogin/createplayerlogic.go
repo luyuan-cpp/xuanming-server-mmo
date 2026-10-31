@@ -18,6 +18,7 @@ import (
 	"shared/generated/pb/table"
 	gametable "shared/generated/table"
 	"shared/playername"
+	"shared/redisslot"
 	"strconv"
 	"time"
 
@@ -76,10 +77,16 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionIdNotFound)}
 		return resp, nil
 	}
+	sessionRef, hasIdentity := loginsession.RefOf(sessionDetails)
+	if !hasIdentity {
+		logMissingConnectionIdentity("CreatePlayer", sessionDetails)
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionIdNotFound)}
+		return resp, nil
+	}
 
 	// 2. Get account —— 只认本条 gate 连接的登录态(loginsession.RefOf):没在这条连接上成功 Login 过就拒绝,
 	//    不会因 gate 重启撞号而读到上一个 gate 进程同号连接的账号(审计 data-overwrite-rollback-audit-20261018.md §2.3)。
-	account, err := loginsession.GetAccount(l.ctx, l.svcCtx.RedisClient, loginsession.RefOf(sessionDetails))
+	account, err := loginsession.GetAccount(l.ctx, l.svcCtx.LoginRedis, sessionRef)
 	if err != nil {
 		logGetAccountFailure("CreatePlayer", sessionDetails, err)
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionNotFound)}
@@ -87,8 +94,8 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	}
 
 	// 3. Lock (UUID + Lua safe release — prevents concurrent character creation)
-	createLock, err := locker.NewRedisLocker(l.svcCtx.RedisClient).TryLock(
-		l.ctx, "account_lock:create:"+account,
+	createLock, err := locker.NewRedisLocker(l.svcCtx.LoginRedis).TryLock(
+		l.ctx, redisslot.AccountCreateLockKey(account),
 		time.Duration(config.AppConfig.Locker.AccountLockTTL)*time.Second,
 	)
 	if err != nil || !createLock.IsLocked() {
@@ -581,7 +588,7 @@ func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locke
 		return loginTip(table.LoginError_kLoginDataSerializeFailed)
 	}
 	playerID, name := role.PlayerId, role.Name
-	if token, err := l.svcCtx.RedisClient.Get(l.ctx, createLock.Key).Result(); err != nil || token != createLock.Value {
+	if token, err := l.svcCtx.LoginRedis.Get(l.ctx, createLock.Key).Result(); err != nil || token != createLock.Value {
 		l.releaseName(account, playerID, name, false)
 		return loginTip(table.LoginError_kLoginInProgress)
 	}
@@ -620,9 +627,8 @@ func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locke
 // 稍后重试」),客户端对它的处理正是我们要的;而 Tip 码轴按段由导表器发号,
 // 这里不手写数字、也不为这一个分支去申请新码。
 //
-// 落点(docs/design/player-storage-placement.md §8.3):Placement.PinOnCreate 打开时,
-// 同一次 RPC 带上 storage_id,由 data_service 与 player:zone 原子一起钉落点;关着时 storage_id=0,
-// 请求与落点设计之前逐字节相同。钉落点失败与登记失败是同一次写,自然同样 fail-closed。
+// 落点(docs/design/player-storage-placement.md §8.3):同一次 RPC 带上 storage_id,由 data_service 和归属
+// 写进 player_route 的同一行。钉落点失败与登记失败是同一次写,自然同样 fail-closed。
 func (l *CreatePlayerLogic) registerHomeZone(account string, playerID uint64) *login_proto_common.TipInfoMessage {
 	zone := config.AppConfig.Node.ZoneId
 	storageID := config.AppConfig.Placement.StorageIDForNewPlayer(zone)

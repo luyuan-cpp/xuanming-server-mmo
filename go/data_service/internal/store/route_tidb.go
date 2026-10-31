@@ -43,7 +43,7 @@ var routeTiDBClusteredTables = []string{PlayerRouteTableName}
 // RouteTiDBPrepareRequest 是 tidb-prepare 的入参。
 type RouteTiDBPrepareRequest struct {
 	Zones    []uint32 // 必填,每个在 [1, RouteHomeZoneMax];去重升序后使用;上限 RouteBatchLimit 个
-	Storages []uint32 // 可空,每个 ≥ 1;去重升序(Phase 2 PinOnCreate 指向 1000000 时传 1000000)
+	Storages []uint32 // 可空,每个 ≥ 1;去重升序(新角色落点配成 1000000 时传 1000000)
 	DryRun   bool     // true:只判引擎、核对聚簇、列出语句,一条 ALTER / SPLIT 都不发
 }
 
@@ -73,7 +73,7 @@ func (r RouteTiDBPrepareReport) SplitRegions() int64 {
 }
 
 // PrepareTiDB:校验入参 → 判引擎(MySQL 直接 Skipped)→ 核对表是聚簇主键(ErrRouteTiDBNotClustered,
-// dry-run 同样核对,只读)→ ATTRIBUTES ×1 → SPLIT ×(2 + zones + storages)。
+// dry-run 同样核对,只读)→ ATTRIBUTES ×1 → SPLIT ×(1 + zones + storages)。
 // 入参非法一律 ErrRouteInvalidArgument,一条语句都不发。中途失败返回已执行的步骤 + error(带第几步与语句)。
 func (s *RouteStore) PrepareTiDB(ctx context.Context, req RouteTiDBPrepareRequest) (RouteTiDBPrepareReport, error) {
 	zones, storages, err := normalizeRouteTiDBPrepareIDs(req.Zones, req.Storages)
@@ -169,16 +169,14 @@ var _ = [1]struct{}{}[placement.RouteRowShards%routeTiDBPrefixSplitPoints]
 //
 //	ATTRIBUTES player_route(先防合并再切)
 //	player_route 行数据:(s, 0),s = 1..63                               → 64 段,每片一段
-//	idx_route_updated:(s, 0, 0),s = 1..63                               → 64 段,每片一段
 //	idx_route_home:每个 zone 一条 (z, s, 0),s = 0、8、…、56            → 每 zone 8 段、每段 8 片(s=0 那个点同时隔开相邻 zone)
 //	idx_route_storage:每个 storage 一条 (sid, s, 0),s = 0、8、…、56    → 每个落点值 8 段、每段 8 片
 //
-// 行数据与 idx_route_updated 为什么仍然每片一段:这两条的切点数是常数(各 63 个),不乘 zone 数;容量模型 §4.1
-// 点名要降密度的只有「每 zone 预切」,提案 H8 担心的也只是 Z 上百时 idx_route_home 的空 Region 数。对这两条没有
-// 现成的结论,取「每条写入尾部独占一个 Region」这一档(与 16 片时相同)。Region 总数 ≈ 63 + 63 + 8·Z + 8·S。
+// 行数据为什么仍然每片一段:它的切点数是常数(63 个),不乘 zone 数;容量模型 §4.1 点名要降密度的只有「每 zone 预切」,
+// 提案 H8 担心的也只是 Z 上百时 idx_route_home 的空 Region 数。对行数据没有现成的结论,取「每条写入尾部独占一个 Region」
+// 这一档(与 16 片时相同)。Region 总数 ≈ 63 + 8·Z + 8·S。
 //
-// 不切 idx_route_storage 的 NULL 前缀段(PinOnCreate=false 时新号 storage 为 NULL):`SPLIT … BY (NULL, …)` 的写法
-// 未核实,且这一段要等 Phase 2 打开 PinOnCreate 后才有写入尾部,届时按 -storages 1000000 切。
+// 不切 idx_route_storage 的 NULL 前缀段:建角恒写落点,这一段没有写入。
 // 片的上界只用 placement.RouteRowShards、间隔只用 routeTiDBPrefixSplitStride,不写字面量。
 func routeTiDBPrepareStatements(zones, storages []uint32) []string {
 	const route = "`" + PlayerRouteTableName + "`"
@@ -191,12 +189,6 @@ func routeTiDBPrepareStatements(zones, storages []uint32) []string {
 		tuples = append(tuples, "("+u32(sh)+", 0)")
 	}
 	stmts = append(stmts, "SPLIT TABLE "+route+" BY "+strings.Join(tuples, ", "))
-
-	tuples = tuples[:0]
-	for sh := uint32(1); sh < placement.RouteRowShards; sh++ {
-		tuples = append(tuples, "("+u32(sh)+", 0, 0)")
-	}
-	stmts = append(stmts, "SPLIT TABLE "+route+" INDEX `idx_route_updated` BY "+strings.Join(tuples, ", "))
 
 	prefixed := func(index string, lead uint32) string {
 		parts := make([]string, 0, routeTiDBPrefixSplitPoints)

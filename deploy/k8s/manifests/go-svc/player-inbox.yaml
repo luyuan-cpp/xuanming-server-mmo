@@ -3,7 +3,7 @@
 #
 # **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
 # 每 (玩家, 域) 一条有序邮箱,按全局唯一的 player_id 存,合服不需要重映射(设计 §8 #17)。
-# k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,infra-up / all-up 在基础设施阶段部署。
+# k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,infra-up / all-up 部署:ConfigMap 与迁移 Job 在基础设施阶段,进程排在第一个 zone 的 data-service 之后(见 k8s_deploy.ps1 的 Apply-GlobalGoSvcManifests)。
 # ConfigMap go-svc-player-inbox-config 由脚本生成(New-GoSvcConfigMapYaml 的 "player-inbox" 分支)。
 #
 # 调用方(都不是客户端,与 -GateRouterMode 无关):
@@ -125,6 +125,10 @@ spec:
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
             - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
               value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
+            # scene 拉取(FetchItems / AckItems)的请求签名,缺失拒启(server.NewConsumerVerifier)。
+            - name: MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: account-directory-scene, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
             # C++ 约定注册(PlayerInboxNodeService.rpc)写进 NodeInfo 的对外 IP:ListenOn 是 0.0.0.0,不能原样写;

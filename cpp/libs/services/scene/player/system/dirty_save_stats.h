@@ -3,9 +3,9 @@
 #include <atomic>
 #include <cstdint>
 
-// Dirty-save statistics for the proto-compare fast-path in SavePlayerToRedis.
+// Dirty-save statistics for the proto-compare fast-path in SavePlayer.
 //
-// Background: SavePlayerToRedis (player_lifecycle.cpp) compares the freshly
+// Background: SavePlayer (player_lifecycle.cpp) compares the freshly
 // marshaled PlayerAllData against PlayerLastPersistedSnapshotComp via
 // dirty_save::IsEqual; on a match the entire save (one player_store commit)
 // is skipped. This is a sizable write-traffic win during idle /
@@ -14,7 +14,7 @@
 //
 // We need numbers, not vibes — these counters expose the skip rate so we
 // can prove the optimization fires under stress. Two counters:
-//   * total   — every SavePlayerToRedis call that reaches the fast-path
+//   * total   — every SavePlayer call that reaches the fast-path
 //               check (i.e. valid entity, marshaled OK; pre-condition
 //               failures don't count)
 //   * skipped — calls that returned early because IsEqual matched the
@@ -22,7 +22,7 @@
 //
 // Skip ratio = skipped / total.
 //
-// save_marshal_refused 单独统计 SavePlayerToRedisImpl 因缺少有效 Guid 或持久组件,
+// save_marshal_refused 单独统计 SavePlayerImpl 因缺少有效 Guid 或持久组件,
 // 无法组装完整存盘消息而拒绝的次数。它不计入 total/skipped,不计相等跳过、交接跳过,
 // 也不计已经失效的实体,不带任何玩家维度。进程启动以来累计,由同一 30s 定时器汇总。
 //

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"login/internal/config"
-	"login/internal/constants"
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/ctxkeys"
 	"login/internal/logic/pkg/homezone"
@@ -19,9 +18,9 @@ import (
 	login_proto_data_base "proto/common/database"
 	login_proto "proto/login"
 	"shared/generated/pb/table"
+	"shared/redisslot"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -75,6 +74,18 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		return resp, nil
 	}
 
+	// 经 gate 转发的请求必须带完整的连接身份(实例号 + 会话代次),登录态和栅栏都按它建键。
+	// 没有就拒绝,在认证之前:第三方 code 不被消费,不抢账号锁,什么都不写。
+	var sessionRef loginsession.Ref
+	if path != loginPathHTTP {
+		var hasIdentity bool
+		if sessionRef, hasIdentity = loginsession.RefOf(sessionDetails); !hasIdentity {
+			logMissingConnectionIdentity("Login", sessionDetails)
+			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionIdNotFound)}
+			return resp, nil
+		}
+	}
+
 	// Resolve account via auth provider
 	account, err := l.resolveAccount(in)
 	if err != nil {
@@ -85,7 +96,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	}
 
 	// 1. Distributed lock (UUID + Lua safe release)
-	accountLock, err := locker.NewRedisLocker(l.svcCtx.RedisClient).TryLock(
+	accountLock, err := locker.NewRedisLocker(l.svcCtx.LoginRedis).TryLock(
 		l.ctx, accountLoginLockKey(account),
 		time.Duration(config.AppConfig.Locker.AccountLockTTL)*time.Second,
 	)
@@ -136,68 +147,40 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		return resp, nil
 	}
 
-	if !sessionFound || sessionDetails.SessionId <= 0 {
-		logx.Error("SessionId not found in context during login")
-		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionIdNotFound)}
+	logx.Infof("Login start: account=%s sessionId=%d", account, sessionDetails.SessionId)
+
+	deviceSetKey := redisslot.AccountDeviceSetKey(account)
+
+	// 3. 登录提交分两步,登录态按连接分布、设备集按账号分布,不同槽(两步之间的结局见 loginsession 包注释)。
+	//
+	// Self-heal 在提交前做:剔除登录态已不存在的设备集条目,吸收 Gate→login.Disconnect 还在途时就重连的竞态,
+	// 否则快速重连会被陈旧条目顶到 MaxDevicesPerAccount。
+	loginsession.PruneStaleFromDeviceSet(l.ctx, l.svcCtx.LoginRedis, deviceSetKey)
+
+	// 第 1 步,gate 连接会话栅栏(docs/design/client-request-ordering.md §6.2):「连接未关闭」的检查与写 login_session
+	// 在同一段脚本里。gate 合成的 Disconnect 可能抢在这条仍在途的 Login 之前执行,没有这道检查时 Login 晚落地会留下
+	// 没人清理的登录态(最长 SessionExpireMin),还可能误触设备数上限。
+	if err := sessionfence.CommitLogin(l.ctx, l.svcCtx.LoginRedis, sessionRef.Fence(), account, loginsession.TTL()); err != nil {
+		if errors.Is(err, sessionfence.ErrClosed) {
+			// 连接已断开,回包也送不到;什么都没写。
+			logx.Infof("Login skipped: gate connection already closed sessionId=%d account=%s", sessionDetails.SessionId, account)
+			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionNotFound)}
+			return resp, nil
+		}
+		logx.Errorf("Login commit failed: sessionId=%d account=%s err=%v", sessionDetails.SessionId, account, err)
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
 		return resp, nil
 	}
 
-	logx.Infof("Login start: account=%s sessionId=%d", account, sessionDetails.SessionId)
-
-	sessionKey := constants.GenerateSessionKey(account)
-	expire := time.Duration(config.AppConfig.Node.SessionExpireMin) * time.Minute
-	// 登录态按 gate 连接建键(gate_instance_id + session_incarnation),不再只按 session_id:
-	// gate 重启后序号从 0 开始,只按 session_id 会让新连接继承旧进程留下的登录态(loginsession 包注释)。
-	sessionRef := loginsession.RefOf(sessionDetails)
-
-	if fenceKey, fenced := sessionfence.KeyOf(sessionDetails); fenced {
-		// 3+4. gate 连接会话栅栏(docs/design/client-request-ordering.md §6.2):「连接未关闭」的检查与
-		// 写 login_session、登记设备集放在同一段脚本里。gate 合成的 Disconnect 可能抢在这条仍在途的 Login 之前执行,
-		// 原先 Login 晚落地会留下没人清理的 login_session 与设备集条目(最长 SessionExpireMin),还可能误触设备数上限。
-		//
-		// Self-heal 照旧在提交前做:剔除 login_session 已不存在的设备集条目。
-		loginsession.PruneStaleFromDeviceSet(l.ctx, l.svcCtx.RedisClient, sessionKey)
-		if err := sessionfence.CommitLogin(l.ctx, l.svcCtx.RedisClient, fenceKey,
-			sessionRef.WriteKeys(), account, loginsession.TTL(),
-			sessionKey, sessionRef.DeviceMember(), expire); err != nil {
-			if errors.Is(err, sessionfence.ErrClosed) {
-				// 连接已断开,回包也送不到;什么都没写。
-				logx.Infof("Login skipped: gate connection already closed sessionId=%d account=%s", sessionDetails.SessionId, account)
-				resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionNotFound)}
-				return resp, nil
-			}
-			logx.Errorf("Login commit failed: sessionId=%d account=%s err=%v", sessionDetails.SessionId, account, err)
-			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
-			return resp, nil
-		}
-	} else {
-		// 旧版 gate(没有会话代次):沿用原先的两步写,登录态仍按 session_id 建键(计入 loginsession_legacy_key_total)。
-		// 3. Save login session (stores account for this session in Redis)
-		if err := loginsession.Save(l.ctx, l.svcCtx.RedisClient, sessionRef, account); err != nil {
-			logx.Errorf("Login save failed: sessionId=%d account=%s err=%v", sessionDetails.SessionId, account, err)
-			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
-			return resp, nil
-		}
-
-		// 4. Enforce device limit
-		// Self-heal: drop any device-set entries whose login_session:{id} key has
-		// already been cleaned up. This absorbs the Gate→login.Disconnect race
-		// that would otherwise trip MaxDevicesPerAccount under rapid reconnect.
-		loginsession.PruneStaleFromDeviceSet(l.ctx, l.svcCtx.RedisClient, sessionKey)
-
-		_, err = l.svcCtx.RedisClient.TxPipelined(l.ctx, func(pipe redis.Pipeliner) error {
-			pipe.SAdd(l.ctx, sessionKey, sessionRef.DeviceMember())
-			pipe.Expire(l.ctx, sessionKey, expire)
-			return nil
-		})
-		if err != nil {
-			logx.Errorf("Device set pipeline failed: sessionKey=%s err=%v", sessionKey, err)
-			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
-			return resp, nil
-		}
+	// 第 2 步,登记设备集。失败按 Redis 故障回失败,已写下的登录态随 TTL 过期。
+	if err := loginsession.RegisterDevice(l.ctx, l.svcCtx.LoginRedis, account, sessionRef, loginsession.TTL()); err != nil {
+		logx.Errorf("Login device set update failed: sessionId=%d account=%s err=%v", sessionDetails.SessionId, account, err)
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
+		return resp, nil
 	}
 
-	count, err := l.svcCtx.RedisClient.SCard(l.ctx, sessionKey).Result()
+	// 4. Enforce device limit
+	count, err := l.svcCtx.LoginRedis.SCard(l.ctx, deviceSetKey).Result()
 	if err != nil {
 		logx.Errorf("SCard error: %v", err)
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
@@ -405,7 +388,7 @@ func resolvePasswordAccount(ctx context.Context, in *login_proto.LoginRequest, p
 // accountLoginLockKey 是 Login 认证之后按账号互斥的分布式锁 key。单独成函数是为了让测试按同一个 key
 // 断言「被 kill switch 拒绝的请求不抢账号锁」,key 改名时断言跟着走,不会悄悄变成空转。
 func accountLoginLockKey(account string) string {
-	return "account_lock:login:" + account
+	return redisslot.AccountLoginLockKey(account)
 }
 
 // issueTokens generates an access/refresh token pair for the authenticated account.

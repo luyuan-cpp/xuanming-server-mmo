@@ -129,6 +129,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-build-image `
 
 本机完整开发栈入口为 `deploy/debug/compose.game.yml`，调试覆盖为同目录 `compose.debug.yml`。它包含 15 个常驻服务与 3 个初始化任务，使用独立网络及持久卷；不复用已有容器或历史演示数据。只启用登录、建角、主世界进场和战斗所需的服务。
 
+（2026-10-31 补）SQL 写者接了写者授权：每个写者前有一次性注册步骤 `<服务>-sql-boot`，初始化任务相应变多，首次要多构建一个 `local/mmorpg-sql-boot` 镜像；重启写者要连注册步骤一起重建。操作见 [`tools/scripts/README.md`](../../tools/scripts/README.md) 的 prepare_docker_debug.py 一节。
+
 在仓库根准备配置：
 
 ```powershell

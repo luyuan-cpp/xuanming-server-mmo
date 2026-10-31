@@ -40,7 +40,8 @@ const (
 
 // AppliedOpsQuery 是 ListAppliedAssetOpsSince 的查询条件(server 层已校验、已把 limit 的 0 换成默认值)。
 type AppliedOpsQuery struct {
-	// ZoneID:0 = 不按 zone 收窄;非 0 时 LEFT JOIN guild,保留本 zone 与已解散帮会(guild 行已删)的行(07 §7.4.3)。
+	// ZoneID:0 = 不按 zone 收窄;非 0 时 LEFT JOIN guild,保留本 zone(含合进来的原始区,GuildRepo.ZoneMembers)
+	// 与已解散帮会(guild 行已删)的行(07 §7.4.3)。
 	ZoneID uint32
 	// PlayerIDs:1..MaxAppliedOpsPlayerIDs 个。去零、去重由 server 层保证(重复只会让 IN 列表冗余,不改结果)。
 	PlayerIDs []uint64
@@ -62,32 +63,35 @@ const (
 	// 两个状态占位符依次绑 APPLIED、APPLIED_PARTIAL(appliedOpsArgs)。
 	sqlAppliedOpsWhereHead = " WHERE o.`status` IN (?, ?) AND o.`next_attempt_ms` > ? AND o.`player_id` IN ("
 	sqlAppliedOpsWhereTail = ") AND o.`op_id` > ?"
-	// 仅 zone_id != 0:g.guild_id IS NULL = 帮会已解散,照样保留。
-	sqlAppliedOpsZoneFilter = " AND (g.zone_id = ? OR g.guild_id IS NULL)"
+	// 仅 zone_id != 0:g.guild_id IS NULL = 帮会已解散,照样保留。公会行记的是建帮时的原始区,合服不改写,所以按一组原始区查。
+	sqlAppliedOpsZoneFilterHead = " AND (g.zone_id IN ("
+	sqlAppliedOpsZoneFilterTail = ") OR g.guild_id IS NULL)"
 	// 多取一行(limit+1)只用来判断"还有没有下一页",不返回给调用方。
 	sqlAppliedOpsOrderLimit = " ORDER BY o.`op_id` ASC LIMIT ?"
 )
 
-// appliedOpsSQL 按玩家数与是否按 zone 收窄拼出完整语句。只拼结构,不拼任何值(值全部走占位符)。
-func appliedOpsSQL(playerCount int, byZone bool) string {
+// appliedOpsSQL 按玩家数与要匹配的原始区数(0 = 不按 zone 收窄)拼出完整语句。只拼结构,不拼任何值(值全部走占位符)。
+func appliedOpsSQL(playerCount, zoneCount int) string {
 	var b strings.Builder
 	b.WriteString(sqlAppliedOpsSelect)
-	if byZone {
+	if zoneCount > 0 {
 		b.WriteString(sqlAppliedOpsZoneJoin)
 	}
 	b.WriteString(sqlAppliedOpsWhereHead)
 	b.WriteString(placeholders(playerCount))
 	b.WriteString(sqlAppliedOpsWhereTail)
-	if byZone {
-		b.WriteString(sqlAppliedOpsZoneFilter)
+	if zoneCount > 0 {
+		b.WriteString(sqlAppliedOpsZoneFilterHead)
+		b.WriteString(placeholders(zoneCount))
+		b.WriteString(sqlAppliedOpsZoneFilterTail)
 	}
 	b.WriteString(sqlAppliedOpsOrderLimit)
 	return b.String()
 }
 
-// appliedOpsArgs 与 appliedOpsSQL 的占位符一一对应。
-func appliedOpsArgs(q AppliedOpsQuery) []any {
-	args := make([]any, 0, len(q.PlayerIDs)+6)
+// appliedOpsArgs 与 appliedOpsSQL 的占位符一一对应。zones 是要匹配的原始区,空 = 不按 zone 收窄。
+func appliedOpsArgs(q AppliedOpsQuery, zones []uint32) []any {
+	args := make([]any, 0, len(q.PlayerIDs)+len(zones)+5)
 	args = append(args,
 		uint32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED),
 		uint32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL),
@@ -96,8 +100,8 @@ func appliedOpsArgs(q AppliedOpsQuery) []any {
 		args = append(args, id)
 	}
 	args = append(args, q.AfterOpID)
-	if q.ZoneID != 0 {
-		args = append(args, q.ZoneID)
+	for _, zone := range zones {
+		args = append(args, zone)
 	}
 	return append(args, q.Limit+1)
 }
@@ -117,7 +121,11 @@ func (s *GuildAssetStore) ListAppliedAssetOpsSince(ctx context.Context, q Applie
 		return nil, 0, fmt.Errorf("list applied %s: %w", guildAssetOpTable, err)
 	}
 
-	rows, err := s.db.QueryContext(ctx, appliedOpsSQL(len(q.PlayerIDs), q.ZoneID != 0), appliedOpsArgs(q)...)
+	var zones []uint32
+	if q.ZoneID != 0 {
+		zones = s.guilds.ZoneMembers(q.ZoneID)
+	}
+	rows, err := s.db.QueryContext(ctx, appliedOpsSQL(len(q.PlayerIDs), len(zones)), appliedOpsArgs(q, zones)...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list applied %s: %w", guildAssetOpTable, err)
 	}

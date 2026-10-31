@@ -26,11 +26,11 @@ func TestConnectionAccountUsesOriginalGateIncarnationAndPreservesAccountBytes(t 
 	account, err := Account(context.Background(), r, in)
 	require.NoError(t, err)
 	require.Equal(t, " Seller 中文 ", account)
-	require.Equal(t, "login_session:original-gate:19", r.key)
+	require.Equal(t, "login_session:{original-gate:19}", r.key)
 	in.SessionId = 8
 	_, err = Account(context.Background(), r, in)
 	require.NoError(t, err)
-	require.Equal(t, "login_session:original-gate:19", r.key)
+	require.Equal(t, "login_session:{original-gate:19}", r.key)
 }
 func TestLegacyOrMissingConnectionCannotBorrowSessionIDKey(t *testing.T) {
 	for _, in := range []*base.SessionDetails{nil, {SessionId: 7}, {SessionId: 7, GateInstanceId: "g"}, {SessionId: 7, SessionIncarnation: 1}} {

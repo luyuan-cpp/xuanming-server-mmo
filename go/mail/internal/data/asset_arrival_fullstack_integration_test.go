@@ -15,7 +15,7 @@ package data
 //
 // 玩家必须由外部专用机器人登录并保持在线/空闲，背包有空位、无欠款/冻结/战斗/交接，
 // 不得同时领取正式邮件或参与其他奖励。scene 须加载相同物品表、MAIL 密钥与真实 item 号段；
-// home zone 的 DB 须为 dual 且指向 TiDB，DataService 须提供 SQL 证据。
+// 玩家存档须在 TiDB 的 player_store，DataService 须提供 SQL 证据。
 // ID 使用正式 DataService 的 mail/mail_asset_op 号源；它们全局唯一，不复用假 ID。
 // 本次随机业务库首次建流使用正式的建行毫秒纪元；不能与正式 mail 共用这个专用角色。
 // 未开启 require 时仅跳过，不代表全栈通过；开启后缺任一前置必须失败。
@@ -48,6 +48,7 @@ import (
 	playerpb "proto/common/database"
 	guildpb "proto/guild"
 	mailpb "proto/mail"
+	storepb "proto/player_store"
 	"schemamigrate"
 	"shared/assetop"
 	"shared/authoritysql"
@@ -107,7 +108,7 @@ func TestFullstackMailAttachmentsReachPlayerSQLExactlyOnce(t *testing.T) {
 	op := rig.readOp(t, claim.AssetOpId)
 	t.Logf("专用邮件到账开始 mail_id=%d op_id=%d stream_epoch=%d seq=%d", sent.MailId, op.OpID, op.StreamEpoch, op.Seq)
 
-	rig.assertPendingWhileSQLLocked(t, sent.MailId, op, before)
+	rig.assertPendingWhileSQLLocked(t, sent.MailId, before)
 	committed := rig.awaitClaimed(t, sent.MailId, op)
 	count, ids := mailFullstackItems(t, committed.bag, rig.item)
 	if len(committed.currency.Values) == 0 || committed.currency.Values[0] != before.currency.Values[0]+17 || count != beforeCount+1 || len(ids) != len(beforeIDs)+1 || committed.epoch < before.epoch || committed.seq == 0 {
@@ -244,7 +245,7 @@ func newMailFullstackRig(t *testing.T) *mailFullstackRig {
 	t.Cleanup(func() { _ = rig.playerDB.Close() })
 	initial := rig.readSQL(t)
 	if initial.epoch == 0 || initial.seq == 0 {
-		t.Fatal("实际玩家SQL没有dual围栏；不能验收为强一致到账")
+		t.Fatal("实际玩家SQL没有写权行序号；不能验收为强一致到账")
 	}
 
 	dsAddr := mailFullstackEnv(t, "DATASERVICE_ADDR")
@@ -335,7 +336,7 @@ func newMailFullstackRig(t *testing.T) *mailFullstackRig {
 		t.Fatalf("关闭邮件 schema 前置查询失败: %v", err)
 	}
 	cfg := assetop.DefaultLoopConfig()
-	cfg.RequireSQLCommit, cfg.Workers, cfg.Batch = true, 1, 1
+	cfg.Workers, cfg.Batch = 1, 1
 	cfg.Streams = []assetpb.AssetOpStream{assetpb.AssetOpStream_ASSET_OP_STREAM_SYSTEM_CREDIT}
 	cfg.AbandonAfter, cfg.AuditInterval, cfg.OfflineAfterAttempts = 0, 0, 0
 	rig.loop, err = assetop.NewLoop(cfg, StoreAdapter{Repo: rig.repo}, rig.caller, nil, nil)
@@ -355,14 +356,20 @@ func (r *mailFullstackRig) readSQL(t *testing.T) *mailFullstackSQL {
 
 func (r *mailFullstackRig) readSQLContext(t *testing.T, ctx context.Context) *mailFullstackSQL {
 	t.Helper()
-	row := &mailFullstackSQL{currency: &componentpb.CurrencyComp{}, bag: &playerpb.BagAllData{}, ledger: &componentpb.PlayerAssetOpLedgerComp{}}
-	var currency, bag, ledger []byte
-	if err := r.playerDB.QueryRowContext(ctx, "SELECT currency,bag_component,asset_op_ledger,fence_owner_epoch,fence_save_seq FROM player_database WHERE player_id=?", r.player).Scan(&currency, &bag, &ledger, &row.epoch, &row.seq); err != nil {
-		t.Fatalf("直接读取实际玩家SQL失败: %v", err)
+	row := &mailFullstackSQL{}
+	// 写权行有代次和序号；kAsset 行是 player_database 的资产片段（货币、背包、账本）。
+	if err := r.playerDB.QueryRowContext(ctx, "SELECT owner_epoch,save_seq FROM player_store WHERE player_id=? AND kind=?", r.player, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER)).Scan(&row.epoch, &row.seq); err != nil {
+		t.Fatalf("直接读取实际玩家写权行失败: %v", err)
 	}
-	if proto.Unmarshal(currency, row.currency) != nil || proto.Unmarshal(bag, row.bag) != nil || proto.Unmarshal(ledger, row.ledger) != nil {
+	var payload []byte
+	if err := r.playerDB.QueryRowContext(ctx, "SELECT payload FROM player_store WHERE player_id=? AND kind=?", r.player, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_ASSET)).Scan(&payload); err != nil {
+		t.Fatalf("直接读取实际玩家资产行失败: %v", err)
+	}
+	asset := &playerpb.PlayerDatabase{}
+	if proto.Unmarshal(payload, asset) != nil || asset.GetCurrency() == nil || asset.GetBagComponent() == nil || asset.GetAssetOpLedger() == nil {
 		t.Fatal("实际玩家SQL资产/账本编码无效")
 	}
+	row.currency, row.bag, row.ledger = asset.GetCurrency(), asset.GetBagComponent(), asset.GetAssetOpLedger()
 	return row
 }
 
@@ -383,9 +390,10 @@ func (r *mailFullstackRig) readOp(t *testing.T, id uint64) assetop.Op {
 	return op
 }
 
-// 只持有专用行的锁，不写资产。BeginTx 的5秒截止使database/sql自动回滚，
+// 只持有专用玩家写权行的锁，不写资产：存盘事务的第一条语句就锁这一行，所以提交被挡住。
+// BeginTx 的5秒截止使database/sql自动回滚，
 // defer另兜正常/失败退出；阶段4.5秒截止早于本轮DB的10秒锁等待。
-func (r *mailFullstackRig) assertPendingWhileSQLLocked(t *testing.T, mailID uint64, op assetop.Op, before *mailFullstackSQL) {
+func (r *mailFullstackRig) assertPendingWhileSQLLocked(t *testing.T, mailID uint64, before *mailFullstackSQL) {
 	t.Helper()
 	lockCtx, cancelLock := context.WithTimeout(r.ctx, 5*time.Second)
 	defer cancelLock()
@@ -397,7 +405,7 @@ func (r *mailFullstackRig) assertPendingWhileSQLLocked(t *testing.T, mailID uint
 	phaseCtx, cancelPhase := context.WithTimeout(lockCtx, 4500*time.Millisecond)
 	defer cancelPhase()
 	var locked uint64
-	if err := tx.QueryRowContext(phaseCtx, "SELECT player_id FROM player_database WHERE player_id=? FOR UPDATE", r.player).Scan(&locked); err != nil || locked != r.player {
+	if err := tx.QueryRowContext(phaseCtx, "SELECT player_id FROM player_store WHERE player_id=? AND kind=0 FOR UPDATE", r.player).Scan(&locked); err != nil || locked != r.player {
 		t.Fatalf("锁定专用玩家行失败: %v", err)
 	}
 	lockedBefore := r.readSQLContext(t, phaseCtx)
@@ -407,14 +415,6 @@ func (r *mailFullstackRig) assertPendingWhileSQLLocked(t *testing.T, mailID uint
 	if n := r.loop.Tick(phaseCtx); n != 1 {
 		t.Fatalf("行锁负向阶段必须真实投递唯一邮件指令，实际处理%d条", n)
 	}
-	mailFullstackAwait(t, phaseCtx, "行锁期间真实Redis父账本已应用", func() (bool, error) {
-		persisted, err := r.ledger.ReadPersistedLedger(phaseCtx, r.player)
-		if err != nil {
-			return false, err
-		}
-		outcome, partial, _ := assetop.ClassifyPersisted(persisted, op.Stream, op.StreamEpoch, op.Seq)
-		return outcome == assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED && !partial && mailFullstackReceipt(persisted, op), nil
-	})
 	// 连接池有两条连接；普通SELECT经另一连接读取已提交行，绝不借锁事务读快照。
 	blocked := r.readSQLContext(t, phaseCtx)
 	if !proto.Equal(blocked.currency, lockedBefore.currency) || !proto.Equal(blocked.bag, lockedBefore.bag) || !proto.Equal(blocked.ledger, lockedBefore.ledger) || blocked.epoch != lockedBefore.epoch || blocked.seq != lockedBefore.seq {
@@ -425,7 +425,7 @@ func (r *mailFullstackRig) assertPendingWhileSQLLocked(t *testing.T, mailID uint
 		t.Fatalf("读取行锁期间邮件状态失败: %v", err)
 	}
 	if state != uint32(mailpb.MailClaimState_MAIL_CLAIM_PENDING) || status != 1 || durable != 0 {
-		t.Fatal("仅Redis已应用而SQL未提交时，邮件必须保持PENDING且不可宣称durable")
+		t.Fatal("scene已应用而SQL未提交时，邮件必须保持PENDING且不可宣称durable")
 	}
 	if err := phaseCtx.Err(); err != nil {
 		t.Fatalf("行锁负向阶段超时，不能据已自动释放的锁宣称通过: %v", err)
@@ -433,7 +433,7 @@ func (r *mailFullstackRig) assertPendingWhileSQLLocked(t *testing.T, mailID uint
 	if err := tx.Rollback(); err != nil {
 		t.Fatalf("释放专用玩家行锁失败: %v", err)
 	}
-	t.Log("真实SQL行锁负向通过：Redis已见同笔APPLIED及摘要，玩家SQL仍旧，邮件仍PENDING；已释放锁")
+	t.Log("真实SQL行锁负向通过：scene已应用同笔指令，玩家SQL仍旧，邮件仍PENDING；已释放锁")
 }
 
 func (r *mailFullstackRig) awaitClaimed(t *testing.T, mailID uint64, op assetop.Op) *mailFullstackSQL {

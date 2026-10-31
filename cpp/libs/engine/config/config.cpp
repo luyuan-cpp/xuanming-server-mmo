@@ -354,6 +354,57 @@ bool readGameConfig(const std::string &filename, GameConfig &gameConfig)
 		return false;
 	}
 
+	// 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6)。整段或单键缺失时显式取默认:
+	// mode = standalone;standalone 又没写 seeds 时地址与口令都沿用上面的 zoneredis(此刻已含 ZONE_REDIS_PASSWORD 覆盖),开发环境不用改配置。
+	// 写了 seeds 就是另一个实例,口令只认显式值,不继承。
+	// 这里只读入与补默认,取值由消费方 scene 的 RedisSystem 在启动时校验:gate、battle 不连玩家域,配错了不该拖累它们。
+	{
+		auto *playerRedis = gameConfig.mutable_player_redis();
+		playerRedis->Clear(); // seeds 是 repeated,同一个对象再读一遍不能累加
+		if (const YAML::Node playerRedisNode = root["player_redis"]; playerRedisNode)
+		{
+			if (playerRedisNode["mode"])
+			{
+				playerRedis->set_mode(playerRedisNode["mode"].as<std::string>());
+			}
+			if (const YAML::Node seedsNode = playerRedisNode["seeds"]; seedsNode)
+			{
+				// 写成标量时迭代不出元素,standalone 下会悄悄回落到 zone_redis,连错 Redis 也没有任何提示。
+				if (!seedsNode.IsSequence())
+				{
+					const std::string reason = "player_redis.seeds must be a list of host:port in " + filename + "; refusing to start";
+					std::fprintf(stderr, "FATAL player_redis config: %s\n", reason.c_str());
+					std::fflush(stderr);
+					LOG_FATAL << "readGameConfig: " << reason;
+					return false; // LOG_FATAL 已 abort;这一行只为控制流明确
+				}
+				for (const auto &seed : seedsNode)
+				{
+					playerRedis->add_seeds(seed.as<std::string>());
+				}
+			}
+			if (playerRedisNode["password"])
+			{
+				playerRedis->set_password(playerRedisNode["password"].as<std::string>());
+			}
+		}
+		if (playerRedis->mode().empty())
+		{
+			playerRedis->set_mode("standalone");
+		}
+		if (playerRedis->mode() == "standalone" && playerRedis->seeds().empty())
+		{
+			const auto &zoneRedis = gameConfig.zone_redis();
+			playerRedis->add_seeds(zoneRedis.host() + ":" + std::to_string(zoneRedis.port()));
+			playerRedis->set_password(zoneRedis.password());
+		}
+		if (const char *envPassword = GetNonEmptyEnv("PLAYER_REDIS_PASSWORD"))
+		{
+			playerRedis->set_password(envPassword);
+			LOG_INFO << "PLAYER_REDIS_PASSWORD env override applied (value hidden)";
+		}
+	}
+
 	return true;
 }
 

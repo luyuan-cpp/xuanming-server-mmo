@@ -3,6 +3,7 @@ package clientplayerloginlogic
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	pbbase "proto/common/base"
 	dbpb "proto/common/database"
 	loginpb "proto/login"
+	"shared/redisslot"
 )
 
 // 这些用例验证当前 Login + Redis 命令路径，不替代真实 Redis AOF/数据库重启验收。
@@ -87,14 +89,14 @@ func TestLoginPersistsLegacyAccountAndKeepsAppearanceAcrossOldExpiry(t *testing.
 				t.Fatal(err)
 			}
 			if legacy {
-				ctx = ctxkeys.WithSessionDetails(ctx, &pbbase.SessionDetails{SessionId: 5152})
+				ctx = ctxkeys.WithSessionDetails(ctx, &pbbase.SessionDetails{SessionId: 5152, GateInstanceId: "gate-persistence", SessionIncarnation: 1})
 			}
 			// 独立名称避免改动生产认证器或其他测试的默认认证状态。
 			authType := fmt.Sprintf("account-persistence-%d", accountPersistenceAuthSequence.Add(1))
 			auth.Register(authType, accountPersistenceAuth{account: accountName})
-			logic := NewLoginLogic(ctx, &svc.ServiceContext{RedisClient: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+			logic := NewLoginLogic(ctx, &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 				TokenManager: token.NewManager(rdb, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 30 * 24 * time.Hour})})
-			var firstAccessToken string
+			loginSessionKey := redisslot.LoginSessionKey(redisslot.LoginConnectionID("gate-persistence", 1))
 			for attempt := 0; attempt < 2; attempt++ {
 				resp, err := logic.Login(&loginpb.LoginRequest{AuthType: authType})
 				if err != nil || resp.GetErrorMessage().GetId() != 0 || len(resp.GetPlayers()) != 1 || !proto.Equal(resp.GetPlayers()[0].GetPlayer(), wanted) {
@@ -102,10 +104,14 @@ func TestLoginPersistsLegacyAccountAndKeepsAppearanceAcrossOldExpiry(t *testing.
 				}
 
 				if attempt == 0 {
-					firstAccessToken = resp.AccessToken
+					if resp.AccessToken == "" {
+						t.Fatal("首次登录必须签发 access token")
+					}
 					mr.FastForward(48 * time.Hour)
-					if mr.Exists("access_token:"+firstAccessToken) || (legacy && mr.Exists("login_session:5152")) {
-						t.Fatal("临时 token/会话仍必须正常过期")
+					for _, key := range mr.Keys() {
+						if strings.HasPrefix(key, "access_token:") || key == loginSessionKey {
+							t.Fatalf("临时 token/会话仍必须正常过期: %s", key)
+						}
 					}
 				}
 			}

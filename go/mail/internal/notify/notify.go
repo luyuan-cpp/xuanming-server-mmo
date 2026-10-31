@@ -4,7 +4,6 @@ package notify
 import (
 	"context"
 	"errors"
-	"fmt"
 	"mail/internal/metrics"
 	"strconv"
 	"time"
@@ -21,6 +20,7 @@ import (
 	mailpb "proto/mail"
 	locator "proto/player_locator"
 	"shared/kafkacmd"
+	"shared/redisslot"
 )
 
 var outcomes = promauto.NewCounterVec(prometheus.CounterOpts{Name: "mail_notifications_total", Help: "提交后可丢失定向邮件提醒"}, []string{"outcome"})
@@ -61,7 +61,7 @@ func (n *Notifier) publish(ctx context.Context, player, mail uint64) (string, er
 	if n == nil || n.Redis == nil || n.Publisher == nil || player == 0 || mail == 0 {
 		return "", errors.New("邮件提醒未装配或输入无效")
 	}
-	raw, err := n.Redis.Get(ctx, fmt.Sprintf("player:session:%d", player)).Bytes()
+	raw, err := n.Redis.Get(ctx, redisslot.SessionKey(player)).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return "offline", nil
 	}

@@ -42,7 +42,7 @@ if ($parseErrors.Count) { throw "k8s_zone_rollback.ps1 解析失败: $($parseErr
 $pureFunctions = @('ConvertFrom-RollbackUtcTime', 'New-RollbackId', 'Get-DiscardToolArgs', 'Format-CommandLine', 'Get-DeploySnapshotKubectlArgs',
     'ConvertFrom-ZoneDeploySnapshot', 'Get-DeployFactsProblems', 'ConvertTo-DeployFactsKey',
     # 回档复核修正(2026-10-18):[4] Redis 实例身份、[5] 工具构建提交、[10] 入口决定。
-    'Get-GoDbRedisRunIdExecArgs', 'ConvertFrom-RedisInfoRunId', 'ConvertFrom-DiscardToolVersion', 'Test-DiscardToolMatchesDbImage',
+    'Get-CoreRedisRunIdExecArgs', 'ConvertFrom-RedisInfoRunId', 'ConvertFrom-DiscardToolVersion', 'Test-DiscardToolMatchesDbImage',
     'Get-ZoneEntryDecision', 'Get-ZoneEntryDecisionValue', 'Compare-ZoneEntryDecision', 'Format-ZoneEntryDecisionArgs')
 foreach ($name in $pureFunctions) {
     $matched = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true))
@@ -185,7 +185,7 @@ Test-Case 'E1:-PitrRestoredTo 必须与 TargetTime 同一时刻;-RollbackId 只�
 
 Test-Case 'E3:-Apply 缺 -RedisHost / -MySqlDsnEnv(或变量为空)/ -RollbackDiscardTool / -PitrRestoredTo,都在入口被拒' {
     $cases = @(
-        @{ Label = '缺 -RedisHost'; Extra = @{ RedisHost = $null }; Pattern = '-RedisHost <go/db 的共享 Redis' },
+        @{ Label = '缺 -RedisHost'; Extra = @{ RedisHost = $null }; Pattern = '-RedisHost <核心 Redis' },
         @{ Label = '缺 -MySqlDsnEnv'; Extra = @{ MySqlDsnEnv = $null }; Pattern = '-MySqlDsnEnv <存放 zone_101_db DSN' },
         @{ Label = '缺 -RollbackDiscardTool'; Extra = @{ RollbackDiscardTool = $null }; Pattern = '-RollbackDiscardTool <与线上 go/db 同一提交构建' },
         @{ Label = '工具文件不存在'; Extra = @{ RollbackDiscardTool = (Join-Path ([IO.Path]::GetTempPath()) 'no-such-zone_rollback_discard.exe') }; Pattern = '不是存在的文件' },
@@ -211,7 +211,7 @@ Test-Case 'E3:-Apply 缺 -RedisHost / -MySqlDsnEnv(或变量为空)/ -RollbackDi
 Test-Case 'E3:dry-run 不要求这些参数,命令里打印占位符' {
     $run = Invoke-ToolScript -ScriptName 'k8s_zone_rollback.ps1' -Arguments ($RollbackBaseArgs + @('-SkipMySqlPause'))
     Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "dry-run 不该失败。输出: $($run.Output)"
-    foreach ($placeholder in @('<zone_rollback_discard>', '<mysql dsn env var>', "'<go/db shared redis host:port>'")) {
+    foreach ($placeholder in @('<zone_rollback_discard>', '<mysql dsn env var>', "'<core redis host:port>'")) {
         Assert-Match -Text $run.Output -Pattern ([regex]::Escape($placeholder)) -Because "dry-run 缺参数时打印占位符 $placeholder"
     }
     Assert-Match -Text $run.Output -Pattern 'not set; -Apply requires -RedisHost' -Because '摘要区提醒 -Apply 必填'
@@ -270,7 +270,7 @@ Test-Case 'dry-run:第 0 步 c、1b、4a、4b、Step 5 的工具命令都完整�
     for ($i = 1; $i -lt $order.Count; $i++) {
         Assert-True -Condition ($order[$i - 1] -ge 0 -and $order[$i - 1] -lt $order[$i]) -Because "dry-run 的步骤顺序必须是 1 → 1b → 3 → 4a → 4b → 5 → 6(第 $i 项错位)"
     }
-    Assert-Match -Text $run.Output -Pattern ([regex]::Escape("player:<pid>:sync_digest")) -Because 'Step 7 的同步摘要键名(shared/playersync.KeyFormat)'
+    Assert-Match -Text $run.Output -Pattern ([regex]::Escape("player:{<pid>}:sync_digest")) -Because 'Step 7 的同步摘要键名(shared/playersync.KeyFormat)'
     Assert-NotMatch -Text $run.Output -Pattern 'PlayerAllData|player_database' -Because '存档只在 player_store,Redis 里没有这些键'
 }
 
@@ -292,7 +292,7 @@ foreach ($displayCase in $KubectlDisplayCases) {
         Assert-Equal -Expected 1 -Actual $identity.Count -Because 'Redis 实例身份只预告一次'
         Assert-Equal -Expected 1 -Actual $facts.Count -Because '部署事实只预告一次'
         Assert-Match -Text $identity[0] -Pattern ('^  Redis identity \(read-only\): ' + [regex]::Escape($displayCase.Prefix) + 'exec -n [A-Za-z0-9.-]+ pod/redis-0 -c redis -- ') -Because 'Redis 命令保留参数边界；空 base 不得多出空参数'
-        $snapshotCommand = $displayCase.Prefix + 'get configmap/go-svc-db-config configmap/go-svc-data-service-config deployment/db deployment/login -n mmorpg-zone-contract-test -o json --ignore-not-found --request-timeout=15s'
+        $snapshotCommand = $displayCase.Prefix + 'get configmap/go-svc-db-config configmap/go-svc-login-config deployment/db deployment/login -n mmorpg-zone-contract-test -o json --ignore-not-found --request-timeout=15s'
         Assert-Match -Text $facts[0] -Pattern ([regex]::Escape($snapshotCommand)) -Because '部署事实的四个对象、namespace、只读 JSON 和截止参数必须按序完整打印'
         $namespaceCommand = $displayCase.Prefix + 'get namespace mmorpg-zone-contract-test -o name --ignore-not-found'
         Assert-Match -Text $run.Output -Pattern ([regex]::Escape('then: ' + $namespaceCommand + ' must print nothing')) -Because '停服后的 namespace 只读复核必须保留同一集群身份'
@@ -309,9 +309,9 @@ foreach ($displayCase in $KubectlDisplayCases) {
 Test-Case '部署快照的对象名与 k8s_deploy.ps1 的 $GoSvcCatalogue 一致' {
     $deployText = Get-Content -LiteralPath (Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1') -Raw
     Assert-Match -Text $deployText -Pattern 'db\s+= @\{ ConfigMap = "go-svc-db-config";[^\r\n]*ConfigFile = "db\.yaml"' -Because '回档读的 db ConfigMap 名与数据键必须是部署脚本生成的那一份'
-    Assert-Match -Text $deployText -Pattern '"data-service"\s+= @\{ ConfigMap = "go-svc-data-service-config";[^\r\n]*ConfigFile = "data_service\.yaml"' -Because 'data-service 同上'
+    Assert-Match -Text $deployText -Pattern 'login\s+= @\{ ConfigMap = "go-svc-login-config";[^\r\n]*ConfigFile = "login\.yaml"' -Because 'login 同上'
     $snapshotArgs = Get-DeploySnapshotKubectlArgs -Namespace 'mmorpg-zone-x'
-    foreach ($name in @('configmap/go-svc-db-config', 'configmap/go-svc-data-service-config', 'deployment/db', 'deployment/login', '--ignore-not-found')) {
+    foreach ($name in @('configmap/go-svc-db-config', 'configmap/go-svc-login-config', 'deployment/db', 'deployment/login', '--ignore-not-found')) {
         Assert-True -Condition ($snapshotArgs -ccontains $name) -Because "部署快照要读 $name"
     }
     Assert-True -Condition (-not ($snapshotArgs -ccontains 'secret') -and -not (($snapshotArgs -join ' ') -match 'secret')) -Because '部署快照不读任何 Secret'
@@ -321,61 +321,71 @@ Test-Case 'ConvertFrom-ZoneDeploySnapshot:只取白名单字段,不读口令;nam
     $reply = New-RollbackDeploySnapshotReply
     $facts = ConvertFrom-ZoneDeploySnapshot -Json $reply.Output -Namespace 'ns'
     Assert-Equal -Expected '101' -Actual $facts.ZoneId -Because 'ZoneId'
-    Assert-Equal -Expected 'redis.mmorpg-infra.svc.cluster.local:6379|0' -Actual "$($facts.Redis.Hosts)|$($facts.Redis.DB)" -Because 'RedisClient 的实例与 DB'
-    Assert-True -Condition ($null -eq $facts.PlacementRedis) -Because 'Placement.Redis 缺省 = 复用 RedisClient'
-    Assert-Equal -Expected 3 -Actual ([int]$facts.Schema) -Because '去掉 Kafka 与 Fencing 字段,Schema 升到 3'
+    Assert-Equal -Expected 'redis.mmorpg-infra.svc.cluster.local:6379|0' -Actual "$($facts.Redis.Hosts)|$($facts.Redis.DB)" -Because '核心 Redis 的实例与 DB,取 login 的 Node.RedisClient'
+    Assert-Equal -Expected 5 -Actual ([int]$facts.Schema) -Because '多了 PlayerRedis,Schema 升到 5'
+    Assert-Equal -Expected 'false' -Actual $facts.PlayerRedis.Cluster -Because '线上 login ConfigMap 没写 PlayerRedis.Cluster:玩家域不是集群'
     Assert-Equal -Expected 'ghcr.io/luyuancpp/mmorpg-db:0123456789ab' -Actual $facts.DbImage -Because 'db 镜像'
     Assert-NotMatch -Text ($facts | ConvertTo-Json -Depth 6) -Pattern 'contract-live-secret-never-read|Password' -Because '口令一概不读'
-    foreach ($gone in @('KafkaGroup', 'KafkaTopicGeneration', 'KafkaPartitionCnt', 'FencingMode', 'OwnerEpochRedis')) {
+    foreach ($gone in @('KafkaGroup', 'KafkaTopicGeneration', 'KafkaPartitionCnt', 'FencingMode', 'OwnerEpochRedis', 'PlacementRedis', 'MappingRedisHost')) {
         Assert-True -Condition ($null -eq $facts.PSObject.Properties[$gone]) -Because "$gone 对应的 go/db 配置已删除"
     }
 
     Assert-True -Condition ($null -eq (ConvertFrom-ZoneDeploySnapshot -Json '' -Namespace 'ns')) -Because 'namespace 已删:无输出返回 $null,由调用方改用存档'
-    $withPlacement = New-RollbackDeploySnapshotReply -ExtraDbYaml @('Placement:', '  Redis:', '    Hosts: "10.0.0.9:6379"', '    DB: 3')
-    $placementFacts = ConvertFrom-ZoneDeploySnapshot -Json $withPlacement.Output -Namespace 'ns'
-    Assert-Equal -Expected '10.0.0.9:6379|3' -Actual "$($placementFacts.PlacementRedis.Hosts)|$($placementFacts.PlacementRedis.DB)" -Because 'Placement.Redis 显式填了就记下来'
-
     $document = $reply.Output | ConvertFrom-Json
     $document.items = @($document.items | Where-Object { $_.metadata.name -ne 'go-svc-db-config' })
     Assert-Match -Text (Get-ThrownMessage { ConvertFrom-ZoneDeploySnapshot -Json ($document | ConvertTo-Json -Depth 30) -Namespace 'ns' }) -Pattern 'go-svc-db-config' -Because 'namespace 还在却缺 db ConfigMap,不猜'
+    $document = $reply.Output | ConvertFrom-Json
+    $document.items = @($document.items | Where-Object { $_.metadata.name -ne 'go-svc-login-config' })
+    Assert-Match -Text (Get-ThrownMessage { ConvertFrom-ZoneDeploySnapshot -Json ($document | ConvertTo-Json -Depth 30) -Namespace 'ns' }) -Pattern 'go-svc-login-config' -Because 'namespace 还在却缺 login ConfigMap,不猜'
     $document = $reply.Output | ConvertFrom-Json
     $document.items = @($document.items | Where-Object { $_.metadata.name -ne 'db' })
     Assert-Match -Text (Get-ThrownMessage { ConvertFrom-ZoneDeploySnapshot -Json ($document | ConvertTo-Json -Depth 30) -Namespace 'ns' }) -Pattern 'Deployment db' -Because '读不到 db 镜像就无法核对工具与线上同一提交'
 }
 
-Test-Case 'Get-DeployFactsProblems:与本次参数一致才放行;Redis 拓扑不在同一实例同一 DB、ZoneId 不同都报问题' {
-    $base = { param([string[]]$Extra = @(), [string]$RedisDB = '0', [string]$Mapping = 'redis.mmorpg-infra.svc.cluster.local:6379', [string]$ZoneId = '101')
-        $reply = New-RollbackDeploySnapshotReply -ZoneId $ZoneId -RedisDB $RedisDB -MappingHost $Mapping -ExtraDbYaml $Extra
+Test-Case 'Get-DeployFactsProblems:与本次参数一致才放行;核心 Redis 的 DB、ZoneId 不同都报问题' {
+    $base = { param([string]$RedisDB = '0', [string]$ZoneId = '101')
+        $reply = New-RollbackDeploySnapshotReply -ZoneId $ZoneId -RedisDB $RedisDB
         return (ConvertFrom-ZoneDeploySnapshot -Json $reply.Output -Namespace 'ns')
     }
     # Get-DeployFactsProblems 以 `, $数组` 返回;这里原样转交(不套 @(...),否则空表也成了 Count 1)。
     $check = { param($Facts) return , (Get-DeployFactsProblems -Facts $Facts -ZoneId 101 -RedisDB 0) }
     Assert-Equal -Expected 0 -Actual (& $check (& $base)).Count -Because '一致时没有问题'
     $cases = @(
-        @{ Label = 'RedisClient.DB 不同'; Facts = (& $base -RedisDB '2'); Pattern = '不是 -RedisDB 0' },
-        @{ Label = 'Placement.Redis 另一个 DB'; Facts = (& $base -Extra @('Placement:', '  Redis:', '    Hosts: "redis.mmorpg-infra.svc.cluster.local:6379"', '    DB: 1')); Pattern = 'Placement\.Redis' },
-        @{ Label = 'MappingRedis 另一个实例'; Facts = (& $base -Mapping '10.0.0.7:6379'); Pattern = 'MappingRedis' },
+        @{ Label = '核心 Redis 的 DB 不同'; Facts = (& $base -RedisDB '2'); Pattern = '不是 -RedisDB 0' },
         @{ Label = 'ZoneId 不同'; Facts = (& $base -ZoneId '102'); Pattern = "ZoneId 是 '102'" }
     )
     foreach ($c in $cases) {
         $problems = & $check $c.Facts
         Assert-True -Condition (@($problems | Where-Object { $_ -match $c.Pattern }).Count -ge 1) -Because "$($c.Label):必须报问题(实际: $($problems -join '; '))"
     }
-    $placementSame = & $base -Extra @('Placement:', '  Redis:', '    Hosts: "redis.mmorpg-infra.svc.cluster.local:6379"', '    DB: 0')
-    Assert-Equal -Expected 0 -Actual (& $check $placementSame).Count -Because 'Placement.Redis 显式写成同一实例同一 DB 时放行'
+
+    # 线上玩家域是 Redis Cluster:回档工具要丢弃的键都在那边,Step 6 的 zone-up 也要主节点数(namespace 删掉之后读不到线上)。
+    $clusterFacts = & $base
+    $clusterFacts.PlayerRedis = [pscustomobject]@{ Cluster = 'true'; FirstSeed = 'redis-player-0.mmorpg-infra:6379' }
+    $missing = Get-DeployFactsProblems -Facts $clusterFacts -ZoneId 101 -RedisDB 0
+    Assert-True -Condition (@($missing | Where-Object { $_ -match '-PlayerRedisSeeds' }).Count -eq 1) -Because "没给种子必须报问题(实际: $($missing -join '; '))"
+    Assert-True -Condition (@($missing | Where-Object { $_ -match '-PlayerRedisMasters' }).Count -eq 1) -Because "没给主节点数必须报问题(实际: $($missing -join '; '))"
+    $given = Get-DeployFactsProblems -Facts $clusterFacts -ZoneId 101 -RedisDB 0 -PlayerRedisSeeds 'redis-player-0.mmorpg-infra:6379' -PlayerRedisMasters 3
+    Assert-Equal -Expected 0 -Actual $given.Count -Because '两个都给了就放行'
+    $tooFew = Get-DeployFactsProblems -Facts $clusterFacts -ZoneId 101 -RedisDB 0 -PlayerRedisSeeds 'redis-player-0.mmorpg-infra:6379' -PlayerRedisMasters 2
+    Assert-True -Condition (@($tooFew | Where-Object { $_ -match '-PlayerRedisMasters' }).Count -eq 1) -Because '少于 3 个主不是合法集群'
+    # 旧存档(Schema 5 之前)没有 PlayerRedis 这一段:按不是集群处理,不报错。
+    $oldFacts = & $base
+    $oldFacts.PSObject.Properties.Remove('PlayerRedis')
+    Assert-Equal -Expected 0 -Actual (& $check $oldFacts).Count -Because '旧存档没有 PlayerRedis,按单实例'
 }
 
 # ─────────────────────────────────────────────────────────────────
 # 回档复核 [4]:Redis 实例身份(run_id);[5]:回档工具与线上 go/db 同一提交
 # ─────────────────────────────────────────────────────────────────
 
-Test-Case '[4] Get-GoDbRedisRunIdExecArgs / ConvertFrom-RedisInfoRunId:exec 进 infra 的 redis-0、对 go/db 的地址读 INFO server,口令取 Pod 自己的环境变量;run_id 恰好一行' {
-    $argv = Get-GoDbRedisRunIdExecArgs -InfraNamespace 'mmorpg-infra' -RedisHosts 'redis.mmorpg-infra.svc.cluster.local:6379'
+Test-Case '[4] Get-CoreRedisRunIdExecArgs / ConvertFrom-RedisInfoRunId:exec 进 infra 的 redis-0、对核心 Redis 的地址读 INFO server,口令取 Pod 自己的环境变量;run_id 恰好一行' {
+    $argv = Get-CoreRedisRunIdExecArgs -InfraNamespace 'mmorpg-infra' -RedisHosts 'redis.mmorpg-infra.svc.cluster.local:6379'
     Assert-Equal -Expected 'exec|-n|mmorpg-infra|pod/redis-0|-c|redis|--|sh|-c' -Actual (($argv | Select-Object -First 9) -join '|') -Because '与 k8s_deploy.ps1 Test-RedisLiveMaxClients 同一个 Pod 与容器'
     Assert-Match -Text $argv[9] -Pattern 'REDISCLI_AUTH=\$REDIS_PASSWORD' -Because '口令取 Pod 自己的 REDIS_PASSWORD,不上本机命令行'
-    Assert-Match -Text $argv[9] -Pattern 'redis-cli --raw -h redis\.mmorpg-infra\.svc\.cluster\.local -p 6379 INFO server$' -Because '对 go/db 自己连的地址读,HA 下经代理落到当前主库'
+    Assert-Match -Text $argv[9] -Pattern 'redis-cli --raw -h redis\.mmorpg-infra\.svc\.cluster\.local -p 6379 INFO server$' -Because '对服务自己连的地址读,HA 下经代理落到当前主库'
     foreach ($bad in @('10.0.0.1:6379,10.0.0.2:6379', 'host;rm -rf /:6379', 'redis', '[::1]:6379')) {
-        Assert-True -Condition ($null -ne (Get-ThrownMessage { Get-GoDbRedisRunIdExecArgs -InfraNamespace 'ns' -RedisHosts $bad })) -Because "'$bad' 不能拼进 sh -c,必须拒绝"
+        Assert-True -Condition ($null -ne (Get-ThrownMessage { Get-CoreRedisRunIdExecArgs -InfraNamespace 'ns' -RedisHosts $bad })) -Because "'$bad' 不能拼进 sh -c,必须拒绝"
     }
     $runId = 'aa11bb22cc33dd44ee55ff6677889900aabbccdd'
     Assert-Equal -Expected $runId -Actual (ConvertFrom-RedisInfoRunId -Text "# Server`r`nredis_version:7.2.4`r`nrun_id:$runId`r`ntcp_port:6379") -Because 'CRLF 输出也认'
@@ -398,7 +408,7 @@ Test-Case '[4] 第 0 步 c(-Apply 沙箱):每次工具调用都带 -expect-run-i
     Assert-Equal -Expected 'k8s-zone-up/dry-run GateRouterMode=1' -Actual ($other.DevToolsCalls -join '|') -Because '没有停服'
 
     $forbidden = Invoke-RollbackInSandbox -Apply -DeployDefault '1' -ExtraArgs $QuietEntryArgs -RedisInfoReply @{ ExitCode = 1; Output = 'Error from server (Forbidden): pods "redis-0" is forbidden' }
-    Assert-Match -Text $forbidden.Error -Pattern '读不到 go/db 所用 Redis[^\r\n]*的 run_id' -Because 'exec 失败即拒绝,不当成「没法核对就放行」'
+    Assert-Match -Text $forbidden.Error -Pattern '读不到核心 Redis[^\r\n]*的 run_id' -Because 'exec 失败即拒绝,不当成「没法核对就放行」'
     Assert-Equal -Expected 0 -Actual $forbidden.DiscardCalls.Count -Because '读不到 run_id 时不调工具'
     Assert-Equal -Expected 'k8s-zone-up/dry-run GateRouterMode=1' -Actual ($forbidden.DevToolsCalls -join '|') -Because '没有停服'
 

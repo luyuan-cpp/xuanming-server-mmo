@@ -19,8 +19,9 @@ var ErrListingNotFound = errors.New("trade: listing not found")
 // ListingQuery 是浏览列表的查询描述(P1 规格 §6 BrowseListings 第 5 条)。
 // 由 logic 在完成全部校验后填写;本包只负责把它翻译成参数化 SQL,不再做业务判断。
 type ListingQuery struct {
-	// MarketZone:0 = 不按分区过滤(global 且 zone_filter=0);否则 market_zone = ?。
-	MarketZone uint32
+	// MarketZones:空 = 不按分区过滤(global 且 zone_filter=0);否则 market_zone IN (...)。
+	// market_zone 是上架时的原始区,合服不改写,所以一个分区可能对应多个原始区(placement.MergedZones.Members)。
+	MarketZones []uint32
 	// Tab 决定状态与时间窗:PUBLIC_NOTICE = 公示中;ON_SALE = 寄售中(含 LOCKED)。其余值拒绝。
 	Tab tradepb.ListingTab
 	// Category 必填。
@@ -399,9 +400,11 @@ func buildListingFilter(q ListingQuery) (string, []any, error) {
 		return "", nil, errors.New("trade: listing query requires a category")
 	}
 
-	if q.MarketZone != 0 {
-		conds = append(conds, "`market_zone` = ?")
-		args = append(args, q.MarketZone)
+	if len(q.MarketZones) > 0 {
+		conds = append(conds, "`market_zone` IN ("+strings.TrimSuffix(strings.Repeat("?,", len(q.MarketZones)), ",")+")")
+		for _, zone := range q.MarketZones {
+			args = append(args, zone)
+		}
 	}
 	conds = append(conds, "`category` = ?")
 	args = append(args, int32(q.Category))

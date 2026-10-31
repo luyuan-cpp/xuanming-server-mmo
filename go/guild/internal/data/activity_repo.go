@@ -132,7 +132,7 @@ var (
 	ErrActivityThresholdNotReached = errors.New("guild activity: reunion online threshold not reached")
 
 	// ErrActivityPoison:确定性失败 —— 帮会资金 / 帮贡相加会溢出 uint64。整事务回滚,重试也一样,不是"忙"。
-	// 单人写 RPC 下按内部故障返回(配表有上限,实际不可达);导出是给 B6b 结算用:结算撞上它要 markPoison 并销账,
+	// 单人写 RPC 下按内部故障返回(配表有上限,实际不可达);导出是给 B6b 结算用:结算撞上它要 markPoison,
 	// 而不是让消费者无限重试同一条消息。
 	ErrActivityPoison = errors.New("guild activity: deterministic failure (overflow)")
 )
@@ -813,8 +813,7 @@ func (r *ActivityRepo) readRecentRejectedRewards(ctx context.Context, playerID, 
 //	ExpireTrialBattle     巡检器判定长时间无结果:STARTED → EXPIRED(迟到的结果仍可结算)
 //	ConvertOwedReward     结算时未决指令已满者的物品,等窗口有空位再转成资产指令行
 //
-// 结果事件可能重复投递(battle 未销账就重发、Kafka 重放、巡检器与消费者同时处理):幂等闸门是 T 行的 SETTLED。
-// SharedRedis 上的结果记录由 logic 在本文件的写成功之后销账(trial_result_record.go),repo 不碰 Redis。
+// 结果事件可能重复投递(发件箱重投、Kafka 重放、巡检器与消费者同时处理):幂等闸门是 T 行的 SETTLED。
 
 // 历练两表表名,唯一事实源是 proto/guild/guild_db.proto 的 OptionTableName。
 const (
@@ -838,7 +837,7 @@ var (
 	// ErrTrialInputInvalid:历练写事务的入参畸形 —— 调用方的编程错误,或结果事件的上下文残缺。碰库之前返回。
 	// 它是**确定性**的:同一份输入重试多少次都一样。结算消费者不得把它当暂时性错误退避重试(消费是单协程串行的,
 	// 会把那个 guild 副本名下全部分区的历练结果一起卡住),
-	// 应按毒消息处理(06 §6.31:标记、销账、提交 offset)。其余非哨兵错误才是暂时性的。
+	// 应按毒消息处理(06 §6.31:标记、提交 offset)。其余非哨兵错误才是暂时性的。
 	ErrTrialInputInvalid = errors.New("guild trial: invalid input")
 
 	// errTrialAlreadySettled / errTrialForeignGuild / errTrialRowMissing / errOwedWindowFull / errOwedRowGone
@@ -1179,7 +1178,7 @@ type TrialEnqueuedReward struct {
 }
 
 // TrialSettleResult 是结算结果。除 Status 外的字段只在 Status == TrialSettleSettled 时有意义。
-// 四种 Status 都意味着"这一局在 guild 侧已有定论",调用方都应销账(删 SharedRedis 结果记录)。
+// 四种 Status 都意味着"这一局在 guild 侧已有定论",调用方不必重试。
 type TrialSettleResult struct {
 	Status TrialSettleStatus
 
@@ -1280,7 +1279,7 @@ func (in TrialSettleInput) plan() (trialSettlePlan, error) {
 // periodKey > DayKey(nowMs − minCounterCleanupAge + trialCounterCleanupMargin)。只要同时在跑的清理的墙钟不比 nowMs 晚出一个余量,
 // 它的截止键就 ≤ 右边那个键 < periodKey,两者行集合不相交(DayKey 随时间单调不减)。
 //
-// 判假意味着这局的结果在 guild 这里至少滞留了约 7 天(battle 的结果记录与 Kafka 都只留 7 天,06 §6.34 T11):
+// 判假意味着这局的结果在 guild 这里至少滞留了约 7 天(Kafka 只留 7 天,06 §6.34 T11):
 // 当日计数行可能已被清掉,"每日次数"无从守起,也不能冒与清理在同一行上相遇的险 —— 不发奖,按确定性失败处理。
 func trialCounterPeriodWritable(periodKey uint32, nowMs uint64) bool {
 	oldest := time.UnixMilli(int64(nowMs)).Add(-(minCounterCleanupAge - trialCounterCleanupMargin))
@@ -1296,10 +1295,10 @@ func trialCounterPeriodWritable(periodKey uint32, nowMs uint64) bool {
 // 不复核帮会等级与入帮时长:那是开战前的门槛(建房、开战时已判),对局打完之后不再追究。
 // 发奖名单 = 候选人 ∩ 结算时仍在本帮 ∩ 该游戏日次数未满(06 §6.49 #10,U2:候选含阵亡者)。
 //
-// 返回:Status 四种去向之一、error 为 nil,都表示这一局已有定论,调用方销账;
+// 返回:Status 四种去向之一、error 为 nil,都表示这一局已有定论;
 // 错误语义:
 //   - ErrTrialInputInvalid(碰库之前)/ ErrActivityPoison(帮贡或资金溢出、结果过旧):**确定性失败**,整体回滚,
-//     调用方走 MarkTrialBattlePoison 并销账,不重试;
+//     调用方走 MarkTrialBattlePoison,不重试;
 //   - ErrWriteConflict(含 errRetryTx、1213 / 9007 重跑耗尽、1205、子预算到期)/ 其余错误:暂时性,
 //     调用方退避后带着**新的 NowMs** 重调;沿用同一批 OpID 是安全的(上一轮已整体回滚)。
 //
@@ -1669,8 +1668,8 @@ const (
 // battle 至少给 BattleID 与 GuildID;结果事件带着完整上下文时把其余字段也填上,这样连登记都没成功的局也能留下一行审计
 // (createdMs 取 finishedAtMs,0 则取 nowMs)。巡检器只有登记行的键时,缺行就无从补插,回 TrialMarkMissing。
 //
-// 五种去向都返回 nil error,表示"这一局不必再处理",调用方销账并提交 offset。
-// 错误语义:ErrTrialInputInvalid(键为 0)/ ErrWriteConflict 与其余错误为暂时性,调用方下轮再试(不销账)。
+// 五种去向都返回 nil error,表示"这一局不必再处理",调用方提交 offset。
+// 错误语义:ErrTrialInputInvalid(键为 0)/ ErrWriteConflict 与其余错误为暂时性,调用方下轮再试。
 // 只写一行状态,不动任何资产。
 func (r *ActivityRepo) MarkTrialBattlePoison(ctx context.Context, battle TrialBattleKey, finishedAtMs, nowMs uint64) (TrialMarkOutcome, error) {
 	if err := battle.validateIdentity(); err != nil {
@@ -1961,7 +1960,7 @@ func (r *ActivityRepo) OwedRewardCounts(ctx context.Context, playerID uint64) (m
 // TrialBattle 按 battle_id 读一行对局。found=false = 没有这一行。普通读,不持任何锁,不在任何事务里。
 // 两个使用方:
 //   - 视图判"battle:lock 指向的那一局是否仍是 STARTED"(06 §6.8 第 6 步);
-//   - 结算入口的终态预读(logic.SettleTrialResult):读到 SETTLED 就当重复结果直接销账,不再开事务。
+//   - 结算入口的终态预读(logic.SettleTrialResult):读到 SETTLED 就当重复结果,不再开事务。
 //     这依赖"SETTLED 行不可变"—— 写 T 的五条路径里,readTrialGate 见到 SETTLED 一律回 errTrialAlreadySettled,
 //     解散只删 STARTED 行(deleteGuildTrialBattles)。将来若新增会改 / 删 SETTLED 行的路径(保留期清理、重放工具),
 //     要回头确认这次预读仍然成立:读到 SETTLED 之后行被删掉无妨(那一局照样是"已有定论")。

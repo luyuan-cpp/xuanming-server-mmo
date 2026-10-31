@@ -22,7 +22,7 @@ public:
 	TransientNode32BitCompositeIdGenerator skillIdGenerator;
 	TransientNode32BitCompositeIdGenerator actorNetIdGenerator;
 	// 玩家存盘序号 save_seq 的进程级发号器(docs/design/db-write-fencing-mysql.md §7.2)。与 node_id 无关,SetNodeId 不碰它;
-	// 加载玩家时 Observe 播种(InitPlayerFromAllData),确定要写盘时 Next(SavePlayerToRedisImpl)。只在 scene 逻辑线程上用。
+	// 加载玩家时 Observe 播种(InitPlayerFromAllData),确定要写盘时 Next(SavePlayerImpl)。只在 scene 逻辑线程上用。
 	save_seq::SaveSeqAllocator saveSeq;
 };
 

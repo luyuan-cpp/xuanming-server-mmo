@@ -1,12 +1,12 @@
 # match:回合制战斗匹配 / 切磋 / 观战编排(docs/design/cross-zone-matchmaking.md)。
 #
 # **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
-# 全局模式的排队、占用、开局意图与评级以同一TiDB事务域为权威；旧Redis队列只用于显式dev兼容。
-# 部署脚本注入TiDB/探测/排行榜Secret引用，生产须传MatchTiDBHost与真实PhysicalRegion。gate发现match走的是
+# 排队、占用、开局意图、组队与评级的权威都在同一SQL事务域，所有档位同一份代码；Redis只留观战协调。
+# 部署脚本注入SQL/探测/排行榜Secret引用，所有档位都须传SQL入口，staging/prod还须传真实PhysicalRegion。gate发现match走的是
 # 非 zone-scoped 的 MatchNodeService 前缀(cpp node_util.cpp IsZoneScopedNodeType
 # 不含它),所以全 zone 的 gate 都会连到这里的实例并随机路由。
 # k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
-# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-match-config 由脚本生成。
+# infra-up / all-up 部署:ConfigMap 与迁移 Job 在基础设施阶段,进程排在第一个 zone 的 data-service 之后(见 k8s_deploy.ps1 的 Apply-GlobalGoSvcManifests)。ConfigMap go-svc-match-config 由脚本生成。
 apiVersion: v1
 kind: Service
 metadata:

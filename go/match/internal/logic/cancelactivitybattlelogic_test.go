@@ -26,7 +26,7 @@ func cancellationContext(t *testing.T) *svc.ServiceContext {
 	return &svc.ServiceContext{Authority: &authority.Store{}, ActivityCancelAuth: verifier, ActivityCancelSecret: secret}
 }
 func TestActivityCancellationRejectsProofFailureBeforeAnySQL(t *testing.T) {
-	for _, mode := range []string{"unsigned", "wrong-caller", "wrong-method", "changed-body", "expired", "missing-authority", "missing-auth", "client"} {
+	for _, mode := range []string{"unsigned", "wrong-caller", "wrong-method", "changed-body", "expired", "missing-auth", "client"} {
 		t.Run(mode, func(t *testing.T) {
 			sc := cancellationContext(t)
 			original := activityRequest(11, 22)
@@ -50,10 +50,6 @@ func TestActivityCancellationRejectsProofFailureBeforeAnySQL(t *testing.T) {
 			}
 			if mode == "changed-body" {
 				in.Original.MemberPlayerIds[1] = 23
-			}
-			if mode == "missing-authority" {
-				sc.Authority = nil
-				expected = codes.Unavailable
 			}
 			if mode == "missing-auth" {
 				sc.ActivityCancelAuth = nil

@@ -15,21 +15,22 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type sqlTeamBattleStarter interface {
-	ReserveSQLTeamMatch(context.Context, *teampb.TeamLaunchRecord) (*matchpb.MatchFormationRecord, error)
-}
-
-func (s *Service) startSQLTeamMatch(ctx context.Context, caller uint64, in *teampb.StartTeamMatchRequest) *teampb.TeamResponse {
+// StartTeamMatch 整队开战(§E.1)。先按 (调用者, request_id) 查持久 launch 原件,有就沿原件续推;没有就走一轮:
+//
+//  1. Mutate(BindCaller, Refresh):未绑定 / 记录缺失 → 4013 + 当前视图;惰性转让 / 过期清理有提交 → 整轮重来;
+//  2. 队长、开战锁有效性(SQL 时钟);3. 副本人数与目标人数;4. roster = 队长在前再按 join_seq;
+//  5. 逐成员预检(会话 → 战斗锁 → 位置 → 票据),失败时 parameters[0] 带该成员 pid;
+//  6. 持久 launch 原件与开战锁同一事务提交(版本钉死在第 1 步);版本已变 → 整轮重来,最多 matchStartRounds 轮且不超出请求预算;
+//  7. 沿原件提交成局(满队直接开局),或进队列(补位与 PVP)。
+//
+// 提交结果未知时原 request_id 查询 / 重试,不按未知去删除 SQL 成局。
+func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.StartTeamMatchRequest) *teampb.TeamResponse {
 	mode, validMode := normalizeTeamMatchMode(uint32(in.GetMatchMode()))
 	if !validMode {
 		return s.respond(ctx, caller, ErrDungeonNotOpen, 0)
 	}
 	if _, err := authority.DirectUUIDKey(1, caller, in.GetRequestId()); err != nil {
 		return s.respond(ctx, caller, uint32(table.CommonError_kInvalidParameter), 0)
-	}
-	port, ok := s.starter.(sqlTeamBattleStarter)
-	if !ok {
-		return s.respond(ctx, caller, ErrInternal, 0)
 	}
 	launch, err := s.svcCtx.Authority.TeamLaunch(ctx, caller, in.RequestId)
 	if err != nil {
@@ -40,7 +41,7 @@ func (s *Service) startSQLTeamMatch(ctx context.Context, caller uint64, in *team
 		if err != nil || !proto.Equal(data.Original.Request, in) {
 			return s.respond(ctx, caller, uint32(table.CommonError_kInvalidParameter), 0)
 		}
-		return s.resumeSQLTeamLaunch(ctx, caller, launch, port)
+		return s.resumeSQLTeamLaunch(ctx, caller, launch)
 	}
 	for attempt := 0; attempt < matchStartRounds && ctx.Err() == nil; attempt++ {
 		result, err := s.store.Mutate(ctx, BindCaller(caller, in.ExpectedTeamId), RefreshOp(caller))
@@ -76,15 +77,12 @@ func (s *Service) startSQLTeamMatch(ctx context.Context, caller uint64, in *team
 			return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
 		}
 		roster := MatchRoster(snap.Record)
-		zones, code, culprit := s.preflightMatch(ctx, roster)
+		code, culprit := s.preflightMatch(ctx, roster)
 		if code != 0 {
 			return s.matchReject(ctx, caller, code, culprit, &snap)
 		}
-		if hook := afterPreflightHook; hook != nil {
-			hook(snap.TeamId, roster)
-		}
 		ttl := uint32(s.starter.MatchLockTTLSeconds(len(roster)))
-		pinned, created, err := s.store.sql.createLaunch(ctx, &snap, caller, in, uuid.NewString(), roster, zones, ttl)
+		pinned, created, err := s.store.sql.createLaunch(ctx, &snap, caller, in, uuid.NewString(), roster, ttl)
 		if err != nil {
 			return s.respond(ctx, caller, ErrInternal, 0)
 		}
@@ -95,19 +93,19 @@ func (s *Service) startSQLTeamMatch(ctx context.Context, caller uint64, in *team
 			return s.respond(ctx, caller, pinned.Code, pinned.CodeParam)
 		}
 		if pinned.Commit != nil {
-			s.publish(caller, []*CommitResult{pinned.Commit}, nil)
+			s.publish(caller, []*CommitResult{pinned.Commit})
 		}
-		return s.resumeSQLTeamLaunch(ctx, caller, created, port)
+		return s.resumeSQLTeamLaunch(ctx, caller, created)
 	}
 	return s.respond(ctx, caller, ErrStateChanged, 0)
 }
 
-func (s *Service) resumeSQLTeamLaunch(ctx context.Context, caller uint64, launch *teampb.TeamLaunchRecord, port sqlTeamBattleStarter) *teampb.TeamResponse {
+func (s *Service) resumeSQLTeamLaunch(ctx context.Context, caller uint64, launch *teampb.TeamLaunchRecord) *teampb.TeamResponse {
 	if launch.State == 5 && launch.BattleId == 0 {
 		return s.respond(ctx, caller, ErrStateChanged, 0)
 	}
 	if launch.State == 1 {
-		formation, err := port.ReserveSQLTeamMatch(ctx, launch)
+		formation, err := s.starter.ReserveSQLTeamMatch(ctx, launch)
 		if err != nil {
 			return s.respond(ctx, caller, ErrInternal, 0)
 		}
@@ -130,7 +128,7 @@ func (s *Service) resumeSQLTeamLaunch(ctx context.Context, caller uint64, launch
 	return response
 }
 
-func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller uint64, request *teampb.StartTeamMatchRequest, token string, roster []uint64, zones map[uint64]uint32, ttl uint32) (*PinnedResult, *teampb.TeamLaunchRecord, error) {
+func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller uint64, request *teampb.StartTeamMatchRequest, token string, roster []uint64, ttl uint32) (*PinnedResult, *teampb.TeamLaunchRecord, error) {
 	key, err := authority.DirectUUIDKey(1, caller, request.RequestId)
 	if err != nil {
 		return nil, nil, err
@@ -207,6 +205,11 @@ func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller 
 	if decision.Code != 0 {
 		return &PinnedResult{Code: decision.Code, CodeParam: decision.CodeParam}, nil, nil
 	}
+	// LockMatch 已确认 roster 就是当前成员,这些路由行都在 CaptureTeamOriginals 里锁住了。
+	zones, err := s.authority.TeamHomeZonesTx(ctx, tx, roster)
+	if err != nil {
+		return nil, nil, err
+	}
 	queued := mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM || size > uint32(len(roster))
 	if queued && len(exits) == 0 {
 		decision.Record.MatchLockToken = ""
@@ -241,6 +244,10 @@ func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller 
 	}
 	launch := &teampb.TeamLaunchRecord{ActorId: caller, RequestHigh: key.RequestHigh, RequestLow: key.RequestLow, TeamId: snap.TeamId, TeamVersion: commit.Version, LockToken: token, ConfigId: request.BattleConfigId, TargetSize: size, MemberCount: uint32(len(roster)), State: 1, EnqueuedMs: stamp, Payload: payload, OwnerAccount: original.Actor.OwnerAccount, OwnerRevision: original.Actor.OwnerRevision, Mode: uint32(mode)}
 	if err = s.authority.InsertTeamLaunchTx(ctx, tx, launch); err != nil {
+		// 撤销合服留下的跨区队伍:是业务拒绝,不是故障。这个事务整体回滚,名册和开战锁都没动。
+		if errors.Is(err, authority.ErrTeamCrossZone) {
+			return &PinnedResult{Code: ErrCrossZoneDenied}, nil, nil
+		}
 		return nil, nil, err
 	}
 	if queued && len(exits) == 0 {
@@ -253,9 +260,4 @@ func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller 
 		return nil, nil, err
 	}
 	return &PinnedResult{Commit: commit}, launch, nil
-}
-
-// SQL开战必须有持久完整Start意图，不能让旧Redis钉版本入口制造无原件锁。
-func (s *sqlTeamStore) commitMatchLock(context.Context, *Snapshot, uint64, string, []uint64, uint64) (*PinnedResult, error) {
-	return nil, errors.New("team: SQL开战须提交完整原launch")
 }

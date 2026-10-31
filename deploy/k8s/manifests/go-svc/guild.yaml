@@ -95,6 +95,12 @@ spec:
           ports:
             - {name: grpc, containerPort: 50300}
             - {name: metrics, containerPort: 9220}
+          # 启动时读 data_service.GetMergedZones,读不到等 60 秒后退出(go/shared/mergedzone),gRPC 口在那之后才监听。
+          # 启动探针给足 150 秒:不抢在进程自己判定之前杀它,也盖住读到映射之后的排名重建;通过之后才开始 readiness / liveness。
+          startupProbe:
+            tcpSocket: {port: grpc}
+            periodSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             tcpSocket: {port: grpc}
             initialDelaySeconds: 5

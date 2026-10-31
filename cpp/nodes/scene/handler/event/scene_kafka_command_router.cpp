@@ -35,15 +35,6 @@ void DispatchSceneKafkaCommand(const std::string& topic, const contracts::kafka:
         BattleEventHandler::BattleConfirmedEventHandler(event);
         return;
     }
-    case BattleSettlementEventEventId: {
-        BattleSettlementEvent event;
-        if (!event.ParseFromString(command.payload())) {
-            LOG_WARN << "SceneCommand payload decode failed, topic=" << topic << ", event_id=" << command.event_id();
-            return;
-        }
-        BattleEventHandler::BattleSettlementEventHandler(event);
-        return;
-    }
     case PlayerInboxNotifyEventEventId: {
         PlayerInboxNotifyEvent event;
         if (!event.ParseFromString(command.payload())) {

@@ -207,6 +207,15 @@ func runTrade(c config.Config) (runErr error) {
 		return nil
 	}
 
+	// 合服映射(docs/design/player-data-tidb-scaling-plan.md §7.1):可见性判定和按区查询都按它解析。
+	// trade 没有全局库连接,从 data_service 取,读不到拒绝启动。放在起 gRPC 之前:不带映射的 trade 一个请求都不该接。
+	if err := svcCtx.LoadMergedZones(ctx); err != nil {
+		if exitRequested(ctx) {
+			return nil
+		}
+		return err
+	}
+
 	// 启动时领第一段 listing_id / op_id:只为尽早暴露"BootstrapTags 漏登记 / data_service 不通",失败只告警。
 	if finish, err := root.Enter(); err == nil {
 		func() { defer finish(); svcCtx.WarmListingIDSegment() }()

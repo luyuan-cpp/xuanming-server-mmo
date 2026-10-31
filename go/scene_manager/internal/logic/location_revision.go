@@ -13,6 +13,7 @@ import (
 	smpb "proto/scene_manager"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/redisslot"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -25,10 +26,16 @@ var errLocationProjectionCorrupt = errors.New("场景位置投影损坏")
 var errLocationRevisionProjectionCorrupt = errors.New("场景位置原修订标签损坏")
 
 func locationRevisionKey(player uint64) string {
-	return fmt.Sprintf("player:%d:location_revision", player)
+	return redisslot.LocationRevisionKey(player)
 }
+
+// locationSnapshotKeys 是 luaReadLocationSnapshot 的 KEYS,全部在玩家自己的 slot 上(scene_keys_contract_test.go)。
+func locationSnapshotKeys(player uint64) []string {
+	return []string{getPlayerLocationKey(player), locationRevisionKey(player)}
+}
+
 func locationRevisionFloorKey(player uint64) string {
-	return fmt.Sprintf("player:%d:location_revision_floor", player)
+	return redisslot.LocationRevisionFloorKey(player)
 }
 func revisionText(revision uint64) string { return fmt.Sprintf("%020d", revision) }
 func optionalRevisionText(revision uint64) string {
@@ -85,7 +92,7 @@ func lookupCurrentRole(ctx context.Context, sc *svc.ServiceContext, player uint6
 }
 
 func observeCurrentRevision(sc *svc.ServiceContext, player, revision uint64) error {
-	result, err := sc.Redis.Eval(luaObserveLocationRevision, []string{locationRevisionFloorKey(player)}, revisionText(revision))
+	result, err := playerRedisEval(sc, luaObserveLocationRevision, []string{locationRevisionFloorKey(player)}, revisionText(revision))
 	if err != nil {
 		return err
 	}
@@ -98,7 +105,7 @@ func observeCurrentRevision(sc *svc.ServiceContext, player, revision uint64) err
 const luaReadLocationSnapshot = `return {redis.call('GET',KEYS[1]) or '',redis.call('GET',KEYS[2]) or ''}`
 
 func getPlayerLocationSnapshot(sc *svc.ServiceContext, player uint64) (*smpb.PlayerLocation, string, string, error) {
-	out, err := sc.Redis.Eval(luaReadLocationSnapshot, []string{getPlayerLocationKey(player), locationRevisionKey(player)})
+	out, err := playerRedisEval(sc, luaReadLocationSnapshot, locationSnapshotKeys(player))
 	if err != nil {
 		return nil, "", "", err
 	}

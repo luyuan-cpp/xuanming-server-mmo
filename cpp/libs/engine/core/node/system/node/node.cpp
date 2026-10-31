@@ -20,6 +20,7 @@
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/redis_manager.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "time/system/time.h"
 #include "core/utils/debug/stacktrace_system.h"
 #include "build_info/build_info.h"
@@ -1837,6 +1838,7 @@ void Node::ReleaseLocalOwnersInLoop()
     localOwnerReleaseStarted_ = true;
     hiredis::Hiredis::ProcessMaintenance()->Close();
     tlsRedis.Shutdown();
+    tlsPlayerRedis.Shutdown(); // 只有 scene 连过玩家域;其它节点这里是空操作
     // TcpServer 析构不能发生在 I/O 分发栈；所有 TCP owner 都在原 loop 释放，随后两跳覆盖 forceClose/connectDestroyed。
     eventLoop.queueInLoop([this] {
         rpcServer.reset(); tlsNodeContextManager.Clear();

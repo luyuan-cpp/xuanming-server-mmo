@@ -1,8 +1,8 @@
 package main
 
-// route_source.go 与 checkFriendOrphans 的单测。本 module 只依赖 go-sql-driver/mysql 与 go-redis,没有 miniredis / sqlmock:
-// Redis 经 mappingRedis 接口注入假实现;SQL 一侧 dbRouteSource 的循环经 routeTable 假实现驱动,
-// sqlRouteTable 的语句与参数经下面注册的最小 database/sql 假驱动核对。真库语义见 route_source_integration_test.go。
+// route_source.go 与 checkFriendOrphans 的单测。本 module 只依赖 go-sql-driver/mysql 与 go-redis,没有 sqlmock:
+// dbRouteSource 的循环经 routeTable 假实现驱动,sqlRouteTable 的语句与参数经下面注册的最小 database/sql 假驱动核对。
+// 真库语义见 route_source_integration_test.go。
 
 import (
 	"context"
@@ -20,212 +20,6 @@ import (
 	"sync"
 	"testing"
 )
-
-// ── 假 Redis ──────────────────────────────────────────────────────
-
-// fakeMapping:keys 是 SCAN 依次返回的键;values 是 MGET 的值(string,不在表里 = nil);
-// types 是 TYPE 的结果(不在表里且不在 values 里 = "none")。
-type fakeMapping struct {
-	keys     []string
-	values   map[string]any
-	types    map[string]string
-	pageSize int
-
-	scanErr   error
-	mgetErr   error
-	typeErr   error
-	existsErr error
-
-	existsKeys []string
-}
-
-func (f *fakeMapping) Scan(_ context.Context, cursor uint64, match string, _ int64) ([]string, uint64, error) {
-	if f.scanErr != nil {
-		return nil, 0, f.scanErr
-	}
-	if match != homeZoneKeyPattern {
-		return nil, 0, fmt.Errorf("unexpected match %q", match)
-	}
-	size := f.pageSize
-	if size <= 0 {
-		size = len(f.keys) + 1
-	}
-	start := int(cursor)
-	end := start + size
-	if end >= len(f.keys) {
-		return append([]string(nil), f.keys[start:]...), 0, nil
-	}
-	return append([]string(nil), f.keys[start:end]...), uint64(end), nil
-}
-
-func (f *fakeMapping) MGet(_ context.Context, keys ...string) ([]any, error) {
-	if f.mgetErr != nil {
-		return nil, f.mgetErr
-	}
-	out := make([]any, len(keys))
-	for i, k := range keys {
-		out[i] = f.values[k]
-	}
-	return out, nil
-}
-
-func (f *fakeMapping) Type(_ context.Context, key string) (string, error) {
-	if f.typeErr != nil {
-		return "", f.typeErr
-	}
-	if t, ok := f.types[key]; ok {
-		return t, nil
-	}
-	if _, ok := f.values[key]; ok {
-		return "string", nil
-	}
-	return "none", nil
-}
-
-func (f *fakeMapping) Exists(_ context.Context, key string) (int64, error) {
-	f.existsKeys = append(f.existsKeys, key)
-	if f.existsErr != nil {
-		return 0, f.existsErr
-	}
-	_, isString := f.values[key]
-	_, isOther := f.types[key]
-	if isString || isOther {
-		return 1, nil
-	}
-	return 0, nil
-}
-
-func TestRedisRouteSourceDescribeSaysNotAuthoritative(t *testing.T) {
-	got := redisRouteSource{r: &fakeMapping{}}.Describe()
-	if got != "route source: redis (not authoritative under db_first)" {
-		t.Fatalf("Describe() = %q", got)
-	}
-}
-
-// TestRedisLiveZonesCountsMalformedValues:畸形值(非数字、0、空串、超 uint32、超 maxHomeZone、非 string 类型)计数并列出样本,
-// 不进活区;SCAN 与 MGET 之间被删的键只计 Vanished。分页跨越多次 SCAN。
-func TestRedisLiveZonesCountsMalformedValues(t *testing.T) {
-	f := &fakeMapping{
-		pageSize: 3,
-		keys: []string{
-			"player:zone:1", "player:zone:2", "player:zone:3", "player:zone:4", "player:zone:5",
-			"player:zone:6", "player:zone:7", "player:zone:8", "player:zone:9", "player:zone:10",
-			"player:zone:11",
-		},
-		values: map[string]any{
-			"player:zone:1":  "3",
-			"player:zone:2":  "3",
-			"player:zone:3":  "5",
-			"player:zone:4":  "abc",
-			"player:zone:5":  "0",
-			"player:zone:6":  "",
-			"player:zone:7":  "4294967296",
-			"player:zone:10": "7",
-			"player:zone:11": "1000000",
-		},
-		// player:zone:8 是 hash;player:zone:9 既不在 values 也不在 types = SCAN 后被删。
-		types: map[string]string{"player:zone:8": "hash"},
-	}
-	zones, rep, err := redisRouteSource{r: f}.LiveZones(context.Background())
-	if err != nil {
-		t.Fatalf("LiveZones: %v", err)
-	}
-	if want := map[uint32]struct{}{3: {}, 5: {}, 7: {}}; fmt.Sprint(sortedKeys(zones)) != fmt.Sprint(sortedKeys(want)) {
-		t.Fatalf("zones = %v, want %v", sortedKeys(zones), sortedKeys(want))
-	}
-	if rep.Scanned != 11 || rep.Malformed != 6 || rep.Vanished != 1 {
-		t.Fatalf("report = %+v, want scanned=11 malformed=6 vanished=1", rep)
-	}
-	joined := strings.Join(rep.Samples, " | ")
-	for _, want := range []string{`player:zone:4="abc"`, `player:zone:5="0"`, `player:zone:6=""`, `player:zone:7="4294967296"`, "player:zone:8 (type=hash)", `player:zone:11="1000000"`} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("samples %q missing %q", joined, want)
-		}
-	}
-	res := shapeCheckResult(rep)
-	if res.Severity != "block" || res.BadCount != 6 || res.TotalCount != 11 {
-		t.Fatalf("shape result = %+v, want block 6/11", res)
-	}
-}
-
-func TestRedisLiveZonesSampleLimit(t *testing.T) {
-	f := &fakeMapping{values: map[string]any{}}
-	for i := 0; i < shapeSampleLimit+5; i++ {
-		k := "player:zone:" + strconv.Itoa(i+1)
-		f.keys = append(f.keys, k)
-		f.values[k] = "bad"
-	}
-	_, rep, err := redisRouteSource{r: f}.LiveZones(context.Background())
-	if err != nil {
-		t.Fatalf("LiveZones: %v", err)
-	}
-	if rep.Malformed != int64(shapeSampleLimit+5) || len(rep.Samples) != shapeSampleLimit {
-		t.Fatalf("malformed=%d samples=%d, want %d / %d", rep.Malformed, len(rep.Samples), shapeSampleLimit+5, shapeSampleLimit)
-	}
-}
-
-func TestRedisLiveZonesCleanIsInfo(t *testing.T) {
-	f := &fakeMapping{keys: []string{"player:zone:1"}, values: map[string]any{"player:zone:1": "2"}}
-	_, rep, err := redisRouteSource{r: f}.LiveZones(context.Background())
-	if err != nil {
-		t.Fatalf("LiveZones: %v", err)
-	}
-	if res := shapeCheckResult(rep); res.Severity != "info" || res.BadCount != 0 {
-		t.Fatalf("shape result = %+v, want info", res)
-	}
-}
-
-// TestRedisRouteSourceErrorsAreErrors:任何一步读失败都报错,不跳过、不当成缺席。
-func TestRedisRouteSourceErrorsAreErrors(t *testing.T) {
-	boom := errors.New("connection reset")
-	base := func() *fakeMapping {
-		return &fakeMapping{keys: []string{"player:zone:1", "player:zone:2"}, values: map[string]any{"player:zone:1": "3"}}
-	}
-	cases := map[string]func(*fakeMapping){
-		"scan": func(f *fakeMapping) { f.scanErr = boom },
-		"mget": func(f *fakeMapping) { f.mgetErr = boom },
-		"type": func(f *fakeMapping) { f.typeErr = boom }, // player:zone:2 的值是 nil,要 TYPE
-	}
-	for name, mutate := range cases {
-		t.Run(name, func(t *testing.T) {
-			f := base()
-			mutate(f)
-			if _, _, err := (redisRouteSource{r: f}).LiveZones(context.Background()); !errors.Is(err, boom) {
-				t.Fatalf("LiveZones err = %v, want %v", err, boom)
-			}
-		})
-	}
-	f := base()
-	f.scanErr = boom
-	if _, err := (redisRouteSource{r: f}).CountPlayers(context.Background()); !errors.Is(err, boom) {
-		t.Fatalf("CountPlayers err = %v, want %v", err, boom)
-	}
-	f = base()
-	f.existsErr = boom
-	has, err := redisRouteSource{r: f}.HasHome(context.Background(), 42)
-	if !errors.Is(err, boom) || has {
-		t.Fatalf("HasHome = %v, %v; want false + %v", has, err, boom)
-	}
-}
-
-func TestRedisCountAndHasHome(t *testing.T) {
-	f := &fakeMapping{pageSize: 1, keys: []string{"player:zone:1", "player:zone:2", "player:zone:3"},
-		values: map[string]any{"player:zone:42": "3"}}
-	n, err := redisRouteSource{r: f}.CountPlayers(context.Background())
-	if err != nil || n != 3 {
-		t.Fatalf("CountPlayers = %d, %v; want 3", n, err)
-	}
-	src := redisRouteSource{r: f}
-	if has, err := src.HasHome(context.Background(), 42); err != nil || !has {
-		t.Fatalf("HasHome(42) = %v, %v; want true", has, err)
-	}
-	if has, err := src.HasHome(context.Background(), 43); err != nil || has {
-		t.Fatalf("HasHome(43) = %v, %v; want false", has, err)
-	}
-	if fmt.Sprint(f.existsKeys) != "[player:zone:42 player:zone:43]" {
-		t.Fatalf("exists keys = %v", f.existsKeys)
-	}
-}
 
 // ── 假 routeTable(驱动 dbRouteSource 的循环)─────────────────────
 
@@ -309,11 +103,14 @@ func TestDBRouteSourceLiveZonesAndCount(t *testing.T) {
 	if fmt.Sprint(sortedKeys(zones)) != "[3 5]" {
 		t.Fatalf("zones = %v, want [3 5]", sortedKeys(zones))
 	}
-	if rep.Scanned != 4 || rep.Malformed != 2 || rep.Vanished != 0 {
+	if rep.Scanned != 4 || rep.Malformed != 2 {
 		t.Fatalf("report = %+v, want scanned=4 malformed=2", rep)
 	}
 	if got := strings.Join(rep.Samples, ","); got != "home_zone=0,home_zone=1000000" {
 		t.Fatalf("samples = %q", got)
+	}
+	if res := shapeCheckResult(rep); res.Severity != "block" || res.BadCount != 2 || res.TotalCount != 4 {
+		t.Fatalf("shape result = %+v, want block 2/4", res)
 	}
 
 	n, err := src.CountPlayers(context.Background())
@@ -329,6 +126,30 @@ func TestDBRouteSourceLiveZonesAndCount(t *testing.T) {
 	}
 	if !strings.Contains(src.Describe(), `"testdb"`) || !strings.Contains(src.Describe(), "route source: db") {
 		t.Fatalf("Describe() = %q", src.Describe())
+	}
+}
+
+func TestDBLiveZonesSampleLimit(t *testing.T) {
+	homes := map[uint64]*uint32{}
+	for i := 0; i < shapeSampleLimit+5; i++ {
+		homes[uint64(i+1)] = zonePtr(maxHomeZone + 1 + uint32(i))
+	}
+	_, rep, err := dbRouteSource{t: &fakeRouteTable{homes: homes}}.LiveZones(context.Background())
+	if err != nil {
+		t.Fatalf("LiveZones: %v", err)
+	}
+	if rep.Malformed != int64(shapeSampleLimit+5) || len(rep.Samples) != shapeSampleLimit {
+		t.Fatalf("malformed=%d samples=%d, want %d / %d", rep.Malformed, len(rep.Samples), shapeSampleLimit+5, shapeSampleLimit)
+	}
+}
+
+func TestDBLiveZonesCleanIsInfo(t *testing.T) {
+	_, rep, err := dbRouteSource{t: &fakeRouteTable{homes: map[uint64]*uint32{1: zonePtr(2)}}}.LiveZones(context.Background())
+	if err != nil {
+		t.Fatalf("LiveZones: %v", err)
+	}
+	if res := shapeCheckResult(rep); res.Severity != "info" || res.BadCount != 0 {
+		t.Fatalf("shape result = %+v, want info", res)
 	}
 }
 

@@ -50,23 +50,30 @@
 //   非 0 时"节点缓存值 == 写权行当前值"才允许写,否则本节点已被废黜。
 namespace player_ownership
 {
-	// 玩家域键,带 {player_id} hash tag(docs/design/redis-player-store-cluster.md §5.2),与 go/shared/ownerepoch.OwnerEpochKey
-	// 逐字一致。
+	// 玩家域键,带 {player_id} hash tag(docs/design/redis-player-store-cluster.md §5.2),同一玩家的键同 slot,
+	// 多键 Lua 才合法。与 Go 逐字一致:go/shared/ownerepoch(OwnerEpochKey、HandoffKey)、go/shared/handofffence.Key、
+	// go/shared/redisslot.LocationKey;金样见 cpp/tests/currency_test 的 PlayerDomainRedisKeysMatchGoContract。
 	inline std::string OwnerEpochRedisKey(uint64_t playerId)
 	{
 		return "player:" + redis_slot::PlayerTag(playerId) + ":owner_epoch";
 	}
 
+	// 已落盘标记,字符串。别和交接资格 hash player:{id}:handoff_fence(handoff_sql_barrier.h)弄混,两个键只差后缀。
 	inline std::string HandoffRedisKey(uint64_t playerId)
 	{
-		return "player:" + std::to_string(playerId) + ":handoff";
+		return "player:" + redis_slot::PlayerTag(playerId) + ":handoff";
 	}
 
-	// 与 go/scene_manager/internal/logic/changesceneutil.go getPlayerLocationKey 同一口径。
-	// 值的解析只走 player_ownership::ParsePlayerLocationElement(player_lifecycle.h),不要各抄一份。
+	// 交接资格 hash,字段名见 handoff_sql_barrier::kFenceField。
+	inline std::string HandoffFenceRedisKey(uint64_t playerId)
+	{
+		return "player:" + redis_slot::PlayerTag(playerId) + ":handoff_fence";
+	}
+
+	// 玩家位置。值的解析只走 player_ownership::ParsePlayerLocationElement(player_lifecycle.h),不要各抄一份。
 	inline std::string LocationRedisKey(uint64_t playerId)
 	{
-		return "player:" + std::to_string(playerId) + ":location";
+		return "player:" + redis_slot::PlayerTag(playerId) + ":location";
 	}
 
 	// 交接标记的值格式 "{epoch}:{saved_at_ms}"。scene_manager 只解析冒号前的 epoch 与当前
@@ -133,7 +140,7 @@ struct PlayerOwnerEpochComp
 //               出去(同一次调用里)或 SET 收到 ERROR 应答(同一个回调里)时都会当场 AbortTravelHandoff 摘掉组件,
 //               所以只要观察到非 0,SET 就一定已经发出。冻结上限与晚发闸按它切"标记已发出"
 //               (travel_freeze_cap::IsHandoffMarkSent):已发出一侧它们只销毁、不解冻。
-//               发起之后本节点**不得再写**该玩家(SavePlayerToRedis 直接跳过):标记一旦落地,
+//               发起之后本节点**不得再写**该玩家(SavePlayer 直接跳过):标记一旦落地,
 //               scene_manager 随时可能放行并 INCR epoch,再写只会被 CAS 拒、徒增
 //               stale_owner_write_rejected 噪声。也是 EnterScene 应答超时看门狗的代际:
 //               看门狗到期时 requestedAtMs 若已变化,说明是另一次交接,不动。

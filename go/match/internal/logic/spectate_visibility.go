@@ -9,11 +9,10 @@ import (
 
 // 观战可见性(docs/design/battle-spectate-tiered-fanout.md §10 第 6 条):「这局能不能被观战」只在本文件决定。
 // gather 建房时调用一次 spectateVisibilityFor,结果写进 CreateBattleRequest.spectate_visibility 随原件冻结
-// (全局模式随 formation 的 create_request 落 TiDB),观战记录 SpectateBattleRecord.visibility 取同一个值。
+// (随 formation 的 create_request 落库),观战记录 SpectateBattleRecord.visibility 取同一个值。
 // 之后各执法点只读冻结值、不再按模式重算:
-//   - 登记与公开:私密局照写观战记录(丢票补签靠它定位 battle 节点),但不进活跃集合(addSpectateActive 拒收);
-//   - WatchBattle:Redis 路径指定场在任何副作用之前判定、随机模式跳过私密成员;全局路径在落原件之前判定
-//     (globalFormationWatchable),不满足按 16018 关闭意图;
+//   - 登记与公开:私密局不进活跃集合(addSpectateActive 拒收);
+//   - WatchBattle:在落原件之前判定(globalFormationWatchable),不满足按 16018 关闭意图;
 //   - 观战列表:过滤非公开记录,只摘活跃集合成员;
 //   - battle AddObserver:房间可见性非 PUBLIC 一律拒绝(第二道闸,C++ battle 侧)。
 // 默认拒绝:UNSPECIFIED(漏填)与 PRIVATE 一样不可观战,只有 PUBLIC 放行。

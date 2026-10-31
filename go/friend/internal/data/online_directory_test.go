@@ -14,6 +14,7 @@ import (
 	dspb "proto/data_service"
 	pb "proto/friend"
 	plpb "proto/player_locator"
+	"shared/redisslot"
 )
 
 type directoryDataService struct {
@@ -106,10 +107,14 @@ func TestOnlineDirectoryFiltersAndPreservesLastBatch(t *testing.T) {
 }
 
 func TestOnlineDirectoryInputAndDependencyFailures(t *testing.T) {
-	for _, raw := range []string{"bad", "v1:-1:0", "v1:18446744073709551616:0", "v1:1:65535", strings.Repeat("0", 49)} {
-		require.ErrorIs(t, ValidateDirectoryInput(raw, ""), ErrInvalidDirectoryInput)
+	for _, raw := range []string{
+		"bad", "v1:1:0", "v2::5", "v2:0:0", "v2:00000000.0.-1:0", "v2:00000000.0.18446744073709551616:0", "v2:00000000.0.1:65535",
+		strings.Repeat("0", 49),
+	} {
+		require.ErrorIs(t, ValidateDirectoryInput(raw, ""), ErrInvalidDirectoryInput, raw)
 	}
-	require.NoError(t, ValidateDirectoryInput("v1:18446744073709551615:0", ""))
+	require.NoError(t, ValidateDirectoryInput("v2:00000000.0.18446744073709551615:0", ""))
+	require.NoError(t, ValidateDirectoryInput("v2:0a1b2c3d.65535.18446744073709551615:1024", ""), "游标编码的最长形状仍在长度上限之内")
 	require.ErrorIs(t, ValidateDirectoryInput("", strings.Repeat("字", 65)), ErrInvalidDirectoryInput)
 	reader, _ := newSessionReaderOnMiniredis(t, 64)
 	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: map[uint64]uint32{}}}
@@ -151,7 +156,7 @@ func TestOnlineDirectoryEmptyPageContinuesWithinScanBudget(t *testing.T) {
 		peer.WriteBulk(next)
 		if next == "0" {
 			peer.WriteLen(1)
-			peer.WriteBulk("player:session:1999")
+			peer.WriteBulk(redisslot.SessionKey(1999))
 		} else {
 			peer.WriteLen(0)
 		}
@@ -182,6 +187,24 @@ func TestOnlineDirectoryEmptyPageContinuesWithinScanBudget(t *testing.T) {
 	require.Equal(t, []uint64{1999}, found)
 }
 
+// 带来的游标属于别的拓扑(集群扩缩容、切主):从头开始,不按旧偏移跳过这一批。客户端按玩家 id 去重。
+func TestOnlineDirectoryStaleTopologyCursorRestarts(t *testing.T) {
+	reader, mr := newSessionReaderOnMiniredis(t, 64)
+	zones := map[uint64]uint32{1: 1}
+	displays := map[uint64]*dspb.PlayerDisplay{}
+	for id := uint64(2); id <= 4; id++ {
+		zones[id] = 1
+		putPlayerSession(t, mr, id, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 123)
+		displays[id] = directoryDisplay(fmt.Sprintf("道人%d", id))
+	}
+	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: zones, displays: displays}}
+
+	resp, err := directory.List(context.Background(), 1, "v2:deadbeef.3.99:2", 10, nil, "")
+	require.NoError(t, err)
+	require.Len(t, resp.GetCandidates(), 3, "旧游标的偏移 2 不得跳过这一批的前两个玩家")
+	require.Empty(t, resp.GetNextCursor())
+}
+
 // 展示资料从 data_service 读。查不到的好友照样回源名字。
 func TestFriendProfilesOnPlayerStoreReadFromDataService(t *testing.T) {
 	friends := []*pb.FriendEntry{{FriendPlayerId: 2, IsOnline: true}, {FriendPlayerId: 3}}
@@ -206,7 +229,7 @@ func TestOnlineDirectoryOnPlayerStoreReadsSessionsFromRedisAndProfilesFromDataSe
 	for _, id := range []uint64{2, 3, 4} {
 		session, err := proto.Marshal(&plpb.PlayerSession{PlayerId: id, State: plpb.PlayerSessionState_SESSION_STATE_ONLINE, LastActiveTs: 1000})
 		require.NoError(t, err)
-		require.NoError(t, mr.Set(fmt.Sprintf("%s%d", playerSessionKeyPrefix, id), string(session)))
+		require.NoError(t, mr.Set(redisslot.SessionKey(id), string(session)))
 	}
 	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{
 		zones: map[uint64]uint32{1: 7, 2: 7, 3: 7, 4: 7},

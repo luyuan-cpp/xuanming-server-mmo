@@ -24,6 +24,8 @@ SQL 事务内不访问 Redis、Kafka 或 scene。RPC 和事务共享可取消截
 
 登录列表、建角上限、EnterGame 归属、身份补齐和孤儿清理接缝均走 SQL 目录；既有无生产调用者的 LoginAdmin 删除 RPC 继续明确 Unimplemented，不借迁移扩大破坏性权限。旧账号 self-heal 不再根据 Redis 反向键制造角色。AssignGate 的“已有会话”优化也查询同一目录。P0-b 原始批次只覆盖这些目录入口；随后获授权的 P4 增加下节的交易锁与过户收据，但不改变玩家种子、父快照及 scene owner_epoch 的事实源。
 
+> **2026-10-30**:旧调试导入工具已删除,`AccountDirectoryStore.ImportRole` 与 `account_role_import_receipt` 随之删除。新的 `debug_import` 只改本地已有角色的 `player_store` 行,不碰账号目录([online-debug-data-fetch.md](../ops/online-debug-data-fetch.md))。下面关于调试导入、维护收据与 `-replace` 墓碑恢复的段落只作历史保留;墓碑现在不能恢复。
+
 调试导出显示全局 SQL 目录，旧 Redis 目录仅标为历史缓存。调试导入的 `-local-account` 必须在目标本地全局目录登记角色；该受本地目标、来源隔离与离线检查约束的 CLI 直接调用 SQL store，不走仅允许 login 的 RPC。墓碑恢复还须显式 -replace，并继续递增归属修订号；不再只写反向 Redis 键冒充归属。工具不得改变认证口令。
 
 导入先在原 Redis 原子闸复核 location、locator 会话和 `player_locker` 均不存在，并安装 pending≠ACK。随后先以稳定维护请求提交 SQL 目录：同角色行锁下拒绝 OPEN admission，首次导入递增 owner_revision 并写永久维护收据；此后才写两张玩家 SQL，最后补齐 ACK。已登记的旧入场先使导入拒绝，尚未登记的旧路由则因修订变化拒绝。目录失败零玩家 SQL；玩家 SQL 失败保留新目录修订与未完成屏障，不能 ACK。重铸 scene owner_epoch 同时覆盖来源、本地 Redis 与实际两张 SQL 行的最高版本，不回退 SQL 围栏。

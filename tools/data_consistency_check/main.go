@@ -10,13 +10,12 @@
 //   triage takes hours.
 //
 //   This tool runs the inverse query family: given the current zone
-//   topology in mapping Redis, find rows in MySQL that point to a zone
-//   that no longer exists, or that disagree with mapping Redis on a
+//   topology in the global route table, find rows in MySQL that point to a
+//   zone that no longer exists, or that disagree with the route table on a
 //   given player_id's home_zone.
 //
-//   Route source (D1 第 3 批,spec_D1_batch1b2_2_3.md §5.5):给了 -route-db-dsn 就按全局库 player_route
-//   枚举归属(db_first 下的真源,见 route_source.go);不给保持 mapping Redis 口径,并在报告里打印
-//   "route source: redis (not authoritative under db_first)"。guild_rank:zone:* 不是映射,始终读 Redis。
+//   归属只读 -route-db-dsn 指向的全局库 player_route(真源,见 route_source.go)。
+//   guild_rank:zone:* 不是映射,读 -redis-addr 指向的 Redis。
 //
 //   It complements:
 //     - tools/merge_zone/audit_resources.go — pre-merge resource counts
@@ -76,9 +75,9 @@ var guildSchemaNamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
 // runConfig is what each checker needs. We pass it by value because
 // every field is a handle / int — no ownership concerns.
 type runConfig struct {
-	accountDB *sql.DB // P0-b全局目录；仅复用显式-route-db-dsn，不读zone账号表。
+	accountDB *sql.DB // P0-b全局目录；复用-route-db-dsn，不读zone账号表。
 	db        *sql.DB
-	mappingDB *redis.Client
+	rankRedis *redis.Client // guild_rank:zone:* 所在的 Redis
 	// friendDB 是好友独占库 mmorpg_friend 的第二个连接(port-decisions D-14,2026-09-18)。
 	//
 	// 为什么不共用 db:-mysql-dsn 指的是 `mmorpg`(公会 / 账号那套),friend 已经搬走。
@@ -89,7 +88,7 @@ type runConfig struct {
 	// nil = 没连上或没配。checkFriendOrphans 据此报 warn「NOT CHECKED」而不是跳过:
 	// 本文件 2026-05-23 的教训就是「优雅降级」把没跑的检查读成了干净通过。
 	friendDB *sql.DB
-	// routes 是玩家归属的读法:-route-db-dsn 给了是 player_route(db 口径),否则是 mapping Redis(redis 口径)。
+	// routes 是玩家归属的读法。
 	routes routeSource
 	// mailDB 是邮件独占库 mmorpg_mail 的连接(docs/design/mail-system.md §7.4,D-14)。理由与 friendDB 逐条相同:
 	// -mysql-dsn 那个库里没有 mail 的表;单独一个 DSN 让运维能指到别处(TiDB 迁移期两个库不一定同实例),
@@ -116,18 +115,17 @@ func main() {
 	// 置空 = 显式声明「本环境没有 mail」,mail 那条检查报 warn「NOT CHECKED」。
 	mailDSN := flag.String("mail-mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg_mail?charset=utf8mb4&parseTime=true&loc=Local",
 		"SQL DSN for the current M2/M3 mail-only database (same target as mail DSNEnv). Empty = skip the mail check and report it as NOT CHECKED")
-	redisAddr := flag.String("redis-addr", "127.0.0.1:6379", "Mapping redis address (player:zone:* keys)")
-	redisPwd := flag.String("redis-password", "", "Mapping redis password")
-	redisDB := flag.Int("redis-db", 0, "Mapping redis DB number")
-	// db_first 下映射的真源是全局库 player_route(dev 是 testdb,K8s 是 mmorpg_global),Redis 只是缓存。
-	// 给了就按库枚举归属(live zones / 玩家数 / 好友端是否有归属),不给保持 Redis 口径并在报告里注明不权威。
+	redisAddr := flag.String("redis-addr", "127.0.0.1:6379", "Redis address holding guild_rank:zone:* keys")
+	redisPwd := flag.String("redis-password", "", "Redis password")
+	redisDB := flag.Int("redis-db", 0, "Redis DB number")
+	// 映射的真源是全局库 player_route(dev 是 testdb,K8s 是 mmorpg_global):live zones / 玩家数 / 好友端是否有归属都按它查。
 	routeDSN := flag.String("route-db-dsn", "",
-		"Global route database DSN (the database holding player_route; db_first source of truth). Empty = use mapping Redis player:zone:* (not authoritative under db_first)")
+		"Global route database DSN, required (the database holding player_route, the source of truth for home zones)")
 
-	// Live zones is a CSV the operator passes in (or we infer from mapping).
+	// Live zones is a CSV the operator passes in (or we infer from the route table).
 	// Inference is the default because operators forget to update flags;
-	// any mapping value seen in player:zone:* is treated as a live zone.
-	liveZonesCSV := flag.String("live-zones", "", "Comma-separated zone IDs that are currently up. Empty = infer from mapping Redis (default; recommended).")
+	// any home_zone seen in player_route is treated as a live zone.
+	liveZonesCSV := flag.String("live-zones", "", "Comma-separated zone IDs that are currently up. Empty = infer from player_route (default; recommended).")
 
 	timeout := flag.Duration("timeout", 5*time.Minute, "Overall timeout for the scan")
 
@@ -135,6 +133,9 @@ func main() {
 
 	if !guildSchemaNamePattern.MatchString(*guildSchema) {
 		log.Fatalf("-guild-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", *guildSchema)
+	}
+	if *routeDSN == "" {
+		log.Fatalf("-route-db-dsn is required: home zones are only stored in the global player_route table")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
@@ -187,38 +188,32 @@ func main() {
 	rdb := redis.NewClient(&redis.Options{Addr: *redisAddr, Password: *redisPwd, DB: *redisDB})
 	defer rdb.Close()
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("mapping redis ping: %v", err)
+		log.Fatalf("redis ping: %v", err)
 	}
 
-	// 归属的读法。给了 -route-db-dsn 却连不上就 Fatal:不能静默退回 Redis 口径,那会把不权威的结论当成库的结论。
-	var routes routeSource = redisRouteSource{r: goRedisMapping{rdb: rdb}}
-	var accountDB *sql.DB
-	if *routeDSN != "" {
-		// ParseDSN 的错误里可能带 DSN 片段(含口令),所以不打印原错误。
-		parsed, err := mysqldriver.ParseDSN(*routeDSN)
-		if err != nil {
-			log.Fatalf("-route-db-dsn cannot be parsed (error not printed: it may contain the password)")
-		}
-		if parsed.DBName == "" {
-			log.Fatalf("-route-db-dsn must name the database that holds player_route")
-		}
-		routeDB, err := sql.Open("mysql", *routeDSN)
-		if err != nil {
-			log.Fatalf("route db open: %v", err)
-		}
-		defer routeDB.Close()
-		if err := routeDB.PingContext(ctx); err != nil {
-			log.Fatalf("route db ping: %v", err)
-		}
-		routes = dbRouteSource{t: sqlRouteTable{db: routeDB}, dbName: parsed.DBName}
-		accountDB = routeDB
+	// ParseDSN 的错误里可能带 DSN 片段(含口令),所以不打印原错误。
+	parsed, err := mysqldriver.ParseDSN(*routeDSN)
+	if err != nil {
+		log.Fatalf("-route-db-dsn cannot be parsed (error not printed: it may contain the password)")
 	}
+	if parsed.DBName == "" {
+		log.Fatalf("-route-db-dsn must name the database that holds player_route")
+	}
+	routeDB, err := sql.Open("mysql", *routeDSN)
+	if err != nil {
+		log.Fatalf("route db open: %v", err)
+	}
+	defer routeDB.Close()
+	if err := routeDB.PingContext(ctx); err != nil {
+		log.Fatalf("route db ping: %v", err)
+	}
+	var routes routeSource = dbRouteSource{t: sqlRouteTable{db: routeDB}, dbName: parsed.DBName}
 	log.Println(routes.Describe())
 
 	// ── build "known zones" set ──────────────────────────────────
 	// Why we build it on the operator's terms first, then fall back to
 	// inference: explicit override is needed during a *failed* merge
-	// (where mapping Redis is in a transient state and self-inference
+	// (where the route table is in a transient state and self-inference
 	// would falsely declare half the rows orphaned).
 	//
 	// 推断时顺带检查归属值的形状(畸形值计数并列进报告,不静默跳过);显式给 -live-zones 时不扫,报告里注明 NOT CHECKED。
@@ -253,7 +248,7 @@ func main() {
 	}
 	log.Printf("Live zones: %v", sortedKeys(knownZones))
 
-	cfg := runConfig{accountDB: accountDB, db: db, mappingDB: rdb, friendDB: friendDB, routes: routes, mailDB: mailDB, knownZones: knownZones, guildSchema: *guildSchema}
+	cfg := runConfig{accountDB: routeDB, db: db, rankRedis: rdb, friendDB: friendDB, routes: routes, mailDB: mailDB, knownZones: knownZones, guildSchema: *guildSchema}
 
 	// ── run checks ───────────────────────────────────────────────
 	//
@@ -290,18 +285,14 @@ func main() {
 // 畸形的归属值会让读方(data_service 的 GetPlayerHomeZone 等)对这个玩家 fail-closed,玩家进不了游戏,所以是 block。
 func shapeCheckResult(rep zoneShapeReport) CheckResult {
 	r := CheckResult{Name: "route home_zone values", BadCount: rep.Malformed, TotalCount: rep.Scanned}
-	vanished := ""
-	if rep.Vanished > 0 {
-		vanished = fmt.Sprintf("; %d key(s) vanished between SCAN and MGET (concurrent delete, not counted)", rep.Vanished)
-	}
 	if rep.Malformed == 0 {
 		r.Severity = "info"
-		r.SampleNotes = fmt.Sprintf("%d %s scanned, none malformed%s", rep.Scanned, rep.Subject, vanished)
+		r.SampleNotes = fmt.Sprintf("%d %s scanned, none malformed", rep.Scanned, rep.Subject)
 		return r
 	}
 	r.Severity = "block"
-	r.SampleNotes = fmt.Sprintf("%d/%d %s malformed (excluded from live zones), samples: %s%s",
-		rep.Malformed, rep.Scanned, rep.Subject, strings.Join(rep.Samples, ", "), vanished)
+	r.SampleNotes = fmt.Sprintf("%d/%d %s malformed (excluded from live zones), samples: %s",
+		rep.Malformed, rep.Scanned, rep.Subject, strings.Join(rep.Samples, ", "))
 	return r
 }
 
@@ -384,7 +375,7 @@ func checkGuildRankZoneOrphans(ctx context.Context, cfg runConfig) CheckResult {
 	var cur uint64
 	var orphanZones []uint32
 	for {
-		keys, next, err := cfg.mappingDB.Scan(ctx, cur, "guild_rank:zone:*", 200).Result()
+		keys, next, err := cfg.rankRedis.Scan(ctx, cur, "guild_rank:zone:*", 200).Result()
 		if err != nil {
 			r.Severity = "warn"
 			r.SampleNotes = fmt.Sprintf("scan failed: %v", err)
@@ -495,8 +486,7 @@ func checkFriendOrphans(ctx context.Context, cfg runConfig) CheckResult {
 			// 2026-10-20 之前 continue:扫描失败的行既不算样本也不算孤儿,样本静默变少、结论看似完整。
 			return friendCheckFailed(r, fmt.Sprintf("scan sample row after %d sampled: %v", sampled, err))
 		}
-		// 查不到归属 ≠ 没有归属:读失败时整条检查判 fail,已数的孤儿作废(2026-10-18 之前 Exists(...).Val() 吞掉错误,
-		// Redis 一抖就把好友整批算成孤儿)。
+		// 查不到归属 ≠ 没有归属:读失败时整条检查判 fail,已数的孤儿作废。
 		has, err := cfg.routes.HasHome(ctx, fid)
 		if err != nil {
 			return friendCheckFailed(r, fmt.Sprintf("route lookup for friend_player_id=%d after %d sampled: %v", fid, sampled, err))
@@ -610,7 +600,7 @@ func mailOrphanSamples(ctx context.Context, db *sql.DB, query string) string {
 
 // printReport renders a markdown-ish table to stdout.
 // Returns the number of block- and fail-severity rows so main can exit non-zero.
-// routeSourceLine 是 routeSource.Describe() 那一行,印在表头:报告读者要知道归属是按库还是按缓存判的。
+// routeSourceLine 是 routeSource.Describe() 那一行,印在表头:报告读者要知道归属是按哪个库判的。
 func printReport(results []CheckResult, routeSourceLine string) int {
 	log.Println()
 	log.Println("=== Data consistency check ===")

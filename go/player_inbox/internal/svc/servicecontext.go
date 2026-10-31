@@ -1,4 +1,4 @@
-// Package svc 是 player_inbox 的依赖装配:etcd 客户端、mmorpg_player_inbox 连接池、核心 Redis、
+// Package svc 是 player_inbox 的依赖装配:etcd 客户端、mmorpg_player_inbox 连接池、核心 Redis、玩家域 Redis、
 // Kafka 生产者、scene 节点镜像、data_service 客户端,以及 inbox 的 Store / 在线提醒 / 后台循环。
 package svc
 
@@ -22,6 +22,7 @@ import (
 	"shared/drainproof"
 	"shared/kafkacmd"
 	"shared/leader"
+	"shared/playerredis"
 	"shared/safego"
 	"shared/scenenode"
 
@@ -40,8 +41,8 @@ const (
 	mysqlPingTimeout     = 5 * time.Second
 	coreRedisPingTimeout = 3 * time.Second
 	// coreRedisReadTimeout / coreRedisWriteTimeout:核心 Redis 单次 socket 读 / 写的兜底上限(评审 L7)。
-	// 客户端开了 ContextTimeoutEnabled,带截止时间的 ctx(请求预算 Timeout − 500ms、OwnerEpochReadTimeout 500ms、
-	// 提醒预算、选主续期 2s)取两者较早者;不带截止时间的调用(选主竞选的 SETNX 用的是循环 ctx)靠它封顶。
+	// 客户端开了 ContextTimeoutEnabled,带截止时间的 ctx(选主续期 2s)取两者较早者;
+	// 不带截止时间的调用(选主竞选的 SETNX 用的是循环 ctx)靠它封顶。
 	// 只用到 GET / SET NX / EVAL 这类单键命令,正常往返是毫秒级,1s 足够宽。必须为正:-1 / -2 会关掉 socket 截止,
 	// 连 ctx 截止也一起失效(shared/leader GoRedisMaxCallDuration 的注释)。
 	coreRedisReadTimeout  = time.Second
@@ -73,8 +74,10 @@ type ServiceContext struct {
 	Etcd *clientv3.Client
 	// DB 是 mmorpg_player_inbox 的连接池(设计 §10 的独立连接池)。表由 schemamigrate 建,本包不碰 DDL。
 	DB *sql.DB
-	// CoreRedis 是核心 Redis(owner_epoch / location / 选主锁)。
+	// CoreRedis 是控制域 Redis(选主锁)。
 	CoreRedis *redis.Client
+	// PlayerRedis 是玩家域句柄(owner_epoch / location)。键一律带 {player_id},发送前经守卫核对。
+	PlayerRedis redis.UniversalClient
 	// Kafka 写在线提醒(scene-cmd_g<N>,显式分区)。
 	Kafka *kafka.Writer
 	// SceneNodes 是 SceneNodeService.rpc/ 前缀的节点镜像。
@@ -117,7 +120,9 @@ type externalDeps struct {
 	openMySQL        func(config.MySQLConf) (*sql.DB, error)
 	newRoleAuthority func(context.Context, *sql.DB, string, authoritysql.Backend) (inbox.RoleAuthority, error)
 	// openCoreRedis 建核心 Redis 客户端并探活;返回错误时自己负责关掉已建的客户端。
-	openCoreRedis   func(config.RedisConf) (*redis.Client, error)
+	openCoreRedis func(config.RedisConf) (*redis.Client, error)
+	// openPlayerRedis 建玩家域客户端并探活;返回错误时自己负责关掉已建的客户端。
+	openPlayerRedis func(playerredis.Config) (redis.UniversalClient, error)
 	openDataService func(zrpc.RpcClientConf) (*grpc.ClientConn, error)
 	// registerer 是 scene 节点镜像指标(scenenode_nodes)的注册表。
 	registerer prometheus.Registerer
@@ -133,7 +138,8 @@ func productionDeps() externalDeps {
 		newRoleAuthority: func(ctx context.Context, db *sql.DB, schema string, backend authoritysql.Backend) (inbox.RoleAuthority, error) {
 			return inbox.NewSQLRoleAuthority(ctx, db, schema, backend)
 		},
-		openCoreRedis: openCoreRedis,
+		openCoreRedis:   openCoreRedis,
+		openPlayerRedis: openPlayerRedis,
 		openDataService: func(c zrpc.RpcClientConf) (*grpc.ClientConn, error) {
 			// 不用 MustNewClient:它在配置错误时直接退出进程,跳过本函数「返回错误、关闭已建资源」的契约。
 			cli, err := zrpc.NewClient(c)
@@ -168,7 +174,7 @@ func coreRedisOptions(c config.RedisConf) *redis.Options {
 	}
 }
 
-// openCoreRedis建提醒/选主/STALE诊断客户端并探活；它不裁决消费身份。错误不含密码。
+// openCoreRedis建选主客户端并探活；它不裁决消费身份。错误不含密码。
 func openCoreRedis(c config.RedisConf) (*redis.Client, error) {
 	client := redis.NewClient(coreRedisOptions(c))
 	pingCtx, cancel := context.WithTimeout(context.Background(), coreRedisPingTimeout)
@@ -176,13 +182,29 @@ func openCoreRedis(c config.RedisConf) (*redis.Client, error) {
 	cancel()
 	if err != nil {
 		_ = client.Close()
-		return nil, fmt.Errorf("ping core Redis %s (DB %d) failed (owner_epoch / location live there and "+
-			"must be the same instance as C++ scene / scene_manager): %w", c.Host, c.DB, err)
+		return nil, fmt.Errorf("ping core Redis %s (DB %d) failed (the maintenance leader lock lives there): %w", c.Host, c.DB, err)
 	}
 	// 生效值:核对 ConfigMap 镜像的 PoolSize 是否真的被加载,以及超时契约是否生效。
 	opts := client.Options()
 	logx.Infof("Core Redis client %s DB=%d pool_size=%d read_timeout=%v write_timeout=%v context_timeout_enabled=%v",
 		c.Host, c.DB, opts.PoolSize, opts.ReadTimeout, opts.WriteTimeout, opts.ContextTimeoutEnabled)
+	return client, nil
+}
+
+// openPlayerRedis 建玩家域客户端并探活。错误不含密码。
+func openPlayerRedis(c playerredis.Config) (redis.UniversalClient, error) {
+	client, err := playerredis.New(c)
+	if err != nil {
+		return nil, err
+	}
+	pingCtx, cancel := context.WithTimeout(context.Background(), coreRedisPingTimeout)
+	err = client.Ping(pingCtx).Err()
+	cancel()
+	if err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("ping player Redis (%s) failed (owner_epoch / location live there): %w", c.Describe(), err)
+	}
+	logx.Infof("Player Redis client %s", c.Describe())
 	return client, nil
 }
 
@@ -252,6 +274,10 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 	if err != nil {
 		return nil, fmt.Errorf("player_inbox: %w", err)
 	}
+	sc.PlayerRedis, err = deps.openPlayerRedis(c.EffectivePlayerRedis())
+	if err != nil {
+		return nil, fmt.Errorf("player_inbox: %w", err)
+	}
 
 	sc.Kafka = &kafka.Writer{
 		Addr: kafka.TCP(c.Kafka.Brokers...),
@@ -278,7 +304,7 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 
 	// 事件号来自 player_inbox/generated/pb/game(proto-gen 产物,随仓库跟踪):干净检出不跑生成也能编译。
 	sc.notifier = &inbox.KafkaNotifier{
-		Locations: scenenode.GoRedisReader{Client: sc.CoreRedis},
+		Locations: scenenode.GoRedisReader{Client: sc.PlayerRedis},
 		Nodes:     sc.SceneNodes,
 		Writer:    &relayMessageWriter{admission: relay, writer: sc.Kafka},
 		EventID:   uint32(game.PlayerInboxNotifyEventEventId),
@@ -288,7 +314,7 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 		Registry: registry,
 		Allowed:  allowed,
 		Players:  &DataServicePlayers{Client: sc.DataService, Timeout: constants.HomeZoneLookupTimeout},
-		Epochs:   &RedisEpochs{Client: sc.CoreRedis},
+		Epochs:   &RedisEpochs{Client: sc.PlayerRedis},
 		Notifier: sc.notifier,
 		Now:      time.Now,
 		Roles:    roles,
@@ -494,6 +520,9 @@ func (sc *ServiceContext) closeResourcesReport() error {
 	var result error
 	if sc.Kafka != nil {
 		result = errors.Join(result, sc.Kafka.Close())
+	}
+	if sc.PlayerRedis != nil {
+		result = errors.Join(result, sc.PlayerRedis.Close())
 	}
 	if sc.CoreRedis != nil {
 		result = errors.Join(result, sc.CoreRedis.Close())

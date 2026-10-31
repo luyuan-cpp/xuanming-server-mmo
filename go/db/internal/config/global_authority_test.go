@@ -15,48 +15,28 @@ import (
 func globalConfigForTest() Config {
 	c := Config{}
 	c.ServerConfig.Database.Backend = "tidb"
-	c.Placement.Required = true
-	c.Placement.RequireRouteReady = true
 	return c
 }
 
-func legacyConfigForTest() Config {
-	c := Config{LegacyNonGlobal: true}
-	c.Mode = service.TestMode
-	return c
-}
-
-func TestGlobalAuthorityRejectsSilentFallback(t *testing.T) {
+// 非法档位一律拒启,Mode 不放宽。
+func TestGlobalAuthorityRejectsIllegalBackend(t *testing.T) {
 	for _, mode := range []string{"", "pro", service.DevMode, service.TestMode} {
-		for _, tc := range []struct {
-			name   string
-			mutate func(*Config)
-			key    string
-		}{
-			{"非法后端档位", func(c *Config) { c.ServerConfig.Database.Backend = "oracle" }, "ServerConfig.Database.Backend"},
-			{"落点可缺失", func(c *Config) { c.Placement.Required = false }, "Placement.Required"},
-			{"ready关闭", func(c *Config) { c.Placement.RequireRouteReady = false }, "Placement.RequireRouteReady"},
-		} {
-			t.Run(mode+"/"+tc.name, func(t *testing.T) {
-				c := globalConfigForTest()
-				c.Mode = mode
-				if err := c.Validate(); err != nil {
-					t.Fatalf("完整全球配置必须可启动: %v", err)
-				}
-				tc.mutate(&c)
-				c.Normalize()
-				if err := c.Validate(); err == nil || !strings.Contains(err.Error(), tc.key) {
-					t.Fatalf("必须拒绝%s，Mode不能隐式放宽，错误=%v", tc.key, err)
-				}
-			})
-		}
-	}
-	if err := (&Config{}).ValidateGlobalAuthority(); err == nil {
-		t.Fatal("缺失Placement/数据库段不能被解释为旧非全球默认")
+		t.Run(mode, func(t *testing.T) {
+			c := globalConfigForTest()
+			c.Mode = mode
+			if err := c.Validate(); err != nil {
+				t.Fatalf("完整配置必须可启动: %v", err)
+			}
+			c.ServerConfig.Database.Backend = "oracle"
+			c.Normalize()
+			if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "ServerConfig.Database.Backend") {
+				t.Fatalf("必须拒绝非法档位,错误=%v", err)
+			}
+		})
 	}
 }
 
-// 门禁只看档位是否合法:两档都能过全球门禁,隔离夹具也不能带非法档位(player-data-tidb-scaling-plan.md §9)。
+// 门禁只看档位是否合法:两档都能过(player-data-tidb-scaling-plan.md §9)。
 func TestGlobalAuthorityAcceptsEveryLegalBackend(t *testing.T) {
 	for _, backend := range []string{"", "tidb", "mysql"} {
 		c := globalConfigForTest()
@@ -65,33 +45,9 @@ func TestGlobalAuthorityAcceptsEveryLegalBackend(t *testing.T) {
 			t.Fatalf("Backend=%q 应可启动: %v", backend, err)
 		}
 	}
-	c := legacyConfigForTest()
-	c.ServerConfig.Database.Backend = "oracle"
-	if err := c.ValidateGlobalAuthority(); err == nil || !strings.Contains(err.Error(), "ServerConfig.Database.Backend") {
-		t.Fatalf("隔离夹具也必须拒绝非法档位: %v", err)
-	}
 }
 
-func TestLegacyNonGlobalOnlyExplicitDevelopment(t *testing.T) {
-	for _, mode := range []string{"", "pro", "production", "DEV", service.DevMode, service.TestMode} {
-		c := Config{LegacyNonGlobal: true}
-		c.Mode = mode
-		err := c.ValidateGlobalAuthority()
-		allowed := mode == service.DevMode || mode == service.TestMode
-		if allowed != (err == nil) {
-			t.Fatalf("LegacyNonGlobal模式=%q，错误=%v", mode, err)
-		}
-	}
-	for _, mode := range []string{service.DevMode, service.TestMode} {
-		c := Config{}
-		c.Mode = mode
-		if err := c.ValidateGlobalAuthority(); err == nil {
-			t.Fatal("dev/test本身不能授权历史降级")
-		}
-	}
-}
-
-func TestGlobalDBYamlAndLoaderRejectDisabledFlags(t *testing.T) {
+func TestGlobalDBYamlAndLoaderRejectIllegalBackend(t *testing.T) {
 	raw, err := os.ReadFile("../../etc/db.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -101,22 +57,17 @@ func TestGlobalDBYamlAndLoaderRejectDisabledFlags(t *testing.T) {
 	if err := conf.LoadFromYamlBytes([]byte(text), &c); err != nil {
 		t.Fatal(err)
 	}
-	if c.LegacyNonGlobal || c.ServerConfig.Database.Backend != "tidb" || !c.Placement.Required || !c.Placement.RequireRouteReady {
-		t.Fatal("正规样例必须显式选择全球强SQL与两个落点门禁")
+	if c.ServerConfig.Database.Backend != "tidb" {
+		t.Fatal("正规样例必须显式选择全球强SQL")
 	}
-	for _, pair := range []struct{ old, replacement, key string }{
-		{"    Backend: tidb", "    Backend: oracle", "ServerConfig.Database.Backend"},
-		{"  Required: true", "  Required: false", "Placement.Required"},
-		{"  RequireRouteReady: true", "  RequireRouteReady: false", "Placement.RequireRouteReady"},
-	} {
-		if strings.Count(text, pair.old) != 1 {
-			t.Fatalf("样例键必须唯一: %s", pair.key)
-		}
-		var rejected Config
-		err := conf.LoadFromYamlBytes([]byte(strings.Replace(text, pair.old, pair.replacement, 1)), &rejected)
-		if err == nil || !strings.Contains(err.Error(), pair.key) {
-			t.Fatalf("加载阶段必须拒绝%s: %v", pair.key, err)
-		}
+	const old = "    Backend: tidb"
+	if strings.Count(text, old) != 1 {
+		t.Fatal("样例键必须唯一: ServerConfig.Database.Backend")
+	}
+	var rejected Config
+	err = conf.LoadFromYamlBytes([]byte(strings.Replace(text, old, "    Backend: oracle", 1)), &rejected)
+	if err == nil || !strings.Contains(err.Error(), "ServerConfig.Database.Backend") {
+		t.Fatalf("加载阶段必须拒绝非法档位: %v", err)
 	}
 }
 
@@ -125,8 +76,8 @@ func TestGlobalDBStartupGuardsBeforeExternalWork(t *testing.T) {
 		path, function, guard string
 		effects               []string
 	}{
-		{"../../db.go", "main", "Validate", []string{"NewServiceContext"}},
-		{"../svc/servicecontext.go", "NewServiceContext", "ValidateGlobalAuthority", []string{"NewClient", "Ping"}},
+		{"../../db.go", "main", "Validate", []string{"NewServiceContext", "InitDB"}},
+		{"../svc/servicecontext.go", "NewServiceContext", "ValidateGlobalAuthority", nil},
 	} {
 		file, err := parser.ParseFile(token.NewFileSet(), entry.path, nil, parser.SkipObjectResolution)
 		if err != nil {

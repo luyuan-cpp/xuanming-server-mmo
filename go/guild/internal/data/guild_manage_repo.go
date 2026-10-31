@@ -32,8 +32,8 @@ package data
 //         被对方的 S next-key 挡住:同名建帮、名字相邻的两帮、uk 上相邻的两个刚离帮玩家都能中(G-OUT1);
 //       - 建状态行的首插者回滚:排在它未提交记录上的两个同键插入者,S 锁被继承成同一段间隙上的互等(G-C3)。
 //     撤掉之后:TiDB 没有 S 锁和间隙锁,这两个环本来就不存在。MySQL 档上它们还在,但只在有未 purge 的删除标记项、或首插者回滚时
-//     才碰得上;InnoDB 牺牲一方。生产连接走 authoritysql,写者闸门把 1213 变成不可重试的结果未知(事务已回滚,连接隔离),inTx 的 retryOnDeadlock 认不出,这一笔直接报错,玩家重试;只有裸连接(测试)才走重跑。
-//     代价是 MySQL 档这几条路径从没有死锁变成偶发失败,换来建帮、审批通过、新玩家首次申请不再全服排队。
+//     才碰得上;InnoDB 牺牲一方,inTx 的 retryOnDeadlock 重跑(事务函数没有非数据库副作用),用尽回 ErrWriteConflict(kGuildBusyRetry)。
+//     代价是 MySQL 档这几条路径的死锁从 0 变成偶发、被重试吸收,换来建帮、审批通过、新玩家首次申请不再全服排队。
 //     (e) TiDB:凡是悲观事务也会改的行,多 key 写(删带二级索引的行、改二级索引列)一律进显式 RC 事务,不走自动提交
 //     (G-C2,理由见 asset_store.go 文件头的 TiDB 附加规则)。本文件据此把撤回申请与申请后的惰性清理改成逐行 RC 短事务,
 //     建状态行也在 RC 短事务里做(ensurePlayerStateRows)。进事务之外,**带复核谓词的点删之前还要先做完整主键 FOR UPDATE 点锁**(死锁复核 V2):
@@ -484,9 +484,8 @@ type ReviewResult struct {
 
 // DisbandResult:解散的结果。
 type DisbandResult struct {
-	// ZoneID 是**删除事务内 FOR UPDATE 读到的**归属区,是清榜唯一可信的输入:
-	// 行删掉之后再也读不到权威 zone,而缓存里的 ZoneID 在合服之后会整整一个 TTL 指向源区,
-	// 按它 ZREM 会把条目永远留在目标区榜上(榜首一个查不到名字的幽灵帮会)。
+	// ZoneID 是**删除事务内 FOR UPDATE 读到的**归属区(建帮时的原始区),是清榜唯一可信的输入:
+	// 行删掉之后再也读不到权威 zone。
 	ZoneID uint32
 	// MemberIDs 是解散前的全部成员,player_id 升序;既是推送收件人,也是要失效的映射键。
 	MemberIDs []uint64
@@ -1571,7 +1570,7 @@ func (r *GuildRepo) ApplyToGuild(ctx context.Context, guildID, playerID uint64, 
 		if err != nil {
 			return err
 		}
-		if requiredZone != 0 && guild.ZoneID != requiredZone {
+		if requiredZone != 0 && !r.SameZone(guild.ZoneID, requiredZone) {
 			return ErrGuildZoneMismatch
 		}
 		if err := lockPlayerState(ctx, tx, playerID); err != nil {
@@ -1959,7 +1958,7 @@ func (r *GuildRepo) CountLiveApplications(ctx context.Context, guildID, now uint
 // `DELETE … WHERE player_id = ?` 经 idx_guild_application_0 "先二级后主键",与别帮对同一人的拒绝分支
 // "先主键后二级"在 (G2, applicant) 上成环(friend 审计 #2 (a),两帮同时审批同一人是常见玩法)。
 // 拒绝 / 过期 / 跨区 / 1062 分支只动 (guildID, applicant) 这一行(后三者是 approve=true 的子分支,锁序见上)。
-// 错误语义:ErrGuildGone / ErrNotGuildMember / ErrRankTooLow / ErrApplicationNotFound /
+// 错误语义:ErrGuildGone / ErrGuildZoneMismatch / ErrNotGuildMember / ErrRankTooLow / ErrApplicationNotFound /
 // ErrGuildFull(保留申请,回滚)/ ErrWriteConflict。
 // 幂等:申请已被处理 / 已过期 / 申请人已入他帮 / 归属区与帮会不一致 → 一律删行并回 ErrApplicationNotFound,
 // 对审批者来说都是"这条已经不能批了";分得更细只会泄露申请人的状态。
@@ -2037,14 +2036,11 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 			return nil
 		}
 
-		// zone 复核:unmerge 只把清单里帮会的 guild.zone_id 改回源区,不动 guild_application。
-		// 合服开服到回滚之间提交的"目标区玩家 → 源区帮"申请在回滚后仍然存在,
-		// 批准它就会造出一个跨区成员。这一刀与旧 AddMemberInZone 是同一条防线。
-		if guild.ZoneID != applicantZone {
-			if _, err := tx.ExecContext(ctx, sqlDeleteApplication, guildID, applicantID); err != nil {
-				return fmt.Errorf("delete cross-zone application (%d,%d): %w", guildID, applicantID, err)
-			}
-			return errCommitThen{inner: ErrApplicationNotFound}
+		// zone 复核:按当前映射比较两边的最终区,不同区就不批,防止造出跨区成员。
+		// 申请行留着,不能在这里删:映射缓存可能正好滞后一个刷新周期,两个其实同区的玩家和帮会会被判成不同区,
+		// 删了就把合法申请弄丢了。合服撤销之后留下的跨区申请由审批人拒绝,或者到期(最长 72 小时)。
+		if !r.SameZone(guild.ZoneID, applicantZone) {
+			return ErrGuildZoneMismatch
 		}
 
 		memberCount, err := countMembers(ctx, tx, guildID)
@@ -2123,8 +2119,7 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 //     `DELETE … WHERE player_id IN (…)`)锁集依赖执行计划,全扫时会锁到别帮的行;现在全部拆成完整主键点操作。
 //   - 最后一条 DELETE guild 会对**同一行**的 uk_guild、idx_guild_0、idx_guild_1 项取 X(表序上排在后序表之后)。
 //     域内没有任何语句经这三个二级索引加锁;唯一可能持有其中之一的是建帮查重对 uk_guild 后继项的 S next-key,
-//     那一方插完 guild 行就只剩 COMMIT、不再等任何锁,所以本事务至多单向等待。merge_zone 经 idx_guild_0 整区改写
-//     是另一条路径(friend 审计 #17),不在本服务。
+//     那一方插完 guild 行就只剩 COMMIT、不再等任何锁,所以本事务至多单向等待。
 //
 // 输入约束:now 为服务进程时钟毫秒(> 0,由 logic 传入),用于建状态行与把全体成员在本帮的未决捐献截止时间提前到 now。
 // 错误语义:ErrGuildGone / ErrRankTooLow(仍是本帮成员、但不是帮主)/ ErrNotGuildMember(已不是本帮成员,见 disbandRefusal)/

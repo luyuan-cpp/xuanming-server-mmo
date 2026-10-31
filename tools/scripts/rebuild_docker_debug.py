@@ -16,13 +16,19 @@ import sys
 REPO = Path(__file__).resolve().parents[2]
 STATE = REPO / "build/docker-debug-current"
 CPP = ("gate", "scene", "battle")
-GO = ("login", "db", "data-service", "scene-manager", "player-locator", "client-rpc-router", "match")
+GO = ("login", "db", "data-service", "scene-manager", "player-locator", "client-rpc-router", "match", "player-inbox", "sql-boot")
 IMAGE_KEYS = {
     **dict.fromkeys(CPP, "NODE_DEBUG_IMAGE"),
     "login": "LOGIN_IMAGE", "db": "DB_IMAGE", "data-service": "DATA_SERVICE_IMAGE",
     "scene-manager": "SCENE_MANAGER_IMAGE", "player-locator": "PLAYER_LOCATOR_IMAGE",
-    "client-rpc-router": "CLIENT_RPC_ROUTER_IMAGE", "match": "MATCH_IMAGE", "gateway": "GATEWAY_IMAGE",
+    "client-rpc-router": "CLIENT_RPC_ROUTER_IMAGE", "match": "MATCH_IMAGE", "player-inbox": "PLAYER_INBOX_IMAGE",
+    "gateway": "GATEWAY_IMAGE",
+    "sql-boot": "SQL_BOOT_IMAGE",
 }
+# 写者的单次启动授权启动即消费：换容器要连注册步骤（compose 的 <服务>-sql-boot）一起重建，只重建服务会被拒启。
+SQL_WRITERS = ("login", "db", "data-service", "match", "player-inbox", "gateway")
+# 一次性容器没有运行态可核对：重编只换 .env 里的镜像，下一次 up 生效。
+ONE_SHOT = ("sql-boot",)
 DOCKER = ["docker", "--context", "desktop-linux"]
 COMPOSE = DOCKER + ["compose", "--env-file", str(STATE / ".env"),
                     "-f", str(REPO / "deploy/debug/compose.game.yml"),
@@ -77,10 +83,12 @@ def runtime_sources(language: str, files: dict[str, str]) -> dict[str, str]:
 
 def check_config_inputs(services: list[str]) -> None:
     from build_docker_go_debug import CATALOGUE
-    from prepare_docker_debug import GO_CONFIGS
+    from prepare_docker_debug import GO_CONFIGS, SQL_BOOT_SOURCES
     recorded = json.loads((STATE / "source-manifest.json").read_text("utf-8-sig"))
     names = set()
     for service in services:
+        if service in SQL_WRITERS or service in ONE_SHOT:
+            names.update(SQL_BOOT_SOURCES)
         if service in CPP:
             names.update(("bin/etc/base_deploy_config.yaml", "bin/etc/game_config.yaml"))
         elif service in GO:
@@ -199,7 +207,7 @@ def main() -> int:
     args = parser.parse_args()
     defaults = {"cpp": CPP, "go": ("login",), "java": ("gateway",), "check": ("scene",)}
     services = args.services.split(",") if args.services else list(defaults[args.language])
-    allowed = {"cpp": CPP, "go": GO, "java": ("gateway",), "check": tuple(IMAGE_KEYS)}
+    allowed = {"cpp": CPP, "go": GO, "java": ("gateway",), "check": tuple(name for name in IMAGE_KEYS if name not in ONE_SHOT)}
     if len(set(services)) != len(services) or not services or any(s not in allowed[args.language] for s in services):
         parser.error("服务名不属于选择的语言，或包含重复项")
     if args.language == "cpp" and set(services) != set(CPP):
@@ -233,14 +241,19 @@ def main() -> int:
         print("构建完成；按要求未修改配置或更新容器。")
         return 0
     update_images(build["images"])
+    running = [s for s in services if s not in ONE_SHOT]
+    if not running:
+        print("Image updated in .env; the next compose up uses it.")
+        return 0
+    targets = [name for s in running for name in ((s + "-sql-boot", s) if s in SQL_WRITERS else (s,))]
     with (root / "recreate.log").open("x", encoding="utf-8") as log:
         result = subprocess.run(COMPOSE + ["up", "-d", "--no-build", "--pull", "never", "--no-deps",
-            "--force-recreate", "--wait", "--wait-timeout", "180", *services], cwd=REPO,
+            "--force-recreate", "--wait", "--wait-timeout", "180", *targets], cwd=REPO,
             stdout=log, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
     if result.returncode:
         print("容器更新失败，配置与现场已保留；检查 " + str(root / "recreate.log"))
         return result.returncode
-    if not check(services, root / "verification.json"):
+    if not check(running, root / "verification.json"):
         return 1
     print("构建、容器更新及源码检查完成，可以在 VS Code 按 F5 附加。")
     return 0

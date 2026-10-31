@@ -119,7 +119,7 @@ func newPlayerNameTestCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 	mr := miniredis.RunT(t)
 
 	c := config.Config{
-		MappingRedis: redis.RedisConf{
+		NameCacheRedis: redis.RedisConf{
 			Host: mr.Addr(),
 			Type: "node",
 		},
@@ -132,16 +132,13 @@ func newPlayerNameTestCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 		},
 	}
 
-	r := routing.NewRouter(c)
-	t.Cleanup(func() { r.Close() })
-
 	fake := &fakePlayerNameStore{
 		reserveOutcome: store.ReserveInserted,
 		releaseOutcome: store.ReleaseDeleted,
 		names:          map[uint64]string{},
 	}
 
-	return &svc.ServiceContext{Config: c, Router: r, PlayerNameStore: fake}, mr, fake
+	return &svc.ServiceContext{Config: c, PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis), PlayerNameStore: fake}, mr, fake
 }
 
 // playerNameOpsCount 从默认 registry 里 gather 一次,读出 ops_total 上某个
@@ -582,7 +579,7 @@ func TestBatchGetPlayerName_NegativeCacheNeverOverwritesRealName(t *testing.T) {
 	svcCtx, mr, _ := newPlayerNameTestCtx(t)
 	require.NoError(t, mr.Set(routing.PlayerNameKey(4006), "云中君"))
 
-	require.NoError(t, svcCtx.Router.SetPlayerNamesAbsent(context.Background(),
+	require.NoError(t, svcCtx.PlayerNameCache.SetPlayerNamesAbsent(context.Background(),
 		[]uint64{4006}, playerNameTestNegativeCacheTTL))
 
 	got, err := mr.Get(routing.PlayerNameKey(4006))
@@ -596,7 +593,7 @@ func TestReservePlayerName_OverwritesNegativeCache(t *testing.T) {
 	ctx := context.Background()
 	key := routing.PlayerNameKey(4007)
 
-	require.NoError(t, svcCtx.Router.SetPlayerNamesAbsent(ctx, []uint64{4007}, playerNameTestNegativeCacheTTL))
+	require.NoError(t, svcCtx.PlayerNameCache.SetPlayerNamesAbsent(ctx, []uint64{4007}, playerNameTestNegativeCacheTTL))
 
 	// 先确认负缓存确实被识别成"库里没有":这一次不该回源。
 	names, err := BatchGetPlayerName(ctx, svcCtx, []uint64{4007})
@@ -693,18 +690,15 @@ func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	mr := miniredis.RunT(t)
 
 	c := config.Config{
-		MappingRedis: redis.RedisConf{
+		NameCacheRedis: redis.RedisConf{
 			Host: mr.Addr(),
 			Type: "node",
 		},
 	}
 
-	r := routing.NewRouter(c)
-	t.Cleanup(func() { r.Close() })
-
 	sc := &svc.ServiceContext{
-		Config: c,
-		Router: r,
+		Config:          c,
+		PlayerNameCache: routing.NewPlayerNameCache(c.NameCacheRedis),
 	}
 	return sc, mr
 }

@@ -242,10 +242,8 @@ services:
     #   - notify-keyspace-events Eg  开启 evict/expire 事件通知,为后续应用层主动卸载预留
     #
     # 2026-10-12 由 allkeys-lfu 改为 noeviction,与 K8s(deploy/k8s/manifests/infra/redis.yaml)一致(负责人决定)。
-    # 这个实例同时是 mapping Redis:player:zone / player:placement / merge:* 映射、go/db 的 applied 游标、
-    # applied_epoch、排序锁、重试收据都在这里,都不带 TTL。allkeys-lfu 会把它们当冷键淘汰:
-    # 游标被淘汰时 orderingForTask 直接判 Apply,顺序守卫静默失效;映射被淘汰时缺键被当成「没有记录」,
-    # 写会落错库。这些都比「内存满了写入报错」危险。见 docs/design/player-route-mapping-durability-proposal.md §3.3。
+    # 这个实例放归属协调键(owner_epoch、location、handoff fence)、会话与锁,不少不带 TTL。allkeys-lfu 会把它们当冷键淘汰,
+    # 缺键会被当成「没有记录」,比「内存满了写入报错」危险。玩家存档与归属映射不在 Redis。
     # 代价:本机内存打满时写入报错(fail-closed),要清数据或调大 maxmemory,不会再静默腾空间。
     #
     # --maxclients 40000 与 K8s(deploy/k8s/manifests/infra/redis.yaml 的 MAXCLIENTS)同值(P0-E,2026-10-15;取值待实测 / 压测复核),
@@ -254,9 +252,8 @@ services:
     #   docker --context desktop-linux compose -f deploy/docker-compose.yml up -d --force-recreate redis
     # 才会带上(会重启本机 Redis,数据在命名卷 redis-data 里不丢)。核对:docker --context desktop-linux exec redis redis-cli config get maxclients
     #
-    # --enable-debug-command no(D1 第 1b-3 批,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §13.1 第 5 条):
-    # DEBUG RELOAD NOSAVE / DEBUG LOADAOF 在同一进程里整库替换数据而 run_id / master_replid 不变,读方「就绪标记绑定实例身份」的判据认不出;
-    # Redis 7 缺省即 no,显式写出防改(对账 leader 每拍 CONFIG GET 核对,不是 no 就拒绝挂标记)。同样只对新建的容器生效(见上一段)。
+    # --enable-debug-command no:DEBUG RELOAD NOSAVE / DEBUG LOADAOF 在同一进程里整库替换数据而 run_id / master_replid 不变,
+    # 谁都认不出换过数据。Redis 7 缺省即 no,显式写出防改。同样只对新建的容器生效(见上一段)。
     command: >
       redis-server
       --appendonly yes

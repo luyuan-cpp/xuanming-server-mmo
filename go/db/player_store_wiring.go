@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -17,7 +18,6 @@ import (
 	"db/internal/config"
 	"db/internal/logic/pkg/proto_sql"
 	"db/internal/playerstore"
-	"db/internal/svc"
 
 	"proto/common/base"
 	"shared/generated/persistschema"
@@ -36,22 +36,13 @@ const (
 )
 
 // newPlayerStoreServer 装配存盘接口。配置不对就拒绝启动:这个节点起不来比起来却存不进要好。
-func newPlayerStoreServer(c *config.Config, ctx *svc.ServiceContext, stores *proto_sql.StoreRegistry) (*playerstore.Server, error) {
+func newPlayerStoreServer(c *config.Config, stores *proto_sql.StoreRegistry) (*playerstore.Server, error) {
 	limits := playerstore.DefaultLimits()
 	if v := c.ServerConfig.PlayerStore.MaxRowBytes; v > 0 {
 		limits.MaxRowBytes = v
 	}
 	if v := c.ServerConfig.PlayerStore.MaxRequestBytes; v > 0 {
 		limits.MaxRequestBytes = v
-	}
-	resolve, err := playerstore.NewStorageResolver(playerstore.ResolverOptions{
-		Redis:             ctx.PlacementRedis,
-		Zone:              c.ZoneId,
-		Required:          c.Placement.Required,
-		RequireRouteReady: c.Placement.RequireRouteReady,
-	})
-	if err != nil {
-		return nil, err
 	}
 	open := func(openCtx context.Context, storageID uint32) (*sql.DB, error) {
 		store, err := stores.Store(openCtx, storageID)
@@ -73,6 +64,20 @@ func newPlayerStoreServer(c *config.Config, ctx *svc.ServiceContext, stores *pro
 	}
 	if err := store.VerifySchema(verifyCtx); err != nil {
 		return nil, err
+	}
+	writer, err := proto_sql.CurrentWriterConfig()
+	if err != nil {
+		return nil, err
+	}
+	// 读路由用本 zone 库的池:写者闸门本来就在这个池的连接上按库名读 <AuthoritySchema>.route_meta / writer_slot,全局库与落点库在同一个
+	// TiDB 集群,账号和严格读会话都现成;它在启动期打开并核过,不像额外落点库那样要按需打开、可能在冷却。路由表就在写权目录那个库里,库名不另配。
+	resolve, err := playerstore.NewStorageResolver(playerstore.ResolverOptions{DB: home, RouteSchema: writer.AuthoritySchema()})
+	if err != nil {
+		return nil, err
+	}
+	// 启动时读一次:缺表或缺授权时每次认领都回暂不可用,玩家进不了游戏,不如拒绝启动。player_id 0 不是玩家,读到「没有落点」就说明读得通。
+	if _, err := resolve(verifyCtx, 0); err != nil && !errors.Is(err, playerstore.ErrPlayerStorageMissing) {
+		return nil, fmt.Errorf("verify route table: %w", err)
 	}
 	return playerstore.NewServer(playerstore.ServerOptions{
 		Secret:   os.Getenv(playerstore.SceneSecretEnv),

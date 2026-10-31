@@ -9,6 +9,8 @@ import (
 	"trade/internal/constants"
 
 	tradepb "proto/trade"
+
+	"shared/placement"
 )
 
 // 本文件是逻辑层的纯函数:阶段推导、可见性、分页窗口、LIKE 转义与输入校验。
@@ -38,9 +40,11 @@ func Phase(rec *tradepb.TradeListingRecord, nowMs uint64) tradepb.ListingPhase {
 }
 
 // VisibleToBuyer 判断非卖家的调用者能否看到这件商品:
-// status ∈ {LISTED, LOCKED} 且 now < sale_end_ms 且(scope=GLOBAL 或 market_zone == 调用者 home_zone)。
+// status ∈ {LISTED, LOCKED} 且 now < sale_end_ms 且(scope=GLOBAL 或 market_zone 与调用者 home_zone 解析到同一个最终区)。
+// market_zone 是上架时的原始区,合服不改写(docs/design/player-data-tidb-scaling-plan.md §7.1),所以两边都先解析再比。
+// zones 是合服映射快照,nil 等于没有合服。
 // scope=ZONE 时 callerHomeZone 必须是查到的非 0 值;传 0 一律不可见(fail-closed)。
-func VisibleToBuyer(rec *tradepb.TradeListingRecord, nowMs uint64, scope tradepb.MarketScope, callerHomeZone uint32) bool {
+func VisibleToBuyer(rec *tradepb.TradeListingRecord, nowMs uint64, scope tradepb.MarketScope, callerHomeZone uint32, zones *placement.MergedZones) bool {
 	switch rec.GetStatus() {
 	case tradepb.ListingStatus_LISTING_STATUS_LISTED, tradepb.ListingStatus_LISTING_STATUS_LOCKED:
 	default:
@@ -53,7 +57,7 @@ func VisibleToBuyer(rec *tradepb.TradeListingRecord, nowMs uint64, scope tradepb
 	case tradepb.MarketScope_MARKET_SCOPE_GLOBAL:
 		return true
 	case tradepb.MarketScope_MARKET_SCOPE_ZONE:
-		return callerHomeZone != 0 && rec.GetMarketZone() == callerHomeZone
+		return callerHomeZone != 0 && zones.Final(rec.GetMarketZone()) == zones.Final(callerHomeZone)
 	default:
 		return false
 	}

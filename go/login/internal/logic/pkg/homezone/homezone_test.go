@@ -208,7 +208,7 @@ func TestRegisterPlayerZone(t *testing.T) {
 		t.Fatalf("register call = %d/%v, want 1 call with player 42 → zone 3, storage 0", ok.regCalls, ok.lastReg)
 	}
 
-	// storage_id 原样透传(0 = 不钉;非 0 由 data_service 与 player:zone 原子一起钉落点)。
+	// storage_id 原样透传,校验在 data_service。
 	pinned := &fakeDataService{}
 	if err := newResolver(pinned).RegisterPlayerZone(context.Background(), 42, 3, 1000000); err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -223,11 +223,11 @@ func TestRegisterPlayerZone(t *testing.T) {
 		zone       uint32
 		wantNoCall bool
 	}{
-		"rpc error":   {r: newResolver(&fakeDataService{regErr: status.Error(codes.Unavailable, "down")}), player: 1, zone: 1},
-		"nil client":  {r: New(nil, 0, 0, 0), player: 1, zone: 1, wantNoCall: true},
+		"rpc error":    {r: newResolver(&fakeDataService{regErr: status.Error(codes.Unavailable, "down")}), player: 1, zone: 1},
+		"nil client":   {r: New(nil, 0, 0, 0), player: 1, zone: 1, wantNoCall: true},
 		"nil resolver": {r: nil, player: 1, zone: 1, wantNoCall: true},
-		"zero zone":   {r: newResolver(&fakeDataService{}), player: 1, zone: 0, wantNoCall: true},
-		"zero player": {r: newResolver(&fakeDataService{}), player: 0, zone: 1, wantNoCall: true},
+		"zero zone":    {r: newResolver(&fakeDataService{}), player: 1, zone: 0, wantNoCall: true},
+		"zero player":  {r: newResolver(&fakeDataService{}), player: 0, zone: 1, wantNoCall: true},
 	}
 	for name, tc := range failing {
 		t.Run(name, func(t *testing.T) {

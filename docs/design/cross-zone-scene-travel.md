@@ -1361,6 +1361,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 - 新 Lua `luaDeletePlayerLocationIfUnchanged`:location 仍是调用方 GET 到的原文时才删,并在同一段 Lua 里减场景 / 节点人数,钳 0。
 - 返回值:1 = deleted,0 = already_gone,-1 = superseded(被改写)。`LeaveScene` 不再单独调用 `DecrInstancePlayerCount`。
 - 删和减绑在一起的理由:go-redis 读超时后会重发同一条 EVAL,重试耗尽后上游也会再调一次。只有"谁删谁减"才能保证人数恰好减一次。
+- (2026-10-31 更新:分片之后删 location 与摘成员不能在一段 Lua 里,人数改成员集合,离场拆成两步,见 [玩家态 Redis 集群化](redis-player-store-cluster.md) §5.10。)
 - 错误语义变化:Redis 读或删失败,从回成功改为回 error。唯一调用方 player_locator 出错时保留 claim 重试。location 写坏时不删、回成功(不形成毒任务)。
 - **挡得住**:GET 与删除之间有并发 EnterScene 写入新 location;go-redis 重发;上游重试。
 - **挡不住**:samePlacement 重连不写 location、值没变,照样会被删;同一场景的新落点在 GET 之前就已写入。
@@ -2199,7 +2200,7 @@ Akka 的 Reliable Delivery 是另加的处理确认协议：业务处理完才�
 | 数据 | 从 zone 1 到 zone 2 后 | 权威维护方 |
 |---|---|---|
 | 当前 Gate 与会话 | 新 Gate、新会话版本与登录代次 | `player_locator` 的会话记录 |
-| 当前 Scene 位置 | zone 2 的目标 Scene；交接中先有一个等待落点 | `scene_manager` 的 `player:<id>:location` |
+| 当前 Scene 位置 | zone 2 的目标 Scene；交接中先有一个等待落点 | `scene_manager` 的 `player:{<id>}:location` |
 | 逻辑归属 `home_zone` | 仍为 1，游玩传送不改归属 | `data_service` 的玩家目录 |
 | 存储落点 `placement` | 保持现有落点；没有显式记录时通常是 `zone_1_db` | 目录维护落点，`go/db` 在处理任务时按当前记录选库 |
 

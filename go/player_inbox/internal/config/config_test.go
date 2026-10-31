@@ -10,6 +10,7 @@ import (
 	"player_inbox/internal/data"
 
 	inboxpb "proto/player_inbox"
+	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -328,5 +329,26 @@ func TestResolveAdminToken(t *testing.T) {
 		if err != nil && strings.Contains(err.Error(), "tiny-secret") {
 			t.Errorf("%s: 错误文本回显了口令: %v", tc.name, err)
 		}
+	}
+}
+
+// 没写 PlayerRedis.Addrs:玩家域指向 CoreRedis 那一个实例;写了就完全按它来;Cluster 没写种子拒启。
+func TestEffectivePlayerRedis(t *testing.T) {
+	c := validConfig()
+	c.CoreRedis = RedisConf{Host: "core:6379", Password: "core-secret", PoolSize: 9}
+	got := c.EffectivePlayerRedis()
+	if len(got.Addrs) != 1 || got.Addrs[0] != "core:6379" || got.Password != "core-secret" || got.PoolSizePerNode != 9 {
+		t.Fatalf("没写 Addrs 应指向 CoreRedis: %+v", got)
+	}
+
+	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true}
+	got = c.EffectivePlayerRedis()
+	if len(got.Addrs) != 2 || !got.Cluster || got.Password != "" {
+		t.Fatalf("写了 Addrs 应完全按它来: %+v", got)
+	}
+
+	c.PlayerRedis = playerredis.Config{Cluster: true}
+	if err := c.Validate(); err == nil {
+		t.Error("Cluster=true 没写种子地址应拒绝")
 	}
 }

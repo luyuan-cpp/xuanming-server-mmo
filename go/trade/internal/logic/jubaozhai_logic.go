@@ -34,15 +34,18 @@ import (
 	tradepb "proto/trade"
 
 	"shared/idsegment"
+	"shared/placement"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // Deps 是逻辑层的全部外部依赖,进程启动时由 NewDeps 组装一次;单测直接构造并注入 fake。
 type Deps struct {
-	Config     config.Config
-	Store      data.ListingStore
-	HomeZones  HomeZoneLookup
+	Config    config.Config
+	Store     data.ListingStore
+	HomeZones HomeZoneLookup
+	// Zones 是合服映射缓存(market_zone 不改写,比较和按区查询都解析)。生产读不到映射拒绝启动;单测不注入等于没有合服。
+	Zones      *placement.MergedZoneCache
 	ListingIDs idsegment.Source
 	// Now 是时间源,生产为 time.Now;单测注入固定时钟验证公示 / 寄售边界与 server_now_ms。
 	Now         func() time.Time
@@ -62,6 +65,7 @@ func NewDeps(svcCtx *svc.ServiceContext) Deps {
 		Config:      svcCtx.Config,
 		Store:       data.NewListingRepo(svcCtx.DB, constants.StoreOpTimeout),
 		HomeZones:   NewDataServiceHomeZone(svcCtx.DataServiceClient, constants.HomeZoneLookupTimeout),
+		Zones:       svcCtx.MergedZones,
 		ListingIDs:  ids,
 		Now:         time.Now,
 		Commerce:    svcCtx.Commerce,
@@ -129,6 +133,8 @@ func (l *JubaozhaiLogic) BrowseListings(in *tradepb.BrowseListingsRequest) (*tra
 	pageSize := ClampPageSize(in.GetPageSize(), market.DefaultPageSize, market.MaxPageSize)
 	nowMs := nowMillis(l.deps.Now)
 
+	// 一次请求用同一份合服映射。商品记的是上架时的原始区,按区查询要把合进来的原始区一起查上。
+	zones := l.deps.Zones.Snapshot()
 	q := data.ListingQuery{
 		Tab:         in.GetTab(),
 		Category:    in.GetCategory(),
@@ -143,9 +149,11 @@ func (l *JubaozhaiLogic) BrowseListings(in *tradepb.BrowseListingsRequest) (*tra
 		if code != 0 {
 			return reject(code)
 		}
-		q.MarketZone = zone
+		q.MarketZones = zones.Members(zone)
 	case tradepb.MarketScope_MARKET_SCOPE_GLOBAL:
-		q.MarketZone = in.GetZoneFilter() // 0 = 全部区
+		if filter := in.GetZoneFilter(); filter != 0 { // 0 = 全部区
+			q.MarketZones = zones.Members(filter)
+		}
 	default:
 		// config.Validate 已保证不会走到这里;万一走到,按故障拒绝而不是退化成全服可见。
 		l.Errorf("[trade] %s: invalid Market.Scope=%q; rejecting request player=%d", method, market.Scope, caller)
@@ -177,7 +185,7 @@ func (l *JubaozhaiLogic) BrowseListings(in *tradepb.BrowseListingsRequest) (*tra
 	}
 
 	return &tradepb.BrowseListingsResponse{
-		Listings:    toSummaries(recs, nowMs, caller, favorites),
+		Listings:    toSummaries(recs, nowMs, caller, favorites, zones),
 		TotalCount:  clampUint32(total),
 		Page:        page,
 		PageSize:    pageSize,
@@ -219,7 +227,7 @@ func (l *JubaozhaiLogic) GetMyShelf(in *tradepb.GetMyShelfRequest) (*tradepb.Get
 	}
 
 	return &tradepb.GetMyShelfResponse{
-		Listings:    toSummaries(recs, nowMs, caller, favorites),
+		Listings:    toSummaries(recs, nowMs, caller, favorites, l.deps.Zones.Snapshot()),
 		TotalCount:  clampUint32(total),
 		Page:        page,
 		PageSize:    pageSize,
@@ -259,7 +267,7 @@ func (l *JubaozhaiLogic) GetListingDetail(in *tradepb.GetListingDetailRequest) (
 
 	return &tradepb.GetListingDetailResponse{
 		Detail: &tradepb.ListingDetail{
-			Summary:     toSummary(rec, nowMs, caller, favorite),
+			Summary:     toSummary(rec, nowMs, caller, favorite, l.deps.Zones.Snapshot()),
 			Description: rec.GetDescription(),
 		},
 		ServerNowMs: nowMs,
@@ -353,7 +361,7 @@ func (l *JubaozhaiLogic) loadVisibleListing(method string, caller, listingID, no
 		}
 		callerHomeZone = zone
 	}
-	if !VisibleToBuyer(rec, nowMs, scope, callerHomeZone) {
+	if !VisibleToBuyer(rec, nowMs, scope, callerHomeZone, l.deps.Zones.Snapshot()) {
 		// 别区 / 已结束的商品对调用者表现为"不存在",不泄露别区有哪些商品。
 		return nil, constants.ErrListingNotFound
 	}
@@ -397,17 +405,17 @@ func favoriteSet(ctx context.Context, store data.ListingStore, caller uint64, re
 	return store.FavoriteIDs(ctx, caller, ids)
 }
 
-func toSummaries(recs []*tradepb.TradeListingRecord, nowMs, caller uint64, favorites map[uint64]bool) []*tradepb.ListingSummary {
+func toSummaries(recs []*tradepb.TradeListingRecord, nowMs, caller uint64, favorites map[uint64]bool, zones *placement.MergedZones) []*tradepb.ListingSummary {
 	out := make([]*tradepb.ListingSummary, 0, len(recs))
 	for _, rec := range recs {
-		out = append(out, toSummary(rec, nowMs, caller, favorites[rec.GetListingId()]))
+		out = append(out, toSummary(rec, nowMs, caller, favorites[rec.GetListingId()], zones))
 	}
 	return out
 }
 
 // toSummary 把存储行转成客户端可见的摘要。刻意不带 seller_player_id / seller_account(设计 §9):
-// 客户端只需要知道"是不是我",不需要知道卖家是谁。
-func toSummary(rec *tradepb.TradeListingRecord, nowMs, caller uint64, favorite bool) *tradepb.ListingSummary {
+// 客户端只需要知道"是不是我",不需要知道卖家是谁。market_zone 给最终区,和玩家自己的归属区同一口径。
+func toSummary(rec *tradepb.TradeListingRecord, nowMs, caller uint64, favorite bool, zones *placement.MergedZones) *tradepb.ListingSummary {
 	return &tradepb.ListingSummary{
 		ListingId:   rec.GetListingId(),
 		Category:    rec.GetCategory(),
@@ -418,7 +426,7 @@ func toSummary(rec *tradepb.TradeListingRecord, nowMs, caller uint64, favorite b
 		Phase:       Phase(rec, nowMs),
 		NoticeEndMs: rec.GetNoticeEndMs(),
 		SaleEndMs:   rec.GetSaleEndMs(),
-		MarketZone:  rec.GetMarketZone(),
+		MarketZone:  zones.Final(rec.GetMarketZone()),
 		IsFavorite:  favorite,
 		IsMine:      rec.GetSellerPlayerId() == caller,
 		Summary:     rec.GetSummary(),

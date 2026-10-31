@@ -11,47 +11,32 @@ import (
 type bootstrapFixture struct {
 	routes, history bool
 	failure         error
-	patterns        []string
-	redisKeys       []string
 }
 
 func (f *bootstrapFixture) HasAnyRoute(context.Context) (bool, error) { return f.routes, f.failure }
 func (f *bootstrapFixture) HasHistoricalPlayers(context.Context, []uint32) (bool, error) {
 	return f.history, f.failure
 }
-func (f *bootstrapFixture) ScanCtx(ctx context.Context, cursor uint64, pattern string, _ int64) ([]string, uint64, error) {
-	f.patterns = append(f.patterns, pattern)
-	return f.redisKeys, 0, ctx.Err()
-}
 
-func TestGlobalEmptyRouteBootstrapRequiresEmptySQLHistoryAndCache(t *testing.T) {
-	for _, mode := range []string{"new-empty", "known-route", "historical-directory-or-player", "historical-cache", "sql-unknown", "cancelled"} {
-		t.Run(mode, func(t *testing.T) {
-			f := &bootstrapFixture{}
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			switch mode {
-			case "known-route":
-				f.routes = true
-			case "historical-directory-or-player":
-				f.history = true
-			case "historical-cache":
-				f.redisKeys = []string{"player:zone:11"}
-			case "sql-unknown":
-				f.failure = errors.New("SQL unknown")
-			case "cancelled":
-				cancel()
-			}
-			err := checkEmptyRouteBootstrap(ctx, f, f, []uint32{1})
-			if mode == "new-empty" {
-				require.NoError(t, err)
-				require.Len(t, f.patterns, 4)
-			} else if mode == "known-route" {
-				require.NoError(t, err)
-				require.Empty(t, f.patterns)
-			} else {
+func TestGlobalEmptyRouteBootstrapRequiresEmptySQLHistory(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		fixture bootstrapFixture
+		wantErr bool
+	}{
+		{name: "新空环境"},
+		{name: "路由表非空不查历史", fixture: bootstrapFixture{routes: true, history: true}},
+		{name: "路由表空而有角色历史", fixture: bootstrapFixture{history: true}, wantErr: true},
+		{name: "SQL读失败不算空", fixture: bootstrapFixture{failure: errors.New("SQL unknown")}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := tc.fixture
+			err := checkEmptyRouteBootstrap(context.Background(), &f, []uint32{1})
+			if tc.wantErr {
 				require.Error(t, err)
+				return
 			}
+			require.NoError(t, err)
 		})
 	}
 }

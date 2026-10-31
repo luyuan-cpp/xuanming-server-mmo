@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
 	"shared/placement"
 )
@@ -31,31 +30,34 @@ func (s *Store) CheckTeamRouteContract(ctx context.Context) error {
 		}
 		return err
 	}
-	// 归属要解析到最终区（PlayerHomeZone、RequireTeamHomeZoneTx）。启动时就核一次读权限，别留到第一次组队才报错。
-	if _, err := placement.ResolveMergedZoneSQL(ctx, s.DB, s.roleSchema, 0); err != nil {
-		return fmt.Errorf("team: zone_merged_into 不可读: %w", err)
-	}
 	return nil
 }
 
-// route前缀已锁住该参与者原行；提交不能把RPC预检期间的旧home写进新名册/consent。
-// expected 是解析到最终区的 home（data_service 回的、票上记的都是），所以先把库里的原始 home 解析了再比。
-func (s *Store) RequireTeamHomeZoneTx(ctx context.Context, tx *sql.Tx, player uint64, expected uint32) error {
+// teamHomeZoneTx 读路由行上的原始 home。调用方已在本事务锁住这一行（lockTeamRoutes），读到的就是提交时刻的值。
+func (s *Store) teamHomeZoneTx(ctx context.Context, tx *sql.Tx, player uint64) (uint32, error) {
 	var home sql.NullInt64
+	if err := tx.QueryRowContext(ctx, "SELECT home_zone FROM `"+s.roleSchema+"`.player_route WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player).Scan(&home); err != nil {
+		return 0, err
+	}
+	if !home.Valid || home.Int64 <= 0 {
+		return 0, ErrTeamRoute
+	}
+	return uint32(home.Int64), nil
+}
+
+// route前缀已锁住该参与者原行；提交不能把RPC预检期间的旧home写进新名册/consent。
+// expected 和路由行存的都是原始区，合服不改写任何一边，两边解析到最终区再比；同一份映射快照，不会被一次刷新夹在中间。
+// 所以合服提交、撤销都不会让在途的票和 launch 在这里失败，失败只说明这名玩家的归属真的变了。
+func (s *Store) RequireTeamHomeZoneTx(ctx context.Context, tx *sql.Tx, player uint64, expected uint32) error {
 	if expected == 0 {
 		return ErrTeamRoute
 	}
-	if err := tx.QueryRowContext(ctx, "SELECT home_zone FROM `"+s.roleSchema+"`.player_route WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player).Scan(&home); err != nil {
-		return err
-	}
-	if !home.Valid || home.Int64 <= 0 {
-		return ErrTeamRoute
-	}
-	resolved, err := placement.ResolveMergedZoneSQL(ctx, tx, s.roleSchema, uint32(home.Int64))
+	home, err := s.teamHomeZoneTx(ctx, tx, player)
 	if err != nil {
 		return err
 	}
-	if resolved != expected {
+	zones := s.MergedZones()
+	if zones.Final(home) != zones.Final(expected) {
 		return ErrTeamRoute
 	}
 	return nil

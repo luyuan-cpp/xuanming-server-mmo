@@ -27,6 +27,7 @@ import (
 	gametable "shared/generated/table"
 	"shared/idsegment"
 	"shared/playername"
+	"shared/redisslot"
 )
 
 // 建角名字登记(设计 docs/design/guild-phase2/03-names.md §3.11 / §3.19)的单测。
@@ -34,9 +35,10 @@ import (
 // 同一个 fakeRegisterClient 同时充当 home zone 与名字登记的后端(生产上就是同一条连接)。
 
 const (
-	nameOwnerID   = uint64(8000) // 「名字已被占用」用例里的占用者
-	nameCreateKey = "account_lock:create:" + hzAccount
+	nameOwnerID = uint64(8000) // 「名字已被占用」用例里的占用者
 )
+
+var nameCreateKey = redisslot.AccountCreateLockKey(hzAccount)
 
 var generatedNamePattern = regexp.MustCompile(`^道友[a-z0-9]{6}$`)
 

@@ -642,6 +642,92 @@ TEST(GameConfigPlayerInbox, ExplicitValuesWinIncludingZero)
 }
 
 // ---------------------------------------------------------------------------
+// GameConfig.player_redis(docs/design/redis-player-store-cluster.md §5.1、§5.6)
+// 整段缺失 = standalone,地址与口令沿用 zoneredis,开发环境不用改配置。
+// 断言不打印口令值(AGENTS.md §11.3)。
+// ---------------------------------------------------------------------------
+
+TEST(GameConfigPlayerRedis, ShippedYamlIsStandaloneOnZoneRedis)
+{
+    GameConfig cfg;
+    ClearEnvVar("PLAYER_REDIS_PASSWORD");
+    ASSERT_TRUE(readGameConfig("etc/game_config.yaml", cfg));
+    EXPECT_EQ(cfg.player_redis().mode(), "standalone");
+    ASSERT_EQ(cfg.player_redis().seeds_size(), 1);
+    EXPECT_EQ(cfg.player_redis().seeds(0),
+              cfg.zone_redis().host() + ":" + std::to_string(cfg.zone_redis().port()));
+}
+
+TEST(GameConfigPlayerRedis, MissingSectionInheritsZoneRedisPassword)
+{
+    constexpr const char *kZonePassword = "zone-pass-01";
+    const auto path = WriteTempGameConfig("game_config_player_redis_missing.yaml", "");
+    GameConfig cfg;
+    ClearEnvVar("PLAYER_REDIS_PASSWORD");
+    SetEnvVar("ZONE_REDIS_PASSWORD", kZonePassword);
+    const bool loaded = readGameConfig(path.string(), cfg);
+    ClearEnvVar("ZONE_REDIS_PASSWORD");
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(cfg.player_redis().mode(), "standalone");
+    ASSERT_EQ(cfg.player_redis().seeds_size(), 1);
+    EXPECT_EQ(cfg.player_redis().seeds(0), "127.0.0.1:6379");
+    EXPECT_TRUE(cfg.player_redis().password() == kZonePassword)
+        << "没配 player_redis 时与 zoneredis 是同一个实例,口令必须沿用";
+}
+
+TEST(GameConfigPlayerRedis, ExplicitClusterKeepsItsOwnSeedsAndDoesNotInheritPassword)
+{
+    const auto path = WriteTempGameConfig("game_config_player_redis_cluster.yaml",
+                                          "player_redis:\n"
+                                          "  mode: cluster\n"
+                                          "  seeds: [\"10.0.0.1:7000\", \"redis-1.infra:7000\"]\n");
+    GameConfig cfg;
+    ClearEnvVar("PLAYER_REDIS_PASSWORD");
+    SetEnvVar("ZONE_REDIS_PASSWORD", "zone-pass-02");
+    const bool loaded = readGameConfig(path.string(), cfg);
+    ClearEnvVar("ZONE_REDIS_PASSWORD");
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(cfg.player_redis().mode(), "cluster");
+    ASSERT_EQ(cfg.player_redis().seeds_size(), 2);
+    EXPECT_EQ(cfg.player_redis().seeds(0), "10.0.0.1:7000");
+    EXPECT_EQ(cfg.player_redis().seeds(1), "redis-1.infra:7000");
+    EXPECT_TRUE(cfg.player_redis().password().empty())
+        << "显式配了种子就是另一个实例,不能继承 zoneredis 的口令";
+}
+
+TEST(GameConfigPlayerRedis, ClusterWithoutSeedsStaysEmptyForTheConsumerToReject)
+{
+    // 不能悄悄回落到 zoneredis:cluster 指向单实例是部署错误,由 scene 启动时拒绝。
+    const auto path = WriteTempGameConfig("game_config_player_redis_no_seeds.yaml", "player_redis:\n  mode: cluster\n");
+    GameConfig cfg;
+    const bool loaded = readGameConfig(path.string(), cfg);
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(cfg.player_redis().mode(), "cluster");
+    EXPECT_EQ(cfg.player_redis().seeds_size(), 0);
+}
+
+TEST(GameConfigPlayerRedis, PasswordFromEnvOverridesYaml)
+{
+    constexpr const char *kEnvPassword = "player-env-pass-01";
+    const auto path = WriteTempGameConfig("game_config_player_redis_env.yaml",
+                                          "player_redis:\n"
+                                          "  mode: cluster\n"
+                                          "  seeds: [\"10.0.0.1:7000\"]\n"
+                                          "  password: \"from-yaml\"\n");
+    GameConfig cfg;
+    SetEnvVar("PLAYER_REDIS_PASSWORD", kEnvPassword);
+    const bool loaded = readGameConfig(path.string(), cfg);
+    ClearEnvVar("PLAYER_REDIS_PASSWORD");
+    RemoveTempGameConfig(path);
+    ASSERT_TRUE(loaded);
+    EXPECT_TRUE(cfg.player_redis().password() == kEnvPassword)
+        << "PLAYER_REDIS_PASSWORD must win over the yaml player_redis.password";
+}
+
+// ---------------------------------------------------------------------------
 // Lookup 守卫宏
 // ---------------------------------------------------------------------------
 // 回归:LookupXxxOrContinue 曾把 continue 包在 do{...}while(0) 里。continue 绑定的是

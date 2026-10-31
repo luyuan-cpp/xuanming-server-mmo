@@ -20,12 +20,12 @@
 // 内严格递增,墙钟下限让崩溃重启后的新进程越过旧进程已发出、但种子里看不到的序号(§7.4)。各玩家共用一条数轴,
 // 每人看到的是有空洞的递增序列,围栏只要求递增、不要求连续。
 //
-// 播种:加载玩家时 SaveSeqFloorFrom(三路 max,见 save_seq_floor.h)经 Observe 进发号器。Observe 只采纳不超过「(nowMs + 60s) << 10」的种子;
+// 播种:加载玩家时把认领返回的 last_save_seq 经 Observe 进发号器。Observe 只采纳不超过「(nowMs + 60s) << 10」的种子;
 // 超界的种子不抬进程水位,只作为该玩家实体上的个人下限(PlayerSaveSeqFloorComp + ApplyPersonalFloor),不污染其他玩家,
 // 也不让这名玩家丢盘(§7.2)。
 //
 // 本头的发号部分只有值类型与纯函数,时间一律由调用方传入,便于单测;不读墙钟、不碰 ECS、不打日志,也不依赖 protobuf
-// (它经 core/system/id_generator.h 被大量编译单元引入;读 PlayerAllData 的种子函数在 save_seq_floor.h)。
+// (它经 core/system/id_generator.h 被大量编译单元引入)。
 // 末尾的 save_seq_stats 是进程级计数(relaxed atomic),由调用方在拒绝 / 超界时递增。
 namespace save_seq
 {

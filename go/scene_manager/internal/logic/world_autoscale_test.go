@@ -49,7 +49,7 @@ func seedChannels(t *testing.T, sc *svc.ServiceContext, zoneID uint32, confID ui
 		require.NoError(t, err)
 		require.NoError(t, sc.Redis.Set(sceneNodeKey(sceneID), "10"))
 		require.NoError(t, sc.Redis.Set(sceneZoneKey(sceneID), fmt.Sprintf("%d", zoneID)))
-		require.NoError(t, sc.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, sceneID), strconv.FormatInt(players, 10)))
+		seedSceneMembersVia(sc, sceneID, int(players))
 	}
 	// 期望频道数与实际铺的数量对齐,否则 initWorldScenesForZone 会补建。
 	setDesiredWorldChannelCount(sc, zoneID, confID, len(playersByScene))
@@ -198,7 +198,7 @@ func TestAutoscale_DrainingChannelWithResidentsStaysDraining(t *testing.T) {
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId) // 开始排空 102
 
 	// 人还没走完。
-	sc.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, 102), "12")
+	seedSceneMembersVia(sc, 102, 12)
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 
 	assert.True(t, mr.Exists(sceneNodeKey(102)), "还有人时不能清掉 scene->node 映射")
@@ -218,7 +218,7 @@ func TestAutoscale_DrainedChannelIsCleanedUp(t *testing.T) {
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 
 	// C++ 侧把人改派走了。
-	sc.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, 102), "0")
+	seedSceneMembersVia(sc, 102, 0)
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
 
 	assert.False(t, mr.Exists(sceneNodeKey(102)))

@@ -99,12 +99,18 @@ func (s *featureSmokeSession) runFeatureBattle(cfg *config.Config) error {
 	if s.player.GetBattleId() != 0 {
 		return fmt.Errorf("feature role already has a battle; refusing to join another")
 	}
+	// 进匹配前先走地域探测:探测回包按请求号认领,不写 feature 快照,放在取 cursor 之前。
+	planID, err := ensureNetworkProbe(s.gc, s.stats, s.gc.Account)
+	if err != nil {
+		return err
+	}
 	// cursor 取在 JoinQueue 之前:开战 / 终局 waiter 只认它之后的快照。JoinQueue 走大厅的 callVia,
 	// 回包经 HandleFeatureBattleMessage 记进快照(waiter 也看它),被拒时在这里就失败。
 	cursor := s.player.FeatureSequence()
 	if _, err := s.call(game.MatchServiceJoinQueueMessageId, &match.JoinQueueRequest{
 		PlayerId: s.gc.PlayerId, Mode: match.MatchMode_MATCH_MODE_PVE_SOLO,
 		BattleConfigId: cfg.FeaturesSmoke.BattleConfigID, ZoneId: cfg.ZoneID,
+		RequestId: chatSmokeRequestId(), NetworkPlanId: planID,
 	}); err != nil {
 		return err
 	}

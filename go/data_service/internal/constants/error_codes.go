@@ -2,10 +2,9 @@ package constants
 
 const (
 	ErrCodeOK       uint32 = 0
-	ErrCodeRedis    uint32 = 1 // Redis 读写失败
 	ErrCodeNotFound uint32 = 4 // GetPlayerHomeZone:映射缺席
 
-	// 2、3、10、12、13、15 是字段 KV 和回档用过的号,已随它们一起删除,不再分配。
+	// 1 是 Redis 读写故障用过的号,2、3、10、12、13、15 是字段 KV 和回档用过的号,都已删除,不再分配。
 	ErrCodeSnapshotDBError uint32 = 11 // MySQL error during snapshot operation
 	ErrCodeInvalidRequest  uint32 = 14 // Missing required fields
 
@@ -37,8 +36,8 @@ const (
 
 	// ── 归属登记(RegisterPlayerZone)────────
 
-	// ErrCodeZoneMappingConflict:player:zone:{id} 已经存在**且值与请求不同**,
-	// RegisterPlayerZone 拒绝覆盖(SETNX 语义),不写任何键。
+	// ErrCodeZoneMappingConflict:player_route 里已有归属**且值与请求不同**,
+	// RegisterPlayerZone 拒绝覆盖,不写。
 	//
 	// 为什么必须拒绝而不是覆盖:home_zone 建号后不再改(合服只写 zone_merged_into 别名,
 	// docs/design/player-data-tidb-scaling-plan.md §7.1),它还决定 go/db 选库。一次覆盖会让玩家的
@@ -87,18 +86,12 @@ const (
 	// 互相矛盾,重试一万次都是同一个答案。
 	ErrCodePlayerNameConflict uint32 = 26
 
-	// ── 玩家归属映射持久化(docs/design/player-route-mapping-durability-proposal.md,第 1a 批)────────
+	// ── 玩家归属映射(docs/design/player-route-mapping-durability-proposal.md §15)────────
 
-	// ErrCodeRouteStoreError:RouteStore.Mode=db_first 时 RegisterPlayerZone 的库这一段出了故障 ——
-	// route store 没装配起来、route_meta 缺行或 writable≠1、锁等待超时(1205)、1213/9007 重试用尽、
-	// 其它 SQL 错误,以及「mapping Redis 认得这名玩家、player_route 却没有行」(要先跑 route_tool import-from-redis)。
+	// ErrCodeRouteStoreError:归属映射读写的库这一段出了故障 —— route store 没装配起来、route_meta 缺行或 writable≠1、
+	// 锁等待超时(1205)、1213/9007 重试用尽、其它 SQL 错误;归属解析时合服映射缓存没装配。
 	//
-	// 与 ErrCodeRedis(1)分开:告警要能一眼分清"全局库坏了"与"mapping Redis 坏了"—— 前者查全局库与迁移,
-	// 后者查 Redis;混成一个码,值班只能两边都翻。只出现在 gRPC status 的 message 里(`error_code=30`,
-	// RegisterPlayerZone 的响应体是 emptypb.Empty),gRPC code 仍是 Unavailable,码集合与 redis 模式相同。
-	//
-	// 2026-10-19 更正:不只 RegisterPlayerZone。第 3 批读方门禁(RouteStore.ReadRequiresReady=true)下,GetPlayerHomeZone /
-	// BatchGetPlayerHomeZone 在缓存不可信、回源 player_route 又失败时(routing.ErrRouteReadUnavailable)同样回 Unavailable + 30
-	// (同样只在 status message 里;绝不回 NotFound)。
+	// 只出现在 gRPC status 的 message 里(`error_code=30`,RegisterPlayerZone 的响应体是 emptypb.Empty),gRPC code 是 Unavailable,
+	// **绝不**回 NotFound:一次库故障不能伪装成「这名玩家没有归属」。
 	ErrCodeRouteStoreError uint32 = 30
 )

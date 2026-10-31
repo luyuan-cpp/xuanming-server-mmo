@@ -84,7 +84,7 @@ public:
     static void Tick();
     // 本线程对该玩家还有没结清的入场登记:SQL 登记 / handoff_fence 登记在途或待重发、登记撤销在途或待发、或登记相关回调未到。
     // 会话结束凭证(PlayerLifecycleSystem::HandleSessionEndedRelease)据此判"本节点可能正在建立持有":这段时间里
-    // save_barrier.handoff_fence 上可能已是这条登记刚写的 H,不能把它当成已结束的资格去消费。只读,scene 逻辑线程调用。
+    // handoff_fence 上可能已是这条登记刚写的 H,不能把它当成已结束的资格去消费。只读,scene 逻辑线程调用。
     static bool HasAdmissionInFlight(Guid playerId);
     // 本进程实例号,即本系统登记 handoff_fence 时写入的 S(与 RequestEnter 同一个来源,测试依赖注入同样生效)。
     static std::string LocalInstanceId();

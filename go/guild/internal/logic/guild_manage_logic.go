@@ -6,7 +6,7 @@ package logic
 //
 //  1. **授权只认 MySQL**。这里做的是"能不能进到事务"的粗筛(有没有会话、目标是不是自己、
 //     role 值合不合法),真正的职位判定一律在 repo 的事务里锁行复核。缓存里的 role / leader_id
-//     只能用来展示 —— 玩家刚被降权、帮会刚被合服搬走时,缓存会在整整一个 TTL 内说谎。
+//     只能用来展示 —— 玩家刚被降权时,缓存会在整整一个 TTL 内说谎。
 //  2. **写 RPC 的前置顺序是固定的**:会话身份 → 归属 zone → 业务前置 → 事务。
 //     顺序不能换:没有会话就没有可信的操作者,没有归属 zone 就不知道他属于哪个区的帮会。
 //  3. **业务拒绝一律回 tip,不回 gRPC 错误**。回 gRPC 错误会让客户端进入重连隔离
@@ -656,8 +656,8 @@ func (l *GuildLogic) myApplicationViews(ctx context.Context, rows []data.Applica
 			// 而他没有任何办法知道少了什么。
 			return nil, err
 		}
-		// 帮会已解散、或回滚合服后留下的跨区残留行:不展示。残留行最多存在一个有效期(默认 72h)。
-		if guild == nil || !visibleIn(guild, zoneID) {
+		// 帮会已解散、或撤销合服后留下的跨区残留行:不展示。残留行最多存在一个有效期(默认 72h)。
+		if guild == nil || !l.visibleIn(guild, zoneID) {
 			continue
 		}
 		views = append(views, &pb.GuildApplicationView{
@@ -752,8 +752,8 @@ func (l *GuildLogic) applicantViews(ctx context.Context, rows []data.ApplicantRo
 
 // ReviewGuildApplication:通过 / 拒绝一条入帮申请。
 //
-// 通过时必须复核申请人的归属 zone —— 申请行是 72 小时前写的,这期间他可能被合服搬到了别的区,
-// 放进来就会出现一个"人在 A 区、帮在 B 区"的成员,而帮会的一切按 zone 隔离。
+// 通过时必须复核申请人的归属 zone —— 申请行是最长 72 小时前写的,这期间可能发生过合服或撤销合服,
+// 放进来一个解析不到同一个最终区的人,就会出现"人在 A 区、帮在 B 区"的成员,而帮会的一切按 zone 隔离。
 // data_service 查不到或报错一律不批(fail-closed):放错人进来要手工修数据,拒绝一次只是重试。
 func (l *GuildLogic) ReviewGuildApplication(ctx context.Context, req *pb.ReviewGuildApplicationRequest) (*pb.ReviewGuildApplicationResponse, error) {
 	who := callerOf(ctx, 0)
@@ -817,6 +817,11 @@ func (l *GuildLogic) ReviewGuildApplication(ctx context.Context, req *pb.ReviewG
 		return &pb.ReviewGuildApplicationResponse{ErrorMessage: tip}, err
 	}
 	res, err := l.repo.ReviewApplication(ctx, guildID, actor, applicant, req.GetApprove(), applicantZone, nowMs())
+	if errors.Is(err, data.ErrGuildZoneMismatch) {
+		// 不走 mapWriteErr:那边的「帮会不存在」答复是给别区帮会的,这里的帮会就是操作者自己的。申请行留着,稍后可以重试。
+		logx.Infof("[guild] review refused: applicant %d (zone %d) is not in the zone of guild %d", applicant, applicantZone, guildID)
+		return reviewTip(constants.ErrApplicationNotFound, "applicant is in another zone"), nil
+	}
 	if tip, err := l.mapWriteErr(ctx, actor, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.ReviewGuildApplicationResponse{ErrorMessage: tip}, err
 	}

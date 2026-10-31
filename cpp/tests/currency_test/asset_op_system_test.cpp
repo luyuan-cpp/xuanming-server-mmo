@@ -347,7 +347,7 @@ TEST_F(AssetOpSystemTest, FrozenRetryNotRecorded)
 }
 
 // 传送/换节点交接在途:PlayerFrozenComp 与 PlayerTravelHandoffComp 成对挂,但只挂了 handoff
-// (或先后顺序错开)时也必须拒。复用 IsCrossZoneFrozen 会漏掉这一格 —— 那时 SavePlayerToRedis
+// (或先后顺序错开)时也必须拒。复用 IsCrossZoneFrozen 会漏掉这一格 —— 那时 SavePlayer
 // 会跳过写盘并返回 false,结局会被误报成 durable。
 TEST_F(AssetOpSystemTest, TravelHandoffRetryNotRecorded)
 {
@@ -938,7 +938,7 @@ TEST_F(AssetOpSystemTest, RedisDurableCanRebuildSQLCommitProof)
 	EXPECT_EQ(before + 1, g_persistCalls) << "Redis durable不应阻止SQL证据修复";
 }
 
-// 脏比较判定"与上次落盘逐字段相等"→ SavePlayerToRedis 返回 false。
+// 脏比较判定"与上次落盘逐字段相等"→ SavePlayer 返回 false。
 // 那不是"没落盘",而是"盘上已经是这份",durable 必须为真(§4.6)。
 // 用 FakePersistSkippedButOnDisk 才能真正走到这条分支:快照若已含结局,
 // PersistAndProbeDurable 根本不会被调用。
@@ -975,7 +975,7 @@ TEST_F(AssetOpSystemTest, AbortDurableAfterSave)
 
 // ── 归属围栏(B4c,08-save-owner-fence.md §8.2.1)──────────────────────────────
 //
-// owner_epoch == 0 时 SavePlayerToRedis 走无守卫的旧 Save:记下的结局可能被旧节点晚到的退出存盘
+// owner_epoch == 0 时 SavePlayer 走无守卫的旧 Save:记下的结局可能被旧节点晚到的退出存盘
 // 抹掉,而 Go 已据 durable 终结 —— 帮会记了资金,玩家侧的扣款却没了(04 K1)。所以改动类 RPC
 // 在无围栏的实体上一律 RETRY、不记账、不触发存盘。
 

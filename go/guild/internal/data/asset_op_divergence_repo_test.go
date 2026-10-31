@@ -78,21 +78,21 @@ func TestListAppliedSinceStatementShape(t *testing.T) {
 			" o.`funds_delta`, o.`contribution_delta`, o.`updated_ms` FROM guild_asset_op o"+
 			" WHERE o.`status` IN (?, ?) AND o.`next_attempt_ms` > ? AND o.`player_id` IN (?)"+
 			" AND o.`op_id` > ? ORDER BY o.`op_id` ASC LIMIT ?",
-		appliedOpsSQL(1, false))
+		appliedOpsSQL(1, 0))
 	assert.Equal(t,
 		"SELECT o.`op_id`, o.`player_id`, o.`guild_id`, o.`stream`, o.`kind`, o.`status`,"+
 			" o.`funds_delta`, o.`contribution_delta`, o.`updated_ms` FROM guild_asset_op o"+
 			" LEFT JOIN guild g ON g.guild_id = o.`guild_id`"+
 			" WHERE o.`status` IN (?, ?) AND o.`next_attempt_ms` > ? AND o.`player_id` IN (?,?)"+
-			" AND o.`op_id` > ? AND (g.zone_id = ? OR g.guild_id IS NULL) ORDER BY o.`op_id` ASC LIMIT ?",
-		appliedOpsSQL(2, true))
+			" AND o.`op_id` > ? AND (g.zone_id IN (?,?) OR g.guild_id IS NULL) ORDER BY o.`op_id` ASC LIMIT ?",
+		appliedOpsSQL(2, 2))
 
 	for _, players := range []int{1, 2, MaxAppliedOpsPlayerIDs} {
-		for _, zone := range []uint32{0, 7} {
-			q := AppliedOpsQuery{ZoneID: zone, PlayerIDs: make([]uint64, players), SinceMs: 1, AfterOpID: 5, Limit: 500}
-			query := appliedOpsSQL(players, zone != 0)
-			args := appliedOpsArgs(q)
-			assert.Equal(t, strings.Count(query, "?"), len(args), "players=%d zone=%d", players, zone)
+		for _, zones := range [][]uint32{nil, {7}, {5, 6, 7}} {
+			q := AppliedOpsQuery{PlayerIDs: make([]uint64, players), SinceMs: 1, AfterOpID: 5, Limit: 500}
+			query := appliedOpsSQL(players, len(zones))
+			args := appliedOpsArgs(q, zones)
+			assert.Equal(t, strings.Count(query, "?"), len(args), "players=%d zones=%v", players, zones)
 			assert.Equal(t, uint32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED), args[0])
 			assert.Equal(t, uint32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL), args[1])
 			assert.Equal(t, q.Limit+1, args[len(args)-1], "多取一行只用来判断还有没有下一页")
@@ -307,6 +307,16 @@ func TestListAppliedSince_ZoneFilterKeepsDisbandedGuilds(t *testing.T) {
 		assert.Zero(t, next, "zone=%d", tc.zone)
 		assert.Equal(t, tc.want, divOpIDs(ops), "zone=%d", tc.zone)
 	}
+
+	// 合服不改写 guild.zone_id:1 区合进 2 区之后,问哪一个区都要同时看到两个原始区的公会。
+	bindMergedZones(t, f.repo, map[uint32]uint32{zone1: zone2})
+	for _, zone := range []uint32{zone1, zone2} {
+		ops, next := divList(t, f, AppliedOpsQuery{ZoneID: zone, PlayerIDs: []uint64{player}, SinceMs: divSince})
+		assert.Zero(t, next, "merged zone=%d", zone)
+		assert.Equal(t, []uint64{9_840_001, 9_840_002, 9_840_003}, divOpIDs(ops), "merged zone=%d", zone)
+	}
+	ops, _ := divList(t, f, AppliedOpsQuery{ZoneID: 99, PlayerIDs: []uint64{player}, SinceMs: divSince})
+	assert.Equal(t, []uint64{9_840_003}, divOpIDs(ops), "没合服的区照旧滤掉别区")
 }
 
 // divReserveDonation 走真实的预留事务造一行未决捐献(G5 / G5b 的起点),返回 op_id。

@@ -317,7 +317,7 @@ go/db 只在 SQL 提交了版本 V 之后才发布 `ACK = V`，而 V 来自 C++ 
 
 K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 按共享 Redis 的形态渲染（`Get-RouteStoreWaitAOFNumReplicas`，与 go/db、data_service 同源）；numlocal 与 timeout 原样镜像 `scene_manager_service.yaml`，yaml 里 numreplicas 保持 0 给本机。ConfigMap 改了不会自动滚动：单实例切高可用之后必须 `rollout restart deploy/scene-manager`。
 
-**Cluster 落地时（集群化第 6 批）必须改的三处**。在那之前，专用客户端对 `Redis.Type=cluster` 直接拒启（fail-closed）。
+**Cluster 落地时（集群化第 6 批）必须改的三处**。2026-10-31 第 6 批已按这三处落码（未编译，`owner_epoch_mint.go`）：连接身份取玩家域配置 `PlayerRedis`，不再有 `Redis.Type=cluster` 拒启；重定向类重发上限 16 次，不计入「结果未知」的 3 次；启动探针逐主节点发。`ownerEpochMintPoolSize` 在 Cluster 下按节点计，连接总账要乘主节点数。
 
 1. **不能用 `ClusterClient.Pipelined`**：它按键分组发送，无键的 WAITAOF 会被发到任意节点，确认的是另一台机器的偏移。要先用 `MasterForKey(ctx, keys[0])` 取到持有该 slot 的主节点 `*Client`，再在它上面发 pipeline。
 2. 对 EVAL 而言，MOVED / ASK / TRYAGAIN / CLUSTERDOWN / LOADING 都表示「没执行」：刷新拓扑后到新节点重发（ASK 要在同一 pipeline 里前置 `ASKING`）。这一类重发不计入「结果未知」的 3 次。

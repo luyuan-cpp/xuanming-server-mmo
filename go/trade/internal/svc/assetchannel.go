@@ -23,6 +23,7 @@ import (
 	"shared/assetopwake"
 	"shared/idsegment"
 	"shared/leader"
+	"shared/playerredis"
 	"shared/safego"
 	"shared/scenenode"
 
@@ -92,10 +93,11 @@ var ErrAssetSecretMissing = errors.New("trade: 资产通道密钥未配置")
 type AssetChannel struct {
 	RelayAdmission *drainproof.Session
 	RootAdmission  *drainproof.Session
-	// Redis 共享单库客户端(SharedRedis)。读位置键 player:{id}:location(scenenode.Locator);另写两类本服务自己的键:
-	// 落地唤醒的跨副本去重键 assetop:wake:trade:{player_id}(SET NX EX,shared/assetopwake),
+	// Redis 是控制域客户端(SharedRedis):落地唤醒的跨副本去重键 assetop:wake:trade:{player_id}(SET NX EX,shared/assetopwake),
 	// 与维护选主锁 trade:assetop:maintenance:leader(shared/leader,值带属主校验)。唤醒订阅的 assetop:wake 频道也在这一实例上。
 	Redis *redis.Client
+	// PlayerRedis 是玩家域句柄(shared/playerredis):读位置键 player:{id}:location(scenenode.Locator)。
+	PlayerRedis redis.UniversalClient
 	// Conns 到各 scene 节点的 gRPC 连接缓存(按 endpoint)。
 	Conns *scenenode.ConnCache
 	// Watcher etcd 里 SceneNodeService.rpc/ 前缀的节点镜像。
@@ -166,14 +168,30 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, rol
 	// 生效值(缺省时是 go-redis 算出来的 10 × GOMAXPROCS):核对 ConfigMap 镜像的 PoolSize 是否真的被加载。
 	logx.Infof("Shared Redis client %s DB=%d pool_size=%d", c.SharedRedis.Host, c.SharedRedis.DB, rdb.Options().PoolSize)
 
+	playerConf := c.EffectivePlayerRedis()
+	playerRdb, err := playerredis.New(playerConf)
+	if err != nil {
+		_ = rdb.Close()
+		return nil, fmt.Errorf("invalid PlayerRedis config: %w", err)
+	}
+	if err := playerRdb.Ping(pingCtx).Err(); err != nil {
+		_ = playerRdb.Close()
+		_ = rdb.Close()
+		// 探不通就不起服,理由同上。Describe 不含密码。
+		return nil, fmt.Errorf("connect player Redis (%s) failed; player:{id}:location lives there: %w", playerConf.Describe(), err)
+	}
+	logx.Infof("Player Redis client %s", playerConf.Describe())
+
 	ops, err := data.NewAssetOpRepo(db, constants.StoreOpTimeout)
 	if err != nil {
+		_ = playerRdb.Close()
 		_ = rdb.Close()
 		return nil, err
 	}
 
 	opIDs, err := NewAssetOpIDSegment(c.IdSegment, ds, roles...)
 	if err != nil {
+		_ = playerRdb.Close()
 		_ = rdb.Close()
 		return nil, fmt.Errorf("op_id segment client: %w", err)
 	}
@@ -184,19 +202,20 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, rol
 		// 节点从 etcd 消失时丢掉它的连接:留着只会让下一次投递卡在一个已经没人听的地址上。
 		func(e scenenode.NodeEntry) { conns.Remove(e.Endpoint) })
 	locator := &scenenode.Locator{
-		Reader:  scenenode.GoRedisReader{Client: rdb},
+		Reader:  scenenode.GoRedisReader{Client: playerRdb},
 		Watcher: watcher,
 		Conns:   conns,
 		Metrics: nodeMetrics,
 	}
 
 	ch := &AssetChannel{
-		Redis:   rdb,
-		Conns:   conns,
-		Watcher: watcher,
-		Locator: locator,
-		Ops:     ops,
-		OpIDs:   opIDs,
+		Redis:       rdb,
+		PlayerRedis: playerRdb,
+		Conns:       conns,
+		Watcher:     watcher,
+		Locator:     locator,
+		Ops:         ops,
+		OpIDs:       opIDs,
 	}
 
 	signer, err := NewAssetOpSigner()
@@ -227,9 +246,8 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, rol
 		//   - Ledger:在线 / 离线终结与自动放弃的证据来源,缺了 reconcile.New 拒绝构造;
 		//   - Recovery:停放档 / 自动放弃 / 日对账的参数。
 		// 这些都只能在这里(任何 goroutine 读 Loop 之前)交给 reconcile.New。
-		Ledger:           persistedLedger(ds),
-		Recovery:         recoveryFrom(c.AssetOp),
-		RequireSQLCommit: true,
+		Ledger:   persistedLedger(ds),
+		Recovery: recoveryFrom(c.AssetOp),
 	})
 	if err != nil {
 		// 循环常量写错,或落地恢复参数越过 assetop 的硬边界(config.Validate 已先拦一道),都必须炸在启动。
@@ -238,8 +256,8 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, rol
 	}
 	ch.Pipeline = pipeline
 
-	// 落地唤醒(设计 §5.3)。订的是 SharedRedis:scene 在玩家进场完成时向同一实例 PUBLISH assetop:wake <player_id>
-	// (位置键 player:{id}:location 也在这里)。实例指错的表现是永远收不到唤醒、只剩原退避,且不报错。
+	// 落地唤醒(设计 §5.3)。订的是 SharedRedis:scene 在玩家进场完成时向同一实例 PUBLISH assetop:wake <player_id>。
+	// 实例指错的表现是永远收不到唤醒、只剩原退避,且不报错。
 	// counter 必须是 Loop 用的同一个 assetop.Metrics:assetop_wake_total 在一个注册表里只能注册一次,
 	// 订阅端与 Loop.WakePlayer 各管一段 result。去重键 assetop:wake:trade:{player_id},与 guild 互不去重。
 	if c.AssetOp.Wake.On() {
@@ -599,11 +617,19 @@ func (a *AssetChannel) CloseAndReport(ctx context.Context) error {
 	if a.Conns != nil {
 		a.Conns.Close()
 	}
+	a.closeRedis()
+	a.resourcesClosed = true
+	return a.closeErr
+}
+
+// closeRedis 关两个 Redis 客户端,错误记进 closeErr。
+func (a *AssetChannel) closeRedis() {
 	if a.Redis != nil {
 		a.closeErr = a.Redis.Close()
 	}
-	a.resourcesClosed = true
-	return a.closeErr
+	if a.PlayerRedis != nil {
+		a.closeErr = errors.Join(a.closeErr, a.PlayerRedis.Close())
+	}
 }
 func (a *AssetChannel) Close() {
 	if a == nil {
@@ -628,9 +654,7 @@ func (a *AssetChannel) Close() {
 	if a.Conns != nil {
 		a.Conns.Close()
 	}
-	if a.Redis != nil {
-		a.closeErr = a.Redis.Close()
-	}
+	a.closeRedis()
 	a.resourcesClosed = true
 }
 

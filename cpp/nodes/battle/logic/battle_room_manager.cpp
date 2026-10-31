@@ -15,9 +15,6 @@
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 
-#include <muduo/contrib/hiredis/Hiredis.h>
-#include <hiredis/hiredis.h>
-
 #include "muduo/base/Logging.h"
 
 #include "engine/infra/messaging/kafka/kafka_producer.h"
@@ -25,7 +22,6 @@
 #include "node/system/node/node.h"
 #include "node/system/node/node_command_route.h"
 #include "node_config_manager.h"
-#include "thread_context/redis_manager.h"
 #include "thread_context/node_context_manager.h"
 #include "core/utils/random/random.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
@@ -42,15 +38,8 @@
 
 #include "constants/turn_battle_constants.h"
 #include "data/battle_table_fingerprint.h"
-// 结算发件箱的纯判定 + Redis key/Lua 契约(R07)。
-#include "settlement/settlement_outbox.h"
-#include "settlement/settlement_reply_shape.h"
-// 活动局结果的回显组装 + 持久记录键/重发判定(帮会同道历练,guild-phase2 §6.19–§6.21)。
+// 活动上下文与逃跑 / 阵亡名单的回显组装(帮会同道历练,guild-phase2 §6.19–§6.21)。
 #include "system/battle_result_activity.h"
-
-// player:{id}:location 是 scene_manager 写的跨运行时契约 key(单一共享 Redis,
-// cross-zone-matchmaking.md D12),重投时用它重新解析玩家当前所在的 scene。
-#include "proto/scene_manager/storage.pb.h"
 
 #include "proto/common/base/message.pb.h"
 #include "proto/common/event/battle_event.pb.h"
@@ -65,7 +54,7 @@
 
 // 事件 id 注册表常量:
 //   contracts_kafka_gate_event_event_id.h  → ContractsKafkaPushToPlayerEventEventId(大厅公告回落)
-//   common_event_battle_event_event_id.h   → BattleSettlementEventEventId
+//   common_event_battle_event_event_id.h   → BattleConfirmedEventEventId
 #include "rpc/service_metadata/contracts_kafka_gate_event_event_id.h"
 #include "rpc/service_metadata/common_event_battle_event_event_id.h"
 // 客户端消息 id 常量(proto/battle/player_battle.proto 重生成后出现):
@@ -176,22 +165,22 @@ namespace
         }
     }
 
-    // 底层发送:显式给出 (scene_node_id, scene_instance_id)。
+    // 发一条进程内事件到玩家所在 scene:SceneCommand{DispatchEvent, eventId, message}。
     // topic=scene-cmd_g<N> 的 scene_node_id % P 号分区,key=player_id
-    // (同一玩家的确认/结算保序 —— 分区已由 node_id 定死,key 只影响同分区内的批次,
+    // (同一玩家的确认保序 —— 分区已由 node_id 定死,key 只影响同分区内的批次,
     //  不影响落点,不变量 3 仍然成立)。
-    //
-    // sceneInstanceId 允许为空 —— 只有一种情况:结算**重投**时目标是刚从
-    // player:{id}:location 重新解析出来的 node_id,那里只有节点号没有实例 uuid。
-    // 留空后 gate/scene 侧的 ValidateCommandTarget 会跳过第二级过滤,语义变成
-    // "谁现在持有这个 node_id 就谁执行"——这正是重投想要的。为什么这样是安全的:
-    // 结算命令**自校验于玩家归属**(scene 侧 ApplySettlement 先 GetPlayer(player_id)),
-    // 不持有该玩家的 scene 只会把待结算记录原样再写一遍(幂等),不会误改任何人的数据。
-    // 首投仍然带 uuid,防僵尸这一级一点没松。
-    void SendSceneCommandTo(const uint32_t sceneNodeId, const std::string &sceneInstanceId,
-                            const uint64_t playerId, const uint32_t eventId,
-                            const std::string &payload, const uint64_t battleIdForLog)
+    // target_instance_id=BattleRouting.scene_instance_id(不变量 2 fail-closed)。
+    void SendSceneEvent(const ::BattleRouting &routing, const uint64_t playerId,
+                        const uint32_t eventId, const google::protobuf::Message &message,
+                        const uint64_t battleIdForLog)
     {
+        if (routing.scene_instance_id().empty())
+        {
+            LOG_ERROR << "battle outbound scene event rejected: scene_instance_id is empty, player_id=" << playerId
+                      << " battle_id=" << battleIdForLog << " event_id=" << eventId;
+            return;
+        }
+        const uint32_t sceneNodeId = routing.scene_node_id();
         if (sceneNodeId == 0)
         {
             LOG_ERROR << "battle outbound scene event rejected: scene_node_id is 0, player_id=" << playerId
@@ -203,8 +192,8 @@ namespace
         command.set_command_type(contracts::kafka::SceneCommand::DispatchEvent);
         command.set_player_id(playerId);
         command.set_target_scene_id(sceneNodeId);
-        command.set_payload(payload);
-        command.set_target_instance_id(sceneInstanceId);
+        command.set_payload(message.SerializeAsString());
+        command.set_target_instance_id(routing.scene_instance_id());
         command.set_event_id(eventId);
 
         const auto route = node::kafka::ResolveCommandRoute(SceneNodeService, sceneNodeId);
@@ -219,169 +208,13 @@ namespace
         }
     }
 
-    // 发一条进程内事件到玩家所在 scene:SceneCommand{DispatchEvent, eventId, message}。
-    // target_instance_id=BattleRouting.scene_instance_id(不变量 2 fail-closed)。
-    // 确认事件走这里;结算走 SendSettlementCommand(重投时目标要重新解析,uuid 无从得知)。
-    void SendSceneEvent(const ::BattleRouting &routing, const uint64_t playerId,
-                        const uint32_t eventId, const google::protobuf::Message &message,
-                        const uint64_t battleIdForLog)
-    {
-        if (routing.scene_instance_id().empty())
-        {
-            LOG_ERROR << "battle outbound scene event rejected: scene_instance_id is empty, player_id=" << playerId
-                      << " battle_id=" << battleIdForLog << " event_id=" << eventId;
-            return;
-        }
-
-        SendSceneCommandTo(routing.scene_node_id(), routing.scene_instance_id(), playerId, eventId,
-                           message.SerializeAsString(), battleIdForLog);
-    }
-
-    // ---- 结算落库(R07):跨进程存储用共享 Redis ----
-    //
-    // 为什么 battle 用 tlsRedis 就够:zone_redis 在本仓部署里是**全服单一实例**
-    // (cross-zone-matchmaking.md D12 把它钉成不变量:player:{id}:location /
-    // player:session:{id} / battle:lock:{id} 三类跨运行时契约 key 都以它为准),
-    // 所以 battle 写的 battle:settlement:pending:* 与 scene 读写的是同一个库。
-    bool RedisReady()
-    {
-        auto &redis = tlsRedis.GetZoneRedis();
-        return redis && redis->connected();
-    }
-
-    // 从 player:{id}:location 解析出玩家当前所在的 scene node_id。0 = 解析不到。
-    // node_id 在这个 key 里是**十进制字符串**(scene_manager 的 enterscenelogic.go
-    // 用 strconv.ParseUint(nodeId, 10, 32) 校验过),不是实体句柄。
-    uint32_t ParseSceneNodeIdFromLocationReply(const redisReply *reply)
-    {
-        if (reply == nullptr || reply->type != REDIS_REPLY_STRING)
-        {
-            return 0;
-        }
-        if (reply->len > static_cast<size_t>(std::numeric_limits<int>::max()))
-        {
-            return 0;
-        }
-        storage::PlayerLocation location;
-        if (!location.ParseFromArray(reply->str, static_cast<int>(reply->len)))
-        {
-            return 0;
-        }
-        if (location.node_id().empty())
-        {
-            return 0;
-        }
-        try
-        {
-            const auto parsed = std::stoull(location.node_id());
-            if (parsed == 0 || parsed > std::numeric_limits<uint32_t>::max())
-            {
-                return 0;
-            }
-            return static_cast<uint32_t>(parsed);
-        }
-        catch (const std::exception &)
-        {
-            return 0;
-        }
-    }
-
-    // 结算命令的一次投递(首投与重投共用),payload 是序列化好的 BattleSettlementEvent。
-    void SendSettlementCommand(const uint32_t sceneNodeId, const std::string &sceneInstanceId,
-                               const uint64_t playerId, const uint64_t battleId,
-                               const std::string &payload)
-    {
-        SendSceneCommandTo(sceneNodeId, sceneInstanceId, playerId, BattleSettlementEventEventId,
-                           payload, battleId);
-    }
-
-    // ---- 待结算积压报数(landing-recovery-sync-digest.md §7) ----
-    //
-    // 一轮三步,都发在同一条 zone Redis 连接上,回复按发送顺序回来(hiredis 单连接 FIFO):
-    //   1) ZRANGE 积压索引 [start, start+N):取一批成员(N = kSettlementBacklogSweepBatch,窗口由
-    //      PendingIndexSweepCursor 给出,头部与轮转交替;BattleRoomManager::ReportPendingSettlementBacklog 发出);
-    //   2) 每个成员一条 kSweepPendingIndexOrphanScript:pending:id 键不在就 ZREM(孤儿)。
-    //      孤儿来自滚动升级窗口:旧版 scene 销账不清索引;旧版 scene 暂存给新记录挂回 7 天 TTL 后到期;
-    //   3) kReadPendingBacklogScript:清理之后的 ZCARD 与最老分数,打一行 metric。
-    // 第 3 步在第 2 步全部发出之后才发,FIFO 保证它的回调晚于全部清理回调,orphans_removed 已数完。
-    // 先清理再读数,而不是 ZRANGE ... WITHSCORES 直接算年龄:头部若是孤儿,oldest_age_s 不会被它们抬高。
-    // 本函数做第 2、3 步。回调只捕获值(计数器的 shared_ptr),不碰 BattleRoomManager(AGENTS.md §11.7)。
-    // 多个 battle 节点各报一遍同一个全局数,无害(设计 §7)。
-    void SweepPendingIndexAndReport(const redisReply &rangeReply)
-    {
-        if (!RedisReady())
-        {
-            return;
-        }
-        auto orphansRemoved = std::make_shared<uint64_t>(0);
-        for (size_t i = 0; i < rangeReply.elements; ++i)
-        {
-            const redisReply *member = rangeReply.element[i];
-            if (member == nullptr || member->type != REDIS_REPLY_STRING)
-            {
-                continue;
-            }
-            uint64_t playerId = 0;
-            if (!battle_settlement::ParsePendingIndexMember(std::string_view(member->str, member->len), playerId))
-            {
-                // 成员只由写入脚本以 %llu 写入,解析不了只可能是索引被手工改过。它对应不到任何记录,
-                // 留着会一直占住一个位置(在头部时还会把 oldest_age_s 钉死),按孤儿删掉
-                // (%b 二进制安全,成员内容不拼进格式串)。
-                LOG_WARN << "battle settlement backlog index member is not a decimal player_id;removed: member_len=" << member->len;
-                tlsRedis.GetZoneRedis()->command(
-                    [orphansRemoved](hiredis::Hiredis *, redisReply *removeReply)
-                    {
-                        if (removeReply != nullptr && removeReply->type == REDIS_REPLY_INTEGER && removeReply->integer > 0)
-                        {
-                            *orphansRemoved += static_cast<uint64_t>(removeReply->integer);
-                        }
-                    },
-                    (std::string("ZREM ") + battle_settlement::kPendingSettlementIndexKey + " %b").c_str(),
-                    member->str, member->len);
-                continue;
-            }
-            tlsRedis.GetZoneRedis()->command(
-                [orphansRemoved](hiredis::Hiredis *, redisReply *sweepReply)
-                {
-                    if (sweepReply != nullptr && sweepReply->type == REDIS_REPLY_INTEGER && sweepReply->integer > 0)
-                    {
-                        *orphansRemoved += static_cast<uint64_t>(sweepReply->integer);
-                    }
-                },
-                (std::string("EVAL %s 2 ") + battle_settlement::kPendingSettlementIndexKey + " " +
-                 battle_settlement::kPendingSettlementIdKeyFmt + " %llu")
-                    .c_str(),
-                battle_settlement::kSweepPendingIndexOrphanScript, playerId, playerId);
-        }
-        tlsRedis.GetZoneRedis()->command(
-            [orphansRemoved](hiredis::Hiredis *, redisReply *countReply)
-            {
-                if (countReply == nullptr || countReply->type != REDIS_REPLY_ARRAY || countReply->elements < 2 ||
-                    countReply->element[0] == nullptr || countReply->element[0]->type != REDIS_REPLY_INTEGER ||
-                    countReply->element[1] == nullptr || countReply->element[1]->type != REDIS_REPLY_INTEGER)
-                {
-                    LOG_WARN << "battle settlement backlog report: backlog read failed;orphans_removed=" << *orphansRemoved;
-                    return;
-                }
-                const auto count = countReply->element[0]->integer;
-                const auto oldestMs = countReply->element[1]->integer;
-                const uint64_t oldestAgeSec = battle_settlement::PendingBacklogOldestAgeSec(
-                    oldestMs > 0 ? static_cast<uint64_t>(oldestMs) : 0, TimeSystem::NowMillisecondsUTC());
-                LOG_INFO << "metric=battle_settlement_pending_backlog count=" << count
-                         << " oldest_age_s=" << oldestAgeSec
-                         << " orphans_removed=" << *orphansRemoved;
-            },
-            (std::string("EVAL %s 1 ") + battle_settlement::kPendingSettlementIndexKey).c_str(),
-            battle_settlement::kReadPendingBacklogScript);
-    }
-
     // 确认事件补发策略(与 scene 侧 player_battle.h 的锁保留期对齐):
     //   scene 备战期锁 EX = prepare_deadline 剩余秒数 + PlayerBattleSystem::kLockExtraTtlSec(60s),
     //   备战到期只摘组件不删锁,锁在期间迟到的确认仍可重建冻结。
     //   prepare_deadline = gather 起点 + match 的 matchedTicketTTLFor(组大小)(go/match queue.go),
-    //   现行公式 ⌈N×6 + 2×(6.1+5) + 3⌉ + 10 → 1/2/5/10 人依次 42/48/66/96s;最大组 10 人(5v5),
-    //   所以锁最晚在 gather 起点 +96+60=156s 过期。补发窗口从建房起算,建房晚于 gather 起点,
-    //   取 180s ≥ 156s,多出的 24s 吸收 match / scene / battle 三方墙钟偏差与锁 EX 的秒级取整。
+    //   现行公式 ⌈N×6 + 2×5 + 3⌉ + 10 → 1/2/5/10 人依次 30/35/53/83s;最大组 10 人(5v5),
+    //   所以锁最晚在 gather 起点 +83+60=143s 过期。补发窗口从建房起算,建房晚于 gather 起点,
+    //   取 180s ≥ 143s,多出的 37s 吸收 match / scene / battle 三方墙钟偏差与锁 EX 的秒级取整。
     //   依赖:match 改 matchedTicketTTLFor 公式、把 MatchedTicketTTLSeconds 配到公式值之上、放大组
     //   上限,或 scene 改 kLockExtraTtlSec 时,本窗口必须同步保持 ≥ 最大 TTL + kLockExtraTtlSec。
     //   窗口内每 10s 一次(scene 已 FIGHTING 时幂等忽略,开销是每玩家一条小消息;收尾即停表)。
@@ -399,29 +232,6 @@ namespace
         event.set_player_id(playerId);
         event.set_deadline_ms(deadlineMs);
         SendSceneEvent(routing, playerId, BattleConfirmedEventEventId, event, battleId);
-    }
-
-    // 对局结果回流 match(评分,二期 MMR):topic=match-results(全局,不带 zone 段),
-    // key=battle_id(同局保序即可)。payload 直接是 BattleResultEvent,不套 *Command 信封:
-    // 该 topic 无目标实例语义(任一 match 实例消费即可),不适用不变量 2 的 target_instance_id。
-    constexpr char kMatchResultsTopic[] = "match-results";
-
-    // 发一条已序列化的 BattleResultEvent。活动局首发与重发都走这里,保证 Kafka 上的字节与
-    // Redis 持久记录逐字节相同(guild 巡检器从记录结算与消费者从 topic 结算看到的是同一份结果)。
-    void SendMatchResultPayload(const uint64_t battleId, const std::string &payload)
-    {
-        const auto err = KafkaProducer::Instance().send(kMatchResultsTopic, payload,
-                                                        std::to_string(battleId));
-        if (err != RdKafka::ERR_NO_ERROR)
-        {
-            LOG_ERROR << "battle result send failed: topic=" << kMatchResultsTopic
-                      << " battle_id=" << battleId << " err=" << err;
-        }
-    }
-
-    void SendBattleResultEvent(const contracts::kafka::BattleResultEvent &event)
-    {
-        SendMatchResultPayload(event.battle_id(), event.SerializeAsString());
     }
 
     // ---- 配表指纹校验开关(cross-zone-matchmaking.md §10) ----
@@ -619,48 +429,40 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
 {
     const auto battleId = request.battle_id();
     response.set_battle_id(battleId);
-    if (request.outcome_protocol_version() > 1 ||
-        (request.outcome_protocol_version() == 1 && (request.placement_operation_id().empty() ||
-            request.target_instance_id().empty()))) {
+    // 只有终局协议 v1:放置操作与目标实例是终局原件的身份,缺一不可;其它版本一律拒绝(player-data-tidb-scaling-plan.md §5.4)。
+    if (request.outcome_protocol_version() != turnbattle::kOutcomeProtocolVersion ||
+        request.placement_operation_id().empty() || request.target_instance_id().empty()) {
         response.mutable_error_message()->set_id(kInvalidParameter); return;
     }
-    if(network_probe::Enabled()&&request.placement_operation_id().empty())
-    {response.mutable_error_message()->set_id(kInvalidParameter);return;}
 
     std::string canonical;
-    if(!request.placement_operation_id().empty())
+    {google::protobuf::io::StringOutputStream sink(&canonical);google::protobuf::io::CodedOutputStream output(&sink);
+     output.SetSerializationDeterministic(true);if(!request.SerializeToCodedStream(&output)){response.mutable_error_message()->set_id(kInvalidParameter);return;}}
+    const auto currentMs=TimeSystem::NowMillisecondsUTC();
+    // 墓碑保留覆盖所有合法迟到请求；过窗请求仍受admit_before硬拒绝。
+    std::erase_if(creationOperations_,[currentMs,&rooms=rooms_](const auto& entry){return turnbattle::CreationReceiptExpired(entry.second.expiresMs,currentMs,rooms.Find(entry.first)!=nullptr);});
+    if(!gNode||request.required_physical_region()==0||request.required_physical_region()!=network_probe::PhysicalRegion()||
+       request.target_instance_id()!=gNode->GetNodeInfo().node_uuid())
+    {response.mutable_error_message()->set_id(kInvalidParameter);return;}
+    const auto old=creationOperations_.find(battleId);
+    if(old!=creationOperations_.end())
     {
-        {google::protobuf::io::StringOutputStream sink(&canonical);google::protobuf::io::CodedOutputStream output(&sink);
-         output.SetSerializationDeterministic(true);if(!request.SerializeToCodedStream(&output)){response.mutable_error_message()->set_id(kInvalidParameter);return;}}
-        const auto currentMs=TimeSystem::NowMillisecondsUTC();
-        // 墓碑保留覆盖所有合法迟到请求；过窗请求仍受admit_before硬拒绝。
-        std::erase_if(creationOperations_,[currentMs,&rooms=rooms_](const auto& entry){return turnbattle::CreationReceiptExpired(entry.second.expiresMs,currentMs,rooms.Find(entry.first)!=nullptr);});
-        if(!gNode||request.required_physical_region()==0||request.required_physical_region()!=network_probe::PhysicalRegion()||
-           request.target_instance_id()!=gNode->GetNodeInfo().node_uuid())
-        {response.mutable_error_message()->set_id(kInvalidParameter);return;}
-        const auto old=creationOperations_.find(battleId);
-        if(old!=creationOperations_.end())
-        {
-            const auto* originalRoom = FindRoom(battleId);
-            if(old->second.aborted||old->second.operationId!=request.placement_operation_id()||
-               old->second.canonicalRequest!=canonical||originalRoom==nullptr)
-                response.mutable_error_message()->set_id(kInvalidParameter);
-            else {
-                response.set_adopted_outcome_protocol_version(originalRoom->outcomeProtocol);
-                response.set_target_instance_id(originalRoom->targetInstance);
-            }
-            return;
+        const auto* originalRoom = FindRoom(battleId);
+        if(old->second.aborted||old->second.operationId!=request.placement_operation_id()||
+           old->second.canonicalRequest!=canonical||originalRoom==nullptr)
+            response.mutable_error_message()->set_id(kInvalidParameter);
+        else {
+            response.set_adopted_outcome_protocol_version(originalRoom->outcomeProtocol);
+            response.set_target_instance_id(originalRoom->targetInstance);
         }
-        if(request.admit_before_ms()==0||request.admit_before_ms()<=currentMs)
-        {response.mutable_error_message()->set_id(kInvalidParameter);return;}
+        return;
     }
-    else if(request.required_physical_region()!=0||!request.target_instance_id().empty())
+    if(request.admit_before_ms()==0||request.admit_before_ms()<=currentMs)
     {response.mutable_error_message()->set_id(kInvalidParameter);return;}
 
-    // 既有操作在上方仍按原房间回显 adopted；缺密钥只禁止创建新的v1房间，不降级。
+    // 既有操作在上方仍按原房间回显 adopted；缺密钥只禁止创建新房间，不降级。
     const char* outcomeSecret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
-    if (request.outcome_protocol_version() == 1 &&
-        !OutcomeSigningKeyReady(outcomeSecret ? outcomeSecret : "")) {
+    if (!OutcomeSigningKeyReady(outcomeSecret ? outcomeSecret : "")) {
         response.mutable_error_message()->set_id(kFeatureUnavailable);
         return;
     }
@@ -713,11 +515,10 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     room->battleId = battleId;
     room->matchMode = request.match_mode();
     room->battleConfigId = request.battle_config_id();
-    // 活动上下文原样保存(未填 = kind NONE);FinishBattle 回显并据此选结果通道(§6.20)
+    // 活动上下文原样保存(未填 = kind NONE);BuildResult 回显进终局原件,结果通道在 match(§6.20)
     room->activityContext = request.activity_context();
     // 观战可见性随原件冻结,只在这里赋值一次(AddObserver 的第二道闸据此执法;未填 = 不可观战)
     room->spectateVisibility = request.spectate_visibility();
-    room->requiresResultConfirmation = !request.placement_operation_id().empty();
     room->outcomeProtocol = request.outcome_protocol_version();
     room->placementOperation = request.placement_operation_id();
     room->targetInstance = request.target_instance_id();
@@ -767,7 +568,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     }
 
     // 纯构建/签票也可能耗尽准入预算，提交前再次拒绝过期的原操作。
-    if(!request.placement_operation_id().empty()&&request.admit_before_ms()<=TimeSystem::NowMillisecondsUTC())
+    if(request.admit_before_ms()<=TimeSystem::NowMillisecondsUTC())
     {response.mutable_error_message()->set_id(kInvalidParameter);return;}
 
     // 插表 = 房间生命周期起点(EmplaceRoom 随即通知 Agones 单元已创建);此前的拒绝路径都没有副作用
@@ -779,11 +580,8 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         // 回错误会诱发 match 的补偿 DestroyBattle(battle_id),把它一起销毁。
         return;
     }
-    if(!request.placement_operation_id().empty())
-    {
-        // canonical 已在任何插表/通知副作用之前成功序列化，失败路径不会留下房间。
-        creationOperations_[battleId]={request.placement_operation_id(),std::move(canonical),request.deadline_ms()+60000,false};
-    }
+    // canonical 已在任何插表/通知副作用之前成功序列化，失败路径不会留下房间。
+    creationOperations_[battleId]={request.placement_operation_id(),std::move(canonical),request.deadline_ms()+60000,false};
 
     roomPtr->battleTimer.RunAfter(static_cast<double>(deadlineMs - nowMs) / 1000.0,
                                   [this, battleId]
@@ -838,42 +636,26 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
 void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &request)
 {
     const auto battleId = request.battle_id();
-    // 原事件可能已落 broker，尚未收到确认不能先把相同对局宣布为作废。
-    if (const auto* pending = FindRoom(battleId); pending && (pending->outcomeProtocol == 1 || TerminalPending(*pending))) return;
+    // 房间只由 Match 的持久决定收尾。终局原件可能已提交,尚未收到决定不能先把相同对局宣布为作废;
+    // 迟到的旧 worker 也不能销毁新 worker 已确认的同一房间。
+    // 本检查与下面立墓碑同在 battle 逻辑线程,CreateBattle 不可能插在二者之间。
+    if (FindRoom(battleId) != nullptr)
+    {
+        LOG_INFO << "DestroyBattle ignored: room still exists and only a match decision can end it, battle_id=" << battleId
+                 << " reason=" << request.reason();
+        return;
+    }
     if(!request.placement_operation_id().empty())
     {
         if(!gNode||request.target_instance_id()!=gNode->GetNodeInfo().node_uuid())return;
         const auto old=creationOperations_.find(battleId);
         if(old!=creationOperations_.end()&&old->second.operationId!=request.placement_operation_id())return;
-        // 匹配恢复只撤销尚未建成的原操作。迟到的旧 worker 不能销毁新 worker 已确认的同一房间。
-        // 本检查与立墓碑同在 battle 逻辑线程，CreateBattle 不可能插在二者之间。
-        if(request.reason()=="global_match_abort_if_absent"&&FindRoom(battleId)!=nullptr)return;
         auto& operation=creationOperations_[battleId];operation.operationId=request.placement_operation_id();operation.aborted=true;
         operation.expiresMs=std::max(operation.expiresMs,TimeSystem::NowMillisecondsUTC()+360000);
     }
-    auto *room = FindRoom(battleId);
-    if (room == nullptr)
-    {
-        // 幂等:已销毁/从未建成都视为成功
-        LOG_INFO << "DestroyBattle idempotent hit: battle_id=" << battleId
-                 << " reason=" << request.reason();
-        return;
-    }
-
-    // 补偿/回滚路径:不发结算(冻结解除由 match 调 scene CancelBattlePrepare
-    // 或 scene reaper 按 deadline 兜底,设计文档 §3.2);推观众终局,并关闭直连。
-    // 注意:scene 收到过本房间的确认事件后会拒绝 CancelBattlePrepare(已 FIGHTING 视为过期回滚),
-    // 此时玩家冻结要等 reaper 按 deadline_ms 解除 —— 房间已销毁无法再发结算,属已知取舍。
-    room->roundTimer.Cancel();
-    room->battleTimer.Cancel();
-    room->confirmResendTimer.Cancel();
-    // 观众同步清退:作废路径无胜负,outcome 留 ONGOING(player_battle.proto 契约)
-    NotifySpectateEndAndClose(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
-    // 作废路径没有终局包可等,直接关直连;客户端凭 GetBattleState 空响应 / 断连收 UI
-    CloseDirectConnections(*room, "destroyed");
-    EraseRoom(battleId);
-
-    LOG_INFO << "DestroyBattle completed: battle_id=" << battleId << " reason=" << request.reason();
+    // 幂等:已销毁/从未建成都视为成功
+    LOG_INFO << "DestroyBattle idempotent hit: battle_id=" << battleId
+             << " reason=" << request.reason();
 }
 
 void BattleRoomManager::HandleQueryBattleCreation(const ::QueryBattleCreationRequest& request,::QueryBattleCreationResponse& response)
@@ -881,7 +663,7 @@ void BattleRoomManager::HandleQueryBattleCreation(const ::QueryBattleCreationReq
     if(!gNode||request.target_instance_id()!=gNode->GetNodeInfo().node_uuid()||request.placement_operation_id().empty())return;
     response.set_target_instance_id(gNode->GetNodeInfo().node_uuid());
     const char* secret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
-    response.set_supported_outcome_protocol_version(OutcomeSigningKeyReady(secret ? secret : "") ? 1 : 0);
+    response.set_supported_outcome_protocol_version(OutcomeSigningKeyReady(secret ? secret : "") ? turnbattle::kOutcomeProtocolVersion : 0);
     const auto found=creationOperations_.find(request.battle_id());
     if(found==creationOperations_.end()){response.set_state(BATTLE_CREATION_ABSENT);return;}
     if(found->second.operationId!=request.placement_operation_id())return;
@@ -958,8 +740,7 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
     if (allReady)
     {
         // 全员就绪提前结算,不等 action_deadline。
-        // 注意:ResolveRound 可能走到 FinishBattle + EraseRoom,之后 room 悬空 ——
-        // 任何依赖 room 的响应字段都必须在这一行之前填完
+        // 任何依赖 room 的响应字段都在这一行之前填完:结算可能把房间带进终局提交
         ResolveRound(room->battleId);
     }
 }
@@ -1445,18 +1226,14 @@ void BattleRoomManager::ResolveRound(const uint64_t battleId)
         result.add_action_order(actorId);
     }
 
-    if (outcome != ::BATTLE_OUTCOME_ONGOING && room->requiresResultConfirmation)
+    // 分出胜负:最后一回合帧连同终局一起等 Match 的持久决定,不提前公布。
+    if (outcome != ::BATTLE_OUTCOME_ONGOING)
     {
         BeginResultCommit(*room, outcome, ::SPECTATE_END_BATTLE_FINISHED,
                           std::move(result), std::move(visibleBefore));
         return;
     }
     BroadcastTurnResult(*room, result);
-
-    if (outcome != ::BATTLE_OUTCOME_ONGOING)
-    {
-        if (FinishBattle(*room, outcome, ::SPECTATE_END_BATTLE_FINISHED)) EraseRoom(battleId);
-    }
 }
 
 void BattleRoomManager::OnBattleDeadline(const uint64_t battleId)
@@ -1479,15 +1256,10 @@ void BattleRoomManager::OnBattleDeadline(const uint64_t battleId)
              << " outcome=" << ::eBattleOutcome_Name(outcome);
 
     room->roundTimer.Cancel();
-    if (room->requiresResultConfirmation)
-    {
-        BeginResultCommit(*room, outcome, ::SPECTATE_END_BATTLE_ABORTED,
-                          std::nullopt, room->engine.BuildStateSnapshot());
-        return;
-    }
     // 观众侧 deadline 强制收尾归 ABORTED(player_battle.proto 枚举注释口径);
     // outcome 带上强制盖章结果,观众端可与参战者的平局结算对齐展示
-    if (FinishBattle(*room, outcome, ::SPECTATE_END_BATTLE_ABORTED)) EraseRoom(battleId);
+    BeginResultCommit(*room, outcome, ::SPECTATE_END_BATTLE_ABORTED,
+                      std::nullopt, room->engine.BuildStateSnapshot());
 }
 
 void BattleRoomManager::ResendBattleConfirmed(const uint64_t battleId)
@@ -1541,7 +1313,7 @@ contracts::kafka::BattleResultEvent BattleRoomManager::BuildResult(const BattleR
     }
     event.set_finished_at_ms(TimeSystem::NowMillisecondsUTC());
     turnbattle::FillBattleResultActivityFields(room.activityContext, std::move(fled), std::move(dead), event);
-    if (room.requiresResultConfirmation && !turnbattle::FreezeBattleSettlementSource(event, std::move(settlements)))
+    if (!turnbattle::FreezeBattleSettlementSource(event, std::move(settlements)))
         LOG_ERROR << "metric=battle_settlement_source_invalid;terminal remains unknown";
     return event;
 }
@@ -1550,65 +1322,6 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
     const ::eSpectateEndReason reason, std::optional<::TurnResultS2C> finalTurn, ::BattleStateS2C visibleBefore)
 {
     if (TerminalPending(room)) return;
-    if (room.outcomeProtocol == 1) {
-        BeginSqlOutcome(room, outcome, reason, std::move(finalTurn), std::move(visibleBefore));
-        return;
-    }
-    room.roundTimer.Cancel(); room.battleTimer.Cancel(); room.confirmResendTimer.Cancel();
-    room.actionDeadlineMs = 0;
-    visibleBefore.set_battle_id(room.battleId);
-    visibleBefore.set_action_deadline_ms(0);
-    room.pendingVisibleState = std::move(visibleBefore);
-    room.pendingFinalTurn = std::move(finalTurn);
-    room.pendingSpectateReason = reason;
-    room.pendingResult = BuildResult(room, outcome);
-    std::string payload;
-    if (room.pendingResult.settlement_format_version() != 1 || !room.pendingResult.SerializeToString(&payload))
-    {
-        LOG_ERROR << "metric=battle_result_commit_serialization_failed;terminal remains unknown";
-        room.resultCommit.emplace(std::string{});
-        // 占位房间留在节点上排不空:周期提醒(ReportExhaustedStagingRooms)要靠报数定时器,这里补装(2026-10-22 评审补)。
-        EnsureSettlementBacklogReporter();
-        return;
-    }
-    // 个人结算字节在发结果之前就要落 pending(StagePersonalSettlements),成员必须与房间一一对应;
-    // 对不上与序列化失败同等处置:结果不发、房间保留,终局保持未知。
-    bool membersMatch = turnbattle::BuildPersonalSettlementPayloads(room.pendingResult, room.personalSettlementPayloads) &&
-                        room.personalSettlementPayloads.size() == room.routingByPlayer.size();
-    for (const auto& [playerId, routing] : room.routingByPlayer)
-        membersMatch = membersMatch && room.personalSettlementPayloads.contains(playerId);
-    if (!membersMatch)
-    {
-        LOG_ERROR << "metric=battle_personal_settlement_source_mismatch battle_id=" << room.battleId
-                  << ";terminal remains unknown";
-        room.personalSettlementPayloads.clear();
-        room.resultCommit.emplace(std::string{});
-        EnsureSettlementBacklogReporter(); // 占位房间的周期提醒,同上
-        return;
-    }
-    // 落库前置条件按成员记(审计 r2-battle#1):成员集合 = 个人结算字节的键,上面已核对与房间成员一一对应。
-    std::set<uint64_t> stagingMembers;
-    for (const auto& [playerId, bytes] : room.personalSettlementPayloads) stagingMembers.insert(playerId);
-    room.resultCommit.emplace(std::move(payload), std::move(stagingMembers));
-    resultRooms_.insert(room.battleId);
-    if (!resultListenerInstalled_)
-    {
-        KafkaProducer::Instance().setDeliveryListener([weak = WeakSelf()](const KafkaProducer::DeliveryReport& report)
-        {
-            if (const auto self = weak.lock())
-                self->resultReports_.emplace_back(report.correlationId, report.err == RdKafka::ERR_NO_ERROR);
-        });
-        resultListenerInstalled_ = true;
-        resultCommitTimer_.RunEvery(0.05, [weak = WeakSelf()]
-        { if (const auto self = weak.lock()) self->PumpResultCommits(); });
-    }
-    PumpResultCommits();
-}
-
-void BattleRoomManager::BeginSqlOutcome(BattleRoom& room, const ::eBattleOutcome outcome,
-    const ::eSpectateEndReason reason, std::optional<::TurnResultS2C> finalTurn, ::BattleStateS2C visibleBefore)
-{
-    if (TerminalPending(room) || room.outcomeProtocol != 1) return;
     room.roundTimer.Cancel(); room.battleTimer.Cancel(); room.confirmResendTimer.Cancel();
     room.actionDeadlineMs = 0;
     visibleBefore.set_battle_id(room.battleId); visibleBefore.set_action_deadline_ms(0);
@@ -1622,15 +1335,15 @@ void BattleRoomManager::BeginSqlOutcome(BattleRoom& room, const ::eBattleOutcome
         !room.pendingResult.SerializeToString(&room.outcomePayload) || room.outcomePayload.empty()) {
         room.outcomeExhausted = true;
         LOG_ERROR << "metric=battle_sql_outcome_source_invalid;terminal remains unknown";
-        // v1 房间不走 R07 落库,节点可能从没装过报数定时器;滞留房间的周期提醒要靠它(2026-10-22 评审补)。
-        EnsureSettlementBacklogReporter();
+        // 这间房留在节点上排不空,周期提醒要靠滞留定时器(2026-10-22 评审补)。
+        EnsureStuckRoomReporter();
         return;
     }
     match::CommitBattleOutcomeRequest original;
     original.set_battle_id(room.battleId); original.set_placement_operation_id(room.placementOperation);
     original.set_target_instance_id(room.targetInstance); original.set_raw_result_payload(room.outcomePayload);
     room.outcomeRequestDigest = service_call_auth::Digest(original);
-    if (room.outcomeRequestDigest.empty()) { room.outcomeExhausted = true; EnsureSettlementBacklogReporter(); return; }
+    if (room.outcomeRequestDigest.empty()) { room.outcomeExhausted = true; EnsureStuckRoomReporter(); return; }
     sqlOutcomeRooms_.insert(room.battleId);
     if (!sqlOutcomeTimer_.IsActive()) sqlOutcomeTimer_.RunEvery(1.0, [weak = WeakSelf()] {
         if (const auto self = weak.lock()) self->PumpSqlOutcomes();
@@ -1664,8 +1377,8 @@ void BattleRoomManager::PumpSqlOutcomes()
             // Match 对同一原件按持久决定幂等回放,到权威截止后的 ABORT 也由 Match 自己落,慢速重放迟早拿到决定。
             room->outcomeExhausted = true;
             LOG_ERROR << "metric=battle_sql_outcome_unconfirmed battle_id=" << battleId;
-            // 之后由报数定时器每 60s 报 sql_unconfirmed=(ReportExhaustedStagingRooms,2026-10-22 评审补)。
-            EnsureSettlementBacklogReporter();
+            // 之后由滞留定时器每 60s 报 sql_unconfirmed=(ReportStuckOutcomeRooms,2026-10-22 评审补)。
+            EnsureStuckRoomReporter();
         }
         if (room->outcomeInFlight || now < room->nextOutcomeAttempt) continue;
         room->nextOutcomeAttempt = now + turnbattle::SqlOutcomeRetryInterval(room->outcomeExhausted);
@@ -1710,331 +1423,68 @@ void BattleRoomManager::PumpSqlOutcomes()
                     !service_call_auth::Verify("/match.MatchInternal/CommitBattleOutcome/reply", *reply,
                         reply->auth(), "match", key, TimeSystem::NowMillisecondsUTC())) return;
                 if (reply->decision() == match::BATTLE_OUTCOME_DECISION_COMPLETE) {
-                    current->outcomeComplete = true;
-                    if (!self->FinishBattle(*current, current->pendingResult.outcome(),
-                        current->pendingSpectateReason, &current->pendingResult)) return;
+                    self->OnSqlOutcomeComplete(*current);
                 } else if (reply->decision() == match::BATTLE_OUTCOME_DECISION_ABORT) {
-                    // 唯有Match持久ABORT才可宣布作废，绝不生成任何个人效果/来源。
-                    self->NotifySpectateEndAndClose(*current, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
-                    self->CloseDirectConnections(*current, "sql_aborted");
-                } else return; // UNKNOWN只重放同件，不能落回legacy。
-                self->sqlOutcomeRooms_.erase(battleId);
-                self->EraseRoom(battleId);
-                if (self->sqlOutcomeRooms_.empty()) self->sqlOutcomeTimer_.Cancel();
+                    self->OnSqlOutcomeAbort(*current);
+                } // UNKNOWN只重放同件。
             });
     }
     if (sqlOutcomeRooms_.empty()) sqlOutcomeTimer_.Cancel();
 }
 
-void BattleRoomManager::PumpResultCommits()
+void BattleRoomManager::OnSqlOutcomeComplete(BattleRoom &room)
 {
-    KafkaProducer::Instance().poll();
-    const auto reports = std::exchange(resultReports_, {});
-    for (const auto& [correlation, acknowledged] : reports)
-    {
-        const auto attempt = resultAttempts_.find(correlation);
-        if (attempt == resultAttempts_.end()) continue;
-        const auto battleId = attempt->second;
-        resultAttempts_.erase(attempt);
-        auto* room = FindRoom(battleId);
-        if (!room || !room->resultCommit) continue;
-        if (!room->resultCommit->Deliver(correlation, acknowledged, turnbattle::ResultCommit::Clock::now()))
-        {
-            LOG_ERROR << "metric=battle_result_commit_retry failures=" << room->resultCommit->Failures();
-            continue;
-        }
-        // listener 只登记；所有副作用均在 poll 返回之后同一逻辑线程执行。
-        contracts::kafka::BattleResultEvent committed;
-        if (!committed.ParseFromString(room->resultCommit->Payload()) || committed.battle_id() != battleId)
-        {
-            LOG_ERROR << "metric=battle_settlement_source_corrupt;no terminal dispatched";
-            continue;
-        }
-        if (!FinishBattle(*room, committed.outcome(), room->pendingSpectateReason, &committed))
-            continue;
-        resultRooms_.erase(battleId);
-        EraseRoom(battleId);
-    }
-    const std::vector<uint64_t> pending(resultRooms_.begin(), resultRooms_.end());
-    for (const auto battleId : pending)
-    {
-        auto* room = FindRoom(battleId);
-        if (!room || !room->resultCommit) { resultRooms_.erase(battleId); continue; }
-        const auto instant = turnbattle::ResultCommit::Clock::now();
-        // 个人结算没落完 pending 之前不发结果(ResultCommit 的发送前置条件,CanSend 同样把关)。
-        // 落库到总跨度上限的房间由 StagePersonalSettlements 判用尽时移出 resultRooms_,不会再走到这里。
-        if (!room->resultCommit->PersonalSettlementsDurable())
-        {
-            StagePersonalSettlements(*room, instant);
-            continue;
-        }
-        if (!room->resultCommit->CanSend(instant)) continue;
-        if (nextResultCorrelation_ == std::numeric_limits<uint64_t>::max())
-        { LOG_ERROR << "metric=battle_result_commit_correlation_exhausted"; continue; }
-        const auto correlation = ++nextResultCorrelation_;
-        if (!room->resultCommit->Begin(correlation, instant)) continue;
-        resultAttempts_.emplace(correlation, battleId);
-        const auto error = KafkaProducer::Instance().sendTracked(kMatchResultsTopic, room->resultCommit->Payload(),
-            std::to_string(battleId), correlation);
-        if (error != RdKafka::ERR_NO_ERROR)
-        {
-            resultAttempts_.erase(correlation);
-            room->resultCommit->Deliver(correlation, false, turnbattle::ResultCommit::Clock::now());
-            LOG_ERROR << "metric=battle_result_commit_not_queued error=" << error;
-        }
-    }
-    if (resultRooms_.empty()) StopResultCommits();
+    room.outcomeComplete = true;
+    if (!FinishBattle(room)) return;
+    RetireSqlOutcomeRoom(room.battleId);
 }
 
-void BattleRoomManager::StopResultCommits()
+void BattleRoomManager::OnSqlOutcomeAbort(BattleRoom &room)
 {
-    resultCommitTimer_.Cancel();
-    if (resultListenerInstalled_) KafkaProducer::Instance().setDeliveryListener(nullptr);
-    resultListenerInstalled_ = false;
-    resultAttempts_.clear(); resultReports_.clear(); resultRooms_.clear();
+    // 唯有Match持久ABORT才可宣布作废，绝不生成任何个人效果/来源。
+    NotifySpectateEndAndClose(room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
+    CloseDirectConnections(room, "sql_aborted");
+    RetireSqlOutcomeRoom(room.battleId);
 }
 
-void BattleRoomManager::StagePersonalSettlements(BattleRoom &room, const turnbattle::ResultCommit::Clock::time_point now)
+void BattleRoomManager::RetireSqlOutcomeRoom(const uint64_t battleId)
 {
-    auto &commit = *room.resultCommit;
-    // 总跨度先判,放在 Redis 连通性检查之前:Redis 一直断着也要到点收手、出告警(turnbattle::kMaxStagingSpan 的说明)。
-    if (commit.ExhaustStagingIfOverdue(now))
-    {
-        RetireExhaustedStaging(room);
-        return;
-    }
-    if (!RedisReady()) return;
-    const uint64_t attempt = commit.BeginStaging(now);
-    if (attempt == 0) return;
-    // 本节点开始往积压索引里写了,报数定时器随之常驻(与 DispatchSettlementDurably 同口径)。
-    EnsureSettlementBacklogReporter();
-
-    // 本轮只写还没落定的成员(审计 r2-battle#1):上一轮已写进去的成员,scene 可能已经应用并销账
-    // (删 pending 与锁、摘账本),再写一次 pending 就会复活,玩家下次登录重复领奖。
-    // 本轮成员在开轮时定下,整轮不变(StagingRoundTally::Members):最后一名成员同步失败(命令没发出)时,
-    // onReply 会当场经 FinishStaging 改写 ResultCommit 的待写集合,遍历的是 tally 自己那份,不受影响。
-    // 回调只捕获值与 weak_ptr<自己>(AGENTS.md §11.7);房间按 battle_id 重查。
-    const auto round = std::make_shared<turnbattle::StagingRoundTally>(commit.UnstagedMembers());
-    const uint64_t battleId = room.battleId;
-    const uint64_t enqueuedAtMs = TimeSystem::NowMillisecondsUTC();
-    const auto onReply = [weakSelf = WeakSelf(), round, battleId, attempt](const uint64_t playerId, const bool settled)
-    {
-        if (!round->Record(playerId, settled)) return;
-        if (const auto self = weakSelf.lock())
-            self->OnPersonalSettlementsStaged(battleId, attempt, round->Settled());
-    };
-    // 落库标记要活过整个落库阶段,一轮开出时它才一定还在(kMaxStagingSpan 的推导,留 4 倍余量)。
-    static_assert(turnbattle::kMaxStagingSpan * 4 <=
-                      std::chrono::seconds(battle_settlement::kStagedSettlementMembersTtlSec),
-                  "staged-settlement marker TTL must outlive the whole staging span with margin");
-    for (const uint64_t playerId : round->Members())
-    {
-        const auto payload = room.personalSettlementPayloads.find(playerId);
-        if (payload == room.personalSettlementPayloads.end())
-        {
-            // BeginResultCommit 已核对成员与字节一一对应,走到这里是程序缺陷:按未落定计,本轮照常收口。
-            LOG_ERROR << "metric=battle_personal_settlement_stage_failed battle_id=" << battleId
-                      << " player_id=" << playerId << ",personal settlement bytes missing;result publish waits";
-            onReply(playerId, false);
-            continue;
-        }
-        // 标记 + 锁判定 + 两键 SET(不过期)+ 进积压索引,一条 Lua(kStagePendingSettlementOnceScript 的说明)。
-        const int rc = tlsRedis.GetZoneRedis()->command(
-            [onReply, battleId, playerId](hiredis::Hiredis *, redisReply *reply)
-            {
-                const auto shape = battle_settlement::ReplyShapeOf(reply);
-                const auto verdict = battle_settlement::ClassifyStageReply(
-                    shape, shape == battle_settlement::ReplyShape::kInteger ? reply->integer : 0);
-                switch (verdict)
-                {
-                case battle_settlement::StageVerdict::kStored:
-                    break;
-                case battle_settlement::StageVerdict::kAlreadyStored:
-                    // 上一轮的应答丢了或报了 ERROR,命令其实执行了;pending 此刻在不在都不重写(可能已被销账)。
-                    LOG_WARN << "metric=battle_personal_settlement_already_staged battle_id=" << battleId
-                             << " player_id=" << playerId << ",an earlier round had written it;not rewritten";
-                    break;
-                case battle_settlement::StageVerdict::kSuperseded:
-                    LOG_WARN << "metric=battle_personal_settlement_superseded battle_id=" << battleId
-                             << " player_id=" << playerId
-                             << ",battle lock or(lock absent)pending slot held by another battle;pending not written"
-                             << "(scene dispatch discards this settlement,login/unfreeze re-read is forgone so the other "
-                             << "battle's pending is not overwritten)";
-                    break;
-                case battle_settlement::StageVerdict::kUnconfirmed:
-                    LOG_ERROR << "metric=battle_personal_settlement_stage_failed battle_id=" << battleId
-                              << " player_id=" << playerId << " reply=" << battle_settlement::ReplyShapeName(shape)
-                              << " redis_error=" << std::string(battle_settlement::ReplyText(reply))
-                              << ",pending write unconfirmed;only this member is retried next round";
-                    break;
-                }
-                onReply(playerId, battle_settlement::IsStageSettled(verdict));
-            },
-            (std::string("EVAL %s 5 ") + battle_settlement::kPendingSettlementKeyFmt + " " +
-             battle_settlement::kPendingSettlementIdKeyFmt + " " + battle_settlement::kPendingSettlementIndexKey + " " +
-             battle_settlement::kBattleLockKeyFmt + " " + battle_settlement::kStagedSettlementMembersKeyFmt +
-             " %b %llu %llu %llu %u")
-                .c_str(),
-            battle_settlement::kStagePendingSettlementOnceScript, playerId, playerId, playerId, battleId,
-            payload->second.data(), payload->second.size(), battleId, enqueuedAtMs, playerId,
-            static_cast<unsigned>(battle_settlement::kStagedSettlementMembersTtlSec));
-        if (rc != REDIS_OK)
-        {
-            // 命令没发出去时回调永远不会被调:就地计一次未落定,本轮仍按到齐收口。
-            LOG_ERROR << "metric=battle_personal_settlement_stage_failed battle_id=" << battleId
-                      << " player_id=" << playerId << " rc=" << rc << ",pending write not sent;result publish waits for retry";
-            onReply(playerId, false);
-        }
-    }
+    sqlOutcomeRooms_.erase(battleId);
+    EraseRoom(battleId);
+    if (sqlOutcomeRooms_.empty()) sqlOutcomeTimer_.Cancel();
 }
 
-void BattleRoomManager::OnPersonalSettlementsStaged(const uint64_t battleId, const uint64_t attempt,
-                                                    std::set<uint64_t> settledMembers)
+bool BattleRoomManager::FinishBattle(BattleRoom &room)
 {
-    auto *room = FindRoom(battleId);
-    if (room == nullptr || !room->resultCommit) return;
-    auto &commit = *room->resultCommit;
-    if (commit.FinishStaging(attempt, std::move(settledMembers), turnbattle::ResultCommit::Clock::now()))
-    {
-        // 发送交给下一次 pump(50ms 定时器仍在转:房间还在 resultRooms_ 里)。
-        LOG_INFO << "battle personal settlements durable before result publish: battle_id=" << battleId
-                 << " players=" << room->personalSettlementPayloads.size();
-        // 低频阶段才落定(2026-10-22 评审补,r2-battle#4 should_fix):此刻各成员的冻结必然已解除(整场期限不晚于成局后
-        // 300s,低频阶段从第 1 轮之后约 571s 起),随后的派发到在线、无 InBattleComp、锁已不在的成员时,scene 的
-        // AckSettlementPending 规则 2 会把已落库的 pending 直接删掉、不应用(cross-service-assets#1,另一会话在修)。
-        // 风险覆盖整局成员(派发对所有人同时发生),不只是最后落定的那几个。那条修复落地之前,在这里列出全部成员,
-        // 供事后按账本对账补偿;battle_id 与其他逐局日志同一写法,player_id 列表只放正文。
-        if (commit.StagingFailures() >= turnbattle::kFastStagingRounds)
-        {
-            std::string members;
-            for (const auto &[playerId, bytes] : room->personalSettlementPayloads)
-            {
-                if (!members.empty()) members += ' ';
-                members += std::to_string(playerId);
-            }
-            LOG_ERROR << "metric=battle_personal_settlement_staged_late battle_id=" << battleId
-                      << " failed_rounds=" << commit.StagingFailures()
-                      << ";staged after the fast phase,freeze already released;online members without the battle lock "
-                      << "may have this pending cleared unapplied on dispatch(cross-service-assets#1);"
-                      << "reconcile against the scene ledger: " << members;
-        }
-        // 落库标记只在落库轮次之间有用(kStagedSettlementMembersKeyFmt 的说明),此后不会再有下一轮。
-        // fire-and-forget:删不掉就随 TTL 过期。
-        if (RedisReady())
-        {
-            tlsRedis.GetZoneRedis()->command([](hiredis::Hiredis *, redisReply *) {},
-                                             (std::string("DEL ") + battle_settlement::kStagedSettlementMembersKeyFmt).c_str(),
-                                             battleId);
-        }
-        return;
-    }
-    // 还有成员没落定:什么都不做。房间仍在 resultRooms_ 里,下一次 pump 先判总跨度(ExhaustStagingIfOverdue),
-    // 没到点再按退避开下一轮。用尽只在没有在途轮次时判,所以不会在这里出现。
-}
-
-void BattleRoomManager::RetireExhaustedStaging(BattleRoom &room)
-{
-    const auto battleId = room.battleId;
-    const auto &commit = *room.resultCommit;
-    // 总跨度用尽(审计 r2-battle#4):不再开新轮,也不放弃落库直接发结果(那会退回 social-match-battle#2)。
-    // 终局保持未知:房间移出 resultRooms_ 不再 pump,但留在房间表里 —— 结果不发、DestroyBattle 不作废、
-    // 新行动照旧拒绝,直到停机 AbortAllRooms(说明与值班处置见头文件 AbortAllRooms)。这一行只在移出那一刻响一次;
-    // 之后由积压报数定时器每 60s 再报一行 staging_exhausted_rooms(ReportExhaustedStagingRooms),直到房间被清掉。
-    if (commit.StagingExhausted() && resultRooms_.erase(battleId) != 0)
-    {
-        // Redis 一直没连上时本节点可能还没开过一轮、报数定时器还没装填:这里补装,周期提醒才有人发。
-        EnsureSettlementBacklogReporter();
-        LOG_ERROR << "metric=battle_personal_settlement_staging_exhausted battle_id=" << battleId
-                  << " rounds=" << commit.StagingFailures()
-                  << " members=" << room.personalSettlementPayloads.size()
-                  << " unstaged=" << commit.UnstagedMembers().size()
-                  << ";terminal remains unknown,result not published,room retained until node shutdown"
-                  << "(drain this game server,wait for other rooms to finish,then delete it)";
-        for (const auto playerId : commit.UnstagedMembers())
-        {
-            LOG_ERROR << "battle personal settlement not staged after staging exhausted: battle_id=" << battleId
-                      << " player_id=" << playerId
-                      << ",pending write never confirmed(it exists only if a round with a lost reply had executed)";
-        }
-    }
-}
-
-bool BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome outcome,
-                                     const ::eSpectateEndReason spectateReason,
-                                     const contracts::kafka::BattleResultEvent* committedResult)
-{
-    if (room.outcomeProtocol == 1 && (!room.outcomeComplete || committedResult != &room.pendingResult)) return false;
+    if (!room.outcomeComplete) return false;
     room.roundTimer.Cancel();
     room.battleTimer.Cancel();
     room.confirmResendTimer.Cancel();
 
-    // 已确认的完整来源是唯一的终局原件；不得在ACK后再次计算掉落或终值。
-    std::map<uint64_t, ::BattleSettlementData> settlements;
-    if (committedResult)
+    // 已确认的完整来源是唯一的终局原件；不得在决定之后再次计算掉落或终值。
+    const auto &result = room.pendingResult;
+    std::set<uint64_t> settled;
+    for (const auto& settlement : result.settlements()) settled.insert(settlement.player_id());
+    if (settled.size() != room.routingByPlayer.size())
     {
-        for (const auto& settlement : committedResult->settlements())
-            settlements.emplace(settlement.player_id(), settlement);
-        if (settlements.size() != room.routingByPlayer.size())
+        LOG_ERROR << "metric=battle_settlement_source_missing;no terminal dispatched";
+        return false;
+    }
+    for (const auto& [playerId, routing] : room.routingByPlayer)
+        if (!settled.contains(playerId))
         {
-            LOG_ERROR << "metric=battle_settlement_source_missing;no terminal dispatched";
+            LOG_ERROR << "metric=battle_settlement_source_member_mismatch;no terminal dispatched";
             return false;
         }
-        for (const auto& [playerId, routing] : room.routingByPlayer)
-            if (!settlements.contains(playerId) || (room.outcomeProtocol != 1 && !room.personalSettlementPayloads.contains(playerId)))
-            {
-                LOG_ERROR << "metric=battle_settlement_source_member_mismatch;no terminal dispatched";
-                return false;
-            }
-        if (room.pendingFinalTurn) BroadcastTurnResult(room, *room.pendingFinalTurn);
-    }
+    if (room.pendingFinalTurn) BroadcastTurnResult(room, *room.pendingFinalTurn);
 
-    for (const auto &[playerId, routing] : room.routingByPlayer)
-    {
-        // v1个人150/资产可见性只由Scene在同snapshot双SQL确认之后通知；Battle只发布公共终局帧。
-        if (room.outcomeProtocol == 1) continue;
-        ::BattleSettlementData settlement = committedResult ? settlements.at(playerId) : room.engine.BuildSettlement(playerId);
-        // 强制平局路径引擎结算里还是 ONGOING,以节点判定为准统一盖章
-        settlement.set_outcome(outcome);
-        settlement.set_battle_id(room.battleId);
-
-        // 顺序:终局包先于关直连(下面 CloseDirectConnections 在全部终局包排队之后)。
-        // 终局包是战斗帧,只走直连(turn-based §22 D68);没有直连的玩家收不到它,
-        // 但 scene 应用结算后会经大厅再推一份 BattleEndS2C(scene 自己的下行,不归 D39 管),
-        // 客户端两条通道都挂 NotifyBattleEnd 并按 battle_id 幂等。
-        ::BattleEndS2C end;
-        end.set_battle_id(room.battleId);
-        end.set_outcome(outcome);
-        *end.mutable_settlement() = settlement;
-        PushBattleFrame(room, playerId, BattleClientPlayerNotifyBattleEndMessageId, end);
-
-        // R07:先落库、后投递、未销账则重投(重投时重新解析目标)。
-        // 确认模式的 pending 在结果发出之前已落库(StagePersonalSettlements),这里只投命令、不再改写;
-        // 本地模式投递被推迟到 Redis 落库回调里。真正要保的是"结算在被投递之前已经持久化"。
-        if (committedResult)
-            DispatchStagedSettlement(routing, playerId, room.battleId, room.personalSettlementPayloads.at(playerId));
-        else
-            DispatchSettlementDurably(routing, playerId, settlement);
-    }
-
-    NotifySpectateEndAndClose(room, spectateReason, outcome);
+    // 个人 BattleEndS2C 与资产可见性只由 Scene 在同 snapshot 双 SQL 确认之后通知;Battle 只发布公共终局帧。
+    NotifySpectateEndAndClose(room, room.pendingSpectateReason, result.outcome());
     // 终局包已全部排队,直连从此没有存在意义:shutdown 让它们先 flush 再 FIN(D23)
     CloseDirectConnections(room, "battle_finished");
 
-    const auto result = committedResult ? *committedResult : BuildResult(room, outcome);
-    // 活动局(帮会同道历练)丢一条就是整局帮贡 / 资金 / 物品永久丢失,走持久化通道;
-    // 普通对局丢一条只影响评分,保持原来的发一次(§6.19)。
-    if (room.outcomeProtocol == 1) { /* Match持久outbox负责结果事件，不在Battle重复生产。 */ }
-    else if (result.has_activity_context())
-    {
-        DispatchActivityResultDurably(result, committedResult != nullptr);
-    }
-    else if (!committedResult)
-    {
-        SendBattleResultEvent(result);
-    }
-
     LOG_INFO << "Battle ended: battle_id=" << room.battleId
-             << " outcome=" << ::eBattleOutcome_Name(outcome)
+             << " outcome=" << ::eBattleOutcome_Name(result.outcome())
              << " players=" << room.routingByPlayer.size()
              << " teams=" << result.teams_size()
              << " total_rounds=" << result.total_rounds()
@@ -2303,9 +1753,7 @@ void BattleRoomManager::ReclaimExpiredObserverSeats(const uint64_t battleId,
 
 void BattleRoomManager::AbortAllRooms(const std::string &reason)
 {
-    // 旧协议(outcome_protocol 0)确认模式的 Kafka 结果提交到此为止;全球局一律走 v1,这条只剩兼容意义。
-    StopResultCommits();
-    // v1 终局在这里不停(2026-10-23 修复,审计 r2-battle#2):已经算出、还没拿到 SQL 决定的终局,在停机排空窗口内立即再提交,
+    // 终局在这里不停(2026-10-23 修复,审计 r2-battle#2):已经算出、还没拿到 SQL 决定的终局,在停机排空窗口内立即再提交,
     // main.cpp 的 SetShutdownDrainComplete(SqlOutcomesFlushed)等它们拿到 COMPLETE / ABORT,有界于 Node 的排空预算;
     // 停止闸到拆除前钩子(StopSqlOutcomes)才装。原来这里直接装停止闸、清空待提交集合:除了恰好在途的那一次,
     // 停机前一刻打完的局再没有机会提交,只能等 match 截止后判 ABORT,全员白打一局。
@@ -2314,8 +1762,8 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
     for (const auto battleId : sqlOutcomeRooms_)
     {
         auto *room = FindRoom(battleId);
-        if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomeProtocol, room->outcomePending,
-                                                                      room->outcomeComplete, room->outcomeExhausted))
+        if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomePending, room->outcomeComplete,
+                                                                      room->outcomeExhausted))
             continue;
         if (!room->outcomeInFlight) room->nextOutcomeAttempt = {};
         ++flushing;
@@ -2327,9 +1775,7 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
         return;
     }
 
-    LOG_INFO << "Invalidating all battle rooms: rooms=" << rooms_.Size() << " reason=" << reason;
-    // 先抄 battle_id 再逐个 EraseRoom:移除走唯一删除口,每个房间都触发一次 onRemoved
-    // (Agones 单元计数归零);不能边遍历房间表边删。
+    LOG_INFO << "Closing all battle rooms: rooms=" << rooms_.Size() << " reason=" << reason;
     for (const auto battleId : rooms_.Ids())
     {
         auto *room = FindRoom(battleId);
@@ -2340,26 +1786,11 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
         room->roundTimer.Cancel();
         room->battleTimer.Cancel();
         room->confirmResendTimer.Cancel();
-        // 不结算:战斗作废,scene reaper 按 InBattleComp.deadline_ms 解冻(§3.2)。
-        // 等结果回执的房间例外:个人结算在结果发出之前已写进 pending,这里不动它。框架随后 flush producer,
-        // 结果可能到达 broker;无论到没到,scene 都会在登录钩子 / 冻结到期补读时应用(审计 social-match-battle#2)。
-        // 还在落库或落库已到总跨度上限(r2-battle#4)的房间同样清掉:结果从未发出,已落定成员的 pending 照常应用,
-        // 没落定的成员按作废处理(同局不对称,r2-battle#2 残余)。本局落库标记随 TTL 过期。
-        // 上面关于等结果回执与落库的说明只适用于旧协议(outcome_protocol 0)确认模式房间;match 的全球成局一律发 v1(gather.go 发 Create 前固定
-        // OutcomeProtocolVersion=1、只持久 v1 原件),这类房间不再产生(2026-10-23 核对,cross-zone-matchmaking.md §13.6)。
-        // 停机作废无胜负:观众收 ABORTED + ONGOING
-        if (room->outcomeProtocol == 1) {
-            // 正常停机不铸造ABORT，也不把UNKNOWN房间报已移除/Ready；Match凭原preflight恢复裁决。
-            // 原loop关闭后在途回包可能失败；保留房间直到manager销毁，不再发布任何终局。
-            // 2026-10-23:上面补提交的房间若在排空窗口内拿到 COMPLETE / ABORT,由回复处理照常收尾删房(lifecycle 已在
-            // Stop 之后,删房只记账、不回 Ready);还在打的房间没有终局可交,按作废处理,match 在权威截止后判 ABORT。
-            CloseDirectConnections(*room, reason.c_str());
-            continue;
-        }
-        if (!room->resultCommit)
-            NotifySpectateEndAndClose(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
+        // 正常停机不铸造ABORT，也不把UNKNOWN房间报已移除/Ready；Match凭原preflight恢复裁决。
+        // 原loop关闭后在途回包可能失败；保留房间直到manager销毁，不再发布任何终局。
+        // 2026-10-23:上面补提交的房间若在排空窗口内拿到 COMPLETE / ABORT,由回复处理照常收尾删房(lifecycle 已在
+        // Stop 之后,删房只记账、不回 Ready);还在打的房间没有终局可交,按作废处理,match 在权威截止后判 ABORT。
         CloseDirectConnections(*room, reason.c_str());
-        EraseRoom(battleId);
     }
 }
 
@@ -2368,8 +1799,8 @@ bool BattleRoomManager::SqlOutcomesFlushed() const
     for (const auto battleId : sqlOutcomeRooms_)
     {
         const auto *room = rooms_.Find(battleId);
-        if (room != nullptr && turnbattle::NeedsShutdownOutcomeFlush(room->outcomeProtocol, room->outcomePending,
-                                                                     room->outcomeComplete, room->outcomeExhausted))
+        if (room != nullptr && turnbattle::NeedsShutdownOutcomeFlush(room->outcomePending, room->outcomeComplete,
+                                                                     room->outcomeExhausted))
             return false;
     }
     return true;
@@ -2385,8 +1816,8 @@ void BattleRoomManager::StopSqlOutcomes()
     for (const auto battleId : sqlOutcomeRooms_)
     {
         const auto *room = rooms_.Find(battleId);
-        if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomeProtocol, room->outcomePending,
-                                                                      room->outcomeComplete, room->outcomeExhausted))
+        if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomePending, room->outcomeComplete,
+                                                                      room->outcomeExhausted))
             continue;
         LOG_ERROR << "metric=battle_sql_outcome_unflushed_at_shutdown battle_id=" << battleId
                   << " attempts=" << room->outcomeAttempt
@@ -2772,592 +2203,54 @@ void BattleRoomManager::CloseDirectConnections(BattleRoom &room, const char *rea
     room.directConnByPlayer.clear();
 }
 
-// ---- 结算持久化 + 有界重投(R07) ----
+// ---- 滞留房间提醒 ----
 
-void BattleRoomManager::DispatchSettlementDurably(const ::BattleRouting &routing,
-                                                  const uint64_t playerId,
-                                                  const ::BattleSettlementData &settlement)
+void BattleRoomManager::EnsureStuckRoomReporter()
 {
-    const uint64_t battleId = settlement.battle_id();
-
-    ::BattleSettlementEvent event;
-    *event.mutable_settlement() = settlement;
-    std::string payload;
-    if (!event.SerializeToString(&payload))
-    {
-        LOG_ERROR << "battle settlement serialization failed: battle_id=" << battleId << " player_id=" << playerId;
-        return;
-    }
-
-    const uint32_t sceneNodeId = routing.scene_node_id();
-    const std::string sceneInstanceId = routing.scene_instance_id();
-
-    // 本节点开始往积压里写了:报数定时器随之常驻(幂等)。放在 Redis 判活之前,
-    // 这一轮落不了库,下一轮 Redis 恢复后照样要报。
-    EnsureSettlementBacklogReporter();
-
-    if (!RedisReady())
-    {
-        // 降级:落不了库就直接投一次。丢了只能靠 scene reaper 按 deadline 解冻
-        // (奖励确实会丢)—— 这与改造前的行为一致,不是新增的退化,但必须响一声。
-        LOG_ERROR << "metric=battle_settlement_not_durable battle_id=" << battleId
-                  << " player_id=" << playerId
-                  << ",Redis unavailable;delivering settlement without persistence(lost delivery means lost rewards)";
-        SendSettlementCommand(sceneNodeId, sceneInstanceId, playerId, battleId, payload);
-        return;
-    }
-
-    // EVAL 两键同 SET(不过期)+ 进积压索引;回调里才投递,保证"记录先于命令存在"。
-    // 积压索引的分数取本节点墙钟毫秒(kSetPendingSettlementScript 的说明)。
-    const uint64_t enqueuedAtMs = TimeSystem::NowMillisecondsUTC();
-    const int rc = tlsRedis.GetZoneRedis()->command(
-        [weakSelf = WeakSelf(), battleId, playerId, payload, sceneNodeId, sceneInstanceId](hiredis::Hiredis *,
-                                                                                         redisReply *reply)
-        {
-            // 应答没确认落库(空应答 / ERROR / 意外形状)也照样登记发件箱(ClassifyPersistReply 的说明):
-            // 空应答只说明连接断了,EVAL 可能已经执行;脚本 ERROR 时前两个 SET 也可能已经执行。
-            // 以前这里只投一次、不登记 —— 记录其实落了而这一次投递又丢了,在线玩家要等到下次登录才拿到奖励。
-            // 登记之后由第一跳探测裁决:伴生 id 键不在(NIL)= 没落库或已销账,摘掉;仍指向本局 = 按原字节重投。
-            const auto shape = battle_settlement::ReplyShapeOf(reply);
-            if (battle_settlement::ClassifyPersistReply(shape, battle_settlement::ReplyShape::kInteger) !=
-                battle_settlement::PersistVerdict::kStored)
-            {
-                LOG_ERROR << "metric=battle_settlement_not_durable battle_id=" << battleId
-                          << " player_id=" << playerId << " reply=" << battle_settlement::ReplyShapeName(shape)
-                          << " redis_error=" << std::string(battle_settlement::ReplyText(reply))
-                          << ",pending settlement persistence unconfirmed;delivering and tracking in outbox(the ack probe decides whether the record exists)";
-            }
-            SendSettlementCommand(sceneNodeId, sceneInstanceId, playerId, battleId, payload);
-            // 本类是进程级单例,寿命覆盖 tlsRedis.Shutdown()(停机时在途回调以空应答进来,本对象仍在):
-            // lock 失败只在理论上发生,那时投递已经做了,只是没有重投。
-            if (const auto self = weakSelf.lock())
-            {
-                self->EnqueuePendingSettlement(battleId, playerId, payload, sceneNodeId);
-            }
-        },
-        (std::string("EVAL %s 3 ") + battle_settlement::kPendingSettlementKeyFmt + " " +
-         battle_settlement::kPendingSettlementIdKeyFmt + " " + battle_settlement::kPendingSettlementIndexKey +
-         " %b %llu %llu %llu")
-            .c_str(),
-        battle_settlement::kSetPendingSettlementScript, playerId, playerId,
-        payload.data(), payload.size(), battleId, enqueuedAtMs, playerId);
-    if (rc != REDIS_OK)
-    {
-        // 命令没发出去(连接恰在断开 / 释放中,Hiredis::command 在登记回调前就返回):回调永远不会来,
-        // 不在这里投递这笔结算就静默丢了。记录肯定没写,登记发件箱也探测不到什么:与 Redis 未连接同样降级,只投一次。
-        LOG_ERROR << "metric=battle_settlement_not_durable battle_id=" << battleId
-                  << " player_id=" << playerId
-                  << ",pending settlement EVAL could not be sent;delivering once without persistence(lost delivery means lost rewards)";
-        SendSettlementCommand(sceneNodeId, sceneInstanceId, playerId, battleId, payload);
-    }
-}
-
-void BattleRoomManager::DispatchStagedSettlement(const ::BattleRouting &routing, const uint64_t playerId,
-                                                 const uint64_t battleId, const std::string &payload)
-{
-    // 记录先于命令存在已由发结果之前的落库保证;outbox 照常按伴生 id 键探测销账、重解析目标重投。
-    SendSettlementCommand(routing.scene_node_id(), routing.scene_instance_id(), playerId, battleId, payload);
-    EnqueuePendingSettlement(battleId, playerId, payload, routing.scene_node_id());
-}
-
-void BattleRoomManager::EnsureSettlementBacklogReporter()
-{
-    if (settlementBacklogTimer_.IsActive())
+    if (stuckRoomReportTimer_.IsActive())
     {
         return;
     }
-    // 只绑 weak_ptr<自己>(AGENTS.md §11.7),与活动结果重发定时器同一写法。
-    settlementBacklogTimer_.RunEvery(kSettlementBacklogReportIntervalSec,
-                                     [weakSelf = WeakSelf()]
-                                     {
-                                         if (const auto self = weakSelf.lock())
-                                         {
-                                             // 先报滞留房间:它不依赖 Redis,Redis 断着时也要响。
-                                             self->ReportExhaustedStagingRooms();
-                                             self->ReportPendingSettlementBacklog();
-                                         }
-                                     });
+    // 只绑 weak_ptr<自己>(AGENTS.md §11.7)。
+    stuckRoomReportTimer_.RunEvery(kStuckRoomReportIntervalSec,
+                                   [weakSelf = WeakSelf()]
+                                   {
+                                       if (const auto self = weakSelf.lock())
+                                       {
+                                           self->ReportStuckOutcomeRooms();
+                                       }
+                                   });
 }
 
-void BattleRoomManager::ReportExhaustedStagingRooms()
+void BattleRoomManager::ReportStuckOutcomeRooms()
 {
-    // 落库到总跨度上限的房间(RetireExhaustedStaging)留在房间表里,节点排不空;那一行一次性告警过了值班查询窗口
-    // 就再没有信号。这里每轮从房间表现数一遍,不另记集合:房间表是唯一真相,房间被清掉后计数自然归零。
+    // 每轮从房间表现数一遍,不另记集合:房间表是唯一真相,房间被清掉后计数自然归零。一次性告警过了值班查询窗口就再没有信号。
     // battle_id 只放日志正文,不写成 key=value 字段(LogQL 解析字段会把它变成高基数 label)。
-    // 2026-10-22 评审补:同样排不空的还有两类,原先只有一次性日志 —— v1 房间 SQL 终局重试到上限仍未确认
-    // (PumpSqlOutcomes,HandleDestroyBattle 对 v1 直接返回),以及终局未知的占位房间(BeginResultCommit 序列化失败 /
-    // 成员对不上)。三类按 turnbattle::ClassifyStuckTerminal 一起数:count= 仍是落库用尽的房间数(沿用已登记的值班查询,
-    // metric 名不改),sql_unconfirmed= / placeholder= 是另两类,stuck_total= 是三者之和。
     // node_rooms = 本节点房间总数:值班打排空标签后等它降到与 stuck_total 相等,说明其余房间都已打完,再删 GameServer。
-    // 房间数受节点容量约束,一行列全即可。
-    std::size_t stagingExhausted = 0;
-    std::size_t sqlUnconfirmed = 0;
-    std::size_t placeholder = 0;
+    // 房间数受节点容量约束,一行列全即可。metric 名沿用已登记的值班查询。
+    std::size_t stuckTotal = 0;
     std::string stuckBattles;
     for (const auto battleId : rooms_.Ids())
     {
         const auto *room = FindRoom(battleId);
-        if (room == nullptr)
+        if (room == nullptr || !room->outcomePending || !room->outcomeExhausted)
         {
             continue;
         }
-        const auto stuck = turnbattle::ClassifyStuckTerminal(room->resultCommit ? &*room->resultCommit : nullptr,
-                                                             room->outcomePending && room->outcomeExhausted);
-        switch (stuck)
-        {
-        case turnbattle::StuckTerminal::kNone:
-            continue;
-        case turnbattle::StuckTerminal::kStagingExhausted:
-            ++stagingExhausted;
-            break;
-        case turnbattle::StuckTerminal::kSqlOutcomeUnconfirmed:
-            ++sqlUnconfirmed;
-            break;
-        case turnbattle::StuckTerminal::kPlaceholder:
-            ++placeholder;
-            break;
-        }
+        ++stuckTotal;
         if (!stuckBattles.empty())
         {
             stuckBattles += ' ';
         }
-        stuckBattles += std::to_string(battleId) + '(' + turnbattle::StuckTerminalName(stuck) + ')';
+        stuckBattles += std::to_string(battleId);
     }
-    const std::size_t stuckTotal = stagingExhausted + sqlUnconfirmed + placeholder;
     if (stuckTotal == 0)
     {
         return;
     }
-    LOG_ERROR << "metric=battle_personal_settlement_staging_exhausted_rooms count=" << stagingExhausted
-              << " sql_unconfirmed=" << sqlUnconfirmed << " placeholder=" << placeholder
+    LOG_ERROR << "metric=battle_personal_settlement_staging_exhausted_rooms sql_unconfirmed=" << stuckTotal
               << " stuck_total=" << stuckTotal << " node_rooms=" << rooms_.Size()
-              << ";results unpublished,this node cannot drain until these rooms are cleared;stuck battles: " << stuckBattles;
-}
-
-void BattleRoomManager::ReportPendingSettlementBacklog()
-{
-    static_assert(kSettlementBacklogSweepBatch > 0, "ZRANGE [start, start+N) requires a positive sweep batch");
-    if (!RedisReady())
-    {
-        // 游标不动:Redis 恢复后从同一个窗口接着查。
-        LOG_WARN << "battle settlement backlog report skipped this round(Redis disconnected)";
-        return;
-    }
-    const uint64_t start = battle_settlement::PendingIndexSweepStart(settlementBacklogCursor_);
-    const uint64_t stop = start + kSettlementBacklogSweepBatch - 1;
-    const int rc = tlsRedis.GetZoneRedis()->command(
-        [weakSelf = WeakSelf()](hiredis::Hiredis *, redisReply *reply)
-        {
-            const auto self = weakSelf.lock();
-            if (!self)
-            {
-                return;
-            }
-            if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY)
-            {
-                // 游标不动,下一轮重查同一个窗口。
-                LOG_WARN << "battle settlement backlog report: pending index read failed;skipping this round";
-                return;
-            }
-            battle_settlement::AdvancePendingIndexSweep(self->settlementBacklogCursor_, reply->elements,
-                                                        kSettlementBacklogSweepBatch);
-            SweepPendingIndexAndReport(*reply);
-        },
-        (std::string("ZRANGE ") + battle_settlement::kPendingSettlementIndexKey + " %llu %llu").c_str(),
-        static_cast<unsigned long long>(start), static_cast<unsigned long long>(stop));
-    if (rc != REDIS_OK)
-    {
-        LOG_WARN << "battle settlement backlog report: pending index read could not be sent;skipping this round";
-    }
-}
-
-void BattleRoomManager::EnqueuePendingSettlement(const uint64_t battleId, const uint64_t playerId,
-                                                 std::string payload,
-                                                 const uint32_t originalSceneNodeId)
-{
-    PendingSettlement entry;
-    entry.battleId = battleId;
-    entry.playerId = playerId;
-    entry.payload = std::move(payload);
-    entry.originalSceneNodeId = originalSceneNodeId;
-    settlementOutbox_[{battleId, playerId}] = std::move(entry);
-
-    if (!settlementRetryTimer_.IsActive())
-    {
-        settlementRetryTimer_.RunEvery(kSettlementRetryIntervalSec,
-                                       [this]
-                                       { RetryPendingSettlements(); });
-    }
-}
-
-void BattleRoomManager::StopSettlementRetryTimerIfIdle()
-{
-    if (settlementOutbox_.empty() && settlementRetryTimer_.IsActive())
-    {
-        settlementRetryTimer_.Cancel();
-    }
-}
-
-void BattleRoomManager::RetryPendingSettlements()
-{
-    if (settlementOutbox_.empty())
-    {
-        StopSettlementRetryTimerIfIdle();
-        return;
-    }
-    if (!RedisReady())
-    {
-        // 探测不了销账就不能判定,更不能盲目重投:等下一轮。次数也不消耗 ——
-        // Redis 抖动不该把重投窗口白白烧掉。
-        LOG_WARN << "battle settlement redelivery skipped this round(Redis disconnected), pending=" << settlementOutbox_.size();
-        return;
-    }
-
-    // 回调里会改 settlementOutbox_,先把本轮要处理的键抄一份。
-    std::vector<std::pair<uint64_t, uint64_t>> keys;
-    keys.reserve(settlementOutbox_.size());
-    for (const auto &[key, entry] : settlementOutbox_)
-    {
-        keys.push_back(key);
-    }
-    for (const auto &[battleId, playerId] : keys)
-    {
-        ProbeAndRetryOne(battleId, playerId);
-    }
-}
-
-void BattleRoomManager::ProbeAndRetryOne(const uint64_t battleId, const uint64_t playerId)
-{
-    // 第一跳:读伴生 id 键探测销账。
-    // 回调只绑 weak_ptr<自己>(AGENTS.md §11.7)。本类是进程级单例,寿命覆盖 tlsRedis.Shutdown()(核对见 WeakSelf 的说明),
-    // 这里不是在修已知的悬垂,而是让发件箱与活动结果发件箱同一写法。
-    tlsRedis.GetZoneRedis()->command(
-        [weakSelf = WeakSelf(), battleId, playerId](hiredis::Hiredis *, redisReply *reply)
-        {
-            const auto self = weakSelf.lock();
-            if (!self)
-            {
-                return;
-            }
-            auto &outbox = self->settlementOutbox_;
-            const auto it = outbox.find({battleId, playerId});
-            if (it == outbox.end())
-            {
-                return; // 回调期间已被别的路径摘掉
-            }
-            // 只有 NIL,或 STRING 且不等于本局,才算销账(ClassifyAckProbe)。空应答 / ERROR 什么都没问到:
-            // 以前把它们当「已销账」并摘条目,一次断线(主切换掐连接、存活探测摘连接)就让在线玩家收不到重投。
-            const auto shape = battle_settlement::ReplyShapeOf(reply);
-            switch (battle_settlement::ClassifyAckProbe(shape, battle_settlement::ReplyText(reply), battleId))
-            {
-            case battle_settlement::AckProbeVerdict::kUndetermined:
-                // 不消耗重投次数,下一轮再探(与 RetryPendingSettlements 里 Redis 未连接时同一取舍);
-                // 没问到的轮次单独计数、有上限(NoteUndeterminedSettlementProbe)。
-                self->NoteUndeterminedSettlementProbe(battleId, playerId, "ack", shape);
-                return;
-            case battle_settlement::AckProbeVerdict::kAcknowledged:
-                LOG_INFO << "battle settlement acknowledged(record settled, superseded, or never persisted): battle_id="
-                         << battleId << " player_id=" << playerId << " attempts=" << it->second.attempts;
-                outbox.erase(it);
-                self->StopSettlementRetryTimerIfIdle();
-                return;
-            case battle_settlement::AckProbeVerdict::kStillOurs:
-                break;
-            }
-
-            // 第二跳:重新解析玩家当前所在的 scene。**绝不复用**开局时抓的 uuid ——
-            // R07 的失败序列里,那个 uuid 恰恰属于已经不在了的那个进程。
-            if (!RedisReady())
-            {
-                return;
-            }
-            tlsRedis.GetZoneRedis()->command(
-                [weakSelf, battleId, playerId](hiredis::Hiredis *, redisReply *locationReply)
-                {
-                    const auto self = weakSelf.lock();
-                    if (!self)
-                    {
-                        return;
-                    }
-                    auto &outbox = self->settlementOutbox_;
-                    const auto entryIt = outbox.find({battleId, playerId});
-                    if (entryIt == outbox.end())
-                    {
-                        return;
-                    }
-                    auto &entry = entryIt->second;
-                    // 空应答 / ERROR 没问到位置:在 ClassifyRetry 之前返回,不消耗次数(IsLocationReplyDecisive)。
-                    // 以前解析成 0 走 kSkipNoTarget 并 ++attempts,一次断线白烧一轮,耗尽时还会误记成 reason=no_target。
-                    const auto locationShape = battle_settlement::ReplyShapeOf(locationReply);
-                    if (!battle_settlement::IsLocationReplyDecisive(locationShape))
-                    {
-                        self->NoteUndeterminedSettlementProbe(battleId, playerId, "location", locationShape);
-                        return;
-                    }
-                    const uint32_t resolvedNodeId = ParseSceneNodeIdFromLocationReply(locationReply);
-
-                    battle_settlement::RetryInput input;
-                    input.pendingRecordStillOurs = true; // 第一跳已确认
-                    input.locationResolved = resolvedNodeId != 0;
-                    input.attemptsSoFar = entry.attempts;
-                    input.maxAttempts = kSettlementRetryMaxAttempts;
-
-                    const auto action = battle_settlement::ClassifyRetry(input);
-                    ++entry.attempts;
-
-                    switch (action)
-                    {
-                    case battle_settlement::RetryAction::kResend:
-                        LOG_WARN << "metric=battle_settlement_resend battle_id=" << battleId
-                                 << " player_id=" << playerId
-                                 << " original_scene_node_id=" << entry.originalSceneNodeId
-                                 << " resolved_scene_node_id=" << resolvedNodeId
-                                 << " attempt=" << entry.attempts
-                                 << ",settlement unacknowledged;redelivering to newly resolved scene";
-                        // instance uuid 留空 = "谁现在持有这个 node_id 就谁执行"。
-                        SendSettlementCommand(resolvedNodeId, std::string{}, playerId, battleId,
-                                              entry.payload);
-                        return;
-                    case battle_settlement::RetryAction::kSkipNoTarget:
-                        LOG_INFO << "battle settlement redelivery has no target this round(player has no scene): battle_id=" << battleId
-                                 << " player_id=" << playerId << " attempt=" << entry.attempts
-                                 << ",persistent record retained;login hook will apply when player enters a scene";
-                        return;
-                    case battle_settlement::RetryAction::kExhausted:
-                        // 响亮但不致命:记录仍在 Redis 里(不再过期),玩家下次进场景补应用。
-                        // reason 分两类(ClassifyUndelivered):no_target = 离线,预期内;not_acked = 在线却没销账,异常。
-                        LOG_ERROR << "metric=battle_settlement_undelivered battle_id=" << battleId
-                                  << " player_id=" << playerId << " attempts=" << entry.attempts
-                                  << " reason=" << battle_settlement::UndeliveredReasonName(
-                                                       battle_settlement::ClassifyUndelivered(input))
-                                  << ",settlement redelivery retries exhausted without acknowledgment;pending settlement retained,"
-                                  << "scene OnPlayerEnterScene login hook will apply it as a fallback";
-                        outbox.erase(entryIt);
-                        self->StopSettlementRetryTimerIfIdle();
-                        return;
-                    case battle_settlement::RetryAction::kDone:
-                        outbox.erase(entryIt);
-                        self->StopSettlementRetryTimerIfIdle();
-                        return;
-                    }
-                },
-                "GET player:%llu:location", playerId);
-        },
-        (std::string("GET ") + battle_settlement::kPendingSettlementIdKeyFmt).c_str(), playerId);
-}
-
-void BattleRoomManager::NoteUndeterminedSettlementProbe(const uint64_t battleId, const uint64_t playerId,
-                                                        const char *stage, const battle_settlement::ReplyShape shape)
-{
-    const auto it = settlementOutbox_.find({battleId, playerId});
-    if (it == settlementOutbox_.end())
-    {
-        return;
-    }
-    auto &entry = it->second;
-    ++entry.undeterminedRounds;
-    if (battle_settlement::ClassifyUndeterminedProbeRound(entry.undeterminedRounds,
-                                                          kSettlementProbeUndeterminedMaxRounds) ==
-        battle_settlement::UndeterminedProbeAction::kWaitNextRound)
-    {
-        LOG_WARN << "metric=battle_settlement_probe_undetermined battle_id=" << battleId << " player_id=" << playerId
-                 << " stage=" << stage << " reply=" << battle_settlement::ReplyShapeName(shape)
-                 << " attempts=" << entry.attempts << " undetermined_rounds=" << entry.undeterminedRounds
-                 << ",settlement probe got no usable reply;entry kept without consuming an attempt";
-        return;
-    }
-    // 响亮但不致命:与次数用尽同一个 metric,reason 单列,告警可以分开设阈值。
-    LOG_ERROR << "metric=battle_settlement_undelivered battle_id=" << battleId << " player_id=" << playerId
-              << " attempts=" << entry.attempts << " undetermined_rounds=" << entry.undeterminedRounds
-              << " stage=" << stage << " reply=" << battle_settlement::ReplyShapeName(shape) << " reason="
-              << battle_settlement::UndeliveredReasonName(battle_settlement::UndeliveredReason::kProbeUndetermined)
-              << ",settlement probe got no usable reply for too many rounds;outbox entry dropped,pending settlement (if persisted) retained,"
-              << "scene OnPlayerEnterScene login hook will apply it as a fallback";
-    settlementOutbox_.erase(it);
-    StopSettlementRetryTimerIfIdle();
-}
-
-// ---- 活动局结果持久化 + 有界重发(帮会同道历练,guild-phase2 §6.19–§6.21) ----
-//
-// 崩溃窗口(§6.21):
-//   R1/R2 战斗中或 SET 回调之前崩溃 → 无记录,guild 巡检器按超期把该局判 EXPIRED(无人得奖,口径一致);
-//   R3 SET 成功、Kafka flush 前崩溃 → 记录在,guild 巡检器 GET 记录直接结算(内存 outbox 随进程丢失无妨);
-//   R4 Kafka 投递失败 → 本类每 10s 重发,最多 30 次,之后巡检器兜底;
-//   R5 guild 已结算但 DEL 失败 → 继续重发,guild 按 battle_id 判重后再 DEL;最坏 TTL 7 天自然过期;
-//   R6 Redis 不可用 → 降级只发一次,metric=battle_activity_result_not_durable,须告警。
-//      SET 发出去了但应答没确认落库(空应答 / ERROR)不属于 R6:照发并登记重发,由 EXISTS 裁决(2026-10-16)。
-// 同一 battle_id 可能被投递多次(重发 / R5),match-results 的消费方必须按 battle_id 幂等(proto 注释已写明)。
-
-void BattleRoomManager::DispatchActivityResultDurably(const contracts::kafka::BattleResultEvent &result, const bool brokerCommitted)
-{
-    const uint64_t battleId = result.battle_id();
-
-    std::string payload;
-    if (!result.SerializeToString(&payload))
-    {
-        // 不可恢复:没有字节可落库也没有字节可发。guild 巡检器会把该局判 EXPIRED 并告警。
-        LOG_ERROR << "metric=battle_activity_result_serialize_failed battle_id=" << battleId
-                  << ",activity battle result serialization failed;neither persisted nor delivered";
-        return;
-    }
-
-    if (!RedisReady())
-    {
-        // R6:落不了库就只发一次 —— 与改造前的行为一致,不是新增的退化,但必须响一声。
-        LOG_ERROR << "metric=battle_activity_result_not_durable battle_id=" << battleId
-                  << ",Redis unavailable;delivering activity battle result once without persistence(lost delivery means lost guild rewards for this battle)";
-        if (!brokerCommitted) SendMatchResultPayload(battleId, payload);
-        return;
-    }
-
-    // 成功回调里才投递,保证"记录先于事件存在"(见头文件 DispatchActivityResultDurably 的说明)。
-    const std::string key = turnbattle::ActivityResultKey(battleId);
-    const int rc = tlsRedis.GetZoneRedis()->command(
-        [weakSelf = WeakSelf(), battleId, payload, brokerCommitted](hiredis::Hiredis *, redisReply *reply)
-        {
-            // 应答没确认落库(空应答 / ERROR / 意外形状)也照样登记重发(ClassifyPersistReply 的说明)。
-            // 以前的理由是「没有记录就没有是否已销账可探测」,可空应答时 SET 可能已经执行:记录落了而这一次
-            // Kafka 投递又丢了,就只能等 guild 巡检器超期兜底。登记之后每轮 EXISTS 裁决:记录不在(没落库,或
-            // guild 已销账)就按已送达摘掉,在就按原字节重发 —— 与 ProbeActivityResultOne 对空应答的处理同一纪律。
-            const auto shape = battle_settlement::ReplyShapeOf(reply);
-            if (battle_settlement::ClassifyPersistReply(shape, battle_settlement::ReplyShape::kStatus) !=
-                battle_settlement::PersistVerdict::kStored)
-            {
-                LOG_ERROR << "metric=battle_activity_result_not_durable battle_id=" << battleId
-                          << " reply=" << battle_settlement::ReplyShapeName(shape)
-                          << " redis_error=" << std::string(battle_settlement::ReplyText(reply))
-                          << ",activity battle result persistence unconfirmed;delivering and tracking for resend(the EXISTS probe decides whether the record exists)";
-            }
-            if (!brokerCommitted) SendMatchResultPayload(battleId, payload);
-            if (const auto self = weakSelf.lock())
-            {
-                self->EnqueuePendingActivityResult(battleId, payload);
-            }
-        },
-        "SET %s %b EX %u", key.c_str(), payload.data(), payload.size(),
-        turnbattle::kActivityResultTtlSec);
-    if (rc != REDIS_OK)
-    {
-        // 命令没发出去(连接恰在断开 / 释放中,Hiredis::command 在登记回调前就返回):回调永远不会来,
-        // 不在这里补发这局结果就静默丢了。按 R6 降级只发一次。
-        LOG_ERROR << "metric=battle_activity_result_not_durable battle_id=" << battleId
-                  << ",activity battle result SET could not be sent;delivering once without persistence(lost delivery means lost guild rewards for this battle)";
-        if (!brokerCommitted) SendMatchResultPayload(battleId, payload);
-    }
-}
-
-void BattleRoomManager::EnqueuePendingActivityResult(const uint64_t battleId, std::string payload)
-{
-    PendingActivityResult entry;
-    entry.payload = std::move(payload);
-    // 同 battle_id 覆盖:FinishBattle 每房间只走一次,正常不会重复;万一重复,以最新一份为准并重置次数。
-    activityResultOutbox_[battleId] = std::move(entry);
-
-    if (!activityResultRetryTimer_.IsActive())
-    {
-        activityResultRetryTimer_.RunEvery(static_cast<double>(turnbattle::kActivityResultRetryIntervalSec),
-                                           [weakSelf = WeakSelf()]
-                                           {
-                                               if (const auto self = weakSelf.lock())
-                                               {
-                                                   self->RetryPendingActivityResults();
-                                               }
-                                           });
-    }
-}
-
-void BattleRoomManager::StopActivityResultRetryTimerIfIdle()
-{
-    if (activityResultOutbox_.empty() && activityResultRetryTimer_.IsActive())
-    {
-        activityResultRetryTimer_.Cancel();
-    }
-}
-
-void BattleRoomManager::RetryPendingActivityResults()
-{
-    if (activityResultOutbox_.empty())
-    {
-        StopActivityResultRetryTimerIfIdle();
-        return;
-    }
-    if (!RedisReady())
-    {
-        // 探测不了销账就不能判定,更不能盲目重发:等下一轮,次数也不消耗(与 R07 同一取舍)。
-        LOG_WARN << "battle activity battle result resend skipped this round(Redis disconnected), pending=" << activityResultOutbox_.size();
-        return;
-    }
-
-    // 回调里会改 activityResultOutbox_,先把本轮要处理的键抄一份。
-    std::vector<uint64_t> battleIds;
-    battleIds.reserve(activityResultOutbox_.size());
-    for (const auto &[battleId, entry] : activityResultOutbox_)
-    {
-        battleIds.push_back(battleId);
-    }
-    for (const auto battleId : battleIds)
-    {
-        ProbeActivityResultOne(battleId);
-    }
-}
-
-void BattleRoomManager::ProbeActivityResultOne(const uint64_t battleId)
-{
-    const std::string key = turnbattle::ActivityResultKey(battleId);
-    tlsRedis.GetZoneRedis()->command(
-        [weakSelf = WeakSelf(), battleId](hiredis::Hiredis *, redisReply *reply)
-        {
-            const auto self = weakSelf.lock();
-            if (!self)
-            {
-                return;
-            }
-            auto &outbox = self->activityResultOutbox_;
-            const auto it = outbox.find(battleId);
-            if (it == outbox.end())
-            {
-                return; // 回调期间已被别的路径摘掉(例如上一轮的迟到回调)
-            }
-            auto &entry = it->second;
-
-            if (reply == nullptr)
-            {
-                // 空回复 = 连接断开 / 停机释放,什么也没问到:本轮不判定、不重发、不消耗次数,
-                // 下一轮再探(与 RetryPendingActivityResults 里 Redis 未连接时的取舍一致)。
-                LOG_WARN << "battle activity battle result probe got no reply(Redis disconnected);skipping this round: battle_id=" << battleId;
-                return;
-            }
-            // 只有明确读到 0 才算已销账;回复出错(或类型不对)一律按"仍在"处理 —— 宁可多发一次
-            // (guild 按 battle_id 判重),也不能把没销账的局当成已送达。
-            const bool recordGone = reply->type == REDIS_REPLY_INTEGER && reply->integer == 0;
-            const auto action = turnbattle::ClassifyActivityResultRetry(
-                !recordGone, entry.attempts, turnbattle::kActivityResultRetryMaxAttempts);
-
-            switch (action)
-            {
-            case turnbattle::ActivityResultRetryAction::kDone:
-                LOG_INFO << "battle activity battle result acknowledged: battle_id=" << battleId << " resends=" << entry.attempts;
-                outbox.erase(it);
-                self->StopActivityResultRetryTimerIfIdle();
-                return;
-            case turnbattle::ActivityResultRetryAction::kResend:
-                ++entry.attempts;
-                LOG_WARN << "metric=battle_activity_result_resend battle_id=" << battleId
-                         << " attempt=" << entry.attempts
-                         << ",activity battle result unacknowledged by guild;resending original bytes";
-                SendMatchResultPayload(battleId, entry.payload);
-                return;
-            case turnbattle::ActivityResultRetryAction::kExhausted:
-                // 响亮但不致命:记录仍在 Redis(TTL 7 天),guild 巡检器超期扫描时从记录直接结算。
-                LOG_ERROR << "metric=battle_activity_result_undelivered battle_id=" << battleId
-                          << " resends=" << entry.attempts
-                          << ",activity battle result resend retries exhausted without acknowledgment;persistent record retained for guild reconciler settlement";
-                outbox.erase(it);
-                self->StopActivityResultRetryTimerIfIdle();
-                return;
-            }
-        },
-        "EXISTS %s", key.c_str());
+              << ";no SQL decision yet,this node cannot drain until these rooms are cleared;stuck battles: " << stuckBattles;
 }
 
 void BattleRoomManager::HandleIssueBattleTicket(const ::IssueBattleTicketRequest &request,

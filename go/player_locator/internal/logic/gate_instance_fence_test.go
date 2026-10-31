@@ -53,7 +53,7 @@ func gateInstSeedAuthorityLocation(t *testing.T, sc *svc.ServiceContext, playerI
 	t.Helper()
 	data, err := proto.Marshal(&smpb.PlayerLocation{SceneId: 50, NodeId: "scene-1"})
 	require.NoError(t, err)
-	require.NoError(t, sc.RedisClient.Set(context.Background(), sceneManagerLocationKey(playerID), data, 0).Err())
+	require.NoError(t, sc.PlayerRedis.Set(context.Background(), sceneManagerLocationKey(playerID), data, 0).Err())
 }
 
 // gateInstStaleCount 读 player_locator_stale_gate_instance_total{op}。这是同号跨实例上报的唯一观测口
@@ -81,12 +81,7 @@ func gateInstStaleCount(t *testing.T, op string) float64 {
 
 func gateInstReadyMembers(t *testing.T, mr *miniredis.Miniredis) []string {
 	t.Helper()
-	if !mr.Exists(LeaseZSetKey) {
-		return nil
-	}
-	members, err := mr.ZMembers(LeaseZSetKey)
-	require.NoError(t, err)
-	return members
+	return leaseMembers(t, mr)
 }
 
 func TestSetDisconnecting_StaleGateInstanceIgnored(t *testing.T) {

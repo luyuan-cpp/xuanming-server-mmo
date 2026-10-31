@@ -114,14 +114,14 @@ func newLoadRefreshScopeCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minir
 	return sc, mr
 }
 
-// seedNodeCountersForTest 写一个节点的两个计数;传空串表示不写那个键(读作 redis.Nil = 0)。
+// seedNodeCountersForTest 写一个节点的场景数与成员集合;传空串表示不写那个键(读作 0)。
 func seedNodeCountersForTest(t *testing.T, mr *miniredis.Miniredis, zoneID uint32, nodeID, sceneCount, playerCount string) {
 	t.Helper()
 	if sceneCount != "" {
 		require.NoError(t, mr.Set(nodeSceneCountKey(zoneID, nodeID), sceneCount))
 	}
 	if playerCount != "" {
-		require.NoError(t, mr.Set(nodePlayerCountKey(zoneID, nodeID), playerCount))
+		seedNodeMembers(mr, zoneID, nodeID, mustAtoi(playerCount))
 	}
 }
 
@@ -288,7 +288,7 @@ func TestRefreshLoadScores_LeaderBatchesScoreWritesPerZone(t *testing.T) {
 	refreshLoadScores(sc)
 
 	assert.LessOrEqual(t, rec.count("ZADD", ""), len(nodes), "每个 zone 至多一条 ZADD")
-	assert.LessOrEqual(t, rec.count("GET", ""), 2*6, "每个节点至多两条 GET")
+	assert.LessOrEqual(t, rec.count("GET", "")+rec.count("SCARD", ""), 2*6, "每个节点至多两条读(场景数 GET + 成员 SCARD)")
 	assert.GreaterOrEqual(t, rec.count("SADD", zoneRegistryKeyForTest), 1, "zone 要登记")
 	for zone, ids := range nodes {
 		for _, id := range ids {
@@ -310,9 +310,9 @@ func TestRefreshLoadScores_ReadErrorKeepsPreviousScore(t *testing.T) {
 	require.NoError(t, err)
 	seedNodeCountersForTest(t, mr, 1, "960", "4", "")
 	seedNodeCountersForTest(t, mr, 1, "961", "7", "")
-	failedKey := nodePlayerCountKey(1, "960")
+	failedKey := nodeMembersKey(1, "960")
 	installRedisCommandRecorderForTest(t, mr, func(cmd string, args []string) string {
-		if cmd == "GET" && len(args) > 0 && args[0] == failedKey {
+		if cmd == "SCARD" && len(args) > 0 && args[0] == failedKey {
 			return "ERR injected counter read failure"
 		}
 		return ""

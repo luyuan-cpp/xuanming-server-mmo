@@ -5,16 +5,17 @@ import (
 	"sort"
 
 	teampb "proto/team"
+	"shared/placement"
 
 	"google.golang.org/protobuf/proto"
 )
 
 // 组队规则(设计文档 docs/design/team-system.md §D.1、§D.5、§D.6、§D.7)。
 //
-// 本文件只放纯函数:输入"记录快照 + nowMs(SharedRedis TIME)+ 在线态 + 配置",
+// 本文件只放纯函数:输入"记录快照 + nowMs(SQL 时钟)+ 在线态 + 配置",
 // 输出决策(新记录、成员/邀请增减集、推送所需的原因)或 tip 错误码。
 // 不做任何 I/O,不读 Go 墙钟(§C.4 唯一时钟源),可表驱动单测。
-// 每次 S_COMMIT 版本冲突后,store 会重新读记录并重新调用这里,所以规则必须幂等可重算。
+// 每次观察到的记录在提交前变化后,store 会重新读记录并重新调用这里,所以规则必须幂等可重算。
 
 // ---- §D.1 常量 ----
 
@@ -31,11 +32,11 @@ const (
 	InviteTTLMs       uint64 = config.TeamInviteTTLMs
 	MaxInvitesPerTeam        = config.TeamMaxInvitesPerTeam
 
-	// MaxPendingInvitesPerInvitee 每个被邀请人的待处理邀请上限,由 S_COMMIT 原子判定({-3,i})。
+	// MaxPendingInvitesPerInvitee 每个被邀请人的待处理邀请上限,由提交事务原子判定。
 	MaxPendingInvitesPerInvitee = config.TeamMaxPendingInvitesPerInvitee
 )
 
-// SessionState 规则层看到的会话状态(player:session:<id>,由 store 的 SessionLoader 提供)。
+// SessionState 规则层看到的会话状态(player:session:{<id>},由 store 的 SessionLoader 提供)。
 // 在线态只用于决策,不写进记录(AGENTS §11.6)。
 type SessionState uint8
 
@@ -57,6 +58,9 @@ type Sessions map[uint64]SessionState
 type RuleConfig struct {
 	// AllowCrossZone 对应 yaml Team.AllowCrossZone(默认 false,§D.3)。
 	AllowCrossZone bool
+	// Zones 合服映射快照:记录里存原始区,同区判定两边都解析到最终区(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1)。
+	// 不可变值,不破坏规则层的纯函数:存储层在提交事务里调 Apply 之前取一份。nil = 没有合服。
+	Zones *placement.MergedZones
 }
 
 // OpKind 名册操作种类。StartTeamMatch 的开战锁不走这里(§E.1:见 LockMatch / ReleaseMatchLock)。
@@ -80,8 +84,8 @@ const (
 type Op struct {
 	Kind   OpKind
 	Caller uint64
-	// CallerTeamId 调用者索引当前指向的队伍(S_READ 的 tidNow;0 = 无队)。
-	// 由 store.Mutate 从同一次 S_READ 填入,调用方不填。
+	// CallerTeamId 调用者索引当前指向的队伍(0 = 无队)。
+	// 由 store.Mutate 在提交事务里填入,调用方不填。
 	CallerTeamId uint64
 	// CallerZone Create:建队者 home zone(即队伍 zone);Apply:申请人 home zone。
 	CallerZone uint32
@@ -137,7 +141,7 @@ func TransferLeaderOp(caller, target uint64) Op {
 // DisbandOp 队长解散。
 func DisbandOp(caller uint64) Op { return Op{Kind: OpDisband, Caller: caller} }
 
-// InviteIndexAdd 需要写进 team:invite:<InviteeId> 的反查项(S_COMMIT 的 IA 集合)。
+// InviteIndexAdd 需要写进 team_invite_index 的反查项。
 type InviteIndexAdd struct {
 	InviteeId  uint64
 	ExpireAtMs uint64
@@ -148,7 +152,7 @@ type InviteIndexAdd struct {
 // 三种形态:
 //   - Code != 0:业务拒绝,不写任何东西;Record 为 nil。CodeParam 是 parameters[0](0 = 不带)。
 //   - Code == 0 && !Changed:成功但无需提交(幂等重放 / 无变化)。
-//   - Code == 0 && Changed:按集合提交 S_COMMIT。Record 为新记录,nil 表示解散。
+//   - Code == 0 && Changed:按集合提交。Record 为新记录,nil 表示解散。
 //
 // 集合契约(store 提交前会校验):Joined ∪ Kept == 新记录成员;Left ⊇ 旧成员 \ 新成员;
 // 三者两两不相交;InvitesRemoved ∩ InvitesAdded == ∅。
@@ -165,11 +169,11 @@ type Decision struct {
 
 	InvitesAdded   []InviteIndexAdd
 	InvitesRemoved []uint64
-	// InvitesExpired InvitesRemoved 里按 Redis 时钟已过期的那些被邀请人(⊆ InvitesRemoved)。
+	// InvitesExpired InvitesRemoved 里按 SQL 时钟已过期的那些被邀请人(⊆ InvitesRemoved)。
 	// 落地摘要不为它们 bump TEAM_INVITE:客户端按 expire_at_ms 自己算(landing-recovery-sync-digest.md §3.3)。
-	// 只是标注,不进 S_COMMIT 的集合校验与 Lua 参数。
+	// 只是标注,不进提交的集合校验。
 	InvitesExpired []uint64
-	// ExpiryOnly 本次变更只是按 Redis 时钟清理过期的申请 / 邀请:没有操作变更,也没有惰性转让队长。
+	// ExpiryOnly 本次变更只是按 SQL 时钟清理过期的申请 / 邀请:没有操作变更,也没有惰性转让队长。
 	// 推送照常;落地摘要不为它 bump(理由同上)。
 	ExpiryOnly bool
 
@@ -189,7 +193,7 @@ type Decision struct {
 	InvitedPlayer uint64
 }
 
-// MatchLockActive 开战锁是否有效(nowMs 为 SharedRedis TIME,§C.4)。
+// MatchLockActive 开战锁是否有效(nowMs 为 SQL 时钟,§C.4)。
 func MatchLockActive(rec *teampb.TeamRecord, nowMs uint64) bool {
 	return rec != nil && rec.GetMatchLockToken() != "" && (rec.GetMatchLockExpireAtMs() == 0 || nowMs < rec.GetMatchLockExpireAtMs())
 }
@@ -216,7 +220,7 @@ func MemberIds(rec *teampb.TeamRecord) []uint64 {
 }
 
 // PruneExpired 返回去掉已过期申请与邀请的副本(不改入参、不转让队长),
-// 供视图层按 Redis 时钟过滤。rec 为 nil 返回 nil。
+// 供视图层按 SQL 时钟过滤。rec 为 nil 返回 nil。
 func PruneExpired(rec *teampb.TeamRecord, nowMs uint64) *teampb.TeamRecord {
 	if rec == nil {
 		return nil
@@ -227,7 +231,7 @@ func PruneExpired(rec *teampb.TeamRecord, nowMs uint64) *teampb.TeamRecord {
 }
 
 // Apply 对记录快照执行一次名册操作(纯函数)。
-// rec 为本轮 S_READ 读到的记录(Create 时必须为 nil);不会被修改。
+// rec 为提交事务里读到的记录(Create 时必须为 nil);不会被修改。
 func Apply(op Op, rec *teampb.TeamRecord, nowMs uint64, sessions Sessions, cfg RuleConfig) Decision {
 	if op.Kind == OpCreate {
 		return applyCreate(op, rec, nowMs)
@@ -266,47 +270,7 @@ func Apply(op Op, rec *teampb.TeamRecord, nowMs uint64, sessions Sessions, cfg R
 	return c.finish(rec)
 }
 
-// RepairRemoveMember 生成"把 playerId 从本队移除"的修复决策:S_COMMIT 返回 {-2,i}
-// (保留成员的索引已指向别的队)时使用(§C.5 Mutate 第 3 步)。等价于 RepairRemoveMembers(rec, [playerId])。
-func RepairRemoveMember(rec *teampb.TeamRecord, playerId uint64, nowMs uint64, sessions Sessions) Decision {
-	return RepairRemoveMembers(rec, []uint64{playerId}, nowMs, sessions)
-}
-
-// RepairRemoveMembers 生成"把 playerIds 一次性从本队移除"的修复决策。同一队可能有多名成员的索引都已指向别队,
-// 而 S_COMMIT 只回报第一个错位下标:修复提交本身再返回 {-2,j} 时,store 把新错位者并入集合、基于**同一份原记录**
-// 重新生成本决策,Left 始终相对原记录计算,推送与 scene 信号不漏人。
-// 这些成员的索引不属于本队,Lua 对 Left 里 tid 不等的索引不写,只回报其当前 (tid, epoch)。
-// Actor 为集合里第一个实际被移出的成员。集合里没有一个在记录中时返回 !Changed。
-func RepairRemoveMembers(rec *teampb.TeamRecord, playerIds []uint64, nowMs uint64, sessions Sessions) Decision {
-	if rec == nil {
-		return reject(ErrNoTeam, 0)
-	}
-	work := proto.Clone(rec).(*teampb.TeamRecord)
-	c := &ruleCtx{rec: work, now: nowMs, sessions: sessions}
-	c.appsExpired, c.invitesExpired = pruneExpired(work, nowMs)
-	c.transferred = lazyTransferLeader(work, sessions)
-	actor := uint64(0)
-	for _, pid := range playerIds {
-		if pid == 0 || FindMember(work, pid) == nil {
-			continue
-		}
-		c.removeMember(pid)
-		// 开战锁有效期间也可能走到这里(索引被淘汰后成员又进了别的队):锁内名单同步去掉他,
-		// 保持"锁期间 match_lock_roster == members"(§E.1 第 6 步);已建的票与在途 gather 不受影响。
-		work.MatchLockRoster = removeId(work.GetMatchLockRoster(), pid)
-		if actor == 0 {
-			actor = pid
-		}
-	}
-	if actor != 0 {
-		c.markOp(teampb.TeamChangeReason_TEAM_CHANGE_REASON_HEALED, actor)
-	}
-	return c.finish(rec)
-}
-
-// ---- §E 整队开战:开战锁规则 ----
-
-// CheckMatchStart 开战前置规则(§E.1 第 2 步,nowMs 为 S_READ 的 Redis 时钟):
+// CheckMatchStart 开战前置规则(§E.1 第 2 步,nowMs 为 SQL 时钟):
 // 调用者必须是队长,开战锁不能有效(重复开战回 ErrInMatch,客户端视为进行中,§D.6)。返回 0 表示通过。
 func CheckMatchStart(rec *teampb.TeamRecord, caller, nowMs uint64) uint32 {
 	switch {
@@ -349,8 +313,8 @@ func MatchRoster(rec *teampb.TeamRecord) []uint64 {
 	return roster
 }
 
-// LockMatch 开战锁决策(§E.1 第 6 步)。rec 是开战这一轮 S_READ 读到的记录,store 按它的 ver 钉死提交、
-// 不重算:预检期间任何名单变化都会让 ver+1,提交返回 {0},调用方整轮重来。
+// LockMatch 开战锁决策(§E.1 第 6 步)。rec 是开战事务里锁住的记录,版本与开战这一轮读到的相同才走到这里:
+// 预检期间任何名单变化都会让 ver+1,调用方整轮重来。
 // 结果:写 token / expire / roster,Kept = 全体成员,Reason = MATCH_STARTED,Actor = caller。
 // 不做惰性转让(同一 ver 的 Refresh 已判过);与所有写同口径地清理过期申请 / 邀请。
 // 防御性复核:队长 / 锁 → 对应码;token 为空或截止不晚于 now → ErrInternal;
@@ -372,29 +336,6 @@ func LockMatch(rec *teampb.TeamRecord, caller uint64, token string, roster []uin
 	work.MatchLockExpireAtMs = expireAtMs
 	work.MatchLockRoster = append([]uint64(nil), roster...)
 	c.markOp(teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_STARTED, caller)
-	return c.finish(rec)
-}
-
-// ReleaseMatchLock EndMatch 清锁决策(§E.1 EndMatch 第 2–3 步)。只有锁仍属于 token、且按 nowMs 仍有效才清:
-// Changed=true,Reason = ok ? MATCH_ENDED : MATCH_FAILED,Kept = 全体成员。
-// 锁已被清、已重新加锁或已自然过期 → 返回零值 Decision(!Changed,调用方停止,不写)。
-// 与所有写同口径:先清理过期项并做惰性转让检查(§D.7)。
-func ReleaseMatchLock(rec *teampb.TeamRecord, token string, ok bool, nowMs uint64, sessions Sessions) Decision {
-	if rec == nil || token == "" || rec.GetMatchLockToken() != token || !MatchLockActive(rec, nowMs) {
-		return Decision{}
-	}
-	work := proto.Clone(rec).(*teampb.TeamRecord)
-	c := &ruleCtx{rec: work, now: nowMs, sessions: sessions}
-	c.appsExpired, c.invitesExpired = pruneExpired(work, nowMs)
-	c.transferred = lazyTransferLeader(work, sessions)
-	work.MatchLockToken = ""
-	work.MatchLockExpireAtMs = 0
-	work.MatchLockRoster = nil
-	reason := teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_FAILED
-	if ok {
-		reason = teampb.TeamChangeReason_TEAM_CHANGE_REASON_MATCH_ENDED
-	}
-	c.markOp(reason, 0)
 	return c.finish(rec)
 }
 
@@ -451,12 +392,14 @@ func (c *ruleCtx) full() bool { return len(c.rec.GetMembers()) >= Capacity }
 func (c *ruleCtx) locked() bool { return MatchLockActive(c.rec, c.now) }
 
 // zoneCheck 跨区校验(§D.3):zone 为 0 视为查不到 home zone,fail-closed;不通过时记下错误码并返回 false。
+// 两边都解析到最终区再比:合服之后两个原始区算同区;撤销合服之后,合服期间留下的申请、邀请按各自的原始区重新算,
+// 不同区就拒绝,不会造出新的跨区成员。
 func (c *ruleCtx) zoneCheck(zone uint32) bool {
 	if zone == 0 {
 		c.fail(ErrHomeZoneUnknown, 0)
 		return false
 	}
-	if !c.cfg.AllowCrossZone && zone != c.rec.GetZoneId() {
+	if !c.cfg.AllowCrossZone && c.cfg.Zones.Final(zone) != c.cfg.Zones.Final(c.rec.GetZoneId()) {
 		c.fail(ErrCrossZoneDenied, 0)
 		return false
 	}
@@ -612,8 +555,7 @@ func (c *ruleCtx) respondInvite() {
 func (c *ruleCtx) leave() {
 	caller := c.op.Caller
 	if FindMember(c.rec, caller) == nil {
-		// 索引指向本队但记录里没有我(索引与记录矛盾):提交 L=[caller] 把索引置 0,
-		// Lua 只在索引 tid 仍等于本队时才写。
+		// 索引指向本队但记录里没有我(索引与记录矛盾):提交 L=[caller] 把索引置 0。
 		if c.op.CallerTeamId == c.rec.GetTeamId() {
 			c.extraLeft = append(c.extraLeft, caller)
 			c.markOp(teampb.TeamChangeReason_TEAM_CHANGE_REASON_MEMBER_LEFT, caller)
@@ -870,8 +812,7 @@ func applyCreate(op Op, rec *teampb.TeamRecord, nowMs uint64) Decision {
 	}
 }
 
-// pruneExpired 按 Redis 时钟删掉 expire_at_ms <= nowMs 的申请与邀请
-// (与 S_INVITE_LIST 的 ZREMRANGEBYSCORE -inf now 同口径)。
+// pruneExpired 按 SQL 时钟删掉 expire_at_ms <= nowMs 的申请与邀请。
 func pruneExpired(rec *teampb.TeamRecord, nowMs uint64) (appsExpired, invitesExpired bool) {
 	apps := rec.Applications[:0:0]
 	for _, a := range rec.GetApplications() {
@@ -937,17 +878,6 @@ func sortMembers(members []*teampb.TeamMemberRecord) {
 		}
 		return members[i].GetPlayerId() < members[j].GetPlayerId()
 	})
-}
-
-// removeId 返回去掉 id 的副本(不改入参)。
-func removeId(ids []uint64, id uint64) []uint64 {
-	out := make([]uint64, 0, len(ids))
-	for _, v := range ids {
-		if v != id {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 func memberSet(rec *teampb.TeamRecord) map[uint64]bool {

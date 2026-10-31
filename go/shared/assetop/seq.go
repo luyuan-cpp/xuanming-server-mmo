@@ -79,7 +79,7 @@ func EnsureSeqRow(ctx context.Context, db *sql.DB, t SeqTables, playerID uint64,
 // 事务外的 EnsureSeqRow 只剩一种 1213 —— 首个插入者回滚时,排在这条未提交记录后面的多个插入者
 // 继承间隙锁后互等(2026-09-21 死锁审计 #16,见 EnsureSeqRowRetry)。TiDB 没有这个环。调用方两种用法:
 //   - 先持有一把**按玩家**的已提交行锁再调本函数(帮会的成员行):同一玩家同一时刻最多一个插入者,环从 SQL 层消掉;
-//   - 放进只建行的短事务,接受首插者回滚时的 1213:裸连接上整事务重试吸收,走 authoritysql 的生产连接上这一笔直接失败(trade 的 EnsureSeqRows)。
+//   - 放进只建行的短事务,接受首插者回滚时的 1213,整事务重试吸收(trade 的 EnsureSeqRows)。
 //
 // 不要用一行全服共用的守卫来串行建行:开服时几乎每个玩家都是首次建行,全服会排在那一行上
 // (docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条)。

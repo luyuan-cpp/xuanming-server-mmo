@@ -46,7 +46,7 @@ func (v *SQLRoleFreezeVerifier) VerifyFrozen(ctx context.Context, tx *sql.Tx, r 
 			return nil, accountdirectory.ErrConflict
 		}
 	}
-	// 路由锁先于两张 zone 行，阻止读证据期间迁移切库。只认全局 SQL，不回落 Redis。
+	// 路由锁先于两张 zone 行，阻止读证据期间迁移切库。
 	var home, storage, version sql.NullInt64
 	var frozen sql.NullString
 	var rev uint64
@@ -57,15 +57,11 @@ func (v *SQLRoleFreezeVerifier) VerifyFrozen(ctx context.Context, tx *sql.Tx, r 
 	if !home.Valid || home.Int64 < 1 || home.Int64 > int64(placement.MaxZoneStorageID) || rev == 0 || frozen.Valid {
 		return nil, accountdirectory.ErrConflict
 	}
-	storageID := uint32(home.Int64)
-	if storage.Valid {
-		if storage.Int64 < 1 || storage.Int64 > int64(^uint32(0)) || !version.Valid || version.Int64 < 1 {
-			return nil, accountdirectory.ErrConflict
-		}
-		storageID = uint32(storage.Int64)
-	} else if version.Valid {
+	// 建角恒写落点,和 go/db 一样不回落 home_zone:猜一个库做证明,比拒绝更糟。
+	if !storage.Valid || storage.Int64 < 1 || storage.Int64 > int64(^uint32(0)) || !version.Valid || version.Int64 < 1 {
 		return nil, accountdirectory.ErrConflict
 	}
+	storageID := uint32(storage.Int64)
 	if !v.allowed[storageID] {
 		return nil, accountdirectory.ErrUnavailable
 	}

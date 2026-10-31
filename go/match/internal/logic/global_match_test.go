@@ -18,6 +18,7 @@ import (
 	battlepb "proto/battle"
 	pb "proto/match"
 	teampb "proto/team"
+	"shared/placement"
 	"shared/serviceauth"
 	"testing"
 	"time"
@@ -202,6 +203,49 @@ func TestPoolFormWidensByHomeZoneScope(t *testing.T) {
 	groups, _ = formPoolFixture(t, s, pool, map[uint32]bool{1: true}, n, a, b)
 	require.Len(t, groups, 1)
 	require.Equal(t, scope.LevelGroup, groups[0].Level)
+}
+
+// 别名合服:票上存原始区不动,范围树按最终区算。合服之后两个原始区算同一个 zone,入队就能凑;没合服还要等范围放宽。
+// 大区也跟着最终区走:5 区登记在大区 1、6 区在大区 2,5 合进 6 之后 5 区的人就在大区 2。
+func TestPoolFormResolvesMergedZones(t *testing.T) {
+	c, err := catalog.New(catalog.Rows{ZoneGroups: []scope.Range{{GroupID: 1, ZoneBegin: 5, ZoneEnd: 5}, {GroupID: 2, ZoneBegin: 6, ZoneEnd: 7}}})
+	require.NoError(t, err)
+	store := &authority.Store{}
+	require.NoError(t, store.ConfigureMatchCatalog(c, scope.Schedule{GroupAfterMs: 600_000, GlobalAfterMs: 600_000}))
+	s := poolFixtureCtx(store, c)
+	pool := catalog.Pool{Mode: pb.MatchMode_MATCH_MODE_PVE_TEAM, ConfigId: 1, TeamSize: 2}
+	n := uint64(100000)
+	a, b := globalCandidate(1, n-5_000, n, 20, 100), globalCandidate(2, n-5_000, n, 20, 100)
+	a.ZoneId, b.ZoneId = 5, 6
+	regions := map[uint32]bool{1: true}
+
+	groups, _ := formPoolFixture(t, s, pool, regions, n, a, b)
+	require.Empty(t, groups, "没合服:两个区,还没等满放宽阈值")
+
+	cache, err := placement.NewMergedZoneCache(context.Background(), func(context.Context) (map[uint32]uint32, error) {
+		return map[uint32]uint32{5: 6}, nil
+	}, placement.MergedZoneCacheOptions{})
+	require.NoError(t, err)
+	store.BindMergedZones(cache)
+
+	groups, inputs := formPoolFixture(t, s, pool, regions, n, a, b)
+	require.Len(t, groups, 1, "合服后算同一个 zone,不用等放宽")
+	require.Equal(t, scope.LevelZone, groups[0].Level)
+	require.Equal(t, scope.Node{Zone: 6, Group: 2}, inputs[0].Members[0].Node, "5 区的人按最终区 6 落在大区 2")
+	require.Equal(t, uint32(5), a.ZoneId, "票上还是原始区")
+
+	third := globalCandidate(3, n-5_000, n, 20, 100)
+	third.ZoneId = 7
+	_, inputs = formPoolFixture(t, s, pool, regions, n, third)
+	require.Equal(t, scope.Node{Zone: 7, Group: 2}, inputs[0].Members[0].Node, "没参与合服的区不动")
+}
+
+// 整队直接开战:buildGlobalDirect 建的票不带 home,提交点要逐项和原件核对,所以必须抄原件里记的原始区。
+func TestApplyLaunchHomesCopiesTheOriginalZones(t *testing.T) {
+	group := []*pb.MatchAuthorityTicketRecord{{PlayerId: 1}, {PlayerId: 2}}
+	applyLaunchHomes(group, &teampb.TeamLaunchData{Original: &teampb.TeamLaunchOriginal{Zones: map[uint64]uint32{1: 5, 2: 6}}})
+	require.Equal(t, uint32(5), group[0].ZoneId)
+	require.Equal(t, uint32(6), group[1].ZoneId)
 }
 
 func TestGlobalJoinRejectsMalformedIdentityBeforeAnySQLRead(t *testing.T) {

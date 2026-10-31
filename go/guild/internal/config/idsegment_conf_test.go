@@ -29,7 +29,7 @@ func TestEtcYamlIdSegmentBlock(t *testing.T) {
 		t.Fatal("DataServiceRpc.Etcd.Hosts is empty")
 	}
 	if !c.DataServiceRpc.NonBlock {
-		t.Fatal("DataServiceRpc.NonBlock must be true: the segment source is a weak dependency, guild must start without data_service")
+		t.Fatal("DataServiceRpc.NonBlock must be true: building the client must not block, the bounded wait for data_service is in svc.LoadMergedZones")
 	}
 }
 

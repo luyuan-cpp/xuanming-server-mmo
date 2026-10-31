@@ -226,9 +226,6 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				continue
 			}
 
-			// Initialize player count.
-			svcCtx.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, sceneId), "0")
-
 			sceneCountKey := nodeSceneCountKey(zoneId, targetNode)
 			svcCtx.Redis.Incr(sceneCountKey)
 
@@ -377,8 +374,7 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 			continue
 		}
 
-		countStr, _ := svcCtx.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneId))
-		count, _ := strconv.ParseInt(countStr, 10, 64)
+		count := readScenePlayerCount(svcCtx, sceneId)
 
 		if count < bestCount {
 			bestCount = count
@@ -410,7 +406,7 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 		targetNode := assignNodeByHash(confId*1000+uint64(i), liveNodes)
 		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 		oldNode, _ := svcCtx.Redis.Get(nodeKey)
-		// 再入屏障:老属主刚判死时仍可能在 SavePlayerToRedis,懒改派同样不能抢。
+		// 再入屏障:老属主刚判死时仍可能在 SavePlayer,懒改派同样不能抢。
 		// 换下一个陈旧频道试,全都被挡住就返回"没有可用频道",上游退避重试。
 		if oldNode != "" && reentryBarrierBlocks(svcCtx, zoneId, oldNode, barrierSiteWorldChannelLazy) {
 			continue
@@ -435,9 +431,9 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 
 // ReserveBestWorldChannelForEnter selects and reserves a world channel for an
 // EnterScene request. It preserves GetBestWorldChannel's stale-channel healing,
-// then performs the final least-loaded choice and player-count reservation in
+// then performs the final least-loaded choice and member reservation in
 // one Redis Lua script.
-func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceContext, confId uint64, zoneId uint32) (uint64, string, error) {
+func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceContext, confId uint64, zoneId uint32, playerId uint64) (uint64, string, error) {
 	channelSetKey := worldChannelsKey(zoneId, confId)
 	members, err := svcCtx.Redis.Smembers(channelSetKey)
 	if err != nil || len(members) == 0 {
@@ -500,7 +496,7 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 		}
 	}
 
-	sceneId, nodeId, _, err := ReserveBestWorldChannel(svcCtx, candidates)
+	sceneId, nodeId, _, err := ReserveBestWorldChannel(svcCtx, candidates, playerId)
 	if err != nil {
 		return 0, "", err
 	}

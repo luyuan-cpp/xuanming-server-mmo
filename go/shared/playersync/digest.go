@@ -18,9 +18,8 @@
 // C++ scene 是读侧(HGETALL),只镜像键格式:cpp/libs/services/scene/player/system/player_landing.h
 // 的 kSyncDigestKeyFmt。两边逐字一致由本包的 TestKeyFormatMatchesCpp 机械钉住,不再维护手工清单。
 //
-// Redis 句柄必须是核心实例(player:{id}:location / player:session:{id} 所在的那个库):
-// C++ scene 只连这一个实例,不发 AUTH / SELECT(§2)。私有实例(FriendRedis、match 集群等)
-// C++ 读不到,写进去等于没写。go-zero 与 go-redis 两套客户端各有一个适配器(gozero.go / goredis.go)。
+// Redis 句柄必须是玩家域(player:{id}:location / player:session:{id} 所在的那个存储域,各服务的 PlayerRedis)。
+// 私有实例(FriendRedis、match 集群等)C++ 读不到,写进去等于没写。适配器见 goredis.go。
 package playersync
 
 import (
@@ -39,9 +38,9 @@ import (
 )
 
 const (
-	// KeyFormat 是摘要键的格式。C++ 侧同一个键写作 "player:%llu:sync_digest"(player_landing.h)。
-	// 不加 hash tag,与 player:{id}:location 等核心契约键同风格。
-	KeyFormat = "player:%d:sync_digest"
+	// KeyFormat 是摘要键的格式。C++ 侧同一个键写作 "player:{%llu}:sync_digest"(player_landing.h)。
+	// 玩家域键,玩家 id 带 hash tag(docs/design/redis-player-store-cluster.md §5.2)。
+	KeyFormat = "player:{%d}:sync_digest"
 
 	// GenerationField 是代次字段名。BumpScript 只在 hash 里没有它时写入,所以 hash 被删、过期、
 	// FLUSHALL 之后重建,g 必然与旧值不同(服务器时间前进),客户端据此全量拉(L-3)。
@@ -74,7 +73,7 @@ func Key(playerID uint64) string {
 }
 
 // Evaler 是 bump 需要的最小 Redis 能力:执行一段 Lua,只关心是否出错(BumpScript 恒返回 1)。
-// go-zero 与 go-redis 各有一个适配器(NewGoZeroEvaler / NewGoRedisEvaler),单测用假实现记录调用。
+// 生产实现是 NewGoRedisEvaler,单测用假实现记录调用。
 type Evaler interface {
 	Eval(ctx context.Context, script string, keys []string, args ...string) error
 }

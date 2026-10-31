@@ -18,6 +18,7 @@ import (
 	"login/internal/logic/pkg/ctxkeys"
 	"login/internal/logic/pkg/loginsession"
 	"login/internal/logic/pkg/playernamereg"
+	"login/internal/logic/pkg/sessionfence"
 	"login/internal/svc"
 	pbbase "proto/common/base"
 	dbpb "proto/common/database"
@@ -26,7 +27,7 @@ import (
 
 const (
 	identityPlayerID  = uint64(7001)
-	identityLockKey   = "player_locker:7001"
+	identityLockKey   = "player_locker:{7001}"
 	identityLockToken = "lock-token-7001"
 )
 
@@ -96,11 +97,9 @@ func newEnterWiringHarness(t *testing.T, players []*pbbase.AccountSimplePlayer, 
 	config.AppConfig.Locker.PlayerLockTTL = 120
 	config.AppConfig.Account.CacheExpire = time.Hour
 
-	details := &pbbase.SessionDetails{SessionId: enterWiringSessionID}
+	details := &pbbase.SessionDetails{SessionId: enterWiringSessionID, GateInstanceId: "gate-enter-wiring", SessionIncarnation: 1}
 	ctx := ctxkeys.WithSessionDetails(context.Background(), details)
-	if err := loginsession.Save(ctx, rdb, loginsession.RefOf(details), enterWiringAccount); err != nil {
-		t.Fatalf("seed session: %v", err)
-	}
+	seedLoginSession(t, ctx, rdb, details, enterWiringAccount)
 	accountBlob, err := proto.Marshal(&dbpb.UserAccounts{
 		SimplePlayers: &pbbase.AccountSimplePlayerList{Players: players},
 	})
@@ -123,12 +122,24 @@ func newEnterWiringHarness(t *testing.T, players []*pbbase.AccountSimplePlayer, 
 		pool:     pool,
 	}
 	h.l = NewEnterGameLogic(ctx, &svc.ServiceContext{
-		RedisClient: rdb, AccountDirectory: fixtureDirectory(t, rdb),
+		RedisClient: rdb, PlayerRedis: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
 		PlayerNames:         playernamereg.New(h.registry),
 		PlayerLocatorClient: h.locator,
 		PreloadPool:         pool,
 	})
 	return h
+}
+
+// seedLoginSession 种下一条连接的登录态,与 Login 提交的第 1 步是同一段脚本。
+func seedLoginSession(t *testing.T, ctx context.Context, rdb redis.UniversalClient, details *pbbase.SessionDetails, account string) {
+	t.Helper()
+	ref, ok := loginsession.RefOf(details)
+	if !ok {
+		t.Fatalf("seed session: incomplete connection identity %v", details)
+	}
+	if err := sessionfence.CommitLogin(ctx, rdb, ref.Fence(), account, loginsession.TTL()); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
 }
 
 // waitChain 等异步入场链收尾(含释放玩家锁)。ants 的 ReleaseTimeout 会等在跑的 worker 退出,

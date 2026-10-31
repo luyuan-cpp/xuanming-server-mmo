@@ -6,14 +6,14 @@ import (
 	"strconv"
 	"time"
 
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"proto/scene_manager"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/handofffence"
 	"shared/ownerepoch"
-	"shared/savebarrier"
 )
 
 // 无资格持有者的带围栏撤销(docs/design/location-release-binding.md §17)。
@@ -29,7 +29,7 @@ import (
 // 正证(§17.3):玩家实体只在 E 下的入场登记(kRegisterFenceLua 写出 E 下的 H)或交接采纳(kResumeFenceLua 写出 E 下的 H)成功之后
 // 才建出或继续持有(不变量 I-1);owner_epoch 为 E 期间,一切资格写只能写出 E 下的原件。所以「资格原件缺失,或其 E ≠ location 的 E,
 // 且没有 E 代标记」与 location、owner_epoch 在同一次原子检查里成立,就证明此刻没有任何进程以 E 持有该玩家,也就没有 E 下未落盘的进度。
-// 前提是共享核心 Redis 不淘汰键(noeviction,save_barrier 不设 TTL):原件「缺失」只能是从来没人登记过。
+// 前提是共享核心 Redis 不淘汰键(noeviction,handoff hash 不设 TTL):原件「缺失」只能是从来没人登记过。
 //
 // 宽限(§17.4 第 4 条)只决定什么时候去检查正证,不参与安全性:在途的入场登记 / 交接采纳若先落地,资格原件变了,撤销 Lua 回
 // fence_changed;若撤销先落地,它们的 Lua 比 owner 失败,那次入场失败、客户端重登走新铸造。两种先后都不会出现两个持有者。
@@ -85,8 +85,8 @@ type unqualifiedRevokeFacts struct {
 	graceElapsed  bool   // 等待计时已过宽限
 	epoch         uint64 // 期望 E:本次请求观察到的 owner_epoch(撤销 Lua 再原子复核键值)
 	locationEpoch uint64 // location 记的 owner_epoch
-	fencePresent  bool   // save_barrier 里有 handoff_fence
-	fenceValid    bool   // 原件可解析(savebarrier.ParseHandoffFence,与 C++ ParseFence 同口径)
+	fencePresent  bool   // handoff hash 里有 handoff_fence
+	fenceValid    bool   // 原件可解析(handofffence.ParseHandoffFence,与 C++ ParseFence 同口径)
 	fenceEpoch    uint64 // 原件的 E(fenceValid 时才有意义)
 }
 
@@ -122,7 +122,7 @@ const (
 
 // luaCppHandoffFenceHelpers 是 C++ handoff_sql_barrier.h kFenceLuaHelpers 的逐字副本(修改须两边同步;
 // TestUnqualifiedRevokeFenceParsingMatchesCpp 逐字比对)。撤销 Lua 只用其中的 uint() 与 fence():「资格原件属于哪一代、
-// 写没写坏」必须与 C++ 登记 / 释放 / 凭证脚本同一口径;Go 侧的 savebarrier.ParseHandoffFence 只用于预判与日志。
+// 写没写坏」必须与 C++ 登记 / 释放 / 凭证脚本同一口径;Go 侧的 handofffence.ParseHandoffFence 只用于预判与日志。
 // 其余几个函数(types3 / prior 等)按 C++ 的键序写死,这里不调用。
 const luaCppHandoffFenceHelpers = `
 local function bytecmp(a,b)
@@ -204,13 +204,11 @@ end
 //
 //	KEYS[1] = player:{id}:location
 //	KEYS[2] = player:{id}:owner_epoch
-//	KEYS[3] = player:{id}:save_barrier(只读 handoff_fence 字段)
-//	KEYS[4] = player:{id}:handoff
+//	KEYS[3] = player:{id}:handoff_fence(只读 handoff_fence 字段)
+//	KEYS[4] = player:{id}:handoff(已落盘标记)
 //	KEYS[5] = player:{id}:leave_release_wait(撤销成功时一并删掉)
 //	KEYS[6] = player:{id}:location_revision(§16 侧车,撤销成功时一并删掉)
 //	KEYS[7] = player:{id}:location_revision_floor(只比不删:floor 不随位置删除)
-//	KEYS[8] = instance:{sceneId}:player_count
-//	KEYS[9] = node:zone:{z}:{node}:player_count(scene:{id}:node 读不到时不传)
 //	ARGV[1] = 调用方读到、并据此判定的 location 原字节
 //	ARGV[2] = 期望 E(规范十进制,非 0)
 //	ARGV[3] = 调用方读到的 handoff_fence 原件;空串 = 读时不存在
@@ -226,10 +224,10 @@ end
 //     由墙钟地板与 WAITAOF 兜 zone Redis 回退(zone-redis-regression-guard-20261022.md §4.3)。WAITAOF 等的是复制偏移,
 //     铸造确认落盘时,排在它之前的撤销一定也已落盘。
 //   - 标记的代际去掉前导零后按串比,与 luaDeletePlayerLocationIfUnchanged 的释放模式同法;owner_epoch 按串严格相等。
-//   - 删 location、等待计时、侧车与扣人数在同一次提交里,口径同 luaDeletePlayerLocationIfUnchanged:谁删谁减;go-redis
-//     读超时后原样重发时,重发看到 location 已不在回 0,不会再推进或再减。
+//   - 删 location、等待计时、侧车在同一次提交里;摘场景成员是第二步,在控制域上(runUnqualifiedRevoke),幂等。go-redis
+//     读超时后原样重发时,重发看到 location 已不在回 0,不会再推进。
 const luaRevokeUnqualifiedHolder = luaCppHandoffFenceHelpers + `
-if (#KEYS ~= 8 and #KEYS ~= 9) or #ARGV ~= 5 or not uint(ARGV[2]) then
+if #KEYS ~= 7 or #ARGV ~= 5 or not uint(ARGV[2]) then
     return redis.error_reply('UNQUALIFIED_REVOKE shape')
 end
 local cur = redis.call('GET', KEYS[1])
@@ -264,12 +262,6 @@ if mark then
 end
 redis.call('INCR', KEYS[2])
 redis.call('DEL', KEYS[1], KEYS[5], KEYS[6])
-for i = 8, #KEYS do
-    local v = redis.call('DECR', KEYS[i])
-    if v < 0 then
-        redis.call('SET', KEYS[i], '0')
-    end
-end
 return 1
 `
 
@@ -280,7 +272,7 @@ type unqualifiedRevokeTarget struct {
 	locationRaw   string                        // location 原字节
 	revisionTag   string                        // §16 的 location_revision 侧车原文(随 location 一起读到的)
 	ownerRevision uint64                        // 本次请求已观察到的 SQL 原修订(floor 期望);0 = 不核
-	zoneID        uint32                        // location 所在 zone,只用于找节点人数键;0 = 只扣场景人数
+	zoneID        uint32                        // location 所在 zone,只用于找节点成员集合;0 按 scene:{id}:zone 补
 	epoch         uint64                        // 本次请求观察到的 owner_epoch(期望 E)
 	waited        time.Duration                 // 这份 location 的等待计时(Redis TIME)
 }
@@ -292,7 +284,7 @@ type unqualifiedRevokeResult struct {
 	grace        time.Duration
 	fencePresent bool
 	fenceValid   bool
-	fence        savebarrier.HandoffFence // fenceValid 时是读到的资格原件,只进日志(不打印原文)
+	fence        handofffence.HandoffFence // fenceValid 时是读到的资格原件,只进日志(不打印原文)
 }
 
 // revokeUnqualifiedHolder 判定并在合格时执行撤销。只在调用方已请过持有节点释放之后调用(§17.4 第 4 条)。
@@ -314,7 +306,7 @@ func revokeUnqualifiedHolder(svcCtx *svc.ServiceContext, target unqualifiedRevok
 	}
 	facts.fencePresent, result.fencePresent = present, present
 	if present {
-		if fence, parseErr := savebarrier.ParseHandoffFence(raw); parseErr == nil {
+		if fence, parseErr := handofffence.ParseHandoffFence(raw); parseErr == nil {
 			facts.fenceValid, facts.fenceEpoch = true, fence.OwnerEpoch
 			result.fenceValid, result.fence = true, fence
 		}
@@ -329,8 +321,8 @@ func revokeUnqualifiedHolder(svcCtx *svc.ServiceContext, target unqualifiedRevok
 // readHandoffFenceRaw 读玩家屏障 hash 里交接资格的原文。没有该字段返回 present=false、err=nil。
 // 与 owner_replaced.go 的 readHandoffFence 读同一个字段;这里要原文,撤销 Lua 按原字节复核。
 func readHandoffFenceRaw(svcCtx *svc.ServiceContext, playerID uint64) (raw string, present bool, err error) {
-	raw, err = svcCtx.Redis.Hget(savebarrier.Key(playerID), savebarrier.HandoffFenceField)
-	if errors.Is(err, redis.Nil) {
+	raw, err = playerRedisHget(svcCtx, handofffence.Key(playerID), handofffence.HandoffFenceField)
+	if errors.Is(err, goredis.Nil) {
 		return "", false, nil
 	}
 	if err != nil {
@@ -339,40 +331,40 @@ func readHandoffFenceRaw(svcCtx *svc.ServiceContext, playerID uint64) (raw strin
 	return raw, true, nil
 }
 
-// unqualifiedRevokeKeys 按 luaRevokeUnqualifiedHolder 的键序组键。节点人数键按**此刻**的 scene:{id}:node 找,找不到(或 zone 未知)
-// 就只扣场景人数 —— 与 deletePlayerLocationGuardedWithTag 同一口径,也同样不原子:读与 EVAL 之间被改派时节点人数最多偏差一次。
-func unqualifiedRevokeKeys(svcCtx *svc.ServiceContext, playerID, sceneID uint64, zoneID uint32) []string {
-	keys := []string{
+// unqualifiedRevokeKeys 按 luaRevokeUnqualifiedHolder 的键序组键,全部同 {id} slot。
+func unqualifiedRevokeKeys(playerID uint64) []string {
+	return []string{
 		getPlayerLocationKey(playerID),
 		ownerepoch.OwnerEpochKey(playerID),
-		savebarrier.Key(playerID),
+		handofffence.Key(playerID),
 		ownerepoch.HandoffKey(playerID),
 		leaveReleaseWaitKey(playerID),
 		locationRevisionKey(playerID),
 		locationRevisionFloorKey(playerID),
-		fmt.Sprintf(InstancePlayerCountKey, sceneID),
 	}
-	if zoneID != 0 {
-		if node := lookupSceneNode(svcCtx, sceneID); node != "" {
-			keys = append(keys, nodePlayerCountKey(zoneID, node))
-		}
-	}
-	return keys
 }
 
 // runUnqualifiedRevoke 执行撤销 Lua,把返回码翻成结果名。observedFence 是调用方读到的资格原件("" = 不存在)。
+//
+// location 已删(本次撤销,或 go-redis 重发时首发已撤销)后摘场景成员。摘成员失败时同时返回结果名与错误:
+// location 已经没了,但调用方要按「没撤销」走重试,下一次 LeaveScene 看到 location 不在会再摘一次。
 func runUnqualifiedRevoke(svcCtx *svc.ServiceContext, target unqualifiedRevokeTarget, observedFence string) (string, error) {
-	keys := unqualifiedRevokeKeys(svcCtx, target.playerID, target.loc.GetSceneId(), target.zoneID)
-	result, err := svcCtx.Redis.Eval(luaRevokeUnqualifiedHolder, keys, target.locationRaw,
+	result, err := playerRedisEval(svcCtx, luaRevokeUnqualifiedHolder, unqualifiedRevokeKeys(target.playerID), target.locationRaw,
 		strconv.FormatUint(target.epoch, 10), observedFence, target.revisionTag, optionalRevisionText(target.ownerRevision))
 	if err != nil {
 		return "", fmt.Errorf("撤销无资格持有者失败: player=%d owner_epoch=%d: %w", target.playerID, target.epoch, err)
 	}
+	removeMember := func(outcome string) (string, error) {
+		if err := removeScenePlayer(svcCtx, target.playerID, target.loc.GetSceneId(), target.zoneID); err != nil {
+			return outcome, fmt.Errorf("撤销后摘场景成员失败: player=%d scene=%d: %w", target.playerID, target.loc.GetSceneId(), err)
+		}
+		return outcome, nil
+	}
 	switch fmt.Sprint(result) {
 	case "1":
-		return unqualifiedRevokeOutcomeRevoked, nil
+		return removeMember(unqualifiedRevokeOutcomeRevoked)
 	case "0":
-		return unqualifiedRevokeOutcomeAlreadyGone, nil
+		return removeMember(unqualifiedRevokeOutcomeAlreadyGone)
 	case "-1":
 		return unqualifiedRevokeOutcomeSuperseded, nil
 	case "-2":

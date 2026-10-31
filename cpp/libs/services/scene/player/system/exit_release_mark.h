@@ -146,7 +146,7 @@ namespace exit_release_mark
 		return ExitReleaseDecision::kWrite;
 	}
 
-    // KEYS=owner/save_barrier/handoff，ARGV=E/原mark/300/原H/本轮F。
+    // KEYS=owner/交接资格hash/已落盘标记，ARGV=E/原mark/300/原H/本轮F。
     // owner与原H同时成立才HSET资格+SET标记；完全相同F只认幂等，不延长TTL。
     // 返回 1 写成 / 0 owner 已不是 E / -2 原 H 已被轮换。会话结束凭证改用 kCredentialMarkLua(同一组返回码)。
 	inline const std::string& kLuaWriteIfOwnerEpoch = handoff_sql_barrier::kReleaseMarkLua;
@@ -154,7 +154,7 @@ namespace exit_release_mark
 	// 条件写的应答分类。一律不重试(R7):写不成的后果只是玩家这一次重登可能回 18、下一次重试放行,
 	// 而重试会把"这一刻已落盘"的凭证推迟到一个不再成立的时刻。
 	// kEpochMoved 与 kSuperseded 都是"不写是对的",分开是为了排障:前者是归属已推进,后者是本次消费的原资格已被
-	// 更新的登记 / 撤销 / 发布轮换(save_barrier.handoff_fence,r2-lc#1 / r2-lc#2 之后的主要拒绝路径)。
+	// 更新的登记 / 撤销 / 发布轮换(handoff_fence,r2-lc#1 / r2-lc#2 之后的主要拒绝路径)。
 	enum class MarkWriteResult : uint8_t
 	{
 		kWritten,	 // 返回 1
@@ -228,7 +228,7 @@ namespace exit_release_mark
 
 	// ── A2′:新载入前"先核归属再删"继承来的标记 ─────────────────────────────────
 
-    // 统一登记已清旧标记。KEYS=owner/save_barrier/handoff；ARGV=E/原ctx的H。
+    // 统一登记已清旧标记。KEYS=owner/交接资格hash/已落盘标记；ARGV=E/原ctx的H。
     // 返回0=原资格仍有效；-1=原路由/资格已过时。历史分类码仍保留用于原回包统计。
     inline const std::string& kLuaInheritClear = handoff_sql_barrier::kConfirmFenceLua;
     inline constexpr const char *kLuaInheritClearUnknownEpoch = "return -1";

@@ -70,7 +70,7 @@
 
 ### 3.1 存储
 
-- **键**：`player:%d:sync_digest`（Go）/ `player:%llu:sync_digest`（C++）。不加 hash tag，与 `player:{id}:location` 等核心契约键同风格。
+- **键**：`player:{%d}:sync_digest`（Go）/ `player:{%llu}:sync_digest`（C++）。花括号是 hash tag，与同一玩家的其它协调键同槽（[玩家态 Redis 集群化](redis-player-store-cluster.md) §5.2）。
 - **字段**：`g` = 代次（hash 创建时刻的 Redis 服务器毫秒）；`"<域号十进制>"` = 该域的变更计数（uint64）。
 - **TTL**：30 天，每次 bump 续期。过期即「摘要丢失」，按 L-3 处理。
 - **Go 侧单一来源**：新包 `go/shared/playersync`（键格式、字段名、TTL、bump Lua）。C++ 只镜像键格式（`player_landing.h` 的 `kSyncDigestKeyFmt`），由 Go 测试解析 C++ 头文件常量逐字比对（沿用 `owner_epoch_crosslang_test.go` 的 `cppStringConstant` 写法）。不要再新增手工维护的「另有 N 处实现」清单。

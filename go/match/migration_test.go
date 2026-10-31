@@ -27,7 +27,7 @@ func TestMigrationUsesIsolatedCredentialsAndPreservesExitCodes(t *testing.T) {
 	t.Setenv("MATCH_PROBE_SECRET", "")
 	c := config.Config{}
 	c.Mode = "pro"
-	c.GlobalMatch = config.GlobalMatchConf{Enabled: true, Backend: "tidb", User: "runtime", PasswordEnv: "RUNTIME_PASSWORD", Database: "mmorpg_match"}
+	c.GlobalMatch = config.GlobalMatchConf{Backend: "tidb", User: "runtime", PasswordEnv: "RUNTIME_PASSWORD", Database: "mmorpg_match"}
 	for _, tc := range []struct {
 		name   string
 		report schemamigrate.Report
@@ -56,10 +56,10 @@ func TestMigrationUsesIsolatedCredentialsAndPreservesExitCodes(t *testing.T) {
 	}
 }
 
-func TestMigrationRejectsMissingCredentialsAndDisabledAuthority(t *testing.T) {
+func TestMigrationRejectsMissingCredentialsAndUnknownBackend(t *testing.T) {
 	c := config.Config{}
 	c.Mode = "pro"
-	c.GlobalMatch = config.GlobalMatchConf{Enabled: true, Backend: "tidb"}
+	c.GlobalMatch = config.GlobalMatchConf{Backend: "tidb"}
 	never := func(context.Context, config.GlobalMatchConf, bool) (schemamigrate.Report, error) {
 		t.Fatal("非法迁移配置不能触碰数据库")
 		return schemamigrate.Report{}, nil
@@ -71,9 +71,7 @@ func TestMigrationRejectsMissingCredentialsAndDisabledAuthority(t *testing.T) {
 	t.Setenv(migrationPasswordEnv, "")
 	require.Equal(t, schemamigrate.ExitFailed, runMigration(c, false, never))
 	t.Setenv(migrationPasswordEnv, "fixture")
-	c.GlobalMatch.Enabled = false
-	require.Equal(t, schemamigrate.ExitFailed, runMigration(c, false, never))
-	c.GlobalMatch.Enabled, c.GlobalMatch.Backend = true, "oracle"
+	c.GlobalMatch.Backend = "oracle"
 	require.Equal(t, schemamigrate.ExitFailed, runMigration(c, false, never))
 }
 

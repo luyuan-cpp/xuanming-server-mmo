@@ -13,6 +13,8 @@
     status  – show which services are currently running
     list    – print the available service catalogue
     build   – compile native binaries for selected services -> bin\go_services\
+    migrate – 本机 MySQL 档(-LocalMySQL)为 match / guild 建表后退出;两边启动时互相核对对方的表,须先于常驻进程
+    plan-instances – 不起进程,把各实例的派生配置与实际端口写到 -InstancePlanOutput(本机写者启动目录生成器用)
 
 .PARAMETER Services
     Comma-separated service names to start (e.g. "login,db").
@@ -27,7 +29,7 @@
     默认 0 = 按服务取值(目录键 StopTimeoutSeconds,db 为 35,未写的服务为 25)。
 
 .PARAMETER LocalMySQL
-    本机 MySQL 兼容档。仅为 db 派生运行配置并把档位改成 mysql；只接受回环 SQL 地址。
+    本机 MySQL 兼容档。为 db 与 match 派生运行配置并把档位改成 mysql；只接受回环 SQL 地址。
     不改源配置或其他服务，默认关闭。
 
 .EXAMPLE
@@ -49,7 +51,7 @@
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("start", "start-exe", "stop", "stop-and-report", "signal-only", "status", "list", "build")]
+    [ValidateSet("start", "start-exe", "stop", "stop-and-report", "signal-only", "status", "list", "build", "migrate", "plan-instances")]
     [string]$Command,
 
     [string[]]$Services = @(),
@@ -103,12 +105,14 @@ param(
     [int]$SignalProcessId = 0,
     [string]$MaintenanceDrainPlan = "",
     [string]$MaintenanceDrainDir = "",
-    [string]$MaintenanceDrainSha256 = ""
+    [string]$MaintenanceDrainSha256 = "",
+    # plan-instances 的输出文件(绝对路径),见 Invoke-PlanInstances。
+    [string]$InstancePlanOutput = ""
 )
 
 $ErrorActionPreference = "Stop"
-if ($LocalMySQL -and $Command -notin @('start', 'start-exe')) {
-    throw '-LocalMySQL 只用于本地 start/start-exe，不用于构建或部署。'
+if ($LocalMySQL -and $Command -notin @('start', 'start-exe', 'migrate', 'plan-instances')) {
+    throw '-LocalMySQL 只用于本地 start/start-exe/migrate/plan-instances，不用于构建或部署。'
 }
 
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -130,10 +134,14 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 # 都回 27008(AssetAuthFailed)。密钥值不写进仓库,见该文件的说明;用法见 Start-ServiceInstance。
 . (Join-Path $ScriptDir "lib\assetop_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\account_directory_dev_secret.ps1")
+# 全球匹配链路(探测 / 终局 / 投榜 / 入箱 / 活动取消)的本机开发密钥,按服务只给各自那几把;用法见 Start-ServiceInstance。
+. (Join-Path $ScriptDir "lib\match_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\release_common.ps1")
 # 邮件 MailAdmin admin 生产者签名密钥(docs/design/mail-system.md §2.3)的本机开发值来源:只注入给 mail,用法见 Start-ServiceInstance。
 # 令牌值不写进仓库,见该文件的说明(run/secrets/mail-admin-producer-dev.env;robot / mailadmin CLI 在自己的 shell 里按同一文件取值)。
 . (Join-Path $ScriptDir "lib\mail_admin_dev_token.ps1")
+# 邮件、排行榜其余生产者签名密钥的本机开发值,按服务只给各自那几把。
+. (Join-Path $ScriptDir "lib\producer_dev_secret.ps1")
 
 # ── Service catalogue ────────────────────────────────────────────────
 # Order matters: infrastructure-layer services first, then domain services.
@@ -164,7 +172,8 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 $ServiceCatalogue = [ordered]@{
     mail = @{ Dir = "mail"; Entry = "mail.go"; Port = 50900; Desc = "邮件（全局权威邮箱与附件到账）"; ConfigFlag = "-f"; ConfigFile = "etc/mail.yaml"; AllowMultiInstance = $true; Tier = 1 }
     rank = @{ Dir = "rank"; Entry = "rank.go"; Port = 51100; Desc = "排行榜（全局代次、封榜与奖励）"; ConfigFlag = "-f"; ConfigFile = "etc/rank.yaml"; AllowMultiInstance = $true; Tier = 1 }
-    db              = @{ Dir = "db";              Entry = "db.go";                    Port = 6000;  Desc = "DB (PlayerStore gRPC + TiDB)";      ConfigFlag = "-f";            ConfigFile = "etc/db.yaml";                    AllowMultiInstance = $true;  Tier = 0; StopTimeoutSeconds = 35 }
+    # 按包构建/运行:db.go 依赖同目录 player_store_wiring.go,单文件 go build 找不到 newPlayerStoreServer。
+    db              = @{ Dir = "db";              Entry = ".";                        Port = 6000;  Desc = "DB (PlayerStore gRPC + TiDB)";      ConfigFlag = "-f";            ConfigFile = "etc/db.yaml";                    AllowMultiInstance = $true;  Tier = 0; StopTimeoutSeconds = 35 }
     data_service    = @{ Dir = "data_service";    Entry = "data_service.go";          Port = 9000;  Desc = "Data Service (global directory + id issuer)"; ConfigFlag = "-f";            ConfigFile = "etc/data_service.yaml";          AllowMultiInstance = $true;  Tier = 0 }
     # Base ports for the zRPC services were originally 50000/50200 but Windows
     # reserves dynamic-port ranges that frequently land on 50000-50171 and a
@@ -179,9 +188,9 @@ $ServiceCatalogue = [ordered]@{
     scene_manager   = @{ Dir = "scene_manager";   Entry = "scene_manager_service.go"; Port = 60300; Desc = "Scene Manager (Kafka + Redis)";    ConfigFlag = "-f";            ConfigFile = "etc/scene_manager_service.yaml"; AllowMultiInstance = $true;  Tier = 1 }
     # 回合制战斗匹配/切磋编排(docs/design/turn-based-battle-server.md §5.4)。
     # 50500 位于已观测的 Windows 保留区间(50000-50171)与 51573-51872 之间,安全;与 etc yaml ListenOn 保持一致。
-    # 全球Match首次启动/协议增表须先用独立迁移账号显式运行：
+    # Match首次启动/协议增表须先用独立迁移账号显式运行(本机 MySQL 档:-Command migrate -Services match,guild -LocalMySQL,start_game.ps1 已接线)：
     # MATCH_MIGRATION_USER / MATCH_MIGRATION_PASSWORD仅注入该前台子命令，执行完清掉环境变量；
-    # bin/go_services/match.exe -f <GlobalMatch.Enabled=true的同库配置> -migrate
+    # bin/go_services/match.exe -f <同库配置> -migrate
     # 常驻start/start-exe只核只读Plan，不自动DDL；运行账号不需要CREATE/ALTER权限。
     # 按包构建/运行,包含同目录 original_role_interceptor.go 等入口依赖。
     match           = @{ Dir = "match";           Entry = ".";                        Port = 50500; Desc = "Match (turn-battle matchmaking)";  ConfigFlag = "-f";            ConfigFile = "etc/match_service.yaml";         AllowMultiInstance = $true;  Tier = 3 }
@@ -248,6 +257,14 @@ $ServiceCatalogue = [ordered]@{
     # 写在所有嵌套段之前;自己的 Etcd.Key 是空串(D-13),DataServiceRpc.Etcd.Key: dataservice.rpc 会被加 .z<N>(照 trade)。
     player_inbox      = @{ Dir = "player_inbox"; Entry = "player_inbox.go"; Port = 50950; Desc = "Player Inbox (玩家持久收件箱,scene 直连)"; ConfigFlag = "-f"; ConfigFile = "etc/player_inbox.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # mail/rank 已按上面的现役条目登记：SQL/TiDB DSN、分用途生产者签名及全局语义；不恢复M1运行时。
+}
+
+# 本机写者启动目录(lib/sql_boot_catalog_local.ps1)要用的工具,不是常驻服务,不进上面的目录;不带 -Services 的 build 一并编出。
+# 口径见 tools/scripts/README.md 的 start_game.ps1 一节。
+$BuildToolCatalogue = [ordered]@{
+    writer_authority     = @{ Dir = "data_service"; Entry = "cmd/writer_authority" }
+    db_migrate           = @{ Dir = "db";           Entry = "cmd/migrate" }
+    private_control_file = @{ Dir = "shared";       Entry = "cmd/private_control_file" }
 }
 
 # Derived per-instance config files live here so the source tree stays clean.
@@ -399,6 +416,22 @@ function Resolve-BindablePort {
     throw "[port] $Label : $Port 起 2000 个端口内没有可用候选。"
 }
 
+# 本机 MySQL 档只改回环端点的档位，远端数据库不由它改。
+function Assert-LoopbackSqlEndpoint([string]$Endpoint) {
+    $endpointMatch = [regex]::Match($Endpoint,
+        '^(?<host>localhost|127\.[0-9]+\.[0-9]+\.[0-9]+|\[::1\]):(?<port>[0-9]+)$',
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    $port = 0
+    $localAddress = $null
+    $hostName = $endpointMatch.Groups['host'].Value.Trim('[', ']')
+    $loopback = $hostName -ieq 'localhost' -or
+        ([Net.IPAddress]::TryParse($hostName, [ref]$localAddress) -and [Net.IPAddress]::IsLoopback($localAddress))
+    if (-not $endpointMatch.Success -or -not $loopback -or
+        -not [int]::TryParse($endpointMatch.Groups['port'].Value, [ref]$port) -or $port -lt 1 -or $port -gt 65535) {
+        throw 'LocalMySQL 只允许显式的回环 SQL 单端点，远端数据库的档位不由它改。'
+    }
+}
+
 # 只接受仓库配置的明确层级/单值；不解释 YAML 别名或表达式，也不回显包含凭据的原文。
 # 按字符位置只替换布尔值，保证其他配置字节原样保留。
 function ConvertTo-LocalMySQLDbConfig([string]$Content) {
@@ -433,18 +466,7 @@ function ConvertTo-LocalMySQLDbConfig([string]$Content) {
     }
     $hostMatch = [regex]::Match($lines[$hosts[0]].Value.TrimEnd("`r", "`n"),
         '^    Hosts:[ \t]*(?:"(?<endpoint>[^"\r\n]+)"|''(?<endpoint>[^''\r\n]+)''|(?<endpoint>[^#\s"'']+))[ \t]*(?:#.*)?$')
-    $endpointMatch = [regex]::Match($hostMatch.Groups['endpoint'].Value,
-        '^(?<host>localhost|127\.[0-9]+\.[0-9]+\.[0-9]+|\[::1\]):(?<port>[0-9]+)$',
-        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-    $port = 0
-    $localAddress = $null
-    $hostName = $endpointMatch.Groups['host'].Value.Trim('[', ']')
-    $loopback = $hostName -ieq 'localhost' -or
-        ([Net.IPAddress]::TryParse($hostName, [ref]$localAddress) -and [Net.IPAddress]::IsLoopback($localAddress))
-    if (-not $hostMatch.Success -or -not $endpointMatch.Success -or -not $loopback -or
-        -not [int]::TryParse($endpointMatch.Groups['port'].Value, [ref]$port) -or $port -lt 1 -or $port -gt 65535) {
-        throw 'LocalMySQL 只允许显式的回环 SQL 单端点，远端数据库的档位不由它改。'
-    }
+    Assert-LoopbackSqlEndpoint $hostMatch.Groups['endpoint'].Value
     $requirementLine = $lines[$requirements[0]]
     $requirementMatch = [regex]::Match($requirementLine.Value.TrimEnd("`r", "`n"),
         '^    Backend:[ \t]*(?<value>tidb|mysql)[ \t]*(?:#.*)?$')
@@ -454,10 +476,21 @@ function ConvertTo-LocalMySQLDbConfig([string]$Content) {
     return $Content.Remove($offset, $value.Length).Insert($offset, 'mysql')
 }
 
+# 全局角色库与登录 Redis 的本机真相:chat / match 都取 data_service 与 login 的原件,缺失时不猜测。
+function Get-LocalAccountDirectorySources {
+    $schema = Get-YamlScalar -Path (Join-Path $GoRoot 'data_service/etc/data_service.yaml') -KeyPath 'SnapshotMySQL.DBName'
+    $redisHost = Get-YamlScalar -Path (Join-Path $GoRoot 'login/etc/login.yaml') -KeyPath 'Node.RedisClient.Host'
+    $redisDb = Get-YamlScalar -Path (Join-Path $GoRoot 'login/etc/login.yaml') -KeyPath 'Node.RedisClient.DB'
+    if (-not $schema.Found -or $schema.Value -notmatch '^[a-z][a-z0-9_]{0,63}$' -or -not $redisHost.Found -or $redisHost.Value -notmatch '^(?:[A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9A-Fa-f:]+\]):[0-9]{1,5}$' -or -not $redisDb.Found -or $redisDb.Value -notmatch '^\d+$') {
+        throw '本机必须能读取同data_service全局角色库与同login Redis地址/DB，缺失时不猜测。'
+    }
+    return @{ Schema = $schema.Value; RedisHost = $redisHost.Value; RedisDb = $redisDb.Value }
+}
+
 function Get-LocalChatAuthoritySettings {
     param([string]$ConfigPath, [switch]$RequireDsn)
     $values = @{}
-    foreach ($key in @('DSNEnv', 'Backend', 'GlobalLoginSessions', 'MaxOpenConns', 'AccountRoleSchema', 'LoginRedis.Host', 'LoginRedis.DB', 'LoginRedis.PasswordEnv', 'LoginRedis.PoolSize')) {
+    foreach ($key in @('DSNEnv', 'Backend', 'GlobalLoginSessions', 'MaxOpenConns', 'AccountRoleSchema', 'LoginRedis.Addrs', 'LoginRedis.DB', 'LoginRedis.PasswordEnv', 'LoginRedis.PoolSizePerNode')) {
         $value = Get-YamlScalar -Path $ConfigPath -KeyPath $key
         if (-not $value.Found) { throw "Chat启动缺少显式权威配置字段 $key" }
         $values[$key] = $value.Value
@@ -465,25 +498,132 @@ function Get-LocalChatAuthoritySettings {
     if ($values.DSNEnv -cne 'CHAT_AUTHORITY_DSN' -or $values.Backend -cnotin @('tidb', 'mysql') -or $values.GlobalLoginSessions -cne 'true' -or $values['LoginRedis.PasswordEnv'] -cne 'LOGIN_REDIS_PASSWORD') {
         throw 'Chat必须使用SQL权威及原登录态；禁止旧Redis历史/幂等权威回退。'
     }
-    if ($values.MaxOpenConns -notmatch '^\d+$' -or [int]$values.MaxOpenConns -lt 2 -or [int]$values.MaxOpenConns -gt 128 -or $values['LoginRedis.PoolSize'] -notmatch '^\d+$' -or [int]$values['LoginRedis.PoolSize'] -lt 1 -or [int]$values['LoginRedis.PoolSize'] -gt 128) {
+    if ($values.MaxOpenConns -notmatch '^\d+$' -or [int]$values.MaxOpenConns -lt 2 -or [int]$values.MaxOpenConns -gt 128 -or $values['LoginRedis.PoolSizePerNode'] -notmatch '^\d+$' -or [int]$values['LoginRedis.PoolSizePerNode'] -lt 1 -or [int]$values['LoginRedis.PoolSizePerNode'] -gt 128) {
         throw 'Chat SQL和登录Redis池必须显式有界，不能采用随CPU变化的缺省池。'
     }
-    $schema = Get-YamlScalar -Path (Join-Path $GoRoot 'data_service/etc/data_service.yaml') -KeyPath 'SnapshotMySQL.DBName'
-    $redisHost = Get-YamlScalar -Path (Join-Path $GoRoot 'login/etc/login.yaml') -KeyPath 'Node.RedisClient.Host'
-    $redisDb = Get-YamlScalar -Path (Join-Path $GoRoot 'login/etc/login.yaml') -KeyPath 'Node.RedisClient.DB'
-    if (-not $schema.Found -or $schema.Value -notmatch '^[a-z][a-z0-9_]{0,63}$' -or -not $redisHost.Found -or $redisHost.Value -notmatch '^(?:[A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9A-Fa-f:]+\]):[0-9]{1,5}$' -or -not $redisDb.Found -or $redisDb.Value -notmatch '^\d+$') {
-        throw '本机Chat必须能读取同data_service全局角色库与同login Redis地址/DB，缺失时不猜测。'
-    }
+    $sources = Get-LocalAccountDirectorySources
     if ($RequireDsn) {
         $dsn = [Environment]::GetEnvironmentVariable($values.DSNEnv, 'Process')
         if ([string]::IsNullOrWhiteSpace($dsn) -or $dsn.Contains("`r") -or $dsn.Contains("`n")) {
             throw 'Chat缺少合法CHAT_AUTHORITY_DSN环境值；请先以迁移账号显式-migrate，再提供无DDL权限的运行账号DSN。值不会写入配置或日志。'
         }
-        if ($values.AccountRoleSchema -cne $schema.Value -or $values['LoginRedis.Host'] -cne $redisHost.Value -or $values['LoginRedis.DB'] -cne $redisDb.Value) {
+        if ($values.AccountRoleSchema -cne $sources.Schema -or $values['LoginRedis.Addrs'] -cne "[$($sources.RedisHost)]" -or $values['LoginRedis.DB'] -cne $sources.RedisDb) {
             throw '派生Chat配置与当前全局角色库/login Redis原件不一致，拒绝启动。'
         }
     }
-    return @{ Schema = $schema.Value; RedisHost = $redisHost.Value; RedisDb = $redisDb.Value }
+    return $sources
+}
+
+# match 的本机 MySQL 档:SQL 入口取 go/db 的原件,全局角色库和登录 Redis 同 chat。源配置写的是 TiDB 入口,不改。
+function Get-LocalMatchAuthoritySettings {
+    $sources = Get-LocalAccountDirectorySources
+    $sqlHost = Get-YamlScalar -Path (Join-Path $GoRoot 'db/etc/db.yaml') -KeyPath 'ServerConfig.Database.Hosts'
+    if (-not $sqlHost.Found) { throw '本机Match必须能读取go/db的SQL入口，缺失时不猜测。' }
+    $endpoint = [string][Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST', 'Process')
+    if ([string]::IsNullOrWhiteSpace($endpoint)) { $endpoint = $sqlHost.Value }
+    Assert-LoopbackSqlEndpoint $endpoint
+    return @{ SqlHost = $endpoint; Schema = $sources.Schema; RedisHost = $sources.RedisHost; RedisDb = $sources.RedisDb }
+}
+
+# 只替换顶层配置段内两格缩进的标量,其余字节原样保留;段或字段不唯一就拒绝,不猜。
+function Set-TopLevelBlockScalars {
+    param([string]$Content, [string]$Block, [Collections.IDictionary]$Values)
+    $blocks = [regex]::Matches($Content, "(?m)^${Block}:[ \t]*\r?\n(?:[ \t]+[^\r\n]*\r?\n|[ \t]*\r?\n)*")
+    if ($blocks.Count -ne 1) { throw "LocalMySQL 要求唯一的 $Block 配置段。" }
+    $text = $blocks[0].Value
+    foreach ($key in $Values.Keys) {
+        $field = [regex]::new("(?m)^  ${key}:[^\r\n]*")
+        if ($field.Matches($text).Count -ne 1) { throw "LocalMySQL 要求 $Block.$key 有一个显式标量。" }
+        $text = $field.Replace($text, { param($m) "  ${key}: $($Values[$key])" }, 1)
+    }
+    return $Content.Substring(0, $blocks[0].Index) + $text + $Content.Substring($blocks[0].Index + $blocks[0].Length)
+}
+
+function ConvertTo-LocalMySQLMatchConfig {
+    param([string]$Content, [hashtable]$Settings)
+    $Content = Set-TopLevelBlockScalars -Content $Content -Block 'GlobalMatch' -Values ([ordered]@{ Backend = 'mysql'; Host = $Settings.SqlHost; AccountRoleSchema = $Settings.Schema })
+    return Set-TopLevelBlockScalars -Content $Content -Block 'LoginRedis' -Values ([ordered]@{ Addrs = "[$($Settings.RedisHost)]"; DB = $Settings.RedisDb })
+}
+
+# guild 的本机建表配置:档位改 mysql,连接串只走环境变量,DDL 账号的口令不落盘。
+function ConvertTo-LocalMySQLGuildMigrationConfig {
+    param([string]$Content)
+    $blocks = [regex]::Matches($Content, '(?m)^MySQL:[ \t]*\r?\n(?:[ \t]+[^\r\n]*\r?\n|[ \t]*\r?\n)*')
+    if ($blocks.Count -ne 1) { throw 'LocalMySQL 要求唯一的 MySQL 配置段。' }
+    $field = [regex]::new('(?m)^  DataSource:[^\r\n]*')
+    if ($field.Matches($blocks[0].Value).Count -ne 1) { throw 'LocalMySQL 要求 MySQL.DataSource 有一个显式标量。' }
+    $text = $field.Replace($blocks[0].Value, '  DataSourceEnv: MMORPG_GUILD_SQL_DSN', 1)
+    $Content = $Content.Substring(0, $blocks[0].Index) + $text + $Content.Substring($blocks[0].Index + $blocks[0].Length)
+    return Set-TopLevelBlockScalars -Content $Content -Block 'MySQL' -Values ([ordered]@{ Backend = 'mysql' })
+}
+
+# 本机建表账号取 go/db 的 root(与 compose 的 MYSQL_ROOT_PASSWORD 同值),值只进子进程环境,不回显、不写文件。
+# 容器外经端口映射连进来,CURRENT_USER() 是 root@%;调用方显式设置了主体就用调用方的。
+function Get-LocalSchemaMigrationAccount {
+    $path = Join-Path $GoRoot 'db/etc/db.yaml'
+    $user = Get-YamlScalar -Path $path -KeyPath 'ServerConfig.Database.User'
+    $password = Get-YamlScalar -Path $path -KeyPath 'ServerConfig.Database.Passwd'
+    if (-not $user.Found -or [string]::IsNullOrWhiteSpace($user.Value) -or -not $password.Found -or [string]::IsNullOrEmpty($password.Value)) {
+        throw '本机建表需要go/db的SQL账号，缺失时不猜测。'
+    }
+    $principal = [string][Environment]::GetEnvironmentVariable('MMORPG_SQL_SCHEMA_PRINCIPAL', 'Process')
+    if ([string]::IsNullOrWhiteSpace($principal)) { $principal = "$($user.Value)@%" }
+    return @{ User = $user.Value; Password = $password.Value; Principal = $principal }
+}
+
+# 进程调用单独成函数:测试用桩替换,不起真实迁移。
+function Invoke-ServiceMigrationProcess {
+    param([string]$Name, [hashtable]$Info, [string]$ConfigPath)
+    $svcDir = Join-Path $GoRoot $Info.Dir
+    $exePath = Resolve-GoExecutablePath -ServiceName $Name -ServiceDir $svcDir
+    Push-Location -LiteralPath $svcDir
+    try {
+        # 子进程标准输出只给人看(迁移语句,不含 DSN),不能混进返回值。
+        if ($exePath) { & $exePath $Info.ConfigFlag $ConfigPath '-migrate' | Out-Host }
+        else { & go run (Join-Path $svcDir $Info.Entry) $Info.ConfigFlag $ConfigPath '-migrate' | Out-Host }
+        return $LASTEXITCODE
+    } finally { Pop-Location }
+}
+
+# 本机 MySQL 档的显式建表入口(start_game.ps1 在起常驻服务前调用)。只建表就退出,不需要写者启动授权,不连 etcd / Redis / Kafka。
+# 只管 match 与 guild:两边启动时互相核对对方的表,任何一边的表缺失,另一边都起不来,必须先于两者的常驻进程。
+# DDL 账号只注入这个前台子进程,结束就还原;常驻进程照旧拿不到(见 Start-ServiceInstance)。
+function Invoke-LocalSchemaMigrate {
+    if (-not $LocalMySQL) { throw '-Command migrate 只支持 -LocalMySQL；TiDB 用独立迁移账号显式运行各服务的 -migrate。' }
+    $names = @(if ($Services.Count -eq 0) { 'match'; 'guild' } else { Resolve-ServiceList -Requested $Services })
+    foreach ($name in $names) {
+        if ($name -cnotin @('match', 'guild')) { throw "-Command migrate 只管 match 与 guild，不接受 $name。" }
+    }
+    $account = Get-LocalSchemaMigrationAccount
+    $guildMigrationConfig = Join-Path $DerivedEtcDir 'guild_migrate.yaml'
+    $saved = @{}
+    foreach ($key in @('MMORPG_SQL_SCHEMA_PRINCIPAL', 'MATCH_MIGRATION_USER', 'MATCH_MIGRATION_PASSWORD', 'MMORPG_GUILD_SQL_DSN')) { $saved[$key] = [Environment]::GetEnvironmentVariable($key, 'Process') }
+    try {
+        [Environment]::SetEnvironmentVariable('MMORPG_SQL_SCHEMA_PRINCIPAL', $account.Principal, 'Process')
+        foreach ($name in $names) {
+            $info = $ServiceCatalogue[$name]
+            if ($name -ceq 'match') {
+                $config = (Resolve-InstanceConfig -Name match -Info $info -Index 1 -Total 1).Path
+                [Environment]::SetEnvironmentVariable('MATCH_MIGRATION_USER', $account.User, 'Process')
+                [Environment]::SetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', $account.Password, 'Process')
+            } else {
+                $source = Join-Path (Join-Path $GoRoot $info.Dir) $info.ConfigFile
+                $dsn = [regex]::Match([string](Get-YamlScalar -Path $source -KeyPath 'MySQL.DataSource').Value, '^[^@]*@tcp\((?<endpoint>[^)]+)\)(?<rest>/.*)$')
+                if (-not $dsn.Success) { throw 'guild 的 MySQL.DataSource 不是显式 tcp 连接串，拒绝派生建表配置。' }
+                Assert-LoopbackSqlEndpoint $dsn.Groups['endpoint'].Value
+                if (-not (Test-Path -LiteralPath $DerivedEtcDir)) { New-Item -ItemType Directory -Path $DerivedEtcDir -Force | Out-Null }
+                Set-Content -LiteralPath $guildMigrationConfig -Value (ConvertTo-LocalMySQLGuildMigrationConfig (Get-Content -LiteralPath $source -Raw)) -NoNewline -Encoding utf8
+                [Environment]::SetEnvironmentVariable('MMORPG_GUILD_SQL_DSN', "$($account.User):$($account.Password)@tcp($($dsn.Groups['endpoint'].Value))$($dsn.Groups['rest'].Value)", 'Process')
+                $config = $guildMigrationConfig
+            }
+            Write-Host "[migrate] $name" -ForegroundColor Cyan
+            $code = Invoke-ServiceMigrationProcess -Name $name -Info $info -ConfigPath $config
+            if ($code -ne 0) { throw "$name 建表失败(退出码 $code)。" }
+        }
+    } finally {
+        foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key], 'Process') }
+        if (Test-Path -LiteralPath $guildMigrationConfig) { Remove-Item -LiteralPath $guildMigrationConfig -Force }
+    }
 }
 
 function Resolve-InstanceConfig {
@@ -496,12 +636,12 @@ function Resolve-InstanceConfig {
     )
     $svcDir    = Join-Path $GoRoot $Info.Dir
     $baseYaml  = Join-Path $svcDir $Info.ConfigFile
-    $useLocalMySQL = $LocalMySQL -and $Name -eq 'db'
+    $useLocalMySQL = $LocalMySQL -and $Name -in @('db', 'match')
     $zoneShift = if ($Zone -gt 0) { ($Zone - 1) * $ZonePortShift } else { 0 }
     $port      = Get-InstancePort -Info $Info -Index $Index
     $port      = Resolve-BindablePort $port (Get-InstanceKey -Name $Name -Index $Index -Total $Total) $ReservedPorts
 	$globalTiDBOverride = [string][Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST','Process')
-	$rewriteGlobalTiDB = $Name -in @('data_service','db') -and -not [string]::IsNullOrWhiteSpace($globalTiDBOverride)
+	$rewriteGlobalTiDB = $Name -in @('data_service','db','match') -and -not [string]::IsNullOrWhiteSpace($globalTiDBOverride)
 
     # Legacy fast path: single-zone, single-instance -> original yaml as-is.
     if (-not $useLocalMySQL -and $Name -ne 'chat' -and -not $rewriteGlobalTiDB -and $Total -le 1 -and $Zone -le 0 -and $port -eq [int]$Info.Port) {
@@ -529,24 +669,26 @@ function Resolve-InstanceConfig {
     # Use an instance Regex so the count-limited overload is available.
 	if ($rewriteGlobalTiDB) {
 		if ($globalTiDBOverride -notmatch '\A(?:[A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9A-Fa-f:]+\]):([0-9]{1,5})\z' -or [int]$Matches[1] -lt 1 -or [int]$Matches[1] -gt 65535) { throw 'MMORPG_GLOBAL_AUTHORITY_TIDB_HOST必须是有效host:port，不接受凭据或配置注入。' }
-		$pattern = if ($Name -eq 'data_service') { '(?m)^(SnapshotMySQL:\r?\n)(?:[ \t]+[^\r\n]*\r?\n)*' } else { '(?m)^  Database:\r?\n(?:[ ]{4}[^\r\n]*\r?\n|[ \t]*\r?\n)*' }
+		$pattern = switch ($Name) { 'data_service' { '(?m)^(SnapshotMySQL:\r?\n)(?:[ \t]+[^\r\n]*\r?\n)*' } 'match' { '(?m)^GlobalMatch:\r?\n(?:[ \t]+[^\r\n]*\r?\n|[ \t]*\r?\n)*' } default { '(?m)^  Database:\r?\n(?:[ ]{4}[^\r\n]*\r?\n|[ \t]*\r?\n)*' } }
 		$blocks = [regex]::Matches($content,$pattern)
 		if ($blocks.Count -ne 1) { throw '正规全球SQL配置块不唯一，拒绝生成本机派生配置。' }
 		$block = $blocks[0].Value
-		$hostPattern = if ($Name -eq 'data_service') { '(?m)^  Host:.*$' } else { '(?m)^    Hosts:.*$' }
+		$hostPattern = if ($Name -eq 'db') { '(?m)^    Hosts:.*$' } else { '(?m)^  Host:.*$' }
 		if ([regex]::Matches($block,$hostPattern).Count -ne 1) { throw '正规全球SQL地址字段不唯一。' }
-		$newLine = if ($Name -eq 'data_service') { '  Host: "'+$globalTiDBOverride+'"' } else { '    Hosts: "'+$globalTiDBOverride+'"' }
+		$newLine = if ($Name -eq 'db') { '    Hosts: "'+$globalTiDBOverride+'"' } else { '  Host: "'+$globalTiDBOverride+'"' }
 		$updated = [regex]::Replace($block,$hostPattern,$newLine)
 		$content = $content.Substring(0,$blocks[0].Index)+$updated+$content.Substring($blocks[0].Index+$blocks[0].Length)
 	}
-    if ($useLocalMySQL) { $content = ConvertTo-LocalMySQLDbConfig $content }
+    if ($useLocalMySQL) {
+        $content = if ($Name -eq 'match') { ConvertTo-LocalMySQLMatchConfig -Content $content -Settings (Get-LocalMatchAuthoritySettings) } else { ConvertTo-LocalMySQLDbConfig $content }
+    }
     if ($Name -eq 'chat') {
         $chatAuthority = Get-LocalChatAuthoritySettings -ConfigPath $baseYaml
         $schemaPattern = [regex]::new('(?m)^AccountRoleSchema:\s*[^\r\n]+$')
         $loginPattern = [regex]::new('(?m)^LoginRedis:\r?\n(?:[ \t]+[^\r\n]*(?:\r?\n|$))+')
         if ($schemaPattern.Matches($content).Count -ne 1 -or $loginPattern.Matches($content).Count -ne 1) { throw 'Chat权威配置块缺失或重复，拒绝派生。' }
         $content = $schemaPattern.Replace($content, "AccountRoleSchema: $($chatAuthority.Schema)", 1)
-        $loginBlock = "LoginRedis:`n  Host: $($chatAuthority.RedisHost)`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: $($chatAuthority.RedisDb)`n  PoolSize: $((Get-YamlScalar -Path $baseYaml -KeyPath 'LoginRedis.PoolSize').Value)`n"
+        $loginBlock = "LoginRedis:`n  Addrs: [$($chatAuthority.RedisHost)]`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: $($chatAuthority.RedisDb)`n  PoolSizePerNode: $((Get-YamlScalar -Path $baseYaml -KeyPath 'LoginRedis.PoolSizePerNode').Value)`n"
         $content = $loginPattern.Replace($content, $loginBlock, 1)
     }
     $regex   = [regex]::new('(?m)^(ListenOn:[ \t]*)([^:\s]+):(\d+)([ \t]*\r?)$')
@@ -634,7 +776,9 @@ function Read-InstanceEntry {
     $procId = if ($RawValue.PSObject.Properties.Name -contains 'Pid') { [int]$RawValue.Pid } else { 0 }
     $port   = if ($RawValue.PSObject.Properties.Name -contains 'Port') { [int]$RawValue.Port } else { $FallbackPort }
     $svc    = if ($RawValue.PSObject.Properties.Name -contains 'Service') { [string]$RawValue.Service } else { $FallbackService }
-    return @{ Pid = $procId; Port = $port; Service = $svc }
+    # 写者服务的 -f 是每 boot 私有配置,路径每次启动都变,只有启动时记下才核得了身份。
+    $configPath = if ($RawValue.PSObject.Properties.Name -contains 'ConfigPath') { [string]$RawValue.ConfigPath } else { '' }
+    return @{ Pid = $procId; Port = $port; Service = $svc; ConfigPath = $configPath }
 }
 
 # 分层就绪只认目标进程的监听;go run 的监听者是它启动的子进程。
@@ -757,7 +901,7 @@ function Resolve-GoExecutablePath {
 }
 
 function Test-InstanceProcessIdentity {
-    param([string]$Name, [hashtable]$Info, [string]$InstanceKey, [int]$Total, $Process)
+    param([string]$Name, [hashtable]$Info, [string]$InstanceKey, [int]$Total, $Process, [string]$RecordedConfigPath = '')
     $svcDir = Join-Path $GoRoot $Info.Dir
     $executablePaths = @((Join-Path $GoBinDir "$Name.exe"), (Join-Path $svcDir "$Name.exe"))
     $commandLine = ([string]$Process.CommandLine).Replace('/', '\')
@@ -767,17 +911,19 @@ function Test-InstanceProcessIdentity {
         # go.exe 是全机共用的;只有绝对源码路径能证明它属于本仓库。旧的相对路径命令无法核实,
         # 保守拒绝复用,避免另一个仓库同名 chat.go 被当成本实例。
         $entryPattern = [regex]::Escape((Join-Path $svcDir $Info.Entry).Replace('/', '\'))
-        if ($commandLine -notmatch "(?:^|\s)run\s+`"?$entryPattern`"?(?=\s|$)") { return $false }
+        if ($commandLine -notmatch "(?:^|\s)`"?run`"?\s+`"?$entryPattern`"?(?=\s|$)") { return $false }
     }
     # 兼容旧 PID 文件;身份必须同时匹配仓库内二进制和本实例配置,不能只凭 PID 存活。
     $configPaths = @((Join-Path $DerivedEtcDir "$InstanceKey.yaml"))
     if ($InstanceKey -eq $Name) {
         $configPaths += $Info.ConfigFile, (Join-Path $svcDir $Info.ConfigFile)
     }
+    if (-not [string]::IsNullOrWhiteSpace($RecordedConfigPath)) { $configPaths += $RecordedConfigPath }
     $flagPattern = [regex]::Escape($Info.ConfigFlag)
     foreach ($path in $configPaths) {
         $pathPattern = [regex]::Escape($path.Replace('/', '\'))
-        if ($commandLine -match "(?:^|\s)$flagPattern\s+(?:`"$pathPattern`"|$pathPattern)(?=\s|$)") { return $true }
+        # 启动参数逐个加引号(ConvertTo-ServiceProcessArgument),真实命令行是 "-f" "<path>",开关本身也带引号。
+        if ($commandLine -match "(?:^|\s)`"?$flagPattern`"?\s+(?:`"$pathPattern`"|$pathPattern)(?=\s|$)") { return $true }
     }
     return $false
 }
@@ -788,7 +934,7 @@ function Get-TrackedRunningInstance {
     if (-not $existing -or $existing.Pid -le 0) { return $null }
     $existingProcess = Get-CimInstance Win32_Process -Filter "ProcessId = $($existing.Pid)" -ErrorAction Stop
     if (-not $existingProcess) { return $null }
-    if ($existing.Service -ne $Name -or -not (Test-InstanceProcessIdentity -Name $Name -Info $Info -InstanceKey $InstanceKey -Process $existingProcess)) {
+    if ($existing.Service -ne $Name -or -not (Test-InstanceProcessIdentity -Name $Name -Info $Info -InstanceKey $InstanceKey -Process $existingProcess -RecordedConfigPath $existing.ConfigPath)) {
         throw "[pid] $InstanceKey : PID $($existing.Pid) 的可执行文件或配置不匹配,请核对 PID 记录;不会复用或终止该进程。"
     }
     return $existing
@@ -853,9 +999,9 @@ function Start-ServiceInstance {
     if ($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','match','trade','player_inbox')) {
         $selectedConfig=''
         $writerEnvironment=Get-SqlWriterBootEnvironment -InstanceKey $instanceKey -RepoRoot $RepoRoot -ServiceName $Name -SelectedRuntimeConfigFile ([ref]$selectedConfig) -PreparedRuntimeArguments ([ref]$bootMaintenanceArgs) -PrepareOnlySupported:($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','match','trade','player_inbox'))
-        $listen=Get-YamlScalar -Path $selectedConfig -KeyPath 'ListenOn'
+        $listen=(Get-YamlScalar -Path $selectedConfig -KeyPath 'ListenOn').Value
         if($listen -cnotmatch '^(?:\[[0-9A-Fa-f:]+\]|[A-Za-z0-9_.-]+):(?<port>[1-9][0-9]{0,4})$' -or [int]$Matches.port -ne $cfg.Port){throw '每boot完整配置的ListenOn与本次实例固定端口不符，不能写回或挪用别人的配置'}
-        if($Zone -gt 0 -and [int](Get-YamlScalar -Path $selectedConfig -KeyPath 'ZoneId') -ne $Zone){throw '每boot完整配置ZoneId与本次实例不符'}
+        if($Zone -gt 0 -and [int](Get-YamlScalar -Path $selectedConfig -KeyPath 'ZoneId').Value -ne $Zone){throw '每boot完整配置ZoneId与本次实例不符'}
         $cfg.Path=$selectedConfig;$cfg.FullPath=$selectedConfig;$cfg.Derived=$false
     }else{Assert-PublicationStartAllowed -RepoRoot $RepoRoot}
     $logOut  = Join-Path $LogDir "$instanceKey.stdout.log"
@@ -880,7 +1026,7 @@ function Start-ServiceInstance {
     # **只对 guild 注入,且只给 guild 这一把**:lib 会把两把都补进环境,trade 那把在启动 guild 前摘掉,
     # 按最小权限给(AGENTS §11.3,同 cpp_nodes.ps1 只给 scene 注入)。trade 的注入不在本批范围。
     # 仅限本机 dev:预发 / 生产的密钥由部署侧注入(k8s_deploy.ps1 Resolve-InjectedSecret -MinLength 32)。
-    $injectAssetOpSecret = ($Name -eq 'guild')
+    $injectAssetOpSecret = ($Name -in @('guild', 'mail'))
     $prevAssetOpSecrets = $null
     $previousAccountDirectorySecrets = $null
     # MailAdmin admin 生产者签名密钥(docs/design/mail-system.md §2.3):**只对 mail 注入、只给这一把**;值取自 run/secrets/mail-admin-producer-dev.env
@@ -890,12 +1036,19 @@ function Start-ServiceInstance {
     # 无条件调用会让那些用例报「命令未找到」。
     $injectMailAdminToken = ($Name -eq 'mail')
     $prevMailAdminToken = $null
+    # 全球匹配链路的本机开发密钥:match 拿全部,rank / player_inbox / guild 只拿自己验签或签名的那一把(battle 见 cpp_nodes.ps1)。
+    # 值取自 run/secrets/match-dev.env(lib 首次随机生成),只在没设时兜底、不回显、finally 里还原;部署链从不调用这里。
+    # lib 函数同样只在分支里调用,理由同上一段。
+    $matchDevSecretService = if ($Name -in @('match','rank','player_inbox','guild')) { $Name.Replace('_','-') } else { '' }
+    $prevMatchDevSecrets = $null
+    # mail、rank 的生产者签名密钥,同样只在分支里调用、finally 里还原;部署链从不调用这里。
+    $producerDevSecretService = if ($Name -in @('mail','rank')) { $Name } else { '' }
+    $prevProducerDevSecrets = $null
     $savedWriterEnvironment = $null
     $savedChatDsn = [Environment]::GetEnvironmentVariable('CHAT_AUTHORITY_DSN', 'Process')
 	$savedMatchMigrationUser = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_USER', 'Process')
 	$savedMatchMigrationPassword = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', 'Process')
 	$savedDatabaseAllowlist = [Environment]::GetEnvironmentVariable('DB_ALLOWED_DATABASES','Process')
-	$savedDbAutoMigrate = [Environment]::GetEnvironmentVariable('DB_AUTO_MIGRATE_SCHEMA','Process')
     try {
         if($null -ne $writerEnvironment){$savedWriterEnvironment=Enter-SqlWriterBootEnvironment -Environment $writerEnvironment}
         if ($Name -eq 'chat') { $null = Get-LocalChatAuthoritySettings -ConfigPath $cfg.FullPath -RequireDsn }
@@ -907,12 +1060,11 @@ function Start-ServiceInstance {
 			if ([string]::IsNullOrWhiteSpace($declaredDatabases)) { throw '全球DS/DB必须显式提供同一DB_ALLOWED_DATABASES（或MMORPG_DB_ALLOWED_DATABASES），不得从当前Zone推导玩家库白名单。' }
 			[Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES',$declaredDatabases,'Process')
 		}
-        # go/db 缺 player_store 就拒启。K8s 和 compose 由迁移任务建表，本机没有迁移步骤，启动时建；只给 db，已显式设置时不覆盖。
-        if ($Name -eq 'db' -and [string]::IsNullOrWhiteSpace($savedDbAutoMigrate)) { [Environment]::SetEnvironmentVariable('DB_AUTO_MIGRATE_SCHEMA','1','Process') }
+        # go/db 常驻进程禁止启动期 DDL(InitDB 见到 DB_AUTO_MIGRATE_SCHEMA=1 直接拒启)。本机的表由写者启动目录生成器先用 go/db cmd/migrate 建好。
         # 聊天SQL账号仅交给chat；其它本机服务不得顺带继承此能力。
         if ($Name -ne 'chat') { [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN', $null, 'Process') }
         $accountDirectoryService = $Name.Replace('_','-')
-        if ($accountDirectoryService -in @('data-service','login','trade','match','scene-manager','db')) {
+        if ($accountDirectoryService -in @('data-service','login','trade','match','scene-manager','db','player-inbox')) {
             $previousAccountDirectorySecrets = Backup-AccountDirectoryDevSecrets -Service $accountDirectoryService
             Initialize-AccountDirectoryDevSecrets -RepoRoot $RepoRoot -Service $accountDirectoryService
         }
@@ -921,10 +1073,19 @@ function Start-ServiceInstance {
             $prevAssetOpSecrets = Backup-AssetOpDevSecrets
             Initialize-AssetOpDevSecrets -RepoRoot $RepoRoot | Out-Null
             Remove-Item Env:MMORPG_ASSET_OP_SECRET_TRADE -ErrorAction SilentlyContinue
+            if ($Name -eq 'mail') { Remove-Item Env:MMORPG_ASSET_OP_SECRET_GUILD -ErrorAction SilentlyContinue }
         }
         if ($injectMailAdminToken) {
             $prevMailAdminToken = Backup-MailAdminDevToken
             Initialize-MailAdminDevToken -RepoRoot $RepoRoot | Out-Null
+        }
+        if ($matchDevSecretService) {
+            $prevMatchDevSecrets = Backup-MatchDevSecrets -Service $matchDevSecretService
+            Initialize-MatchDevSecrets -RepoRoot $RepoRoot -Service $matchDevSecretService
+        }
+        if ($producerDevSecretService) {
+            $prevProducerDevSecrets = Backup-ProducerDevSecrets -Service $producerDevSecretService
+            Initialize-ProducerDevSecrets -RepoRoot $RepoRoot -Service $producerDevSecretService
         }
 
         # 下面两处 Start-Process 必须保持每个实例一个独立(隐藏)控制台:-WindowStyle Hidden,且不得加 -NoNewWindow。
@@ -964,12 +1125,13 @@ function Start-ServiceInstance {
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_USER', $savedMatchMigrationUser, 'Process')
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', $savedMatchMigrationPassword, 'Process')
 		[Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES',$savedDatabaseAllowlist,'Process')
-		[Environment]::SetEnvironmentVariable('DB_AUTO_MIGRATE_SCHEMA',$savedDbAutoMigrate,'Process')
         [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN', $savedChatDsn, 'Process')
         # 没注入过就没什么可还原的($prevAssetOpSecrets 仍是 $null);还原同时把摘掉的 trade 那把放回去。
         if ($injectAssetOpSecret) { Restore-AssetOpDevSecrets $prevAssetOpSecrets }
         Restore-AccountDirectoryDevSecrets $previousAccountDirectorySecrets
         if ($injectMailAdminToken) { Restore-MailAdminDevToken $prevMailAdminToken }
+        if ($matchDevSecretService) { Restore-MatchDevSecrets $prevMatchDevSecrets }
+        if ($producerDevSecretService) { Restore-ProducerDevSecrets $prevProducerDevSecrets }
     }
 
     $entry = [pscustomobject]@{
@@ -980,6 +1142,7 @@ function Start-ServiceInstance {
         ExecutablePath = $proc.Path
         ExecutableSha256 = Get-MaintenanceSha256 -Path $proc.Path
         AllowChildProcess = -not $UseExe
+        ConfigPath = $cfg.Path
     }
     $Pids | Add-Member -NotePropertyName $instanceKey -NotePropertyValue $entry -Force
     if ($cfg.Derived) {
@@ -997,6 +1160,68 @@ function Start-ServiceInstance {
     }
 }
 
+# Build a flat plan of (name, index, total, info, tier) entries. Validation
+# (multi-instance allow, missing dirs) happens here so we can still group
+# by tier afterwards without re-scanning.
+function New-InstancePlan {
+    param([string[]]$Names, [hashtable]$ReservedPorts)
+    $plan = @()
+    foreach ($name in $Names) {
+        $info = $ServiceCatalogue[$name]
+        $svcDir = Join-Path $GoRoot $info.Dir
+        if (-not (Test-Path $svcDir)) {
+            Write-Warning "Skipping '$name': directory $svcDir does not exist."
+            continue
+        }
+        $count = Get-ServiceInstanceCount -Name $name
+        $tier  = if ($info.ContainsKey('Tier')) { [int]$info.Tier } else { 99 }
+        for ($i = 1; $i -le $count; $i++) {
+            $instanceKey = Get-InstanceKey -Name $name -Index $i -Total $count
+            $requestedPort = Get-InstancePort -Info $info -Index $i
+            if ($ReservedPorts.ContainsKey($requestedPort)) {
+                throw "[port] $instanceKey 与 $($ReservedPorts[$requestedPort]) 计划使用同一原始端口 $requestedPort,请核对配置。"
+            }
+            # 提前预留后续实例的原始端口,前面的保留区间避让不能抢占它。
+            $ReservedPorts[$requestedPort] = $instanceKey
+            $plan += [pscustomobject]@{
+                Name = $name; Info = $info; Index = $i; Total = $count; Tier = $tier
+            }
+        }
+    }
+    return $plan
+}
+
+# 写者启动目录生成器(lib/sql_boot_catalog_local.ps1)用:不起进程,按 start 的同一规则预留端口、派生配置,
+# 把每个实例的配置路径和实际端口写成 JSON,生成器据此产出 ListenOn 对得上的每 boot 配置。
+# 已在运行的实例标 Running:start 会跳过它们,不需要新授权。
+function Invoke-PlanInstances {
+    if ([string]::IsNullOrWhiteSpace($InstancePlanOutput) -or -not [IO.Path]::IsPathRooted($InstancePlanOutput)) {
+        throw 'plan-instances 必须用 -InstancePlanOutput 指定绝对输出路径。'
+    }
+    $names = Resolve-ServiceList -Requested $Services
+    $pids = Read-PidFile
+    $reservedPorts = @{}
+    $plan = @(New-InstancePlan -Names $names -ReservedPorts $reservedPorts)
+    Reserve-RunningInstancePorts -Pids $pids -ReservedPorts $reservedPorts
+    $instances = @()
+    foreach ($p in $plan) {
+        $instanceKey = Get-InstanceKey -Name $p.Name -Index $p.Index -Total $p.Total
+        $existing = $null
+        if ($pids.PSObject.Properties.Name -contains $instanceKey) {
+            $existing = Get-TrackedRunningInstance -Name $p.Name -Info $p.Info -InstanceKey $instanceKey -RawValue $pids.$instanceKey -FallbackPort (Get-InstancePort -Info $p.Info -Index $p.Index)
+        }
+        if ($existing) {
+            $reservedPorts[$existing.Port] = $instanceKey
+            $instances += [pscustomobject]@{ InstanceKey = $instanceKey; Service = $p.Name; Running = $true; Port = $existing.Port; ConfigPath = '' }
+            continue
+        }
+        $cfg = Resolve-InstanceConfig -Name $p.Name -Info $p.Info -Index $p.Index -Total $p.Total -ReservedPorts $reservedPorts
+        $instances += [pscustomobject]@{ InstanceKey = $instanceKey; Service = $p.Name; Running = $false; Port = $cfg.Port; ConfigPath = $cfg.FullPath }
+    }
+    # 空列表和单元素都要保持 JSON 数组形状。
+    [IO.File]::WriteAllText($InstancePlanOutput, (ConvertTo-Json -InputObject ([object[]]$instances) -Depth 4), [Text.UTF8Encoding]::new($false))
+}
+
 function Invoke-Start {
     param(
         [switch]$UseExe
@@ -1009,32 +1234,7 @@ function Invoke-Start {
 
     if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 
-    # Build a flat plan of (name, index, total, info, tier) entries. Validation
-    # (multi-instance allow, missing dirs) happens here so we can still group
-    # by tier afterwards without re-scanning.
-    $plan = @()
-    foreach ($name in $names) {
-        $info = $ServiceCatalogue[$name]
-        $svcDir = Join-Path $GoRoot $info.Dir
-        if (-not (Test-Path $svcDir)) {
-            Write-Warning "Skipping '$name': directory $svcDir does not exist."
-            continue
-        }
-        $count = Get-ServiceInstanceCount -Name $name
-        $tier  = if ($info.ContainsKey('Tier')) { [int]$info.Tier } else { 99 }
-        for ($i = 1; $i -le $count; $i++) {
-            $instanceKey = Get-InstanceKey -Name $name -Index $i -Total $count
-            $requestedPort = Get-InstancePort -Info $info -Index $i
-            if ($reservedPorts.ContainsKey($requestedPort)) {
-                throw "[port] $instanceKey 与 $($reservedPorts[$requestedPort]) 计划使用同一原始端口 $requestedPort,请核对配置。"
-            }
-            # 提前预留后续实例的原始端口,前面的保留区间避让不能抢占它。
-            $reservedPorts[$requestedPort] = $instanceKey
-            $plan += [pscustomobject]@{
-                Name = $name; Info = $info; Index = $i; Total = $count; Tier = $tier
-            }
-        }
-    }
+    $plan = @(New-InstancePlan -Names $names -ReservedPorts $reservedPorts)
 
     if ($plan.Count -eq 0) {
         Write-Host "No services to launch." -ForegroundColor Yellow
@@ -1394,8 +1594,10 @@ function Invoke-Build {
     Write-Host "[stamp] $ldflags" -ForegroundColor DarkGray
 
     $failed = @()
-    foreach ($name in $names) {
-        $info   = $ServiceCatalogue[$name]
+    # 只有整批构建才带工具:按服务名点名构建时不多编,保持 -Services 的语义。
+    $toolNames = @(if ($Services.Count -eq 0) { $BuildToolCatalogue.Keys })
+    foreach ($name in @($names) + $toolNames) {
+        $info   = if ($ServiceCatalogue.Contains($name)) { $ServiceCatalogue[$name] } else { $BuildToolCatalogue[$name] }
         $svcDir = Join-Path $GoRoot $info.Dir
 
         if (-not (Test-Path $svcDir)) {
@@ -1445,4 +1647,6 @@ switch ($Command) {
     "status" { Invoke-Status }
     "list"   { Invoke-List }
     "build"  { Invoke-Build }
+    "migrate" { Invoke-LocalSchemaMigrate }
+    "plan-instances" { Invoke-PlanInstances }
 }
