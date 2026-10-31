@@ -85,11 +85,12 @@ message_content: msg_id=70, serialized_message ~20 bytes
 - `cpp/libs/engine/core/network/broadcast_target_codec.h` — `broadcast_targets::Encode`，与 Gate 共用目标顺序和身份栅栏编码
 
 **C++ Gate 接收侧:**
-- `cpp/nodes/gate/handler/rpc/gate_service_handler.cpp` — muduo TCP RPC：`BroadcastToPlayers`（bitmap 解码及身份校验）、`BroadcastToScene`、`BroadcastToAll`
-- `cpp/nodes/gate/handler/event/gate_event_handler.cpp` — Kafka: 同上 + `PushToPlayerEventHandler`
+- `cpp/nodes/gate/handler/gate_push_delivery.{h,cpp}` — 共享投递模块 `gate_push`（2026-10-30 起）：身份栅栏（`ClassifyPush`）、广播只编码一次、场景 / 全服广播只推已绑定玩家的会话；RPC 与 Kafka 两条入口都走这里
+- `cpp/nodes/gate/handler/rpc/gate_service_handler.cpp` — muduo TCP RPC 入口：`BroadcastToPlayers`、`BroadcastToScene`、`BroadcastToAll`
+- `cpp/nodes/gate/handler/event/gate_event_handler.cpp` — Kafka 入口：同上 + `PushToPlayerEventHandler`（2026-10-30 之前 Kafka 版场景 / 全服广播 handler 是空实现，消息被静默吞掉）
 
 **Go 共享工具:**
-- `go/shared/kafkautil/gate_push.go` — `GateCommandBuilder` 接口, `BroadcastToScene()`, `BroadcastToAll()`, `EncodeBitmapFields()`
+- `go/shared/kafkautil/gate_push.go` — `GateCommandBuilder` 接口, `BroadcastToScene()`, `BroadcastToAll()`, `EncodeBroadcastTargets()`（session 与 player 成对编码，与 C++ `broadcast_target_codec.h` 用 `testdata/broadcast_target_vectors.json` 对拍）
 
 **Go 服务 Builder:**
 - `go/guild/internal/kafka/gate_command_builder.go`

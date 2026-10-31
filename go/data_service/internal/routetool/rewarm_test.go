@@ -45,12 +45,12 @@ func (f *fakeRewarmDB) ReadRouteMeta(context.Context) (store.RouteMeta, error) {
 	return f.meta, nil
 }
 
-func (f *fakeRewarmDB) ListActiveMergeFences(context.Context) (store.ActiveMergeFences, error) {
+func (f *fakeRewarmDB) DBNowMs(context.Context) (uint64, error) {
 	f.clockCalls++
 	if f.onClock != nil {
 		f.onClock()
 	}
-	return store.ActiveMergeFences{DBNowMs: f.dbNowMs}, nil
+	return f.dbNowMs, nil
 }
 
 func writableRewarmDB(nowMs uint64) *fakeRewarmDB {
@@ -98,7 +98,7 @@ func markerWithSetAt(t *testing.T, setAtMs uint64) string {
 	return readyMarkerFor(t, testIdentity, testGeneration, setAtMs-1)
 }
 
-// presetRewarmKeys 写满三把控制键,外加两把 rewarm 不许碰的键(映射与合服围栏)。
+// presetRewarmKeys 写满三把控制键,外加一把 rewarm 不许碰的映射键。
 func presetRewarmKeys(t *testing.T, mr *miniredis.Miniredis, marker string) {
 	t.Helper()
 	wm, err := placement.EncodeRouteWatermark(placement.RouteWatermark{Generation: testGeneration, WatermarkMs: 42})
@@ -107,7 +107,6 @@ func presetRewarmKeys(t *testing.T, mr *miniredis.Miniredis, marker string) {
 		placement.RouteWarmKey:      strings.Repeat("0a", 16),
 		placement.RouteWatermarkKey: wm,
 		placement.HomeZoneKey(1):    "1",
-		placement.MergeFenceKey(3):  "{}",
 	}
 	if marker != "" {
 		kv[placement.RouteReadyKey] = marker
@@ -123,7 +122,7 @@ func assertControlKeys(t *testing.T, mr *miniredis.Miniredis, present bool) {
 }
 
 // TestRewarm_DropsAllThreeKeysInOneDel:三把控制键在**同一条** DEL 里撤掉(规格 §13.1 第 4 条:不留「标记没了、令牌还在」之类的中间态),
-// 除此之外不发任何写命令;不相干的映射键与合服围栏不动。键本来就不在、或标记不是 string 类型,也是一条 DEL、退出码 0(幂等)。
+// 除此之外不发任何写命令;不相干的映射键不动。键本来就不在、或标记不是 string 类型,也是一条 DEL、退出码 0(幂等)。
 func TestRewarm_DropsAllThreeKeysInOneDel(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -174,7 +173,6 @@ func TestRewarm_DropsAllThreeKeysInOneDel(t *testing.T) {
 			assertControlKeys(t, mr, false)
 			if tc.wantDeleted > 0 {
 				assert.True(t, mr.Exists(placement.HomeZoneKey(1)), "映射键不归 rewarm 管")
-				assert.True(t, mr.Exists(placement.MergeFenceKey(3)), "合服围栏不归 rewarm 管")
 			}
 			assert.Equal(t, tc.wantDeleted, rep.Deleted)
 			assert.Equal(t, tc.wantMarker, rep.MarkerWas)

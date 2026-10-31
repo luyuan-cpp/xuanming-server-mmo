@@ -52,7 +52,7 @@ type ListingStore interface {
 	CountListings(ctx context.Context, q ListingQuery) (uint64, error)
 	QueryListings(ctx context.Context, q ListingQuery, offset, limit uint64) ([]*tradepb.TradeListingRecord, error)
 	CountSellerListings(ctx context.Context, sellerPlayerID uint64) (uint64, error)
-	// QuerySellerListings 按 listing_id DESC 返回卖家任意状态的商品(货架)。
+	// QuerySellerListings 按上架时间倒序返回卖家任意状态的商品(货架)。
 	QuerySellerListings(ctx context.Context, sellerPlayerID uint64, offset, limit uint64) ([]*tradepb.TradeListingRecord, error)
 	// GetListing 返回含 description 的完整行;不存在返回 ErrListingNotFound。
 	GetListing(ctx context.Context, listingID uint64) (*tradepb.TradeListingRecord, error)
@@ -141,7 +141,7 @@ func (r *ListingRepo) CountSellerListings(ctx context.Context, sellerPlayerID ui
 // QuerySellerListings 返回卖家货架的一页,新上架在前。
 func (r *ListingRepo) QuerySellerListings(ctx context.Context, sellerPlayerID uint64, offset, limit uint64) ([]*tradepb.TradeListingRecord, error) {
 	query := "SELECT " + listingSummaryColumns + " FROM trade_listing WHERE `seller_player_id` = ?" +
-		" ORDER BY `listing_id` DESC LIMIT ? OFFSET ?"
+		" ORDER BY `created_ms` DESC, `listing_id` DESC LIMIT ? OFFSET ?"
 	return r.queryListingRows(ctx, query, []any{sellerPlayerID, limit, offset})
 }
 
@@ -431,7 +431,8 @@ func buildListingFilter(q ListingQuery) (string, []any, error) {
 func listingOrderBy(sort tradepb.ListingSort, tab tradepb.ListingTab) (string, error) {
 	switch sort {
 	case tradepb.ListingSort_LISTING_SORT_DEFAULT:
-		return "`listing_id` DESC", nil
+		// 新上架在前。listing_id 是打散过的,不代表先后。
+		return "`created_ms` DESC, `listing_id` DESC", nil
 	case tradepb.ListingSort_LISTING_SORT_PRICE_ASC:
 		return "`price_fen` ASC, `listing_id` ASC", nil
 	case tradepb.ListingSort_LISTING_SORT_PRICE_DESC:

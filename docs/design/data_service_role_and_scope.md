@@ -101,23 +101,12 @@ Windows 第一轮真实正例已通过；第二轮新测试程序在运行前被
 历史说明：2026-10-08 之前的普通索引加 `NOT EXISTS` 方案曾依赖 InnoDB 间隙锁与单实例部署。可空唯一键落地后，这已不再是正常写入契约，也不再据此要求 `Recreate`；当前多副本部署见 [横向扩容设计](no-single-node-horizontal-scaling-20261001.md)。
 
 ### `AllocateIdSegment(biz_tag, step) → [lo, hi)`
-- 半开区间,一经返回视为已发出、绝不重发;段内剩余号作废不回收。
-- 行由迁移按 `IdSegment.BootstrapTags` 预建,从 **1** 起(0 保持非法);表里没有的 `biz_tag` 在生产(`IdSegment.AllowAutoSeed=false`,默认)→ `ErrCodeIdSegmentUnknownTag`(故障码,表零变更),只有 dev 显式 `AllowAutoSeed: true` 才运行期自动种行。`step=0` 沿用行上的 step,非 0 则覆盖并回写;`step` 上限 10,000,000。
-- `biz_tag` 必须匹配 `^[a-z0-9_]{1,64}$`;非法 tag / 非法 step → `ErrCodeInvalidRequest`(不算故障,表零变更)。
-- 值域上限 **2^55**(与存量 snowflake 号 ≥ 6.7e16 永不相交):`max_id + step ≥ 2^55` → `ErrCodeIdSegmentExhausted`,fail-closed、表零变更;表上的 `CHECK (max_id < 2^55)` 兜底手工 SQL。
-- 并发:`SELECT ... FOR UPDATE` + `WHERE version=?` CAS,同 tag 串行;死锁/锁超时重试 4 次。store 不可用 → `ErrCodeIdSegmentDBError`(故障码,进拦截器告警)。指标 `id_segment_allocate_total{biz_tag,outcome}`。
-
-### `id_segment` bootstrap 例外
-本包唯一一段手写 DDL(`store/schema.go: idSegmentBootstrapDDL`):proto2mysql v0.1.0 把 string 主键渲染成 MEDIUMTEXT(MySQL 1170 建不了表),所以 `id_segment` 用 `biz_tag VARCHAR(64)` 预建,之后**不对它跑** `CreateOrUpdateTable`(会试图 MODIFY 回 MEDIUMTEXT),只做"proto 每个字段都有同名列"的漂移检查。其余三张表全部由 proto 驱动。
-
-### `id_segment` 行的生命周期与恢复手册(设计 §7.5 第 7 条)
-每一行都是一个永久身份的发号水位。行只会在**全局库被 drop 重建、或从旧备份恢复**时消失 / 回退,而消费表(`player_database` / `guild` / 玩家 blob 里的物品、Kafka 里的流水与快照)还留着已发出的号;此时从 1 重发,login 的 `INSERT ... ON DUPLICATE KEY UPDATE` 会**静默覆盖别人的角色行**,没有任何报错。所以计数器必须有一条"库被重置也活得下来"的底线:
-
-- **运行期不补种**(`IdSegment.AllowAutoSeed`,没配 = false):缺行 → `ErrCodeIdSegmentUnknownTag`(20,进 `FaultCodeSet` 告警),不写任何行,Error 日志点名 tag 与补救步骤。dev yaml 显式 `true` 只为本地随手换 tag,k8s ConfigMap 按 profile 镜像(staging/prod 固定 false)。
-- **行由迁移显式创建**(`IdSegment.BootstrapTags`,没配 = `player, guild, item, txlog, snapshot, trade_listing, guild_asset_op, friend_request, mail`;`friend_request` 是好友申请代次号;`mail` 是邮件 mail_id / sys_mail_id,邮件 M1a 加入,消费表在独占库 `mmorpg_mail`、不做地板校验;`trade_listing` 是聚宝斋商品号,2026-09-14 加入;`guild_asset_op` 是帮会资产指令 op_id,2026-09-20 帮会二期 B5a 加入,消费表在独占库 `mmorpg_guild`、不做地板校验):`-migrate` 与 AutoMigrate 都在四张表就位之后对每个 tag `INSERT IGNORE ... (max_id=1, step=100, version=0)`,幂等,**绝不降低**已有行的 max_id;每行创建 / 已存在各打一条 Info。清单里出现非法 tag(不匹配 `^[a-z0-9_]{1,64}$`)整次迁移失败。新增一种永久身份 = 加一个 tag。
-- **地板校验**(`store/schema.go: idSegmentFloorSources` → `raiseIdSegmentFloor`):迁移接着对 `player` / `guild` 两行做 `max_id ← MAX(主键 < 2^55) + 1`(只在 `MAX ≥ max_id` 时;`< 2^55` 排除存量 snowflake 号;UPDATE 带 `max_id < ?` 守卫,与并发发号互斥安全)。消费表必须与 `id_segment` **同库**才查得到(`INFORMATION_SCHEMA.COLUMNS` 探测,不在就 Info 跳过);抬升时打 Error `id_segment counter was behind the consuming table — backup restore?`,出现即意味着库曾被重置,按下面的手册排查已被覆盖的行。`item` / `txlog` / `snapshot` **做不了**这种校验:item guid 在 zone 库的玩家 blob 里;tx_id / snapshot_id 所在的 `transaction_log` / `player_snapshot` 与 `id_segment` 同库、会被一起恢复到旧水位,而真正"已发出"的集合在 Kafka 积压与 C++ 进程手里的段里(重放的旧流水会与重发的新号撞 `tx_id` 主键,`INSERT IGNORE` 静默丢掉**新**的流水)。
-
-**运维手册(恢复全局库 = ID 安全事件,不是普通库恢复)**:恢复 `id_segment` 所在的全局库之前,必须先核对每个 tag 的 `max_id ≥ 消费侧最大号 + 1` —— `player` 看各 zone 库 `MAX(player_database.player_id) WHERE player_id < 2^55`,`guild` 看 `MAX(guild.guild_id)`,`item` 看各 zone 库 blob 里 bag 的最大 guid,`txlog` / `snapshot` 看两个 Kafka topic 里的最大 `tx_id` / `snapshot_id`;不够就手工 `UPDATE id_segment SET max_id = <最大号 + 1>, version = version + 1` 抬上去,再启动 data_service / 跑 `-migrate`。消费表在各服务独占库里的 tag(`trade_listing` / `guild_asset_op` / `friend_request` / `mail`)同样要核对,各自查哪张表见 `deploy/k8s/README.md`「恢复全局库前须先核对」一条。迁移里的自动地板校验只是同库能查到时的兜底,"跳过"不代表安全。回归用例:`store/id_segment_integration_test.go`(缺行拒绝零写入 / bootstrap 幂等不降位 / 地板抬升与 snowflake 号排除 / dev 补种)、`logic/id_segment_integration_test.go`(错误码定性)。
+- 半开区间,一经返回视为已发出、绝不重发;段内剩余号作废不回收。`hi-lo` 可能小于 `step`(块尾截短)。
+- 2026-10-30 起不再用 `id_segment` 表:发号器(`internal/idissuer`)从内存切段,预留记录写两份,放在两套独立的 etcd 里。设计见 [总体方案](./player-data-tidb-scaling-plan.md) §6。
+- `biz_tag` 必须匹配 `^[a-z0-9_]{1,64}$`,`step` 不超过 1000 万,否则 `ErrCodeInvalidRequest`(不算故障);没登记进 `IdSegment.Tags` 的 → `ErrCodeIdSegmentUnknownTag`。
+- 两份预留记录都不存在,且 `IdSegment.AllowAutoSeed=false`(生产)→ `ErrCodeIdSegmentUnknownTag`,不写任何记录。首次部署跑 `data_service -id-issuer-init`,其余情况是 ID 安全事件,见 [发号器运维手册](../ops/id-issuer-runbook.md)。
+- 值域见底 → `ErrCodeIdSegmentExhausted`;读写预留记录失败 → `ErrCodeIdSegmentSourceError`。这两个与上面那个都进 `FaultCodeSet` 告警。
+- 恢复全局库不再影响发号。
 
 ### 存量库(老手写 DDL 建的表)升级路径
 proto2mysql 的 `syncTableSchema` 只在表**不存在**时执行完整的 `CREATE TABLE`(索引在那条语句里);表已存在时它一条索引都不建,只 `ADD/MODIFY/CHANGE COLUMN`。所以任何一台跑过旧版 data_service 的机器,迁移之后是"列齐了、索引缺了":`player_snapshot` 少 `snapshot_guid` 索引 → 消费者每落一条快照全表扫一次,而且没有任何报错。
@@ -170,17 +159,18 @@ Kafka:
 - `player:{id}:<field>` 键族只有 data_service 自己写(Save / SetField / 回档 / debug_import),不在游戏存档主链上(主链是 `PlayerAllData:{id}`)。`LoadPlayerData` 的生产调用方只有 GM 快照、快照 diff 和 debug_fetch,都不用返回的 Version。
 - `ClientForPlayer` 真正的生产用途是账本读:`persisted_player_database.go` 读 `PlayerAllData:<id>`,`asset_sql_commit.go` 读 `player:{id}:asset_sql_commit`,供 guild / trade / mail / player_inbox 使用。它们读的是 scene 和 go/db 写的键,正确性完全依赖配置同址。
 
-### 已整改(2026-10-19 三批,2026-10-22 第四批)
-下表标「二」「三」「四」:第三批是对第二批的对抗评审修正,第四批是 10-19/20 只读核对中复核成立的遗留项。验证状态(2026-10-22 订正):
+### 已整改(2026-10-19 三批,2026-10-22 第四批,2026-10-23 / 10-30 第四批后续)
+下表标「二」「三」「四」:第三批是对第二批的对抗评审修正,第四批是 10-19/20 只读核对中复核成立的遗留项,「四(后续)」是第四批对抗评审成立的低危项。验证状态(2026-10-30 订正):
 - 第一批 data_service 部分:Codex 在 `e611b5d8d` 上跑过定向与全量单测(PROGRESS 同日 Codex 条目)。之后第二、三批改了同一批文件,这份结果只作历史证据。
 - 第一批 DevRedis 同址契约:在 `k8s_deploy_contract` 套件里实跑通过。
-- 第一批 merge_zone `checkDataRedisBlobFlags`:从未编译、运行。第三批 merge_zone 集成用例同样从未运行。
+- merge_zone(第一批 `checkDataRedisBlobFlags`、第三批数据锁拷贝集成用例、第四批 `requireIT` / `itMissing`):2026-10-22 Codex merge_zone 全量验收通过(`MERGE_ZONE_IT_REQUIRE=1`,439 PASS / 0 SKIP,输入哈希与 `7a23b4fed` 一致,见 PROGRESS 同日 Codex 条目)。
 - 第二、三批的 `internal/logic` 包:2026-10-20 在 `c35e1133d` 授权副本上编译、单测通过,真 Redis 两版也通过(见下文「字段 Lua 验证结果」)。
-- routing 包、data_service 全量单测:当前提交上还没有运行证据。第四批未编译、未测试,待 Codex 验证。
+- 第四批 data_service 部分:2026-10-23 Codex `go test -p=1 -count=1 ./...` 1653 PASS / 0 FAIL,覆盖空串版本与 routing 拿锁回滚(输入为 `7a23b4fed` 的文件)。没跑:`go vet -tags=integration ./internal/logic/`,以及 `DATA_SERVICE_IT_REQUIRE=1` 下的真 Redis 两版。
+- 「四(后续)」两行:未编译、未测试,待 Codex 验证。
 
 | 批 | 问题 | 改法 | 位置 |
 |----|------|------|------|
-| 一 | `LoadPlayerData` 先读字段、再单独 GET 版本,两步之间有存盘就返回「旧数据 + 新版本」,调用方据此 CAS 会覆盖别人的写 | 指定字段:版本键与字段键同一条 MGET。全量读第二批改走字段索引(见下一行);存量玩家的 SCAN 回退保留「先读版本、版本变了回旧版本」 | `internal/logic/data_logic.go` |
+| 一 | `LoadPlayerData` 先读字段、再单独 GET 版本,两步之间有存盘就返回「旧数据 + 新版本」,调用方据此 CAS 会覆盖别人的写 | 指定字段:版本键与字段键同一条 MGET(2026-10-30 起改为只读 Lua,见「四(后续,10-30)」)。全量读第二批改走字段索引(见下一行);存量玩家的 SCAN 回退保留「先读版本、版本变了回旧版本」 | `internal/logic/data_logic.go` |
 | 一 | 锁释放沿用请求 ctx,请求超时/取消后释放命令发不出去,两把锁挂到 `PlayerLockTTLSec` | `lockReleaseContext`:`context.WithoutCancel` + 1s 超时;第二把锁失败时回滚第一把也走它 | `internal/routing/router.go` |
 | 一 | 账本读的正确性只靠 DevRedis 与 C++ zoneredis、go/db RedisClient 同址同库,仓库里没有守卫;漂移后账本读全是 Nil → found=false,fail-closed 但只丢活性、很难发现 | 契约测试钉住三者同址且都是 DB 0 | `tools/scripts/tests/k8s_deploy_contract.tests.ps1` |
 | 一 | 合服第 2 步拷 blob 只看 `-migrate-player-blobs`、与 pin/copy 模式无关;两端 data Redis 不同又不搬时,改映射后 `LoadPlayerData` 读到「成功、空数据、Version=0」 | merge_zone `checkDataRedisBlobFlags`:声明了不同的 `-source-data-redis` / `-target-data-redis`,却既没给 `-migrate-player-blobs` 也没给 `-skip-player-blob-migration` 时,写前拒跑;`player-storage-placement.md` 更正「copy 模式无条件拷 blob」的错误说法 | `tools/merge_zone/main.go` |
@@ -194,7 +184,9 @@ Kafka:
 | 三 | merge_zone 拷 blob 前查数据锁、且必须早于 SCAN,没有任何测试 | 真 Redis 集成测试 `TestIT_CopyPlayerStringKeys_RefusesWhileDataLockHeld`(tag `merge_integration`);字段索引键名在 data_service 与 merge_zone 两边各钉一次字面量 | `tools/merge_zone/blob_lock_integration_test.go`、`internal/logic/player_fields_test.go` |
 | 四 | 读路径把「版本键存在、值为空串」当成无版本,回 Version=0 成功,与 LoadPlayerData 的 fail-closed 契约和写侧守卫不一致 | `parseVersionValue` 空串按损坏处理;「键不存在」只由 `parseVersionReply` 的 nil 分支表达 | `internal/logic/data_logic.go` |
 | 四 | 拿锁时 SETNX 结果不明:回包丢失、或客户端重试撞上自己写入的 token。此时只回滚 mapping 锁,自己写下的数据锁挂到 `PlayerLockTTLSec`,期间该玩家的写全部 LockConflict | 任一把锁没拿到,都把可能已落地的锁按 token 释放:mapping 失败释放 mapping,数据失败两把都释放。只删自己的,代价是锁冲突时多一次释放往返 | `internal/routing/router.go` `AcquirePlayerLock`、`router_lock_test.go`(新) |
-| 四 | 合服集成用例第一句不是 `requireIT(t)`,AST 守卫 `TestIntegrationTestsCallRequireIT` 必然 FAIL;它与本文件的真 Redis 用例都不认 REQUIRE 开关,SKIP 会被当成通过 | merge_zone 用例补 `requireIT(t)`,DB 13/14 非空改走 `itMissing`;真 Redis 用例加 `requireRealRedisIT`(`DATA_SERVICE_IT_REQUIRE=1` 时 SKIP 判 FAIL) | `tools/merge_zone/blob_lock_integration_test.go`、`internal/logic/data_logic_integration_test.go` |
+| 四 | 合服集成用例第一句不是 `requireIT(t)`,AST 守卫 `TestIntegrationTestsCallRequireIT` 必然 FAIL;它与 data_service 的真 Redis 用例(`TestRealRedis*`)都不认 REQUIRE 开关,SKIP 会被当成通过 | merge_zone 用例补 `requireIT(t)`,DB 13/14 非空改走 `itMissing`;真 Redis 用例加 `requireRealRedisIT`(`DATA_SERVICE_IT_REQUIRE=1` 时 SKIP 判 FAIL) | `tools/merge_zone/blob_lock_integration_test.go`、`internal/logic/data_logic_integration_test.go` |
+| 四(后续,10-23) | 拿锁失败后的回滚释放若也失败,错误被丢掉、没有日志;锁冲突分支返回裸的释放错误,看不出锁可能还挂着。mapping 侧回滚、释放失败分支都没有回归用例 | `(*Router).lockAcquireFailure`:释放失败记 `[PlayerLock]` 日志(写明几秒后过期),冲突分支的释放错误包一层;`lockReleaseContext` 注释订正(1s 只管取连接 / 拨号 / 重试退避,单次读写受 ReadTimeout 缺省 3s 约束);补 mapping 侧「回包丢失」「重试撞上自己」两个用例(go-zero `redis.WithHook` 注入,PING 自检)与 `TestLockAcquireFailure` | `internal/routing/router.go`、`router_lock_test.go` |
+| 四(后续,10-30) | 指定字段读用 MGET,MGET 对非 string 键回 nil:被带外写成 HASH 的版本键读成「无版本」→ Version=0 成功,非 string 的字段键被当成缺失;全量读则先查 TYPE、fail-closed,两条读路径口径不一 | 改为一段只读 Lua `loadSelectedFieldsScript`:KEYS 全声明(版本在前),逐键 TYPE 必须 none / string,否则 error_reply,再逐键 GET | `internal/logic/data_logic.go`、`data_logic_test.go`、`data_logic_integration_test.go` |
 
 ### 字段索引与保留名(2026-10-20:c35 业务源码加授权生成绑定,字段 Lua 验证通过)
 - **结构**:`player:{id}:__fields`(HASH,与 `__version` / `__lock` / 字段键同 `{id}` slot),成员 `<字段名>` = 空串,保留成员 `__version` = 戳(索引在哪个版本上完整)。
@@ -203,6 +195,7 @@ Kafka:
   - `saveFieldsScript`:所有可失败检查(版本键类型与格式 ≤15 位、锁 token、期望版本、索引类型、每个字段键必须是 none / string)都在第一条 SET 之前,字段键类型不对回 -2(InvalidRequest,零副作用);新玩家或索引可信时把本次字段名加进索引并把戳盖成新版本,否则不加名字、索引存在就 DEL。
   - `loadAllFieldsScript`(只读):无数据回空;可信时一段脚本读完字段集合、值与版本(同一瞬间,返回的版本可直接 CAS);未索引回版本,Go 侧退回 SCAN。
   - `deletePlayerFieldsScript`:校验 token;可信时按索引删,否则 Go 侧 SCAN 收候选后回退模式删;两种模式都只删 TYPE 为 string 的键。
+  - 指定字段读 `loadSelectedFieldsScript`(只读,2026-10-30 起,不维护索引):版本键与请求的字段键都在 KEYS 里,逐键 TYPE 必须是 none / string,否则整段 error_reply;版本与字段同一瞬间。以前的单条 MGET 会把非 string 键静默读成 nil。
 - **存量玩家**:永远走 SCAN 回退(成本等于以前),读路径不「收养」—— 这族键没有生产写者,存量集合不再增长;收养要在读路径写元数据,还有「删除后重存版本回到同一值」的 ABA 缺陷。收敛靠指标 `data_service_player_fields_enum_total{op,path}`:`path="legacy_scan"` 长期为 0 后,再另起一批把回退改成 fail-closed。
 - **保留名**:`__` 前缀、`save_barrier`、`asset_sql_commit`(键名取自 `shared/savebarrier`、`shared/assetop` 的规范键函数)。Load(指定字段)/ Save / SetField 回 InvalidRequest,GetField 回错误(server 折成 1,既有口径)。今后新增 `player:{%d}:` 花括号键必须同时登记(见 `shared-redis-split-by-purpose.md` 2026-10-19 增补)。
 - **删除边界**:`KeysDeleted` = 实际删掉的字段 string 键数 + 版本键(索引不计);别的模块的 HASH 与保留名不删;只由带外半截写造成的「有字段、无版本」残留在全量读里不可见、删除时也不删;`__` 前缀的老字段不读、不删。
@@ -226,16 +219,17 @@ Kafka:
 - **结论边界**:这是上述授权派生副本的字段 Lua 线验证,不表示 `c35e1133d` 原样提交可编译,也不表示最新工作区或 D1 路由线已验证。此前共享输入变化、D1 接口未齐及原样提交缺绑定的失败记录保留在交接 §7–9;本轮未运行其他包单测、MySQL 集成、race、全服务启动、压测或全仓协议同步。
 
 
-### 写门禁契约(2026-10-19;未编译、未测试,待验证)
+### 写门禁契约(2026-10-19;验证状态见上文「已整改」)
 - **顺序**:`Router.AcquirePlayerWriteLock` = 预检(`GetPlayerHomeZoneAndMergeFence`,home 与围栏同一段 Lua / 同一条 SQL)→ 按 home 取数据客户端 → 两把锁 → **数据锁 SETNX 成功之后**复核。复核看到围栏、home 变了或读失败,先释放两把锁再拒绝。Save / SetField / Delete 唯一的拿锁入口;读路径(Load / GetField / 账本读)不拦,继续用 `ClientForPlayer`。
 - **为什么复核必须晚于数据锁**:提交脚本校验数据锁 token,merge_zone 拷 blob 前 `EXISTS` 的也是数据锁。复核晚于数据锁时,立围栏之后才拿到锁的写者复核必然看见围栏;立围栏之前拿到锁的写者,要么在锁有效期内提交(锁在,合服拷贝中止),要么锁过期后提交被 token 拒绝。复核若早于数据锁,写者可能在 merge_zone 查锁之后才拿到锁、在拷贝之后提交。
 - **码**:围栏 / home 变化 → `ErrCodeZoneMergeInProgress`(22,规则拒绝,零写入,不进 FaultCodeSet);锁冲突 → 2;其余(Regions 下映射缺席、Redis 故障、回源失败、zone 未配集群)→ 1。回档里 22 不算「走到写那一步」,不触发写后帮会复查。指标 `data_service_player_lock_total{outcome="merge_fenced"}`、`save_player_data_total{outcome="merge_fenced"|"type_conflict"}`;日志 `[PlayerWriteLock]` / `[DataRoute]`。
-- **拿锁失败的回滚(2026-10-22)**:`AcquirePlayerLock` 里任一把锁没拿到,都按 token 释放可能已落地的锁。原因是 SETNX 报错不等于没写入,回 false 也可能是客户端重试撞上自己。只删自己的,别人持有的锁不动。
+- **拿锁失败的回滚(2026-10-22)**:`AcquirePlayerLock` 里任一把锁没拿到,都按 token 释放可能已落地的锁。原因是 SETNX 报错不等于没写入,回 false 也可能是客户端重试撞上自己。只删自己的,别人持有的锁不动。回滚释放本身失败时记 `[PlayerLock]` 日志;拿锁只是没抢到而释放失败时回错误(1),不当成普通锁冲突(2)(2026-10-23)。释放一份副本最坏约等一个 ReadTimeout(缺省 3s),不是 1s,见 `lockReleaseContext` 注释。
 - **dev 与 Regions**:围栏两种模式同口径(合服窗口内 src / dst 两个 zone 的写入一律拒绝)。dev 模式下映射缺席照常可写:数据位置不依赖映射,这类玩家也不可能在合服清单里(清单按 `player:zone` 收集,登记受同一道围栏约束),行为与引入门禁之前一致;Regions 下映射缺席照旧是故障。
 - **代价**:每次写多两次 mapping Redis 往返(ReadRequiresReady=true 时是两次就绪读,缓存不可信时两次库点查,`route_read_total{path="home_fence"}` 会混入写门禁的读);复核耗时计入 3s 锁 TTL,慢到锁过期时提交被拒成 LockConflict,只损活性。db_first 下 SQL 回源读 `zone_merge_fence`,merge_zone 目前只写 Redis 围栏,沿用「第 2 批落地前禁止 merge_zone 写模式」的冻结前提。
 - **部署**:merge_zone 的拷贝前查锁只有在所有 data_service 副本都含写门禁时才成立;Regions 下合服(含 unmerge)之前必须确认副本已全部升级。
 
 ### 仍未处理
+- **这族键本身的去向待定**:按 [TiDB 决策](./global-data-layer-tidb-decision.md) §9.3 表 A,`player:{id}:<field>` / `__version` / `__fields` / `__lock` 属于「移出 Redis」,去向是删除,或把 GM 快照、回档重建在 TiDB 玩家行上,二选一待负责人定(2026-10-24 方向,未设计、未落码)。本节前面的修复只保证现行代码在被替换之前 fail-closed,不是在为这族键扩功能。
 - `cmd/debug_import` 的 player 模式仍然不持玩家锁、先写数据后登记映射、把版本重置为 `"1"`(调试工具,只写本地目标;字段索引问题已由 `writeLegacyPlayerFields` 解决)。与正在运行的 data_service 写入并发时可能互相覆盖,不要对线上进程正在写的玩家导入。
 
 ### 启用 Regions(去掉 DevRedis)之前必须先处理
@@ -256,7 +250,7 @@ Kafka:
 - 客户端不能经 client_rpc_router 调 DataService(路由表 `ClientProtocol=false`,转发被拒)。
 
 ### 其余低优先级发现(未整改,记录备查)
-- `AcquirePlayerLock` 的 SET NX 与 `saveFieldsScript` 在回包丢失时会被 Redis 客户端自动重发,可能回假的 LockConflict(锁残留到 TTL)或假的 VersionMismatch(写入其实成功)。
+- `AcquirePlayerLock` 的 SET NX 与 `saveFieldsScript` 在回包丢失时会被 Redis 客户端自动重发。「锁残留到 TTL」已于 2026-10-22 第四批修复(任一 SETNX 失败都按 token 释放);剩下的是这一次请求仍回一次假的 LockConflict(锁已释放,可立即重试),以及 `saveFieldsScript` 重发时可能回假的 VersionMismatch(写入其实成功,调用方重读即可看到)。
 - `__version` 被 `DeletePlayerData` 删掉后从 0 重计,有 ABA;`expected_version=0` 跳过校验,首次存盘不受乐观锁保护。
 - redis 模式下映射写入没有 WAITAOF,节点级崩溃可能丢掉合服最后一批映射改写,续跑时不复核。
 - 回档里 SavePlayerData 回 LockConflict(2) 也是零写入,但仍记成 writeAttempted=true,可能误触发写后复查、误报 29(本批只修了 22)。

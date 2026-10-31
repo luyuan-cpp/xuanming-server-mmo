@@ -760,7 +760,7 @@ func econNextSeq(t *testing.T, f econFixture, playerID uint64, stream assetpb.As
 // ── T-D 捐献预留 ─────────────────────────────────────────────
 
 // TestReserveDonation_WritesPendingRowAndOccupiesCount:成功路径写满 29 列、占一次今日次数,
-// 可空的三列写成空值而不是 NULL,合服闸门拿到的是事务内读到的 zone。
+// 可空的三列写成空值而不是 NULL。
 // last_send_ms = created_ms(LastSendMs 契约第 1 条)由 asset_store_landing_test.go 的 TestReserve_WritesLastSendMsAsCreatedMs 钉住。
 func TestReserveDonation_WritesPendingRowAndOccupiesCount(t *testing.T) {
 	f := openEconomyFixture(t)
@@ -772,14 +772,11 @@ func TestReserveDonation_WritesPendingRowAndOccupiesCount(t *testing.T) {
 	)
 	seedManagedGuild(t, f.ctx, f.db, guildID, zone, 1, 50, leader, map[uint64]uint32{donor: constants.RoleMember})
 
-	var fencedZone uint32
 	in := econDonation(t, 9_500_001, donor, guildID, testNowMs)
-	in.Fence = func(_ context.Context, zoneID uint32) error { fencedZone = zoneID; return nil }
 	res, err := f.econ.ReserveDonation(f.ctx, in)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(1), res.Seq, "首笔 seq 从 1 起")
 	assert.Equal(t, testNowMs, res.StreamEpoch, "纪元 = 事务内建 seq 行的时刻")
-	assert.Equal(t, zone, fencedZone, "闸门必须拿事务内读到的 guild.zone_id")
 
 	rec := econRecord(t, f, in.OpID)
 	assert.Equal(t, pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING, rec.GetStatus())
@@ -854,7 +851,7 @@ func TestReserveDonation_LimitReachedRollsBack(t *testing.T) {
 	assert.Equal(t, uint32(1), used)
 }
 
-// TestReserveDonation_Rejections:帮会不在 / 不是成员 / 等级不够 / 合服闸门(含闸门读失败)各自回对应哨兵,
+// TestReserveDonation_Rejections:帮会不在 / 不是成员 / 等级不够各自回对应哨兵,
 // 且拒绝之后库里什么都没留下。
 func TestReserveDonation_Rejections(t *testing.T) {
 	f := openEconomyFixture(t)
@@ -877,16 +874,6 @@ func TestReserveDonation_Rejections(t *testing.T) {
 	tooHigh.MinGuildLevel = 2
 	_, err = f.econ.ReserveDonation(f.ctx, tooHigh)
 	assert.ErrorIs(t, err, ErrGuildLevelTooLow)
-
-	merging := econDonation(t, 9_520_004, donor, guildID, testNowMs)
-	merging.Fence = func(context.Context, uint32) error { return ErrZoneMerging }
-	_, err = f.econ.ReserveDonation(f.ctx, merging)
-	assert.ErrorIs(t, err, ErrZoneMerging)
-
-	unreadable := econDonation(t, 9_520_005, donor, guildID, testNowMs)
-	unreadable.Fence = func(context.Context, uint32) error { return errors.New("redis down") }
-	_, err = f.econ.ReserveDonation(f.ctx, unreadable)
-	assert.ErrorIs(t, err, ErrZoneMerging, "闸门读不出来也按拒绝处理(fail-closed)")
 
 	var ops int
 	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT COUNT(*) FROM guild_asset_op").Scan(&ops))
@@ -1108,7 +1095,7 @@ func TestReserve_AdjacentNewMembersConcurrentAllSucceed(t *testing.T) {
 // ── T-U 升级 ─────────────────────────────────────────────────
 
 // TestUpgradeGuild_ChargesCurrentLevelCostAndRaisesCap:1→2 级扣 GuildLevel[1].upgrade_cost_funds(20000),
-// 上限取 GuildLevel[2].max_members(35);职位、expected_level、资金、满级、配表缺行、闸门各自拒绝。
+// 上限取 GuildLevel[2].max_members(35);职位、expected_level、资金、满级、配表缺行各自拒绝。
 func TestUpgradeGuild_ChargesCurrentLevelCostAndRaisesCap(t *testing.T) {
 	f := openEconomyFixture(t)
 	const (
@@ -1127,20 +1114,16 @@ func TestUpgradeGuild_ChargesCurrentLevelCostAndRaisesCap(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint32(1), cached.Level)
 
-	_, err = f.econ.UpgradeGuild(f.ctx, guildID, member, 1, econLevelLookup, nil)
+	_, err = f.econ.UpgradeGuild(f.ctx, guildID, member, 1, econLevelLookup)
 	assert.ErrorIs(t, err, ErrRankTooLow, "普通成员不能升级")
 
-	_, err = f.econ.UpgradeGuild(f.ctx, guildID, officer, 1, econLevelLookup,
-		func(context.Context, uint32) error { return ErrZoneMerging })
-	assert.ErrorIs(t, err, ErrZoneMerging)
-
-	stale, err := f.econ.UpgradeGuild(f.ctx, guildID, officer, 2, econLevelLookup, nil)
+	stale, err := f.econ.UpgradeGuild(f.ctx, guildID, officer, 2, econLevelLookup)
 	require.NoError(t, err)
 	assert.False(t, stale.Changed, "expected_level 对不上 = 无改动")
 	assert.Equal(t, uint32(1), stale.NewLevel)
 	assert.Equal(t, uint64(25000), econFunds(t, f, guildID))
 
-	res, err := f.econ.UpgradeGuild(f.ctx, guildID, officer, 1, econLevelLookup, nil)
+	res, err := f.econ.UpgradeGuild(f.ctx, guildID, officer, 1, econLevelLookup)
 	require.NoError(t, err)
 	assert.True(t, res.Changed)
 	assert.Equal(t, uint32(2), res.NewLevel)
@@ -1155,12 +1138,12 @@ func TestUpgradeGuild_ChargesCurrentLevelCostAndRaisesCap(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, uint32(2), fresh.Level, "提交后必须失效帮会快照缓存")
 
-	again, err := f.econ.UpgradeGuild(f.ctx, guildID, officer, 1, econLevelLookup, nil)
+	again, err := f.econ.UpgradeGuild(f.ctx, guildID, officer, 1, econLevelLookup)
 	require.NoError(t, err)
 	assert.False(t, again.Changed, "重复点击不能连升两级")
 	assert.Equal(t, uint64(5000), econFunds(t, f, guildID))
 
-	_, err = f.econ.UpgradeGuild(f.ctx, guildID, leader, 2, econLevelLookup, nil)
+	_, err = f.econ.UpgradeGuild(f.ctx, guildID, leader, 2, econLevelLookup)
 	assert.ErrorIs(t, err, ErrFundsInsufficient)
 
 	// 过期视图自愈:模拟"上一次升级已提交、COMMIT 回执丢失、当时没失效缓存"—— 先把快照读进缓存,再绕过 repo 直接改库。
@@ -1169,7 +1152,7 @@ func TestUpgradeGuild_ChargesCurrentLevelCostAndRaisesCap(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint32(2), cached.Level)
 	mustExec(t, f.ctx, f.db, "UPDATE guild SET level=? WHERE guild_id=?", 3, guildID)
-	healed, err := f.econ.UpgradeGuild(f.ctx, guildID, leader, 2, econLevelLookup, nil)
+	healed, err := f.econ.UpgradeGuild(f.ctx, guildID, leader, 2, econLevelLookup)
 	require.NoError(t, err)
 	assert.False(t, healed.Changed)
 	assert.Equal(t, uint32(3), healed.NewLevel)
@@ -1179,7 +1162,7 @@ func TestUpgradeGuild_ChargesCurrentLevelCostAndRaisesCap(t *testing.T) {
 	assert.Equal(t, uint32(3), fresh.Level, "expected_level 不符 = 调用方视图过期,必须顺手失效缓存")
 
 	mustExec(t, f.ctx, f.db, "UPDATE guild SET level=?, funds=? WHERE guild_id=?", 10, 9_000_000, guildID)
-	_, err = f.econ.UpgradeGuild(f.ctx, guildID, leader, 0, econLevelLookup, nil)
+	_, err = f.econ.UpgradeGuild(f.ctx, guildID, leader, 0, econLevelLookup)
 	assert.ErrorIs(t, err, ErrGuildMaxLevel)
 
 	mustExec(t, f.ctx, f.db, "UPDATE guild SET level=? WHERE guild_id=?", 9, guildID)
@@ -1189,7 +1172,7 @@ func TestUpgradeGuild_ChargesCurrentLevelCostAndRaisesCap(t *testing.T) {
 		}
 		return econLevelLookup(level)
 	}
-	_, err = f.econ.UpgradeGuild(f.ctx, guildID, leader, 0, missingNext, nil)
+	_, err = f.econ.UpgradeGuild(f.ctx, guildID, leader, 0, missingNext)
 	assert.ErrorIs(t, err, ErrGuildLevelConfigMissing, "配表缺下一级行按错误处理,不默认放行")
 }
 
@@ -1209,12 +1192,12 @@ func TestUpgradeGuild_ConcurrentSameExpectedLevelUpgradesOnce(t *testing.T) {
 	var results [2]UpgradeResult
 	errs := econRunTogether(
 		func() error {
-			res, err := f.econ.UpgradeGuild(f.ctx, guildID, leader, 1, econLevelLookup, nil)
+			res, err := f.econ.UpgradeGuild(f.ctx, guildID, leader, 1, econLevelLookup)
 			results[0] = res
 			return err
 		},
 		func() error {
-			res, err := f.econ.UpgradeGuild(f.ctx, guildID, officer, 1, econLevelLookup, nil)
+			res, err := f.econ.UpgradeGuild(f.ctx, guildID, officer, 1, econLevelLookup)
 			results[1] = res
 			return err
 		})
@@ -1466,7 +1449,7 @@ func TestFinalize_DonateAppliedGuildGoneIsOrphan(t *testing.T) {
 	in := econDonation(t, 9_620_001, donor, guildID, testNowMs)
 	_, err := f.econ.ReserveDonation(f.ctx, in)
 	require.NoError(t, err)
-	_, err = f.repo.DisbandGuild(f.ctx, guildID, leader, testNowMs+10, nil)
+	_, err = f.repo.DisbandGuild(f.ctx, guildID, leader, testNowMs+10)
 	require.NoError(t, err)
 
 	orphans := econCaptureOrphans(t)
@@ -1812,7 +1795,7 @@ func TestAccelerate_LeaveKickDisbandPullDeadlineToNow(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, kickAt, econRecord(t, f, kickedDonation.OpID).GetDeadlineMs(), "被踢:截止提前到 now")
 
-	_, err = f.repo.DisbandGuild(f.ctx, guildID, leader, disbandAt, nil)
+	_, err = f.repo.DisbandGuild(f.ctx, guildID, leader, disbandAt)
 	require.NoError(t, err)
 	assert.Equal(t, disbandAt, econRecord(t, f, stayerDonation.OpID).GetDeadlineMs(), "解散:全体成员的捐献截止提前到 now")
 	assert.Equal(t, leaveAt, econRecord(t, f, leaverDonation.OpID).GetDeadlineMs(), "已到期的行不会被再改")

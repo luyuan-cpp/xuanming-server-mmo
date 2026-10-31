@@ -28,9 +28,8 @@ import (
 //   - player_route:每个玩家一行,home_zone 与落点同行;rev 本行任何列变化 +1,只供缓存排序。
 //     聚簇主键 (route_shard, player_id),route_shard = placement.RouteRowShard(player_id)(G1a,TiDB 写热点修复):
 //     **按 player_id 的每一条读写都必须同时带 route_shard**,片一律经 placement.RouteRowShard 算;
-//   - zone_merge_fence:合服围栏真源,按 (zone, shard) 分片。第 2 批起由 tools/merge_zone(-route-source=db)获取、续期、释放
-//     (写满 0..63 全部片,批事务锁 63 号片);本文件的 W1 只锁 player_id % FenceShards 那一片复核(规格 c.3);
-//   - zone_merged_into:合走标记,由 route_tool 从 Redis 导入,第 2 批起由 merge_zone 的合服 / 撤销写入与删除;
+//   - zone_merged_into:合服映射(源区 → 目标区)的永久记录,由 route_tool 从 Redis 导入,由 merge_zone 的合服 / 撤销写入与删除;
+//     别名合服之后它就是合服的全部写入:玩家行和路由行都不动(docs/design/player-data-tidb-scaling-plan.md §7.1);
 //   - route_meta:开关表,单行(id=1),writable=0 = 全体映射写者拒写;很少写;
 //   - route_reconcile:对账表,单行(id=1),对账 leader(route_reconcile.go)的租约、水位与 cache_verified_ms。
 //
@@ -44,23 +43,21 @@ import (
 // 冻结 / 解冻(FreezeRouteWriters / UnfreezeRouteWriters,route_tool freeze / unfreeze)与冻结态下的反向修库
 // (RepairRoutesFromCache / RepairMergedIntoFromCache,route_tool reconcile-from-cache)。锁序见下面不变量 2 的补充。
 //
-// 「行片」与「围栏片」是两回事,同一函数里不得同名:行片 rowShard = player_id % placement.RouteRowShards
-// (聚簇主键首列,常量 64,建表后不可改);围栏片 fenceShard = player_id % FenceShards(可配,只决定 W1 锁哪一个
-// 围栏行)。绑错的后果:把围栏片绑进 R4,两种片不相等的新号(FenceShards=8 时占 7/8)撞 chk_route_shard(3819)
-// 建角失败;绑进 R5 / R6,按错片点查读不到行 → ErrRouteRowVanished。
+// 行片 rowShard = player_id % placement.RouteRowShards(聚簇主键首列,常量 64,建表后不可改)。
 //
 // 不变量,按重要性排序:
 //  1. **判定只认加锁读**(R5 / R8 / R11 的 FOR UPDATE)。新行一律 ODKU no-op 插入、撞键 = 受影响 0 行,
 //     **不用 INSERT IGNORE**:它会把 CHECK 违例降成 warning,坏值就静默进库了(提案 §4.1-3)。
-//  2. **锁顺序**:route_meta(普通读)→ zone_merge_fence 分片(FOR UPDATE)→ player_route(按聚簇键 (route_shard, player_id);
-//     ODKU 或 FOR UPDATE)。W1 只持一个分片行、再等最多一个玩家行;导入只按聚簇键升序锁玩家行、不碰分片;
+//  2. **锁顺序**:route_meta(普通读)→ player_route(按聚簇键 (route_shard, player_id);
+//     ODKU 或 FOR UPDATE)。W1 只等最多一个玩家行;导入只按聚簇键升序锁玩家行;
 //     任何一次锁多行的语句(R8 FOR UPDATE、R7、R9 循环)都按聚簇键升序,两个并发导入之间也不成环(规格 c.2)。
 //     2026-10-18(第 1b-1 批)补:反向修库 route_meta(R18x FOR UPDATE)→ player_route(按聚簇键升序);
 //     解冻 route_reconcile(R20 FOR UPDATE)→ route_meta(R22);冻结只写 route_meta(R19,单条自动提交)。
-//     W1 与导入对 route_meta 只做普通读、从不持它的锁,建池探针守卫是 route_meta → player_route(与修库同向),
-//     没有任何一方持 route_meta 再去等 route_reconcile,所以不成环。
+//     W1、导入与建角的初始提交对 route_meta 只做普通读、从不持它的锁(每笔业务事务都锁这一行就是全服排队,
+//     提交点的保证靠写者闸门,见 lockInitialPlayerRoute);只有低频的修库、解冻与建池探针才锁它。
+//     建池探针守卫是 route_meta → player_route(与修库同向),没有任何一方持 route_meta 再去等 route_reconcile,所以不成环。
 //  3. **会话级 RC + 锁等待 1s**(buildRouteDSN,建 store 时探针读回校验):锁推演只在 RC 下成立;
-//     锁等待封顶后,ctx 到期的请求最多再占 1s 分片锁。
+//     锁等待封顶后,ctx 到期的请求最多再占 1s 行锁。
 //  4. **1213 / 9007 有界重试,1205 不重试**:前两者整个事务已被回滚、重跑安全;1205 已经等满了封顶的 1s,
 //     再等一轮只会白白吃掉服务端 2s 的预算,结论不会变(guild 先例 guild_manage_repo.go)。
 //  5. 时间戳一律取库时钟(dbNowMsSQL);NOW() 与 UNIX_TIMESTAMP() 都按会话时区算、互相抵消,
@@ -74,7 +71,6 @@ const (
 	// PlayerRouteTableName 等是路由表名(= proto 的 OptionTableName);建表语句在 schema.go,
 	// 形状守卫的事实源是 rollback_database_table.proto 的同名 message(schema.go 的 routeTableMessages)。
 	PlayerRouteTableName    = "player_route"
-	ZoneMergeFenceTableName = "zone_merge_fence"
 	ZoneMergedIntoTableName = "zone_merged_into"
 	RouteMetaTableName      = "route_meta"
 	RouteReconcileTableName = "route_reconcile"
@@ -132,8 +128,6 @@ var (
 	// ErrRouteRowVanished ODKU 撞了键(受影响 0 行),紧接着的加锁读却读不到这一行。
 	// 本批没有删 player_route 的写者,出现即说明有人绕过本 store 删行,fail-closed。
 	ErrRouteRowVanished = errors.New("player_route: row vanished between ON DUPLICATE KEY and the locking read")
-	// ErrRouteFenceShardVanished 刚确保过的围栏分片行,重开事务后的加锁读仍读不到。
-	ErrRouteFenceShardVanished = errors.New("zone_merge_fence: shard row missing right after ensure")
 	// ErrRouteSessionMisconfigured 探针读回的会话隔离级别 / 锁等待 / TiDB 事务模式不符合要求,拒绝建 store。
 	ErrRouteSessionMisconfigured = errors.New("route store: session isolation / lock wait / txn mode not as required")
 	// ErrRouteCheckNotEnforced 探针 P4 证不了 chk_route_shard 生效(插入成功,或被别的约束拒绝),拒绝建 store。
@@ -147,14 +141,14 @@ var (
 	// (CREATE TABLE IF NOT EXISTS 不改已有的表);也不能改常量迁就旧表 —— 模数是聚簇主键的一部分,改它 = 整表重写。
 	ErrRouteShardModulusMismatch = errors.New("player_route: the route_shard modulus in CHECK chk_route_shard differs from " +
 		"this binary's placement.RouteRowShards (the table was created with another modulus); after confirming the route " +
-		"tables hold no data worth keeping, DROP TABLE player_route, zone_merge_fence, zone_merged_into, route_meta, " +
+		"tables hold no data worth keeping, DROP TABLE player_route, zone_merged_into, route_meta, " +
 		"route_reconcile by hand (proposal §11.2 HR4), then rerun `data_service -f <yaml> -migrate`; " +
 		"do not change the constant to fit the old table")
 	// ErrRouteShardMismatch 库里某一行存的 route_shard 不等于 placement.RouteRowShard(player_id):只有 CHECK 曾经
 	// 不生效时被绕过 store 的写者写进来。fail-closed,整页 / 整批作废。只有全表键集扫描(ScanRoutes)在真库上
 	// 看得见这种行;按 id 的点读(R5 / R8 / R13)按正确片查,错片行对它们表现为缺席。
 	ErrRouteShardMismatch = errors.New("player_route: stored route_shard does not match placement.RouteRowShard(player_id)")
-	// ErrRouteTiDBNotClustered tidb-prepare 的前置核对失败:player_route / zone_merge_fence 在 TiDB 上不是聚簇主键。
+	// ErrRouteTiDBNotClustered tidb-prepare 的前置核对失败:player_route 在 TiDB 上不是聚簇主键。
 	// 非聚簇的表按 (route_shard, player_id) 切毫无意义,而且建表后改不了,只能趁表空 DROP 后用 -migrate 重建。
 	ErrRouteTiDBNotClustered = errors.New("route tables are not CLUSTERED on TiDB; while they are still empty, " +
 		"DROP them and rebuild with `data_service -f <yaml> -migrate`")
@@ -198,16 +192,6 @@ const (
 	routeReadWritableSQL = "SELECT writable FROM route_meta WHERE id = 1"
 	// 建池探针的守卫(lockRouteProbeGuard):同一行,加锁读。
 	routeLockProbeGuardSQL = routeReadWritableSQL + " FOR UPDATE"
-
-	// R2 锁围栏分片行。active 为 NULL 也当生效(fail-closed):只有 CHECK 不生效的库上才可能出现
-	// run_id 非空而 expires_at_ms 为 NULL 的行。
-	routeLockFenceShardSQL = "SELECT (run_id IS NOT NULL AND expires_at_ms > " + dbNowMsSQL + ") AS active, run_id" +
-		" FROM zone_merge_fence WHERE zone_id = ? AND shard = ? FOR UPDATE"
-
-	// R3 确保分片行存在(autocommit、事务外,只在 R2 读不到行时跑)。
-	// 不在持锁事务里插:两个事务同时对不存在的行 FOR UPDATE 再各自 INSERT,是经典的成环形状
-	// (同 id_segment_store.go Allocate 的种子行)。ODKU no-op,已存在时一个字节都不改。
-	routeEnsureFenceShardSQL = "INSERT INTO zone_merge_fence (zone_id, shard) VALUES (?, ?) ON DUPLICATE KEY UPDATE zone_id = zone_id"
 
 	// R4 新行。storage / version 用 nullU32 / nullU64 绑定(0 → NULL)。受影响 1 = 插入,0 = 撞键 no-op。
 	// 实参:行片、player_id、home、storage、version、writer。
@@ -402,16 +386,11 @@ func nullString(s string) any {
 type RouteStoreOptions struct {
 	// MaintenanceFreeze 仅给恢复工具；必须是该库永久正常冻结收据，不能使用紧急冻结。
 	MaintenanceFreeze *pb.SqlWriterMaintenanceReceipt
-	// FenceShards 围栏分片数,1..placement.MaxRouteFenceShards。各进程可以不同:围栏持有者写满全部 64 行。
-	FenceShards uint32
 	// Writer 写进 updated_by 的写者标识,用 NewRouteWriterID 生成(只含 [A-Za-z0-9._@:-],不超过 96 字节)。
 	Writer string
 }
 
 func (o RouteStoreOptions) validate() error {
-	if _, err := placement.RouteFenceShard(0, o.FenceShards); err != nil {
-		return fmt.Errorf("%w: %w", ErrRouteInvalidArgument, err)
-	}
 	if !validRouteWriter(o.Writer) {
 		return fmt.Errorf("%w: writer %q must be 1..%d bytes of [A-Za-z0-9._@:-] (use NewRouteWriterID)",
 			ErrRouteInvalidArgument, o.Writer, routeWriterMaxLen)
@@ -424,7 +403,6 @@ func (o RouteStoreOptions) validate() error {
 // 并发安全(sql.DB 与 atomic 计数器都是)。
 type RouteStore struct {
 	db                *sql.DB
-	fenceShards       uint32
 	writer            string
 	maintenanceFreeze *pb.SqlWriterMaintenanceReceipt
 
@@ -449,9 +427,9 @@ func NewRouteStore(cfg MySQLConfig, opts RouteStoreOptions) (*RouteStore, error)
 	if err != nil {
 		return nil, fmt.Errorf("route store on %s/%s: %w", cfg.Host, cfg.DBName, err)
 	}
-	logx.Infof("[RouteStore] connected to %s/%s max_open_conn=%d max_idle_conn=%d fence_shards=%d writer=%s "+
+	logx.Infof("[RouteStore] connected to %s/%s max_open_conn=%d max_idle_conn=%d writer=%s "+
 		"(session READ-COMMITTED, innodb_lock_wait_timeout=%ds)",
-		cfg.Host, cfg.DBName, cfg.MaxOpenConn, cfg.MaxIdleConn, opts.FenceShards, opts.Writer, routeLockWaitTimeoutSec)
+		cfg.Host, cfg.DBName, cfg.MaxOpenConn, cfg.MaxIdleConn, opts.Writer, routeLockWaitTimeoutSec)
 	return st, nil
 }
 
@@ -477,7 +455,7 @@ func newVerifiedRouteStoreFromDB(ctx context.Context, db *sql.DB, opts RouteStor
 	if _, err := readRouteWritable(ctx, db); err != nil {
 		return fail(err)
 	}
-	st := &RouteStore{db: db, fenceShards: opts.FenceShards, writer: opts.Writer}
+	st := &RouteStore{db: db, writer: opts.Writer}
 	if opts.MaintenanceFreeze != nil {
 		st.maintenanceFreeze = proto.Clone(opts.MaintenanceFreeze).(*pb.SqlWriterMaintenanceReceipt)
 	}
@@ -612,7 +590,7 @@ func routeShardClauseMatches(clause string) bool {
 // OpenRouteStoreHint 是 NewRouteStore 失败时给运维的一句处理提示(英文,拼进日志、错误或 stderr 的括号里),建 route store 的
 // 三个入口共用:db_first 的 data_service 装配、debugutil、route_tool。configPath 是 data_service 的 yaml 路径,
 // 不知道时传 "<yaml>"。表按另一个行片模数建的(ErrRouteShardModulusMismatch)不能照常提示「先跑迁移」:
-// CREATE TABLE IF NOT EXISTS 不改已有的表,只重跑 -migrate 修不好,要先按报错里的步骤 DROP 五张路由表
+// CREATE TABLE IF NOT EXISTS 不改已有的表,只重跑 -migrate 修不好,要先按报错里的步骤 DROP 四张路由表
 // (runbook §9.3 前置第 1 条)。其余原因回原来的「先跑迁移」提示。
 func OpenRouteStoreHint(configPath string, err error) string {
 	if errors.Is(err, ErrRouteShardModulusMismatch) {
@@ -660,7 +638,7 @@ func newRouteStoreFromDB(ctx context.Context, db *sql.DB, opts RouteStoreOptions
 	if err := retryRouteTx(ctx, "chk_route_shard probes", nil, func() error { return probeRouteShardCheck(ctx, db) }); err != nil {
 		return fail(err)
 	}
-	return &RouteStore{db: db, fenceShards: opts.FenceShards, writer: opts.Writer}, nil
+	return &RouteStore{db: db, writer: opts.Writer}, nil
 }
 
 // probeRouteShardCheck 是探针第 4 步(P4):player_id 的唯一性现在靠 chk_route_shard(主键是 (route_shard, player_id)),
@@ -739,8 +717,8 @@ func probeRouteShardCheck(ctx context.Context, db *sql.DB) error {
 // 同一条权限提示;3819 点名别的约束(探针行本该满足其余全部约束)、1205 与其它任何错误 → 原样包装(证不了就不建
 // store,fail-closed);其中 1213 / 9007 由调用方整事务重跑(见下「锁」)。不需要 P4 之外的新权限。
 // 1062 = 库里已有这一行:CHECK 生效的表上已有的行都满足它,所以撞键同样说明这一行在表的模数下合法,
-// 与引擎先判 CHECK 还是先判撞键无关(CHECK 被关掉期间写进来的行除外,那是 HR2 的范畴)。号段从 1 发号
-// (IdSegmentFirstID),63 / 64 号是开服后最早的一批真实玩家,撞键在生产上是常态。
+// 与引擎先判 CHECK 还是先判撞键无关(CHECK 被关掉期间写进来的行除外,那是 HR2 的范畴)。探针键是固定值,
+// 真实玩家的 id 恰好等于它时就会撞键(早期号段从 1 发号时这是常态,打散之后几乎不会发生,但判定不变)。
 //
 // 锁:这两行不存在且模数一致时真的插进去(未提交);已存在时撞键会在那一行上取共享锁(评审按 mysql-server 8.0.36
 // 源码 row0ins.cc 核对,未实跑;真库用例 TestRouteStore_ProbeKeysHeldByRealPlayers 取证)。两种都持到回滚(毫秒级),
@@ -842,7 +820,7 @@ type routeQueryer interface {
 
 // lockRouteProbeGuard 是探针事务(P4 + P5)的第一句:对 route_meta(id=1) 完整主键等值 FOR UPDATE。
 // 这一行由迁移种好、从不删除,所以并发建池的探针排在一行**已提交**的记录上,而不是排在别人必然回滚的探针行后面
-// (原因见 probeRouteShardModulus 的「锁」)。与全局锁序 route_meta → zone_merge_fence → player_route 同向;
+// (原因见 probeRouteShardModulus 的「锁」)。与全局锁序 route_meta → player_route 同向;
 // W1 对 route_meta 只做一致读(requireRouteWritable),不受它影响;冻结写者(1b 把 writable 置 0)最多等一个探针事务。
 // 需要对 route_meta 的 UPDATE(或 DELETE / LOCK TABLES)权限 —— MySQL 对 FOR UPDATE 的要求;部署给 appuser 的是库级 ALL。
 func lockRouteProbeGuard(ctx context.Context, tx *sql.Tx) error {
@@ -1086,7 +1064,7 @@ type RouteRegisterRequest struct {
 	ExistingRowOnly bool
 }
 
-// RouteRegisterOutcome 是一次 W1 在库里的终局。业务结果(冲突、围栏、缺行)走这里,只有故障才走 error。
+// RouteRegisterOutcome 是一次 W1 在库里的终局。业务结果(冲突、缺行)走这里,只有故障才走 error。
 type RouteRegisterOutcome uint8
 
 const (
@@ -1101,13 +1079,11 @@ const (
 	RouteRegisterAlreadySame
 	// RouteRegisterConflict 行里 home 是另一个值,ExistingHome 给出。不写。
 	RouteRegisterConflict
-	// RouteRegisterFenced 围栏分片生效(或 active 为 NULL,fail-closed),FenceRunID 给出持有者。不写。
-	RouteRegisterFenced
 	// RouteRegisterRowMissing 只在 ExistingRowOnly 时出现:缓存认得这名玩家,库里却没有行。不写。
 	RouteRegisterRowMissing
 )
 
-// String 仅供日志与指标 label(低基数,七个固定值)。
+// String 仅供日志与指标 label(低基数,六个固定值)。
 func (o RouteRegisterOutcome) String() string {
 	switch o {
 	case RouteRegisterInserted:
@@ -1120,8 +1096,6 @@ func (o RouteRegisterOutcome) String() string {
 		return "already_same"
 	case RouteRegisterConflict:
 		return "conflict"
-	case RouteRegisterFenced:
-		return "fenced"
 	case RouteRegisterRowMissing:
 		return "row_missing"
 	default:
@@ -1136,22 +1110,21 @@ type RouteRegisterResult struct {
 	Row RouteRow
 	// ExistingHome 只在 Conflict 时有值。
 	ExistingHome uint32
-	// FenceRunID 只在 Fenced 时有值(可能为空:active 为 NULL 的 fail-closed 分支)。
-	FenceRunID string
 }
 
 // RegisterHome 是 W1 的库内提交点(规格 c.2):
 //
 //	BEGIN(RC,DSN 已设)
 //	R1 普通读 route_meta.writable            缺行 → ErrRouteMetaMissing;!=1 → ErrRouteNotWritable
-//	R2 锁围栏分片 (home, player_id % N)      缺行 → 回滚、事务外 R3 补行、重开(不耗重试预算;再缺 → ErrRouteFenceShardVanished)
-//	                                          生效或 NULL → 回滚,Fenced
 //	R4 ODKU 插新行(仅 !ExistingRowOnly)     1 行 → COMMIT,Inserted;0 行 → 往下;其它 → fail-closed
 //	R5 加锁读玩家行 (player_id % 64, id)      缺行 → RowMissing(ExistingRowOnly)/ ErrRouteRowVanished
 //	   home == 请求 → 回滚,AlreadySame;home 是别的值 → 回滚,Conflict
 //	   home 为 NULL → R6b(请求带 storage 且行里没落点)或 R6a → COMMIT,Filled*
 //
-// 错误语义:冲突、围栏、缺行通过 Outcome 返回,err 为 nil;只有故障才返回 err —— 参数非法
+// 不看合服状态:合服过程中在源区建号是允许的,home_zone 就是请求里的源区,归属解析之后落到目标区
+// (docs/design/player-data-tidb-scaling-plan.md §7.1)。
+//
+// 错误语义:冲突、缺行通过 Outcome 返回,err 为 nil;只有故障才返回 err —— 参数非法
 // (ErrRouteInvalidArgument)、meta 缺失 / 不可写、行消失、SQL 错误(含 1205)、1213 / 9007 重试用尽。
 // COMMIT 出错时结果不确定,按 err 返回;调用方重试会落到幂等分支(AlreadySame),安全。
 //
@@ -1161,15 +1134,10 @@ func (s *RouteStore) RegisterHome(ctx context.Context, req RouteRegisterRequest)
 		return RouteRegisterResult{}, fmt.Errorf("%w: player_id=%d home_zone=%d (want player_id > 0 and home_zone in [1, %d])",
 			ErrRouteInvalidArgument, req.PlayerID, req.HomeZone, RouteHomeZoneMax)
 	}
-	fenceShard, err := placement.RouteFenceShard(req.PlayerID, s.fenceShards)
-	if err != nil {
-		return RouteRegisterResult{}, fmt.Errorf("%w: %w", ErrRouteInvalidArgument, err)
-	}
-
 	var res RouteRegisterResult
-	err = s.runRouteTx(ctx, "player_route register player_id="+strconv.FormatUint(req.PlayerID, 10), func() error {
+	err := s.runRouteTx(ctx, "player_route register player_id="+strconv.FormatUint(req.PlayerID, 10), func() error {
 		var attemptErr error
-		res, attemptErr = s.registerHomeEnsuringShard(ctx, req, fenceShard)
+		res, attemptErr = s.registerHomeTx(ctx, req)
 		return attemptErr
 	})
 	if err != nil {
@@ -1178,30 +1146,8 @@ func (s *RouteStore) RegisterHome(ctx context.Context, req RouteRegisterRequest)
 	return res, nil
 }
 
-// registerHomeEnsuringShard 跑一次 W1 事务;R2 读不到围栏分片行时在事务外补一次再重开(规格 c.2 第 2 步)。
-// 这次重开不消耗 runRouteTx 的重试预算:它不是冲突,而是懒建分片行的正常路径。
-// fenceShard 是**围栏片**(player_id % FenceShards),与 player_route 的行片无关(见文件头)。
-func (s *RouteStore) registerHomeEnsuringShard(ctx context.Context, req RouteRegisterRequest, fenceShard uint32) (RouteRegisterResult, error) {
-	res, shardMissing, err := s.registerHomeTx(ctx, req, fenceShard)
-	if err != nil || !shardMissing {
-		return res, err
-	}
-	if _, err := s.db.ExecContext(ctx, routeEnsureFenceShardSQL, uint64(req.HomeZone), uint64(fenceShard)); err != nil {
-		return RouteRegisterResult{}, fmt.Errorf("ensure zone_merge_fence row zone=%d shard=%d: %w", req.HomeZone, fenceShard, err)
-	}
-	res, shardMissing, err = s.registerHomeTx(ctx, req, fenceShard)
-	if err != nil {
-		return RouteRegisterResult{}, err
-	}
-	if shardMissing {
-		return RouteRegisterResult{}, fmt.Errorf("%w (zone=%d shard=%d player_id=%d)", ErrRouteFenceShardVanished, req.HomeZone, fenceShard, req.PlayerID)
-	}
-	return res, nil
-}
-
-// registerHomeTx 一次事务尝试。shardMissing=true 表示 R2 没读到围栏分片行(事务已回滚,什么都没写)。
-// fenceShard 只绑进 R2;R4 / R5 / R6 绑的是行片 rowShard(在这里由 player_id 算,不经形参传,免得两个 uint32 位置互换)。
-func (s *RouteStore) registerHomeTx(ctx context.Context, req RouteRegisterRequest, fenceShard uint32) (res RouteRegisterResult, shardMissing bool, err error) {
+// registerHomeTx 一次事务尝试。R4 / R5 / R6 绑的行片 rowShard 在这里由 player_id 算。
+func (s *RouteStore) registerHomeTx(ctx context.Context, req RouteRegisterRequest) (RouteRegisterResult, error) {
 	rowShard := routeShardArg(req.PlayerID)
 	// 参数绑定:落点缺席时 storage / version 都绑 NULL(chk_route_place 要求两者同 NULL)。
 	storageArg := nullU32(req.StorageID)
@@ -1210,12 +1156,12 @@ func (s *RouteStore) registerHomeTx(ctx context.Context, req RouteRegisterReques
 		versionArg = uint64(1)
 	}
 	if (storageArg == nil) != (versionArg == nil) {
-		return RouteRegisterResult{}, false, fmt.Errorf("player_route register player_id=%d: storage/version binding out of sync (internal bug)", req.PlayerID)
+		return RouteRegisterResult{}, fmt.Errorf("player_route register player_id=%d: storage/version binding out of sync (internal bug)", req.PlayerID)
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return RouteRegisterResult{}, false, fmt.Errorf("begin player_route register tx player_id=%d: %w", req.PlayerID, err)
+		return RouteRegisterResult{}, fmt.Errorf("begin player_route register tx player_id=%d: %w", req.PlayerID, err)
 	}
 	committed := false
 	defer func() {
@@ -1234,47 +1180,33 @@ func (s *RouteStore) registerHomeTx(ctx context.Context, req RouteRegisterReques
 
 	// R1
 	if err := requireRouteWritable(ctx, tx); err != nil {
-		return RouteRegisterResult{}, false, err
-	}
-
-	// R2
-	var active sql.NullInt64
-	var runID sql.NullString
-	err = tx.QueryRowContext(ctx, routeLockFenceShardSQL, uint64(req.HomeZone), uint64(fenceShard)).Scan(&active, &runID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return RouteRegisterResult{}, true, nil
-	}
-	if err != nil {
-		return RouteRegisterResult{}, false, fmt.Errorf("lock zone_merge_fence zone=%d shard=%d: %w", req.HomeZone, fenceShard, err)
-	}
-	if !active.Valid || active.Int64 != 0 {
-		return RouteRegisterResult{Outcome: RouteRegisterFenced, FenceRunID: runID.String}, false, nil
+		return RouteRegisterResult{}, err
 	}
 
 	// R4(调用方在缓存里见过这名玩家时跳过:只认已有行)
 	if !req.ExistingRowOnly {
 		r4, err := tx.ExecContext(ctx, routeInsertNewSQL, rowShard, req.PlayerID, uint64(req.HomeZone), storageArg, versionArg, s.writer)
 		if err != nil {
-			return RouteRegisterResult{}, false, fmt.Errorf("insert player_route player_id=%d: %w", req.PlayerID, err)
+			return RouteRegisterResult{}, fmt.Errorf("insert player_route player_id=%d: %w", req.PlayerID, err)
 		}
 		n, err := r4.RowsAffected()
 		if err != nil {
-			return RouteRegisterResult{}, false, fmt.Errorf("insert player_route player_id=%d rows affected: %w", req.PlayerID, err)
+			return RouteRegisterResult{}, fmt.Errorf("insert player_route player_id=%d rows affected: %w", req.PlayerID, err)
 		}
 		switch n {
 		case 1:
 			if err := commit(); err != nil {
-				return RouteRegisterResult{}, false, err
+				return RouteRegisterResult{}, err
 			}
 			row := RouteRow{PlayerID: req.PlayerID, HomeZone: req.HomeZone, Rev: 1, UpdatedBy: s.writer}
 			if req.StorageID != 0 {
 				row.StorageID, row.PlacementVersion = req.StorageID, 1
 			}
-			return RouteRegisterResult{Outcome: RouteRegisterInserted, Row: row}, false, nil
+			return RouteRegisterResult{Outcome: RouteRegisterInserted, Row: row}, nil
 		case 0:
 			// 撞键:行已在,落到 R5 用加锁读判定。
 		default:
-			return RouteRegisterResult{}, false, fmt.Errorf("insert player_route player_id=%d: 受影响行数 %d 不在 {1=插入, 0=撞键 no-op} 之内,"+
+			return RouteRegisterResult{}, fmt.Errorf("insert player_route player_id=%d: 受影响行数 %d 不在 {1=插入, 0=撞键 no-op} 之内,"+
 				"routeInsertNewSQL 的 ON DUPLICATE KEY UPDATE 必须保持 no-op、连接不得带 CLIENT_FOUND_ROWS", req.PlayerID, n)
 		}
 	}
@@ -1284,18 +1216,18 @@ func (s *RouteStore) registerHomeTx(ctx context.Context, req RouteRegisterReques
 	err = scanRouteRow(tx.QueryRowContext(ctx, routeLockRowSQL, rowShard, req.PlayerID), &row, false)
 	if errors.Is(err, sql.ErrNoRows) {
 		if req.ExistingRowOnly {
-			return RouteRegisterResult{Outcome: RouteRegisterRowMissing}, false, nil
+			return RouteRegisterResult{Outcome: RouteRegisterRowMissing}, nil
 		}
-		return RouteRegisterResult{}, false, fmt.Errorf("%w (player_id=%d)", ErrRouteRowVanished, req.PlayerID)
+		return RouteRegisterResult{}, fmt.Errorf("%w (player_id=%d)", ErrRouteRowVanished, req.PlayerID)
 	}
 	if err != nil {
-		return RouteRegisterResult{}, false, fmt.Errorf("lock player_route player_id=%d: %w", req.PlayerID, err)
+		return RouteRegisterResult{}, fmt.Errorf("lock player_route player_id=%d: %w", req.PlayerID, err)
 	}
 	switch {
 	case row.HomeZone == req.HomeZone:
-		return RouteRegisterResult{Outcome: RouteRegisterAlreadySame, Row: row}, false, nil
+		return RouteRegisterResult{Outcome: RouteRegisterAlreadySame, Row: row}, nil
 	case row.HomeZone != 0:
-		return RouteRegisterResult{Outcome: RouteRegisterConflict, ExistingHome: row.HomeZone}, false, nil
+		return RouteRegisterResult{Outcome: RouteRegisterConflict, ExistingHome: row.HomeZone}, nil
 	}
 
 	// home 为 NULL:补 home(以及请求带、行里没有的落点)。
@@ -1314,18 +1246,18 @@ func (s *RouteStore) registerHomeTx(ctx context.Context, req RouteRegisterReques
 		}
 	}
 	if err != nil {
-		return RouteRegisterResult{}, false, fmt.Errorf("fill player_route home player_id=%d: %w", req.PlayerID, err)
+		return RouteRegisterResult{}, fmt.Errorf("fill player_route home player_id=%d: %w", req.PlayerID, err)
 	}
 	if err := requireOneRowAffected(upd, "fill player_route home player_id="+strconv.FormatUint(req.PlayerID, 10)); err != nil {
-		return RouteRegisterResult{}, false, err
+		return RouteRegisterResult{}, err
 	}
 	if err := commit(); err != nil {
-		return RouteRegisterResult{}, false, err
+		return RouteRegisterResult{}, err
 	}
 	next.Rev = row.Rev + 1
 	next.UpdatedBy = s.writer
 	next.UpdatedAtMs = 0 // 库时钟写入,不回读(发布不用)
-	return RouteRegisterResult{Outcome: outcome, Row: next}, false, nil
+	return RouteRegisterResult{Outcome: outcome, Row: next}, nil
 }
 
 // requireOneRowAffected 是「行已被加锁读锁住」之后那条 CAS UPDATE 的判据:必须恰好 1 行
@@ -1428,7 +1360,7 @@ type RouteImportStats struct {
 // 非 dry-run 时一批一个事务:R1 → R8(按聚簇键升序加锁读已有行)→ decideImport 逐行判定 → R7(批量插新行)
 // → R9(逐行补 NULL 列,按读到的 rev 做 CAS)→ COMMIT。R7 的受影响行数必须等于待插行数:少了说明 R8 之后
 // 有 W1 并发插入了同一个 id,整批回滚后重来(那一行会被 R8 读到),总尝试次数不超过 routeTxAttempts。
-// 导入只按聚簇键 (route_shard, player_id) 升序锁玩家行(R8 / R7 / R9 同序),不碰围栏分片,与 W1、与另一个导入都不成环。
+// 导入只按聚簇键 (route_shard, player_id) 升序锁玩家行(R8 / R7 / R9 同序),与 W1、与另一个导入都不成环。
 // 入参仍按 player_id 升序给(契约不变),排成聚簇键序是本函数内部的事。
 //
 // R1 是本实现在规格 b.4 之外补的一步(提案 §4.1-2 第 1 步「全体映射写者」都要先读 writable):

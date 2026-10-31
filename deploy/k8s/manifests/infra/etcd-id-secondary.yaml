@@ -1,0 +1,179 @@
+# etcd-id-secondary:放发号器第二份预留记录的独立 etcd(docs/design/player-data-tidb-scaling-plan.md §6.3)。
+#
+# 发号器一块号要两份记录都写成功才发,任何一份丢失或回退,另一份都盖得住发过的号。所以这两份记录不能放在
+# 同一套 etcd 上,不然一次「整套 etcd 被旧备份覆盖」就同时打穿两份。主记录放在现有的 etcd(etcd.yaml)。
+#
+# 写入极少:只有发号器预留新块时才写一次,数据只有一个键。它不可用时新块预留失败,但发号器手里的块还能用很久。
+# 运维(首次初始化、恢复、演练)见 docs/ops/id-issuer-runbook.md。
+#
+# 只在 staging / prod 部署(k8s_deploy.ps1 Apply-Infra)。dev 档不起,两份记录放同一套 etcd 的不同键。
+# 所有 __INFRA_NAMESPACE__ 占位由 k8s_deploy.ps1 Apply-Infra 在 apply 前替换成 -InfraNamespace。
+#
+# 形状照 etcd.yaml,理由见那份文件的注释。不同的地方:
+#   - 名字和标签都是 etcd-id-secondary,绝不能是 app: etcd(会混进主 etcd 的 Service 和 PDB);
+#   - 引导令牌不同,防止误把对方当成员;
+#   - 新集群没有滚动存量的顾虑,直接开自动压缩和配额,不需要 etcd-maintenance.yaml 的 CronJob;
+#   - 资源和盘都按「只有一个键」给。
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd-id-secondary
+  labels:
+    app: etcd-id-secondary
+spec:
+  type: ClusterIP
+  selector:
+    app: etcd-id-secondary
+  ports:
+    - name: client
+      port: 2379
+      targetPort: 2379
+---
+# publishNotReadyAddresses 必须为 true:成员选出 leader 之前不会 Ready,不发布地址就永远互相找不到。
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd-id-secondary-headless
+  labels:
+    app: etcd-id-secondary
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: etcd-id-secondary
+  ports:
+    - name: client
+      port: 2379
+      targetPort: 2379
+    - name: peer
+      port: 2380
+      targetPort: 2380
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: etcd-id-secondary
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: etcd-id-secondary
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: etcd-id-secondary
+  labels:
+    app: etcd-id-secondary
+spec:
+  serviceName: etcd-id-secondary-headless
+  replicas: 3
+  # 必须 Parallel:静态引导要 2 个成员同时在线才能选出 leader,OrderedReady 会死锁。
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: etcd-id-secondary
+  template:
+    metadata:
+      labels:
+        app: etcd-id-secondary
+    spec:
+      # 尽量散到不同节点,也尽量别和主 etcd 的成员挤在一起:两套同时倒下正是这份记录要防的事。
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: etcd-id-secondary
+            - weight: 50
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: etcd
+      securityContext:
+        runAsUser: 1001
+        runAsNonRoot: true
+        fsGroup: 1001
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: etcd
+          # 与 etcd.yaml 同一镜像,钉版本要一起改(docs/ops/etcd-maintenance-runbook.md「阶段 2」)。
+          image: bitnamilegacy/etcd:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ETCD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ALLOW_NONE_AUTHENTICATION
+              value: "yes"
+            - name: ETCD_DATA_DIR
+              value: /bitnami/etcd/data
+            - name: ETCD_LISTEN_CLIENT_URLS
+              value: "http://0.0.0.0:2379"
+            - name: ETCD_LISTEN_PEER_URLS
+              value: "http://0.0.0.0:2380"
+            - name: ETCD_ADVERTISE_CLIENT_URLS
+              value: "http://$(POD_NAME).etcd-id-secondary-headless.__INFRA_NAMESPACE__.svc.cluster.local:2379"
+            - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
+              value: "http://$(POD_NAME).etcd-id-secondary-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380"
+            - name: ETCD_INITIAL_CLUSTER
+              value: "etcd-id-secondary-0=http://etcd-id-secondary-0.etcd-id-secondary-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380,etcd-id-secondary-1=http://etcd-id-secondary-1.etcd-id-secondary-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380,etcd-id-secondary-2=http://etcd-id-secondary-2.etcd-id-secondary-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380"
+            - name: ETCD_INITIAL_CLUSTER_STATE
+              value: "new"
+            - name: ETCD_INITIAL_CLUSTER_TOKEN
+              value: "mmorpg-etcd-id-secondary-__INFRA_NAMESPACE__"
+            # 只有一个键,写入极少。留 1000 个历史版本足够,配额给 512MiB(满足「配额 × 2 + 1Gi ≤ 盘」)。
+            - name: ETCD_AUTO_COMPACTION_MODE
+              value: "revision"
+            - name: ETCD_AUTO_COMPACTION_RETENTION
+              value: "1000"
+            - name: ETCD_QUOTA_BACKEND_BYTES
+              value: "536870912"
+          ports:
+            - containerPort: 2379
+              name: client
+            - containerPort: 2380
+              name: peer
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 2379
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health?serializable=true
+              port: 2379
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          volumeMounts:
+            - name: etcd-data
+              mountPath: /bitnami/etcd
+  volumeClaimTemplates:
+    - metadata:
+        name: etcd-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi

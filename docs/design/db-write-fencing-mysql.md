@@ -1,5 +1,7 @@
 # 玩家存盘 MySQL 条件写（围栏）：go/db、C++、proto、schema 详细设计
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),两张表的行内围栏、Redis 屏障和条件写都已删除,写权改由 `player_store` 的写权行判定。文末「上线状态」一节仍然有效(AGENTS.md 引用它),其余只作历史保留。
+
 > **2026-10-23 初始持久基底后继（待正式生成与运行验证）**：正式 Create 目录与双 SQL 初始行同一 TiDB 事务严格 INSERT，持久 marker 只在首次成功写入；保留无 actor 初始提交 `(1,1)`，首任 actor 由 SceneManager 在采纳地板后铸到 2。完整合同与免冷读种子的提交后顺序见[建角初始持久提交](new-player-first-enter-no-cold-read.md#建角初始持久提交)。空 SQL 或零序号旧缓存不能证明新号，任一真实玩家行缺失均拒绝。
 
 > **2026-10-23 建角初始提交合同（实现与验证中）**：仅正常 `CreateAccountRole` 对严格全新 ID 的目录首次 INSERT，可与权威落点的两张玩家 SQL 行在同一个 TiDB 事务中产生保留初始版本 `(1,1)`。此版本表示无 actor 的真实持久基底，不是“空 SQL 可放行”的例外；缺失的历史行不得补种。首次加载沿现有 SQL 采纳原子地建立 owner 地板 1，随后仍由 SceneManager 唯一发号为首任 actor 2；实际存盘的 SaveSeqAllocator 采用载入下限并严格前进。已有更高 owner 不回退，任何并发 pending/ACK/owner 变化仍由原提交 Lua 拒绝。完整的锁序、提交回执与缓存开关合同见 [建角初始持久提交](new-player-first-enter-no-cold-read.md#建角初始持久提交)。本注不代表已经编译或取得运行证据。
@@ -604,7 +606,7 @@ G5（瓶颈文档 §4 的缺口表）：游标与已落库 epoch 记录缺键时
 ### 6.1 现状
 
 - 键 `{MsgType}:{Key}`，TTL 3600 秒，普通 `SET`，没有版本也没有条件 [C]。
-- 写入点只有 go/db 两处：读路径 `publishDBReadResult`、写路径 `writeBackDBCache`。读取方是 login（`ensure_player_all_data_async.go`；`sync_loader.go` 的 `TriggerPlayerDataPreload` 逻辑相同，但全仓无调用方）和 `cmd/verifier`。删除方只有 `tools/merge_zone/player_rows.go` 的 `invalidatePlayerCaches` [C]。
+- 写入点只有 go/db 两处：读路径 `publishDBReadResult`、写路径 `writeBackDBCache`。读取方是 login（`ensure_player_all_data_async.go`；`sync_loader.go` 的 `TriggerPlayerDataPreload` 逻辑相同，但全仓无调用方，2026-10-30 已删除）和 `cmd/verifier`。删除方只有 `tools/merge_zone/player_rows.go` 的 `invalidatePlayerCaches` [C]。
 - 写路径现状（HEAD，A3 之后）：`runDBOp` 里复核 → `lease.verify`（带令牌的 Lua 续期，step `lease_verify`）→ `writeBackDBCache` 普通 `SET`（step `cache_set`）[C]。v0.3 写的「缓存回写在核锁之前」已过时。核锁与 SET 仍是两次往返，verify 通过之后、SET 之前失租，旧值照样写进缓存。
 - 在途实现在此之上改成：先单独 EVAL 发布资产证据，再对两张玩家表做 GET → 解析 → 比较围栏 → 按现值 CAS（最多三轮，`player_cache_publish.go`），同版本用 `proto.Equal` 比内容；非玩家表回落普通 `SET` [C]。v0.4 删掉这一套（§0.2 第 6、9、10 行），由下面的令牌发布脚本取代。
 - 两个缺口：写路径的核锁与缓存写不是一个原子步骤（旧实例恢复后会把缓存写回旧值）；读路径不拿锁、无条件覆盖子表缓存（瓶颈文档 G4，后果是缓存被旧值覆盖）。本节解决这两个缺口，不解决「冷登录拼出旧父键」，后者见 §6.2 残余窗口 3。
@@ -677,7 +679,7 @@ return result
 
 **读路径**：`SET` 换成 `SET NX`。
 
-- login 在子表缓存缺失、`GET` 出错或值解析失败时发读任务（`ensure_player_all_data_async.go:79-89`；`sync_loader.go` 的 `TriggerPlayerDataPreload` 逻辑相同，但全仓无调用方）[C]。常态下 NX 成功。v0.2 写的「只在缺失时才发」不准确：`GET` 超时时键可能是好的，值解析失败时键里是坏值，这两种情况 NX 都不写。
+- login 在子表缓存缺失、`GET` 出错或值解析失败时发读任务（`ensure_player_all_data_async.go:79-89`；`sync_loader.go` 的 `TriggerPlayerDataPreload` 逻辑相同，但全仓无调用方，2026-10-30 已删除）[C]。常态下 NX 成功。v0.2 写的「只在缺失时才发」不准确：`GET` 超时时键可能是好的，值解析失败时键里是坏值，这两种情况 NX 都不写。
 - **NX 只决定缓存键。** 读任务回给 login 的 `TaskResult.Data` 始终是本次 SELECT 的行（`publishDBReadResult` 用同一份数据做缓存写和结果发布）。父键缺失时 login 用它或子表缓存拼父键（`ensure_player_all_data_async.go:79-89`、:145、:178-186）[C]。
 - 读与写并发时，读到的旧行写不进已有的新缓存；即使读先写进去，写路径随后的发布会覆盖它。
 

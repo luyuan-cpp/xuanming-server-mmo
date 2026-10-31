@@ -6,12 +6,39 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
+	"match/internal/metrics"
 	pb "proto/match"
 )
 
 // SQL只缩小待核候选；完整Create正文及当前角色P/工作租约仍由锁内入口复核。
+// recoverableOutcomeShape 是同一规则的 Go 写法,两处必须一起改。
 const recoverableOutcomeShapeSQL = "f.outcome_protocol_version=1 AND f.preflight_supported_version=1 AND f.operation_id<>'' AND f.target_instance_id<>'' AND f.preflight_instance_id=f.target_instance_id AND LENGTH(f.create_request)>0 AND ((f.adopted_outcome_observed=0 AND f.adopted_outcome_protocol_version=0) OR (f.adopted_outcome_observed=1 AND f.adopted_outcome_protocol_version=1))"
+
+// recoverableOutcomeShape 是 recoverableOutcomeShapeSQL 的 Go 写法。只用来把「形状合格、却过不了持久 Create 原件核对」
+// 与旧协议 / 能力证据不全(按设计保持 UNKNOWN,过截止后由巡检的 CountStrandedExpiredFormations 计数)分开。
+func recoverableOutcomeShape(f *pb.MatchFormationRecord) bool {
+	return f != nil && f.OutcomeProtocolVersion == 1 && f.PreflightSupportedVersion == 1 && f.OperationId != "" &&
+		f.TargetInstanceId != "" && f.PreflightInstanceId == f.TargetInstanceId && len(f.CreateRequest) > 0 &&
+		((!f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion == 0) || (f.AdoptedOutcomeObserved && f.AdoptedOutcomeProtocolVersion == 1))
+}
+
+// ErrUnrecoverableFormation:成局满足到期恢复的候选形状(recoverableOutcomeShape),持久 Create 原件却与成局字段对不上
+// (supportedOutcomeOriginal 失败)。到期 ABORT 与 COMPLETE 都裁决不了它,票据永远停在 state 2/3/4,只能人工按
+// cross-zone-matchmaking.md §13.3 处置。用 errors.Is 判断(2026-10-30,评审 B-4)。
+var ErrUnrecoverableFormation = errors.New("成局形状合格但持久Create原件与成局字段不符，到期终局无法裁决")
+
+// unrecoverableFormationOutcome 是这一类在 global_flow_total{stage="recover"} 下的 outcome 取值(低基数;battle_id 只进日志)。
+const unrecoverableFormationOutcome = "original_mismatch"
+
+// reportUnrecoverableFormation 记一次「到期恢复访问到不可恢复成局」:计数 + ERROR。每次访问都报,值班按速率判断还在不在。
+func reportUnrecoverableFormation(battleID uint64, cause error) {
+	metrics.ObserveGlobalFlow("recover", unrecoverableFormationOutcome)
+	logx.Errorf("global formation can never reach a terminal outcome battle_id=%d: %v; its tickets stay occupied, "+
+		"handle it per cross-zone-matchmaking.md 13.3 (never hand-edit match_formation / match_authority_ticket / match_battle_completion)",
+		battleID, cause)
+}
 
 // 同一持久原操作与实例的合法终局才退出恢复；冲突/旧来源记录不能被当作新终局证明。
 const matchingOutcomeTerminalSQL = "c.battle_id=f.battle_id AND c.outcome_protocol_version=1 AND c.placement_operation_id=f.operation_id AND c.target_instance_id=f.target_instance_id AND c.decision IN(1,2)"
@@ -107,11 +134,29 @@ func (s *Store) RecoverExpiredOutcomes(ctx context.Context, afterRetryMs, afterB
 // RecoverExpiredOutcome 不查询Battle、也不根据节点死亡猜终局。原发房前能力与完整
 // v1 Create证明所有个人效果必须先过本SQL门；到期后在原P→formation锁内争唯一ABORT。
 // 原工作租约仍有效时不抢占；多副本重放只读取同原操作/UUID的已提交终局。
+//
+// 不可恢复成局(ErrUnrecoverableFormation)在这里计数并打 ERROR,对外仍回 UNKNOWN、nil:现有调用方
+// (RecoverExpiredOutcomes 的整轮失败、logic globalAbortPrepared 的 HoldRelay)会把非 nil error 当成本轮未确认的故障,
+// 而这一类是永久状态,不是本轮故障。要区分它的新调用方用 recoverExpiredOutcome 拿哨兵。
 func (s *Store) RecoverExpiredOutcome(ctx context.Context, observed *pb.MatchFormationRecord) (pb.BattleOutcomeDecision, error) {
+	decision, err := s.recoverExpiredOutcome(ctx, observed)
+	if errors.Is(err, ErrUnrecoverableFormation) {
+		reportUnrecoverableFormation(observed.GetBattleId(), err)
+		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
+	}
+	return decision, err
+}
+
+// recoverExpiredOutcome 是 RecoverExpiredOutcome 的实现;形状合格却过不了原件核对时回 ErrUnrecoverableFormation(决定为 UNKNOWN)。
+func (s *Store) recoverExpiredOutcome(ctx context.Context, observed *pb.MatchFormationRecord) (pb.BattleOutcomeDecision, error) {
 	if observed == nil {
 		return 0, errors.New("到期恢复缺持久创建原件")
 	}
 	if _, err := supportedOutcomeOriginal(observed); err != nil {
+		if recoverableOutcomeShape(observed) {
+			return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, fmt.Errorf("%w: %v", ErrUnrecoverableFormation, err)
+		}
+		// 旧协议 / 能力证据不全:按设计保持 UNKNOWN(过截止的由巡检 CountStrandedExpiredFormations 计数)。
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 	}
 	readExisting := func() (pb.BattleOutcomeDecision, bool, error) {

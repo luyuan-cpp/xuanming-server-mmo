@@ -10,6 +10,7 @@ import (
 
 	"chat/internal/constants"
 	"chat/internal/textfilter"
+	"shared/authoritysql"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -32,13 +33,17 @@ const MaxRpcTimeoutMs int64 = 4000
 type Config struct {
 	zrpc.RpcServerConf
 
-	// 权威原件与角色目录必须是同一TiDB事务域；环境变量名不含凭据值。
-	DSNEnv              string           `json:",optional"`
-	RequireTiDB         bool             `json:",default=true"`
-	MaxOpenConns        int              `json:",default=16"`
-	AccountRoleSchema   string           `json:",optional"`
-	GlobalLoginSessions bool             `json:",default=true"`
-	LoginRedis          LoginRedisConfig `json:",optional"`
+	// 聊天原件与角色目录走同一连接池(同一 TiDB 集群或同一 MySQL 主库),目录只做跨库普通读、不同事务；环境变量名不含凭据值。
+	DSNEnv string `json:",optional"`
+	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);非法值拒启。
+	Backend           string `json:",default=tidb"`
+	MaxOpenConns      int    `json:",default=16"`
+	AccountRoleSchema string `json:",optional"`
+	// ActorVerifyTTLSeconds:身份校验结果的进程内缓存秒数,0 = 每次都校验。
+	// 代价:角色被挂牌或过户之后,旧会话最多还能发这么久的聊天(authority/actor_verify.go)。
+	ActorVerifyTTLSeconds int              `json:",default=30"`
+	GlobalLoginSessions   bool             `json:",default=true"`
+	LoginRedis            LoginRedisConfig `json:",optional"`
 
 	// ChatRedis保留既有可丢缓存配置；正式Send/Pull只用SQL原件，不读写旧LIST或授权键。
 	ChatRedis redis.RedisConf `json:",optional"`
@@ -59,7 +64,7 @@ type Config struct {
 	// 大小写敏感、按配置顺序替换，一个 Unicode 字符变为一个 *，与原 Go 聊天业务一致。
 	SensitiveWords []string `json:",optional"`
 
-	// RateLimitPerSecond:每玩家每秒最多接受几条；在原P内按SQL时间固定秒窗口计数。
+	// RateLimitPerSecond:每玩家每秒最多接受几条；按SQL时间固定秒窗口计数,并发在途时可能略超。
 	RateLimitPerSecond int `json:",default=5"`
 
 	// HistoryMaxEntries:每个SQL频道窗口最多可见的最近条数。
@@ -119,8 +124,14 @@ func (c *Config) ListenHostPort() (string, uint32, error) {
 //   - 各上限 ≤0:例如 RateLimitPerSecond=0 会拒绝全部发言、HistoryMaxEntries=0 会让
 //     SQL窗口失去必要上限。
 func (c *Config) Validate() error {
-	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.DSNEnv) || !c.RequireTiDB || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 || !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) || !c.GlobalLoginSessions || c.LoginRedis.Host == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize < 1 || c.LoginRedis.PoolSize > 128 {
-		return errors.New("聊天必须显式配置TiDB原件库、同域角色目录与全局原登录态只读句柄")
+	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
+		return err
+	}
+	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.DSNEnv) || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 || !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) || !c.GlobalLoginSessions || c.LoginRedis.Host == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize < 1 || c.LoginRedis.PoolSize > 128 {
+		return errors.New("聊天必须显式配置SQL原件库、同域角色目录与全局原登录态只读句柄")
+	}
+	if c.ActorVerifyTTLSeconds < 0 || c.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds {
+		return fmt.Errorf("ActorVerifyTTLSeconds(%d)必须在 [0, %d] 内", c.ActorVerifyTTLSeconds, constants.MaxActorVerifyTTLSeconds)
 	}
 	if c.ZoneId == 0 {
 		return errors.New("ZoneId 必须非 0(K8s 全局服务用命令行 / ConfigMap 注入的 CurrentZoneId)")

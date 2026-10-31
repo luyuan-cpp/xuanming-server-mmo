@@ -96,10 +96,11 @@ struct PlayerInboxDomainState
 	bool hasMore{false};          // 本轮 Fetch 回包的 has_more:确认完立刻拉下一批
 	bool recheckRequested{false}; // 非 Idle 期间收到的新触发(单飞,设计 §7.4)
 	uint64_t nextCheckMs{0};      // 到点做一次检查(Idle → Fetch,Applying → 续做);0 = 不安排
-	uint64_t nextAckMs{0};        // kAwaitDurable 里下一次允许发 Ack 的时刻(Ack 失败后的退避)
+	uint64_t nextAckMs{0};        // kAwaitDurable 里下一次允许发 Ack / SQL 确认探测的时刻(Ack 失败、探测未证明提交后的退避)
 	uint64_t lastFetchMs{0};      // 最近一次发出 Fetch 的时刻(去抖:两次检查至少间隔 1 秒)
 	uint64_t nextPeriodicMs{0};   // 在线有界兜底的下一次到点;0 = 关闭
 	uint64_t lastPersistRequestMs{0}; // 最近一次为本域请求存盘的时刻(500ms 节流 / 5s 补请求)
+	bool persistProbeArmed{false};    // 存盘落定的回调已挂、还没回来:go/db 长时间不通时不重复挂
 	uint32_t failStreak{0};       // 连续失败次数,决定 1s→60s 的退避
 	uint32_t ackFailStreak{0};    // Ack 连续失败次数
 	PlayerInboxDeferReason deferReason{PlayerInboxDeferReason::kNone};

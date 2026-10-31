@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"match/internal/authority"
-	"match/internal/config"
 
 	matchpb "proto/match"
 	teampb "proto/team"
@@ -62,10 +61,7 @@ func (s *Service) startSQLTeamMatch(ctx context.Context, caller uint64, in *team
 		if code := CheckMatchStart(snap.Record, caller, snap.NowMs); code != 0 {
 			return s.matchReject(ctx, caller, code, 0, &snap)
 		}
-		limit := s.starter.TeamSizeFor(in.BattleConfigId)
-		if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
-			limit = config.TeamCapacity
-		}
+		limit := s.starter.TeamSizeFor(uint32(mode), in.BattleConfigId)
 		if code := CheckMatchTeamSize(snap.Record, limit); code != 0 {
 			return s.matchReject(ctx, caller, code, 0, &snap)
 		}

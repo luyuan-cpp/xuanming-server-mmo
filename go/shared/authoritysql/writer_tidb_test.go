@@ -66,7 +66,7 @@ func TestPhysicalTiDBConnectionsPinStrongSession(t *testing.T) {
 		t.Fatal("fixture连接配置无效")
 	}
 	cfg.Params = map[string]string{"tidb_read_consistency": "'weak'", "tidb_snapshot": "'2000-01-01 00:00:00'", "tidb_read_staleness": "-5", "tidb_replica_read": "'follower'", "transaction_isolation": "'REPEATABLE-READ'"}
-	db, err := authoritysql.Open(ctx, cfg.FormatDSN(), opts.AuthoritySchema, true, 4, fixture.Permission)
+	db, err := authoritysql.Open(ctx, cfg.FormatDSN(), opts.AuthoritySchema, authoritysql.BackendTiDB, 4, fixture.Permission)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +404,7 @@ func TestTiDBOldEpochWaitingSlotCannotSendBusinessSQL(t *testing.T) {
 				t.Fatal(err)
 			}
 			probe := &epochWaitProbe{schema: schema, snapshotReady: make(chan struct{}), slotSent: make(chan struct{})}
-			guarded, err := authoritysql.PinCurrentSession(epochWaitConnector{inner: inner, probe: probe}, true, f.Permission)
+			guarded, err := authoritysql.PinCurrentSession(epochWaitConnector{inner: inner, probe: probe}, authoritysql.BackendTiDB, f.Permission)
 			if err != nil {
 				t.Fatal(err)
 			}

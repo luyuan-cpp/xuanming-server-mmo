@@ -158,6 +158,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="broadcast_target_vectors_test.cpp" />
     <ClCompile Include="kafka_command_test.cpp" />
     <ClCompile Include="kafka_command_whitelist_test.cpp" />
     <ClCompile Include="kafka_manager_init_test.cpp" />

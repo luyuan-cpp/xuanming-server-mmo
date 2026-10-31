@@ -6,7 +6,7 @@
 // 职责(全服唯一一个 leader,由全局库 route_reconcile 的租约选出):
 //   - 补发「已提交、未发布」的孤儿行(增量推送),Redis 重启 / 切主之后回看修补,Redis 整体丢失之后全量预热;
 //   - 每拍检测库回档；命中后关闭本 boot 接纳并交独立维护 owner，normal 不修改 writable;
-//   - 维护合服围栏镜像 merge:in_progress:{zone}(以库 zone_merge_fence 为准,双向)与合走标记 merge:merged_into:{src}(只增);
+//   - 维护合走标记 merge:merged_into:{src}(只增);
 //   - ArmReadyMarker=true 时在完整预热 / 修补之后挂就绪标记 mapping:route:ready(预热令牌 M2 fencing + 同连接 WAITAOF),
 //     false 时每拍撤掉现存标记(M4);每拍用读方同一段脚本自检并导出 verdict。
 //
@@ -29,8 +29,7 @@
 //  4. AdvanceReconcile(水位键 + 世代 + 容差;cvm 按完成任务的起点写);冻结 → 停推送、身份不符 / 淘汰异常时撤标记;
 //     未冻结 → 标记世代 ≠ 库世代即冻结(scout D4 保留的那条),否则单调推进水位键(GET → 判 → CAS / SET NX);
 //  5. 淘汰策略 / evicted_keys / enable-debug-command 自检:异常时撤标记、禁止挂标记;
-//  6. 围栏镜像双向对账(库生效的补 / 续;库里有片行的 zone 按名单 MGET,Redis 有而库已不生效的复读库后按完整值 CAD;
-//     名单之外的镜像靠跨拍增量 SCAN 发现;解不出 fence_epoch 的不删、计 foreign_fence);
+//  6. (已删:合服围栏镜像对账。别名合服不再有围栏,其余步骤编号不变)
 //  7. Arm=false:VI 为空(或身份变了)排追平(catch_up,设新令牌,起点 max(0, 库里的 cvm − RepairLookbackMs));
 //  8. Arm=true:标记在且身份相等 → VI = 当前身份,CAS 把标记水位推进到 cvm;标记在而身份不等 → CAD、排修补(起点
 //     max(0, min(标记水位, cvm) − RepairLookbackMs));标记不在 → **一律**全量预热(armingBlocked 除外),预热 / 修补完成且无阻塞
@@ -61,12 +60,6 @@
 //     丢掉记不全的候选、重新全量预热;记下的还没解决时照旧闩住、不重跑预热。
 //   - cache_ahead 的冻结不随任务被取消而回滚(核实意见 A1-2):push 里用 context.WithoutCancel;被取消的任务若冻结没做成,
 //     证据转成 cacheAheadPending 由循环每拍重试。
-//   - 围栏镜像对账不成功(列库 / 写镜像出错、镜像的 fence_epoch 比库新)与 foreign_fence 一样阻止挂标记,事件记 arming_refused_unresolved
-//     (规格的事件集合里没有单独的 fence 拒绝事件)。
-//   - 围栏镜像不再每拍 SCAN 整个 mapping 库(核实意见 A1-4 / LR-1,偏离规格 §13.1 第 3 条的「每拍 SCAN」):删本方案写的过期镜像只按
-//     「zone_merge_fence 63 号片有行的 zone」名单 MGET(R31);发现 foreign / 名单之外的镜像改为跨拍增量 SCAN(游标存在 leader 里,
-//     每拍至多 fenceScanPagesPerTick 页、独立时限 fenceScanTimeout);发现过的 foreign 键每拍按键复读,消失才解除。挂标记的前置相应改为
-//     「候选任务开始之后**开始**的一整轮 SCAN 已经扫完,且此刻没有已知的 foreign 镜像」;还没扫完只推迟挂标记(Info 日志,不计拒绝事件)。
 //   - 合走标记镜像的冲突只记 ERROR 与 mirror_total{merged_into_conflict},不阻止挂标记(db_first 下 W9 / W10 读库里的 zone_merged_into)。
 package routereconcile
 
@@ -108,9 +101,6 @@ type Store interface {
 	ScanRoutesUpdatedSince(ctx context.Context, shard uint32, after store.RouteUpdatedCursor, limit int) ([]store.RouteRow, error)
 	GetRoutes(ctx context.Context, ids []uint64) (map[uint64]store.RouteRow, error)
 	ListMergedInto(ctx context.Context) ([]store.MergedIntoRow, error)
-	ListActiveMergeFences(ctx context.Context) (store.ActiveMergeFences, error)
-	// ListMergeFenceZones:zone_merge_fence 63 号片上有行的全部 zone(R31,含已释放的)—— 本方案写过镜像的 zone 都在里面。
-	ListMergeFenceZones(ctx context.Context) ([]uint32, error)
 	DBNowMs(ctx context.Context) (uint64, error)
 }
 
@@ -155,7 +145,6 @@ const (
 	PushSuperseded
 	PushConflict
 	PushLegacyConflict
-	PushFenced
 	PushTombstoneSkipped
 	PushDBInvalid
 	PushError
@@ -176,8 +165,6 @@ func (o PushOutcome) label() string {
 		return metrics.RouteReconcilePushConflict
 	case PushLegacyConflict:
 		return metrics.RouteReconcilePushLegacyConflict
-	case PushFenced:
-		return metrics.RouteReconcilePushFenced
 	case PushTombstoneSkipped:
 		return metrics.RouteReconcilePushTombstoneSkipped
 	case PushDBInvalid:
@@ -187,10 +174,10 @@ func (o PushOutcome) label() string {
 	}
 }
 
-// unresolved 报告这个结局是不是「未决」(挂标记要求零未决,规格 scout D3):冲突、遗留值冲突、围栏、库行无效、逐行的错误回复。
+// unresolved 报告这个结局是不是「未决」(挂标记要求零未决,规格 scout D3):冲突、遗留值冲突、库行无效、逐行的错误回复。
 func (o PushOutcome) unresolved() bool {
 	switch o {
-	case PushConflict, PushLegacyConflict, PushFenced, PushDBInvalid, PushError:
+	case PushConflict, PushLegacyConflict, PushDBInvalid, PushError:
 		return true
 	}
 	return false
@@ -209,14 +196,6 @@ type MergedIntoMirrorResult struct {
 	Added, Present, Conflicts, Errors int
 	// ConflictDetails 只进日志(src、库值、缓存值)。
 	ConflictDetails []string
-}
-
-// FenceMirror 是 Redis 里一把 merge:in_progress:* 键。Zone 为 0 = 键的后缀不是合法 zone(不是本方案写的,不删)。
-type FenceMirror struct {
-	Key       string
-	Zone      uint32
-	Value     string
-	WrongType bool
 }
 
 // Cache 是 leader 对 mapping Redis 的依赖。生产实现是 RedisCache(cache.go,独立 go-redis 客户端,不经 go-zero 熔断器)。
@@ -239,12 +218,6 @@ type Cache interface {
 	AdvanceWatermark(ctx context.Context, prev *string, next string) (bool, error)
 	Push(ctx context.Context, rows []store.RouteRow) ([]PushRowResult, error)
 	MirrorMergedInto(ctx context.Context, rows []store.MergedIntoRow) (MergedIntoMirrorResult, error)
-	// ScanFenceMirrors 每次只翻有限页；失败时调用方不得提交返回的游标。
-	ScanFenceMirrors(ctx context.Context, cursor uint64, pages int) ([]FenceMirror, uint64, error)
-	// GetFenceMirrors 按名单取仍存在的镜像，不存在的键不返回。
-	GetFenceMirrors(ctx context.Context, keys []string) ([]FenceMirror, error)
-	SetFenceMirror(ctx context.Context, zone uint32, holderJSON string, epoch, expiresAtMs uint64) (placement.MergeFenceMirrorOutcome, error)
-	CompareAndDeleteFenceMirror(ctx context.Context, key, value string) (bool, error)
 	Close() error
 }
 
@@ -346,9 +319,6 @@ const (
 	taskStopWait = 200 * time.Millisecond
 	// unresolvedLogSample 是一次日志里列出的未决 player_id 个数上限。
 	unresolvedLogSample = 10
-	// 全库发现与按 zone 名单的清理分开计时，避免 SCAN 挤占本拍的正常围栏对账。
-	fenceScanPagesPerTick = 2
-	fenceScanTimeout      = 200 * time.Millisecond
 )
 
 type options struct {
@@ -452,18 +422,11 @@ type Reconciler struct {
 	wm         uint64
 	dbNow      uint64
 
-	lastIncremental  time.Time
-	lastForeignFence string
-	// 扫描轮次只由决策循环推进；身份或任期变化后不能复用旧实例的游标及完成证据。
-	fenceScanIdentity      placement.RedisInstanceIdentity
-	fenceScanCursor        uint64
-	fenceScanRoundStarted  uint64
-	fenceScanRoundComplete uint64
-	foreignFenceKeys       map[string]struct{}
-	running                *runningTask
-	taskSeq                uint64
-	taskDone               chan taskResult
-	startedThisTick        bool
+	lastIncremental time.Time
+	running         *runningTask
+	taskSeq         uint64
+	taskDone        chan taskResult
+	startedThisTick bool
 
 	// syncTasks:单测用,任务在启动它的那一拍里同步跑完,结果在下一拍开头收(等价于「两拍之间跑完」)。
 	syncTasks  bool
@@ -667,8 +630,6 @@ type task struct {
 	token      string
 	identity   placement.RedisInstanceIdentity
 	generation string
-	// 只有比本任务启动时更晚开始的完整围栏扫描，才可为其挂标记提供证据。
-	fenceScanAfterRound uint64
 	// pending:incremental 顺带复读的未决 player_id。
 	pending []uint64
 	// pendingSet:任务开始时 leader 记下的未决 player_id(预热为 nil:startTask 先清空了未决表)。任务只对其中的 id 记 resolved
@@ -715,11 +676,10 @@ func (rt *runningTask) abort(reason string) {
 
 // armCandidate 是一次完整预热 / 修补的结果:令牌、它对应的 Redis 身份与库世代。挂标记在决策循环里做。
 type armCandidate struct {
-	token               string
-	identity            placement.RedisInstanceIdentity
-	generation          string
-	phase               taskPhase
-	fenceScanAfterRound uint64
+	token      string
+	identity   placement.RedisInstanceIdentity
+	generation string
+	phase      taskPhase
 }
 
 // armLatch 是 armingBlocked 闩锁(规格 §4.2「挂标记被拒后无限预热」):被拒之后不再重跑全量预热,只做增量并复读未决行;
@@ -770,7 +730,6 @@ func (r *Reconciler) startTask(ctx context.Context, t task) bool {
 	r.taskSeq++
 	t.seq = r.taskSeq
 	t.generation = r.generation
-	t.fenceScanAfterRound = r.fenceScanRoundStarted
 	tctx, cancel := context.WithCancel(ctx)
 	r.running = &runningTask{task: t, cancel: cancel, startedAt: r.clock.Now()}
 	r.startedThisTick = true
@@ -889,8 +848,7 @@ func (r *Reconciler) applyTaskResult(ctx context.Context, res taskResult, t task
 		id := res.endIdentity
 		r.vi = &id
 	case phasePrewarm, phaseRepair:
-		r.candidate = &armCandidate{token: res.token, identity: res.endIdentity, generation: res.generation, phase: res.phase,
-			fenceScanAfterRound: t.fenceScanAfterRound}
+		r.candidate = &armCandidate{token: res.token, identity: res.endIdentity, generation: res.generation, phase: res.phase}
 	}
 }
 
@@ -1335,9 +1293,6 @@ func (r *Reconciler) tick(ctx context.Context) string {
 		return r.onRedisFailure(ctx, now, "read control keys", err)
 	}
 	r.redisFailSince = time.Time{}
-	if r.fenceScanIdentity != p.Identity {
-		r.resetFenceScan(p.Identity)
-	}
 	r.takeEvictedBaseline(p)
 	if r.pendingCvm != nil && r.pendingCvmIdentity != p.Identity {
 		logx.Errorf("[RouteReconcile] redis identity changed since the last task finished (run_id %s → %s); its cache_verified_ms is discarded",
@@ -1382,18 +1337,12 @@ func (r *Reconciler) tick(ctx context.Context) string {
 		r.vi = nil
 	}
 
-	// 6. 围栏镜像双向对账。
-	if !r.leaseStillHeld("the fence mirror reconciliation") {
-		return metrics.RouteReconcileTickLeaseLost
-	}
-	mirrorOK, foreign := r.reconcileFenceMirrors(ctx)
-
 	// 7 / 8. 标记与任务。
 	if !r.leaseStillHeld("the marker / task decision") {
 		return metrics.RouteReconcileTickLeaseLost
 	}
 	if r.opts.arm {
-		r.decideArmed(ctx, &ms, p, blockers{eviction: evBad, debug: dbgBad, fenceMirror: !mirrorOK || foreign}, evTaint)
+		r.decideArmed(ctx, &ms, p, blockers{eviction: evBad, debug: dbgBad}, evTaint)
 	} else {
 		r.decideDisarmed(ctx, p)
 	}
@@ -1485,7 +1434,7 @@ func (r *Reconciler) demote(reason string) {
 }
 
 // leaseStillHeld 是拍内各步 Redis 写之前的本地租约复核(核实意见 LR-10):拍首判过一次,但一拍可能因 Redis / 库变慢拖过本地截止,
-// 之后的 Redis 写(预热令牌、标记、围栏镜像)不受库侧租约谓词保护,会与已接手的新 leader 打架。过点即降级,调用方结束本拍。
+// 之后的 Redis 写(预热令牌、标记)不受库侧租约谓词保护,会与已接手的新 leader 打架。过点即降级,调用方结束本拍。
 func (r *Reconciler) leaseStillHeld(before string) bool {
 	if r.leaseValid() {
 		return true
@@ -1496,7 +1445,7 @@ func (r *Reconciler) leaseStillHeld(before string) bool {
 
 func (r *Reconciler) resetTerm() {
 	r.vi, r.candidate, r.latch, r.queuedRepair = nil, nil, nil, nil
-	r.lastRefusal, r.lastForeignFence, r.lastWatermarkShape = "", "", ""
+	r.lastRefusal, r.lastWatermarkShape = "", ""
 	r.cacheEvidenceLost = false
 	r.pending = map[uint64]struct{}{}
 	r.pendingOverflow = false
@@ -1507,13 +1456,6 @@ func (r *Reconciler) resetTerm() {
 	r.redisFailSince = time.Time{}
 	r.lastIncremental = time.Time{}
 	r.generation, r.cvm, r.wm, r.dbNow = "", 0, 0, 0
-	r.resetFenceScan(placement.RedisInstanceIdentity{})
-}
-
-func (r *Reconciler) resetFenceScan(identity placement.RedisInstanceIdentity) {
-	r.fenceScanIdentity = identity
-	r.fenceScanCursor, r.fenceScanRoundStarted, r.fenceScanRoundComplete = 0, 0, 0
-	r.foreignFenceKeys = map[string]struct{}{}
 }
 
 func (r *Reconciler) probe(ctx context.Context) (Probe, error) {
@@ -1814,7 +1756,7 @@ func freezeEvent(reason store.RouteFreezeReason) string {
 	}
 }
 
-// onFrozen:冻结期停止一切推送(取消在途任务、不起新任务、不推进水位键、不对账围栏镜像);标记不动,除非它已不可信
+// onFrozen:冻结期停止一切推送(取消在途任务、不起新任务、不推进水位键);标记不动,除非它已不可信
 // (身份不符、淘汰异常、DEBUG 开着)或 Arm=false(撤销信任永远安全)。
 func (r *Reconciler) onFrozen(ctx context.Context, ms *markerState, p Probe) string {
 	if r.running != nil {
@@ -1901,13 +1843,13 @@ func (r *Reconciler) evictionState(p Probe) (bad, taint bool) {
 
 // blockers 是挂标记的阻塞原因(规格 scout D3 + §13.1 第 3、5 条)。
 type blockers struct {
-	eviction, debug, fenceMirror, unresolved bool
+	eviction, debug, unresolved bool
 }
 
-func (b blockers) any() bool { return b.eviction || b.debug || b.fenceMirror || b.unresolved }
+func (b blockers) any() bool { return b.eviction || b.debug || b.unresolved }
 
 // state 报告是否有「状态类」原因(与任务结果无关,不跑预热也清不掉)。
-func (b blockers) state() bool { return b.eviction || b.debug || b.fenceMirror }
+func (b blockers) state() bool { return b.eviction || b.debug }
 
 func (b blockers) key() string {
 	var parts []string
@@ -1916,9 +1858,6 @@ func (b blockers) key() string {
 	}
 	if b.debug {
 		parts = append(parts, "debug_enabled")
-	}
-	if b.fenceMirror {
-		parts = append(parts, "fence_mirror")
 	}
 	if b.unresolved {
 		parts = append(parts, "unresolved")
@@ -1939,7 +1878,7 @@ func (r *Reconciler) reportRefusal(b blockers) {
 	if b.debug {
 		r.obs.Event(metrics.RouteReconcileEventArmingRefusedDebugEnabled)
 	}
-	if b.unresolved || b.fenceMirror {
+	if b.unresolved {
 		r.obs.Event(metrics.RouteReconcileEventArmingRefusedUnresolved)
 	}
 	sample := r.pendingIDs()
@@ -2055,7 +1994,7 @@ func (r *Reconciler) decideArmed(ctx context.Context, ms *markerState, p Probe, 
 		}
 	}
 	if b.state() {
-		// 淘汰 / DEBUG / 围栏镜像这类状态原因下,全量预热挂不上标记:先闩住,原因清掉再预热(不白跑一遍全表)。
+		// 淘汰 / DEBUG 这类状态原因下,全量预热挂不上标记:先闩住,原因清掉再预热(不白跑一遍全表)。
 		r.latch = &armLatch{identity: p.Identity, evictionTaint: evTaint}
 		r.reportRefusal(b)
 		return
@@ -2101,13 +2040,6 @@ func (r *Reconciler) raiseMarkerWatermark(ctx context.Context, ms *markerState) 
 // tryArm 挂标记(规格 §4.3 末段、§13.1 第 7 条):再 Peek 一次库租约(必须仍是自己)→ RouteReadyArmScript(令牌、标记值、身份)
 // + 同连接 WAITAOF → 复读身份,变了就按原值撤掉自己的值。标记水位写 cvm,set_at_ms 取库时钟。
 func (r *Reconciler) tryArm(ctx context.Context, c *armCandidate, p Probe) {
-	if r.fenceScanIdentity != c.identity || r.fenceScanRoundComplete <= c.fenceScanAfterRound {
-		// 扫描尚未结束不是拒绝，更不需要重新预热；保留完整任务结果等后续拍。
-		logx.Infof("[RouteReconcile] arming postponed: waiting for a complete fence scan started after %s (completed_round=%d task_after_round=%d)",
-			c.phase, r.fenceScanRoundComplete, c.fenceScanAfterRound)
-		r.candidate = c
-		return
-	}
 	opCtx, cancel := context.WithTimeout(ctx, tickOpTimeout)
 	lease, err := r.st.PeekReconcileLease(opCtx)
 	cancel()
@@ -2183,189 +2115,6 @@ func (r *Reconciler) tryArm(ctx context.Context, c *armCandidate, p Probe) {
 	r.obs.Event(metrics.RouteReconcileEventMarkerArmed)
 	logx.Infof("[RouteReconcile] ARMED %s after %s: generation=%s run_id=%s watermark_ms(cvm)=%d set_at_ms=%d",
 		placement.RouteReadyKey, c.phase, r.generation, c.identity.RunID, r.cvm, lease.NowMs)
-}
-
-// reconcileFenceMirrors 按库名单清理过期镜像，跨拍有限页发现名单之外的镜像。
-// 返回 ok(本拍没有失败)与 foreign(仍存在已发现的 foreign 镜像)；完整扫描的证据另记在循环状态中。
-//   - 库里生效的围栏(63 号片,库时钟判):用 set-if-newer 脚本补 / 续镜像(PEXPIREAT = 库 expires_at_ms + 10 分钟);
-//   - Redis 里有、库里对应 zone 不生效的:**复读库**确认仍不生效后按完整值 CAD(挡住「库刚获取、镜像刚写」的竞态);
-//   - 值解不出 fence_epoch 的(旧版 merge_zone 写的、手工写的)、键后缀不是 zone 的:不删,计 foreign_fence。
-func (r *Reconciler) reconcileFenceMirrors(ctx context.Context) (ok bool, foreign bool) {
-	ok = true
-	if r.foreignFenceKeys == nil {
-		r.foreignFenceKeys = map[string]struct{}{}
-	}
-	defer func() {
-		keys := make([]string, 0, len(r.foreignFenceKeys))
-		for key := range r.foreignFenceKeys {
-			keys = append(keys, key)
-			r.obs.Mirror(metrics.RouteReconcileMirrorFenceForeign, 1)
-			r.obs.Event(metrics.RouteReconcileEventForeignFence)
-		}
-		r.logForeignFences(keys)
-		foreign = len(keys) != 0
-	}()
-	opCtx, cancel := context.WithTimeout(ctx, tickOpTimeout)
-	defer cancel()
-	fences, err := r.st.ListActiveMergeFences(opCtx)
-	if err != nil {
-		logx.Errorf("[RouteReconcile] fence mirror: list active zone_merge_fence: %v", err)
-		r.obs.Mirror(metrics.RouteReconcileMirrorError, 1)
-		return false, false
-	}
-	zones, err := r.st.ListMergeFenceZones(opCtx)
-	if err != nil {
-		logx.Errorf("[RouteReconcile] fence mirror: list zone_merge_fence zones: %v", err)
-		r.obs.Mirror(metrics.RouteReconcileMirrorError, 1)
-		return false, false
-	}
-	active := make(map[uint32]bool, len(fences.Fences))
-	keySet := make(map[string]struct{}, len(zones)+len(r.foreignFenceKeys))
-	for _, zone := range zones {
-		keySet[placement.MergeFenceKey(zone)] = struct{}{}
-	}
-	for key := range r.foreignFenceKeys {
-		keySet[key] = struct{}{}
-	}
-	for _, f := range fences.Fences {
-		active[f.ZoneID] = true
-		key := placement.MergeFenceKey(f.ZoneID)
-		keySet[key] = struct{}{}
-		if f.ExpiresAtMs == 0 {
-			logx.Errorf("[RouteReconcile] fence mirror: zone %d fence run_id=%s has no expires_at_ms (CHECK not enforced?); mirror not written", f.ZoneID, f.RunID)
-			r.obs.Mirror(metrics.RouteReconcileMirrorError, 1)
-			ok = false
-			continue
-		}
-		out, err := r.cache.SetFenceMirror(opCtx, f.ZoneID, f.HolderJSON, f.FenceEpoch, f.ExpiresAtMs)
-		switch {
-		case err != nil:
-			logx.Errorf("[RouteReconcile] fence mirror: zone %d run_id=%s epoch=%d: %v", f.ZoneID, f.RunID, f.FenceEpoch, err)
-			r.obs.Mirror(metrics.RouteReconcileMirrorError, 1)
-			ok = false
-		case out == placement.MergeFenceMirrorWritten:
-			r.obs.Mirror(metrics.RouteReconcileMirrorFenceWritten, 1)
-		case out == placement.MergeFenceMirrorStale:
-			// 镜像的 fence_epoch 比库里的大:库丢了一次围栏获取(回档?)。镜像只会多封锁,不动它;但这一轮不算对账成功。
-			logx.Errorf("[RouteReconcile] fence mirror: zone %d mirror carries a fence_epoch newer than the database's %d (database rollback?); left as is",
-				f.ZoneID, f.FenceEpoch)
-			r.obs.Mirror(metrics.RouteReconcileMirrorFenceStale, 1)
-			ok = false
-		case out == placement.MergeFenceMirrorForeign:
-			r.foreignFenceKeys[key] = struct{}{}
-			// 即使后面的按键复读已看见它消失，本拍仍未成功补齐这个生效围栏。
-			ok = false
-		}
-	}
-	keys := make([]string, 0, len(keySet))
-	for key := range keySet {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	mirrors, err := r.cache.GetFenceMirrors(opCtx, keys)
-	if err != nil {
-		logx.Errorf("[RouteReconcile] fence mirror: get %d known mirror(s): %v", len(keys), err)
-		r.obs.Mirror(metrics.RouteReconcileMirrorError, 1)
-		return false, false
-	}
-	present := make(map[string]FenceMirror, len(mirrors))
-	for _, m := range mirrors {
-		present[m.Key] = m
-	}
-	for key := range r.foreignFenceKeys {
-		if _, exists := present[key]; !exists {
-			// 已知 foreign 只能由按键复读证明消失；一轮 SCAN 没遇到它不构成证据。
-			delete(r.foreignFenceKeys, key)
-		}
-	}
-	rememberForeign := func(m FenceMirror) {
-		if _, hasEpoch := placement.MergeFenceHolderEpoch(m.Value); m.Zone == 0 || m.WrongType || !hasEpoch {
-			r.foreignFenceKeys[m.Key] = struct{}{}
-		}
-	}
-	for _, m := range mirrors {
-		rememberForeign(m)
-	}
-
-	// SCAN 有自己的短预算，游标与轮次在整拍对账成功后才提交。
-	scanRound := r.fenceScanRoundStarted
-	if r.fenceScanCursor == 0 {
-		scanRound++
-	}
-	scanCtx, scanCancel := context.WithTimeout(ctx, fenceScanTimeout)
-	scanned, nextCursor, scanErr := r.cache.ScanFenceMirrors(scanCtx, r.fenceScanCursor, fenceScanPagesPerTick)
-	scanCancel()
-	if scanErr != nil {
-		logx.Errorf("[RouteReconcile] fence mirror: SCAN cursor=%d: %v", r.fenceScanCursor, scanErr)
-		r.obs.Mirror(metrics.RouteReconcileMirrorError, 1)
-		ok = false
-	} else {
-		for _, m := range scanned {
-			rememberForeign(m)
-			present[m.Key] = m
-		}
-	}
-	var stale []FenceMirror
-	for _, m := range present {
-		if _, knownForeign := r.foreignFenceKeys[m.Key]; knownForeign || active[m.Zone] {
-			continue
-		}
-		stale = append(stale, m)
-	}
-	// Redis 的 SCAN 顺序不稳定；清理顺序固定，便于复盘与可重复验证。
-	sort.Slice(stale, func(i, j int) bool { return stale[i].Key < stale[j].Key })
-	if len(stale) != 0 {
-		recheck, err := r.st.ListActiveMergeFences(opCtx)
-		if err != nil {
-			logx.Errorf("[RouteReconcile] fence mirror: re-read active fences before deleting %d stale mirror(s): %v", len(stale), err)
-			r.obs.Mirror(metrics.RouteReconcileMirrorError, 1)
-			return false, false
-		}
-		stillActive := make(map[uint32]bool, len(recheck.Fences))
-		for _, f := range recheck.Fences {
-			stillActive[f.ZoneID] = true
-		}
-		for _, m := range stale {
-			if stillActive[m.Zone] {
-				continue // 两次读之间刚获取的围栏:下一拍按库值写镜像
-			}
-			deleted, err := r.cache.CompareAndDeleteFenceMirror(opCtx, m.Key, m.Value)
-			switch {
-			case err != nil:
-				logx.Errorf("[RouteReconcile] fence mirror: compare-and-delete %s: %v", m.Key, err)
-				r.obs.Mirror(metrics.RouteReconcileMirrorError, 1)
-				ok = false
-			case deleted:
-				r.obs.Mirror(metrics.RouteReconcileMirrorFenceDeleted, 1)
-				logx.Infof("[RouteReconcile] fence mirror: deleted %s (its fence is no longer active in zone_merge_fence)", m.Key)
-			default:
-				r.obs.Mirror(metrics.RouteReconcileMirrorFenceDeleteLost, 1)
-			}
-		}
-	}
-	if ok && scanErr == nil {
-		r.fenceScanCursor = nextCursor
-		r.fenceScanRoundStarted = scanRound
-		if nextCursor == 0 {
-			r.fenceScanRoundComplete = scanRound
-		}
-	}
-	return ok, false
-}
-
-func (r *Reconciler) logForeignFences(keys []string) {
-	sort.Strings(keys)
-	k := strings.Join(keys, ",")
-	if k == r.lastForeignFence {
-		return
-	}
-	r.lastForeignFence = k
-	if k == "" {
-		logx.Infof("[RouteReconcile] fence mirror: no foreign merge fence mirror left")
-		return
-	}
-	logx.Errorf("[RouteReconcile] FOREIGN merge fence mirror(s) without a fence_epoch (old merge_zone binary or a manual write; never deleted, "+
-		"arming is refused until they are gone): %s", k)
 }
 
 // observe 是第 10 步:自检(RouteReadyReadScript 不带映射键,读方同一判据)并写 leader 观测型 gauge(规格 §13.1 第 8 条)。
@@ -2523,13 +2272,5 @@ func (c *drainCache) MirrorMergedInto(ctx context.Context, rows []store.MergedIn
 		}
 		return e
 	})
-	return
-}
-func (c *drainCache) SetFenceMirror(ctx context.Context, z uint32, v string, e, expires uint64) (out placement.MergeFenceMirrorOutcome, err error) {
-	err = trackEffect(ctx, c.effects, func() error { var fail error; out, fail = c.Cache.SetFenceMirror(ctx, z, v, e, expires); return fail })
-	return
-}
-func (c *drainCache) CompareAndDeleteFenceMirror(ctx context.Context, key, value string) (out bool, err error) {
-	err = trackEffect(ctx, c.effects, func() error { var e error; out, e = c.Cache.CompareAndDeleteFenceMirror(ctx, key, value); return e })
 	return
 }

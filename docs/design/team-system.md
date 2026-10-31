@@ -147,7 +147,7 @@ flowchart LR
    - 再注册 MatchNodeService:继续用 match 自己的 `internal/noderegistry.Register`。上一步已经确认端口可连，这里不另写探测;也不迁到 shared registry,避免顺手改变 match 的 node_id 失租语义。
    - 两者的 host 都换成 `advertisedHost(host)`。`advertisedHost` 照抄 `go/chat/chat.go:236-250`,优先读 POD_IP。这一步修掉 K8s 上把 `0.0.0.0` 原样注册进 NodeInfo 的问题(`match_service.go:116`、`:191-199`;K8s 模板 `ListenOn: 0.0.0.0:50500`,见 `tools/scripts/k8s_deploy.ps1:1904`)。
 4. **注册失败的退出路径**:任一注册失败，先对已经成功的注册调 `Close()`(撤销租约，发现 key 立刻消失),再 `s.Stop()`、`logx.Close()`、`os.Exit(1)`。**不用 `logx.Must`**:它直接 `os.Exit`,defer 不执行，已写入的发现 key 要等 `LeaseTTL`(`match_service.yaml` 为 60s)才消失，这段时间路由服会持续把请求打到已退出的进程。HEAD 版 chat 就是这个写法(`git show HEAD:go/chat/chat.go` 第 122 行 `logx.Must`);工作区版 chat(未提交)已改成返回 error 并由 `lifecycle.Shutdown` 收尾(`go/chat/chat.go:190-196`),match 照"返回 error + 先 Close 已成功注册"的思路写，不照抄 HEAD 版。
-5. snowflake 失租时的 fence/exit 逻辑(`:147-156`)保持不变，只在 `os.Exit(1)` 之前补上两个注册的 `Close()`,理由同上。
+5. (2026-10-30 起 match 没有这段了,见 §C.3 的更正)snowflake 失租时的 fence/exit 逻辑(`:147-156`)保持不变，只在 `os.Exit(1)` 之前补上两个注册的 `Close()`,理由同上。
 6. `deploy/k8s/manifests/go-svc/match.yaml` 目前的 env 只有 `GOLANG_PROTOBUF_REGISTRATION_CONFLICT`(`:64-66`),需要照 `deploy/k8s/manifests/go-svc/chat.yaml:75` 加上 `POD_IP`。
 7. **match 的 zrpc `Timeout` 保持 5000,不改**。zrpc 服务端 Timeout 对同一个 server 上的所有 service 生效(`match_service.go:102-112`)。既有的 `MatchService.WatchBattle` 是一串同步 RPC:`stopWatchingIfAny`(`watchbattlelogic.go:98`)→ `addObserver`(`:180`),复查冲突时还有 `removeObserver`(`:198`),每段 3s(`spectate.go:34-35`),最坏已超过 4s。改成 4000 会把它截断成"battle 侧观战已绑定、客户端收到失败"。team 改为**自己控制请求预算**:
    - `team.server` 每个方法入口执行 `ctx, cancel := context.WithTimeout(ctx, teamRPCBudget)`,`teamRPCBudget = 3500ms`,保证赶在路由服 `ForwardTimeoutMs=5000`(`go/client_rpc_router/etc/*.yaml:32`)之前把 in-band 结果回去;
@@ -464,6 +464,8 @@ message JoinQueueRequest {
    - 队伍不落 MySQL。共享库如果丢数据，队伍会全部消失，玩家重新组队即可。队伍本身就是会话级数据，这个代价可以接受。
 
 ### C.3 team_id 发号
+
+> 2026-10-30 更正:team_id、battle_id、challenge_id 已从 snowflake 迁到号段(biz_tag = battle),match 不再申领 snowflake 槽位,也没有失租强退。下面关于槽位和 fence 的描述是当时的实现,现状见 [总体方案 §6.4](player-data-tidb-scaling-plan.md) 与 `go/match/internal/svc/battle_id.go`。发号失败仍是 CreateTeam 回 `kTeamInternal`,不许用 0 顶替。
 
 - 复用 `svcCtx.BattleIDGen.Generate()`(`go/match/internal/svc/servicecontext.go:57-61`)。它的槽位按 snowflakealloc 的 kind=`"match"` 独立申领(`:103-113`),与 NodeInfo 的 node_id 解耦。
 - **AGENTS §7 #1(SnowFlake 节点隔离)**:team_id 只由 match 进程生产，与 battle_id、challenge_id 共用同一个生成器，同一个生成器发出的号不会重复。第二次注册 TeamNodeService 不涉及 snowflake 槽位。

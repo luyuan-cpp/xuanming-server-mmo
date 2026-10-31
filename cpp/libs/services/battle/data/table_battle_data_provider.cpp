@@ -42,7 +42,7 @@ bool TableBattleDataProvider::LoadBattleRewards(const std::string& path) {
             (profile.item_draws() > 0 && profile.random_items_size() == 0)) return false;
         std::set<uint32_t> currencies;
         for (const auto& currency : profile.currencies()) {
-            if (currency.currency_type() >= kCurrencyMax ||
+            if (!IsKnownCurrencyType(currency.currency_type()) ||
                 currency.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
                 !currencies.insert(currency.currency_type()).second) return false;
         }

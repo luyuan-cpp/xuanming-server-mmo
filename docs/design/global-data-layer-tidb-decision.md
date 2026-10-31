@@ -427,6 +427,8 @@ Java 版:本节只记录共享设计原则及 C++/Go 当前源码,对应 Java �
 7. **读方与工具**:friend(好友档案、在线推荐)、match、login 的选角外观补齐与首次入场身份补齐(`role_appearance_backfill.go`、`player_class_backfill.go`)、data_service 账本、`go/db/internal/barrierrestore`、`tools/merge_zone`、`debug_fetch` / `debug_import`,以及压测工具 `go/db/cmd/verifier`,凡读父快照或子表缓存的地方逐个改。同批改不完的按 fail-closed 处理,不能带着旧键静默空过。(`tools/data_consistency_check` 只读映射 Redis,不在此列。)
 8. **TiDB 部署**:仓库没有 TiDB 的 K8s 清单,只有本地 `deploy/docker-compose.tidb.yml`。`k8s_deploy.ps1` 只接收外部 TiDB 入口(`-GlobalAuthorityTiDBHost`,或必须与之相同的 `-FriendTiDBHost` / `-TradeTiDBHost` / `-MatchTiDBHost`),go/db 的玩家表与目录、好友、交易、匹配共用这一个入口。玩家数据只存 TiDB 之后,TiDB 是存档读写的唯一依赖,部署、备份与回档方案要先落(§D8、[TiDB Phase 1 与开服准备](./tidb-phase1-and-launch-readiness.md))。
 
+> **2026-10-30 回指(上面原文不改)**:本节问题的总体答案与用户 10-30 的拍板见[玩家数据只存 TiDB 与全链路水平扩展:总体方案](./player-data-tidb-scaling-plan.md):第 1 条按「直接提交 TiDB」推进(该文 §3);第 2 条见该文 §3.3;第 3 条改为写权代次与整笔存盘序号在 TiDB 事务里核对(§3.2);第 4 条改为看事务结果或 TiDB 强读(§3.3、§3.4);第 5 条为同一次存盘的所有脏行同事务(§4.3);第 6 条另含「关键变化立即存 + 拆出热行」带来的事务数变化(§4.4)。各条的落码规格随该文 §13 分批给出,都未落码。
+
 ### 9.5 对其他文档的影响
 
 - [玩家态 Redis 集群化](./redis-player-store-cluster.md):

@@ -57,6 +57,27 @@
     <ClInclude Include="code\item_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\playmode_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\playmode_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\playmode_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\playmode_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\zonegroup_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\zonegroup_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\zonegroup_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\messagelimiter_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -588,6 +609,21 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\item_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\playmode_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\playmode_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\playmode_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\zonegroup_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\zonegroup_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\messagelimiter_table.cpp">

@@ -9,7 +9,7 @@
 - 集群已具备 Ingress controller、DNS / TLS、可用的存储类,并已安装本例使用的 Agones。生产 battle 用 Agones 动态端口;普通 Deployment + hostPort 只作验证与回退。
 - C++、全部启用的 Go 服务与 Java gateway 镜像都已构建、验证,并由有权限的发布者推到目标仓库。AI 不执行推送。
 - 使用明确的 `ReleaseProfile=prod` 或 `staging`;默认 `dev` 不代表生产档。先完成该档位的 `release_preflight.ps1` 门禁。
-- 发布环境通过受控方式注入密钥,不把值写进本文、Git 文件、命令历史或日志。部署脚本使用 `MMORPG_GATE_TOKEN_SECRET`、`MMORPG_INTERNAL_AUTH_SECRET`、`MMORPG_BATTLE_TOKEN_SECRET`、`MMORPG_LOGIN_QUEUE_TOKEN_SECRET`、`MMORPG_GATEWAY_ADMIN_API_KEY`,以及 `MMORPG_MYSQL_USER/PASSWORD`、`MMORPG_GATEWAY_DB_USER/PASSWORD`、`MMORPG_REDIS_PASSWORD`。HMAC 与管理密钥至少 32 字符,数据库 / Redis 密码至少 12 字符;用途不同的密钥不得复用。数据库账号必须已在目标实例正确创建并授权,各业务服务的其他专用凭据按其配置准备。
+- 发布环境通过受控方式注入密钥,不把值写进本文、Git 文件、命令历史或日志。部署脚本使用 `MMORPG_GATE_TOKEN_SECRET`、`MMORPG_INTERNAL_AUTH_SECRET`、`MMORPG_BATTLE_TOKEN_SECRET`、`MMORPG_SPECTATE_TOKEN_SECRET`、`MMORPG_LOGIN_QUEUE_TOKEN_SECRET`、`MMORPG_GATEWAY_ADMIN_API_KEY`,以及 `MMORPG_MYSQL_USER/PASSWORD`、`MMORPG_GATEWAY_DB_USER/PASSWORD`、`MMORPG_REDIS_PASSWORD`。HMAC 与管理密钥至少 32 字符,数据库 / Redis 密码至少 12 字符;用途不同的密钥不得复用。数据库账号必须已在目标实例正确创建并授权,各业务服务的其他专用凭据按其配置准备。
 - `ZonesConfigPath` 要包含实际区服,不能把示例区服直接当成已审批规划;`ClusterId` 是部署级常量,已有环境不得随意改值。
 
 `-DryRun` 会输出部分 ConfigMap / Secret 的渲染内容;只用不含真实密钥的离线输入检查结构,不要把真实密钥的 dry-run 输出归档。

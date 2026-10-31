@@ -284,6 +284,40 @@ inline bool NeedsShutdownOutcomeFlush(uint32_t outcomeProtocol, bool outcomePend
     return outcomeProtocol == 1 && outcomePending && !outcomeComplete && !outcomeExhausted;
 }
 
+// 终局协议 v1 的 SQL 终局(CommitBattleOutcome)重放节奏(2026-10-30,battle_room_manager.cpp 的 PumpSqlOutcomes 按它判)。
+// 原先从终局冻结(outcomeSince)起满 kMaxStagingSpan 即判用尽、移出待提交集合、此后不再重放;可房间只在拿到 COMPLETE / ABORT
+// 时才删,于是这间房永远留在节点上(每 60s 报一次 sql_unconfirmed),节点排不空。现在分三段:
+//   - 快速重放:跨度之内每 kSqlOutcomeRetryInterval 重放一次同一原件;
+//   - 越界(SqlOutcomeSpanExceeded):照旧置 outcomeExhausted、打一次 ERROR、计入滞留房间,但**不停**,改为每
+//     kSqlOutcomeSlowRetryInterval 重放一次。Match 对同一原件按持久决定幂等回放,到权威截止后的 ABORT 也由 Match 自己落,
+//     所以慢速重放迟早拿到 COMPLETE / ABORT,房间照常收尾;
+//   - 放弃(SqlOutcomeReplayAbandoned):越界之后再过 kSqlOutcomeSlowReplaySpan 仍无决定(Match 长期不可达),本地删房并打 ERROR
+//     (AGENTS §11.3 重试必须有上限)。本地删房不是 ABORT,不发布任何终局:终局仍由 Match 凭持久原件恢复裁决。
+// 停机补提交(NeedsShutdownOutcomeFlush)与滞留分类(ClassifyStuckTerminal)照旧只看 outcomeExhausted,不受这里影响。
+inline constexpr std::chrono::seconds kSqlOutcomeRetryInterval{5};
+inline constexpr std::chrono::seconds kSqlOutcomeSlowRetryInterval{60};
+inline constexpr std::chrono::hours kSqlOutcomeSlowReplaySpan{24};
+static_assert(kSqlOutcomeRetryInterval < kSqlOutcomeSlowRetryInterval, "越界之后的重放只能更慢");
+static_assert(kSqlOutcomeSlowRetryInterval < kSqlOutcomeSlowReplaySpan, "放弃之前至少还要慢速重放一轮");
+
+// 从终局冻结起已过 sinceFrozen(单调时钟,调用方传入),是否已越过快速重放的总跨度。
+inline constexpr bool SqlOutcomeSpanExceeded(std::chrono::steady_clock::duration sinceFrozen)
+{
+    return sinceFrozen >= kMaxStagingSpan;
+}
+
+// 越界之后的慢速重放是否也到了上限:到了就本地删房、不再重放。
+inline constexpr bool SqlOutcomeReplayAbandoned(std::chrono::steady_clock::duration sinceFrozen)
+{
+    return sinceFrozen >= kMaxStagingSpan + kSqlOutcomeSlowReplaySpan;
+}
+
+// 下一次重放的间隔:越界(outcomeExhausted)之后每分钟一次,之前每 5 秒一次。
+inline constexpr std::chrono::seconds SqlOutcomeRetryInterval(bool outcomeExhausted)
+{
+    return outcomeExhausted ? kSqlOutcomeSlowRetryInterval : kSqlOutcomeRetryInterval;
+}
+
 // 一轮落库的回复汇总(battle_room_manager.cpp StagePersonalSettlements 每轮一份，回调共享)。
 // 本轮成员 = 开轮那一刻的 ResultCommit::UnstagedMembers()，整轮不变。每名成员只记第一次回复，
 // 不在本轮成员里的 id 忽略；全部成员都回复过的那一次 Record 返回 true(恰好一次)，调用方随即把

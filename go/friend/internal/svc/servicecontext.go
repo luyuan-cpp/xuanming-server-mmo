@@ -161,7 +161,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic("friend: failed to create etcd client: " + err.Error())
 	}
 
-	db, err := openMySQL(c.MySQL, c.RequireTiDB, authoritysql.Writer(writer))
+	backend := authoritysql.Backend(c.Backend)
+	db, err := openMySQL(c.MySQL, backend, authoritysql.Writer(writer))
 	if err != nil {
 		panic(fmt.Errorf("friend: %w", err))
 	}
@@ -170,10 +171,15 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		_ = db.Close()
 		panic(fmt.Errorf("friend: %w", err))
 	}
-	if c.RequireTiDB && dialect != sqldialect.TiDB {
+	// 档位与方言必须一致:推荐查询的提示按方言渲染,两边对不上时提示全部失效而不报错。
+	wantDialect := sqldialect.TiDB
+	if backend == authoritysql.BackendMySQL {
+		wantDialect = sqldialect.MySQL
+	}
+	if dialect != wantDialect {
 		_ = db.Close()
 		_ = etcdCli.Close()
-		panic("friend: RequireTiDB=true，但权威数据库不是 TiDB；拒绝启动")
+		panic(fmt.Sprintf("friend: Backend=%q, but the authority database dialect is %s; refusing to start", c.Backend, dialect))
 	}
 
 	friendRds, sharedRds, target := NewRedisHandles(c)
@@ -296,14 +302,14 @@ func NewRedisHandles(c config.Config) (friendRds, sharedRds *redis.Redis, target
 // 自动提交语句每条各取新快照,读语义与 RR 下相同,不影响任何业务判定。
 //
 // 返回值**含密码**,只能交给 sql.Open,绝不打日志、绝不进错误信息(横幅用 MySQLTarget)。
-func BuildDSN(c config.MySQLConf, requireTiDB bool) string {
+func BuildDSN(c config.MySQLConf, backend authoritysql.Backend) string {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27"+
 		"&transaction_isolation=%%27READ-COMMITTED%%27",
 		c.User, c.Password, c.Host, c.DBName)
-	if requireTiDB {
+	if backend != authoritysql.BackendMySQL {
 		// 驱动在每条新建物理连接上初始化会话，不能只在当前Ping连接SET一次。
 		// 权威列表是自动提交普通读；悲观事务模式不会关闭历史快照、缓存TSO或跳锁弱读。
-		// 仅TiDB池设置这些变量，MySQL开发池不发送它们；禁止改服务器全局模式。
+		// 仅TiDB池设置这些变量，mysql 档不发送它们；禁止改服务器全局模式。
 		dsn += "&tidb_txn_mode=%27pessimistic%27&tidb_read_staleness=0" +
 			"&tidb_low_resolution_tso=OFF&tidb_replica_read=%27leader%27" +
 			"&tidb_read_consistency=%27strict%27&tidb_snapshot=%27%27"
@@ -320,27 +326,27 @@ func MySQLTarget(c config.MySQLConf) string {
 // connectionOpener goroutine 泄漏在一个注定要退出的进程里)。
 // 错误信息点名库名:友好度不是重点,重点是 `-migrate` 以 1 退出时运维能直接看出
 // 是"库不存在"而不是"密码错"(D-14 第 5 条)。
-func OpenMySQL(c config.MySQLConf, requireTiDB bool) (*sql.DB, error) {
+func OpenMySQL(c config.MySQLConf, backend authoritysql.Backend) (*sql.DB, error) {
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
 		return nil, err
 	}
-	return openMySQL(c, requireTiDB, authoritysql.Writer(writer))
+	return openMySQL(c, backend, authoritysql.Writer(writer))
 }
 
 // OpenSchemaMySQL只属于显式迁移入口，常驻业务不得借用此能力。
-func OpenSchemaMySQL(c config.MySQLConf, requireTiDB bool) (*sql.DB, error) {
+func OpenSchemaMySQL(c config.MySQLConf, backend authoritysql.Backend) (*sql.DB, error) {
 	permission, err := authoritysql.LoadSchemaPermission(os.Getenv)
 	if err != nil {
 		return nil, err
 	}
-	return openMySQL(c, requireTiDB, permission)
+	return openMySQL(c, backend, permission)
 }
 
-func openMySQL(c config.MySQLConf, requireTiDB bool, permission authoritysql.Permission) (*sql.DB, error) {
+func openMySQL(c config.MySQLConf, backend authoritysql.Backend, permission authoritysql.Permission) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, BuildDSN(c, requireTiDB), c.DBName, requireTiDB, c.MaxOpenConn, permission)
+	db, err := authoritysql.Open(ctx, BuildDSN(c, backend), c.DBName, backend, c.MaxOpenConn, permission)
 	if err != nil {
 		return nil, fmt.Errorf("open MySQL %s: %w", MySQLTarget(c), err)
 	}
@@ -354,7 +360,7 @@ func openMySQL(c config.MySQLConf, requireTiDB bool, permission authoritysql.Per
 		return nil, fmt.Errorf("ping MySQL %s 失败(库 %s 不存在时先按 deploy/mysql-init/00_init_zone_dbs.sql 建库并授权): %w",
 			MySQLTarget(c), c.DBName, err)
 	}
-	if requireTiDB {
+	if backend != authoritysql.BackendMySQL {
 		dialect, _, err := sqldialect.Detect(ctx, db)
 		if err != nil || dialect != sqldialect.TiDB {
 			_ = db.Close()

@@ -8,9 +8,8 @@ package logic
 //  1. **身份只认会话,帮会只认复核过的映射**(Y-01):economyCaller = callerOf + operatorGuild,
 //     快照里没有本人时以 MySQL 复核(ResolvePlayerGuild);事务回"不是成员 / 帮会不存在"时经 mapWriteErr
 //     调 VerifyPlayerGuildID 自愈。经济 RPC **不查**归属 zone(R4):S2 的申请事务已保证"是成员 ⇒ 归属区一致",
-//     合服窗口由事务内的闸门兜底,省下的同步预算留给 scene 同步投递。
-//  2. **合服闸门在事务里**:zone 一律取事务内读到的 guild.zone_id(缓存里的 zone 在合服后会说谎
-//     一个 TTL);闸门读不到按封锁处理(fail-closed),见 economyFence。
+//     省下的同步预算留给 scene 同步投递。
+//  2. (已删:事务内的合服闸门。别名合服不再有闸门,公会合并任务在维护窗口里只影响公会自己;其余纪律编号不变)
 //  3. **PENDING 不是错误**:scene 暂时不可达时指令留在 outbox 由重投循环接手,玩家看到的是视图里的
 //     "结算中",不是 error_message —— 客户端遇到任何非 0 tip 都会中断后续刷新(05 §5.4)。
 //  4. **业务拒绝回 tip,故障回 gRPC 错误**(沿用 guild_manage_logic.go 的纪律 3)。
@@ -105,7 +104,6 @@ const (
 	resultInsufficient   = "insufficient"
 	resultPendingGuard   = "pending_guard"
 	resultBusyRetry      = "busy_retry"
-	resultFence          = "fence"
 	resultNotMember      = "not_member"
 	resultLevel          = "level"
 	resultRank           = "rank"
@@ -290,31 +288,6 @@ func memberOf(g *data.GuildData, playerID uint64) (data.MemberData, bool) {
 	return data.MemberData{}, false
 }
 
-// economyFence 满足 data.FenceFunc:repo 在事务内拿读到的 guild.zone_id 调它。
-//
-// 与 mergeFenceTip 同一套三分支,区别只在返回形态 —— 这里回 data.ErrZoneMerging 让事务回滚,
-// 由 economyTip 统一翻成 kGuildZoneMerging:
-//   - 闸门未配置或 zone 为 0 → 放行(闸门是可选加固,guild.go 启动时已打过 Info);
-//   - 读不到 → **拒绝**(fail-closed):合服窗口里写出来的帮会资金会落在一个正在搬迁的 zone 上;
-//   - 标记存在 → 拒绝。
-//
-// 它在持有成员行锁期间执行一次 Redis 读,多花几毫秒可以接受(05 §5.15)。
-func (l *GuildLogic) economyFence(ctx context.Context, zoneID uint32) error {
-	if l.mergeFence == nil || zoneID == 0 {
-		return nil
-	}
-	merging, err := l.mergeFence.MergeInProgress(ctx, zoneID)
-	if err != nil {
-		logMergeFenceRefusal("GuildEconomy", zoneID, err) // 副本不可信只打 DEBUG + 每分钟汇总,其余读失败 ERROR(merge_fence.go)
-		return fmt.Errorf("%w: fence unreadable: %v", data.ErrZoneMerging, err)
-	}
-	if merging {
-		logx.Infof("[GuildEconomy] refused: zone %d is merging (%s present)", zoneID, MergeFenceKey(zoneID))
-		return data.ErrZoneMerging
-	}
-	return nil
-}
-
 // economyTip 把经济事务的错误翻成响应:先认经济哨兵,余者交给 mapWriteErr(§11.4 的统一映射,
 // 含 ErrWriteConflict → kGuildBusyRetry 与"不是成员 / 帮会不存在"时的映射自愈)。
 //
@@ -324,8 +297,6 @@ func (l *GuildLogic) economyTip(ctx context.Context, playerID, guildID uint64, e
 	switch {
 	case err == nil:
 		return nil, "", nil
-	case errors.Is(err, data.ErrZoneMerging):
-		return tipErr(constants.ErrZoneMerging, "zone merging"), resultFence, nil
 	case errors.Is(err, data.ErrGuildLevelTooLow):
 		// 捐献选项的 min_guild_level 与商品的 required_guild_level 共用一个码(05 §5.12)。
 		return tipErr(constants.ErrShopLevelTooLow, "guild level too low"), resultLevel, nil
@@ -895,7 +866,6 @@ func (l *GuildLogic) donateOnce(ctx context.Context, eco *EconomyDeps, req *pb.D
 		LeaseToken:       token,
 		NowMs:            startMs,
 		Payload:          payload,
-		Fence:            l.economyFence,
 		ClientRequestID:  req.GetClientRequestId(),
 	})
 	if errors.Is(err, data.ErrClientRequestReplayed) {
@@ -969,7 +939,7 @@ func (l *GuildLogic) upgradeGuild(ctx context.Context, req *pb.UpgradeGuildReque
 
 	// 职位、闸门、expected_level、花费全部在事务内按锁住的帮会行判定:缓存里的 role / level / funds
 	// 都可能说谎一个 TTL,而升级扣的是全帮的钱。
-	res, err := eco.Repo.UpgradeGuild(ctx, g.GuildID, playerID, req.GetExpectedLevel(), upgradeLevelLookup, l.economyFence)
+	res, err := eco.Repo.UpgradeGuild(ctx, g.GuildID, playerID, req.GetExpectedLevel(), upgradeLevelLookup)
 	if err != nil {
 		rejectTip, result, fault := l.economyTip(ctx, playerID, g.GuildID, err)
 		if fault != nil {
@@ -1130,7 +1100,6 @@ func (l *GuildLogic) buyOnce(ctx context.Context, eco *EconomyDeps, req *pb.BuyG
 		LeaseToken:         token,
 		NowMs:              startMs,
 		Payload:            payload,
-		Fence:              l.economyFence,
 		ClientRequestID:    req.GetClientRequestId(),
 	})
 	if errors.Is(err, data.ErrClientRequestReplayed) {
@@ -1230,7 +1199,7 @@ func (l *GuildLogic) refundedBalance(ctx context.Context, eco *EconomyDeps, guil
 	return balance
 }
 
-// ── 两个读 RPC(05 §5.28;不查合服闸门)────────────────────────
+// ── 两个读 RPC(05 §5.28)────────────────────────
 
 // GetGuildDonateOptions:捐献页。客户端不加载配表,选项与今日用量只能由服务端下发(契约偏差 2)。
 func (l *GuildLogic) GetGuildDonateOptions(ctx context.Context, req *pb.GetGuildDonateOptionsRequest) (*pb.GetGuildDonateOptionsResponse, error) {

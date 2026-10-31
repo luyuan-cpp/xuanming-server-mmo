@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,6 +29,8 @@ import (
 )
 
 type Options struct {
+	// AllowMySQL 表示这组用例在 MySQL 与 TiDB 上都要能跑:按真实引擎选档位(fixtureBackend),各自走正式核对。
+	// 不写就只接受 TiDB。没有「什么都不核对」的第三种连接。
 	AllowMySQL              bool
 	AdminDSN                string
 	AuthoritySchema         string
@@ -49,7 +52,7 @@ type Fixture struct {
 	maintenance         *fixtureMaintenance
 	admin               *mysql.Config
 	adminPrincipal      string
-	requireTiDB         bool
+	backend             authoritysql.Backend
 	Schema              *sql.DB
 	Operator            *sql.DB
 	Catalog             *authoritysql.Catalog
@@ -155,7 +158,11 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 		return nil, errors.New("SQL fixture拒绝非本任务loopback端点")
 	}
 	base.DBName = "mysql"
-	probe, err := authoritysql.Open(ctx, base.FormatDSN(), "mysql", !opts.AllowMySQL, 2, authoritysql.Reader())
+	backend, err := fixtureBackend(ctx, base, opts.AllowMySQL)
+	if err != nil {
+		return nil, err
+	}
+	probe, err := authoritysql.Open(ctx, base.FormatDSN(), "mysql", backend, 2, authoritysql.Reader())
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +175,7 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 	if closeErr != nil {
 		return nil, closeErr
 	}
-	schema, err := authoritysql.OpenForMigration(ctx, base.FormatDSN(), "mysql", !opts.AllowMySQL, authoritysql.Schema(principal))
+	schema, err := authoritysql.OpenForMigration(ctx, base.FormatDSN(), "mysql", backend, authoritysql.Schema(principal))
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +184,7 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 		schema.Close()
 		return nil, err
 	}
-	f := &Fixture{Schema: schema, base: base, admin: base.Clone(), adminPrincipal: principal, requireTiDB: !opts.AllowMySQL, authority: opts.AuthoritySchema, t: t, owner: owner, physical: append([]byte(nil), opts.PhysicalAuthoritySHA256...)}
+	f := &Fixture{Schema: schema, base: base, admin: base.Clone(), adminPrincipal: principal, backend: backend, authority: opts.AuthoritySchema, t: t, owner: owner, physical: append([]byte(nil), opts.PhysicalAuthoritySHA256...)}
 	t.Cleanup(f.Close)
 	defer func() {
 		if resultErr != nil {
@@ -244,7 +251,7 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 		return nil, err
 	}
 	base.DBName = opts.AuthoritySchema
-	schema, err = authoritysql.OpenForMigration(ctx, base.FormatDSN(), opts.AuthoritySchema, f.requireTiDB, authoritysql.Schema(principal))
+	schema, err = authoritysql.OpenForMigration(ctx, base.FormatDSN(), opts.AuthoritySchema, f.backend, authoritysql.Schema(principal))
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +259,7 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 	if err = opts.PrepareAuthority(ctx, schema, opts.AuthoritySchema, generation); err != nil {
 		return nil, err
 	}
-	operator, err := authoritysql.Open(ctx, base.FormatDSN(), opts.AuthoritySchema, f.requireTiDB, 2, authoritysql.Operator(principal))
+	operator, err := authoritysql.Open(ctx, base.FormatDSN(), opts.AuthoritySchema, f.backend, 2, authoritysql.Operator(principal))
 	if err != nil {
 		return nil, err
 	}
@@ -311,6 +318,31 @@ func (f *Fixture) DSN(schema string) string {
 	cfg.DBName = schema
 	return cfg.FormatDSN()
 }
+
+// Backend 是本夹具实际用的档位;测试自己开池时传它,不要写死。
+func (f *Fixture) Backend() authoritysql.Backend { return f.backend }
+
+// fixtureBackend 决定夹具走哪一档。不允许 MySQL 时就是 tidb,由 authoritysql.Open 核对;允许时问一次真实引擎,
+// 而不是一律走 mysql 档 —— 那样连到 TiDB 会被 mysql 档正确地拒绝。判据与 authoritysql 的 mysql 档同口径。
+func fixtureBackend(ctx context.Context, base *mysql.Config, allowMySQL bool) (authoritysql.Backend, error) {
+	if !allowMySQL {
+		return authoritysql.BackendTiDB, nil
+	}
+	db, err := sql.Open("mysql", base.FormatDSN())
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+	var version string
+	var comment sql.NullString
+	if err = db.QueryRowContext(ctx, "SELECT VERSION(),@@version_comment").Scan(&version, &comment); err != nil {
+		return "", err
+	}
+	if strings.Contains(strings.ToLower(version+" "+comment.String), "tidb") {
+		return authoritysql.BackendTiDB, nil
+	}
+	return authoritysql.BackendMySQL, nil
+}
 func (f *Fixture) Open(ctx context.Context, schema string, maxOpen int) (*sql.DB, error) {
 	allowed := false
 	for _, name := range f.created {
@@ -321,7 +353,7 @@ func (f *Fixture) Open(ctx context.Context, schema string, maxOpen int) (*sql.DB
 	if !allowed {
 		return nil, errors.New("SQL fixture拒绝非自有schema")
 	}
-	db, err := authoritysql.Open(ctx, f.DSN(schema), schema, f.requireTiDB, maxOpen, f.Permission)
+	db, err := authoritysql.Open(ctx, f.DSN(schema), schema, f.backend, maxOpen, f.Permission)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +375,7 @@ func (f *Fixture) OpenSchema(ctx context.Context, schema string) (*sql.DB, error
 	}
 	config := f.admin.Clone()
 	config.DBName = schema
-	db, err := authoritysql.OpenForMigration(ctx, config.FormatDSN(), schema, f.requireTiDB, authoritysql.Schema(f.adminPrincipal))
+	db, err := authoritysql.OpenForMigration(ctx, config.FormatDSN(), schema, f.backend, authoritysql.Schema(f.adminPrincipal))
 	if err != nil {
 		return nil, err
 	}

@@ -161,6 +161,7 @@ services:
       <<: *go-env
       DB_ALLOWED_DATABASES: zone_1_db
       POD_IP: ${DB_IP:?请先准备配置}
+      MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/db.yaml:/app/etc/service.yaml:ro
     networks:
@@ -369,6 +370,7 @@ services:
       ZONE_ID: "1"
       SCENE_NODE_TYPE: "0"
       SCENE_RUN_MODE: dev
+      MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/base_deploy_config.yaml:/app/bin/etc/base_deploy_config.yaml:ro
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/game_config.yaml:/app/bin/etc/game_config.yaml:ro

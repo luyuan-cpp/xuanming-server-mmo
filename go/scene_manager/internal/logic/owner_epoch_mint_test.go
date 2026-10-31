@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -30,10 +31,14 @@ import (
 // fakeOwnerEpochMinter 是单测用的 svc.OwnerEpochMinter:铸造 EVAL 走 svcCtx 同一个 go-zero 客户端(miniredis 没有
 // WAITAOF),落盘结论由用例指定,缺省 Confirmed。三个 svcCtx 构造助手(newTestSvcCtx、newTestSvcCtxWithWorldScenes、
 // newIntegrationSvcCtxWithRedisOptions)缺省装上它。
+//
+// 墙钟缺省 0:墙钟地板不起作用,铸造退化为观察值 + 1,既有用例里的 1 / 2 / 3 照旧成立;要测地板的用例用 setNowMs
+// 钉一个固定毫秒(单测不读真实墙钟,AGENTS §11.4)。
 type fakeOwnerEpochMinter struct {
 	rds *redis.Redis
 
 	mu         sync.Mutex
+	nowMs      uint64
 	durability svc.MintDurability
 	durableErr error
 	// notSent 为 true 时模拟「剩余预算不够发一次 WAITAOF」:一条都不发,返回 svc.ErrOwnerEpochMintNotSent。
@@ -49,7 +54,18 @@ func newFakeOwnerEpochMinter(rds *redis.Redis) *fakeOwnerEpochMinter {
 	return &fakeOwnerEpochMinter{rds: rds, durability: svc.MintDurabilityConfirmed}
 }
 
-func (m *fakeOwnerEpochMinter) NowMs() uint64 { return 0 }
+func (m *fakeOwnerEpochMinter) NowMs() uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.nowMs
+}
+
+// setNowMs 钉住之后每次铸造读到的墙钟(Unix 毫秒)。
+func (m *fakeOwnerEpochMinter) setNowMs(ms uint64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.nowMs = ms
+}
 
 func (m *fakeOwnerEpochMinter) EvalAndConfirm(ctx context.Context, script string, keys []string, args ...any) (svc.MintEvalResult, error) {
 	m.mu.Lock()
@@ -103,6 +119,31 @@ func testMinter(t *testing.T, sc *svc.ServiceContext) *fakeOwnerEpochMinter {
 }
 
 var errTestWaitAOFShort = errors.New("WAITAOF acked numlocal=0 numreplicas=0, want at least 1 and 0")
+
+// mintLuaArgs 把直接 EVAL 铸造脚本的用例参数补齐到 ARGV[9]:传进来的 ARGV[1..k] 原样,ARGV[k+1..8] 补空串
+// (location 期望 = any、不带位置修订),ARGV[9] = ARGV[1] + 1 —— 等同墙钟地板不起作用的铸造,与 G3a 之前 INCR
+// 的结果相同。生产只经 placePlayerLocationCtx 发这段脚本,ARGV[9] 由 mintTargetEpoch 给出。ARGV[1] 不是十进制时
+// panic(用例写错)。
+func mintLuaArgs(args ...any) []any {
+	observed, err := strconv.ParseUint(fmt.Sprint(args[0]), 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("mintLuaArgs: ARGV[1] %v is not a decimal epoch: %v", args[0], err))
+	}
+	return mintLuaArgsWithTarget(strconv.FormatUint(observed+1, 10), args...)
+}
+
+// mintLuaArgsWithTarget 同 mintLuaArgs,ARGV[9] 由用例显式给出(测地板与目标值校验)。
+func mintLuaArgsWithTarget(target string, args ...any) []any {
+	if len(args) > 8 {
+		panic("mintLuaArgsWithTarget: at most 8 ARGV before the target")
+	}
+	out := make([]any, 0, 9)
+	out = append(out, args...)
+	for len(out) < 8 {
+		out = append(out, "")
+	}
+	return append(out, target)
+}
 
 // --- 确认先于路由 -------------------------------------------------------------
 
@@ -439,20 +480,226 @@ func TestMintEpochLuaReplayBranchRewritesEpochForWaitAOF(t *testing.T) {
 	mr.Set(ownerepoch.OwnerEpochKey(playerID), "1")
 	mr.Set(ownerepoch.HandoffKey(playerID), marker)
 
-	first, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, "1", "placed-bytes", marker)
+	first, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "placed-bytes", marker)...)
 	require.NoError(t, err)
 	require.Equal(t, "2", fmt.Sprint(first))
 
 	mr.SetTTL(ownerepoch.OwnerEpochKey(playerID), time.Hour)
-	replay, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, "1", "placed-bytes", marker)
+	replay, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "placed-bytes", marker)...)
 	require.NoError(t, err)
 	assert.Equal(t, "-2", fmt.Sprint(replay), "重放识别命中")
 	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "写回的是原值")
 	assert.Zero(t, mr.TTL(ownerepoch.OwnerEpochKey(playerID)), "识别分支对 owner_epoch 发了一次写")
 
 	mr.SetTTL(ownerepoch.OwnerEpochKey(playerID), time.Hour)
-	other, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, "1", "someone-else-bytes", marker)
+	other, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys, mintLuaArgs("1", "someone-else-bytes", marker)...)
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(other), "不是本请求的写:回 0")
 	assert.Greater(t, mr.TTL(ownerepoch.OwnerEpochKey(playerID)), time.Duration(0), "回 0 的分支一个字节都不写")
+}
+
+// ---------------------------------------------------------------------------
+// G3a 墙钟地板(docs/design/zone-redis-regression-guard-20261022.md §4.3.1)
+//
+// 铸造值 = max(观察值 + 1, 当前毫秒)。zone Redis 回退丢掉最近的铸造之后,下一次铸造取墙钟,必然越过回退前铸出的
+// 一切值,不会把已经发给某个节点的值再铸一次给另一个节点(identity-routing-redis#1)。
+// ---------------------------------------------------------------------------
+
+// 用例钉住的墙钟(2025-10-09 前后的 Unix 毫秒,约 1.76e12,远小于 2^53)。
+const testWallClockMs uint64 = 1_760_000_000_000
+
+func TestMintTargetEpoch(t *testing.T) {
+	cases := []struct {
+		name        string
+		observed    uint64
+		nowMs       uint64
+		want        uint64
+		clockBehind bool
+	}{
+		{"floor_above_observed_plus_one", 1, testWallClockMs, testWallClockMs, false},
+		{"first_mint_from_zero", 0, testWallClockMs, testWallClockMs, false},
+		{"floor_equals_observed_plus_one", testWallClockMs - 1, testWallClockMs, testWallClockMs, false},
+		{"floor_equals_observed", testWallClockMs, testWallClockMs, testWallClockMs + 1, true},
+		{"floor_below_observed", testWallClockMs + 5, testWallClockMs, testWallClockMs + 6, true},
+		{"clock_unset", 4, 0, 5, true},
+		{"just_below_max", maxMintedOwnerEpoch - 1, 0, maxMintedOwnerEpoch, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, behind, err := mintTargetEpoch(c.observed, c.nowMs)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, got)
+			assert.Equal(t, c.clockBehind, behind)
+		})
+	}
+
+	for name, in := range map[string][2]uint64{
+		"observed_at_max":          {maxMintedOwnerEpoch, 0},
+		"observed_uint64_max":      {^uint64(0), 0},
+		"clock_in_nanoseconds":     {1, testWallClockMs * 1_000_000},
+		"clock_one_above_max":      {1, maxMintedOwnerEpoch + 1},
+		"clock_in_nanoseconds_max": {1, ^uint64(0)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, _, err := mintTargetEpoch(in[0], in[1])
+			require.ErrorIs(t, err, errOwnerEpochMintTargetOutOfRange)
+		})
+	}
+}
+
+// 首次落点取墙钟:键、location 与下发的 RoutePlayerEvent 都是当前毫秒,不是 1。
+func TestEnterScene_WallClockFloorMintsCurrentMillis(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	testMinter(t, sc).setNowMs(testWallClockMs)
+
+	const (
+		playerID = uint64(6920)
+		targetID = uint64(7920)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+	want := strconv.FormatUint(testWallClockMs, 10)
+	assert.Equal(t, want, ownerEpochRaw(t, sc, playerID))
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, testWallClockMs, loc.OwnerEpoch, "location 与键同值")
+	require.Len(t, *captured, 1)
+	assert.Equal(t, testWallClockMs, decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+}
+
+// 凭标记的跨节点交接铸出墙钟值 T 之后推路由失败:回滚仍是 INCR 一格(T → T+1),回执是原标记,标记转写成
+// "{T+1}:…"。C++ 源端按「回滚后 ≥ 标记 epoch + 2」采纳(player_lifecycle.h ClassifyOwnership)。
+func TestEnterScene_WallClockFloorRouteFailureBumpsOneAndForwardsMarker(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Kafka = &countingKafkaWriter{err: errors.New("broker unavailable")}
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const (
+		playerID = uint64(6921)
+		oldScene = uint64(7921)
+		targetID = uint64(7922)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	writeHandoffMarker(t, sc, playerID, 1)
+	withReachableSceneNode(t, sc, "10", "20")
+	testMinter(t, sc).setNowMs(testWallClockMs)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	rolledBack := testWallClockMs + 1
+	assert.Equal(t, rolledBack, resp.OwnerEpochAfterRollback)
+	assert.Equal(t, strconv.FormatUint(rolledBack, 10), ownerEpochRaw(t, sc, playerID), "回滚只 INCR 一格")
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, oldScene, loc.SceneId)
+	assert.Equal(t, rolledBack, loc.OwnerEpoch, "location 与键同值(C++ 交叉校验)")
+	assert.Equal(t, "1:1757000000000", loc.RollbackReceipt)
+	forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	assert.Equal(t, strconv.FormatUint(rolledBack, 10)+":1757000000000", forwarded)
+}
+
+// 墙钟远超上限(这里取 uint64 最大值,纳秒级的时钟同样超限)时 fail-closed:铸造通道一次都不调,Redis 一个字节都不写。
+func TestPlacePlayerLocation_WallClockOutOfRangeFailsClosed(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	minter := testMinter(t, sc)
+	minter.setNowMs(^uint64(0))
+	const playerID = uint64(6922)
+
+	_, err := placePlayerLocation(sc, playerID, 7923, "10", testZoneId, placementGuard{observedEpoch: 0, mint: true})
+	require.ErrorIs(t, err, errOwnerEpochMintTargetOutOfRange)
+	assert.Zero(t, minter.callCount())
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
+	assert.False(t, mr.Exists(ownerepoch.OwnerEpochKey(playerID)))
+}
+
+// 铸造脚本直接按 ARGV[9] 落值;重发认的是同一个目标值;被 bump 回滚(T+1)之后的重发不再认。
+func TestMintEpochLuaFloorTargetReplayAndRollback(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6923)
+	marker := ownerepoch.Handoff{Epoch: 1, SavedAtMs: 1757000000000}.String()
+	mintKeys := []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
+	rollbackKeys := []string{getPlayerLocationKey(playerID), ownerepoch.OwnerEpochKey(playerID), ownerepoch.HandoffKey(playerID)}
+	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), "old-bytes"))
+	require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), marker))
+	target := strconv.FormatUint(testWallClockMs, 10)
+	args := mintLuaArgsWithTarget(target, "1", "placed-bytes", marker)
+
+	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, args...)
+	require.NoError(t, err)
+	require.Equal(t, target, fmt.Sprint(result))
+	require.Equal(t, target, ownerEpochRaw(t, sc, playerID))
+
+	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, args...)
+	require.NoError(t, err)
+	assert.Equal(t, "-"+target, fmt.Sprint(result), "原样重发:认出本请求自己的写")
+
+	rolledBack := strconv.FormatUint(testWallClockMs+1, 10)
+	result, err = sc.Redis.Eval(luaRollbackPlayerPlacement, rollbackKeys,
+		"placed-bytes", "restored-bytes", target, "bump", marker, rolledBack+":1757000000000", "300")
+	require.NoError(t, err)
+	require.Equal(t, "-"+rolledBack, fmt.Sprint(result), "回滚仍是 INCR 一格")
+
+	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, args...)
+	require.NoError(t, err)
+	assert.Equal(t, "0", fmt.Sprint(result), "回滚之后的重发:目标值对不上,不是本请求已生效")
+	assert.Equal(t, rolledBack, ownerEpochRaw(t, sc, playerID))
+}
+
+// 目标值不合格时脚本回 error_reply,任何读写之前就拒绝:缺省、空串、前导零、非数字、不大于观察值、超过 2^53 − 2、
+// 观察值本身不规范。按十进制串比较,不经 Lua double:2^53 相邻的两个值也分得开。
+func TestMintEpochLuaRejectsInvalidTargetWithoutWriting(t *testing.T) {
+	cases := []struct {
+		name string
+		args []any
+	}{
+		{"target_missing", []any{"1", "loc", "", "", "", "", "", ""}},
+		{"target_empty", mintLuaArgsWithTarget("", "1", "loc", "")},
+		{"target_leading_zero", mintLuaArgsWithTarget("02", "1", "loc", "")},
+		{"target_not_decimal", mintLuaArgsWithTarget("2x", "1", "loc", "")},
+		{"target_equals_observed", mintLuaArgsWithTarget("1", "1", "loc", "")},
+		{"target_below_observed", mintLuaArgsWithTarget("9", "10", "loc", "")},
+		{"target_above_max", mintLuaArgsWithTarget("9007199254740991", "1", "loc", "")},
+		{"target_far_above_max", mintLuaArgsWithTarget("18446744073709551615", "1", "loc", "")},
+		{"observed_leading_zero", mintLuaArgsWithTarget("2", "01", "loc", "")},
+		{"observed_not_decimal", mintLuaArgsWithTarget("2", "x", "loc", "")},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			const playerID = uint64(6924)
+			mintKeys := []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
+			require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), fmt.Sprint(c.args[0])))
+			_, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, c.args...)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "owner epoch mint target invalid")
+			assert.Equal(t, fmt.Sprint(c.args[0]), ownerEpochRaw(t, sc, playerID), "epoch 一个字节都不动")
+			assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "location 一个字节都不写")
+		})
+	}
+
+	// 上限本身合法;按串比较能区分 2^53 − 2 与 2^53 − 1(double 下前者 +1 与后者相等)。
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6925)
+	mintKeys := []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
+	maxText := strconv.FormatUint(maxMintedOwnerEpoch, 10)
+	require.Equal(t, "9007199254740990", maxText, "luaMintTargetCheck 的字面量必须与 maxMintedOwnerEpoch 同值")
+	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, mintLuaArgsWithTarget(maxText, "0", "loc", "")...)
+	require.NoError(t, err)
+	assert.Equal(t, maxText, fmt.Sprint(result))
 }

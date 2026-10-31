@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"strings"
 	"sync"
@@ -154,7 +155,7 @@ func (r *recordingDeps) deps() externalDeps {
 			return r.db, nil
 		},
 		// 只验证装配/回收；不冒充任何真实SQL原角色围栏证据。
-		newRoleAuthority: func(context.Context, *sql.DB, string) (inbox.RoleAuthority, error) {
+		newRoleAuthority: func(context.Context, *sql.DB, string, authoritysql.Backend) (inbox.RoleAuthority, error) {
 			if r.failAt == "role" {
 				return nil, errInjected
 			}

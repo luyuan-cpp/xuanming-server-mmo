@@ -32,6 +32,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "muduo/base/noncopyable.h"
 #include "muduo/net/TcpConnection.h"
@@ -69,11 +70,33 @@ public:
     // 在 const 方法里对按值成员调用编不过(gate 能那样写是因为它持的是引用成员)。
     void Send(const muduo::net::TcpConnectionPtr &conn, const ::google::protobuf::Message &message) const;
 
+    // 一份完整的下行帧(与 Send 写出的字节逐字节相同)。只能由 EncodeFrame 产出,SendEncoded 只收这个类型:
+    // 裸序列化字节进不来(理由同 Send)。
+    class EncodedFrame
+    {
+        friend class BattleClientEdge;
+        explicit EncodedFrame(std::string bytes) : bytes_(std::move(bytes)) {}
+        std::string bytes_;
+    };
+
+    // 编码一次、多条连接复用(观众帧,battle-spectate-tiered-fanout.md §10 第 3 条):同一帧发给多条直连时
+    // 先 EncodeFrame 一次,再逐条 SendEncoded,序列化、分帧与校验和不再随连接数重复。
+    // 前提是帧与收信连接无关;将来要按连接签名 / 加料,这条复用就作废。
+    static EncodedFrame EncodeFrame(const ::google::protobuf::Message &message);
+    // 经 send(StringPiece) 写出:loop 内就地写 socket,写不完的部分拷进本连接的输出缓冲,入参不被改动,
+    // 同一份帧可以反复发。不能改成对共享 Buffer 调 send(Buffer*):它在 loop 内会 retrieveAll() 清空传入的
+    // 缓冲,第一条连接发完,后面的连接拿到的就是空帧。
+    void SendEncoded(const muduo::net::TcpConnectionPtr &conn, const EncodedFrame &frame) const;
+
     // 停机收尾:仍处于 connected 的直连 forceClose;已被房间管理器 shutdown() 的连接
     //(终局包还在排空)不再动它,由其自身的延迟强关收尾,保证"终局包先于 FIN"。
     void DisconnectAll(const char *reason);
 
     size_t ConnectionCount() const { return sessions_.size(); }
+
+    // 并发连接的有效上限(闸 1 的判据,现读部署配置):battle_max_connections,为 0(仅 dev/test 合法)时取
+    // kHardMaxConnections。「0 = 硬上限」这条规则只写在这里,节点观众席配额由它派生(BattleRoomManager::SetClientEdge)。
+    size_t EffectiveMaxConnections() const;
 
 private:
     struct DirectSession

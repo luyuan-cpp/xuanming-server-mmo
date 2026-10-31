@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <chrono>
 #include <functional>
@@ -18,6 +19,7 @@
 #include "time/comp/timer_task_comp.h"
 
 #include "battle_room_table.h"
+#include "battle_spectate_relay.h"
 
 // 回合引擎(cpp/libs/services/battle,纯逻辑库,API 见设计文档 §5.1)
 #include "system/turn_battle_engine.h"
@@ -28,7 +30,9 @@
 #include "proto/battle/battle_data.pb.h"
 #include "proto/battle/battle_node.pb.h"
 #include "proto/battle/player_battle.pb.h"
+#include "proto/common/base/message.pb.h"
 #include "proto/common/base/session.pb.h"
+#include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/contracts/kafka/match_event.pb.h"
 
 // 回合制战斗房间管理器(设计文档 §5.2)。
@@ -46,6 +50,8 @@
 //   大厅公告 → 无活直连时 GateCommand{PushToPlayerEvent},topic=gate-cmd_g<N> 的
 //             gate_node_id % P 号分区,key=player_id,
 //             target_gate_id=gate_node_id + target_instance_id=BattleRouting.gate_instance_id;
+//             GateCommand.player_id 与 PushToPlayerEvent.player_id 都填目标玩家(gate 投递前核对
+//             会话当前玩家,session_id 回绕 / gate node_id 复用时不会写进别人的连接),0 在本侧拒发;
 //             只有 NotifyBattleAssigned / NotifyBattleStart 走这里(turn-based §22 D68),
 //             战斗帧不回落。battle 不再发任何 gate 绑定事件(§22 D67:gate 不中继战斗);
 //   结算     → SceneCommand{DispatchEvent, BattleSettlementEvent},
@@ -56,7 +62,10 @@
 //   对局结果 → contracts.kafka.BattleResultEvent,topic=match-results(全局无 zone 段),
 //             key=battle_id;只在真实打完(FinishBattle)时发,Destroy/Abort 作废不发。
 //             带活动上下文(帮会同道历练)的局先落 zone Redis battle:activity_result:{battle_id}
-//             再发,guild 销账前每 10s 重发(docs/design/guild-phase2/06-activities.md §6.19–§6.21)。
+//             再发,guild 销账前每 10s 重发(docs/design/guild-phase2/06-activities.md §6.19–§6.21);
+//   观战帧   → 直连席之外的观众(battle-spectate-tiered-fanout.md §15.4):SpectateFrameEvent,不套信封。
+//             L1 给房间挂接的每台 gate 各一条,L2 只往全服广播 topic 发一条;topic / 分区 / key 与失败语义见
+//             battle_spectate_relay.h。这是 §22 D68 的显式例外(D94),参战帧仍然只走直连。
 //
 // 客户端直连(设计文档 §18,D23-D28;收缩见 turn-based §22):直连是战斗唯一通路 ——
 // 上行只从直连面(BattleClientEdge)进来,下行分两个显式出口:战斗帧 PushBattleFrame
@@ -105,15 +114,11 @@ public:
 
     // ---- 客户端直连面(main.cpp 装配;BattleClientEdge 生命周期由 main 的运行时上下文持有) ----
 
-    void SetClientEdge(BattleClientEdge *edge)
-    {
-        if (edge == nullptr)
-        {
-            edge_.reset();
-            return;
-        }
-        edge_ = std::ref(*edge);
-    }
+    // 借用直连面;nullptr = 收回借用(不销毁对象,也不动观众席配额)。
+    // 借用非空直连面时,按它的有效连接上限算出节点级观众席配额并注入(SetObserverSeatQuota,口径见公开区
+    // 「节点级观众席配额」):main.cpp 在启动门禁之后、gRPC 开服之前调用一次,部署配置此刻已加载;
+    // 之后准入只比对注入值,请求路径不读配置。
+    void SetClientEdge(BattleClientEdge *edge);
 
     // 票据握手通过后把直连挂到房间上。校验"房间仍存在 + 该玩家按 role 确在名单上";
     // 同一玩家已有直连(重连)则关闭旧连接、换成新的。成功时回填该玩家的 gate 会话号
@@ -161,14 +166,18 @@ public:
     bool AcceptsPlacementOperation(uint64_t,const std::string&,const std::string&) const;
 
     // 观战接入(设计文档 §10.5)。错误 tip 约定:房间不存在=kEntityIsNull
-    // (match 据此懒剔除 Redis 索引并换场重试)、观众席满=kMatchSpectateFull(match_error 段,
-    // battle→match 与 match→客户端共用;席位按名单人数计,含待连接与宽限中的观众)、
+    // (match 据此懒剔除 Redis 索引并换场重试)、房间不可观战=kInvalidParameter(可见性第二道闸,
+    // battle-spectate-tiered-fanout.md §10 第 6 条:建房时冻结的 spectate_visibility 不是 PUBLIC 即拒,
+    // 未填与 PRIVATE 同样拒绝;房间其实还在,不能回 kEntityIsNull)、观众席满=kMatchSpectateFull
+    // (match_error 段,battle→match 与 match→客户端共用;单房间席位 kMaxObserversPerRoom 与节点级观众席配额
+    // 任一满都回它,语义都是「直连席已满」;席位按名单人数计,含待连接与宽限中的观众)、
     // 观战操作墓碑表满=kRateLimitExceeded(节点级过载,可重试,不是满员)、
     // 观众是参战者=kInvalidParameter、签不出票据=kServiceUnavailable(turn-based §22 D70:
     // 新观众不登记;幂等重推路径把已登记的观众摘除并关其直连 —— match 收到任何错误都会
     // DEL 观战标记,房间里不能留着这名观众)。幂等:同 observer 同 op 重复 Add 只重推落点分配
-    // (有活直连时连同观战首帧),且先于满员判定。拒绝即终态只对立起墓碑之后的拒绝成立(房间不存在、
-    // 满员、签票失败等):同 op 的墓碑保持封闭,迟到的同 op Add 不会翻成准入。两类拒绝不立墓碑、
+    // (有活直连时连同观战首帧),且先于可见性闸与满员 / 配额判定(可见性建房后不变,私密局的名单恒为空,
+    // 这个顺序放不进私密局的观众)。拒绝即终态只对立起墓碑之后的拒绝成立(房间不存在、不可观战、
+    // 满员、签票失败等):同 op 的墓碑保持封闭,迟到的同 op Add 不会翻成准入,回首次拒绝码。两类拒绝不立墓碑、
     // 同一 op 之后仍可能被重新判定:入参校验失败(目标实例 / op 形状 / 准入窗口等)与墓碑表满;
     // 要封住它们只能靠 match 收到错误后发的 RemoveObserver 补立封闭墓碑。
     // 新登记的观众从此刻起计 kObserverConnectGrace,到期未建直连即被回收(ReclaimExpiredObserverSeats)。
@@ -177,6 +186,36 @@ public:
     // 幂等移除(match 互斥清退路径):经直连向该观众推 SpectateEnd(REMOVED)并关直连。
     void HandleRemoveObserver(const ::RemoveObserverRequest &request, ::RemoveObserverResponse &response);
     void HandleQueryObserver(const ::QueryObserverRequest &request, ::QueryObserverResponse &response);
+
+    // ---- 观战中继(L1)/ 全服广播(L2)(battle-spectate-tiered-fanout.md §15.4) ----
+    //
+    // 档位由 match 记账,battle 只认两件事:本场挂了哪些中继 gate、是否已升广播。两者都是房间的内存状态,
+    // 随房间消失;节点重启后 target_instance_id 对不上,旧挂接不会被继承。
+    // 下面两个接口的前置校验相同,顺序是契约,任何一项不过都没有副作用,回包只带 error_message:
+    //   1. target_instance_id 不是本实例 = kInvalidParameter;
+    //   2. 房间不存在 = kEntityIsNull(match 据此懒剔除观战索引,别换 tip);
+    //   3. 房间不公开 = kInvalidParameter(可见性闸,与 AddObserver 同口径:未填与 PRIVATE 一样拒)。
+    // 通过后回包带本实例 UUID 与房间作废期限,match 写进观战凭证:gate 据前者丢僵尸帧,据后者在等不到终局帧时兜底收尾。
+    // 补发的 STATE 帧是观众版当前快照(与 L0 首帧同源;observer_count = 0,gate 不知道全服人数),等结果回执期间是冻结的
+    // 可见状态,不提前泄露终局。帧没发出去不影响回包(只计数,见 battle_spectate_relay.h),下一回合的帧自愈。
+
+    // 把一台 gate 挂进本场的中继集合:此后每回合给它发一帧,结束时发终局帧;升广播后不再给它发任何帧(TURN 与 END 都只走广播)。
+    // gate_node_id 为 0 或 gate_instance_id 为空 = kInvalidParameter(空目标会关掉 gate 侧的目标过滤,AGENTS.md §7.2)。
+    // 已是广播档:回 broadcast = true,不挂 gate、不发帧(每台 gate 都在读广播,match 据此把档位同步成 L2)。
+    // 新挂接,或同 gate_node_id 换了实例(node_id 会被回收,旧实例已死,直接覆盖):只给这台 gate 补发一帧 STATE。
+    // 幂等:同 (gate_node_id, gate_instance_id) 重复挂接只回包、不再补发(match 并发准入与回包丢失后的重试都会走到这里)。
+    void HandleAttachRelayGate(const ::AttachRelayGateRequest &request, ::AttachRelayGateResponse &response);
+
+    // 把本场升为全服广播,单向:只升不降。此后每回合与终局帧都只往广播 topic 发一帧,不再逐 gate 中继。
+    // 首次升档往广播 topic 发一帧 STATE。幂等:重复调用只回包、不再发帧。
+    void HandlePromoteSpectateBroadcast(const ::PromoteSpectateBroadcastRequest &request,
+                                        ::PromoteSpectateBroadcastResponse &response);
+
+    // 注入观战帧出口(显式依赖);空 = 默认的真实 Kafka 生产者。给测试用,生产不调用;只能在 loop 线程调用。
+    void SetSpectateFrameSink(battle_spectate_relay::FrameSink sink)
+    {
+        spectateFramePublisher_.SetSink(std::move(sink));
+    }
 
     // ---- 客户端直连消息(BattleClientEdge 派发;权威身份来自已验证的票据,不信请求体) ----
     //
@@ -275,6 +314,24 @@ public:
     // 防观战成为放大器。满员回 kMatchSpectateFull(见 HandleAddObserver)。
     static constexpr size_t kMaxObserversPerRoom = 20;
 
+    // 节点级观众席配额(battle-spectate-tiered-fanout.md §10 第 4 条)。观众直连与参战者共用直连面的连接上限
+    // (BattleClientEdge::EffectiveMaxConnections),不给观众划额度,热门节点上的
+    // 观众会把参战者挤在直连面之外。全节点已登记的观众席(各房间名单人数之和,口径同单房间满员:含待连接与
+    // 宽限中的观众)达到配额即拒新观众,回 kMatchSpectateFull:对 match 与单房间满员同义(「直连席已满」),
+    // P1 起据此转 gate 中继档。
+    // 配额 = max(kMaxObserversPerRoom, 有效连接上限 / kObserverConnectionShareDivisor):观众最多占四分之一,
+    // 连接上限很小时也至少坐得下一个满员房间。
+    static constexpr size_t kObserverConnectionShareDivisor = 4;
+    static constexpr size_t ObserverSeatQuotaFor(const size_t effectiveMaxConnections)
+    {
+        return std::max(kMaxObserversPerRoom, effectiveMaxConnections / kObserverConnectionShareDivisor);
+    }
+
+    // 注入节点级观众席配额。生产由 SetClientEdge 在装配时注入;测试在借用直连面之后直接注入小值
+    // (借用非空直连面会按连接上限重新注入)。只约束此后的新准入:调低后在册人数可能暂时高于配额,
+    // 已登记的观众不会因此被摘除,同 op 幂等重放照常成功。只能在 loop 线程调用(与准入同线程,无锁)。
+    void SetObserverSeatQuota(const size_t quota) { observerSeatQuota_ = quota; }
+
     // 满员按名单人数判定(routingByObserver),名单里除了已挂直连的观众,还有登记后尚未建直连、
     // 或直连断开等重连的观众。客户端崩溃 / 放弃观战而 match 没来 Remove 时,后两类会一直占座,
     // 房间满员后新观众全被拒。所以:
@@ -307,6 +364,10 @@ private:
         // CreateBattleRequest.activity_context 原样副本(缺省 = kind NONE = 普通对局)。
         // battle 不解释业务字段,只在 FinishBattle 回显进 BattleResultEvent 并据 kind 选结果通道。
         ::BattleActivityContext activityContext;
+        // CreateBattleRequest.spectate_visibility 原样副本:建房时赋值一次,整场不变,只供观战准入
+        // (AddObserver 的第二道闸与 AttachRelayGate / PromoteSpectateBroadcast)读,只放行 PUBLIC。
+        // 缺省 UNSPECIFIED 与 PRIVATE 一样不可观战(默认拒绝)。
+        ::eSpectateVisibility spectateVisibility = ::SPECTATE_VISIBILITY_UNSPECIFIED;
         bool requiresResultConfirmation = false;
         // 原Create采用值，不以当前节点support替代采用证明。v1绝不进入旧Redis/Kafka个人直投。
         uint32_t outcomeProtocol = 0;
@@ -351,6 +412,16 @@ private:
         // 只挂「最早期限」的一次性定时器。摘除观众不重挂(期限只会变晚,早到一次由回收入口重挂);
         // 新增期限时重挂。回调只捕获 WeakSelf() 与 battleId(AGENTS.md §11.7),随房间析构取消。
         TimerTaskComp observerSeatTimer;
+        // L1 中继:gate_node_id → gate_instance_id(中继帧的 target_instance_id)。只经 HandleAttachRelayGate 写入,
+        // 键值都已校验非空;同 node_id 新实例覆盖旧实例。有序容器:发帧顺序稳定。升广播后不再往这里发帧,也不再写入。
+        std::map<uint32_t, std::string> relayGates;
+        // L2:本场已升全服广播,只升不降。
+        bool spectateBroadcast = false;
+        // 本场有没有观战帧要发。绝大多数对局一个观众都没有,连观众版状态都不用做。
+        bool HasSpectateAudience() const
+        {
+            return !routingByObserver.empty() || !relayGates.empty() || spectateBroadcast;
+        }
         TimerTaskComp roundTimer;      // 回合 action_deadline
         TimerTaskComp battleTimer;     // 整场 deadline_ms(强制收尾,防房间泄漏)
         uint64_t actionDeadlineMs = 0; // 当前回合行动截止(Unix 毫秒,GetBattleState 回填)
@@ -451,7 +522,11 @@ private:
     void FillSelfItems(const BattleRoom &room, ::BattleStateS2C &state,
                        uint64_t viewerPlayerId) const;
 
-    // 观战快照:全量快照 + 房间 timer 回填的行动截止 + 当前观众数。战斗帧(只走直连):
+    // 观众版全量快照:全量快照 + 房间 timer 回填的行动截止 + 观众视角裁剪。L0 首帧与中继 / 广播的 STATE 帧共用这一份,
+    // observerCount 由调用方按各自口径给。等结果回执期间取冻结的 pendingVisibleState,不提前泄露终局。
+    ::SpectateStateS2C BuildSpectatorState(const BattleRoom &room, uint32_t observerCount) const;
+
+    // 观战快照:全量快照 + 当前观众数(LiveObserverCount)。战斗帧(只走直连):
     // 首帧由直连握手触发(OnDirectConnectionVerified),AddObserver 同会话幂等重推时
     // 有活直连才会真正送达。
     void PushSpectateState(const BattleRoom &room, uint64_t observerId) const;
@@ -460,10 +535,40 @@ private:
     // 与满员判定的口径不同:满员按名单人数,含待连接与宽限中的观众。
     uint32_t LiveObserverCount(const BattleRoom &room) const;
 
-    // 收尾/作废统一出口:经直连向全部观众推 SpectateEndS2C,再逐个 RetireObserver
-    // (封墓碑、出名单、关直连),最后取消观众席定时器(此后任何广播都不会再打到观众)。
+    // 全节点已登记的观众席 = 各房间名单(routingByObserver)人数之和,节点级观众席配额按它判定。
+    // 每次现算、不另设计数器:停机清房等路径会连同名单整间删房,计数器得在每条删房路径上对齐,
+    // 漏一条就永久漂移;AddObserver 不是热路径,遍历房间表即可。
+    size_t RegisteredObserverSeats() const;
+
+    // 收尾/作废统一出口:同一帧 SpectateEndS2C 只序列化一次,先发给中继 gate 或广播(PublishSpectateEnd),再经直连推给
+    // 全部观众(PushSpectatorFrame)并逐个 RetireObserver(封墓碑、出名单、关直连),最后取消观众席定时器(此后任何广播都
+    // 不会再打到观众)。调用方不调本函数的路径(停机时结果未落定的房间)三个通道一起不发,中继观众靠 gate 的空闲超时收尾。
     void NotifySpectateEndAndClose(BattleRoom &room, ::eSpectateEndReason reason,
                                    ::eBattleOutcome outcome);
+
+    // ---- 观战中继(L1)/ 全服广播(L2)的出站(寻址与失败语义在 battle_spectate_relay.h) ----
+
+    // Attach / Promote 共用的前置校验(顺序与错误码见公开区契约)。通过返回房间;否则返回 nullptr 并写 rejectTip。
+    BattleRoom *FindSpectateChannelRoom(uint64_t battleId, const std::string &targetInstanceId, uint32_t &rejectTip);
+
+    // 一帧的公共字段;目标字段由 SpectateFramePublisher 按通道写入。envelope 只在这里序列化一次,gate 加自己的帧头后原样转发。
+    ::contracts::kafka::SpectateFrameEvent NewSpectateFrame(const BattleRoom &room,
+                                                            ::contracts::kafka::eSpectateFrameKind kind,
+                                                            uint32_t roundIndex, const ::MessageContent &envelope) const;
+
+    // 观众版当前快照编成 STATE 帧(161,observer_count = 0),round_index 取快照的回合(§15.4)。
+    // 注意快照的回合是「正在收集行动、还没结算」的回合 r,紧随其后的 TURN 同样带 r:gate 不能用 STATE 推进已收回合,
+    // 否则这一回合的结算帧会被当成重复丢掉。
+    ::contracts::kafka::SpectateFrameEvent BuildSpectateStateFrame(const BattleRoom &room) const;
+
+    // 每回合一帧 TURN:已升广播只发广播 1 条;否则每台中继 gate 各 1 条。两者都没有时什么都不做。
+    void PublishSpectateTurn(const BattleRoom &room, uint32_t roundIndex, const ::MessageContent &envelope);
+
+    // 终局帧 END,通道与 TURN 相同:已升广播只发广播 1 条(升档之前挂的 gate 也不再发);否则每台中继 gate 各 1 条。
+    // 升档后不能再发中继:两条 topic 之间没有顺序,中继 END 越过广播上的最后一回合 TURN 时,gate 收尾后把那一帧丢掉。
+    // 代价:广播上的 END 丢了,这些 gate 上的观众要等空闲超时收尾(与最后一回合之前丢帧同一条兜底)。
+    // round_index 取引擎当前回合(最后一回合)。
+    void PublishSpectateEnd(const BattleRoom &room, const ::MessageContent &envelope);
 
     // 观众出房的唯一收口(补签失败 / RemoveObserver / StopWatchBattle / 收尾作废 / 席位回收):
     // 封闭该观众当前观战操作的墓碑(原准入截止已过即删,否则置 cancelled,挡住同 op 迟到的 Add),
@@ -492,6 +597,16 @@ private:
     // const:PushSpectateState 是 const 方法。
     void PushBattleFrame(const BattleRoom &room, uint64_t playerId, uint32_t messageId,
                          const ::google::protobuf::Message &message) const;
+
+    // 发给全部观众的同一帧(SpectateTurnResult / SpectateEnd):envelope 由调用方序列化好(同一份也用于中继 / 广播),
+    // 这里只分帧一次,再对名单上每条活直连写出同一份字节(battle-spectate-tiered-fanout.md §10 第 3 条);逐人的判定与
+    // 丢弃日志同 PushBattleFrame。只用于与收信人无关的观众帧;按人裁剪的帧(参战者回合结果、观战首帧)仍走 PushBattleFrame。
+    void PushSpectatorFrame(const BattleRoom &room, const ::MessageContent &envelope) const;
+
+    // 战斗帧出口的逐人路由判定(battle_push_policy:只走直连),上面两个出口共用同一判定:
+    // 有活直连返回它;否则打采样丢弃日志,返回空。
+    muduo::net::TcpConnectionPtr BattleFrameConnOf(const BattleRoom &room, uint64_t playerId,
+                                                   uint32_t messageId) const;
 
     // 大厅公告出口:有活直连直发,否则回落 Kafka→gate(routing 只在回落时用)。
     // **只**用于 NotifyBattleAssigned / NotifyBattleStart —— 它们发生在直连建立之前,
@@ -633,6 +748,10 @@ private:
 
     // 仅借用运行时上下文持有的直连面；清空借用不销毁对象。
     std::optional<std::reference_wrapper<BattleClientEdge>> edge_;
+    // 节点级观众席配额(SetObserverSeatQuota)。装配前(还没借到直连面)只留一个满员房间的余量。
+    size_t observerSeatQuota_ = kMaxObserversPerRoom;
+    // 观战中继 / 广播的出口;默认走真实 Kafka 生产者(SetSpectateFrameSink 可换)。
+    battle_spectate_relay::SpectateFramePublisher spectateFramePublisher_;
 
     // 房间表:增删与生命周期回调(SetRoomLifecycleHooks)绑死在 RoomTable 里,本类只经
     // EmplaceRoom / EraseRoom 调它的 Emplace / Erase,其余路径只读(FindRoom / AbortAllRooms 抄 id)。
@@ -641,7 +760,8 @@ private:
     struct CreationOperation {std::string operationId;std::string canonicalRequest;uint64_t expiresMs=0;bool aborted=false;};
     std::unordered_map<uint64_t,CreationOperation> creationOperations_;
     // 取消先于Add时房间可能尚不存在；墓碑在manager而非room，保留到原准入截止。
-    struct SpectatorOperation { uint64_t admitBeforeMs{0}; std::string canonicalRequest; bool cancelled{true}; };
+    // rejectTip:本操作首次被拒的码,同 op、同请求的重放回同一结论(0 = 不是被拒关闭,而是被 Remove / 回收封闭)。
+    struct SpectatorOperation { uint64_t admitBeforeMs{0}; std::string canonicalRequest; bool cancelled{true}; uint32_t rejectTip{0}; };
     using SpectatorKey = std::tuple<uint64_t, uint64_t, std::string>;
     std::map<SpectatorKey, SpectatorOperation> spectatorOperations_;
     std::multimap<uint64_t, SpectatorKey> spectatorDeadlines_;

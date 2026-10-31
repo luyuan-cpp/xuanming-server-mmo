@@ -35,22 +35,6 @@ const (
 	KindBusy
 )
 
-// Reason 是指标 db_task_deferred_total 的 reason 取值;KindNone 返回空串。
-func (k Kind) Reason() string {
-	switch k {
-	case KindConnRefused:
-		return "conn_refused"
-	case KindConnLost:
-		return "conn_lost"
-	case KindReadOnly:
-		return "store_readonly"
-	case KindBusy:
-		return "store_busy"
-	default:
-		return ""
-	}
-}
-
 // MySQL / TiDB 错误号。含义来自 MySQL 与 TiDB 的官方错误码表;落码时没有在真库上逐个触发核对,
 // 见设计稿 §11「未核实」。
 const (

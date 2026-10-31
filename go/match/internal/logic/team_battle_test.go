@@ -23,7 +23,7 @@ import (
 // teamBattlePort 与 team.BattleStarter 同形的本地副本,钉住 TeamBattleStarter 的方法集。
 // 真正的编译期保证在 match_service.go 装配处(team.NewService(..., logic.NewTeamBattleStarter(svcCtx)))。
 type teamBattlePort interface {
-	TeamSizeFor(battleConfigId uint32) uint32
+	TeamSizeFor(mode, battleConfigId uint32) uint32
 	MatchLockTTLSeconds(memberCount int) int
 	TicketBlocked(ctx context.Context, playerId uint64) (bool, error)
 	CreateMatchedTickets(ctx context.Context, battleConfigId uint32, teamId uint64,
@@ -46,11 +46,15 @@ func TestTeamBattleSizeAndLockTTL(t *testing.T) {
 	require.Equal(t, 5, kMaxBattleTeamSize)
 
 	svcCtx, _ := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 3, "2": 10}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 3, 2: 5})
 	starter := NewTeamBattleStarter(svcCtx)
-	require.Equal(t, uint32(3), starter.TeamSizeFor(1))
-	require.Equal(t, uint32(kMaxBattleTeamSize), starter.TeamSizeFor(2), "上限按 kMaxBattleTeamSize 收口,与 PVE_TEAM 排队同口径")
-	require.Zero(t, starter.TeamSizeFor(99), "未配置 = 未开放组队")
+	pveTeam, pvpTeam := uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), uint32(matchpb.MatchMode_MATCH_MODE_PVP_TEAM)
+	require.Equal(t, uint32(3), starter.TeamSizeFor(pveTeam, 1))
+	require.Equal(t, uint32(kMaxBattleTeamSize), starter.TeamSizeFor(pveTeam, 2), "与 PVE_TEAM 排队同口径")
+	require.Zero(t, starter.TeamSizeFor(pveTeam, 99), "PlayMode 表没有这一行 = 未开放组队")
+	require.Equal(t, uint32(kMaxBattleTeamSize), starter.TeamSizeFor(pvpTeam, 1), "PVP_TEAM 是每侧人数上限")
+	require.Zero(t, starter.TeamSizeFor(pvpTeam, 99), "PVP_TEAM 同样只认 PlayMode 表")
+	require.Zero(t, starter.TeamSizeFor(uint32(matchpb.MatchMode_MATCH_MODE_1V1), 1), "非组队模式没有组队上限")
 
 	// 5 人:matched 66s(含 D82 换节点重试链路,见 matchedWorstCaseSeconds)+ 补偿 25s + 余量 10s
 	// (§E.1 第 6 步)。

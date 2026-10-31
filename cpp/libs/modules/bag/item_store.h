@@ -99,8 +99,6 @@ public:
     // 结论优先级:确定不足 > 版本错位 > 够。
     [[nodiscard]] QuantityVerdict CheckQuantities(const ItemCountMap &required) const;
 
-    // 是否持有 required 列出的每一项(只计可计单位)。等价于 CheckQuantities(required) == kEnough。
-    [[nodiscard]] bool HasAll(const ItemCountMap &required) const;
 
     // ── 堆叠语义 ──────────────────────────────────────────────────────
     // 一次计划中的补堆:往既有 guid 里再倒 amount 个单位。

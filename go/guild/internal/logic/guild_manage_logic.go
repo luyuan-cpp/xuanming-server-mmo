@@ -7,9 +7,8 @@ package logic
 //  1. **授权只认 MySQL**。这里做的是"能不能进到事务"的粗筛(有没有会话、目标是不是自己、
 //     role 值合不合法),真正的职位判定一律在 repo 的事务里锁行复核。缓存里的 role / leader_id
 //     只能用来展示 —— 玩家刚被降权、帮会刚被合服搬走时,缓存会在整整一个 TTL 内说谎。
-//  2. **写 RPC 的前置顺序是固定的**:会话身份 → 归属 zone → 合服闸门 → 业务前置 → 事务。
-//     顺序不能换:没有会话就没有可信的操作者,没有归属 zone 就不知道该查哪个区的闸门,
-//     闸门没过就一个字节都不该写。
+//  2. **写 RPC 的前置顺序是固定的**:会话身份 → 归属 zone → 业务前置 → 事务。
+//     顺序不能换:没有会话就没有可信的操作者,没有归属 zone 就不知道他属于哪个区的帮会。
 //  3. **业务拒绝一律回 tip,不回 gRPC 错误**。回 gRPC 错误会让客户端进入重连隔离
 //     (serverbase 把它当故障),而"职位不够""申请已失效""写冲突重试一次"都是正常玩法。
 //     只有真故障(配表缺行、双存储互相矛盾、依赖不可用)才返回 error。
@@ -216,7 +215,7 @@ func viewerOf(who caller) uint64 {
 //
 // 只接受带 gate 会话的调用:这些请求体里**没有** player_id(协议刻意不放),
 // 内部调用因此没有可信的操作者身份,继续往下走只会拿 0 当操作者。
-// 顺序:会话 → 归属 zone → 合服闸门(§11.2)。
+// 顺序:会话 → 归属 zone(§11.2)。
 //
 // 返回约定:err 非 nil = 故障(调用方直接 return nil, err);
 // tip 非 nil = 业务拒绝(调用方把 tip 放进响应体,error 回 nil)。
@@ -229,7 +228,7 @@ func (l *GuildLogic) clientWrite(ctx context.Context) (playerID uint64, zoneID u
 	if err != nil || tip != nil {
 		return who.playerID, 0, tip, err
 	}
-	return who.playerID, zoneID, l.mergeFenceTip(ctx, zoneID), nil
+	return who.playerID, zoneID, nil, nil
 }
 
 // operatorGuild 定位操作者所在帮会,并在读到 0 时用 MySQL 复核一次(§6.4.2)。
@@ -310,11 +309,6 @@ func (l *GuildLogic) mapWriteErr(ctx context.Context, actor, logGuildID, cachedG
 		return tipErr(constants.ErrApplicationLimit, "pending application limit reached"), nil
 	case errors.Is(err, data.ErrApplicationQueueFull):
 		return tipErr(constants.ErrApplicationQueueFull, "guild application queue is full"), nil
-	case errors.Is(err, data.ErrZoneMerging):
-		// 事务内的合服闸门拒绝:解散、帮会活动(点灯 / 团圆,activityTxTip 不截它)都落到这里;
-		// 经济事务先经 economyTip 截走,走不到这里。改这一支前先确认两个调用方都还成立。
-		// 与事务外的 mergeFenceTip 同一答复:合服是可预期的运维窗口,回 tip 而不是 gRPC 错误。
-		return tipErr(constants.ErrZoneMerging, "zone merging"), nil
 	case errors.Is(err, data.ErrWriteConflict):
 		// 记 Info 不记 Error:两个人同时改同一个帮会是正常玩法,客户端原地重试一次就能成功。
 		// 这里**不能**回 gRPC 错误 —— 那会让客户端进入重连隔离(见文件头纪律 3)。
@@ -605,8 +599,7 @@ func (l *GuildLogic) bumpCancelReviewers(ctx context.Context, guildID, applicant
 	l.bumpSync(reviewersIn(g), scenepb.SyncDomain_SYNC_DOMAIN_GUILD)
 }
 
-// ListMyGuildApplications:申请人视角的待审列表。读 RPC 要会话(列表是本人私有信息),但不查合服闸门 ——
-// 合服窗口里读一眼自己申请了哪些帮会是安全的,拦掉只会让界面变成空白。
+// ListMyGuildApplications:申请人视角的待审列表。读 RPC 要会话(列表是本人私有信息)。
 func (l *GuildLogic) ListMyGuildApplications(ctx context.Context, _ *pb.ListMyGuildApplicationsRequest) (*pb.ListMyGuildApplicationsResponse, error) {
 	who := callerOf(ctx, 0)
 	if !who.fromClient {

@@ -8,7 +8,6 @@ import (
 	"login/internal/config"
 	loginlogic "login/internal/logic/clientplayerlogin"
 	"login/internal/logic/pkg/callerauth"
-	"login/internal/logic/pkg/dataloader"
 	"login/internal/logic/pkg/node"
 	"login/internal/rpclogging"
 	loginserver "login/internal/server/clientplayerlogin"
@@ -24,7 +23,6 @@ import (
 	"shared/buildinfo"
 	"shared/drainproof"
 	"shared/grpcstats"
-	"shared/kafkautil"
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
@@ -33,7 +31,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/service"
@@ -102,21 +99,6 @@ func main() {
 	}
 	config.ActiveSecrets = secrets
 
-	// 持久 schema 倒退判定(C4)的模式同样在任何外部连接之前校验:缺键 / 空串按 warn,
-	// 只认 warn / enforce,其余拒绝启动 —— 拼错的 enforce 静默按 warn 跑,比起不来更危险
-	// (docs/design/mixed-version-persist-field-protection.md §5.1;切 enforce 的条件见 §8.1 第 5 步)。
-	regressionMode, err := config.ParsePersistSchemaRegressionMode(config.AppConfig.PersistSchemaRegressionMode)
-	if err != nil {
-		panic(fmt.Sprintf("持久 schema 倒退判定模式配置不合格,拒绝启动: %v", err))
-	}
-	logx.Infof("persist schema regression check (C4) mode=%s", regressionMode)
-
-	// Derive zone-specific Kafka topic from ZoneId
-	config.AppConfig.Kafka.Topic = config.DbTaskTopicForGeneration(
-		config.AppConfig.Node.ZoneId, config.AppConfig.Kafka.TopicGeneration)
-
-	// Ensure db_task topic exists with configured retention.
-	//
 	// 控制面命令 topic(gate-cmd_g<N> / scene-cmd_g<N>)**刻意不在这里建**:
 	// 它的分区数是不可变的寻址契约(partition = node_id % P),必须由基础设施
 	// 引导阶段统一按 256 分区 + 1 小时保留期建好 —— deploy/docker-compose.yml 的
@@ -134,20 +116,6 @@ func main() {
 	} else if *maintenanceDir != "" || *maintenanceSHA != "" {
 		panic("维护参数必须完整提供")
 	}
-	if maintenanceRuntime == nil {
-		if err := kafkautil.EnsureTopics(config.AppConfig.Kafka.Brokers, []kafkautil.TopicSpec{
-			{
-				Name:           config.AppConfig.Kafka.Topic,
-				Partitions:     config.AppConfig.Kafka.PartitionCnt,
-				RetentionMs:    config.AppConfig.Kafka.RetentionMs,
-				RetentionBytes: config.AppConfig.Kafka.RetentionBytes,
-			},
-		}); err != nil {
-			panic(fmt.Sprintf("Kafka db-task partition contract rejected: %v", err))
-		}
-
-	}
-
 	var ctx *svc.ServiceContext
 	if maintenanceRuntime != nil {
 		ctx, err = svc.NewServiceContextForDrain(maintenanceRuntime)
@@ -205,11 +173,7 @@ func main() {
 				}
 				return
 			}
-			instance, err := uuid.Parse(ctx.TaskResultDispatcher.ReplyInstance())
-			if err == nil {
-				err = runtime.BindBoot(instance[:], nil)
-			}
-			if err != nil {
+			if err = runtime.BindBoot(ctx.BootInstance(), nil); err != nil {
 				ctx.CloseRootAdmission()
 				logx.Errorf("维护同boot身份HOLD: %v", err)
 				return
@@ -504,8 +468,6 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	// 全局开关,在那之前写的样本会被直接丢弃(理由与告警口径见 PrimeCreatePlayerMetrics)。
 	loginlogic.PrimeCreatePlayerMetrics()
 	loginlogic.PrimeEnterGameMetrics()
-	dataloader.PrimePersistSchemaRegressionMetrics()
-	dataloader.PrimeParentLoadVerifyMetrics()
 
 	// 拦截器顺序有讲究(go-zero 把它们交给 grpc.ChainUnaryInterceptor,
 	// **排在前面的在外层、先执行**;注意 recover/timeout/stat 等 go-zero

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 //     推迟摘除重试(retryDeferredNodeDetaches)里调用;
 //  2. 判定入口(reentryBarrierBlocks)——**所有**会改派 / 销毁 / 清理场景归属
 //     的分支在动手前都要过它;
-//  3. 被推迟的死节点收尾队列(死节点孤儿场景强制销毁 + 计数清理);
+//  3. 被推迟的死节点收尾(死节点孤儿场景强制销毁 + 计数清理),任务落 Redis,任何领导者都能接手;
 //  4. death_at 写不进 / 摘负载集失败时推迟的摘除(GO-6,见文件末尾「推迟的摘除」一段)。
 //
 // 判定的默认方向是 fail-closed:拿不准就**不动** scene ownership。少改一次派
@@ -194,117 +195,397 @@ func reentryBarrierBlocks(svcCtx *svc.ServiceContext, zoneID uint32, nodeID, sit
 }
 
 // ---------------------------------------------------------------------------
-// 被屏障推迟的死节点收尾
+// 被屏障推迟的死节点收尾:任务落 Redis,任何新当选的领导者都能接手
 // ---------------------------------------------------------------------------
-
-// deadNodeReconcile 是一次「等屏障走完再做」的死节点收尾任务。
 //
-// scenes 是**判死那一刻**该节点名下场景的快照,而不是收尾时再读一次:
-// 屏障窗口里完全可能有新场景被建到同一个 node_id 上(进程换代但 id 复用),
-// 收尾时现读会把这些新场景一起强制销毁。快照把收尾范围钉死在「它死时确实
-// 属于它的那些场景」。
-type deadNodeReconcile struct {
-	entry  nodeEntry
-	scenes []string
-}
-
-// pendingDeadNodes 保存已判死、但收尾动作还被屏障压着的节点。
+// 一条收尾任务由两个键组成,都在控制域共享 Redis 里(与 scene_manager 其它多键 Lua 脚本同一前提):
 //
-// 只在 LoadReporter 的 watch / ticker 这条单 goroutine 链路上读写,加锁是为了
-// 让测试能从别的 goroutine 观察。进程重启会丢掉队列 —— 代价是那批孤儿实例
-// 场景的映射会残留到下一次节点死亡事件,不是数据损坏。
-var (
-	pendingDeadNodesMu sync.Mutex
-	pendingDeadNodes   = make(map[string]deadNodeReconcile)
-	// deadNodeReconcilePublishedZones:上一次发布时队列深度非 0 的 zone(受 pendingDeadNodesMu 保护)。
-	// 见 publishDeadNodeReconcilePending。
-	deadNodeReconcilePublishedZones = make(map[uint32]struct{})
+//	scene_manager:dead_node_reconcile    ZSET,成员 "{zone}/{node}",分数 = 首次入队时刻(Unix 毫秒,只用于排序与日志)
+//	node:zone:{z}:{n}:reconcile_scenes   SET,这次死亡还没收完的场景(收尾范围):入队时从反向索引
+//	                                     node:zone:{z}:{n}:scenes 抄出判死时刻的快照,此后每处理完一个摘掉一个
+//
+// 2026-10-30 之前任务与快照只在领导者进程内存里:drain 没有领导者闸门,旧领导者降级后照样删计数并出队;新领导者的
+// fullSync 只扫负载集,看不到已摘出负载集的死节点;进程重启丢队列;failed 成员没有重试(docs/PROGRESS.md 2026-10-23
+// 「死节点收尾与显式 DestroyScene 的销毁改为按认领时属主」条目的残余 R1)。
+//
+// 不变量:
+//
+//	R1-I1 节点被摘出负载集的那一刻,它的收尾任务已经在 Redis 里:摘负载集与写任务是同一次 Lua
+//	      (luaEnqueueDeadNodeReconcile)。所以任何领导者都能发现每个死节点 —— 还在负载集里的由 fullSync 的
+//	      陈旧清扫重扫,已摘出去的由任务表接手。
+//	R1-I2 收尾范围是判死时刻的快照,入队之后不再从反向索引补抄:屏障窗口里新化身建到同一 node_id 上的场景不属于
+//	      这次死亡,补抄会把它们一起强制销毁(属主比对拦不住,它们的属主就是这个 node_id)。同一 node_id 在上一条
+//	      任务做完之前再次判死时,两次的快照取并集。
+//	R1-I3 死节点的计数键(scene_count / player_count)只在收尾范围已空时、与出队在同一次 Lua 里删掉(放弃时强制删),
+//	      理由见 finishDeadNodeReconcile。
+//	R1-I4 只有领导者读写任务;降级即停,一个字节不写回。旧领导者没做完的,新领导者照 Redis 里剩下的接着做。每个
+//	      场景的销毁是 Lua 原子认领(destroyOrphanOfDeadNode),新旧领导者短暂重叠时副作用也只执行一次;重做已处理
+//	      过的成员只会落到 stale / world_skipped。
+//
+// 有界重试(AGENTS §11.3):一轮里有成员没结论(Redis 出错)时任务留着,下一拍(5s ticker / fullSync)只重试收尾
+// 范围里剩下的。本进程从第一次没做完起(单调时钟)满 deadNodeReconcileGiveUpAfter 仍做不完就放弃:删计数、删任务,
+// 没结论的成员留在反向索引里,等同一 node_id 再次判死或空闲回收(与 10-30 之前「跑一次就出队」的结局相同,只是晚了
+// 一个放弃期限)。计时只在进程内:换领导者时新领导者从头计时,放弃更晚,方向是多重试;每个领导任期内仍有界。不把
+// 计时写进 Redis,是因为跨进程的截止时间只能用墙钟。不加退避与抖动,理由同「推迟的摘除」一段:单写者、节拍固定。
+
+const (
+	// deadNodeReconcileTasksKey:死节点收尾任务表。全服一张:领导者全服只有一个(scene_manager_service.go 的选主锁
+	// 不分 zone),每拍一条 ZRANGE 就看到全部任务。键名不以 node:zone: 开头,理由同 zone_registry.go 的
+	// sceneManagerZonesKey。合服清源 zone 热状态时(tools/merge_zone,按 node:zone:{S}:* 前缀)收尾范围会被一并删掉,
+	// 留下的源 zone 任务下一拍按「收尾范围为空」出队。
+	deadNodeReconcileTasksKey = "scene_manager:dead_node_reconcile"
+
+	// NodeReconcileScenesKeyFmt:一个死节点还没收完的场景(收尾范围),与 NodeScenesKeyFmt 同一命名族。
+	NodeReconcileScenesKeyFmt = "node:zone:%d:%s:reconcile_scenes"
+
+	// deadNodeReconcileGiveUpAfter:收尾一直做不完时放弃的期限。Redis 主从切换 / 重启是分钟级,10 分钟约 120 拍,
+	// 足够跨过一次;过了它还做不完,多半是持续性故障或个别成员的脏数据,再等也不会好。
+	deadNodeReconcileGiveUpAfter = 10 * time.Minute
 )
 
+// luaEnqueueDeadNodeReconcile 写一条收尾任务;ARGV[4] 非空时在同一次脚本里先把节点摘出负载集(R1-I1)。
+//
+// KEYS[1] = 任务表 scene_manager:dead_node_reconcile
+// KEYS[2] = 收尾范围 node:zone:{z}:{n}:reconcile_scenes
+// KEYS[3] = 反向索引 node:zone:{z}:{n}:scenes(只在 ARGV[3] == 'index' 时读)
+// KEYS[4] = 负载集 scene_nodes:zone:{z}:load
+// ARGV[1] = 任务成员 "{z}/{n}"
+// ARGV[2] = 入队时刻(Unix 毫秒);成员已在表里时保留更早的分数(ZADD NX)
+// ARGV[3] = 'index':收尾范围从反向索引抄;'given':用 ARGV[5..]
+// ARGV[4] = 要摘出负载集的节点 id;空串 = 不碰负载集(节点重新注册时只交出快照)
+// ARGV[5..] = 'given' 时的场景成员
+// 返回收尾范围的成员数。
+//
+// ZREM 放在最前:脚本中途报错时已执行的写不会回滚(同 world_init.go luaReassignSceneNode 的写法),ZREM 失败时什么都
+// 没写,节点照旧留在负载集、进推迟队列。之后的写只会因键类型错(数据损坏)失败;内存满时 Redis 只在脚本第一次写之前
+// 拒绝 denyoom 命令,ZREM 不是 denyoom,真摘掉了成员之后的 SUNIONSTORE / ZADD 不会被拒。
+// 收尾范围用 SUNIONSTORE / SADD 与已有内容取并集(R1-I2)。
+const luaEnqueueDeadNodeReconcile = `
+if ARGV[4] ~= '' then
+    redis.call('ZREM', KEYS[4], ARGV[4])
+end
+if ARGV[3] == 'index' then
+    redis.call('SUNIONSTORE', KEYS[2], KEYS[2], KEYS[3])
+else
+    for i = 5, #ARGV do
+        redis.call('SADD', KEYS[2], ARGV[i])
+    end
+end
+redis.call('ZADD', KEYS[1], 'NX', ARGV[2], ARGV[1])
+return redis.call('SCARD', KEYS[2])
+`
+
+// luaFinishDeadNodeReconcile 结束一条收尾任务:收尾范围已空时删死节点的计数键并出队(R1-I3);
+// ARGV[2] == '1'(放弃)时不看收尾范围,连同它一起删。
+//
+// KEYS[1] = 收尾范围  KEYS[2] = scene_count  KEYS[3] = player_count  KEYS[4] = 任务表
+// ARGV[1] = 任务成员  ARGV[2] = '1' 表示放弃
+// 返回 1 = 已出队;0 = 收尾范围不空,任务原样留着。
+const luaFinishDeadNodeReconcile = `
+if ARGV[2] ~= '1' and redis.call('SCARD', KEYS[1]) > 0 then
+    return 0
+end
+redis.call('DEL', KEYS[1], KEYS[2], KEYS[3])
+redis.call('ZREM', KEYS[4], ARGV[1])
+return 1
+`
+
+// pendingDeadNodeKey 是 (zone,node) 的队列键:推迟摘除表的键,也是收尾任务表的成员。
 func pendingDeadNodeKey(zoneID uint32, nodeID string) string {
 	return fmt.Sprintf("%d/%s", zoneID, nodeID)
 }
 
-// enqueueDeadNodeReconcile 记下一个待收尾的死节点,并立刻抄下它名下的场景快照。
-func enqueueDeadNodeReconcile(svcCtx *svc.ServiceContext, entry nodeEntry) {
-	setKey := nodeScenesKey(entry.reg.ZoneId, entry.nodeID)
-	scenes, err := svcCtx.Redis.Smembers(setKey)
+// parseDeadNodeReconcileMember 是 pendingDeadNodeKey 的逆。
+func parseDeadNodeReconcileMember(member string) (uint32, string, bool) {
+	zonePart, nodeID, ok := strings.Cut(member, "/")
+	if !ok || nodeID == "" {
+		return 0, "", false
+	}
+	zoneID, err := strconv.ParseUint(zonePart, 10, 32)
 	if err != nil {
-		// 快照读不到就别猜:留着反向索引,等同一 node_id 下次判死时重新抄(此时节点已摘出
-		// 负载集,fullSync 的陈旧清理只扫负载集,扫不到它)。这里若退化成「收尾时现读」,就把
-		// 上面说的「误杀新场景」风险放了回来。
-		logx.Errorf("[ReentryBarrier] Failed to capture dead node scene snapshot; skipping cleanup: zone=%d node=%s err=%v",
-			entry.reg.ZoneId, entry.nodeID, err)
-		return
+		return 0, "", false
 	}
-	enqueueDeadNodeReconcileSnapshot(entry, scenes)
+	return uint32(zoneID), nodeID, true
 }
 
-// enqueueDeadNodeReconcileSnapshot 用调用方已经抄好的场景快照入收尾队列。
-// 推迟摘除(GO-6)用它交出**首次推迟时**抄的快照:推迟期间新建到同一 node_id 上的场景
-// 不属于这次死亡的收尾范围,现读会把它们一起强制销毁(理由同 deadNodeReconcile 的注释)。
-func enqueueDeadNodeReconcileSnapshot(entry nodeEntry, scenes []string) {
-	pendingDeadNodesMu.Lock()
-	pendingDeadNodes[pendingDeadNodeKey(entry.reg.ZoneId, entry.nodeID)] = deadNodeReconcile{
-		entry:  entry,
-		scenes: scenes,
-	}
-	pending := len(pendingDeadNodes)
-	pendingDeadNodesMu.Unlock()
-
-	logx.Infof("[ReentryBarrier] Dead node cleanup queued (awaiting barrier): zone=%d node=%s scenes=%d pending=%d",
-		entry.reg.ZoneId, entry.nodeID, len(scenes), pending)
-	publishDeadNodeReconcilePending()
+func nodeReconcileScenesKey(zoneID uint32, nodeID string) string {
+	return fmt.Sprintf(NodeReconcileScenesKeyFmt, zoneID, nodeID)
 }
 
-// drainPendingDeadNodeReconciles 把屏障已过的死节点收尾做掉,返回本轮完成数。
+// enqueueDeadNodeReconcile 把一个已判死的节点写进收尾任务表,返回收尾范围的成员数。
 //
-// 由 LoadReporter 的 5s ticker 与每次 fullSync 驱动:屏障(默认 20s)远大于
-// 一个 tick,所以「等屏障」天然就是「多等几拍」,不需要额外的定时器或
-// 每个死节点一条 goroutine。
-func drainPendingDeadNodeReconciles(ctx context.Context, svcCtx *svc.ServiceContext) int {
-	pendingDeadNodesMu.Lock()
-	snapshot := make([]deadNodeReconcile, 0, len(pendingDeadNodes))
-	for _, task := range pendingDeadNodes {
-		snapshot = append(snapshot, task)
+// detach=true 时在同一次脚本里先把节点摘出负载集(detachDeadNode 用,R1-I1);detach=false 只交出快照
+// (节点已重新注册,不能碰负载集)。scenesCaptured=true 时收尾范围用调用方抄好的 scenes —— 推迟摘除(GO-6)交出的
+// **首次推迟时**的快照:推迟期间节点留在负载集里、还能被派新场景,那些不属于这次死亡;否则在脚本里从反向索引现抄
+// (此刻就是判死时刻)。脚本出错时什么都没写(见脚本注释),调用方按失败处理。
+func enqueueDeadNodeReconcile(svcCtx *svc.ServiceContext, entry nodeEntry, detach bool, scenes []string, scenesCaptured bool) (int64, error) {
+	zoneID, nodeID := entry.reg.ZoneId, entry.nodeID
+	detachMember := ""
+	if detach {
+		detachMember = nodeID
 	}
-	pendingDeadNodesMu.Unlock()
+	mode := "index"
+	if scenesCaptured {
+		mode = "given"
+	}
+	args := []any{pendingDeadNodeKey(zoneID, nodeID), strconv.FormatInt(time.Now().UnixMilli(), 10), mode, detachMember}
+	if scenesCaptured {
+		args = append(args, stringsAsArgs(scenes)...)
+	}
+	keys := []string{deadNodeReconcileTasksKey, nodeReconcileScenesKey(zoneID, nodeID), nodeScenesKey(zoneID, nodeID), nodeLoadKey(zoneID)}
+	raw, err := svcCtx.Redis.Eval(luaEnqueueDeadNodeReconcile, keys, args...)
+	if err != nil {
+		return 0, fmt.Errorf("写死节点收尾任务失败: zone=%d node=%s: %w", zoneID, nodeID, err)
+	}
+	scope := toInt64(raw)
+	logx.Infof("[ReentryBarrier] Dead node cleanup queued in Redis (awaiting barrier): zone=%d node=%s scenes=%d captured=%v detached=%v",
+		zoneID, nodeID, scope, scenesCaptured, detach)
+	return scope, nil
+}
 
-	done := 0
-	for _, task := range snapshot {
-		zoneID := task.entry.reg.ZoneId
-		if reentryBarrierBlocks(svcCtx, zoneID, task.entry.nodeID, barrierSiteDeadNodeCleanup) {
+// deadNodeReconcileTask 是从任务表里读出的一条任务。
+type deadNodeReconcileTask struct {
+	member   string // 任务表成员 "{zone}/{node}"
+	zoneID   uint32
+	nodeID   string
+	queuedAt time.Time // 首次入队时刻(墙钟),只用于日志
+}
+
+func (t deadNodeReconcileTask) entry() nodeEntry {
+	e := nodeEntry{nodeID: t.nodeID}
+	e.reg.ZoneId = t.zoneID
+	return e
+}
+
+// listDeadNodeReconcileTasks 读任务表,按入队先后返回。解析不了的成员(不是本代码写的,对不上任何节点)单独返回。
+func listDeadNodeReconcileTasks(svcCtx *svc.ServiceContext) ([]deadNodeReconcileTask, []string, error) {
+	pairs, err := svcCtx.Redis.ZrangeWithScores(deadNodeReconcileTasksKey, 0, -1)
+	if err != nil {
+		return nil, nil, fmt.Errorf("zrange %s: %w", deadNodeReconcileTasksKey, err)
+	}
+	tasks := make([]deadNodeReconcileTask, 0, len(pairs))
+	var malformed []string
+	for _, p := range pairs {
+		zoneID, nodeID, ok := parseDeadNodeReconcileMember(p.Key)
+		if !ok {
+			malformed = append(malformed, p.Key)
 			continue
 		}
-
-		reconcileDeadNodeScenes(ctx, svcCtx, task.entry, task.scenes)
-		// scene_count / player_count 必须在 reconcile **之后**清:
-		// reconcile 里的 destroyOrphanOfDeadNode 认领成功时还会对死节点的这两个键做减法,
-		// 先删会被它们重新建出来。(理由详见 deleteNodeCounters)
-		deleteNodeCounters(svcCtx, zoneID, task.entry.nodeID)
-
-		pendingDeadNodesMu.Lock()
-		delete(pendingDeadNodes, pendingDeadNodeKey(zoneID, task.entry.nodeID))
-		pendingDeadNodesMu.Unlock()
-		done++
+		tasks = append(tasks, deadNodeReconcileTask{member: p.Key, zoneID: zoneID, nodeID: nodeID, queuedAt: time.UnixMilli(p.Score)})
 	}
+	return tasks, malformed, nil
+}
 
-	if done > 0 {
-		publishDeadNodeReconcilePending()
+// drainPendingDeadNodeReconciles 对屏障已过的收尾任务各做一轮,返回本轮出队(做完或放弃)的任务数。
+//
+// 由 LoadReporter 的 5s ticker 与每次 fullSync 的领导者分支驱动:屏障(默认 20s)远大于一拍,「等屏障」就是
+// 「多等几拍」,不需要额外的定时器或每个死节点一条 goroutine。新当选的领导者经 resync → fullSync 立刻接手
+// 旧领导者没做完的任务(R1-I4)。
+func drainPendingDeadNodeReconciles(ctx context.Context, svcCtx *svc.ServiceContext) int {
+	if !isLeader() {
+		// 跟随者不读不写任务表。本进程当领导者时留下的重试计时与队列深度一并清掉:再当选时从头计时
+		// (放弃更晚,方向保守),深度由现任领导者发布。
+		resetDeadNodeReconcileLocalState()
+		return 0
 	}
+	tasks, malformed, err := listDeadNodeReconcileTasks(svcCtx)
+	if err != nil {
+		logx.Errorf("[ReentryBarrier] Failed to list dead node cleanup tasks; retrying next tick: %v", err)
+		return 0
+	}
+	for _, member := range malformed {
+		// 对不上任何 (zone,node),驱动不了任何销毁;摘掉,免得每拍报一次。
+		logx.Errorf("[ReentryBarrier] Dropping malformed dead node cleanup task %q from %s", member, deadNodeReconcileTasksKey)
+		if _, err := svcCtx.Redis.Zrem(deadNodeReconcileTasksKey, member); err != nil {
+			logx.Errorf("[ReentryBarrier] Failed to drop malformed dead node cleanup task %q: %v", member, err)
+		}
+	}
+	keepDeadNodeReconcileRetriesOnlyFor(tasks)
+
+	pending := make(map[uint32]int, len(tasks))
+	for _, task := range tasks {
+		pending[task.zoneID]++
+	}
+	done := 0
+	for _, task := range tasks {
+		if !isLeader() {
+			// 降级即停:剩下的原样留在 Redis 里给新领导者;深度也不发布,下一拍走上面的跟随者分支清掉。
+			return done
+		}
+		if reentryBarrierBlocks(svcCtx, task.zoneID, task.nodeID, barrierSiteDeadNodeCleanup) {
+			continue
+		}
+		finished, lostLeadership := reconcileDeadNodeTask(ctx, svcCtx, task)
+		if lostLeadership {
+			return done
+		}
+		if finished {
+			pending[task.zoneID]--
+			done++
+		}
+	}
+	publishDeadNodeReconcilePending(pending)
 	return done
 }
 
-// publishDeadNodeReconcilePending 把队列深度按 zone 发到 Prometheus。
-// 已经归零的 zone 也要显式写 0,否则仪表盘会一直停在最后一个非零值上。"归零的 zone"包括已经不在 GetActiveZones 里的:
-// 一个 zone 的最后一个节点死掉(或换到别的 zone)之后,它的收尾任务 drain 完时这个 zone 已不再活跃,所以记住上一次发布过
-// 非 0 的 zone,这次没有任务的一并写 0。
-func publishDeadNodeReconcilePending() {
-	pendingDeadNodesMu.Lock()
-	counts := make(map[uint32]int, len(pendingDeadNodes))
-	for _, task := range pendingDeadNodes {
-		counts[task.entry.reg.ZoneId]++
+// reconcileDeadNodeTask 对一条屏障已过的任务做一轮收尾。finished = 任务已出队(做完或放弃);
+// lostLeadership = 中途失去领导权,什么都没写回,调用方停掉本轮。
+func reconcileDeadNodeTask(ctx context.Context, svcCtx *svc.ServiceContext, task deadNodeReconcileTask) (finished, lostLeadership bool) {
+	scopeKey := nodeReconcileScenesKey(task.zoneID, task.nodeID)
+	members, err := svcCtx.Redis.Smembers(scopeKey)
+	if err != nil {
+		return retryOrAbandonDeadNodeReconcile(svcCtx, task, fmt.Errorf("smembers %s: %w", scopeKey, err)), false
 	}
+	result := reconcileDeadNodeScenes(ctx, svcCtx, task.entry(), members)
+	if result.lostLeadership {
+		return false, true
+	}
+	// 有结论的摘出收尾范围,下一拍只重试剩下的。摘失败也不要紧:重做它们只会落到 stale / world_skipped。
+	if len(result.resolved) > 0 {
+		if _, err := svcCtx.Redis.Srem(scopeKey, stringsAsArgs(result.resolved)...); err != nil {
+			return retryOrAbandonDeadNodeReconcile(svcCtx, task, fmt.Errorf("srem %s: %w", scopeKey, err)), false
+		}
+	}
+	if len(result.failed) > 0 || result.indexUnlinkFailed {
+		return retryOrAbandonDeadNodeReconcile(svcCtx, task, fmt.Errorf("%d of %d scenes without a verdict (index unlink failed: %v)",
+			len(result.failed), len(members), result.indexUnlinkFailed)), false
+	}
+	finished, err = finishDeadNodeReconcile(svcCtx, task, false)
+	if err != nil {
+		return retryOrAbandonDeadNodeReconcile(svcCtx, task, err), false
+	}
+	if !finished {
+		// 读完收尾范围之后又进来了新成员(同一 node_id 再次判死):下一拍接着收,不算失败。
+		logx.Infof("[ReentryBarrier] Dead node cleanup scope grew during this pass; continuing next tick: zone=%d node=%s",
+			task.zoneID, task.nodeID)
+		return false, false
+	}
+	forgetDeadNodeReconcileRetry(task.member)
+	metrics.ObserveDeadNodeReconcile(task.zoneID, metrics.DeadNodeReconcileOutcomeCompleted)
+	logx.Infof("[ReentryBarrier] Dead node cleanup finished; counters deleted, task removed: zone=%d node=%s scenes=%d queued_at=%s",
+		task.zoneID, task.nodeID, len(members), task.queuedAt.Format(time.RFC3339))
+	return true, false
+}
+
+// retryOrAbandonDeadNodeReconcile 处理没做完的一轮:放弃期限内留到下一拍;满期限就放弃(删计数、删任务)。
+// 返回任务是否已出队。期限从本进程第一次没做完这条任务时起算(单调时钟),见本段开头「有界重试」。
+func retryOrAbandonDeadNodeReconcile(svcCtx *svc.ServiceContext, task deadNodeReconcileTask, cause error) bool {
+	waited := time.Since(deadNodeReconcileRetryStartedAt(task.member))
+	if waited < deadNodeReconcileGiveUpAfter {
+		metrics.ObserveDeadNodeReconcile(task.zoneID, metrics.DeadNodeReconcileOutcomeRetry)
+		logx.Errorf("[ReentryBarrier] Dead node cleanup incomplete; retrying the rest of %s next tick (waited %v / give-up %v): zone=%d node=%s err=%v",
+			nodeReconcileScenesKey(task.zoneID, task.nodeID), waited, deadNodeReconcileGiveUpAfter, task.zoneID, task.nodeID, cause)
+		return false
+	}
+	finished, err := finishDeadNodeReconcile(svcCtx, task, true)
+	if err != nil {
+		logx.Errorf("[ReentryBarrier] Failed to abandon dead node cleanup; retrying next tick: zone=%d node=%s cause=%v err=%v",
+			task.zoneID, task.nodeID, cause, err)
+		return false
+	}
+	forgetDeadNodeReconcileRetry(task.member)
+	metrics.ObserveDeadNodeReconcile(task.zoneID, metrics.DeadNodeReconcileOutcomeAbandoned)
+	logx.Errorf("[ReentryBarrier] Dead node cleanup still incomplete after %v; abandoned: counters deleted, task removed, unresolved scenes stay in %s (handled only if this node_id is declared dead again, or by idle reclaim): zone=%d node=%s err=%v",
+		waited, nodeScenesKey(task.zoneID, task.nodeID), task.zoneID, task.nodeID, cause)
+	return finished
+}
+
+// finishDeadNodeReconcile 结束一条任务:收尾范围已空时删死节点的计数键并出队;abandon=true 时不看收尾范围,
+// 连同它一起删。返回 true = 已出队;false = 收尾范围不空,任务原样留着。
+//
+// 为什么要删计数(R1-I3):这两个键全仓只有 Incr/Decr,没有任何「节点重新上线时归零」的路径,死节点残留的正计数
+// 会被复用同 id 的新节点原样继承,负载分永久虚高,调度一直躲着它。
+//
+// 为什么等收尾范围空了才删:destroyOrphanOfDeadNode 认领成功时还会对死节点的这两个键做减法(脚本比对期望属主,
+// 对死节点计数的减法只来自这里;级联到别的节点上的镜像时扣的是镜像属主的计数,与这里无关),先删会被它们重新建
+// 出来。放弃之后剩下的成员若由空闲回收销毁,会把键重建成小负数:player_count 有 <0 归零钳制,scene_count 的 -1 会被
+// 新节点的第一次 Incr 冲平 —— 有界,与无界的正残留不同。删计数与出队在同一次脚本里,不会出现「任务出队了、计数
+// 没删」,也不会出现反过来的半截。
+func finishDeadNodeReconcile(svcCtx *svc.ServiceContext, task deadNodeReconcileTask, abandon bool) (bool, error) {
+	keys := []string{
+		nodeReconcileScenesKey(task.zoneID, task.nodeID),
+		nodeSceneCountKey(task.zoneID, task.nodeID),
+		nodePlayerCountKey(task.zoneID, task.nodeID),
+		deadNodeReconcileTasksKey,
+	}
+	abandonFlag := "0"
+	if abandon {
+		abandonFlag = "1"
+	}
+	raw, err := svcCtx.Redis.Eval(luaFinishDeadNodeReconcile, keys, task.member, abandonFlag)
+	if err != nil {
+		return false, fmt.Errorf("结束死节点收尾任务失败: zone=%d node=%s: %w", task.zoneID, task.nodeID, err)
+	}
+	return toInt64(raw) == 1, nil
+}
+
+// 本进程的收尾重试计时与已发布的队列深度。只在 LoadReporter goroutine 上写;加锁是为了让测试能从别的 goroutine 改。
+var (
+	deadNodeReconcileLocalMu sync.Mutex
+	// deadNodeReconcileRetrySince:本进程第一次没做完某条任务的时刻(time.Now(),带单调读数),键 = 任务成员。
+	// 重复失败不刷新:截止时间必须从最早一次算,否则一直失败会把放弃无限推后。
+	deadNodeReconcileRetrySince = make(map[string]time.Time)
+	// deadNodeReconcilePublishedZones:上一次发布时队列深度非 0 的 zone,见 publishDeadNodeReconcilePending。
+	deadNodeReconcilePublishedZones = make(map[uint32]struct{})
+)
+
+// deadNodeReconcileRetryStartedAt 返回本进程第一次没做完 member 的时刻;第一次调用时记为此刻。
+func deadNodeReconcileRetryStartedAt(member string) time.Time {
+	deadNodeReconcileLocalMu.Lock()
+	defer deadNodeReconcileLocalMu.Unlock()
+	if at, ok := deadNodeReconcileRetrySince[member]; ok {
+		return at
+	}
+	now := time.Now()
+	deadNodeReconcileRetrySince[member] = now
+	return now
+}
+
+func forgetDeadNodeReconcileRetry(member string) {
+	deadNodeReconcileLocalMu.Lock()
+	delete(deadNodeReconcileRetrySince, member)
+	deadNodeReconcileLocalMu.Unlock()
+}
+
+// keepDeadNodeReconcileRetriesOnlyFor 丢掉已不在任务表里的计时(别的领导者做完了,或合服清掉了),表不会无限增长。
+func keepDeadNodeReconcileRetriesOnlyFor(tasks []deadNodeReconcileTask) {
+	listed := make(map[string]struct{}, len(tasks))
+	for _, task := range tasks {
+		listed[task.member] = struct{}{}
+	}
+	deadNodeReconcileLocalMu.Lock()
+	defer deadNodeReconcileLocalMu.Unlock()
+	for member := range deadNodeReconcileRetrySince {
+		if _, ok := listed[member]; !ok {
+			delete(deadNodeReconcileRetrySince, member)
+		}
+	}
+}
+
+// resetDeadNodeReconcileLocalState 清掉本进程的重试计时,并把上次发布过非 0 的 zone 写回 0(本副本不再是领导者)。
+// 跟随者的常态是两张表都空,每拍只付一次加锁。
+func resetDeadNodeReconcileLocalState() {
+	deadNodeReconcileLocalMu.Lock()
+	if len(deadNodeReconcileRetrySince) == 0 && len(deadNodeReconcilePublishedZones) == 0 {
+		deadNodeReconcileLocalMu.Unlock()
+		return
+	}
+	published := deadNodeReconcilePublishedZones
+	deadNodeReconcileRetrySince = make(map[string]time.Time)
+	deadNodeReconcilePublishedZones = make(map[uint32]struct{})
+	deadNodeReconcileLocalMu.Unlock()
+
+	for zoneID := range published {
+		metrics.SetDeadNodeReconcilePending(zoneID, 0)
+	}
+}
+
+// publishDeadNodeReconcilePending 把各 zone 还没收完的任务数发到 Prometheus(只由领导者调用)。
+// 已经归零的 zone 也要显式写 0,否则仪表盘会一直停在最后一个非零值上。"归零的 zone"包括已经不在 GetActiveZones 里的:
+// 一个 zone 的最后一个节点死掉(或换到别的 zone)之后,它的收尾任务做完时这个 zone 已不再活跃,所以记住上一次发布过
+// 非 0 的 zone,这次没有任务的一并写 0。
+func publishDeadNodeReconcilePending(counts map[uint32]int) {
+	deadNodeReconcileLocalMu.Lock()
 	drained := make([]uint32, 0, len(deadNodeReconcilePublishedZones))
 	for zoneID := range deadNodeReconcilePublishedZones {
 		if counts[zoneID] == 0 {
@@ -312,10 +593,12 @@ func publishDeadNodeReconcilePending() {
 		}
 	}
 	deadNodeReconcilePublishedZones = make(map[uint32]struct{}, len(counts))
-	for zoneID := range counts {
-		deadNodeReconcilePublishedZones[zoneID] = struct{}{}
+	for zoneID, n := range counts {
+		if n > 0 {
+			deadNodeReconcilePublishedZones[zoneID] = struct{}{}
+		}
 	}
-	pendingDeadNodesMu.Unlock()
+	deadNodeReconcileLocalMu.Unlock()
 
 	for _, zoneID := range GetActiveZones() {
 		metrics.SetDeadNodeReconcilePending(zoneID, counts[zoneID])
@@ -326,6 +609,15 @@ func publishDeadNodeReconcilePending() {
 	for zoneID, n := range counts {
 		metrics.SetDeadNodeReconcilePending(zoneID, n)
 	}
+}
+
+// stringsAsArgs 把字符串切片转成 go-zero 变参命令(Srem / Eval)要的 []any。
+func stringsAsArgs(ss []string) []any {
+	out := make([]any, len(ss))
+	for i, s := range ss {
+		out[i] = s
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -389,8 +681,8 @@ type deferredNodeDetach struct {
 	// 这一次死亡里本进程第一次尝试摘它的时刻(time.Now(),带单调读数)。重复失败不刷新:
 	// 截止时间必须从最早一次算,否则一直失败的写会把摘除无限推后。
 	firstObservedAt time.Time
-	// 判死时刻的场景快照(与 deadNodeReconcile 同一口径)。推迟结束或节点重新注册时交给收尾队列;
-	// 没抄到时 scenesCaptured=false,摘除时退回 enqueueDeadNodeReconcile 现读。
+	// 判死时刻的场景快照(收尾范围,R1-I2)。推迟结束或节点重新注册时写进收尾任务;
+	// 没抄到时 scenesCaptured=false,摘除时在摘负载集的同一次脚本里从反向索引现抄。
 	scenes         []string
 	scenesCaptured bool
 }
@@ -416,7 +708,7 @@ func deferNodeDetach(svcCtx *svc.ServiceContext, entry nodeEntry, cause error) {
 	task := deferredNodeDetach{entry: entry, firstObservedAt: time.Now()}
 	scenes, snapErr := svcCtx.Redis.Smembers(nodeScenesKey(zoneID, nodeID))
 	if snapErr != nil {
-		// 快照没抄到不影响推迟本身;摘除时退回 enqueueDeadNodeReconcile 现读(那边读失败同样跳过收尾)。
+		// 快照没抄到不影响推迟本身;摘除时退回从反向索引现抄(与摘负载集同一次脚本,失败就继续推迟)。
 		logx.Errorf("[ReentryBarrier][DeferDetach] Failed to capture dead node scene snapshot; will reread at removal: zone=%d node=%s err=%v",
 			zoneID, nodeID, snapErr)
 	} else {
@@ -468,11 +760,12 @@ func isNodeDetachDeferred(zoneID uint32, nodeID string) bool {
 // cancelDeferredNodeDetachOnReregister:节点重新注册(watch PUT,或重试时发现它已回到注册表)。
 // 取消摘除 —— 不写 death_at(不能给活节点打死亡标记)、不摘负载集,记 dropped。
 //
-// 快照抄到了就交给收尾队列,与旧代码「DELETE 入队 → PUT 清 death_at → 下一拍 drain 收尾旧化身的
-// 孤儿实例并删计数」时序一致(含其既有取舍:drain 按「没有 death_at」立即收尾,会删掉新化身已开始
-// 累计的计数,有界)。快照没抄到时只打 Errorf:旧化身的孤儿实例映射与计数留到该节点下一次死亡时收,
-// 与 enqueueDeadNodeReconcile 抄快照失败同口径。
-func cancelDeferredNodeDetachOnReregister(zoneID uint32, nodeID string) {
+// 快照抄到了就写进收尾任务(只交快照、不碰负载集),与旧代码「DELETE 入队 → PUT 清 death_at → 下一拍 drain
+// 收尾旧化身的孤儿实例并删计数」时序一致(含其既有取舍:drain 按「没有 death_at」立即收尾,会删掉新化身已开始
+// 累计的计数,有界)。以下三种情况只打 Errorf,旧化身的孤儿实例映射与计数留到该节点下一次死亡时收:
+// 快照没抄到;本副本已不是领导者(R1-I4,跟随者不写任务表;推迟表只在领导者上有内容,只有刚降级的副本会走到);
+// 写任务失败。
+func cancelDeferredNodeDetachOnReregister(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string) {
 	key := pendingDeadNodeKey(zoneID, nodeID)
 	deferredNodeDetachMu.Lock()
 	task, ok := deferredNodeDetaches[key]
@@ -483,14 +776,21 @@ func cancelDeferredNodeDetachOnReregister(zoneID uint32, nodeID string) {
 	}
 
 	metrics.ObserveNodeDetachDeferred(zoneID, metrics.NodeDetachOutcomeDropped)
-	if task.scenesCaptured {
-		logx.Infof("[ReentryBarrier][DeferDetach] Node registered again during deferred removal; abandoning removal, passing death-time snapshot to cleanup queue: zone=%d node=%s scenes=%d",
-			zoneID, nodeID, len(task.scenes))
-		enqueueDeadNodeReconcileSnapshot(task.entry, task.scenes)
+	if !task.scenesCaptured {
+		logx.Errorf("[ReentryBarrier][DeferDetach] Node registered again during deferred removal; abandoning removal, death-time snapshot unavailable, old incarnation orphan instances and counts retained until next node death: zone=%d node=%s",
+			zoneID, nodeID)
 		return
 	}
-	logx.Errorf("[ReentryBarrier][DeferDetach] Node registered again during deferred removal; abandoning removal, death-time snapshot unavailable, old incarnation orphan instances and counts retained until next node death: zone=%d node=%s",
-		zoneID, nodeID)
+	if !isLeader() {
+		logx.Errorf("[ReentryBarrier][DeferDetach] Node registered again during deferred removal, but this replica is no longer leader; dropping death-time snapshot, old incarnation orphan instances and counts retained until next node death: zone=%d node=%s scenes=%d",
+			zoneID, nodeID, len(task.scenes))
+		return
+	}
+	logx.Infof("[ReentryBarrier][DeferDetach] Node registered again during deferred removal; abandoning removal, passing death-time snapshot to cleanup task: zone=%d node=%s scenes=%d",
+		zoneID, nodeID, len(task.scenes))
+	if _, err := enqueueDeadNodeReconcile(svcCtx, task.entry, false, task.scenes, true); err != nil {
+		logx.Errorf("[ReentryBarrier][DeferDetach] Failed to hand death-time snapshot to cleanup task; old incarnation orphan instances and counts retained until next node death: %v", err)
+	}
 }
 
 // retryDeferredNodeDetaches 重试推迟队列里的摘除,返回本轮完成摘除的个数。
@@ -525,7 +825,7 @@ func retryDeferredNodeDetaches(svcCtx *svc.ServiceContext) int {
 		}
 		// 漏了 PUT 也不能给活节点打死亡标记:它已经回到注册表,按重新注册处理。
 		if knownNodeIdentityMatchCount(z, n) > 0 {
-			cancelDeferredNodeDetachOnReregister(z, n)
+			cancelDeferredNodeDetachOnReregister(svcCtx, z, n)
 			continue
 		}
 

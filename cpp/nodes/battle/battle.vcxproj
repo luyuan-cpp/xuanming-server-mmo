@@ -23,6 +23,7 @@
     <ClCompile Include="handler\rpc\battle_handler.cpp" />
     <ClCompile Include="handler\rpc\player\player_service_interface.cpp" />
     <ClCompile Include="logic\battle_room_manager.cpp" />
+    <ClCompile Include="logic\battle_spectate_relay.cpp" />
     <ClCompile Include="client\battle_client_edge.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="rpc_replies\register_handler.cpp" />
@@ -35,6 +36,7 @@
     <ClInclude Include="handler\grpc\battle_node.h" />
     <ClInclude Include="handler\rpc\battle_handler.h" />
     <ClInclude Include="logic\battle_room_manager.h" />
+    <ClInclude Include="logic\battle_spectate_relay.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

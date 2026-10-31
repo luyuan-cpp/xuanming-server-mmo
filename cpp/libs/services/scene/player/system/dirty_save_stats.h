@@ -7,8 +7,8 @@
 //
 // Background: SavePlayerToRedis (player_lifecycle.cpp) compares the freshly
 // marshaled PlayerAllData against PlayerLastPersistedSnapshotComp via
-// dirty_save::IsEqual; on a match the entire save (Redis Save + two Kafka
-// DBTasks) is skipped. This is a sizable Kafka-traffic win during idle /
+// dirty_save::IsEqual; on a match the entire save (one player_store commit)
+// is skipped. This is a sizable write-traffic win during idle /
 // AFK / move-only gameplay where most of the proto is unchanged between
 // periodic 300s save ticks.
 //

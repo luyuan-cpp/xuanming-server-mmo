@@ -39,7 +39,7 @@ import (
 // populated in main() and read by lower-level helpers that don't (yet) take
 // a Stats pointer in their signature — notably the queue-aware AssignGate
 // loop in assignGateHTTPLocal, which is reached from resolveGateAddrLocal
-// at multiple call sites across login modes (login-test, data-stress, stress).
+// at multiple call sites across login modes (login-test, stress).
 //
 // Plumbing Stats through every caller would touch ~10 functions for marginal
 // benefit. The trade-off is "one global, set once at startup" vs "always-
@@ -103,24 +103,6 @@ func main() {
 		}
 		port, _ := strconv.Atoi(portStr)
 		runLoginTests(host, port, cfg, stats, tokenPayload, tokenSig)
-		_ = stats.ExportBehaviorCSV("behavior_test_results.csv")
-		_ = stats.ExportBehaviorJSONL("behavior_test_results.jsonl")
-		return
-	}
-
-	// Data-stress mode: drive repeated login → play → logout cycles per robot
-	// and publish per-player expectations to Redis for the db-side verifier
-	// (see go/db/cmd/verifier).
-	if cfg.Mode == "data-stress" {
-		stop := make(chan struct{})
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		go func() {
-			<-sig
-			zap.L().Info("data-stress shutdown signal received")
-			close(stop)
-		}()
-		runDataStressMode(cfg, stats, stop)
 		_ = stats.ExportBehaviorCSV("behavior_test_results.csv")
 		_ = stats.ExportBehaviorJSONL("behavior_test_results.jsonl")
 		return
@@ -872,7 +854,7 @@ func loginAndEnterLocal(gc *pkg.GameClient, password string, stats *metrics.Stat
 // failure we transparently fall back to the configured primary auth provider.
 //
 // 例外:前一种方式因握手超时失败(errLoginStuck)时不回落,直接返回该错误——超时后连接上留着阻塞的读者,
-// 这条连接已不能再用。返回之后怎样取决于调用方:压测主路径(runRobotOnce / data_stress)登录失败即结束本次会话,
+// 这条连接已不能再用。返回之后怎样取决于调用方:压测主路径(runRobotOnce)登录失败即结束本次会话,
 // 外层退避后换新连接重来。重定向重登录(pkg.SetRedirectRelogin)也走本函数,同样不回落,但那里没有外层重连:
 // FollowRedirect 返回的错误目前只被 logic/handler 的重定向处理器记一行日志,RecvLoop 继续读这条未认证的新连接
 // (muduo 的 Close 也唤不醒它),会话就此空转到 stop,仍按已连接计数。这是「确定失败、不做有竞态的回落」的代价;

@@ -105,7 +105,7 @@ try {
     foreach ($configName in @('login','data_service')) { New-Item -ItemType Directory -Path (Join-Path $GoRoot "$configName/etc") -Force | Out-Null }
     Set-Content -LiteralPath (Join-Path $GoRoot 'login/etc/login.yaml') -Value "Node:`n  RedisClient:`n    Host: 127.0.0.1:26379`n    DB: 0"
     Set-Content -LiteralPath (Join-Path $GoRoot 'data_service/etc/data_service.yaml') -Value "SnapshotMySQL:`n  DBName: testdb"
-    Add-Content -LiteralPath (Join-Path $GoRoot 'chat/etc/chat.yaml') -Value "`nDSNEnv: CHAT_AUTHORITY_DSN`nRequireTiDB: true`nGlobalLoginSessions: true`nMaxOpenConns: 16`nAccountRoleSchema: mmorpg_global`nLoginRedis:`n  Host: 127.0.0.1:6379`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: 0`n  PoolSize: 4"
+    Add-Content -LiteralPath (Join-Path $GoRoot 'chat/etc/chat.yaml') -Value "`nDSNEnv: CHAT_AUTHORITY_DSN`nBackend: tidb`nGlobalLoginSessions: true`nMaxOpenConns: 16`nAccountRoleSchema: mmorpg_global`nLoginRedis:`n  Host: 127.0.0.1:6379`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: 0`n  PoolSize: 4"
 
     New-Item -ItemType Directory -Path $GoBinDir, $DerivedEtcDir -Force | Out-Null
     foreach ($name in $ServiceCatalogue.Keys) { Set-Content -LiteralPath (Join-Path $GoBinDir "$name.exe") -Value '进程桩占位文件' }
@@ -156,7 +156,7 @@ try {
         Assert-Equal 'testdb' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'AccountRoleSchema').Value '本地角色目录取data_service全局库'
         Assert-Equal '127.0.0.1:26379' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'LoginRedis.Host').Value '地址与login一致'
         Assert-Equal '0' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'LoginRedis.DB').Value 'DB与login一致'
-        Assert-Equal 'true' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'RequireTiDB').Value '本机也不能降级旧Redis权威'
+        Assert-Equal 'tidb' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'Backend').Value '本机也不能降级旧Redis权威'
     }
     Test-Case 'Chat缺DSN时在任何子进程前拒绝且不回显凭据' {
         Reset-TestState

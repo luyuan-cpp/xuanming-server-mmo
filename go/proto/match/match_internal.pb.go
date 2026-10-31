@@ -133,6 +133,61 @@ func (BattleOutcomeDecision) EnumDescriptor() ([]byte, []int) {
 	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{1}
 }
 
+// 运营把一场公开局标成 / 取消标成赛事局(docs/design/battle-spectate-tiered-fanout.md §15.6,Q3)。
+// 调用方为运维工具(serviceauth 调用方 "ops",只放行本方法);标记即立刻尝试升全服广播(受全服配额约束)。
+// 私密局、不存在或已结束的局一律拒绝;重复设置同值幂等成功。
+type SpectateFeaturedReject int32
+
+const (
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NONE      SpectateFeaturedReject = 0
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NOT_FOUND SpectateFeaturedReject = 1 // 观战记录不存在(局不存在或已结束)
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_PRIVATE   SpectateFeaturedReject = 2 // 非公开局不能标成赛事局
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_INTERNAL  SpectateFeaturedReject = 3 // Redis 读写失败(可重试)
+)
+
+// Enum value maps for SpectateFeaturedReject.
+var (
+	SpectateFeaturedReject_name = map[int32]string{
+		0: "SPECTATE_FEATURED_REJECT_NONE",
+		1: "SPECTATE_FEATURED_REJECT_NOT_FOUND",
+		2: "SPECTATE_FEATURED_REJECT_PRIVATE",
+		3: "SPECTATE_FEATURED_REJECT_INTERNAL",
+	}
+	SpectateFeaturedReject_value = map[string]int32{
+		"SPECTATE_FEATURED_REJECT_NONE":      0,
+		"SPECTATE_FEATURED_REJECT_NOT_FOUND": 1,
+		"SPECTATE_FEATURED_REJECT_PRIVATE":   2,
+		"SPECTATE_FEATURED_REJECT_INTERNAL":  3,
+	}
+)
+
+func (x SpectateFeaturedReject) Enum() *SpectateFeaturedReject {
+	p := new(SpectateFeaturedReject)
+	*p = x
+	return p
+}
+
+func (x SpectateFeaturedReject) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SpectateFeaturedReject) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_internal_proto_enumTypes[2].Descriptor()
+}
+
+func (SpectateFeaturedReject) Type() protoreflect.EnumType {
+	return &file_proto_match_match_internal_proto_enumTypes[2]
+}
+
+func (x SpectateFeaturedReject) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SpectateFeaturedReject.Descriptor instead.
+func (SpectateFeaturedReject) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{2}
+}
+
 type StartActivityBattleRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	BattleConfigId uint32                 `protobuf:"varint,1,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id(= GuildActivity.dungeon_id);非 0
@@ -550,6 +605,118 @@ func (x *CommitBattleOutcomeResponse) GetAuth() *base.ServiceCallAuth {
 	return nil
 }
 
+type SetSpectateFeaturedRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	Featured      bool                   `protobuf:"varint,2,opt,name=featured,proto3" json:"featured,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSpectateFeaturedRequest) Reset() {
+	*x = SetSpectateFeaturedRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSpectateFeaturedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSpectateFeaturedRequest) ProtoMessage() {}
+
+func (x *SetSpectateFeaturedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSpectateFeaturedRequest.ProtoReflect.Descriptor instead.
+func (*SetSpectateFeaturedRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SetSpectateFeaturedRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *SetSpectateFeaturedRequest) GetFeatured() bool {
+	if x != nil {
+		return x.Featured
+	}
+	return false
+}
+
+func (x *SetSpectateFeaturedRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type SetSpectateFeaturedResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reject        SpectateFeaturedReject `protobuf:"varint,1,opt,name=reject,proto3,enum=match.SpectateFeaturedReject" json:"reject,omitempty"`
+	Tier          battle.ESpectateTier   `protobuf:"varint,2,opt,name=tier,proto3,enum=ESpectateTier" json:"tier,omitempty"` // 处理后的档位(标记后升 L2 成功即为 BROADCAST;配额满时保持原档)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSpectateFeaturedResponse) Reset() {
+	*x = SetSpectateFeaturedResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSpectateFeaturedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSpectateFeaturedResponse) ProtoMessage() {}
+
+func (x *SetSpectateFeaturedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSpectateFeaturedResponse.ProtoReflect.Descriptor instead.
+func (*SetSpectateFeaturedResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SetSpectateFeaturedResponse) GetReject() SpectateFeaturedReject {
+	if x != nil {
+		return x.Reject
+	}
+	return SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NONE
+}
+
+func (x *SetSpectateFeaturedResponse) GetTier() battle.ESpectateTier {
+	if x != nil {
+		return x.Tier
+	}
+	return battle.ESpectateTier(0)
+}
+
 var File_proto_match_match_internal_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_internal_proto_rawDesc = "" +
@@ -585,7 +752,14 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x1bCommitBattleOutcomeResponse\x128\n" +
 	"\bdecision\x18\x01 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\bdecision\x12%\n" +
 	"\x0erequest_digest\x18\x02 \x01(\tR\rrequestDigest\x120\n" +
-	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth*\x8e\x02\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\x87\x01\n" +
+	"\x1aSetSpectateFeaturedRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1a\n" +
+	"\bfeatured\x18\x02 \x01(\bR\bfeatured\x120\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"x\n" +
+	"\x1bSetSpectateFeaturedResponse\x125\n" +
+	"\x06reject\x18\x01 \x01(\x0e2\x1d.match.SpectateFeaturedRejectR\x06reject\x12\"\n" +
+	"\x04tier\x18\x02 \x01(\x0e2\x0e.eSpectateTierR\x04tier*\x8e\x02\n" +
 	"\x14ActivityBattleReject\x12\x1f\n" +
 	"\x1bACTIVITY_BATTLE_REJECT_NONE\x10\x00\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT\x10\x01\x12)\n" +
@@ -596,11 +770,17 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x15BattleOutcomeDecision\x12#\n" +
 	"\x1fBATTLE_OUTCOME_DECISION_UNKNOWN\x10\x00\x12$\n" +
 	" BATTLE_OUTCOME_DECISION_COMPLETE\x10\x01\x12!\n" +
-	"\x1dBATTLE_OUTCOME_DECISION_ABORT\x10\x022\xac\x02\n" +
+	"\x1dBATTLE_OUTCOME_DECISION_ABORT\x10\x02*\xb0\x01\n" +
+	"\x16SpectateFeaturedReject\x12!\n" +
+	"\x1dSPECTATE_FEATURED_REJECT_NONE\x10\x00\x12&\n" +
+	"\"SPECTATE_FEATURED_REJECT_NOT_FOUND\x10\x01\x12$\n" +
+	" SPECTATE_FEATURED_REJECT_PRIVATE\x10\x02\x12%\n" +
+	"!SPECTATE_FEATURED_REJECT_INTERNAL\x10\x032\x8a\x03\n" +
 	"\rMatchInternal\x12\\\n" +
 	"\x13StartActivityBattle\x12!.match.StartActivityBattleRequest\x1a\".match.StartActivityBattleResponse\x12_\n" +
 	"\x14CancelActivityBattle\x12\".match.CancelActivityBattleRequest\x1a#.match.CancelActivityBattleResponse\x12\\\n" +
-	"\x13CommitBattleOutcome\x12!.match.CommitBattleOutcomeRequest\x1a\".match.CommitBattleOutcomeResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
+	"\x13CommitBattleOutcome\x12!.match.CommitBattleOutcomeRequest\x1a\".match.CommitBattleOutcomeResponse\x12\\\n" +
+	"\x13SetSpectateFeatured\x12!.match.SetSpectateFeaturedRequest\x1a\".match.SetSpectateFeaturedResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_match_match_internal_proto_rawDescOnce sync.Once
@@ -614,41 +794,50 @@ func file_proto_match_match_internal_proto_rawDescGZIP() []byte {
 	return file_proto_match_match_internal_proto_rawDescData
 }
 
-var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_match_match_internal_proto_goTypes = []any{
 	(ActivityBattleReject)(0),            // 0: match.ActivityBattleReject
 	(BattleOutcomeDecision)(0),           // 1: match.BattleOutcomeDecision
-	(*StartActivityBattleRequest)(nil),   // 2: match.StartActivityBattleRequest
-	(*StartActivityBattleResponse)(nil),  // 3: match.StartActivityBattleResponse
-	(*CancelActivityBattleRequest)(nil),  // 4: match.CancelActivityBattleRequest
-	(*CancelActivityBattleResponse)(nil), // 5: match.CancelActivityBattleResponse
-	(*CommitBattleOutcomeRequest)(nil),   // 6: match.CommitBattleOutcomeRequest
-	(*CommitBattleOutcomeResponse)(nil),  // 7: match.CommitBattleOutcomeResponse
-	(*battle.BattleActivityContext)(nil), // 8: BattleActivityContext
-	(*base.ServiceCallAuth)(nil),         // 9: common.base.ServiceCallAuth
+	(SpectateFeaturedReject)(0),          // 2: match.SpectateFeaturedReject
+	(*StartActivityBattleRequest)(nil),   // 3: match.StartActivityBattleRequest
+	(*StartActivityBattleResponse)(nil),  // 4: match.StartActivityBattleResponse
+	(*CancelActivityBattleRequest)(nil),  // 5: match.CancelActivityBattleRequest
+	(*CancelActivityBattleResponse)(nil), // 6: match.CancelActivityBattleResponse
+	(*CommitBattleOutcomeRequest)(nil),   // 7: match.CommitBattleOutcomeRequest
+	(*CommitBattleOutcomeResponse)(nil),  // 8: match.CommitBattleOutcomeResponse
+	(*SetSpectateFeaturedRequest)(nil),   // 9: match.SetSpectateFeaturedRequest
+	(*SetSpectateFeaturedResponse)(nil),  // 10: match.SetSpectateFeaturedResponse
+	(*battle.BattleActivityContext)(nil), // 11: BattleActivityContext
+	(*base.ServiceCallAuth)(nil),         // 12: common.base.ServiceCallAuth
+	(battle.ESpectateTier)(0),            // 13: eSpectateTier
 }
 var file_proto_match_match_internal_proto_depIdxs = []int32{
-	8,  // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
+	11, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
 	0,  // 1: match.StartActivityBattleResponse.reject:type_name -> match.ActivityBattleReject
-	2,  // 2: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
-	9,  // 3: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
-	9,  // 4: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
+	3,  // 2: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
+	12, // 3: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	12, // 4: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
 	1,  // 5: match.CancelActivityBattleResponse.terminal_decision:type_name -> match.BattleOutcomeDecision
-	9,  // 6: match.CommitBattleOutcomeRequest.auth:type_name -> common.base.ServiceCallAuth
+	12, // 6: match.CommitBattleOutcomeRequest.auth:type_name -> common.base.ServiceCallAuth
 	1,  // 7: match.CommitBattleOutcomeResponse.decision:type_name -> match.BattleOutcomeDecision
-	9,  // 8: match.CommitBattleOutcomeResponse.auth:type_name -> common.base.ServiceCallAuth
-	2,  // 9: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
-	4,  // 10: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
-	6,  // 11: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
-	3,  // 12: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
-	5,  // 13: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
-	7,  // 14: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
-	12, // [12:15] is the sub-list for method output_type
-	9,  // [9:12] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	12, // 8: match.CommitBattleOutcomeResponse.auth:type_name -> common.base.ServiceCallAuth
+	12, // 9: match.SetSpectateFeaturedRequest.auth:type_name -> common.base.ServiceCallAuth
+	2,  // 10: match.SetSpectateFeaturedResponse.reject:type_name -> match.SpectateFeaturedReject
+	13, // 11: match.SetSpectateFeaturedResponse.tier:type_name -> eSpectateTier
+	3,  // 12: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
+	5,  // 13: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
+	7,  // 14: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
+	9,  // 15: match.MatchInternal.SetSpectateFeatured:input_type -> match.SetSpectateFeaturedRequest
+	4,  // 16: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
+	6,  // 17: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
+	8,  // 18: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
+	10, // 19: match.MatchInternal.SetSpectateFeatured:output_type -> match.SetSpectateFeaturedResponse
+	16, // [16:20] is the sub-list for method output_type
+	12, // [12:16] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_internal_proto_init() }
@@ -661,8 +850,8 @@ func file_proto_match_match_internal_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_internal_proto_rawDesc), len(file_proto_match_match_internal_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   6,
+			NumEnums:      3,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -93,7 +93,7 @@ func TestListingOrderBy(t *testing.T) {
 		tab  tradepb.ListingTab
 		want string
 	}{
-		{tradepb.ListingSort_LISTING_SORT_DEFAULT, onSale, "`listing_id` DESC"},
+		{tradepb.ListingSort_LISTING_SORT_DEFAULT, onSale, "`created_ms` DESC, `listing_id` DESC"},
 		{tradepb.ListingSort_LISTING_SORT_PRICE_ASC, onSale, "`price_fen` ASC, `listing_id` ASC"},
 		{tradepb.ListingSort_LISTING_SORT_PRICE_DESC, onSale, "`price_fen` DESC, `listing_id` DESC"},
 		{tradepb.ListingSort_LISTING_SORT_LEVEL_DESC, onSale, "`level` DESC, `listing_id` DESC"},

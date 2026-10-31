@@ -253,14 +253,12 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 // 同样只补在返回的那一份上、不回写目录。
 //
 // 三段补齐**串行**,各自独立计时、不共享一份预算,失败都放行:归属(HomeZone.RoleListLookupTimeout,缺省 500ms)
-// → 缺外观的角色整份读核心 Redis 的 PlayerAllData(fillMissingRoleAppearances 写死 1s)→ 缺名的角色回源名字
 // 注册表(同用 RoleListLookupTimeout)。1s 与名字那段只约束 ctx,单次 socket 读还受 Node.RedisClient.ReadTimeout
 // 约束,所以核心 Redis 变慢时最坏会超过三段之和。调用之前 Login 已做完一次不能失败的账号目录读
 // (readAccountDirectory,最长 2.5s),整个 Login 受服务端 Timeout 约束:调大任一段之前先核总和。
 func (l *LoginLogic) roleListWithCurrentHomeZone(userAccount *login_proto_data_base.UserAccounts) []*login_proto.AccountSimplePlayerWrapper {
 	players := userAccount.GetSimplePlayers().GetPlayers()
 	roles := buildRoleList(l.ctx, l.svcCtx.HomeZone, config.AppConfig.HomeZone.RefreshRoleListDisabled, players)
-	fillMissingRoleAppearances(l.ctx, l.svcCtx.RedisClient, roles)
 	fillMissingRoleNames(l.ctx, l.svcCtx.PlayerNames, roles, config.AppConfig.HomeZone.RoleListLookupTimeout)
 	return roles
 }

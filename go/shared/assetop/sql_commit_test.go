@@ -5,15 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 	assetpb "proto/common/asset"
 	componentpb "proto/common/component"
 )
 
-// requireSQLCommit 打开资产 SQL 提交证据开关(db-write-fencing-mysql.md §6.6),给 newTestLoop 用。
+// requireSQLCommit 打开 LoopConfig.RequireSQLCommit(生产恒开),给 newTestLoop 用。
 func requireSQLCommit(c *LoopConfig) { c.RequireSQLCommit = true }
 
 // splitLedger 让 Redis 父键 blob 与 SQL 提交证据各给各的账本:开关打开时自动放弃要两份都读,
@@ -270,97 +267,5 @@ func TestEscrowReceiptCheckedWhenSwitchOff(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func publishCount(result string) float64 {
-	return testutil.ToFloat64(sqlCommitPublishTotal.WithLabelValues(result))
-}
-
-func newEvidenceRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
-	t.Helper()
-	server := miniredis.RunT(t)
-	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
-	t.Cleanup(func() { _ = client.Close() })
-	return server, client
-}
-
-func TestSQLCommitPublicationIsMonotonicAtUint64Limit(t *testing.T) {
-	server, client := newEvidenceRedis(t)
-	ctx := context.Background()
-	written, ahead, conflict := publishCount(sqlCommitWritten), publishCount(sqlCommitAhead), publishCount(sqlCommitConflict)
-
-	newer := &assetpb.PlayerAssetSQLCommit{PlayerId: ^uint64(0), OwnerEpoch: ^uint64(0), SaveSeq: ^uint64(0), LedgerProto: []byte("new")}
-	if err := PublishSQLCommit(ctx, client, newer); err != nil {
-		t.Fatal(err)
-	}
-	older := &assetpb.PlayerAssetSQLCommit{PlayerId: newer.PlayerId, OwnerEpoch: newer.OwnerEpoch, SaveSeq: newer.SaveSeq - 1, LedgerProto: []byte("old")}
-	if err := PublishSQLCommit(ctx, client, older); err != nil {
-		t.Fatalf("已有证据更新时不回错误(写已落库),只计数: %v", err)
-	}
-	if got := publishCount(sqlCommitAhead) - ahead; got != 1 {
-		t.Fatalf("证据已更新(n==0 的旧语义)必须计数,实际 %v", got)
-	}
-	if err := PublishSQLCommit(ctx, client, newer); err != nil {
-		t.Fatalf("同版本同内容是幂等重放: %v", err)
-	}
-	key := SQLCommitKey(newer.PlayerId)
-	stored := server.HGet(key, "data")
-	newer.LedgerProto = []byte("conflict")
-	if err := PublishSQLCommit(ctx, client, newer); err == nil {
-		t.Fatal("同版本不同账本必须拒绝")
-	}
-	if got := publishCount(sqlCommitConflict) - conflict; got != 1 {
-		t.Fatalf("同版本冲突必须计数,实际 %v", got)
-	}
-	if server.HGet(key, "data") != stored || server.HGet(key, "version") != SQLCommitVersion(^uint64(0), ^uint64(0)) {
-		t.Fatal("被拒绝的发布不得改动已有证据")
-	}
-	if got := publishCount(sqlCommitWritten) - written; got != 2 {
-		t.Fatalf("首次写入与幂等重放各计 written 一次,实际 %v", got)
-	}
-}
-
-// 版本按 (owner_epoch, save_seq) 的字典序逐字节比较:新 epoch 的小 seq 胜过旧 epoch 的大 seq。
-func TestSQLCommitVersionOrderIsEpochThenSeq(t *testing.T) {
-	server, client := newEvidenceRedis(t)
-	ctx := context.Background()
-	key := SQLCommitKey(7)
-	publish := func(epoch, seq uint64, data string) {
-		t.Helper()
-		if err := PublishSQLCommit(ctx, client, &assetpb.PlayerAssetSQLCommit{PlayerId: 7, OwnerEpoch: epoch, SaveSeq: seq, LedgerProto: []byte(data)}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	publish(2, 1, "e2s1")
-	publish(1, ^uint64(0), "e1max") // 旧 epoch:不回退
-	if got := server.HGet(key, "version"); got != SQLCommitVersion(2, 1) {
-		t.Fatalf("旧 epoch 的发布不得覆盖新 epoch,实际 %s", got)
-	}
-	publish(2, 10, "e2s10") // 10 与 9 位数不同:定宽才比得对
-	publish(2, 9, "e2s9")
-	if got := server.HGet(key, "version"); got != SQLCommitVersion(2, 10) {
-		t.Fatalf("同 epoch 按 seq 数值比较,实际 %s", got)
-	}
-	if len(SQLCommitVersion(^uint64(0), ^uint64(0))) != 41 {
-		t.Fatal("版本串必须是 41 字节定宽")
-	}
-}
-
-// 存量版本串畸形(人工写坏、旧格式)时报错并计数,不改存量,也不当成「没有证据」覆盖掉。
-func TestSQLCommitMalformedStoredVersionRejected(t *testing.T) {
-	server, client := newEvidenceRedis(t)
-	key := SQLCommitKey(8)
-	server.HSet(key, "version", "9:1", "data", "keep")
-	failed := publishCount(sqlCommitError)
-	err := PublishSQLCommit(context.Background(), client, &assetpb.PlayerAssetSQLCommit{PlayerId: 8, OwnerEpoch: 9, SaveSeq: 2, LedgerProto: []byte("x")})
-	if err == nil {
-		t.Fatal("存量版本畸形必须报错")
-	}
-	if got := publishCount(sqlCommitError) - failed; got != 1 {
-		t.Fatalf("畸形版本必须计 error,实际 %v", got)
-	}
-	if server.HGet(key, "version") != "9:1" || server.HGet(key, "data") != "keep" {
-		t.Fatal("报错时不得改动存量")
 	}
 }

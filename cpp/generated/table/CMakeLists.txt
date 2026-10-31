@@ -65,6 +65,11 @@ set(SOURCE_FILES
     code/guildshop_table_fk.cpp
     code/equipslot_table.cpp
     code/item_table.cpp
+    code/playmode_table.cpp
+    code/playmode_table_fk.cpp
+    proto/playmode_table.pb.cc
+    code/zonegroup_table.cpp
+    proto/zonegroup_table.pb.cc
     code/messagelimiter_table.cpp
     code/mirror_table.cpp
     code/mirror_table_fk.cpp

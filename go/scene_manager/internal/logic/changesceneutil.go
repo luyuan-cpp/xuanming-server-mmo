@@ -73,7 +73,7 @@ type placedLocation struct {
 	tag         string
 	previousTag string
 	// epoch 是写进 location、并随 RoutePlayerEvent 下发的 owner_epoch:
-	// 铸造时 = 观察值 + 1,不铸造时 = 观察值本身。
+	// 铸造时 = max(观察值 + 1, 当前毫秒)(mintTargetEpoch),不铸造时 = 观察值本身。
 	epoch uint64
 	// minted 记录本次是否推进了 epoch,回滚据此选择 bump(再 INCR 一格,epoch 只进不退)或 keep
 	// (epoch 键不动,只退 location);见 planRouteRollback。
@@ -162,7 +162,7 @@ func expectObservedLocation(observedRaw string) locationExpectation {
 // location 不动 epoch,只有原文期望挡得住。写入的 location 带 guard.identity。
 //
 // mint=true(持有者换了:首次落点 / 过了标记门的交接 / 跨 zone 放行 / 等待落点
-// 的第二条腿)→ luaMintEpochAndSetLocation,location 里记 observedEpoch+1。
+// 的第二条腿)→ luaMintEpochAndSetLocation,location 里记 max(observedEpoch+1, 当前毫秒)(G3a 墙钟地板)。
 // mint=false(持有者没换:同节点换图;或 dev 旁路下无标记的跨节点交接,保持旧的
 // 竞态语义让旧节点的释放存盘照常落地)→ luaSetLocationIfEpoch,epoch 不动。
 //
@@ -198,8 +198,18 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 	observedEpoch, mint := guard.observedEpoch, guard.mint
 	placedEpoch := observedEpoch
 	script := luaSetLocationIfEpoch
+	clockBehind := false
 	if mint {
-		placedEpoch = observedEpoch + 1
+		if svcCtx.OwnerEpochMint == nil {
+			return placedLocation{}, errOwnerEpochMinterMissing
+		}
+		// 墙钟只在这里取一次:目标值写进 location 字节,也作为 ARGV[9] 随 EVAL 发出;铸造通道重发时带的是同一份
+		// ARGV,重放识别才比得上(见 luaMintEpochAndSetLocation)。
+		var targetErr error
+		placedEpoch, clockBehind, targetErr = mintTargetEpoch(observedEpoch, svcCtx.OwnerEpochMint.NowMs())
+		if targetErr != nil {
+			return placedLocation{}, targetErr
+		}
 		script = luaMintEpochAndSetLocation
 	}
 
@@ -227,9 +237,7 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 	var result any
 	var minted svc.MintEvalResult
 	if mint {
-		if svcCtx.OwnerEpochMint == nil {
-			return placedLocation{}, errOwnerEpochMinterMissing
-		}
+		args = append(args, strconv.FormatUint(placedEpoch, 10))
 		mintCtx, cancel := ownerEpochMintContext(ctx, &svcCtx.Config)
 		minted, err = svcCtx.OwnerEpochMint.EvalAndConfirm(mintCtx, script, keys, args...)
 		cancel()
@@ -266,9 +274,13 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 	}
 	returned := uint64(signed)
 	if mint && returned != placedEpoch {
-		// INCR 的结果与我们序列化进 location 的值不一致,只可能是 Lua 与这里的
+		// 脚本铸出的值与我们序列化进 location 的值不一致,只可能是 Lua 与这里的
 		// 约定被改劈叉了。location 里的 epoch 已经是错的,必须当失败处理。
 		return placedLocation{}, fmt.Errorf("owner_epoch 铸造结果 %d 与预期 %d 不一致", returned, placedEpoch)
+	}
+	if clockBehind {
+		// 只对真的写进 Redis 的铸造计(含重放识别命中);CAS 落败 / 标记撤回已在上面返回。
+		metrics.ObserveOwnerEpochMintClockBehind()
 	}
 	if replayed {
 		// 铸造 EVAL 首发已生效、应答丢了,铸造通道在新连接上原样重发,被脚本认成「本请求已生效」(脚本在这一支把 epoch
@@ -345,7 +357,7 @@ func setLocationIdentityIfUnchanged(svcCtx *svc.ServiceContext, playerId uint64,
 // DeletePlayerLocation removes the player's location from Redis.
 //
 // 刻意**不删** player:{id}:owner_epoch:epoch 是单调递增的归属代际,删掉再从 1
-// 开始铸造会让一个旧节点手里的旧值重新"合法";下一次 EnterScene 在它之上继续 INCR。
+// 开始铸造会让一个旧节点手里的旧值重新"合法";下一次 EnterScene 在它之上继续铸造(至少 +1)。
 func DeletePlayerLocation(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64) error {
 	key := getPlayerLocationKey(playerId)
 	_, err := svcCtx.Redis.Del(key)

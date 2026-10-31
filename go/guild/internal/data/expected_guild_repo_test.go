@@ -3,13 +3,12 @@ package data
 // 解散对「已不是本帮成员」的区分(docs/design/client-request-ordering.md O14 / §6.4,批次 E2;真库,GUILD_TEST_MYSQL_DSN 未设即 Skip)。
 //
 // 带 expected_guild_id 的晚到解散可能在预检之后、锁住 guild 行之前,操作者已经转让并离开了这个帮。repo 必须在同一把 guild 行锁下
-// 答出「他已不是成员」(ErrNotGuildMember,logic 回 kGuildNotInGuild),而不是「他不是帮主」;两种拒绝都整体回滚、不碰闸门。
+// 答出「他已不是成员」(ErrNotGuildMember,logic 回 kGuildNotInGuild),而不是「他不是帮主」;两种拒绝都整体回滚。
 // 帮里仍是普通成员的人照旧是 ErrRankTooLow(旧客户端两者都答 kGuildNotLeader,见 logic.DisbandGuild)。
 //
 // 选中本文件:`go test ./internal/data -run TestDisbandGuildRefusal -count=1 -v`。
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,21 +37,14 @@ func TestDisbandGuildRefusalDistinguishesFormerMember(t *testing.T) {
 	mustExec(t, ctx, db, "DELETE FROM guild_member WHERE guild_id = ? AND player_id = ?", guildID, formerLeader)
 	seedMemberRow(t, ctx, db, otherGuild, formerLeader, constants.RoleMember)
 
-	fenced := 0
-	fence := func(context.Context, uint32) error {
-		fenced++
-		return nil
-	}
-
-	_, err := repo.DisbandGuild(ctx, guildID, formerLeader, testNowMs, fence)
+	_, err := repo.DisbandGuild(ctx, guildID, formerLeader, testNowMs)
 	assert.ErrorIs(t, err, ErrNotGuildMember, "已不是本帮成员:要答「不在该帮」,不是「不是帮主」")
 	assert.NotErrorIs(t, err, ErrRankTooLow)
 
-	_, err = repo.DisbandGuild(ctx, guildID, member, testNowMs, fence)
+	_, err = repo.DisbandGuild(ctx, guildID, member, testNowMs)
 	assert.ErrorIs(t, err, ErrRankTooLow, "仍是本帮成员、只是不是帮主:照旧")
 	assert.NotErrorIs(t, err, ErrNotGuildMember)
 
-	assert.Zero(t, fenced, "两种拒绝都在闸门之前,不白查一次合服标记")
 	assert.Equal(t, 1, guildRowCount(t, ctx, db, guildID), "被拒的解散整体回滚")
 	assert.Equal(t, 1, guildRowCount(t, ctx, db, otherGuild), "别的帮原封不动")
 	assert.Equal(t, heir, leaderIDOf(t, ctx, db, guildID))
@@ -65,9 +57,8 @@ func TestDisbandGuildRefusalDistinguishesFormerMember(t *testing.T) {
 	assert.Equal(t, constants.RoleMember, role)
 
 	// 新帮主照常能解散:区分只发生在拒绝分支,成功路径不变。
-	res, err := repo.DisbandGuild(ctx, guildID, heir, testNowMs, fence)
+	res, err := repo.DisbandGuild(ctx, guildID, heir, testNowMs)
 	assert.NoError(t, err)
 	assert.Equal(t, zone, res.ZoneID)
 	assert.Zero(t, guildRowCount(t, ctx, db, guildID))
-	assert.Equal(t, 1, fenced, "只有成功的那次进了闸门")
 }

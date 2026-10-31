@@ -83,7 +83,7 @@ class ZoneWhitelistRepositoryWiringTest {
 
         assertNotNull(first);
         assertNotNull(second);
-        assertNotEquals(999L, first.getId(), "请求体里的 id 必须被忽略,id 由库分配");
+        assertNotEquals(999L, first.getId(), "请求体里的 id 必须被忽略,id 由应用发");
         assertEquals(first.getId(), second.getId(), "重复 add 返回的是同一行(幂等),不再是唯一键冲突");
         assertEquals("b", second.getNote());
         assertEquals(1, repo.findByZoneId(ZONE).size());

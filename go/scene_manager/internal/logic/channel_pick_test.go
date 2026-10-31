@@ -588,7 +588,7 @@ func TestChannelSwitchStartsCooldown(t *testing.T) {
 	for _, code := range []uint32{
 		constants.ErrNoAvailableNode, constants.ErrUpdateLocation, constants.ErrKafkaRoute, constants.ErrRedis,
 		constants.ErrSceneReentryBarrier, constants.ErrOwnerEpochConflict,
-		constants.ErrHomeZoneUnavailable, constants.ErrHomeZoneMerging,
+		constants.ErrHomeZoneUnavailable,
 		constants.ErrChannelUnavailable, constants.ErrChannelFull, constants.ErrChannelSwitchCooldown,
 	} {
 		assert.False(t, channelSwitchStartsCooldown(respWith(code), nil), "code=%d", code)

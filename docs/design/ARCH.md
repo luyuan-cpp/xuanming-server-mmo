@@ -435,6 +435,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 - [gRPC 传输与节点双端口](./grpc-muduo-transport.md#node-grpc-endpoints)
 - [scene-node-threading-model.md](./scene-node-threading-model.md) — 业务线程归属、50ms 固定步长与整体停机顺序
 - [enter-scene-zone-routing.md](./enter-scene-zone-routing.md)
+- [mmo-massive-world-cell-direction.md](./mmo-massive-world-cell-direction.md) — 万人同屏与大世界:多进程 cell 方向(以后做成实时 MMO 时才实施)
 
 ### 数据与持久化
 - [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md)
@@ -496,6 +497,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 | 21 | **全区全服数据层 + TiDB**:玩家数据层收敛为单一 TiDB 集群(v8.5 LTS),按 player_id 组织,home_zone 表达逻辑归属;跨区 = 客户端 redirect 重连 + 全局层直读(废弃 player_migrate 的数据搬运职责);合服 = RemapHomeZoneForMerge 零迁移。硬前提:snowflake 主键建表必须 NONCLUSTERED + SHARD_ROW_ID_BITS(写热点)、`txn-entry-size-limit` ≥32MB(16MB 存档默认必炸)、proto2mysql 升新版须逐表锁表名。partition 契约与 L1-L4 验收体系不变 | **2026-08-15** | [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md)(注:2026-10-12 起 `RemapHomeZoneForMerge` 停用,见 [player-route-mapping-durability-proposal.md](./player-route-mapping-durability-proposal.md) §4.3) |
 | 22 | **battle 直连收缩 + 集群外入口一次落地**(用户拍板「一次全做,事后验」,豁免「K8s 路由模式 battle-smoke 先跑通」前提):① gate 两种路由模式都不中继战斗,直连是战斗唯一通路,battle → gate 只剩 Kafka 大厅公告(Assigned / Start,无直连才回落),删 Kafka Bind/Unbind 契约(事件号墓碑不复用),D26 改 fail-closed(签不出票不建房),scene 换会话只推重连提示(D65–D74);② K8s `-GateRouterMode` 默认翻 `"1"`,C++ 进程默认仍直连(D75 / D-12 修订);③ 集群外入口:进程自报 `NodeInfo.client_endpoint`(=11;仅 static / agones 形态,默认 podip 不自报、回落 endpoint),login / scene_manager / battle 三出口同一选择规则,battle = Agones Fleet `portPolicy: Dynamic` + 分配许可与排空标签,gate = StatefulSet + 每序号 Service(D76–D93)。**全部未编译、未测试、未上集群,待 Codex / 用户验证** | **2026-09-29** | [turn-based-battle-server.md](./turn-based-battle-server.md) §22, [k8s-client-entry.md](./k8s-client-entry.md), [battle-transport-decision.md](./battle-transport-decision.md), [xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) D-12 修订 |
 | 23 | **玩家数据不再用 Redis 存储,Redis 其他用途照旧**:玩家持久存档以 TiDB 为唯一存储,Redis 不再保存、缓存或中转玩家数据(父快照 `PlayerAllData`、子表缓存、outbox 载荷、重试与死信队列里的 DBTask 载荷、资产 SQL 证据、战斗结算原件等移出;补投索引等只服务于它们的协调键随之失去用途);会话、锁、归属与位置投影、排队与限流、队列、Pub/Sub 等协调用途继续用 Redis,新功能该用 Redis 的照用。修订 #21 文档 §D5 的「Redis 权威读缓存」与经 Redis 缓冲玩家数据的部分,D5 其余条目随新设计逐条裁定。**只定方向,存盘与加载新路径未设计、未落码** | **2026-10-24** | [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) §9 |
+| 24 | **万人同屏与大世界走多进程 cell(远期方向,当前不实施)**:以后做成实时战斗 MMO 时才改,现在不改代码、不预留。世界切成 chunk,chunk 目录决定归哪些 cell 进程;cell 内部仍是单线程 ECS;玩家拆成不动的 base(持久数据、写权)和跟人走的 cell 部分;跨 cell 靠只读 ghost 加转发修改,接受晚一个 tick;客户端同步分近圈、中圈、远圈三档。同一模型覆盖大地图局部交战、1 万人同地互砍、大世界和无限世界。**只定方向,未设计细节、未落码,容量数字全是推算** | **2026-10-30** | [mmo-massive-world-cell-direction.md](./mmo-massive-world-cell-direction.md) |
 
 ---
 

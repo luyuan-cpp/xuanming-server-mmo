@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"data_service/internal/constants"
-	"data_service/internal/guildcheck"
 	"data_service/internal/logic"
 	"data_service/internal/metrics"
 	"data_service/internal/routing"
@@ -35,55 +34,6 @@ func NewDataServiceServer(svcCtx *svc.ServiceContext) *DataServiceServer {
 	return &DataServiceServer{svcCtx: svcCtx}
 }
 
-func (s *DataServiceServer) LoadPlayerData(ctx context.Context, req *data_service.LoadPlayerDataRequest) (*data_service.LoadPlayerDataResponse, error) {
-	resp, err := logic.LoadPlayerData(ctx, s.svcCtx, &logic.LoadPlayerDataReq{
-		PlayerID: req.PlayerId,
-		Fields:   req.Fields,
-	})
-	if err != nil {
-		return &data_service.LoadPlayerDataResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.LoadPlayerDataResponse{
-		ErrorCode: resp.ErrorCode,
-		Data:      resp.Data,
-		Version:   resp.Version,
-	}, nil
-}
-
-func (s *DataServiceServer) SavePlayerData(ctx context.Context, req *data_service.SavePlayerDataRequest) (*data_service.SavePlayerDataResponse, error) {
-	resp, err := logic.SavePlayerData(ctx, s.svcCtx, &logic.SavePlayerDataReq{
-		PlayerID:        req.PlayerId,
-		Data:            req.Data,
-		ExpectedVersion: req.ExpectedVersion,
-	})
-	if err != nil {
-		return &data_service.SavePlayerDataResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.SavePlayerDataResponse{
-		ErrorCode:  resp.ErrorCode,
-		NewVersion: resp.NewVersion,
-	}, nil
-}
-
-func (s *DataServiceServer) GetPlayerField(ctx context.Context, req *data_service.GetPlayerFieldRequest) (*data_service.GetPlayerFieldResponse, error) {
-	val, err := logic.GetPlayerField(ctx, s.svcCtx, req.PlayerId, req.Field)
-	if err != nil {
-		return &data_service.GetPlayerFieldResponse{ErrorCode: constants.ErrCodeRedis}, nil
-	}
-	return &data_service.GetPlayerFieldResponse{Value: val}, nil
-}
-
-func (s *DataServiceServer) SetPlayerField(ctx context.Context, req *data_service.SetPlayerFieldRequest) (*data_service.SetPlayerFieldResponse, error) {
-	resp, err := logic.SetPlayerField(ctx, s.svcCtx, req.PlayerId, req.Field, req.Value, req.ExpectedVersion)
-	if err != nil {
-		return &data_service.SetPlayerFieldResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.SetPlayerFieldResponse{
-		ErrorCode:  resp.ErrorCode,
-		NewVersion: resp.NewVersion,
-	}, nil
-}
-
 // RegisterPlayerZone 登记 player → home_zone 映射,SETNX 语义(见 routing.RegisterPlayerZone)。
 //
 // 本 RPC 的响应体是 emptypb.Empty,没有 error_code 字段可放码,所以失败一律走 gRPC
@@ -91,15 +41,16 @@ func (s *DataServiceServer) SetPlayerField(ctx context.Context, req *data_servic
 //
 //   - 映射不存在 / 已存在且相同 → OK(幂等)
 //   - 已存在且不同             → AlreadyExists + ErrCodeZoneMappingConflict,消息带既有 zone
-//   - 目标 zone 正在合服        → FailedPrecondition + ErrCodeZoneMergeInProgress
-//   - mapping Redis 故障        → Unavailable + ErrCodeRedis(闸门查询失败也走这里:fail-closed)
+//   - mapping Redis 故障        → Unavailable + ErrCodeRedis
+//
+// 不看合服状态(docs/design/player-data-tidb-scaling-plan.md §7.1):合服过程中在源区建号是允许的,
+// 他的 home_zone 就是源区,GetPlayerHomeZone 解析之后落到目标区。这里写入的永远是原始 home_zone。
 //
 // storage_id != 0 时与映射同一段 Lua 原子钉落点记录(player-storage-placement.md §8.1);
-// 上面四种结果的语义不变 —— 只有映射这次真的写成才会写落点,幂等 / 冲突 / 被围栏拒绝都不碰它。
+// 上面几种结果的语义不变 —— 只有映射这次真的写成才会写落点,幂等 / 冲突都不碰它。
 //
-// RouteStore.Mode=db_first(docs/design/player-route-mapping-durability-proposal.md §4)时上面四条照旧
-// (合服围栏另有两条路径:库内分片、发布脚本的提交点复核,都是 FailedPrecondition + 22),另多两种 Unavailable,
-// **gRPC code 的集合不变**(OK / AlreadyExists / FailedPrecondition / Unavailable),新码只体现在 message 里:
+// RouteStore.Mode=db_first(docs/design/player-route-mapping-durability-proposal.md §4)时上面几条照旧,另多两种 Unavailable,
+// **gRPC code 的集合不变**(OK / AlreadyExists / Unavailable),新码只体现在 message 里:
 //   - 库这一段故障(store 没装配、SQL / 锁等待、route_meta 缺失或冻结、缓存认得玩家而库里没行)→ Unavailable + ErrCodeRouteStoreError
 //   - player_id 为 0 或 home_zone 越界 → Unavailable + ErrCodeInvalidRequest
 //
@@ -120,10 +71,6 @@ func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_se
 			conflict.PlayerID, conflict.Existing, conflict.Requested)
 		return nil, status.Errorf(codes.AlreadyExists, "error_code=%d: %s",
 			constants.ErrCodeZoneMappingConflict, conflict.Error())
-	case errors.Is(err, routing.ErrZoneMergeInProgress):
-		logx.Errorf("[RegisterPlayerZone] refused by merge fence: player=%d zone=%d", req.PlayerId, req.HomeZoneId)
-		return nil, status.Errorf(codes.FailedPrecondition, "error_code=%d: %v",
-			constants.ErrCodeZoneMergeInProgress, err)
 	case errors.Is(err, routing.ErrInvalidRegistration):
 		// 只有 db_first 可达。刻意不用 InvalidArgument:gRPC code 集合保持与 redis 模式相同(规格 g.2 第 14 条),靠码 14 区分。
 		logx.Errorf("[RegisterPlayerZone] refused invalid registration: player=%d zone=%d: %v", req.PlayerId, req.HomeZoneId, err)
@@ -137,13 +84,14 @@ func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_se
 }
 
 // GetPlayerHomeZone 的线上契约(proto 注释不归本服务改,以此处为准):
-//   - 映射存在           → HomeZoneId=归属 zone, HomeZoneMerging=该 zone 是否在合服围栏内, err=nil
+//   - 映射存在           → HomeZoneId=**已解析到最终区**的归属 zone, err=nil
 //   - 映射不存在         → codes.NotFound,消息含 "no home zone mapping"
 //   - mapping Redis 故障 → codes.Unavailable
+//   - 合服映射解析失败(成环、缓存没装配)→ codes.Unavailable + ErrCodeRouteStoreError(fail-closed)
 //
-// HomeZoneMerging 与 HomeZoneId 同一段 Lua 读出(见 routing.GetPlayerHomeZoneAndMergeFence);
-// 围栏读失败按 true 返回(fail-closed)。scene_manager 据此在任何写之前拒绝进场(§8.2 / A16);
-// 旧版 data_service 不填该字段,调用方读到 false,行为与今天一致。
+// 为什么在出口解析(docs/design/player-data-tidb-scaling-plan.md §7.1):合服只写 zone_merged_into,玩家行和路由行都不动,
+// home_zone 还是源区;而按区分组的调用方(榜单、频道、市场、公会、进场判断)几乎都经这两个 RPC 取归属,要的是最终区。
+// 要原始 home_zone 的只有 go/db 选库、登记写入和路由工具,它们都不走这里。
 //
 // 为什么「不存在」要用一个**专门的码**而不是 HomeZoneId=0 + nil:调用方必须能把
 // 「这名玩家确实没有映射」和「我没查到,因为 Redis 挂了」分开。前者是数据状态
@@ -166,7 +114,7 @@ func (s *DataServiceServer) RegisterPlayerZone(ctx context.Context, req *data_se
 // 每次调用记 data_service_home_zone_read_seconds{rpc="home"},结局按返回的 gRPC code 归类(homeZoneReadResult)。
 func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_service.GetPlayerHomeZoneRequest) (_ *data_service.GetPlayerHomeZoneResponse, err error) {
 	defer observeHomeZoneRead(metrics.HomeZoneRPCHome, time.Now(), &err)
-	zoneID, merging, err := s.svcCtx.Router.GetPlayerHomeZoneAndMergeFence(ctx, req.GetPlayerId())
+	home, err := s.svcCtx.Router.GetPlayerHomeZone(ctx, req.GetPlayerId())
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, status.FromContextError(ctxErr).Err()
@@ -180,7 +128,12 @@ func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_ser
 		}
 		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRedis, err)
 	}
-	return &data_service.GetPlayerHomeZoneResponse{HomeZoneId: zoneID, HomeZoneMerging: merging}, nil
+	zoneID, err := s.svcCtx.MergedZones.Resolve(home)
+	if err != nil {
+		logx.Errorf("[GetPlayerHomeZone] merged zone resolve failed: player=%d home_zone=%d: %v", req.GetPlayerId(), home, err)
+		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
+	}
+	return &data_service.GetPlayerHomeZoneResponse{HomeZoneId: zoneID}, nil
 }
 
 // BatchGetPlayerHomeZone 与单查刻意不同:**缺席的 id 直接不出现在 map 里**,不是错误。
@@ -189,6 +142,7 @@ func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_ser
 // 值畸形与单查同口径,整批回 Unavailable(2026-10-12 起;此前畸形值被当成缺席静默跳过)。
 // ReadRequiresReady=true 时缓存不可信的块回源全局库,任一块回源失败整批 Unavailable + ErrCodeRouteStoreError(码 30),
 // 不回半份结果(半份会被调用方当成「这些人没有归属」)。调用方已放弃(ctx 取消 / 超时)时同单查,回它的取消原因(M1-2)。
+// 结果同单查解析到最终区;任一 id 解析失败整批 Unavailable + ErrCodeRouteStoreError,同样不回半份。
 //
 // 每次调用记 data_service_home_zone_read_seconds{rpc="batch"}(结局同单查归类,批量查不会有 not_found)与本批 id 个数。
 func (s *DataServiceServer) BatchGetPlayerHomeZone(ctx context.Context, req *data_service.BatchGetPlayerHomeZoneRequest) (_ *data_service.BatchGetPlayerHomeZoneResponse, err error) {
@@ -203,6 +157,14 @@ func (s *DataServiceServer) BatchGetPlayerHomeZone(ctx context.Context, req *dat
 			return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
 		}
 		return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRedis, err)
+	}
+	for playerID, home := range mapping {
+		zoneID, err := s.svcCtx.MergedZones.Resolve(home)
+		if err != nil {
+			logx.Errorf("[BatchGetPlayerHomeZone] merged zone resolve failed: player=%d home_zone=%d: %v", playerID, home, err)
+			return nil, status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodeRouteStoreError, err)
+		}
+		mapping[playerID] = zoneID
 	}
 	return &data_service.BatchGetPlayerHomeZoneResponse{PlayerZoneMap: mapping}, nil
 }
@@ -280,68 +242,7 @@ func callerIdentity(ctx context.Context) string {
 	return fmt.Sprintf("peer=%s user-agent=%q operator=%q", addr, agent, operator)
 }
 
-// RemapHomeZoneForMerge **已停用**(2026-10-12,docs/design/player-route-mapping-durability-proposal.md §4.3 的 W2):
-// 一律回 FailedPrecondition + ErrCodeNotImplemented,零变更。改映射只走 tools/merge_zone(按 CAS 改写、
-// 第 2 批起库先写);Router 上对应的实现已删除。
-//
-// 停用的理由:它对扫到的 player:zone:* 做无条件 SET(tools/merge_zone/merge_run.go 的 CAS 改写注释写了危害),
-// 且只写 Redis、绕过 player_route 真源 —— db_first 之后它改出来的值库里不知道,下一次发布会被判成冲突或被覆盖回去。
-// 仓库内没有调用方(规格 g.2 第 12 条)。
-//
-// 拒绝发生在**鉴权之前**:不再有"带对 token 就能执行"的路径,也就不该让调用方以为换个 token 能过。
-// 每次被调都留 ERROR 日志并带调用方身份:还在调它的只可能是忘了升级的运维脚本,必须让人看见。
-func (s *DataServiceServer) RemapHomeZoneForMerge(ctx context.Context, req *data_service.RemapHomeZoneForMergeRequest) (*data_service.RemapHomeZoneForMergeResponse, error) {
-	const rpcName = "RemapHomeZoneForMerge"
-	logx.Errorf("[admin] %s refused: the RPC is retired (proposal §4.3); remap mappings with tools/merge_zone. source=%d target=%d dry_run=%t %s",
-		rpcName, req.GetSourceZoneId(), req.GetTargetZoneId(), req.GetDryRun(), callerIdentity(ctx))
-	return nil, status.Errorf(codes.FailedPrecondition,
-		"error_code=%d: %s is retired since 2026-10-12 (player-route-mapping-durability-proposal.md §4.3); remap mappings with tools/merge_zone",
-		constants.ErrCodeNotImplemented, rpcName)
-}
-
-// DeletePlayerData 删玩家数据键。失败一律走响应体的 in-band error_code,**唯一的例外**是
-// delete_zone_mapping=true:映射删除分支已停用(logic.ErrZoneMappingDeletionDisabled,proposal §4.3 的 W3),
-// 回 gRPC FailedPrecondition + ErrCodeNotImplemented,且在任何副作用之前拒绝(数据键与映射都不动)。
-// 走 status 而不是 in-band 码,是为了让还带着这个开关的调用方当场失败,而不是看着一个"错误码非 0 的响应"继续往下走。
-func (s *DataServiceServer) DeletePlayerData(ctx context.Context, req *data_service.DeletePlayerDataRequest) (*data_service.DeletePlayerDataResponse, error) {
-	resp, err := logic.DeletePlayerData(ctx, s.svcCtx, &logic.DeletePlayerDataReq{
-		PlayerID:          req.PlayerId,
-		DeleteZoneMapping: req.DeleteZoneMapping,
-	})
-	if errors.Is(err, logic.ErrZoneMappingDeletionDisabled) {
-		logx.Errorf("[DeletePlayerData] refused delete_zone_mapping=true: player=%d %s", req.GetPlayerId(), callerIdentity(ctx))
-		return nil, status.Errorf(codes.FailedPrecondition, "error_code=%d: %v", constants.ErrCodeNotImplemented, err)
-	}
-	if err != nil {
-		return &data_service.DeletePlayerDataResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.DeletePlayerDataResponse{
-		ErrorCode:   resp.ErrorCode,
-		KeysDeleted: resp.KeysDeleted,
-	}, nil
-}
-
-// ── Snapshot / Rollback Handlers ───────────────────────────────
-
-func (s *DataServiceServer) CreatePlayerSnapshot(ctx context.Context, req *data_service.CreatePlayerSnapshotRequest) (*data_service.CreatePlayerSnapshotResponse, error) {
-	if s.svcCtx.SnapshotStore == nil {
-		return &data_service.CreatePlayerSnapshotResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
-	}
-	resp, err := logic.CreatePlayerSnapshot(ctx, s.svcCtx, &logic.CreateSnapshotReq{
-		PlayerID:     req.PlayerId,
-		SnapshotType: uint32(req.Type),
-		Reason:       req.Reason,
-		Operator:     req.Operator,
-	})
-	if err != nil {
-		return &data_service.CreatePlayerSnapshotResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.CreatePlayerSnapshotResponse{
-		ErrorCode:  resp.ErrorCode,
-		SnapshotId: resp.SnapshotID,
-		CreatedAt:  resp.CreatedAt,
-	}, nil
-}
+// ── 快照元数据(只读审计表)──
 
 func (s *DataServiceServer) ListPlayerSnapshots(ctx context.Context, req *data_service.ListPlayerSnapshotsRequest) (*data_service.ListPlayerSnapshotsResponse, error) {
 	if s.svcCtx.SnapshotStore == nil {
@@ -375,173 +276,7 @@ func (s *DataServiceServer) ListPlayerSnapshots(ctx context.Context, req *data_s
 	}, nil
 }
 
-func (s *DataServiceServer) GetPlayerSnapshotDiff(ctx context.Context, req *data_service.GetPlayerSnapshotDiffRequest) (*data_service.GetPlayerSnapshotDiffResponse, error) {
-	if s.svcCtx.SnapshotStore == nil {
-		return &data_service.GetPlayerSnapshotDiffResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
-	}
-	resp, err := logic.GetPlayerSnapshotDiff(ctx, s.svcCtx, &logic.SnapshotDiffReq{
-		PlayerID:   req.PlayerId,
-		SnapshotID: req.SnapshotId,
-		TargetTime: req.TargetTime,
-	})
-	if err != nil {
-		return &data_service.GetPlayerSnapshotDiffResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-
-	diffs := make([]*data_service.FieldDiff, 0, len(resp.Diffs))
-	for _, d := range resp.Diffs {
-		diffs = append(diffs, &data_service.FieldDiff{
-			Field:          d.Field,
-			SnapshotValue:  d.SnapshotValue,
-			CurrentValue:   d.CurrentValue,
-			OnlyInSnapshot: d.OnlyInSnapshot,
-			OnlyInCurrent:  d.OnlyInCurrent,
-		})
-	}
-	return &data_service.GetPlayerSnapshotDiffResponse{
-		ErrorCode:      resp.ErrorCode,
-		SnapshotIdUsed: resp.SnapshotIDUsed,
-		SnapshotTime:   resp.SnapshotTime,
-		Diffs:          diffs,
-	}, nil
-}
-
-// ── 三个 Rollback*:一律要求 x-admin-token(docs/design/guild-phase2/07-rollback-fail-closed.md §7.6.3 Q2 = ②)──
-//
-// 为什么不是"只有 accept_guild_divergence=true 才要 token":三个 handler 原先零鉴权、operator 是自报字符串,
-// 任何能拨到 data_service 的进程发一次不带放行的 Rollback* 就能 (i) 从拒绝响应里读到目标玩家的资产流水样本,
-// (ii) 让目标玩家 / 整个 zone 被栅栏挡住登录最长"沉降 30s + 检查预算"。一律要 token 两条都没有了,
-// 也就不需要"未鉴权只回计数"的分支。口径同 RemapHomeZoneForMerge:没配 AdminToken = 回档 RPC 整体停用。
-// 鉴权在任何 logic(栅栏、审计、快照读)之前;拒绝走 gRPC status(PermissionDenied + ErrCodeAdminAuthRequired)。
-//
-// 响应:logic 对规则拒绝(RollbackGuildDivergence)与写后分歧(RollbackGuildDivergedAfterWrite)不返回 err,
-// 分歧计数与前 20 条样本才带得出去;返回 err 的是故障,只回 error_code(原样)。
-
-func (s *DataServiceServer) RollbackPlayer(ctx context.Context, req *data_service.RollbackPlayerRequest) (*data_service.RollbackPlayerResponse, error) {
-	const rpcName = "RollbackPlayer"
-	if err := s.authorizeAdmin(ctx, rpcName); err != nil {
-		return nil, err
-	}
-	caller := callerIdentity(ctx)
-	logx.Infof("[admin] %s authorized: player_id=%d snapshot_id=%d target_time=%d scope=%d accept_guild_divergence=%t operator=%q %s",
-		rpcName, req.GetPlayerId(), req.GetSnapshotId(), req.GetTargetTime(), req.GetScope(), req.GetAcceptGuildDivergence(), req.GetOperator(), caller)
-	if s.svcCtx.SnapshotStore == nil {
-		return &data_service.RollbackPlayerResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
-	}
-	resp, err := logic.RollbackPlayer(ctx, s.svcCtx, &logic.RollbackPlayerReq{
-		PlayerID:              req.PlayerId,
-		SnapshotID:            req.SnapshotId,
-		TargetTime:            req.TargetTime,
-		Scope:                 uint32(req.Scope),
-		Fields:                req.Fields,
-		Reason:                req.Reason,
-		Operator:              req.Operator,
-		AcceptGuildDivergence: req.GetAcceptGuildDivergence(),
-		Caller:                caller,
-	})
-	if err != nil {
-		return &data_service.RollbackPlayerResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.RollbackPlayerResponse{
-		ErrorCode:                  resp.ErrorCode,
-		SnapshotIdUsed:             resp.SnapshotIDUsed,
-		PreRollbackSnapshotId:      resp.PreRollbackSnapshotID,
-		FieldsRestored:             resp.FieldsRestored,
-		GuildDivergenceCount:       resp.GuildDivergenceCount,
-		GuildDivergences:           toProtoGuildDivergences(resp.GuildDivergences),
-		GuildUnprovablePlayerCount: resp.GuildUnprovablePlayerCount,
-	}, nil
-}
-
-func (s *DataServiceServer) RollbackZone(ctx context.Context, req *data_service.RollbackZoneRequest) (*data_service.RollbackZoneResponse, error) {
-	const rpcName = "RollbackZone"
-	if err := s.authorizeAdmin(ctx, rpcName); err != nil {
-		return nil, err
-	}
-	caller := callerIdentity(ctx)
-	logx.Infof("[admin] %s authorized: zone=%d target_time=%d accept_guild_divergence=%t operator=%q %s",
-		rpcName, req.GetZoneId(), req.GetTargetTime(), req.GetAcceptGuildDivergence(), req.GetOperator(), caller)
-	if s.svcCtx.SnapshotStore == nil {
-		return &data_service.RollbackZoneResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
-	}
-	resp, err := logic.RollbackZone(ctx, s.svcCtx, &logic.RollbackZoneReq{
-		ZoneID:                req.ZoneId,
-		TargetTime:            req.TargetTime,
-		Reason:                req.Reason,
-		Operator:              req.Operator,
-		AcceptGuildDivergence: req.GetAcceptGuildDivergence(),
-		Caller:                caller,
-	})
-	if err != nil {
-		return &data_service.RollbackZoneResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.RollbackZoneResponse{
-		ErrorCode:                  resp.ErrorCode,
-		PlayersAffected:            resp.PlayersAffected,
-		PlayersFailed:              resp.PlayersFailed,
-		FailedPlayerIds:            resp.FailedPlayerIDs,
-		OrphanPlayerIds:            resp.OrphanPlayerIDs,
-		OrphansCleaned:             resp.OrphansCleaned,
-		GuildDivergenceCount:       resp.GuildDivergenceCount,
-		GuildDivergences:           toProtoGuildDivergences(resp.GuildDivergences),
-		GuildUnprovablePlayerCount: resp.GuildUnprovablePlayerCount,
-	}, nil
-}
-
-func (s *DataServiceServer) RollbackAll(ctx context.Context, req *data_service.RollbackAllRequest) (*data_service.RollbackAllResponse, error) {
-	const rpcName = "RollbackAll"
-	if err := s.authorizeAdmin(ctx, rpcName); err != nil {
-		return nil, err
-	}
-	caller := callerIdentity(ctx)
-	logx.Infof("[admin] %s authorized: target_time=%d accept_guild_divergence=%t operator=%q %s",
-		rpcName, req.GetTargetTime(), req.GetAcceptGuildDivergence(), req.GetOperator(), caller)
-	if s.svcCtx.SnapshotStore == nil {
-		return &data_service.RollbackAllResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
-	}
-	resp, err := logic.RollbackAll(ctx, s.svcCtx, &logic.RollbackAllReq{
-		TargetTime:            req.TargetTime,
-		Reason:                req.Reason,
-		Operator:              req.Operator,
-		AcceptGuildDivergence: req.GetAcceptGuildDivergence(),
-		Caller:                caller,
-	})
-	if err != nil {
-		return &data_service.RollbackAllResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.RollbackAllResponse{
-		ErrorCode:                  resp.ErrorCode,
-		ZonesProcessed:             resp.ZonesProcessed,
-		PlayersAffected:            resp.PlayersAffected,
-		PlayersFailed:              resp.PlayersFailed,
-		GuildDivergenceCount:       resp.GuildDivergenceCount,
-		GuildDivergences:           toProtoGuildDivergences(resp.GuildDivergences),
-		GuildUnprovablePlayerCount: resp.GuildUnprovablePlayerCount,
-	}, nil
-}
-
-// toProtoGuildDivergences 把帮会闸的分歧样本搬进 proto(logic 已截到前 20 条)。
-func toProtoGuildDivergences(rows []guildcheck.GuildDivergence) []*data_service.RollbackGuildDivergence {
-	if len(rows) == 0 {
-		return nil
-	}
-	out := make([]*data_service.RollbackGuildDivergence, 0, len(rows))
-	for _, d := range rows {
-		out = append(out, &data_service.RollbackGuildDivergence{
-			OpId:              d.OpID,
-			PlayerId:          d.PlayerID,
-			GuildId:           d.GuildID,
-			Kind:              d.Kind,
-			Status:            d.Status,
-			FundsDelta:        d.FundsDelta,
-			ContributionDelta: d.ContributionDelta,
-			UpdatedMs:         d.UpdatedMs,
-		})
-	}
-	return out
-}
-
-// ── Batch Recall / Transaction Log Query / Event Snapshot ──────
+// ── Batch Recall / Transaction Log Query ──────
 
 func (s *DataServiceServer) BatchRecallItems(ctx context.Context, req *data_service.BatchRecallItemsRequest) (*data_service.BatchRecallItemsResponse, error) {
 	resp, err := logic.BatchRecallItems(ctx, s.svcCtx, &logic.BatchRecallReq{
@@ -617,26 +352,6 @@ func (s *DataServiceServer) QueryTransactionLog(ctx context.Context, req *data_s
 		ErrorCode:  resp.ErrorCode,
 		Rows:       rows,
 		TotalCount: resp.TotalCount,
-	}, nil
-}
-
-func (s *DataServiceServer) CreateEventSnapshot(ctx context.Context, req *data_service.CreateEventSnapshotRequest) (*data_service.CreateEventSnapshotResponse, error) {
-	if s.svcCtx.SnapshotStore == nil {
-		return &data_service.CreateEventSnapshotResponse{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
-	}
-	resp, err := logic.CreateEventSnapshot(ctx, s.svcCtx, &logic.CreateEventSnapshotReq{
-		PlayerID:    req.PlayerId,
-		EventType:   uint32(req.EventType),
-		EventDetail: req.EventDetail,
-		Operator:    req.Operator,
-	})
-	if err != nil {
-		return &data_service.CreateEventSnapshotResponse{ErrorCode: resp.ErrorCode}, nil
-	}
-	return &data_service.CreateEventSnapshotResponse{
-		ErrorCode:  resp.ErrorCode,
-		SnapshotId: resp.SnapshotID,
-		CreatedAt:  resp.CreatedAt,
 	}, nil
 }
 
@@ -733,30 +448,11 @@ func (s *DataServiceServer) BatchGetPlayerName(ctx context.Context, req *data_se
 // 本 RPC 没有 in-band error_code,契约就是 gRPC code;语义表与 code 全在 logic 里一处定义,
 // logic 返回的 error 已经是 status,这里只做搬运 —— 不要在这里再包一层映射。
 func (s *DataServiceServer) GetPlayerAssetOpLedger(ctx context.Context, req *data_service.GetPlayerAssetOpLedgerRequest) (*data_service.GetPlayerAssetOpLedgerResponse, error) {
-	// 副本核验只对 Redis blob 读有意义;SQL 证据分支不核验,两者同时要求是调用方写错了请求,不猜它要哪一份。
-	if req.GetRequireSqlCommit() && req.GetVerifyRedisCopy() {
-		return nil, status.Error(codes.InvalidArgument, "GetPlayerAssetOpLedger: verify_redis_copy applies only to the Redis blob read, not with require_sql_commit")
-	}
-	// 资产自动放弃的闸(docs/design/zone-redis-regression-guard-20261022.md §4.5):blob 与实例身份、身份戳同一段 Lua 读出。
-	if req.GetVerifyRedisCopy() {
-		ledger, found, verified, err := logic.GetVerifiedPlayerAssetOpLedger(ctx, s.svcCtx, req.GetPlayerId())
-		if err != nil {
-			return nil, err
-		}
-		return &data_service.GetPlayerAssetOpLedgerResponse{Found: found, Ledger: ledger, RedisCopyVerified: verified}, nil
-	}
-	if req.GetRequireSqlCommit() {
-		ledger, found, err := logic.GetSQLCommittedAssetLedger(ctx, s.svcCtx, req.GetPlayerId())
-		if err != nil {
-			return nil, err
-		}
-		return &data_service.GetPlayerAssetOpLedgerResponse{Found: found, Ledger: ledger, SqlCommitted: true}, nil
-	}
-	ledger, found, err := logic.GetPlayerAssetOpLedger(ctx, s.svcCtx, req.GetPlayerId())
+	snapshot, err := logic.GetPlayerStoreLedger(ctx, s.svcCtx, req.GetPlayerId())
 	if err != nil {
 		return nil, err
 	}
-	return &data_service.GetPlayerAssetOpLedgerResponse{Found: found, Ledger: ledger}, nil
+	return &data_service.GetPlayerAssetOpLedgerResponse{Found: snapshot.Found, Ledger: snapshot.Ledger, PlayerReleased: snapshot.Released}, nil
 }
 
 // GetPlayerInboxLedger 读玩家**已落盘**的收件箱账本(docs/design/player-inbox-service.md §5.1、§9.3),

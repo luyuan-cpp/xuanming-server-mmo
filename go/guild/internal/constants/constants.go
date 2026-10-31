@@ -78,12 +78,8 @@ const (
 	// ErrAnnouncementTooLong:公告超过 MaxAnnouncementBytes。
 	ErrAnnouncementTooLong = uint32(table.GuildError_kGuildAnnouncementTooLong)
 	// ErrHomeZoneUnknown:data_service 里没有该玩家的归属 zone 映射,无法判定他属于哪个区的帮会。
-	// 是数据状态不是故障:存量玩家需要运维跑 tools/merge_zone -backfill-home-zone 补映射。
+	// 是数据状态不是故障:这名玩家在 player_route 里没有归属行(建角时写入),要查数据。
 	ErrHomeZoneUnknown = uint32(table.GuildError_kGuildHomeZoneUnknown)
-	// ErrZoneMerging:归属 zone 正在合服维护(merge:in_progress:{zone} 存在,或这个键读不到)。
-	// 读失败也回它:闸门判不了就当成"正在合服"拒绝,而不是放行(fail-closed)。
-	// 取代了原来的 gRPC FailedPrecondition —— 那条路径客户端只能显示通用错误。
-	ErrZoneMerging = uint32(table.GuildError_kGuildZoneMerging)
 	// ErrTargetNotMember:操作目标不是本帮成员(可能刚退帮、被别人踢了,或客户端拿的是过期快照)。
 	ErrTargetNotMember = uint32(table.GuildError_kGuildTargetNotMember)
 	// ErrCannotTargetSelf:任免 / 踢人 / 转让 / 审批都不允许把自己当目标。

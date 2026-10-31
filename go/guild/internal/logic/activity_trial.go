@@ -22,7 +22,7 @@ package logic
 //     巡检器与消费者同时处理)。幂等闸门在仓储的对局行上;SharedRedis 的结果记录只在事务提交之后删。
 //     闸门有两道:入口处一次不持锁的终态预读(对局行已是 SETTLED 就直接销账,不构建奖励、不发号、不开事务),
 //     与事务里持着帮会行锁的权威判定。前一道让重复副本便宜地走掉,也是"卡住的消息"的人工出口(06 §6.35a 做法 A)。
-//     暂时性错误(库 / Redis 故障、写冲突、合服闸门、号段不可用)原样返回让调用方退避重试,**不销账**;
+//     暂时性错误(库 / Redis 故障、写冲突、号段不可用)原样返回让调用方退避重试,**不销账**;
 //     确定性错误(溢出、奖励包坏、上下文畸形)标成毒消息后销账,不卡住分区(06 §6.31)。
 //  4. **名单先判帮会归属、再判在线**:在线状态只对"确认是本帮成员"的人作答,否则任何人都能把陌生玩家的 id
 //     塞进名单来探测他在不在线。
@@ -257,18 +257,6 @@ func trialRewardChannelTip(d *ActivityDeps, bundle *assetpb.AssetBundle) *base.T
 	}
 }
 
-// trialMergeFenceTip:帮会所在 zone 正在合服(或闸门读不到,fail-closed)时不许发起、不许凑齐开战,回 kGuildZoneMerging。
-//
-// 灯会 / 团圆的合服闸门在写事务里按锁住的 guild.zone_id 判;建房与开战不开 MySQL 事务,只能在这里按缓存快照的 zone 判。
-// 快照的 zone 在合服刚结束时可能落后一个缓存代次,所以它只是"尽量别在合服窗口里开新的对局"的前置闸:
-// 权威的闸门仍在结算事务里(SettleTrialResult 传的 Fence)。少了这道前置闸的代价是:合服窗口里打完的对局,
-// 它的结果会让结果消费停在那条消息上重试到合服结束 —— 消费是单协程串行的,停住的是**这个 guild 副本分到的全部分区**
-// (只有一个副本时就是全服),别的 zone、别的帮会的结算跟着一起等,只能靠巡检器在登记 420s 之后从结果记录兜底
-// (kafka/trial_result_consumer.go 文件头纪律 2)。
-func (l *GuildLogic) trialMergeFenceTip(ctx context.Context, a activityActor) *base.TipInfoMessage {
-	return l.mergeFenceTip(ctx, a.guild.ZoneID)
-}
-
 // notifyTrialRoster 给名单里除 actor 以外的人推一条 ACTIVITY_CHANGED(房间状态变了,去拉活动页),
 // 并给名单**全员**(含 actor 本人,摘要纪律 2)bump GUILD_ACTIVITY(landing-recovery-sync-digest.md §3.3 表第 9 行)。
 // 调用点(同意 / 拒绝 / 取消 / 开战成功 / 开战失败)都在房间写成新状态之后(开战前后两步写失败时也已尽力写过,
@@ -452,7 +440,7 @@ func (l *GuildLogic) trialView(ctx context.Context, d *ActivityDeps, a activityA
 
 // ── RPC:建邀请房间(06 §6.24)────────────────────────────────
 
-// StartGuildTrial:发起人建邀请房间,**不直接开战**。流程:前置 → 合服闸门 → 预检(开放 / 帮会等级 / 入帮时长 / 今日次数)→
+// StartGuildTrial:发起人建邀请房间,**不直接开战**。流程:前置 → 预检(开放 / 帮会等级 / 入帮时长 / 今日次数)→
 // 名单规范化 → 权威核对名单(本帮成员、入帮时长、在线)→ [物品通道] → 建房(Redis 原子脚本:冷却、每人同时只在
 // 一个有效房间)→ 推送给被邀请人(target = 被邀请人,客户端据此弹邀请)→ 回带房间的视图。
 //
@@ -481,9 +469,6 @@ func (l *GuildLogic) startGuildTrial(ctx context.Context, req *pb.StartGuildTria
 	// 依赖不齐(没配 match、结果消费没开、房间 Redis 没接)与"活动没开"同一答复,且排在任何历练读写之前。
 	if !d.trialAvailable() {
 		return trialNotOpenTip(), nil, nil
-	}
-	if tip := l.trialMergeFenceTip(ctx, a); tip != nil {
-		return tip, nil, nil
 	}
 	pre, tip, err := l.precheckActivity(ctx, d, a, activity.TypeTrial, req.GetActivityId(), now)
 	if err != nil || tip != nil {
@@ -591,12 +576,6 @@ func (l *GuildLogic) respondGuildTrialInvite(ctx context.Context, req *pb.Respon
 	}
 	if lobby == nil || lobby.GuildID != a.guild.GuildID || !lobby.Has(a.playerID) {
 		return trialRespondOutcome{tip: trialInviteExpiredTip()}, nil
-	}
-	// 合服期间不接受"同意"(它可能就是凑齐开战的那一票);拒绝 / 取消照常,让房间能被主动解散。房间本身不动,到期自然失效。
-	if req.GetAccept() {
-		if tip := l.trialMergeFenceTip(ctx, a); tip != nil {
-			return trialRespondOutcome{tip: tip}, nil
-		}
 	}
 	res, err := d.Lobby.Respond(ctx, lobby.LobbyID, a.playerID, req.GetAccept(), nowMs, trialLaunchWindow)
 	if err != nil {
@@ -877,7 +856,7 @@ const trialSyncDeliveryReserve = syncTailReserve
 // 返回语义(消费者据此决定提交还是重试):
 //   - error 为 nil:这条消息处理完了 —— 已结算、判为重复 / 帮会已解散 / 上下文不可用 / 毒消息,或与 guild 无关。
 //     消费者**提交 offset**。outcome 说明是哪一种,只用于日志与测试。
-//   - error 非 nil:**暂时性失败**(MySQL / Redis 故障、写冲突、合服闸门、号段不可用、未接线)。什么都没提交,
+//   - error 非 nil:**暂时性失败**(MySQL / Redis 故障、写冲突、号段不可用、未接线)。什么都没提交,
 //     结果记录没有销账;消费者**不提交**,退避后带同一条消息重调。每次调用都会重取"现在"。
 //
 // 幂等:同一条消息可以调任意多次、可以与巡检器并发调,发奖至多一次。幂等闸门在对局行上,有两道:
@@ -885,7 +864,7 @@ const trialSyncDeliveryReserve = syncTailReserve
 // 线程模型:可并发调用;本方法不持有任何跨调用的状态。ctx 取消时尽快返回(事务回滚,返回 error)。
 //
 // 发奖名单 = team 0 的玩家 − 逃跑者(用户决策 U2:阵亡者也得奖)∩ 结算时仍在本帮 ∩ 开战那个游戏日次数未满;
-// 后两条由仓储在事务里按锁住的行判。合服闸门照常生效:帮会所在 zone 正在合服时回暂时性错误,合服结束后照常结算。
+// 后两条由仓储在事务里按锁住的行判。
 func (l *GuildLogic) SettleTrialResult(ctx context.Context, ev *kafkapb.BattleResultEvent) (TrialSettleOutcome, error) {
 	actx := ev.GetActivityContext()
 	if actx.GetKind() != battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL {
@@ -931,10 +910,10 @@ func (l *GuildLogic) SettleTrialResult(ctx context.Context, ev *kafkapb.BattleRe
 
 	// 幂等短路:这一局已有终态 → 这是一份重复的结果,销账了事。排在构建奖励包、发号、开事务**之前**,为的是两件事:
 	//   - battle 在结果记录被销账之前每 10s 按原字节重发一次(至多 30 次,key = battle_id,同一分区)。这些副本不必各烧
-	//     一批指令号、各抢一次帮会行锁;合服期间它们也不会被事务里的闸门拦成"暂时性失败"而把消费卡住。
+	//     一批指令号、各抢一次帮会行锁。
 	//   - 它是"卡住的消息"的人工出口(06 §6.35a 做法 A):运维把对局行手工写成终态之后,不论原先失败在这一步之后的
-	//     哪个位置(奖励包、发号、合服闸门、事务里的任何一步,包括在那些位置上 panic),这条消息连同排在它后面的全部
-	//     重发副本都从这里走掉。没有这一步,闸门只在事务里、排在合服闸门之后,前面几步的失败就没有不重启的出口。
+	//     哪个位置(奖励包、发号、事务里的任何一步,包括在那些位置上 panic),这条消息连同排在它后面的全部
+	//     重发副本都从这里走掉。没有这一步,闸门只在事务里,前面几步的失败就没有不重启的出口。
 	// 读失败按暂时性错误返回:事务用的是同一个库,硬往下走只会多烧一批号。
 	settled, err := trialSettledBefore(ctx, d, battle)
 	if err != nil {
@@ -962,7 +941,6 @@ func (l *GuildLogic) SettleTrialResult(ctx context.Context, ev *kafkapb.BattleRe
 		Candidates:   trialCandidates(ev),
 		FinishedAtMs: ev.GetFinishedAtMs(),
 		NowMs:        nowMs,
-		Fence:        l.economyFence,
 	}
 	var bundle *assetpb.AssetBundle
 	if in.Win && row != nil && len(in.Candidates) > 0 {

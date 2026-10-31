@@ -1,0 +1,290 @@
+{
+  "schema": "BroadcastToPlayersEvent / BroadcastToPlayersRequest 目标字段的跨语言 golden 向量。编码方:Go go/shared/kafkautil/gate_push.go 的 EncodeBroadcastTargets(gate_push_test.go 逐字段断言等于 expect);解码方:C++ gate 的 cpp/libs/engine/core/network/broadcast_target_codec.h ForEach(cpp/tests 的 BroadcastTargetVectors.GateDecodesGoEncodedPairs 用 expect 构造事件后解码,断言得到 targets 按 session_id 稳定升序、同一 session 保留首个之后的 (session, player) 对)。契约:去重后目标数 >= 32 且 bitmap 字节数 + 6 < 目标数 * 3 时用 bitmap,否则用 session_list;bitmap 第 offset 位(第 offset/8 字节的第 offset%8 位,字节内低位在前)置位表示 session = session_bitmap_base + offset;player_list[i] 对应 session_id 升序的第 i 个目标。session_bitmap_hex 是 bitmap 字节的小写十六进制;用 bitmap 时 session_list 为空数组,反之 session_bitmap_hex 为空串且 session_bitmap_base 为 0。session_id 取 gate node 5 的会话段(5<<17 = 655360 起)。player_id 刻意不随 session_id 单调,独立排序 player_list 的错误实现会被发现。数值为手算,不一致时以机器结果回报,不直接改表。",
+  "vectors": [
+    {
+      "name": "single_target",
+      "targets": [
+        { "session_id": 655361, "player_id": 1001 }
+      ],
+      "expect": {
+        "session_list": [655361],
+        "session_bitmap_base": 0,
+        "session_bitmap_hex": "",
+        "player_list": [1001]
+      }
+    },
+    {
+      "name": "few_unsorted_list",
+      "targets": [
+        { "session_id": 655400, "player_id": 1001 },
+        { "session_id": 655362, "player_id": 3003 },
+        { "session_id": 655380, "player_id": 2002 }
+      ],
+      "expect": {
+        "session_list": [655362, 655380, 655400],
+        "session_bitmap_base": 0,
+        "session_bitmap_hex": "",
+        "player_list": [3003, 2002, 1001]
+      }
+    },
+    {
+      "name": "duplicate_session_keeps_first",
+      "targets": [
+        { "session_id": 655370, "player_id": 7001 },
+        { "session_id": 655365, "player_id": 6001 },
+        { "session_id": 655370, "player_id": 7002 },
+        { "session_id": 655365, "player_id": 6002 }
+      ],
+      "expect": {
+        "session_list": [655365, 655370],
+        "session_bitmap_base": 0,
+        "session_bitmap_hex": "",
+        "player_list": [6001, 7001]
+      }
+    },
+    {
+      "name": "dense_bitmap_64",
+      "targets": [
+        { "session_id": 655424, "player_id": 5000063 },
+        { "session_id": 655423, "player_id": 5000064 },
+        { "session_id": 655422, "player_id": 5000061 },
+        { "session_id": 655421, "player_id": 5000062 },
+        { "session_id": 655420, "player_id": 5000059 },
+        { "session_id": 655419, "player_id": 5000060 },
+        { "session_id": 655418, "player_id": 5000057 },
+        { "session_id": 655417, "player_id": 5000058 },
+        { "session_id": 655416, "player_id": 5000055 },
+        { "session_id": 655415, "player_id": 5000056 },
+        { "session_id": 655414, "player_id": 5000053 },
+        { "session_id": 655413, "player_id": 5000054 },
+        { "session_id": 655412, "player_id": 5000051 },
+        { "session_id": 655411, "player_id": 5000052 },
+        { "session_id": 655410, "player_id": 5000049 },
+        { "session_id": 655409, "player_id": 5000050 },
+        { "session_id": 655408, "player_id": 5000047 },
+        { "session_id": 655407, "player_id": 5000048 },
+        { "session_id": 655406, "player_id": 5000045 },
+        { "session_id": 655405, "player_id": 5000046 },
+        { "session_id": 655404, "player_id": 5000043 },
+        { "session_id": 655403, "player_id": 5000044 },
+        { "session_id": 655402, "player_id": 5000041 },
+        { "session_id": 655401, "player_id": 5000042 },
+        { "session_id": 655400, "player_id": 5000039 },
+        { "session_id": 655399, "player_id": 5000040 },
+        { "session_id": 655398, "player_id": 5000037 },
+        { "session_id": 655397, "player_id": 5000038 },
+        { "session_id": 655396, "player_id": 5000035 },
+        { "session_id": 655395, "player_id": 5000036 },
+        { "session_id": 655394, "player_id": 5000033 },
+        { "session_id": 655393, "player_id": 5000034 },
+        { "session_id": 655392, "player_id": 5000031 },
+        { "session_id": 655391, "player_id": 5000032 },
+        { "session_id": 655390, "player_id": 5000029 },
+        { "session_id": 655389, "player_id": 5000030 },
+        { "session_id": 655388, "player_id": 5000027 },
+        { "session_id": 655387, "player_id": 5000028 },
+        { "session_id": 655386, "player_id": 5000025 },
+        { "session_id": 655385, "player_id": 5000026 },
+        { "session_id": 655384, "player_id": 5000023 },
+        { "session_id": 655383, "player_id": 5000024 },
+        { "session_id": 655382, "player_id": 5000021 },
+        { "session_id": 655381, "player_id": 5000022 },
+        { "session_id": 655380, "player_id": 5000019 },
+        { "session_id": 655379, "player_id": 5000020 },
+        { "session_id": 655378, "player_id": 5000017 },
+        { "session_id": 655377, "player_id": 5000018 },
+        { "session_id": 655376, "player_id": 5000015 },
+        { "session_id": 655375, "player_id": 5000016 },
+        { "session_id": 655374, "player_id": 5000013 },
+        { "session_id": 655373, "player_id": 5000014 },
+        { "session_id": 655372, "player_id": 5000011 },
+        { "session_id": 655371, "player_id": 5000012 },
+        { "session_id": 655370, "player_id": 5000009 },
+        { "session_id": 655369, "player_id": 5000010 },
+        { "session_id": 655368, "player_id": 5000007 },
+        { "session_id": 655367, "player_id": 5000008 },
+        { "session_id": 655366, "player_id": 5000005 },
+        { "session_id": 655365, "player_id": 5000006 },
+        { "session_id": 655364, "player_id": 5000003 },
+        { "session_id": 655363, "player_id": 5000004 },
+        { "session_id": 655362, "player_id": 5000001 },
+        { "session_id": 655361, "player_id": 5000002 }
+      ],
+      "expect": {
+        "session_list": [],
+        "session_bitmap_base": 655361,
+        "session_bitmap_hex": "ffffffffffffffff",
+        "player_list": [
+          5000002, 5000001, 5000004, 5000003, 5000006, 5000005, 5000008, 5000007,
+          5000010, 5000009, 5000012, 5000011, 5000014, 5000013, 5000016, 5000015,
+          5000018, 5000017, 5000020, 5000019, 5000022, 5000021, 5000024, 5000023,
+          5000026, 5000025, 5000028, 5000027, 5000030, 5000029, 5000032, 5000031,
+          5000034, 5000033, 5000036, 5000035, 5000038, 5000037, 5000040, 5000039,
+          5000042, 5000041, 5000044, 5000043, 5000046, 5000045, 5000048, 5000047,
+          5000050, 5000049, 5000052, 5000051, 5000054, 5000053, 5000056, 5000055,
+          5000058, 5000057, 5000060, 5000059, 5000062, 5000061, 5000064, 5000063
+        ]
+      }
+    },
+    {
+      "name": "duplicate_in_bitmap_keeps_first",
+      "targets": [
+        { "session_id": 655370, "player_id": 8100010 },
+        { "session_id": 655361, "player_id": 8000001 },
+        { "session_id": 655362, "player_id": 8000002 },
+        { "session_id": 655363, "player_id": 8000003 },
+        { "session_id": 655364, "player_id": 8000004 },
+        { "session_id": 655365, "player_id": 8000005 },
+        { "session_id": 655366, "player_id": 8000006 },
+        { "session_id": 655367, "player_id": 8000007 },
+        { "session_id": 655368, "player_id": 8000008 },
+        { "session_id": 655369, "player_id": 8000009 },
+        { "session_id": 655370, "player_id": 8000010 },
+        { "session_id": 655371, "player_id": 8000011 },
+        { "session_id": 655372, "player_id": 8000012 },
+        { "session_id": 655373, "player_id": 8000013 },
+        { "session_id": 655374, "player_id": 8000014 },
+        { "session_id": 655375, "player_id": 8000015 },
+        { "session_id": 655376, "player_id": 8000016 },
+        { "session_id": 655377, "player_id": 8000017 },
+        { "session_id": 655378, "player_id": 8000018 },
+        { "session_id": 655379, "player_id": 8000019 },
+        { "session_id": 655380, "player_id": 8000020 },
+        { "session_id": 655381, "player_id": 8000021 },
+        { "session_id": 655382, "player_id": 8000022 },
+        { "session_id": 655383, "player_id": 8000023 },
+        { "session_id": 655384, "player_id": 8000024 },
+        { "session_id": 655385, "player_id": 8000025 },
+        { "session_id": 655386, "player_id": 8000026 },
+        { "session_id": 655387, "player_id": 8000027 },
+        { "session_id": 655388, "player_id": 8000028 },
+        { "session_id": 655389, "player_id": 8000029 },
+        { "session_id": 655390, "player_id": 8000030 },
+        { "session_id": 655391, "player_id": 8000031 },
+        { "session_id": 655392, "player_id": 8000032 },
+        { "session_id": 655380, "player_id": 8100020 }
+      ],
+      "expect": {
+        "session_list": [],
+        "session_bitmap_base": 655361,
+        "session_bitmap_hex": "ffffffff",
+        "player_list": [
+          8000001, 8000002, 8000003, 8000004, 8000005, 8000006, 8000007, 8000008,
+          8000009, 8100010, 8000011, 8000012, 8000013, 8000014, 8000015, 8000016,
+          8000017, 8000018, 8000019, 8000020, 8000021, 8000022, 8000023, 8000024,
+          8000025, 8000026, 8000027, 8000028, 8000029, 8000030, 8000031, 8000032
+        ]
+      }
+    },
+    {
+      "name": "alternating_bits_bitmap_40",
+      "targets": [
+        { "session_id": 655401, "player_id": 7000020 },
+        { "session_id": 655403, "player_id": 7000019 },
+        { "session_id": 655405, "player_id": 7000018 },
+        { "session_id": 655407, "player_id": 7000017 },
+        { "session_id": 655409, "player_id": 7000016 },
+        { "session_id": 655411, "player_id": 7000015 },
+        { "session_id": 655413, "player_id": 7000014 },
+        { "session_id": 655415, "player_id": 7000013 },
+        { "session_id": 655417, "player_id": 7000012 },
+        { "session_id": 655419, "player_id": 7000011 },
+        { "session_id": 655421, "player_id": 7000010 },
+        { "session_id": 655423, "player_id": 7000009 },
+        { "session_id": 655425, "player_id": 7000008 },
+        { "session_id": 655427, "player_id": 7000007 },
+        { "session_id": 655429, "player_id": 7000006 },
+        { "session_id": 655431, "player_id": 7000005 },
+        { "session_id": 655433, "player_id": 7000004 },
+        { "session_id": 655435, "player_id": 7000003 },
+        { "session_id": 655437, "player_id": 7000002 },
+        { "session_id": 655439, "player_id": 7000001 },
+        { "session_id": 655361, "player_id": 7000040 },
+        { "session_id": 655363, "player_id": 7000039 },
+        { "session_id": 655365, "player_id": 7000038 },
+        { "session_id": 655367, "player_id": 7000037 },
+        { "session_id": 655369, "player_id": 7000036 },
+        { "session_id": 655371, "player_id": 7000035 },
+        { "session_id": 655373, "player_id": 7000034 },
+        { "session_id": 655375, "player_id": 7000033 },
+        { "session_id": 655377, "player_id": 7000032 },
+        { "session_id": 655379, "player_id": 7000031 },
+        { "session_id": 655381, "player_id": 7000030 },
+        { "session_id": 655383, "player_id": 7000029 },
+        { "session_id": 655385, "player_id": 7000028 },
+        { "session_id": 655387, "player_id": 7000027 },
+        { "session_id": 655389, "player_id": 7000026 },
+        { "session_id": 655391, "player_id": 7000025 },
+        { "session_id": 655393, "player_id": 7000024 },
+        { "session_id": 655395, "player_id": 7000023 },
+        { "session_id": 655397, "player_id": 7000022 },
+        { "session_id": 655399, "player_id": 7000021 }
+      ],
+      "expect": {
+        "session_list": [],
+        "session_bitmap_base": 655361,
+        "session_bitmap_hex": "55555555555555555555",
+        "player_list": [
+          7000040, 7000039, 7000038, 7000037, 7000036, 7000035, 7000034, 7000033,
+          7000032, 7000031, 7000030, 7000029, 7000028, 7000027, 7000026, 7000025,
+          7000024, 7000023, 7000022, 7000021, 7000020, 7000019, 7000018, 7000017,
+          7000016, 7000015, 7000014, 7000013, 7000012, 7000011, 7000010, 7000009,
+          7000008, 7000007, 7000006, 7000005, 7000004, 7000003, 7000002, 7000001
+        ]
+      }
+    },
+    {
+      "name": "sparse_span_falls_back_to_list_32",
+      "targets": [
+        { "session_id": 658560, "player_id": 6000031 },
+        { "session_id": 658460, "player_id": 6000032 },
+        { "session_id": 658360, "player_id": 6000029 },
+        { "session_id": 658260, "player_id": 6000030 },
+        { "session_id": 658160, "player_id": 6000027 },
+        { "session_id": 658060, "player_id": 6000028 },
+        { "session_id": 657960, "player_id": 6000025 },
+        { "session_id": 657860, "player_id": 6000026 },
+        { "session_id": 657760, "player_id": 6000023 },
+        { "session_id": 657660, "player_id": 6000024 },
+        { "session_id": 657560, "player_id": 6000021 },
+        { "session_id": 657460, "player_id": 6000022 },
+        { "session_id": 657360, "player_id": 6000019 },
+        { "session_id": 657260, "player_id": 6000020 },
+        { "session_id": 657160, "player_id": 6000017 },
+        { "session_id": 657060, "player_id": 6000018 },
+        { "session_id": 656960, "player_id": 6000015 },
+        { "session_id": 656860, "player_id": 6000016 },
+        { "session_id": 656760, "player_id": 6000013 },
+        { "session_id": 656660, "player_id": 6000014 },
+        { "session_id": 656560, "player_id": 6000011 },
+        { "session_id": 656460, "player_id": 6000012 },
+        { "session_id": 656360, "player_id": 6000009 },
+        { "session_id": 656260, "player_id": 6000010 },
+        { "session_id": 656160, "player_id": 6000007 },
+        { "session_id": 656060, "player_id": 6000008 },
+        { "session_id": 655960, "player_id": 6000005 },
+        { "session_id": 655860, "player_id": 6000006 },
+        { "session_id": 655760, "player_id": 6000003 },
+        { "session_id": 655660, "player_id": 6000004 },
+        { "session_id": 655560, "player_id": 6000001 },
+        { "session_id": 655460, "player_id": 6000002 }
+      ],
+      "expect": {
+        "session_list": [
+          655460, 655560, 655660, 655760, 655860, 655960, 656060, 656160,
+          656260, 656360, 656460, 656560, 656660, 656760, 656860, 656960,
+          657060, 657160, 657260, 657360, 657460, 657560, 657660, 657760,
+          657860, 657960, 658060, 658160, 658260, 658360, 658460, 658560
+        ],
+        "session_bitmap_base": 0,
+        "session_bitmap_hex": "",
+        "player_list": [
+          6000002, 6000001, 6000004, 6000003, 6000006, 6000005, 6000008, 6000007,
+          6000010, 6000009, 6000012, 6000011, 6000014, 6000013, 6000016, 6000015,
+          6000018, 6000017, 6000020, 6000019, 6000022, 6000021, 6000024, 6000023,
+          6000026, 6000025, 6000028, 6000027, 6000030, 6000029, 6000032, 6000031
+        ]
+      }
+    }
+  ]
+}

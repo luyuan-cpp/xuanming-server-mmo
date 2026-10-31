@@ -43,9 +43,6 @@ type stubPlayerRouteStore struct{}
 func (stubPlayerRouteStore) RegisterHome(context.Context, store.RouteRegisterRequest) (store.RouteRegisterResult, error) {
 	return store.RouteRegisterResult{}, nil
 }
-func (stubPlayerRouteStore) GetHomeAndFence(context.Context, uint64) (store.RouteHomeFence, error) {
-	return store.RouteHomeFence{}, nil
-}
 func (stubPlayerRouteStore) GetRoutes(context.Context, []uint64) (map[uint64]store.RouteRow, error) {
 	return map[uint64]store.RouteRow{}, nil
 }
@@ -315,9 +312,6 @@ func TestRouteRouterOptionsInjectsStoreAsWriterAndReader(t *testing.T) {
 	mr := miniredis.RunT(t)
 	var c config.Config
 	c.MappingRedis = redis.RedisConf{Host: mr.Addr(), Type: "node"}
-	// 保持非 dev 的合法路由配置;R7 应只读注入的 store,不访问数据 Redis 集群。
-	c.Regions = []config.RegionConfig{{Id: 1, Zones: []uint32{7}, Redis: config.RedisClusterConfig{Addrs: []string{mr.Addr()}}}}
-	c.PlayerLockTTLSec = 3
 	zero := 0
 	c.RouteStore = config.RouteStoreConfig{Mode: config.RouteStoreModeDBFirst, WaitAOFNumLocal: &zero, WaitAOFNumReplicas: &zero}
 

@@ -46,13 +46,12 @@
 //                                    不读回执、不采纳 epoch)。
 //
 // ── epoch 的 0 语义 ──
-//   0 = 未知 / 旧版 Go 未铸造。这是滚动升级的兼容窗口:校验一律跳过并计数
-//   (owner_epoch_stats::OwnerEpochUnknown),不许静默。非 0 时"节点缓存值 ==
-//   Redis 当前值"才允许写,否则本节点已被废黜。
+//   0 = 未知:本实体的存盘没有归属围栏(player_mutability 判 kOwnerEpochUnknown,不许改、不许消费资产)。
+//   非 0 时"节点缓存值 == 写权行当前值"才允许写,否则本节点已被废黜。
 namespace player_ownership
 {
 	// 玩家域键,带 {player_id} hash tag(docs/design/redis-player-store-cluster.md §5.2),与 go/shared/ownerepoch.OwnerEpochKey
-	// 逐字一致。存盘严格 Lua(redis_client.h kSaveWithCommitBarrierLuaScript)按这个形状逐字核对 KEYS[2]。
+	// 逐字一致。
 	inline std::string OwnerEpochRedisKey(uint64_t playerId)
 	{
 		return "player:" + redis_slot::PlayerTag(playerId) + ":owner_epoch";
@@ -82,20 +81,18 @@ namespace player_ownership
 	inline constexpr int kHandoffMarkTtlSec = 300;
 } // namespace player_ownership
 
-// 玩家归属 zone:数据落库的目的地(DBTask 按它选 topic),与进程所在 zone 无关。
+// 玩家归属 zone,与进程所在 zone 无关。存盘不按它选库,落点由认领返回。
 // 值来自 RoutePlayerEvent.home_zone_id → PlayerEnterGameNodeRequest.home_zone_id,
 // 建实体时挂上;节点**不得**自己去 data_service 查(CZ-3:两次改派挨近时会读到后一次的值)。
 //
-// homeZoneId == 0:未知(旧版 gate / scene_manager 未填)。
-// 存盘时 fail-closed 用进程 zone 并计数 owner_epoch_stats::HomeZoneUnknown + LOG_WARN,
-// 绝不静默落错库(不变量 §6.2)。
+// homeZoneId == 0:未知(gate / scene_manager 未填)。存盘不看它(规格 §7.1),只用于跨 zone 判定和日志。
 struct PlayerHomeZoneComp
 {
 	uint32_t homeZoneId{0};
 };
 
 // 本节点持有该玩家时的归属 epoch(scene_manager 铸造,随 RoutePlayerEvent 下发)。
-// 存盘时作为 Redis Lua CAS 的期望值,并写进 DBTask.owner_epoch 供 db 服务落库前比对。
+// 存盘时写进 SavePlayerRequest.owner_epoch,go/db 在提交事务里按写权行判定。
 //
 // epoch == 0:旧版 Go 未铸造(兼容窗口),存盘走无守卫的旧 Save,并计数。
 // 重连 / 顶号路径若请求带非 0 epoch,取 max 更新:epoch 单调,Redis 当前值 ≥ 见过的最大值,
@@ -169,12 +166,6 @@ struct PlayerOwnerEpochComp
 // destroyDeferralReported
 //               "handoff 标记已发出、该销毁了,但还有未落地的存盘,推迟销毁"(ConcludeHandoffAfterMarkSent)的
 //               ERROR 与 destroy_deferred_unsettled_save 计数每次交接只打 / 只计一次;随组件销毁。
-// sqlBarrierWaits
-//               本次交接里,BeginTravelHandoff 的标记脚本因冻结快照两张子表的 SQL ACK 还没与 pending 同版而回 0 的次数
-//               (handoff_sql_barrier.h;每次 250ms 后重试,直到标记写成或交接收口)。0 → 1 时打一条 INFO 并计
-//               sql_barrier_waited;等过之后交接在标记写成前收口(通常是 30s 存盘看门狗,快路径上是 35s 晚发闸,
-//               也可能是冻结上限),或标记写成太晚被 enter_scene 阶段的晚发闸拦下时,另打一条 WARN 并计
-//               sql_barrier_expired,把"等 SQL ACK 超时"与"存盘落地太晚"分开。只用于观测,不参与任何判定;纯内存,随组件销毁。
 struct PlayerTravelHandoffComp
 {
 	uint32_t targetZoneId{0};
@@ -187,8 +178,6 @@ struct PlayerTravelHandoffComp
 	uint64_t enterSceneCorrelationId{0};
 	std::chrono::steady_clock::time_point frozenAtSteady{};
 	bool destroyDeferralReported{false};
-	uint32_t sqlBarrierWaits{0};
-    bool sqlBarrierExpiryReported{false};
 	// 值捕获冻结前资格、拟发布资格及稳定撤销后继。回调必须同时核这些原值，不能命中新实体。
 	std::string holderFence;
 	std::string publishedFence;

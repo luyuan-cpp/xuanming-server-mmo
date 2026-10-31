@@ -91,8 +91,8 @@ func NewDataServicePlayerNames(client dspb.DataServiceClient, timeout time.Durat
 
 // BatchResolve 见 PlayerNameResolver 的契约。永远返回非 nil 的 map。
 //
-// nil 接收者也安全:`(*DataServicePlayerNames)(nil)` 装进接口之后 != nil(与 guild.go 里
-// mergeFence 躲的是同一个坑),WithPlayerNames 的判空拦不住它,所以这里再兜一层。
+// nil 接收者也安全:`(*DataServicePlayerNames)(nil)` 装进接口之后 != nil,
+// WithPlayerNames 的判空拦不住它,所以这里再兜一层。
 func (r *DataServicePlayerNames) BatchResolve(ctx context.Context, playerIDs []uint64) map[uint64]string {
 	names := make(map[uint64]string, len(playerIDs))
 	if r == nil || r.client == nil {

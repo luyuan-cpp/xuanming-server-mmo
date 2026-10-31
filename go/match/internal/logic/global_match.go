@@ -14,10 +14,12 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"match/internal/authority"
+	"match/internal/catalog"
 	"match/internal/constants"
 	"match/internal/discovery"
 	"match/internal/metrics"
 	"match/internal/pkg/ctxkeys"
+	"match/internal/poolowner"
 	"match/internal/svc"
 	battlepb "proto/battle"
 	pb "proto/match"
@@ -25,7 +27,11 @@ import (
 	"shared/serviceauth"
 )
 
-func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required, zone uint32) (*pb.JoinQueueResponse, error) {
+// globalJoin 是全球模式的入队（docs/design/global-match-hierarchical-pools.md §3、§5.4）：
+//   - 票据记 home zone（角色归属），范围树按它逐级放宽；
+//   - 计分模式（1V1 / 5V5）读不到评分就拒绝入队，不按默认分进池（计分池不能混进错误的分数）；
+//   - 单人档（PVE_SOLO、PVE_TEAM 1 人档）入队提交后立即尝试成局，失败的票留给池写者兜底。
+func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required uint32) (*pb.JoinQueueResponse, error) {
 	if parsed, e := uuid.Parse(in.RequestId); e != nil || parsed == uuid.Nil || parsed.String() != in.RequestId {
 		return nil, status.Error(codes.InvalidArgument, "匹配请求编号无效")
 	}
@@ -39,16 +45,26 @@ func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required, zone uint3
 	d, _ := ctxkeys.GetSessionDetails(l.ctx)
 	binding := authority.SessionBinding(l.ctx, d)
 	if binding == "" || in.RequestId == "" || len(in.RequestId) > 64 || in.NetworkPlanId == "" {
-		return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "请完成地域延迟探测后重试")}, nil
+		return &pb.JoinQueueResponse{ErrorCode: constants.ErrProbeRequired, ErrorMessage: tipErr(constants.ErrProbeRequired, "请完成地域延迟探测后重试")}, nil
+	}
+	home, e := l.svcCtx.Authority.PlayerHomeZone(l.ctx, d.PlayerId)
+	if e != nil {
+		return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "角色归属暂不可用")}, nil
+	}
+	var rating float64
+	if isRatedMode(in.Mode) {
+		if rating, e = loadRating(l.svcCtx, d.PlayerId); e != nil {
+			return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "评分暂不可用")}, nil
+		}
 	}
 
-	t := &pb.MatchAuthorityTicketRecord{PlayerId: d.PlayerId, Ticket: uuid.NewString(), RequestId: in.RequestId, Mode: uint32(in.Mode), ConfigId: in.BattleConfigId, TeamSize: required, ZoneId: zone, RatingCenti: int64(math.Round(loadRatingOrDefault(l.svcCtx, d.PlayerId) * 100))}
+	t := &pb.MatchAuthorityTicketRecord{PlayerId: d.PlayerId, Ticket: uuid.NewString(), RequestId: in.RequestId, Mode: uint32(in.Mode), ConfigId: in.BattleConfigId, TeamSize: required, ZoneId: home, RatingCenti: int64(math.Round(rating * 100))}
 	if in.Mode == pb.MatchMode_MATCH_MODE_PVP_TEAM {
 		t.TeamSize = required / 2
 	}
 	prepared, exit, pending, e := l.svcCtx.Authority.PrepareJoin(l.ctx, t, in, binding)
 	if e != nil {
-		return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "匹配原意图暂不可用")}, nil
+		return joinRejection(e, "匹配原意图暂不可用"), nil
 	}
 	if prepared.RequestId != in.RequestId {
 		return &pb.JoinQueueResponse{QueueTicket: prepared.Ticket, ErrorCode: constants.ErrAlreadyQueued, ErrorMessage: tipErr(constants.ErrAlreadyQueued, "已在匹配队列中")}, nil
@@ -61,20 +77,28 @@ func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required, zone uint3
 	t = prepared
 	old, created, e := l.svcCtx.Authority.Join(l.ctx, t, in.NetworkPlanId, binding)
 	if e != nil {
-		return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "匹配权威暂不可用或探测已过期")}, nil
+		return joinRejection(e, "匹配权威暂不可用"), nil
 	}
 	metrics.ObserveGlobalFlow("join", "accepted")
 	if !created && old.RequestId != in.RequestId {
 		return &pb.JoinQueueResponse{QueueTicket: old.Ticket, ErrorCode: constants.ErrAlreadyQueued, ErrorMessage: tipErr(constants.ErrAlreadyQueued, "已在匹配队列中")}, nil
 	}
+	if created && old.State == 1 && old.TeamSize == 1 && old.Mode != uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		claimImmediately(l.svcCtx, old)
+	}
 	return &pb.JoinQueueResponse{QueueTicket: old.Ticket}, nil
 }
 
-type globalChoice struct {
-	group        []*pb.MatchAuthorityTicketRecord
-	node         discovery.NodeEntry
-	region       uint32
-	scannedUntil *pb.MatchAuthorityTicketRecord
+// joinRejection 把入队失败映射成客户端可区分的提示：探测问题让客户端重新探测，其余按服务端故障处理。
+func joinRejection(err error, fallback string) *pb.JoinQueueResponse {
+	switch {
+	case errors.Is(err, authority.ErrProbeRequired):
+		return &pb.JoinQueueResponse{ErrorCode: constants.ErrProbeRequired, ErrorMessage: tipErr(constants.ErrProbeRequired, "请完成地域延迟探测后重试")}
+	case errors.Is(err, authority.ErrNoRegionWithinLatency):
+		return &pb.JoinQueueResponse{ErrorCode: constants.ErrNoRegionWithinLatency, ErrorMessage: tipErr(constants.ErrNoRegionWithinLatency, "附近没有延迟合适的服务器")}
+	default:
+		return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, fallback)}
+	}
 }
 
 func reserveGlobalDirect(ctx context.Context, s *svc.ServiceContext, key *pb.MatchDirectIntentRecord, payload []byte, mode pb.MatchMode, config uint32, members []uint64, tickets map[uint64]string, opts gatherOptions) (*pb.MatchFormationRecord, error) {
@@ -120,17 +144,17 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 		profiles[pid] = p
 		lat[pid] = authority.Latencies(p, n, s.Config.GlobalMatch.HardLatencyMs)
 	}
-	var target discovery.NodeEntry
+	// 点名成局（切磋、活动、整队直接开战）名单固定：在全员硬延迟内、且有可分配节点的机房里，
+	// 选全员最大 RTT 最小者，其次 RTT 之和，再次机房号；机房内按负载选节点（battleplace）。
+	nodes := s.BattleNodes.Snapshot()
+	var region uint32
 	bestMax, bestSum := uint32(math.MaxUint32), uint64(math.MaxUint64)
-	for _, node := range s.BattleNodes.Snapshot() {
-		if node.PhysicalRegion == 0 || node.NodeUuid == "" {
-			continue
-		}
+	for candidate := range s.Placement.Regions(nodes) {
 		maxRTT := uint32(0)
 		sum := uint64(0)
 		eligible := true
 		for _, pid := range members {
-			rtt, ok := lat[pid][node.PhysicalRegion]
+			rtt, ok := lat[pid][candidate]
 			if !ok {
 				eligible = false
 				break
@@ -138,13 +162,12 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 			maxRTT = max(maxRTT, rtt)
 			sum += uint64(rtt)
 		}
-		if eligible && (maxRTT < bestMax || (maxRTT == bestMax && (sum < bestSum || (sum == bestSum && node.PhysicalRegion < target.PhysicalRegion)))) {
-			target = node
-			bestMax = maxRTT
-			bestSum = sum
+		if eligible && (maxRTT < bestMax || (maxRTT == bestMax && (sum < bestSum || (sum == bestSum && candidate < region)))) {
+			region, bestMax, bestSum = candidate, maxRTT, sum
 		}
 	}
-	if target.PhysicalRegion == 0 {
+	target, found := s.Placement.Pick(nodes, region)
+	if region == 0 || !found {
 		return nil, nil, errors.New("没有满足全员硬延迟的共同机房")
 	}
 	id := opts.presetBattleID
@@ -221,92 +244,28 @@ func releaseGlobalFinished(ctx context.Context, s *svc.ServiceContext, t *pb.Mat
 func runGlobalRound(ctx context.Context, s *svc.ServiceContext) {
 	ctx, cancelRound := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelRound()
-	// 成功开房的state4不在旧Pending集合内，必须独立巡检；不依赖Guild取消或Battle存活。
-	recoverCtx, recoverCancel := context.WithTimeout(ctx, 3*time.Second)
-	var recoverErr error
-	s.GlobalOutcomeRetryMs, s.GlobalOutcomeBattle, recoverErr = s.Authority.RecoverExpiredOutcomes(recoverCtx, s.GlobalOutcomeRetryMs, s.GlobalOutcomeBattle)
-	recoverCancel()
-	if recoverErr != nil {
-		s.HoldRelay(recoverErr)
-		logx.Error("全球匹配到期终局恢复未确认，保留原件等待下轮")
-	}
+	// 到期终局恢复(成功开房的 state4 等不在 Pending 里的成局)在独立循环 match.global.outcome.recover 里跑
+	// (global_outcome_recover.go,2026-10-30):撮合轮不再调用它,也不碰它的翻页游标。
 	pending, e := s.Authority.Pending(ctx)
 	if e != nil {
 		logx.Error("全球匹配恢复查询失败")
 		return
 	}
+	// 已提交成局的恢复按 (模式, 模板) 与新成局同样分给负责副本，副本之间不再抢同一批 Pending；
+	// 成员表为空（etcd 不可用、本实例尚未注册时仍有其它成员则交给它们）时全部副本都恢复，退化为旧行为。
+	// 恢复的正确性只靠 AcquireWork 的工作租约与行锁，归属只是分工。
+	members, self := s.PoolMembers(), s.PoolMember()
 	for _, f := range pending {
-		launchGlobalFormation(s, f)
-	}
-	// 候选投影故障不能挡住已经提交的formation恢复。
-	if !s.GlobalRegionRepairActive {
-		throughMs, throughPlayer, err := s.Authority.CandidateRegionRepairHighWater(ctx)
-		if err != nil {
-			logx.Error("全球匹配候选投影尾界读取失败")
-			return
+		if len(members) == 0 || poolowner.Owns(self, catalog.OwnerKey(pb.MatchMode(f.Mode), f.ConfigId), members) {
+			launchGlobalFormation(s, f)
 		}
-		s.GlobalRegionRepairThroughMs, s.GlobalRegionRepairThroughPlayer = throughMs, throughPlayer
-		s.GlobalRegionRepairActive = true
 	}
-	repairMs, repairPlayer, repairErr := s.Authority.RepairCandidateRegionsThrough(ctx, s.GlobalRegionRepairMs, s.GlobalRegionRepairPlayer, s.GlobalRegionRepairThroughMs, s.GlobalRegionRepairThroughPlayer)
-	if repairErr != nil {
-		s.HoldRelay(repairErr)
-		logx.Error("全球匹配候选投影维护失败")
-		return
-	}
-	s.GlobalRegionRepairMs, s.GlobalRegionRepairPlayer = repairMs, repairPlayer
-	if repairMs == 0 && repairPlayer == 0 {
-		s.GlobalRegionProjectionReady.Store(true)
-		s.GlobalRegionRepairActive = false
-	}
-	if s.GlobalGatherSlots != nil && len(s.GlobalGatherSlots) == cap(s.GlobalGatherSlots) {
-		return
-	}
-	all, e := s.Authority.CandidatesAfter(ctx, s.GlobalScanMs, s.GlobalScanPlayer)
-	if e != nil {
-		logx.Error("全球匹配候选读取失败")
-		return
-	}
-	if len(all) == 0 {
-		s.GlobalScanMs = 0
-		s.GlobalScanPlayer = 0
-		return
-	}
-	n, e := s.Authority.Now(ctx)
-	if e != nil {
-		return
-	}
-	choice, e := pickIndexedGlobalGroup(ctx, s, all, s.BattleNodes.Snapshot(), n, s.GlobalRegionProjectionReady.Load(), s.Authority.CandidatePeers)
-	if e != nil {
-		logx.Error("全球匹配机房候选读取失败")
-		return
-	}
-	last := all[len(all)-1]
-	if choice != nil && choice.scannedUntil != nil {
-		last = choice.scannedUntil
-	}
-	s.GlobalScanMs, s.GlobalScanPlayer = last.EnqueuedMs, last.PlayerId
-	if choice == nil {
-		return
-	}
-	id, e := s.BattleIDGen.Generate()
-	if e != nil {
-		return
-	}
-	a := choice.group[0]
-	f := &pb.MatchFormationRecord{BattleId: id, OperationId: uuid.NewString(), PhysicalRegion: choice.region, TargetNodeId: choice.node.NodeId, TargetInstanceId: choice.node.NodeUuid, TargetEndpoint: choice.node.Endpoint, Mode: a.Mode, ConfigId: a.ConfigId, RequeueOnFailure: true}
-	if e = s.Authority.Claim(ctx, f, choice.group); e != nil {
-		s.HoldRelay(e)
-		metrics.ObserveGlobalFlow("claim", "conflict")
-		return
-	}
-	metrics.ObserveGlobalFlow("claim", "committed")
-	launchGlobalFormation(s, f)
 }
 
+// launchGlobalFormation 为已提交的成局占一个备战槽并在后台推进；占不到槽就留给下一轮 Pending 恢复。
 func launchGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	if s.GlobalGatherSlots == nil {
-		_ = s.RunRelay(func() error { runGlobalFormation(s, f); return nil })
+		_ = s.RunRelay(func() error { runPlacedFormation(s, f); return nil })
 		return
 	}
 	select {
@@ -314,9 +273,23 @@ func launchGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	default:
 		return
 	}
-	if !s.LaunchRelayTask("match.global.gather", func() { defer func() { <-s.GlobalGatherSlots }(); runGlobalFormation(s, f) }) {
+	launchReservedFormation(s, f)
+}
+
+// launchReservedFormation 推进一个已经占好备战槽的成局，结束时释放槽。
+func launchReservedFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
+	if !s.LaunchRelayTask("match.global.gather", func() { defer func() { <-s.GlobalGatherSlots }(); runPlacedFormation(s, f) }) {
 		<-s.GlobalGatherSlots
 	}
+}
+
+// runPlacedFormation 在机房选点器里记一笔在途，再推进成局；在途数让同一机房的后续成局摊到别的节点。
+func runPlacedFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
+	if s.Placement != nil {
+		s.Placement.Started(f.TargetInstanceId)
+		defer s.Placement.Finished(f.TargetInstanceId)
+	}
+	runGlobalFormation(s, f)
 }
 
 func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
@@ -510,6 +483,8 @@ func CommitBattleOutcome(ctx context.Context, s *svc.ServiceContext, in *pb.Comm
 		logx.Error("metric=match_terminal_outcome_unconfirmed reason=storage_or_transport")
 		return nil, status.Error(codes.Unavailable, "终局原提交尚未确认")
 	}
+	// 终局已落库,这场的观战数据不再需要。尽力而为,失败只记日志,不影响终局回执。
+	releaseSpectateOnOutcome(s, in.GetBattleId())
 	out := &pb.CommitBattleOutcomeResponse{Decision: decision, RequestDigest: digest}
 	if err = serviceauth.Sign(method+"/reply", out, "match", s.BattleOutcomeSecret, uint64(time.Now().UnixMilli())); err != nil {
 		return nil, status.Error(codes.Unavailable, "终局回执无法签名")
@@ -560,7 +535,9 @@ func globalRequestBattleTicket(ctx context.Context, s *svc.ServiceContext, pid, 
 	}
 	return &battlepb.RequestBattleTicketResponse{ErrorMessage: r.ErrorMessage, Assignment: r.Assignment}, nil
 }
-func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
+// globalAbortPrepared 收尾发房前失败的成局。culprits 是确定由自己导致失败的成员(0 忽略):
+// 没有 Create 原件时,单排肇事者的票终止、其余成员回队(authority.FinishFailed);有原件时等唯一 SQL 终局。
+func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culprits ...uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	latest, e := s.Authority.Formation(ctx, f.BattleId)
 	cancel()
@@ -596,7 +573,7 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	// 走到这里的成局都没有 Create 原件（上面有原件的已经返回）。计数只在提交之后打（2026-10-22 评审补）：
 	// 原先在 globalDestroy 判定时就计 abort/no_create_intent，之后租约变化、CheckWork 或 Finish 失败都没有释放，
 	// 值班会把「尝试」读成「已释放」。
-	if e := s.Authority.Finish(finishCtx, f, false); e != nil {
+	if e := s.Authority.FinishFailed(finishCtx, f, culprits); e != nil {
 		s.HoldRelay(e)
 		metrics.ObserveGlobalFlow("abort", "no_create_intent_unconfirmed")
 		logx.Error("全球匹配中止提交未确认")

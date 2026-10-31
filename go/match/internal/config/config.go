@@ -1,9 +1,13 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
+	"strings"
+	"time"
+
+	"shared/authoritysql"
+	"shared/idsegment"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -34,16 +38,9 @@ type Config struct {
 	// LeaseTTL:etcd 节点注册 keepalive 的租约 TTL(秒)。
 	LeaseTTL int64 `json:",default=60"`
 
-	// ClusterId:部署级集群号,snowflake 17 位 worker 段的 [cluster5] 部分
-	// (docs/design/node-id-overhaul-plan-20260908.md §5)。**运维按集群一次性设定,
-	// 策划不碰**;默认 0 = 单集群 / 存量 id 布局。etcd 槽位前缀带 c<cluster>,两个集群
-	// 共用一个 etcd 也不会撞号。必须 < 32。
-	ClusterId uint32 `json:",default=0"`
-
-	// SnowflakeCacheDir:snowflake 槽位的本地缓存目录(shared/snowflakealloc,设计稿 §3.5)。
-	// 启动时 etcd 不可达、且缓存里的上次水位确认在 F(2h)内,就用缓存的槽起服并后台重试
-	// 注册。留空关闭。默认相对服务工作目录(go/match/)指向仓库 run/(已 gitignore)。
-	SnowflakeCacheDir string `json:",default=../../run/snowflake"`
+	// IdSegment:battle_id / challenge_id / team_id 的号段配置(biz_tag = battle,字段语义见 shared/idsegment.Conf)。
+	// 必须显式写 Enabled: true,没写起服即拒绝:发不出 id 的 match 什么都做不了。
+	IdSegment idsegment.Conf `json:"IdSegment,optional"`
 
 	// KafkaWriteTimeoutSeconds:挑战 S2C 推送经 gate-{id} topic 的一次
 	// 同步 produce 的 writer 侧超时(秒)。与 scene_manager 同口径:
@@ -95,16 +92,10 @@ type Config struct {
 	// 全员非空且两两一致才把该值透传给 battle(battle 再与自身指纹核对)。
 	TableFingerprintMode string `json:",default=warn,options=off|warn|enforce"`
 
-	// PveTeamSizeByConfigId:PVE 组队各 battle_config_id(DungeonTable id)
-	// 的队伍人数上限。排队按人数档凑单(JoinQueueRequest.team_size,1..上限,不填 = 上限;
-	// docs/design/pve-team-size-matching.md),整队开战按它判人数是否超编。
-	// 一期临时配置 —— 人数权威来源是 DungeonTable.max_team_size,
-	// Go 侧尚无表管理器,待接导表数据后改为查表(backlog P2-05)。
-	// yaml map 键是字符串(与 scene_manager 的 WorldChannelCountByConfId 同 workaround)。
-	// 组队整队开战(ClientPlayerTeam.StartTeamMatch)也用它判副本人数上限,未配置
-	// 即"该副本未开放组队"(team-system.md §E.1 / J-6)。K8s ConfigMap 整段逐字搬运
-	// 服务 yaml 里的这一块(k8s_deploy.ps1 Get-AuthoritativeYamlBlock),新增 id 只改 yaml。
-	PveTeamSizeByConfigId map[string]uint32 `json:",optional"`
+	// TableDir:导表产物目录。match 只从中读 PlayMode(匹配入口白名单与人数上限)、Dungeon(怪物战斗模板)、
+	// ZoneGroup(大区)三张表,编译成模板目录(internal/catalog;docs/design/global-match-hierarchical-pools.md §7)。
+	// 读表或校验失败拒绝启动。开新本、调人数只改表,不改本配置,也不需要停全部副本。
+	TableDir string `json:",default=../../generated/tables"`
 
 	// MetricsListenAddr:Prometheus /metrics 监听地址,留空关闭。
 	// 端口分工:9101=login / 9150=scene_manager / 9160=db / 9170=match。
@@ -127,29 +118,8 @@ type Config struct {
 	ResultTopicPartitions int32 `json:",default=3"`
 
 	// ResultConsumerGroup:消费组名。多个 match 实例同组分摊分区,每条结果只被
-	// 一个实例消费;入账幂等由 match:rating:applied:{battle_id} 兜底。
+	// 一个实例消费;入账幂等由全球权威库的 match_rating_applied 兜底。
 	ResultConsumerGroup string `json:",default=match-rating"`
-
-	// ---- 排行榜评分快照(docs/design/leaderboard-system.md §2.4,2026-09-20 已拍板)----
-
-	// RatingSnapshotPublishEnabled:一局评分入账后,是否把全员的当前评分快照(contracts.kafka.PlayerRatingSnapshotEvent)
-	// 发到 RatingSnapshotTopic,供 rank 写排行榜。**v1 默认 false,是排行榜上线的唯一闸门**:rank 部署好之后再翻 true
-	// 滚动重启;回滚 = 翻回 false,评分链本身不受影响,榜停止更新但仍可读。
-	// K8s 上不镜像本 yaml:由 k8s_deploy.ps1 的 -MatchRatingSnapshotPublish '0'|'1' 显式给值(设计 §5.4)。
-	// 打开时要求 RatingEnabled=true(不消费对局结果就没有快照可发)且 Kafka.Brokers 非空,Validate 守。
-	RatingSnapshotPublishEnabled bool `json:",default=false"`
-
-	// RatingSnapshotTopic:快照 topic,全局无 zone 段,key = player_id,不套信封;rank 的消费组 rank-rating 读它。
-	RatingSnapshotTopic string `json:",default=match-rating-snapshot"`
-
-	// RatingSnapshotTopicPartitions:快照 topic 的分区数,不可变契约(EnsureTopics 拒绝与 broker 不一致的值);
-	// 真要改走"代号 +1"换 topic(deploy/k8s/README.md「改分区数 = 代号 +1,绝不原地扩分区」)。
-	RatingSnapshotTopicPartitions int32 `json:",default=3"`
-
-	// RatingSnapshotRetentionHours:快照 topic 的保留期。**保留期只由 match 声明**(rank 在 EnsureTopics 时传
-	// RetentionMs: -1、不改写):两边各写一份数,保留期会随重启顺序来回改(db_task_zone_<N> 的同一个坑)。
-	// 它也是排行榜丢失后 offset 重放的恢复窗口(设计 §3.5)。默认 168h = 7 天,与 match-results 对齐。
-	RatingSnapshotRetentionHours int64 `json:",default=168"`
 
 	// RatingTolerance*:评分容差曲线 tol = min(Max, Base + floor(wait/StepSeconds) × StepDelta)。
 	// 默认 100 起、每 5s 放宽 100、上限 1000:两个新号(都 1500)第一轮就互配,
@@ -174,7 +144,7 @@ type Config struct {
 
 	// RatingDrawRoundCapByConfigId:按 battle_config_id 覆盖回合上限(引擎按
 	// DungeonTable.time_limit 换算,配了 time_limit 的配置上限可能不是 300)。
-	// yaml map 键是字符串(与 PveTeamSizeByConfigId 同 workaround);0 视为未配置。
+	// yaml map 键是字符串(go-zero 不支持整数键的 map);0 视为未配置。
 	RatingDrawRoundCapByConfigId map[string]uint32 `json:",optional"`
 
 	// ---- 组队(docs/design/team-system.md §D.1)----
@@ -190,11 +160,17 @@ type Config struct {
 	// svc.NewDataServiceClient 对 NonBlock=false 记错误日志并强制改为 true。
 	// optional:没配任何目标时不建客户端,team 需要 home zone 的请求一律 fail-closed。
 	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
+
+	// ---- 观战分级(docs/design/battle-spectate-tiered-fanout.md §15.6)----
+
+	// Spectate:观战 L1 中继、L2 全服广播与观战凭证。与 Team 一样不标 optional:整段缺席时 go-zero 按空块
+	// 递归填各字段的 default(开关关闭,其余取默认值),标了 optional 反而不会填 default。
+	Spectate SpectateConf
 }
 
 type GlobalMatchConf struct {
 	Enabled                bool   `json:",optional"`
-	RequireTiDB            bool   `json:",optional"`
+	Backend                string `json:",default=tidb"` // tidb | mysql,不写就是 tidb;整段缺席时是空串,同样按 tidb
 	Host                   string `json:",optional"`
 	User                   string `json:",optional"`
 	PasswordEnv            string `json:",default=MATCH_MYSQL_PASSWORD"`
@@ -205,8 +181,54 @@ type GlobalMatchConf struct {
 	CrossRegionWaitSeconds uint32 `json:",default=30"`
 	HardLatencyMs          uint32 `json:",default=180"`
 	ProbeTTLSeconds        uint32 `json:",default=120"`
-	RankEndpoint           string `json:",default=127.0.0.1:51100"`
-	RankSecretEnv          string `json:",default=RANK_PRODUCER_SECRET_MATCH"`
+	// 匹配范围树逐级放宽(docs/design/global-match-hierarchical-pools.md §3.2):入队后先只和同 zone 的人凑,
+	// 等满 ScopeGroupAfterSeconds 可到同大区,等满 ScopeGlobalAfterSeconds 可到全服;从原始入队时刻起算。
+	// 两者都是提交点规则,进全局策略指纹,各副本必须一致。初值待按真实等待分布定标(D-16)。
+	ScopeGroupAfterSeconds  uint32 `json:",default=10"`
+	ScopeGlobalAfterSeconds uint32 `json:",default=20"`
+	// GatherSlots:每个副本同时进行的成局备战(PrepareBattle + CreateBattle)上限。池写者先占槽再提交成局,
+	// 占不到槽本轮就不再提交,票留在队列里。不是提交点规则,不进策略指纹。
+	GatherSlots int `json:",default=256"`
+	// PoolPageSize:池写者每轮每个池读的单排票页大小;队首一整页都凑不出组时下一轮翻到下一页。
+	PoolPageSize  int    `json:",default=512"`
+	RankEndpoint  string `json:",default=127.0.0.1:51100"`
+	RankSecretEnv string `json:",default=RANK_PRODUCER_SECRET_MATCH"`
+	// OutcomeOutbox:终局发件箱(整局结果发 Kafka、个人结算入 Inbox)的投递节拍、每轮批量与并发(2026-10-30,评审 B-6)。
+	// 不是提交点规则,不进策略指纹,各副本可以不同;越界在装配时拒启(authority.OutcomeOutboxOptions.Normalized)。
+	OutcomeOutbox OutcomeOutboxConf `json:",optional"`
+}
+
+// OutcomeOutboxConf 是终局发件箱的投递参数。默认值与 2026-10-30 之前写死的行为一致;0 / 漏配按默认。
+type OutcomeOutboxConf struct {
+	IntervalMs   int `json:",default=2000"` // 投递循环节拍
+	ResultBatch  int `json:",default=8"`    // 每轮最多读出的结果行
+	FirstBatch   int `json:",default=4"`    // 每轮最多读出的个人首投行(inbox_seq=0)
+	WaitingBatch int `json:",default=4"`    // 每轮最多读出的个人等待 APPLIED 行(inbox_seq>0)
+	Concurrency  int `json:",default=1"`    // 已认领行的并发投递上限;1 = 逐行串行
+}
+
+// OutcomeOutboxInterval 返回终局发件箱的投递节拍;0 / 负数 / 漏配(直接构造 Config 的单测)按默认 2 秒。
+func (g GlobalMatchConf) OutcomeOutboxInterval() time.Duration {
+	if g.OutcomeOutbox.IntervalMs <= 0 {
+		return 2 * time.Second
+	}
+	return time.Duration(g.OutcomeOutbox.IntervalMs) * time.Millisecond
+}
+
+// GatherSlotCount 返回成局备战并发上限;0 / 漏配(直接构造 Config 的单测)按默认 256。
+func (g GlobalMatchConf) GatherSlotCount() int {
+	if g.GatherSlots <= 0 {
+		return 256
+	}
+	return g.GatherSlots
+}
+
+// PoolPage 返回按池读单排票的页大小;0 / 漏配按默认 512。
+func (g GlobalMatchConf) PoolPage() int {
+	if g.PoolPageSize <= 0 {
+		return 512
+	}
+	return g.PoolPageSize
 }
 
 type LoginRedisConf struct {
@@ -234,6 +256,78 @@ type TeamConf struct {
 	FillQueueDisabled bool `json:",default=false"`
 }
 
+// spectateSecretMinBytes 观战凭证与运营入口密钥去除首尾空白后的最小长度,口径同 battle 令牌(§15.7)。
+const spectateSecretMinBytes = 32
+
+// defaultSpectateTicketTTL 观战凭证的缺省有效期,与 TicketTTLSeconds 的 default 同值。
+const defaultSpectateTicketTTL = 60 * time.Second
+
+// SpectateOpsCaller 是 MatchInternal.SetSpectateFeatured 唯一接受的 serviceauth 调用方。
+const SpectateOpsCaller = "ops"
+
+// SpectateConf 观战分级配置(battle-spectate-tiered-fanout.md §15.1、§15.6)。每一档都能单独关掉:
+// RelayEnabled=false 时观众只走 L0,直连席满了回 16021;BroadcastMaxConcurrent=0 时不再升 L2,只用 L1。
+type SpectateConf struct {
+	// RelayEnabled:是否开启 L1 / L2(Q6)。两档都依赖「battle 能经 Kafka 到达观众所在 gate」,所以只在全部 battle
+	// 与 gate 共用一个 Kafka 集群时打开。这是部署级开关:靠运行期探测猜集群边界不可靠。
+	RelayEnabled bool `json:",default=false"`
+
+	// BroadcastMaxConcurrent:全服同时处于 L2 的场次上限 B。0 = 不开 L2。
+	BroadcastMaxConcurrent int `json:",default=4"`
+
+	// BroadcastAutoGateThreshold:本场有观众的 gate 数达到该值时自动尝试升 L2(G_min)。0 = 只认运营标记。
+	BroadcastAutoGateThreshold int `json:",default=32"`
+
+	// TicketTTLSeconds:观战凭证有效期(秒)。凭证只决定「能不能订阅」,过期后客户端用原 request_id 重放拿新凭证。
+	TicketTTLSeconds int64 `json:",default=60"`
+
+	// TicketSecret:观战凭证的 HMAC 密钥,与 gate 的 BaseDeployConfig.spectate_token_secret 同值
+	// (部署注入 MMORPG_SPECTATE_TOKEN_SECRET),与 gate / battle 令牌密钥分域。签名用原值,不去空白:gate 也用原值验签。
+	TicketSecret string `json:",optional"`
+
+	// OpsCallerSecret:运营工具调用 MatchInternal.SetSpectateFeatured 的 serviceauth 密钥。空 = 运营入口关闭,一律 PermissionDenied。
+	OpsCallerSecret string `json:",optional"`
+}
+
+// RelayUsable 判定本实例能否把观众放进 L1 / L2:开关打开且有凭证密钥。dev / test 允许开关开着而密钥为空
+// (启动时告警),此时按关闭处理、满员回 16021,不去升档再签 gate 必然拒绝的凭证。
+func (c SpectateConf) RelayUsable() bool {
+	return c.RelayEnabled && strings.TrimSpace(c.TicketSecret) != ""
+}
+
+// OpsEntryEnabled 判定运营入口是否开启。纯空白的密钥等同没配。
+func (c SpectateConf) OpsEntryEnabled() bool {
+	return strings.TrimSpace(c.OpsCallerSecret) != ""
+}
+
+// TicketTTL 返回观战凭证有效期;0 / 负数 / 漏配(直接构造 Config 的单测)按默认 60 秒。
+func (c SpectateConf) TicketTTL() time.Duration {
+	if c.TicketTTLSeconds <= 0 {
+		return defaultSpectateTicketTTL
+	}
+	return time.Duration(c.TicketTTLSeconds) * time.Second
+}
+
+// validateSpectate 校验观战配置:prod(非 dev / test,与 svc.NewServiceContextWithAdmission 同一判据)打开中继时
+// 凭证密钥必须够长,否则拒启;运营密钥一旦配了就必须够长(serviceauth 的硬要求,提前到加载期报)。
+func (c *Config) validateSpectate() error {
+	spectate := c.Spectate
+	if spectate.BroadcastMaxConcurrent < 0 {
+		return fmt.Errorf("Spectate.BroadcastMaxConcurrent 不能为负数,得到 %d(0 = 不开 L2)", spectate.BroadcastMaxConcurrent)
+	}
+	if spectate.BroadcastAutoGateThreshold < 0 {
+		return fmt.Errorf("Spectate.BroadcastAutoGateThreshold 不能为负数,得到 %d(0 = 只认运营标记)", spectate.BroadcastAutoGateThreshold)
+	}
+	if spectate.RelayEnabled && c.Mode != "dev" && c.Mode != "test" &&
+		len(strings.TrimSpace(spectate.TicketSecret)) < spectateSecretMinBytes {
+		return fmt.Errorf("Spectate.RelayEnabled=true 时 Spectate.TicketSecret 去除首尾空白后必须至少 %d 字节", spectateSecretMinBytes)
+	}
+	if spectate.OpsEntryEnabled() && len(strings.TrimSpace(spectate.OpsCallerSecret)) < spectateSecretMinBytes {
+		return fmt.Errorf("Spectate.OpsCallerSecret 去除首尾空白后必须至少 %d 字节(留空 = 关闭运营入口)", spectateSecretMinBytes)
+	}
+	return nil
+}
+
 // Validate 由 conf.MustLoad 自动调用(go-zero v1.10.0)。只校验排行榜快照这一组新字段;
 // 其余字段沿用各自的"0 / 漏配按默认"约定,不在这里收紧(收紧会让既有部署在升级时启动失败)。
 // 先调内嵌 RpcServerConf 的 Validate:本方法会遮蔽那个被提升的方法,不显式调用的话加载期就少了它那项校验
@@ -242,33 +336,14 @@ func (c *Config) Validate() error {
 	if err := c.RpcServerConf.Validate(); err != nil {
 		return err
 	}
-	if c.RatingSnapshotTopic == "" {
-		return errors.New("RatingSnapshotTopic 不能为空")
+	if _, err := authoritysql.ParseBackend(c.GlobalMatch.Backend); err != nil {
+		return fmt.Errorf("GlobalMatch.Backend: %w", err)
 	}
-	if c.RatingSnapshotTopicPartitions <= 0 {
-		return fmt.Errorf("RatingSnapshotTopicPartitions 必须为正数,得到 %d", c.RatingSnapshotTopicPartitions)
+	if c.GlobalMatch.ScopeGroupAfterSeconds > c.GlobalMatch.ScopeGlobalAfterSeconds {
+		return fmt.Errorf("GlobalMatch.ScopeGroupAfterSeconds(%d) 不能大于 ScopeGlobalAfterSeconds(%d):先放宽到大区,再放宽到全服",
+			c.GlobalMatch.ScopeGroupAfterSeconds, c.GlobalMatch.ScopeGlobalAfterSeconds)
 	}
-	if c.RatingSnapshotRetentionHours <= 0 {
-		return fmt.Errorf("RatingSnapshotRetentionHours 必须为正数,得到 %d(保留期只由 match 声明,不能交给 broker 默认值)",
-			c.RatingSnapshotRetentionHours)
-	}
-	if c.RatingSnapshotPublishEnabled {
-		if c.GlobalMatch.Enabled {
-			return errors.New("全球评分只走SQL outbox签名投榜，不能同时启用旧Kafka评分快照发布")
-		}
-		if !c.RatingEnabled {
-			return errors.New("RatingSnapshotPublishEnabled=true 需要 RatingEnabled=true:不消费对局结果就没有评分快照可发")
-		}
-		if len(c.Kafka.Brokers) == 0 {
-			return errors.New("RatingSnapshotPublishEnabled=true 需要 Kafka.Brokers:快照经 Kafka 发给 rank")
-		}
-	}
-	return nil
-}
-
-// RatingSnapshotRetentionMs 是快照 topic 声明给 broker 的保留期(毫秒)。
-func (c *Config) RatingSnapshotRetentionMs() int64 {
-	return c.RatingSnapshotRetentionHours * 3600 * 1000
+	return c.validateSpectate()
 }
 
 // RatingDrawRoundCapFor 返回 battle_config_id 对应的"回合打满按平局"阈值:
@@ -284,22 +359,4 @@ func (c *Config) RatingDrawRoundCapFor(configId uint32) uint32 {
 		}
 	}
 	return c.RatingDrawRoundCap
-}
-
-// PveTeamSizeFor 返回 battle_config_id 对应的 PVE 组队人数上限(未按引擎每队上限收口,
-// 收口在 logic.requiredPlayers);未配置返回 0(调用方按"该副本未开放组队"拒绝)。
-func (c *Config) PveTeamSizeFor(configId uint32) uint32 {
-	if c.PveTeamSizeByConfigId == nil {
-		return 0
-	}
-	for key, value := range c.PveTeamSizeByConfigId {
-		if value == 0 {
-			continue
-		}
-		parsed, err := strconv.ParseUint(key, 10, 32)
-		if err == nil && uint32(parsed) == configId {
-			return value
-		}
-	}
-	return 0
 }

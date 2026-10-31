@@ -46,6 +46,14 @@
 #             个人结算与成员对不上的占位,另有一次性的 battle_result_commit_serialization_failed /
 #             battle_personal_settlement_source_mismatch);stuck_total= 是 count + sql_unconfirmed + placeholder。
 #             第 2 步按 stuck_total 判(原写「与 count 相等」,同节点有另两类房间时永远等不到)。count=0 时这一行照样会打。
+#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[AssetOp]" |= "metric=persist_version_skew" [10m]) > 0
+#             (2026-10-30,混版本持久字段保护第 6 批)资产通道遇到本版本解释不了的东西,回 RETRY + reason 1006
+#             (kFeatureUnavailable)、不记账:where=asset_debit 是按数量扣出只有算上带更新版本字段的物品才够,
+#             where=asset_currency 是包里的币种本版本不认识。Go 行上表现为 PENDING、last_reason=1006。
+#             滚动发布期间属预期,升级走完自然收口;发布已走完仍持续 → 查是否有 scene 停在旧版本或被回滚。
+#             不要人工终结这类行:入账没有 Abort 栅栏,人工终结还会在流上留下永久的洞(04 §4.38)。聚宝斋托管卡在这里时,
+#             卖家可以撤单收口。选择器按 player-inbox-alerts.yaml 的写法(C++ 日志 sidecar 不打 app 标签,本文件其余
+#             {app=...} 的查询待统一改写)。
 #   warning : count_over_time({app="battle"} |= "metric=battle_personal_settlement_staged_late" [1h]) > 0
 #             (2026-10-22 评审补)全球对局个人结算在低频重试阶段才落库:派发时冻结已解除,在线、无战斗锁的成员
 #             可能被 scene 直接销账而不应用(cross-service-assets#1 落地前)。正文列出 battle_id 与整局成员,
@@ -94,8 +102,8 @@ spec:
           annotations:
             summary: "{{ $labels.service }} 的资产指令结局发生翻转(违反 I2)"
             description: >-
-              同一 (player, stream, seq) 先后得到不同的终结结局。可能是 Redis 回退到旧 blob(C5)
-              或旧持有者覆盖存盘(K1)。保留现场,对照 scene 流水与 guild_asset_op 行,不要人工终结。
+              同一 (player, stream, seq) 先后得到不同的终结结局。账本只在 player_store 里,旧持有者的写被 go/db 按写权拒绝,
+              所以这必定是代码缺陷或库被回档 / 改动过。保留现场,对照 scene 流水与 guild_asset_op 行,不要人工终结。
 
         # 部分发放:不做对侧账,转人工补偿(X-15)。
         - alert: AssetOpAppliedPartial
@@ -139,6 +147,9 @@ spec:
               最老的 online_retry 类 PENDING 行已存在 {{ $value | printf "%.0f" }} 秒。
               玩家在线时正常 1 分钟内应当终结;检查该玩家是否长期处于战斗 / 冻结 / 加载未完成,
               以及 scene 的资产 RPC 拒绝原因(assetop_rpc_total)。
+              行上 last_reason=1006(kFeatureUnavailable)是版本错位(混版本持久字段保护第 6 批):scene 遇到本版本
+              解释不了的物品字段或币种,先确认 scene 滚动是否走完,不要人工终结;scene 侧日志见文件头
+              metric=persist_version_skew 那条查询。
 
         - alert: AssetOpAlertClassRows
           expr: |
@@ -164,21 +175,6 @@ spec:
               过去 1 天有 {{ $value | printf "%.0f" }} 条 PENDING 超过 180 天且玩家仍不在线的资产指令
               被终结为 ABANDONED(docs/design/landing-recovery-sync-digest.md §6.3)。
               如需补偿,以审计行与 scene 流水为依据人工处理。
-
-        # 开关打开时,SQL 提交证据确定未见而 Redis 父键 blob 已见这笔:证据落后于父键,放弃被跳过(fail-closed)。
-        # 正常运行中不该出现,说明证据发布链有缺口或回档清理不完整(db-write-fencing-mysql.md §6.6)。
-        - alert: AssetOpAbandonSqlEvidenceBehind
-          expr: |
-            sum by (service) (increase(assetop_abandon_skipped_total{reason="sql_evidence_behind"}[1h])) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "{{ $labels.service }} 有放弃候选因 SQL 证据落后被跳过"
-            description: >-
-              过去 1 小时有 {{ $value | printf "%.0f" }} 次:SQL 提交证据未见这笔 seq,但 Redis 父键账本已见。
-              自动放弃已跳过,待办保留。按 "[AssetOp] Abandon skipped: player blob has an outcome that asset SQL commit evidence has not seen" 日志定位,核对 go/db 是否在该 zone 处于 dual、
-              证据发布是否失败、回档后是否清理了证据键;不得手工放弃或伪造到账。
 
     # 交易合同推进(go/trade commerce.Engine.Tick,docs/design/jubaozhai-market.md §15.3,2026-10-22 补)。
     # 指标没有 service 标签(只有 trade 一个服务);每个副本各自计数,所以用 sum。

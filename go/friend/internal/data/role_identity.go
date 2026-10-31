@@ -15,15 +15,15 @@ import (
 var roleAuthoritySchema = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 var ErrOriginalRole = errors.New("好友原会话角色归属已失效或被冻结")
 
-// ConfigureRoleAuthority 仅在启动装配调用；目录和好友表必须位于同一真实 TiDB 事务域。
+// ConfigureRoleAuthority 仅在启动装配调用；目录和好友表必须位于同一事务域(同一 TiDB 集群或同一 MySQL 主库)。
 // 未配置构造器只供显式系统/旧独立仓储夹具；带原会话的请求绝不回落到该路径。
-func (r *FriendRepo) ConfigureRoleAuthority(schema string) error {
+func (r *FriendRepo) ConfigureRoleAuthority(schema string, backend authoritysql.Backend) error {
 	if !roleAuthoritySchema.MatchString(schema) {
 		return errors.New("好友全局角色目录schema未配置")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := authoritysql.AssertCurrentSession(ctx, r.db, true); err != nil {
+	if err := authoritysql.AssertCurrentSession(ctx, r.db, backend); err != nil {
 		return err
 	}
 	rows, err := r.db.QueryContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+schema+"`.account_role LIMIT 0")

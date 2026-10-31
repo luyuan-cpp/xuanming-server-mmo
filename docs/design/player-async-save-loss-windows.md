@@ -1,5 +1,7 @@
 # 玩家异步存盘：已修复问题、剩余丢失窗口与修复任务
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),`MessageAsyncClient` 和 go/db 消费链都已删除。现行的丢失窗口见 [player-data-tidb-scaling-plan.md](./player-data-tidb-scaling-plan.md) §5。本文只作历史保留,不再描述现行行为。
+
 - 创建：2026-08-03；现状核对：2026-10-23。
 - 范围：C++ scene 的 `PlayerLifecycleSystem` / `MessageAsyncClient`，以及 Go login 父快照恢复、go/db SQL 围栏与补投链。
 - 证据：按本轮工作区源码静态核对，包含尚未提交的并行修改；本文的“已修复”表示已有实现，**不表示本轮完成了构建、测试或故障验收**。交接资格、登录初始行与恢复工具正在并行修改，实施时按下列函数重新核对。

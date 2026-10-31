@@ -237,8 +237,8 @@ func TestNewRouteLeaderIDUniqueAndValid(t *testing.T) {
 	}
 }
 
-// TestRouteReconcileSQLShapes 钉住 R23–R31 的文本形状:每条 route_reconcile 写都带租约判据(fencing)、库时钟用 dbNowMsSQL、
-// normal 不再直接翻 writable；R29 照提案 G1a 模板(片等值 + 键集,不是行比较)、R31 只读 63 号片、只有 R26 加锁。
+// TestRouteReconcileSQLShapes 钉住 R23–R30 的文本形状:每条 route_reconcile 写都带租约判据(fencing)、库时钟用 dbNowMsSQL、
+// normal 不再直接翻 writable；R29 照提案 G1a 模板(片等值 + 键集,不是行比较)、只有 R26 加锁。
 func TestRouteReconcileSQLShapes(t *testing.T) {
 	contains := func(name, stmt string, parts ...string) {
 		t.Helper()
@@ -294,16 +294,10 @@ func TestRouteReconcileSQLShapes(t *testing.T) {
 		t.Fatalf("R30 = %q", routeDBNowSQL)
 	}
 
-	// R31(核实意见 A1-4 / LR-1):只读 63 号片(与 RD4 同一片)上有行的 zone,按 zone_id 升序,不加锁。
-	if routeListFenceZonesSQL != "SELECT zone_id FROM zone_merge_fence WHERE shard = ? ORDER BY zone_id" {
-		t.Fatalf("R31 = %q", routeListFenceZonesSQL)
-	}
-
 	ws := regexp.MustCompile(`\s+`)
 	for name, stmt := range map[string]string{
 		"R23": routeRenewLeaseSQL, "R24": routePeekLeaseSQL, "R25": routeReleaseLeaseSQL, "R26": routeLockReconcileSQL,
 		"R27": routeAdvanceReconcileSQL, "R29": routeScanUpdatedSinceSQL, "R30": routeDBNowSQL,
-		"R31": routeListFenceZonesSQL,
 	} {
 		norm := ws.ReplaceAllString(strings.ToUpper(stmt), " ")
 		if strings.Contains(norm, "INSERT IGNORE") || strings.Contains(norm, "REPLACE INTO") {
@@ -319,14 +313,13 @@ func TestRouteReconcileSQLShapes(t *testing.T) {
 // TestRouteReconcileFileDoesNotWritePlayerRoute:本文件对 player_route 只读(R29),写入方仍只有 route_store.go。
 func TestRouteReconcileFileDoesNotWritePlayerRoute(t *testing.T) {
 	write := regexp.MustCompile("(?i)(INSERT\\s+INTO|UPDATE|DELETE\\s+FROM|REPLACE\\s+INTO|TRUNCATE\\s+TABLE)\\s+`?(" +
-		PlayerRouteTableName + "|" + ZoneMergeFenceTableName + "|" + ZoneMergedIntoTableName + ")\\b")
+		PlayerRouteTableName + "|" + ZoneMergedIntoTableName + ")\\b")
 	for name, stmt := range map[string]string{
 		"R23": routeRenewLeaseSQL, "R24": routePeekLeaseSQL, "R25": routeReleaseLeaseSQL, "R26": routeLockReconcileSQL,
 		"R27": routeAdvanceReconcileSQL, "R29": routeScanUpdatedSinceSQL, "R30": routeDBNowSQL,
-		"R31": routeListFenceZonesSQL,
 	} {
 		if write.MatchString(stmt) {
-			t.Fatalf("%s writes player_route / zone_merge_fence / zone_merged_into: %q", name, stmt)
+			t.Fatalf("%s writes player_route / zone_merged_into: %q", name, stmt)
 		}
 	}
 }

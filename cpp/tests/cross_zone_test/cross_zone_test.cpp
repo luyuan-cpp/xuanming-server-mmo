@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include <google/protobuf/util/message_differencer.h>
+#include <chrono>
+#include <deque>
 #include <vector>
+#include <node_config_manager.h>
 #include "hexagons_grid.h"
 #include "infra/agones/agones_gameserver_lifecycle.h"
 #include "core/node/system/node/muduo_grpc_channel_slot.h"
@@ -15,6 +18,9 @@
 #include "modules/bag/comp/player_bags_comp.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/bag_marshal.h"
+#include "player/comp/player_key_progress_save_comp.h"
+#include "player/comp/player_save_seq_floor_comp.h"
+#include "player/system/player_store_client.h"
 #include "player/system/role_admission_system.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
 #include "thread_context/ecs_context.h"
@@ -776,7 +782,6 @@ TEST(TravelOutcomeReset, NoRecordedEvidenceKeepsIncoming)
 #include "player/system/player_data_loader.h"
 #include "player/system/player_persist_marshal.h"
 #include "player/comp/player_persist_carry_comp.h"
-#include "player/comp/player_persist_writer_comp.h" // 严格屏障写方令牌(混版本持久字段保护 §5.2)
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/mission/comp/mission_comp.h"
 #include "proto/common/component/asset_op_ledger_comp.pb.h"
@@ -970,8 +975,8 @@ TEST(ExitPersistPayload, ProbeFieldsAreIgnoredBusinessFieldsAreNot)
 }
 
 // ── ECS 级回归(M15):直接驱动 PlayerLifecycleSystem::HandlePlayerAsyncSaved ──
-// 宿主里没有初始化 RedisSystem(GetPlayerDataRedis() 为空):"未落地存盘"查询如实返回 false,
-// 且下面的用例都不会走到重存(SavePlayerToRedis 需要真的 Redis 客户端)。
+// 宿主里没有认领过(PlayerStoreClient 未 Seed):"未落地存盘"查询如实返回 false,
+// 且下面的用例都不会走到重存(存盘回 kNotSeeded)。
 namespace
 {
 constexpr Guid kExitPlayerId = 950200001;
@@ -1366,7 +1371,7 @@ TEST(ExitPersistEcs, StaleEpochResaveRejectedDiscardsWithoutReleaseMark)
     tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
     tlsEcs.actorRegistry.remove<PlayerAssetOpLedgerComp>(player);
 
-    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6", RedisSaveOwnerRejection{});
+    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6");
 
     EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
     EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), entt::entity{entt::null});
@@ -1405,7 +1410,7 @@ TEST(ExitPersistEcs, StaleEpochRejectOnOnlinePlayerKeepsEntity)
     tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
     tlsEcs.actorRegistry.remove<PlayerAssetOpLedgerComp>(player);
 
-    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6", RedisSaveOwnerRejection{});
+    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6");
 
     ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
@@ -1489,56 +1494,561 @@ TEST(ExitPersistEcs, SchemaRejectOnOnlinePlayerKeepsEntity)
         << "C3 拒写不计入双主证据";
 }
 
-// warn 照写只计数,不改实体状态;同一写方之后每次写入都会再返回 2(证据留在 Redis,防回包丢失),按写方令牌只记一次;
-// 令牌对不上(另一个加载实体留下的在途写)照常计数;实体已不在时两种回调都是空操作。
-TEST(ExitPersistEcs, SchemaWarnOnlyCountsAndGonePlayerIsNoop)
+// ── 存盘直接提交 TiDB:主流程接线(docs/design/player-save-direct-commit.md §5.1、§6)───────────────────────
+
+class PlayerStoreDirectTestAccess
 {
+public:
+    static void InstallTransport(const PlayerStoreTransport& transport)
+    {
+        PlayerLifecycleSystem::InstallPlayerStoreTransport(transport);
+    }
+    static void Reset() { PlayerLifecycleSystem::PlayerStoreSlot().reset(); }
+};
+
+namespace
+{
+constexpr uint64_t kDirectEpoch = 7;
+constexpr uint64_t kClaimedSeq = 5;
+
+// 把本线程切到新路径,传输和定时器换成假的。发号、探针、落定回收都是生产接线。
+struct PlayerStoreDirectFixture
+{
+    struct Sent
+    {
+        playerstore::SavePlayerRequest request;
+        PlayerStoreClient::SendDone done;
+    };
+    struct SentClaim
+    {
+        playerstore::LoadAndClaimRequest request;
+        PlayerStoreClient::ClaimDone done;
+    };
     ScopedPersistedPlayerCleanup cleanup;
-    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
-    ASSERT_TRUE(MarkPersisted(player));
-    // 令牌由存盘写入口懒建;能返回 2 的实体必然已有。这里在测试创建点显式挂上。
-    tlsEcs.actorRegistry.emplace_or_replace<PlayerPersistWriterComp>(player).token = "writer-of-this-entity";
-    const auto schemaBefore = persist_schema_stats::Read();
+    std::deque<Sent> sent;
+    std::deque<SentClaim> sentClaims;
+    std::vector<std::function<void()>> timers;
 
-    PlayerLifecycleSystem::HandlePlayerSaveSchemaWarned(kExitPlayerId, "player-save-test", "writer-of-this-entity");
+    PlayerStoreDirectFixture()
+    {
+        PlayerStoreTransport transport;
+        transport.send = [this](const playerstore::SavePlayerRequest& request, PlayerStoreClient::SendDone done)
+        {
+            sent.push_back({request, std::move(done)});
+            return true;
+        };
+        transport.schedule = [this](double, std::function<void()> fn) { timers.push_back(std::move(fn)); };
+        transport.sendClaim = [this](const playerstore::LoadAndClaimRequest& request, PlayerStoreClient::ClaimDone done)
+        {
+            sentClaims.push_back({request, std::move(done)});
+            return true;
+        };
+        PlayerStoreDirectTestAccess::InstallTransport(transport);
+    }
 
-    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "warn 已照写,退出照常等落地回调收尾";
-    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
-    EXPECT_EQ(persist_schema_stats::Read().regressionWarned, schemaBefore.regressionWarned + 1);
+    ~PlayerStoreDirectFixture()
+    {
+        PlayerStoreDirectTestAccess::Reset();
+        PlayerLifecycleSystem::GetPendingEnterMap().clear();
+    }
 
-    PlayerLifecycleSystem::HandlePlayerSaveSchemaWarned(kExitPlayerId, "player-save-test", "writer-of-this-entity");
-    EXPECT_EQ(persist_schema_stats::Read().regressionWarned, schemaBefore.regressionWarned + 1)
-        << "同一写方后续写入带回的旧证据只记一次";
-    PlayerLifecycleSystem::HandlePlayerSaveSchemaWarned(kExitPlayerId, "player-save-test", "writer-of-another-entity");
-    EXPECT_EQ(persist_schema_stats::Read().regressionWarned, schemaBefore.regressionWarned + 2)
-        << "另一个加载实体的在途写照常计数,不被当前实体的去重标记吞掉";
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerPersistWriterComp>(player).regressionWarnReported);
+    void ReplyClaim(const playerstore::LoadAndClaimResponse& response)
+    {
+        ASSERT_FALSE(sentClaims.empty());
+        SentClaim front = std::move(sentClaims.front());
+        sentClaims.pop_front();
+        front.done(true, &response);
+    }
 
-    constexpr Guid kGonePlayerId = 987650001;
-    ASSERT_EQ(tlsEcs.GetPlayer(kGonePlayerId), entt::entity{entt::null});
-    PlayerLifecycleSystem::HandlePlayerSaveSchemaRejected(kGonePlayerId, "player-save-test", "6");
-    EXPECT_EQ(persist_schema_stats::Read().regressionRejected, schemaBefore.regressionRejected + 1);
+    void Reply(playerstore::SavePlayerResult result, uint64_t rowEpoch = 0, uint64_t rowSeq = 0)
+    {
+        ASSERT_FALSE(sent.empty());
+        Sent front = std::move(sent.front());
+        sent.pop_front();
+        playerstore::SavePlayerResponse response;
+        response.set_result(result);
+        response.set_row_owner_epoch(rowEpoch);
+        response.set_row_save_seq(rowSeq);
+        front.done(true, &response);
+    }
+};
+
+// 加载完成时的状态:库里的行就是当前内存,写权代次是 kDirectEpoch。
+entt::entity MakeClaimedPlayer()
+{
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = kDirectEpoch;
+    PlayerAllData data;
+    EXPECT_TRUE(MarshalAsSaved(player, data));
+    player_store_rows::KindBytes rows;
+    std::string error;
+    EXPECT_TRUE(player_store_rows::ProjectPlayer(*data.mutable_player_database_data(), data.player_database_1_data(), rows, error)) << error;
+    EXPECT_TRUE(PlayerLifecycleSystem::PlayerStore().Seed(kExitPlayerId, 1, kDirectEpoch, kClaimedSeq, std::move(rows)));
+    return player;
 }
 
-// 写方令牌"一个加载实体一个、生命期内不变"(设计 §5.2):读路径不建;同一实体两次取相同;换 owner 代次(E→E+1 复用实体)
-// 不变;同一玩家重新加载成新实体(entt 实体号可能被回收复用)必须不同;形状满足严格 Lua 的 ARGV[11] 校验。
-TEST(ExitPersistEcs, PersistWriterTokenIsPerLoadedEntity)
+// 改一个 kHot 里的字段,让下一笔有脏行。
+void TouchHotRow(entt::entity player)
+{
+    auto& level = tlsEcs.actorRegistry.get<LevelComp>(player);
+    level.set_level(level.level() + 1);
+}
+} // namespace
+
+#include "proto/common/component/battle_comp.pb.h" // InBattleComp
+
+namespace
+{
+constexpr char kTradeSealInstance[] = "01234567-89ab-cdef-0123-456789abcdef";
+
+// 交易封存:本实例持有 kExitPlayerId 的登记,时钟和 AckDrain 换成假的。其余(冻结、存盘落定)走生产接线。
+struct TradeSealFixture
+{
+    RoleAdmissionSystem::Clock::time_point now{};
+    std::vector<data_service::AckRoleTradeDrainRequest> acks;
+    std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> scoped;
+
+    TradeSealFixture()
+    {
+        RoleAdmissionSystem::Dependencies dependencies;
+        dependencies.now = [this] { return now; };
+        dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{kTradeSealInstance, "91", 3}; };
+        dependencies.ackDrain = [this](data_service::AckRoleTradeDrainRequest request, std::function<void(bool)> reply)
+        {
+            acks.push_back(std::move(request));
+            reply(true);
+            return true;
+        };
+        auto& identity = dependencies.confirmedAdmissions.emplace_back();
+        identity.set_player_id(kExitPlayerId);
+        identity.set_generation(kFixtureAdmissionGeneration);
+        identity.set_owner_revision(kFixtureOwnerRevision);
+        identity.set_owner_epoch(kDirectEpoch);
+        identity.set_scene_instance_id(kTradeSealInstance);
+        scoped = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
+    }
+
+    static common::base::RoleTradeSeal Seal()
+    {
+        common::base::RoleTradeSeal seal;
+        seal.set_listing_id(71);
+        seal.set_player_id(kExitPlayerId);
+        seal.set_owner_revision(kFixtureOwnerRevision);
+        seal.set_scene_instance_id(kTradeSealInstance);
+        seal.set_through_generation(kFixtureAdmissionGeneration);
+        seal.set_scene_node_id("91");
+        seal.set_zone_id(3);
+        return seal;
+    }
+
+    // Tick 对同一个玩家一秒只处理一次。
+    void TickAfterRetry()
+    {
+        now += std::chrono::seconds(2);
+        RoleAdmissionSystem::Tick();
+    }
+};
+} // namespace
+
+// 冻结之后提交的快照才是排空证据,下限是最后一笔的序号。
+TEST(PlayerStoreDirectEcs, CommitSubmittedAfterTradeFreezeIsDrainEvidence)
+{
+    PlayerStoreDirectFixture f;
+    TradeSealFixture trade;
+    const auto player = MakeClaimedPlayer();
+    ASSERT_TRUE(RoleAdmissionSystem::Seal(TradeSealFixture::Seal()));
+    ASSERT_FALSE(f.sent.empty());
+    while (!f.sent.empty())
+    {
+        f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    }
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+    trade.TickAfterRetry();
+    ASSERT_EQ(1u, trade.acks.size());
+    EXPECT_EQ(kDirectEpoch, trade.acks[0].required_owner_epoch());
+    EXPECT_GT(trade.acks[0].required_save_seq(), kClaimedSeq);
+}
+
+// 封存时已经在途的那笔不是排空证据:它不含冻结之后的状态。冻结存盘被拒时不能发 AckDrain,否则交易带着更旧的存档继续。
+TEST(PlayerStoreDirectEcs, CommitSubmittedBeforeTradeFreezeIsNotDrainEvidence)
+{
+    PlayerStoreDirectFixture f;
+    TradeSealFixture trade;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_EQ(1u, f.sent.size());
+    TouchHotRow(player);
+    ASSERT_TRUE(RoleAdmissionSystem::Seal(TradeSealFixture::Seal()));
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    while (!f.sent.empty())
+    {
+        f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
+    }
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "冻结存盘被拒,实体按拒存丢弃";
+    trade.TickAfterRetry();
+    EXPECT_TRUE(trade.acks.empty()) << "拒存不能转为排空证明";
+}
+
+// 局中封存:结算自己的存盘不能顶替冻结,否则重放封存不再冻结,交易一直停在 FREEZING。
+TEST(PlayerStoreDirectEcs, SaveDuringBattleDoesNotReplaceTradeFreeze)
+{
+    PlayerStoreDirectFixture f;
+    TradeSealFixture trade;
+    const auto player = MakeClaimedPlayer();
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(4242);
+    ASSERT_TRUE(RoleAdmissionSystem::Seal(TradeSealFixture::Seal()));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
+    EXPECT_FALSE(RoleAdmissionSystem::IsTradeFreezeSaving(kExitPlayerId));
+
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    tlsEcs.actorRegistry.remove<InBattleComp>(player);
+    ASSERT_TRUE(RoleAdmissionSystem::Seal(TradeSealFixture::Seal()));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player)) << "战斗结束后重放封存要真的冻结";
+    EXPECT_TRUE(RoleAdmissionSystem::IsTradeFreezeSaving(kExitPlayerId));
+}
+
+// 挂机下线没有脏行也要发释放,并且等到提交才销毁。
+TEST(PlayerStoreDirectEcs, ExitWithoutChangesStillReleasesAndFinishesOnCommit)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "释放提交之前实体不能走";
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_TRUE(f.sent.front().request.release());
+    EXPECT_EQ(kDirectEpoch, f.sent.front().request.owner_epoch());
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), entt::entity{entt::null});
+    EXPECT_EQ(SessionMap().count(kSessionAtExit), 0u);
+}
+
+// 有排队的最终存盘时,前一笔提交不能触发退出收尾,否则内存里最新的那份就丢了。
+TEST(PlayerStoreDirectEcs, PendingSnapshotHoldsBackExitUntilItCommits)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_FALSE(f.sent.front().request.release());
+
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
+    EXPECT_EQ(1u, f.sent.size()) << "每个玩家只有一个在途存盘";
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_TRUE(f.sent.front().request.release());
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+}
+
+// 退出被更新的会话取代:释放已经提交了,玩家却还在这里。马上写一笔清掉 released,否则库里显示他已下线。
+TEST(PlayerStoreDirectEcs, SupersededExitClearsTheCommittedRelease)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
+    ASSERT_EQ(1u, f.sent.size());
+    ASSERT_TRUE(f.sent.front().request.release());
+    tlsEcs.actorRegistry.get<PlayerSessionSnapshotComp>(player).set_gate_session_id(kNewerSession);
+    SessionMap().insert_or_assign(kNewerSession, kExitPlayerId);
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_FALSE(f.sent.front().request.release());
+    EXPECT_EQ(0, f.sent.front().request.rows_size());
+}
+
+// 提交之后快照跟上,没有变化的定时存盘不发请求;调用方要确定的提交时(资产重查)照样写一笔。
+TEST(PlayerStoreDirectEcs, CommitReplacesSnapshotAndUnchangedSaveSkips)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+    ASSERT_NE(snapshot, nullptr);
+    EXPECT_TRUE(snapshot->HasSnapshot());
+
+    // 这个宿主没有登记入场身份,提交证据记不上(CaptureSnapshotCommit 回空),这里按身份已确认时的结果补上。
+    snapshot->committed_owner_epoch = kDirectEpoch;
+    snapshot->committed_save_seq = 1;
+    EXPECT_FALSE(PlayerLifecycleSystem::SavePlayerToRedis(player)) << "没有变化不算排入写入";
+    EXPECT_TRUE(f.sent.empty());
+
+    EXPECT_TRUE(PlayerLifecycleSystem::SavePlayerForAssetCommit(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(0, f.sent.front().request.rows_size());
+}
+
+// 加载之后第一笔哪怕没有脏行也要写:资产、结算、收件箱拿快照当「已提交」的证据,没有这一笔它们等不到快照。
+TEST(PlayerStoreDirectEcs, FirstSaveAfterLoadWritesEvenWithoutChanges)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+
+    EXPECT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(0, f.sent.front().request.rows_size());
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    const auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+    ASSERT_NE(snapshot, nullptr);
+    EXPECT_TRUE(snapshot->HasSnapshot());
+}
+
+// 被拒的就是实体当前的代次:本节点已被废黜,销毁,不重试。
+TEST(PlayerStoreDirectEcs, StaleOwnerOnCurrentEpochDestroysTheEntity)
+{
+    for (const auto rejected : {playerstore::SAVE_PLAYER_STALE_OWNER, playerstore::SAVE_PLAYER_NOT_HOLDER, playerstore::SAVE_PLAYER_UNCLAIMED})
+    {
+        PlayerStoreDirectFixture f;
+        const auto player = MakeClaimedPlayer();
+        TouchHotRow(player);
+        ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+        f.Reply(rejected, kDirectEpoch + 1, 1);
+        EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << playerstore::SavePlayerResult_Name(rejected);
+        EXPECT_TRUE(f.sent.empty());
+    }
+}
+
+// 在途期间采纳了新代次:被拒的只是那笔旧写,本节点仍是持有者,用新代次重存。
+TEST(PlayerStoreDirectEcs, StaleOwnerAfterEpochAdvanceSavesAgainWithTheNewEpoch)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = kDirectEpoch + 2;
+
+    f.Reply(playerstore::SAVE_PLAYER_STALE_OWNER, kDirectEpoch + 1, 1);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(kDirectEpoch + 2, f.sent.front().request.owner_epoch());
+    EXPECT_GT(f.sent.front().request.rows_size(), 0) << "被拒那笔的行可能已经提交过,必须重写";
+}
+
+// 确定性拒绝不会再有落地回调:退出中不能无限等。
+TEST(PlayerStoreDirectEcs, RefusedSaveOnExitDiscardsTheEntity)
+{
+    for (const auto refused : {playerstore::SAVE_PLAYER_TOO_LARGE, playerstore::SAVE_PLAYER_INVALID, playerstore::SAVE_PLAYER_SCHEMA_REGRESSED})
+    {
+        PlayerStoreDirectFixture f;
+        const auto player = MakeClaimedPlayer();
+        PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
+        ASSERT_EQ(1u, f.sent.size());
+        f.Reply(refused);
+        EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << playerstore::SavePlayerResult_Name(refused);
+    }
+}
+
+// 在途那笔被确定性拒绝时,排队的最终存盘还没有结论:不能按「退出存盘被拒」销毁,由最后一笔决定。
+TEST(PlayerStoreDirectEcs, RefusedSaveWithQueuedExitSaveWaitsForTheLastResult)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
+    ASSERT_EQ(1u, f.sent.size());
+
+    f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_TRUE(f.sent.front().request.release());
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+}
+
+// 最后一笔也被拒才是结论:退出不能无限等。
+TEST(PlayerStoreDirectEcs, RefusedLastExitSaveDiscardsTheEntity)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kClientDisconnect);
+
+    f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+}
+
+// 排队那笔之前的提交也要换快照:排队那笔要是被拒,结算、收件箱的确认不能卡在更旧的快照上。
+TEST(PlayerStoreDirectEcs, CommitWithQueuedSnapshotStillReplacesTheSnapshot)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_EQ(1u, f.sent.size());
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    const auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
+    ASSERT_NE(snapshot, nullptr);
+    EXPECT_TRUE(snapshot->HasSnapshot());
+    EXPECT_EQ(1u, f.sent.size()) << "排队那笔接着发";
+}
+
+// 在线时只是这一笔作废:保留实体,下一次存盘把这些行再写一遍。
+TEST(PlayerStoreDirectEcs, RefusedSaveOnOnlinePlayerKeepsTheEntityAndWritesAgainNextTime)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+
+    f.Reply(playerstore::SAVE_PLAYER_TOO_LARGE);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_TRUE(f.sent.empty());
+    EXPECT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_GT(f.sent.front().request.rows_size(), 0);
+}
+
+// NO_OWNER 这一笔没有提交:保留实体,同序号重试,不当成拒绝。
+TEST(PlayerStoreDirectEcs, NoOwnerKeepsTheEntityAndRetriesTheSameSave)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    const uint64_t firstSeq = f.sent.front().request.save_seq();
+
+    f.Reply(playerstore::SAVE_PLAYER_NO_OWNER);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    ASSERT_EQ(1u, f.timers.size());
+    auto fired = std::move(f.timers);
+    f.timers.clear();
+    fired.front()();
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ(firstSeq, f.sent.front().request.save_seq());
+}
+
+// 库里的序号比发号器高:抬过去再存一次,新序号必须越过库里的值。
+TEST(PlayerStoreDirectEcs, OlderSeqRaisesTheAllocatorAndSavesAgain)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    const uint64_t rowSeq = f.sent.front().request.save_seq() + 1000;
+
+    f.Reply(playerstore::SAVE_PLAYER_OLDER_SEQ, kDirectEpoch, rowSeq);
+
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_GT(f.sent.front().request.save_seq(), rowSeq);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSaveSeqFloorComp>(player)) << "界内的值抬进程水位就够了";
+}
+
+// 超界的值不抬进程水位(否则一条坏数据把全进程的序号带飞),只挂这名玩家的个人下限。
+TEST(PlayerStoreDirectEcs, OlderSeqBeyondBoundBecomesThePersonalFloor)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    constexpr uint64_t kBeyondBound = UINT64_MAX / 2;
+
+    f.Reply(playerstore::SAVE_PLAYER_OLDER_SEQ, kDirectEpoch, kBeyondBound);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerSaveSeqFloorComp>(player));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_GT(f.sent.front().request.save_seq(), kBeyondBound);
+}
+
+// 实体销毁时存盘还在途(被废黜):状态留到落定,落定时回收。
+TEST(PlayerStoreDirectEcs, EntityDestroyedWhileInFlightIsForgottenOnSettle)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    ASSERT_TRUE(PlayerLifecycleSystem::SavePlayerToRedis(player));
+    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", std::to_string(kDirectEpoch));
+    ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
+
+    auto& client = PlayerLifecycleSystem::PlayerStore();
+    EXPECT_TRUE(client.HasUnsettled(kExitPlayerId)) << "这时重新加载要等它落定";
+
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    EXPECT_FALSE(client.HasUnsettled(kExitPlayerId));
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kNotSeeded, client.Submit(kExitPlayerId, {}, {}, nullptr));
+}
+
+// 存盘已落定时销毁,状态立刻回收。
+TEST(PlayerStoreDirectEcs, EntityDestroyedAfterSettleIsForgottenImmediately)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", std::to_string(kDirectEpoch));
+    ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kNotSeeded,
+              PlayerLifecycleSystem::PlayerStore().Submit(kExitPlayerId, {}, {}, nullptr));
+}
+
+// 节流的全部规则:没存过不等,窗口内等剩余时间,过了窗口不等。
+TEST(PlayerStoreDirectEcs, KeyProgressDelayRule)
+{
+    using Clock = PlayerKeyProgressSaveComp::Clock;
+    using namespace std::chrono_literals;
+    const auto t0 = Clock::time_point{} + 1h;
+    EXPECT_EQ(Clock::duration::zero(), key_progress_save::DelayUntilNextSave(Clock::time_point{}, t0));
+    EXPECT_EQ(std::chrono::duration_cast<Clock::duration>(600ms), key_progress_save::DelayUntilNextSave(t0, t0 + 400ms));
+    EXPECT_EQ(Clock::duration::zero(), key_progress_save::DelayUntilNextSave(t0, t0 + key_progress_save::kWindow));
+}
+
+// 不在调用方的栈上存盘;一个窗口内的多次请求合并成一次。
+TEST(PlayerStoreDirectEcs, KeyProgressSaveRunsAfterTheCallerAndCoalesces)
+{
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
+    TouchHotRow(player);
+    muduo::net::EventLoop loop;
+
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "test");
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "test");
+    EXPECT_TRUE(f.sent.empty());
+
+    loop.runAfter(0.05, [&loop] { loop.quit(); });
+    loop.loop();
+
+    EXPECT_EQ(1u, f.sent.size());
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<PlayerKeyProgressSaveComp>(player).armed);
+}
+
+// 旧路径上是空操作:每次存盘都要过 Kafka,不加这部分写量。
+TEST(PlayerStoreDirectEcs, KeyProgressIsANoOpOnTheOldPath)
 {
     ScopedPersistedPlayerCleanup cleanup;
-    const auto first = MakeOnlinePlayer(kSessionAtExit);
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerPersistWriterComp>(first)) << "令牌只在存盘写入口懒建";
-    const std::string tokenA = player_persist::WriterTokenForSave(first);
-    EXPECT_TRUE(IsValidRedisSaveSchemaWriter(tokenA)) << tokenA;
-    EXPECT_EQ(tokenA, player_persist::WriterTokenForSave(first));
-    tlsEcs.actorRegistry.emplace_or_replace<PlayerOwnerEpochComp>(first).epoch = 7;
-    tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(first).epoch = 8;
-    EXPECT_EQ(tokenA, player_persist::WriterTokenForSave(first)) << "换 owner 代次不换令牌,本实体的后续写入才能跳过 C3";
-
-    // MakeOnlinePlayer 先 tlsEcs.Clear() 再建实体:同一玩家重新加载,实体号可能复用。
-    const auto second = MakeOnlinePlayer(kSessionAtExit);
-    const std::string tokenB = player_persist::WriterTokenForSave(second);
-    EXPECT_TRUE(IsValidRedisSaveSchemaWriter(tokenB)) << tokenB;
-    EXPECT_NE(tokenA, tokenB) << "新加载的实体必须拿新令牌,否则会跳过它接手别人数据时那一次比较";
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "test");
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerKeyProgressSaveComp>(player));
 }
 
 TEST(ExitPersistEcs, CancelExitOnReconnectRemovesBothMarkers)
@@ -1921,6 +2431,97 @@ TEST(ExitReleaseEcs, UnconfirmedIdentityOnExitSkipsTheMark)
     const auto skip = static_cast<std::size_t>(erm::ExitReleaseDecision::kSkipIdentityConflict);
     EXPECT_EQ(after.decisions[skip], before.decisions[skip] + 1);
     EXPECT_EQ(after.failed, before.failed) << "不写就不会有失败";
+}
+
+// ── 存盘直接提交 TiDB:载入。认领结果接进和 Redis 载入同一个入口,闸门照旧 ──────────────────────────────
+
+// 认领带的是待入场上下文里的代次和本进程的世代。
+TEST(PlayerStoreDirectEcs, RequestLoadClaimsWithThePendingEpoch)
+{
+    PlayerStoreDirectFixture f;
+    RegisterPendingEnter(/*ownerEpoch=*/5);
+
+    PlayerLifecycleSystem::RequestPlayerLoad(kReleasePlayerId);
+
+    EXPECT_TRUE(PlayerLifecycleSystem::HasPendingPlayerLoad(kReleasePlayerId));
+    ASSERT_EQ(1u, f.sentClaims.size());
+    EXPECT_EQ(kReleasePlayerId, f.sentClaims.front().request.player_id());
+    EXPECT_EQ(5u, f.sentClaims.front().request.owner_epoch());
+    EXPECT_EQ(persist_schema::kPersistSchemaGen, f.sentClaims.front().request.binary_schema_gen());
+}
+
+// 写权行不存在:不造空档,这次入场失败。
+TEST(PlayerStoreDirectEcs, ClaimRefusalFailsTheEntry)
+{
+    PlayerStoreDirectFixture f;
+    RegisterPendingEnter(/*ownerEpoch=*/5);
+    PlayerLifecycleSystem::RequestPlayerLoad(kReleasePlayerId);
+
+    playerstore::LoadAndClaimResponse refused;
+    refused.set_result(playerstore::LOAD_AND_CLAIM_NO_OWNER);
+    f.ReplyClaim(refused);
+
+    EXPECT_FALSE(PlayerLifecycleSystem::HasPendingPlayerLoad(kReleasePlayerId));
+    EXPECT_EQ(PlayerLifecycleSystem::GetPendingEnterMap().count(kReleasePlayerId), 0u);
+    EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u);
+}
+
+// 拼回来的消息带上元数据:身份校验靠 player_id,序号播种靠 last_save_seq,加载世代靠 persist_schema_gen。
+// 闸门还在等 A2′ 时暂存,正好看得到交给载入入口的那份。播种的状态这时不能回收。
+TEST(PlayerStoreDirectEcs, ClaimFillsTheMetadataBackIntoTheLoad)
+{
+    PlayerStoreDirectFixture f;
+    RegisterPendingEnter(/*ownerEpoch=*/5);
+    PlayerLifecycleSystem::BeginInheritedMarkClear(kReleasePlayerId);
+    PlayerLifecycleSystem::RequestPlayerLoad(kReleasePlayerId);
+
+    player_database hot;
+    hot.mutable_level_component()->set_level(9);
+    playerstore::LoadAndClaimResponse claimed;
+    claimed.set_result(playerstore::LOAD_AND_CLAIM_CLAIMED);
+    claimed.set_storage_id(3);
+    claimed.set_owner_epoch(5);
+    claimed.set_save_seq(77);
+    claimed.set_schema_gen(persist_schema::kPersistSchemaGen);
+    auto* row = claimed.add_rows();
+    row->set_kind(playerstore::PLAYER_STORE_KIND_HOT);
+    row->set_payload(hot.SerializeAsString());
+    f.ReplyClaim(claimed);
+
+    auto& pending = PlayerLifecycleSystem::GetPendingEnterMap();
+    ASSERT_EQ(pending.count(kReleasePlayerId), 1u);
+    ASSERT_NE(pending.at(kReleasePlayerId).inheritClear.stashedLoad, nullptr);
+    const auto& load = *pending.at(kReleasePlayerId).inheritClear.stashedLoad;
+    EXPECT_EQ(kReleasePlayerId, load.player_database_data().player_id());
+    EXPECT_EQ(kReleasePlayerId, load.player_database_1_data().player_id());
+    EXPECT_EQ(5u, load.player_database_data().fence_owner_epoch());
+    EXPECT_EQ(77u, load.player_database_data().fence_save_seq());
+    EXPECT_EQ(77u, load.last_save_seq());
+    EXPECT_EQ(persist_schema::kPersistSchemaGen, load.player_database_data().persist_schema_gen());
+    EXPECT_EQ(persist_schema::kPersistSchemaGen, load.player_database_1_data().persist_schema_gen());
+    EXPECT_EQ(9u, load.player_database_data().level_component().level());
+
+    EXPECT_NE(PlayerStoreClient::SubmitResult::kNotSeeded,
+              PlayerLifecycleSystem::PlayerStore().Submit(kReleasePlayerId, {}, {}, nullptr));
+}
+
+// 认领成功,这次载入却拒建实体:本节点不再持有这名玩家,播种的状态要回收。
+TEST(PlayerStoreDirectEcs, ClaimedButRefusedEntryForgetsTheSeed)
+{
+    PlayerStoreDirectFixture f;
+    RegisterPendingEnter(/*ownerEpoch=*/5);
+    PlayerLifecycleSystem::RequestPlayerLoad(kReleasePlayerId);
+
+    playerstore::LoadAndClaimResponse claimed;
+    claimed.set_result(playerstore::LOAD_AND_CLAIM_CLAIMED);
+    claimed.set_owner_epoch(5);
+    claimed.set_save_seq(1);
+    f.ReplyClaim(claimed);
+
+    EXPECT_EQ(PlayerLifecycleSystem::GetPendingEnterMap().count(kReleasePlayerId), 0u) << "没有针对这一代的 A2′:拒建实体";
+    EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u);
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kNotSeeded,
+              PlayerLifecycleSystem::PlayerStore().Submit(kReleasePlayerId, {}, {}, nullptr));
 }
 
 TEST(ExitReleaseEcs, LoadWithoutClearForItsEpochIsRefused)
@@ -2861,31 +3462,6 @@ TEST(TravelFreezeCapEcs, PastDispatchWindowRequiresRevocationBeforeUnfreeze)
     EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
     EXPECT_EQ(after.dispatchWindowClosed, before.dispatchWindowClosed + 1);
     EXPECT_EQ(after.aborted, before.aborted);
-    EXPECT_EQ(after.sqlBarrierExpired, before.sqlBarrierExpired) << "没等过 SQL ACK,不算这一类";
-    EXPECT_TRUE(PlayerLifecycleSystem::IsSceneChangeBusy(player)) << "原资格未确认撤销，不解冻";
-}
-
-TEST(TravelFreezeCapEcs, BeginTravelHandoffPastWindowWhileWaitingForSqlAcksCountsSqlBarrierExpiry)
-{
-    // 交接 SQL 屏障:标记脚本因两张子表 SQL ACK 没追平而回 0、每 250ms 重试,直到 35s 晚发闸。窗口在等待中关闭时,
-    // 除了既有的 dispatch_window_closed,还要计 sql_barrier_expired,把"等 SQL ACK 超时"与"存盘落地太晚"分开。
-    // 等待计数只能由 Redis 回调写(宿主里没有 zone Redis),这里直接在组件上置 3,模拟已经等过三轮。
-    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/0, /*markEpoch=*/0,
-                                                tfc::Clock::now() - (tfc::kDispatchWindow + 1s));
-    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
-    tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player).sqlBarrierWaits = 3;
-    const auto before = Stats();
-
-    PlayerLifecycleSystem::BeginTravelHandoff(kCapPlayerId);
-
-    const auto after = Stats();
-    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "无Redis撤资格确认，仍保持冻结";
-    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
-    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player));
-    EXPECT_EQ(after.dispatchWindowClosed, before.dispatchWindowClosed + 1);
-    EXPECT_EQ(after.sqlBarrierExpired, before.sqlBarrierExpired + 1);
-    EXPECT_EQ(after.aborted, before.aborted);
-    EXPECT_EQ(after.sqlBarrierWaited, before.sqlBarrierWaited) << "等待计数只在回调里第一次等待时加,这里不动";
     EXPECT_TRUE(PlayerLifecycleSystem::IsSceneChangeBusy(player)) << "原资格未确认撤销，不解冻";
 }
 
@@ -2967,40 +3543,6 @@ public:
     }
 };
 
-TEST(TravelFreezeCapEcs, SaveWatchdogAbortWhileWaitingForSqlAcksCountsSqlBarrierExpiry)
-{
-    // 主路径:交接存盘在途(kQueued)时挂 30s 存盘看门狗,它先于 35s 晚发闸到期。两次 SQL ACK 重试之间 requestedAtMs 为 0,
-    // 看门狗照常 AbortTravelHandoff —— 归因在这个共同出口做,同样要计 sql_barrier_expired。
-    const auto player = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/0, /*markEpoch=*/0, kT0);
-    tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player).sqlBarrierWaits = 2;
-    const auto before = Stats();
-
-    PlayerTravelOutcomeTestAccess::Abort(kCapPlayerId, "handoff save did not land in time");
-
-    const auto after = Stats();
-    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
-    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player));
-    EXPECT_EQ(after.sqlBarrierExpired, before.sqlBarrierExpired + 1);
-    EXPECT_EQ(after.aborted, before.aborted);
-    EXPECT_EQ(after.dispatchWindowClosed, before.dispatchWindowClosed) << "不是晚发闸收的口";
-}
-
-TEST(TravelFreezeCapEcs, AbortWithMarkWriteInFlightIsNotSqlBarrierExpiry)
-{
-    // 对照组:标记脚本在途(requestedAtMs != 0)时中止,不是"在等 SQL ACK";没等过(sqlBarrierWaits == 0)也不算。
-    // markEpoch 保持 0,Abort 不登记撤回,宿主里不需要 zone Redis。
-    const auto inFlight = MakeFrozenHandoffPlayer(kCapSelfZone + 1, /*requestedAtMs=*/123, /*markEpoch=*/0, kT0);
-    tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(inFlight).sqlBarrierWaits = 2;
-    const auto before = Stats();
-
-    PlayerTravelOutcomeTestAccess::Abort(kCapPlayerId, "test abort while the mark write is in flight");
-
-    const auto after = Stats();
-    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(inFlight));
-    EXPECT_EQ(after.sqlBarrierExpired, before.sqlBarrierExpired);
-    EXPECT_EQ(after.aborted, before.aborted);
-}
-
 
 namespace
 {
@@ -3066,7 +3608,22 @@ TEST(TravelOwnership, ReceiptOfThisHandoffIsAdopted)
     static_assert(to::ClassifyOwnership(RolledBackToSelfFacts()) == to::Ownership::kRolledBackToSelf,
                   "判定必须能在编译期求值(纯函数)");
     EXPECT_EQ(to::ClassifyOwnership(RolledBackToSelfFacts()), to::Ownership::kRolledBackToSelf)
-        << "回执是本次原文,epoch 恰好前进两格且与 location 一致,location 指回本节点:采纳";
+        << "回执是本次原文,epoch 至少前进两格且与 location 一致,location 指回本节点:采纳";
+}
+
+// 墙钟地板(zone-redis-regression-guard-20261022.md §4.3.1):scene_manager 铸造取 max(观察值 + 1, 当前毫秒),
+// 回滚再 +1,所以回滚之后的 epoch 是「毫秒值 + 1」,远大于 markEpoch + 2。交叉校验照旧成立,必须采纳 ——
+// 否则每一次推路由失败(以及铸造没确认落盘)的回滚,源端都会判成回执异常、不存盘销毁。
+TEST(TravelOwnership, WallClockFloorRollbackIsAdopted)
+{
+    constexpr uint64_t kRolledBackEpoch = 1'760'000'000'001ULL;
+    auto facts = RolledBackToSelfFacts();
+    facts.redisEpoch = kRolledBackEpoch;
+    facts.locationOwnerEpoch = kRolledBackEpoch;
+    EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kRolledBackToSelf);
+
+    facts.locationOwnerEpoch = kRolledBackEpoch - 1; // 键与 location 不一致仍是异常
+    EXPECT_EQ(to::ClassifyOwnership(facts), to::Ownership::kReceiptAnomaly);
 }
 
 // 回执、回复形状、玩家与交接代际都有效,必须进入真实 B5。缺组件应在采纳 epoch / 解冻之前拒绝。
@@ -3173,9 +3730,17 @@ TEST(TravelOwnership, ReceiptWithFailedCrossCheckIsAnomaly)
     }
     {
         auto facts = RolledBackToSelfFacts();
-        facts.redisEpoch = 8; // 回滚之后又前进过
-        facts.locationOwnerEpoch = 8;
-        cases.push_back({"redis=8", facts});
+        facts.redisEpoch = 9; // 回滚之后键又前进过,location 还记着回滚值(回滚之后的任何落点都会整条重写 location)
+        facts.locationOwnerEpoch = 7;
+        cases.push_back({"redis=9,locEpoch=7", facts});
+    }
+    {
+        auto facts = RolledBackToSelfFacts();
+        facts.markEpoch = UINT64_MAX - 1; // markEpoch + 2 会溢出:不可能是真实的回滚
+        facts.cachedEpoch = UINT64_MAX - 1;
+        facts.redisEpoch = UINT64_MAX;
+        facts.locationOwnerEpoch = UINT64_MAX;
+        cases.push_back({"markEpoch=max-1", facts});
     }
     {
         auto facts = RolledBackToSelfFacts();
@@ -3473,11 +4038,9 @@ TEST(RelocateConfirmReply, OnlyAwaitingReplyTriggersVerification)
     }
     EXPECT_EQ(rc::EvidenceForReply(0), rc::Evidence::kReplySucceeded);
     // 非 0 一律只是「被拒」,不区分码:推路由失败(7,没有具名常量,字面量抄自
-    // go/scene_manager/internal/constants/errors.go 的 ErrKafkaRoute)、缺 gate 实例号(前置拒绝)、归属查不到、
-    // 归属 zone 合服中(合服围栏)。
+    // go/scene_manager/internal/constants/errors.go 的 ErrKafkaRoute)、缺 gate 实例号(前置拒绝)、归属查不到。
     for (const uint32_t code : {7u, PlayerLifecycleSystem::kSmErrInvalidGateID,
-                                PlayerLifecycleSystem::kSmErrHomeZoneUnavailable,
-                                PlayerLifecycleSystem::kSmErrHomeZoneMerging})
+                                PlayerLifecycleSystem::kSmErrHomeZoneUnavailable})
     {
         EXPECT_EQ(rc::EvidenceForReply(code), rc::Evidence::kReplyRejected) << "code=" << code;
     }
@@ -3813,7 +4376,6 @@ TEST(RelocateConfirmKick, UnverifiableKickOnlyWhenSceneManagerCannotHaveGrantedO
         {PlayerLifecycleSystem::kSmErrRedis, 8, "ErrRedis"},
         {PlayerLifecycleSystem::kSmErrSceneReentryBarrier, 17, "ErrSceneReentryBarrier"},
         {PlayerLifecycleSystem::kSmErrHomeZoneUnavailable, 20, "ErrHomeZoneUnavailable"},
-        {PlayerLifecycleSystem::kSmErrHomeZoneMerging, 21, "ErrHomeZoneMerging"},
         // 25 的唯一出处是落点会话身份判定 decidePlacementIdentity,早于一切预占与写(scene-enter-chain-residuals.md §5.2 ⑤)。
         {PlayerLifecycleSystem::kSmErrPlacementSessionSuperseded, 25, "ErrPlacementSessionSuperseded"},
     };
@@ -3832,7 +4394,7 @@ TEST(RelocateConfirmKick, UnverifiableKickOnlyWhenSceneManagerCannotHaveGrantedO
     {
         EXPECT_FALSE(PlayerLifecycleSystem::SmRejectedBeforeAnyPlacementWrite(code)) << "code=" << code;
     }
-    static_assert(PlayerLifecycleSystem::SmRejectedBeforeAnyPlacementWrite(PlayerLifecycleSystem::kSmErrHomeZoneMerging) &&
+    static_assert(PlayerLifecycleSystem::SmRejectedBeforeAnyPlacementWrite(PlayerLifecycleSystem::kSmErrHomeZoneUnavailable) &&
                       !PlayerLifecycleSystem::SmRejectedBeforeAnyPlacementWrite(0),
                   "白名单判定必须能在编译期求值(纯函数)");
 
@@ -3844,8 +4406,8 @@ TEST(RelocateConfirmKick, UnverifiableKickOnlyWhenSceneManagerCannotHaveGrantedO
                                           PlayerLifecycleSystem::SmRejectedBeforeAnyPlacementWrite(19)));
     EXPECT_TRUE(rc::ShouldKickUnverified(
         rc::Evidence::kReplyRejected, false,
-        PlayerLifecycleSystem::SmRejectedBeforeAnyPlacementWrite(PlayerLifecycleSystem::kSmErrHomeZoneMerging)))
-        << "合服围栏的拒绝发生在任何落点写之前";
+        PlayerLifecycleSystem::SmRejectedBeforeAnyPlacementWrite(PlayerLifecycleSystem::kSmErrHomeZoneUnavailable)))
+        << "归属查不到的拒绝发生在任何落点写之前";
 }
 
 TEST(RelocateConfirmKick, UnsettledRequestDefersTheReadAndForbidsEarlyOrBlindKicks)
@@ -5255,42 +5817,6 @@ TEST(RelocateConfirmEcs, UnsettledPreviousRelocateIsCarriedIntoTheNextOne)
     DrainRelocateConfirms();
 }
 
-// ============================================================================
-// DBTask topic 世代号(player-storage-placement.md §7 / §12 A14)
-// ============================================================================
-// CZ-2 让存盘按 home_zone 选 topic;这里钉住 topic 名里的世代号规则。C++ scene 是生产者、go/db 是
-// 唯一的消费者,两边规则一旦漂移不报任何错,存盘静默写进没人消费的 topic —— 所以期望值逐条抄自
-// go/db/internal/config 与 go/login/internal/config 的 DbTaskTopicForGeneration,不从 C++ 实现反推。
-#include "player/constants/player.h"
-
-TEST(DbTaskTopicGeneration, FirstGenerationKeepsLegacyNameWithoutSuffix)
-{
-    // 第一代的名字在引入世代号前就已上线,不能补 _g1(与审计 topic 第一代就带 _g1 刻意不同)。
-    EXPECT_EQ(GetDbTaskTopic(1, 1), "db_task_zone_1");
-    EXPECT_EQ(GetDbTaskTopic(42, 1), "db_task_zone_42");
-}
-
-TEST(DbTaskTopicGeneration, ZeroMeansUnconfiguredAndEqualsFirstGeneration)
-{
-    // proto3 没有 presence:yaml 不写 DbTaskTopicGeneration 就是 0,必须与第一代同名,存量部署不改也能起。
-    EXPECT_EQ(GetDbTaskTopic(3, 0), GetDbTaskTopic(3, 1));
-    EXPECT_EQ(GetDbTaskTopic(3, 0), "db_task_zone_3");
-}
-
-TEST(DbTaskTopicGeneration, LaterGenerationsAppendSuffix)
-{
-    EXPECT_EQ(GetDbTaskTopic(1, 2), "db_task_zone_1_g2");
-    EXPECT_EQ(GetDbTaskTopic(7, 10), "db_task_zone_7_g10");
-    EXPECT_EQ(GetDbTaskTopic(4294967295u, 4294967295u), "db_task_zone_4294967295_g4294967295");
-}
-
-TEST(DbTaskTopicGeneration, GenerationDoesNotChangeZoneRouting)
-{
-    // 世代号只改名字后缀,不改按 zone 分 topic 的路由:不同 zone 同世代必然不同名。
-    EXPECT_NE(GetDbTaskTopic(1, 2), GetDbTaskTopic(2, 2));
-    EXPECT_NE(GetDbTaskTopic(1, 1), GetDbTaskTopic(1, 2));
-}
-
 // 15. BagEquipInstanceData —— 装备实例数据(ItemEntry.equip,docs/design/equipment-attributes.md §3.1)
 // 随存盘的 PlayerAllData 过一跳不丢。目标节点是从共享 Redis 里的 PlayerAllData 载入玩家的,所以这里
 // 走的是「marshal 成 PlayerAllData → 整条序列化 / 解析 → 从记录里的 bag_component 还原」。
@@ -6409,14 +6935,13 @@ TEST(EnterFenceEcs, RemovePlayerSessionOnlyErasesOwnMapping)
 TEST(EnterFenceEcs, AbandonedLoadOnlyErasesOwnMapping)
 {
     // 载入放弃的路径(RedisError、A2′ 重发耗尽 → 拒建实体)与载入回调的"会话已取消"判据,同样只认属于自己的映射。
-    using LoadFailureReason = MessageAsyncClient<Guid, PlayerAllData>::LoadFailureReason;
     constexpr SessionId kShared = kFenceSessionA;
 
-    // ① RedisError。
+    // ① 存储错误。
     ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
     ASSERT_EQ(EnterGameNode(FenceEnter(kShared, kGenA)), PlayerLifecycleSystem::EnterGameNodeOutcome::kLoadRequired);
     SessionMap()[kShared] = kFenceOtherPlayerId;
-    PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(kExitPlayerId, LoadFailureReason::RedisError);
+    PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(kExitPlayerId, PlayerLoadFailureReason::kStoreError);
     EXPECT_EQ(PendingEnter(), nullptr);
     EXPECT_EQ(SessionMap().at(kShared), kFenceOtherPlayerId);
 
@@ -6521,7 +7046,6 @@ TEST(EnterFenceEcs, StaleEnterDoesNotSupersedeRelocateEntry)
 // ============================================================================
 #include "core/network/grpc_client_call.h"                    // GrpcCallOutcome
 #include "player/system/player_tip.h"                     // 校准迟到完成不得推提示的日志观察器
-#include "player/system/db_task_dispatch_system.h"          // 复用账本测试钩子,让真实退出等回执时保留实体
 #include "proto/common/component/battle_comp.pb.h"       // InBattleComp
 
 namespace
@@ -6902,25 +7426,15 @@ TEST(MirrorCreateInFlightEcs, CommittedHandoffPermanentlyCancelsOldMirror)
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
 }
 
-TEST(MirrorCreateInFlightEcs, CommittedExitCancelsMirrorWhileWaitingForDbAck)
+TEST(MirrorCreateInFlightEcs, CommittedExitCancelsMirrorWhileWaitingForSaveCommit)
 {
-    ScopedPersistedPlayerCleanup cleanup;
-    struct LedgerCleanup
-    {
-        LedgerCleanup() { DbTaskDispatchSystem::ResetForTest(); }
-        ~LedgerCleanup() { DbTaskDispatchSystem::ResetForTest(); }
-    } ledgerCleanup;
-    const auto player = MakeOnlinePlayer(kSessionAtExit);
-    ASSERT_TRUE(MarkPersisted(player));
-    auto& ledger = DbTaskDispatchSystem::LedgerForTest();
-    const auto generation = ledger.BeginSave(kExitPlayerId);
-    ledger.IssueTicket(kExitPlayerId, generation, db_task_dispatch::Clock::now());
-    ledger.FinishSave(kExitPlayerId, generation, /*allQueued=*/true);
+    PlayerStoreDirectFixture f;
+    const auto player = MakeClaimedPlayer();
     AttachMirrorCreate(player, /*token=*/83);
 
     PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kNodeShutdown);
 
-    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "实体还在等 DBTask 回执,旧完成确实仍可能找到它";
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "实体还在等释放提交,旧完成确实仍可能找到它";
     ASSERT_TRUE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
     ASSERT_FALSE(HasMirrorCreate(player));
     MirrorTipPushProbe tipPush;
@@ -8013,13 +8527,12 @@ TEST(OwnerEpochStats, RejectedExitingSaveCountsAsRollbackEvidence)
     tlsEcs.actorRegistry.remove<PlayerAssetOpLedgerComp>(player);
     const auto before = owner_epoch_stats::Read();
 
-    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6", RedisSaveOwnerRejection{});
+    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6");
 
     EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "已被废黜:不存盘销毁";
     const auto after = owner_epoch_stats::Read();
     EXPECT_EQ(after.staleOwnerWriteRejected, before.staleOwnerWriteRejected + 1);
     EXPECT_EQ(after.staleOwnerRejectedExiting, before.staleOwnerRejectedExiting + 1);
-    EXPECT_EQ(after.ownerCounterBehind, before.ownerCounterBehind) << "改派不是 Redis 回退";
     EXPECT_TRUE(after.Any());
 }
 
@@ -8033,63 +8546,12 @@ TEST(OwnerEpochStats, RejectedLiveSaveIsNotCountedAsExiting)
     tlsEcs.actorRegistry.remove<PlayerAssetOpLedgerComp>(player);
     const auto before = owner_epoch_stats::Read();
 
-    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6", RedisSaveOwnerRejection{});
+    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6");
 
     EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
     const auto after = owner_epoch_stats::Read();
     EXPECT_EQ(after.staleOwnerWriteRejected, before.staleOwnerWriteRejected + 1);
     EXPECT_EQ(after.staleOwnerRejectedExiting, before.staleOwnerRejectedExiting);
-}
-
-TEST(OwnerEpochStats, CounterBehindDestroysWithoutSavingAndIsNotCountedAsDeposal)
-{
-    // G4(docs/design/zone-redis-regression-guard-20261022.md §4.4):Redis 的 owner 计数器(5)比实体缓存的 epoch(6)还小 =
-    // Redis 回退丢了铸造。只检测、不修复:与废黜同样不存盘销毁(不写释放标记),单独计 owner_counter_behind;
-    // 成因不是双主,stale_owner_write_rejected / stale_owner_rejected_exiting 都不动。用退出中的实体:退出存盘被拒最要紧。
-    ScopedPersistedPlayerCleanup cleanup;
-    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
-    ASSERT_TRUE(MarkPersisted(player));
-    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 6;
-    tlsEcs.actorRegistry.remove<PlayerAssetOpLedgerComp>(player);
-    const auto before = owner_epoch_stats::Read();
-    const auto exitBefore = exit_release_stats::Read();
-
-    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6",
-        RedisSaveOwnerRejection{RedisSaveOwnerRejectReason::kOwnerCounterBehind, "5"});
-
-    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "只丢不盖:不存盘销毁";
-    EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), entt::entity{entt::null});
-    EXPECT_EQ(SessionMap().count(kSessionAtExit), 0u);
-    EXPECT_EQ(exit_release_stats::Read().decisions, exitBefore.decisions) << "不写释放标记、不发改派";
-    const auto after = owner_epoch_stats::Read();
-    EXPECT_EQ(after.ownerCounterBehind, before.ownerCounterBehind + 1);
-    EXPECT_EQ(after.staleOwnerWriteRejected, before.staleOwnerWriteRejected);
-    EXPECT_EQ(after.staleOwnerRejectedExiting, before.staleOwnerRejectedExiting);
-    EXPECT_TRUE(after.Any()) << "[OwnerEpoch] 汇总行要因它而打出";
-}
-
-TEST(OwnerEpochStats, CounterBehindOnStaleInFlightSaveResavesWithCurrentEpoch)
-{
-    // 被拒的是旧期望值(6),实体已缓存更新的 epoch(7):与改派下的旧代际在途写同一处置 —— 用当前 epoch 重存,由 Lua 按同一判据
-    // 重新回答(仍落后就再回计数器落后,那时两值相等才销毁),这里既不计数也不销毁。本宿主没有 Redis:去掉一个持久组件让重存
-    // 在组装阶段被拒,在线实体保留(同 ExitPersistEcs.StaleEpochRejectOnOnlinePlayerKeepsEntity)。
-    ScopedPersistedPlayerCleanup cleanup;
-    const auto player = MakeOnlinePlayer(kSessionAtExit);
-    ASSERT_TRUE(MarkPersisted(player));
-    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
-    tlsEcs.actorRegistry.remove<PlayerAssetOpLedgerComp>(player);
-    const auto before = owner_epoch_stats::Read();
-
-    PlayerLifecycleSystem::HandlePlayerSaveRejected(kExitPlayerId, "player-save-test", "6",
-        RedisSaveOwnerRejection{RedisSaveOwnerRejectReason::kOwnerCounterBehind, "5"});
-
-    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
-    EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), player);
-    EXPECT_EQ(SessionMap().count(kSessionAtExit), 1u);
-    const auto after = owner_epoch_stats::Read();
-    EXPECT_EQ(after.ownerCounterBehind, before.ownerCounterBehind) << "当前 epoch 是否也落后要等重存的回答";
-    EXPECT_EQ(after.staleOwnerWriteRejected, before.staleOwnerWriteRejected);
 }
 
 TEST(HandoffFenceCodec, PreservesUint64AndRejectsUnknownHolderMasqueradingAsAdmission)

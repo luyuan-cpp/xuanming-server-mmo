@@ -56,7 +56,6 @@ message player_snapshot
 {
   option(OptionTableName) = "player_snapshot";
   option(OptionPrimaryKey) = "id";
-  option(OptionAutoIncrementKey) = "id";
   // 分号 = 两条独立索引(proto2mysql 语义:分号分隔多索引,逗号 = 联合索引)。
   // snapshot_guid 刻意用普通 INDEX 而不是 UNIQUE:GM/data_service 产生的行没有 guid,
   // proto2mysql 的 nullable 选项只去掉 NOT NULL、仍保留 DEFAULT 0,且写入路径对未设置的
@@ -67,12 +66,13 @@ message player_snapshot
   // 于是 store 侧靠 extraIndexes 兜底建它 —— 补进来之后那段兜底会自行失效
   // (它按"想要的索引已被覆盖"判断)。
   option(OptionIndex) = "player_id;snapshot_guid;zone_id,created_at";
-  // 自增主键同样单调递增,按 §D3 处方 NONCLUSTERED + 打散;自增值非连续可接受(无连续性依赖)
+  // 主键是应用向发号器申请的打散行号(player-data-tidb-scaling-plan.md §6.4),不依赖库的自增。
+  // 行数据按 _tidb_rowid 存,所以 §D3 的 NONCLUSTERED + 打散照旧保留。
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
 
-  uint64 id = 1;             // Auto-increment snapshot ID
+  uint64 id = 1;             // 行号,biz_tag = snapshot_row。打散、不连续、不代表先后,排序看 created_at
   uint64 player_id = 2;      // Player this snapshot belongs to
   uint32 zone_id = 3;        // Player's home zone at snapshot time
   uint32 snapshot_type = 4;  // SnapshotType enum value
@@ -81,7 +81,7 @@ message player_snapshot
   string operator = 7;       // GM operator who created it
   bytes  data = 8;           // Serialized snapshot data (proto SnapshotData)
   // C++ scene 经 Kafka 送来的 PlayerSnapshotEntry.snapshot_id(SnowFlake)。GM 行为 0。
-  // 不改主键:rollback_audit_log.snapshot_id_used 引用的是自增 id,换主键等于篡改历史审计。
+  // 不改主键:rollback_audit_log.snapshot_id_used 引用的是 id,换主键等于篡改历史审计。
   uint64 snapshot_guid = 9;
   // 来源:0 = GM/data_service 直接写入(data 列是 Redis 字段图 JSON),
   //       1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 的两个 proto blob)。
@@ -96,13 +96,13 @@ message rollback_audit_log
 {
   option(OptionTableName) = "rollback_audit_log";
   option(OptionPrimaryKey) = "id";
-  option(OptionAutoIncrementKey) = "id";
-  // 自增主键同样单调递增,按 §D3 处方 NONCLUSTERED + 打散;自增值非连续可接受(无连续性依赖)
+  // 主键是应用向发号器申请的打散行号(player-data-tidb-scaling-plan.md §6.4),不依赖库的自增。
+  // 行数据按 _tidb_rowid 存,所以 §D3 的 NONCLUSTERED + 打散照旧保留。
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
 
-  uint64 id = 1;
+  uint64 id = 1;                 // 行号,biz_tag = rollback_audit。不代表先后,排序看 created_at
   uint64 player_id = 2;          // 0 for zone/server rollback
   uint32 zone_id = 3;            // 0 for server-wide rollback
   uint32 rollback_type = 4;      // 1=player, 2=zone, 3=server
@@ -171,32 +171,6 @@ message rollback_audit
 }
 
 // ============================================================================
-// ID Segment — Leaf-segment 号段表(永久身份 player_id / guild_id / item guid 的发号源)。
-// 一个持有者用一次 CAS(WHERE biz_tag=? AND version=?)领走 [max_id, max_id+step),
-// 不依赖 lease / 时钟 / worker id。
-// 放在本文件而不是 mysql_database_table.proto:导表器按那个文件的 message 成员生成
-// go/db 的 zone 库建表清单(generated/data/mysql_database_table_list.json),而号段表
-// 只该存在于全局库(data_service)一处。
-// 值域上限 2^55,与存量 snowflake 号(≥ 6.7e16)永不相交,新旧号可共存。
-// 见 docs/design/node-id-overhaul-plan-20260908.md §6。
-// ============================================================================
-message id_segment
-{
-  option(OptionTableName) = "id_segment";
-  option(OptionPrimaryKey) = "biz_tag";
-  // 主键是短字符串、行数只有几条(player / guild / item),没有写热点;
-  // 仍按 §D3 声明 NONCLUSTERED + 打散,与全局库其余表口径一致,免得日后加 biz_tag 时再迁。
-  option(OptionTiDBNonclusteredPK) = true;
-  option(OptionTiDBShardRowIDBits) = 4;
-  option(OptionTiDBPreSplitRegions) = 4;
-
-  string biz_tag = 1;   // "player" / "guild" / "item"
-  uint64 max_id = 2;    // 已分配到(不含);下一段从这里开始
-  uint32 step = 3;      // 每次领段的长度,按"10 分钟峰值发号量"配
-  uint64 version = 4;   // CAS 版本号,每次领段 +1
-}
-
-// ============================================================================
 // Player Name — 玩家名字注册表(全服唯一)。
 // 放在本文件而不是 mysql_database_table.proto:导表器按那个文件的 message 成员生成
 // go/db 的 zone 库建表清单(generated/data/mysql_database_table_list.json),而名字
@@ -206,8 +180,8 @@ message id_segment
 //
 // 【为什么这张表不靠 proto2mysql 建】proto2mysql v0.1.0 把 string 渲染成 MEDIUMTEXT
 // (proto2mysql.go:259),而 TEXT 列上建 UNIQUE KEY 会被 MySQL 以 1170(BLOB/TEXT
-// column used in key specification without a key length)拒掉。所以本表和 id_segment
-// 一样走 store/schema.go 的 bootstrap DDL(name/name_norm 建成 VARCHAR),本 message
+// column used in key specification without a key length)拒掉。所以本表走
+// store/schema.go 的 bootstrap DDL(name/name_norm 建成 VARCHAR),本 message
 // 只作为列漂移校验的事实源 —— 改了这里就必须同步改 bootstrap DDL,否则启动校验会报。
 // VARCHAR 长度 < 191,唯一键覆盖整列,不需要 D-14 §2 的 191 前缀写法。
 //
@@ -239,7 +213,7 @@ message player_name
 // ============================================================================
 // 路由表(玩家归属与落点映射持久化 D1,docs/design/player-route-mapping-durability-proposal.md §3.2 / §13)。
 //
-// 下面五个 message **只作列漂移守卫的事实源**(与 id_segment / player_name 同一模式):
+// 下面五个 message **只作列漂移守卫的事实源**(与 player_name 同一模式):
 // 表由 go/data_service/internal/store/schema.go 的 bootstrap DDL 预建(要 VARCHAR、可空列、CHECK、
 // 带片前缀的二级索引,proto2mysql 都生成不了),**不交给 proto2mysql 建表或同步**。迁移期按这里的字段名
 // 查线上表的列齐不齐、按 OptionPrimaryKey 查主键列序(schema.go 的 assertRouteTableShapes)。
@@ -252,7 +226,7 @@ message player_name
 // 本 message 不是读写载体,读写只在 store 的 SQL 里,所以不用 optional。
 // 主键是聚簇的(TiDB CLUSTERED,见 schema.go 注释),不声明 OptionTiDBNonclusteredPK;
 // 二级索引只写在 DDL 里,这里不声明 OptionIndex(这几张表不跑 ensureIndexes)。
-// 放在本文件而不是 mysql_database_table.proto 的原因与 id_segment 相同:路由表只在全局库。
+// 放在本文件而不是 mysql_database_table.proto 的原因:路由表只在全局库。
 // ============================================================================
 
 // player_route:每个玩家一行,home 与落点同行。
@@ -273,24 +247,7 @@ message player_route
   uint32 route_shard       = 10; // = player_id % 64(placement.RouteRowShards,chk_route_shard)
 }
 
-// zone_merge_fence:合服围栏真源,按 (zone_id, shard) 存 N 份相同内容。
-message zone_merge_fence
-{
-  option(OptionTableName) = "zone_merge_fence";
-  option(OptionPrimaryKey) = "zone_id,shard";
-
-  uint32 zone_id       = 1;
-  uint32 shard         = 2;
-  string run_id        = 3;  // 空串 = NULL(未封锁);与 expires_at_ms 同 NULL(chk_fence_pair)
-  string purpose       = 4;  // 空串 = NULL
-  uint32 src_zone      = 5;  // 0 = NULL
-  uint32 dst_zone      = 6;  // 0 = NULL
-  uint64 expires_at_ms = 7;  // 0 = NULL;库时钟 Unix 毫秒
-  string holder_json   = 8;  // 空串 = NULL;排障用持有者描述
-  uint64 fence_epoch   = 9;  // 每次获取 +1,围栏镜像 set-if-newer 的依据
-}
-
-// zone_merged_into:「源区已合走」的永久标记。
+// zone_merged_into:合服映射(源区 → 目标区)的永久记录,归属解析的真源(别名合服)。
 message zone_merged_into
 {
   option(OptionTableName) = "zone_merged_into";
@@ -434,105 +391,6 @@ message account_role_import_receipt {
   bytes role_proto = 6;
   uint32 allow_restore = 7;
   uint64 created_ms = 8;
-}
-
-
-// 停写维护的永久阶段收据；只由本地受控 fence-only promotion 写入。
-// phase：1=计划已固定，2=R/owner撤销已确认，3=双SQL围栏已提交，4=屏障确认。
-// 原计划正文和摘要不可变，未知提交只能按同一计划重读，不得铸造新撤销token。
-message save_barrier_maintenance_receipt {
-  option(OptionTableName) = "save_barrier_maintenance_receipt";
-  option(OptionPrimaryKey) = "receipt_id";
-  bytes receipt_id = 1;
-  uint64 player_id = 2;
-  bytes request_digest = 3;
-  bytes plan_proto = 4;
-  enum Phase {
-    PHASE_UNKNOWN = 0;
-    PLAN_FIXED = 1;
-    WRITERS_REVOKED = 2;
-    SQL_PROMOTED = 3;
-    BARRIER_CONFIRMED = 4;
-  }
-  Phase phase = 5;
-  uint64 updated_ms = 6;
-
-  // 本工具的审定计划，不是跨实例RPC，也不是业务写者自行提交的排空ACK。
-  message PromotionPlan {
-    string format = 1;
-    string maintenance_id = 2;
-    uint64 player_id = 3;
-    string row_schema = 4;
-    string route_schema = 5;
-    uint32 home_zone = 6;
-    uint32 storage_id = 7;
-    uint64 route_revision = 8;
-    string route_generation = 9;
-    uint64 route_watermark = 10;
-    uint64 placement_version = 11;
-    uint64 audited_owner_upper_bound = 12;
-    uint64 original_owner = 13;
-    uint64 target_owner = 14;
-    uint64 original_save_epoch = 15;
-    uint64 original_save_seq = 16;
-    uint64 target_save_seq = 17;
-    uint32 schema_gen = 18;
-    // 全部非fence列含NULL、未知blob和原世代的逐字节摘要；不丢弃未知资产字段。
-    bytes first_business_sha256 = 19;
-    bytes second_business_sha256 = 20;
-    string original_fence = 21;
-    string revoked_fence = 22;
-    bytes receipt_id = 23;
-    string redis_addr = 24;
-    int32 redis_db = 25;
-    bytes audit_evidence_sha256 = 26;
-    bool writers_stopped = 27;
-    bool queues_drained = 28;
-    string mapping_addr = 29;
-    int32 mapping_db = 30;
-    // 空摘要代表键原本缺席；有缓存时，必须先逐字段核对已提交SQL，执行时再CAS原bytes。
-    repeated CacheObservation caches = 31;
-    message CacheObservation {
-      string key = 1;
-      bool present = 2;
-      bytes sha256 = 3;
-      string redis_type = 4;
-    }
-  }
-}
-
-// 指定旧Scene holder的永久退休原件。与closed_through/drained在同一SQL事务提交；
-// 不接通用跨UUID关闭RPC，不根据TTL、新UUID或仅高于初次identity的SQL水位退休。
-message account_role_admission_recovery {
-  option(OptionTableName) = "account_role_admission_recovery";
-  option(OptionPrimaryKey) = "request_id";
-  bytes request_id = 1;
-  uint64 listing_id = 2;
-  uint64 player_id = 3;
-  string scene_instance_id = 4;
-  uint64 through_generation = 5;
-  uint64 owner_revision = 6;
-  bytes request_digest = 7;
-  bytes request_proto = 8;
-  bytes maintenance_receipt_id = 9;
-  bytes maintenance_request_digest = 10;
-  uint64 required_owner_epoch = 11;
-  uint64 required_save_seq = 12;
-  bytes sql_proof_digest = 13;
-  uint64 recovered_ms = 14;
-
-  message Request {
-    bytes request_id = 1;
-    string seller_account = 2;
-    common.base.RoleTradeSeal seal = 3;
-    common.base.RoleAdmissionIdentity admission = 4;
-    bytes admission_request_digest = 5;
-    uint64 expected_closed_through = 6;
-    uint64 expected_required_owner_epoch = 7;
-    uint64 expected_required_save_seq = 8;
-    bytes maintenance_receipt_id = 9;
-    bytes maintenance_request_digest = 10;
-  }
 }
 
 
@@ -894,7 +752,7 @@ message sql_writer_maintenance_receipt {
     uint64 merged_into_missing_in_redis = 11;
     uint64 merged_into_missing_in_db = 12;
     uint64 merged_into_mismatch = 13;
-    uint64 redis_fences_active = 14;
+    reserved 14; // 原 redis_fences_active:合服围栏已删除
     uint64 transient_cleared = 15;
     bool frozen_recovery = 16;
     bool require_map_rev = 17;

@@ -12,12 +12,13 @@ import (
 )
 
 // MySQLConfig holds MySQL connection settings for the global-DB stores.
-// snapshot / transaction_log / id_segment 三个 store 都落在同一个全局库
+// snapshot / transaction_log 等 store 都落在同一个全局库
 // (config.SnapshotMySQL),这里是它们共用的连接参数。
 type MySQLConfig struct {
 	// Permission 由进程装配入口显式传入；同一 boot 的所有业务池复用同一不可变写者。
-	Permission  authoritysql.Permission
-	RequireTiDB bool
+	Permission authoritysql.Permission
+	// Backend 零值按 tidb(authoritysql.ParseBackend);测试连 MySQL 必须显式写 BackendMySQL。
+	Backend     authoritysql.Backend
 	Host        string
 	User        string
 	Password    string
@@ -43,11 +44,10 @@ func buildDSN(cfg MySQLConfig) string {
 // (go-sql-driver 把不认识的 DSN 参数当成建连后的会话级 SET,先例见
 // go/guild/internal/data/guild_manage_repo.go 的 WithLockWaitTimeout、go/friend/internal/svc 的 BuildDSN):
 //
-//   - transaction_isolation='READ-COMMITTED':player_route / zone_merge_fence 的锁推演(规格 c.2「为什么这套锁
+//   - transaction_isolation='READ-COMMITTED':player_route 的锁推演(规格 c.2「为什么这套锁
 //     不会成环」)只在 RC 下成立 —— RC 下 ODKU 撞主键只加记录锁、FOR UPDATE 读不存在的行不留间隙锁。
-//     事务外的 autocommit 语句(确保围栏分片行存在的 ODKU)也走同一个隔离级别,推演口径只有一种。
 //   - innodb_lock_wait_timeout=routeLockWaitTimeoutSec(1s):默认 50s 的锁等待在 data_service 2s 的服务端预算里
-//     永远等不到 1205;ctx 到期时驱动只关连接,服务端那个等锁的线程会继续占着已拿到的围栏分片锁,
+//     永远等不到 1205;ctx 到期时驱动只关连接,服务端那个等锁的线程会继续占着已拿到的行锁,
 //     把同一 (zone, shard) 上的建角串成最长 50s 的停顿。封顶 1s 之后最多再占 1s。
 //
 // 与 buildDSN 一样不设 clientFoundRows:R4 / R7 / R10 / R15 的 ODKU no-op 靠「撞键 = 受影响 0 行」判定,
@@ -73,7 +73,7 @@ func openMySQLWithDSN(cfg MySQLConfig, dsn string) (*sql.DB, error) {
 	if maxOpen <= 0 {
 		maxOpen = 5
 	}
-	db, err := authoritysql.Open(ctx, dsn, cfg.DBName, cfg.RequireTiDB, maxOpen, cfg.Permission)
+	db, err := authoritysql.Open(ctx, dsn, cfg.DBName, cfg.Backend, maxOpen, cfg.Permission)
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
 	}

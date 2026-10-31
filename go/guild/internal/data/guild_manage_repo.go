@@ -24,34 +24,22 @@ package data
 //     (c) 任何**插入或删除 guild_member 行**的事务(建帮、审批通过、踢人、退帮、解散)都先持有该玩家的
 //     guild_player_state 行锁:同一玩家的成员行、uk 项与他名下全部申请行的写者由此串行,
 //     "离帮删成员 + 删申请"与"别帮审批通过同一人"不再能在 uk_guild_member(p) 与 guild_application(G2,p) 上成环。
-//     (d) **全局插入守卫**(G-OUT1 / G-C3):guild_player_state 里 player_id = 0 的哨兵行(globalInsertGuardPlayerID,
-//     启动期由 EnsureGlobalInsertGuard 建好、永不删除)。持有它的只有三类事务,都在**事务内**用 lockGlobalInsertGuard 点锁:
-//       - 唯一二级索引的查重插入者:建帮(插 guild / guild_member)、审批通过(插 guild_member)。InnoDB 对唯一二级索引查重时,
-//         对每条等值项(含未 purge 的删除标记项)及其后第一条记录加 S next-key(取锁规则 R12,RC 不豁免);两个查重插入者
-//         只要插入点落在同一段间隙,各自的插入意向锁就被对方的 S next-key 挡住 —— 同名建帮、名字相邻的两帮、uk 上相邻的
-//         两个刚离帮玩家都能中,谁和谁相邻与名字 / id 数值无关,没有能分片的守卫,只能全局串行;
-//       - 建状态行的短事务(ensurePlayerStateRows 缺行时):首次建行者都排在已存在的哨兵行上,而不是排在别人未提交的新记录上,
-//         首插者回滚不再能把两个排队者的 S 锁继承成同一段间隙上的互等(G-C3)。
-//     位置:表内按 player_id 升序,0 最小 —— 建帮 S(0) → S(p);审批通过 G(G) → S(0) → S(p);建状态行 S(0) → 插 S(p)。
-//     哨兵只为串行化"唯一二级索引查重插入者"与"状态行首插者";其余事务(申请、撤回、拒绝、踢人、退帮、解散、任免、转让、
-//     经济)一概不取它。为什么不与它们成环:
-//       - 不取哨兵的事务从不请求 S(0),所以"等 S(0)"的边只从三类持有者之间出发,而它们在 S(0) 上排成一列;
-//       - 等 S(0) 时手里还有别的锁的只有审批通过(恰好一把 guild(G));而**任何**锁已有 guild 行的事务都把它作为第一把锁,
-//         等 guild 行的一方手里没有别的数据库锁,等待链走到 guild(G) 就断了,回不到持 S(0) 的一方;
-//       - 持 S(0) 的一方此后只请求 S(p)(p > 0,升序)、本帮 / 本人的成员行与申请行、唯一索引查重与新行,从不回头等任何
-//         guild 行(建帮不锁已有 guild 行,审批通过的那一把 guild(G) 早于 S(0) 已持有),也从不等比 p 更小的状态行。
-//     哨兵行缺失时 fail-closed(lockGlobalInsertGuard 回内部错误,不当忙重试,也不在请求路径上补建)。唯一性仍由 uk 裁决,
-//     哨兵只为消掉这两类 1213;它替掉了此前的 Redis 全局互斥:库内行锁对 InnoDB / TiDB 的死锁检测可见、随事务提交释放,
-//     没有 TTL 提前到期与"持行锁等 Redis"的跨系统互等,Redis 故障也不再挡住建帮与审批。
+//     (d) **没有全局插入守卫**(2026-10-30 撤掉,docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条)。
+//     这里曾有一行 guild_player_state.player_id = 0 的哨兵,建帮、审批通过、首次建状态行都先锁它,全服排成一列。
+//     它只防两类 MySQL 1213,从来不管对错(唯一性一直由 uk 裁决):
+//       - 唯一二级索引的查重插入者(建帮、审批通过)。InnoDB 对唯一二级索引查重时,对每条等值项(含未 purge 的删除标记项)
+//         及其后第一条记录加 S next-key(取锁规则 R12,RC 不豁免);两个查重插入者的插入点落在同一段间隙时,各自的插入意向锁
+//         被对方的 S next-key 挡住:同名建帮、名字相邻的两帮、uk 上相邻的两个刚离帮玩家都能中(G-OUT1);
+//       - 建状态行的首插者回滚:排在它未提交记录上的两个同键插入者,S 锁被继承成同一段间隙上的互等(G-C3)。
+//     撤掉之后:TiDB 没有 S 锁和间隙锁,这两个环本来就不存在。MySQL 档上它们还在,但只在有未 purge 的删除标记项、或首插者回滚时
+//     才碰得上;InnoDB 牺牲一方。生产连接走 authoritysql,写者闸门把 1213 变成不可重试的结果未知(事务已回滚,连接隔离),inTx 的 retryOnDeadlock 认不出,这一笔直接报错,玩家重试;只有裸连接(测试)才走重跑。
+//     代价是 MySQL 档这几条路径从没有死锁变成偶发失败,换来建帮、审批通过、新玩家首次申请不再全服排队。
 //     (e) TiDB:凡是悲观事务也会改的行,多 key 写(删带二级索引的行、改二级索引列)一律进显式 RC 事务,不走自动提交
 //     (G-C2,理由见 asset_store.go 文件头的 TiDB 附加规则)。本文件据此把撤回申请与申请后的惰性清理改成逐行 RC 短事务,
-//     建状态行也在 (d) 的 RC 短事务里做。进事务之外,**带复核谓词的点删之前还要先做完整主键 FOR UPDATE 点锁**(死锁复核 V2):
+//     建状态行也在 RC 短事务里做(ensurePlayerStateRows)。进事务之外,**带复核谓词的点删之前还要先做完整主键 FOR UPDATE 点锁**(死锁复核 V2):
 //     这类 DELETE 不走 Point_Get 快路径,语句末尾并行锁 {行 key, PRIMARY key},会与别人的 Point_Get(先 PRIMARY key 后行 key)
 //     各持一半;撤回、申请事务内删本人过期行、申请后的惰性清理三处因此都先 sqlSelectApplicationExpire 点锁再带复核点删。
 //     纯完整主键等值的 sqlDeleteApplication(无复核条件)本身就走快路径,不需要另加点锁。
-//     仍在事务外自动提交的只剩启动期建哨兵行的 INSERT IGNORE(EnsureGlobalInsertGuard)——
-//     它只插新行(TiDB 的行 key 是新分配的 rowid,没人持有、也没人提交时需要它),不会"部分持有"别人要的 key。
-//     MySQL 上它在会话级命名锁(GET_LOCK)下串行:同一时刻至多一个建哨兵者,首插者回滚也不会留下两个排队者互等(死锁复核 C1)。
 //     EXPLAIN 回归见 guild_lock_plan_mysql_test.go,并发回归见 guild_lock_order_mysql_test.go。
 //  3. **提交之后才失效缓存**(§6.4)。MySQL 是真相,失效失败不把已提交的写报成失败,
 //     否则客户端会因为 Redis 抖动进入 RequiresReconnect 隔离,而数据其实已经写成功了。
@@ -269,8 +257,7 @@ func retryOnDeadlock(ctx context.Context, op string, run func() error) error {
 }
 
 // txDeadlockObserved:retryOnDeadlock 每判定一次"事务已整体回滚、可重跑"(1213 / 9007 / errRetryTx)调用一次
-// (建状态行的守卫短事务走 inTx、启动期建哨兵行走 retryOnDeadlock,都在内;建 seq 行自死锁复核 C2 起在 T-D / T-S 事务内做,
-// 随 inTx 一起计)。
+// (建状态行的短事务走 inTx,在内;建 seq 行自死锁复核 C2 起在 T-D / T-S 事务内做,随 inTx 一起计)。
 // 生产实现计 guild_tx_deadlock_total。锁序并发回归(guild_lock_order_mysql_test.go)把它换成记录器、断言修复后
 // 的场景 0 次 —— inTx 会把 1213 吸收掉重跑,只看返回值看不见死锁;go-zero 的指标在未启用 Prometheus 时
 // Inc 是空操作,测试里也读不回来。与 invalidateGaveUp 同一惯例:包级可替换钩子,只许单测替换。
@@ -326,7 +313,7 @@ const sessionIsolation = "'READ-COMMITTED'"
 //
 //   - innodb_lock_wait_timeout = LockWaitTimeoutSeconds:锁等待封顶(§6.2a);
 //   - transaction_isolation = READ-COMMITTED(2026-09-21 死锁修复契约 P5):inTx 的 BeginTx 本来就显式 RC,
-//     但**事务外**的自动提交语句(启动期建哨兵行的 INSERT IGNORE、资产指令的领取、读路径)走的是会话默认
+//     但**事务外**的自动提交语句(资产指令的领取、读路径)走的是会话默认
 //     隔离级别,MySQL 默认 RR。RR 下这些语句的锁定扫描带间隙 / next-key 锁,锁集比本包按 RC 推演的取锁表大,
 //     判环结论对它们不成立;shared/assetop.AllocateSeq 的未决行普通读也以"调用事务是 RC"为硬前提。
 //     全连接统一 RC,推演口径只有一种。TiDB 只在悲观事务模式下支持 RC,部署时 tidb_txn_mode 须为 pessimistic。
@@ -422,10 +409,6 @@ const (
 	// 预留与终结的死锁 / 超预算指标会混在同一个 label 下,排障时分不清是哪条路径在抢锁。
 	opDonate = "donate"
 	opShop   = "shop"
-
-	// 启动期建全局插入守卫哨兵行(EnsureGlobalInsertGuard)的标签:它的 1213 / 9007 重试与 1205 单独计,
-	// 不混进任何请求路径的 label。
-	opInsertGuard = "insert_guard"
 
 	// B6b 追加:同道历练除结算(opTrialSettle)之外的三类写事务(activity_repo.go)。分开计的理由同 opDonate / opShop:
 	// 登记在开战 RPC 里、标记与转换在后台循环里,混进 trial_settle 一个 label,死锁 / 超预算指标就分不清是哪条路径在抢锁。
@@ -745,9 +728,8 @@ const (
 	// sqlEnsurePlayerState / sqlLockPlayerState:锁序位置 2(X-10)。
 	// 建行必须在**业务事务之外**:对不存在的行做加锁读再插入,在 RR 下靠间隙锁互等、
 	// 在 TiDB 下根本锁不住后续插入(01-storage.md §2.1 规则 3)。
-	// 建行前先用 sqlSelectExistingPlayerStatesHead/Tail 普通读挑出已存在的行,只对缺的在全局插入守卫下的 RC 短事务里插
-	// (见 ensurePlayerStateRows);启动期建哨兵行本身(EnsureGlobalInsertGuard)是唯一的自动提交用法,
-	// 在会话级命名锁下同一时刻至多一个插入者(C1)。
+	// 建行前先用 sqlSelectExistingPlayerStatesHead/Tail 普通读挑出已存在的行,只对缺的在 RC 短事务里插
+	// (见 ensurePlayerStateRows)。
 	sqlEnsurePlayerState = `INSERT IGNORE INTO guild_player_state (player_id, updated_ms) VALUES (?, ?)`
 	sqlLockPlayerState   = `SELECT player_id FROM guild_player_state WHERE player_id = ? FOR UPDATE`
 	// 普通读(不加锁),IN 列表按 100 分块,由调用方拼 placeholders。
@@ -774,8 +756,7 @@ const (
 	// uk 项 (p, G) 的写者(插 / 删 p 的成员行)都先持有 p 的 guild_player_state 行锁(文件头 (c)),彼此串行;
 	// 但它**可能**有一个别的持锁者:另一名玩家 x 的查重插入(建帮 / 审批通过)对"x 的等值项后面第一条记录"加的
 	// S next-key(R12),那一条恰好可能是 p 的活 uk 项。这时本语句 delete-mark 它要等那一方提交 —— 只是单向等待:
-	// 查重插入者此后只碰 x 自己名下的申请行与(建帮时)新 guild 行,不等本事务持有的任何锁;且同一时刻至多一个
-	// 查重插入者(文件头 (d) 的全局插入守卫,持到提交)。
+	// 查重插入者此后只碰 x 自己名下的申请行与(建帮时)新 guild 行,不等本事务持有的任何锁。
 	sqlDeleteMember = `DELETE FROM guild_member WHERE guild_id = ? AND player_id = ?`
 
 	// 申请表:锁序位置 4。只存待审,通过 / 拒绝 / 撤回 / 过期 / 解散都删行。
@@ -842,8 +823,7 @@ func lockGuildRow(ctx context.Context, tx *sql.Tx, guildID uint64) (guildLockRow
 	return row, nil
 }
 
-// errPlayerStateRowMissing:事务内点锁状态行时行不存在。lockPlayerState 用 %w 包它,
-// lockGlobalInsertGuard 据此把"哨兵行缺失"与其它锁错误区分开。
+// errPlayerStateRowMissing:事务内点锁状态行时行不存在。lockPlayerState 用 %w 包它。
 var errPlayerStateRowMissing = errors.New("guild_player_state row missing")
 
 // lockPlayerState 锁住玩家的串行化状态行(锁序位置 2)。
@@ -860,163 +840,8 @@ func lockPlayerState(ctx context.Context, tx *sql.Tx, playerID uint64) error {
 	return nil
 }
 
-// ── 全局插入守卫(哨兵行;文件头 (d),2026-09-21 死锁复核 G-OUT1 / G-C3) ─────────
-
-// globalInsertGuardPlayerID:全局插入守卫 = guild_player_state 里这一行。0 永远不是真实玩家:login 的 PlayerId
-// 由 snowflake 发号恒 > 0;ensurePlayerStateRows 另外拒绝把 0 当玩家建行 / 锁行,免得某个带 0 的请求在别的锁序位置
-// 抢到这把全局锁。行由启动期 EnsureGlobalInsertGuard 建好、永不删除。
-const globalInsertGuardPlayerID uint64 = 0
-
-// errGlobalInsertGuardMissing:哨兵行不在。不是可重试的忙错误 —— 它说明部署 / 启动步骤漏了,
-// 重试多少次都一样;按内部错误 fail-closed,建帮 / 审批通过 / 首次建状态行一律拒绝,绝不在请求路径上补建
-// (那会让"建哨兵"本身变成一个没有守卫的并发首插)。
-var errGlobalInsertGuardMissing = errors.New("全局插入守卫哨兵行缺失(guild_player_state.player_id=0),检查启动期 EnsureGlobalInsertGuard")
-
-// insertGuardInitLockName:启动期建哨兵行的会话级命名锁(死锁复核 C1,见 EnsureGlobalInsertGuard)。
-// GET_LOCK 的名字在整个 MySQL 实例(TiDB 集群)内共用、不分库,所以带上库名;与 schemamigrate 的迁移锁
-// ("mmorpg_db_migrate:<库名>")不同名 —— 两者在启动期先后获取、从不嵌套。长度 43 字节,低于 MySQL 的 64 字节上限。
-// 测试库名不同但共用这个名字:并行的测试包之间只会短暂串行,无害。
-const insertGuardInitLockName = "mmorpg_guild_insert_guard_init:" + DatabaseName
-
-// insertGuardInitLockWaitSeconds:GET_LOCK 的等待上限,必须明显短于调用方 ctx(guild.go 给 10s)。
-// ctx 若先到期,驱动会直接断开连接,拿不到"0 = 等满仍被持有"这个结果,也就没有机会复读。
-const insertGuardInitLockWaitSeconds = 5
-
-// insertGuardInitReleaseTimeout:RELEASE_LOCK 的独立超时。调用方 ctx 可能已经到期,锁仍然要放。
-const insertGuardInitReleaseTimeout = 2 * time.Second
-
-// lockGlobalInsertGuard 在事务内点锁全局插入守卫(sqlLockPlayerState,player_id = 0,完整主键 const)。
-// 调用位置必须满足文件头 (d):状态行表内的第一把锁(0 最小),且之后不再回头等任何 guild 行。
-// 行不存在 → 包了 errGlobalInsertGuardMissing 的内部错误;其余错误原样(1213 / 1205 交给 inTx 分类)。
-func lockGlobalInsertGuard(ctx context.Context, tx *sql.Tx) error {
-	err := lockPlayerState(ctx, tx, globalInsertGuardPlayerID)
-	if errors.Is(err, errPlayerStateRowMissing) {
-		return fmt.Errorf("lock global insert guard: %w", errGlobalInsertGuardMissing)
-	}
-	return err
-}
-
-// EnsureGlobalInsertGuard 保证全局插入守卫哨兵行存在。**启动期**调用一次(guild.go:建表之后、任何 goroutine / RPC
-// 之前,失败拒启);幂等,多实例同时首建也不会死锁。
-//
-// 先做普通读:行已在(常态)就直接返回,不取任何锁 —— 运行中的实例可能正持着它(建帮 / 审批通过),新实例启动不该排在后面。
-//
-// 缺行时(首次部署)先在一条专用连接上取会话级命名锁,再在**同一连接**上复读,仍缺才自动提交 INSERT IGNORE。
-// 为什么需要命名锁(死锁复核 C1):不串行时,首个插入者 A 的 INSERT 还没提交,B、C 的前置普通读看不见它(RC 只读已提交),
-// 各自发出 INSERT IGNORE,撞上 A 的记录排队等 S。A 一旦回滚(被 KILL、binlog / 刷盘失败),记录被删,B、C 排队中的 S
-// 会按 lock_rec_inherit_to_gap 继承成后继记录前那段间隙上的间隙 S(查重锁带 inherit_all,RC 也继承),
-// 双方的插入意向锁互相挡住,InnoDB 报 1213(手册 "Locks Set by Different SQL Statements" 三会话 INSERT 的示例);
-// 删除标记项尚未 purge 时则是双方各持已授予的 S、再都要 X 去改写它(取锁规则 H2),同样 1213。
-// 有了命名锁,同一时刻至多一个建哨兵者碰这个主键:首插者回滚时没有第二个排队者,继承下来的间隙锁只属于唯一的等待者,
-// 挡不住它自己的插入意向。等命名锁的一方手里没有任何 InnoDB 锁(前置读是普通读),所以命名锁和行锁之间也连不成环;
-// 持命名锁的一方可能等的行锁(手工 / 测试事务、旧版本实例留下的)其持有者都不等命名锁,同样不成环。
-//
-// 复读、INSERT、插后确认都走 conn,原因有两个:一是命名锁是会话级的,语句若落到池里另一条连接上,持锁会话断开(锁随之释放)时
-// 那条 INSERT 可能还在服务端执行,串行就被打破;二是持着 conn 再向池要连接,池满时会自己卡死自己。
-// GET_LOCK 返回 0(等满仍被持有)或 NULL(服务端出错)时复读一次:行已在(持锁者已建好、只是还没放锁)就算成功;
-// 仍缺就拒启(fail-closed),**绝不**无锁插入 —— 无锁插入正是这里要消灭的并发首插。
-// retryOnDeadlock 保留作兜底(TiDB 9007;将来若有人绕开命名锁插 0 号行);1205 归一成 ErrWriteConflict。
-// 插完再普通读一次确认(INSERT IGNORE 会把非重复类的异常降级成告警,不能只看返回值)。now 只写进 updated_ms(诊断用)。
-// TiDB 上本来没有这个环(查重用 X 悲观锁,没有 S 锁,也没有间隙继承),命名锁多余但无害;
-// 同一启动流程里 schemamigrate 已经在用 GET_LOCK,不新增部署前提。
-// VerifyGlobalInsertGuard 是常驻 normal 的只读启动门禁；不会申请命名锁或播种哨兵。
-func (r *GuildRepo) VerifyGlobalInsertGuard(ctx context.Context) error {
-	missing, err := missingPlayerStateRows(ctx, r.db, []uint64{globalInsertGuardPlayerID})
-	if err != nil {
-		return err
-	}
-	if len(missing) != 0 {
-		return fmt.Errorf("请先执行 guild -migrate 播种全局插入守卫: %w", errGlobalInsertGuardMissing)
-	}
-	return nil
-}
-
-// SeedGlobalInsertGuard 只由显式 Schema 入口调用；固定主键点写，沿用数据库唯一键和有界死锁重试。
-func SeedGlobalInsertGuard(ctx context.Context, db *sql.DB, now uint64) error {
-	if db == nil || now == 0 {
-		return errors.New("全局插入守卫 Schema 参数缺失")
-	}
-	if err := retryOnDeadlock(ctx, opInsertGuard, func() error {
-		_, err := db.ExecContext(ctx, sqlEnsurePlayerState, globalInsertGuardPlayerID, now)
-		return err
-	}); err != nil {
-		return err
-	}
-	missing, err := missingPlayerStateRows(ctx, db, []uint64{globalInsertGuardPlayerID})
-	if err != nil {
-		return err
-	}
-	if len(missing) != 0 {
-		return errGlobalInsertGuardMissing
-	}
-	return nil
-}
-
-func (r *GuildRepo) EnsureGlobalInsertGuard(ctx context.Context, now uint64) error {
-	guardIDs := []uint64{globalInsertGuardPlayerID}
-	missing, err := missingPlayerStateRows(ctx, r.db, guardIDs)
-	if err != nil {
-		return fmt.Errorf("read global insert guard row: %w", err)
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-
-	conn, err := r.db.Conn(ctx)
-	if err != nil {
-		return fmt.Errorf("open connection for global insert guard: %w", err)
-	}
-	defer conn.Close() // 连接断开时服务端也会自动释放命名锁
-
-	var got sql.NullInt64
-	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, ?)",
-		insertGuardInitLockName, insertGuardInitLockWaitSeconds).Scan(&got); err != nil {
-		return fmt.Errorf("get lock %s for global insert guard: %w", insertGuardInitLockName, err)
-	}
-	if !got.Valid || got.Int64 != 1 {
-		if stillMissing, readErr := missingPlayerStateRows(ctx, conn, guardIDs); readErr == nil && len(stillMissing) == 0 {
-			return nil
-		}
-		return fmt.Errorf("get lock %s for global insert guard: not acquired within %ds (valid=%t result=%d): %w",
-			insertGuardInitLockName, insertGuardInitLockWaitSeconds, got.Valid, got.Int64, errGlobalInsertGuardMissing)
-	}
-	defer releaseInsertGuardInitLock(conn) // defer 后进先出:先放锁,再关连接
-
-	if missing, err = missingPlayerStateRows(ctx, conn, guardIDs); err != nil {
-		return fmt.Errorf("re-read global insert guard row under lock: %w", err)
-	}
-	if len(missing) == 0 {
-		return nil // 前一个持锁者已经建好并提交
-	}
-	if err := retryOnDeadlock(ctx, opInsertGuard, func() error {
-		_, err := conn.ExecContext(ctx, sqlEnsurePlayerState, globalInsertGuardPlayerID, now)
-		return err
-	}); err != nil {
-		return fmt.Errorf("create global insert guard row: %w", err)
-	}
-	if missing, err = missingPlayerStateRows(ctx, conn, guardIDs); err != nil {
-		return fmt.Errorf("re-read global insert guard row: %w", err)
-	}
-	if len(missing) != 0 {
-		return fmt.Errorf("create global insert guard row: still missing after INSERT IGNORE: %w", errGlobalInsertGuardMissing)
-	}
-	return nil
-}
-
-// releaseInsertGuardInitLock 释放启动期建哨兵用的命名锁,用独立超时。
-// 放锁失败只记日志,与 schemamigrate 的迁移锁同一口径:成功路径上行已建好,别的实例走普通读快路径,不再需要这把锁;
-// 失败路径上调用方拒启退出,连接随之断开,服务端会自动释放。
-func releaseInsertGuardInitLock(conn *sql.Conn) {
-	releaseCtx, cancel := context.WithTimeout(context.Background(), insertGuardInitReleaseTimeout)
-	defer cancel()
-	var released sql.NullInt64
-	if err := conn.QueryRowContext(releaseCtx, "SELECT RELEASE_LOCK(?)", insertGuardInitLockName).Scan(&released); err != nil {
-		logx.Errorf("[guild] release lock %s failed (the server releases it when the connection closes): %v", insertGuardInitLockName, err)
-	}
-}
-
 // missingPlayerStateRows 普通读(不加锁)ids 里哪些状态行还不存在,按入参顺序返回缺的那些。
-// ids 须已升序去重;IN 列表按 100 分块。q 是 *sql.DB(事务外)或 *sql.Tx(守卫下复读)。
+// ids 须已升序去重;IN 列表按 100 分块。
 func missingPlayerStateRows(ctx context.Context, q queryer, ids []uint64) ([]uint64, error) {
 	existing := make(map[uint64]struct{}, len(ids))
 	const chunkSize = 100
@@ -1043,32 +868,26 @@ func missingPlayerStateRows(ctx context.Context, q queryer, ids []uint64) ([]uin
 // ensurePlayerStateRows 保证这些玩家的状态行存在,是 lockPlayerState 的前置
 // (01-storage.md §2.1 规则 3:对不存在的行做加锁读再插入,RR 下靠间隙锁互等、TiDB 下锁不住后续插入)。
 // **调用时本 goroutine 不得持有任何事务**:它总在调用方的业务事务之前调用(建帮、审批通过、申请、踢人、退帮、解散),
-// 自己开的短事务要拿全局插入守卫,嵌在别的事务里就是"持业务行锁等全局锁",锁序推演不再成立。
+// 建状态行不和业务事务持锁重叠。
 //
 // 两步:
 //  1. 普通读挑出已存在的行(行建好后永不删除,常态下全都已存在,直接返回)。为什么不对全部 id 直接 INSERT IGNORE:
 //     撞上已存在的主键会对它取 S 锁(TiDB 取 X),而状态行正是写事务里 FOR UPDATE 的那把串行化锁 —— 解散会把全体
 //     成员的状态行锁到提交,这期间这些人的申请 / 退帮 / 被踢在"建行"这一步就会白等。普通读不碰锁。
-//  2. 有缺的:一个 RC 短事务(经 inTx,op 用调用方的)里 lockGlobalInsertGuard → **守卫下再普通读一次** →
-//     只对仍缺的按 player_id 升序 INSERT IGNORE → 提交。
-//     守卫下复读的理由:别的首建者也都在这把守卫下建行、持到提交,拿到守卫时它们的行都已提交、RC 普通读看得见;
-//     跳过它们,INSERT 就只落在真正不存在的主键上,不会撞上别人的记录去排 S 锁 —— 否则持着全局守卫去等某个
-//     被解散事务锁住的状态行,会把全服的建帮 / 审批通过一起拖住。
+//  2. 有缺的:一个 RC 短事务(经 inTx,op 用调用方的)里按 player_id 升序 INSERT IGNORE → 提交。
 //
-// 为什么在守卫下建行(G-C3):旧写法是事务外逐条自动提交 INSERT IGNORE。首个插入者在提交前被回滚(连接被 KILL、
-// 刷盘失败、实例关闭)时,排在它未提交记录上的两个同键插入者,其 S 锁在 RC 下被继承为后继记录上的间隙 S,
-// 插入意向互相挡住,InnoDB 牺牲其一(1213)。现在首次建行者都排在**已存在、从不删除**的守卫行上,而不是排在
-// 别人未提交的新记录上:同一时刻至多一个建行者碰到缺行的主键,首插者回滚后留下的间隙锁只属于它自己(或已随回滚释放),
-// 不再有第二个排队者与之互等。
+// 同一玩家并发首建靠主键裁决,不串行。MySQL 档上首个插入者在提交前被回滚(连接被 KILL、刷盘失败、实例关闭)时,
+// 排在它未提交记录上的两个同键插入者,其 S 锁在 RC 下被继承为后继记录上的间隙 S,插入意向互相挡住,InnoDB 牺牲其一(1213,G-C3);
+// inTx 重跑,语句幂等,重跑要么撞上胜者已提交的行(空操作),要么自己插入成功。TiDB 没有这个环。
 //
-// 错误语义:player_id 0 是守卫本身,不是玩家 → 内部错误(不碰库);哨兵行缺失 → errGlobalInsertGuardMissing(内部错误);
+// 错误语义:player_id 0 不是玩家 → 内部错误(不碰库);
 // 1213 / 9007 重试耗尽、1205、超子预算 → ErrWriteConflict(inTx 同口径,logic 回 kGuildBusyRetry);其余包一层原样返回。
 func (r *GuildRepo) ensurePlayerStateRows(ctx context.Context, op string, now uint64, playerIDs ...uint64) error {
 	ids := slices.Clone(playerIDs)
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
-	if len(ids) > 0 && ids[0] == globalInsertGuardPlayerID {
-		return fmt.Errorf("ensure guild player state rows: player_id %d is the global insert guard, not a player", globalInsertGuardPlayerID)
+	if len(ids) > 0 && ids[0] == 0 {
+		return errors.New("ensure guild player state rows: player_id 0 is not a player")
 	}
 
 	missing, err := missingPlayerStateRows(ctx, r.db, ids)
@@ -1079,14 +898,7 @@ func (r *GuildRepo) ensurePlayerStateRows(ctx context.Context, op string, now ui
 		return nil
 	}
 	return r.inTx(ctx, op, func(ctx context.Context, tx *sql.Tx) error {
-		if err := lockGlobalInsertGuard(ctx, tx); err != nil {
-			return err
-		}
-		stillMissing, err := missingPlayerStateRows(ctx, tx, missing)
-		if err != nil {
-			return err
-		}
-		for _, playerID := range stillMissing { // missing 继承 ids 的升序:同表按主键升序插
+		for _, playerID := range missing { // missing 继承 ids 的升序:同表按主键升序插
 			if _, err := tx.ExecContext(ctx, sqlEnsurePlayerState, playerID, now); err != nil {
 				return fmt.Errorf("ensure guild player state row %d: %w", playerID, err)
 			}
@@ -1456,7 +1268,7 @@ func (r *GuildRepo) KickMember(ctx context.Context, guildID, actorID, targetID, 
 		return MemberWriteResult{}, fmt.Errorf("kick member of guild %d: actor and target must differ", guildID)
 	}
 	// 完整性复核 G4:目标先普通读是不是本帮成员,不是就直接答复,不建状态行、不开事务。否则任何帮会成员拿随机 id
-	// 调踢人,每次都会为一个不存在的玩家取一次全局插入守卫 S(0)(建状态行的短事务)并留下一行永不删除的垃圾状态行。
+	// 调踢人,每次都会为一个不存在的玩家留下一行永不删除的垃圾状态行。
 	// 预读只决定"要不要建行",授权与成员判定仍以锁内为准;预读说"不在"就按那一刻的已提交状态答复(等价于本次踢人
 	// 排在对方入帮之前),答复的优先级与锁内一致(见 precheckKickTarget)。
 	if err := r.precheckKickTarget(ctx, guildID, actorID, targetID); err != nil {
@@ -1531,7 +1343,7 @@ func (r *GuildRepo) precheckKickTarget(ctx context.Context, guildID, actorID, ta
 }
 
 // precheckApprovedApplication(G4)普通读(不加锁)要批准的申请行在不在:在(含已过期,过期由锁内分支删行)→ nil;
-// 不在 → 不建状态行、不取全局插入守卫,按锁内判定的同一优先级答复:帮会不在 ErrGuildGone、审批人不在 ErrNotGuildMember、
+// 不在 → 不建状态行,按锁内判定的同一优先级答复:帮会不在 ErrGuildGone、审批人不在 ErrNotGuildMember、
 // 职位不够 ErrRankTooLow,否则 ErrApplicationNotFound。预读说"不在"就按那一刻的已提交状态答复(申请已被处理 / 撤回)。
 func (r *GuildRepo) precheckApprovedApplication(ctx context.Context, guildID, actorID, applicantID uint64) error {
 	var exists int
@@ -2115,19 +1927,15 @@ func (r *GuildRepo) CountLiveApplications(ctx context.Context, guildID, now uint
 // 不变量:通过时申请人恰好获得一行 guild_member,并按 I2 清掉他在**所有**帮会的申请。
 // 事务边界:单事务 op=review。实际取锁序列(p = 申请人):
 //
-//	guild(G) → [approve] guild_player_state(0)(全局插入守卫)→ guild_player_state(p) → guild_member(G, 审批人) →
+//	guild(G) → [approve] guild_player_state(p) → guild_member(G, 审批人) →
 //	guild_application(G,p) FOR UPDATE → [通过] 插 guild_member(G,p)(PK 新项 + uk(p) 新项;p 有未 purge 的删除标记项时,
 //	查重另对 uk 上"p 之后第一条记录"加 S next-key)→ guild_application(p 名下其余行,主键升序点删)。
 //
-// 全局插入守卫 S(0)(文件头 (d)):通过分支是 uk_guild_member 的查重插入者,与建帮、别的审批通过在 S(0) 上串行,
-// 两个查重插入者不会同时在 uk 上持有 S next-key(G-OUT1)。它排在 guild(G) 之后、S(p) 之前(表内 0 最小,P2)。
-// 本事务在等 S(0) 时手里只有 guild(G);而任何锁已有 guild 行的事务都把 guild 行当第一把锁、等它时手里没有别的锁,
-// 所以"持 S(0) 者 → … → 等 guild(G)"的链不存在;持 S(0) 之后本事务也不再等任何 guild 行。
-// approve=false(拒绝)不取 S(0) 也不取 S(p)。approve=true 里的过期 / 跨区 / 1062 子分支是在锁住 (G,p) 之后才判出的,
-// 判出之前已按通过分支的锁序拿了 S(0)、S(p):要让它们不取守卫,只能先普通读预判、锁内复核、复核翻转时整体重跑,
-// 为罕见分支多一层重跑不值得(KISS);它们的锁集是通过分支前缀的子集,不引入新的等待边。
+// 通过分支是 uk_guild_member 的查重插入者:MySQL 档上可能与建帮、别的审批通过在 uk 同一段间隙上互挡(G-OUT1),
+// 由 retryOnDeadlock 吸收(文件头 (d))。approve=false(拒绝)不取 S(p)。approve=true 里的过期 / 跨区 / 1062 子分支是在
+// 锁住 (G,p) 之后才判出的,判出之前已按通过分支的锁序拿了 S(p);它们的锁集是通过分支前缀的子集,不引入新的等待边。
 // 唯一的例外是"申请行根本不存在"(已被处理 / 撤回,或客户端拿着过期列表):事务外先普通读预判,不在就直接按锁内的
-// 答复优先级回错,不建状态行、不取 S(0)(完整性复核 G4,见 precheckApprovedApplication);预读说在,仍以锁内为准。
+// 答复优先级回错,不建状态行(完整性复核 G4,见 precheckApprovedApplication);预读说在,仍以锁内为准。
 //
 // **表间全序 P1 的第二个登记例外**(第一个是建帮的新 guild 行):通过分支在锁住 guild_application(G,p) 之后才对
 // guild_member 取新锁。不改序的理由:过期 / 跨区 / 1062 分支都要"删掉这条申请并提交"(errCommitThen),
@@ -2142,9 +1950,9 @@ func (r *GuildRepo) CountLiveApplications(ctx context.Context, guildID, now uint
 //   - 查重对后继 uk(q)(另一名玩家 q)加的 S next-key:本事务可能要等 q 的删除者(退帮 / 被踢 / 解散,持有 uk(q) 的 X
 //     直到提交)。那些事务持有的是 guild(Gq)、state(q)、q 的成员行,之后只碰 q 名下的申请行与 guild_asset_op,
 //     从不等 guild_application(G,p)、state(p) 或 guild(G)(Gq == G 时它们一开始就排在本事务的 guild(G) 后面)。
-//     反方向(q 的删除者等本事务的 S)同样是单向的,见 sqlDeleteMember 的注释。另一个查重插入者本来会与本事务在同一段
-//     间隙上互等(G-OUT1),现由全局插入守卫 S(0) 串行化:它持 S(0) 到提交,本事务拿到 S(0) 时它的 S next-key 已随提交释放。
-//   - TiDB:uk(p) key 的竞争者都经 state(p) 串行;没有 S 锁与间隙锁。S(0) 在 TiDB 下是一把普通的行 / PRIMARY key 悲观锁。
+//     反方向(q 的删除者等本事务的 S)同样是单向的,见 sqlDeleteMember 的注释。另一个查重插入者可能与本事务在同一段
+//     间隙上互等(G-OUT1),这是唯一还会成环的边,InnoDB 牺牲一方后整事务重跑。
+//   - TiDB:uk(p) key 的竞争者都经 state(p) 串行;没有 S 锁与间隙锁。
 //
 // 申请行一律按完整主键取锁:(guildID, applicant) 先 FOR UPDATE;通过分支清申请人名下其余申请(I2)时,
 // 普通读候选后按主键升序逐行点删、已持有的那一行一并放进列表(不取新锁)。旧写法
@@ -2152,7 +1960,7 @@ func (r *GuildRepo) CountLiveApplications(ctx context.Context, guildID, now uint
 // "先主键后二级"在 (G2, applicant) 上成环(friend 审计 #2 (a),两帮同时审批同一人是常见玩法)。
 // 拒绝 / 过期 / 跨区 / 1062 分支只动 (guildID, applicant) 这一行(后三者是 approve=true 的子分支,锁序见上)。
 // 错误语义:ErrGuildGone / ErrNotGuildMember / ErrRankTooLow / ErrApplicationNotFound /
-// ErrGuildFull(保留申请,回滚)/ ErrWriteConflict;通过分支遇哨兵行缺失 → errGlobalInsertGuardMissing(内部错误,fail-closed)。
+// ErrGuildFull(保留申请,回滚)/ ErrWriteConflict。
 // 幂等:申请已被处理 / 已过期 / 申请人已入他帮 / 归属区与帮会不一致 → 一律删行并回 ErrApplicationNotFound,
 // 对审批者来说都是"这条已经不能批了";分得更细只会泄露申请人的状态。
 func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, applicantID uint64, approve bool, applicantZone uint32, now uint64) (ReviewResult, error) {
@@ -2163,7 +1971,7 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 		return ReviewResult{}, fmt.Errorf("review application of guild %d: applicant %d home zone unknown", guildID, applicantID)
 	}
 	if approve {
-		// G4:申请行不在就不建状态行、不取全局插入守卫(见 precheckApprovedApplication)。
+		// G4:申请行不在就不建状态行(见 precheckApprovedApplication)。
 		if err := r.precheckApprovedApplication(ctx, guildID, actorID, applicantID); err != nil {
 			return ReviewResult{}, err
 		}
@@ -2180,13 +1988,9 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 		if err != nil {
 			return err
 		}
-		// 只有通过分支会给申请人插成员行,所以只有它需要占申请人的串行化锁位(X-10),以及全局插入守卫(文件头 (d))。
-		// 位置 2 必须在锁 guild_member 之前拿,否则同一玩家的"审批通过"与"申请"会逆序互等;
-		// 表内 S(0) 在前、S(p) 在后(按主键升序,p > 0)。
+		// 只有通过分支会给申请人插成员行,所以只有它需要占申请人的串行化锁位(X-10)。
+		// 位置 2 必须在锁 guild_member 之前拿,否则同一玩家的"审批通过"与"申请"会逆序互等。
 		if approve {
-			if err := lockGlobalInsertGuard(ctx, tx); err != nil {
-				return err
-			}
 			if err := lockPlayerState(ctx, tx, applicantID); err != nil {
 				return err
 			}
@@ -2322,20 +2126,16 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 //     那一方插完 guild 行就只剩 COMMIT、不再等任何锁,所以本事务至多单向等待。merge_zone 经 idx_guild_0 整区改写
 //     是另一条路径(friend 审计 #17),不在本服务。
 //
-// fence(friend 审计 #17 第 6 点):锁住 guild 行后用**行里的 zone_id** 调合服闸门,拒绝回 ErrZoneMerging。
-// logic 在事务外按请求者归属区查过一次闸门,但那一步与合服置闸之间有检查到使用的窗口,内部调用路径更是完全不查;
-// 解散要删 guild 行(连同 idx_guild_0(zone_id) 的项),与合服按 zone 整区改写同一批行,事务内再判一次才从调用关系上
-// 消除并发。nil = 不设闸(单测与未配闸门的环境)。
 // 输入约束:now 为服务进程时钟毫秒(> 0,由 logic 传入),用于建状态行与把全体成员在本帮的未决捐献截止时间提前到 now。
 // 错误语义:ErrGuildGone / ErrRankTooLow(仍是本帮成员、但不是帮主)/ ErrNotGuildMember(已不是本帮成员,见 disbandRefusal)/
-// ErrZoneMerging / ErrWriteConflict。logic 对旧客户端(expected_guild_id = 0)把 ErrRankTooLow 与 ErrNotGuildMember 都答成
+// ErrWriteConflict。logic 对旧客户端(expected_guild_id = 0)把 ErrRankTooLow 与 ErrNotGuildMember 都答成
 // kGuildNotLeader,与区分之前一致。
 // 幂等:重放得到 ErrGuildGone。
 // 扩展点:B5(捐献提前截止,已落)、B6a(活动进度,已落)、B6b(历练对局行,已落,接在删进度之后)按表序插在提前截止之后、
 // 删帮会行之前(90-consistency X-14 原写"删申请之后、删成员之前",删成员已按上文前移,见交付说明)。
 // 历练对局行只删 STARTED(在途)的,已结算 / 已判过期的历史行留着:理由与"为什么必须删在途行"见 activity_repo.go 的
 // deleteGuildTrialBattles。待入队物品 guild_trial_reward_owed 不删(物品属于玩家,06 §6.14)。
-func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint64, fence FenceFunc) (DisbandResult, error) {
+func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint64) (DisbandResult, error) {
 	// 事务外建状态行(规则 3:事务内只对已存在的行点锁)。这次读不加锁,只决定给谁建行;
 	// 帮会不存在时读到空集,照常进事务拿 ErrGuildGone。
 	preread, err := readIDColumn(ctx, r.db, sqlSelectMemberIDs, guildID)
@@ -2356,9 +2156,6 @@ func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint
 		}
 		if guild.LeaderID != actorID {
 			return disbandRefusal(ctx, tx, guildID, actorID)
-		}
-		if err := checkFence(ctx, fence, guild.ZoneID); err != nil {
-			return err
 		}
 		res.ZoneID = guild.ZoneID
 

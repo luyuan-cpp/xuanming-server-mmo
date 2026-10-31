@@ -39,13 +39,6 @@ inline uint32_t ConfiguredCommandTopicGeneration()
         tlsNodeConfigManager.GetBaseDeployConfig().kafka().command_topic_generation());
 }
 
-// 迁移窗口:false = 除新 topic 外还继续消费旧的 `<类型>-<node_id>`。
-// 生产者全部切完之前不能关,否则命令全丢(详见 config.proto 的字段注释)。
-inline bool LegacyPerNodeTopicDisabled()
-{
-    return tlsNodeConfigManager.GetBaseDeployConfig().kafka().disable_legacy_per_node_topic();
-}
-
 // gate -> "gate-cmd_g1"、scene -> "scene-cmd_g1"。
 inline std::string CommandTopicForNodeType(uint32_t nodeType)
 {
@@ -53,11 +46,6 @@ inline std::string CommandTopicForNodeType(uint32_t nodeType)
         ConfiguredCommandTopicGeneration());
 }
 
-// 旧的一节点一 topic 名字,只在迁移窗口里用。
-inline std::string LegacyPerNodeTopic(uint32_t nodeType, uint32_t targetNodeId)
-{
-    return NodeUtils::NodeTypeToShortName(nodeType) + "-" + std::to_string(targetNodeId);
-}
 
 inline CommandRoute ResolveCommandRoute(uint32_t nodeType, uint32_t targetNodeId)
 {

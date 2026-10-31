@@ -8,7 +8,6 @@
     <ClCompile Include="messaging\kafka\kafka_consumer.cpp" />
     <ClCompile Include="messaging\kafka\kafka_manager.cpp" />
     <ClCompile Include="messaging\kafka\kafka_producer.cpp" />
-    <ClCompile Include="storage\redis_client\redis_client.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="agones\agones_client_endpoint_source.h" />
@@ -19,7 +18,6 @@
     <ClInclude Include="messaging\kafka\kafka_manager.h" />
     <ClInclude Include="messaging\kafka\kafka_producer.h" />
     <ClInclude Include="messaging\kafka\kafka_producer_policy.h" />
-    <ClInclude Include="storage\redis_client\redis_client.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="src\network\protoc.exe" />

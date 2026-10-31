@@ -16,8 +16,6 @@ func fakeStatsOf(v any) (sql.DBStats, bool) {
 		maxOpen = 1
 	case stubTxLogStore:
 		maxOpen = 2
-	case stubIdSegmentStore:
-		maxOpen = 3
 	case stubPlayerNameStore:
 		maxOpen = 4
 	case stubPlayerRouteStore:
@@ -70,7 +68,6 @@ func TestSQLPoolSamplesNamesPoolsByStore(t *testing.T) {
 	want := map[string]int{
 		"snapshot":        1,
 		"transaction_log": 2,
-		"id_segment":      3,
 		"player_name":     4,
 		"player_route":    5,
 	}

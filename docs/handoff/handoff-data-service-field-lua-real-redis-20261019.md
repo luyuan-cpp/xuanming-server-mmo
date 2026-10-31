@@ -43,6 +43,8 @@ Codex 的运行结果,按第 3.4 节核对回填是否正确;没有结果就不�
 | 第 4 节尾巴 2:版本守卫 ≤18 位 → ≤15 位 | `data_logic.go` 的 `saveFieldsScript`(守卫字面量与注释)、`parseVersionValue` 注释;新单测 `player_fields_test.go: TestSave_VersionPrecisionCap`;集成测试用例 3 加上界段、用例 4 加两行坏版本;设计文档「版本格式」后加「版本精度上限」一条 | 已随 `c35e1133d` 入库 |
 | 静态评审修正:Cluster 用例的就绪判断 | 集成测试用例 7:改为逐个种子节点等 `cluster_state:ok`(最多 30 秒)之后再建集群客户端,并断言 `CLUSTER SLOTS` 覆盖满 16384;第 3.2 节容器步骤改为三个节点都等到 ok | 已随 `c35e1133d` 入库 |
 | 进度记录 | `docs/PROGRESS.md`「第 4 节两个尾巴」一条 | 已随 `c35e1133d` 入库 |
+| 第四批(不在 `c35e1133d` 通过范围内):`parseVersionValue` 空串按损坏处理;`requireRealRedisIT`(`DATA_SERVICE_IT_REQUIRE=1` 时 SKIP 判 FAIL);routing 拿锁回滚 | `data_logic.go`、`data_logic_test.go`、`player_fields_test.go`、本线集成测试、`routing/router.go`、`routing/router_lock_test.go` | 已随 `7a23b4fed` 入库;10-23 Codex 普通单测通过,集成 tag 的 vet 与 REQUIRE=1 两版未跑 |
+| 第四批后续:指定字段读改为只读 Lua `loadSelectedFieldsScript`(逐键 TYPE,fail-closed);用例 1 加一段「版本键是 HASH 时指定字段读也拒」;routing `lockAcquireFailure` 日志与 mapping 侧回归用例 | 同上 | 10-23 / 10-30 改动,未编译、未测试;是否已入库以 `git log -1 -- <文件>` 为准 |
 
 7 个用例各钉什么:
 
@@ -88,7 +90,7 @@ Codex 的运行结果,按第 3.4 节核对回填是否正确;没有结果就不�
 3. 只在第一轮做静态检查与单测(不需要容器):
    - `gofmt -l internal/logic internal/routing`(期望无输出);
    - `go build ./...` → `go vet ./internal/logic/ ./internal/routing/` → `go vet -tags=integration ./internal/logic/`(同包 `id_segment_integration_test.go` 同 tag,会一起编译;它要 MySQL,但 `-run RealRedis` 不会跑它);
-   - `go test -count=1 ./internal/logic/`(miniredis 单测,全绿;其中 `TestSave_VersionPrecisionCap` 是本线新增,必须 PASS)。`router.go` 只改了注释,编译与 vet 过即可,不单跑 routing 包测试;
+   - `go test -count=1 ./internal/logic/`(miniredis 单测,全绿;其中 `TestSave_VersionPrecisionCap` 是本线新增,必须 PASS)。复验原样 `c35e1133d` 时 `router.go` 只改了注释,编译与 vet 过即可;**在当前树上验收则必须加跑** `go test -count=1 ./internal/routing/`(含 `router_lock_test.go` 的拿锁回滚用例,2026-10-22 起);
    - `c35e1133d` 一并收进了别的线(D1 路由对账、debug_import 等)同样未编译的改动:`go build` / `go vet` 若报在本线文件(第 6 节)之外,记下文件与报错、归给对应那条线,不在本线里修。
 4. 跑测:
 
@@ -99,7 +101,7 @@ Codex 的运行结果,按第 3.4 节核对回填是否正确;没有结果就不�
    go test -tags=integration ./internal/logic/ -run RealRedis -count=1 -v
    ```
 
-   `DATA_SERVICE_IT_REQUIRE=1`(2026-10-22 起本文件的用例也认这个开关,见 `requireRealRedisIT`):任何 SKIP 都直接判 FAIL,不用再靠肉眼看 `-v` 输出。
+   `DATA_SERVICE_IT_REQUIRE=1`(2026-10-22 起本文件的用例也认这个开关,见 `requireRealRedisIT`):`TestRealRedis*` 任何 SKIP 都直接判 FAIL,不用再靠肉眼看 `-v` 输出。同包的 `id_segment_integration_test.go` 不认这个开关,`-run RealRedis` 也不会跑它。
    遇 `Access is denied`(杀毒扫描新生成的二进制):`go test -c -tags=integration -o $env:TEMP\logic_it.test.exe ./internal/logic/`,同一会话设好上面三个环境变量后执行 `& $env:TEMP\logic_it.test.exe -test.run RealRedis -test.count=1 -test.v`。
 5. `docker stop ds-it-fields ds-it-cluster`(`--rm` 会删容器;ds-it-cluster 的 PID 1 是 sh,stop 要等 10 秒,正常)。
 

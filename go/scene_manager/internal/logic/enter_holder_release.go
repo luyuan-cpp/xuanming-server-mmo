@@ -135,8 +135,9 @@ var enterHolderReleaseRequester = RequestNodeReleaseEndedSession
 // requestHolderReleaseForLogin 在同 zone 跨节点换手门以 18 拒绝之后调用(enterscenelogic.go 第 3 步),判定并在合格时
 // 同步请 location 的持有节点按会话结束释放。不写任何 Redis 状态、不改应答:换手门的结论由下一次重登读标记重新判定,
 // 这里的结果只进指标与日志。loc 是本次换手门比对的那一份 location(非 nil),locZoneID 是它所在的 zone。
+// 返回是否请过(判 eligible 并已派发,不论 RPC 成败):调用方据此接着做无资格持有者撤销的检查(§17,unqualified_holder_revoke.go)。
 func (l *EnterSceneLogic) requestHolderReleaseForLogin(in *scene_manager.EnterSceneRequest, loc *scene_manager.PlayerLocation,
-	locZoneID uint32, observedEpoch uint64, identityVerdict placementVerdict) {
+	locZoneID uint32, observedEpoch uint64, identityVerdict placementVerdict) bool {
 	_, enabled := l.svcCtx.Config.EffectiveLeaveSceneHolderReleaseWait()
 	locIdentity := identityOfLocation(loc)
 	verdict := decideEnterHolderRelease(enterHolderReleaseFacts{
@@ -155,7 +156,7 @@ func (l *EnterSceneLogic) requestHolderReleaseForLogin(in *scene_manager.EnterSc
 				verdict, in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
 				locIdentity.sessionID, locIdentity.loginGeneration, identityVerdict)
 		}
-		return
+		return false
 	}
 
 	// 截止取 1s 与登录链剩余预算中较短的一个:登录链取消时这次请求一并取消,不在发起方已经放弃之后还去动持有者。
@@ -168,10 +169,11 @@ func (l *EnterSceneLogic) requestHolderReleaseForLogin(in *scene_manager.EnterSc
 		l.Logger.Errorf("[EnterHolderRelease] session-ended release to location holder failed (next login retry will resend): player=%d owner_epoch=%d holder_zone=%d holder_node=%s request_session=%d request_generation=%d location_session=%d location_generation=%d elapsed=%s err=%v",
 			in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
 			locIdentity.sessionID, locIdentity.loginGeneration, time.Since(start), err)
-		return
+		return true
 	}
 	metrics.ObserveEnterHolderRelease(enterHolderReleaseOutcomeDelivered)
 	l.Logger.Infof("[EnterHolderRelease] session-ended release delivered to location holder: player=%d owner_epoch=%d holder_zone=%d holder_node=%s request_session=%d request_generation=%d location_session=%d location_generation=%d elapsed=%s",
 		in.PlayerId, observedEpoch, locZoneID, loc.GetNodeId(), in.SessionId, in.LoginGeneration,
 		locIdentity.sessionID, locIdentity.loginGeneration, time.Since(start))
+	return true
 }

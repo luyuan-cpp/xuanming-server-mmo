@@ -38,18 +38,7 @@ type RedisCache struct {
 	readyRead *goredis.Script
 	cas       *goredis.Script
 	cad       *goredis.Script
-	fenceSet  *goredis.Script
 }
-
-// fenceMirrorKeyPrefix 是 merge:in_progress:{zone} 的前缀,从 placement.MergeFenceKey 推出来(不另抄一份字面量)。
-var fenceMirrorKeyPrefix = strings.TrimSuffix(placement.MergeFenceKey(0), "0")
-
-// fenceScanCount 是 SCAN merge:in_progress:* 每页的 COUNT(Redis 每页大致遍历这么多个键);fenceMGetChunk 是 MGET 的分块。
-// 每拍翻几页由 leader 的 fenceScanPagesPerTick 决定(reconciler.go)。
-const (
-	fenceScanCount = 1000
-	fenceMGetChunk = 500
-)
 
 // NewRedisCache 建 leader 的 mapping Redis 客户端。rc 必须是 Normalize 过的 RouteStore 段(池大小取 Reconcile.RedisPoolSize,
 // WAITAOF 取 WaitAOFNumLocal / WaitAOFNumReplicas / WaitAOFTimeoutMs,与 W1 的发布同口径)。
@@ -92,7 +81,6 @@ func newRedisCacheFromClient(rdb *goredis.Client, rc config.RouteStoreConfig) *R
 		readyRead:   goredis.NewScript(placement.RouteReadyReadScript),
 		cas:         goredis.NewScript(placement.RouteReadyCompareAndSetScript),
 		cad:         goredis.NewScript(placement.RouteReadyCompareAndDeleteScript),
-		fenceSet:    goredis.NewScript(placement.MergeFenceMirrorSetScript),
 	}
 }
 
@@ -344,7 +332,7 @@ type publishArgs struct {
 // Push 推一批库行到 mapping Redis(规格 scout 1b-2 cache.go「Push(rows)」):
 //  1. 墓碑行(home 与落点都为空)跳过:推了会造出只有 maprev 的键,导入 / 审计工具判它畸形;落点三列不自洽、rev 不合法 → db_invalid;
 //  2. 一次 MGET 取 zone / placement / maprev,与本行值和 rev 全等的计 skipped_current(稳态下增量推送绝大多数行走这里,零 EVALSHA);
-//  3. 其余在一个 pipeline 里 EVALSHA 发布脚本(三键,fenceZone=0:leader 推的是库里已提交的状态,围栏由写者在库里复核);
+//  3. 其余在一个 pipeline 里 EVALSHA 发布脚本(三键);
 //  4. 回 NOSCRIPT 的行 SCRIPT LOAD 后只重发这些行(脚本是 set-if-newer + touch,重发幂等);
 //  5. 逐行用 placement.ClassifyPublishReply 分类;脚本的错误回复(畸形 maprev 等)是逐行 PushError;网络错误整批返回 error。
 //
@@ -368,7 +356,7 @@ func (c *RedisCache) Push(ctx context.Context, rows []store.RouteRow) ([]PushRow
 			out[i].Outcome, out[i].Detail = PushDBInvalid, fmt.Sprintf("player_id=%d rev=%d", row.PlayerID, row.Rev)
 			continue
 		}
-		todo = append(todo, publishArgs{idx: i, keys: placement.PublishRouteKeys(row.PlayerID, 0), rev: rev, home: row.HomeValue(), plc: plc})
+		todo = append(todo, publishArgs{idx: i, keys: placement.PublishRouteKeys(row.PlayerID), rev: rev, home: row.HomeValue(), plc: plc})
 	}
 	if len(todo) == 0 {
 		return out, nil
@@ -474,8 +462,6 @@ func (c *RedisCache) evalPublish(ctx context.Context, list []publishArgs, out []
 			out[a.idx].Outcome = PushLegacyConflict
 			out[a.idx].Detail = fmt.Sprintf("no maprev, cached home=%q placement=%q, db rev=%s home=%q placement=%q",
 				reply.CurHome, reply.CurPlacement, a.rev, a.home, a.plc)
-		case placement.PublishFenced:
-			out[a.idx].Outcome = PushFenced
 		default:
 			out[a.idx].Outcome, out[a.idx].Detail = PushError, "unknown publish outcome "+reply.Outcome.String()
 		}
@@ -498,7 +484,7 @@ func isString(v any, want string) bool {
 	return ok && s == want
 }
 
-// ── 合走标记与围栏镜像 ────────────────────────────────────────────────────────
+// ── 合走标记 ────────────────────────────────────────────────────────
 
 // MirrorMergedInto 把库里的合走标记镜像进 Redis(只增):SET NX;没写成就 GET 解析,同 dst 同 run_id 计 present,否则计冲突
 // (不覆盖、不删除;db_first 下读方读库)。单行编码 / 解码失败计 Errors 并接着做其它行;网络错误整体返回 error(已有统计照样返回)。
@@ -563,114 +549,6 @@ func (c *RedisCache) MirrorMergedInto(ctx context.Context, rows []store.MergedIn
 		res.ConflictDetails = append(res.ConflictDetails, fmt.Sprintf("%s: db dst=%d run_id=%s, cache %q", it.key, it.row.DstZone, it.row.RunID, cur))
 	}
 	return res, nil
-}
-
-// ScanFenceMirrors 从 cursor 起 SCAN merge:in_progress:* 至多 pages 页(每页 COUNT fenceScanCount;cursor 0 = 新一轮的起点),
-// 这几页里的键去重后按 GetFenceMirrors 取值。返回下一游标:0 = 这一轮扫完。出错时返回的游标是入参 cursor 原值
-// (这次翻过的页一个都没交出去,下一拍从同一处重翻,不跳过键)。
-//
-// 不一次扫到底(核实意见 A1-4 / LR-1):SCAN MATCH 仍要遍历整个 DB 0(每名玩家三把映射键),亿级键空间一拍扫不完,
-// 还会持续占用与登录读 / W1 发布共用的单线程 Redis。leader 把一轮分摊到多拍,游标存在它自己手里;SCAN 的保证
-// (一轮开始前就在、一直没删的键至少返回一次;可能重复)跨多次调用同样成立。
-func (c *RedisCache) ScanFenceMirrors(ctx context.Context, cursor uint64, pages int) ([]FenceMirror, uint64, error) {
-	if pages < 1 {
-		return nil, cursor, fmt.Errorf("scan merge fence mirrors: pages %d < 1", pages)
-	}
-	start := cursor
-	seen := map[string]bool{}
-	var keys []string
-	for i := 0; i < pages; i++ {
-		batch, next, err := c.rdb.Scan(ctx, cursor, fenceMirrorKeyPrefix+"*", fenceScanCount).Result()
-		if err != nil {
-			return nil, start, fmt.Errorf("SCAN %d %s*: %w", cursor, fenceMirrorKeyPrefix, err)
-		}
-		for _, k := range batch {
-			if !seen[k] {
-				seen[k] = true
-				keys = append(keys, k)
-			}
-		}
-		cursor = next
-		if next == 0 {
-			break
-		}
-	}
-	mirrors, err := c.GetFenceMirrors(ctx, keys)
-	if err != nil {
-		return nil, start, err
-	}
-	return mirrors, cursor, nil
-}
-
-// GetFenceMirrors 按键分块 MGET 围栏镜像;值为 nil 的键再 TYPE 一次:不在了(并发删除)就跳过,不是 string 的记 WrongType
-// (不是本方案写的,不删)。键后缀不是 [1, RouteHomeZoneMax] 的规范十进制数 → Zone=0。keys 必须都在 merge:in_progress: 前缀下
-// (否则报错、不发命令),由调用方去重。
-func (c *RedisCache) GetFenceMirrors(ctx context.Context, keys []string) ([]FenceMirror, error) {
-	for _, k := range keys {
-		if !strings.HasPrefix(k, fenceMirrorKeyPrefix) {
-			return nil, fmt.Errorf("%q is not a merge fence mirror key", k)
-		}
-	}
-	out := make([]FenceMirror, 0, len(keys))
-	for start := 0; start < len(keys); start += fenceMGetChunk {
-		chunk := keys[start:min(start+fenceMGetChunk, len(keys))]
-		vals, err := c.rdb.MGet(ctx, chunk...).Result()
-		if err != nil {
-			return nil, fmt.Errorf("MGET %d merge fence mirrors: %w", len(chunk), err)
-		}
-		if len(vals) != len(chunk) {
-			return nil, fmt.Errorf("MGET returned %d values for %d merge fence mirrors", len(vals), len(chunk))
-		}
-		for i, k := range chunk {
-			m := FenceMirror{Key: k, Zone: fenceMirrorZone(k)}
-			if s, ok := vals[i].(string); ok {
-				m.Value = s
-				out = append(out, m)
-				continue
-			}
-			t, err := c.rdb.Type(ctx, k).Result()
-			if err != nil {
-				return nil, fmt.Errorf("TYPE %s: %w", k, err)
-			}
-			if t == "none" {
-				continue
-			}
-			m.WrongType = true
-			out = append(out, m)
-		}
-	}
-	return out, nil
-}
-
-// fenceMirrorZone 解析 merge:in_progress:{zone} 的 zone;不是规范的 [1, RouteHomeZoneMax] 十进制数回 0。
-func fenceMirrorZone(key string) uint32 {
-	suffix := strings.TrimPrefix(key, fenceMirrorKeyPrefix)
-	n, err := strconv.ParseUint(suffix, 10, 32)
-	if err != nil || n == 0 || n > uint64(store.RouteHomeZoneMax) || strconv.FormatUint(n, 10) != suffix {
-		return 0
-	}
-	return uint32(n)
-}
-
-// SetFenceMirror 按 fence_epoch set-if-newer 写围栏镜像(placement.MergeFenceMirrorSetScript,PEXPIREAT = 库 expires_at_ms + 10 分钟)。
-func (c *RedisCache) SetFenceMirror(ctx context.Context, zone uint32, holderJSON string, epoch, expiresAtMs uint64) (placement.MergeFenceMirrorOutcome, error) {
-	keys, args, err := placement.MergeFenceMirrorArgs(zone, holderJSON, epoch, expiresAtMs)
-	if err != nil {
-		return 0, err
-	}
-	raw, err := c.fenceSet.Run(ctx, c.rdb, keys, args...).Result()
-	if err != nil {
-		return 0, fmt.Errorf("merge fence mirror script on %s: %w", keys[0], err)
-	}
-	return placement.ClassifyMergeFenceMirrorReply(raw)
-}
-
-// CompareAndDeleteFenceMirror 按完整值删围栏镜像(RouteReadyCompareAndDeleteScript 与键无关,这里给它围栏键)。
-func (c *RedisCache) CompareAndDeleteFenceMirror(ctx context.Context, key, value string) (bool, error) {
-	if !strings.HasPrefix(key, fenceMirrorKeyPrefix) {
-		return false, fmt.Errorf("%q is not a merge fence mirror key", key)
-	}
-	return c.runFlag(ctx, c.cad, key, value)
 }
 
 // ── 小工具 ────────────────────────────────────────────────────────────────────

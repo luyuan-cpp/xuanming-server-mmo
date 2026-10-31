@@ -68,9 +68,6 @@ var (
 	// 下面这组由 economy_repo.go 的经济事务返回(05-economy.md §5.16–§5.18)。
 	// 帮会不存在 / 不是成员 / 职位不够 / 配表缺行 / 写冲突直接复用上面已有的哨兵,不另造一份同义错误。
 
-	// ErrZoneMerging:合服闸门拒绝,或闸门状态读不出来。读失败也按拒绝处理(fail-closed):
-	// 合服期间放过一笔资产写,源区与目标区的帮会资金就会各记一份。
-	ErrZoneMerging = errors.New("guild zone is merging or merge fence unreadable")
 	// ErrGuildLevelTooLow:帮会等级低于捐献选项 / 商品要求的等级(事务内读到的权威等级)。
 	ErrGuildLevelTooLow = errors.New("guild level too low")
 	// ErrDonateLimit:该捐献选项本游戏日次数已用完(计数行的带上限 upsert 判为达上限)。
@@ -317,7 +314,7 @@ func (r *GuildRepo) cacheGeneration(ctx context.Context, key string) (string, er
 // 任何一步失败整体回滚 —— 不允许出现「有公会无会长」或「有会长无公会」的半态。
 //
 // 事务边界:经 inTx(op=create),因此与管理 / 审批事务共用同一套死锁重试与 READ COMMITTED。
-// 锁序 guild_player_state(0)(全局插入守卫)→ guild_player_state(建帮者)→ guild_member(INSERT)→
+// 锁序 guild_player_state(建帮者)→ guild_member(INSERT)→
 // guild_application(I2,主键升序逐行点删)→ guild(INSERT 新行,**事务里最后一条写**)。
 //
 // 新 guild 行排在最后,是全局表序(guild 在最前)的登记例外之一(2026-09-21 死锁修复契约 P1,friend 审计 #6;
@@ -328,17 +325,13 @@ func (r *GuildRepo) cacheGeneration(ctx context.Context, key string) (string, er
 // 现在 INSERT guild 之后只剩 COMMIT:会让本事务业务回滚的步骤(成员 1062)全在它之前,彼时还没碰过 uk_guild,
 // 同名插入者卷不进来;撞 uk_guild 时本事务只是持有已提交重复项上的 S 锁然后回滚。
 // 为什么这个例外不成环:新 guild 行的 guild_id 刚发号、提交前别人无从得知,能等它的只有同名插入者(在 uk_guild 项上
-// 以 S 锁等)—— 而同名插入者也是建帮,排在本事务持有的全局插入守卫 S(0) 后面,根本走不到 uk_guild;本事务插完 guild 后
-// 不再等任何锁。guild_member 没有指向 guild 的外键,先插成员行、后插帮会行在提交前对外不可见,没有半态。
+// 以 S 锁等),本事务插完 guild 后不再等任何锁。guild_member 没有指向 guild 的外键,先插成员行、后插帮会行在提交前对外不可见,没有半态。
 //
-// 全局插入守卫 S(0)(guild_manage_repo.go 文件头 (d),G-OUT1):建帮同时是 uk_guild 与 uk_guild_member 两个唯一二级索引的
-// **查重插入者**。同名(名字刚被解散的帮用过)、名字在 uk 上相邻的两帮、在 uk_guild_member 上相邻的两个刚离帮玩家,两个
-// 查重插入者各持 S next-key(R12),插入意向互相挡住 —— 与建帮者本人的状态行无关。所以事务第一把锁是哨兵行 S(0),
-// 持到提交:同一时刻至多一个查重插入者(建帮或审批通过)在 uk 上持有 S next-key。S(0) 之后本事务只等 S(p)(p > 0,表内升序)、
-// p 名下的申请行、唯一索引查重与新行,从不锁任何已有 guild 行,所以不会与"持 guild(G) 等 S(0)"的审批通过成环。
-// 唯一性仍由 uk 裁决。
-// 错误语义:ErrGuildNameTaken / ErrPlayerAlreadyInGuild / ErrWriteConflict;哨兵行缺失 → errGlobalInsertGuardMissing
-// (内部错误,fail-closed);其余为内部错误。
+// 查重靠唯一索引裁决,撞 1062 回 ErrGuildNameTaken / ErrPlayerAlreadyInGuild,不再先排全局守卫(guild_manage_repo.go 文件头 (d))。
+// 建帮同时是 uk_guild 与 uk_guild_member 两个唯一二级索引的查重插入者:MySQL 档上,同名(名字刚被解散的帮用过)、名字在 uk 上
+// 相邻的两帮、在 uk_guild_member 上相邻的两个刚离帮玩家,两个查重插入者可能各持 S next-key(R12)、插入意向互相挡住(G-OUT1),
+// InnoDB 牺牲一方,inTx 重跑。TiDB 没有这个环。
+// 错误语义:ErrGuildNameTaken / ErrPlayerAlreadyInGuild / ErrWriteConflict;其余为内部错误。
 // 提交后的缓存失效走 invalidateAfterCommit,**不再**把失效失败当成建帮失败回给客户端。
 func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 	if len(guild.Members) != 1 {
@@ -357,10 +350,6 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 	}
 
 	if err := r.inTx(withRoleTargets(ctx, leader.PlayerID), opCreate, func(ctx context.Context, tx *sql.Tx) error {
-		// 全局插入守卫(见函数头):事务第一把锁,状态行表内 0 最小,排在建帮者的状态行之前。
-		if err := lockGlobalInsertGuard(ctx, tx); err != nil {
-			return err
-		}
 		// 与"审批通过"抢同一个申请人状态行:两者都要给同一玩家插成员行,
 		// 由这把行锁串行,不再靠间隙锁。
 		if err := lockPlayerState(ctx, tx, leader.PlayerID); err != nil {

@@ -51,20 +51,21 @@ func TestOriginalLoginConfigMustBeExplicit(t *testing.T) {
 	}
 }
 
-func TestProductionRequiresTiDB(t *testing.T) {
-	c := validConfig()
-	c.Mode = service.ProMode
-	c.RequireTiDB = false
-	if err := c.Validate(); err == nil {
-		t.Fatal("生产未强制TiDB仍可启动")
-	}
-	c.RequireTiDB = true
-	if err := c.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	c.Mode, c.RequireTiDB = service.DevMode, false
-	if err := c.Validate(); err != nil {
-		t.Fatalf("本地单机MySQL回归应允许: %v", err)
+// 门禁只看档位是否合法,不看 Mode:两档都能上生产(player-data-tidb-scaling-plan.md §9)。
+func TestBackendMustBeLegalInEveryMode(t *testing.T) {
+	for _, mode := range []string{service.ProMode, service.DevMode} {
+		for _, backend := range []string{"", "tidb", "mysql"} {
+			c := validConfig()
+			c.Mode, c.Backend = mode, backend
+			if err := c.Validate(); err != nil {
+				t.Fatalf("Mode=%s Backend=%q 应可启动: %v", mode, backend, err)
+			}
+		}
+		c := validConfig()
+		c.Mode, c.Backend = mode, "oracle"
+		if err := c.Validate(); err == nil {
+			t.Fatalf("Mode=%s 非法档位仍可启动", mode)
+		}
 	}
 }
 
@@ -314,7 +315,7 @@ func validConfig() Config {
 	c := Config{
 		AccountRoleSchema: "testdb", GlobalLoginSessions: true,
 		LoginRedis:        LoginRedisConf{Host: "127.0.0.1:6379", DB: 3, PoolSize: 8},
-		RequireTiDB:       true,
+		Backend:           "tidb",
 		ZoneId:            1,
 		LeaseTTL:          60,
 		MetricsListenAddr: ":9180",

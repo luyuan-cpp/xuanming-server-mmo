@@ -49,11 +49,213 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto, /* tracker*/ nullptr,},
         // ::contracts::kafka::BroadcastToAllEvent
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto, /* tracker*/ nullptr,},
+        // ::contracts::kafka::SpectateFrameEvent
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
 namespace contracts {
 namespace kafka {
+class SpectateFrameEvent::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SpectateFrameEvent>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_._has_bits_);
+};
+
+constexpr SpectateFrameEvent::ParseTableT_ SpectateFrameEvent::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_._has_bits_),
+      0, // no _extensions_
+      8, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967040,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      8,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::contracts::kafka::SpectateFrameEvent>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string target_instance_id = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.target_instance_id_)}},
+      // uint64 battle_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SpectateFrameEvent, _impl_.battle_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.battle_id_)}},
+      // string battle_instance_id = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.battle_instance_id_)}},
+      // uint32 round_index = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SpectateFrameEvent, _impl_.round_index_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.round_index_)}},
+      // .contracts.kafka.eSpectateFrameKind kind = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SpectateFrameEvent, _impl_.kind_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.kind_)}},
+      // bytes client_frame = 5;
+      {::_pbi::TcParser::FastBS1,
+       {42, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.client_frame_)}},
+      // uint64 deadline_ms = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SpectateFrameEvent, _impl_.deadline_ms_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.deadline_ms_)}},
+      // uint32 target_gate_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SpectateFrameEvent, _impl_.target_gate_id_), 7>(),
+       {56, 7, 0,
+        PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.target_gate_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 battle_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.battle_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string battle_instance_id = 2;
+      {PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.battle_instance_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 round_index = 3;
+      {PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.round_index_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .contracts.kafka.eSpectateFrameKind kind = 4;
+      {PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.kind_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // bytes client_frame = 5;
+      {PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.client_frame_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // uint64 deadline_ms = 6;
+      {PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.deadline_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 target_gate_id = 7;
+      {PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.target_gate_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string target_instance_id = 8;
+      {PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.target_instance_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\42\0\22\0\0\0\0\0\22\0\0\0\0\0\0\0"
+      "contracts.kafka.SpectateFrameEvent"
+      "battle_instance_id"
+      "target_instance_id"
+    }},
+  };
+}
+
+
+inline constexpr SpectateFrameEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        battle_instance_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        client_frame_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        target_instance_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        battle_id_{::uint64_t{0u}},
+        round_index_{0u},
+        kind_{static_cast< ::contracts::kafka::eSpectateFrameKind >(0)},
+        deadline_ms_{::uint64_t{0u}},
+        target_gate_id_{0u} {}
+
+template <typename>
+constexpr SpectateFrameEvent::SpectateFrameEvent(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SpectateFrameEvent::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SpectateFrameEvent(arena);
+}
+constexpr auto SpectateFrameEvent::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SpectateFrameEvent), alignof(SpectateFrameEvent));
+}
+constexpr auto SpectateFrameEvent::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SpectateFrameEvent::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SpectateFrameEvent>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SpectateFrameEvent::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SpectateFrameEvent>(), &SpectateFrameEvent::ByteSizeLong,
+              &SpectateFrameEvent::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SpectateFrameEventGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SpectateFrameEventGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SpectateFrameEvent_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SpectateFrameEvent::InternalGenerateClassData_(
+            _default, &SpectateFrameEvent_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SpectateFrameEvent>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SpectateFrameEventGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SpectateFrameEvent _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SpectateFrameEvent>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SpectateFrameEventGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SpectateFrameEventGlobalsTypeInternal SpectateFrameEvent_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SpectateFrameEvent_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SpectateFrameEvent_globals_.GetClassData();
+#else
+  return SpectateFrameEvent_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RoutePlayerEvent::_Internal {
  public:
   using HasBits = decltype(::std::declval<RoutePlayerEvent>()._impl_._has_bits_);
@@ -1136,11 +1338,11 @@ constexpr PushToPlayerEvent::ParseTableT_ PushToPlayerEvent::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1150,21 +1352,28 @@ constexpr PushToPlayerEvent::ParseTableT_ PushToPlayerEvent::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::contracts::kafka::PushToPlayerEvent>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 session_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PushToPlayerEvent, _impl_.session_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_.session_id_)}},
       // .MessageContent message_content = 2;
       {::_pbi::TcParser::FastMtS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_.message_content_)}},
-      // uint32 session_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PushToPlayerEvent, _impl_.session_id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_.session_id_)}},
+      // uint64 player_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PushToPlayerEvent, _impl_.player_id_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 session_id = 1;
-      {PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .MessageContent message_content = 2;
       {PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_.message_content_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 player_id = 3;
+      {PROTOBUF_FIELD_OFFSET(PushToPlayerEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1184,6 +1393,7 @@ inline constexpr PushToPlayerEvent::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         message_content_{nullptr},
+        player_id_{::uint64_t{0u}},
         session_id_{0u} {}
 
 template <typename>
@@ -1444,11 +1654,11 @@ constexpr BroadcastToPlayersEvent::ParseTableT_ BroadcastToPlayersEvent::Interna
     {
       PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1458,33 +1668,42 @@ constexpr BroadcastToPlayersEvent::ParseTableT_ BroadcastToPlayersEvent::Interna
       ::_pbi::TcParser::GetTable<::contracts::kafka::BroadcastToPlayersEvent>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // bytes session_bitmap = 4;
-      {::_pbi::TcParser::FastBS1,
-       {34, 1, 0,
-        PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_bitmap_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // repeated uint32 session_list = 1;
       {::_pbi::TcParser::FastV32P1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_list_)}},
       // .MessageContent message_content = 2;
       {::_pbi::TcParser::FastMtS1,
-       {18, 2, 0,
+       {18, 3, 0,
         PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.message_content_)}},
       // uint32 session_bitmap_base = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BroadcastToPlayersEvent, _impl_.session_bitmap_base_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BroadcastToPlayersEvent, _impl_.session_bitmap_base_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_bitmap_base_)}},
+      // bytes session_bitmap = 4;
+      {::_pbi::TcParser::FastBS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_bitmap_)}},
+      // repeated uint64 player_list = 5;
+      {::_pbi::TcParser::FastV64P1,
+       {42, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.player_list_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // repeated uint32 session_list = 1;
       {PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_list_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // .MessageContent message_content = 2;
-      {PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.message_content_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.message_content_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 session_bitmap_base = 3;
-      {PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_bitmap_base_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_bitmap_base_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bytes session_bitmap = 4;
-      {PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_bitmap_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_bitmap_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // repeated uint64 player_list = 5;
+      {PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.player_list_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1509,6 +1728,12 @@ inline constexpr BroadcastToPlayersEvent::Impl_::Impl_(
          }
         ,
         _session_list_cached_byte_size_{0},
+        player_list_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::contracts::kafka::BroadcastToPlayersEvent,
+            PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_.player_list_)>()
+         }
+        ,
+        _player_list_cached_byte_size_{0},
         session_bitmap_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
@@ -1756,8 +1981,8 @@ const ::_pbi::ClassData* BroadcastToAllEvent_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace kafka
 }  // namespace contracts
-static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
-    file_level_enum_descriptors_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
+    file_level_enum_descriptors_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto[1];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto = nullptr;
 const ::uint32_t
@@ -1849,21 +2074,25 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PushToPlayerEvent, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PushToPlayerEvent, _impl_.session_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PushToPlayerEvent, _impl_.message_content_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::PushToPlayerEvent, _impl_.player_id_),
+        2,
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_.session_list_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_.message_content_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_.session_bitmap_base_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_.session_bitmap_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_.player_list_),
         0,
-        2,
         3,
+        4,
+        2,
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToSceneEvent, _impl_._has_bits_),
@@ -1877,6 +2106,25 @@ const ::uint32_t
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToAllEvent, _impl_.message_content_),
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_._has_bits_),
+        11, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_.battle_instance_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_.round_index_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_.client_frame_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_.deadline_ms_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_.target_gate_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::SpectateFrameEvent, _impl_.target_instance_id_),
+        3,
+        0,
+        4,
+        5,
+        1,
+        6,
+        7,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
@@ -1888,9 +2136,10 @@ static const ::_pbi::MigrationSchema
         {54, sizeof(::contracts::kafka::BindSessionEvent)},
         {67, sizeof(::contracts::kafka::RedirectToGateEvent)},
         {84, sizeof(::contracts::kafka::PushToPlayerEvent)},
-        {91, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
-        {102, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
-        {109, sizeof(::contracts::kafka::BroadcastToAllEvent)},
+        {93, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
+        {106, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
+        {113, sizeof(::contracts::kafka::BroadcastToAllEvent)},
+        {118, sizeof(::contracts::kafka::SpectateFrameEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1904,6 +2153,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::contracts::kafka::BroadcastToPlayersEvent_globals_,
         &::contracts::kafka::BroadcastToSceneEvent_globals_,
         &::contracts::kafka::BroadcastToAllEvent_globals_,
+        &::contracts::kafka::SpectateFrameEvent_globals_,
 };
 const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -1932,18 +2182,28 @@ const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2e
     "\001(\004\022\022\n\nsession_id\030\002 \001(\r\022\026\n\016target_gate_i"
     "p\030\003 \001(\t\022\030\n\020target_gate_port\030\004 \001(\r\022\025\n\rtok"
     "en_payload\030\005 \001(\014\022\027\n\017token_signature\030\006 \001("
-    "\014\022\026\n\016token_deadline\030\007 \001(\003:\005\210\346\325\002\001\"X\n\021Push"
+    "\014\022\026\n\016token_deadline\030\007 \001(\003:\005\210\346\325\002\001\"k\n\021Push"
     "ToPlayerEvent\022\022\n\nsession_id\030\001 \001(\r\022(\n\017mes"
-    "sage_content\030\002 \001(\0132\017.MessageContent:\005\210\346\325"
-    "\002\001\"\225\001\n\027BroadcastToPlayersEvent\022\024\n\014sessio"
-    "n_list\030\001 \003(\r\022(\n\017message_content\030\002 \001(\0132\017."
-    "MessageContent\022\033\n\023session_bitmap_base\030\003 "
-    "\001(\r\022\026\n\016session_bitmap\030\004 \001(\014:\005\210\346\325\002\001\"Z\n\025Br"
+    "sage_content\030\002 \001(\0132\017.MessageContent\022\021\n\tp"
+    "layer_id\030\003 \001(\004:\005\210\346\325\002\001\"\252\001\n\027BroadcastToPla"
+    "yersEvent\022\024\n\014session_list\030\001 \003(\r\022(\n\017messa"
+    "ge_content\030\002 \001(\0132\017.MessageContent\022\033\n\023ses"
+    "sion_bitmap_base\030\003 \001(\r\022\026\n\016session_bitmap"
+    "\030\004 \001(\014\022\023\n\013player_list\030\005 \003(\004:\005\210\346\325\002\001\"Z\n\025Br"
     "oadcastToSceneEvent\022\020\n\010scene_id\030\001 \001(\004\022(\n"
     "\017message_content\030\002 \001(\0132\017.MessageContent:"
     "\005\210\346\325\002\001\"F\n\023BroadcastToAllEvent\022(\n\017message"
-    "_content\030\001 \001(\0132\017.MessageContent:\005\210\346\325\002\001B\021"
-    "Z\017contracts/kafkab\006proto3"
+    "_content\030\001 \001(\0132\017.MessageContent:\005\210\346\325\002\001\"\352"
+    "\001\n\022SpectateFrameEvent\022\021\n\tbattle_id\030\001 \001(\004"
+    "\022\032\n\022battle_instance_id\030\002 \001(\t\022\023\n\013round_in"
+    "dex\030\003 \001(\r\0221\n\004kind\030\004 \001(\0162#.contracts.kafk"
+    "a.eSpectateFrameKind\022\024\n\014client_frame\030\005 \001"
+    "(\014\022\023\n\013deadline_ms\030\006 \001(\004\022\026\n\016target_gate_i"
+    "d\030\007 \001(\r\022\032\n\022target_instance_id\030\010 \001(\t*x\n\022e"
+    "SpectateFrameKind\022\027\n\023SPECTATE_FRAME_NONE"
+    "\020\000\022\030\n\024SPECTATE_FRAME_STATE\020\001\022\027\n\023SPECTATE"
+    "_FRAME_TURN\020\002\022\026\n\022SPECTATE_FRAME_END\020\003B\021Z"
+    "\017contracts/kafkab\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_deps[2] = {
@@ -1954,13 +2214,13 @@ static ::absl::once_flag descriptor_table_proto_2fcontracts_2fkafka_2fgate_5feve
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto = {
     false,
     false,
-    1465,
+    1864,
     descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto,
     "proto/contracts/kafka/gate_event.proto",
     &descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_once,
     descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_deps,
     2,
-    10,
+    11,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto::offsets,
@@ -1969,6 +2229,13 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcontra
 };
 namespace contracts {
 namespace kafka {
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+eSpectateFrameKind_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto);
+  return file_level_enum_descriptors_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t eSpectateFrameKind_internal_data_[] = {
+    262144u, 0u, };
 // ===================================================================
 
 RoutePlayerEvent::RoutePlayerEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -3983,7 +4250,13 @@ PushToPlayerEvent::PushToPlayerEvent(
   _impl_.message_content_ = (CheckHasBit(cached_has_bits, 0x00000001U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.message_content_)
                 : nullptr;
-  _impl_.session_id_ = from._impl_.session_id_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, session_id_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::session_id_));
 
   // @@protoc_insertion_point(copy_constructor:contracts.kafka.PushToPlayerEvent)
 }
@@ -4054,7 +4327,11 @@ PROTOBUF_NOINLINE void PushToPlayerEvent::Clear() {
     ABSL_DCHECK(_impl_.message_content_ != nullptr);
     _impl_.message_content_->Clear();
   }
-  _impl_.session_id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.session_id_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.session_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -4079,7 +4356,7 @@ PROTOBUF_NOINLINE void PushToPlayerEvent::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 session_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_session_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4092,6 +4369,15 @@ PROTOBUF_NOINLINE void PushToPlayerEvent::Clear() {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.message_content_, this_._impl_.message_content_->GetCachedSize(), target,
         stream);
+  }
+
+  // uint64 player_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_player_id(), target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -4119,14 +4405,21 @@ PROTOBUF_NOINLINE void PushToPlayerEvent::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // .MessageContent message_content = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.message_content_);
     }
-    // uint32 session_id = 1;
+    // uint64 player_id = 3;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 session_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_session_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_session_id());
@@ -4151,7 +4444,7 @@ void PushToPlayerEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.message_content_ != nullptr);
       if (_this->_impl_.message_content_ == nullptr) {
@@ -4161,6 +4454,11 @@ void PushToPlayerEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_session_id() != 0) {
         _this->_impl_.session_id_ = from._impl_.session_id_;
       }
@@ -4199,7 +4497,7 @@ void PushToPlayerEvent::InternalSwap(PushToPlayerEvent* PROTOBUF_RESTRICT PROTOB
 void BroadcastToPlayersEvent::clear_message_content() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.message_content_ != nullptr) _impl_.message_content_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 BroadcastToPlayersEvent::BroadcastToPlayersEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -4224,6 +4522,14 @@ PROTOBUF_NDEBUG_INLINE BroadcastToPlayersEvent::Impl_::Impl_(
         }
         ,
         _session_list_cached_byte_size_{0},
+        player_list_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::contracts::kafka::BroadcastToPlayersEvent,
+              PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_.player_list_)>()
+          , from.player_list_
+        }
+        ,
+        _player_list_cached_byte_size_{0},
         session_bitmap_(arena, from.session_bitmap_) {}
 
 BroadcastToPlayersEvent::BroadcastToPlayersEvent(
@@ -4241,7 +4547,7 @@ BroadcastToPlayersEvent::BroadcastToPlayersEvent(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.message_content_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+  _impl_.message_content_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.message_content_)
                 : nullptr;
   _impl_.session_bitmap_base_ = from._impl_.session_bitmap_base_;
@@ -4258,6 +4564,12 @@ PROTOBUF_NDEBUG_INLINE BroadcastToPlayersEvent::Impl_::Impl_(
          }
         ,
         _session_list_cached_byte_size_{0},
+        player_list_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::contracts::kafka::BroadcastToPlayersEvent,
+            PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToPlayersEvent, _impl_.player_list_)>()
+         }
+        ,
+        _player_list_cached_byte_size_{0},
         session_bitmap_(arena) {}
 
 inline void BroadcastToPlayersEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
@@ -4319,14 +4631,17 @@ PROTOBUF_NOINLINE void BroadcastToPlayersEvent::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.session_list_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      _impl_.session_bitmap_.ClearNonDefaultToEmpty();
+      _impl_.player_list_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.session_bitmap_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(_impl_.message_content_ != nullptr);
       _impl_.message_content_->Clear();
     }
@@ -4367,14 +4682,14 @@ PROTOBUF_NOINLINE void BroadcastToPlayersEvent::Clear() {
   }
 
   // .MessageContent message_content = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         2, *this_._impl_.message_content_, this_._impl_.message_content_->GetCachedSize(), target,
         stream);
   }
 
   // uint32 session_bitmap_base = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_session_bitmap_base() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4383,10 +4698,21 @@ PROTOBUF_NOINLINE void BroadcastToPlayersEvent::Clear() {
   }
 
   // bytes session_bitmap = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (!this_._internal_session_bitmap().empty()) {
       const ::std::string& _s = this_._internal_session_bitmap();
       target = stream->WriteBytesMaybeAliased(4, _s, target);
+    }
+  }
+
+  // repeated uint64 player_list = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    {
+      int byte_size = this_._impl_._player_list_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            5, this_._internal_player_list(), byte_size, target);
+      }
     }
   }
 
@@ -4415,7 +4741,7 @@ PROTOBUF_NOINLINE void BroadcastToPlayersEvent::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // repeated uint32 session_list = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -4423,20 +4749,27 @@ PROTOBUF_NOINLINE void BroadcastToPlayersEvent::Clear() {
               this_._internal_session_list(), 1,
               this_._impl_._session_list_cached_byte_size_);
     }
-    // bytes session_bitmap = 4;
+    // repeated uint64 player_list = 5;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_player_list(), 1,
+              this_._impl_._player_list_cached_byte_size_);
+    }
+    // bytes session_bitmap = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!this_._internal_session_bitmap().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
                                         this_._internal_session_bitmap());
       }
     }
     // .MessageContent message_content = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.message_content_);
     }
     // uint32 session_bitmap_base = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_session_bitmap_base() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_session_bitmap_base());
@@ -4461,11 +4794,14 @@ void BroadcastToPlayersEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_session_list()->MergeFrom(from._internal_session_list());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_player_list()->MergeFrom(from._internal_player_list());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!from._internal_session_bitmap().empty()) {
         _this->_internal_set_session_bitmap(from._internal_session_bitmap());
       } else {
@@ -4474,7 +4810,7 @@ void BroadcastToPlayersEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(from._impl_.message_content_ != nullptr);
       if (_this->_impl_.message_content_ == nullptr) {
         _this->_impl_.message_content_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.message_content_);
@@ -4482,7 +4818,7 @@ void BroadcastToPlayersEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.message_content_->MergeFrom(*from._impl_.message_content_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_session_bitmap_base() != 0) {
         _this->_impl_.session_bitmap_base_ = from._impl_.session_bitmap_base_;
       }
@@ -4508,6 +4844,7 @@ void BroadcastToPlayersEvent::InternalSwap(BroadcastToPlayersEvent* PROTOBUF_RES
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.session_list_.InternalSwap(&other->_impl_.session_list_);
+  _impl_.player_list_.InternalSwap(&other->_impl_.player_list_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.session_bitmap_, &other->_impl_.session_bitmap_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(BroadcastToPlayersEvent, _impl_.session_bitmap_base_)
@@ -4986,6 +5323,418 @@ void BroadcastToAllEvent::InternalSwap(BroadcastToAllEvent* PROTOBUF_RESTRICT PR
 }
 
 ::google::protobuf::Metadata BroadcastToAllEvent::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SpectateFrameEvent::SpectateFrameEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SpectateFrameEvent_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:contracts.kafka.SpectateFrameEvent)
+}
+PROTOBUF_NDEBUG_INLINE SpectateFrameEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::contracts::kafka::SpectateFrameEvent& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        battle_instance_id_(arena, from.battle_instance_id_),
+        client_frame_(arena, from.client_frame_),
+        target_instance_id_(arena, from.target_instance_id_) {}
+
+SpectateFrameEvent::SpectateFrameEvent(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SpectateFrameEvent& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SpectateFrameEvent_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SpectateFrameEvent* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, battle_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, battle_id_),
+           offsetof(Impl_, target_gate_id_) -
+               offsetof(Impl_, battle_id_) +
+               sizeof(Impl_::target_gate_id_));
+
+  // @@protoc_insertion_point(copy_constructor:contracts.kafka.SpectateFrameEvent)
+}
+PROTOBUF_NDEBUG_INLINE SpectateFrameEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        battle_instance_id_(arena),
+        client_frame_(arena),
+        target_instance_id_(arena) {}
+
+inline void SpectateFrameEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, battle_id_),
+           0,
+           offsetof(Impl_, target_gate_id_) -
+               offsetof(Impl_, battle_id_) +
+               sizeof(Impl_::target_gate_id_));
+}
+SpectateFrameEvent::~SpectateFrameEvent() {
+  // @@protoc_insertion_point(destructor:contracts.kafka.SpectateFrameEvent)
+  SharedDtor(*this);
+}
+inline void SpectateFrameEvent::SharedDtor(MessageLite& self) {
+  SpectateFrameEvent& this_ = static_cast<SpectateFrameEvent&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.battle_instance_id_.Destroy();
+  this_._impl_.client_frame_.Destroy();
+  this_._impl_.target_instance_id_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SpectateFrameEvent_class_data_ =
+        SpectateFrameEvent::InternalGenerateClassData_(SpectateFrameEvent_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SpectateFrameEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SpectateFrameEvent_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SpectateFrameEvent_class_data_.tc_table);
+  return SpectateFrameEvent_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SpectateFrameEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SpectateFrameEvent_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SpectateFrameEvent_globals_));
+  return SpectateFrameEvent_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SpectateFrameEvent::ParseTableT_
+    SpectateFrameEvent::_table_ =
+        SpectateFrameEvent::InternalGenerateParseTable_(SpectateFrameEvent_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SpectateFrameEvent::Clear() {
+// @@protoc_insertion_point(message_clear_start:contracts.kafka.SpectateFrameEvent)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.battle_instance_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.client_frame_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.target_instance_id_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.target_gate_id_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.target_gate_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SpectateFrameEvent::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SpectateFrameEvent& this_ = static_cast<const SpectateFrameEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SpectateFrameEvent::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SpectateFrameEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:contracts.kafka.SpectateFrameEvent)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 battle_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_battle_id(), target);
+    }
+  }
+
+  // string battle_instance_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_battle_instance_id().empty()) {
+      const ::std::string& _s = this_._internal_battle_instance_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "contracts.kafka.SpectateFrameEvent.battle_instance_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint32 round_index = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_round_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_round_index(), target);
+    }
+  }
+
+  // .contracts.kafka.eSpectateFrameKind kind = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          4, this_._internal_kind(), target);
+    }
+  }
+
+  // bytes client_frame = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_client_frame().empty()) {
+      const ::std::string& _s = this_._internal_client_frame();
+      target = stream->WriteBytesMaybeAliased(5, _s, target);
+    }
+  }
+
+  // uint64 deadline_ms = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_deadline_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_deadline_ms(), target);
+    }
+  }
+
+  // uint32 target_gate_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_target_gate_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_target_gate_id(), target);
+    }
+  }
+
+  // string target_instance_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_target_instance_id().empty()) {
+      const ::std::string& _s = this_._internal_target_instance_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "contracts.kafka.SpectateFrameEvent.target_instance_id");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:contracts.kafka.SpectateFrameEvent)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SpectateFrameEvent::ByteSizeLong(const MessageLite& base) {
+  const SpectateFrameEvent& this_ = static_cast<const SpectateFrameEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SpectateFrameEvent::ByteSizeLong() const {
+  const SpectateFrameEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:contracts.kafka.SpectateFrameEvent)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string battle_instance_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_battle_instance_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_battle_instance_id());
+      }
+    }
+    // bytes client_frame = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_client_frame().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_client_frame());
+      }
+    }
+    // string target_instance_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_target_instance_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_instance_id());
+      }
+    }
+    // uint64 battle_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_id());
+      }
+    }
+    // uint32 round_index = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_round_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_round_index());
+      }
+    }
+    // .contracts.kafka.eSpectateFrameKind kind = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_kind() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_kind());
+      }
+    }
+    // uint64 deadline_ms = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_deadline_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_deadline_ms());
+      }
+    }
+    // uint32 target_gate_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_target_gate_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_target_gate_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SpectateFrameEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SpectateFrameEvent*>(&to_msg);
+  auto& from = static_cast<const SpectateFrameEvent&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:contracts.kafka.SpectateFrameEvent)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_battle_instance_id().empty()) {
+        _this->_internal_set_battle_instance_id(from._internal_battle_instance_id());
+      } else {
+        if (_this->_impl_.battle_instance_id_.IsDefault()) {
+          _this->_internal_set_battle_instance_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_client_frame().empty()) {
+        _this->_internal_set_client_frame(from._internal_client_frame());
+      } else {
+        if (_this->_impl_.client_frame_.IsDefault()) {
+          _this->_internal_set_client_frame("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_target_instance_id().empty()) {
+        _this->_internal_set_target_instance_id(from._internal_target_instance_id());
+      } else {
+        if (_this->_impl_.target_instance_id_.IsDefault()) {
+          _this->_internal_set_target_instance_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_round_index() != 0) {
+        _this->_impl_.round_index_ = from._impl_.round_index_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_kind() != 0) {
+        _this->_impl_.kind_ = from._impl_.kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_deadline_ms() != 0) {
+        _this->_impl_.deadline_ms_ = from._impl_.deadline_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_target_gate_id() != 0) {
+        _this->_impl_.target_gate_id_ = from._impl_.target_gate_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SpectateFrameEvent::CopyFrom(const SpectateFrameEvent& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:contracts.kafka.SpectateFrameEvent)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SpectateFrameEvent::InternalSwap(SpectateFrameEvent* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_instance_id_, &other->_impl_.battle_instance_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.client_frame_, &other->_impl_.client_frame_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_instance_id_, &other->_impl_.target_instance_id_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.target_gate_id_)
+      + sizeof(SpectateFrameEvent::_impl_.target_gate_id_)
+      - PROTOBUF_FIELD_OFFSET(SpectateFrameEvent, _impl_.battle_id_)>(
+          reinterpret_cast<char*>(&_impl_.battle_id_),
+          reinterpret_cast<char*>(&other->_impl_.battle_id_));
+}
+
+::google::protobuf::Metadata SpectateFrameEvent::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

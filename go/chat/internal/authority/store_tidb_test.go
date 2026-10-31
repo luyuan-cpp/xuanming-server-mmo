@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
+	"shared/placement"
 	"strings"
 	"sync"
 	"testing"
@@ -12,7 +14,6 @@ import (
 
 	"chat/internal/constants"
 	chatpb "proto/chat"
-	"shared/placement"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -66,7 +67,7 @@ func independentStore(t *testing.T, s *Store, fixture *sqltest.Fixture) *Store {
 	require.NoError(t, first.QueryRowContext(ctx, "SELECT CONNECTION_ID()").Scan(&firstID))
 	require.NoError(t, second.QueryRowContext(ctx, "SELECT CONNECTION_ID()").Scan(&secondID))
 	require.NotEqual(t, firstID, secondID, "副本必须持有不同物理连接")
-	peer, err := New(ctx, db, s.roleSchema, s.rules)
+	peer, err := New(ctx, db, s.roleSchema, authoritysql.BackendTiDB, s.rules)
 	require.NoError(t, err)
 	return peer
 }
@@ -196,7 +197,7 @@ func TestChatTiDBConcurrentSameOriginalCommitsOnce(t *testing.T) {
 func TestChatTiDBSQLRateRejectDoesNotConsumeUUID(t *testing.T) {
 	s, _ := nativeStoreFixture(t, false)
 	ctx := original(t, 11)
-	// 只控制时间接缝使固定秒边界确定；TiDB角色/route/P/唯一行与事务均为真实实现。
+	// 只控制时间接缝使固定秒边界确定；TiDB角色/route/唯一行与事务均为真实实现。
 	now := uint64(100000)
 	s.clock = func(context.Context, *sql.Tx) (uint64, error) { return now, nil }
 	for i := range 5 {
@@ -230,47 +231,45 @@ func TestChatTiDBCallerCanReadHistoryAfterPeerDeletion(t *testing.T) {
 	require.Len(t, pull(t, s, ctx, 22), 2)
 }
 
-func TestChatTiDBTransferHoldingPWinsAgainstLateSendAndPull(t *testing.T) {
+// 校验是不加锁的普通读:别的事务持着路由行和角色行的锁未提交时,聊天不排队,读到的是已提交的旧归属;
+// 过户提交之后(TTL=0)立刻拒绝。
+func TestChatTiDBUncommittedTransferDoesNotBlockChatThenRejectsAfterCommit(t *testing.T) {
 	s, _ := nativeStoreFixture(t, false)
 	ctx := original(t, 11)
 	tx, err := s.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	require.NoError(t, err)
 	defer tx.Rollback()
-	_, _, err = s.lockActor(ctx, tx)
-	require.NoError(t, err)
+	var rev uint64
+	require.NoError(t, tx.QueryRow("SELECT rev FROM player_route WHERE route_shard=? AND player_id=11 FOR UPDATE", placement.RouteRowShard(11)).Scan(&rev))
 	_, err = tx.Exec("UPDATE account_role SET account='new-owner',owner_revision=8 WHERE player_id=11")
 	require.NoError(t, err)
-	started := make(chan struct{}, 2)
-	done := make(chan error, 2)
-	go func() { started <- struct{}{}; _, err := s.Send(ctx, sendRequest("late", 22)); done <- err }()
-	go func() {
-		started <- struct{}{}
-		_, err := s.Pull(ctx, &chatpb.PullChatHistoryRequest{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_PRIVATE, PeerPlayerId: 22}, 20)
-		done <- err
-	}()
-	<-started
-	<-started
+
+	bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_, err = s.Send(bounded, sendRequest("before-commit", 22))
+	require.NoError(t, err, "过户持锁未提交时聊天不排队")
+	_, err = s.Pull(bounded, &chatpb.PullChatHistoryRequest{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_PRIVATE, PeerPlayerId: 22}, 20)
+	require.NoError(t, err, "拉取同样不排队")
+
 	require.NoError(t, tx.Commit())
-	for range 2 {
-		select {
-		case e := <-done:
-			require.ErrorIs(t, e, ErrOriginal)
-		case <-time.After(5 * time.Second):
-			t.Fatal("角色P释放后聊天请求未收敛")
-		}
-	}
-	require.Zero(t, count(t, s))
+	_, err = s.Send(ctx, sendRequest("after-commit", 22))
+	require.ErrorIs(t, err, ErrOriginal)
+	_, err = s.Pull(ctx, &chatpb.PullChatHistoryRequest{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_PRIVATE, PeerPlayerId: 22}, 20)
+	require.ErrorIs(t, err, ErrOriginal)
+	require.Equal(t, 1, count(t, s))
 }
 
-func TestChatTiDBAcceptedSendHoldsPThroughCommitThenTransferPreservesHistory(t *testing.T) {
+// 发送事务只碰聊天自己的表:发送卡在提交之前时过户照常完成,不等它。这条消息按校验时的旧归属落库,
+// 这是校验不再和过户串行的代价(actor_verify.go),消息记在角色名下,新主能看到。
+func TestChatTiDBInFlightSendDoesNotBlockTransferAndHistoryStaysWithRole(t *testing.T) {
 	s, _ := nativeStoreFixture(t, false)
 	ctx, cancel := context.WithTimeout(original(t, 11), 10*time.Second)
 	defer cancel()
-	locked := make(chan struct{})
+	inTx := make(chan struct{})
 	release := make(chan struct{})
 	clock := s.clock
 	s.clock = func(ctx context.Context, tx *sql.Tx) (uint64, error) {
-		close(locked)
+		close(inTx)
 		select {
 		case <-release:
 			return clock(ctx, tx)
@@ -279,35 +278,68 @@ func TestChatTiDBAcceptedSendHoldsPThroughCommitThenTransferPreservesHistory(t *
 		}
 	}
 	sent := make(chan error, 1)
-	go func() { _, err := s.Send(ctx, sendRequest("accepted-first", 22)); sent <- err }()
+	go func() { _, err := s.Send(ctx, sendRequest("in-flight", 22)); sent <- err }()
 	select {
-	case <-locked:
+	case <-inTx:
 	case err := <-sent:
-		t.Fatalf("发送尚未持P即返回：%v", err)
+		t.Fatalf("发送尚未进入事务即返回：%v", err)
 	case <-ctx.Done():
-		t.Fatal("发送未进入原P提交阶段")
+		t.Fatal("发送未进入事务")
 	}
-	transferred := make(chan error, 1)
-	go func() {
-		_, err := s.db.Exec("UPDATE account_role SET account='new-owner',owner_revision=8 WHERE player_id=11")
-		transferred <- err
-	}()
+	_, err := s.db.ExecContext(ctx, "UPDATE account_role SET account='new-owner',owner_revision=8 WHERE player_id=11")
+	require.NoError(t, err, "发送事务不持角色锁,过户不等它")
 	close(release)
 	select {
 	case err := <-sent:
 		require.NoError(t, err)
 	case <-time.After(5 * time.Second):
-		t.Fatal("原发送持P提交未收敛")
-	}
-	select {
-	case err := <-transferred:
-		require.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("发送提交后换主未收敛")
+		t.Fatal("发送未收敛")
 	}
 	s.clock = clock
-	require.Len(t, pull(t, s, actor(t, 11, "new-owner", 8), 22), 1, "SQL接受先于换主，历史仍属于该角色")
-	_, err := s.Send(ctx, sendRequest("late-old", 22))
+	require.Len(t, pull(t, s, actor(t, 11, "new-owner", 8), 22), 1, "历史属于角色,新主能看到")
+	_, err = s.Send(ctx, sendRequest("late-old", 22))
+	require.ErrorIs(t, err, ErrOriginal)
+	require.Equal(t, 1, count(t, s))
+}
+
+// TTL 内旧会话还能说话(写明的代价),过期后被拒;拒绝不进缓存,新主用新 revision 不受旧条目影响。
+func TestChatTiDBActorVerifyTTLBoundsOldSessionWindow(t *testing.T) {
+	s, _ := nativeStoreFixture(t, false)
+	var now time.Duration
+	s.actors = newActorVerifyCache(30*time.Second, actorVerifyMaxEntries, func() time.Duration { return now })
+	old := original(t, 11)
+	_, err := s.Send(old, sendRequest("first", 22))
+	require.NoError(t, err)
+	_, err = s.db.Exec("UPDATE account_role SET account='new-owner',owner_revision=8 WHERE player_id=11")
+	require.NoError(t, err)
+
+	now += 29 * time.Second
+	_, err = s.Send(old, sendRequest("inside-ttl", 22))
+	require.NoError(t, err, "TTL 内不重读,旧会话还能发")
+	require.Len(t, pull(t, s, old, 22), 2)
+
+	now += 2 * time.Second
+	_, err = s.Send(old, sendRequest("after-ttl", 22))
+	require.ErrorIs(t, err, ErrOriginal, "过期后重读,旧会话被拒")
+	_, err = s.Send(old, sendRequest("still-rejected", 22))
+	require.ErrorIs(t, err, ErrOriginal, "拒绝不写缓存")
+
+	current := actor(t, 11, "new-owner", 8)
+	_, err = s.Send(current, sendRequest("new-owner-first", 22))
+	require.NoError(t, err)
+	require.Equal(t, 3, count(t, s))
+}
+
+// 过户之后,原 request_id 的重放按原件里的归属判定,TTL 窗口不能让旧原件换主。
+func TestChatTiDBActorVerifyTTLDoesNotLetNewOwnerReplayOldReceipt(t *testing.T) {
+	s, _ := nativeStoreFixture(t, false)
+	var now time.Duration
+	s.actors = newActorVerifyCache(30*time.Second, actorVerifyMaxEntries, func() time.Duration { return now })
+	_, err := s.Send(original(t, 11), sendRequest("receipt", 22))
+	require.NoError(t, err)
+	_, err = s.db.Exec("UPDATE account_role SET account='new-owner',owner_revision=8 WHERE player_id=11")
+	require.NoError(t, err)
+	_, err = s.Send(actor(t, 11, "new-owner", 8), sendRequest("receipt", 22))
 	require.ErrorIs(t, err, ErrOriginal)
 	require.Equal(t, 1, count(t, s))
 }
@@ -341,30 +373,15 @@ func TestChatTiDBSQLWindowExpiryGapAndMaximumRemainBounded(t *testing.T) {
 	require.Len(t, pull(t, s, ctx, 0), 1)
 }
 
-func TestChatTiDBMergeAndFrozenRouteRejectBeforeAnyChatRow(t *testing.T) {
-	for _, kind := range []string{"meta", "zone-fence", "frozen-route"} {
-		t.Run(kind, func(t *testing.T) {
-			s, _ := nativeStoreFixture(t, false)
-			switch kind {
-			case "meta":
-				_, err := s.db.Exec("UPDATE route_meta SET writable=0 WHERE id=1")
-				require.NoError(t, err)
-			case "zone-fence":
-				shard, err := placement.RouteFenceShard(11, placement.MaxRouteFenceShards)
-				require.NoError(t, err)
-				_, err = s.db.Exec("INSERT INTO zone_merge_fence(zone_id,shard,run_id,expires_at_ms) VALUES(1,?,'chat-merge',"+dbNow+"+60000)", shard)
-				require.NoError(t, err)
-			case "frozen-route":
-				_, err := s.db.Exec("UPDATE player_route SET frozen_run_id='chat-frozen' WHERE player_id=11")
-				require.NoError(t, err)
-			}
-			_, err := s.Send(original(t, 11), sendRequest("denied", 22))
-			require.Error(t, err)
-			_, err = s.Pull(original(t, 11), &chatpb.PullChatHistoryRequest{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD}, 20)
-			require.Error(t, err)
-			require.Zero(t, count(t, s))
-		})
-	}
+func TestChatTiDBFrozenRouteRejectsBeforeAnyChatRow(t *testing.T) {
+	s, _ := nativeStoreFixture(t, false)
+	_, err := s.db.Exec("UPDATE player_route SET frozen_run_id='chat-frozen' WHERE player_id=11")
+	require.NoError(t, err)
+	_, err = s.Send(original(t, 11), sendRequest("denied", 22))
+	require.Error(t, err)
+	_, err = s.Pull(original(t, 11), &chatpb.PullChatHistoryRequest{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD}, 20)
+	require.Error(t, err)
+	require.Zero(t, count(t, s))
 }
 
 func TestChatTiDBPolicyMismatchAndMissingIndexFailClosed(t *testing.T) {
@@ -374,17 +391,17 @@ func TestChatTiDBPolicyMismatchAndMissingIndexFailClosed(t *testing.T) {
 	s, fixture := nativeStoreFixture(t, false, boundary)
 	tooLarge := boundary
 	tooLarge.HistoryMaxLimit = 201
-	_, err := New(context.Background(), s.db, s.roleSchema, tooLarge)
+	_, err := New(context.Background(), s.db, s.roleSchema, authoritysql.BackendTiDB, tooLarge)
 	require.ErrorIs(t, err, ErrInvalid)
 	rules := s.rules
 	rules.RateLimitPerSecond++
-	_, err = New(context.Background(), s.db, s.roleSchema, rules)
+	_, err = New(context.Background(), s.db, s.roleSchema, authoritysql.BackendTiDB, rules)
 	require.ErrorIs(t, err, ErrPolicy)
 	install, err := fixture.OpenSchema(context.Background(), s.roleSchema)
 	require.NoError(t, err)
 	_, err = install.Exec("ALTER TABLE chat_send_authority DROP INDEX idx_chat_stream")
 	require.NoError(t, err)
-	_, err = New(context.Background(), s.db, s.roleSchema, s.rules)
+	_, err = New(context.Background(), s.db, s.roleSchema, authoritysql.BackendTiDB, s.rules)
 	require.ErrorContains(t, err, "索引")
 }
 

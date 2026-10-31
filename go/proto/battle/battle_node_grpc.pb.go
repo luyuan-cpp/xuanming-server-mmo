@@ -20,13 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BattleNode_QueryObserver_FullMethodName       = "/BattleNode/QueryObserver"
-	BattleNode_QueryBattleCreation_FullMethodName = "/BattleNode/QueryBattleCreation"
-	BattleNode_CreateBattle_FullMethodName        = "/BattleNode/CreateBattle"
-	BattleNode_DestroyBattle_FullMethodName       = "/BattleNode/DestroyBattle"
-	BattleNode_AddObserver_FullMethodName         = "/BattleNode/AddObserver"
-	BattleNode_RemoveObserver_FullMethodName      = "/BattleNode/RemoveObserver"
-	BattleNode_IssueBattleTicket_FullMethodName   = "/BattleNode/IssueBattleTicket"
+	BattleNode_QueryObserver_FullMethodName            = "/BattleNode/QueryObserver"
+	BattleNode_QueryBattleCreation_FullMethodName      = "/BattleNode/QueryBattleCreation"
+	BattleNode_CreateBattle_FullMethodName             = "/BattleNode/CreateBattle"
+	BattleNode_DestroyBattle_FullMethodName            = "/BattleNode/DestroyBattle"
+	BattleNode_AddObserver_FullMethodName              = "/BattleNode/AddObserver"
+	BattleNode_RemoveObserver_FullMethodName           = "/BattleNode/RemoveObserver"
+	BattleNode_IssueBattleTicket_FullMethodName        = "/BattleNode/IssueBattleTicket"
+	BattleNode_AttachRelayGate_FullMethodName          = "/BattleNode/AttachRelayGate"
+	BattleNode_PromoteSpectateBroadcast_FullMethodName = "/BattleNode/PromoteSpectateBroadcast"
 )
 
 // BattleNodeClient is the client API for BattleNode service.
@@ -40,6 +42,8 @@ type BattleNodeClient interface {
 	AddObserver(ctx context.Context, in *AddObserverRequest, opts ...grpc.CallOption) (*AddObserverResponse, error)
 	RemoveObserver(ctx context.Context, in *RemoveObserverRequest, opts ...grpc.CallOption) (*RemoveObserverResponse, error)
 	IssueBattleTicket(ctx context.Context, in *IssueBattleTicketRequest, opts ...grpc.CallOption) (*IssueBattleTicketResponse, error)
+	AttachRelayGate(ctx context.Context, in *AttachRelayGateRequest, opts ...grpc.CallOption) (*AttachRelayGateResponse, error)
+	PromoteSpectateBroadcast(ctx context.Context, in *PromoteSpectateBroadcastRequest, opts ...grpc.CallOption) (*PromoteSpectateBroadcastResponse, error)
 }
 
 type battleNodeClient struct {
@@ -120,6 +124,26 @@ func (c *battleNodeClient) IssueBattleTicket(ctx context.Context, in *IssueBattl
 	return out, nil
 }
 
+func (c *battleNodeClient) AttachRelayGate(ctx context.Context, in *AttachRelayGateRequest, opts ...grpc.CallOption) (*AttachRelayGateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttachRelayGateResponse)
+	err := c.cc.Invoke(ctx, BattleNode_AttachRelayGate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *battleNodeClient) PromoteSpectateBroadcast(ctx context.Context, in *PromoteSpectateBroadcastRequest, opts ...grpc.CallOption) (*PromoteSpectateBroadcastResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PromoteSpectateBroadcastResponse)
+	err := c.cc.Invoke(ctx, BattleNode_PromoteSpectateBroadcast_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BattleNodeServer is the server API for BattleNode service.
 // All implementations must embed UnimplementedBattleNodeServer
 // for forward compatibility.
@@ -131,6 +155,8 @@ type BattleNodeServer interface {
 	AddObserver(context.Context, *AddObserverRequest) (*AddObserverResponse, error)
 	RemoveObserver(context.Context, *RemoveObserverRequest) (*RemoveObserverResponse, error)
 	IssueBattleTicket(context.Context, *IssueBattleTicketRequest) (*IssueBattleTicketResponse, error)
+	AttachRelayGate(context.Context, *AttachRelayGateRequest) (*AttachRelayGateResponse, error)
+	PromoteSpectateBroadcast(context.Context, *PromoteSpectateBroadcastRequest) (*PromoteSpectateBroadcastResponse, error)
 	mustEmbedUnimplementedBattleNodeServer()
 }
 
@@ -161,6 +187,12 @@ func (UnimplementedBattleNodeServer) RemoveObserver(context.Context, *RemoveObse
 }
 func (UnimplementedBattleNodeServer) IssueBattleTicket(context.Context, *IssueBattleTicketRequest) (*IssueBattleTicketResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IssueBattleTicket not implemented")
+}
+func (UnimplementedBattleNodeServer) AttachRelayGate(context.Context, *AttachRelayGateRequest) (*AttachRelayGateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachRelayGate not implemented")
+}
+func (UnimplementedBattleNodeServer) PromoteSpectateBroadcast(context.Context, *PromoteSpectateBroadcastRequest) (*PromoteSpectateBroadcastResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PromoteSpectateBroadcast not implemented")
 }
 func (UnimplementedBattleNodeServer) mustEmbedUnimplementedBattleNodeServer() {}
 func (UnimplementedBattleNodeServer) testEmbeddedByValue()                    {}
@@ -309,6 +341,42 @@ func _BattleNode_IssueBattleTicket_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BattleNode_AttachRelayGate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachRelayGateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleNodeServer).AttachRelayGate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleNode_AttachRelayGate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleNodeServer).AttachRelayGate(ctx, req.(*AttachRelayGateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BattleNode_PromoteSpectateBroadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PromoteSpectateBroadcastRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleNodeServer).PromoteSpectateBroadcast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleNode_PromoteSpectateBroadcast_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleNodeServer).PromoteSpectateBroadcast(ctx, req.(*PromoteSpectateBroadcastRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BattleNode_ServiceDesc is the grpc.ServiceDesc for BattleNode service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -343,6 +411,14 @@ var BattleNode_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IssueBattleTicket",
 			Handler:    _BattleNode_IssueBattleTicket_Handler,
+		},
+		{
+			MethodName: "AttachRelayGate",
+			Handler:    _BattleNode_AttachRelayGate_Handler,
+		},
+		{
+			MethodName: "PromoteSpectateBroadcast",
+			Handler:    _BattleNode_PromoteSpectateBroadcast_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -341,6 +341,9 @@ public:
     uint32_t RemoveItemsClamped(const ItemCountMap &itemsToRemove,
                                 std::vector<DrainedInstance> *drainedOut);
 
+    // 按槽位点名一个实例扣数量。它不看实例是否带更新版本的字段:目前没有生产调用方,
+    // 将来接上(例如"使用物品")的入口必须先判 ItemStore::IsCountableByConfig,不可计的回
+    // kFeatureUnavailable(版本错位),与按 config 扣除同口径(混版本持久字段保护设计 §4.4)。
     uint32_t RemoveItemByPos(const RemoveItemByPosParam &param);
 
     // 「满没满」是**布局层**的问题。拆分前它写作 items.size() >= capacity,

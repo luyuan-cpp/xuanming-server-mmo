@@ -213,7 +213,7 @@ bool TurnBattleEngine::IsValidRewardProfile(const BattleRewardProfile& profile) 
     }
     std::set<uint32_t> currencyTypes;
     for (const auto& currency : profile.currencies()) {
-        if (currency.currency_type() >= kCurrencyMax ||
+        if (!IsKnownCurrencyType(currency.currency_type()) ||
             currency.amount() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ||
             !currencyTypes.insert(currency.currency_type()).second) {
             return false;

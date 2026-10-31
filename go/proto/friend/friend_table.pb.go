@@ -99,12 +99,12 @@ type FriendRequestRecord struct {
 	// 不能复用 request_time_ms —— 那是发起时刻,一条刚被拒的老请求会被误判成该立刻清掉。
 	//
 	// 写入方已齐(F2 批,四条路径 / 五条语句,凡是改 status 的语句都同句写本列):
-	//  1. AddFriendRequest 的 upsert(INSERT ... ON DUPLICATE KEY UPDATE ... updated_ms=VALUES(updated_ms));
-	//  2. AcceptFriend 的正向 UPDATE(status=2);
-	//  3. AcceptFriend 的反向 UPDATE(把反向 pending 一并收敛成 accepted);
-	//  4. RejectFriend 的 CAS(status=3);
-	//  5. Block 取消两个方向的 pending(go/friend/internal/data/block_repo.go)。
-	//     前四条在 go/friend/internal/data/friend_repo.go。新增任何改 status 的写路径必须照此同句写本列。
+	//   1. AddFriendRequest 的 upsert(INSERT ... ON DUPLICATE KEY UPDATE ... updated_ms=VALUES(updated_ms));
+	//   2. AcceptFriend 的正向 UPDATE(status=2);
+	//   3. AcceptFriend 的反向 UPDATE(把反向 pending 一并收敛成 accepted);
+	//   4. RejectFriend 的 CAS(status=3);
+	//   5. Block 取消两个方向的 pending(go/friend/internal/data/block_repo.go)。
+	//   前四条在 go/friend/internal/data/friend_repo.go。新增任何改 status 的写路径必须照此同句写本列。
 	//
 	// ⚠ 把 Sweep.Mode 配成 delete 的**剩余前置只有一条**:从旧共享库 mmorpg 搬来的存量行。
 	// 旧表没有这一列,uint64 建出来是 bigint unsigned DEFAULT 0,搬过来的行 updated_ms 会是 0;

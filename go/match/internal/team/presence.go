@@ -5,22 +5,20 @@ import (
 
 	"match/internal/playercontract"
 
-	dbpb "proto/common/database"
-	"shared/savebarrier"
+	dspb "proto/data_service"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
-	"google.golang.org/protobuf/proto"
 )
 
 // 在线态与展示信息(设计文档 docs/design/team-system.md §G.1 / §G.2)。
 //
 // 这些都是显示层数据:每次构建视图或做惰性转让判定时按需批量读,绝不写进 TeamRecord
-// (AGENTS §11.6)。全部只读 SharedRedis,写者都不是 match:
+// (AGENTS §11.6)。只读,写者都不是 match:
 //
 //	player:session:<id>      player_locator  在线态唯一真值(只有 SESSION_STATE_ONLINE 算在线)
 //	battle:lock:<id>         C++ scene       咨询性"战斗中"(值是 battle_id,非空)
-//	PlayerAllData:{<id>}     C++ scene / login 等级、职业、昵称、外观、性别(尽力而为,缺失或解析失败填零值)
+//	data_service             player_store    等级、职业、昵称、外观、性别(尽力而为,缺失或读失败填零值)
 //
 // 失败语义:任何一次 MGET 失败只让对应字段按"离线 / 不在战斗 / 0"处理并记日志,
 // 不让 RPC 失败(照 guild online_status_resolver)。惰性转让用的 SessionLoader 例外:
@@ -42,12 +40,8 @@ type displayCache map[uint64]memberDisplay
 
 // presenceReader 批量读取在线态与展示信息。无可变状态,可并发使用。
 type presenceReader struct {
-	rds *redis.Redis // svcCtx.SharedRedis
-}
-
-// playerAllDataKey 是父快照键 PlayerAllData:{<id>},与 scene / login 同经 savebarrier.ParentKey 构造,不手写字面量。
-func playerAllDataKey(playerId uint64) string {
-	return savebarrier.ParentKey(playerId)
+	rds      *redis.Redis // svcCtx.SharedRedis
+	displays dspb.DataServiceClient
 }
 
 // loadSessions 实现 SessionLoader:key 不存在 → SessionAbsent;ONLINE → SessionOnline;
@@ -87,18 +81,32 @@ func (p presenceReader) loadDisplay(ctx context.Context, playerIds []uint64) dis
 	}
 	sessions := p.loadSessions(ctx, ids)
 	locks := p.mget(ctx, ids, playercontract.BattleLockKey, "battle:lock")
-	blobs := p.mget(ctx, ids, playerAllDataKey, "PlayerAllData")
+	displays := p.loadStoreDisplays(ctx, ids)
 	for i, id := range ids {
 		d := memberDisplay{Online: sessions[id] == SessionOnline}
 		if locks != nil {
 			d.InBattle = locks[i] != ""
 		}
-		if blobs != nil {
-			d.Level, d.ClassId, d.Name, d.AppearanceId, d.Gender = parsePlayerBrief(ctx, id, blobs[i])
+		if display := displays[id]; display != nil {
+			d.Level, d.ClassId, d.Name, d.AppearanceId, d.Gender = display.GetLevel(), display.GetClassId(),
+				display.GetName(), display.GetAppearanceId(), display.GetGender()
 		}
 		dc[id] = d
 	}
 	return dc
+}
+
+// loadStoreDisplays 经 data_service 读展示资料。失败只记日志,按全部缺失处理(同 mget 的失败语义)。
+func (p presenceReader) loadStoreDisplays(ctx context.Context, ids []uint64) map[uint64]*dspb.PlayerDisplay {
+	if p.displays == nil {
+		return nil
+	}
+	resp, err := p.displays.BatchGetPlayerDisplay(ctx, &dspb.BatchGetPlayerDisplayRequest{PlayerIds: ids})
+	if err != nil {
+		logx.WithContext(ctx).Errorf("[team] Failed to batch-read player display (treating as missing) n=%d: %v", len(ids), err)
+		return nil
+	}
+	return resp.GetPlayers()
 }
 
 // mget 按 keyOf 拼 key 批量读;失败或返回长度不符时记日志返回 nil(调用方按"全部缺失"处理)。
@@ -120,27 +128,6 @@ func (p presenceReader) mget(ctx context.Context, ids []uint64, keyOf func(uint6
 		return nil
 	}
 	return values
-}
-
-// parsePlayerBrief 从 PlayerAllData 取等级、职业、昵称、外观与性别(读法照 login player_class_backfill.go)。
-// 缺失、解析失败、player_id 不匹配都返回零值(尽力而为,§G.2 / J-11);昵称为空时由客户端兜底显示,
-// 服务端不编造名字。
-func parsePlayerBrief(ctx context.Context, playerId uint64, raw string) (level, classId uint32, name, appearanceId string, gender uint32) {
-	if raw == "" {
-		return 0, 0, "", "", 0
-	}
-	data := &dbpb.PlayerAllData{}
-	if err := proto.Unmarshal([]byte(raw), data); err != nil {
-		logx.WithContext(ctx).Infof("[team] Failed to parse PlayerAllData; display fields set to 0 player=%d: %v", playerId, err)
-		return 0, 0, "", "", 0
-	}
-	player := data.GetPlayerDatabaseData()
-	if player.GetPlayerId() != playerId {
-		return 0, 0, "", "", 0
-	}
-	profile := player.GetProfileComponent()
-	return player.GetLevelComponent().GetLevel(), player.GetUint32PbComponent().GetClass(),
-		profile.GetName(), profile.GetAppearanceId(), profile.GetGender()
 }
 
 // uniqueIds 去掉 0 与重复,保持首次出现顺序。

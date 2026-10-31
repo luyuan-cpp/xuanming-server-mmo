@@ -289,3 +289,20 @@ message BattleActivityContext {
   uint32 guild_period_key = 6;      // 确认开战时的帮会期键(activity.GuildPeriodKey;历练即游戏日),用于每日计资金胜场上限
   uint64 launch_request_id = 7;     // 同道历练开战前持久原件；match/battle原样复制回结果，不包含账号
 }
+
+// 观战可见性(docs/design/battle-spectate-tiered-fanout.md §10 第 6 条 / §10.2):战斗创建时由 match 按
+// 单一策略表决定、随 CreateBattleRequest 冻结,之后不变。match 的登记公开、两条 WatchBattle 路径、
+// 观战列表与 battle 的 AddObserver 四处都按它执法。默认拒绝:未填(UNSPECIFIED)与 PRIVATE 一样不可观战。
+enum eSpectateVisibility {
+  SPECTATE_VISIBILITY_UNSPECIFIED = 0;  // 视同私密(老发送方 / 漏填一律 fail-closed)
+  SPECTATE_VISIBILITY_PRIVATE = 1;      // 不可观战:计分局、切磋、活动局、自定义房间与未知模式
+  SPECTATE_VISIBILITY_PUBLIC = 2;       // 任何在线玩家可观战,进观战列表与随机观战
+}
+
+// 观战投递档位(battle-spectate-tiered-fanout.md §3 / §15):按场只升不降,match 是档位的记账方,
+// battle 只认「挂了哪些中继 gate」与「是否已升广播」两件事。
+enum eSpectateTier {
+  SPECTATE_TIER_DIRECT = 0;     // L0:观众凭票直连 battle(直连席未满)
+  SPECTATE_TIER_RELAY = 1;      // L1:直连席已满,battle 每回合给每台挂了观众的 gate 各发一条中继帧
+  SPECTATE_TIER_BROADCAST = 2;  // L2:全服广播,battle 每回合只往广播 topic 发一条,所有 gate 都读
+}

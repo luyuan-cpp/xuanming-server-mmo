@@ -622,6 +622,41 @@ TEST(BattleShutdownOutcomeFlush, OnlyFrozenUnconfirmedV1OutcomesAreFlushed)
     EXPECT_FALSE(NeedsShutdownOutcomeFlush(2, true, false, false));  // 未知协议版本(建房时已拒):fail-closed 不提交
 }
 
+// 2026-10-30:v1 房间的 SQL 终局重放到总跨度上限之后不再「判用尽就停」。修复前越界即移出待提交集合、此后不再重放,
+// 而房间只在拿到 COMPLETE / ABORT 时才删,于是永远留在节点上、节点排不空。现在越界只置 outcomeExhausted(告警、计入滞留),
+// 重放改为每分钟一次,直到 Match 给出决定(同一原件按持久决定幂等回放,到期 ABORT 由 Match 自己落);越界之后再过
+// kSqlOutcomeSlowReplaySpan 仍无决定才本地删房(重试有上限)。
+TEST(BattleSqlOutcomeReplay, SqlOutcomeKeepsSlowReplayAfterSpanExhaustion)
+{
+    using turnbattle::SqlOutcomeReplayAbandoned;
+    using turnbattle::SqlOutcomeRetryInterval;
+    using turnbattle::SqlOutcomeSpanExceeded;
+    const std::chrono::steady_clock::duration span = turnbattle::kMaxStagingSpan;
+    const std::chrono::steady_clock::duration giveUp = span + turnbattle::kSqlOutcomeSlowReplaySpan;
+    const auto oneMs = std::chrono::milliseconds(1);
+
+    // 跨度之内:快速重放,每 5 秒一次。
+    EXPECT_FALSE(SqlOutcomeSpanExceeded(std::chrono::steady_clock::duration::zero()));
+    EXPECT_FALSE(SqlOutcomeSpanExceeded(span - oneMs));
+    EXPECT_EQ(5, SqlOutcomeRetryInterval(false).count());
+
+    // 越界:判 exhausted(告警、计入滞留),但不放弃 —— 继续慢速重放,每分钟一次。
+    EXPECT_TRUE(SqlOutcomeSpanExceeded(span));
+    EXPECT_FALSE(SqlOutcomeReplayAbandoned(span));
+    EXPECT_FALSE(SqlOutcomeReplayAbandoned(giveUp - oneMs));
+    EXPECT_EQ(60, SqlOutcomeRetryInterval(true).count());
+    // 越界之后到放弃之前还能慢速重放上千轮(24h / 60s),足够等到 Match 的到期 ABORT 或 COMPLETE 回放。
+    EXPECT_GE(turnbattle::kSqlOutcomeSlowReplaySpan / SqlOutcomeRetryInterval(true), 1000);
+
+    // 越界之后再过 kSqlOutcomeSlowReplaySpan 仍无决定:本地删房,不再重放。
+    EXPECT_TRUE(SqlOutcomeReplayAbandoned(giveUp));
+    EXPECT_TRUE(SqlOutcomeSpanExceeded(giveUp));
+
+    // 越界改变的只是重放节奏:停机补提交与滞留分类照旧只看 outcomeExhausted。
+    EXPECT_FALSE(turnbattle::NeedsShutdownOutcomeFlush(1, true, false, true));
+    EXPECT_EQ(turnbattle::ClassifyStuckTerminal(nullptr, true), turnbattle::StuckTerminal::kSqlOutcomeUnconfirmed);
+}
+
 // 一轮落库的回复汇总(battle_room_manager.cpp StagePersonalSettlements 的编排接缝)。
 // 每名成员只记第一次回复;不在本轮成员里的 id 忽略;全部成员回复过的那一次恰好返回 true。
 TEST(BattleStagingRoundTally, RecordsFirstReplyPerMemberAndCompletesOnce)

@@ -15,16 +15,15 @@ import (
 
 // import-from-redis(提案 §7 P1):把 mapping Redis 里现存的归属 / 落点 / 合走标记导进全局库的路由表。
 //
-//  1. 开头 SCAN merge:in_progress:*,有一把就中止(退出码 3),一行都不写;没有就再原样快照一次 merge:merged_into:*;
+//  1. 开头原样快照一次 merge:merged_into:*;
 //  2. A 遍:逐页 SCAN player:zone:*,每页一次 MGET 三族键(zone / placement / maprev),逐名校验规范形式,
 //     任一值不规范就整名玩家跳过并记 MALFORMED;合法的按 player_id 升序凑批调 ImportRoutes;
 //     处理过(含判畸形)的 id 记进 seen;
 //  3. B 遍:SCAN player:placement:*,**按是否在 seen 里**跳过 —— 不是按「zone 非空」跳过:P1 期间 redis 模式
 //     还在登记,A、B 两遍之间新写了 zone 的玩家在 A 遍里没被 SCAN 到,按 zone 跳过就会把他漏掉;
 //  4. merged_into:SCAN merge:merged_into:*,校验后调 ImportMergedInto(同 src 而 dst / run_id 不同记冲突、不覆盖);
-//  5. 结尾再 SCAN 一次围栏,并把 merged_into 快照与开头比对:命中围栏、或快照有任何新增 / 消失 / 改值,同样退出码 3。
-//     后者抓的是「在两次围栏检查之间开始并跑完」的合服 / 撤销合服:围栏已删,结尾的围栏 SCAN 看不到它,
-//     而 merge 先写 merged_into 再改映射、unmerge 先改回映射再删它,快照一定不同(见 snapshotMergedInto)。
+//  5. 结尾把 merged_into 快照与开头比对:有任何新增 / 消失 / 改值,退出码 3 —— 导入窗口内跑过合服 / 撤销合服
+//     (见 snapshotMergedInto)。
 //
 // 退出码 3 之后**不能原样重跑**:窗口内被合服改写的玩家,库里已导入的是旧 home(src)、缓存里是新 home(dst),
 // 而导入从不覆盖库里的非 NULL 值,重跑只会把它们判成 conflict(退出码 1)且永远收敛不了。P1 期间库还不是真源
@@ -32,12 +31,11 @@ import (
 // route_meta / route_reconcile 原地复位之后从头导入(docs/ops/merge-zone-runbook.md §9.3)。只有中断 / 超时 / 退出码 2
 // 这类与合服无关的失败,才可以原样重跑(导入幂等)。
 //
-// 只能检测 merge / unmerge 立的围栏与写的 merged_into;relocate / pin-placement / backfill 两样都不碰,
-// 冻结窗口由人保证(ImportNote)。
+// 只能检测 merge / unmerge 写的 merged_into;其余写者的冻结窗口由人保证(ImportNote)。
 // seen 按 100 万玩家估算约几十 MB,对一次性的运维工具可以接受。
 
 // ImportNote 是 import-from-redis 在 stderr 打的第一行。
-const ImportNote = "NOTE: 只能检测 merge/unmerge 的合服围栏(merge:in_progress:*);relocate / pin-placement / backfill 不立围栏,冻结窗口由人保证(proposal §7 P1)"
+const ImportNote = "NOTE: 只能检测 merge/unmerge 改过 merge:merged_into:*;其余写者的冻结窗口由人保证(proposal §7 P1)"
 
 // 退出码(cmd/route_tool 原样返回给 shell)。
 const (
@@ -47,15 +45,11 @@ const (
 	ExitAttention = 1
 	// ExitFailed 失败:参数、配置、连接、查询或写入出错(含 1205),或超时。
 	ExitFailed = 2
-	// ExitFenced 只有 import 用:有生效的合服围栏,或导入期间 merge:merged_into 变过(窗口内跑过合服),已中止。
-	ExitFenced = 3
+	// ExitMergeChanged 只有 import 用:导入期间 merge:merged_into 变过(窗口内跑过合服),已中止。
+	ExitMergeChanged = 3
 )
 
-// ErrMergeFenceActive 表示 import 开头或结尾 SCAN 到了 merge:in_progress:*(退出码 3)。
-var ErrMergeFenceActive = errors.New("route_tool: active merge fence (merge:in_progress:*)")
-
-// ErrMergeStateChanged 表示 import 结尾的 merge:merged_into 快照与开头不同:导入窗口内有合服 / 撤销合服跑过
-// (退出码 3,与围栏同一个恢复办法)。
+// ErrMergeStateChanged 表示 import 结尾的 merge:merged_into 快照与开头不同:导入窗口内有合服 / 撤销合服跑过(退出码 3)。
 var ErrMergeStateChanged = errors.New("route_tool: merge:merged_into changed during the import (a merge / unmerge ran inside the window)")
 
 // routeDB 是本包对全局库的全部依赖,*store.RouteStore 天然满足。导入只走 ImportRoutes / ImportMergedInto
@@ -137,8 +131,8 @@ func (r ImportReport) SummaryLine() string {
 // ImportExitCode 把一次 import 的结果映射成退出码。
 func ImportExitCode(rep ImportReport, err error) int {
 	switch {
-	case errors.Is(err, ErrMergeFenceActive), errors.Is(err, ErrMergeStateChanged):
-		return ExitFenced
+	case errors.Is(err, ErrMergeStateChanged):
+		return ExitMergeChanged
 	case err != nil:
 		return ExitFailed
 	case rep.NeedsAttention():
@@ -165,8 +159,8 @@ type importer struct {
 	mergedIntoAtStart map[string]string
 }
 
-// Import 跑一次 import-from-redis(步骤见文件头)。返回 ErrMergeFenceActive / ErrMergeStateChanged 时退出码为 3;
-// 其它 error(Redis / 库 / 超时)退出码为 2。只有完整跑完(含结尾的围栏与 merged_into 复查)才往 Stdout 写统计行。
+// Import 跑一次 import-from-redis(步骤见文件头)。返回 ErrMergeStateChanged 时退出码为 3;
+// 其它 error(Redis / 库 / 超时)退出码为 2。只有完整跑完(含结尾的 merged_into 复查)才往 Stdout 写统计行。
 func Import(ctx context.Context, rd mappingReader, db routeDB, opts ImportOptions) (ImportReport, error) {
 	if err := opts.validate(); err != nil {
 		return ImportReport{DryRun: opts.DryRun}, err
@@ -186,9 +180,6 @@ func Import(ctx context.Context, rd mappingReader, db routeDB, opts ImportOption
 		badKeys: make(map[string]struct{}),
 	}
 
-	if err := im.checkFences(ctx, "before the import; nothing was written"); err != nil {
-		return im.report, err
-	}
 	snap, err := snapshotMergedInto(ctx, rd, int64(opts.Batch))
 	if err != nil {
 		// 一行都还没写:按失败处理(退出码 2),原样重跑即可。
@@ -207,24 +198,17 @@ func Import(ctx context.Context, rd mappingReader, db routeDB, opts ImportOption
 		return im.report, err
 	}
 
-	// 结尾两项复查:此刻还有围栏,或 merged_into 与开头不同(窗口内有合服 / 撤销合服跑完了),都是退出码 3。
-	// 两项都做(不因前一项命中就跳过后一项),ABORT 行把看到的都列出来,运维一次看全。
+	// 结尾复查:merged_into 与开头不同(窗口内有合服 / 撤销合服跑完了)是退出码 3。
 	const afterWhen = "after the import; rows already written are kept but must NOT be re-imported as is — " +
 		"truncate the route tables and import from scratch after the window (merge-zone-runbook §9.3)"
-	fenceErr := im.checkFences(ctx, afterWhen)
 	changeErr := im.checkMergedIntoUnchanged(ctx, afterWhen)
 	im.detail.finish()
-	for _, e := range []error{fenceErr, changeErr} {
-		if e != nil && !errors.Is(e, ErrMergeFenceActive) && !errors.Is(e, ErrMergeStateChanged) {
-			// 复查本身失败(Redis 出错):证明不了窗口内没有合服,按失败处理,不出统计行。
-			return im.report, e
-		}
+	if changeErr != nil && !errors.Is(changeErr, ErrMergeStateChanged) {
+		// 复查本身失败(Redis 出错):证明不了窗口内没有合服,按失败处理,不出统计行。
+		return im.report, changeErr
 	}
 	// 结尾命中时也出统计行:已写入的部分是真实的,运维需要知道写了多少。
 	fmt.Fprintln(opts.Stdout, im.report.SummaryLine())
-	if fenceErr != nil {
-		return im.report, fenceErr
-	}
 	return im.report, changeErr
 }
 
@@ -242,19 +226,6 @@ func (im *importer) checkMergedIntoUnchanged(ctx context.Context, when string) e
 	fmt.Fprintf(im.opts.Stderr, "ABORT: merge:merged_into changed during the import (+added -removed ~changed) %s: %s\n",
 		when, strings.Join(changes, " "))
 	return fmt.Errorf("%w (%s): %s", ErrMergeStateChanged, when, strings.Join(changes, ", "))
-}
-
-// checkFences SCAN 一次围栏;有生效的就打 ABORT 并返回 ErrMergeFenceActive。
-func (im *importer) checkFences(ctx context.Context, when string) error {
-	fences, err := listActiveFences(ctx, im.rd, int64(im.opts.Batch))
-	if err != nil {
-		return err
-	}
-	if len(fences) == 0 {
-		return nil
-	}
-	fmt.Fprintf(im.opts.Stderr, "ABORT: %d active merge fence(s) %s: %s\n", len(fences), when, strings.Join(fences, " "))
-	return fmt.Errorf("%w (%s): %s", ErrMergeFenceActive, when, strings.Join(fences, ", "))
 }
 
 // importPlayerPass 是 A 遍(prefix = player:zone:)或 B 遍(prefix = player:placement:)。

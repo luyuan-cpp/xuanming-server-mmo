@@ -41,6 +41,8 @@ public:
     static constexpr std::string_view kAddObserverPath = "/BattleNode/AddObserver";
     static constexpr std::string_view kRemoveObserverPath = "/BattleNode/RemoveObserver";
     static constexpr std::string_view kIssueBattleTicketPath = "/BattleNode/IssueBattleTicket";
+    static constexpr std::string_view kAttachRelayGatePath = "/BattleNode/AttachRelayGate";
+    static constexpr std::string_view kPromoteSpectateBroadcastPath = "/BattleNode/PromoteSpectateBroadcast";
 
 private:
     using QueryObserverCall = GrpcUnaryCall<::QueryObserverRequest, ::QueryObserverResponse>;
@@ -50,6 +52,8 @@ private:
     using AddObserverCall = GrpcUnaryCall<::AddObserverRequest, ::AddObserverResponse>;
     using RemoveObserverCall = GrpcUnaryCall<::RemoveObserverRequest, ::RemoveObserverResponse>;
     using IssueBattleTicketCall = GrpcUnaryCall<::IssueBattleTicketRequest, ::IssueBattleTicketResponse>;
+    using AttachRelayGateCall = GrpcUnaryCall<::AttachRelayGateRequest, ::AttachRelayGateResponse>;
+    using PromoteSpectateBroadcastCall = GrpcUnaryCall<::PromoteSpectateBroadcastRequest, ::PromoteSpectateBroadcastResponse>;
     void QueryObserver(const std::shared_ptr<QueryObserverCall>& call);
     void QueryBattleCreation(const std::shared_ptr<QueryBattleCreationCall>& call);
     void CreateBattle(const std::shared_ptr<CreateBattleCall>& call);
@@ -57,6 +61,8 @@ private:
     void AddObserver(const std::shared_ptr<AddObserverCall>& call);
     void RemoveObserver(const std::shared_ptr<RemoveObserverCall>& call);
     void IssueBattleTicket(const std::shared_ptr<IssueBattleTicketCall>& call);
+    void AttachRelayGate(const std::shared_ptr<AttachRelayGateCall>& call);
+    void PromoteSpectateBroadcast(const std::shared_ptr<PromoteSpectateBroadcastCall>& call);
     static void HandleQueryObserver(const ::QueryObserverRequest* request, ::QueryObserverResponse* response);
     static void HandleQueryBattleCreation(const ::QueryBattleCreationRequest* request, ::QueryBattleCreationResponse* response);
     static void HandleCreateBattle(const ::CreateBattleRequest* request, ::CreateBattleResponse* response);
@@ -64,6 +70,8 @@ private:
     static void HandleAddObserver(const ::AddObserverRequest* request, ::AddObserverResponse* response);
     static void HandleRemoveObserver(const ::RemoveObserverRequest* request, ::RemoveObserverResponse* response);
     static void HandleIssueBattleTicket(const ::IssueBattleTicketRequest* request, ::IssueBattleTicketResponse* response);
+    static void HandleAttachRelayGate(const ::AttachRelayGateRequest* request, ::AttachRelayGateResponse* response);
+    static void HandlePromoteSpectateBroadcast(const ::PromoteSpectateBroadcastRequest* request, ::PromoteSpectateBroadcastResponse* response);
     muduo::net::EventLoop& loop_;
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.private
     // 建房准入闸。用 shared_ptr 持有:grpc.CreateBattle.guard 的许可回调只弱持有它、不捕获 this(AGENTS §11.7),

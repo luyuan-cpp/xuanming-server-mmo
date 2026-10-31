@@ -4,7 +4,7 @@ package routereconcile
 // 下一拍开头收结果 = 「两拍之间跑完」),不起计时器、不依赖墙钟、不真睡。关停的两个用例才起真 goroutine(Run / Start),
 // 它们的等待全部由假钟与通道驱动。
 //
-// 用例与规格的对应:scout 1b-2 reconciler_test 全部(NeverTouchesMergeFenceKeys 按 §13.1 第 3 条改写为 FenceMirrorFollowsDB)、
+// 用例与规格的对应:scout 1b-2 reconciler_test 全部、
 // VERDICT 补的用例(CatchUp… / LookbackSaturatesAtZero / FailoverIncremental… / IncrementalAfterPrewarm… / ThrottledIncremental… /
 // ArmingRefused… / SustainedRedisErrors… / Shutdown…)、§13.1 新增行为各一条。
 
@@ -132,17 +132,12 @@ type fakeStore struct {
 	wm, cvm    uint64
 	rows       map[uint64]store.RouteRow
 	mergedInto []store.MergedIntoRow
-	fences     []store.ActiveMergeFence
-	// fenceListHook 非 nil 时按调用序号(从 1 起)给 ListActiveMergeFences 的结果。
-	fenceListHook func(n int) []store.ActiveMergeFence
-	// fenceZones 保留出现过围栏行的 zone，覆盖已释放但 63 号片仍有行的情况。
-	fenceZones map[uint32]struct{}
 
-	peeks, renews, releases, fenceLists int
-	releaseErr                          error
-	advanceReqs                         []store.ReconcileTickRequest
-	freezes                             []store.RouteFreezeReason
-	scans                               []scanCall
+	peeks, renews, releases int
+	releaseErr              error
+	advanceReqs             []store.ReconcileTickRequest
+	freezes                 []store.RouteFreezeReason
+	scans                   []scanCall
 
 	// block 非 nil 时 ScanRoutes 先发 scanStarted 信号,再阻塞到 block 关闭(无视 ctx:模拟卡住的库调用)。
 	block       chan struct{}
@@ -151,7 +146,7 @@ type fakeStore struct {
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{nowMs: 1_000_000, generation: testGen, writable: true, rows: map[uint64]store.RouteRow{}, fenceZones: map[uint32]struct{}{}}
+	return &fakeStore{nowMs: 1_000_000, generation: testGen, writable: true, rows: map[uint64]store.RouteRow{}}
 }
 
 func (s *fakeStore) setRow(r store.RouteRow) {
@@ -337,31 +332,6 @@ func (s *fakeStore) ListMergedInto(context.Context) ([]store.MergedIntoRow, erro
 	return append([]store.MergedIntoRow(nil), s.mergedInto...), nil
 }
 
-func (s *fakeStore) ListActiveMergeFences(context.Context) (store.ActiveMergeFences, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.fenceLists++
-	fences := s.fences
-	if s.fenceListHook != nil {
-		fences = s.fenceListHook(s.fenceLists)
-	}
-	for _, fence := range fences {
-		s.fenceZones[fence.ZoneID] = struct{}{}
-	}
-	return store.ActiveMergeFences{DBNowMs: s.nowMs, Fences: append([]store.ActiveMergeFence(nil), fences...)}, nil
-}
-
-func (s *fakeStore) ListMergeFenceZones(context.Context) ([]uint32, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var zones []uint32
-	for zone := range s.fenceZones {
-		zones = append(zones, zone)
-	}
-	sort.Slice(zones, func(i, j int) bool { return zones[i] < zones[j] })
-	return zones, nil
-}
-
 func (s *fakeStore) DBNowMs(context.Context) (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -390,16 +360,6 @@ type fakeCache struct {
 	arms     int
 	pexpire  map[string]uint64
 	closed   bool
-	// 钩子在不持 c.mu 时调用，可通过同一 Cache 接口读取本拍模拟页面中的键。
-	fenceScanHook func(context.Context, uint64, int) ([]FenceMirror, uint64, error)
-	fenceGetHook  func(context.Context, []string) ([]FenceMirror, error)
-	fenceScans    []fenceScanCall
-	fenceGets     [][]string
-}
-
-type fenceScanCall struct {
-	cursor uint64
-	pages  int
 }
 
 func newFakeCache() *fakeCache {
@@ -693,77 +653,6 @@ func (c *fakeCache) MirrorMergedInto(_ context.Context, rows []store.MergedIntoR
 	return res, nil
 }
 
-func (c *fakeCache) ScanFenceMirrors(ctx context.Context, cursor uint64, pages int) ([]FenceMirror, uint64, error) {
-	c.mu.Lock()
-	c.record("ScanFenceMirrors")
-	c.fenceScans = append(c.fenceScans, fenceScanCall{cursor: cursor, pages: pages})
-	hook := c.fenceScanHook
-	c.mu.Unlock()
-	if hook != nil {
-		return hook(ctx, cursor, pages)
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	var out []FenceMirror
-	for k, v := range c.kv {
-		if strings.HasPrefix(k, fenceMirrorKeyPrefix) {
-			out = append(out, FenceMirror{Key: k, Zone: fenceMirrorZone(k), Value: v})
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
-	return out, 0, nil
-}
-
-func (c *fakeCache) GetFenceMirrors(ctx context.Context, keys []string) ([]FenceMirror, error) {
-	c.mu.Lock()
-	c.record("GetFenceMirrors")
-	c.fenceGets = append(c.fenceGets, append([]string(nil), keys...))
-	hook := c.fenceGetHook
-	c.mu.Unlock()
-	if hook != nil {
-		return hook(ctx, keys)
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	var out []FenceMirror
-	for _, key := range keys {
-		if value, ok := c.kv[key]; ok {
-			out = append(out, FenceMirror{Key: key, Zone: fenceMirrorZone(key), Value: value})
-		}
-	}
-	return out, nil
-}
-
-func (c *fakeCache) SetFenceMirror(_ context.Context, zone uint32, holder string, epoch, expiresAtMs uint64) (placement.MergeFenceMirrorOutcome, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.record("SetFenceMirror")
-	keys, args, err := placement.MergeFenceMirrorArgs(zone, holder, epoch, expiresAtMs)
-	if err != nil {
-		return 0, err
-	}
-	if cur, ok := c.kv[keys[0]]; ok {
-		got, has := placement.MergeFenceHolderEpoch(cur)
-		if !has {
-			return placement.MergeFenceMirrorForeign, nil
-		}
-		if got > epoch {
-			return placement.MergeFenceMirrorStale, nil
-		}
-	}
-	c.kv[keys[0]] = holder
-	c.pexpire[keys[0]] = expiresAtMs + placement.MergeFenceMirrorMarginMs
-	_ = args
-	return placement.MergeFenceMirrorWritten, nil
-}
-
-func (c *fakeCache) CompareAndDeleteFenceMirror(_ context.Context, key, value string) (bool, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.record("CompareAndDeleteFenceMirror")
-	return c.cadLocked(key, value), nil
-}
-
 func (c *fakeCache) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -956,10 +845,6 @@ func watermarkFor(t *testing.T, gen string, wm uint64) string {
 		t.Fatalf("encode watermark: %v", err)
 	}
 	return raw
-}
-
-func holderJSON(run string, epoch uint64) string {
-	return fmt.Sprintf(`{"run_id":%q,"fence_epoch":%d}`, run, epoch)
 }
 
 // firstUpdatedScan 返回第一次按 updated_at_ms 扫库的起点(没有回 nil)。
@@ -1472,25 +1357,17 @@ func TestSelfCheckExportedOnlyByLeader(t *testing.T) {
 
 // ── 挂标记的前置与闩锁 ────────────────────────────────────────────────────────
 
-// TestLegacyConflictOrFencedBlocksArming:预热有未决结局(遗留值冲突 / 围栏)→ 不挂标记,进 armingBlocked。
-func TestLegacyConflictOrFencedBlocksArming(t *testing.T) {
-	for _, kind := range []string{"legacy_conflict", "fenced"} {
-		t.Run(kind, func(t *testing.T) {
-			h := newHarness(t, true, nil)
-			h.st.setRow(homeRow(7, 3, 1, 900_000))
-			if kind == "fenced" {
-				h.c.forced[7] = PushFenced
-			} else {
-				h.c.set(placement.HomeZoneKey(7), "9")
-			}
-			h.ticks(3, 0)
-			if h.c.arms != 0 || h.readyPresent() {
-				t.Fatalf("an unresolved row must block arming (arms=%d)", h.c.arms)
-			}
-			if h.obs.event(metrics.RouteReconcileEventArmingRefusedUnresolved) != 1 || h.r.latch == nil {
-				t.Fatalf("refused=%d latch=%v", h.obs.event(metrics.RouteReconcileEventArmingRefusedUnresolved), h.r.latch)
-			}
-		})
+// TestLegacyConflictBlocksArming:预热有未决结局(遗留值冲突)→ 不挂标记,进 armingBlocked。
+func TestLegacyConflictBlocksArming(t *testing.T) {
+	h := newHarness(t, true, nil)
+	h.st.setRow(homeRow(7, 3, 1, 900_000))
+	h.c.set(placement.HomeZoneKey(7), "9")
+	h.ticks(3, 0)
+	if h.c.arms != 0 || h.readyPresent() {
+		t.Fatalf("an unresolved row must block arming (arms=%d)", h.c.arms)
+	}
+	if h.obs.event(metrics.RouteReconcileEventArmingRefusedUnresolved) != 1 || h.r.latch == nil {
+		t.Fatalf("refused=%d latch=%v", h.obs.event(metrics.RouteReconcileEventArmingRefusedUnresolved), h.r.latch)
 	}
 }
 
@@ -1619,92 +1496,6 @@ func TestDisarmDropsMarker(t *testing.T) {
 	h.mustTick(metrics.RouteReconcileTickOK)
 	if h.readyPresent() || h.obs.event(metrics.RouteReconcileEventMarkerDroppedDisarmed) != 1 {
 		t.Fatalf("Arm=false must drop the marker (present=%t events=%v)", h.readyPresent(), h.obs.events)
-	}
-}
-
-// ── 围栏镜像 ──────────────────────────────────────────────────────────────────
-
-// TestFenceMirrorFollowsDB(取代 NeverTouchesMergeFenceKeys,§13.1 第 3 条):库里生效的围栏补镜像(过期 = 库 expires_at + 10 分钟),
-// 库里释放之后复读确认再按完整值删;别的键一概不碰。
-func TestFenceMirrorFollowsDB(t *testing.T) {
-	h := newHarness(t, false, nil)
-	holder := holderJSON("run1", 3)
-	h.st.fences = []store.ActiveMergeFence{{ZoneID: 5, RunID: "run1", ExpiresAtMs: 2_000_000, HolderJSON: holder, FenceEpoch: 3}}
-	h.mustTick(metrics.RouteReconcileTickOK)
-	key := placement.MergeFenceKey(5)
-	if v, _ := h.c.get(key); v != holder || h.c.pexpire[key] != 2_000_000+placement.MergeFenceMirrorMarginMs {
-		t.Fatalf("mirror %q pexpireat %d", v, h.c.pexpire[key])
-	}
-	h.st.mu.Lock()
-	h.st.fences = nil
-	h.st.mu.Unlock()
-	h.mustTick(metrics.RouteReconcileTickOK)
-	if _, ok := h.c.get(key); ok || h.obs.mirrors[metrics.RouteReconcileMirrorFenceDeleted] != 1 {
-		t.Fatalf("a released fence's mirror must be deleted (mirrors %v)", h.obs.mirrors)
-	}
-	for k := range h.c.kv {
-		if strings.HasPrefix(k, fenceMirrorKeyPrefix) {
-			t.Fatalf("unexpected fence mirror key left: %s", k)
-		}
-	}
-}
-
-// TestStaleFenceMirrorDeletedOnlyAfterDBRecheck:第一次读库不生效、复读库时已生效(两次读之间刚获取)→ 不删;
-// 下一拍按库值(更大的 epoch)覆写;释放之后两次读都不生效才删。
-func TestStaleFenceMirrorDeletedOnlyAfterDBRecheck(t *testing.T) {
-	h := newHarness(t, false, nil)
-	key := placement.MergeFenceKey(5)
-	old, newer := holderJSON("run1", 3), holderJSON("run2", 4)
-	h.c.set(key, old)
-	active := []store.ActiveMergeFence{{ZoneID: 5, RunID: "run2", ExpiresAtMs: 3_000_000, HolderJSON: newer, FenceEpoch: 4}}
-	h.st.fenceListHook = func(n int) []store.ActiveMergeFence {
-		switch n {
-		case 1:
-			return nil // 第一拍第一次读:还没获取
-		case 2, 3:
-			return active // 第一拍复读、第二拍:已获取
-		default:
-			return nil // 之后:已释放
-		}
-	}
-	h.mustTick(metrics.RouteReconcileTickOK)
-	if v, _ := h.c.get(key); v != old || h.obs.mirrors[metrics.RouteReconcileMirrorFenceDeleted] != 0 {
-		t.Fatalf("a mirror whose fence became active between the two reads must not be deleted (value %q)", v)
-	}
-	h.mustTick(metrics.RouteReconcileTickOK)
-	if v, _ := h.c.get(key); v != newer {
-		t.Fatalf("the active fence must overwrite the older-epoch mirror, got %q", v)
-	}
-	h.mustTick(metrics.RouteReconcileTickOK)
-	if _, ok := h.c.get(key); ok {
-		t.Fatal("after release the mirror must be deleted")
-	}
-}
-
-// TestForeignFenceBlocksArmingAndIsNotDeleted(§13.1 第 3 条):解不出 fence_epoch 的镜像(旧版 merge_zone 写的)不删、计 foreign_fence、
-// 阻止挂标记;它消失之后才预热、挂标记。
-func TestForeignFenceBlocksArmingAndIsNotDeleted(t *testing.T) {
-	h := newHarness(t, true, nil)
-	key := placement.MergeFenceKey(5)
-	h.c.set(key, `{"run_id":"legacy"}`)
-	h.ticks(2, time.Second)
-	if v, ok := h.c.get(key); !ok || v != `{"run_id":"legacy"}` {
-		t.Fatal("a foreign fence mirror must never be deleted")
-	}
-	if h.obs.event(metrics.RouteReconcileEventForeignFence) < 2 || h.obs.event(metrics.RouteReconcileEventArmingRefusedUnresolved) != 1 {
-		t.Fatalf("events %v", h.obs.events)
-	}
-	if h.c.arms != 0 || h.c.count("SetWarmToken") != 0 {
-		t.Fatal("no prewarm / arming while a foreign fence mirror exists")
-	}
-	h.c.del(key)
-	h.mustTick(metrics.RouteReconcileTickOK)
-	if h.started() != phasePrewarm {
-		t.Fatalf("after the foreign mirror is gone: task = %s, want prewarm", h.started())
-	}
-	h.mustTick(metrics.RouteReconcileTickOK)
-	if !h.readyPresent() {
-		t.Fatal("the marker must be armed after the prewarm")
 	}
 }
 

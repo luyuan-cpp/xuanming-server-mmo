@@ -6,7 +6,9 @@ package logic
 //     outcome=index_failed;D82 换节点前改写记录失败同理;
 //   - 建房失败路径在补偿之后删掉预写记录;DestroyBattle 也失败(房间可能活着)时保留记录;
 //   - 开局成功后在推进 ready 之后补写记录 + 入活跃集合(publishSpectateBattle,best-effort),
-//     补回建房窗口里被按 battle_id 观战懒剔除的记录。
+//     补回建房窗口里被按 battle_id 观战懒剔除的记录;
+//   - 可见性随建房原件冻结(§10 第 6 条):私密局只写记录、不入活跃集合。依赖「开局后入活跃集合」的
+//     用例改用公开的 PVE_SOLO(startPveSolo),不用按策略已是私密局的 1V1。
 // Redis 故障用 miniredis 前置钩子按命令 + key 精确注入;退避用 spectateRecordRetrySleepFn 记录器
 // 顶替,不真睡。scene 的冻结用 sceneFreezeModel 按真实状态机模拟(FIGHTING 下拒绝取消),
 // 断言补偿后到底还有没有人被冻着,而不是只数 CancelBattlePrepare 调用。
@@ -14,6 +16,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,17 +36,35 @@ import (
 )
 
 // registerSpectateBattle 是单测夹具:一次性登记一场"已确定存在"的战斗(写记录 + 入活跃集合),
-// 与 gather 开局成功后的最终状态一致。生产路径不用它 —— gather 把两步拆在建房前后
+// 与 gather 开局成功后的最终状态一致:可见性按 spectateVisibilityFor(mode, 无活动上下文)冻结,
+// 私密模式(1V1 / 5V5 / 切磋……)只写记录、不入活跃集合。生产路径不用它 —— gather 把两步拆在建房前后
 // (writeSpectateRecord / publishSpectateBattle)。spectate_test.go、requestbattleticket_test.go 也用它。
 func registerSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64, battleNodeId uint32,
 	mode matchpb.MatchMode, battleConfigId uint32, playerNames []string, createdAtMs uint64,
 ) error {
-	record := newSpectateRecord(battleId, battleNodeId, mode, battleConfigId, playerNames, createdAtMs)
+	record := newSpectateRecord(battleId, battleNodeId, mode, battleConfigId, playerNames, createdAtMs,
+		spectateVisibilityFor(mode, nil))
 	if err := writeSpectateRecord(svcCtx, record); err != nil {
 		return err
 	}
 	addSpectateActive(svcCtx, record)
 	return nil
+}
+
+// startPveSolo 按 JoinQueue 单人即时开战的样子铺数据(位置 + 一张不入队的 matched 票),返回 gather 入参;
+// 用例随后照生产调 RunGather(PVE_SOLO, 单人, requeueOnFail=false)。PVE_SOLO 是公开局,开局成功即入活跃集合。
+func startPveSolo(t *testing.T, svcCtx *svc.ServiceContext, mr *miniredis.Miniredis, playerId uint64) ([]uint64, map[uint64]string) {
+	t.Helper()
+	setPlayerLocation(t, mr, playerId, 1)
+	ticket := &queueTicket{
+		Ticket:       "solo-" + strconv.FormatUint(playerId, 10),
+		Mode:         int32(matchpb.MatchMode_MATCH_MODE_PVE_SOLO),
+		State:        ticketStateMatched,
+		EnqueuedAtMs: nowMs(),
+		ZoneId:       1,
+	}
+	mustCreateTicket(t, svcCtx, playerId, ticket)
+	return []uint64{playerId}, map[uint64]string{playerId: ticket.Ticket}
 }
 
 // spectateWriteFault 观战索引写入的故障钩子状态。钩子可能在 Lua 的 redis.call 里带锁重入,
@@ -198,7 +219,8 @@ func TestWriteSpectateRecordRetriesTransientFailure(t *testing.T) {
 	sleeps := stubSpectateRetrySleep(t)
 	const battleId = uint64(881001)
 
-	err := writeSpectateRecord(svcCtx, newSpectateRecord(battleId, 7, matchpb.MatchMode_MATCH_MODE_1V1, 0, []string{"甲"}, nowMs()))
+	err := writeSpectateRecord(svcCtx, newSpectateRecord(battleId, 7, matchpb.MatchMode_MATCH_MODE_1V1, 0, []string{"甲"}, nowMs(),
+		visPrivate))
 
 	require.NoError(t, err)
 	require.Equal(t, int32(2), faults.recordWrites.Load())
@@ -217,7 +239,8 @@ func TestWriteSpectateRecordGivesUpAfterBoundedAttempts(t *testing.T) {
 	sleeps := stubSpectateRetrySleep(t)
 	const battleId = uint64(881002)
 
-	err := writeSpectateRecord(svcCtx, newSpectateRecord(battleId, 7, matchpb.MatchMode_MATCH_MODE_1V1, 0, []string{"甲"}, nowMs()))
+	err := writeSpectateRecord(svcCtx, newSpectateRecord(battleId, 7, matchpb.MatchMode_MATCH_MODE_1V1, 0, []string{"甲"}, nowMs(),
+		visPrivate))
 
 	require.Error(t, err)
 	require.Equal(t, int32(spectateRecordWriteAttempts), faults.recordWrites.Load(), "重试次数有上限")
@@ -241,6 +264,7 @@ func TestSpectateRecordWriteWorstFitsMatchedTicketTTL(t *testing.T) {
 }
 
 // 活跃集合 ZADD 失败仍 best-effort:返回 nil(补签与指定 battle_id 观战只读记录),记录可读。
+// 用公开的 PVE_SOLO:私密局根本不会 ZADD,测不到这条失败路径。
 func TestRegisterSpectateBattleZaddFailureIsBestEffort(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
 	faults := installSpectateWriteFault(t, mr, nil)
@@ -248,7 +272,7 @@ func TestRegisterSpectateBattleZaddFailureIsBestEffort(t *testing.T) {
 	stubSpectateRetrySleep(t)
 	const battleId = uint64(881003)
 
-	err := registerSpectateBattle(svcCtx, battleId, 7, matchpb.MatchMode_MATCH_MODE_1V1, 0, []string{"甲"}, nowMs())
+	err := registerSpectateBattle(svcCtx, battleId, 7, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, 0, []string{"甲"}, nowMs())
 
 	require.NoError(t, err, "ZADD 只服务观战列表,不能让它拖垮开局")
 	record, err := loadSpectateBattle(svcCtx, battleId)
@@ -414,21 +438,22 @@ func TestGatherCreateFailureWithDestroyFailureKeepsRecord(t *testing.T) {
 }
 
 // 只失败一次:重试吸收,照常开局 —— 不销毁、不解冻、票据 ready;开局后补写一次记录并入活跃集合
-// (共 3 次写:失败 1 + 成功 1 + 补写 1)。模型核对:建房成功后两人确实是 FIGHTING。
+// (共 3 次写:失败 1 + 成功 1 + 补写 1)。模型核对:建房成功后参战者确实是 FIGHTING。
+// 用公开的 PVE_SOLO 单人开局:要断言「入活跃集合」,而 1V1 按可见性策略是私密局。
 func TestGatherSpectateIndexTransientFailureStillStartsBattle(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
-	fake := stubGatherRPCs(t, map[uint64]string{9831: "fp", 9832: "fp"})
+	fake := stubGatherRPCs(t, map[uint64]string{9831: "fp"})
 	scene := stubSceneFreezeModel(t)
-	members, tickets, _ := popMatchedPair(t, svcCtx, mr, 9831, 9832)
+	members, tickets := startPveSolo(t, svcCtx, mr, 9831)
 	faults := installSpectateWriteFault(t, mr, failRecordWritesUpTo(1))
 	sleeps := stubSpectateRetrySleep(t)
 
-	RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 0, members, true, tickets)
+	RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, 0, members, false, tickets)
 
 	require.Len(t, fake.created, 1)
 	require.Empty(t, fake.destroyed)
 	require.Empty(t, fake.cancelled)
-	require.ElementsMatch(t, members, scene.frozen(), "开局成功:两人按确认事件升 FIGHTING")
+	require.ElementsMatch(t, members, scene.frozen(), "开局成功:参战者按确认事件升 FIGHTING")
 	require.Equal(t, int32(3), faults.recordWrites.Load())
 	require.Equal(t, []time.Duration{spectateRecordWriteBackoff}, sleeps())
 	record, err := loadSpectateBattle(svcCtx, fake.created[0].GetBattleId())
@@ -443,11 +468,12 @@ func TestGatherSpectateIndexTransientFailureStillStartsBattle(t *testing.T) {
 	}
 }
 
-// 建房窗口里记录被懒剔除(活动开局的 battle_id 在 gather 之前已回给 guild,有人此刻按 battle_id 观战,
-// battle 回房间不存在,WatchBattle 删记录):开局成功后的补写把记录找回来,并照常入活跃集合。
+// 建房窗口里记录被懒剔除(按 battle_id 观战落进窗口、battle 回房间不存在、窗口判定没兜住时 WatchBattle 删记录;
+// 活动局现为私密局,按 battle_id 观战在选场处即被拒,这里直接模拟剔除):开局成功后的补写把记录找回来,
+// 并照常入活跃集合。用公开的 PVE_SOLO:1V1 按可见性策略是私密局,不入活跃集合。
 func TestGatherPublishRestoresRecordEvictedDuringCreate(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
-	fake := stubGatherRPCs(t, map[uint64]string{9851: "fp", 9852: "fp"})
+	fake := stubGatherRPCs(t, map[uint64]string{9851: "fp"})
 	prevCreate := createBattleFn
 	createBattleFn = func(endpoint string, req *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
 		require.True(t, mr.Exists(spectateBattleKey(req.GetBattleId())), "记录必须先于建房写入")
@@ -455,9 +481,9 @@ func TestGatherPublishRestoresRecordEvictedDuringCreate(t *testing.T) {
 		return prevCreate(endpoint, req)
 	}
 	t.Cleanup(func() { createBattleFn = prevCreate })
-	members, tickets, _ := popMatchedPair(t, svcCtx, mr, 9851, 9852)
+	members, tickets := startPveSolo(t, svcCtx, mr, 9851)
 
-	RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 0, members, true, tickets)
+	RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, 0, members, false, tickets)
 
 	require.Len(t, fake.created, 1)
 	record, err := loadSpectateBattle(svcCtx, fake.created[0].GetBattleId())
@@ -468,16 +494,17 @@ func TestGatherPublishRestoresRecordEvictedDuringCreate(t *testing.T) {
 }
 
 // 开局成功后入活跃集合失败:仍是成功开局(success、票据 ready),记录在,只是不进观战列表。
+// 用公开的 PVE_SOLO:私密局根本不会 ZADD,测不到这条失败路径。
 func TestGatherSucceedsWhenActiveZaddFails(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
-	fake := stubGatherRPCs(t, map[uint64]string{9861: "fp", 9862: "fp"})
-	members, tickets, _ := popMatchedPair(t, svcCtx, mr, 9861, 9862)
+	fake := stubGatherRPCs(t, map[uint64]string{9861: "fp"})
+	members, tickets := startPveSolo(t, svcCtx, mr, 9861)
 	faults := installSpectateWriteFault(t, mr, nil)
 	faults.failZadd.Store(true)
-	mode := matchpb.MatchMode_MATCH_MODE_1V1.String()
+	mode := matchpb.MatchMode_MATCH_MODE_PVE_SOLO.String()
 	successBase := metrics.GatherValue(mode, "success")
 
-	RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 0, members, true, tickets)
+	RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, 0, members, false, tickets)
 
 	require.Len(t, fake.created, 1)
 	require.Empty(t, fake.destroyed)
@@ -493,4 +520,73 @@ func TestGatherSucceedsWhenActiveZaddFails(t *testing.T) {
 		require.Equal(t, ticketStateReady, ticket.State)
 	}
 	require.Equal(t, successBase+1, metrics.GatherValue(mode, "success"))
+}
+
+// ---- 可见性冻结(battle-spectate-tiered-fanout.md §10 第 6 条)----
+
+// 建房时按 spectateVisibilityFor 决定一次:CreateBattleRequest 与观战记录带同一个值。私密局的记录照写
+// (丢票补签靠它定位 battle 节点)但不入活跃集合;公开局开局成功即入。覆盖各开局入口:点名切磋 /
+// 1V1 队列 / 帮会历练(活动局压过 PVE_TEAM 的公开)/ 单人 PVE / 整队 PVE。
+func TestGatherFreezesSpectateVisibility(t *testing.T) {
+	type starter func(t *testing.T, svcCtx *svc.ServiceContext, mr *miniredis.Miniredis)
+	cases := []struct {
+		name  string
+		start starter
+		want  battlepb.ESpectateVisibility
+	}{
+		{"点名切磋私密", func(t *testing.T, svcCtx *svc.ServiceContext, mr *miniredis.Miniredis) {
+			setPlayerLocation(t, mr, 9871, 1)
+			setPlayerLocation(t, mr, 9872, 2)
+			require.True(t, RunChallengeGather(svcCtx, 0, 9871, 9872))
+		}, visPrivate},
+		{"1V1 计分局私密", func(t *testing.T, svcCtx *svc.ServiceContext, mr *miniredis.Miniredis) {
+			members, tickets, _ := popMatchedPair(t, svcCtx, mr, 9873, 9874)
+			RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 0, members, true, tickets)
+		}, visPrivate},
+		{"帮会历练私密", func(t *testing.T, svcCtx *svc.ServiceContext, mr *miniredis.Miniredis) {
+			members := []uint64{9875, 9876}
+			for _, pid := range members {
+				setPlayerLocation(t, mr, pid, 1)
+			}
+			tickets := mustCreateActivityTickets(t, svcCtx, members)
+			require.True(t, RunActivityGather(svcCtx, testActivityConfigId, members, tickets, 880_000_000_101,
+				testActivityContext(members[0])))
+		}, visPrivate},
+		{"单人 PVE 公开", func(t *testing.T, svcCtx *svc.ServiceContext, mr *miniredis.Miniredis) {
+			members, tickets := startPveSolo(t, svcCtx, mr, 9877)
+			RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, 0, members, false, tickets)
+		}, visPublic},
+		{"整队 PVE 公开", func(t *testing.T, svcCtx *svc.ServiceContext, mr *miniredis.Miniredis) {
+			members := []uint64{9878, 9879}
+			for _, pid := range members {
+				setPlayerLocation(t, mr, pid, 1)
+			}
+			require.True(t, RunTeamGather(svcCtx, testActivityConfigId, members, mustCreateActivityTickets(t, svcCtx, members)))
+		}, visPublic},
+	}
+	fingerprints := map[uint64]string{}
+	for pid := uint64(9871); pid <= 9879; pid++ {
+		fingerprints[pid] = "fp"
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svcCtx, mr := newGatherSvcCtx(t)
+			fake := stubGatherRPCs(t, fingerprints)
+
+			c.start(t, svcCtx, mr)
+
+			require.Len(t, fake.created, 1, "开局必须成功")
+			created := fake.created[0]
+			require.Equal(t, c.want, created.GetSpectateVisibility(), "可见性随 CreateBattleRequest 冻结(battle 据此执第二道闸)")
+			record, err := loadSpectateBattle(svcCtx, created.GetBattleId())
+			require.NoError(t, err)
+			require.NotNil(t, record, "私密局的记录也照写:丢票补签靠它定位 battle 节点")
+			require.Equal(t, c.want, record.GetVisibility(), "记录与建房原件同源")
+			wantActive := 0
+			if c.want == visPublic {
+				wantActive = 1
+			}
+			require.Equal(t, wantActive, activeIndexSize(t, svcCtx), "只有公开局进观战列表与随机选场")
+		})
+	}
 }

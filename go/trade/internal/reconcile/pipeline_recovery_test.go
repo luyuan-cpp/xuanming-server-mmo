@@ -110,24 +110,21 @@ func TestNewRejectsRecoveryBeyondAssetopBounds(t *testing.T) {
 	}
 }
 
-// TestNewAttachesLedgerAndLocatorOnlyWhenGiven:Ledger 是自动放弃"账本确定未见"的唯一证据来源,Locator 是
-// "玩家没有位置"的证据来源;给了就必须挂上,没给就保持 nil(assetop 据此 fail-closed、不运行放弃)。
-func TestNewAttachesLedgerAndLocatorOnlyWhenGiven(t *testing.T) {
+// TestNewAttachesLedgerOnlyWhenGiven:Ledger 是自动放弃的唯一证据来源;给了就必须挂上,没给就保持 nil
+// (assetop 据此 fail-closed、不运行放弃)。
+func TestNewAttachesLedgerOnlyWhenGiven(t *testing.T) {
 	bare := newTestPipeline(t, &fakeIDs{})
-	if bare.loop.Ledger != nil || bare.loop.Locator != nil {
-		t.Errorf("没给 Ledger / Locator 时必须保持 nil,得到 Ledger=%v Locator=%v", bare.loop.Ledger, bare.loop.Locator)
+	if bare.loop.Ledger != nil {
+		t.Errorf("没给 Ledger 时必须保持 nil,得到 Ledger=%v", bare.loop.Ledger)
 	}
 
-	ledger, locator := fakeLedger{}, fakeResolver{}
-	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: ledger, Locator: locator})
+	ledger := fakeLedger{}
+	p, err := New(Deps{Ops: newTestRepo(t), Caller: newTestCaller(t), OpIDs: &fakeIDs{}, Ledger: ledger})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	if p.loop.Ledger != assetop.LedgerReader(ledger) {
 		t.Error("给了 Ledger 却没挂到 Loop 上:离线读账本与自动放弃都不会运行")
-	}
-	if p.loop.Locator != assetop.Resolver(locator) {
-		t.Error("给了 Locator 却没挂到 Loop 上:自动放弃拿不到'没有位置'的证据")
 	}
 	if p.loop.Manual == nil {
 		t.Error("挂落地恢复依赖时不得丢掉人工终结通道")

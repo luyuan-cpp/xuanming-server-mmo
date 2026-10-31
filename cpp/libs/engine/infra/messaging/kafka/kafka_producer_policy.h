@@ -64,33 +64,6 @@ constexpr bool IsPurgeDeliveryError(RdKafka::ErrorCode code) {
 	return code == RdKafka::ERR__PURGE_QUEUE || code == RdKafka::ERR__PURGE_INFLIGHT;
 }
 
-// 这个错误(produce() 的同步返回码,或投递回执里的错误)是否说明「这条消息本身发不出去」:按当前状态再发一条
-// 同样形状的消息,结果也一样,与 broker 是否可用无关。调用方据此停止没有收益的重发(scene 下线收尾的 DBTask 回执闸门
-// 不再为它保留实体,见 player_exit::DecideDbTaskGate)。
-// 只列 Kafka 协议错误表里标为不可重试、且与消息内容 / 权限 / 参数绑定的错误;拿不准的一律按可重试(返回 false)——
-// 误判成永久会放弃一次可能成功的重发,误判成可重试只是多保留一会儿实体(改动前的行为)。
-//   ERR_MSG_SIZE_TOO_LARGE          消息超过本端 message.max.bytes(produce() 同步返回),或超过 broker / topic 的
-//                                   max.message.bytes(回执);三处上限没对齐时每次都撞(S5 规格 B-14)
-//   ERR_RECORD_LIST_TOO_LARGE       批次超过 broker / topic 上限,成因同上
-//   ERR_INVALID_RECORD              broker 拒收这条记录(记录本身不合规)
-//   ERR_TOPIC_AUTHORIZATION_FAILED  没有该 topic 的写权限;ACL 修好之前每次都一样
-//   ERR__INVALID_ARG                produce() 参数非法(本地同步返回)
-// 刻意不算:ERR__QUEUE_FULL / ERR__FATAL / ERR__STATE / ERR__MSG_TIMED_OUT / ERR__PURGE_*(都是可用性问题);
-// ERR__UNKNOWN_TOPIC / ERR_UNKNOWN_TOPIC_OR_PART(topic 可能正在创建、元数据还没传播);ERR_INVALID_MSG(CRC 不符,
-// 协议里标为可重试,可能是传输损坏);ERR_CLUSTER_AUTHORIZATION_FAILED(幂等生产者会直接进 fatal,走重建)。
-constexpr bool IsPermanentMessageError(RdKafka::ErrorCode code) {
-	switch (code) {
-	case RdKafka::ERR_MSG_SIZE_TOO_LARGE:
-	case RdKafka::ERR_RECORD_LIST_TOO_LARGE:
-	case RdKafka::ERR_INVALID_RECORD:
-	case RdKafka::ERR_TOPIC_AUTHORIZATION_FAILED:
-	case RdKafka::ERR__INVALID_ARG:
-		return true;
-	default:
-		return false;
-	}
-}
-
 // 重建生产者的最小间隔。fatal 的成因若还在(例如 broker 侧日志被截断后尚未恢复),新实例可能
 // 很快再次 fatal;不设间隔的话每次 send() 都会销毁、重建一整套 librdkafka 线程。
 class RebuildGate {
@@ -191,7 +164,7 @@ private:
 //   TakeAll:实例因 fatal 被重建,旧实例里来不及派发回执的消息由调用方合成失败回执。
 // 离开之后同一个 id 再到的回执(例如重建合成之后原回执迟到)Resolve 返回 false,调用方据此不二次通知。
 // 0 表示「不跟踪」(普通 send()),Accept(0) 忽略、Resolve(0) 恒为 false。
-// id 的唯一性由调用方保证(scene 侧是 DbTaskDispatch 账本单调递增的票据号);这里不做去重以外的校验。
+// id 的唯一性由调用方保证;这里不做去重以外的校验。
 // 线程模型同 KafkaProducer:只在拥有它的那个线程上读写,不加锁。
 // 每个producer线程的全部发送账本，普通send与sendTracked都计入。只读快照不解除准入。
 // 失败/超时/purge一律保留UNKNOWN；重建生产者不清账，不能由outq_len==0推断永久闭合。

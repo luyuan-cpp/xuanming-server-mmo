@@ -229,7 +229,7 @@ func actAssertUntouched(t *testing.T, f actFixture, row *tablepb.GuildActivityTa
 // ── 灯会(I1–I5) ─────────────────────────────────────────────
 
 // TestActivityIT_LanternFirstLight(I1):计数 1、进度 1、帮贡两列各 +20;没有物品就不插指令行,
-// 但仍建好并锁住 CREDIT 流的 seq 行作计数守卫(不推进 seq);闸门拿到的是事务内锁住的 zone。
+// 但仍建好并锁住 CREDIT 流的 seq 行作计数守卫(不推进 seq)。
 func TestActivityIT_LanternFirstLight(t *testing.T) {
 	f := openActivityFixture(t)
 	const (
@@ -240,15 +240,9 @@ func TestActivityIT_LanternFirstLight(t *testing.T) {
 	seedManagedGuild(t, f.ctx, f.db, guildID, 2, 1, 50, leader, map[uint64]uint32{player: constants.RoleMember})
 	row := actLanternRow()
 	in := actInput(row, guildID, player, testNowMs)
-	var fencedZone uint32
-	in.Fence = func(_ context.Context, zoneID uint32) error {
-		fencedZone = zoneID
-		return nil
-	}
 
 	res, err := f.act.LightLanternTx(f.ctx, in)
 	require.NoError(t, err)
-	assert.Equal(t, uint32(2), fencedZone, "合服闸门必须用事务内锁住的 guild.zone_id")
 	assert.False(t, res.Enqueued)
 	assert.False(t, res.ReachedNow)
 	assert.False(t, res.FundsGranted)
@@ -792,7 +786,7 @@ func TestActivityIT_MemberOrGuildGone(t *testing.T) {
 	assert.ErrorIs(t, err, ErrGuildGone)
 }
 
-// TestActivityIT_BusinessRejections:帮会等级不足、入帮未满 N 小时(恰好满算满)、合服闸门拒绝 / 读不出(fail-closed)。
+// TestActivityIT_BusinessRejections:帮会等级不足、入帮未满 N 小时(恰好满算满)。
 func TestActivityIT_BusinessRejections(t *testing.T) {
 	f := openActivityFixture(t)
 	const (
@@ -809,16 +803,6 @@ func TestActivityIT_BusinessRejections(t *testing.T) {
 	actAssertUntouched(t, f, highLevel, guildID, player, testNowMs, "帮会等级不足")
 
 	row := actLanternRow()
-	for _, fence := range []FenceFunc{
-		func(context.Context, uint32) error { return ErrZoneMerging },
-		func(context.Context, uint32) error { return errors.New("merge fence unreadable") },
-	} {
-		in := actInput(row, guildID, player, testNowMs)
-		in.Fence = fence
-		_, err = f.act.LightLanternTx(f.ctx, in)
-		assert.ErrorIs(t, err, ErrZoneMerging, "闸门拒绝或读不出一律按合服中拒绝")
-		actAssertUntouched(t, f, row, guildID, player, testNowMs, "合服闸门")
-	}
 
 	// seedMemberRow 的 join_time_ms = testNowMs;要求入帮满 1 小时。
 	tooEarly := actInput(row, guildID, player, testNowMs+actHourMs-1)
@@ -869,7 +853,7 @@ func TestActivityIT_DisbandDeletesProgressKeepsCountersAndOps(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, actProgressRowCount(t, f, guildID), "前提:本帮有 3 行进度(两期灯会 + 一期团圆)")
 
-	_, err = f.repo.DisbandGuild(f.ctx, guildID, leader, day2+1_000, nil)
+	_, err = f.repo.DisbandGuild(f.ctx, guildID, leader, day2+1_000)
 	require.NoError(t, err)
 
 	assert.Zero(t, actProgressRowCount(t, f, guildID), "解散删本帮全部进度行")
@@ -913,7 +897,7 @@ func TestActivityIT_ConcurrentLanternVersusDisband(t *testing.T) {
 		seedManagedGuild(t, f.ctx, f.db, guildID, 2, 1, 50, leader, roles)
 
 		fns := []func() error{func() error {
-			_, err := f.repo.DisbandGuild(f.ctx, guildID, leader, testNowMs, nil)
+			_, err := f.repo.DisbandGuild(f.ctx, guildID, leader, testNowMs)
 			return err
 		}}
 		opIDs := make([]uint64, len(members))
@@ -1151,16 +1135,11 @@ func actSetupTrialWin(t *testing.T, f actFixture) actTrialWinScenario {
 
 // TestActivityIT_TrialWinRewardsEligibleMembers(I13):胜利、4 名候选、其中 1 人当日次数已满 ——
 // 另 3 人各得帮贡 50、占一次当日次数、各有一行物品指令;帮会资金 +300、当天计资金胜场 1;对局行 SETTLED / WIN / 3 人。
-// 次数已满的人什么都没有(但他的 seq 行作为计数守卫已建好、未推进)。闸门拿到的是事务内锁住的 zone。
+// 次数已满的人什么都没有(但他的 seq 行作为计数守卫已建好、未推进)。
 func TestActivityIT_TrialWinRewardsEligibleMembers(t *testing.T) {
 	f := openActivityFixture(t)
 	s := actSetupTrialWin(t, f)
 	in := s.input
-	var fencedZone uint32
-	in.Fence = func(_ context.Context, zoneID uint32) error {
-		fencedZone = zoneID
-		return nil
-	}
 
 	registered := actRequireTrialBattle(t, f, s.battleID)
 	assert.Equal(t, pb.GuildTrialBattleState_GUILD_TRIAL_BATTLE_STATE_STARTED, registered.State)
@@ -1170,7 +1149,6 @@ func TestActivityIT_TrialWinRewardsEligibleMembers(t *testing.T) {
 
 	res, err := f.act.SettleTrialBattleTx(f.ctx, in)
 	require.NoError(t, err)
-	assert.Equal(t, uint32(2), fencedZone, "合服闸门必须用事务内锁住的 guild.zone_id")
 	assert.Equal(t, TrialSettleSettled, res.Status)
 	assert.Equal(t, pb.GuildTrialSettleResult_GUILD_TRIAL_SETTLE_RESULT_WIN, res.Result)
 	rewarded := []uint64{8951, 8952, 8953}
@@ -1820,9 +1798,9 @@ func TestActivityIT_TrialDeterministicFailuresRollBack(t *testing.T) {
 	assert.False(t, found, "没登记过的局回滚后不留对局行")
 }
 
-// TestActivityIT_TrialMembershipAndFence:结算时已不在本帮的候选人没有奖励(战后退帮 / 被踢),也不为他建 seq 行;
-// 全员都不在了仍结算成 WIN、0 人得奖。合服闸门拒绝或读不出 → ErrZoneMerging,什么都不写(消费者稍后重试)。
-func TestActivityIT_TrialMembershipAndFence(t *testing.T) {
+// TestActivityIT_TrialMembership:结算时已不在本帮的候选人没有奖励(战后退帮 / 被踢),也不为他建 seq 行;
+// 全员都不在了仍结算成 WIN、0 人得奖。
+func TestActivityIT_TrialMembership(t *testing.T) {
 	f := openActivityFixture(t)
 	const (
 		guildID  uint64 = 8060
@@ -1836,18 +1814,6 @@ func TestActivityIT_TrialMembershipAndFence(t *testing.T) {
 	row := actTrialRow()
 	in := actTrialWin(row, battleID, guildID, testNowMs, stays, left, outsider)
 	require.NoError(t, f.act.RegisterTrialBattle(f.ctx, in.Battle, testNowMs))
-
-	before := actDumpTables(t, f)
-	for _, fence := range []FenceFunc{
-		func(context.Context, uint32) error { return ErrZoneMerging },
-		func(context.Context, uint32) error { return errors.New("merge fence unreadable") },
-	} {
-		fenced := in
-		fenced.Fence = fence
-		_, err := f.act.SettleTrialBattleTx(f.ctx, fenced)
-		assert.ErrorIs(t, err, ErrZoneMerging, "闸门拒绝或读不出一律按合服中拒绝")
-		assert.Equal(t, before, actDumpTables(t, f))
-	}
 
 	mustExec(t, f.ctx, f.db, "DELETE FROM guild_member WHERE guild_id=? AND player_id=?", guildID, left)
 	res, err := f.act.SettleTrialBattleTx(f.ctx, in)
@@ -1987,7 +1953,7 @@ func TestActivityIT_DisbandDeletesStartedTrialBattlesKeepsHistoryAndOwed(t *test
 	require.NoError(t, err)
 	require.NoError(t, f.act.RegisterTrialBattle(f.ctx, actTrialKey(row, foreign, otherID, otherMb, testNowMs), testNowMs))
 
-	_, err = f.repo.DisbandGuild(f.ctx, guildID, leader, testNowMs+2*actHourMs, nil)
+	_, err = f.repo.DisbandGuild(f.ctx, guildID, leader, testNowMs+2*actHourMs)
 	require.NoError(t, err)
 
 	for _, battleID := range []uint64{inFlight, another} {
@@ -2170,7 +2136,7 @@ func TestActivityIT_TrialConcurrentSettleVersusDisband(t *testing.T) {
 		var settled TrialSettleResult
 		errs := econRunTogether(
 			func() error {
-				_, err := f.repo.DisbandGuild(f.ctx, guildID, leader, testNowMs, nil)
+				_, err := f.repo.DisbandGuild(f.ctx, guildID, leader, testNowMs)
 				return err
 			},
 			func() error {

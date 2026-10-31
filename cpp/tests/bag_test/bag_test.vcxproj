@@ -163,6 +163,7 @@
     <ClCompile Include="bag_remove_exact_test.cpp" />
     <ClCompile Include="bag_instance_data_test.cpp" />
     <ClCompile Include="bag_selection_order_test.cpp" />
+    <ClCompile Include="player_store_client_test.cpp" />
     <ClCompile Include="bag_java_parity_test.cpp" />
     <ClCompile Include="player_equip_test.cpp" />
     <ClCompile Include="player_equip_attribute_test.cpp" />

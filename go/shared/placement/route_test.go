@@ -39,27 +39,14 @@ func TestRouteKeys(t *testing.T) {
 		t.Fatalf("RouteReadyKey = %q", RouteReadyKey)
 	}
 
-	three := PublishRouteKeys(7, 0)
-	wantThree := []string{"player:zone:7", "player:placement:7", "player:maprev:7"}
-	if len(three) != len(wantThree) {
-		t.Fatalf("PublishRouteKeys(7, 0) = %v, want %v(fenceZone=0 不带围栏键)", three, wantThree)
+	keys := PublishRouteKeys(7)
+	want := []string{"player:zone:7", "player:placement:7", "player:maprev:7"}
+	if len(keys) != len(want) {
+		t.Fatalf("PublishRouteKeys(7) = %v, want %v", keys, want)
 	}
-	for i := range wantThree {
-		if three[i] != wantThree[i] {
-			t.Fatalf("PublishRouteKeys(7, 0)[%d] = %q, want %q(KEYS 顺序是脚本契约)", i, three[i], wantThree[i])
-		}
-	}
-
-	four := PublishRouteKeys(7, 2)
-	if len(four) != 4 {
-		t.Fatalf("PublishRouteKeys(7, 2) = %v, want 4 keys", four)
-	}
-	if four[3] != MergeFenceKey(2) {
-		t.Fatalf("PublishRouteKeys(7, 2)[3] = %q, want %q(第 4 把必须是围栏键,脚本按 KEYS[4] 复核)", four[3], MergeFenceKey(2))
-	}
-	for i := range wantThree {
-		if four[i] != wantThree[i] {
-			t.Fatalf("PublishRouteKeys(7, 2)[%d] = %q, want %q", i, four[i], wantThree[i])
+	for i := range want {
+		if keys[i] != want[i] {
+			t.Fatalf("PublishRouteKeys(7)[%d] = %q, want %q(KEYS 顺序是脚本契约)", i, keys[i], want[i])
 		}
 	}
 }
@@ -158,11 +145,6 @@ func TestClassifyPublishReply(t *testing.T) {
 			raw:  []any{int64(2), "", "3", ""},
 			want: PublishReply{Outcome: PublishLegacyConflict, CurHome: "3", CurPlacement: ""},
 		},
-		{
-			name: "合服围栏",
-			raw:  []any{int64(3)},
-			want: PublishReply{Outcome: PublishFenced},
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := ClassifyPublishReply(tc.raw, rev, home, plc)
@@ -192,7 +174,7 @@ func TestClassifyPublishReply(t *testing.T) {
 		{"空数组", []any{}},
 		{"首元素不是整数", []any{"1", "3"}},
 		{"未知回复码", []any{int64(4)}},
-		{"围栏回复多了元素", []any{int64(3), "x"}},
+		{"已删除的围栏回复码", []any{int64(3)}},
 		{"不是数组", "OK"},
 	} {
 		t.Run("拒绝_"+tc.name, func(t *testing.T) {
@@ -212,28 +194,10 @@ func TestPublishOutcomeStringsAreStableLowCardinality(t *testing.T) {
 		{PublishConfirmed.String(), "confirmed"},
 		{PublishConflict.String(), "conflict"},
 		{PublishLegacyConflict.String(), "legacy_conflict"},
-		{PublishFenced.String(), "fenced"},
 		{PublishOutcome(0).String(), "unknown"},
 	} {
 		if tc.got != tc.want {
 			t.Fatalf("outcome label = %q, want %q", tc.got, tc.want)
-		}
-	}
-}
-
-func TestRouteFenceShard(t *testing.T) {
-	if got, err := RouteFenceShard(17, 8); err != nil || got != 1 {
-		t.Fatalf("RouteFenceShard(17, 8) = (%d, %v), want (1, nil)", got, err)
-	}
-	if got, err := RouteFenceShard(17, 1); err != nil || got != 0 {
-		t.Fatalf("RouteFenceShard(17, 1) = (%d, %v), want (0, nil)", got, err)
-	}
-	if got, err := RouteFenceShard(127, MaxRouteFenceShards); err != nil || got != 63 {
-		t.Fatalf("RouteFenceShard(127, 64) = (%d, %v), want (63, nil)", got, err)
-	}
-	for _, shards := range []uint32{0, MaxRouteFenceShards + 1} {
-		if _, err := RouteFenceShard(17, shards); err == nil {
-			t.Fatalf("RouteFenceShard(17, %d) 应报错(只接受 [1, %d])", shards, MaxRouteFenceShards)
 		}
 	}
 }

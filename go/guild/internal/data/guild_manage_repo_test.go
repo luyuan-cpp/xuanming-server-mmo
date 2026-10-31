@@ -589,19 +589,17 @@ func TestApplyPushGateCooldown(t *testing.T) {
 	mr.SetError("")
 }
 
-// TestEnsurePlayerStateRowsRejectsGuardPlayerID:player_id 0 是全局插入守卫的哨兵行(globalInsertGuardPlayerID),
-// 不是玩家。带 0 的请求若能建行 / 锁行,就会在"申请 / 踢人 / 退帮 / 解散"这些本不取守卫的事务里、以玩家状态行的身份
-// 抢到这把全局锁,文件头 (d) 的无环推演对它不成立。ensurePlayerStateRows 是所有这些事务的必经前置,在碰库之前就拒绝:
+// TestEnsurePlayerStateRowsRejectsZeroPlayerID:player_id 0 不是玩家,不给它建状态行。
+// ensurePlayerStateRows 是"申请 / 踢人 / 退帮 / 解散"这些事务的必经前置,在碰库之前就拒绝:
 // 这里 repo 的 db 是 nil,只要它去读库就会 panic —— 不 panic 且回错误,就说明拒绝发生在任何数据库访问之前。
 // 错误必须是内部错误,不能伪装成可重试的忙错误(重试多少次都一样)。
-func TestEnsurePlayerStateRowsRejectsGuardPlayerID(t *testing.T) {
+func TestEnsurePlayerStateRowsRejectsZeroPlayerID(t *testing.T) {
 	repo, _ := newCacheOnlyRepo(t)
-	require.Zero(t, globalInsertGuardPlayerID, "哨兵是 player_id 0:改它等于改数据约定,须同步启动期建行与文档")
 
-	for _, ids := range [][]uint64{{globalInsertGuardPlayerID}, {8801, globalInsertGuardPlayerID, 8802}} {
+	for _, ids := range [][]uint64{{0}, {8801, 0, 8802}} {
 		err := repo.ensurePlayerStateRows(context.Background(), opApply, testNowMs, ids...)
 		require.Error(t, err, "ids=%v", ids)
-		assert.NotErrorIs(t, err, ErrWriteConflict, "ids=%v:守卫 id 被当成玩家是调用方的错,不是忙", ids)
+		assert.NotErrorIs(t, err, ErrWriteConflict, "ids=%v:0 被当成玩家是调用方的错,不是忙", ids)
 	}
 	// 空列表不碰库、直接成功(解散一个已没有成员的帮时 preread 为空)。
 	require.NoError(t, repo.ensurePlayerStateRows(context.Background(), opDisband, testNowMs))
@@ -1371,7 +1369,7 @@ func TestCreateGuild_DeletesOwnApplications(t *testing.T) {
 	assert.Empty(t, applicants)
 
 	// 关键在"解散之后仍然为空":I2 删的是物理行,不是靠 I1 过滤遮住。
-	_, err = repo.DisbandGuild(ctx, g2, founder, testNowMs, nil)
+	_, err = repo.DisbandGuild(ctx, g2, founder, testNowMs)
 	require.NoError(t, err)
 	applicants, err = repo.ListApplicants(ctx, g1, testNowMs, 50)
 	require.NoError(t, err)
@@ -1399,11 +1397,11 @@ func TestDisbandGuild_AuthorizesByMySQLAndDeletesApplications(t *testing.T) {
 	seedApplicationRow(t, ctx, db, guildID, outsider, testNowMs-10, testNowMs+testApplicationTTLMs)
 	seedApplicationRow(t, ctx, db, other, member, testNowMs-10, testNowMs+testApplicationTTLMs)
 
-	_, err := repo.DisbandGuild(ctx, guildID, officer, testNowMs, nil)
+	_, err := repo.DisbandGuild(ctx, guildID, officer, testNowMs)
 	assert.ErrorIs(t, err, ErrRankTooLow)
 	assert.Equal(t, 1, guildRowCount(t, ctx, db, guildID))
 
-	res, err := repo.DisbandGuild(ctx, guildID, leader, testNowMs, nil)
+	res, err := repo.DisbandGuild(ctx, guildID, leader, testNowMs)
 	require.NoError(t, err)
 	assert.Equal(t, zone, res.ZoneID, "清榜只能信删除事务里 FOR UPDATE 读到的 zone")
 	assert.Equal(t, []uint64{leader, officer, member}, res.MemberIDs, "收件人必须是 player_id 升序")
@@ -1414,49 +1412,6 @@ func TestDisbandGuild_AuthorizesByMySQLAndDeletesApplications(t *testing.T) {
 	}
 	assert.Zero(t, guildApplicationCount(t, ctx, db, guildID, outsider), "本帮的待审申请要清掉")
 	assert.Zero(t, playerApplicationCount(t, ctx, db, member), "I3:成员在他帮的申请也要清掉")
-}
-
-// TestDisbandGuild_FenceInsideTransaction:解散在事务内按**行里的** zone_id 调合服闸门(friend 审计 #17 第 6 点)。
-// 事务外那次闸门查的是请求者归属区,与合服置闸之间有窗口,内部调用路径更是不查;
-// 闸门拒绝或读不出来(fail-closed)都必须整体回滚、回 ErrZoneMerging,帮会原封不动。
-func TestDisbandGuild_FenceInsideTransaction(t *testing.T) {
-	ctx, db, repo := openGuildIntegrationRepo(t)
-	const (
-		guildID uint64 = 7366
-		leader  uint64 = 8366
-		member  uint64 = 8367
-		zone    uint32 = 6
-	)
-	seedManagedGuild(t, ctx, db, guildID, zone, 1, 50, leader, map[uint64]uint32{member: constants.RoleMember})
-
-	var fencedZones []uint32
-	merging := func(_ context.Context, zoneID uint32) error {
-		fencedZones = append(fencedZones, zoneID)
-		return ErrZoneMerging
-	}
-	_, err := repo.DisbandGuild(ctx, guildID, leader, testNowMs, merging)
-	assert.ErrorIs(t, err, ErrZoneMerging)
-	assert.Equal(t, []uint32{zone}, fencedZones, "闸门必须拿事务内读到的 guild.zone_id 调")
-	assert.Equal(t, 1, guildRowCount(t, ctx, db, guildID), "闸门拒绝必须整体回滚")
-	assert.Equal(t, 1, memberCount(t, ctx, db, member))
-
-	// 闸门读不出来(非 ErrZoneMerging 的错误)同样拒绝,并被包成 ErrZoneMerging。
-	unreadable := func(context.Context, uint32) error { return errors.New("redis: connection refused") }
-	_, err = repo.DisbandGuild(ctx, guildID, leader, testNowMs, unreadable)
-	assert.ErrorIs(t, err, ErrZoneMerging)
-	assert.Equal(t, 1, guildRowCount(t, ctx, db, guildID))
-
-	// 非帮主先吃 ErrRankTooLow,不白查一次闸门。
-	fencedZones = nil
-	_, err = repo.DisbandGuild(ctx, guildID, member, testNowMs, merging)
-	assert.ErrorIs(t, err, ErrRankTooLow)
-	assert.Empty(t, fencedZones)
-
-	open := func(context.Context, uint32) error { return nil }
-	res, err := repo.DisbandGuild(ctx, guildID, leader, testNowMs, open)
-	require.NoError(t, err)
-	assert.Equal(t, zone, res.ZoneID)
-	assert.Zero(t, guildRowCount(t, ctx, db, guildID))
 }
 
 // TestUpdateAnnouncement_ReturnsSnapshot:公告写回带事务内快照(客户端直接应用,不用再拉一次)。
@@ -1517,7 +1472,7 @@ func TestLeaveAndKickDeleteOwnApplications(t *testing.T) {
 
 	seedApplicationRow(t, ctx, db, elseWhere, stayer, testNowMs-10, testNowMs+testApplicationTTLMs)
 	seedApplicationRow(t, ctx, db, elseWhere, leader, testNowMs-10, testNowMs+testApplicationTTLMs)
-	_, err = repo.DisbandGuild(ctx, guildID, leader, testNowMs, nil)
+	_, err = repo.DisbandGuild(ctx, guildID, leader, testNowMs)
 	require.NoError(t, err)
 	assert.Zero(t, playerApplicationCount(t, ctx, db, stayer), "解散必须带走全部成员的残留申请")
 	assert.Zero(t, playerApplicationCount(t, ctx, db, leader))
@@ -1816,7 +1771,7 @@ func TestConcurrentCreateAndApply(t *testing.T) {
 		require.NoError(t, err)
 		assert.Zero(t, live, "round %d:建帮成功就不该还有本人的有效申请(I2)", round)
 
-		res, err := repo.DisbandGuild(ctx, founded, player, now, nil)
+		res, err := repo.DisbandGuild(ctx, founded, player, now)
 		require.NoError(t, err, "round %d", round)
 		assert.Equal(t, []uint64{player}, res.MemberIDs)
 

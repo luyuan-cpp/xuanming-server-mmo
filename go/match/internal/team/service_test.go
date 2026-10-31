@@ -8,6 +8,7 @@ package team
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -842,4 +843,42 @@ func TestListMyInvitesPruneKeepsReinvitedIndex(t *testing.T) {
 	members, err = h.mr.ZMembers(key)
 	require.NoError(t, err)
 	require.Equal(t, []string{u64s(tid)}, members)
+}
+
+// displayDataService 只实现 BatchGetPlayerDisplay。
+type displayDataService struct {
+	dspb.DataServiceClient
+	players map[uint64]*dspb.PlayerDisplay
+	err     error
+}
+
+func (f *displayDataService) BatchGetPlayerDisplay(_ context.Context, _ *dspb.BatchGetPlayerDisplayRequest, _ ...grpc.CallOption) (*dspb.BatchGetPlayerDisplayResponse, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &dspb.BatchGetPlayerDisplayResponse{Players: f.players}, nil
+}
+
+// 展示资料从 data_service 读。
+func TestLoadDisplay_PlayerStoreReadsDataService(t *testing.T) {
+	reader := presenceReader{displays: &displayDataService{players: map[uint64]*dspb.PlayerDisplay{
+		7: {Name: "青云", Level: 12, ClassId: 3, Gender: 1, AppearanceId: "daoshi"},
+	}}}
+	display := reader.loadDisplay(context.Background(), []uint64{7, 8})
+	got := display[7]
+	if got.Name != "青云" || got.Level != 12 || got.ClassId != 3 || got.Gender != 1 || got.AppearanceId != "daoshi" {
+		t.Fatalf("display = %+v", got)
+	}
+	if missing := display[8]; missing.Name != "" || missing.Level != 0 {
+		t.Fatalf("a player without a display must stay zero: %+v", missing)
+	}
+}
+
+// 读失败按全部缺失处理,不让视图失败:同 mget 的失败语义。
+func TestLoadDisplay_PlayerStoreFailureLeavesZeroValues(t *testing.T) {
+	reader := presenceReader{displays: &displayDataService{err: errors.New("data_service down")}}
+	display := reader.loadDisplay(context.Background(), []uint64{7})
+	if got := display[7]; got.Name != "" || got.Level != 0 {
+		t.Fatalf("display = %+v", got)
+	}
 }

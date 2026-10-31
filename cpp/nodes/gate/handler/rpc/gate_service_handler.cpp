@@ -4,7 +4,6 @@
 ///<<< BEGIN WRITING YOUR CODE
 #include "muduo/base/Logging.h"
 
-#include "gate_codec.h"
 #include "gate_security.h"
 #include "node/system/node/node.h"
 #include "network/rpc_controller.h"
@@ -12,8 +11,8 @@
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/common/base/common.pb.h"
 #include "proto/common/base/node.pb.h"
-#include "network/broadcast_target_codec.h"
 #include "handler/event/scene_entry_dispatch.h"
+#include "handler/gate_push_delivery.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
 #include "thread_context/node_context_manager.h"
 #include <session/manager/session_manager.h>
@@ -24,36 +23,9 @@
 
 namespace
 {
-	// 身份栅栏(routing-identity-audit-20260908.md R13/R14)的两条日志。
-	//
-	// 失配:这是**真正要报警的那一条** —— 要么 routing node_id 被复用后 scene 反查到了
-	// 继任 gate,要么单个 gate 内 session 序号回绕后同号 session 已易主。两种都意味着
-	// 有一条推送本来会写进别人的 socket。带上两个 id 才能事后判断是哪一种。
-	void LogFenceMismatch(const char *where, uint32_t sessionId, uint64_t sessionPlayerId,
-						  uint64_t targetPlayerId, uint32_t messageId)
-	{
-		LOG_WARN << where << ": target player mismatch, dropping push. session_id=" << sessionId
-				 << " session_player_id=" << sessionPlayerId
-				 << " target_player_id=" << targetPlayerId
-				 << " message_id=" << messageId;
-	}
-
-	// 兼容位:老发送方不填 target_player_id。只在**首次**记一行 INFO ——
-	// 迁移窗口里这条会对每一条推送成立,逐条打就是把 gate 日志打爆(gate 日志曾因
-	// 逐条 WARN 涨到 ~2GB 并偷走 IO 线程 CPU)。看到这一行 = 灰度尚未完成;
-	// 一个版本之后 unfenced 将改为丢弃。
-	void LogFenceUnfencedOnce(const char *where)
-	{
-		static bool logged = false;
-		if (logged)
-		{
-			return;
-		}
-		logged = true;
-		LOG_INFO << where << ": received a push without target_player_id (legacy sender). "
-				 << "Identity fence is inactive for such messages; this is logged once. "
-				 << "See docs/design/routing-identity-audit-20260908.md R13.";
-	}
+	// 推送四个 RPC 的投递(查会话、lock 连接、身份栅栏、编码与写 socket、计数与采样日志)都在
+	// handler/gate_push_delivery.cpp,与 Kafka 入口共用。本文件只留 RPC 专属的判定:
+	// 踢线来源栅栏要比对本次 RPC 所在的连接。
 
 	// 会话当前绑定的 scene 进程实例号(踢线来源栅栏用)。没绑定、实体已失效、注册不带 uuid 时返回空。
 	std::string BoundSceneInstance(const SessionInfo &session)
@@ -91,6 +63,31 @@ namespace
 		}
 		return {};
 	}
+
+	// 踢线来源栅栏:34 只认会话当前绑定的 scene 进程(session_identity_fence.h ClassifySceneKickSource)。
+	// 同 zone 交接其实已放行、会话已改绑到目标节点时,源 scene 收口推来的 34 会断掉这条合法会话。
+	// 返回 true = 丢弃这条 34(已记 WARN)。会话不存在时返回 false,交给共享投递按「会话不存在」计数。
+	bool DropKickFromUnboundScene(::google::protobuf::RpcController *controller, uint32_t sessionId)
+	{
+		const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
+		if (sessionIt == tlsSessionManager.sessions().end())
+		{
+			return false;
+		}
+		const auto boundScene = BoundSceneInstance(sessionIt->second);
+		const auto senderScene = SenderSceneInstance(RpcController::From(controller).conn());
+		if (gate_session_fence::ClassifySceneKickSource(boundScene, senderScene) !=
+			gate_session_fence::SceneKickSourceVerdict::kDropNotBoundScene)
+		{
+			return false;
+		}
+		LOG_WARN << "SendMessageToPlayer: dropping KickPlayer from a scene process the session is no longer bound to"
+				 << " (the session was re-routed, e.g. a same-zone handoff that was admitted although the source"
+				 << " missed the reply). session_id=" << sessionId
+				 << " player_id=" << sessionIt->second.playerId << " sender_scene=" << senderScene
+				 << " bound_scene=" << boundScene;
+		return true;
+	}
 } // namespace
 
 ///<<< END WRITING YOUR CODE
@@ -101,57 +98,18 @@ void GateHandler::SendMessageToPlayer(::google::protobuf::RpcController* control
 {
 	///<<< BEGIN WRITING YOUR CODE
 
-	auto sessionIt = tlsSessionManager.sessions().find(request->header().session_id());
-	if (sessionIt == tlsSessionManager.sessions().end())
+	const uint32_t sessionId = request->header().session_id();
+	// 踢线来源栅栏要比对本次 RPC 所在的连接,是 RPC 专属的判定,放在共享投递之前。它与共享投递里的
+	// 会话 / 连接检查、身份栅栏都是无副作用的纯判定,先后不影响「发不发」,只影响丢弃时记哪一条日志。
+	if (request->message_content().message_id() == SceneClientPlayerCommonKickPlayerMessageId &&
+		DropKickFromUnboundScene(controller, sessionId))
 	{
-		// Expected during disconnect race: scene pushed a message (e.g. NotifyEnterScene)
-		// after the player's TCP session was already closed on the gate. No state corruption.
-		// LOG_DEBUG (level-guarded): under churn this fires millions of times and a
-		// per-message WARN flooded the gate log to ~2GB, stealing IO-thread CPU.
-		LOG_DEBUG << "Connection ID not found for PlayerMessage, session ID: " << request->header().session_id() << ", message ID:" << request->message_content().message_id();
 		return;
 	}
-	// 会话不持有连接；发送前锁定，连接已释放时丢弃本次推送。
-	auto conn = sessionIt->second.conn.lock();
-	if (!conn)
-	{
-		LOG_ERROR << "SendMessageToPlayer: session has no connection, session_id="
-				  << request->header().session_id();
-		return;
-	}
-	// 身份栅栏(R13/R14):写 socket 之前确认这条推送的目标玩家就是本会话当前的主人。
-	switch (gate_session_fence::ClassifyPush(sessionIt->second.playerId,
-											 request->header().target_player_id()))
-	{
-	case gate_session_fence::PushVerdict::kDrop:
-		LogFenceMismatch("SendMessageToPlayer", request->header().session_id(),
-						 sessionIt->second.playerId, request->header().target_player_id(),
-						 request->message_content().message_id());
-		return;
-	case gate_session_fence::PushVerdict::kDeliverUnfenced:
-		LogFenceUnfencedOnce("SendMessageToPlayer");
-		break;
-	case gate_session_fence::PushVerdict::kDeliver:
-		break;
-	}
-	// 踢线来源栅栏:34 只认会话当前绑定的 scene 进程(session_identity_fence.h ClassifySceneKickSource)。
-	// 同 zone 交接其实已放行、会话已改绑到目标节点时,源 scene 收口推来的 34 会断掉这条合法会话。
-	if (request->message_content().message_id() == SceneClientPlayerCommonKickPlayerMessageId)
-	{
-		const auto boundScene = BoundSceneInstance(sessionIt->second);
-		const auto senderScene = SenderSceneInstance(RpcController::From(controller).conn());
-		if (gate_session_fence::ClassifySceneKickSource(boundScene, senderScene) ==
-			gate_session_fence::SceneKickSourceVerdict::kDropNotBoundScene)
-		{
-			LOG_WARN << "SendMessageToPlayer: dropping KickPlayer from a scene process the session is no longer bound to"
-					 << " (the session was re-routed, e.g. a same-zone handoff that was admitted although the source"
-					 << " missed the reply). session_id=" << request->header().session_id()
-					 << " player_id=" << sessionIt->second.playerId << " sender_scene=" << senderScene
-					 << " bound_scene=" << boundScene;
-			return;
-		}
-	}
-	GetGateCodec().send(conn, request->message_content());
+	// 查会话、lock 连接、身份栅栏(R13/R14,目标玩家 = header.target_player_id)与写 socket,
+	// 与 Kafka 版 PushToPlayer 同一份实现。
+	gate_push::DeliverToSession(gate_push::Path::kRpc, sessionId, request->header().target_player_id(),
+								gate_push::ContentOf(*request));
 	///<<< END WRITING YOUR CODE
 
 }
@@ -161,41 +119,9 @@ void GateHandler::BroadcastToPlayers(::google::protobuf::RpcController* controll
 	::google::protobuf::Closure* done)
 {
 	///<<< BEGIN WRITING YOUR CODE
-	// (session_id, player_id) 的解码与顺序契约收在 broadcast_target_codec.h,
-	// 与 scene 侧的编码共用同一份实现 —— 两边各写一遍必然某天错开一格(R13)。
-	auto sendToSession = [&](uint32_t sessionId, uint64_t targetPlayerId)
-	{
-		auto sessionIt = tlsSessionManager.sessions().find(sessionId);
-		if (sessionIt == tlsSessionManager.sessions().end())
-		{
-			// LOG_DEBUG (level-guarded): AOI broadcasts to a session torn down in the
-			// same frame are expected churn; this fired ~9.6M times and dominated the
-			// ~2GB gate log, stealing IO-thread CPU that delays real pushes.
-			LOG_DEBUG << "Connection ID not found for BroadCast2PlayerMessage, session ID: " << sessionId << ", message ID:" << request->message_content().message_id();
-			return;
-		}
-		auto conn = sessionIt->second.conn.lock();
-		if (!conn)
-		{
-			return;
-		}
-		// 身份栅栏(R13):广播和单播用同一条判据 —— 会话易主后这一条必须丢。
-		switch (gate_session_fence::ClassifyPush(sessionIt->second.playerId, targetPlayerId))
-		{
-		case gate_session_fence::PushVerdict::kDrop:
-			LogFenceMismatch("BroadcastToPlayers", sessionId, sessionIt->second.playerId,
-							 targetPlayerId, request->message_content().message_id());
-			return;
-		case gate_session_fence::PushVerdict::kDeliverUnfenced:
-			LogFenceUnfencedOnce("BroadcastToPlayers");
-			break;
-		case gate_session_fence::PushVerdict::kDeliver:
-			break;
-		}
-		GetGateCodec().send(conn, request->message_content());
-	};
-
-	broadcast_targets::ForEach(*request, sendToSession);
+	// (session_id, player_id) 按 broadcast_target_codec.h 的顺序契约解码、整条校验、逐个目标过身份栅栏(R13)、
+	// 编码一次后复用字节扇出,与 Kafka 版 BroadcastToPlayers 同一份实现。
+	gate_push::DeliverToTargets(gate_push::Path::kRpc, *request);
 	///<<< END WRITING YOUR CODE
 
 }
@@ -205,18 +131,8 @@ void GateHandler::BroadcastToScene(::google::protobuf::RpcController* controller
 	::google::protobuf::Closure* done)
 {
 	///<<< BEGIN WRITING YOUR CODE
-	const uint64_t sceneId = request->scene_id();
-	for (auto &[sessionId, info] : tlsSessionManager.sessions())
-	{
-		if (info.sceneId != sceneId)
-		{
-			continue;
-		}
-		if (const auto conn = info.conn.lock())
-		{
-			GetGateCodec().send(conn, request->message_content());
-		}
-	}
+	// 只推本场景内已绑定玩家的会话,scene_id 为 0 整条拒绝;与 Kafka 版 BroadcastToScene 同一份实现。
+	gate_push::DeliverToScene(gate_push::Path::kRpc, request->scene_id(), gate_push::ContentOf(*request));
 	///<<< END WRITING YOUR CODE
 
 }
@@ -226,13 +142,8 @@ void GateHandler::BroadcastToAll(::google::protobuf::RpcController* controller, 
 	::google::protobuf::Closure* done)
 {
 	///<<< BEGIN WRITING YOUR CODE
-	for (auto &[sessionId, info] : tlsSessionManager.sessions())
-	{
-		if (const auto conn = info.conn.lock())
-		{
-			GetGateCodec().send(conn, request->message_content());
-		}
-	}
+	// 只推已绑定玩家的会话(未登录的连接不收游戏广播);与 Kafka 版 BroadcastToAll 同一份实现。
+	gate_push::DeliverToAll(gate_push::Path::kRpc, gate_push::ContentOf(*request));
 	///<<< END WRITING YOUR CODE
 
 }

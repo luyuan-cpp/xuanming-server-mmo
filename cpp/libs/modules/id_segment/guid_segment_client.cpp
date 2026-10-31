@@ -53,9 +53,9 @@ bool GuidSegmentClient::Enable(Options options, SendFn send, ScheduleFn schedule
     }
     if (options.maxIdExclusive == 0 || options.maxIdExclusive > kDefaultMaxIdExclusive)
     {
-        // 调大就与存量 snowflake 号的值域相交,见头文件。
+        // 调大就超出 63 位值域,见头文件。
         LOG_ERROR << "[idsegment] Enable rejected: maxIdExclusive=" << options.maxIdExclusive
-                  << " must be within (0, 2^55] (kind=" << options.kindName << ")";
+                  << " must be within (0, 2^63] (kind=" << options.kindName << ")";
         return false;
     }
     if (options.stepGrowBelowSec < 0.0 || options.stepShrinkAboveSec < options.stepGrowBelowSec)
@@ -142,6 +142,8 @@ void GuidSegmentClient::Reset()
     retryPending_ = false;
     backoffSec_ = 0.5;
     highWater_ = 0;
+    recent_ = {};
+    recentCount_ = 0;
     consecutiveFailures_ = 0;
     issued_ = fetches_ = fetchErrors_ = rangeViolations_ = 0;
     unavailable_ = sendUnavailable_ = timeouts_ = droppedRanges_ = 0;
@@ -231,7 +233,7 @@ bool GuidSegmentClient::TryNext(Guid &out)
     }
     if (cur_.Remaining() > 0)
     {
-        out = static_cast<Guid>(cur_.pos);
+        out = static_cast<Guid>(options_.mixIds ? MixGuid(cur_.pos) : cur_.pos);
         ++cur_.pos;
         ++issued_;
         if (cur_.Remaining() == 0)
@@ -380,13 +382,26 @@ const char *GuidSegmentClient::ValidateRange(uint64_t lo, uint64_t hi) const
     }
     if (hi > options_.maxIdExclusive)
     {
-        return "hi > max_id_exclusive(2^55): would intersect the snowflake domain";
+        return "hi > max_id_exclusive";
     }
-    if (lo < highWater_)
+    if (OverlapsRecent(lo, hi))
     {
-        return "lo < previous hi: ranges regressed/overlapped";
+        return "overlaps a recently accepted range";
     }
     return nullptr;
+}
+
+bool GuidSegmentClient::OverlapsRecent(uint64_t lo, uint64_t hi) const
+{
+    const auto count = static_cast<std::size_t>(std::min<uint64_t>(recentCount_, kRecentRangeWindow));
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        if (lo < recent_[i].second && recent_[i].first < hi)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void GuidSegmentClient::OnResponse(uint32_t errorCode, uint64_t lo, uint64_t hi)
@@ -421,8 +436,10 @@ void GuidSegmentClient::OnResponse(uint32_t errorCode, uint64_t lo, uint64_t hi)
         return;
     }
 
-    // 校验通过即视为已从服务端领走:不管落不落得下,水位都要抬(单调性靠它)。
-    highWater_ = hi;
+    // 校验通过即视为已从服务端领走:不管落不落得下都要记下来,之后的范围不能和它重叠。
+    highWater_ = std::max(highWater_, hi);
+    recent_[static_cast<std::size_t>(recentCount_ % kRecentRangeWindow)] = {lo, hi};
+    ++recentCount_;
     consecutiveFailures_ = 0;
     backoffSec_ = options_.retryBackoffMinSec;
 

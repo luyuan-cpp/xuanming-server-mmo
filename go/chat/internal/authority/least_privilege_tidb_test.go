@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	dbpb "proto/common/database"
 	"shared/authoritysql"
+	"shared/placement"
 )
 
 // TestChatTiDBLeastPrivilegeRuntimeContract只使用本例随机库、角色和用户。
@@ -60,12 +61,7 @@ func TestChatTiDBLeastPrivilegeRuntimeContract(t *testing.T) {
 	migrationDB := chatPrivilegeOpen(t, ctx, migrationUser, migrationPassword, chatSchema, true, authoritysql.Schema(migrationUser+"@%"))
 	chatPrivilegeDefaultRole(t, ctx, runtimeDB, runtimeRole)
 	chatPrivilegeDefaultRole(t, ctx, migrationDB, migrationRole)
-	var initialFences int
-	chatPrivilegeNoError(t, "核初始目录围栏为空", globalAdmin.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM zone_merge_fence").Scan(&initialFences))
-	require.Zero(t, initialFences)
-
-	limited, err := New(ctx, runtimeDB, globalSchema, s.rules)
+	limited, err := New(ctx, runtimeDB, globalSchema, authoritysql.BackendTiDB, s.rules)
 	chatPrivilegeNoError(t, "有限业务账号启动权威存储", err)
 	originalContext, cancelOriginal := context.WithTimeout(original(t, 11), 90*time.Second)
 	defer cancelOriginal()
@@ -79,30 +75,16 @@ func TestChatTiDBLeastPrivilegeRuntimeContract(t *testing.T) {
 	require.True(t, replayed.Duplicate)
 	require.Len(t, pull(t, limited, originalContext, 22), 1)
 	require.Equal(t, 1, count(t, limited))
-	var currentFences int
-	chatPrivilegeNoError(t, "核业务账号中性ODKU创建围栏", globalAdmin.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM zone_merge_fence").Scan(&currentFences))
-	require.Greater(t, currentFences, 0)
-
-	// 显式证明SELECT FOR UPDATE权限，而非用管理员的New/Send/Pull替代。
-	tx, err := runtimeDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	chatPrivilegeNoError(t, "有限业务账号开启锁事务", err)
-	defer tx.Rollback() // 断言中止也归还连接；提交后的ErrTxDone无需作为清理失败。
+	// 运行期对角色目录和路由只有普通读,不持锁(actor_verify.go);发送原件只增不改,判重也是普通读。
+	// 显式用有限账号证明这三条读,而非用管理员的New/Send/Pull替代。
 	var revision uint64
-	err = tx.QueryRowContext(ctx, "SELECT owner_revision FROM `"+globalSchema+"`.account_role WHERE player_id=11 FOR UPDATE").Scan(&revision)
-	if err != nil {
-		_ = tx.Rollback()
-		chatPrivilegeNoError(t, "有限业务账号持真实角色P锁", err)
-	}
+	chatPrivilegeNoError(t, "有限业务账号普通读角色目录", runtimeDB.QueryRowContext(ctx,
+		"SELECT owner_revision FROM `"+globalSchema+"`.account_role WHERE player_id=11").Scan(&revision))
 	require.EqualValues(t, 7, revision)
+	chatPrivilegeNoError(t, "有限业务账号普通读路由", placement.CheckRoleRoute(ctx, runtimeDB, globalSchema, 11))
 	var originalBytes []byte
-	err = tx.QueryRowContext(ctx, "SELECT request_payload FROM chat_send_authority WHERE player_id=11 AND request_id=? FOR UPDATE",
-		[]byte(in.RequestId)).Scan(&originalBytes)
-	if err != nil {
-		_ = tx.Rollback()
-		chatPrivilegeNoError(t, "有限业务账号锁定原发送收据", err)
-	}
-	chatPrivilegeNoError(t, "有限业务账号提交只读锁事务", tx.Commit())
+	chatPrivilegeNoError(t, "有限业务账号读原发送收据", runtimeDB.QueryRowContext(ctx,
+		"SELECT request_payload FROM chat_send_authority WHERE player_id=11 AND request_id=?", []byte(in.RequestId)).Scan(&originalBytes))
 	require.NotEmpty(t, originalBytes)
 
 	// 词法拒绝与数据库权限是两个契约：前者不能替代原有的真实 GRANT 拒绝断言。
@@ -153,7 +135,7 @@ func TestChatTiDBLeastPrivilegeRuntimeContract(t *testing.T) {
 		chatPrivilegeDenied(t, "有限迁移账号不得越界DDL或写业务/全局归属", err)
 	}
 
-	afterCreate, err := New(ctx, runtimeDB, globalSchema, s.rules)
+	afterCreate, err := New(ctx, runtimeDB, globalSchema, authoritysql.BackendTiDB, s.rules)
 	chatPrivilegeNoError(t, "迁移后有限业务账号重新启动", err)
 	accepted, err := afterCreate.Send(originalContext, sendRequest("least-privilege-after-create", 22))
 	chatPrivilegeNoError(t, "真正CREATE后有限业务账号发言", err)
@@ -287,9 +269,9 @@ func chatPrivilegeOpen(t *testing.T, ctx context.Context, user, password, schema
 	var db *sql.DB
 	var err error
 	if migration {
-		db, err = authoritysql.OpenForMigration(ctx, config.FormatDSN(), schema, true, permission)
+		db, err = authoritysql.OpenForMigration(ctx, config.FormatDSN(), schema, authoritysql.BackendTiDB, permission)
 	} else {
-		db, err = authoritysql.Open(ctx, config.FormatDSN(), schema, true, 2, permission)
+		db, err = authoritysql.Open(ctx, config.FormatDSN(), schema, authoritysql.BackendTiDB, 2, permission)
 	}
 	chatPrivilegeNoError(t, "打开本例强会话连接池", err)
 	t.Cleanup(func() { chatPrivilegeNoError(t, "关闭本例连接池", db.Close()) })

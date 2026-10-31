@@ -179,11 +179,6 @@ ItemStore::QuantityVerdict ItemStore::CheckQuantities(const ItemCountMap &requir
     return versionSkew ? QuantityVerdict::kVersionSkew : QuantityVerdict::kEnough;
 }
 
-bool ItemStore::HasAll(const ItemCountMap &required) const
-{
-    return CheckQuantities(required) == QuantityVerdict::kEnough;
-}
-
 // ── 堆叠语义 ─────────────────────────────────────────────────────────────
 
 ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted,

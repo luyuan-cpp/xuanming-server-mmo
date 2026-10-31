@@ -2291,6 +2291,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     kDataRootDirectoryFieldNumber = 14,
     kBattleTokenSecretFieldNumber = 16,
     kPersistSchemaRegressionModeFieldNumber = 23,
+    kSpectateTokenSecretFieldNumber = 24,
     kKafkaFieldNumber = 9,
     kIdSegmentFieldNumber = 19,
     kGrpcClientFieldNumber = 21,
@@ -2485,6 +2486,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   ::std::string* PROTOBUF_NONNULL _internal_mutable_persist_schema_regression_mode();
 
   public:
+  // string spectate_token_secret = 24;
+  void clear_spectate_token_secret() ;
+  [[nodiscard]] const ::std::string& spectate_token_secret() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_spectate_token_secret(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_spectate_token_secret();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_spectate_token_secret();
+  void set_allocated_spectate_token_secret(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_spectate_token_secret() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_spectate_token_secret(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_spectate_token_secret();
+
+  public:
   // .KafkaConfig kafka = 9;
   [[nodiscard]] bool has_kafka()
       const;
@@ -2637,8 +2653,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          4, 219,
+      ::google::protobuf::internal::TcParseTable<5, 24,
+                          4, 248,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2676,6 +2692,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     ::google::protobuf::internal::ArenaStringPtr data_root_directory_;
     ::google::protobuf::internal::ArenaStringPtr battle_token_secret_;
     ::google::protobuf::internal::ArenaStringPtr persist_schema_regression_mode_;
+    ::google::protobuf::internal::ArenaStringPtr spectate_token_secret_;
     ::KafkaConfig* PROTOBUF_NULLABLE kafka_;
     ::IdSegmentConfig* PROTOBUF_NULLABLE id_segment_;
     ::GrpcClientConfig* PROTOBUF_NULLABLE grpc_client_;
@@ -3551,7 +3568,7 @@ BaseDeployConfig::_internal_mutable_etcd_hosts() {
 inline void BaseDeployConfig::clear_log_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.log_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t BaseDeployConfig::log_level() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.log_level)
@@ -3559,7 +3576,7 @@ inline ::uint32_t BaseDeployConfig::log_level() const {
 }
 inline void BaseDeployConfig::set_log_level(::uint32_t value) {
   _internal_set_log_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.log_level)
 }
 inline ::uint32_t BaseDeployConfig::_internal_log_level() const {
@@ -3702,7 +3719,7 @@ BaseDeployConfig::_internal_mutable_service_discovery_prefixes() {
 inline void BaseDeployConfig::clear_keep_alive_interval() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.keep_alive_interval_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t BaseDeployConfig::keep_alive_interval() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.keep_alive_interval)
@@ -3710,7 +3727,7 @@ inline ::uint32_t BaseDeployConfig::keep_alive_interval() const {
 }
 inline void BaseDeployConfig::set_keep_alive_interval(::uint32_t value) {
   _internal_set_keep_alive_interval(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.keep_alive_interval)
 }
 inline ::uint32_t BaseDeployConfig::_internal_keep_alive_interval() const {
@@ -3790,7 +3807,7 @@ inline void BaseDeployConfig::set_allocated_deployservice_prefix(::std::string* 
 inline void BaseDeployConfig::clear_node_ttl_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.node_ttl_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t BaseDeployConfig::node_ttl_seconds() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.node_ttl_seconds)
@@ -3798,7 +3815,7 @@ inline ::uint32_t BaseDeployConfig::node_ttl_seconds() const {
 }
 inline void BaseDeployConfig::set_node_ttl_seconds(::uint32_t value) {
   _internal_set_node_ttl_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.node_ttl_seconds)
 }
 inline ::uint32_t BaseDeployConfig::_internal_node_ttl_seconds() const {
@@ -3814,7 +3831,7 @@ inline void BaseDeployConfig::_internal_set_node_ttl_seconds(::uint32_t value) {
 inline void BaseDeployConfig::clear_health_check_interval() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_check_interval_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t BaseDeployConfig::health_check_interval() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.health_check_interval)
@@ -3822,7 +3839,7 @@ inline ::uint32_t BaseDeployConfig::health_check_interval() const {
 }
 inline void BaseDeployConfig::set_health_check_interval(::uint32_t value) {
   _internal_set_health_check_interval(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.health_check_interval)
 }
 inline ::uint32_t BaseDeployConfig::_internal_health_check_interval() const {
@@ -3836,14 +3853,14 @@ inline void BaseDeployConfig::_internal_set_health_check_interval(::uint32_t val
 
 // .KafkaConfig kafka = 9;
 inline bool BaseDeployConfig::has_kafka() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000800U);
   PROTOBUF_ASSUME(!value || _impl_.kafka_ != nullptr);
   return value;
 }
 inline void BaseDeployConfig::clear_kafka() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.kafka_ != nullptr) _impl_.kafka_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline const ::KafkaConfig& BaseDeployConfig::_internal_kafka() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -3862,16 +3879,16 @@ inline void BaseDeployConfig::unsafe_arena_set_allocated_kafka(
   }
   _impl_.kafka_ = reinterpret_cast<::KafkaConfig*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BaseDeployConfig.kafka)
 }
 inline ::KafkaConfig* PROTOBUF_NULLABLE BaseDeployConfig::release_kafka() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::KafkaConfig* released = _impl_.kafka_;
   _impl_.kafka_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3891,7 +3908,7 @@ inline ::KafkaConfig* PROTOBUF_NULLABLE BaseDeployConfig::unsafe_arena_release_k
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BaseDeployConfig.kafka)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::KafkaConfig* temp = _impl_.kafka_;
   _impl_.kafka_ = nullptr;
   return temp;
@@ -3906,7 +3923,7 @@ inline ::KafkaConfig* PROTOBUF_NONNULL BaseDeployConfig::_internal_mutable_kafka
 }
 inline ::KafkaConfig* PROTOBUF_NONNULL BaseDeployConfig::mutable_kafka()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::KafkaConfig* _msg = _internal_mutable_kafka();
   // @@protoc_insertion_point(field_mutable:BaseDeployConfig.kafka)
   return _msg;
@@ -3923,9 +3940,9 @@ inline void BaseDeployConfig::set_allocated_kafka(::KafkaConfig* PROTOBUF_NULLAB
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   }
 
   _impl_.kafka_ = reinterpret_cast<::KafkaConfig*>(value);
@@ -4128,7 +4145,7 @@ inline void BaseDeployConfig::set_allocated_table_data_format(::std::string* PRO
 inline void BaseDeployConfig::clear_node_removal_grace_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.node_removal_grace_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t BaseDeployConfig::node_removal_grace_seconds() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.node_removal_grace_seconds)
@@ -4136,7 +4153,7 @@ inline ::uint32_t BaseDeployConfig::node_removal_grace_seconds() const {
 }
 inline void BaseDeployConfig::set_node_removal_grace_seconds(::uint32_t value) {
   _internal_set_node_removal_grace_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.node_removal_grace_seconds)
 }
 inline ::uint32_t BaseDeployConfig::_internal_node_removal_grace_seconds() const {
@@ -4216,7 +4233,7 @@ inline void BaseDeployConfig::set_allocated_data_root_directory(::std::string* P
 inline void BaseDeployConfig::clear_gate_max_connections() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gate_max_connections_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t BaseDeployConfig::gate_max_connections() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.gate_max_connections)
@@ -4224,7 +4241,7 @@ inline ::uint32_t BaseDeployConfig::gate_max_connections() const {
 }
 inline void BaseDeployConfig::set_gate_max_connections(::uint32_t value) {
   _internal_set_gate_max_connections(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.gate_max_connections)
 }
 inline ::uint32_t BaseDeployConfig::_internal_gate_max_connections() const {
@@ -4304,7 +4321,7 @@ inline void BaseDeployConfig::set_allocated_battle_token_secret(::std::string* P
 inline void BaseDeployConfig::clear_battle_max_connections() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_max_connections_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t BaseDeployConfig::battle_max_connections() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.battle_max_connections)
@@ -4312,7 +4329,7 @@ inline ::uint32_t BaseDeployConfig::battle_max_connections() const {
 }
 inline void BaseDeployConfig::set_battle_max_connections(::uint32_t value) {
   _internal_set_battle_max_connections(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.battle_max_connections)
 }
 inline ::uint32_t BaseDeployConfig::_internal_battle_max_connections() const {
@@ -4324,11 +4341,75 @@ inline void BaseDeployConfig::_internal_set_battle_max_connections(::uint32_t va
   _impl_.battle_max_connections_ = value;
 }
 
+// string spectate_token_secret = 24;
+inline void BaseDeployConfig::clear_spectate_token_secret() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_token_secret_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline const ::std::string& BaseDeployConfig::spectate_token_secret() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BaseDeployConfig.spectate_token_secret)
+  return _internal_spectate_token_secret();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BaseDeployConfig::set_spectate_token_secret(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  _impl_.spectate_token_secret_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:BaseDeployConfig.spectate_token_secret)
+}
+inline ::std::string* PROTOBUF_NONNULL BaseDeployConfig::mutable_spectate_token_secret()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::std::string* _s = _internal_mutable_spectate_token_secret();
+  // @@protoc_insertion_point(field_mutable:BaseDeployConfig.spectate_token_secret)
+  return _s;
+}
+inline const ::std::string& BaseDeployConfig::_internal_spectate_token_secret() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spectate_token_secret_.Get();
+}
+inline void BaseDeployConfig::_internal_set_spectate_token_secret(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_token_secret_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BaseDeployConfig::_internal_mutable_spectate_token_secret() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.spectate_token_secret_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BaseDeployConfig::release_spectate_token_secret() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BaseDeployConfig.spectate_token_secret)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000400U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  auto* released = _impl_.spectate_token_secret_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.spectate_token_secret_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BaseDeployConfig::set_allocated_spectate_token_secret(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+  _impl_.spectate_token_secret_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.spectate_token_secret_.IsDefault()) {
+    _impl_.spectate_token_secret_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:BaseDeployConfig.spectate_token_secret)
+}
+
 // uint32 cluster_id = 18;
 inline void BaseDeployConfig::clear_cluster_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cluster_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t BaseDeployConfig::cluster_id() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.cluster_id)
@@ -4336,7 +4417,7 @@ inline ::uint32_t BaseDeployConfig::cluster_id() const {
 }
 inline void BaseDeployConfig::set_cluster_id(::uint32_t value) {
   _internal_set_cluster_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.cluster_id)
 }
 inline ::uint32_t BaseDeployConfig::_internal_cluster_id() const {
@@ -4350,14 +4431,14 @@ inline void BaseDeployConfig::_internal_set_cluster_id(::uint32_t value) {
 
 // .IdSegmentConfig id_segment = 19;
 inline bool BaseDeployConfig::has_id_segment() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000800U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00001000U);
   PROTOBUF_ASSUME(!value || _impl_.id_segment_ != nullptr);
   return value;
 }
 inline void BaseDeployConfig::clear_id_segment() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.id_segment_ != nullptr) _impl_.id_segment_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline const ::IdSegmentConfig& BaseDeployConfig::_internal_id_segment() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -4376,16 +4457,16 @@ inline void BaseDeployConfig::unsafe_arena_set_allocated_id_segment(
   }
   _impl_.id_segment_ = reinterpret_cast<::IdSegmentConfig*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BaseDeployConfig.id_segment)
 }
 inline ::IdSegmentConfig* PROTOBUF_NULLABLE BaseDeployConfig::release_id_segment() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::IdSegmentConfig* released = _impl_.id_segment_;
   _impl_.id_segment_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4405,7 +4486,7 @@ inline ::IdSegmentConfig* PROTOBUF_NULLABLE BaseDeployConfig::unsafe_arena_relea
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BaseDeployConfig.id_segment)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::IdSegmentConfig* temp = _impl_.id_segment_;
   _impl_.id_segment_ = nullptr;
   return temp;
@@ -4420,7 +4501,7 @@ inline ::IdSegmentConfig* PROTOBUF_NONNULL BaseDeployConfig::_internal_mutable_i
 }
 inline ::IdSegmentConfig* PROTOBUF_NONNULL BaseDeployConfig::mutable_id_segment()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::IdSegmentConfig* _msg = _internal_mutable_id_segment();
   // @@protoc_insertion_point(field_mutable:BaseDeployConfig.id_segment)
   return _msg;
@@ -4437,9 +4518,9 @@ inline void BaseDeployConfig::set_allocated_id_segment(::IdSegmentConfig* PROTOB
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   }
 
   _impl_.id_segment_ = reinterpret_cast<::IdSegmentConfig*>(value);
@@ -4450,7 +4531,7 @@ inline void BaseDeployConfig::set_allocated_id_segment(::IdSegmentConfig* PROTOB
 inline void BaseDeployConfig::clear_audit_topic_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.audit_topic_generation_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t BaseDeployConfig::audit_topic_generation() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.audit_topic_generation)
@@ -4458,7 +4539,7 @@ inline ::uint32_t BaseDeployConfig::audit_topic_generation() const {
 }
 inline void BaseDeployConfig::set_audit_topic_generation(::uint32_t value) {
   _internal_set_audit_topic_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.audit_topic_generation)
 }
 inline ::uint32_t BaseDeployConfig::_internal_audit_topic_generation() const {
@@ -4472,14 +4553,14 @@ inline void BaseDeployConfig::_internal_set_audit_topic_generation(::uint32_t va
 
 // .GrpcClientConfig grpc_client = 21;
 inline bool BaseDeployConfig::has_grpc_client() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00001000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00002000U);
   PROTOBUF_ASSUME(!value || _impl_.grpc_client_ != nullptr);
   return value;
 }
 inline void BaseDeployConfig::clear_grpc_client() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.grpc_client_ != nullptr) _impl_.grpc_client_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline const ::GrpcClientConfig& BaseDeployConfig::_internal_grpc_client() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -4498,16 +4579,16 @@ inline void BaseDeployConfig::unsafe_arena_set_allocated_grpc_client(
   }
   _impl_.grpc_client_ = reinterpret_cast<::GrpcClientConfig*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BaseDeployConfig.grpc_client)
 }
 inline ::GrpcClientConfig* PROTOBUF_NULLABLE BaseDeployConfig::release_grpc_client() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
   ::GrpcClientConfig* released = _impl_.grpc_client_;
   _impl_.grpc_client_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4527,7 +4608,7 @@ inline ::GrpcClientConfig* PROTOBUF_NULLABLE BaseDeployConfig::unsafe_arena_rele
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BaseDeployConfig.grpc_client)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
   ::GrpcClientConfig* temp = _impl_.grpc_client_;
   _impl_.grpc_client_ = nullptr;
   return temp;
@@ -4542,7 +4623,7 @@ inline ::GrpcClientConfig* PROTOBUF_NONNULL BaseDeployConfig::_internal_mutable_
 }
 inline ::GrpcClientConfig* PROTOBUF_NONNULL BaseDeployConfig::mutable_grpc_client()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   ::GrpcClientConfig* _msg = _internal_mutable_grpc_client();
   // @@protoc_insertion_point(field_mutable:BaseDeployConfig.grpc_client)
   return _msg;
@@ -4559,9 +4640,9 @@ inline void BaseDeployConfig::set_allocated_grpc_client(::GrpcClientConfig* PROT
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
   }
 
   _impl_.grpc_client_ = reinterpret_cast<::GrpcClientConfig*>(value);
@@ -4572,7 +4653,7 @@ inline void BaseDeployConfig::set_allocated_grpc_client(::GrpcClientConfig* PROT
 inline void BaseDeployConfig::clear_db_task_topic_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.db_task_topic_generation_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t BaseDeployConfig::db_task_topic_generation() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.db_task_topic_generation)
@@ -4580,7 +4661,7 @@ inline ::uint32_t BaseDeployConfig::db_task_topic_generation() const {
 }
 inline void BaseDeployConfig::set_db_task_topic_generation(::uint32_t value) {
   _internal_set_db_task_topic_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.db_task_topic_generation)
 }
 inline ::uint32_t BaseDeployConfig::_internal_db_task_topic_generation() const {

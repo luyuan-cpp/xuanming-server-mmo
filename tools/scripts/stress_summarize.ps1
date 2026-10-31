@@ -12,16 +12,12 @@
           time | conn | login_ok | enter_ok | enter_fail | recon_fb | max_login | msg/s
 
       [entergame_total snapshot at each prom-snapshot point]
-          when | success | preload_failed | apply_failed | fail %
-                 | preload{ok} avg | preload{fail} avg | apply avg | pool_saturated
+          when | success | apply_failed | lock_lost | fail % | total{ok} avg | apply avg | pool_saturated
           (pool_saturated = PreloadPool 满、入场链没启动的次数;不计入 fail %;缺序列打印 n/a)
-
-      [dataloader per-stage avg at each prom-snapshot point]
-          when | cache_check{hit} | sub_cache_check | kafka_send | callback_wait{ok} | callback_wait{fail}
 
       [CreatePlayer stages:每个快照点的建角分阶段均值 + 名字孤儿计数;缺指标打印 n/a,
        name_orphan 在「有 stage 序列但无孤儿序列」时打印 0(规则见该段注释)]
-          when | mint | name | register | seed | account_write | name_orphan
+          when | mint | name | register | account_write | name_orphan
 
       [L1 Login outbound RPC(login :9101 的 go-zero rpc_client_requests_*,2026-10-23 起):登录链路调
        data_service 的 5 个方法各自的次数 / 累计均值 / p99(桶插值)/ 非 OK 码数;缺序列打印 n/a]
@@ -29,9 +25,6 @@
 
       [L2 Login gate directory reads(login_gate_directory_reads_total):gate 目录读镜像还是回落直读 etcd]
           when | cache etcd_unsynced etcd_stale | cache%
-
-      [L3 Login task:result delivery(login_task_result_delivery_total):读回执送达终态与附加信号]
-          when | inst legacy salvaged timed_out | late missing | deliv% salv% tmo% legacy%
 
       [S1 SceneManager home_zone / role_lookup(*_sm):归属查询结果分布 + 两个新 stage 的 n / 均值 / p99]
           when | mapped unmapped unconfig error | hz_n hz_avg hz_p99 | rl_n rl_avg rl_p99
@@ -43,19 +36,18 @@
       [D2 data_service account directory RPC(*_ds):每个快照 × 每个账号目录 RPC 一行]
           when | rpc | n avg p99 | nf rej err
 
-      [DB write path(Round 20+,*_db 快照):db 新 stage 均值、子 shard 批大小、排序守卫 / 失租 / 释放计数、
-       go-redis 连接池等待与超时;缺序列打印 n/a]
-          when | w_sql w_task w_queue w_e2e | r_sql r_task | batch | no_cursor lease_lost rel_notown | rpool_wait rpool_tmo
+      [P1 Player store save(*_db 快照,:9160):db_player_store_seconds{op="save"} 的 n / 均值 / p99,
+       db_player_store_requests_total 每个结局的次数;本 op 没有序列打印 n/a,有序列时缺的结局打 0]
+          when | n avg p99 | committed equal | stale not_hold unclaimed older | no_owner invalid regressed too_new too_large | unknown unavail denied
 
-      [DB Redis steps(Round 20+ / 围栏 v0.4,*_db 快照):12 个固定列只读写任务均值与合计;缺序列打印 n/a]
-          when | lock_acq cur_get ep_get owner_ep plc_lkp exp_get plc_rck verify publish cache_nx advance lock_rel | sum
+      [P2 Player store claim(同上,op="claim")]
+          when | n avg p99 | claimed | stale not_hold no_owner invalid too_new | unknown unavail denied
 
-      [DB retry routing(*_db 快照):重试路由模式、四个重试列表长度、路由动作计数;缺序列打印 n/a]
-          when | mode | q_ready q_part q_proc q_dead | exec nonowner fwd revoked misrouted rt_dead
+      [P3 Player store row bytes(db_player_store_row_bytes,已提交的行):每组 n / 均值 / p99,单位字节]
+          when | hot_* | asset_* | growth_* | profile_* | legacy1_*
 
-      [DB task:result notify(*_db 快照,2026-10-18 起):读回执到达通知按 target × result 的累计数,
-       实例频道无人接收占比与回落旧频道占比;缺序列打印 n/a,分母为 0 打印 -]
-          when | inst_ok inst_nr inst_err | unset_ok unset_nr unset_err | inval_ok inval_nr inval_err | inst_nr% legacy%
+      [P4 DB pools and placement(db_redis_pool_*、mmorpg_sql_pool_*、db_placement_*、db_store_cooldown_stores)]
+          when | rpool_wait rpool_tmo | sql_in_use sql_wait sql_wait_s | open_stores open_err cooldown
 
       [R1 Redis instance load(stress_snap.ps1 抓的 t<N>m_redis_<name>.txt,INFO 相邻两份求差 + 首末整体窗口)]
           target | window | secs ops/s cpu% main% in_KB/s out_KB/s | clients used_MB mem% | rej_conn err_rep oom aof_dfs | note
@@ -64,12 +56,12 @@
           target | window | cmd | calls/s usec/call | p50 p99 p99.9 | failed rejected
 
       [M1 Mapping read path at a glance:按 t<N>m 把 login / ds / sm / db / redis 的关键均值连成一行]
-          tag | l_bgz l_rad | ds_batch ds_home ds_dir | sm_hz sm_rl | db_plc_lkp db_plc_rck | rd_ops/s rd_main%
+          tag | l_bgz l_rad | ds_batch ds_home ds_dir | sm_hz sm_rl | db_claim db_save | rd_ops/s rd_main%
 
     新表在缺文件时打印标题加一行「(无数据 no data: …)」,缺序列打印 n/a,退出码不变。
 
-      [optional: Kafka consumer lag (final)]
-          partition | current | log_end | lag
+      [optional: Kafka consumer lag (live,data_service 的两条审计落库消费组)]
+          group | topic | partition | current | log_end | lag
 
     All numbers are derived, no raw histogram buckets — exactly what the
     AI needs to understand a run in ≤2 KB output instead of 30+ KB of
@@ -92,20 +84,10 @@
     Docker container name (default 'kafka'). Set to '' to skip Kafka lag
     section.
 
-.PARAMETER Zone
-    本机启动 go/db 时用的 -Zone(dev_tools.ps1 dev-start-zones / go_services.ps1 -Zone N)。默认 0 = 单 zone 默认启动
-    (start_game / dev-start / go-svc-start 不带 -Zone):topic 与组名用下面两个参数的缺省值。
-    > 0 时,未显式传 -KafkaTopic / -KafkaConsumerGroup 的那一项按 zone 推导:topic 为 db_task_zone_<Zone>,
-    组名为 db_rpc_consumer_group_z<Zone>(go_services.ps1 只在 -Zone > 0 时给 GroupID 追加 _z<Zone>)。
-    显式传的值一律优先。
-
-.PARAMETER KafkaTopic
-    Topic to inspect for consumer lag. Default 'db_task_zone_1' (db.yaml ZoneId=1);
-    derived as 'db_task_zone_<Zone>' when -Zone > 0 and this parameter is not passed.
-
-.PARAMETER KafkaConsumerGroup
-    Consumer group to inspect. Default 'db_rpc_consumer_group' (single-zone default start);
-    derived as 'db_rpc_consumer_group_z<Zone>' when -Zone > 0 and this parameter is not passed.
+.PARAMETER KafkaConsumerGroups
+    Consumer groups to inspect for lag. Default: data_service 的两条审计落库消费组
+    (go/data_service/etc/data_service.yaml 的 Kafka.TransactionLogConsumerGroup / SnapshotConsumerGroup)。
+    玩家存盘不经 Kafka,go/db 没有消费组;控制面命令 topic 是 assign 分区、不进消费组,这里看不到。
 
 .EXAMPLE
     # Standard post-run summary
@@ -125,20 +107,10 @@ param(
     [string]$ProbePromUrl = "",
 
     [string]$KafkaContainer = "kafka",
-    [string]$KafkaTopic = "db_task_zone_1",
-    [string]$KafkaConsumerGroup = "db_rpc_consumer_group",
-    # 见 .PARAMETER Zone:0 = 单 zone 默认启动(裸名组);> 0 时推导未显式传入的 topic / 组名。
-    [int]$Zone = 0
+    [string[]]$KafkaConsumerGroups = @("data_service-transaction-log", "data_service-player-snapshot")
 )
 
 $ErrorActionPreference = "Stop"
-
-# 本机组名规则以 go_services.ps1 为准:只有 -Zone N(N > 0)启动时 GroupID 才追加 _zN,单 zone 默认启动是裸名。
-# 只推导调用方没有显式传的那一项,显式值优先。
-if ($Zone -gt 0) {
-    if (-not $PSBoundParameters.ContainsKey('KafkaTopic')) { $KafkaTopic = "db_task_zone_$Zone" }
-    if (-not $PSBoundParameters.ContainsKey('KafkaConsumerGroup')) { $KafkaConsumerGroup = "db_rpc_consumer_group_z$Zone" }
-}
 
 # ----- helpers ---------------------------------------------------------
 
@@ -202,25 +174,7 @@ function Get-MetricSumOrNull {
     return $null
 }
 
-# 下面 5 个函数(Get-SeriesPattern … Format-RatioCell)原先定义在 2d 段之前,2026-10-23 原样搬到这里:
-# PowerShell 脚本里的函数不提升,login 段之后的新表也要调用它们。
-
-# 一条序列的精确匹配正则;$Labels 为空表示无 label 的序列。
-function Get-SeriesPattern {
-    param([string]$Name, [string]$Labels = "")
-    if ($Labels) { return '^' + [regex]::Escape($Name) + '\{' + [regex]::Escape($Labels) + '\}$' }
-    return '^' + [regex]::Escape($Name) + '$'
-}
-
-# histogram 均值(秒)。sum / count 任一序列缺失返回 $null(→ n/a);count 为 0 返回 NaN(→ "-")。
-function Get-HistogramAvgOrNull {
-    param([hashtable]$M, [string]$Name, [string]$Labels = "")
-    $sumV = Get-MetricSumOrNull $M (Get-SeriesPattern "${Name}_sum" $Labels)
-    $cntV = Get-MetricSumOrNull $M (Get-SeriesPattern "${Name}_count" $Labels)
-    if ($null -eq $sumV -or $null -eq $cntV) { return $null }
-    if ($cntV -le 0) { return [double]::NaN }
-    return $sumV / $cntV
-}
+# 下面几个函数放在脚本前部:PowerShell 脚本里的函数不提升,后面各段都要调用它们。
 
 # 秒 → 毫秒文本;≥10s 改用秒(同 Format-Avg)。
 function Format-AvgCell {
@@ -269,8 +223,7 @@ function Get-SumOrNull {
 
 # ----- 按 label 过滤的序列读取(2026-10-23,L-18 观测批的新表用) ------------
 #
-# Get-SeriesPattern 系列按 /metrics 输出的 label 原文精确匹配,label 必须按字母序写全;下面这组按 label 名取值,
-# 与顺序无关,没列出的 label(scene_manager 的 zone_id、histogram 的 le 以外)跨值求和。
+# 按 label 名取值,与 /metrics 输出时的 label 顺序无关,没列出的 label(scene_manager 的 zone_id、histogram 的 le 以外)跨值求和。
 
 # 拆出一条序列 key("name{a=\"x\",b=\"y\"}" 或 "name")的 label 字典;不属于 $Name 这一族返回 $null。
 # name_sum / name_count / name_bucket 各算一族。
@@ -377,7 +330,21 @@ function Get-HistogramAvgCell {
     return (Get-HistogramCells $Hist $UnitScale $Decimals)[1]
 }
 
-# 「族内存在规则」:没有预建的 counter(scene_manager_home_zone_lookup_total、login_gate_directory_reads_total)
+# 字节 histogram 的「n / 均值 / p99」三格,缺序列与没有样本的规则同 Get-HistogramCells。
+function Get-HistogramByteCells {
+    param($Hist)
+    if ($null -eq $Hist) { return @('n/a', 'n/a', 'n/a') }
+    $n = Format-CountCell $Hist.Count
+    if ($Hist.Count -le 0) { return @($n, '-', '-') }
+    $q = Get-HistogramQuantile -Hist $Hist -Q 0.99
+    $p99 = if ($null -eq $q) { 'n/a' }
+           elseif ($q -is [double]) { '-' }
+           else { $(if ($q.Overflow) { '>' } else { '' }) + (Format-DecimalCell $q.Value 0) }
+    return @($n, (Format-DecimalCell ($Hist.Sum / $Hist.Count) 0), $p99)
+}
+
+# 「族内存在规则」:没有预建的 counter(scene_manager_home_zone_lookup_total、login_gate_directory_reads_total、
+# db_player_store_requests_total)
 # 在第一次事件之前整族一条序列都没有。整族都没有 → 每个取值 $null(→ n/a:分不清旧版本与零事件,如实标 n/a);
 # 族内有任一序列 → 缺的取值记 0(同一进程的同一个计数器,有一条序列即证明已注册、采集已开,缺的取值只是
 # 还没发生过)。先例是 CreatePlayer 段 name_orphan 的 $stageSeen 兜底。返回按 $Values 顺序的 取值 → 数。
@@ -538,8 +505,8 @@ function Get-RedisWindow {
 
 # ----- 跨语言钉名的取值数组(2026-10-23,L-18 观测批) -----------------------
 #
-# 下面的数组与 Go 侧常量逐项对应,Go 的钉名测试按 `$名字 = @( … )` 读出这些数组再比对(仿
-# go/db/internal/metrics 的 TestRedisStepNamesMatchStressSummarize):两边不一致时整列会静默变成 n/a,
+# 下面的数组与 Go 侧常量逐项对应,Go 的钉名测试按 `$名字 = @( … )` 读出这些数组再比对(如
+# go/data_service/internal/metrics 的 TestLoginReadNamesMatchStressSummarize):两边不一致时整列会静默变成 n/a,
 # 只有钉名测试能先红。改名或加取值要同改 Go 常量、本数组与 test_stress_summarize.ps1;括号里不写注释。
 #
 # $loginRpcMethods:login 调 data_service 的 gRPC 方法全名(go-zero rpc_client_requests_* 的 method label),
@@ -551,11 +518,6 @@ $loginRpcColumns = @('bgz', 'bpn', 'ghz', 'rad', 'lar')
 # $gateDirectorySources:login_gate_directory_reads_total 的 source,同 go/login/internal/logic/pkg/node/node_cache.go
 #   的 readSourceCache / readSourceUnsynced / readSourceStale。
 $gateDirectorySources = @('cache', 'etcd_unsynced', 'etcd_stale')
-# $deliveryOutcomes:login_task_result_delivery_total 的 outcome,与 go/login/internal/dispatcher/metrics.go 的
-#   deliveryOutcomes 同序。
-$deliveryOutcomes = @('instance_notify', 'legacy_notify', 'late_notify', 'result_missing', 'salvaged', 'timed_out')
-#   L3 表的列名 → outcome(列序按「终态在前、附加信号在后」,与上面的 Go 顺序不同;下面的检查保证一一对应)。
-$l3Columns = [ordered]@{ inst = 'instance_notify'; legacy = 'legacy_notify'; salvaged = 'salvaged'; timed_out = 'timed_out'; late = 'late_notify'; missing = 'result_missing' }
 # $smEnterSceneStages:scene_manager_enter_scene_stage_seconds 的全部 stage,同 go/scene_manager/internal/metrics
 #   的 EnterSceneStage* 常量(前 7 个是原 SM stages 表的列,列序不动;home_zone / role_lookup 由 S1 表出)。
 #   $smLookupStages 声明哪几个进 S1 表,必须是 $smEnterSceneStages 的子集。
@@ -578,15 +540,28 @@ $accountDirectoryRpcs = @('read', 'create', 'lookup', 'repair', 'remove')
 $accountDirectoryResults = @('ok', 'not_found', 'rejected', 'error')
 # $redisAlwaysCommands:R2 在 Δcalls 前 8 名之外必列的命令(有就列),对应 mapping 读路径与核心读写。
 $redisAlwaysCommands = @('mget', 'evalsha', 'eval', 'get', 'set')
+# $playerStoreSaveColumns / $playerStoreClaimColumns:db_player_store_requests_total 的 result → 列名。result 取
+#   proto/player_store/player_store.proto 的 SavePlayerResult / LoadAndClaimResult 枚举名,加 go/db/internal/metrics 的
+#   unknown_outcome / unavailable / denied(请求没走到判定就结束)。枚举加值要同改这里与 test_stress_summarize.ps1。
+$playerStoreSaveColumns = [ordered]@{
+    committed = 'SAVE_PLAYER_COMMITTED'; equal = 'SAVE_PLAYER_EQUAL'
+    stale = 'SAVE_PLAYER_STALE_OWNER'; not_hold = 'SAVE_PLAYER_NOT_HOLDER'; unclaimed = 'SAVE_PLAYER_UNCLAIMED'; older = 'SAVE_PLAYER_OLDER_SEQ'
+    no_owner = 'SAVE_PLAYER_NO_OWNER'; invalid = 'SAVE_PLAYER_INVALID'; regressed = 'SAVE_PLAYER_SCHEMA_REGRESSED'; too_new = 'SAVE_PLAYER_SCHEMA_TOO_NEW'; too_large = 'SAVE_PLAYER_TOO_LARGE'
+    unknown = 'unknown_outcome'; unavail = 'unavailable'; denied = 'denied'
+}
+$playerStoreClaimColumns = [ordered]@{
+    claimed = 'LOAD_AND_CLAIM_CLAIMED'
+    stale = 'LOAD_AND_CLAIM_STALE_OWNER'; not_hold = 'LOAD_AND_CLAIM_NOT_HOLDER'; no_owner = 'LOAD_AND_CLAIM_NO_OWNER'; invalid = 'LOAD_AND_CLAIM_INVALID'; too_new = 'LOAD_AND_CLAIM_SCHEMA_TOO_NEW'
+    unknown = 'unknown_outcome'; unavail = 'unavailable'; denied = 'denied'
+}
+# $playerStoreRowKinds:db_player_store_row_bytes 的 kind(PlayerStoreKind 枚举名,写权行不带 payload,不在这里)→ 列名前缀。
+$playerStoreRowKinds = [ordered]@{ hot = 'PLAYER_STORE_KIND_HOT'; asset = 'PLAYER_STORE_KIND_ASSET'; growth = 'PLAYER_STORE_KIND_GROWTH'; profile = 'PLAYER_STORE_KIND_PROFILE'; legacy1 = 'PLAYER_STORE_KIND_LEGACY1' }
 
 if ($loginRpcMethods.Count -ne $loginRpcColumns.Count) {
     throw "`$loginRpcMethods 与 `$loginRpcColumns 长度不一致"
 }
 foreach ($st in $smLookupStages) {
     if ($smEnterSceneStages -cnotcontains $st) { throw "`$smLookupStages 的 $st 不在 `$smEnterSceneStages 里" }
-}
-if ($l3Columns.Count -ne $deliveryOutcomes.Count -or @($l3Columns.Values | Where-Object { $deliveryOutcomes -cnotcontains $_ }).Count -gt 0) {
-    throw "`$l3Columns 必须与 `$deliveryOutcomes 一一对应"
 }
 
 # ----- 1. robot stats ---------------------------------------------------
@@ -688,102 +663,49 @@ if ($snapshots.Count -eq 0) {
     Write-Host ""
     Write-Host "=== EnterGame end-to-end (entergame_*) =================================" -ForegroundColor Yellow
     Write-Host ""
-    "  snapshot                       success  preload_failed  apply_failed  fail%   preload{ok}avg  preload{fail}avg  apply avg  pool_saturated" | Write-Host
-    "  --------                       -------  --------------  ------------  -----   --------------  ----------------  ---------  --------------" | Write-Host
+    "  snapshot                       success  apply_failed  lock_lost  fail%   total{ok}avg  apply avg  pool_saturated" | Write-Host
+    "  --------                       -------  ------------  ---------  -----   ------------  ---------  --------------" | Write-Host
 
     foreach ($snap in $snapshots) {
         $m = Read-PromSnapshot $snap.FullName
         $success      = Get-Metric $m 'entergame_total{result="success"}'
-        $preloadFail  = Get-Metric $m 'entergame_total{result="preload_failed"}'
         $applyFail    = Get-Metric $m 'entergame_total{result="apply_failed"}'
         $lockLost     = Get-Metric $m 'entergame_total{result="lock_lost"}'
-        $total = $success + $preloadFail + $applyFail + $lockLost
-        $failPct = if ($total -gt 0) { [math]::Round(($preloadFail + $applyFail + $lockLost) / $total * 100, 1) } else { 0.0 }
+        $total = $success + $applyFail + $lockLost
+        $failPct = if ($total -gt 0) { [math]::Round(($applyFail + $lockLost) / $total * 100, 1) } else { 0.0 }
 
         # pool_saturated = PreloadPool 满、入场链根本没启动(EnterGame 当场回 kLoginInProgress)的次数。
         # 它**不是**链的终态:只在 entergame_total 里计数,不进任何耗时直方图,所以不计入上面的
-        # $total 与 fail%,单列一列放在最后(原有各列的位置不变,新旧 summary 仍能逐列对比)。
-        # 开 NewPlayerSeed 后新号的入场链整段跑在 PreloadPool 的 worker 上,这一列有数就该调大
-        # login 的 PreloadPool.Size(docs/design/new-player-first-enter-no-cold-read.md §6 第 21 行)。
+        # $total 与 fail%,单列一列放在最后。入场链整段跑在 PreloadPool 的 worker 上(配置键名是预加载时代留下的),
+        # 这一列有数就该调大 login 的 PreloadPool.Size。
         # 缺序列打印 n/a 而不是 0:login 起服时由 PrimeEnterGameMetrics(clientplayerlogin/metrics.go)
         # 把这条序列预置成 0,所以带这个取值的 login 的快照里它恒存在,健康压测读到的就是 0;
         # 读到 n/a = 这个 login 不导出该取值(2026-10-13 之前的版本 / 预置没跑 / 采集没开),不是「测到 0」。
         $poolSatV = Get-MetricSumOrNull $m '^entergame_total\{.*result="pool_saturated"'
         $poolSatCell = if ($null -ne $poolSatV) { "{0:N0}" -f $poolSatV } else { "n/a" }
 
-        $preloadOkAvg   = Format-Avg (Get-Metric $m 'entergame_preload_seconds_sum{result="success"}')        (Get-Metric $m 'entergame_preload_seconds_count{result="success"}')
-        $preloadFailAvg = Format-Avg (Get-Metric $m 'entergame_preload_seconds_sum{result="preload_failed"}') (Get-Metric $m 'entergame_preload_seconds_count{result="preload_failed"}')
-        $applyAvg       = Format-Avg (Get-Metric $m 'entergame_apply_seconds_sum{result="success"}')          (Get-Metric $m 'entergame_apply_seconds_count{result="success"}')
+        $totalOkAvg = Format-Avg (Get-Metric $m 'entergame_total_seconds_sum{result="success"}') (Get-Metric $m 'entergame_total_seconds_count{result="success"}')
+        $applyAvg   = Format-Avg (Get-Metric $m 'entergame_apply_seconds_sum{result="success"}') (Get-Metric $m 'entergame_apply_seconds_count{result="success"}')
 
         $name = $snap.BaseName
-        $line = "  {0,-30} {1,-8} {2,-15} {3,-13} {4,-7} {5,-15} {6,-17} {7,-10} {8}" -f `
+        $line = "  {0,-30} {1,-8} {2,-13} {3,-10} {4,-7} {5,-13} {6,-10} {7}" -f `
             $name, `
             (Format-Number $success 8), `
-            (Format-Number $preloadFail 15), `
             (Format-Number $applyFail 13), `
+            (Format-Number $lockLost 10), `
             ("{0:N1}%" -f $failPct), `
-            $preloadOkAvg, `
-            $preloadFailAvg, `
+            $totalOkAvg, `
             $applyAvg, `
             $poolSatCell
         Write-Host $line
     }
 
-    Write-Host ""
-    Write-Host "=== Dataloader per-stage avg (dataloader_preload_*) ====================" -ForegroundColor Yellow
-    Write-Host ""
-    "  snapshot                       cache_check  sub_cache  dispatcher  kafka_send  cb_wait{ok}  cb_wait{fail}" | Write-Host
-    "  --------                       -----------  ---------  ----------  ----------  -----------  -------------" | Write-Host
-
-    foreach ($snap in $snapshots) {
-        $m = Read-PromSnapshot $snap.FullName
-
-        # cache_check has hit/miss labels; combine for an overall avg.
-        $ccSumHit    = Get-Metric $m 'dataloader_preload_cache_check_seconds_sum{hit="hit"}'
-        $ccCountHit  = Get-Metric $m 'dataloader_preload_cache_check_seconds_count{hit="hit"}'
-        $ccSumMiss   = Get-Metric $m 'dataloader_preload_cache_check_seconds_sum{hit="miss"}'
-        $ccCountMiss = Get-Metric $m 'dataloader_preload_cache_check_seconds_count{hit="miss"}'
-        $cacheAvg = Format-Avg ($ccSumHit + $ccSumMiss) ($ccCountHit + $ccCountMiss)
-
-        # sub_cache_check has labels by `subs=N`; we collapse by walking all keys.
-        $subSum = 0.0; $subCount = 0.0
-        foreach ($k in $m.Keys) {
-            if ($k -match '^dataloader_preload_sub_cache_check_seconds_sum\{subs="') { $subSum += $m[$k] }
-            elseif ($k -match '^dataloader_preload_sub_cache_check_seconds_count\{subs="') { $subCount += $m[$k] }
-        }
-        $subAvg = Format-Avg $subSum $subCount
-
-        $dispatcherAvg = Format-Avg `
-            (Get-Metric $m 'dataloader_preload_dispatcher_register_seconds_sum') `
-            (Get-Metric $m 'dataloader_preload_dispatcher_register_seconds_count')
-
-        $kafkaAvg = Format-Avg `
-            (Get-Metric $m 'dataloader_preload_kafka_send_seconds_sum{result="success"}') `
-            (Get-Metric $m 'dataloader_preload_kafka_send_seconds_count{result="success"}')
-
-        $cbOkAvg   = Format-Avg `
-            (Get-Metric $m 'dataloader_preload_callback_wait_seconds_sum{result="success"}') `
-            (Get-Metric $m 'dataloader_preload_callback_wait_seconds_count{result="success"}')
-        $cbFailAvg = Format-Avg `
-            (Get-Metric $m 'dataloader_preload_callback_wait_seconds_sum{result="failed"}') `
-            (Get-Metric $m 'dataloader_preload_callback_wait_seconds_count{result="failed"}')
-
-        $name = $snap.BaseName
-        $line = "  {0,-30} {1,-12} {2,-10} {3,-11} {4,-11} {5,-12} {6}" -f `
-            $name, $cacheAvg, $subAvg, $dispatcherAvg, $kafkaAvg, $cbOkAvg, $cbFailAvg
-        Write-Host $line
-    }
-
     # 建角分阶段耗时(帮会二期 B3a-2,docs/design/guild-phase2/03-names.md §3.11 / §3.20)。
-    # 指标在 login(:9101)上,所以与上面两段共用 login 快照。stage 的五个取值落码在
-    # go/login/internal/logic/clientplayerlogin/metrics.go(mint / name / register / account_write
-    # 由设计 §3.11 钉死,seed 由 docs/design/new-player-first-enter-no-cold-read.md §4.5 加入)
+    # 指标在 login(:9101)上,所以与上面共用 login 快照。stage 的四个取值落码在
+    # go/login/internal/logic/clientplayerlogin/metrics.go(由设计 §3.11 钉死)
     # —— 那边改名或加取值这里必须跟着改,否则整列静默变成 n/a,或者新取值根本没有列:
     #   mint = 发 player_id,name = 名字占用(ReservePlayerName,含重试),
-    #   register = RegisterPlayerZone,account_write = 围栏写账号 blob,
-    #   seed = 新号父键种子(账号锁内多出的一次 Redis,排在 register 与 account_write 之间)。
-    #          只在 login 的 NewPlayerSeed.Enabled 打开时有序列,关着时按下面的既有规则打印 n/a
-    #          —— 所以这一列同时能核对本轮压测的开关状态。
+    #   register = RegisterPlayerZone,account_write = 围栏写账号 blob。
     # 验收口径(§3.20)看 name 段均值与 name_orphan(建角失败后名字仍被占住的次数,应为 0)。
     # 各 stage 列缺指标一律打印 n/a,不折成 0:B3a-2 之前的 login 没有这些序列;histogram 的
     # 某个 stage 在第一次观测前也不会出现 —— 两种都不是「测到 0」。
@@ -804,10 +726,10 @@ if ($snapshots.Count -eq 0) {
     Write-Host ""
     Write-Host "=== CreatePlayer stages (login_create_player_stage_seconds) ============" -ForegroundColor Yellow
     Write-Host ""
-    "  snapshot                       mint       name       register   seed       account_write  name_orphan" | Write-Host
-    "  --------                       ----       ----       --------   ----       -------------  -----------" | Write-Host
+    "  snapshot                       mint       name       register   account_write  name_orphan" | Write-Host
+    "  --------                       ----       ----       --------   -------------  -----------" | Write-Host
 
-    $createStages = @('mint','name','register','seed','account_write')
+    $createStages = @('mint','name','register','account_write')
     foreach ($snap in $snapshots) {
         $m = Read-PromSnapshot $snap.FullName
         $cells = @()
@@ -823,15 +745,15 @@ if ($snapshots.Count -eq 0) {
         $orphanCell = if ($null -ne $orphanV) { "{0:N0}" -f $orphanV } elseif ($stageSeen) { "0" } else { "n/a" }
 
         $name = $snap.BaseName
-        $line = "  {0,-30} {1,-10} {2,-10} {3,-10} {4,-10} {5,-14} {6}" -f `
-            $name, $cells[0], $cells[1], $cells[2], $cells[3], $cells[4], $orphanCell
+        $line = "  {0,-30} {1,-10} {2,-10} {3,-10} {4,-14} {5}" -f `
+            $name, $cells[0], $cells[1], $cells[2], $cells[3], $orphanCell
         Write-Host $line
     }
 }
 
-# ----- 2a. Login 出站 RPC / gate 目录 / 读回执送达(L-18 观测批,login :9101) ----
+# ----- 2a. Login 出站 RPC / gate 目录(L-18 观测批,login :9101) ----
 #
-# 与上面三张 login 表共用 login 快照($snapshots),但放在那个 if / else 之外:一份 login 快照都没有时也打印标题与
+# 与上面两张 login 表共用 login 快照($snapshots),但放在那个 if / else 之外:一份 login 快照都没有时也打印标题与
 # 「无数据」行,复盘时能分清「没抓到」和「表没了」。
 
 # L1:go-zero 客户端拦截器的 rpc_client_requests_duration_ms{method}(毫秒,桶 1,2,5,10,25,50,…)与
@@ -895,38 +817,6 @@ if ($snapshots.Count -eq 0) {
         $cells = @($snap.BaseName) + @($gateDirectorySources | ForEach-Object { Format-CountCell $counts[$_] })
         $cells += Format-RatioCell $counts[$gateDirectorySources[0]] (Get-SumOrNull $counts.Values)
         Write-Host ($l2Fmt -f $cells)
-    }
-}
-
-# L3:login_task_result_delivery_total{outcome}(client_golang,六个取值起服即预建为 0;缺序列 = 不导出它的 login,打印 n/a)。
-#     终态 inst / legacy / salvaged / timed_out 之和作分母(一条登记最多落在其中一个上);late / missing 是附加信号,
-#     不进分母。deliv% = (inst + legacy) / 终态,salv% = salvaged / 终态,tmo% = timed_out / 终态,
-#     legacy% = legacy / (inst + legacy)(两侧全量升级后应约为 0)。口径同 go/login/internal/dispatcher/metrics.go
-#     文件头;与 2g 段 db 发布方的 db_task_result_notify_total 对照看。列与 outcome 的对应见 $l3Columns。
-$l3Fmt = "  {0,-30} | {1,-6} {2,-6} {3,-8} {4,-9} | {5,-5} {6,-7} | {7,-7} {8,-6} {9,-6} {10}"
-Write-Host ""
-Write-Host "=== L3 Login task:result delivery (login_task_result_delivery_total) ===" -ForegroundColor Yellow
-Write-Host ""
-if ($snapshots.Count -eq 0) {
-    Write-NoData "没有 login 快照"
-} else {
-    Write-Host ($l3Fmt -f (@('snapshot') + @($l3Columns.Keys) + @('deliv%', 'salv%', 'tmo%', 'legacy%')))
-    Write-Host ($l3Fmt -f (@('--------') + @($l3Columns.Keys | ForEach-Object { '-' * $_.Length }) + @('------', '-----', '----', '-------')))
-    foreach ($snap in $snapshots) {
-        $m = Read-PromSnapshot $snap.FullName
-        $v = @{}
-        foreach ($col in $l3Columns.Keys) {
-            $v[$col] = Get-SeriesSumOrNull $m 'login_task_result_delivery_total' @{ outcome = $l3Columns[$col] }
-        }
-        $notified = Get-SumOrNull @($v['inst'], $v['legacy'])
-        $terminal = Get-SumOrNull @($v['inst'], $v['legacy'], $v['salvaged'], $v['timed_out'])
-        $cells = @($snap.BaseName) + @($l3Columns.Keys | ForEach-Object { Format-CountCell $v[$_] })
-        $cells += @(
-            (Format-RatioCell $notified $terminal),
-            (Format-RatioCell $v['salvaged'] $terminal),
-            (Format-RatioCell $v['timed_out'] $terminal),
-            (Format-RatioCell $v['legacy'] $notified))
-        Write-Host ($l3Fmt -f $cells)
     }
 }
 
@@ -1064,7 +954,7 @@ if ($dsSnapshots.Count -eq 0) {
 # Why log-parsing instead of a Prometheus scrape: cpp scene processes don't
 # expose a metrics HTTP endpoint today (only go SceneManager :9150 and go
 # db :9160 do). The two atomic counters live in dirty_save_stats.h and emit
-# one LOG_INFO line every 30 s from the RedisSystem snapshot timer. We pull
+# one LOG_INFO line from the scene's 30 s counter snapshot timer. We pull
 # the LATEST line from the most recent scene_*.log and surface the
 # total / skipped / skip_pct triple.
 #
@@ -1207,244 +1097,130 @@ if ($rpcChannelLatest.Count -gt 0) {
     Write-Host "  (after a same-zone cutover timeout / late_reply / legacy_id0_reply should stay 0)"
 }
 
-# ----- 2c. DB per-task stage breakdown (Round 16+) ----------------------
+# ----- 2c. 存盘接口(go/db 的 PlayerStore gRPC,*_db 快照,:9160) ----------
+#
+# go/db 只剩这一件事(docs/design/player-save-direct-commit.md),下面四张表就是 DB 的对比表。指标来源
+# go/db/internal/metrics/metrics.go 与 go/shared/sqlpoolstats,那边改名或加取值,这里与 test_stress_summarize.ps1
+# 必须同改,否则整列静默变成 n/a。
 
-if ($dbSnapshots.Count -gt 0) {
-    Write-Host ""
-    Write-Host "=== DB task stages (db_task_stage_seconds, db_task_result_total) ===" -ForegroundColor Yellow
-    Write-Host ""
-    "  snapshot                       read_total read_hdlr cache_wr publish  | write_total write_hdlr | ok      err" | Write-Host
-    "  --------                       ---------- --------- -------- -------- | ----------- ---------- | ------- ----" | Write-Host
+# 一个 op 的 n / avg / p99(db_player_store_seconds,服务端耗时,含写权闸的语句;p99 由桶线性插值,桶粗,只看量级),
+# 后面跟 $Columns 里每个结局的次数(db_player_store_requests_total)。这个计数器没有预建,按族内存在规则:
+# 本 op 一条序列都没有 → n/a(还没有这类请求,或不导出它的 db);有任一序列 → 缺的结局打 0。
+function Get-PlayerStoreOpCells {
+    param([hashtable]$M, [string]$Op, $Columns)
+    $results = @($Columns.Values)
+    $counts = Get-FamilyCountsOrNull $M 'db_player_store_requests_total' 'result' $results @{ op = $Op }
+    $cells = @(Get-HistogramCells (Get-HistogramOrNull $M 'db_player_store_seconds' @{ op = $Op }) 1.0 1)
+    $cells += @($results | ForEach-Object { Format-CountCell $counts[$_] })
+    return $cells
+}
 
+$dbNoSnapshot = 'no *_db snapshots (stress_snap.ps1 scrapes db :9160 by default)'
+
+# P1:存盘。committed 与 equal 都算提交成功(equal = 同序号重发,幂等)。stale / not_hold / unclaimed / older 是写权与序号的拒绝,
+#     持续增长说明有人还在写已被接管的玩家。no_owner / invalid / regressed / too_new / too_large 正常为 0:too_new 是发布顺序错了,
+#     too_large 是 payload 超预算。unknown = 提交结局未知(scene 用同一序号重发),unavail = 落点或库打不开,denied = 调用方鉴权失败。
+$p1Fmt = "  {0,-30} | {1,-7} {2,-9} {3,-9} | {4,-9} {5,-6} | {6,-6} {7,-8} {8,-9} {9,-6} | {10,-8} {11,-7} {12,-9} {13,-7} {14,-9} | {15,-7} {16,-7} {17}"
+$p1Columns = @('n', 'avg', 'p99') + @($playerStoreSaveColumns.Keys)
+Write-Host ""
+Write-Host "=== P1 Player store save (db_player_store_seconds, db_player_store_requests_total, :9160) ===" -ForegroundColor Yellow
+Write-Host ""
+if ($dbSnapshots.Count -eq 0) {
+    Write-NoData $dbNoSnapshot
+} else {
+    Write-Host ($p1Fmt -f (@('snapshot') + $p1Columns))
+    Write-Host ($p1Fmt -f (@('--------') + @($p1Columns | ForEach-Object { '-' * $_.Length })))
     foreach ($snap in $dbSnapshots) {
         $m = Read-PromSnapshot $snap.FullName
-
-        # Get-Metric 按 key 精确查找,label 必须写成 /metrics 实际输出的顺序。
-        # client_golang 输出时按 label 名字排序(op < stage),写成 {stage=..,op=..} 永远查不到,
-        # 历次 summary(如 prev-summary-round18.txt、prev-summary.txt)这几列全是 "-" 就是这个原因
-        # (go/db/internal/metrics/metrics.go 里声明的顺序是 stage, op,输出时会被重排)。
-        $readTotalAvg = Format-Avg `
-            (Get-Metric $m 'db_task_stage_seconds_sum{op="read",stage="op_total"}') `
-            (Get-Metric $m 'db_task_stage_seconds_count{op="read",stage="op_total"}')
-        $readHdlrAvg = Format-Avg `
-            (Get-Metric $m 'db_task_stage_seconds_sum{op="read",stage="op_handler"}') `
-            (Get-Metric $m 'db_task_stage_seconds_count{op="read",stage="op_handler"}')
-        $readCacheAvg = Format-Avg `
-            (Get-Metric $m 'db_task_stage_seconds_sum{op="read",stage="cache_write"}') `
-            (Get-Metric $m 'db_task_stage_seconds_count{op="read",stage="cache_write"}')
-        $publishAvg = Format-Avg `
-            (Get-Metric $m 'db_task_stage_seconds_sum{op="read",stage="result_publish"}') `
-            (Get-Metric $m 'db_task_stage_seconds_count{op="read",stage="result_publish"}')
-
-        $writeTotalAvg = Format-Avg `
-            (Get-Metric $m 'db_task_stage_seconds_sum{op="write",stage="op_total"}') `
-            (Get-Metric $m 'db_task_stage_seconds_count{op="write",stage="op_total"}')
-        $writeHdlrAvg = Format-Avg `
-            (Get-Metric $m 'db_task_stage_seconds_sum{op="write",stage="op_handler"}') `
-            (Get-Metric $m 'db_task_stage_seconds_count{op="write",stage="op_handler"}')
-
-        $okCnt  = (Get-Metric $m 'db_task_result_total{op="read",result="ok"}') + (Get-Metric $m 'db_task_result_total{op="write",result="ok"}')
-        $errCnt = (Get-Metric $m 'db_task_result_total{op="read",result="error"}') + (Get-Metric $m 'db_task_result_total{op="write",result="error"}')
-
-        $name = $snap.BaseName
-        $line = "  {0,-30} {1,-10} {2,-9} {3,-8} {4,-8} | {5,-11} {6,-10} | {7,-7} {8}" -f `
-            $name, $readTotalAvg, $readHdlrAvg, $readCacheAvg, $publishAvg, $writeTotalAvg, $writeHdlrAvg, `
-            (Format-Number $okCnt 7), (Format-Number $errCnt 4)
-        Write-Host $line
+        Write-Host ($p1Fmt -f (@($snap.BaseName) + @(Get-PlayerStoreOpCells $m 'save' $playerStoreSaveColumns)))
     }
 }
 
-# ----- 2d / 2e / 2f. DB 写路径打点、Redis 分步、重试路由(Round 20+) ----
-#
-# 指标来源(那边改名或加取值,这里与 test_stress_summarize.ps1 必须同改,否则整列静默变成 n/a):
-#   - db_task_stage_seconds 的 stage=sql / task_total / queue_wait / kafka_e2e:go/db/internal/metrics/metrics.go;
-#   - db_task_redis_step_seconds、db_ordering_guard_total、db_subshard_batch_size、db_ordering_lease_lost_total、
-#     db_ordering_lock_release_total、db_redis_pool_*:go/db/internal/metrics/pipeline.go;
-#   - db_retry_routing_mode、db_retry_route_total、db_retry_queue_length(含 queue="partitioned"):
-#     go/db/internal/metrics/metrics.go(重试只交给分区属主,docs/design/db-retry-owner-routing.md)。
-# 缺序列一律打印 n/a,不折成 0:Round 20 之前的 db 没有这些序列,显示成 0 会被读成「测过了,是 0」。
-# histogram 的 sum / count 都有序列但 count=0 时打印 "-"(同 Format-Avg)。
-# 键按 client_golang 输出时的 label 字母序写(op < stage < step;action < mode),原因见 2c 段注释。
-# 本段用到的 Get-SeriesPattern / Get-HistogramAvgOrNull / Format-AvgCell / Format-CountCell / Format-RatioCell
-# 原先定义在这里,2026-10-23 搬到文件前部 helpers 区(函数不提升,login 段之后的新表也要用)。
-
-if ($dbSnapshots.Count -gt 0) {
-
-    # ----- 2d. DB write path ---------------------------------------------
-    # 列含义:
-    #   w_sql / r_sql      runDBOp 里 handler 的耗时(写含大字段闸 + Save,读是 SELECT)
-    #   w_task / r_task    handleTask 整段
-    #   w_queue            入 worker 通道到 handleTask 开始(排队)
-    #   w_e2e              生产者 CreateTime 到 handleTask 结束,只统计 Kafka 来源;有跨机时钟偏差,只看趋势
-    #                      (超过 5s 落 +Inf 桶,但 sum/count 的均值仍准)
-    #   batch              子 shard 每批合并的任务数均值(db_subshard_batch_size 的 sum/count)
-    #   no_cursor          db_ordering_guard_total{outcome="apply_no_cursor"}:没有 applied 游标、按首写放行的次数
-    #   lease_lost         db_ordering_lease_lost_total 各 reason 之和(排序锁失租,应接近 0)
-    #   rel_notown         db_ordering_lock_release_total{outcome="not_owner"}(释放时锁已不归本实例,应为 0)
-    #   rpool_wait / rpool_tmo
-    #                      go-redis 连接池等待次数 / 取连接超时次数(db_redis_pool_wait_total / timeouts_total),
-    #                      跨 redis_client 求和;placement 与 main 是同一个 client 时只导出 main 一份,不会重复计数。
-    #                      注意 wait_total 与 wait_seconds_total 是两条指标,正则锚到 "_wait_total{" 不会串。
-    $wpFmt = "  {0,-30} {1,-8} {2,-8} {3,-8} {4,-8} | {5,-8} {6,-8} | {7,-6} | {8,-9} {9,-10} {10,-10} | {11,-10} {12}"
-    Write-Host ""
-    Write-Host "=== DB write path (db_task_stage_seconds sql/task_total/queue_wait/kafka_e2e, Round 20+) ===" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host ($wpFmt -f 'snapshot', 'w_sql', 'w_task', 'w_queue', 'w_e2e', 'r_sql', 'r_task', 'batch',
-        'no_cursor', 'lease_lost', 'rel_notown', 'rpool_wait', 'rpool_tmo')
-    Write-Host ($wpFmt -f '--------', '-----', '------', '-------', '-----', '-----', '------', '-----',
-        '---------', '----------', '----------', '----------', '---------')
-
+# P2:认领(进场读档)。claimed 之外:stale = 路由过期,not_hold = 同代次被别的实例持有,no_owner = 角色不存在或未建完,
+#     too_new = 库里的世代比 scene 新;unknown / unavail / denied 同 P1。
+$p2Fmt = "  {0,-30} | {1,-7} {2,-9} {3,-9} | {4,-8} | {5,-6} {6,-8} {7,-8} {8,-7} {9,-7} | {10,-7} {11,-7} {12}"
+$p2Columns = @('n', 'avg', 'p99') + @($playerStoreClaimColumns.Keys)
+Write-Host ""
+Write-Host "=== P2 Player store claim (db_player_store_seconds, db_player_store_requests_total, :9160) ===" -ForegroundColor Yellow
+Write-Host ""
+if ($dbSnapshots.Count -eq 0) {
+    Write-NoData $dbNoSnapshot
+} else {
+    Write-Host ($p2Fmt -f (@('snapshot') + $p2Columns))
+    Write-Host ($p2Fmt -f (@('--------') + @($p2Columns | ForEach-Object { '-' * $_.Length })))
     foreach ($snap in $dbSnapshots) {
         $m = Read-PromSnapshot $snap.FullName
-        $stageName = 'db_task_stage_seconds'
-
-        $wSql   = Format-AvgCell (Get-HistogramAvgOrNull $m $stageName 'op="write",stage="sql"')
-        $wTask  = Format-AvgCell (Get-HistogramAvgOrNull $m $stageName 'op="write",stage="task_total"')
-        $wQueue = Format-AvgCell (Get-HistogramAvgOrNull $m $stageName 'op="write",stage="queue_wait"')
-        $wE2e   = Format-AvgCell (Get-HistogramAvgOrNull $m $stageName 'op="write",stage="kafka_e2e"')
-        $rSql   = Format-AvgCell (Get-HistogramAvgOrNull $m $stageName 'op="read",stage="sql"')
-        $rTask  = Format-AvgCell (Get-HistogramAvgOrNull $m $stageName 'op="read",stage="task_total"')
-
-        $batchAvg = Get-HistogramAvgOrNull $m 'db_subshard_batch_size'
-        $batchCell = if ($null -eq $batchAvg) { "n/a" } elseif ([double]::IsNaN($batchAvg)) { "-" } else { "{0:N1}" -f $batchAvg }
-
-        $noCursor  = Format-CountCell (Get-MetricSumOrNull $m (Get-SeriesPattern 'db_ordering_guard_total' 'outcome="apply_no_cursor"'))
-        $leaseLost = Format-CountCell (Get-MetricSumOrNull $m '^db_ordering_lease_lost_total\{')
-        $relNotOwn = Format-CountCell (Get-MetricSumOrNull $m (Get-SeriesPattern 'db_ordering_lock_release_total' 'outcome="not_owner"'))
-        $rpoolWait = Format-CountCell (Get-MetricSumOrNull $m '^db_redis_pool_wait_total\{')
-        $rpoolTmo  = Format-CountCell (Get-MetricSumOrNull $m '^db_redis_pool_timeouts_total\{')
-
-        Write-Host ($wpFmt -f $snap.BaseName, $wSql, $wTask, $wQueue, $wE2e, $rSql, $rTask, $batchCell,
-            $noCursor, $leaseLost, $relNotOwn, $rpoolWait, $rpoolTmo)
+        Write-Host ($p2Fmt -f (@($snap.BaseName) + @(Get-PlayerStoreOpCells $m 'claim' $playerStoreClaimColumns)))
     }
+}
 
-    # ----- 2e. DB Redis steps --------------------------------------------
-    # 写任务每个 Redis 往返的均值。12 个 step 的名字与顺序同 go/db/internal/metrics/pipeline.go 的 RedisSteps
-    # (按写路径顺序),一一对应;那边改名 / 合并 step 时,这里、test_stress_summarize.ps1 与 TestRedisStepNamesPinned 同改。
-    # 只读 op="write";读任务只有 placement_lookup / expand_get / placement_recheck / cache_set 四步,不进本表。
-    # 围栏 v0.4 起 cache_set 只剩读路径 SET NX,写任务这列应为 n/a;lease_verify 只剩 older_seq 条件路径。
-    # cache_publish 合并写路径核锁与缓存发布,applied_advance 合并 cursor_set / epoch_mark。
-    # R20 的 cache_set / lease_verify 含义已变、cursor_set / epoch_mark 已移除,新旧列不能直接相减。
-    # 均值保留两位小数(Redis 往返常在 0.1ms 量级,一位小数分不开)。sum = 有序列的各步均值之和,
-    # 近似一条写任务花在 Redis 往返上的时间;某步没有序列时不计入,全部没有打印 n/a。
-    $redisSteps = @('lock_acquire', 'cursor_get', 'epoch_get', 'owner_epoch_probe', 'placement_lookup', 'expand_get', 'placement_recheck',
-                    'lease_verify', 'cache_publish', 'cache_set', 'applied_advance', 'lock_release')
-    $rsFmt = "  {0,-30} {1,-8} {2,-8} {3,-8} {4,-8} {5,-8} {6,-8} {7,-8} {8,-8} {9,-8} {10,-8} {11,-8} {12,-8} {13}"
-    Write-Host ""
-    Write-Host "=== DB Redis steps (db_task_redis_step_seconds{op=`"write`"} avg, fence v0.4) ===" -ForegroundColor Yellow
-    Write-Host '  口径: verify 仅 older_seq;cache_nx 仅读路径(本表通常 n/a);publish / advance 已合并旧步骤,勿直接减 R20 对应列。'
-    Write-Host ""
-    Write-Host ($rsFmt -f 'snapshot', 'lock_acq', 'cur_get', 'ep_get', 'owner_ep', 'plc_lkp', 'exp_get', 'plc_rck', 'verify',
-        'publish', 'cache_nx', 'advance', 'lock_rel', 'sum')
-    Write-Host ($rsFmt -f '--------', '--------', '-------', '------', '--------', '-------', '-------', '-------', '------',
-        '-------', '--------', '-------', '--------', '---')
-
-    foreach ($snap in $dbSnapshots) {
-        $m = Read-PromSnapshot $snap.FullName
-        $cells = @()
-        $sumSeconds = 0.0
-        $anySeries = $false
-        $anyValue = $false
-        foreach ($step in $redisSteps) {
-            $avg = Get-HistogramAvgOrNull $m 'db_task_redis_step_seconds' "op=`"write`",step=`"$step`""
-            $cells += (Format-AvgCell $avg 2)
-            if ($null -eq $avg) { continue }
-            $anySeries = $true
-            if (-not [double]::IsNaN($avg)) { $sumSeconds += $avg; $anyValue = $true }
-        }
-        $sumCell = if (-not $anySeries) { "n/a" } elseif (-not $anyValue) { "-" } else { Format-AvgCell $sumSeconds 2 }
-        $rowArgs = @($snap.BaseName) + $cells + @($sumCell)
-        Write-Host ($rsFmt -f $rowArgs)
+# P3:已提交行的 payload 大小(db_player_store_row_bytes{kind},字节,只记 SAVE_PLAYER_COMMITTED 里带的行)。每组三列 n / avg / p99;
+#     某组没有序列打 n/a。n 的比例就是写放大的分布:只写有变化的行,hot 应远多于其它组。
+$p3Fmt = '  {0,-30}'
+$p3Header = @('snapshot')
+$p3Rule = @('--------')
+$p3Index = 0
+foreach ($col in $playerStoreRowKinds.Keys) {
+    $base = 1 + 3 * $p3Index
+    $p3Fmt += (' | {{{0},-9}} {{{1},-11}} {{{2},-11}}' -f $base, ($base + 1), ($base + 2))
+    foreach ($suffix in @('n', 'avg', 'p99')) {
+        $title = "${col}_$suffix"
+        $p3Header += $title
+        $p3Rule += ('-' * $title.Length)
     }
-
-    # ----- 2f. DB retry routing ------------------------------------------
-    # 重试只交给分区属主(docs/design/db-retry-owner-routing.md)的观测面。列:
-    #   mode       db_retry_routing_mode 中值为 1 的那个(shared / owner);旧版 db 没有该序列 → n/a
-    #   q_ready / q_part / q_proc / q_dead
-    #              db_retry_queue_length{queue=ready|partitioned|processing|dead}:共享收件箱、按分区的 p* 之和、
-    #              本实例 processing、死信。ready / partitioned / dead 是 topic 级共享列表,每个实例报的是同一个数;
-    #              q_part 在 shared 模式下应为 0;旧版 db 没有 partitioned → n/a,其余三列照常有数
-    #   exec / nonowner / fwd / revoked / misrouted / rt_dead
-    #              db_retry_route_total{action=executed|executed_nonowner|forwarded|requeued_revoked|misrouted|dead}
-    #              跨 mode 求和,是本实例的累计;owner 模式的 zone 里 nonowner 应为 0
-    # 快照是单个 db 实例(:9160)的抓取;多实例时各实例的计数不在这里合并。
-    $rtFmt = "  {0,-30} {1,-7} | {2,-7} {3,-7} {4,-7} {5,-7} | {6,-7} {7,-8} {8,-7} {9,-7} {10,-9} {11}"
-    Write-Host ""
-    Write-Host "=== DB retry routing (db_retry_routing_mode, db_retry_queue_length, db_retry_route_total) ===" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host ($rtFmt -f 'snapshot', 'mode', 'q_ready', 'q_part', 'q_proc', 'q_dead',
-        'exec', 'nonowner', 'fwd', 'revoked', 'misrouted', 'rt_dead')
-    Write-Host ($rtFmt -f '--------', '----', '-------', '------', '------', '------',
-        '----', '--------', '---', '-------', '---------', '-------')
-
-    $retryQueues = @('ready', 'partitioned', 'processing', 'dead')
-    $retryActions = @('executed', 'executed_nonowner', 'forwarded', 'requeued_revoked', 'misrouted', 'dead')
+    $p3Index++
+}
+Write-Host ""
+Write-Host "=== P3 Player store row bytes (db_player_store_row_bytes, committed rows, bytes) ===" -ForegroundColor Yellow
+Write-Host ""
+if ($dbSnapshots.Count -eq 0) {
+    Write-NoData $dbNoSnapshot
+} else {
+    Write-Host ($p3Fmt -f $p3Header)
+    Write-Host ($p3Fmt -f $p3Rule)
     foreach ($snap in $dbSnapshots) {
         $m = Read-PromSnapshot $snap.FullName
-
-        $ownerV  = Get-MetricSumOrNull $m (Get-SeriesPattern 'db_retry_routing_mode' 'mode="owner"')
-        $sharedV = Get-MetricSumOrNull $m (Get-SeriesPattern 'db_retry_routing_mode' 'mode="shared"')
-        $modeCell = if ($null -eq $ownerV -and $null -eq $sharedV) { "n/a" }
-                    elseif ($ownerV -gt 0 -and $sharedV -gt 0) { "both?" }
-                    elseif ($ownerV -gt 0) { "owner" }
-                    elseif ($sharedV -gt 0) { "shared" }
-                    else { "none" }
-
-        $queueCells = foreach ($q in $retryQueues) {
-            Format-CountCell (Get-MetricSumOrNull $m (Get-SeriesPattern 'db_retry_queue_length' "queue=`"$q`""))
+        $cells = @($snap.BaseName)
+        foreach ($kind in $playerStoreRowKinds.Values) {
+            $cells += Get-HistogramByteCells (Get-HistogramOrNull $m 'db_player_store_row_bytes' @{ kind = $kind })
         }
-        # action 在 mode 之前(字母序);action="executed" 带上右引号,不会把 executed_nonowner 算进来。
-        $actionCells = foreach ($a in $retryActions) {
-            Format-CountCell (Get-MetricSumOrNull $m ('^db_retry_route_total\{action="' + [regex]::Escape($a) + '",'))
-        }
-
-        $rowArgs = @($snap.BaseName, $modeCell) + @($queueCells) + @($actionCells)
-        Write-Host ($rtFmt -f $rowArgs)
+        Write-Host ($p3Fmt -f $cells)
     }
+}
 
-    # ----- 2g. DB task:result notify -------------------------------------
-    # 读回执到达通知分频道(B0-3 第 2 批)的发布方观测面,指标 db_task_result_notify_total{target,result}
-    # (go/db/internal/metrics/task_result_notify.go):go/db 按 DBTask.reply_instance 只 PUBLISH 一次,合法发发起方
-    # login 的实例频道,为空 / 不合法回落全服旧频道。列:
-    #   inst_* / unset_* / inval_*   target=instance | legacy_unset | legacy_invalid 各自 result=ok | no_receiver | error 的累计
-    #   inst_nr%                     instance 里 no_receiver 的占比(分母 = instance 三个 result 之和);新版 login 全量后应约为 0,
-    #                                明显上升说明发起方 login 不在或两端频道名不一致(告警 DbTaskResultNotifyNoReceiver)
-    #   legacy%                      回落旧频道(legacy_unset + legacy_invalid)占全部通知的比例;旧版 login 发起的读计 legacy_unset,
-    #                                login 全量升级后应约为 0
-    # $notifyTargets / $notifyResults 与 metrics 包的取值逐项对应(TestTaskResultNotifyNamesMatchStressSummarize 守住),
-    # 改名要同改两边与 test_stress_summarize.ps1。旧版 db 没有这些序列 → 全部 n/a。键按 label 字母序写(result < target)。
-    # login 侧对照的 login_task_result_delivery_total{outcome} 还没进本脚本(B0-3 第 1 批交付说明的后续项)。
-    $notifyTargets = @('instance', 'legacy_unset', 'legacy_invalid')
-    $notifyResults = @('ok', 'no_receiver', 'error')
-    $ntFmt = "  {0,-30} {1,-8} {2,-8} {3,-8} | {4,-8} {5,-8} {6,-9} | {7,-8} {8,-8} {9,-9} | {10,-8} {11}"
-    Write-Host ""
-    Write-Host "=== DB task:result notify (db_task_result_notify_total, target x result) ===" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host ($ntFmt -f 'snapshot', 'inst_ok', 'inst_nr', 'inst_err', 'unset_ok', 'unset_nr', 'unset_err',
-        'inval_ok', 'inval_nr', 'inval_err', 'inst_nr%', 'legacy%')
-    Write-Host ($ntFmt -f '--------', '-------', '-------', '--------', '--------', '--------', '---------',
-        '--------', '--------', '---------', '--------', '-------')
-
+# P4:连接池与落点。rpool_wait / rpool_tmo = go-redis 连接池等待次数 / 取连接超时次数(db_redis_pool_wait_total / timeouts_total,
+#     跨 redis_client 求和;placement 与 main 是同一个 client 时只导出 main 一份,不会重复计数)。
+#     sql_in_use = 此刻在用的 SQL 连接数,sql_wait / sql_wait_s = 等连接的累计次数与秒数(mmorpg_sql_pool_*{sql_client="db"},跨 pool 求和),
+#     存盘慢先看这两列。open_stores = 常驻的落点库个数,open_err = 按需打开失败或被拒的累计次数(db_placement_store_open_total 的
+#     error + rejected),cooldown = 此刻在库级冷却期内的库个数(db_store_cooldown_stores,跨 pool 求和)。
+$p4Fmt = "  {0,-30} | {1,-10} {2,-9} | {3,-10} {4,-8} {5,-10} | {6,-11} {7,-8} {8}"
+Write-Host ""
+Write-Host "=== P4 DB pools and placement (db_redis_pool_*, mmorpg_sql_pool_*, db_placement_*, db_store_cooldown_stores) ===" -ForegroundColor Yellow
+Write-Host ""
+if ($dbSnapshots.Count -eq 0) {
+    Write-NoData $dbNoSnapshot
+} else {
+    Write-Host ($p4Fmt -f @('snapshot', 'rpool_wait', 'rpool_tmo', 'sql_in_use', 'sql_wait', 'sql_wait_s', 'open_stores', 'open_err', 'cooldown'))
+    Write-Host ($p4Fmt -f @('--------', '----------', '---------', '----------', '--------', '----------', '-----------', '--------', '--------'))
     foreach ($snap in $dbSnapshots) {
         $m = Read-PromSnapshot $snap.FullName
-        $notifyCells = foreach ($t in $notifyTargets) {
-            foreach ($r in $notifyResults) {
-                Format-CountCell (Get-MetricSumOrNull $m (Get-SeriesPattern 'db_task_result_notify_total' "result=`"$r`",target=`"$t`""))
-            }
-        }
-        $instNoReceiver = Get-MetricSumOrNull $m (Get-SeriesPattern 'db_task_result_notify_total' 'result="no_receiver",target="instance"')
-        $instTotal      = Get-MetricSumOrNull $m '^db_task_result_notify_total\{result="[a-z_]+",target="instance"\}$'
-        $legacyTotal    = Get-MetricSumOrNull $m '^db_task_result_notify_total\{result="[a-z_]+",target="legacy_(unset|invalid)"\}$'
-        $allTotal       = Get-MetricSumOrNull $m '^db_task_result_notify_total\{'
-
-        $rowArgs = @($snap.BaseName) + @($notifyCells) + @((Format-RatioCell $instNoReceiver $instTotal), (Format-RatioCell $legacyTotal $allTotal))
-        Write-Host ($ntFmt -f $rowArgs)
+        $sqlMatch = @{ sql_client = 'db' }
+        $openErr = Get-SumOrNull @(
+            (Get-SeriesSumOrNull $m 'db_placement_store_open_total' @{ result = 'error' }),
+            (Get-SeriesSumOrNull $m 'db_placement_store_open_total' @{ result = 'rejected' }))
+        Write-Host ($p4Fmt -f @($snap.BaseName,
+            (Format-CountCell (Get-SeriesSumOrNull $m 'db_redis_pool_wait_total')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'db_redis_pool_timeouts_total')),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'mmorpg_sql_pool_in_use_connections' $sqlMatch)),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'mmorpg_sql_pool_wait_count_total' $sqlMatch)),
+            (Format-DecimalCell (Get-SeriesSumOrNull $m 'mmorpg_sql_pool_wait_duration_seconds_total' $sqlMatch) 1),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'db_placement_open_stores')),
+            (Format-CountCell $openErr),
+            (Format-CountCell (Get-SeriesSumOrNull $m 'db_store_cooldown_stores'))))
     }
 }
 
 # ----- 2h. Redis INFO 快照(R1 / R2)与映射读路径总览(M1),2026-10-23 -----------
-#
-# 放在 Kafka 段之前:Kafka 段在 docker 失败时会 return。
 
 # 按 target 分组(组内已按分钟数数值排序),并找出「同一时刻 run_id 相同」的 target:同一个实例被抓了两份
 # (G4a 之前 mapping 与核心就是同一台),后出现的只标 same_as=<先出现的 target>,不重复出数。
@@ -1592,8 +1368,8 @@ if ($redisSnapshots.Count -eq 0) {
 # M1:映射读路径总览,按 t<N>m 把各端关键均值连成一行(prom 是进程启动以来的累计均值;Redis 取该时刻与同一 target
 #     上一份快照之间的窗口,只有一份时自实例启动)。缺哪份快照哪列打 n/a。
 #     l_bgz / l_rad = login 客户端 BatchGetPlayerHomeZone / ReadAccountDirectory;ds_batch / ds_home / ds_dir = data_service
-#     服务端批量归属读 / 单查 / ReadAccountDirectory;sm_hz / sm_rl = scene_manager 两个查询 stage;db_plc_lkp / db_plc_rck =
-#     go/db 写任务选库 / 复核(db_task_redis_step_seconds{op="write"});rd = Redis target,mapping 优先,没有就 core,
+#     服务端批量归属读 / 单查 / ReadAccountDirectory;sm_hz / sm_rl = scene_manager 两个查询 stage;db_claim / db_save =
+#     go/db 存盘接口认领 / 存盘的服务端耗时(db_player_store_seconds{op});rd = Redis target,mapping 优先,没有就 core,
 #     再没有就第一个。G4a 之前 mapping 与核心是同一个实例,rd 的数是两者合计。L-18 第 5 步「是不是瓶颈」先看这一张。
 $m1ByTag = @{}
 foreach ($pair in @(@('login', $snapshots), @('sm', $smSnapshots), @('ds', $dsSnapshots), @('db', $dbSnapshots))) {
@@ -1625,8 +1401,8 @@ Write-Host ""
 if ($m1ByTag.Count -eq 0) {
     Write-NoData "没有任何 t<N>m_* 快照"
 } else {
-    Write-Host ($m1Fmt -f @('tag', 'l_bgz', 'l_rad', 'ds_batch', 'ds_home', 'ds_dir', 'sm_hz', 'sm_rl', 'db_plc_lkp', 'db_plc_rck', 'rd_ops/s', 'rd_main%'))
-    Write-Host ($m1Fmt -f @('---', '-----', '-----', '--------', '-------', '------', '-----', '-----', '----------', '----------', '--------', '--------'))
+    Write-Host ($m1Fmt -f @('tag', 'l_bgz', 'l_rad', 'ds_batch', 'ds_home', 'ds_dir', 'sm_hz', 'sm_rl', 'db_claim', 'db_save', 'rd_ops/s', 'rd_main%'))
+    Write-Host ($m1Fmt -f @('---', '-----', '-----', '--------', '-------', '------', '-----', '-----', '--------', '-------', '--------', '--------'))
     foreach ($t in @($m1ByTag.Keys | Sort-Object)) {
         $row = $m1ByTag[$t]
         $m1MOf = { param($kind) if ($row.ContainsKey($kind)) { Read-PromSnapshot $row[$kind].FullName } else { $null } }
@@ -1643,8 +1419,8 @@ if ($m1ByTag.Count -eq 0) {
             (& $m1Avg $md 'data_service_account_directory_rpc_seconds' @{ rpc = 'read' } 1.0),
             (& $m1Avg $ms 'scene_manager_enter_scene_stage_seconds' @{ stage = 'home_zone' } 1.0),
             (& $m1Avg $ms 'scene_manager_enter_scene_stage_seconds' @{ stage = 'role_lookup' } 1.0),
-            (& $m1Avg $mb 'db_task_redis_step_seconds' @{ op = 'write'; step = 'placement_lookup' } 1.0),
-            (& $m1Avg $mb 'db_task_redis_step_seconds' @{ op = 'write'; step = 'placement_recheck' } 1.0))
+            (& $m1Avg $mb 'db_player_store_seconds' @{ op = 'claim' } 1.0),
+            (& $m1Avg $mb 'db_player_store_seconds' @{ op = 'save' } 1.0))
         $rw = $m1RedisByTag[$t]
         if ($null -eq $rw) { $cells += @('n/a', 'n/a') }
         elseif ($rw.Restart) { $cells += @('restart', 'restart') }
@@ -1654,6 +1430,9 @@ if ($m1ByTag.Count -eq 0) {
 }
 
 # ----- 3. Kafka lag -----------------------------------------------------
+#
+# 玩家存盘不经 Kafka,go/db 没有消费组。还走消费组的是 data_service 的两条审计落库(交易流水、玩家快照),
+# 组名见 -KafkaConsumerGroups。控制面命令 topic(gate-cmd / scene-cmd)是 assign 分区、不进消费组,这里看不到。
 
 if ($KafkaContainer) {
     Write-Host ""
@@ -1661,47 +1440,46 @@ if ($KafkaContainer) {
     Write-Host ""
 
     $cmd = "/opt/kafka/bin/kafka-consumer-groups.sh"
-    $args = @(
-        "exec", $KafkaContainer, $cmd,
-        "--bootstrap-server", "localhost:9092",
-        "--describe", "--group", $KafkaConsumerGroup
-    )
+    $lagFmt = "  {0,-30} {1,-26} {2,-10} {3,-12} {4,-13} {5}"
+    $lagHeaderPrinted = $false
+    foreach ($group in $KafkaConsumerGroups) {
+        $dockerArgs = @(
+            "exec", $KafkaContainer, $cmd,
+            "--bootstrap-server", "localhost:9092",
+            "--describe", "--group", $group
+        )
 
-    $raw = ""
-    try {
-        $raw = & docker @args 2>&1 | Out-String
-    } catch {
-        Write-Host "  docker exec failed: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host ""
-        return
-    }
-
-    $totalLag = 0
-    $partRows = @()
-    foreach ($line in ($raw -split "`r?`n")) {
-        # GROUP TOPIC PARTITION CURRENT-OFFSET LOG-END-OFFSET LAG ...
-        if ($line -match "^\S+\s+$KafkaTopic\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)") {
-            $p = [int]$matches[1]
-            $cur = [int]$matches[2]
-            $end = [int]$matches[3]
-            $lag = [int]$matches[4]
-            $totalRows += 1
-            $totalLag += $lag
-            $partRows += [pscustomobject]@{ Part = $p; Cur = $cur; End = $end; Lag = $lag }
+        $raw = ""
+        try {
+            $raw = & docker @dockerArgs 2>&1 | Out-String
+        } catch {
+            Write-Host "  docker exec failed: $($_.Exception.Message)" -ForegroundColor Red
+            break
         }
-    }
 
-    if ($partRows.Count -eq 0) {
-        Write-Host "  (no lag rows parsed — group $KafkaConsumerGroup empty? or container=$KafkaContainer down?)" -ForegroundColor DarkGray
-    } else {
-        "  partition    current      log_end       lag" | Write-Host
-        "  ---------    -------      -------       ---" | Write-Host
-        foreach ($r in ($partRows | Sort-Object Part)) {
-            $line = "  {0,-12} {1,-12} {2,-13} {3}" -f $r.Part, $r.Cur.ToString("N0"), $r.End.ToString("N0"), $r.Lag.ToString("N0")
-            Write-Host $line
+        $partRows = @()
+        foreach ($line in ($raw -split "`r?`n")) {
+            # GROUP TOPIC PARTITION CURRENT-OFFSET LOG-END-OFFSET LAG ...
+            if ($line -match '^\S+\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)') {
+                $partRows += [pscustomobject]@{ Topic = $matches[1]; Part = [int]$matches[2]; Cur = [long]$matches[3]; End = [long]$matches[4]; Lag = [long]$matches[5] }
+            }
         }
-        Write-Host ""
-        Write-Host ("  TOTAL LAG: {0}" -f $totalLag.ToString("N0")) -ForegroundColor Yellow
+
+        if ($partRows.Count -eq 0) {
+            Write-Host "  (no lag rows parsed: group $group empty, or container=$KafkaContainer down?)" -ForegroundColor DarkGray
+            continue
+        }
+        if (-not $lagHeaderPrinted) {
+            Write-Host ($lagFmt -f 'group', 'topic', 'partition', 'current', 'log_end', 'lag')
+            Write-Host ($lagFmt -f '-----', '-----', '---------', '-------', '-------', '---')
+            $lagHeaderPrinted = $true
+        }
+        $totalLag = [long]0
+        foreach ($r in ($partRows | Sort-Object Topic, Part)) {
+            $totalLag += $r.Lag
+            Write-Host ($lagFmt -f $group, $r.Topic, $r.Part, $r.Cur.ToString("N0"), $r.End.ToString("N0"), $r.Lag.ToString("N0"))
+        }
+        Write-Host ("  TOTAL LAG ({0}): {1}" -f $group, $totalLag.ToString("N0")) -ForegroundColor Yellow
     }
 }
 

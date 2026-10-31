@@ -9,7 +9,6 @@ import (
 
 	base "proto/common/base"
 	dspb "proto/data_service"
-	"shared/savebarrier"
 	"shared/serviceauth"
 
 	"google.golang.org/grpc/codes"
@@ -135,10 +134,6 @@ func (c *Client) CreateWithInitialCommit(ctx context.Context, account string, ro
 		return nil, classify(err)
 	}
 	if out == nil || out.Players == nil {
-		return nil, ErrUnavailable
-	}
-	if out.InitialPlayerData != nil && (!savebarrier.IsInitialPlayerData(out.InitialPlayerData) ||
-		out.InitialPlayerData.GetPlayerDatabaseData().GetPlayerId() != role.GetPlayerId()) {
 		return nil, ErrUnavailable
 	}
 	return out, nil

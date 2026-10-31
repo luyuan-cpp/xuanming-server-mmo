@@ -14,6 +14,9 @@ import (
 // MaxHistoryPullLimit约束一次权威历史读取的行数；存储容量阈值仍可独立配置。
 const MaxHistoryPullLimit = 200
 
+// MaxActorVerifyTTLSeconds 是身份校验缓存的配置上限:它就是旧会话在角色过户后还能说话的时长,配太大等于没校验。
+const MaxActorVerifyTTLSeconds = 3600
+
 const (
 	// ErrInvalidParameter:取不到会话(缺 / 坏 x-session-detail-bin)、请求体缺 message、
 	// PRIVATE 缺对端或对端是自己、频道枚举值未知、request_id 超长。
@@ -25,8 +28,8 @@ const (
 	// gate 对整包 >1024B 已先拒一道,这里是 chat 侧按"内容字节"的第二道闸。
 	ErrMessageTooLong = uint32(table.CommonError_kMessageSizeExceeded)
 
-	// ErrRateLimited:同原P内SQL固定秒计数超过RateLimitPerSecond(gate 每会话
-	// 每消息号 3 次/秒是第一道)。
+	// ErrRateLimited:SQL固定秒计数超过RateLimitPerSecond(gate 每会话
+	// 每消息号 3 次/秒是第一道;这一道并发在途时可能略超,见 authority/actor_verify.go)。
 	ErrRateLimited = uint32(table.CommonError_kRateLimitExceeded)
 
 	// ErrChannelUnavailable:TEAM / SYSTEM / UNSPECIFIED 频道 v1 不开放。

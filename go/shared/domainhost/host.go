@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -39,7 +40,7 @@ type Config struct {
 	KillSwitchPrefix  string             `json:"KillSwitchPrefix,optional"`
 	AdvertiseHost     string             `json:"AdvertiseHost,optional"`
 	DSNEnv            string             `json:"DSNEnv"`
-	RequireTiDB       bool               `json:"RequireTiDB,default=true"`
+	Backend           string             `json:"Backend,default=tidb"` // tidb | mysql,见 authoritysql.ParseBackend
 	MaxOpenConns      int                `json:"MaxOpenConns,default=16"`
 	AutoMigrate       bool               `json:"AutoMigrate,default=false"`
 	TableDir          string             `json:"TableDir"`
@@ -52,8 +53,8 @@ func (c Config) Validate() error {
 	if c.Name == "" || c.ListenOn == "" || c.ZoneId == 0 || len(c.Etcd.Hosts) == 0 || c.DSNEnv == "" || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 || len(c.Producers) == 0 || c.Timeout < 1000 || c.Timeout > 4000 {
 		return errors.New("领域进程配置不完整或预算越界")
 	}
-	if c.Mode != "dev" && c.Mode != "test" && !c.RequireTiDB {
-		return errors.New("生产领域库必须启用TiDB强会话门禁")
+	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
+		return err
 	}
 	return nil
 }

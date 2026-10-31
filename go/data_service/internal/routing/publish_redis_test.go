@@ -29,10 +29,8 @@ func publishTestConfig(mr *miniredis.Miniredis, mode string, tweak func(*config.
 		tweak(&rc)
 	}
 	return config.Config{
-		MappingRedis:     redis.RedisConf{Host: mr.Addr(), Type: "node"},
-		DevRedis:         config.DevRedisConfig{Host: mr.Addr()},
-		PlayerLockTTLSec: 3,
-		RouteStore:       rc,
+		MappingRedis: redis.RedisConf{Host: mr.Addr(), Type: "node"},
+		RouteStore:   rc,
 	}
 }
 
@@ -148,9 +146,8 @@ func TestNewRouter_PublishPoolSizeValidated(t *testing.T) {
 	for _, mode := range []string{config.RouteStoreModeRedis, config.RouteStoreModeDBFirst} {
 		for _, size := range []int{-1, config.MaxRouteStorePublishRedisPoolSize + 1} {
 			c := config.Config{
-				MappingRedis:     redis.RedisConf{Host: "127.0.0.1:1", Type: "node"},
-				PlayerLockTTLSec: 3,
-				RouteStore:       config.RouteStoreConfig{Mode: mode, PublishRedisPoolSize: size},
+				MappingRedis: redis.RedisConf{Host: "127.0.0.1:1", Type: "node"},
+				RouteStore:   config.RouteStoreConfig{Mode: mode, PublishRedisPoolSize: size},
 			}
 			assert.Panics(t, func() { NewRouter(c) }, "Mode=%s PublishRedisPoolSize=%d", mode, size)
 		}
@@ -165,7 +162,7 @@ func TestNewRouter_PublishPoolSizeValidated(t *testing.T) {
 }
 
 // TestDBFirstPublishPoolExhaustedDoesNotBlockReads 是 A2-1 要的隔离用例:发布池只有 1 条连接且被占住时,读路径
-// (GetPlayerHomeZone / 带围栏的单查 / 批量 / 围栏预检)照常成功;W1 只在自己的池上排队,到调用方截止时间失败
+// (GetPlayerHomeZone / 批量)照常成功;W1 只在自己的池上排队,到调用方截止时间失败
 // (库已提交、缓存零写入,错误认得出是截止时间,不是库故障)。改动前两者共用 go-zero 的同一个池,这里读会一起排队。
 // 截止时间只是 W1 等待的上界:被占住的连接在用例结束前不会归还,结论不取决于调度。
 func TestDBFirstPublishPoolExhaustedDoesNotBlockReads(t *testing.T) {
@@ -188,16 +185,9 @@ func TestDBFirstPublishPoolExhaustedDoesNotBlockReads(t *testing.T) {
 	zone, err := r.GetPlayerHomeZone(ctx, 9610)
 	require.NoError(t, err, "reads do not share the publish pool")
 	assert.Equal(t, uint32(5), zone)
-	zone, merging, err := r.GetPlayerHomeZoneAndMergeFence(ctx, 9610)
-	require.NoError(t, err)
-	assert.Equal(t, uint32(5), zone)
-	assert.False(t, merging)
 	batch, err := r.BatchGetPlayerHomeZone(ctx, []uint64{9610, 9611})
 	require.NoError(t, err)
 	assert.Equal(t, map[uint64]uint32{9610: 5}, batch)
-	fenced, err := r.IsMergeInProgress(ctx, 5)
-	require.NoError(t, err)
-	assert.False(t, fenced)
 
 	wctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()

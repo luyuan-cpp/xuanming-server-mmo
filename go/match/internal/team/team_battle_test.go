@@ -182,7 +182,8 @@ func (f *fakeBattlePort) PartyQueueState(_ context.Context, playerId, teamId uin
 
 var _ BattleStarter = (*fakeBattlePort)(nil)
 
-func (f *fakeBattlePort) TeamSizeFor(battleConfigId uint32) uint32 {
+// TeamSizeFor 假端口不分模式:sizes 按模板给上限,PVE_TEAM / PVP_TEAM 同一口径。
+func (f *fakeBattlePort) TeamSizeFor(_, battleConfigId uint32) uint32 {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.sizes[battleConfigId]

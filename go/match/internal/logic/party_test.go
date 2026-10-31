@@ -99,7 +99,7 @@ const partyTestConfig uint32 = 1
 func newPartySvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis, *fakePartyPort) {
 	t.Helper()
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	port := &fakePartyPort{}
 	svcCtx.SetPartyTeam(port)
 	return svcCtx, mr, port

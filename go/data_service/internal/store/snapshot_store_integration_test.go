@@ -15,6 +15,7 @@ import (
 
 	"data_service/internal/store"
 	"data_service/internal/store/storetest"
+	"shared/idsegment"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,7 @@ func newSnapshotStore(t *testing.T, db *storetest.DB) *store.SnapshotStore {
 	t.Helper()
 	ss, err := store.NewSnapshotStore(db.Cfg)
 	require.NoError(t, err)
+	ss.UseRowIDs(store.RowIDsForTest, store.RowIDsForTest)
 	t.Cleanup(func() { _ = ss.Close() })
 	return ss
 }
@@ -186,7 +188,7 @@ func TestSnapshotStore_GmReadersExcludeSceneRows(t *testing.T) {
 // ── 审计 #11:并发写者在 idx(snapshot_guid) 同一段间隙上互等插入意向锁,1213 由 InsertSnapshotIfGuidAbsent 就地吸收 ──
 
 // legacyInsertArgs 按 store.InsertSnapshotIfGuidAbsentLegacySQLForTest 的占位符顺序展开一行:
-// 九个列值(顺序由生产代码的 store.SnapshotInsertArgsForTest 给,用例不再拄一份)+ 子查询里再绑一次 guid。
+// 行号 + 九个列值(顺序由生产代码的 store.SnapshotInsertArgsForTest 给,用例不再拄一份)+ 子查询里再绑一次 guid。
 func legacyInsertArgs(r *store.SnapshotRow) []any {
 	return append(store.SnapshotInsertArgsForTest(r), r.SnapshotGuid)
 }
@@ -488,9 +490,11 @@ func TestSnapshotStore_LegacyGapDeadlockIsAbsorbedInPlace(t *testing.T) {
 	require.Equal(t, int64(1), affected, "夹具:A 应插入 guid=2000")
 	for i := 0; i < weightRows; i++ {
 		// GM 行 guid=0,落在 idx(snapshot_guid) 的最左端,不碰 supremum 那段间隙,只用来加重 A 的事务权重。
-		_, err := txA.ExecContext(ctx,
-			`INSERT INTO player_snapshot (player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source)
-			 VALUES (?, 4, 1, ?, 'weight', 'it', '{}', 0, 0)`, 900+i, createdAt)
+		rowID, err := store.RowIDsForTest.Next(ctx)
+		require.NoError(t, err)
+		_, err = txA.ExecContext(ctx,
+			`INSERT INTO player_snapshot (id, player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source)
+			 VALUES (?, ?, 4, 1, ?, 'weight', 'it', '{}', 0, 0)`, rowID, 900+i, createdAt)
 		require.NoError(t, err)
 	}
 
@@ -570,15 +574,14 @@ func snapshotGuidNzOf(t *testing.T, ctx context.Context, db *storetest.DB, id ui
 	return nz
 }
 
-// rawInsertSnapshot 用生产的普通 INSERT 文本直接写一行(绕过 store 的去重),返回自增 id。
+// rawInsertSnapshot 用生产的普通 INSERT 文本直接写一行(绕过 store 的去重),返回行号(用例的来源单调递增,后写的更大)。
 // 造历史重复行用:它模拟的正是"两个写者都插进去了"那个已经发生过的事实。
 func rawInsertSnapshot(t *testing.T, ctx context.Context, db *storetest.DB, row *store.SnapshotRow) uint64 {
 	t.Helper()
-	res, err := db.Raw.ExecContext(ctx, store.InsertSnapshotSQLForTest, store.SnapshotInsertArgsForTest(row)...)
+	args := store.SnapshotInsertArgsForTest(row)
+	_, err := db.Raw.ExecContext(ctx, store.InsertSnapshotSQLForTest, args...)
 	require.NoError(t, err)
-	id, err := res.LastInsertId()
-	require.NoError(t, err)
-	return uint64(id)
+	return args[0].(uint64)
 }
 
 // snapshotIDsOfGuid 返回某个 guid 现有的全部 id(升序)。
@@ -806,8 +809,18 @@ func TestSnapshotStore_DistinctGuidDoesNotWaitOnUncommittedNeighbour(t *testing.
 // TestSnapshotStore_DistinctGuidsNeverDeadlock:一批不同 guid 的写者并发落库,就地重跑计数**一次都不涨**。
 // 与上一条确定性用例互补:那条证"不会互等",这条覆盖真实并发度下的量级(老写法在这种并发下会频繁互杀)。
 func TestSnapshotStore_DistinctGuidsNeverDeadlock(t *testing.T) {
+	testDistinctGuidsNeverDeadlock(t, store.RowIDsForTest)
+}
+
+// TestSnapshotStore_DistinctGuidsNeverDeadlock_MixedRowIDs:生产的行号是打散的,写入落在主键中间,同样不能成环。
+func TestSnapshotStore_DistinctGuidsNeverDeadlock_MixedRowIDs(t *testing.T) {
+	testDistinctGuidsNeverDeadlock(t, store.MixedRowIDsForTest)
+}
+
+func testDistinctGuidsNeverDeadlock(t *testing.T, rowIDs idsegment.Source) {
 	db := storetest.NewMigratedDB(t)
 	ss := newSnapshotStore(t, db)
+	ss.UseRowIDs(rowIDs, rowIDs)
 	requireGuidUniqueKey(t, ss)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -1042,13 +1055,24 @@ func TestSnapshotTableUniqueIndexesAreOnlyGuidKey(t *testing.T) {
 //	B 批 [2000, 2001, 1001](新属主从更早的 offset 重读):2001 排在 A 后面;
 //	C 回滚 → A 继续插 9000、1001 并提交 → B 撞 1062 → 逐行判重。
 //
-// 旧实现(多行 ODKU)里 B 的第一行 2000 撞已提交记录,在自增主键末尾留下 X 间隙锁直到语句结束,A 回来要在主键末尾
+// 旧实现(多行 ODKU)里 B 的第一行 2000 撞已提交记录,在主键末尾(用例的行号单调,与当年的自增一样)留下 X 间隙锁直到语句结束,A 回来要在主键末尾
 // 插 9000 / 1001 时被它挡住,而 B 正等着 A 的 2001 —— 环,1213 由就地重跑吸收,这里的重跑计数就不为 0。
 // 新实现:B 的预读剔掉 2000,普通 INSERT 不持间隙锁地等 A,A 不等 B,单向等待,重跑计数必须为 0。
 func TestSnapshotStore_BatchOverlapDoesNotDeadlock(t *testing.T) {
+	testBatchOverlapDoesNotDeadlock(t, store.RowIDsForTest)
+}
+
+// TestSnapshotStore_BatchOverlapDoesNotDeadlock_MixedRowIDs:A、B 的行号与生产同形(打散)。夹具 C 的那一行仍是单调的,
+// 它只用来把 A 挡住,落在哪不影响这个编排。
+func TestSnapshotStore_BatchOverlapDoesNotDeadlock_MixedRowIDs(t *testing.T) {
+	testBatchOverlapDoesNotDeadlock(t, store.MixedRowIDsForTest)
+}
+
+func testBatchOverlapDoesNotDeadlock(t *testing.T, rowIDs idsegment.Source) {
 	db := storetest.NewMigratedDB(t)
 	requireDeadlockDetect(t, db.Raw)
 	ss := newSnapshotStore(t, db)
+	ss.UseRowIDs(rowIDs, rowIDs)
 	requireGuidUniqueKey(t, ss)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -1116,12 +1140,11 @@ func TestSnapshotStore_BatchOverlapDoesNotDeadlock(t *testing.T) {
 	assert.Equal(t, []byte("a"), snapshotDataOf(t, ctx, db, 2001), "2001 由 A 先落")
 }
 
-// TestSnapshotStore_LegacyWriterCoexistsWithUniqueKey 钉住滚动升级窗口的行为:
-// **旧版本二进制**(按 INSERT...SELECT...NOT EXISTS 去重)对着**新表结构**(已有唯一键)写,
-// 不会违反唯一键,也不会写出重复行。
+// TestSnapshotStore_LegacyWriterCoexistsWithUniqueKey 钉住 NOT EXISTS 退路语句对着已有唯一键的表写时的行为:
+// 不会违反唯一键,也不会写出重复行。这是唯一键迁移可以单独回滚的前提(见 schema.go 的「回滚方案」)。
 //
-// 这是回滚方案能成立的前提:DDL 与二进制的上线顺序不需要编排(见 schema.go 的「回滚方案」)。
-// 用例直接执行旧版那段 SQL 文本 —— 它就是旧二进制在库上留下的东西,不是近似模拟。
+// 用例执行的是现在的语句文本,带 id 列。2026-10-30 去掉自增之前的旧二进制不写 id,在新表上会落成 id=0,第二行就撞主键,
+// 所以它**不**证明旧二进制能对着新表跑。新旧二进制不能混跑,项目未上线,整批起步。
 func TestSnapshotStore_LegacyWriterCoexistsWithUniqueKey(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	ss := newSnapshotStore(t, db)
@@ -1487,9 +1510,10 @@ func TestSnapshotStore_BatchReplayIsNoop(t *testing.T) {
 	}
 }
 
-// TestSnapshotStore_BatchIdsFollowGuidOrder:同一批 5 行,自增 id 严格按 **guid 升序**递增(不是按行序)。
+// TestSnapshotStore_BatchIdsFollowGuidOrder:同一批 5 行按 **guid 升序**发行号、拼语句(不是按行序)。
+// 用例的行号来源单调递增,所以 id 大小就反映拼语句的顺序;生产的行号是打散的,大小没有含义。
 // 批量路径按 guid 升序拼多行 INSERT 是为了让取锁顺序 = 唯一键顺序(两写者倒序成环,见 InsertSnapshotsIfGuidAbsent
-// 「为什么要按 guid 升序插」);代价是同秒并列时 ListSceneSnapshotsByPlayer 的 id DESC 次序跟 guid 走。
+// 「为什么要按 guid 升序插」)。
 // guid 故意按行序打乱,免得「没排序」也能让断言通过。
 func TestSnapshotStore_BatchIdsFollowGuidOrder(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
@@ -1518,6 +1542,51 @@ func TestSnapshotStore_BatchIdsFollowGuidOrder(t *testing.T) {
 		}
 		prev = ids[0]
 	}
+}
+
+// TestSnapshotTablesHaveNoAutoIncrement:新建的库上两张表的 id 不带自增。这条红了多半是漏跑协议生成:
+// MySQL 上对自增列显式写 id 也能成功,别的用例都发现不了。
+func TestSnapshotTablesHaveNoAutoIncrement(t *testing.T) {
+	db := storetest.NewMigratedDB(t)
+	for _, table := range []string{store.PlayerSnapshotTableName, "rollback_audit_log"} {
+		var extra string
+		require.NoError(t, db.Raw.QueryRow(
+			`SELECT EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'id'`,
+			table).Scan(&extra))
+		assert.NotContainsf(t, strings.ToLower(extra), "auto_increment", "%s.id 还带自增,协议重新生成了吗", table)
+	}
+}
+
+// fixedRowID 永远发同一个行号,扮演发重了的发号器。
+type fixedRowID uint64
+
+func (f fixedRowID) Next(context.Context) (uint64, error) { return uint64(f), nil }
+
+// TestSnapshotStore_RowIDCollisionIsNotSwallowed:ODKU 会把撞主键也吸收成 affected=0。发号器发重时(不该发生)
+// 必须报错,不能把这条快照当成「这个 guid 已存在」丢掉;换一个行号重试后要能落库。
+func TestSnapshotStore_RowIDCollisionIsNotSwallowed(t *testing.T) {
+	db := storetest.NewMigratedDB(t)
+	ss := newSnapshotStore(t, db)
+	requireGuidUniqueKey(t, ss)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	taken, inserted, err := ss.InsertSnapshotIfGuidAbsent(ctx, sceneRow(31, 84001, 1700000000, []byte("first")))
+	require.NoError(t, err)
+	require.True(t, inserted)
+
+	ss.UseRowIDs(fixedRowID(taken), store.RowIDsForTest)
+	_, inserted, err = ss.InsertSnapshotIfGuidAbsent(ctx, sceneRow(31, 84002, 1700000000, []byte("second")))
+	require.Error(t, err, "撞主键不是去重结果")
+	assert.False(t, inserted)
+	assert.Empty(t, snapshotIDsOfGuid(t, ctx, db, 84002), "撞主键时这条快照还没有落库")
+
+	ss.UseRowIDs(store.RowIDsForTest, store.RowIDsForTest)
+	id, inserted, err := ss.InsertSnapshotIfGuidAbsent(ctx, sceneRow(31, 84002, 1700000000, []byte("second")))
+	require.NoError(t, err)
+	assert.True(t, inserted)
+	assert.NotEqual(t, taken, id)
+	assert.Equal(t, []uint64{id}, snapshotIDsOfGuid(t, ctx, db, 84002))
 }
 
 // TestSnapshotStore_BatchFallsBackWhenUniqueKeyAbsent:唯一键不在(迁移未跑 / DDL 回滚 / TiDB)时,批量入口退回逐行

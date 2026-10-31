@@ -1,13 +1,17 @@
 #pragma once
 
+#include <array>
 #include <functional>
 #include <string>
+#include <utility>
 
 #include "engine/core/type_define/type_define.h"
 #include "core/time/comp/timer_task_comp.h"
+#include "modules/id_segment/guid_mix.h"
 
 // ─────────────────────────────────────────────────────────────────────────
-// 永久 guid 号段客户端(Leaf-segment;docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5)。
+// 永久 guid 号段客户端(docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5;
+// 发号器的设计见 docs/design/player-data-tidb-scaling-plan.md §6)。
 // go/shared/idsegment/client.go 的 C++ 同构:同一套双 buffer / 单飞预取 / 范围校验 /
 // 退避语义,只是把"阻塞等续段"换成事件循环下的"立刻返回 false"。
 //
@@ -23,7 +27,7 @@
 // 永久身份只需要「全局唯一 + 不重发」,不需要把铸号时间和铸号节点编进 id 里。snowflake 的
 // 唯一性建立在 worker 槽租约 + 时钟单调之上,10 万台 scene 每秒 10 万次水位写 + 续约超出单个
 // etcd 一个数量级;号段没有 lease、没有时钟、没有 worker:持有者经 DataService.AllocateIdSegment
-// 用一次 CAS 从 id_segment 表领走 [lo, hi),协调器只在续段时碰一次,对节点数不敏感。
+// 领走 [lo, hi),发号器从内存切段,协调器只在续段时碰一次,对节点数不敏感。
 //
 // # 双 buffer(§6.5 弱依赖)
 //
@@ -40,8 +44,7 @@
 //
 // # 不持久化游标(§7.5 第 6 条)
 //
-// 一段在 AllocateIdSegment 提交时就已被数据库判定为用掉,进程崩溃只产生空洞不产生重号;
-// 优雅关服也不把尾巴还回去(会破坏"每段必比上一段大"这条让客户端能整段拒收服务端错误的不变量)。
+// 一段从发号器切出来就算用掉,进程崩溃只产生空洞不产生重号;优雅关服也不把尾巴还回去。
 //
 // # 传输不可靠的处理
 //
@@ -52,14 +55,17 @@
 //
 // # 服务端范围校验(fail-closed)
 //
-// lo ≥ 1、hi > lo、hi ≤ maxIdExclusive(2^55)、lo ≥ 上一段 hi(同一客户端拿到的范围
-// 必须单调递增)。任一不满足即 REJECTED:这段**绝不使用**并大声记日志 —— 服务端把号
-// 发重了比发不出号严重得多(撞号会静默串档,不报错)。
+// lo ≥ 1、hi > lo、hi ≤ maxIdExclusive(2^63)、不与最近接受过的范围重叠。任一不满足即 REJECTED:
+// 这段**绝不使用**并大声记日志 —— 服务端把号发重了比发不出号严重得多(撞号会静默串档,不报错)。
 //
-// # 与存量 snowflake 号不撞
+// 不要求范围递增:发号器有多个副本,每个副本从自己预留的块里切段,同一个客户端先后领到的段可能
+// 来自不同副本,后一段比前一段小是正常的。查重叠只是兜底,窗口之外的重复查不到,唯一性由发号器保证。
 //
-// 号段从 1 起、上限 2^55;存量 item guid / tx_id / snapshot_id(epoch 2026-03,秒<<32)≥ 6.7e16,
-// 两个区间永不相交,新旧号在同一张表 / 同一个玩家 blob 里共存、不迁数据。
+// # 发出去的 id 是打散过的
+//
+// 发号器发的 [lo, hi) 是连续的计数器值,TryNext 返回的是 MixGuid(计数器值),所以 id 不单调、不连续、
+// 没有业务含义,但一定不重复(MixGuid 是双射)。范围校验都针对计数器值,不针对打散后的 id。
+// 不要依赖 id 的大小做排序或分页。
 //
 // # 线程模型
 //
@@ -74,14 +80,13 @@
 class GuidSegmentClient
 {
 public:
-    // 值域上界(不含):2^55,与 id_segment 表的 CHECK 一致。只能调小不能调大 ——
-    // 调大就与存量 snowflake 号相交。
-    static constexpr uint64_t kDefaultMaxIdExclusive = uint64_t{1} << 55;
+    // 计数器值域上界(不含):2^63。发出去的 id 恒小于它,转 int64 不会变负。只能调小不能调大。
+    static constexpr uint64_t kDefaultMaxIdExclusive = uint64_t{1} << 63;
 
     struct Options
     {
         std::string kindName;   // 注册表里的种类名,日志 / 指标标签(item / txlog / snapshot),必填
-        std::string bizTag;     // id_segment.biz_tag;空 = 与 kindName 相同
+        std::string bizTag;     // AllocateIdSegment 的 biz_tag;空 = 与 kindName 相同
         uint32_t initialStep{0}; // 首次领段长度,必填 > 0
         uint32_t minStep{0};    // 动态 step 下限;0 = initialStep(不缩)
         uint32_t maxStep{0};    // 动态 step 上限;0 = initialStep(不扩)
@@ -92,6 +97,7 @@ public:
         double fetchTimeoutSec{3.0};    // 单次领段无响应视为失败的期限
         double stepGrowBelowSec{15.0 * 60.0};    // 一段撑不到这么久就用完 → step ×2
         double stepShrinkAboveSec{30.0 * 60.0};  // 一段撑过这么久才用完 → step ÷2
+        bool mixIds{true}; // 发号时是否打散。生产恒 true,不从配置读;false 只给单测断言计数器值用
     };
 
     // 发一次领段请求。返回 false = 此刻发不出去(没有已连接的 DataService 节点 / 共享通道忙),
@@ -128,7 +134,7 @@ public:
         bool nextReady{false};
         bool inflight{false};
         bool retryPending{false};
-        uint64_t highWater{0}; // 至今校验通过的最大 hi;后续范围的 lo 必须 ≥ 它
+        uint64_t highWater{0}; // 至今校验通过的最大 hi
         double backoffSec{0};  // 下一次失败后将采用的退避
         uint32_t currentStep{0};      // 下一次领段会请求的 step
         double lastRangeLastedSec{0}; // 最近一段从成为当前段到发完撑了多久
@@ -140,7 +146,7 @@ public:
 
     // 配置并启用。不做任何 IO:第一段在 Warm() / 首次 TryNext 时才去领。
     // schedule 为空时用内置 TimerTaskComp(需要当前线程有 muduo EventLoop);clock 为空时用 steady_clock。
-    // 选项自相矛盾(kindName 空、initialStep=0、min>initial>max、prefetchAt 越界、maxIdExclusive 超 2^55、
+    // 选项自相矛盾(kindName 空、initialStep=0、min>initial>max、prefetchAt 越界、maxIdExclusive 超 2^63、
     // 阈值倒挂)返回 false 且保持未启用。
     bool Enable(Options options, SendFn send, ScheduleFn schedule = nullptr, ClockFn clock = nullptr);
 
@@ -171,8 +177,8 @@ public:
     void OnResponse(uint32_t errorCode, uint64_t lo, uint64_t hi);
 
     // 本次在途请求在传输层失败了(gRPC status 非 OK),传输层已按请求编号确认归属。
-    // 与 fetchTimeout 到期同一种后果:这次没领到段,按退避重试。服务端可能其实已经发出过那一段
-    // (deadline 到期时 CAS 已提交)—— 号段本来就不回收,那一段直接作废,浪费但无害。
+    // 与 fetchTimeout 到期同一种后果:这次没领到段,按退避重试。服务端可能其实已经切出过那一段
+    // —— 号段本来就不回收,那一段直接作废,浪费但无害。
     // 不在途(fetchTimeout 已先判过失败、或已收到响应)时是空操作,不重复计失败。
     void OnTransportFailure(const std::string &why);
 
@@ -204,6 +210,7 @@ private:
     void OnRetryTimer(uint64_t gen);
     void Schedule(TimerKind kind, double delaySec, std::function<void()> fn);
     [[nodiscard]] const char *ValidateRange(uint64_t lo, uint64_t hi) const;
+    [[nodiscard]] bool OverlapsRecent(uint64_t lo, uint64_t hi) const;
 
     Options options_;
     SendFn send_;
@@ -228,6 +235,10 @@ private:
     uint64_t retryGen_{0}; // 每次安排重试 +1;Reset 也 +1,让旧回调作废
     double backoffSec_{0.5};
     uint64_t highWater_{0};
+    // 最近接受过的范围,环形覆盖;recentCount_ 是接受过的总数。查重叠用,窗口之外的重复查不到。
+    static constexpr std::size_t kRecentRangeWindow = 16;
+    std::array<std::pair<uint64_t, uint64_t>, kRecentRangeWindow> recent_{};
+    uint64_t recentCount_{0};
     uint32_t consecutiveFailures_{0};
 
     uint64_t issued_{0};

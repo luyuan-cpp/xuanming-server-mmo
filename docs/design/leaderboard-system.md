@@ -1,5 +1,7 @@
 # 排行榜(leaderboard / rank)v1 设计
 
+> **2026-10-30**:`match-rating-snapshot` topic、`PlayerRatingSnapshotEvent`、`RatingSnapshot*` 配置、`-MatchRatingSnapshotPublish` 都已删除。评分只在全球权威库(`match_rating`、`match_rating_applied`),写榜走 `match_rank_source` 和 `go/match/internal/authority/rank_publisher.go`。下文 §2.4、§5.4 等关于这个 topic 的内容只作历史保留。
+
 > **2026-10-19 主干合并口径**：现役为 SQL 权威的通用榜代次、封榜、快照及邮件奖励链，配置入口为 `go/rank/etc/rank.yaml`（DSNEnv、RequireTiDB、MaxOpenConns、MailRpc、Producers）。R2/R2b 的 Redis/Kafka 消费榜、redis-rank 和消费类告警保留为历史设计，不能与现役同时作为写者启用。全局服务登记、端口、冗余部署和失败可观测性继续保留。
 
 > **2026-10-21 SQL 可观测性接缝**：`rank_write_total{operation,outcome}` 在 Open/Submit/Freeze/Remove/Delete 外层返回后记录确认提交、原回执重放、业务拒绝与错误；事务内尝试与回滚不计成功，提交未知只计 error。奖励工作器的 `rank_reward_dispatch_total{outcome}` 仅在邮件 ID 和奖励终态 SQL 提交都确认时记 delivered；未知结果保留原奖励恢复。`rank_reward_scan_total{outcome}` 与 `rank_reward_due_delay_seconds` 沿现有 `(status,next_attempt_ms)` 索引的有界 DueRewards 查询读取首行，不增全表计数；首次成功查询前无延迟样本，失败保旧，真实空结果才清零。延迟覆盖已到期且未持租约的奖励，活租约到期后恢复可见。`deploy/k8s/rank-alerts.yaml` 已按此现役语义替换历史 Redis 消费/榜大小告警；仍实际发出的 match 快照发布指标保留独立告警。标签仅封闭 operation/outcome，不含玩家、榜或请求 ID。源码与回归已准备，实际编译、真库及告警合同验证由本轮主控执行。

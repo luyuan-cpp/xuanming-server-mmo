@@ -89,31 +89,6 @@ TEST(DeliveryErrorClassification, PurgeErrorsAreRecognised)
     EXPECT_FALSE(IsPurgeDeliveryError(RdKafka::ERR__MSG_TIMED_OUT));
 }
 
-// 永久错误 = 按当前状态重发同样形状的消息也必然失败。scene 下线收尾的 DBTask 回执闸门据此不再保留实体:
-// 把可用性问题误判成永久,会放弃一次 Kafka 恢复后本可成功的重存;把永久误判成可重试,实体每次下线都被无限期保留。
-TEST(DeliveryErrorClassification, PermanentMessageErrorsAreBoundToTheMessageNotToAvailability)
-{
-    using kafka_producer_policy::IsPermanentMessageError;
-    // 与消息内容 / 权限 / 参数绑定:重发不会变好。
-    EXPECT_TRUE(IsPermanentMessageError(RdKafka::ERR_MSG_SIZE_TOO_LARGE)) << "超过 message.max.bytes,produce() 同步返回";
-    EXPECT_TRUE(IsPermanentMessageError(RdKafka::ERR_RECORD_LIST_TOO_LARGE));
-    EXPECT_TRUE(IsPermanentMessageError(RdKafka::ERR_INVALID_RECORD));
-    EXPECT_TRUE(IsPermanentMessageError(RdKafka::ERR_TOPIC_AUTHORIZATION_FAILED));
-    EXPECT_TRUE(IsPermanentMessageError(RdKafka::ERR__INVALID_ARG));
-
-    // 可用性问题:Kafka 恢复后重发可能成功。
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR_NO_ERROR));
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR__QUEUE_FULL));
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR__FATAL)) << "fatal 走重建,新实例上重发可能成功";
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR__STATE)) << "没有 broker / 生产者建不出来";
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR__MSG_TIMED_OUT));
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR__PURGE_QUEUE));
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR__PURGE_INFLIGHT));
-    // 拿不准的按可重试:topic 可能正在创建;CRC 不符在协议里标为可重试。
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR__UNKNOWN_TOPIC));
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR_UNKNOWN_TOPIC_OR_PART));
-    EXPECT_FALSE(IsPermanentMessageError(RdKafka::ERR_INVALID_MSG));
-}
 
 TEST(RebuildGate, FirstRebuildIsAlwaysAllowed)
 {
@@ -293,7 +268,7 @@ TEST(FailureLogThrottle, TakeSuppressedDrainsUnconditionallyAndKeepsTheWindow)
 
 // ---------------------------------------------------------------------------
 // DeliveryTracker:sendTracked 的关联号登记簿。契约是「每个 Accept 过的非 0 id 恰好一次经 Resolve 或
-// TakeAll 离开」—— 少一次,scene 的下线收尾就一直等到 330s 超时;多一次,同一条 DBTask 会被记两次结局。
+// TakeAll 离开」—— 少一次,调用方就一直等到自己的超时;多一次,同一条消息会被记两次结局。
 // ---------------------------------------------------------------------------
 
 TEST(DeliveryTracker, AcceptThenResolveIsTrueOnceThenFalse)

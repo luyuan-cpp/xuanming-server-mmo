@@ -9,7 +9,7 @@
       1. 不带 -RedisSplit(缺省 auto,DryRun 按 none)时 zone-up / infra-up 的产物里没有 QueueRedis、没有 redis-queue-g 字样,
          gateway 的 spring.data.redis.host 仍是核心 redis.<infra>;
       2. -RedisSplit queue:login 整段写 Node.QueueRedis(Host = redis-queue-g0.<infra>:6379,其余字段与 RedisClient 逐项同值),
-         gateway 指向 redis-queue-g0.<infra>;C++ zoneredis、go/db RedisClient、data-service DevRedis 仍是核心;
+         gateway 指向 redis-queue-g0.<infra>;C++ zoneredis、go/db RedisClient、data-service MappingRedis 仍是核心;
       3. zones 配置的 redisQueueGroup: 2 → redis-queue-g2;非法值(负数、小数、字符串)在任何写操作之前 throw;
       4. infra-up -RedisSplit queue 渲染 redis-queue-g0:不带 app: redis、noeviction + maxmemory、MAXCLIENTS 只定义一次、
          --enable-debug-command no、redis-exporter sidecar、没有未替换的占位,且排在核心 Redis 之后;
@@ -131,12 +131,12 @@ Test-Case '-RedisSplit queue:gateway 的 spring.data.redis.host = redis-queue-g0
     Assert-Equal -Expected '6379' -Actual (Get-ConfigValue -Output $out -ConfigMap 'java-svc-gateway-config' -KeyPath 'data.application.yaml.spring.data.redis.port') -Because '端口行不变'
 }
 
-Test-Case '-RedisSplit queue:C++ zoneredis、go/db RedisClient、data-service DevRedis 仍是核心 redis.<infra>:6379' {
+Test-Case '-RedisSplit queue:C++ zoneredis、go/db RedisClient、data-service MappingRedis 仍是核心 redis.<infra>:6379' {
     $out = $queueZoneRun.Output
     $zoneRedis = '{0}:{1}' -f (Get-ConfigValue -Output $out -ConfigMap 'node-config' -KeyPath 'data.game_config.yaml.zoneredis.host'), (Get-ConfigValue -Output $out -ConfigMap 'node-config' -KeyPath 'data.game_config.yaml.zoneredis.port')
-    Assert-Equal -Expected "redis.${Infra}:6379" -Actual $zoneRedis -Because 'C++ 存盘与会话恒在核心,永不指向拆出去的实例'
-    Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-ConfigValue -Output $out -ConfigMap 'go-svc-db-config' -KeyPath 'data.db.yaml.ServerConfig.RedisClient.Hosts') -Because 'go/db 的 RedisClient(存盘控制面、屏障 ACK)恒在核心'
-    Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-ConfigValue -Output $out -ConfigMap 'go-svc-data-service-config' -KeyPath 'data.data_service.yaml.DevRedis.Host') -Because 'data-service 读的账本由 C++ / go/db 写在核心'
+    Assert-Equal -Expected "redis.${Infra}:6379" -Actual $zoneRedis -Because 'C++ 的归属与会话协调恒在核心,永不指向拆出去的实例'
+    Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-ConfigValue -Output $out -ConfigMap 'go-svc-db-config' -KeyPath 'data.db.yaml.ServerConfig.RedisClient.Hosts') -Because 'go/db 的 RedisClient(落点记录与归属协调)恒在核心'
+    Assert-Equal -Expected "redis.${Infra}:6379" -Actual (Get-ConfigValue -Output $out -ConfigMap 'go-svc-data-service-config' -KeyPath 'data.data_service.yaml.MappingRedis.Host') -Because 'data-service 的映射镜像与 go/db 读的落点记录在同一实例,恒在核心'
 }
 
 Test-Case '-RedisSplit queue:核心总账去掉 gateway,另打 queue 实例的总账一行;DryRun 打出 resolved=queue' {

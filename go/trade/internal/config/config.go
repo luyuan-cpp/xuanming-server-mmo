@@ -22,6 +22,7 @@ import (
 	tradepb "proto/trade"
 
 	"shared/assetopwake"
+	"shared/authoritysql"
 	"shared/currencytype"
 	"shared/idsegment"
 
@@ -193,14 +194,6 @@ type AssetOpConf struct {
 	// 当未知键静默忽略 —— 静默忽略的代价是密钥从此留在仓库与 etcd 里,且没人知道它没生效。
 	// 值不进日志、不进错误文本(AGENTS §11.3)。
 	Secret string `json:",optional"`
-
-	// RequireSQLCommit 是资产 SQL 提交证据开关,原样映射到 assetop.LoopConfig.RequireSQLCommit
-	// (docs/design/db-write-fencing-mysql.md §6.6 / §8.7)。缺省 false = HEAD 口径:在线按 scene 回包的 durable 终结,
-	// 离线读账本与自动放弃读 Redis 父键 blob。true = 终结只认 go/db 发布的 SQL 提交证据,自动放弃要 blob 与证据都未见。
-	// **trade 是全服服务:只有它会投递到的 zone 全部已切 go/db Fencing.Mode=dual、已上新版 C++,并观察到证据在持续发布
-	// 之后才打开**;打开时没有 data_service 客户端即拒启(reconcile.New 经 Loop.CheckWiring)。回退时先关它,再切回 legacy
-	// 或回退 C++。交易合同 / 商城到账只认 SQL 证据,配了它们就必须打开(Validate)。
-	RequireSQLCommit bool `json:",optional"`
 
 	// ── 落地恢复(docs/design/landing-recovery-sync-digest.md §6;只在 Enabled 时校验,见 validateRecovery)──
 	//
@@ -390,10 +383,9 @@ type MySQLConf struct {
 	DBName      string `json:"DBName"`
 	MaxOpenConn int    `json:"MaxOpenConn,default=20"`
 	MaxIdleConn int    `json:"MaxIdleConn,default=5"`
-	RequireTiDB *bool  `json:",optional"`
+	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);非法值拒启。
+	Backend string `json:",default=tidb"`
 }
-
-func (c MySQLConf) RequiresTiDB() bool { return c.RequireTiDB == nil || *c.RequireTiDB }
 
 // SchemaConf 建表策略(D-14 第 4 条)。
 type SchemaConf struct {
@@ -479,8 +471,8 @@ func (c *Config) ListenHostPort() (string, uint32, error) {
 //   - AssetOp.Enabled=true 时落地恢复参数越界(停放间隔、放弃门槛 / 安全间隔 / 批量 / 间隔、对账间隔、唤醒参数);
 //   - AssetOp.CleanupEnabled=true 时清理间隔或保留期越界(与 Enabled 独立,同 guild)。
 func (c *Config) Validate() error {
-	if !c.MySQL.RequiresTiDB() && !IsRelaxedMode(c.Mode) {
-		return errors.New("生产交易权威库不得关闭TiDB门禁")
+	if _, err := authoritysql.ParseBackend(c.MySQL.Backend); err != nil {
+		return fmt.Errorf("MySQL.Backend: %w", err)
 	}
 	if c.ZoneId == 0 {
 		return errors.New("ZoneId 必须非 0(K8s 全局服务用 ConfigMap 注入的 CurrentZoneId)")
@@ -522,9 +514,6 @@ func (c *Config) Validate() error {
 	}
 	if !c.IdSegment.Enabled {
 		return errors.New("IdSegment.Enabled 必须为 true:listing_id 只由号段发(biz_tag=trade_listing),trade 没有 snowflake 回退")
-	}
-	if c.IdSegment.FallbackToSnowflake {
-		return errors.New("IdSegment.FallbackToSnowflake 必须为 false:trade 没有 snowflake 节点可回退")
 	}
 
 	if c.Market.Scope != ScopeZone && c.Market.Scope != ScopeGlobal {
@@ -585,8 +574,8 @@ func (c *Config) Validate() error {
 		if c.Rmb.LoginRedis.DB < 0 || c.Rmb.LoginRedis.PoolSize < 0 {
 			return errors.New("登录态Redis库号/连接池非法")
 		}
-		if c.Market.Scope != ScopeGlobal || !c.MySQL.RequiresTiDB() {
-			return errors.New("交易写面必须使用全球市场与强一致TiDB，禁止按区域独立撮合")
+		if c.Market.Scope != ScopeGlobal {
+			return errors.New("交易写面必须使用全球市场，禁止按区域独立撮合")
 		}
 		for _, id := range c.Commerce.ItemConfigs {
 			if id == 0 || strings.TrimSpace(c.Commerce.ItemTitles[strconv.FormatUint(uint64(id), 10)]) == "" {
@@ -598,19 +587,12 @@ func (c *Config) Validate() error {
 				return errors.New("交易货币只允许金币0与显式启用钻石1，绑定币禁售")
 			}
 		}
-		// 交易合同与商城到账的终结只认玩家 SQL 提交证据(data.AssetOpRepo.Finalize 对 ORDER 行强制):开关关闭时
-		// 这些行永远终结不了,只会反复报错。配了合同白名单或商城就必须先打开开关(docs/design/db-write-fencing-mysql.md
-		// §6.6 / §8.7);关着时只有聚宝斋托管按 HEAD 口径运行。
-		if !c.AssetOp.RequireSQLCommit && (len(c.Commerce.ItemConfigs) > 0 || len(c.Commerce.PetConfigs) > 0 ||
-			len(c.Commerce.CurrencyTypes) > 0 || c.Mall.URL != "") {
-			return errors.New("配置了交易合同白名单或商城时必须打开 AssetOp.RequireSQLCommit:合同终结只认玩家 SQL 提交证据")
-		}
 		if err := c.AssetOp.validateRecovery(); err != nil {
 			return err
 		}
 	}
 	if c.Rmb.Enabled {
-		if !c.AssetOp.Enabled || !c.AssetOp.RequireSQLCommit || c.Mall.URL == "" {
+		if !c.AssetOp.Enabled || c.Mall.URL == "" {
 			return errors.New("人民币寄售必须开启商城与SQL资产通道")
 		}
 		for _, currency := range c.Rmb.CurrencyTypes {

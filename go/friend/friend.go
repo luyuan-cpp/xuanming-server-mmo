@@ -113,7 +113,7 @@ func main() {
 
 	if *migrateOnly {
 		openAuthority := func(mysqlConf config.MySQLConf) (*sql.DB, error) {
-			return svc.OpenSchemaMySQL(mysqlConf, c.RequireTiDB)
+			return svc.OpenSchemaMySQL(mysqlConf, authoritysql.Backend(c.Backend))
 		}
 		os.Exit(runMigration(c, *allowModify, openAuthority, schemamigrate.Up))
 	}

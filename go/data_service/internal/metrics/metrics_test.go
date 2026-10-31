@@ -42,61 +42,10 @@ func TestSetKafkaConsumerUpCreatesChildSeries(t *testing.T) {
 	t.Fatal("metric family data_service_kafka_consumer_up is not registered")
 }
 
-// TestPrimeRollbackGuildCheckCreatesAllSeries 锁死 M1(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.1):
-// PrimeRollbackGuildCheck 之后,rollback_guild_check_total 的 scope × result 封闭集合 27 条子序列**全部存在且为 0**。
-//
-// 放行回档(divergent_accepted)与写后分歧(post_write_*)是进程一辈子可能只发生一次的事件,
-// 告警是 `increase(...) > 0`:序列在第一次 Inc 之前不存在的话,那一次恰好只有一个样本,告警是哑的。
-func TestPrimeRollbackGuildCheckCreatesAllSeries(t *testing.T) {
-	PrimeRollbackGuildCheck()
-
-	families, err := prometheus.DefaultGatherer.Gather()
-	if err != nil {
-		t.Fatalf("gather: %v", err)
-	}
-	for _, mf := range families {
-		if mf.GetName() != "data_service_rollback_guild_check_total" {
-			continue
-		}
-		seen := make(map[string]float64, len(mf.GetMetric()))
-		for _, m := range mf.GetMetric() {
-			var scope, result string
-			for _, l := range m.GetLabel() {
-				switch l.GetName() {
-				case "scope":
-					scope = l.GetValue()
-				case "result":
-					result = l.GetValue()
-				}
-			}
-			seen[scope+"/"+result] = m.GetCounter().GetValue()
-		}
-		if len(seen) != len(rollbackGuildScopes)*len(rollbackGuildResults) || len(seen) != 27 {
-			t.Fatalf("rollback_guild_check_total has %d series after priming, want 27: %v", len(seen), seen)
-		}
-		for _, scope := range rollbackGuildScopes {
-			for _, result := range rollbackGuildResults {
-				v, ok := seen[scope+"/"+result]
-				if !ok {
-					t.Fatalf("series scope=%q result=%q missing after priming", scope, result)
-				}
-				if v != 0 {
-					t.Fatalf("series scope=%q result=%q = %v after priming, want 0", scope, result, v)
-				}
-			}
-		}
-		if _, ok := seen[RollbackGuildScopePlayer+"/"+RollbackGuildResultDivergentAccepted]; !ok {
-			t.Fatal(`series scope="player",result="divergent_accepted" missing`)
-		}
-		return
-	}
-	t.Fatal("metric family data_service_rollback_guild_check_total is not registered")
-}
-
 // TestPrimeRouteCreatesAllSeries 锁死映射持久化第 1a 批的两组告警前提:PrimeRoute 之后,
-// route_register_total{outcome} 的 12 条与 route_publish_total{result} 的 8 条子序列**全部存在且为 0**。
-// fenced / refused_unknown_row / legacy_conflict 这类结局可能一辈子只发生几次,序列不预先存在,
-// `increase(...) > 0` 恰好漏掉第一次(同 TestPrimeRollbackGuildCheckCreatesAllSeries)。
+// route_register_total{outcome} 的 10 条与 route_publish_total{result} 的 7 条子序列**全部存在且为 0**。
+// refused_unknown_row / legacy_conflict 这类结局可能一辈子只发生几次,序列不预先存在,
+// `increase(...) > 0` 恰好漏掉第一次。
 func TestPrimeRouteCreatesAllSeries(t *testing.T) {
 	PrimeRoute()
 
@@ -109,8 +58,8 @@ func TestPrimeRouteCreatesAllSeries(t *testing.T) {
 		values []string
 		count  int
 	}{
-		"data_service_route_register_total": {"outcome", routeRegisterOutcomes, 12},
-		"data_service_route_publish_total":  {"result", routePublishResults, 8},
+		"data_service_route_register_total": {"outcome", routeRegisterOutcomes, 10},
+		"data_service_route_publish_total":  {"result", routePublishResults, 7},
 	}
 	found := map[string]bool{}
 	for _, mf := range families {
@@ -264,8 +213,8 @@ func TestSQLPoolCollectorDeclaresRouteOnlyUnderDBFirst(t *testing.T) {
 		includeRoute bool
 		want         []string
 	}{
-		{includeRoute: false, want: []string{PoolSnapshot, PoolTransactionLog, PoolIdSegment, PoolPlayerName}},
-		{includeRoute: true, want: []string{PoolSnapshot, PoolTransactionLog, PoolIdSegment, PoolPlayerName, PoolPlayerRoute}},
+		{includeRoute: false, want: []string{PoolSnapshot, PoolTransactionLog, PoolPlayerName}},
+		{includeRoute: true, want: []string{PoolSnapshot, PoolTransactionLog, PoolPlayerName, PoolPlayerRoute}},
 	} {
 		reg := prometheus.NewPedanticRegistry()
 		if err := reg.Register(NewSQLPoolCollector(nil, tc.includeRoute)); err != nil {
@@ -308,8 +257,8 @@ func TestSQLPoolCollectorDeclaresRouteOnlyUnderDBFirst(t *testing.T) {
 }
 
 // TestPrimeRouteReadCreatesAllSeries 锁死第 3 批读方门禁告警(RouteReadSQLFallbackErrors 等,规格 §7 第 2 条)的前提:
-// PrimeRouteRead 之后,route_read_total 会出现的 13 个 path × result 组合与 route_ready_verdict_total 的 8 个 verdict
-// **全部存在且为 0**,且没有多出不会出现的组合(batch 没有 not_found_sql,enumerate 只读库)。
+// PrimeRouteRead 之后,route_read_total 会出现的 7 个 path × result 组合与 route_ready_verdict_total 的 8 个 verdict
+// **全部存在且为 0**,且没有多出不会出现的组合(batch 没有 not_found_sql)。
 // sql_error 可能一辈子只发生几次,序列不预先存在,`increase(...) > 0` 恰好漏掉第一次(同 TestPrimeRouteCreatesAllSeries)。
 func TestPrimeRouteReadCreatesAllSeries(t *testing.T) {
 	PrimeRouteRead()
@@ -322,13 +271,11 @@ func TestPrimeRouteReadCreatesAllSeries(t *testing.T) {
 	for _, s := range routeReadSeries {
 		wantRead[s[0]+"/"+s[1]] = true
 	}
-	if len(wantRead) != 13 {
-		t.Fatalf("routeReadSeries lists %d distinct combinations, want 13", len(wantRead))
+	if len(wantRead) != 7 {
+		t.Fatalf("routeReadSeries lists %d distinct combinations, want 7", len(wantRead))
 	}
 	for _, absent := range []string{
 		RouteReadPathBatch + "/" + RouteReadResultNotFoundSQL,
-		RouteReadPathEnumerate + "/" + RouteReadResultCache,
-		RouteReadPathEnumerate + "/" + RouteReadResultNotFoundSQL,
 	} {
 		if wantRead[absent] {
 			t.Fatalf("%s can never happen and must not be primed", absent)
@@ -422,7 +369,7 @@ func labelKey(m *dto.Metric, names ...string) string {
 }
 
 // TestPrimeRouteReconcileSeries 锁死对账 leader 告警的前提(规格 §13.1 第 9 条、§13.4 第 2 条):PrimeRouteReconcile 之后
-// tick 6 条、event 16 条、push 4×11=44 条、mirror 9 条全部存在且为 0;task_rows 每个 phase 一条;装配型 gauge
+// tick 6 条、event 15 条、push 4×10=40 条、mirror 4 条全部存在且为 0;task_rows 每个 phase 一条;装配型 gauge
 // assembled=1、leader=0、arm_enabled 按入参;leader 观测型 gauge 不预置(只有现任 leader 导出)。
 func TestPrimeRouteReconcileSeries(t *testing.T) {
 	ClearRouteLeaderObservations()
@@ -435,8 +382,8 @@ func TestPrimeRouteReconcileSeries(t *testing.T) {
 		count  int
 	}{
 		{"data_service_route_reconcile_tick_total", []string{"result"}, setOf(routeReconcileTickResults), 6},
-		{"data_service_route_reconcile_event_total", []string{"event"}, setOf(routeReconcileEvents), 16},
-		{"data_service_route_reconcile_mirror_total", []string{"result"}, setOf(routeReconcileMirrorResults), 9},
+		{"data_service_route_reconcile_event_total", []string{"event"}, setOf(routeReconcileEvents), 15},
+		{"data_service_route_reconcile_mirror_total", []string{"result"}, setOf(routeReconcileMirrorResults), 4},
 	}
 	push := map[string]bool{}
 	for _, p := range routeReconcilePhases {
@@ -449,7 +396,7 @@ func TestPrimeRouteReconcileSeries(t *testing.T) {
 		labels []string
 		want   map[string]bool
 		count  int
-	}{"data_service_route_reconcile_push_total", []string{"phase", "result"}, push, 44})
+	}{"data_service_route_reconcile_push_total", []string{"phase", "result"}, push, 40})
 
 	for _, c := range counters {
 		if len(c.want) != c.count {
@@ -469,7 +416,7 @@ func TestPrimeRouteReconcileSeries(t *testing.T) {
 			}
 		}
 	}
-	for _, ev := range []string{"marker_dropped_disarmed", "arming_refused_debug_enabled", "foreign_fence", "lease_released_redis_unreachable"} {
+	for _, ev := range []string{"marker_dropped_disarmed", "arming_refused_debug_enabled", "lease_released_redis_unreachable"} {
 		if !setOf(routeReconcileEvents)[ev] {
 			t.Fatalf("event %q must be in the closed set (spec §13.1)", ev)
 		}

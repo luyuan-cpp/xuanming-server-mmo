@@ -242,6 +242,7 @@ enum MatchBattleCompletionSourceKind : int {
   MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED = 0,
   MATCH_BATTLE_COMPLETION_SOURCE_KAFKA = 1,
   MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC = 2,
+  MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT = 3,
   MatchBattleCompletionSourceKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   MatchBattleCompletionSourceKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -252,11 +253,11 @@ extern const uint32_t MatchBattleCompletionSourceKind_internal_data_[];
 inline constexpr MatchBattleCompletionSourceKind MatchBattleCompletionSourceKind_MIN =
     static_cast<MatchBattleCompletionSourceKind>(0);
 inline constexpr MatchBattleCompletionSourceKind MatchBattleCompletionSourceKind_MAX =
-    static_cast<MatchBattleCompletionSourceKind>(2);
+    static_cast<MatchBattleCompletionSourceKind>(3);
 [[nodiscard]] inline bool MatchBattleCompletionSourceKind_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 3;
 }
-inline constexpr int MatchBattleCompletionSourceKind_ARRAYSIZE = 2 + 1;
+inline constexpr int MatchBattleCompletionSourceKind_ARRAYSIZE = 3 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 MatchBattleCompletionSourceKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(MatchBattleCompletionSourceKind) {
@@ -271,7 +272,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& MatchBattleCompletionSourceKind_Name(MatchBattleCompletionSourceKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<MatchBattleCompletionSourceKind_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<MatchBattleCompletionSourceKind_descriptor, 0, 3>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool MatchBattleCompletionSourceKind_Parse(
@@ -1157,6 +1158,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchSpectatorIntentRecord final : 
     kOwnerRevisionFieldNumber = 7,
     kStateFieldNumber = 8,
     kCloseTipFieldNumber = 9,
+    kDeliveryFieldNumber = 10,
   };
   // bytes original = 4;
   void clear_original() ;
@@ -1263,11 +1265,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchSpectatorIntentRecord final : 
   void _internal_set_close_tip(::uint32_t value);
 
   public:
+  // uint32 delivery = 10;
+  void clear_delivery() ;
+  [[nodiscard]] ::uint32_t delivery() const;
+  void set_delivery(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_delivery() const;
+  void _internal_set_delivery(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:match.MatchSpectatorIntentRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 62,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1305,6 +1317,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchSpectatorIntentRecord final : 
     ::uint64_t owner_revision_;
     ::uint32_t state_;
     ::uint32_t close_tip_;
+    ::uint32_t delivery_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7808,6 +7821,30 @@ inline ::uint32_t MatchSpectatorIntentRecord::_internal_close_tip() const {
 inline void MatchSpectatorIntentRecord::_internal_set_close_tip(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.close_tip_ = value;
+}
+
+// uint32 delivery = 10;
+inline void MatchSpectatorIntentRecord::clear_delivery() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.delivery_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t MatchSpectatorIntentRecord::delivery() const {
+  // @@protoc_insertion_point(field_get:match.MatchSpectatorIntentRecord.delivery)
+  return _internal_delivery();
+}
+inline void MatchSpectatorIntentRecord::set_delivery(::uint32_t value) {
+  _internal_set_delivery(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.MatchSpectatorIntentRecord.delivery)
+}
+inline ::uint32_t MatchSpectatorIntentRecord::_internal_delivery() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.delivery_;
+}
+inline void MatchSpectatorIntentRecord::_internal_set_delivery(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.delivery_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/binary"
 	"errors"
 	"sync"
 	"testing"
@@ -18,6 +17,7 @@ import (
 	kafkapb "proto/contracts/kafka"
 	pb "proto/match"
 	inboxpb "proto/player_inbox"
+	"shared/inboxcontract"
 	"shared/serviceauth"
 )
 
@@ -121,7 +121,47 @@ func TestTerminalResultRejectsLegacyAndNestedUnknownBeforeSQL(t *testing.T) {
 		e.Settlements[0].ItemsGained = append(e.Settlements[0].ItemsGained, &battlepb.BattleItemEntry{ItemTableId: uint32(i + 1), Count: 1})
 	}
 	// 全部字段均已知，证明单人16KiB限制本身，而非借未知字段拒绝。
-	require.ErrorContains(t, validateTerminalResult(f, e, resultBytes(t, e)), "16KiB")
+	require.ErrorContains(t, validateTerminalResult(f, e, resultBytes(t, e)), "Inbox载荷上限")
+}
+
+// padSettlementTo 把个人结算补到确定性序列化恰好 size 字节:{item_table_id:1,count:1} 的掉落每项 6 字节,
+// 余下不足 6 字节的把前几项 count 改成 128(varint 1 字节变 2 字节,整项多 1 字节)逐字节补齐。
+func padSettlementTo(t *testing.T, s *battlepb.BattleSettlementData, size int) {
+	t.Helper()
+	marshaled := func() int {
+		body, err := proto.MarshalOptions{Deterministic: true}.Marshal(s)
+		require.NoError(t, err)
+		return len(body)
+	}
+	base := marshaled()
+	require.GreaterOrEqual(t, size, base+30, "补齐需要至少 5 项掉落")
+	entries, gap := (size-base)/6, (size-base)%6
+	for i := 0; i < entries; i++ {
+		count := uint64(1)
+		if i < gap {
+			count = 128
+		}
+		s.ItemsGained = append(s.ItemsGained, &battlepb.BattleItemEntry{ItemTableId: 1, Count: count})
+	}
+	require.Equal(t, size, marshaled())
+}
+
+// 2026-10-30(评审 B-3):个人结算的上限只读 Inbox 的 proto 类型规格(shared/inboxcontract),与收件箱的原件校验同一来源;
+// 恰好 16384 字节可以提交 COMPLETE,16385 字节整局拒绝。
+func TestTerminalPersonalSettlementLimitIsInboxProtoLimit(t *testing.T) {
+	limit, ok := inboxcontract.MaxPayloadBytes(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT)
+	require.True(t, ok)
+	require.Equal(t, 16384, limit, "Inbox 的 Battle 载荷上限是 16KiB")
+	for _, size := range []int{limit, limit + 1} {
+		e := completeResult()
+		padSettlementTo(t, e.Settlements[0], size)
+		err := validateTerminalPayload(e, resultBytes(t, e))
+		if size <= limit {
+			require.NoError(t, err, "恰好 %d 字节可以整份入 Inbox", size)
+			continue
+		}
+		require.ErrorContains(t, err, "Inbox载荷上限")
+	}
 }
 
 func TestTerminalPureOriginalErrorsAreTypedBeforeAnySQL(t *testing.T) {
@@ -396,13 +436,9 @@ func (c *terminalInboxFixture) response(method string, r *inboxpb.BattleSettleme
 	if err != nil {
 		return nil, err
 	}
-	var head [12]byte
-	binary.BigEndian.PutUint32(head[:4], 4)
-	binary.BigEndian.PutUint64(head[4:], r.IssuedAtMs)
-	h := sha256.New()
-	h.Write(head[:])
-	h.Write(r.SettlementPayload)
-	out := &inboxpb.BattleSettlementInboxResponse{PlayerId: r.PlayerId, BattleId: r.BattleId, Seq: r.PlayerId + 100, State: c.state, ContentSha256: h.Sum(nil), RequestDigest: digest}
+	// 与收件箱写库同一份摘要实现(字节布局由 shared/inboxcontract 的 golden 用例钉住)。
+	content := inboxcontract.ContentSHA256(uint32(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT), r.IssuedAtMs, r.SettlementPayload)
+	out := &inboxpb.BattleSettlementInboxResponse{PlayerId: r.PlayerId, BattleId: r.BattleId, Seq: r.PlayerId + 100, State: c.state, ContentSha256: content, RequestDigest: digest}
 	err = serviceauth.Sign(method+"/reply", out, "inbox", terminalFixtureSecret, uint64(time.Now().UnixMilli()))
 	return out, err
 }

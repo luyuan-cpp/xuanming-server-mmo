@@ -32,15 +32,12 @@ import (
 // 各自的理由写在对应的常量注释里:
 //   - bootstrapTables 清单里的表:整表预建,之后不再交给 proto2mysql 同步,只做形状守卫,守卫的事实源都是 proto。
 //     id_segment、player_name:proto 字段都有同名列 + 单列唯一键;
-//     路由表 player_route / zone_merge_fence / zone_merged_into / route_meta / route_reconcile(2026-10-12 映射持久化
+//     路由表 player_route / zone_merged_into / route_meta / route_reconcile(2026-10-12 映射持久化
 //     第 1a 批,docs/design/player-route-mapping-durability-proposal.md §3.2;route_reconcile 是同日 G1a 热点修复
 //     从 route_meta 拆出的;2026-10-19 补 proto,取代原手写的 routeTableShapes):proto 字段都有同名列 +
 //     主键列序等于 proto 的 OptionPrimaryKey(assertRouteTableShapes)。
 //   - nullableUniqueKeys 清单里的可空唯一列(player_snapshot.snapshot_guid_nz +
 //     uk_snapshot_guid_nz):表仍全程由 proto 驱动,只在同步之后**追加**一列 + 一个键。
-
-// IdSegmentTableName 号段表名(与 proto OptionTableName 一致)。
-const IdSegmentTableName = "id_segment"
 
 // PlayerNameTableName 玩家名字注册表名(与 proto OptionTableName 一致)。
 //
@@ -49,31 +46,6 @@ const IdSegmentTableName = "id_segment"
 // 只读副本,可能缺失,读侧一律回源 BatchGetPlayerName。所以它只能放全局库一处 ——
 // 每个 zone 一份就退化成"区内唯一",跨区必然重名。
 const PlayerNameTableName = "player_name"
-
-// idSegmentBootstrapDDL 是本包两段手写 DDL 之一(另一段是 playerNameBootstrapDDL)。
-//
-// 原因:proto2mysql v0.1.0 把 proto string 一律渲染成 MEDIUMTEXT,而 TEXT 列不能做
-// 无前缀主键(MySQL 错误 1170);id_segment 的主键 biz_tag 恰是 string。于是按设计
-// §6.2 用 VARCHAR(64) 预建,在 CreateOrUpdateTable 之前执行 —— 与
-// go/db/model/mysql_database_table.sql 预建 user_accounts 是同一个模式。
-//
-// 列注释 pb:N 与 proto2mysql 生成列的格式一致,让日后的迁移工具仍能按字段号识别列。
-// CHECK (max_id < 2^55) 是值域上限的最后一道闸(设计 §6.3:号段与存量 snowflake 号
-// 永不相交);应用层在 UPDATE 之前就拒绝,CHECK 只兜底手工 SQL。TiDB ≥ 7.2 才校验
-// CHECK,更早版本解析后忽略,不影响建表。
-//
-// 预建之后**不能**再对本表跑 CreateOrUpdateTable:proto2mysql 会把 VARCHAR(64) 判成
-// 与 MEDIUMTEXT 不兼容而 MODIFY COLUMN,同样撞 1170。所以 migrateSchemaOn 对
-// id_segment 只做"proto 每个字段都有同名列"的漂移检查,不做同步。
-const idSegmentBootstrapDDL = "CREATE TABLE IF NOT EXISTS `id_segment` (\n" +
-	"  `biz_tag` VARCHAR(64) NOT NULL COMMENT 'pb:1',\n" +
-	"  `max_id` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:2',\n" +
-	"  `step` int unsigned NOT NULL DEFAULT 0 COMMENT 'pb:3',\n" +
-	"  `version` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:4',\n" +
-	"  PRIMARY KEY (`biz_tag`) /*T![clustered_index] NONCLUSTERED */,\n" +
-	"  CONSTRAINT `chk_id_segment_max_id_cap` CHECK (`max_id` < 36028797018963968)\n" +
-	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" +
-	" /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */ COMMENT='id_segment';"
 
 // PlayerNameOwnerUniqueKey 是 player_name 上建在 player_id 的唯一键名。
 //
@@ -97,7 +69,7 @@ const PlayerNameOwnerUniqueKey = "uk_player_name_owner"
 //
 // 被争抢的键是"名字"。名字如果只是**二级**唯一索引,Reserve 的重复检查就发生在二级索引上,
 // 而二级索引上的插入要申请插入意向锁、要检查后继记录 —— 于是"新记录的主键小于删除标记项原主人"
-// 时必然成环(号段发的 player_id 都 < 2^55,存量角色是更大的 snowflake id,新号抢老角色释放的名字
+// 时必然成环(当时号段发的 player_id 都小于存量的 snowflake id,新号抢老角色释放的名字
 // 正是这一路,是生产常态而不是罕见交错)。
 //
 // 2026-09-29 在本机真 MySQL 26.7.0 上跑的探针给出的是实测数据,不是推演
@@ -161,11 +133,11 @@ const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 // ── 映射持久化的路由表(第 1a 批,docs/design/player-route-mapping-durability-proposal.md §3.2)──────
 //
 // 为什么也走手写 DDL:要 VARCHAR 的 run_id、可空列、二级索引与 CHECK,而 proto2mysql 把 string 渲染成
-// MEDIUMTEXT、标量一律 NOT NULL DEFAULT 0(见 idSegmentBootstrapDDL 的注释)。列漂移守卫的事实源是
+// MEDIUMTEXT、标量一律 NOT NULL DEFAULT 0(TEXT 列不能做无前缀主键,MySQL 错误 1170)。列漂移守卫的事实源是
 // proto/common/database/rollback_database_table.proto 的同名 message(routeTableMessages):它们进 TableMessages
 // 只为表名守卫,同步循环跳过它们,形状由 ensureRouteTables 守。改了 DDL 就要同步改 proto,反之亦然。
-// 五张表每列的注释 pb:N 都等于 proto 字段号(route_store_test 的 TestRouteBootstrapDDLContract 钉住):player_route 的
-// pb:1..10 是第 1a 批预留的(route_shard 是 10,player_id 仍是 1);另外四张是 2026-10-20 补 proto 时按列序新定、同时补进
+// 四张表每列的注释 pb:N 都等于 proto 字段号(route_store_test 的 TestRouteBootstrapDDLContract 钉住):player_route 的
+// pb:1..10 是第 1a 批预留的(route_shard 是 10,player_id 仍是 1);另外三张是 2026-10-20 补 proto 时按列序新定、同时补进
 // DDL 的。CREATE TABLE IF NOT EXISTS 不改已存在的表,所以补注释前建过表的库列上仍没有这些注释:形状守卫只按列名比对,
 // 不受影响;项目尚未上线,只是这类库的 SHOW CREATE TABLE 与新建库差在列注释上。
 //
@@ -181,7 +153,6 @@ const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 //     因为按 zone 预切需要真实 zone 清单,迁移拿不到;TRUNCATE / BR 恢复后也要重跑。
 //   - route_meta 拆成很少写的开关表 route_meta 与 1b leader 常写的对账表 route_reconcile:每次 W1 都普通读 writable,
 //     不能和每秒写一次的水位放在同一行上(TiDB 的读会被更早的未提交写锁拖住,且常写的表没法设成缓存表)。
-//   - zone_merge_fence 主键本来就是聚簇 (zone_id, shard),由 tidb-prepare 按 zone 预切。
 // 聚簇属性建表后不能再改(TiDB),所以这些都只能在任何环境建表之前定;MySQL 上 InnoDB 主键本来就聚簇,
 // /*T![clustered_index] CLUSTERED */ 只是注释,行为与容量都不变。
 //
@@ -199,7 +170,7 @@ const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 // 才等价于「player_id 唯一」),所以 RouteStore 建池时实测它生效(probeRouteShardCheck),不生效就拒绝建 store。
 // 其中的 64 与 placement.RouteRowShards 必须一致(route_store_test.go 钉住);任何环境建过表之后都不可改。
 // HEAD(d5cbb8a8e)按 % 16 提交过:CREATE TABLE IF NOT EXISTS 不会改已有的表,按 16 建过表的库要先人工 DROP
-// 全部五张路由表再迁移(同 playerRouteG1aShapeHint 的做法;形状守卫只查列名与主键,认不出旧模数)。
+// 全部四张路由表再迁移(同 playerRouteG1aShapeHint 的做法;形状守卫只查列名与主键,认不出旧模数)。
 //
 // 三条二级索引显式写出尾部 player_id:InnoDB 本来就会追加主键列、TiDB 非唯一索引也带 handle,写出来是为了让
 // 键集翻页的游标 (route_shard, player_id) / (updated_at_ms, player_id) 在两种引擎上语义一致,不增加存储。
@@ -227,29 +198,9 @@ const playerRouteBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_route` (\n" 
 	"  CONSTRAINT `chk_route_rev` CHECK (`rev` >= 1)\n" +
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='player_route';"
 
-// zoneMergeFenceBootstrapDDL 是合服围栏的真源:按 (zone, shard) 存 N 份相同内容,建角只锁 player_id % N
-// 那一片,获取围栏的一方锁全部分片(placement.MaxRouteFenceShards 是持有者必须写满的上限)。
-// 生效判据:run_id 非空且 expires_at_ms 大于库时钟。分片行由 RouteStore 在第一次用到时懒建(R3)。
-//
-// 主键带 CLUSTERED(与提案 §3.2 唯一的不同,规格 g.2 第 16 条):TiDB 建表后不能再改聚簇属性,
-// 只有聚簇主键才能按 (zone_id, shard) 的值 SPLIT 出按 zone 分的 Region(route_tool tidb-prepare);MySQL 上没有影响。
-// 整表只有「zone 数 × N」行,不预切就必然落在一个 Region 上,每次 W1 的 FOR UPDATE 都压同一个 leader。
-const zoneMergeFenceBootstrapDDL = "CREATE TABLE IF NOT EXISTS `zone_merge_fence` (\n" +
-	"  `zone_id` int unsigned NOT NULL COMMENT 'pb:1',\n" +
-	"  `shard` tinyint unsigned NOT NULL COMMENT 'pb:2',\n" +
-	"  `run_id` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NULL COMMENT 'pb:3',\n" +
-	"  `purpose` varchar(16) CHARACTER SET ascii COLLATE ascii_bin NULL COMMENT 'pb:4',\n" +
-	"  `src_zone` int unsigned NULL COMMENT 'pb:5',\n" +
-	"  `dst_zone` int unsigned NULL COMMENT 'pb:6',\n" +
-	"  `expires_at_ms` bigint unsigned NULL COMMENT 'pb:7',\n" +
-	"  `holder_json` varchar(1024) NULL COMMENT 'pb:8',\n" +
-	"  `fence_epoch` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:9',\n" +
-	"  PRIMARY KEY (`zone_id`, `shard`) /*T![clustered_index] CLUSTERED */,\n" +
-	"  CONSTRAINT `chk_fence_pair` CHECK ((`run_id` IS NULL) = (`expires_at_ms` IS NULL))\n" +
-	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='zone_merge_fence';"
-
-// zoneMergedIntoBootstrapDDL 是「源区已合走」的永久标记,契约同 tools/merge_zone/merged_into.go。
-// 第 1a 批只由 route_tool 从 Redis 的 merge:merged_into:* 导入(merged_at_ms 取导入时刻的库时钟)。
+// zoneMergedIntoBootstrapDDL 是合服映射(源区 → 目标区)的永久记录,契约同 tools/merge_zone/merged_into.go。
+// 别名合服之后它是归属解析的真源(placement.ResolveMergedZone,docs/design/player-data-tidb-scaling-plan.md §7.1);
+// route_tool 从 Redis 的 merge:merged_into:* 导入时 merged_at_ms 取导入时刻的库时钟。
 const zoneMergedIntoBootstrapDDL = "CREATE TABLE IF NOT EXISTS `zone_merged_into` (\n" +
 	"  `src_zone` int unsigned NOT NULL COMMENT 'pb:1',\n" +
 	"  `dst_zone` int unsigned NOT NULL COMMENT 'pb:2',\n" +
@@ -309,12 +260,8 @@ var bootstrapTables = map[string]string{
 	AccountRoleAdmissionTableName:         accountRoleAdmissionDDL,
 	AccountRoleTradeHolderTableName:       accountRoleTradeHolderDDL,
 	AccountRoleImportTableName:            accountRoleImportDDL,
-	AccountRoleAdmissionRecoveryTableName: accountRoleAdmissionRecoveryDDL,
-	SaveBarrierMaintenanceTableName:       saveBarrierMaintenanceDDL,
-	IdSegmentTableName:                    idSegmentBootstrapDDL,
 	PlayerNameTableName:                   playerNameBootstrapDDL,
 	PlayerRouteTableName:                  playerRouteBootstrapDDL,
-	ZoneMergeFenceTableName:               zoneMergeFenceBootstrapDDL,
 	ZoneMergedIntoTableName:               zoneMergedIntoBootstrapDDL,
 	RouteMetaTableName:                    routeMetaBootstrapDDL,
 	RouteReconcileTableName:               routeReconcileBootstrapDDL,
@@ -324,20 +271,20 @@ var bootstrapTables = map[string]string{
 //
 // 挂在表级而不是只挂在主键分支:真实的旧表**没有 route_shard 列**,守卫先查列,会在列检查就返回,只挂主键分支的
 // 提示永远走不到。要求 DROP 全部路由表而不是只 DROP player_route:守卫只查列名是否存在、不查多余列与排序规则,
-// 旧形状的 route_meta(多出水位与租约四列)、未带 COLLATE 的旧 zone_merge_fence / zone_merged_into 都能静默通过,
+// 旧形状的 route_meta(多出水位与租约四列)、未带 COLLATE 的旧 zone_merged_into 都能静默通过,
 // 只 DROP 一张会留下一个「守卫全绿、形状却是混合态」的库。**代码绝不自动 DROP**:表里可能有人要保留的数据。
 // (文案里不能出现「改写 player_route」形状的 SQL 动词短语:TestNoPlayerRouteWritesOutsideRouteStore 按字面量匹配。)
 const playerRouteG1aShapeHint = "if this is the pre-G1a shape of the 1a batch (no route_shard column / primary key = player_id) " +
-	"and the route tables hold no data worth keeping, DROP TABLE player_route, zone_merge_fence, zone_merged_into, route_meta " +
+	"and the route tables hold no data worth keeping, DROP TABLE player_route, zone_merged_into, route_meta " +
 	"(and route_reconcile if it exists) by hand, then rerun `data_service -f <yaml> -migrate`; " +
 	"the migration never drops them itself (docs/design/player-route-mapping-durability-proposal.md §11.2 G1a)"
 
-// routeTableMessages 是五张路由表的形状事实源(proto/common/database/rollback_database_table.proto),
+// routeTableMessages 是四张路由表的形状事实源(proto/common/database/rollback_database_table.proto),
 // 按表名排序(日志与失败顺序稳定)。它们也在 TableMessages 里(表名守卫),但不由 proto2mysql 建表或同步。
 //
 // 为什么只守列名与主键、不守类型:CREATE TABLE IF NOT EXISTS 在表已存在时整条跳过,一张被手工改过的
 // 存量表(丢了列、换了主键)会一路静默通过启动;而 RouteStore 的写法全部建在「主键 = (route_shard, player_id) /
-// (zone_id, shard) / src_zone / id」与这些列上,形状不对时 ODKU 撞不到键、判定就会安静地错。
+// src_zone / id」与这些列上,形状不对时 ODKU 撞不到键、判定就会安静地错。
 // proto2mysql 的类型映射(string → MEDIUMTEXT、标量 NOT NULL)与这几张表的 DDL 本来就不同,按类型比只会误报;
 // 类型、可空与 CHECK 由 DDL 常量和 route_store_test 的 DDL 契约钉住。
 func routeTableMessages() []proto.Message {
@@ -345,7 +292,6 @@ func routeTableMessages() []proto.Message {
 		&dbpb.PlayerRoute{},
 		&dbpb.RouteMeta{},
 		&dbpb.RouteReconcile{},
-		&dbpb.ZoneMergeFence{},
 		&dbpb.ZoneMergedInto{},
 	}
 }
@@ -922,8 +868,8 @@ const (
 //     而 snapshot_guid_nz 也刻意**不该**进 proto:它不是快照的一个字段,是同一个事实的
 //     一种索引形态,进 proto 就会被 C++ / Go 两侧的 message 当成要填的业务字段。
 //
-// 于是这一条与 idSegmentBootstrapDDL / playerNameBootstrapDDL 同类(手写 DDL),但形态不同:
-// 那两张表是**整表**预建、之后不再交给 proto2mysql 同步;player_snapshot 仍然全程由 proto 驱动,
+// 于是这一条与 playerNameBootstrapDDL 同类(手写 DDL),但形态不同:
+// player_name 是**整表**预建、之后不再交给 proto2mysql 同步;player_snapshot 仍然全程由 proto 驱动,
 // 这里只在同步之后**追加**一列 + 一个键(纯加法),所以放在 ensureIndexes 之后作为独立一步,
 // 而不是把 player_snapshot 塞进 bootstrapTables —— 塞进去会连带停掉它的列同步,proto 以后加字段
 // 就再也补不上列了。
@@ -971,6 +917,7 @@ const (
 //     探不到就继续走 NOT EXISTS 那条语句(见 snapshot_store.go 的 InsertSnapshotIfGuidAbsent),
 //     去重照旧有效,只是又回到了靠 RR 间隙锁、并因此需要有界 1213 重试的形态。
 //
+// (2026-10-30 起 id 由应用发号,更早的旧二进制不写 id,不能对着去掉自增的新表跑;这里说的是唯一键这一步本身。)
 // 两个方向都安全,所以 DDL 与二进制的上线顺序不需要编排;推荐仍是先 `-migrate` 再滚动发版,
 // 好让窗口里尽早只剩一条写路径。
 const (
@@ -1201,6 +1148,7 @@ func assertNullableUniqueKey(ctx context.Context, db *sql.DB, dbName string, k n
 // 为什么留**最小** id:自增 id 单调递增,最小 id 就是先到的那一行;而 rollback_audit_log.snapshot_id_used
 // 引用的是这个自增 id,留先到的一行能让既有审计记录继续指得到东西(后到的重复行还没被任何审计引用过 ——
 // 它是"同一 guid 落了两次"的产物,消费者用的是第一次的 id)。
+// 行号改成应用发号之后 id 不再代表先后,但这里处理的是唯一键建起来之前留下的历史重复行,那些 id 仍是当年的自增值。
 //
 // 幂等 / 可重跑:每一步都从当前库状态重新算,删到"没有重复值"为止。中途失败(网络断、上限用尽)
 // 再跑一次就从断点继续,不会重复删、也不会漏。
@@ -1529,13 +1477,12 @@ func serverIsTiDB(ctx context.Context, db *sql.DB) (bool, string, error) {
 // TableMessages 返回全局库全部表的 proto 原型,顺序即迁移顺序。
 // 前三张由 proto2mysql 建表与同步;其余都在 bootstrapTables 里(手写 DDL 预建):
 // id_segment、player_name 由同步循环做列漂移与唯一键检查;
-// 末尾五张路由表(routeTableMessages)由 ensureRouteTables 守列名与主键,同步循环跳过。
+// 四张路由表(routeTableMessages)由 ensureRouteTables 守列名与主键,同步循环跳过。
 func TableMessages() []proto.Message {
 	return append(append([]proto.Message{
 		&dbpb.TransactionLog{},
 		&dbpb.PlayerSnapshot{},
 		&dbpb.RollbackAuditLog{},
-		&dbpb.IdSegment{},
 		&dbpb.PlayerName{},
 		&dbpb.AccountDirectory{},
 		&dbpb.AccountRole{},
@@ -1544,8 +1491,6 @@ func TableMessages() []proto.Message {
 		&dbpb.AccountRoleAdmission{},
 		&dbpb.AccountRoleTradeHolder{},
 		&dbpb.AccountRoleImportReceipt{},
-		&dbpb.AccountRoleAdmissionRecovery{},
-		&dbpb.SaveBarrierMaintenanceReceipt{},
 	}, routeTableMessages()...), writerAuthorityTableMessages()...)
 }
 
@@ -1578,11 +1523,6 @@ func assertTableNameLocked(model *proto2mysql.DB, table proto.Message) error {
 
 // MigrateOptions 迁移路径除 DDL 之外还要做的事。
 type MigrateOptions struct {
-	// BootstrapTags 表就位之后用 INSERT IGNORE 预建的 id_segment 行(config.IdSegmentConfig.
-	// EffectiveBootstrapTags)。nil = 不建行(只给测试用:生产与启动路径都必须传完整清单,
-	// 因为运行期补种在生产是关着的,漏掉的 tag 会让 AllocateIdSegment 直接拒绝)。
-	BootstrapTags []string
-
 	// AllowMissingGuidUniqueKey 仅保留旧调用方源码兼容，已不再允许绕过唯一约束。
 	// TiDB 采用 CASE + VIRTUAL 后，所有方言都必须通过相同唯一性验收。
 	AllowMissingGuidUniqueKey bool
@@ -1620,25 +1560,6 @@ func (o MigrateOptions) dedupeMaxRows() int64 {
 		return o.SnapshotGuidDedupeMaxRows
 	}
 	return snapshotGuidDedupeMaxRows
-}
-
-// idSegmentFloorSources 迁移时能用消费表最大号给 id_segment 水位兜底的身份(raiseIdSegmentFloor)。
-//
-// 只有这两种:它们的号是消费表的**主键列**,一条 MAX() 就能查到"已发出的最大号"。
-// 另外三种(item / txlog / snapshot)**做不了**这种地板校验:
-//   - item guid 躺在 player_database 的玩家 blob(bag 组件)里,不是列,MySQL 查不到;
-//   - tx_id / snapshot_id 虽然最终落 transaction_log / player_snapshot,但那两张表与 id_segment
-//     同在全局库 —— 从备份恢复时一起回到旧水位,同库 MAX() 给不出独立证据;而真正的
-//     "已发出"集合在 Kafka 积压(消费者会把恢复点之后的旧消息重放进来,与重发的新号撞
-//     tx_id 主键,INSERT IGNORE 会静默丢掉**新**的流水)和 C++ 进程手里的段里。
-//
-// 所以恢复全局库是一次 ID 安全事件,不是普通的库恢复:动手之前必须按运维手册核对
-// id_segment.max_id ≥ 每种身份的消费侧最大号(item 看各 zone 库 blob 的 bag 最大 guid,
-// txlog / snapshot 看 Kafka 两个 topic 里的最大 tx_id / snapshot_id),不够就手工 UPDATE 抬上去。
-// 本表的自动校验只是能查到时的一道兜底,查不到时只打 Info,不代表安全。
-var idSegmentFloorSources = []idSegmentFloorSource{
-	{bizTag: "player", table: "player_database", column: "player_id"},
-	{bizTag: "guild", table: "guild", column: "guild_id"},
 }
 
 // MigrateSchema 打开一条短连接跑迁移,跑完即关。
@@ -1780,7 +1701,7 @@ func acquireMigrateLock(ctx context.Context, db *sql.DB, dbName string, wait tim
 // (ensureRouteTables)
 // → 有 proto 的 bootstrap 表只做形状守卫(列齐 + 单列唯一键还在)、其余三张 CreateOrUpdateTable
 // → 补缺失索引 → 补 nullableUniqueKeys 的可空唯一列(player_snapshot.snapshot_guid_nz)
-// → 预建 id_segment 行(BootstrapTags)→ player / guild 水位地板校验。
+// (2026-10-30 起发号不再用 id_segment 表,迁移也不再预建号段行,见 internal/idissuer)。
 //
 // 路由表那一步失败同样让整次迁移失败(redis 模式也受影响:启动路径会因此不装配任何 store,
 // 规格 g.3 第 8 条)。这是刻意的:表形状不对时 RouteStore 的判定会安静地错,不能带着它启动。
@@ -1868,16 +1789,6 @@ func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts Migrat
 		logx.Infof("[schema] table %s synced from proto", name)
 	}
 
-	// 行管理放在所有 DDL 之后:表齐了才有地方写行。先 bootstrap 再抬地板,顺序不能反 ——
-	// 库被 drop 重建时 player 行是这一步刚种成 1 的,紧接着的地板校验把它抬回消费表最大号 +1。
-	if err := bootstrapIdSegmentRows(ctx, db, opts.BootstrapTags); err != nil {
-		return err
-	}
-	for _, src := range idSegmentFloorSources {
-		if err := raiseIdSegmentFloor(ctx, db, dbName, src); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

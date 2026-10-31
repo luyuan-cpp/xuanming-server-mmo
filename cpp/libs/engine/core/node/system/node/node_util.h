@@ -39,6 +39,7 @@ using common::base::MatchNodeService;
 using common::base::PaymentNodeService;
 using common::base::PlayerInboxNodeService;
 using common::base::PlayerLocatorNodeService;
+using common::base::PlayerStoreNodeService;
 using common::base::RankNodeService;
 using common::base::RedisNodeService;
 using common::base::SceneManagerNodeService;

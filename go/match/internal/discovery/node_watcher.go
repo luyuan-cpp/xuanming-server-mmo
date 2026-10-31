@@ -7,6 +7,7 @@ package discovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -322,6 +323,23 @@ func (w *NodeWatcher) EntryOfNode(nodeId uint32) (NodeEntry, error) {
 		return NodeEntry{}, fmt.Errorf("节点未注册 node=%d", nodeId)
 	}
 	return found, nil
+}
+
+// EntryOfInstance 按实例 uuid 找节点的完整登记。实例 uuid 是进程级身份,同一实例的 gRPC 地址在其存活期内不变,
+// 所以取到的地址一定通向原实例,不受 node_id 被新实例占用的影响(观战原件固定了 target_instance_id,取消时用它定位)。
+// 查不到不代表实例已死:etcd 抖动、租约短暂失效时同样查不到,调用方不得据此推断对端状态。
+func (w *NodeWatcher) EntryOfInstance(instanceId string) (NodeEntry, error) {
+	if instanceId == "" {
+		return NodeEntry{}, errors.New("节点实例 uuid 为空")
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	for _, entry := range w.nodes {
+		if entry.NodeUuid == instanceId {
+			return entry, nil
+		}
+	}
+	return NodeEntry{}, fmt.Errorf("节点实例未注册 instance=%s", instanceId)
 }
 
 // EndpointOfNode 按 node_id 找节点 gRPC 地址;查找与歧义拒绝语义见 EntryOfNode。

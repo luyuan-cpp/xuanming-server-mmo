@@ -447,7 +447,11 @@ func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, reque
 			if r.Kind == 2 && (w.Stage == "confirm" || w.Stage == "offer_escrow" || w.Stage == "buyer_escrow") {
 				w.CancelRequested = true
 				r.Status = CancelPending
-			} else if me == r.SellerPlayerId && (w.Stage == "open" || w.Stage == "market_open" || w.Stage == "lot_open" && w.HighestBidder == 0) {
+			} else if me == r.SellerPlayerId && (w.Stage == "open" || w.Stage == "market_open" || w.Stage == "lot_open" && w.HighestBidder == 0 ||
+				w.Stage == "escrow" && (r.Kind == 3 || r.Kind == 4 || r.Kind == 5)) {
+				// 托管阶段也许撤:托管扣款可能一直回 RETRY 而不记终态(例如按数量扣出遇到带更新版本字段的物品,
+				// 混版本设计 §4.4 第 6 批),材料订单的托管腿又没有截止(ExpiresMs=0),不许撤就没有任何出口。
+				// 撤单走下面同一条截止:没扣到的由 Abort 关门、按取消收口,已扣到的照常上架后立刻按撤单退回。
 				w.CancelRequested = true
 				r.Status = CancelPending
 			} else {

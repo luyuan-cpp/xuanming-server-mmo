@@ -26,13 +26,11 @@ import (
 	"shared/placement"
 )
 
-// 键前缀。player:placement / player:maprev 的前缀在 shared/placement 里导出;另外三个那边只导出了拼好的键,
-// 这里各镜像一份(routetool_test.go 钉住与 placement.HomeZoneKey / MergeFenceKey 逐字节相同)。
+// 键前缀。player:placement / player:maprev 的前缀在 shared/placement 里导出;另外两个这里各镜像一份
+// (routetool_test.go 钉住与 placement.HomeZoneKey / MergedIntoKey 逐字节相同)。
 const (
 	// homeZoneKeyPrefix = placement.HomeZoneKey 的前缀(写者 data_service 的 routing 包)。
 	homeZoneKeyPrefix = "player:zone:"
-	// mergeFenceKeyPrefix = placement.MergeFenceKey 的前缀(写者 tools/merge_zone/fence.go;判据:键存在即生效)。
-	mergeFenceKeyPrefix = "merge:in_progress:"
 	// mergedIntoKeyPrefix 是合走标记 merge:merged_into:{src}(写者 tools/merge_zone/merged_into.go,值 JSON {dst, run_id})。
 	mergedIntoKeyPrefix = "merge:merged_into:"
 )
@@ -48,7 +46,7 @@ type mappingReader interface {
 }
 
 // scanKeys 逐页 SCAN match,每页非空时回调一次。SCAN 允许同一个键在不同页重复出现(rehash 期间),
-// 调用方自己去重;SCAN 期间新增的键可能出现也可能不出现,这正是 import 结尾要复查围栏、audit 要复核的原因。
+// 调用方自己去重;SCAN 期间新增的键可能出现也可能不出现,这正是 audit 要复核的原因。
 func scanKeys(ctx context.Context, rd mappingReader, match string, count int64, page func(keys []string) error) error {
 	var cursor uint64
 	for {
@@ -71,32 +69,9 @@ func scanKeys(ctx context.Context, rd mappingReader, match string, count int64, 
 	}
 }
 
-// listActiveFences 返回全部 merge:in_progress:* 键(去重、升序)。判据与 routing.IsMergeInProgress 相同:
-// 键存在即生效,不看值、不看剩余 TTL。
-func listActiveFences(ctx context.Context, rd mappingReader, count int64) ([]string, error) {
-	seen := make(map[string]struct{})
-	err := scanKeys(ctx, rd, mergeFenceKeyPrefix+"*", count, func(keys []string) error {
-		for _, k := range keys {
-			seen[k] = struct{}{}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(seen))
-	for k := range seen {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out, nil
-}
-
 // snapshotMergedInto 原样读一次全部 merge:merged_into:*(键 → 原值,不解析、不校验;值为空串 = SCAN 与 MGET 之间
-// 被删,视为不在)。import 在开头与结尾各读一次并比对:merge 必然先写 merged_into 再改映射,unmerge 必然先改回映射
-// 再删它(tools/merge_zone/merge_run.go 步骤 5、unmerge.go 5'a),所以一次在两次围栏检查之间开始并跑完的合服 /
-// 撤销合服,围栏已经删掉、结尾的围栏 SCAN 看不到,却一定会让这两份快照不同。原值比对(而不是解析后的行)连畸形值的
-// 变化也算进去 —— 这里只关心「窗口内有没有人写过」,不关心写的对不对。
+// 被删,视为不在)。import 在开头与结尾各读一次并比对:导入窗口内跑过的合服 / 撤销合服一定会让这两份快照不同。
+// 原值比对(而不是解析后的行)连畸形值的变化也算进去 —— 这里只关心「窗口内有没有人写过」,不关心写的对不对。
 func snapshotMergedInto(ctx context.Context, rd mappingReader, count int64) (map[string]string, error) {
 	seen := make(map[string]struct{})
 	var keys []string

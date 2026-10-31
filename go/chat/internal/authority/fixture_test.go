@@ -70,7 +70,7 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 	require.NoError(t, err)
 	require.NoError(t, Migrate(ctx, db))
 	loadFormalRoleFixtures(t, ctx, db)
-	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy", "account_role", "player_route", "zone_merge_fence", "zone_merged_into", "route_meta", "route_reconcile"))
+	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy", "account_role", "player_route", "zone_merged_into", "route_meta", "route_reconcile"))
 	runtimeDB, err := fixture.Open(ctx, name, 8)
 	require.NoError(t, err)
 	rules := fixtureRules()
@@ -78,7 +78,7 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 	if len(configured) == 1 {
 		rules = configured[0]
 	}
-	s, err := New(ctx, runtimeDB, name, rules)
+	s, err := New(ctx, runtimeDB, name, authoritysql.BackendTiDB, rules)
 	require.NoError(t, err)
 	return s, fixture
 }
@@ -89,7 +89,7 @@ func loadFormalRoleFixtures(t *testing.T, ctx context.Context, db *sql.DB) {
 	_, source, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 	root := filepath.Join(filepath.Dir(source), "..", "..", "..", "data_service", "internal", "store")
-	wanted := map[string]bool{"playerRouteBootstrapDDL": true, "zoneMergeFenceBootstrapDDL": true, "zoneMergedIntoBootstrapDDL": true, "accountRoleDDL": true}
+	wanted := map[string]bool{"playerRouteBootstrapDDL": true, "zoneMergedIntoBootstrapDDL": true, "accountRoleDDL": true}
 	catalogDDL := authoritysql.CatalogBootstrapStatements()
 	values := map[string]string{"routeMetaBootstrapDDL": catalogDDL["route_meta"], "routeReconcileBootstrapDDL": catalogDDL["route_reconcile"]}
 	var literal func(ast.Expr) string
@@ -130,7 +130,7 @@ func loadFormalRoleFixtures(t *testing.T, ctx context.Context, db *sql.DB) {
 			}
 		}
 	}
-	for _, name := range []string{"playerRouteBootstrapDDL", "zoneMergeFenceBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL", "accountRoleDDL"} {
+	for _, name := range []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL", "accountRoleDDL"} {
 		ddl, ok := values[name]
 		require.True(t, ok, "缺正规DDL %s", name)
 		_, err := db.ExecContext(ctx, ddl)

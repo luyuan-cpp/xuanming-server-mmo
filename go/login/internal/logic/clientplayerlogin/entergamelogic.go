@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"login/internal/config"
 	"login/internal/logic/pkg/ctxkeys"
-	"login/internal/logic/pkg/dataloader"
 	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/locker"
 	"login/internal/logic/pkg/loginsession"
-	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/sessionfence"
 	"login/internal/logic/pkg/sessionmanager"
 	"login/internal/svc"
@@ -35,27 +33,21 @@ type EnterGameLogic struct {
 	logx.Logger
 	// kicker 是 ReplaceLogin 踢旧会话用的发送能力;nil = 生产实现 l.svcCtx(见 replacedKicker)。只供单测替换。
 	kicker replacedSessionKicker
+	// binder 是通知 gate 绑定会话的发送能力;nil = 生产实现 l.svcCtx(见 sessionBinder)。只供单测替换。
+	binder sessionBindSender
 }
 
 type enterGameSessionState struct {
-	ownerRevision   uint64
-	playerID        uint64
-	sessionID       uint32
-	gateID          string
-	gateInstanceID  string
-	account         string
-	requestID       string
-	classID         uint32
-	appearanceID    string
-	gender          uint32
-	playerLockKey   string
-	playerLockToken string
+	ownerRevision  uint64
+	playerID       uint64
+	sessionID      uint32
+	gateID         string
+	gateInstanceID string
+	account        string
+	requestID      string
 	// ticketTargetZoneID 是本连接所持重定向票据的目标 zone(gate 验签后经 SessionDetails 透传);
 	// 0 = 普通 AssignGate 票据。等于本 zone 时进场景不按 home_zone 弹回(CZ-8)。
 	ticketTargetZoneID uint32
-	// playerName 是要补进 PlayerProfileComp 的角色名副本,由 resolveEnterName 在入场前定好;
-	// "" = 账号记录与名字注册表里都拿不到(旧角色 / 注册表不可用),本次入场不补名字。
-	playerName string
 	// gate 连接会话栅栏(docs/design/client-request-ordering.md §6.2):fenced = 发起本次 EnterGame 的 gate
 	// 带了会话代次(旧版 gate 为 false,沿用旧行为);fenceGen 是入口处读到的 LeaveGame 计数,
 	// 后台链绑定 / 进场前复查据此识别「期间已离开游戏」。
@@ -155,8 +147,6 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	}
 
 	flowState := buildEnterGameSessionState(in, sessionDetails, account)
-	flowState.playerLockKey = tryLocker.Key
-	flowState.playerLockToken = tryLocker.Value
 	flowState.fenced = fenced
 	flowState.fenceKey = fenceKey
 	flowState.fenceGen = fenceGen
@@ -201,37 +191,18 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginInProgress)
 		return resp, nil
 	}
-	p := ownership.Role
 	flowState.ownerRevision = ownership.OwnerRevision
-	flowState.classID = p.GetClassId()
-	flowState.appearanceID = p.GetAppearanceId()
-	flowState.gender = p.GetGender()
-	flowState.playerName = resolveEnterName(ctx, p.GetName(), l.svcCtx.PlayerNames, in.PlayerId)
 
-	// 5. Kick off the EnterGame chain entirely event-driven. The RPC returns
-	//    immediately; the client gets the actual "in scene" notification when
-	//    Gate consumes the BindSession event and Scene pushes enter-scene.
-	//
-	//    Flow:
-	//      a. EnsurePlayerAllDataInRedisAsync sends Kafka DB-read tasks and
-	//         registers callbacks with the TaskResultDispatcher (Pub/Sub
-	//         driven). NO goroutine waits on BLPOP.
-	//      b. When all sub-results arrive, the dispatcher invokes our
-	//         completion callback which runs applyLoadedPlayerSession +
-	//         cleanup, then releases the player lock.
-	//
-	//    The Kafka send itself is the only sync I/O on this path; we wrap it
-	//    in SubmitPreload so the gRPC handler thread never touches the
-	//    SyncProducer mutex. The pool task exits as soon as Kafka send
-	//    returns — no waiting on results.
+	// 5. Kick off the EnterGame chain asynchronously. The RPC returns immediately; the client
+	//    gets the actual "in scene" notification when Gate consumes the BindSession event and
+	//    Scene pushes enter-scene. 存档不在这里加载:scene 进场时直接从 TiDB 认领
+	//    (docs/design/player-save-direct-commit.md §3)。
 	//
 	//    对客户端的契约:本 RPC 的应答**无错 = 已受理**,不等于已进场。之后链上任何一步
-	//    没成(预加载失败 / applyLoadedPlayerSession 失败,含 EnterScene 被 scene_manager
+	//    没成(applyLoadedPlayerSession 失败,含 EnterScene 被 scene_manager
 	//    拒绝),服务端经 gate 推一条 SendTipToClient,tip = kEnterSceneFailed
 	//    (notifyEnterGameFailed)。客户端收到即可收口,自身等 NotifyEnterScene 的超时只作兜底。
-	// flowState 在这里按值拷进闭包:classID / playerName 这类入场前定好的字段必须在此之前赋完,
-	// 之后再改 flowState 进不到 applyLoadedPlayerSession → backfillPlayerIdentity,而且不报任何错
-	// (回归用例:TestEnterGame_PlayerNameReachesIdentityBackfill)。
+	// flowState 在这里按值拷进闭包:入场前定好的字段必须在此之前赋完。
 	enterCtx := flowState // value-copied state for the closure
 	playerID := in.PlayerId
 	// 异步清理也保留本条连接的完整身份，不能只带可能撞号的 session_id。
@@ -243,7 +214,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	const chainBudget = enterGameChainBudget
 	chainCtx, chainCancel := context.WithTimeout(context.Background(), chainBudget)
 
-	// chainStart is the t0 for the total / preload latency histograms.
+	// chainStart is the t0 for the total latency histogram.
 	// We start the clock here (not before TryLock) because the histograms
 	// are measuring "what happens AFTER the lock is taken until we release
 	// it", which is the exact window we need to attribute the err25 stalls
@@ -261,8 +232,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		}
 	}
 
-	// Heartbeat: renew lock every TTL/3 so a slow EnterGame chain (DB cold,
-	// dispatcher TTL retry, etc.) never lets the lock expire mid-flight. If
+	// Heartbeat: renew lock every TTL/3 so a slow EnterGame chain never lets the lock expire mid-flight. If
 	// we lose ownership (Redis flap, manual kill, etc.) we cancel chainCtx
 	// to abort applyLoadedPlayerSession before it can issue a stale
 	// EnterScene against an already-replaced session.
@@ -273,55 +243,37 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 			logx.Errorf("EnterGame lost lock mid-chain [PlayerId=%d]: %v", playerID, err)
 			chainCancel()
 			// Mark this chain as "lock_lost" for the total histogram.
-			// observeTotal in onPreloadComplete won't run because the
-			// dispatcher callback may never fire after the chain is
-			// cancelled mid-flight; record it here so the histogram has
-			// closure even on the lost-lock path.
 			observeTotal(chainStart, ResultLockLost)
 		},
 	)
 
-	onPreloadComplete := func(err error) {
+	runEnterChain := func() {
 		// 失败出口(契约见 notifyEnterGameFailed):本函数的 gRPC 应答早已同步回了"成功",
 		// 链上之后的失败只能经 gate 推 tip 告诉客户端。failedStage 非空 = 客户端会因此等不到
 		// NotifyEnterScene。这个 defer 注册在最前、因而**最后**执行 —— 排在停心跳与释放玩家锁
 		// 之后:推送是一次同步 Kafka 写,Kafka 抖动时可能阻塞数秒,不能让它拉长持锁窗口
 		// (持锁期间该账号的每次重连都是 kLoginInProgress)。
-		// 反过来不成立:failedStage 只在下面两个显式失败分支置位。本回调中途 panic(跑在 dispatcher
-		// 的 worker / sweep goroutine 上,会被其 recover 吞掉)时 failedStage 仍为空,不通知,
+		// 反过来不成立:failedStage 只在下面的显式失败分支置位。本回调中途 panic 时 failedStage 仍为空,不通知,
 		// 由客户端自己的 60s 进场超时兜底。
 		failedStage := ""
+		// bindSent 记住本链的 Bind 是否已写进 Kafka,决定失败 tip 带不带身份栅栏(见 notifyEnterGameFailed)。
+		// 只在本回调所在的 goroutine 上读写。
+		bindSent := false
 		defer func() {
 			if failedStage != "" {
-				notifyEnterGameFailed(l.svcCtx, enterCtx, failedStage)
+				notifyEnterGameFailed(l.svcCtx, enterCtx, failedStage, bindSent)
 			}
 		}()
 		defer chainCancel()
 		defer releaseLock()
-		// 会话落盘和职业 / 名字补齐期间继续续租；退出时先停心跳，再释放锁。
+		// 会话落盘期间继续续租；退出时先停心跳，再释放锁。
 		defer stopHeartbeat()
-
-		// preloadSeconds: from chain start to the moment the dispatcher
-		// callback fires. Includes Kafka send + DB worker turnaround +
-		// dispatcher Pub/Sub delivery.
-		preloadResult := ResultSuccess
-		if err != nil {
-			preloadResult = ResultPreloadFailed
-		}
-		preloadSeconds.ObserveFloat(time.Since(chainStart).Seconds(), preloadResult)
-
-		if err != nil {
-			logx.Errorf("EnterGame preload failed [PlayerId=%d]: %v", playerID, err)
-			observeTotal(chainStart, ResultPreloadFailed)
-			failedStage = notifyStagePreload
-			return
-		}
 
 		// applySeconds wraps the whole apply phase (GetSession + persist
 		// + BindGate + EnterScene). Sub-stages are recorded separately
 		// inside applyLoadedPlayerSession.
 		applyStart := time.Now()
-		decision, applyErr := l.applyLoadedPlayerSession(chainCtx, enterCtx)
+		decision, applyErr := l.applyLoadedPlayerSession(chainCtx, enterCtx, &bindSent)
 		applyResult := ResultSuccess
 		if applyErr != nil {
 			applyResult = ResultApplyFailed
@@ -331,7 +283,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		if applyErr != nil {
 			logx.Errorf("EnterGame apply session failed [PlayerId=%d]: %v", playerID, applyErr)
 			observeTotal(chainStart, ResultApplyFailed)
-			// applyLoadedPlayerSession 的每一个 error 返回点(GetSession / 身份补齐 / 铸登录代次 / 会话落盘 /
+			// applyLoadedPlayerSession 的每一个 error 返回点(GetSession / 铸登录代次 / 会话落盘 /
 			// BindSession / EnterScene 调用失败 / EnterScene 被拒)都发生在 scene_manager 放行之前,
 			// 客户端都等不到 NotifyEnterScene;而它自行处置后返回 nil 的路径(跨区重定向已推给
 			// gate、ReplaceLogin 踢旧会话失败只记日志)走不到这里,不会误报。
@@ -344,42 +296,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		observeTotal(chainStart, ResultSuccess)
 	}
 
-	// dispatcherTaskTTL caps how long the EnsurePlayerAllDataInRedisAsync
-	// chain will wait for DB-task callbacks before declaring the preload
-	// failed. The (f) instrumented 25k smoke (2026-05-28) showed:
-	//   - successful preload avg = 3s
-	//   - failed preload avg = 35s (was 30s + dispatcher overhead)
-	//   - 2.7% failure rate consumed 25% of the preload pool's wall time
-	// 30s was way too generous: while a failed preload sits in the wait,
-	// player_locker:{playerId} stays held, every reconnect for that
-	// account hits err25, and the failure cascades into a retry storm.
-	// 5s lets the chain give up early — the client retry path is faster
-	// than waiting for an unresponsive Kafka/dispatcher leg, and the
-	// scene-side Redis NIL retry already compensates for genuinely lost
-	// preloads.
-	//
-	// 2026-06-01 Round 14 §P6: after Round 14 P0 unblocked EnterScene the
-	// EnterGame throughput jumped +15% and pushed the DB consumer→dispatch
-	// chain past its critical point; cb_wait{ok} avg climbed 85ms → 275ms
-	// and ~4% of preloads hit the 5s TTL with cb_wait{fail}=5.5s exactly.
-	// Round 15 short-term stop-loss: bump TTL to 8s so transient queueing
-	// inside db_rpc + task_result_dispatcher does NOT cascade into preload
-	// failures. Real fix lives in P5 (db service sub-shard parallelism)
-	// and P7 (dispatcher worker pool); 8s is just the absorbing buffer
-	// while those land. Revisit downward once cb_wait{ok} drops back to
-	// <100ms steady-state.
-	const dispatcherTaskTTL = 8 * time.Second
-	ok := l.svcCtx.SubmitPreload(func() {
-		dataloader.EnsurePlayerAllDataInRedisAsync(
-			chainCtx,
-			l.svcCtx.RedisClient,
-			l.svcCtx.TaskResultDispatcher,
-			l.svcCtx.KafkaClient,
-			playerID,
-			dispatcherTaskTTL,
-			onPreloadComplete,
-		)
-	})
+	ok := l.svcCtx.SubmitPreload(runEnterChain)
 
 	if !ok {
 		// Pool saturated — outer defer will release the lock since the
@@ -397,25 +314,24 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	// suppress the outer defer.
 	lockHandedOff = true
 
-	// Post-merge one-shot signals (server-merge-gap-fixes.md §1 / §5).
-	// Read flags stamped by tools/merge_zone/post_merge_stamp.go; if
-	// either is set, populate the response and DELete the key so the
-	// next login doesn't re-trigger the UI. Best-effort: read errors
-	// don't block login (the player can still enter; they just miss
-	// the one-shot notice this round and we'll catch them next time).
-	consumePostMergeFlags(ctx, l.svcCtx.RedisClient, in.PlayerId, resp)
-
 	// RPC returns success; client waits for Gate/Scene push to know they're in.
 	resp.ErrorMessage = nil
 	resp.PlayerId = in.PlayerId
 	return resp, nil
 }
 
-// enterFailureTipPusher 是 notifyEnterGameFailed 唯一需要的能力:经 gate 给某个会话推一条 tip。
-// 生产实现是 *svc.ServiceContext(PushTipToSession)。只收这一个方法而不是整个 ServiceContext,
+// enterFailureTipPusher 是 notifyEnterGameFailed 唯一需要的能力:经 gate 给某个会话推一条 tip,分已绑定与未绑定两种会话。
+// 生产实现是 *svc.ServiceContext(PushTipToSession / PushTipToUnboundSession)。只收这两个方法而不是整个 ServiceContext,
 // 是因为其 KafkaClient 是具体类型、单测里起不出来;与 resolveEnterName 收 roleNameLookup 同做法。
 type enterFailureTipPusher interface {
 	PushTipToSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error
+	PushTipToUnboundSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error
+}
+
+// sessionBindSender 是通知 gate 绑定会话唯一需要的能力。生产实现是 *svc.ServiceContext(SendBindSessionToGate),
+// 做法同 replacedSessionKicker:KafkaClient 是具体类型,单测里起不出来,收成接口才测得到 Bind 发出之后的链段。
+type sessionBindSender interface {
+	SendBindSessionToGate(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, sessionVersion uint32, enterGsType uint32, loginGeneration uint64) error
 }
 
 // replacedSessionKicker 是 ReplaceLogin 踢旧会话唯一需要的能力:经 gate 踢掉被替换的会话。
@@ -430,6 +346,14 @@ type replacedSessionKicker interface {
 func (l *EnterGameLogic) replacedKicker() replacedSessionKicker {
 	if l.kicker != nil {
 		return l.kicker
+	}
+	return l.svcCtx
+}
+
+// sessionBinder 返回本次通知 gate 绑定用的发送能力:测试注入的优先,否则用生产的 l.svcCtx。
+func (l *EnterGameLogic) sessionBinder() sessionBindSender {
+	if l.binder != nil {
+		return l.binder
 	}
 	return l.svcCtx
 }
@@ -459,8 +383,13 @@ func (l *EnterGameLogic) replacedKicker() replacedSessionKicker {
 // gate_instance_id,或 gate_node_id 没填 = "0")就不推:硬造寻址只会被 buildGateCommandMessage 的
 // fail-closed 守卫拒掉,这里提前分流只是为了让计数区分"无处可推"与"推了但失败"。
 //
-// stage 只用于日志与计数 label(notifyStagePreload / notifyStageApply)。
-func notifyEnterGameFailed(pusher enterFailureTipPusher, state enterGameSessionState, stage string) {
+// bindSent = 本链的 Bind 已写进 Kafka。Bind 与 tip 同分区,tip 排在后面,gate 处理 tip 时会话已绑定本玩家,所以带真实 player_id,
+// 身份栅栏照常生效。Bind 没发出(预加载失败、会话落盘失败等)时 gate 上的会话没有绑定本玩家,带真实 player_id 必被栅栏丢弃,
+// 走未绑定的发送(player_id 留 0,理由见 login svc 的 buildPushTipToUnboundSessionCommand)。Bind 写 Kafka 报错时结果未知,
+// 按没发出处理:player_id = 0 在两种情况下都能送达。
+//
+// stage 只用于日志与计数 label(notifyStageApply)。
+func notifyEnterGameFailed(pusher enterFailureTipPusher, state enterGameSessionState, stage string, bindSent bool) {
 	if state.gateInstanceID == "" || state.gateID == "" || state.gateID == "0" {
 		failureNotifyCounter.Inc(stage, notifyOutcomeSkippedNoGate)
 		logx.Errorf("EnterGame failure tip not sent: session carries no gate address [PlayerId=%d session=%d stage=%s gate=%q]; client falls back to its own enter timeout",
@@ -468,8 +397,12 @@ func notifyEnterGameFailed(pusher enterFailureTipPusher, state enterGameSessionS
 		return
 	}
 
+	push := pusher.PushTipToUnboundSession
+	if bindSent {
+		push = pusher.PushTipToSession
+	}
 	tipID := uint32(table.SceneError_kEnterSceneFailed)
-	if err := pusher.PushTipToSession(state.gateID, state.gateInstanceID, state.sessionID, state.playerID, tipID); err != nil {
+	if err := push(state.gateID, state.gateInstanceID, state.sessionID, state.playerID, tipID); err != nil {
 		failureNotifyCounter.Inc(stage, notifyOutcomeFailed)
 		logx.Errorf("EnterGame failure tip push failed [PlayerId=%d session=%d stage=%s gate=%s tip=%d]: %v; client falls back to its own enter timeout",
 			state.playerID, state.sessionID, stage, state.gateID, tipID, err)
@@ -478,83 +411,6 @@ func notifyEnterGameFailed(pusher enterFailureTipPusher, state enterGameSessionS
 	failureNotifyCounter.Inc(stage, notifyOutcomeSent)
 	logx.Infof("EnterGame failure tip sent [PlayerId=%d session=%d stage=%s gate=%s tip=%d]",
 		state.playerID, state.sessionID, stage, state.gateID, tipID)
-}
-
-// consumePostMergeFlags reads the two Redis flag keys written by
-// tools/merge_zone/post_merge_stamp.go and:
-//   - populates resp.PostMergeNoticeTs / resp.ForceRenameRequired
-//   - DELetes the keys so subsequent logins don't re-fire the UI
-//
-// Best-effort: any Redis error is logged and swallowed. The semantic
-// is "show notice once if possible"; missing it is recoverable, and
-// blocking the player's login because we can't read a flag is worse
-// than the alternative.
-//
-// Key prefixes are duplicated from tools/merge_zone/post_merge_stamp.go
-// — keep them in sync. Crossing module boundaries (tools/merge_zone
-// has its own go.mod) for a constants file isn't worth the build
-// complexity for two short strings.
-func consumePostMergeFlags(
-	ctx context.Context,
-	rdb *redis.Client,
-	playerID uint64,
-	resp *login_proto.EnterGameResponse,
-) {
-	const (
-		mergeNoticeKey = "player_merge_notice:"
-		forceRenameKey = "player_force_rename:"
-	)
-	pidStr := strconv.FormatUint(playerID, 10)
-
-	// One pipeline read for both keys; one pipeline DEL for both. Two
-	// pipelines instead of one because we don't want to DEL keys we
-	// haven't yet read — Redis doesn't promise GET-then-DEL atomicity
-	// in a single pipeline (it's two separate ops on the wire).
-	pipe := rdb.Pipeline()
-	noticeCmd := pipe.Get(ctx, mergeNoticeKey+pidStr)
-	renameCmd := pipe.Get(ctx, forceRenameKey+pidStr)
-	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
-		// Pipeline-level errors (network) are non-fatal. Per-key Nil
-		// errors are normal — most players don't have these flags.
-		logx.Errorf("consumePostMergeFlags: pipeline get failed for player=%d: %v (continuing)", playerID, err)
-		return
-	}
-
-	if v, err := noticeCmd.Result(); err == nil && v != "" {
-		if ts, parseErr := strconv.ParseInt(v, 10, 64); parseErr == nil {
-			resp.PostMergeNoticeTs = ts
-		}
-	}
-	if _, err := renameCmd.Result(); err == nil {
-		// Mere presence of the key is the signal; value is the merge
-		// timestamp for ops audit but doesn't gate the flag itself.
-		resp.ForceRenameRequired = true
-	}
-
-	if resp.PostMergeNoticeTs == 0 && !resp.ForceRenameRequired {
-		// Nothing to consume — skip the DEL round-trip.
-		return
-	}
-
-	delPipe := rdb.Pipeline()
-	if resp.PostMergeNoticeTs != 0 {
-		delPipe.Del(ctx, mergeNoticeKey+pidStr)
-	}
-	if resp.ForceRenameRequired {
-		// NOTE: we do NOT DEL the rename flag here — clearing it must
-		// happen only after the player has actually picked a new name.
-		// Otherwise a player who dismisses the rename UI loses the gate
-		// permanently. Today the project has no rename RPC at all
-		// (CreatePlayer is empty, no nickname surface; see
-		// docs/ops/merge-zone-runbook.md §4.4 reality note); when a
-		// rename RPC eventually lands, *that* handler is the single
-		// deleter of `player_force_rename:{player_id}`. Until then the
-		// flag is dormant — force_rename_required will never be set
-		// because nobody can stamp it without a name to clash on.
-	}
-	if _, err := delPipe.Exec(ctx); err != nil {
-		logx.Errorf("consumePostMergeFlags: pipeline del failed for player=%d: %v (flags consumed but not cleared, will re-fire next login)", playerID, err)
-	}
 }
 
 func buildEnterGameSessionState(in *login_proto.EnterGameRequest, sessionDetails *login_proto_common.SessionDetails, account string) enterGameSessionState {
@@ -568,33 +424,6 @@ func buildEnterGameSessionState(in *login_proto.EnterGameRequest, sessionDetails
 
 		ticketTargetZoneID: sessionDetails.GetTicketTargetZoneId(),
 	}
-}
-
-// resolveEnterName 决定本次入场要补进 PlayerProfileComp 的角色名(见 backfillPlayerIdentity)。
-//
-// accountName 来自已验证归属的账号角色记录:非空直接用,正常角色因此不多一次 RPC。
-// 为空才回源名字注册表(data_service BatchGetPlayerName)一次,预算 DefaultLookupTimeout。
-// 名字是展示数据,读侧 fail-open:查询失败(含注册表未配置的 ErrUnavailable)只记 Info
-// 并返回 "",入场照常进行;本次不补名字,下一次无会话入场会再试。
-//
-// names 为 nil 接口时直接返回 "";l.svcCtx.PlayerNames 是 *playernamereg.Client,nil 指针
-// 装进接口后**不等于** nil 接口,那种情况由 Client.Lookup 的 nil 接收者分支返回
-// ErrUnavailable 兜住,走下面的错误分支。
-func resolveEnterName(ctx context.Context, accountName string, names roleNameLookup, id uint64) string {
-	if accountName != "" {
-		return accountName
-	}
-	if names == nil {
-		return ""
-	}
-	lookupCtx, cancel := context.WithTimeout(ctx, playernamereg.DefaultLookupTimeout)
-	defer cancel()
-	found, err := names.Lookup(lookupCtx, []uint64{id})
-	if err != nil {
-		logx.WithContext(ctx).Infof("[role-name] EnterGame name backfill skipped: player=%d failed to query name registry: %v", id, err)
-		return ""
-	}
-	return found[id]
 }
 
 // homeZoneOverrideAllowed 决定这次 EnterGame 能不能把 ZoneId 换成归属 zone。
@@ -692,7 +521,9 @@ func resolveEnterSceneRoute(
 	return enterSceneRoute{zoneID: ownZone, sceneID: 0}
 }
 
-func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state enterGameSessionState) (sessionmanager.EnterGameDecision, error) {
+// applyLoadedPlayerSession 是异步链的 apply 段。bindSent 在 Bind 写进 Kafka 之后置 true,调用方据此决定失败提示带不带身份栅栏
+// (notifyEnterGameFailed);调用方必须传非 nil。
+func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state enterGameSessionState, bindSent *bool) (sessionmanager.EnterGameDecision, error) {
 	// 预加载可能晚于目录冻结／过户。异步链不能只沿用入口捕获的归属。
 	if err := l.recheckAccountRoleEntry(ctx, state); err != nil {
 		return sessionmanager.FirstLogin, err
@@ -706,9 +537,6 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	}
 
 	decision := sessionmanager.DecideEnterGame(existing, state.account)
-	if err := l.backfillPlayerIdentity(ctx, existing, state); err != nil {
-		return decision, err
-	}
 
 	// 登录代次:持锁、读到会话记录之后,写会话与踢线之前铸一次(scene-enter-session-fence.md §3.2 / §3.3)。
 	// 踢线排在 SetSession 提交之后(persistEnterGameSession,scene-enter-chain-residuals.md §2.2 ①)。
@@ -739,7 +567,7 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	// 代次随 Bind 一起到 gate:Bind 先于本次路由到达时,gate 按旧路由补发也要带本次的代次(§4)。
 	enterGsType := sessionmanager.DecisionToEnterGsType(decision)
 	bindTimer := observeStage(applyBindGateSeconds)
-	bindErr := l.svcCtx.SendBindSessionToGate(
+	bindErr := l.sessionBinder().SendBindSessionToGate(
 		state.gateID, state.gateInstanceID,
 		state.sessionID, state.playerID, version, enterGsType, loginGeneration,
 	)
@@ -748,6 +576,7 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 		logx.Errorf("Failed to send BindSessionToGate for player %d: %v", state.playerID, bindErr)
 		return decision, bindErr
 	}
+	*bindSent = true
 
 	// Route player to Scene node via SceneManager.
 	// 去向(ZoneId / SceneId)的优先级见 resolveEnterSceneRoute;GateZoneId 保持 login 自己的 zone。

@@ -77,6 +77,7 @@ func TestTiDBSnapshotGuidMigrationAndStore(t *testing.T) {
 	require.NoError(t, store.MigrateOwnedFixtureSchema(ctx, fixture, cfg.DBName, store.MigrateOptions{}))
 	ss, err := store.NewSnapshotStore(cfg)
 	require.NoError(t, err)
+	ss.UseRowIDs(store.RowIDsForTest, store.RowIDsForTest)
 	t.Cleanup(func() { require.NoError(t, ss.Close()) })
 	require.True(t, ss.UniqueGuidKeyForTest(), "真实 store 必须启用数据库唯一约束")
 	marker := fmt.Sprintf("tidb-guid-%d", time.Now().UnixNano())

@@ -1,5 +1,7 @@
 # 玩家存盘管线(go/db)的瓶颈、不停服转移与修复计划
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),这条管线已删除。本文只作历史保留,不再描述现行行为。
+
 > 状态:分析完成,修复分批进行。第 0 批的小修已落码(§7),未编译,待 Codex 验证;其余各批待负责人拍板(§5.3)。
 > 日期:2026-10-12
 > 范围:玩家存盘管线 C++ scene / login → Kafka `db_task_zone_*` → go/db → MySQL / Redis,以及 guild 的扩展形态。

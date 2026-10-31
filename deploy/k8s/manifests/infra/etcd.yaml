@@ -85,6 +85,10 @@ spec:
     metadata:
       labels:
         app: etcd
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2379"
+        prometheus.io/path: "/metrics"
     spec:
       # 尽量把 3 个成员散到不同节点;单节点 kind / minikube 仍能调度(preferred 而非 required)。
       affinity:
@@ -111,11 +115,7 @@ spec:
           # 到 bitnamilegacy 只读仓库)。bitnamilegacy/etcd 是同一套镜像的归档,
           # ALLOW_NONE_AUTHENTICATION / ETCD_* 环境变量语义与数据目录 /bitnami/etcd/data
           # 完全兼容;deploy/docker-compose.yml 已改同一镜像,这里保持口径一致。
-          # 钉 tag@摘要、加 ETCD_AUTO_COMPACTION_* / ETCD_QUOTA_BACKEND_BYTES env、加抓取注解都会改 Pod 模板、滚动 3 个成员,
-          # 属 P0-C 阶段 2:必须等 C++ etcd 流重建(docs/design/grpc-muduo-transport.md §10.2 第 2 批)验证通过之后,
-          # 与 etcd-maintenance.yaml、compose 同批改,步骤见 docs/ops/etcd-maintenance-runbook.md「阶段 2」。
-          # 在那之前 MVCC 压缩由 etcd-maintenance.yaml 的 CronJob etcd-compact 负责;
-          # tools/scripts/tests/etcd_maintenance_contract.tests.ps1 断言这里还没有压缩 / 配额 env,防止提前滚动。
+          # 钉 tag@摘要待 Codex 实测 M0 后与 etcd-maintenance.yaml、compose 同批改(docs/ops/etcd-maintenance-runbook.md §8)。
           image: bitnamilegacy/etcd:latest
           imagePullPolicy: IfNotPresent
           env:
@@ -155,6 +155,14 @@ spec:
             # 引导令牌:防止两套同名 etcd(比如两个 namespace 各一套)误把对方当成员。
             - name: ETCD_INITIAL_CLUSTER_TOKEN
               value: "mmorpg-etcd-__INFRA_NAMESPACE__"
+            # MVCC 历史压缩与空间配额(P0-C 阶段 2),与 compose 同值;etcd_maintenance_contract.tests.ps1 守住。
+            # 配额 3GiB 满足「配额 × 2 + 1Gi ≤ 下面的 PVC」,给 defrag 的临时文件留余量。
+            - name: ETCD_AUTO_COMPACTION_MODE
+              value: "revision"
+            - name: ETCD_AUTO_COMPACTION_RETENTION
+              value: "1000000"
+            - name: ETCD_QUOTA_BACKEND_BYTES
+              value: "3221225472"
           ports:
             - containerPort: 2379
               name: client
@@ -162,9 +170,10 @@ spec:
               name: peer
           # readiness 用线性一致的 /health:只有能服务一致读(有 leader、在 quorum 内)的
           # 成员才进 Service `etcd` 的 endpoint,客户端不会被路由到掉队成员上。
+          # exclude=NOSPACE:空间告警时不把成员全摘掉,读和删还要靠它们(docs/ops/etcd-maintenance-runbook.md §2 / §7)。
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health?exclude=NOSPACE
               port: 2379
             initialDelaySeconds: 5
             periodSeconds: 5
@@ -174,12 +183,11 @@ spec:
           # 否则集群一旦暂时失去 quorum,三个成员的 liveness 会同时失败、同时被重启,
           # 重启本身又拖慢 quorum 恢复。不认识该参数的老版本 etcd 会退化成普通 /health
           # (只是保护弱一点,不会误报)。阈值刻意给宽:重启是最后手段。
-          # 注意:/health 先查告警,有 NOSPACE 等未排除的告警就返回 503,serializable 跳不过 —— 告警时三个成员会一起
-          # NotReady 并被反复重启(推断,待实测)。改成 exclude=NOSPACE 属 P0-C 阶段 2(会滚动成员),处置与应急办法见
-          # docs/ops/etcd-maintenance-runbook.md §2 / §7;契约测试钉住了两个探针的现值。
+          # /health 先查告警,有 NOSPACE 等未排除的告警就返回 503,serializable 跳不过,所以这里也要排除 NOSPACE,
+          # 否则告警时三个成员会被反复重启(推断,待实测,docs/ops/etcd-maintenance-runbook.md §9 探针 A)。
           livenessProbe:
             httpGet:
-              path: /health?serializable=true
+              path: /health?exclude=NOSPACE&serializable=true
               port: 2379
             initialDelaySeconds: 30
             periodSeconds: 10
@@ -196,8 +204,7 @@ spec:
   # 每个成员一块盘。不写 storageClassName = 用集群默认 StorageClass(kind 的 local-path、
   # 云上的默认盘)。8Gi 对本项目的 key 量(节点注册、lease、发号水位、killswitch)是大冗余;
   # 真正要盯的是 etcd 自身 2GB 默认 quota 与 compaction,不是 PVC 大小。
-  # compaction 现由 etcd-maintenance.yaml 的 CronJob etcd-compact 做(P0-C 阶段 1);quota 仍是默认值,阶段 2 改成
-  # 3GiB 时要满足「quota × 2 + 1Gi ≤ 这里的 storage」(defrag 需要临时空间),见 docs/ops/etcd-maintenance-runbook.md。
+  # quota 3GiB 要满足「quota × 2 + 1Gi ≤ 这里的 storage」(defrag 需要临时空间),见 docs/ops/etcd-maintenance-runbook.md。
   # 注意:删除 StatefulSet **不会**删这些 PVC(删 namespace 才会)。infra-down 是删 namespace,
   # 所以 infra-down → infra-up 之后是一套全新的空 etcd。
   volumeClaimTemplates:

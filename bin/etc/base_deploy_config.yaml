@@ -54,38 +54,17 @@ service_discovery_prefixes:
   - "MatchNodeService.rpc" # 匹配服务（Go-Zero gRPC，全局池不分 zone：不在 IsZoneScopedNodeType，gate 连全 zone 的 match 实例随机路由；排队池全服共享，见 docs/design/cross-zone-matchmaking.md）：gate 按 NODE_MATCH 路由 JoinQueue/WatchBattle 等客户端消息，缺此前缀会报 "Node not found ... message id: 157"（2026-09-01 冒烟补）
   - "DataServiceNodeService.rpc" # 全局数据服务（Go-Zero gRPC，全局池不分 zone）：scene 经它的 AllocateIdSegment 领 item / txlog / snapshot 三种永久 guid 的号段（IdSegments 里启用的种类领到首段是启动硬依赖）。前提：data_service 须按 C++ 约定把 NodeInfo 注册到本前缀下（同 scene_manager 的 noderegistry），只注册 go-zero 的 dataservice.rpc 是发现不到的
   - "PlayerInboxNodeService.rpc" # 玩家持久收件箱（Go-Zero gRPC，全服一份、多副本，不分 zone）：scene 经它的 FetchItems / AckItems 拉取并确认 GM 处置等待办（docs/design/player-inbox-service.md §1.4）。弱依赖：不进 DependencyGate，发现不到只退避、不阻断进场（IB-7）。前提：player_inbox 按 C++ 约定经 shared/noderegistry 注册到本前缀下
+  - "PlayerStoreNodeService.rpc" # 玩家存盘(go/db 提供,按 zone 发现):scene 经它 LoadAndClaim / SavePlayer
 
 
 # Kafka 配置（分布式消息队列，用于异步通信、日志收集、事件分发等）
 Kafka:
   Brokers:
     - "localhost:9092" # Kafka 集群 Broker 地址（单机填1个，集群需填所有Broker IP:端口）
-  Topics:
-    - "game-events" # 默认消息主题（如游戏内事件：角色升级、道具交易等）
-  # Kafka consumer group ID.
-  #
-  # Empty string on purpose: when blank, the cpp engine falls back to
-  # `<groupPrefix>-<node_id>` per instance (see the legacy-path branch of
-  # RegisterKafkaCommandHandler in
-  # cpp/libs/engine/core/node/system/node/node_kafka_command_handler.h).
-  # Sharing one group across the entire fleet (every gate + scene + ...) was
-  # the original behavior, but it made Kafka rebalance happily hand a
-  # `gate-{N}` partition to a process that wasn't actually gate-N — so a
-  # zone-2 BindSession could land on z1_gate, where ValidateCommandTarget
-  # silently dropped it because target_gate_id != node.GetNodeId(). Stress
-  # 2026-05-24 saw this surface as z2/z3 `scene_notified=1` ratios at 5%
-  # while z1 was at 100%; see docs/stress/stress-3zone-2026-05-23-postmortem.md
-  # §J.6.
-  #
-  # Per-instance groupId means every node only competes for partitions of
-  # its own topic, which is what we always wanted: gate-N's group consumes
-  # gate-N. ValidateCommandTarget then only ever sees correctly-routed
-  # commands.
-  #
-  # 现状(2026-10-15):本键只剩旧的一节点一 topic 消费路径在读(上面那个回落);新路径 assign 分区、
-  # 不进 group,KafkaManager::Init 也不再读它(P0-B 批 1:生产端 broker 无条件登记,与本键无关)。
+  # Kafka consumer group ID 的回落值:只有 KafkaManager::Subscribe 在调用方没给组名时才用它,现役调用方都给组名,所以保持空串。
+  # 控制面命令走 gate-cmd_g<N> / scene-cmd_g<N> 的 assign,不进 group(见下)。
   # K8s 的 node-config / battle-node-config 由 tools/scripts/k8s_deploy.ps1 的 New-NodeConfigMapYaml
-  # 从这里镜像(P0-B 批 2;以前那边写死一个全服共享的组名,与这里分家),改这里就是同时改 K8s。
+  # 从这里镜像(P0-B 批 2),改这里就是同时改 K8s。
   GroupID: ""
   EnableAutoCommit: true
   AutoOffsetReset: "earliest"
@@ -93,10 +72,7 @@ Kafka:
   # ---- 控制面命令 topic 的分区契约 ----
   # docs/design/control-plane-topic-partitioning-20260908.md
   #
-  # 上面那段关于 per-instance groupId 的说明只对**旧的**一节点一 topic 路径成立,
-  # 而且它只解决了"跨 zone 错路由",没有解决同一个 node_id 被回收后
-  # 前任僵尸与继任者共用 `gate-group-5` 的分区争夺(P1)。新路径不再进 group:
-  # 命令走 `gate-cmd_g1` / `scene-cmd_g1`,partition = node_id % CommandTopicPartitions,
+  # 命令走 `gate-cmd_g<N>` / `scene-cmd_g<N>`,partition = node_id % CommandTopicPartitions,
   # 每个进程 assign 自己那一个分区。
   #
   # 三个数是**部署级常量**,必须与下列各处同时改(改分区数一律走换代号,绝不原地扩):
@@ -105,22 +81,8 @@ Kafka:
   #   deploy/k8s/manifests/infra/kafka-topic-init.yaml(值由 k8s_deploy.ps1 从本文件读)
   CommandTopicPartitions: 256
   CommandTopicGeneration: 2
-  # 迁移窗口开关。true = 不再消费旧的 `gate-<node_id>` / `scene-<node_id>`。
-  # 生产者(含 Go login)全部切到新 topic 之前必须保持 false,否则命令全丢。
-  #
-  # 2026-09-08:**生产者侧前置条件已全部满足** —— 全仓已无旧主题的生产者
-  # (C++ 四处走 ResolveCommandRoute;Go 的 friend/guild/match/scene_manager/
-  # player_locator/login 全部切完;唯一残留的 LegacyPerNodeTopic() 只被消费端引用)。
-  # 但**仍保持 false**:翻这个开关只关掉旧的消费路径,必须等新版本 gate/scene
-  # 滚更全部完成、且旧 topic 的写入速率与积压都读到 0 之后,由运维显式翻。
-  # 滚更窗口里提前翻 = 老版本生产者发出的命令没人消费。
-  # 顺序见 docs/design/control-plane-topic-partitioning-20260908.md §迁移顺序 第 4 步。
-  #
-  # 2026-10-15 复核:生产者侧结论仍成立(LegacyPerNodeTopic() 现在只剩单测引用,消费端自己拼旧 topic 名)。
-  # K8s 已翻:k8s_deploy.ps1 的 New-NodeConfigMapYaml 给 node-config / battle-node-config 直接写 true
-  # (模板常数,**不镜像本键**),与上面 GroupID 改为镜像同批 —— 旧路径开着时换组名会让新组从 earliest 重放旧 topic。
-  # 本机这一份仍是 false,照上一段由运维确认旧 topic 写入与积压为 0 后显式翻。
-  DisableLegacyPerNodeTopic: false
+  # 观战帧 topic 也跟这两个数走(docs/design/battle-spectate-tiered-fanout.md §15.3):gate-spectate_g<N> 分区数与代号都相同;
+  # spectate-bcast_g<N> 只共用代号,分区数是 C++ 常量 kSpectateBroadcastTopicPartitions(node_command_topic.h)。
 
 # Gate 连接令牌 HMAC 共享密钥（Login 签发，Gate 验证）
 # 必须与 Go Login 的 GateTokenSecret 保持一致。
@@ -161,6 +123,14 @@ BattleTokenSecret: "local-dev-battle-token-secret-fedcba9876543210"
 # (2026-10-18 补注)fd 门槛同 GateMaxConnections:Linux 上软限抬到硬限后仍小于本值 + 4096 就拒绝启动。
 BattleMaxConnections: 4096
 
+# 观战订阅凭证的 HMAC 共享密钥(docs/design/battle-spectate-tiered-fanout.md §15.2 / §15.7):match 签发、gate 本地验签。
+# 必须与 go/match/etc/match_service.yaml 的 Spectate.TicketSecret 同值:不一致不会报启动错误,只是 L1 / L2 观众的订阅全部被拒
+# (回 MatchSpectateTicketInvalid)。至少 32 字节,且与 GateTokenSecret、BattleTokenSecret 都不同(分域:任一泄露不影响另一侧);
+# 不许含空白:Go 签名、C++ 验签,两边去空白的口径不同,含空白的密钥会让验签静默分家。
+# 空值处置看 GATE_RUN_MODE:dev/test 放行并 WARN(gate 拒绝一切 SubscribeSpectate,观众只能走直连),prod 拒绝启动。
+# K8s 的 node-config 由 k8s_deploy.ps1 从环境变量 MMORPG_SPECTATE_TOKEN_SECRET 注入,不抄这份。
+SpectateTokenSecret: "local-dev-spectate-token-secret-a1b2c3d4e5f60718"
+
 # 审计 topic(流水 / 快照)的世代号,进有效 topic 名:transaction_log_topic_g<N> / player_snapshot_topic_g<N>。
 # 基名是 C++ 常量(cpp/libs/modules/transaction_log/transaction_log_system.h、
 # cpp/libs/modules/snapshot/snapshot_system.h),后缀由本键拼(0 = 1)。
@@ -181,28 +151,6 @@ BattleMaxConnections: 4096
 # K8s 上 node ConfigMap 里的这一键由 k8s_deploy.ps1 从 data_service.yaml 镜像生成(不抄这份)。
 AuditTopicGeneration: 1
 
-# 玩家存盘 DBTask topic 的世代号(C++ scene 按 home_zone 往 db_task_zone_{zone} 写存盘)。
-# 名字规则与审计 topic **不同**:<= 1 → db_task_zone_{zone}(第一代不带后缀,该名字在引入世代号前就已上线),
-# >= 2 → db_task_zone_{zone}_g{N}。缺键 / 0 = 1。见 cpp/libs/services/scene/player/constants/player.h。
-#
-# **必须与 go/db/etc/db.yaml 的 ServerConfig.Kafka.TopicGeneration、go/login/etc/login.yaml 的
-# Kafka.TopicGeneration 三方相等**:go/db 是唯一的消费者。不一致不会有任何报错 —— 换代后 scene
-# 仍写旧代 topic,存盘静默积压在已排空、没人消费的旧 topic 里。start_game.ps1 启动前会核对三方。
-# 换代(= 改分区数)走 docs/design/db-task-kafka-partition-contract.md 的停写 / 排空流程,三处同一次提交改。
-# K8s 上 node ConfigMap 里的这一键由 k8s_deploy.ps1 从 go/db/etc/db.yaml 镜像生成(不抄这份)。
-DbTaskTopicGeneration: 1
-
-# 混版本持久字段保护:scene 严格提交屏障 C3 的模式(docs/design/mixed-version-persist-field-protection.md §5.2)。
-# 只认 warn / enforce(区分大小写):
-#   warn    判定为截断(加载世代 < 屏障记录的世代)时照写、计数、打日志,不拦截;
-#   enforce 拒写,该玩家本次在线进度不落盘(宁可不写,也不让截断的数据覆盖 SQL)。
-# 缺键 / 空串 / YAML 空值 = warn;其余值 scene / gate / battle 拒绝启动(config.cpp::readBaseDeployConfig)。
-# K8s 的 node ConfigMap 由 k8s_deploy.ps1 从本键镜像,生成期要求显式写 warn 或 enforce(空值直接拒绝生成)。
-# 切 enforce 的前提(设计 §8.1 第 5 步):staging 真实升世代演练中 C3 / C4 倒退计数为 0,且线上 warn 观察期计数也为 0。
-# login 侧 C4 用 go/login/etc/login.yaml 的同名键,两边分别切换。
-# K8s 上 node ConfigMap 里的这一键由 k8s_deploy.ps1 从本文件镜像生成。
-PersistSchemaRegressionMode: warn
-
 # 集群号(0..31):部署级常量,运维一次性设定,策划不碰。只有 Go 的 snowflake 槽位协议
 # (login-player / guild / scene-manager / match)消费它,作为 17 位 worker 字段的高 5 位;
 # C++ 侧 2026-09-08 起没有消费者(scene 的永久 guid 走号段,不编码集群),这里只是同一份口径。
@@ -210,9 +158,8 @@ PersistSchemaRegressionMode: warn
 ClusterId: 0
 
 # 永久 guid 号段(Leaf-segment,docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5)。
-# item guid / tx_id / snapshot_id 三种**全部**走号段:scene 经 DataService.AllocateIdSegment 从全局库
-# id_segment 表领 [lo, hi) 双 buffer 发号,值域 [1, 2^55) 与存量 snowflake 号(≥ 6.7e16)不相交,
-# 新旧号在同一张表 / 玩家 blob 里共存、不迁数据。scene 不再参与任何 snowflake 槽位协议。
+# item guid / tx_id / snapshot_id 三种**全部**走号段:scene 经 DataService.AllocateIdSegment 领 [lo, hi)
+# 双 buffer 发号。scene 不再参与任何 snowflake 槽位协议。
 # 一种 GUID 一个客户端实例(各自的段 / 预取 / 退避 / 指标),共用一条到 data_service 的 gRPC 路径。
 # 只有 scene 读;gate / battle 不铸永久 guid。
 #
@@ -220,11 +167,11 @@ ClusterId: 0
 # 运行期是弱依赖(手里两段能顶 data_service 不可用一段时间)。没有 snowflake 回退:没段就 fail-closed
 # (背包整批拒绝、零写入;流水不发;快照跳过),都记 ERROR。
 # 前提:service_discovery_prefixes 里有 DataServiceNodeService.rpc,且 data_service 按 C++ 约定注册 NodeInfo;
-# id_segment 表里每个 Kind 有一行(迁移显式创建,生产不自动补种)。
+# 每个 Kind 都登记在 data_service 的 IdSegment.Tags 里。
 #
 # 动态 step(Leaf 口径):一段不到 15 分钟用完 → 下次 step ×2(≤ MaxStep);超过 30 分钟才用完 → ÷2(≥ MinStep)。
-# 每天重启一次浪费 ≤ 2×step;2^55 个号在 10 万台每天重启下仍可撑两万年以上,这里只为把浪费压到最小。
-# 加一种 guid(pet / guild …)= C++ GUID_SEGMENT_KIND_LIST 加一行 + 这里加一块 + id_segment 表加一行种子。
+# 每天重启一次浪费 ≤ 2×step;值域足够大,这里只为把浪费压到最小。
+# 加一种 guid(pet / guild …)= C++ GuidKind 加一项 + 这里加一块 + data_service 的 IdSegment.Tags 加一项。
 IdSegments:
   # item guid:拾取 / 发放 / 邮件附件每新建一个物品实例铸一个号。用户拍板的默认值:初值 20,000,区间 [1,000, 1,000,000]。
   - Kind: item
@@ -256,9 +203,9 @@ IdSegments:
 #   2. 依赖调用结果的 C++ 看门狗 > deadline:号段 fetchTimeout、换图在途 TTL 都从这里派生,不另写常数。
 # 没列出的类型用内置默认 10000(core/network/grpc_client_call.h kDefaultGrpcCallDeadlineMs);
 # 不认识的键、0(= 不限时)被忽略并记 ERROR。改服务端超时时同步改这里。流式调用(etcd Watch / KeepAlive)不设。
-# 第 1 条对下面有 Go 服务端的六个目标(SceneManager / DataService / ClientRpcRouter / Match / Login / PlayerInbox)是部署门禁:
+# 第 1 条对下面有 Go 服务端的七个目标(SceneManager / DataService / ClientRpcRouter / Match / Login / PlayerInbox / PlayerStore)是部署门禁:
 # k8s_deploy.ps1 的 Assert-GrpcClientDeadlineBudget 在 zone-up / infra-up / all-up 写集群之前核对
-# deadline ≥ 对应服务 yaml 的 zrpc Timeout + 2000(没写 Timeout 按 go-zero 默认 2000),这六项必须显式列出,
+# deadline ≥ 对应服务 yaml 的 zrpc Timeout + 2000(没写 Timeout 按 go-zero 默认 2000),这七项必须显式列出,
 # 不满足就拒绝部署并点名是哪一项。本块由 k8s_deploy.ps1 原样搬进 node ConfigMap(Get-AuthoritativeYamlBlock)。
 GrpcClient:
   CallDeadlineMs:
@@ -270,3 +217,4 @@ GrpcClient:
     BattleNodeService: 5000            # C++ battle gRPC 同步处理,无服务端超时(gate 直连模式)
     EtcdNodeService: 5000              # etcd 无服务端超时;须 < etcd_service 的 Txn 看门狗 / LeaseGrant 重试 10s
     PlayerInboxNodeService: 6000       # go/player_inbox/etc/player_inbox.yaml 显式写的 zrpc Timeout(≤ 4000)+2000;scene 的 Fetch / Ack 失败只退避,不阻断进场(player-inbox-service.md IB-7)
+    PlayerStoreNodeService: 14000      # go/db/etc/db.yaml 的 MethodTimeouts 12s(大于 SQL 锁等待 10s)+2000

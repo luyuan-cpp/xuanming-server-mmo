@@ -12,6 +12,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 
 	"chat/internal/constants"
 	"chat/internal/textfilter"
@@ -19,8 +20,8 @@ import (
 	"shared/accountdirectory"
 	"shared/authoritysql"
 	"shared/placement"
-	"shared/roleidentity"
 
+	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -35,6 +36,9 @@ const acceptedState uint32 = 1
 const dbNow = "CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)"
 const receiptColumns = "owner_account,owner_revision,request_digest,request_payload,message_payload,stream_key,state,accepted_ms,result_tip"
 
+// 发送原件只增不改(运行账号没有 UPDATE、DELETE),所以判重用普通读,不加锁。
+const receiptSelectSQL = "SELECT " + receiptColumns + " FROM chat_send_authority WHERE player_id=? AND request_id=?"
+
 type Rules struct {
 	MaxContentBytes     int
 	RateLimitPerSecond  int
@@ -43,6 +47,9 @@ type Rules struct {
 	HistoryDefaultLimit int
 	HistoryMaxLimit     int
 	SensitiveWords      []string
+	// ActorVerifyTTLSeconds 是身份校验结果的进程内缓存秒数,0 = 每次都校验(actor_verify.go)。
+	// 刻意不进 policyBytes:它只影响本进程读权威行的频率,不改变已登记原件的判定,副本之间可以不同,滚动改它不该被当成规则漂移。
+	ActorVerifyTTLSeconds int
 }
 
 type SendResult struct {
@@ -62,6 +69,7 @@ type Store struct {
 	rules      Rules
 	filter     *textfilter.Filter
 	clock      func(context.Context, *sql.Tx) (uint64, error)
+	actors     *actorVerifyCache
 }
 
 // receipt只描述SQL元数据；业务原件始终是原PB字节，不复制PB字段定义。
@@ -82,11 +90,11 @@ type role struct {
 	revision uint64
 }
 
-func New(ctx context.Context, db *sql.DB, schema string, rules Rules) (*Store, error) {
-	if db == nil || !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(schema) || rules.MaxContentBytes <= 0 || rules.RateLimitPerSecond <= 0 || rules.HistoryMaxEntries <= 0 || rules.HistoryDefaultLimit <= 0 || rules.HistoryMaxLimit < rules.HistoryDefaultLimit || rules.HistoryMaxLimit > constants.MaxHistoryPullLimit || rules.HistoryTTLSeconds <= 0 || uint64(rules.HistoryTTLSeconds) > math.MaxUint64/1000 {
+func New(ctx context.Context, db *sql.DB, schema string, backend authoritysql.Backend, rules Rules) (*Store, error) {
+	if db == nil || !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(schema) || rules.MaxContentBytes <= 0 || rules.RateLimitPerSecond <= 0 || rules.HistoryMaxEntries <= 0 || rules.HistoryDefaultLimit <= 0 || rules.HistoryMaxLimit < rules.HistoryDefaultLimit || rules.HistoryMaxLimit > constants.MaxHistoryPullLimit || rules.HistoryTTLSeconds <= 0 || uint64(rules.HistoryTTLSeconds) > math.MaxUint64/1000 || rules.ActorVerifyTTLSeconds < 0 || rules.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds {
 		return nil, ErrInvalid
 	}
-	if err := authoritysql.AssertCurrentSession(ctx, db, true); err != nil {
+	if err := authoritysql.AssertCurrentSession(ctx, db, backend); err != nil {
 		return nil, err
 	}
 	if err := CheckSchema(ctx, db); err != nil {
@@ -107,7 +115,8 @@ func New(ctx context.Context, db *sql.DB, schema string, rules Rules) (*Store, e
 		return nil, err
 	}
 	rules.SensitiveWords = append([]string(nil), rules.SensitiveWords...)
-	s := &Store{db: db, roleSchema: schema, rules: rules, filter: filter, clock: databaseNow}
+	s := &Store{db: db, roleSchema: schema, rules: rules, filter: filter, clock: databaseNow,
+		actors: newActorVerifyCache(time.Duration(rules.ActorVerifyTTLSeconds)*time.Second, actorVerifyMaxEntries, monotonicSinceStart())}
 	if err = s.ensurePolicy(ctx); err != nil {
 		return nil, err
 	}
@@ -157,30 +166,6 @@ func policyBytes(r Rules) []byte {
 		out.WriteString(word)
 	}
 	return out.Bytes()
-}
-
-// 聊天只修改/授权caller；peer只是会话选择器，删除peer不能抹掉caller已有历史。
-func (s *Store) lockActor(ctx context.Context, tx *sql.Tx) (uint64, role, error) {
-	original, ok := roleidentity.Original(ctx)
-	if !ok || original.Role.GetPlayerId() == 0 {
-		return 0, role{}, ErrOriginal
-	}
-	actor := original.Role.PlayerId
-	if err := placement.LockRoleRoutes(ctx, tx, s.roleSchema, []uint64{actor}); err != nil {
-		return 0, role{}, err
-	}
-	var account []byte
-	var revision, listing uint64
-	if err := tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+s.roleSchema+"`.account_role WHERE player_id=? FOR UPDATE", actor).Scan(&account, &revision, &listing); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, role{}, ErrOriginal
-		}
-		return 0, role{}, err
-	}
-	if !accountdirectory.ValidAccount(string(account)) || revision == 0 || string(account) != original.Account || revision != original.OwnerRevision || listing != 0 {
-		return 0, role{}, ErrOriginal
-	}
-	return actor, role{account: string(account), revision: revision}, nil
 }
 
 func streamKey(actor, peer uint64) string {
@@ -236,20 +221,20 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 			return SendResult{}, ErrInvalid
 		}
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	if err != nil {
-		return SendResult{}, err
-	}
-	defer tx.Rollback()
-	actor, owned, err := s.lockActor(ctx, tx)
+	// 身份校验在发送事务之外(actor_verify.go):事务里只剩聊天自己的表,不持角色锁。
+	actor, owned, err := s.verifyActor(ctx)
 	if err != nil {
 		return SendResult{}, err
 	}
 	if peer == actor {
 		return SendResult{}, ErrInvalid
 	}
-	r, err := scanReceipt(tx.QueryRowContext(ctx, "SELECT "+receiptColumns+" FROM chat_send_authority WHERE player_id=? AND request_id=? FOR UPDATE", actor, []byte(requestID)))
-	if err == nil {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return SendResult{}, err
+	}
+	defer tx.Rollback()
+	replay := func(r *receipt) (SendResult, error) {
 		if string(r.account) != owned.account || r.revision != owned.revision {
 			return SendResult{}, ErrOriginal
 		}
@@ -263,6 +248,10 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		}
 		return SendResult{Tip: r.tip, Duplicate: true}, nil
 	}
+	r, err := scanReceipt(tx.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID)))
+	if err == nil {
+		return replay(r)
+	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return SendResult{}, err
 	}
@@ -273,12 +262,20 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 	if now == 0 || now > math.MaxInt64 {
 		return SendResult{}, errors.New("聊天SQL时间非法")
 	}
+	// 计数和下面的插入之间没有锁,并发在途时可能略超:近似限流,理由见 actor_verify.go。
 	var count uint64
 	start := now - now%1000
 	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM chat_send_authority WHERE player_id=? AND state=1 AND accepted_ms>=? AND accepted_ms<?", actor, start, start+1000).Scan(&count); err != nil {
 		return SendResult{}, err
 	}
 	if count >= uint64(s.rules.RateLimitPerSecond) {
+		// 计数里可能有同一 request_id 并发首发的赢家:它已提交就是重复,不是超限。否则客户端换新 id 重发会多出一条。
+		if r, err = scanReceipt(tx.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID))); err == nil {
+			return replay(r)
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return SendResult{}, err
+		}
 		return SendResult{Tip: constants.ErrRateLimited}, nil
 	}
 	var payload []byte
@@ -288,7 +285,15 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		return SendResult{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "INSERT INTO chat_send_authority(player_id,request_id,"+receiptColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?)", actor, []byte(requestID), []byte(owned.account), owned.revision, digest[:], raw, payload, []byte(streamKey(actor, peer)), acceptedState, now, uint32(0)); err != nil {
-		return SendResult{}, err
+		var duplicate *mysql.MySQLError
+		if !errors.As(err, &duplicate) || duplicate.Number != 1062 {
+			return SendResult{}, err
+		}
+		// 同一 request_id 并发首发:主键裁决,输家转读赢家已提交的原件,走同一条重放判定。
+		if r, err = scanReceipt(tx.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID))); err != nil {
+			return SendResult{}, err
+		}
+		return replay(r)
 	}
 	// SQL提交是唯一可见写入；未知提交结果保留原ID由调用者重放，不在本函数换ID重试。
 	if err = tx.Commit(); err != nil {
@@ -308,18 +313,18 @@ func (s *Store) Pull(ctx context.Context, in *chatpb.PullChatHistoryRequest, lim
 			return nil, ErrInvalid
 		}
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	actor, _, err := s.lockActor(ctx, tx)
+	actor, _, err := s.verifyActor(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if actor == peer {
 		return nil, ErrInvalid
 	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
 	limit = min(limit, s.rules.HistoryMaxLimit, s.rules.HistoryMaxEntries, constants.MaxHistoryPullLimit)
 	now, err := s.clock(ctx, tx)
 	if err != nil {

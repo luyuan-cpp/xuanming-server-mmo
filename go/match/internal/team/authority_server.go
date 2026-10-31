@@ -37,7 +37,7 @@ func NewAuthorityServer(s *svc.ServiceContext) (*AuthorityServer, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := s.Authority.CheckTeamRouteContract(ctx); err != nil {
-		return nil, errors.New("team: SQL路由/合服围栏契约缺失或不可写")
+		return nil, errors.New("team: SQL路由契约缺失或不可读")
 	}
 	secret := strings.TrimSpace(os.Getenv(accountdirectory.SceneSecretEnv))
 	verifier, err := serviceauth.New(map[string]string{"scene": secret})

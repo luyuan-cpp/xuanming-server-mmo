@@ -93,6 +93,29 @@ void BattleClientEdge::Send(const muduo::net::TcpConnectionPtr &conn,
     conn->send(&buf);
 }
 
+BattleClientEdge::EncodedFrame BattleClientEdge::EncodeFrame(const ::google::protobuf::Message &message)
+{
+    // 与 Send 同一份分帧;多出的一次拷贝(Buffer → string)每帧一次,不随连接数增长。
+    muduo::net::Buffer buf;
+    ProtobufCodec::fillEmptyBuffer(&buf, message);
+    return EncodedFrame(buf.retrieveAllAsString());
+}
+
+void BattleClientEdge::SendEncoded(const muduo::net::TcpConnectionPtr &conn, const EncodedFrame &frame) const
+{
+    if (!conn || !conn->connected())
+    {
+        return;
+    }
+    conn->send(muduo::StringPiece(frame.bytes_));
+}
+
+size_t BattleClientEdge::EffectiveMaxConnections() const
+{
+    const size_t configuredMax = gNodeConfigManager.GetBaseDeployConfig().battle_max_connections();
+    return configuredMax > 0 ? configuredMax : kHardMaxConnections;
+}
+
 void BattleClientEdge::DisconnectAll(const char *reason)
 {
     if (sessions_.empty())
@@ -161,9 +184,7 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
 
     // 闸 1:并发上限。必须是第一道:在分配会话之前拒掉,否则限流本身先付出它想省的内存。
     // 0 = 关闭运维阈值(仅 dev/test 合法,启动门禁已核过),但硬上限仍在。
-    const size_t configuredMax = deploy.battle_max_connections();
-    const size_t effectiveMax = configuredMax > 0 ? configuredMax : kHardMaxConnections;
-    if (sessions_.size() >= effectiveMax)
+    if (sessions_.size() >= EffectiveMaxConnections())
     {
         LogRejectionSampled("at_capacity", conn);
         conn->forceClose();

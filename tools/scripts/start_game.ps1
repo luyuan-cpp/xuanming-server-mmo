@@ -129,7 +129,7 @@ function Get-LocalKafkaContract {
     $basePath = Join-Path $serverRoot 'bin/etc/base_deploy_config.yaml'
     $auditPath = Join-Path $serverRoot 'go/data_service/etc/data_service.yaml'
     $values = @{}
-    foreach ($key in @('Kafka.CommandTopicPartitions','Kafka.CommandTopicGeneration','AuditTopicGeneration','DbTaskTopicGeneration')) {
+    foreach ($key in @('Kafka.CommandTopicPartitions','Kafka.CommandTopicGeneration','AuditTopicGeneration')) {
         $value = Get-YamlScalar -Path $basePath -KeyPath $key
         $number = 0L
         if (-not $value.Found -or -not [long]::TryParse($value.Value,[ref]$number) -or $number -le 0 -or $number -gt [int]::MaxValue) {
@@ -145,18 +145,6 @@ function Get-LocalKafkaContract {
     if ($values['TopicGeneration'] -cne [string]$values['AuditTopicGeneration']) {
         throw 'C++ AuditTopicGeneration 与 data_service Kafka.TopicGeneration 不一致，已中止主题预建。'
     }
-    # 玩家存盘 DBTask topic 世代号：C++ scene 生产、go/db 消费、login 同样读写这组 topic，三方分家不报任何错，
-    # 只会让换代后的存盘静默写进没人消费的旧 topic（player-storage-placement.md §7）。
-    foreach ($entry in @{'go/db/etc/db.yaml'='ServerConfig.Kafka.TopicGeneration';'go/login/etc/login.yaml'='Kafka.TopicGeneration'}.GetEnumerator()) {
-        $value = Get-YamlScalar -Path (Join-Path $serverRoot $entry.Key) -KeyPath $entry.Value
-        $number = 0L
-        if (-not $value.Found -or -not [long]::TryParse($value.Value,[ref]$number) -or $number -le 0) {
-            throw "$($entry.Key) 缺少有效的 $($entry.Value)，未启动任何服务。"
-        }
-        if ($number -ne $values['DbTaskTopicGeneration']) {
-            throw "C++ DbTaskTopicGeneration 与 $($entry.Key) 的 $($entry.Value) 不一致，未启动任何服务。"
-        }
-    }
     # 正式 Compose 预建清单的审计规则当前固定；漂移时显式拒绝，避免给生产者建错主题。
     foreach ($entry in @{TransactionLogTopic='transaction_log_topic';TransactionLogPartitions='6';SnapshotTopic='player_snapshot_topic';SnapshotPartitions='3';RetentionMs='2592000000'}.GetEnumerator()) {
         if ($values[$entry.Key] -cne $entry.Value) { throw "data_service Kafka.$($entry.Key) 与 deploy/docker-compose.yml 预建清单不一致，需先同步正式规则。" }
@@ -169,22 +157,12 @@ function Get-LocalKafkaContract {
         Topics=@(
             @{Name="gate-cmd_g$generation";Partitions=$partitions;RetentionMs=3600000},
             @{Name="scene-cmd_g$generation";Partitions=$partitions;RetentionMs=3600000},
-            @{Name='game-events';Partitions=1;RetentionMs=3600000},
+            # 观战帧 topic 与 deploy/docker-compose.yml 预建清单一致:代号同命令 topic;广播的 16 分区等于 C++ kSpectateBroadcastTopicPartitions。
+            @{Name="gate-spectate_g$generation";Partitions=$partitions;RetentionMs=600000},
+            @{Name="spectate-bcast_g$generation";Partitions=16;RetentionMs=600000},
             @{Name="transaction_log_topic_g$auditGeneration";Partitions=6;RetentionMs=2592000000},
             @{Name="player_snapshot_topic_g$auditGeneration";Partitions=3;RetentionMs=2592000000}
         )
-    }
-}
-# 混版本持久字段保护的倒退判定模式（scene C3 读 base_deploy_config，login C4 读 login.yaml）。
-# 只认 warn / enforce，缺键或空串按 warn；其余值 scene 与 login 都会拒绝启动，这里提前拦下，免得起到一半才失败。
-function Assert-PersistSchemaRegressionModes {
-    foreach ($entry in @{'bin/etc/base_deploy_config.yaml'='PersistSchemaRegressionMode';'go/login/etc/login.yaml'='PersistSchemaRegressionMode'}.GetEnumerator()) {
-        $value = Get-YamlScalar -Path (Join-Path $serverRoot $entry.Key) -KeyPath $entry.Value
-        # YAML 空值(空、~、null)与缺键同义,C++ 与 login 都按 warn。
-        $isYamlNull = [string]::IsNullOrEmpty($value.Value) -or $value.Value -cin @('~','null','Null','NULL')
-        if ($value.Found -and -not $isYamlNull -and $value.Value -cne 'warn' -and $value.Value -cne 'enforce') {
-            throw "$($entry.Key) 的 $($entry.Value) 只能是 warn 或 enforce（当前 '$($value.Value)'），未启动任何服务。"
-        }
     }
 }
 function Assert-LocalKafkaTopic($Spec) {
@@ -388,7 +366,6 @@ try {
     Write-Step '1/6 Check the local game runtime environment'
     . (Join-Path $PSScriptRoot 'lib/release_common.ps1')
     $kafkaContract = Get-LocalKafkaContract
-    Assert-PersistSchemaRegressionModes
     $script:docker = Find-Program 'docker.exe' @((Join-Path $env:LOCALAPPDATA 'Programs/DockerDesktop/resources/bin/docker.exe'),(Join-Path $env:ProgramFiles 'Docker/Docker/resources/bin/docker.exe'))
     $desktop = Find-Program 'Docker Desktop.exe' @((Join-Path $env:LOCALAPPDATA 'Programs/DockerDesktop/Docker Desktop.exe'),(Join-Path $env:ProgramFiles 'Docker/Docker/Docker Desktop.exe'))
     $java = Find-Program 'java.exe' @($(if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin/java.exe' }))

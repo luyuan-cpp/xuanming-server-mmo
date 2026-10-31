@@ -111,7 +111,7 @@ SceneManagerRpc:
 # DataService gRPC client (discovered via etcd)。PlayerId 号段(DataService.AllocateIdSegment)、角色名登记,
 # 以及每次登录角色列表上的归属查询(BatchGetPlayerHomeZone)共用这一条连接(2026-10-18 更正:原注释「只用它领号段」已过时)。
 # NonBlock: true —— 号段是弱依赖(设计稿 §6.5):data_service 没起时 login 照常起服,
-# 领段失败按 IdSegment.FallbackToSnowflake 决定回退还是拒绝建角。
+# 领段失败即拒绝建角。
 # Breaker: true —— 与 go/login/etc/login.yaml、K8s ConfigMap 一致(2026-10-18 起):data_service 僵住但 etcd 键还在时,
 # 登录的归属查询快速失败、按「保留建角 zone」放行,不让每次登录都白等满查询预算。
 # ⚠️ 本 compose 栈没有 data_service 容器:要走建角,得在宿主上起 go/data_service
@@ -128,45 +128,24 @@ DataServiceRpc:
     Breaker: true
 
 # PlayerId 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6),与 go/login/etc/login.yaml 同值。
-# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 纯 snowflake 老路径(回滚开关)。
+# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 发不出 id,建角一律失败。
 # Step:每次领段长度,按「10 分钟峰值建角量」配;双 buffer 意味着库倒下后还能发完两段。
-# FallbackToSnowflake:固定 false(§6.4 的决定):号段失败即建角失败(tip kLoginDataSerializeFailed),
-#   靠 data_service 的可用性兜底,不靠回退 —— 回退虽安全但会让 snowflake 机器永远留着。
+# 号段失败即建角失败(tip kLoginDataSerializeFailed),靠 data_service 的可用性兜底,没有回退。
 IdSegment:
   Enabled: true
   Step: 100
-  FallbackToSnowflake: false
 
 # ─────────────────────────────────────────────────────────────────────────
 # 建角钉存储落点(docs/design/player-storage-placement.md §8.3 / §13)
 #
 # PinOnCreate:true = CreatePlayer 在同一次 RegisterPlayerZone 里让 data_service 与 player:zone
-#   原子一起写 player:placement = "{storage}:1";false(默认,整块不写也一样)= 只登记归属、不钉,
-#   在 go/db 未开 Placement.Required 时与落点设计上线前完全一致(Required 开着时见下方第 3 条)。
+#   原子一起写 player:placement = "{storage}:1"。全球服务必须显式 true,缺键或 false 拒启。
 # NewPlayerStorageId:新号钉到哪个落点库;0 = 本 login 所在 zone(Node.ZoneId);
 #   1..999999 = zone_{id}_db,>=1000000 = player_store_{id}_db(Phase 2 全局库填 1000000)。
-#   只在 PinOnCreate=true 时生效。
-# 打开顺序(§13,反了会出事):
-#   1) data_service / scene_manager / go/db 新版全部上线、各 zone 的 db:capability 标记齐全,才允许开 PinOnCreate;
-#   2) go/db 的 Placement.Required=true **必须**在全部 login 都 PinOnCreate=true 之后(且各 zone 已
-#      pin-placement 钉完存量)才能打开 —— 否则新号没有落点记录,Required 下它的每一条存盘都进死信。
-#   3) 关闭 / 回退顺序相反:go/db 任一 zone 已开 Required=true 时,禁止把 PinOnCreate 改回 false、
-#      禁止把 NewPlayerStorageId 改成没有 go/db 能打开的库、也禁止回退到不带 storage_id 的 login;
-#      否则建角照常成功、login 零报错,但新号进游戏预加载秒级失败、存盘全进死信。要关,先关全部 go/db 的 Required。
-#      开着 NewPlayerSeed 时新号不再走预加载读,违反本条的症状只剩存盘这一半(死信 / 无限重试),更隐蔽(见下方 NewPlayerSeed)。
 #   启动日志 "[placement] pin_on_create=..." 是核对依据。
 Placement:
   PinOnCreate: true
   NewPlayerStorageId: 0
-
-# 新号首次入场免冷读(docs/design/new-player-first-enter-no-cold-read.md);默认关,打开前置见设计 §7。
-NewPlayerSeed:
-  Enabled: false
-
-# 混版本持久字段保护 C4 的模式(docs/design/mixed-version-persist-field-protection.md §5.1):warn = 判定父快照被截断时
-# 照常进游戏并计数,enforce = 拒绝这次进游戏。缺键 / 空串 = warn,其余值启动即拒。与 go/login/etc/login.yaml 同名项一致;
-# 切 enforce 的条件见设计 §8.1 第 5 步。
-PersistSchemaRegressionMode: warn
 
 GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
 TableDir: "/app/data"
@@ -215,22 +194,9 @@ AuthProviders:
 Kafka:
   Brokers:
     - host.docker.internal:9092
-  GroupID: "db_rpc_consumer_group"
-  TopicGeneration: 1
-  PartitionCnt: 5
-  InitialPartition: 5
   DialTimeout: 10s
   ReadTimeout: 30s
   WriteTimeout: 30s
-  RetryMax: 3
-  RetryBackoff: 250ms
-  ChannelBuffer: 256
-  SyncInterval: 500ms
-  StatsInterval: 30s
-  CompressionType: 0
-  Idempotent: true
-  MaxOpenRequests: 1
-  RetentionMs: 86400000  # 24h, P1 数据安全加固 2026-06-03(旧值 300000 = 5min,太短)
 
 PreloadPool:
   Size: 256

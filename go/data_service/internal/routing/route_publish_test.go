@@ -73,10 +73,8 @@ func newDBFirstRouterOn(t *testing.T, mr *miniredis.Miniredis, fake *routeFakeSt
 		tweak(&rc)
 	}
 	c := config.Config{
-		MappingRedis:     redis.RedisConf{Host: mr.Addr(), Type: "node"},
-		DevRedis:         config.DevRedisConfig{Host: mr.Addr()},
-		PlayerLockTTLSec: 3,
-		RouteStore:       rc,
+		MappingRedis: redis.RedisConf{Host: mr.Addr(), Type: "node"},
+		RouteStore:   rc,
 	}
 	var opts []RouterOption
 	if fake != nil {
@@ -123,11 +121,11 @@ func presetRouteKeys(t *testing.T, mr *miniredis.Miniredis, playerID uint64, val
 	}
 }
 
-// evalPublish 绕过编排直接跑发布脚本,回分类后的回复。fenceZone 为 0 时只给三把键。
-func evalPublish(t *testing.T, r *Router, playerID uint64, fenceZone uint32, rev, home, plc string) placement.PublishReply {
+// evalPublish 绕过编排直接跑发布脚本,回分类后的回复。
+func evalPublish(t *testing.T, r *Router, playerID uint64, rev, home, plc string) placement.PublishReply {
 	t.Helper()
 	raw, err := r.mappingRedis.EvalCtx(context.Background(), placement.PublishRouteScript,
-		placement.PublishRouteKeys(playerID, fenceZone), rev, home, plc)
+		placement.PublishRouteKeys(playerID), rev, home, plc)
 	require.NoError(t, err)
 	reply, err := placement.ClassifyPublishReply(raw, rev, home, plc)
 	require.NoError(t, err, "raw reply %v", raw)
@@ -140,7 +138,7 @@ func TestPublishRouteScript_AppliesWhenAbsent(t *testing.T) {
 	r, mr := newDBFirstRouter(t, nil, nil)
 	plc := placement.StableValue(placement.DefaultGlobalStorageID, 1)
 
-	reply := evalPublish(t, r, 9001, 5, "1", "5", plc)
+	reply := evalPublish(t, r, 9001, "1", "5", plc)
 	assert.Equal(t, placement.PublishApplied, reply.Outcome)
 	assert.Equal(t, [3]string{"5", plc, "1"}, routeKeysOf(t, mr, 9001), "三键一起写下,maprev 最后写")
 }
@@ -150,11 +148,11 @@ func TestPublishRouteScript_LengthBeforeLexicographic(t *testing.T) {
 	r, mr := newDBFirstRouter(t, nil, nil)
 	presetRouteKeys(t, mr, 9002, [3]string{"5", "", "9"})
 
-	reply := evalPublish(t, r, 9002, 0, "10", "5", "")
+	reply := evalPublish(t, r, 9002, "10", "5", "")
 	assert.Equal(t, placement.PublishApplied, reply.Outcome, "缓存 9、发 10:10 更新,必须写入")
 	assert.Equal(t, [3]string{"5", "", "10"}, routeKeysOf(t, mr, 9002))
 
-	reply = evalPublish(t, r, 9002, 0, "9", "5", "")
+	reply = evalPublish(t, r, 9002, "9", "5", "")
 	assert.Equal(t, placement.PublishSuperseded, reply.Outcome, "缓存 10、发 9:9 更旧,不许写")
 	assert.Equal(t, "10", reply.CurRev)
 	assert.Equal(t, [3]string{"5", "", "10"}, routeKeysOf(t, mr, 9002))
@@ -167,7 +165,7 @@ func TestPublishRouteScript_EqualSameIsConfirmed(t *testing.T) {
 	presetRouteKeys(t, mr, 9003, [3]string{"5", "7:3", "4"})
 	mr.SetTTL(placement.MapRevKey(9003), time.Hour)
 
-	reply := evalPublish(t, r, 9003, 5, "4", "5", "7:3")
+	reply := evalPublish(t, r, 9003, "4", "5", "7:3")
 	assert.Equal(t, placement.PublishConfirmed, reply.Outcome)
 	assert.Equal(t, [3]string{"5", "7:3", "4"}, routeKeysOf(t, mr, 9003))
 	assert.Zero(t, mr.TTL(placement.MapRevKey(9003)), "返回 0 的分支必须把 maprev 原值写回一次(touch)")
@@ -179,11 +177,11 @@ func TestPublishRouteScript_EqualDifferentIsConflict(t *testing.T) {
 	before := [3]string{"5", placement.StableValue(placement.DefaultGlobalStorageID, 1), "5"}
 	presetRouteKeys(t, mr, 9004, before)
 
-	reply := evalPublish(t, r, 9004, 0, "5", "5", placement.StableValue(placement.DefaultGlobalStorageID, 2))
+	reply := evalPublish(t, r, 9004, "5", "5", placement.StableValue(placement.DefaultGlobalStorageID, 2))
 	assert.Equal(t, placement.PublishConflict, reply.Outcome)
 	assert.Equal(t, before, routeKeysOf(t, mr, 9004))
 
-	reply = evalPublish(t, r, 9004, 0, "5", "6", before[1])
+	reply = evalPublish(t, r, 9004, "5", "6", before[1])
 	assert.Equal(t, placement.PublishConflict, reply.Outcome, "home 不同同样是冲突")
 	assert.Equal(t, before, routeKeysOf(t, mr, 9004))
 }
@@ -193,11 +191,11 @@ func TestPublishRouteScript_EmptyArgDeletes(t *testing.T) {
 	r, mr := newDBFirstRouter(t, nil, nil)
 	presetRouteKeys(t, mr, 9005, [3]string{"5", "7:1", "1"})
 
-	reply := evalPublish(t, r, 9005, 0, "2", "5", "")
+	reply := evalPublish(t, r, 9005, "2", "5", "")
 	assert.Equal(t, placement.PublishApplied, reply.Outcome)
 	assert.Equal(t, [3]string{"5", "", "2"}, routeKeysOf(t, mr, 9005))
 
-	reply = evalPublish(t, r, 9005, 0, "3", "", "")
+	reply = evalPublish(t, r, 9005, "3", "", "")
 	assert.Equal(t, placement.PublishApplied, reply.Outcome)
 	assert.Equal(t, [3]string{"", "", "3"}, routeKeysOf(t, mr, 9005), "墓碑:两列都 DEL,maprev 仍记下这一版")
 }
@@ -213,7 +211,7 @@ func TestPublishRouteScript_RejectsBadRevAndMalformedMapRev(t *testing.T) {
 			before := [3]string{"5", "7:1", "3"}
 			presetRouteKeys(t, mr, 9006, before)
 			_, err := r.mappingRedis.EvalCtx(context.Background(), placement.PublishRouteScript,
-				placement.PublishRouteKeys(9006, 0), bad, "5", "7:1")
+				placement.PublishRouteKeys(9006), bad, "5", "7:1")
 			require.Error(t, err, "rev=%q", bad)
 			assert.Contains(t, err.Error(), "bad rev argument", "rev=%q", bad)
 			assert.Equal(t, before, routeKeysOf(t, mr, 9006), "rev=%q", bad)
@@ -225,7 +223,7 @@ func TestPublishRouteScript_RejectsBadRevAndMalformedMapRev(t *testing.T) {
 		before := [3]string{"5", "7:1", "abc"}
 		presetRouteKeys(t, mr, 9006, before)
 		_, err := r.mappingRedis.EvalCtx(context.Background(), placement.PublishRouteScript,
-			placement.PublishRouteKeys(9006, 0), "4", "5", "7:1")
+			placement.PublishRouteKeys(9006), "4", "5", "7:1")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "malformed maprev")
 		assert.Equal(t, before, routeKeysOf(t, mr, 9006))
@@ -257,7 +255,7 @@ func TestPublishRouteScript_LegacyValuesWithoutMapRev(t *testing.T) {
 			before := [3]string{tc.zone, tc.plc, ""}
 			presetRouteKeys(t, mr, playerID, before)
 
-			reply := evalPublish(t, r, playerID, 0, "1", tc.sendHome, tc.sendPlc)
+			reply := evalPublish(t, r, playerID, "1", tc.sendHome, tc.sendPlc)
 			assert.Equal(t, tc.want, reply.Outcome)
 			if tc.want == placement.PublishLegacyConflict {
 				assert.Equal(t, before, routeKeysOf(t, mr, playerID), "遗留值不同:零写入,也不写 maprev")
@@ -268,27 +266,6 @@ func TestPublishRouteScript_LegacyValuesWithoutMapRev(t *testing.T) {
 			assert.Equal(t, [3]string{tc.sendHome, tc.sendPlc, "1"}, routeKeysOf(t, mr, playerID))
 		})
 	}
-}
-
-// TestPublishRouteScript_FenceKeyBlocksEverything 是 B1:KEYS[4](merge:in_progress:{home})存在时回 {3},三键零变更;
-// 缓存已是这一版时同样回 {3} 且**不 touch**(maprev 的 TTL 原样保留)。不带第 4 把键时围栏不参与(第 2 批合服批量发布的形态)。
-func TestPublishRouteScript_FenceKeyBlocksEverything(t *testing.T) {
-	r, mr := newDBFirstRouter(t, nil, nil)
-	require.NoError(t, mr.Set(MergeFenceKey(5), `{"started_at":1757000000}`))
-
-	reply := evalPublish(t, r, 9010, 5, "1", "5", "")
-	assert.Equal(t, placement.PublishFenced, reply.Outcome)
-	assert.Equal(t, [3]string{}, routeKeysOf(t, mr, 9010))
-
-	presetRouteKeys(t, mr, 9011, [3]string{"5", "", "3"})
-	mr.SetTTL(placement.MapRevKey(9011), time.Hour)
-	reply = evalPublish(t, r, 9011, 5, "3", "5", "")
-	assert.Equal(t, placement.PublishFenced, reply.Outcome)
-	assert.Equal(t, [3]string{"5", "", "3"}, routeKeysOf(t, mr, 9011))
-	assert.Positive(t, mr.TTL(placement.MapRevKey(9011)), "围栏命中时不许 touch maprev")
-
-	reply = evalPublish(t, r, 9012, 0, "1", "5", "")
-	assert.Equal(t, placement.PublishApplied, reply.Outcome, "只给三把键时不看围栏")
 }
 
 // ── db_first 编排(17 个)──────────────────────────────────────────
@@ -353,45 +330,6 @@ func TestDBFirstRegister_RedisPrecheckConflictSkipsStore(t *testing.T) {
 	assert.False(t, errors.As(err, &conflict))
 	assert.Contains(t, err.Error(), "unparsable zone mapping")
 	assert.Empty(t, fake.reqs)
-}
-
-// TestDBFirstRegister_RedisFenceSkipsStore:预检命中合服围栏就拒绝,不进库;即使缓存里是别的 zone,
-// 也先回围栏而不是冲突(「围栏先于冲突」,与 redis 模式同)。
-func TestDBFirstRegister_RedisFenceSkipsStore(t *testing.T) {
-	fake := &routeFakeStore{result: committed(store.RouteRegisterInserted, 9206, 5, 0, 0, 1)}
-	r, mr := newDBFirstRouter(t, fake, nil)
-	ctx := context.Background()
-	require.NoError(t, mr.Set(MergeFenceKey(5), `{"started_at":1757000000}`))
-
-	require.ErrorIs(t, r.RegisterPlayerZone(ctx, 9206, 5, 0), ErrZoneMergeInProgress)
-	require.NoError(t, mr.Set(placement.HomeZoneKey(9207), "3"))
-	require.ErrorIs(t, r.RegisterPlayerZone(ctx, 9207, 5, 0), ErrZoneMergeInProgress)
-	assert.Empty(t, fake.reqs, "围栏预检命中不许进库")
-	assert.Equal(t, [3]string{}, routeKeysOf(t, mr, 9206))
-}
-
-func TestDBFirstRegister_StoreFencedIsMergeInProgress(t *testing.T) {
-	fake := &routeFakeStore{result: store.RouteRegisterResult{Outcome: store.RouteRegisterFenced, FenceRunID: "3-5-20261012T000000Z-0a1b2c3d"}}
-	r, mr := newDBFirstRouter(t, fake, nil)
-
-	err := r.RegisterPlayerZone(context.Background(), 9208, 5, 0)
-	require.ErrorIs(t, err, ErrZoneMergeInProgress)
-	assert.Contains(t, err.Error(), "3-5-20261012T000000Z-0a1b2c3d", "错误里带上围栏持有者的 run_id")
-	assert.Equal(t, [3]string{}, routeKeysOf(t, mr, 9208))
-}
-
-// TestDBFirstRegister_FenceRaisedAfterPrecheckBlocksPublish 是 B1:预检之后、发布之前 merge_zone 立起围栏,
-// 发布脚本的 KEYS[4] 复核拒绝,三键零变更(库里那一行已提交,留给第 1b 批的预热 / 人工核对)。
-func TestDBFirstRegister_FenceRaisedAfterPrecheckBlocksPublish(t *testing.T) {
-	fake := &routeFakeStore{result: committed(store.RouteRegisterInserted, 9209, 5, placement.DefaultGlobalStorageID, 1, 1)}
-	r, mr := newDBFirstRouter(t, fake, nil)
-	fake.hook = func(int) { _ = mr.Set(MergeFenceKey(5), `{"started_at":1757000000}`) }
-
-	err := r.RegisterPlayerZone(context.Background(), 9209, 5, placement.DefaultGlobalStorageID)
-	require.ErrorIs(t, err, ErrZoneMergeInProgress)
-	assert.NotErrorIs(t, err, ErrRouteStore)
-	assert.Contains(t, err.Error(), "committed but unpublished")
-	assert.Equal(t, [3]string{}, routeKeysOf(t, mr, 9209), "围栏内三键都不许写")
 }
 
 // TestDBFirstRegister_RedisKnownPlayerRequiresExistingRow:三键任一在 = 缓存认得这名玩家,store 必须收到
@@ -471,7 +409,7 @@ func TestDBFirstRegister_PublishFailureAfterCommitThenRetryRepairs(t *testing.T)
 }
 
 // TestDBFirstRegister_InvalidArgsNeverReachStore:player_id 为 0、home 为 0 或越界 → ErrInvalidRegistration,
-// 不碰 Redis(连围栏预检都不做)也不碰库。
+// 不碰 Redis 也不碰库。
 func TestDBFirstRegister_InvalidArgsNeverReachStore(t *testing.T) {
 	fake := &routeFakeStore{result: committed(store.RouteRegisterInserted, 9230, 5, 0, 0, 1)}
 	r, mr := newDBFirstRouter(t, fake, nil)
@@ -485,7 +423,7 @@ func TestDBFirstRegister_InvalidArgsNeverReachStore(t *testing.T) {
 		require.ErrorIs(t, err, ErrInvalidRegistration, "player=%d home=%d", tc.playerID, tc.home)
 	}
 	assert.Empty(t, fake.reqs, "参数非法不许进库")
-	assert.Empty(t, rec.snapshot(), "参数非法不许碰 Redis(连围栏预检都不做)")
+	assert.Empty(t, rec.snapshot(), "参数非法不许碰 Redis")
 }
 
 // TestDBFirstRegister_PlacementKeptSucceeds:行里 home 为 NULL、落点已在(请求也带 storage)→ 补 home、保留落点,
@@ -788,15 +726,14 @@ func TestNewRouterPanicsOnInvalidRouteStore(t *testing.T) {
 	for _, rc := range []config.RouteStoreConfig{
 		{Mode: "DB_FIRST"},
 		{Mode: "db-first"},
-		{FenceShards: 65},
+		{MergedZoneRefreshSec: 61},
 		{PublishAttempts: 6},
 		{WaitAOFTimeoutMs: 1501},
 		{WaitAOFNumLocal: intPtr(2)},
 	} {
 		c := config.Config{
-			MappingRedis:     redis.RedisConf{Host: "127.0.0.1:1", Type: "node"},
-			PlayerLockTTLSec: 3,
-			RouteStore:       rc,
+			MappingRedis: redis.RedisConf{Host: "127.0.0.1:1", Type: "node"},
+			RouteStore:   rc,
 		}
 		assert.Panics(t, func() { NewRouter(c) }, "RouteStore=%+v", rc)
 	}

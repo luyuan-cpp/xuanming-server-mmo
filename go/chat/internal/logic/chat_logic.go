@@ -127,7 +127,7 @@ func (l *ChatLogic) PullChatHistory(in *chatpb.PullChatHistoryRequest) (*chatpb.
 	return &chatpb.PullChatHistoryResponse{Messages: messages}, nil
 }
 
-// 这里只决定纯参数资格；SQL在caller原P内授权，私聊分区保持双方player_id历史语义。
+// 这里只决定纯参数资格；身份由 authority 校验，私聊分区保持双方player_id历史语义。
 func resolveLogKey(channel chatpb.ChatChannelType, self, peer uint64) (string, rejection, bool) {
 	switch channel {
 	case chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD:

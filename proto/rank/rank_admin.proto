@@ -16,25 +16,35 @@ message OpenRankGenerationRequest {
   common.base.ServiceCallAuth auth = 6;
 }
 message OpenRankGenerationResponse { TipInfoMessage error_message = 1; uint64 board_id = 2; bool duplicated = 3; }
-message RankScoreInput { uint64 entity_id = 1; int64 score = 2; uint64 achieved_ms = 3; }
+message RankScoreInput {
+  uint64 entity_id = 1;
+  int64 score = 2;
+  uint64 achieved_ms = 3;
+  // 这个实体的分数版本,生产者保证严格递增;0 = 不带版本。
+  // 不同片的批次到达顺序不代表发生顺序:带版本时只有比榜上版本新才写,旧版本迟到直接跳过,榜分不会退回旧值。
+  uint64 score_version = 4;
+}
 message SubmitRankScoresRequest {
   uint64 board_id = 1;
   uint64 generation = 2;
   uint64 source_epoch = 3;
-  // 同代次无缺口、从1起；重复核完整载荷，跳号拒绝，绝不静默吞掉上一批。
+  // 同代次同片无缺口、从1起；重复核完整载荷，跳号拒绝，绝不静默吞掉上一批。
   uint64 source_cursor = 4;
   uint64 request_id = 5;
   RankSubmitMode mode = 6;
   repeated RankScoreInput entries = 7;
   common.base.ServiceCallAuth auth = 8;
+  // 生产者的来源片,不分片的生产者留 0。游标与幂等按 (shard, cursor) 算,片之间没有先后。
+  uint32 source_shard = 9;
 }
+// committed_cursor 是请求所在片已落账到的游标。
 message SubmitRankScoresResponse { TipInfoMessage error_message = 1; uint64 committed_cursor = 2; bool duplicated = 3; }
 message RankRewardTier { uint32 first_rank = 1; uint32 last_rank = 2; mailpb.MailAttachments attachments = 3; }
 message FreezeRankGenerationRequest {
   uint64 board_id = 1;
   uint64 generation = 2;
   uint64 source_epoch = 3;
-  // 生产者停止本代写后的最终游标；只有完整落账到此处才可seal。
+  // 生产者停止本代写后各片最终游标之和(不分片就是那一片的游标)；只有完整落账到此处才可seal。
   uint64 expected_source_cursor = 4;
   uint64 request_id = 5;
   repeated RankRewardTier rewards = 6;

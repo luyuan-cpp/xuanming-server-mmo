@@ -53,4 +53,10 @@ enum match_error {
 
   kMatchSpectateFull = 16021;
 
+  kMatchProbeRequired = 16022;
+
+  kMatchNoRegionWithinLatency = 16023;
+
+  kMatchSpectateTicketInvalid = 16024;
+
 };

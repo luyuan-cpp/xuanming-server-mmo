@@ -115,7 +115,7 @@ type backgroundTask struct {
 type externalDeps struct {
 	openEtcd         func(hosts []string) (*clientv3.Client, error)
 	openMySQL        func(config.MySQLConf) (*sql.DB, error)
-	newRoleAuthority func(context.Context, *sql.DB, string) (inbox.RoleAuthority, error)
+	newRoleAuthority func(context.Context, *sql.DB, string, authoritysql.Backend) (inbox.RoleAuthority, error)
 	// openCoreRedis 建核心 Redis 客户端并探活;返回错误时自己负责关掉已建的客户端。
 	openCoreRedis   func(config.RedisConf) (*redis.Client, error)
 	openDataService func(zrpc.RpcClientConf) (*grpc.ClientConn, error)
@@ -130,8 +130,8 @@ func productionDeps() externalDeps {
 			return clientv3.New(clientv3.Config{Endpoints: hosts, DialTimeout: etcdDialTimeout})
 		},
 		openMySQL: OpenMySQL,
-		newRoleAuthority: func(ctx context.Context, db *sql.DB, schema string) (inbox.RoleAuthority, error) {
-			return inbox.NewSQLRoleAuthority(ctx, db, schema)
+		newRoleAuthority: func(ctx context.Context, db *sql.DB, schema string, backend authoritysql.Backend) (inbox.RoleAuthority, error) {
+			return inbox.NewSQLRoleAuthority(ctx, db, schema, backend)
 		},
 		openCoreRedis: openCoreRedis,
 		openDataService: func(c zrpc.RpcClientConf) (*grpc.ClientConn, error) {
@@ -242,7 +242,7 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 		return nil, fmt.Errorf("player_inbox: %w", err)
 	}
 	roleCtx, roleCancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
-	roles, err := deps.newRoleAuthority(roleCtx, sc.DB, c.AccountRoleSchema)
+	roles, err := deps.newRoleAuthority(roleCtx, sc.DB, c.AccountRoleSchema, authoritysql.Backend(c.MySQL.Backend))
 	roleCancel()
 	if err != nil {
 		return nil, fmt.Errorf("player_inbox: SQL角色原件不可用: %w", err)
@@ -530,7 +530,7 @@ func MySQLTarget(c config.MySQLConf) string {
 	return fmt.Sprintf("%s/%s (user=%s)", c.Host, c.DBName, c.User)
 }
 
-// OpenMySQL保留原连接入口名；全球池只接受TiDB并逐物理连接固定当前强读，失败自行关闭。
+// OpenMySQL保留原连接入口名；全球池按 MySQL.Backend 档位逐物理连接固定当前读，失败自行关闭。
 func OpenMySQL(c config.MySQLConf) (*sql.DB, error) {
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
@@ -551,7 +551,7 @@ func OpenSchemaMySQL(c config.MySQLConf) (*sql.DB, error) {
 func openMySQL(c config.MySQLConf, permission authoritysql.Permission) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, BuildDSN(c), c.DBName, true, c.MaxOpenConn, permission)
+	db, err := authoritysql.Open(ctx, BuildDSN(c), c.DBName, authoritysql.Backend(c.Backend), c.MaxOpenConn, permission)
 	if err != nil {
 		return nil, err
 	}

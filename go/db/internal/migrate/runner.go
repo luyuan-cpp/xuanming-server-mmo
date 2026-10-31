@@ -19,7 +19,7 @@ const SchemaMigrationsTable = "schema_migrations"
 //
 // 锁名带库名是刻意的:不同 zone 是不同的库、不同的表,让它们并行迁移;
 // 同一个库的多个副本 / 多次部署则必须串行 —— 那正是「并发 ALTER 同一张大表
-// 把整个 zone 的 db_task 消费拖停」的场景。MySQL 的 GET_LOCK 名字上限 64 字节。
+// 把整个 zone 的存盘拖停」的场景。MySQL 的 GET_LOCK 名字上限 64 字节。
 const advisoryLockPrefix = "mmorpg_db_migrate:"
 
 // ErrDirtySchema 表示上一次迁移中途失败,库结构处于未知状态。
@@ -261,7 +261,7 @@ func (r *Runner) connectionID(ctx context.Context, conn *sql.Conn) (uint64, erro
 //
 // 这一步是「DDL 撞上长事务时快速失败」的唯一开关:默认 lock_wait_timeout
 // 是 31536000 秒(一年),一条 ALTER 排在长事务后面会把该表的 MDL 队列整个
-// 堵死,后面所有 db_task 的 Save 一起挂住 —— 表现就是整个 zone 消费停摆。
+// 堵死,后面所有存盘一起挂住 —— 表现就是整个 zone 存盘停摆。
 func (r *Runner) prepareSession(ctx context.Context, conn *sql.Conn) error {
 	lockWait := clampInt(r.opts.LockWaitSeconds, 1, 31536000)
 	innodbWait := clampInt(r.opts.InnodbLockWaitSeconds, 1, 1073741824)

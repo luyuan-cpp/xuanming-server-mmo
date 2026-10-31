@@ -1,5 +1,7 @@
 # 线上玩家数据拉取与本地复现
 
+> **工具已删除(2026-10-30)**:`debug_fetch`、`debug_import` 读写的是 Redis 父快照和两张旧表,随旧存盘路径一起删了,**现在没有线上拉数工具**。要看一名玩家的存档,只能直接查 `player_store`(`WHERE player_id=?`,`payload` 按 `kind` 解析成 `player_database` 的字段子集),没有现成的解析和本地导入工具,要按 `player_store` 重写。本文只作历史保留。
+
 2026-10-19 重写(此前版本的 `-mode player` 示例读的是没有生产写者的键族,照做拿不到玩家数据)。
 入口仍是 `go/data_service/cmd/debug_fetch`(只读拉取)与 `go/data_service/cmd/debug_import`(导入本地);没有 ps1 包装器。
 
@@ -15,7 +17,7 @@
 | 位置 | 内容 | 新鲜度 |
 |---|---|---|
 | scene 进程内存(ECS) | 在线玩家的真实最新态 | 只能等玩家下线后落盘再拉 |
-| 核心 Redis `PlayerAllData:<id>` | 父快照,scene 存盘写入,无 TTL | 周期存盘最多落后内存约 300 秒;资产操作即时存盘 |
+| 核心 Redis `PlayerAllData:{<id>}` | 父快照,scene 存盘写入,无 TTL | 周期存盘最多落后内存约 300 秒;资产操作即时存盘 |
 | 落点库 `player_database` / `player_database_1` | Kafka DBTask 经 go/db 异步落库,行内带围栏 `fence_owner_epoch` / `fence_save_seq` | 落后父快照一段 Kafka 积压 + 重试时间;进死信时一直落后 |
 | `player:{<id>}:save_barrier` | `pending` 与两张表的 ACK | **三者相等 = 最近一次存盘两张表都已落库** |
 | 全局库 `player_snapshot`(source=1) | 登录 / 登出时 C++ 拍的快照 | 历史对比用 |

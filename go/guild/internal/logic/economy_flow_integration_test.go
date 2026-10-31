@@ -125,11 +125,6 @@ func resetEconomyFlowSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: dbName, Tables: data.Tables(), Logf: t.Logf})
 	require.NoError(t, err)
 	require.Empty(t, report.Manual, "新建库不应出现需人工项")
-	// 建表后紧接着建全局插入守卫哨兵行(guild_player_state.player_id = 0),与 guild.go 启动顺序、
-	// data 包 resetGuildSchemaViaMigrate 一致:首次建状态行(如离帮用例里给没有状态行的成员补建)、建帮、审批通过
-	// 都要在事务内锁它,缺了一律 fail-closed。EnsureGlobalInsertGuard 只用 db,不碰 Redis。
-	require.NoError(t, data.NewGuildRepo(nil, db, time.Minute).EnsureGlobalInsertGuard(ctx, uint64(time.Now().UnixMilli())),
-		"建全局插入守卫哨兵行")
 }
 
 // economyFlowDBCounter 给一次性库编号:同一测试进程里每个用例一个库。
@@ -148,7 +143,7 @@ func openEconomyFlowDB(t *testing.T, rawDSN string) *sql.DB {
 	require.NoError(t, err)
 	opts, err := sqltest.OptionsFromEnv(dsn, name+"_writer", name)
 	require.NoError(t, err)
-	// 该既有测试同时覆盖显式本地 MySQL；不把它冒充 TiDB 锁资格验收。
+	// 该既有测试 MySQL 与 TiDB 端点都能跑,档位按真实引擎选；不把 MySQL 冒充 TiDB 锁资格验收。
 	opts.AllowMySQL = true
 	fixture, err := sqltest.New(ctx, t, opts)
 	require.NoError(t, err)
@@ -406,7 +401,7 @@ func newEconomyFlowEnv(t *testing.T, workers int) *economyFlowEnv {
 	syncBumps := &recordingSyncBumper{}
 	minter := &sequenceMinter{}
 	minter.next.Store(900_000)
-	l := NewGuildLogic(repo, nil, nil, nil, &fakeHomeZones{zone: flowZone},
+	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: flowZone},
 		WithNotifier(notifier),
 		WithSyncBumper(syncBumps),
 		WithEconomy(EconomyDeps{

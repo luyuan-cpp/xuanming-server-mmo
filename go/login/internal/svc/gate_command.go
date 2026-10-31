@@ -18,9 +18,6 @@ import (
 // 背景:控制面命令从"一个节点一个 topic"(gate-5)改成"一个节点类型一个 topic +
 // partition = node_id % P"(gate-cmd_g1 的第 5 号分区),
 // 见 docs/design/control-plane-topic-partitioning-20260908.md。
-// login 是最后一个还在写老 topic 的生产者,切完之后
-// Kafka.DisableLegacyPerNodeTopic 才能置 true、老的 group 订阅路径才能关掉
-// (在那之前 R05/R09 的"僵尸前任把继任者饿死"在老路径上仍然成立)。
 //
 // 为什么收成一个函数而不是在每个方法里各写一遍:
 //   - topic 名与分区号必须一起算。分开写必然漂移,而漂移的表现是消息落到没人
@@ -160,17 +157,48 @@ func buildKickPlayerCommand(gateID string, gateInstanceID string,
 //
 // 三层信封,由内到外:
 //
-//	TipInfoMessage{id}                        客户端按 id 查文案(id 由导表器发号,调用方只传枚举值)
-//	MessageContent{message_id, serialized}    gate 原样写给客户端 TCP;message_id = SendTipToClient
-//	PushToPlayerEvent{session_id, content}    gate 的 PushToPlayerEventHandler 按 session_id 找连接
+//	TipInfoMessage{id}                                   客户端按 id 查文案(id 由导表器发号,调用方只传枚举值)
+//	MessageContent{message_id, serialized}               gate 原样写给客户端 TCP;message_id = SendTipToClient
+//	PushToPlayerEvent{session_id, player_id, content}    gate 按 session_id 找连接,按 player_id 核对会话当前玩家
 //
 // 最外层仍是 GateCommand,寻址与守卫走 buildGateCommandMessage,与 Bind / Kick 同一条路。
-// gate 侧只认 payload 里的 session_id;GateCommand 上的 SessionId / PlayerId 照 Kick 那样填,
+// gate 侧只认 payload 里的 session_id 与 player_id;GateCommand 上的 SessionId / PlayerId 照 Kick 那样填,
 // 一是分区 key 取自 PlayerId(同一玩家的命令在分区内保序),二是 broker 侧排障可读。
 //
 // 消息号与事件号一律引用生成常量,不写数字字面量。
 func buildPushTipCommand(gateID string, gateInstanceID string,
 	sessionID uint32, playerID uint64, tipID uint32,
+) (gateCommandMessage, error) {
+	// 目标玩家身份栅栏(gate_event.proto PushToPlayerEvent.player_id):session_id 会被复用,
+	// 0 在 gate 侧是「不校验」的兼容位,发 0 等于关掉栅栏,tip 可能弹给复用同号的另一个玩家。
+	// 与共享推送收口 kafkautil.PushToPlayer 同口径 fail-closed。
+	if playerID == 0 {
+		return gateCommandMessage{}, fmt.Errorf(
+			"push tip (tip=%d session=%d) rejected: zero player_id, gate identity fence would be disabled", tipID, sessionID)
+	}
+	return buildPushTipMessage("push tip", gateID, gateInstanceID, sessionID, playerID, playerID, tipID)
+}
+
+// buildPushTipToUnboundSessionCommand 组装发给**尚未绑定玩家**的会话的 tip:BindSession 还没发出时,gate 上的会话没有绑定这名玩家,
+// 带真实 player_id 必被身份栅栏丢弃(ClassifyPush 判 kDrop),客户端只能干等 60 秒的进场超时。
+//
+// 这是「生产者拒发 0」的唯一例外:PushToPlayerEvent.player_id 留 0,gate 按兼容位放行;信封 PlayerId 照填,分区 key 与 broker 侧排障都读它。
+// 关掉栅栏的代价可接受:内容是固定 tip、不含私有数据;target_instance_id 已挡住 node_id 复用,残余只有同一 gate 实例内的 session 序号回绕。
+// 别的命令不要走这里:只要 Bind 已发出(同分区、排在前面),就必须用 buildPushTipCommand 带上真实 player_id。
+func buildPushTipToUnboundSessionCommand(gateID string, gateInstanceID string,
+	sessionID uint32, playerID uint64, tipID uint32,
+) (gateCommandMessage, error) {
+	if playerID == 0 {
+		return gateCommandMessage{}, fmt.Errorf(
+			"push tip to unbound session (tip=%d session=%d) rejected: zero player_id, the enter chain always knows its player", tipID, sessionID)
+	}
+	return buildPushTipMessage("push tip to unbound session", gateID, gateInstanceID, sessionID, playerID, 0, tipID)
+}
+
+// buildPushTipMessage 组三层信封。envelopePlayerID 填 GateCommand.PlayerId;fencePlayerID 填 PushToPlayerEvent.player_id,
+// 即 gate 身份栅栏核对的目标玩家,0 = 不校验。
+func buildPushTipMessage(kind string, gateID string, gateInstanceID string,
+	sessionID uint32, envelopePlayerID uint64, fencePlayerID uint64, tipID uint32,
 ) (gateCommandMessage, error) {
 	tipBody, err := proto.Marshal(&basepb.TipInfoMessage{Id: tipID})
 	if err != nil {
@@ -178,6 +206,7 @@ func buildPushTipCommand(gateID string, gateInstanceID string,
 	}
 	eventPayload, err := proto.Marshal(&kafkapb.PushToPlayerEvent{
 		SessionId: sessionID,
+		PlayerId:  fencePlayerID,
 		MessageContent: &basepb.MessageContent{
 			MessageId:         uint32(game.SceneClientPlayerCommonSendTipToClientMessageId),
 			SerializedMessage: tipBody,
@@ -186,10 +215,26 @@ func buildPushTipCommand(gateID string, gateInstanceID string,
 	if err != nil {
 		return gateCommandMessage{}, fmt.Errorf("marshal PushToPlayerEvent (tip=%d): %w", tipID, err)
 	}
-	return buildGateCommandMessage("push tip", gateID, gateInstanceID, &kafkapb.GateCommand{
+	return buildGateCommandMessage(kind, gateID, gateInstanceID, &kafkapb.GateCommand{
 		SessionId: sessionID,
-		PlayerId:  playerID,
+		PlayerId:  envelopePlayerID,
 		EventId:   uint32(game.ContractsKafkaPushToPlayerEventEventId),
 		Payload:   eventPayload,
 	})
+}
+
+// PushTipToUnboundSession 经 gate 给尚未绑定玩家的会话推一条 tip,用于 BindSession 发出之前的进场失败提示
+// (entergamelogic.go notifyEnterGameFailed)。身份栅栏为什么可以放开见 buildPushTipToUnboundSessionCommand;
+// 其余约定同 PushTipToSession。
+func (s *ServiceContext) PushTipToUnboundSession(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, tipID uint32) error {
+	msg, err := buildPushTipToUnboundSessionCommand(gateID, gateInstanceID, sessionID, playerID, tipID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+		return fmt.Errorf("send gate push tip to unbound session command to %s/%d: %w", msg.Topic, msg.Partition, err)
+	}
+
+	return nil
 }

@@ -348,7 +348,6 @@ type trialFixture struct {
 	clock    *trialTestClock
 	lobbies  *miniredis.Miniredis
 	locator  *miniredis.Miniredis
-	fence    *fakeFence
 }
 
 // newTrialFixture 建夹具。调用前先用 swapActivityTables 布好配表。mutate(可为 nil)在装配前改依赖,
@@ -385,7 +384,6 @@ func newTrialFixture(t *testing.T, g data.GuildData, mutate func(d *ActivityDeps
 		clock:    &trialTestClock{now: activityTestNow},
 		lobbies:  lobbies,
 		locator:  locator,
-		fence:    &fakeFence{},
 	}
 	deps := ActivityDeps{
 		Repo:        activityRepo,
@@ -399,7 +397,7 @@ func newTrialFixture(t *testing.T, g data.GuildData, mutate func(d *ActivityDeps
 	if mutate != nil {
 		mutate(&deps)
 	}
-	f.l = NewGuildLogic(repo, nil, NewOnlineStatusResolver(locatorRedis), f.fence, &fakeHomeZones{zone: g.ZoneID},
+	f.l = NewGuildLogic(repo, nil, NewOnlineStatusResolver(locatorRedis), &fakeHomeZones{zone: g.ZoneID},
 		WithNotifier(f.notifier), WithActivities(deps))
 	f.deps = f.l.activities
 	require.NotNil(t, f.deps)
@@ -803,38 +801,6 @@ func TestStartGuildTrialInitiatorPrechecks(t *testing.T) {
 		assert.Equal(t, constants.ErrActivityJoinTooRecent, resp.GetErrorMessage().GetId())
 		assert.Equal(t, []string{"24"}, resp.GetErrorMessage().GetParameters())
 	})
-}
-
-// TestTrialRefusedWhileZoneIsMerging:帮会所在 zone 正在合服(或闸门读不到)时不许发起、不许投"同意"票
-// (它可能就是凑齐开战的那一票),回 kGuildZoneMerging;拒绝 / 取消照常,房间能被主动解散。
-// 合服窗口里开出去的对局,结果会把结果消费卡在那条消息上直到合服结束。
-func TestTrialRefusedWhileZoneIsMerging(t *testing.T) {
-	useTrialTables(t, nil, nil)
-	f := newTrialFixture(t, activityGuild(1, 42, 43, 44), nil)
-	f.setOnline(t, 42, 43, 44)
-	lobby := f.mustStart(t, 42, 42, 43)
-
-	f.fence.merging = true
-	start, err := f.start(44, 44, 42)
-	require.NoError(t, err)
-	assert.Equal(t, constants.ErrZoneMerging, start.GetErrorMessage().GetId())
-	assert.Equal(t, uint32(2), f.fence.lastZone, "按帮会所在 zone 查闸门")
-
-	accept, err := f.respond(43, lobby.GetLobbyId(), true)
-	require.NoError(t, err)
-	assert.Equal(t, constants.ErrZoneMerging, accept.GetErrorMessage().GetId())
-	assert.Zero(t, f.match.callCount(), "合服期间不开战")
-
-	f.fence.merging, f.fence.err = false, errors.New("redis: connection refused")
-	unreadable, err := f.respond(43, lobby.GetLobbyId(), true)
-	require.NoError(t, err)
-	assert.Equal(t, constants.ErrZoneMerging, unreadable.GetErrorMessage().GetId(), "闸门读不到按封锁处理")
-
-	f.fence.merging, f.fence.err = true, nil
-	decline, err := f.respond(43, lobby.GetLobbyId(), false)
-	require.NoError(t, err)
-	require.Nil(t, decline.GetErrorMessage(), "拒绝不受闸门限制")
-	assert.Equal(t, pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_ENDED, decline.GetActivity().GetTrialLobby().GetState())
 }
 
 // TestStartGuildTrialRewardChannel:历练配了物品而资产通道关闭 / 发号器没接线 → 建房之前拒绝(fail-closed):
@@ -1386,7 +1352,7 @@ func TestSettleSkipsEventsThatAreNotGuildTrials(t *testing.T) {
 	}
 	assert.Zero(t, f.store.settleCount())
 
-	unwired := NewGuildLogic(nil, nil, nil, nil, nil)
+	unwired := NewGuildLogic(nil, nil, nil, nil)
 	outcome, err := unwired.SettleTrialResult(context.Background(), plain)
 	require.NoError(t, err)
 	assert.Equal(t, TrialOutcomeSkipped, outcome)
@@ -1437,7 +1403,7 @@ func TestSettleBadContextAcksWithoutTouchingRepo(t *testing.T) {
 }
 
 // TestSettleWinPassesCandidatesAndAcks(06 §6.29):胜局把"己方 − 逃跑者"(含阵亡者,U2)交给仓储,带上开战时的
-// 周期键、对局结束时刻、本次调用的"现在"与合服闸门;提交后销账。本局计了帮会资金 → 推给全帮成员。
+// 周期键、对局结束时刻、本次调用的"现在";提交后销账。本局计了帮会资金 → 推给全帮成员。
 func TestSettleWinPassesCandidatesAndAcks(t *testing.T) {
 	useTrialTables(t, nil, nil)
 	f := newTrialFixture(t, activityGuild(1, 42, 43, 44, 45), nil)
@@ -1466,9 +1432,6 @@ func TestSettleWinPassesCandidatesAndAcks(t *testing.T) {
 	assert.Nil(t, in.Reward, "没配物品奖励就不预备指令")
 	assert.Equal(t, ev.GetFinishedAtMs(), in.FinishedAtMs)
 	assert.Equal(t, f.nowMs(), in.NowMs)
-	require.NotNil(t, in.Fence, "结算要过合服闸门")
-	f.fence.merging = true
-	assert.ErrorIs(t, in.Fence(context.Background(), 2), data.ErrZoneMerging, "闸门就是帮会写事务共用的那一个")
 
 	assert.False(t, f.hasResult(501), "提交后销账")
 	pushes := f.activityPushes()
@@ -1569,7 +1532,7 @@ func TestSettleWithItemsWhileChannelClosed(t *testing.T) {
 	assert.False(t, f.hasResult(501))
 }
 
-// TestSettleTemporaryFailuresKeepTheRecord:暂时性失败(发号失败、写冲突、合服闸门、库故障)原样返回错误,
+// TestSettleTemporaryFailuresKeepTheRecord:暂时性失败(发号失败、写冲突、库故障)原样返回错误,
 // 让调用方退避重试 —— 不标毒、不销账(销了账这一局的奖励就永久丢了)。
 func TestSettleTemporaryFailuresKeepTheRecord(t *testing.T) {
 	t.Run("发号失败:不进事务", func(t *testing.T) {
@@ -1602,7 +1565,6 @@ func TestSettleTemporaryFailuresKeepTheRecord(t *testing.T) {
 	})
 	for _, repoErr := range []error{
 		data.ErrWriteConflict,
-		fmt.Errorf("%w: fence unreadable", data.ErrZoneMerging),
 		errors.New("driver: bad connection"),
 	} {
 		t.Run("事务回 "+repoErr.Error(), func(t *testing.T) {
@@ -1763,14 +1725,14 @@ func TestSettleTerminalStatusesAck(t *testing.T) {
 
 // TestSettleShortCircuitsAlreadySettledBattles(06 §6.29 落码修正第 10 点):对局行已是 SETTLED —— 正常结算过、被标成
 // 毒消息、或运维按 §6.35a 做法 A 手工写成终态 —— 入口处直接回 Duplicate 并销账,不构建奖励包、不发号、不进事务。
-// 这是 battle 重发副本(逐字节相同,至多 30 份)的常规去向,也是"卡住的消息"的人工出口,所以必须排在发号与合服闸门
+// 这是 battle 重发副本(逐字节相同,至多 30 份)的常规去向,也是"卡住的消息"的人工出口,所以必须排在发号与事务门
 // 之前:用例里发号器是坏的、事务一进就回"正在合服",预读排错了位置,这条结果就一直是暂时性失败。
 func TestSettleShortCircuitsAlreadySettledBattles(t *testing.T) {
 	useTrialTables(t, trialRowWithReward(), nil)
 	minter := &seqMinter{err: errors.New("segment fenced")}
 	f := newTrialFixture(t, activityGuild(1, 42, 43), func(d *ActivityDeps) { d.OpIDs = minter })
 	f.store.settle = func(data.TrialSettleInput) (data.TrialSettleResult, error) {
-		return data.TrialSettleResult{}, data.ErrZoneMerging
+		return data.TrialSettleResult{}, data.ErrWriteConflict
 	}
 	ev := trialEvent(501, 42, 43)
 	f.putResult(t, ev)
@@ -1882,7 +1844,7 @@ func TestSettleConfigMissing(t *testing.T) {
 func TestSettleNotWiredIsAnError(t *testing.T) {
 	ev := trialEvent(501, 42, 43)
 
-	_, err := NewGuildLogic(nil, nil, nil, nil, nil).SettleTrialResult(context.Background(), ev)
+	_, err := NewGuildLogic(nil, nil, nil, nil).SettleTrialResult(context.Background(), ev)
 	require.ErrorIs(t, err, errTrialNotWired)
 
 	useTrialTables(t, nil, nil)

@@ -1,0 +1,21 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "PlayModeTableOuterClass";
+option java_multiple_files = true;
+
+
+message PlayModeTable {
+	uint32 id = 1;
+	uint32 match_mode = 2;
+	uint32 battle_config_id = 3;
+	bool enabled = 4;
+	uint32 team_size_max = 5;
+}
+
+message PlayModeTableData {
+	repeated PlayModeTable data = 1;
+}

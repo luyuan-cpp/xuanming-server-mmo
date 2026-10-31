@@ -14,6 +14,7 @@ import (
 	battlepb "proto/battle"
 	dspb "proto/data_service"
 	inboxpb "proto/player_inbox"
+	"shared/inboxcontract"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -271,7 +272,9 @@ func (s *Store) LookupBattleSettlement(ctx context.Context, req *inboxpb.BattleS
 }
 
 func validateBattleOriginal(req *inboxpb.BattleSettlementInboxRequest) error {
-	if req == nil || req.PlayerId == 0 || req.BattleId == 0 || ValidateText(req.ExpectedOwnerAccount, 191, true) != 0 || req.ExpectedOwnerRevision == 0 || req.IssuedAtMs == 0 || len(req.SettlementPayload) == 0 || len(req.SettlementPayload) > 16384 || battlePayloadHasUnknown(req.ProtoReflect()) {
+	// 载荷上限只读 proto 类型规格(shared/inboxcontract,与 Match 的 COMPLETE 准入同一来源);读不到按上限未知拒绝。
+	limit, limited := inboxcontract.MaxPayloadBytes(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT)
+	if req == nil || req.PlayerId == 0 || req.BattleId == 0 || ValidateText(req.ExpectedOwnerAccount, 191, true) != 0 || req.ExpectedOwnerRevision == 0 || req.IssuedAtMs == 0 || len(req.SettlementPayload) == 0 || !limited || len(req.SettlementPayload) > limit || battlePayloadHasUnknown(req.ProtoReflect()) {
 		return fmt.Errorf("%w: Battle原件不完整", ErrBattleSettlementOriginal)
 	}
 	p := &battlepb.BattleSettlementData{}

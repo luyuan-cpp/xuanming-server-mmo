@@ -5,6 +5,7 @@ import "proto/db/proto_option.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/base/tip.proto";
 import "proto/battle/player_battle.proto";
+import "proto/battle/battle_data.proto";
 import "proto/match/match_network.proto";
 
 option go_package = "db/proto/match";
@@ -186,10 +187,20 @@ message WatchBattleRequest {
   string request_id = 3; // 全球模式原观战意图UUID，重试复用；已关闭原件不能复活或清退后来的观战。
 }
 
+// 观战帧的投递方式(battle-spectate-tiered-fanout.md §15.2,D94/D95)。
+enum eSpectateDelivery {
+  SPECTATE_DELIVERY_NONE = 0;    // 未进入观战(error_message 非零)
+  SPECTATE_DELIVERY_DIRECT = 1;  // L0:等 NotifyBattleAssigned,凭票直连 battle,首帧 161 经直连下发
+  SPECTATE_DELIVERY_LOBBY = 2;   // L1 / L2:不建直连;把 spectate_ticket 原样交给 gate 的 SubscribeSpectate,
+                                 //   观战帧 161 / 158 / 166 经大厅连接下发
+}
+
 message WatchBattleResponse {
   uint64 battle_id = 1;      // 实际观战的战斗(随机模式回填)
   TipInfoMessage error_message = 2;  // 无可观战战斗/本人在战斗或队列中/战斗已结束
   string spectator_operation_id = 3;
+  eSpectateDelivery delivery = 4;
+  bytes spectate_ticket = 5; // LOBBY 时非空:match 签发的观战订阅凭证(不透明字节,客户端不解析、不持久)
 }
 
 message ListWatchableBattlesRequest {
@@ -208,12 +219,21 @@ message BattleWatchSummary {
   uint32 battle_config_id = 3;
   repeated string player_names = 4;
   uint64 created_at_ms = 5;
+  bool featured = 6;         // 运营标记的赛事局(列表排在最前,优先升全服广播)
 }
 
 // 内部登记记录(Redis value,含路由所需的 battle 节点 id,不下发客户端)
 message SpectateBattleRecord {
   BattleWatchSummary summary = 1;
   uint32 battle_node_id = 2;
+  // 与 CreateBattleRequest.spectate_visibility 同值(建房原件冻结)。非 PUBLIC 的记录照样写
+  // (丢票补签要靠它定位 battle 节点),但不进 spectate:battles:active,也不能被 WatchBattle 指定观战。
+  eSpectateVisibility visibility = 3;
+  // 以下三项由 match 在观战准入时维护(§15.6):档位以独立键 spectate:tier:{id} 为准(Lua 只升不降),
+  // 这里只是建房时的初值;实例与期限来自 battle 的 AttachRelayGate / PromoteSpectateBroadcast 回包。
+  eSpectateTier tier = 4;
+  string battle_instance_id = 5;
+  uint64 deadline_ms = 6;
 }
 
 // ----- Server-internal: match result (used between MatchService and SceneManager) -----

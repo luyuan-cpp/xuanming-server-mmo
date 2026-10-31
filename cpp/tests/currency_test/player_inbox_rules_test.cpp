@@ -165,6 +165,42 @@ TEST(PlayerInboxRules, ClassifyDeliveryBelowWatermarkOutsideRingIsUnknown)
 	EXPECT_EQ(before, untouched.SerializeAsString());
 }
 
+// C-1(2026-10-30):收件箱库回档后同一局换新 seq 重投,按 seq 判是新条目;战斗结算域再按最近结局环认一次同一局。
+// 只认 request_id 相同、类型为 BATTLE_SETTLEMENT、结局 APPLIED 的条目。已挤出环的旧局认不出来:这是有界缓解,
+// 不是永久去重(设计上不另造永久 battle-id 集合)。
+TEST(PlayerInboxRules, RecentAppliedBattleSettlementIsRecognizedOnlyWithinTheRing)
+{
+	constexpr uint32_t kBattleDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
+	constexpr uint32_t kBattleType = player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT;
+	EXPECT_FALSE(rules::HasRecentAppliedBattleSettlement(nullptr, 7001)) << "从未处理过的域";
+
+	PlayerInboxLedgerComp ledger;
+	auto &cursor = rules::MutableCursor(ledger, kBattleDomain);
+	ASSERT_TRUE(rules::RecordDecision(cursor, MakeDecision(1, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 7001, kBattleType)));
+	EXPECT_TRUE(rules::HasRecentAppliedBattleSettlement(&cursor, 7001)) << "同一局(request_id = battle_id)";
+	EXPECT_FALSE(rules::HasRecentAppliedBattleSettlement(&cursor, 7002)) << "别的局";
+	EXPECT_FALSE(rules::HasRecentAppliedBattleSettlement(&cursor, 0)) << "没有身份可比";
+
+	// 同 request_id 但类型不是战斗结算,或结局不是 APPLIED:都不算同一局已到账。
+	ASSERT_TRUE(rules::RecordDecision(cursor, MakeDecision(2, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 7003, kDebtType)));
+	EXPECT_FALSE(rules::HasRecentAppliedBattleSettlement(&cursor, 7003));
+	ASSERT_TRUE(rules::RecordDecision(
+		cursor, MakeDecision(3, player_inbox::PLAYER_INBOX_OUTCOME_REJECTED, 7004, kBattleType, 29003)));
+	EXPECT_FALSE(rules::HasRecentAppliedBattleSettlement(&cursor, 7004));
+
+	// 再记满一环,seq 1 被挤出:环外的旧局认不出来(有界缓解的上界)。
+	const uint64_t firstFill = 4;
+	const uint64_t lastFill = firstFill + static_cast<uint64_t>(rules::kRecentCapacity) - 1;
+	for (uint64_t seq = firstFill; seq <= lastFill; ++seq)
+	{
+		ASSERT_TRUE(rules::RecordDecision(
+			cursor, MakeDecision(seq, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 8000 + seq, kBattleType)))
+			<< "seq=" << seq;
+	}
+	EXPECT_FALSE(rules::HasRecentAppliedBattleSettlement(&cursor, 7001)) << "已挤出环";
+	EXPECT_TRUE(rules::HasRecentAppliedBattleSettlement(&cursor, 8000 + lastFill));
+}
+
 // ── 判定顺序(设计 §7.6 第 3 步、§7.9,评审 M1)──────────────────────────────────
 
 namespace

@@ -24,11 +24,11 @@ import (
 // 两把键的格式契约在 shared/ownerepoch(Go 与 C++ 两边一字不差)。本文件只放
 // scene_manager 自己的读写:
 //
-//  1. 铸造 + CAS 写 location 的 Lua(placePlayerLocation 用)。铸造 EVAL 与紧随的 WAITAOF 走 svc.OwnerEpochMint 的
-//     同一条连接,确认落盘之后才把新 epoch 交给路由 / 重定向(docs/design/zone-redis-regression-guard-20261022.md
-//     §4.3.2 G3b);墙钟地板(§4.3.1 G3a)**尚未落地**,铸造仍是恰好 +1,前置条件见该节;
+//  1. 铸造 + CAS 写 location 的 Lua(placePlayerLocation 用)。铸造值取墙钟地板 max(观察值 + 1, 当前毫秒)
+//     (docs/design/zone-redis-regression-guard-20261022.md §4.3.1 G3a);铸造 EVAL 与紧随的 WAITAOF 走
+//     svc.OwnerEpochMint 的同一条连接,确认落盘之后才把新 epoch 交给路由 / 重定向(§4.3.2 G3b);
 //  2. 路由 / 重定向投递失败(含铸造没确认落盘)后的**单调**回滚(GO-2 根治,cross-zone-scene-travel.md §12.8):
-//     location 退回本次写入之前的值,铸造过的 epoch 再 INCR 一格(N+1 → N+2),从不退回旧值;
+//     location 退回本次写入之前的值,铸造过的 epoch 再 INCR 一格(铸出 M → M+1),从不退回旧值;
 //     凭标记铸造的回滚以「所凭标记原样还在」为前提,同时在恢复出的 location 里写回滚回执、把
 //     标记转写到新 epoch。例外 keep:没铸造的落点,以及同物理节点 epoch 0 的铸造(§12.6.9(c)),
 //     只退 location、epoch 键不动;
@@ -38,12 +38,16 @@ import (
 // 闸口推进,而且**只在持有者真的换了的时候**推进:首次落点、过了换手门的跨节点
 // 交接、放行跨 zone 交接、等待落点的第二条腿。新值随路由事件带给目标节点;C++
 // 存盘用 Lua 比对「缓存值 == Redis 当前值」,老 epoch 的写一律被拒。
-// epoch 只经 INCR 前进 —— 路由失败的回滚也是 INCR,在 Redis 不回退的前提下任何值都不会被铸两次(补种只按 location
-// 记录值补回缺失的键,见 enterscenelogic.go sameNodeZeroMint 一段)。除下面「唯一例外」里的同节点 epoch 0
+// epoch 只升不降:铸造取 max(观察值 + 1, 当前毫秒墙钟)(G3a 墙钟地板),路由失败的回滚 INCR 一格;任何值都不会被
+// 铸两次(补种只按 location 记录值补回缺失的键,见 enterscenelogic.go sameNodeZeroMint 一段)。墙钟地板让 zone Redis
+// 回退之后的第一次铸造越过回退前的一切铸造(前提:SM 副本间时钟偏差小于「回退前最后一次铸造」到「回退后第一次铸造」的
+// 间隔),不会把回退前已经发给某个节点的值再铸一次给另一个节点。除下面「唯一例外」里的同节点 epoch 0
 // 铸造外,bump 回滚是另一种「持有者没换也推进」的情形:它让被回滚掉的那个值作废,仍持有玩家的源 scene
 // 凭 location 里的回滚回执采纳新值。
-// 现有判据依赖「铸造恰好前进一格」:铸造的重放识别比 cur == ARGV[1]+1;C++ 源端采纳回滚要求 epoch == 标记 epoch + 2
-// (player_lifecycle.h travel_outcome::ClassifyOwnership)。G3a 墙钟地板会打破这两条,落地时必须两边同批改。
+// 因为铸造不再是「恰好 +1」,任何判据都不得依赖「铸造恰好前进一格」或「回滚之后恰好比标记 epoch 大 2」:
+// 铸造的重放识别比的是本请求自己算出的目标值(ARGV[9]);C++ 源端采纳回滚只要求回滚后的 epoch ≥ 标记 epoch + 2
+// (player_lifecycle.h travel_outcome::ClassifyOwnership、ResumeTravelAfterRevocation 与 handoff_sql_barrier.h 的
+// kResumeFenceLua)。
 //
 // 持有者没换就不许推进 —— 同节点换图、同落点重连、dev 旁路下无标记的跨节点
 // 交接都只做「epoch 不变才写 location」的 CAS。原因:持有节点要等 Kafka → gate →
@@ -87,41 +91,48 @@ elseif expect_mode ~= nil and expect_mode ~= "" and expect_mode ~= "any" then
 end
 `
 
-// luaMintEpochAndSetLocation:「当前 epoch == ARGV[1] 且 location 符合期望才 INCR 并写 location」。
+// luaMintEpochAndSetLocation:「当前 epoch == ARGV[1] 且 location 符合期望才把 epoch 设成 ARGV[9] 并写 location」。
 //
 //	KEYS[1] = player:{id}:owner_epoch
 //	KEYS[2] = player:{id}:location
 //	KEYS[3] = player:{id}:handoff
-//	ARGV[1] = 调用方读到的当前 epoch(十进制;键不存在按 "0")
-//	ARGV[2] = 已带上 epoch+1 的 PlayerLocation 字节
+//	ARGV[1] = 调用方读到的当前 epoch(规范十进制;键不存在按 "0")
+//	ARGV[2] = 已带上新 epoch(= ARGV[9])的 PlayerLocation 字节
 //	ARGV[3] = 本次放行所凭的 handoff 标记原文;空串 = 本次不凭标记(首次落点 / 等待落点)
 //	ARGV[4] / ARGV[5] = location 原文期望,见 luaLocationExpectCheck
+//	ARGV[6..8] = 位置修订,见 luaPlacementRevisionCheck
+//	ARGV[9] = 本次要铸出的 epoch(规范十进制),由 Go 按 max(ARGV[1] + 1, 当前毫秒) 一次算好(mintTargetEpoch,
+//	          G3a 墙钟地板)。Go 先算、Lua 只校验并 SET:location 字节在 EVAL 之前就已带上这个值,两边必须同值;
+//	          重发的 EVAL 带的是同一份 ARGV,重放识别才比得上。
 //
-// 分支顺序:epoch 比对(含下面的重放识别,放在原文检查之前、保持不变)→ location 期望 → 标记比对 → INCR + SET。
-// 返回 INCR 之后的新 epoch;epoch CAS 不过或 location 已不是观察时那一份返回 0;标记已不是预检时那一份返回 -1。
+// ARGV[9] 的校验(luaMintTargetCheck)最先做:必须是规范十进制、严格大于 ARGV[1]、不超过 2^53 − 2
+// (maxMintedOwnerEpoch,回滚再 +1 仍在 Lua double 的精确范围内)。全程按十进制串比较,不经 Lua double。
+// 不合格回 error_reply、一个字节都不写:说明 Go 与 Lua 的约定被改岔了,不能猜一个值铸下去。
+//
+// 分支顺序:目标值校验 → epoch 比对(含下面的重放识别,放在原文检查之前、保持不变)→ location 期望 → 标记比对 → SET + SET。
+// 返回新 epoch(= ARGV[9]);epoch CAS 不过或 location 已不是观察时那一份返回 0;标记已不是预检时那一份返回 -1。
 // 失败都什么都不改,返回值集合与加原文期望之前相同。键不存在时 GET 给 false,与 "0" 归一后比对(首次铸造)。
-// 回滚只 INCR、从不把键退回旧值(见 luaRollbackPlayerPlacement),所以不存在「回滚之后
+// 回滚只 INCR、从不把键退回旧值(见 luaRollbackPlayerPlacement),而下一次铸造至少是当前值 + 1,所以不存在「回滚之后
 // 再铸出同一个值」。
 //
 // 重放识别(epoch CAS 不过、`return 0` 之前那一段):铸造走 svc.OwnerEpochMint,EVAL 结果未知(传输错误)时
 // 它会在新连接上把**同一条** EVAL(连同 WAITAOF)原样重发(svc/owner_epoch_mint.go EvalAndConfirm,最多 3 次)。
-// 首发其实已经执行(epoch 已是
-// ARGV[1]+1、location 已写成 ARGV[2])、只是应答丢了时,重发在这里读到 cur ≠ ARGV[1],
+// 首发其实已经执行(epoch 已是 ARGV[9]、location 已写成 ARGV[2])、只是应答丢了时,重发在这里读到 cur ≠ ARGV[1],
 // 原本会回 0 被当成「并发推进」(errOwnerEpochConflict → 19):状态已经推进,调用方却既不发
 // 重定向 / 路由、也不回滚 —— 与「推重定向失败 + 回滚失败」同一个终态(源端静默销毁实体、
 // 客户端挂在哑连接上),但只需要一次 Redis 读超时。所以在回 0 之前再认一次「本请求已生效」:
 //
-//	ARGV[3] 非空(本请求凭标记放行)且 cur == ARGV[1]+1 且 location == ARGV[2] 且标记仍 == ARGV[3]
+//	ARGV[3] 非空(本请求凭标记放行)且 cur == ARGV[9] 且 location == ARGV[2] 且标记仍 == ARGV[3]
 //
 // 满足就返回 **-cur**(cur == 本请求本该铸出的新 epoch;取负只为让调用方区分「重放识别命中」与
 // 「首发成功」以便计数,decodeMintReply 还原后按铸造成功继续:扣旧场景人数、发重定向 / 路由)。
 // 负值不会与 -1(标记已撤回)/ 0(epoch 冲突)撞:凭标记放行时观察到的 epoch ≥ 1(epoch 为 0 的
-// 标记从不写出),新 epoch ≥ 2,取负 ≤ -2;万一真有 epoch 0 的标记,-1 会被读成「已撤回」,
-// 是拒绝方向,不会误放行。三条合起来能证明是本请求自己的写入:epoch 恰好只前进一格;location 原文带
+// 标记从不写出),新 epoch > 观察值 ≥ 1,取负 ≤ -2;万一真有 epoch 0 的标记,-1 会被读成「已撤回」,
+// 是拒绝方向,不会误放行。三条合起来能证明是本请求自己的写入:epoch 恰好是本请求算出的目标值;location 原文带
 // UpdateTime 与完整目标;标记仍是本请求所凭的那一份(源端的原子取证脚本删掉本族标记之后不再认,与上面
 // 「标记检查与铸造同一原子步骤」的承诺一致 —— 源端删标记后读 epoch / location 做裁决,此时识别与否都不
 // 改变它的结论,只影响本请求回 0 还是回成功)。本请求的落点已被 bump 回滚之后(epoch 已是
-// ARGV[1]+2),原样重发同样回 0:「恰好只前进一格」不成立,不会把回滚掉的落点重新认成已生效。
+// ARGV[9]+1),原样重发同样回 0:目标值对不上,不会把回滚掉的落点重新认成已生效。
 //
 // 识别命中时把 owner_epoch 原值 SET 回去一次(值不变,该键没有 TTL):重发走的是新连接,紧随的 WAITAOF 等的是
 // 「本连接最后一次写」的复制偏移(Redis call() 只在命令产生传播时更新 client woff)。只读的识别分支不传播,
@@ -133,23 +144,23 @@ end
 // 同样的值」。残余:凭**同一份**标记、同一秒、同一目标的两个并发请求(只有上游重复提交才会
 // 出现)两个都会被判成功 —— 归属终态正是两者都想要的那一个,代价是旧场景人数多扣一次、
 // 重定向 / 路由多发一条(客户端与 gate 对重复 124 去重)。
-// tonumber 比较:epoch 远小于 2^53,双精度下精确;cur 被写坏(非数字)时 tonumber 得 nil,
-// 比较为假,照旧回 0。
+// 比较全按串:cur 被写坏(非数字)时与 ARGV[1]、ARGV[9] 都不等,照旧回 0。返回值 tonumber(ARGV[9]) 经 Lua double
+// 转成 Redis 整数,ARGV[9] ≤ 2^53 − 2 保证精确。
 //
 // 标记为什么要在这段 Lua 里再比一次:源 scene 等应答超时(或收到失败应答)后要决定
 // 「解冻继续玩」还是「我已被放行、销毁实体」。它的做法是在一段原子脚本里先删掉本次交接这一族
 // 标记(按 saved_at_ms 认,含回滚转写出来的那份)、再读 owner_epoch 与 location(§12.8)——
 // 只要标记检查与铸造是同一个原子步骤,删除之后就不可能再有凭这份标记的放行,于是「epoch 没变」
-// 就严格等价于「没被放行」;被回滚时 epoch 变成 N+2,另由 location 里的回滚回执证明(见
+// 就严格等价于「没被放行」;被回滚时 epoch 变成铸出值 + 1(≥ 标记 epoch + 2),另由 location 里的回滚回执证明(见
 // luaRollbackPlayerPlacement)。若只在预检里读标记,一个卡了很久的 EnterScene 可以在源端解冻
 // 之后才铸造,同一名玩家在两个 zone 同时活着。
-const luaMintEpochAndSetLocation = luaPlacementRevisionCheck + `
+const luaMintEpochAndSetLocation = luaMintTargetCheck + luaPlacementRevisionCheck + `
 local cur = redis.call("GET", KEYS[1])
 if cur == false then
     cur = "0"
 end
 if cur ~= ARGV[1] then
-    if ARGV[3] ~= "" and tonumber(cur) == tonumber(ARGV[1]) + 1
+    if ARGV[3] ~= "" and cur == ARGV[9]
         and redis.call("GET", KEYS[2]) == ARGV[2]
         and redis.call("GET", KEYS[3]) == ARGV[3] then
         redis.call("SET", KEYS[1], cur)
@@ -161,10 +172,68 @@ end
 if ARGV[3] ~= "" and redis.call("GET", KEYS[3]) ~= ARGV[3] then
     return -1
 end
-local minted = redis.call("INCR", KEYS[1])
+redis.call("SET", KEYS[1], ARGV[9])
 redis.call("SET", KEYS[2], ARGV[2])
 ` + luaWritePlacementRevision + `
-return minted
+return tonumber(ARGV[9])
+`
+
+// maxMintedOwnerEpoch 是铸造目标值的上限 2^53 − 2:铸造与回滚的返回值经 Lua double 转成 Redis 整数,回滚在
+// 铸出值上再 INCR 一格(≤ 2^53 − 1),两者都要在 double 的精确整数范围内。当前毫秒约 1.8e12,离上限很远;
+// 超过它只可能是注入的时钟单位错了(纳秒级)或 epoch 被写坏。luaMintTargetCheck 里的字面量与它同值。
+const maxMintedOwnerEpoch uint64 = 1<<53 - 2
+
+// errOwnerEpochMintTargetOutOfRange:算出的铸造目标值超过 maxMintedOwnerEpoch(观察值已到上限,或注入的墙钟单位
+// 不对)。在任何 Redis 写之前返回,调用方按通用落点错误回 3。
+var errOwnerEpochMintTargetOutOfRange = errors.New("owner epoch mint target out of range")
+
+// mintTargetEpoch 算本次铸造要写下的 epoch(G3a 墙钟地板,docs/design/zone-redis-regression-guard-20261022.md §4.3.1):
+// target = max(observed + 1, nowMs)。nowMs 是 svc.OwnerEpochMinter.NowMs() 的 Unix 毫秒,单测注入固定值。
+//
+// clockBehind 为 true 表示墙钟没起作用(nowMs ≤ observed,只能取 observed + 1):稳态下 observed 是上一次铸造取的墙钟,
+// 所以它多半说明铸造的 SM 副本之间有时钟偏差;同一毫秒内回滚之后马上重试(observed = 铸出值 + 1 > nowMs)也会命中,
+// 属正常。只计数,不拒绝:+1 仍然单调,只是失去「越过 Redis 回退前的一切铸造」这一保证。
+//
+// 目标值超过 maxMintedOwnerEpoch 时返回 errOwnerEpochMintTargetOutOfRange(fail-closed,不截断成一个猜出来的值)。
+func mintTargetEpoch(observed, nowMs uint64) (target uint64, clockBehind bool, err error) {
+	if observed >= maxMintedOwnerEpoch {
+		return 0, false, fmt.Errorf("%w: observed=%d max=%d", errOwnerEpochMintTargetOutOfRange, observed, maxMintedOwnerEpoch)
+	}
+	target = observed + 1
+	if nowMs > target {
+		target = nowMs
+	}
+	if target > maxMintedOwnerEpoch {
+		return 0, false, fmt.Errorf("%w: wall clock %dms exceeds max=%d (clock unit?)", errOwnerEpochMintTargetOutOfRange, nowMs, maxMintedOwnerEpoch)
+	}
+	return target, nowMs <= observed, nil
+}
+
+// luaMintTargetCheck 校验铸造目标值 ARGV[9](见 luaMintEpochAndSetLocation):ARGV[1] 是规范十进制("0" 或无前导零),
+// ARGV[9] 是无前导零的正十进制、严格大于 ARGV[1]、不超过 maxMintedOwnerEpoch。按串比较:规范十进制先比长度、
+// 等长再逐字节比,不经 Lua double;也不用 Lua 的 `<` 比串 —— Lua 5.1 的串比较走 strcoll,Redis 启动时按环境
+// 设了 LC_COLLATE(与 C++ handoff_sql_barrier.h kFenceLuaHelpers 的 bytecmp 同一个理由)。不合格回 error_reply,
+// 在任何读写之前。
+const luaMintTargetCheck = `
+local function owner_epoch_dec_gt(a, b)
+    if #a ~= #b then
+        return #a > #b
+    end
+    for i = 1, #a do
+        local x, y = string.byte(a, i), string.byte(b, i)
+        if x ~= y then
+            return x > y
+        end
+    end
+    return false
+end
+local mint_target = ARGV[9]
+if type(ARGV[1]) ~= "string" or not (ARGV[1] == "0" or string.match(ARGV[1], "^[1-9]%d*$"))
+    or type(mint_target) ~= "string" or not string.match(mint_target, "^[1-9]%d*$")
+    or not owner_epoch_dec_gt(mint_target, ARGV[1])
+    or owner_epoch_dec_gt(mint_target, "9007199254740990") then
+    return redis.error_reply("owner epoch mint target invalid")
+end
 `
 
 // luaSetLocationIfEpoch:「当前 epoch == ARGV[1] 且 location 符合期望才写 location」,**不铸造**。
@@ -197,6 +266,9 @@ return 1
 // luaRollbackPlayerPlacement:推路由 / 重定向失败后撤掉本次落点(GO-2 根治,cross-zone-scene-travel.md
 // §12.8)。location 退回本次写入之前的值;owner_epoch **只进不退**。
 //
+// 记号:下文 N 是源端持有(本次观察到)的 epoch,"N+1" 指本次铸出的值,"N+2" 指它再 +1 的回滚值。G3a 墙钟地板之后
+// 铸出值是 max(N+1, 当前毫秒),不一定恰好是 N+1;本段推理只用到「铸出值 > N」与「回滚值 = 铸出值 + 1」,与此无关。
+//
 //	KEYS[1] = player:{id}:location
 //	KEYS[2] = player:{id}:owner_epoch
 //	KEYS[3] = player:{id}:handoff
@@ -221,10 +293,10 @@ return 1
 //	0            location 或 epoch 已被并发请求推进,什么都没改(否则会覆盖后来者刚提交的归属)。
 //
 // 为什么 epoch 不退回旧值(旧写法把键 SET 回 N,两条已确认伤害):
-//   - 伤害 1:「kafka-go 报错但 broker 其实已投递」时,目标节点 B 拿着 N+1 载入、可能已落盘并发出
-//     DBTask(N+1);db 的 epoch 守卫只升不降,回滚后仍持有玩家的源端以 N 发出的 DBTask 被永久判 stale;
+//   - 伤害 1:「kafka-go 报错但 broker 其实已投递」时,目标节点 B 拿着 N+1 认领,写权行的代次抬到 N+1;
+//     代次只升不降,回滚后仍持有玩家的源端以 N 发出的存盘被永久判 stale;
 //   - 伤害 2:下一次铸造又铸出 N+1,同一个值被铸两次 —— 幽灵 B 手里的 N+1 与下一任持有者的 N+1 一样,
-//     存盘 CAS 与 db 守卫都分不开两者。
+//     只剩写权行的实例号能分开两者。
 //
 // 单调回滚之后,回滚后的任何合法持有者(采纳了 N+2 的源端,或之后任何新落点)手里的 epoch 都大于任何被
 // 回滚掉的值。代价:源端手里的 N 也过期了,它必须凭回执采纳 N+2 才能继续持有(见下)。
@@ -232,7 +304,7 @@ return 1
 // 为什么凭标记的回滚要求标记原样还在(伤害 3,令牌互斥):目标节点载入时的 A2′(C++ exit_release_mark.h
 // kLuaInheritClear)先核对 owner_epoch == N+1、再删掉 ≤ N+1 的标记,确认之后才建实体。两段是同一 Redis 上
 // 的原子 Lua,只能先后执行:A2′ 在先 → 标记已删,这里回 3、归属留在 B,源端读到 (N+1, 指向 B) 销毁自己;
-// 这里在先 → epoch 已是 N+2,A2′ 回 -1,B 拒建实体、发不出 DBTask(N+1)。「报错但已投递」不再造成双持有
+// 这里在先 → epoch 已是 N+2,A2′ 回 -1,B 拒建实体、认领不了 N+1。「报错但已投递」不再造成双持有
 // 与回档。同一条也收住「回滚晚于源端取证」:源端原子删掉本族标记之后,迟到的回滚只能回 3。
 // 不凭标记的铸造(首次落点、第二条腿、死节点接管)没有令牌可查,这一支做不到互斥(§12.8 第十三节残余)。
 //
@@ -394,7 +466,7 @@ type rollbackMode uint8
 const (
 	// rollbackModeKeep:epoch 键不动,location 按旧的原字节退回。用于本次没铸造的落点(同物理节点换图、
 	// dev 旁路),以及同物理节点 epoch 0 的铸造(§12.6.9(c):路由的目标就是持有节点本身,投递成功时它
-	// 缓存的就是铸出的 1,再 INCR 会废黜合法持有者)。
+	// 缓存的就是铸出值,再 INCR 会废黜合法持有者)。
 	rollbackModeKeep rollbackMode = iota
 	// rollbackModeBump:本次铸造过(N → N+1),回滚再 INCR 一格到 N+2,只升不降。
 	rollbackModeBump
@@ -424,7 +496,7 @@ type routeRollbackPlan struct {
 }
 
 // planRouteRollback 决定路由 / 重定向失败后怎么撤掉本次落点(取代旧的 rollbackEpochFor:旧写法把 epoch
-// 退回旧值,会同值重铸并让合法持有者的 DBTask 被永久判 stale,见 luaRollbackPlayerPlacement)。
+// 退回旧值,会同值重铸并让合法持有者的存盘被永久判 stale,见 luaRollbackPlayerPlacement)。
 //
 //   - old / oldRaw:本次 EnterScene 开头读到的旧 location 与其原文(陈旧 zone / 死节点接管时调用方已把两者
 //     一起清空,回滚 = DEL);oldZoneID:调用方按 scene:{id}:zone 解析出的旧 zone,是权威值。

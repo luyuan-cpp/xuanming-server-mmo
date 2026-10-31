@@ -33,9 +33,7 @@ func (s *RouteStore) HasHistoricalPlayers(ctx context.Context, storageIDs []uint
 			return false, fmt.Errorf("玩家存储白名单非法")
 		}
 		prefix := "`" + name + "`."
-		queries = append(queries, "SELECT 1 WHERE "+
-			"EXISTS(SELECT 1 FROM "+prefix+"`player_database` LIMIT 1) OR "+
-			"EXISTS(SELECT 1 FROM "+prefix+"`player_database_1` LIMIT 1) OR "+
+		queries = append(queries, "SELECT 1 WHERE EXISTS(SELECT 1 FROM "+prefix+"`player_store` LIMIT 1) OR "+
 			"EXISTS(SELECT 1 FROM "+prefix+"`player_centre_database` LIMIT 1) OR "+
 			"EXISTS(SELECT 1 FROM "+prefix+"`user_accounts` WHERE simple_players IS NOT NULL AND OCTET_LENGTH(simple_players)>0 LIMIT 1)")
 	}

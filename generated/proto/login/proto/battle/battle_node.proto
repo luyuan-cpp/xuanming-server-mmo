@@ -51,6 +51,9 @@ message CreateBattleRequest {
   uint64 admit_before_ms = 13;
   // 1：个人副作用之前必须先取得 Match SQL 的 COMPLETE；0 保持旧协议且不得追认。
   uint32 outcome_protocol_version = 14;
+  // 观战可见性,由 match 按 spectateVisibilityFor 决定后冻结进本原件(全局模式随 formation 的
+  // create_request 持久)。battle 存进房间,AddObserver 对非 PUBLIC 一律拒绝(第二道闸)。
+  eSpectateVisibility spectate_visibility = 15;
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):
@@ -155,6 +158,35 @@ message IssueBattleTicketResponse {
   BattleAssignedS2C assignment = 2;
 }
 
+// ---- 观战 L1 / L2(battle-spectate-tiered-fanout.md §15.4)----
+// 把一台 gate 挂进本场的中继扇出集合。幂等;同 gate_node_id 新实例覆盖旧实例。新挂的 gate 立即收到一帧
+// STATE 关键帧。target_instance_id 不是本实例回 kInvalidParameter;房间不存在回 kEntityIsNull;
+// 非公开局回 kInvalidParameter。已是广播档时不挂 gate,回 broadcast = true(match 据此把档位同步成 L2)。
+message AttachRelayGateRequest {
+  uint64 battle_id = 1;
+  uint32 gate_node_id = 2;
+  string gate_instance_id = 3;     // 中继帧信封的 target_instance_id(AGENTS §7.2 防僵尸)
+  string target_instance_id = 4;   // 本 battle 实例 UUID;不符即拒(进程重启后不能继承旧挂接)
+}
+message AttachRelayGateResponse {
+  TipInfoMessage error_message = 1;
+  string battle_instance_id = 2;   // 本实例 UUID,写进观战凭证,gate 据此丢弃僵尸帧
+  uint64 deadline_ms = 3;          // 战斗最长期限(Unix 毫秒),写进观战凭证,gate 据此兜底收尾
+  bool broadcast = 4;              // 本场已是广播档:没有挂 gate
+}
+
+// 本场升为全服广播(单向、幂等):此后每回合只发广播 topic,不再逐 gate 中继;升档时先发一帧 STATE。
+// 错误口径同 AttachRelayGate。
+message PromoteSpectateBroadcastRequest {
+  uint64 battle_id = 1;
+  string target_instance_id = 2;
+}
+message PromoteSpectateBroadcastResponse {
+  TipInfoMessage error_message = 1;
+  string battle_instance_id = 2;
+  uint64 deadline_ms = 3;
+}
+
 service BattleNode {
   rpc QueryObserver(QueryObserverRequest) returns (QueryObserverResponse);
   rpc QueryBattleCreation(QueryBattleCreationRequest) returns (QueryBattleCreationResponse);
@@ -163,4 +195,6 @@ service BattleNode {
   rpc AddObserver (AddObserverRequest) returns (AddObserverResponse);
   rpc RemoveObserver (RemoveObserverRequest) returns (RemoveObserverResponse);
   rpc IssueBattleTicket (IssueBattleTicketRequest) returns (IssueBattleTicketResponse);
+  rpc AttachRelayGate (AttachRelayGateRequest) returns (AttachRelayGateResponse);
+  rpc PromoteSpectateBroadcast (PromoteSpectateBroadcastRequest) returns (PromoteSpectateBroadcastResponse);
 }

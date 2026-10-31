@@ -60,6 +60,7 @@ set(SOURCE_FILES
     handler/rpc/battle_handler.cpp
     handler/rpc/player/player_service_interface.cpp
     logic/battle_room_manager.cpp
+    logic/battle_spectate_relay.cpp
     client/battle_client_edge.cpp
     main.cpp
     rpc_replies/register_handler.cpp

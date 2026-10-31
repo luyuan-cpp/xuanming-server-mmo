@@ -39,8 +39,6 @@ type fakeHomeZoneClient struct {
 	zone  uint32
 	err   error
 	calls int
-	// merging 原样填进 GetPlayerHomeZoneResponse.home_zone_merging(归属 zone 正在合服)。
-	merging bool
 	// onCall 非 nil 时在每次查询里先跑一遍。归属查询夹在「解析场景」与「预占人数」之间,
 	// 用例借它在这个窗口里改 Redis(destroy-while-entering)。
 	onCall func()
@@ -54,7 +52,7 @@ func (f *fakeHomeZoneClient) GetPlayerHomeZone(_ context.Context, _ *dspb.GetPla
 	if f.err != nil {
 		return nil, f.err
 	}
-	return &dspb.GetPlayerHomeZoneResponse{HomeZoneId: f.zone, HomeZoneMerging: f.merging}, nil
+	return &dspb.GetPlayerHomeZoneResponse{HomeZoneId: f.zone}, nil
 }
 
 // capturingKafkaWriter 把发出的消息原样留下,供解码 RoutePlayerEvent。
@@ -206,7 +204,7 @@ func TestMintEpochLuaRejectsStaleExpectedValueWithoutTouchingKeys(t *testing.T) 
 	// 调用方读到的是 2(并发请求已经推到 3):CAS 必须落败且两把键一个字节不动。
 	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
 		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
-		"2", "new-location-bytes", "")
+		mintLuaArgs("2", "new-location-bytes", "")...)
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(result))
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
@@ -216,7 +214,7 @@ func TestMintEpochLuaRejectsStaleExpectedValueWithoutTouchingKeys(t *testing.T) 
 	// 期望值对上:INCR 到 4 并写 location,一次原子完成。
 	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation,
 		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
-		"3", "new-location-bytes", "")
+		mintLuaArgs("3", "new-location-bytes", "")...)
 	require.NoError(t, err)
 	assert.Equal(t, "4", fmt.Sprint(result))
 	assert.Equal(t, "4", ownerEpochRaw(t, sc, playerID))
@@ -230,7 +228,7 @@ func TestMintEpochLuaTreatsMissingKeyAsZero(t *testing.T) {
 
 	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
 		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
-		"0", "loc", "")
+		mintLuaArgs("0", "loc", "")...)
 	require.NoError(t, err)
 	assert.Equal(t, "1", fmt.Sprint(result), "键不存在与 \"0\" 同义:首次铸造得到 1")
 
@@ -238,7 +236,7 @@ func TestMintEpochLuaTreatsMissingKeyAsZero(t *testing.T) {
 	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "0"))
 	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation,
 		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
-		"0", "loc", "")
+		mintLuaArgs("0", "loc", "")...)
 	require.NoError(t, err)
 	assert.Equal(t, "1", fmt.Sprint(result))
 }
@@ -955,7 +953,7 @@ func TestMintEpochLuaReplayAfterBumpedRollbackIsConflict(t *testing.T) {
 	writeHandoffMarker(t, sc, playerID, 1)
 	marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
 
-	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, "1", "placed-bytes", marker)
+	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, mintLuaArgs("1", "placed-bytes", marker)...)
 	require.NoError(t, err)
 	require.Equal(t, "2", fmt.Sprint(result))
 	result, err = sc.Redis.Eval(luaRollbackPlayerPlacement, rollbackKeys,
@@ -963,7 +961,7 @@ func TestMintEpochLuaReplayAfterBumpedRollbackIsConflict(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "-3", fmt.Sprint(result))
 
-	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, "1", "placed-bytes", marker)
+	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, mintKeys, mintLuaArgs("1", "placed-bytes", marker)...)
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(result), "铸造重发晚于回滚:不是本请求已生效")
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
@@ -2859,10 +2857,10 @@ func TestMintEpochLuaRecognizesReplayOfItsOwnWrite(t *testing.T) {
 		writeHandoffMarker(t, sc, playerID, 1)
 		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
 
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		assert.Equal(t, "2", fmt.Sprint(result))
-		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		assert.Equal(t, "-2", fmt.Sprint(result), "重发:认出是本请求自己的写入,返回取负的同一个新 epoch")
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "epoch 只前进一格")
@@ -2877,12 +2875,12 @@ func TestMintEpochLuaRecognizesReplayOfItsOwnWrite(t *testing.T) {
 		writeHandoffMarker(t, sc, playerID, 1)
 		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
 
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		require.Equal(t, "2", fmt.Sprint(result))
 		// 源 scene 的取证脚本已删掉本族标记(同一步里读 epoch / location 自行裁决),重发不再认。这里用 DEL 模拟。
 		mr.Del(ownerepoch.HandoffKey(playerID))
-		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		assert.Equal(t, "0", fmt.Sprint(result))
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
@@ -2895,11 +2893,11 @@ func TestMintEpochLuaRecognizesReplayOfItsOwnWrite(t *testing.T) {
 		writeHandoffMarker(t, sc, playerID, 1)
 		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
 
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		require.Equal(t, "2", fmt.Sprint(result))
 		require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), "someone-else-bytes"))
-		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "awaiting-bytes", marker)...)
 		require.NoError(t, err)
 		assert.Equal(t, "0", fmt.Sprint(result), "location 不是本请求写的那份:不是本请求生效")
 		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
@@ -2911,10 +2909,10 @@ func TestMintEpochLuaRecognizesReplayOfItsOwnWrite(t *testing.T) {
 		const playerID = uint64(6196)
 		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
 
-		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "loc-bytes", "")
+		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "loc-bytes", "")...)
 		require.NoError(t, err)
 		require.Equal(t, "2", fmt.Sprint(result))
-		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "loc-bytes", "")
+		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), mintLuaArgs("1", "loc-bytes", "")...)
 		require.NoError(t, err)
 		assert.Equal(t, "0", fmt.Sprint(result), "不凭标记的铸造区分不开「我已生效」与「别人写了同样的值」,维持冲突")
 		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))

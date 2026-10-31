@@ -30,3 +30,11 @@ constexpr uint32_t BattleNodeRemoveObserverIndex = 5;
 constexpr uint32_t BattleNodeIssueBattleTicketMessageId = 178;
 constexpr uint32_t BattleNodeIssueBattleTicketIndex = 6;
 #define BattleNodeIssueBattleTicketMethod  ::BattleNode_Stub::descriptor()->method(6)
+
+constexpr uint32_t BattleNodeAttachRelayGateMessageId = 349;
+constexpr uint32_t BattleNodeAttachRelayGateIndex = 7;
+#define BattleNodeAttachRelayGateMethod  ::BattleNode_Stub::descriptor()->method(7)
+
+constexpr uint32_t BattleNodePromoteSpectateBroadcastMessageId = 350;
+constexpr uint32_t BattleNodePromoteSpectateBroadcastIndex = 8;
+#define BattleNodePromoteSpectateBroadcastMethod  ::BattleNode_Stub::descriptor()->method(8)

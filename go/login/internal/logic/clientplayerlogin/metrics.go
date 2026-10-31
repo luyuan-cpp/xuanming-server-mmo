@@ -26,7 +26,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/metric"
 
-	"login/internal/logic/pkg/dataloader"
 	"login/internal/logic/pkg/sessionmanager"
 )
 
@@ -60,21 +59,7 @@ var (
 		Name:      "total_seconds",
 		Help: "End-to-end EnterGame async-chain latency, from TryLock " +
 			"acquire to releaseLock fire. Result label: success | " +
-			"preload_failed | apply_failed | lock_lost.",
-		Labels:  []string{"result"},
-		Buckets: stageBuckets,
-	})
-
-	// preloadSeconds: the EnsurePlayerAllDataInRedisAsync stage —
-	// Kafka SyncProducer.SendMessages + dispatcher-callback wait.
-	// Expected to dominate the total under load (per the postmortem
-	// hypothesis). Result label: success | failed | timeout.
-	preloadSeconds = metric.NewHistogramVec(&metric.HistogramVecOpts{
-		Namespace: metricNamespace,
-		Subsystem: "",
-		Name:      "preload_seconds",
-		Help: "EnsurePlayerAllDataInRedisAsync latency (Kafka send + " +
-			"dispatcher callback wait). Result: success | failed | timeout.",
+			"apply_failed | lock_lost.",
 		Labels:  []string{"result"},
 		Buckets: stageBuckets,
 	})
@@ -167,15 +152,14 @@ var (
 		Subsystem: "",
 		Name:      "failure_notify_total",
 		Help: "Client-facing failure tip pushes issued after the EnterGame async chain failed. " +
-			"Stage: preload | apply. Outcome: sent | failed | skipped_no_gate.",
+			"Stage: apply. Outcome: sent | failed | skipped_no_gate.",
 		Labels: []string{"stage", "outcome"},
 	})
 )
 
 // failureNotifyCounter 的 label 取值。
 const (
-	notifyStagePreload = "preload" // 预加载失败(含 dispatcher TTL 超时)
-	notifyStageApply   = "apply"   // applyLoadedPlayerSession 失败(含 EnterScene 被 scene_manager 拒绝)
+	notifyStageApply = "apply" // applyLoadedPlayerSession 失败(含 EnterScene 被 scene_manager 拒绝)
 
 	notifyOutcomeSent          = "sent"            // 命令已写进 Kafka(不等于客户端一定收到)
 	notifyOutcomeFailed        = "failed"          // 组装被守卫拒绝或 Kafka 写失败
@@ -184,12 +168,10 @@ const (
 
 // Result label values — exported so call sites self-document.
 const (
-	ResultSuccess        = "success"
-	ResultPreloadFailed  = "preload_failed"
-	ResultPreloadTimeout = "preload_timeout"
-	ResultApplyFailed    = "apply_failed"
-	ResultLockLost       = "lock_lost"
-	ResultPoolSaturated  = "pool_saturated" // PreloadPool 满,链未启动(只计数,不进 total_seconds)
+	ResultSuccess       = "success"
+	ResultApplyFailed   = "apply_failed"
+	ResultLockLost      = "lock_lost"
+	ResultPoolSaturated = "pool_saturated" // PreloadPool 满,链未启动(只计数,不进 total_seconds)
 )
 
 // observeTotal records both the histogram observation and the counter
@@ -241,17 +223,13 @@ var createPlayerStageBuckets = []float64{
 	0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5,
 }
 
-// createPlayerStageSeconds 的 stage 取值。建角持着账号锁串行跑这几步(开 NewPlayerSeed 时多一步 seed),
+// createPlayerStageSeconds 的 stage 取值。建角持着账号锁串行跑这几步,
 // 锁 TTL 是按它们的耗时之和估的(login.yaml Locker.AccountLockTTL;不是硬上界,理由见那边的注释),
 // 哪一步拖长了要能直接看出来。
-// id_probe 是 2026-10-15 加的(设计 new-player-first-enter-no-cold-read.md §10 P7):每次建角都有,不看种子开关;
-// tools/scripts/stress_summarize.ps1 的 CreatePlayer stages 表还没有这一列。
 const (
 	createStageMint         = "mint"          // 发号(号段 / snowflake)
-	createStageIDProbe      = "id_probe"      // 新铸 id 的只读探测(父键 / owner_epoch,一次 Redis 往返)
 	createStageName         = "name"          // 名字登记(含同名重试、生成名换名重试)
 	createStageRegister     = "register"      // player:zone 归属登记
-	createStageSeed         = "seed"          // 新号父键种子(NewPlayerSeed.Enabled 时才有,一次 Redis)
 	createStageAccountWrite = "account_write" // 围栏写账号 blob(含写未确认后的回读)
 )
 
@@ -297,42 +275,6 @@ var (
 			"ReleasePlayerName with admin token; see the matching ERROR log).",
 		Labels: []string{},
 	})
-
-	// 新号种子的每一次写入记一条(只在 NewPlayerSeed.Enabled 时有)。result 取 dataloader.SeedResult.String()。
-	// parent_exists / owner_epoch_exists 对新铸 id 稳态恒为 0:每 +1 都对应一条带 player_id 的 ERROR 日志
-	// (`[new-player-seed] freshly minted ...`),意味着 id 复用,按 ID 安全事件处理。error 表示种子写入未确认
-	// (可能已落地,也可能没有):首次入场命中则走快路径,否则退回冷读,结果相同,不影响正确性。
-	// idempotent 在建角侧稳态应接近 0(成因见 seedNewPlayer),每 +1 对应一条带 player_id 的 INFO 日志。
-	// 2026-10-15 起(设计 §10 P2):parent_exists / owner_epoch_exists 每 +1 还对应一次**被拒绝的建角**;
-	// 6b' 的只读探测(id_probe_total)已先拦下建角前就在的状态,这里只剩探测与种子写之间窗口里冒出来的。
-	createPlayerSeedTotal = metric.NewCounterVec(&metric.CounterVecOpts{
-		Namespace: createPlayerMetricNamespace,
-		Subsystem: createPlayerMetricSubsystem,
-		Name:      "seed_total",
-		Help: "New-player PlayerAllData seed writes by CreatePlayer (NewPlayerSeed.Enabled). " +
-			"Result: written | idempotent | parent_exists | owner_epoch_exists | error. " +
-			"parent_exists / owner_epoch_exists on a freshly minted id mean id reuse (see the ERROR log); " +
-			"the create is refused.",
-		Labels: []string{"result"},
-	})
-
-	// 建角在登记名字之前对新铸 id 的只读探测(createplayer_seed.go 的 probeMintedID;设计 §10 P7),
-	// 每次探测记一条,不看 NewPlayerSeed 开关。result 取 dataloader.MintedIDProbe.String():
-	// clear | parent_exists | owner_epoch_exists | error。除 clear 外每 +1 都对应一次被拒绝的建角和一条带
-	// player_id 的 ERROR 日志(`[minted-id-probe] ...`):parent_exists / owner_epoch_exists 意味着 id 复用,
-	// 按 ID 安全事件处理;error 是 Redis 探不清,建角 fail-closed。请求 ctx 截止之后不探、不计。
-	// (2026-10-16 补)探测途中请求 ctx 结束(go-redis 取连接 / 拨号时返回 ctx 错误)同样不计、只打 INFO。
-	// error 只统计不会被 go-redis 重发、或在截止前已重发到上限的 Redis 错误;读超时、连接池超时在截止之后会被
-	// 重发前的退避换成 ctx 错误,不计入 —— Redis 卡顿要看 stage_seconds{stage="id_probe"},不能指望 error。
-	createPlayerIDProbeTotal = metric.NewCounterVec(&metric.CounterVecOpts{
-		Namespace: createPlayerMetricNamespace,
-		Subsystem: createPlayerMetricSubsystem,
-		Name:      "id_probe_total",
-		Help: "Read-only probe of a freshly minted player_id before CreatePlayer reserves the name. " +
-			"Result: clear | parent_exists | owner_epoch_exists | error. Anything but clear refuses the create; " +
-			"parent_exists / owner_epoch_exists mean id reuse (see the ERROR log).",
-		Labels: []string{"result"},
-	})
 )
 
 // PrimeCreatePlayerMetrics 把孤儿计数器、以及新号种子的两个 id 复用结局预置成 0,让这几条序列从起服起就存在。
@@ -347,17 +289,8 @@ var (
 // 会被开关直接丢弃,等于没写。Prometheus.Host 留空的环境里本函数是空操作,与其它指标同口径。
 //
 // 只预置孤儿与种子的两个 id 复用结局:name_release_total 带 label、且不用于"出现即告警",不值得为它预铺四条序列。
-// 开关(NewPlayerSeed.Enabled)关着时种子的两条 0 序列照样预置:无害,`increase(...) > 0` 恒为假,不必按开关区分。
-// 2026-10-15 起再预置 id_probe_total 的三个拒绝结局(parent_exists / owner_epoch_exists / error):它们每 +1
-// 都是一次被拒绝的建角,同样用于「出现即告警」;clear 是常态,不预置。
 func PrimeCreatePlayerMetrics() {
 	createPlayerNameOrphanTotal.Add(0)
-	// 种子的两个 id 复用结局同样用于「出现即告警」,理由同上。
-	createPlayerSeedTotal.Add(0, dataloader.SeedParentExists.String())
-	createPlayerSeedTotal.Add(0, dataloader.SeedOwnerEpochExists.String())
-	createPlayerIDProbeTotal.Add(0, dataloader.MintedIDParentExists.String())
-	createPlayerIDProbeTotal.Add(0, dataloader.MintedIDOwnerEpochExists.String())
-	createPlayerIDProbeTotal.Add(0, dataloader.MintedIDProbeError.String())
 }
 
 // ── 顶号踢线指标 ─────────────────────────────────────────────────────────

@@ -44,6 +44,10 @@ message MatchSpectatorIntentRecord {
   uint64 owner_revision = 7;
   uint32 state = 8; // 1尚未发出Add、2已绑定current原件、5已关闭；未知一律拒绝。
   uint32 close_tip = 9; // 关闭原因(客户端tip)，先写为准，同request_id重放回同一结论；0=未记录原因，state1必须为0。
+  // eSpectateDelivery 数值(match_service.proto)。L1 / L2 观众不占 match_spectator 行，意图直接以 LOBBY 结案
+  // (state=5、close_tip=0、delivery=2)；重放时重新做幂等的中继 / 广播准入并签新凭证(battle-spectate-tiered-fanout.md §15.6)。
+  // 0 = 未以 LOBBY 结案(L0 观众与业务拒绝)。
+  uint32 delivery = 10;
 }
 message MatchSpectatorHeadRecord {
   option (OptionTableName) = "match_spectator_head";
@@ -64,7 +68,8 @@ message MatchNetworkProfileRecord {
 message MatchAuthorityTicketRecord {
   option (OptionTableName) = "match_authority_ticket";
   option (OptionPrimaryKey) = "player_id";
-  option (OptionIndex) = "state,mode,config_id,team_size,enqueued_ms;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_id";
+  // 第一条是按池读单排票的索引（authority.PoolTickets）：池 = (mode, config_id, team_size)，team_id=0 只取单排。
+  option (OptionIndex) = "state,mode,config_id,team_size,team_id,enqueued_ms,player_id;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_id";
   uint64 player_id = 1;
   string ticket = 2;
   string request_id = 3;
@@ -256,6 +261,9 @@ enum MatchBattleCompletionSourceKind {
   MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED = 0;
   MATCH_BATTLE_COMPLETION_SOURCE_KAFKA = 1;
   MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC = 2;
+  // Match 在权威截止加终局提交宽限之后自己写的 ABORT：没有任何 Battle 原字节，该行 format_version 为 0。
+  // 审计据此区分「Battle 提交的终局」与「Match 截止裁决」，不能再把 ABORT 行误读成 BATTLE_RPC 来源。
+  MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT = 3;
 }
 
 // 唯一终局与原结果outbox；RPC来源不伪造Kafka位点。

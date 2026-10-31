@@ -87,8 +87,8 @@ namespace relocate_confirm
 	// 不叫 kReplyBudget:travel_freeze_cap::kReplyBudget 是交接应答看门狗,同名异义。
 	inline constexpr std::chrono::seconds kReplyWaitBudget{30};
 
-	// 进场路由回到本节点之后等实体建出来的上限:路由传递 + AsyncLoad 6 次退避约 31.5s(redis_client.h 的
-	// kMaxLoadRetries = 6)+ 载入前清继承标记 5s(exit_release_mark::kInheritClearDeadline)+ 余量。
+	// 进场路由回到本节点之后等实体建出来的上限:路由传递 + 认领重试(PlayerStoreClient 的 claimBudgetSec = 30s)
+	// + 载入前清继承标记 5s(exit_release_mark::kInheritClearDeadline)+ 余量。
 	inline constexpr std::chrono::seconds kLandingBudget{60};
 
 	// 一轮核实(从转入 kVerifying 起)最多重试多久;到期仍读不到按"无法核实"处置(ShouldKickUnverified)。

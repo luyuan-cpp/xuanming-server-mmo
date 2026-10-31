@@ -67,10 +67,15 @@ namespace player_inbox_registry
 	// 日志用的类型名(枚举值名);不认识时返回 "unknown"。
 	const std::string &TypeName(uint32_t msgType);
 
+	// 类型规格的载荷上限(OptionPlayerInboxType.max_payload_bytes,字节)。唯一事实源是 proto,执行器据此校验载荷长度,
+	// 不在代码里另抄一份数字。不认识的类型、没写规格、规格里写 0 一律返回 0:调用方按「上限未知」fail-closed 拒执行,
+	// 不能当成「不限长」。SelfCheck 拒绝写 0 的规格,所以消费开着时认识的类型都拿得到非 0 值。
+	uint32_t MaxPayloadBytes(uint32_t msgType);
+
 	// 本二进制要消费的域:至少有一种类型登记了执行器的那些域,升序。落地钩子按它为每个域建运行时状态。
 	const std::vector<uint32_t> &ConsumerDomains();
 
 	// 启动自检:每个非 0 类型都有规格、所属域非 0 且写了域规格、分级是 DURABLE、载荷消息名能在生成池里解析、
-	// 执行器非空。返回空串 = 通过;非空串是可直接进日志的原因(PlayerInboxSystem::Initialize 据此停用消费)。
+	// 载荷上限非 0、执行器非空。返回空串 = 通过;非空串是可直接进日志的原因(PlayerInboxSystem::Initialize 据此停用消费)。
 	std::string SelfCheck();
 } // namespace player_inbox_registry

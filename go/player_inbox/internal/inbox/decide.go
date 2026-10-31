@@ -3,7 +3,6 @@ package inbox
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -13,22 +12,17 @@ import (
 
 	componentpb "proto/common/component"
 	inboxpb "proto/player_inbox"
+	"shared/inboxcontract"
 )
 
 // 本文件是存储层的纯判定函数:不碰库、不碰时钟,单测直接对着设计表断言(设计 §4.3、§6.2、§7.8、§7.9、§9)。
 // store_* 与 reconcile.go 只负责读写与事务,读出之后「怎么判、写回什么」一律在这里。
 
-// ContentSHA256 = sha256(msg_type ‖ issued_at_ms ‖ payload)(IB-2)。
-// 整数按 big-endian 定长编码(msg_type 4 字节、issued_at_ms 8 字节),拼接无歧义;
+// ContentSHA256 = sha256(msg_type ‖ issued_at_ms ‖ payload)(IB-2)。字节布局只在 shared/inboxcontract 写一份,
+// 与生产方 Match 核对回执用的是同一个实现(2026-10-30,评审 B-3);这里只保留按类型的入口。
 // issued_at_ms 在摘要里,所以生产方刷新它重试会得到 CONFLICT(设计 §6.2 生产方契约)。
 func ContentSHA256(t inboxpb.PlayerInboxMessageType, issuedAtMs uint64, payload []byte) []byte {
-	h := sha256.New()
-	var head [12]byte
-	binary.BigEndian.PutUint32(head[0:4], uint32(t))
-	binary.BigEndian.PutUint64(head[4:12], issuedAtMs)
-	h.Write(head[:])
-	h.Write(payload)
-	return h.Sum(nil)
+	return inboxcontract.ContentSHA256(uint32(t), issuedAtMs, payload)
 }
 
 // IsTerminalState 报告条目状态是否为终态(只有 PENDING 不是)。

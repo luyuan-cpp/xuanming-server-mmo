@@ -83,9 +83,13 @@ AllowUnsafeCrossNodeHandoff: true
 # -1 同时关掉 EnterScene「登录撞上未释放的持有者时请持有节点释放」(同一份释放协议,设计 §12)。
 LeaveSceneHolderReleaseWaitSeconds: 600
 
+# 无资格持有者撤销的宽限(秒,docs/design/location-release-binding.md §17)。请过持有节点释放之后,从等待计时起点(Redis TIME)
+# 算起过了这么久,且资格原件证明没有任何进程在当前 owner_epoch 下登记过,scene_manager 才推进 owner_epoch 并删 location。
+# 宽限只让在途的入场登记(15s)与交接冻结(70s)先走完,正确性不依赖它。0 / 不写 = 120;必须在 (85, 600] 内,否则拒启。没有关闭开关。
+UnqualifiedHolderRevokeGraceSeconds: 120
+
 # data_service gRPC 客户端(etcd 发现)。EnterScene 用它查玩家归属 zone
-# (GetPlayerHomeZone),结果随 RoutePlayerEvent.home_zone_id 下发,scene 节点据此选
-# 存盘 topic(cross-zone-scene-travel.md CZ-3)。
+# (GetPlayerHomeZone),结果随 RoutePlayerEvent.home_zone_id 下发,scene 节点用它做入场归属核对。
 # 语义:映射存在 → 用它;映射里没有 → 首次落点 / 同 zone 换图按 gate zone,跨 zone 传送的
 # 两条腿一律拒绝(gate zone 不能代表归属,需先回填映射);超时/不可用 → 拒绝进场景让
 # 上游重试(归属未知不得静默落进程 zone 库)。整块不写 = 本地单区联调,一律按 gate

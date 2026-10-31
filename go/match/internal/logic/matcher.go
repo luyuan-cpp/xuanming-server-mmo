@@ -136,12 +136,22 @@ func warnStarvedAnchor(queueKey string, anchor uint64, waitSeconds int64, tol fl
 // 独立 goroutine 里执行,不占锁。
 func StartMatcherLoop(ctx context.Context, svcCtx *svc.ServiceContext) {
 	if svcCtx.Authority != nil {
-		svcCtx.GlobalGatherSlots = make(chan struct{}, 16)
+		svcCtx.GlobalGatherSlots = make(chan struct{}, svcCtx.Config.GlobalMatch.GatherSlotCount())
 		readyCursor := &globalReadyCursor{}
 		svcCtx.StartRelayLoop(ctx, "match.global.ready.scan", 500*time.Millisecond, func(ctx context.Context) { readyCursor.round(ctx, svcCtx) })
+		// 到期终局恢复自成一个循环(2026-10-30,global_outcome_recover.go):翻页游标是这个循环的局部状态,只有它读写;
+		// 不按池归属分工,所有副本都跑,幂等靠 SQL 行锁与条件。装配在 GlobalGatherSlots 之后,与成局发起的初始化顺序无关。
+		outcomeRecovery := &globalOutcomeRecovery{}
+		svcCtx.StartRelayLoop(ctx, "match.global.outcome.recover", globalOutcomeRecoverInterval, func(ctx context.Context) {
+			outcomeRecovery.round(ctx, svcCtx.Authority, svcCtx.HoldRelay)
+		})
+		// 已提交成局的 Pending 恢复与新成局分开两个循环:恢复变慢不拖住撮合节拍。
 		svcCtx.StartSourceLoop(ctx, "match.global", 500*time.Millisecond, func(ctx context.Context) { runGlobalRound(ctx, svcCtx) })
+		StartGlobalPoolMatcher(ctx, svcCtx)
 		// 到期成局巡检只报数(2026-10-22 评审补,global_expired_audit.go),与上面的恢复循环分开:不占它的 500ms 节拍。
 		svcCtx.StartRelayLoop(ctx, "match.global.expired.audit", globalExpiredAuditInterval, func(ctx context.Context) { auditStrandedExpiredFormations(ctx, svcCtx) })
+		// 观战索引定期清理与意图保留期清理(global_spectator.go):全局分支不走 runMatcherRound,这里不起就没有人清。
+		startGlobalSpectateMaintenance(ctx, svcCtx, globalSpectateCleanupInterval, globalSpectatorIntentPurgeInterval)
 		return
 	}
 	interval := time.Duration(svcCtx.Config.MatcherIntervalMs) * time.Millisecond
@@ -346,7 +356,7 @@ func pruneEmptyQueue(svcCtx *svc.ServiceContext, queueKey string, modeName strin
 // requiredPlayers 返回 (mode, config) 的凑满人数;未知模式/未配置返回 0。
 // PVP 各模式它就是队列的凑满人数,必须与 JoinQueue 的 required 口径一致,否则队列永远凑不满或多弹人。
 // PVE_TEAM 返回的是副本人数**上限**:排队按人数档凑单(见 requiredPlayersForQueue),
-// 整队开战(TeamSizeFor)拿它判超编;JoinQueue 也用它校验请求的人数档。
+// 整队开战(TeamSizeFor)与它同口径判超编;JoinQueue 也用它校验请求的人数档。
 func requiredPlayers(svcCtx *svc.ServiceContext, mode int32, config uint32) uint32 {
 	switch matchpb.MatchMode(mode) {
 	case matchpb.MatchMode_MATCH_MODE_1V1:
@@ -356,12 +366,9 @@ func requiredPlayers(svcCtx *svc.ServiceContext, mode int32, config uint32) uint
 	case matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
 		return kMaxBattleTeamSize * 2
 	case matchpb.MatchMode_MATCH_MODE_PVE_TEAM:
-		required := svcCtx.Config.PveTeamSizeFor(config)
-		// 队伍上限 5 收口(D14),与 JoinQueue 同口径。
-		if required > kMaxBattleTeamSize {
-			required = kMaxBattleTeamSize
-		}
-		return required
+		// 人数上限来自 PlayMode 表(模板目录编译时已按 Dungeon.max_team_size 与引擎上限 5 收口);
+		// 没有开放的 PVE_TEAM 行即 0(未开放组队)。
+		return min(svcCtx.Catalog.MaxTeamSize(matchpb.MatchMode_MATCH_MODE_PVE_TEAM, config), kMaxBattleTeamSize)
 	default:
 		// PVE_SOLO 不入队;3v3/切磋没有队列。
 		return 0

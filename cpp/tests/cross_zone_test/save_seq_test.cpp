@@ -10,7 +10,6 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/mission/comp/mission_comp.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
-#include "player/system/db_task_dispatch_system.h"
 #include "player/system/dirty_save_stats.h"
 #include "player/system/player_data_loader.h"
 #include "player/system/player_persist_marshal.h"
@@ -36,10 +35,8 @@
 //
 // 两层:
 //   SaveSeq.*(纯)   局部 save_seq::SaveSeqAllocator 实例与纯函数,时间显式传入,不碰 tlsIdGeneratorManager、不读墙钟;
-//   SaveSeq.*(ECS)  驱动 PlayerLastPersistedSnapshotComp::Replace、HandlePlayerAsyncSaved 与 SavePlayerToRedis 的快路径。
-//                    宿主里没有 Redis 客户端(GetPlayerDataRedis() 为空):快路径用例先 ASSERT 快照相等再调 SavePlayerToRedis,
-//                    实现出错时在断言处失败返回,不会走到写盘段对空指针解引用、连带后面的用例不跑。
-// InitPlayerFromAllData 里的播种与 SavePlayerToRedisImpl 写盘段的发号在宿主里跑不通(§7.2、§7.5),由代码评审与本地端到端覆盖。
+// 没有变化的存盘不发请求由 cross_zone_test.cpp 的 PlayerStoreDirectEcs 覆盖。
+// InitPlayerFromAllData 里的播种在宿主里跑不通(§7.2、§7.5),由代码评审与本地端到端覆盖。
 // 用例名统一带 SaveSeq 前缀,§11 第 6 步按名逐条核对。
 // ---------------------------------------------------------------------------
 
@@ -272,131 +269,4 @@ TEST(SaveSeq, SnapshotStripsLastSaveSeq)
     landed.set_last_save_seq(31338);
     comp.Replace(landed);
     EXPECT_EQ(comp.snapshot->last_save_seq(), 0u);
-}
-
-// ============================================================================
-// 2. ECS 级:落地回调 → 快照剥离 → 快路径
-// ============================================================================
-
-namespace
-{
-constexpr Guid kSaveSeqPlayerId = 950400001;
-
-// 本宿主不加载配表:在测试创建点显式构造"加载已完成"的持久组件集合(与 cross_zone_test.cpp / db_task_dispatch_test.cpp
-// 的 CreatePersistedPlayerComps 同一份清单;那两处都在匿名命名空间里,不跨编译单元复用)。
-void CreatePersistedPlayerComps(entt::entity player)
-{
-    auto& registry = tlsEcs.actorRegistry;
-    registry.emplace<Transform>(player);
-    registry.emplace<PlayerUint64Comp>(player);
-    registry.emplace<PlayerSkillListComp>(player);
-    registry.emplace<PlayerUint32Comp>(player);
-    registry.emplace<BaseAttributesComp>(player);
-    registry.emplace<LevelComp>(player);
-    registry.emplace<PlayerAttributeComp>(player);
-    registry.emplace<PlayerPetComp>(player);
-    registry.emplace<PlayerProfileComp>(player);
-    registry.emplace<PlayerBagsComp>(player);
-    registry.emplace<MissionsContainerComp>(player);
-    registry.emplace<PlayerAssetOpLedgerComp>(player);
-    registry.emplace<BattleSettlementLedgerComp>(player);
-    registry.emplace<PlayerInboxLedgerComp>(player);
-    // 神秘商人限购记录是 2026-10-19 新增的持久组件,这份清单当时漏了;缺它 marshal 会整份拒存。
-    registry.emplace<PlayerMysteryMerchantComp>(player);
-    registry.emplace<CurrencyComp>(player);
-    registry.emplace<PlayerCurrencyComp>(player);
-    // 两表顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由两张表的 Unmarshal 创建。
-    registry.emplace<PlayerDatabaseCarryComp>(player);
-    registry.emplace<PlayerDatabase1CarryComp>(player);
-}
-
-// 在线(未退出、无交接)的玩家:落地回调只更新快照,不走退出 / 交接分支。
-entt::entity MakeOnlinePlayer()
-{
-    const auto player = tlsEcs.actorRegistry.create();
-    CreatePersistedPlayerComps(player);
-    tlsEcs.playerList.emplace(kSaveSeqPlayerId, player);
-    tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, kSaveSeqPlayerId);
-    return player;
-}
-
-// 与 SavePlayerToRedis 快路径比较时的新消息同一个形状:走同一个统一入口(拼装 + player_id + 持久 schema 世代),
-// 不带 last_save_seq。
-bool MarshalAsFresh(entt::entity player, PlayerAllData& data)
-{
-    return player_persist::MarshalPlayerForPersist(player, kSaveSeqPlayerId, data);
-}
-
-class SaveSeqEcsFixture : public ::testing::Test
-{
-protected:
-    void SetUp() override
-    {
-        tlsEcs.Clear();
-        SessionMap().clear();
-        // 快路径在快照相等时会查 DBTask 投递账本(NeedsResave):用空账本,且不留给 cross_zone_test.cpp 里依赖空账本的用例。
-        DbTaskDispatchSystem::ResetForTest();
-    }
-
-    void TearDown() override
-    {
-        DbTaskDispatchSystem::ResetForTest();
-        tlsEcs.Clear();
-        SessionMap().clear();
-    }
-};
-
-using SaveSeqEcs = SaveSeqEcsFixture;
-} // namespace
-
-TEST_F(SaveSeqEcs, SecondUnchangedSaveHitsFastPath)
-{
-    const auto player = MakeOnlinePlayer();
-
-    // 第一次存盘落地:Redis 里的那份带着发号写入的 last_save_seq。
-    PlayerAllData landed;
-    ASSERT_TRUE(MarshalAsFresh(player, landed));
-    landed.set_last_save_seq(7001);
-    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kSaveSeqPlayerId, landed);
-
-    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
-    const auto* snap = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
-    ASSERT_NE(snap, nullptr) << "落地回调记下快照";
-    ASSERT_TRUE(snap->HasSnapshot());
-    ASSERT_EQ(snap->snapshot->last_save_seq(), 0u) << "快照在 Replace 时剥离了 last_save_seq";
-
-    // 内存没变:新 marshal 与快照逐字段相等(新消息此刻还没发号,两侧都不带序号)。
-    PlayerAllData fresh;
-    ASSERT_TRUE(MarshalAsFresh(player, fresh));
-    ASSERT_TRUE(dirty_save::IsEqual(fresh, *snap->snapshot))
-        << "这里不等,下面的 SavePlayerToRedis 会越过快路径去写空的 Redis 客户端;先在断言处失败";
-
-    const auto before = dirty_save_stats::Read();
-    EXPECT_FALSE(PlayerLifecycleSystem::SavePlayerToRedis(player)) << "第二次无改动的存盘命中快路径,不写盘";
-    const auto after = dirty_save_stats::Read();
-    EXPECT_EQ(after.total - before.total, 1u);
-    EXPECT_EQ(after.skipped - before.skipped, 1u) << "计入快路径跳过";
-}
-
-TEST_F(SaveSeqEcs, FastPathIgnoresDifferingLastSaveSeq)
-{
-    const auto player = MakeOnlinePlayer();
-
-    // 连续两次落地,序号不同(每次写盘都变),业务内容相同:快路径仍判相等。
-    for (const uint64_t landedSeq : {uint64_t{9001}, uint64_t{9005}})
-    {
-        PlayerAllData landed;
-        ASSERT_TRUE(MarshalAsFresh(player, landed));
-        landed.set_last_save_seq(landedSeq);
-        PlayerLifecycleSystem::HandlePlayerAsyncSaved(kSaveSeqPlayerId, landed);
-
-        const auto* snap = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
-        ASSERT_NE(snap, nullptr);
-        ASSERT_TRUE(snap->HasSnapshot());
-        PlayerAllData fresh;
-        ASSERT_TRUE(MarshalAsFresh(player, fresh));
-        ASSERT_TRUE(dirty_save::IsEqual(fresh, *snap->snapshot)) << "landed_seq=" << landedSeq;
-
-        EXPECT_FALSE(PlayerLifecycleSystem::SavePlayerToRedis(player)) << "landed_seq=" << landedSeq;
-    }
 }

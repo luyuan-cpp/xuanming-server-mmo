@@ -92,6 +92,11 @@
 > `services/battle/settlement/settlement_outbox.h`(结算重投判定 + Redis key/Lua 契约)。
 > **R13 的兼容位有到期日**:`target_player_id`/`player_id`/`player_list` 为空时收方放行并
 > 只记一次 INFO;**灰度一个版本之后必须改为丢弃**,否则栅栏等于没加。
+>
+> **2026-10-30 补记(未编译,待 Codex)**:上面这批只封住了 scene → gate 的 muduo RPC 面,Kafka 版 `PushToPlayerEvent` /
+> `BroadcastToPlayersEvent` 此前没有栅栏,事件里也没有可比对的字段。现已补齐:两个事件加 `player_id` / `player_list`,
+> 两条入口共用 `cpp/nodes/gate/handler/gate_push_delivery.{h,cpp}`,全部生产者(Go kafkautil、login、mail、C++ battle)
+> 都填目标玩家、拒发 0;见 [battle-spectate-tiered-fanout.md](battle-spectate-tiered-fanout.md) C 批。
 
 ### 4.1 已在做:控制面主题改分区(修 R12,顺带 R05/R09)
 

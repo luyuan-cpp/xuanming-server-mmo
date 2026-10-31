@@ -1404,7 +1404,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 - 极端残余:推迟期间节点重新注册又再死,而本进程的 PUT 与 DELETE 都漏掉了,会沿用上一次的首次观察时刻。
 - abandoned 之后没有自动重扫:fullSync 不是周期任务,死节点会留在负载集,名下玩家一直回 18,直到 watch 中断、领导权变化或重启 SM 领导者。旧代码 ZREM 失败时同样残留,不算回归,新告警覆盖了它。复审建议放弃时调一次 `RequestLoadReporterResync()`,未落。*(2026-10-22 已落码,未编译、未测试:`retryDeferredNodeDetaches` 的 abandoned 分支放弃后调 `RequestLoadReporterResync()`,fullSync 的陈旧清扫会在负载集里重扫到它、以新的首次观察时刻重新推迟;每个卡住的节点最多每个放弃期限触发一次 fullSync。用例在 `node_detach_deferred_test.go` 的 `abandons_after_give_up`。)*
 - expired 分支的重新注册检查,挡不住"PUT 已到达 watchCh、还没被处理"的竞态,可能把新化身不带 death_at 摘出负载集。前提是 Redis 拒 SET 已满一个屏障,概率极低。
-- 刚失去领导权的副本在 cancel 时,会把快照交给本地收尾队列,而跟随者上的 drain 不经领导者闸门,会删掉新化身的计数。这是既有问题的一个新入口。
+- 刚失去领导权的副本在 cancel 时,会把快照交给本地收尾队列,而跟随者上的 drain 不经领导者闸门,会删掉新化身的计数。这是既有问题的一个新入口。*(2026-10-30 已落码,未编译、未测试:收尾任务落 Redis,drain 有领导者闸门,cancel 在跟随者上不写任务;见 `scene-creation-architecture.md`「Node-death reconciliation」与 `docs/PROGRESS.md` 2026-10-30 死节点收尾任务落 Redis 条目。)*
 - 同一场景跨节点重写(频道迁移后 NodeId 变了)时,EnterScene 只在 SceneId 变了才减旧场景人数,这个场景的人数会多 1。这是 EnterScene 既有的问题,LeaveScene 的注释"改写它的 EnterScene 已减过旧场景人数"对这种情况不准确,待另开一项。
 - `ResolveSceneReentryBarrier` 对配置值没有上限。屏障配到 ≥10 分钟时,death_at 的 TTL 会短于屏障,推迟那一段的截止也会越过 10 分钟。既有问题,建议另开一项做配置校验。
 - 告警还有这些盲区:
@@ -1665,6 +1665,7 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
    - A1:本次交接没写出任何标记。换手门只凭 epoch 等于观察值的标记放行,而 E 代标记只有本节点能写,所以放行不可能发生。"同一代 SET 被 Redis 回 ERROR"也在这一类:SET 没有执行。
    - B4:同一原子脚本删掉本族标记,并读到 epoch 等于缓存值。epoch 只经 INCR 前进(回滚也是 INCR),所以此前从未有凭本次标记的铸造;脚本之后,铸造 Lua 的标记复核挡住一切凭本族标记的铸造。
    - B5:同一原子脚本删掉本族标记,并读到"回执 = 本次标记原文、epoch = E+2 = location.owner_epoch、location 指回本节点本 zone"。最后一次写 location 的就是对本次铸造的回滚(之后若还有铸造,location 会被整条重写、回执消失);E+2 之后能换属主的只剩本节点自己以后写的标记,以及不凭标记的路径(location 为空、等待落点、死节点、zone 下线、dev 旁路),后者都不适用于指向活节点的 location。采纳与解冻在同一回调里完成。
+     - *2026-10-30 补注*:墙钟地板([zone Redis 回退防护](zone-redis-regression-guard-20261022.md) §4.3.1)之后,铸造取 max(E+1, 当前毫秒),回滚值不再恰好是 E+2,判据改为「epoch ≥ E+2 且 = location.owner_epoch」(`ClassifyOwnership`、`ResumeTravelAfterRevocation`、`kResumeFenceLua` 同批改)。论证不变:回执只可能来自凭本次标记原文那一次铸造的回滚,之后的任何落点都会重写 location;本节其余处的「E+2」读作「回滚后的值」。
    - 其余摘冻结的路径(`DestroyDeposedPlayer`、`ConcludeHandoffAfterMarkSent`、存盘被 CAS 拒、B7–B11)都会同时销毁实体。"退出优先"只作用于带 `UnregisterPlayer` 的实体,战斗侧把它视同离线。
    - 适用范围:只覆盖交接协议本身。判死接管、LeaveScene 之后的首次铸造、dev 旁路、gate 会话被改绑后的僵尸,这些"节点不知情地失去属主"的情形照旧由存盘 CAS 兜底,与 GO-2 之前同级。
 9. **兼容与升级顺序**:
@@ -2005,7 +2006,7 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
   2. 副本重启后屏障从复核时刻重新起算,最多多等一个屏障;
   3. 旧实例失租超过屏障仍活着时,未落盘进度丢失(只丢不盖),同 handover-single-writer-v#1;
   4. 进程交易持有方(`account_role_admission` 里旧实例未关闭的入场世代)不在本项范围:登记新入场不受它影响,交易侧的处理归落地围栏线。
-  5. (2026-10-24 复核补)资格 E 小于当前 owner_epoch 的被顶替情形仍会卡住:例如跨节点交接已铸 E+1、location 改到目标节点,目标进程在登记资格之前崩溃、又被同号顶替。此时资格还是源进程的 `E|U7|F`,第 3 条不成立;即使放宽,源进程 U7 可能健在、仍在册,第 4 条也不成立。登录恰好落回该节点时新进程能按 E+1 登记(`kRegisterFenceLua` 允许更大的 E 盖过),挑到别的节点则一直 18,LeaveScene 也拿不到证据。改动前同样卡住,不是回归。根治要在落点 Lua 里原子比对资格原文、并用「location 节点的现任实例启动晚于 location 写入」作证据,或改 C++ 资格契约允许同号新实例补写凭证,两者都要单独评审。另一条收口线 `location-release-binding.md` §17(无资格持有者由权威方带围栏撤销,2026-10-24 设计、未落码)正好覆盖「原件 E ≠ location E」这一类,落码后本条改为指向那里;`location-release-binding.md` §3.3 残余(1)、§17.1 与 `release_fence.h` 里「等被顶替(GO-3)」的说法已按此订正。
+  5. (2026-10-24 复核补)资格 E 小于当前 owner_epoch 的被顶替情形仍会卡住:例如跨节点交接已铸 E+1、location 改到目标节点,目标进程在登记资格之前崩溃、又被同号顶替。此时资格还是源进程的 `E|U7|F`,第 3 条不成立;即使放宽,源进程 U7 可能健在、仍在册,第 4 条也不成立。登录恰好落回该节点时新进程能按 E+1 登记(`kRegisterFenceLua` 允许更大的 E 盖过),挑到别的节点则一直 18,LeaveScene 也拿不到证据。改动前同样卡住,不是回归。根治要在落点 Lua 里原子比对资格原文、并用「location 节点的现任实例启动晚于 location 写入」作证据,或改 C++ 资格契约允许同号新实例补写凭证,两者都要单独评审。另一条收口线 `location-release-binding.md` §17(无资格持有者由权威方带围栏撤销,2026-10-24 设计、未落码)正好覆盖「原件 E ≠ location E」这一类,落码后本条改为指向那里(**2026-10-30 已落码、未编译:本条由 §17 收口,见 §17.9**);`location-release-binding.md` §3.3 残余(1)、§17.1 与 `release_fence.h` 里「等被顶替(GO-3)」的说法已按此订正。
   6. (既有,复核补登)节点号被复用而 DELETE 没被领导者处理(领导者缺位、scene_manager 整体重启)时,旧进程名下副本场景的收尾快照拿不到:(zone,node) 身份一直在册,不会入死节点收尾队列。根治要让场景记录宿主实例号,归死节点收尾线;GO-3 的实例差集只记时间,不改变场景收尾。
 
 **3. 34 来源栅栏(§12.5.6 残余 1、§13.2「上限到期一律踢线」)**
@@ -2557,7 +2558,7 @@ sequenceDiagram
 - **回归**：Go `TestLateMarkWritesFromReplacedConnectionNeverOpenHandoffGate`（`lc1_…` / `lc2_…` 两个子用例按 Redis 实际执行顺序重放，断言迟到写不改任何字节、换手门与 LeaveScene 都拿不到证据，且新持有者自己的发布照常放行）；C++ `CurrencyTest.HandoffMarkFramesDelayedOnReplacedConnectionCannotReviveCredentialAgainstRealRedis`（两条真实连接，旧帧先 `redisAppendCommandArgv` 留在输出缓冲、新连接跑完取证 / 重载后才发出；需 `MMORPG_TEST_REDIS_ADDR`）。会话结束凭证（同日评审后修订为带围栏，不再拒发）：Go 子用例 `session_ended_credential_lands_after_same_node_reload`（迟到凭证帧回 -2）/ `session_ended_credential_releases_idle_holder`（原件 F 照写、换手门与 LeaveScene 拿到证据）；C++ 同一真 Redis 用例第三段（F / R 原件照写、迟到帧 -2、owner 推进 0）；`ReleaseFenceEcs.SessionEndedReleaseWithoutHolderReadsQualificationBeforeCredential`（HEAD 原名 `..._WithoutHolderWritesCredential`）、`RoleAdmissionTest.RegistrationInFlightBlocksSessionEndedCredential`、`ReleaseFence.CredentialQualification*`；`kReleaseMarkLua` 的 -2 相应更新了既有期望。均未编译、未运行。
 - **残余**：
   1. Redis 自身回退（异步复制下故障转移丢掉已确认的 fence 写）不在本围栏能力内：丢掉新登记后旧 H 可能重新成为现任，迟到写会被接受。归"zone Redis 回退时的存档防护"另案。
-  2. ~~会话结束凭证不再发~~（评审后修订：§15 起等待上限不再授权删 location，拒发会让"持有节点活着而不持有"永久卡住，已改为带围栏的凭证）。剩下的是拿不出资格的情形：本节点从未在 location 记的那个 E 下登记成功（入场登记在写 fence 之前被拒；或交接回滚把 location 推到 E+2、而实体已在销毁侧收尾、转写标记又已过期）时，fence 原件的 E 对不上，判 `no_qualification` 并升 WARN；这条 location 要等玩家下次登录落回该节点重新登记，或持有节点死亡 / 被顶替。活性代价，不是数据风险。
+  2. ~~会话结束凭证不再发~~（评审后修订：§15 起等待上限不再授权删 location，拒发会让"持有节点活着而不持有"永久卡住，已改为带围栏的凭证）。剩下的是拿不出资格的情形：本节点从未在 location 记的那个 E 下登记成功（入场登记在写 fence 之前被拒；或交接回滚把 location 推到 E+2、而实体已在销毁侧收尾、转写标记又已过期）时，fence 原件的 E 对不上，判 `no_qualification` 并升 WARN；这条 location 要等玩家下次登录落回该节点重新登记，或持有节点死亡 / 被顶替。活性代价，不是数据风险。**（2026-10-30 已收口，未编译、未测试：由 [location-release-binding.md](location-release-binding.md) §17 的「无资格持有者带围栏撤销」处理 —— scene_manager 请过持有节点释放、过了宽限之后，原子复核资格原件缺失或属于别的 E、没有 E 代标记，再推进 owner_epoch 并删 location；实现与用例见那里的 §17.9。）**
   3. 改派已写成 F 之后标记被消费或过期，踢线前补写返回 -2；**评审后修订**：玩家重登撞门时，scene_manager 的登录撞门释放请求（location-release-binding.md §12）落到本节点、走会话结束凭证，本节点自己的 F 原件可以被消费写出凭证（整节点疏散期间身份不确认，不写，等节点退出后由注册表证据收口）。
   4. `RoleAdmissionSystem` 的登记已落地又被撤销（15s 截止 / Seal）时，登记脚本删掉的继承标记没有即时补写路径；**评审后修订**：撤销留下的 R 原件同样能被会话结束凭证消费，下一次 LeaveScene 重试 / 登录撞门即可收口。
 - **Java 版**：不适用。Java 的跨节点交接是一笔 MySQL 交出事务（Java 仓 `PARITY.md`「跨节点换图与归属交接」行的有意差异 D1），没有 handoff 标记、A1′ / A2′ 与 `ReleasePlayer` 凭证这条链；结局不明时用加锁读探测（在同一行锁上等旧事务提交或回滚），不依赖连接顺序。只读核对 PARITY 行文，未读 Java 源码细节，不登记 PARITY。

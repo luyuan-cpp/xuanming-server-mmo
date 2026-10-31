@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// zoneDownRegistry 是「注册表里该 zone 已一条注册都没有」的替身,供需要越过 P2 / 热状态门禁的用例使用。
+// zoneDownRegistry 是「注册表里该 zone 已一条注册都没有」的替身,供需要越过 P2 门禁的用例使用。
 type zoneDownRegistry struct{}
 
 func (zoneDownRegistry) SceneNodesInZone(context.Context, uint32) (int, error) { return 0, nil }

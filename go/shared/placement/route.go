@@ -1,6 +1,6 @@
 package placement
 
-// 本文件是「映射持久化(D1)」在 Redis 一侧的契约:新增的两把键、合服围栏分片、rev 的格式与比较、
+// 本文件是「映射持久化(D1)」在 Redis 一侧的契约:新增的两把键、rev 的格式与比较、
 // 发布脚本(set-if-newer)全文及其回复分类(docs/design/player-route-mapping-durability-proposal.md §3.3、§4.2,
 // 第 1a 批定稿)。
 //
@@ -198,26 +198,6 @@ end
 return 0
 `
 
-// 合服围栏在库里按 (zone_id, shard) 存 N 份相同内容:建角只锁 player_id % N 那一个分片,
-// 获取围栏的一方锁全部分片(提案 §3.2「围栏为什么分片」)。
-const (
-	// DefaultRouteFenceShards 是 RouteStore.FenceShards 的缺省值。
-	DefaultRouteFenceShards uint32 = 8
-	// MaxRouteFenceShards 是分片数上限,同时是**围栏持有者的契约**:持有者(第 2 批的 merge_zone)
-	// 必须锁住并写满 0..MaxRouteFenceShards-1 全部分片行,而不是只写自己配置的 N 行 ——
-	// 各进程的 N 可能不同,N 大的写者会落到持有者没锁的分片上,绕过围栏。
-	MaxRouteFenceShards uint32 = 64
-)
-
-// RouteFenceShard 返回 playerID 在 shards 个分片里落在哪一片。shards 不在 [1, MaxRouteFenceShards] 时报错:
-// 0 会除零,超过上限则会落到围栏持有者不保证写过的分片上(见 MaxRouteFenceShards)。
-func RouteFenceShard(playerID uint64, shards uint32) (uint32, error) {
-	if shards < 1 || shards > MaxRouteFenceShards {
-		return 0, fmt.Errorf("placement: route fence shards %d out of [1, %d]", shards, MaxRouteFenceShards)
-	}
-	return uint32(playerID % uint64(shards)), nil
-}
-
 // RouteRowShards 是 player_route 的固定分片数:route_shard = player_id % RouteRowShards,
 // 是聚簇主键 (route_shard, player_id) 的首列。目的是把单调递增的 player_id 在 TiDB 上拆成 64 条写入尾部
 // (docs/design/player-route-mapping-durability-proposal.md §11.2「第 1a 批热点修复」):号段发号在每个 login 段内
@@ -228,15 +208,13 @@ func RouteFenceShard(playerID uint64, shards uint32) (uint32, error) {
 // 上限 256:route_shard 列是 tinyint unsigned。
 //
 // 2026-10-13 按容量模型(docs/design/capacity-model-hok-scale.md §4.1)定为 64:单 Region 的写入上限没测过,
-// 而模数建表后改不了,取 64 是保险。此前 HEAD(d5cbb8a8e)按 16 提交过:**按 16 建过表的库必须先 DROP 五张路由表
-// (player_route、zone_merge_fence、zone_merged_into、route_meta、route_reconcile)再迁移**(提案 §11.2
+// 而模数建表后改不了,取 64 是保险。此前 HEAD(d5cbb8a8e)按 16 提交过:**按 16 建过表的库必须先 DROP 四张路由表
+// (player_route、zone_merged_into、route_meta、route_reconcile)再迁移**(提案 §11.2
 // 「行片 16 → 64」的前置,做法同 HR4)。不 DROP 的话旧表的 CHECK 仍是 % 16:建 route store 的入口(db_first 的
 // data_service、route_tool、debugutil)建池时由探针 P5 拒绝(store.ErrRouteShardModulusMismatch;data_service 不装配
 // route store、RegisterPlayerZone 一律 fail-closed,Store.Required=true 时拒启;route_tool 退出码 2);redis 模式的
 // data_service 不建 route store、认不出旧模数,所以人工 SHOW CREATE TABLE player_route 核对仍要做(提案 §11.2
 // 「正向探针 P5」)。
-//
-// 与 RouteFenceShard 无关:那是可配置的围栏分片数,只决定 W1 锁哪一个围栏行;两者同时出现的函数里不得同名。
 const RouteRowShards uint32 = 64
 
 // RouteRowShard 返回 player_route.route_shard。写者与读者都只能经它计算,不得自己再写一份取模 —— 算错片的写者
@@ -298,22 +276,16 @@ func CompareRev(a, b string) (int, error) {
 	}
 }
 
-// PublishRouteKeys 返回发布脚本的 KEYS:player:zone、player:placement、player:maprev,
-// fenceZone != 0 时追加第 4 把 merge:in_progress:{fenceZone}(W1 用:提交点复核合服围栏);
-// fenceZone == 0 只给三把(第 2 批合服批量发布用:那时围栏由持有者自己在库里校验)。
+// PublishRouteKeys 返回发布脚本的 KEYS:player:zone、player:placement、player:maprev。
 //
 // 多键脚本成立的前提是 mapping Redis 为单实例(非 Cluster),所以键里不带 hash tag。
-func PublishRouteKeys(playerID uint64, fenceZone uint32) []string {
-	keys := []string{HomeZoneKey(playerID), Key(playerID), MapRevKey(playerID)}
-	if fenceZone != 0 {
-		keys = append(keys, MergeFenceKey(fenceZone))
-	}
-	return keys
+func PublishRouteKeys(playerID uint64) []string {
+	return []string{HomeZoneKey(playerID), Key(playerID), MapRevKey(playerID)}
 }
 
 // PublishRouteScript 是把库里一行发布到 mapping Redis 的脚本(set-if-newer)。
 //
-// 在提案 §4.2 的基础上加了五处(规格 b.1):rev 参数校验、可选的围栏键(KEYS[4],提交点复核合服围栏)、
+// 在提案 §4.2 的基础上加了四处(规格 b.1):rev 参数校验、
 // 无 maprev 时的遗留值守卫(不静默覆盖 P1 导入之前或绕过本脚本的写者留下的值)、返回 0 时把 maprev
 // 原值写回一次(touch,让同一连接随后的 WAITAOF 覆盖「此刻已在缓存里的状态」)、逐字节比较。
 //
@@ -322,12 +294,11 @@ func PublishRouteKeys(playerID uint64, fenceZone uint32) []string {
 //
 // 回复形状与含义见 ClassifyPublishReply;改脚本必须同步改它和 route_test.go 的向量。
 const PublishRouteScript = `-- route publish (set-if-newer),docs/design/player-route-mapping-durability-proposal.md §4.2(第 1a 批定稿)
--- KEYS: 1=player:zone:{id} 2=player:placement:{id} 3=player:maprev:{id} [4=merge:in_progress:{home},可选]
+-- KEYS: 1=player:zone:{id} 2=player:placement:{id} 3=player:maprev:{id}
 -- ARGV: 1=rev(十进制,无前导零,1..20 位) 2=home(''=DEL) 3=placement(''=DEL)
 -- 返回: {1, rev}                          已写入三键
 --       {0, cur, curHome, curPlacement}   缓存 rev >= 本次:映射未改(maprev 原值写回一次,见下)
 --       {2, '', curHome, curPlacement}    缓存无 maprev 且遗留值与本次不同:零写入
---       {3}                               KEYS[4] 存在(合服围栏):零写入
 local function valid_rev(s)
   return type(s) == 'string' and #s >= 1 and #s <= 20 and string.match(s, '^[1-9][0-9]*$') ~= nil
 end
@@ -343,10 +314,6 @@ end
 local rev = ARGV[1]
 if not valid_rev(rev) then
   return redis.error_reply('ERR route publish: bad rev argument')
-end
--- 提交点复核合服围栏(与 router.go setPlayerZoneIfAbsentScript 的 EXISTS KEYS[2] 同一判据:键存在即封锁)
-if KEYS[4] and redis.call('EXISTS', KEYS[4]) == 1 then
-  return {3}
 end
 local cur = redis.call('GET', KEYS[3])
 local curHome = redis.call('GET', KEYS[1])
@@ -394,11 +361,9 @@ const (
 	// PublishLegacyConflict 脚本回 {2, '', h, p}:缓存没有 maprev,而遗留的 zone / placement 与本次不同。
 	// 零写入,写者按失败返回(覆盖它就是把缓存改成可能已过时的库值)。
 	PublishLegacyConflict
-	// PublishFenced 脚本回 {3}:KEYS[4] 合服围栏存在,零写入。写者映射成 ErrZoneMergeInProgress。
-	PublishFenced
 )
 
-// String 仅供日志与指标 label(低基数,六个固定值),与 data_service_route_publish_total{result} 的取值同名。
+// String 仅供日志与指标 label(低基数,五个固定值),与 data_service_route_publish_total{result} 的取值同名。
 func (o PublishOutcome) String() string {
 	switch o {
 	case PublishApplied:
@@ -411,15 +376,13 @@ func (o PublishOutcome) String() string {
 		return "conflict"
 	case PublishLegacyConflict:
 		return "legacy_conflict"
-	case PublishFenced:
-		return "fenced"
 	default:
 		return "unknown"
 	}
 }
 
 // PublishReply 是分类后的脚本回复。CurRev / CurHome / CurPlacement 是脚本执行那一刻缓存里的值
-// (Applied 时就是本次写入的值;Fenced 时全空;LegacyConflict 时 CurRev 为空)。
+// (Applied 时就是本次写入的值;LegacyConflict 时 CurRev 为空)。
 type PublishReply struct {
 	Outcome      PublishOutcome
 	CurRev       string
@@ -427,17 +390,16 @@ type PublishReply struct {
 	CurPlacement string
 }
 
-// ErrUnexpectedPublishReply 表示脚本回复不是 PublishRouteScript 能产生的四种形状之一。
+// ErrUnexpectedPublishReply 表示脚本回复不是 PublishRouteScript 能产生的三种形状之一。
 // 写者必须 fail-closed(当作发布失败,不重试):形状不对说明脚本被改过、或连的根本不是同一套契约。
 var ErrUnexpectedPublishReply = errors.New("placement: unexpected route publish reply")
 
 // ClassifyPublishReply 把 PublishRouteScript 的回复分类。rev / home / plc 是本次发给脚本的 ARGV。
 //
-// 只接受四种形状(go-redis 把 Lua 表回成 []any,整数是 int64、串是 string):
+// 只接受三种形状(go-redis 把 Lua 表回成 []any,整数是 int64、串是 string):
 //   - {int64(1), rev}:第二个元素必须等于 rev;
 //   - {int64(0), cur, h, p}:cur 必须规范且 >= rev(> 为 Superseded;== 时按值是否相同分 Confirmed / Conflict);
-//   - {int64(2), "", h, p}:且 h != home || p != plc;
-//   - {int64(3)}。
+//   - {int64(2), "", h, p}:且 h != home || p != plc。
 //
 // 其余一律回 ErrUnexpectedPublishReply,包括「0 回复里 cur < rev」「2 回复里值反而相同」
 // 「cur 是 20 位数字但超过 MaxUint64」—— 脚本不可能产生这些状态,出现就是契约被破坏,按 fail-closed 处理。
@@ -495,11 +457,6 @@ func ClassifyPublishReply(raw any, rev, home, plc string) (PublishReply, error) 
 			return PublishReply{}, fmt.Errorf("%w: legacy reply with values identical to the sent ones", ErrUnexpectedPublishReply)
 		}
 		return PublishReply{Outcome: PublishLegacyConflict, CurHome: h, CurPlacement: p}, nil
-	case 3:
-		if len(arr) != 1 {
-			return PublishReply{}, fmt.Errorf("%w: fenced reply has %d elements, want 1", ErrUnexpectedPublishReply, len(arr))
-		}
-		return PublishReply{Outcome: PublishFenced}, nil
 	default:
 		return PublishReply{}, fmt.Errorf("%w: unknown reply code %d", ErrUnexpectedPublishReply, code)
 	}

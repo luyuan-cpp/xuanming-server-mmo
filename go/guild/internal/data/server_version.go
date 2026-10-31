@@ -28,7 +28,7 @@ const sqlSelectServerVersion = `SELECT VERSION()`
 var minMySQLVersion = [3]int{8, 0, 29}
 
 // CheckServerVersion 读 VERSION() 并按 validateServerVersion 判定;通过时返回版本串(供启动日志)。
-// 调用方(guild.go)在启动期、建全局插入守卫之前调用,失败即拒启。
+// 调用方(guild.go)在启动期调用,失败即拒启。
 func (r *GuildRepo) CheckServerVersion(ctx context.Context) (string, error) {
 	var version string
 	if err := r.db.QueryRowContext(ctx, sqlSelectServerVersion).Scan(&version); err != nil {

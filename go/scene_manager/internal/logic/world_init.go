@@ -524,7 +524,7 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 //
 // 新节点的 INCR 放在所有其它写之前:Lua 脚本中途报错时已执行的写不会回滚,计数键里
 // 若是非整数(INCR 唯一会失败的情形),要在动归属之前就失败,不留半截改派。
-// 老节点的 scene_count 只在 > 0 时才减:判死的节点由 deleteNodeCounters 删掉计数键,
+// 老节点的 scene_count 只在 > 0 时才减:判死的节点由死节点收尾(finishDeadNodeReconcile)删掉计数键,
 // 这里无条件 DECR 会把键重建成 -1,再被复用同 id 的新节点继承。
 const luaReassignSceneNode = `
 local cur = redis.call('GET', KEYS[1])

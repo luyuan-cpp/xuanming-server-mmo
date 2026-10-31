@@ -38,7 +38,7 @@ func (s *AccountDirectoryStore) ConfigureAssetContracts(schema string, peers ...
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := authoritysql.AssertCurrentSession(ctx, s.db, true); err != nil {
+	if err := authoritysql.AssertCurrentSession(ctx, s.db, s.backend); err != nil {
 		return err
 	}
 	guard := &roleAssetContractGuard{schema: schema, guildSchema: peers[0], mailSchema: peers[1], matchSchema: peers[2], inboxSchema: peers[3]}

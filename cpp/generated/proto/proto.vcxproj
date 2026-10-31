@@ -426,4 +426,10 @@
     <ClCompile Include="common\base\currency_type.pb.cc" />
     <ClInclude Include="common\base\currency_type.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="gate\gate_client_spectate.pb.cc" />
+    <ClCompile Include="gate\gate_spectate_ticket.pb.cc" />
+    <ClInclude Include="gate\gate_client_spectate.pb.h" />
+    <ClInclude Include="gate\gate_spectate_ticket.pb.h" />
+  </ItemGroup>
 </Project>

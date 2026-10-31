@@ -7,8 +7,8 @@ import java.time.LocalDateTime;
 @Table(name = "announcement")
 public class Announcement {
 
+    /** 行号,见 {@link RowIds#nextInt32()}。 */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false, length = 128)
@@ -32,6 +32,9 @@ public class Announcement {
 
     @PrePersist
     protected void onCreate() {
+        if (id == null) {
+            id = RowIds.nextInt32();
+        }
         createdAt = LocalDateTime.now();
     }
 

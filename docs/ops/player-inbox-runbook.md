@@ -21,12 +21,13 @@
 | 发现 | etcd 前缀 `PlayerInboxNodeService.rpc`(节点类型 30);自己的 go-zero `Etcd.Key` 为空(D-13) | `bin/etc/base_deploy_config.yaml` |
 | C++ deadline | `GrpcClient.CallDeadlineMs.PlayerInboxNodeService = 6000`,部署门禁核对 ≥ 服务 `Timeout` + 2000 | 同上 |
 | 库 | 独占库 `mmorpg_player_inbox`:`player_inbox_stream` / `player_inbox_item` / `player_inbox_audit` | `deploy/mysql-init/00_init_zone_dbs.sql` |
-| 消费端账本 | 各 zone 库 `player_database.inbox_ledger`(字段 20),与 currency 同一次存盘 | 设计 §4.4 |
+| 消费端账本 | `player_store` 资产行里的 `inbox_ledger`(字段 20),与 currency 同一次提交 | 设计 §4.4 |
 | 运维口令 | Secret `player-inbox-admin-token` → 容器 `PLAYER_INBOX_ADMIN_TOKEN`;ConfigMap 只写 `PlayerInbox.AdminTokenEnv`(变量名) | `k8s_deploy.ps1` |
+| Battle 结算入箱签名 | Secret `domain-service-secrets` 的 key `player-inbox-match` → 容器 `MMORPG_PLAYER_INBOX_SECRET_MATCH`,**只在全球匹配启用时注入**(`Add-PlayerInboxMatchSecretEnv`)。缺失或不足 32 字节时照常启动,但打一条 ERROR `MMORPG_PLAYER_INBOX_SECRET_MATCH is missing`,gauge `player_inbox_battle_producer_ready` 为 0,`EnqueueBattleSettlement` / `LookupBattleSettlement` 一律回 Unavailable(2026-10-30) | `player_inbox.go` `resolveMatchProducer` |
 | 入箱开关 | 服务 yaml `PlayerInbox.EnqueueTypes`(空 = 停用入箱)。**v1 只放封锁 / 解封**,列了 `GM_ATTACH_CURRENCY_DEBT` 启动即拒(见下) | 设计 §3.3;`config.ParseEnqueueTypes` |
 | 消费开关 | git 跟踪的 `bin/etc/game_config.yaml` 的 `player_inbox.consumer_enabled`(只认小写 `true` / `false`)。K8s 的 node-config 整段复制这一段;`-PlayerInboxConsumer on|off` 只核对、不改值(§2.1) | 设计 §11.5、§11.7;`k8s_deploy.ps1` |
 | 分片 | `RowShard = mix64(player_id) % 64`(2026-10-16 起)。启动与 `-migrate` 在表结构对齐之后核对行布局,不一致拒启(§2.2) | `internal/inbox/shard.go` |
-| 对账读口 | data_service `GetPlayerInboxLedger`(读 zone Redis 的 `PlayerAllData` blob,不读 MySQL,不校验、原样返回) | 设计 §5.1、§9.3 |
+| 对账读口 | data_service `GetPlayerInboxLedger`(读 `player_store` 资产行,不校验、原样返回) | 设计 §5.1、§9.3 |
 
 **部署侧与服务配置的键名契约**(K8s ConfigMap 由 `k8s_deploy.ps1` 生成,键名必须与 `go/player_inbox/internal/config` 逐字一致):
 `Name` / `ListenOn` / `Timeout` / `Mode` / `Middlewares.StatConf.IgnoreContentMethods` / `Etcd{Hosts, Key:""}` / `ZoneId` / `LeaseTTL` / `MetricsListenAddr` / `KillSwitchPrefix` /
@@ -46,6 +47,11 @@ NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, Rec
 - 原因二:没有撤销路径。挂错之后,v1 没有任何类型能把它撤掉。
 - 合并语义、撤销类型(按金额减少)与单笔上限一起做完之前不开。
 
+**Battle 结算域**(2026-10-30 补记):后来又加了第二个域 `SCENE_BATTLE_SETTLEMENT`(`domain=2`),只有一种类型 `PLAYER_INBOX_MSG_BATTLE_SETTLEMENT`,
+生产方是 Match(`PLAYER_INBOX_PRODUCER_MATCH`,`request_id` = battle_id),走独立签名的 `EnqueueBattleSettlement` / `LookupBattleSettlement`。
+这个域**禁止作废**(`VoidItem` 一律回 `kPlayerInboxItemStateConflict`),Ack 也**只认 `APPLIED`**;卡住时按 §6.1 处理,不要套用 GM 域的作废步骤。
+仓库默认 `EnqueueTypes` 已列入它;未启用全球匹配的部署没有 Match 签名密钥,这时这两个方法回 Unavailable(见上表「Battle 结算入箱签名」)。
+
 ---
 
 ## 2. 上线顺序与回滚下限(设计 §11.7)
@@ -59,7 +65,7 @@ NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, Rec
 
 | 步 | 动作 | 验收 |
 |---|---|---|
-| 1 | 每个 zone 库跑 go/db 的 `cmd/migrate`(先 `-command plan` 再 `-command up`),加 `inbox_ledger` 列;收件箱库与表就位(K8s:`infra-up` 的 `player-inbox-migrate` Job;本地:启动期 AutoMigrate 或 `player_inbox -f etc/player_inbox.yaml -migrate`);TiDB 上做 §12 的索引预切 | `plan` 只出现 `inbox_ledger`(以及已放行的 `fence_*`)的 ADD COLUMN;`SHOW COLUMNS FROM zone_<N>_db.player_database` 末列是 `inbox_ledger`;`kubectl -n mmorpg-infra get job player-inbox-migrate` 为 1/1;`-migrate` 输出里有 `row shard layout check OK` |
+| 1 | 收件箱库与表就位(K8s:`infra-up` 的 `player-inbox-migrate` Job;本地:启动期 AutoMigrate 或 `player_inbox -f etc/player_inbox.yaml -migrate`);TiDB 上做 §12 的索引预切 | `plan` 只出现 `inbox_ledger`(以及已放行的 `fence_*`)的 ADD COLUMN;`SHOW COLUMNS FROM zone_<N>_db.player_database` 末列是 `inbox_ledger`;`kubectl -n mmorpg-infra get job player-inbox-migrate` 为 1/1;`-migrate` 输出里有 `row shard layout check OK` |
 | 2 | 全部 zone 的 go/db 升到认识新字段的版本 | `kubectl get deploy db -o jsonpath='{..image}'` 各 zone 一致 |
 | 3 | 部署收件箱服务,`EnqueueTypes` **为空** | `player-inbox` 两副本 Ready;etcd 有 `PlayerInboxNodeService.rpc/...` 键;`GmSanctionPlayer` 返回 `kPlayerInboxDisabled`;写路径打印 `player-inbox consumer gate: consumer_enabled=false ... enqueue_types=0 ... OK` |
 | 4 | 全部 scene 升级,`consumer_enabled=false`(`bin/etc/game_config.yaml` 里默认就是 `false`;K8s:逐 zone `zone-up`) | **这就是回滚下限**。存档能原样往返 `inbox_ledger`,scene 不发 Fetch(收件箱 `player_inbox_fetch_total` 不涨)。每个 scene 启动时打一行 WARN `[PlayerInbox] metric=inbox_consumer_disabled`,之后每 5 分钟补打一行:这一步出现它是预期的 |
@@ -249,7 +255,7 @@ grpcurl -plaintext -import-path . -proto proto/player_inbox/player_inbox_admin.p
 | `PlayerInboxReconcileMismatch` | critical | 对账读数 > 0:由消费方终结的行,已落盘账本里没有它的结局。这是读数,不是事件数,处置之后不会马上消失 | §10.2 |
 | `PlayerInboxConsumerMaybeDisabled` | warning | 6 小时内有新入箱,却没有一次锁路径 Fetch:scene 消费开关可能被关了 | §2.1 |
 | `PlayerInboxDeliveredUnackedTooOld` | warning | 最近 24 小时内投递过的行里,已投递未确认最老的超过 1 小时 | §6 |
-| `PlayerInboxPoisonSuspect` | warning | 最近 24 小时内投递过的行里,有条目投递 ≥ 5 次仍未终结 | §6 |
+| `PlayerInboxPoisonSuspect` | warning | 最近 24 小时内投递过的行里,有条目投递 ≥ 5 次仍未终结 | §6;先看 ERROR `Item delivered N times without ack` 的 `domain`,Battle 域(`domain=2`)按 §6.1,**禁止作废** |
 | `PlayerInboxNotifyBacklog` | warning | 在线提醒从流行最后一次写入起悬了 5 分钟以上没落定(退避中的也算) | §5.3 |
 | `PlayerInboxSqlPoolSaturated` | warning | 某副本独占库连接池在用 > 90% 持续 15 分钟(`go_sql_*{db_name="player_inbox"}`) | 看 `go_sql_wait_duration_seconds_total` 与 `fetch_total{path="locked"}`;调大池要同步 MySQL 连接总账与 `max_connections` |
 | `PlayerInboxSettledUnknown` | warning | UNKNOWN 报告以 SETTLED_UNKNOWN 收尾 | 对照 scene 的 `[PlayerInbox] applied` 日志与玩家存档人工核实,必要时用新 `request_id` 重下 |
@@ -313,7 +319,11 @@ scene 对一条投递的判定顺序是:先按账本分类,只有新条目才看
 
 **A′. 版本错位**(`metric=inbox_halted reason=version_skew`,前一行 ERROR `Executor reported version skew` 带 `seq` / `type` / `request_id`;2026-10-19 起)
 
-scene 认识这个类型,但本版本不能安全执行这一条。v1 只有一个来源:挂欠款时,玩家同币种的既有欠款带着本版本不认识的字段(更新版本的 scene 写下的,见 `mixed-version-persist-field-protection.md` §4.4)。
+scene 认识这个类型,但本版本不能安全执行这一条。GM 处置域有两个来源,先按日志分开:
+- **欠款带新字段**:挂欠款时,玩家同币种的既有欠款带着更新版本的字段(更新版本的 scene 写下的,见 `mixed-version-persist-field-protection.md` §4.4)。日志 `AttachCurrencyDebt version skew: existing debt carries fields unknown to this version`。
+- **新币种**(2026-10-23 起):载荷里的币种不在本版本 scene 的取值表内,日志 `metric=persist_version_skew where=inbox_currency`,带 `executor` / `currency_type`。收件箱入箱已按 `proto/common/base/currency_type.proto` 拒绝写错的值,所以这只可能是更新版本加的币种:GM 在 scene 全量升级之前就对新币种下了处置(发布纪律不允许)。处置同下面第 1、2 条;第 3 条不适用,升级到认识这个币种的版本即解除。
+
+**先排除版本错位再处理毒消息**:同一名玩家在几台旧版本节点之间换图或重建实体,每次重拉都会让这一行的 `delivery_count` +1,可能触发 `PlayerInboxPoisonSuspect`。告警指引的 `VoidItem(reason=QUARANTINED)` 会把一条合法处置作废:先查该玩家 scene 日志里有没有 `reason=version_skew` 或上面两种日志,有就按本节处理。
 出现在新旧 scene 混跑(滚动发布、金丝雀)期间;整体回滚到不认识这些字段的版本之后不会自行消失(见第 3 条)。这一条不记账、不确认,已定的前缀照常确认,行留在收件箱 PENDING。同域排在它后面的处置(例如 `GM_BLOCK_CURRENCY_GAIN`)也一起停住。
 1. 不要作废它,它是合法处置。让全网 scene 跑认识这些字段的版本,也就是把滚动发布走完;玩家下次落到这种节点时(实体重建之后)照常执行。
 2. 确实不要它了,或必须先让同域后面的处置执行:同 A 第 2 条,普通模式 `VoidItem`。玩家下次登录时按「新条目 + VOID」记 SKIPPED。要重下这笔欠款,等认识这些字段的版本全量上线后再用新的 `request_id` 重下;仍跑旧版本时重下会再次 `version_skew`。
@@ -413,7 +423,8 @@ v1 **不做自动隔离**。
    - **该域停用**(`metric=inbox_halted`):按 §5.2 / §5.1 处理,作废指令解不开 MISMATCH。
    - **存盘失败导致一直不 Ack**:看 scene / go/db 的存盘告警,先修存盘。
    - **玩家已离开**:看上表的 `metric=inbox_leave_ack`。
-3. 确认是毒消息后,`VoidItem`(`reason=PLAYER_INBOX_VOID_QUARANTINED`,`operator` 写自己,`note` 写工单号):
+3. 确认是毒消息后,`VoidItem`(`reason=PLAYER_INBOX_VOID_QUARANTINED`,`operator` 写自己,`note` 写工单号)。
+   **只适用于 GM 处置域**;Battle 结算域(`domain=2`)禁止作废,`VoidItem` 对它一律回 `kPlayerInboxItemStateConflict`,改走 §6.1。GM 域作废的结局:
    - 从未投递过(`delivery_count=0`):直接 VOIDED(`finalized_by=ADMIN`)。
    - 已投递:**只挂 VOID 指令**。回包 `void_requested=true`、`state` 仍是 PENDING,**这不等于已取消**。结局要等 scene 下次拉到这一行时裁决:
      - 账本里还没有这一条(新条目):不查执行器、不解码载荷,记 SKIPPED,不会再触发崩溃。收件箱终结为 VOIDED(`finalized_by=CONSUMER`)。
@@ -433,6 +444,43 @@ v1 **不做自动隔离**。
 
 5. 隔离之后要不要重下一条修正过的处置,由负责人定;重下一律用新 `request_id`。
 6. 作废限速与批量脚本同(§4.2 第 2、3 条)。
+
+### 6.1 Battle 域条目卡住(`domain=2`,`PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT`)
+
+2026-10-30 起收件箱对这个域的 ERROR 写的是 `Item delivered N times without ack ... domain=2 ...: battle settlement stuck; VoidItem is refused for this domain ...`,
+不再建议 `VoidItem(QUARANTINED)`。这一域是 Match 签名入箱的战斗结算原件(每名玩家同时最多 1 条未终结,`max_pending=1`),规则与 GM 域不同:
+
+- **禁止 VOID**:`VoidItem`(普通模式与 `FORCE_MISMATCH` 都一样)对该域一律回 `kPlayerInboxItemStateConflict`,行不变;scene 见到 Battle 条目挂着指令也只会停用该域。
+- **只认 APPLIED**:Ack 对该域只接受 `APPLIED`;报 REJECTED / SKIPPED / UNKNOWN 回 CONFLICT、行不变。Match 只凭签名的 APPLIED 收据释放这名玩家的全球匹配 ready 票(state 3),
+  条目卡着期间玩家的 ready 票一直占用、不能重新进全球匹配,后面的战斗结算也被 `max_pending=1` 挡在门外。
+- **禁止手改 SQL**:不得改 `mmorpg_player_inbox` 的条目 / 流行 / 审计,也不得改 Match TiDB 的 `match_battle_settlement_source` / `match_battle_completion` /
+  `match_authority_ticket` 来伪造到账或放票。签名收据、scene 账本与收件箱三方一旦对不上,奖励会丢或重复,事后也对不了账。
+- 所以这一域只有一个出口:让 scene 真正把这份原件执行成功。下面每一种处置都是在「让它能执行」,不是在「让它消失」。
+
+**定位**:
+1. 从告警(`PlayerInboxPoisonSuspect` / `PlayerInboxDeliveredUnackedTooOld`)或上面那行 ERROR 拿到 `player_id` / `seq`,
+   `ListItems(player_id, domain=PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT, state=PLAYER_INBOX_ITEM_PENDING)` 记下 `request_id`(就是 battle_id)与 `delivery_count`。
+2. 按 `player_id` 搜 scene 日志的 `[PlayerInbox]` 与 `[PlayerBattle]`,先分清两种表现:
+   - **整笔延后**:`Executor deferred ... type=PLAYER_INBOX_MSG_BATTLE_SETTLEMENT` 与 `metric=inbox_deferred reason=executor_defer`。scene 本地按 1s→60s 退避重试、不重新拉取,
+     所以 `delivery_count` 不涨;条件一解除,玩家在线时下一次重试就应用。
+   - **停用该域**:`Executor reported version skew` 与 `metric=inbox_halted reason=version_skew`。实体重建(退出完成后再登录,或换节点)才重拉,每次重拉都会再停,
+     `delivery_count` 随登录次数上涨,`PlayerInboxPoisonSuspect` 多半是这一类。
+3. 按下表对原因。处置完成后用 `LookupByRequest`(`producer_kind=PLAYER_INBOX_PRODUCER_MATCH`,`request_id`=battle_id)确认 `state=PLAYER_INBOX_ITEM_APPLIED`;
+   Match 的终局发件箱下一轮 Lookup 拿到 APPLIED 后自行释放 ready 票,不需要任何人工放票。
+
+| 原因 | scene 表现 | 恢复 |
+|---|---|---|
+| 宝宝 / 宠物配置缺失(宠物配置行被删、宠物已不在玩家身上、宠物属性池缺失) | 已改为**跳过该宠物的子效果**,其余照常应用,逐项 ERROR `metric=battle_inbox_pet_effect_skipped reason=pet_table_missing / pet_no_longer_owned / pet_pool_missing`。条目正常 APPLIED,不再卡住 | 不需要解卡。按日志里的 `battle_id` 与数量由负责人评估是否补偿;仍在跑旧版本的 scene 可能整笔延后,滚动升级 scene |
+| 物品配置行被热更删除(掉落或消耗项的 `config_id` 已不存在) | C++ 与 Java 正在改为**跳过该物品子效果**(ERROR `metric=battle_inbox_item_effect_skipped reason=item_table_missing`,其余照常应用)。还没跑到这一版的节点上,这份原件会一直延后或停用 | 首选把被删的配置行热更回来(只恢复那一行),下一次重试即应用;或把 scene 升到跳过版本。跳过的物品按日志人工补偿。**不要**为了解卡改原件或作废 |
+| 产出封禁(全服 GainBlock 封了某物品 / 币种,或玩家被 GM 封锁了该币种的获取) | Inbox 路径按整批契约不部分入账:**整笔延后**,封禁解除前一直重试,不报错 | 两版(C++ / Java)对这一类的口径(继续整笔保留,还是跳过被封的那部分)**待负责人定**。定之前:封禁是误操作就解除,条目自行应用;封禁应当继续就让条目留着,把玩家与 battle_id 报给负责人,不要作废、不要改原件 |
+| 持久数据损坏或含未知字段(玩家背包实例 / 宠物 / 欠款带本版本不认识的字段,数量实例不可计数,或持久组件缺失) | 未知字段与不可计数实例判**版本错位、停用该域**;组件缺失则整笔延后 | 未知字段来自更新版本的 scene 写下的数据:把全网 scene 滚动到认识这些字段的版本(同 §5.2 A′),玩家重新落地即应用。确属损坏(没有任何版本认识):按事故上报负责人,走存档修复 / 回档流程(§9、`docs/ops/online-debug-data-fetch.md`),不要手改存档 |
+| 载荷坏值(结算原件解不开、带未知字段、终局值非法;或币种越界、同币种重复、金额超过 INT64_MAX) | 前三种判**版本错位、停用该域**,后三种**整笔延后**。原件不可变,重试永远是同一个结果 | 先查是不是更新版本的 battle 写出的字段(升级 scene 即可)。否则是 battle / match 的缺陷:按事故上报,修复只能靠能安全处理这份原件的新版本 scene;**不能**改载荷、作废或另发一份结算 |
+| 主包与临时格都满(主包放不下整批掉落,转临时格也放不下;临时格满了会先进先出挤掉最早的实例,只有整批超过临时格容量这类情况才失败),或物品号段余量不足(`metric=battle_settlement_item_guid_shortage`) | **整笔延后**,玩家在线时本地退避重试 | 让玩家整理背包腾出空间,下一次重试即应用;号段不足看号段告警,补足后自愈。不需要服务端操作 |
+
+**条目根本没进收件箱**:如果 `ListItems` 查不到这局,而 Match 侧该玩家的 `match_battle_settlement_source` 一直停在 `inbox_seq=0`
+(Match 指标 `match_outcome_outbox_backlog_rows{kind="first"}` 不降、`match_outcome_outbox_delivery_total{kind="first",outcome="failed"}` 在涨),先看收件箱的
+`player_inbox_battle_producer_ready` 是否为 0、启动日志里有没有 `MMORPG_PLAYER_INBOX_SECRET_MATCH is missing`:缺 Match 签名密钥时这两个方法一律回 Unavailable,
+补上 Secret(`domain-service-secrets` 的 `player-inbox-match`,与 Match 侧同值)后滚动收件箱即可,Match 的发件箱会按原件重投。
 
 ---
 
@@ -487,10 +535,10 @@ v1 **不做自动隔离**。
 
 玩家回档会把账本(`inbox_ledger`)连同货币一起退回快照时刻,而收件箱里那段时间已终结的 APPLIED 行不会再投递 —— 回档之后,那些处置在玩家身上「消失」了。
 
-- **现状**:单人回档的栅栏未接线,`RollbackPlayer` 目前一律返回 NotImplemented(`go/data_service/internal/logic/rollback_logic.go`)。
+- **现状**:回档 RPC 已删除(2026-10-30),恢复玩家数据只走 PITR(`docs/ops/mysql-backup-pitr-runbook.md` §4.2)。
   预检的自动化与回档接线同批做;在那之前,任何回档(含整区回档)都按下面的人工步骤预检。
 - **人工预检**:
-  1. 取快照里该玩家 `player_database.inbox_ledger` 各域的 `decided_through_seq`(快照数据的取法见 `docs/ops/online-debug-data-fetch.md`)。
+  1. 从 PITR 影子库取该玩家 `player_store` 资产行,解析出 `inbox_ledger` 各域的 `decided_through_seq`。
   2. `ListItems(state=PLAYER_INBOX_ITEM_APPLIED)`,列出 seq **大于**快照水位的行 —— 这些就是回档后会「消失」的处置。
   3. 差异清单写进回档工单,负责人**显式接受并写明原因**才继续回档。
   4. 回档完成后,对清单里仍要执行的处置**用新 `request_id` 重下**(§4.1)。
@@ -597,8 +645,7 @@ v1 **不做自动隔离**。
 
 步骤:
 1. 从 scene 日志取 `player_id` 与 `reason=`。
-2. 原样留存账本,写进工单。data_service `GetPlayerInboxLedger` 不做校验,原样返回存档里的账本;也可按 `docs/ops/online-debug-data-fetch.md`
-   取该玩家的 `PlayerAllData` blob。MySQL `player_database.inbox_ledger` 可能更旧,一并记下。
+2. 原样留存账本,写进工单。data_service `GetPlayerInboxLedger` 不做校验,原样返回存档里的账本。
 3. 收件箱一侧导出这名玩家:`GetSummary`(各域 `next_seq` / `open_count` / `fence_epoch`)与 `ListItems`(各域、全部状态)。
    `ReconcilePlayer` 在账本修好之前一律回 `kPlayerInboxStoreUnavailable`,不要重试它。
 4. 对照 scene 的 `[PlayerInbox] applied` 日志,逐个 seq 判断哪些已在玩家身上生效。
@@ -681,10 +728,7 @@ SHOW TABLE mmorpg_player_inbox.player_inbox_item INDEX `uk_player_inbox_item` RE
 
 ## 13. 合服
 
-收件箱三张表按全局唯一的 player_id 存,**没有 zone 列,合服不搬不改**。`tools/merge_zone` 的合服前审计多了 `player_inbox` 一行:
-- 源区或目标区 zone 库缺 `player_database.inbox_ledger` 列 → **block**:先对那个 zone 跑 go/db `cmd/migrate up`。否则拷贝玩家行时会以 SCHEMA MISMATCH 停在维护窗口里。
-- 收件箱库 / 表查不到 → warn「NOT VERIFIED」(该环境多半没部署收件箱,合服本身不受影响);其余查询失败 → INFRA。
-- 正常时 info,报 PENDING 条数。
+收件箱三张表按全局唯一的 player_id 存,**没有 zone 列,合服不搬不改**;别名合服也不动玩家行,账本不受影响。
 
 ---
 

@@ -82,7 +82,6 @@ set(SOURCE_FILES
     messaging/kafka/kafka_consumer.cpp
     messaging/kafka/kafka_manager.cpp
     messaging/kafka/kafka_producer.cpp
-    storage/redis_client/redis_client.cpp
 )
 
 add_library(infra STATIC ${SOURCE_FILES})

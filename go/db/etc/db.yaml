@@ -7,62 +7,19 @@ Etcd:
     - 127.0.0.1:2379
   Key: db.rpc
 ZoneId: 1
+# 存盘接口的预算要大于 SQL 锁等待(10s):zrpc 默认 2s 就取消,取消就是结果未知。
+MethodTimeouts:
+  - FullMethod: /playerstore.PlayerStore/SavePlayer
+    Timeout: 12s
+  - FullMethod: /playerstore.PlayerStore/LoadAndClaim
+    Timeout: 12s
 ServerConfig:
+  # 存盘接口要求环境变量 MMORPG_PLAYER_STORE_SECRET_SCENE(至少 32 字节),库里要有 player_store 表。
+  PlayerStore: {}
   JsonPath: "../../generated/data/mysql_database_table_list.json"
-  # Kafka config for the Kafka consumer
-  Kafka:
-    Brokers:
-      - "127.0.0.1:9092" # Kafka broker address
-    GroupID: "db_rpc_consumer_group" # 消费组(最终形状键);本机 go_services.ps1 -Zone N 追加 _zN,K8s 见下方注释
-    # ── 消费组(docs/design/db-consumer-group-per-zone.md)────────────────────────
-    # 上面这一行保持「GroupID: "<名>"」加行尾注释的形状:go_services.ps1 按这个形状给本机 -Zone N 启动追加 _zN
-    # (不带 -Zone 的单 zone 默认启动保持裸名),dev_tools.ps1 / k8s_deploy.ps1 / k8s_zone_rollback.ps1 /
-    # merge_zone 都拿这个值当推导 zone 组名 db_rpc_consumer_group_z<ZoneId> 的基名。
-    # K8s 的 go-svc-db-config 由 k8s_deploy.ps1 渲染,只有四种形状:
-    #   最终形状 final(G):只写 GroupID: "G",G 为 db_rpc_consumer_group 或 db_rpc_consumer_group_z<ZoneId>,任何版本都能加载;
-    #   交接形状 handoff(X←Y):写 ConsumerGroup: "X" 与 GroupHandoffFrom: "Y",不写 GroupID(交接闸之前的二进制因此拒启)。
-    # 下面五个键默认不写;需要时取消注释:
-    # ConsumerGroup: "db_rpc_consumer_group_z1"  # 与 GroupID 二选一,只用于交接形状
-    # GroupHandoffFrom: "db_rpc_consumer_group"  # 只能和 ConsumerGroup 一起用,且不能等于本组名;非空即启用交接闸
-    # SessionTimeoutMs: 10000                    # 消费组会话超时;不写取 10000(sarama 默认)
-    # HeartbeatIntervalMs: 3000                  # 心跳间隔;约束 HeartbeatIntervalMs x 3 <= SessionTimeoutMs
-    # RebalanceTimeoutMs: 60000                  # 再平衡超时;约束 >= 15000(claim 收尾 10s + 提交余量 5s)
-    # Topic and DBName are derived from ZoneId at startup (db_task_zone_{ZoneId}, zone_{ZoneId}_db)
-    # Partition count is immutable within one generation. Expansion requires
-    # an offline drain and a new generation in login/db together.
-    TopicGeneration: 1
-    PartitionCnt: 10 # ⚠️ MIRROR of go/login/etc/login.yaml Kafka.PartitionCnt.
-                     # 两边不一致或 broker 已漂移时启动直接 fail-closed。
-    # RetentionBytes: 0  # 0/不写 = 沿用 broker 的 log.retention.bytes;K8s 由 k8s_deploy.ps1 按 Kafka 盘预算渲染(与 login 同值)
-    IsOfflineExpand: false # Default false; dynamic expansion mode
-    SubShardCount: 8 # 2026-05-28 stress §5: partition=10 × 1 worker per
-                     # partition was the real throughput cap (not MySQL
-                     # pool). SubShardCount=4 splits each partition's
-                     # work across 4 goroutines (hash by Key, per-key
-                     # ordering preserved), giving 10×4=40 effective
-                     # parallelism and finally saturating MaxOpenConn=30.
-                     # 2026-06-01 Round 14 §P5: after Round 14 P0 lifted
-                     # EnterGame throughput +15% the db consumer→dispatch
-                     # chain became the new bottleneck (preload_failed
-                     # 0→3,663 @ t18m, cb_wait{ok} 85→275ms). Bump 4→8
-                     # = 10×8=80 effective parallelism, paired with
-                     # MaxOpenConn 30→60 below so MySQL pool stays the
-                     # limiter we WANT (linear scaling) rather than the
-                     # per-partition goroutine count.
-    # ── 重试路由(docs/design/db-retry-owner-routing.md)────────────────────────────
-    # shared(缺省):任一实例都可认领共享 ready 里的重试并执行;另外每拍兜底排空按原始分区拆开的
-    #   kafka:retry:queue:{topic}:p{N}(从 owner 回滚时靠它把 p* 清空)。
-    # owner:重试只在持有原始分区 claim 的实例执行,与该分区的新消息同子 shard 串行;拿不到分区的副本是热备,
-    #   只把共享收件箱按原始分区分拣进 p{N}、回收孤儿收据,不执行重试。
-    # 取值大小写敏感,拼错拒启。环境变量 DB_RETRY_ROUTING 优先于本键,只用于单 zone 金丝雀;每个实例的启动日志
-    # "retry routing: mode=… source=…" 与指标 db_retry_routing_mode 是核对依据。K8s 上改值后必须 rollout restart。
-    # 切 owner 之前该 zone 的每个 db 都必须已是新版本;回滚到不认识 p* 的旧镜像之前,先切回 shared 并等 p* 归零
-    # (go run ./cmd/retry_requeue -f etc/db.yaml -zone <ZoneId> -check;-zone 必填,退出码 0 才算归零,3/4/5 见工具文件头),
-    # 已经回滚的立即执行同一命令去掉 -check 搬回(步骤见 docs/ops/release-checklist.md「go/db 回滚到 S1」一条)。
-    RetryRouting: shared
   Database:
-    # 全球数据层必须使用当前 TiDB leader 严格读；MySQL 本地兼容配置可显式置 false。
-    RequireTiDB: true
+    # 后端档位 tidb | mysql,不写就是 tidb;tidb 档固定 leader 严格读,mysql 档必须连主库。
+    Backend: tidb
     Hosts: "127.0.0.1:3306"
     User: "root"
     Passwd: "Mmorpg#2026db"
@@ -82,11 +39,11 @@ ServerConfig:
     # ── 启动期 DDL 开关(默认全关)──────────────────────────────────
     # 历史行为等价于两个都 true:InitDB() 会逐张跑 CreateOrUpdateTable。
     # 多 zone × 多副本同时启动会对同一张大表并发 ALTER,MDL 阻塞会让整个 zone
-    # 的 db_task 消费停摆;proto2mysql 还会在类型不匹配时自动 MODIFY COLUMN,
+    # 的存盘停摆;proto2mysql 还会在类型不匹配时自动 MODIFY COLUMN,
     # 无版本记录、无 lock 超时。生产改为部署阶段跑:
     #     go run ./cmd/migrate -f etc/db.yaml -command up
-    # 本地为了「起了就能用」保持 true;要临时回退线上行为可用环境变量
-    # DB_AUTO_CREATE_DATABASE=1 / DB_AUTO_MIGRATE_SCHEMA=1 覆盖(见 README)。
+    # 本地 go_services.ps1 启动 db 时设 DB_AUTO_MIGRATE_SCHEMA=1(zone 库由 deploy/mysql-init 预建),
+    # 其余场景要临时打开也用环境变量 DB_AUTO_CREATE_DATABASE=1 / DB_AUTO_MIGRATE_SCHEMA=1。
     AutoCreateDatabase: false
     AutoMigrateSchema: false
     Migration:
@@ -94,7 +51,7 @@ ServerConfig:
       InnodbLockWaitSeconds: 5     # 行锁等待上限
       StatementTimeoutSeconds: 300 # 单条 DDL 硬超时,超时后旁路 KILL QUERY
       AdvisoryLockSeconds: 60      # GET_LOCK 等待:多副本同时部署时后到的排队
-    # ── 业务连接池的超时与会话级锁等待(L-04,docs/design/db-task-store-unavailable-deferral.md §8)──
+    # ── 业务连接池的超时与会话级锁等待 ──
     # 本 zone 库与按需打开的落点库都用这组值;迁移入口(cmd/migrate)与建库不用(DDL 可能合法地跑几分钟)。
     # 不写或写 0 取默认值(即下面这几个数);写负数表示不设。K8s 的 ConfigMap 不写这几项,走默认值。
     # 会话级锁等待必须短于读超时:客户端读超时撤不回已经发出的语句,让服务端先以 1205 中止排队中的语句,
@@ -104,24 +61,11 @@ ServerConfig:
     WriteTimeoutSeconds: 30
     SessionLockWaitSeconds: 10       # MySQL lock_wait_timeout(元数据锁);TiDB 是否接受未核实,不接受时写 -1
     SessionInnodbLockWaitSeconds: 10 # MySQL innodb_lock_wait_timeout(行锁)
-    MaxOpenConn: 60 # 2026-05-28 deep-dive §1: 10 was the real bottleneck.
-                    # partition=10 + MaxOpenConn=10 meant every worker
-                    # competed for exactly one MySQL connection; under
-                    # ~90 task/s steady input the pool was always full
-                    # and Kafka backlog grew to 91k. 30 gave 3x headroom.
-                    # 2026-06-01 Round 14 §P5: 30→60 to match
-                    # SubShardCount 4→8 (10 partitions × 8 sub-shards
-                    # = 80 effective workers, 60 connections keeps the
-                    # pool the limiter).
-                    # 2026-10-12 更正:以前这里写的「MySQL 默认 max_connections=151 留得出余量」不成立。
-                    # K8s 上所有 zone 的 go/db、data_service、gateway 与全局的 friend、trade 共用同一台 MySQL,
+    MaxOpenConn: 60 # K8s 上所有 zone 的 go/db、data_service、gateway 与全局的 friend、trade 共用同一台库,
                     # 本池 × 副本数(2)× zone 数是总账里最大的一项。改这个值必须重算总账:
                     # tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger(部署时打印 "MySQL connection ledger"),
                     # 契约测试钉住「规划峰值 ≤ deploy/k8s/manifests/infra/mysql.yaml 的 max_connections」。
-    MaxIdleConn: 20 # raised from 3 to keep the warm-pool sized for the
-                    # new MaxOpenConn — otherwise the pool churns
-                    # connections under load. 2026-06-01 Round 14: 10→20
-                    # tracks MaxOpenConn 30→60 so warm-idle stays at 1/3.
+    MaxIdleConn: 20
     Net: ""
   RedisClient:
     Hosts: "127.0.0.1:6379"
@@ -130,81 +74,28 @@ ServerConfig:
     DB: 0
     # go-redis 连接池上限(P0-E 第 3 批,共享 Redis 连接总账)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
     # 随 CPU limit 漂移(本机 Windows 上是 10 × 核数)。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值,显式写出后不再随 CPU limit 变。
-    # 存盘工人(PartitionCnt × SubShardCount = 80)多于本池时取连接会排队:看 db_redis_pool_wait_total / db_redis_pool_timeouts_total。
     # tools/scripts/k8s_deploy.ps1 把它镜像进 db ConfigMap(要求正整数),Redis 连接总账读同一个键:改它看部署时打印的
     # "Redis connection ledger" 一行。下面 Placement.Redis 不写时落点句柄复用本客户端,不另开池。
     PoolSize: 20
-    # ── 重试 / 死信 / 毒消息入队的落盘确认(WAITAOF,docs/design/db-retry-owner-routing.md §7)──
-    # Kafka 位点提交之前,入队的这份副本是任务唯一的副本:组提交 LPUSH 之后发 WAITAOF,确认不足就不提交位点
-    # (fail-closed,该 claim 失败、消息重投,靠 seq 游标幂等)。确认走专用小连接池(每实例 2 条),不占上面的 PoolSize。
-    # 启动时先探一次 WAITAOF,失败拒启:需要 Redis >= 7.2 且 appendonly yes(本机 compose 与 K8s 的 redis 都已开 AOF)。
-    # 只有确实没开 AOF 的环境才把两项都写 0(关闭确认,启动打一行 ERROR)。NumReplicas:K8s 上由 k8s_deploy.ps1 按共享 Redis
-    # 形态渲染(单实例 0、高可用 1,与 data-service 的 RouteStore 同一个函数),本文件保持 0 给本机 compose 单实例:
-    # 写 1 本机 go/db 的启动探针等不到副本而拒启。
-    # K8s 上改值后必须 rollout restart。
-    WaitAOFNumLocal: 1     # 0 | 1;不写 = 1
-    WaitAOFNumReplicas: 0  # [0, 16];不写 = 0
-    WaitAOFTimeoutMs: 1500 # [1, 2000];不写 = 1500(专用客户端读超时 = 本值 + 1s)
-  # ── 大字段三档闸(db_task 落库路径)──────────────────────────────
-  # 上限按**设计期望**定,不是按 MEDIUMBLOB 的 16MB 定 —— 按 16MB 设等于没设,
-  # 等它触发时单次存盘早就把 MySQL 往返 + Redis 写回一起拖垮了。
-  # 玩家单个组件 blob 的设计量级是个位数 KB,256KiB 已留一到两个数量级余量。
-  # 沿用 base64.EncodedLen(序列化字节) 的保守计费/历史指标口径；不是真实入库量。
-  # 当前 proto2mysql v0.2.0 向 SQL 传裸 protobuf/bytes，本轮不改变生产计费算法。
-  # 观测:db_blob_bytes{table,column} / db_blob_row_bytes{table} 两个 histogram
-  #      (看 p99,不是 max)+ db_blob_guard_total{table,column,level} 计数。
-  BlobGuard:
-    MaxColumnBytes: 262144   # 256 KiB / 列(保守计费)
-    MaxRowBytes: 1048576     # 1 MiB / 行(所有 blob 列的保守计费之和)
-    WarnRatio: 0.8           # 到 80% 打 WARN + counter,仍放行
-    ReportOnly: false        # 超限拒写。灰度期可临时设 true 先只观测
-    PerTable:
-      # 五流各 1024 条身份与总共 256 KiB 托管原件须在兼容保守计费下通过。
-      # 只放宽账本列；同表其他组件仍受上面的 256 KiB 约束。
-      player_database:
-        ColumnBytes:
-          asset_op_ledger: 1048576
-      # 快照天然就大,单独放宽;它不走 db_task 路径,这里只是把口径写明白。
-      player_snapshot:
-        MaxColumnBytes: 8388608
-        MaxRowBytes: 8388608
-  # MySQL 行内围栏与存盘协议世代(docs/design/db-write-fencing-mysql.md §4.7、§8 与 2026-10-18 存盘协议世代附注)。
-  # 整段可缺省,缺省 = dual。
-  #   dual  :按 DBTask 的 (owner_epoch, save_seq) 做行内围栏条件写,写两表 SQL ACK、跑存盘补投,并发布资产 SQL 提交证据。
-  #           现行 C++ scene(owner_epoch≠0)与 login 只说严格提交屏障(父快照写 pending,冷加载 / 交接要求两表 ACK 都等于 pending),
-  #           只能与 dual 配合。启动时写世代标记 db:save_protocol:zone:<ZoneId>=strict。
-  #   legacy:玩家两张表照旧普通 Save,不写 ACK、不补投、不发布资产证据。只与尚未升级到严格屏障的旧 scene / login 同世代;
-  #           本 zone 有世代标记或补投桶非空即拒启,运行中出现即停机。回退步骤见设计 §8.6,不是「随时安全」的开关。
-  # 启动日志 "player row fencing: mode=" 与 "save protocol generation:" 两行是核对依据。
-  # K8s 的 db ConfigMap 由 k8s_deploy.ps1 原样镜像本键(没有逐 zone 覆盖)。
-  Fencing:
-    Mode: dual
-    EpochOverride: false
 
 # ── 玩家存储落点(docs/design/player-storage-placement.md §6)────────────────
-# 每条读 / 写任务按 player:placement:{id}(落点记录)与 player:zone:{id}(home_zone)选库:
-#   有记录 → 记录指向的库;无记录 → home_zone 的 zone 库;都没有 → 本 zone 库(旧语义)。
-#   写任务的 home_zone ≠ 本 ZoneId → 进死信不落库(合服前的滞留写);记录冻结(搬库中)→ 延后重试。
+# 认领和释放按 player:placement:{id}(落点记录)与 player:zone:{id}(home_zone)选库:
+#   有记录 → 记录指向的库;无记录 → home_zone 的 zone 库;都没有 → 本 zone 库(旧语义)。记录冻结(搬库中)→ 暂不可用。
 # 全球服务必须显式满足下面三个权威开关，缺键/关闭拒启；不从旧Redis或本区推导权威。
 Placement:
   # 允许按需打开 zone_{1..999999}_db / player_store_{>=1000000}_db 两个家族的库(不在上面的
   # 库名白名单里也行)。按需打开只 Ping + 只读 schema 闸,**从不建库**,白名单防「ZoneId 填错
   # 静默建新库」的语义不变。设 false 时,本 zone 库之外的每个落点库都必须写进白名单。
   AllowStoreFamilies: true
-  # true = 没有落点记录的玩家一律 fail-closed(写进死信、读回失败)。
+  # true = 没有落点记录的玩家一律 fail-closed(认领和释放都拒绝)。
   # 打开顺序(§13,反了会出事):全部 login 已 Placement.PinOnCreate=true,且各 zone 已
   # `merge_zone -mode pin-placement` 钉完存量之后才能开。
   Required: true
   # D1 第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.3 / §13.2)。
   # true = 只有 mapping Redis 的副本被判可信(mapping:route:ready 存在,且其中记下的 run_id / master_replid 就是本次读所在的
-  # 主实例)才按 player:placement / player:zone 选库;不可信时写延后(不耗重试预算)、读耗预算,进程级就绪闸暂停取 Kafka
-  # 消息与认领重试。启动时试跑一次读脚本(脚本里调 INFO),执行出错即拒启。false = 行为与引入之前相同。
-  # 打开顺序(§8 P5,反了全 zone 停存盘):data_service 对账 leader 已挂上就绪标记、自检稳定为 trusted 之后逐 zone 打开;
+  # 主实例)才按 player:placement / player:zone 选库;不可信时回「暂不可用」。
   # 正式顺序：显式迁移/路由初始化→DS db_first强TiDB且reconcile arm→自然发布可信ready→DB/login。
-  # 未trusted时保留既有消费/重试闭闸；不允许通过关闭门禁、自动写ready或空SQL接管旧Redis绕过初始化。
   RequireRouteReady: true
-  # 就绪闸的刷新 / 复查间隔(毫秒),[200, 10000],不写 = 1000。只在 RequireRouteReady=true 时生效。
-  RouteReadyGateIntervalMs: 1000
   # 额外落点库(本 zone 库之外)的连接池,**每个库一个池**,按库所属家族分两个旋钮(本 zone 库仍用上面的 Database.MaxOpenConn):
   #   ZoneStore*    —— zone 家族库 zone_{1..999999}_db:冷缓存访客读、合服 pin 后的源区库。最坏情形每个实例会打开其余全部
   #                    zone 的库,预算随 zone 数平方增长(总账见 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger)。
@@ -221,9 +112,7 @@ Placement:
   # 落点记录所在的 Redis = data_service 的 MappingRedis(player:zone 所在实例,DB 0)。
   # 不写 = 复用上面的 RedisClient(本地与 K8s 两者同实例同 DB 0)。两者不同时**必须**显式填:
   # 读错 Redis = 读不到任何记录与 home_zone,全员按本 zone 选库,被钉到别处的玩家会写错库。
-  # 必须指向主节点,不能是只读副本:落库后复核(§6.3)读到的冻结若滞后于搬库工具的写,关不住 TOCTOU。
-  # 能力标记 db:capability:zone:{ZoneId} 也写在这里:带 90s TTL、每 30s 心跳续写(合服 pin / 搬库工具据此确认
-  # 本 zone 此刻正在跑新版 go/db;回退旧版后标记在 TTL 内自然消失)。
+  # 必须指向主节点,不能是只读副本。
   # Redis:
   #   Hosts: "127.0.0.1:6379"
   #   Password: ""
@@ -231,14 +120,6 @@ Placement:
   #   PoolSize: 20   # 同 ServerConfig.RedisClient.PoolSize;另开的落点客户端要进 Redis 连接总账
 
 # Prometheus /metrics endpoint. Dev default; disable for prod by setting
-# empty string. Exposes:
-#   db_task_stage_seconds{stage,op}  - per-task sub-stage latency
-#     (op_total | op_handler | cache_write | result_publish)
-#   db_task_result_total{op,result}  - terminal task outcome counter
-#   db_placement_guard_total{op,outcome} / db_placement_store_open_total{result} /
-#   db_placement_open_stores          - 按落点选库(见上面 Placement 段;stale_topic 应恒 0,
-#                                       frozen_deferred 持续上涨 = 搬库冻结未解除,应告警)
-# Round 16 stress runs scrape :9160 alongside login :9101 and
-# scene_manager :9150 to attribute the dataloader_preload_callback_wait
-# 11.8 ms → 31.4 ms regression seen in Round 15.
+# empty string. Exposes db_player_store_requests_total{op,result}, db_player_store_seconds{op},
+# db_player_store_row_bytes{kind} and the placement store and pool gauges.
 MetricsListenAddr: ":9160"

@@ -1,6 +1,10 @@
 # 本机开发跨进程证明。只注入调用进程需要的键；部署环境必须由Secret提供，不调用本文件。
+function Get-AccountDirectoryDevSecretAllNames {
+    # 末尾是玩家存盘接口的调用密钥:scene 签名、go/db 验签,两端同值。
+    @('LOGIN','TRADE','SCENE','SCENE_MANAGER' | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" }) + 'MMORPG_PLAYER_STORE_SECRET_SCENE'
+}
 function Get-AccountDirectoryDevSecretNames {
-    param([Parameter(Mandatory)][ValidateSet('scene','data-service','login','trade','match','scene-manager')][string]$Service)
+    param([Parameter(Mandatory)][ValidateSet('scene','data-service','login','trade','match','scene-manager','db')][string]$Service)
     $names = switch ($Service) {
         'data-service' { 'LOGIN'; 'TRADE'; 'SCENE'; 'SCENE_MANAGER' }
         'scene' { 'SCENE'; 'TRADE' }
@@ -10,12 +14,13 @@ function Get-AccountDirectoryDevSecretNames {
         'scene-manager' { 'SCENE_MANAGER' }
     }
     @($names | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" })
+    if ($Service -cin @('scene','db')) { 'MMORPG_PLAYER_STORE_SECRET_SCENE' }
 }
 function Backup-AccountDirectoryDevSecrets {
     param([Parameter(Mandatory)][string]$Service)
     $saved = @{}
     $names = @(Get-AccountDirectoryDevSecretNames -Service $Service)
-    if ($Service -ceq 'scene-manager') { $names = @('LOGIN','TRADE','SCENE','SCENE_MANAGER' | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" }) }
+    if ($Service -ceq 'scene-manager') { $names = @(Get-AccountDirectoryDevSecretAllNames) }
     foreach ($name in $names) {
         $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
     }
@@ -29,7 +34,7 @@ function Restore-AccountDirectoryDevSecrets {
 function Initialize-AccountDirectoryDevSecrets {
     param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$Service)
     $needed = @(Get-AccountDirectoryDevSecretNames -Service $Service)
-    $all = @('LOGIN','TRADE','SCENE','SCENE_MANAGER' | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" })
+    $all = @(Get-AccountDirectoryDevSecretAllNames)
     foreach ($name in $needed) {
         $supplied = [string][Environment]::GetEnvironmentVariable($name,'Process')
         if ($supplied.Contains("`r") -or $supplied.Contains("`n")) { throw '本机账号目录证明不能包含换行。' }

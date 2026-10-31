@@ -9,6 +9,8 @@ import (
 	assetpb "proto/common/asset"
 	tradepb "proto/trade"
 	"shared/assetop"
+	"strconv"
+	"strings"
 )
 
 // CommerceRepo只存合同与托管证据。玩家余额/实例的权威始终在scene玩家SQL存档。
@@ -117,8 +119,42 @@ func (r *CommerceRepo) Defer(ctx context.Context, id, version, untilMs uint64) (
 func (r *CommerceRepo) Tx(ctx context.Context, body func(*sql.Tx) error) error {
 	return assetop.WithTxRetry(ctx, r.DB, 2, IsRetryableTxError, body)
 }
-func (r *CommerceRepo) List(ctx context.Context, player, after uint64, limit int) ([]*tradepb.TradeCommerceRecord, error) {
-	return r.Query(ctx, "SELECT "+CommerceColumns+" FROM trade_commerce WHERE commerce_id>? AND kind<>1 AND (seller_player_id=? OR buyer_player_id=?) ORDER BY commerce_id LIMIT ?", after, player, player, limit)
+
+// CommerceCursor 是合同列表的翻页游标。commerce_id 是打散过的,不代表先后,所以按 (created_ms, commerce_id) 翻页。
+// 对客户端它只是一个不透明的字符串。
+type CommerceCursor struct {
+	CreatedMs  uint64
+	CommerceId uint64
+}
+
+// ParseCommerceCursor 解析 CommerceCursor.String 的结果。空串或格式不对都从头开始。
+func ParseCommerceCursor(raw string) CommerceCursor {
+	created, id, ok := strings.Cut(raw, ":")
+	if !ok {
+		return CommerceCursor{}
+	}
+	createdMs, err := strconv.ParseUint(created, 10, 64)
+	if err != nil {
+		return CommerceCursor{}
+	}
+	commerceID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		return CommerceCursor{}
+	}
+	return CommerceCursor{CreatedMs: createdMs, CommerceId: commerceID}
+}
+
+func (c CommerceCursor) String() string {
+	return strconv.FormatUint(c.CreatedMs, 10) + ":" + strconv.FormatUint(c.CommerceId, 10)
+}
+
+// CommerceCursorOf 是排在 r 之后那一页的游标。
+func CommerceCursorOf(r *tradepb.TradeCommerceRecord) CommerceCursor {
+	return CommerceCursor{CreatedMs: r.GetCreatedMs(), CommerceId: r.GetCommerceId()}
+}
+
+func (r *CommerceRepo) List(ctx context.Context, player uint64, after CommerceCursor, limit int) ([]*tradepb.TradeCommerceRecord, error) {
+	return r.Query(ctx, "SELECT "+CommerceColumns+" FROM trade_commerce WHERE (created_ms>? OR (created_ms=? AND commerce_id>?)) AND kind<>1 AND (seller_player_id=? OR buyer_player_id=?) ORDER BY created_ms,commerce_id LIMIT ?", after.CreatedMs, after.CreatedMs, after.CommerceId, player, player, limit)
 }
 // Due 取到期待推进的合同。updated_ms 兼作调度键:Save 写成当前时刻(立即到期),Defer 写成将来时刻(推迟),
 // 所以只取 updated_ms<=nowMs 的行。以前不过滤到期时刻,失败行与等待拍品结算的持有竞价 updated_ms 不变,

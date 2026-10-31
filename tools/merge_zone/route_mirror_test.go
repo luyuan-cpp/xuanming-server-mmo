@@ -1,10 +1,10 @@
 package main
 
-// TestMirroredRouteScriptsMatchShared:route_publish.go / route_store.go 镜像的 Redis 契约必须与 go/shared/placement 逐字节相同
-// (规格 §6.1「DRY 守卫」)。merge_zone 不 import shared(理由见 placement_codec.go 文件头),两份代码只能靠这个用例钉住:
-// 用 go/parser 读 ../../go/shared/placement/route.go 与 route_ready.go 的字符串 / 数值常量,逐个与本模块的镜像比较。
-// shared 那边改了脚本或常量而这里没跟,这个用例就红 —— 两份脚本一旦分叉,工具写下的缓存值、围栏镜像会与 data_service
-// 的判定口径不一致,而且不会报在任何一侧。shared 文件读不到、常量改了名,一律 FAIL(不 SKIP:守卫不能悄悄失效)。
+// TestMirroredRouteScriptsMatchShared:route_publish.go / route_store.go 镜像的 Redis 契约必须与 go/shared/placement 逐字节相同。
+// merge_zone 不 import shared/placement,两份代码只能靠这个用例钉住:用 go/parser 读 ../../go/shared/placement/route.go 与
+// route_ready.go 的字符串 / 数值常量,逐个与本模块的镜像比较。shared 那边改了脚本或常量而这里没跟,这个用例就红 —— 两份一旦分叉,
+// 工具写下的标记值会与 data_service 的判定口径不一致,而且不会报在任何一侧。shared 文件读不到、常量改了名,一律 FAIL
+// (不 SKIP:守卫不能悄悄失效)。
 
 import (
 	"go/ast"
@@ -25,10 +25,7 @@ func TestMirroredRouteScriptsMatchShared(t *testing.T) {
 	for _, c := range []struct {
 		shared, mirrorName, mirror string
 	}{
-		{"PublishRouteScript", "routePublishScript", routePublishScript},
 		{"RouteReadyCompareAndDeleteScript", "routeCompareAndDeleteScript", routeCompareAndDeleteScript},
-		{"MergeFenceMirrorSetScript", "routeFenceMirrorSetScript", routeFenceMirrorSetScript},
-		{"MapRevKeyPrefix", "routeMapRevKeyPrefix", routeMapRevKeyPrefix},
 		{"RouteWatermarkKey", "routeWatermarkKey", routeWatermarkKey},
 		{"MergedIntoKeyPrefix", "mergedIntoKey (prefix)", strings.TrimSuffix(mergedIntoKey(7), "7")},
 	} {
@@ -49,11 +46,8 @@ func TestMirroredRouteScriptsMatchShared(t *testing.T) {
 		mirror             int64
 	}{
 		{"RouteRowShards", "routeRowShards", int64(routeRowShards)},
-		{"MaxRouteFenceShards", "routeFenceShards", int64(routeFenceShards)},
-		{"MergeFenceMirrorMarginMs", "routeFenceMirrorMarginMs", routeFenceMirrorMarginMs},
 		{"RouteWatermarkFormatVersion", "routeWatermarkFormatVersion", routeWatermarkFormatVersion},
 		{"routeReadyGenerationMaxLen", "routeGenerationMaxLen", routeGenerationMaxLen},
-		{"maxRevDigits", "routeMaxRevDigits", routeMaxRevDigits},
 	} {
 		v, ok := consts[c.shared]
 		if !ok {
@@ -63,11 +57,6 @@ func TestMirroredRouteScriptsMatchShared(t *testing.T) {
 		if !exact || got != c.mirror {
 			t.Fatalf("%s = %d drifted from shared/placement.%s = %v", c.mirrorName, c.mirror, c.shared, v)
 		}
-	}
-
-	// 围栏批事务锁的分片 = 持有者写满的最后一片(data_service route_reads.go 的 routeFenceReadShard 同口径)。
-	if routeFenceCheckShard != routeFenceShards-1 {
-		t.Fatalf("routeFenceCheckShard = %d, want MaxRouteFenceShards-1", routeFenceCheckShard)
 	}
 }
 

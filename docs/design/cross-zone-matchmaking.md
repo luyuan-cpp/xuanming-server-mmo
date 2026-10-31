@@ -211,7 +211,7 @@ MULTI、MGET(§10.0)。所以 SharedRedis **必须保持单实例(或主从哨�
 - **入口**:gate 在全 zone 的 match 实例间随机路由,实例无状态 → 加实例即扩容。
 - **凑单**:每个 `(mode,config)` 队列一把锁,同一队列同时只有一个实例弹组,但弹组只是 `LPOP` 级操作(微秒级),gather(3–5 跳 RPC)在弹组实例的 goroutine 里并行,不占锁 → 凑单串行不是瓶颈。
 - **单 slot**:`{mq}` 把所有队列压到一个 master。每次 JoinQueue 一条 Lua、matcher 每 500ms 每队列一次 `LLEN` + 若干 `LPOP`。按 1 万玩家/分钟入队算,单 master 负载 < 200 QPS,余量三个数量级;票据 / 挑战 / 观战按玩家分布,吃满集群分片。
-- **snowflake**:worker id 17-bit 布局,由 etcd `/match` 前缀独立分配,实例数上限远高于实际需要。
+- **snowflake**:worker id 17-bit 布局,由 etcd `/match` 前缀独立分配,实例数上限远高于实际需要。(2026-10-30 更正:battle_id 已迁到号段,match 不再申领 snowflake 槽位,上面故障表里「etcd 失租」一行也不再适用。见 [总体方案 §6.4](player-data-tidb-scaling-plan.md)。)
 
 ---
 
@@ -315,7 +315,7 @@ player_migrate 目标判据(`scene_info.guid` uint32)、SceneManager 部署粒�
 
 > **状态说明(2026-09-20)**:上面这段列的是审计当时的既有问题,其中多项已被 [cross-zone-scene-travel.md](cross-zone-scene-travel.md) 阶段 1–3 改变(代码已进 main,尚未编译 / 测试),原文保留为历史:
 > - `ErrUnsafeCrossNodeHandoff` 门 → 已被**换手门**取代:源 scene 为当前 `owner_epoch` 写出 `player:{id}:handoff` 落盘标记即放行,否则回可重试的 18(`ErrHandoffPending`);14 是历史码,不再发出(CZ-4)。
-> - 存盘按进程 zone 路由 → 已改为 `GetDbTaskTopic(home_zone)`(CZ-2 / CZ-3)。
+> - 存盘按进程 zone 路由 → 已改为 `GetDbTaskTopic(home_zone)`(CZ-2 / CZ-3);2026-10-30 起存盘直接提交 `player_store`,不再有这个 topic。
 > - `player_migrate` 目标判据 → 随搬数据链在阶段 3 整条删除而消失(§11.3)。
 > - `player:zone:{id}` 无生产写入方 → login 建角现在会调 `RegisterPlayerZone` 写入(`go/login/internal/logic/pkg/homezone`);该处归 login 会话维护,细节以其代码为准。
 > - 「SceneManager 部署粒度错位」一项本次未重新核实。
@@ -751,6 +751,8 @@ K8s沿既有迁移门禁接`match-migrate`：ConfigMap先于Job，全球模式�
 
 ### 2026-10-24：旧 Scene 维护后的显式解除（设计候选，未实现／未验收）
 
+> **2026-10-30:本节作废。** `save_barrier_restore` 的 guard / plan / apply 和旧 `admission_recover` 都已删除,崩溃实例由 `player_store` 写权行判定([player-save-direct-commit.md](./player-save-direct-commit.md) §9 第 11 条),不需要维护解除流程。
+
 > 下述初版严格验收方案作为历史保留。它把本地调试 marker、Codex 构建和 Windows 进程原件直接接进了维护入口；这些限制不构成生产运维授权。2026-10-24 负责人已批准本节后面的正式维护合同取代这部分生产依赖。历史实测与原失败原件不重写；新合同尚未完成实现和运行验收。
 
 旧 Scene 恢复分为两个独立结果：A 只证明原写者已停止、真实队列排空、永久撤资格与 SQL 恢复／退休收据成立，维护仍关闭；B 才是受控解除后由新 SM 铸造 owner、新 Scene 以新入场世代重新接流。Ctmp 的连接边界、队列观察和故障编排是验收工具，不是生产业务入口，源码或工具编译成功不等于 A／B 已通过。
@@ -783,6 +785,17 @@ Redis 在每个实际 addr／DB 上由运维预置 `maintenance_recovery:target:
 领域裁决保持原实现：只能在正式同身份 Cancel 得到 `CANCEL_PENDING` 后恢复旧 holder，常规 `AckTradeSeal` 的 FREEZING 规则不变；恢复后 Confirm 必须明确拒绝，再重放同一 unsigned Cancel 正文得到 SQL／回包 `CANCELLED`。解除仍核完整生成的 promotion／admission 永久 PB、原域摘要、原 holder／Seal、双 SQL 全列与 NULL、原 owner/save_seq、路由冻结 generation／rev／watermark／placement，以及整个 zone 的原成员等集（上限 1000）。SQL 事务内不访问 Redis、Kafka 或 Scene。原 intent 与原 plan 固定，每次新窗独立，单调截止不自动续期；两存储前缀、提交回复丢失与同原件重放规则均保持。解除成功仍不自动 unfreeze 或重启，必须再执行正式 route audit／unfreeze，并实际证明新世代重登及保存可用、旧世代真实迟到写仍拒绝。
 
 新回归须包含非 loopback 的精确专用目标、仅调试 marker 拒绝、错物理 scope／nonce／TTL 在首副作用前拒绝、Linux 无 Codex／PE／FILETIME 输入、缺发行方／重复或同 COUNT 换成员、完整队列漏世代、所有 SQL／Lua 并发与未知提交前缀。现有本地旧 marker 和私有审核原件仅保留历史证据，不能称为新合同已通过；本条目前没有新的编译、单测、真库或 A／B 验收结果。
+
+#### 2026-10-30 修订：promotion 固定前复核、同维护单份原件与解除的 owner 计数器判据（未编译，待 Codex 验证）
+
+- **promotion**：首次写 PLAN_FIXED 之前，在 SQL 锁外完成三项只读复核——缓存仍与双 SQL 同内容、映射、Lua `check`；任一项不成立都不留收据，避免撤销失败后的孤儿原件永久阻断显式解除。计划时在、执行时已按 TTL 过期的缓存不再拒绝；重新出现且 bytes 不同仍拒。同一维护号内同一玩家只允许一份 promotion 原件：PreparePromotion 提前拒绝，固定原件时在维护标记行锁内再核一次。续跑以 SQL 里的原 bytes 为准，核原摘要后按语义比较，不要求重新编码后逐字节一致。
+- **显式解除**：成员新增 `redis_owner_epoch`，即审定时观测到的 owner 计数器原值，执行时逐字节钉死。非恢复成员要求它不低于双 SQL 围栏的 `owner_epoch`；恢复成员要求它等于 promotion 的 TargetOwner；屏障 ACK 仍须等于双 SQL 围栏版本。原「计数器等于 SQL 围栏」在真实 zone 必然失败，原因有两个：玩家进场后未存盘就退出时，计数器本就高于 SQL 围栏；scene_manager 铸代写的是 `max(观测+1, 墙钟毫秒)`。格式同批升版：计划升为 `player-save-explicit-maintenance-release-v3`，成员输入升为 `maintenance-release-member-input-v2`，Redis 解除收据前缀改为 `release-v3`。v2 计划与 v1 输入一律拒绝，验收工具须同步。
+- **旧 holder 恢复**：跨 zone 传送后，旧 holder 可能在别区 Scene 上。恢复事务对 Scene zone 和收据 home zone 两个 zone 都持锁核验 admission 维护标记，并删除原「home zone 必须等于 seal.zone_id」判据。确定拒绝返回固定 ASCII 原因码（`RecoveryRejectError`，`errors.Is(ErrConflict)` 仍成立），CLI 只打印原因码。plan 遇到已提交的原请求时，返回原件与 `ErrAdmissionRecoveryAlreadyCommitted`，提示「已提交、apply 只读重放」。Java 版 PlayerTradeStore／RecoverTradeAdmission 同批对齐。
+- **业务全列摘要**：协议收敛到 `go/shared/businessdigest`，go/db 的计划／解除与 data_service 的证明共用，并由 golden 测试固定字节。
+- **仍待负责人拍板**：
+  - 孤儿 PLAN_FIXED 收据的正式放弃阶段；
+  - 全 zone 等集的 1000 成员上限；
+  - 非恢复成员「无挂单、admission 全关」的判据是否收窄。崩溃 Scene 上的非交易在线玩家，现有工具都关不掉其 admission，一次崩溃就会阻断解除。
 
 ### 2026-10-24：终局提交宽限与永久不适用子效果的恢复边界
 

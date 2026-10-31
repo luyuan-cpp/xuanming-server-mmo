@@ -121,7 +121,7 @@ func (c *Consumers) StopAndReport(ctx context.Context) ([]byte, error) {
 //
 // **本函数会阻塞**:半死不活的 broker 上 EnsureTopics 要走完 sarama 的
 // Net.DialTimeout(默认 30s)加若干次元数据重试。所以连第一次尝试也必须在后台
-// goroutine 里做,不能挡在 gRPC 服务器起来之前 —— 否则 LoadPlayerData / SavePlayerData
+// goroutine 里做,不能挡在 gRPC 服务器起来之前 —— 否则账号目录、名字、归属这些同步 RPC
 // 这条玩家数据热路径会被一个纯审计用途的组件按住几十秒(见 data_service.go
 // startKafkaConsumers)。
 func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink SnapshotSink) (*Consumers, error) {

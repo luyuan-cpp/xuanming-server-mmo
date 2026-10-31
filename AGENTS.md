@@ -90,7 +90,7 @@
 **压测复盘只读 `stress_summarize.ps1` 输出，不要手 grep raw prom dump**。
 
 - 命令：`pwsh tools/scripts/stress_summarize.ps1 -RunDir robot/logs/stress-<name>-<ts>`
-- 输出五段二维表：robot 每分钟 stats + entergame_total + dataloader stage avg + SceneManager EnterScene 子阶段 + DB task 子阶段 + Kafka lag，约 3KB 上下文。
+- 输出多段二维表：robot 每分钟 stats + EnterGame 端到端 + 建角阶段 + login 出站 RPC + SceneManager EnterScene 子阶段 + data_service 归属读 + 存盘接口（P1~P4）+ Redis 负载（R1 / R2）+ Kafka lag。
 - **Round 16+ 推荐用 `tools/scripts/stress_snap.ps1` 后台批量拉 snapshot**（并行 scrape 三端口）：
   `pwsh tools/scripts/stress_snap.ps1 -RunDir robot/logs/stress-<name>-<ts> -StartTime '<yyyy-MM-dd HH:mm:ss>' -Stages 2,5,10,15,18`
   端口分工：`:9101` login / `:9150` scene_manager / `:9160` db / `:9260` data_service（2026-10-23 起）。
@@ -107,7 +107,7 @@
    - `robot/logs/stress-*` 旧目录（留最近 1 个备查，其余删掉）
    - `bin/log/*` cpp gate/scene 日志
    - 各 go service stderr/stdout（`go-svc-stop` + 删 `tools/scripts/.run/` 的 pid/log）
-   - `redis-cli FLUSHALL` 清掉残留 lock / session / task:result key
+   - `redis-cli FLUSHALL` 清掉残留 lock / session key
    - kafka topic offset reset（`pwsh tools/scripts/dev_tools.ps1 -Command kafka-offset-reset`）+ broker 数据目录可选清，生产/历史不要清
    - prom snapshot 目录 = 新建 `robot/logs/stress-<name>-<ts>/prom-snapshots/`
 3. **压测中** —— 至少在 ramp 完成 / 稳态中段 / 稳态末三个时刻拉 snapshot 进 `prom-snapshots/`。
@@ -122,12 +122,11 @@
 跨服务必须保持的不变量，违反 → PR review 直接拒。
 
 1. **SnowFlake 节点隔离**：每种 SnowFlake ID 只能由一种 node 类型生产（不同 node 类型共享 node_id 范围会撞）。
-   注意**全系统有两套互不兼容的位布局**，不要混用解析函数：
+   注意**全系统有三种互不兼容的 ID**，不要混用解析函数：
    - `shared/snowflake` 与 C++ `SnowFlake`：**17-bit** worker / 15-bit step / **秒**级 epoch（1773446400）。
-     仍由这套号源生成的 scene_id 等值可用 C++ `ParseGuid` 解；已切号段的种类不能仅凭字段名选择解析器，存量 SnowFlake 与新号段须按号源区分。
-   - login 的**存量及回退 SnowFlake PlayerId**：`bwmarrin/snowflake`，**13-bit** node / 9-bit step / **毫秒**级 epoch
-     （见 `login/etc/login.yaml` 的 `Snowflake` 段）。**拿 `ParseGuid` 解 player_id 得到的是垃圾。**
-     改布局会作废存量 player_id，所以这是既成事实，不是待修项。当前 `IdSegment.Enabled=true` 时新建角色优先使用 `data_service.AllocateIdSegment` 的 `player` 号段；号段 ID 没有 SnowFlake 位布局，也不能用 `ParseGuid` 解析。关闭号段或显式允许回退时才使用上述旧号源，失败语义见 `go/login/internal/svc/player_id_minter.go`。
+     仍由这套号源生成的 scene_id 等值可用 C++ `ParseGuid` 解，不能仅凭字段名选择解析器。
+   - `bwmarrin/snowflake`：**13-bit** node / 9-bit step / **毫秒**级 epoch。只有 login 的旧号源是这套，新角色已不用它。
+   - **发号器发的永久 ID**（player_id、guild_id、物品 guid、流水号、battle_id、challenge_id、team_id 等，`data_service.AllocateIdSegment`）：打散过的计数器值，63 位以内，不单调、不连续、没有位布局。**不能用 `ParseGuid` 解析，不能靠大小判断先后**（排序和翻页用时间列），Lua 里只当字符串，不进有序集合的分数。没有回退号源，发号失败就是操作失败。详见 [发号器设计](docs/design/player-data-tidb-scaling-plan.md) §6 与 [运维手册](docs/ops/id-issuer-runbook.md)。
 2. **Kafka 防僵尸**：发往 `{type}-{id}` topic 的消息必须填 `target_instance_id`（目标节点 UUID），空值则关闭过滤
 3. **kafka topic key = 业务实体 ID**（同一玩家 / 同一对局事件有序）
 4. **proto 字段编号上线后不复用**（见 §4）

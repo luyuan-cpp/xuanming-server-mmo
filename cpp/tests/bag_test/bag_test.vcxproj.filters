@@ -13,6 +13,9 @@
     <ClCompile Include="bag_selection_order_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="player_store_client_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="bag_java_parity_test.cpp">
       <Filter>source</Filter>
     </ClCompile>

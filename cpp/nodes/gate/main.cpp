@@ -33,9 +33,15 @@
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "handler/event/gate_kafka_command_router.h"
 #include "handler/event/scene_entry_dispatch.h"
+#include "proto/contracts/kafka/gate_event.pb.h"
+#include "spectate/gate_spectate_client.h"
+#include "spectate/gate_spectate_ticket.h"
 
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -137,6 +143,58 @@ namespace
         LOG_INFO << "Client connection limit ENFORCED, max_connections=" << maxConnections;
     }
 
+    // 启动门禁:观战凭证密钥(docs/design/battle-spectate-tiered-fanout.md §15.7,口径同 battle 令牌)。
+    // prod 下空密钥、过短、与 gate / battle 令牌密钥相同都拒绝启动:密钥短了凭证可以伪造给任意玩家,相同则信任域没分开。
+    // dev / test 放行并 WARN。这里的放行只是让进程起得来,不是跳过校验:没有密钥时所有 SubscribeSpectate 一律拒绝
+    // (gate_spectate_ticket.h),本机也不注册观战帧消费者,观众只能走直连。
+    void ValidateSpectateTokenSecretOrDie()
+    {
+        const auto mode = gate_security::CurrentRunMode();
+        const auto &deploy = gNodeConfigManager.GetBaseDeployConfig();
+        const auto &secret = deploy.spectate_token_secret();
+        switch (gate_security::ClassifyTokenSecret(secret, mode))
+        {
+        case gate_security::TokenSecretVerdict::kEnforce:
+            break;
+        case gate_security::TokenSecretVerdict::kDevBypass:
+            LOG_WARN << "spectate_token_secret is EMPTY and " << gate_security::kRunModeEnv << "="
+                     << gate_security::RunModeName(mode)
+                     << " -- every SubscribeSpectate will be rejected and spectate frame consumers are not registered;"
+                     << " spectators can only use the direct path.";
+            return;
+        case gate_security::TokenSecretVerdict::kRefuse:
+            LOG_FATAL << "Refusing to start: spectate_token_secret is empty while run_mode=prod."
+                      << " Set SpectateTokenSecret in etc/base_deploy_config.yaml, or set "
+                      << gate_security::kRunModeEnv << "=dev|test for a local run.";
+            return;
+        }
+
+        const char *problem = nullptr;
+        switch (gate_spectate::ClassifySecretStrength(secret, deploy.gate_token_secret(), deploy.battle_token_secret()))
+        {
+        case gate_spectate::SecretStrengthVerdict::kOk:
+            LOG_INFO << "Spectate ticket verification ENFORCED, run_mode=" << gate_security::RunModeName(mode);
+            return;
+        case gate_spectate::SecretStrengthVerdict::kTooShort:
+            problem = "is shorter than the required minimum";
+            break;
+        case gate_spectate::SecretStrengthVerdict::kSameAsGate:
+            problem = "equals gate_token_secret (trust domains must be separate)";
+            break;
+        case gate_spectate::SecretStrengthVerdict::kSameAsBattle:
+            problem = "equals battle_token_secret (trust domains must be separate)";
+            break;
+        }
+        if (gate_security::IsNonProdMode(mode))
+        {
+            LOG_WARN << "spectate_token_secret " << problem << "; tolerated only because run_mode="
+                     << gate_security::RunModeName(mode) << ", minimum_bytes=" << gate_spectate::kMinSpectateSecretBytes;
+            return;
+        }
+        LOG_FATAL << "Refusing to start: spectate_token_secret " << problem
+                  << " while run_mode=prod, minimum_bytes=" << gate_spectate::kMinSpectateSecretBytes;
+    }
+
     struct GateRuntimeContext
     {
         ProtobufDispatcher protobufDispatcher;
@@ -150,6 +208,10 @@ namespace
         // 路由 lane 在途调用的本地截止扫描(handler/rpc/client_request_lane.cpp)。回调不捕获任何对象;
         // 必须主动扫:队头卡住时客户端在等回包,不会再发新请求触发惰性清理(client-request-ordering.md §4.5)。
         TimerTaskComp routerLaneExpiryTimer;
+        // 观战订阅中心(spectate/gate_spectate_hub.h)。定时器与 Kafka 回调都不捕获对象,经 gate_spectate_client.h 的入口
+        // 按弱引用找到它;在 Node 之后析构,这时 Kafka 消费已经停了。
+        std::shared_ptr<gate_spectate::SpectateHub> spectateHub;
+        TimerTaskComp spectateSweepTimer;
         bool sourceClosed = false;
 
         GateRuntimeContext()
@@ -180,6 +242,66 @@ namespace
             DispatchGateKafkaCommand(topic, command);
         }
     };
+
+    // 维护控制模式下启动的 boot(判据与 node.cpp InitMaintenanceControl 相同:变量存在且非空)。
+    bool IsMaintenanceControlledBoot()
+    {
+        const char *directory = std::getenv("MMORPG_MAINTENANCE_CONTROL_DIR");
+        return directory != nullptr && directory[0] != '\0';
+    }
+
+    // 观战帧的两个消费者(docs/design/battle-spectate-tiered-fanout.md §15.3)。消息体就是 SpectateFrameEvent,不套 GateCommand。
+    // 回调已在主 loop 上。没有密钥时不注册:订阅全拒,收帧没有去处(prod 下空密钥进程已拒启,走到这里只会是 dev / test)。
+    bool RegisterSpectateFrameConsumers(Node &gateNode)
+    {
+        const auto &secret = gNodeConfigManager.GetBaseDeployConfig().spectate_token_secret();
+        if (token_security::TrimAscii(secret).empty())
+        {
+            return true;
+        }
+
+        using contracts::kafka::SpectateFrameEvent;
+        const auto onFrame = [](const std::string &, const SpectateFrameEvent &event)
+        { gate_spectate::OnKafkaFrame(event); };
+
+        // L1 中继:与 gate-cmd 同一分区契约(node_id % 命令 topic 分区数),target_gate_id / target_instance_id 过滤。
+        auto relayOptions = node::kafka::BuildDefaultKafkaOptions(gateNode.GetNodeType());
+        relayOptions.commandTopicBase = node::kafka::kSpectateRelayTopicBase;
+        // 观战帧是持续流:这台 gate 重启拿回同一 node_id 后,battle 的中继表还指着前任实例(没有摘除通道,只有这台 gate 上来新观众
+        // 重新挂接才覆盖),这些场每回合一帧都按实例不符丢弃。1000 场、3 秒一回合约 330 行 / 秒,不采样就全写在主 loop 上。
+        // 广播 options 由这里复制,两条 topic 共用一个计数。
+        relayOptions.targetFilter.staleInstanceDropCounter = std::make_shared<std::atomic<uint64_t>>(0);
+        if (!node::kafka::RegisterKafkaCommandHandler<SpectateFrameEvent>(gateNode, relayOptions, onFrame))
+        {
+            return false;
+        }
+
+        // 维护控制模式的 manual consumer 证据要求「一个消费者只 assign 本节点的一个分区」(node.cpp RegisterKafkaMessageHandler、
+        // kafka_consumer.cpp ReadManualLocked),全分区消费者放不进去,硬注册会把整个 gate 打成 LOG_FATAL。
+        // 维护 boot 是单个具名节点的受控过程;这台 gate 上的 L2 观众收不到帧,靠空闲巡检收尾,不碰资产,代价可接受。
+        if (IsMaintenanceControlledBoot())
+        {
+            LOG_WARN << "Spectate broadcast consumer is not registered on a maintenance-controlled boot:"
+                     << " L2 spectators on this gate end with SPECTATE_END_SOURCE_LOST.";
+            return true;
+        }
+
+        // L2 广播:assign 全部分区,两个目标字段留空(现有过滤规则放行),防僵尸靠 SpectateHub 比对 battle_instance_id。
+        auto broadcastOptions = relayOptions;
+        broadcastOptions.commandTopicBase = node::kafka::kSpectateBroadcastTopicBase;
+        broadcastOptions.assignAllPartitions = node::kafka::kSpectateBroadcastTopicPartitions;
+        return node::kafka::RegisterKafkaCommandHandler<SpectateFrameEvent>(gateNode, broadcastOptions, onFrame);
+    }
+
+    bool RegisterGateKafkaConsumers(Node &gateNode)
+    {
+        if (!node::kafka::RegisterKafkaCommandHandler<GateNodeHooks::KafkaCommandType>(
+                gateNode, &GateNodeHooks::DispatchKafkaCommand))
+        {
+            return false;
+        }
+        return RegisterSpectateFrameConsumers(gateNode);
+    }
 
     // 所有节点类型上的 gRPC 通道都没有未完成的调用(关机排空用:断线通知发出并拿到结果之后,才允许清掉通道)。
     // 路由模式下通知走路由服通道,直连模式走 login 通道;两者都在这里,不按模式区分。
@@ -259,6 +381,14 @@ int main(int argc, char *argv[])
             // 此处 Node 构造已完成,LoadConfigs 读过 etc/base_deploy_config.yaml。
             ValidateGateTokenSecretOrDie();
             ValidateGateConnectionLimitOrDie();
+            ValidateSpectateTokenSecretOrDie();
+
+            // 观战订阅中心。hub 先建好:客户端消息、会话关闭与 Kafka 回调都经 gate_spectate_client.h 的入口找它。
+            context.spectateHub = gate_spectate::InstallHub(
+                *node.GetLoop(), gNodeConfigManager.GetBaseDeployConfig().spectate_token_secret());
+            // 覆盖 node_entry 按 GateNodeHooks 装的默认钩子:gate-cmd 的注册不变,同一时机追加两个观战帧消费者。
+            node.SetKafkaHandlers([](Node &n)
+                                  { return RegisterGateKafkaConsumers(n); });
 
             // 启动日志:出口模式与出站白名单一起打。事故复盘要能一眼看出"这台 gate
             // 连的是路由服还是业务服务",不能靠翻容器的环境变量。
@@ -342,8 +472,8 @@ int main(int argc, char *argv[])
                 node.SetBeforeShutdown(closeSource);
                 node.SetMaintenanceInboundRelay(); // 内部推送/路由是relay；客户端TCP根由closeSource关闭。
                 node.SetMaintenanceSourceClose(closeSource);
-                node.SetMaintenanceRelayStop([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); });
-                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); });
+                node.SetMaintenanceRelayStop([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); });
+                node.SetBeforeTeardown([&context](Node &) { context.sceneEntryRetryTimer.Cancel(); context.routerLaneExpiryTimer.Cancel(); context.spectateSweepTimer.Cancel(); });
                 node.SetShutdownDrainComplete([closingSessions](Node &)
                                               {
                     const auto &sessions = tlsSessionManager.sessions();
@@ -413,6 +543,10 @@ int main(int argc, char *argv[])
                         // 路由 lane 的在途过期扫描同理:客户端连进来之后就可能有在途调用。在途索引为空时每轮只做一次堆顶比较。
                         context.routerLaneExpiryTimer.RunEvery(gate_lane::kSweepIntervalSeconds, [] {
                             gate_lane::ExpireDue(std::chrono::steady_clock::now());
+                        });
+                        // 观战空闲巡检与指标行:回调不捕获对象,hub 按弱引用找,没有了就是空操作(AGENTS.md §11.7)。
+                        context.spectateSweepTimer.RunEvery(gate_spectate::kSweepIntervalSeconds, [] {
+                            gate_spectate::SweepIdleNow();
                         });
 
                         // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连

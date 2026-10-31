@@ -1,5 +1,7 @@
 # 合服(Server Merge)设计文档
 
+> **已过期(2026-10-30)**:合服改成别名合服([player-data-tidb-scaling-plan.md](./player-data-tidb-scaling-plan.md) §7.1),不再改玩家归属、不动玩家行,围栏已删除。本文只作历史保留,不再描述现行行为。
+
 > **文档状态**: v2 — 2026-09-08(v1 2026-05-15)。**这是设计与历史决策文档;可逐字执行的 SOP 在 [`docs/ops/merge-zone-runbook.md`](../ops/merge-zone-runbook.md)。** 作废段落一律就地标注,不悄悄改写历史。
 > **范围**: 把散落在 `tools/merge_zone/main.go`、`mmo_cross_server_architecture.md §9`、`guild_ranking_architecture.md §合服工具`、`enter-scene-zone-routing.md §50` 的合服知识收口为单一权威来源。
 > **读者**: 运维、客服总监、新接手的 AI / 工程师。

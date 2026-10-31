@@ -326,9 +326,9 @@ spec:
         #                                 的存量号 / 映射 Redis 丢失):gate zone 不能代表归属,拒绝(错误码同
         #                                 上,20)。zone_id 同样是 gate zone:第一条腿上是源 zone(玩家留在
         #                                 原地收 tip),第二条腿上是目标 zone(玩家落不了地,应≈0)。它不是
-        #                                 依赖故障,重试不会好,要跑 merge_zone -backfill-home-zone 补映射。
+        #                                 依赖故障,重试不会好,要查这名玩家的 player_route 行(建角时写入)。
         #                                 由玩家操作直接触发(每点一次传送一次拒绝 + 一条 ERROR 日志),
-        #                                 见 SceneManagerHomeZoneUnmappedTravel;回填完成的部署里应恒 0。
+        #                                 见 SceneManagerHomeZoneUnmappedTravel;应恒 0。
         #   scene_gone                    destroy-while-entering:请求指定的 scene_id 在解析之后、预占人数
         #                                 之前被回收。偶发是正常噪声,持续非 0 见 SceneManagerEnterSceneSceneGone。
         #   travel_map_unavailable       跨 zone 传送第一条腿:目标 zone 没有这张图的任何世界频道,未改
@@ -336,9 +336,7 @@ spec:
         #   pending_map_fallback          跨 zone 传送第二条腿:第一条腿记下的目标地图解析失败,已回落默认
         #                                 大世界(人照常落地)。不该有稳定速率。
         #
-        # (2026-10-20 补,10-22 订正:Help 里另有 3 个本清单没列的 reason,本组都不按它们告警。
-        #   home_zone_merging:归属 zone 处于合服围栏内,zone_id 是 gate zone,只应在合服窗口里非 0;窗口外持续
-        #   非 0 = 围栏残留,由 deploy/k8s/player-placement-alerts.yaml 的 SceneManagerHomeZoneMerging 告警。
+        # (2026-10-20 补,10-22 订正:Help 里另有 2 个本清单没列的 reason,本组都不按它们告警。
         #   session_stale:落点会话身份裁决拒绝,顶号竞态下偶发属正常;
         #   session_conflict:同上一类裁决,应恒 0,由下面 scene-manager.placement-identity 组按
         #   placement_identity_total 告警。
@@ -456,7 +454,7 @@ spec:
               拒绝(错误码 20,未改玩家状态)。zone_id 是 gate zone:第一条腿上是源 zone,玩家留在
               原地收 tip;第二条腿上是目标 zone,玩家已离开源 scene、落不了地,优先处理(指标与
               日志都不区分两条腿,要看该玩家的 player:{id}:location 是否为无 node_id 的等待落点)。
-              处置:跑 tools/merge_zone 的 -backfill-home-zone 回填映射;若此前已回填过,查 data_service
+              处置:查这名玩家的 player_route 行(建角时写入),再查 data_service
               的映射 Redis 是否丢过数据。scene_manager 日志搜 "[home-zone] Cross-zone travel rejected"
               可看到具体 player(每次拒绝一条 ERROR,由玩家操作直接触发;2026-10-13 日志英文化之前的
               原文是 "[home-zone] 跨 zone 传送被拒")。

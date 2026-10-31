@@ -10,9 +10,7 @@ import (
 	"github.com/alicebob/miniredis/v2/server"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	pb "proto/friend"
 	plpb "proto/player_locator"
@@ -20,9 +18,20 @@ import (
 
 type directoryDataService struct {
 	dspb.DataServiceClient
-	zones map[uint64]uint32
-	names map[uint64]string
-	err   error
+	zones    map[uint64]uint32
+	names    map[uint64]string
+	displays map[uint64]*dspb.PlayerDisplay
+	err      error
+}
+
+func (d directoryDataService) BatchGetPlayerDisplay(ctx context.Context, _ *dspb.BatchGetPlayerDisplayRequest, _ ...grpc.CallOption) (*dspb.BatchGetPlayerDisplayResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if d.err != nil {
+		return nil, d.err
+	}
+	return &dspb.BatchGetPlayerDisplayResponse{Players: d.displays}, nil
 }
 
 func (d directoryDataService) BatchGetPlayerHomeZone(ctx context.Context, in *dspb.BatchGetPlayerHomeZoneRequest, _ ...grpc.CallOption) (*dspb.BatchGetPlayerHomeZoneResponse, error) {
@@ -49,30 +58,25 @@ func (d directoryDataService) BatchGetPlayerName(ctx context.Context, in *dspb.B
 	return &dspb.BatchGetPlayerNameResponse{Names: d.names}, nil
 }
 
-func directoryProfile(t *testing.T, id uint64, name string) string {
-	t.Helper()
-	profile := &dbpb.PlayerAllData{}
-	require.NoError(t, protojson.Unmarshal([]byte(fmt.Sprintf(`{"playerDatabaseData":{"playerId":"%d","levelComponent":{"level":12},"uint32PbComponent":{"class":1},"profileComponent":{"name":%q,"appearanceId":"daoshi","gender":1}}}`, id, name)), profile))
-	raw, err := proto.Marshal(profile)
-	require.NoError(t, err)
-	return string(raw)
+func directoryDisplay(name string) *dspb.PlayerDisplay {
+	return &dspb.PlayerDisplay{Name: name, Level: 12, ClassId: 1, Gender: 1, AppearanceId: "daoshi"}
 }
 
 func TestOnlineDirectoryFiltersAndPreservesLastBatch(t *testing.T) {
 	reader, mr := newSessionReaderOnMiniredis(t, 64)
 	zones := map[uint64]uint32{1: 1}
-	prefix := string((&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName())
+	displays := map[uint64]*dspb.PlayerDisplay{}
 	for id := uint64(1); id <= 15; id++ {
 		zones[id] = 1
 		putPlayerSession(t, mr, id, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 123)
-		require.NoError(t, mr.Set(fmt.Sprintf("%s:{%d}", prefix, id), directoryProfile(t, id, fmt.Sprintf("道人%d", id))))
+		displays[id] = directoryDisplay(fmt.Sprintf("道人%d", id))
 	}
-	// 不同 home zone、断线重连、缺资料、错误身份、自身和排除项都不得出现。
+	// 不同 home zone、断线重连、缺资料、没有名字、自身和排除项都不得出现。
 	zones[3] = 2
 	putPlayerSession(t, mr, 4, plpb.PlayerSessionState_SESSION_STATE_DISCONNECTING, 123)
-	mr.Del(fmt.Sprintf("%s:{5}", prefix))
-	require.NoError(t, mr.Set(fmt.Sprintf("%s:{6}", prefix), directoryProfile(t, 99, "错误身份")))
-	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: zones}}
+	delete(displays, 5)
+	displays[6] = directoryDisplay("")
+	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: zones, displays: displays}}
 	seen := map[uint64]bool{}
 	cursor := ""
 	for page := 0; ; page++ {
@@ -154,9 +158,8 @@ func TestOnlineDirectoryEmptyPageContinuesWithinScanBudget(t *testing.T) {
 		return true
 	})
 	putPlayerSession(t, mr, 1999, plpb.PlayerSessionState_SESSION_STATE_ONLINE, 123)
-	prefix := string((&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName())
-	require.NoError(t, mr.Set(prefix+":{1999}", directoryProfile(t, 1999, "最后的在线玩家")))
-	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: map[uint64]uint32{1: 1, 1999: 1}}}
+	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: map[uint64]uint32{1: 1, 1999: 1},
+		displays: map[uint64]*dspb.PlayerDisplay{1999: directoryDisplay("最后的在线玩家")}}}
 	cursor := ""
 	seenEmptyPage := false
 	var found []uint64
@@ -179,18 +182,45 @@ func TestOnlineDirectoryEmptyPageContinuesWithinScanBudget(t *testing.T) {
 	require.Equal(t, []uint64{1999}, found)
 }
 
-func TestFriendProfilesFillCacheAndResolveOfflineNames(t *testing.T) {
-	reader, mr := newSessionReaderOnMiniredis(t, 64)
-	prefix := string((&dbpb.PlayerAllData{}).ProtoReflect().Descriptor().FullName())
-	require.NoError(t, mr.Set(prefix+":{2}", directoryProfile(t, 2, "青云")))
+// 展示资料从 data_service 读。查不到的好友照样回源名字。
+func TestFriendProfilesOnPlayerStoreReadFromDataService(t *testing.T) {
 	friends := []*pb.FriendEntry{{FriendPlayerId: 2, IsOnline: true}, {FriendPlayerId: 3}}
-	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{zones: map[uint64]uint32{2: 1, 3: 2}, names: map[uint64]string{3: "离线好友"}}}
+	directory := OnlineDirectory{DataService: directoryDataService{
+		zones:    map[uint64]uint32{2: 1, 3: 2},
+		names:    map[uint64]string{3: "离线好友"},
+		displays: map[uint64]*dspb.PlayerDisplay{2: {Name: "青云", Level: 12, ClassId: 1, Gender: 1, AppearanceId: "daoshi"}},
+	}}
 	require.NoError(t, directory.FillFriendProfiles(context.Background(), friends))
 	require.Equal(t, "青云", friends[0].GetName())
 	require.Equal(t, uint32(12), friends[0].GetLevel())
+	require.Equal(t, uint32(1), friends[0].GetClassId())
 	require.Equal(t, "daoshi", friends[0].GetAppearanceId())
 	require.Equal(t, "离线好友", friends[1].GetName())
 	require.Equal(t, uint32(2), friends[1].GetZoneId())
 	require.Zero(t, friends[1].GetLevel())
-	require.False(t, friends[1].GetIsOnline())
+}
+
+// 在线目录的会话还在 Redis,展示资料从 data_service 读;没有资料的玩家不进目录。
+func TestOnlineDirectoryOnPlayerStoreReadsSessionsFromRedisAndProfilesFromDataService(t *testing.T) {
+	reader, mr := newSessionReaderOnMiniredis(t, 64)
+	for _, id := range []uint64{2, 3, 4} {
+		session, err := proto.Marshal(&plpb.PlayerSession{PlayerId: id, State: plpb.PlayerSessionState_SESSION_STATE_ONLINE, LastActiveTs: 1000})
+		require.NoError(t, err)
+		require.NoError(t, mr.Set(fmt.Sprintf("%s%d", playerSessionKeyPrefix, id), string(session)))
+	}
+	directory := OnlineDirectory{Redis: reader.rdb, DataService: directoryDataService{
+		zones: map[uint64]uint32{1: 7, 2: 7, 3: 7, 4: 7},
+		displays: map[uint64]*dspb.PlayerDisplay{
+			2: {Name: "青云", Level: 12, ClassId: 1, Gender: 1, AppearanceId: "daoshi"},
+			3: {Name: "", ClassId: 1},
+		},
+	}}
+	resp, err := directory.List(context.Background(), 1, "", 12, nil, "")
+	require.NoError(t, err)
+	require.Len(t, resp.GetCandidates(), 1, "没有名字、没有资料的玩家都不进目录")
+	entry := resp.GetCandidates()[0]
+	require.Equal(t, uint64(2), entry.GetCandidatePlayerId())
+	require.Equal(t, "青云", entry.GetName())
+	require.Equal(t, uint32(12), entry.GetLevel())
+	require.Equal(t, "daoshi", entry.GetAppearanceId())
 }

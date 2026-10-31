@@ -1,5 +1,7 @@
 # go/db 存盘任务：存储不可用时延后、不进死信（L-04）设计评审稿
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),go/db 不再消费存盘任务,存储不可用时由 scene 的状态机退避重试。本文只作历史保留,不再描述现行行为。
+
 > **状态**：v0.3.1（2026-10-14，Claude）。第 1 批已获负责人授权（2026-10-13，「L-04 第 1 批 + 读写超时」），**代码已按本稿落码，未编译、未测试**（AGENTS.md §10.1）。负责人同时要求「先实现代码，先不管测试，测试记录到上线待做里面」，未执行的验证列在 [godb-pipeline-launch-todo.md](../ops/godb-pipeline-launch-todo.md)。
 > **来源**：`tidb-phase1-and-launch-readiness.md` 的 L-04（「go/db 遇到 1040 或拿不到连接时改为延后，不消耗重试预算；死信加消费者和告警」）；[交接](../handoff/godb-pipeline-handoff-20261013.md) §4.1 第 1 项；[瓶颈文档](db-task-pipeline-bottlenecks.md) §4.4 的缺口 G2；全局单点交接的同名 P0。附录 A「mysql-connection-budget」批 A 是起点，按 HEAD 重新核对后改写。
 > **归属**：负责人 2026-10-13 定为本交接做（交接 §5 第 4 项）。

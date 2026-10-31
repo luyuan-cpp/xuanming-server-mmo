@@ -531,11 +531,8 @@ func (s *TeamBattleStarter) EnqueuePartyMode(ctx context.Context, rawMode, battl
 	roster []uint64, zones map[uint64]uint32,
 ) (uint64, error) {
 	log := logx.WithContext(ctx)
-	limit := s.TeamSizeFor(battleConfigId)
+	limit := s.TeamSizeFor(rawMode, battleConfigId)
 	mode := matchpb.MatchMode(rawMode)
-	if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
-		limit = kMaxBattleTeamSize
-	}
 	if mode != matchpb.MatchMode_MATCH_MODE_PVE_TEAM && mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
 		return 0, fmt.Errorf("invalid party match mode: %d", rawMode)
 	}

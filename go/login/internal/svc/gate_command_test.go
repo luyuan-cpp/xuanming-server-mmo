@@ -125,8 +125,12 @@ func TestGateCommandAddressingMatchesSharedVectors(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: buildPushTipCommand(%s): %v", c.Name, gateID, err)
 		}
+		pushTipUnbound, err := buildPushTipToUnboundSessionCommand(gateID, instanceID, 7, 1001, uint32(table.SceneError_kEnterSceneFailed))
+		if err != nil {
+			t.Fatalf("%s: buildPushTipToUnboundSessionCommand(%s): %v", c.Name, gateID, err)
+		}
 
-		for path, msg := range map[string]gateCommandMessage{"bind session": bind, "kick": kick, "push tip": pushTip} {
+		for path, msg := range map[string]gateCommandMessage{"bind session": bind, "kick": kick, "push tip": pushTip, "push tip to unbound session": pushTipUnbound} {
 			if msg.Topic != c.ExpectTopic {
 				t.Errorf("%s/%s: topic for gate %s = %q, want %q",
 					c.Name, path, gateID, msg.Topic, c.ExpectTopic)
@@ -135,8 +139,7 @@ func TestGateCommandAddressingMatchesSharedVectors(t *testing.T) {
 				t.Errorf("%s/%s: partition for gate %s = %d, want %d",
 					c.Name, path, gateID, msg.Partition, c.ExpectPartition)
 			}
-			// 老的一节点一 topic 名字必须彻底消失:只要还有一条命令写 gate-<id>,
-			// Kafka.DisableLegacyPerNodeTopic 就不能置 true。
+			// 老的一节点一 topic 已退役,C++ 不再订阅,写过去就丢了。
 			if msg.Topic == "gate-"+gateID {
 				t.Errorf("%s/%s: still producing to the legacy per-node topic %q", c.Name, path, msg.Topic)
 			}
@@ -192,6 +195,16 @@ func TestGateCommandTargetFieldsArePopulated(t *testing.T) {
 			name: "push tip",
 			build: func() (gateCommandMessage, error) {
 				return buildPushTipCommand(gateID, instanceID, sessionID, playerID, uint32(table.SceneError_kEnterSceneFailed))
+			},
+			wantEventID:  uint32(game.ContractsKafkaPushToPlayerEventEventId),
+			wantSession:  sessionID,
+			wantPlayerID: playerID,
+		},
+		{
+			// 信封字段照填:分区 key 取自信封 PlayerId,放开的只是 payload 里的身份栅栏。
+			name: "push tip to unbound session",
+			build: func() (gateCommandMessage, error) {
+				return buildPushTipToUnboundSessionCommand(gateID, instanceID, sessionID, playerID, uint32(table.SceneError_kEnterSceneFailed))
 			},
 			wantEventID:  uint32(game.ContractsKafkaPushToPlayerEventEventId),
 			wantSession:  sessionID,
@@ -313,6 +326,72 @@ func TestGateCommandFailsClosed(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.wantSubstr) {
 				t.Errorf("PushTipToSession error = %q, want it to mention %q", err, tc.wantSubstr)
 			}
+
+			err = sc.PushTipToUnboundSession(tc.gateID, tc.instanceID, 1, 2, uint32(table.SceneError_kEnterSceneFailed))
+			if err == nil {
+				t.Fatal("PushTipToUnboundSession: want error, got nil (command would be unroutable/unfilterable)")
+			}
+			if !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Errorf("PushTipToUnboundSession error = %q, want it to mention %q", err, tc.wantSubstr)
+			}
+		})
+	}
+}
+
+// TestPushTipFenceBeforeAndAfterBind 盯住 Bind 前后 PushToPlayerEvent.player_id 的差别。
+//
+// Bind 之前会话没有绑定玩家,带真实 player_id 必被 gate 的身份栅栏丢弃(ClassifyPush 判 kDrop),客户端只能干等进场超时,
+// 所以留 0 走兼容位;Bind 之后必须带真实 player_id,session_id 复用时栅栏才挡得住。两种情况信封字段、目标字段、内容都一样。
+func TestPushTipFenceBeforeAndAfterBind(t *testing.T) {
+	requireDefaultContract(t)
+
+	const (
+		sessionID = uint32(4242)
+		playerID  = uint64(90001)
+	)
+	tipID := uint32(table.SceneError_kEnterSceneFailed)
+
+	cases := []struct {
+		name      string
+		build     func(string, string, uint32, uint64, uint32) (gateCommandMessage, error)
+		wantFence uint64
+	}{
+		{name: "before bind", build: buildPushTipToUnboundSessionCommand, wantFence: 0},
+		{name: "after bind", build: buildPushTipCommand, wantFence: playerID},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := tc.build("300", "b0a1-uuid", sessionID, playerID, tipID)
+			if err != nil {
+				t.Fatalf("build: %v", err)
+			}
+			var cmd kafkapb.GateCommand
+			if err := proto.Unmarshal(msg.Payload, &cmd); err != nil {
+				t.Fatalf("unmarshal GateCommand: %v", err)
+			}
+			if cmd.GetPlayerId() != playerID {
+				t.Errorf("envelope player_id = %d, want %d (partition key and broker-side debugging read it)", cmd.GetPlayerId(), playerID)
+			}
+			if cmd.GetTargetInstanceId() != "b0a1-uuid" {
+				t.Errorf("target_instance_id = %q, want it set: it is what keeps node_id reuse out", cmd.GetTargetInstanceId())
+			}
+			var event kafkapb.PushToPlayerEvent
+			if err := proto.Unmarshal(cmd.GetPayload(), &event); err != nil {
+				t.Fatalf("unmarshal PushToPlayerEvent: %v", err)
+			}
+			if event.GetPlayerId() != tc.wantFence {
+				t.Errorf("PushToPlayerEvent.player_id = %d, want %d", event.GetPlayerId(), tc.wantFence)
+			}
+			if event.GetSessionId() != sessionID {
+				t.Errorf("PushToPlayerEvent.session_id = %d, want %d", event.GetSessionId(), sessionID)
+			}
+			var tip basepb.TipInfoMessage
+			if err := proto.Unmarshal(event.GetMessageContent().GetSerializedMessage(), &tip); err != nil {
+				t.Fatalf("unmarshal TipInfoMessage: %v", err)
+			}
+			if tip.GetId() != tipID {
+				t.Errorf("tip id = %d, want %d", tip.GetId(), tipID)
+			}
 		})
 	}
 }
@@ -353,6 +432,10 @@ func TestPushTipCommandPayloadLayers(t *testing.T) {
 	if event.GetSessionId() != sessionID {
 		t.Errorf("PushToPlayerEvent.session_id = %d, want %d", event.GetSessionId(), sessionID)
 	}
+	// player_id 是 gate 的目标玩家身份栅栏:漏填时 gate 按兼容位放行,session 被复用后 tip 弹给别人。
+	if event.GetPlayerId() != playerID {
+		t.Errorf("PushToPlayerEvent.player_id = %d, want %d (gate identity fence)", event.GetPlayerId(), playerID)
+	}
 	content := event.GetMessageContent()
 	if content == nil {
 		t.Fatal("PushToPlayerEvent.message_content is nil; gate would push an empty frame")
@@ -371,6 +454,35 @@ func TestPushTipCommandPayloadLayers(t *testing.T) {
 	}
 	if len(tip.GetParameters()) != 0 {
 		t.Errorf("tip parameters = %v, want none", tip.GetParameters())
+	}
+}
+
+// TestPushTipRejectsZeroPlayerID:player_id 为 0 的 tip 必须在碰 Kafka 之前被拒,与共享推送收口
+// kafkautil.PushToPlayer 同口径 —— 0 在 gate 侧是「不校验」的兼容位,放出去等于关掉身份栅栏。
+// 导出的发送方法同样用零值 ServiceContext(KafkaClient 为 nil)去调:守卫要是没长在发送路径上,
+// 这里会 nil 解引用 panic 而不是悄悄变绿。
+func TestPushTipRejectsZeroPlayerID(t *testing.T) {
+	tipID := uint32(table.SceneError_kEnterSceneFailed)
+
+	if _, err := buildPushTipCommand("300", "b0a1-uuid", 4242, 0, tipID); err == nil ||
+		!strings.Contains(err.Error(), "zero player_id") {
+		t.Fatalf("buildPushTipCommand with player 0: err = %v, want a zero player_id rejection", err)
+	}
+
+	sc := &ServiceContext{}
+	if err := sc.PushTipToSession("300", "b0a1-uuid", 4242, 0, tipID); err == nil ||
+		!strings.Contains(err.Error(), "zero player_id") {
+		t.Fatalf("PushTipToSession with player 0: err = %v, want a zero player_id rejection", err)
+	}
+
+	// 未绑定的发送只放开 payload 里的栅栏,信封 PlayerId 仍必须是本链的玩家。
+	if _, err := buildPushTipToUnboundSessionCommand("300", "b0a1-uuid", 4242, 0, tipID); err == nil ||
+		!strings.Contains(err.Error(), "zero player_id") {
+		t.Fatalf("buildPushTipToUnboundSessionCommand with player 0: err = %v, want a zero player_id rejection", err)
+	}
+	if err := sc.PushTipToUnboundSession("300", "b0a1-uuid", 4242, 0, tipID); err == nil ||
+		!strings.Contains(err.Error(), "zero player_id") {
+		t.Fatalf("PushTipToUnboundSession with player 0: err = %v, want a zero player_id rejection", err)
 	}
 }
 

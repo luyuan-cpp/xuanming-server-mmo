@@ -159,6 +159,21 @@ attributerules::StoredPoolAllocation StoredAllocationOf(const PetInstance& pet, 
 	return stored;
 }
 
+// 宝宝的生效等级:存储等级按本版本种类上限封顶(PetTable.level_cap;0 = 不设上限,0 级按 1),存储值本身不改。
+// 宝宝等级只升不降(RecalculateOne),新版本调高上限后回滚、或经交易从上限更高的版本带进来时,存储等级可能超过
+// 本版本上限:超出的部分原样携带、不生效,与主人的 playerlevel::CappedLevel 同一条规则
+// (mixed-version-persist-field-protection.md §12.2)。总点数、二级属性、列表与战斗快照的等级、
+// 召唤 / 参战的"主人等级不低于宝宝"判定都读它;只有成长的只升不降比较读存储值。
+// 种类查不到表时没有上限可依,按存储值:这类宝宝的召唤、加点与战斗快照本来就拒绝。
+uint32_t PetEffectiveLevel(const PetInstance& pet, const PetTable* row) {
+	return petrules::EffectiveLevel(pet.level(), row != nullptr ? row->level_cap() : 0);
+}
+
+uint32_t PetEffectiveLevel(const PetInstance& pet) {
+	const auto [row, err] = PetTableManager::Instance().FindByIdSilent(pet.pet_table_id());
+	return PetEffectiveLevel(pet, row);
+}
+
 // 宝宝在宝宝池上的判定结果(加点统一规则 3 / 4),与角色侧 PoolAllocationState 同构。
 // 列表、加点、洗点、自动加点与生效输入都从这里取,不再各抄一份"总量 − 已用"。
 struct PetPoolState {
@@ -168,11 +183,11 @@ struct PetPoolState {
 	uint32_t remaining = 0;
 };
 
-// 总量按宝宝已存等级算(等级只升不降,见 RecalculateOne)。
+// 总量按宝宝的生效等级算(存储等级按本版本种类上限封顶,见 PetEffectiveLevel)。
 PetPoolState EvaluatePetPool(const PetInstance& pet, const AttributePoolTable& pool) {
 	PetPoolState state;
 	const auto rule = ToRule(pool);
-	state.total = attributerules::TotalPoints(rule, pet.level(), 0);
+	state.total = attributerules::TotalPoints(rule, PetEffectiveLevel(pet), 0);
 	state.stored = StoredAllocationOf(pet, pool.id());
 	state.effective = attributerules::PoolAllocationEffective(rule, state.total, state.stored);
 	state.remaining = attributerules::RemainingPoints(rule, state.total, state.stored);
@@ -330,16 +345,16 @@ uint64_t ResetCostFor(const PetInstance& pet, const AttributePoolTable& pool, co
 	if (!state.effective) {
 		return 0;
 	}
-	if (pool.reset_free_below_level() > 0 && pet.level() < pool.reset_free_below_level()) {
+	if (pool.reset_free_below_level() > 0 && PetEffectiveLevel(pet) < pool.reset_free_below_level()) {
 		return 0;
 	}
 	return pool.reset_cost_gold();
 }
 
 // 一只宝宝的二级属性:现算,不缓存(见头文件"没有第二份真相")。加点按 BuildDimensionInputs 过门后的生效值算,
-// 所以从不生效状态洗点前后上限不变,HP/MP 也不变(加点统一规则 7)。
+// 所以从不生效状态洗点前后上限不变,HP/MP 也不变(加点统一规则 7)。等级按生效等级(PetEffectiveLevel)。
 petrules::DerivedAttributes ComputeDerived(const PetInstance& pet, const PetTable& row, const AttributePoolTable& pool) {
-	return petrules::ComputeDerived(BaseValuesOf(row), BuildDimensionInputs(pet, pool), pet.level());
+	return petrules::ComputeDerived(BaseValuesOf(row), BuildDimensionInputs(pet, pool), PetEffectiveLevel(pet, &row));
 }
 
 // 加载期可观测性(只读,不写任何数据):加点不生效、或带着本版本解释不了的键时各打一条 WARN。
@@ -423,13 +438,15 @@ bool RecalculateOne(entt::entity player, uint32_t ownerLevel, PetInstance& pet, 
 
 void FillPetInfo(entt::entity player, const PlayerPetComp& comp, const PetInstance& pet,
 				 const AttributePoolTable& pool, PetInfo& info) {
+	const auto* row = PetRow(pet.pet_table_id());
+	// 下发生效等级(存储等级按本版本种类上限封顶),与总点数、维度 value、二级属性同一口径。
+	const auto effectiveLevel = PetEffectiveLevel(pet, row);
 	info.set_pet_id(pet.pet_id());
 	info.set_pet_table_id(pet.pet_table_id());
-	info.set_level(pet.level());
+	info.set_level(effectiveLevel);
 	info.set_is_active(comp.active_pet_id() == pet.pet_id());
 	info.set_pool_id(pool.id());
 
-	const auto* row = PetRow(pet.pet_table_id());
 	info.set_name(!pet.name().empty() ? pet.name() : (row != nullptr ? row->name() : std::string()));
 	if (row != nullptr) {
 		info.set_quality(row->quality());
@@ -463,7 +480,7 @@ void FillPetInfo(entt::entity player, const PlayerPetComp& comp, const PetInstan
 		const auto input = std::find_if(inputs.begin(), inputs.end(), [dim](const petrules::DimensionInput& one) {
 			return one.dimensionId == dim->id();
 		});
-		dimensionInfo->set_value(input != inputs.end() ? petrules::DimensionValue(*input, pet.level()) : 0);
+		dimensionInfo->set_value(input != inputs.end() ? petrules::DimensionValue(*input, effectiveLevel) : 0);
 	}
 
 	auto* derivedInfo = info.mutable_derived();
@@ -533,10 +550,11 @@ void PetSystem::RecalculateAll(entt::entity player, RecalcReason reason) {
 		RecalculateOne(player, *ownerLevel, pet, *pool, reason);
 	}
 	// 主人等级低于出战宝宝时取消出战,只在等级真的变化(kLevelChanged)时做。加载(kLoad)不写 active_pet_id:
-	// 主人的生效等级可能只是这一版本的解读(超上限的存储等级按上限读、混版本带来的等级差),按它改写出战状态会随
-	// 存盘落库;而运行期 Summon 与 BuildBattleSnapshot 本来就按主人等级拦截,留着的出战指针带不进战斗。
+	// 主人与宝宝的生效等级可能只是这一版本的解读(超上限的存储等级按上限读、混版本带来的等级差),按它改写出战状态
+	// 会随存盘落库;而运行期 Summon 与 BuildBattleSnapshot 本来就按同一对生效等级拦截,留着的出战指针带不进战斗。
 	if (reason == RecalcReason::kLevelChanged) {
-		if (const auto* active = FindPet(comp, comp.active_pet_id()); active != nullptr && *ownerLevel < active->level()) {
+		if (const auto* active = FindPet(comp, comp.active_pet_id());
+			active != nullptr && *ownerLevel < PetEffectiveLevel(*active)) {
 			comp.set_active_pet_id(0);
 		}
 	}
@@ -593,7 +611,7 @@ uint32_t PetSystem::Summon(entt::entity player, uint64_t petId) {
 	if (row == nullptr) {
 		return kPetTableRowMissing;
 	}
-	if (*ownerLevel < row->unlock_level() || *ownerLevel < pet->level()) {
+	if (*ownerLevel < row->unlock_level() || *ownerLevel < PetEffectiveLevel(*pet, row)) {
 		return kPetOwnerLevelNotEnough;
 	}
 	comp.set_active_pet_id(petId);
@@ -656,7 +674,7 @@ uint32_t PetSystem::Allocate(entt::entity player, uint64_t petId,
 	const auto state = EvaluatePetPool(*pet, *pool);
 
 	uint32_t delta = 0;
-	const auto err = attributerules::ValidateAllocation(ToRule(*pool), pet->level(), current, target,
+	const auto err = attributerules::ValidateAllocation(ToRule(*pool), PetEffectiveLevel(*pet, row), current, target,
 														state.remaining, delta);
 	if (err != AllocError::kOk) {
 		return MapAllocError(err);
@@ -1008,9 +1026,9 @@ bool PetSystem::BuildBattleSnapshot(entt::entity player, ::BattlePetSnapshot& sn
 	if (pet == nullptr) {
 		return false;
 	}
-	const auto ownerLevel = OwnerLevel(player);
-	if (!ownerLevel.has_value() || *ownerLevel < pet->level()) return false;
 	const auto* row = PetRow(pet->pet_table_id());
+	const auto ownerLevel = OwnerLevel(player);
+	if (!ownerLevel.has_value() || *ownerLevel < PetEffectiveLevel(*pet, row)) return false;
 	const auto* pool = PetPool();
 	if (row == nullptr || pool == nullptr) {
 		LOG_WARN << "[PlayerPet] Deployed pet has no table row;pet excluded from this battle: player_id=" << tlsEcs.GetPlayerId(player)
@@ -1028,7 +1046,7 @@ bool PetSystem::BuildBattleSnapshot(entt::entity player, ::BattlePetSnapshot& sn
 	snapshot.set_owner_player_id(tlsEcs.GetPlayerId(player));
 	snapshot.set_pet_name(!pet->name().empty() ? pet->name() : row->name());
 	snapshot.set_pet_table_id(pet->pet_table_id());
-	snapshot.set_level(pet->level());
+	snapshot.set_level(PetEffectiveLevel(*pet, row));
 	snapshot.set_max_health(derived.maxHealth);
 	snapshot.set_max_mana(derived.maxMana);
 	snapshot.set_physical_attack(derived.physicalAttack);

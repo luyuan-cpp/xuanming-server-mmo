@@ -72,6 +72,10 @@ enum eBattleHitKind : int;
 extern const uint32_t eBattleHitKind_internal_data_[];
 enum eBattleOutcome : int;
 extern const uint32_t eBattleOutcome_internal_data_[];
+enum eSpectateTier : int;
+extern const uint32_t eSpectateTier_internal_data_[];
+enum eSpectateVisibility : int;
+extern const uint32_t eSpectateVisibility_internal_data_[];
 class BattleAction;
 struct BattleActionGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -244,6 +248,12 @@ internal::EnumTraitsT<::eBattleHitKind_internal_data_>
 template <>
 internal::EnumTraitsT<::eBattleOutcome_internal_data_>
     internal::EnumTraitsImpl::value<::eBattleOutcome>;
+template <>
+internal::EnumTraitsT<::eSpectateTier_internal_data_>
+    internal::EnumTraitsImpl::value<::eSpectateTier>;
+template <>
+internal::EnumTraitsT<::eSpectateVisibility_internal_data_>
+    internal::EnumTraitsImpl::value<::eSpectateVisibility>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -509,6 +519,88 @@ template <>
 [[nodiscard]] inline bool eBattleActivityKind_Parse(
     ::absl::string_view name, eBattleActivityKind* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<eBattleActivityKind>(eBattleActivityKind_descriptor(), name,
+                                           value);
+}
+enum eSpectateVisibility : int {
+  SPECTATE_VISIBILITY_UNSPECIFIED = 0,
+  SPECTATE_VISIBILITY_PRIVATE = 1,
+  SPECTATE_VISIBILITY_PUBLIC = 2,
+  eSpectateVisibility_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  eSpectateVisibility_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t eSpectateVisibility_internal_data_[];
+inline constexpr eSpectateVisibility eSpectateVisibility_MIN =
+    static_cast<eSpectateVisibility>(0);
+inline constexpr eSpectateVisibility eSpectateVisibility_MAX =
+    static_cast<eSpectateVisibility>(2);
+[[nodiscard]] inline bool eSpectateVisibility_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int eSpectateVisibility_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+eSpectateVisibility_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eSpectateVisibility) {
+  return eSpectateVisibility_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& eSpectateVisibility_Name(T value) {
+  static_assert(::std::is_same<T, eSpectateVisibility>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to eSpectateVisibility_Name().");
+  return eSpectateVisibility_Name(static_cast<eSpectateVisibility>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& eSpectateVisibility_Name(eSpectateVisibility value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<eSpectateVisibility_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool eSpectateVisibility_Parse(
+    ::absl::string_view name, eSpectateVisibility* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<eSpectateVisibility>(eSpectateVisibility_descriptor(), name,
+                                           value);
+}
+enum eSpectateTier : int {
+  SPECTATE_TIER_DIRECT = 0,
+  SPECTATE_TIER_RELAY = 1,
+  SPECTATE_TIER_BROADCAST = 2,
+  eSpectateTier_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  eSpectateTier_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t eSpectateTier_internal_data_[];
+inline constexpr eSpectateTier eSpectateTier_MIN =
+    static_cast<eSpectateTier>(0);
+inline constexpr eSpectateTier eSpectateTier_MAX =
+    static_cast<eSpectateTier>(2);
+[[nodiscard]] inline bool eSpectateTier_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int eSpectateTier_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+eSpectateTier_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eSpectateTier) {
+  return eSpectateTier_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& eSpectateTier_Name(T value) {
+  static_assert(::std::is_same<T, eSpectateTier>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to eSpectateTier_Name().");
+  return eSpectateTier_Name(static_cast<eSpectateTier>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& eSpectateTier_Name(eSpectateTier value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<eSpectateTier_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool eSpectateTier_Parse(
+    ::absl::string_view name, eSpectateTier* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<eSpectateTier>(eSpectateTier_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -10235,6 +10327,18 @@ struct is_proto_enum<::eBattleActivityKind> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::eBattleActivityKind>() {
   return ::eBattleActivityKind_descriptor();
+}
+template <>
+struct is_proto_enum<::eSpectateVisibility> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::eSpectateVisibility>() {
+  return ::eSpectateVisibility_descriptor();
+}
+template <>
+struct is_proto_enum<::eSpectateTier> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::eSpectateTier>() {
+  return ::eSpectateTier_descriptor();
 }
 
 }  // namespace protobuf

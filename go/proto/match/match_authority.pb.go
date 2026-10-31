@@ -28,6 +28,9 @@ const (
 	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED MatchBattleCompletionSourceKind = 0
 	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_KAFKA       MatchBattleCompletionSourceKind = 1
 	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC  MatchBattleCompletionSourceKind = 2
+	// Match 在权威截止加终局提交宽限之后自己写的 ABORT：没有任何 Battle 原字节，该行 format_version 为 0。
+	// 审计据此区分「Battle 提交的终局」与「Match 截止裁决」，不能再把 ABORT 行误读成 BATTLE_RPC 来源。
+	MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT MatchBattleCompletionSourceKind = 3
 )
 
 // Enum value maps for MatchBattleCompletionSourceKind.
@@ -36,11 +39,13 @@ var (
 		0: "MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED",
 		1: "MATCH_BATTLE_COMPLETION_SOURCE_KAFKA",
 		2: "MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC",
+		3: "MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT",
 	}
 	MatchBattleCompletionSourceKind_value = map[string]int32{
-		"MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED": 0,
-		"MATCH_BATTLE_COMPLETION_SOURCE_KAFKA":       1,
-		"MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC":  2,
+		"MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED":          0,
+		"MATCH_BATTLE_COMPLETION_SOURCE_KAFKA":                1,
+		"MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC":           2,
+		"MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT": 3,
 	}
 )
 
@@ -299,8 +304,12 @@ type MatchSpectatorIntentRecord struct {
 	OwnerRevision  uint64                 `protobuf:"varint,7,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
 	State          uint32                 `protobuf:"varint,8,opt,name=state,proto3" json:"state,omitempty"`                       // 1尚未发出Add、2已绑定current原件、5已关闭；未知一律拒绝。
 	CloseTip       uint32                 `protobuf:"varint,9,opt,name=close_tip,json=closeTip,proto3" json:"close_tip,omitempty"` // 关闭原因(客户端tip)，先写为准，同request_id重放回同一结论；0=未记录原因，state1必须为0。
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// eSpectateDelivery 数值(match_service.proto)。L1 / L2 观众不占 match_spectator 行，意图直接以 LOBBY 结案
+	// (state=5、close_tip=0、delivery=2)；重放时重新做幂等的中继 / 广播准入并签新凭证(battle-spectate-tiered-fanout.md §15.6)。
+	// 0 = 未以 LOBBY 结案(L0 观众与业务拒绝)。
+	Delivery      uint32 `protobuf:"varint,10,opt,name=delivery,proto3" json:"delivery,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchSpectatorIntentRecord) Reset() {
@@ -392,6 +401,13 @@ func (x *MatchSpectatorIntentRecord) GetState() uint32 {
 func (x *MatchSpectatorIntentRecord) GetCloseTip() uint32 {
 	if x != nil {
 		return x.CloseTip
+	}
+	return 0
+}
+
+func (x *MatchSpectatorIntentRecord) GetDelivery() uint32 {
+	if x != nil {
+		return x.Delivery
 	}
 	return 0
 }
@@ -2250,7 +2266,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"updated_ms\x18\v \x01(\x04R\tupdatedMs\x12!\n" +
 	"\frequest_high\x18\f \x01(\x04R\vrequestHigh\x12\x1f\n" +
 	"\vrequest_low\x18\r \x01(\x04R\n" +
-	"requestLow:K\x8a\x92\xf4\x01\x0fmatch_spectator\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01$updated_ms,player_id;state,player_id\"\x85\x03\n" +
+	"requestLow:K\x8a\x92\xf4\x01\x0fmatch_spectator\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01$updated_ms,player_id;state,player_id\"\xa1\x03\n" +
 	"\x1aMatchSpectatorIntentRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
@@ -2261,7 +2277,9 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\rowner_account\x18\x06 \x01(\tR\fownerAccount\x12%\n" +
 	"\x0eowner_revision\x18\a \x01(\x04R\rownerRevision\x12\x14\n" +
 	"\x05state\x18\b \x01(\rR\x05state\x12\x1b\n" +
-	"\tclose_tip\x18\t \x01(\rR\bcloseTip:B\x8a\x92\xf4\x01\x16match_spectator_intent\x92\x92\xf4\x01\"player_id,request_high,request_low\"\x83\x01\n" +
+	"\tclose_tip\x18\t \x01(\rR\bcloseTip\x12\x1a\n" +
+	"\bdelivery\x18\n" +
+	" \x01(\rR\bdelivery:B\x8a\x92\xf4\x01\x16match_spectator_intent\x92\x92\xf4\x01\"player_id,request_high,request_low\"\x83\x01\n" +
 	"\x18MatchSpectatorHeadRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId:'\x8a\x92\xf4\x01\x14match_spectator_head\x92\x92\xf4\x01\tplayer_id\"\x9b\x01\n" +
@@ -2269,7 +2287,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\x12\x1d\n" +
 	"\n" +
-	"expires_ms\x18\x03 \x01(\x04R\texpiresMs:(\x8a\x92\xf4\x01\x15match_network_profile\x92\x92\xf4\x01\tplayer_id\"\xa6\x06\n" +
+	"expires_ms\x18\x03 \x01(\x04R\texpiresMs:(\x8a\x92\xf4\x01\x15match_network_profile\x92\x92\xf4\x01\tplayer_id\"\xb9\x06\n" +
 	"\x1aMatchAuthorityTicketRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
@@ -2293,7 +2311,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0fselected_region\x18\x10 \x01(\rR\x0eselectedRegion\x12)\n" +
 	"\x10preferred_region\x18\x11 \x01(\rR\x0fpreferredRegion\x12#\n" +
 	"\rowner_account\x18\x12 \x01(\tR\fownerAccount\x12%\n" +
-	"\x0eowner_revision\x18\x13 \x01(\x04R\rownerRevision:\xaa\x01\x8a\x92\xf4\x01\x16match_authority_ticket\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01|state,mode,config_id,team_size,enqueued_ms;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_id\"\xab\x06\n" +
+	"\x0eowner_revision\x18\x13 \x01(\x04R\rownerRevision:\xbd\x01\x8a\x92\xf4\x01\x16match_authority_ticket\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01\x8e\x01state,mode,config_id,team_size,team_id,enqueued_ms,player_id;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_id\"\xab\x06\n" +
 	"\x17MatchTicketRegionRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12'\n" +
 	"\x0fphysical_region\x18\x02 \x01(\rR\x0ephysicalRegion\x12\x16\n" +
@@ -2456,11 +2474,12 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	" \x01(\rR\n" +
 	"inboxState\x12%\n" +
 	"\x0edispatch_state\x18\v \x01(\rR\rdispatchState\x12\"\n" +
-	"\rnext_retry_ms\x18\f \x01(\x04R\vnextRetryMs:p\x8a\x92\xf4\x01\x1ematch_battle_settlement_source\x92\x92\xf4\x01\x13battle_id,player_idڒ\xf4\x010dispatch_state,next_retry_ms,battle_id,player_id*\xaa\x01\n" +
+	"\rnext_retry_ms\x18\f \x01(\x04R\vnextRetryMs:p\x8a\x92\xf4\x01\x1ematch_battle_settlement_source\x92\x92\xf4\x01\x13battle_id,player_idڒ\xf4\x010dispatch_state,next_retry_ms,battle_id,player_id*\xe3\x01\n" +
 	"\x1fMatchBattleCompletionSourceKind\x12.\n" +
 	"*MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\x10\x01\x12-\n" +
-	")MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC\x10\x02B\rZ\vproto/matchb\x06proto3"
+	")MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC\x10\x02\x127\n" +
+	"3MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT\x10\x03B\rZ\vproto/matchb\x06proto3"
 
 var (
 	file_proto_match_match_authority_proto_rawDescOnce sync.Once

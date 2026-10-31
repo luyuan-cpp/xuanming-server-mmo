@@ -1,15 +1,10 @@
 package clientplayerloginlogic
 
 import (
-	"context"
 	"testing"
-	"time"
 
-	"google.golang.org/protobuf/proto"
 	"login/internal/logic/pkg/homezone"
 	pbbase "proto/common/base"
-	comppb "proto/common/component"
-	dbpb "proto/common/database"
 	loginpb "proto/login"
 )
 
@@ -49,78 +44,5 @@ func TestCreatePlayerAppearanceIsSavedInAccountAndResponse(t *testing.T) {
 	}
 	if len(response.GetPlayers()) != 1 || response.GetPlayers()[0].GetPlayer().GetAppearanceId() != players[0].GetAppearanceId() {
 		t.Fatal("选角响应与已保存人物身份不一致")
-	}
-}
-
-func TestBackfillAppearancePersistsAndKeepsStoredIdentity(t *testing.T) {
-	l, rdb, _, _ := newIdentityBackfillHarness(t, &dbpb.PlayerDatabase{PlayerId: identityPlayerID})
-	state := identityState(3, "云中君")
-	state.appearanceID = "04_mountain_guardian_boy"
-	state.gender = 1
-	if err := l.backfillPlayerIdentity(context.Background(), nil, state); err != nil {
-		t.Fatal(err)
-	}
-	_, player := readIdentityBlob(t, rdb)
-	if got := player.GetProfileComponent(); got.GetAppearanceId() != state.appearanceID || got.GetGender() != 1 {
-		t.Fatalf("外观未随存档往返: %v", got)
-	}
-	state.appearanceID = "06_thunder_caster_boy"
-	state.gender = 2
-	if err := l.backfillPlayerIdentity(context.Background(), nil, state); err == nil {
-		t.Fatal("非空身份冲突必须拒绝入场")
-	}
-	_, player = readIdentityBlob(t, rdb)
-	if got := player.GetProfileComponent(); got.GetAppearanceId() != "04_mountain_guardian_boy" || got.GetGender() != 1 {
-		t.Fatalf("重登补齐覆盖了已有身份: %v", got)
-	}
-}
-
-func TestSelfHealedRoleRecoversAppearanceWithoutMutatingOtherRoles(t *testing.T) {
-	l, rdb, mr, _ := newIdentityBackfillHarness(t, &dbpb.PlayerDatabase{
-		PlayerId: identityPlayerID, Uint32PbComponent: &comppb.PlayerUint32Comp{Class: 3},
-		ProfileComponent: &comppb.PlayerProfileComp{AppearanceId: "04_mountain_guardian_boy", Gender: 1},
-	})
-	account := &dbpb.UserAccounts{SimplePlayers: &pbbase.AccountSimplePlayerList{Players: []*pbbase.AccountSimplePlayer{
-		{PlayerId: identityPlayerID, Name: "恢复角色"}, {PlayerId: 7002, AppearanceId: "06_thunder_caster_boy"},
-	}}}
-	ctx := context.Background()
-	// 目录归属与修复均以显式 SQL 替身为准，Redis 只保留 PlayerAllData 缓存。
-	fixtureDirectory(t, rdb).seed("appearance-recovery", account.SimplePlayers.Players...)
-	roles := []*loginpb.AccountSimplePlayerWrapper{{Player: account.SimplePlayers.Players[0]}}
-	fillMissingRoleAppearances(ctx, rdb, roles)
-	if roles[0].Player.AppearanceId != "04_mountain_guardian_boy" || account.SimplePlayers.Players[0].AppearanceId != "" {
-		t.Fatal("选角恢复必须补展示副本，不能原地改账号")
-	}
-	state := identityState(0, "")
-	state.account = "appearance-recovery"
-	if err := l.backfillPlayerIdentity(ctx, nil, state); err != nil {
-		t.Fatal(err)
-	}
-	account.SimplePlayers = fixtureRoles(t, rdb, state.account)
-	if got := account.SimplePlayers.Players[0]; got.AppearanceId != "04_mountain_guardian_boy" || got.ClassId != 3 || got.Gender != 1 {
-		t.Fatalf("self-heal身份未修复: %v", got)
-	}
-	if account.SimplePlayers.Players[1].AppearanceId != "06_thunder_caster_boy" {
-		t.Fatal("修复覆盖了其他人物")
-	}
-	if mr.TTL(identityBlobKey()) <= 0 {
-		t.Fatal("外观修复不能取消 PlayerAllData 缓存 TTL")
-	}
-	mr.FastForward(48 * time.Hour)
-	if saved := fixtureRoles(t, rdb, state.account); !proto.Equal(account.SimplePlayers, saved) {
-		t.Fatalf("修复后的账号目录未长期保留: %v", saved)
-	}
-}
-
-func TestBackfillLegacyAppearanceRemainsEmpty(t *testing.T) {
-	l, rdb, _, _ := newIdentityBackfillHarness(t, &dbpb.PlayerDatabase{PlayerId: identityPlayerID, ProfileComponent: &comppb.PlayerProfileComp{}})
-	state := identityState(3, "旧角色")
-	state.gender = 2
-	if err := l.backfillPlayerIdentity(context.Background(), nil, state); err != nil {
-		t.Fatal(err)
-	}
-	_, player := readIdentityBlob(t, rdb)
-	if got := player.GetProfileComponent(); got.GetAppearanceId() != "" || got.GetGender() != 2 {
-		t.Fatalf("旧角色不能被隐式分配新人物: %v", got)
 	}
 }

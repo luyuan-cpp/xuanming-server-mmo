@@ -639,3 +639,301 @@ Java 仓 `PARITY.md` 已补登一行「Java 待做」（§9 要求的那一行�
 ### 11.9 续：恢复工具 schema_gen 改为两行最小值（设计 §13 第 8 条，2026-10-22）
 
 未编译、未测试。`go/db/internal/barrierrestore/restore.go`：`schemaFloor`（两行最大值）改为 `restoredSchemaGen`（两行最小值，0 按 1）；`scripts.go`：不再保留 hash 里更高的旧 `schema_gen`，旧值格式损坏也覆盖。用例：`TestSchemaGenRestoreUsesSQLMinimumAndOverwritesIndex`（原 `...SQLMaximumAndExistingFloor`）、新增 `TestSchemaGenRestoreOverwritesMalformedIndex`、`TestSchemaGenRejectsInvalidRedisFieldsWithoutWrites` 去掉 schema_gen 损坏用例、`TestSchemaGenRecoveryAcrossRedisSplitAndDBFirst` 期望 7→4、真库集成 `TestIntegrationBarrierRestoreSchemaGeneration` 期望同步。运维手册 `docs/ops/mysql-backup-pitr-runbook.md` 追加 2026-10-22 口径变更小节。Codex：工作目录 `go/db`，`go test -count=1 ./internal/barrierrestore/`；有真库环境时再按该文件头的环境变量跑集成用例。
+
+## 13. 续：§12 持久值域落码（D1–D6 与等级上限，2026-10-23～30，核对 §12 的会话）
+
+> 本节由核对 §12 的会话追加（只追加，不改上文）。设计见设计稿 §12.2 与 §15 v0.9。代码已随 10-24 起别的会话的整仓快照提交入库（主要在 `5de132e2`，另有 `a3c9b9b7`、`83859448`）。
+>
+> **运行旁证**：Codex 2026-10-24 在含这批改动的共享工作区实际构建了 `game.sln`（0 错误），并全量运行 bag_test（708 条）、skill_test（76 条）、turn_battle_engine_test（287 条），全部 0 失败。§13.2 列出的用例里，除标了「10-30 新增」的几条和最后一条任务用例，其余都在当天的结果里在列且通过。
+> - 出处：PROGRESS「2026-10-24 07:38 UTC」与「07:43 UTC 后继实际结果」；原始 XML 在 `C:/Users/luyua/.codex/tmp/cpp-current1884-post-full-gtests-evidence-r1/run-20261024T071358902Z-25be95de/`，本会话 10-30 按用例名逐条核过。
+> - 第 5 批与 3a′ 的新用例也在当天的 currency_test、cross_zone_test 里通过。
+> - 证据边界：这不是本主题专门的验证，构建前没有封存源快照；10-29 之后别的会话又改过 `player_battle.cpp`、`class_skill_test.cpp`，并新增 `PlayerMissionSystemTest.ActivityAcceptUsesCappedLevelWithoutChangingStoredLevel`，所以最新状态要按 §13.2 复跑。
+
+### 13.1 做了什么
+
+- **来由**：用户 2026-10-23 确认项目未上线、存量玩家数据可以清空，要求按最标准的方式做完，做到数据强一致、代码可读、可水平扩展。据此把设计 §12.1 里 D1–D6 与等级上限一行改成"加载与重算不改写持久值，原样携带，按本版本生效"。D7 保留为发布约束，W1–W3 接受，都不改代码。
+- **过程**：
+  - 定方案：四路只读精读（技能 / 角色加点 / 宝宝加点 / 等级），每路配一名对抗复核者。复核推翻了三处初稿：
+    - 加点"方案带未知键就整套冻结"：值为 0 的未知键很常见，会大面积误冻；
+    - "洗点清掉未知键且免费"：等于旧版本在删新版本的数据；
+    - "生效判定把未知键也算进去"：宝宝二期加第二个池后，旧版本会让整只宝宝失效。
+  - 落码：三路实现，文件互不重叠。加点那一路在汇报前被额度打断，但代码、测试、proto 注释与两份设计文档其实都已写完；当时的四个评审也没跑成。
+  - 评审：10-30 核对现状后补做两路只读评审（逻辑 / 回滚，测试 / 静态编译），结论与修正见 §13.3。
+- **改法**（详见设计 §12.2）：
+  - **等级**：`playerlevel::CappedLevel` 取代 `ClampToMaxLevel`。加载不再压回等级，超限只打 WARN（`metric=level_above_cap`）。玩法读点全部改走 `CappedLevel`：属性、宝宝、技能、装备穿戴、战斗快照、接任务等级事件、技能伤害、回血 buff。`GmSetLevel` 覆写超上限的存储等级时打 WARN。10-30 评审后补：宝宝的生效等级 = min(存储等级, 本版本种类上限)（`PetEffectiveLevel`），与主人同一条规则。
+  - **加点**（角色与宝宝共用 `attribute_allocation_rules.h` 的纯规则）：
+    - 删除 `SanitizeSchemes`、`ConvergeOverAllocation`、`SanitizeAllocations`，以及宝宝超额时的 `clear()`；
+    - 未知键计入已用、永不生效，洗点不清；
+    - 超额的池整池不生效、免费洗点（`metric=allocation_reset_free_ineffective`）；
+    - 加载时对不生效的池和未知键各打一条 WARN（`metric=allocation_not_effective`）；
+    - `Allocate` 只写变化的键；
+    - 宝宝出战只在 `kLevelChanged` 时取消。
+  - **技能**：
+    - `SanitizeSkillList` 只去 id 0 与重复 id，不再按 `max_rank` 压回、不删 rank 0 的职业技能、不清通用技能的 rank；
+    - `GrantInitialSkills` 把 rank 0 的种子原地补到 1 重；
+    - `BuildSkillBook` 的已拥有列表改为显式投影；
+    - 第 5 批的"查不到表的技能保留但不生效"没有回退。
+- **文档**：
+  - 设计稿：§0、§8.3、§9 实施状态、§12 两行、§12.1、新增 §12.2、§15 v0.9；
+  - `class-skills.md`、`player-attribute-allocation.md`、`player-pet.md`；
+  - 三个 proto 的注释：`player_skill_comp.proto`、`player_attribute.proto`、`player_pet.proto`。
+- **Java 版（AGENTS §12）**：0.1.0-SNAPSHOT，待做。在 Java 仓 `PARITY.md` 原有的「混版本持久字段保护」一行追加了说明：Java `SceneWorld` 加载时用 `PlayerLevels.clampStored` 压回等级，同属待做（未提交）。
+
+### 13.2 待 Codex 复跑（照抄执行）
+
+10-24 的实跑已经覆盖本批代码；这一轮复跑针对最新的整体状态，包括别的会话 10-29 之后的改动、新增的任务等级用例，以及本会话 10-30 的补充（宝宝生效等级与 5 条新用例）。
+
+工作目录为仓库根 `D:\luyuan\xuanming-server-mmo-cpp`，pwsh 7。C++ MSBuild 必须串行 `/m:1`。日志统一放 `build/verification/persist-value-domain/`。
+
+1. **proto**（只改了注释）：
+   ```
+   pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml
+   ```
+   通过标准：退出 0；生成产物里与这三个 proto 相关的差异只有注释。
+2. **C++ 构建**：按 §5.2 第 1 步编 `game.sln`（`/m:1`，输出 Tee 到 `build/verification/persist-value-domain/game-sln.build.log`）。通过标准：Scene 共享库与 Scene / Gate / Battle 节点退出 0。
+3. **C++ 测试**（依次执行）：
+   ```
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine_test -LogDir build/verification/persist-value-domain
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter skill_test -LogDir build/verification/persist-value-domain
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir build/verification/persist-value-domain
+   ```
+   通过标准：三个工程 gtest 全绿（10-24 基线：708 / 76 / 287 条全过，之后别的会话可能新增了用例）；下列用例在列且通过。
+   - turn_battle_engine_test：
+     - `ClassSkillRulesTest.PlanUpgradeFromAboveMaxRankPlansNothing`
+     - `AttributeAllocationRulesTest.TotalPointsNeverDecreaseAsLevelRises`
+     - `StoredAllocationRulesTest.*`（6 条）
+     - `PlayerLevelRulesTest.CappedLevelReadsStoredLevelsWithinOneThroughMax`
+     - `PlayerLevelRulesTest.RankLimitNeverDecreasesAsLevelRises`
+   - skill_test：
+     - `PlayerSkillSystemTest.SanitizeSkillListCarriesOutOfRangeRanksVerbatim`
+     - `PlayerSkillBookTest.InitializeOnLoadDropsOnlyZeroAndDuplicateIdsAndCarriesTheRest`
+     - `PlayerSkillBookTest.RollbackRankAboveTableMaxIsStoredButEffectiveAtMax`
+     - `PlayerSkillBookTest.UpgradeRefusesRankAboveTableMaxWithoutCharging`
+     - `PlayerSkillBookTest.RankZeroClassSkillIsUnlearnedButCarried`
+     - `PlayerSkillBookTest.RankZeroClassSeedIsRegrantedInPlace`
+     - `PlayerSkillBookTest.LegacySkillRankIsCarriedAndIgnored`
+     - `PlayerSkillBookTest.OwnedListIsAnExplicitProjection`
+     - `PlayerSkillBookTest.StoredLevelAboveCapReportsCappedPlayerLevel`
+   - bag_test：
+     - `PersistRoundTripTest.ValueDomainsBeyondThisBuildSurviveLoadAndSave`
+     - `PlayerEquipAttributeTest.OverAllocatedPoolIsCarriedButIneffectiveOnEveryRecalculation`
+     - `PlayerEquipAttributeTest.UnknownDimensionSurvivesLoadAndIsNotEffective`
+     - `PlayerEquipAttributeTest.UnknownDimensionReducesRemainingAndSurvivesReset`
+     - `PlayerEquipAttributeTest.ZeroValueUnknownKeyChangesNothing`
+     - `PlayerEquipAttributeTest.LoweringAndRestoringTheLevelKeepsTheAllocation`
+     - `PlayerEquipAttributeTest.ResetOfAnIneffectivePoolIsFreeAndKeepsHealth`
+     - `PlayerEquipAttributeTest.SwitchingToAnOverAllocatedSchemeKeepsItIneffective`
+     - `PlayerEquipAttributeTest.StoredLevelAboveCapUsesCappedLevelForTotals`
+     - `PlayerEquipAttributeTest.OnlyUnknownKeysResetIsNothingToChangeAndFree`（10-30 新增）
+     - `PlayerEquipAttributeTest.AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys`（10-30 新增）
+     - `PetAllocationTest.*`（13 条；10-30 新增 `StoredLevelAboveSpeciesCapIsEffectiveAtTheCap`、`SummonAndBattleCompareOwnerLevelWithTheCappedPetLevel`、`AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys`，这三条从未运行过）
+     - `PlayerMissionSystemTest.ActivityAcceptUsesCappedLevelWithoutChangingStoredLevel`
+   - 旧用例名不应再出现：
+     - `PlayerSkillBookTest.InitializeOnLoadCleansBadRecordsAndHidesRetiredEntries`
+     - `PlayerEquipAttributeTest.EquipmentChangeDoesNotTriggerAllocationConvergence`
+     - `PlayerLevelRulesTest.StoredLevelAboveCapIsClampedDown`
+4. **可选冒烟**：robot 属性加点场景（`robot/attribute_smoke_scenario.go`）。预备步骤里的洗点用 `callTolerant`，两种结果都接受，所以"GM 设回 1 级后洗点"从"无变化"变成"成功"不影响判定。
+5. **失败时**：保留首个编译错误，以及失败用例的 gtest 原文（往返用例会打出 `MessageDifferencer` 的差异报告）；不改断言重跑。首个错误如果不在 §13.5 的文件里，归给对应会话。
+
+### 13.3 评审结论与修正（2026-10-30）
+
+**逻辑 / 回滚评审**（只读）：等级、加点、技能三块的加载与存盘路径里，没有发现按本版本配置改写存储值的地方。面板、宝宝列表、技能书与写入口用的是同一个判定（`EvaluatePool` / `EvaluatePetPool` / `PlanUpgrade`），没有找到刷血、刷点或扣错钱的路径。四条发现的处理：
+1. **【中】宝宝没有生效等级**：存储等级只升不降，高于本版本种类上限时照常生效，比本版本合法宝宝强，与主人的 `CappedLevel` 口径不一致。
+   - **已修（10-30，未编译）**：新增 `PetEffectiveLevel` = min(存储等级, `level_cap`)。总点数、二级属性、列表与快照的等级、召唤 / 参战 / 取消出战的等级比较都改读它；成长比较仍读存储等级。
+   - 新增用例 `PetAllocationTest.StoredLevelAboveSpeciesCapIsEffectiveAtTheCap`、`PetAllocationTest.SummonAndBattleCompareOwnerLevelWithTheCappedPetLevel`（后者临时改小种类上限，用例结束还原）。
+   - 同步了 `player_pet.h` 注释、`player-pet.md` §3.2、设计 §12.1 N12 / §12.2 / §15 v0.9。
+2. **【中】资产通道入账遇到本版本不认识的物品 / 宝宝种类，记终态 REJECTED**（`asset_op_system.cpp` 的 `ValidateCreditBundle`）：既有问题，不是本批引入，本节不改。已转给第 6 批会话，对方的结论是这一批也不改代码，登记在设计 §12「收件箱、资产通道载荷」一行与 §13 第 10 条待拍板（见本文 §14）：
+   - 理由：改判版本错位（RETRY）的前提是表行只增不删、Go 各入口按同源配置表校验。热更删行时，旧 scene 分不清"新行"和"已删行"，改判 RETRY 会让已删行的入账永远挂起。
+   - 交易侧已核：交付被拒后合同转人工（`finalCredits → Manual`），托管原件保留，不丢资产。
+3. **【低】池不生效时免费洗点，混版本窗口里可以反复用**：已接受，写进设计 §12.2「已接受的代价」。
+4. **【低】技能、装备的等级辅助函数缺 `LevelComp` 时按 1 级继续**：既有行为，加载链保证 `LevelComp` 先挂上，触发不了。记为后续项（§13.4）。
+
+**测试 / 静态编译评审**（只读）：
+- 没有发现会编不过或会红的问题。核对过：include 根、改过签名的函数与全部调用点、protobuf v35 接口（`Map::contains` / `at`、`MessageDifferencer`）、tip 枚举名、夹具辅助函数。真表前提也逐条推过：角色池与宝宝池每级 5 点，洗点分别 500 / 300 金，30 级以下免费；宠物 1 的 `level_cap` 是 120。
+- 四处覆盖不足的处理：
+  1. 战斗快照、技能伤害、回血 buff、穿戴的等级读点没有超上限 / 0 级用例：未补。`player_battle_settlement_test.cpp` 正被别的会话改，记为后续项（§13.4）。
+  2. 自动加点改了剩余点口径但没有用例：已补角色与宝宝各一条 `AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys`。
+  3. 角色侧"只剩未知键时洗点算无可洗"原用例用的是 0 值未知键，没有区分力：已补 `PlayerEquipAttributeTest.OnlyUnknownKeysResetIsNothingToChangeAndFree`（未知键带 30 点）。
+  4. `PetAllocationTest.UnknownDimensionSurvivesLoadAndRecalculation` 末尾的序列化往返是自己比自己，恒真：已删，注释改为指向真实存盘往返用例。
+
+### 13.4 未做 / 风险
+
+- **客户端**：面板、技能书有几处客户端可见的语义变化（设计 §12.2 末段），客户端仓未获授权读取，需要客户端侧确认显示与提交没有问题。
+- **约束只能靠评审守**：技能 id 不复用、不改归属、`max_rank` 只增，维度 id 不复用、不改池，按等级的规则单调不减，下调上限须配迁移。§13 第 7 条评审清单由第 6 批会话维护，请其引用设计 §12.2 的约束清单。
+- **契约测试没做**：`LevelComp.level()` 读点白名单靠 grep 守，等代码稳定后再按行级白名单补。
+- **§4.4 登记**：技能条目、加点方案、宝宝实例本层新字段"暂无守卫，按 R5"一行，由第 6 批会话加。
+- **D7**：调大 `kMaxAppliedRecords` 的版本不可回滚 scene，仍是发布约束。
+- **缺 `LevelComp` 的语义**：`player_skill.cpp` 与 `player_equip.cpp` 的等级辅助函数缺组件时按 1 级继续，与组件访问规则"持久数据缺失 fail-closed"不一致。加载链保证不会触发；要统一，就改成缺组件即拒绝，并补用例。
+- **10-30 的改动没有运行证据**：`player_pet.cpp`（宝宝生效等级）和 5 条新用例都要在本次复跑里确认。
+- **等级读点覆盖缺口**：战斗快照（`player_battle.cpp` 的 `BuildBattleSnapshot`）、技能伤害（`skill.cpp` 的目标等级与伤害参数）、回血 buff（`modifier_buff_impl.cpp`）、装备穿戴（`player_equip.cpp`）在存储等级为 0 或大于 85 时没有用例。其中 `skill.cpp` 与回血 buff 的"0 级按 1 级"是新行为。等 `player_battle_settlement_test.cpp` 的并行修改结束后补：快照等级 == 85、`LevelComp` 不变；施法者 / 目标等级为 0 和 100 时的伤害分别等于 1 级和 85 级。
+
+### 13.5 文件清单
+
+- 生产代码（`cpp/libs/services/scene/`）：
+  - `player/system/`：`attribute_allocation_rules.h`、`pet_rules.h`、`player_level_rules.h`、`player_attribute.{h,cpp}`、`player_pet.{h,cpp}`（10-30 又改：宝宝生效等级）、`player_skill.{h,cpp}`、`player_database_loader.cpp`、`player_mission.cpp`；
+  - `player/system/player_equip.cpp`：只改了顶部的 `PlayerLevel`；
+  - `battle/system/player_battle.cpp`：只改了快照等级一行加 include；
+  - `combat/skill/system/skill.cpp`、`combat/buff/system/modifier_buff_impl.cpp`。
+- 测试：
+  - `cpp/tests/skill_test/{player_skill_book_test.cpp,skill_test.cpp}`；
+  - `cpp/tests/turn_battle_engine_test/{class_skill_test.cpp,attribute_allocation_rules_test.cpp}`；
+  - `cpp/tests/bag_test/{player_equip_attribute_test.cpp,player_feature_handler_test.cpp,persist_round_trip_test.cpp}`（前两个 10-30 又加了用例）；
+  - `player_mission_system_test.cpp` 里那条用例是别的会话在 `83859448` 加的，一并验证。
+- proto 注释：`proto/common/component/player_skill_comp.proto`、`proto/scene/player_attribute.proto`、`proto/scene/player_pet.proto`。
+- 文档：
+  - `docs/design/{mixed-version-persist-field-protection.md,class-skills.md,player-attribute-allocation.md,player-pet.md}`；
+  - 本文、`docs/PROGRESS.md`；
+  - Java 仓 `PARITY.md`（未提交）。
+
+## 14. 续：第 6 批（退役字段残留、按数量扣除守卫、新币种；2026-10-23～30，第 6 批会话）
+
+> **状态**：10-23 写的部分已随整仓快照提交入库（`5de132e2` 等）；10-30 的补齐在工作区，未提交。没有做过本主题专门的验证。
+> **运行旁证**：Codex 10-24 全量运行 currency_test（318 条）、bag_test（708 条）全部通过，Go shared 模块全量单测通过，这批 10-23 的新用例都在列。player_inbox、guild、trade、scene_manager 四个 Go 模块没有旁证；10-30 新增与改动的部分未编译、未测试。
+> **Java 版**：待做，PARITY 已登记。
+
+### 14.1 做了什么
+
+**① 退役字段的残留不算版本错位**（设计 §4.4）
+- 生成器把台账的 `retired=<消息全名>#<字段号>` 行生成为 `persist_schema::kRetiredFields` / `IsRetiredField`。生成器在 `tools/proto_generator/protogen/internal/persistschema/{render,generate}.go`，用例为 `TestRenderOutputs`。
+- `unknown_field_carry::CarriesNewerVersionFields` 取代 `HasUnknown`。合堆（`IsIndependentInstance`）、欠款合并（`DebtCarriesUnknownFields`）、按数量扣除（`IsCountableByConfig`）三处守卫统一用它。
+- 用例：`UnknownFieldCarryTest.OnlyUnretiredUnknownFieldsCountAsNewerVersionFields`。生产退役清单目前为空，所以用注入谓词钉住过滤逻辑。
+
+**② 按数量扣除守卫**（设计 §4.4）
+- 谓词 `ItemStore::IsCountableByConfig`；`TotalCountOf` 与 `DrainStacks` 都只认可计单位。
+- 三态预检 `ItemStore::CheckQuantities`，不足优先于版本错位。`Bag::CheckQuantities` 与 `Bag::CheckItemsAvailable` 静默返回，三个码分别是 kSuccess / kFeatureUnavailable / kBagInsufficientItems。
+- 调用方：资产通道数量扣出（版本错位回 RETRY + 1006、不记账）、强化、镶嵌（回 1006，排在金币判定之前）、战斗快照（只计可计单位）。
+- 10-30 补齐：
+  - 资产扣出把版本错位排到按 guid、宝宝这些确定性校验之后。
+  - 删除 `ItemStore::HasAll`：它没有调用方，而且会把版本错位并进"不足"。
+  - 聚宝斋卖家在托管阶段也可以撤单。材料订单的托管腿没有截止时间，扣款一直回 RETRY 时，原来没有任何出口（`go/trade/internal/commerce/engine.go` 的 `Mutate` 撤单分支）。
+  - `RemoveItemByPos` 补了约束注释。
+  - `bag_service.h`、`player_equip.h`、`equipment-enhance-inlay.md`、`bag-instance-layout-split.md` 的口径同步。
+
+**③ 新币种**（设计 §12 载荷行）
+- 取值表的唯一来源是 `proto/common/base/currency_type.proto`，生成产物已在库。C++ `currency.h` 与 Go `shared/currencytype` 都从它派生；`IsKnownCurrencyType` 收成一份，三份本地副本已删。
+- Go 各入口按同源取值表校验：收件箱入箱（`registry.go` 的 gain / debt 两个校验函数）、邮件附件（`mailgrant`）、帮会捐献配置、交易配置（`isTradableCurrency`）与托管包（`reconcile/pipeline.go`）、神秘商人表。
+- scene 侧：
+  - 收件箱执行器先判与版本无关的条件（解码、欠款额），再判币种；不认识的币种回 `kVersionSkew`，日志 `metric=persist_version_skew where=inbox_currency`。
+  - 资产通道新增第 8b 步：回 RETRY + 1006，不记账（`where=asset_currency`）。
+  - 原语与神秘商人仍按非法参数处理。
+- 10-30 补齐：
+  - 战斗节点奖励档的两处判据（`turn_battle_engine.cpp`、`table_battle_data_provider.cpp`）改调 `IsKnownCurrencyType`。
+  - 收件箱 `TestValidatePayload` 补 4 条取值表用例。
+- 订正：§10.7 与设计 §12 原写"资产通道在已有改动之后遇到不认识的币种记 APPLIED_PARTIAL"，不对。第 6 批之前的实际行为是在第 8 步、任何改动之前记终态 REJECTED(kAssetInvalidBundle)。
+
+**日志关键字**：所有版本错位统一为 `metric=persist_version_skew`，用 `where=` 区分：asset_debit / asset_currency / equip_enhance / equip_inlay / inbox_currency。`deploy/k8s/asset-channel-alerts.yaml` 文件头已补值班查询，`AssetOpOnlineRetryStuck` 的描述也补了说明。
+
+**文档**：
+- 设计稿 v0.8：§0、R5、§4.4、§9、§12 载荷行、§13 第 5 / 6 / 7 条与新增第 10 条、§15；
+- `04-asset-channel.md`：§4.9 第 8b 步、§4.38 版本错位处置；
+- `player-inbox-service.md`：§6.2、§7.6；
+- `docs/ops/player-inbox-runbook.md`：§5.2 A′ 的新币种来源，以及毒消息排查前先排除版本错位；
+- `jubaozhai-market.md`：托管阶段撤单。
+
+### 14.2 对抗复核裁决（2026-10-30）
+
+10-23 规格出来后跑过三路攻击：一致性、行为、运维与扩展。裁决一步因额度失败，10-30 由本会话按当前代码逐条裁决：
+
+| 发现 | 结论 | 处理 |
+|---|---|---|
+| 材料订单托管腿无截止、托管阶段不可撤单，6a 改 RETRY 后无出口（高） | 成立 | 托管阶段可撤单，补真库用例 `TestTiDBSellerCancelsMarketOrderStillInEscrow`，`jubaozhai-market.md` 同步 |
+| 资产扣出版本错位排在 guid / 宝宝确定性校验之前（中） | 成立 | 调整顺序，补 `AssetOpSystemTest.QuantityDebitDeterministicRejectionsComeBeforeVersionSkewRetry` |
+| bool `HasAll` 留着会把错位并进"不足"（中） | 成立 | 删除 |
+| 日志关键字与规格不一致（中） | 成立 | 统一为代码实际打的 `persist_version_skew where=...`，文档跟代码 |
+| 资产通道版本错位的值班查询与告警描述（中） | 成立 | yaml 补查询与描述，04 §4.38 补处置 |
+| 收件箱版本错位停用只打一次日志；PoisonSuspect 指引会作废合法处置（中） | 成立 | runbook A′ 已补排查前置；周期补打与告警描述**未做**（见 14.4） |
+| 普遍写入的 `ItemComp` 新字段会让回滚变成全服降级（中） | 成立 | R5 加"分两版发布、`size` 计数含义不变"，§13 第 7 条同步 |
+| 6b / 6c 同版本在滚动发布下不够（低） | 成立 | 改为 Go 全量之后才滚 scene，首次上线除外 |
+| 人工终结不是零成本出口（低） | 成立 | 04 §4.38、设计 §13 第 6 条写明 |
+| 规格的谓词写成 `HasUnknown`（中） | 已不成立 | 实现用的就是 `CarriesNewerVersionFields` |
+| 6c 先于 6b 的半截状态、生成步骤缺失（高 / 中） | 已不成立 | 6b 已落，生成产物已在库 |
+| 跨版本战斗结算少扣却记 APPLIED（中） | 已由战斗结算会话修 | `HasUnsupportedInboxConsumption` 遇到带新字段的消耗物品回 `kVersionSkew` |
+| GM 对新币种的处置可按 ID 透明执行，不必停用整个域（中） | 待拍板 | 设计 §13 第 10 条，推荐维持现状 |
+| 新币种启用开关（中） | 待拍板 | §13 第 10 条，推荐到第一次真正新增币种时再做 |
+| 新物品 / 宝宝表行在资产通道入账被记终态（低；§12 核对会话 10-30 也转来同一条） | 待拍板 | §12 载荷行、§13 第 10 条：先定表行只增不删，再改判 RETRY；拍板之前守发布次序 |
+| 越界包类型的携带记录不参与数量判定（中） | 只在将来新包类型参与资产扣出时触发 | 设计 §13 第 7 条评审清单加一条 |
+| `GetTotalItemCount` 改语义未改名（低） | 接受 | 注释已写明；约 100 处测试调用，改名另议 |
+| 按 guid 改写带新字段的装备实例（低） | 接受 | 列入 R5"仍未守" |
+| `ValidateDebitBundle` 只看可叠加、不看 `equip_kind`（低，既有行为） | 交负责人 | 14.4 |
+| 收件箱入箱校验排在判重之前，Go 混副本时同请求可能不同结局（低） | 已被发布次序覆盖 | Go 全量之后才允许对新币种下处置 |
+
+### 14.3 待 Codex 验证（照抄执行）
+
+工作目录：仓库根 `D:\luyuan\xuanming-server-mmo-cpp`，pwsh 7。C++ MSBuild 必须串行 `/m:1`。日志统一放 `build/verification/persist-batch6/`。
+
+1. **生成**：本批的生成产物已在库，不需要重新生成：`cpp/generated/persist_schema/persist_schema_gen.h` 已含 `kRetiredFields`，`currency_type.pb.*` 已生成。只有别的会话在本轮之前改了 proto，才按 §13.2 第 1 步先跑 no-unity `proto-gen-run`。
+2. **C++ 构建**：按 §5.2 第 1 步编 `game.sln`（`/m:1`，输出 Tee 到 `build/verification/persist-batch6/game-sln.build.log`）。通过标准：Scene、Battle 共享库与各节点退出 0。
+3. **C++ 测试**（依次执行）：
+   ```
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter currency_test -LogDir build/verification/persist-batch6
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test -LogDir build/verification/persist-batch6
+   pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine_test -LogDir build/verification/persist-batch6
+   ```
+   通过标准：三个工程 gtest 全绿，下列用例在列且通过。
+   - currency_test：
+     - `CurrencyTest.CurrencyTypeEnumIsDerivedFromTheProtoTable`
+     - `GmSanctionInboxExecutorTest.GainPayloadWithGarbageIsRejected`
+     - `GmSanctionInboxExecutorTest.GainPayloadWithCurrencyUnknownToThisVersionReportsVersionSkew`
+     - `GmSanctionInboxExecutorTest.AttachCurrencyDebtWithCurrencyUnknownToThisVersionReportsVersionSkew`
+     - `GmSanctionInboxExecutorTest.AttachCurrencyDebtRejectsBadAmountBeforeCheckingCurrency`
+     - `AssetOpSystemTest.QuantityDebitOfStacksCarryingNewerVersionFieldsRetriesWithoutRecording`
+     - `AssetOpSystemTest.QuantityDebitDeterministicRejectionsComeBeforeVersionSkewRetry`（10-30 新增，从未运行）
+     - `AssetOpSystemTest.CreditWithCurrencyUnknownToThisVersionRetriesWithoutAnyMutation`
+     - `AssetOpSystemTest.DebitWithCurrencyUnknownToThisVersionRetriesWithoutRecording`
+     - `AssetOpSystemTest.DuplicateUnknownCurrencyIsStillRejected`
+     - `AssetOpSystemTest.AbortStillClosesASeqWhoseBundleCarriesAnUnknownCurrency`
+     - `PlayerInboxSystemTest.ExecutorVersionSkewHaltsAfterConfirmingThePrefixAndNeverResumesLocally`（回归）
+   - bag_test：
+     - `UnknownFieldCarryTest.OnlyUnretiredUnknownFieldsCountAsNewerVersionFields`
+     - `BagInstanceDataTest.QuantityPathsSkipStacksCarryingNewerVersionFields`
+     - `PlayerEquipTest.EnhanceWithMaterialOnlyEnoughCountingNewerVersionStacksIsAVersionSkew`
+     - `PlayerEquipTest.InlayGemWithOnlyNewerVersionGemsIsAVersionSkew`
+   - turn_battle_engine_test：全绿即可。奖励档判据只改调同一谓词，行为不变。
+4. **Go**（每个模块在各自目录下执行）：
+   ```
+   cd go/shared;          go test -count=1 ./currencytype/... ./mailgrant/... ; go vet ./currencytype/... ./mailgrant/...
+   cd go/player_inbox;    go test -count=1 ./... ; go vet ./...
+   cd go/guild;           go test -count=1 ./... ; go vet ./...
+   cd go/trade;           go test -count=1 ./... ; go vet ./...
+   cd go/scene_manager;   go test -count=1 ./... ; go vet ./...
+   cd go/mail;            go test -count=1 ./... ; go vet ./...
+   cd go/rank;            go test -count=1 ./... ; go vet ./...
+   cd tools/proto_generator/protogen; go test -count=1 ./internal/persistschema/...
+   ```
+   通过标准：全部退出 0。`TestValidatePayload` 的 4 条取值表子用例、`currencytype` 的 3 条用例要在列。
+5. **交易真库用例**（可选，需要一次性 TiDB；不要借 codex-* 容器）：设置 `COMMERCE_TEST_DSN` 与 `COMMERCE_REQUIRE_TIDB=1`，在 `go/trade` 下执行：
+   ```
+   go test -count=1 -run 'TestTiDBSellerCancelsMarketOrderStillInEscrow|TestTiDBOrderBookPriceTimePartialCancelWaitsForChildren|TestTiDBPlayerTradeRequiresBothEscrowSummariesAndReturnsOnCancel' ./internal/commerce/
+   ```
+   没有 DSN 时这些用例会 Skip，Skip 不算通过。
+6. **失败时**：保留首个编译错误与失败用例的原文，不改断言重跑。首个错误如果不在 14.5 的文件里，归给对应会话。
+
+### 14.4 未做 / 待办 / 风险
+
+- **收件箱版本错位停用的周期补打**：`Halt` 只打一次，`[10m]` 窗口过后告警熄灭，停用却对实体一直有效。做法：对 `reason=version_skew`（以及同样不会自愈的 `unknown_type`）按 `kSceneLogAlertWindowMs` 节拍补打，与 `ledger_invalid` 同口径；`player-inbox-alerts.yaml` 的 PoisonSuspect 描述补一句"先排除 version_skew"（runbook A′ 已写）。10-30 时 `player_inbox_system.cpp`、`player_inbox_runtime_comp.h`、`player-inbox-alerts.yaml` 都有别的会话未提交的改动（C-1 / C-4），所以没动。
+- **战斗结算收件箱执行器**：载荷币种不认识时回 `kDefer`（`player_battle.cpp` 的 `CollectSettlementCurrencyGains` 失败分支），与 GM 执行器的 `kVersionSkew` 不一致；DEFER 在会话内只会空转。同一函数的 `>= kCurrencyMax` 判据也还没改调 `IsKnownCurrencyType`。该文件正被战斗结算的在途改动占用，没动，留给那项工作的负责人。
+- **交易 Go 侧三处币种字面量**（DRY，行为正确）：`commerce/engine.go` 与 `commerce/rmb.go` 的 `== 2`（绑定币禁售）、`svc/role_trade.go` 的 `c > 1`。改为引用 `currencytype.BindDiamond` / `isTradableCurrency`。
+- 设计 §13 第 10 条三项待拍板；R5 仍未守的场景见设计 §4.4 与 R5 行。
+- `ValidateDebitBundle` 只要求可叠加、不看 `equip_kind`：装备行被误配成可叠加时，交易按数量扣出会让装备属性无声丢失。这是既有行为，交负责人决定是否收紧。
+- `asset-channel-alerts.yaml` 其余 `{app=...}` 选择器仍匹配不到流（既有问题，契约测试注释已记），本批新加的那条已按正确写法。
+- Java 版：取值表、Go 入口校验、版本错位结局、按数量扣除守卫、托管阶段撤单都待做。
+
+### 14.5 文件清单
+
+**10-23 部分（已入库）**：
+- 生成器：`tools/proto_generator/protogen/internal/persistschema/{render.go,generate.go,persistschema_test.go}`；
+- 实例层与背包：`cpp/libs/engine/core/utils/proto/unknown_field_carry.h`、`cpp/libs/modules/bag/{item_store,bag_system}.{h,cpp}`；
+- 货币：`cpp/libs/modules/currency/{constants/currency.h,system/currency_system.{h,cpp}}`；
+- scene 玩法：`cpp/libs/services/scene/player/system/{asset_op_system.cpp,gm_sanction_inbox_executor.{h,cpp},player_equip.cpp,player_mystery_merchant.cpp}`、`cpp/libs/services/scene/battle/system/player_battle.cpp`（快照一行）；
+- proto：`proto/common/base/currency_type.proto`；
+- Go：`go/shared/currencytype/{currencytype.go,currencytype_test.go}`、`go/shared/mailgrant/bundle.go`、`go/player_inbox/internal/inbox/registry.go`、`go/guild/internal/logic/economy_config.go`、`go/trade/internal/{config/config.go,reconcile/pipeline.go}`、`go/scene_manager/internal/logic/mystery_merchant.go`；
+- 测试：`cpp/tests/bag_test/{bag_instance_data_test,player_equip_test}.cpp`、`cpp/tests/currency_test/{currency_test,gm_sanction_inbox_executor_test,asset_op_system_test}.cpp`。
+
+**10-30 部分（工作区，未提交）**：
+- C++：`cpp/libs/modules/bag/{item_store.h,item_store.cpp,bag_service.h,bag_service.cpp,bag_system.h}`、`cpp/libs/services/scene/player/system/{asset_op_system.cpp,player_equip.h}`、`cpp/libs/services/battle/{system/turn_battle_engine.cpp,data/table_battle_data_provider.cpp}`、`cpp/tests/currency_test/asset_op_system_test.cpp`；
+- Go：`go/player_inbox/internal/inbox/registry_test.go`、`go/trade/internal/commerce/{engine.go,engine_tidb_test.go}`；
+- 部署：`deploy/k8s/asset-channel-alerts.yaml`；
+- 文档：`docs/design/{mixed-version-persist-field-protection.md,guild-phase2/04-asset-channel.md,player-inbox-service.md,jubaozhai-market.md,equipment-enhance-inlay.md,bag-instance-layout-split.md}`、`docs/ops/player-inbox-runbook.md`、本文、`docs/PROGRESS.md`；
+- 仓外：Java 仓 `PARITY.md`。
+
+同一批文件上有别的会话未提交的改动：`currency_test.cpp`、`player_battle.cpp`、`result_commit.h`、收件箱几份文件等。编译或用例失败时先按行号归因，不要回退任何一方。

@@ -1,6 +1,7 @@
 # etcd MVCC 压缩与空间维护 Runbook
 
-> **状态**:v1 — 2026-10-15,P0-C 阶段 1a + 1b 落码,**未验证**(待 Codex 执行,见 §9)。阶段 2 未做。
+> **状态**:v1 — 2026-10-15,P0-C 阶段 1a + 1b 落码,**未验证**(待 Codex 执行,见 §9)。
+> **v2 — 2026-10-30**:阶段 2 的清单和契约测试已写(负责人 10-30「一起写进文档一起做」),**未验证**。项目未上线,没有要保护的存量集群;首次部署之前先过 §8 的前置。镜像 tag@摘要还没钉,要 Codex 实测 M0。
 > v1.1 — 同日审查修订:§2 补 K8s 探针让 NOSPACE 扩大成成员反复重启;§5 补 defrag 时限与「等 Job 结束」的判法;§7 补时间窗、应急改探针(须负责人批准)与告警在时的 defrag 判据;§8、§9 同步。
 > **范围**:K8s 的 etcd(`deploy/k8s/manifests/infra/etcd.yaml` + `etcd-maintenance.yaml`)与本机 / Linux 预发共用的 compose etcd(`deploy/docker-compose.yml`)的历史压缩、碎片整理、空间告警处置。
 > **依据**:`docs/handoff/global-singletons-p0-findings-20261014.md`「## P0-C」(证据链、推算与原设计);C++ etcd 流重建是 `docs/design/grpc-muduo-transport.md` §10.2 第 2 批。
@@ -12,7 +13,7 @@
 
 | 环境 | 压缩 | 配额 | 备注 |
 |---|---|---|---|
-| K8s(`infra-up` 部署) | CronJob `etcd-compact` 每 5 分钟压一次,保留 1000000 个 revision | 未设置,etcd 默认(约 2GiB,待实测) | 阶段 2 才给 StatefulSet 加 env |
+| K8s(`infra-up` 部署) | etcd 自动压缩,保留 1000000 个 revision;CronJob `etcd-compact` 每 5 分钟再压一次(稳定一个版本后删,§8 步骤 7) | 3GiB | 探针已排除 NOSPACE |
 | K8s(有真实存档、未重跑 `infra-up`) | **没有**,直到按 §4.2 单独 apply | 同上 | 不要为它跑 `infra-up` |
 | compose(本机开发 / Linux 预发) | env 自动压缩,保留 1000000 个 revision | 3GiB | **只对新建的容器生效**(§6),镜像是否接受 env 待实测 |
 
@@ -60,7 +61,7 @@ defrag 在任何环境都不自动做,只按 §5 手工逐成员做。
 ### 3.2 配额 3GiB(3221225472)
 
 - 判据:`配额 × 2 + 1Gi ≤ PVC`(etcd.yaml 的 `volumeClaimTemplates` 是 8Gi,且不能在线改),给 defrag 的临时文件留余量。4GiB 不满足。
-- 现在只有 compose 设了;K8s 的 etcd 在阶段 2 之前仍是默认配额。
+- compose 和 K8s 的 etcd 都设了(2026-10-30 起)。
 
 ## 4. K8s:CronJob `etcd-compact`
 
@@ -269,11 +270,11 @@ Git Bash 下,以 `/` 开头的参数(容器内路径、`/mmorpg/killswitch/...` 
 8. **事后**:看 C++ 节点是否失租重注册、gate 是否摘掉了节点;Go 发号水位恢复写入后 scene_manager / match / guild 的拒发应自行解除(推断);
    再查一次 `etcd-compact` 为什么没挡住(是否在跑、保留量是否过大、写入速率是否超出 §3.1 的推算)。
 
-## 8. 阶段 2(未做):给 etcd 本身开自动压缩与配额
+## 8. 阶段 2:给 etcd 本身开自动压缩与配额
 
-会改 StatefulSet `etcd` 的 Pod 模板,逐个滚动 3 个成员。**未经负责人许可不得提前做**;契约测试断言 `etcd.yaml` 里还没有这些参数。
+**2026-10-30:步骤 1、3 已落到 `etcd.yaml` 和契约测试,镜像还没钉**(步骤 1、2 的 tag@摘要要 Codex 实测 M0)。项目未上线,没有存量集群要滚动,但下面的前置仍要在首次部署之前跑完:配置写了不等于这个镜像接受。
 
-**前置**(全部满足才开窗口):
+**前置**(全部满足才能部署):
 
 1. C++ etcd 流重建(`docs/design/grpc-muduo-transport.md` §10.2 第 2 批)修复并经 Codex 验证:删除 / 重启一个 etcd 成员后无节点 fence 且零重注册;
 2. M0:取到 `bitnamilegacy/etcd` 的 tag@摘要;各环境逐成员核对正在跑的版本

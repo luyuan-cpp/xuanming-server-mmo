@@ -162,6 +162,8 @@ set(SOURCE_FILES
     common/base/role_admission.pb.cc
     team/team_authority.pb.cc
     common/base/currency_type.pb.cc
+    gate/gate_client_spectate.pb.cc
+    gate/gate_spectate_ticket.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

@@ -18,12 +18,12 @@ import (
 
 func TestBuildDSN_AuthorityModeAppliesToEveryConnection(t *testing.T) {
 	c := config.MySQLConf{Host: "localhost:4000", User: "test", DBName: "test"}
-	for _, required := range []bool{false, true} {
-		parsed, err := drivermysql.ParseDSN(BuildDSN(c, required))
+	for _, backend := range []authoritysql.Backend{authoritysql.BackendMySQL, authoritysql.BackendTiDB} {
+		parsed, err := drivermysql.ParseDSN(BuildDSN(c, backend))
 		require.NoError(t, err)
 		assert.Equal(t, "'READ-COMMITTED'", parsed.Params["transaction_isolation"])
 		assert.Equal(t, "'STRICT_TRANS_TABLES'", parsed.Params["sql_mode"])
-		if required {
+		if backend == authoritysql.BackendTiDB {
 			assert.Equal(t, "'pessimistic'", parsed.Params["tidb_txn_mode"])
 			assert.Equal(t, "0", parsed.Params["tidb_read_staleness"])
 			assert.Equal(t, "OFF", parsed.Params["tidb_low_resolution_tso"])
@@ -32,7 +32,7 @@ func TestBuildDSN_AuthorityModeAppliesToEveryConnection(t *testing.T) {
 			assert.Equal(t, "''", parsed.Params["tidb_snapshot"])
 		} else {
 			for _, variable := range []string{"tidb_txn_mode", "tidb_read_staleness", "tidb_low_resolution_tso", "tidb_replica_read", "tidb_read_consistency", "tidb_snapshot"} {
-				assert.NotContains(t, parsed.Params, variable, "MySQL开发池不能发送TiDB专有参数")
+				assert.NotContains(t, parsed.Params, variable, "mysql 档不能发送TiDB专有参数")
 			}
 		}
 	}
@@ -54,9 +54,9 @@ func authorityTestConfig(t *testing.T, envName string) config.MySQLConf {
 	return config.MySQLConf{Host: parsed.Addr, User: parsed.User, Password: parsed.Passwd, DBName: parsed.DBName, MaxOpenConn: 3, MaxIdleConn: 3}
 }
 
-func TestAuthorityDB_MySQLDevelopmentAndProductionGate(t *testing.T) {
+func TestAuthorityDB_MySQLBackendAndTiDBGate(t *testing.T) {
 	c := authorityTestConfig(t, "FRIEND_TEST_MYSQL_DSN")
-	db, err := openMySQL(c, false, authoritysql.Reader())
+	db, err := openMySQL(c, authoritysql.BackendMySQL, authoritysql.Reader())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -64,16 +64,16 @@ func TestAuthorityDB_MySQLDevelopmentAndProductionGate(t *testing.T) {
 	var isolation string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT @@transaction_isolation").Scan(&isolation))
 	assert.Equal(t, "READ-COMMITTED", strings.ToUpper(isolation))
-	wrong, err := openMySQL(c, true, authoritysql.Reader())
+	wrong, err := openMySQL(c, authoritysql.BackendTiDB, authoritysql.Reader())
 	if wrong != nil {
 		_ = wrong.Close()
 	}
-	require.Error(t, err, "生产TiDB模式不能放行真实MySQL")
+	require.Error(t, err, "tidb 档不能放行真实MySQL")
 }
 
 func TestAuthorityDB_TiDBPessimisticOnEveryConnection(t *testing.T) {
 	c := authorityTestConfig(t, "FRIEND_TEST_TIDB_DSN")
-	db, err := openMySQL(c, true, authoritysql.Reader())
+	db, err := openMySQL(c, authoritysql.BackendTiDB, authoritysql.Reader())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

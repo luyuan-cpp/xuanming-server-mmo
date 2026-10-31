@@ -18,6 +18,9 @@
 // (老生产者的兼容位)。所以 Go 侧生产者补齐 target_gate_id 是这轮改造的一部分,
 // 见 docs/design/control-plane-topic-partitioning-20260908.md。
 
+#include <atomic>
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -33,6 +36,11 @@ namespace node::kafka {
 struct KafkaCommandTargetFilter {
     std::vector<std::string> nodeIdFieldNames{ "target_node_id" };
     std::vector<std::string> instanceIdFieldNames{ "target_instance_id" };
+    // 非空 = 打开「僵尸实例」WARN 的采样(ValidateCommandTarget):第一条必打,此后每 1024 条一行,累计数存在这里,
+    // 拷贝过滤器共用同一份。空 = 逐条打(默认):控制命令是偶发的,每一条都值得看。
+    // 给持续流的 topic 用:观战帧按回合持续发,gate 重启拿回同一 node_id 后,battle 的中继表还指着前任实例,
+    // 这些场的每一帧都会走到这条分支,不采样就是在主 loop 上同步写一行日志。
+    std::shared_ptr<std::atomic<uint64_t>> staleInstanceDropCounter;
 };
 
 namespace detail {
@@ -111,7 +119,7 @@ inline bool TryReadStringField(const google::protobuf::Message& msg,
 // —— 所以 mismatch 走 LOG_DEBUG 而不是 LOG_WARN:一个分区上几百个节点,
 // 每人对每条别人的命令打一行 WARN,日志量会是控制面消息量的几百倍。
 // 真正需要报警的是"发给我的 node_id、但 instance 对不上"(僵尸残留),
-// 那一条仍然是 WARN。
+// 那一条仍然是 WARN(持续流的 topic 可以打开采样,见 KafkaCommandTargetFilter)。
 template <typename CommandT>
 bool ValidateCommandTarget(const std::string& topic,
     const CommandT& command,
@@ -136,9 +144,15 @@ bool ValidateCommandTarget(const std::string& topic,
             // target_node_id 也没填(老生产者)时,这条命令本来就可能是同分区上
             // 别人的,降级成 DEBUG;填了且等于自己才是真的"僵尸命令"。
             if (hasNodeIdField && targetNodeId == nodeId) {
-                LOG_WARN << "Kafka command stale instance ignored. field=" << instanceFieldName
-                    << ", target=" << targetInstanceId << ", current=" << nodeInstanceId
-                    << ", node_id=" << nodeId << ", topic=" << topic;
+                // sampled_total = 0:这个过滤器没开采样,逐条打。
+                const auto& dropCounter = filter.staleInstanceDropCounter;
+                const uint64_t sampledTotal = dropCounter ? dropCounter->fetch_add(1, std::memory_order_relaxed) + 1 : 0;
+                if (!dropCounter || (sampledTotal & 0x3FF) == 1) {
+                    LOG_WARN << "Kafka command stale instance ignored. field=" << instanceFieldName
+                        << ", target=" << targetInstanceId << ", current=" << nodeInstanceId
+                        << ", node_id=" << nodeId << ", topic=" << topic
+                        << ", sampled_total=" << sampledTotal;
+                }
             }
             else {
                 LOG_DEBUG << "Kafka command for another instance ignored. field=" << instanceFieldName

@@ -237,7 +237,7 @@ func newMailFullstackRig(t *testing.T) *mailFullstackRig {
 	rig := &mailFullstackRig{ctx: ctx, player: player, item: uint32(item)}
 
 	playerCfg := mailFullstackDSN(t, "PLAYER_DSN", true)
-	rig.playerDB, err = authoritysql.Open(ctx, playerCfg.FormatDSN(), playerCfg.DBName, true, 2, authoritysql.Reader())
+	rig.playerDB, err = authoritysql.Open(ctx, playerCfg.FormatDSN(), playerCfg.DBName, authoritysql.BackendTiDB, 2, authoritysql.Reader())
 	if err != nil {
 		t.Fatalf("实际玩家TiDB不可用: %v", err)
 	}

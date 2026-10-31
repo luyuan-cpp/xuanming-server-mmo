@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
+	"shared/authoritysql"
 )
 
 // 这里只保存操作者明确指定的SQL原件选择键，不复制正式proto正文或构造第二份排空事实。
@@ -43,7 +44,7 @@ AND g.attempt_revision=r.attempt_revision AND g.receipt_digest=t.grant_receipt_d
 AND g.prior_receipt_id=n.request_id AND g.prior_receipt_digest=n.receipt_digest`
 
 func parseNormalFreezeProof(o options) (*normalFreezeProof, error) {
-	if o.routeSource != routeSourceDB || o.routeDBDSN == "" || o.assumeKafkaDrained || o.frozenWriterEpoch == 0 {
+	if o.routeDBDSN == "" || o.frozenWriterEpoch == 0 {
 		return nil, errNormalFreezeProof
 	}
 	cfg, err := mysql.ParseDSN(o.routeDBDSN)
@@ -128,7 +129,7 @@ func openNormalFreezeProof(ctx context.Context, o options) (*normalFreezeProof, 
 	if err != nil {
 		return nil, nil, err
 	}
-	db, err := openCurrentTiDB(ctx, o.routeDBDSN)
+	db, err := openCurrentSession(ctx, o.routeDBDSN, o.sqlBackend)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -154,25 +155,49 @@ const (
 	currentTiDBSessionSQL = "SELECT @@tidb_txn_mode,@@transaction_isolation,@@tidb_replica_read,@@tidb_read_consistency,@@tidb_snapshot,@@tidb_read_staleness,@@tidb_low_resolution_tso"
 )
 
-var errCurrentTiDB = errors.New("全局SQL连接必须使用真实TiDB当前强读会话")
+var (
+	errCurrentTiDB  = errors.New("全局SQL连接必须使用真实TiDB当前强读会话")
+	errCurrentMySQL = errors.New("全局SQL连接必须是MySQL主库的RC会话")
+)
 
-// 玩家行、Team原件、路由收集与审计共用同一规则。按大小写无关删除旧参数，避免驱动SET时同名别名覆盖安全值。
+// 业务原件、Team原件、路由读取与审计共用同一规则。按大小写无关删除旧参数，避免驱动SET时同名别名覆盖安全值。
 // 每条新连接都绑定，不只修改探针碰到的那一条连接；调用者仍须在交付句柄前读回策略。
-func pinCurrentTiDB(cfg *mysql.Config) {
+// mysql 档只固定 RC,并删掉 DSN 里所有 tidb_* 参数:驱动会把它们当会话变量 SET,在 MySQL 上是 1193,建连就失败。
+func pinCurrentSession(cfg *mysql.Config, backend authoritysql.Backend) {
 	if cfg.Params == nil {
 		cfg.Params = map[string]string{}
 	}
 	for key := range cfg.Params {
-		switch strings.ToLower(key) {
+		lower := strings.ToLower(key)
+		switch lower {
 		case mysqlIsolationParam, mysqlLegacyIsolationParam, "tidb_txn_mode", "tidb_replica_read", "tidb_read_consistency", "tidb_snapshot", "tidb_read_staleness", "tidb_low_resolution_tso":
 			delete(cfg.Params, key)
+		default:
+			if backend == authoritysql.BackendMySQL && strings.HasPrefix(lower, "tidb_") {
+				delete(cfg.Params, key)
+			}
 		}
 	}
+	cfg.Params[mysqlIsolationParam] = mysqlReadCommitted
+	if backend == authoritysql.BackendMySQL {
+		return
+	}
 	for key, value := range map[string]string{
-		mysqlIsolationParam: mysqlReadCommitted, "tidb_txn_mode": "'pessimistic'", "tidb_replica_read": "'leader'", "tidb_read_consistency": "'strict'", "tidb_snapshot": "''", "tidb_read_staleness": "0", "tidb_low_resolution_tso": "OFF",
+		"tidb_txn_mode": "'pessimistic'", "tidb_replica_read": "'leader'", "tidb_read_consistency": "'strict'", "tidb_snapshot": "''", "tidb_read_staleness": "0", "tidb_low_resolution_tso": "OFF",
 	} {
 		cfg.Params[key] = value
 	}
+}
+
+// requireCurrentSession 在交付句柄前读回策略。mysql 档与服务同一口径(authoritysql):不是 TiDB、是主库、会话是 RC。
+func requireCurrentSession(ctx context.Context, db *sql.DB, backend authoritysql.Backend) error {
+	if backend == authoritysql.BackendMySQL {
+		if err := authoritysql.AssertCurrentSession(ctx, db, backend); err != nil {
+			return fmt.Errorf("%w: %w", errCurrentMySQL, err)
+		}
+		return nil
+	}
+	return requireCurrentTiDB(ctx, db)
 }
 
 func requireCurrentTiDB(ctx context.Context, db *sql.DB) error {
@@ -195,19 +220,19 @@ func requireCurrentTiDB(ctx context.Context, db *sql.DB) error {
 }
 
 // 不使用log.Fatal，审计入口必须将连接失败保留为INFRA/exit2，不能把未执行误报为无阻塞。
-func openCurrentTiDB(ctx context.Context, raw string) (*sql.DB, error) {
-	dsn, err := readCommittedDSN(raw)
+func openCurrentSession(ctx context.Context, raw string, backend authoritysql.Backend) (*sql.DB, error) {
+	dsn, err := readCommittedDSN(raw, backend)
 	if err != nil {
 		return nil, err
 	}
-	db, err := openToolSQLPool(ctx, dsn)
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
 	}
 	if err := registerMaintenanceResource(ctx, db); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
-	if err := requireCurrentTiDB(ctx, db); err != nil {
+	if err := requireCurrentSession(ctx, db, backend); err != nil {
 		return nil, errors.Join(err, db.Close())
 	}
 	return db, nil

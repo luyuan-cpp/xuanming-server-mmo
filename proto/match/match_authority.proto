@@ -35,6 +35,8 @@ message MatchSpectatorRecord {
 message MatchSpectatorIntentRecord {
   option (OptionTableName) = "match_spectator_intent";
   option (OptionPrimaryKey) = "player_id,request_high,request_low";
+  // 保留期清理按 (created_ms, 主键) 翻页读已关闭的行(authority.PurgeClosedSpectatorIntents)，只索引读，不扫全表。
+  option (OptionIndex) = "state,created_ms,player_id,request_high,request_low";
   uint64 player_id = 1;
   uint64 request_high = 2;
   uint64 request_low = 3;
@@ -44,6 +46,12 @@ message MatchSpectatorIntentRecord {
   uint64 owner_revision = 7;
   uint32 state = 8; // 1尚未发出Add、2已绑定current原件、5已关闭；未知一律拒绝。
   uint32 close_tip = 9; // 关闭原因(客户端tip)，先写为准，同request_id重放回同一结论；0=未记录原因，state1必须为0。
+  // eSpectateDelivery 数值(match_service.proto)。L1 / L2 观众不占 match_spectator 行，意图直接以 LOBBY 结案
+  // (state=5、close_tip=0、delivery=2)；重放时重新做幂等的中继 / 广播准入并签新凭证(battle-spectate-tiered-fanout.md §15.6)。
+  // 0 = 未以 LOBBY 结案(L0 观众与业务拒绝)。
+  uint32 delivery = 10;
+  // 意图创建时刻(TiDB 时钟，Unix 毫秒)。只供保留期清理：state=5、不是请求头、超过保留期的行分批删除。
+  uint64 created_ms = 11;
 }
 message MatchSpectatorHeadRecord {
   option (OptionTableName) = "match_spectator_head";
@@ -64,7 +72,8 @@ message MatchNetworkProfileRecord {
 message MatchAuthorityTicketRecord {
   option (OptionTableName) = "match_authority_ticket";
   option (OptionPrimaryKey) = "player_id";
-  option (OptionIndex) = "state,mode,config_id,team_size,enqueued_ms;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_id";
+  // 第一条是按池读单排票的索引（authority.PoolTickets）：池 = (mode, config_id, team_size)，team_id=0 只取单排。
+  option (OptionIndex) = "state,mode,config_id,team_size,team_id,enqueued_ms,player_id;formation_id;state,enqueued_ms,player_id;state,mode,team_id,enqueued_ms,player_id";
   uint64 player_id = 1;
   string ticket = 2;
   string request_id = 3;
@@ -225,6 +234,7 @@ message MatchRatingRecord {
   int64 rating_centi = 2;
   uint64 games = 3;
   uint64 updated_ms = 4;
+  uint64 score_changed_ms = 5; // 分数最后一次变化的时刻,进批次的 achieved_ms。榜上同分决胜用它,不看批次到达顺序
 }
 message MatchRatingAppliedRecord {
   option (OptionTableName) = "match_rating_applied";
@@ -233,29 +243,35 @@ message MatchRatingAppliedRecord {
   bytes payload_digest = 2;
   uint64 applied_ms = 3;
 }
-// 停写标记与最终游标和每次评分事务争同一行锁；不依赖墙钟猜最后一批。
+// 评级投榜来源,按对局 id 拆片(shard = battle_id % 64,片数建表后不可改):每局只锁自己那一片。
+// 停写标记与最终游标和本片的评分事务争同一行锁；停写逐片取锁，不依赖墙钟猜最后一批。
 message MatchRankSourceRecord {
   option (OptionTableName) = "match_rank_source";
-  option (OptionPrimaryKey) = "source_epoch";
+  option (OptionPrimaryKey) = "source_epoch,shard";
   uint64 source_epoch = 1;
   uint64 produced_cursor = 2;
   uint64 committed_cursor = 3;
   uint64 board_id = 4;
   bool stopped = 5;
+  uint32 shard = 6;
 }
 message MatchRankOutboxRecord {
   option (OptionTableName) = "match_rank_outbox";
-  option (OptionPrimaryKey) = "source_epoch,source_cursor";
+  option (OptionPrimaryKey) = "source_epoch,shard,source_cursor";
   uint64 source_epoch = 1;
   uint64 source_cursor = 2;
   uint64 request_id = 3;
   bytes entries = 4; // 确定性序列化 SubmitRankScoresRequest（未签名）；重投只重签 auth。
+  uint32 shard = 5;
 }
 
 enum MatchBattleCompletionSourceKind {
   MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED = 0;
   MATCH_BATTLE_COMPLETION_SOURCE_KAFKA = 1;
   MATCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC = 2;
+  // Match 在权威截止加终局提交宽限之后自己写的 ABORT：没有任何 Battle 原字节，该行 format_version 为 0。
+  // 审计据此区分「Battle 提交的终局」与「Match 截止裁决」，不能再把 ABORT 行误读成 BATTLE_RPC 来源。
+  MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT = 3;
 }
 
 // 唯一终局与原结果outbox；RPC来源不伪造Kafka位点。

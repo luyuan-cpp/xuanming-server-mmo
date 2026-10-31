@@ -81,14 +81,13 @@ DataServiceRpc:
     Breaker: false
 
 # listing_id 号段(shared/idsegment.Conf,biz_tag = trade_listing)。
-# Enabled 必须 true、FallbackToSnowflake 必须 false:trade 没有 snowflake 可回退,号段失败即本次上架失败。
-# biz_tag 必须登记进 data_service 的 BootstrapTags,否则生产(AllowAutoSeed=false)发号被拒。
+# Enabled 必须 true:号段失败即本次上架失败。
+# biz_tag 必须登记进 data_service 的 IdSegment.Tags,否则发号被拒。
 IdSegment:
   Enabled: true
   Step: 100
   MinStep: 10
   MaxStep: 1000
-  FallbackToSnowflake: false
 
 # 市场参数(设计 §3/§8)。
 #   Scope: zone   浏览 / 详情 / 收藏按调用者 home_zone 过滤,别区商品对调用者"不存在",zone_filter 被忽略;
@@ -155,13 +154,6 @@ SharedRedis:
 AssetOp:
   Enabled: false
   SecretEnv: MMORPG_ASSET_OP_SECRET_TRADE
-  # 资产 SQL 提交证据开关(docs/design/db-write-fencing-mysql.md §6.6 / §8.7)。不写或 false = HEAD 口径:在线按 scene
-  # 回包的 durable 终结,离线读账本与自动放弃读 Redis 父键 blob。true = 终结只认 go/db 发布的 SQL 提交证据,
-  # 自动放弃要 blob 与证据都确认未见。
-  # !! trade 是全服服务:只有它会投递到的 zone 全部已切 go/db Fencing.Mode=dual、已上新版 C++,并观察到证据在持续发布
-  # 之后才打开;打开前接受「已离线、尚无证据的玩家待办要等他再次存盘」。下面 Commerce 白名单或 Mall.URL 非空时
-  # 必须打开(合同终结只认 SQL 证据,config.Validate 拒启)。回退顺序:先改回 false,再把 zone 切回 legacy 或回退 C++。
-  RequireSQLCommit: false
   # 离线停放档(§6.1):连续投递 5 次仍"玩家没有位置"的行改为约 30 分钟一次(±20%),玩家上线由落地唤醒立刻处理。
   # OfflineAfterAttempts=0 关闭停放档;OfflineBackoffMs 必须在 [60000(重投退避封顶), 86400000] 内。
   OfflineAfterAttempts: 5

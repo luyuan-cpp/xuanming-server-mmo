@@ -35,7 +35,7 @@ message KickPlayerEvent {
   option (OptionKafkaIngress) = true;
   uint32 session_id = 1;
   // 被踢会话所属玩家。gate 只踢当前绑定该玩家的会话;0 = 旧版发送方,按 session_id 踢。
-  // 信封路径由生成路由按同名同型从 GateCommand.player_id 映射(必须 uint64)。
+  // 2026-10-30 起没有信封路径:本事件有信封装不下的字段,生成路由对空 payload 一律拒绝(scene-enter-chain-residuals.md §2.5)。
   uint64 player_id = 2;
   // 发起踢线、已提交的那条登录链的代次。会话已见过不小于它的代次时不踢;0 = 不比较。只经 payload 下发。
   uint64 login_generation = 3;
@@ -63,7 +63,7 @@ message PlayerLeaseExpiredEvent {
 }
 
 // Sent by Login/player_locator to bind a session to Gate.
-// login 经 GateCommand.payload 下发(信封字段照填);payload 为空的旧版 login 只带得到前两个字段与 enter_gs_type。
+// login 经 GateCommand.payload 下发(信封字段照填);2026-10-30 起生成路由对空 payload 一律拒绝,没有信封路径。
 message BindSessionEvent {
   option (OptionKafkaIngress) = true;
   uint32 session_id = 1;
@@ -94,6 +94,13 @@ message PushToPlayerEvent {
   option (OptionKafkaIngress) = true;
   uint32 session_id = 1;
   MessageContent message_content = 2;
+  // 目标玩家身份栅栏(routing-identity-audit-20260908.md R13,与 gate_service.proto
+  // BroadcastToPlayersRequest.player_list 同一理由):session_id 的高位是立刻复用的 gate node_id,
+  // 低位序号在单个 gate 实例内也会回绕,单靠 session_id 会把推送写进另一个玩家的连接。
+  // gate 投递前核对「会话当前玩家 == player_id」,不符即丢弃并计数(会话还没绑定玩家同样丢弃)。所有生产者都必须填;
+  // 0 只为与 RPC 版同口径的兼容判定(gate 放行不校验),生产者一侧拒绝发 0。唯一例外:login 在 BindSession 之前的登录失败提示,
+  // 这时会话还没绑定玩家,带真实 player_id 必被丢弃,所以显式发 0(见 login gate_command.go)。
+  uint64 player_id = 3;
 }
 
 // Go service broadcasts the same message to multiple players on the same Gate.
@@ -105,21 +112,61 @@ message BroadcastToPlayersEvent {
   MessageContent message_content = 2;
   uint32 session_bitmap_base = 3;
   bytes session_bitmap = 4;
+  // 目标玩家身份栅栏,与 gate_service.proto BroadcastToPlayersRequest.player_list 字段号、
+  // 语义、顺序契约完全相同(两条入口共用 cpp/libs/engine/core/network/broadcast_target_codec.h):
+  // player_list[i] 对应「按 session_id 升序」的第 i 个目标——session_list 形态按升序逐项对应;
+  // bitmap 形态按 bit 序(= session_id 升序)第 i 个置位的 session 对应 player_list[i]。
+  // 非空但长度与目标数不等 → gate 整条拒绝并计数。所有生产者都必须填;留空只为与 RPC 版同口径的兼容判定。
+  repeated uint64 player_list = 5;
 }
 
 // Scene-wide broadcast: Gate iterates all sessions with matching scene_id.
 // More compact than session_list when broadcasting to most/all players in a scene.
+// gate 只推已绑定玩家的会话;scene_id 为 0 整条拒绝(没进场景的会话 sceneId 就是 0)。
 message BroadcastToSceneEvent {
   option (OptionKafkaIngress) = true;
   uint64 scene_id = 1;
   MessageContent message_content = 2;
 }
 
-// Server-wide broadcast: Gate sends to ALL connected sessions.
+// 全服广播:gate 推给本机所有已绑定玩家的会话,未登录的连接不收游戏广播。
 // Caller sends one message per Gate node.
 message BroadcastToAllEvent {
   option (OptionKafkaIngress) = true;
   MessageContent message_content = 1;
+}
+
+// 观战中继 / 广播帧的种类(battle-spectate-tiered-fanout.md §15.3–§15.5)。
+enum eSpectateFrameKind {
+  SPECTATE_FRAME_NONE = 0;
+  SPECTATE_FRAME_STATE = 1;  // 关键帧(161 SpectateState):挂接 / 升档时补发,gate 只用它更新缓存与给新订阅者发首帧
+  SPECTATE_FRAME_TURN = 2;   // 每回合结算(158 SpectateTurnResult)
+  SPECTATE_FRAME_END = 3;    // 终局(166 SpectateEnd):gate 扇出后结束该场的全部订阅
+}
+
+// battle → gate 的观战帧。gate 只做转发与本机扇出,不改帧内容(给新订阅者合成首帧 161 时除外)。
+// 观战帧 topic 的 Kafka 消息体**就是本消息**(不套 GateCommand 信封,不进 gate-cmd 路由),所以不标
+// OptionKafkaIngress:gate 用 RegisterKafkaCommandHandler<SpectateFrameEvent> 的同一套按分区 assign 与
+// target_gate_id / target_instance_id 反射过滤(node_kafka_command_filter.h)直接消费,不生成 gate-cmd handler。
+// - L1 中继:发往 gate-spectate_g<N>,分区 = 目标 gate node_id % 命令 topic 分区数;target_gate_id 与
+//   target_instance_id 必填(AGENTS §7.2);同一场到同一台 gate 落在同一分区,单生产者有序。
+// - L2 广播:发往 spectate-bcast_g<N>,分区 = battle_id % 16;两个目标字段留空(广播);gate 以 battle_instance_id 防僵尸。
+//   升档之后 TURN 与 END 都只走广播:同分区保序,END 不会越过最后一回合的 TURN。
+// gate 先比 battle_instance_id,再按两条水位去重(客户端去重同口径):
+// - 158(TURN)只与 158 比较:只收 round_index 大于已收 TURN 的帧。
+// - 161(STATE)不推进这条水位:STATE(r) 是第 r 回合结算前的快照,紧接着的 TURN(r) 必须照常处理,否则每次挂接 / 升档少播一回合。
+// - TURN(r) 带的 state 是结算后的状态,回合是 r + 1(终局回合停在 r),所以 161 的 state.round_index 不能拿来与 158 的 round_index 比较。
+// 中继与广播重叠或缺一帧都能自愈:每帧都带全量状态。
+message SpectateFrameEvent {
+  uint64 battle_id = 1;
+  string battle_instance_id = 2;   // 产出帧的 battle 实例 UUID;与订阅凭证不符的帧一律丢弃
+  uint32 round_index = 3;          // STATE 取快照回合;TURN 取刚结算的回合;END 取最后一回合
+  eSpectateFrameKind kind = 4;
+  bytes client_frame = 5;          // 已编码的客户端 MessageContent 序列化字节(message_id 为 161 / 158 / 166,
+                                   //   serialized_message 为对应 S2C 消息);gate 只加自己的帧头后原样转发
+  uint64 deadline_ms = 6;          // 战斗最长期限(Unix 毫秒),gate 过期 + 宽限仍无 END 即本地收尾
+  uint32 target_gate_id = 7;       // L1 必填(目标 gate 的 node_id);L2 为 0
+  string target_instance_id = 8;   // L1 必填(目标 gate 实例 UUID);L2 为空
 }
 
 // 已删除:BindBattleEvent / UnbindBattleEvent(gate 两种模式都不再中继战斗,

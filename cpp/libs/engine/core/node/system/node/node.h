@@ -201,7 +201,7 @@ public:
     // 本节点的 etcd 身份(node_id 租约)已经失效时调用。
     //
     // 关键约束:调用点**不得**紧接着 LOG_FATAL / abort。玩家存盘是异步的
-    // (Redis 命令 + Kafka DBTask 都在发送缓冲里),abort 会把它们全部丢掉。
+    // (提交请求还在发往 go/db 的路上),abort 会把它们全部丢掉。
     // 这里的顺序是:fence 发号 -> 跑业务收尾 hook -> 有界等待收尾完成 -> 正常退出。
     virtual void OnNodeIdConflictShutdown(NodeIdConflictReason reason);
 

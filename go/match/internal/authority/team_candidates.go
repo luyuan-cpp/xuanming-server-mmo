@@ -142,7 +142,8 @@ func (s *Store) TeamLaunchTickets(ctx context.Context, launch *teampb.TeamLaunch
 	if err != nil {
 		return nil, err
 	}
-	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: !s.Config.RequireTiDB, Isolation: sql.LevelRepeatableRead})
+	// 不设 ReadOnly:写者资格门要在同一事务里锁 writer_slot,MySQL 的 READ ONLY 事务里 FOR UPDATE / UPDATE 都是 1792。
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}

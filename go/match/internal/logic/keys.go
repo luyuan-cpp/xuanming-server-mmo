@@ -20,8 +20,6 @@ import (
 //	                                      PVE 人数档(pve-team-size-matching.md §3):同一副本按目标人数 N
 //	                                      各有一套 queue / rank / lock,人数段在 hash tag 之后,仍与上面同 slot
 //	match:ticket:{player_id}              hash  排队票据(状态机:queued/matched/ready),按玩家分布
-//	match:rating:{player_id}              hash  玩家评分(rating/games/updated_at_ms,无 TTL),按玩家分布
-//	match:rating:applied:{battle_id}      string 对局结果已入账标记(TTL 7d,SETNX 幂等),按对局分布
 //	challenge:{id}                        hash  切磋记录(TTL 60s)
 //	challenge:target:{player_id}          锁    同一目标同时只挂一个待应答挑战
 //	spectate:*                            观战索引与互斥标记(§10.4),key 组装见 spectate.go
@@ -31,11 +29,7 @@ import (
 // "活跃队列 ⊆ 注册集"与"list 成员集 == zset 成员集"两条不变量不会被打破。
 // 队列 QPS 极低,单 slot 不是瓶颈(§6)。
 //
-// 评分 key 按玩家分布、不带 {mq}(JoinQueue 读评分与入队 Lua 不同 slot,所以评分
-// 在 Go 侧读出后作为 ARGV 传进 Lua)。**无 TTL 的前提是 MatchRedis 独立部署**:
-// MatchRedis 缺省回落到共享库时,共享库若被配成 allkeys-* 淘汰型,评分可能被淘汰回落到
-// 默认 1500;即使是 noeviction(2026-10-12 起本地 compose 也改为 noeviction,K8s 一直是),
-// 无 TTL 的评分也在与契约 key 争内存 —— 生产必须配独立 MatchRedis(设计文档 §4.2 / §11)。
+// 评分不在 Redis(全球权威库的 match_rating):JoinQueue 读出评分后作为 ARGV 传进入队 Lua。
 //
 // ---- SharedRedis:既有共享库,match 原有代码只读 ----
 //
@@ -140,19 +134,6 @@ func rankKeyForQueue(queueKey string) (string, error) {
 	parts := strings.Split(queueKey, ":")
 	parts[len(parts)-3] = "rank"
 	return strings.Join(parts, ":"), nil
-}
-
-// matchRatingKey 玩家评分 hash(§11):字段 rating / games / updated_at_ms / recent_battles,以及排行榜用的代际 rating_gen
-// (首次写入时 HSETNX,docs/design/leaderboard-system.md §2.4),
-// 无 TTL,按玩家分布(不带 {mq})。缺失即默认 defaultRating。
-func matchRatingKey(playerId uint64) string {
-	return fmt.Sprintf("match:rating:%d", playerId)
-}
-
-// matchRatingAppliedKey 对局结果入账标记(§11):消费 match-results 时先 SETNX
-// 它(TTL 7d),已存在即重复投递,跳过 —— Kafka at-least-once 下同一局不会算两次。
-func matchRatingAppliedKey(battleId uint64) string {
-	return fmt.Sprintf("match:rating:applied:%d", battleId)
 }
 
 // parseQueueKey 从队列 key 尾部解析 (mode, config):只认最后两段,前缀

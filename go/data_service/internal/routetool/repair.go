@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strings"
 	"time"
 
 	"data_service/internal/store"
@@ -22,15 +21,14 @@ import (
 // 恢复流程是 freeze → reconcile-from-cache → audit -frozen-recovery → unfreeze,本文件只管第二步。
 //
 //  1. ReadRouteMeta:writable == 1 → 退出码 2,提示先 freeze(库内每批事务还会用 R18x 加锁复核一次);
-//  2. SCAN merge:in_progress:*,有一把就退出码 3,一行都不写(冻结窗口内本不该有合服);
+//  2. (已删:SCAN 合服围栏。别名合服不再有围栏,其余步骤编号不变)
 //  3. 强读正式正常冻结收据与当前 epoch / run；每批提交在同一 meta 行锁下复核；
 //  4. 三遍 SCAN,**无状态去重**(内存只占一页,不像 import 那样保留 O(N) 的已见集合):
 //     A 遍 player:zone:*;B 遍 player:placement:*,MGET 出的 zone 非空就跳过(A 遍处理过);
 //     C 遍 player:maprev:*,zone 或落点非空就跳过,剩下的只有 maprev → MALFORMED。
 //     每页先按 player_id 去重(SCAN 同一页也可能回重复键)、升序,再按 Batch 分块 MGET 三族键 → 规范形式校验 →
 //     RepairRoutesFromCache(逐行判定见 store.decideRepair);
-//  5. merge:merged_into:* → RepairMergedIntoFromCache(只增不删);
-//  6. 结尾再查一次围栏,命中同样退出码 3(已写的保留,统计行照出)。
+//  5. merge:merged_into:* → RepairMergedIntoFromCache(只增不删)。
 //
 // 无状态去重成立的前提是**冻结期间没有人写 mapping Redis**:W1 被 writable=0 拦下(拦在发布之前)、合服被冻结窗口禁止、
 // 第 1b-2 批的 leader 冻结时停止推送。有人违反时,B 遍可能因为「A、B 两遍之间新写了 zone」而跳过一名玩家,那名玩家漏修,
@@ -132,11 +130,9 @@ func (r RepairReport) SummaryLine() string {
 		r.MergedIntoConflicts, r.MergedIntoMalformed)
 }
 
-// RepairExitCode 把一次 reconcile-from-cache 的结果映射成退出码:围栏 3,出错 2(含没冻结),需要人工处理 1,否则 0。
+// RepairExitCode 把一次 reconcile-from-cache 的结果映射成退出码:出错 2(含没冻结),需要人工处理 1,否则 0。
 func RepairExitCode(rep RepairReport, err error) int {
 	switch {
-	case errors.Is(err, ErrMergeFenceActive):
-		return ExitFenced
 	case err != nil:
 		return ExitFailed
 	case rep.NeedsAttention():
@@ -155,8 +151,8 @@ type repairer struct {
 	detail *detailReporter
 }
 
-// ReconcileFromCache 跑一次 reconcile-from-cache(步骤见文件头)。返回 ErrMergeFenceActive 时退出码为 3;
-// 其它 error(没冻结、Redis / 库出错、超时)退出码为 2。只有跑到结尾才往 Stdout 写统计行(结尾命中围栏时也写)。
+// ReconcileFromCache 跑一次 reconcile-from-cache(步骤见文件头)。
+// error(没冻结、Redis / 库出错、超时)退出码为 2。只有跑到结尾才往 Stdout 写统计行。
 func ReconcileFromCache(ctx context.Context, rd mappingReader, db repairDB, opts RepairOptions) (RepairReport, error) {
 	if opts.DryRun {
 		return reconcileFromCache(ctx, rd, db, opts)
@@ -176,7 +172,7 @@ func ReconcileFromCache(ctx context.Context, rd mappingReader, db repairDB, opts
 		done()
 	}()
 	rep, err := reconcileFromCache(ctx, rd, db, opts)
-	if err != nil && !errors.Is(err, ErrMergeFenceActive) {
+	if err != nil {
 		opts.Maintenance.Hold()
 	}
 	returned = true
@@ -220,9 +216,6 @@ func reconcileFromCache(ctx context.Context, rd mappingReader, db repairDB, opts
 	if !meta.Frozen() {
 		return rp.report, fmt.Errorf("%w: run `-route-tool freeze` first, then this", store.ErrRouteNotFrozen)
 	}
-	if err := rp.checkFences(ctx, "before the repair; nothing was written"); err != nil {
-		return rp.report, err
-	}
 	// 正式冻结收据已证明排空；等待固定秒数不能替代证明，也不参与放行。
 
 	for _, prefix := range []string{homeZoneKeyPrefix, placement.KeyPrefix, placement.MapRevKeyPrefix} {
@@ -236,27 +229,9 @@ func reconcileFromCache(ctx context.Context, rd mappingReader, db repairDB, opts
 		return rp.report, err
 	}
 
-	fenceErr := rp.checkFences(ctx, "after the repair; rows already written are kept (the repair is idempotent, rerun it after the merge window)")
 	rp.detail.finish()
-	if fenceErr != nil && !errors.Is(fenceErr, ErrMergeFenceActive) {
-		// 复查本身失败:证明不了窗口内没有合服,按失败处理,不出统计行。
-		return rp.report, fenceErr
-	}
 	fmt.Fprintln(opts.Stdout, rp.report.SummaryLine())
-	return rp.report, fenceErr
-}
-
-// checkFences SCAN 一次围栏;有生效的就打 ABORT 并返回 ErrMergeFenceActive。
-func (rp *repairer) checkFences(ctx context.Context, when string) error {
-	fences, err := listActiveFences(ctx, rp.rd, int64(rp.opts.Batch))
-	if err != nil {
-		return err
-	}
-	if len(fences) == 0 {
-		return nil
-	}
-	fmt.Fprintf(rp.opts.Stderr, "ABORT: %d active merge fence(s) %s: %s\n", len(fences), when, strings.Join(fences, " "))
-	return fmt.Errorf("%w (%s): %s", ErrMergeFenceActive, when, strings.Join(fences, ", "))
+	return rp.report, nil
 }
 
 // repairPass 是 A / B / C 三遍之一(prefix 决定跳过规则,见文件头第 4 步)。

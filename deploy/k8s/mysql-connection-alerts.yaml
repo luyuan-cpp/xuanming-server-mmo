@@ -25,7 +25,7 @@
 #
 # 池指标 mmorpg_sql_pool_*{sql_client,pool} 由 go/shared/sqlpoolstats 导出,按池类别聚合,不含库名:
 #   sql_client="db"            pool = home | extra_zone | extra_non_zone(go/db/internal/metrics 的 Pool* 常量)
-#   sql_client="data_service"  pool = snapshot | transaction_log | id_segment | player_name,
+#   sql_client="data_service"  pool = snapshot | transaction_log | player_name,
 #                              以及只在 RouteStore.Mode=db_first 时才声明的 player_route(go/data_service/internal/metrics 的 Pool* 常量)
 # friend / trade / Java gateway 没有导出池指标,不在 sql-pool.client 组的覆盖范围内;它们占的连接只能从 MySQL 服务端那一组看到。
 #
@@ -59,17 +59,13 @@ spec:
       rules:
         # 已经有连接因为 max_connections 被 MySQL 拒绝(客户端看到 1040 Too many connections):上限被击穿,不是「快满了」。
         # 后果不只是变慢。下面这条链是读代码推断的,未实测:
-        #   go/db 不特判 1040,取连接失败按普通落库失败处理 → 任务进重试队列,每轮重试耗一次预算
-        #   (retryMaxTimes = 3,重试循环 1 秒一轮)→ 上限持续被顶住时几秒内耗尽 → 进 kafka:dead:queue:{topic},
-        #   那个队列全仓没有消费者 → 这笔存盘不会自动落库。
-        #   代码位置:go/db/internal/kafka/key_ordered_consumer.go 的 deferFailedTask / consumeOneRetryTask;
-        #   不耗预算的豁免只有 placement_route.go retryBudgetExempt 列的几种。与连接有关的只有一种:按需**打开**额外落点库
-        #   失败(包成 ErrStoreUnavailable,写延后);已经打开的池(含本 zone 主池)取连接时遇到 1040 不在豁免内。
-        #   改成「拿不到连接时延后、不耗预算」并给死信加消费者是 L-04(docs/design/tidb-phase1-and-launch-readiness.md),
-        #   写本文件时 go/db 里还没有;它落地后这段注释与下面的 description 要同步改。
-        # for: 0m —— 一次被拒就可能已有存盘在耗预算,不等。
+        #   go/db 取连接失败或 SQL 出错 → SavePlayer 回 gRPC Unavailable(结果未知,db_player_store_requests_total{result="unknown_outcome"})
+        #   → scene 用同样的内容、同一个序号退避重试(0.5s 起,封顶 5s),没有次数上限,进度这期间只在 scene 内存里;
+        #   LoadAndClaim 同样回 Unavailable,scene 最多重试 30 秒,之后进场失败。没有重试队列,也没有死信。
+        #   代码位置:go/db/internal/playerstore/server.go;cpp/libs/services/scene/player/system/player_store_client.cpp 的 ScheduleRetry / ScheduleClaimRetry。
+        # for: 0m —— 一次被拒就可能已有存盘在重试、已有玩家进不了场,不等。
         # Connection_errors_max_connections 是 SHOW GLOBAL STATUS 的固定行,exporter 起来就应以 0 值导出,increase 抓得到第一次
-        # (凭记忆,部署 exporter 时一并核对;若它其实是「首次发生才出现」的序列,照 owner-epoch-alerts.yaml 的 legacy_zero 改用绝对值)。
+        # (凭记忆,部署 exporter 时一并核对;若它其实是「首次发生才出现」的序列,改用绝对值)。
         # 阈值(> 0、5 分钟窗口)待压测确认。
         - alert: MysqlConnectionsRefused
           expr: |
@@ -78,18 +74,19 @@ spec:
           labels:
             severity: critical
           annotations:
-            summary: "MySQL 因 max_connections 拒绝了连接(1040),存盘可能正在进死信"
+            summary: "MySQL 因 max_connections 拒绝了连接(1040),玩家存盘可能卡在重试、进场可能失败"
             description: >-
               过去 5 分钟约 {{ $value | printf "%.0f" }} 次连接因达到 max_connections 被 MySQL 拒绝(客户端报 1040)。
-              这不只是变慢:go/db 把 1040 当普通落库失败,任务进重试队列、每轮耗一次重试预算(上限 3 次,1 秒一轮),
-              耗尽后进 `kafka:dead:queue:<db_task topic>`;死信没有消费者,这些存盘不会自动落库(读代码推断,未实测)。
+              这不只是变慢:go/db 把 1040 当结果未知回给 scene,存盘由 scene 同内容退避重试,进度这期间只在 scene 内存里;
+              认领重试 30 秒后进场失败(读代码推断,未实测)。
               处置:
               ① 止血 —— 在 MySQL 上按 user / host 统计 `SHOW PROCESSLIST`,看是谁占着连接;停掉正在跑的迁移 / 备份 / 人工会话,
               暂停进行中的滚动发布。上限确实不够时按 deploy/k8s/manifests/infra/mysql.yaml「连接上限」注释调
               (`SET GLOBAL max_connections` 可在线改运行值,先确认 MySQL Pod 的内存 limits 跟得上,并把 mysql.yaml 同步成新值;
               不要用 SET PERSIST,原因见那段注释)。
-              ② 查有没有丢 —— 各 zone 的 go/db 所用 Redis 上 `LLEN kafka:dead:queue:db_task_zone_<zone>`(topic 换代后带 `_g<N>` 后缀)。
-              非 0 即已有任务进了死信:它不会自己变空,保留列表内容(不要清),上报负责人处理。
+              ② 查影响 —— 各 zone go/db 的 db_player_store_requests_total{result="unknown_outcome"} 在涨就是有存盘没拿到结论;
+              scene 日志 metric=player_store_save_retry 给出玩家与序号。上限恢复前不要重启 scene:
+              停机时没落定的玩家会丢掉最后一次提交之后的进度(日志 metric=player_store_shutdown_unsettled 列出这些玩家)。
               ③ 找根因 —— 对照部署日志的 `MySQL connection ledger` 一行与 tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger,
               看是 zone 数 / 额外落点库数超了规划档(DbExtraStorePoolsBeyondPlan),还是多个 zone 同时在滚动发布。
 
@@ -111,7 +108,7 @@ spec:
             summary: "MySQL 连接数逼近 max_connections(峰值占比 {{ $value | printf \"%.2f\" }})"
             description: >-
               {{ $labels.instance }} 过去 5 分钟的连接数峰值已占 max_connections 的 {{ $value | printf "%.2f" }}(1 = 满)。
-              再涨就是 1040,go/db 的存盘会耗尽重试进死信(见 MysqlConnectionsRefused)。
+              再涨就是 1040,玩家存盘会卡在 scene 的重试里、进场会失败(见 MysqlConnectionsRefused)。
               先看是不是正在滚动发布、迁移或备份(这些是临时的);不是的话对照部署日志的 `MySQL connection ledger` 一行,
               结合 SqlPoolSaturated / DbExtraStorePoolsBeyondPlan 判断是 zone 数、额外落点库数还是某个池涨了。
               调上限的做法与内存约束见 deploy/k8s/manifests/infra/mysql.yaml 的「连接上限」注释。
@@ -149,8 +146,8 @@ spec:
               每个池 × 副本数 × zone 数都压在同一台 MySQL 的 max_connections 上。
 
         # 池长期用满:in_use / max_open > 0.9 持续 15 分钟。只作趋势信号。
-        # go/db 的 home 池按设计就是限流点(go/db/etc/db.yaml 的 SubShardCount / MaxOpenConn 注释:worker 数多于连接数,
-        # 让池当限流器),高负载下常满属预期;真正要动手的信号是上一条 SqlPoolSlowAcquire。
+        # go/db 的 home 池实际就是限流点(存盘 RPC 的并发多于 MaxOpenConn 时在池上排队,超过方法预算 12s 就是结果未知、scene 重试),
+        # 高负载下常满属预期;真正要动手的信号是上一条 SqlPoolSlowAcquire。
         # 任一池不限(MaxOpenConn = 0)时 max_open 导出为 +Inf,商为 0;类别里没有池时是 0 / 0 = NaN:两种都不触发。
         # 这里按 (namespace, sql_client, pool) 对各副本求和后再比:一个副本满、另一个闲时会被摊平,
         # 要看单副本,去掉 sum 按 instance 查。
@@ -166,11 +163,11 @@ spec:
             summary: "{{ $labels.sql_client }} 的 {{ $labels.pool }} 连接池长期用满(占比 {{ $value | printf \"%.2f\" }})"
             description: >-
               {{ $labels.namespace }} 里 {{ $labels.sql_client }} 的 {{ $labels.pool }} 池在用连接占上限的 {{ $value | printf "%.2f" }}(1 = 满),已持续 15 分钟。
-              go/db 的 home 池按设计就是限流点,高负载下常满属预期;其它池长期用满、或同时出现 SqlPoolSlowAcquire 时才需要处理。
+              go/db 的 home 池实际就是限流点,高负载下常满属预期;其它池长期用满、或同时出现 SqlPoolSlowAcquire 时才需要处理。
               要调池先重算 MySQL 连接总账(tools/scripts/k8s_deploy.ps1 的 Get-MysqlConnectionLedger)。
 
         # 某个 go/db 实例打开的额外落点库数超过了总账规划档:max_connections 是按规划档算的,超出后可能已经不够。
-        #   extra_zone     —— 本 zone 库之外的 zone 家族库(zone_*_db):冷缓存访客读、合服 pin 后的源区库。
+        #   extra_zone     —— 本 zone 库之外的 zone 家族库(zone_*_db):落点在别的 zone 的玩家跨区进场、合服 pin 后的源区库。
         #                     每个库一个常驻池;最坏情形每个实例打开其余全部 zone 的库,名义预算随 zone 数平方增长。
         #   extra_non_zone —— 非 zone 落点库(player_store_*_db,Phase 2):规划档按「未开」计,
         #                     出现一个就说明 Phase 2 的库在没有重做规划的情况下被打开了。

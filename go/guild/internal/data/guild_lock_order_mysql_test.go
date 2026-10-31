@@ -3,7 +3,7 @@ package data
 // guild_lock_order_mysql_test.go —— B2 事务的并发锁序回归(真库;GUILD_TEST_MYSQL_DSN 未设即 Skip)。
 //
 // ⚠ 全体 Skip 不代表通过:验收时 DSN 必须真的设上,交付里写明"看到的是 PASS 而不是 SKIP"。
-// 选中本文件:`go test ./internal/data -run 'TestGuildLockOrder|TestGuildInsertGuard' -count=3`。
+// 选中本文件:`go test ./internal/data -run 'TestGuildLockOrder' -count=3`。
 //
 // # 覆盖的环(2026-09-21 死锁修复契约 §2.1 第 9 条;friend 会话全仓审计 #2 #6)
 //
@@ -25,28 +25,23 @@ package data
 //   - CreateGuild(p) ‖ Review(G2,p,拒绝) ‖ Cancel(G3,p)(审计 #2 (c));Leave / Kick 删 p 名下申请 ‖ 别帮拒绝 / 撤回(#2 主形态的删除方)。
 //   - 唯一二级索引的两个查重插入者(G-OUT1):同名建帮、uk_guild 上相邻的两个名字、uk_guild_member 上相邻的两个刚离帮玩家
 //     (建帮 ‖ 审批通过)。三组都用"占锁事务先删目标行不提交 → 放两路插入者 → 松开"把双方的查重对齐到同一时刻;
-//     修复前双方的 S next-key 互挡插入意向(1213),修复后两路在全局插入守卫(guild_player_state 的 player_id=0 哨兵行)上
-//     串行,钩子零记录、业务结局确定(不再有"互斥排队超时"这一类 ErrWriteConflict)。
-//   - 建状态行时首个插入者回滚(G-C3 同形):两个补建者在守卫下串行,钩子零记录。
+//     双方的 S next-key 互挡插入意向(1213)。2026-10-30 撤掉全局插入守卫之后这个环在 MySQL 档上重新可见,由 retryOnDeadlock 吸收,
+//     这三组不再要求钩子为空,改为只看业务结局确定;TiDB 没有这个环(guild_manage_repo.go 文件头 (d))。
+//   - 建状态行时首个插入者回滚(G-C3 同形):同上,重试吸收,两个补建者都成功、恰好一行。
 //
-// 2026-09-21 第三轮(Redis 互斥换成库内哨兵行):
-//   - 哨兵缺失时建帮 / 审批通过 / 首次建状态行 fail-closed,拒绝分支不受影响;EnsureGlobalInsertGuard 幂等、并发首建安全、
-//     不在被锁住的哨兵行上排队;
-//   - 确定性钉住"谁取守卫":占锁事务持有哨兵行时,建帮与审批通过必须等满锁等待上限,拒绝、申请、退帮不等;
-//   - 申请后顺带清理本帮过期申请每次至多 purgeExpiredApplicationsPerApply 行。
-//
-// 2026-09-21 第四轮(死锁复核 C1 与完整性复核 G2 / G4):
-//   - 启动期建哨兵行时首插者回滚(C1):建哨兵者在会话级命名锁下串行,钩子零记录;
+// 2026-09-21 第四轮(完整性复核 G2 / G4):
 //   - Disband(G) ‖ Review(G2,p,通过),p 刚离帮、uk_guild_member 上 p 的后继项是 G 的成员 q(G2):审批方查重对 uk(q) 加的
 //     S 与解散删 q 的成员行对撞。修复("删成员行前移到删申请之前")之前是环,用读视图挡住 purge、确定性地摆出这个交错;
-//   - 踢一个不是本帮成员的 id / 批准一条不存在的申请(G4):不建状态行、不取全局插入守卫。
+//   - 踢一个不是本帮成员的 id / 批准一条不存在的申请(G4):不建状态行。
+//
+// 2026-10-30:占锁事务卡住一名玩家的建帮时,别人的建帮、审批通过、首次建状态行不受影响(不再全服排队)。
 //
 // 另有两条确定性用例:删成员行的三个事务确实先拿玩家守卫(P4);事务外建状态行不在已存在的行上取锁。
 //
-// # 判据(契约 P6,选定一种):txDeadlockObserved 钩子的记录为空
+// # 判据(契约 P6,选定一种):txDeadlockObserved 钩子的记录为空(上面写明由重试吸收的几组除外)
 //
-// inTx(CancelApplication、申请后的惰性清理、建状态行的守卫短事务都走它)经 retryOnDeadlock,1213 会被吸收掉重跑,
-// 调用方只看得见最终成功;启动期建哨兵行的 retryOnDeadlock 也走同一钩子(seq 行自 C2 起在 T-D / T-S 的 inTx 里建)。
+// inTx(CancelApplication、申请后的惰性清理、建状态行的短事务都走它)经 retryOnDeadlock,1213 会被吸收掉重跑,
+// 调用方只看得见最终成功(seq 行自 C2 起在 T-D / T-S 的 inTx 里建)。
 // 看不见的:TiDB 在语句级内部重试掉的死锁(不回到应用层),那一类要看 INFORMATION_SCHEMA.CLUSTER_DEADLOCKS
 // (economy_repo_test.go 的 econDeadlockWatch 已接,本文件的用例是 MySQL 机制的回归)。
 // 本文件把钩子换成记录器,断言整组轮次结束后**一次都没有**。它只数本进程里帮会写路径真正撞上的死锁,
@@ -267,7 +262,7 @@ func TestGuildLockOrder_ApplyVersusCancelDisbandAndExpiredReview(t *testing.T) {
 			},
 			func() error { return repo.CancelApplication(ctx, g2, applicant, now) },
 			func() error {
-				_, err := repo.DisbandGuild(ctx, g2, l2, now, nil)
+				_, err := repo.DisbandGuild(ctx, g2, l2, now)
 				return err
 			},
 			func() error {
@@ -398,16 +393,14 @@ func TestGuildLockOrder_LeaveVersusApproveElsewhere(t *testing.T) {
 // 编排:占锁事务先持有 state(p1)(模拟 p1 正被别帮审批通过)→ 放 T1 = CreateGuild(名, p1)(p1 已入帮)并等它卡住 →
 // 放 T2 / T3 = CreateGuild(同名, p2 / p3)→ 短暂等待 → 松开占锁事务。
 // 修复前 T1 已插了 guild(uk 'x' 项由它隐式持有),T2 / T3 在 'x' 上排队等 S;T1 插成员撞 1062 回滚后两人的 S 同时授予,
-// 再插入时互等 → 1213。修复后 T1 卡在 state(p1) 时还没碰 uk_guild;且三者都是查重插入者,在全局插入守卫上串行(G-OUT1):
-// T1 持 S(0) 卡在 state(p1) 上,T2 / T3 在 S(0) 上排队(除此之外不持任何行锁);T1 松开后撞成员 1062 回滚、放掉 S(0),
-// 先拿到 S(0) 的一方建帮成功,另一方撞 uk_guild 回 ErrGuildNameTaken。
-// 判据是确定的:没有 1205 —— 占锁事务至多持有 ~400ms(等锁等待至多 300ms + lockOrderSettle),T1 在 state(p1) 上、
-// T2 / T3 在 S(0) 上的单次锁等待都短于 innodb_lock_wait_timeout(1s);真出现 ErrWriteConflict 说明编排超时或有人
-// 持守卫过久,要看日志查原因,不能放过。
+// 再插入时互等 → 1213。修复后 T1 卡在 state(p1) 时还没碰 uk_guild,T2 / T3 不等它:先插 guild 的一方建帮成功,另一方排在 uk 项上,
+// 对方提交后撞 uk_guild 回 ErrGuildNameTaken;T1 松开后撞成员 1062 回滚。
+// 上一轮留下的 uk_guild_member 删除标记项可能让 T2 / T3 的成员插入在 MySQL 上互挡,由重试吸收,所以不看钩子,只看业务结局。
+// 判据是确定的:没有 1205 —— 占锁事务至多持有 ~400ms(等锁等待至多 300ms + lockOrderSettle),单次锁等待都短于
+// innodb_lock_wait_timeout(1s);真出现 ErrWriteConflict 说明编排超时,要看日志查原因,不能放过。
 func TestGuildLockOrder_SameNameCreateThreeWay(t *testing.T) {
 	seedCtx, db, repo := openGuildIntegrationRepo(t)
 	ctx := lockOrderContext(t)
-	deadlocks := watchGuildTxDeadlocks(t)
 	const (
 		home   uint64 = 7631 // p1 已经所在的帮
 		leader uint64 = 8631
@@ -464,7 +457,6 @@ func TestGuildLockOrder_SameNameCreateThreeWay(t *testing.T) {
 		mustExec(t, ctx, db, "DELETE FROM guild_member WHERE guild_id IN (?, ?)", gB, gC)
 		mustExec(t, ctx, db, "DELETE FROM guild WHERE guild_id IN (?, ?)", gB, gC)
 	}
-	deadlocks.assertNone(t, "同名 CreateGuild 三方(首个因已入帮回滚)")
 }
 
 // TestGuildLockOrder_DisbandVersusKickAndLeave:解散与踢人 / 退帮同帮对撞。
@@ -507,7 +499,7 @@ func TestGuildLockOrder_DisbandVersusKickAndLeave(t *testing.T) {
 
 		errs := runConcurrently(
 			func() error {
-				_, err := repo.DisbandGuild(ctx, g, leader, now, nil)
+				_, err := repo.DisbandGuild(ctx, g, leader, now)
 				return err
 			},
 			func() error {
@@ -570,7 +562,7 @@ func TestGuildLockOrder_MemberRemovalHoldsPlayerGuard(t *testing.T) {
 	}{
 		{"LeaveGuild", func() error { _, err := repo.LeaveGuild(ctx, g, p, testNowMs); return err }},
 		{"KickMember", func() error { _, err := repo.KickMember(ctx, g, leader, p, testNowMs); return err }},
-		{"DisbandGuild", func() error { _, err := repo.DisbandGuild(ctx, g, leader, testNowMs, nil); return err }},
+		{"DisbandGuild", func() error { _, err := repo.DisbandGuild(ctx, g, leader, testNowMs); return err }},
 	}
 	for _, call := range calls {
 		start := time.Now()
@@ -817,11 +809,9 @@ func lockOrderSeedNamedGuild(t *testing.T, ctx context.Context, db *sql.DB, guil
 // lockOrderStageUniqueInserters 把两个查重插入者的重复检查对齐到同一时刻(G-OUT1 三组用例共用):
 // 占锁事务先执行 holds(删掉 uk 上的目标行,不提交)→ 同时放行两路插入者 → 等到至少一方在库里锁等待(或等满上限)→
 // 再给另一方 lockOrderSettle 排进来 → 提交占锁事务。
-// 修复前两路都排在占锁事务留下的删除标记项上,提交瞬间同时拿到 S next-key,随即互挡插入意向;
-// 修复后先拿到全局插入守卫 S(0) 的一路排在删除标记项上,另一路排在 S(0) 上(建帮除此之外不持任何锁;审批通过只多持
-// 自己那一帮的 guild 行),第一路提交放掉 S(0) 与它的 S next-key 之后第二路才查重。
-// 为什么不会出 1205:占锁事务至多持有 ~400ms(至多 300ms 的等待 + lockOrderSettle),第一路在删除标记项上、第二路在 S(0)
-// 上的单次锁等待都不超过"占锁时长 + 第一路剩余的几条主键语句",远小于 innodb_lock_wait_timeout(1s)。
+// 两路都排在占锁事务留下的删除标记项上,提交瞬间同时拿到 S next-key,随即互挡插入意向,InnoDB 牺牲一路,inTx 重跑。
+// 为什么不会出 1205:占锁事务至多持有 ~400ms(至多 300ms 的等待 + lockOrderSettle),
+// 单次锁等待都不超过"占锁时长 + 对方剩余的几条主键语句",远小于 innodb_lock_wait_timeout(1s)。
 func lockOrderStageUniqueInserters(t *testing.T, ctx context.Context, db *sql.DB, holds []lockOrderStmt, first, second func() error) [2]error {
 	t.Helper()
 	blocker, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
@@ -844,14 +834,13 @@ func lockOrderStageUniqueInserters(t *testing.T, ctx context.Context, db *sql.DB
 //
 // 帮 'x'(gOld)刚被删、uk_guild 上的删除标记项还在;两人同时以 'x' 建帮,新帮号一个比 gOld 小、一个比 gOld 大
 // (新项分别落在删除标记项前后两段间隙 —— 两种位置都会被对方的 S next-key 挡住)。
-// 修复前两方的取锁序列相同:state(p) → 插 member(new,p) → 删 p 名下申请 → 插 guild:uk_guild 查重对 dm('x',gOld)
+// 两方的取锁序列相同:state(p) → 插 member(new,p) → 删 p 名下申请 → 插 guild:uk_guild 查重对 dm('x',gOld)
 // 及其后继加 S next-key → 插入意向被对方的 S next-key 挡住,1213。两方不共享任何玩家,状态行守卫管不到。
-// 修复后:两方事务的第一把锁都是全局插入守卫 S(0),第二方在第一方提交之前查不了重;第一方建成,第二方撞 uk 回
-// ErrGuildNameTaken。判据:钩子严格为空,且恰好一方成功、另一方只能是撞名(没有忙错误的容忍分支)。
+// InnoDB 牺牲一方,inTx 重跑:另一方已建成,被牺牲的一方重跑时撞 uk 回 ErrGuildNameTaken。
+// 判据:恰好一方成功、另一方只能是撞名(没有忙错误的容忍分支)。
 func TestGuildLockOrder_UniqueInsertersSameNameAfterDisband(t *testing.T) {
 	seedCtx, db, repo := openGuildIntegrationRepo(t)
 	ctx := lockOrderContext(t)
-	deadlocks := watchGuildTxDeadlocks(t)
 	const (
 		p1   uint64 = 8701
 		p2   uint64 = 8702
@@ -889,20 +878,18 @@ func TestGuildLockOrder_UniqueInsertersSameNameAfterDisband(t *testing.T) {
 		mustExec(t, ctx, db, "DELETE FROM guild_member WHERE player_id IN (?, ?)", p1, p2)
 		mustExec(t, ctx, db, "DELETE FROM guild WHERE guild_id IN (?, ?)", gOld-1, gOld+1)
 	}
-	deadlocks.assertNone(t, "同名建帮 ×2(名字刚被解散的帮用过)")
 }
 
 // TestGuildLockOrder_UniqueInsertersAdjacentNamesAfterDisband:G-OUT1 不同名、uk_guild 上相邻的形态。
 //
 // 'a' < 'b' 两帮(gA、gB)都刚被删,删除标记项在 uk_guild 上相邻、中间没有别的项。一人按新号 gA+1(> gA)建 'a',
 // 另一人按新号 gB-1(< gB)建 'b':两个新项都落在 dm('a',gA) 与 dm('b',gB) 之间。
-// 修复前:建 'a' 查重对 dm('a') 及后继 dm('b') 加 S next-key;建 'b' 查重对 dm('b') 及其后继加 S next-key;
+// 建 'a' 查重对 dm('a') 及后继 dm('b') 加 S next-key;建 'b' 查重对 dm('b') 及其后继加 S next-key;
 // 两方的插入意向都挂在 dm('b') 前的间隙上,互被对方挡住 —— 1213。名字不同,按名字分片的互斥也挡不住它。
-// 修复后两方在全局插入守卫 S(0) 上串行,业务结局确定:两帮都建成。判据:钩子严格为空、两路都返回 nil。
+// InnoDB 牺牲一方,inTx 重跑,业务结局确定:两帮都建成。判据:两路都返回 nil。
 func TestGuildLockOrder_UniqueInsertersAdjacentNamesAfterDisband(t *testing.T) {
 	seedCtx, db, repo := openGuildIntegrationRepo(t)
 	ctx := lockOrderContext(t)
-	deadlocks := watchGuildTxDeadlocks(t)
 	const (
 		p1   uint64 = 8721
 		p2   uint64 = 8722
@@ -939,23 +926,19 @@ func TestGuildLockOrder_UniqueInsertersAdjacentNamesAfterDisband(t *testing.T) {
 		mustExec(t, ctx, db, "DELETE FROM guild_member WHERE player_id IN (?, ?)", p1, p2)
 		mustExec(t, ctx, db, "DELETE FROM guild WHERE guild_id IN (?, ?)", gA+1, gB-1)
 	}
-	deadlocks.assertNone(t, "建帮 'a' ‖ 建帮 'b'(两名在 uk_guild 上相邻、都刚被解散)")
 }
 
 // TestGuildLockOrder_UniqueInsertersAdjacentMembers:G-OUT1 成员形态(建帮 ‖ 审批通过)。
 //
 // p1 < p2 在 uk_guild_member 上相邻、同属 gOld;占锁事务删掉两人的成员行不提交。随后 p1 建帮(新帮号 gHi > gOld)、
 // gLo(< gOld)批准 p2 —— 两人的新 uk 项 (p1,gHi)、(p2,gLo) 都落在 dm(p1,gOld) 与 dm(p2,gOld) 之间。
-// 修复前:建帮 state(p1) → 插 member(gHi,p1):查重对 dm(p1) 及后继 dm(p2) 加 S next-key;审批 guild(gLo) → state(p2) →
+// 建帮 state(p1) → 插 member(gHi,p1):查重对 dm(p1) 及后继 dm(p2) 加 S next-key;审批 guild(gLo) → state(p2) →
 // member(gLo,审批人) → app(gLo,p2) → 插 member(gLo,p2):查重对 dm(p2) 及其后继加 S next-key;两方的插入意向都挂在
 // dm(p2) 前的间隙上,互被对方挡住 —— 1213。两方不共享任何玩家或帮会,状态行守卫管不到。
-// 修复后两方在全局插入守卫 S(0) 上串行(建帮:S(0) → S(p1) → …;审批通过:guild(gLo) → S(0) → S(p2) → …;建帮不锁任何
-// 已有 guild 行,所以"审批方持 guild(gLo) 等 S(0)"不会反过来被建帮方等);业务结局确定:两人各自入帮。
-// 判据:钩子严格为空、两路都返回 nil。
+// InnoDB 牺牲一方,inTx 重跑,业务结局确定:两人各自入帮。判据:两路都返回 nil。
 func TestGuildLockOrder_UniqueInsertersAdjacentMembers(t *testing.T) {
 	seedCtx, db, repo := openGuildIntegrationRepo(t)
 	ctx := lockOrderContext(t)
-	deadlocks := watchGuildTxDeadlocks(t)
 	const (
 		p1   uint64 = 8750
 		p2   uint64 = 8751 // 与 p1 在 uk 上相邻:两人之间没有别的 player_id(各轮的帮主都取 86xx)
@@ -1004,23 +987,17 @@ func TestGuildLockOrder_UniqueInsertersAdjacentMembers(t *testing.T) {
 		mustExec(t, ctx, db, "DELETE FROM guild_application WHERE player_id=?", p2)
 		mustExec(t, ctx, db, "DELETE FROM guild WHERE guild_id=?", gHi)
 	}
-	deadlocks.assertNone(t, "建帮(p1) ‖ 审批通过(p2),两人在 uk_guild_member 上相邻、都刚离帮")
 }
 
 // TestGuildLockOrder_EnsureStateRowFirstInserterRollback:建状态行的 G-C3 同形。
 //
 // 首插者在事务里插了 state(p) 未提交;两个请求 B、C 同时补建同一行(前置普通读看不见未提交的行,都要建);首插者回滚。
-// 修复前(事务外逐条自动提交 INSERT IGNORE):B、C 都排在首插者的记录上等 S,回滚后两者的 S 锁在 RC 下被继承为后继记录上的
-// 间隙 S,插入意向互相挡住,InnoDB 牺牲其一(1213)。
-// 修复后:补建在全局插入守卫 S(0) 下的短事务里做。先拿到 S(0) 的一方(设为 B)排在首插者的记录上,C 排在 S(0) 上、碰不到
-// 那条记录;首插者回滚后继承下来的间隙锁只属于 B,不挡 B 自己的插入意向;B 插入、提交、放掉 S(0),C 在守卫下复读看见
-// B 已提交的行,跳过插入。
-// 这里的首插者刻意**不**取守卫(生产里的首插者也是守卫短事务,那样 B、C 连首插者的记录都碰不到),是比生产更难的交错。
-// 判据:钩子严格为空;首插者回滚后 B、C 都成功,表里恰好一行。
-// 不会 1205:首插者至多持有 500ms;B 在记录上、C 在 S(0) 上的单次锁等待都小于 1s。
+// B、C 都排在首插者的记录上等 S,回滚后两者的 S 锁在 RC 下被继承为后继记录上的间隙 S,插入意向互相挡住,InnoDB 牺牲其一(1213)。
+// 建行的短事务走 inTx,被牺牲的一方重跑,语句幂等。
+// 判据:首插者回滚后 B、C 都成功,表里恰好一行。
+// 不会 1205:首插者至多持有 500ms;B、C 的单次锁等待都小于 1s。
 func TestGuildLockOrder_EnsureStateRowFirstInserterRollback(t *testing.T) {
 	ctx, db, repo := openGuildIntegrationRepo(t)
-	deadlocks := watchGuildTxDeadlocks(t)
 	const player uint64 = 8674
 
 	first, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
@@ -1031,7 +1008,7 @@ func TestGuildLockOrder_EnsureStateRowFirstInserterRollback(t *testing.T) {
 
 	b := lockOrderGo(func() error { return repo.ensurePlayerStateRows(ctx, opApply, testNowMs, player) })
 	c := lockOrderGo(func() error { return repo.ensurePlayerStateRows(ctx, opApply, testNowMs, player) })
-	// 两个锁等待:一个补建者在首插者的记录上,另一个在 S(0) 上。锁等待上限是 1s:最多等到 500ms 就回滚首插者。
+	// 两个锁等待:两个补建者都在首插者的记录上。锁等待上限是 1s:最多等到 500ms 就回滚首插者。
 	lockOrderAwaitLockWaits(ctx, db, 2, 500*time.Millisecond)
 	require.NoError(t, first.Rollback())
 
@@ -1040,106 +1017,6 @@ func TestGuildLockOrder_EnsureStateRowFirstInserterRollback(t *testing.T) {
 	var n int
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_player_state WHERE player_id=?", player).Scan(&n))
 	assert.Equal(t, 1, n, "两个补建者合起来恰好建出一行")
-	deadlocks.assertNone(t, "建状态行:首插者回滚(补建者在全局插入守卫下串行)")
-}
-
-// ── 2026-09-21 第三轮:全局插入守卫(哨兵行)────────────────────────
-
-// insertGuardRow 读哨兵行:行数(0 或 1)与 updated_ms(行不在时为 0)。
-func insertGuardRow(t *testing.T, ctx context.Context, db *sql.DB) (count int, updatedMs uint64) {
-	t.Helper()
-	require.NoError(t, db.QueryRowContext(ctx,
-		"SELECT COUNT(*), COALESCE(MAX(updated_ms), 0) FROM guild_player_state WHERE player_id=?",
-		globalInsertGuardPlayerID).Scan(&count, &updatedMs))
-	return count, updatedMs
-}
-
-// lockOrderHoldInsertGuard 开一个占锁事务持有哨兵行 FOR UPDATE(模拟正在进行的建帮 / 审批通过)。
-// 调用方显式回滚;用例提前失败时由 Cleanup 兜底放锁(已回滚时是空操作)。
-func lockOrderHoldInsertGuard(t *testing.T, ctx context.Context, db *sql.DB) *sql.Tx {
-	t.Helper()
-	blocker, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = blocker.Rollback() })
-	var locked uint64
-	require.NoError(t, blocker.QueryRowContext(ctx,
-		"SELECT player_id FROM guild_player_state WHERE player_id=? FOR UPDATE", globalInsertGuardPlayerID).Scan(&locked))
-	return blocker
-}
-
-// TestGuildInsertGuard_EnsureIsIdempotent:EnsureGlobalInsertGuard 的三条契约。
-//   - 幂等:行已在时不改写(updated_ms 仍是首建时刻),行数恒为 1;
-//   - 行正被持有(运行中的实例在建帮 / 审批通过)时,新实例启动的这一步靠普通读命中直接返回,不排在锁后面
-//     (退回"直接 INSERT IGNORE"会在 X 锁后等满 1s 回 1205 → ErrWriteConflict,下面的 NoError 就红);
-//   - 行缺失时多个实例并发首建:全部成功、恰好一行、钩子零记录。建哨兵者在会话级命名锁下串行(C1):刚 DELETE 过、删除标记项
-//     尚未 purge 时,不串行的并发 INSERT IGNORE 会各持已授予的 S、再都要 X 去改写它(H2),这里也会偶发 1213。
-func TestGuildInsertGuard_EnsureIsIdempotent(t *testing.T) {
-	ctx, db, repo := openGuildIntegrationRepo(t)
-	deadlocks := watchGuildTxDeadlocks(t)
-
-	// 夹具(resetGuildSchemaViaMigrate)已按启动顺序建好哨兵,updated_ms = testNowMs。
-	count, updated := insertGuardRow(t, ctx, db)
-	require.Equal(t, 1, count, "建表之后必须已有哨兵行")
-	require.Equal(t, testNowMs, updated)
-	require.NoError(t, repo.EnsureGlobalInsertGuard(ctx, testNowMs+1))
-	require.NoError(t, repo.EnsureGlobalInsertGuard(ctx, testNowMs+2))
-	count, updated = insertGuardRow(t, ctx, db)
-	assert.Equal(t, 1, count)
-	assert.Equal(t, testNowMs, updated, "行已在时不改写")
-
-	blocker := lockOrderHoldInsertGuard(t, ctx, db)
-	require.NoError(t, repo.EnsureGlobalInsertGuard(ctx, testNowMs+3), "哨兵正被持有时,启动步骤不该排在锁后面")
-	require.NoError(t, blocker.Rollback())
-
-	mustExec(t, ctx, db, "DELETE FROM guild_player_state WHERE player_id=?", globalInsertGuardPlayerID)
-	errs := runConcurrently(
-		func() error { return repo.EnsureGlobalInsertGuard(ctx, testNowMs+10) },
-		func() error { return repo.EnsureGlobalInsertGuard(ctx, testNowMs+11) },
-		func() error { return repo.EnsureGlobalInsertGuard(ctx, testNowMs+12) },
-		func() error { return repo.EnsureGlobalInsertGuard(ctx, testNowMs+13) },
-	)
-	for i, err := range errs {
-		assert.NoError(t, err, "并发首建第 %d 路", i)
-	}
-	count, _ = insertGuardRow(t, ctx, db)
-	assert.Equal(t, 1, count, "并发首建恰好一行")
-	deadlocks.assertNone(t, "EnsureGlobalInsertGuard 并发首建")
-}
-
-// TestGuildInsertGuard_EnsureFirstInserterRollback:启动期建哨兵行的 C1。
-//
-// 首插者 A 在事务里插了 0 号行、未提交;两个实例 B、C 同时 EnsureGlobalInsertGuard(前置普通读看不见未提交的行,都要建),然后 A 回滚。
-// 修复前(无命名锁):B、C 都排在 A 的记录上等 S,A 回滚后两者的 S 被继承成同一段间隙上的间隙 S,插入意向互挡,1213;
-// 夹具刚删过哨兵行、删除标记项尚未 purge 时,A 回滚会把它恢复成删除标记项,B、C 各持已授予的 S 再都要 X 去改写它,同样 1213。
-// 两种形态在修复前都会红(1213 被 retryOnDeadlock 吸收,经钩子记下)。
-// 修复后:先拿到命名锁的一方排在 A 的记录上,另一方排在 GET_LOCK 上(不进 INNODB_TRX 的锁等待)。A 回滚后前者独自插入、
-// 提交、放锁,后者拿到锁后复读,看见已提交的行直接返回。
-// A 刻意不取命名锁,比生产更难。不会 1205:A 至多持有约 600ms(至多 500ms 的等待 + lockOrderSettle),小于
-// innodb_lock_wait_timeout(1s);后者在 GET_LOCK 上至多等 insertGuardInitLockWaitSeconds(5s),远大于前者的持锁时间。
-func TestGuildInsertGuard_EnsureFirstInserterRollback(t *testing.T) {
-	ctx, db, repo := openGuildIntegrationRepo(t)
-	deadlocks := watchGuildTxDeadlocks(t)
-	mustExec(t, ctx, db, "DELETE FROM guild_player_state WHERE player_id=?", globalInsertGuardPlayerID)
-
-	first, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	require.NoError(t, err)
-	defer first.Rollback() // 下面已显式回滚时是空操作
-	_, err = first.ExecContext(ctx, "INSERT INTO guild_player_state (player_id, updated_ms) VALUES (?, ?)",
-		globalInsertGuardPlayerID, testNowMs)
-	require.NoError(t, err)
-
-	b := lockOrderGo(func() error { return repo.EnsureGlobalInsertGuard(ctx, testNowMs+1) })
-	c := lockOrderGo(func() error { return repo.EnsureGlobalInsertGuard(ctx, testNowMs+2) })
-	// 修复后只有一个 InnoDB 锁等待(另一方等在 GET_LOCK 上);再等 lockOrderSettle,让另一方确实走到 GET_LOCK。
-	lockOrderAwaitLockWaits(ctx, db, 1, 500*time.Millisecond)
-	time.Sleep(lockOrderSettle)
-	require.NoError(t, first.Rollback())
-
-	assert.NoError(t, <-b, "首插者回滚后 B 必须成功")
-	assert.NoError(t, <-c, "首插者回滚后 C 必须成功")
-	count, _ := insertGuardRow(t, ctx, db)
-	assert.Equal(t, 1, count, "两个实例合起来恰好建出一行")
-	deadlocks.assertNone(t, "启动期建哨兵:首插者回滚(建哨兵者在命名锁下串行)")
 }
 
 // TestGuildLockOrder_DisbandVersusApproveUniqueSuccessor:完整性复核 G2 —— "解散时删成员行前移到删申请之前"所修之环的确定性回归。
@@ -1147,9 +1024,9 @@ func TestGuildInsertGuard_EnsureFirstInserterRollback(t *testing.T) {
 // 形状:p 刚离开 gOld(uk_guild_member 上留着删除标记项 (p,gOld)),q = p+1 是 G 的成员,于是 uk 上 p 之后第一条记录就是 (q,G);
 // p 在 G 与 G2 各有一条申请。G 解散 ‖ G2 批准 p。
 //   - 修复前的解散:guild(G) → state(全员) → member(全员)锁 → **删申请**(持有 (G,p))→ 提前截止 → **删成员**(delete-mark
-//     (q,G) 要 X);审批通过:guild(G2) → S(0) → state(p) → member(G2,l2) → app(G2,p) → 插 member(G2,p):查重对 (p,gOld) 及其
+//     (q,G) 要 X);审批通过:guild(G2) → state(p) → member(G2,l2) → app(G2,p) → 插 member(G2,p):查重对 (p,gOld) 及其
 //     后继 (q,G) 加 S → 删 p 名下申请时 (G,p) 被解散持有。解散等审批方在 (q,G) 上的 S,审批方等解散持有的 (G,p) —— 1213。
-//     全局插入守卫 S(0) 管不到解散(它不是查重插入者),所以只有语句顺序在防这个环。
+//     只有语句顺序在防这个环。
 //   - 修复后的解散先删成员行(持 (q,G) 的 X)再删申请:审批方查重时在 (q,G) 上等解散,手里没有解散要的任何锁 —— 单向等待。
 //
 // 编排(确定性):
@@ -1179,7 +1056,7 @@ func TestGuildLockOrder_DisbandVersusApproveUniqueSuccessor(t *testing.T) {
 	seedManagedGuild(t, ctx, db, g, zone, 1, 50, lg, map[uint64]uint32{q: constants.RoleMember})
 	seedManagedGuild(t, ctx, db, g2, zone, 1, 50, l2, nil)
 	seedManagedGuild(t, ctx, db, gOld, zone, 1, 50, lOld, map[uint64]uint32{p: constants.RoleMember})
-	// 状态行先建好:两边事务外建行都只做普通读,不取全局插入守卫,编排里的锁等待只来自事务内。
+	// 状态行先建好:两边事务外建行都只做普通读,编排里的锁等待只来自事务内。
 	for _, playerID := range []uint64{lg, q, p} {
 		mustExec(t, ctx, db, "INSERT INTO guild_player_state (player_id, updated_ms) VALUES (?, ?)", playerID, testNowMs)
 	}
@@ -1202,7 +1079,7 @@ func TestGuildLockOrder_DisbandVersusApproveUniqueSuccessor(t *testing.T) {
 	var locked uint64
 	require.NoError(t, blocker.QueryRowContext(ctx, sqlLockAssetOp, opID).Scan(&locked))
 
-	disband := lockOrderGo(func() error { _, err := repo.DisbandGuild(ctx, g, lg, testNowMs, nil); return err })
+	disband := lockOrderGo(func() error { _, err := repo.DisbandGuild(ctx, g, lg, testNowMs); return err })
 	lockOrderAwaitLockWaits(ctx, db, 1, 300*time.Millisecond)
 	approve := lockOrderGo(func() error {
 		_, err := repo.ReviewApplication(ctx, g2, l2, p, true, zone, testNowMs)
@@ -1225,154 +1102,82 @@ func TestGuildLockOrder_DisbandVersusApproveUniqueSuccessor(t *testing.T) {
 	deadlocks.assertNone(t, "Disband(G) ‖ Review(G2,p,通过),uk 上 p 的后继是 G 的成员")
 }
 
-// TestGuildInsertGuard_MissingFailsClosed:哨兵行缺失(启动步骤被跳过 / 被人手工删掉)时,取守卫的路径一律拒绝,
-// 且不能伪装成可重试的忙错误;不取守卫的路径照常。补上哨兵后恢复。
+// TestGuildLockOrder_UniqueInsertersDoNotQueueGlobally:撤掉全局插入守卫的判据(guild_manage_repo.go 文件头 (d))。
 //
-// 建帮者与申请人的状态行预先建好:事务外建行的普通读命中、不需要守卫,挡住它们的只能是事务内的 lockGlobalInsertGuard。
-func TestGuildInsertGuard_MissingFailsClosed(t *testing.T) {
-	ctx, db, repo := openGuildIntegrationRepo(t)
-	const (
-		g         uint64 = 7951
-		gNew      uint64 = 7952
-		leader    uint64 = 8951
-		founder   uint64 = 8952
-		applicant uint64 = 8953
-		rejectee  uint64 = 8954
-		fresh     uint64 = 8955 // 没有状态行的新玩家
-		zone      uint32 = 2
-	)
-	seedManagedGuild(t, ctx, db, g, zone, 1, 50, leader, nil)
-	for _, playerID := range []uint64{founder, applicant} {
-		mustExec(t, ctx, db, "INSERT INTO guild_player_state (player_id, updated_ms) VALUES (?, ?)", playerID, testNowMs)
-	}
-	seedApplicationRow(t, ctx, db, g, applicant, testNowMs, testNowMs+testApplicationTTLMs)
-	seedApplicationRow(t, ctx, db, g, rejectee, testNowMs, testNowMs+testApplicationTTLMs)
-	mustExec(t, ctx, db, "DELETE FROM guild_player_state WHERE player_id=?", globalInsertGuardPlayerID)
-
-	founding := lockOrderFounding(gNew, founder, "guard-missing", zone, testNowMs)
-	err := repo.CreateGuild(ctx, founding)
-	require.ErrorIs(t, err, errGlobalInsertGuardMissing, "建帮")
-	assert.NotErrorIs(t, err, ErrWriteConflict, "哨兵缺失是部署问题,不是忙")
-	assert.Zero(t, guildRowCount(t, ctx, db, gNew))
-	assert.Zero(t, memberCount(t, ctx, db, founder))
-
-	_, err = repo.ReviewApplication(ctx, g, leader, applicant, true, zone, testNowMs)
-	require.ErrorIs(t, err, errGlobalInsertGuardMissing, "审批通过")
-	assert.NotErrorIs(t, err, ErrWriteConflict)
-	assert.Zero(t, memberCount(t, ctx, db, applicant))
-	assert.Equal(t, 1, guildApplicationCount(t, ctx, db, g, applicant), "审批通过被拒时申请保留")
-
-	// 首次建状态行同样要守卫:不建出行,依赖它的申请也不落地。
-	err = repo.ensurePlayerStateRows(ctx, opApply, testNowMs, fresh)
-	require.ErrorIs(t, err, errGlobalInsertGuardMissing, "首次建状态行")
-	_, err = repo.ApplyToGuild(ctx, g, fresh, zone, testNowMs, testRules)
-	require.ErrorIs(t, err, errGlobalInsertGuardMissing, "新玩家申请")
-	var n int
-	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_player_state WHERE player_id=?", fresh).Scan(&n))
-	assert.Zero(t, n, "请求路径上绝不补建")
-	assert.Zero(t, playerApplicationCount(t, ctx, db, fresh))
-
-	// 不取守卫的路径照常:拒绝分支。
-	_, err = repo.ReviewApplication(ctx, g, leader, rejectee, false, 0, testNowMs)
-	require.NoError(t, err, "拒绝分支不取守卫")
-	assert.Zero(t, guildApplicationCount(t, ctx, db, g, rejectee))
-
-	// 启动步骤补上之后恢复。
-	require.NoError(t, repo.EnsureGlobalInsertGuard(ctx, testNowMs))
-	require.NoError(t, repo.CreateGuild(ctx, founding))
-	_, err = repo.ReviewApplication(ctx, g, leader, applicant, true, zone, testNowMs)
-	require.NoError(t, err)
-	_, err = repo.ApplyToGuild(ctx, g, fresh, zone, testNowMs, testRules)
-	require.NoError(t, err)
-}
-
-// TestGuildInsertGuard_OnlyUniqueInsertersTakeIt 确定性地钉住"谁取守卫"(guild_manage_repo.go 文件头 (d) 的无环推演以它为前提):
-// 占锁事务持有哨兵行时,建帮、审批通过、首次建状态行都必须等满锁等待上限(1205 → ErrWriteConflict)且不改数据;
-// 拒绝、申请(状态行已在)、退帮不取守卫,照常成功 —— 它们若也取守卫,同样会等满 1s 回 ErrWriteConflict。
-// 状态行预先建好的玩家,事务外建行只做普通读,不碰守卫。
-func TestGuildInsertGuard_OnlyUniqueInsertersTakeIt(t *testing.T) {
+// 占锁事务持有一名玩家的状态行,他的建帮卡在那一行上;与此同时别的玩家建帮、审批通过、首次建状态行、新玩家申请都必须立即成功。
+// 守卫还在的话卡住的建帮持着它,这几条都会等满 1s 锁等待回 ErrWriteConflict。
+func TestGuildLockOrder_UniqueInsertersDoNotQueueGlobally(t *testing.T) {
 	ctx, db, repo := openGuildIntegrationRepo(t)
 	const (
 		g         uint64 = 7961
-		gNew      uint64 = 7962
+		gStuck    uint64 = 7962
+		gOther    uint64 = 7964
 		leader    uint64 = 8961
-		member    uint64 = 8962
-		applicant uint64 = 8963
-		rejectee  uint64 = 8964
-		applier   uint64 = 8965
-		founder   uint64 = 8966
-		fresh     uint64 = 8967 // 没有状态行
+		stuck     uint64 = 8962 // 建帮卡在自己的状态行上
+		other     uint64 = 8963
+		applicant uint64 = 8964
+		fresh     uint64 = 8965 // 没有状态行
+		newcomer  uint64 = 8966 // 没有状态行,直接申请
 		zone      uint32 = 2
 	)
-	seedManagedGuild(t, ctx, db, g, zone, 1, 50, leader, map[uint64]uint32{member: constants.RoleMember})
-	for _, playerID := range []uint64{leader, member, applicant, applier, founder} {
+	seedManagedGuild(t, ctx, db, g, zone, 1, 50, leader, nil)
+	for _, playerID := range []uint64{stuck, other, applicant} {
 		mustExec(t, ctx, db, "INSERT INTO guild_player_state (player_id, updated_ms) VALUES (?, ?)", playerID, testNowMs)
 	}
 	seedApplicationRow(t, ctx, db, g, applicant, testNowMs, testNowMs+testApplicationTTLMs)
-	seedApplicationRow(t, ctx, db, g, rejectee, testNowMs, testNowMs+testApplicationTTLMs)
 
-	blocker := lockOrderHoldInsertGuard(t, ctx, db)
+	blocker, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	require.NoError(t, err)
+	defer blocker.Rollback() // 下面已显式回滚时是空操作
+	var locked uint64
+	require.NoError(t, blocker.QueryRowContext(ctx, sqlLockPlayerState, stuck).Scan(&locked))
+	stuckDone := lockOrderGo(func() error {
+		return repo.CreateGuild(ctx, lockOrderFounding(gStuck, stuck, "no-queue-stuck", zone, testNowMs))
+	})
+	lockOrderAwaitLockWaits(ctx, db, 1, 300*time.Millisecond)
 
-	blocked := []struct {
-		name string
-		run  func() error
-	}{
-		{"CreateGuild", func() error {
-			return repo.CreateGuild(ctx, lockOrderFounding(gNew, founder, "guard-holder", zone, testNowMs))
-		}},
-		{"ReviewApplication(通过)", func() error {
-			_, err := repo.ReviewApplication(ctx, g, leader, applicant, true, zone, testNowMs)
-			return err
-		}},
-		{"ensurePlayerStateRows(缺行)", func() error { return repo.ensurePlayerStateRows(ctx, opApply, testNowMs, fresh) }},
+	require.NoError(t, repo.CreateGuild(ctx, lockOrderFounding(gOther, other, "no-queue-other", zone, testNowMs)), "别人的建帮不排队")
+	_, err = repo.ReviewApplication(ctx, g, leader, applicant, true, zone, testNowMs)
+	require.NoError(t, err, "审批通过不排队")
+	require.NoError(t, repo.ensurePlayerStateRows(ctx, opApply, testNowMs, fresh), "首次建状态行不排队")
+	_, err = repo.ApplyToGuild(ctx, g, newcomer, zone, testNowMs, testRules)
+	require.NoError(t, err, "新玩家申请不排队")
+
+	require.NoError(t, blocker.Rollback())
+	// 慢机器上它可能已经等满 1s 回 ErrWriteConflict,那也是这名玩家自己的事;要紧的是上面几条没被它拖住。
+	if err := <-stuckDone; err != nil {
+		require.ErrorIs(t, err, ErrWriteConflict)
 	}
-	for _, call := range blocked {
-		start := time.Now()
-		err := call.run()
-		elapsed := time.Since(start)
-		assert.ErrorIs(t, err, ErrWriteConflict, "%s 必须在哨兵行上等锁", call.name)
-		assert.GreaterOrEqual(t, elapsed, 900*time.Millisecond, "%s 没有等满锁等待上限:它没取全局插入守卫", call.name)
-	}
-	assert.Zero(t, guildRowCount(t, ctx, db, gNew), "被挡住的建帮不能留下帮会行")
-	assert.Zero(t, memberCount(t, ctx, db, founder))
-	assert.Zero(t, memberCount(t, ctx, db, applicant), "被挡住的审批通过不能加人")
-	assert.Equal(t, 1, guildApplicationCount(t, ctx, db, g, applicant))
-	var n int
-	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_player_state WHERE player_id=?", fresh).Scan(&n))
-	assert.Zero(t, n, "被挡住的建行不能留下行")
 
-	// 不取守卫的路径:拒绝先做(腾出队列名额,testRules.MaxPerGuild = 2),再申请、退帮。
-	_, err := repo.ReviewApplication(ctx, g, leader, rejectee, false, 0, testNowMs)
-	require.NoError(t, err, "拒绝分支不取守卫")
-	res, err := repo.ApplyToGuild(ctx, g, applier, zone, testNowMs, testRules)
-	require.NoError(t, err, "状态行已在的申请不取守卫")
-	assert.True(t, res.Inserted)
-	_, err = repo.LeaveGuild(ctx, g, member, testNowMs)
-	require.NoError(t, err, "退帮不取守卫")
+	var sentinels int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_player_state WHERE player_id=0").Scan(&sentinels))
+	assert.Zero(t, sentinels, "不再有 player_id=0 的哨兵行")
+}
 
-	// 完整性复核 G4:踢一个不是本帮成员的 id、批准一条不存在的申请 —— 事务外普通读预判就答复,不建状态行、不取守卫
-	// (取了就会等满 1s 回 ErrWriteConflict)。答复的优先级与锁内一致:帮会不在 → 操作者不在 → 目标 / 申请不在。
+// TestGuildLockOrder_PrecheckAnswersWithoutStateRow(完整性复核 G4):踢一个不是本帮成员的 id、批准一条不存在的申请 ——
+// 事务外普通读预判就答复,不建状态行。答复的优先级与锁内一致:帮会不在 → 操作者不在 → 目标 / 申请不在。
+func TestGuildLockOrder_PrecheckAnswersWithoutStateRow(t *testing.T) {
+	ctx, db, repo := openGuildIntegrationRepo(t)
 	const (
-		stranger  uint64 = 8968 // 从没出现过的玩家 id
-		outsider  uint64 = 8969 // 不是本帮成员的"操作者"
-		noSuchGid uint64 = 7963
+		g         uint64 = 7971
+		leader    uint64 = 8971
+		stranger  uint64 = 8972 // 从没出现过的玩家 id
+		outsider  uint64 = 8973 // 不是本帮成员的"操作者"
+		noSuchGid uint64 = 7972
+		zone      uint32 = 2
 	)
-	_, err = repo.KickMember(ctx, g, leader, stranger, testNowMs)
-	assert.ErrorIs(t, err, ErrTargetNotMember, "踢非成员:预读答复,不取守卫")
+	seedManagedGuild(t, ctx, db, g, zone, 1, 50, leader, nil)
+	_, err := repo.KickMember(ctx, g, leader, stranger, testNowMs)
+	assert.ErrorIs(t, err, ErrTargetNotMember, "踢非成员:预读答复")
 	_, err = repo.KickMember(ctx, g, outsider, stranger, testNowMs)
 	assert.ErrorIs(t, err, ErrNotGuildMember, "操作者不在本帮的优先级高于目标不在")
 	_, err = repo.KickMember(ctx, noSuchGid, leader, stranger, testNowMs)
 	assert.ErrorIs(t, err, ErrGuildGone, "帮会不在的优先级最高")
 	_, err = repo.ReviewApplication(ctx, g, leader, stranger, true, zone, testNowMs)
-	assert.ErrorIs(t, err, ErrApplicationNotFound, "批准不存在的申请:预读答复,不取守卫")
+	assert.ErrorIs(t, err, ErrApplicationNotFound, "批准不存在的申请:预读答复")
 	_, err = repo.ReviewApplication(ctx, g, outsider, stranger, true, zone, testNowMs)
 	assert.ErrorIs(t, err, ErrNotGuildMember, "审批人不在本帮的优先级高于申请不在")
+	var n int
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_player_state WHERE player_id=?", stranger).Scan(&n))
 	assert.Zero(t, n, "不给不存在的目标 / 申请人建状态行")
-
-	require.NoError(t, blocker.Rollback())
-	require.NoError(t, repo.CreateGuild(ctx, lockOrderFounding(gNew, founder, "guard-holder", zone, testNowMs)),
-		"守卫放开后建帮必须成功")
-	_, err = repo.ReviewApplication(ctx, g, leader, applicant, true, zone, testNowMs)
-	require.NoError(t, err, "守卫放开后审批通过必须成功")
 }

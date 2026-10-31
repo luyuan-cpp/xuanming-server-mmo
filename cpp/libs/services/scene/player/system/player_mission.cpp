@@ -101,6 +101,9 @@ void ApplyFollowUps(entt::entity player, const MissionFollowUps& followUps) {
             static_cast<uint32_t>(eConditionType::kConditionCompleteMission), {missionId}, 1};
         PlayerMissionSystem::OnCondition(player, completed);
     }
+    if (!followUps.completed.empty()) {
+        PlayerLifecycleSystem::RequestKeyProgressSave(player, "mission_completed");
+    }
 }
 } // namespace
 
@@ -258,5 +261,6 @@ uint32_t PlayerMissionSystem::ClaimReward(entt::entity player, uint32_t scope, u
     if (result != kSuccess) return result;
     // scene EventLoop 内同步提交，无异步间隙；发奖成功后才消耗领取权。
     missions.ClearClaimable(missionId);
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "mission_reward_claimed");
     return kSuccess;
 }

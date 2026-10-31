@@ -339,6 +339,17 @@ TEST(PlayerInboxRegistry, ConsumerDomainsAreTheDomainsWithExecutors)
 	EXPECT_EQ(expected, player_inbox_registry::ConsumerDomains());
 }
 
+// C-3(2026-10-30):载荷上限的唯一事实源是 proto 的 max_payload_bytes,执行器经注册表读它(战斗结算原先手写 16384)。
+// 改 proto 的上限时这里跟着改;不认识的类型返回 0,调用方按上限未知拒执行。
+TEST(PlayerInboxRegistry, MaxPayloadBytesIsReadFromTypeSpec)
+{
+	EXPECT_EQ(16384u, player_inbox_registry::MaxPayloadBytes(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT));
+	EXPECT_EQ(64u, player_inbox_registry::MaxPayloadBytes(player_inbox::PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN));
+	EXPECT_EQ(1024u, player_inbox_registry::MaxPayloadBytes(player_inbox::PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT));
+	EXPECT_EQ(0u, player_inbox_registry::MaxPayloadBytes(player_inbox::PLAYER_INBOX_MSG_UNSPECIFIED));
+	EXPECT_EQ(0u, player_inbox_registry::MaxPayloadBytes(999)) << "本二进制不认识的类型";
+}
+
 TEST(PlayerInboxRegistry, BattleSettlementDomainRetainsOnePendingAndAllowsInBattleExecution)
 {
     const auto domain = static_cast<uint32_t>(player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT);

@@ -11,9 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
-	componentpb "proto/common/component"
 	dspb "proto/data_service"
-	"shared/savebarrier"
 )
 
 type initialCommitRPC struct {
@@ -27,7 +25,7 @@ func (f initialCommitRPC) CreateAccountRole(ctx context.Context, in *dspb.Create
 
 func TestCreateClientValidatesInitialCommitReceipt(t *testing.T) {
 	role := &base.AccountSimplePlayer{PlayerId: 9101, ZoneId: 1}
-	for _, kind := range []string{"new", "idempotent", "wrong-id", "zero-sequence", "business-payload", "unknown-field", "unknown-commit"} {
+	for _, kind := range []string{"committed", "unknown-commit"} {
 		t.Run(kind, func(t *testing.T) {
 			client := NewClient(initialCommitRPC{create: func(ctx context.Context, in *dspb.CreateAccountRoleRequest) (*dspb.AccountDirectoryResponse, error) {
 				if in.Account != "owner" || !proto.Equal(in.Role, role) {
@@ -39,46 +37,17 @@ func TestCreateClientValidatesInitialCommitReceipt(t *testing.T) {
 				if kind == "unknown-commit" {
 					return nil, status.Error(codes.Unavailable, "提交应答未知")
 				}
-				out := &dspb.AccountDirectoryResponse{Players: &base.AccountSimplePlayerList{Players: []*base.AccountSimplePlayer{proto.Clone(role).(*base.AccountSimplePlayer)}}, InitialPlayerData: savebarrier.InitialPlayerData(role.PlayerId)}
-				switch kind {
-				case "idempotent":
-					out.InitialPlayerData = nil
-				case "wrong-id":
-					out.InitialPlayerData = savebarrier.InitialPlayerData(role.PlayerId + 1)
-				case "zero-sequence":
-					out.InitialPlayerData.LastSaveSeq = 0
-				case "business-payload":
-					out.InitialPlayerData.PlayerDatabaseData.LevelComponent = &componentpb.LevelComp{Level: 8}
-				case "unknown-field":
-					out.InitialPlayerData.ProtoReflect().SetUnknown([]byte{0xF8, 0x7F, 1})
-				}
-				return out, nil
+				return &dspb.AccountDirectoryResponse{Players: &base.AccountSimplePlayerList{Players: []*base.AccountSimplePlayer{proto.Clone(role).(*base.AccountSimplePlayer)}}}, nil
 			}}, strings.Repeat("c", 32))
 			out, err := client.CreateWithInitialCommit(context.Background(), "owner", role)
-			if kind == "new" || kind == "idempotent" {
+			if kind == "committed" {
 				if err != nil || out == nil {
 					t.Fatalf("有效回执被拒: %v", err)
 				}
-				if (out.InitialPlayerData != nil) != (kind == "new") {
-					t.Fatal("幂等目录制造了初始凭据")
-				}
 			} else if !errors.Is(err, ErrUnavailable) || out != nil {
-				t.Fatalf("坏/未知回执被放行: %v/%v", out, err)
+				t.Fatalf("未知回执被放行: %v/%v", out, err)
 			}
 		})
 	}
 }
 
-// 旧 Directory 实现仍可返回目录，能力缺失不制造新的 SQL 初始原件。
-type oldDirectory struct{ Directory }
-
-func (oldDirectory) Create(context.Context, string, *base.AccountSimplePlayer) (*base.AccountSimplePlayerList, error) {
-	return &base.AccountSimplePlayerList{}, nil
-}
-
-func TestLegacyDirectoryCannotManufactureInitialCommitReceipt(t *testing.T) {
-	out, err := CreateWithInitialCommit(context.Background(), oldDirectory{}, "owner", &base.AccountSimplePlayer{PlayerId: 9101})
-	if err != nil || out == nil || out.InitialPlayerData != nil {
-		t.Fatalf("旧目录能力被提升: %v/%v", out, err)
-	}
-}

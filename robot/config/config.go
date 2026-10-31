@@ -31,9 +31,7 @@ type Config struct {
 	TableDir       string   `yaml:"table_dir"`       // path to generated/tables dir for reading Skill/Class tables
 
 	// Mode: "stress" (default) — mass concurrent bots; "login-test" — scenario
-	// suite with login/skill/scene tests; "data-stress" — repeated
-	// login → play → logout cycles with Redis-published expectations for the
-	// db-side verifier (see DataStress block); "currency-crash-snapshot" —
+	// suite with login/skill/scene tests; "currency-crash-snapshot" —
 	// 单次登录快照(见 CurrencyCrash 块); "battle-smoke" — 双机器人
 	// 回合制战斗 + 观战端到端冒烟(见 battle_smoke_scenario.go;子模式
 	// 见 BattleSmoke 块); "travel-smoke" — 单机器人跨 zone 场景传送往返
@@ -51,9 +49,6 @@ type Config struct {
 
 	// AssetArrivalPrepare 只用于本机专用角色的正式 RPC 资产准备与有界保活。
 	AssetArrivalPrepare AssetArrivalPrepareConfig `yaml:"asset_arrival_prepare"`
-
-	// DataStress configures the data-consistency stress mode.
-	DataStress DataStressConfig `yaml:"data_stress"`
 
 	// BattleSmoke 是 "battle-smoke" 模式的子开关(见 BattleSmokeConfig)。
 	// 缺省(cross_zone=false)跑原 PVE + 观战流程。
@@ -206,24 +201,6 @@ func (c *Config) ValidateAssetArrivalPrepare() error {
 		return fmt.Errorf("资产准备 output_path 必须是独立结果文件的绝对路径")
 	}
 	return nil
-}
-
-// DataStressConfig configures the "data-stress" mode that drives repeated
-// login/logout cycles and publishes per-player expectations to Redis for the
-// db-side verifier (`go/db/cmd/verifier`).
-type DataStressConfig struct {
-	// Rounds is the number of login → play → logout cycles each robot runs.
-	Rounds int `yaml:"rounds"`
-
-	// PlaySeconds is how long each robot stays in-game per round.
-	PlaySeconds int `yaml:"play_seconds"`
-
-	// VerifyRedisAddr is the Redis the verifier reads from. Usually the same
-	// one the db service uses; the verifier needs both `verify:enrolled:*`
-	// and `verify:expected:*` keys here.
-	VerifyRedisAddr     string `yaml:"verify_redis_addr"`
-	VerifyRedisPassword string `yaml:"verify_redis_password"`
-	VerifyRedisDB       int    `yaml:"verify_redis_db"`
 }
 
 // CurrencyCrashConfig configures the "currency-crash-snapshot" mode.
@@ -587,7 +564,7 @@ type TeamSmokeConfig struct {
 	// ZoneB 仅 cross_zone=true 时使用,必须非 0 且与 ZoneA 不同。
 	ZoneB uint32 `yaml:"zone_b"`
 
-	// BattleConfigId 是整队开战 / 单人 PVE 用的 DungeonTable id,必须非 0 且在 match 的 PveTeamSizeByConfigId 里配置。
+	// BattleConfigId 是整队开战 / 单人 PVE 用的 DungeonTable id,必须非 0 且是 match PlayMode 表里开放的模板。
 	BattleConfigId uint32 `yaml:"battle_config_id"`
 
 	// FollowSceneConfigIds 是换图候选(BaseScene id),至少 3 个互不相同的非 0 值:
@@ -600,7 +577,7 @@ type TeamSmokeConfig struct {
 type TeamBackfillSmokeConfig struct {
 	// Zone 必须非 0:三人要在同一个 zone(0 会被 server-list 自动选区顶掉,不保证三人同区)。
 	Zone uint32 `yaml:"zone"`
-	// BattleConfigId 是补位开战用的 DungeonTable id,必须非 0,且 match 的 PveTeamSizeByConfigId 里它的人数上限 ≥ 3。
+	// BattleConfigId 是补位开战用的 DungeonTable id,必须非 0,且 match PlayMode 表里它的 PVE_TEAM 人数上限 ≥ 3。
 	BattleConfigId uint32 `yaml:"battle_config_id"`
 }
 
@@ -947,10 +924,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "equip-smoke", "equip-forge-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "team-follow-smoke", "team-backfill-smoke", "travel-smoke", "friend-smoke", "mail-smoke", "rank-smoke", "channel-smoke", "ordering-smoke", "sync-smoke", "features-smoke", "merchant-smoke", "mall-arrival-smoke", "equip-forge-topup", "asset-arrival-prepare":
+	case "", "stress", "login-test", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "equip-smoke", "equip-forge-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "team-follow-smoke", "team-backfill-smoke", "travel-smoke", "friend-smoke", "mail-smoke", "rank-smoke", "channel-smoke", "ordering-smoke", "sync-smoke", "features-smoke", "merchant-smoke", "mall-arrival-smoke", "equip-forge-topup", "asset-arrival-prepare":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, equip-smoke, equip-forge-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, team-follow-smoke, team-backfill-smoke, travel-smoke, friend-smoke, mail-smoke, rank-smoke, channel-smoke, ordering-smoke, sync-smoke, features-smoke, merchant-smoke, mall-arrival-smoke, equip-forge-topup, or asset-arrival-prepare)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, equip-smoke, equip-forge-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, team-follow-smoke, team-backfill-smoke, travel-smoke, friend-smoke, mail-smoke, rank-smoke, channel-smoke, ordering-smoke, sync-smoke, features-smoke, merchant-smoke, mall-arrival-smoke, equip-forge-topup, or asset-arrival-prepare)", c.Mode)
 	}
 	if c.Mode == "asset-arrival-prepare" {
 		return c.ValidateAssetArrivalPrepare()

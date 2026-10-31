@@ -110,26 +110,17 @@ bool KafkaProducer::createProducer(const std::string& brokers) {
 		LOG_ERROR << "Kafka producer: required idempotent all-ack policy unavailable: " << errstr;
 		return false;
 	}
-	// 显式钉住分区器 = 玩家存盘 DBTask 的分区契约:partition = CRC-32/IEEE(key) mod N(按 uint32 取模),
-	// key 为玩家 id 的十进制 ASCII(见 player.h DbTaskKafkaKey)。login 发读请求用的是同一个函数
-	// (go/shared/kafkautil/dbtask_partition.go),同一玩家的读与写落同一分区,go/db 的读后写屏障才成立;
-	// 契约全文见 docs/design/db-task-kafka-partition-contract.md「分区函数契约」。
-	//
-	// 值与 vendored librdkafka 2.14.0 的默认值相同,运行时零变化;显式写出来是为了把契约钉在代码里:
-	// librdkafka 升级改了默认值、或者有人在这里换了 partitioner,同一玩家的写就会在新旧 scene 之间换分区,
-	// 被 go/db 判为 orderingIncomparable 送进死信。**换函数 = 换 TopicGeneration(离线排空)**,不能原地改。
+	// 显式钉住分区器:partition = CRC-32/IEEE(key) mod N(按 uint32 取模)。同一业务实体的 key 落同一分区,
+	// 换分区器就破坏了 AGENTS §7.3 的有序性,所以不随 librdkafka 升级漂移。值与 vendored librdkafka 2.14.0 的默认值相同。
 	//
 	// 这是 topic 级属性,设在 CONF_GLOBAL 上时 librdkafka 会落到默认 topic conf(rd_kafka_conf_set 的
-	// fallthru),对本实例所有 topic 生效:battle 命令显式传分区不受影响,审计 / 告警 topic 本来就走默认分区器。
-	// 设置失败不阻止建实例:拒绝建实例会让本节点所有 Kafka 发送(包括存盘和命令)全部失败,
-	// 这里只大声报出来(默认值本身就是契约值),由 go/db 的分区契约观测与告警兜底。
+	// fallthru),对本实例所有 topic 生效:battle 命令显式传分区不受影响。
+	// 设置失败不阻止建实例:拒绝建实例会让本节点所有 Kafka 发送全部失败,这里只大声报出来(默认值本身就是契约值)。
 	if (conf->set("partitioner", "consistent_random", errstr) != RdKafka::Conf::CONF_OK) {
-		LOG_ERROR << "Kafka producer: failed to pin partitioner=consistent_random (db_task partition contract): "
+		LOG_ERROR << "Kafka producer: failed to pin partitioner=consistent_random: "
 			<< errstr;
 	}
-	// message.timeout.ms 刻意保持 librdkafka 缺省 300000(本仓任何地方都没有覆盖它)。scene 的 DBTask 投递账本
-	// 用 330s 的票据超时兜底「回执始终不来」(db_task_dispatch_system.cpp 的 kTicketTimeout),它依赖这个值:
-	// 改这里必须同步改那边,且那边必须严格大于这里 —— 否则迟到的成功回执会被先判成失败(只多一次重存,不丢数据)。
+	// message.timeout.ms 刻意保持 librdkafka 缺省 300000(本仓任何地方都没有覆盖它)。
 
 	std::unique_ptr<RdKafka::Producer> producer(RdKafka::Producer::create(conf.get(), errstr));
 	if (!producer) {
@@ -151,8 +142,8 @@ bool KafkaProducer::ensureInitialized() {
 }
 
 KafkaProducer::~KafkaProducer() {
-	// 第一件事是注销监听器:本对象是 thread_local,监听器背后的记账状态(scene 的 DbTaskDispatch 账本)
-	// 也是 thread_local,两者的析构顺序不归这里管。注销之后下面 flush 派发的回执只计数、记日志,不再回调。
+	// 第一件事是注销监听器:本对象是 thread_local,监听器背后的记账状态的析构顺序不归这里管。
+	// 注销之后下面 flush 派发的回执只计数、记日志,不再回调。
 	setDeliveryListener({});
 	// broker 不可用时不允许进程析构无限挂起;正常停机的
 	// KafkaManager 也复用同一条有界 flush 路径。
@@ -277,8 +268,7 @@ RdKafka::ErrorCode KafkaProducer::sendImpl(const std::string& topic, const std::
 
 	poll(); // Ensure delivery callbacks are dispatched
 
-	// 限流压掉的条数,在「窗口过期、之后不再失败」时靠这里补报:send() 是唯一的补报驱动点
-	// (scene 的 DbTaskDispatchSystem::Pump 也会定时 poll() 派发回执,但不补报限流)。放在 poll() 之后,
+	// 限流压掉的条数,在「窗口过期、之后不再失败」时靠这里补报:send() 是唯一的补报驱动点。放在 poll() 之后,
 	// 让本次派发的回执先计完数。先用 PendingSuppressed() 预检,无失败时不必每条消息取一次时钟。
 	if (failureLogThrottle_.PendingSuppressed() > 0) {
 		const std::uint64_t suppressed =

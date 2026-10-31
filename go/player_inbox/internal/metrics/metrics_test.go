@@ -101,7 +101,7 @@ func TestRegisterExposesEveryMetric(t *testing.T) {
 		"player_inbox_sweep_deleted_total", "player_inbox_fetch_scanned_rows",
 		"player_inbox_delivered_unacked", "player_inbox_delivered_unacked_oldest_seconds", "player_inbox_open_items",
 		"player_inbox_oldest_open_age_seconds", "player_inbox_max_delivery_count", "player_inbox_notify_backlog",
-		"player_inbox_delivered_unacked_stale",
+		"player_inbox_delivered_unacked_stale", "player_inbox_battle_producer_ready",
 	} {
 		if _, ok := families[name]; !ok {
 			t.Errorf("默认注册表里没有 %s", name)
@@ -304,6 +304,18 @@ func TestReconcileRoundAndTruncatedCounters(t *testing.T) {
 	IncReconcileTruncated()
 	if got := testutil.ToFloat64(reconcileTruncatedTotal) - truncated; got != 1 {
 		t.Fatalf("truncated_total 增量 = %v, want 1", got)
+	}
+}
+
+// TestBattleProducerReadyGauge:Match 结算生产面的装配状态只取 0 / 1(2026-10-30,缺密钥不再静默)。
+func TestBattleProducerReadyGauge(t *testing.T) {
+	SetBattleProducerReady(true)
+	if got := testutil.ToFloat64(battleProducerReady); got != 1 {
+		t.Fatalf("已装配应为 1,got %v", got)
+	}
+	SetBattleProducerReady(false)
+	if got := testutil.ToFloat64(battleProducerReady); got != 0 {
+		t.Fatalf("未装配应为 0,got %v", got)
 	}
 }
 

@@ -39,7 +39,7 @@ import (
 //   - 线程安全:Service 无可变状态。
 
 // IdGenerator team_id 发号器。生产为 svcCtx.BattleIDGen(battle_id / challenge_id / team_id 共用,§C.3);
-// 失租被 fence 后返回错误,调用方整体失败,不许用 0 顶替。
+// 发不出号时返回错误,调用方整体失败,不许用 0 顶替。
 type IdGenerator interface {
 	Generate() (uint64, error)
 }
@@ -51,8 +51,9 @@ type IdGenerator interface {
 // 编排全部在本包(Service.StartTeamMatch):bindCaller 读、惰性转让、队长 / 锁 / 人数校验、roster、
 // 会话 / 战斗锁 / 位置预检、开战锁钉版本提交与整轮重来、EndMatch、推送。实现方只管票据与 gather。
 type BattleStarter interface {
-	// TeamSizeFor 副本组队开战人数上限(与 PVE_TEAM 排队同口径,已按引擎每队上限收口);0 = 未开放组队。
-	TeamSizeFor(battleConfigId uint32) uint32
+	// TeamSizeFor 模式 mode(PVE_TEAM / PVP_TEAM)在模板 battleConfigId 上的每队人数上限,来自 PlayMode 表
+	// (与 JoinQueue 同口径,已按引擎每队上限收口);0 = 该模板未开放这个模式。PVP_TEAM 是每侧人数。
+	TeamSizeFor(mode, battleConfigId uint32) uint32
 	// MatchLockTTLSeconds memberCount 人的开战锁时长(秒):覆盖 matched 票 TTL + 补偿窗口 + 余量。
 	MatchLockTTLSeconds(memberCount int) int
 	// TicketBlocked 成员票据预检:没有票据或残留已自愈 → false;仍在途 → true。
@@ -140,7 +141,7 @@ type Service struct {
 //   - team_id 发号器取 svcCtx.BattleIDGen,为 nil 时建队回 ErrInternal;
 //   - 落地摘要取 svcCtx.SyncDigest(SharedRedis 上的 Bumper),为 nil 时不 bump。
 func NewService(svcCtx *svc.ServiceContext, homeZones HomeZoneLookup, starter BattleStarter) *Service {
-	presence := presenceReader{rds: svcCtx.SharedRedis}
+	presence := presenceReader{rds: svcCtx.SharedRedis, displays: svcCtx.DataServiceClient}
 	cfg := RuleConfig{AllowCrossZone: svcCtx.Config.Team.AllowCrossZone}
 	s := &Service{
 		svcCtx:     svcCtx,
@@ -149,9 +150,7 @@ func NewService(svcCtx *svc.ServiceContext, homeZones HomeZoneLookup, starter Ba
 		homeZones:  homeZones,
 		starter:    starter,
 		syncDigest: svcCtx.SyncDigest,
-	}
-	if svcCtx.BattleIDGen != nil { // 避免把 nil 指针包成非 nil 接口
-		s.ids = svcCtx.BattleIDGen
+		ids:        svcCtx.BattleIDGen,
 	}
 	if svcCtx.Authority != nil {
 		s.store = NewSQLStore(svcCtx.Authority, presence.loadSessions, cfg)
@@ -470,9 +469,8 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 		if code := CheckMatchStart(rec, caller, snap.NowMs); code != 0 {
 			return s.matchReject(ctx, caller, code, 0, &snap)
 		}
-		limit := s.starter.TeamSizeFor(configId)
+		limit := s.starter.TeamSizeFor(uint32(mode), configId)
 		if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
-			limit = Capacity
 			if _, wired := s.starter.(pvpPartyStarter); !wired {
 				return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
 			}

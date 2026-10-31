@@ -176,7 +176,7 @@ type Result struct {
 	// Durable 表示该 seq 的结局已经在「最后一次成功写入 Redis 的玩家数据」里。
 	// 只有它为真,终结才是安全的(不变量 I4)。
 	Durable bool
-	// SQLCommitted 仅由已提交 SQL 账本核验路径赋值，scene 的 Redis 回包不能设置它。
+	// SQLCommitted 仅由已提交 SQL 账本核验路径赋值，scene 的回包不能设置它。
 	SQLCommitted bool
 	// Partial 表示 APPLIED 但只发放了一部分。对侧账不能做,转人工补偿(规格 §4.33)。
 	Partial bool
@@ -188,7 +188,6 @@ type Result struct {
 	// Absent 表示 Local 的原因是**位置键不存在**(scenenode.ErrNotOnline):玩家确实不在线。
 	// 等待跨 zone 落点、节点未注册 / 歧义、节点镜像未完成首次同步时 Local 为真而 Absent 为假 ——
 	// 那时玩家多半在线,不会再有落地唤醒,所以只有 Absent 才进离线停放档(decide.go OfflineParking),
-	// 与自动放弃的「没有位置」(abandon.go playerAbsent)同一口径。
 	Absent bool
 }
 

@@ -42,7 +42,6 @@ const (
 	activityResultClaimed       = "claimed"
 	activityResultThreshold     = "threshold"
 	activityResultAssetPending  = "asset_pending"
-	activityResultMerging       = "merging"
 	activityResultNotInGuild    = "not_in_guild"
 	activityResultHomeZone      = "home_zone"
 	activityResultBusyRetry     = "busy_retry"

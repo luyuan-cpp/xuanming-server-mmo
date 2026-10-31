@@ -36,41 +36,56 @@ func (r *Repo) createCampaign(ctx context.Context, caller string, kind mailpb.Ma
 		return nil, err
 	}
 	now := uint64(r.now().UnixMilli())
-	if _, err = r.db.ExecContext(ctx, "INSERT IGNORE INTO mail_box (player_id,created_ms) VALUES (0,?)", now); err != nil {
-		return nil, err
-	}
 	result := &mailpb.SendMailResponse{}
 	err = r.tx(ctx, func(tx *sql.Tx) error {
-		// 初次创建按已提交的全局发件守卫串行，防同sender/request被换campaign重复建意图。
-		var guard uint64
-		if err := tx.QueryRowContext(ctx, "SELECT player_id FROM mail_box WHERE player_id=0 FOR UPDATE").Scan(&guard); err != nil {
-			return err
-		}
-		old, e := scanCampaign(tx.QueryRowContext(ctx, "SELECT "+campaignColumns+" FROM mail_campaign WHERE sender_kind=? AND request_id=? LIMIT 1", in.SenderKind, in.RequestId))
-		if e == nil {
+		// 防同 sender/request 被换 campaign 重复建意图,靠 mail_message 与 mail_campaign 上 (sender_kind, request_id) 的唯一键;
+		// 不再排全服共用的 mail_box(0) 守卫(docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条)。
+		replay := func() (bool, error) {
+			old, e := scanCampaign(tx.QueryRowContext(ctx, "SELECT "+campaignColumns+" FROM mail_campaign WHERE sender_kind=? AND request_id=? LIMIT 1", in.SenderKind, in.RequestId))
+			if errors.Is(e, ErrNotFound) {
+				return false, nil
+			}
+			if e != nil {
+				return false, e
+			}
 			if old.RequestHash != digest || old.Producer != caller {
-				return ErrConflict
+				return false, ErrConflict
 			}
 			result.MailId = old.MailId
 			result.Duplicated = true
-			return nil
+			return true, nil
 		}
-		if !errors.Is(e, ErrNotFound) {
+		if replayed, e := replay(); e != nil || replayed {
 			return e
 		}
+		// 软上限:并发建活动可能略超,理由同 Send。
 		var active uint64
-		if e = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_message WHERE owner_player_id=0 AND kind IN (0,2,3) AND expire_ms>?", now).Scan(&active); e != nil {
+		if e := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_message WHERE owner_player_id=0 AND kind IN (0,2,3) AND expire_ms>?", now).Scan(&active); e != nil {
 			return e
 		}
 		if active >= uint64(r.limits.Defaults().MaxActiveSystemMails) {
 			return ErrBoxFull
 		}
 		// kind=0仅保留全频道共享的发件幂等键；可见查询明确排除它。
-		if _, e = tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+") VALUES (?,0,?,0,?,?,?,?,?,?,?,?,?,?)", id, in.GuildId, in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire, in.CampaignId, in.ManifestGeneration); e != nil {
-			return e
+		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+") VALUES (?,0,?,0,?,?,?,?,?,?,?,?,?,?)", id, in.GuildId, in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire, in.CampaignId, in.ManifestGeneration); e != nil {
+			if !isDuplicateKey(e) {
+				return e
+			}
+			// 并发首建同一请求:唯一键裁决,转读赢家已提交的活动。读不到说明这个键被非活动邮件占了。
+			replayed, re := replay()
+			if re != nil {
+				return re
+			}
+			if !replayed {
+				return ErrConflict
+			}
+			return nil
 		}
-		_, e = tx.ExecContext(ctx, "INSERT INTO mail_campaign ("+campaignColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,?,?)", in.SenderKind, in.CampaignId, in.ManifestGeneration, id, in.RequestId, caller, digest, in.Title, in.Body, payload, expire, in.ExpectedRecipientCount, in.ExpectedShardCount, in.ManifestHash, now, uint32(kind), in.GuildId)
-		if e != nil {
+		// 消息行已经插成,活动行再撞键只可能是 (sender,campaign,generation) 被别的请求占了:整笔回滚,不留下孤儿消息行。
+		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_campaign ("+campaignColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,?,?)", in.SenderKind, in.CampaignId, in.ManifestGeneration, id, in.RequestId, caller, digest, in.Title, in.Body, payload, expire, in.ExpectedRecipientCount, in.ExpectedShardCount, in.ManifestHash, now, uint32(kind), in.GuildId); e != nil {
+			if isDuplicateKey(e) {
+				return ErrConflict
+			}
 			return e
 		}
 		result.MailId = id

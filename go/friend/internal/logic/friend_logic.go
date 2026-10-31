@@ -54,6 +54,7 @@ import (
 	base "proto/common/base"
 	pb "proto/friend"
 	scenepb "proto/scene"
+	"shared/authoritysql"
 	"shared/roleidentity"
 )
 
@@ -183,7 +184,7 @@ func NewDeps(svcCtx *svc.ServiceContext) *Deps {
 		SQLDialect:                svcCtx.SQLDialect,
 		RecommendStatementTimeout: svcCtx.Config.RequestBudget(),
 	})
-	if err := repo.ConfigureRoleAuthority(svcCtx.Config.AccountRoleSchema); err != nil {
+	if err := repo.ConfigureRoleAuthority(svcCtx.Config.AccountRoleSchema, authoritysql.Backend(svcCtx.Config.Backend)); err != nil {
 		panic("好友原会话 SQL 权威装配失败：" + err.Error())
 	}
 	return &Deps{

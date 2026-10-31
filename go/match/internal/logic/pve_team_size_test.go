@@ -136,12 +136,13 @@ func TestSizedQueueKeyRoundTrip(t *testing.T) {
 // 凑满人数口径:人数档以 key 为准但不超过副本上限;不带人数段的 PVE_TEAM 队列(存量)按上限凑满。
 func TestRequiredPlayersForQueue(t *testing.T) {
 	svcCtx, _ := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 4, "2": 10}
+	// 上限超过引擎每队 5 人的表行在模板目录编译时就被拒绝(catalog_test.go),这里只剩合法上限。
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 4, 2: 5})
 
 	require.Equal(t, uint32(2), requiredPlayersForQueue(svcCtx, matchSizedQueueKey(pveTeamMode, 1, 2), pveTeamMode, 1))
 	require.Equal(t, uint32(4), requiredPlayersForQueue(svcCtx, matchSizedQueueKey(pveTeamMode, 1, 4), pveTeamMode, 1))
 	require.Zero(t, requiredPlayersForQueue(svcCtx, matchSizedQueueKey(pveTeamMode, 1, 5), pveTeamMode, 1), "超过副本上限的人数档不弹组")
-	require.Equal(t, uint32(kMaxBattleTeamSize), requiredPlayersForQueue(svcCtx, matchSizedQueueKey(pveTeamMode, 2, 5), pveTeamMode, 2), "配置 10 按引擎上限 5 收口")
+	require.Equal(t, uint32(kMaxBattleTeamSize), requiredPlayersForQueue(svcCtx, matchSizedQueueKey(pveTeamMode, 2, 5), pveTeamMode, 2), "上限 5 = 引擎每队上限")
 	require.Zero(t, requiredPlayersForQueue(svcCtx, matchSizedQueueKey(pveTeamMode, 99, 2), pveTeamMode, 99), "未配置的副本")
 
 	require.Equal(t, uint32(4), requiredPlayersForQueue(svcCtx, matchQueueKey(pveTeamMode, 1), pveTeamMode, 1), "存量队列按上限凑满")
@@ -153,7 +154,7 @@ func TestRequiredPlayersForQueue(t *testing.T) {
 // 同一副本的 2 人档与 3 人档互不串队:各凑各的,先满先开。
 func TestPveTeamSizeTiersQueueSeparately(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	calls := stubPveGather(t)
 	for pid := uint64(21001); pid <= 21005; pid++ {
 		setPlayerLocation(t, mr, pid, 1)
@@ -211,7 +212,7 @@ func mustLockKey(t *testing.T, queueKey string) string {
 // 1 人档不排队:与 PVE_SOLO 同一条即时开战路径(matched 票、不入队、失败不回队列)。
 func TestPveTeamSizeOneStartsImmediately(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	calls := stubPveGather(t)
 	setPlayerLocation(t, mr, 22001, 1)
 
@@ -236,7 +237,7 @@ func TestPveTeamSizeOneStartsImmediately(t *testing.T) {
 // 不填人数 = 副本上限,且与显式填上限的人进同一条队列(否则同一档的人被拆成两堆,谁也凑不满)。
 func TestPveTeamSizeZeroMeansDungeonLimit(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 3}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 3})
 	calls := stubPveGather(t)
 	for pid := uint64(23001); pid <= 23003; pid++ {
 		setPlayerLocation(t, mr, pid, 1)
@@ -256,7 +257,7 @@ func TestPveTeamSizeZeroMeansDungeonLimit(t *testing.T) {
 // 人数超过副本上限、副本未开放组队:拒绝且不留票据。
 func TestPveTeamSizeRejections(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 3}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 3})
 	calls := stubPveGather(t)
 	setPlayerLocation(t, mr, 24001, 1)
 
@@ -280,7 +281,7 @@ func TestPveTeamSizeRejections(t *testing.T) {
 // 队列与票据原样保留,玩家取消后可以改排别的档。
 func TestSizedQueueStopsMatchingWhenLimitLowered(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	calls := stubPveGather(t)
 	ids := []uint64{25001, 25002, 25003, 25004}
 	for _, pid := range ids {
@@ -289,7 +290,7 @@ func TestSizedQueueStopsMatchingWhenLimitLowered(t *testing.T) {
 	}
 	queue4 := matchSizedQueueKey(pveTeamMode, 1, 4)
 
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 3}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 3})
 	runMatcherRound(context.Background(), svcCtx)
 	expectNoPveGather(t, calls)
 	require.Equal(t, []string{"25001", "25002", "25003", "25004"}, queueMembers(t, svcCtx, queue4))
@@ -308,7 +309,7 @@ func TestSizedQueueStopsMatchingWhenLimitLowered(t *testing.T) {
 	require.Zero(t, joinPveTeam(t, svcCtx, 25002, 1, 3).ErrorCode)
 
 	// 上限调回来,剩下三人加上新来的一个照常成组。
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	setPlayerLocation(t, mr, 25005, 1)
 	require.Zero(t, joinPveTeam(t, svcCtx, 25005, 1, 4).ErrorCode)
 	runMatcherRound(context.Background(), svcCtx)
@@ -318,7 +319,7 @@ func TestSizedQueueStopsMatchingWhenLimitLowered(t *testing.T) {
 // queue_depth 按人数档分开上报:同一副本的两个档不能互相覆盖同一条时间序列。
 func TestQueueDepthReportedPerTeamSize(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	stubPveGather(t)
 
 	var mu sync.Mutex
@@ -352,7 +353,7 @@ func TestQueueDepthReportedPerTeamSize(t *testing.T) {
 // JoinQueue 已经不放人进这个档,不摘的话它会永远留在注册集里每轮被扫,gauge 停在最后一次上报的值。
 func TestOverLimitSizedQueuePrunedOnceEmpty(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	stubPveGather(t)
 
 	var mu sync.Mutex
@@ -370,7 +371,7 @@ func TestOverLimitSizedQueuePrunedOnceEmpty(t *testing.T) {
 	require.Zero(t, resp.ErrorCode)
 	queue4 := matchSizedQueueKey(pveTeamMode, 1, 4)
 
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 3}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 3})
 	runMatcherRound(context.Background(), svcCtx)
 	queues, err := svcCtx.MatchRedis.Smembers(matchQueueIndexKey)
 	require.NoError(t, err)
@@ -395,7 +396,7 @@ func TestOverLimitSizedQueuePrunedOnceEmpty(t *testing.T) {
 // 5 人档凑单时不能把他带进去 —— 他的票据记的是 2 人档。残留项被摘掉,票据原样不动。
 func TestStaleEntryFromOtherTierIsDroppedNotMatched(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	calls := stubPveGather(t)
 	queue2 := matchSizedQueueKey(pveTeamMode, 1, 2)
 	queue5 := matchSizedQueueKey(pveTeamMode, 1, 5)

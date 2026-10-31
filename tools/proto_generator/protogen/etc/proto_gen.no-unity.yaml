@@ -383,6 +383,22 @@ domain_meta:
         handler: "cpp/generated/data_service/handler"
         grpc: "cpp/generated/data_service/grpc"
 
+  # 玩家存盘直接提交(docs/design/player-save-direct-commit.md):go/db 提供,scene 调用。
+  # proto_gen.yaml 与 proto_gen.no-unity.yaml 必须同步。
+  player_store:
+    source: "{{proto_dir}}player_store/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/player_store/proto"
+        handler: "go/generated/player_store/handler"
+        grpc: "go/generated/player_store/grpc"
+      cpp:
+        proto: "cpp/generated/player_store/proto"
+        handler: "cpp/generated/player_store/handler"
+        grpc: "cpp/generated/player_store/grpc"
+
   etcd:
     source: "{{proto_dir}}etcd/"
     rpc:

@@ -13,6 +13,7 @@ import (
 
 	"guild/internal/data"
 	"shared/assetopwake"
+	"shared/authoritysql"
 	"shared/idsegment"
 )
 
@@ -60,18 +61,6 @@ type Config struct {
 	TableDir           string       `json:",default=../../generated/tables"`
 	// 入帮申请尝试的每玩家固定 60 秒配额，包含重复刷新与仓储拒绝；不能用待审总量代替。
 	ApplicationQuotaPerMinute uint32 `json:"ApplicationQuotaPerMinute,default=10"`
-
-	// MergeMarkerRedis 指向 data_service 的 **mapping Redis**(player:zone:{id} 所在的
-	// 那个实例/DB),guild 只从里面读一把键:merge:in_progress:{zone}。
-	// 契约见 go/data_service/internal/routing/router.go 顶部的「合服闸门」注释:
-	// 键存在即该 zone 正在合服,值(JSON)与 TTL 都不解析,由 tools/merge_zone 写入与删除。
-	//
-	// **整段可缺失 = 闸门不生效**(CreateGuild 不做这项检查),启动时会打一条
-	// "MergeMarkerRedis 未配置" 的 Info 日志。这是刻意的:guild 与 data_service 目前没有
-	// 任何连线,强制它连一个新 Redis 会让所有还没配这段的环境直接起不来;而闸门本身
-	// 是合服维护窗口里的加固,不是常态运行的必需品。真要在合服里用,就必须配上 ——
-	// 没配的后果是维护窗口内玩家仍能在源 zone 建帮,那个公会不会被 merge_zone 搬走。
-	MergeMarkerRedis MergeMarkerRedisConf `json:"MergeMarkerRedis,optional"`
 
 	// DataServiceRpc 是 data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc),
 	// 与 login 的 PlayerLocatorRpc / SceneManagerRpc 同一套 zrpc+etcd 写法。
@@ -271,6 +260,15 @@ func (c Config) TrialResultActive() bool {
 	return c.Activity.TrialResult.Enabled && len(c.Kafka.Brokers) > 0
 }
 
+// TrialResultRequiresDurability 报告历练结果 topic 是否要核验 RF3 严格策略。结算要不要耐久和 SQL 用哪一档无关:
+// 只有本地 dev/test 的 mysql 档放行(本地 Kafka 通常单 broker);生产 mysql 档同样严格,省钱档不能顺带丢结算。
+func (c Config) TrialResultRequiresDurability() bool {
+	if authoritysql.Backend(c.MySQL.Backend) != authoritysql.BackendMySQL {
+		return true
+	}
+	return c.Mode != service.DevMode && c.Mode != service.TestMode
+}
+
 // AssetOpConf 是帮会资产通道(docs/design/guild-phase2/05-economy.md §5.29,
 // 循环参数按 90-consistency.md Y-06)的配置。
 //
@@ -318,11 +316,6 @@ type AssetOpConf struct {
 	PoisonDelayMs int `json:",default=3600000"`
 	// LedgerReadMinAttempts 连续几次投不出去之后才读已落盘账本(B5d-1 起由 guild.go 的 AttachPersistedLedger 接上;没配 DataServiceRpc 时不读)。
 	LedgerReadMinAttempts int `json:",default=3"`
-	// RequireSQLCommit 是资产 SQL 提交证据开关,原样映射到 assetop.LoopConfig.RequireSQLCommit
-	// (docs/design/db-write-fencing-mysql.md §6.6 / §8.7)。缺省 false = HEAD 口径(scene 回包 durable / Redis 父键 blob)。
-	// **只有 guild 会投递到的 zone 全部已切 go/db Fencing.Mode=dual、已上新版 C++,并观察到证据在持续发布之后才打开**;
-	// 打开时 Loop.Ledger 必填(guild.go 经 Loop.CheckWiring 拒启)。回退时先关它,再切回 legacy 或回退 C++。
-	RequireSQLCommit bool `json:",optional"`
 
 	// ── 清理(goroutine guild.asset_op_cleanup,§5.22)──
 
@@ -594,14 +587,11 @@ func (c *Config) Validate() error {
 		// 环境变量配置代表唯一来源；缺失时禁止退回本地样例连接串。
 		c.MySQL.DataSource = value
 	}
-	if !c.MySQL.RequiresTiDB() && c.Mode != service.DevMode && c.Mode != service.TestMode {
-		return errors.New("生产帮会权威库不得关闭TiDB门禁")
-	}
-	if c.AccountRoleSchema != "" && !c.MySQL.RequiresTiDB() {
-		return errors.New("角色归属提交互锁必须使用TiDB强权威池")
+	if _, err := authoritysql.ParseBackend(c.MySQL.Backend); err != nil {
+		return fmt.Errorf("MySQL.Backend: %w", err)
 	}
 	if c.AccountRoleSchema != "" && strings.TrimSpace(c.MatchAuthoritySchema) == "" {
-		return errors.New("MatchAuthoritySchema必须显式指向同TiDB集群的Match/Team权威库")
+		return errors.New("MatchAuthoritySchema必须显式指向同事务域的Match/Team权威库")
 	}
 	if c.AccountRoleSchema != "" && (!c.GlobalLoginSessions || strings.TrimSpace(c.LoginRedis.Host) == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize < 0) {
 		return errors.New("角色归属互锁须显式声明全局LoginRedis，同库登录态缺失拒绝")
@@ -616,14 +606,10 @@ func (c *Config) Validate() error {
 	}{
 		{"RedisClient", c.RedisClient.PoolSize},
 		{"PlayerLocatorRedis", c.PlayerLocatorRedis.PoolSize},
-		{"MergeMarkerRedis", c.MergeMarkerRedis.PoolSize},
 	} {
 		if pool.size < 0 {
 			return fmt.Errorf("%s.PoolSize(%d)不能为负:0 = go-redis 缺省 10 × GOMAXPROCS", pool.name, pool.size)
 		}
-	}
-	if err := c.MergeMarkerRedis.validate(); err != nil {
-		return err
 	}
 	if c.ApplicationQuotaPerMinute < 1 || c.ApplicationQuotaPerMinute > MaxApplicationQuotaPerMinute {
 		return fmt.Errorf("ApplicationQuotaPerMinute(%d)必须在 [1, %d] 内", c.ApplicationQuotaPerMinute, MaxApplicationQuotaPerMinute)
@@ -709,51 +695,14 @@ type RedisConf struct {
 	PoolSize int `json:"PoolSize,optional"`
 }
 
-// MergeMarkerRedisConf 是合服标记所在 Redis 的连接参数。
-//
-// 字段单独定义而不复用上面的 RedisConf,只为把 optional 语义钉死在类型上:
-// 这三个键**全部** optional,Host 为空就是"没配",而 RedisConf 的 Host 是必填。
-// 密码字段叫 Pass(与 go-zero redis.RedisConf 同名),因为运维填这段时对着的是
-// data_service 的 MappingRedis 那份 yaml。
-type MergeMarkerRedisConf struct {
-	Host string `json:"Host,optional"`
-	Pass string `json:"Pass,optional"`
-	DB   int    `json:"DB,optional"`
-	// PoolSize 同 RedisConf.PoolSize(0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,负数拒启)。
-	PoolSize int `json:"PoolSize,optional"`
-	// RequireRouteReady 是 D1 第 3 批的读方门禁开关(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.4):
-	// true 时闸门改用 placement.RouteReadyReadScript,只有 mapping Redis 的就绪标记可信(身份绑定到本实例)时才按
-	// merge:in_progress:{zone} 判,不可信时经闸门的公会写(建帮、入帮、经济、活动等)一律按封锁拒绝;启动期试跑一次读脚本,执行不了就拒启。
-	// 缺省 false = 今天的 EXISTS 判据,行为不变。只在 data_service 的 RouteStore.Mode=db_first 且对账 leader 已挂上标记后打开
-	// (上线顺序 P5:go/db → data_service → guild);回退时先关它。要求配了 Host(Validate 拒绝「开关开着、闸门没接」)。
-	RequireRouteReady bool `json:"RequireRouteReady,optional"`
-}
-
-// Enabled 报告合服闸门是否配置了。Host 是唯一判据:没有地址就连不上,
-// 其余两项都有合法的零值(无密码、DB 0)。
-func (c MergeMarkerRedisConf) Enabled() bool {
-	return c.Host != ""
-}
-
-// validate 拒绝「要求就绪标记却没接闸门」:那样开关形同虚设,闸门整体不生效,运维却以为它在 fail-closed。
-func (c MergeMarkerRedisConf) validate() error {
-	if c.RequireRouteReady && !c.Enabled() {
-		return errors.New("MergeMarkerRedis.RequireRouteReady=true 要求配置 MergeMarkerRedis.Host(data_service 的 mapping Redis):" +
-			"没接闸门时开关不生效,公会写完全不检查合服")
-	}
-	return nil
-}
-
 type MySQLConf struct {
 	DataSource    string `json:"DataSource,optional"`
 	DataSourceEnv string `json:",optional"`
-	// 缺省开启全局权威库门禁；旧MySQL仅可在dev/test显式关闭。
-	RequireTiDB *bool `json:",optional"`
-	MaxOpenConn int   `json:",default=20"`
-	MaxIdleConn int   `json:",optional"`
+	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);非法值拒启。
+	Backend     string `json:",default=tidb"`
+	MaxOpenConn int    `json:",default=20"`
+	MaxIdleConn int    `json:",optional"`
 }
-
-func (c MySQLConf) RequiresTiDB() bool { return c.RequireTiDB == nil || *c.RequireTiDB }
 
 // 连接池预算与部署总账共用，强会话初始化仍由 authoritysql 负责。
 const (

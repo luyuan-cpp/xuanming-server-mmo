@@ -22,10 +22,69 @@ type gateKafkaRouterCase struct {
 	ClassName        string
 	HandlerName      string
 	Assignments      []string
+
+	// PayloadRequired:事件有 GateCommand 信封装不下的字段(见 eventRequiresPayload)。空载荷的这类命令
+	// 只可能来自坏生产者,模板把信封分支渲染成「计数 + 采样日志 + 拒绝」,不构造缺字段的事件下发;
+	// 为 true 时 Assignments 为空。
+	PayloadRequired bool
 }
 
 type gateKafkaRouterTemplateData struct {
 	Cases []gateKafkaRouterCase
+}
+
+// AnyPayloadRequired 供模板决定是否渲染拒绝空载荷的辅助函数:没有需要载荷的事件时不生成它,
+// 免得生成物里留一个没人调用的函数。
+func (d gateKafkaRouterTemplateData) AnyPayloadRequired() bool {
+	for _, c := range d.Cases {
+		if c.PayloadRequired {
+			return true
+		}
+	}
+	return false
+}
+
+// gateCommandPayloadField 是 GateCommand 上承载事件序列化字节的字段。信封分支只在它为空时才走,所以它不算能映射的字段:
+// 事件里同名的字段拿到的恒为空。
+const gateCommandPayloadField = "payload"
+
+// envelopeCarriesField 是信封分支映射规则的唯一实现:GateCommand 上有同名、同型、双方都不是 repeated 的标量字段,
+// 这个事件字段才能从信封赋值。message / group 永远装不下(信封只有标量)。同名不同型多半是 proto 写错了,留一行 Warn。
+func envelopeCarriesField(eventName string, commandFields map[string]*descriptorpb.FieldDescriptorProto,
+	eventField *descriptorpb.FieldDescriptorProto) bool {
+	commandField, exists := commandFields[eventField.GetName()]
+	if !exists || eventField.GetName() == gateCommandPayloadField {
+		return false
+	}
+	if commandField.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED ||
+		eventField.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED {
+		return false
+	}
+	switch eventField.GetType() {
+	case descriptorpb.FieldDescriptorProto_TYPE_MESSAGE, descriptorpb.FieldDescriptorProto_TYPE_GROUP:
+		return false
+	}
+	if commandField.GetType() != eventField.GetType() {
+		logger.Global.Warn("GateCommand and Event field type mismatch, the event now requires a payload",
+			zap.String("event", eventName),
+			zap.String("field", eventField.GetName()),
+		)
+		return false
+	}
+	return true
+}
+
+// eventRequiresPayload 判断事件是否只能经 payload 到 gate:只要有一个字段信封装不下(envelopeCarriesField 为假)就是。
+// 信封分支对装不下的字段只能留默认值,这样构造出来的事件缺字段却照常执行:PushToPlayer 给客户端推一个空 MessageContent,
+// 三种广播静默变成空操作,RedirectToGate 把客户端重定向到空地址,踢线和进场丢掉登录代次与所有权栅栏
+// (docs/design/battle-spectate-tiered-fanout.md §14 顺带发现)。所以判据看全部字段,不只看 message / repeated。
+func eventRequiresPayload(event *descriptorpb.DescriptorProto, commandFields map[string]*descriptorpb.FieldDescriptorProto) bool {
+	for _, field := range event.GetField() {
+		if !envelopeCarriesField(event.GetName(), commandFields, field) {
+			return true
+		}
+	}
+	return false
 }
 
 func findProtoFileBySuffix(pkgName string, nameSuffix string) *descriptorpb.FileDescriptorProto {
@@ -101,27 +160,17 @@ func buildGateKafkaRouterCases() ([]gateKafkaRouterCase, error) {
 			ClassName:        "GateEventHandler",
 			HandlerName:      buildEventHandlerMethodName("GateEventHandler", eventMessageName),
 			Assignments:      make([]string, 0),
+			PayloadRequired:  eventRequiresPayload(eventMsg, commandFieldMap),
 		}
 
-		// Auto-map fields: for each event field, if GateCommand has a field with
-		// the same name and compatible type, generate an assignment.
-		for _, eventField := range eventMsg.GetField() {
-			commandField, exists := commandFieldMap[eventField.GetName()]
-			if !exists {
-				continue
-			}
-			if commandField.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED ||
-				eventField.GetLabel() == descriptorpb.FieldDescriptorProto_LABEL_REPEATED {
-				continue
-			}
-			if commandField.GetType() != eventField.GetType() {
-				logger.Global.Warn("GateCommand and Event field type mismatch, skipping auto-assignment",
-					zap.String("event", eventMessageName),
-					zap.String("field", eventField.GetName()),
-				)
-				continue
-			}
+		// 信封装不下的事件不做同名映射:空载荷时模板渲染拒绝分支,映射出来也用不上。
+		if caseData.PayloadRequired {
+			cases = append(cases, caseData)
+			continue
+		}
 
+		// 走到这里每个字段都能从信封映射(envelopeCarriesField),按同名赋值。
+		for _, eventField := range eventMsg.GetField() {
 			fieldName := eventField.GetName()
 			caseData.Assignments = append(caseData.Assignments,
 				"event.set_"+fieldName+"(command."+fieldName+"());")

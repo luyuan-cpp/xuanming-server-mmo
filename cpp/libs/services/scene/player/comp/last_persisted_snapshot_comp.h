@@ -10,10 +10,9 @@
 //
 // This component is attached to a player entity AFTER a successful
 // HandlePlayerAsyncSaved and holds the exact bytes that were just
-// committed to Redis. On the next SavePlayerToRedis, the new
-// PlayerAllData is compared (via dirty_save::IsEqual) against this
-// snapshot; if equal, the save is skipped — Redis write + Kafka
-// DBTask emission both avoided.
+// committed to TiDB. On the next save, the new PlayerAllData is compared
+// (via dirty_save::IsEqual) against this snapshot; if equal, the save
+// is skipped.
 //
 // Lifetime:
 //   - Created on the FIRST successful save for a player. Before that,
@@ -50,14 +49,13 @@ struct PlayerLastPersistedSnapshotComp
     // save-skip cadence. 0 when snapshot is nullptr.
     int64_t saved_at_ms{0};
 
-    // 仅原严格Redis提交钩子提供的(E,q)，不是SQL已经完成的缓存。body中的fence仍保持0，
-    // last_save_seq仍从dirty快照剥离；确认SQL时必须用这两个数读同一Lua视图。
+    // 提交钩子提供的(E,q)。body中的fence仍保持0，last_save_seq仍从dirty快照剥离。
     uint64_t committed_owner_epoch{0};
     uint64_t committed_save_seq{0};
 
     // 钩子先于全局saved回调；只匹配同一个不可变源对象，旧/合并快照不借新回包补资格。
     // weak不延长异步客户端payload寿命，至多一个候选，下一次实际提交覆盖它。
-    void RememberRedisCommit(const std::shared_ptr<const PlayerAllData>& source, uint64_t epoch, uint64_t seq)
+    void RememberCommit(const std::shared_ptr<const PlayerAllData>& source, uint64_t epoch, uint64_t seq)
     {
         committed_source_ = source;
         source_owner_epoch_ = epoch;

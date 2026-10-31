@@ -66,9 +66,6 @@ func TestKeys(t *testing.T) {
 	if got := HomeZoneKey(90002); got != "player:zone:90002" {
 		t.Fatalf("HomeZoneKey = %q", got)
 	}
-	if got := MergeFenceKey(102); got != "merge:in_progress:102" {
-		t.Fatalf("MergeFenceKey = %q", got)
-	}
 	if got := CapabilityKey(101); got != "db:capability:zone:101" {
 		t.Fatalf("CapabilityKey = %q", got)
 	}

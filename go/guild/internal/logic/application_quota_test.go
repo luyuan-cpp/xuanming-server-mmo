@@ -144,7 +144,7 @@ func TestApplyJoinGuildQuotaRejectsBeforeRepositoryAndEffects(t *testing.T) {
 	_, err := q.Allow(context.Background(), 42)
 	require.NoError(t, err)
 	notifier, bumper := &recordingNotifier{}, &recordingSyncBumper{}
-	l := NewGuildLogic(nil, nil, nil, nil, &fakeHomeZones{zone: 2},
+	l := NewGuildLogic(nil, nil, nil, &fakeHomeZones{zone: 2},
 		WithApplicationQuota(q), WithNotifier(notifier), WithSyncBumper(bumper))
 	resp, err := l.ApplyJoinGuild(clientCtx(42), &pb.ApplyJoinGuildRequest{GuildId: 9})
 	require.NoError(t, err)
@@ -159,7 +159,7 @@ func TestApplyJoinGuildQuotaCountsRepositoryRejectionsAndRefreshAttempts(t *test
 	t.Cleanup(func() { _ = rdb.Close() })
 	q := newTestApplicationQuota(t, rdb, 2)
 	repo := data.NewGuildRepo(rdb, nil, time.Minute)
-	l := NewGuildLogic(repo, nil, nil, nil, &fakeHomeZones{zone: 2}, WithApplicationQuota(q))
+	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}, WithApplicationQuota(q))
 	// 缓存预检的非法值仓储拒绝发生在配额之后；相同 guild 的重试仍各消耗一次。
 	require.NoError(t, rdb.Set(context.Background(), "player_guild:v2:42", "bad-guild-id", 0).Err())
 	for i := 0; i < 2; i++ {
@@ -177,7 +177,7 @@ func TestApplyJoinGuildQuotaCountsRepositoryRejectionsAndRefreshAttempts(t *test
 
 func TestApplyJoinGuildQuotaAuthenticationAndTargetPrecedeConsumption(t *testing.T) {
 	q := &ApplicationQuota{eval: func(context.Context, string) (any, error) { t.Fatal("非法请求不得消费配额"); return nil, nil }}
-	l := NewGuildLogic(nil, nil, nil, nil, &fakeHomeZones{zone: 2}, WithApplicationQuota(q))
+	l := NewGuildLogic(nil, nil, nil, &fakeHomeZones{zone: 2}, WithApplicationQuota(q))
 	_, err := l.ApplyJoinGuild(context.Background(), &pb.ApplyJoinGuildRequest{GuildId: 9})
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
 	resp, err := l.ApplyJoinGuild(clientCtx(42), &pb.ApplyJoinGuildRequest{})

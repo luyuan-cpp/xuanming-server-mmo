@@ -1,7 +1,7 @@
 # 现役排行榜采用 SQL 代次、封榜与持久邮件奖励；历史 Redis 消费延迟、ZCARD、版本表不再是运行时事实。
 # 多副本 counter 用 sum(rate/increase)，奖励延迟取 max；只有成功 SQL 查询才发布延迟样本。
 # 延迟覆盖已到期且未持租约的奖励，短租约到期后重新可见。查询失败保旧，另由扫描失败告警覆盖。
-# 须抓取 rank/match Pod metrics；进程或抓取缺失沿现有 Deployment/探针告警处理。
+# 须抓取 rank Pod metrics；进程或抓取缺失沿现有 Deployment/探针告警处理。
 # 所有 label 仅有限 operation/outcome，不得增加玩家、榜ID或请求ID。
 ---
 apiVersion: monitoring.coreos.com/v1
@@ -71,19 +71,3 @@ spec:
           annotations:
             summary: "排行榜持久奖励附件无法解析"
             description: "封榜奖励原件出现坏附件，工作器保留原意图并延后重试；核封榜来源与受控修复，不能跳奖或删除待办。"
-
-    - name: rank.publish
-      interval: 60s
-      rules:
-        # match 仍实际发出此快照发布指标；与 SQL rank 奖励链分别观测。
-        - alert: MatchRatingSnapshotPublishFailing
-          expr: |
-            sum(rate(match_rating_snapshot_publish_total{outcome="error"}[5m]))
-            /
-            sum(rate(match_rating_snapshot_publish_total[5m])) > 0.05
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "match 评分快照发布失败率超过 5%"
-            description: "查 match 的 rating snapshot 发布错误与 Kafka broker；该计数不表示 SQL 排行榜奖励交付完成。"

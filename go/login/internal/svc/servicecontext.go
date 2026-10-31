@@ -13,13 +13,13 @@ import (
 	"sync/atomic"
 
 	"github.com/bwmarrin/snowflake"
+	"github.com/google/uuid"
 	"github.com/panjf2000/ants/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
 
 	"login/internal/config"
-	"login/internal/dispatcher"
 	"login/internal/kafka"
 	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/loginqueue"
@@ -79,8 +79,7 @@ type ServiceContext struct {
 	// fail-closed),角色列表 / EnterGame 的名字回源则按「查不到」放行(展示数据,fail-open)。
 	PlayerNames         *playernamereg.Client
 	NodeInfo            login_proto.NodeInfo
-	KafkaClient         *kafka.KeyOrderedKafkaProducer
-	ExpandMonitor       *kafka.ExpandMonitor
+	KafkaClient         *kafka.CommandProducer
 	PlayerLocatorClient plpb.PlayerLocatorClient
 	SceneManagerClient  smpb.SceneManagerClient
 	GateWatcher         *node.NodeWatcher
@@ -94,16 +93,13 @@ type ServiceContext struct {
 	QueueDispatcher  *loginqueue.Dispatcher
 	queueCapProvider loginqueue.CapacityProvider
 
-	// PreloadPool runs background tasks (e.g. Kafka DB-preload) without spawning
-	// an unbounded number of goroutines per login. Configured non-blocking so
-	// Submit returns ErrPoolOverload immediately when full instead of stalling
-	// the caller (which would defeat the whole point of going async).
+	// PreloadPool 跑 EnterGame 的异步入场链,不为每次登录起一个无界的 goroutine。名字是预加载时代留下的:
+	// 现在没有预加载,scene 进场时直接从 TiDB 认领存档。非阻塞,池满时 Submit 立即返回失败,
+	// 不让调用方卡住。
 	PreloadPool *ants.Pool
 
-	// TaskResultDispatcher converts DB task-result delivery from BLPOP polling
-	// into a callback registry driven by a single Redis Pub/Sub subscriber.
-	// Hot paths register a callback for a taskID and return immediately.
-	TaskResultDispatcher *dispatcher.TaskResultDispatcher
+	// bootInstance 是本次启动的身份,维护排空按它绑定同 boot 的控制输入。
+	bootInstance uuid.UUID
 
 	// preloadSubmitted / preloadDropped track pool throughput for periodic
 	// stats logging. Atomic-only (no mutex) so the hot path stays cheap.
@@ -154,20 +150,7 @@ func NewServiceContext() *ServiceContext {
 	logx.Infof("Redis client %s DB=%d pool_size=%d", redisHost, redisDB, redisClient.Options().PoolSize)
 	queueRedis := newQueueRedis(ctx, redisClient, config.AppConfig.Node.QueueRedis)
 
-	kafkaClient, err := kafka.NewKeyOrderedKafkaProducer(config.AppConfig.Kafka)
-
-	if err != nil {
-		logx.Error(err)
-		panic(err)
-	}
-
-	monitor, err := kafka.NewExpandMonitor(
-		config.AppConfig.Kafka.Brokers, // Kafka broker addresses
-		config.AppConfig.Kafka.Topic,   // Consumer group ID
-		kafkaClient,
-		1*time.Second,
-	)
-
+	kafkaClient, err := kafka.NewCommandProducer(config.AppConfig.Kafka)
 	if err != nil {
 		logx.Error(err)
 		panic(err)
@@ -206,9 +189,7 @@ func NewServiceContext() *ServiceContext {
 	RegisterAccessTokenProvider(tokenMgr)
 
 	// Bounded background-task pool. Size is configurable; non-blocking + pre-alloc
-	// keep Submit cost O(1) and fail fast under overload. Kafka SyncProducer is
-	// internally serialized by a mutex, so a very large worker count buys nothing,
-	// but a generous ceiling absorbs short bursts.
+	// keep Submit cost O(1) and fail fast under overload.
 	poolSize := config.AppConfig.PreloadPool.Size
 	if poolSize <= 0 {
 		poolSize = 256
@@ -226,19 +207,18 @@ func NewServiceContext() *ServiceContext {
 	}
 
 	sc := &ServiceContext{
-		authCleanup:          authCleanup,
-		rootAdmission:        drainproof.New(),
-		preloads:             drainproof.New(),
-		RedisClient:          redisClient,
-		QueueRedis:           queueRedis,
-		KafkaClient:          kafkaClient,
-		ExpandMonitor:        monitor,
-		PlayerLocatorClient:  plClient,
-		SceneManagerClient:   smClient,
-		GateWatcher:          gateWatcher,
-		TokenManager:         tokenMgr,
-		PreloadPool:          preloadPool,
-		TaskResultDispatcher: dispatcher.NewTaskResultDispatcher(redisClient, 30*time.Second),
+		authCleanup:         authCleanup,
+		rootAdmission:       drainproof.New(),
+		preloads:            drainproof.New(),
+		RedisClient:         redisClient,
+		QueueRedis:          queueRedis,
+		KafkaClient:         kafkaClient,
+		PlayerLocatorClient: plClient,
+		SceneManagerClient:  smClient,
+		GateWatcher:         gateWatcher,
+		TokenManager:        tokenMgr,
+		PreloadPool:         preloadPool,
+		bootInstance:        uuid.New(),
 	}
 	sc.initLoginQueue()
 	sc.initPlayerIDMinter()
@@ -579,17 +559,10 @@ func (s *ServiceContext) initLoginQueue() {
 }
 
 func (s *ServiceContext) Start() {
-	backgroundCtx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	s.backgroundCancel = cancel
-	if s.ExpandMonitor != nil {
-		s.background.Add(1)
-		safego.Go("login.kafka_expand_monitor", func() { defer s.background.Done(); s.ExpandMonitor.RunJoined(backgroundCtx) })
-	}
 	s.startPreloadStatsLogger()
 	s.warmPlayerIDSegment()
-	if s.TaskResultDispatcher != nil {
-		s.TaskResultDispatcher.Start()
-	}
 	if s.QueueDispatcher != nil {
 		s.QueueDispatcher.Start()
 		s.queueStarted = true
@@ -800,15 +773,12 @@ func (s *ServiceContext) Stop() {
 	}
 }
 
-// StopAndReport先闭根入口，保留预加载/结果回调的相互派生能力；全部实际返回后才关闭生产者。
+// StopAndReport先闭根入口，等入场链全部实际返回后才关闭生产者。
 // ctx截止不等于server undo；返回错误时不关闭SQL/Redis或伪造已静止报告。
 func (s *ServiceContext) CloseSource(ctx context.Context) error {
 	s.sourceMu.Lock()
 	defer s.sourceMu.Unlock()
 	s.CloseRootAdmission()
-	if s.TaskResultDispatcher != nil {
-		s.TaskResultDispatcher.BeginDrain()
-	}
 	if s.KafkaClient != nil {
 		s.KafkaClient.BeginDrain()
 	}
@@ -821,9 +791,6 @@ func (s *ServiceContext) CloseSource(ctx context.Context) error {
 		}
 		if s.QueueDispatcher != nil && s.queueStarted {
 			s.QueueDispatcher.Stop()
-		}
-		if s.ExpandMonitor != nil {
-			s.ExpandMonitor.Stop()
 		}
 		if s.gateDrainStop != nil {
 			s.gateDrainStop()
@@ -850,27 +817,9 @@ func (s *ServiceContext) CloseSource(ctx context.Context) error {
 	}
 	preloads := s.preloads
 	s.lifecycleMu.Unlock()
-	for {
-		if err := preloads.WaitIdle(ctx); err != nil {
-			return err
-		}
-		if s.TaskResultDispatcher != nil {
-			if err := s.TaskResultDispatcher.WaitIdle(ctx); err != nil {
-				return err
-			}
-		}
-		if preloads.Pending() == 0 {
-			break
-		}
-	}
 	preloads.CloseAdmission()
 	if err := preloads.Wait(ctx); err != nil {
 		return err
-	}
-	if s.TaskResultDispatcher != nil {
-		if err := s.TaskResultDispatcher.StopAndReport(ctx); err != nil {
-			return err
-		}
 	}
 	if s.PreloadPool != nil {
 		s.PreloadPool.Release()
@@ -923,7 +872,7 @@ func (s *ServiceContext) StopAndReport(ctx context.Context) error {
 	return s.stopErr
 }
 
-// SourceFrontier包括已接收RPC、预加载及全部结果回调的实际前沿。
+// SourceFrontier包括已接收RPC与入场链的实际前沿。
 func (s *ServiceContext) SourceFrontier(ctx context.Context) ([]byte, error) {
 	if err := s.CloseSource(ctx); err != nil {
 		return nil, err
@@ -931,15 +880,6 @@ func (s *ServiceContext) SourceFrontier(ctx context.Context) ([]byte, error) {
 	combined := drainproof.New()
 	for _, owner := range []*drainproof.Session{s.rootAdmission, s.preloads} {
 		digest, err := owner.SettledDigest(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if err = combined.MergeSettled(digest); err != nil {
-			return nil, err
-		}
-	}
-	if s.TaskResultDispatcher != nil {
-		digest, err := s.TaskResultDispatcher.FrontierDigest(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -1053,11 +993,6 @@ func NewServiceContextForDrain(runtime *drainproof.Runtime) (*ServiceContext, er
 		return nil, err
 	}
 	service := NewServiceContext()
-	results, err := dispatcher.NewTaskResultDispatcherForBoot(service.RedisClient, 30*time.Second, seed.InstanceId)
-	if err != nil {
-		return nil, err
-	}
-	service.TaskResultDispatcher = results
 	if runtime.Request.RunPhase == pb.SqlWriterDrainRun_SQL_RELEASED {
 		service.rootAdmission = drainproof.NewPrepared()
 	} else {
@@ -1069,16 +1004,11 @@ func (s *ServiceContext) PreparedFrontier(ctx context.Context) ([]byte, error) {
 	if s.rootAdmission == nil || s.rootAdmission.Pending() != 0 {
 		return nil, drainproof.ErrHold
 	}
-	callback, err := s.TaskResultDispatcher.ReadyFrontier(ctx)
-	if err != nil {
-		return nil, err
-	}
 	producer, err := s.KafkaClient.ReadyFrontier(ctx)
 	if err != nil {
 		return nil, err
 	}
 	h := sha256.New()
-	h.Write(callback)
 	h.Write(producer)
 	h.Write(s.rootAdmission.SnapshotDigest())
 	return h.Sum(nil), nil
@@ -1096,12 +1026,15 @@ func (s *ServiceContext) OpenPreparedRoot(ctx context.Context) ([]byte, error) {
 	return s.rootAdmission.SnapshotDigest(), nil
 }
 
-// StartForDrain只启动真实结果relay，不warm号段或启动会发新根命令的登录队列。
+// StartForDrain不warm号段，也不启动会发新根命令的登录队列。
 func (s *ServiceContext) StartForDrain() {
 	if !s.idSegmentNeverUsed {
 		panic("专用排空启动必须是从未serve的固定boot")
 	}
-	if s.TaskResultDispatcher != nil {
-		s.TaskResultDispatcher.Start()
-	}
+}
+
+// BootInstance 返回本次启动的身份(16 字节)。
+func (s *ServiceContext) BootInstance() []byte {
+	instance := s.bootInstance
+	return instance[:]
 }

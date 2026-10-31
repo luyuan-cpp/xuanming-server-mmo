@@ -101,7 +101,7 @@ func (r *ActivityRepo) PrepareTrialLaunch(ctx context.Context, requestID uint64,
 	}
 	var result *pb.GuildTrialLaunchOriginal
 	err := r.guilds.inTx(withRoleTargets(ctx, launchPlayers(proposed)...), opTrialRegister, func(ctx context.Context, tx *sql.Tx) error {
-		if _, _, err := lockTrialGuild(ctx, tx, battle.GuildID); err != nil {
+		if _, err := lockTrialGuild(ctx, tx, battle.GuildID); err != nil {
 			return err
 		}
 		if err := r.verifyTrialOwners(ctx, tx, proposed); err != nil {
@@ -335,7 +335,7 @@ func (r *ActivityRepo) FinishCancelledTrialLaunch(ctx context.Context, original 
 	}
 	return r.guilds.inTx(withRoleTargets(ctx, launchPlayers(original)...), opTrialMark, func(ctx context.Context, tx *sql.Tx) error {
 		// 已解散帮会也须消费可信取消证明；G缺失时不补造帮会或奖项。
-		if _, _, err := lockTrialGuild(ctx, tx, original.GuildId); err != nil && !errors.Is(err, ErrGuildGone) {
+		if _, err := lockTrialGuild(ctx, tx, original.GuildId); err != nil && !errors.Is(err, ErrGuildGone) {
 			return err
 		}
 		lobby, err := lockTrialLobbyForLaunch(ctx, tx, original)

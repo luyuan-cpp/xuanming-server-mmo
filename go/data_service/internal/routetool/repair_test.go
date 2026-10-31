@@ -18,7 +18,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "proto/common/database"
 	"shared/drainproof"
-	"shared/placement"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -122,40 +121,6 @@ func TestReconcileFromCache_RefusedWhenWritable(t *testing.T) {
 	assert.Empty(t, sleeps, "没冻结就不该等宽限")
 	assert.Empty(t, run.stdout)
 	assert.NotContains(t, run.stderr, RepairNote, "正式冻结校验先于业务恢复输出")
-}
-
-// TestReconcileFromCache_FenceExitsThree:开头有围栏 → 退出码 3,一行都不修;途中才立的围栏由结尾复查发现,已修的保留、统计行照出。
-func TestReconcileFromCache_FenceExitsThree(t *testing.T) {
-	t.Run("开头", func(t *testing.T) {
-		mr, rd := newMappingRedis(t)
-		setKeys(t, mr, map[string]string{"player:zone:1": "1", placement.MergeFenceKey(3): "{}"})
-		db := newFrozenRepairDB()
-
-		_, run, _ := runRepair(t, rd, db, false, false)
-
-		assert.Equal(t, ExitFenced, run.code)
-		assert.Empty(t, db.calls)
-		assert.Empty(t, run.stdout)
-		assert.Contains(t, run.stderr, placement.MergeFenceKey(3))
-	})
-	t.Run("结尾", func(t *testing.T) {
-		mr, rd := newMappingRedis(t)
-		setKeys(t, mr, map[string]string{"player:zone:1": "1"})
-		db := newFrozenRepairDB()
-		db.hook = func(n int, rows []store.RouteImportRow, _ store.RouteRepairOptions) store.RouteRepairStats {
-			if n == 1 {
-				require.NoError(t, mr.Set(placement.MergeFenceKey(1), "{}"))
-			}
-			return store.RouteRepairStats{Restored: len(rows)}
-		}
-
-		rep, run, _ := runRepair(t, rd, db, false, false)
-
-		assert.Equal(t, ExitFenced, run.code)
-		assert.Equal(t, 1, rep.Restored, "围栏出现之前修的那一批不回滚")
-		assert.Contains(t, run.stdout, "route_reconcile_from_cache ")
-		assert.Contains(t, run.stderr, "after the repair")
-	})
 }
 
 // TestReconcileFromCache_StatelessDedupeAcrossPasses:三族键都在的玩家只修一次(A 遍);只有落点(+ maprev)的在 B 遍修一次;

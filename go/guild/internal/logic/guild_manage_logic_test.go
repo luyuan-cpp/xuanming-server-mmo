@@ -6,8 +6,7 @@ package logic
 // 就会当场 nil panic。用"误触即崩"代替"断言没调用过",是因为 *data.GuildRepo 是具体类型
 // 而不是接口,没法塞一个记录调用的替身进去 —— 顺序正确是这里唯一能机械守住的东西。
 //
-// 与本包其它测试文件共用的替身:fakeHomeZones / clientCtx 在 client_zone_test.go,
-// fakeFence 在 merge_fence_test.go。本文件只新建它们覆盖不到的那两个(见下)。
+// 与本包其它测试文件共用的替身:fakeHomeZones / clientCtx 在 client_zone_test.go。本文件只新建它们覆盖不到的那两个(见下)。
 
 import (
 	"context"
@@ -70,11 +69,11 @@ func (f *perPlayerZones) callCount(playerID uint64) int {
 // 用它构造出来的 notifier 在本文件里从不真正发消息(每个用例都缺至少一个依赖 → NoopNotifier)。
 type fakeGateCommandBuilder struct{}
 
-func (fakeGateCommandBuilder) BuildPushCommand(uint32, uint32, string, uint32, []byte) ([]byte, error) {
+func (fakeGateCommandBuilder) BuildPushCommand(uint32, uint32, uint64, string, uint32, []byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (fakeGateCommandBuilder) BuildBroadcastCommand(uint32, []uint32, string, uint32, []byte) ([]byte, error) {
+func (fakeGateCommandBuilder) BuildBroadcastCommand(uint32, []kafkautil.BroadcastTarget, string, uint32, []byte) ([]byte, error) {
 	return nil, nil
 }
 
@@ -86,7 +85,7 @@ func (fakeGateCommandBuilder) BuildBroadcastToAllCommand(uint32, string, uint32,
 	return nil, nil
 }
 
-// managementCall 把签名各不相同的 RPC 抹平成同一个形状,好让"会话""闸门"这类
+// managementCall 把签名各不相同的 RPC 抹平成同一个形状,好让"会话""归属 zone"这类
 // 公共前置用一张表覆盖全部入口 —— 逐个手写等于给漏掉一个入口留了位置。
 //
 // 返回值取 tip 的 id 而不是整个响应:全部响应都有 error_message 字段,而生成的 getter
@@ -134,15 +133,12 @@ func managementRPCs() []managementCall {
 	}
 }
 
-// fenceGuardedWrites 是所有要过合服闸门的写 RPC(§29 第 3 条:"所有写 RPC"取字面,
-// 存量的 LeaveGuild / DisbandGuild / SetAnnouncement / CreateGuild 也在内)。
-//
-// 两个读 RPC(ListMyGuildApplications / ListGuildApplications)**刻意不在这张表里**:
-// 合服窗口里读一眼自己申请了哪些帮会是安全的,拦掉只会让界面变成空白。
+// clientPrecheckWrites 是所有要先过会话与归属 zone 的写 RPC
+// (存量的 LeaveGuild / DisbandGuild / SetAnnouncement / CreateGuild 也在内)。
 //
 // 审批统一用 approve:false:通过分支会额外起一个协程去查申请人的 zone,
 // 而本表的用例用的是单值替身 fakeHomeZones —— 那条路由 TestReviewApproveChecksApplicantZoneBeforeRepo 覆盖。
-func fenceGuardedWrites() []managementCall {
+func clientPrecheckWrites() []managementCall {
 	readOnly := map[string]bool{"ListMyGuildApplications": true, "ListGuildApplications": true}
 	writes := make([]managementCall, 0, 10)
 	for _, rpc := range managementRPCs() {
@@ -178,7 +174,7 @@ func fenceGuardedWrites() []managementCall {
 // **没有** player_id,内部调用因此拿不出可信的操作者身份。放行只会让操作者变成 0 号玩家。
 // GM / 运维代操作要另设带身份的内部 RPC,不走这几个口。
 func TestManagementRPCsRequireClientSession(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, &fakeFence{}, &fakeHomeZones{zone: 2})
+	l := NewGuildLogic(nil, nil, nil, &fakeHomeZones{zone: 2})
 
 	for _, tc := range managementRPCs() {
 		t.Run(tc.name, func(t *testing.T) {
@@ -190,55 +186,16 @@ func TestManagementRPCsRequireClientSession(t *testing.T) {
 	}
 }
 
-// ── §11.1 合服闸门 ───────────────────────────────────────────
-
-// TestWriteRPCsRefusedWhileMerging:闸门命中时回 tip 而不是 gRPC 错误(§11.1),
-// 且查的是**请求者归属 zone**(2),不是客户端选的任何值。
-func TestWriteRPCsRefusedWhileMerging(t *testing.T) {
-	for _, tc := range fenceGuardedWrites() {
+// TestWriteRPCsRefusedWhenHomeZoneUnknown:没有归属 zone 就不知道玩家属于哪个区的帮会,回 tip 而不是 gRPC 错误。
+func TestWriteRPCsRefusedWhenHomeZoneUnknown(t *testing.T) {
+	for _, tc := range clientPrecheckWrites() {
 		t.Run(tc.name, func(t *testing.T) {
-			fence := &fakeFence{merging: true}
-			l := NewGuildLogic(nil, nil, nil, fence, &fakeHomeZones{zone: 2})
-
-			id, err := tc.run(l, clientCtx(42))
-
-			require.NoError(t, err, "合服是可预期的运维窗口,回 gRPC 错误会让客户端进重连隔离")
-			assert.Equal(t, constants.ErrZoneMerging, id)
-			assert.Equal(t, uint32(2), fence.lastZone, "闸门查的必须是请求者的归属 zone")
-		})
-	}
-}
-
-// TestFenceUnreadableReturnsZoneMergingTip:查不到闸门状态 ≠ 没有闸门。
-// 合服窗口里写出来的帮会数据会落在一个正在搬迁的 zone 上,那是要手工修的数据事故;
-// 拒绝一次只是玩家重试。
-func TestFenceUnreadableReturnsZoneMergingTip(t *testing.T) {
-	for _, tc := range fenceGuardedWrites() {
-		t.Run(tc.name, func(t *testing.T) {
-			fence := &fakeFence{err: errors.New("dial tcp: connection refused")}
-			l := NewGuildLogic(nil, nil, nil, fence, &fakeHomeZones{zone: 2})
-
-			id, err := tc.run(l, clientCtx(42))
-
-			require.NoError(t, err)
-			assert.Equal(t, constants.ErrZoneMerging, id)
-		})
-	}
-}
-
-// TestHomeZoneUnknownPrecedesFence:没有归属 zone 就不知道该查哪个区的闸门,
-// 顺序反过来会对着一个猜出来的 zone 做判定。fence.calls == 0 是这条顺序的证明。
-func TestHomeZoneUnknownPrecedesFence(t *testing.T) {
-	for _, tc := range fenceGuardedWrites() {
-		t.Run(tc.name, func(t *testing.T) {
-			fence := &fakeFence{merging: true}
-			l := NewGuildLogic(nil, nil, nil, fence, &fakeHomeZones{zone: 0})
+			l := NewGuildLogic(nil, nil, nil, &fakeHomeZones{zone: 0})
 
 			id, err := tc.run(l, clientCtx(42))
 
 			require.NoError(t, err)
 			assert.Equal(t, constants.ErrHomeZoneUnknown, id)
-			assert.Zero(t, fence.calls, "归属 zone 未知时不该产生一次闸门查询")
 		})
 	}
 }
@@ -250,7 +207,7 @@ func TestHomeZoneUnknownPrecedesFence(t *testing.T) {
 // 一把本不该加的行锁,而结果照样是拒绝。
 func TestTargetValidationBeforeRepo(t *testing.T) {
 	newLogic := func() *GuildLogic {
-		return NewGuildLogic(nil, nil, nil, &fakeFence{}, &fakeHomeZones{zone: 2})
+		return NewGuildLogic(nil, nil, nil, &fakeHomeZones{zone: 2})
 	}
 	const actor = uint64(42)
 
@@ -332,7 +289,7 @@ func TestReviewApproveChecksApplicantZoneBeforeRepo(t *testing.T) {
 
 	t.Run("申请人没有归属 zone 映射", func(t *testing.T) {
 		zones := &perPlayerZones{zones: map[uint64]uint32{reviewer: 2}}
-		l := NewGuildLogic(nil, nil, nil, &fakeFence{}, zones)
+		l := NewGuildLogic(nil, nil, nil, zones)
 
 		resp, err := l.ReviewGuildApplication(clientCtx(reviewer),
 			&pb.ReviewGuildApplicationRequest{ApplicantPlayerId: applicant, Approve: true})
@@ -349,7 +306,7 @@ func TestReviewApproveChecksApplicantZoneBeforeRepo(t *testing.T) {
 			zones: map[uint64]uint32{reviewer: 2},
 			errs:  map[uint64]error{applicant: boom},
 		}
-		l := NewGuildLogic(nil, nil, nil, &fakeFence{}, zones)
+		l := NewGuildLogic(nil, nil, nil, zones)
 
 		resp, err := l.ReviewGuildApplication(clientCtx(reviewer),
 			&pb.ReviewGuildApplicationRequest{ApplicantPlayerId: applicant, Approve: true})
@@ -360,7 +317,7 @@ func TestReviewApproveChecksApplicantZoneBeforeRepo(t *testing.T) {
 
 	t.Run("拒绝不查申请人 zone", func(t *testing.T) {
 		zones := &perPlayerZones{zones: map[uint64]uint32{reviewer: 2}}
-		l := NewGuildLogic(nil, nil, nil, &fakeFence{}, zones)
+		l := NewGuildLogic(nil, nil, nil, zones)
 
 		// 删掉一条申请在任何 zone 下都是安全的,所以拒绝分支不该付这次 data_service 往返。
 		// repo 为 nil,流程会一直走到 operatorGuild 才崩 —— 这个 panic 正是"确实走到了仓储"的证据。
@@ -370,7 +327,7 @@ func TestReviewApproveChecksApplicantZoneBeforeRepo(t *testing.T) {
 		}, "拒绝分支应当一路走到仓储调用")
 
 		assert.Zero(t, zones.callCount(applicant), "拒绝不该查申请人的归属 zone")
-		assert.Equal(t, 1, zones.callCount(reviewer), "审批人自己的 zone 仍要查(闸门要用)")
+		assert.Equal(t, 1, zones.callCount(reviewer), "审批人自己的 zone 仍要查")
 	})
 }
 
@@ -380,7 +337,7 @@ func TestReviewApproveChecksApplicantZoneBeforeRepo(t *testing.T) {
 //
 // 这一支刻意不碰 repo(映射表里只有它和几个前置分支不复核映射),所以 repo 传 nil 就是断言。
 func TestWriteConflictMapsToBusyTip(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 
 	tip, err := l.mapWriteErr(context.Background(), 42, 1, 1, data.ErrWriteConflict)
 
@@ -395,7 +352,7 @@ func TestWriteConflictMapsToBusyTip(t *testing.T) {
 // 表现只是"某个操作偶尔提示得莫名其妙",线上极难发现。
 // repo 传 nil 是安全的:会复核映射的几支都经 verifyMapping,而它对 nil repo 直接返回。
 func TestMapWriteErrMapping(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 	ctx := context.Background()
 
 	tips := []struct {

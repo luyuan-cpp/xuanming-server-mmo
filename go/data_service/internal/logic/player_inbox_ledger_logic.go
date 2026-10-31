@@ -13,18 +13,8 @@ import (
 // 一句话:go/player_inbox 的对账(领导者每小时一轮的定时作业,以及运维 ReconcilePlayer)来这里读玩家
 // **已落盘**的收件箱账本(player_database.inbox_ledger),比对 decided_through_seq 与收件箱里已终结的行。
 //
-// 读法与语义表与 GetPlayerAssetOpLedger 完全相同(asset_op_ledger_logic.go 文件头;共用 readPersistedPlayerDatabase):
-//
-//	key 不存在(redis.Nil)                       → found=false,无 error(对账计 unknown,不告警)
-//	blob 反序列化失败 / player_id 与请求不符        → Internal
-//	home_zone 查不到(无映射 / 映射库错 / zone 未配)→ Unavailable
-//	zone Redis 读失败                              → Internal
-//	player_id = 0                                  → InvalidArgument
-//	调用方已取消 / 超时                            → Canceled / DeadlineExceeded
-//	正常                                           → found=true + 账本(从未消费过收件箱时为空消息)
-//
-// 为什么读 Redis 的 PlayerAllData blob 而不是 MySQL:账本与 currency 在 scene 的同一次存盘里写出(IB-3),
-// Redis 里的那份就是「已落盘」的判据;MySQL 是 go/db 异步落库,可能更旧,会把已处理的 seq 误判为未处理。
+// 读法与语义表与 GetPlayerAssetOpLedger 完全相同(asset_op_ledger_logic.go 文件头;共用 readPlayerStoreAsset):
+// 没有写权行 found=false,对账计 unknown,不告警。账本与 currency 在 scene 的同一次存盘里提交(IB-3)。
 //
 // 响应形状照 GetPlayerAssetOpLedgerResponse:只有 found 与 ledger,不带 error_code 也不带 tip(设计 §1.4 注),
 // 契约就是 gRPC code 本身;本服务的进程级拦截器(ErrorCodeClassifier)读不到 in-band 码,对它无感。
@@ -45,19 +35,18 @@ func GetPlayerInboxLedger(ctx context.Context, svcCtx *svc.ServiceContext, playe
 	result := inboxLedgerReadError
 	defer func() { metrics.ObservePlayerInboxLedgerRead(result) }()
 
-	player, found, err := readPersistedPlayerDatabase(ctx, svcCtx, playerID, "GetPlayerInboxLedger", "player-inbox-ledger")
+	row, err := readPlayerStoreAsset(ctx, svcCtx, playerID, "GetPlayerInboxLedger", "player-inbox-ledger")
 	if err != nil {
 		return nil, false, err
 	}
-	if !found {
+	if row == nil {
 		result = inboxLedgerReadAbsent
 		return nil, false, nil
 	}
 
-	ledger := player.GetInboxLedger()
+	ledger := row.Player.GetInboxLedger()
 	if ledger == nil {
-		// 从未消费过收件箱(或存档由不认识新字段的旧 scene 写出):回空消息而不是 nil,
-		// 让调用方区分「有 blob、账本为空」与「没有 blob」。
+		// 从未消费过收件箱:回空消息而不是 nil,让调用方区分「有存档、账本为空」与「没有存档」。
 		ledger = &componentpb.PlayerInboxLedgerComp{}
 	}
 	result = inboxLedgerReadFound

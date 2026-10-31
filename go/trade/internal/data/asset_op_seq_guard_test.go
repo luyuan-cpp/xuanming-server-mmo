@@ -1,6 +1,6 @@
 package data
 
-// asset_op_seq_guard_test.go —— 建 seq 行的守卫锁序回归(不连库)。
+// asset_op_seq_guard_test.go —— 建 seq 行的锁序回归(不连库)。文件名保留历史叫法:哨兵守卫行 2026-10-30 已撤。
 //
 // 被测对象是 AssetOpRepo.EnsureSeqRows(短事务 A)、AssetOpRepo.AllocateSeqsTx(业务事务 B)
 // 以及两者合起来的**取锁顺序**。真库上的死锁证据在 asset_op_seq_guard_integration_test.go
@@ -42,8 +42,6 @@ type seqScript struct {
 
 	// existing 是已存在的 seq 行,键 = (player_id, stream)。对应"普通读命中"。
 	existing map[[2]uint64]bool
-	// guardExists 是哨兵守卫行 (0, 0) 是否已 bootstrap。
-	guardExists bool
 	// nextSeq / epoch 是 AllocateSeq 读到的值;epoch 必须 > 0,否则 assetop 判行损坏。
 	nextSeq uint64
 	epoch   uint64
@@ -155,16 +153,10 @@ func (c *seqFakeConn) QueryContext(_ context.Context, query string, args []drive
 	defer c.s.mu.Unlock()
 	switch {
 	case strings.HasPrefix(query, "SELECT 1 FROM "+AssetOpSeqTableName):
-		// 存在性探针(普通读)与守卫行的锁定点查共用这个前缀,只差尾部的 FOR UPDATE。
+		// 存在性探针(普通读)。
 		player, stream, err := twoUintArgs(args)
 		if err != nil {
 			return nil, err
-		}
-		if player == seqGuardPlayerID && stream == uint64(seqGuardStream) {
-			if !c.s.guardExists {
-				return &seqFakeRows{cols: []string{"1"}}, nil
-			}
-			return &seqFakeRows{cols: []string{"1"}, data: [][]driver.Value{{int64(1)}}}, nil
 		}
 		if !c.s.existing[[2]uint64{player, stream}] {
 			return &seqFakeRows{cols: []string{"1"}}, nil
@@ -270,55 +262,14 @@ func (r *seqFakeRows) Next(dest []driver.Value) error {
 
 // TestSeqRowExistsProbeTakesNoLocks:探针 / 确认读必须是**普通读**。
 //
-// 给它加上锁定子句就等于取消了整个守卫:RC 下未命中的锁定读不取间隙锁、什么都拦不住,
-// 而命中时它会在玩家 seq 行上先取一把锁 —— 短事务 A 会因此在拿哨兵行之前先持有玩家 seq 行,
-// 与"持哨兵行、等玩家 seq 行"的另一个 A 正好反序成环,正是本次要消掉的那个形状。
+// 给它加上锁定子句没有任何好处:RC 下未命中的锁定读不取间隙锁、什么都拦不住,
+// 而命中时它会白白在玩家 seq 行上排队 —— 稳态路径每次上架都要多等一把锁。
 func TestSeqRowExistsProbeTakesNoLocks(t *testing.T) {
 	q := strings.ToUpper(sqlSeqRowExists)
 	for _, clause := range []string{"FOR UPDATE", "FOR SHARE", "LOCK IN SHARE MODE"} {
 		if strings.Contains(q, clause) {
-			t.Fatalf("seq 行探针不得带 %q(会把守卫锁序反过来,见 asset_op_repo.go 守卫一节): %s",
+			t.Fatalf("seq 行探针不得带 %q: %s",
 				clause, sqlSeqRowExists)
-		}
-	}
-}
-
-// TestSeqGuardLockIsPrimaryKeyPointLookup:守卫行的锁定读必须是完整主键等值点查 + FOR UPDATE。
-//
-// 主键是 (player_id, stream),两列都给等值条件,锁集才**恰好**落在哨兵行上。少一列(或改成
-// IN / 范围)会让执行计划退化成扫描,把别的玩家的 seq 行一起锁进来,与 AllocateSeq 跨玩家成环。
-// 真库上的 EXPLAIN 断言(key=PRIMARY、key_len=12)在 integration 用例里。
-func TestSeqGuardLockIsPrimaryKeyPointLookup(t *testing.T) {
-	if want := sqlSeqRowExists + " FOR UPDATE"; sqlLockSeqGuardRow != want {
-		t.Fatalf("守卫行锁定读应当只在探针语句尾部加 FOR UPDATE:\n  got  %s\n  want %s", sqlLockSeqGuardRow, want)
-	}
-	for _, col := range []string{"`player_id` = ?", "`stream` = ?"} {
-		if !strings.Contains(sqlLockSeqGuardRow, col) {
-			t.Errorf("守卫行锁定读缺主键列等值条件 %s(锁集会越出哨兵行): %s", col, sqlLockSeqGuardRow)
-		}
-	}
-	for _, forbidden := range []string{" IN (", " OR ", " LIKE ", " > ", " < "} {
-		if strings.Contains(sqlLockSeqGuardRow, forbidden) {
-			t.Errorf("守卫行锁定读出现 %q:必须是完整主键等值点查: %s", forbidden, sqlLockSeqGuardRow)
-		}
-	}
-}
-
-// TestSeqGuardKeyIsNotARealStream:哨兵键不能与任何一条真流撞上,否则守卫行会被当成业务 seq 行
-// 分配号(玩家 0 的流水),而业务事务又在锁它 —— 那就是自己跟自己抢。
-func TestSeqGuardKeyIsNotARealStream(t *testing.T) {
-	if seqGuardPlayerID != 0 {
-		t.Errorf("哨兵 player_id = %d,应为 0(真玩家的 PlayerId 由 login 的 snowflake 发,不发 0)", seqGuardPlayerID)
-	}
-	if seqGuardStream != assetpb.AssetOpStream_ASSET_OP_STREAM_UNSPECIFIED {
-		t.Errorf("哨兵 stream = %v,应为 UNSPECIFIED", seqGuardStream)
-	}
-	for _, s := range []assetpb.AssetOpStream{
-		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT,
-		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_CREDIT,
-	} {
-		if s == seqGuardStream {
-			t.Errorf("哨兵 stream 与 trade 独占的流 %v 撞了", s)
 		}
 	}
 }
@@ -336,7 +287,6 @@ const legacyEnsureSeqRowSQL = "INSERT IGNORE INTO " + AssetOpSeqTableName +
 // TestLegacyEnsureSeqRowSQLMatchesAssetop:上面那份副本必须与 assetop.EnsureSeqRowTx 实际发出的语句一致。
 func TestLegacyEnsureSeqRowSQLMatchesAssetop(t *testing.T) {
 	s := newSeqScript()
-	s.guardExists = true
 	repo := newSeqGuardRepo(t, s)
 	tx := beginRC(t, repo)
 	if err := assetop.EnsureSeqRowTx(context.Background(), tx, repo.Tables(),
@@ -352,12 +302,11 @@ func TestLegacyEnsureSeqRowSQLMatchesAssetop(t *testing.T) {
 // TestSeqTableRowsAreNeverDeleted 是本次修法最关键的一条前提:**trade 从不删 seq 行**。
 //
 // 它顶着两件事:
-//   - "首次建行排在一行已提交的守卫行上"只消掉了"首插者回滚"那一种环。一旦有人给 seq 表加了清理 /
+//   - MySQL 档上并发补行"后到者判重即结束、不升 X"成立的前提是行不会被删。一旦有人给 seq 表加了清理 /
 //     回收 DELETE,就会出现**已提交的删除标记记录**,并发补行的重复键检查取 S、发现要就地复活、
-//     各自升 X —— friend 的场景 (g) 与 trade 收藏的红对照都是这个形状,守卫行拦不住它(守卫只保证
-//     同一时刻一个插入者,而这个环只要"插入者 + 一个删行者"两方就能成)。
+//     各自升 X —— friend 的场景 (g) 与 trade 收藏的红对照都是这个形状。
 //   - 2026-09-29 建行挪进独立短事务之后,"短事务提交到业务事务开始之间 seq 行不可能消失"这条论证
-//     (asset_op_repo.go 守卫一节第 2 点)直接依赖本用例。行会被删的话,业务事务的确认读会
+//     (asset_op_repo.go "拆开之后为什么仍然正确"第 2 点)直接依赖本用例。行会被删的话,业务事务的确认读会
 //     fail-closed 报 ErrSeqRowMissingInTx —— 响亮,但那时整套锁分析都要重做。
 //
 // 用源码扫描而不是人工约定:下一个 AI 不会记得这两条前提,但它会看到这条红灯。
@@ -367,25 +316,9 @@ func TestSeqTableRowsAreNeverDeleted(t *testing.T) {
 	for file, line := range seqTableSQLLines(t) {
 		if strings.Contains(strings.ToUpper(line), "DELETE") {
 			t.Errorf("%s 出现了针对 %s 的 DELETE:%s\n"+
-				"删 seq 行会造出已提交的删除标记记录,并发补行在它上面 S→X 成环,守卫行拦不住;"+
+				"删 seq 行会造出已提交的删除标记记录,并发补行在它上面 S→X 成环;"+
 				"而且会让「短事务提交后行不会消失」这条论证作废 —— 见本用例头注,加清理之前先重做锁分析",
 				file, AssetOpSeqTableName, line)
-		}
-	}
-}
-
-// TestNoAggregateQueryOverSeqTable:哨兵行 (0, 0) 混在 seq 表里,任何聚合 / 分组查询都会把它算进去。
-// 目前全模块对这张表只有完整主键等值语句(assetop 的点查点改 + 本包的探针 / 确认读 / 守卫锁定读),
-// 所以哨兵行不会被误处理;新增聚合时必须显式排除 (0, 0) 并改这条断言,而不是让它悄悄多数一行。
-func TestNoAggregateQueryOverSeqTable(t *testing.T) {
-	for file, line := range seqTableSQLLines(t) {
-		up := strings.ToUpper(line)
-		for _, agg := range []string{"COUNT(", "MIN(", "MAX(", "SUM(", "AVG(", "GROUP BY"} {
-			if strings.Contains(up, agg) {
-				t.Errorf("%s 出现了针对 %s 的聚合 %s:%s\n"+
-					"哨兵守卫行 (player_id=0, stream=0) 会被算进去 —— 要么显式排除它,要么改本用例的判据",
-					file, AssetOpSeqTableName, agg, line)
-			}
 		}
 	}
 }
@@ -398,7 +331,7 @@ func tradeModuleRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("拿不到本文件路径:无法定位 trade 模块根,两条源码扫描守卫此刻什么都没看住")
+		t.Fatal("拿不到本文件路径:无法定位 trade 模块根,源码扫描此刻什么都没看住")
 	}
 	dir := filepath.Dir(file)
 	for {
@@ -464,17 +397,17 @@ func seqTableSQLLines(t *testing.T) map[string]string {
 	if err != nil {
 		t.Fatalf("遍历 trade 模块源码失败: %v", err)
 	}
-	// 扫不到任何行 = 判据失效(文件改名、常量改名、语句挪走),此时上面两条守卫会静默全绿。
-	// 宁可在这里判红让人来改判据,也不要留两条什么都不看的绿灯。
+	// 扫不到任何行 = 判据失效(文件改名、常量改名、语句挪走),此时上面的用例会静默全绿。
+	// 宁可在这里判红让人来改判据,也不要留一条什么都不看的绿灯。
 	if len(out) == 0 {
 		t.Fatalf("在 %s 的非测试源码里扫不到任何提到 %s 的 SQL 行:判据已失效,"+
-			"TestSeqTableRowsAreNeverDeleted 与 TestNoAggregateQueryOverSeqTable 此刻什么都没看住",
+			"TestSeqTableRowsAreNeverDeleted 此刻什么都没看住",
 			root, AssetOpSeqTableName)
 	}
 	return out
 }
 
-// ── 行为:什么时候锁守卫行 ──────────────────────────────────
+// ── 行为:什么时候开短事务 ──────────────────────────────────
 
 // newSeqGuardRepo 建一个挂在录制驱动上的仓库。
 func newSeqGuardRepo(t *testing.T, s *seqScript) *AssetOpRepo {
@@ -505,17 +438,15 @@ var guardTestStream = assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT
 // TestEnsureSeqRowsOpensItsOwnShortTransaction 是本文件最要紧的一条:
 //
 //   - 缺行时:先发一条**自动提交**的普通读探针(没有 BEGIN),确认缺行之后才开事务,
-//     事务里是"再探一次 → 守卫行 FOR UPDATE → 建行 → COMMIT"。守卫行排在建行之后 = 白锁一把;
-//     排在事务外 = 根本没有守卫。
+//     事务里只有"建行 → COMMIT",不碰任何全局共用的行(否则开服首日全服上架排在那一行上)。
 //   - 行已存在时:**一个事务都不开、一条写语句都不发**。这是稳态路径(每玩家每流只有第一笔会缺行),
 //     多开一个事务就是给全服每一次上架加一次无谓的 BEGIN/COMMIT 往返。
 //   - 短事务必须是 RC:确认读要看得见前一个建行者已提交的行。
 func TestEnsureSeqRowsOpensItsOwnShortTransaction(t *testing.T) {
 	key := SeqKey{PlayerID: guardTestPlayer, Stream: guardTestStream}
 
-	t.Run("缺行:自动提交探针 → 短事务(再探 → 守卫行 FOR UPDATE → 建行 → COMMIT)", func(t *testing.T) {
+	t.Run("缺行:自动提交探针 → 短事务(建行 → COMMIT)", func(t *testing.T) {
 		s := newSeqScript()
-		s.guardExists = true
 		repo := newSeqGuardRepo(t, s)
 
 		if err := repo.EnsureSeqRows(context.Background(), guardTestNowMs, key); err != nil {
@@ -525,8 +456,6 @@ func TestEnsureSeqRowsOpensItsOwnShortTransaction(t *testing.T) {
 		want := []string{
 			collapseSpaces(sqlSeqRowExists), // 自动提交的前置探针:BEGIN 之前
 			"BEGIN",
-			collapseSpaces(sqlSeqRowExists), // 事务内再探一次:期间别的副本可能已经建出来了
-			collapseSpaces(sqlLockSeqGuardRow),
 			legacyEnsureSeqRowSQL,
 			"COMMIT",
 		}
@@ -539,9 +468,8 @@ func TestEnsureSeqRowsOpensItsOwnShortTransaction(t *testing.T) {
 		}
 	})
 
-	t.Run("行已存在:只有一条自动提交探针,不开事务、不碰守卫行", func(t *testing.T) {
+	t.Run("行已存在:只有一条自动提交探针,不开事务", func(t *testing.T) {
 		s := newSeqScript()
-		s.guardExists = true
 		s.existing[[2]uint64{key.PlayerID, uint64(key.Stream)}] = true
 		repo := newSeqGuardRepo(t, s)
 
@@ -555,15 +483,10 @@ func TestEnsureSeqRowsOpensItsOwnShortTransaction(t *testing.T) {
 	})
 }
 
-// TestEnsureSeqRowsLocksGuardOnceForSeveralMissingKeys:多个 key 缺行时,守卫行只锁一次,
-// 且**所有**建行都在那一把守卫之后、都在同一个短事务里。
-//
-// 这是"必须一次把全部 key 传进来"那条契约的机械保障:分两次调用 EnsureSeqRows 会开两个短事务,
-// 各自锁一次守卫行 —— 虽然不成环(每次都是空手去拿守卫),但会把开服首日的串行点踩两遍;
-// 更要紧的是它会让调用方误以为"分次传也行",进而在事务 B 里补第二次建行,那才是真的反序成环。
-func TestEnsureSeqRowsLocksGuardOnceForSeveralMissingKeys(t *testing.T) {
+// TestEnsureSeqRowsCreatesAllMissingKeysInOneShortTx:多个 key 缺行时全部在同一个短事务里建完,不碰任何别的行。
+// 这张表上除了玩家自己的行没有别的行:启动期不用补任何东西,不存在 (player_id=0, stream=0) 这样的全局行。
+func TestEnsureSeqRowsCreatesAllMissingKeysInOneShortTx(t *testing.T) {
 	s := newSeqScript()
-	s.guardExists = true
 	repo := newSeqGuardRepo(t, s)
 
 	keys := []SeqKey{
@@ -573,26 +496,15 @@ func TestEnsureSeqRowsLocksGuardOnceForSeveralMissingKeys(t *testing.T) {
 	if err := repo.EnsureSeqRows(context.Background(), guardTestNowMs, keys...); err != nil {
 		t.Fatalf("EnsureSeqRows: %v", err)
 	}
-
 	got := s.recorded()
-	guardStmt := collapseSpaces(sqlLockSeqGuardRow)
-	guardAt, guards, inserts := -1, 0, 0
-	for i, stmt := range got {
-		switch {
-		case stmt == guardStmt:
-			guards++
-			if guardAt < 0 {
-				guardAt = i
-			}
-		case strings.HasPrefix(stmt, "INSERT IGNORE INTO "+AssetOpSeqTableName):
+	inserts := 0
+	for _, stmt := range got {
+		if strings.HasPrefix(stmt, "INSERT IGNORE INTO "+AssetOpSeqTableName) {
 			inserts++
-			if guardAt < 0 {
-				t.Fatalf("第 %d 条语句是建行,但守卫行还没锁:\n%s", i, strings.Join(got, "\n"))
-			}
 		}
-	}
-	if guards != 1 {
-		t.Errorf("守卫行被锁了 %d 次,应为 1 次:\n%s", guards, strings.Join(got, "\n"))
+		if strings.Contains(stmt, "FOR UPDATE") {
+			t.Errorf("建行短事务不该取任何锁定读: %s", stmt)
+		}
 	}
 	if inserts != len(keys) {
 		t.Errorf("建行 %d 次,应为 %d 次:\n%s", inserts, len(keys), strings.Join(got, "\n"))
@@ -600,15 +512,19 @@ func TestEnsureSeqRowsLocksGuardOnceForSeveralMissingKeys(t *testing.T) {
 	if txs := s.transactions(); txs != 1 {
 		t.Errorf("开了 %d 个事务,应为 1 个(全部 key 必须在同一个短事务里建完)", txs)
 	}
+	for _, k := range s.keysOf("INSERT IGNORE INTO " + AssetOpSeqTableName) {
+		if k.PlayerID == 0 {
+			t.Errorf("不该再有全局行: %+v", k)
+		}
+	}
 }
 
 // TestSeqKeysAreProcessedInAscendingOrder:多 key 一律按 (player_id, stream) **升序**处理,
 // 建行(事务 A)与分配(事务 B)都是。
 //
-// 这条钉的是本服务对多把玩家 seq 行锁的确定性全序。哨兵行只串行化"建行",不串行化"分配":
-// 行建出之后所有分配都只走普通读 + 玩家行 FOR UPDATE,全程不碰守卫行。P3 的交付要在同一个事务里
-// 给买家 CREDIT 和卖家 CREDIT,两笔交易若以相反顺序锁两条都已存在的玩家行就直接成环 ——
-// 那时守卫行一次都不会被碰,这条用例是唯一看着它的机制。
+// 这条钉的是本服务对多把玩家 seq 行锁的确定性全序:行建出之后所有分配都只走普通读 + 玩家行 FOR UPDATE。
+// P3 的交付要在同一个事务里给买家 CREDIT 和卖家 CREDIT,两笔交易若以相反顺序锁两条都已存在的玩家行就直接成环,
+// 这条用例是唯一看着它的机制。
 //
 // 入参刻意乱序 + 带重复,断言:语句里出现的 (player, stream) 严格升序、无重复。
 func TestSeqKeysAreProcessedInAscendingOrder(t *testing.T) {
@@ -621,7 +537,6 @@ func TestSeqKeysAreProcessedInAscendingOrder(t *testing.T) {
 
 	t.Run("建行(事务 A)按升序 INSERT IGNORE", func(t *testing.T) {
 		s := newSeqScript()
-		s.guardExists = true
 		repo := newSeqGuardRepo(t, s)
 		if err := repo.EnsureSeqRows(context.Background(), guardTestNowMs, shuffled...); err != nil {
 			t.Fatalf("EnsureSeqRows: %v", err)
@@ -631,7 +546,6 @@ func TestSeqKeysAreProcessedInAscendingOrder(t *testing.T) {
 
 	t.Run("分配(事务 B)按升序 FOR UPDATE", func(t *testing.T) {
 		s := newSeqScript()
-		s.guardExists = true
 		for _, k := range wantOrder {
 			s.existing[[2]uint64{k.PlayerID, uint64(k.Stream)}] = true
 		}
@@ -666,48 +580,19 @@ func assertKeyOrder(t *testing.T, s *seqScript, prefix string, want []SeqKey) {
 	}
 }
 
-// TestEnsureSeqRowsFailsClosedWhenGuardRowMissing:哨兵行不在时必须失败,而且**不许建行**。
-//
-// 退化成"没有守卫就直接插"会把审计 #16 的环原样装回去,而且只在 bootstrap 失败的机器上复现 ——
-// 那是最难查的一类。fail-closed 的代价只是首次上架报错,bootstrap 的 ERROR 日志与
-// trade_assetop_seq_guard_bootstrap_failures_total 已经指出补救动作。
-func TestEnsureSeqRowsFailsClosedWhenGuardRowMissing(t *testing.T) {
-	s := newSeqScript() // guardExists = false
-	repo := newSeqGuardRepo(t, s)
-
-	err := repo.EnsureSeqRows(context.Background(), guardTestNowMs,
-		SeqKey{PlayerID: guardTestPlayer, Stream: guardTestStream})
-	if !errors.Is(err, ErrSeqGuardRowMissing) {
-		t.Fatalf("err = %v, want errors.Is(..., ErrSeqGuardRowMissing)", err)
-	}
-	for _, stmt := range s.recorded() {
-		if strings.HasPrefix(stmt, "INSERT IGNORE INTO "+AssetOpSeqTableName) {
-			t.Fatalf("守卫行缺失时发出了建行语句(绕过守卫 = 死锁装回去): %s", stmt)
-		}
-	}
-	// 失败必须是**不可重试**的:IsRetryableTxError 认了它的话,WithTxRetry 会围着一个
-	// 永远不会自己变好的条件空转,把 5s 预算耗光,错误现场还被最后一次尝试覆盖掉。
-	if IsRetryableTxError(err) {
-		t.Error("ErrSeqGuardRowMissing 不得被判成可重试错误")
-	}
-}
-
-// TestSeqRowKeysRejectSentinel:哨兵键不得当业务流用,两个入口都要拒,而且要在发出任何语句之前拒。
-// 放行的话,同一个事务会先锁守卫行再把它当玩家 seq 行读写,AllocateSeq 还会推进它的 next_seq ——
-// 守卫行从此带着业务语义,任何人想清理它都要先搞懂这段历史。
-func TestSeqRowKeysRejectSentinel(t *testing.T) {
+// TestSeqRowKeysRejectInvalid:player_id=0 不是玩家,stream=0 是 UNSPECIFIED,两个入口都要拒,而且要在发出任何语句之前拒。
+func TestSeqRowKeysRejectInvalid(t *testing.T) {
 	cases := []struct {
 		name string
 		key  SeqKey
 	}{
-		{"哨兵整键", SeqKey{PlayerID: seqGuardPlayerID, Stream: seqGuardStream}},
+		{"两者都是 0", SeqKey{}},
 		{"player_id=0", SeqKey{PlayerID: 0, Stream: guardTestStream}},
-		{"stream=UNSPECIFIED", SeqKey{PlayerID: guardTestPlayer, Stream: seqGuardStream}},
+		{"stream=UNSPECIFIED", SeqKey{PlayerID: guardTestPlayer, Stream: assetpb.AssetOpStream_ASSET_OP_STREAM_UNSPECIFIED}},
 	}
 	for _, tc := range cases {
 		t.Run("EnsureSeqRows/"+tc.name, func(t *testing.T) {
 			s := newSeqScript()
-			s.guardExists = true
 			repo := newSeqGuardRepo(t, s)
 			if err := repo.EnsureSeqRows(context.Background(), guardTestNowMs, tc.key); err == nil {
 				t.Fatal("应被拒绝")
@@ -718,7 +603,6 @@ func TestSeqRowKeysRejectSentinel(t *testing.T) {
 		})
 		t.Run("AllocateSeqsTx/"+tc.name, func(t *testing.T) {
 			s := newSeqScript()
-			s.guardExists = true
 			repo := newSeqGuardRepo(t, s)
 			tx := beginRC(t, repo)
 			if _, err := repo.AllocateSeqsTx(context.Background(), tx, guardTestNowMs, tc.key); err == nil {
@@ -748,12 +632,11 @@ func TestAllocateSeqsTxRequiresTx(t *testing.T) {
 // **绝不就地补行**。
 //
 // 这条守的是 2026-09-29 拆短事务时新增的那条缝:如果这里退化成"读不到就自己建",业务事务就会在
-// 已经可能持有业务行锁(P3 的 trade_listing / trade_order)之后去拿哨兵行 —— 那正是被消掉的反向边,
+// 已经可能持有业务行锁(P3 的 trade_listing / trade_order)之后去插 seq 行,业务回滚还会把它一起带走,
 // 而且只在"有人删了 seq 行"这种罕见前提下才复现,几乎不可能被压测撞到。
 // 顺带断言"一把 X 都还没拿":确认读全部做完才开始 FOR UPDATE,失败时锁集为空,重试代价最小。
 func TestAllocateSeqsTxFailsClosedWhenRowVanished(t *testing.T) {
 	s := newSeqScript() // existing 为空:模拟"短事务建过,但行没了"
-	s.guardExists = true
 	repo := newSeqGuardRepo(t, s)
 	tx := beginRC(t, repo)
 
@@ -764,10 +647,7 @@ func TestAllocateSeqsTxFailsClosedWhenRowVanished(t *testing.T) {
 	}
 	for _, stmt := range s.recorded() {
 		if strings.HasPrefix(stmt, "INSERT IGNORE INTO "+AssetOpSeqTableName) {
-			t.Fatalf("业务事务里就地补行了(把守卫的锁序反了过来): %s", stmt)
-		}
-		if stmt == collapseSpaces(sqlLockSeqGuardRow) {
-			t.Fatalf("业务事务里去锁了哨兵守卫行:全序要求哨兵行只在短事务 A 里取: %s", stmt)
+			t.Fatalf("业务事务里就地补行了: %s", stmt)
 		}
 		if strings.HasPrefix(stmt, "SELECT next_seq, epoch FROM "+AssetOpSeqTableName) {
 			t.Fatalf("确认读落空之后仍然去取了玩家 seq 行的 X:应当在一把锁都没拿之前就失败: %s", stmt)
@@ -778,44 +658,19 @@ func TestAllocateSeqsTxFailsClosedWhenRowVanished(t *testing.T) {
 	}
 }
 
-// TestBusinessTxNeverTouchesGuardRow:业务事务(事务 B)一次都不许提到哨兵键。
-//
-// 这是短事务化之后"消环"论证的**核心**:哨兵行只在事务 A 里取,而 A 取它的时候手上没有任何别的锁。
-// 只要事务 B 里出现哨兵行,那条"持业务锁 → 等哨兵行"的反向边就立刻画得出来。
-func TestBusinessTxNeverTouchesGuardRow(t *testing.T) {
-	s := newSeqScript()
-	s.guardExists = true
-	key := SeqKey{PlayerID: guardTestPlayer, Stream: guardTestStream}
-	s.existing[[2]uint64{key.PlayerID, uint64(key.Stream)}] = true
-	repo := newSeqGuardRepo(t, s)
-	tx := beginRC(t, repo)
-
-	if _, err := repo.AllocateSeqsTx(context.Background(), tx, guardTestNowMs, key); err != nil {
-		t.Fatalf("AllocateSeqsTx: %v", err)
-	}
-	guardStmt := collapseSpaces(sqlLockSeqGuardRow)
-	for _, stmt := range s.recorded() {
-		if stmt == guardStmt {
-			t.Fatalf("业务事务里出现了哨兵守卫行的锁定读:\n%s", strings.Join(s.recorded(), "\n"))
-		}
-	}
-}
-
 // TestEscrowTransactionLockOrder 钉住托管两段事务的**完整取锁顺序**:
 //
-//	[事务 A] 自动提交探针 → BEGIN → 探针 → 守卫行 FOR UPDATE → 建 seq 行 → COMMIT
+//	[事务 A] 自动提交探针 → BEGIN → 建 seq 行 → COMMIT
 //	[事务 B] BEGIN → 确认读 → 玩家 seq 行 FOR UPDATE → 未决行普通读 → 推进 next_seq → 插 outbox 行
 //
-// 这正是 asset_op_repo.go 守卫一节写下的全序在 seq 与 outbox 两张表上的那一段。
+// 这正是 asset_op_repo.go "seq 行的建行"一节写下的全序在 seq 与 outbox 两张表上的那一段。
 // reconcile.Pipeline.EnqueueEscrowDebit 是产品调用点,它的端到端语句顺序由
 // internal/reconcile/pipeline_lock_order_test.go 单独看住 —— 本用例只证 data 层这两个方法
 // 各自发什么、按什么顺序发。
 //
-// 顺序一旦反过来(先 AllocateSeqsTx 再 EnsureSeqRows),缺行时确认读落空、上架必失败(响亮);
-// 而"在事务 B 里去拿守卫行"则会与正常路径反序成环 —— 只在并发下偶发,由上面两条用例分别盯住。
+// 顺序一旦反过来(先 AllocateSeqsTx 再 EnsureSeqRows),缺行时确认读落空、上架必失败(响亮)。
 func TestEscrowTransactionLockOrder(t *testing.T) {
 	s := newSeqScript()
-	s.guardExists = true
 	repo := newSeqGuardRepo(t, s)
 	ctx := context.Background()
 	key := SeqKey{PlayerID: guardTestPlayer, Stream: guardTestStream}
@@ -823,10 +678,10 @@ func TestEscrowTransactionLockOrder(t *testing.T) {
 	if err := repo.EnsureSeqRows(ctx, guardTestNowMs, key); err != nil {
 		t.Fatalf("EnsureSeqRows: %v", err)
 	}
-	guardAt := idxOfPrefix(s.recorded(), collapseSpaces(sqlLockSeqGuardRow))
+	insertAt := idxOfPrefix(s.recorded(), "INSERT IGNORE INTO "+AssetOpSeqTableName)
 	commitAt := idxOfPrefix(s.recorded(), "COMMIT")
-	if guardAt < 0 || commitAt < 0 || commitAt < guardAt {
-		t.Fatalf("短事务 A 必须在拿过守卫行之后提交:\n%s", strings.Join(s.recorded(), "\n"))
+	if insertAt < 0 || commitAt < 0 || commitAt < insertAt {
+		t.Fatalf("短事务 A 必须在建完行之后提交:\n%s", strings.Join(s.recorded(), "\n"))
 	}
 	aStmts := len(s.recorded())
 
@@ -846,7 +701,6 @@ func TestEscrowTransactionLockOrder(t *testing.T) {
 		what   string
 		prefix string
 	}{
-		{"守卫行 FOR UPDATE(事务 A)", collapseSpaces(sqlLockSeqGuardRow)},
 		{"建 seq 行(事务 A)", "INSERT IGNORE INTO " + AssetOpSeqTableName},
 		{"事务 A 提交", "COMMIT"},
 		{"确认读(事务 B)", collapseSpaces(sqlSeqRowExists)},

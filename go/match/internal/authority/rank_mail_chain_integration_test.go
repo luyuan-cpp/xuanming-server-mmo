@@ -77,7 +77,7 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 		observer, err := mysql.ParseDSN(opts.AdminDSN)
 		require.NoError(t, err)
 		observer.DBName = database
-		db, err := authoritysql.Open(ctx, observer.FormatDSN(), database, true, 2, authoritysql.Reader())
+		db, err := authoritysql.Open(ctx, observer.FormatDSN(), database, authoritysql.BackendTiDB, 2, authoritysql.Reader())
 		require.NoError(t, err)
 		t.Cleanup(func() { require.NoError(t, db.Close()) })
 		return db
@@ -110,6 +110,7 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 
 	for i, score := range []float64{1, 0.5} {
 		battle := uint64(5001 + i)
+		shard := rankSourceShard(battle) // 两局落在相邻两片,各片游标从 1 起,榜上的游标是总数
 		event := &kafkapb.BattleResultEvent{BattleId: battle, MatchMode: 3}
 		applied, err := s.ApplyRating(ctx, battle, event, 3, []uint64{7}, []uint64{8}, score)
 		require.NoError(t, err)
@@ -121,14 +122,14 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 		require.NoError(t, s.PublishRankOnce(ctx, rankClient, secret))
 		require.NoError(t, s.PublishRankOnce(ctx, rankClient, secret), "来源重放不得重复提交榜批次")
 		var produced, committed, board, rankCursor uint64
-		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT produced_cursor,committed_cursor,board_id FROM match_rank_source WHERE source_epoch=1").Scan(&produced, &committed, &board))
-		require.Equal(t, uint64(i+1), produced)
+		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT produced_cursor,committed_cursor,board_id FROM match_rank_source WHERE source_epoch=1 AND shard=?", shard).Scan(&produced, &committed, &board))
+		require.Equal(t, uint64(1), produced)
 		require.Equal(t, produced, committed)
 		require.NotZero(t, board)
 		require.NoError(t, rankDB.QueryRowContext(ctx, "SELECT committed_cursor FROM rank_board WHERE board_id=?", board).Scan(&rankCursor))
-		require.Equal(t, committed, rankCursor)
+		require.Equal(t, uint64(i+1), rankCursor)
 		var body []byte
-		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT entries FROM match_rank_outbox WHERE source_epoch=1 AND source_cursor=?", produced).Scan(&body))
+		require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT entries FROM match_rank_outbox WHERE source_epoch=1 AND shard=? AND source_cursor=?", shard, produced).Scan(&body))
 		replay := &rankpb.SubmitRankScoresRequest{}
 		require.NoError(t, proto.Unmarshal(body, replay))
 		replay.BoardId = board
@@ -163,7 +164,7 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 	require.Equal(t, before, after)
 	chainCount(t, ctx, s.DB, "SELECT COUNT(*) FROM match_rating_applied WHERE battle_id=5003", 0)
 	var board uint64
-	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT board_id FROM match_rank_source WHERE source_epoch=1").Scan(&board))
+	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT MAX(board_id) FROM match_rank_source WHERE source_epoch=1").Scan(&board))
 	attachments := &mailpb.MailAttachments{Currencies: []*mailpb.MailCurrency{{CurrencyType: 0, Amount: 10}}}
 	freeze := &rankpb.FreezeRankGenerationRequest{BoardId: board, Generation: 1, SourceEpoch: 1,
 		ExpectedSourceCursor: finalCursor + 1, RequestId: 9901, TopN: 2,
@@ -190,7 +191,7 @@ func TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss(t *testing.T) {
 	require.NoError(t, rankDB.QueryRowContext(ctx, "SELECT reward_id,player_id,attachments,created_ms FROM rank_mail_reward WHERE settlement_id=?", sealed.SettlementId).Scan(&rewardID, &recipient, &rewardBody, &created))
 	require.Equal(t, uint64(7), recipient)
 	require.NotZero(t, rewardID)
-	t.Log("真实评分/outbox 经连续游标 1→2 入榜；停代回滚迟到评分；未齐封榜拒绝，正式封榜生成 2 快照、1 奖励")
+	t.Log("真实评分/outbox 经两片各自的连续游标入榜；停代回滚迟到评分；未齐封榜拒绝，正式封榜生成 2 快照、1 奖励")
 
 	chainTick(t, ctx, rankProcess)
 	var state, attempts uint32

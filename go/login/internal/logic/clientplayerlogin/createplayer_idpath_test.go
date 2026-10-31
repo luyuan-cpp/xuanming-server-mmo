@@ -17,12 +17,10 @@ type fakeSegment struct {
 
 func (f *fakeSegment) Next(context.Context) (uint64, error) { return f.id, f.err }
 
-// CreatePlayer 的发号步骤:号段成功用号段;失败时按 FallbackToSnowflake 决定回退还是
-// 用**既有的** kLoginDataSerializeFailed 整体拒绝 —— 任何情况下都不会拿到 0 或自造 id。
+// CreatePlayer 的发号步骤:号段成功用号段;失败时用**既有的** kLoginDataSerializeFailed
+// 整体拒绝 —— 任何情况下都不会拿到 0 或自造 id。
 func TestMintPlayerID(t *testing.T) {
 	segDown := errors.New("idsegment: segment unavailable")
-	snowflake := func() (uint64, error) { return 280000000000000001, nil }
-	fenced := func() (uint64, error) { return 0, errors.New("player id generator fenced") }
 
 	cases := []struct {
 		name    string
@@ -36,24 +34,14 @@ func TestMintPlayerID(t *testing.T) {
 			wantID: 77,
 		},
 		{
-			name:    "segment down, fallback off → fail closed with the existing id-gen tip",
+			name:    "segment down → fail closed with the existing id-gen tip",
 			minter:  &idsegment.Minter{Name: "player_id", Segment: &fakeSegment{err: segDown}},
 			wantTip: uint32(table.LoginError_kLoginDataSerializeFailed),
 		},
 		{
-			name:   "segment down, fallback on → snowflake id",
-			minter: &idsegment.Minter{Name: "player_id", Segment: &fakeSegment{err: segDown}, Fallback: snowflake},
-			wantID: 280000000000000001,
-		},
-		{
-			name:    "segment down, fallback on but snowflake fenced → still fails closed",
-			minter:  &idsegment.Minter{Name: "player_id", Segment: &fakeSegment{err: segDown}, Fallback: fenced},
+			name:    "segment disabled → fail closed",
+			minter:  &idsegment.Minter{Name: "player_id"},
 			wantTip: uint32(table.LoginError_kLoginDataSerializeFailed),
-		},
-		{
-			name:   "segment disabled (rollback switch) → snowflake",
-			minter: &idsegment.Minter{Name: "player_id", Fallback: snowflake},
-			wantID: 280000000000000001,
 		},
 		{
 			name:    "minter not wired → fails closed instead of nil-deref",

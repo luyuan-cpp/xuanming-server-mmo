@@ -76,7 +76,7 @@ func TestGetGuild_FillsMemberAndLeaderNames(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
 	seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门", namesTestMemberB), 10)
 	names := &recordingPlayerNames{names: map[uint64]string{namesTestLeaderA: "云中君"}}
-	l := NewGuildLogic(repo, nil, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
 
 	// 内部调用(无会话):不查归属 zone,也不算待审数,读路径只剩缓存 + 取名。
 	resp, err := l.GetGuild(context.Background(), &pb.GetGuildRequest{GuildId: namesTestGuildOne})
@@ -101,7 +101,7 @@ func TestGetGuild_LeaderMissingFromMembersStillNamed(t *testing.T) {
 	guild.Members = []data.MemberData{{PlayerID: namesTestMemberB, Role: constants.RoleMember}}
 	seedGuild(t, mr, guild, 10)
 	names := &recordingPlayerNames{names: map[uint64]string{namesTestLeaderA: "云中君"}}
-	l := NewGuildLogic(repo, nil, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
 
 	resp, err := l.GetGuild(context.Background(), &pb.GetGuildRequest{GuildId: namesTestGuildOne})
 
@@ -118,7 +118,7 @@ func TestGetGuildRank_ResolvesLeaderNamesInOneBatch(t *testing.T) {
 		namesTestLeaderA: "云中君",
 		namesTestLeaderC: "青莲客",
 	}}
-	l := NewGuildLogic(repo, nil, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
 
 	resp, err := l.GetGuildRank(context.Background(), &pb.GetGuildRankRequest{ZoneId: 2})
 
@@ -139,7 +139,7 @@ func TestGetGuildRankByGuild_FillsLeaderName(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
 	seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门", namesTestMemberB), 20)
 	names := &recordingPlayerNames{names: map[uint64]string{namesTestLeaderA: "云中君"}}
-	l := NewGuildLogic(repo, nil, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
 
 	resp, err := l.GetGuildRankByGuild(context.Background(), &pb.GetGuildRankByGuildRequest{GuildId: namesTestGuildOne, ZoneId: 2})
 
@@ -153,7 +153,7 @@ func TestGetGuildRankByGuild_FillsLeaderName(t *testing.T) {
 // repo / onlineResolver 都传 nil:这一段装配不碰库,在线状态的 resolver 自己 nil 安全。
 func TestApplicantViews_FillsNamesInOneBatch(t *testing.T) {
 	names := &recordingPlayerNames{names: map[uint64]string{namesTestLeaderA: "云中君"}}
-	l := NewGuildLogic(nil, nil, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(nil, nil, nil, nil, WithPlayerNames(names))
 	rows := []data.ApplicantRow{
 		{PlayerID: namesTestLeaderA, ApplyMs: 100, ExpireMs: 200},
 		{PlayerID: namesTestMemberB, ApplyMs: 300, ExpireMs: 400},
@@ -183,7 +183,7 @@ func TestMyApplicationViews_FillsLeaderNamesInOneBatch(t *testing.T) {
 		namesTestLeaderA: "云中君",
 		namesTestLeaderD: "不该出现",
 	}}
-	l := NewGuildLogic(repo, nil, nil, nil, nil, WithPlayerNames(names))
+	l := NewGuildLogic(repo, nil, nil, nil, WithPlayerNames(names))
 	rows := []data.ApplicationRow{
 		{GuildID: namesTestGuildOne, ApplyMs: 100, ExpireMs: 200},
 		{GuildID: namesTestGuildFar, ApplyMs: 300, ExpireMs: 400},
@@ -217,7 +217,7 @@ func TestNamesStayEmptyWithoutResolver(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			repo, mr := newCacheOnlyRepo(t)
 			seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门", namesTestMemberB), 10)
-			l := NewGuildLogic(repo, nil, nil, nil, nil, opts...)
+			l := NewGuildLogic(repo, nil, nil, nil, opts...)
 			ctx := context.Background()
 
 			require.NotPanics(t, func() {
@@ -264,7 +264,7 @@ func TestGetGuild_NameLookupFailureDoesNotFailTheRead(t *testing.T) {
 			repo, mr := newCacheOnlyRepo(t)
 			seedGuild(t, mr, namesTestGuild(namesTestGuildOne, namesTestLeaderA, 2, "青云门", namesTestMemberB), 10)
 			// 短超时只为让慢响应用例尽快结束;时序由 resolver 自己的超时驱动,用例里没有 sleep。
-			l := NewGuildLogic(repo, nil, nil, nil, nil,
+			l := NewGuildLogic(repo, nil, nil, nil,
 				WithPlayerNames(NewDataServicePlayerNames(client, 20*time.Millisecond)))
 
 			resp, err := l.GetGuild(context.Background(), &pb.GetGuildRequest{GuildId: namesTestGuildOne})

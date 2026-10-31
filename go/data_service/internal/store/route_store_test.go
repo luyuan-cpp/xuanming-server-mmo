@@ -32,7 +32,7 @@ import (
 
 // TestRouteDSNSetsReadCommittedAndLockWaitWithoutClientFoundRows 钉住 RouteStore 池的三条前提:
 //   - 会话 RC:锁推演(规格 c.2「为什么这套锁不会成环」)只在 RC 下成立;
-//   - innodb_lock_wait_timeout=1:ctx 到期后服务端那个等锁的线程最多再占 1s 围栏分片锁(默认 50s);
+//   - innodb_lock_wait_timeout=1:ctx 到期后服务端那个等锁的线程最多再占 1s 行锁(默认 50s);
 //   - 不带 clientFoundRows:ODKU no-op 靠「撞键 = 受影响 0 行」判定,带了它 no-op 也回 1,撞键会被当成插入成功。
 //
 // 同时要求它是在 buildDSN 之上追加的:严格模式(sql_mode)是全部 store 共用的写入兜底,不能因为另开一个池就丢了。
@@ -67,7 +67,6 @@ func TestRouteDSNSetsReadCommittedAndLockWaitWithoutClientFoundRows(t *testing.T
 func TestRouteBootstrapDDLContract(t *testing.T) {
 	ddls := map[string]string{
 		PlayerRouteTableName:    playerRouteBootstrapDDL,
-		ZoneMergeFenceTableName: zoneMergeFenceBootstrapDDL,
 		ZoneMergedIntoTableName: zoneMergedIntoBootstrapDDL,
 		RouteMetaTableName:      routeMetaBootstrapDDL,
 		RouteReconcileTableName: routeReconcileBootstrapDDL,
@@ -107,12 +106,6 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 			t.Fatalf("正式authority控制表 %s 未按原catalog DDL装配", name)
 		}
 	}
-	for name, ddl := range map[string]string{SaveBarrierMaintenanceTableName: saveBarrierMaintenanceDDL, AccountRoleAdmissionRecoveryTableName: accountRoleAdmissionRecoveryDDL} {
-		if bootstrapTables[name] != ddl {
-			t.Fatalf("永久恢复事实表 %s 没有按原DDL装配", name)
-		}
-	}
-
 	// player_route 的聚簇主键 (route_shard, player_id) 与 64 片(G1a;模数 2026-10-13 由 16 改为 64,数值由
 	// placement 的 TestRouteRowShard 钉住)。chk_route_shard 里的模数与 placement.RouteRowShards 必须一致:
 	// 不一致时一部分写入撞 3819,或 CHECK 根本钉不住应用算出的片。
@@ -146,9 +139,6 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 	if n := strings.Count(playerRouteBootstrapDDL, "KEY `idx_route_"); n != 3 {
 		t.Fatalf("player_route 有 %d 个 idx_route_* 索引,want 3", n)
 	}
-	if !strings.Contains(zoneMergeFenceBootstrapDDL, "PRIMARY KEY (`zone_id`, `shard`) /*T![clustered_index] CLUSTERED */") {
-		t.Fatal("zone_merge_fence 的主键丢了 CLUSTERED:TiDB 建表后不能再改聚簇属性,非聚簇就没法按 zone 的值 SPLIT Region(规格 g.2 第 16 条)")
-	}
 
 	// route_meta 只留很少写的开关;常写的租约 / 水位在 route_reconcile(G1a 拆表)。
 	for _, col := range []string{"watermark_ms", "cache_verified_ms", "leader", "lease_until_ms"} {
@@ -180,7 +170,7 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		name, ok := proto2mysql.TableNameFromDescriptor(md)
 		ddl, known := ddls[name]
 		if !ok || !known {
-			t.Fatalf("routeTableMessages 里的 %s 表名 %q 不是五张路由表之一", md.FullName(), name)
+			t.Fatalf("routeTableMessages 里的 %s 表名 %q 不是四张路由表之一", md.FullName(), name)
 		}
 		if name <= prevName {
 			t.Fatalf("routeTableMessages 没有按表名升序(%s 排在 %s 之后):守卫的日志与失败顺序要稳定", name, prevName)
@@ -216,7 +206,7 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		}
 	}
 
-	// 五张表每列的注释 pb:N 都等于 proto 字段号:player_route 的 pb:1..10 是 1a 批预留、补 proto 时沿用的;
+	// 四张表每列的注释 pb:N 都等于 proto 字段号:player_route 的 pb:1..10 是 1a 批预留、补 proto 时沿用的;
 	// 另外四张补 proto 时按列序新定、同时补进 DDL。字段号上线后不复用(AGENTS §4),只有这里能钉住两边不各自重编号。
 	pbCommentRe := regexp.MustCompile("(?m)^  `([a-z_]+)` .*COMMENT 'pb:(\\d+)'")
 	for _, m := range routeMsgs {
@@ -252,9 +242,9 @@ func TestRouteTablePrimaryKeyRejectsMalformedOption(t *testing.T) {
 		}
 	}
 	opts := &descriptorpb.MessageOptions{}
-	proto.SetExtension(opts, dbopts.E_OptionPrimaryKey, " zone_id , shard ")
-	if got, err := primaryKeyFromOption("test.zone_merge_fence", opts); err != nil || !slices.Equal(got, []string{"zone_id", "shard"}) {
-		t.Fatalf("primaryKeyFromOption(%q) = %v, %v; want [zone_id shard](分量去首尾空白)", " zone_id , shard ", got, err)
+	proto.SetExtension(opts, dbopts.E_OptionPrimaryKey, " route_shard , player_id ")
+	if got, err := primaryKeyFromOption("test.player_route", opts); err != nil || !slices.Equal(got, []string{"route_shard", "player_id"}) {
+		t.Fatalf("primaryKeyFromOption(%q) = %v, %v; want [route_shard player_id](分量去首尾空白)", " route_shard , player_id ", got, err)
 	}
 	got, err := routeTablePrimaryKey(&dbpb.PlayerRoute{})
 	if err != nil || !slices.Equal(got, []string{"route_shard", "player_id"}) {
@@ -391,8 +381,6 @@ func allRouteSQLForTest() map[string]string {
 		"probe_session":   routeProbeSessionSQL,
 		"probe_txn_mode":  routeProbeTiDBTxnModeSQL,
 		"R1":              routeReadWritableSQL,
-		"R2":              routeLockFenceShardSQL,
-		"R3":              routeEnsureFenceShardSQL,
 		"R4":              routeInsertNewSQL,
 		"R5":              routeLockRowSQL,
 		"R6a":             routeFillHomeSQL,
@@ -417,7 +405,6 @@ func allRouteSQLForTest() map[string]string {
 		"P5":              routeProbeShardModulusSQL,
 		"T1":              routeTiDBPKTypeSQL,
 		"ddl_route":       playerRouteBootstrapDDL,
-		"ddl_fence":       zoneMergeFenceBootstrapDDL,
 		"ddl_merged_into": zoneMergedIntoBootstrapDDL,
 		"ddl_meta":        routeMetaBootstrapDDL,
 		"ddl_reconcile":   routeReconcileBootstrapDDL,
@@ -449,7 +436,6 @@ func TestRouteODKUClausesAreNoOp(t *testing.T) {
 	for _, tc := range []struct {
 		name, stmt, clause string
 	}{
-		{"R3", routeEnsureFenceShardSQL, "zone_id = zone_id"},
 		{"R4", routeInsertNewSQL, "player_id = player_id"},
 		{"R7", routeImportInsertSQL(2), "player_id = player_id"},
 		{"R10", routeInsertMergedIntoSQL, "src_zone = src_zone"},
@@ -471,7 +457,7 @@ func TestRouteODKUClausesAreNoOp(t *testing.T) {
 }
 
 // TestNoPlayerRouteWritesOutsideRouteStore:player_route 的写入只许出现在 internal/store/route_store.go
-// (提案 §4.1-6「防绕过」)。绕过它的写者不走 rev、不走围栏、不发布,缓存与库会静默分叉。
+// (提案 §4.1-6「防绕过」)。绕过它的写者不走 rev、不发布,缓存与库会静默分叉。
 //
 // 用 go/parser 只检查**字符串字面量**(先 unquote),不看注释 —— 注释里讲解 SQL 是正当的。
 // 局限:跨字面量拼接出来的语句("UPDATE " + table)查不到;生成代码(generated/)与 _test.go 不检查。
@@ -1013,9 +999,9 @@ func TestNewRouteWriterID(t *testing.T) {
 	}
 }
 
-// TestRouteStoreOptionsValidate:分片数只接受 [1, 64],写者必须是 NewRouteWriterID 的形状。
+// TestRouteStoreOptionsValidate:写者必须是 NewRouteWriterID 的形状。
 func TestRouteStoreOptionsValidate(t *testing.T) {
-	good := RouteStoreOptions{FenceShards: placement.DefaultRouteFenceShards, Writer: NewRouteWriterID("data_service", "h")}
+	good := RouteStoreOptions{Writer: NewRouteWriterID("data_service", "h")}
 	if err := good.validate(); err != nil {
 		t.Fatalf("合法选项被拒: %v", err)
 	}
@@ -1023,11 +1009,9 @@ func TestRouteStoreOptionsValidate(t *testing.T) {
 		name string
 		opts RouteStoreOptions
 	}{
-		{"分片数0", RouteStoreOptions{FenceShards: 0, Writer: good.Writer}},
-		{"分片数65", RouteStoreOptions{FenceShards: placement.MaxRouteFenceShards + 1, Writer: good.Writer}},
-		{"写者为空", RouteStoreOptions{FenceShards: 8}},
-		{"写者含非法字符", RouteStoreOptions{FenceShards: 8, Writer: "a b"}},
-		{"写者超长", RouteStoreOptions{FenceShards: 8, Writer: strings.Repeat("w", routeWriterMaxLen+1)}},
+		{"写者为空", RouteStoreOptions{}},
+		{"写者含非法字符", RouteStoreOptions{Writer: "a b"}},
+		{"写者超长", RouteStoreOptions{Writer: strings.Repeat("w", routeWriterMaxLen+1)}},
 	} {
 		if err := tc.opts.validate(); !errors.Is(err, ErrRouteInvalidArgument) {
 			t.Fatalf("%s: err = %v, want ErrRouteInvalidArgument", tc.name, err)
@@ -1045,7 +1029,6 @@ func TestRouteRegisterOutcomeStringsAreStableLowCardinality(t *testing.T) {
 		{RouteRegisterFilledHomePlacementKept.String(), "filled_home_placement_kept"},
 		{RouteRegisterAlreadySame.String(), "already_same"},
 		{RouteRegisterConflict.String(), "conflict"},
-		{RouteRegisterFenced.String(), "fenced"},
 		{RouteRegisterRowMissing.String(), "row_missing"},
 		{RouteRegisterOutcome(0).String(), "unknown"},
 	} {
@@ -1122,7 +1105,6 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 	// idx_route_home / idx_route_storage 每个 zone / 落点值 8 个切点:片 0、8、…、56(每段 8 片),逐字写出。
 	want := []string{
 		"ALTER TABLE `player_route` ATTRIBUTES 'merge_option=deny'",
-		"ALTER TABLE `zone_merge_fence` ATTRIBUTES 'merge_option=deny'",
 		"SPLIT TABLE `player_route` BY " + perShard(", 0"),
 		"SPLIT TABLE `player_route` INDEX `idx_route_updated` BY " + perShard(", 0, 0"),
 		"SPLIT TABLE `player_route` INDEX `idx_route_home` BY (1, 0, 0), (1, 8, 0), (1, 16, 0), (1, 24, 0), " +
@@ -1131,16 +1113,15 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 			"(2, 32, 0), (2, 40, 0), (2, 48, 0), (2, 56, 0)",
 		"SPLIT TABLE `player_route` INDEX `idx_route_storage` BY (1000000, 0, 0), (1000000, 8, 0), (1000000, 16, 0), " +
 			"(1000000, 24, 0), (1000000, 32, 0), (1000000, 40, 0), (1000000, 48, 0), (1000000, 56, 0)",
-		"SPLIT TABLE `zone_merge_fence` BY (1, 0), (2, 0)",
 	}
 	// 期望自检:perShard 拼出来的头尾与个数(免得上面的循环自己写错了还和被测函数错到一处去)。
-	if !strings.HasPrefix(want[2], "SPLIT TABLE `player_route` BY (1, 0), (2, 0), (3, 0), ") ||
-		!strings.HasSuffix(want[2], ", (62, 0), (63, 0)") || strings.Count(want[2], "(") != 63 {
-		t.Fatalf("用例自己的期望拼错了(行数据):%q", want[2])
+	if !strings.HasPrefix(want[1], "SPLIT TABLE `player_route` BY (1, 0), (2, 0), (3, 0), ") ||
+		!strings.HasSuffix(want[1], ", (62, 0), (63, 0)") || strings.Count(want[1], "(") != 63 {
+		t.Fatalf("用例自己的期望拼错了(行数据):%q", want[1])
 	}
-	if !strings.HasPrefix(want[3], "SPLIT TABLE `player_route` INDEX `idx_route_updated` BY (1, 0, 0), (2, 0, 0), ") ||
-		!strings.HasSuffix(want[3], ", (62, 0, 0), (63, 0, 0)") || strings.Count(want[3], "(") != 63 {
-		t.Fatalf("用例自己的期望拼错了(idx_route_updated):%q", want[3])
+	if !strings.HasPrefix(want[2], "SPLIT TABLE `player_route` INDEX `idx_route_updated` BY (1, 0, 0), (2, 0, 0), ") ||
+		!strings.HasSuffix(want[2], ", (62, 0, 0), (63, 0, 0)") || strings.Count(want[2], "(") != 63 {
+		t.Fatalf("用例自己的期望拼错了(idx_route_updated):%q", want[2])
 	}
 	got := routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000})
 	if len(got) != len(want) {
@@ -1151,8 +1132,8 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 			t.Fatalf("第 %d 条:\n got=%q\nwant=%q", i, got[i], want[i])
 		}
 	}
-	if n := len(routeTiDBPrepareStatements([]uint32{7}, nil)); n != 2+2+1+0+1 {
-		t.Fatalf("1 个 zone、0 个 storage 应生成 6 条语句,got %d", n)
+	if n := len(routeTiDBPrepareStatements([]uint32{7}, nil)); n != 1+2+1+0 {
+		t.Fatalf("1 个 zone、0 个 storage 应生成 4 条语句,got %d", n)
 	}
 	// 切点密度的两个常量:8 个点、间隔 8 片(64 / 8);切点数必须整除行片数(route_tidb.go 另有编译期断言)。
 	if routeTiDBPrefixSplitPoints != 8 || routeTiDBPrefixSplitStride != 8 || placement.RouteRowShards%routeTiDBPrefixSplitPoints != 0 {

@@ -119,10 +119,8 @@ var (
 	//
 	// 读数注意:handoff_pending_no_marker 在生产配置(AllowUnsafeCrossNodeHandoff=false)下是
 	// 跨节点换图的常规第一跳,恒非 0,不能拿来告警;告警口径见 deploy/k8s/scene-manager-alerts.yaml。
-	// zone_id 对 home_zone_unavailable / home_zone_unmapped_travel / home_zone_merging 是 gate zone
+	// zone_id 对 home_zone_unavailable / home_zone_unmapped_travel 是 gate zone
 	// (home_zone.go),对其余 reason 是目标 zone。
-	// home_zone_merging = 归属 zone 正处于合服围栏内(player-storage-placement.md §8.2 / §12 A16),
-	// 只应在合服窗口里非 0;窗口外持续非 0 = merge:in_progress:{home} 围栏键残留。
 	// channel_* 五种 = 玩家主动选线的预检拒绝(internal/logic/channel_pick.go,world-channel-switch.md §4.4),
 	// 只有带 client_channel_pick 的请求会发出,zone_id 是目标 zone。它们是玩家操作触发的业务拒绝,
 	// 有稳定的低速率属正常(channel_switch_cooldown / channel_full 尤其如此),不要按「> 0」告警。
@@ -137,7 +135,7 @@ var (
 		// reason 取值必须与 enterscenelogic.go / home_zone.go / channel_pick.go 里实际传入的字面量一致;
 		// 旧的 unsafe_handoff / handoff_pending 已无调用点(换手门拒绝细分成了
 		// no_marker / stale_marker / withdrawn 三种),按旧名配的告警会恒为空而不报错。
-		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|home_zone_merging|travel_map_unavailable|pending_map_fallback|scene_gone|channel_closing|channel_conf_mismatch|channel_switch_disabled|channel_full|channel_switch_cooldown|session_stale|session_conflict).",
+		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|travel_map_unavailable|pending_map_fallback|scene_gone|channel_closing|channel_conf_mismatch|channel_switch_disabled|channel_full|channel_switch_cooldown|session_stale|session_conflict).",
 	}, []string{"zone_id", "reason"})
 
 	// placementIdentityTotal 统计落点会话身份的每一次裁决(docs/design/scene-enter-chain-residuals.md §3.3):
@@ -165,11 +163,14 @@ var (
 	//   legacy_epoch0 / disabled                 例外,按旧行为删(epoch 未铸造 / 功能关闭或 dev 旁路)
 	//   pending / pending_unproven               没拿到证据,保留 location、回可重试错误;登出 / 断线后的正常短暂态
 	//   forced                                   等满上限仍没拿到证据,按旧行为删除(接受回档风险)。应恒 0,出现即查
+	//   revoked_unqualified                      pending 过了宽限,资格原件证明没有任何进程在当前代登记过:推进 owner_epoch 并删 location
+	//                                            (§17,logic/unqualified_holder_revoke.go)。只在真正撤销时计;正常应接近 0,出现说明持有节点的
+	//                                            入场登记没做成、location 卡过了宽限,按 [UnqualifiedRevoke] ERROR 日志逐条看
 	// 只按 verdict 分,player_id / 节点号 / epoch 一律只进日志。
 	leaveHolderReleaseTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "leave_holder_release_total",
-		Help:      "LeaveScene holder-release verdicts before deleting a player location (released|owner_dead|no_holder|legacy_epoch0|disabled|pending|pending_unproven|forced).",
+		Help:      "LeaveScene holder-release verdicts before deleting a player location (released|owner_dead|no_holder|legacy_epoch0|disabled|pending|pending_unproven|forced|revoked_unqualified).",
 	}, []string{"verdict"})
 
 	// enterHolderReleaseTotal 统计 EnterScene 同 zone 跨节点换手门以 18 拒绝之后,要不要替这次登录请持有节点释放
@@ -180,11 +181,13 @@ var (
 	//   legacy_epoch0 / holder_unaddressable      epoch 未铸造 / location 寻址不到唯一持有节点,不请
 	//   chain_gone                                发起的登录链已结束(超时 / 丢锁),不请
 	//   disabled                                  持有者释放协议关着(与 LeaveScene 同一开关)
+	//   revoked_unqualified                       请过释放之后过了宽限,资格原件证明没有任何进程在当前代登记过:推进 owner_epoch 并删 location
+	//                                             (§17;与同一次请求的 delivered / failed 各计一次)。含义同 LeaveScene 一侧
 	// failed 持续非 0 = 持有节点不可达或过慢;只按 verdict 分,player_id / 节点号 / epoch 一律只进日志。
 	enterHolderReleaseTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_holder_release_total",
-		Help:      "EnterScene holder-release requests after a cross-node handoff-gate rejection (delivered|failed|not_login|identity_not_newer|legacy_epoch0|holder_unaddressable|chain_gone|disabled).",
+		Help:      "EnterScene holder-release requests after a cross-node handoff-gate rejection (delivered|failed|not_login|identity_not_newer|legacy_epoch0|holder_unaddressable|chain_gone|disabled|revoked_unqualified).",
 	}, []string{"verdict"})
 
 	// homeZoneLookupTotal 统计 EnterScene 里每一次归属 zone 查询的结果:
@@ -347,8 +350,9 @@ var (
 
 	// ownerEpochMintClockBehindTotal 统计墙钟地板没起作用的铸造(docs/design/zone-redis-regression-guard-20261022.md §4.3.1 G3a):
 	// 铸造目标值 = max(观察值 + 1, 当前毫秒),当前毫秒 ≤ 观察值时只能取观察值 + 1。稳态下观察值是上一次铸造取的墙钟,
-	// 所以它非 0 多半说明铸造的 scene_manager 副本之间、或与上一次铸造的副本之间有时钟偏差(或同一玩家在同一毫秒内连续换手)。
-	// 持续增长时按 §14 第 13 条的主机时钟偏差监控排查。不带任何 label(不带 player_id)。
+	// 所以它非 0 多半说明铸造的 scene_manager 副本之间、或与上一次铸造的副本之间有时钟偏差(或同一玩家在同一毫秒内连续换手;
+	// 推路由失败回滚(铸出值 + 1)之后同一毫秒内的重试也会命中,属正常)。只对真的写进 Redis 的铸造计(logic changesceneutil.go
+	// placePlayerLocationCtx)。持续增长时按 §14 第 13 条的主机时钟偏差监控排查。不带任何 label(不带 player_id)。
 	ownerEpochMintClockBehindTotal = prometheus.NewCounter(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "owner_epoch_mint_clock_behind_total",
@@ -428,13 +432,26 @@ var (
 		Help:      "etcd re-checks made while deciding whether a player's holding scene process was replaced by a new process reusing its node id, by result.",
 	}, []string{"zone_id", "result"})
 
-	// deadNodeReconcilePending 是「已判死、但收尾动作还被屏障压着」的节点数。
-	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了。
+	// deadNodeReconcilePending 是还没收完的死节点收尾任务数(Redis 任务表 scene_manager:dead_node_reconcile 按 zone 计,
+	// 含屏障未过的与有成员没结论、等下一拍重试的),只由领导者发布,降级的副本把自己发过的 zone 写回 0。
+	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了,看 dead_node_reconcile_total 的 retry / abandoned。
 	deadNodeReconcilePending = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "dead_node_reconcile_pending",
-		Help:      "Dead scene nodes whose orphan-scene reconciliation is deferred by the re-entry barrier.",
+		Help:      "Dead scene nodes whose orphan-scene reconciliation has not finished yet (waiting for the re-entry barrier, or retrying scenes without a verdict). Published by the leader.",
 	}, []string{"zone_id"})
+
+	// deadNodeReconcileTotal:死节点收尾任务每一轮的结局(internal/logic/reentry_barrier.go「被屏障推迟的死节点收尾」)。
+	// outcome 取 DeadNodeReconcileOutcome* 常量:
+	//   completed  收尾范围已空,计数已删,任务出队(正常)
+	//   retry      这一轮有场景没结论(Redis 出错),任务留着,下一拍只重试剩下的
+	//   abandoned  本进程从第一次没做完起满 10 分钟仍做不完,放弃:计数与任务删掉,没结论的场景留在反向索引里
+	// retry / abandoned 健康时恒 0。只有领导者会发出。
+	deadNodeReconcileTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "dead_node_reconcile_total",
+		Help:      "Dead scene node reconcile passes by outcome (completed|retry|abandoned).",
+	}, []string{"zone_id", "outcome"})
 
 	// nodeDetachDeferredTotal:已判死的 scene 节点因为 death_at 写不进、或摘负载集(ZREM)失败,
 	// 被**留在负载集里**推迟摘除(GO-6,internal/logic/reentry_barrier.go 的「推迟的摘除」一段)。
@@ -562,7 +579,7 @@ func register() {
 			agonesCounterDrift, worldAutoscaleTotal,
 			kafkaDeliveryTotal, enterSceneRollbackTotal, enterSceneMintReplayRecognizedTotal,
 			ownerEpochMintClockBehindTotal, ownerEpochMintDurableTotal, ownerEpochMintDurableSeconds,
-			reentryBarrierBlockedTotal, deadNodeReconcilePending,
+			reentryBarrierBlockedTotal, deadNodeReconcilePending, deadNodeReconcileTotal,
 			enterSceneOwnerDeadTakeoverTotal, enterSceneOwnerReplacedTakeoverTotal, enterSceneHandoffAdmittedTotal,
 			ownerReplacedRecheckTotal,
 			homeZoneLookupTotal,
@@ -712,6 +729,25 @@ func ObserveNodeDetachDeferred(zoneID uint32, outcome string) {
 		nodeDetachDeferredTotal.WithLabelValues(zoneStr, NodeDetachOutcomeAbandoned).Add(0)
 	}
 	nodeDetachDeferredTotal.WithLabelValues(zoneStr, outcome).Inc()
+}
+
+// dead_node_reconcile_total 的 outcome 标签取值。**必须是常量**:它们直接变成 Prometheus label。
+const (
+	DeadNodeReconcileOutcomeCompleted = "completed"
+	DeadNodeReconcileOutcomeRetry     = "retry"
+	DeadNodeReconcileOutcomeAbandoned = "abandoned"
+)
+
+// ObserveDeadNodeReconcile 记一轮死节点收尾的结局,outcome 取 DeadNodeReconcileOutcome*。
+// 第一次 retry 时给同一 zone 的 abandoned 预建值为 0 的序列,理由同 ObserveNodeDetachDeferred:increase() 看不到
+// 序列从「不存在」到 1 的第一次跳变;abandoned 要 10 分钟后才发生,预建的 0 来得及被抓到。
+func ObserveDeadNodeReconcile(zoneID uint32, outcome string) {
+	register()
+	zoneStr := strconv.FormatUint(uint64(zoneID), 10)
+	if outcome == DeadNodeReconcileOutcomeRetry {
+		deadNodeReconcileTotal.WithLabelValues(zoneStr, DeadNodeReconcileOutcomeAbandoned).Add(0)
+	}
+	deadNodeReconcileTotal.WithLabelValues(zoneStr, outcome).Inc()
 }
 
 // 归属 zone 查询结果标签取值,见 homeZoneLookupTotal 的注释。

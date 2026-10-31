@@ -471,11 +471,11 @@ func TestBumpSyncWithoutBumperDoesNotPanic(t *testing.T) {
 
 // TestWithSyncBumper:默认 Noop;传 nil 被忽略(不覆盖成 nil);显式值原样保留。
 func TestWithSyncBumper(t *testing.T) {
-	assert.IsType(t, NoopSyncBumper{}, NewGuildLogic(nil, nil, nil, nil, nil).syncBumper)
-	assert.IsType(t, NoopSyncBumper{}, NewGuildLogic(nil, nil, nil, nil, nil, WithSyncBumper(nil)).syncBumper)
+	assert.IsType(t, NoopSyncBumper{}, NewGuildLogic(nil, nil, nil, nil).syncBumper)
+	assert.IsType(t, NoopSyncBumper{}, NewGuildLogic(nil, nil, nil, nil, WithSyncBumper(nil)).syncBumper)
 
 	rec := &recordingSyncBumper{}
-	assert.Same(t, rec, NewGuildLogic(nil, nil, nil, nil, nil, WithSyncBumper(rec)).syncBumper)
+	assert.Same(t, rec, NewGuildLogic(nil, nil, nil, nil, WithSyncBumper(rec)).syncBumper)
 }
 
 // ── 纯函数 ────────────────────────────────────────────────────
@@ -528,7 +528,7 @@ func TestOnAssetFinalizedBumpsOwnerOnEveryPath(t *testing.T) {
 		for _, syncDelivery := range []bool{false, true} {
 			rec := &recordingSyncBumper{}
 			notifier := &recordingNotifier{}
-			l := NewGuildLogic(nil, nil, nil, nil, nil, WithSyncBumper(rec), WithNotifier(notifier))
+			l := NewGuildLogic(nil, nil, nil, nil, WithSyncBumper(rec), WithNotifier(notifier))
 			ctx := context.Background()
 			if syncDelivery {
 				ctx = withSyncDelivery(ctx)
@@ -559,7 +559,7 @@ func TestAfterActivityCommitBumps(t *testing.T) {
 
 	t.Run("未达阈值只给本人", func(t *testing.T) {
 		rec := &recordingSyncBumper{}
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithSyncBumper(rec))
+		l := NewGuildLogic(nil, nil, nil, nil, WithSyncBumper(rec))
 
 		l.afterActivityCommit(context.Background(), &ActivityDeps{}, a, activityReward{}, data.ActivityTxResult{}, activityTypeLantern)
 
@@ -570,7 +570,7 @@ func TestAfterActivityCommitBumps(t *testing.T) {
 	})
 	t.Run("首次达阈值且发了资金扇出全帮", func(t *testing.T) {
 		rec := &recordingSyncBumper{}
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithSyncBumper(rec))
+		l := NewGuildLogic(nil, nil, nil, nil, WithSyncBumper(rec))
 
 		l.afterActivityCommit(context.Background(), &ActivityDeps{}, a, activityReward{},
 			data.ActivityTxResult{ReachedNow: true, FundsGranted: true}, activityTypeReunion)
@@ -580,7 +580,7 @@ func TestAfterActivityCommitBumps(t *testing.T) {
 	})
 	t.Run("达阈值但没发资金只扇出活动页", func(t *testing.T) {
 		rec := &recordingSyncBumper{}
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithSyncBumper(rec))
+		l := NewGuildLogic(nil, nil, nil, nil, WithSyncBumper(rec))
 
 		l.afterActivityCommit(context.Background(), &ActivityDeps{}, a, activityReward{},
 			data.ActivityTxResult{ReachedNow: true}, activityTypeLantern)
@@ -604,7 +604,7 @@ func TestBumpReviewed(t *testing.T) {
 
 	t.Run("通过", func(t *testing.T) {
 		rec := &recordingSyncBumper{}
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithSyncBumper(rec))
+		l := NewGuildLogic(nil, nil, nil, nil, WithSyncBumper(rec))
 		snapshot := &data.GuildData{GuildID: 9, Members: append(slices.Clone(members), data.MemberData{PlayerID: applicant, Role: constants.RoleMember})}
 
 		l.bumpReviewed(data.ReviewResult{Guild: snapshot, Approved: true}, applicant)
@@ -615,7 +615,7 @@ func TestBumpReviewed(t *testing.T) {
 	})
 	t.Run("拒绝", func(t *testing.T) {
 		rec := &recordingSyncBumper{}
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithSyncBumper(rec))
+		l := NewGuildLogic(nil, nil, nil, nil, WithSyncBumper(rec))
 		snapshot := &data.GuildData{GuildID: 9, Members: slices.Clone(members)}
 
 		l.bumpReviewed(data.ReviewResult{Guild: snapshot, Approved: false}, applicant)
@@ -629,18 +629,18 @@ func TestBumpReviewed(t *testing.T) {
 
 // ── 提交之前的拒绝不 bump(§3.5 第 1 条)────────────────────────
 
-// TestWritesRefusedBeforeCommitDoNotBump:合服闸门在碰库之前拒绝的全部写 RPC(管理 / 申请 / 建帮 / 离帮 / 解散 / 公告)
+// TestWritesRefusedBeforeCommitDoNotBump:归属未知时在碰库之前拒绝的全部写 RPC(管理 / 申请 / 建帮 / 离帮 / 解散 / 公告)
 // 一次都不 bump —— 先 bump 后提交(或不提交)会让客户端把旧数据记成新版本。
 func TestWritesRefusedBeforeCommitDoNotBump(t *testing.T) {
-	for _, tc := range fenceGuardedWrites() {
+	for _, tc := range clientPrecheckWrites() {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := &recordingSyncBumper{}
-			l := NewGuildLogic(nil, nil, nil, &fakeFence{merging: true}, &fakeHomeZones{zone: 2}, WithSyncBumper(rec))
+			l := NewGuildLogic(nil, nil, nil, &fakeHomeZones{zone: 0}, WithSyncBumper(rec))
 
 			id, err := tc.run(l, clientCtx(42))
 
 			require.NoError(t, err)
-			require.Equal(t, constants.ErrZoneMerging, id)
+			require.Equal(t, constants.ErrHomeZoneUnknown, id)
 			assert.Zero(t, rec.count())
 		})
 	}

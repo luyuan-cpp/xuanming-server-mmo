@@ -49,13 +49,10 @@ const (
 	// AssetOpIDBizTag 是 op_id 的号段业务键(proto/trade/trade_table.proto 的 TradeAssetOpRecord.op_id)。
 	// 与 listing_id 分开:两者值域各自连续,对账时一眼能看出这个 id 是商品还是资产指令。
 	//
-	// **必须**登记进 data_service 的 BootstrapTags **四处**,否则生产(AllowAutoSeed=false)
-	// 发号被拒 = 一上架就失败(本地 dev 自动播种,不会暴露):
-	//   1. go/data_service/internal/config/config.go  DefaultIdSegmentBootstrapTags
-	//   2. go/data_service/internal/store/id_segment_store.go  DefaultIdSegmentBootstrapTags
-	//      (config 不能 import store,那边自己写了一份;两份注释互指"必须一致")
-	//   3. go/data_service/etc/data_service.yaml      IdSegment.BootstrapTags
-	//   4. tools/scripts/k8s_deploy.ps1               data-service ConfigMap 的同一行
+	// **必须**登记进 data_service 的 IdSegment.Tags **三处**,否则发号被拒 = 一上架就失败:
+	//   1. go/data_service/internal/config/config.go  DefaultIdSegmentTags
+	//   2. go/data_service/etc/data_service.yaml      IdSegment.Tags
+	//   3. tools/scripts/k8s_deploy.ps1               data-service ConfigMap 的同一行
 	AssetOpIDBizTag = "trade_asset_op"
 
 	// sceneWatcherName 是 etcd 节点镜像的名字,进 scenenode_nodes{kind} 这一个 label。
@@ -227,17 +224,12 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, rol
 		OpIDs:   opIDs,
 		Metrics: assetMetrics,
 		// 落地恢复(docs/design/landing-recovery-sync-digest.md §6.4,与 guild 同口径):
-		//   - Ledger:离线读已落盘账本,也是自动放弃"账本确定未见"那条证据的唯一来源;RequireSQLCommit 打开时
-		//     还是在线 / 离线终结所认的 SQL 提交证据来源,缺了 reconcile.New 拒绝构造;
-		//   - Locator:自动放弃前重新解析位置,与 Caller 同一个 Locator(同一份位置键、同一份节点镜像,
-		//     "有没有位置"与投递看到的是同一件事);
-		//   - Recovery:停放档 / 自动放弃 / 日对账的参数;
-		//   - RequireSQLCommit:资产 SQL 提交证据开关(docs/design/db-write-fencing-mysql.md §6.6,缺省关 = HEAD 口径)。
+		//   - Ledger:在线 / 离线终结与自动放弃的证据来源,缺了 reconcile.New 拒绝构造;
+		//   - Recovery:停放档 / 自动放弃 / 日对账的参数。
 		// 这些都只能在这里(任何 goroutine 读 Loop 之前)交给 reconcile.New。
 		Ledger:           persistedLedger(ds),
-		Locator:          locator,
 		Recovery:         recoveryFrom(c.AssetOp),
-		RequireSQLCommit: c.AssetOp.RequireSQLCommit,
+		RequireSQLCommit: true,
 	})
 	if err != nil {
 		// 循环常量写错,或落地恢复参数越过 assetop 的硬边界(config.Validate 已先拦一道),都必须炸在启动。
@@ -283,19 +275,14 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient, rol
 	return ch, nil
 }
 
-// persistedLedger 建已落盘账本读取器(assetop.DataServiceLedger,同时能读 Redis 父键 blob 与 SQL 提交证据)。
-// 没有 data_service 客户端时回 **nil 接口**(不是装着 nil 指针的接口):reconcile.New 据此不挂 Loop.Ledger。
-// 后果按 AssetOp.RequireSQLCommit(docs/design/db-write-fencing-mysql.md §6.6)分:
-//   - 关闭(缺省,HEAD 口径):离线读账本只是优化,它与自动放弃都不运行(fail-closed);长期离线玩家的行照常退避重投,
-//     玩家上线后由在线投递终结(不变量 I7)。
-//   - 打开:在线 / 离线终结都只认 SQL 证据,reconcile.New 经 Loop.CheckWiring 拒绝构造,服务拒启。
+// persistedLedger 建已落盘账本读取器(assetop.DataServiceLedger)。
+// 没有 data_service 客户端时回 **nil 接口**(不是装着 nil 指针的接口):reconcile.New 经 Loop.CheckWiring 拒绝构造,服务拒启。
 //
 // 交易合同(commerce)的收据 ACK 也用它读 SQL 证据。trade 的 NewServiceContext 无条件拨 data_service(号段也要它),
 // 生产上走不到 nil 分支。
 func persistedLedger(ds dspb.DataServiceClient) assetop.LedgerReader {
 	if ds == nil {
-		logx.Info("[trade] data_service client absent: asset redelivery loop will not read persisted ledger (Loop.Ledger=nil); " +
-			"automatic abandon will not run")
+		logx.Error("[trade] data_service client absent: the committed asset ledger cannot be read")
 		return nil
 	}
 	return &assetop.DataServiceLedger{Client: ds, Timeout: persistedLedgerReadTimeout}

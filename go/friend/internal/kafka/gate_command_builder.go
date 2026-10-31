@@ -25,16 +25,19 @@ func NewGateCommandBuilder() kafkautil.GateCommandBuilder {
 	return &gateCommandBuilder{}
 }
 
-func (b *gateCommandBuilder) BuildPushCommand(gateNodeID uint32, sessionID uint32, gateInstanceID string,
+func (b *gateCommandBuilder) BuildPushCommand(gateNodeID uint32, sessionID uint32, playerID uint64, gateInstanceID string,
 	messageID uint32, body []byte,
 ) ([]byte, error) {
 	mc := &basepb.MessageContent{
 		MessageId:         messageID,
 		SerializedMessage: body,
 	}
+	// player_id 是 gate 的目标玩家身份栅栏,gate 只按 payload 投递;
+	// 信封上的 PlayerId / SessionId 只供 broker 侧排障读取。
 	event := &kafkapb.PushToPlayerEvent{
 		SessionId:      sessionID,
 		MessageContent: mc,
+		PlayerId:       playerID,
 	}
 	payload, err := proto.Marshal(event)
 	if err != nil {
@@ -43,6 +46,8 @@ func (b *gateCommandBuilder) BuildPushCommand(gateNodeID uint32, sessionID uint3
 
 	cmd := &kafkapb.GateCommand{
 		EventId:          uint32(game.ContractsKafkaPushToPlayerEventEventId),
+		PlayerId:         playerID,
+		SessionId:        sessionID,
 		TargetGateId:     gateNodeID,
 		TargetInstanceId: gateInstanceID,
 		Payload:          payload,
@@ -50,22 +55,21 @@ func (b *gateCommandBuilder) BuildPushCommand(gateNodeID uint32, sessionID uint3
 	return proto.Marshal(cmd)
 }
 
-func (b *gateCommandBuilder) BuildBroadcastCommand(gateNodeID uint32, sessionList []uint32, gateInstanceID string,
+func (b *gateCommandBuilder) BuildBroadcastCommand(gateNodeID uint32, targets []kafkautil.BroadcastTarget, gateInstanceID string,
 	messageID uint32, body []byte,
 ) ([]byte, error) {
 	mc := &basepb.MessageContent{
 		MessageId:         messageID,
 		SerializedMessage: body,
 	}
+	// 四个目标字段只由共享编码器产出:player_list 与 session 的对应全靠顺序契约,不能另写一份。
+	sessionList, bitmapBase, bitmap, playerList := kafkautil.EncodeBroadcastTargets(targets)
 	event := &kafkapb.BroadcastToPlayersEvent{
-		MessageContent: mc,
-	}
-
-	if base, bm, ok := kafkautil.EncodeBitmapFields(sessionList); ok {
-		event.SessionBitmapBase = base
-		event.SessionBitmap = bm
-	} else {
-		event.SessionList = sessionList
+		SessionList:       sessionList,
+		MessageContent:    mc,
+		SessionBitmapBase: bitmapBase,
+		SessionBitmap:     bitmap,
+		PlayerList:        playerList,
 	}
 
 	payload, err := proto.Marshal(event)

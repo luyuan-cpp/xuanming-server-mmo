@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"match/internal/authority"
+	"match/internal/catalog"
 	"match/internal/config"
+	"match/internal/scope"
 
 	battlepb "proto/battle"
 	base "proto/common/base"
@@ -82,7 +84,7 @@ func newNativeTeamFixture(t *testing.T) *nativeTeamFixture {
 		"CREATE TABLE route_meta(id INT PRIMARY KEY,writable INT NOT NULL)",
 		"INSERT INTO route_meta VALUES(1,1)",
 		"CREATE TABLE player_route(route_shard INT UNSIGNED NOT NULL,player_id BIGINT UNSIGNED NOT NULL,home_zone INT UNSIGNED NULL,rev BIGINT UNSIGNED NOT NULL,frozen_run_id VARBINARY(96) NULL,PRIMARY KEY(route_shard,player_id))",
-		"CREATE TABLE zone_merge_fence(zone_id INT UNSIGNED NOT NULL,shard INT UNSIGNED NOT NULL,run_id VARBINARY(96) NULL,expires_at_ms BIGINT UNSIGNED NULL,PRIMARY KEY(zone_id,shard))",
+		"CREATE TABLE zone_merged_into(src_zone INT UNSIGNED NOT NULL PRIMARY KEY,dst_zone INT UNSIGNED NOT NULL,run_id VARBINARY(64) NOT NULL,merged_at_ms BIGINT UNSIGNED NOT NULL)",
 	} {
 		_, err = db.ExecContext(ctx, statement)
 		require.NoError(t, err)
@@ -94,10 +96,10 @@ func newNativeTeamFixture(t *testing.T) *nativeTeamFixture {
 		require.NoError(t, err)
 	}
 	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
-	require.NoError(t, fixture.GrantTables(ctx, schema, "account_role", "route_meta", "player_route", "zone_merge_fence"))
+	require.NoError(t, fixture.GrantTables(ctx, schema, "account_role", "route_meta", "player_route", "zone_merged_into"))
 	db, err = fixture.Open(ctx, schema, 16)
 	require.NoError(t, err)
-	owner := &authority.Store{DB: db, Secret: []byte("fixture-only-network-secret-0000000000"), Config: config.GlobalMatchConf{RequireTiDB: true, HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, TeamConfig: config.TeamConf{AllowCrossZone: true}}
+	owner := &authority.Store{DB: db, Secret: []byte("fixture-only-network-secret-0000000000"), Config: config.GlobalMatchConf{Backend: "tidb", HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, TeamConfig: config.TeamConf{AllowCrossZone: true}}
 	require.NoError(t, owner.ConfigureRoleAuthority(ctx, schema))
 	require.NoError(t, owner.ConfigureMatchEntryAuthority(ctx, schema))
 	require.NoError(t, owner.CheckTeamRouteContract(ctx))
@@ -411,8 +413,16 @@ func TestTeamTiDBFinalHomeFiltersWholeUnitsBeforeLimit(t *testing.T) {
 	require.Equal(t, same.ActorId, peers[0].ActorId)
 	right, err := f.owner.TeamLaunchTickets(context.Background(), foreign[0])
 	require.NoError(t, err)
+	// 跨 home 成局改由范围树双向同意决定(global-match-hierarchical-pools.md D2):两队 home 不同(未分大区,
+	// 共同祖先是全服)且都刚入队,没等满放宽到全服的阈值,提交点拒绝。阈值取 10 分钟,测试内不可能等满。
+	matchCatalog, err := catalog.New(catalog.Rows{
+		Dungeons:  []catalog.DungeonRow{{Id: 1, MaxTeamSize: 5, MonsterCount: 1}},
+		PlayModes: []catalog.PlayModeRow{{Id: 1, Mode: matchpb.MatchMode_MATCH_MODE_PVE_TEAM, ConfigId: 1, Enabled: true, TeamSizeMax: 5}},
+	})
+	require.NoError(t, err)
+	require.NoError(t, f.owner.ConfigureMatchCatalog(matchCatalog, scope.Schedule{GroupAfterMs: 600_000, GlobalAfterMs: 600_000}))
 	formation := &matchpb.MatchFormationRecord{BattleId: 902, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1}
-	require.ErrorIs(t, f.owner.ClaimTeamUnits(context.Background(), formation, append(append([]*matchpb.MatchAuthorityTicketRecord(nil), left...), right...), []*teampb.TeamLaunchRecord{anchor, foreign[0]}), authority.ErrTeamRoute, "提交也须拦完整组跨home")
+	require.ErrorIs(t, f.owner.ClaimTeamUnits(context.Background(), formation, append(append([]*matchpb.MatchAuthorityTicketRecord(nil), left...), right...), []*teampb.TeamLaunchRecord{anchor, foreign[0]}), authority.ErrScopeWait, "跨 home 的完整组须等满范围阈值")
 	var count int
 	require.NoError(t, f.owner.DB.QueryRow("SELECT COUNT(*) FROM match_formation WHERE battle_id=902").Scan(&count))
 	require.Zero(t, count)
@@ -514,9 +524,25 @@ func TestTeamTiDBFailedFormationRequeuesWholeOriginalUnit(t *testing.T) {
 	}
 }
 
-func TestTeamTiDBMergeFenceAndFrozenRouteRejectBeforeMembership(t *testing.T) {
+// 别名合服:路由行的 home_zone 还是源区,PlayerHomeZone 与提交点复核都按解析后的最终区(5→6→7 这样的链也沿到底)。
+func TestTeamTiDBHomeZoneResolvesMergedZone(t *testing.T) {
 	f := newNativeTeamFixture(t)
-	_, err := f.owner.DB.Exec("INSERT INTO zone_merge_fence(zone_id,shard,run_id,expires_at_ms) VALUES(1,?,'fixture-merge',18446744073709551615)", placement.RouteRowShard(1))
+	_, err := f.owner.DB.Exec("INSERT INTO zone_merged_into(src_zone,dst_zone,run_id,merged_at_ms) VALUES(1,2,'fixture-merge-1',1),(2,3,'fixture-merge-2',2)")
+	require.NoError(t, err)
+	ctx := context.Background()
+	home, err := f.owner.PlayerHomeZone(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint32(3), home)
+	tx, err := f.owner.DB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	require.NoError(t, f.owner.RequireTeamHomeZoneTx(ctx, tx, 1, 3))
+	require.ErrorIs(t, f.owner.RequireTeamHomeZoneTx(ctx, tx, 1, 1), authority.ErrTeamRoute, "合服前记下的旧区要被拒")
+}
+
+func TestTeamTiDBFrozenRouteRejectsBeforeMembership(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	_, err := f.owner.DB.Exec("UPDATE player_route SET frozen_run_id='fixture-frozen' WHERE player_id=1")
 	require.NoError(t, err)
 	request := &teampb.CreateTeamRequest{RequestId: uuid.NewString()}
 	ctx := fixtureTeamAction(t, f.actor(t, 1), 1, OpCreate, request)
@@ -525,12 +551,6 @@ func TestTeamTiDBMergeFenceAndFrozenRouteRejectBeforeMembership(t *testing.T) {
 	var count int
 	require.NoError(t, f.owner.DB.QueryRow("SELECT COUNT(*) FROM team_membership").Scan(&count))
 	require.Zero(t, count)
-	_, err = f.owner.DB.Exec("UPDATE zone_merge_fence SET run_id=NULL,expires_at_ms=NULL WHERE zone_id=1")
-	require.NoError(t, err)
-	_, err = f.owner.DB.Exec("UPDATE player_route SET frozen_run_id='fixture-frozen' WHERE player_id=1")
-	require.NoError(t, err)
-	_, err = f.store.Mutate(ctx, BindCreate(1, 101), CreateOp(1, 101, 1))
-	require.ErrorIs(t, err, authority.ErrTeamRoute)
 }
 
 func TestTeamTiDBMemberCancelClosesWholeUnitAndOldReplayCannotCancelNew(t *testing.T) {

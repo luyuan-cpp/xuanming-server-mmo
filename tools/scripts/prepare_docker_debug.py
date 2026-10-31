@@ -30,11 +30,16 @@ SERVICE_IP_OFFSETS = {
     "scene_manager": 14, "client_rpc_router": 15, "match": 16,
     "gate": 30, "scene": 31, "battle": 32,
 }
+# 观战两把密钥和存盘接口密钥晚于已准备好的 .env 引入，也不写进任何数据卷，补生成不算轮换。
+ADDITIVE_SECRET_NAMES = ("SPECTATE_TOKEN_SECRET", "MATCH_OPS_CALLER_SECRET", "PLAYER_STORE_SCENE_SECRET")
 SECRET_NAMES = (
     "MYSQL_ROOT_PASSWORD", "MYSQL_PASSWORD", "GATE_TOKEN_SECRET",
     "QUEUE_TOKEN_SECRET", "INTERNAL_AUTH_SECRET", "BATTLE_TOKEN_SECRET",
     "LOGIN_DEV_PASSWORD_SHARED_SECRET", "GATEWAY_ADMIN_API_KEY",
+    *ADDITIVE_SECRET_NAMES,
 )
+# 与 C++ kSpectateBroadcastTopicPartitions（node_command_topic.h）相等；分区数是不可变契约，改数走换代号。
+SPECTATE_BROADCAST_PARTITIONS = 16
 
 
 def load_yaml(relative: str) -> dict:
@@ -72,6 +77,8 @@ def read_environment(path: Path) -> dict[str, str]:
         if line and not line.startswith("#"):
             key, value = line.split("=", 1)
             values[key] = value
+    for name in ADDITIVE_SECRET_NAMES:
+        values.setdefault(name, secrets.token_hex(32))
     # 已有数据卷的口令不能因重新准备配置而悄悄轮换。
     if any(not re.fullmatch(r"[0-9a-f]{64}", values.get(name, "")) for name in SECRET_NAMES):
         raise ValueError("已有 .env 缺少有效密钥；保留原文件并人工核对，拒绝自动轮换")
@@ -98,27 +105,19 @@ def check_subnet(subnet: ipaddress.IPv4Network, project: str) -> None:
                 raise ValueError(f"开发子网与现有 Docker 网络重叠: {network['Name']} ({current})")
 
 
-def topic_script(base: dict, data: dict, db: dict, login: dict) -> str:
+def topic_script(base: dict, data: dict) -> str:
     commands = base["Kafka"]
-    if db["ServerConfig"]["Kafka"]["PartitionCnt"] != login["Kafka"]["PartitionCnt"]:
-        raise ValueError("login/db 的 DBTask 分区契约不一致")
-    db_generation = db["ServerConfig"]["Kafka"].get("TopicGeneration", 1)
-    if db_generation != login["Kafka"].get("TopicGeneration", 1):
-        raise ValueError("login/db 的 DBTask 世代不一致")
-    if base.get("DbTaskTopicGeneration", 1) != db_generation:
-        raise ValueError("C++/Go 的 DBTask 世代不一致")
     audit = data["Kafka"]
     if base["AuditTopicGeneration"] != audit["TopicGeneration"]:
         raise ValueError("C++/data_service 的审计 topic 世代不一致")
-    db_topic = "db_task_zone_1" + (f"_g{db_generation}" if db_generation > 1 else "")
     topics = [
         (f"gate-cmd_g{commands['CommandTopicGeneration']}", commands["CommandTopicPartitions"], 3600000),
         (f"scene-cmd_g{commands['CommandTopicGeneration']}", commands["CommandTopicPartitions"], 3600000),
+        (f"gate-spectate_g{commands['CommandTopicGeneration']}", commands["CommandTopicPartitions"], 600000),
+        (f"spectate-bcast_g{commands['CommandTopicGeneration']}", SPECTATE_BROADCAST_PARTITIONS, 600000),
         (f"{audit['TransactionLogTopic']}_g{audit['TopicGeneration']}", audit["TransactionLogPartitions"], audit["RetentionMs"]),
         (f"{audit['SnapshotTopic']}_g{audit['TopicGeneration']}", audit["SnapshotPartitions"], audit["RetentionMs"]),
-        (db_topic, login["Kafka"]["PartitionCnt"], login["Kafka"]["RetentionMs"]),
     ]
-    topics.extend((name, 1, 3600000) for name in commands.get("Topics", []))
     script = r"""#!/bin/sh
 set -eu
 command -v timeout >/dev/null || { echo '缺少 Kafka CLI 超时工具' >&2; exit 1; }
@@ -254,12 +253,10 @@ def main() -> None:
     login["RequireClientEndpoint"] = True
     db = configs["db"]
     db["ServerConfig"]["JsonPath"] = "/app/data/mysql_database_table_list.json"
-    db["ServerConfig"]["Database"].update(RequireTiDB=False, User="appuser", Passwd=environment["MYSQL_PASSWORD"], AllowedDatabases=["zone_1_db"], AllowlistEnforcement="strict", AutoCreateDatabase=False, AutoMigrateSchema=False)
+    db["ServerConfig"]["Database"].update(Backend="mysql", User="appuser", Passwd=environment["MYSQL_PASSWORD"], AllowedDatabases=["zone_1_db"], AllowlistEnforcement="strict", AutoCreateDatabase=False, AutoMigrateSchema=False)
     data = configs["data_service"]
-    data["SnapshotMySQL"].update(Host="mysql:3306", User="appuser", Password=environment["MYSQL_PASSWORD"], DBName="testdb")
+    data["SnapshotMySQL"].update(Backend="mysql", Host="mysql:3306", User="appuser", Password=environment["MYSQL_PASSWORD"], DBName="testdb")
     data["Schema"]["AutoMigrate"] = False
-    data["LoginAdminRpc"]["NonBlock"] = True
-    data["Regions"] = []
     scene_manager = configs["scene_manager"]
     scene_manager["GateTokenSecret"] = environment["GATE_TOKEN_SECRET"]
     scene_manager["RequireClientEndpoint"] = True
@@ -268,12 +265,12 @@ def main() -> None:
     match = configs["match"]
     match["GlobalMatch"]["Enabled"] = False
     match.pop("MatchRedis", None)
+    # TicketSecret 与下面 C++ 的 SpectateTokenSecret 同值：match 签发、gate 验签。
+    match["Spectate"].update(TicketSecret=environment["SPECTATE_TOKEN_SECRET"], OpsCallerSecret=environment["MATCH_OPS_CALLER_SECRET"])
     for service, config in configs.items():
         write_yaml(config_dir / f"{service}.yaml", config)
     base = container_addresses(load_yaml("bin/etc/base_deploy_config.yaml"))
-    base.update(TableDataDirectory="/app/generated/generated_tables/", DataRootDirectory="/app/", GateTokenSecret=environment["GATE_TOKEN_SECRET"], BattleTokenSecret=environment["BATTLE_TOKEN_SECRET"])
-    # 全栈同批启动且所有生产者走新契约，不保留旧一节点一 topic 消费路径。
-    base["Kafka"]["DisableLegacyPerNodeTopic"] = True
+    base.update(TableDataDirectory="/app/generated/generated_tables/", DataRootDirectory="/app/", GateTokenSecret=environment["GATE_TOKEN_SECRET"], BattleTokenSecret=environment["BATTLE_TOKEN_SECRET"], SpectateTokenSecret=environment["SPECTATE_TOKEN_SECRET"])
     write_yaml(config_dir / "base_deploy_config.yaml", base)
     game = load_yaml("bin/etc/game_config.yaml")
     game["zoneredis"]["host"] = "redis"
@@ -289,7 +286,7 @@ def main() -> None:
     write_yaml(config_dir / "gateway.yaml", gateway)
     for filename in ("00_init_zone_dbs.sql", "gateway_tables.sql"):
         shutil.copyfile(REPO / "deploy/mysql-init" / filename, sql_dir / filename)
-    (output / "init-topics.sh").write_text(topic_script(base, data, db, login), encoding="utf-8", newline="\n")
+    (output / "init-topics.sh").write_text(topic_script(base, data), encoding="utf-8", newline="\n")
     environment.update(DEBUG_RUN_DIR=output.as_posix(), COMPOSE_PROJECT_NAME=args.project, DEBUG_SUBNET=str(subnet), GATEWAY_PORT=str(args.gateway_port), GATE_PORT=str(args.gate_port), BATTLE_PORT=str(args.battle_port), KAFKA_COMMAND_TOPIC_GENERATION=str(base["Kafka"]["CommandTopicGeneration"]), KAFKA_COMMAND_TOPIC_PARTITIONS=str(base["Kafka"]["CommandTopicPartitions"]))
     for service, host_number in SERVICE_IP_OFFSETS.items():
         environment[f"{service.upper()}_IP"] = str(subnet.network_address + host_number)

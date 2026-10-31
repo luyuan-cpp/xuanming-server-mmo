@@ -23,7 +23,7 @@ func createGuildRouteFixture(t *testing.T, ctx context.Context, db *sql.DB) {
 	path := filepath.Join(filepath.Dir(source), "..", "..", "..", "data_service", "internal", "store", "schema.go")
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
 	require.NoError(t, err)
-	names := []string{"playerRouteBootstrapDDL", "zoneMergeFenceBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL"}
+	names := []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL"}
 	wanted := map[string]bool{}
 	for _, name := range names {
 		wanted[name] = true

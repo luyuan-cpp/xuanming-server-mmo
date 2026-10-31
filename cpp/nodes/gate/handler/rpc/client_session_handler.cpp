@@ -24,6 +24,7 @@
 #include "grpc_client/login/login_grpc_client.h"
 #include "handler/rpc/router_muduo_forward.h"
 #include "handler/event/scene_entry_dispatch.h"
+#include "spectate/gate_spectate_client.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "proto/client_rpc_router/client_rpc_router.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -624,6 +625,8 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 	if (sessionFound)
 	{
 		gate_lane::OnSessionClosing(sessionIt->second);
+		// 观战订阅只存 session_id:不摘除的话 session_id 复用后新连接会收到旧订阅的帧。
+		gate_spectate::OnSessionClosed(sessionId);
 	}
 	sessions.erase(sessionId);
 
@@ -853,7 +856,7 @@ void HandleTcpNodeMessage(const SessionInfo &session, const RpcClientMessagePtr 
 	// 而且组件在但 shared_ptr 为空同样可能(连接已断开正在重连)。
 	// 这两种情况下旧写法分别是 get 抛异常和空指针解引用 —— 都是把 gate 打崩,
 	// 而 gate 崩 = 该节点上所有在线玩家一起掉线。
-	// 本文件 333 行、gate_service_handler.cpp:143 已经是 try_get + 判空的写法。
+	// 本文件的 NotifySceneExitGame、gate_service_handler.cpp 的 BoundSceneInstance 已经是 try_get + 判空的写法。
 	const auto *tcpNode = registry.try_get<RpcClientPtr>(targetNodeEntity);
 	if (tcpNode == nullptr || !*tcpNode)
 	{
@@ -1138,6 +1141,14 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	}
 
 	auto &messageInfo = gRpcMethodRegistry[request->message_id()];
+
+	// gate 本地服务(目前只有观战订阅 GateClientSpectate,battle-spectate-tiered-fanout.md §15.2):不转发、不进路由 lane,
+	// 同时覆盖直连与路由两种模式。排在体积 / 限流 / GM 几道闸之后,订阅消息与其它消息占同一份额度。
+	if (messageInfo.targetNodeType == eNodeType::GateNodeService)
+	{
+		gate_spectate::HandleClientRequest(sessionId, session, *request);
+		return;
+	}
 
 	// 战斗消息 gate 两种模式都不中继(turn-based §22 D66):BattleClientPlayer 的上行只走客户端
 	// 直连 battle;gate 出站白名单里没有 BattleNodeService,也不维护会话到 battle 的绑定。

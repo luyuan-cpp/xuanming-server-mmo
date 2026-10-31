@@ -269,10 +269,10 @@ const (
 	// 领取与终结仍各自走主键 CAS,这里读到的只是候选,过时了由那一步落空兜住。
 	//
 	// sqlListPendingByPlayer:落地唤醒(assetop.PlayerPendingLister),走 idx_guild_asset_op_2 的 player_id 前缀,
-	// 不看 next_attempt_ms 与租约(唤醒本来就是要提前,租约由随后的 Claim CAS 判)。按 op_id(≈ 创建顺序)升序,
+	// 不看 next_attempt_ms 与租约(唤醒本来就是要提前,租约由随后的 Claim CAS 判)。按创建时间升序,
 	// 截断时先处理老行。
 	sqlListPendingByPlayer = "SELECT `op_id` FROM " + guildAssetOpTable +
-		" WHERE `player_id` = ? AND `status` = ? ORDER BY `op_id` ASC LIMIT ?"
+		" WHERE `player_id` = ? AND `status` = ? ORDER BY `created_ms` ASC, `op_id` ASC LIMIT ?"
 	// sqlListPendingFactsPage:日对账(assetop.PendingClassCounter)按主键翻页,只取 assetop.PendingFacts 要的列。
 	sqlListPendingFactsPage = "SELECT `op_id`, `stream`, `created_ms`, `attempts`, `last_outcome`, `last_reason` FROM " +
 		guildAssetOpTable + " WHERE `status` = ? AND `op_id` > ? ORDER BY `op_id` ASC LIMIT ?"
@@ -313,7 +313,7 @@ const (
 	// ABANDONED 与其它终态同等对待(落地恢复 §6.3):对侧账已在放弃事务里做完,保留期内的行与 [AssetOp] 放弃日志
 	// 是人工补偿的依据,保留期之后与 ABORTED 一样删。
 	// 判龄按 next_attempt_ms —— 终态行上它等于终结时刻(Finalize / ResolveManually / Abandon 同写)。
-	// 按 op_id 升序取前 500:op_id 是雪花号、随创建时刻单调增,老的终态行天然排在前面。
+	// 按 op_id 升序取前 500:只是稳定地分批,op_id 不代表先后,判龄靠 next_attempt_ms。
 	sqlListCleanupTerminalOps = "SELECT `op_id` FROM " + guildAssetOpTable +
 		" WHERE `status` IN (?, ?, ?, ?) AND `next_attempt_ms` < ? ORDER BY `op_id` ASC LIMIT ?"
 	sqlCleanupTerminalOp = "DELETE FROM " + guildAssetOpTable +
@@ -1059,7 +1059,7 @@ const (
 // 写成函数而不是常量:DefaultLimits 是变量,不另抄一个 16。
 func pendingByPlayerLimit() int { return 2 * int(assetop.DefaultLimits.MaxPending) }
 
-// ListPendingByPlayer 实现 assetop.PlayerPendingLister(落地唤醒,§5.3):该玩家 PENDING 行的 op_id,按 op_id 升序,
+// ListPendingByPlayer 实现 assetop.PlayerPendingLister(落地唤醒,§5.3):该玩家 PENDING 行的 op_id,按创建时间升序,
 // 至多 min(limit, 32) 条。非加锁读,走 idx_guild_asset_op_2 的 player_id 前缀;不看 next_attempt_ms 与租约。
 // 玩家没有未决行时回 (nil, nil)。
 func (s *GuildAssetStore) ListPendingByPlayer(ctx context.Context, playerID uint64, limit int) ([]uint64, error) {

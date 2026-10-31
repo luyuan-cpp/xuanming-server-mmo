@@ -10,7 +10,7 @@ LoginRedis:
 # 密钥只从环境读取，MATCH_PROBE_SECRET须与各机房battle一致且至少32字节。
 GlobalMatch:
   Enabled: false
-  RequireTiDB: true
+  Backend: tidb
   Host: 127.0.0.1:4000
   User: root
   Database: mmorpg_match
@@ -21,8 +21,23 @@ GlobalMatch:
   CrossRegionWaitSeconds: 30
   HardLatencyMs: 180
   ProbeTTLSeconds: 120
+  # 匹配范围逐级放宽(docs/design/global-match-hierarchical-pools.md §3.2):先同 zone,等满 10 秒可同大区,
+  # 等满 20 秒可全服。提交点规则,进全局策略指纹,改动须停全部副本后受控调整。初值待按真实等待分布定标。
+  ScopeGroupAfterSeconds: 10
+  ScopeGlobalAfterSeconds: 20
+  # 每副本同时备战的成局上限、按池读单排票的页大小。
+  GatherSlots: 256
+  PoolPageSize: 512
   RankEndpoint: 127.0.0.1:51100
   RankSecretEnv: RANK_PRODUCER_SECRET_MATCH
+  # 终局发件箱(整局结果发 Kafka、个人结算入 Inbox)的投递节拍、每轮批量与并发;默认与 2026-10-30 之前写死的行为一致。
+  # 批量 1..256、并发 1..32,越界拒启。一轮从读 SQL 时刻起 26 秒内没轮到认领的行留给下一轮(认领租约 30 秒)。
+  OutcomeOutbox:
+    IntervalMs: 2000
+    ResultBatch: 8
+    FirstBatch: 4
+    WaitingBatch: 4
+    Concurrency: 1
 ListenOn: 127.0.0.1:50500
 # zrpc 服务端超时(毫秒),对同一 server 上的 MatchService 与 ClientPlayerTeam 都生效。2026-10-14 由 5000 改为 4000
 # (docs/design/client-request-ordering.md O10 / §5):预算链要求「目标 Timeout + 1000 ≤ 路由服 ForwardTimeoutMs(5000)」。
@@ -37,6 +52,7 @@ Middlewares:
     IgnoreContentMethods:
       - /match.MatchInternal/CommitBattleOutcome
       - /match.MatchInternal/CancelActivityBattle
+      - /match.MatchInternal/SetSpectateFeatured
 Etcd:
   Hosts:
     - 127.0.0.1:2379
@@ -67,12 +83,13 @@ ZoneId: 1
 # etcd 节点注册 keepalive 的租约 TTL(秒)。
 LeaseTTL: 60
 
-# 部署级集群号(snowflake worker 段的 cluster 位,0..31)。运维按集群一次性设定,策划不碰;
-# 单集群 / 存量布局保持 0。两个集群共用一个 etcd 也不撞号。
-ClusterId: 0
-
-# snowflake 槽位本地缓存目录:etcd 启动时不可达、缓存在 2h 内则用缓存的槽起服。留空关闭。
-SnowflakeCacheDir: ../../run/snowflake
+# battle_id / challenge_id / team_id 的号段(biz_tag = battle,向 data_service 的发号器申请)。
+# Step 只是初值,客户端按每段用掉的时长在 [MinStep, MaxStep] 内调整。必须写 Enabled: true,没写起服即拒绝。
+IdSegment:
+  Enabled: true
+  Step: 1000
+  MinStep: 100
+  MaxStep: 100000
 
 Kafka:
   Brokers:
@@ -120,20 +137,10 @@ ReadyTicketTTLSeconds: 60
 # 灰度期用 warn 观察指标,各 zone 表版本对齐后再切 enforce。
 TableFingerprintMode: warn
 
-# PVE 组队各 battle_config_id(DungeonTable id)的队伍人数上限。
-# 排队按人数档凑单(JoinQueueRequest.team_size,docs/design/pve-team-size-matching.md):1 人即时开战,
-# 2..上限 各有一条队列,不填 = 上限;怪物只数跟参战人数走。配 5 就是开放 1~5 人五个档。
-# 把某个 id 的上限调低后,已经排在更高人数档里的人不会再被凑走(只告警),要他们取消重排。
-# ⚠ 一期临时配置:人数的权威来源是 DungeonTable.max_team_size,Go 侧尚无表管理器,
-# 待接导表数据后删除本段改为查表(见设计文档 §5.4)。yaml map 键必须是字符串。
-# 组队整队开战(ClientPlayerTeam.StartTeamMatch)也按它判副本人数上限,未配置的 id 回
-# TeamDungeonNotOpen(docs/design/team-system.md §E.1 / J-6)。
-# "1" 由 3 改为 5(2026-09-15 用户拍板 J-6):与 generated/tables/dungeon.json 中 id=1 的
-# max_team_size=5 对齐;match 侧另按 min(配置值, 5) 收口(gather.go kMaxBattleTeamSize)。
-# K8s ConfigMap 整块逐字搬运本段(k8s_deploy.ps1 Get-AuthoritativeYamlBlock),新增 id 只改这里;
-# 块内不要写顶格注释,顶格行会截断搬运。
-PveTeamSizeByConfigId:
-  "1": 5
+# 匹配入口白名单与人数上限来自导表产物(2026-10-24 起,docs/design/global-match-hierarchical-pools.md §7):
+# PlayMode 表一行 = 一个 (模式, 怪物战斗模板) 组合可以排队或开战,Dungeon 表描述怪物组与战斗时长,
+# ZoneGroup 表描述大区。原 PveTeamSizeByConfigId 已删除:开新本、调人数只改表,不改本配置,也不需要停全部副本。
+TableDir: ../../generated/tables
 
 # Prometheus /metrics 端口。9101=login / 9150=scene_manager / 9160=db 已占,match 用 9170。
 # 置空可关闭。本机多实例时由 go_services.ps1 按实例派生不同端口。
@@ -153,17 +160,6 @@ ResultTopic: match-results
 ResultTopicPartitions: 3
 # 消费组:多实例同组分摊分区,每条结果只被一个实例消费。
 ResultConsumerGroup: match-rating
-# ---- 排行榜评分快照(docs/design/leaderboard-system.md §2.4)----
-# 一局评分入账后,把全员的当前评分快照发到 RatingSnapshotTopic(key = player_id),rank 消费它写榜。
-# RatingSnapshotPublishEnabled 是排行榜上线的**唯一闸门**,仓内默认 false:rank 部署好之后再翻 true 滚动重启;
-# 回滚 = 翻回 false(评分链不受影响,榜停止更新但仍可读)。K8s 上不镜像本行,由 k8s_deploy.ps1 -MatchRatingSnapshotPublish 给值。
-# 本地冒烟(rank-smoke)时临时改成 true,跑完改回,**不要提交**这一改动。
-RatingSnapshotPublishEnabled: false
-# topic 全局无 zone 段;分区数是不可变契约(改要"代号 +1"换 topic);保留期**只由 match 声明**(rank 不改写),
-# 也是排行榜丢失后 offset 重放的恢复窗口(7 天,与 match-results 对齐)。不论开关如何,启动时都会声明这个 topic。
-RatingSnapshotTopic: match-rating-snapshot
-RatingSnapshotTopicPartitions: 3
-RatingSnapshotRetentionHours: 168
 # 容差曲线 tol = min(Max, Base + floor(等待秒 / StepSeconds) × StepDelta):
 # 100 起、每 5s 放宽 100、上限 1000。PVE 组队不看评分(容差 ∞,纯等待序)。
 RatingToleranceBase: 100
@@ -191,6 +187,25 @@ RatingDrawRoundCap: 300
 Team:
   AllowCrossZone: false
   FillQueueDisabled: false
+
+# ---- 观战分级扩容(docs/design/battle-spectate-tiered-fanout.md §15.6 / §15.7)----
+# RelayEnabled:L1 中继 / L2 广播的部署级开关(Q6)。只在全部 battle 与 gate 共用一个 Kafka 集群时打开:帧经 gate-spectate_g<N> /
+#   spectate-bcast_g<N> 从 battle 到 gate,跨集群收不到且不报错。关闭时观众只走 L0 直连,满了回 MatchSpectateFull。
+#   本机只有一个 Kafka,打开;K8s 上不镜像本行,由 k8s_deploy.ps1 的 New-MatchSpectateYaml 按部署拓扑写。
+# BroadcastMaxConcurrent:全服同时处于 L2 的场次上限 B,0 = 不开 L2。
+# BroadcastAutoGateThreshold:本场中继 gate 数达到它就自动升 L2(G_min),0 = 只认运营标记(featured)。
+# TicketTTLSeconds:观战凭证有效期(秒),与顶层排队票据的 TicketTTLSeconds 无关。
+# TicketSecret:观战凭证 HMAC 密钥,必须与 bin/etc/base_deploy_config.yaml 的 SpectateTokenSecret 同值,否则订阅全部被 gate 拒绝;
+#   至少 32 字节、不许含空白,且与 gate / battle 令牌密钥都不同。
+# OpsCallerSecret:运营入口 SetSpectateFeatured 的调用方验签密钥(serviceauth 调用方 ops)。空 = 入口关闭,一律 PermissionDenied;非空至少 32 字节。
+# 这两把在这里只是本机 dev 值;K8s 由环境变量 MMORPG_SPECTATE_TOKEN_SECRET / MMORPG_MATCH_OPS_CALLER_SECRET 注入。
+Spectate:
+  RelayEnabled: true
+  BroadcastMaxConcurrent: 4
+  BroadcastAutoGateThreshold: 32
+  TicketTTLSeconds: 60
+  TicketSecret: "local-dev-spectate-token-secret-a1b2c3d4e5f60718"
+  OpsCallerSecret: "local-dev-match-ops-caller-secret-0f1e2d3c4b5a6978"
 
 # data_service gRPC 客户端(etcd 发现):team 用 BatchGetPlayerHomeZone 查玩家 home zone,
 # 查询失败组队 fail-closed(TeamInternal),查不到映射回 TeamHomeZoneUnknown。

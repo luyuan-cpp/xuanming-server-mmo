@@ -6,13 +6,12 @@
 .DESCRIPTION
     背景:以前这个分支用数组 splatting 调 kafka_offset_reset.ps1(`$kArgs = @("-BootstrapServer", ...)` 再 `@kArgs`),
     PowerShell 把数组元素当位置参数依次绑定,"-Topic" 后面的 topic 名撞上 [int]$Partitions 直接类型转换失败 ——
-    本地回档 / 重置路径从来跑不通(k8s_zone_rollback.ps1 Step 5 的注释记录的是同一个 bug)。旧的契约测试只做源码断言,测不出来。
+    重置路径从来跑不通。旧的契约测试只做源码断言,测不出来。
 
     本套在隔离目录里真跑 dev_tools.ps1 入口(夹具做法同 dev_tools_proto_gen_exit.tests.ps1:只拷 dev_tools.ps1 与
     lib/release_common.ps1,镜像 tag 显式给出,不依赖 git),旁边放一个假的 kafka_offset_reset.ps1:与真脚本同名同类型地声明全部参数、
     关掉位置绑定,把收到的具名参数逐行写进记录文件。断言:
-      - 每个参数都按名字绑定到位(BootstrapServer / Topic / Group / RetireGroup / ToDatetime / Partitions / FinalizeHandoff / Apply …);
-      - 新参数 -KafkaRetireGroup / -KafkaFinalizeHandoff 真正透传(go/db 消费组交接收尾,docs/design/db-consumer-group-per-zone.md §5);
+      - 每个参数都按名字绑定到位(BootstrapServer / Topic / Group / ToDatetime / ToLatest / Partitions / Apply …);
       - 留空 / 缺省的参数不透传(字符串非空才放、switch 打开才放、数值偏离缺省才放);
       - 下游以非 0 退出时 dev_tools.ps1 同样失败,不把失败吞成成功。
     不运行任何 Kafka CLI。
@@ -38,13 +37,11 @@ $fakeKafkaReset = @'
 param(
     [Parameter(Mandatory = $true)][string]$BootstrapServer,
     [string]$Group,
-    [string]$RetireGroup,
     [string]$Topic,
     [string]$ToDatetime,
     [switch]$ToEarliest,
     [switch]$ToLatest,
     [switch]$DeleteAndRecreateTopic,
-    [switch]$FinalizeHandoff,
     [int]$Partitions,
     [int]$ReplicationFactor,
     [string]$KafkaBin,
@@ -112,44 +109,29 @@ try {
     Copy-Item -LiteralPath (Join-Path (Get-ToolsScriptsDir) 'lib' 'release_common.ps1') -Destination (Join-Path $fixtureScriptDir 'lib')
     Set-Content -LiteralPath (Join-Path $fixtureScriptDir 'kafka_offset_reset.ps1') -Encoding utf8 -Value $fakeKafkaReset
 
-    Test-Case '交接收尾:-KafkaFinalizeHandoff / -KafkaRetireGroup / -KafkaPartitions / -KafkaApply 全部按名字绑定' {
+    Test-Case '拨到日志末端:-KafkaGroup / -KafkaToLatest / -KafkaPartitions / -KafkaApply 全部按名字绑定' {
         $run = Invoke-DevToolsKafkaReset -Arguments @(
-            '-KafkaBootstrapServer', 'kafka.infra:9092', '-KafkaTopic', 'db_task_zone_101',
-            '-KafkaGroup', 'db_rpc_consumer_group_z101', '-KafkaRetireGroup', 'db_rpc_consumer_group',
-            '-KafkaPartitions', '10', '-KafkaFinalizeHandoff', '-KafkaApply')
+            '-KafkaBootstrapServer', 'kafka.infra:9092', '-KafkaTopic', 'transaction_log_topic_g1',
+            '-KafkaGroup', 'data_service-transaction-log', '-KafkaToLatest', '-KafkaPartitions', '6', '-KafkaApply')
         Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "假下游成功时 dev_tools.ps1 不该失败。输出: $($run.Output)"
-        Assert-BoundExactly -Run $run -Label '交接收尾' -Expected @{
-            BootstrapServer = 'kafka.infra:9092'; Topic = 'db_task_zone_101'; Group = 'db_rpc_consumer_group_z101'
-            RetireGroup = 'db_rpc_consumer_group'; Partitions = '10'; FinalizeHandoff = 'True'; Apply = 'True'
+        Assert-BoundExactly -Run $run -Label '拨到日志末端' -Expected @{
+            BootstrapServer = 'kafka.infra:9092'; Topic = 'transaction_log_topic_g1'; Group = 'data_service-transaction-log'
+            ToLatest = 'True'; Partitions = '6'; Apply = 'True'
         }
     }
 
-    Test-Case '按时间重置 + 退役旧组(回档 Step 5 的本地等价):不带 -KafkaApply 时不透传 Apply' {
+    Test-Case '按时间重置:不带 -KafkaApply 时不透传 Apply' {
         $run = Invoke-DevToolsKafkaReset -Arguments @(
-            '-KafkaBootstrapServer', '127.0.0.1:9092', '-KafkaTopic', 'db_task_zone_1',
-            '-KafkaGroup', 'db_rpc_consumer_group_z1', '-KafkaRetireGroup', 'db_rpc_consumer_group',
-            '-KafkaToDatetime', '2026-05-15T03:17:00Z', '-KafkaPartitions', '10')
+            '-KafkaBootstrapServer', '127.0.0.1:9092', '-KafkaTopic', 'player_snapshot_topic_g1',
+            '-KafkaGroup', 'data_service-player-snapshot', '-KafkaToDatetime', '2026-05-15T03:17:00Z', '-KafkaPartitions', '3')
         Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "输出: $($run.Output)"
         Assert-BoundExactly -Run $run -Label '按时间重置' -Expected @{
-            BootstrapServer = '127.0.0.1:9092'; Topic = 'db_task_zone_1'; Group = 'db_rpc_consumer_group_z1'
-            RetireGroup = 'db_rpc_consumer_group'; ToDatetime = '2026-05-15T03:17:00Z'; Partitions = '10'
-        }
-    }
-
-    Test-Case '拨到日志末端 + 退役旧组(回档 Step 5 -ToLatest 的本地等价):-KafkaToLatest 与 -KafkaRetireGroup 原样转发' {
-        $run = Invoke-DevToolsKafkaReset -Arguments @(
-            '-KafkaBootstrapServer', '127.0.0.1:9092', '-KafkaTopic', 'db_task_zone_1',
-            '-KafkaGroup', 'db_rpc_consumer_group_z1', '-KafkaRetireGroup', 'db_rpc_consumer_group',
-            '-KafkaToLatest', '-KafkaPartitions', '10', '-KafkaApply')
-        Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "输出: $($run.Output)"
-        Assert-BoundExactly -Run $run -Label '拨到日志末端' -Expected @{
-            BootstrapServer = '127.0.0.1:9092'; Topic = 'db_task_zone_1'; Group = 'db_rpc_consumer_group_z1'
-            RetireGroup = 'db_rpc_consumer_group'; ToLatest = 'True'; Partitions = '10'; Apply = 'True'
+            BootstrapServer = '127.0.0.1:9092'; Topic = 'player_snapshot_topic_g1'; Group = 'data_service-player-snapshot'
+            ToDatetime = '2026-05-15T03:17:00Z'; Partitions = '3'
         }
     }
 
     Test-Case '删 topic 重建:-KafkaDeleteAndRecreate / -KafkaReplicationFactor / -KafkaBin 按名字绑定,不带 Group' {
-        # topic 用非 db_task 的名字:真脚本对 db_task_zone_* 一律拒绝同名重建(R7 复核 [1]),这里只测包装入口的透传。
         $run = Invoke-DevToolsKafkaReset -Arguments @(
             '-KafkaTopic', 'contract_recreate_topic', '-KafkaDeleteAndRecreate', '-KafkaPartitions', '5',
             '-KafkaReplicationFactor', '3', '-KafkaBin', '/opt/kafka/bin')
@@ -171,13 +153,13 @@ try {
     }
 
     Test-Case '缺省值不透传:只给 topic 与 -KafkaToEarliest 时,下游只收到 BootstrapServer(dev_tools 缺省)/ Topic / ToEarliest' {
-        $run = Invoke-DevToolsKafkaReset -Arguments @('-KafkaTopic', 'db_task_zone_1', '-KafkaToEarliest')
+        $run = Invoke-DevToolsKafkaReset -Arguments @('-KafkaTopic', 'match-results', '-KafkaToEarliest')
         Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "输出: $($run.Output)"
-        Assert-BoundExactly -Run $run -Label '缺省值' -Expected @{ BootstrapServer = 'kafka:9092'; Topic = 'db_task_zone_1'; ToEarliest = 'True' }
+        Assert-BoundExactly -Run $run -Label '缺省值' -Expected @{ BootstrapServer = 'kafka:9092'; Topic = 'match-results'; ToEarliest = 'True' }
     }
 
     Test-Case '下游以非 0 退出:dev_tools.ps1 同样失败,错误带上退出码' {
-        $run = Invoke-DevToolsKafkaReset -FakeExit 7 -Arguments @('-KafkaTopic', 'db_task_zone_1', '-KafkaGroup', 'g', '-KafkaToLatest')
+        $run = Invoke-DevToolsKafkaReset -FakeExit 7 -Arguments @('-KafkaTopic', 'match-results', '-KafkaGroup', 'g', '-KafkaToLatest')
         Assert-True -Condition $run.Called -Because "必须真正调到假下游。输出: $($run.Output)"
         Assert-True -Condition ($run.ExitCode -ne 0) -Because "kafka_offset_reset.ps1 以 7 退出时包装入口必须失败。输出: $($run.Output)"
         Assert-Match -Text $run.Output -Pattern 'exit code 7' -Because '失败诊断要带上下游的退出码'

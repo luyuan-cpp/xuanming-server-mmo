@@ -292,6 +292,7 @@ message KickPlayerEvent {
   - 旧 gate + 新 login:payload 非空,旧 gate 按白名单解 `KickPlayerEvent`(旧版生成路由走 `DispatchGateCommandEvent`,
     新版直接调 handler,两者都能解),未知字段 2、3 被忽略,按 session_id 踢。行为与现状一致,不丢踢线;顺序修复由 login 单方生效。
   - Kafka 里在途的老格式踢线(空 payload)由新 gate 的信封路径处理,能拿到 player_id。
+  - 2026-10-30 起空 payload 一律拒绝:Kick / Bind 等入口事件都有信封装不下的字段,生成路由(`gate_kafka_command_router.go` `eventRequiresPayload`)不再走信封路径。项目未上线,不做新旧混跑,上面两条信封路径的说法只作历史记录。
 - **回滚**:按发布的反序。要回滚 player_locator 的 e,先回滚 login(否则又回到上面的时序);gate 单独回滚只是退回按 session_id 踢。
   proto 只加字段,回滚不删字段;字段一经上线不再复用(AGENTS §4.3)。
 - 第 4 行还会把 scene 侧同号 ExitGame 的反例从「旧连接自然关闭时」提前到「新登录提交后」,见 §2.2 ⑤ 的已知代价与 §6.8。

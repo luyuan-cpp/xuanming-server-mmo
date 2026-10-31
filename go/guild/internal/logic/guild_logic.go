@@ -21,7 +21,7 @@ import (
 )
 
 // IDMinter 是 guild_id 的发号入口(*shared/idsegment.Minter 满足;单测用假实现)。
-// 号段优先、是否回退 snowflake 的策略在 svc.NewGuildIDMinter 里定,logic 层只管
+// 号段失败即建帮失败,不回退;组装在 svc.NewGuildIDMinter,logic 层只管
 // 「拿不到号就整体失败」。
 type IDMinter interface {
 	Mint(ctx context.Context) (uint64, error)
@@ -36,9 +36,6 @@ type GuildLogic struct {
 	repo           *data.GuildRepo
 	ids            IDMinter
 	onlineResolver *OnlineStatusResolver
-	// mergeFence 为 nil = 没配 MergeMarkerRedis = 闸门不生效(见 merge_fence.go)。
-	// 用接口而不是 *redis.Client:单测要能注入"永远封锁"和"永远报错"两种替身。
-	mergeFence MergeFence
 	// homeZones 为 nil = 没配 DataServiceRpc:内部调用照常,客户端来源的请求一律拒绝
 	// (没有归属 zone 的真源就不能猜玩家属于哪个区)。
 	homeZones HomeZoneLookup
@@ -121,15 +118,12 @@ func WithPlayerNames(r PlayerNameResolver) Option {
 	}
 }
 
-// NewGuildLogic。mergeFence / homeZones 可为 nil,语义见字段注释。
-//
-// 注意 nil 接口的坑:传 (*RedisMergeFence)(nil) 进来**不等于** nil 接口,
-// 所以 guild.go 必须显式判空再决定传不传 —— 见那边的接线。
+// NewGuildLogic。homeZones 可为 nil,语义见字段注释。
 func NewGuildLogic(repo *data.GuildRepo, ids IDMinter, onlineResolver *OnlineStatusResolver,
-	mergeFence MergeFence, homeZones HomeZoneLookup, opts ...Option) *GuildLogic {
+	homeZones HomeZoneLookup, opts ...Option) *GuildLogic {
 	l := &GuildLogic{
 		repo: repo, ids: ids, onlineResolver: onlineResolver,
-		mergeFence: mergeFence, homeZones: homeZones,
+		homeZones:     homeZones,
 		notifier:      NoopNotifier{},
 		syncBumper:    NoopSyncBumper{},
 		applyPushGate: func(context.Context, uint64, uint64) bool { return true },
@@ -181,8 +175,7 @@ func (l *GuildLogic) clientZone(ctx context.Context, playerID uint64) (uint32, *
 		return 0, nil, err
 	}
 	if zoneID == 0 {
-		logx.Infof("[guild] player %d has no home zone mapping, guild request refused "+
-			"(run tools/merge_zone -backfill-home-zone for legacy players)", playerID)
+		logx.Infof("[guild] player %d has no home zone mapping, guild request refused", playerID)
 		return 0, tipErr(constants.ErrHomeZoneUnknown, "home zone unknown"), nil
 	}
 	return zoneID, nil, nil
@@ -231,13 +224,7 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 		zoneID = homeZone
 	}
 
-	// 合服闸门在铸号与任何写之前:目标 zone 正在合服时连号都不铸。
-	// 放在铸号之后会白白烧掉一个 guild_id(号段只进不退),放在建库之后就已经晚了。
-	if tip := l.mergeFenceTip(ctx, zoneID); tip != nil {
-		return &pb.CreateGuildResponse{ErrorMessage: tip}, nil
-	}
-
-	// 成员上限读 GuildLevel 第 1 级(默认 30)。读表放在闸门之后、铸号之前:
+	// 成员上限读 GuildLevel 第 1 级(默认 30)。读表放在铸号之前:
 	// 配表缺行时既不越过闸门,也不白烧一个 guild_id。
 	maxMembers, ok := initialMaxMembers()
 	if !ok {
@@ -317,40 +304,10 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 	return &pb.CreateGuildResponse{Guild: l.guildInfoFor(ctx, guild, viewerOf(who))}, nil
 }
 
-// mergeFenceTip 返回非 nil 表示本次写被合服闸门拒绝(取代原先回 gRPC FailedPrecondition 的 checkMergeFence)。
-//
-// 三条分支各有理由:
-//   - fence 为 nil(没配 MergeMarkerRedis)或 zoneID 为 0(内部调用)→ 放行。闸门是可选加固,
-//     不能因为没配就把帮会功能整体关掉;guild.go 启动时已经打过"闸门未生效"的 Info。
-//   - 查询报错 → **拒绝**(fail closed)。查不到闸门状态不等于没有闸门,
-//     而合服窗口里写出来的帮会数据会落在一个正在搬迁的 zone 上 —— 那是数据事故,
-//     拒绝只是一次可重试的失败。
-//   - 键存在 → 拒绝。
-//
-// 为什么回 tip 而不是 gRPC 错误:gRPC 错误会被 serverbase 记成服务端故障,客户端也会
-// 进入重连隔离;而"这个区正在合服,等几分钟"是可预期的运维窗口,玩家该看到一句人话。
-// 码由配表发号(kGuildZoneMerging),不是手写数字。
-func (l *GuildLogic) mergeFenceTip(ctx context.Context, zoneID uint32) *base.TipInfoMessage {
-	if l.mergeFence == nil || zoneID == 0 {
-		return nil
-	}
-	merging, err := l.mergeFence.MergeInProgress(ctx, zoneID)
-	if err != nil {
-		logMergeFenceRefusal("guild", zoneID, err) // 副本不可信只打 DEBUG + 每分钟汇总,其余读失败 ERROR(merge_fence.go)
-		return tipErr(constants.ErrZoneMerging, "merge fence unreadable")
-	}
-	if merging {
-		logx.Infof("[guild] refused: zone %d is merging (%s present)", zoneID, MergeFenceKey(zoneID))
-		return tipErr(constants.ErrZoneMerging, "zone merging")
-	}
-	return nil
-}
-
 // mintGuildID 是建帮的发号步骤。单独抽出来只为可测:CreateGuild 其余每一步都要 MySQL。
 //
-// 号段优先(设计稿 §6),失败时按 IdSegment.FallbackToSnowflake 决定回退还是整体失败 ——
-// 绝不能吞掉错误再用 0 或自造 id 建帮:snowflake 那条路上,那会与接管了同一 worker id
-// 的进程发出逐位相同的 guild_id。失败沿用既有的 ErrIDGenUnavailable(Tip 表里已标 fault,
+// 号段失败即整体失败,绝不能吞掉错误再用 0 或自造 id 建帮。失败沿用既有的
+// ErrIDGenUnavailable(Tip 表里已标 fault,
 // serverbase 会把它记成服务端故障),不另发新码。
 func (l *GuildLogic) mintGuildID(ctx context.Context, playerID uint64) (uint64, *base.TipInfoMessage) {
 	if l.ids == nil {
@@ -453,14 +410,11 @@ func (l *GuildLogic) GetPlayerGuild(ctx context.Context, req *pb.GetPlayerGuildR
 func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) (*pb.LeaveGuildResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
 	if who.fromClient {
-		zoneID, tip, err := l.clientZone(ctx, who.playerID)
+		_, tip, err := l.clientZone(ctx, who.playerID)
 		if err != nil {
 			return nil, err
 		}
 		if tip != nil {
-			return &pb.LeaveGuildResponse{ErrorMessage: tip}, nil
-		}
-		if tip := l.mergeFenceTip(ctx, zoneID); tip != nil {
 			return &pb.LeaveGuildResponse{ErrorMessage: tip}, nil
 		}
 	}
@@ -508,14 +462,11 @@ func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) 
 func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildRequest) (*pb.DisbandGuildResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
 	if who.fromClient {
-		zoneID, tip, err := l.clientZone(ctx, who.playerID)
+		_, tip, err := l.clientZone(ctx, who.playerID)
 		if err != nil {
 			return nil, err
 		}
 		if tip != nil {
-			return &pb.DisbandGuildResponse{ErrorMessage: tip}, nil
-		}
-		if tip := l.mergeFenceTip(ctx, zoneID); tip != nil {
 			return &pb.DisbandGuildResponse{ErrorMessage: tip}, nil
 		}
 	}
@@ -529,10 +480,7 @@ func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildReque
 		return &pb.DisbandGuildResponse{ErrorMessage: tip}, err
 	}
 	// now 显式传入(B5):解散事务把全体成员未结算捐献的截止时间提前到"现在"。
-	// 闸门在事务内**再判一次**(friend 审计 #17 第 6 点):上面的 mergeFenceTip 查的是请求者归属区、且在事务外,
-	// 与合服置闸之间有检查到使用的窗口,内部调用路径更是完全不查;repo 锁住 guild 行后按行里的 zone_id 调它,
-	// 拒绝回 data.ErrZoneMerging,由 mapWriteErr 翻成 kGuildZoneMerging。
-	res, err := l.repo.DisbandGuild(ctx, guildID, who.playerID, nowMs(), l.economyFence)
+	res, err := l.repo.DisbandGuild(ctx, guildID, who.playerID, nowMs())
 	// 事务在锁住的 guild 行上复核:预期帮会已不存在(ErrGuildGone),或操作者已不是它的成员(ErrNotGuildMember:
 	// 预检之后才转让并离帮,repo 的 disbandRefusal 区分)→ kGuildNotInGuild。两种情况事务都已回滚,没有写。
 	if expectedGuildLost(expected, err) {
@@ -578,14 +526,11 @@ func (l *GuildLogic) SetAnnouncement(ctx context.Context, req *pb.SetAnnouncemen
 		return &pb.SetAnnouncementResponse{ErrorMessage: tipErr(constants.ErrAnnouncementTooLong, "announcement too long")}, nil
 	}
 	if who.fromClient {
-		zoneID, tip, err := l.clientZone(ctx, who.playerID)
+		_, tip, err := l.clientZone(ctx, who.playerID)
 		if err != nil {
 			return nil, err
 		}
 		if tip != nil {
-			return &pb.SetAnnouncementResponse{ErrorMessage: tip}, nil
-		}
-		if tip := l.mergeFenceTip(ctx, zoneID); tip != nil {
 			return &pb.SetAnnouncementResponse{ErrorMessage: tip}, nil
 		}
 	}

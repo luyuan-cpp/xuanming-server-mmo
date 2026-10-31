@@ -66,14 +66,19 @@ set(SOURCE_FILES
     handler/event/scene_entry_dispatch.cpp
     handler/event/gate_event_handler.cpp
     handler/event/gate_kafka_command_router.cpp
+    handler/gate_push_delivery.cpp
     handler/rpc/client_session_handler.cpp
     handler/rpc/client_request_lane.cpp
     handler/rpc/router_muduo_forward.cpp
     handler/rpc/rpc_reply_bridge.cpp
     handler/rpc/gate_service_handler.cpp
+    handler/rpc/gate_client_spectate_handler.cpp
     handler/rpc/player/player_service_interface.cpp
     main.cpp
     rpc_replies/register_handler.cpp
+    spectate/gate_spectate_client.cpp
+    spectate/gate_spectate_hub.cpp
+    spectate/gate_spectate_ticket.cpp
 )
 
 find_package(absl CONFIG REQUIRED)

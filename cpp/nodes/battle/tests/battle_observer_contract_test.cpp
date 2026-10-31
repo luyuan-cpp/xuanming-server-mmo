@@ -2,6 +2,8 @@
 // 通过既有MutableNodeInfo临时撤下可达地址，确定性复现幂等补签失败；不加生产故障hook。
 // 断线重连宽限用例另在夹具的 loop_ 上起一对回环 TcpServer / TcpClient,只为拿真实的服务端侧连接
 // (见 LoopbackDirectConnection);仍不启动 BattleClientEdge,直连断开由用例直接调 DetachDirectConnection 模拟。
+// 观众帧编码一次的用例把一个不 Install 的 BattleClientEdge 借给管理器,只用它的出站分帧,在回环客户端侧收字节比对。
+// 观战中继 / 广播的用例把出口换成捕获函数(SetSpectateFrameSink),逐条核对 Kafka 记录;结算回合走 HandleSetAutoBattle,不等定时器。
 #include <gtest/gtest.h>
 
 #include <atomic>
@@ -10,22 +12,31 @@
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "client/battle_client_edge.h"
+#include "data/table_battle_data_provider.h"
 #include "logic/battle_room_manager.h"
+#include "logic/battle_spectate_relay.h"
+#include "muduo/net/Buffer.h"
 #include "muduo/net/EventLoop.h"
 #include "muduo/net/InetAddress.h"
 #include "muduo/net/TcpClient.h"
 #include "muduo/net/TcpConnection.h"
 #include "muduo/net/TcpServer.h"
+#include "network/codec/codec.h"
 #include "node/system/node/node.h"
 #include "node_config_manager.h"
+#include "proto/common/base/message.pb.h"
 #include "proto/common/base/node.pb.h"
+#include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/match/match_service.pb.h"
+#include "rpc/service_metadata/player_battle_service_metadata.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/match_error_tip.pb.h"
 #include "time/system/time.h"
@@ -49,11 +60,65 @@ constexpr uint64_t kObserver = 59003;
 constexpr uint64_t kFillerObserverBase = 59100;
 // 观众席上限只认 BattleRoomManager 的公开常量,这里只收窄成循环与造号用的类型。
 constexpr uint32_t kRoomObserverCap = static_cast<uint32_t>(BattleRoomManager::kMaxObserversPerRoom);
+// 夹具默认的节点观众席配额:与 dev/test(battle_max_connections=0)装配后的值相同,远大于任何用例的观众数。
+// 管理器是进程级单例,每个用例前后都复位到它,注入小配额的用例不会漏到后面的用例里。
+constexpr size_t kFixtureObserverSeatQuota =
+    BattleRoomManager::ObserverSeatQuotaFor(BattleClientEdge::kHardMaxConnections);
 constexpr char kInstance[] = "a1094888-4208-482e-b187-a28a98ca2b54";
 constexpr char kFirstOperation[] = "aa094888-4208-482e-b187-a28a98ca2b54";
 constexpr char kSecondOperation[] = "bb094888-4208-482e-b187-a28a98ca2b54";
 constexpr char kPlacement[] = "cc094888-4208-482e-b187-a28a98ca2b54";
+// 中继 gate:两台的 node_id 对默认的 256 分区取模后落在不同分区。
+constexpr uint32_t kRelayGate = 12;
+constexpr uint32_t kOtherRelayGate = 300;
+constexpr char kGateInstance[] = "relay-gate-instance";
+constexpr char kOtherGateInstance[] = "other-relay-gate-instance";
+constexpr char kDefaultRelayTopic[] = "gate-spectate_g1";
+constexpr char kDefaultBroadcastTopic[] = "spectate-bcast_g1";
 std::atomic<uint64_t> nextBattleId{590000};
+
+// 观战帧的 Kafka 消息体就是 SpectateFrameEvent(不套信封)。
+contracts::kafka::SpectateFrameEvent ParseFrame(const battle_spectate_relay::FrameRecord& record) {
+    contracts::kafka::SpectateFrameEvent frame;
+    EXPECT_TRUE(frame.ParseFromString(record.payload));
+    return frame;
+}
+
+// client_frame 必须能还原成客户端信封,信封里是 messageId 对应的 S2C。
+template <typename S2C>
+S2C ParseClientFrame(const contracts::kafka::SpectateFrameEvent& frame, const uint32_t messageId) {
+    ::MessageContent envelope;
+    EXPECT_TRUE(envelope.ParseFromString(frame.client_frame()));
+    EXPECT_EQ(messageId, envelope.message_id());
+    S2C message;
+    EXPECT_TRUE(message.ParseFromString(envelope.serialized_message()));
+    return message;
+}
+
+// 发给单台 gate 的中继帧:默认配置下的 topic / 分区 / key 与事件目标字段。
+void ExpectRelayRecord(const battle_spectate_relay::FrameRecord& record, const uint64_t battleId,
+                       const uint32_t gateNodeId, const std::string& gateInstanceId) {
+    EXPECT_EQ(kDefaultRelayTopic, record.topic);
+    EXPECT_EQ(static_cast<int32_t>(gateNodeId % 256), record.partition);
+    EXPECT_EQ(std::to_string(battleId), record.key);
+    const auto frame = ParseFrame(record);
+    EXPECT_EQ(battleId, frame.battle_id());
+    EXPECT_EQ(kInstance, frame.battle_instance_id());
+    EXPECT_EQ(gateNodeId, frame.target_gate_id());
+    EXPECT_EQ(gateInstanceId, frame.target_instance_id());
+}
+
+// 全服广播帧:默认配置下的 topic、按 battle_id 定的分区,两个目标字段留空。
+void ExpectBroadcastRecord(const battle_spectate_relay::FrameRecord& record, const uint64_t battleId) {
+    EXPECT_EQ(kDefaultBroadcastTopic, record.topic);
+    EXPECT_EQ(static_cast<int32_t>(battleId % 16), record.partition);
+    EXPECT_EQ(std::to_string(battleId), record.key);
+    const auto frame = ParseFrame(record);
+    EXPECT_EQ(battleId, frame.battle_id());
+    EXPECT_EQ(kInstance, frame.battle_instance_id());
+    EXPECT_EQ(0u, frame.target_gate_id());
+    EXPECT_TRUE(frame.target_instance_id().empty());
+}
 
 // 第 index 个填充观众的观战操作号:合法 UUID 形状(小写十六进制、非全零),彼此不同,
 // 也不与上面几个固定操作号相撞。
@@ -63,9 +128,9 @@ std::string FillerOperation(uint32_t index) {
     return buffer;
 }
 
-// ---- 回环直连(断线重连宽限用例)----
+// ---- 回环直连(断线重连宽限 / 观众帧编码一次用例)----
 // 夹具的 loop_ 就在测试线程上、平时不跑。Attach / Detach 只要一条真实的服务端侧连接,
-// 这里在 loop_ 上起一对回环 TcpServer / TcpClient,只在建连与拆除时限时驱动 loop()。
+// 这里在 loop_ 上起一对回环 TcpServer / TcpClient,只在建连、收帧与拆除时限时驱动 loop()。
 
 // 只作活性上限,不作判据(同 rpc_channel_loopback_test 的 kLiveness)。
 constexpr double kLoopLivenessSec = 5.0;
@@ -169,11 +234,23 @@ public:
             if (conn->connected()) probe->clientUp = true;
             else probe->clientDown = true;
         });
+        // 客户端侧按到达顺序收下全部字节,供用例比对服务端经直连写出的帧
+        client_->setMessageCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr&,
+                                                                          muduo::net::Buffer* buffer, muduo::Timestamp) {
+            const auto probe = weak.lock();
+            if (!probe) {
+                buffer->retrieveAll();
+                return;
+            }
+            probe->clientReceived.append(buffer->retrieveAllAsString());
+        });
         client_->connect();
         return DriveLoopUntil(loop_, [probe = probe_] { return probe->serverUp && probe->clientUp; });
     }
 
     muduo::net::TcpConnectionPtr ServerSide() const { return probe_->serverSide.lock(); }
+    // 客户端侧至今收到的全部字节。只在测试线程(即 loop_ 线程)读。
+    const std::string& ClientReceived() const { return probe_->clientReceived; }
 
 private:
     struct Probe {
@@ -182,6 +259,7 @@ private:
         bool serverDown = false;
         bool clientUp = false;
         bool clientDown = false;
+        std::string clientReceived;
     };
 
     void Close() {
@@ -208,6 +286,16 @@ private:
     const std::shared_ptr<Probe> probe_ = std::make_shared<Probe>();
     std::unique_ptr<muduo::net::TcpServer> server_;
     std::unique_ptr<muduo::net::TcpClient> client_;
+};
+
+// 用例作用域内把直连面借给管理器,出作用域即收回。声明在直连面之后 = 先于它析构:用例中途失败提前返回时,
+// TearDown 再销毁房间也不会经已析构的直连面写帧。
+class ClientEdgeBinding {
+public:
+    explicit ClientEdgeBinding(BattleClientEdge& edge) { BattleRoomManager::Instance().SetClientEdge(&edge); }
+    ~ClientEdgeBinding() { BattleRoomManager::Instance().SetClientEdge(nullptr); }
+    ClientEdgeBinding(const ClientEdgeBinding&) = delete;
+    ClientEdgeBinding& operator=(const ClientEdgeBinding&) = delete;
 };
 
 class ObserverFixtureEnvironment {
@@ -273,24 +361,44 @@ protected:
         originalNowMs_ = TimeSystem::NowMillisecondsUTC();
         manager().SetRoomLifecycleHooks({});
         manager().SetClientEdge(nullptr);
+        // 房间引擎的数据源由管理器注入(生产在 main.cpp 表加载后装),不注入则 Create() 一律 kInvalidTableData。
+        // 用读全局表的生产实现:表没加载,空表足够开 PVP 1v1(没有技能 / 宠物 / 副本行要查)。
+        manager().SetDataProvider(std::make_shared<turnbattle::TableBattleDataProvider>());
+        manager().SetObserverSeatQuota(kFixtureObserverSeatQuota);
+        manager().SetSpectateFrameSink([this](const battle_spectate_relay::FrameRecord& record) {
+            spectateFrames_.push_back(record);
+            return spectateSinkAccepts_;
+        });
     }
 
     void TearDown() override {
         if (node_) {
-            DestroyBattleRequest request;
-            request.set_battle_id(battleId_);
-            request.set_placement_operation_id(kPlacement);
-            request.set_target_instance_id(kInstance);
-            manager().HandleDestroyBattle(request);
+            // 夹具房间连同用例另建的房间一起销毁:管理器是进程级单例,漏掉的房间(连同观众)会带进后续用例,
+            // 还会占用节点观众席配额
+            std::vector<uint64_t> rooms = extraBattles_;
+            rooms.push_back(battleId_);
+            for (const auto battleId : rooms) Destroy(battleId);
             manager().SetClientEdge(nullptr);
             node_.reset(); // 既有Node两跳排空完成后才销毁EventLoop。
         }
+        manager().SetObserverSeatQuota(kFixtureObserverSeatQuota);
+        manager().SetSpectateFrameSink(nullptr);
+        manager().SetDataProvider(nullptr);
         loop_.reset();
         gNodeConfigManager = savedGlobal_;
         tlsNodeConfigManager = savedThread_;
     }
 
     static BattleRoomManager& manager() { return BattleRoomManager::Instance(); }
+
+    // 按夹具原件的放置操作销毁房间;房间不存在时幂等。
+    static void Destroy(const uint64_t battleId) {
+        DestroyBattleRequest request;
+        request.set_battle_id(battleId);
+        request.set_placement_operation_id(kPlacement);
+        request.set_target_instance_id(kInstance);
+        manager().HandleDestroyBattle(request);
+    }
 
     CreateBattleRequest OriginalCreation(uint32_t outcomeProtocol = 0) const {
         CreateBattleRequest request;
@@ -304,6 +412,9 @@ protected:
         request.set_target_instance_id(kInstance);
         request.set_required_physical_region(1);
         request.set_admit_before_ms(originalNowMs_ + 30000);
+        // 夹具建的都是公开局:私密 / 未填可见性的房间会被 AddObserver 的第二道闸拒掉全部观众。
+        // 要私密局的用例经 CreateExtraRoom 指定。
+        request.set_spectate_visibility(::SPECTATE_VISIBILITY_PUBLIC);
         for (uint32_t side = 0; side < 2; ++side) {
             auto* player = request.add_players();
             player->set_player_id(side == 0 ? kFirstPlayer : kSecondPlayer);
@@ -348,6 +459,17 @@ protected:
         QueryBattleCreationResponse state;
         manager().HandleQueryBattleCreation(query, state);
         ASSERT_EQ(BATTLE_CREATION_PRESENT, state.state());
+    }
+
+    // 夹具房间之外另建一间(可见性由用例指定),TearDown 统一销毁。
+    void CreateExtraRoom(const uint64_t battleId, const ::eSpectateVisibility visibility) {
+        auto request = OriginalCreation();
+        request.set_battle_id(battleId);
+        request.set_spectate_visibility(visibility);
+        extraBattles_.push_back(battleId);
+        CreateBattleResponse reply;
+        manager().HandleCreateBattle(request, reply);
+        ASSERT_EQ(0u, reply.error_message().id());
     }
 
     AddObserverRequest Original(const std::string& operation) const {
@@ -411,6 +533,13 @@ protected:
         return request;
     }
 
+    // 与 OriginalFor 相同,再换房间;用于在 CreateExtraRoom 建的房间里登记。
+    AddObserverRequest OriginalIn(uint64_t battleId, uint64_t observerId, const std::string& operation) const {
+        auto request = OriginalFor(observerId, operation);
+        request.set_battle_id(battleId);
+        return request;
+    }
+
     uint32_t AddError(const AddObserverRequest& original) {
         AddObserverResponse reply;
         manager().HandleAddObserver(original, reply);
@@ -436,6 +565,49 @@ protected:
         }
     }
 
+    AttachRelayGateResponse Attach(const uint64_t battleId, const uint32_t gateNodeId, const std::string& gateInstanceId,
+                                   const std::string& targetInstanceId = kInstance) {
+        AttachRelayGateRequest request;
+        request.set_battle_id(battleId);
+        request.set_gate_node_id(gateNodeId);
+        request.set_gate_instance_id(gateInstanceId);
+        request.set_target_instance_id(targetInstanceId);
+        AttachRelayGateResponse reply;
+        manager().HandleAttachRelayGate(request, reply);
+        return reply;
+    }
+
+    PromoteSpectateBroadcastResponse Promote(const uint64_t battleId, const std::string& targetInstanceId = kInstance) {
+        PromoteSpectateBroadcastRequest request;
+        request.set_battle_id(battleId);
+        request.set_target_instance_id(targetInstanceId);
+        PromoteSpectateBroadcastResponse reply;
+        manager().HandlePromoteSpectateBroadcast(request, reply);
+        return reply;
+    }
+
+    void SetAuto(const uint64_t battleId, const uint64_t playerId, const bool enabled) {
+        SessionDetails session;
+        session.set_player_id(playerId);
+        SetAutoBattleRequest request;
+        request.set_battle_id(battleId);
+        request.set_enabled(enabled);
+        SetAutoBattleResponse reply;
+        manager().HandleSetAutoBattle(session, request, reply);
+        ASSERT_EQ(0u, reply.error_message().id());
+    }
+
+    // 结算一回合,不等定时器:第二名参战者挂机,第一名切回手动再切自动,「未就绪 → 全员就绪」的翻转立即结算。
+    // 夹具的 1000 气血几回合内打不死人(普攻基础伤害 10),房间保持 ONGOING,TearDown 能正常销毁。
+    void DriveOneRound(const uint64_t battleId) {
+        ASSERT_NO_FATAL_FAILURE(SetAuto(battleId, kSecondPlayer, true));
+        ASSERT_NO_FATAL_FAILURE(SetAuto(battleId, kFirstPlayer, false));
+        ASSERT_NO_FATAL_FAILURE(SetAuto(battleId, kFirstPlayer, true));
+    }
+
+    // 取走至今捕获的观战帧。
+    std::vector<battle_spectate_relay::FrameRecord> TakeFrames() { return std::exchange(spectateFrames_, {}); }
+
     ObserverFixtureEnvironment global_{"GLOBAL_MATCH_ENABLED", "true"};
     ObserverFixtureEnvironment region_{"PHYSICAL_REGION", "1"};
     NodeConfigManager savedGlobal_;
@@ -446,6 +618,11 @@ protected:
     std::filesystem::path logDirectory_;
     uint64_t battleId_{0};
     uint64_t originalNowMs_{0};
+    // CreateExtraRoom 建的房间,TearDown 与 battleId_ 一起销毁。
+    std::vector<uint64_t> extraBattles_;
+    // 观战帧出口捕获到的记录,以及出口对它们的回答(false = 模拟没进生产者队列)。
+    std::vector<battle_spectate_relay::FrameRecord> spectateFrames_;
+    bool spectateSinkAccepts_ = true;
 };
 
 TEST_F(BattleObserverContract, AssignmentFailureRemovesOriginalOperationAndNewOperationRecovers) {
@@ -523,8 +700,9 @@ TEST_F(BattleObserverContract, FullRoomRejectsWithSpectateFullWhileSeatedReplayS
     EXPECT_EQ(0u, AddError(seated.back()));
     EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(seated.back()));
 
-    // 拒绝即终态:同 op 重放不会重新判定成准入,Remove 拿得到 cancelled 证明
-    EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), AddError(overflow));
+    // 拒绝即终态:同 op 重放不会重新判定成准入,回首次拒绝码(前台与后台恢复并发发同一个 op 时结论一致),
+    // Remove 拿得到 cancelled 证明
+    EXPECT_EQ(static_cast<uint32_t>(::kMatchSpectateFull), AddError(overflow));
     EXPECT_TRUE(Remove(overflow).cancelled());
     EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(overflow));
 }
@@ -576,7 +754,8 @@ TEST_F(BattleObserverContract, ReclaimedSeatsAdmitTheTwentyFirstObserver) {
         EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(request)) << "observer=" << request.observer_player_id();
     }
 
-    EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), AddError(waiting));
+    // 腾出席位后,原 op 仍回首次拒绝码(拒绝即终态),换新 op 才能进
+    EXPECT_EQ(static_cast<uint32_t>(::kMatchSpectateFull), AddError(waiting));
     const auto retry = OriginalFor(kFillerObserverBase + kRoomObserverCap, FillerOperation(kRoomObserverCap + 1));
     ASSERT_EQ(0u, AddError(retry));
     EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(retry));
@@ -648,6 +827,148 @@ TEST_F(BattleObserverContract, ReconnectWithinGraceKeepsSeatAndStaleDetachIsIgno
         battleId_, reattached + BattleRoomManager::kObserverConnectGrace + BattleRoomManager::kObserverReconnectGrace);
     EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(first));
     ASSERT_NO_FATAL_FAILURE(AssertTicket(first));
+}
+
+// 可见性第二道闸(battle-spectate-tiered-fanout.md §10 第 6 条):私密局与未填可见性的局(默认拒绝)一律回
+// kInvalidParameter —— 房间还在,不能回 kEntityIsNull(match 会懒剔除观战索引),也不是满员。拒绝封闭原 op:
+// 名单里没有这名观众、补签被拒,同 op 迟到的 Add 不会翻成准入,Remove 拿得到取消证明。
+TEST_F(BattleObserverContract, NonPublicBattleRejectsObserverAsTerminalInvalidParameter) {
+    const std::vector<std::pair<::eSpectateVisibility, const char*>> cases{
+        {::SPECTATE_VISIBILITY_PRIVATE, kFirstOperation},
+        {::SPECTATE_VISIBILITY_UNSPECIFIED, kSecondOperation}};
+    for (const auto& [visibility, operation] : cases) {
+        SCOPED_TRACE(::eSpectateVisibility_Name(visibility));
+        const auto battleId = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+        ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(battleId, visibility));
+        const auto original = OriginalIn(battleId, kObserver, operation);
+
+        const auto rejected = AddError(original);
+        EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), rejected);
+        EXPECT_NE(static_cast<uint32_t>(::kEntityIsNull), rejected);
+        EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(original));
+        EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), TicketError(original));
+
+        EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), AddError(original));
+        EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(original));
+        EXPECT_TRUE(Remove(original).cancelled());
+        EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(original));
+    }
+}
+
+// 节点观众席配额按全部房间的名单人数之和计(含还没建直连的观众):两个房间都远没满(单房间上限 20),
+// 跨房间凑满注入的配额后,下一名回与单房间满员同一个码;已登记观众的同 op 重放先于配额判定,照常成功。
+// 任一房间回收一席后换新 op 即可进入,被拒的 op 仍是终态。配额由用例直接注入,不依赖装配时的连接上限。
+TEST_F(BattleObserverContract, NodeObserverQuotaSpansRoomsAndReopensAfterReclaim) {
+    constexpr size_t kInjectedQuota = 3;
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const auto otherBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(otherBattle, ::SPECTATE_VISIBILITY_PUBLIC));
+    manager().SetObserverSeatQuota(kInjectedQuota);
+
+    const auto first = OriginalFor(kFillerObserverBase, FillerOperation(0));
+    const auto second = OriginalFor(kFillerObserverBase + 1, FillerOperation(1));
+    ASSERT_EQ(0u, AddError(first));
+    ASSERT_EQ(0u, AddError(second));
+    const auto elsewhere = OriginalIn(otherBattle, kFillerObserverBase + 2, FillerOperation(2));
+    ASSERT_EQ(0u, AddError(elsewhere));
+    const auto elsewhereAdmitted = std::chrono::steady_clock::now();
+
+    const auto fourth = OriginalFor(kFillerObserverBase + 3, FillerOperation(3));
+    const auto rejected = AddError(fourth);
+    EXPECT_EQ(static_cast<uint32_t>(::kMatchSpectateFull), rejected);
+    EXPECT_NE(static_cast<uint32_t>(::kRateLimitExceeded), rejected);
+    EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(fourth));
+    EXPECT_EQ(0u, AddError(first));
+    EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(first));
+
+    // 另一房间那一席过了连接宽限被回收,节点腾出一席
+    manager().ReclaimExpiredObserverSeats(otherBattle, elsewhereAdmitted + BattleRoomManager::kObserverConnectGrace);
+    EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(elsewhere));
+
+    EXPECT_EQ(static_cast<uint32_t>(::kMatchSpectateFull), AddError(fourth));
+    const auto retry = OriginalFor(kFillerObserverBase + 3, FillerOperation(4));
+    ASSERT_EQ(0u, AddError(retry));
+    EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(retry));
+    // 再次凑满配额:下一名照样被拒,换到另一房间也一样
+    const auto fifth = OriginalIn(otherBattle, kFillerObserverBase + 4, FillerOperation(5));
+    EXPECT_EQ(static_cast<uint32_t>(::kMatchSpectateFull), AddError(fifth));
+}
+
+// 配额公式钉在编译期:观众最多占有效连接上限的四分之一,连接上限再小也坐得下一个满员房间。
+static_assert(BattleRoomManager::ObserverSeatQuotaFor(4096) == 1024);
+static_assert(BattleRoomManager::ObserverSeatQuotaFor(0) == BattleRoomManager::kMaxObserversPerRoom);
+static_assert(BattleRoomManager::ObserverSeatQuotaFor(4 * BattleRoomManager::kMaxObserversPerRoom + 3) ==
+              BattleRoomManager::kMaxObserversPerRoom);
+
+// 生产的注入路径:借用直连面时按 battle_max_connections 算出节点配额(装配时一次,之后准入不读配置)。
+// 84 条连接 → 21 席:一个满员房间之外只剩一席,另一房间第二名观众即被拒。
+TEST_F(BattleObserverContract, ClientEdgeBindingDerivesObserverQuotaFromConnectionCap) {
+    constexpr uint32_t kMaxConnections = 84;
+    static_assert(BattleRoomManager::ObserverSeatQuotaFor(kMaxConnections) == BattleRoomManager::kMaxObserversPerRoom + 1);
+    gNodeConfigManager.GetBaseDeployConfig().set_battle_max_connections(kMaxConnections);
+    const auto edge = std::make_shared<BattleClientEdge>();
+    const ClientEdgeBinding binding(*edge);
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const auto otherBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(otherBattle, ::SPECTATE_VISIBILITY_PUBLIC));
+    std::vector<AddObserverRequest> seated;
+    ASSERT_NO_FATAL_FAILURE(FillRoom(seated));
+
+    const auto lastSeat = OriginalIn(otherBattle, kFillerObserverBase + kRoomObserverCap, FillerOperation(kRoomObserverCap));
+    ASSERT_EQ(0u, AddError(lastSeat));
+    const auto overQuota =
+        OriginalIn(otherBattle, kFillerObserverBase + kRoomObserverCap + 1, FillerOperation(kRoomObserverCap + 1));
+    EXPECT_EQ(static_cast<uint32_t>(::kMatchSpectateFull), AddError(overQuota));
+    EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(overQuota));
+}
+
+// 观众帧编码一次(battle-spectate-tiered-fanout.md §10 第 3 条):同一帧只编码一份,逐条直连写出。共享的那份字节
+// 不能被第一条连接的发送清空(对共享 Buffer 调 send(Buffer*) 会 retrieveAll),所以每名有直连的观众都必须收到
+// 与单发分帧逐字节相同的完整帧;夹在中间、没有直连的观众只是被跳过,不打断后面的观众。
+// 作废房间推 SpectateEnd(ABORTED) 是不依赖引擎出招的确定路径;回合结果的观众帧走同一个出口(PushSpectatorFrame)。
+TEST_F(BattleObserverContract, SpectatorFrameEncodedOnceReachesEveryDirectObserverIntact) {
+    // 回环连接先于建房打开:建房之后到销毁之前不驱动 loop,房间的回合 / 确认定时器没有机会触发,
+    // 两条直连上只会出现这一帧
+    LoopbackDirectConnection firstDirect(*loop_);
+    LoopbackDirectConnection lastDirect(*loop_);
+    ASSERT_TRUE(firstDirect.Open("spectator_first"));
+    ASSERT_TRUE(lastDirect.Open("spectator_last"));
+    const auto edge = std::make_shared<BattleClientEdge>();
+    const ClientEdgeBinding binding(*edge);
+    ASSERT_NO_FATAL_FAILURE(Create());
+
+    // 名单按观众号有序遍历:没有直连的那名排在两名有直连的观众中间
+    const auto first = OriginalFor(kFillerObserverBase, FillerOperation(0));
+    const auto withoutDirect = OriginalFor(kFillerObserverBase + 1, FillerOperation(1));
+    const auto last = OriginalFor(kFillerObserverBase + 2, FillerOperation(2));
+    ASSERT_EQ(0u, AddError(first));
+    ASSERT_EQ(0u, AddError(withoutDirect));
+    ASSERT_EQ(0u, AddError(last));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId_, first.observer_player_id(), ::BATTLE_TICKET_ROLE_OBSERVER,
+                                                 firstDirect.ServerSide(), nullptr, first.spectator_operation_id()));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId_, last.observer_player_id(), ::BATTLE_TICKET_ROLE_OBSERVER,
+                                                 lastDirect.ServerSide(), nullptr, last.spectator_operation_id()));
+
+    Destroy(battleId_);
+
+    // 期望字节按单发 Send 的分帧(ProtobufCodec::fillEmptyBuffer)独立算一遍,不经被测的编码出口
+    ::SpectateEndS2C end;
+    end.set_battle_id(battleId_);
+    end.set_outcome(::BATTLE_OUTCOME_ONGOING);
+    end.set_reason(::SPECTATE_END_BATTLE_ABORTED);
+    ::MessageContent content;
+    content.set_message_id(BattleClientPlayerNotifySpectateEndMessageId);
+    content.set_serialized_message(end.SerializeAsString());
+    muduo::net::Buffer framed;
+    ProtobufCodec::fillEmptyBuffer(&framed, content);
+    const std::string expected = framed.retrieveAllAsString();
+
+    ASSERT_TRUE(DriveLoopUntil(*loop_, [&] {
+        return firstDirect.ClientReceived().size() >= expected.size()
+            && lastDirect.ClientReceived().size() >= expected.size();
+    }));
+    EXPECT_EQ(expected, firstDirect.ClientReceived());
+    EXPECT_EQ(expected, lastDirect.ClientReceived());
 }
 
 // 查询能力来自本节点此刻可签名状态；空/短/仅空白密钥均不能宣告v1。
@@ -725,5 +1046,379 @@ TEST_F(BattleObserverContract, ExistingOutcomeV1AdoptionSurvivesSigningKeyLossWi
         EXPECT_EQ(0u, refused.adopted_outcome_protocol_version());
         EXPECT_EQ(1u, CreationState().adopted_outcome_protocol_version());
     }));
+}
+
+// ---- 观战中继(L1)/ 全服广播(L2)(battle-spectate-tiered-fanout.md §15.4)----
+
+// 校验顺序是契约:实例 → 房间 → 公开。实例不对时即使房间不存在也回 kInvalidParameter,不能触发 match 懒剔除观战索引。
+// 任何一项不过都不挂 gate、不发帧,回包也不带实例与期限。
+TEST_F(BattleObserverContract, AttachRelayGateRejectionsFollowContractOrderWithoutSideEffects) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const auto privateBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    const auto unsetBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    const auto missingBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(privateBattle, ::SPECTATE_VISIBILITY_PRIVATE));
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(unsetBattle, ::SPECTATE_VISIBILITY_UNSPECIFIED));
+
+    const auto expectRejected = [](const AttachRelayGateResponse& reply, const uint32_t tip) {
+        EXPECT_EQ(tip, reply.error_message().id());
+        EXPECT_TRUE(reply.battle_instance_id().empty());
+        EXPECT_EQ(0u, reply.deadline_ms());
+        EXPECT_FALSE(reply.broadcast());
+    };
+    const auto invalid = static_cast<uint32_t>(::kInvalidParameter);
+    expectRejected(Attach(battleId_, kRelayGate, kGateInstance, "another-battle-instance"), invalid);
+    expectRejected(Attach(missingBattle, kRelayGate, kGateInstance, "another-battle-instance"), invalid);
+    expectRejected(Attach(missingBattle, kRelayGate, kGateInstance), static_cast<uint32_t>(::kEntityIsNull));
+    expectRejected(Attach(privateBattle, kRelayGate, kGateInstance), invalid);
+    expectRejected(Attach(unsetBattle, kRelayGate, kGateInstance), invalid);
+    // 空目标会关掉 gate 侧的目标过滤(AGENTS.md §7.2)
+    expectRejected(Attach(battleId_, 0, kGateInstance), invalid);
+    expectRejected(Attach(battleId_, kRelayGate, ""), invalid);
+    EXPECT_TRUE(TakeFrames().empty());
+
+    // 被拒的 gate 没进中继表:结算一回合没有任何帧
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    EXPECT_TRUE(TakeFrames().empty());
+}
+
+// 校验口径同 Attach;被拒不升档:之后 Attach 仍然能挂上,不回 broadcast。
+TEST_F(BattleObserverContract, PromoteRejectionsFollowContractOrderAndDoNotPromote) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const auto privateBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    const auto unsetBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    const auto missingBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(privateBattle, ::SPECTATE_VISIBILITY_PRIVATE));
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(unsetBattle, ::SPECTATE_VISIBILITY_UNSPECIFIED));
+
+    const auto expectRejected = [](const PromoteSpectateBroadcastResponse& reply, const uint32_t tip) {
+        EXPECT_EQ(tip, reply.error_message().id());
+        EXPECT_TRUE(reply.battle_instance_id().empty());
+        EXPECT_EQ(0u, reply.deadline_ms());
+    };
+    const auto invalid = static_cast<uint32_t>(::kInvalidParameter);
+    expectRejected(Promote(battleId_, "another-battle-instance"), invalid);
+    expectRejected(Promote(missingBattle, "another-battle-instance"), invalid);
+    expectRejected(Promote(missingBattle), static_cast<uint32_t>(::kEntityIsNull));
+    expectRejected(Promote(privateBattle), invalid);
+    expectRejected(Promote(unsetBattle), invalid);
+    EXPECT_TRUE(TakeFrames().empty());
+
+    const auto attached = Attach(battleId_, kRelayGate, kGateInstance);
+    EXPECT_EQ(0u, attached.error_message().id());
+    EXPECT_FALSE(attached.broadcast());
+}
+
+// 新挂接只给这台 gate 补发一帧 STATE(161,observer_count = 0);同实例重复挂接只回包;同 node_id 新实例覆盖旧实例,
+// 只给新实例发一帧。此后每回合的帧只到最新实例。
+TEST_F(BattleObserverContract, AttachRelayGateIsIdempotentAndNewInstanceReplacesOldWithOneStateFrame) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+
+    const auto first = Attach(battleId_, kRelayGate, kGateInstance);
+    ASSERT_EQ(0u, first.error_message().id());
+    EXPECT_EQ(kInstance, first.battle_instance_id());
+    EXPECT_EQ(originalNowMs_ + 180000, first.deadline_ms());
+    EXPECT_FALSE(first.broadcast());
+    auto frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectRelayRecord(frames[0], battleId_, kRelayGate, kGateInstance);
+    const auto stateFrame = ParseFrame(frames[0]);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_STATE, stateFrame.kind());
+    EXPECT_EQ(originalNowMs_ + 180000, stateFrame.deadline_ms());
+    const auto state = ParseClientFrame<SpectateStateS2C>(stateFrame, BattleClientPlayerNotifySpectateStateMessageId);
+    EXPECT_EQ(0u, state.observer_count());
+    EXPECT_EQ(battleId_, state.state().battle_id());
+    EXPECT_EQ(state.state().round_index(), stateFrame.round_index());
+    EXPECT_EQ(2, state.state().actors_size());
+    EXPECT_NE(0u, state.state().action_deadline_ms());
+
+    const auto repeated = Attach(battleId_, kRelayGate, kGateInstance);
+    EXPECT_EQ(0u, repeated.error_message().id());
+    EXPECT_EQ(kInstance, repeated.battle_instance_id());
+    EXPECT_EQ(first.deadline_ms(), repeated.deadline_ms());
+    EXPECT_TRUE(TakeFrames().empty());
+
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kOtherGateInstance).error_message().id());
+    frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectRelayRecord(frames[0], battleId_, kRelayGate, kOtherGateInstance);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_STATE, ParseFrame(frames[0]).kind());
+
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectRelayRecord(frames[0], battleId_, kRelayGate, kOtherGateInstance);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_TURN, ParseFrame(frames[0]).kind());
+}
+
+// 每回合的中继条数 = 挂接 gate 数;topic 名与分区走部署配置(代号、命令 topic 分区数);事件字段齐全,
+// client_frame 能还原成 158 的 MessageContent,里面是观众视角的回合结果。
+TEST_F(BattleObserverContract, EveryRoundSendsOneRelayFramePerAttachedGateOverConfiguredRoute) {
+    auto& kafka = *tlsNodeConfigManager.GetBaseDeployConfig().mutable_kafka();
+    kafka.set_command_topic_generation(3);
+    kafka.set_command_topic_partitions(8);
+    // 带上装备战斗属性:观众帧必须把它裁掉(RedactStateForViewer)
+    auto creation = OriginalCreation();
+    for (auto& player : *creation.mutable_players()) player.mutable_combat()->Clear();
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+
+    std::map<uint32_t, std::string> gates{{9, "gate-nine"}, {16, "gate-sixteen"}};
+    for (const auto& [gateNodeId, gateInstanceId] : gates) {
+        ASSERT_EQ(0u, Attach(battleId_, gateNodeId, gateInstanceId).error_message().id());
+    }
+    const auto attachFrames = TakeFrames();
+    ASSERT_EQ(gates.size(), attachFrames.size());
+    const uint32_t firstRound = ParseFrame(attachFrames[0]).round_index();
+
+    for (uint32_t round = 0; round < 2; ++round) {
+        SCOPED_TRACE(round);
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+        const auto frames = TakeFrames();
+        ASSERT_EQ(gates.size(), frames.size());
+        size_t index = 0;
+        for (const auto& [gateNodeId, gateInstanceId] : gates) {
+            const auto& record = frames[index++];
+            EXPECT_EQ("gate-spectate_g3", record.topic);
+            EXPECT_EQ(static_cast<int32_t>(gateNodeId % 8), record.partition);
+            EXPECT_EQ(std::to_string(battleId_), record.key);
+            const auto frame = ParseFrame(record);
+            EXPECT_EQ(battleId_, frame.battle_id());
+            EXPECT_EQ(kInstance, frame.battle_instance_id());
+            EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_TURN, frame.kind());
+            EXPECT_EQ(firstRound + round, frame.round_index());
+            EXPECT_EQ(originalNowMs_ + 180000, frame.deadline_ms());
+            EXPECT_EQ(gateNodeId, frame.target_gate_id());
+            EXPECT_EQ(gateInstanceId, frame.target_instance_id());
+            const auto turn = ParseClientFrame<TurnResultS2C>(frame, BattleClientPlayerNotifySpectateTurnResultMessageId);
+            EXPECT_EQ(battleId_, turn.battle_id());
+            EXPECT_EQ(frame.round_index(), turn.round_index());
+            EXPECT_EQ(0, turn.state().self_items_size());
+            EXPECT_EQ(2, turn.state().actors_size());
+            for (const auto& actor : turn.state().actors()) {
+                EXPECT_FALSE(actor.has_combat());
+                EXPECT_EQ(0, actor.skill_cooldown_rounds_size());
+            }
+        }
+        // 下一回合多挂一台,条数跟着变
+        gates.emplace(23, "gate-twenty-three");
+        ASSERT_EQ(0u, Attach(battleId_, 23, "gate-twenty-three").error_message().id());
+        (void)TakeFrames();
+    }
+}
+
+// 升档单向幂等:首次往广播 topic 发一帧 STATE,此后每回合与终局帧都只发广播 1 条、不再发中继;之后的 Attach 回 broadcast = true,
+// 不挂 gate。
+TEST_F(BattleObserverContract, PromoteIsIdempotentAndLaterRoundsOnlyBroadcast) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    ASSERT_EQ(0u, Attach(battleId_, kOtherRelayGate, kOtherGateInstance).error_message().id());
+    (void)TakeFrames();
+
+    const auto promoted = Promote(battleId_);
+    ASSERT_EQ(0u, promoted.error_message().id());
+    EXPECT_EQ(kInstance, promoted.battle_instance_id());
+    EXPECT_EQ(originalNowMs_ + 180000, promoted.deadline_ms());
+    auto frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectBroadcastRecord(frames[0], battleId_);
+    const auto stateFrame = ParseFrame(frames[0]);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_STATE, stateFrame.kind());
+    EXPECT_EQ(0u, ParseClientFrame<SpectateStateS2C>(stateFrame, BattleClientPlayerNotifySpectateStateMessageId)
+                      .observer_count());
+
+    const auto repeated = Promote(battleId_);
+    EXPECT_EQ(0u, repeated.error_message().id());
+    EXPECT_EQ(kInstance, repeated.battle_instance_id());
+    EXPECT_TRUE(TakeFrames().empty());
+
+    for (int round = 0; round < 2; ++round) {
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+        frames = TakeFrames();
+        ASSERT_EQ(1u, frames.size());
+        ExpectBroadcastRecord(frames[0], battleId_);
+        const auto turnFrame = ParseFrame(frames[0]);
+        EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_TURN, turnFrame.kind());
+        (void)ParseClientFrame<TurnResultS2C>(turnFrame, BattleClientPlayerNotifySpectateTurnResultMessageId);
+    }
+
+    const auto late = Attach(battleId_, 77, "late-gate-instance");
+    EXPECT_EQ(0u, late.error_message().id());
+    EXPECT_TRUE(late.broadcast());
+    EXPECT_EQ(kInstance, late.battle_instance_id());
+    EXPECT_EQ(originalNowMs_ + 180000, late.deadline_ms());
+    EXPECT_TRUE(TakeFrames().empty());
+
+    // END 也只发广播,升档前挂的两台 gate 不再单发:与最后一回合的 TURN 同分区保序。中继 END 可能越过广播上的 TURN,
+    // gate 收尾后把那一帧丢掉,观众就看不到最后一回合(§15.4)。
+    Destroy(battleId_);
+    frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectBroadcastRecord(frames[0], battleId_);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, ParseFrame(frames[0]).kind());
+}
+
+// 结束 / 作废:没升档时每台中继 gate 各一帧 END,升过档只发广播一帧(编好的 166,reason 与 L0 同值),不要求房间有直连观众;
+// 房间没了就没有第二帧;从没开过通道的房间不发。
+TEST_F(BattleObserverContract, EndFrameReachesEveryChannelOnceWithDirectObserverReason) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    ASSERT_EQ(0u, Attach(battleId_, kOtherRelayGate, kOtherGateInstance).error_message().id());
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    const auto turnFrames = TakeFrames();
+    ASSERT_EQ(4u, turnFrames.size()); // 两帧 STATE + 两帧 TURN
+    const auto lastTurnRound = ParseFrame(turnFrames.back()).round_index();
+
+    Destroy(battleId_);
+    auto frames = TakeFrames();
+    ASSERT_EQ(2u, frames.size());
+    ExpectRelayRecord(frames[0], battleId_, kRelayGate, kGateInstance);
+    ExpectRelayRecord(frames[1], battleId_, kOtherRelayGate, kOtherGateInstance);
+    for (const auto& record : frames) {
+        const auto frame = ParseFrame(record);
+        EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, frame.kind());
+        EXPECT_GE(frame.round_index(), lastTurnRound);
+        const auto end = ParseClientFrame<SpectateEndS2C>(frame, BattleClientPlayerNotifySpectateEndMessageId);
+        EXPECT_EQ(battleId_, end.battle_id());
+        EXPECT_EQ(::SPECTATE_END_BATTLE_ABORTED, end.reason());
+        EXPECT_EQ(::BATTLE_OUTCOME_ONGOING, end.outcome());
+    }
+    Destroy(battleId_);
+    EXPECT_TRUE(TakeFrames().empty());
+
+    const auto promotedBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(promotedBattle, ::SPECTATE_VISIBILITY_PUBLIC));
+    ASSERT_EQ(0u, Promote(promotedBattle).error_message().id());
+    (void)TakeFrames();
+    Destroy(promotedBattle);
+    frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ExpectBroadcastRecord(frames[0], promotedBattle);
+    EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, ParseFrame(frames[0]).kind());
+
+    const auto quietBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    ASSERT_NO_FATAL_FAILURE(CreateExtraRoom(quietBattle, ::SPECTATE_VISIBILITY_PUBLIC));
+    Destroy(quietBattle);
+    EXPECT_TRUE(TakeFrames().empty());
+}
+
+// L0 直连与中继共用同一份观众帧:中继帧里的客户端信封加上直连分帧,必须与直连观众收到的字节逐字节相同。
+TEST_F(BattleObserverContract, DirectObserverAndRelayGateShareTheSameSpectatorEnvelope) {
+    // 回环连接先于建房打开,理由同 SpectatorFrameEncodedOnceReachesEveryDirectObserverIntact
+    LoopbackDirectConnection direct(*loop_);
+    ASSERT_TRUE(direct.Open("spectator_shared"));
+    const auto edge = std::make_shared<BattleClientEdge>();
+    const ClientEdgeBinding binding(*edge);
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const auto observer = OriginalFor(kFillerObserverBase, FillerOperation(0));
+    ASSERT_EQ(0u, AddError(observer));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId_, observer.observer_player_id(), ::BATTLE_TICKET_ROLE_OBSERVER,
+                                                 direct.ServerSide(), nullptr, observer.spectator_operation_id()));
+    ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+    (void)TakeFrames();
+
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    const auto frames = TakeFrames();
+    ASSERT_EQ(1u, frames.size());
+    ::MessageContent envelope;
+    ASSERT_TRUE(envelope.ParseFromString(ParseFrame(frames[0]).client_frame()));
+    EXPECT_EQ(BattleClientPlayerNotifySpectateTurnResultMessageId, envelope.message_id());
+    muduo::net::Buffer framed;
+    ProtobufCodec::fillEmptyBuffer(&framed, envelope);
+    const std::string expected = framed.retrieveAllAsString();
+
+    ASSERT_TRUE(DriveLoopUntil(*loop_, [&] { return direct.ClientReceived().size() >= expected.size(); }));
+    EXPECT_EQ(expected, direct.ClientReceived());
+    Destroy(battleId_);
+}
+
+// 帧没发出去只计数:挂接照常成功,回合照常推进,不重试;下一帧带全量状态,自愈。
+TEST_F(BattleObserverContract, RefusedSpectateFramesNeitherFailAttachNorBlockRounds) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    spectateSinkAccepts_ = false;
+    const auto attached = Attach(battleId_, kRelayGate, kGateInstance);
+    EXPECT_EQ(0u, attached.error_message().id());
+    EXPECT_EQ(kInstance, attached.battle_instance_id());
+    EXPECT_EQ(1u, TakeFrames().size());
+
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    const auto refused = TakeFrames();
+    ASSERT_EQ(1u, refused.size());
+
+    spectateSinkAccepts_ = true;
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    const auto healed = TakeFrames();
+    ASSERT_EQ(1u, healed.size());
+    EXPECT_EQ(ParseFrame(refused[0]).round_index() + 1, ParseFrame(healed[0]).round_index());
+}
+
+// 停机口径与 L0 相同(§5.3):结果未落定的房间不发 END(不能发一个可能与真实结果矛盾的 ABORTED),中继观众靠 gate 的
+// 空闲超时收尾;没有结果要等的房间照常发 END(ABORTED)。v1 房间按生产合同删不掉,放在独立子进程里。
+TEST_F(BattleObserverContract, ShutdownSendsNoEndFrameForUndecidedRoomButEndsAbortableRoom) {
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+        ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012");
+        CreateBattleResponse undecided;
+        manager().HandleCreateBattle(OriginalCreation(1), undecided);
+        ASSERT_EQ(0u, undecided.error_message().id());
+        auto abortable = OriginalCreation();
+        abortable.set_battle_id(battleId_ + 1);
+        CreateBattleResponse created;
+        manager().HandleCreateBattle(abortable, created);
+        ASSERT_EQ(0u, created.error_message().id());
+        ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+        ASSERT_EQ(0u, Attach(abortable.battle_id(), kRelayGate, kGateInstance).error_message().id());
+        (void)TakeFrames();
+
+        manager().AbortAllRooms("unit_shutdown");
+        const auto frames = TakeFrames();
+        ASSERT_EQ(1u, frames.size());
+        ExpectRelayRecord(frames[0], abortable.battle_id(), kRelayGate, kGateInstance);
+        const auto frame = ParseFrame(frames[0]);
+        EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_END, frame.kind());
+        const auto end = ParseClientFrame<SpectateEndS2C>(frame, BattleClientPlayerNotifySpectateEndMessageId);
+        EXPECT_EQ(::SPECTATE_END_BATTLE_ABORTED, end.reason());
+    }));
+}
+
+// 等结果回执期间,终局已算出但还没拿到决定:最后一回合的 TURN 不提前发,新挂的 gate 收到的 STATE 是冻结的可见状态,
+// 不提前泄露结果(与 L0 首帧同口径)。1 点气血一回合分出胜负;测试里没有 match 可连,房间一直等着,所以放在独立子进程里。
+TEST_F(BattleObserverContract, RelayStateFrameDuringOutcomeWaitDoesNotLeakTerminalResult) {
+    ASSERT_NO_FATAL_FAILURE(AssertInFreshOutcomeProcess([&] {
+        ObserverFixtureEnvironment environment("MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "12345678901234567890123456789012");
+        auto creation = OriginalCreation(1);
+        for (auto& player : *creation.mutable_players()) {
+            player.set_max_health(1);
+            player.mutable_base_attributes()->set_health(1);
+        }
+        CreateBattleResponse created;
+        manager().HandleCreateBattle(creation, created);
+        ASSERT_EQ(0u, created.error_message().id());
+        ASSERT_EQ(0u, Attach(battleId_, kRelayGate, kGateInstance).error_message().id());
+        (void)TakeFrames();
+
+        ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+        EXPECT_TRUE(TakeFrames().empty());
+
+        ASSERT_EQ(0u, Attach(battleId_, kOtherRelayGate, kOtherGateInstance).error_message().id());
+        const auto frames = TakeFrames();
+        ASSERT_EQ(1u, frames.size());
+        ExpectRelayRecord(frames[0], battleId_, kOtherRelayGate, kOtherGateInstance);
+        const auto frame = ParseFrame(frames[0]);
+        EXPECT_EQ(contracts::kafka::SPECTATE_FRAME_STATE, frame.kind());
+        const auto state = ParseClientFrame<SpectateStateS2C>(frame, BattleClientPlayerNotifySpectateStateMessageId);
+        EXPECT_EQ(::BATTLE_OUTCOME_ONGOING, state.state().outcome());
+        EXPECT_EQ(2, state.state().actors_size());
+        for (const auto& actor : state.state().actors()) EXPECT_FALSE(actor.is_dead());
+    }));
+}
+
+// 「0 = 硬上限」的规则只在直连面:节点观众席配额经 SetClientEdge 取同一个值。
+TEST_F(BattleObserverContract, ClientEdgeEffectiveMaxConnectionsFallsBackToHardCap) {
+    const auto edge = std::make_shared<BattleClientEdge>();
+    gNodeConfigManager.GetBaseDeployConfig().set_battle_max_connections(0);
+    EXPECT_EQ(BattleClientEdge::kHardMaxConnections, edge->EffectiveMaxConnections());
+    gNodeConfigManager.GetBaseDeployConfig().set_battle_max_connections(84);
+    EXPECT_EQ(84u, edge->EffectiveMaxConnections());
 }
 } // namespace

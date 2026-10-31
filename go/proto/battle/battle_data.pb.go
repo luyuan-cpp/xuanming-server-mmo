@@ -382,6 +382,109 @@ func (EBattleActivityKind) EnumDescriptor() ([]byte, []int) {
 	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{5}
 }
 
+// 观战可见性(docs/design/battle-spectate-tiered-fanout.md §10 第 6 条 / §10.2):战斗创建时由 match 按
+// 单一策略表决定、随 CreateBattleRequest 冻结,之后不变。match 的登记公开、两条 WatchBattle 路径、
+// 观战列表与 battle 的 AddObserver 四处都按它执法。默认拒绝:未填(UNSPECIFIED)与 PRIVATE 一样不可观战。
+type ESpectateVisibility int32
+
+const (
+	ESpectateVisibility_SPECTATE_VISIBILITY_UNSPECIFIED ESpectateVisibility = 0 // 视同私密(老发送方 / 漏填一律 fail-closed)
+	ESpectateVisibility_SPECTATE_VISIBILITY_PRIVATE     ESpectateVisibility = 1 // 不可观战:计分局、切磋、活动局、自定义房间与未知模式
+	ESpectateVisibility_SPECTATE_VISIBILITY_PUBLIC      ESpectateVisibility = 2 // 任何在线玩家可观战,进观战列表与随机观战
+)
+
+// Enum value maps for ESpectateVisibility.
+var (
+	ESpectateVisibility_name = map[int32]string{
+		0: "SPECTATE_VISIBILITY_UNSPECIFIED",
+		1: "SPECTATE_VISIBILITY_PRIVATE",
+		2: "SPECTATE_VISIBILITY_PUBLIC",
+	}
+	ESpectateVisibility_value = map[string]int32{
+		"SPECTATE_VISIBILITY_UNSPECIFIED": 0,
+		"SPECTATE_VISIBILITY_PRIVATE":     1,
+		"SPECTATE_VISIBILITY_PUBLIC":      2,
+	}
+)
+
+func (x ESpectateVisibility) Enum() *ESpectateVisibility {
+	p := new(ESpectateVisibility)
+	*p = x
+	return p
+}
+
+func (x ESpectateVisibility) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ESpectateVisibility) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_battle_battle_data_proto_enumTypes[6].Descriptor()
+}
+
+func (ESpectateVisibility) Type() protoreflect.EnumType {
+	return &file_proto_battle_battle_data_proto_enumTypes[6]
+}
+
+func (x ESpectateVisibility) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ESpectateVisibility.Descriptor instead.
+func (ESpectateVisibility) EnumDescriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{6}
+}
+
+// 观战投递档位(battle-spectate-tiered-fanout.md §3 / §15):按场只升不降,match 是档位的记账方,
+// battle 只认「挂了哪些中继 gate」与「是否已升广播」两件事。
+type ESpectateTier int32
+
+const (
+	ESpectateTier_SPECTATE_TIER_DIRECT    ESpectateTier = 0 // L0:观众凭票直连 battle(直连席未满)
+	ESpectateTier_SPECTATE_TIER_RELAY     ESpectateTier = 1 // L1:直连席已满,battle 每回合给每台挂了观众的 gate 各发一条中继帧
+	ESpectateTier_SPECTATE_TIER_BROADCAST ESpectateTier = 2 // L2:全服广播,battle 每回合只往广播 topic 发一条,所有 gate 都读
+)
+
+// Enum value maps for ESpectateTier.
+var (
+	ESpectateTier_name = map[int32]string{
+		0: "SPECTATE_TIER_DIRECT",
+		1: "SPECTATE_TIER_RELAY",
+		2: "SPECTATE_TIER_BROADCAST",
+	}
+	ESpectateTier_value = map[string]int32{
+		"SPECTATE_TIER_DIRECT":    0,
+		"SPECTATE_TIER_RELAY":     1,
+		"SPECTATE_TIER_BROADCAST": 2,
+	}
+)
+
+func (x ESpectateTier) Enum() *ESpectateTier {
+	p := new(ESpectateTier)
+	*p = x
+	return p
+}
+
+func (x ESpectateTier) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ESpectateTier) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_battle_battle_data_proto_enumTypes[7].Descriptor()
+}
+
+func (ESpectateTier) Type() protoreflect.EnumType {
+	return &file_proto_battle_battle_data_proto_enumTypes[7]
+}
+
+func (x ESpectateTier) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ESpectateTier.Descriptor instead.
+func (ESpectateTier) EnumDescriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{7}
+}
+
 // ---- 路由信息:battle 节点出站消息(Kafka)所需的全部定位数据,快照携带,battle 不查 etcd ----
 type BattleRouting struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -2317,7 +2420,15 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x13BATTLE_OUTCOME_DRAW\x10\x03*Z\n" +
 	"\x13eBattleActivityKind\x12\x1d\n" +
 	"\x19BATTLE_ACTIVITY_KIND_NONE\x10\x00\x12$\n" +
-	" BATTLE_ACTIVITY_KIND_GUILD_TRIAL\x10\x01B\x0eZ\fproto/battleb\x06proto3"
+	" BATTLE_ACTIVITY_KIND_GUILD_TRIAL\x10\x01*{\n" +
+	"\x13eSpectateVisibility\x12#\n" +
+	"\x1fSPECTATE_VISIBILITY_UNSPECIFIED\x10\x00\x12\x1f\n" +
+	"\x1bSPECTATE_VISIBILITY_PRIVATE\x10\x01\x12\x1e\n" +
+	"\x1aSPECTATE_VISIBILITY_PUBLIC\x10\x02*_\n" +
+	"\reSpectateTier\x12\x18\n" +
+	"\x14SPECTATE_TIER_DIRECT\x10\x00\x12\x17\n" +
+	"\x13SPECTATE_TIER_RELAY\x10\x01\x12\x1b\n" +
+	"\x17SPECTATE_TIER_BROADCAST\x10\x02B\x0eZ\fproto/battleb\x06proto3"
 
 var (
 	file_proto_battle_battle_data_proto_rawDescOnce sync.Once
@@ -2331,7 +2442,7 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 	return file_proto_battle_battle_data_proto_rawDescData
 }
 
-var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
 var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleActorType)(0),                // 0: eBattleActorType
@@ -2340,55 +2451,57 @@ var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleHitKind)(0),                  // 3: eBattleHitKind
 	(EBattleOutcome)(0),                  // 4: eBattleOutcome
 	(EBattleActivityKind)(0),             // 5: eBattleActivityKind
-	(*BattleRouting)(nil),                // 6: BattleRouting
-	(*BattleBuffEntry)(nil),              // 7: BattleBuffEntry
-	(*BattleItemEntry)(nil),              // 8: BattleItemEntry
-	(*BattlePlayerSnapshot)(nil),         // 9: BattlePlayerSnapshot
-	(*BattlePetSnapshot)(nil),            // 10: BattlePetSnapshot
-	(*BattleActorState)(nil),             // 11: BattleActorState
-	(*BattleAction)(nil),                 // 12: BattleAction
-	(*BattleEventItem)(nil),              // 13: BattleEventItem
-	(*BattleMonsterDefeat)(nil),          // 14: BattleMonsterDefeat
-	(*BattleCurrencyGain)(nil),           // 15: BattleCurrencyGain
-	(*BattleRandomItemReward)(nil),       // 16: BattleRandomItemReward
-	(*BattleRewardProfile)(nil),          // 17: BattleRewardProfile
-	(*BattleRewardConfig)(nil),           // 18: BattleRewardConfig
-	(*BattleSettlementData)(nil),         // 19: BattleSettlementData
-	(*BattlePetSettlementData)(nil),      // 20: BattlePetSettlementData
-	(*BattleActivityContext)(nil),        // 21: BattleActivityContext
-	nil,                                  // 22: BattlePlayerSnapshot.SkillRanksEntry
-	nil,                                  // 23: BattleActorState.SkillCooldownRoundsEntry
-	nil,                                  // 24: BattleActorState.SkillRanksEntry
-	(*component.BaseAttributesComp)(nil), // 25: BaseAttributesComp
-	(*component.CombatAttributes)(nil),   // 26: CombatAttributes
+	(ESpectateVisibility)(0),             // 6: eSpectateVisibility
+	(ESpectateTier)(0),                   // 7: eSpectateTier
+	(*BattleRouting)(nil),                // 8: BattleRouting
+	(*BattleBuffEntry)(nil),              // 9: BattleBuffEntry
+	(*BattleItemEntry)(nil),              // 10: BattleItemEntry
+	(*BattlePlayerSnapshot)(nil),         // 11: BattlePlayerSnapshot
+	(*BattlePetSnapshot)(nil),            // 12: BattlePetSnapshot
+	(*BattleActorState)(nil),             // 13: BattleActorState
+	(*BattleAction)(nil),                 // 14: BattleAction
+	(*BattleEventItem)(nil),              // 15: BattleEventItem
+	(*BattleMonsterDefeat)(nil),          // 16: BattleMonsterDefeat
+	(*BattleCurrencyGain)(nil),           // 17: BattleCurrencyGain
+	(*BattleRandomItemReward)(nil),       // 18: BattleRandomItemReward
+	(*BattleRewardProfile)(nil),          // 19: BattleRewardProfile
+	(*BattleRewardConfig)(nil),           // 20: BattleRewardConfig
+	(*BattleSettlementData)(nil),         // 21: BattleSettlementData
+	(*BattlePetSettlementData)(nil),      // 22: BattlePetSettlementData
+	(*BattleActivityContext)(nil),        // 23: BattleActivityContext
+	nil,                                  // 24: BattlePlayerSnapshot.SkillRanksEntry
+	nil,                                  // 25: BattleActorState.SkillCooldownRoundsEntry
+	nil,                                  // 26: BattleActorState.SkillRanksEntry
+	(*component.BaseAttributesComp)(nil), // 27: BaseAttributesComp
+	(*component.CombatAttributes)(nil),   // 28: CombatAttributes
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
-	25, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
-	7,  // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
-	8,  // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
-	6,  // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
-	10, // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
-	26, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
-	22, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
-	25, // 7: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	27, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
+	9,  // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
+	10, // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
+	8,  // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
+	12, // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
+	28, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
+	24, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
+	27, // 7: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
 	0,  // 8: BattleActorState.actor_type:type_name -> eBattleActorType
-	25, // 9: BattleActorState.attributes:type_name -> BaseAttributesComp
-	7,  // 10: BattleActorState.buffs:type_name -> BattleBuffEntry
-	23, // 11: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	26, // 12: BattleActorState.combat:type_name -> CombatAttributes
-	24, // 13: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
+	27, // 9: BattleActorState.attributes:type_name -> BaseAttributesComp
+	9,  // 10: BattleActorState.buffs:type_name -> BattleBuffEntry
+	25, // 11: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	28, // 12: BattleActorState.combat:type_name -> CombatAttributes
+	26, // 13: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
 	1,  // 14: BattleAction.action_type:type_name -> eBattleActionType
 	2,  // 15: BattleEventItem.event_type:type_name -> eBattleEventType
 	3,  // 16: BattleEventItem.hit_kind:type_name -> eBattleHitKind
-	15, // 17: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
-	16, // 18: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
-	17, // 19: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
+	17, // 17: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
+	18, // 18: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
+	19, // 19: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
 	4,  // 20: BattleSettlementData.outcome:type_name -> eBattleOutcome
-	8,  // 21: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
-	8,  // 22: BattleSettlementData.items_gained:type_name -> BattleItemEntry
-	20, // 23: BattleSettlementData.pets:type_name -> BattlePetSettlementData
-	14, // 24: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
-	15, // 25: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
+	10, // 21: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
+	10, // 22: BattleSettlementData.items_gained:type_name -> BattleItemEntry
+	22, // 23: BattleSettlementData.pets:type_name -> BattlePetSettlementData
+	16, // 24: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
+	17, // 25: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
 	5,  // 26: BattleActivityContext.kind:type_name -> eBattleActivityKind
 	27, // [27:27] is the sub-list for method output_type
 	27, // [27:27] is the sub-list for method input_type
@@ -2408,7 +2521,7 @@ func file_proto_battle_battle_data_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_data_proto_rawDesc), len(file_proto_battle_battle_data_proto_rawDesc)),
-			NumEnums:      6,
+			NumEnums:      8,
 			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,

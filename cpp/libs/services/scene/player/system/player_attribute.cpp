@@ -10,6 +10,7 @@
 #include <muduo/base/Logging.h>
 
 #include "engine/core/time/system/time.h"
+#include "services/scene/player/system/player_lifecycle.h"
 #include "network/client_message_sender.h"
 #include "thread_context/ecs_context.h"
 
@@ -1261,6 +1262,7 @@ uint32_t PlayerAttributeSystem::GmSetLevel(entt::entity player, uint32_t level) 
 	const ConditionEvent progress{player,
 		static_cast<uint32_t>(eConditionType::kConditionLevelUp), {level}, level};
 	PlayerMissionSystem::OnCondition(player, progress);
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "level_changed");
 	return kSuccess;
 }
 

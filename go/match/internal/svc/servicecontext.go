@@ -14,21 +14,23 @@ import (
 	"time"
 
 	"match/internal/authority"
+	"match/internal/battleplace"
+	"match/internal/catalog"
 	"match/internal/config"
 	"match/internal/discovery"
 	matchkafka "match/internal/kafka"
 	"match/internal/metrics"
+	"match/internal/scope"
 
 	dspb "proto/data_service"
 	matchpb "proto/match"
 	inboxpb "proto/player_inbox"
 
+	"shared/idsegment"
 	"shared/kafkacmd"
 	"shared/kafkautil"
 	"shared/playersync"
 	"shared/serviceauth"
-	"shared/snowflake"
-	"shared/snowflakealloc"
 
 	"github.com/google/uuid"
 	redv9 "github.com/redis/go-redis/v9"
@@ -39,11 +41,12 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-// SceneNodeRpcPrefix / BattleNodeRpcPrefix 是 match 侧 watch 的两个发现前缀。
+// SceneNodeRpcPrefix / BattleNodeRpcPrefix / MatchNodeRpcPrefix 是 match 侧 watch 的发现前缀。
 // 与 load_reporter 的 sceneNodePrefix 同写法:字符串字面量,不依赖生成的枚举名。
 const (
 	SceneNodeRpcPrefix   = "SceneNodeService.rpc/"
 	BattleNodeRpcPrefix  = "BattleNodeService.rpc/"
+	MatchNodeRpcPrefix   = "MatchNodeService.rpc/"
 	PlayerInboxRpcPrefix = "PlayerInboxNodeService.rpc/"
 )
 
@@ -70,23 +73,25 @@ type ServiceContext struct {
 	ActivityCancelSecret string
 	BattleOutcomeAuth    *serviceauth.Verifier
 	BattleOutcomeSecret  string
+	// SpectateOpsAuth 校验运营工具调 SetSpectateFeatured 的调用证明。Spectate.OpsCallerSecret 为空时保持 nil,入口一律回 SPECTATE_FEATURED_REJECT_DENIED。
+	SpectateOpsAuth *serviceauth.Verifier
 	// 启动时装配，随后只读；调用方必须在取得SQL/P锁之前调用。
 	RefreshBattleSettlement func(context.Context, *matchpb.MatchAuthorityTicketRecord) error
 	resultPublisher         *kafka.Writer
-	// 候选扫描游标是可重建调度状态，只由matcher循环访问；不参与SQL写决策。
-	GlobalScanMs      uint64
-	GlobalScanPlayer  uint64
+	// GlobalGatherSlots 限制本副本同时备战的成局数(GlobalMatch.GatherSlots)。按池撮合先占槽再提交成局。
+	// 到期终局恢复的翻页游标不挂在这里:它是 match.global.outcome.recover 循环的局部状态(logic/global_outcome_recover.go)。
 	GlobalGatherSlots chan struct{}
-	// 终局恢复与候选游标独立；只由同一matcher循环访问，不参与SQL终局裁决。
-	GlobalOutcomeRetryMs uint64
-	GlobalOutcomeBattle  uint64
-	// 投影维护独立走有界游标；首次完整修复前不以缺投影宣称本区人数不足。
-	GlobalRegionRepairMs            uint64
-	GlobalRegionRepairPlayer        uint64
-	GlobalRegionRepairThroughMs     uint64
-	GlobalRegionRepairThroughPlayer uint64
-	GlobalRegionRepairActive        bool
-	GlobalRegionProjectionReady     atomic.Bool
+
+	// Catalog 是启动时由 PlayMode / Dungeon / ZoneGroup 三张表编译的模板目录,之后只读
+	// (docs/design/global-match-hierarchical-pools.md §7)。手工构造的单测 ServiceContext 可为 nil。
+	Catalog *catalog.Catalog
+	// MatchNodes 是 match 实例自身注册(MatchNodeService)的 etcd 镜像。按池撮合用它的实例 UUID 作成员表,
+	// 以最高随机权重哈希决定每个池由哪个副本负责(internal/poolowner)。
+	MatchNodes *discovery.NodeWatcher
+	// poolMember 是本实例 MatchNodeService 注册的 NodeUuid,注册成功后由 match_service 设置;未设置时不负责任何池。
+	poolMember atomic.Pointer[string]
+	// Placement 记录本副本在各 battle 节点上的在途备战数与临时熔断,用于机房内选点(internal/battleplace)。
+	Placement *battleplace.Picker
 
 	// 双存储(设计文档 cross-zone-matchmaking.md D2):
 	//   - MatchRedis:match 私有 key(match:* / challenge:* / spectate:*),
@@ -115,15 +120,10 @@ type ServiceContext struct {
 	Kafka              *kafka.Writer
 	GateCommandBuilder kafkautil.GateCommandBuilder
 
-	// BattleIDGen 生产 battle_id / challenge_id / team_id(shared/snowflake 17-bit
-	// worker 布局)。SnowFlake 节点隔离不变量(AGENTS.md §7 #1):这三类 id 只能由
-	// match 节点生产,共用同一个生成器所以互不重复;worker 槽位按 snowflakealloc
-	// kind="match" 独立申领(cluster 0 兼容旧前缀 "/match"),与 NodeInfo.NodeId 及
-	// 其它节点类型的 worker 池互不相干。同进程第二次注册 TeamNodeService 不涉及
-	// snowflake 槽位(team-system.md §C.3)。失租被 fence 后 Generate 返回错误,
-	// 调用方必须整体失败,不许用 0 顶替。
-	BattleIDGen *snowflake.Node
-	snowflakeHd *snowflakealloc.Handle
+	// BattleIDGen 发 battle_id / challenge_id / team_id(biz_tag = battle,见 battle_id.go)。
+	// 同进程第二次注册 TeamNodeService 不影响发号(team-system.md §C.3)。
+	BattleIDGen     BattleIDGenerator
+	battleIDSegment *idsegment.Client
 
 	// InstanceID 是本进程一次性 UUID,用作 matcher 凑单锁的持有者标记
 	// (释放锁时比对,避免误删别的实例续拿的锁)。
@@ -177,6 +177,34 @@ func (s *ServiceContext) SetPartyTeam(port PartyTeamPort) {
 	s.partyTeam.Store(&partyTeamHolder{port: port})
 }
 
+// SetPoolMember 记录本实例 MatchNodeService 注册的 NodeUuid(注册成功后调用;注销前传空串)。
+func (s *ServiceContext) SetPoolMember(nodeUUID string) {
+	s.poolMember.Store(&nodeUUID)
+}
+
+// PoolMember 返回本实例在池归属成员表里的身份;尚未注册返回空串,此时不负责任何池。
+func (s *ServiceContext) PoolMember() string {
+	if p := s.poolMember.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+// PoolMembers 返回当前注册在 etcd 的全部 match 实例 UUID(按池归属的成员表)。未装配 watcher 时为空。
+func (s *ServiceContext) PoolMembers() []string {
+	if s.MatchNodes == nil {
+		return nil
+	}
+	nodes := s.MatchNodes.Snapshot()
+	out := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		if node.NodeUuid != "" {
+			out = append(out, node.NodeUuid)
+		}
+	}
+	return out
+}
+
 // PartyTeam 取补位端口;未注入返回 nil。端口缺失时 matcher 不让补位单成组(核不了就本轮搁置),
 // 撤单照做但通知发不出去、只记日志。生产装配在 matcher 循环启动之前注入(match_service.go)。
 func (s *ServiceContext) PartyTeam() PartyTeamPort {
@@ -198,8 +226,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	if root == nil || relay == nil || root == relay {
 		panic("匹配真实角色门禁未装配")
 	}
-	if c.Mode != "dev" && c.Mode != "test" && (!c.GlobalMatch.Enabled || !c.GlobalMatch.RequireTiDB) {
-		panic("生产匹配必须启用全球TiDB事务权威")
+	if c.Mode != "dev" && c.Mode != "test" && !c.GlobalMatch.Enabled {
+		panic("生产匹配必须启用全球SQL事务权威")
 	}
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   c.Etcd.Hosts,
@@ -208,35 +236,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	if err != nil {
 		panic("failed to create etcd client: " + err.Error())
 	}
-
-	// 通过 shared/snowflakealloc 申领独立的 Snowflake 槽位(照 scene_manager):
-	// kind="match" 与 NodeInfo.NodeId 解耦,reRegister 换业务 node_id 不影响发号;
-	// 同亲和键优雅重启复用同槽,Handle.NewNode 注入前任高水位地板 + 水位年龄自 fence。
-	// ClusterId 由运维按集群设定(默认 0);LegacyPrefix="/match" 让 cluster 0 在滚动升级期
-	// 仍读旧布局的水位 / 活 id(发布一版后可删)。
-	//
-	// 亲和键 = hostname#ListenOn 而非裸 hostname(设计决策 D5b):同一主机上两个 match
-	// 进程(本地双 zone / -Counts match=2)用裸 hostname 会互相覆盖亲和键,失去"重启
-	// 复用同槽"这一优化(分配器如今只在前任优雅退出、三元组同 lease 时才复用,不会再
-	// 抢活着的槽,所以这只关乎复用率,不关乎正确性)。加上监听地址后同机多进程各自
-	// 一把键、各自一份本地缓存文件;同一进程重启仍复用原槽。
-	host, err := os.Hostname()
-	if err != nil {
-		panic(fmt.Sprintf("snowflake: failed to get hostname: %v", err))
-	}
-	affinityKey := fmt.Sprintf("%s#%s", host, c.ListenOn)
-	allocCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	hd, err := snowflakealloc.AllocateWithKeepAlive(allocCtx, etcdCli, "match", affinityKey, snowflakealloc.Options{
-		LeaseTTL:     60,
-		ClusterID:    c.ClusterId,
-		LegacyPrefix: "/match",
-		CachePath:    snowflakealloc.DefaultCachePath(c.SnowflakeCacheDir, "match", affinityKey),
-	})
-	if err != nil {
-		panic(fmt.Sprintf("snowflake worker id alloc failed: %v", err))
-	}
-	logx.Infof("[match] snowflake %s worker_id=%d (affinity=%s)", hd.LogFields(), hd.WorkerID, affinityKey)
 
 	matchRds, sharedRds := NewRedisHandles(c)
 	sc := &ServiceContext{
@@ -248,8 +247,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		SyncDigest:         playersync.NewBumper(playersync.NewGoZeroEvaler(sharedRds), "team"),
 		Etcd:               etcdCli,
 		GateCommandBuilder: matchkafka.NewGateCommandBuilder(),
-		BattleIDGen:        hd.NewNode(),
-		snowflakeHd:        hd,
 		InstanceID:         uuid.New().String(),
 	}
 
@@ -284,8 +281,37 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	sc.BattleNodes = discovery.NewNodeWatcher("battle", BattleNodeRpcPrefix,
 		metrics.SetDiscoveredNodes,
 		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
+	sc.MatchNodes = discovery.NewNodeWatcher("match", MatchNodeRpcPrefix, metrics.SetDiscoveredNodes, nil)
+	sc.Placement = battleplace.New()
+
+	// 模板目录读表失败或校验不过直接拒绝启动:不带着坏表开放任何匹配入口。
+	matchCatalog, err := catalog.Load(c.TableDir)
+	if err != nil {
+		sc.Stop()
+		panic(fmt.Errorf("匹配模板目录加载失败(TableDir=%s): %w", c.TableDir, err))
+	}
+	sc.Catalog = matchCatalog
 
 	sc.DataServiceClient = NewDataServiceClient(c.DataServiceRpc)
+	battleIDSegment, err := NewBattleIDSegment(c.IdSegment, sc.DataServiceClient)
+	if err != nil {
+		sc.Stop()
+		panic(fmt.Errorf("battle id segment: %w", err))
+	}
+	sc.battleIDSegment = battleIDSegment
+	sc.BattleIDGen = segmentBattleIDs{segment: battleIDSegment}
+	// 观战运营入口与凭证密钥(battle-spectate-tiered-fanout.md §15.6、§15.7)。密钥长度已由 Config.Validate 在加载期校验。
+	if c.Spectate.OpsEntryEnabled() {
+		opsAuth, err := serviceauth.New(map[string]string{config.SpectateOpsCaller: c.Spectate.OpsCallerSecret})
+		if err != nil {
+			sc.Stop()
+			panic(fmt.Errorf("Spectate.OpsCallerSecret 无效: %w", err))
+		}
+		sc.SpectateOpsAuth = opsAuth
+	}
+	if c.Spectate.RelayEnabled && !c.Spectate.RelayUsable() {
+		logx.Error("[match] Spectate.RelayEnabled is on but Spectate.TicketSecret is empty (dev/test only); spectator relay stays off and full direct seats return 16021")
+	}
 	if c.GlobalMatch.Enabled {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -295,9 +321,13 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 			panic(fmt.Errorf("全球匹配权威初始化失败: %w", err))
 		}
 		sc.Authority = store
-		if !c.GlobalMatch.RequireTiDB {
+		schedule := scope.Schedule{
+			GroupAfterMs:  uint64(c.GlobalMatch.ScopeGroupAfterSeconds) * 1000,
+			GlobalAfterMs: uint64(c.GlobalMatch.ScopeGlobalAfterSeconds) * 1000,
+		}
+		if err := store.ConfigureMatchCatalog(matchCatalog, schedule); err != nil {
 			sc.Stop()
-			panic("全球匹配角色归属必须与权威目录共用TiDB")
+			panic(fmt.Errorf("全球匹配范围规则无效: %w", err))
 		}
 		if err := store.ConfigureRoleAuthority(ctx, c.GlobalMatch.AccountRoleSchema); err != nil {
 			sc.Stop()
@@ -322,6 +352,18 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		if len(secret) < 32 || c.GlobalMatch.RankEndpoint == "" {
 			sc.Stop()
 			panic("全球评级投榜必须注入RANK_PRODUCER_SECRET_MATCH与RankEndpoint")
+		}
+		// 终局发件箱的批量与并发(GlobalMatch.OutcomeOutbox,2026-10-30):越界拒启、不悄悄夹紧;逐行结局计入 metrics。
+		outboxOptions, err := authority.OutcomeOutboxOptions{
+			ResultBatch:  c.GlobalMatch.OutcomeOutbox.ResultBatch,
+			FirstBatch:   c.GlobalMatch.OutcomeOutbox.FirstBatch,
+			WaitingBatch: c.GlobalMatch.OutcomeOutbox.WaitingBatch,
+			Concurrency:  c.GlobalMatch.OutcomeOutbox.Concurrency,
+			Observe:      metrics.ObserveOutcomeOutboxDelivery,
+		}.Normalized()
+		if err != nil {
+			sc.Stop()
+			panic(fmt.Errorf("GlobalMatch.OutcomeOutbox 参数无效: %w", err))
 		}
 		pubctx, pubcancel := context.WithCancel(context.Background())
 		sc.rankPublisherCancel = pubcancel
@@ -367,7 +409,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		go func() { defer publishers.Done(); inboxNodes.Run(pubctx, etcdCli) }()
 		go func() {
 			defer publishers.Done()
-			ticker := time.NewTicker(2 * time.Second)
+			ticker := time.NewTicker(c.GlobalMatch.OutcomeOutboxInterval())
 			defer ticker.Stop()
 			for {
 				if pubctx.Err() != nil {
@@ -390,7 +432,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 							relay.Hold()
 						}
 					}()
-					return store.PublishBattleOutcomesOnce(call, resolveInbox, inboxSecret, publishResult)
+					return store.PublishBattleOutcomes(call, resolveInbox, inboxSecret, publishResult, outboxOptions)
 				}()
 				cancel()
 				if err != nil && pubctx.Err() == nil {
@@ -444,18 +486,6 @@ func NewRedisHandles(c config.Config) (matchRds, sharedRds *redis.Redis) {
 	return matchRds, sharedRds
 }
 
-// SnowflakeLost 在本进程失去 Snowflake worker id 的 etcd 租约时关闭。
-// 此时 etcd 可以把同一 worker id 分给别的进程,继续发号就是确定性撞号,
-// 主流程必须 fence 后退出(见 match_service.go)。
-func (sc *ServiceContext) SnowflakeLost() <-chan struct{} {
-	if sc.snowflakeHd == nil {
-		return nil
-	}
-	return sc.snowflakeHd.Lost()
-}
-
-// Stop 先关 Kafka writer(flush 在途批次),再释放 Snowflake worker lease。
-// 幂等,正常 defer 与失租强退路径可安全共用。
 func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
 	sc.lifecycleMu.Lock()
 	defer sc.lifecycleMu.Unlock()
@@ -546,6 +576,17 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	if err := sc.RelayAdmission.WaitIdle(ctx); err != nil {
 		return err
 	}
+	// 发号的调用方都已停下。领段结局不明时排空不了,与 guild、trade 同口径。
+	if sc.battleIDSegment != nil {
+		digest, err := sc.battleIDSegment.DrainAndReport(ctx)
+		if err != nil {
+			sc.RelayAdmission.Hold()
+			return err
+		}
+		if err = sc.RelayAdmission.MergeSettled(digest); err != nil {
+			return err
+		}
+	}
 	if sc.resultPublisher != nil {
 		if err := sc.resultPublisher.Close(); err != nil {
 			sc.RelayAdmission.Hold()
@@ -570,9 +611,6 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	if sc.LoginSessions != nil {
 		result = errors.Join(result, sc.LoginSessions.Close())
 	}
-	if sc.snowflakeHd != nil {
-		sc.snowflakeHd.Close()
-	}
 	if sc.Etcd != nil {
 		result = errors.Join(result, sc.Etcd.Close())
 	}
@@ -583,6 +621,8 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	}
 	return result
 }
+
+// Stop 是带时限的 StopAndReport(排空号段、flush Kafka 在途批次)。幂等,正常退出与启动失败路径可安全共用。
 func (sc *ServiceContext) Stop() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

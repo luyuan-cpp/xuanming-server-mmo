@@ -41,34 +41,13 @@ AccountDirectory:
     AllowedStorageIDs: []
 
 # Prometheus /metrics(internal/metrics/metrics.go)。留空 = 不开端口。
-# 回档帮会闸的告警(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.2)依赖它:
-# data_service_rollback_guild_check_total{scope,result} 等。9260 不与其它服务撞号
+# 9260 不与其它服务撞号
 # (login 9101 / scene_manager 9150 / db 9160 / match 9170 / friend 9180 / player_locator 9190 /
 #  路由服 9200 / chat 9210 / guild 9220 / trade 9230 / mail 9240 / rank 9250)。
 # 必须保持顶层单行:go_services.ps1 -Zone 按与 ListenOn 相同的规则位移它。k8s ConfigMap 本批不镜像(07 §7.9.1 前提缺口)。
 MetricsListenAddr: ":9260"
 
-# 三个回档 RPC 的服务端超时(go-zero 默认 2000ms,帮会闸的沉降 30s + 检查预算 120s 远超它,
-# 不配的话批量回档恒被截断成 DeadlineExceeded)。07 §7.5.3-3:
-#   RollbackPlayer:沉降 30 + 检查预算 120 + 复查等待 10 + 复查预算 max(120, 检查预算) = 280,余 20s 给单人写。
-#   RollbackZone / RollbackAll:起始值,没有写耗时实测(回档今天在生产整体停用);落码后按本地 zone 回档实测订正。
-# 配小了的后果:调用方拿到 DeadlineExceeded、拿不到响应体;写后阶段靠脱钩 ctx 照常跑完,结论以 RESULT 审计与日志为准。
-# 调大 GuildCheckBudgetSeconds 时同步调大这里:写后复查的预算跟着检查预算走(复查重走同一套分块翻页),
-# 所以检查预算每加 1 秒,这三项各加 2 秒。k8s_deploy.ps1 只镜像标量 Timeout,不镜像这张表 ——
-# k8s 里今天也没配 GuildInternalRpc(回档一律被拒),接上 guild 时再一并处理。
-# 部署门禁(k8s_deploy.ps1 Assert-GrpcClientDeadlineBudget)逐条核对这张表:每一条都要 ≤ C++ 的
-# GrpcClient.CallDeadlineMs.DataServiceNodeService − 2000,除非该方法登记在 Get-GrpcClientMethodsNotCalledFromCpp
-# (C++ 节点从不调用)。下面三条已登记;往这里加新条目时二选一,否则部署被拒。
-MethodTimeouts:
-  - FullMethod: /data_service.DataService/RollbackPlayer
-    Timeout: 300s
-  - FullMethod: /data_service.DataService/RollbackZone
-    Timeout: 3600s
-  - FullMethod: /data_service.DataService/RollbackAll
-    Timeout: 14400s
-
-# Global mapping Redis: stores player_id → home_zone_id (player:zone:{id}),
-# 以及合服闸门 merge:in_progress:{zone}(见 internal/routing/router.go)。
+# Global mapping Redis: stores player_id → home_zone_id (player:zone:{id})。
 #
 # ⚠ 这里**没有 DB 键**,而且不能加:go-zero 的 redis.RedisConf 只有
 #   Host / Type / User / Pass / Tls / NonBlock / PingTimeout,压根没有 DB 字段。
@@ -76,48 +55,17 @@ MethodTimeouts:
 #   于是那一行被**静默忽略**,映射实际一直落在 **DB 0**(已实测确认)。
 #   删掉它是为了让文件与运行时一致 —— 留着比没有更危险:
 #   tools/merge_zone 有 -mapping-redis-db 参数,运维照着这份 yaml 填 15,
-#   合服标记与 remap 就会全部打进一个 data_service 从来不看的库,
-#   闸门形同虚设而且 remap 一个玩家都改不到,却报"成功"。
+#   工具读写的就是一个 data_service 从来不看的库,却报"成功"。
 #   真要分库,得先给 config.Config 加一段自带 DB 的结构(不能用 go-zero 的 RedisConf),
 #   同时改 tools/merge_zone 与所有直连这把 Redis 的运维脚本。
 MappingRedis:
   Host: 127.0.0.1:6379
   Type: node
 
-# Zone → Region → Redis Cluster routing
-Regions:
-  - Id: 1
-    Zones: [1, 2, 3, 4, 5]
-    Redis:
-      Addrs:
-        - 127.0.0.1:7001
-        - 127.0.0.1:7002
-        - 127.0.0.1:7003
-  - Id: 2
-    Zones: [6, 7, 8, 9, 10]
-    Redis:
-      Addrs:
-        - 127.0.0.1:7004
-        - 127.0.0.1:7005
-        - 127.0.0.1:7006
-
-# Standalone dev mode: single Redis for all zones (overrides Regions when set)
-DevRedis:
-  Host: 127.0.0.1:6379
-  Type: node
-  DB: 0
-  # go-redis 连接池上限(P0-E 第 3 批,共享 Redis 连接总账)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-  # 随 CPU limit 漂移(本机 Windows 上是 10 × 核数);负数拒启。20 = K8s 上 GOMAXPROCS 按 2 时的缺省值。
-  # tools/scripts/k8s_deploy.ps1 把它镜像进 data-service ConfigMap(要求正整数),Redis 连接总账读同一个键:
-  # 改它看部署时打印的 "Redis connection ledger" 一行。上面的 MappingRedis 是 go-zero 封装,没有池参数,总账按缺省池记。
-  PoolSize: 20
-
-# Player lock TTL in seconds
-PlayerLockTTLSec: 3
-
-# Snapshot MySQL (for rollback persistence)
+# Snapshot MySQL (player_snapshot / transaction_log 审计库)
 SnapshotMySQL:
-  RequireTiDB: true
+  # 后端档位 tidb | mysql,不写就是 tidb;mysql 档必须连主库。
+  Backend: tidb
   Host: "127.0.0.1:3306"
   User: "appuser"
   Password: "apppass123"
@@ -145,47 +93,15 @@ PlayerName:
   CacheTTL: 24h        # player:name:{id} 正缓存;v1 不支持改名,名字内容不会变
   NegativeCacheTTL: 60s # "库里确实没这个 id 的名字"的负缓存,挡住老角色每次开面板都回源
 
-# Login admin gRPC client (for orphan account cleanup during rollback)
-LoginAdminRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: login.rpc
-
 # 运维 RPC 的共享口令。调用方放在 gRPC metadata 的 `x-admin-token` 里。
-# 2026-10-12 起 RemapHomeZoneForMerge 已停用(player-route-mapping-durability-proposal.md §4.3):
-# 不论 token 对不对一律 FailedPrecondition + ErrCodeNotImplemented,改映射只走 tools/merge_zone。
-# 这个 token 现在只守三个 Rollback* 与 ReleasePlayerName 的运维路径(不限登记时间的释放)。
+# 这个 token 现在只守 ReleasePlayerName 的运维路径(不限登记时间的释放)。
 #
 # **不写这一行(或写空串)= 这些 RPC 整体停用**,不是免鉴权。这是刻意的默认值:
-# data_service 在集群内网无鉴权可达,默认敞开意味着任何能拨到它的进程都能回档任意玩家。
+# data_service 在集群内网无鉴权可达,默认敞开意味着任何能拨到它的进程都能释放任意玩家的名字。
 # 维护窗口里临时下发,窗口结束撤掉;生产建议由 k8s Secret 注入而不是明文写在这里。
 #
-# 三个 Rollback* 一律要求这个 token(docs/design/guild-phase2/07-rollback-fail-closed.md §7.6.3 Q2 = ②):
-# 不配 = 回档 RPC 整体停用。
 # AdminToken: ""
 
-# 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.5):回档写任何玩家数据之前,
-# 先问 guild "这些玩家自快照以来有没有已应用的帮会资产操作",有就拒绝(可带 accept_guild_divergence 放行)。
-# **这一段不写 = 回档一律被拒**(ErrCodeRollbackGuildCheckFailed),不是"跳过检查"。
-# 直连 guild 的 gRPC 端口(07 §7.11-U10 选 (c)),= go/guild/etc/guild.yaml 的 ListenOn;guild 换端口要同步改这里。
-# **只认 Endpoints / Target**:guild 刻意不写 go-zero 的 Etcd.Key(D-13),按 etcd 找不到它;而且本段的 Etcd
-# 会继承顶层 Etcd(Key=dataservice.rpc)拨到自己身上,所以只写 Etcd 的配置按"没配"处理。
-# NonBlock:guild 不在线不得阻塞 data_service 启动(代码里也强制了一遍)。
-# Breaker 关:与 guild.yaml 对 DataServiceRpc 同取舍 —— 本链路不重试、一次失败即整体拒绝,熔断器帮不上忙,
-# 只会把"guild 抖了一下"在日志里变成 breaker 错误,误导排障。
-GuildInternalRpc:
-  Endpoints:
-    - 127.0.0.1:50300
-  Timeout: 3000        # 单次调用上限(毫秒);ValidateGuildCheck 限 [500, 3500](guild 服务端 Timeout 4000 − 500 回包余量)
-  NonBlock: true
-  Middlewares:
-    Breaker: false
-# since_ms = 快照时刻×1000 − 本值。盖住跨机时钟差 + guild 终结时刻可早于落盘的一个 OpBudget;
-# 限 [5000, 3600000],0 与 4999 一律拒绝(回档闸不装配)。默认 300000,与 ±300s 服务间时钟承诺同口径。
-GuildClockSkewMarginMs: 300000
-# 检查阶段(沉降等待之后、第一笔写之前)总预算,秒;只罩检查阶段。限 [1, 3600]。
-GuildCheckBudgetSeconds: 120
 
 # 玩家归属 / 落点映射的提交点(docs/design/player-route-mapping-durability-proposal.md §4、§11.2)。
 # 当前全球默认db_first：TiDB player_route提交，再按maprev发布缓存。redis仅显式LegacyNonGlobal隔离工具。
@@ -203,19 +119,17 @@ GuildCheckBudgetSeconds: 120
 # 非法值 = 拒启。WAITAOF 两项都显式写 0 = 不等落盘(只给没有 AOF 的环境 / 单测用)。WaitAOFNumReplicas:K8s 上由
 # k8s_deploy.ps1 按共享 Redis 形态渲染(单实例 0、高可用 1,与 go/db 同一个函数),本文件保持 0 给本机 compose 单实例:
 # 写 1 时本机没有副本可等,db_first 下每次发布都确认不足(ErrRoutePublishNotDurable)。
-# FenceShards(围栏分片数,同一 zone 的建角分摊到几把围栏行锁上;与 player_route 的行片 64 无关):
-#   当前全球 TiDB 档 64；历史 MySQL 档为 16(docs/design/capacity-model-hok-scale.md §4.1)。只改配置,
-#   任何时候都可以改,各副本取值也可以不同 —— 围栏持有者总是锁满 0..63 全部分片行(placement.MaxRouteFenceShards)。
-#   组件原始默认值是 8(不写这个键时)，全球应用配置固定使用 64。K8s 上 k8s_deploy.ps1 按全局库档位渲染本键，
-#   越界在 apply 之前失败；Mode / ReadRequiresReady / Reconcile.ArmReadyMarker
+# K8s 上 k8s_deploy.ps1 渲染 Mode / ReadRequiresReady / Reconcile.ArmReadyMarker,
 #   取 -RouteStoreMode / -RouteReadRequiresReady / -RouteReconcileArm,不镜像本文件;MaxOpenConn / MaxIdleConn / WaitAOFTimeoutMs
 #   取本文件,这里改了下次部署就生效。
+# MergedZoneRefreshSec:定时重读 zone_merged_into 的周期(秒),[1, 60]。GetPlayerHomeZone / BatchGetPlayerHomeZone 用它把归属解析成
+#   最终区(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1),这个周期就是滞后上限;tools/merge_zone 写完映射后等 2 个周期
+#   再跑业务合并任务。启动时读不到拒启,之后读失败保留旧值、打 ERROR 与 data_service_merged_zone_refresh_total{result="error"}。
 # PublishRedisPoolSize(2026-10-20):db_first 下 W1 发布 + WAITAOF 专用 go-redis 客户端的池上限(连 MappingRedis 同一个实例,
 #   与读路径的 go-zero 客户端分池、不经熔断器);缺省 20 的论证见 internal/config DefaultRouteStorePublishRedisPoolSize。
 #   redis 模式不建、不开连接;db_first 下每个副本最多多占 mapping Redis 这么多条连接(进共享 Redis 连接总账)。
 RouteStore:
   Mode: db_first
-  FenceShards: 64
   MaxOpenConn: 20
   MaxIdleConn: 5
   PublishAttempts: 3
@@ -223,6 +137,7 @@ RouteStore:
   WaitAOFNumReplicas: 0
   WaitAOFTimeoutMs: 1500
   PublishRedisPoolSize: 20
+  MergedZoneRefreshSec: 5
   # 第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2):true 时归属查询只在就绪标记
   # 绑定本实例身份时信任缓存,否则回源全局库 player_route(库故障回 Unavailable,绝不 NotFound)。只许 db_first(否则拒启)。
   # 打开时启动期试跑一次读脚本:跑不起来、或 route store 没装配起来,不论 Store.Required 都拒启;探针结论是 not_master /
@@ -232,7 +147,7 @@ RouteStore:
   # 对账 leader(第 1b-2 批,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §4、§13.1;internal/routereconcile)。
   # 除全球显式开启 ArmReadyMarker 外，其余为组件默认值；非法值不论 Mode 都拒启(internal/config RouteReconcileConfig.validate)。
   #   - 只在 Mode=db_first 时运行:redis 模式不构造 leader、不建它的 Redis 客户端、不碰任何控制键(mapping:route:ready / warm / watermark)。
-  #     db_first 下租约(route_reconcile)选出全服唯一的 leader:补发已提交未发布的孤儿行、每拍做库回档检测(水位键 M3)、维护合服围栏镜像。
+  #     db_first 下租约(route_reconcile)选出全服唯一的 leader:补发已提交未发布的孤儿行、每拍做库回档检测(水位键 M3)。
   #   - ArmReadyMarker:全球默认 true，**全服同值**；存量仍须完成二次导入、audit -require-maprev，
   #     全新环境须证明全部白名单玩家库无历史。此开关不跳过上述检查或水位回档检查。
   #     共享同一全局库的所有 data_service 副本必须取同一个值；false 会撤掉现存就绪标记，不能作为全球降级开关。
@@ -259,11 +174,11 @@ RouteStore:
     RedisFailureReleaseMs: 10000
     ArmingBlockedReportLimit: 1000
 
-# 全局库的建表策略:十张表都在 rollback_database_table.proto 里有 message:transaction_log / player_snapshot /
-# rollback_audit_log / id_segment / player_name + 路由表(player_route / zone_merge_fence / zone_merged_into / route_meta /
+# 全局库的建表策略:八张表都在 rollback_database_table.proto 里有 message:transaction_log / player_snapshot /
+# rollback_audit_log / player_name + 路由表(player_route / zone_merged_into / route_meta /
 # route_reconcile,映射持久化第 1a 批;proto 2026-10-19 补)。
-# 其中 id_segment 与 player_name 走 schema.go 里手写的 bootstrap DDL(proto2mysql 把 string 渲染成
-# MEDIUMTEXT,而 player_name 的唯一键必须建在 VARCHAR 上),迁移对这两张只做列漂移校验;
+# 其中 player_name 走 schema.go 里手写的 bootstrap DDL(proto2mysql 把 string 渲染成
+# MEDIUMTEXT,而 player_name 的唯一键必须建在 VARCHAR 上),迁移对它只做列漂移校验;
 # 路由表同样走手写 DDL,迁移按 proto 只守列名与主键,并种 route_meta / route_reconcile(id=1)。redis 模式同样依赖它们建成。
 # TiDB 上建表之后另跑 `route_tool -f <yaml> tidb-prepare -zones=<全部 zone> -dry-run=false` 预切路由表(MySQL 自动跳过)。
 # AutoMigrate=true:启动时按 proto(rollback_database_table.proto)用 proto2mysql 建表/补列。
@@ -275,28 +190,21 @@ RouteStore:
 Schema:
   AutoMigrate: true
 
-# 号段表 id_segment 的**行**生命周期(设计 node-id-overhaul-plan-20260908.md §7.5 第 7 条)。
-# 每一行都是一个永久身份(player_id / guild_id / item guid / tx_id / snapshot_id)的发号水位:
-# 行丢了(全局库 drop 重建、从旧备份恢复)而消费表还留着已发出的号,下一次发号会从 1 重来,
-# login 的 INSERT ... ON DUPLICATE KEY UPDATE 会静默覆盖别人的角色行。所以:
-#   AllowAutoSeed: 运行期遇到表里没有的 biz_tag 是否自动种一行从 1 起。
-#     **生产必须保持 false / 不写**(整段缺失 = false):缺行 → ErrCodeIdSegmentUnknownTag,不写任何行。
-#     这里 dev 设 true 只是为了本地随手换 tag 不必先跑迁移;k8s ConfigMap 按 profile 镜像本键
-#     (dev 取服务 yaml,staging/prod 固定 false)。
-#   BootstrapTags: 迁移(AutoMigrate / `-migrate`)用 INSERT IGNORE 预建的 tag,max_id=1 step=100
-#     version=0,幂等、绝不降低已有行。没配 = 代码默认清单(config/store 两处 DefaultIdSegmentBootstrapTags)。
-#     新增永久身份 = 在这里、两处代码默认清单与 k8s_deploy.ps1 data-service ConfigMap 同时加 tag。
-#     trade_listing:聚宝斋 listing_id(go/trade),消费表在独占库 mmorpg_trade,不做水位地板校验。
-#     guild_asset_op:帮会资产指令 op_id(go/guild 捐献 / 商店 / 活动发奖),消费表在独占库 mmorpg_guild,同上。
-#       缺这一行时 guild 取不到号,经济类写 RPC 全部失败 —— 必须先于(或同次)guild 经济服务部署。
-#     mail:邮件 mail_id / sys_mail_id(go/mail,两种 id 共用一个 tag),消费表在独占库 mmorpg_mail,同上。
-#       缺这一行时 mail 取不到号,发件全部回 kServiceUnavailable —— 必须先于(或同次)mail 服务部署。
-# 迁移还会把 player / guild 行的 max_id 抬到 MAX(消费表主键)+1(只在同库能查到该表时;
-# item / txlog / snapshot 的号在 blob / Kafka 里查不到)。恢复全局库前必须按运维手册核对
-# max_id ≥ 消费表最大号,这是 ID 安全事件,不是普通的库恢复。
+# 发号器(AllocateIdSegment),设计见 docs/design/player-data-tidb-scaling-plan.md §6,运维见 docs/ops/id-issuer-runbook.md。
+# 发号器从内存切号段,只在预留新块时写两份记录;任何一份丢失或回退,另一份都盖得住发过的号。
+#   AllowAutoSeed: 两份记录都不存在时是否自动初始化。
+#     **生产必须保持 false / 不写**(整段缺失 = false):拒绝发号、不写任何记录,由部署步骤跑
+#     `data_service -f <yaml> -id-issuer-init` 显式初始化。两份都不存在可能是两套 etcd 同时丢了数据,这个判断要留给人。
+#     这里 dev 设 true,是为了空环境起了就能建角;k8s ConfigMap 按 profile 镜像(dev 取服务 yaml,staging/prod 固定 false)。
+#   Tags: 允许发号的 biz_tag。没配 = 代码默认清单(config.DefaultIdSegmentTags)。所有种类共用一个计数器,清单只用来拦住拼错的 tag。
+#     新增永久身份 = 在这里、代码默认清单与 k8s_deploy.ps1 data-service ConfigMap 同加。
+#     trade_listing 是聚宝斋 listing_id,guild_asset_op 是帮会资产指令 op_id,mail 是 mail_id / sys_mail_id。
+#   Issuer.Region: 地域码 0..63,写进计数器最高位。开始发号之后不能改。
+#   Issuer.PrimaryEtcd / SecondaryEtcd: 放两份记录的两套 etcd。生产必须各配一套,地址不能有交集。
+#     dev 可以不写,回落到上面的 Etcd.Hosts,两份记录放同一套 etcd 的不同键。
 IdSegment:
   AllowAutoSeed: true      # dev only;生产必须 false
-  BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op, friend_request, trade_asset_op, mail, mail_asset_op, rank_board, rank_settlement, rank_reward]
+  Tags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op, friend_request, trade_asset_op, mail, mail_asset_op, rank_board, rank_settlement, rank_reward, battle, snapshot_row, rollback_audit]
 
 # C++ scene 产出的交易流水 / 玩家快照落库消费者。Brokers 留空 = 不消费(本地无 Kafka 合法)。
 # Kafka 不可达不影响 Load/Save,只记日志并每 30s 后台重试。

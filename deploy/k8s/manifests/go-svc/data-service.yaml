@@ -26,7 +26,7 @@ spec:
   #   - 去重现在是唯一键 uk_snapshot_guid_nz + ON DUPLICATE KEY,不同 guid 互不相干;
   #   - 两条落库消费者是 consumer group,每个分区同一时刻只属于一个实例,重叠只发生在 rebalance 的瞬间
   #     (先落库后提交 offset + 幂等落库,不丢不重);
-  #   - 发号段靠 id_segment 行锁 + version、名字登记靠唯一键,本来就不依赖单实例;
+  #   - 发号靠两份预留记录上的 CAS、每个实例各发各的块,名字登记靠唯一键,本来就不依赖单实例;
   #   - 多个 zone 的 data-service 早就在共用同一个全局库、同一组 topic 与消费组 —— 它一直是多实例的。
   # 多副本的两个前提在服务侧:启动期迁移由库级命名锁串行(store.acquireMigrateLock);store 装配不起来就拒启
   # (ConfigMap 的 Store.Required: true),不让一个每次调用都报错的实例进发现池、按比例吃掉请求。

@@ -41,9 +41,8 @@ func (f *fakeBattleProducer) LookupBattleSettlement(ctx context.Context, r *inbo
 
 func TestBattleProducerMethodsRequireIndependentSignatureAndBindReply(t *testing.T) {
 	const secret = "fixture-only-match-inbox-secret-000000000000"
-	t.Setenv("MMORPG_PLAYER_INBOX_SECRET_MATCH", secret)
 	store := &fakeBattleProducer{}
-	s := newTestConsumer(t, store, time.Second)
+	s := newTestProducerServer(t, store, time.Second, secret)
 	r := &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21, ExpectedOwnerAccount: "original", ExpectedOwnerRevision: 3, IssuedAtMs: 7, SettlementPayload: []byte{1}}
 	method := inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName
 	if _, err := s.EnqueueBattleSettlement(context.Background(), r); status.Code(err) != codes.PermissionDenied {
@@ -95,7 +94,6 @@ func TestBattleProducerMethodsRequireIndependentSignatureAndBindReply(t *testing
 
 func TestBattleProducerDistinguishesOriginalConflictFromUnknownFailure(t *testing.T) {
 	const secret = "fixture-only-match-inbox-secret-000000000000"
-	t.Setenv("MMORPG_PLAYER_INBOX_SECRET_MATCH", secret)
 	for _, tc := range []struct {
 		name string
 		err  error
@@ -108,7 +106,7 @@ func TestBattleProducerDistinguishesOriginalConflictFromUnknownFailure(t *testin
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &fakeBattleProducer{fakeConsumer: fakeConsumer{err: tc.err}}
-			s := newTestConsumer(t, store, time.Second)
+			s := newTestProducerServer(t, store, time.Second, secret)
 			for _, method := range []string{inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName, inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName} {
 				req := &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21, ExpectedOwnerAccount: "original", ExpectedOwnerRevision: 3, IssuedAtMs: 7, SettlementPayload: []byte{1}}
 				if err := serviceauth.Sign(method, req, "match", secret, uint64(time.Now().UnixMilli())); err != nil {
@@ -128,13 +126,66 @@ func TestBattleProducerDistinguishesOriginalConflictFromUnknownFailure(t *testin
 	}
 }
 
+// TestBattleProducerUnavailableWithoutMatchKey 钉住 B-2(2026-10-30):Match 结算密钥缺失或不足 32 字节时
+// 生产面零值、Ready()=false,两个 Battle 方法即使带着「正确」签名也回 Unavailable,且不触存储;
+// 不能借 Scene 的消费签名过这一面。环境变量不再被构造函数读取,设了也不影响零值生产面。
+func TestBattleProducerUnavailableWithoutMatchKey(t *testing.T) {
+	const secret = "fixture-only-match-inbox-secret-000000000000"
+	t.Setenv(MatchProducerSecretEnv, secret) // 构造函数不读环境变量:设了也必须仍是未装配
+	for _, raw := range []string{"", "  ", "short-match-secret"} {
+		if p, err := NewMatchProducer(raw); err == nil || p.Ready() {
+			t.Fatalf("密钥 %q 应构造失败且未就绪: ready=%v err=%v", raw, p.Ready(), err)
+		}
+	}
+	if p, err := NewMatchProducer(secret); err != nil || !p.Ready() {
+		t.Fatalf("有效密钥应就绪: ready=%v err=%v", p.Ready(), err)
+	}
+	store := &fakeBattleProducer{}
+	s := newTestConsumer(t, store, time.Second)
+	for _, method := range []string{inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName, inboxpb.PlayerInbox_LookupBattleSettlement_FullMethodName} {
+		for _, caller := range []struct{ name, secret string }{{"match", secret}, {"scene", consumerFixtureSecret}} {
+			req := &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21, ExpectedOwnerAccount: "original", ExpectedOwnerRevision: 3, IssuedAtMs: 7, SettlementPayload: []byte{1}}
+			if err := serviceauth.Sign(method, req, caller.name, caller.secret, uint64(time.Now().UnixMilli())); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			if method == inboxpb.PlayerInbox_EnqueueBattleSettlement_FullMethodName {
+				_, err = s.EnqueueBattleSettlement(context.Background(), req)
+			} else {
+				_, err = s.LookupBattleSettlement(context.Background(), req)
+			}
+			if status.Code(err) != codes.Unavailable {
+				t.Fatalf("%s 由 %s 签名,生产面未装配时应回 Unavailable: %v", method, caller.name, err)
+			}
+		}
+	}
+	if store.calls != 0 {
+		t.Fatal("生产面未装配不得触存储")
+	}
+}
+
 func newTestConsumer(t *testing.T, store ConsumerStore, budget time.Duration) *PlayerInboxServer {
+	t.Helper()
+	return newTestServer(t, store, budget, MatchProducer{})
+}
+
+// newTestProducerServer 装配带 Match 结算生产面的服务端(密钥由用例显式传入,不经环境变量)。
+func newTestProducerServer(t *testing.T, store ConsumerStore, budget time.Duration, matchSecret string) *PlayerInboxServer {
+	t.Helper()
+	producer, err := NewMatchProducer(matchSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return newTestServer(t, store, budget, producer)
+}
+
+func newTestServer(t *testing.T, store ConsumerStore, budget time.Duration, producer MatchProducer) *PlayerInboxServer {
 	t.Helper()
 	verifier, err := serviceauth.New(map[string]string{"scene": consumerFixtureSecret})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewPlayerInboxServer(store, budget, verifier)
+	return NewPlayerInboxServer(store, budget, verifier, producer)
 }
 func callFetch(t *testing.T, server *PlayerInboxServer, request *inboxpb.FetchPlayerInboxRequest) (*inboxpb.FetchPlayerInboxResponse, error) {
 	t.Helper()

@@ -16,7 +16,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-// route_reconcile.go(R23–R31)的**对外语义**回归:库回什么 → 结局 / 错误、发了哪几条语句(含 BEGIN / COMMIT / ROLLBACK)、
+// route_reconcile.go(R23–R30)的**对外语义**回归:库回什么 → 结局 / 错误、发了哪几条语句(含 BEGIN / COMMIT / ROLLBACK)、
 // 每条语句的实参。做法同 route_store_contract_test.go(假驱动 + mysqlLikeConvert 参数转换),但用一个只认本文件语句与 R18 的
 // 独立假驱动:那边的语句标签表(routeStmtLabel)属于第 1a / 1b-1 批写入方的契约,本批不往里加。
 // 假驱动不模拟 InnoDB:锁、租约谓词在库时钟上的真实判定、并发只有真库能证(route_reconcile_integration_test.go)。
@@ -47,8 +47,6 @@ func reconcileStmtLabel(query string) string {
 		return "R29"
 	case routeDBNowSQL:
 		return "R30"
-	case routeListFenceZonesSQL:
-		return "R31"
 	}
 	return ""
 }
@@ -62,7 +60,7 @@ func newReconcileFakeStore(t *testing.T, replies map[string][]fakeRouteReply) (*
 	}
 	db := sql.OpenDB(reconcileConnector{fake: fake})
 	t.Cleanup(func() { _ = db.Close() })
-	return &RouteStore{db: db, fenceShards: fakeRouteShards, writer: fakeRouteWriter}, fake
+	return &RouteStore{db: db, writer: fakeRouteWriter}, fake
 }
 
 func (f *reconcileFakeDB) next(query string, args []driver.Value) (fakeRouteReply, error) {
@@ -887,42 +885,4 @@ func TestDBNowMs(t *testing.T) {
 		t.Fatal("a query error must surface")
 	}
 	assertReconcileLabels(t, fake, "R30", "R30", "R30")
-}
-
-// TestListMergeFenceZones(核实意见 A1-4 / LR-1):R31 的实参是 63 号片;按 zone_id 升序原样返回;没有行回空;
-// 重复 / 不升序(回复形状坏了)与查询失败都报错。
-func TestListMergeFenceZones(t *testing.T) {
-	ctx := context.Background()
-	zoneRows := func(zones ...int64) fakeRouteReply {
-		rows := make([][]driver.Value, 0, len(zones))
-		for _, z := range zones {
-			rows = append(rows, []driver.Value{z})
-		}
-		return fakeRouteReply{rows: rows}
-	}
-
-	st, fake := newReconcileFakeStore(t, map[string][]fakeRouteReply{"R31": {zoneRows(3, 5, 9)}})
-	got, err := st.ListMergeFenceZones(ctx)
-	if err != nil || !reflect.DeepEqual(got, []uint32{3, 5, 9}) {
-		t.Fatalf("ListMergeFenceZones = (%v, %v), want [3 5 9]", got, err)
-	}
-	assertReconcileArgs(t, fake, "R31", uint64(placement.MaxRouteFenceShards-1))
-
-	st, _ = newReconcileFakeStore(t, map[string][]fakeRouteReply{"R31": {zoneRows()}})
-	if got, err := st.ListMergeFenceZones(ctx); err != nil || len(got) != 0 {
-		t.Fatalf("no rows: (%v, %v), want an empty list", got, err)
-	}
-
-	for name, reply := range map[string]fakeRouteReply{
-		"重复":   zoneRows(3, 3),
-		"不升序":  zoneRows(5, 3),
-		"查询失败": replyErr(mysqlErrNo(mysqlErrLockWaitTimeout)),
-	} {
-		t.Run(name, func(t *testing.T) {
-			st, _ := newReconcileFakeStore(t, map[string][]fakeRouteReply{"R31": {reply}})
-			if _, err := st.ListMergeFenceZones(ctx); err == nil {
-				t.Fatal("want an error")
-			}
-		})
-	}
 }

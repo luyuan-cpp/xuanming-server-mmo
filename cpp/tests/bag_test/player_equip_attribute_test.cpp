@@ -671,6 +671,7 @@ bool ArmItemSegment(uint64_t lo, uint64_t hi)
 	auto &client = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
 	client.Reset();
 	GuidSegmentClient::Options options;
+	options.mixIds = false;
 	options.kindName = "item";
 	options.initialStep = 100000;
 	if (!client.Enable(options, [](const std::string &, uint32_t) { return true; },
@@ -1736,6 +1737,74 @@ TEST_F(PlayerEquipAttributeTest, ZeroValueUnknownKeyChangesNothing)
 	const auto *pool = FindPool(after, poolId);
 	ASSERT_NE(nullptr, pool);
 	EXPECT_EQ(ExpectedTotalAt(kLevel) - kStrengthPoints, pool->remaining());
+}
+
+// 本池已知维度一点没加、只剩带点数的未知键:洗点是「无可洗」,不扣费,未知键原样留着。
+// (上一条用的是 0 值未知键,分不出「已知维度之和为 0」和「全部键之和为 0」两种判法;这里未知键带 30 点。)
+TEST_F(PlayerEquipAttributeTest, OnlyUnknownKeysResetIsNothingToChangeAndFree)
+{
+	constexpr uint32_t kFuturePoints = 30;
+	constexpr uint64_t kGold = 100000;
+	const uint32_t poolId = PlayerPoolId();
+	const auto *poolRow = PlayerPoolRow();
+	ASSERT_NE(nullptr, poolRow);
+	ASSERT_GT(poolRow->reset_cost_gold(), 0u);
+	ASSERT_LE(poolRow->reset_free_below_level(), kLevel) << "a reset at the fixture level would otherwise cost gold";
+	ASSERT_EQ(nullptr, AttributeDimensionTableManager::Instance().FindByIdSilent(kFutureDimension).first);
+	ASSERT_TRUE(AttributeComp(player).schemes(0).allocated().empty()) << "the fixture scheme starts without allocations";
+	FirstSchemeAllocation(player)[kFutureDimension] = kFuturePoints;
+	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLoad);
+	SetGold(player, kGold);
+	const PlayerAttributeComp before = AttributeComp(player);
+
+	EXPECT_EQ(kAttributeNothingToChange, PlayerAttributeSystem::Reset(player, poolId));
+	EXPECT_EQ(kGold, CurrencySystem::GetBalance(player, kCurrencyGold)) << "nothing was reset, so nothing is charged";
+	EXPECT_TRUE(MessageDifferencer::Equals(before, AttributeComp(player)));
+}
+
+// 自动加点与加点同一个剩余点判定:未知键占着的点不会再被建议出去;建议原样提交能通过校验并恰好用完。
+// 池不生效时没有可分的点,回「无可分配」,不给出一份提交后必被拒的建议。
+TEST_F(PlayerEquipAttributeTest, AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys)
+{
+	constexpr uint32_t kKnown = 50;
+	constexpr uint32_t kFuturePoints = 30;
+	constexpr uint32_t kLoweredLevel = 10;
+	const uint32_t poolId = PlayerPoolId();
+	const uint32_t total = ExpectedTotalAt(kLevel);
+	ASSERT_GT(total, kKnown + kFuturePoints);
+	ASSERT_EQ(nullptr, AttributeDimensionTableManager::Instance().FindByIdSilent(kFutureDimension).first);
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, poolId, std::map<uint32_t, uint32_t>{{kDimStrength, kKnown}}));
+	FirstSchemeAllocation(player)[kFutureDimension] = kFuturePoints;
+	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLoad);
+
+	std::map<uint32_t, uint32_t> suggested;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::AutoAllocate(player, poolId, suggested));
+	EXPECT_FALSE(suggested.contains(kFutureDimension)) << "a suggestion only covers dimensions this pool knows";
+	uint64_t added = 0;
+	for (const auto &[dimensionId, want] : suggested)
+	{
+		const auto &allocated = AttributeComp(player).schemes(0).allocated();
+		const uint32_t current = allocated.contains(dimensionId) ? allocated.at(dimensionId) : 0;
+		ASSERT_GE(want, current) << "dimension " << dimensionId;
+		added += want - current;
+	}
+	EXPECT_EQ(total - kKnown - kFuturePoints, added) << "points parked on the unknown key are not suggested again";
+
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::Allocate(player, poolId, suggested)) << "the suggestion must pass the commit check as-is";
+	AttributePanelInfo panel;
+	ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
+	const auto *pool = FindPool(panel, poolId);
+	ASSERT_NE(nullptr, pool);
+	EXPECT_EQ(0u, pool->remaining());
+	ASSERT_TRUE(AttributeComp(player).schemes(0).allocated().contains(kFutureDimension));
+	EXPECT_EQ(kFuturePoints, AttributeComp(player).schemes(0).allocated().at(kFutureDimension));
+
+	// 压低等级后已知维度超过总量:池不生效,没有可分的点。
+	ASSERT_LT(ExpectedTotalAt(kLoweredLevel), total - kFuturePoints);
+	tlsEcs.actorRegistry.get<LevelComp>(player).set_level(kLoweredLevel);
+	PlayerAttributeSystem::Recalculate(player, RecalcReason::kLevelChanged);
+	suggested.clear();
+	EXPECT_EQ(kAttributeNothingToChange, PlayerAttributeSystem::AutoAllocate(player, poolId, suggested));
 }
 
 // GM 降级再设回原等级(回档 / 混版本同理):降级时超额的池按 0 生效、存储加点一点不动;

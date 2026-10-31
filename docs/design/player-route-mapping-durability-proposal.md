@@ -1574,6 +1574,8 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 ### 15.4 删除与保留清单（汇总，B0 穷举后补全）
 
+> 2026-10-30：B0 已完成，逐文件清单、对本节的更正（`route_meta` 整表保留、`MappingRedis` 还承载名字缓存等）与漏项见 §15.9。
+
 - **data_service**：删 `routing/route_read.go` 的就绪读、`routing/publish_redis.go`、`route_publish.go` 的发布与 WAITAOF（W1 的 SQL 部分保留）、`internal/routereconcile/` 整包、routetool 的 rewarm / 水位键出口 / `audit -require-maprev`；配置删 `RouteStore.Mode`（只剩 SQL，不再有 redis / db_first 之分）/ `ReadRequiresReady` / `Reconcile.*` / `ArmReadyMarker` / `PublishRedisPoolSize` / `WaitAOF*`，`global_authority.go` 的强制组合随之简化；指标删 `route_ready_*`，`route_read_total` 改为只计 SQL 读结局（ok / not_found / error）。D1 会话留下的未提交读方门禁改动（M1-5 / M1-6 / `PrimeRouteEnumerate` 及两份测试）随之删改。
 - **`go/shared/placement`**：删 `route_ready.go`（就绪脚本、Arm 脚本、`VerifyRouteReady`、水位键）与 `route.go` 的发布脚本、`PublishRouteKeys`、`MapRevKey`；保留按 player_id 计算路由分片等纯函数。
 - **go/db**：删 `route_ready_gate.go`、`placement_route.go` 的 Redis 读（改为 §15.3）、配置 `Placement.Redis` / `RequireRouteReady` / `RouteReadyGateIntervalMs`、`ValidateGlobalAuthority` 里对应的组合、就绪指标；`placement_lookup` / `placement_recheck` 两个 Redis 步骤指标改为 SQL 步骤。`db:capability:zone:{z}` 是给旧版 go/db 作证的临时标记，未上线、整批起步时不再需要，一并删除。**保留** go/db 核心 Redis 上 persistBeforeAck 用的 WAITAOF（与映射无关）。
@@ -1622,3 +1624,283 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 冻结、解冻均保留原世代与业务行语义。正常释放所需水位下限固定到 ReleaseReadiness.route_watermark_floor_ms，必须覆盖审核时同世代可信 ReadyMarker 与 Redis watermark 下限；Catalog 在 slots→reconcile→meta→run→ticket 顺序下，于同一事务抬 route_reconcile.watermark_ms 并推进 E/writable。请求或审核原件一旦封装，不因当前观测变化而原地重封。已有 Redis CAS 后处理继续按原结果判断，UNKNOWN 保持维护。
 
 当前生产主入口、真实发行者关闭/新 boot prepare-open 仍在逐项接线；相应遗漏路径单列待范围决策。候选只读形状检查、独立 fresh-prestart 与测试夹具的 Schema 能力已分开；未执行生成、构建、真库或压力测试。Java 版由同批独立实现对齐，不复制 R 的 route_reconcile 结构。
+
+### 15.9 B0 穷举盘点结果（2026-10-30，只读，未改代码）
+
+> **基线**：HEAD `720179638` 加当日工作区。D1 收尾会话用三路只读代理扫描了键字面量、配置键、指标名、K8s 参数、测试与文档引用，又亲自抽查了以下几处：`RequireReconcile` 调用点、`route_meta` / `route_reconcile` 建表语句、名字缓存所在实例、home 读错误码、`savePlayerRow` 事务边界、proto2mysql v0.2.0 的事务接口。
+> **落码归属**：会话「映射直读 TiDB 落码（提案 §15，B0~B5）」，10-30 起受「账号登录逻辑/物理服瓶颈」委派。本节是它的 B0 输入，可直接修订。
+> 行号随改动漂移，下文只写文件与符号。三路原始报告（含行号）暂存在该收尾会话的 scratchpad，以本节为准。
+
+**结论**
+
+1. **§15 仍未落码。** `go/shared/placement/route_ready.go`、`go/db/internal/kafka/route_ready_gate.go`、`go/data_service/internal/routing/publish_redis.go`、`tools/merge_zone/route_publish.go`、`go/data_service/internal/routereconcile/` 都还在。
+2. **规模（推断，按下文清单计）。**
+   - data_service 加 placement 约 105 个文件。
+   - go/db、guild、merge_zone、data_consistency_check、脚本、部署、CI，以及 scene_manager / login 的过时注释，约 160 个。
+   - 写资格框架、proto、其余测试夹具约 16 个。
+   - 合计约 280 个手改文件，不含 proto 生成物和 Java 仓 3 处，远超 AGENTS §10.2 的 30 文件门槛。
+3. **与本节 10-26 补段正面冲突。**
+   - 补段把 v4 维护协议的释放水位建在 `route_reconcile.watermark_ms`、ReadyMarker 和 Redis watermark 上：锁序是 slots→reconcile→meta→run→ticket，释放事务内用 `GREATEST` 抬水位。这三样恰是 §15 的删除对象。
+   - R 侧 6 个 `authoritysql.CatalogConfig` 调用点全部写的是 `RequireReconcile: true`。
+   - 代码里已有 `RequireReconcile=false` 分支：不锁 reconcile，floor 必须为 0。这就是 J 的形状。§15 落地后 R 收敛到这一形状即可，不需要另起协议。
+4. **待负责人决定。**
+   - (a) 10-23 拍板的 §15 与 10-26 补段，以哪一份为准。
+   - (b) §15 与 Codex 全球同服验收谁先谁后。§15 会改 Codex 正在验收的 authoritysql、barrierrestore、drainproof、proto 和维护权限脚本，受影响的验收项见文末。
+   - (c) 约 280 文件的改动授权。
+   - (d) B2 的 go/db 写路径怎么做（落码会话 10-30 补）。[TiDB 决策](./global-data-layer-tidb-decision.md) §9.3 已写明映射不在 §9 范围，§15 的结论不变。但 §9.4 第 1 条还没定：存盘改为 scene 经 data_service 直接提交 TiDB，还是保留 Kafka → go/db。若选前者，go/db 写路径整体退场，§15.3 的写事务锁读和 T1（proto2mysql 事务出口）都白做。候选：
+     - 按 §15.3 做；
+     - 先把 go/db 现有的「选库读 + 落库后复核读」从 Redis 一比一换成 SQL 点查，保持现在的正确性；写事务内锁读等 §9.4 定了，再并入新的存盘路径。这一种偏离了负责人所选选项的原文「go/db 在同一 TiDB 事务里核落点」，所以要负责人定。
+     - **（2026-10-30 补，上面原文不改）§9.4 第 1 条已定**：用户在会话「玩家数据存储方案」选了存盘直接提交 TiDB，存盘服务放 go/db（原话「放 go/db」），见[总体方案](./player-data-tidb-scaling-plan.md) §3。所以上面「go/db 写路径整体退场」的前提不成立：退场的只是 go/db 的 Kafka 消费路径，go/db 改成接 RPC 的存盘服务，仍在一个 TiDB 事务里写玩家行。「go/db 在同一 TiDB 事务里核落点」和 T1（proto2mysql 事务出口）在新路径上仍然需要；Kafka 写路径本身会退役，所以不必为它单独做一遍。(d) 的具体做法落码前与该总体方案的第 1 批规格对齐。其余 (a)(b)(c) 仍待负责人定。
+   - 盘点人建议在独立分支上落码：分支编译、测试通过后整批合入主线。这样多批次改动期间主工作区不会处于半改状态，也不打断其他会话和 Codex 的验收。
+
+**对 §15.4 的更正**
+
+- **`route_meta` 整表保留。** 它没有水位列，水位和租约都在 `route_reconcile`。唯一的世代列 `generation` 是写资格框架的 writer generation：NORMAL 写者每个事务都核它，merge_zone 的冻结证明、drainproof、J 侧初始化也核它。它不属于「只为副本服务」的列。
+- **`MappingRedis` 句柄保留，说明改为「玩家写锁与名字缓存」。** 它除了两把玩家写锁，还承载名字缓存 `player:name:{id}`（见 `routing/player_name_cache.go`）。
+- **另外两个 Redis 句柄也不能整撤：**
+  - merge_zone 的映射 Redis 句柄：preflight 查 `lock:player` 要用。
+  - data_consistency_check 的 `-redis-addr`：扫 `guild_rank:zone:*` 要用。
+- **D1 读方门禁改动已入库。** §15.4 写的「未提交」改动（M1-5 / M1-6 / `PrimeRouteEnumerate`）已经提交，仍按删改处理。
+- **错误码按现有分层口径理解，不另造新码。** gRPC 层 home 读遇 SQL 故障现回 `ErrCodeRouteStoreError`（30），in-band 回 1。§15.5 第 2 条「回码 1」按这一分层口径读。
+- **k8s_deploy 有两处与原文不符：**
+  - `Get-RouteStoreWaitAOFNumReplicas` 去掉路由用途后还剩 go/db 和 scene-manager OwnerEpochMint 两处用途，不是只剩一处。
+  - Redis 总账里本来就没有发布池，只有一条过时注释，`PublishRedisPoolSize` 从未进过总账。
+- **`tools/scripts/k8s_zone_rollback.ps1` 不在本批改动范围。** 它只有 `merge:in_progress` 判据的注释过时，按 D1 交接约定不碰，交该脚本的负责会话处理。
+
+**§15.4 漏项（必须同批改）**
+
+| 编号 | 位置 | 说明 |
+|---|---|---|
+| L1 | `data_service.go`、`svc/servicecontext.go` | SOURCE 排空闭合（`closeSource` 用 `RouteReconciler.SettledDigest`）、`onDanger` / `RouteEmergencyError` 的危险原件与 Hold、prepare-only boot 推迟 route owner，这几处都挂在对账 leader 上。删对账包时要同时重新定义 SOURCE 闭合 |
+| L2 | `routetoolcli/cli.go`、`cmd/writer_authority/main.go`、`routetool/freeze.go` | v4 维护 P7 导出 `RouteRecoveryAudit`（内含 ReadyMarker、水位键、INFO 原件、floor、mapping 目标）；P8 解冻时核 floor；`RequireReconcile: true` |
+| L3 | `store/account_role_sql_proof.go`、`account_role_admission_tidb_test.go` | 角色交易的维护恢复证明用 `FOR UPDATE` 读 `route_reconcile.watermark_ms`，再与 `PromotionPlan.RouteWatermark` 比对；测试夹具往 mapping Redis 预置路由键 |
+| L4 | `routetool/*`、`store/route_store.go` | 除 rewarm 外，还有 import-from-redis、audit、reconcile-from-cache 三个子命令；store 侧还有 `Import*` / `Repair*` / `MaintenanceFreeze` 和 Freeze/Unfreeze 存根 |
+| L5 | `svc/route_bootstrap.go` | 首启空库判据仍在 SCAN 四族 Redis 键 |
+| L6 | `routing/router.go` | redis 模式的整套读写：注册、home、围栏、批量、按 zone 枚举、删除 |
+| L7 | `route_store.go`、`route_publish.go`、`metrics.go`、`dataserviceserver.go` | W1 Redis 预检的残留：`ExistingRowOnly`、`RouteRegisterRowMissing`、`ErrRouteUnknownToStore`、`precheck_*` 与 `refused_unknown_row` 两类结局、default 分支回 `ErrCodeRedis` |
+| L8 | data_service `metrics/metrics.go` | 除 `route_ready_*` 外，还有 `route_publish_total`、`route_register_total` 的预检结局、`route_reconcile_*` 全族、`route_writable`、`route_cache_verified_age_seconds`、SQL 池的 `includeRoute` |
+| L9 | `config/config.go`、`global_authority.go`、`etc/data_service.yaml` | `RouteStore.PublishAttempts`；散落各处的 `DBFirst()` 调用点；`LegacyNonGlobal` 的「历史 Redis 夹具」语义会随 redis 模式一起消失 |
+| L11 | `cmd/debugutil`、`cmd/debug_fetch`、`cmd/debug_import` | 选库、映射登记、写目标检查全部依赖 mapping Redis 的 `player:zone` / `player:placement`，以及 go/db `Placement.Redis` 的镜像，要改成读全局库 `player_route` |
+| L12 | `shared/placement/placement.go` | `Key` / `HomeZoneKey` / `MergeFenceKey`、`CapabilityKey*`、Redis 值格式，外部调用方在 go/db、barrierrestore、guild。等这些调用方改完，最后一批再删 |
+| L13 | `store/schema.go`、`store/route_tidb.go` | `idx_route_updated` 及其预切只服务对账增量扫描（推断），随对账一起删 |
+| L14 | `store/route_reads.go` | RD4 `ListActiveMergeFences` 只服务对账与 rewarm，删 |
+| L15 | `logic/data_logic_test.go`、`server/dataserviceserver_test.go` 等 | 同包共享的测试 helper 依赖 redis 模式和 miniredis，需要新增内存版 RouteStore / RouteReader |
+| L16 | `routing/router.go` 的 `readWriteRoute` | dev 模式把 `ErrHomeZoneNotMapped` 当作「未登记、可写」；改读 SQL 后这个口径要重新定 |
+| L19 | `store/route_reconcile.go` 及其 3 份测试 | 与 `routereconcile` 是两个包，§15.4 没有点名 |
+| F1 | `go/shared/authoritysql`（`catalog.go`、`maintenance.go`、`sqltest/fixture.go`） | Advance / GrantTicket / RevokeTicket / Freeze / Release / publicationReleased 里的 reconcile 行锁；`route_reconcile` 建表与种子行（`CatalogBootstrapStatements` 是 data_service 建表和各服务测试夹具的唯一事实源）；floor 校验与 `GREATEST` 写入 |
+| F2 | `go/shared/drainproof/report.go` | `RouteRecoveryReadScript` / `ParseRouteRecoverySnapshot` 读 ReadyMarker 与水位键，依赖 `placement/route_ready.go` |
+| F3 | `go/db/internal/barrierrestore`（`route.go`、`restore.go`、`scripts.go`；`drain.go` 间接）、`go/db/cmd/save_barrier_restore/main.go` | redis / split / db_first 三种路由模式；reconcile 锁；mapping 键检查；`merge:in_progress` 广播围栏（§15 删镜像后，这把 Redis guard 挡不住任何写入，要改成 SQL 围栏）；整套路由 P7 审核；75 键分支；清单里 `route_source` 缺省为 redis |
+| F4 | `tools/merge_zone`（`main.go`、`current_tidb.go`、`team_authority.go`、`audit_checks.go`、`audit_resources.go`） | `RequireReconcile` 两处；`-route-source` 判断；P7 必需检查 `verify:route_cache` / `verify:merge_fence`，要与 `restore.go` 的必需检查表一起改 |
+| F5 | `proto/common/database/rollback_database_table.proto` | `route_reconcile`、`RouteRecoveryAudit` / `RouteRecoveryStats`、`ReleaseReadiness.route_watermark_floor_ms`、`PromotionPlan.route_watermark` 与 `mapping_addr` / `mapping_db`。删字段写 `reserved`，按 AGENTS §4 重新生成 |
+| F6 | `deploy/sql/authority_operator_role.sql`、`authority_runtime_role.sql`、`tools/scripts/maintenance_drain.ps1` 及其测试 | 删 `route_reconcile` 的授权，包括 10-28 新增的列级 UPDATE 特例和 schema 账号的 CREATE / INSERT；runtime 角色补 `player_route` 授权（见 T8） |
+| F7 | go/chat、go/guild、go/player_inbox 的 TiDB 测试夹具 | 自建 `route_reconcile` 表和种子行，或者解析 `routeReconcileBootstrapDDL` |
+| F8 | Java 仓 | `InitializeRouteAuthority.java` 的 floor==0 校验、game-player-store `route_authority.proto` 的 floor 与 `RouteRecoveryAudit`、game-proto 副本（经 ContractSync）。§15.8「Java 不适用」对映射层成立，但这三处要随 proto 同批对齐 |
+| G1 | `go/db/internal/saveoutbox`（`replay.go`、`service.go`）、`internal/drain/session.go` | RouteGate 接缝与维护排空的签名。另外 `db.go` 交给 saveoutbox 的 mapping 客户端会随 `Placement.Redis` 一起消失，必须先和「Redis 物理水平扩展设计」会话的 saveoutbox 改造约好先后 |
+| G2 | `go/db/internal/kafka`（`key_ordered_consumer.go`、`retry_routing.go`、`store_failure.go`） | 进程级就绪闸接在 Start、重试循环、shared 认领、ConsumeClaim、owner 认领循环这几处；`route_not_ready` 延后原因 |
+| G3 | `tools/merge_zone`（`capability_check.go`、`main.go`、`merge_run.go`、`placement_ops.go`、`placement_codec.go`、`unmerge.go`）、`dev_tools.ps1` | 能力标记机制：`-mode capability-check`、`-db-capability-zones`、`-MergeDbCapabilityZones` 及对应测试。§15.4 只写了 go/db 一侧 |
+| G4 | `dev_tools.ps1`、`k8s_deploy.ps1` 及契约测试 | 六个 D1 开关的透传与 `dev_tools_route_switch_forwarding.tests.ps1`；`k8s_client_entry_contract` 的开关键；第六个开关 `-ConfirmRouteSwitchChange`（粘滞核对） |
+| G5 | `currency_crash_window.ps1`、`stress_round19.ps1` | 清库脚本里的 `route_reconcile` 复位，以及对账 leader 探测 |
+| G6 | go/db `metrics/pipeline.go`、`stress_summarize.ps1`、`test_stress_summarize.ps1` | `db_redis_pool_*{redis_client="placement"}`；`placement_lookup` / `placement_recheck` 两个步骤名要改成 SQL 步骤；`db_save_outbox_total` 的 `route_not_ready` 结局 |
+| G7 | `deploy/k8s/player-placement-alerts.yaml`、`data-service-route-alerts.yaml`、`deploy/k8s/README.md` | route alerts 删 15 条、改 3 条，其中 WritesFrozen 依赖只有 leader 才导出的 `route_writable`。placement alerts 的 RecheckMoved 随落库后复核一起消失 |
+| G8 | `tools/merge_zone`（`relocate.go`、`relocate_run.go`、`main.go`） | R2 原先成立的前提是「go/db 持锁直到复核完成」。§15.3 去掉复核后，这个前提改由 TiDB 行锁保证，R2 / `-relocate-lock-wait` / `redisOrderingLocks` 可能变成冗余（推断） |
+| G9 | `.github/workflows/deploy-config-tests.yml`；go/db `durable_enqueue.go` | CI 路径过滤；一条镜像注释指向将被删除的同名函数 |
+| G10 | scene_manager、login | 两者只经 data_service RPC 读，代码不用改，只改过时注释：§14 的 reconcile→ready 顺序、「同一段 Lua」、`merge:in_progress` 键 |
+| G11 | `tools/scripts/stress_summarize.ps1`（D1 表与文件头说明）、`stress_snap.ps1` 注释、`test_stress_summarize.ps1` | D1 表的 `rr_cache` / `rr_sql` / `rr_sqlerr` 三列按 `data_service_route_read_total{result=cache\|sql\|not_found_sql\|sql_error}` 求和；`route_read_total` 改为只计 ok / not_found / error 后，三列改为 `rr_ok` / `rr_nf` / `rr_err`，夹具里的 `data_service_route_ready_verdict_total` 一并删，与 B1 同批。`go/data_service/internal/metrics/login_reads_test.go` 的 `TestLoginReadNamesMatchStressSummarize` 从脚本读 `$homeZoneReadResults` / `$accountDirectoryRpcs` 钉名；rr_* 的结局若也提成脚本变量，钉名用例同批加一项。L-18 观测批（PROGRESS 10-24）至今没有 Codex 验证记录（落码会话 10-30 补） |
+| G12 | `go/db/internal/saveoutbox/{replay,service}.go`、`db.go` | 归属更正：§15.2 / §15.8 写的「由『Redis 物理水平扩展设计』会话的 saveoutbox 改造删掉这处映射读」已不成立。那项改造属于第 2c / 2d 批，已作废（PROGRESS 10-30），该会话 10-24 之后也没再运行。R2 会话的记录是「映射直读 TiDB 后 RouteGate 接缝同批删除，home_zone 的 GET 改读 TiDB，归新方向会话」。所以由 B2 做：删 RouteGate 接缝和 `db.go` 注入的 mapping 客户端，映射读的去向见 T10（落码会话 10-30 补） |
+
+**落码前要定的技术点**
+
+这些点由落码会话按 §11 原则自定，定后写回本节，不需要负责人拍板。
+
+- **T1 go/db 的事务结构。** 现状有三处缺口：
+  - `savePlayerRow` 的 `ExistsByPK` 和 `Insert` 在事务外，事务第一条语句是 `FindOneByPKForUpdate`。
+  - 未围栏表的 Save 和读路径都不在事务里。
+  - `dbOpHandler` 拿不到路由信息。
+
+  proto2mysql v0.2.0 的 `RunInTransaction` 只交出绑了事务的 `*DB`，`tx` 字段不导出，也没有导出的原生查询方法，所以没法在同一事务里先发 `SELECT … FROM <全局库>.player_route … FOR UPDATE`。候选做法：
+  - (a) 给 luyuan-cpp 分叉加一个事务内原生查询出口，需要发新版本；
+  - (b) 在本仓内解决，不跨仓发版。
+
+  无论选哪种，都要保持「路由行 → 玩家数据行」的锁序，INSERT 分支也要挪进事务。
+- **T2 路由读错的重试预算。** 现在 `lookup_error` 会消耗重试预算，写任务 3 次后进 `budget_exhausted` 死信。按 §15.5 第 1 条，以及 §15.6「TiDB 不可用时存盘停、消息留在 Kafka」，SQL 路由读错应当按存储故障处理、豁免重试预算。
+- **T3** `player_route.home_zone` 允许 NULL，stale 判定要写明这种行怎么算。
+- **T4** barrierrestore 的广播围栏改用 SQL `zone_merge_fence`，或者写资格冻结本身。
+- **T5** P7 路由恢复审核在 §15 后失去比对对象，删掉 `RouteRecoveryAudit` 的 Redis 部分，以及 `ReleaseReadiness` 里对应的审核类型。
+- **T6（推断）** go/db 的 `Placement.RouteSchema` 可以直接取 writer 配置的 `AuthoritySchema`：路由表就在这个库里，`restore.go` 也要求两者相等。这样避免两个来源对不上。
+- **T7** relocate R2 是否保留，见 G8。
+- **T8 权限。** runtime 角色模板目前没有 `player_route`，Plan.tables 要加上。`FOR UPDATE` 需要什么权限取决于锁原语是 SELECT_ONLY 还是 LOCK_TOUCH，要用真 TiDB 确认。
+- **T9 容量估算。** go/db 每个落点库池的每个事务都会读 `route_meta`、锁 `writer_slot`，所以 §15.3 第 1 步说的「无锁点查」经这些池走并不是无锁的。§15.6 的容量估算要把这部分算进去。
+- **T10 saveoutbox 跨 zone 迁移前的 home_zone 读（见 G12）。** 两种做法：
+  - (a) 把 `replay.go` 的 `GET player:zone:{id}` 换成全局库 `player_route` 点查，读错按 R2 已定的口径不计次；
+  - (b) 按 [cluster 稿](./redis-player-store-cluster.md) §5.4 不再读映射，由消费端 go/db 的 stale 判定作权威。§5.4 是作废的 2c / 2d 分片设计的一部分，单独采用要重新核对补投索引的跨 zone 迁移语义。
+
+  两种都依赖 §15.5 第 1 条的三态。按 §11「先做最小完整方案」，倾向 (a)。
+
+**逐文件清单**
+
+路径相对于仓库根目录。
+
+- **data_service + placement**
+  - 整删（非测试）：
+    - `go/data_service/internal/routereconcile/{cache,reconciler}.go`
+    - `internal/routing/publish_redis.go`
+    - `internal/routetool/{rewarm,auditor,importer,redisread,repair}.go`：删之前先把 `importer.go` 的退出码常量和 `redisread.go` 的包注释挪走
+    - `internal/store/route_reconcile.go`
+    - `go/shared/placement/route_ready.go`
+  - 整删（测试）：
+    - routereconcile 包 4 份
+    - `routing/{publish_redis_test,route_read_probe_test}.go`
+    - `store/route_reconcile_{test,contract_test,integration_test}.go`
+    - `svc/route_read_gate_test.go`
+    - `metrics/route_enumerate_prime_test.go`
+    - `routetool/{repair_test,rewarm_test,routetool_integration_test,routetool_test}.go`：先挪走 `TestRouteTiDBPrepareOutputAndExitCodes`
+    - `placement/route_ready_test.go`
+  - 改写（非测试）：
+    - `data_service.go`、`etc/data_service.yaml`
+    - `cmd/writer_authority/main.go`
+    - `cmd/debugutil/{debugutil,bundle}.go`、`cmd/debug_fetch/bundle.go`、`cmd/debug_import/{main,bundle_import,target_identity}.go`
+    - `config/{config,global_authority}.go`
+    - `metrics/metrics.go`
+    - `routetool/freeze.go`、`routetoolcli/cli.go`
+    - `routing/{route_read,route_publish,router}.go`
+    - `server/dataserviceserver.go`
+    - `store/{route_store,route_reads,schema,account_role_sql_proof}.go`
+    - `svc/{servicecontext,route_bootstrap}.go`
+    - `placement/{route,placement}.go`
+  - 只改注释：
+    - `cmd/route_tool/main.go`、`cmd/debug_fetch/main.go`
+    - `constants/error_codes.go`
+    - `logic/{data_logic,persisted_player_database,asset_op_ledger_logic,player_inbox_ledger_logic}.go`
+    - `routing/player_name_cache.go`
+    - `store/{account_role_trade_store,route_tidb}.go`
+    - `routetool/tidb_prepare.go`
+  - 改写（测试）：
+    - routing：`route_publish_test`、`route_read_test`、`route_read_abandon_test`、`router_test`、`write_lock_test`、`router_integration_test`
+    - store：`route_store_*` 3 份、`route_reads_*` 3 份、`export_test`、`account_role_admission_tidb_test`
+    - svc：`route_bootstrap_test`、`servicecontext_missing_stores_test`
+    - config：`config_test`、`global_authority_test`
+    - `metrics_test`
+    - server：`dataserviceserver_test`、`data_rpc_route_test`、`home_zone_ctx_test`、`login_read_metrics_test`
+    - logic：`data_logic_test`、`route_failure_test`、`rollback_merge_fence_test`、`player_fields_test`、`asset_op_ledger_logic_test`、`player_inbox_ledger_logic_test`、`rollback_recall_test`
+    - `routetool/freeze_test`、`routetoolcli/cli_test`
+    - debug 三个工具的测试
+    - `placement/{route_test,placement_test}`
+  - 保留不动：
+    - `routing/router_lock_test.go`
+    - `logic/rollback_logic.go`
+    - `store/{route_bootstrap,account_role_initial_commit,mysql}.go`
+    - `placement/role_route_sql.go`
+    - `logic/player_name_logic_test.go`
+  - 新增：
+    - routetool 退出码与包注释的落点
+    - `tidb_prepare` 用例
+    - 内存版 RouteStore / RouteReader，共 2 个
+    - 可选：SQL 读路径用例
+- **go/db**
+  - 整删：
+    - `internal/kafka/route_ready_gate.go`
+    - 测试 `route_ready_gate_test`、`route_ready_gate_shutdown_test`、`route_gate_open_test`、`route_ready_integration_test`
+  - 改写：
+    - `internal/kafka/{placement_route,key_ordered_consumer,player_row_fence,store_failure,retry_routing}.go`
+    - `internal/config/config.go`：新增 `RouteSchema`
+    - `internal/svc/servicecontext.go`
+    - `db.go`
+    - `internal/metrics/{metrics,pipeline}.go`
+    - `internal/saveoutbox/{replay,service}.go`
+    - `internal/drain/session.go`
+    - `etc/db.yaml`
+    - `internal/barrierrestore/{route,restore,scripts}.go`
+    - `cmd/save_barrier_restore/main.go`
+  - 只核对：`save_outbox_note.go`，确认 SQL 读错不判终态。
+  - 只改注释：`durable_enqueue.go`
+  - 改写（测试）：
+    - kafka：`placement_route_test`、`key_ordered_consumer_test`、`run_db_op_test`、`l04_deferral_test`、`ordering_lease_test`、`consumer_shutdown_test`、`retry_routing_test`、`group_handoff_test`、`instrumentation_test`、`player_row_fence_mode_test`、`player_row_fence_integration_test`、`player_read_missing_integration_test`、`save_outbox_note_test`
+    - `metrics_test`
+    - config：`config_test`、`global_authority_test`
+    - saveoutbox：`replay_route_gate_test`（只删闸用例）、`replay_test`、`replay_integration_test`、`replay_bounds_test`、`lifecycle_test`
+    - barrierrestore：`route_test`、`route_integration_test`、`restore_test`、`restore_integration_test`、`home_fallback_test`、`drain_test`、`schema_gen_test`
+    - `cmd/save_barrier_restore/{main_test,home_fallback_test}`
+  - 新增：
+    - SQL 路由读单测
+    - 真 TiDB 用例：写事务锁读、版本冲突、冻结、跨库权限
+    - 「读错不进 stale、不终结补投意图」回归
+- **go/guild**
+  - 改写：
+    - `internal/logic/merge_fence.go`：改成 SQL 围栏
+    - `internal/config/config.go`、`internal/svc/servicecontext.go`
+    - `guild.go`、`etc/guild.yaml`
+    - `internal/data/`：SQL 围栏读，可以复用 roleAuthority
+  - 改日志和注释：
+    - `internal/logic/{guild_logic,economy_logic,home_zone}.go`
+    - `internal/constants/constants.go`
+  - 测试：
+    - `merge_fence_test`、`config_test`、`data/{route_authority_fixture_test,role_identity_tidb_test}`
+    - 新增 SQL 围栏的真 TiDB 用例
+- **tools/merge_zone**
+  - 整删：
+    - `route_publish.go`、`capability_check.go`
+    - 测试 `route_publish_test`、`capability_check_test`、`manifest_route_source_test`（推断整删）
+  - 改写：
+    - `main.go`：`-route-db-dsn` 改必填，`-take-over-fence` 保留
+    - `merge_run.go`、`fence.go`、`merged_into.go`
+    - `placement_ops.go`、`placement_codec.go`、`pin_placement.go`、`backfill_home_zone.go`
+    - `relocate_run.go`、`relocate.go`、`relocate_manifest.go`、`unmerge.go`
+    - `storage_audit.go`、`player_blob_migrate.go`、`manifest.go`
+    - `current_tidb.go`、`team_authority.go`、`route_store.go`
+    - `audit_checks.go`、`audit_resources.go`
+  - 只改注释：`preflight.go`、`trade_step.go`、`player_rows.go`
+  - 测试：
+    - 约 26 份要改，以 `*_db_test` / `*_integration_test` 为主
+    - `route_mirror_test` 只删脚本比对项，镜像常量保留
+- **tools/data_consistency_check**
+  - `route_source.go`：删 redis 口径。
+  - `main.go`：`-route-db-dsn` 改必填，`-redis-addr` 保留。
+  - `route_source_test.go`：删 Redis 用例。
+- **tools/scripts 与契约测试**
+  - 脚本：
+    - `dev_tools.ps1`：`-MergeZoneRouteDbDsn` 保留并改必填
+    - `k8s_deploy.ps1`：新增 `Placement.RouteSchema` 的渲染
+    - `k8s_route_tool.ps1`、`maintenance_drain.ps1`
+    - `currency_crash_window.ps1`、`stress_round19.ps1`、`stress_summarize.ps1`
+  - 测试：
+    - `dev_tools_route_switch_forwarding.tests.ps1`：整删
+    - `dev_tools_merge_zone_contract`、`k8s_deploy_contract`、`k8s_route_tool`、`k8s_client_entry_contract`、`maintenance_drain` 的 tests
+    - `test_stress_summarize.ps1`
+- **部署与 CI**
+  - 改写：
+    - `deploy/k8s/{data-service-route-alerts,player-placement-alerts}.yaml`、`deploy/k8s/README.md`
+    - `deploy/sql/{authority_runtime_role,authority_operator_role}.sql`
+    - `.github/workflows/deploy-config-tests.yml`
+  - 只改注释：
+    - `deploy/k8s/manifests/infra/{redis,redis-ha}.yaml`：`--enable-debug-command no` 保留
+    - `manifests/go-svc/{data-service,data-service-route-tool}.yaml`
+    - `deploy/k8s/{mysql-connection-alerts,scene-manager-alerts}.yaml`、`scene-manager-dashboard.json`
+    - `deploy/login-stack.linux/login.yaml`、`deploy/docker-compose.yml`
+- **写资格框架、proto、其余夹具**
+  - `go/shared/authoritysql/{catalog,maintenance}.go`、`sqltest/fixture.go` 及相关测试
+  - `go/shared/drainproof/{report,report_test}.go`
+  - `proto/common/database/rollback_database_table.proto`，并重新生成
+  - `go/chat/internal/authority/fixture_test.go`
+  - `go/player_inbox/internal/inbox/{route_authority_integration_test,store_integration_test}.go`
+  - Java 仓 3 处见 F8
+- **工作区注意**（10-30 当时）：以下文件有别的会话的未提交改动，落码时只做路由相关的局部编辑：
+  - data_service：`logic/data_logic.go`、`data_logic_test.go`、`data_logic_integration_test.go`，以及新增的 `asset_op_ledger_verified_test.go`
+  - `tools/scripts/k8s_deploy.ps1`：match 线
+  - `tools/merge_zone/blob_lock_integration_test.go`
+
+**对 Codex 全球同服验收的影响（推断，按依赖推出）**
+
+- **要重跑：**
+  - 完整协议生成与 After 快照；
+  - C++ 构建（生成的 pb 会变）与 29 项测试；
+  - J 的 ContractSync 与全量构建；
+  - Go 的 data_service、db、shared、merge_zone、chat、guild、player_inbox；
+  - barrierrestore 专项；
+  - maintenance_drain 合同，以及部署 / 排空合同里涉及授权的部分；
+  - 外部 R14 fixture（migrate、render-roles、writer_authority）；
+  - I3 对 `authoritysql/catalog.go` 的「权威 DDL」SHA 绑定；
+  - 涉及路由表的真库项，以及 Main36 双区。
+- **基本不受影响：**
+  - schemamigrate：该模块禁止引用 shared / proto；
+  - R 的 `authority_jdbc`：只读 `route_meta`；
+  - 纯环境类工作：容器恢复、Raw、旧库存核账。

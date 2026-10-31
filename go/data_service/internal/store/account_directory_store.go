@@ -28,33 +28,36 @@ const accountRoleDDL = "CREATE TABLE IF NOT EXISTS account_role (player_id BIGIN
 // AccountDirectoryStore 只拥有全局目录；与快照池隔离，不访问认证 password 或 Redis。
 type AccountDirectoryStore struct {
 	db              *sql.DB
+	backend         authoritysql.Backend
 	maxRoles        int
 	contracts       *roleAssetContractGuard
 	schema          string
 	initialRequired bool
 	initialStores   map[uint32]bool
+	// 账本和展示资料读的名额,见 acquirePlayerStoreRead。
+	playerStoreReads chan struct{}
 }
 
 // maxOpenConn 是本池的连接上限(config.AccountDirectoryConfig.PoolMaxOpenConn),显式传入而不读 cfg.MaxOpenConn:
 // cfg 是共用的全局库连接参数,那里的 MaxOpenConn 属于快照池。越界由 authoritysql.Open 拒绝。
-func NewAccountDirectoryStore(cfg MySQLConfig, requireTiDB bool, maxRoles, maxOpenConn int) (*AccountDirectoryStore, error) {
-	// 正式目录安全语义不由 SQL 探针或运行模式开关决定。
-	return newAccountDirectoryStore(cfg, requireTiDB, maxRoles, maxOpenConn, true)
+func NewAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, maxRoles, maxOpenConn int) (*AccountDirectoryStore, error) {
+	// 正式目录安全语义不由后端档位或运行模式开关决定。
+	return newAccountDirectoryStore(cfg, backend, maxRoles, maxOpenConn, true)
 }
 
 // NewLegacyAccountDirectoryStore 只供显式 LegacyNonGlobal 隔离模式装配。
-// 不产生初始提交回执；普通构造器永不按 RequireTiDB=false 隐式进入此模式。
-func NewLegacyAccountDirectoryStore(cfg MySQLConfig, requireTiDB bool, maxRoles, maxOpenConn int) (*AccountDirectoryStore, error) {
-	return newAccountDirectoryStore(cfg, requireTiDB, maxRoles, maxOpenConn, false)
+// 不产生初始提交回执；普通构造器永不按后端档位隐式进入此模式。
+func NewLegacyAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, maxRoles, maxOpenConn int) (*AccountDirectoryStore, error) {
+	return newAccountDirectoryStore(cfg, backend, maxRoles, maxOpenConn, false)
 }
 
-func newAccountDirectoryStore(cfg MySQLConfig, requireTiDB bool, maxRoles, maxOpenConn int, initialRequired bool) (*AccountDirectoryStore, error) {
+func newAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, maxRoles, maxOpenConn int, initialRequired bool) (*AccountDirectoryStore, error) {
 	if maxRoles < 1 || maxRoles > 100 {
 		return nil, accountdirectory.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, buildDSN(cfg), cfg.DBName, requireTiDB, maxOpenConn, cfg.Permission)
+	db, err := authoritysql.Open(ctx, buildDSN(cfg), cfg.DBName, backend, maxOpenConn, cfg.Permission)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +65,8 @@ func newAccountDirectoryStore(cfg MySQLConfig, requireTiDB bool, maxRoles, maxOp
 		_ = db.Close()
 		return nil, err
 	}
-	return &AccountDirectoryStore{db: db, maxRoles: maxRoles, schema: cfg.DBName, initialRequired: initialRequired}, nil
+	return &AccountDirectoryStore{db: db, backend: backend, maxRoles: maxRoles, schema: cfg.DBName, initialRequired: initialRequired,
+		playerStoreReads: make(chan struct{}, playerStoreReadLimit(maxOpenConn))}, nil
 }
 func (s *AccountDirectoryStore) Close() error { return s.db.Close() }
 
@@ -176,10 +180,37 @@ func readRoles(ctx context.Context, q directoryQuery, account string) (*base.Acc
 	}
 	return out, nil
 }
+
+// Read 读账号的角色列表。登录每次都走这里,所以先无锁读,目录行已在就只读返回,不碰任何行锁
+// (docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条)。
+// 只有 create=true 且目录行不存在才进入加锁建行的路径,那条路径在锁内复核。
+//
+// 不加锁之后 Read 不再排在同账号在途的 Create / Repair / Remove 后面:对方提交之前读到的是提交之前的列表,
+// 提交之后才开始的 Read 一定读得到(强读会话,TiDB 读 leader、MySQL 档连主库)。调用方不依赖那次排队:
+// 列表只用来展示和选角,改归属的操作在各自事务里按 owner_revision 复核,入场用 Lookup 强读复核;
+// 建角超时的恢复是先 Lookup 确认已提交,再 Read。目录行只增不删,所以目录行与角色列表分两条语句读没有一致性问题。
 func (s *AccountDirectoryStore) Read(ctx context.Context, account string, create bool) (*base.AccountSimplePlayerList, error) {
+	if !accountdirectory.ValidAccount(account) {
+		return nil, accountdirectory.ErrInvalid
+	}
 	var out *base.AccountSimplePlayerList
 	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := lockDirectory(ctx, tx, account, create); err != nil {
+		var stored []byte
+		err := tx.QueryRowContext(ctx, "SELECT account FROM account_directory WHERE account=?", []byte(account)).Scan(&stored)
+		if errors.Is(err, sql.ErrNoRows) {
+			return accountdirectory.ErrMissing
+		}
+		if err != nil {
+			return err
+		}
+		out, err = readRoles(ctx, tx, account)
+		return err
+	})
+	if !create || !errors.Is(err, accountdirectory.ErrMissing) {
+		return out, err
+	}
+	err = s.transaction(ctx, func(tx *sql.Tx) error {
+		if err := lockDirectory(ctx, tx, account, true); err != nil {
 			return err
 		}
 		var err error
@@ -228,15 +259,13 @@ func (s *AccountDirectoryStore) Create(ctx context.Context, account string, role
 	return out.Players, nil
 }
 
-// CreateWithInitialCommit 仅本次严格新建且整个 SQL 事务成功时返回可缓存的初始原件。
-// 幂等旧目录和导入不得重新制造此回执；未知提交由原 Lookup 恢复，不补发种子。
+// CreateWithInitialCommit 严格新建:同一事务写角色目录和 player_store 初始行。未知提交由原 Lookup 恢复。
 func (s *AccountDirectoryStore) CreateWithInitialCommit(ctx context.Context, account string, role *base.AccountSimplePlayer) (*dspb.AccountDirectoryResponse, error) {
-	var initial *dbpb.PlayerAllData
-	players, err := s.createRole(ctx, account, role, roleCreateNormal, nil, &initial)
+	players, err := s.createRole(ctx, account, role, roleCreateNormal, nil, true)
 	if err != nil {
 		return nil, err
 	}
-	return &dspb.AccountDirectoryResponse{Players: players, InitialPlayerData: initial}, nil
+	return &dspb.AccountDirectoryResponse{Players: players}, nil
 }
 
 // ImportRole 只供受本地目标／离线检查约束的调试导入工具使用；普通 RPC 永不复活删除墓碑。
@@ -248,7 +277,7 @@ func (s *AccountDirectoryStore) ImportRole(ctx context.Context, account string, 
 	if len(requestID) != 32 {
 		return nil, accountdirectory.ErrInvalid
 	}
-	return s.createRole(ctx, account, role, mode, requestID, nil)
+	return s.createRole(ctx, account, role, mode, requestID, false)
 }
 
 type roleCreateMode uint8
@@ -259,10 +288,7 @@ const (
 	roleImportRestore
 )
 
-func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, role *base.AccountSimplePlayer, mode roleCreateMode, requestID []byte, initial **dbpb.PlayerAllData) (*base.AccountSimplePlayerList, error) {
-	if initial != nil {
-		*initial = nil
-	}
+func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, role *base.AccountSimplePlayer, mode roleCreateMode, requestID []byte, strictInitial bool) (*base.AccountSimplePlayerList, error) {
 	if !validRole(role) {
 		return nil, accountdirectory.ErrInvalid
 	}
@@ -272,10 +298,6 @@ func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, 
 	}
 	var out *base.AccountSimplePlayerList
 	err = s.transaction(ctx, func(tx *sql.Tx) error {
-		// 本事务目前不重试；仍在每次 action 入口清空，不能泄漏未提交 attempt 的种子凭据。
-		if initial != nil {
-			*initial = nil
-		}
 		if err := lockDirectory(ctx, tx, account, true); err != nil {
 			return err
 		}
@@ -344,14 +366,13 @@ func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, 
 		if len(out.Players) >= s.maxRoles {
 			return accountdirectory.ErrFull
 		}
+		wroteInitial := false
 		if old == nil && mode == roleCreateNormal {
-			committed, err := s.insertInitialPlayerRows(ctx, tx, role)
+			wrote, err := s.insertInitialPlayerRows(ctx, tx, role)
 			if err != nil {
 				return err
 			}
-			if initial != nil {
-				*initial = committed
-			}
+			wroteInitial = wrote
 		}
 		if old != nil {
 			if old.OwnerRevision == math.MaxUint64 {
@@ -360,7 +381,7 @@ func (s *AccountDirectoryStore) createRole(ctx context.Context, account string, 
 			_, err = tx.ExecContext(ctx, "UPDATE account_role SET account=?,role_proto=?,owner_revision=?,updated_ms=UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 WHERE player_id=?", []byte(account), raw, old.OwnerRevision+1, role.PlayerId)
 		} else {
 			initialMarker := uint64(0)
-			if initial != nil && *initial != nil {
+			if strictInitial && wroteInitial {
 				initialMarker = 1
 			}
 			_, err = tx.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,initial_player_commit) VALUES (?,?,?,1,UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000,?)", role.PlayerId, []byte(account), raw, initialMarker)

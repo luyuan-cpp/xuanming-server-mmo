@@ -111,6 +111,10 @@ func (c *guardedConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	}
 	if err = c.session.pin(ctx, raw); err != nil {
 		_ = raw.Close()
+		// 档位不符是部署错误,文本不含 DSN,原样带出「连到了从库 / TiDB」,否则运维只看得到下面这句笼统的话。
+		if errors.Is(err, ErrBackendMismatch) {
+			return nil, err
+		}
 		return nil, errors.New("权威SQL物理会话或boot身份核验失败")
 	}
 	return &guardedConn{raw: raw, gate: c.gate, session: c.session, outcomes: c.outcomes, permission: c.permission}, nil

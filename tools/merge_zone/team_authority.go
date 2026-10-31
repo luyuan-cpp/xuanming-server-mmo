@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"shared/authoritysql"
 )
 
 const defaultTeamSchema = "mmorpg_match"
@@ -18,10 +19,8 @@ type teamAuthorityReader interface {
 }
 type sqlTeamAuthority struct{ db *sql.DB }
 
-func requireTeamRouteDomain(gameDSN, routeDSN, source string) error {
-	if source != routeSourceDB {
-		return errors.New("全球Team合区只允许-route-source=db及SQL全部64片围栏")
-	}
+// requireSameSQLDomain 要求业务库与路由库走同一个全球 SQL 入口:同时读两份原件的入口不能把两个集群拼成一份事实。
+func requireSameSQLDomain(gameDSN, routeDSN string) error {
 	game, err := mysql.ParseDSN(gameDSN)
 	if err != nil {
 		return errors.New("全球SQL连接配置无效")
@@ -31,13 +30,13 @@ func requireTeamRouteDomain(gameDSN, routeDSN, source string) error {
 		return errors.New("全局路由连接配置无效")
 	}
 	if game.Net != route.Net || game.Addr != route.Addr {
-		return errors.New("组队与路由围栏必须使用同一全球TiDB SQL入口")
+		return errors.New("业务库与路由库必须使用同一全球SQL入口")
 	}
 	return nil
 }
 
-// 合区P7读取全球Team原件，独立池固定当前TiDB强读；不把区域Redis缓存用于无队证明。
-func openTeamAuthority(ctx context.Context, dsn, schema string) (*sqlTeamAuthority, error) {
+// 合区P7读取全球Team原件，独立池按档位固定当前读；不把区域Redis缓存用于无队证明。
+func openTeamAuthority(ctx context.Context, dsn, schema string, backend authoritysql.Backend) (*sqlTeamAuthority, error) {
 	if !schemaNamePattern.MatchString(schema) {
 		return nil, errors.New("team-schema必须是有效的SQL标识符")
 	}
@@ -49,7 +48,7 @@ func openTeamAuthority(ctx context.Context, dsn, schema string) (*sqlTeamAuthori
 	cfg.Timeout = 3 * time.Second
 	cfg.ReadTimeout = 3 * time.Second
 	cfg.WriteTimeout = 3 * time.Second
-	pinCurrentTiDB(cfg)
+	pinCurrentSession(cfg, backend)
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		return nil, errors.New("组队权威连接不可用")
@@ -62,7 +61,7 @@ func openTeamAuthority(ctx context.Context, dsn, schema string) (*sqlTeamAuthori
 			db.Close()
 		}
 	}()
-	if err = requireCurrentTiDB(ctx, db); err != nil {
+	if err = requireCurrentSession(ctx, db, backend); err != nil {
 		return nil, err
 	}
 	rows, err := db.QueryContext(ctx, "SELECT player_id,team_id,epoch FROM team_membership WHERE 1=0")

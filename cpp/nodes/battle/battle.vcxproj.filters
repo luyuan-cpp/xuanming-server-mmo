@@ -43,6 +43,9 @@
     <ClCompile Include="logic\battle_room_manager.cpp">
       <Filter>logic</Filter>
     </ClCompile>
+    <ClCompile Include="logic\battle_spectate_relay.cpp">
+      <Filter>logic</Filter>
+    </ClCompile>
     <ClCompile Include="rpc_replies\register_handler.cpp">
       <Filter>rpc_replies</Filter>
     </ClCompile>
@@ -62,6 +65,9 @@
       <Filter>handler\rpc</Filter>
     </ClInclude>
     <ClInclude Include="logic\battle_room_manager.h">
+      <Filter>logic</Filter>
+    </ClInclude>
+    <ClInclude Include="logic\battle_spectate_relay.h">
       <Filter>logic</Filter>
     </ClInclude>
   </ItemGroup>

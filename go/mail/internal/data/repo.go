@@ -202,35 +202,43 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 		return nil, err
 	}
 	result := &mailpb.SendMailResponse{MailId: id}
-	guardID := in.RecipientPlayerId
-	if kind != mailpb.MailKind_MAIL_KIND_PERSONAL {
-		guardID = 0
-	}
-	{
-		if _, err = r.db.ExecContext(ctx, "INSERT IGNORE INTO mail_box (player_id,created_ms) VALUES (?,?)", guardID, now); err != nil {
+	// 个人邮件按收件人串行(一人一行 mail_box),满箱计数因此是精确的。
+	// 系统和帮会邮件曾共用 player_id=0 这一行全服排队,2026-10-30 撤掉(docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条):
+	// 同一请求的并发首发由 (sender_kind, request_id) 唯一键裁决,输家转读赢家;MaxActiveSystemMails 变成软上限,并发发件可能略超,
+	// 读侧 ListMails 有 LIMIT 硬上限,发件方只有运维和帮会公告。
+	personal := kind == mailpb.MailKind_MAIL_KIND_PERSONAL
+	if personal {
+		if _, err = r.db.ExecContext(ctx, "INSERT IGNORE INTO mail_box (player_id,created_ms) VALUES (?,?)", in.RecipientPlayerId, now); err != nil {
 			return nil, err
 		}
 	}
 	err = r.tx(ctx, func(tx *sql.Tx) error {
-		{
-			var guard uint64
-			if err := tx.QueryRowContext(ctx, "SELECT player_id FROM mail_box WHERE player_id=? FOR UPDATE", guardID).Scan(&guard); err != nil {
+		if personal {
+			var box uint64
+			if err := tx.QueryRowContext(ctx, "SELECT player_id FROM mail_box WHERE player_id=? FOR UPDATE", in.RecipientPlayerId).Scan(&box); err != nil {
 				return err
 			}
 		}
-		previous, e := scanMessage(tx.QueryRowContext(ctx, "SELECT "+messageColumns+" FROM mail_message WHERE sender_kind=? AND request_id=?", in.SenderKind, in.RequestId))
-		if e == nil {
+		// 同一请求已有邮件时回原 mail_id;不同请求占了这个键回 ErrConflict。
+		replay := func() (bool, error) {
+			previous, e := scanMessage(tx.QueryRowContext(ctx, "SELECT "+messageColumns+" FROM mail_message WHERE sender_kind=? AND request_id=?", in.SenderKind, in.RequestId))
+			if errors.Is(e, ErrNotFound) {
+				return false, nil
+			}
+			if e != nil {
+				return false, e
+			}
 			if previous.RequestHash != digest || previous.Kind != uint32(kind) {
-				return ErrConflict
+				return false, ErrConflict
 			}
 			result.MailId = previous.MailId
 			result.Duplicated = true
-			return nil
+			return true, nil
 		}
-		if !errors.Is(e, ErrNotFound) {
+		if replayed, e := replay(); e != nil || replayed {
 			return e
 		}
-		if kind == mailpb.MailKind_MAIL_KIND_PERSONAL {
+		if personal {
 			var count uint64
 			if e := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_message m JOIN mail_state s ON s.mail_id=m.mail_id AND s.player_id=m.owner_player_id WHERE m.owner_player_id=? AND s.deleted_ms=0 AND (m.expire_ms>? OR s.claim_state NOT IN (0,1,3))", in.RecipientPlayerId, now).Scan(&count); e != nil {
 				return e
@@ -239,7 +247,7 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 				return ErrBoxFull
 			}
 		}
-		if kind != mailpb.MailKind_MAIL_KIND_PERSONAL {
+		if !personal {
 			var count uint64
 			if e := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_message WHERE kind IN (0,2,3) AND owner_player_id=0 AND expire_ms>?", now).Scan(&count); e != nil {
 				return e
@@ -249,23 +257,37 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 			}
 		}
 		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0)", id, in.RecipientPlayerId, in.GuildId, uint32(kind), in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire); e != nil {
-			return e
+			if !isDuplicateKey(e) {
+				return e
+			}
+			// 并发首发同一请求:唯一键裁决,转读赢家已提交的行。读不到说明撞的是别的键,按冲突回。
+			replayed, re := replay()
+			if re != nil {
+				return re
+			}
+			if !replayed {
+				return ErrConflict
+			}
+			return nil
 		}
 		if in.RecipientPlayerId != 0 {
 			state := uint32(mailpb.MailClaimState_MAIL_CLAIM_NONE)
 			if hasAttachments(payload) {
 				state = uint32(mailpb.MailClaimState_MAIL_CLAIM_UNCLAIMED)
 			}
-			_, e = tx.ExecContext(ctx, "INSERT INTO mail_state (player_id,mail_id,read_ms,deleted_ms,claim_state,current_op_id,claim_version,reason_tip_id,updated_ms) VALUES (?,?,0,0,?,0,0,0,?)", in.RecipientPlayerId, id, state, now)
+			_, e := tx.ExecContext(ctx, "INSERT INTO mail_state (player_id,mail_id,read_ms,deleted_ms,claim_state,current_op_id,claim_version,reason_tip_id,updated_ms) VALUES (?,?,0,0,?,0,0,0,?)", in.RecipientPlayerId, id, state, now)
 			return e
 		}
 		return nil
 	})
-	if err != nil {
-		var me *mysql.MySQLError
-		if errors.As(err, &me) && me.Number == 1062 {
-			return nil, ErrConflict
-		}
+	if isDuplicateKey(err) {
+		return nil, ErrConflict
 	}
 	return result, err
+}
+
+// isDuplicateKey 判断是不是唯一键冲突(1062)。
+func isDuplicateKey(err error) bool {
+	var me *mysql.MySQLError
+	return errors.As(err, &me) && me.Number == 1062
 }

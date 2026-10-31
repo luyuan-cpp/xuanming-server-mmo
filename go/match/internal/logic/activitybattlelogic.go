@@ -119,7 +119,7 @@ func (l *StartActivityBattleLogic) StartActivityBattle(in *matchpb.StartActivity
 		zones[pid] = zone
 	}
 
-	// 4. battle_id:只能由 match 节点生产(宪法 §7 SnowFlake 节点隔离);失败 fail-closed,不得用 0 顶替。
+	// 4. battle_id:向发号器申请(biz_tag = battle);失败 fail-closed,不得用 0 顶替。
 	battleID, err := l.svcCtx.BattleIDGen.Generate()
 	if err != nil {
 		l.Errorf("[match] Failed to generate activity battle_id members=%v ctx={%s}: %v", members, formatActivityContext(actx), err)

@@ -238,6 +238,7 @@ enum eSpectateEndReason : int {
   SPECTATE_END_BATTLE_FINISHED = 1,
   SPECTATE_END_BATTLE_ABORTED = 2,
   SPECTATE_END_REMOVED = 3,
+  SPECTATE_END_SOURCE_LOST = 4,
   eSpectateEndReason_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   eSpectateEndReason_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -248,11 +249,11 @@ extern const uint32_t eSpectateEndReason_internal_data_[];
 inline constexpr eSpectateEndReason eSpectateEndReason_MIN =
     static_cast<eSpectateEndReason>(0);
 inline constexpr eSpectateEndReason eSpectateEndReason_MAX =
-    static_cast<eSpectateEndReason>(3);
+    static_cast<eSpectateEndReason>(4);
 [[nodiscard]] inline bool eSpectateEndReason_IsValid(int value) {
-  return 0 <= value && value <= 3;
+  return 0 <= value && value <= 4;
 }
-inline constexpr int eSpectateEndReason_ARRAYSIZE = 3 + 1;
+inline constexpr int eSpectateEndReason_ARRAYSIZE = 4 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eSpectateEndReason_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eSpectateEndReason) {
@@ -267,7 +268,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& eSpectateEndReason_Name(eSpectateEndReason value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<eSpectateEndReason_descriptor, 0, 3>(
+  return ::google::protobuf::internal::NameOfDenseEnum<eSpectateEndReason_descriptor, 0, 4>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool eSpectateEndReason_Parse(

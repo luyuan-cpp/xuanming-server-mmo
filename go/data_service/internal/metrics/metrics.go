@@ -1,8 +1,5 @@
 // Package metrics exposes Prometheus counters / histograms for data_service
-// cross-server observability. The intent is to surface SavePlayerData /
-// LoadPlayerData / per-player lock / rollback / cross-scene transition
-// behavior so operators can tell at a glance whether the data plane is
-// healthy.
+// cross-server observability: 归属映射、账号目录、发号、名字、账本读与审计落库。玩家存档的存盘指标在 go/db。
 //
 // Style mirrors scene_manager/internal/metrics — Observe* helpers that lazy-
 // register on first use. Keep label cardinality low: never label by player_id.
@@ -10,7 +7,6 @@ package metrics
 
 import (
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -25,82 +21,6 @@ import (
 const subsystem = "data_service"
 
 var (
-	// ── SavePlayerData / SetPlayerField — write path ──────────────
-	savePlayerDataTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "save_player_data_total",
-		Help:      "SavePlayerData outcomes (ok|version_mismatch|lock_conflict|redis_error|invalid_request|type_conflict|merge_fenced).",
-	}, []string{"outcome"})
-
-	saveLatencySeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: subsystem,
-		Name:      "save_latency_seconds",
-		Help:      "End-to-end SavePlayerData latency including lock acquire + version check + Redis pipeline.",
-		Buckets:   prometheus.ExponentialBuckets(0.001, 2, 12), // 1ms .. ~4s
-	}, []string{"outcome"})
-
-	// ── Per-player lock — Layer 2 of consistency defense ──────────
-	playerLockTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "player_lock_total",
-		Help:      "Per-player write lock outcomes (acquired|conflict|error|merge_fenced).",
-	}, []string{"outcome"})
-
-	// ── 全量读 / 删除怎样枚举 data_service 自有字段键 ──────────────
-	// legacy_scan = 字段索引缺席或戳已失效,退回 SCAN player:{id}:*(单机上扫全库)。它不是故障(故障经 ErrCodeRedis 计入),
-	// 只用来判断存量玩家是否已收敛:长期为 0 后才能另起一批把回退改成 fail-closed。label 不带 player_id。
-	playerFieldsEnumTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "player_fields_enum_total",
-		Help:      "How LoadPlayerData(all fields) / DeletePlayerData enumerated data_service field keys: op=load_all|delete, path=indexed|empty|legacy_scan (empty only for load_all).",
-	}, []string{"op", "path"})
-
-	// ── Version mismatch — optimistic lock conflicts ──────────────
-	versionMismatchTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "version_mismatch_total",
-		Help:      "SavePlayerData / SetPlayerField optimistic-lock mismatches by op.",
-	}, []string{"op"})
-
-	// ── Cross-scene transition — Single Writer enforcement ────────
-	// Reports the SceneManager-orchestrated old-Scene-release → new-Scene-load
-	// sequence. data_service is the data plane that backs both steps; phase
-	// labels record where time goes so we can spot Scene nodes that are
-	// slow to flush vs slow to load.
-	crossSceneTransitionLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: subsystem,
-		Name:      "cross_scene_transition_latency_seconds",
-		Help:      "Per-phase cross-scene transition latency (release|save|load|total).",
-		Buckets:   prometheus.ExponentialBuckets(0.005, 2, 12), // 5ms .. ~20s
-	}, []string{"phase"})
-
-	crossSceneTransitionTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "cross_scene_transition_total",
-		Help:      "Cross-scene transition outcomes (ok|release_timeout|save_failed|load_failed|aborted).",
-	}, []string{"outcome"})
-
-	// ── Rollback — snapshot / zone / full-server ──────────────────
-	rollbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "rollback_total",
-		Help:      "Rollback attempts by scope (player|zone|server) and outcome (ok|partial|failed).",
-	}, []string{"scope", "outcome"})
-
-	// rollbackPlayersAffected accumulates the count of players touched so
-	// operators can dashboard "how big was this rollback" without scraping logs.
-	rollbackPlayersAffectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "rollback_players_affected_total",
-		Help:      "Total players whose data was restored by a rollback, by scope.",
-	}, []string{"scope"})
-
-	rollbackOrphansCleanedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "rollback_orphans_cleaned_total",
-		Help:      "Orphan characters (created after target_time) cleaned during zone/server rollback.",
-	}, []string{"scope"})
-
 	// ── Kafka 落库消费者(transaction_log / player_snapshot)──────
 	// up=0 且进程还活着 = 消费者因 DB 故障停下(宁可积压不丢审计),必须告警:
 	// 积压超过 topic 保留期(默认 30 天)就真丢了。
@@ -189,8 +109,16 @@ var (
 	idSegmentAllocateTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "id_segment_allocate_total",
-		Help:      "AllocateIdSegment outcomes by biz_tag (ok|invalid|exhausted|unknown_tag|db_error).",
+		Help:      "AllocateIdSegment outcomes by biz_tag (ok|invalid|exhausted|unknown_tag|records_missing|source_error).",
 	}, []string{"biz_tag", "outcome"})
+
+	// idIssuerReserveTotal 是发号器预留块的结果。ok 正常很少发生;one_record_missing / record_behind
+	// 说明某一份预留记录丢失或回退过,ahead_of_clock 说明时钟曾跳到未来,都要人看一眼。
+	idIssuerReserveTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "id_issuer_reserve_total",
+		Help:      "Id issuer block reservations by result (ok|conflict|store_error|refused|one_record_missing|record_behind|ahead_of_clock).",
+	}, []string{"result"})
 
 	// ── 玩家名字注册表(设计 docs/design/guild-phase2/03-names.md §3.6)────
 	//
@@ -234,7 +162,7 @@ var (
 	assetOpLedgerReadTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "asset_op_ledger_read_total",
-		Help:      "GetPlayerAssetOpLedger outcomes: found (blob read, ledger returned) | absent (no PlayerAllData blob) | error (routing, Redis or corrupt blob).",
+		Help:      "GetPlayerAssetOpLedger outcomes: found (row read, ledger returned) | absent (no owner row) | error (routing, Redis or corrupt blob).",
 	}, []string{"result"})
 
 	// ── 玩家收件箱:已落盘账本读取(docs/design/player-inbox-service.md §9.3)──
@@ -244,37 +172,8 @@ var (
 	playerInboxLedgerReadTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "player_inbox_ledger_read_total",
-		Help:      "GetPlayerInboxLedger outcomes: found (blob read, ledger returned) | absent (no PlayerAllData blob) | error (routing, Redis or corrupt blob).",
+		Help:      "GetPlayerInboxLedger outcomes: found (row read, ledger returned) | absent (no owner row) | error (routing, Redis or corrupt blob).",
 	}, []string{"result"})
-
-	// ── 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.1)──
-	//
-	// 告警口径(07 §7.9.2):divergent_accepted → 通知(有人放行了,必须有人认领补偿单);
-	// post_write_* → 紧急;unavailable|budget → 警告;retention → 通知;divergent_rejected 不告警(闸在正常工作)。
-	// 这些都是"进程一辈子可能只发生一次"的事件,所以序列必须在启动时预置为 0(PrimeRollbackGuildCheck),
-	// 否则 increase(...) > 0 恰好漏掉第一次。
-	rollbackGuildCheckTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "rollback_guild_check_total",
-		Help: "Rollback guild-asset gate outcomes by scope (player|zone|server) and result " +
-			"(clean|divergent_rejected|divergent_accepted|unavailable|retention|truncated|budget|post_write_divergent|post_write_recheck_failed). " +
-			"The check phase counts exactly one result per rollback RPC; a post-write problem adds one post_write_* on top.",
-	}, []string{"scope", "result"})
-
-	rollbackGuildDivergenceRows = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "rollback_guild_divergence_rows",
-		Help:      "Guild asset divergence rows seen by the rollback gate (after per-player since filtering), by scope and whether the rollback was accepted anyway.",
-	}, []string{"scope", "accepted"})
-
-	// 桶按"一次检查翻完所有块所有页"的量级铺:零命中的单人回档是一两次 RPC(几十毫秒),
-	// 全服回档是成百上千次串行 RPC;上限对齐默认检查预算 120s。
-	rollbackGuildCheckSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: subsystem,
-		Name:      "rollback_guild_check_seconds",
-		Help:      "Wall time of one rollback guild check (all chunks and pages, excluding the settle wait).",
-		Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1, 5, 15, 30, 60, 120},
-	}, []string{"scope"})
 
 	// ── 玩家归属映射的提交点(docs/design/player-route-mapping-durability-proposal.md §4,第 1a 批)──
 	//
@@ -282,16 +181,16 @@ var (
 	// db_first 启动时由 PrimeRoute 全部预置为 0。**不要**把 player_id / rev 加成 label(AGENTS.md §9),
 	// 逐条明细在 `[RegisterPlayerZone][db_first]` 的 ERROR 日志里。
 	//
-	// 每一次 db_first 的 W1 恰好计一次,合计 = db_first 下 W1 的请求数。Redis 预检本身出错(围栏 EXISTS / 三键 MGET
+	// 每一次 db_first 的 W1 恰好计一次,合计 = db_first 下 W1 的请求数。Redis 预检本身出错(三键 MGET
 	// 失败、MGET 长度不对、缓存里的 zone 解析不了)单独计 precheck_error:RegisterPlayerZone 的 error_code 只在 gRPC
 	// status 的 message 里,grpcstats 只分得出 Unavailable、分不出码 1 与码 30,不计的话这类拒绝在指标上就看不见。
 	routeRegisterTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "route_register_total",
 		Help: "db_first RegisterPlayerZone outcomes, exactly one per request: inserted|filled_home|filled_home_placement_kept|already_same " +
-			"(committed in player_route, published separately, see route_publish_total) | conflict|fenced|refused_unknown_row " +
-			"(decided by player_route) | precheck_conflict|precheck_fenced (decided by the mapping Redis precheck, store not called) | " +
-			"precheck_error (the mapping Redis precheck itself failed: EXISTS/MGET error or an unparsable cached zone; store not called) | " +
+			"(committed in player_route, published separately, see route_publish_total) | conflict|refused_unknown_row " +
+			"(decided by player_route) | precheck_conflict (decided by the mapping Redis precheck, store not called) | " +
+			"precheck_error (the mapping Redis precheck itself failed: MGET error or an unparsable cached zone; store not called) | " +
 			"store_error|invalid.",
 	}, []string{"outcome"})
 
@@ -303,12 +202,12 @@ var (
 		Subsystem: subsystem,
 		Name:      "route_publish_total",
 		Help: "db_first route publish results per publishRoute call: applied|confirmed|superseded (success) | " +
-			"conflict|legacy_conflict|fenced|not_durable|error (failure; the player_route row stays committed but unpublished).",
+			"conflict|legacy_conflict|not_durable|error (failure; the player_route row stays committed but unpublished).",
 	}, []string{"result"})
 
 	// ── 第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2)──
 	//
-	// RouteStore.ReadRequiresReady=true 时 R2(home_fence)/ R6(home,含 ClientForPlayer)/ R3(batch,按块计)每次读计一次,
+	// RouteStore.ReadRequiresReady=true 时 R2(home_fence)/ R6(home)/ R3(batch,按块计)每次读计一次,
 	// 结果是 cache(副本可信,用了缓存,含权威缺席)| sql(回源库读到了)| not_found_sql(回源库,权威缺席)| sql_error(回源失败,
 	// RPC 回 Unavailable)。enumerate(R7)在 db_first 下一律读库,与开关无关,只有 sql / sql_error。两个 label 都是封闭集合,
 	// 开关打开时 PrimeRouteRead 全部预置为 0;sql_error 持续非零 = 缓存不可信期间全局库也不可用,读方整体 fail-closed。
@@ -341,10 +240,8 @@ const (
 	RouteRegisterFilledHomePlacementKept = "filled_home_placement_kept"
 	RouteRegisterAlreadySame             = "already_same"
 	RouteRegisterConflict                = "conflict"
-	RouteRegisterFenced                  = "fenced"
 	RouteRegisterRefusedUnknownRow       = "refused_unknown_row"
 	RouteRegisterPrecheckConflict        = "precheck_conflict"
-	RouteRegisterPrecheckFenced          = "precheck_fenced"
 	RouteRegisterPrecheckError           = "precheck_error"
 	RouteRegisterStoreError              = "store_error"
 	RouteRegisterInvalid                 = "invalid"
@@ -357,7 +254,6 @@ const (
 	RoutePublishSuperseded     = "superseded"
 	RoutePublishConflict       = "conflict"
 	RoutePublishLegacyConflict = "legacy_conflict"
-	RoutePublishFenced         = "fenced"
 	RoutePublishNotDurable     = "not_durable"
 	RoutePublishError          = "error"
 )
@@ -369,10 +265,8 @@ var (
 		RouteRegisterFilledHomePlacementKept,
 		RouteRegisterAlreadySame,
 		RouteRegisterConflict,
-		RouteRegisterFenced,
 		RouteRegisterRefusedUnknownRow,
 		RouteRegisterPrecheckConflict,
-		RouteRegisterPrecheckFenced,
 		RouteRegisterPrecheckError,
 		RouteRegisterStoreError,
 		RouteRegisterInvalid,
@@ -384,72 +278,32 @@ var (
 		RoutePublishSuperseded,
 		RoutePublishConflict,
 		RoutePublishLegacyConflict,
-		RoutePublishFenced,
 		RoutePublishNotDurable,
 		RoutePublishError,
-	}
-)
-
-// 回档帮会闸指标的 label 取值(封闭集合,PrimeRollbackGuildCheck 逐个预置;新增取值必须同时加进下面两个切片)。
-const (
-	RollbackGuildScopePlayer = "player"
-	RollbackGuildScopeZone   = "zone"
-	RollbackGuildScopeServer = "server"
-
-	RollbackGuildResultClean                  = "clean"
-	RollbackGuildResultDivergentRejected      = "divergent_rejected"
-	RollbackGuildResultDivergentAccepted      = "divergent_accepted"
-	RollbackGuildResultUnavailable            = "unavailable"
-	RollbackGuildResultRetention              = "retention"
-	RollbackGuildResultTruncated              = "truncated"
-	RollbackGuildResultBudget                 = "budget"
-	RollbackGuildResultPostWriteDivergent     = "post_write_divergent"
-	RollbackGuildResultPostWriteRecheckFailed = "post_write_recheck_failed"
-)
-
-var (
-	rollbackGuildScopes = []string{RollbackGuildScopePlayer, RollbackGuildScopeZone, RollbackGuildScopeServer}
-
-	rollbackGuildResults = []string{
-		RollbackGuildResultClean,
-		RollbackGuildResultDivergentRejected,
-		RollbackGuildResultDivergentAccepted,
-		RollbackGuildResultUnavailable,
-		RollbackGuildResultRetention,
-		RollbackGuildResultTruncated,
-		RollbackGuildResultBudget,
-		RollbackGuildResultPostWriteDivergent,
-		RollbackGuildResultPostWriteRecheckFailed,
 	}
 )
 
 func register() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(
-			savePlayerDataTotal, saveLatencySeconds,
-			playerLockTotal,
-			playerFieldsEnumTotal,
-			versionMismatchTotal,
-			crossSceneTransitionLatency, crossSceneTransitionTotal,
-			rollbackTotal, rollbackPlayersAffectedTotal, rollbackOrphansCleanedTotal,
 			kafkaConsumerUp, kafkaConsumerMessagesTotal,
 			kafkaConsumerFlushSeconds, kafkaConsumerBatchRows, kafkaConsumerMessageBytes,
 			kafkaConsumerLagMessages, kafkaConsumerLagMaxPartitionMessages, kafkaConsumerRetentionGapMessages,
 			kafkaConsumerLagProbeTotal, kafkaConsumerIsolationTotal,
 			idSegmentAllocateTotal,
+			idIssuerReserveTotal,
 			playerNameOpsTotal, playerNameOpSeconds, playerNameCacheTotal,
 			assetOpLedgerReadTotal,
 			playerInboxLedgerReadTotal,
-			rollbackGuildCheckTotal, rollbackGuildDivergenceRows, rollbackGuildCheckSeconds,
 			routeRegisterTotal, routePublishTotal,
 			routeReadTotal, routeReadyVerdictTotal,
 		)
 	})
 }
 
-// PrimeRoute 把 route_register_total(11 条)与 route_publish_total(8 条)的封闭集合逐个预置为 0。
-// 只在 RouteStore.Mode=db_first 时调(data_service.go 启动路径):理由同 PrimeRollbackGuildCheck ——
-// fenced / refused_unknown_row / legacy_conflict 这类一辈子可能只发生几次的结局,序列不预先存在的话
+// PrimeRoute 把 route_register_total(10 条)与 route_publish_total(7 条)的封闭集合逐个预置为 0。
+// 只在 RouteStore.Mode=db_first 时调(data_service.go 启动路径):—
+// refused_unknown_row / legacy_conflict 这类一辈子可能只发生几次的结局,序列不预先存在的话
 // `increase(...) > 0` 恰好漏掉第一次。redis 模式不调,免得面板上多出一组恒为 0、看着像"在跑"的序列。
 func PrimeRoute() {
 	register()
@@ -473,13 +327,43 @@ func ObserveRoutePublish(result string) {
 	routePublishTotal.WithLabelValues(result).Inc()
 }
 
+// merged_zone_refresh_total{result} 的取值:定时重读 zone_merged_into 的结局(routing.MergedZoneCache)。
+const (
+	MergedZoneRefreshOK    = "ok"
+	MergedZoneRefreshError = "error"
+)
+
+var (
+	mergedZoneRefreshTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "merged_zone_refresh_total",
+		Help:      "Periodic zone_merged_into reloads; on error the previous mapping is kept, so sustained errors mean merged zone resolution is going stale.",
+	}, []string{"result"})
+	mergedZoneRegisterOnce sync.Once
+)
+
+func registerMergedZone() {
+	mergedZoneRegisterOnce.Do(func() { prometheus.MustRegister(mergedZoneRefreshTotal) })
+}
+
+// PrimeMergedZoneRefresh 预置两条序列为 0(理由同 PrimeRoute:error 可能很久才发生一次)。可重复调用。
+func PrimeMergedZoneRefresh() {
+	registerMergedZone()
+	mergedZoneRefreshTotal.WithLabelValues(MergedZoneRefreshOK).Add(0)
+	mergedZoneRefreshTotal.WithLabelValues(MergedZoneRefreshError).Add(0)
+}
+
+// ObserveMergedZoneRefresh 记一次定时重读的结局。result 取 MergedZoneRefresh* 常量。
+func ObserveMergedZoneRefresh(result string) {
+	registerMergedZone()
+	mergedZoneRefreshTotal.WithLabelValues(result).Inc()
+}
+
 // route_read_total{path,result} 与 route_ready_verdict_total{verdict} 的取值(封闭集合,PrimeRouteRead 逐个预置;
 // 新增取值必须同时加进 routeReadSeries / routeReadyVerdicts)。
 const (
-	RouteReadPathHome      = "home"
-	RouteReadPathHomeFence = "home_fence"
-	RouteReadPathBatch     = "batch"
-	RouteReadPathEnumerate = "enumerate"
+	RouteReadPathHome  = "home"
+	RouteReadPathBatch = "batch"
 
 	RouteReadResultCache       = "cache"
 	RouteReadResultSQL         = "sql"
@@ -490,22 +374,16 @@ const (
 	RouteReadyVerdictScriptError = "script_error"
 )
 
-// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(13 条):batch 没有逐 id 的缺席结论,
-// enumerate 只读库。不出现的组合不预置,免得面板上多出恒为 0、看着像「在跑」的序列。
+// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(7 条):batch 没有逐 id 的缺席结论,
+// 不出现的组合不预置,免得面板上多出恒为 0、看着像「在跑」的序列。
 var routeReadSeries = [][2]string{
 	{RouteReadPathHome, RouteReadResultCache},
 	{RouteReadPathHome, RouteReadResultSQL},
 	{RouteReadPathHome, RouteReadResultNotFoundSQL},
 	{RouteReadPathHome, RouteReadResultSQLError},
-	{RouteReadPathHomeFence, RouteReadResultCache},
-	{RouteReadPathHomeFence, RouteReadResultSQL},
-	{RouteReadPathHomeFence, RouteReadResultNotFoundSQL},
-	{RouteReadPathHomeFence, RouteReadResultSQLError},
 	{RouteReadPathBatch, RouteReadResultCache},
 	{RouteReadPathBatch, RouteReadResultSQL},
 	{RouteReadPathBatch, RouteReadResultSQLError},
-	{RouteReadPathEnumerate, RouteReadResultSQL},
-	{RouteReadPathEnumerate, RouteReadResultSQLError},
 }
 
 // routeReadyVerdicts 是 route_ready_verdict_total 的封闭集合:placement 的 7 个 verdict 名字(唯一出处,不在这里抄一份)
@@ -514,7 +392,7 @@ func routeReadyVerdicts() []string {
 	return append(placement.RouteReadyVerdictNames(), RouteReadyVerdictScriptError)
 }
 
-// PrimeRouteRead 把 route_read_total(13 条)与 route_ready_verdict_total(8 条)逐个预置为 0。
+// PrimeRouteRead 把 route_read_total(7 条)与 route_ready_verdict_total(8 条)逐个预置为 0。
 // 只在 RouteStore.ReadRequiresReady=true(必然 db_first)时调(svc.NewServiceContext):理由同 PrimeRoute ——
 // sql_error 这类一辈子可能只发生几次的结局,序列不预先存在的话 `increase(...) > 0` 恰好漏掉第一次;
 // 开关关着时不调,免得面板上多出一组恒为 0 的序列。
@@ -540,51 +418,11 @@ func ObserveRouteReadyVerdict(verdict string) {
 	routeReadyVerdictTotal.WithLabelValues(verdict).Inc()
 }
 
-// PrimeRollbackGuildCheck 把 rollback_guild_check_total 的 scope × result 封闭集合(3 × 9 = 27 条)
-// 逐个预置为 0。**必须在启动时调**(data_service.go 里紧跟 metrics.Start):
-// CounterVec 的子序列在首次 WithLabelValues 之前不存在,`increase(...) > 0` 对"从无到 1"的序列
-// 在窗口内只有一个样本,恰好漏掉第一次 —— 而放行回档与写后分歧正是一辈子可能只发生一次的事件
-// (92-handoff:184-189 踩过的坑;同仓先例 SetKafkaConsumerUp 预注册 0)。
-// 本包是直连 prometheus/client_golang 的懒注册,不受 go-zero core/metric 那个全局开关影响,
-// 所以调用时机只要求"在第一次 scrape 之前",MetricsListenAddr 留空时调用也无害。
-func PrimeRollbackGuildCheck() {
-	register()
-	for _, scope := range rollbackGuildScopes {
-		for _, result := range rollbackGuildResults {
-			rollbackGuildCheckTotal.WithLabelValues(scope, result).Add(0)
-		}
-	}
-}
-
-// ObserveRollbackGuildCheck 记一次回档帮会闸的结论。scope / result 取上面的常量(封闭集合),本函数不校验。
-// 一次回档 RPC 的检查阶段只记一个 result;写后复查出问题时再额外记一个 post_write_*。
-func ObserveRollbackGuildCheck(scope, result string) {
-	register()
-	rollbackGuildCheckTotal.WithLabelValues(scope, result).Inc()
-}
-
-// AddRollbackGuildDivergenceRows 累加检查阶段看到的分歧行数(过滤后)。n <= 0 直接返回。
-// **不要**把 player_id / op_id 加成 label(AGENTS.md §9),逐行明细在 `[Rollback][GuildDivergence]` 日志里。
-func AddRollbackGuildDivergenceRows(scope string, accepted bool, n int) {
-	if n <= 0 {
-		return
-	}
-	register()
-	rollbackGuildDivergenceRows.WithLabelValues(scope, strconv.FormatBool(accepted)).Add(float64(n))
-}
-
-// ObserveRollbackGuildCheckSeconds 记一次检查(全部块、全部页,不含沉降等待)的耗时。
-func ObserveRollbackGuildCheckSeconds(scope string, d time.Duration) {
-	register()
-	rollbackGuildCheckSeconds.WithLabelValues(scope).Observe(d.Seconds())
-}
-
 // 连接池类别(mmorpg_sql_pool_*{sql_client="data_service",pool=...},G2b):一个 store 一个独立连接池,类别即 store 名。
 // 封闭集合;svc.ServiceContext.SQLPoolSamples 按这些常量报样本。
 const (
 	PoolSnapshot       = "snapshot"        // player_snapshot / rollback_audit_log(SnapshotMySQL.MaxOpenConn)
 	PoolTransactionLog = "transaction_log" // transaction_log(SnapshotMySQL.MaxOpenConn)
-	PoolIdSegment      = "id_segment"      // id_segment(SnapshotMySQL.MaxOpenConn)
 	PoolPlayerName     = "player_name"     // player_name(PlayerName.MaxOpenConn)
 	PoolPlayerRoute    = "player_route"    // 路由表(RouteStore.MaxOpenConn),只在 RouteStore.Mode=db_first 时装配
 )
@@ -593,7 +431,7 @@ const (
 // includeRoute 为 false 时不声明 player_route:理由同 PrimeRoute —— redis 模式下不装配 route store,
 // 不要一组恒为 0、看着像在跑的序列。
 func NewSQLPoolCollector(source sqlpoolstats.Source, includeRoute bool) prometheus.Collector {
-	pools := []string{PoolSnapshot, PoolTransactionLog, PoolIdSegment, PoolPlayerName}
+	pools := []string{PoolSnapshot, PoolTransactionLog, PoolPlayerName}
 	if includeRoute {
 		pools = append(pools, PoolPlayerRoute)
 	}
@@ -646,7 +484,7 @@ var (
 )
 
 // PrimeKafkaConsumer 把一条消费者的 messages_total(6 个 outcome)、lag_probe_total(ok / error)、
-// isolation_total(recovered / stopped)逐个预置为 0。理由同 PrimeRollbackGuildCheck:坏消息跳过、保留期丢失、
+// isolation_total(recovered / stopped)逐个预置为 0。CounterVec 的子序列在首次 WithLabelValues 之前不存在:坏消息跳过、保留期丢失、
 // 批量兜底停机这类一辈子可能只发生几次的结局,序列不预先存在的话 `increase(...) > 0` 恰好漏掉第一次。
 // 启动路径(data_service.go startKafkaConsumers)对两条消费者各调一次;txlog 没有逐条兜底,它的 isolation 序列恒为 0,无害。
 func PrimeKafkaConsumer(consumer string) {
@@ -711,6 +549,12 @@ func ObserveIdSegmentAllocate(bizTag, outcome string) {
 	idSegmentAllocateTotal.WithLabelValues(bizTag, outcome).Inc()
 }
 
+// ObserveIdIssuerReserve records one id issuer block reservation attempt. result is a fixed set (idissuer.ReserveXxx).
+func ObserveIdIssuerReserve(result string) {
+	register()
+	idIssuerReserveTotal.WithLabelValues(result).Inc()
+}
+
 // ObservePlayerNameOp 记一次玩家名字注册表操作:结果计数 + 耗时。
 //
 // op 是 "reserve" | "release" | "batch_get";result 取 Help 里那组有界取值。
@@ -756,81 +600,6 @@ func ObservePlayerInboxLedgerRead(result string) {
 
 // ── Observe helpers ─────────────────────────────────────────────────
 
-// ObserveSavePlayerData records one SavePlayerData / SetPlayerField outcome
-// along with end-to-end latency. outcome must be one of
-//
-//	"ok" | "version_mismatch" | "lock_conflict" | "redis_error" | "invalid_request" | "type_conflict" | "merge_fenced"
-//
-// Pass startTime = time.Now() captured at the very top of the RPC handler
-// so the histogram captures every code path including failure exits.
-func ObserveSavePlayerData(outcome string, startTime time.Time) {
-	register()
-	savePlayerDataTotal.WithLabelValues(outcome).Inc()
-	saveLatencySeconds.WithLabelValues(outcome).Observe(time.Since(startTime).Seconds())
-}
-
-// ObservePlayerLock records one player write-lock attempt. outcome is
-// "acquired" | "conflict" | "error" | "merge_fenced".
-func ObservePlayerLock(outcome string) {
-	register()
-	playerLockTotal.WithLabelValues(outcome).Inc()
-}
-
-// player_fields_enum_total 的 op / path 取值。
-const (
-	PlayerFieldsOpLoadAll      = "load_all"
-	PlayerFieldsOpDelete       = "delete"
-	PlayerFieldsPathIndexed    = "indexed"
-	PlayerFieldsPathEmpty      = "empty"
-	PlayerFieldsPathLegacyScan = "legacy_scan"
-)
-
-// ObservePlayerFieldsEnum 记一次全量读或删除走了哪条枚举路径(见 playerFieldsEnumTotal)。
-func ObservePlayerFieldsEnum(op, path string) {
-	register()
-	playerFieldsEnumTotal.WithLabelValues(op, path).Inc()
-}
-
-// ObserveVersionMismatch records one optimistic-lock collision. op is
-// "save_player_data" | "set_player_field".
-func ObserveVersionMismatch(op string) {
-	register()
-	versionMismatchTotal.WithLabelValues(op).Inc()
-}
-
-// ObserveCrossSceneTransition records latency for one phase of the
-// SceneManager-orchestrated transition. phase is "release" | "save" |
-// "load" | "total". Use a separate call per phase so dashboards can
-// stack them.
-func ObserveCrossSceneTransition(phase string, dur time.Duration) {
-	register()
-	crossSceneTransitionLatency.WithLabelValues(phase).Observe(dur.Seconds())
-}
-
-// ObserveCrossSceneTransitionOutcome records the final outcome of one
-// transition attempt. outcome is "ok" | "release_timeout" | "save_failed"
-// | "load_failed" | "aborted".
-func ObserveCrossSceneTransitionOutcome(outcome string) {
-	register()
-	crossSceneTransitionTotal.WithLabelValues(outcome).Inc()
-}
-
-// ObserveRollback records one rollback attempt. scope is "player" |
-// "zone" | "server"; outcome is "ok" | "partial" | "failed".
-// affectedPlayers is the count of players whose data was actually
-// restored (0 on failure / orphan-only sweeps). orphansCleaned is the
-// count of orphan characters scrubbed (0 for player-scope rollback).
-func ObserveRollback(scope, outcome string, affectedPlayers, orphansCleaned uint32) {
-	register()
-	rollbackTotal.WithLabelValues(scope, outcome).Inc()
-	if affectedPlayers > 0 {
-		rollbackPlayersAffectedTotal.WithLabelValues(scope).Add(float64(affectedPlayers))
-	}
-	if orphansCleaned > 0 {
-		rollbackOrphansCleanedTotal.WithLabelValues(scope).Add(float64(orphansCleaned))
-	}
-}
-
 // ── HTTP /metrics endpoint ──────────────────────────────────────────
 
 // Start exposes /metrics over HTTP. Empty addr disables the endpoint.
@@ -857,32 +626,6 @@ func Start(addr string) {
 	}()
 }
 
-// CommonLatencyHelper — convenience: returns a closure that observes a
-// histogram with the elapsed time since the helper was created. Saves
-// callers from having to capture startTime manually around early returns.
-//
-// Example:
-//
-//	defer metrics.WithSaveLatency("ok")() // observes 'ok' on normal exit
-//	... if err != nil { defer metrics.WithSaveLatency("redis_error")() }
-//
-// (Use ObserveSavePlayerData directly if you want explicit control.)
-func WithSaveLatency(outcome string) func() {
-	register()
-	start := time.Now()
-	return func() {
-		savePlayerDataTotal.WithLabelValues(outcome).Inc()
-		saveLatencySeconds.WithLabelValues(outcome).Observe(time.Since(start).Seconds())
-	}
-}
-
-// FormatZone is a tiny helper that callers can use when they need to
-// expose a zone-labeled metric (none currently do — kept here so future
-// observe helpers can stay consistent with scene_manager).
-func FormatZone(zoneID uint32) string {
-	return strconv.FormatUint(uint64(zoneID), 10)
-}
-
 // ── 登录取归属 zone 与账号目录(开服线 X-3;L-14 / L-18 压测口径,docs/design/player-route-mapping-durability-proposal.md §12.2)──
 //
 // 每次登录(HTTP 与 gate 各一次)都要 ReadAccountDirectory(全局 TiDB 悲观事务)+ BatchGetPlayerHomeZone,EnterGame 与
@@ -896,7 +639,7 @@ func FormatZone(zoneID uint32) string {
 
 // home_zone_read_seconds{rpc,result} 的取值。
 const (
-	HomeZoneRPCHome  = "home"  // GetPlayerHomeZone(单查,带合服围栏)
+	HomeZoneRPCHome  = "home"  // GetPlayerHomeZone(单查)
 	HomeZoneRPCBatch = "batch" // BatchGetPlayerHomeZone(login 角色列表)
 
 	// 按返回的 gRPC code 归类(server.homeZoneReadResult):OK → ok,NotFound(映射的权威缺席)→ not_found,
@@ -1030,22 +773,21 @@ const (
 
 // route_reconcile_event_total{event} 的取值。
 const (
-	RouteReconcileEventMarkerArmed                = "marker_armed"
-	RouteReconcileEventMarkerDroppedIdentity      = "marker_dropped_identity"
-	RouteReconcileEventMarkerDroppedEviction      = "marker_dropped_eviction"
-	RouteReconcileEventMarkerDroppedMalformed     = "marker_dropped_malformed"
-	RouteReconcileEventMarkerDroppedDisarmed      = "marker_dropped_disarmed"
-	RouteReconcileEventArmingRefusedEviction      = "arming_refused_eviction"
-	RouteReconcileEventArmingRefusedUnresolved    = "arming_refused_unresolved"
-	RouteReconcileEventArmingRefusedDebugEnabled  = "arming_refused_debug_enabled"
-	RouteReconcileEventFreezeWatermark            = "freeze_watermark"
-	RouteReconcileEventFreezeGeneration           = "freeze_generation"
-	RouteReconcileEventFreezeCacheAhead           = "freeze_cache_ahead"
-	RouteReconcileEventForeignFence               = "foreign_fence"
+	RouteReconcileEventMarkerArmed                   = "marker_armed"
+	RouteReconcileEventMarkerDroppedIdentity         = "marker_dropped_identity"
+	RouteReconcileEventMarkerDroppedEviction         = "marker_dropped_eviction"
+	RouteReconcileEventMarkerDroppedMalformed        = "marker_dropped_malformed"
+	RouteReconcileEventMarkerDroppedDisarmed         = "marker_dropped_disarmed"
+	RouteReconcileEventArmingRefusedEviction         = "arming_refused_eviction"
+	RouteReconcileEventArmingRefusedUnresolved       = "arming_refused_unresolved"
+	RouteReconcileEventArmingRefusedDebugEnabled     = "arming_refused_debug_enabled"
+	RouteReconcileEventFreezeWatermark               = "freeze_watermark"
+	RouteReconcileEventFreezeGeneration              = "freeze_generation"
+	RouteReconcileEventFreezeCacheAhead              = "freeze_cache_ahead"
 	RouteReconcileEventLeaseReleasedRedisUnreachable = "lease_released_redis_unreachable"
-	RouteReconcileEventTaskStarted                = "task_started"
-	RouteReconcileEventTaskCompleted              = "task_completed"
-	RouteReconcileEventTaskAborted                = "task_aborted"
+	RouteReconcileEventTaskStarted                   = "task_started"
+	RouteReconcileEventTaskCompleted                 = "task_completed"
+	RouteReconcileEventTaskAborted                   = "task_aborted"
 )
 
 // route_reconcile_push_total{phase,result} 与 task_seconds / task_rows{phase} 的 phase 取值。
@@ -1066,22 +808,16 @@ const (
 	RouteReconcilePushCacheAhead       = "cache_ahead"
 	RouteReconcilePushConflict         = "conflict"
 	RouteReconcilePushLegacyConflict   = "legacy_conflict"
-	RouteReconcilePushFenced           = "fenced"
 	RouteReconcilePushTombstoneSkipped = "tombstone_skipped"
 	RouteReconcilePushDBInvalid        = "db_invalid"
 	RouteReconcilePushError            = "error"
 )
 
-// route_reconcile_mirror_total{result} 的取值:merge:merged_into:{src}(只增)与 merge:in_progress:{zone}(围栏镜像,双向)。
+// route_reconcile_mirror_total{result} 的取值:merge:merged_into:{src}(只增)。
 const (
 	RouteReconcileMirrorMergedIntoAdded    = "merged_into_added"
 	RouteReconcileMirrorMergedIntoPresent  = "merged_into_present"
 	RouteReconcileMirrorMergedIntoConflict = "merged_into_conflict"
-	RouteReconcileMirrorFenceWritten       = "fence_written"
-	RouteReconcileMirrorFenceStale         = "fence_stale"
-	RouteReconcileMirrorFenceForeign       = "fence_foreign"
-	RouteReconcileMirrorFenceDeleted       = "fence_deleted"
-	RouteReconcileMirrorFenceDeleteLost    = "fence_delete_lost"
 	RouteReconcileMirrorError              = "error"
 )
 
@@ -1106,7 +842,6 @@ var (
 		RouteReconcileEventFreezeWatermark,
 		RouteReconcileEventFreezeGeneration,
 		RouteReconcileEventFreezeCacheAhead,
-		RouteReconcileEventForeignFence,
 		RouteReconcileEventLeaseReleasedRedisUnreachable,
 		RouteReconcileEventTaskStarted,
 		RouteReconcileEventTaskCompleted,
@@ -1123,7 +858,6 @@ var (
 		RouteReconcilePushCacheAhead,
 		RouteReconcilePushConflict,
 		RouteReconcilePushLegacyConflict,
-		RouteReconcilePushFenced,
 		RouteReconcilePushTombstoneSkipped,
 		RouteReconcilePushDBInvalid,
 		RouteReconcilePushError,
@@ -1132,11 +866,6 @@ var (
 		RouteReconcileMirrorMergedIntoAdded,
 		RouteReconcileMirrorMergedIntoPresent,
 		RouteReconcileMirrorMergedIntoConflict,
-		RouteReconcileMirrorFenceWritten,
-		RouteReconcileMirrorFenceStale,
-		RouteReconcileMirrorFenceForeign,
-		RouteReconcileMirrorFenceDeleted,
-		RouteReconcileMirrorFenceDeleteLost,
 		RouteReconcileMirrorError,
 	}
 )
@@ -1190,7 +919,7 @@ var (
 	routeReconcileEventTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "route_reconcile_event_total",
-		Help:      "Route reconcile leader events (marker armed / dropped, arming refused, freezes, foreign fence mirrors, lease released, tasks).",
+		Help:      "Route reconcile leader events (marker armed / dropped, arming refused, freezes, lease released, tasks).",
 	}, []string{"event"})
 	routeReconcilePushTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
@@ -1200,7 +929,7 @@ var (
 	routeReconcileMirrorTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "route_reconcile_mirror_total",
-		Help:      "merge:merged_into (add-only) and merge:in_progress (fence mirror, both directions) reconciliation results.",
+		Help:      "merge:merged_into (add-only) reconciliation results.",
 	}, []string{"result"})
 	routeReconcileTaskSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Subsystem: subsystem,
@@ -1229,7 +958,7 @@ func registerRouteReconcile() {
 }
 
 // PrimeRouteReconcile 在装配了 reconciler 的副本上调一次(data_service.go 启动路径):assembled=1、leader=0、arm_enabled=arm,
-// 计数器的全部封闭集合预置 0(tick 6、event 16、push 4×11、mirror 9),task_seconds / task_rows 每个 phase 一条。
+// 计数器的全部封闭集合预置 0(tick 6、event 15、push 4×10、mirror 4),task_seconds / task_rows 每个 phase 一条。
 // leader 观测型 gauge 不预置(只有现任 leader 导出)。redis 模式与 Enabled=false 不调。
 func PrimeRouteReconcile(arm bool) {
 	registerRouteReconcile()
@@ -1329,27 +1058,4 @@ func boolGauge(b bool) float64 {
 		return 1
 	}
 	return 0
-}
-
-// PrimeRouteEnumerate 只把 route_read_total 里 path="enumerate" 的两条序列(sql / sql_error)预置为 0(M1-6,2026-10-23)。
-// R7(GetAllPlayerIDsInZone)在 db_first 下一律读库、与读方开关无关,每次调用都计这两条之一;只靠 PrimeRouteRead(读方开关打开时才调)
-// 预置的话,开关关着时 enumerate 的 sql_error 要等第一次出现才有序列,`increase(...) > 0` 恰好漏掉那一次(zone 回档的孤儿号报告
-// 就走 R7)。所以 db_first 一律调本函数(svc.NewServiceContext);其余 11 条与 verdict 仍只由 PrimeRouteRead 在开关打开时预置。
-// 取值从 routeReadSeries 里按 path 筛,不另抄一份;与 PrimeRouteRead 重复调用无害(Add(0))。
-func PrimeRouteEnumerate() {
-	register()
-	for _, s := range routeEnumerateSeries() {
-		routeReadTotal.WithLabelValues(s[0], s[1]).Add(0)
-	}
-}
-
-// routeEnumerateSeries 是 routeReadSeries 里 path="enumerate" 的那几条(现为 sql / sql_error 两条)。
-func routeEnumerateSeries() [][2]string {
-	var out [][2]string
-	for _, s := range routeReadSeries {
-		if s[0] == RouteReadPathEnumerate {
-			out = append(out, s)
-		}
-	}
-	return out
 }

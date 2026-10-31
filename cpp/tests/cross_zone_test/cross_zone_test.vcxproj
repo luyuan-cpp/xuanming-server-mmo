@@ -160,7 +160,6 @@
   <ItemGroup>
     <ClCompile Include="cross_zone_test.cpp" />
     <ClCompile Include="role_admission_test.cpp" />
-    <ClCompile Include="db_task_dispatch_test.cpp" />
     <ClCompile Include="save_seq_test.cpp" />
     <ClCompile Include="player_ownership_metrics_test.cpp" />
   </ItemGroup>

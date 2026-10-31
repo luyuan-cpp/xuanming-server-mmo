@@ -30,6 +30,6 @@ void BroadcastToSceneClients(uint32_t messageId, const google::protobuf::Message
 void BroadcastToSceneClients(uint32_t messageId, const google::protobuf::Message &message, uint64_t sceneId,
                              const EntityVector &scenePlayerEntities);
 
-// 向当前线程 Gate 注册表中拥有 RpcSession 的 Gate 发广播，由各 Gate 转发给其全部客户端会话。
+// 向当前线程 Gate 注册表中拥有 RpcSession 的 Gate 发广播，由各 Gate 转发给其上已绑定玩家的客户端会话（未登录的连接不收）。
 // 覆盖范围取决于本节点已登记的 Gate，不保证覆盖其他节点或 zone 的客户端。
 void BroadcastToAllClientsOnKnownGates(uint32_t messageId, const google::protobuf::Message &message);

@@ -756,4 +756,18 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="gate\gate_client_spectate.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="gate\gate_spectate_ticket.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="gate\gate_client_spectate.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="gate\gate_spectate_ticket.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

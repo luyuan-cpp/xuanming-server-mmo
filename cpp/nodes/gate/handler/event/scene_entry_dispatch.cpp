@@ -14,6 +14,7 @@
 #include "scene_route_helper.h"
 #include "handler/rpc/client_session_handler.h"
 #include "gate_codec.h"
+#include "spectate/gate_spectate_client.h"
 #include "proto/scene/scene.pb.h"
 #include "proto/scene/client_player_common.pb.h"
 #include "proto/common/base/message.pb.h"
@@ -388,6 +389,8 @@ void OnClientLeaveGame(const SessionId sessionId, SessionInfo &session)
 
     gate_scene_route::ResetSceneRoute(session);
     tlsSessionsWithPendingEntry.erase(sessionId);
+    // TCP 不断、之后可能换角色,而观战凭证绑的是离开的这个角色。只摘订阅表,不发帧、不碰连接,之后可以重新订阅。
+    gate_spectate::OnSessionClosed(sessionId);
 
     if (hadSceneBinding || previousSceneId != 0 || hadPendingEntry)
     {

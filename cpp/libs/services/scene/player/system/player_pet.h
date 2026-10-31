@@ -21,6 +21,8 @@ class BattlePetSettlementData;
 // 与角色属性加点的关系:点数总量、"目标已分配"校验、按比例保持 HP/MP 全部复用
 // attributerules;维度与池取表中 owner_type=1 的行。宝宝的二级属性**不落库、不缓存**,
 // 需要时由 ComputeDerived 现算,全仓只有"已分配点 + 资质 + 主人等级"三个输入是真相。
+// 等级口径:宝宝存储等级只升不降,可能高于本版本的 PetTable.level_cap(回滚 / 交易带入);玩法读宝宝生效等级
+// min(存储等级, level_cap)(player_pet.cpp 的 PetEffectiveLevel),主人读 playerlevel::CappedLevel,存储值都不改。
 //
 // 跨 zone 冻结(PlayerFrozenComp)与战斗在途(InBattleComp)期间所有写操作拒绝:
 // 快照已出,改宝宝会让局内单位与面板分叉(与 PlayerAttributeSystem::CheckWritable 同口径)。

@@ -4,19 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"strconv"
 	"strings"
 
-	"github.com/go-sql-driver/mysql"
-
-	"google.golang.org/protobuf/reflect/protoreflect"
 	base "proto/common/base"
-	databasepb "proto/common/database"
 	"shared/accountdirectory"
-	"shared/generated/persistschema"
 	"shared/placement"
-	"shared/savebarrier"
 )
 
 // 只由正式迁移调用。旧角色只取得默认 0，绝不从现有 1:1 数字推断出生资格。
@@ -31,81 +23,6 @@ func ensureInitialPlayerCommitSchema(ctx context.Context, db *sql.DB, schema str
 		}
 	}
 	return assertInitialPlayerCommitShape(ctx, db, schema)
-}
-
-// 初始证据必须核实际完整行，不能只凭可与旧围栏重号的 1:1 元组。
-func initialSQLRowMatches(ctx context.Context, tx *sql.Tx, schema, table string, player uint64, fields protoreflect.FieldDescriptors) (bool, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT * FROM `"+schema+"`.`"+table+"` WHERE player_id=? FOR UPDATE", player)
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-	columns, err := rows.Columns()
-	if err != nil {
-		return false, err
-	}
-	if len(columns) != fields.Len() {
-		return false, nil
-	}
-	if !rows.Next() {
-		return false, rows.Err()
-	}
-	values := make([]sql.RawBytes, len(columns))
-	dest := make([]any, len(columns))
-	for i := range values {
-		dest[i] = &values[i]
-	}
-	if err := rows.Scan(dest...); err != nil {
-		return false, err
-	}
-	seen := make(map[string]bool, len(columns))
-	for i, name := range columns {
-		field := fields.ByName(protoreflect.Name(name))
-		if field == nil || seen[name] {
-			return false, nil
-		}
-		seen[name] = true
-		var want uint64
-		switch name {
-		case "player_id":
-			want = player
-		case "fence_owner_epoch":
-			want = savebarrier.InitialOwnerEpoch
-		case "fence_save_seq":
-			want = savebarrier.InitialSaveSeq
-		case "persist_schema_gen":
-			gen, e := strconv.ParseUint(string(values[i]), 10, 32)
-			if e != nil || gen == 0 || gen > uint64(persistschema.Gen) {
-				return false, nil
-			}
-			continue
-		default:
-			if len(values[i]) == 0 {
-				continue
-			}
-			switch field.Kind() {
-			case protoreflect.MessageKind, protoreflect.BytesKind, protoreflect.StringKind:
-				return false, nil
-			default:
-				if string(values[i]) != "0" {
-					return false, nil
-				}
-			}
-			continue
-		}
-		if string(values[i]) != strconv.FormatUint(want, 10) {
-			return false, nil
-		}
-	}
-	for _, name := range []string{"player_id", "fence_owner_epoch", "fence_save_seq", "persist_schema_gen"} {
-		if !seen[name] {
-			return false, nil
-		}
-	}
-	if rows.Next() {
-		return false, errors.New("玩家初始行主键不唯一")
-	}
-	return rows.Err() == nil, rows.Err()
 }
 
 func assertInitialPlayerCommitShape(ctx context.Context, db *sql.DB, schema string) error {
@@ -139,7 +56,17 @@ func (s *AccountDirectoryStore) ConfigureInitialPlayerCommit(storageIDs []uint32
 }
 
 // lockInitialPlayerRoute 必须在获取角色归属行锁之前调用。
-// 复用正式角色路由前缀：中性合服分片 → 路由聚簇键，再允许调用者获取角色 P 和玩家行。
+// 复用正式角色路由前缀:只锁这名玩家自己的路由行并复核,再允许调用者获取角色 P 和玩家行。
+//
+// route_meta.writable 是维护开关:回档恢复期间冻结路由写者,防止新写入和反向修库互相覆盖。
+// 这里只普通读,不加锁:每次建角都对这一行 FOR UPDATE 的话全服建角排成一列
+// (docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条)。
+//
+// 读到旧值的窗口:读到 writable=1 之后维护才开始冻结,这笔建角仍可能提交。提交点的保证不靠这条读,靠写者闸门:
+// 事务从 BEGIN 起持着本写者的 writer_slot 行锁,持锁后复核过 route_meta(authoritysql/writer.go),而 Catalog.Freeze 推进
+// epoch 要先拿到所有在册写者的 slot 行锁,所以冻结只能排在这笔事务提交之后,之后的新事务在闸门上就被拒。route_tool 的冻结
+// 流程和对账 leader 的紧急冻结都走 Catalog,不用改。这条普通读只负责把「已冻结」翻译成 ErrRouteNotWritable,
+// 并覆盖不走写者闸门的连接池;没有闸门时窗口是一笔事务的时长,与 RegisterHome(W1)的 requireRouteWritable 同口径。
 func (s *AccountDirectoryStore) lockInitialPlayerRoute(ctx context.Context, tx *sql.Tx, role *base.AccountSimplePlayer) error {
 	if !s.initialRequired {
 		return nil // 仅具名 LegacyNonGlobal 构造，不返回持久初始提交回执。
@@ -147,54 +74,38 @@ func (s *AccountDirectoryStore) lockInitialPlayerRoute(ctx context.Context, tx *
 	if len(s.initialStores) == 0 || role.GetZoneId() == 0 {
 		return accountdirectory.ErrUnavailable
 	}
-	// 与冻结/反向修库串行，保证提交时仍可写；不让前置普通读代替提交锁。
-	meta, err := readRouteMeta(ctx, tx, routeLockMetaSQL)
-	if err != nil {
+	if err := requireRouteWritable(ctx, tx); err != nil {
 		return err
-	}
-	if meta.Frozen() {
-		return ErrRouteNotWritable
 	}
 	return placement.LockRoleRoutes(ctx, tx, s.schema, []uint64{role.PlayerId})
 }
 
-func (s *AccountDirectoryStore) insertInitialPlayerRows(ctx context.Context, tx *sql.Tx, role *base.AccountSimplePlayer) (*databasepb.PlayerAllData, error) {
+// insertInitialPlayerRows 写新角色的 player_store 初始行,返回本事务是否写了:账号行的 initial_player_commit 按它记。
+// scene 进场时从这些行认领。
+func (s *AccountDirectoryStore) insertInitialPlayerRows(ctx context.Context, tx *sql.Tx, role *base.AccountSimplePlayer) (bool, error) {
 	if !s.initialRequired {
-		return nil, nil
+		return false, nil
 	}
 	var row RouteRow
 	if err := scanRouteRow(tx.QueryRowContext(ctx, routeLockRowSQL, placement.RouteRowShard(role.PlayerId), role.PlayerId), &row, false); err != nil {
-		return nil, err
+		return false, err
 	}
 	if row.HomeZone != role.ZoneId || row.Rev == 0 || row.FrozenRunID != "" {
-		return nil, accountdirectory.ErrConflict
+		return false, accountdirectory.ErrConflict
 	}
 	storage := row.StorageID
 	if !row.HasPlacement() {
 		storage = row.HomeZone
 	}
 	if !s.initialStores[storage] {
-		return nil, accountdirectory.ErrUnavailable
+		return false, accountdirectory.ErrUnavailable
 	}
 	schema, ok := placement.StoreDBName(storage)
 	if !ok {
-		return nil, accountdirectory.ErrInvalid
+		return false, accountdirectory.ErrInvalid
 	}
-	for _, table := range []string{"player_database", "player_database_1"} {
-		// 标识符只由权威落点和两个固定表名产生。严格 INSERT：旧行/并发撞键整批回滚，不能 REPLACE/ODKU。
-		query := "INSERT INTO `" + schema + "`.`" + table + "` (player_id,fence_owner_epoch,fence_save_seq,persist_schema_gen) VALUES (?,?,?,?)"
-		result, err := tx.ExecContext(ctx, query, role.PlayerId, savebarrier.InitialOwnerEpoch, savebarrier.InitialSaveSeq, persistschema.Gen)
-		if err != nil {
-			var duplicate *mysql.MySQLError
-			if errors.As(err, &duplicate) && duplicate.Number == 1062 {
-				return nil, accountdirectory.ErrConflict
-			}
-			return nil, fmt.Errorf("提交玩家初始持久行 %s: %w", table, err)
-		}
-		count, err := result.RowsAffected()
-		if err != nil || count != 1 {
-			return nil, errors.New("玩家初始持久行未严格插入一行")
-		}
+	if err := insertInitialPlayerStoreRows(ctx, tx, schema, role); err != nil {
+		return false, err
 	}
-	return savebarrier.InitialPlayerData(role.PlayerId), nil
+	return true, nil
 }

@@ -258,65 +258,6 @@ func TestRouteReadyArmScriptShapeAndArgs(t *testing.T) {
 	}
 }
 
-func TestMergeFenceMirrorScriptShapeAndArgs(t *testing.T) {
-	for _, want := range []string{
-		"pcall(cjson.decode, cur)",
-		"type(v.fence_epoch) ~= 'number' then return 2",
-		"v.fence_epoch > tonumber(ARGV[2]) then return 0",
-		"redis.call('SET', KEYS[1], ARGV[1])",
-		"redis.call('PEXPIREAT', KEYS[1], ARGV[3])",
-	} {
-		if !strings.Contains(MergeFenceMirrorSetScript, want) {
-			t.Errorf("MergeFenceMirrorSetScript missing %q", want)
-		}
-	}
-	holder := `{"run_id":"1-2-20261018T000000Z-0a1b2c3d","src":1,"dst":2,"fence_epoch":7}`
-	if e, ok := MergeFenceHolderEpoch(holder); !ok || e != 7 {
-		t.Fatalf("MergeFenceHolderEpoch = %d %v", e, ok)
-	}
-	for _, raw := range []string{`{"run_id":"x"}`, `{"fence_epoch":-1}`, `{"fence_epoch":1.5}`, `{"fence_epoch":"7"}`, `nope`, ``} {
-		if _, ok := MergeFenceHolderEpoch(raw); ok {
-			t.Errorf("MergeFenceHolderEpoch(%q) ok, want not ok", raw)
-		}
-	}
-	keys, args, err := MergeFenceMirrorArgs(2, holder, 7, 1000)
-	if err != nil {
-		t.Fatalf("args: %v", err)
-	}
-	if len(keys) != 1 || keys[0] != MergeFenceKey(2) {
-		t.Fatalf("keys = %v", keys)
-	}
-	wantExpire := "601000" // 1000 + MergeFenceMirrorMarginMs
-	if len(args) != 3 || args[0] != holder || args[1] != "7" || args[2] != wantExpire {
-		t.Fatalf("args = %v", args)
-	}
-	for name, c := range map[string]struct {
-		zone   uint32
-		holder string
-		epoch  uint64
-		exp    uint64
-	}{
-		"zone 0":         {0, holder, 7, 1000},
-		"epoch mismatch": {2, holder, 8, 1000},
-		"epoch 0":        {2, `{"fence_epoch":0}`, 0, 1000},
-		"no epoch":       {2, `{"run_id":"x"}`, 7, 1000},
-		"expires 0":      {2, holder, 7, 0},
-	} {
-		if _, _, err := MergeFenceMirrorArgs(c.zone, c.holder, c.epoch, c.exp); !errors.Is(err, ErrMalformed) {
-			t.Errorf("%s: err = %v, want ErrMalformed", name, err)
-		}
-	}
-	for raw, want := range map[int64]MergeFenceMirrorOutcome{0: MergeFenceMirrorStale, 1: MergeFenceMirrorWritten, 2: MergeFenceMirrorForeign} {
-		got, err := ClassifyMergeFenceMirrorReply(raw)
-		if err != nil || got != want || got.String() == "unknown" {
-			t.Errorf("classify %d = %v %v", raw, got, err)
-		}
-	}
-	if _, err := ClassifyMergeFenceMirrorReply(int64(3)); !errors.Is(err, ErrUnexpectedRouteReadyReadReply) {
-		t.Errorf("classify 3: err = %v", err)
-	}
-}
-
 // TestMergedIntoValueMatchesMergeZoneEncoding:与 tools/merge_zone/merged_into.go 的 mergedIntoValue 用 json.Marshal 写出的值逐字节相同。
 func TestMergedIntoValueMatchesMergeZoneEncoding(t *testing.T) {
 	mergeZoneShape := struct {

@@ -3798,7 +3798,7 @@ const ::_pbi::ClassData* BattlePlayerSnapshot_get_class_data() {
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[6];
+    file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[8];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto = nullptr;
 const ::uint32_t
@@ -4319,8 +4319,13 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "\031BATTLE_OUTCOME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_O"
     "UTCOME_DRAW\020\003*Z\n\023eBattleActivityKind\022\035\n\031"
     "BATTLE_ACTIVITY_KIND_NONE\020\000\022$\n BATTLE_AC"
-    "TIVITY_KIND_GUILD_TRIAL\020\001B\010Z\006battleb\006pro"
-    "to3"
+    "TIVITY_KIND_GUILD_TRIAL\020\001*{\n\023eSpectateVi"
+    "sibility\022#\n\037SPECTATE_VISIBILITY_UNSPECIF"
+    "IED\020\000\022\037\n\033SPECTATE_VISIBILITY_PRIVATE\020\001\022\036"
+    "\n\032SPECTATE_VISIBILITY_PUBLIC\020\002*_\n\reSpect"
+    "ateTier\022\030\n\024SPECTATE_TIER_DIRECT\020\000\022\027\n\023SPE"
+    "CTATE_TIER_RELAY\020\001\022\033\n\027SPECTATE_TIER_BROA"
+    "DCAST\020\002B\010Z\006battleb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps[2] = {
@@ -4331,7 +4336,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto = {
     false,
     false,
-    5083,
+    5305,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto,
     "proto/battle/battle_data.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_once,
@@ -4386,6 +4391,20 @@ eBattleActivityKind_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t eBattleActivityKind_internal_data_[] = {
     131072u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+eSpectateVisibility_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
+  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[6];
+}
+PROTOBUF_CONSTINIT const uint32_t eSpectateVisibility_internal_data_[] = {
+    196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+eSpectateTier_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto);
+  return file_level_enum_descriptors_proto_2fbattle_2fbattle_5fdata_2eproto[7];
+}
+PROTOBUF_CONSTINIT const uint32_t eSpectateTier_internal_data_[] = {
+    196608u, 0u, };
 // ===================================================================
 
 BattleRouting::BattleRouting(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)

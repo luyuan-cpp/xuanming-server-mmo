@@ -9,7 +9,7 @@ import (
 )
 
 // GuildServer 是 gRPC 入口薄包装:每个方法只把请求转给对应 logic,不写业务。
-// 身份校验、合服闸门、事务与推送全部在 logic 层,这里保持零分支——
+// 身份校验、事务与推送全部在 logic 层,这里保持零分支——
 // 一旦这里开始出现 if,同一条规则就会在 server 与 logic 各存一份。
 type GuildServer struct {
 	pb.UnimplementedGuildServiceServer

@@ -41,7 +41,9 @@ func NewJoinQueueLogic(ctx context.Context, svcCtx *svc.ServiceContext) *JoinQue
 //   - 咨询性查 battle:lock:{player_id},存在即拒(权威判定仍在 scene 的 InBattleComp);
 //   - 读 player:{id}:location 取 zone 记进票据;位置缺失直接拒(ErrNotInScene,
 //     决策 D6:没有位置的玩家 gather 必败,提前拒比进队再失败省);
-//   - 匹配池全局不分 zone(决策 D1),zone 只进票据与日志;
+//   - 入口白名单与人数上限来自 PlayMode 表(模板目录 svcCtx.Catalog);
+//   - 全球路径:票据记 home zone,匹配范围按 zone → 大区 → 全服逐级放宽(global-match-hierarchical-pools.md);
+//     Redis 兼容路径池子不分 zone(决策 D1),zone 只进票据与日志;
 //   - MATCH_MODE_PVE_SOLO 即时开战:不入队,直接走 gather 开局管线;
 //   - MATCH_MODE_PVE_TEAM 按人数档凑单(pve-team-size-matching.md):请求的 team_size 就是凑满人数,
 //     0 = 该副本上限(battle_config_id 查配置,上限 5 收口,D14),超过上限拒绝;
@@ -101,9 +103,11 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 		if sideSize == 0 {
 			sideSize = 1
 		}
-		if sideSize > kMaxBattleTeamSize {
+		// 每侧人数上限来自 PlayMode 表(不超过引擎每队上限 5);模板没有开放 PVP_TEAM 即 0,一律拒绝。
+		if limit := min(l.svcCtx.Catalog.MaxTeamSize(in.Mode, in.BattleConfigId), kMaxBattleTeamSize); sideSize > limit {
+			metrics.ObserveJoinQueue(modeName, "team_size_over_limit")
 			return &matchpb.JoinQueueResponse{ErrorCode: constants.ErrModeNotOpen,
-				ErrorMessage: tipErr(constants.ErrModeNotOpen, "PVP每方人数须为1到5人")}, nil
+				ErrorMessage: tipErr(constants.ErrModeNotOpen, "该模板不支持这个每方人数")}, nil
 		}
 		required = sideSize * 2
 	default:
@@ -112,6 +116,15 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 		return &matchpb.JoinQueueResponse{
 			ErrorCode:    constants.ErrModeNotOpen,
 			ErrorMessage: tipErr(constants.ErrModeNotOpen, "该匹配模式未开放"),
+		}, nil
+	}
+	// 入口白名单(PlayMode 表,docs/design/global-match-hierarchical-pools.md §7):(模式, 怪物战斗模板)
+	// 不在表里或已关闭一律拒绝,堵住客户端任填 battle_config_id 自建私有池。
+	if !l.svcCtx.Catalog.Open(in.Mode, in.BattleConfigId) {
+		metrics.ObserveJoinQueue(modeName, "template_not_open")
+		return &matchpb.JoinQueueResponse{
+			ErrorCode:    constants.ErrModeNotOpen,
+			ErrorMessage: tipErr(constants.ErrModeNotOpen, "该副本暂未开放"),
 		}, nil
 	}
 
@@ -149,7 +162,9 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 		if stale {
 			return &matchpb.JoinQueueResponse{ErrorCode: constants.ErrNotInScene, ErrorMessage: tipErr(constants.ErrNotInScene, "会话已经失效")}, nil
 		}
-		return globalJoin(l, in, required, loc.ZoneId)
+		// 票据记 home zone(角色归属)而不是当前所在场景的 zone:范围树按 home 逐级放宽,
+		// 整队提交按 home 复核,访客在别的 zone 排队也不会因此提交必败。
+		return globalJoin(l, in, required)
 	}
 	existing, err := loadTicket(l.svcCtx, playerId)
 	if err != nil {

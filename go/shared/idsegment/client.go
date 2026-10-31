@@ -6,7 +6,7 @@
 // 永久身份只需要「全局唯一 + 不重发」,不需要把铸号时间和铸号节点编进 id 里。
 // snowflake 的唯一性建立在 worker id 租约 + 时钟单调之上,冻结 / 重启 / 时钟回拨
 // 每一样都要专门的 fence 机制去堵;号段模式没有 lease、没有时钟、没有 worker:
-// 持有者用一次 CAS 从表里领走 [lo, hi),协调器(data_service → MySQL)只在续段时碰一次。
+// 持有者向发号器(data_service.AllocateIdSegment)领走 [lo, hi),只在续段时碰一次。
 //
 // # 双 buffer
 //
@@ -26,29 +26,18 @@
 // # 服务端范围校验(fail-closed)
 //
 // 每个从服务端拿到的范围都要过四道检查:lo ≥ 1、hi > lo、hi ≤ MaxIDExclusive、
-// lo ≥ 上一段的 hi(同一客户端拿到的范围必须单调递增)。任何一条不满足就是
-// ErrRangeViolation:这段**绝不使用**并大声记日志 —— 服务端把号发重了比发不出号
-// 严重得多(player_database 的写路径是 INSERT ... ON DUPLICATE KEY UPDATE,撞号不报错
-// 而是静默串档)。
+// 不与最近接受过的范围重叠。任何一条不满足就是 ErrRangeViolation:这段**绝不使用**并
+// 大声记日志 —— 服务端把号发重了比发不出号严重得多(撞号多数不报错,而是静默串档)。
 //
-// # 与存量 snowflake 号不撞:精确边界
+// 不要求范围递增:发号器有多个副本,每个副本从自己预留的块里切段,同一个客户端先后领到的段
+// 可能来自不同副本,后一段比前一段小是正常的。查重叠只是兜底,窗口之外的重复查不到,
+// 唯一性由发号器保证。
 //
-// 号段从 1 起、上限 2^55 ≈ 3.6e16(MaxIDExclusive 默认,服务端 CHECK 同样守着)。
-// 存量 snowflake 号从哪一刻起落到 2^55 之上,由各自的布局与 epoch 决定:
+// # 发出去的 id 是打散过的
 //
-//   - player_id(bwmarrin,login.yaml Snowflake.Epoch = 2024-07-20 11:01:03 UTC,
-//     毫秒时间 << 22):时间字段 ≥ 2^33 ms(≈ 99.4 天)后 id ≥ 2^55,即自
-//     2024-10-27 21:06 UTC 起铸的号全部 ≥ 2^55(今天 ≈ 2.8e17)。在那之前铸的号
-//     (如有)落在 [2^22, 2^55) 内。
-//   - guild_id 及其他 17/15 布局(shared/snowflake,epoch 2026-03-14 00:00 UTC,
-//     秒 << 32):时间字段 ≥ 2^23 s(≈ 97.1 天)后 id ≥ 2^55,即自 2026-06-19 02:10 UTC
-//     起铸的号全部 ≥ 2^55(今天 ≈ 6.7e16)。dev / staging 在那之前铸的行落在
-//     [2^32, 2^55) 内。
-//
-// 边界之前铸的号虽在 [1, 2^55) 里,却都在 2^22 ≈ 4.2e6 / 2^32 ≈ 4.3e9 以上:从 1 起、
-// 步长 ≤ MaxStep 的计数器要先发出这么多个号才够得着,按建角 / 建帮的速率是遥不可及的。
-// 但这是「够不着」不是「不相交」,所以上限 2^55 **保持不动、不擅自下调**:要不要把
-// MaxIDExclusive 收紧到 2^22 / 2^32 以下由项目负责人拍板,本包只把边界写清楚。
+// 发号器发的 [lo, hi) 是连续的计数器值,Next 返回的是 MixID(计数器值),所以 id 不单调、不连续、
+// 没有业务含义,但一定不重复(MixID 是双射)。范围校验都针对计数器值,不针对打散后的 id。
+// 不要依赖 id 的大小做排序或分页。详见 mix.go 与 docs/design/player-data-tidb-scaling-plan.md §6。
 package idsegment
 
 import (
@@ -76,9 +65,8 @@ type Logger interface {
 	Infof(format string, args ...any)
 }
 
-// DefaultMaxIDExclusive 是号段值域的上界(不含):2^55,与 id_segment 表的 CHECK 一致。
-// 与存量 snowflake 号的精确边界见包注释「与存量 snowflake 号不撞」;不要在这里下调。
-const DefaultMaxIDExclusive = uint64(1) << 55
+// DefaultMaxIDExclusive 是计数器值域的上界(不含):2^63。发出去的 id 恒小于它,转 int64 不会变负。
+const DefaultMaxIDExclusive = uint64(1) << 63
 
 const (
 	// DefaultMinStep / DefaultMaxStep 是动态 step 的默认上下限 [10, 1000]。
@@ -92,6 +80,9 @@ const (
 	// 否则 step 会在门限附近来回抖。
 	stepGrowBelow   = 15 * time.Minute
 	stepShrinkAbove = 30 * time.Minute
+
+	// recentRangeWindow 是查重叠时记住的最近范围数。
+	recentRangeWindow = 16
 )
 
 var (
@@ -124,8 +115,7 @@ type Options struct {
 	// PrefetchAt 是触发预取的剩余比例:当前段剩余 ≤ PrefetchAt·段长 时后台领下一段。
 	// 默认 0.1;必须在 (0, 1] 内。按段的实际长度算,因为动态 step 下每段长度不同。
 	PrefetchAt float64
-	// MaxIDExclusive 是允许的最大 id(不含)。默认 2^55。只能调小不能调大 ——
-	// 调大就会与存量 snowflake 号的值域相交(精确边界见包注释)。
+	// MaxIDExclusive 是允许的最大计数器值(不含)。默认 2^63,只能调小不能调大。
 	MaxIDExclusive uint64
 	// RetryBackoff 是一次领段失败后、下一次领段前的最短间隔,防止把已经倒下的
 	// 服务端打成雪崩。预取与阻塞续段两条路径都受它约束。默认 500ms。
@@ -156,7 +146,7 @@ type Stats struct {
 	// CurrentRemaining 是当前段剩余的 id 数;NextReady 表示下一段已预取到手。
 	CurrentRemaining uint64
 	NextReady        bool
-	// HighWater 是至今校验通过的最大 hi。后续范围的 lo 必须 ≥ 它。
+	// HighWater 是至今校验通过的最大 hi。
 	HighWater uint64
 }
 
@@ -188,6 +178,8 @@ type Client struct {
 	rpc AllocateFunc
 	opt Options
 	log Logger
+	// emit 把计数器值变成对外的 id,生产恒为 MixID;只有单测为了断言计数器值才换掉它。
+	emit func(uint64) uint64
 	// now 是墙钟,只为让单测拨表(动态 step 的门限是分钟级,真等不起)。
 	// 退避判断也走它 —— 用假钟的测试要么不制造领段失败,要么显式拨过 RetryBackoff。
 	now func() time.Time
@@ -206,7 +198,10 @@ type Client struct {
 	// notBefore 是上次失败后允许再次领段的最早时刻。
 	notBefore time.Time
 	// highWater 是校验通过的最大 hi。
-	highWater                      uint64
+	highWater uint64
+	// recent 是最近接受过的范围,环形覆盖;recentCount 是接受过的总数。
+	recent                         [recentRangeWindow][2]uint64
+	recentCount                    uint64
 	closed                         bool
 	draining                       bool
 	fetchesSettled, fetchesUnknown uint64
@@ -252,8 +247,7 @@ func New(rpc AllocateFunc, opt Options) (*Client, error) {
 		opt.MaxIDExclusive = DefaultMaxIDExclusive
 	}
 	if opt.MaxIDExclusive > DefaultMaxIDExclusive {
-		// 调大就与 snowflake 值域相交,见包注释。
-		return nil, fmt.Errorf("%w: MaxIDExclusive=%d exceeds 2^55", ErrInvalidOptions, opt.MaxIDExclusive)
+		return nil, fmt.Errorf("%w: MaxIDExclusive=%d exceeds 2^63", ErrInvalidOptions, opt.MaxIDExclusive)
 	}
 	if opt.RetryBackoff <= 0 {
 		opt.RetryBackoff = 500 * time.Millisecond
@@ -269,6 +263,7 @@ func New(rpc AllocateFunc, opt Options) (*Client, error) {
 		rpc:    rpc,
 		opt:    opt,
 		log:    opt.Logger,
+		emit:   MixID,
 		now:    time.Now,
 		step:   opt.Step,
 		bg:     bg,
@@ -302,7 +297,7 @@ func (c *Client) Next(ctx context.Context) (uint64, error) {
 				c.startFetchLocked()
 			}
 			c.mu.Unlock()
-			return id, nil
+			return c.emit(id), nil
 		}
 		if c.next != nil {
 			c.cur = *c.next
@@ -526,7 +521,9 @@ func (c *Client) finishFetch(st *fetchState, lo, hi uint64, err error) {
 		return
 	}
 	c.next = &segment{pos: lo, hi: hi, prefetchAt: prefetchThreshold(c.opt.PrefetchAt, hi-lo)}
-	c.highWater = hi
+	c.highWater = max(c.highWater, hi)
+	c.recent[c.recentCount%recentRangeWindow] = [2]uint64{lo, hi}
+	c.recentCount++
 	c.fetches++
 	c.log.Infof("[idsegment] biz_tag=%s got range [%d, %d) (fetches=%d issued=%d step=%d)",
 		c.opt.BizTag, lo, hi, c.fetches, c.issued, c.step)
@@ -552,8 +549,8 @@ func (c *Client) validateLocked(lo, hi uint64) error {
 		reason = "hi <= lo"
 	case hi > c.opt.MaxIDExclusive:
 		reason = fmt.Sprintf("hi > max_id_exclusive(%d)", c.opt.MaxIDExclusive)
-	case lo < c.highWater:
-		reason = fmt.Sprintf("lo < previous hi(%d): ranges regressed/overlapped", c.highWater)
+	case c.overlapsRecentLocked(lo, hi):
+		reason = "overlaps a recently accepted range"
 	default:
 		return nil
 	}
@@ -563,6 +560,16 @@ func (c *Client) validateLocked(lo, hi uint64) error {
 		"(server-side bug: an overlapping or out-of-domain range would silently collide with existing ids)",
 		lo, hi, c.opt.BizTag, reason)
 	return fmt.Errorf("%w: [%d, %d) %s", ErrRangeViolation, lo, hi, reason)
+}
+
+// overlapsRecentLocked 判断 [lo, hi) 是否与最近接受过的范围重叠。
+func (c *Client) overlapsRecentLocked(lo, hi uint64) bool {
+	for i := uint64(0); i < min(c.recentCount, recentRangeWindow); i++ {
+		if r := c.recent[i]; lo < r[1] && r[0] < hi {
+			return true
+		}
+	}
+	return false
 }
 
 // sleepCtx 睡 d,ctx 先到期则返回其错误。

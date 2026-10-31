@@ -1,5 +1,7 @@
 # Zone 数据回档方案
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),回档 RPC 都已删除。本文只作历史保留,不再描述现行行为。
+
 ## 概述
 
 Zone 数据回档分两个层面：

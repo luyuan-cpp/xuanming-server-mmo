@@ -7,8 +7,8 @@ import jakarta.persistence.*;
         uniqueConstraints = @UniqueConstraint(columnNames = {"zone_id", "account_id"}))
 public class ZoneWhitelist {
 
+    /** 行号,见 {@link RowIds}。生产写路径是 ZoneWhitelistRepository#upsert,直接 persist 时由 {@link #onCreate} 赋值。 */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "zone_id", nullable = false)
@@ -19,6 +19,13 @@ public class ZoneWhitelist {
 
     @Column(name = "note", length = 128)
     private String note = "";
+
+    @PrePersist
+    protected void onCreate() {
+        if (id == null) {
+            id = RowIds.next();
+        }
+    }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

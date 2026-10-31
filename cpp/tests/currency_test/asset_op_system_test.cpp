@@ -182,6 +182,7 @@ protected:
 		auto& segment = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
 		segment.Reset();
 		GuidSegmentClient::Options options;
+		options.mixIds = false;
 		options.kindName = "item";
 		options.initialStep = 100000;
 		const bool enabled = segment.Enable(
@@ -1313,6 +1314,41 @@ TEST_F(AssetOpSystemTest, QuantityDebitOfStacksCarryingNewerVersionFieldsRetries
 	PlayerAssetOpSystem::Debit(quantityDebit(2, 6), insufficient);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, insufficient.outcome());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), insufficient.reason().id());
+}
+
+// 同一个包里既有错位的数量项、又有与版本无关的坏项(托管一个不在背包里的 guid):坏项在任何版本上都不会成功,
+// 必须当场记终态拒绝,不能因为数量项错位就回 RETRY、重投到截止时刻(混版本设计 §4.4 第 6 批)。
+TEST_F(AssetOpSystemTest, QuantityDebitDeterministicRejectionsComeBeforeVersionSkewRetry)
+{
+	constexpr uint32_t kStackableConfig = 10;
+	constexpr Guid kGuidNotInBag = 950199999;
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	GiveBags();
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ItemComp plain;
+	plain.set_item_id(950199991); plain.set_config_id(kStackableConfig); plain.set_size(2);
+	ItemComp fromNewerVersion;
+	fromNewerVersion.set_item_id(950199992); fromNewerVersion.set_config_id(kStackableConfig); fromNewerVersion.set_size(5);
+	fromNewerVersion.mutable_unknown_fields()->AddVarint(412345, 1);
+	inventory.RestoreItems({{plain, 0}, {fromNewerVersion, 1}});
+	ASSERT_EQ(nullptr, inventory.GetItemCompByGuid(kGuidNotInBag));
+
+	::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 1, TX_TRADE);
+	request.clear_bundle();
+	auto* item = request.mutable_bundle()->add_items();
+	item->set_config_id(kStackableConfig);
+	item->set_count(4); // 普通单位只有 2:只算普通单位不够、算上带新字段的才够 = 错位
+	request.mutable_bundle()->add_item_uuids(kGuidNotInBag);
+	SignForTest("debit", request, "trade");
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(request, response);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, response.outcome()) << "确定性坏项先记终态";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), response.reason().id());
+	ASSERT_NE(nullptr, Ledger(ASSET_OP_STREAM_TRADE_DEBIT)) << "终态拒绝要记账";
+	EXPECT_EQ(2u, inventory.GetTotalItemCount(kStackableConfig));
+	ASSERT_NE(nullptr, inventory.GetItemCompByGuid(fromNewerVersion.item_id()));
+	EXPECT_EQ(5u, inventory.GetItemCompByGuid(fromNewerVersion.item_id())->size()) << "背包一件不动";
 }
 
 // ── 本二进制不认识的币种(混版本设计 §12、04-asset-channel.md §4.9 第 8b 步)────────────

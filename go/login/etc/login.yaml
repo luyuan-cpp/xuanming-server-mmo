@@ -92,7 +92,6 @@ Locker:
   #     + 名字登记 3s(建角侧总预算)+ player:zone 登记 3s(HomeZone.RegisterTimeout)= 9s;
   #   - 三次 Redis:读 blob、围栏写 blob、写未确认时的回读。常态是毫秒级;Redis 变慢但每次
   #     回包都还在 3s 以内时,三步合计 < 9s。
-  #   - 开 NewPlayerSeed 时多一次 Redis(新号种子;代码里的 1s ctx 预算只掐重发,单次最坏仍是 3s 读超时)。
   #     各步预算直接相加是 gRPC 9s + Redis 4×3s = 21s,但在现行 zrpc Timeout(本文件顶部,4s)下到不了:
   #     除回读、名字补偿释放、建角锁释放与提交后的反查映射写(7b)外,每一步的 ctx 都派生自 handler ctx,
   #     4s 一到 gRPC 立即失败、go-redis 不再发新命令(建角在每次写之前也显式查 ctx,见 createplayerlogic.go 6c''),
@@ -162,12 +161,6 @@ Timeouts:
   EtcdDialTimeout: 30s
   ServiceDiscoveryTimeout: 30s
   TaskWaitTimeout: 30s
-  # 2026-05-25 stress §M: 5s 在 45k 浪涌下被 db worker 池吞噬,
-  # login.EnterGame submit preload → Kafka db_task → MySQL SELECT → ACK
-  # 总链路在 partition=5 + 1 worker/zone 配置下 5s 撑不住,触发 47802
-  # 次 preload timeout(取代 lock 成为第八轮新瓶颈)。30s 给 6× 容错,
-  # 真正长尾的 SELECT 也能完成 ACK;稳态 prod 下应该 100ms 内 ACK,
-  # 30s 只在浪涌期生效。后续考虑把 partition 拉到 10/20 并行更多。
   LoginTotalTimeout: 10s # Total login timeout (including Redis load, DB ops, etc.)
   RoleCacheExpire: 24h
   TaskManagerCleanInterval: 5s # Task manager cleanup interval
@@ -202,7 +195,7 @@ SceneManagerRpc:
 # 角色名(ReservePlayerName / ReleasePlayerName,全服唯一,登记失败建角整体失败)、
 # 角色列表与进游戏缺名时回源(BatchGetPlayerName,失败只是名字显示为空)。
 # NonBlock: true —— 号段与归属查询都是弱依赖(设计稿 §6.5):data_service 没起时 login
-# 照常起服,领段失败按 IdSegment.FallbackToSnowflake 决定回退还是拒绝建角。
+# 照常起服,领段失败即拒绝建角。
 # Middlewares.Breaker: true —— 归属查询串在**每次登录**的角色列表上。最难受的不是
 # data_service 干净地下线(那样 etcd 掉键、连接直接被摘掉),而是它**死了但键还在**:
 # 进程僵住 / 机器失联时,etcd 租约到期前那个 endpoint 仍在候选池里,go-zero 照样往它
@@ -220,19 +213,16 @@ DataServiceRpc:
     Breaker: true
 
 # PlayerId 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
-# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 纯 snowflake 老路径(回滚开关)。
+# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 发不出 id,建角一律失败。
 # Step:**初始**领段长度;之后按 Leaf 口径动态调整 —— 一段不到 15 分钟用完则下次翻倍,
 #   超过 30 分钟则减半,夹在 [MinStep, MaxStep] 内(缺省 [10, 1000])。每天重启一次时浪费
 #   最多两段(当前段 + 预取段),动态 step 把它压到最小;双 buffer 意味着库倒下后还能发完两段。
-# FallbackToSnowflake:号段失败时回退 snowflake。回退是安全的(号段 [1, 2^55) 与存量
-#   snowflake PlayerId ≈2.8e17 起的值域不相交),但会让 snowflake 机器永远留着 ——
-#   默认 false:号段失败即建角失败(tip kLoginDataSerializeFailed),§6.4 的决定。
+# 号段失败即建角失败(tip kLoginDataSerializeFailed),没有回退:发号打散之后与 snowflake 的值域不再不相交。
 IdSegment:
   Enabled: true
   Step: 100
   MinStep: 10
   MaxStep: 1000
-  FallbackToSnowflake: false
 
 # 合服后的 zone 归属修正(internal/logic/pkg/homezone)。走 DataServiceRpc 查
 # player:zone 映射。
@@ -274,37 +264,6 @@ HomeZone:
 Placement:
   PinOnCreate: true
   NewPlayerStorageId: 0
-
-# ─────────────────────────────────────────────────────────────────────────
-# 新号首次入场免冷读(docs/design/new-player-first-enter-no-cold-read.md)
-#
-# Enabled:true = CreatePlayer 在落账号 blob 之前写一份 PlayerAllData:{id} 种子(两张子表只带 player_id,
-#   与「冷读读空后 login 组装出的父键」相同,TTL 24h),新号首次 EnterGame 命中缓存,不再发 Kafka 读任务、
-#   不再同步等 go/db(现状单任务最长 8s)。false(默认,整块不写也一样)= 与本功能之前完全一致。
-#   种子只是缓存:写失败 / 过期 / 被删时首次入场退回冷读,结果相同;它永不覆盖已有父键,
-#   也不会写给进过场景的玩家(player:{id}:owner_epoch 已存在)。
-#   前提(既有契约,不是新增):PlayerAllData 与 player:{id}:owner_epoch 在同一个 Redis 实例(CZ-2 / CZ-4)。
-#   打开前置:go/db 的 db_placement_guard_total{outcome="missing_required"} 与
-#   db_placement_store_open_total{result=~"error|rejected"} 两类告警已就位(见上方 Placement 第 3 条)。
-#   开着时新号的入场链在 PreloadPool 里跑完,池满回 kLoginInProgress;压测看指标 entergame_total{result="pool_saturated"}
-#   (tools/scripts/stress_summarize.ps1 的 pool_saturated 列),[preload-pool] 日志的 dropped_delta 作辅证。
-#   启动日志 "[new-player-seed] enabled=..." 是核对依据。
-NewPlayerSeed:
-  Enabled: false
-
-# Redis 身份变化后先核两张 SQL 行；关闭仅用于冷读风暴止血，不能豁免历史缺口或 ACK 超前。
-ParentLoad:
-  VerifyOnRedisIdentityChange: true
-
-# 持久 schema 世代倒退判定(C4,docs/design/mixed-version-persist-field-protection.md §5.1)。
-# EnterGame 命中 PlayerAllData 父快照(快路径)时,父快照两张表的覆盖世代取最小值(0 按 1),
-# 低于 player:{id}:save_barrier 里 scene 记录的 schema_gen、或 schema_gen 损坏,即判定数据可能被截断。
-#   warn    = 照常进游戏,只计数 login_persist_schema_regression_total 并打日志(引导期默认);
-#   enforce = 本次 EnterGame 失败,客户端收到固定的 kEnterSceneFailed(不新增 tip)。
-# 不写或写空串按 warn;写成其他任何值 login 拒绝启动。
-# 切到 enforce 的条件(设计 §8.1 第 5 步):staging 真实升世代演练中倒退计数为 0,
-# 且线上 warn 观察期内计数也为 0;两条都满足之前保持 warn。
-PersistSchemaRegressionMode: warn
 
 # ─────────────────────────────────────────────────────────────────────────
 # HMAC 密钥治理(见 internal/config/secrets.go 包注释)
@@ -397,14 +356,9 @@ Prometheus:
   Port: 9101
   Path: /metrics
 
-# Background goroutine pool for player data preload (Kafka fan-out).
-# Size: max concurrent in-flight EnterGame preload tasks. Submit is non-blocking;
-#       when the pool is saturated the chain is NOT started and EnterGame returns
-#       kLoginInProgress (the client retries); nothing downstream compensates.
-#       Cache-hit chains run the whole apply phase on a pool worker; with
-#       NewPlayerSeed on that includes every new player.
-#       Watch entergame_total{result="pool_saturated"}; dropped_delta in the
-#       [preload-pool] log is the secondary signal.
+# EnterGame 异步入场链的 goroutine 池(名字是预加载时代留下的)。
+# Size: 同时在跑的入场链上限。Submit 非阻塞,池满时不启动这条链,EnterGame 回 kLoginInProgress,客户端重试。
+#       看 entergame_total{result="pool_saturated"},[preload-pool] 日志的 dropped_delta 是次要信号。
 # StatsInterval: periodic pool snapshot log (running/free/cap, drop counter).
 #       Set to 0 to disable.
 PreloadPool:
@@ -552,40 +506,13 @@ Queue:
   #   "1": 5000
   #   "2": 5000
 
-# Kafka config
+# 控制面命令的生产者。login 只生产不消费。
 Kafka:
   Brokers:
     - "127.0.0.1:9092"
-  GroupID: "db_rpc_consumer_group"
-  # Topic is derived from Node.ZoneId at startup (db_task_zone_{ZoneId})
-  # Partition count is immutable for one topic generation. To expand, stop
-  # writers, drain the old topic + retry ready/processing queues, then raise
-  # TopicGeneration and PartitionCnt in login/db together.
-  TopicGeneration: 1
-  PartitionCnt: 10  # 2026-05-26 stress §10part: 5->10 to lift db worker pool
-  # ⚠️ login/db 两边必须完全一致；启动门禁不会原地扩 broker。
-  # 2026-05-25 stress §N: db worker count = partition count (per
-  # go/db/internal/kafka/key_ordered_consumer.go workers map). 5 partition
-  # 在 45k 浪涌下端到端 100-500ms / task,稳态吞吐 50-100/s 远低于浪涌
-  # 250/s,触发 87k 次 preload timeout。10 partition 把 worker 池容量
-  # 翻倍,期望 preload_to 减半,scene_notified=1 翻倍。
-  InitialPartition: 10
   DialTimeout: 10s
   ReadTimeout: 30s
   WriteTimeout: 10s
-  RetryMax: 3
-  RetryBackoff: 100ms
-  ChannelBuffer: 1024
-  SyncInterval: 30s
-  StatsInterval: 5m
-  CompressionType: 0
-  Idempotent: true
-  MaxOpenRequests: 1
-  RetentionMs: 86400000 # Topic retention: 24h (P1 数据安全加固 2026-06-03)
-                        # 旧值 300000 (5min) 会让 db service 卡住超过 5 分钟时丢数据,
-                        # 24h 给运维处理事故留出充足窗口。详见
-                        # docs/notes/redis-oom-data-safety-qa-record.md P1 章节。
-  # RetentionBytes: 0  # 0/不写 = 沿用 broker 的 log.retention.bytes;K8s 由 k8s_deploy.ps1 按 Kafka 盘预算渲染(与 db 同值)
 
 # 下发 gate 地址时是否必须用 gate 自报的客户端可达地址(NodeInfo.clientEndpoint,集群外入口 D78)。
 # false = gate 没自报就回落 endpoint(PodIP),本地开发 / podip 模式用它;

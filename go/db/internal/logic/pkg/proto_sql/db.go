@@ -59,7 +59,7 @@ const (
 //
 // 历史行为(等价于全 true)的问题不是「多跑了几条语句」,而是:
 //   - 多 zone × 多副本同时启动 ⇒ 对同一张大表并发 ALTER,MDL 阻塞会把整个
-//     zone 的 db_task 消费一起拖停;
+//     zone 的存盘一起拖停;
 //   - proto2mysql 在列类型不匹配时会自作主张拼 MODIFY COLUMN 并执行,
 //     没有版本记录、没有 lock 超时,大表上就是一次无人批准的在线 DDL。
 //
@@ -289,7 +289,7 @@ func newPlayerConnector(cfg *mysql.Config) (driver.Connector, error) {
 	if err != nil {
 		return nil, err
 	}
-	return authoritysql.PinCurrentSession(inner, config.AppConfig.ServerConfig.Database.RequireTiDB, authoritysql.Writer(DB.writer))
+	return authoritysql.PinCurrentSession(inner, authoritysql.Backend(config.AppConfig.ServerConfig.Database.Backend), authoritysql.Writer(DB.writer))
 }
 
 func openDB(policy DDLPolicy) error {
@@ -335,7 +335,7 @@ func openDB(policy DDLPolicy) error {
 
 	checkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := authoritysql.AssertCurrentSession(checkCtx, databaseHandle, config.AppConfig.ServerConfig.Database.RequireTiDB); err != nil {
+	if err := authoritysql.AssertCurrentSession(checkCtx, databaseHandle, authoritysql.Backend(config.AppConfig.ServerConfig.Database.Backend)); err != nil {
 		_ = databaseHandle.Close()
 		return err
 	}
@@ -394,8 +394,7 @@ var addColumnStmtRe = regexp.MustCompile("^ALTER TABLE `([^`]+)` ADD COLUMN `([^
 // assertSchemaUpToDate 是启动期 DDL 关闭时的只读 schema 闸:库里缺 proto 声明的列,或缺表且
 // `cmd/migrate -command up` 能建出来时,就拒启。
 //
-// 为什么缺列必须拒启:消费者 Save 按 proto descriptor 写全部列、FindOneByWhereClause 按全部列
-// SELECT,库里少一列,该表的每一条 db_task 都是 Error 1054 → 进死信,玩家加载也全部失败。
+// 为什么缺列必须拒启:库里少一列,存盘和认领的语句都是 Error 1054,玩家存不了盘,也进不了场。
 // 2026-09-22 zone 库缺 profile_component / asset_op_ledger 就是这样:进程照常打印
 // STARTED SUCCESSFULLY,故障拖到玩家登录时才以 EnterGame preload failed 暴露。
 //
@@ -436,12 +435,12 @@ func assertSchemaUpToDate(ctx context.Context, q migrate.Queryer, model *proto2m
 			return schemaCheckFailed(database, err)
 		}
 		if !applied {
-			return fmt.Errorf("库 %s 缺 %d 张 proto 声明的表且台账 %s 里没有干净的基线,拒绝启动(启动期 DDL 已关闭,缺表会让对应表的每条 db_task 以 Error 1146 进死信);"+
+			return fmt.Errorf("库 %s 缺 %d 张 proto 声明的表且台账 %s 里没有干净的基线,拒绝启动(启动期 DDL 已关闭,缺表会让对应表的每次存盘都以 Error 1146 失败);"+
 				"在 go/db 目录执行 `%s`(先跑基线建表再补列;报 dirty 时按它的提示人工核对)后重启: %s",
 				database, len(missingTables), migrate.SchemaMigrationsTable, migrateRemedyCommand, strings.Join(missingTables, ", "))
 		}
 		for _, name := range missingTables {
-			logx.Errorf("SCHEMA-DRIFT: database %s missing table %s, but baseline already applied and cmd/migrate -command up will not recreate it (startup allowed); each db_task for this table will enter dead-letter with Error 1146, manual table creation required",
+			logx.Errorf("SCHEMA-DRIFT: database %s missing table %s, but baseline already applied and cmd/migrate -command up will not recreate it (startup allowed); each save for this table will fail, dead-letter with Error 1146, manual table creation required",
 				database, name)
 		}
 	}
@@ -474,7 +473,7 @@ func assertSchemaUpToDate(ctx context.Context, q migrate.Queryer, model *proto2m
 		}
 		missing = append(missing, stmt)
 	}
-	return fmt.Errorf("库 %s 缺 %d 个 proto 声明的列,拒绝启动(启动期 DDL 已关闭,缺列会让对应表的每条 db_task 以 Error 1054 进死信);"+
+	return fmt.Errorf("库 %s 缺 %d 个 proto 声明的列,拒绝启动(启动期 DDL 已关闭,缺列会让对应表的每次存盘都以 Error 1054 失败);"+
 		"在 go/db 目录执行 `%s`(不加 -allow-modify)后重启: %s",
 		database, len(missing), migrateRemedyCommand, strings.Join(missing, ", "))
 }

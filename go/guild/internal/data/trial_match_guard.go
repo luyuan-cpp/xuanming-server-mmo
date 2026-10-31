@@ -11,13 +11,13 @@ import (
 )
 
 // 显式跨schema、同主连接池；只读核列，不从DSN推断，不在业务进程补建Match表。
-func (r *GuildRepo) ConfigureMatchAuthority(schema string) error {
+func (r *GuildRepo) ConfigureMatchAuthority(schema string, backend authoritysql.Backend) error {
 	if !roleAuthoritySchema.MatchString(schema) {
 		return errors.New("历练Match权威schema未配置")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := authoritysql.AssertCurrentSession(ctx, r.db, true); err != nil {
+	if err := authoritysql.AssertCurrentSession(ctx, r.db, backend); err != nil {
 		return err
 	}
 	for _, query := range []string{

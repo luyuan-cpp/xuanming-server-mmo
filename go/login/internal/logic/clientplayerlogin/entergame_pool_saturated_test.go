@@ -14,7 +14,7 @@ import (
 )
 
 // EnterGame 池满背压(PreloadPool 满、链未启动)的指标用例。
-// 开 NewPlayerSeed 之后新号的入场链整段跑在 PreloadPool 的 worker 上,池满回 kLoginInProgress 成了
+// 入场链整段跑在 PreloadPool 里,池满要有背压。
 // 开服首日新号的常规背压出口(docs/design/new-player-first-enter-no-cold-read.md §6 第 21 行、R8);
 // entergame_total{result="pool_saturated"} 是它唯一进 Prometheus 的信号,
 // tools/scripts/stress_summarize.ps1 的 pool_saturated 列读的就是这条序列。

@@ -172,7 +172,7 @@ func infoValue(info, field string) string {
 // RouteReadyReadScript 在同一段只读 Lua 里取回:就绪标记原值、本实例的 run_id / role / master_replid、
 // 以及调用方要读的映射键。
 //
-//	KEYS[1] = mapping:route:ready;KEYS[2..] = 映射键(player:placement / player:zone / merge:in_progress 等,单实例同库)
+//	KEYS[1] = mapping:route:ready;KEYS[2..] = 映射键(player:placement / player:zone 等,单实例同库)
 //	返回 {marker 或 nil, run_id, role, master_replid, v1, v2, …}
 //
 //   - 标记用 redis.pcall('GET'):键不是 string 类型时按「不存在」回 nil(与读方 MGET 口径一致),不让整段脚本报错;
@@ -401,109 +401,6 @@ func ClassifyRouteReadyArmReply(raw any) (RouteReadyArmOutcome, error) {
 		return 0, fmt.Errorf("%w: arm reply %T %v", ErrUnexpectedRouteReadyReadReply, raw, raw)
 	}
 	return RouteReadyArmOutcome(n), nil
-}
-
-// ── 合服围栏镜像 merge:in_progress:{zone}(规格 §13.1 第 3 条)───────────────────
-
-// 合服围栏的真源是全局库 zone_merge_fence(第 2 批起);Redis 里的 merge:in_progress:{zone} 只是镜像,
-// 读方(data_service 的进场判定、guild)只看 EXISTS,值的格式不是读方契约。镜像的值是 merge_zone 写进库
-// holder_json 列的持有者 JSON,其中必须带 fence_epoch(获取一次围栏 +1,同一次获取的 64 个分片行取同一值)。
-
-// MergeFenceMirrorMarginMs 是镜像比库里的围栏多活的时长:镜像的过期时刻 = 库 expires_at_ms(库时钟)+ 本值。
-// 只会比库晚过期(多封锁、不少封锁);merge_zone 崩溃且没有对账 leader 时,镜像也能自己消失,不会永久封区。
-const MergeFenceMirrorMarginMs = 10 * 60 * 1000
-
-// MergeFenceMirrorSetScript 按 fence_epoch 写围栏镜像(set-if-newer):
-//
-//	KEYS[1] = merge:in_progress:{zone}
-//	ARGV[1] = 新值(带 fence_epoch 的持有者 JSON)  ARGV[2] = fence_epoch(十进制)  ARGV[3] = 过期时刻(Unix 毫秒,绝对值)
-//	回 1:已写(新建,或同一 epoch 续期 / 刷新,或替换更旧的 epoch);
-//	   0:当前值的 fence_epoch 更大(失权的旧持有者迟到的写),零写入;
-//	   2:当前值解不出数字 fence_epoch(旧版 merge_zone 写的、或被人手工写的),零写入 —— 不认识的围栏一律不覆盖。
-//
-// 过期用 PEXPIREAT 单独设,不用 SET 的 PXAT 选项(miniredis 与旧版本兼容面更大)。
-const MergeFenceMirrorSetScript = `-- merge fence mirror set-if-newer,spec_D1_batch1b2_2_3.md §13.1
-local cur = redis.call('GET', KEYS[1])
-if cur then
-  local ok, v = pcall(cjson.decode, cur)
-  if not ok or type(v) ~= 'table' or type(v.fence_epoch) ~= 'number' then return 2 end
-  if v.fence_epoch > tonumber(ARGV[2]) then return 0 end
-end
-redis.call('SET', KEYS[1], ARGV[1])
-redis.call('PEXPIREAT', KEYS[1], ARGV[3])
-return 1
-`
-
-// MergeFenceMirrorOutcome 与 MergeFenceMirrorSetScript 的返回码一一对应。
-type MergeFenceMirrorOutcome int64
-
-const (
-	MergeFenceMirrorStale   MergeFenceMirrorOutcome = 0
-	MergeFenceMirrorWritten MergeFenceMirrorOutcome = 1
-	MergeFenceMirrorForeign MergeFenceMirrorOutcome = 2
-)
-
-// String 返回低基数的名字。
-func (o MergeFenceMirrorOutcome) String() string {
-	switch o {
-	case MergeFenceMirrorStale:
-		return "stale"
-	case MergeFenceMirrorWritten:
-		return "written"
-	case MergeFenceMirrorForeign:
-		return "foreign"
-	}
-	return "unknown"
-}
-
-// ClassifyMergeFenceMirrorReply 解析 MergeFenceMirrorSetScript 的回复。
-func ClassifyMergeFenceMirrorReply(raw any) (MergeFenceMirrorOutcome, error) {
-	n, ok := raw.(int64)
-	if !ok || n < 0 || n > 2 {
-		return 0, fmt.Errorf("%w: merge fence mirror reply %T %v", ErrUnexpectedRouteReadyReadReply, raw, raw)
-	}
-	return MergeFenceMirrorOutcome(n), nil
-}
-
-// MergeFenceHolderEpoch 从持有者 JSON 里取 fence_epoch;取不到(不是 JSON 对象、没有该字段、不是 JSON 数字字面量
-// 表示的非负整数)回 false。对账 leader 用它区分「本方案写的镜像」与「旧版 merge_zone 写的镜像」(后者不删,只告警)。
-//
-// 先取原始字面量再判:json.Number 会接受带引号的 "7",而 MergeFenceMirrorSetScript 里 cjson 解出的是字符串、
-// type(...) ~= 'number',两边口径会分叉。这里只认不带引号的十进制整数字面量,与脚本一致。
-func MergeFenceHolderEpoch(raw string) (uint64, bool) {
-	var v struct {
-		FenceEpoch json.RawMessage `json:"fence_epoch"`
-	}
-	if err := json.Unmarshal([]byte(raw), &v); err != nil || len(v.FenceEpoch) == 0 {
-		return 0, false
-	}
-	lit := string(v.FenceEpoch)
-	for i := 0; i < len(lit); i++ {
-		if lit[i] < '0' || lit[i] > '9' {
-			return 0, false
-		}
-	}
-	n, err := strconv.ParseUint(lit, 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return n, true
-}
-
-// MergeFenceMirrorArgs 组装 MergeFenceMirrorSetScript 的 KEYS / ARGV:holderJSON 里的 fence_epoch 必须等于 epoch
-// (库里 holder_json 列与 fence_epoch 列不一致说明写者有错,拒绝发出去);expiresAtMs 是库里的 expires_at_ms。
-func MergeFenceMirrorArgs(zone uint32, holderJSON string, epoch, expiresAtMs uint64) ([]string, []any, error) {
-	if zone == 0 {
-		return nil, nil, fmt.Errorf("%w: merge fence zone must be >= 1", ErrMalformed)
-	}
-	got, ok := MergeFenceHolderEpoch(holderJSON)
-	if !ok || got != epoch || epoch == 0 {
-		return nil, nil, fmt.Errorf("%w: merge fence holder %q carries fence_epoch %d (ok=%v), want %d (> 0)", ErrMalformed, holderJSON, got, ok, epoch)
-	}
-	if expiresAtMs == 0 {
-		return nil, nil, fmt.Errorf("%w: merge fence expires_at_ms must be > 0", ErrMalformed)
-	}
-	return []string{MergeFenceKey(zone)}, []any{holderJSON, strconv.FormatUint(epoch, 10), strconv.FormatUint(expiresAtMs+MergeFenceMirrorMarginMs, 10)}, nil
 }
 
 // ── 合走标记 merge:merged_into:{src} ──────────────────────────────────────────

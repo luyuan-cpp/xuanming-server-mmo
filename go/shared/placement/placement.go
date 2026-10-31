@@ -1,9 +1,9 @@
 // Package placement 是玩家「存储落点」记录在 Redis 里的键名 / 值格式契约
 // (docs/design/player-storage-placement.md §4)。
 //
-// home_zone(player:zone:{id})回答「玩家属于哪个区」,落点记录回答「玩家主数据在哪个库」。
-// 两者分开之后,合服只改 home_zone,搬库只改落点记录。选库只在 go/db 一处发生:
-// 按处理那一刻的记录选,生产者消息里不带任何落点信息(§0.2、§3 P-3)。
+// home_zone(player:zone:{id})回答「玩家建号时属于哪个区」,落点记录回答「玩家主数据在哪个库」。
+// 合服不改这两个值,只写一条 zone_merged_into 别名(merged_zone.go),搬库只改落点记录。
+// 选库只在 go/db 一处发生:按处理那一刻的记录选,生产者消息里不带任何落点信息(§0.2、§3 P-3)。
 //
 // 键与值(与 tools/merge_zone/placement_codec.go 的镜像一字不差,两边用同一组测试向量字面量):
 //
@@ -38,11 +38,6 @@ func Key(playerID uint64) string {
 // 维护,这里镜像一份只为让 go/db 能在同一次 MGET 里读到 home_zone(§6.2)。
 func HomeZoneKey(playerID uint64) string {
 	return "player:zone:" + strconv.FormatUint(playerID, 10)
-}
-
-// MergeFenceKey 返回合服围栏键 merge:in_progress:{zone}(写者 tools/merge_zone/fence.go)。
-func MergeFenceKey(zone uint32) string {
-	return "merge:in_progress:" + strconv.FormatUint(uint64(zone), 10)
 }
 
 // 落点编号空间(§4.2),库名由编号唯一派生,不需要配置表:

@@ -44,44 +44,38 @@ func clientCtx(playerID uint64) context.Context {
 	return session.WithDetails(context.Background(), &base.SessionDetails{SessionId: 1, PlayerId: playerID})
 }
 
+// 归属查不到让流程停在铸号之前:repo 与发号器都传 nil,误触即 panic。请求体里的 ZoneId=7 如果被采用,这里就不会被拒。
 func TestCreateGuild_ClientIdentityAndZoneComeFromServer(t *testing.T) {
-	homeZones := &fakeHomeZones{zone: 2}
-	// 闸门封锁让流程停在铸号之前:repo 与发号器都传 nil,误触即 panic。
-	fence := &fakeFence{merging: true}
-	l := NewGuildLogic(nil, nil, nil, fence, homeZones)
+	homeZones := &fakeHomeZones{zone: 0}
+	l := NewGuildLogic(nil, nil, nil, homeZones)
 
 	resp, err := l.CreateGuild(clientCtx(42), &pb.CreateGuildRequest{PlayerId: 999, Name: "青云门", ZoneId: 7})
 
-	// 闸门命中回的是 tip 不是 gRPC 错误(§11.1):正在合服是可预期的运维窗口,
-	// 回 error 会被 serverbase 记成服务端故障,客户端还会进重连隔离。
 	require.NoError(t, err)
-	assert.Equal(t, constants.ErrZoneMerging, resp.GetErrorMessage().GetId())
+	assert.Equal(t, constants.ErrHomeZoneUnknown, resp.GetErrorMessage().GetId())
 	assert.Equal(t, uint64(42), homeZones.lastPlayer, "身份必须取会话,不能取请求体里伪造的 999")
-	assert.Equal(t, uint32(2), fence.lastZone, "zone 必须取归属 zone,不能取客户端选的 7")
 }
 
-func TestInternalCreateGuildKeepsRequestZone(t *testing.T) {
+// 内部调用不查归属 zone。repo 为 nil:越过这一步走到仓储就 panic,这里只钉「不查」。
+func TestInternalCreateGuildSkipsHomeZoneLookup(t *testing.T) {
 	homeZones := &fakeHomeZones{zone: 2}
-	fence := &fakeFence{merging: true}
-	l := NewGuildLogic(nil, nil, nil, fence, homeZones)
+	l := NewGuildLogic(nil, nil, nil, homeZones)
 
-	resp, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{PlayerId: 1001, Name: "内部建帮", ZoneId: 7})
+	func() {
+		defer func() { _ = recover() }()
+		_, _ = l.CreateGuild(context.Background(), &pb.CreateGuildRequest{PlayerId: 1001, Name: "内部建帮", ZoneId: 7})
+	}()
 
-	require.NoError(t, err)
-	assert.Equal(t, constants.ErrZoneMerging, resp.GetErrorMessage().GetId())
-	assert.Equal(t, uint32(7), fence.lastZone)
 	assert.Zero(t, homeZones.calls, "内部调用不查归属 zone")
 }
 
 func TestClientRequestWithoutHomeZoneMappingIsRefused(t *testing.T) {
-	fence := &fakeFence{}
-	l := NewGuildLogic(nil, nil, nil, fence, &fakeHomeZones{zone: 0})
+	l := NewGuildLogic(nil, nil, nil, &fakeHomeZones{zone: 0})
 	ctx := clientCtx(42)
 
 	create, err := l.CreateGuild(ctx, &pb.CreateGuildRequest{Name: "青云门"})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrHomeZoneUnknown, create.GetErrorMessage().GetId())
-	assert.Zero(t, fence.calls)
 
 	// 入帮改申请制:原先那个直接入帮的 RPC 已删。提交申请同样要先知道玩家属于哪个区 ——
 	// 帮会按 zone 隔离,归属未知就没法判断他能不能申请这个帮。
@@ -104,7 +98,7 @@ func TestClientRequestWithoutHomeZoneMappingIsRefused(t *testing.T) {
 
 func TestClientRequestHomeZoneLookupFailures(t *testing.T) {
 	t.Run("data_service error is a fault, not a tip", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, &fakeHomeZones{err: errors.New("mapping redis down")})
+		l := NewGuildLogic(nil, nil, nil, &fakeHomeZones{err: errors.New("mapping redis down")})
 
 		resp, err := l.GetGuildRank(clientCtx(42), &pb.GetGuildRankRequest{})
 
@@ -112,7 +106,7 @@ func TestClientRequestHomeZoneLookupFailures(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 	t.Run("lookup not wired", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, nil)
+		l := NewGuildLogic(nil, nil, nil, nil)
 
 		_, err := l.CreateGuild(clientCtx(42), &pb.CreateGuildRequest{Name: "青云门"})
 
@@ -130,7 +124,7 @@ func TestCreateGuild_RejectsInvalidNames(t *testing.T) {
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {
 			homeZones := &fakeHomeZones{zone: 2}
-			l := NewGuildLogic(nil, nil, nil, nil, homeZones)
+			l := NewGuildLogic(nil, nil, nil, homeZones)
 
 			resp, err := l.CreateGuild(clientCtx(42), &pb.CreateGuildRequest{Name: raw})
 
@@ -151,7 +145,7 @@ func TestNormalizeGuildName(t *testing.T) {
 }
 
 func TestSetAnnouncement_RejectsOversizeBeforeTouchingStorage(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 	oversize := strings.Repeat("汉", constants.MaxAnnouncementBytes/3+1) // 每个汉字 3 字节
 
 	resp, err := l.SetAnnouncement(clientCtx(42), &pb.SetAnnouncementRequest{GuildId: 1, Announcement: oversize})
@@ -187,7 +181,7 @@ func TestGetGuildRank_ClientSeesOnlyHomeZone(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
 	seedGuild(t, mr, data.GuildData{GuildID: 501, Name: "二区帮", ZoneID: 2}, 20)
 	seedGuild(t, mr, data.GuildData{GuildID: 701, Name: "七区帮", ZoneID: 7}, 30)
-	l := NewGuildLogic(repo, nil, nil, nil, &fakeHomeZones{zone: 2})
+	l := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2})
 
 	// 客户端要全服榜(zone 0)、一页 500 条:zone 被归属 zone 覆盖,页长被夹到上限。
 	resp, err := l.GetGuildRank(clientCtx(42), &pb.GetGuildRankRequest{ZoneId: 0, PageSize: 500})
@@ -209,13 +203,13 @@ func TestGetGuild_OtherZoneLooksNonexistentToClient(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
 	seedGuild(t, mr, data.GuildData{GuildID: 701, Name: "七区帮", ZoneID: 7}, 30)
 
-	other, err := NewGuildLogic(repo, nil, nil, nil, &fakeHomeZones{zone: 2}).
+	other, err := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}).
 		GetGuild(clientCtx(42), &pb.GetGuildRequest{GuildId: 701})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrGuildNotFound, other.GetErrorMessage().GetId())
 	assert.Nil(t, other.GetGuild())
 
-	same, err := NewGuildLogic(repo, nil, nil, nil, &fakeHomeZones{zone: 7}).
+	same, err := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 7}).
 		GetGuild(clientCtx(42), &pb.GetGuildRequest{GuildId: 701})
 	require.NoError(t, err)
 	assert.Equal(t, uint64(701), same.GetGuild().GetGuildId())
@@ -225,12 +219,12 @@ func TestGetGuildRankByGuild_ClientOnlyRanksInHomeZone(t *testing.T) {
 	repo, mr := newCacheOnlyRepo(t)
 	seedGuild(t, mr, data.GuildData{GuildID: 701, Name: "七区帮", ZoneID: 7}, 30)
 
-	other, err := NewGuildLogic(repo, nil, nil, nil, &fakeHomeZones{zone: 2}).
+	other, err := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 2}).
 		GetGuildRankByGuild(clientCtx(42), &pb.GetGuildRankByGuildRequest{GuildId: 701, ZoneId: 7})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrNotRanked, other.GetErrorMessage().GetId())
 
-	same, err := NewGuildLogic(repo, nil, nil, nil, &fakeHomeZones{zone: 7}).
+	same, err := NewGuildLogic(repo, nil, nil, &fakeHomeZones{zone: 7}).
 		GetGuildRankByGuild(clientCtx(42), &pb.GetGuildRankByGuildRequest{GuildId: 701})
 	require.NoError(t, err)
 	assert.Equal(t, uint32(1), same.GetEntry().GetRank())

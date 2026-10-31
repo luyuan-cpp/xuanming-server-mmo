@@ -14,3 +14,7 @@ constexpr uint32_t MatchInternalCancelActivityBattleIndex = 1;
 constexpr uint32_t MatchInternalCommitBattleOutcomeMessageId = 345;
 constexpr uint32_t MatchInternalCommitBattleOutcomeIndex = 2;
 #define MatchInternalCommitBattleOutcomeMethod  ::MatchInternal_Stub::descriptor()->method(2)
+
+constexpr uint32_t MatchInternalSetSpectateFeaturedMessageId = 353;
+constexpr uint32_t MatchInternalSetSpectateFeaturedIndex = 3;
+#define MatchInternalSetSpectateFeaturedMethod  ::MatchInternal_Stub::descriptor()->method(3)

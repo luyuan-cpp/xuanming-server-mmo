@@ -76,14 +76,15 @@ func EnsureSeqRow(ctx context.Context, db *sql.DB, t SeqTables, playerID uint64,
 // EnsureSeqRowTx 是 EnsureSeqRow 的**事务内**版本:同一条语句、同一纪元语义(已存在是空操作、不改纪元),
 // 只是跑在调用方的事务里。不重试,错误原样返回 —— 重试整笔事务是调用方的事。
 //
-// 为什么要有它(2026-09-21 死锁审计 #16):事务外的 EnsureSeqRow 只剩一种 1213 —— 首个插入者回滚时,
-// 排在这条未提交记录后面的多个插入者继承间隙锁后互等(见 EnsureSeqRowRetry)。要从根上消掉它,
-// 得让所有首次建行者先排在一行**已存在、已提交**的守卫行上(调用方选定,如帮会的全局哨兵行),
-// 再在同一事务里普通读 → 缺行才调本函数插入:同一时刻最多一个插入者,排队的是守卫行的记录锁,
-// 守卫持有者回滚只是放锁,不会把锁继承成间隙锁。
+// 事务外的 EnsureSeqRow 只剩一种 1213 —— 首个插入者回滚时,排在这条未提交记录后面的多个插入者
+// 继承间隙锁后互等(2026-09-21 死锁审计 #16,见 EnsureSeqRowRetry)。TiDB 没有这个环。调用方两种用法:
+//   - 先持有一把**按玩家**的已提交行锁再调本函数(帮会的成员行):同一玩家同一时刻最多一个插入者,环从 SQL 层消掉;
+//   - 放进只建行的短事务,接受首插者回滚时的 1213:裸连接上整事务重试吸收,走 authoritysql 的生产连接上这一笔直接失败(trade 的 EnsureSeqRows)。
 //
-// 契约:调用方事务必须是 READ COMMITTED(与 AllocateSeq 相同的理由:普通读要看得见前一个建行者已提交的行);
-// 调用方必须先持有自己的守卫锁,否则本函数与事务外的 EnsureSeqRow 没有区别,只是把锁持有时间拉长了。
+// 不要用一行全服共用的守卫来串行建行:开服时几乎每个玩家都是首次建行,全服会排在那一行上
+// (docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条)。
+//
+// 契约:调用方事务必须是 READ COMMITTED(与 AllocateSeq 相同的理由:普通读要看得见前一个建行者已提交的行)。
 func EnsureSeqRowTx(ctx context.Context, tx *sql.Tx, t SeqTables, playerID uint64, s assetpb.AssetOpStream, nowMs uint64) error {
 	return ensureSeqRow(ctx, tx, t, playerID, s, nowMs)
 }

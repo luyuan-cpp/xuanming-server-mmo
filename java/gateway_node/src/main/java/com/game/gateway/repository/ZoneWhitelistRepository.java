@@ -1,5 +1,6 @@
 package com.game.gateway.repository;
 
+import com.game.gateway.entity.RowIds;
 import com.game.gateway.entity.ZoneWhitelist;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,11 +15,11 @@ import java.util.Optional;
  * zone_whitelist 的读写。
  *
  * <h2>写路径只有两条,凡是会与别人冲突的锁都按「uk_zone_account 项 → 已有主键记录」同向取(2026-09-21 死锁审计 #18)</h2>
- * 这张表的业务键是唯一索引 {@code uk_zone_account(zone_id, account_id)},{@code id} 只是自增代理主键。
+ * 这张表的业务键是唯一索引 {@code uk_zone_account(zone_id, account_id)},{@code id} 只是代理主键(按时间递增的行号,见 {@link RowIds})。
  * 写入一律按业务键定位:{@link #upsert} 与 {@link #deleteByZoneIdAndAccountId}。
  * <ul>
  *   <li>DELETE:先在唯一索引上取 X,再回表取已有主键记录的 X。</li>
- *   <li>upsert 走<b>插入</b>分支(键不存在或只剩删除标记项):InnoDB 先插聚簇索引 —— 一条新自增主键记录,只带
+ *   <li>upsert 走<b>插入</b>分支(键不存在或只剩删除标记项):InnoDB 先插聚簇索引 —— 一条新主键记录,只带
  *       隐式锁,并在主键尾部间隙取插入意向 —— 然后才对 uk_zone_account 做重复键检查(对候选项及其后一项取 X
  *       next-key),最后插入 uk 项。</li>
  *   <li>upsert 走<b>重复键</b>分支(键已有活行):先把刚插的新主键记录在语句内回滚,再按 uk 项 X → 已有主键 X
@@ -27,9 +28,10 @@ import java.util.Optional;
  * 插入分支里那条新主键记录不参与任何锁序比较:它的 id 刚分配、只有本事务知道,没有写者会按主键或主键范围去锁它
  * (别人只可能经由 uk 项碰到它,那已是 uk 上的排队)。所以两条写路径彼此只会排队、不会成环。
  *
- * <p><b>「id 是自增」在这里不是无关紧要的实现细节,而是消环论证的一半</b>(2026-09-29 真库探针,见 {@link #upsert}
- * 的「为什么 ODKU 在这张表上只会排队」)。谁要把它换成外部发号(雪花、号段)之前,必须先重跑那份探针:新行的
- * 唯一键项一旦可能排在删除标记项<b>之前</b>,ODKU 就不再消环。
+ * <p><b>「id 按时间递增」在这里不是无关紧要的实现细节,而是消环论证的一半</b>(2026-09-29 真库探针,见 {@link #upsert}
+ * 的「为什么 ODKU 在这张表上只会排队」)。探针当时测的是自增主键;2026-10-30 起换成 {@link RowIds},新行主键仍大于
+ * 删除标记那条记录的主键,判据不变,由 {@code ZoneWhitelistUpsertLockOrderMySqlTest} 真库复验(未跑,待 Codex)。
+ * 不要换成打散的发号器行号:新行的唯一键项一旦可能排在删除标记项<b>之前</b>,ODKU 就不再消环。
  *
  * <p>刻意继承 {@link Repository} 而不是 {@code JpaRepository}:不再暴露 {@code save()} / {@code delete(entity)} /
  * {@code deleteById()}。{@code save()} 正是 #18 的成因(见 {@link #upsert}),{@code deleteById()} 与 merge 式
@@ -52,7 +54,7 @@ public interface ZoneWhitelistRepository extends Repository<ZoneWhitelist, Long>
      *       哪天 MySQL 真移除它,须全仓一起换写法,不要只改这一处。</li>
      * </ul>
      */
-    String UPSERT_SQL = "INSERT INTO zone_whitelist (zone_id, account_id, note) VALUES (:zoneId, :accountId, :note)"
+    String UPSERT_SQL = "INSERT INTO zone_whitelist (id, zone_id, account_id, note) VALUES (:id, :zoneId, :accountId, :note)"
             + " ON DUPLICATE KEY UPDATE note = VALUES(note)";
 
     /** {@link #deleteByZoneIdAndAccountId} 的语句(JPQL)。Hibernate 翻译成按 uk_zone_account 定位的单条 DELETE。 */
@@ -92,7 +94,7 @@ public interface ZoneWhitelistRepository extends Repository<ZoneWhitelist, Long>
      * <ol>
      *   <li><b>ODKU 的重复键检查直接取 X next-key</b>,不存在「先拿 S、再升级」这一步。X 与 X 互斥,等待者只能
      *       一个一个拿到:先到者插入(或改 note)并提交,后到者再拿到锁时看见的是活行,走 UPDATE 分支。</li>
-     *   <li><b>{@code id} 是自增,所以新行的 uk 项必然排在删除标记项之后</b>(唯一二级索引记录按索引列
+     *   <li><b>{@code id} 按时间递增,所以新行的 uk 项排在删除标记项之后</b>(唯一二级索引记录按索引列
      *       排序、以主键破同键的序)。探针测的正是这一路:{@code zone_whitelist} 这种形状上 ODKU <b>0/5</b> 成环,
      *       同一时序的普通 INSERT 只有 <b>2/5</b> 成环、其余几次是幸存者先提交、后到者拿 1062。</li>
      * </ol>
@@ -103,7 +105,7 @@ public interface ZoneWhitelistRepository extends Repository<ZoneWhitelist, Long>
      *
      * <p>锁序按分支不同(见类注释):插入分支是「新主键记录(隐式锁,别人碰不到)→ uk 重复键检查 X → 插入 uk 项」,
      * 重复键分支是「uk 项 X → 已有主键 X」;能与别人冲突的部分都与 {@link #deleteByZoneIdAndAccountId} 同向。
-     * 走 UPDATE 分支也会消耗一个自增号,id 出现空洞无害(id 只是代理主键,接口一律按业务键定位)。
+     * 走 UPDATE 分支也会白发一个行号,无害(id 只是代理主键,接口一律按业务键定位)。
      *
      * <h3>为什么不靠 JDBC URL 加 READ COMMITTED</h3>
      * InnoDB 对唯一二级索引的重复键检查在 RC 下仍然加 S next-key(那把锁是唯一约束本身要的),RC 去不掉它,
@@ -116,13 +118,21 @@ public interface ZoneWhitelistRepository extends Repository<ZoneWhitelist, Long>
      * (该类是包内可见的支撑类,本包引用不到,所以只能写成文本而不是 {@code @link})。
      * 该论证目前<b>没有真库证据</b>:探针的 ODKU 那一格是 0/5,连一次 1213 都没观察到,所以「重试能吸收它」
      * 至今是推演。
+     */
+    default int upsert(Long zoneId, Long accountId, String note) {
+        return upsertRow(RowIds.next(), zoneId, accountId, note);
+    }
+
+    /**
+     * {@link #upsert} 的列级形式。调用方用 {@link #upsert},这里只负责绑定。
      *
      * <p>native 语句绕过持久化上下文,所以先 flush 再 clear,免得同一事务里随后读到缓存里的旧实体。
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query(value = UPSERT_SQL, nativeQuery = true)
-    int upsert(@Param("zoneId") Long zoneId, @Param("accountId") Long accountId, @Param("note") String note);
+    int upsertRow(@Param("id") long id, @Param("zoneId") Long zoneId, @Param("accountId") Long accountId,
+            @Param("note") String note);
 
     /**
      * 按业务键删除,返回删掉的行数(0 = 本来就不在)。

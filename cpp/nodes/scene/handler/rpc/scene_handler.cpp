@@ -24,7 +24,6 @@
 #include "type_alias/player_session_type_alias.h"
 #include "core/utils/proto/proto_field_checker.h"
 #include "network/network_utils.h"
-#include "core/system/redis.h"
 #include "player/comp/afk_comp.h"
 #include "frame/manager/frame_time.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
@@ -119,8 +118,8 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	ctx.enterInfo.set_session_id(request->session_id());
 	ctx.enterInfo.set_enter_gs_type(request->enter_gs_type());
 	ctx.enterInfo.set_scene_id(request->scene_id());
-	// 归属字段(gate 从 RoutePlayerEvent 透传):home_zone 决定落库 topic,owner_epoch 是存盘 CAS 的
-	// 期望值。必须跟着"这一次路由决策"走,节点不得自己读 Redis(cross-zone-scene-travel.md CZ-3、
+	// 归属字段(gate 从 RoutePlayerEvent 透传):home_zone 用于入场归属核对,owner_epoch 是认领和存盘带的代次。
+	// 必须跟着"这一次路由决策"走,节点不得自己读 Redis(cross-zone-scene-travel.md CZ-3、
 	// reentry-barrier §3.3)。0 = 上游未填,EnterScene 里不覆盖已有值。
 	// 唯一例外(GO-2 §12.8 判定表 B5):源端 ResolveTravelOutcome 在交接被 scene_manager 单调回滚到本节点时采纳
 	// Redis 里的 owner_epoch(E+2)。三条前提写死:同一段原子脚本先删掉本次交接这一族标记;location.rollback_receipt

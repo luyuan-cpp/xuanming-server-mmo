@@ -1,41 +1,31 @@
-# Prometheus alert rules for 玩家存储落点(go/db 按落点选库与落库后复核、按需打开落点库;scene_manager 的合服围栏拒绝进场)。
+# Prometheus alert rules for 玩家存储落点(go/db 按需打开落点库)。
 #
-# 来源:docs/design/player-storage-placement.md §13 / §14(2026-09-28 落码时只写了告警建议、没进 deploy/k8s,本文件补上);
-#       docs/design/new-player-first-enter-no-cold-read.md §9 第 3 条:**打开 login 的 NewPlayerSeed 之前,missing_required 与
-#       db_placement_store_open_total{result=~"error|rejected"} 两类告警必须就位**(P5 定为硬门禁),即本文件的
-#       DbPlacementMissingRequired、DbPlacementStoreRejected、DbPlacementStoreOpenErrors。
+# 来源:docs/design/player-storage-placement.md §13 / §14(2026-09-28 落码时只写了告警建议、没进 deploy/k8s,本文件补上)。
 # 指标定义(名字与取值以代码为准,本文件只引用;改了要同改,tools/scripts/tests/k8s_deploy_contract.tests.ps1 从源码核对):
 #   - go/db(go/db/internal/metrics/metrics.go,subsystem "db"):
-#       db_placement_guard_total{op=read|write, outcome}   每条任务选库时记一次,落库后复核不通过 / 复核读失败时再记一次。
-#                                                          outcome 取 Placement* 常量:placed | home | legacy | stale_topic |
-#                                                          frozen_deferred | missing_required | lookup_error | recheck_moved |
-#                                                          route_not_ready(最后一个归 data-service-route-alerts.yaml 的 GoDbRouteNotReadyDeferrals)
 #       db_placement_store_open_total{result=ok|error|rejected}
 #                                                          每一次真正发生的按需打开落点库(StoreOpen* 常量);打开失败后的冷却期
 #                                                          (缺省 10s)内复用上次的错误、不重复计数,所以速率是「每个冷却期最多一次」
-#   - scene_manager(go/scene_manager/internal/metrics/metrics.go,subsystem "scene_manager"):
-#       scene_manager_enter_scene_rejected_total{zone_id, reason="home_zone_merging"}
-#                                                          归属 zone 处于合服围栏内时拒绝进场(go/scene_manager/internal/logic/home_zone.go
-#                                                          的 rejectReasonHomeZoneMerging);zone_id 是 **gate zone**,不是目标 zone
+#
+# 选库本身的失败(没有落点记录、搬库冻结、映射 Redis 的副本不可信)与打不开库一样回 Unavailable,在 go/db 上不细分,
+# 都记 db_player_store_requests_total{result="unavailable"};原因看 go/db 日志 `[player_store] resolve storage of player`
+# (搬库冻结不打这一行)。这个计数目前没有告警规则(没有压测基线),只进看板与 stress_summarize。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/player-placement-alerts.yaml
 #
 # Scrape prerequisites:
-#   - go/db 的 MetricsListenAddr(K8s 上 db ConfigMap 写 ":9160")与 scene_manager 的指标端口有 ServiceMonitor / PodMonitor
-#     (或按注解抓取的 job);前提不满足时这些告警是哑的(同 db-task-retry-alerts.yaml、scene-manager-alerts.yaml)。
+#   - go/db 的 MetricsListenAddr(K8s 上 db ConfigMap 写 ":9160")有 ServiceMonitor / PodMonitor
+#     (或按注解抓取的 job);前提不满足时这些告警是哑的(同 scene-manager-alerts.yaml)。
 #   - go/db 的规则按 namespace 聚合(一个 zone 一个 namespace),用的是 ServiceMonitor / PodMonitor 默认附加的 namespace 标签。
 #
 # 口径:
-#   - **两个 go/db 计数器启动时没有以 0 预置序列**(metrics.go 的 register() 只预置了 task_deferred / dead_letter 等;2026-10-20 核对)。
-#     increase() 对「序列从无到 1」只有一个样本,恰好漏掉第一次(owner-epoch-alerts.yaml、player-inbox-alerts.yaml 同一个坑)。
-#     所以「出现一次就报」的四条(StaleTopic / MissingRequired / StoreRejected / StoreOpenErrors)第二支用
-#     `unless … offset 10m` 把 10 分钟内新出现的序列也算进来,写法同 player-inbox-alerts.yaml 的 PlayerInboxAckAnomaly;
-#     第二支带 `> 0`,go/db 以后补上以 0 预置时它不会因为新 Pod 的 0 值序列误报。「持续出现才报」的两条(FrozenStuck / RecheckMoved)
-#     只用 rate,漏掉第一次不影响判定。
-#   - stale_topic / missing_required(op=write)的写同时进死信,db-task-retry-alerts.yaml 的 DbTaskDeadLetterAdded(warning)会一起响;
-#     本文件的 critical 是按落点语义的处置入口,两条一起响时按本文件处理。
-#   - 阈值都没有实测基线(这些取值所在的代码未压测),首轮合服 / 搬库演练后回头校准。
+#   - db_placement_store_open_total 起服即以 0 建出全部 result(metrics.go 的 register()),increase() 抓得到第一次。
+#     「出现一次就报」的两条(StoreRejected / StoreOpenErrors)第二支 `unless … offset 10m` 是序列还没有预置时留下的,写法同
+#     player-inbox-alerts.yaml 的 PlayerInboxAckAnomaly;它带 `> 0`,新 Pod 的 0 值序列不会误报,所以保留不动。
+#   - 打不开库时存盘回 Unavailable,scene 用同样的内容、同一个序号退避重试(0.5s 起,封顶 5s),进度只在 scene 内存里;
+#     认领回 Unavailable 时最多重试 30 秒,之后进场失败。scene 停机时还没落定的玩家,最后一次提交之后的进度会丢(日志 metric=player_store_shutdown_unsettled)。
+#   - 阈值都没有实测基线(这些取值所在的代码未压测),首轮演练后回头校准。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -52,62 +42,11 @@ metadata:
     role: alert-rules
 spec:
   groups:
-    - name: db-task.placement
+    - name: db.placement
       interval: 30s
       rules:
-        # 写任务所在 topic 的 zone ≠ 玩家的 home_zone(P-6):这笔写早于一次 home_zone 变化(合服 pin、映射回填),
-        # 游标按 topic 分、跨 topic 没有可比的顺序,放它落库就可能盖掉经新 topic 落下的更新版本,所以进死信、不落任何库。
-        # 设计 §13 第 2 步:上线后应恒为 0。
-        - alert: DbPlacementStaleTopic
-          expr: |
-            sum by (namespace, op) (increase(db_placement_guard_total{outcome="stale_topic"}[10m])) > 0
-            or
-            sum by (namespace, op) (
-              db_placement_guard_total{outcome="stale_topic"}
-              unless db_placement_guard_total{outcome="stale_topic"} offset 10m
-            ) > 0
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "{{ $labels.namespace }} 的 go/db 有存盘因 topic zone ≠ home_zone 进了死信(stale_topic)"
-            description: >-
-              过去 10 分钟约 {{ $value | printf "%.0f" }} 条写任务判为 stale_topic:写所在 topic 的 zone 不是玩家当前的 home_zone,
-              已进 kafka:dead:queue:{topic}(死信原因同名),**没有落任何库**,这名玩家这一次的进度只在死信原件里。
-              最常见的来源是 C++ 侧 home_zone 未知时回落到进程 zone 的存盘:先查 scene 日志 / 计数里的 home_zone_unknown;
-              其次是合服 pin、映射回填前后仍在途的旧写(合服窗口内偶发,窗口外不该出现)。按 go/db 日志 `PLACEMENT stale_topic` 行拿到
-              topic zone 与 home_zone。处置:保留现场,不要把死信条目搬回 ready(搬回去还是 stale_topic);上报负责人,按玩家逐个核对 SQL 与 Redis 里的在线数据。
-            runbook_url: docs/design/player-storage-placement.md
-
-        # Placement.Required=true 而玩家没有落点记录:写进死信(missing_required),读回失败(冷登录 / 预加载秒级失败,读不进死信,
-        # 除本条之外没有任何告警)。设计 §13 第 5 步的顺序被打破(login 的 PinOnCreate 没开全、pin-placement 没跑完就开了 Required),
-        # 或 §13 列出的禁止回退被违反。打开 login 的 NewPlayerSeed 之前本条必须就位(new-player-first-enter-no-cold-read.md §9)。
-        - alert: DbPlacementMissingRequired
-          expr: |
-            sum by (namespace, op) (increase(db_placement_guard_total{outcome="missing_required"}[10m])) > 0
-            or
-            sum by (namespace, op) (
-              db_placement_guard_total{outcome="missing_required"}
-              unless db_placement_guard_total{outcome="missing_required"} offset 10m
-            ) > 0
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "{{ $labels.namespace }} 的 go/db 遇到没有落点记录的玩家(missing_required,op={{ $labels.op }})"
-            description: >-
-              过去 10 分钟约 {{ $value | printf "%.0f" }} 条 {{ $labels.op }} 任务判为 missing_required:本 zone 的 go/db 开着
-              Placement.Required=true,而玩家没有 player:placement 记录。op=write = 存盘进死信(不落库);op=read = 冷登录 / 预加载立即失败。
-              开着 login 的 NewPlayerSeed 时新号首次进场不走预加载读,症状只剩存盘进死信这一半,玩家侧零报错。
-              原因按设计 §13 第 5 步核对:全部 login 是否已 Placement.PinOnCreate=true、各 zone 是否已跑完 merge-zone-pin-placement;
-              是否有 login 或 data_service 被回退到不支持 storage_id 的版本,或 PinOnCreate 被改回 false(都是 §13 明令禁止的)。
-              止血:先把全部 go/db 的 Placement.Required 改回 false 并滚动(这一步安全,关掉后按 home / 本 zone 选库,与 Required 之前相同),
-              再补齐落点、按上面的顺序重新打开;死信条目保留,不要搬回 ready。按 go/db 日志 `PLACEMENT missing_required` 行拿到玩家号。
-            runbook_url: docs/design/player-storage-placement.md
-
-        # 落点库名不在 db 的库名白名单里,也没被 Placement.AllowStoreFamilies 放行:写这个库的玩家存盘一直延后(不耗重试预算,
-        # 留在 Redis 重试队列里),读立即失败。错的多半是配置(白名单 / AllowStoreFamilies=false)或指错的库(login 的
-        # NewPlayerStorageId、搬库清单的目标库)。打开 NewPlayerSeed 之前本条必须就位。
+        # 落点库名不在 db 的库名白名单里,也没被 Placement.AllowStoreFamilies 放行:落到这个库的玩家存盘和认领都回 Unavailable。
+        # 错的多半是配置(白名单 / AllowStoreFamilies=false)或指错的库(login 的 NewPlayerStorageId、搬库清单的目标库)。
         - alert: DbPlacementStoreRejected
           expr: |
             sum by (namespace) (increase(db_placement_store_open_total{result="rejected"}[10m])) > 0
@@ -123,15 +62,14 @@ spec:
             summary: "{{ $labels.namespace }} 的 go/db 拒绝打开某个落点库(不在白名单、也不被 AllowStoreFamilies 放行)"
             description: >-
               过去 10 分钟约 {{ $value | printf "%.0f" }} 次按需打开落点库被拒(rejected,每个冷却期最多计一次)。落到这个库的玩家:
-              写一直延后、不耗重试预算(留在 kafka:retry:queue:{topic} 里,库能打开之前不要重启或清空这台 Redis);读立即失败。
+              存盘由 scene 退避重试,进度只在 scene 内存里(库能打开之前不要重启这些 scene,停机时没落定的玩家会丢掉最后一次提交之后的进度);认领重试 30 秒后进场失败。
               go/db 日志 `[placement] store rejected` 行给出 storage id 与当前白名单。核对:db 配置的库名白名单与 Placement.AllowStoreFamilies;
               login 的 NewPlayerStorageId 是否指向一个 go/db 打不开的库(设计 §13 禁止项);搬库清单的目标库是否预建并加进白名单
-              (docs/ops/merge-zone-runbook.md §14.5)。修好配置并滚动 db 之后,延后的写自动落库。
+              (docs/ops/merge-zone-runbook.md §14.5)。修好配置并滚动 db 之后,scene 的重试自动落库。
             runbook_url: docs/design/player-storage-placement.md
 
         # 落点库打开失败(Ping 不通、schema 闸不过、库不存在 —— go/db 按需打开只 Ping + 只读 schema 闸,从不建库)。
-        # 写任务按 store_open_failed 延后,由 db-task-retry-alerts.yaml 的 DbTaskDeferredByStore(critical)报;本条补上读侧
-        # (读立即失败,冷登录进不来)并给出落点库相关的处置。打开 NewPlayerSeed 之前本条必须就位。
+        # 存盘和认领都回 Unavailable,同时看 db_player_store_requests_total{result="unavailable"}。
         - alert: DbPlacementStoreOpenErrors
           expr: |
             sum by (namespace) (increase(db_placement_store_open_total{result="error"}[10m])) > 0
@@ -147,70 +85,7 @@ spec:
             summary: "{{ $labels.namespace }} 的 go/db 持续打不开某个落点库"
             description: >-
               过去 10 分钟约 {{ $value | printf "%.0f" }} 次按需打开落点库失败(error,每个冷却期最多计一次),已持续 5 分钟。
-              读这个库的冷登录立即失败;写按 store_open_failed 延后(同时看 DbTaskDeferredByStore)。go/db 日志 `[placement] store open failed`
+              落到这个库的玩家:存盘由 scene 退避重试,进度只在 scene 内存里;认领重试 30 秒后进场失败。go/db 日志 `[placement] store open failed`
               行给出 storage id 与错误:库不存在 = 没有预建(go/db 从不建库,按 docs/ops/merge-zone-runbook.md §14.5 预建);
               schema 闸不过 = 该库没跑迁移或版本落后;Ping 不通 = MySQL 实例 / 网络问题(落点库必须与 Database.Hosts 在同一实例或集群,设计 §13)。
             runbook_url: docs/design/player-storage-placement.md
-
-        # 写任务遇到搬库冻结(player:placement 记录带冻结标记):延后重试、不耗重试次数,每个重试周期计一次(只打 DEBUG,
-        # 冻结是否卡住只能看这个计数,设计 §14)。搬库(merge-zone-relocate)运行期间属预期;relocate 崩溃会把冻结留在 Redis,
-        # 这名玩家的存盘就无限延后。阈值没有实测基线:大批量 relocate 运行时间可能超过 30 分钟,以 relocate 清单进度为准。
-        - alert: DbPlacementFrozenStuck
-          expr: |
-            sum by (namespace) (rate(db_placement_guard_total{op="write", outcome="frozen_deferred"}[10m])) > 0
-          for: 30m
-          labels:
-            severity: warning
-          annotations:
-            summary: "{{ $labels.namespace }} 的 go/db 持续因搬库冻结延后存盘(frozen_deferred 超过 30 分钟)"
-            description: >-
-              每秒约 {{ $value | printf "%.2f" }} 次写任务遇到冻结中的落点记录,已持续 30 分钟。这些写不耗重试预算,留在 Redis 重试队列里,
-              不要重启或清空这台 Redis。先确认当前有没有 relocate 在跑:有且清单在推进 = 预期;没有,或进程已退出 = 冻结没解除。
-              按 docs/ops/merge-zone-runbook.md §14.2 用同一份清单原命令续跑(冻结 → 拷贝 → 切换按清单幂等推进),
-              或按 §14.3 用 merge-zone-relocate-abort 放弃并解冻(先确认那次 relocate 进程已经退出:两者会改写同一份清单)。
-              不要手工改 player:placement 去掉冻结标记。
-            runbook_url: docs/ops/merge-zone-runbook.md
-
-        # 落库后复核发现路由变了(落点记录出现 / 消失 / 换库换版本、无记录玩家的 home_zone 变了,或写在复核时看到冻结):
-        # 不标记游标、不写共享缓存,重试(设计 §6.3)。只该在搬库 / 合服窗口出现;窗口外持续出现说明有绕过工具改
-        # player:placement / player:zone 的写者,或 copy 模式合服在拷行。
-        - alert: DbPlacementRecheckMoved
-          expr: |
-            sum by (namespace, op) (rate(db_placement_guard_total{outcome="recheck_moved"}[15m])) > 0
-          for: 15m
-          labels:
-            severity: warning
-          annotations:
-            summary: "{{ $labels.namespace }} 的 go/db 落库后复核持续发现落点变化(recheck_moved,op={{ $labels.op }})"
-            description: >-
-              每秒约 {{ $value | printf "%.2f" }} 次 {{ $labels.op }} 任务在 SQL 之后复核时发现路由变了,已作废重试,已持续 15 分钟。
-              搬库(relocate)、合服(pin / copy)、映射回填的窗口内属预期;窗口外出现说明有不经 merge_zone 工具改 player:placement /
-              player:zone 的写者(手工 redis-cli、旧版工具),或复核与选库读到的不是同一个 mapping Redis。按 go/db 日志里 recheck 的
-              selected / now 两份快照比对,找到改映射的来源;同时看 DataServiceRoutePushConflicts(绕过发布脚本的写者)是否在响。
-            runbook_url: docs/design/player-storage-placement.md
-
-    # scene_manager 的合服围栏拒绝进场(设计 §8.2 / §12 A16)。zone_id 是 gate zone(玩家从哪个 zone 进来),不是目标 zone。
-    # 计数器序列第一次拒绝之前不存在;本条按持续速率判,漏掉第一次不影响。
-    - name: scene-manager.home-zone-merge
-      interval: 30s
-      rules:
-        # 合服窗口内(merge / unmerge 持有围栏期间)属预期;窗口外持续出现 = 围栏残留(合服工具崩溃没释放,或中止后围栏按设计
-        # 保留在本次 run_id 上)。阈值没有实测基线:45 分钟是为了盖过一次正常合服持有围栏的时段,首轮合服演练后按实测校准;
-        # 围栏缺省 TTL 2h30m 只是进程被 kill 时的兜底,不是正常清除手段。
-        - alert: SceneManagerHomeZoneMerging
-          expr: |
-            sum by (zone_id) (rate(scene_manager_enter_scene_rejected_total{reason="home_zone_merging"}[15m])) > 0
-          for: 45m
-          labels:
-            severity: warning
-          annotations:
-            summary: "gate zone {{ $labels.zone_id }} 持续有玩家因归属 zone 处于合服围栏内进不了场景(home_zone_merging)"
-            description: >-
-              每秒约 {{ $value | printf "%.2f" }} 次 EnterScene 因玩家的 home_zone 处于合服围栏内被拒,已持续 45 分钟(zone_id 是 gate zone)。
-              先确认是否有合服 / 撤销正在跑:在跑 = 预期。没有在跑时按映射来源处理(docs/ops/merge-zone-runbook.md §3「手动清理」):
-              -MergeZoneRouteSource redis:按 §3 核对 merge:in_progress:<zone> 的 run_id 与中止日志后再处理;
-              -MergeZoneRouteSource db(全局库为映射真源):真源是全局库 zone_merge_fence(shard 63),merge:in_progress:* 只是镜像,
-              不要手工 DEL 镜像、也不要手工 UPDATE zone_merge_fence(镜像由工具与对账 leader 按库维护);先只读查库,
-              中止的那次要续跑就原命令加 -MergeZoneTakeOverFence <run_id>(§15.4),要撤掉就 merge-zone-unmerge 同一份清单加同一参数(§10.1),
-              两者都不做就等库时钟过了 expires_at_ms 自然解封,期间两个 zone 保持封锁。
-            runbook_url: docs/ops/merge-zone-runbook.md

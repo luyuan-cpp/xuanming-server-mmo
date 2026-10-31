@@ -230,12 +230,22 @@ func (s *Store) Fetch(ctx context.Context, req *inboxpb.FetchPlayerInboxRequest)
 	}
 	for _, it := range items {
 		if it.GetDeliveryCount() >= constants.DeliveryWarnThreshold {
-			log.Errorf("[player_inbox] Item delivered %d times without ack player=%d domain=%d seq=%d msg_type=%d scene_node_id=%d: "+
-				"possible poison message; consider VoidItem(QUARANTINED)",
-				it.GetDeliveryCount(), playerID, domain, it.GetSeq(), it.GetMsgType(), req.GetSceneNodeId())
+			log.Errorf("[player_inbox] Item delivered %d times without ack player=%d domain=%d seq=%d msg_type=%d scene_node_id=%d: %s",
+				it.GetDeliveryCount(), playerID, domain, it.GetSeq(), it.GetMsgType(), req.GetSceneNodeId(), deliveryWarnAdvice(domain))
 		}
 	}
 	return resp, nil
+}
+
+// deliveryWarnAdvice 是「投递多次仍未确认」ERROR 的处置提示。Battle 结算域不能作废(Void 对该域一律回
+// kPlayerInboxItemStateConflict,见 Store.Void),Ack 对该域也只认 APPLIED(见 Ack):提示 VoidItem 只会把值班
+// 引进死路,所以该域指向 runbook 的「Battle 域条目卡住」小节;其余域仍按毒消息建议隔离。
+func deliveryWarnAdvice(domain inboxpb.PlayerInboxDomain) string {
+	if domain == inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT {
+		return "battle settlement stuck; VoidItem is refused for this domain and only an APPLIED ack settles it; " +
+			"follow docs/ops/player-inbox-runbook.md section 6.1 (battle settlement stuck), never edit SQL by hand"
+	}
+	return "possible poison message; consider VoidItem(QUARANTINED)"
 }
 
 // deliveredItem 把一行折成 Fetch 回包条目。directive != NONE 时**不带载荷**:作废路径不解码载荷

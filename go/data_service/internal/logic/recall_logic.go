@@ -185,7 +185,7 @@ func BatchRecallItems(ctx context.Context, svcCtx *svc.ServiceContext, req *Batc
 
 	// ── Execute recalls ──────────────────────────────────────────────────
 	//
-	// 真正的回收尚未实现:货币要走 SavePlayerData 扣减,道具要落一份持久化的
+	// 真正的回收尚未实现:货币要走存档扣减,道具要落一份持久化的
 	// pending-recall 意图并由 C++ scene 节点在 load/save 时消费,两者都还不存在
 	// (全仓没有任何 pending_recall 写入方,transaction_log 也没有 Go 侧生产者)。
 	//
@@ -330,76 +330,4 @@ func QueryTransactionLog(ctx context.Context, svcCtx *svc.ServiceContext, req *Q
 	}
 
 	return resp, nil
-}
-
-// ── CreateEventSnapshot ────────────────────────────────────────
-// Creates a snapshot triggered by a game event (recharge, large tx, etc.).
-// Maps SnapshotEventType to internal SnapshotType with descriptive reason.
-
-const (
-	snapshotTypeEvent uint32 = 5 // New type: EVENT (beyond existing 0-4)
-)
-
-type CreateEventSnapshotReq struct {
-	PlayerID    uint64
-	EventType   uint32
-	EventDetail string
-	Operator    string
-}
-
-type CreateEventSnapshotResp struct {
-	ErrorCode  uint32
-	SnapshotID uint64
-	CreatedAt  uint64
-}
-
-var eventTypeNames = map[uint32]string{
-	0: "large_transaction",
-	1: "recharge",
-	2: "pre_maintenance",
-	3: "level_up",
-	4: "first_login",
-}
-
-func CreateEventSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, req *CreateEventSnapshotReq) (*CreateEventSnapshotResp, error) {
-	if req == nil || req.PlayerID == 0 {
-		return &CreateEventSnapshotResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
-	}
-
-	eventName := eventTypeNames[req.EventType]
-	if eventName == "" {
-		eventName = fmt.Sprintf("event_%d", req.EventType)
-	}
-
-	reason := fmt.Sprintf("event_snapshot:%s", eventName)
-	if req.EventDetail != "" {
-		reason += " " + req.EventDetail
-	}
-
-	resp, err := CreatePlayerSnapshot(ctx, svcCtx, &CreateSnapshotReq{
-		PlayerID:     req.PlayerID,
-		SnapshotType: snapshotTypeEvent,
-		Reason:       reason,
-		Operator:     req.Operator,
-	})
-	if err != nil {
-		code := constants.ErrCodeSnapshotDBError
-		if resp != nil {
-			code = resp.ErrorCode
-		}
-		return &CreateEventSnapshotResp{ErrorCode: code}, err
-	}
-	if resp == nil {
-		return &CreateEventSnapshotResp{ErrorCode: constants.ErrCodeSnapshotDBError},
-			fmt.Errorf("create event snapshot returned nil response")
-	}
-
-	logx.Infof("[EventSnapshot] player=%d event=%s snapshot=%d",
-		req.PlayerID, eventName, resp.SnapshotID)
-
-	return &CreateEventSnapshotResp{
-		ErrorCode:  resp.ErrorCode,
-		SnapshotID: resp.SnapshotID,
-		CreatedAt:  resp.CreatedAt,
-	}, nil
 }

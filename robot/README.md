@@ -43,7 +43,6 @@ zone_id: 0
 |--------|--------|
 | `stress`(默认) | 大量机器人并发登录、进场景、按 AI 策略行动 |
 | `login-test` | 登录场景测试集:重连、顶号、超时等,跑完即退出 |
-| `data-stress` | 反复登录、游玩、下线,配合 `go/db` 的校验器验证数据一致性 |
 | `battle-smoke` | 两个机器人匹配并打完一场回合制战斗 |
 | `attribute-smoke`、`pet-smoke` | 属性加点、宠物 |
 | `equip-smoke`、`equip-forge-smoke` | 装备随机属性与穿脱;装备强化、宝石镶嵌与取下(两条冒烟各用各的账号,强化不可逆) |

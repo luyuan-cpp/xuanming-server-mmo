@@ -408,8 +408,10 @@ static void SetSecretLookupForTest(AssetOpSecretLookup fn);     // 第 8 部分 
 6. **Abort**:`Record(seq, applied=false, reason=0)` → RequestPersist → `REJECTED`,durable 取 IsDurable(通常为 false,Go 重查)。返回。
 7. **应用闸门**:`PlayerBattleSystem::IsInBattle(player)` → `RETRY + kAssetInBattle`;缺 `CurrencyComp` 或(Credit 带物品时)缺 `PlayerBagsComp` → `RETRY + kAssetPlayerNotHere`(仍在加载)。
 8. **包内容校验**(确定性,记账):失败 → `Record(REJECTED, kAssetInvalidBundle)` + RequestPersist → REJECTED。
-   - **Debit(v1)**:恰好 1 个 currency、0 个 item;`currency_type < kCurrencyMax`;`1 <= amount <= INT64_MAX`。
+   - **Debit(v1)**:恰好 1 个 currency、0 个 item;`1 <= amount <= INT64_MAX`。币种是否认识不在这一步判(见 8b)。
    - **Credit**:currencies + items 至少 1 条;currencies ≤4 条且类型互不相同、各自合法;items ≤16 条、config_id 互不相同、`count >= 1`、`ItemTableManager::Instance().FindByIdSilent(config_id).first != nullptr`。
+8b. **本二进制不认识的币种**(2026-10-23,混版本持久字段保护第 6 批):包里任一 `currency_type` 不满足 `IsKnownCurrencyType`(取值表唯一来源 `proto/common/base/currency_type.proto`) → 打 `[AssetOp] metric=persist_version_skew where=asset_currency` WARN,回 `RETRY + kFeatureUnavailable`(1006),**不记账、不存盘**。Go 各入口已按同源取值表拒绝写错的值,不认识的值只可能来自更新版本,记终态会让对侧白白退款或中止。位置:排在中止(第 6 步)与第 8 步的确定性包校验之后(截止时刻照常能关门,与版本无关的坏包仍先记终态,包内重复的不认识币种也照旧判非法),排在任何改动之前(`ApplyDebit` / `ApplyCredit` 从此见不到不认识的币种)。Go 侧对 RETRY 统一退避重投:有截止的流到点中止,截止为 0 的入账一直 PENDING 到 scene 升级;这类行不要人工终结(4.38)。
+   - 同一批还给**按数量扣出**加了版本错位(`混版本持久字段保护设计 §4.4`):只有算上带更新版本字段的物品才够时回 `RETRY + kFeatureUnavailable`、不记账(`where=asset_debit`),排在按 guid、宝宝这些确定性校验之后;连算上它们都不够才记终态 `REJECTED(kAssetInvalidBundle)`。
 9. **Debit 应用**:
    - `!CurrencySystem::CanAfford(player, type, amount)` → `Record(REJECTED, kAssetCurrencyInsufficient)` → RequestPersist → REJECTED。
    - 否则 `err = CurrencySystem::DeductCurrency(player, type, amount, txType, correlation_id)`。
@@ -1542,6 +1544,8 @@ func ClassifyPersisted(l *componentpb.PlayerAssetOpLedgerComp, s assetpb.AssetOp
 ## 4.38 卡死行处置
 
 **会卡住的行**:UNKNOWN(配置不一致、纪元过期、跳号、鉴权失败)每 60s 重排;离线且未见的行一直 PENDING;玩家从不上线。前者修好配置会自动恢复;其余要人工路径。
+
+**版本错位的行不走人工路径**(2026-10-30,混版本持久字段保护第 6 批):`last_reason = 1006`(kFeatureUnavailable)的 PENDING 行是 scene 遇到本版本解释不了的币种或物品字段(4.9 第 8b 步与按数量扣出)。首选出口是把 scene 升级走完,行会自动终结。必须人工终结时:先停掉对应服务的重投循环,或等这一行的租约过期,确认没有在途 RPC(入账没有 Abort 栅栏,在途 RPC 随后落地会出现 Go 判拒绝、scene 已入账的分叉);并预告之后要抬纪元(人工终结的 seq 在流上留下永久的洞,累计超过 511 判 kJumpTooFar)。聚宝斋托管卡在这里时,卖家可以撤单收口(托管阶段可撤)。
 
 **assetop 提供**(可选接口):
 ```go

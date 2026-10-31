@@ -1,8 +1,8 @@
 package main
 
-// 2026-09-21 死锁审计 #17 的纯单测(不连库):RC 会话 DSN、锁冲突判定、有界重试、点更新 SQL 形状、
-// 围栏保留文案。执行计划与真实交错(整区 UPDATE 与 DisbandGuild 反序成环)在 integration_test.go 的
-// TestIT_ZonePointUpdatesArePrimaryKeyPointLookups / TestIT_MigrateGuildZone_ConcurrentDisbandDoesNotDeadlock。
+// 2026-09-21 死锁审计 #17 的纯单测(不连库):RC 会话 DSN、锁冲突判定、有界重试、点更新 SQL 形状。
+// 执行计划与真实交错(整区 UPDATE 与 DisbandGuild 反序成环)在 integration_test.go 的
+// TestIT_ZonePointUpdatesArePrimaryKeyPointLookups / TestIT_SQLDomainMigrateGuildZone_ConcurrentDisbandDoesNotDeadlock。
 //
 // 2026-09-28(player-storage-placement.md §12 A15)起每个 id 一个显式短事务:SELECT … FOR UPDATE →
 // 带 zone 复核的 UPDATE → COMMIT。本文件末尾用内存替身(fakeZoneTable)钉住事务的口径:升序、一个 id
@@ -17,12 +17,13 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"shared/authoritysql"
 )
 
 func TestReadCommittedDSN_SetsIsolationAndKeepsOtherParams(t *testing.T) {
 	// 与集成测试 / main.go 默认值同形:密码带 #,带 parseTime / loc / multiStatements / charset。
 	in := "root:Mmorpg#2026db@tcp(127.0.0.1:3306)/merge_zone_it_db?charset=utf8mb4&parseTime=true&loc=Local&multiStatements=true"
-	out, err := readCommittedDSN(in)
+	out, err := readCommittedDSN(in, authoritysql.BackendTiDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func TestReadCommittedDSN_SetsIsolationAndKeepsOtherParams(t *testing.T) {
 		t.Errorf("existing params lost: parseTime=%v multiStatements=%v loc=%v", cfg.ParseTime, cfg.MultiStatements, cfg.Loc)
 	}
 	// 幂等:再过一遍结果不变。
-	again, err := readCommittedDSN(out)
+	again, err := readCommittedDSN(out, authoritysql.BackendTiDB)
 	if err != nil || again != out {
 		t.Errorf("not idempotent: %q → %q (err=%v)", out, again, err)
 	}
@@ -50,7 +51,7 @@ func TestReadCommittedDSN_OverridesExplicitIsolationAndDropsLegacyName(t *testin
 	// 运维显式写了 RR,或写了旧名 tx_isolation:一律改成 RC,旧名删掉 —— 两个名字同时在时驱动按 map
 	// 顺序拼进同一条 SET,最后生效哪个不确定。
 	in := "u:p@tcp(db:3306)/mmorpg?transaction_isolation=%27REPEATABLE-READ%27&tx_isolation=%27SERIALIZABLE%27"
-	out, err := readCommittedDSN(in)
+	out, err := readCommittedDSN(in, authoritysql.BackendTiDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +68,7 @@ func TestReadCommittedDSN_OverridesExplicitIsolationAndDropsLegacyName(t *testin
 }
 
 func TestReadCommittedDSN_RejectsMalformedDSN(t *testing.T) {
-	if _, err := readCommittedDSN("not a dsn"); err == nil {
+	if _, err := readCommittedDSN("not a dsn", authoritysql.BackendTiDB); err == nil {
 		t.Fatal("a malformed -mysql-dsn must be refused before opening anything")
 	}
 }
@@ -398,62 +399,5 @@ func TestRewriteZoneRows_HardErrorStopsAndReportsProgress(t *testing.T) {
 	}
 	if len(rec.waits) != 0 {
 		t.Errorf("a non-lock error must not be retried, slept %v", rec.waits)
-	}
-}
-
-func TestFenceKeptAbortMessage_KeepsFenceAndSaysHowToClearIt(t *testing.T) {
-	// 合服步骤 3 / 3b 与撤销 3' / 3b' 的写失败、缓存失效失败都走 log.Fatal,defer 的 fence.release 不执行。
-	// 两条路径共有的契约:文案带本次 run_id、两把键名、mapping Redis 位置与 DEL 指引,否则运维重跑撞上 SETNX 被拒。
-	// 各自的契约:保留围栏的理由与重跑语义按路径写 —— 「续跑按清单走、不重扫玩家」只对合服成立,
-	// 撤销没有步骤进度,重跑靠每一步幂等。
-	const runID = "901-902-20260921T000000Z-abcd1234"
-	for _, c := range []struct {
-		name    string
-		op      fencedOp
-		cause   string
-		want    []string
-		notWant []string
-	}{
-		{
-			name:    "merge",
-			op:      fencedOpMerge,
-			cause:   "guild MySQL:改写 zone_id 中途失败,步骤 guild_mysql 未标记完成:boom",
-			want:    []string{"guild MySQL:改写 zone_id 中途失败", "续跑按清单走、不重扫玩家", "合服读清单续跑", "源区残留对象"},
-			notWant: []string{"撤销"},
-		},
-		{
-			name:    "unmerge",
-			op:      fencedOpUnmerge,
-			cause:   "restore guild zone_id:已改回 3 行,但 guild:v2 缓存失效失败:boom",
-			want:    []string{"restore guild zone_id:已改回 3 行", "半撤销", "每一步都按对象当前值过滤、幂等"},
-			notWant: []string{"不重扫玩家", "读清单续跑", "源区残留对象"},
-		},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			msg := fenceKeptAbortMessage(c.cause, c.op, 901, 902, runID, "10.0.0.5:6379", 0)
-			shared := []string{
-				"LEFT IN PLACE",
-				"仍归 run_id=" + runID,
-				"(10.0.0.5:6379 db=0)上 GET merge:in_progress:901,核对其 run_id 是 " + runID,
-				"DEL merge:in_progress:901 merge:in_progress:902",
-				"another merge is already fencing zone", // 与 acquireMergeFence 的拒绝文案一致
-				"SHOW ENGINE INNODB STATUS",
-			}
-			for _, want := range append(shared, c.want...) {
-				if !strings.Contains(msg, want) {
-					t.Errorf("abort message is missing %q:\n%s", want, msg)
-				}
-			}
-			for _, bad := range c.notWant {
-				if strings.Contains(msg, bad) {
-					t.Errorf("abort message for %s must not say %q (wrong path's wording):\n%s", c.name, bad, msg)
-				}
-			}
-			// 顺序也是契约:先 GET 核对,再 DEL,最后重跑。
-			get, del, rerun := strings.Index(msg, "GET "), strings.Index(msg, "DEL "), strings.Index(msg, "立即用原命令重跑")
-			if get < 0 || del < 0 || rerun < 0 || !(get < del && del < rerun) {
-				t.Errorf("resume steps out of order (GET=%d DEL=%d re-run=%d):\n%s", get, del, rerun, msg)
-			}
-		})
 	}
 }

@@ -38,7 +38,4 @@ func (s *ServiceContext) initHomeZoneResolver() {
 	pl := config.AppConfig.Placement
 	logx.Infof("[placement] pin_on_create=%v new_player_storage_id=%d (0 = not pinned)",
 		pl.PinOnCreate, pl.StorageIDForNewPlayer(config.AppConfig.Node.ZoneId))
-	// 新号种子打开时,§13 第 3 条违例的症状从「新号预加载秒级失败」变成「进得去、存盘全进死信」,更隐蔽
-	// (docs/design/new-player-first-enter-no-cold-read.md §9)。与 pin_on_create 打在一起,方便核对。
-	logx.Infof("[new-player-seed] enabled=%v (pin_on_create=%v)", config.AppConfig.NewPlayerSeed.Enabled, pl.PinOnCreate)
 }

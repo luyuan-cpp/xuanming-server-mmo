@@ -713,7 +713,7 @@ func TestMalformedPartyIsEvictedAsAWhole(t *testing.T) {
 // 不等 matcher 哪天扫到:人数不够凑满的队列 matcher 不扫,票据会留到切磋打完之后。
 func TestChallengeBattleStartLeavesQueue(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 5}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 5})
 	port := &fakePartyPort{}
 	svcCtx.SetPartyTeam(port)
 	stubGatherRPCs(t, nil)

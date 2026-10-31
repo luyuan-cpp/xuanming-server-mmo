@@ -45,7 +45,7 @@ try {
         Assert-Match -Text $roles.runtime -Pattern 'writer_lifecycle_receipt' -Because 'normal强读原REGISTER核部署/原语'
         Assert-True -Condition ($runtimeStatements -notmatch '(?i)ALL PRIVILEGES|CREATE|ALTER|GRANT OPTION|ON\s+[^;]+\.\*') -Because 'runtime没有DDL/全schema/注册能力'
         Assert-Match -Text $roles.operator -Pattern 'schema_fixture' -Because 'fresh schema独立principal'
-        Assert-Match -Text $roles.operator -Pattern 'CREATE,INSERT,UPDATE ON `authority_fixture`\.`id_segment`' -Because 'DS fresh启动实际号段seed需要具名表I/U，不能漏配或放宽到业务全库'
+        Assert-True -Condition ($roles.operator -notmatch 'id_segment') -Because '发号器不用 SQL,schema 账号不该再有 id_segment 的写权限'
         Assert-Match -Text $roles.operator -Pattern 'CREATE,INSERT,UPDATE ON `domain_fixture`\.`schema_migrations`' -Because '迁移账本只给具名表写权限'
         Assert-True -Condition ($roles.operator -notmatch 'guild_player_state') -Because '没有具名guild schema时不额外授哨兵写权限'
         $plan.schemaDatabases=@('authority_fixture','domain_fixture','mmorpg_guild')
@@ -185,8 +185,10 @@ try {
             $tool.arguments=@($override);$message='';try{$null=Get-NormalFiniteToolArguments -Tool $tool -RuntimeConfig $config}catch{$message=$_.Exception.Message}
             Assert-Match -Text $message -Pattern '不能覆盖' -Because 'argv不准改固定配置/模式或自带P6原件'
         }
-        $tool.kind='unknown';$tool.arguments=@();$message='';try{$null=Get-NormalFiniteToolArguments -Tool $tool -RuntimeConfig $config}catch{$message=$_.Exception.Message}
-        Assert-Match -Text $message -Pattern '具名工具' -Because '有限入口不是任意命令执行器'
+        foreach($kind in @('unknown','debug_import')){
+            $tool.kind=$kind;$tool.arguments=@();$message='';try{$null=Get-NormalFiniteToolArguments -Tool $tool -RuntimeConfig $config}catch{$message=$_.Exception.Message}
+            Assert-Match -Text $message -Pattern '具名工具' -Because '有限入口不是任意命令执行器'
+        }
     }
 
 

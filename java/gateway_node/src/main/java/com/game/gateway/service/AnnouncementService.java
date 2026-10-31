@@ -25,6 +25,8 @@ public class AnnouncementService {
     }
 
     public Announcement create(Announcement announcement) {
+        // 请求体里的 id 不算数:带 id 的 save() 走 merge,会按主键改掉已有的公告,或者按客户端给的号插一行。
+        announcement.setId(null);
         return announcementRepo.save(announcement);
     }
 

@@ -328,7 +328,10 @@
         "MatchBattleNotWatchable": 16018,
         "MatchSpectateOffline": 16019,
         "MatchNotInScene": 16020,
-        "MatchSpectateFull": 16021
+        "MatchSpectateFull": 16021,
+        "MatchProbeRequired": 16022,
+        "MatchNoRegionWithinLatency": 16023,
+        "MatchSpectateTicketInvalid": 16024
       }
     },
     "attribute_error": {

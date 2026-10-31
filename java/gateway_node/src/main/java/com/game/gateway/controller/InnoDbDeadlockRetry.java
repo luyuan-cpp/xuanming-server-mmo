@@ -28,7 +28,7 @@ import java.util.function.Supplier;
  * 相同</b> —— 别把其中一个的理由安给另一个。下面按 2026-09-29 的真库探针(MySQL 26.7.0,全局 RR,
  * {@code innodb_deadlock_detect=ON},编排与本包的 {@code MySqlLockOrderFixture} 同形,每格重复 5 次)逐条写明:
  * <ul>
- *   <li>{@link AdminWhitelistController#add} 写的 {@code zone_whitelist}:自增代理主键 + 业务唯一索引
+ *   <li>{@link AdminWhitelistController#add} 写的 {@code zone_whitelist}:按时间递增的代理主键(探针时是自增)+ 业务唯一索引
  *       {@code uk_zone_account},争抢的键是<b>二级唯一索引</b>,新行的唯一键项必然排在删除标记项<b>之后</b>
  *       —— 这一路 ODKU <b>0/5</b> 成环;</li>
  *   <li>{@link AdminZoneController#create} 写的 {@code zone_config}:它走的是<b>另一条</b>安全路径,与「新项排在

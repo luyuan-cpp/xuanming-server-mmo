@@ -1,5 +1,7 @@
 # go/db 重试只交给分区属主（④）与 Kafka 源入队的落盘确认（WAITAOF）
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),go/db 的 Kafka 消费、重试队列和 WAITAOF 都已删除。本文只作历史保留,不再描述现行行为。
+
 > **状态**：已落码，未编译、未测试，待 Codex 验证（截至 2026-10-17 工作区，含 R7 语义复核 godb 区域的 9 条修复）。告警表达式没有经过 `promtool` 校验，也没有在真实 Prometheus 上跑过。
 > **范围**：存盘管线 S1。包括 ④ 的 (a)「重试只在原始分区的属主进程执行」、(c)「go/db 副本数 ≤ PartitionCnt 的部署门禁」，以及三类 Kafka 源入队点的 WAITAOF 组提交，外加回滚工具 `go/db/cmd/retry_requeue`。B0（调 SubShardCount）和 ④B2（双消费在线换代）不在本批。TiDB 决策 D5 的修订块已于 2026-10-17 写进 `global-data-layer-tidb-decision.md`。
 > **执行清单**：Codex 与负责人逐项打勾用 [上线待做](../ops/godb-pipeline-launch-todo.md) §9；回滚到 S1 之前的镜像用 [发布清单](../ops/release-checklist.md) §4「go/db 回滚到 S1(重试只交给分区属主)之前的版本」。两者的设计依据都是本文。

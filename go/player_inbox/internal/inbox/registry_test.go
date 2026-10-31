@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"player_inbox/internal/constants"
+	"shared/currencytype"
 
 	battlepb "proto/battle"
 	base "proto/common/base"
@@ -402,6 +403,12 @@ func TestValidatePayload(t *testing.T) {
 	}{
 		{"封锁:空载荷(金币 = 0)合法", gmBlock, all, nil, 0},
 		{"封锁:钻石", gmBlock, all, marshal(t, &inboxpb.GmCurrencyGainPayload{CurrencyType: 1}), 0},
+		// 币种按 proto 同源取值表(shared/currencytype)校验:写错的值在入箱时拒绝,
+		// scene 才能把不认识的币种判成版本错位,而不是对一个笔误停用整个处置域。
+		{"封锁:取值表最大值", gmBlock, all, marshal(t, &inboxpb.GmCurrencyGainPayload{CurrencyType: currencytype.BindDiamond}), 0},
+		{"封锁:取值表之外的币种", gmBlock, all, marshal(t, &inboxpb.GmCurrencyGainPayload{CurrencyType: currencyOutsideTable()}), constants.ErrPayloadInvalid},
+		{"解封:取值表之外的币种", gmUnblock, all, marshal(t, &inboxpb.GmCurrencyGainPayload{CurrencyType: currencyOutsideTable()}), constants.ErrPayloadInvalid},
+		{"挂欠款:取值表之外的币种", gmDebt, all, marshal(t, withDebt(func(p *inboxpb.GmCurrencyDebtPayload) { p.CurrencyType = currencyOutsideTable() })), constants.ErrPayloadInvalid},
 		{"挂欠款:合法", gmDebt, all, marshal(t, validDebt()), 0},
 		{"未知类型", inboxpb.PlayerInboxMessageType(99), all, nil, constants.ErrUnknownType},
 		{"UNSPECIFIED", inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_UNSPECIFIED, all, nil, constants.ErrUnknownType},
@@ -428,6 +435,11 @@ func TestValidatePayload(t *testing.T) {
 			}
 		})
 	}
+}
+
+// currencyOutsideTable 是取值表之后的第一个值:取值从 0 连续,所以它恰好不在表内(由 currencytype 的测试守住)。
+func currencyOutsideTable() uint32 {
+	return uint32(len(base.CurrencyType_name))
 }
 
 func withDebt(mutate func(*inboxpb.GmCurrencyDebtPayload)) *inboxpb.GmCurrencyDebtPayload {

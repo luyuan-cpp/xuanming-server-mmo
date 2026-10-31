@@ -22,9 +22,6 @@ func TestEtcYamlIdSegmentBlock(t *testing.T) {
 	if c.IdSegment.StepOrDefault() != 100 {
 		t.Fatalf("IdSegment.Step = %d, want 100", c.IdSegment.Step)
 	}
-	if c.IdSegment.FallbackToSnowflake {
-		t.Fatal("IdSegment.FallbackToSnowflake must default to false (plan §6.4)")
-	}
 	if c.DataServiceRpc.Etcd.Key != "dataservice.rpc" {
 		t.Fatalf("DataServiceRpc.Etcd.Key = %q, want dataservice.rpc (data_service registers under that key)", c.DataServiceRpc.Etcd.Key)
 	}

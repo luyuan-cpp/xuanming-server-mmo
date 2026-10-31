@@ -6,6 +6,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -590,6 +591,125 @@ func TestLeaveScene_OwnerGoneFromRegistryDeletes(t *testing.T) {
 	assert.Equal(t, "1", leaveCasValue(t, mr, fmt.Sprintf(InstancePlayerCountKey, sceneID)))
 	assert.Empty(t, calls())
 	assert.Equal(t, before+1, leaveReleaseCount(t, "owner_dead"))
+}
+
+type fakePlayerStoreHolders struct {
+	err     error
+	players []uint64
+	epochs  []uint64
+}
+
+func (f *fakePlayerStoreHolders) ReleaseDeadPlayerStoreHolder(_ context.Context, player, ownerEpoch uint64) error {
+	f.players = append(f.players, player)
+	f.epochs = append(f.epochs, ownerEpoch)
+	return f.err
+}
+
+// 判死的持有者可能只是暂停了,先在写权行上把它挡住,再删 location。
+func TestLeaveScene_OwnerDeadReleasesPlayerStoreBeforeDeleting(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtx(t, "")
+	installLeaveReleaseRecorder(t)
+	holders := &fakePlayerStoreHolders{}
+	sc.PlayerStoreHolders = holders
+	const (
+		playerID = uint64(8331)
+		sceneID  = uint64(9431)
+	)
+	leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
+	markKnownNodesSyncedForTest(t)
+	mr.Del(nodeLoadKey(testZoneId))
+
+	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
+	require.NoError(t, err)
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
+	assert.Equal(t, []uint64{playerID}, holders.players)
+	assert.Equal(t, []uint64{3}, holders.epochs)
+}
+
+// location 和 owner_epoch 键不一致:读到 location 之后,另一路 EnterScene 已经接手、铸了新代次。
+// 释放只能用 location 这一代,用键里的新值会把刚接手的新持有者围掉。
+func TestLeaveScene_OwnerDeadReleasesTheLocationEpochNotTheKey(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtx(t, "")
+	installLeaveReleaseRecorder(t)
+	holders := &fakePlayerStoreHolders{}
+	sc.PlayerStoreHolders = holders
+	const (
+		playerID = uint64(8334)
+		sceneID  = uint64(9434)
+	)
+	leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
+	require.NoError(t, mr.Set(ownerepoch.OwnerEpochKey(playerID), "5"))
+	markKnownNodesSyncedForTest(t)
+	mr.Del(nodeLoadKey(testZoneId))
+
+	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{3}, holders.epochs)
+}
+
+// location 没记代次:不释放,也不挡清理。下一次认领照样抬代次把旧持有者挡住。
+func TestLeaveScene_OwnerDeadWithoutLocationEpochSkipsPlayerStoreRelease(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtx(t, "")
+	installLeaveReleaseRecorder(t)
+	holders := &fakePlayerStoreHolders{}
+	sc.PlayerStoreHolders = holders
+	const (
+		playerID = uint64(8335)
+		sceneID  = uint64(9435)
+	)
+	leaveReleaseSeed(t, mr, playerID, sceneID, "10", 0)
+	require.NoError(t, mr.Set(ownerepoch.OwnerEpochKey(playerID), "3"))
+	markKnownNodesSyncedForTest(t)
+	mr.Del(nodeLoadKey(testZoneId))
+
+	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
+	require.NoError(t, err)
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
+	assert.Empty(t, holders.players)
+}
+
+// 释放失败就保留 location 重试:不释放的话 released 一直是 0,待放弃的资产操作永远卡着。
+func TestLeaveScene_OwnerDeadKeepsLocationWhenPlayerStoreReleaseFails(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtx(t, "")
+	installLeaveReleaseRecorder(t)
+	sc.PlayerStoreHolders = &fakePlayerStoreHolders{err: errors.New("data_service down")}
+	const (
+		playerID = uint64(8332)
+		sceneID  = uint64(9432)
+	)
+	raw := leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
+	markKnownNodesSyncedForTest(t)
+	mr.Del(nodeLoadKey(testZoneId))
+
+	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
+	require.Error(t, err)
+	assert.Equal(t, raw, leaveCasValue(t, mr, getPlayerLocationKey(playerID)))
+}
+
+// 其余能删 location 的结论不调释放:持有者自己已经释放过(标记),或根本没有持有者。
+func TestLeaveScene_MarkerReleaseDoesNotCallPlayerStore(t *testing.T) {
+	sc, mr := newTestSvcCtx(t, "")
+	installLeaveReleaseRecorder(t)
+	holders := &fakePlayerStoreHolders{}
+	sc.PlayerStoreHolders = holders
+	const (
+		playerID = uint64(8333)
+		sceneID  = uint64(9433)
+	)
+	leaveReleaseSeed(t, mr, playerID, sceneID, "10", 3)
+	require.NoError(t, mr.Set(ownerepoch.HandoffKey(playerID), "3:1700000000000"))
+
+	_, err := NewLeaveSceneLogic(context.Background(), sc).LeaveScene(leaveReleaseRequest(playerID, sceneID))
+	require.NoError(t, err)
+	assert.Empty(t, holders.players)
 }
 
 // 第二轮审计 r2-sm#1:释放判定计数(scene_manager_leave_holder_release_total)与 forced 的 ERROR 只记真正删掉的那一次。

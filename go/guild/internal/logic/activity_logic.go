@@ -4,8 +4,7 @@ package logic
 // 同道历练(B6b)的邀请房间、确认开战与结算在 activity_trial.go,后台循环在 trial_background.go;
 // 它们共用本文件的 ActivityDeps、activityPrelude、precheckActivity 与视图装配。
 // 设计 docs/design/guild-phase2/06-activities.md §6.6–§6.15;以下订正效力高于 06 正文(06 写于死锁修复之前):
-//   - 90-consistency Y-01:身份 = callerOf + operatorGuild;写 RPC 不查归属 zone(合服闸门在事务内按锁住的
-//     guild.zone_id 判,part2 §2 第 10 条);读 RPC GetGuildActivities 保留 clientZone + visibleIn;
+//   - 90-consistency Y-01:身份 = callerOf + operatorGuild;写 RPC 不查归属 zone;读 RPC GetGuildActivities 保留 clientZone + visibleIn;
 //     事务回"不是成员 / 帮会不存在"时经 mapWriteErr 调 VerifyPlayerGuildID 自愈映射。
 //   - Y-02:依赖经函数式 Option WithActivities 一次装配;ActivityDeps 不带 Notifier(推送走 l.notify),发号器用 IDMinter.Mint。
 //   - Y-03 / Y-04:不改 push.go(activity_changed 标签已在);提交后缓存失效由 repo 走 invalidateAfterCommit(opActivity)。
@@ -180,7 +179,7 @@ type activityActor struct {
 //
 //  1. 身份只认会话(callerOf);没有会话 → gRPC PermissionDenied(协议里没有 player_id,内部调用拿不出可信操作者)。
 //  2. readPath(GetGuildActivities)查归属 zone,帮会不在本区按"未入帮"答复(Y-01 保留 clientZone + visibleIn);
-//     写 RPC **不查**:S2 的入帮事务已保证"是成员 ⇒ 归属区一致",合服窗口由事务内闸门兜底,省下 1.5s 预算。
+//     写 RPC **不查**:S2 的入帮事务已保证"是成员 ⇒ 归属区一致",省下 1.5s 预算。
 //  3. operatorGuild(缓存读到 0 时以 MySQL 复核)→ 帮会快照 → 快照里有本人。
 //  4. 映射指着已不存在的帮、或快照里没有本人时,用 ResolvePlayerGuild 以 MySQL 复核并绕过缓存直读
 //     (理由同 economyCaller:只纠映射治不了"映射对、快照旧"那一种,刚入帮的人会整整一个 TTL 点不了灯)。
@@ -422,9 +421,6 @@ func (l *GuildLogic) activityTxInput(a activityActor, pre activityPrecheck, rw a
 		JoinMinHours: pre.rule.GetActivityJoinMinHours(),
 		NowMs:        nowMs,
 		Reward:       rw.op,
-		// 合服闸门在事务内按锁住的 guild.zone_id 判(90 part2 §2 第 10 条),与经济、解散共用同一个实现:
-		// 读不到闸门按封锁处理(fail-closed)。
-		Fence: l.economyFence,
 	}
 }
 
@@ -454,7 +450,7 @@ func (l *GuildLogic) activityTxTip(ctx context.Context, a activityActor, pre act
 			a.guild.GuildID, a.playerID, pre.row.GetId(), err)
 		return nil, status.Error(codes.Internal, "guild activity reward would overflow")
 	default:
-		// 帮会不存在 / 不是成员(mapWriteErr 内先以 VerifyPlayerGuildID 自愈映射,Y-01)、合服闸门(kGuildZoneMerging)、
+		// 帮会不存在 / 不是成员(mapWriteErr 内先以 VerifyPlayerGuildID 自愈映射,Y-01)、
 		// 写冲突(kGuildBusyRetry,D6)与其余故障,统一交给管理类写 RPC 的映射,不另写一份。
 		return l.mapWriteErr(ctx, a.playerID, a.guild.GuildID, a.guild.GuildID, err)
 	}
@@ -736,8 +732,6 @@ func activityResultOf(tip *base.TipInfoMessage, err error) string {
 		return activityResultThreshold
 	case constants.ErrAssetPending:
 		return activityResultAssetPending
-	case constants.ErrZoneMerging:
-		return activityResultMerging
 	case constants.ErrNotInGuild, constants.ErrGuildNotFound:
 		return activityResultNotInGuild
 	case constants.ErrHomeZoneUnknown:
@@ -761,7 +755,7 @@ func activityResultOf(tip *base.TipInfoMessage, err error) string {
 
 // ── RPC:查询(06 §6.8)──────────────────────────────────────
 
-// GetGuildActivities:活动页。每种类型至多一条、按 type 升序;不查合服闸门(只读)。
+// GetGuildActivities:活动页。每种类型至多一条、按 type 升序。
 func (l *GuildLogic) GetGuildActivities(ctx context.Context, req *pb.GetGuildActivitiesRequest) (*pb.GetGuildActivitiesResponse, error) {
 	resp, err := l.getGuildActivities(ctx, req)
 	guildActivityActionTotal.Inc(activityTypeAll, activityActionView, activityResultOf(resp.GetErrorMessage(), err))

@@ -7,10 +7,12 @@
 //   1) 账本里某个域的游标在哪、怎么按 seq 升序记一条结局(最近结局环 ≤ 32,超出挤掉最旧的);
 //   2) 一条投递是新条目,还是重复投递 —— 重复投递时能不能回放原结局(IB-9 三项核对);
 //      以及分类与指令合起来,这一条接下来是执行、跳过、回放、报 UNKNOWN 还是停用(判定顺序见 PlanItem);
+//      战斗结算域里同一局换了新 seq 的重投能否按最近结局环认出来(有界缓解,HasRecentAppliedBattleSettlement);
 //   3) 一条已定的结局此刻算不算已落盘(含 UNKNOWN 的专门规则);
 //   4) 从存档读出来的账本是否自洽(损坏就 fail-closed,由调用方挂标签停用该玩家的收件箱);
 //   5) 一次落地算不算"新落地";
-//   6) 退避与在线兜底的时长(抖动由调用方以参数传入,本文件不取随机数),以及卡住时周期性告警的节拍。
+//   6) 退避(含只读 SQL 确认探测的退避)与在线兜底的时长(抖动由调用方以参数传入,本文件不取随机数),
+//      以及卡住时周期性告警的节拍。
 //
 // 线程模型:纯函数,状态全在入参里,由调用方(scene loop 线程)保证独占访问。
 // 单测:cpp/tests/currency_test/player_inbox_rules_test.cpp。
@@ -38,6 +40,8 @@ namespace player_inbox_rules
 	constexpr uint32_t kTickCheckBudget = 200;           // 单个 tick 最多发起的检查数
 	constexpr uint64_t kResaveIntervalMs = 5000;         // 等落盘期间补请求存盘的间隔
 	constexpr uint64_t kPersistThrottleMs = 500;         // 记账后请求存盘的节流(照 kAssetOpResaveMinIntervalMs)
+	// 快照与本实体对不上(RoleAdmissionSystem::IsSnapshotCommitted 回 false)时隔多久再看。
+	constexpr uint64_t kSnapshotRecheckMs = 1000;
 	constexpr uint32_t kJitterPermilleMax = 1000;        // 抖动参数取值 [0, 1000]
 	constexpr uint32_t kPeriodicJitterPercent = 20;      // 在线兜底 ±20%
 	// 卡住时周期性告警的节拍(评审 L13、F3)。仓库现有的 scene 日志告警一律写成
@@ -104,6 +108,17 @@ namespace player_inbox_rules
 	DeliveryClass ClassifyDelivery(const PlayerInboxDomainCursor *cursor, uint64_t seq, uint64_t requestId,
 								   uint32_t msgType, PlayerInboxDecision *replayed);
 
+	// 战斗结算域的同局重投识别(C-1,2026-10-30)。ClassifyDelivery 只按 seq 去重:Match 首投的回包丢了(它记的
+	// inbox_seq 仍是 0)、之后收件箱库又回档时,Match 重新 Enqueue 拿到的是一个新 seq,这一局在这里被判 kNew,
+	// 奖励就会再发一次。本函数回答:本域最近结局环里是否已有 request_id 相同(战斗结算的 request_id = battle_id)、
+	// msg_type 为 BATTLE_SETTLEMENT、结局 APPLIED 的条目。命中 = 同一局换了新 seq 重投,调用方不调执行器,
+	// 直接给新 seq 记 APPLIED 并照常确认。
+	// **有界缓解**:只看最近结局环(≤ kRecentCapacity 条),早已挤出环的旧局换新 seq 重投仍识别不出来。设计上刻意
+	// 不另造永久 battle-id 集合(docs/design/cross-zone-matchmaking.md「不另造永久 battle-id 集合」),
+	// 不要为了补这个上界在这里加持久索引。
+	// cursor 为 nullptr、requestId 为 0(没有身份可比)时返回 false。纯函数,不改任何状态。
+	bool HasRecentAppliedBattleSettlement(const PlayerInboxDomainCursor *cursor, uint64_t requestId);
+
 	// 一条投递接下来怎么处理(设计 §7.6 第 3 步、§7.9,评审 M1)。最后一项固定为 kCount(AGENTS §11.2)。
 	enum class ItemAction : uint8_t
 	{
@@ -156,6 +171,8 @@ namespace player_inbox_rules
 	// 第 failStreak 次连续失败后的退避:1s、2s、4s … 封顶 60s,再乘 [0.8, 1.2] 的抖动,
 	// 结果夹在 [kBackoffMinMs, kBackoffMaxMs]。failStreak == 0 按 1 处理。jitterPermille 取 [0, 1000]。
 	uint64_t BackoffMs(uint32_t failStreak, uint32_t jitterPermille);
+
+	// 第 streak 次连续「只读 SQL 确认没证明提交」之后到下一次探测的等待:BackoffMs(streak) 再封顶到
 
 	// 在线有界兜底的间隔:minutes 分钟 ±20%。minutes == 0 = 关闭,返回 0。
 	uint64_t PeriodicDelayMs(uint32_t minutes, uint32_t jitterPermille);

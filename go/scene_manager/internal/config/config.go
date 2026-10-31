@@ -35,6 +35,13 @@ type Config struct {
 	// EnterScene登录撞上未释放持有者时仍沿同一协议请求原持有者释放。
 	LeaveSceneHolderReleaseWaitSeconds int64 `json:",default=600"`
 
+	// UnqualifiedHolderRevokeGraceSeconds 是无资格持有者撤销的宽限(秒,docs/design/location-release-binding.md §17.4 第 4 条):
+	// 请过持有节点释放之后,从这份 location 的等待计时起点(Redis TIME)算起过了这么久,且资格原件证明没有任何进程在当前代登记过,
+	// scene_manager 才推进 owner_epoch 并删 location(logic/unqualified_holder_revoke.go)。宽限只让在途的入场登记(15s 截止)
+	// 与交接冻结(70s 硬上限)先走完,正确性不依赖它。0 / 不写 = 120;写了必须在 (85, 600] 内,否则拒启
+	// (ValidateUnqualifiedHolderRevokeGrace)。没有关闭开关:关掉等于让 no_qualification 的玩家永久进不了场。
+	UnqualifiedHolderRevokeGraceSeconds int64 `json:",optional"`
+
 	// DataServiceRpc 是 data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc)。
 	// 同一个客户端查home zone与只读LookupAccountRole；后者必须携独立scene_manager密钥。
 	// 配置缺失启动拒绝；AllowGateZoneAsHomeZone只保留已明确未映射的单区测试语义，不能绕角色修订核验。
@@ -527,6 +534,37 @@ func (c *Config) EffectiveLeaveSceneHolderReleaseWait() (wait time.Duration, ena
 		seconds = defaultLeaveSceneHolderReleaseWaitSeconds
 	}
 	return time.Duration(seconds) * time.Second, true
+}
+
+// UnqualifiedHolderRevokeGraceSeconds 的缺省值与取值范围(docs/design/location-release-binding.md §17.4)。
+const (
+	DefaultUnqualifiedHolderRevokeGraceSeconds int64 = 120
+	// MinUnqualifiedHolderRevokeGraceSeconds 是下界(不含):C++ 入场登记截止 15s(role_admission_system.cpp registerDeadline)
+	// + 交接冻结硬上限 70s(travel_freeze_cap.h kFreezeCap)。logic 包的跨语言用例钉住这两个 C++ 常量。
+	MinUnqualifiedHolderRevokeGraceSeconds int64 = 85
+	// MaxUnqualifiedHolderRevokeGraceSeconds 是上界(含):等待计时键的 TTL = LeaveScene 诊断预算(≥ 1s)+ 600s 余量
+	// (logic leaveReleaseWaitKeyMargin),宽限不超过 600s,计时键就不会在宽限走完之前过期、从头计时。
+	MaxUnqualifiedHolderRevokeGraceSeconds int64 = 600
+)
+
+// ValidateUnqualifiedHolderRevokeGrace 只拒绝写出来的非法值(没写 = 缺省,合法),错误文本英文并点名键。
+func (c *Config) ValidateUnqualifiedHolderRevokeGrace() error {
+	seconds := c.UnqualifiedHolderRevokeGraceSeconds
+	if seconds != 0 && (seconds <= MinUnqualifiedHolderRevokeGraceSeconds || seconds > MaxUnqualifiedHolderRevokeGraceSeconds) {
+		return fmt.Errorf("UnqualifiedHolderRevokeGraceSeconds must be in (%d, %d] (0 or unset = %d), got %d",
+			MinUnqualifiedHolderRevokeGraceSeconds, MaxUnqualifiedHolderRevokeGraceSeconds, DefaultUnqualifiedHolderRevokeGraceSeconds, seconds)
+	}
+	return nil
+}
+
+// EffectiveUnqualifiedHolderRevokeGrace 返回生效的宽限。启动时已过 ValidateUnqualifiedHolderRevokeGrace;没经过校验的值
+// (单测直接构造 Config)越界时同样取缺省值,不会比下界更短。
+func (c *Config) EffectiveUnqualifiedHolderRevokeGrace() time.Duration {
+	seconds := c.UnqualifiedHolderRevokeGraceSeconds
+	if seconds <= MinUnqualifiedHolderRevokeGraceSeconds || seconds > MaxUnqualifiedHolderRevokeGraceSeconds {
+		seconds = DefaultUnqualifiedHolderRevokeGraceSeconds
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // defaultKafkaWriteTimeoutSeconds 是 KafkaWriteTimeoutSeconds 配成 ≤ 0 时的取值,与该字段的 default= 标签一致。

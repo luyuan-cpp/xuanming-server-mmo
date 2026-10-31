@@ -473,9 +473,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		// 收到错误应答后 epoch 未变 → 解冻并回 tip(player_lifecycle.cpp ResolveTravelOutcome),玩家
 		// 不受损。放在换手门之前:它是纯只读的前置条件,与标记就没就绪无关,没理由让一个注定过不去的
 		// 请求先拿一次 18。查到的值本身用不上(第二条腿自己再查),这里只要「有映射」。
-		// 未映射 / 映射为 0 / 查询失败都回 ErrHomeZoneUnavailable;归属 zone 正在合服(home_zone_merging)
-		// 回 ErrHomeZoneMerging —— 放行的话第二条腿必被 3b 以同一理由拒,而玩家那时已被源 scene 销毁。
-		// 只读,一个字节都不改。
+		// 未映射 / 映射为 0 / 查询失败都回 ErrHomeZoneUnavailable。只读,一个字节都不改。
 		// 只送连接的重定向(!leavingZone,含 login 首登的 RedirectOnEnter)不动归属,不查。
 		// 有意**不看** in.GateId(与 3b「没有 GateId 就不查」不同):3b 查的是要写进路由事件的值,没有
 		// GateId 就没有消费者;这里查的是放行的前提 —— 等待落点无论有没有 GateId 都会写
@@ -595,7 +593,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		currentZoneID != 0 && targetZoneId != 0 && currentZoneID == targetZoneId
 	crossNodeHandoff := currentLoc != nil && !awaitingPlacement && !samePlacement && !samePhysicalNode
 	// 换手门与 3b 归属查询都排在下面的同节点 owner_epoch 补种之前 —— 补种是本路径上对
-	// location / owner_epoch 的**第一次写**,而 3b 的合服围栏拒绝(ErrHomeZoneMerging)必须发生在
+	// location / owner_epoch 的**第一次写**,而 3b 的归属拒绝(ErrHomeZoneUnavailable)必须发生在
 	// 任何这类写之前(player-storage-placement.md §8.2)。换手门只读(checkHandoffCommitted 只 GET
 	// 标记),且与补种互斥(crossNodeHandoff 要求 !samePhysicalNode,补种要求 samePhysicalNode),
 	// 挪到补种前面不改变任何一条请求的结局;放行凭据先记在 handoffGrant,guard 建好之后再套上。
@@ -613,17 +611,21 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			// 回之前请持有节点按会话结束释放,否则要等旧会话清理到期才有人请它(location-release-binding.md §12)。
 			// 只看「标记未就绪」的 18(无标记 / 非当前代);读标记失败(ErrRedis)不请。是否派发由
 			// requestHolderReleaseForLogin 判定:只替最新的登录请求,scene 自发的请求一律不请。
-			if resp.ErrorCode == constants.ErrHandoffPending {
-				l.requestHolderReleaseForLogin(in, currentLoc, currentZoneID, observedEpoch, identityVerdict)
+			if resp.ErrorCode == constants.ErrHandoffPending &&
+				l.requestHolderReleaseForLogin(in, currentLoc, currentZoneID, observedEpoch, identityVerdict) {
+				// 请过释放之后:持有节点在当前代从未登记成功(拿不出资格)、且已过宽限时,由本服务带围栏撤销
+				// (location-release-binding.md §17,unqualified_holder_revoke.go)。撤销与否都照回 18;撤销之后的重登看到
+				// 没有 location,按无持有者落点铸造。
+				l.revokeUnqualifiedHolderOnLogin(in, currentLoc, currentLocRaw, currentLocTag, currentZoneID, observedEpoch)
 			}
 			return resp, nil
 		}
 		handoffGrant = grant
 	}
 
-	// 3b. 归属 zone:随 RoutePlayerEvent 下发,scene 节点据此选存盘 topic(CZ-3)。
+	// 3b. 归属 zone:随 RoutePlayerEvent 下发,scene 节点用它做入场归属核对(存盘不看它,落点由认领返回)。
 	//     只有真的要发路由事件时才查;查不到(data_service 不可用)按可重试拒绝,
-	//     不能带着 home_zone_id=0 把人派下去让节点落进程 zone 库。
+	//     不能带着 home_zone_id=0 把人派下去。
 	//     「未映射 = 首登,按 gate zone」只对 gate zone 就是玩家所在 zone 的落点成立:没有任何位置
 	//     记录的首次落点,或已有同 zone 位置记录的换图 / 重连(未回填的存量号一直这么存盘)。
 	//     正在消费「等待落点」= 跨 zone 传送的第二条腿,gate zone 是目标 zone,未映射必须拒绝
@@ -632,17 +634,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//     归属。「被采用」= 没在上面被 playerLocationOwnerGone 过滤掉;等待落点所在 zone 已整 zone
 	//     下线(注册表里没有任何节点)时 currentLoc 已是 nil,这里按首次落点回落 gate zone(该旁路只对未映射且已有
 	//     等待落点的玩家可达,即旧版本遗留 / 映射丢失)。
-	//     归属 zone 正在合服(home_zone_merging)时 resolveHomeZone 回 ErrHomeZoneMerging:同区落点、
-	//     同落点重连、第二条腿一律拒。走到这里之前本请求只动过去重占位与场景预占(下面成对释放),
-	//     location / owner_epoch 一个字节都没写。
-	//     已知缺口(player-storage-placement.md §8.2「不覆盖的入口」):上面「拒绝先于任何写」只对带
-	//     GateId 的请求成立。没有 GateId 的请求不查归属,也就不过合服围栏,但下面的第 6 步
+	//     走到这里之前本请求只动过去重占位与场景预占(下面成对释放),location / owner_epoch 一个字节都没写。
+	//     上面「拒绝先于任何写」只对带 GateId 的请求成立:没有 GateId 的请求不查归属,下面的第 6 步
 	//     (铸 epoch + CAS 写 location)、第 6b 步(扣旧场景人数)与第 7b 步(跨节点时派发 ReleasePlayer)
-	//     照常执行。当前能接受,前提是所有生产调用方都带 GateId(login entergamelogic.go 与 C++ 侧
-	//     全部 EnterSceneRequest 构造点)。新增不带 GateId 的调用方(疏散 / GM / 机器人)之前,必须先把
-	//     围栏从这个 GateId 条件里拆出来:不带 GateId 时也调 resolveHomeZone、只采用它的拒绝结果,
-	//     并放在同节点补种与第 6 步之前。TestEnterScene_HomeZoneNotQueriedWithoutGateRoute 钉住的
-	//     「不带 GateId 不发归属 RPC」届时要一并改。
+	//     照常执行。TestEnterScene_HomeZoneNotQueriedWithoutGateRoute 钉住「不带 GateId 不发归属 RPC」。
 	var homeZoneID uint32
 	if in.GateId != "" {
 		unmappedPolicy := homeZoneUnmappedFallsBackToGateZone
@@ -659,18 +654,14 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		homeZoneID = hz
 	}
 
-	// guard.mint:持有者换了才铸造。同节点换图持有者没换 —— 铸了,持有节点要等路由
-	// 事件绕一圈才知道新值,窗口内它的周期 / 退出存盘会被 C++ CAS 拒掉,合法持有者
-	// 被当成废黜销毁(踢人 + 回档)。跨节点交接:过了标记门才铸;dev 旁路下无标记
-	// 放行时不铸,保持旧的竞态语义,让旧节点 ReleasePlayer 的释放存盘照常落地
-	// (铸了它必被拒,每次跨节点换图确定性回档)。
+	// guard.mint:持有者换了才铸造。同节点换图持有者没换,不需要新代次。跨节点交接:过了标记门才铸;
+	// dev 旁路下无标记放行时不铸,保持旧的竞态语义,让旧节点 ReleasePlayer 的释放存盘照常落地
+	// (铸了之后新节点认领就把写权行的代次抬上去,旧节点的释放存盘必被拒,每次跨节点换图确定性回档)。
 	//
-	// 例外:同物理节点但观察到的 epoch 为 0(存量玩家,从未铸造过)也铸造(§12.6.9)。上面「铸了
-	// 会被 CAS 拒」的前提是持有节点手里有非 0 的缓存值;缓存为 0 时 C++ 存盘走的是**不带 guard**
-	// 的旧 Save(player_lifecycle.cpp SavePlayerToRedis 的 owner_epoch 段,计 owner_epoch_unknown),
-	// Redis 里铸出的新值拒不了它;DBTask 带 0,db 按 legacy_zero 放行。路由到达后 EnterScene 第 0.5 步
-	// 把缓存抬到新值(0 不覆盖、取 max),此后存盘带 guard 且与 Redis 相等,DBTask 从 0 升到新值被 db
-	// 判 advance。epoch 为 0 的实体不会有在途交接(BeginTravelHandoff 在 epoch 为 0 时直接放弃,
+	// 例外:同物理节点但观察到的 epoch 为 0(从未铸造过)也铸造(§12.6.9):go/db 拒绝代次为 0 的存盘和认领,
+	// 持有节点手里必须有非 0 的值。路由到达后 EnterScene 第 0.5 步把缓存抬到新值(0 不覆盖、取 max),
+	// 下一笔存盘带新值;持有者是自己,go/db 放行并抬代次(docs/design/player-save-direct-commit.md §4)。
+	// epoch 为 0 的实体不会有在途交接(BeginTravelHandoff 在 epoch 为 0 时直接放弃,
 	// requestedAtMs 不置位),DiscardStaleHandoffEntity 不会因更新的一代把它销毁。
 	// 不这样做,「存量 location + 一直落回同节点」的玩家永远停在 0:帮会 B4c 让资产改动类 RPC 在
 	// epoch == 0 时回 RETRY(fail-closed),这类玩家在换一次节点之前资产操作会一直 RETRY ——
@@ -681,20 +672,20 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 着 N ≠ 0、只是键单独丢了(2026-10-12 起本地 compose 也改为 noeviction,K8s 一直是 noeviction,正常
 	// 不会被单独淘汰;但手工 DEL 或共享库被误配成 allkeys-* 淘汰型(该键无 TTL,volatile-* 不会淘汰它)时
 	// 读数相同,所以这条防御保留)。此时铸出 1,持有节点
-	// 按 max 保留 N,下一次带 guard 的存盘拿 "1" 比 N 被拒,合法持有者被当废黜销毁(踢人 + 回档)。
-	// 所以这种情形不铸造,并先按 location 记的 N 把键补种回去(SET NX,与 C++ kSaveIfGuardLuaScript
-	// 缺键补种同一语义),本次落点以 N 为观察值走不铸造的 CAS:location 继续记 N,路由事件带 N。
+	// 按 max 保留 N,这个键却停在 1,下一任持有者拿 1 认领被 go/db 判 STALE_OWNER,玩家进不了场。
+	// 所以这种情形不铸造,并先按 location 记的 N 把键补种回去(SET NX),
+	// 本次落点以 N 为观察值走不铸造的 CAS:location 继续记 N,路由事件带 N。
 	// 只放过不补种是不够的:不铸造的落点把 location 的 epoch 写成观察值,0 会把 N 抹掉,之后在持有
-	// 节点存盘补种之前的下一次同节点换图就与存量玩家无从区分、照样铸造。
+	// 节点存盘之前的下一次同节点换图就与从未铸造过的玩家无从区分、照样铸造。
 	// 补种没成功 = 观察之后这把键已存在:要么被并发请求写过(观察值 0 已过期),要么键值本身就是 "0"
 	// 而 location 记着 N(按现有写入方 —— 铸造 / 不铸造 CAS / 回滚 Lua 都成对写 location 与键 ——
 	// 构造不出来,但拿不准外部有没有单独写 "0" 的)。两种都直接回 19、不走落点:后一种若照常走不铸造的
 	// CAS,"0" 比 "0" 会通过,location 里的 N 被抹成 0,正是上面要防的情形。前一种重试即收口;后一种
-	// 会持续 19,直到持有节点带 guard 的存盘 / 干净登出把两边对齐 —— fail-closed 优先于抹掉 N。
+	// 会持续 19,直到持有节点干净登出把两边对齐 —— fail-closed 优先于抹掉 N。
 	//
 	// 已知残余(同节点 epoch 0 铸造):这次铸造不带 handoff 标记,luaMintEpochAndSetLocation 没有重放
 	// 识别(只对标记铸造做,见 owner_epoch.go)。go-redis 在首发已执行、读超时后重发 EVAL 时,重发的
-	// CAS 看到 epoch 已是 1 → 本次回 19:第 6 步退回目标场景预占人数、6b 不退旧场景人数、路由不发,
+	// CAS 看到 epoch 已是铸出值 → 本次回 19:第 6 步退回目标场景预占人数、6b 不退旧场景人数、路由不发,
 	// 两边人数各漂一次,location 短暂指向目标场景而持有节点仍在旧场景。频率 = 一次 Redis 读超时;
 	// 客户端重试同落点重连 / 再次换图即收口。改动前同节点只走幂等的不铸造 CAS,这是本条新开的入口。
 	// 同落点重连(samePlacement)在第 4 步提前返回、不走落点,仍原样下发观察值(存量玩家即 0,
@@ -867,7 +858,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			// 回滚:location 退回本次之前的值,epoch 只进不退(GO-2,cross-zone-scene-travel.md §12.8)。
 			// 铸造过的再 INCR 一格(bump);凭标记铸造的以「所凭标记原样还在」为前提,并写回执、转写标记,
 			// 源 scene 凭回执采纳新值;标记已被目标节点消费 / 源端取走时保留本次落点(marker_gone)。
-			// 同节点 epoch 0 的铸造走 keep(sameNodeZeroMint:epoch 保留铸出的 1,只退 location):路由的目标
+			// 同节点 epoch 0 的铸造走 keep(sameNodeZeroMint:epoch 保留铸出值,只退 location):路由的目标
 			// 就是持有节点本身。没投递到 —— 持有节点缓存仍是 0,存盘不带 guard,1 拒不了它;kafka-go 报错但
 			// broker 其实已投递 —— 缓存已是 1,再 INCR 会让它之后带 guard 的存盘被拒、实体被当废黜销毁。
 			// 回显只在 bump 回滚确认生效时非 0,只供源端日志,不是采纳凭证。
@@ -910,11 +901,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 开发用的原因(派发推后一个 Kafka 写时延,这个窗口相应略增,只影响 dev)。
 	// 同步等待也堵不住：C++ ReleasePlayer RPC 只保证 HandleExitGameNode **入队**了存盘，不保证已落盘。
 	//
-	// 注意:db 写管道的 kafka key / applied-seq 只约束 db 服务自己消费到的
-	// 分表写入顺序；它既不等待旧 Scene 的 PlayerAllData Redis 写完成，也不会
-	// 重写新 Scene 实际加载的同一份 key，因此**不是**交接屏障或本窗口的兜底。
-	// 真正的兜底是第 6 步铸造的 owner_epoch:旧节点迟到的写会被 C++ 存盘 Lua 与
-	// db 消费者按 epoch 拒掉。
+	// 兜底是第 6 步铸造的 owner_epoch:旧节点迟到的写在 player_store 的写权行上按 epoch 拒掉。
 	if currentLoc != nil && currentLoc.NodeId != "" && !samePhysicalNode {
 		relStart := time.Now()
 		releaseDispatcher(l.svcCtx, l.Logger, currentZoneID,
@@ -955,8 +942,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 //
 // AllowUnsafeCrossNodeHandoff 是开发旁路:没有标记也放行,并且**不铸造** epoch,
 // 只做「epoch 没被并发推进才写 location」的 CAS。旁路走的是旧的竞态语义 —— 改派、
-// 路由提交之后异步通知旧节点 ReleasePlayer(第 7b 步);此时若铸造,旧节点的释放存盘必然晚于 INCR、
-// 被 C++ 的 CAS 拒掉,每次跨节点换图都确定性丢掉最后一段进度,比旁路本来的
+// 路由提交之后异步通知旧节点 ReleasePlayer(第 7b 步);此时若铸造,旧节点的释放存盘可能晚于新节点认领、
+// 被 go/db 拒掉,每次跨节点换图都可能丢掉最后一段进度,比旁路本来的
 // 「可能读到旧快照」更糟。不铸造 = 新旧节点短暂同持一个 epoch,这正是 unsafe 的
 // 含义,只许 dev 用。先看标记、后看旁路:旁路开着但源确实写了标记时照样走安全路径。
 func (l *EnterSceneLogic) requireHandoffCommitted(in *scene_manager.EnterSceneRequest, currentLoc *scene_manager.PlayerLocation,
@@ -1045,9 +1032,9 @@ func (l *EnterSceneLogic) releaseTakenOverSceneCount(loc *scene_manager.PlayerLo
 //   - 再入屏障(scene-owner-reentry-barrier.md §3.2):节点从 etcd 消失后 C++ 老进程还有
 //     kDrainBudget(15s)的紧急疏散在存盘,屏障(默认 20s)盖过这段窗口;屏障未到本函数
 //     返回 false,请求照旧被换手门以可重试的 18 暂拒。
-//   - owner_epoch CAS(§3.3):放行后的落点一定铸造新 epoch(此时 currentLoc 已被当作
-//     不存在,走首次落点的 mint=true),僵尸手里的旧 epoch 之后每一次存盘都被 C++ 的
-//     Lua 原子拒绝并自毁,DBTask 由 db 的 applied-epoch 守卫拒绝。屏障靠时间、epoch
+//   - 写权行(docs/design/player-save-direct-commit.md §4):放行后的落点一定铸造新 epoch(此时 currentLoc
+//     已被当作不存在,走首次落点的 mint=true),新持有者认领时把代次抬上去,僵尸手里的旧 epoch
+//     之后每一次存盘都被 go/db 判 STALE_OWNER 并自毁。屏障靠时间、epoch
 //     不靠时间,两层同时在位才敢放行 —— 这正是阶段 1 落完之后才补这条的原因。
 //
 // 代价(崩溃固有,与本函数无关):死节点没来得及落盘的那段进度丢失,新节点读到的是上一次
@@ -1110,7 +1097,7 @@ func (l *EnterSceneLogic) playerLocationOwnerDead(loc *scene_manager.PlayerLocat
 //     **不能**只看负载集 scene_nodes:zone:{z}:load 为空:负载键丢失 / 被淘汰时
 //     ZCARD 读作 0、ZSCORE 为空、也没有 death_at,活着的持有节点会被判死 —— 玩家
 //     从别区 gate 登录时陈旧位置被过滤,在 gate zone 直接落点并铸造新 epoch,持有
-//     节点之后的存盘全被 owner CAS 拒绝,未落盘的进度回档(第二轮审计 r2-sm#3 的
+//     节点之后的存盘全被 go/db 拒绝,未落盘的进度回档(第二轮审计 r2-sm#3 的
 //     同源缺陷,2026-10-19 起;LeaveScene 一侧见 judgeHolderRelease)。
 //  2. 本副本亲眼看到 loc 的节点从注册表消失还不到一个屏障时长 → 不放行
 //     (localGoneBarrierBlocks,与 playerLocationOwnerDead 同一口径,不依赖 leader 写的 death_at)。

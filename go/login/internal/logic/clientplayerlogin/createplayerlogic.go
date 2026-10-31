@@ -183,20 +183,6 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		return resp, nil
 	}
 
-	// 6b'. 新铸 id 的只读探测(docs/design/new-player-first-enter-no-cold-read.md §10 P7,负责人 2026-10-15 定):
-	// PlayerAllData 父键或 player:{id}:owner_epoch 已在 = 这个 id 上已有既有状态(id 复用),探测出错 = 探不清,
-	// 两者都拒绝建角(fail-closed)。排在 6c 之前:拒绝发生在任何持久写之前,只烧掉这一个 id,名字与 player:zone
-	// 都不登记,无需补偿。与种子开关无关,每次建角都探。它只是预检,不是提交点:开种子时 6d' 的种子脚本对「探测 → 种子」
-	// 这一段做写时原子复核;关种子(默认)时探测之后、开种子时种子之后,到第 7 步围栏写都没有复核(已知残余窗口,
-	// 接受理由见设计 §13.2 的 2026-10-16 补注;6c 名字登记的 FailedPrecondition 是与时序无关的另一道拦截)。
-	stageDone = observeStage(createPlayerStageSeconds, createStageIDProbe)
-	tip = l.probeMintedID(account, newPlayerId)
-	stageDone()
-	if tip != nil {
-		resp.ErrorMessage = tip
-		return resp, nil
-	}
-
 	// 6c. 登记名字(全服唯一,真源是 data_service 的 player_name 表),**fail-closed**:
 	// 登记不成功就不建角。顺序固定为 mint → 探测(6b')→ 名字 → player:zone → SQL 账号目录:
 	// 名字排在 player:zone 之前,是因为撞名是玩家侧的常态失败,而 player:zone 映射是
@@ -282,28 +268,12 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	if abandonAfterDeadline("account directory SQL commit") {
 		return resp, nil
 	}
-	// 保留原 ID 复用的提交前拒绝；这里只读，不在 SQL 成功前写可信缓存。
-	if config.AppConfig.NewPlayerSeed.Enabled {
-		if tip = l.checkInitialSeedState(account, newPlayerId); tip != nil {
-			l.releaseName(account, newPlayerId, name, false)
-			resp.ErrorMessage = tip
-			return resp, nil
-		}
-	}
 	stageDone = observeStage(createPlayerStageSeconds, createStageAccountWrite)
-	initial, tip := l.persistAccountRoleWithInitial(account, createLock, newPlayer, userAccount)
+	tip = l.persistAccountRole(account, createLock, newPlayer, userAccount)
 	stageDone()
 	if tip != nil {
 		resp.ErrorMessage = tip
 		return resp, nil
-	}
-
-	// 已提交的目录不能因可选缓存优化失败再释放名字或假装建角失败。
-	// 仅本次严格新建的真实 SQL 回执可缓存；未知提交/旧目录重放没有这种回执。
-	if config.AppConfig.NewPlayerSeed.Enabled && initial != nil && l.ctx.Err() == nil {
-		stageDone = observeStage(createPlayerStageSeconds, createStageSeed)
-		l.cacheCommittedNewPlayer(account, initial)
-		stageDone()
 	}
 
 	// 7b. Write reverse mapping: player_id → account (for rollback orphan cleanup)
@@ -607,30 +577,25 @@ func recordNameOrphan(account string, playerID uint64, name string, err error) {
 // persistAccountRole 把单个原角色提交到全局目录；SQL 账号锁裁决上限与唯一归属。
 // 已失去本次入口锁时不再发新写；SQL 提交结果未知时只强读原 player_id 恢复。
 func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locker.Lock, role *login_proto_common.AccountSimplePlayer, directory *login_data_base.UserAccounts) *login_proto_common.TipInfoMessage {
-	_, tip := l.persistAccountRoleWithInitial(account, createLock, role, directory)
-	return tip
-}
-
-func (l *CreatePlayerLogic) persistAccountRoleWithInitial(account string, createLock *locker.Lock, role *login_proto_common.AccountSimplePlayer, directory *login_data_base.UserAccounts) (*login_data_base.PlayerAllData, *login_proto_common.TipInfoMessage) {
 	if role == nil || l.svcCtx.AccountDirectory == nil {
-		return nil, loginTip(table.LoginError_kLoginDataSerializeFailed)
+		return loginTip(table.LoginError_kLoginDataSerializeFailed)
 	}
 	playerID, name := role.PlayerId, role.Name
 	if token, err := l.svcCtx.RedisClient.Get(l.ctx, createLock.Key).Result(); err != nil || token != createLock.Value {
 		l.releaseName(account, playerID, name, false)
-		return nil, loginTip(table.LoginError_kLoginInProgress)
+		return loginTip(table.LoginError_kLoginInProgress)
 	}
 	created, err := accountdirectory.CreateWithInitialCommit(l.ctx, l.svcCtx.AccountDirectory, account, role)
 	if err == nil && created != nil && created.Players != nil {
 		directory.SimplePlayers = created.Players
-		return created.InitialPlayerData, nil
+		return nil
 	}
 	if errors.Is(err, accountdirectory.ErrFull) || errors.Is(err, accountdirectory.ErrConflict) || errors.Is(err, accountdirectory.ErrInvalid) {
 		l.releaseName(account, playerID, name, false)
 		if errors.Is(err, accountdirectory.ErrFull) {
-			return nil, loginTip(table.LoginError_kLoginAccountPlayerFull)
+			return loginTip(table.LoginError_kLoginAccountPlayerFull)
 		}
-		return nil, loginTip(table.LoginError_kLoginDataSerializeFailed)
+		return loginTip(table.LoginError_kLoginDataSerializeFailed)
 	}
 	// 超时可能发生在提交后；仅原账号、原 player_id、原载荷一致才恢复成功。
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(l.ctx), accountBlobReadBackTimeout)
@@ -639,12 +604,12 @@ func (l *CreatePlayerLogic) persistAccountRoleWithInitial(account string, create
 	if readErr == nil && stored.Account == account && proto.Equal(stored.Role, role) {
 		if roles, err := l.svcCtx.AccountDirectory.Read(ctx, account, false); err == nil {
 			directory.SimplePlayers = roles
-			return nil, nil
+			return nil
 		}
 	}
 	// RPC 仍可能在远端提交；缺行也不能据此释放还在途的名字登记。
 	recordNameOrphan(account, playerID, name, fmt.Errorf("SQL目录提交未知: write=%v read=%v", err, readErr))
-	return nil, loginTip(table.LoginError_kLoginDataSerializeFailed)
+	return loginTip(table.LoginError_kLoginDataSerializeFailed)
 }
 
 // registerHomeZone 把新角色登记进 data_service 的 player:zone 映射(见调用点 6d 的理由)。

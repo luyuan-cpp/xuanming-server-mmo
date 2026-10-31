@@ -199,7 +199,7 @@ func newActivityFixture(t *testing.T, g data.GuildData, deps ActivityDeps, homeZ
 	if deps.Now == nil {
 		deps.Now = activityTestClock
 	}
-	l := NewGuildLogic(repo, nil, NewOnlineStatusResolver(srdb), nil, &fakeHomeZones{zone: homeZone}, WithActivities(deps))
+	l := NewGuildLogic(repo, nil, NewOnlineStatusResolver(srdb), &fakeHomeZones{zone: homeZone}, WithActivities(deps))
 	return &activityFixture{l: l, sessions: sessions}
 }
 
@@ -269,12 +269,12 @@ func activityRPCs() []managementCall {
 // 依赖落在 GuildLogic.activities 字段上(90 Y-02 的函数式 Option),不经任何包级状态。
 func TestWithActivities(t *testing.T) {
 	t.Run("Repo 为 nil 不装配", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithActivities(ActivityDeps{SyncBudget: time.Second}))
+		l := NewGuildLogic(nil, nil, nil, nil, WithActivities(ActivityDeps{SyncBudget: time.Second}))
 
 		assert.Nil(t, l.activities)
 	})
 	t.Run("零值字段补默认", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithActivities(ActivityDeps{Repo: &data.ActivityRepo{}}))
+		l := NewGuildLogic(nil, nil, nil, nil, WithActivities(ActivityDeps{Repo: &data.ActivityRepo{}}))
 
 		d := l.activities
 		require.NotNil(t, d)
@@ -285,7 +285,7 @@ func TestWithActivities(t *testing.T) {
 		assert.Nil(t, d.OpIDs)
 	})
 	t.Run("显式值原样保留", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithActivities(ActivityDeps{
+		l := NewGuildLogic(nil, nil, nil, nil, WithActivities(ActivityDeps{
 			Repo: &data.ActivityRepo{}, Now: activityTestClock, SyncBudget: time.Second, Lease: 30 * time.Second,
 		}))
 
@@ -300,7 +300,7 @@ func TestWithActivities(t *testing.T) {
 // TestActivityRPCsRefuseWithoutDeps:未接线时五个 RPC 回明确的 tip(kGuildActivityNotOpen),不回 gRPC 错误、
 // 更不 nil 解引用崩掉整个进程。repo 为 nil:判定若排在任何仓储读之后,这里会当场 panic。
 func TestActivityRPCsRefuseWithoutDeps(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 
 	for _, tc := range activityRPCs() {
 		t.Run(tc.name, func(t *testing.T) {
@@ -315,7 +315,7 @@ func TestActivityRPCsRefuseWithoutDeps(t *testing.T) {
 // TestActivityNoSessionPermissionDenied(06 §6.40):五个 RPC 无会话 → PermissionDenied。
 // 请求体里没有 player_id,内部调用拿不出可信身份;repo 为 nil,越过这一步就会 panic。
 func TestActivityNoSessionPermissionDenied(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 	l.activities = &ActivityDeps{Now: activityTestClock}
 
 	for _, tc := range activityRPCs() {
@@ -334,7 +334,7 @@ func TestTrialStubsB6a(t *testing.T) {
 	seedGuild(t, mr, activityGuild(1, 42, 43), 0)
 	seedMembership(t, mr, 42, 9)
 	seedMembership(t, mr, 43, 9)
-	l := NewGuildLogic(repo, nil, nil, nil, nil)
+	l := NewGuildLogic(repo, nil, nil, nil)
 	l.activities = &ActivityDeps{Now: activityTestClock}
 
 	start, err := l.StartGuildTrial(clientCtx(42), &pb.StartGuildTrialRequest{ActivityId: 3, MemberPlayerIds: []uint64{42, 43}})
@@ -349,7 +349,7 @@ func TestTrialStubsB6a(t *testing.T) {
 // TestTrialStubsAnswerNotInGuildFirst:不在帮的人先看到"未入帮"(以 MySQL 复核过的 0),与 B6b 落地后的答复一致。
 func TestTrialStubsAnswerNotInGuildFirst(t *testing.T) {
 	repo, _ := newNoMembershipRepo(t)
-	l := NewGuildLogic(repo, nil, nil, nil, nil)
+	l := NewGuildLogic(repo, nil, nil, nil)
 	l.activities = &ActivityDeps{Now: activityTestClock}
 
 	resp, err := l.StartGuildTrial(clientCtx(42), &pb.StartGuildTrialRequest{ActivityId: 3})
@@ -620,7 +620,7 @@ func TestReunionEligible(t *testing.T) {
 
 // TestActivityTxTipMapping(06 §6.10,按 90 part2 §2 第 5 条订正):事务哨兵 → tip / 故障;写冲突是 tip 不是 gRPC 错误。
 func TestActivityTxTipMapping(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil) // repo 为 nil:mapWriteErr 的映射自愈直接跳过
+	l := NewGuildLogic(nil, nil, nil, nil) // repo 为 nil:mapWriteErr 的映射自愈直接跳过
 	row := lanternRow()
 	row.MinGuildLevel = 3
 	rule := activityTestRule()
@@ -642,7 +642,6 @@ func TestActivityTxTipMapping(t *testing.T) {
 		{"团圆人数", data.ErrActivityThresholdNotReached, constants.ErrActivityThresholdNotReached, []string{"2", "3"}, activityResultThreshold, false},
 		{"未决指令过多", fmt.Errorf("allocate seq: %w", assetop.ErrTooManyPending), constants.ErrAssetPending, nil, activityResultAssetPending, false},
 		{"写冲突", data.ErrWriteConflict, constants.ErrBusyRetry, nil, activityResultBusyRetry, false},
-		{"合服闸门", fmt.Errorf("%w: fence unreadable", data.ErrZoneMerging), constants.ErrZoneMerging, nil, activityResultMerging, false},
 		{"不是成员", data.ErrNotGuildMember, constants.ErrNotInGuild, nil, activityResultNotInGuild, false},
 		{"帮会不存在", data.ErrGuildGone, constants.ErrGuildNotFound, nil, activityResultNotInGuild, false},
 		{"溢出是故障", fmt.Errorf("%w: funds", data.ErrActivityPoison), 0, nil, activityResultError, true},
@@ -742,7 +741,7 @@ func TestLanternSyncBudget(t *testing.T) {
 		require.NoError(t, err)
 		return &ActivityDeps{Loop: loop, SyncBudget: syncBudget}, applier, store
 	}
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 
 	skips := []struct {
 		name string
@@ -787,7 +786,7 @@ func TestLanternSyncBudget(t *testing.T) {
 
 // TestDeliverActivityRewardWithoutLoop:Loop 未接线时只记日志,不 panic(预检本应已拒绝,这里是防御)。
 func TestDeliverActivityRewardWithoutLoop(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 
 	assert.NotPanics(t, func() {
 		l.deliverActivityReward(context.Background(), &ActivityDeps{SyncBudget: defaultSyncBudget}, assetop.Op{OpID: 1})

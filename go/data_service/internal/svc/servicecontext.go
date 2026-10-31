@@ -12,43 +12,35 @@ import (
 	"time"
 
 	"data_service/internal/config"
-	"data_service/internal/guildcheck"
+	"data_service/internal/idissuer"
 	"data_service/internal/metrics"
 	"data_service/internal/routereconcile"
 	"data_service/internal/routing"
 	"data_service/internal/store"
 
-	guildpb "proto/guild"
-	loginpb "proto/login"
+	dspb "proto/data_service"
 	"shared/accountdirectory"
 	"shared/authoritysql"
 	"shared/drainproof"
+	"shared/idsegment"
 	"shared/placement"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
-	"github.com/zeromicro/go-zero/zrpc"
 )
 
 // SnapshotStore 描述 logic 层实际依赖的快照/审计能力。使用接口既让启动失败时
 // 可以明确保持 nil，也允许单测注入失败实现验证 fail-closed 行为。
 type SnapshotStore interface {
 	Close() error
-	InsertSnapshot(context.Context, *store.SnapshotRow) (uint64, error)
 	// InsertSnapshotIfGuidAbsent 是 player_snapshot_topic 消费者的落库入口(source=1,按 guid 去重)。
 	InsertSnapshotIfGuidAbsent(context.Context, *store.SnapshotRow) (uint64, bool, error)
 	// InsertSnapshotsIfGuidAbsent 是 player_snapshot_topic 消费者的批量入口(G2a;返回新插入行数,批内与库内重复都不计)。
 	// data_service.go 把本接口的值直接交给 kafka.Start 的 SnapshotSink,接口少了它就编译不过。
 	InsertSnapshotsIfGuidAbsent(context.Context, []*store.SnapshotRow) (int64, error)
-	GetSnapshotByID(context.Context, uint64) (*store.SnapshotRow, error)
-	GetLatestSnapshotBefore(context.Context, uint64, uint64) (*store.SnapshotRow, error)
 	ListSnapshotsMeta(context.Context, uint64, uint64, uint32) ([]*store.SnapshotMeta, error)
-	GetSnapshotPlayerIDsByZone(context.Context, uint32, uint64) ([]uint64, error)
-	// GetSnapshotPlayerTimesByZone 是 zone / 全服回档的计划:player_id → 该 zone 下最新快照的 created_at(秒)。
-	// 帮会检查的 since 起点与执行期 R5 断言的下界都来自它(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.3-1)。
-	GetSnapshotPlayerTimesByZone(context.Context, uint32, uint64) (map[uint64]uint64, error)
 	InsertAuditLog(context.Context, *store.AuditLogRow) error
 }
 
@@ -59,7 +51,17 @@ type TransactionLogStore interface {
 	InsertBatchIgnore(context.Context, []*store.TransactionLogRow) (int64, error)
 }
 
-// IdSegmentStore 是 AllocateIdSegment 的号段发号源(设计 §6.2)。
+// 两张表的行号走号段(biz_tag 要在 IdSegment.Tags 里)。快照量大,上限给到 10 万,
+// 一段用不到 15 分钟才会涨上去;重启最多白发两段,63 位用不完。
+const (
+	snapshotRowBizTag   = "snapshot_row"
+	rollbackAuditBizTag = "rollback_audit"
+	rowIDSegmentStep    = 1000
+	rowIDSegmentMinStep = 100
+	rowIDSegmentMaxStep = 100000
+)
+
+// IdSegmentStore 是 AllocateIdSegment 的号段发号源,生产实现是 *idissuer.Issuer。
 type IdSegmentStore interface {
 	Close() error
 	Allocate(ctx context.Context, bizTag string, step uint32) (lo, hi uint64, err error)
@@ -84,6 +86,21 @@ type PlayerNameStore interface {
 	BatchGet(ctx context.Context, playerIDs []uint64) (map[uint64]string, error)
 }
 
+// PlayerStoreAssetReader 读 player_store 的写权行和 kAsset 行。*store.AccountDirectoryStore 满足它。
+type PlayerStoreAssetReader interface {
+	ReadPlayerStoreAsset(ctx context.Context, playerID uint64) (*store.PlayerAssetRow, error)
+}
+
+// PlayerStoreDisplayReader 读玩家展示资料。*store.AccountDirectoryStore 满足它。
+type PlayerStoreDisplayReader interface {
+	ReadPlayerDisplays(ctx context.Context, ids []uint64) (map[uint64]*dspb.PlayerDisplay, error)
+}
+
+// PlayerStoreHolderReleaser 在持有节点判死后释放写权。*store.AccountDirectoryStore 满足它。
+type PlayerStoreHolderReleaser interface {
+	ReleaseDeadPlayerStoreHolder(ctx context.Context, playerID, ownerEpoch uint64) error
+}
+
 // PlayerRouteStore 是玩家归属 / 落点映射的持久层(docs/design/player-route-mapping-durability-proposal.md,第 1a 批)。
 //
 // RegisterHome 那一半由消费方 routing 定义(routing.RouteStore:路由器只需要它),这里再加 Close 让
@@ -92,27 +109,12 @@ type PlayerNameStore interface {
 //
 // 只在 RouteStore.Mode=db_first 时装配;redis 模式下恒为 nil,也没有任何代码读它。
 //
-// 第 3 批起再嵌 routing.RouteReader(回源读:R2 / R3 / R6 在缓存不可信时读库,R7 在 db_first 下一律读库):
+// 第 3 批起再嵌 routing.RouteReader(回源读:R2 / R3 / R6 在缓存不可信时读库):
 // 同一个 *store.RouteStore 同时作为写入点与回源读者注入 Router(routeRouterOptions)。
 type PlayerRouteStore interface {
 	routing.RouteStore
 	routing.RouteReader
 	Close() error
-}
-
-// ErrRollbackTargetOnline 由 RollbackFence 实现在目标仍在线、正在登录，或旧
-// epoch 写入尚未排空时返回。logic 层据此向调用方返回 ErrCodePlayerOnline。
-var ErrRollbackTargetOnline = errors.New("rollback target is online or has active writes")
-
-// RollbackFence 是应用级回档执行前必须持有的跨服务离线 epoch。
-// Acquire* 成功后，直到 release 被调用，登录/Scene 激活和任何旧 epoch 存盘都
-// 必须被阻断。一次普通的“当前是否在线”查询不满足这个接口（存在 TOCTOU）。
-// 当前仓库尚无跨 login/player_locator/Scene/db 的实现，因此生产 ServiceContext
-// 故意保持 nil，所有回档写 RPC fail-closed；测试可注入 fake 验证其余逻辑。
-type RollbackFence interface {
-	AcquirePlayer(context.Context, uint64) (release func(), err error)
-	AcquireZone(context.Context, uint32) (release func(), err error)
-	AcquireServer(context.Context, []uint32) (release func(), err error)
 }
 
 type ServiceContext struct {
@@ -140,10 +142,13 @@ type ServiceContext struct {
 	SnapshotStore             SnapshotStore
 	TxLogStore                TransactionLogStore
 	IdSegmentStore            IdSegmentStore
-	PlayerNameStore           PlayerNameStore // nil = 名字注册表不可用,Reserve/Release/BatchGet 全部 fail-closed
-	RollbackFence             RollbackFence
-	LoginAdminClient          loginpb.LoginAdminClient // nil when not configured
+	rowIDSegments             []*idsegment.Client // player_snapshot、rollback_audit_log 的行号来源,Close 时关
+	PlayerNameStore           PlayerNameStore     // nil = 名字注册表不可用,Reserve/Release/BatchGet 全部 fail-closed
 
+	// PlayerStoreAssets、PlayerStoreHolders、PlayerStoreDisplays 在账号目录装配不起来时为 nil,对应的读回 Unavailable。
+	PlayerStoreAssets   PlayerStoreAssetReader
+	PlayerStoreHolders  PlayerStoreHolderReleaser
+	PlayerStoreDisplays PlayerStoreDisplayReader
 	// PlayerRouteStore 是 db_first 下 RegisterPlayerZone 的库内提交点(已经注入进 Router,这里只为 Close 与
 	// MissingStores 留一份引用)。nil = redis 模式,或 db_first 但没装配起来(此时 RegisterPlayerZone fail-closed)。
 	PlayerRouteStore PlayerRouteStore
@@ -153,16 +158,10 @@ type ServiceContext struct {
 	// 构造时不开连接、不起 goroutine;由 main 启停(Start / stop,关停顺序见 data_service.go),Close 不管它。
 	RouteReconciler *routereconcile.Reconciler
 
-	// GuildDivergence 是回档闸问 guild 的接缝(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.1)。
-	//
-	// ⚠ **nil = 未配置 = 三个 Rollback* 一律拒绝**(ErrCodeRollbackGuildCheckFailed,零写入,放行无效)。
-	// 这与上一行 LoginAdminClient 的先例(nil = 跳过孤儿清理)**方向相反**:照抄那个先例写成
-	// "没配就不查",就是让回档在 guild 缺席时复制资产(fail-open)。测试 D2 钉住。
-	GuildDivergence guildcheck.GuildDivergenceChecker
-
-	// GuildCheckSleep 是回档闸两段等待(沉降 30s、写后复查前 10s,07 §7.7)的注入点。
-	// nil = 真实计时器等待(可被 ctx 取消);单测注入,既不真睡,也能断言"检查发生在沉降之后"(AGENTS §11.4)。
-	GuildCheckSleep func(ctx context.Context, d time.Duration) error
+	// MergedZones 是 zone_merged_into 的缓存,GetPlayerHomeZone / BatchGetPlayerHomeZone 的出口用它把归属解析成最终区。
+	// 构造时读一次,定时重读由 main 调 Start 开始,CloseAndReport 里停。
+	// nil = db_first 而没有读到映射(main 据 MergedZonesUnassembled 拒启);redis 模式是空的静态表。
+	MergedZones *routing.MergedZoneCache
 }
 
 // autoMigrateTimeout 启动路径建表/补列的总时限。CreateOrUpdateTable 对存量大表的
@@ -177,6 +176,9 @@ const routePublishProbeMargin = 3 * time.Second
 // routeReadyProbeTimeout 是 ReadRequiresReady=true 时启动期试跑一次读脚本的时限(连 mapping Redis、EVAL 含两次 INFO、回包)。
 const routeReadyProbeTimeout = 3 * time.Second
 
+// mergedZoneInitialReadTimeout 是启动时读一次 zone_merged_into 的时限。
+const mergedZoneInitialReadTimeout = 3 * time.Second
+
 // MySQLConfigOf 把 yaml 的 SnapshotMySQL 段转成 store 的连接参数;main 的 -migrate 入口也用它。
 func MySQLConfigOf(c config.Config) store.MySQLConfig {
 	return store.MySQLConfig{
@@ -186,7 +188,7 @@ func MySQLConfigOf(c config.Config) store.MySQLConfig {
 		DBName:      c.SnapshotMySQL.DBName,
 		MaxOpenConn: c.SnapshotMySQL.MaxOpenConn,
 		MaxIdleConn: c.SnapshotMySQL.MaxIdleConn,
-		RequireTiDB: c.SnapshotMySQL.RequireTiDB,
+		Backend:     authoritysql.Backend(c.SnapshotMySQL.Backend),
 	}
 }
 
@@ -237,6 +239,16 @@ func (s *ServiceContext) RouteReadGateUnassembled() error {
 		"every untrusted home zone read would answer Unavailable and every RegisterPlayerZone would fail closed")
 }
 
+// MergedZonesUnassembled 返回非 nil = db_first 而合服映射缓存没有装配起来(route store 没起来,或启动时读不到 zone_merged_into,
+// 原因见此前的 ERROR)。main 据此**无条件**拒启,不看 Store.Required:没有映射就没法区分「没有合服」和「读不到」,
+// 带着它跑,每一次归属读都只能回 Unavailable。redis 模式恒回 nil。
+func (s *ServiceContext) MergedZonesUnassembled() error {
+	if !s.Config.RouteStore.DBFirst() || s.MergedZones != nil {
+		return nil
+	}
+	return errors.New("RouteStore.Mode=db_first but the merged zone cache is not assembled: zone_merged_into could not be read at startup")
+}
+
 func NewServiceContext(c config.Config) *ServiceContext {
 	return NewServiceContextWithRouteDangerOwner(c, nil)
 }
@@ -251,6 +263,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	if root == nil || relay == nil || root == relay {
 		panic("data_service 缺独立 SOURCE/RELAY 门禁")
 	}
+	// 拼错的值静默回落到 redis,这个节点就和 scene 走了两条路。
 	resolved, err := c.ResolveGlobalAuthority(os.Getenv)
 	if err != nil {
 		panic(fmt.Sprintf("全球SQL装配拒绝: %v", err))
@@ -289,19 +302,28 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		mysqlCfg.Permission = authoritysql.Writer(writerConfig)
 	}
 	schemaReady := true
-	logx.Info("[ServiceContext] 常驻启动只读核对表形状；schema 与号段初值必须由独立 -migrate 入口预建")
+	logx.Info("[ServiceContext] 常驻启动只读核对表形状；schema 必须由独立 -migrate 入口预建")
 
 	var (
 		snapshotStore       SnapshotStore
 		transactionLogStore TransactionLogStore
 		idSegmentStore      IdSegmentStore
+		rowIDSegments       []*idsegment.Client
 		playerNameStore     PlayerNameStore
 	)
+	// 发号器不依赖 MySQL。这里只校验配置、不连 etcd:etcd 暂时不可达时进程照常起,
+	// 只有真要预留新块的那次领段才会失败,恢复后自动好。
+	if issuer, err := NewIdIssuer(c); err != nil {
+		logx.Errorf("[ServiceContext] id issuer init failed (AllocateIdSegment disabled): %v", err)
+	} else {
+		idSegmentStore = issuer
+	}
 	if schemaReady {
 		if ss, err := store.NewSnapshotStore(mysqlCfg); err != nil {
 			logx.Errorf("[ServiceContext] snapshot store init failed (rollback disabled): %v", err)
 		} else if ss != nil {
 			snapshotStore = ss
+			rowIDSegments = useSnapshotRowIDs(ss, idSegmentStore)
 		}
 
 		if txLog, err := store.NewTransactionLogStore(mysqlCfg); err != nil {
@@ -310,15 +332,9 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 			transactionLogStore = txLog
 		}
 
-		if seg, err := store.NewIdSegmentStore(mysqlCfg, store.IdSegmentOptions{AllowAutoSeed: c.IdSegment.AllowAutoSeed}); err != nil {
-			logx.Errorf("[ServiceContext] id segment store init failed (AllocateIdSegment disabled): %v", err)
-		} else if seg != nil {
-			idSegmentStore = seg
-		}
-
-		// 名字注册表用**独立连接池**:建角路径上每次都有一条同步 INSERT,与快照/号段
+		// 名字注册表用**独立连接池**:建角路径上每次都有一条同步 INSERT,与快照
 		// 共用 SnapshotMySQL 那几条连接时,一次 GM 批量回滚就能把全服建角卡住。
-		// 只覆盖池大小,库/账号仍是同一个全局库 —— player_name 与 id_segment 同库。
+		// 只覆盖池大小,库/账号仍是同一个全局库。
 		//
 		// 配置非法时**不装配**(nil),而不是纠正成默认值:那三个时间窗里有一个是安全
 		// 边界(ReleaseWindow),被悄悄放宽了谁都不知道;nil 的症状是建角当场全线拒绝,
@@ -351,7 +367,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 			logx.Errorf("[account-directory] internal caller key is unavailable; account directory RPCs disabled")
 		} else if maxOpen, err := c.AccountDirectory.PoolMaxOpenConn(); err != nil {
 			logx.Errorf("[account-directory] invalid AccountDirectory config; account directory RPCs disabled: %v", err)
-		} else if ds, err := newDirectory(mysqlCfg, mysqlCfg.RequireTiDB || c.AccountDirectory.RoleTradeSQLProof.Enabled || (c.Mode != "dev" && c.Mode != "test"), c.AccountDirectory.MaxRoles(), maxOpen); err != nil {
+		} else if ds, err := newDirectory(mysqlCfg, mysqlCfg.Backend, c.AccountDirectory.MaxRoles(), maxOpen); err != nil {
 			logx.Errorf("[account-directory] SQL store init failed: %v", err)
 		} else {
 			if !c.LegacyNonGlobal {
@@ -395,33 +411,18 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		panic(fmt.Sprintf("data_service对账owner装配失败，拒绝启动: %v", err))
 	}
 
-	// Optional: login admin gRPC client for orphan account cleanup during rollback
-	var loginClient loginpb.LoginAdminClient
 	var upstreamClosers []interface{ Close() error }
-	if c.LoginAdminRpc.Etcd.Key != "" {
-		conn := zrpc.MustNewClient(c.LoginAdminRpc)
-		loginClient = loginpb.NewLoginAdminClient(conn.Conn())
-		upstreamClosers = append(upstreamClosers, conn.Conn())
-		logx.Info("[ServiceContext] login admin RPC client connected")
-	}
 
 	// 只有 store 非 nil 时才注入(规格 d 节「nil 接口陷阱」):playerRouteStore 只在 routeStore 非 nil 时才被赋值(见上),
 	// 这里的判空才可靠。第 3 批起同一个实例也作为回源读者注入(routeRouterOptions)。
 	routerOpts := routeRouterOptions(playerRouteStore)
 
 	// 读路径指标的启动预置(理由同 metrics.PrimeRoute:sql_error 这类可能一辈子只发生几次的结局,序列不预先存在的话
-	// `increase(...) > 0` 恰好漏掉第一次):
-	//   - R7(GetAllPlayerIDsInZone)在 db_first 下一律读库、与读方开关无关,每次都计 route_read_total{path="enumerate"},
-	//     所以它的两条序列只要 db_first 就预置(M1-6,2026-10-23);
-	//   - 其余 11 条 path × result 与 verdict 只在读方开关打开时才会出现,只在那时预置(开关只许 db_first,Validate 已钉住)。
-	if c.RouteStore.DBFirst() {
-		metrics.PrimeRouteEnumerate()
-		if c.RouteStore.ReadRequiresReady {
-			metrics.PrimeRouteRead()
-		}
+	// `increase(...) > 0` 恰好漏掉第一次)。只在读方开关打开时才会出现,只在那时预置(开关只许 db_first)。
+	if c.RouteStore.DBFirst() && c.RouteStore.ReadRequiresReady {
+		metrics.PrimeRouteRead()
 	}
 
-	divergence := newGuildDivergenceChecker(c, func(closer interface{ Close() error }) { upstreamClosers = append(upstreamClosers, closer) })
 	s := &ServiceContext{
 		upstreamClosers:      upstreamClosers,
 		Writer:               writerConfig,
@@ -434,15 +435,18 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		AccountDirectoryAuth: directoryAuth,
 		TxLogStore:           transactionLogStore,
 		IdSegmentStore:       idSegmentStore,
+		rowIDSegments:        rowIDSegments,
 		PlayerNameStore:      playerNameStore,
 		PlayerRouteStore:     playerRouteStore,
 		RouteReconciler:      routeReconciler,
-		LoginAdminClient:     loginClient,
-		GuildDivergence:      divergence,
+		MergedZones:          newMergedZoneCache(c, routeStore),
 	}
 	if directory != nil {
 		s.AccountDirectory = directory
 		s.accountDirectoryCloser = directory
+		s.PlayerStoreAssets = directory
+		s.PlayerStoreHolders = directory
+		s.PlayerStoreDisplays = directory
 		var verifier store.RoleFreezeVerifier
 		if c.AccountDirectory.RoleTradeSQLProof.Enabled && c.RouteStore.DBFirst() {
 			if v, err := store.NewSQLRoleFreezeVerifier(c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {
@@ -451,7 +455,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 				verifier = v
 			}
 		} else {
-			logx.Info("[account-role-trade] explicit TiDB SQL proof/db_first configuration absent; Confirm disabled")
+			logx.Info("[account-role-trade] explicit SQL proof/db_first configuration absent; Confirm disabled")
 		}
 		trades := store.NewAccountRoleTradeStore(directory, verifier)
 		if err := trades.ConfigureGuildExit(c.AccountDirectory.MustLeaveGuild(), c.AccountDirectory.RoleTradeGuildSchema); err != nil {
@@ -491,6 +495,37 @@ type routeReconcilerDeps struct {
 }
 
 // productionRouteReconcilerDeps:独立 go-redis 客户端(routereconcile.NewRedisCache,不经 go-zero 熔断器)、os.Hostname、crypto/rand。
+// useSnapshotRowIDs 给 player_snapshot、rollback_audit_log 接上行号来源:直接调本进程的发号器,不走 RPC。
+// 发号器不可用时不接,这两张表的插入返回 ErrNoRowIDSource,快照消费者停在当前 offset,修好重启后接着落。
+func useSnapshotRowIDs(ss *store.SnapshotStore, issuer IdSegmentStore) []*idsegment.Client {
+	if issuer == nil {
+		logx.Errorf("[ServiceContext] id issuer unavailable: player_snapshot and rollback_audit_log inserts will fail until it is fixed")
+		return nil
+	}
+	snapshots, err := newRowIDSegment(issuer, snapshotRowBizTag)
+	if err != nil {
+		logx.Errorf("[ServiceContext] snapshot row id segment init failed: %v", err)
+		return nil
+	}
+	audits, err := newRowIDSegment(issuer, rollbackAuditBizTag)
+	if err != nil {
+		snapshots.Close()
+		logx.Errorf("[ServiceContext] rollback audit row id segment init failed: %v", err)
+		return nil
+	}
+	ss.UseRowIDs(snapshots, audits)
+	return []*idsegment.Client{snapshots, audits}
+}
+
+func newRowIDSegment(issuer IdSegmentStore, bizTag string) (*idsegment.Client, error) {
+	return idsegment.New(issuer.Allocate, idsegment.Options{
+		BizTag:  bizTag,
+		Step:    rowIDSegmentStep,
+		MinStep: rowIDSegmentMinStep,
+		MaxStep: rowIDSegmentMaxStep,
+	})
+}
+
 func productionRouteReconcilerDeps(onDanger func(context.Context, *store.RouteEmergencyError) error) routeReconcilerDeps {
 	return routeReconcilerDeps{
 		onDanger: onDanger,
@@ -548,6 +583,32 @@ func newRouteReconciler(c config.Config, rs routereconcile.Store, deps routeReco
 	return r, nil
 }
 
+// newMergedZoneCache 装配合服映射缓存:redis 模式没有 route store、也没有合服,给一张空的静态表;
+// db_first 下读一次 zone_merged_into,读不到(含 rs 为 nil)只记 ERROR、回 nil,由 main 据 MergedZonesUnassembled 拒启。
+// rs 是具体类型:*store.RouteStore 为 nil 时不能转成 routing.MergedZoneLister 接口(「非 nil 接口包着 nil 指针」)。
+func newMergedZoneCache(c config.Config, rs *store.RouteStore) *routing.MergedZoneCache {
+	if !c.RouteStore.DBFirst() {
+		return routing.NewStaticMergedZoneCache(nil)
+	}
+	if rs == nil {
+		logx.Errorf("[ServiceContext] merged zone cache not assembled: the route store is not assembled, see the route store error above")
+		return nil
+	}
+	return loadMergedZoneCache(rs, time.Duration(c.RouteStore.MergedZoneRefreshSec)*time.Second)
+}
+
+// loadMergedZoneCache 是 newMergedZoneCache 读库的那一半(单测注入假的 lister)。
+func loadMergedZoneCache(lister routing.MergedZoneLister, interval time.Duration) *routing.MergedZoneCache {
+	ctx, cancel := context.WithTimeout(context.Background(), mergedZoneInitialReadTimeout)
+	defer cancel()
+	cache, err := routing.NewMergedZoneCache(ctx, lister, interval)
+	if err != nil {
+		logx.Errorf("[ServiceContext] merged zone cache not assembled: %v", err)
+		return nil
+	}
+	return cache
+}
+
 // newPlayerRouteStore 装配 db_first 的库内提交点。redis 模式、启动期迁移失败(schemaReady=false)、
 // 或 mapping Redis 过不了 WAITAOF 能力探针(routing.ProbeWaitAOF)时返回 nil;第 3 批起,ReadRequiresReady=true 而
 // 读脚本在 mapping Redis 上跑不起来(probeRouteReadyReadAtStartup)时同样返回 nil。
@@ -590,8 +651,7 @@ func newPlayerRouteStore(c config.Config, mysqlCfg store.MySQLConfig, schemaRead
 		logx.Errorf("[ServiceContext] os.Hostname failed, route writer id falls back to unknown: %v", err)
 	}
 	rs, err := store.NewRouteStore(routeCfg, store.RouteStoreOptions{
-		FenceShards: uint32(c.RouteStore.FenceShards),
-		Writer:      store.NewRouteWriterID("data_service", host),
+		Writer: store.NewRouteWriterID("data_service", host),
 	})
 	if err != nil {
 		logx.Errorf("[ServiceContext] route store init failed (RegisterPlayerZone will fail closed; %s): %v", store.OpenRouteStoreHint("<yaml>", err), err)
@@ -608,8 +668,8 @@ func newPlayerRouteStore(c config.Config, mysqlCfg store.MySQLConfig, schemaRead
 			return nil
 		}
 	}
-	logx.Infof("[ServiceContext] route store ready (RouteStore.Mode=db_first): fence_shards=%d publish_attempts=%d waitaof_numlocal=%d waitaof_numreplicas=%d waitaof_timeout_ms=%d",
-		c.RouteStore.FenceShards, c.RouteStore.PublishAttempts, c.RouteStore.NumLocal(), c.RouteStore.NumReplicas(), c.RouteStore.WaitAOFTimeoutMs)
+	logx.Infof("[ServiceContext] route store ready (RouteStore.Mode=db_first): publish_attempts=%d waitaof_numlocal=%d waitaof_numreplicas=%d waitaof_timeout_ms=%d",
+		c.RouteStore.PublishAttempts, c.RouteStore.NumLocal(), c.RouteStore.NumReplicas(), c.RouteStore.WaitAOFTimeoutMs)
 	return rs
 }
 
@@ -666,38 +726,6 @@ func routeRouterOptions(rs PlayerRouteStore) []routing.RouterOption {
 	return []routing.RouterOption{routing.WithRouteStore(rs), routing.WithRouteReader(rs)}
 }
 
-// newGuildDivergenceChecker 装配回档闸问 guild 的接缝(07 §7.5.1、§7.5.5)。
-//
-// 返回 nil = 回档一律被拒,**不是**"跳过检查"(与 LoginAdminClient 的 nil 语义相反,见 ServiceContext.GuildDivergence)。
-// 任何失败都只记日志、不拒启:这三项配置只关系到回档,而 guild 启动要用 data_service(领号段、查归属),
-// 这里再反向阻塞就是启动死锁(07 §7.5.5)。
-func newGuildDivergenceChecker(c config.Config, track ...func(interface{ Close() error })) guildcheck.GuildDivergenceChecker {
-	if err := c.ValidateGuildCheck(); err != nil {
-		logx.Errorf("[ServiceContext] guild check config invalid; every Rollback* will be rejected (ErrCodeRollbackGuildCheckFailed): %v", err)
-		return nil
-	}
-	if !c.HasGuildInternalRpc() {
-		// 合法形态(k8s 今天就是这样:guild 还没有 manifest,07 §7.5.5 末条),所以是 Info;
-		// 每次回档被拒时 logic 会再打一条带 "guild check unavailable: not configured" 的 ERROR。
-		logx.Infof("[ServiceContext] GuildInternalRpc has no Endpoints/Target; every Rollback* will be rejected (guild check unavailable: not configured)")
-		return nil
-	}
-	// 强制 NonBlock,不信 yaml:guild 不在线时 zrpc 默认的阻塞拨号会把 data_service 的启动按住。
-	// 追加在 NewClient 内部由 yaml 决定的选项之后,后者被覆盖。
-	cli, err := zrpc.NewClient(c.GuildInternalRpc, zrpc.WithNonBlock())
-	if err != nil {
-		logx.Errorf("[ServiceContext] GuildInternalRpc client build failed; every Rollback* will be rejected (ErrCodeRollbackGuildCheckFailed): %v", err)
-		return nil
-	}
-	logx.Infof("[ServiceContext] guild divergence checker ready: endpoints=%v target=%q timeout=%dms margin=%dms budget=%ds",
-		c.GuildInternalRpc.Endpoints, c.GuildInternalRpc.Target, c.GuildInternalRpc.Timeout,
-		c.GuildClockSkewMarginMs, c.GuildCheckBudgetSeconds)
-	if len(track) == 1 && track[0] != nil {
-		track[0](cli.Conn())
-	}
-	return guildcheck.New(guildpb.NewGuildInternalClient(cli.Conn()))
-}
-
 // SQLPoolSamples 是 /metrics 的连接池快照来源(shared/sqlpoolstats.Source,G2b):只报装配成功的 store,一个 store 一个池,
 // 类别即 store 名(metrics.Pool*)。字段在 NewServiceContext 之后不再写(cmd/debugutil 是另一个进程,不注册池指标),
 // 抓取时并发读是安全的;sql.DB.Stats 只取一把内存锁,不做 I/O。
@@ -708,12 +736,48 @@ func (s *ServiceContext) SQLPoolSamples() []sqlpoolstats.Sample {
 	return sqlPoolSamples(s.namedStores(), store.DBStatsOf)
 }
 
-// namedStores 列出五个 store 与各自的池类别(固定顺序)。单测据此核对「哪个字段报成哪个类别」。
+// 两份预留记录的键。生产在两套 etcd 上,dev 可以在同一套上,所以键名也要不同。
+const (
+	idIssuerPrimaryKey   = "/id_issuer/counter/primary"
+	idIssuerSecondaryKey = "/id_issuer/counter/secondary"
+)
+
+// NewIdIssuer 按配置装配发号器。只校验配置,不连 etcd。服务启动和 -id-issuer-init 共用。
+func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
+	if c.IdSegment.Issuer.Region > uint32(idissuer.MaxRegion) {
+		return nil, fmt.Errorf("IdSegment.Issuer.Region = %d exceeds %d", c.IdSegment.Issuer.Region, idissuer.MaxRegion)
+	}
+	primaryHosts, secondaryHosts, err := c.IdSegment.IssuerEndpoints(c.Etcd.Hosts)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := idissuer.NewEtcdStore(primaryHosts, idIssuerPrimaryKey)
+	if err != nil {
+		return nil, err
+	}
+	secondary, err := idissuer.NewEtcdStore(secondaryHosts, idIssuerSecondaryKey)
+	if err != nil {
+		return nil, errors.Join(err, primary.Close())
+	}
+	issuer, err := idissuer.New(idissuer.Options{
+		Primary:        primary,
+		Secondary:      secondary,
+		Region:         uint8(c.IdSegment.Issuer.Region),
+		AllowBootstrap: c.IdSegment.AllowAutoSeed,
+		Tags:           c.IdSegment.EffectiveTags(),
+		OnReserve:      metrics.ObserveIdIssuerReserve,
+	})
+	if err != nil {
+		return nil, errors.Join(err, primary.Close(), secondary.Close())
+	}
+	return issuer, nil
+}
+
+// namedStores 列出用 SQL 连接池的 store 与各自的池类别(固定顺序)。单测据此核对「哪个字段报成哪个类别」。
 func (s *ServiceContext) namedStores() []namedStore {
 	return []namedStore{
 		{pool: metrics.PoolSnapshot, store: s.SnapshotStore},
 		{pool: metrics.PoolTransactionLog, store: s.TxLogStore},
-		{pool: metrics.PoolIdSegment, store: s.IdSegmentStore},
 		{pool: metrics.PoolPlayerName, store: s.PlayerNameStore},
 		{pool: metrics.PoolPlayerRoute, store: s.PlayerRouteStore},
 	}
@@ -794,6 +858,8 @@ func (s *ServiceContext) CloseAndReport() error {
 		}
 	}
 	s.closeOnce.Do(func() {
+		// 先停合服映射的定时重读:它读 route store 的池,池关了之后的那一拍只会报假故障。
+		s.MergedZones.Stop()
 		s.Writer.Seal()
 		for _, closer := range s.upstreamClosers {
 			if closer != nil {
@@ -805,6 +871,9 @@ func (s *ServiceContext) CloseAndReport() error {
 		}
 		if s.Router != nil {
 			s.closeErr = errors.Join(s.closeErr, s.Router.CloseAndReport())
+		}
+		for _, segment := range s.rowIDSegments {
+			segment.Close()
 		}
 		if s.SnapshotStore != nil {
 			s.closeErr = errors.Join(s.closeErr, s.SnapshotStore.Close())

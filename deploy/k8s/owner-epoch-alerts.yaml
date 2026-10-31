@@ -1,16 +1,21 @@
-# Prometheus alert rules for the owner_epoch save fence (玩家存盘属主围栏).
+# Prometheus alert rules for owner_epoch 铸造(玩家存盘的属主代次,由 scene_manager 铸造)。
 #
-# 来源:docs/design/guild-phase2/08-save-owner-fence.md §8.2.4(帮会二期 B4c);
-#       机制本身见 docs/design/scene-owner-reentry-barrier.md §3.3 / §6.3。
+# 来源:docs/design/zone-redis-regression-guard-20261022.md §7(铸造的落盘确认与墙钟地板);
+#       代次怎么用见 docs/design/player-save-direct-commit.md §3 / §4:写权判定在 go/db 的提交事务里,
+#       认领时把库里的代次抬上去,老持有者的下一笔立刻被拒,不依赖 Redis 里的任何判定。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 scene-manager-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/owner-epoch-alerts.yaml
 #
 # Scrape prerequisites:
-#   - go/db 的 MetricsListenAddr 已配置(本地惯例 ":9160",AGENTS.md §6.1)。
+#   - scene_manager 的指标端口(本地惯例 ":9150",AGENTS.md §6.1)。
 #   - A ServiceMonitor or PodMonitor pointed at that port.
 #
-# scene 侧的对应信号(owner_epoch_unknown、资产操作因 epoch = 0 被挡、"save outran reconnect lease")
+# go/db 侧的写权结局记在 db_player_store_requests_total{op,result},result 取 proto 枚举名
+# (SAVE_PLAYER_STALE_OWNER / SAVE_PLAYER_NOT_HOLDER / SAVE_PLAYER_UNCLAIMED / SAVE_PLAYER_OLDER_SEQ /
+# LOAD_AND_CLAIM_STALE_OWNER / LOAD_AND_CLAIM_NOT_HOLDER 等)。告警在 player-store-alerts.yaml。
+#
+# scene 侧的对应信号(旧持有者被拒 metric=stale_owner_write_rejected、资产操作因 epoch = 0 被挡、"save outran reconnect lease")
 # 只存在于 scene 日志:scene 的计数不进 Prometheus,而仓库里 Loki 的 ruler 目前没有挂载规则目录、
 # 也没有 alertmanager_url,不存在能生效的日志告警通路。那几条 LogQL 写在
 # docs/ops/cross-zone-failure-test-runbook.md,作为值班固定查询;ruler 接线归上线批 BK8s。
@@ -25,194 +30,15 @@ kind: PrometheusRule
 metadata:
   name: owner-epoch-alerts
   labels:
-    app: db
+    app: scene-manager
     prometheus: kube-prometheus
     role: alert-rules
 spec:
   groups:
-    - name: owner-epoch.save-fence
+    # 序列都在启动时预建,increase 能抓到第一次。
+    - name: owner-epoch.mint
       interval: 30s
       rules:
-        # 旧持有者的 DBTask 被 db 按 applied_epoch 拒绝。
-        # 两种来源都要看:① 僵尸 / 双主(不该发生);② K1 被正确拦下 —— 旧节点的退出存盘迟到,
-        # 新节点已铸出更高的 epoch。区分方法见 runbook(被拒前该玩家在旧节点上是否已进入退出链)。
-        # 这是无 label 的 Counter,注册时即以 0 值导出,increase 能抓到第一次。
-        - alert: DbStaleOwnerWriteRejected
-          expr: |
-            sum(increase(db_stale_owner_write_rejected_total[10m])) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "db 拒绝了旧 owner_epoch 的写入"
-            description: >-
-              过去 10 分钟约 {{ $value | printf "%.0f" }} 次 DBTask 因 owner_epoch 落后于已落库的 epoch 被 db 丢弃。
-              可能是僵尸 / 双主,也可能是旧节点退出存盘迟到被正确拦下(K1)。
-              按 docs/ops/cross-zone-failure-test-runbook.md 的区分方法核对 scene 日志
-              `HandlePlayerSaveRejected` 与该玩家在旧节点上的退出链。
-              计数器倒退由 regressed 单独区分,不计入本条;SQL 围栏拒绝旧主另有 DbFenceStaleOwner critical。
-
-        # epoch = 0 的写进了 MySQL:owner_epoch 兼容窗口仍在(旧版 scene_manager / 存量 location /
-        # Redis 丢了 owner_epoch 键 / dev 旁路)。帮会二期要求"共享 / 预发环境开启帮会资产操作"时它恒为 0
-        # (08-save-owner-fence.md §8.3 第 5 条):epoch = 0 的实体存盘没有围栏。
-        # 用绝对值而不是 increase:对"应当恒为 0"的门禁不变量,进程本轮发生过一次就必须处置。
-        # 新版已在启动时预建全部取值;绝对值同时兼容未预建序列的旧版,避免漏掉"从无到 1"的第一次。
-        # 代价是进程重启之前一直处于告警态 —— 对"应当恒为 0"的门禁不变量,这正是想要的。
-        - alert: DbOwnerEpochLegacyZero
-          expr: |
-            sum(db_owner_epoch_guard_total{outcome="legacy_zero"}) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "有 owner_epoch = 0 的写入进了 MySQL"
-            description: >-
-              所有 db 实例累计(各自从自己启动时起算)已放行 {{ $value }} 次 owner_epoch = 0 的写入(legacy_zero);要定位实例,去掉 sum 按 pod 查询。
-              epoch = 0 的实体存盘不带归属围栏;帮会资产操作在该环境不得开启
-              (docs/design/guild-phase2/08-save-owner-fence.md §8.3 第 5 条)。
-              对照 scene 日志的 `[OwnerEpoch]` 行与 `[AssetOp] blocked: owner_epoch unknown`。
-
-        # SQL 围栏 v0.4(docs/design/db-write-fencing-mysql.md §10)。关键异常用本次进程的绝对累计,
-        # 序列在启动时预建;三类围栏死信在 DbTaskDeadLetterAdded 中排除,只由本组 critical 处置。
-        - alert: DbFenceStaleOwner
-          expr: |
-            sum by (namespace) (db_fence_write_total{outcome="stale_owner"}) > 0
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "{{ $labels.namespace }} 的 SQL 围栏拒绝了旧持有者"
-            description: >-
-              SQL 行围栏拒绝了旧 owner_epoch 的写,载荷已按 fence_stale_owner 保留在死信中,不会自动到账。
-              按 STALE-OWNER-WRITE 日志核对写入方版本、归属切换与 SQL 行围栏,保留现场。
-              不要直接把死信搬回 ready;回灌前须核对原始版本与 EpochOverride 全 writer 升级门禁。
-
-        - alert: DbOwnerEpochRegressed
-          expr: |
-            (sum by (namespace) (db_owner_epoch_guard_total{outcome="regressed"}) > 0)
-            or (sum by (namespace) (db_fence_write_total{outcome="owner_epoch_regressed"}) > 0)
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "{{ $labels.namespace }} 的 owner epoch 计数器发生倒退"
-            description: >-
-              owner epoch 计数器低于已应用 epoch 或 SQL 行围栏,相关写已隔离并保留 owner_epoch_regressed 死信证据。
-              按 docs/design/db-write-fencing-mysql.md §9.1 在小时级处置:冻结相关归属切换、保留现场并确定真源。
-              倒退期间的载荷只作证据,不得回灌;不要清空 Redis 后自动重铸 epoch。
-
-        - alert: DbFenceLegacyAfterSeq
-          expr: |
-            sum by (namespace) (db_fence_write_total{outcome="legacy_after_seq"}) > 0
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "{{ $labels.namespace }} 的有序存盘后仍收到旧版无序号写"
-            description: >-
-              SQL 行已有非零 save_seq,又收到不带 save_seq 的旧版写,已拒绝并保留 fence_legacy_after_seq 死信。
-              查遗漏升级的 writer、旧 Kafka / 重试载荷与旁路写入,按全 writer 门禁完成升级后再评估回灌。
-
-        - alert: DbFenceRace
-          expr: |
-            sum by (namespace) (db_fence_write_total{outcome="race"}) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "{{ $labels.namespace }} 的 SQL 条件写发生竞态重试"
-            description: >-
-              条件写未完成,任务以 fence_race 延后且耗重试预算。单条任务空转可能达不到队列长度告警阈值。
-              核对条件写实现、锁与并发首写;若耗尽预算仍由 DbTaskDeadLetterAdded 的 budget_exhausted 报告。
-
-        # DbFenceOlderSeqHigh 的比例阈值须由压测基线确定,暂不启用未经验证的数值。
-        # 比例口径:sum(rate(db_fence_write_total{class="seq",outcome="older_seq"}[10m]))
-        # / sum(rate(db_fence_write_total{class="seq"}[10m]));分母为 0 时不应报警。
-
-        - alert: DbFenceBodyMismatch
-          expr: |
-            sum by (namespace) (db_fence_body_mismatch_total) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "{{ $labels.namespace }} 的存盘 body 错带围栏字段"
-            description: >-
-              生产者 body 携带了非零 fence 字段,go/db 已忽略该字段并按可信 DBTask 元数据判定。
-              按 FENCE-BODY-MISMATCH 日志定位生产者并修正;legacy 与 dual 模式均会记录。
-
-        - alert: DbAssetSQLCommitAnomaly
-          expr: |
-            sum by (namespace, result) (db_fence_cache_publish_total{path="write",result=~"evidence_conflict|evidence_ahead"}) > 0
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "{{ $labels.namespace }} 的 SQL 资产证据异常({{ $labels.result }})"
-            description: >-
-              evidence_conflict 表示同一 owner_epoch / save_seq 出现不同证据内容;本次发布被拒绝并耗预算延后。
-              evidence_ahead 表示 Redis 已有更新证据,本次保留较新证据;通常需要核对回档后清理范围。
-              两种情况都可能使资产到账通道卡住或错账,按 ASSET-SQL-COMMIT-CONFLICT / ASSET-SQL-COMMIT-AHEAD 日志
-              核对 SQL、父缓存与证据版本,保留现场,不得绕过 require_sql_commit 伪造到账。
-
-    # zone Redis 回退防护(docs/design/zone-redis-regression-guard-20261022.md §7)。
-    # 抓取前提:login 的 :9101、scene_manager 的 :9150、go/db 的 :9160 都有 ServiceMonitor / PodMonitor。
-    # 序列都在启动时预建;「应当恒为 0」的不变量用本次进程的绝对累计,其余用 increase。
-    # scene 侧的 owner_counter_behind(存盘时 Redis 计数器比实体缓存的 epoch 小 = 铸造丢失)只在 scene 日志里,
-    # 与本文件头所述其他 scene 信号一样,作为值班固定 LogQL 查询:{app="scene"} |= "metric=owner_counter_behind"。
-    - name: owner-epoch.redis-regression
-      interval: 30s
-      rules:
-        - alert: LoginParentLoadSQLBehind
-          expr: |
-            sum by (namespace) (login_parent_load_verify_total{verdict="sql_behind"}) > 0
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "{{ $labels.namespace }} 有玩家的 SQL 行低于 Redis 屏障记录的 ACK"
-            description: >-
-              ACK 只在 SQL 提交之后才写,SQL 低于 ACK 只能是 SQL 侧回档或损坏。该玩家登录被拒(fail-closed),
-              按 PARENT-LOAD-SQL-BEHIND 日志定位玩家,按 docs/design/db-write-fencing-mysql.md §9.2 处置,不要手工改屏障。
-
-        - alert: LoginParentLoadReconcilingPersistent
-          expr: |
-            sum by (namespace) (increase(login_parent_load_verify_total{verdict="reconciling"}[10m])) > 0
-          for: 30m
-          labels:
-            severity: critical
-          annotations:
-            summary: "{{ $labels.namespace }} 有玩家的两张 SQL 表持续停在不同版本"
-            description: >-
-              正常情况下落后的那张表会在 Kafka 积压或重试队列消化后追平;持续 30 分钟以上说明那笔任务丢了或进了死信。
-              查该玩家的死信与 db_task 积压,确认真源后用 save_barrier_restore 处置。
-
-        - alert: LoginParentLoadAdoptedSQL
-          expr: |
-            sum by (namespace) (increase(login_parent_load_verify_total{verdict="adopted"}[10m])) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "{{ $labels.namespace }} 登录时按 SQL 修复了回退的 Redis 屏障"
-            description: >-
-              过去 10 分钟约 {{ $value | printf "%.0f" }} 名玩家的 Redis 父快照落后于已提交的 SQL,登录已自动采纳 SQL。
-              每一次都说明 zone Redis 丢过已确认的写(崩溃丢尾、切主丢尾或从备份恢复)。核对 Redis 的重启 / 切主记录,
-              按 PARENT-LOAD-ADOPT-SQL 日志抽查玩家;单独出现无需处置,与 DbSaveBarrierAckAhead 同时持续出现要查 Redis 持久化配置。
-
-        - alert: DbSaveBarrierAckAhead
-          expr: |
-            sum by (namespace, kind) (db_save_barrier_ack_ahead_total) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "{{ $labels.namespace }} 的存盘屏障出现 ACK 高于 pending({{ $labels.kind }})"
-            description: >-
-              go/db 在 SQL 提交后发布 ACK 时发现它高于屏障的 pending。正常流程里 ACK 不会高于 pending,
-              只能是 zone Redis 回退、手工改写或合服拷错屏障。玩家下次登录会按 SQL 自动修复(LoginParentLoadAdoptedSQL);
-              按 SAVE-BARRIER-ACK-AHEAD 日志定位玩家,核对 Redis 重启 / 切主记录。
-
         - alert: SceneManagerOwnerEpochMintNotDurable
           expr: |
             sum by (namespace, result) (increase(scene_manager_owner_epoch_mint_durable_total{result!="confirmed"}[10m])) > 0
@@ -236,3 +62,4 @@ spec:
             description: >-
               铸造的墙钟地板没有起作用(退化为当前值 + 1)。通常是 scene_manager 主机之间时钟偏差,
               或主机时钟回拨。Redis 回退后重铸同值的防护依赖墙钟单调,核对主机 NTP 与时钟偏差监控。
+              偶发一次也可能是推路由失败回滚(铸出值 + 1)后同一毫秒内的重试,这种不用处理;持续增长才查时钟。

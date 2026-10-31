@@ -132,6 +132,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := PetRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load PetRule table: %v", err)
     }
+    if err := PlayModeTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load PlayMode table: %v", err)
+    }
     if err := RewardTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load Reward table: %v", err)
     }
@@ -153,6 +156,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := WorldTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load World table: %v", err)
     }
+    if err := ZoneGroupTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load ZoneGroup table: %v", err)
+    }
 
     if loadSuccessCallback != nil {
         loadSuccessCallback()
@@ -163,7 +169,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(47)
+    wg.Add(49)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -406,6 +412,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
     }()
     go func() {
         defer wg.Done()
+        if err := PlayModeTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load PlayMode table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
         if err := RewardTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load Reward table: %v", err)
         }
@@ -444,6 +456,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := WorldTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load World table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := ZoneGroupTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load ZoneGroup table: %v", err)
         }
     }()
 
@@ -622,6 +640,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newPetRule.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload PetRule failed: %w", err)
     }
+    newPlayMode := NewPlayModeTableManager()
+    if err := newPlayMode.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload PlayMode failed: %w", err)
+    }
     newReward := NewRewardTableManager()
     if err := newReward.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload Reward failed: %w", err)
@@ -649,6 +671,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     newWorld := NewWorldTableManager()
     if err := newWorld.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload World failed: %w", err)
+    }
+    newZoneGroup := NewZoneGroupTableManager()
+    if err := newZoneGroup.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload ZoneGroup failed: %w", err)
     }
 
     // Swap all instances at once after all loads succeed.
@@ -692,6 +718,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     MysteryMerchantSpotTableManagerInstance = newMysteryMerchantSpot
     PetTableManagerInstance = newPet
     PetRuleTableManagerInstance = newPetRule
+    PlayModeTableManagerInstance = newPlayMode
     RewardTableManagerInstance = newReward
     RoleNameRuleTableManagerInstance = newRoleNameRule
     SkillTableManagerInstance = newSkill
@@ -699,6 +726,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     TestTableManagerInstance = newTest
     TestMultiKeyTableManagerInstance = newTestMultiKey
     WorldTableManagerInstance = newWorld
+    ZoneGroupTableManagerInstance = newZoneGroup
 
     if loadSuccessCallback != nil {
         loadSuccessCallback()

@@ -6,11 +6,8 @@ CREATE ROLE IF NOT EXISTS 'mmorpg_chat_runtime';
 
 GRANT SELECT, INSERT ON `mmorpg_chat`.`chat_send_authority` TO 'mmorpg_chat_runtime';
 GRANT SELECT, INSERT, UPDATE ON `mmorpg_chat`.`chat_policy` TO 'mmorpg_chat_runtime';
-GRANT SELECT ON `mmorpg_global`.`route_meta` TO 'mmorpg_chat_runtime';
 GRANT SELECT ON `mmorpg_global`.`player_route` TO 'mmorpg_chat_runtime';
 GRANT SELECT ON `mmorpg_global`.`account_role` TO 'mmorpg_chat_runtime';
--- 原placement前缀须以中性ODKU补缺片；表级INSERT/UPDATE是既有TiDB可表达的最窄边界。
-GRANT SELECT, INSERT, UPDATE ON `mmorpg_global`.`zone_merge_fence` TO 'mmorpg_chat_runtime';
 
 -- 表级GRANT必须在-migrate创建正式两表之后执行；信息架构按已授权对象可见。
--- runtime真实准入仍须用该账号跑同原角色P/route事务；不能用管理员账号通过替代权限验收。
+-- runtime对角色目录和路由只有普通读（发送事务之外校验，结果带TTL缓存）；验收须用该账号跑真实发送，不能用管理员账号替代。

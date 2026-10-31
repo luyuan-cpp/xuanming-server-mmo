@@ -11,7 +11,6 @@ package store_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -23,7 +22,7 @@ import (
 )
 
 // TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent 验证设计 §2.0c 步骤 3 的落地:
-// 五张表全部由 proto 驱动建出(id_segment 与 player_name 走 bootstrapTables 的两个例外),列齐,
+// 四张表全部由 proto 驱动建出(player_name 走 bootstrapTables 的例外),列齐,
 // 且第二次迁移对已建好的表零变更(生产 -migrate 会在每次部署重复跑)。
 func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 	db := storetest.NewEmptyDB(t)
@@ -49,8 +48,7 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 			"target_time", "players_affected", "players_failed", "reason", "operator", "created_at",
 			"orphans_cleaned",
 		},
-		store.IdSegmentTableName: {"biz_tag", "max_id", "step", "version"},
-		// player_name 与 id_segment 一样走 bootstrapTables 的手写 DDL,这里只断言"proto 声明的列都在"
+		// player_name 走 bootstrapTables 的手写 DDL,这里只断言"proto 声明的列都在"
 		// —— 正是 migrateSchemaOn 对预建表做的漂移检查的对象。VARCHAR / utf8mb4_bin /
 		// UNIQUE(name_norm) 这些形状断言在 player_name_store_integration_test.go。
 		store.PlayerNameTableName: {
@@ -64,15 +62,6 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 			assert.Truef(t, have[c], "table %s lacks column %s (have %v)", table, c, keys(have))
 		}
 	}
-
-	// id_segment 的 bootstrap 例外:biz_tag 必须是 VARCHAR(64) 主键,不是 proto2mysql 的 MEDIUMTEXT。
-	var colType, colKey string
-	require.NoError(t, db.Raw.QueryRow(
-		`SELECT COLUMN_TYPE, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS
-		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'biz_tag'`,
-		db.Name, store.IdSegmentTableName).Scan(&colType, &colKey))
-	assert.Equal(t, "varchar(64)", strings.ToLower(colType), "id_segment.biz_tag column type")
-	assert.Equal(t, "PRI", colKey, "id_segment.biz_tag must be the primary key")
 
 	// player_snapshot.snapshot_guid 要有普通索引(消费者按 guid 先查后插),且**不是** UNIQUE
 	// (GM 行 guid 恒 0,UNIQUE 会让第二条 GM 行撞键)。
@@ -135,22 +124,19 @@ func TestMigrateSchema_ConcurrentFirstBootIsSerialized(t *testing.T) {
 	defer cancel()
 
 	const instances = 4
-	tags := []string{"player", "guild"}
 	errs := make(chan error, instances)
 	for i := 0; i < instances; i++ {
 		go func() {
-			errs <- db.Migrate(ctx, store.MigrateOptions{BootstrapTags: tags, LockWait: 4 * time.Minute})
+			errs <- db.Migrate(ctx, store.MigrateOptions{LockWait: 4 * time.Minute})
 		}()
 	}
 	for i := 0; i < instances; i++ {
 		require.NoError(t, <-errs, "every concurrently starting instance must finish its migration")
 	}
 
-	for _, table := range []string{"transaction_log", "player_snapshot", "rollback_audit_log", store.IdSegmentTableName, store.PlayerNameTableName} {
+	for _, table := range []string{"transaction_log", "player_snapshot", "rollback_audit_log", store.PlayerNameTableName} {
 		require.NotEmpty(t, db.Columns(t, table), "table %s must exist after concurrent first boot", table)
 	}
-	assert.EqualValues(t, len(tags), db.Count(t, store.IdSegmentTableName, "biz_tag IN ('player','guild')"),
-		"each bootstrap tag must have exactly one id_segment row")
 }
 
 // 锁被另一个实例持有、等待上限已到:返回 ErrMigrateLockBusy(-migrate 据此以退出码 3 让部署侧重试),

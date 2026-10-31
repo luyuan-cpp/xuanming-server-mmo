@@ -847,8 +847,7 @@ func (f *fakeLedger) ReadPersistedLedger(context.Context, uint64) (*componentpb.
 	return f.ledger, f.err
 }
 
-// ReadSQLCommittedLedger 让同一份假账本也能充当 SQL 提交证据(RequireSQLCommit 打开的用例);
-// Redis blob 与 SQL 证据要给出不同内容时用 sql_commit_test.go 的 splitLedger。
+// ReadSQLCommittedLedger 让同一份假账本也能充当已提交账本(RequireSQLCommit 打开的用例)。
 func (f *fakeLedger) ReadSQLCommittedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
 	return f.ReadPersistedLedger(ctx, playerID)
 }

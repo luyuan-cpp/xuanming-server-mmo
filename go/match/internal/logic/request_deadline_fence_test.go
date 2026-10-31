@@ -166,7 +166,7 @@ func TestWatchBattleRewatchAfterRequestDeadlineDoesNotEvictCurrentWatch(t *testi
 }
 
 func TestWatchBattleAddObserverOutcomeUnknownRemovesObserver(t *testing.T) {
-	// AddObserver 截止 / 取消 / 不可用:观众可能已在 battle 挂上。回失败之前补一次 RemoveObserver,与回滚标记一致。
+	// AddObserver 的任何 RPC 错误:观众可能已在 battle 挂上。回失败之前沿原件取消,拿到证明才回滚标记。
 	cases := []struct {
 		name string
 		err  error
@@ -174,6 +174,7 @@ func TestWatchBattleAddObserverOutcomeUnknownRemovesObserver(t *testing.T) {
 		{name: "截止", err: status.Error(codes.DeadlineExceeded, "context deadline exceeded")},
 		{name: "取消", err: status.Error(codes.Canceled, "context canceled")},
 		{name: "不可用", err: status.Error(codes.Unavailable, "transport is closing")},
+		{name: "内部错误", err: status.Error(codes.Internal, "stream terminated")},
 	}
 	for i, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

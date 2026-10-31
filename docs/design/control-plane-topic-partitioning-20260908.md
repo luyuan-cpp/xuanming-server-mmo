@@ -1,5 +1,7 @@
 # 控制面命令 topic:从"一节点一 topic"改为"固定分区 + 按 node_id 取模寻址"
 
+> **2026-10-30**:迁移窗口已结束。`Kafka.DisableLegacyPerNodeTopic` 和 C++ 的旧订阅分支都已删除,下文关于切换步骤的内容只作历史保留。
+
 > 状态:已落码(2026-09-08)。迁移开关 `Kafka.DisableLegacyPerNodeTopic` 默认 `false`,
 > 全部生产者切完后置 `true` 才算完成。
 

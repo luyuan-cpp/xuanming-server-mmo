@@ -11,13 +11,11 @@ import "proto/common/component/player_inbox_ledger_comp.proto";
 import "proto/common/base/user_accounts.proto";
 import "proto/common/base/service_call_auth.proto";
 import "proto/common/base/role_admission.proto";
-import "proto/common/database/player_cache.proto";
 
 option go_package = "data_service/data_service";
 
 // DataService: Cross-realm transparent data proxy.
 // Scene Server calls this service with player_id only;
-// DataService internally routes to the player's home-realm Redis.
 service DataService {
   // 全球账号角色目录；只接受已签名的 login 调用，不使用 Redis 归属降级。
   rpc ReadAccountDirectory(ReadAccountDirectoryRequest) returns (AccountDirectoryResponse) {}
@@ -37,59 +35,47 @@ service DataService {
   rpc CloseRoleAdmissions(CloseRoleAdmissionsRequest) returns (CloseRoleAdmissionsResponse) {}
   // 原 listing 的本地墓碑与排空 ACK；不是 caller 自报的冻结完成证明。
   rpc AckRoleTradeDrain(AckRoleTradeDrainRequest) returns (google.protobuf.Empty) {}
-  // ── Player lifecycle data ─────────────────────────────────────
-  rpc LoadPlayerData(LoadPlayerDataRequest) returns (LoadPlayerDataResponse) {}
-  rpc SavePlayerData(SavePlayerDataRequest) returns (SavePlayerDataResponse) {}
+  // 持有节点已判死:同一个事务里抬写权行的代次、清持有者、置 released=1,旧持有者恢复之后的写被挡住
+  // (docs/design/player-save-direct-commit.md §6)。只有 scene_manager 能调。
+  rpc ReleaseDeadPlayerStoreHolder(ReleaseDeadPlayerStoreHolderRequest) returns (google.protobuf.Empty) {}
 
-  // ── Fine-grained key/value access ────────────────────────────
-  rpc GetPlayerField(GetPlayerFieldRequest) returns (GetPlayerFieldResponse) {}
-  rpc SetPlayerField(SetPlayerFieldRequest) returns (SetPlayerFieldResponse) {}
-
-  // ── Player-zone mapping (registration / merge) ───────────────
+  // ── Player-zone mapping (registration / lookup) ───────────────
   rpc RegisterPlayerZone(RegisterPlayerZoneRequest) returns (google.protobuf.Empty) {}
   rpc GetPlayerHomeZone(GetPlayerHomeZoneRequest) returns (GetPlayerHomeZoneResponse) {}
   rpc BatchGetPlayerHomeZone(BatchGetPlayerHomeZoneRequest) returns (BatchGetPlayerHomeZoneResponse) {}
-  // Remap every player:zone:* mapping that points at source_zone_id to target_zone_id (server merge).
-  rpc RemapHomeZoneForMerge(RemapHomeZoneForMergeRequest) returns (RemapHomeZoneForMergeResponse) {}
 
-  // ── Cleanup / merge ──────────────────────────────────────────
-  rpc DeletePlayerData(DeletePlayerDataRequest) returns (DeletePlayerDataResponse) {}
-
-  // ── Snapshot / Rollback ──────────────────────────────────────
-  rpc CreatePlayerSnapshot(CreatePlayerSnapshotRequest) returns (CreatePlayerSnapshotResponse) {}
+  // ── Snapshot ──────────────────────────────────────
   rpc ListPlayerSnapshots(ListPlayerSnapshotsRequest) returns (ListPlayerSnapshotsResponse) {}
-  rpc GetPlayerSnapshotDiff(GetPlayerSnapshotDiffRequest) returns (GetPlayerSnapshotDiffResponse) {}
-  rpc RollbackPlayer(RollbackPlayerRequest) returns (RollbackPlayerResponse) {}
-  rpc RollbackZone(RollbackZoneRequest) returns (RollbackZoneResponse) {}
-  rpc RollbackAll(RollbackAllRequest) returns (RollbackAllResponse) {}
 
-  // ── Batch Recall / Anomaly / Event Snapshot ──────────────────
+  // ── Batch Recall / Anomaly ──────────────────
   rpc BatchRecallItems(BatchRecallItemsRequest) returns (BatchRecallItemsResponse) {}
   rpc QueryTransactionLog(QueryTransactionLogRequest) returns (QueryTransactionLogResponse) {}
-  rpc CreateEventSnapshot(CreateEventSnapshotRequest) returns (CreateEventSnapshotResponse) {}
 
   // ── ID segment allocation (Leaf-segment) ────────────────────
-  // C++ scene 没有 MySQL 客户端,永久 ID(item guid 等)的号段经这里从 id_segment 表领取。
-  // 见 docs/design/node-id-overhaul-plan-20260908.md §6。
+  // 永久 ID(player_id、item guid 等)的号段经这里领取,发号器见 go/data_service/internal/idissuer。
+  // 见 docs/design/player-data-tidb-scaling-plan.md §6。
   rpc AllocateIdSegment(AllocateIdSegmentRequest) returns (AllocateIdSegmentResponse) {}
 
   // ── Player name registry(角色名全服唯一)──────────────────────
-  // 真源是全局库 player_name 表(rollback_database_table.proto);zone 库
-  // player_database.profile_component 与 AccountSimplePlayer.name 都只是副本。
+  // 真源是全局库 player_name 表(rollback_database_table.proto);
+  // player_store 的 profile 片段与 AccountSimplePlayer.name 都只是副本。
   // 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
   // 设计见 docs/design/guild-phase2/03-names.md §3.1。
   rpc ReservePlayerName(ReservePlayerNameRequest) returns (ReservePlayerNameResponse) {}
   rpc ReleasePlayerName(ReleasePlayerNameRequest) returns (google.protobuf.Empty) {}
   rpc BatchGetPlayerName(BatchGetPlayerNameRequest) returns (BatchGetPlayerNameResponse) {}
+  // 玩家展示资料:名字、等级、职业、性别、外观,读 player_store。
+  // 好友列表、在线目录、队伍视图用。只读、不鉴权,与 BatchGetPlayerName 同级。
+  rpc BatchGetPlayerDisplay(BatchGetPlayerDisplayRequest) returns (BatchGetPlayerDisplayResponse) {}
 
-  // ── 资产通道:已落盘账本只读 ─────────────────────────────────
-  // 读 zone Redis 里 scene 写的 PlayerAllData blob 的 asset_op_ledger 子字段。只读、不鉴权(与
-  // BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader / SQLCommitLedgerReader / VerifiedLedgerReader。
-  // 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8;副本核验见 zone-redis-regression-guard-20261022.md §4.5。
+  // ── 资产通道:已落盘账本 ─────────────────────────────────
+  // 读 player_store 资产行(kind=ASSET)的 asset_op_ledger 子字段,和写权行出自同一条语句。只读、不鉴权
+  // (与 BatchGetPlayerName 同级)。实现 go/shared/assetop 的 LedgerReader / SQLCommitLedgerReader / StoreLedgerReader。
+  // 设计见 docs/design/guild-phase2/07-rollback-fail-closed.md §7.8。
   rpc GetPlayerAssetOpLedger(GetPlayerAssetOpLedgerRequest) returns (GetPlayerAssetOpLedgerResponse) {}
 
-  // ── 玩家收件箱:已落盘账本只读 ───────────────────────────────
-  // 读同一份 PlayerAllData blob 的 inbox_ledger 子字段,读法与错误语义照 GetPlayerAssetOpLedger。
+  // ── 玩家收件箱:已落盘账本只读 ──────────────────────────────
+  // 读同一行的 inbox_ledger 子字段,读法与错误语义照 GetPlayerAssetOpLedger。
   // 调用方是 go/player_inbox 的对账(定时作业与运维 ReconcilePlayer),不是 scene。
   // 设计见 docs/design/player-inbox-service.md §5.1、§9.3。
   rpc GetPlayerInboxLedger(GetPlayerInboxLedgerRequest) returns (GetPlayerInboxLedgerResponse) {}
@@ -97,9 +83,6 @@ service DataService {
 
 message AccountDirectoryResponse {
   AccountSimplePlayerList players = 1;
-  // 仅本次严格新建且 SQL 已提交的角色返回初始快照。
-  // 已有角色重放、导入、修复不补发种子凭据。
-  PlayerAllData initial_player_data = 2;
 }
 message AccountRoleOwnership {
   string account = 1;
@@ -121,6 +104,11 @@ message CreateAccountRoleRequest {
 message LookupAccountRoleRequest {
   uint64 player_id = 1;
   common.base.ServiceCallAuth auth = 2;
+}
+message ReleaseDeadPlayerStoreHolderRequest {
+  uint64 player_id = 1;
+  uint64 owner_epoch = 2;              // 判死时 location 这一代;库里已比它新就不动
+  common.base.ServiceCallAuth auth = 3;
 }
 message RepairAccountRoleRequest {
   string account = 1;
@@ -241,54 +229,6 @@ message AckRoleTradeDrainRequest {
   common.base.ServiceCallAuth auth = 4;
 }
 
-// ── Load / Save ────────────────────────────────────────────────
-
-message LoadPlayerDataRequest {
-  uint64 player_id = 1;
-  repeated string fields = 2; // optional: specific fields to load; empty = all
-}
-
-message LoadPlayerDataResponse {
-  uint32 error_code = 1;
-  map<string, bytes> data = 2; // field_name → serialised value
-  uint64 version = 3;          // optimistic-lock version
-}
-
-message SavePlayerDataRequest {
-  uint64 player_id = 1;
-  map<string, bytes> data = 2;
-  uint64 expected_version = 3; // 0 = skip version check
-}
-
-message SavePlayerDataResponse {
-  uint32 error_code = 1;
-  uint64 new_version = 2;
-}
-
-// ── Field-level access ─────────────────────────────────────────
-
-message GetPlayerFieldRequest {
-  uint64 player_id = 1;
-  string field = 2;
-}
-
-message GetPlayerFieldResponse {
-  uint32 error_code = 1;
-  bytes value = 2;
-}
-
-message SetPlayerFieldRequest {
-  uint64 player_id = 1;
-  string field = 2;
-  bytes value = 3;
-  uint64 expected_version = 4; // 0 = skip version check
-}
-
-message SetPlayerFieldResponse {
-  uint32 error_code = 1;
-  uint64 new_version = 2;
-}
-
 // ── Zone mapping ───────────────────────────────────────────────
 
 message RegisterPlayerZoneRequest {
@@ -304,11 +244,10 @@ message GetPlayerHomeZoneRequest {
 }
 
 message GetPlayerHomeZoneResponse {
+  // 已解析到最终区(别名合服:合服只写 zone_merged_into,玩家的原始 home_zone 不变,
+  // docs/design/player-data-tidb-scaling-plan.md §7.1)。
   uint32 home_zone_id = 1;
-  // home_zone 正处于合服围栏内(merge:in_progress:{home_zone_id} 存在),与 home_zone 同一段 Lua 读出。
-  // scene_manager 据此拒绝进场:合服窗口里源区归属玩家不得从任何 zone 进场,否则存盘会写进已排空的
-  // 源 topic(player-storage-placement.md §8 / §12 A16)。旧版 data_service 不填 = false。
-  bool home_zone_merging = 2;
+  reserved 2; // 原 home_zone_merging:合服围栏已删除
 }
 
 message BatchGetPlayerHomeZoneRequest {
@@ -316,34 +255,10 @@ message BatchGetPlayerHomeZoneRequest {
 }
 
 message BatchGetPlayerHomeZoneResponse {
-  map<uint64, uint32> player_zone_map = 2; // player_id → home_zone_id
+  map<uint64, uint32> player_zone_map = 2; // player_id → home_zone_id(同 GetPlayerHomeZoneResponse,已解析到最终区)
 }
 
-message RemapHomeZoneForMergeRequest {
-  uint32 source_zone_id = 1;
-  uint32 target_zone_id = 2;
-  bool   dry_run = 3; // if true, only count; no SET
-}
-
-message RemapHomeZoneForMergeResponse {
-  uint32 error_code = 1;
-  uint32 players_matched = 2; // home_zone == source_zone_id
-  uint32 players_updated = 3;  // same as matched unless dry_run (then 0)
-}
-
-// ── Delete / Cleanup ───────────────────────────────────────────
-
-message DeletePlayerDataRequest {
-  uint64 player_id = 1;
-  bool   delete_zone_mapping = 2; // also remove player→zone mapping?
-}
-
-message DeletePlayerDataResponse {
-  uint32 error_code = 1;
-  uint32 keys_deleted = 2;
-}
-
-// ── Snapshot / Rollback ────────────────────────────────────────
+// ── Snapshot ────────────────────────────────────────
 
 enum SnapshotType {
   SNAPSHOT_MANUAL          = 0; // GM-triggered
@@ -353,25 +268,7 @@ enum SnapshotType {
   SNAPSHOT_LOGIN           = 4; // On player login
 }
 
-enum RollbackScope {
-  ROLLBACK_FULL    = 0; // Restore all fields
-  ROLLBACK_PARTIAL = 1; // Restore selected fields only
-}
-
 // ── Snapshot management ────────────────────────────────────────
-
-message CreatePlayerSnapshotRequest {
-  uint64 player_id = 1;
-  SnapshotType type = 2;
-  string reason = 3;
-  string operator = 4; // GM operator name
-}
-
-message CreatePlayerSnapshotResponse {
-  uint32 error_code = 1;
-  uint64 snapshot_id = 2;
-  uint64 created_at = 3; // unix timestamp
-}
 
 message ListPlayerSnapshotsRequest {
   uint64 player_id = 1;
@@ -394,129 +291,6 @@ message SnapshotInfo {
 message ListPlayerSnapshotsResponse {
   uint32 error_code = 1;
   repeated SnapshotInfo snapshots = 2;
-}
-
-// ── Snapshot diff (soft rollback support) ──────────────────────
-
-message GetPlayerSnapshotDiffRequest {
-  uint64 player_id = 1;
-  uint64 snapshot_id = 2;    // specific snapshot; 0 = use target_time
-  uint64 target_time = 3;    // find latest snapshot before this time
-}
-
-message FieldDiff {
-  string field = 1;
-  bytes  snapshot_value = 2;  // value in snapshot (empty if field didn't exist)
-  bytes  current_value = 3;   // current live value (empty if field doesn't exist)
-  bool   only_in_snapshot = 4;
-  bool   only_in_current = 5;
-}
-
-message GetPlayerSnapshotDiffResponse {
-  uint32 error_code = 1;
-  uint64 snapshot_id_used = 2;
-  uint64 snapshot_time = 3;
-  repeated FieldDiff diffs = 4; // only fields that differ
-}
-
-// ── Single player rollback ─────────────────────────────────────
-
-// ── 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md)──────────
-//
-// 三个 Rollback* 在写任何玩家数据(含回档前安全快照)之前,先问 guild:"这些玩家自各自快照时刻以来,
-// 有没有已经终结为已应用的帮会资产操作?"有 → 默认拒绝(error_code = RollbackGuildDivergence);问不到
-// → 同样拒绝且放行无效(RollbackGuildCheckFailed)。错误码走本服务自己的码轴
-// (go/data_service/internal/constants/error_codes.go),proto 里不写数字。
-//
-// 鉴权:三个 Rollback* 一律要求 metadata `x-admin-token`(07 §7.6.3 Q2 = ②),与 RemapHomeZoneForMerge
-// 同一套 AdminToken;没配 AdminToken = 回档 RPC 整体停用。
-//
-// 放行(accept_guild_divergence = true)只覆盖"guild 答了,答案是有分歧 / 快照早于保留期证明不了",
-// 不覆盖"guild 没答";且要求 reason 与 operator 非空。放行时每一条分歧先以 ERROR 日志写出
-// (`[Rollback][GuildDivergence] accepted …`),供事后按 op_id 人工补偿。
-
-// 回档被帮会资产分歧拦下(或被放行)时的摘要行。与 guildpb.GuildAssetOpBrief 同义;刻意不 import
-// guild 的 proto,避免 data_service 的 C++/Go 生成闭包依赖 guild。kind / status 是 guild_db.proto 里
-// GuildAssetOpKind / GuildAssetOpStatus 的数值(status 只会是 APPLIED 或 APPLIED_PARTIAL)。
-message RollbackGuildDivergence {
-  uint64 op_id = 1;
-  uint64 player_id = 2;
-  uint64 guild_id = 3;              // 发起时绑定的帮会;该帮会可能已解散
-  uint32 kind = 4;
-  uint32 status = 5;
-  uint64 funds_delta = 6;
-  uint64 contribution_delta = 7;
-  uint64 updated_ms = 8;            // guild 侧终结时刻(毫秒,guild 的墙钟)
-}
-
-message RollbackPlayerRequest {
-  uint64 player_id = 1;
-  uint64 snapshot_id = 2;    // specific snapshot; 0 = use target_time
-  uint64 target_time = 3;    // rollback to latest snapshot before this time
-  RollbackScope scope = 4;
-  repeated string fields = 5; // only for ROLLBACK_PARTIAL
-  string reason = 6;
-  string operator = 7;
-  // true = 明知帮会资产有分歧(或快照早于帮会流水保留期、无法证明)仍要回档;要求 reason 与 operator 非空。
-  // 默认 false = 有分歧即拒绝。ROLLBACK_PARTIAL 同样过闸。
-  bool accept_guild_divergence = 8;
-}
-
-message RollbackPlayerResponse {
-  uint32 error_code = 1;
-  uint64 snapshot_id_used = 2;
-  uint64 pre_rollback_snapshot_id = 3; // safety snapshot created before rollback
-  repeated string fields_restored = 4;
-  // 帮会资产分歧条数(已按逐玩家快照时刻过滤)。error_code = RollbackGuildDivergedAfterWrite 时是写后复查
-  // 新发现的条数。
-  uint32 guild_divergence_count = 5;
-  repeated RollbackGuildDivergence guild_divergences = 6; // 按 op_id 升序的前 20 条
-  // 快照早于帮会流水保留期、无法证明的玩家数(是谁看 `[Rollback][GuildDivergence] unprovable` 日志)。
-  uint32 guild_unprovable_player_count = 7;
-}
-
-// ── Zone rollback ──────────────────────────────────────────────
-
-message RollbackZoneRequest {
-  uint32 zone_id = 1;
-  uint64 target_time = 2;
-  string reason = 3;
-  string operator = 4;
-  bool accept_guild_divergence = 5;  // 语义同 RollbackPlayerRequest.accept_guild_divergence
-}
-
-message RollbackZoneResponse {
-  uint32 error_code = 1;
-  uint32 players_affected = 2;
-  uint32 players_failed = 3;
-  repeated uint64 failed_player_ids = 4;
-  // Compatibility name: players currently mapped to the zone but without a
-  // snapshot at or before target_time. Candidates are reported only; no player
-  // data, zone mapping, or account relationship is deleted.
-  repeated uint64 orphan_player_ids = 5;
-  uint32 orphans_cleaned = 6;
-  uint32 guild_divergence_count = 7;                       // 语义同 RollbackPlayerResponse
-  repeated RollbackGuildDivergence guild_divergences = 8;  // 按 op_id 升序的前 20 条
-  uint32 guild_unprovable_player_count = 9;
-}
-
-// ── Full server rollback ───────────────────────────────────────
-
-message RollbackAllRequest {
-  uint64 target_time = 1;
-  string reason = 2;
-  string operator = 3;
-  bool accept_guild_divergence = 4;  // 语义同 RollbackPlayerRequest.accept_guild_divergence
-}
-
-message RollbackAllResponse {
-  uint32 error_code = 1;
-  uint32 zones_processed = 2;
-  uint32 players_affected = 3;
-  uint32 players_failed = 4;
-  uint32 guild_divergence_count = 5;                       // 全部 zone 合并检查一次(语义同 RollbackPlayerResponse)
-  repeated RollbackGuildDivergence guild_divergences = 6;  // 按 op_id 升序的前 20 条
-  uint32 guild_unprovable_player_count = 7;
 }
 
 // ── Batch Recall ───────────────────────────────────────────────
@@ -594,38 +368,16 @@ message QueryTransactionLogResponse {
   uint32 total_count = 3;              // total matching rows (for pagination)
 }
 
-// ── Event-Triggered Snapshot ───────────────────────────────────
-
-enum SnapshotEventType {
-  EVENT_LARGE_TRANSACTION  = 0;  // Currency/item above threshold
-  EVENT_RECHARGE           = 1;  // Real-money purchase
-  EVENT_PRE_MAINTENANCE    = 2;  // Scheduled maintenance
-  EVENT_LEVEL_UP           = 3;  // Milestone level-up
-  EVENT_FIRST_LOGIN        = 4;  // First login of the day
-}
-
-message CreateEventSnapshotRequest {
-  uint64 player_id = 1;
-  SnapshotEventType event_type = 2;
-  string event_detail = 3;             // human-readable context
-  string operator = 4;
-}
-
-message CreateEventSnapshotResponse {
-  uint32 error_code = 1;
-  uint64 snapshot_id = 2;
-  uint64 created_at = 3;
-}
-
 // ── ID segment allocation ──────────────────────────────────────
 
 message AllocateIdSegmentRequest {
-  string biz_tag = 1;   // id_segment.biz_tag:"player" / "guild" / "item"
-  uint32 step = 2;      // 0 = 用表里配置的 step;>0 = 本次希望领取的段长(服务端可钳制)
+  string biz_tag = 1;   // 种类:"player" / "guild" / "item"
+  uint32 step = 2;      // 0 = 用发号器的默认长度;>0 = 本次希望领取的段长(服务端可能截短)
 }
 
 // 返回半开区间 [lo, hi):调用方独占这一段,服务端一经返回即视为已发出、绝不重发。
 // 调用方段内发号完毕(或进程退出)剩余的号直接作废,不回收。
+// lo、hi 是计数器值,调用方发号时要过一遍打散函数(go/shared/idsegment 的 MixID、C++ 的 MixGuid)。
 // error_code 沿用本文件约定:0 = 成功,其余取值来自 data_service 自己的错误码轴
 // (go/data_service/internal/constants/error_codes.go),不在 tip 码轴上,proto 里不写数字。
 message AllocateIdSegmentResponse {
@@ -679,46 +431,48 @@ message BatchGetPlayerNameResponse {
   map<uint64, string> names = 1;
 }
 
+message BatchGetPlayerDisplayRequest {
+  repeated uint64 player_ids = 1;      // 最多 1024 个
+}
+
+message PlayerDisplay {
+  string name = 1;
+  uint32 level = 2;                    // 还没存过盘的新角色是 0
+  uint32 class_id = 3;
+  uint32 gender = 4;
+  string appearance_id = 5;
+}
+
+// 缺席的 id(角色不存在)不出现在 map 里,不是错误。
+message BatchGetPlayerDisplayResponse {
+  map<uint64, PlayerDisplay> players = 1;
+}
+
 // ── 资产通道:已落盘账本 ───────────────────────────────────────
 //
-// 语义(07 §7.8.2):读的是 `<PlayerAllData 全名>:{player_id}`(scene 存盘写的那份 blob),
-// **不是** data_service 自己那套 player:{id}:<field>(那里没有账本)。不回退读 MySQL:MySQL
-// 落库是异步 DBTask,可能更旧,会把已记账的 seq 误判为未见。
+// 语义:读 player_store 的资产行(kind=ASSET)和写权行,出自同一条语句,看到的是已提交的最新值。
 // 读不成一律走 gRPC 错误,**绝不**用 found=false 顶替:
-//   - home_zone 查不到(无映射 / 映射库出错 / zone 未配 Redis)→ Unavailable;
-//   - zone Redis 读失败 → Internal;blob 在但反序列化失败、或 player_id 与请求不符 → Internal;
+//   - 库读失败、片段损坏 → Internal;
 //   - player_id = 0 → InvalidArgument。
 
 message GetPlayerAssetOpLedgerRequest {
   uint64 player_id = 1;
-  bool require_sql_commit = 2; // true 只读取 SQL 提交证据，缺失时 found=false，禁止 Redis 快照回退
-  // true:读 Redis 父键 blob 时,在同一段 Lua 里一并取本实例身份与屏障 player:{id}:save_barrier 的
-  // verified_identity,结论回在 redis_copy_verified(资产自动放弃的闸,
-  // docs/design/zone-redis-regression-guard-20261022.md §4.5)。只适用于 blob 读,与 require_sql_commit
-  // 同时为 true 回 InvalidArgument。
-  bool verify_redis_copy = 3;
 }
 
 message GetPlayerAssetOpLedgerResponse {
-  bool found = 1;                          // false = 该玩家在 zone Redis 里没有 blob(从未入场,或 Redis 丢数据)
+  bool found = 1;                          // false = 这个玩家没有写权行(从未建角)
   PlayerAssetOpLedgerComp ledger = 2;      // found=true 且玩家从未有过资产操作时为空消息(不是缺席)
-  bool sql_committed = 3; // SQL 提交证据分支才为 true；旧服务默认 false，强一致调用拒绝旧证据
-  // 只在 verify_redis_copy=true 时有意义:读 blob 的同一段 Lua 里,本实例身份已知、role=master,且等于
-  // login 核验时写下的身份戳。false(身份戳不等 / 身份未知 / 不是主 / 没有 blob / 对端不认识 verify_redis_copy)
-  // = 这份副本可能回退过,调用方不得拿它作「确定未见」的证据。
-  bool redis_copy_verified = 4;
+  bool player_released = 3;                // 写权行 released=1:持有者已最终存盘并释放,或者没有人认领过
 }
 
 // ── 玩家收件箱:已落盘账本 ─────────────────────────────────────
 //
-// 语义与错误口径同上面的资产通道账本:读 scene 存盘写的 `<PlayerAllData 全名>:{player_id}` blob 的
-// inbox_ledger,不回退读 MySQL;读不成一律走 gRPC 错误(Unavailable / Internal / InvalidArgument),
-// **绝不**用 found=false 顶替。响应形状同 GetPlayerAssetOpLedgerResponse:只有 found 与 ledger,
-// 不带 error_code 也不带 tip(设计 §1.4 注)。
+// 语义与错误口径同上面的资产通道账本:读 player_store 资产行里的 inbox_ledger。
+// 响应形状同 GetPlayerAssetOpLedgerResponse:只有 found 与 ledger,不带 error_code 也不带 tip(设计 §1.4 注)。
 
 message GetPlayerInboxLedgerRequest { uint64 player_id = 1; }
 
 message GetPlayerInboxLedgerResponse {
-  bool found = 1;                          // false = 该玩家在 zone Redis 里没有 blob(从未入场,或 Redis 丢数据)
+  bool found = 1;                          // false = 这个玩家没有写权行(从未建角)
   PlayerInboxLedgerComp ledger = 2;        // found=true 且玩家从未消费过收件箱时为空消息(不是缺席)
 }

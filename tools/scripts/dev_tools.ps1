@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "merge-zone-relocate", "merge-zone-relocate-abort", "merge-zone-pin-placement", "merge-zone-storage-audit", "merge-zone-capability-check", "kafka-offset-reset", "git-stats")]
+    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "kafka-offset-reset", "git-stats")]
     [string]$Command,
 
     [string]$ConfigPath = "",
@@ -90,19 +90,6 @@
     # (回退后果与前置见 k8s_deploy.ps1 -GateRouterMode 参数注释)。
     [ValidateSet("", "0", "1")]
     [string]$GateRouterMode = "",
-    # go/db 存盘消费组的渲染模式(keep | zone | legacy),透传给 k8s_deploy.ps1 同名参数,语义见那边的参数注释与
-    # docs/design/db-consumer-group-per-zone.md(zone / legacy 只许配 k8s-zone-up,由 k8s_deploy.ps1 在入口拒绝)。
-    # 默认留空 = 不透传,由 k8s_deploy.ps1 的默认值 keep 接管(写法同 -GateRouterMode:默认值只留在 k8s_deploy.ps1 一处)。
-    # k8s-image-* / k8s-release-* 不转发它(不部署 db);k8s-zone-rollback 不经本参数,回滚脚本的 Step 6 自己固定传 zone。
-    # 这两条路上显式给了即在任何副作用之前拒绝,不静默吞掉。
-    [ValidateSet("", "keep", "zone", "legacy")]
-    [string]$DbConsumerGroup = "",
-    # 排行榜评分快照发布开关(k8s-infra-up / k8s-all-up),透传给 k8s_deploy.ps1 -MatchRatingSnapshotPublish(docs/design/leaderboard-system.md §5.4)。
-    # 默认留空 = 不透传,由 k8s_deploy.ps1 的默认值 "0" 接管(写法同 -GateRouterMode)。⚠ 那边**不粘滞**:以 "1" 运行的环境用本入口
-    # 发版却不传,会落回 "0"、榜停止更新(部署输出有一行 MatchRatingSnapshotPublish: 0)。k8s-release-*(k8s_image.ps1)不部署全局
-    # Go 服务、碰不到 match,不转发它。
-    [ValidateSet("", "0", "1")]
-    [string]$MatchRatingSnapshotPublish = "",
     # B0-4 运维豁免开关(NODE_OPEN_FILE_LIMIT_MODE),透传给 k8s_deploy.ps1 -NodeOpenFileLimitMode(k8s-infra-up / k8s-zone-up /
     # k8s-all-up)、k8s_image.ps1(k8s-release-*)与 k8s_zone_rollback.ps1(k8s-zone-rollback,由它的 Step 6 转给 k8s-zone-up)。
     # 取值语义、覆盖范围(zone-up 的 gate / scene,infra-up 的 battle)与 warn 的代价见 k8s_deploy.ps1 同名参数注释。
@@ -246,18 +233,17 @@
     [int]$Zone = 0,
     # Port offset between zones (forwarded to go_services.ps1).
     [int]$ZonePortShift = 1000,
-    # ── merge-zone / merge-zone-audit / merge-zone-unmerge / 落点(relocate / pin-placement / storage-audit)──
-    # 合服跨了三个 Redis DB。DB 号猜错不会报错,只会**静默无效**。所以每个 DB
+    # ── merge-zone / merge-zone-audit / merge-zone-unmerge ──
+    # 合服碰到的 Redis 可以是不同的实例与 DB。DB 号猜错不会报错,只会**静默无效**。所以每个 DB
     # 都是独立参数,默认值取自各服务 yaml。
-    #   mapping DB 0   player:zone / player:placement / lock:player / merge:in_progress /
-    #                  merge:merged_into / db:capability:zone(落点记录与能力标记都和 player:zone 同库)
+    #   mapping DB 0   merge:merged_into / mapping:route:watermark
     #                  **一定是 0**:data_service 用 go-zero 的 MustNewRedis,
     #                  而 go-zero v1.10.0 的 RedisConf 没有 DB 字段,yaml 里写
     #                  `DB: 15` 会被静默忽略(那行 inert 的键已从 yaml 删除)。
-    #                  传 -MergeMappingRedisDB 15 = fence 与 remap 一起指向
-    #                  data_service 从不碰的库 = 审计恒绿、合服报成功却零改动。
+    #                  传 -MergeMappingRedisDB 15 = 映射镜像写到 data_service 从不碰的库。
     #   guild   DB 0   guild_rank:zone / guild:v2 / guild_rank:maintenance_lock(2026-10-23 由 DB 2 改为 0)
-    #   login   DB 0   player_merge_notice / player:session / kafka:retry|dead
+    #   login   DB 0   player:session
+    #   scene   DB 0   scene_nodes:zone:*:load
     # friend 的 DB 3 已退役(friend 移植:F2 删读者、F3 删参数):friend:online 从来没有写者,读者也已删除,
     # 好友在线状态改为读共享库的契约 key player:session:{id}(login 段那一行)。
     # 所以这里不再有 friend 的 Redis 参数;好友数据在独占库 mmorpg_friend,归 merge_zone 的 MySQL 审计管。
@@ -276,84 +262,26 @@
     [string]$MergeSceneRedisAddr = "",
     [int]$MergeSceneRedisDB = 0,
     # etcd 客户端地址(逗号分隔,http://host:2379),转发为 -etcd-endpoints。merge-zone / merge-zone-unmerge 必填:
-    # 门禁 P2 与 -MergeClearSourceHotState 要 etcd 场景节点注册表的正面证据(该 zone 一条注册都没有)。
+    # 门禁 P2 要 etcd 场景节点注册表的正面证据(该 zone 一条注册都没有)。
     # 不设缺省值:指向错的 etcd(例如本机空 etcd 而 Redis 指向 K8s)会把活着的 zone 误判为已下线。
     [string]$MergeEtcdEndpoints = "",
-    # 多 Redis 集群部署才需要的 player:{id}:* blob 拷贝。
-    [switch]$MergeMigratePlayerBlobs,
-    [string]$MergeSourceDataRedis = "",
-    [string]$MergeTargetDataRedis = "",
-    [string]$MergeDataRedisPassword = "",
-    [int]$MergeSourceDataRedisDB = 0,
-    [int]$MergeTargetDataRedisDB = 0,
-    # 合服后清掉源区在 scene_manager Redis 里的热状态(location / scene / 频道 / 节点)。
-    [switch]$MergeClearSourceHotState,
-    # 存量玩家 player:zone 回填。**第一次合服之前每个 zone 都要跑一遍。**
-    [int]$MergeBackfillZone = 0,
-    # 清单 / 复核 / 撤销 / 搬库续跑与放弃。合服与搬库留空时在仓库根按时间戳生成;
+    # 清单 / 复核 / 撤销 / 续跑。合服留空时在仓库根按时间戳生成;
     # -DryRun 从不写它,只写 <path>.dryrun.json 预览(apply / unmerge / verify 都拒读预览)。
     [string]$MergeManifestPath = "",
-    [int]$MergeExpectedSrcPlayers = -1,
-    [switch]$MergeAllowEmptySource,
-    [string]$MergeTableListJson = "",
-    # Kafka 积压门禁:有 CLI 就真查,没有就必须显式声明(不允许静默跳过)。
-    # TopicGeneration 必须与 go/db/etc/db.yaml 一致 —— 查错 topic 等于「查了一个不存在的 topic,lag 恒 0」,
-    # 门禁形同虚设;留空(-1)即现读 db.yaml。
-    # 消费组(-MergeKafkaGroup)留空 = 不转发,由 tools/merge_zone 按 zone 推导候选组(db_rpc_consumer_group_z<zone>
-    # 加 legacy 组 db_rpc_consumer_group),只认在本 topic 上有已提交位点的唯一权威组(docs/design/db-consumer-group-per-zone.md §7)。
-    # 只在需要显式指定实际在跑的组时才给(例如本机混用过单 zone 默认启动的裸名组与 -Zone N 启动的 _zN 组)。
-    [string]$MergeKafkaConsumerGroupsCmd = "",
-    [string]$MergeKafkaBootstrap = "127.0.0.1:9092",
-    [string]$MergeKafkaGroup = "",
-    [int]$MergeKafkaTopicGeneration = -1,
-    [switch]$MergeAssumeKafkaDrained,
     # 聚宝斋步骤 3b(tools/merge_zone -skip-trade-mysql):merge_zone 默认要求 mmorpg_trade.trade_listing 存在(fail-closed)。
-    # 只在确实没有部署 trade 的环境显式跳过;跳过后 -VerifyMerged 的 verify:trade_listing 记 warn "NOT VERIFIED",不算通过。
+    # 只在确实没有部署 trade 的环境显式跳过;跳过后 -VerifyMerged 的 verify:trade_market_zone 记 warn "NOT VERIFIED",不算通过。
     [switch]$MergeSkipTradeMySql,
     # 帮会步骤开关(tools/merge_zone -skip-guild-mysql / -skip-guild-rank)。与 trade 开关同理放在公共参数里:
     # 合服 / 撤销 / 审计必须同一口径。审计只在**两个都给**时才把 guild_member 核对记为 SKIPPED(warn);
     # 只给一个时审计仍按「部署了帮会」去查,库或表查不成是 INFRA(exit 2)。只在确实没部署 guild 的环境使用。
     [switch]$MergeSkipGuildMySql,
     [switch]$MergeSkipGuildRank,
-    # 玩家主数据处理方式(player-storage-placement.md §10):留空 = 工具默认 pin(只改归属、给无记录者钉落点、
-    # 不拷行,要求 -MergeDbCapabilityZones 里每个 zone 的 go/db 已带能力标记);copy = 旧版 go/db 的兼容模式。
-    # 只对 merge-zone 生效:撤销与复核按清单里记录的模式,续跑必须与清单同模式。
-    # PowerShell 不校验参数默认值,所以默认 "" 不受 ValidateSet 约束,只拦显式传错的值。
-    [ValidateSet("pin", "copy")]
-    [string]$MergePlayerRowsMode = "",
-    # 必须带能力标记 db:capability:zone:{z}=placement-routing-v1 的 zone:逗号分隔的 zone 号,或字面量 none
-    # (「此刻没有别的 zone 在跑,不检查」)。**工具没有缺省值**(标记是 90s 心跳,T-0 时 src / dst 已 zone-down,
-    # 旧的缺省 "src,dst" 必然被拒;src / dst 记号已删除):
-    #   merge-zone(pin)                必填,可 none;T-0 只列仍在跑的 zone(runbook §5.1)。copy 模式只在清单玩家已有
-    #                                   落点记录时由工具要求
-    #   merge-zone-unmerge              清单是 pin 模式时由工具要求(可 none);copy 撤销给了才查
-    #   merge-zone-relocate             必填,不接受 none(搬库在线进行,全部在跑的 zone 都要列)
-    #   merge-zone-capability-check     必填,不接受 none(合服后 dst zone-up、开服之前核对它)
-    [string]$MergeDbCapabilityZones = "",
-    # -Command merge-zone-pin-placement:给 home_zone==N 且无落点记录的玩家钉 "N:1"。有效落点不变,在线执行安全、幂等。
-    [int]$MergePinPlacementZone = 0,
-    # -Command merge-zone-relocate / merge-zone-relocate-abort(搬库,§9)。storage id:1..999999 = zone_{id}_db,
-    # >=1000000 = player_store_{id}_db。用 long:工具按 uint32 接收,int 装不下上半段。
-    # relocate-abort 可选给这两个,工具会与清单核对,防止拿错清单放弃了别的搬库。
-    [long]$MergeRelocateSourceStorage = 0,
-    [long]$MergeRelocateTargetStorage = 0,
-    # 逗号分隔的 player_id;留空 = 有效落点为源库的全部玩家。
-    [string]$MergeRelocatePlayerIds = "",
-    # 0 / 空 = 不转发,用工具默认(批大小 100;R2 等排序锁 150s,略大于 go/db 排序锁 TTL 2m)。
-    # 等锁时长是 Go duration 字面量,如 "150s" / "3m"。
-    [int]$MergeRelocateBatchSize = 0,
-    [string]$MergeRelocateLockWait = "",
-    # -Command merge-zone-storage-audit:要审计的落点库 id。退役一个库之前,结论必须是
-    # "RETIREMENT CHECK: nothing routes to storage" 且 unmapped / unreadable 都为 0。
-    [long]$MergeAuditStorage = 0,
-    # merge-zone-audit only — switches to post-merge verification mode that
-    # asserts source-zone state has been emptied. See merge-zone-runbook.md §5.
-    # 必须同时给 -MergeManifestPath:复核逐个核对清单里的玩家(映射 == dst、落点库有行),没有清单无从核对。
+    # 只用于 merge-zone-audit:改跑合服后验证(verify:merged_into / guild_zone / trade_market_zone / guild_rank)。
+    # 必须同时给 -MergeManifestPath:映射与清单的 run_id 要互相核对,没有清单无从核对。
     [switch]$VerifyMerged,
 
     # ── kafka-offset-reset ────────────────────────────────────────
     # See tools/scripts/kafka_offset_reset.ps1 for full docs.
-    # Used by zone rollback (docs/design/zone_data_rollback.md §3 step 4).
     [string]$KafkaBootstrapServer = "kafka:9092",
     [string]$KafkaGroup = "",
     [string]$KafkaTopic = "",
@@ -366,10 +294,6 @@
     # 以前缺省 1 且只在 ≠ 1 时透传,单 broker 档显式给 1 也传不下去。
     [int]$KafkaReplicationFactor = 0,
     [string]$KafkaBin = "",
-    # 转给 kafka_offset_reset.ps1 -RetireGroup / -FinalizeHandoff(db_task 消费组交接收尾与回档退役旧组位点,
-    # 见 docs/design/db-consumer-group-per-zone.md §5)。都要配 -KafkaPartitions(> 0)。
-    [string]$KafkaRetireGroup = "",
-    [switch]$KafkaFinalizeHandoff,
     [switch]$KafkaApply,
 
     # ── k8s-zone-rollback ─────────────────────────────────────────
@@ -382,33 +306,22 @@
     # 已废弃(2026-10-18):口令不再经命令行。非空即在调用回滚脚本之前拒绝,改用 -RollbackRedisPasswordEnv <环境变量名>。
     [string]$RollbackRedisPassword = "",
     [int]$RollbackRedisDB = 0,
-    # 留空 = 由 k8s_zone_rollback.ps1 按 -ZoneId 与 go/db/etc/db.yaml 的 TopicGeneration 推导 db_task_zone_<id>[_g<gen>];
-    # 显式给了却与推导值不同,回滚脚本在入口拒绝。旧默认 "db_task_topic" 全仓不存在,会静默重置一个空 topic。
-    [string]$RollbackKafkaTopic = "",
-    # 留空 = 由 k8s_zone_rollback.ps1 按 go/db/etc/db.yaml 的 GroupID 基名推导:-RollbackKafkaGroup 为 <基名>_z<ZoneId>
-    # (回档后的权威组,Step 5 重置它),-RollbackKafkaLegacyGroup 为 <基名>(Step 5 删除它在本 topic 上的位点)。
-    # 非空才转发。以前缺省是 legacy 共享组:别的 zone 在线时它不是 Empty,Step 5 的重置一定被拒。
-    [string]$RollbackKafkaGroup = "",
-    [string]$RollbackKafkaLegacyGroup = "",
     [switch]$RollbackSkipMySqlPause,
     # 转给 k8s_zone_rollback.ps1 -ConfirmNoGatewayIngress:显式声明回滚后该 zone 不要 Ingress gateway(Ingress 核对的显式决定,
     # 与 -GatewayIngressHost 互斥)。switch 不占位置参数,插在这里不影响后面参数的位置绑定。
     [switch]$RollbackConfirmNoGatewayIngress,
-    # 已废弃(2026-10-18):回档不再 FLUSHDB(go/db 游标、重试收据、映射、账号目录与各 zone 缓存同在一个 Redis DB)。
+    # 已废弃(2026-10-18):回档不再 FLUSHDB(归属与位置键、交接标记、路由映射与账号目录同在一个 Redis DB)。
     # 传了即在调用回滚脚本之前拒绝;整套环境重建走 AGENTS.md §6.2。
     [switch]$RollbackConfirmFlushSharedRedis,
     # 以下转给 k8s_zone_rollback.ps1 的同名参数(去掉 Rollback 前缀),非空 / 大于 0 才转发,语义与校验都在回滚脚本一处:
-    # Redis 口令所在的环境变量名、zone_<id>_db DSN 所在的环境变量名(都只给变量名)、预编译的 zone_rollback_discard、屏障协议世代
-    # (legacy;strict 待负责人裁决 #3)、rollback-id(单步或整脚本重跑用同一个)、Step 1b 的静默窗口秒数(≥ 300)、
-    # -RollbackSkipMySqlPause 时声明的 PITR 恢复时刻、带 blocked 玩家继续的人数(待负责人裁决 #4,回滚脚本会拒绝)。
+    # Redis 口令所在的环境变量名、zone_<id>_db DSN 所在的环境变量名(都只给变量名)、预编译的 zone_rollback_discard、
+    # rollback-id(单步或整脚本重跑用同一个)、-RollbackSkipMySqlPause 时声明的 PITR 恢复时刻、
+    # 带 blocked 玩家继续的人数(待负责人裁决 #4,回滚脚本会拒绝)。
     # switch 与这些字符串 / 整数都放在参数块末尾,不影响前面参数的位置绑定。
     [string]$RollbackRedisPasswordEnv = "",
     [string]$RollbackMySqlDsnEnv = "",
     [string]$RollbackDiscardTool = "",
-    [ValidateSet("", "legacy", "strict")]
-    [string]$RollbackBarrierProtocol = "",
     [string]$RollbackId = "",
-    [int]$RollbackQuiesceSeconds = 0,
     [string]$RollbackPitrRestoredTo = "",
     [int]$RollbackAcceptBlockedPlayers = 0,
     # 转给 k8s_zone_rollback.ps1 的 -AllowEmptyTarget / -AcknowledgeNoPostTWrites(回档复核 [11]):只在被指定时转发,语义见回滚脚本同名参数
@@ -416,7 +329,6 @@
     # 以前经本入口走不到这两条路径,只能直接调用回滚脚本。
     [switch]$RollbackAllowEmptyTarget,
     [switch]$RollbackAcknowledgeNoPostTWrites,
-    # 原 -RollbackKafkaDrainTimeoutSec 已删除(2026-10-15):回滚脚本删掉了 zone-down 之后等 LAG 排空的 Step 2。
     [switch]$RollbackApply,
     # 集群内 login 的第三方登录(微信 / QQ),透传给 k8s_deploy.ps1 同名参数(k8s-zone-up / k8s-all-up)与 k8s-zone-rollback 的 Step 6,
     # 语义、形状校验与微信密钥(环境变量 MMORPG_LOGIN_WECHAT_APP_SECRET,不经参数)都只在 k8s_deploy.ps1 一处。字符串非空才透传,
@@ -431,19 +343,13 @@
     [string]$LoginQQEndpoint = "",
     [switch]$LoginQQAllowOpenId,
     [switch]$ConfirmLoginAuthProviderChange,
-    # ── merge-zone 系列的映射来源(D1 第 2 批,docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §13.3 第 3 条)──
-    # 转给 tools/merge_zone 的 -route-source / -route-db-dsn / -waitaof-local / -waitaof-replicas / -waitaof-timeout-ms。
-    # **没有缺省值,也不从 data_service.yaml 推断**:除 merge-zone-capability-check(不读写映射)外的每个 merge-zone 命令都必须显式给
-    # -MergeZoneRouteSource db|redis,缺了在调用工具之前点名拒绝。推断不可靠:本机 yaml 与线上部署可以是两种模式,猜错的一边
-    # 会写错库(db_first 环境里直写 Redis 写出库不知道的值;redis 环境里写库则缓存根本不认)。
-    #   db    data_service 已是 RouteStore.Mode=db_first:必须同时给 -MergeZoneRouteDbDsn(全局库 DSN,dev testdb / K8s mmorpg_global;
-    #         含口令,建议从环境变量取,例如 -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN,不进 shell 历史)。
-    #   redis 只在全部 data_service 仍是 RouteStore.Mode=redis 时用;不接受 -MergeZoneRouteDbDsn(由工具拒绝)。
-    # 工具开写前还会核对库与 mapping Redis 是否成对(mapping:route:watermark),不成对即拒绝。
+    # ── merge-zone 系列的路由库与 WAITAOF ──
+    # 转给 tools/merge_zone 的 -route-db-dsn / -waitaof-local / -waitaof-replicas / -waitaof-timeout-ms。
+    # -MergeZoneRouteDbDsn **没有缺省值**:全局库(dev testdb / K8s mmorpg_global)是 zone_merged_into 与 player_route 的唯一真源,
+    # 工具三个模式都读它,缺了在调用工具之前点名拒绝。含口令,建议从环境变量取,例如 -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN,
+    # 不进 shell 历史。工具开写前还会核对库与 mapping Redis 是否成对(mapping:route:watermark),不成对即拒绝。
     # WAITAOF 三项 -1 = 不转发,用工具缺省(1 / 0 / 1500ms);redis-ha 档把 -MergeZoneWaitAofReplicas 设为 1。
     # 追加在参数块末尾,理由同上(字符串参数按声明顺序占位置)。
-    [ValidateSet("", "db", "redis")]
-    [string]$MergeZoneRouteSource = "",
     [string]$MergeZoneRouteDbDsn = "",
     [int]$MergeZoneWaitAofLocal = -1,
     [int]$MergeZoneWaitAofReplicas = -1,
@@ -457,19 +363,12 @@
     [string]$RouteToolReportDir = "",
     [int]$RouteToolTimeoutSeconds = 0,
     [string]$RouteToolImage = "",
-    # ── merge-zone / merge-zone-unmerge 续跑接手库围栏(D1 第 2 批)──
-    # 转给 tools/merge_zone 的 -take-over-fence <run_id>。-MergeZoneRouteSource db 下,写到一半中止的合服 / 撤销会把库围栏
-    # (zone_merge_fence)故意留着,中止文案给出 run_id;确认那次运行的进程已不在之后,原命令加 -MergeZoneTakeOverFence <run_id>
-    # 重跑,工具在一个库事务里把围栏接到新 run_id,两区一刻不解封(docs/ops/merge-zone-runbook.md §15.4)。db 源下不要再
-    # 「DEL merge:in_progress 键后重跑」:库里的围栏才是真源。留空不转发;适用范围由工具判(经 Get-MergeRouteSourceArgs 转发)。
-    # 追加在参数块末尾,理由同上(字符串参数按声明顺序占位置)。
-    [string]$MergeZoneTakeOverFence = "",
     # ── D1 映射开关,透传给 k8s_deploy.ps1 同名参数(k8s-infra-up / k8s-zone-up / k8s-all-up)──
     # 语义、组合门禁与粘滞核对(线上现状与本次参数不一致且没带 -ConfirmRouteSwitchChange 即拒绝)都只在 k8s_deploy.ps1 一处,
-    # 本入口只透传:-RouteStoreMode 非空才传,五个 switch 只在被指定时传,默认值只留在下游(2026-10-21 起 k8s_deploy 缺省
+    # 本入口只透传:-RouteStoreMode 非空才传,四个 switch 只在被指定时传,默认值只留在下游(2026-10-21 起 k8s_deploy 缺省
     # db_first / 全 true = 全球默认,部署 Go 服务时入口闸只许这一组值)。线上仍是旧值(redis / false)的集群经本入口部署会被
     # 粘滞核对拒绝,确认升级时加 -ConfirmRouteSwitchChange;读方前提(本次不部署的 zone 必须已 db_first + Arm)不受它豁免。
-    # k8s_image.ps1 不部署 Go 服务,k8s-image-* / k8s-release-* 显式给了即拒绝。k8s_zone_rollback.ps1 不声明这六个参数,
+    # k8s_image.ps1 不部署 Go 服务,k8s-image-* / k8s-release-* 显式给了即拒绝。k8s_zone_rollback.ps1 不声明这五个参数,
     # 它的 Step 6 按 k8s_deploy 缺省重建 zone;k8s-zone-rollback 显式给了即在调用回档脚本之前拒绝(不静默丢掉)。
     # 追加在参数块末尾,理由同上(字符串参数按声明顺序占位置)。
     [ValidateSet("", "redis", "db_first")]
@@ -477,7 +376,6 @@
     [switch]$RouteReconcileArm,
     [switch]$RouteReadRequiresReady,
     [switch]$DbPlacementRequireRouteReady,
-    [switch]$GuildRequireRouteReady,
     [switch]$ConfirmRouteSwitchChange
 )
 
@@ -951,14 +849,6 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($GateRouterMode)) {
         $args.GateRouterMode = $GateRouterMode
     }
-    # 同上:留空不传,由 k8s_deploy.ps1 的默认值(keep)接管。
-    if (-not [string]::IsNullOrWhiteSpace($DbConsumerGroup)) {
-        $args.DbConsumerGroup = $DbConsumerGroup
-    }
-    # 同上:留空不传,由 k8s_deploy.ps1 的默认值("0")接管。
-    if (-not [string]::IsNullOrWhiteSpace($MatchRatingSnapshotPublish)) {
-        $args.MatchRatingSnapshotPublish = $MatchRatingSnapshotPublish
-    }
     # 同上:留空不传,k8s_deploy.ps1 留空即不写 NODE_OPEN_FILE_LIMIT_MODE(进程按 enforce)。
     if (-not [string]::IsNullOrWhiteSpace($NodeOpenFileLimitMode)) {
         $args.NodeOpenFileLimitMode = $NodeOpenFileLimitMode
@@ -991,7 +881,6 @@ function Invoke-K8sDeploy {
     if ($RouteReconcileArm) { $args.RouteReconcileArm = $true }
     if ($RouteReadRequiresReady) { $args.RouteReadRequiresReady = $true }
     if ($DbPlacementRequireRouteReady) { $args.DbPlacementRequireRouteReady = $true }
-    if ($GuildRequireRouteReady) { $args.GuildRequireRouteReady = $true }
     if ($ConfirmRouteSwitchChange) { $args.ConfirmRouteSwitchChange = $true }
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
@@ -1135,8 +1024,6 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressClassName)) { $notForwarded += '-GatewayIngressClassName' }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressTlsSecret)) { $notForwarded += '-GatewayIngressTlsSecret' }
     if (-not [string]::IsNullOrWhiteSpace($GatewayTrustedProxies)) { $notForwarded += '-GatewayTrustedProxies' }
-    # -DbConsumerGroup:k8s_image.ps1 不部署 db(不传 -GoSvcRegistry),给什么值都不生效;切组只走 k8s-zone-up(docs/design/db-consumer-group-per-zone.md)。
-    if (-not [string]::IsNullOrWhiteSpace($DbConsumerGroup)) { $notForwarded += '-DbConsumerGroup' }
     # login 第三方登录(微信 / QQ)与它的确认开关同 -LoginDevPasswordAuth:只落在 login 上,k8s_image.ps1 不部署 login、也不声明它们。
     # 经这条路发布反过来也关不掉线上的第三方登录(不重写 login ConfigMap、不碰 Secret login-oauth),不需要防误关。
     if (-not [string]::IsNullOrWhiteSpace($LoginWeChatAppId)) { $notForwarded += '-LoginWeChatAppId' }
@@ -1151,7 +1038,6 @@ function Invoke-K8sImage {
     if ($RouteReconcileArm) { $notForwarded += '-RouteReconcileArm' }
     if ($RouteReadRequiresReady) { $notForwarded += '-RouteReadRequiresReady' }
     if ($DbPlacementRequireRouteReady) { $notForwarded += '-DbPlacementRequireRouteReady' }
-    if ($GuildRequireRouteReady) { $notForwarded += '-GuildRequireRouteReady' }
     if ($ConfirmRouteSwitchChange) { $notForwarded += '-ConfirmRouteSwitchChange' }
     if ($notForwarded.Count -gt 0) {
         throw "k8s-image-* / k8s-release-* 不支持 $($notForwarded -join ', '):k8s_image.ps1 不部署 Go / Java 服务,也不支持 Agones 高密度 / FleetAutoscaler。请改用 k8s-infra-up / k8s-zone-up / k8s-all-up(直接调 k8s_deploy.ps1)。"
@@ -1286,7 +1172,7 @@ function Invoke-GitStats {
 # 段现读 Host / DB / Password,作为 -MergeMappingRedis* 的默认值。
 #
 # 为什么现读而不是写死:mapping Redis 的地址 / DB 号是合服里最容易出错、且出错
-# **完全静默**的参数 —— 扫错库 = 一个玩家都匹配不到 =「合服成功,0 人被迁移」。
+# **完全静默**的参数 —— 写错库 = 映射镜像落在 data_service 从不读的地方。
 # DB 今天恒为 0(go-zero RedisConf 没有 DB 字段,yaml 里也已不写 DB 键,解析结果恒为 -1,
 # 由 Get-MergeZoneArgs 兜底成 0);仍保留 DB 解析,是为了将来 data_service 真支持分库时与部署同源。
 # 解析用最小行扫描(不引 powershell-yaml 模块,那是外部依赖):
@@ -1319,28 +1205,7 @@ function Get-MergeMappingRedis {
 # `go run` 必须在 tools/merge_zone 里跑(在仓库根跑会得到
 # "cannot find main module" —— 旧的 `go run ./tools/merge_zone` 从来没跑通过)。
 # 一旦切了工作目录,所有相对路径参数都必须先转成绝对路径。
-# Get-MergeDbKafka 现读 go/db/etc/db.yaml 的 Kafka 段,给合服的积压门禁用。
-# 为什么必须现读:门禁查的是 db_task_zone_<src>[_g<gen>] 的 consumer lag。TopicGeneration
-# 与 go/db 实际用的不一致时,查的是一个**不存在的 topic** ——
-# lag 恒 0,门禁静默放行,于是在 go/db 还没消费完的时候就开始搬数据。
-# 解析不到就返回 GroupID="" / TopicGeneration=-1,由调用方决定是回落到工具默认值
-# 还是不转发(这里选择不转发,让工具用它自己文档化的默认值)。
-# 返回的 GroupID 保留但不再转发:db.yaml 里的裸名只是基名,go/db 按 zone 拆组之后(本机 -Zone N 启动为 _zN,
-# K8s 切组后为 _z<ZoneId>),实际组名由 tools/merge_zone 按 zone 推导并认定唯一权威组。
-function Get-MergeDbKafka {
-    $result = @{ GroupID = ""; TopicGeneration = -1 }
-    $yaml = Join-Path $ScriptDir "..\..\go\db\etc\db.yaml"
-    if (-not (Test-Path $yaml)) { return $result }
-    foreach ($line in (Get-Content -LiteralPath $yaml)) {
-        if ($line -match '^\s*#') { continue }
-        if ($line -match '^\s+GroupID:\s*(\S+)') { $result.GroupID = $matches[1].Trim('"').Trim("'") }
-        if ($line -match '^\s+TopicGeneration:\s*(\d+)') { $result.TopicGeneration = [int]$matches[1] }
-    }
-    return $result
-}
-
 function Get-MergeZoneArgs {
-    $repoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
     $mapping = Get-MergeMappingRedis
     $mapAddr = if ($MergeMappingRedisAddr -ne "") { $MergeMappingRedisAddr }
                elseif ($mapping.Host -ne "")      { $mapping.Host }
@@ -1348,8 +1213,7 @@ function Get-MergeZoneArgs {
     # 兜底是 **0**,不是 15:data_service 用 go-zero 的 redis.MustNewRedis(MappingRedis),
     # 而 go-zero 的 RedisConf(v1.10.0)没有 DB 字段 —— yaml 里就算写了 `DB: 15` 也会被
     # 静默忽略,映射永远落在 DB 0。data_service.yaml 里那行 inert 的 DB 已经删除,所以
-    # 上面的解析现在恒为 -1。兜底若写 15,fence 与 remap 会一起指向 data_service 从不碰
-    # 的库:审计恒绿、合服报告成功却一个 key 都没改。
+    # 上面的解析现在恒为 -1。兜底若写 15,映射镜像会写到 data_service 从不碰的库。
     $mapDB = if ($MergeMappingRedisDB -ge 0) { $MergeMappingRedisDB }
              elseif ($mapping.DB -ge 0)      { $mapping.DB }
              else                            { 0 }
@@ -1365,29 +1229,11 @@ function Get-MergeZoneArgs {
         "-scene-redis-db", $MergeSceneRedisDB
     )
 
-    # Kafka 积压门禁:-kafka-topic-generation 必须转发。漏转时工具会去查 db_task_zone_<src>,
-    # 在 TopicGeneration != 1 的环境上那是一个**不存在的 topic**:lag 查出来恒 0,门禁静默放行。
-    # -kafka-group 只在显式 -MergeKafkaGroup 时转发:db.yaml 的 GroupID 只是基名(go/db 按 zone 拆组,本机 -Zone N 启动为 _zN,
-    # K8s 切组后为 _z<ZoneId>),转发裸名会让门禁只查一个可能不存在、或已退役的组。不转发时由工具按 zone 推导候选组
-    # (zone 组 + legacy 组),只认在本 topic 上有已提交位点的唯一权威组,两组都有就拒绝(先跑 kafka_offset_reset.ps1 -FinalizeHandoff)。
-    $kGen = if ($MergeKafkaTopicGeneration -ge 0) { $MergeKafkaTopicGeneration } else { (Get-MergeDbKafka).TopicGeneration }
-    # 只在这里转发 group / generation:CLI 路径与 -assume-kafka-drained 由
-    # merge-zone 命令块单独追加(审计不跑积压门禁,给了也无害但没必要)。
-    if ($MergeKafkaGroup -ne "") { $a += @("-kafka-group", $MergeKafkaGroup) }
-    if ($kGen -ge 0) { $a += @("-kafka-topic-generation", $kGen) }
     if ($MergeRedisPassword -ne "")      { $a += @("-redis-password", $MergeRedisPassword) }
     if ($mapPwd -ne "")                  { $a += @("-mapping-redis-password", $mapPwd) }
     if ($MergeNoticeRedisAddr -ne "")    { $a += @("-notice-redis-addr", $MergeNoticeRedisAddr) }
     if ($MergeSceneRedisAddr -ne "")     { $a += @("-scene-redis-addr", $MergeSceneRedisAddr) }
     if ($MergeEtcdEndpoints -ne "")      { $a += @("-etcd-endpoints", $MergeEtcdEndpoints) }
-    # 建表清单:go run 在 tools/merge_zone 里跑,相对路径会指错地方,一律转绝对。
-    $tableList = if ($MergeTableListJson -ne "") { $MergeTableListJson }
-                 else { Join-Path $repoRoot "generated\data\mysql_database_table_list.json" }
-    $a += @("-table-list-json", (Convert-Path -LiteralPath $tableList -ErrorAction SilentlyContinue) ?? $tableList)
-    if ($MergeSourceDataRedis -ne "")    { $a += @("-source-data-redis", $MergeSourceDataRedis, "-source-data-redis-db", $MergeSourceDataRedisDB) }
-    if ($MergeTargetDataRedis -ne "")    { $a += @("-target-data-redis", $MergeTargetDataRedis, "-target-data-redis-db", $MergeTargetDataRedisDB) }
-    if ($MergeDataRedisPassword -ne "")  { $a += @("-data-redis-password", $MergeDataRedisPassword) }
-    if ($MergeExpectedSrcPlayers -ge 0)  { $a += @("-expected-src-players", $MergeExpectedSrcPlayers) }
     # trade 跳过开关放在公共参数里:merge-zone / merge-zone-unmerge / merge-zone-audit 必须同一口径,
     # 否则合服跳过了 3b、审计却仍去查 trade 库(恒报 INFRA),或反过来。
     if ($MergeSkipTradeMySql)            { $a += "-skip-trade-mysql" }
@@ -1399,45 +1245,24 @@ function Get-MergeZoneArgs {
     return $a
 }
 
-# Get-MergeKafkaGateArgs 组装 db_task 积压门禁的取证方式:有 CLI 就真查,没有就必须显式声明已排空。
-# 合服与撤销共用这一份 —— 撤销(-mode unmerge)同样要先按目标区口径跑 P2~P7,缺这两个参数
-# 工具直接拒绝;以前 merge-zone-unmerge 不转发它们,撤销从 ps1 入口根本跑不起来。
-# 返回可能为空的数组,调用方一律用 @(...) 接,避免把 $null 当成一个参数塞给 go。
-function Get-MergeKafkaGateArgs {
-    $a = @()
-    if ($MergeAssumeKafkaDrained)            { $a += "-assume-kafka-drained" }
-    if ($MergeKafkaConsumerGroupsCmd -ne "") { $a += @("-kafka-consumer-groups-cmd", $MergeKafkaConsumerGroupsCmd, "-kafka-bootstrap", $MergeKafkaBootstrap) }
-    return $a
-}
-
-# Get-MergeRouteSourceArgs 组装映射来源的 flag(D1 第 2 批,规格 §13.3 第 3 条):-route-source 必填、没有缺省值、**不从 yaml 推断**;
-# db 时 -route-db-dsn 必填。只拒绝「缺了工具必然拒绝」的两条,其余(redis 配 DSN、WAITAOF 取值范围、库与 Redis 是否成对)
-# 一律留给工具判,不在 ps1 里复制第二份规则。merge-zone-capability-check 不读写映射,不调用本函数。
+# Get-MergeRouteDbArgs 组装路由库与 WAITAOF 的 flag:工具三个模式都读路由库(checkRouteFlags),-route-db-dsn 缺了工具必然拒绝,
+# 这里先点名;WAITAOF 取值范围、库与 Redis 是否成对一律留给工具判,不在 ps1 里复制第二份规则。
 # DSN 含口令:只进参数数组,不 Write-Host。返回数组,调用方用 @(...) 接。
-function Get-MergeRouteSourceArgs {
+function Get-MergeRouteDbArgs {
     param([Parameter(Mandatory = $true)][string]$MergeCommand)
-    if ($MergeZoneRouteSource -eq "") {
-        throw ("$MergeCommand requires -MergeZoneRouteSource db|redis (there is no default and it is never inferred from data_service.yaml): " +
-               "'db' when data_service runs RouteStore.Mode=db_first (also pass -MergeZoneRouteDbDsn <global DB DSN>), " +
-               "'redis' only while every data_service still runs RouteStore.Mode=redis (docs/ops/merge-zone-runbook.md §15)")
+    if ($MergeZoneRouteDbDsn -eq "") {
+        throw ("$MergeCommand requires -MergeZoneRouteDbDsn <DSN of the global DB that holds zone_merged_into and player_route " +
+               "(dev: testdb, K8s: mmorpg_global)>; there is no default. Pass it from an environment variable, e.g. -MergeZoneRouteDbDsn `$env:MERGE_ZONE_ROUTE_DB_DSN")
     }
-    $a = @("-route-source", $MergeZoneRouteSource)
-    if ($MergeZoneRouteSource -eq "db" -and $MergeZoneRouteDbDsn -eq "") {
-        throw ("$MergeCommand -MergeZoneRouteSource db requires -MergeZoneRouteDbDsn <DSN of the global DB that holds player_route " +
-               "(dev: testdb, K8s: mmorpg_global)>; pass it from an environment variable, e.g. -MergeZoneRouteDbDsn `$env:MERGE_ZONE_ROUTE_DB_DSN")
-    }
-    if ($MergeZoneRouteDbDsn -ne "")      { $a += @("-route-db-dsn", $MergeZoneRouteDbDsn) }
+    $a = @("-route-db-dsn", $MergeZoneRouteDbDsn)
     if ($MergeZoneWaitAofLocal -ge 0)     { $a += @("-waitaof-local", $MergeZoneWaitAofLocal) }
     if ($MergeZoneWaitAofReplicas -ge 0)  { $a += @("-waitaof-replicas", $MergeZoneWaitAofReplicas) }
     if ($MergeZoneWaitAofTimeoutMs -ge 0) { $a += @("-waitaof-timeout-ms", $MergeZoneWaitAofTimeoutMs) }
-    # -take-over-fence 是库围栏的续跑接手:适用范围(只 merge / unmerge、只 db 源、run_id 形状)只由工具判,这里原样转发,
-    # 给到别的命令时工具会点名拒绝,而不是被 ps1 静默丢掉。
-    if ($MergeZoneTakeOverFence -ne "")   { $a += @("-take-over-fence", $MergeZoneTakeOverFence) }
     return $a
 }
 
 # Resolve-MergeFullPath 把清单路径按**调用者的**当前目录转成绝对路径。
-# 必须在 Push-Location 进 tools/merge_zone 之前调用:清单是续跑 / 撤销 / 复核 / 放弃搬库的唯一凭据,
+# 必须在 Push-Location 进 tools/merge_zone 之前调用:清单是续跑 / 撤销 / 复核的唯一凭据,
 # 相对路径一旦按切换后的目录解释,就会在另一个地方新建一份空清单(= 把续跑当成全新的一次)。
 function Resolve-MergeFullPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -1447,11 +1272,13 @@ function Resolve-MergeFullPath {
 # Get-MergeZoneCommandArgs 返回某个 merge-zone 系列命令的完整参数(以 "run", "." 开头;
 # Invoke-MergeZoneGo 去掉这个前缀后直接执行编译产物,见那里关于退出码的说明)。
 # 与执行分开,是为了让契约测试(tests/dev_tools_merge_zone_contract.tests.ps1)不起 go、不连任何库
-# 就能钉住「哪个命令转发哪些 flag」—— 这里漏转一个 flag 不会报错,只会让工具静默用默认值
-# (如 relocate 的能力标记 zone 集合、verify 的清单),历史上这正是审计恒绿、撤销跑不起来的来源。
+# 就能钉住「哪个命令转发哪些 flag」—— 这里漏转一个 flag 不会报错,只会让工具静默用默认值,
+# 多转一个工具已删的 flag 则整条命令被 flag 包拒绝(契约测试逐个核对 main.go 的声明)。
 #
-# 参数校验只做「缺了必然失败」的那几条,给出点名参数的中文报错;其余语义校验(模式组合、
-# storage id 范围、清单是否 dry-run 预览)一律留给工具 —— 不在 ps1 里复制第二份业务规则。
+# 参数校验只做「缺了必然失败」的那几条,给出点名参数的报错;其余语义校验(模式组合、清单是否
+# dry-run 预览)一律留给工具 —— 不在 ps1 里复制第二份业务规则。
+# merge-zone / merge-zone-unmerge 不带 -DryRun 时还要工具的维护证据旗标(-maintenance-run-id 等,见 tools/merge_zone/main.go),
+# 本入口没有转发,工具按 fail-closed 拒绝;-DryRun 与审计不需要它们。
 function Get-MergeZoneCommandArgs {
     param(
         [Parameter(Mandatory = $true)][string]$MergeCommand,
@@ -1462,14 +1289,8 @@ function Get-MergeZoneCommandArgs {
 
     switch ($MergeCommand) {
         "merge-zone" {
-            # 存量 player:zone 回填(合服前置,每个 zone 各跑一次)。合服之后源区带 merge:merged_into
-            # 标记,工具会拒绝对它回填(否则映射丢失时会把人钉回源区,A10)。
-            if ($MergeBackfillZone -gt 0) {
-                return @("run", ".", "-backfill-home-zone", "-zone", $MergeBackfillZone) + @(Get-MergeZoneArgs) +
-                       @(Get-MergeRouteSourceArgs -MergeCommand "merge-zone") + @($intent)
-            }
             if ($MergeSourceZone -le 0 -or $MergeTargetZone -le 0) {
-                throw "merge-zone requires -MergeSourceZone <id> and -MergeTargetZone <id> (or -MergeBackfillZone <id> for the backfill mode)"
+                throw "merge-zone requires -MergeSourceZone <id> and -MergeTargetZone <id>"
             }
             # 清单必须落在仓库根(而不是 go run 的工作目录),而且路径要绝对。
             $manifest = if ($MergeManifestPath -ne "") { Resolve-MergeFullPath $MergeManifestPath }
@@ -1480,23 +1301,8 @@ function Get-MergeZoneCommandArgs {
                 "-target-zone", $MergeTargetZone,
                 "-manifest-path", $manifest
             )
-            # -db-capability-zones 没有缺省值:pin(留空即工具默认 pin)必填,这里先点名拒绝,文案与工具一致。
-            # copy 模式只在清单玩家已有落点记录时才需要,那要到工具立围栏之后才知道,交给工具判。
-            if ($MergePlayerRowsMode -ne "copy" -and $MergeDbCapabilityZones -eq "") {
-                throw ("merge-zone requires -MergeDbCapabilityZones (there is no default): list the ids of the zones whose go/db is running " +
-                       "right now (comma-separated), or 'none' if no other zone is running. src/dst went down at T-0, so list only the zones " +
-                       "still running; check dst's capability after its zone-up with -Command merge-zone-capability-check " +
-                       "-MergeDbCapabilityZones <dst> before opening it (runbook §5.1 / §8 Step 6)")
-            }
             $a += @(Get-MergeZoneArgs)
-            $a += @(Get-MergeRouteSourceArgs -MergeCommand "merge-zone")
-            # 模式只在显式给出时转发:留空 = 工具默认 pin,默认值只在工具里定义一处。能力标记 zone 给了就原样转发。
-            if ($MergePlayerRowsMode -ne "")    { $a += @("-player-rows-mode", $MergePlayerRowsMode) }
-            if ($MergeDbCapabilityZones -ne "") { $a += @("-db-capability-zones", $MergeDbCapabilityZones) }
-            if ($MergeMigratePlayerBlobs)       { $a += "-migrate-player-blobs" }
-            if ($MergeClearSourceHotState)      { $a += "-clear-source-hot-state" }
-            if ($MergeAllowEmptySource)         { $a += "-allow-empty-source" }
-            $a += @(Get-MergeKafkaGateArgs)
+            $a += @(Get-MergeRouteDbArgs -MergeCommand "merge-zone")
             $a += $intent
             return $a
         }
@@ -1506,18 +1312,10 @@ function Get-MergeZoneCommandArgs {
             }
             $manifest = Resolve-MergeFullPath $MergeManifestPath
             if (-not (Test-Path -LiteralPath $manifest)) { throw "manifest not found: $manifest" }
+            # zone 从清单读(工具的约定:撤销的对象必须与当初合的一致),不转发 -source-zone / -target-zone。
             $a = @("run", ".", "-mode", "unmerge", "-manifest-path", $manifest)
             $a += @(Get-MergeZoneArgs)
-            $a += @(Get-MergeRouteSourceArgs -MergeCommand "merge-zone-unmerge")
-            # 清单是 pin 模式时工具要求 -db-capability-zones(没有缺省值,可 none),copy 撤销给了才查。
-            # 模式只在清单里,这里不读清单复制那条规则:给了就转发,没给时提示,由工具按清单拒绝。
-            if ($MergeDbCapabilityZones -ne "") { $a += @("-db-capability-zones", $MergeDbCapabilityZones) }
-            else {
-                Write-Host ("merge-zone-unmerge: -MergeDbCapabilityZones not given. Unmerging a pin-mode merge requires it (there is no default): " +
-                            "list the ids of the zones whose go/db is running right now, or 'none' if no other zone is running; " +
-                            "merge_zone refuses before touching anything if the manifest is pin mode") -ForegroundColor Yellow
-            }
-            $a += @(Get-MergeKafkaGateArgs)
+            $a += @(Get-MergeRouteDbArgs -MergeCommand "merge-zone-unmerge")
             $a += $intent
             return $a
         }
@@ -1532,96 +1330,15 @@ function Get-MergeZoneCommandArgs {
                 "-target-zone", $MergeTargetZone
             )
             $a += @(Get-MergeZoneArgs)
-            # 审计也要:db 源下映射相关检查读库,合服后验证多一行 verify:route_cache(缓存与库逐人一致)。
-            $a += @(Get-MergeRouteSourceArgs -MergeCommand "merge-zone-audit")
+            $a += @(Get-MergeRouteDbArgs -MergeCommand "merge-zone-audit")
             if ($VerifyMerged) {
-                # 合服后复核逐 id 核对清单玩家(A6),工具在没有清单时拒绝;这里先点名 ps1 参数报错。
+                # 合服后验证要核对映射与清单的 run_id,工具在没有清单时拒绝;这里先点名 ps1 参数报错。
                 # 清单存在性不在这里查:清单缺失 / 是 dry-run 预览由工具报 INFRA(exit 2),退出码语义以工具为准。
                 if ($MergeManifestPath -eq "") {
                     throw "merge-zone-audit -VerifyMerged requires -MergeManifestPath <the manifest written by the merge being verified>"
                 }
                 $a += @("-verify-merged", "-manifest-path", (Resolve-MergeFullPath $MergeManifestPath))
             }
-            return $a
-        }
-        "merge-zone-pin-placement" {
-            if ($MergePinPlacementZone -le 0) {
-                throw "merge-zone-pin-placement requires -MergePinPlacementZone <zone id>"
-            }
-            $a = @("run", ".", "-mode", "pin-placement", "-zone", $MergePinPlacementZone)
-            $a += @(Get-MergeZoneArgs)
-            $a += @(Get-MergeRouteSourceArgs -MergeCommand "merge-zone-pin-placement")
-            $a += $intent
-            return $a
-        }
-        "merge-zone-relocate" {
-            if ($MergeRelocateSourceStorage -le 0 -or $MergeRelocateTargetStorage -le 0) {
-                throw "merge-zone-relocate requires -MergeRelocateSourceStorage <storage id> and -MergeRelocateTargetStorage <storage id>"
-            }
-            # 工具没有缺省值,搬库也不接受 none;这里先点名,文案与工具一致(none 由工具拒绝,不在这里复制规则)。
-            # 漏掉在跑的 zone = 那个 zone 的 go/db 若还是旧版,会按本进程 zone 选库,把已搬走的玩家写回源库。
-            if ($MergeDbCapabilityZones -eq "") {
-                throw ("merge-zone-relocate requires -MergeDbCapabilityZones: list every zone whose go/db is running (comma-separated " +
-                       "zone ids, e.g. 1,2,3); 'none' is not accepted - a relocation runs online, every running zone must carry the marker")
-            }
-            $manifest = if ($MergeManifestPath -ne "") { Resolve-MergeFullPath $MergeManifestPath }
-                        else { Join-Path $RepoRoot ("relocate_{0}_to_{1}_{2}.json" -f $MergeRelocateSourceStorage, $MergeRelocateTargetStorage, $stamp) }
-            $a = @(
-                "run", ".",
-                "-mode", "relocate",
-                "-relocate-source-storage", $MergeRelocateSourceStorage,
-                "-relocate-target-storage", $MergeRelocateTargetStorage,
-                "-db-capability-zones", $MergeDbCapabilityZones,
-                "-manifest-path", $manifest
-            )
-            if ($MergeRelocatePlayerIds -ne "") { $a += @("-relocate-player-ids", $MergeRelocatePlayerIds) }
-            if ($MergeRelocateBatchSize -gt 0)  { $a += @("-relocate-batch-size", $MergeRelocateBatchSize) }
-            if ($MergeRelocateLockWait -ne "")  { $a += @("-relocate-lock-wait", $MergeRelocateLockWait) }
-            # 公共参数里的 -kafka-topic-generation 决定 R2 等的排序锁键(db_task_zone_<home>[_g<gen>]),
-            # 现读 db.yaml;-table-list-json 决定搬哪些玩家表;-notice-redis-* 是排序锁所在的共享 DB 0。
-            $a += @(Get-MergeZoneArgs)
-            $a += @(Get-MergeRouteSourceArgs -MergeCommand "merge-zone-relocate")
-            $a += $intent
-            return $a
-        }
-        "merge-zone-relocate-abort" {
-            if ($MergeManifestPath -eq "") {
-                throw "merge-zone-relocate-abort requires -MergeManifestPath <the manifest written by the relocate run>"
-            }
-            $manifest = Resolve-MergeFullPath $MergeManifestPath
-            if (-not (Test-Path -LiteralPath $manifest)) { throw "manifest not found: $manifest" }
-            $a = @("run", ".", "-mode", "relocate-abort", "-manifest-path", $manifest)
-            if ($MergeRelocateSourceStorage -gt 0) { $a += @("-relocate-source-storage", $MergeRelocateSourceStorage) }
-            if ($MergeRelocateTargetStorage -gt 0) { $a += @("-relocate-target-storage", $MergeRelocateTargetStorage) }
-            if ($MergeRelocateBatchSize -gt 0)     { $a += @("-relocate-batch-size", $MergeRelocateBatchSize) }
-            $a += @(Get-MergeZoneArgs)
-            $a += @(Get-MergeRouteSourceArgs -MergeCommand "merge-zone-relocate-abort")
-            $a += $intent
-            return $a
-        }
-        "merge-zone-capability-check" {
-            # 只读:逐 zone 报告能力标记 present / missing / unreadable,工具以 0 / 1 / 2 退出(与审计同口径)。
-            # 合服后 dst zone-up、开服之前必跑(runbook §8 Step 6)。none 由工具拒绝。
-            if ($MergeDbCapabilityZones -eq "") {
-                throw "merge-zone-capability-check requires -MergeDbCapabilityZones <zone ids to check>, e.g. the merge target right after its zone-up"
-            }
-            # 本命令不读写映射、不持围栏,不调用 Get-MergeRouteSourceArgs:给了 -MergeZoneTakeOverFence 就拒绝,不静默丢掉。
-            if ($MergeZoneTakeOverFence -ne "") {
-                throw "merge-zone-capability-check does not hold a merge fence; -MergeZoneTakeOverFence only applies to merge-zone / merge-zone-unmerge"
-            }
-            $a = @("run", ".", "-mode", "capability-check", "-db-capability-zones", $MergeDbCapabilityZones)
-            $a += @(Get-MergeZoneArgs)
-            return $a
-        }
-        "merge-zone-storage-audit" {
-            if ($MergeAuditStorage -le 0) {
-                throw "merge-zone-storage-audit requires -MergeAuditStorage <storage id>"
-            }
-            # 只读模式,工具不要求 -dry-run / -apply,所以这里不转发写意图。
-            $a = @("run", ".", "-mode", "storage-audit", "-storage", $MergeAuditStorage)
-            $a += @(Get-MergeZoneArgs)
-            # 决定库能否退役:db 源下一律读库,不按缓存下结论。
-            $a += @(Get-MergeRouteSourceArgs -MergeCommand "merge-zone-storage-audit")
             return $a
         }
         default { throw "Get-MergeZoneCommandArgs: unknown merge command '$MergeCommand'" }
@@ -1646,25 +1363,14 @@ function New-MergeZoneExePath {
 #   1) 不能用 `go run`:它把子进程的任何非零退出码都压成 1(只往 stderr 打一行 `exit status N`),
 #      审计的 1(有 block)与 2(INFRA,没查成、结论不可信)从此分不开。所以先 build 再直接执行产物。
 #   2) 必须显式 `exit`:`pwsh -File dev_tools.ps1 ...` 在脚本正常结束时进程退出码恒为 0 ——
-#      合服 apply 半途失败、storage-audit 连不上库,调用方拿到的都是「成功」。
+#      合服 apply 半途失败、审计连不上库,调用方拿到的都是「成功」。
 #   3) 编译失败时工具一行都没跑,退出码按 2(没做成 / 没查成、结论不可信)给出,不与工具的 1(block / 失败)混用。
 # 不经管道接工具输出:管道会让 pwsh 按控制台代码页重解码 Go 写出的 UTF-8,中文报告会变乱码。
 function Invoke-MergeZoneGo {
     param([Parameter(Mandatory = $true)][string]$MergeCommand)
     $repoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
-    try {
-        $goArgs = @(Get-MergeZoneCommandArgs -MergeCommand $MergeCommand -RepoRoot $repoRoot)
-    }
-    catch {
-        #   4) merge-zone-capability-check 的 1 是业务结论(有 missing)。参数没给齐(漏 -MergeDbCapabilityZones 等)时一个标记都没查,
-        #      属于「没查成」,按 2 退出,不与 1 混用(09-28 遗留;已 grep 全部调用方,没有依赖这里退出 1 的,runbook §8 Step 6 按 2 处理)。
-        #      其余命令的参数错误仍照旧往上抛(pwsh -File 下为 1 = 拒绝、什么都没做),语义不变。
-        if ($MergeCommand -eq "merge-zone-capability-check") {
-            [Console]::Error.WriteLine("ERROR: $($_.Exception.Message); the tool was NOT run, no capability marker was checked (exit 2)")
-            exit 2
-        }
-        throw
-    }
+    # 参数错误往上抛(pwsh -File 下为 1 = 拒绝、什么都没做),不编译、不运行工具。
+    $goArgs = @(Get-MergeZoneCommandArgs -MergeCommand $MergeCommand -RepoRoot $repoRoot)
     # Get-MergeZoneCommandArgs 仍以 "run", "." 开头(契约测试按这个形状钉 flag);执行时去掉这个前缀。
     if ($goArgs.Count -lt 2 -or [string]$goArgs[0] -ne "run" -or [string]$goArgs[1] -ne ".") {
         throw "Invoke-MergeZoneGo: unexpected argument shape for '$MergeCommand' (must start with 'run', '.')"
@@ -1807,7 +1513,7 @@ Other common commands:
     -Command k8s-all-up | k8s-all-down | k8s-all-status
         k8s-infra-up / k8s-zone-up / k8s-all-up pass the D1 route switches through to
         k8s_deploy.ps1 unchanged: [-RouteStoreMode redis|db_first] [-RouteReconcileArm]
-        [-RouteReadRequiresReady] [-DbPlacementRequireRouteReady] [-GuildRequireRouteReady]
+        [-RouteReadRequiresReady] [-DbPlacementRequireRouteReady]
         [-ConfirmRouteSwitchChange]. k8s_deploy.ps1 defaults to db_first with every switch on
         (the global default; deploying Go services accepts nothing else). They are sticky: a
         cluster still on redis / off is refused before any write unless -ConfirmRouteSwitchChange
@@ -1826,79 +1532,33 @@ Zone merge (合服) commands — full SOP: docs/ops/merge-zone-runbook.md
     Every merge-zone* command exits with merge_zone's own exit code (the
     tool is built then run directly, not via `go run`). If merge_zone fails
     to build, nothing runs and the exit code is 2.
-    Every merge-zone* command except merge-zone-capability-check REQUIRES
-    -MergeZoneRouteSource db|redis (no default, never inferred from yaml):
-        db    data_service runs RouteStore.Mode=db_first; also pass
-              -MergeZoneRouteDbDsn <global DB DSN> (from an env var) and, on
-              redis-ha, -MergeZoneWaitAofReplicas 1.
-        redis only while every data_service still runs RouteStore.Mode=redis.
-    The tool refuses when the route DB and the mapping Redis are not a pair
-    (mapping:route:watermark). Runbook §15.
-    -MergeZoneTakeOverFence <run_id> (merge-zone / merge-zone-unmerge with
-    -MergeZoneRouteSource db only): resume a run that aborted mid-write and
-    left its DB merge fence in place, after confirming that run's process
-    is gone; the fence moves to the new run in one DB transaction. Do NOT
-    DEL merge:in_progress:* under db: the DB fence is the source of truth.
-    Runbook §15.4.
-    -Command merge-zone -MergeBackfillZone <id> [-DryRun]
-        PREREQUISITE, run once per existing zone BEFORE the first ever merge:
-        seeds player:zone:{id} (SET NX) from zone_<id>_db.player_database.
-        Players without that mapping are silently left behind by a merge.
+    Every merge-zone* command REQUIRES -MergeZoneRouteDbDsn <global DB DSN>
+    (pass it from an env var; no default): the global DB that holds
+    zone_merged_into is the only source of truth for the mapping. On redis-ha
+    also pass -MergeZoneWaitAofReplicas 1. The tool refuses when the route DB
+    and the mapping Redis are not a pair (mapping:route:watermark).
     -Command merge-zone-audit -MergeSourceZone <s> -MergeTargetZone <d>
-        Read-only pre-merge gates (scene nodes / online / locks / kafka queues).
+        Read-only pre-merge gates (scene nodes / sessions). Teams and mapping conflicts are checked by the merge itself.
         Exit 0=clean, 1=blocking finding, 2=the audit itself could not run.
     -Command merge-zone -MergeSourceZone <s> -MergeTargetZone <d> [-DryRun]
-            [-MergePlayerRowsMode pin|copy] -MergeDbCapabilityZones <z1,z2,...|none>
-        Guild MySQL/ZSET/cache + player:zone remap (manifest players only) +
-        post-merge notice flags. Player main data: pin (default) re-homes
-        without copying rows and pins placement "<s>:1"; needs every
-        -MergeDbCapabilityZones zone to run a placement-aware go/db.
-        -MergeDbCapabilityZones has NO default (pin requires it): at T-0 src
-        and dst are already down, so list only the zones still running, or
-        'none' if no other zone runs; then check dst with
-        merge-zone-capability-check after its zone-up, before opening it.
-        copy = old go/db: copies rows zone_<s>_db -> zone_<d>_db (needs
-        -MergeDbCapabilityZones only if manifest players have a placement). Writes a JSON manifest BEFORE the first
-        write (-MergeManifestPath); -DryRun only writes <path>.dryrun.json.
-        -DryRun first, ALWAYS; record players_in_source and pass it back as
-        -MergeExpectedSrcPlayers on the real run.
-        After a pin merge the source zone DB stays the source of truth for
-        pinned players: relocate them before retiring it.
-    -Command merge-zone-audit ... -VerifyMerged -MergeManifestPath <file> -MergeExpectedSrcPlayers <n>
-        Post-merge assertions (runbook Step 5), checked player by player
-        against the manifest.
+        Alias merge: record zone_merged_into <s> -> <d> and its Redis mirror,
+        then merge guild / trade / guild rank data. Player rows and home_zone
+        are not touched. Writes a JSON manifest BEFORE the first write
+        (-MergeManifestPath); -DryRun only writes <path>.dryrun.json.
+        -DryRun first, ALWAYS. A real run also needs merge_zone's maintenance
+        evidence flags (-maintenance-run-id ...), which this entry point does
+        not forward: the tool refuses without them.
+    -Command merge-zone-audit ... -VerifyMerged -MergeManifestPath <file>
+        Post-merge assertions (verify:merged_into / guild_zone /
+        trade_market_zone / guild_rank).
     -Command merge-zone-unmerge -MergeManifestPath <file> [-DryRun]
-            (-MergeKafkaConsumerGroupsCmd <cli> [-MergeKafkaBootstrap <b>] | -MergeAssumeKafkaDrained)
-            [-MergeDbCapabilityZones <z1,z2,...|none>]
-        Reverse one run, object by object. Target-zone natives are untouched.
-        Runs the pre-flight gates against the TARGET zone first. A pin-mode
-        manifest requires -MergeDbCapabilityZones (still-running zones, or none).
-    -Command merge-zone-capability-check -MergeDbCapabilityZones <z1,z2,...>
-        Read-only: per zone, is db:capability:zone:<z> = placement-routing-v1?
-        Exit 0=all present, 1=some missing, 2=some unreadable. Run it for dst
-        after its zone-up and BEFORE opening it ('none' is refused).
+        Reverse one run from its manifest: restore rank / trade / guild data,
+        then delete the mapping. Target-zone natives are untouched. Runs the
+        pre-flight gates against the TARGET zone first.
     Common: -MergeSkipGuildMySql / -MergeSkipGuildRank / -MergeSkipTradeMySql
         ONLY where that service was never deployed; merge, unmerge and audit
         must use the same switches (audit skips guild only when both are set).
 
-Player storage placement commands — docs/design/player-storage-placement.md
-    -Command merge-zone-pin-placement -MergePinPlacementZone <z> [-DryRun]
-        Pin "<z>:1" for players with home_zone=<z> and no placement record.
-        Safe online, idempotent. Order: login PinOnCreate -> every zone ->
-        only then go/db Placement.Required.
-    -Command merge-zone-relocate -MergeRelocateSourceStorage <S> -MergeRelocateTargetStorage <T>
-            -MergeDbCapabilityZones <every running zone, 'none' refused> [-MergeRelocatePlayerIds <id,id>]
-            [-MergeRelocateBatchSize <n>] [-MergeRelocateLockWait <dur>] [-MergeManifestPath <file>] [-DryRun]
-        Freeze -> wait in-flight writes -> copy -> byte-compare -> switch.
-        Storage id 1..999999 = zone_<id>_db, >=1000000 = player_store_<id>_db.
-        Resume = re-run with the same -MergeManifestPath.
-    -Command merge-zone-relocate-abort -MergeManifestPath <file> [-DryRun]
-        Unfreeze everything that relocate run left frozen; the manifest
-        cannot be resumed afterwards.
-    -Command merge-zone-storage-audit -MergeAuditStorage <id>
-        Read-only: who is still placed on that storage + its cold copies.
-        Retire a DB only on "RETIREMENT CHECK: nothing routes to storage"
-        with unmapped = unreadable = 0. Exit 0=done, 2=infra failure.
 
 Proto-gen naming docs:
     tools/docs/proto_gen_naming_audit.md
@@ -2008,16 +1668,13 @@ switch ($Command) {
         # implementation invoked a `merge_zone.ps1` wrapper that never
         # actually existed in the repo. See docs/ops/merge-zone-runbook.md §5.
         #
-        # 两种子模式共用这一个命令(撤销由 -Command merge-zone-unmerge 承担):
-        #   -MergeBackfillZone <id>   存量 player:zone 回填(合服前置,每个 zone 各跑一次)
-        #   其余                       正常合服(默认 pin 模式,见 -MergePlayerRowsMode)
-        # 参数组装见 Get-MergeZoneCommandArgs,执行目录见 Invoke-MergeZoneGo。
+        # 撤销由 -Command merge-zone-unmerge 承担。参数组装见 Get-MergeZoneCommandArgs,执行目录见 Invoke-MergeZoneGo。
         Invoke-MergeZoneGo -MergeCommand "merge-zone"
     }
     "merge-zone-unmerge" {
         # 按清单逐对象撤销一次合服(目标区原住民不受影响)。
         # 只在「刚合完、还没开服」的窗口里用;开服之后请走备份还原。
-        # 工具先按目标区口径跑 P2~P7 门禁,所以同样要 -MergeKafkaConsumerGroupsCmd 或 -MergeAssumeKafkaDrained。
+        # 工具先按目标区口径跑前置门禁。
         Invoke-MergeZoneGo -MergeCommand "merge-zone-unmerge"
     }
     "merge-zone-audit" {
@@ -2031,47 +1688,19 @@ switch ($Command) {
         # (连不上某个库),结论不可信 —— 不要把 2 当成 1 处理。
         Invoke-MergeZoneGo -MergeCommand "merge-zone-audit"
     }
-    "merge-zone-pin-placement" {
-        # 批量钉落点(player-storage-placement.md §10.3):home==N 且无记录的玩家钉 "N:1",在线安全、幂等。
-        # 顺序:先开 login 的 Placement.PinOnCreate,再对全部 zone 跑本命令,最后才能开 go/db 的 Placement.Required。
-        Invoke-MergeZoneGo -MergeCommand "merge-zone-pin-placement"
-    }
-    "merge-zone-relocate" {
-        # 冻结式搬库(§9,R0–R5)。崩溃后用同一 -MergeManifestPath 重跑即续跑;
-        # 放弃用 -Command merge-zone-relocate-abort,之后该清单不能再续跑。
-        Invoke-MergeZoneGo -MergeCommand "merge-zone-relocate"
-    }
-    "merge-zone-relocate-abort" {
-        # 把某次搬库留下的冻结全部解回稳定态(按清单)。
-        Invoke-MergeZoneGo -MergeCommand "merge-zone-relocate-abort"
-    }
-    "merge-zone-storage-audit" {
-        # 只读:谁的有效落点仍是这个库、库里有多少冷副本。退出码 0=查成 / 2=基础设施失败。
-        Invoke-MergeZoneGo -MergeCommand "merge-zone-storage-audit"
-    }
-    "merge-zone-capability-check" {
-        # 只读:逐 zone 核对 go/db 能力标记。退出码 0=全部 present / 1=有 missing / 2=有 unreadable(结论不可信)。
-        # 合服后 dst zone-up 之后、开服之前必跑,非 0 不许开服(runbook §8 Step 6)。
-        Invoke-MergeZoneGo -MergeCommand "merge-zone-capability-check"
-    }
     "kafka-offset-reset" {
-        # Wraps kafka_offset_reset.ps1 — see docs/design/zone_data_rollback.md §3 step 4.
-        # Used during zone rollback to reset db_task_zone_<id> offsets before restarting a zone,
-        # and to finalize a db_task consumer-group handoff (-KafkaFinalizeHandoff / -KafkaRetireGroup).
-        # 必须 hashtable splatting:以前是数组 splatting,PowerShell 把数组元素当**位置参数**依次绑定,
-        # "-Topic" 后面的 topic 名会撞上 [int]$Partitions 直接类型转换失败(与 k8s_zone_rollback.ps1 Step 5 注释里记录的是同一个 bug),
-        # 本地回档 / 重置路径因此从来跑不通。字符串非空才放,switch 只在被指定时放,数值只在偏离缺省时放。
+        # Wraps kafka_offset_reset.ps1:仍在用 Kafka 的消费组的通用位点重置工具。
+        # 必须 hashtable splatting:数组 splatting 按位置绑定,"-Topic" 后面的 topic 名会撞上 [int]$Partitions 直接类型转换失败。
+        # 字符串非空才放,switch 只在被指定时放,数值只在偏离缺省时放。
         $kArgs = @{
             BootstrapServer = $KafkaBootstrapServer
             Topic           = $KafkaTopic
         }
         if ($KafkaGroup -ne "")               { $kArgs.Group = $KafkaGroup }
-        if ($KafkaRetireGroup -ne "")         { $kArgs.RetireGroup = $KafkaRetireGroup }
         if ($KafkaToDatetime -ne "")          { $kArgs.ToDatetime = $KafkaToDatetime }
         if ($KafkaToEarliest)                 { $kArgs.ToEarliest = $true }
         if ($KafkaToLatest)                   { $kArgs.ToLatest = $true }
         if ($KafkaDeleteAndRecreate)          { $kArgs.DeleteAndRecreateTopic = $true }
-        if ($KafkaFinalizeHandoff)            { $kArgs.FinalizeHandoff = $true }
         if ($KafkaPartitions -gt 0)           { $kArgs.Partitions = $KafkaPartitions }
         if ($KafkaReplicationFactor -gt 0)    { $kArgs.ReplicationFactor = $KafkaReplicationFactor }
         if ($KafkaBin -ne "")                 { $kArgs.KafkaBin = $KafkaBin }
@@ -2084,14 +1713,13 @@ switch ($Command) {
     "k8s-zone-rollback" {
         # Wraps k8s_zone_rollback.ps1 — see docs/design/zone_data_rollback.md §3.
         # Orchestrates: preflight → zone-down → post-stop checks → MySQL PITR (manual) → inventory
-        #             → Kafka offsets to the log end (zone group; retire legacy offsets) → discard post-TargetTime Redis state
-        #             → verify → zone-up → verification checklist.
+        #             → discard post-TargetTime Redis state → verify → zone-up → verification checklist.
         if ($RollbackTargetTime -eq "") {
             throw "k8s-zone-rollback requires -RollbackTargetTime (UTC, e.g. '2026-05-15T14:23:00Z')"
         }
         # 已废弃的两个参数在调用回滚脚本之前拒绝,不静默吞掉(AGENTS §11.3)。
         if ($RollbackConfirmFlushSharedRedis) {
-            throw "k8s-zone-rollback 不再支持 -RollbackConfirmFlushSharedRedis:回档已不做 FLUSHDB(go/db 游标、重试收据、映射、账号目录与各 zone 缓存同在一个 Redis DB,FLUSHDB 等于事故),改由 zone_rollback_discard 只丢弃 TargetTime 之后的状态;整套环境重建走 AGENTS.md §6.2。去掉该参数重跑;尚未做任何操作。"
+            throw "k8s-zone-rollback 不再支持 -RollbackConfirmFlushSharedRedis:回档已不做 FLUSHDB(归属与位置键、交接标记、路由映射与账号目录同在一个 Redis DB,FLUSHDB 等于事故),改由 zone_rollback_discard 只丢弃 TargetTime 之后的状态;整套环境重建走 AGENTS.md §6.2。去掉该参数重跑;尚未做任何操作。"
         }
         if ($RollbackRedisPassword -ne "") {
             throw "k8s-zone-rollback 不再支持 -RollbackRedisPassword:口令经命令行会进进程列表与 shell 历史。把口令放进环境变量,改传 -RollbackRedisPasswordEnv <变量名>;尚未做任何操作。"
@@ -2101,19 +1729,13 @@ switch ($Command) {
         if (-not $script:NodeImageExplicit) {
             throw "k8s-zone-rollback requires an explicit -NodeImage (回滚目标版本的镜像引用,如 ghcr.io/luyuancpp/mmorpg-node:<回滚目标 sha>)。默认值是当前工作树的 sha,不是回滚目标。"
         }
-        # 回档的 Step 6 固定传 -DbConsumerGroup zone(docs/design/db-consumer-group-per-zone.md §6),本参数在这条路上不生效;
-        # 显式给了就在调用回档脚本之前拒绝,不静默吞掉(AGENTS §11.3)。
-        if (-not [string]::IsNullOrWhiteSpace($DbConsumerGroup)) {
-            throw "k8s-zone-rollback 不支持 -DbConsumerGroup:回档的 Step 6 固定使用 zone(回档后落到 zone 组的最终形状),给的 '$DbConsumerGroup' 不会生效。去掉该参数重跑;尚未做任何操作。"
-        }
-        # D1 映射开关同理:k8s_zone_rollback.ps1 不声明它们,Step 6 按 k8s_deploy 缺省(db_first / 全 true)重建 zone。
+        # D1 映射开关:k8s_zone_rollback.ps1 不声明它们,显式给了就在调用回档脚本之前拒绝,不静默吞掉(AGENTS §11.3),Step 6 按 k8s_deploy 缺省(db_first / 全 true)重建 zone。
         # 尤其 -ConfirmRouteSwitchChange 被静默丢掉时,Step 6 要到 namespace 已删、库已回档之后才被粘滞核对拒绝(review B3-1 / OPS-3)。
         $rollbackRouteSwitches = @()
         if (-not [string]::IsNullOrWhiteSpace($RouteStoreMode)) { $rollbackRouteSwitches += '-RouteStoreMode' }
         if ($RouteReconcileArm) { $rollbackRouteSwitches += '-RouteReconcileArm' }
         if ($RouteReadRequiresReady) { $rollbackRouteSwitches += '-RouteReadRequiresReady' }
         if ($DbPlacementRequireRouteReady) { $rollbackRouteSwitches += '-DbPlacementRequireRouteReady' }
-        if ($GuildRequireRouteReady) { $rollbackRouteSwitches += '-GuildRequireRouteReady' }
         if ($ConfirmRouteSwitchChange) { $rollbackRouteSwitches += '-ConfirmRouteSwitchChange' }
         if ($rollbackRouteSwitches.Count -gt 0) {
             throw "k8s-zone-rollback 不支持 $($rollbackRouteSwitches -join ', '):回档脚本不透传 D1 映射开关,Step 6 按 k8s_deploy.ps1 缺省(db_first / 全 true)重建 zone,给的值不会生效。线上 D1 开关不是全球默认的集群先用 k8s-all-up 切好再回档;去掉这些参数重跑;尚未做任何操作。"
@@ -2133,14 +1755,9 @@ switch ($Command) {
             ZoneName             = $ZoneName
             ZoneId               = $ZoneId
             TargetTime           = $RollbackTargetTime
-            KafkaBootstrap       = $KafkaBootstrapServer
-            KafkaTopic           = $RollbackKafkaTopic
             NodeImage            = $NodeImage
             NamespacePrefix      = $NamespacePrefix
         }
-        # 消费组留空不传,由回滚脚本按 go/db/etc/db.yaml 推导(zone 组 / legacy 组),默认值只在那一处。
-        if ($RollbackKafkaGroup -ne "")       { $rbArgs.KafkaGroup = $RollbackKafkaGroup }
-        if ($RollbackKafkaLegacyGroup -ne "") { $rbArgs.KafkaLegacyGroup = $RollbackKafkaLegacyGroup }
         if ($RollbackRedisHost -ne "")     { $rbArgs.RedisHost = $RollbackRedisHost }
         if ($RollbackRedisPort -ne "6379") { $rbArgs.RedisPort = $RollbackRedisPort }
         if ($RollbackRedisDB -ne 0)        { $rbArgs.RedisDB = $RollbackRedisDB }
@@ -2149,9 +1766,7 @@ switch ($Command) {
         if ($RollbackRedisPasswordEnv -ne "")  { $rbArgs.RedisPasswordEnv = $RollbackRedisPasswordEnv }
         if ($RollbackMySqlDsnEnv -ne "")       { $rbArgs.MySqlDsnEnv = $RollbackMySqlDsnEnv }
         if ($RollbackDiscardTool -ne "")       { $rbArgs.RollbackDiscardTool = $RollbackDiscardTool }
-        if ($RollbackBarrierProtocol -ne "")   { $rbArgs.BarrierProtocol = $RollbackBarrierProtocol }
         if ($RollbackId -ne "")                { $rbArgs.RollbackId = $RollbackId }
-        if ($RollbackQuiesceSeconds -gt 0)     { $rbArgs.QuiesceSeconds = $RollbackQuiesceSeconds }
         if ($RollbackPitrRestoredTo -ne "")    { $rbArgs.PitrRestoredTo = $RollbackPitrRestoredTo }
         if ($RollbackAcceptBlockedPlayers -gt 0) { $rbArgs.AcceptBlockedPlayers = $RollbackAcceptBlockedPlayers }
         if ($RollbackAllowEmptyTarget)         { $rbArgs.AllowEmptyTarget = $true }

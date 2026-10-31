@@ -58,6 +58,13 @@
     <ClInclude Include="code\guildshop_table_fk.h" />
     <ClInclude Include="code\equipslot_table.h" />
     <ClInclude Include="code\item_table.h" />
+    <ClInclude Include="code\playmode_table.h" />
+    <ClInclude Include="code\playmode_table_comp.h" />
+    <ClInclude Include="code\playmode_table_fk.h" />
+    <ClInclude Include="proto\playmode_table.pb.h" />
+    <ClInclude Include="code\zonegroup_table.h" />
+    <ClInclude Include="code\zonegroup_table_comp.h" />
+    <ClInclude Include="proto\zonegroup_table.pb.h" />
     <ClInclude Include="code\equipslot_table_comp.h" />
     <ClInclude Include="code\item_table_comp.h" />
     <ClInclude Include="code\messagelimiter_table.h" />
@@ -224,6 +231,11 @@
     <ClCompile Include="code\guildshop_table_fk.cpp" />
     <ClCompile Include="code\equipslot_table.cpp" />
     <ClCompile Include="code\item_table.cpp" />
+    <ClCompile Include="code\playmode_table.cpp" />
+    <ClCompile Include="code\playmode_table_fk.cpp" />
+    <ClCompile Include="proto\playmode_table.pb.cc" />
+    <ClCompile Include="code\zonegroup_table.cpp" />
+    <ClCompile Include="proto\zonegroup_table.pb.cc" />
     <ClCompile Include="code\messagelimiter_table.cpp" />
     <ClCompile Include="code\mirror_table.cpp" />
     <ClCompile Include="code\mirror_table_fk.cpp" />

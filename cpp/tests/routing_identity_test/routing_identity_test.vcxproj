@@ -161,6 +161,33 @@
     <ClCompile Include="routing_identity_test.cpp" />
     <ClCompile Include="scene_client_call_reply_test.cpp" />
     <ClCompile Include="scene_manager_selector_test.cpp" />
+    <!-- gate 观战订阅中心:被测源码直接编进测试,发送函数与时钟注入,不需要 gate 进程。
+         ObjectFileName 单独指定:gate 工程也编这两个源文件,默认的 $(IntDir)%(RelativeDir) 会与它落到同一个中间目录、互相覆盖。 -->
+    <ClCompile Include="../../nodes/gate/spectate/gate_spectate_hub.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_spectate\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/spectate/gate_spectate_ticket.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_spectate\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/gate_spectate_hub_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_spectate\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/gate_spectate_ticket_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_spectate\</ObjectFileName>
+    </ClCompile>
+    <!-- gate 推送收口:被测源码直接编进测试,会话表 tlsSessionManager 来自 gate.lib,连接是回环 TCP。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/handler/gate_push_delivery.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_push\</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="../../nodes/gate/tests/gate_push_delivery_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_push\</ObjectFileName>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>

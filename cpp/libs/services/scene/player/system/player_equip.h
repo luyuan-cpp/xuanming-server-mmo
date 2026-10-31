@@ -230,8 +230,11 @@ public:
 	//   下一级的行 success_rate == 0(必败的行不收费)           kEquipEnhanceUnavailable
 	//   要材料,但材料的 Item 行不存在或是装备(打 ERROR)       kEquipInternalError
 	//   要材料,人物背包里的数量不够                             kEquipEnhanceMaterialNotEnough
+	//   要材料,只有算上带更新版本字段的堆才够(打 WARN)         kFeatureUnavailable(版本错位,可重试)
 	//   要金币,余额不够(cost_gold > INT64_MAX 一律算不够)     kEquipEnhanceGoldNotEnough
 	//   「要材料」= material_id != 0 且 material_count > 0;「要金币」= cost_gold > 0。
+	//   材料按 Bag::CheckQuantities 判,只计 ItemStore::IsCountableByConfig 的堆,与提交段扣材料同一口径
+	//   (混版本设计 §4.4 第 6 批):判完才扣金币,扣材料不会因版本错位失败,也就不会出现 ENHANCE_PARTIAL。
 	// 提交顺序:掷骰(equiprules::RollEnhanceSuccess,恰好消耗一次 rand(10000);先掷后扣是为了让流水带上成败)
 	//   → 扣金币(CurrencySystem::DeductCurrency,TX_EQUIP_ENHANCE,correlation = itemId)
 	//   → 扣材料(BagService::RemoveItemsExact,TX_EQUIP_ENHANCE,correlation = itemId,
@@ -259,6 +262,7 @@ public:
 	//   宝石类型与孔位类型不符(孔位类型 0 = 任意)             kEquipGemTypeMismatch
 	//   实例上的宝石记录已达 equiprules::kMaxGemSockets 条      kEquipInternalError(脏数据,打 ERROR)
 	//   人物背包里没有这种宝石                                  kEquipGemNotOwned
+	//   只有带更新版本字段的堆里有这种宝石(打 WARN)            kFeatureUnavailable(版本错位,可重试)
 	//   「已有记录」看实例上的**全部**原始记录,不管那条记录此刻是否计入加成(equiprules::CheckGemFit 的
 	//   判定顺序:孔不存在 → 已占用 → 类型不符);占着孔的是一条不生效的记录时另打一条 WARN。
 	//   唯一的例外:gem_config_id == 0 的记录视同不存在(协议里 0 就是空孔,没有东西可退;当成占用的话

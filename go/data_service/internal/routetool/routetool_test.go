@@ -193,7 +193,7 @@ func runAudit(t *testing.T, rd mappingReader, db routeDB, maxRecheck int, sleep 
 // TestRouteToolKeyPrefixesMatchPlacement:本包镜像的前缀必须与 shared/placement 拼出来的键逐字节相同。
 func TestRouteToolKeyPrefixesMatchPlacement(t *testing.T) {
 	assert.Equal(t, placement.HomeZoneKey(7), homeZoneKeyPrefix+"7")
-	assert.Equal(t, placement.MergeFenceKey(3), mergeFenceKeyPrefix+"3")
+	assert.Equal(t, placement.MergedIntoKey(3), mergedIntoKeyPrefix+"3")
 	assert.Equal(t, placement.Key(7), placement.KeyPrefix+"7")
 	assert.Equal(t, placement.MapRevKey(7), placement.MapRevKeyPrefix+"7")
 }
@@ -250,48 +250,8 @@ func TestRouteToolCanonicalForms(t *testing.T) {
 
 // ── import ────────────────────────────────────────────────────────────────────
 
-// TestRouteImportFenceAtStartWritesNothing:开头有围栏 → 退出码 3,对库零调用,stdout 不出统计行。
-func TestRouteImportFenceAtStartWritesNothing(t *testing.T) {
-	mr, rd := newMappingRedis(t)
-	setKeys(t, mr, map[string]string{
-		"player:zone:1":            "1",
-		"merge:merged_into:5":      `{"dst":6,"run_id":"r5"}`,
-		placement.MergeFenceKey(3): `{"started_at":"2026-10-12T00:00:00Z"}`,
-	})
-	db := newFakeRouteDB()
-
-	_, run := runImport(t, rd, db, false)
-
-	assert.Equal(t, ExitFenced, run.code)
-	assert.Empty(t, db.importCalls)
-	assert.Empty(t, db.mergedCalls)
-	assert.Empty(t, run.stdout)
-	assert.Contains(t, run.stderr, placement.MergeFenceKey(3))
-}
-
-// TestRouteImportFenceRaisedBeforeTheEndExitsThree:导入途中才立的围栏由结尾复查发现 → 退出码 3,已写入的部分保留。
-func TestRouteImportFenceRaisedBeforeTheEndExitsThree(t *testing.T) {
-	mr, rd := newMappingRedis(t)
-	setKeys(t, mr, map[string]string{"player:zone:1": "1"})
-	db := newFakeRouteDB()
-	db.importHook = func(n int, _ []store.RouteImportRow) *store.RouteImportStats {
-		if n == 1 {
-			require.NoError(t, mr.Set(placement.MergeFenceKey(1), "{}"))
-		}
-		return nil
-	}
-
-	rep, run := runImport(t, rd, db, false)
-
-	assert.Equal(t, ExitFenced, run.code)
-	require.Len(t, db.importCalls, 1, "围栏出现之前的那一批已经写了,不回滚")
-	assert.Equal(t, 1, rep.Inserted)
-	assert.Contains(t, run.stdout, "route_import ")
-	assert.Contains(t, run.stderr, "after the import")
-}
-
-// TestRouteImportMergedIntoChangedInsideWindowExitsThree:一次在两次围栏检查之间开始并跑完的合服 / 撤销合服,
-// 结尾的围栏 SCAN 看不到(围栏已删),但 merged_into 的快照一定不同 → 同样退出码 3,统计行照出。
+// TestRouteImportMergedIntoChangedInsideWindowExitsThree:导入窗口内跑过的合服 / 撤销合服,
+// merged_into 的快照一定不同 → 退出码 3,统计行照出。
 // 不抓的话导入以退出码 0 结束,留下的旧 home 行只有 audit 才能发现,重跑又只会判 conflict、永远收敛不了。
 func TestRouteImportMergedIntoChangedInsideWindowExitsThree(t *testing.T) {
 	cases := []struct {
@@ -328,7 +288,7 @@ func TestRouteImportMergedIntoChangedInsideWindowExitsThree(t *testing.T) {
 
 			rep, run := runImport(t, rd, db, false)
 
-			assert.Equal(t, ExitFenced, run.code, run.stderr)
+			assert.Equal(t, ExitMergeChanged, run.code, run.stderr)
 			assert.Equal(t, 1, rep.Inserted, "窗口内已写的部分不回滚,计数照实给出")
 			assert.Contains(t, run.stdout, "route_import ")
 			assert.Contains(t, run.stderr, "ABORT: merge:merged_into changed during the import")
@@ -552,21 +512,20 @@ func TestRouteAuditClassifiesBothDirections(t *testing.T) {
 		{SrcZone: 26, DstZone: 27, RunID: "r4"},
 	}
 	setKeys(t, mr, map[string]string{
-		"player:zone:1":             "1",
-		"player:zone:3":             "3",
-		"player:zone:4":             "4",
-		"player:placement:4":        "4:1",
-		"player:zone:5":             "6",
-		"player:zone:6":             "06",
-		"player:zone:8":             "8",
-		"player:maprev:8":           "5",
-		"player:maprev:9":           "3",
-		"player:zone:10":            "10",
-		"player:placement:012":      "1:1",
-		"merge:merged_into:20":      `{"dst":21,"run_id":"r1"}`,
-		"merge:merged_into:24":      `{"dst":25,"run_id":"r3"}`,
-		"merge:merged_into:26":      `{"dst":28,"run_id":"r4"}`,
-		placement.MergeFenceKey(30): "{}",
+		"player:zone:1":        "1",
+		"player:zone:3":        "3",
+		"player:zone:4":        "4",
+		"player:placement:4":   "4:1",
+		"player:zone:5":        "6",
+		"player:zone:6":        "06",
+		"player:zone:8":        "8",
+		"player:maprev:8":      "5",
+		"player:maprev:9":      "3",
+		"player:zone:10":       "10",
+		"player:placement:012": "1:1",
+		"merge:merged_into:20": `{"dst":21,"run_id":"r1"}`,
+		"merge:merged_into:24": `{"dst":25,"run_id":"r3"}`,
+		"merge:merged_into:26": `{"dst":28,"run_id":"r4"}`,
 	})
 
 	sleeps := 0
@@ -585,14 +544,12 @@ func TestRouteAuditClassifiesBothDirections(t *testing.T) {
 		MergedIntoMissingInRedis: 1,
 		MergedIntoMissingInDB:    1,
 		MergedIntoMismatch:       1,
-		RedisFencesActive:        1,
 	}, rep)
 	assert.Equal(t, ExitAttention, run.code)
 	assert.Equal(t, 1, sleeps, "差异玩家没超过 -max-recheck,复核一次")
 	assert.Contains(t, run.stderr, "DIFF kind=db_only_unpublished player=2 ")
 	assert.Contains(t, run.stderr, "DIFF kind=redis_rev_ahead player=8 ")
 	assert.Contains(t, run.stderr, "DIFF kind=missing_in_db player=9 db=none ")
-	assert.Contains(t, run.stderr, "WARN: 1 active merge fence(s)")
 	assert.True(t, strings.HasPrefix(run.stdout, "route_audit db_rows=9 redis_players=8 "), run.stdout)
 }
 
@@ -767,7 +724,7 @@ func TestRouteTiDBPrepareOutputAndExitCodes(t *testing.T) {
 	steps := func(executed bool) []store.RouteTiDBPrepareStep {
 		return []store.RouteTiDBPrepareStep{
 			{SQL: "ALTER TABLE `player_route` ATTRIBUTES 'merge_option=deny'", Executed: executed},
-			{SQL: "SPLIT TABLE `zone_merge_fence` BY (1, 0), (2, 0)", Executed: executed, SplitRegions: map[bool]int64{true: 2}[executed]},
+			{SQL: "SPLIT TABLE `player_route` BY (1, 0), (2, 0)", Executed: executed, SplitRegions: map[bool]int64{true: 2}[executed]},
 		}
 	}
 
@@ -790,7 +747,7 @@ func TestRouteTiDBPrepareOutputAndExitCodes(t *testing.T) {
 		assert.Equal(t, ExitClean, r.code, r.stderr)
 		assert.True(t, p.reqs[0].DryRun)
 		assert.Contains(t, r.stderr, "PLAN ALTER TABLE `player_route` ATTRIBUTES 'merge_option=deny'\n")
-		assert.Contains(t, r.stderr, "PLAN SPLIT TABLE `zone_merge_fence` BY (1, 0), (2, 0)\n")
+		assert.Contains(t, r.stderr, "PLAN SPLIT TABLE `player_route` BY (1, 0), (2, 0)\n")
 		assert.NotContains(t, r.stderr, "DONE ")
 		assert.Contains(t, r.stdout, "route_tidb_prepare engine=tidb skipped=false dry_run=true ")
 		assert.Contains(t, r.stdout, " statements=2 executed=0 split_regions=0")
@@ -800,7 +757,7 @@ func TestRouteTiDBPrepareOutputAndExitCodes(t *testing.T) {
 		p := &fakeTiDBPreparer{rep: store.RouteTiDBPrepareReport{Engine: "tidb", Version: "8.0.11-TiDB-v8.5.2", Steps: steps(true)}}
 		r := run(p, false)
 		assert.Equal(t, ExitClean, r.code, r.stderr)
-		assert.Contains(t, r.stderr, "DONE SPLIT TABLE `zone_merge_fence` BY (1, 0), (2, 0) split_regions=2\n")
+		assert.Contains(t, r.stderr, "DONE SPLIT TABLE `player_route` BY (1, 0), (2, 0) split_regions=2\n")
 		assert.Contains(t, r.stdout, " statements=2 executed=2 split_regions=2")
 	})
 
@@ -809,7 +766,7 @@ func TestRouteTiDBPrepareOutputAndExitCodes(t *testing.T) {
 		failed[0].Executed = true
 		p := &fakeTiDBPreparer{
 			rep: store.RouteTiDBPrepareReport{Engine: "tidb", Version: "8.0.11-TiDB-v8.5.2", Steps: failed},
-			err: errors.New("tidb-prepare step 2/2: SPLIT TABLE `zone_merge_fence` BY (1, 0), (2, 0): Error 1105"),
+			err: errors.New("tidb-prepare step 2/2: SPLIT TABLE `player_route` BY (1, 0), (2, 0): Error 1105"),
 		}
 		r := run(p, false)
 		assert.Equal(t, ExitFailed, r.code)

@@ -72,14 +72,19 @@ func TestGlobalGuildTrialRequiresDurableTopicBeforeServing(t *testing.T) {
 	if err := ensureTrialResultTopic(c, ensure); !errors.Is(err, blocked) || calls != 1 {
 		t.Fatalf("耐久门禁失败不能转为后台放行: %v calls=%d", err, calls)
 	}
-	legacy := false
-	c.MySQL.RequireTiDB = &legacy
+	c.MySQL.Backend = "mysql"
+	c.Mode = "dev"
 	if err := ensureTrialResultTopic(c, ensure); err != nil || calls != 1 {
-		t.Fatalf("显式本地兼容不应同步连接Kafka: %v calls=%d", err, calls)
+		t.Fatalf("本地 mysql 档不应同步连接Kafka: %v calls=%d", err, calls)
 	}
-	c.MySQL.RequireTiDB = nil
+	// 生产 mysql 档的结算同样要耐久:省钱档不能顺带丢掉 RF3 门禁。
+	c.Mode = "pro"
+	if err := ensureTrialResultTopic(c, ensure); !errors.Is(err, blocked) || calls != 2 {
+		t.Fatalf("生产 mysql 档必须核验耐久: %v calls=%d", err, calls)
+	}
+	c.MySQL.Backend = ""
 	c.Activity.TrialResult.Enabled = false
-	if err := ensureTrialResultTopic(c, ensure); err != nil || calls != 1 {
+	if err := ensureTrialResultTopic(c, ensure); err != nil || calls != 2 {
 		t.Fatalf("活动关闭不应创建结果topic: %v calls=%d", err, calls)
 	}
 }

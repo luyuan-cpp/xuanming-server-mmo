@@ -340,7 +340,7 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
 |-----|------|------|
 | `spectate:battle:{battle_id}` | string = SpectateBattleRecord pb,TTL = BattleMaxDurationSeconds + 60s | 活跃战斗登记(gather 成功后写) |
 | `spectate:battles:active` | ZSET member=battle_id score=created_at_ms | 随机/列表索引;懒剔除 + 定期按 score 清过期 |
-| `spectate:watching:{player_id}` | string = 本次观战固定的 AddObserverRequest 原件 pb(battle_id / op / 准入截止 / 实例;2026-10-24 前为十进制 battle_id),TTL 同上 | 观战互斥标记(gather 清退时反查用,RemoveObserver 带原件的同一 op);重复 WatchBattle(含重看同一场)按原件懒清退旧观战(战斗已收尾或标记解析不出原件则仅删标记);见 [battle-spectate-tiered-fanout.md](battle-spectate-tiered-fanout.md) §10.1 |
+| `spectate:watching:{player_id}` | string = 本次观战固定的 AddObserverRequest 原件 pb(battle_id / op / 准入截止 / 实例;2026-10-24 前为十进制 battle_id),TTL 同上 | 观战互斥标记,也是 battle 上观众的恢复入口(gather 清退时反查用,RemoveObserver 带原件的同一 op);重复 WatchBattle(含重看同一场)沿原件取消旧观战,拿到取消证明才按值删标记,否则回 16004 并保留(标记解析不出原件时只删标记);见 [battle-spectate-tiered-fanout.md](battle-spectate-tiered-fanout.md) §10.1 |
 
 ### 10.5 房间侧规格(battle 节点)
 

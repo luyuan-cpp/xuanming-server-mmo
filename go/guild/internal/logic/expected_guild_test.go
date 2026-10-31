@@ -2,7 +2,7 @@ package logic
 
 // expected_guild_id 栅栏的不连库单测(docs/design/client-request-ordering.md O14 / §6.4,批次 E2)。
 //
-// 这里钉两件与存储无关的事:哪些错误算「不在预期帮」(expectedGuildLost 的真值表),以及会话 / 归属区 / 合服闸门这些前置
+// 这里钉两件与存储无关的事:哪些错误算「不在预期帮」(expectedGuildLost 的真值表),以及会话 / 归属区这些前置
 // 拒绝发生在绑定帮会之前(不计数、不碰仓储 —— repo 传 nil,顺序错了当场 nil panic,与 guild_manage_logic_test.go 同一套路)。
 // 「复核与写入在同一个事务里」「复核与写入之间换帮也不会写错帮」要真 InnoDB 才有意义,见 expected_guild_integration_test.go
 // (build tag integration)。
@@ -125,7 +125,7 @@ func expectedGuildWrites() []expectedGuildWrite {
 	}
 }
 
-// TestExpectedGuildBoundAfterClientPrechecks:归属区未知、合服闸门命中时,无论带不带 expected_guild_id,
+// TestExpectedGuildBoundAfterClientPrechecks:归属区未知时,无论带不带 expected_guild_id,
 // 都在绑定帮会之前就拒绝 —— 不计 absent / mismatch(那两个数衡量的是「走到绑定的请求」),也不碰仓储(repo 为 nil)。
 func TestExpectedGuildBoundAfterClientPrechecks(t *testing.T) {
 	for _, w := range expectedGuildWrites() {
@@ -133,13 +133,8 @@ func TestExpectedGuildBoundAfterClientPrechecks(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/expected=%d", w.method, expected), func(t *testing.T) {
 				counts := watchExpectedGuild(t)
 
-				merging := NewGuildLogic(nil, nil, nil, &fakeFence{merging: true}, &fakeHomeZones{zone: 2})
-				id, err := w.run(merging, clientCtx(42), expected)
-				require.NoError(t, err)
-				assert.Equal(t, constants.ErrZoneMerging, id)
-
-				unknownZone := NewGuildLogic(nil, nil, nil, &fakeFence{}, &fakeHomeZones{zone: 0})
-				id, err = w.run(unknownZone, clientCtx(42), expected)
+				unknownZone := NewGuildLogic(nil, nil, nil, &fakeHomeZones{zone: 0})
+				id, err := w.run(unknownZone, clientCtx(42), expected)
 				require.NoError(t, err)
 				assert.Equal(t, constants.ErrHomeZoneUnknown, id)
 

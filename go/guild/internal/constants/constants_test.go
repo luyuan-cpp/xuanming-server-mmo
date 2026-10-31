@@ -47,7 +47,6 @@ func tipCodes() map[string]uint32 {
 		"ErrAnnouncementTooLong": ErrAnnouncementTooLong,
 		"ErrHomeZoneUnknown":     ErrHomeZoneUnknown,
 		// 帮会二期 B2(管理与审批)新增的 9 个。
-		"ErrZoneMerging":          ErrZoneMerging,
 		"ErrTargetNotMember":      ErrTargetNotMember,
 		"ErrCannotTargetSelf":     ErrCannotTargetSelf,
 		"ErrRankTooLow":           ErrRankTooLow,
@@ -245,7 +244,6 @@ func TestTipClassifier(t *testing.T) {
 func TestManagementTipCodesAreBusinessRejects(t *testing.T) {
 	all := tipCodes()
 	for _, name := range []string{
-		"ErrZoneMerging",
 		"ErrTargetNotMember",
 		"ErrCannotTargetSelf",
 		"ErrRankTooLow",

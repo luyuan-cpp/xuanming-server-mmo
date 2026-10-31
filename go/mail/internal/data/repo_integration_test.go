@@ -314,6 +314,110 @@ func TestTiDBConcurrentClaimRequiresSQLCommitAndProtectsPending(t *testing.T) {
 	}
 }
 
+// 系统邮件不再排全服共用的 mail_box(0):同一请求并发首发恰好一封、其余回同一 mail_id,没有 player_id=0 的行。
+func TestTiDBConcurrentSystemSendIsDecidedByUniqueKey(t *testing.T) {
+	ctx, db, r := mailFixture(t)
+	request := func() *mailpb.SendMailRequest {
+		return &mailpb.SendMailRequest{SenderKind: 1, RequestId: 200, Title: "公告", Body: "并发首发"}
+	}
+	type outcome struct {
+		out *mailpb.SendMailResponse
+		err error
+	}
+	results := make(chan outcome, 8)
+	start := make(chan struct{})
+	for range 8 {
+		go func() {
+			<-start
+			out, err := r.Send(ctx, "admin", mailpb.MailKind_MAIL_KIND_SYSTEM, request())
+			results <- outcome{out, err}
+		}()
+	}
+	close(start)
+	var mailID uint64
+	fresh := 0
+	for range 8 {
+		got := <-results
+		if got.err != nil {
+			t.Fatalf("并发首发: %v", got.err)
+		}
+		if mailID != 0 && got.out.MailId != mailID {
+			t.Fatalf("同一请求回了不同的 mail_id: %d %d", mailID, got.out.MailId)
+		}
+		mailID = got.out.MailId
+		if !got.out.Duplicated {
+			fresh++
+		}
+	}
+	if fresh != 1 {
+		t.Fatalf("恰好一路首发成功,实际 %d", fresh)
+	}
+	var rows, sentinels int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_message WHERE sender_kind=1 AND request_id=200").Scan(&rows); err != nil || rows != 1 {
+		t.Fatalf("恰好一封: %v %d", err, rows)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_box WHERE player_id=0").Scan(&sentinels); err != nil || sentinels != 0 {
+		t.Fatalf("不再有 player_id=0 的守卫行: %v %d", err, sentinels)
+	}
+	changed := request()
+	changed.Body = "同键换内容"
+	if _, err := r.Send(ctx, "admin", mailpb.MailKind_MAIL_KIND_SYSTEM, changed); !errors.Is(err, ErrConflict) {
+		t.Fatalf("同键换内容: %v", err)
+	}
+}
+
+// 活动首建同样靠唯一键:同一请求并发只建一份;同 (sender,campaign,generation) 换请求整笔回滚,不留孤儿消息行。
+func TestTiDBConcurrentCampaignCreateIsDecidedByUniqueKey(t *testing.T) {
+	ctx, db, r := mailFixture(t)
+	hash, _, err := ShardHash([]uint64{7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := sha256.Sum256([]byte(fmt.Sprintf("v1\n0:%s:1\n", hash)))
+	request := func(requestID uint64) *mailpb.SendMailRequest {
+		return &mailpb.SendMailRequest{SenderKind: 1, RequestId: requestID, Title: "活动奖", Body: "并发首建", Attachments: &mailpb.MailAttachments{Currencies: []*mailpb.MailCurrency{{Amount: 20}}}, CampaignId: 21, ManifestGeneration: 1, ExpectedRecipientCount: 1, ExpectedShardCount: 1, ManifestHash: hex.EncodeToString(manifest[:])}
+	}
+	type outcome struct {
+		out *mailpb.SendMailResponse
+		err error
+	}
+	results := make(chan outcome, 6)
+	start := make(chan struct{})
+	for range 6 {
+		go func() {
+			<-start
+			out, err := r.Send(ctx, "admin", mailpb.MailKind_MAIL_KIND_SYSTEM, request(300))
+			results <- outcome{out, err}
+		}()
+	}
+	close(start)
+	var mailID uint64
+	for range 6 {
+		got := <-results
+		if got.err != nil {
+			t.Fatalf("并发首建: %v", got.err)
+		}
+		if mailID != 0 && got.out.MailId != mailID {
+			t.Fatalf("同一请求回了不同的 mail_id: %d %d", mailID, got.out.MailId)
+		}
+		mailID = got.out.MailId
+	}
+	if _, err = r.Send(ctx, "admin", mailpb.MailKind_MAIL_KIND_SYSTEM, request(301)); !errors.Is(err, ErrConflict) {
+		t.Fatalf("同活动换请求: %v", err)
+	}
+	for query, want := range map[string]int{
+		"SELECT COUNT(*) FROM mail_campaign WHERE sender_kind=1 AND campaign_id=21": 1,
+		"SELECT COUNT(*) FROM mail_message WHERE sender_kind=1 AND request_id=300":  1,
+		"SELECT COUNT(*) FROM mail_message WHERE sender_kind=1 AND request_id=301":  0,
+		"SELECT COUNT(*) FROM mail_box WHERE player_id=0":                           0,
+	} {
+		var n int
+		if err = db.QueryRowContext(ctx, query).Scan(&n); err != nil || n != want {
+			t.Fatalf("%s: %v %d want %d", query, err, n, want)
+		}
+	}
+}
+
 func TestTiDBManifestSealFreezesBroadcastRecipients(t *testing.T) {
 	ctx, db, r := mailFixture(t)
 	hash, _, err := ShardHash([]uint64{9, 7, 7})

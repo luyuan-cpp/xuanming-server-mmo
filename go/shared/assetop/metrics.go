@@ -118,8 +118,8 @@ func newMetrics(reg prometheus.Registerer, service string) *Metrics {
 		}, []string{"result"}),
 		ledgerReadTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "assetop_ledger_read_total",
-			Help: "读已落盘账本的结果:finalized / unseen / absent / error;RequireSQLCommit 打开时还有 unwired" +
-				"(没挂 SQL 证据读取器,CheckWiring 本应拒启)",
+			Help: "读已落盘账本的结果:finalized / unseen / absent / error / unwired" +
+				"(没挂账本读取器,CheckWiring 本应拒启)",
 			ConstLabels: labels,
 		}, []string{"result"}),
 		manualResolveTotal: f.NewCounterVec(prometheus.CounterOpts{

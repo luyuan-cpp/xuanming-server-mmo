@@ -8,7 +8,7 @@
 #
 # 前置:
 #   1. match 是补位版本(含 docs/design/team-backfill-matching.md 的改动)且 Team.FillQueueDisabled=false;
-#      PveTeamSizeByConfigId 里 battle_config_id 的人数上限 ≥ 3(本地 "1": 5)。
+#      PlayMode 表里 PVE_TEAM 行 battle_config_id 的人数上限 ≥ 3(本地模板 1 为 5)。
 #   2. gate 以路由服模式启动(GATE_CLIENT_RPC_ROUTER=1,start_game.ps1 默认已开);MessageLimiter 表已导出 team 额度。
 #   3. 3 人档队列里没有别人在排(否则路人可能是别人而不是 C,P4 的「同一场」断言会失败)。
 #   4. 从 robot/ 目录运行(table_dir 是相对路径)。
@@ -32,6 +32,6 @@ mode: "team-backfill-smoke"
 
 team_backfill_smoke:
   zone: 1
-  battle_config_id: 1 # 必须在 match 的 PveTeamSizeByConfigId 里,且人数上限 ≥ 3
+  battle_config_id: 1 # 必须是 PlayMode 表里开放的 PVE_TEAM 模板,且人数上限 ≥ 3
 
 auth_type: "password"

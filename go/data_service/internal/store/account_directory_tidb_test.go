@@ -21,6 +21,7 @@ import (
 	databasepb "proto/common/database"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
+	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
 	"shared/placement"
 )
@@ -86,7 +87,7 @@ func accountDirectoryTiDBWithWriter(t *testing.T) (*AccountDirectoryStore, *sql.
 		business = append(business, model)
 	}
 	require.NoError(t, fixture.GrantProtoTables(ctx, name, business))
-	playerModels := []proto.Message{&databasepb.PlayerDatabase{}, &databasepb.PlayerDatabase_1{}}
+	playerModels := []proto.Message{&databasepb.PlayerStore{}}
 	for _, schema := range []string{playerSchema, proofSchema} {
 		install, err := fixture.OpenSchema(ctx, schema)
 		require.NoError(t, err)
@@ -101,9 +102,10 @@ func accountDirectoryTiDBWithWriter(t *testing.T) (*AccountDirectoryStore, *sql.
 	normal, err := mysql.ParseDSN(fixture.DSN(name))
 	require.NoError(t, err)
 	conf := MySQLConfig{Host: normal.Addr, User: normal.User, Password: normal.Passwd, DBName: name, MaxOpenConn: 8, MaxIdleConn: 2, Permission: fixture.Permission}
-	directory, err := NewAccountDirectoryStore(conf, true, 2, 8)
+	directory, err := NewAccountDirectoryStore(conf, authoritysql.BackendTiDB, 2, 8)
 	require.NoError(t, err)
-	require.NoError(t, directory.ConfigureInitialPlayerCommit([]uint32{storageID}))
+	// 证据夹具会把路由切到 proof 库,两个库都要在白名单里。
+	require.NoError(t, directory.ConfigureInitialPlayerCommit([]uint32{storageID, proofStorageID}))
 	// 只隔离原目录契约；跨域资产互锁仍由对应正式用例装配。
 	directory.contracts = &roleAssetContractGuard{disabled: true}
 	t.Cleanup(func() { require.NoError(t, directory.Close()) })
@@ -199,6 +201,75 @@ func TestTiDBAccountDirectoryCapReplayRepairAndRemoval(t *testing.T) {
 	require.ErrorIs(t, err, accountdirectory.ErrMissing)
 }
 
+// 登录读目录:create=false 未命中不建行;create=true 未命中才建行;目录行已在时只读返回,
+// 别的事务持着这一行的锁(比如同账号正在建角)也不排队,读到的是已提交的列表。
+func TestTiDBAccountDirectoryReadTakesNoLockOnHit(t *testing.T) {
+	s, db := accountDirectoryTiDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	directoryRows := func(account string) int {
+		t.Helper()
+		var rows int
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM account_directory WHERE account=?", []byte(account)).Scan(&rows))
+		return rows
+	}
+	_, err := s.Read(ctx, "reader", false)
+	require.ErrorIs(t, err, accountdirectory.ErrMissing)
+	require.Zero(t, directoryRows("reader"), "create=false 不建行")
+	roles, err := s.Read(ctx, "reader", true)
+	require.NoError(t, err)
+	require.Empty(t, roles.Players)
+	require.Equal(t, 1, directoryRows("reader"))
+
+	role := &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 3201}
+	_, err = createInitialRoleForTest(s, ctx, "reader", role)
+	require.NoError(t, err)
+
+	holder, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	require.NoError(t, err)
+	defer holder.Rollback()
+	var stored []byte
+	require.NoError(t, holder.QueryRowContext(ctx, "SELECT account FROM account_directory WHERE account='reader' FOR UPDATE").Scan(&stored))
+	for _, create := range []bool{false, true} {
+		bounded, stop := context.WithTimeout(ctx, 5*time.Second)
+		roles, err = s.Read(bounded, "reader", create)
+		stop()
+		require.NoError(t, err, "目录行被锁时读不排队(create=%v)", create)
+		require.Len(t, roles.Players, 1)
+	}
+	require.NoError(t, holder.Rollback())
+}
+
+// 并发首次登录只建一行目录;之后提交的角色,提交之后开始的 Read 一定读得到。
+func TestTiDBAccountDirectoryConcurrentFirstLoginCreatesOneRow(t *testing.T) {
+	s, db := accountDirectoryTiDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	results := make(chan error, 8)
+	start := make(chan struct{})
+	for range 8 {
+		go func() {
+			<-start
+			_, err := s.Read(ctx, "first-login", true)
+			results <- err
+		}()
+	}
+	close(start)
+	for range 8 {
+		require.NoError(t, <-results)
+	}
+	var rows int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM account_directory WHERE account='first-login'").Scan(&rows))
+	require.Equal(t, 1, rows)
+	_, err := createInitialRoleForTest(s, ctx, "first-login", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 3202})
+	require.NoError(t, err)
+	roles, err := s.Read(ctx, "first-login", false)
+	require.NoError(t, err)
+	require.Len(t, roles.Players, 1)
+	_, err = s.Read(ctx, string(make([]byte, 192)), true)
+	require.ErrorIs(t, err, accountdirectory.ErrInvalid, "非法账号在碰库之前就拒")
+}
+
 func TestTiDBAccountDirectoryPreservesExactAccountIdentity(t *testing.T) {
 	s, _ := accountDirectoryTiDB(t)
 	ctx := context.Background()
@@ -224,7 +295,7 @@ func TestTiDBAccountDirectoryPreservesExactAccountIdentity(t *testing.T) {
 	}
 }
 
-// 夹具只登记本次角色的正式原路由，随后仍调用公开 Create 完成真实双表事务。
+// 夹具只登记本次角色的正式原路由，随后仍调用公开 Create 完成真实建角事务。
 // 不预建所有玩家路由、不修改任何已存在路由；生产事务的路由/合服保护仍实际执行。
 func createInitialRoleForTest(s *AccountDirectoryStore, ctx context.Context, account string, role *base.AccountSimplePlayer) (*base.AccountSimplePlayerList, error) {
 	if err := installInitialRouteForTest(s, ctx, role); err != nil {

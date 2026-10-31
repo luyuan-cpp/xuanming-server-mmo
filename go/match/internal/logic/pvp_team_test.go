@@ -15,7 +15,7 @@ import (
 func TestPvpTeamSoloQueuesEverySideSizeWithoutStartingAlone(t *testing.T) {
 	for size := uint32(1); size <= 5; size++ {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
-			s, mr := newPartySvcCtx(t)
+			s, mr, _ := newPartySvcCtx(t)
 			calls := stubPveGather(t)
 			setPlayerLocation(t, mr, 71001, 1)
 			response, err := NewJoinQueueLogic(context.Background(), s).JoinQueue(&matchpb.JoinQueueRequest{
@@ -132,7 +132,7 @@ func TestPvpTeamGatherUsesExplicitSidesAndRejectsInvalidSides(t *testing.T) {
 }
 
 func TestPvpTeamRejectsOversizedSideBeforeWritingTicket(t *testing.T) {
-	s, mr := newPartySvcCtx(t)
+	s, mr, _ := newPartySvcCtx(t)
 	setPlayerLocation(t, mr, 71002, 1)
 	response, err := NewJoinQueueLogic(context.Background(), s).JoinQueue(&matchpb.JoinQueueRequest{
 		PlayerId: 71002, Mode: matchpb.MatchMode(7), TeamSize: 6,

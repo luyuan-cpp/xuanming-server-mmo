@@ -117,7 +117,8 @@ func LoopConfigFrom(c config.AssetOpConf, retryBase time.Duration) assetop.LoopC
 		AbandonBatch:          c.AbandonBatch,
 		AbandonInterval:       msToDuration(c.AbandonIntervalMs),
 		AuditInterval:         msToDuration(c.AuditIntervalMs),
-		RequireSQLCommit:      c.RequireSQLCommit,
+		// 终结只认强读 player_store 得到的账本(docs/design/player-data-tidb-scaling-plan.md §3.4)。
+		RequireSQLCommit: true,
 	}
 }
 
@@ -237,9 +238,6 @@ func NewAssetPipeline(c config.AssetOpConf, retryBase time.Duration, locatorRedi
 		conns.Close()
 		return nil, fmt.Errorf("guild: 资产重投循环参数非法(AssetOp 段 + GuildRule.asset_op_retry_base_ms): %w", err)
 	}
-	// 自动放弃前重新解析位置(abandon.go 条件 3)用的是与 Caller 同一个 Locator:同一份 player:{id}:location、
-	// 同一份节点镜像,"有没有位置"与投递看到的是同一件事。在任何 goroutine 读它之前(此处)写入。
-	loop.Locator = locator
 	// Loop.Ledger 在这里先留 nil,由装配方在 Start 之前调 AttachPersistedLedger 接上(B5d-1,Y-06):
 	// 本函数拿不到 data_service 客户端(它挂在 ServiceContext 上),不为此改签名。没有 Ledger 时自动放弃不运行(fail-closed)。
 	// Loop.Manual 不挂:人工终结 v1 只做离线 CLI(90 清单 D4),进程里没有调用者;
@@ -317,11 +315,8 @@ func (p *AssetPipeline) AttachMaintenanceLeader(rdb *redis.Client, id string) {
 // 其 ProcessOne 同样会读账本)与 gRPC 开始服务之前。Loop.Ledger 是无锁字段,有 goroutine 读它之后
 // 再写就是数据竞争。本方法只能拦住"Start / Stop 之后"这一种误用(打 ERROR、不生效);nil 接收者安全。
 //
-// 它在不在是不是正确性路径,取决于 AssetOp.RequireSQLCommit(docs/design/db-write-fencing-mysql.md §6.6):
-//   - 关闭(缺省,HEAD 口径):离线读账本是优化。client 为 nil(没配 DataServiceRpc)时保持 Ledger = nil 并打 INFO:
-//     长期离线玩家的行照常退避重投,玩家上线后由在线投递终结(不变量 I7),自动放弃不运行。
-//   - 打开:在线 / 离线终结都只认 SQL 提交证据,没有它所有终结都停在 AwaitDurable。client 为 nil 时这里只打 ERROR,
-//     由装配方随后调 Loop.CheckWiring 拒启(guild.go)。
+// 在线 / 离线终结都只认已提交账本,没有它所有终结都停在 AwaitDurable。client 为 nil 时这里只打 ERROR,
+// 由装配方随后调 Loop.CheckWiring 拒启(guild.go)。
 func (p *AssetPipeline) AttachPersistedLedger(client dspb.DataServiceClient) {
 	if p == nil {
 		return
@@ -332,19 +327,13 @@ func (p *AssetPipeline) AttachPersistedLedger(client dspb.DataServiceClient) {
 		logx.Error("[guild] AttachPersistedLedger called after asset channel Start / Stop; ignored: Loop.Ledger can only be set before Start")
 		return
 	}
-	requireSQL := p.Loop.RequireSQLCommit()
 	if client == nil {
-		if requireSQL {
-			logx.Error("[guild] DataServiceRpc not configured while AssetOp.RequireSQLCommit=true: SQL commit evidence cannot be read; startup must be refused (Loop.CheckWiring)")
-			return
-		}
-		logx.Info("[guild] DataServiceRpc not configured: asset redelivery loop will not read persisted ledger (Loop.Ledger=nil), " +
-			"rows for long-offline players continue redelivery with backoff and finalize after players reconnect; automatic abandon will not run")
+		logx.Error("[guild] DataServiceRpc not configured: the committed asset ledger cannot be read; startup must be refused by Loop.CheckWiring")
 		return
 	}
 	p.Loop.Ledger = &assetop.DataServiceLedger{Client: client, Timeout: persistedLedgerReadTimeout}
-	logx.Infof("[guild] Asset redelivery loop wired to persisted ledger reads: data_service.GetPlayerAssetOpLedger (per-call limit %v) require_sql_commit=%t",
-		persistedLedgerReadTimeout, requireSQL)
+	logx.Infof("[guild] Asset redelivery loop wired to persisted ledger reads: data_service.GetPlayerAssetOpLedger (per-call limit %v)",
+		persistedLedgerReadTimeout)
 }
 
 // Start 起 scene 节点镜像与重投循环两个后台 goroutine,以及(装配了的话)维护选主与落地唤醒订阅。
@@ -353,9 +342,7 @@ func (p *AssetPipeline) AttachPersistedLedger(client dspb.DataServiceClient) {
 // 先起 watcher 再起循环:反过来也能工作(镜像没同步时定位回 node_unknown,循环按退避重来),只是白跑一轮。
 // etcdCli 为 nil 时 watcher 打 ERROR 后直接返回、节点镜像永不同步:有位置记录的玩家一律定位成 node_unknown,
 // 投递发不出去(fail-closed),循环照跑但这些行都留在 PENDING。
-// 注意这**不会**停掉自动放弃:「位置键不存在」(scenenode.ErrNotOnline)的判定只读 player:{id}:location,
-// 不经过节点镜像,所以无位置玩家的行仍按其余条件(年龄、安全间隔、已落盘账本确认未见)照常放弃;
-// 有位置记录的玩家按「有位置」跳过(located)。要停掉放弃只能把 AssetOp.AbandonAfterDays 写 0。
+// 自动放弃不看节点镜像:写权行和账本都来自 data_service。要停掉放弃只能把 AssetOp.AbandonAfterDays 写 0。
 // 唤醒订阅最后起:它调的 Loop.WakePlayer 与 Tick 共用 Workers 预算,早起晚起都不改变任何正确性论证(设计 L-4)。
 func (p *AssetPipeline) Start(ctx context.Context, etcdCli *clientv3.Client) {
 	if p == nil {

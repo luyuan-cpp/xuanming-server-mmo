@@ -172,6 +172,97 @@ func TestTiDBOrderedScoresFreezeAndReliableRewardIntents(t *testing.T) {
 		t.Fatal("隐藏不得删除奖励意图")
 	}
 }
+
+// 带版本的批次 achieved_ms 由生产者定:分数没变也照写,榜上同分决胜不看到达顺序。不带版本的仍按「分数变了才更新」。
+func TestTiDBVersionedAchievedMsComesFromProducer(t *testing.T) {
+	ctx, db, next := rankFixture(t)
+	r := New(db, next, next, next, func(uint32) bool { return true })
+	board := testOpen(t, ctx, r)
+	submit := func(cursor, achieved, version uint64) {
+		t.Helper()
+		_, err := r.Submit(ctx, "match", &rankpb.SubmitRankScoresRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, SourceShard: 1, SourceCursor: cursor, RequestId: 100 + cursor, Mode: rankpb.RankSubmitMode_RANK_SUBMIT_SET, Entries: []*rankpb.RankScoreInput{{EntityId: 7, Score: 100, AchievedMs: achieved, ScoreVersion: version}}})
+		require.NoError(t, err)
+	}
+	achieved := func() uint64 {
+		t.Helper()
+		var value uint64
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT achieved_ms FROM rank_score WHERE board_id=? AND generation=1 AND entity_id=7", board.BoardId).Scan(&value))
+		return value
+	}
+	submit(1, 5, 1)
+	require.EqualValues(t, 5, achieved())
+	submit(2, 9, 2)
+	require.EqualValues(t, 9, achieved(), "带版本:分数没变也用生产者的值")
+	submit(3, 12, 0)
+	require.EqualValues(t, 9, achieved(), "不带版本:分数没变不更新")
+}
+
+// 生产者按片投批:幂等与连续都按 (shard, cursor) 算,片之间没有先后;
+// 带版本的绝对分即使迟到也不会把榜分退回旧值;封榜按各片批次总数核齐。
+func TestTiDBShardedSourceCursorsAndVersionsSurviveOutOfOrderDelivery(t *testing.T) {
+	ctx, db, next := rankFixture(t)
+	r := New(db, next, next, next, func(uint32) bool { return true })
+	board := testOpen(t, ctx, r)
+	batch := func(shard uint32, cursor, request uint64, score int64, version uint64) *rankpb.SubmitRankScoresRequest {
+		return &rankpb.SubmitRankScoresRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, SourceShard: shard, SourceCursor: cursor, RequestId: request, Mode: rankpb.RankSubmitMode_RANK_SUBMIT_SET, Entries: []*rankpb.RankScoreInput{{EntityId: 7, Score: score, AchievedMs: uint64(request), ScoreVersion: version}}}
+	}
+	scoreOf := func() (int64, uint64) {
+		t.Helper()
+		var score int64
+		var version uint64
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT score,score_version FROM rank_score WHERE board_id=? AND generation=1 AND entity_id=7", board.BoardId).Scan(&score, &version))
+		return score, version
+	}
+	// 新版本先到,旧版本后到:两批都落账,榜分不回退。
+	newer := batch(5, 1, 10, 200, 2)
+	older := batch(3, 1, 11, 100, 1)
+	out, err := r.Submit(ctx, "match", newer)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, out.CommittedCursor)
+	out, err = r.Submit(ctx, "match", older)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, out.CommittedCursor, "回的是本片游标")
+	require.False(t, out.Duplicated)
+	score, version := scoreOf()
+	require.EqualValues(t, 200, score, "旧版本迟到不得覆盖新版本")
+	require.EqualValues(t, 2, version)
+	// 同版本同样跳过;更新的版本照常写。
+	_, err = r.Submit(ctx, "match", batch(3, 2, 12, 150, 2))
+	require.NoError(t, err)
+	score, _ = scoreOf()
+	require.EqualValues(t, 200, score)
+	_, err = r.Submit(ctx, "match", batch(5, 2, 13, 300, 3))
+	require.NoError(t, err)
+	score, version = scoreOf()
+	require.EqualValues(t, 300, score)
+	require.EqualValues(t, 3, version)
+	// 每片各自幂等、各自连续。
+	replayed, err := r.Submit(ctx, "match", older)
+	require.NoError(t, err)
+	require.True(t, replayed.Duplicated)
+	require.EqualValues(t, 2, replayed.CommittedCursor)
+	_, err = r.Submit(ctx, "match", batch(3, 1, 11, 101, 1))
+	require.ErrorIs(t, err, ErrConflict, "同片同游标换载荷")
+	_, err = r.Submit(ctx, "match", batch(3, 4, 14, 400, 4))
+	require.ErrorIs(t, err, ErrCursor, "片内跳号")
+	first, err := r.Submit(ctx, "match", batch(9, 1, 15, 400, 4))
+	require.NoError(t, err, "没投过的片从 1 起")
+	require.False(t, first.Duplicated)
+	// 榜上的总数 = 三片合计 5 批,封榜按总数核齐。
+	var total uint64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT committed_cursor FROM rank_board WHERE board_id=?", board.BoardId).Scan(&total))
+	require.EqualValues(t, 5, total)
+	freeze := &rankpb.FreezeRankGenerationRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, ExpectedSourceCursor: 6, RequestId: 20, TopN: 1, Rewards: []*rankpb.RankRewardTier{{FirstRank: 1, LastRank: 1, Attachments: &mailpb.MailAttachments{Currencies: []*mailpb.MailCurrency{{CurrencyType: 0, Amount: 10}}}}}}
+	_, err = r.Freeze(ctx, "match", freeze)
+	require.ErrorIs(t, err, ErrCursor, "未齐不可封榜")
+	freeze.ExpectedSourceCursor = 5
+	settled, err := r.Freeze(ctx, "match", freeze)
+	require.NoError(t, err)
+	require.NotZero(t, settled.SettlementId)
+	_, err = r.Submit(ctx, "match", batch(3, 3, 16, 500, 5))
+	require.ErrorIs(t, err, ErrClosed, "封榜后任何片都不能再写")
+}
+
 func TestTiDBFreezeFailureRollsBackEverySnapshotAndIntent(t *testing.T) {
 	ctx, db, next := rankFixture(t)
 	r := New(db, next, next, func(context.Context) (uint64, error) { return 999, nil }, func(uint32) bool { return true })

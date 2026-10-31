@@ -300,11 +300,10 @@ func (l *JubaozhaiLogic) ListCommerceOrders(in *tradepb.ListCommerceOrdersReques
 	if strings.HasPrefix(cursor, "mall:") {
 		cursor = ""
 	}
-	after, _ := strconv.ParseUint(cursor, 10, 64)
-	rows, err := l.deps.Commerce.Repo.List(l.ctx, me, after, limit)
+	rows, err := l.deps.Commerce.Repo.List(l.ctx, me, data.ParseCommerceCursor(cursor), limit)
 	out := &tradepb.ListCommerceOrdersResponse{ErrorMessage: tipOf(commerceCode(err)), ServerNowMs: nowMillis(l.deps.Now)}
 	for _, r := range rows {
-		out.NextCursor = strconv.FormatUint(r.CommerceId, 10)
+		out.NextCursor = data.CommerceCursorOf(r).String()
 		workflow, decodeErr := data.Workflow(r)
 		if decodeErr == nil && commerce.OwnsRecord(l.ctx, r, workflow) {
 			out.Orders = append(out.Orders, orderView(r))
@@ -354,13 +353,13 @@ func (l *JubaozhaiLogic) ListMarketOrders(in *tradepb.ListMarketOrdersRequest) (
 	if l.deps.Commerce == nil {
 		return &tradepb.ListMarketOrdersResponse{ErrorMessage: tipOf(constants.ErrFeatureDisabled)}, nil
 	}
-	after, _ := strconv.ParseUint(in.GetCursor(), 10, 64)
+	after := data.ParseCommerceCursor(in.GetCursor())
 	limit := min(max(int(in.GetLimit()), 1), 100)
-	rows, err := l.deps.Commerce.Repo.Query(l.ctx, "SELECT "+data.CommerceColumns+" FROM trade_commerce WHERE kind=4 AND side<>0 AND seller_player_id=? AND commerce_id>? ORDER BY commerce_id LIMIT ?", me, after, limit)
+	rows, err := l.deps.Commerce.Repo.Query(l.ctx, "SELECT "+data.CommerceColumns+" FROM trade_commerce WHERE kind=4 AND side<>0 AND seller_player_id=? AND (created_ms>? OR (created_ms=? AND commerce_id>?)) ORDER BY created_ms,commerce_id LIMIT ?", me, after.CreatedMs, after.CreatedMs, after.CommerceId, limit)
 	out := &tradepb.ListMarketOrdersResponse{ErrorMessage: tipOf(commerceCode(err))}
 	for _, r := range rows {
 		out.Orders = append(out.Orders, marketView(r))
-		out.NextCursor = strconv.FormatUint(r.CommerceId, 10)
+		out.NextCursor = data.CommerceCursorOf(r).String()
 	}
 	return out, nil
 }

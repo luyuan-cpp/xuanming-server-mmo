@@ -5,7 +5,6 @@
 #include <node_config_manager.h>
 
 #include "node_log_level.h"
-#include "persist_schema_regression_mode.h"
 
 namespace
 {
@@ -134,6 +133,11 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_battle_token_secret(root["BattleTokenSecret"].as<std::string>());
 	}
 
+	if (root["SpectateTokenSecret"])
+	{
+		baseConfig.set_spectate_token_secret(root["SpectateTokenSecret"].as<std::string>());
+	}
+
 	if (root["BattleMaxConnections"])
 	{
 		baseConfig.set_battle_max_connections(root["BattleMaxConnections"].as<uint32_t>());
@@ -153,33 +157,6 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 	if (root["AuditTopicGeneration"])
 	{
 		baseConfig.set_audit_topic_generation(root["AuditTopicGeneration"].as<uint32_t>());
-	}
-
-	// 玩家存盘 DBTask topic 世代号(见 config.proto db_task_topic_generation /
-	// services/scene/player/constants/player.h GetDbTaskTopic)。
-	// 可以不写:不写 = 0 = 第一代,topic 名仍是不带后缀的 db_task_zone_{zone},存量 yaml 不改也能起。
-	// 必须与 go/db、go/login 的 Kafka.TopicGeneration 相等,否则换代后存盘写进没人消费的旧 topic。
-	if (root["DbTaskTopicGeneration"])
-	{
-		baseConfig.set_db_task_topic_generation(root["DbTaskTopicGeneration"].as<uint32_t>());
-	}
-
-	// 严格提交屏障 C3 的模式(见 config.proto persist_schema_regression_mode / persist_schema_regression_mode.h)。
-	// 在这里一次性归一化:缺键 / 空串 = warn;warn / enforce 原样;其余拒绝启动。运行期只会见到两个字面量,
-	// 非法值不会进 Lua 的 ARGV[10](那会让脚本返回 error_reply、OnSaved 无限重试,全服存不进盘)。
-	{
-		// YAML 空值(`PersistSchemaRegressionMode:` 或 `~`)是 Null 节点,yaml-cpp 的 as<std::string>() 会把它变成字面量
-		// "null";与缺键、空串一样按 warn,和 login、start_game.ps1 的口径一致。
-		const YAML::Node modeNode = root["PersistSchemaRegressionMode"];
-		const std::string rawMode = (modeNode && !modeNode.IsNull()) ? modeNode.as<std::string>() : std::string();
-		const auto mode = persist_schema_regression_mode::Normalize(rawMode);
-		if (!mode)
-		{
-			LOG_FATAL << "readBaseDeployConfig: PersistSchemaRegressionMode must be 'warn' or 'enforce' (or absent = warn), got '"
-					  << rawMode << "' in " << filename;
-			return false; // LOG_FATAL 已 abort;这一行只为不在 nullopt 上解引用
-		}
-		baseConfig.set_persist_schema_regression_mode(std::string(*mode));
 	}
 
 	// 永久 guid 号段(见 config.proto IdSegmentConfig):一种 GUID 一块配置,按 Kind 名字
@@ -266,10 +243,6 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		if (kafkaNode["CommandTopicGeneration"])
 		{
 			kafkaConfig.set_command_topic_generation(kafkaNode["CommandTopicGeneration"].as<uint32_t>());
-		}
-		if (kafkaNode["DisableLegacyPerNodeTopic"])
-		{
-			kafkaConfig.set_disable_legacy_per_node_topic(kafkaNode["DisableLegacyPerNodeTopic"].as<bool>());
 		}
 	}
 

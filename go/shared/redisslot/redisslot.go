@@ -143,7 +143,7 @@ func SlotIndexTag(slot uint16) string {
 // player:{<id>}: 键都必须登记到这里,否则 data_service 可能把它当字段读出或覆盖(设计 §5.2)。
 // tools/merge_zone 是独立 module,在 player_blob_migrate.go 镜像了这张表(合服拷 blob 时跳过),两边测试钉同一份字面量。
 var reservedPlayerKeySuffixes = map[string]struct{}{
-	"save_barrier":            {}, // C++ 存盘屏障(shared/savebarrier)
+	"save_barrier":            {}, // 交接资格(shared/savebarrier)
 	"asset_sql_commit":        {}, // go/db 资产 SQL 提交证据(shared/assetop)
 	"owner_epoch":             {}, // 归属代次
 	"handoff":                 {}, // 交接标记

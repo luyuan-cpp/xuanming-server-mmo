@@ -59,15 +59,17 @@ param(
     [int]$SteadyMinutes = 18,   # how long 'all' waits before summarize
     [string]$RunDir = '',       # reused by 'summarize'; auto-created by 'run'/'all'
 
-    # mysql tables to truncate in zone_<N>_db (proven set from currency_crash_window.ps1)
+    # mysql tables to truncate in zone_<N>_db (same set as currency_crash_window.ps1).
+    # 玩家存档只在 player_store;player_database / player_database_1 只是内存形状,不建表,写进来 TRUNCATE 会在第一条就中断。
     [string[]]$MySqlTables = @(
-        'player_database','player_database_1','player_centre_database',
+        'player_store','player_centre_database',
         'user_accounts','account_share_database'
     ),
 
     # data_service 全局库(go/data_service/etc/data_service.yaml 的 SnapshotMySQL.DBName):
-    # 映射持久化的路由表在这里(见 Clear-GlobalRouteTables)。
-    [string]$GlobalDbName = 'testdb',
+    # 映射持久化的路由表与账号目录在这里(见 Clear-GlobalRouteTables):只清 player_store 不清账号目录,
+    # 下一轮登录会读到旧角色,认领时写权行已经没了(LOAD_AND_CLAIM_NO_OWNER)。
+    [string]$GlobalDbName = 'mmorpg_global',
 
     # 全局库里还有在任的映射对账 leader(RouteStore.Mode=db_first 的 data_service 在跑)时照样清库。
     # 不给时 wipe 在 FLUSHALL 之前探测并拒绝(见 Assert-NoRunningRouteReconcileLeader;D1 第 1b-3 批)。
@@ -121,7 +123,7 @@ function Invoke-Baseline {
 # 本脚本只连本机 mysql 容器。TiDB 环境的清库按 docs/design/tidb-phase1-and-launch-readiness.md §3.5 做:
 # TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`。
 # 既有全量本地 reset 同时清全局角色目录；Redis清空不再删除SQL归属。仅原显式wipe门禁允许执行。
-$RouteDataTables        = @('account_role_import_receipt', 'account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role', 'account_directory', 'player_route', 'zone_merge_fence', 'zone_merged_into')
+$RouteDataTables        = @('account_role_import_receipt', 'account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role', 'account_directory', 'player_route', 'zone_merged_into')
 $RouteMetaResetSql      = 'UPDATE route_meta SET writable=1 WHERE id=1;'
 $RouteReconcileResetSql = 'UPDATE route_reconcile SET leader=NULL, lease_until_ms=NULL, watermark_ms=0, cache_verified_ms=0 WHERE id=1;'
 
@@ -446,14 +448,14 @@ function Invoke-Summarize {
     if (-not $Execute) {
         Plan "pwsh $SummPs1 -RunDir $RunDir"
         Plan "Then 2D-compare against $PrevSummary (R18). PASS = token expired -> ~0,"
-        Plan 'login_fail/gave-up down sharply, pipeline enter_fail=0/DB err=0/Kafka lag=0.'
+        Plan 'login_fail/gave-up down sharply, pipeline enter_fail=0/player store unknown=0/audit Kafka lag=0.'
         return
     }
     Do1 "stress_summarize -RunDir $RunDir"
     & pwsh -NoProfile -File $SummPs1 -RunDir $RunDir
     Write-Host "`nCompare the table above against baseline: $PrevSummary" -ForegroundColor Yellow
     Write-Host 'PASS criteria: token expired -> ~0; login_fail & gave-up down sharply;' -ForegroundColor Yellow
-    Write-Host '              pipeline stays enter_fail=0 / DB err=0 / Kafka lag=0.'      -ForegroundColor Yellow
+    Write-Host '              pipeline stays enter_fail=0 / player store unknown=0 / audit Kafka lag=0.' -ForegroundColor Yellow
     Write-Host 'Do NOT claim "fixed" without this comparison table (CLAUDE §6).'          -ForegroundColor Yellow
 }
 

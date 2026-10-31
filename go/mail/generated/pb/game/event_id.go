@@ -18,3 +18,4 @@ const ContractsKafkaBattleResultTeamEventId = 47
 const PlayerTeamRefreshEventEventId = 48
 const PlayerInboxNotifyEventEventId = 49
 const ContractsKafkaPlayerRatingSnapshotEventEventId = 50
+const ContractsKafkaSpectateFrameEventEventId = 51

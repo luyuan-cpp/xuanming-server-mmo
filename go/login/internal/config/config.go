@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 
@@ -111,18 +110,6 @@ type Config struct {
 	// 全球服务必须显式PinOnCreate=true；整块缺省保留零值，启动门禁拒绝而不静默补权。
 	Placement PlacementConf `json:"Placement,optional"`
 
-	// NewPlayerSeed 控制建角时是否写「新号父键种子」,让新号首次 EnterGame 不再冷读数据库
-	// (docs/design/new-player-first-enter-no-cold-read.md)。整块可缺省,缺省 = 关 = 与本功能之前逐字节相同。
-	NewPlayerSeed NewPlayerSeedConf `json:"NewPlayerSeed,optional"`
-	// ParentLoad 控制 Redis 实例身份变化后的 SQL 核验；块缺省也必须启用内部默认值。
-	ParentLoad ParentLoadConf `json:"ParentLoad"`
-
-	// PersistSchemaRegressionMode 是 EnterGame 父快照快路径上持久 schema 世代倒退判定(C4)的模式
-	// (docs/design/mixed-version-persist-field-protection.md §5.1)。取值 warn / enforce;
-	// 缺键或空串按 warn,其余取值启动期拒绝(ParsePersistSchemaRegressionMode,login.go)。
-	// 运行期只读归一化之后的结果,不要直接比较这个字符串。
-	PersistSchemaRegressionMode string `json:"PersistSchemaRegressionMode,optional"`
-
 	// RequireClientEndpoint 控制下发 gate 地址时是否**必须**用 gate 自报的客户端可达地址
 	// (NodeInfo.client_endpoint,集群外入口 D78/D79,规则见 shared/clientendpoint.Select)。
 	//
@@ -144,12 +131,6 @@ type Config struct {
 	// 零值 Interval = 监控关闭,drained 永远等不到。不标 optional 且内层字段全带 default 时,go-zero
 	// 判定该结构体「非必填」,整块缺失 = 全部取默认值(gate_drain_conf_test.go 钉住这一点)。
 	GateDrain GateDrainConf `json:"GateDrain"`
-}
-
-// 整块不标 optional，保证省略块的部署模板也取得 true；false 仅用于冷读风暴止血。
-// ACK 超前与历史缺口属于独立的回退证据，不受此开关影响。
-type ParentLoadConf struct {
-	VerifyOnRedisIdentityChange bool `json:"VerifyOnRedisIdentityChange,default=true"`
 }
 
 // GateDrainConf 是 gate 排空判定的参数,判定逻辑与标记语义见 loginqueue/gatedrain_monitor.go。
@@ -235,18 +216,6 @@ func (c *Config) ValidateGlobalAuthority(getenv func(string) string) error {
 		return fmt.Errorf("全球Login的%s无效: %w", accountdirectory.SecretEnv, err)
 	}
 	return nil
-}
-
-// NewPlayerSeedConf 是「新号首次入场免冷读」的开关(docs/design/new-player-first-enter-no-cold-read.md)。
-//
-// 正向命名,零值 = 关:go-zero 不给整块缺失的 optional 结构体递归填内层 default(见 HomeZoneConf 的说明),
-// 所以默认值只能靠零值表达。
-type NewPlayerSeedConf struct {
-	// Enabled=true:CreatePlayer 在落账号 blob 之前写 PlayerAllData:{id} 种子(两张子表只带 player_id,
-	// TTL 与冷读组装的父键相同),新号首次 EnterGame 命中缓存直接进场。种子没写成不影响建角(退回冷读)。
-	// 打开前置:go/db 的 db_placement_guard_total{outcome="missing_required"} 与
-	// db_placement_store_open_total{result=~"error|rejected"} 两类告警已就位(设计 §9 第 2 条)。
-	Enabled bool `json:"Enabled,optional"`
 }
 
 // HomeZoneConf 是合服后 zone 归属修正的开关。
@@ -517,10 +486,10 @@ type TokenConf struct {
 
 // NodeConfig holds node-level settings including login duration limits.
 type NodeConfig struct {
-	ZoneId           uint32        `json:"ZoneId"`
-	SessionExpireMin uint32        `json:"SessionExpireMin"` // Session idle timeout in minutes
-	MaxLoginDevices  uint32        `json:"MaxLoginDevices"`
-	RedisClient      RedisConf     `json:"RedisClient"`
+	ZoneId           uint32    `json:"ZoneId"`
+	SessionExpireMin uint32    `json:"SessionExpireMin"` // Session idle timeout in minutes
+	MaxLoginDevices  uint32    `json:"MaxLoginDevices"`
+	RedisClient      RedisConf `json:"RedisClient"`
 	// QueueRedis 是排队、准入与放行锁所在的 Redis(shared-redis-split-by-purpose.md §3.2.1、§25.3 第 10 条:
 	// 按 zone 组分实例 redis-queue-g<N>)。整段不写 = 复用 RedisClient,而且是同一个 *redis.Client(不多开连接池),
 	// 行为与拆分前逐字相同。gate 排空标记(gate:<id>:draining / drained)**不在**这里,仍在 RedisClient:
@@ -559,39 +528,12 @@ func (c RedisConf) ValidatePoolSize() error {
 	return nil
 }
 
-// KafkaConfig holds Kafka producer and consumer settings.
+// KafkaConfig holds the command producer settings. login 只生产控制面命令,不消费。
 type KafkaConfig struct {
-	Brokers []string `json:"Brokers"`
-	// GroupID 已废弃:login 只生产不消费,代码不读它,也不是 go/db 的消费组(go/db 按 zone 拆组与它无关)。
-	// 保留为可选只是为了让带这个键的旧 ConfigMap / login.yaml 仍能加载;先放宽、全部 login 跑上本版本之后再删,
-	// 三处配置(go/login/etc/login.yaml、k8s_deploy.ps1 的 login 模板、deploy/login-stack.linux/login.yaml)的
-	// 删除顺序见 docs/design/db-consumer-group-per-zone.md §8 Step 7。
-	GroupID string `json:"GroupID,optional"`
-	Topic   string `json:"Topic,optional"` // Derived from Node.ZoneId at startup
-	// TopicGeneration is part of the immutable routing identity. Keep 1 for
-	// db_task_zone_{ZoneId}; a partition-count change requires an offline drain
-	// and a higher generation, which creates a new topic namespace.
-	TopicGeneration  uint32                  `json:"TopicGeneration,default=1"`
-	PartitionCnt     int32                   `json:"PartitionCnt"`
-	InitialPartition int                     `json:"InitialPartition"` // Should match PartitionCnt
-	DialTimeout      time.Duration           `json:"DialTimeout"`
-	ReadTimeout      time.Duration           `json:"ReadTimeout"`
-	WriteTimeout     time.Duration           `json:"WriteTimeout"`
-	RetryMax         int                     `json:"RetryMax"`
-	RetryBackoff     time.Duration           `json:"RetryBackoff"`
-	ChannelBuffer    int                     `json:"ChannelBuffer"`
-	SyncInterval     time.Duration           `json:"SyncInterval"`
-	StatsInterval    time.Duration           `json:"StatsInterval"`
-	CompressionType  sarama.CompressionCodec `json:"CompressionType"` // none/gzip/snappy
-	Idempotent       bool                    `json:"Idempotent"`
-	MaxOpenRequests  int                     `json:"MaxOpenRequests"`              // Must be 1 when idempotent
-	RetentionMs      int64                   `json:"RetentionMs,default=86400000"` // Topic retention in ms (default 24h)
-	// P1 数据安全加固 2026-06-03: 旧值 300000 (5min)
-	// 太短,db service 卡住会丢数据
-	// RetentionBytes 是 db_task topic 每分区的 retention.bytes。K8s 由 k8s_deploy.ps1 按 Kafka 盘预算渲染,
-	// 与 db 同值;本机不设 = 沿用 broker 缺省(0 = 不管理,<0 启动拒绝)。
-	// 见 docs/design/db-task-delivery-and-retention.md §B。
-	RetentionBytes int64 `json:"RetentionBytes,optional"`
+	Brokers      []string      `json:"Brokers"`
+	DialTimeout  time.Duration `json:"DialTimeout"`
+	ReadTimeout  time.Duration `json:"ReadTimeout"`
+	WriteTimeout time.Duration `json:"WriteTimeout"`
 }
 
 // SnowflakeConf holds snowflake ID generator settings.
@@ -636,16 +578,3 @@ type TimeoutConf struct {
 }
 
 var AppConfig Config
-
-// DbTaskTopic returns the zone-specific Kafka topic for DB tasks.
-func DbTaskTopic(zoneId uint32) string {
-	return fmt.Sprintf("db_task_zone_%d", zoneId)
-}
-
-func DbTaskTopicForGeneration(zoneId, generation uint32) string {
-	base := DbTaskTopic(zoneId)
-	if generation <= 1 {
-		return base
-	}
-	return fmt.Sprintf("%s_g%d", base, generation)
-}

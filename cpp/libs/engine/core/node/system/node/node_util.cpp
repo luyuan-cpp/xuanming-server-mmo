@@ -28,7 +28,10 @@ const std::unordered_map<eNodeType, std::string> nodeTypeNameMap = {
 	{eNodeType::ClientRpcRouterNodeService, eNodeType_Name(ClientRpcRouterNodeService)},
 	// 玩家持久收件箱:etcd 前缀 PlayerInboxNodeService.rpc;scene 调 FetchItems / AckItems
 	// (docs/design/player-inbox-service.md §1.4),Go-Zero 实现。不进 IsGlobalPoolNodeType。
-	{eNodeType::PlayerInboxNodeService, eNodeType_Name(PlayerInboxNodeService)}};
+	{eNodeType::PlayerInboxNodeService, eNodeType_Name(PlayerInboxNodeService)},
+	// 玩家存盘:etcd 前缀 PlayerStoreNodeService.rpc;scene 调 LoadAndClaim / SavePlayer,只连本 zone 的 go/db
+	// (docs/design/player-save-direct-commit.md §5.2)。
+	{eNodeType::PlayerStoreNodeService, eNodeType_Name(PlayerStoreNodeService)}};
 
 eNodeType NodeUtils::GetServiceTypeFromPrefix(const std::string &prefix)
 {
@@ -125,6 +128,7 @@ bool NodeUtils::IsZoneScopedNodeType(uint32_t nodeType)
 	case eNodeType::SceneNodeService:
 	case eNodeType::LoginNodeService:
 	case eNodeType::PlayerLocatorNodeService:
+	case eNodeType::PlayerStoreNodeService:
 		return true;
 	default:
 		return false;

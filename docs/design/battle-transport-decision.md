@@ -175,9 +175,9 @@ gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate
   - 跨房间,客户端侧:单一的 `BattleDirectLink` 收到新局的 Assigned 就关掉旧连接。
   - 跨房间,服务端侧:靠 match 的**尽力**互斥,不是强保证。
     - `WatchBattle` 见到匹配票或 `battle:lock` 就拒绝。`battle:lock` 只是咨询性的,权威在 scene 的 `InBattleComp`。
-    - 已在观战时不拒绝,先尽力 `RemoveObserver` 旧场,再用 `spectate:watching:{player_id}` 的 SETNX 抢占新场。SETNX 只裁决并发的 WatchBattle。
-    - 进匹配凑单时也会清退观战(`go/match/internal/logic/gather.go:233`)。
-    - `RemoveObserver` 失败只记日志,旧场的观众身份和它的直连会一直留到该场结束。
+    - 已在观战时不拒绝,先沿观战标记固定的原件 `RemoveObserver` 旧场,拿到取消证明才删标记,再用 `spectate:watching:{player_id}` 的 SETNX 抢占新场;取消未获证明就回 16004、不登记新操作。SETNX 只裁决并发的 WatchBattle。
+    - 进匹配凑单时也会清退观战(`gather.go` 的 `stopWatchingIfAny`)。
+    - 进匹配时 `RemoveObserver` 失败只记日志、标记保留,不阻断开局;客户端收到参战分配后关掉观战直连,旧场席位由 battle 的断线宽限(30s)回收。
   - 重连替换或换场观战的瞬间,旧连接可能还没关完,会短暂重叠。
 - **跨 zone 传送是替换 gate 连接**:收到 `RedirectToGateNotify`(msg 124)后,先探测新 gate 可达并发起新连接,再关旧 gate(`robot/pkg/redirect.go` → `GameClient.SwapConn`,`robot/pkg/client.go:118`)。muduo 拨号是异步的,关旧连接时新 TCP 不保证已经建好。连接数不增加。服务端与 robot 不会因换 gate 断开 battle 直连;但 Unity 大厅断线仍会拆直连(D74,本批不改,见 turn-based §22.2 D74、§22.5 风险第 10 条),跨 zone 换 gate 时 Unity 是否按大厅断线处理,本仓没核。
 - **K8s 上连不连得上,取决于入口形态**(D80):

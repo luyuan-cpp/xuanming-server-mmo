@@ -560,11 +560,11 @@ constexpr MatchSpectatorIntentRecord::ParseTableT_ MatchSpectatorIntentRecord::I
     {
       PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      10,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -611,7 +611,10 @@ constexpr MatchSpectatorIntentRecord::ParseTableT_ MatchSpectatorIntentRecord::I
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchSpectatorIntentRecord, _impl_.close_tip_), 8>(),
        {72, 8, 0,
         PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_.close_tip_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 delivery = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchSpectatorIntentRecord, _impl_.delivery_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_.delivery_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -638,6 +641,8 @@ constexpr MatchSpectatorIntentRecord::ParseTableT_ MatchSpectatorIntentRecord::I
       {PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_.state_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 close_tip = 9;
       {PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_.close_tip_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 delivery = 10;
+      {PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_.delivery_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -667,7 +672,8 @@ inline constexpr MatchSpectatorIntentRecord::Impl_::Impl_(
         request_low_{::uint64_t{0u}},
         owner_revision_{::uint64_t{0u}},
         state_{0u},
-        close_tip_{0u} {}
+        close_tip_{0u},
+        delivery_{0u} {}
 
 template <typename>
 constexpr MatchSpectatorIntentRecord::MatchSpectatorIntentRecord(::_pbi::ConstantInitialized,
@@ -4421,7 +4427,7 @@ const ::uint32_t
         11,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorIntentRecord, _impl_._has_bits_),
-        12, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorIntentRecord, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorIntentRecord, _impl_.request_high_),
         PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorIntentRecord, _impl_.request_low_),
@@ -4431,6 +4437,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorIntentRecord, _impl_.owner_revision_),
         PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorIntentRecord, _impl_.state_),
         PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorIntentRecord, _impl_.close_tip_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorIntentRecord, _impl_.delivery_),
         3,
         4,
         5,
@@ -4440,6 +4447,7 @@ const ::uint32_t
         6,
         7,
         8,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchSpectatorHeadRecord, _impl_._has_bits_),
         5, // hasbit index offset
@@ -4793,24 +4801,24 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::match::MatchNetworkProfile)},
         {13, sizeof(::match::MatchSpectatorRecord)},
         {42, sizeof(::match::MatchSpectatorIntentRecord)},
-        {63, sizeof(::match::MatchSpectatorHeadRecord)},
-        {70, sizeof(::match::MatchNetworkProfileRecord)},
-        {79, sizeof(::match::MatchAuthorityTicketRecord)},
-        {120, sizeof(::match::MatchTicketRegionRecord)},
-        {147, sizeof(::match::MatchJoinIntentRecord)},
-        {174, sizeof(::match::MatchDirectIntentRecord)},
-        {201, sizeof(::match::MatchDirectStartOriginal)},
-        {208, sizeof(::match::MatchChallengeInvitationRecord)},
-        {235, sizeof(::match::MatchGlobalPolicyRecord)},
-        {242, sizeof(::match::MatchFormationMember)},
-        {251, sizeof(::match::MatchFormationRecord)},
-        {298, sizeof(::match::MatchPreparedEndpoint)},
-        {305, sizeof(::match::MatchRatingRecord)},
-        {316, sizeof(::match::MatchRatingAppliedRecord)},
-        {325, sizeof(::match::MatchRankSourceRecord)},
-        {338, sizeof(::match::MatchRankOutboxRecord)},
-        {349, sizeof(::match::MatchBattleCompletionRecord)},
-        {382, sizeof(::match::MatchBattleSettlementSourceRecord)},
+        {65, sizeof(::match::MatchSpectatorHeadRecord)},
+        {72, sizeof(::match::MatchNetworkProfileRecord)},
+        {81, sizeof(::match::MatchAuthorityTicketRecord)},
+        {122, sizeof(::match::MatchTicketRegionRecord)},
+        {149, sizeof(::match::MatchJoinIntentRecord)},
+        {176, sizeof(::match::MatchDirectIntentRecord)},
+        {203, sizeof(::match::MatchDirectStartOriginal)},
+        {210, sizeof(::match::MatchChallengeInvitationRecord)},
+        {237, sizeof(::match::MatchGlobalPolicyRecord)},
+        {244, sizeof(::match::MatchFormationMember)},
+        {253, sizeof(::match::MatchFormationRecord)},
+        {300, sizeof(::match::MatchPreparedEndpoint)},
+        {307, sizeof(::match::MatchRatingRecord)},
+        {318, sizeof(::match::MatchRatingAppliedRecord)},
+        {327, sizeof(::match::MatchRankSourceRecord)},
+        {340, sizeof(::match::MatchRankOutboxRecord)},
+        {351, sizeof(::match::MatchBattleCompletionRecord)},
+        {384, sizeof(::match::MatchBattleSettlementSourceRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4855,156 +4863,158 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[]
     "\001(\004\022\024\n\014request_high\030\014 \001(\004\022\023\n\013request_low"
     "\030\r \001(\004:K\212\222\364\001\017match_spectator\222\222\364\001\tplayer_"
     "id\332\222\364\001$updated_ms,player_id;state,player"
-    "_id\"\232\002\n\032MatchSpectatorIntentRecord\022\021\n\tpl"
+    "_id\"\254\002\n\032MatchSpectatorIntentRecord\022\021\n\tpl"
     "ayer_id\030\001 \001(\004\022\024\n\014request_high\030\002 \001(\004\022\023\n\013r"
     "equest_low\030\003 \001(\004\022\020\n\010original\030\004 \001(\014\022\027\n\017re"
     "quest_payload\030\005 \001(\014\022\025\n\rowner_account\030\006 \001"
     "(\t\022\026\n\016owner_revision\030\007 \001(\004\022\r\n\005state\030\010 \001("
-    "\r\022\021\n\tclose_tip\030\t \001(\r:B\212\222\364\001\026match_spectat"
-    "or_intent\222\222\364\001\"player_id,request_high,req"
-    "uest_low\"l\n\030MatchSpectatorHeadRecord\022\021\n\t"
-    "player_id\030\001 \001(\004\022\024\n\014operation_id\030\002 \001(\t:\'\212"
-    "\222\364\001\024match_spectator_head\222\222\364\001\tplayer_id\"}"
-    "\n\031MatchNetworkProfileRecord\022\021\n\tplayer_id"
-    "\030\001 \001(\004\022\017\n\007payload\030\002 \001(\014\022\022\n\nexpires_ms\030\003 "
-    "\001(\004:(\212\222\364\001\025match_network_profile\222\222\364\001\tplay"
-    "er_id\"\314\004\n\032MatchAuthorityTicketRecord\022\021\n\t"
-    "player_id\030\001 \001(\004\022\016\n\006ticket\030\002 \001(\t\022\022\n\nreque"
-    "st_id\030\003 \001(\t\022\014\n\004mode\030\004 \001(\r\022\021\n\tconfig_id\030\005"
-    " \001(\r\022\021\n\tteam_size\030\006 \001(\r\022\r\n\005state\030\007 \001(\r\022\023"
-    "\n\013enqueued_ms\030\010 \001(\004\022\025\n\rnot_before_ms\030\t \001"
-    "(\004\022\017\n\007zone_id\030\n \001(\r\022\024\n\014rating_centi\030\013 \001("
-    "\003\022\024\n\014formation_id\030\014 \001(\004\022\017\n\007team_id\030\r \001(\004"
-    "\022\027\n\017network_profile\030\016 \001(\014\022\022\n\nexpires_ms\030"
-    "\017 \001(\004\022\027\n\017selected_region\030\020 \001(\r\022\030\n\020prefer"
-    "red_region\030\021 \001(\r\022\025\n\rowner_account\030\022 \001(\t\022"
-    "\026\n\016owner_revision\030\023 \001(\004:\252\001\212\222\364\001\026match_aut"
-    "hority_ticket\222\222\364\001\tplayer_id\332\222\364\001|state,mo"
-    "de,config_id,team_size,enqueued_ms;forma"
-    "tion_id;state,enqueued_ms,player_id;stat"
-    "e,mode,team_id,enqueued_ms,player_id\"\251\005\n"
-    "\027MatchTicketRegionRecord\022\021\n\tplayer_id\030\001 "
-    "\001(\004\022\027\n\017physical_region\030\002 \001(\r\022\016\n\006ticket\030\003"
-    " \001(\t\022\014\n\004mode\030\004 \001(\r\022\021\n\tconfig_id\030\005 \001(\r\022\021\n"
-    "\tteam_size\030\006 \001(\r\022\030\n\020preferred_region\030\007 \001"
-    "(\r\022\023\n\013enqueued_ms\030\010 \001(\004\022\024\n\014rating_centi\030"
-    "\t \001(\003\022\016\n\006rtt_ms\030\n \001(\r\022\022\n\nexpires_ms\030\013 \001("
-    "\004\022\021\n\thome_zone\030\014 \001(\r:\241\003\212\222\364\001\023match_ticket"
-    "_region\222\222\364\001\031player_id,physical_region\332\222\364"
-    "\001\326\002physical_region,mode,config_id,team_s"
-    "ize,preferred_region,enqueued_ms,player_"
-    "id;physical_region,mode,config_id,team_s"
-    "ize,enqueued_ms,player_id;expires_ms,pla"
-    "yer_id,physical_region;physical_region,m"
-    "ode,config_id,team_size,home_zone,prefer"
-    "red_region,enqueued_ms,player_id;physica"
-    "l_region,mode,config_id,team_size,home_z"
-    "one,enqueued_ms,player_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004"
-    "\"\205\003\n\025MatchJoinIntentRecord\022\021\n\tplayer_id\030"
-    "\001 \001(\004\022\022\n\nrequest_id\030\002 \001(\t\022\025\n\rticket_reco"
-    "rd\030\003 \001(\014\022\021\n\tcancelled\030\004 \001(\010\022\024\n\014request_h"
-    "igh\030\005 \001(\004\022\023\n\013request_low\030\006 \001(\004\022\025\n\rowner_"
-    "account\030\007 \001(\t\022\026\n\016owner_revision\030\010 \001(\004\022\026\n"
-    "\016spectator_exit\030\t \001(\014\022\025\n\rexit_prepared\030\n"
-    " \001(\010\022\027\n\017request_payload\030\013 \001(\014\022\r\n\005state\030\014"
-    " \001(\r:j\212\222\364\001\021match_join_intent\222\222\364\001\"player_"
-    "id,request_high,request_low\332\222\364\001(state,pl"
-    "ayer_id,request_high,request_low\"\302\003\n\027Mat"
-    "chDirectIntentRecord\022\014\n\004kind\030\001 \001(\r\022\020\n\010ow"
-    "ner_id\030\002 \001(\004\022\024\n\014request_high\030\003 \001(\004\022\023\n\013re"
-    "quest_low\030\004 \001(\004\022\017\n\007payload\030\005 \001(\014\022\021\n\tbatt"
-    "le_id\030\006 \001(\004\022\021\n\tcancelled\030\007 \001(\010\022\025\n\rowner_"
-    "account\030\010 \001(\t\022\026\n\016owner_revision\030\t \001(\004\0224\n"
-    "\017spectator_exits\030\n \003(\0132\033.match.MatchSpec"
-    "tatorRecord\022\025\n\rexit_prepared\030\013 \001(\010\022\026\n\016st"
-    "art_original\030\014 \001(\014:\220\001\212\222\364\001\023match_direct_i"
-    "ntent\222\222\364\001&kind,owner_id,request_high,req"
-    "uest_low\332\222\364\001Hexit_prepared,cancelled,bat"
-    "tle_id,kind,owner_id,request_high,reques"
-    "t_low\"~\n\030MatchDirectStartOriginal\022.\n\tfor"
-    "mation\030\001 \001(\0132\033.match.MatchFormationRecor"
-    "d\0222\n\007tickets\030\002 \003(\0132!.match.MatchAuthorit"
-    "yTicketRecord\"\335\003\n\036MatchChallengeInvitati"
-    "onRecord\022\024\n\014challenge_id\030\001 \001(\004\022\034\n\024challe"
-    "nger_player_id\030\002 \001(\004\022\030\n\020target_player_id"
-    "\030\003 \001(\004\022\021\n\tconfig_id\030\004 \001(\r\022\032\n\022challenger_"
-    "account\030\005 \001(\t\022\033\n\023challenger_revision\030\006 \001"
-    "(\004\022\026\n\016target_account\030\007 \001(\t\022\027\n\017target_rev"
-    "ision\030\010 \001(\004\022\022\n\ncreated_ms\030\t \001(\004\022\022\n\nexpir"
-    "es_ms\030\n \001(\004\022\r\n\005state\030\013 \001(\r\022\021\n\tbattle_id\030"
-    "\014 \001(\004:\245\001\212\222\364\001\032match_challenge_invitation\222"
-    "\222\364\001\014challenge_id\332\222\364\001atarget_player_id,st"
-    "ate,expires_ms,challenge_id;challenger_p"
-    "layer_id,state,expires_ms,challenge_id\250\223"
-    "\364\001\001\260\223\364\001\004\270\223\364\001\004\"m\n\027MatchGlobalPolicyRecord"
-    "\022\021\n\tpolicy_id\030\001 \001(\r\022\027\n\017contract_digest\030\002"
-    " \001(\014:&\212\222\364\001\023match_global_policy\222\222\364\001\tpolic"
-    "y_id\"M\n\024MatchFormationMember\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\022\016\n\006ticket\030\002 \001(\t\022\022\n\nteam_index\030\003 "
-    "\001(\r\"\253\005\n\024MatchFormationRecord\022\021\n\tbattle_i"
-    "d\030\001 \001(\004\022\024\n\014operation_id\030\002 \001(\t\022\r\n\005state\030\003"
-    " \001(\r\022\027\n\017physical_region\030\004 \001(\r\022\026\n\016target_"
-    "node_id\030\005 \001(\r\022\032\n\022target_instance_id\030\006 \001("
-    "\t\022\027\n\017target_endpoint\030\007 \001(\t\022\014\n\004mode\030\010 \001(\r"
-    "\022\021\n\tconfig_id\030\t \001(\r\022,\n\007members\030\n \003(\0132\033.m"
-    "atch.MatchFormationMember\022\026\n\016create_requ"
-    "est\030\013 \001(\014\022\022\n\ncreated_ms\030\014 \001(\004\022\023\n\013deadlin"
-    "e_ms\030\r \001(\004\022\023\n\013retry_at_ms\030\016 \001(\004\022\030\n\020activ"
-    "ity_context\030\017 \001(\014\022\032\n\022requeue_on_failure\030"
-    "\020 \001(\010\022.\n\010prepared\030\021 \003(\0132\034.match.MatchPre"
-    "paredEndpoint\022 \n\030outcome_protocol_versio"
-    "n\030\022 \001(\r\022#\n\033preflight_supported_version\030\023"
-    " \001(\r\022\035\n\025preflight_instance_id\030\024 \001(\t\022(\n a"
-    "dopted_outcome_protocol_version\030\025 \001(\r\022 \n"
-    "\030adopted_outcome_observed\030\026 \001(\010:8\212\222\364\001\017ma"
-    "tch_formation\222\222\364\001\tbattle_id\332\222\364\001\021state,re"
-    "try_at_ms\"<\n\025MatchPreparedEndpoint\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022\020\n\010endpoint\030\002 \001(\t\"\200\001\n\021Matc"
-    "hRatingRecord\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014rati"
-    "ng_centi\030\002 \001(\003\022\r\n\005games\030\003 \001(\004\022\022\n\nupdated"
-    "_ms\030\004 \001(\004:\037\212\222\364\001\014match_rating\222\222\364\001\tplayer_"
-    "id\"\202\001\n\030MatchRatingAppliedRecord\022\021\n\tbattl"
-    "e_id\030\001 \001(\004\022\026\n\016payload_digest\030\002 \001(\014\022\022\n\nap"
-    "plied_ms\030\003 \001(\004:\'\212\222\364\001\024match_rating_applie"
-    "d\222\222\364\001\tbattle_id\"\254\001\n\025MatchRankSourceRecor"
-    "d\022\024\n\014source_epoch\030\001 \001(\004\022\027\n\017produced_curs"
-    "or\030\002 \001(\004\022\030\n\020committed_cursor\030\003 \001(\004\022\020\n\010bo"
-    "ard_id\030\004 \001(\004\022\017\n\007stopped\030\005 \001(\010:\'\212\222\364\001\021matc"
-    "h_rank_source\222\222\364\001\014source_epoch\"\240\001\n\025Match"
-    "RankOutboxRecord\022\024\n\014source_epoch\030\001 \001(\004\022\025"
-    "\n\rsource_cursor\030\002 \001(\004\022\022\n\nrequest_id\030\003 \001("
-    "\004\022\017\n\007entries\030\004 \001(\014:5\212\222\364\001\021match_rank_outb"
-    "ox\222\222\364\001\032source_epoch,source_cursor\"\257\004\n\033Ma"
-    "tchBattleCompletionRecord\022\021\n\tbattle_id\030\001"
-    " \001(\004\022\023\n\013raw_payload\030\002 \001(\014\022\026\n\016payload_dig"
-    "est\030\003 \001(\014\022\026\n\016format_version\030\004 \001(\r\022\023\n\013arc"
-    "hived_ms\030\005 \001(\004\022\024\n\014source_topic\030\006 \001(\t\022\030\n\020"
-    "source_partition\030\007 \001(\005\022\025\n\rsource_offset\030"
-    "\010 \001(\003\022.\n\010decision\030\t \001(\0162\034.match.BattleOu"
-    "tcomeDecision\022;\n\013source_kind\030\n \001(\0162&.mat"
-    "ch.MatchBattleCompletionSourceKind\022\036\n\026pl"
-    "acement_operation_id\030\013 \001(\t\022\032\n\022target_ins"
-    "tance_id\030\014 \001(\t\022 \n\030outcome_protocol_versi"
-    "on\030\r \001(\r\022\030\n\020result_published\030\016 \001(\010\022\025\n\rne"
-    "xt_retry_ms\030\017 \001(\004:`\212\222\364\001\027match_battle_com"
-    "pletion\222\222\364\001\tbattle_id\332\222\364\0011decision,resul"
-    "t_published,next_retry_ms,battle_id\"\236\003\n!"
-    "MatchBattleSettlementSourceRecord\022\021\n\tbat"
-    "tle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\030\n\020settl"
-    "ement_proto\030\003 \001(\014\022\026\n\016payload_digest\030\004 \001("
-    "\014\022\023\n\013archived_ms\030\005 \001(\004\022\025\n\rowner_account\030"
-    "\006 \001(\t\022\026\n\016owner_revision\030\007 \001(\004\022\024\n\014issued_"
-    "at_ms\030\010 \001(\004\022\021\n\tinbox_seq\030\t \001(\004\022\023\n\013inbox_"
-    "state\030\n \001(\r\022\026\n\016dispatch_state\030\013 \001(\r\022\025\n\rn"
-    "ext_retry_ms\030\014 \001(\004:p\212\222\364\001\036match_battle_se"
-    "ttlement_source\222\222\364\001\023battle_id,player_id\332"
-    "\222\364\0010dispatch_state,next_retry_ms,battle_"
-    "id,player_id*\252\001\n\037MatchBattleCompletionSo"
-    "urceKind\022.\n*MATCH_BATTLE_COMPLETION_SOUR"
-    "CE_UNSPECIFIED\020\000\022(\n$MATCH_BATTLE_COMPLET"
-    "ION_SOURCE_KAFKA\020\001\022-\n)MATCH_BATTLE_COMPL"
-    "ETION_SOURCE_BATTLE_RPC\020\002B\rZ\013match/match"
-    "b\006proto3"
+    "\r\022\021\n\tclose_tip\030\t \001(\r\022\020\n\010delivery\030\n \001(\r:B"
+    "\212\222\364\001\026match_spectator_intent\222\222\364\001\"player_i"
+    "d,request_high,request_low\"l\n\030MatchSpect"
+    "atorHeadRecord\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014ope"
+    "ration_id\030\002 \001(\t:\'\212\222\364\001\024match_spectator_he"
+    "ad\222\222\364\001\tplayer_id\"}\n\031MatchNetworkProfileR"
+    "ecord\022\021\n\tplayer_id\030\001 \001(\004\022\017\n\007payload\030\002 \001("
+    "\014\022\022\n\nexpires_ms\030\003 \001(\004:(\212\222\364\001\025match_networ"
+    "k_profile\222\222\364\001\tplayer_id\"\337\004\n\032MatchAuthori"
+    "tyTicketRecord\022\021\n\tplayer_id\030\001 \001(\004\022\016\n\006tic"
+    "ket\030\002 \001(\t\022\022\n\nrequest_id\030\003 \001(\t\022\014\n\004mode\030\004 "
+    "\001(\r\022\021\n\tconfig_id\030\005 \001(\r\022\021\n\tteam_size\030\006 \001("
+    "\r\022\r\n\005state\030\007 \001(\r\022\023\n\013enqueued_ms\030\010 \001(\004\022\025\n"
+    "\rnot_before_ms\030\t \001(\004\022\017\n\007zone_id\030\n \001(\r\022\024\n"
+    "\014rating_centi\030\013 \001(\003\022\024\n\014formation_id\030\014 \001("
+    "\004\022\017\n\007team_id\030\r \001(\004\022\027\n\017network_profile\030\016 "
+    "\001(\014\022\022\n\nexpires_ms\030\017 \001(\004\022\027\n\017selected_regi"
+    "on\030\020 \001(\r\022\030\n\020preferred_region\030\021 \001(\r\022\025\n\row"
+    "ner_account\030\022 \001(\t\022\026\n\016owner_revision\030\023 \001("
+    "\004:\275\001\212\222\364\001\026match_authority_ticket\222\222\364\001\tplay"
+    "er_id\332\222\364\001\216\001state,mode,config_id,team_siz"
+    "e,team_id,enqueued_ms,player_id;formatio"
+    "n_id;state,enqueued_ms,player_id;state,m"
+    "ode,team_id,enqueued_ms,player_id\"\251\005\n\027Ma"
+    "tchTicketRegionRecord\022\021\n\tplayer_id\030\001 \001(\004"
+    "\022\027\n\017physical_region\030\002 \001(\r\022\016\n\006ticket\030\003 \001("
+    "\t\022\014\n\004mode\030\004 \001(\r\022\021\n\tconfig_id\030\005 \001(\r\022\021\n\tte"
+    "am_size\030\006 \001(\r\022\030\n\020preferred_region\030\007 \001(\r\022"
+    "\023\n\013enqueued_ms\030\010 \001(\004\022\024\n\014rating_centi\030\t \001"
+    "(\003\022\016\n\006rtt_ms\030\n \001(\r\022\022\n\nexpires_ms\030\013 \001(\004\022\021"
+    "\n\thome_zone\030\014 \001(\r:\241\003\212\222\364\001\023match_ticket_re"
+    "gion\222\222\364\001\031player_id,physical_region\332\222\364\001\326\002"
+    "physical_region,mode,config_id,team_size"
+    ",preferred_region,enqueued_ms,player_id;"
+    "physical_region,mode,config_id,team_size"
+    ",enqueued_ms,player_id;expires_ms,player"
+    "_id,physical_region;physical_region,mode"
+    ",config_id,team_size,home_zone,preferred"
+    "_region,enqueued_ms,player_id;physical_r"
+    "egion,mode,config_id,team_size,home_zone"
+    ",enqueued_ms,player_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\205\003"
+    "\n\025MatchJoinIntentRecord\022\021\n\tplayer_id\030\001 \001"
+    "(\004\022\022\n\nrequest_id\030\002 \001(\t\022\025\n\rticket_record\030"
+    "\003 \001(\014\022\021\n\tcancelled\030\004 \001(\010\022\024\n\014request_high"
+    "\030\005 \001(\004\022\023\n\013request_low\030\006 \001(\004\022\025\n\rowner_acc"
+    "ount\030\007 \001(\t\022\026\n\016owner_revision\030\010 \001(\004\022\026\n\016sp"
+    "ectator_exit\030\t \001(\014\022\025\n\rexit_prepared\030\n \001("
+    "\010\022\027\n\017request_payload\030\013 \001(\014\022\r\n\005state\030\014 \001("
+    "\r:j\212\222\364\001\021match_join_intent\222\222\364\001\"player_id,"
+    "request_high,request_low\332\222\364\001(state,playe"
+    "r_id,request_high,request_low\"\302\003\n\027MatchD"
+    "irectIntentRecord\022\014\n\004kind\030\001 \001(\r\022\020\n\010owner"
+    "_id\030\002 \001(\004\022\024\n\014request_high\030\003 \001(\004\022\023\n\013reque"
+    "st_low\030\004 \001(\004\022\017\n\007payload\030\005 \001(\014\022\021\n\tbattle_"
+    "id\030\006 \001(\004\022\021\n\tcancelled\030\007 \001(\010\022\025\n\rowner_acc"
+    "ount\030\010 \001(\t\022\026\n\016owner_revision\030\t \001(\004\0224\n\017sp"
+    "ectator_exits\030\n \003(\0132\033.match.MatchSpectat"
+    "orRecord\022\025\n\rexit_prepared\030\013 \001(\010\022\026\n\016start"
+    "_original\030\014 \001(\014:\220\001\212\222\364\001\023match_direct_inte"
+    "nt\222\222\364\001&kind,owner_id,request_high,reques"
+    "t_low\332\222\364\001Hexit_prepared,cancelled,battle"
+    "_id,kind,owner_id,request_high,request_l"
+    "ow\"~\n\030MatchDirectStartOriginal\022.\n\tformat"
+    "ion\030\001 \001(\0132\033.match.MatchFormationRecord\0222"
+    "\n\007tickets\030\002 \003(\0132!.match.MatchAuthorityTi"
+    "cketRecord\"\335\003\n\036MatchChallengeInvitationR"
+    "ecord\022\024\n\014challenge_id\030\001 \001(\004\022\034\n\024challenge"
+    "r_player_id\030\002 \001(\004\022\030\n\020target_player_id\030\003 "
+    "\001(\004\022\021\n\tconfig_id\030\004 \001(\r\022\032\n\022challenger_acc"
+    "ount\030\005 \001(\t\022\033\n\023challenger_revision\030\006 \001(\004\022"
+    "\026\n\016target_account\030\007 \001(\t\022\027\n\017target_revisi"
+    "on\030\010 \001(\004\022\022\n\ncreated_ms\030\t \001(\004\022\022\n\nexpires_"
+    "ms\030\n \001(\004\022\r\n\005state\030\013 \001(\r\022\021\n\tbattle_id\030\014 \001"
+    "(\004:\245\001\212\222\364\001\032match_challenge_invitation\222\222\364\001"
+    "\014challenge_id\332\222\364\001atarget_player_id,state"
+    ",expires_ms,challenge_id;challenger_play"
+    "er_id,state,expires_ms,challenge_id\250\223\364\001\001"
+    "\260\223\364\001\004\270\223\364\001\004\"m\n\027MatchGlobalPolicyRecord\022\021\n"
+    "\tpolicy_id\030\001 \001(\r\022\027\n\017contract_digest\030\002 \001("
+    "\014:&\212\222\364\001\023match_global_policy\222\222\364\001\tpolicy_i"
+    "d\"M\n\024MatchFormationMember\022\021\n\tplayer_id\030\001"
+    " \001(\004\022\016\n\006ticket\030\002 \001(\t\022\022\n\nteam_index\030\003 \001(\r"
+    "\"\253\005\n\024MatchFormationRecord\022\021\n\tbattle_id\030\001"
+    " \001(\004\022\024\n\014operation_id\030\002 \001(\t\022\r\n\005state\030\003 \001("
+    "\r\022\027\n\017physical_region\030\004 \001(\r\022\026\n\016target_nod"
+    "e_id\030\005 \001(\r\022\032\n\022target_instance_id\030\006 \001(\t\022\027"
+    "\n\017target_endpoint\030\007 \001(\t\022\014\n\004mode\030\010 \001(\r\022\021\n"
+    "\tconfig_id\030\t \001(\r\022,\n\007members\030\n \003(\0132\033.matc"
+    "h.MatchFormationMember\022\026\n\016create_request"
+    "\030\013 \001(\014\022\022\n\ncreated_ms\030\014 \001(\004\022\023\n\013deadline_m"
+    "s\030\r \001(\004\022\023\n\013retry_at_ms\030\016 \001(\004\022\030\n\020activity"
+    "_context\030\017 \001(\014\022\032\n\022requeue_on_failure\030\020 \001"
+    "(\010\022.\n\010prepared\030\021 \003(\0132\034.match.MatchPrepar"
+    "edEndpoint\022 \n\030outcome_protocol_version\030\022"
+    " \001(\r\022#\n\033preflight_supported_version\030\023 \001("
+    "\r\022\035\n\025preflight_instance_id\030\024 \001(\t\022(\n adop"
+    "ted_outcome_protocol_version\030\025 \001(\r\022 \n\030ad"
+    "opted_outcome_observed\030\026 \001(\010:8\212\222\364\001\017match"
+    "_formation\222\222\364\001\tbattle_id\332\222\364\001\021state,retry"
+    "_at_ms\"<\n\025MatchPreparedEndpoint\022\021\n\tplaye"
+    "r_id\030\001 \001(\004\022\020\n\010endpoint\030\002 \001(\t\"\200\001\n\021MatchRa"
+    "tingRecord\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014rating_"
+    "centi\030\002 \001(\003\022\r\n\005games\030\003 \001(\004\022\022\n\nupdated_ms"
+    "\030\004 \001(\004:\037\212\222\364\001\014match_rating\222\222\364\001\tplayer_id\""
+    "\202\001\n\030MatchRatingAppliedRecord\022\021\n\tbattle_i"
+    "d\030\001 \001(\004\022\026\n\016payload_digest\030\002 \001(\014\022\022\n\nappli"
+    "ed_ms\030\003 \001(\004:\'\212\222\364\001\024match_rating_applied\222\222"
+    "\364\001\tbattle_id\"\254\001\n\025MatchRankSourceRecord\022\024"
+    "\n\014source_epoch\030\001 \001(\004\022\027\n\017produced_cursor\030"
+    "\002 \001(\004\022\030\n\020committed_cursor\030\003 \001(\004\022\020\n\010board"
+    "_id\030\004 \001(\004\022\017\n\007stopped\030\005 \001(\010:\'\212\222\364\001\021match_r"
+    "ank_source\222\222\364\001\014source_epoch\"\240\001\n\025MatchRan"
+    "kOutboxRecord\022\024\n\014source_epoch\030\001 \001(\004\022\025\n\rs"
+    "ource_cursor\030\002 \001(\004\022\022\n\nrequest_id\030\003 \001(\004\022\017"
+    "\n\007entries\030\004 \001(\014:5\212\222\364\001\021match_rank_outbox\222"
+    "\222\364\001\032source_epoch,source_cursor\"\257\004\n\033Match"
+    "BattleCompletionRecord\022\021\n\tbattle_id\030\001 \001("
+    "\004\022\023\n\013raw_payload\030\002 \001(\014\022\026\n\016payload_digest"
+    "\030\003 \001(\014\022\026\n\016format_version\030\004 \001(\r\022\023\n\013archiv"
+    "ed_ms\030\005 \001(\004\022\024\n\014source_topic\030\006 \001(\t\022\030\n\020sou"
+    "rce_partition\030\007 \001(\005\022\025\n\rsource_offset\030\010 \001"
+    "(\003\022.\n\010decision\030\t \001(\0162\034.match.BattleOutco"
+    "meDecision\022;\n\013source_kind\030\n \001(\0162&.match."
+    "MatchBattleCompletionSourceKind\022\036\n\026place"
+    "ment_operation_id\030\013 \001(\t\022\032\n\022target_instan"
+    "ce_id\030\014 \001(\t\022 \n\030outcome_protocol_version\030"
+    "\r \001(\r\022\030\n\020result_published\030\016 \001(\010\022\025\n\rnext_"
+    "retry_ms\030\017 \001(\004:`\212\222\364\001\027match_battle_comple"
+    "tion\222\222\364\001\tbattle_id\332\222\364\0011decision,result_p"
+    "ublished,next_retry_ms,battle_id\"\236\003\n!Mat"
+    "chBattleSettlementSourceRecord\022\021\n\tbattle"
+    "_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\030\n\020settleme"
+    "nt_proto\030\003 \001(\014\022\026\n\016payload_digest\030\004 \001(\014\022\023"
+    "\n\013archived_ms\030\005 \001(\004\022\025\n\rowner_account\030\006 \001"
+    "(\t\022\026\n\016owner_revision\030\007 \001(\004\022\024\n\014issued_at_"
+    "ms\030\010 \001(\004\022\021\n\tinbox_seq\030\t \001(\004\022\023\n\013inbox_sta"
+    "te\030\n \001(\r\022\026\n\016dispatch_state\030\013 \001(\r\022\025\n\rnext"
+    "_retry_ms\030\014 \001(\004:p\212\222\364\001\036match_battle_settl"
+    "ement_source\222\222\364\001\023battle_id,player_id\332\222\364\001"
+    "0dispatch_state,next_retry_ms,battle_id,"
+    "player_id*\343\001\n\037MatchBattleCompletionSourc"
+    "eKind\022.\n*MATCH_BATTLE_COMPLETION_SOURCE_"
+    "UNSPECIFIED\020\000\022(\n$MATCH_BATTLE_COMPLETION"
+    "_SOURCE_KAFKA\020\001\022-\n)MATCH_BATTLE_COMPLETI"
+    "ON_SOURCE_BATTLE_RPC\020\002\0227\n3MATCH_BATTLE_C"
+    "OMPLETION_SOURCE_MATCH_DEADLINE_ABORT\020\003B"
+    "\rZ\013match/matchb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps[3] = {
@@ -5016,7 +5026,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fauthority_2epr
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto = {
     false,
     false,
-    6648,
+    6742,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto,
     "proto/match/match_authority.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_once,
@@ -5036,7 +5046,7 @@ MatchBattleCompletionSourceKind_descriptor() {
   return file_level_enum_descriptors_proto_2fmatch_2fmatch_5fauthority_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t MatchBattleCompletionSourceKind_internal_data_[] = {
-    196608u, 0u, };
+    262144u, 0u, };
 // ===================================================================
 
 void MatchNetworkProfile::clear_receipts() {
@@ -5993,9 +6003,9 @@ MatchSpectatorIntentRecord::MatchSpectatorIntentRecord(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, close_tip_) -
+           offsetof(Impl_, delivery_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::close_tip_));
+               sizeof(Impl_::delivery_));
 
   // @@protoc_insertion_point(copy_constructor:match.MatchSpectatorIntentRecord)
 }
@@ -6012,9 +6022,9 @@ inline void MatchSpectatorIntentRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLAB
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, close_tip_) -
+           offsetof(Impl_, delivery_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::close_tip_));
+               sizeof(Impl_::delivery_));
 }
 MatchSpectatorIntentRecord::~MatchSpectatorIntentRecord() {
   // @@protoc_insertion_point(destructor:match.MatchSpectatorIntentRecord)
@@ -6083,7 +6093,11 @@ PROTOBUF_NOINLINE void MatchSpectatorIntentRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.state_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.state_));
   }
-  _impl_.close_tip_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.close_tip_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.delivery_) -
+        reinterpret_cast<char*>(&_impl_.close_tip_)) + sizeof(_impl_.delivery_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -6187,6 +6201,15 @@ PROTOBUF_NOINLINE void MatchSpectatorIntentRecord::Clear() {
     }
   }
 
+  // uint32 delivery = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_delivery() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_delivery(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6270,12 +6293,19 @@ PROTOBUF_NOINLINE void MatchSpectatorIntentRecord::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint32 close_tip = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_close_tip() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_close_tip());
+      }
+    }
+    // uint32 delivery = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_delivery() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_delivery());
       }
     }
   }
@@ -6350,9 +6380,16 @@ void MatchSpectatorIntentRecord::MergeImpl(::google::protobuf::MessageLite& to_m
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_close_tip() != 0) {
-      _this->_impl_.close_tip_ = from._impl_.close_tip_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_close_tip() != 0) {
+        _this->_impl_.close_tip_ = from._impl_.close_tip_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_delivery() != 0) {
+        _this->_impl_.delivery_ = from._impl_.delivery_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -6378,8 +6415,8 @@ void MatchSpectatorIntentRecord::InternalSwap(MatchSpectatorIntentRecord* PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.request_payload_, &other->_impl_.request_payload_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.owner_account_, &other->_impl_.owner_account_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_.close_tip_)
-      + sizeof(MatchSpectatorIntentRecord::_impl_.close_tip_)
+      PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_.delivery_)
+      + sizeof(MatchSpectatorIntentRecord::_impl_.delivery_)
       - PROTOBUF_FIELD_OFFSET(MatchSpectatorIntentRecord, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));

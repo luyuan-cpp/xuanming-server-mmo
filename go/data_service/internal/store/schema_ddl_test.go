@@ -8,10 +8,10 @@ import (
 )
 
 // 直接用本服务的真实描述符生成 DDL,防止代理缓存或依赖回退静默丢掉 TiDB 选项。
-// bootstrapTables 里的表(id_segment、player_name 与五张路由表)走手写 DDL,proto2mysql 生成的建表语句
+// bootstrapTables 里的表(player_name 与四张路由表)走手写 DDL,proto2mysql 生成的建表语句
 // 对它们不作数;这里只验证它们能通过迁移前的表名守卫。
 //
-// 豁免判据必须用同包的 isBootstrapTable,不能写成 `name == IdSegmentTableName`:
+// 豁免判据必须用同包的 isBootstrapTable,不能写死成某一张表的名字:
 // 后者在 player_name 进 TableMessages 的那一刻就把本测试打成 Fatal(primaryKeys 里查不到),
 // 而真正该被这条断言拦住的是"新增**自动迁移**表忘了补主键与 TiDB 契约"。
 // 表名清单只有 schema.go 一处答案,测试跟着它走,以后再加 bootstrap 表不用回来改这里。

@@ -6,12 +6,13 @@ import "testing"
 // 没有 -route-tool 却带位置参数一律拒绝 —— 以前这些参数被静默忽略,`data_service -f x.yaml audit` 会起成一个普通服务。
 func TestSelectEntry(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		migrate   bool
-		routeTool bool
-		args      []string
-		want      entryMode
-		wantErr   bool
+		name       string
+		migrate    bool
+		routeTool  bool
+		issuerInit bool
+		args       []string
+		want       entryMode
+		wantErr    bool
 	}{
 		{name: "serve", want: entryServe},
 		{name: "migrate", migrate: true, want: entryMigrate},
@@ -20,17 +21,21 @@ func TestSelectEntry(t *testing.T) {
 		{name: "migrate and route-tool", migrate: true, routeTool: true, args: []string{"audit"}, wantErr: true},
 		{name: "positional arguments without route-tool", args: []string{"audit"}, wantErr: true},
 		{name: "positional arguments with migrate", migrate: true, args: []string{"audit"}, wantErr: true},
+		{name: "id issuer init", issuerInit: true, want: entryIdIssuerInit},
+		{name: "id issuer init and migrate", issuerInit: true, migrate: true, wantErr: true},
+		{name: "id issuer init and route-tool", issuerInit: true, routeTool: true, args: []string{"audit"}, wantErr: true},
+		{name: "positional arguments with id issuer init", issuerInit: true, args: []string{"audit"}, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := selectEntry(tc.migrate, tc.routeTool, tc.args)
+			got, err := selectEntry(tc.migrate, tc.routeTool, tc.issuerInit, tc.args)
 			if tc.wantErr {
 				if err == nil {
-					t.Fatalf("selectEntry(%t, %t, %q) = %d, want an error", tc.migrate, tc.routeTool, tc.args, got)
+					t.Fatalf("selectEntry(%t, %t, %t, %q) = %d, want an error", tc.migrate, tc.routeTool, tc.issuerInit, tc.args, got)
 				}
 				return
 			}
 			if err != nil || got != tc.want {
-				t.Fatalf("selectEntry(%t, %t, %q) = (%d, %v), want (%d, nil)", tc.migrate, tc.routeTool, tc.args, got, err, tc.want)
+				t.Fatalf("selectEntry(%t, %t, %t, %q) = (%d, %v), want (%d, nil)", tc.migrate, tc.routeTool, tc.issuerInit, tc.args, got, err, tc.want)
 			}
 		})
 	}

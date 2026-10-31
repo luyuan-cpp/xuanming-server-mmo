@@ -19,10 +19,6 @@ func DBStatsOf(v any) (sql.DBStats, bool) {
 		if s != nil {
 			db = s.db
 		}
-	case *IdSegmentStore:
-		if s != nil {
-			db = s.db
-		}
 	case *PlayerNameStore:
 		if s != nil {
 			db = s.db

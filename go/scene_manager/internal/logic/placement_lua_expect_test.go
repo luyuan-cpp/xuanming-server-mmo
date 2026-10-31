@@ -20,9 +20,13 @@ func luaExpectKeys(playerID uint64) []string {
 	return []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
 }
 
-// luaExpectEval 执行脚本并把返回值转成字符串(go-zero 返回 int64)。
+// luaExpectEval 执行脚本并把返回值转成字符串(go-zero 返回 int64)。铸造脚本要求 ARGV[9] = 目标值,
+// 这里按 mintLuaArgs 补齐(目标 = ARGV[1] + 1,与墙钟地板不起作用时相同),本文件只测 location 原文期望。
 func luaExpectEval(t *testing.T, sc *svc.ServiceContext, script string, playerID uint64, args ...any) string {
 	t.Helper()
+	if script == luaMintEpochAndSetLocation {
+		args = mintLuaArgs(args...)
+	}
 	result, err := sc.Redis.Eval(script, luaExpectKeys(playerID), args...)
 	require.NoError(t, err)
 	return fmt.Sprint(result)

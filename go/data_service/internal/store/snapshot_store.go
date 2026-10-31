@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"shared/idsegment"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -32,6 +34,10 @@ const (
 	// SnapshotOperatorSceneNode 是 source=1 行的 operator 固定值。
 	SnapshotOperatorSceneNode = "scene-node"
 )
+
+// ErrNoRowIDSource 表示没接上行号来源:发号器没配好,或者装配漏了 UseRowIDs。
+// 插入一律失败,不自造 id;快照消费者停在当前 offset 重试,不会丢。
+var ErrNoRowIDSource = errors.New("snapshot store: no row id source")
 
 // SnapshotRow represents a row in the player_snapshot table.
 type SnapshotRow struct {
@@ -83,12 +89,12 @@ const (
 // 抽成常量还让真库回归用例能用**同一段文本**扮演并发写者。
 // VALUES 后面那一组占位符单独成常量(snapshotValuesTupleSQL),批量语句按行数重复它;拼出来的文本与拆分前逐字相同。
 const insertSnapshotSQL = `INSERT INTO player_snapshot
-	 (player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source)
+	 (id, player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source)
 	 VALUES ` + snapshotValuesTupleSQL
 
-// snapshotValuesTupleSQL 是一行的九个占位符,顺序 = snapshotInsertArgs。单行与多行(批量)语句共用这一段,
+// snapshotValuesTupleSQL 是一行的十个占位符,顺序 = snapshotInsertArgs。单行与多行(批量)语句共用这一段,
 // 列清单只在 insertSnapshotSQL 里写一次。
-const snapshotValuesTupleSQL = `(?, ?, ?, ?, ?, ?, ?, ?, ?)`
+const snapshotValuesTupleSQL = `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // onDuplicateKeepIDSQL 是唯一键形态**单行**语句的 ODKU 尾巴:撞 uk_snapshot_guid_nz 时一列不改,只把已存在那行的 id 回带。
 // 取舍见 insertSnapshotOnDuplicateKeepSQL 的注释。多行语句**不用 ODKU**,见 InsertSnapshotsIfGuidAbsent 的「为什么不是多行 ODKU」。
@@ -123,15 +129,15 @@ const onDuplicateKeepIDSQL = "\n\t ON DUPLICATE KEY UPDATE `id` = LAST_INSERT_ID
 //
 // # 代价(都不是正确性问题,记在这里免得下次又被当成"不能用 ODKU"的理由)
 //
-//   - 每次重放都会烧掉一个自增值(取号发生在重复键检查之前),id 因此有空洞 —— 它本来就只是行号,
-//     没有任何业务含义,bigint unsigned 也烧不完。
+//   - 每次重放都白发一个行号(发号在语句之前),id 因此有空洞 —— 它本来就只是行号,
+//     打散、不连续、没有任何业务含义,63 位也用不完。
 //   - 撞键时取的是唯一键上的 **next-key X**(手册:"An exclusive next-key lock is taken for a
 //     duplicate unique key value"),范围仅限同一个 guid。没撞键的常态路径与普通 INSERT 完全一样,
 //     只取插入意向锁,所以不同 guid 的写者仍然互不相干(回归 TestSnapshotStore_DistinctGuidsNeverDeadlock)。
 const insertSnapshotOnDuplicateKeepSQL = insertSnapshotSQL + onDuplicateKeepIDSQL
 
 // MaxSnapshotBatchRows 是一条多行快照语句的行数硬上限(InsertSnapshotsIfGuidAbsent 拒绝更多)。
-// 9×256 = 2304 个占位符,远低于预处理语句 65535 的上限;与 config.MaxSnapshotBatchMaxRows 相等,单测钉住。
+// 10×256 = 2560 个占位符,远低于预处理语句 65535 的上限;与 config.MaxSnapshotBatchMaxRows 相等,单测钉住。
 const MaxSnapshotBatchRows = 256
 
 // insertSnapshotsSQL 拼 n(>=1)行的**普通**多行 INSERT(不带 ODKU / IGNORE);n==1 时与 insertSnapshotSQL 逐字相同。
@@ -161,8 +167,8 @@ func existingSnapshotGuidsSQL(n int) string {
 // 它的去重靠 REPEATABLE READ 下 INSERT ... SELECT 源端的**加锁读**,代价是并发写者会在
 // idx(snapshot_guid) 的同一段间隙上互等插入意向锁而成环 —— 那正是唯一键要消掉的东西。
 const insertSnapshotIfGuidAbsentLegacySQL = `INSERT INTO player_snapshot
-	 (player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source)
-	 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+	 (id, player_id, zone_id, snapshot_type, created_at, reason, operator, data, snapshot_guid, source)
+	 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 	 FROM DUAL
 	 WHERE NOT EXISTS (SELECT 1 FROM player_snapshot AS existing WHERE existing.snapshot_guid = ?)`
 
@@ -206,6 +212,11 @@ type SnapshotStore struct {
 	// batchFallbacks 是批量路径的普通多行 INSERT 撞 1062、整批转逐行的累计次数(InsertSnapshotsIfGuidAbsent)。
 	// 常态(无并发重叠)必须为 0:不为 0 而又没有 rebalance,说明预读没起作用。
 	batchFallbacks atomic.Uint64
+
+	// snapshotRowIDs、auditRowIDs 发两张表的主键,由 UseRowIDs 接上。
+	// 行号只回答「是哪一行」:打散、不连续、不代表先后,排序一律看 created_at。
+	snapshotRowIDs idsegment.Source
+	auditRowIDs    idsegment.Source
 }
 
 // NewSnapshotStore opens the pool. It does NOT create tables — see schema.go.
@@ -266,20 +277,35 @@ func NewSnapshotStore(cfg MySQLConfig) (*SnapshotStore, error) {
 	return s, nil
 }
 
-// snapshotInsertArgs 按 insertSnapshotSQL 的占位符顺序展开一行。
-// 两条 INSERT(普通 / NOT EXISTS)的前九个占位符完全一致,顺序只在这里定义一次。
-func snapshotInsertArgs(row *SnapshotRow) []any {
-	return []any{row.PlayerID, row.ZoneID, row.SnapshotType, row.CreatedAt, row.Reason, row.Operator, row.Data,
+// UseRowIDs 接上两张表的行号来源。必须在第一次写入之前调用,之后只读。
+// 只读工具(cmd/debugutil)用不到行号,所以不放进 NewSnapshotStore 的参数。
+func (s *SnapshotStore) UseRowIDs(snapshots, audits idsegment.Source) {
+	s.snapshotRowIDs = snapshots
+	s.auditRowIDs = audits
+}
+
+// nextRowID 发一个行号。发不出来这次写入就失败,不用 0 或自造的值顶替。
+func nextRowID(ctx context.Context, source idsegment.Source) (uint64, error) {
+	if source == nil {
+		return 0, ErrNoRowIDSource
+	}
+	return source.Next(ctx)
+}
+
+// snapshotInsertArgs 按 insertSnapshotSQL 的占位符顺序展开一行,id 是这一行的行号。
+// 两条 INSERT(普通 / NOT EXISTS)的前十个占位符完全一致,顺序只在这里定义一次。
+func snapshotInsertArgs(id uint64, row *SnapshotRow) []any {
+	return []any{id, row.PlayerID, row.ZoneID, row.SnapshotType, row.CreatedAt, row.Reason, row.Operator, row.Data,
 		row.SnapshotGuid, row.Source}
 }
 
 // guidDedupeStatement 按探到的结构给出这次写入要用的语句与实参。
-func (s *SnapshotStore) guidDedupeStatement(row *SnapshotRow) (string, []any) {
+func (s *SnapshotStore) guidDedupeStatement(id uint64, row *SnapshotRow) (string, []any) {
 	if s.uniqueGuidKey {
-		return insertSnapshotOnDuplicateKeepSQL, snapshotInsertArgs(row)
+		return insertSnapshotOnDuplicateKeepSQL, snapshotInsertArgs(id, row)
 	}
 	// NOT EXISTS 形态多一个占位符:子查询里再绑一次同一个 guid。
-	return insertSnapshotIfGuidAbsentLegacySQL, append(snapshotInsertArgs(row), row.SnapshotGuid)
+	return insertSnapshotIfGuidAbsentLegacySQL, append(snapshotInsertArgs(id, row), row.SnapshotGuid)
 }
 
 // guidLookupStatement 按探到的结构给出"查这个 guid 已存在那行 id"的语句。
@@ -295,22 +321,21 @@ func (s *SnapshotStore) Close() error {
 	return s.db.Close()
 }
 
-// InsertSnapshot saves a snapshot and returns the auto-increment ID.
+// InsertSnapshot saves a snapshot and returns its row ID.
 // GM 路径调用方不设 Source / SnapshotGuid,即落成 source=0、guid=0。
 func (s *SnapshotStore) InsertSnapshot(ctx context.Context, row *SnapshotRow) (uint64, error) {
-	res, err := s.db.ExecContext(ctx, insertSnapshotSQL, snapshotInsertArgs(row)...)
+	id, err := nextRowID(ctx, s.snapshotRowIDs)
 	if err != nil {
+		return 0, fmt.Errorf("mint snapshot row id: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, insertSnapshotSQL, snapshotInsertArgs(id, row)...); err != nil {
 		return 0, err
 	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-	return uint64(id), nil
+	return id, nil
 }
 
 // InsertSnapshotIfGuidAbsent 按 snapshot_guid 去重落库,返回 inserted=false 时
-// id 是已存在那行的自增 id。
+// id 是已存在那行的行号。
 //
 // # 去重由库上的可空唯一键兜住
 //
@@ -409,7 +434,12 @@ func (s *SnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *Sna
 		return 0, false, fmt.Errorf("snapshot_guid must be non-zero for check-then-insert")
 	}
 
-	query, args := s.guidDedupeStatement(row)
+	// 就地重跑 1213 用同一个行号:牺牲方的语句已整条回滚,这个行号并没有落库。
+	rowID, err := nextRowID(ctx, s.snapshotRowIDs)
+	if err != nil {
+		return 0, false, fmt.Errorf("mint row id for snapshot guid %d: %w", row.SnapshotGuid, err)
+	}
+	query, args := s.guidDedupeStatement(rowID, row)
 	var res sql.Result
 	reruns, err := retryOnDeadlock(ctx, snapshotGuidInsertAttempts, snapshotGuidDeadlockBackoff, func() error {
 		var execErr error
@@ -458,11 +488,7 @@ func (s *SnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *Sna
 		// ODKU 的重放是 0("set to its current values"),NOT EXISTS 的重放也是 0(子查询判假)。
 		// 这个判据依赖连接没有打开 CLIENT_FOUND_ROWS —— 见 insertSnapshotOnDuplicateKeepSQL 的注释与
 		// TestSnapshotDSNKeepsAffectedRowsSemantics。
-		newID, err := res.LastInsertId()
-		if err != nil {
-			return 0, false, fmt.Errorf("insert snapshot guid %d last insert id: %w", row.SnapshotGuid, err)
-		}
-		return uint64(newID), true, nil
+		return rowID, true, nil
 	}
 
 	// 到这里 = 这个 guid 已经落过了(ODKU 判定值未变 affected=0,或 NOT EXISTS 子查询判假 affected=0)。
@@ -470,6 +496,11 @@ func (s *SnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *Sna
 		// ODKU 的 `id = LAST_INSERT_ID(id)` 已经把已存在那行的 id 记进会话并由 OK 包回带,
 		// 常态下一次往返就够。手册没有明说"值未变时一定回带",拿到 0 时退回一次唯一键点查。
 		if existingID, err := res.LastInsertId(); err == nil && existingID > 0 {
+			if uint64(existingID) == rowID {
+				// 撞的是主键不是 guid,只有发号器发重了才会走到这里。ODKU 同样吸收成 affected=0,
+				// 当成「已存在」就会静默丢掉这条快照。报错让调用方重试,重试时换一个行号。
+				return 0, false, fmt.Errorf("snapshot guid %d: row id %d already belongs to another row, the id issuer issued a duplicate", row.SnapshotGuid, rowID)
+			}
 			return uint64(existingID), false, nil
 		}
 	}
@@ -495,6 +526,7 @@ func (s *SnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *Sna
 // PRIMARY supremum 上的 X 间隙锁,并且**一直持有到整条语句结束** —— 之后同一条语句再在唯一键上等别人的未提交行,
 // 而那个写者要在主键末尾插入、被这把间隙锁挡住,就成环。2026-10-16 真库:按 offset 序 3/3、按 guid 升序也 3/3。
 // (多行 ODKU 给自增列赋值还会在批内重复时报 1869,这是另一个问题,见 #19。)
+// 这些都是主键还自增时测的。行号打散之后试插不再都落在末尾,撞上的概率变小,但这把间隙锁和这个环都还在,所以仍不用多行 ODKU。
 // 现在的写法拆掉了它:普通 INSERT 撞到**已提交**的重复会立刻 1062、整条自动回滚,不会带着间隙锁继续往下。
 // ①的预读把「新属主重读旧属主已落库的行」这一常见重叠直接剔掉,1062 → 逐行只剩①与②之间那一瞬的竞态。
 //
@@ -506,8 +538,8 @@ func (s *SnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *Sna
 // (同一秒里不同 scene 节点的快照到达序与 guid 序无关),所以批内倒序是常态:两写者 [5000, 6000..6149, 4999] 10/10 成环,
 // 流式重叠压测 7/279 条批量语句 1213,就地 3 次重试还会被连续耗尽。剔重之后按 snapshot_guid 升序拼(逐行回退同序),
 // 领先写者之后的行都大于 x、落不进 x 下方的间隙,同组实验全部 0(0/10、0/10、0/6、0/273)。
-// 代价:同一批里 id 顺序变成 guid 顺序。同一 scene 线程的 guid 按生成序递增,只有同一玩家、同一秒、跨节点产生的
-// 快照在 ListSceneSnapshotsByPlayer(`ORDER BY created_at DESC, id DESC`)里的并列次序可能与 offset 序不同。
+// 这样排序没有别的代价:行号是打散的,同一秒内的快照在 ListSceneSnapshotsByPlayer(`ORDER BY created_at DESC, id DESC`)
+// 里本来就没有先后含义。
 //
 // 残余属于单行路径已有的那一类:同一条未提交记录后面排着 ≥2 个等待者(即 ≥3 个写者同写一个 guid)、且第一个插入者
 // 回滚时,等待者继承的间隙锁互挡(§9.1 现场二),由 retryOnDeadlock 有界吸收(#11 已登记;复核员实测 6/6,与声明一致)。
@@ -541,9 +573,13 @@ func (s *SnapshotStore) InsertSnapshotsIfGuidAbsent(ctx context.Context, rows []
 		return 0, nil
 	}
 	query := insertSnapshotsSQL(len(fresh))
-	args := make([]any, 0, len(fresh)*9)
+	args := make([]any, 0, len(fresh)*10)
 	for _, r := range fresh {
-		args = append(args, snapshotInsertArgs(r)...)
+		rowID, err := nextRowID(ctx, s.snapshotRowIDs)
+		if err != nil {
+			return 0, fmt.Errorf("mint row id for snapshot batch of %d: %w", len(fresh), err)
+		}
+		args = append(args, snapshotInsertArgs(rowID, r)...)
 	}
 	var res sql.Result
 	reruns, err := retryOnDeadlock(ctx, snapshotGuidInsertAttempts, snapshotGuidDeadlockBackoff, func() error {
@@ -657,7 +693,7 @@ func IsSnapshotBatchTooLarge(err error) bool {
 	return errors.As(err, &me) && (me.Number == mysqlErrNetPacketTooLarge || me.Number == tidbErrTxnTooLarge)
 }
 
-// lookupSnapshotIDByGuid 查这个 guid 已存在那行的自增 id(日志/审计要用)。reason 只进错误文案。
+// lookupSnapshotIDByGuid 查这个 guid 已存在那行的行号(日志/审计要用)。reason 只进错误文案。
 //
 // 查不到**一律当故障**,不再返回 (0, false, nil):调用方是 kafka.SnapshotConsumer,它收到
 // (id=0, inserted=false, err=nil) 会记一条 duplicate 指标、打一条 `already stored as id=0` 的 INFO,
@@ -897,7 +933,7 @@ func (s *SnapshotStore) GetSnapshotPlayerTimesByZone(ctx context.Context, zoneID
 
 // SceneSnapshotMeta 是 source=1(C++ scene)快照的元数据,给将来的 GM 列表 / 恢复路径用。
 type SceneSnapshotMeta struct {
-	ID            uint64 // player_snapshot.id(自增)
+	ID            uint64 // player_snapshot.id(行号,不代表先后)
 	SnapshotGuid  uint64 // C++ SnapshotId
 	ZoneID        uint32
 	Trigger       uint32 // C++ SnapshotTrigger 原值(snapshot_type 列)
@@ -907,6 +943,7 @@ type SceneSnapshotMeta struct {
 
 // ListSceneSnapshotsByPlayer lists a player's source=1 rows newest first (no blob).
 // 尚未接 RPC:source=1 的恢复路径是下一阶段。
+// id DESC 只是让同一秒内的次序稳定,行号是打散的,这个次序不代表先后。
 func (s *SnapshotStore) ListSceneSnapshotsByPlayer(ctx context.Context, playerID uint64, limit uint32) ([]*SceneSnapshotMeta, error) {
 	if limit == 0 {
 		limit = 20
@@ -934,12 +971,16 @@ func (s *SnapshotStore) ListSceneSnapshotsByPlayer(ctx context.Context, playerID
 
 // InsertAuditLog writes a rollback audit record.
 func (s *SnapshotStore) InsertAuditLog(ctx context.Context, row *AuditLogRow) error {
-	_, err := s.db.ExecContext(ctx,
+	id, err := nextRowID(ctx, s.auditRowIDs)
+	if err != nil {
+		return fmt.Errorf("mint rollback audit row id: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO rollback_audit_log
-		 (player_id, zone_id, rollback_type, snapshot_id_used, pre_rollback_snapshot_id,
+		 (id, player_id, zone_id, rollback_type, snapshot_id_used, pre_rollback_snapshot_id,
 		  target_time, players_affected, players_failed, orphans_cleaned, reason, operator, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		row.PlayerID, row.ZoneID, row.RollbackType, row.SnapshotIDUsed,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, row.PlayerID, row.ZoneID, row.RollbackType, row.SnapshotIDUsed,
 		row.PreRollbackSnapshotID, row.TargetTime, row.PlayersAffected,
 		row.PlayersFailed, row.OrphansCleaned, row.Reason, row.Operator, row.CreatedAt,
 	)

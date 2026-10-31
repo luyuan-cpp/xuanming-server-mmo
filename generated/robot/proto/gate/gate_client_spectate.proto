@@ -1,0 +1,39 @@
+syntax = "proto3";
+option go_package = "robot/proto/gate";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_GATE;
+
+// 观战中继 / 全服广播档的订阅(docs/design/battle-spectate-tiered-fanout.md §15.2 / §15.5,D94 / D98)。
+// 这组消息由 gate **本地处理**,不转发给任何业务服务:gate 在客户端消息分发处按目标节点类型 GateNodeService
+// 拦下。客户端先发 MatchService.WatchBattle,回包 delivery = LOBBY 时把回包里的 spectate_ticket 原样放进
+// SubscribeSpectate;之后 SpectateState(161)/ SpectateTurnResult(158)/ SpectateEnd(166)经大厅连接下发。
+// 一个会话同时只订一场:新订阅自动替换旧订阅。
+
+message SubscribeSpectateRequest {
+  uint64 battle_id = 1;
+  bytes spectate_ticket = 2;   // WatchBattleResponse.spectate_ticket 原样回填
+}
+
+// 失败:凭证无效 / 过期 / 不属于本会话 → MatchSpectateTicketInvalid。成功后若 gate 已缓存该场状态,
+// 首帧 161 紧随回包下发;否则等 battle 的下一帧(中继档挂接时会立即补发一帧)。
+message SubscribeSpectateResponse {
+  TipInfoMessage error_message = 1;
+}
+
+message UnsubscribeSpectateRequest {
+  uint64 battle_id = 1;        // 与当前订阅不符时幂等成功(什么都不做)
+}
+
+message UnsubscribeSpectateResponse {
+  TipInfoMessage error_message = 1;
+}
+
+service GateClientSpectate {
+  option (OptionIsClientProtocolService) = true;
+  rpc SubscribeSpectate (SubscribeSpectateRequest) returns (SubscribeSpectateResponse);
+  rpc UnsubscribeSpectate (UnsubscribeSpectateRequest) returns (UnsubscribeSpectateResponse);
+}

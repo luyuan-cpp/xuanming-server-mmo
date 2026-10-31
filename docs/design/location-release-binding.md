@@ -152,7 +152,8 @@ scene 侧 `PlayerLifecycleSystem::HandleSessionEndedRelease(playerId, expectedOw
    - 残余(活性,不是数据风险):(1) 本节点从未为 E 登记成功(入场登记在写 fence 之前被拒)时 Redis 里是上一任的资格,判
      `no_qualification`,这条 location 要等玩家下次登录落回本节点重新登记,或持有节点死亡(证据 2)。同号重启顶替(GO-3,
      `owner_replaced.go`)只认「资格原件的 E 等于 location 的 E」,这里原件是上一任的 E,不在其内(`cross-zone-scene-travel.md`
-     §13.10 第 2 条残余 5);收口见 §17;
+     §13.10 第 2 条残余 5);收口见 §17;*(2026-10-30 已按 §17 落码收口:请过持有节点释放、过了宽限仍拿不到释放证据,且资格原件
+     缺失或属于别的 E 时,scene_manager 原子推进 owner_epoch 并删 location,见 §17.9;未编译、未测试。)*
      (2) 凭证 CAS 帧滞留、而同节点新登记的 HGET 恰在它之前执行时,那次登记的 CAS 回 -2、本次登录失败重试;
      (3) 读失败不重试(同 R7),下一次 LeaveScene 重试 / 登录撞门再请。
 3. `playerList` 里留着无效句柄 → 不写凭证(表不一致,fail-closed)。
@@ -799,9 +800,9 @@ Lookup是缓存修复的观察点，不与Redis合并成角色授权事务。Loo
 补正前次只读推导：不能仅凭“旧R曾写到无实体节点”断言永久HandoffPending；现有enter_holder_release路径会按原E请求持有节点，节点无实体时也可按原epoch条件补写真实释放标记。此接缝保留，不为软调度创建第二份永久SQL head。*（2026-10-23 批注：r2-lc#2 之后这条补写改为带围栏的凭证 —— 读本进程实例在原 E 下登记的 `handoff_fence` 原件、重核本节点仍完全不持有后以原件 CAS，见 §3.3 第 2 项的更正；本节点从未为原 E 登记成功时拿不出资格，见那里的残余 1。）*新增回归源码覆盖旧done拒绝、目录未知/冻结、2^53相邻及uint64最大R、raw+tag竞态、未知原件不补权、R2前缀后的迟到回滚、同R bump/keep及回滚重放不复活handoff。尚未运行编译/测试。
 
 
-## 17. 2026-10-24 无资格持有者的收口：权威方带围栏撤销（设计，未落码）
+## 17. 2026-10-24 无资格持有者的收口：权威方带围栏撤销（2026-10-30 已落码，未编译、未测试）
 
-负责人 2026-10-24 要求给 r2-lc 修复后的 `no_qualification` 残余加收口机制，按最标准的方式设计并落码。本节是设计；落码因周额度到 90%（会话组约定 92% 停线）推迟，接手说明见 §17.8。
+负责人 2026-10-24 要求给 r2-lc 修复后的 `no_qualification` 残余加收口机制，按最标准的方式设计并落码。§17.1–§17.7 是 10-24 的设计（原文保留）；落码因周额度推迟到 10-29 重置之后，§17.8 是当时的接手说明，**2026-10-30 已按它落码**：I-1 核对结论、实现、与设计正文的差异、用例与验证命令见 §17.9。代码与用例在工作区，**未编译、未测试，待 Codex 验证**。
 
 ### 17.1 问题
 
@@ -878,3 +879,80 @@ KEYS：location、`owner_epoch`、`save_barrier`（读 `handoff_fence`）、hand
 4. 文档：本节改为"已落码"，§3.3 残余 1 与 `cross-zone-scene-travel.md` 残余 2 改为指向本节，`docs/ops/cross-zone-failure-test-runbook.md` 补 `revoked_unqualified` 的观测与演练项。
 5. 交 Codex：`go/scene_manager` 的 gofmt、`go vet ./internal/logic`、定向与全量 `go test ./internal/logic`；没有 C++ 或 proto 变更。
 6. Java 版：不适用。Java 的交接是一笔 MySQL 交出事务（PARITY 有意差异 D1），没有 location 标记链与 owner_epoch 铸造。按约定不登记 PARITY。
+
+### 17.9 落码记录（2026-10-30，未编译、未测试，待 Codex 验证）
+
+**I-1 核对（§17.8 第 1 步）：成立，没有例外，§17.4 的条件不用改。** 逐条读了 `role_admission_system.cpp`、`player_lifecycle.cpp`、`handoff_sql_barrier.h`、`scene_handler.cpp`：
+
+- **入场**（首次载入、同节点复用实体、退出保留期重登、同落点重连都走这一条）：scene 的唯一入口 `SceneHandler::PlayerEnterGameNode` 在任何本地会话 / 实体 / 载入副作用之前调 `RoleAdmissionSystem::RequestEnter`。它拒绝 owner_epoch 为 0 的路由，先做 SQL 登记，再 `SendFence`（`kRegisterFenceLua`，要求 owner_epoch == 候选的 E）；只有登记回包成功才置 `authorized` 并 `Activate` → `HandleEnterGameNode`。`HandleEnterGameNode` 第一步 `RoleAdmissionSystem::Allows`（authorized == 本次 generation）不过即拒；复用实体（+1 抬缓存、≥ +2 废黜重载）、取消退出都排在它之后。载入回包 `HandlePlayerAsyncLoaded` 只消费 `HandleEnterGameNode` 登记的待入场条目，A2′ 闸门（`kConfirmFenceLua` 只确认原 H）过了才 `InitPlayerFromAllData`。
+- **交接采纳**：`ResumeTravelAfterRevocation` 的 `kResumeFenceLua` 要求 owner_epoch == 目标 E、location 原字节不变、没有标记，成功回调里才把实体缓存改成目标 E。回 0 时实体保持冻结，到冻结硬上限后按「标记已发出」不存盘销毁；冻结快照在 `kPublishMarkLua` 之前已双表 SQL ACK，没有未落盘进度（§17.6 第 3 条）。
+- **owner_epoch == E 期间原件只能是 E 下的**：
+  - `kRegisterFenceLua`、发布 / 释放 / 凭证（`kPublishMarkLua`、`kReleaseMarkLua`、`kCredentialMarkLua`）、采纳（`kResumeFenceLua`）都要求 owner == 原件的 E；
+  - `kCancelRegistrationLua` 只替换本次候选或它观察到的 prior，同 E 异实例回 0；
+  - `kRevokeFenceLua`、`kJudgeOutcomeLua` 只认本实体缓存的原件。
+
+  所以 E 下有合法持有者时，原件的 E 必为 E，别的进程改不掉。离线工具（`save_barrier_restore` / `debug_import`）在停写时运行，不计入。
+- **前提**：共享核心 Redis 是 noeviction，`save_barrier` 不设 TTL（`kRegisterFenceLua` 的 `types3()` 也要求 PTTL == -1），所以原件「缺失」只能是从来没人登记过。
+
+**实现**（只改 scene_manager；C++ 与 proto 不改）：
+
+- `go/scene_manager/internal/logic/unqualified_holder_revoke.go`（新）：
+  - 撤销 Lua `luaRevokeUnqualifiedHolder`；
+  - 预判 `decideUnqualifiedRevoke`，取值 `not_due / epoch_unproven / fence_malformed / qualified / eligible`；
+  - 执行 `revokeUnqualifiedHolder`；
+  - 两个调用点的粘合 `revokeUnqualifiedHolderOnLeave` / `revokeUnqualifiedHolderOnLogin`。
+
+  Lua 解析原件用 C++ `kFenceLuaHelpers` 的逐字副本 `luaCppHandoffFenceHelpers`，用例逐字比对。
+- **Lua 做的事**：按 §17.5 原子复核下列条件，都成立才写：
+  - location 原字节，§16 侧车原文与 floor；
+  - owner_epoch 按串严格等于 E（缺键不 INCR）；
+  - `handoff_fence` 原字节等于观察值，且按 C++ 口径解析出的 E ≠ 期望 E（或原件缺失）；
+  - 没有 E 代或写坏的标记。
+
+  写入：`INCR owner_epoch`，删 location、等待计时与 §16 侧车（floor 保留），扣场景与节点人数。谁删谁减，口径同 `luaDeletePlayerLocationIfUnchanged`。资格原件一个字节不动。
+
+  返回码：1 已撤销、0 location 已不在、-1 location / 修订已变、-2 owner 已不是 E、-3 原件已变、-4 原件属于 E 或写坏、-5 有 E 代标记。参数形状不对回 error_reply，不写。
+- **调用点**：
+  - `leavescenelogic.go`：判 `pending` 时，在保留 location、请释放之前先检查；撤销成功即回成功，这次清理完成。
+  - `enterscenelogic.go` 第 3 步：换手门以 18 拒绝、`requestHolderReleaseForLogin` 判 eligible 并已请过释放之后检查。该函数改为返回是否请过。撤销与否都照回 18。
+- **宽限**：配置 `UnqualifiedHolderRevokeGraceSeconds`（`config.go`、`etc/scene_manager_service.yaml`）。0 / 不写 = 120；必须在 (85, 600] 内，否则 `svc.NewServiceContext` 拒启。没有关闭开关。K8s ConfigMap 不渲染此键，取缺省。
+- **可观测**：
+  - 指标：`scene_manager_leave_holder_release_total{verdict="revoked_unqualified"}` 与 `scene_manager_enter_holder_release_total{verdict="revoked_unqualified"}`，只在 Lua 返回 1 时计。
+  - 日志：`[UnqualifiedRevoke]`。撤销成功、原件写坏、读写失败打 ERROR（go-zero logx 没有 WARN 级），已过宽限而不撤销打 INFO，宽限内不打。日志带节点、E、原件的 E 与状态，不打原件原文。
+  - 都不以 player_id 作 label。
+
+**与 §17.1–§17.8 正文的差异**（都是收紧或说清，不放宽）：
+
+1. 「已请过释放」（§17.4 第 4 条）落成：只在本次请求本身就在请持有节点释放的流程里检查，即 LeaveScene 判 `pending`（离场身份 `deleted`）、EnterScene 释放门判 `eligible`。`pending_unproven`（legacy 离场身份，不发释放）与 scene 自发的 18 都不检查。
+   - 宽限从这份 location 的等待计时起点算（`noteLeaveReleaseWait`，Redis TIME）。LeaveScene 与 EnterScene 释放门共用一把键、同一个 scope。
+   - 因此 EnterScene 释放门第一次写等待计时键。§12.2「不写任何 Redis 状态」对 `requestHolderReleaseForLogin` 本身仍成立。
+2. 宽限加上界 600s：等待计时键的 TTL = 诊断预算（≥ 1s）+ 600s 余量；宽限更长时，计时键会在宽限走完之前过期、从头计时，撤销就永远轮不到。
+3. owner_epoch 键与 location 记的 E 必须同为 E 且非 0：Go 预判出 `epoch_unproven` 就不发，Lua 按串严格比键值。
+4. 推进围栏用 INCR，不取 G3a 墙钟地板。撤销不把新值交给任何节点；下一次落点照常走铸造（墙钟地板 + WAITAOF），WAITAOF 确认的复制偏移覆盖排在它之前的撤销。
+5. EnterScene 一侧撤销之后照回 18，不在同一次请求里接着落点；下一次重登按无持有者落点铸造（≥ E+2）。
+
+**残余**：
+
+1. 宽限只防打断在途的登记 / 采纳，不参与安全性；宽限内被拒的入场按既有路径重试。
+2. Redis 自身回退（异步复制下故障转移丢写）不在本机制能力内，同 `cross-zone-scene-travel.md` 写入口对照节残余 1。回退只会让撤销连同其后的写一起丢失，退回撤销之前的卡住状态，不产生两个持有者。
+3. 离线恢复 / 维护提升留下的形态不在本机制内，属离线维护流程：location 记的 E 与 owner_epoch 不一致（预判 `epoch_unproven`），或原件是 E 下的恢复墓碑（n = 0，预判 `qualified`）。
+4. go-redis 读超时后原样重发撤销 EVAL 时，重发回 0（`already_gone`），那一次少计一次指标；人数在首发里已减，不会多减。
+5. 键集跨 hash tag（location / handoff 尚未带 `{id}`），与既有删除 Lua、`kRegisterFenceLua` 同一残余，上 Cluster 前一起改形（shared-redis §20.4 / §20.6）。
+
+**用例**（`go/scene_manager/internal/logic/unqualified_holder_revoke_test.go`；miniredis，钉死 Redis 服务端时钟，按 Redis 实际执行顺序重放）：
+
+| 验收项 | 用例 |
+|---|---|
+| 预判表、名表、指标取值与两族既有取值不撞 | `TestDecideUnqualifiedRevoke_Table`、`TestUnqualifiedRevokeVerdictNamesCoverEveryValue` |
+| 宽限缺省 / 范围 / 越界拒启、上界不超过计时键最短 TTL | `TestUnqualifiedHolderRevokeGraceConfig` |
+| 原件解析与 C++ 同口径；宽限下界 = C++ 登记截止 15s + 冻结硬上限 70s | `TestUnqualifiedRevokeFenceParsingMatchesCpp`、`TestUnqualifiedRevokeGraceFloorMatchesCppDeadlines` |
+| Lua 每个返回码、合格时的写集合、不合格一个字节不写、两副本 / 重发只撤一次、参数错不写 | `TestRevokeUnqualifiedHolderLua_Outcomes`、`TestRevokeUnqualifiedHolderLua_RejectsMalformedArguments` |
+| 与在途登记的两种先后（C++ `kRegisterFenceLua` 金样） | `TestRevokeUnqualifiedHolderRacesWithRegistration` |
+| 「采纳 E+2」窗口的两种先后（C++ `kResumeFenceLua` 金样） | `TestRevokeUnqualifiedHolderRacesWithTravelAdoption` |
+| LeaveScene 主时序：宽限内保留并请释放；宽限到即撤销、围栏 +1、计数；迟到重试不再动 | `TestLeaveScene_UnqualifiedHolderRevokedAfterGrace`、`TestLeaveScene_UnqualifiedHolderWithoutAnyFenceRevoked` |
+| 原件属于 E / 写坏 / 读不出、legacy 离场身份：不撤销 | `TestLeaveScene_UnqualifiedRevokeRequiresProof` |
+| 预判之后登记先落地：Lua 拒绝、照旧请释放 | `TestLeaveScene_UnqualifiedRevokeLosesToRegistrationLandingFirst` |
+| EnterScene 释放门：计时、宽限到撤销、照回 18、下一次重登铸造 | `TestEnterScene_LoginRevokesUnqualifiedHolderAfterGrace` |
+| scene 自发的 18 不撤销 | `TestEnterScene_SceneInitiatedRejectionNeverRevokes` |
+
+**验证（Codex）**：命令见 `docs/PROGRESS.md` 2026-10-30「location 无资格持有者带围栏撤销」条目。运维观测与演练见 `docs/ops/cross-zone-failure-test-runbook.md` v3.2（§2.3、§2.4、场景 UQ）。

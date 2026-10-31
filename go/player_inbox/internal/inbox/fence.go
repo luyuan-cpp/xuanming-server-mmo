@@ -6,8 +6,7 @@ import (
 
 // owner_epoch 围栏(设计 §7.8、IB-8)。
 //
-// 规则照 go/db 的 checkOwnerEpoch(go/db/internal/kafka/key_ordered_consumer.go),差别两处:
-// req == 0 时拒绝(收件箱没有历史包袱,fail-closed,与资产通道一致);增加核心 Redis 上界 R。
+// req == 0 时拒绝(收件箱没有历史包袱,fail-closed,与资产通道一致);有核心 Redis 上界 R。
 //
 //	| 条件                       | 结局           | 动作                                   |
 //	| req == 0                   | EPOCH_REQUIRED | 拒绝,不改任何状态                      |

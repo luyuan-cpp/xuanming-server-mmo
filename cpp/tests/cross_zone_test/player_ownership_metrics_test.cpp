@@ -26,13 +26,11 @@ namespace
 		"withdraw_deferred", "withdraw_expired", "granted_client_reset", "reply_uncorrelated", "reply_unmatched",
 		"freeze_cap_reached", "dispatch_window_closed", "mark_sent_destroyed", "mark_sent_client_reset",
 		"destroy_deferred_unsettled_save", "freeze_unstamped", "watchdog_early_fire", "handoff_fastpath_forced",
-		"rolled_back_adopted", "returned_after_grant", "rollback_receipt_anomaly", "sql_barrier_waited",
-		"sql_barrier_expired", "sql_owner_rejected",
+		"rolled_back_adopted", "returned_after_grant", "rollback_receipt_anomaly", "sql_owner_rejected",
 	};
 
 	const std::vector<std::string_view> kOwnerEpochKeys = {
-		"stale_owner_write_rejected", "home_zone_unknown", "owner_epoch_unknown", "stale_owner_rejected_exiting",
-		"owner_counter_behind",
+		"stale_owner_write_rejected", "stale_owner_rejected_exiting",
 	};
 
 	std::string RenderAll()

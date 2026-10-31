@@ -51,7 +51,7 @@ func TestClassify(t *testing.T) {
 			assert.Equal(t, tc.want, Classify(tc.err))
 			// proto2mysql 与 go/db 都用 %w 包装,包一层之后判定不变。
 			if tc.err != nil {
-				assert.Equal(t, tc.want, Classify(fmt.Errorf("update existing row for save on table player_database: %w", tc.err)))
+				assert.Equal(t, tc.want, Classify(fmt.Errorf("update existing row for save on table player_store: %w", tc.err)))
 			}
 		})
 	}
@@ -80,12 +80,4 @@ func TestKindOfIgnoresUntaggedNetworkErrors(t *testing.T) {
 	redisTimeout := fmt.Errorf("placement recheck unavailable: %w", &net.OpError{Op: "read", Net: "tcp", Err: errors.New("i/o timeout")})
 	assert.Equal(t, KindNone, KindOf(redisTimeout))
 	assert.Equal(t, KindConnLost, Classify(redisTimeout), "Classify alone cannot tell MySQL from Redis; that is why callers use KindOf")
-}
-
-func TestReason(t *testing.T) {
-	assert.Equal(t, "conn_refused", KindConnRefused.Reason())
-	assert.Equal(t, "conn_lost", KindConnLost.Reason())
-	assert.Equal(t, "store_readonly", KindReadOnly.Reason())
-	assert.Equal(t, "store_busy", KindBusy.Reason())
-	assert.Equal(t, "", KindNone.Reason())
 }

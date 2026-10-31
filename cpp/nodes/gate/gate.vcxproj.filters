@@ -24,6 +24,9 @@
     <ClCompile Include="handler\event\gate_kafka_command_router.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="handler\gate_push_delivery.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -40,6 +43,18 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="handler\rpc\gate_service_handler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="handler\rpc\gate_client_spectate_handler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="spectate\gate_spectate_client.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="spectate\gate_spectate_hub.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="spectate\gate_spectate_ticket.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="rpc_replies\register_handler.cpp">
@@ -62,6 +77,9 @@
     <ClInclude Include="handler\event\gate_kafka_command_router.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="handler\gate_push_delivery.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="handler\rpc\client_session_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -75,6 +93,18 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\gate_service_handler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\rpc\gate_client_spectate_handler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="spectate\gate_spectate_client.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="spectate\gate_spectate_hub.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="spectate\gate_spectate_ticket.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="gate_codec.h">

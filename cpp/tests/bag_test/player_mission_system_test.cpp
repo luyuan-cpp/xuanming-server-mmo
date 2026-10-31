@@ -62,6 +62,7 @@ bool ArmMissionTestItemSegment(uint64_t lo = 100000, uint64_t hi = 200000) {
     auto& client = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
     client.Reset();
     GuidSegmentClient::Options options;
+    options.mixIds = false;
     options.kindName = "item";
     options.initialStep = 100000;
     if (!client.Enable(options, [](const std::string&, uint32_t) { return true; },

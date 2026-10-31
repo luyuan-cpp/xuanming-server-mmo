@@ -56,6 +56,12 @@ try {
         Assert-Equal 1 $runningScan.Count '复用门禁必须枚举真实本仓进程，不能依赖未赋值变量'
         Assert-Equal $true ($runningScan[0].Extent.EndOffset -lt $goStart[0].Extent.StartOffset) '真实进程扫描必须先于服务复用'
     }
+    # 存盘路径开关、db_task 世代与 game-events 已随旧存盘路径退役,启动前检查不应再读它们。
+    Test-Case 'pre-start checks read live config only: PlayerStorePath, db_task generation and game-events are retired' {
+        foreach ($retired in @('PlayerStorePath','PersistSchemaRegressionMode','DbTaskTopicGeneration','db_task','game-events')) {
+            Assert-NotMatch $ast.Extent.Text ([regex]::Escape($retired)) "start_game.ps1 must not check the retired $retired"
+        }
+    }
     # player_inbox:在线提醒(PlayerInboxNotifyEvent)发往 scene-cmd,与 friend / guild 的推送同为命令主题生产者。
     # mail:新邮件提醒(NotifyMailEvent)经 gate-cmd_g<N> 推送,同为命令主题生产者(docs/design/mail-system.md §12.3)。
     foreach ($serviceName in @('friend','guild','player_inbox','mail')) {

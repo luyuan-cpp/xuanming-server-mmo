@@ -1,5 +1,7 @@
 #include "node_connector.h"
+#include "engine/config/player_store_path.h"
 #include "proto/common/base/common.pb.h"
+#include "proto/common/base/node.pb.h"
 #include "node_util.h"
 #include <muduo/base/Logging.h>
 #include <network/rpc_client.h>
@@ -69,8 +71,14 @@ void NodeConnector::ConnectToGrpcNode(const NodeInfo &nodeInfo)
 	// 所有出站 gRPC 走 muduo 驱动的传输(docs/design/grpc-muduo-transport.md §14):一个节点一条 muduo_grpc::Channel,
 	// 挂成 MuduoGrpcChannelPtr 组件,生成的 Send<Svc><Method> 从这里取。通道只接受 IPv4 字面量(§8);
 	// 业务服务通道不开周期 keepalive(对端是 grpc-go 默认强制策略,§4.4),连接参数取 ChannelOptions 默认值。
+	// 只有玩家存盘例外:认领响应是一个玩家的全部行,可以超过默认的接收上限。
+	muduo_grpc::ChannelOptions channelOptions;
+	if (nodeInfo.node_type() == common::base::PlayerStoreNodeService)
+	{
+		channelOptions.maxReceiveMessageBytes = player_store_path::kMaxClaimResponseBytes;
+	}
 	auto channel = ep.port() <= 0xFFFF
-					   ? muduo_grpc::Channel::Create(*gNode->GetLoop(), ep.ip(), static_cast<uint16_t>(ep.port()))
+					   ? muduo_grpc::Channel::Create(*gNode->GetLoop(), ep.ip(), static_cast<uint16_t>(ep.port()), std::move(channelOptions))
 					   : nullptr;
 	if (!channel)
 	{

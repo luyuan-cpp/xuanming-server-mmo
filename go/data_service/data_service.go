@@ -61,6 +61,11 @@ var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Gete
 // 生产把 AutoMigrate 设 false,部署阶段单进程跑这个。
 var migrateOnly = flag.Bool("migrate", false, "run the global-DB schema migration (proto2mysql) and exit")
 
+// idIssuerInit 把发号器的两份预留记录初始化到当前时间之上,跑完即退出。只在首次部署,或确认过
+// 两套 etcd 同时丢数据的影响之后跑(docs/ops/id-issuer-runbook.md)。不并进 -migrate:部署每次都跑
+// -migrate,而两份记录都不存在可能是事故,不能让一次普通发布悄悄盖过去。
+var idIssuerInit = flag.Bool("id-issuer-init", false, "initialize the id issuer reservation records and exit")
+
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
 // routeTool 是 route_tool 的主程序入口(映射持久化第 1b-1 批,2026-10-18):`data_service -f <yaml> -route-tool <子命令> [参数]`
@@ -68,24 +73,25 @@ var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 // 生产上只能这样跑 route_tool(一次性 Job / Pod,runbook §9.4)。逻辑在 internal/routetoolcli,与 cmd/route_tool 同一份。
 var routeTool = flag.Bool("route-tool", false, "run a route_tool subcommand and exit: data_service -f <yaml> -route-tool <subcommand> [flags]")
 
-// entryMode 是 main 的三种入口。
+// entryMode 是 main 的入口。
 type entryMode uint8
 
 const (
 	entryServe entryMode = iota
 	entryMigrate
 	entryRouteTool
+	entryIdIssuerInit
 )
 
 // selectEntry 按 flag 选入口(纯函数,data_service_entry_test.go 表驱动钉住)。args 是 flag.Args()(第一个非 flag 参数起)。
-//   - -migrate 与 -route-tool 同时给:拒绝(一次只做一件事);
+//   - -migrate、-route-tool、-id-issuer-init 同时给多个:拒绝(一次只做一件事);
 //   - -route-tool 但没有子命令:拒绝;
 //   - 没有 -route-tool 却带位置参数:拒绝 —— 以前这些参数被静默忽略,`data_service -f x.yaml audit` 会被当成一次普通启动、
 //     起一个服务进发现池,而运维以为自己跑的是审计。
-func selectEntry(migrate, routeTool bool, args []string) (entryMode, error) {
+func selectEntry(migrate, routeTool, issuerInit bool, args []string) (entryMode, error) {
 	switch {
-	case migrate && routeTool:
-		return entryServe, errors.New("-migrate and -route-tool are mutually exclusive")
+	case migrate && routeTool, migrate && issuerInit, routeTool && issuerInit:
+		return entryServe, errors.New("-migrate, -route-tool and -id-issuer-init are mutually exclusive")
 	case routeTool && len(args) == 0:
 		return entryServe, errors.New("-route-tool needs a subcommand: data_service -f <yaml> -route-tool <subcommand> [flags]")
 	case routeTool:
@@ -95,6 +101,8 @@ func selectEntry(migrate, routeTool bool, args []string) (entryMode, error) {
 			"(data_service -f <yaml> -route-tool %s ...)", args, args[0])
 	case migrate:
 		return entryMigrate, nil
+	case issuerInit:
+		return entryIdIssuerInit, nil
 	default:
 		return entryServe, nil
 	}
@@ -124,7 +132,7 @@ const nodeRegisterListenPoll = 100 * time.Millisecond
 
 func main() {
 	flag.Parse()
-	entry, err := selectEntry(*migrateOnly, *routeTool, flag.Args())
+	entry, err := selectEntry(*migrateOnly, *routeTool, *idIssuerInit, flag.Args())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "data_service: %v\n", err)
 		os.Exit(2)
@@ -151,6 +159,9 @@ func main() {
 	if entry == entryMigrate {
 		os.Exit(runMigration(c))
 	}
+	if entry == entryIdIssuerInit {
+		os.Exit(runIdIssuerInit(c))
+	}
 	var globalErr error
 	c, globalErr = c.ResolveGlobalAuthority(os.Getenv)
 	if globalErr != nil {
@@ -169,11 +180,11 @@ func main() {
 		os.Exit(1)
 	}
 	if c.RouteStore.DBFirst() {
-		logx.Infof("[startup] RouteStore.Mode=db_first: fence_shards=%d max_open_conn=%d max_idle_conn=%d publish_attempts=%d "+
-			"waitaof_numlocal=%d waitaof_numreplicas=%d waitaof_timeout_ms=%d",
-			c.RouteStore.FenceShards, c.RouteStore.MaxOpenConn, c.RouteStore.MaxIdleConn, c.RouteStore.PublishAttempts,
-			c.RouteStore.NumLocal(), c.RouteStore.NumReplicas(), c.RouteStore.WaitAOFTimeoutMs)
-		// go-zero 的 logx 没有 WARN 级别(同 rollback_logic.go 的取舍),取 ERROR:这条是运维必须看见的前提,淹在 Info 里等于没有。
+		logx.Infof("[startup] RouteStore.Mode=db_first: max_open_conn=%d max_idle_conn=%d publish_attempts=%d "+
+			"waitaof_numlocal=%d waitaof_numreplicas=%d waitaof_timeout_ms=%d merged_zone_refresh_sec=%d",
+			c.RouteStore.MaxOpenConn, c.RouteStore.MaxIdleConn, c.RouteStore.PublishAttempts,
+			c.RouteStore.NumLocal(), c.RouteStore.NumReplicas(), c.RouteStore.WaitAOFTimeoutMs, c.RouteStore.MergedZoneRefreshSec)
+		// go-zero 的 logx 没有 WARN 级别,取 ERROR:这条是运维必须看见的前提,淹在 Info 里等于没有。
 		logx.Errorf("[startup] WARN %s", routeStoreDBFirstWarning)
 	}
 
@@ -263,6 +274,11 @@ func runDataService(c config.Config) (runErr error) {
 	if err := svcCtx.RouteReadGateUnassembled(); err != nil {
 		return errors.Join(err, cleanupUnstarted())
 	}
+	if err := svcCtx.MergedZonesUnassembled(); err != nil {
+		return errors.Join(err, cleanupUnstarted())
+	}
+	// 定时重读合服映射;CloseAndReport 里停。上面的自检没过时不起,也就不用单独收回。
+	svcCtx.MergedZones.Start()
 
 	kafkaOwner, err = dskafka.NewConsumerOwner(relay, svcCtx.RelayIngress)
 	if err != nil {
@@ -396,9 +412,6 @@ func runDataService(c config.Config) (runErr error) {
 	// HTTP 导出仅观察指标与并发安全的 DB.Stats，不派生业务写；不作为资产发行者 closure。
 	// 空地址保持禁用。
 	metrics.Start(c.MetricsListenAddr)
-	// 回档帮会闸的 27 条告警序列启动即预置为 0(docs/design/guild-phase2/07-rollback-fail-closed.md §7.9.1):
-	// 放行回档 / 写后分歧一辈子可能只发生一次,序列不预先存在的话 `increase(...) > 0` 恰好漏掉那一次。
-	metrics.PrimeRollbackGuildCheck()
 	// 映射提交点的两组序列(route_register_total / route_publish_total)只在 db_first 时有数,同理预置为 0。
 	if c.RouteStore.DBFirst() {
 		metrics.PrimeRoute()
@@ -407,7 +420,7 @@ func runDataService(c config.Config) (runErr error) {
 	// ── 热关停(killswitch)────────────────────────────────────────────
 	// data_service 是玩家权威数据的读写入口,真出事时最缺的是"秒级止血阀":
 	// 往 etcd 前缀 /mmorpg/killswitch/ 下写一个 key 就能把某个方法立刻短路掉
-	// (例如 RollbackAll 这种放大面极大的运维接口),而不必走一遍
+	// (例如 BatchRecallItems 这种放大面极大的运维接口),而不必走一遍
 	// 构建-发布-滚动更新。规则布局与优先级见 shared/killswitch 包注释。
 	//
 	// New 出来立刻可用(规则为空 = 全放行),Start 非阻塞、etcd 为 nil 也合法,
@@ -456,48 +469,35 @@ func runDataService(c config.Config) (runErr error) {
 	// kSuccess),混用会得到垃圾定性。serverbase 在没有 ErrorCodeClassifier 时
 	// 对私有码只敢记成 VerdictBizReject,所以这份集合必须由本服务显式给出。
 	//
-	// 归进"服务端内部故障"的三个码,逐个都有产码点为证:
-	//   ErrCodeRedis(1)          —— 玩家数据 Redis 读写失败(data_logic.go 多处),也含玩家数据路由失败(映射缺席 / 映射库
-	//                               故障或熔断 / 回源失败 / zone 未配集群;logic.clientForPlayer、写门禁与 snapshot_logic.go 第 3 步)。
-	//                               刻意不另分码:4 不在本集合里,改 4 会让路由故障哑掉。原因只在 `[DataRoute]` 日志里,本拦截器只带 method/code
+	// 归进"服务端内部故障"的码,逐个都有产码点为证:
+	//   ErrCodeRedis(1)          —— 名字展示缓存之类的 Redis 读失败
 	//   ErrCodeSnapshotDBError(11) —— 快照/流水 MySQL 出错,或 store 干脆没配起来
-	//   ErrCodeRollbackFailed(12)  —— 回滚 fence 拿不到/释放函数为 nil,服务端自身走死
 	// 其余非 0 码刻意**不算**故障,免得刷出满屏假告警:
 	//   LockConflict(2) / VersionMismatch(3)  正常并发竞争,重试即可
 	//   NotFound(4) / SnapshotNotFound(10) / ZoneNotFound(15)  查无此物
-	//   PlayerOnline(13)   回滚前置条件不满足,是规则拒绝
 	//   InvalidRequest(14) 调用方参数问题
 	//   NotImplemented(16) 刻意的 fail-closed(fence 未配置就明确失败,不装成成功),
 	//                      是确定性的配置态而非运行期故障,告警只会变噪音
 	//   ResultTruncated(17) 命中数超上限的容量拒绝 —— 按 serverbase 的既定口径,
 	//                      "满"属于规则拒绝不是故障
 	// 号段发号(AllocateIdSegment)再加两个故障码:
-	//   ErrCodeIdSegmentDBError(18)   —— id_segment 表读写失败 / store 没配起来,发号源停摆
-	//   ErrCodeIdSegmentExhausted(19) —— 值域 2^55 见底的 fail-closed;理论上万年不会发生,
-	//                                    发生即事故,必须当故障告警而不是"业务拒绝"
-	//   ErrCodeIdSegmentUnknownTag(20) —— 生产(AllowAutoSeed=false)下 id_segment 缺行:漏配
-	//                                    BootstrapTags,或全局库被重置 / 从备份恢复 —— 后者是
-	//                                    "从 1 重发覆盖别人角色行"的前夜,必须告警而不是当参数错
-	// 合服那四个码(21..24,见 constants)刻意不在这份集合里,而且这层拦截器也看不到它们:
-	// RegisterPlayerZone 的响应体是 emptypb.Empty、RemapHomeZoneForMerge 的拒绝走 gRPC status,
-	// 都没有 in-band 的 error_code 字段可读。它们的可见性由 handler 里的 logx.Errorf 提供
-	// (每一条都带调用方身份),外加 grpcstats 那层按 gRPC code 统计的失败率。
-	// (24 ErrCodeMergeFenceMissing 自 2026-10-12 RemapHomeZoneForMerge 停用起不再产生,号不复用。)
-	// 22 自 2026-10-19 写门禁起也以 in-band error_code 出现在 SavePlayerData / SetPlayerField / DeletePlayerData 与 Rollback*
-	// 的响应里,这层拦截器能看到。仍刻意不进集合:那是围栏在正常工作(规则拒绝,口径同 RegisterPlayerZone 的拒绝)。
-	// 可见性来自 data_service_player_lock_total{outcome="merge_fenced"} 与 `[PlayerWriteLock]` 的 ERROR 日志。
+	//   ErrCodeIdSegmentSourceError(18) —— 发号器读写预留记录失败 / 没配起来,发号源停摆
+	//   ErrCodeIdSegmentExhausted(19)   —— 值域见底的 fail-closed;理论上万年不会发生,
+	//                                      发生即事故,必须当故障告警而不是"业务拒绝"
+	//   ErrCodeIdSegmentUnknownTag(20)  —— 漏配 IdSegment.Tags,或生产(AllowAutoSeed=false)下两份预留记录
+	//                                      都不存在 —— 后者不是首次部署的话就是两套 etcd 同时丢了数据,
+	//                                      从头发号会静默串档,必须告警而不是当参数错
+	// ErrCodeZoneMappingConflict(21)与 ErrCodeAdminAuthRequired(23)刻意不在这份集合里,而且这层拦截器也看不到它们:
+	// RegisterPlayerZone 的响应体是 emptypb.Empty,都没有 in-band 的 error_code 字段可读。它们的可见性由
+	// handler 里的 logx.Errorf 提供(每一条都带调用方身份),外加 grpcstats 那层按 gRPC code 统计的失败率。
+	// (22、24 随合服围栏删除,号不复用。)
 	// 映射持久化的 ErrCodeRouteStoreError(30)同理:只出现在 gRPC status message 里(Unavailable),这层看不到。
 	// 产码点有两类(2026-10-19 更正:此前写的「只用于 RegisterPlayerZone」已不成立):
 	//   - db_first 下 RegisterPlayerZone 的库这一段故障 —— 可见性来自 data_service_route_register_total{outcome="store_error"}
 	//     与 `[RegisterPlayerZone][db_first]` 的 ERROR 日志;
 	//   - 第 3 批读方门禁(ReadRequiresReady=true)下 GetPlayerHomeZone / BatchGetPlayerHomeZone 缓存不可信、回源全局库又失败
-	//     (routing.ErrRouteReadUnavailable)—— 可见性来自 data_service_route_read_total{result="sql_error"}。
-	// in-band 入口(Load / Save / SetPlayerField 等)的回源失败折成 ErrCodeRedis(1),不出 30;原因在 `[DataRoute]` 日志里。
-	// 回档帮会闸三个码(27..29,docs/design/guild-phase2/07-rollback-fail-closed.md §7.3.3)里算故障的两个:
-	//   ErrCodeRollbackGuildCheckFailed(28)       —— 帮会检查没做成(guild 未配 / 不可达 / 超时 / 预算耗尽…),
-	//                                                此时**所有**回档都被拒,不告警就等于回档工具悄悄失灵
-	//   ErrCodeRollbackGuildDivergedAfterWrite(29) —— 数据已写、写后复查发现新分歧或复查失败,紧急人工
-	// ErrCodeRollbackGuildDivergence(27) 刻意不算:那是闸在正常工作(规则拒绝,口径同 PlayerOnline)。
+	//     (routing.ErrRouteReadUnavailable)—— 可见性来自 data_service_route_read_total{result="sql_error"};
+	//   - 这两个 RPC 的合服映射解析失败(成环、缓存没装配)—— 可见性来自 handler 的 ERROR 日志。
 	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{
 		ErrorCodeClassifier: dataServiceFaultClassifier(),
 	}))
@@ -649,26 +649,46 @@ func runDataService(c config.Config) (runErr error) {
 // 输出走 stdout/stderr,方便部署脚本直接读退出码。
 func runMigration(c config.Config) int {
 	cfg := svc.MySQLConfigOf(c)
-	tags := c.IdSegment.EffectiveBootstrapTags()
-	fmt.Printf("data_service schema migration: %s/%s (id_segment bootstrap tags: %v)\n", cfg.Host, cfg.DBName, tags)
-	// 号段行在生产只能由这条路径创建(IdSegment.AllowAutoSeed 生产恒 false),所以 -migrate
-	// 必须带完整的 BootstrapTags;迁移顺带把 player / guild 的 max_id 抬到消费表最大号 +1
-	// (同库能查到时),那条 Error 日志出现就意味着库曾被重置 / 从备份恢复,按运维手册处理。
-	if err := store.MigrateSchema(context.Background(), cfg, store.MigrateOptions{BootstrapTags: tags}); err != nil {
+	fmt.Printf("data_service schema migration: %s/%s\n", cfg.Host, cfg.DBName)
+	if err := store.MigrateSchema(context.Background(), cfg, store.MigrateOptions{}); err != nil {
 		fmt.Fprintf(os.Stderr, "schema migration FAILED: %v\n", err)
 		return migrateExitCode(err)
 	}
-	fmt.Printf("schema migration OK: transaction_log, player_snapshot, rollback_audit_log synced from proto; id_segment bootstrapped for %v (existing rows untouched, player/guild floors checked); route tables player_route, zone_merge_fence, zone_merged_into, route_meta, route_reconcile in place (route_meta / route_reconcile row id=1 seeded if absent)\n", tags)
+	fmt.Printf("schema migration OK: transaction_log, player_snapshot, rollback_audit_log synced from proto; route tables player_route, zone_merged_into, route_meta, route_reconcile in place (route_meta / route_reconcile row id=1 seeded if absent)\n")
+	return 0
+}
+
+// idIssuerInitTimeout 是 -id-issuer-init 的预算:读写两套 etcd 各一次,不需要更久。
+const idIssuerInitTimeout = 30 * time.Second
+
+// runIdIssuerInit 是 -id-issuer-init 的实现:成功 0,失败 1。
+// 只要有一份记录存在就什么也不做,所以重复执行是安全的。
+func runIdIssuerInit(c config.Config) int {
+	issuer, err := svc.NewIdIssuer(c)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "id issuer init FAILED: %v\n", err)
+		return 1
+	}
+	defer issuer.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), idIssuerInitTimeout)
+	defer cancel()
+	created, err := issuer.Bootstrap(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "id issuer init FAILED: %v\n", err)
+		return 1
+	}
+	if created {
+		fmt.Println("id issuer init OK: both reservation records created")
+	} else {
+		fmt.Println("id issuer init: at least one reservation record already exists, nothing changed")
+	}
 	return 0
 }
 
 // routeStoreDBFirstWarning 是 RouteStore.Mode=db_first 时启动日志与横幅里的那条 WARN(规格 d 节,M4)。
-// 第 2 批起 merge_zone 以 -route-source=db 库先写并在 zone_merge_fence 持围栏;仍要提醒的是:旧版 merge_zone 二进制直写 Redis、
-// 不写库(对账 leader 看不见它写的东西),P4 起一律禁用;切换与回退顺序按提案 §13.4。
-// 2026-10-20 补「围栏真源」一句:db 源下 merge:in_progress 只是镜像,运维不得再按 redis 源的旧流程手工 GET / DEL 它(runbook §15)。
-const routeStoreDBFirstWarning = "RouteStore.Mode=db_first: merge_zone 写模式只许第 2 批新版二进制,且显式 -route-source=db " +
-	"-route-db-dsn=<本全局库>(旧版直写 Redis、不写 zone_merge_fence,一律禁用);P4 解除冻结窗口之前不跑合服写模式;" +
-	"合服围栏以 zone_merge_fence 为真源,merge:in_progress 只是镜像,不要手工 SET / DEL(merge-zone-runbook §15);" +
+// 仍要提醒的是:旧版 merge_zone 二进制会改写玩家映射(别名合服之后不再有这一步),一律禁用;切换与回退顺序按提案 §13.4。
+const routeStoreDBFirstWarning = "RouteStore.Mode=db_first: merge_zone 写模式只许别名合服版二进制(旧版会改写玩家映射,一律禁用);" +
+	"P4 解除冻结窗口之前不跑合服写模式;" +
 	"ArmReadyMarker 与读方开关按 proposal §13.4 切换,回退先关读方、再 Arm=false"
 
 // startRouteReconciler 返回真实停止新拍并 join 原任务的接缝；不把 bool Wait 或租约 TTL 当成功。
@@ -1096,21 +1116,17 @@ func dataServiceRelayMethods() map[string]bool {
 		"/data_service.DataService/RegisterRoleAdmission":         true,
 		"/data_service.DataService/CloseRoleAdmissions":           true,
 		"/data_service.DataService/AckRoleTradeDrain":             true,
-		"/data_service.DataService/LoadPlayerData":                true,
-		"/data_service.DataService/SavePlayerData":                true,
-		"/data_service.DataService/GetPlayerField":                true,
-		"/data_service.DataService/SetPlayerField":                true,
+		"/data_service.DataService/ReleaseDeadPlayerStoreHolder":  true,
 		"/data_service.DataService/RegisterPlayerZone":            true,
 		"/data_service.DataService/GetPlayerHomeZone":             true,
 		"/data_service.DataService/BatchGetPlayerHomeZone":        true,
-		"/data_service.DataService/DeletePlayerData":              true,
 		"/data_service.DataService/ListPlayerSnapshots":           true,
-		"/data_service.DataService/GetPlayerSnapshotDiff":         true,
 		"/data_service.DataService/QueryTransactionLog":           true,
 		"/data_service.DataService/AllocateIdSegment":             true,
 		"/data_service.DataService/ReservePlayerName":             true,
 		"/data_service.DataService/ReleasePlayerName":             true,
 		"/data_service.DataService/BatchGetPlayerName":            true,
+		"/data_service.DataService/BatchGetPlayerDisplay":         true,
 		"/data_service.DataService/GetPlayerAssetOpLedger":        true,
 		"/data_service.DataService/GetPlayerInboxLedger":          true,
 	}
@@ -1119,12 +1135,9 @@ func dataServiceFaultClassifier() serverbase.Classifier {
 	return serverbase.FaultCodeSet(
 		constants.ErrCodeRedis,
 		constants.ErrCodeSnapshotDBError,
-		constants.ErrCodeRollbackFailed,
-		constants.ErrCodeIdSegmentDBError,
+		constants.ErrCodeIdSegmentSourceError,
 		constants.ErrCodeIdSegmentExhausted,
 		constants.ErrCodeIdSegmentUnknownTag,
-		constants.ErrCodeRollbackGuildCheckFailed,
-		constants.ErrCodeRollbackGuildDivergedAfterWrite,
 	)
 }
 

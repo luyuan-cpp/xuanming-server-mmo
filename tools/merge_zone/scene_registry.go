@@ -2,13 +2,12 @@ package main
 
 // 源 zone 是否已下线的**正面证据**:etcd 场景节点注册表里该 zone 一条注册都没有。
 //
-// 以前 -clear-source-hot-state 只凭 scene_nodes:zone:{S}:load 为空判下线。负载键丢失 / 被淘汰时 ZCARD 读作 0,
-// 活着的 zone 会被当成已下线,随后删掉活玩家的 location;玩家从别的 gate 进来会落新节点、铸新 epoch,持有节点的
-// 存盘全被 owner CAS 拒绝,未落盘的进度回档(docs/design/cross-zone-scene-travel.md §13.9 末、§13.10)。
+// 只凭 scene_nodes:zone:{S}:load 为空判下线不够:负载键丢失 / 被淘汰时 ZCARD 读作 0,活着的 zone 会被当成已下线
+// (docs/design/cross-zone-scene-travel.md §13.10)。
 // scene_manager 的 EnterScene 一侧早已改为要 etcd 注册表的正面证据(isZoneGoneFromRegistry),这里用同一口径。
 //
 // 走 etcd 官方的 v3 JSON 网关(POST /v3/kv/range,etcd ≥ 3.4 默认开启),不引 etcd / gRPC 客户端:本工具刻意不带
-// 那一串依赖(placement_codec.go 文件头)。本仓 etcd 不开认证(deploy/docker-compose.yml、
+// 那一串依赖。本仓 etcd 不开认证(deploy/docker-compose.yml、
 // deploy/k8s/manifests/infra/etcd.yaml 的 ALLOW_NONE_AUTHENTICATION);开了认证要先在这里补 token 再用。
 //
 // 读是线性一致的(网关默认 serializable=false),读不到就报错,调用方按「不能证明已下线」拒绝(fail-closed)。

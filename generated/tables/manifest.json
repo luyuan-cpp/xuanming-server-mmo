@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "version": 32,
-  "content_digest": "a81e80235cf9f4f5c609c862911bb697f8184373466cdd27e5546f57ca573337",
-  "generated_at": "2026-10-23T13:58:25Z",
+  "version": 33,
+  "content_digest": "52686314aef9e77a21c97cdd4dcb1d47f7060c913462621171a3dcb42f43cf2c",
+  "generated_at": "2026-10-30T07:06:43Z",
   "source_rev": {
-    "commit": "190d9f2ea80bee1dbee0a043529e0d71c27f0874",
+    "commit": "72017963846c68712cc0c5a0b37ccdd97bae9a02",
     "data_dirty": true
   },
-  "table_count": 47,
+  "table_count": 49,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -930,6 +930,29 @@
       ]
     },
     {
+      "name": "PlayMode",
+      "rows": 6,
+      "source": {
+        "file": "PlayMode.xlsx",
+        "size": 5514,
+        "sha256": "018f74fd078f40a36fb0e98bac74f1c00e2eb7efa3c6938f19c4f26b38c8d375"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "playmode.json",
+          "size": 670,
+          "sha256": "d0626962219740b36fd648b497f9841b4139874ee5eb0bba1b834d7d322d71c9"
+        },
+        {
+          "kind": "binary",
+          "file": "playmode.pb",
+          "size": 64,
+          "sha256": "b6fa0c5bef946b4ba69e6d31a4185efa2e2f1b5bfda967997e821b2f9b71b986"
+        }
+      ]
+    },
+    {
       "name": "Reward",
       "rows": 7,
       "source": {
@@ -1087,6 +1110,29 @@
           "file": "world.pb",
           "size": 96,
           "sha256": "d107e92a1a1767083ef043760e5eadebdd34f278885d72a17fc08e76651de8c4"
+        }
+      ]
+    },
+    {
+      "name": "ZoneGroup",
+      "rows": 2,
+      "source": {
+        "file": "ZoneGroup.xlsx",
+        "size": 5170,
+        "sha256": "8913720f650231732ed0c96f159da1ae9651de28c9dbf69243c763c4962e265b"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "zonegroup.json",
+          "size": 174,
+          "sha256": "66842f941f4b758896ba4723d6f9b11a5c2f52113361380250fdb3d1806dedf7"
+        },
+        {
+          "kind": "binary",
+          "file": "zonegroup.pb",
+          "size": 21,
+          "sha256": "1bca00a2caa3d9a0f7dce41f23aef0384991bf00bdfacd878780c0420890fd6b"
         }
       ]
     }

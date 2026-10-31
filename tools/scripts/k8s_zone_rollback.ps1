@@ -2,41 +2,38 @@
 <#
 .SYNOPSIS
     Disaster-recovery rollback for a single zone — orchestrates
-    `k8s-zone-down` → MySQL PITR (manual) → inventory → Kafka offsets to the log end (-ToLatest)
+    `k8s-zone-down` → MySQL PITR (manual) → inventory
     → discard Redis state written after TargetTime (zone_rollback_discard) → `k8s-zone-up`.
 
 .DESCRIPTION
     This script is the executable form of the SOP in
     docs/design/zone_data_rollback.md §3 "整 Zone 灾难恢复级回档".
 
-    回档语义(负责人 2026-10-17 裁决:丢弃 TargetTime 之后的写):回档 = 回到 TargetTime 时刻 MySQL 里已经落库的状态。
-    T 之后的写一律丢弃 —— 包括 T 之前产生、T 时还在 Kafka 里没落库的存盘(玩家看到的回退点比 T 早一个消费延迟),
-    代价已接受:T 之后的合法存盘一并丢失。所以:
-      - Step 5 把 zone 组拨到日志末端(-ToLatest),不再拨回 TargetTime:拨回 T 会让 [T, 停服] 之间从未落库的积压照常写进 PITR 之后的 MySQL;
-      - Step 4 丢弃 Redis 里 T 之后派生的状态:本 topic 的重试收据与死信改名进隔离区,受影响玩家的缓存与提交屏障按 PITR 之后的库处置;
-      - go/db 的已落库游标 consumer:applied* 与归属计数器 owner_epoch 保留不动:拨到末端之后新消息的 seq(= offset + 1)恒大于旧游标,
-        不会被误判陈旧(Step 5b 由工具复核 offset 单调这一前提)。
-    回档里不再有 FLUSHDB:K8s 与本机的 go/db 游标、重试收据、归属映射、账号目录与各 zone 的玩家缓存同在一个 Redis DB,
-    FLUSHDB 会清掉所有 zone 的这些键、游标没了之后重放全部重新落库,等于事故(-ConfirmFlushSharedRedis 已改为入口拒绝)。
+    回档语义(负责人 2026-10-17 裁决:丢弃 TargetTime 之后的写):回档 = 回到 TargetTime 时刻库里已经提交的状态。
+    存盘已是 scene 经 gRPC 直接调 go/db 提交 player_store,没有在途队列,回退点就是 T;T 之后的写一律丢弃,代价已接受。所以:
+      - Step 4 丢弃 Redis 里 T 之后派生的状态:受影响玩家的同步摘要与资产提交证据按 PITR 之后的库处置;
+      - 归属计数器 owner_epoch 保留不动。
+    回档里不再有 FLUSHDB:归属与位置键、交接标记、路由映射与账号目录同在一个 Redis DB,FLUSHDB 会清掉所有 zone 的这些键,
+    等于事故(-ConfirmFlushSharedRedis 已改为入口拒绝)。
 
     It will NOT do the destructive steps without -Apply. Default is dry-run:dry-run 照样执行入口校验,其余每一步只打印将要执行的命令
-    与作用范围,不调 kubectl / Kafka CLI / 回档工具,不读写 Redis / MySQL。
+    与作用范围,不调 kubectl / 回档工具,不读写 Redis / MySQL。
 
     读 MySQL、写 Redis 的动作全部在独立工具 zone_rollback_discard 里(go/db/cmd/zone_rollback_discard,与 go/db 共用键名函数;
     -RollbackDiscardTool 给与线上 go/db 同一提交构建的可执行文件,-Apply 必填)。**该工具尚未落地**,契约见下方「zone_rollback_discard 契约」;
-    本脚本只编排 kubectl、Kafka CLI 与工具调用,不自己拼任何 Redis 键名。
+    本脚本只编排 kubectl 与工具调用,不自己拼任何 Redis 键名。
 
     What it does (in order):
       入口校验(dry-run 也执行,任何改动之前):
-        E1 -TargetTime 必须是 UTC 的 yyyy-MM-ddTHH:mm:ss[.fff]Z,且早于当前 UTC(改成 -ToLatest 之后 Kafka 不再顺带校验它);
+        E1 -TargetTime 必须是 UTC 的 yyyy-MM-ddTHH:mm:ss[.fff]Z,且早于当前 UTC;
            -PitrRestoredTo 同一格式,给了就必须等于 -TargetTime。
         E2 -ConfirmFlushSharedRedis 与 -RedisPassword 传了即拒绝:回档不再 FLUSHDB;口令只经 -RedisPasswordEnv 指名的环境变量,不上命令行。
-        E3 -Apply 时必须显式给 -RedisHost(go/db 的共享 Redis,不按 db.yaml 缺省的 127.0.0.1 补)、-MySqlDsnEnv(该环境变量非空)、
-           -RollbackDiscardTool(存在的文件)与 -BarrierProtocol;-SkipMySqlPause 必须配 -PitrRestoredTo。dry-run 缺这些时打印占位符。
-        E4 原有校验(不可变镜像、Ingress 参数成对、db.yaml 的组名 / 分区数 / topic 世代、zone 组 ≠ legacy 组)全部保留;
+        E3 -Apply 时必须显式给 -RedisHost(go/db 的共享 Redis,不按 db.yaml 缺省的 127.0.0.1 补)、-MySqlDsnEnv(该环境变量非空)
+           与 -RollbackDiscardTool(存在的文件);-SkipMySqlPause 必须配 -PitrRestoredTo。dry-run 缺这些时打印占位符。
+        E4 不可变镜像、Ingress 参数成对;
            生成 rollback-id(z<id>-<T 紧凑格式>-<当前 UTC 紧凑格式>,-RollbackId 可显式给),报告目录 run/logs/zone-rollback/<rid>/。
-        待负责人裁决的路径一律在入口拒绝:-BarrierProtocol strict(裁决 #3)、-AcceptBlockedPlayers(裁决 #4)。
-      0. 预检(只读,先于停服;dry-run 只预告,不执行),a / b / d / e / f 都过了才进 Step 1(c 只告警):
+        待负责人裁决的路径一律在入口拒绝:-AcceptBlockedPlayers(裁决 #4)。
+      0. 预检(只读,先于停服;dry-run 只预告,不执行),a / b / c 都过了才进 Step 1:
          a. 集群现状:以下四项凡是留空的,都要与集群现状核对,一次 kubectl 读 zone namespace 里的
             gate(StatefulSet 或 Deployment,两种形态都认)、Ingress gateway 与 scene Deployment(第四项用;
             scene Fleet 是 CRD,集群装了 Agones 时另读):
@@ -65,79 +62,43 @@
          b. 静态预检:把 Step 6 将要传给 dev_tools.ps1 k8s-zone-up 的同一份参数加 -DryRun 执行一遍
             (k8s_deploy.ps1 -DryRun 只在本地渲染清单、不调 kubectl),非 0 即拒绝。参数组合、档位与密钥、发布门禁的
             规则只在 k8s_deploy.ps1 一处,这里不复制,拼错或矛盾的组合在停服之前就暴露。
-         c. Kafka LAG 只读快照(2026-10-15):对 zone 组与 legacy 组各 describe 一次,只打印本 topic 的分区、位点与 LAG 合计,
-            供操作者核对;任何失败只告警,绝不拒绝(取代原 Step 2 的排空等待,见下)。这些 LAG 将被 Step 5 -ToLatest 丢弃。
-         d. Step 5 预演(2026-10-15;2026-10-18 改为 -ToLatest):zone 组在本 topic 上已有数值位点就跳过;否则(组不存在 / 没有位点)用
-            kafka_offset_reset.ps1 的 dry-run 对 zone 组按 -ToLatest 生成重置计划,计划不完整或失败即在停服之前拒绝 ——
-            Kafka 不能为 zone 组建出完整计划时,拖到 Step 5 才发现,zone 已停服、MySQL 已回档。
-            describe 本身失败同样拒绝(判不出就无法证明 Step 5 走得通)。
-         e. Step 6 的 Kafka 读法(2026-10-17,R7 复核 [2]):Step 6 的 k8s_deploy.ps1 经 kubectl exec 进 infra namespace 的 kafka-0
-            读两组位点(lib Get-DbGroupDescribeExecArgs,同一组 -KubeContext / -KubeConfig;infra namespace 取 dev_tools.ps1 的默认值,
-            Step 6 就用它),这里先用同一条路径读一遍:exec 失败(缺 pods/exec、kafka-0 未就绪)或判不出即拒绝;再逐组与本机 CLI
-            (-KafkaBootstrap)比对「本 topic 上有没有已提交位点」,不一致(两条路径指向不同的 Kafka)同样拒绝。
-         f. 部署事实与回档工具预检(2026-10-18):一次只读 kubectl 取 zone namespace 里的 go-svc-db-config、go-svc-data-service-config
-            与 db / login Deployment,只折出非机密的拓扑与世代(go/db RedisClient 的实例与 DB、OwnerEpochRedis / Placement.Redis、
-            data-service MappingRedis、Fencing.Mode、db 消费组形状 / 世代 / 分区数、ZoneId、镜像),口令一概不读。逐项核对:
-            ZoneId、TopicGeneration、PartitionCnt 等于本机 go/db/etc/db.yaml(topic 就是按它推导的);db 消费组按 lib ConvertFrom-LiveDbConsumerGroup
-            (k8s_deploy.ps1 判组用的同一份规则)归到四种形状,facts 记 Shape / Group / HandoffFrom,只放行 final(L)、final(Z)、handoff(Z←L)、
-            handoff(L←Z)(L = 本机 db.yaml 的 GroupID 基名,Z = L_z<ZoneId>;本脚本 Step 6 渲染的就是 final(Z),回档过一次的 zone 都是它,
-            回档复核 [0]);-RedisDB 等于 RedisClient.DB、
-            OwnerEpochRedis / Placement.Redis / MappingRedis 与 RedisClient 是同一实例同一 DB(工具的每玩家 Lua 跨这些键原子执行)、
-            -BarrierProtocol legacy 时 Fencing.Mode 必须是 legacy。存为 <报告目录>/deploy-facts.json;同一 rid 重跑而 namespace 已删时复用它,
+         c. 部署事实与回档工具预检(2026-10-18):一次只读 kubectl 取 zone namespace 里的 go-svc-db-config、go-svc-data-service-config
+            与 db / login Deployment,只折出非机密的拓扑(go/db RedisClient 的实例与 DB、Placement.Redis、data-service MappingRedis、
+            ZoneId、镜像),口令一概不读。逐项核对:ZoneId;-RedisDB 等于 RedisClient.DB;
+            Placement.Redis / MappingRedis 与 RedisClient 是同一实例同一 DB(工具的每玩家 Lua 跨这些键原子执行)。
+            存为 <报告目录>/deploy-facts.json;同一 rid 重跑而 namespace 已删时复用它,
             namespace 还在时与存档逐项相同才放行。随后两项身份核对(2026-10-18,回档复核 [4][5]):
-              - Redis 实例:用同一组 -KubeContext / -KubeConfig kubectl exec 进 infra namespace 的 redis-0(口令取 Pod 自己的 REDIS_PASSWORD,
-                不上本机命令行),对 deploy-facts 里 RedisClient 的地址读 INFO server 的 run_id,作为每次工具调用的 -expect-run-id;工具每个模式
-                先读 -redis 的 run_id,不一致即以 3 拒绝 —— -RedisHost(可以是端口转发)与 -KubeContext 由此绑到 go/db 用的同一个实例;
+              - Redis 实例:用同一组 -KubeContext / -KubeConfig kubectl exec 进 infra namespace 的 redis-0(infra namespace 取 dev_tools.ps1 的默认值,
+                Step 6 就用它;口令取 Pod 自己的 REDIS_PASSWORD,不上本机命令行),对 deploy-facts 里 RedisClient 的地址读 INFO server 的 run_id,
+                作为每次工具调用的 -expect-run-id;工具每个模式先读 -redis 的 run_id,不一致即以 3 拒绝 ——
+                -RedisHost(可以是端口转发)与 -KubeContext 由此绑到 go/db 用的同一个实例;
               - 工具版本:<tool> -version 报出的构建提交必须以线上 db 镜像的 tag(git sha)开头,且两边都不是脏树构建;db 镜像以 digest 部署、
                 tag 不是 git sha 时无从核对,同样拒绝。
             然后 <tool> -mode preflight。任一不过即在停服之前拒绝。
       1. `k8s-zone-down -ZoneName <zone>` — stop all writers(删掉整个 zone namespace),随后用 kubectl 确认 namespace 已不存在
          (dev_tools 的 Remove-Zone 允许失败、不报错,不能靠它的退出码判断停服成功)。
       1b. 停服后核对(2026-10-18,只读,先于 PITR;顺序是「先证明没有写者,再取基线」,回档复核 [1]):
-          (i)   zone 组 --state 为 Empty / Dead 或组不存在;legacy 组在本 topic 的行里 CONSUMER-ID 全是 '-';
-          (ii)  隔 -QuiesceSeconds(≥ 300s,不低于 C++ 生产者 librdkafka message.timeout.ms)两次读本 topic 的日志末端,必须完全相同;
-          (iii) <tool> -mode stopped:Redis TIME 下本 topic 没有未过期的 go/db 重试租约(单调时钟截止,缺省 90s)、
-                本 zone 归属玩家没有人仍在别的 zone 在线(陈旧 location 按 merge_zone 的判据剔除,handoff 另等 300s);都过了之后,
-                最后一步写行指纹基线 <报告目录>/fingerprint-baseline.json(phase=stopped)。这时 namespace 已确认删除、两组在本 topic 上
-                没有活跃成员、日志末端不动、租约已过期,zone_<id>_db 不再有写入;以前基线在第 0 步 f(停服前)取,go/db 一直在落存盘,
-                只要 zone 上有玩家活动,停服时的行就与基线不同 —— 没做 PITR 或连错库也会被 4a 当成「有变化」放行;
-          (iv)  打印两组的 LAG,按「zone 组在本 topic 上有位点就用 zone 组,否则用 legacy 组」给出本次将被丢弃的积压条数。
-          任一不过即拒绝:zone 已停服,尚未 PITR,Redis / Kafka 尚未改动;错误文本给出用同一 rid 重跑或放弃(不带 -DbConsumerGroup 的
-          zone-up,见 4a 的中止路径)的做法。
-      2. (已删除,2026-10-15)原来是 zone-down 之后等 Kafka LAG 排空。zone-down 之后本 zone 的 db 已停,LAG 不可能排空,
-         以前必然等满超时再「proceeding anyway」;而 Step 5 把位点拨到日志末端(丢弃积压),排空没有意义。
-         改为第 0 步 c 的只读快照与 Step 1b (iv)。编号 3–7 不变。
+          <tool> -mode stopped:本 zone 归属玩家没有人仍在别的 zone 在线(陈旧 location 不算,handoff 另等 300s);
+          都过了之后,最后一步写行指纹基线 <报告目录>/fingerprint-baseline.json(phase=stopped)。这时 namespace 已确认删除,zone_<id>_db 不再有写入;
+          以前基线在停服前取,go/db 一直在落存盘,只要 zone 上有玩家活动,停服时的行就与基线不同 —— 没做 PITR 或连错库也会被 4a 当成「有变化」放行。
+          不过即拒绝:zone 已停服,尚未 PITR,Redis 尚未改动;错误文本给出用同一 rid 重跑或放弃(按 Step 6 的同一份参数 zone-up)的做法。
+      2. (已删除,2026-10-15)原来是 zone-down 之后等 Kafka LAG 排空。存盘已不经 Kafka,没有积压可等。编号 3–7 不变。
       3. ⚠️ MySQL PITR is NOT automated — print runbook reference and pause
          for confirmation. Operator runs PITR manually, hits ENTER to continue.
-         只回退 zone_<id>_db(及工具预检报告里列出的落点库),不回退全局库(data_service 的 id_segment / player_name / 路由表、guild、
-         mail、收件箱、trade;回退 id_segment 会重复发号);先恢复到影子库再替换,回档前的原库改名保留到 Step 6 冒烟通过。
+         只回退 zone_<id>_db(及工具预检报告里列出的落点库),不回退全局库(data_service 的 player_name / 路由表、guild、
+         mail、收件箱、trade);先恢复到影子库再替换,回档前的原库改名保留到 Step 6 冒烟通过。
          -Apply 带 -SkipMySqlPause 时必须同时给 -PitrRestoredTo(= TargetTime),声明写进报告目录。
       4a. 盘点(只读):<tool> -mode inventory,与 Step 1b 的停服基线比较行指纹(没有任何玩家变化 = 没做 PITR / 恢复到影子库没换回 /
-          连错库,拒绝)。拒绝(在线、落点在别处、合服标记、隔离区冲突、读失败)或盘点出 blocked 玩家时停在这里:
-          Kafka 与 Redis 都还没动,中止路径 = 换回原库 → 不跑 Step 5 / 4b → k8s-zone-up **不带 -DbConsumerGroup**(keep:全新 namespace
-          按 Kafka 位点落回回档前的 final(L) 或 final(Z),两组都有位点时 k8s_deploy.ps1 拒绝并给出收尾命令)。不用 Step 6 的
-          -DbConsumerGroup zone:回档前还在 legacy 组上的 zone 会被渲染成交接形状 handoff(Z←L),db 镜像没有交接闸时 go/db 在
-          conf.MustLoad 拒启,「退路」反而起不来,还顺带改了消费组归属(回档复核 [9])。
-          4a 通过之后、Step 5 之前再复核一次停服状态(只读,回档复核 [8]):namespace 仍不存在(没被 GitOps / CD 重建)、zone 组仍不活跃、
-          legacy 组在本 topic 上仍没有成员。PITR 往往要几个小时,这段时间里写者可能回来;不过即按上面的中止路径拒绝(Kafka 与 Redis 都还没动)。
-      5. Kafka offsets on db_task_zone_<id>[_g<gen>]:zone 组(db_rpc_consumer_group_z<id>,-KafkaGroup 留空即按 go/db/etc/db.yaml 的 GroupID
-         基名推导)拨到日志末端(kafka_offset_reset.ps1 -ToLatest),逐分区复核之后删除 legacy 组(-KafkaLegacyGroup,留空即该基名)在本 topic 上的位点。
-         回档之后该 zone 一律以 zone 组为权威,仍在 legacy 组上的 zone 借此迁到 zone 组(docs/design/db-consumer-group-per-zone.md §6)。
-         legacy 组即使还有别的 zone 的成员,只要没有成员订阅本 topic,broker 就允许删除;仍有订阅者时这一步失败。
-         随后读 zone 组位点作为切点 O(每个分区 CURRENT == LOG-END)存入 <报告目录>/kafka-cut.json。
-         从这一步起没有干净的中止路径(积压已丢弃,原库缺这批写),只能向前:失败时按打印的单步命令用同一 rid 重跑。
-         拨到末端之后为什么不清游标:seq 是 go/db 消费时算的 offset + 1,切点之后的消息 offset ≥ O,旧游标 ≤ O,新写恒大于旧游标;
-         保留游标反而在以后误投递时还能吸收重放。以后再做 -ToDatetime / -ToEarliest 重置不得越过本次的切点(kafka-cut.json),
-         越过即把停服时那批积压重新落库 —— 目前只能靠文档禁止。
+          连错库,拒绝)。拒绝(在线、落点在别处、合服标记、读失败)或盘点出 blocked 玩家时停在这里:
+          Redis 还没动,中止路径 = 换回原库 → 不跑 4b / Step 5 → 按 Step 6 的同一份参数 k8s-zone-up。
+          4a 通过之后、4b 之前再复核一次停服状态(只读,回档复核 [8]):namespace 仍不存在(没被 GitOps / CD 重建)。
+          PITR 往往要几个小时,这段时间里写者可能回来;不过即按上面的中止路径拒绝(Redis 还没动)。
       4b. 丢弃 Redis 里 T 之后的状态:<tool> -mode purge -confirm,判定参数与 4a 同一份(-target-time、-fingerprint-baseline,给了
           -AcknowledgeNoPostTWrites 时连同 -acknowledge-no-post-t-writes;回档复核 [2]),工具内部先原样重跑 4a 的检查,任一不过什么都不写。
-          放在 Step 5 之后(回档丢弃语义对抗复核 [4]):Step 5 记下切点之后,残留写者(他区 scene 保留的实体、晚到的本地队列消息)写进
-          Kafka 的消息越过切点,写进 Redis 的状态由 5b 的 verify 逐个复核已处理玩家的键并重跑盘点归类(回档复核 [6]),都在 Step 6 之前被发现;
-          verify 覆盖不到的写法见 docs/design/zone_data_rollback.md「2026-10-18 修订」的残余风险。同一 rid 续跑的规则见契约。
-      5b. 复核:zone 组每个分区 CURRENT == LOG-END == O(切点之后本 topic 没有新消息),再 <tool> -mode verify(只读)。
+          从这一步起没有干净的中止路径,只能向前:失败时按打印的单步命令用同一 rid 重跑。写进 Redis 的残留状态由 Step 5 的 verify 逐个复核
+          已处理玩家的键并重跑盘点归类(回档复核 [6]),都在 Step 6 之前被发现。同一 rid 续跑的规则见契约。
+      5. 复核:<tool> -mode verify(只读)。
       6. `k8s-zone-up -ZoneName <zone> -ZoneId <id>` — restart zone
-         显式传 -DbConsumerGroup zone:Step 5 之后 zone 组有完整位点、legacy 组在本 topic 上没有位点,k8s_deploy.ps1 的决策表
-         因此落到最终形状(db ConfigMap 写 `GroupID: "<zone 组>"`,不带 GroupHandoffFrom),任何镜像都能起。
          ⚠️ gate 路由模式不粘滞:k8s_deploy.ps1 每次部署都把 -GateRouterMode 原样重写进 gate env
          (默认 "1",turn-based §22 D75),不从集群读回旧值。该 zone 若以 "0" 回退运行,回滚时
          **必须传 -GateRouterMode 0**,否则本步把它静默切回 "1";回退的原因(如路由服不可用)
@@ -165,63 +126,47 @@
       docs/ops/mysql-backup-pitr-runbook.md §4.1 for the procedure.
 
     zone_rollback_discard 契约(go/db/cmd/zone_rollback_discard,尚未落地;落地时以本段为准,改一边必须同步另一边):
-      公共参数(Get-DiscardToolArgs 拼,顺序固定):-deploy-facts <报告目录>/deploy-facts.json -zone <id> -topic-generation <gen>
+      公共参数(Get-DiscardToolArgs 拼,顺序固定):-deploy-facts <报告目录>/deploy-facts.json -zone <id>
         -redis <host:port> -redis-db <n> [-redis-password-env <环境变量名>] -expect-run-id <40 位 hex> -mysql-dsn-env <环境变量名>
-        -rollback-id <rid> -barrier-protocol legacy -report-dir <报告目录> -mode <preflight|stopped|inventory|purge|verify>。
-        口令与 DSN 只从这两个环境变量读,不上命令行、不进报告;topic 名按 go/db 的同一函数由 zone + 世代推导。
-        键名一律由 go/db/internal/kafka 的导出函数生成(工具落地时把 retry_routing.go / retry_ownership.go / key_ordered_consumer.go 里
-        现为包内私有的键名函数与 escapeRedisGlob 导出给工具用,工具里不另拼键名字面量)。
+        -rollback-id <rid> -report-dir <报告目录> -mode <preflight|stopped|inventory|purge|verify>。
+        口令与 DSN 只从这两个环境变量读,不上命令行、不进报告。
+        键名一律由 go/shared 的导出函数生成(shared/playersync、shared/assetop、shared/savebarrier、shared/ownerepoch 等),工具里不另拼键名字面量。
         Redis 实例身份(回档复核 [4]):每个模式开始时先读 -redis 的 INFO server,cluster_enabled 必须为 0,run_id 必须等于 -expect-run-id,
-        否则以 3 拒绝、什么都不写。-expect-run-id 由本脚本第 0 步 f 经 kubectl exec 对线上 go/db RedisClient 的地址读出,
+        否则以 3 拒绝、什么都不写。-expect-run-id 由本脚本第 0 步 c 经 kubectl exec 对线上 go/db RedisClient 的地址读出,
         把 -RedisHost(可以是端口转发)与 -KubeContext 指向的集群绑到同一个实例;deploy-facts 只说明 go/db 用哪个地址,证明不了 -redis 就是它。
       构建身份(回档复核 [5]):只带 -version 时打印恰好两行 commit=<40 位小写 hex> 与 dirty=<true|false> 后以 0 退出,commit 由构建时
-        -ldflags "-X main.buildCommit=…" 嵌入。本脚本第 0 步 f 据此与线上 db 镜像的 tag 比对(Test-DiscardToolMatchesDbImage);
+        -ldflags "-X main.buildCommit=…" 嵌入。本脚本第 0 步 c 据此与线上 db 镜像的 tag 比对(Test-DiscardToolMatchesDbImage);
         preflight 另以同一规则复核 -deploy-facts 的 DbImage,不一致以 3 拒绝(键名与 Lua 契约只对同一提交的 go/db 成立)。
       退出码:0 通过;1 出错(可能只做了一部分,修好后同一 rid 重跑,幂等);3 拒绝(什么都没写);
-        4 目标看起来没在用(只 preflight:本 topic 一个 consumer:applied:<topic>:* 都没有,-allow-empty-target 放行);
+        4 目标看起来没在用(只 preflight:本 zone 归属玩家在 Redis 里一个协调键都没有,-allow-empty-target 放行);
         6 有 blocked 玩家(inventory 即拒绝)。其它值一律按出错处理。
       判定参数(inventory / purge / verify 共用,本脚本只拼一份 $judgeArgs,回档复核 [2]):-target-time <T> -fingerprint-baseline
         <报告目录>/fingerprint-baseline.json [-acknowledge-no-post-t-writes]。三个模式对同一组参数做同一份判定,不各自取舍开关。
-      续跑规则(preflight、purge、verify 与整脚本重跑同一条,回档复核 [3]):进度清单 rollback:quarantine:<zone>:<rid>:manifest 记 rid / zone /
-        topic / 世代,以及每一轮 pass 的序号、起止时刻与分族计数。清单的 rid / zone / topic / 世代与本次一致时,
-        rollback:quarantine:<zone>:<rid>:* 里的内容属于本次续跑,不算冲突;清单缺失却有隔离键,或清单与本次不一致,才算隔离区冲突(3)。
-        隔离键名带轮次:rollback:quarantine:<zone>:<rid>:<pass>:<原键>。每次 purge 在清单里开新一轮(pass 从 1 递增),本轮只改名源键仍在的条目,
-        目标键都带本轮 pass —— 第 2 页失败后同 rid 重跑,已改名的键不在源上、不会重复;5b 发现切点之后又有写入、单独重跑 Step 5 再跑 4b 时,
-        重新长出来的同名源键进下一轮,不撞上一轮的目标。目标键已存在(清单与隔离区不一致)即停,以 1 退出。
-      preflight(停服前,只读):Redis 连得上且确实是 go/db 的库(run_id 见上);本 topic 各族键 TYPE 正确;merge:in_progress / merged_into:<zone>
+      续跑规则(purge、verify 与整脚本重跑同一条,回档复核 [3]):purge 幂等,已处理玩家的键已不在,同一 rid 重跑接着做;
+        purge.json 累计全部轮次,已处理玩家名单是 verify 的输入。
+      preflight(停服前,只读):Redis 连得上且确实是 go/db 的库(run_id 见上);merge:merged_into:<zone>
         不存在、merge:merged_into:* 里 dst = 本 zone 的一律拒绝(T 之后合入本 zone 的玩家会被当成 T 之后建角而清掉,负责人裁决 #6 之前
-        fail-closed);隔离区按续跑规则判定;zone_<id>_db 连得上、SELECT DATABASE() 正确、两张玩家表可读;只靠 Redis 就能判出的拒绝
-        (落点在别处、协议世代与 Redis 内容矛盾、他区在线、隔离区冲突)在这里先判一次。preflight 不取行指纹基线(停服前 go/db 仍在落库,
+        fail-closed);zone_<id>_db 连得上、SELECT DATABASE() 正确、player_store 表可读;只靠 Redis 就能判出的拒绝
+        (落点在别处、他区在线)在这里先判一次。preflight 不取行指纹基线(停服前 go/db 仍在落库,
         那时的基线没有意义,回档复核 [1])。zone 维护围栏(负责人裁决 #1)落地之前必须以 3 拒绝。
-      stopped(停服后,-lease-wait / -handoff-wait / -fingerprint-baseline):scene_nodes:zone:<zone>:load 为空;本 topic 的 kafka:retry:instances
-        没有未过期租约(-lease-wait,单调时钟截止);player:<id>:location 按 tools/merge_zone/scene_hot_state.go 的判据区分陈旧与他区在线,
+      stopped(停服后,-handoff-wait / -fingerprint-baseline):scene_nodes:zone:<zone>:load 为空;
+        player:<id>:location 要区分陈旧与他区在线(判据随工具落地一起定),
         只看 home = 本 zone 的成员,他区在线即拒绝;handoff 另按 -handoff-wait(≥ HandoffTTL 300s)等待。以上都过了之后,最后一步把受影响玩家
-        两表的行指纹基线写进 -fingerprint-baseline,文件里记 phase=stopped、rid、zone、取样时刻(Redis TIME 与 UTC)。本脚本保证调用它时
-        namespace 已确认删除、两组在本 topic 上没有活跃成员、日志末端两次读数相同。同一 rid 已有 phase=stopped 的基线时不覆盖
+        player_store 的行指纹基线写进 -fingerprint-baseline,文件里记 phase=stopped、rid、zone、取样时刻(Redis TIME 与 UTC)。本脚本保证调用它时
+        namespace 已确认删除。同一 rid 已有 phase=stopped 的基线时不覆盖
         (PITR 之后整脚本重跑仍要与停服时的基线比较);已有文件但 phase 不是 stopped、rid / zone 不同或格式不对,以 3 拒绝。
-      inventory(PITR 之后,只读,判定参数 + -report):读 -fingerprint-baseline(缺失、phase 不是 stopped 即 3),重算两表行指纹,
+      inventory(PITR 之后,只读,判定参数 + -report):读 -fingerprint-baseline(缺失、phase 不是 stopped 即 3),重算行指纹,
         与停服基线相比没有任何玩家变化即拒绝(没做 PITR、恢复到影子库没换回或连错库),除非 -acknowledge-no-post-t-writes;
         归类表穷举,兜底项 unclassified 按 blocked 处理;post_t_candidate / home_elsewhere 占比超过阈值即拒绝。
       purge(判定参数 + -confirm / -report,回档复核 [7]):先原样重跑 inventory 的全部前置检查与判定(同一组判定参数),任一不过即 3、什么都不写。
-        删除范围只限本 topic、本 zone:
-          - SCAN 的 MATCH 一律是 escapeRedisGlob(<含 topic 的键前缀>) + 边界 + '*',边界紧跟 topic:按实例 / 按键的族是 ':',按分区 ready 是 ':p'
-            (go/db retry_routing.go 的 retryPartitionReadyKeyPrefix 同一口径);只认前缀逐字相同、topic 后紧跟边界的键,
-            db_task_zone_1 不得命中 db_task_zone_11 / db_task_zone_1_g2,topic 里的 glob 元字符按字面匹配;SCAN 循环到 cursor = 0;
-          - 本 topic 的重试收据(共享 ready、按分区 ready、processing、实例登记)与死信 RENAMENX 进 rollback:quarantine:<zone>:<rid>:<pass>:<原键>
-            (改名与 PEXPIRE 同一段 Lua),guard 键 UNLINK;
-          - 每玩家一段 Lua(白名单:home = 本 zone 且落点 = zone_<id>_db,KEYS 带映射与落点并原子复核)删除父快照、子表缓存、sync_digest、
-            资产提交证据与屏障,ZREM 本人的补投索引;-barrier-protocol legacy 时绝不写 save_barrier;绝不碰 consumer:applied*、映射、account:*;
-          - 任何一页 SCAN、任何一段 Lua 出错即停止,以 1 退出;停止时与正常结束时都把分族计数(每族 quarantined / unlinked,玩家 processed /
-            skipped)打印到 stdout 并写进 -report(purge.json)。purge.json 与清单累计全部轮次,已处理玩家名单是 verify 的输入。
-      verify(判定参数 + -kafka-cut / -purge-report / -report,只读,回档复核 [6]):
-          - 本 topic 各族为 0(同一 MATCH 规则)、64 个补投桶为空、没有存活租约;
-          - 逐个复核 -purge-report(全部轮次累计,须与清单一致)列为已处理的玩家:父快照、子表缓存、sync_digest、资产提交证据仍不存在,
-            legacy 协议下 save_barrier 同样不存在,补投桶里没有其成员;
-          - 用同一组判定参数对本 zone 归属玩家重跑 inventory 的归类:出现任何仍需丢弃的 T 之后状态或 blocked 玩家;
-          - 分页 SCAN consumer:applied:<topic>:*(同一 MATCH 规则),各分区最大 seq 不大于切点(否则 offset 回退过,新存盘会被判陈旧,须换世代)。
+        删除范围只限本 zone:每玩家一段 Lua(白名单:home = 本 zone 且落点 = zone_<id>_db,KEYS 带映射与落点并原子复核)删除
+        sync_digest 与资产提交证据;绝不写 save_barrier(只剩交接资格 handoff_fence),绝不碰 owner_epoch、映射、account:*;
+        任何一段 Lua 出错即停止,以 1 退出;停止时与正常结束时都把计数(玩家 processed / skipped)打印到 stdout 并写进 -report(purge.json)。
+      verify(判定参数 + -purge-report / -report,只读,回档复核 [6]):
+          - 逐个复核 -purge-report(全部轮次累计)列为已处理的玩家:sync_digest、资产提交证据仍不存在;
+          - 用同一组判定参数对本 zone 归属玩家重跑 inventory 的归类:出现任何仍需丢弃的 T 之后状态或 blocked 玩家。
         任一项不过即 3,本脚本在 Step 6 之前拒绝。
-      工具自己的测试至少覆盖:db_task_zone_1 与 db_task_zone_11、db_task_zone_1_g2 的键并存;topic 含 glob 元字符;SCAN 第 2 页失败
-        (退出 1、分族计数正确、同 rid 重跑结果一致);第一次 purge 完成后源键又出现(同 rid 再跑 purge 成功,新条目进下一轮 pass);
+      工具自己的测试至少覆盖:某段 Lua 失败(退出 1、计数正确、同 rid 重跑结果一致);
         -expect-run-id 不一致;-version 的输出格式;stopped 已有非 stopped 阶段的基线。
 
 .EXAMPLE
@@ -241,8 +186,6 @@
         -RedisHost 127.0.0.1 -RedisPort 6379 -RedisDB 0 -RedisPasswordEnv MMORPG_ROLLBACK_REDIS_PASSWORD `
         -MySqlDsnEnv MMORPG_ROLLBACK_MYSQL_DSN `
         -RollbackDiscardTool <与线上 go/db 同一提交构建的 zone_rollback_discard> `
-        -BarrierProtocol legacy `
-        -KafkaBootstrap kafka:9092 `
         -Apply
 
 .EXAMPLE
@@ -254,8 +197,7 @@
         -TargetTime "2026-05-15T14:23:00Z" `
         -NodeImage ghcr.io/luyuancpp/mmorpg-node:<回滚目标 sha> `
         -RedisHost 127.0.0.1 -MySqlDsnEnv MMORPG_ROLLBACK_MYSQL_DSN `
-        -RollbackDiscardTool <zone_rollback_discard> -BarrierProtocol legacy `
-        -KafkaBootstrap kafka:9092 `
+        -RollbackDiscardTool <zone_rollback_discard> `
         -GateRouterMode 0 `
         -Apply
 
@@ -271,7 +213,7 @@
         -ClientEntryMode external -GateServiceType NodePort -GateNodePortBase 30100 -ClientPublicHost 203.0.113.10 `
         -GatewayIngressHost gateway.test1.example.com -GatewayTrustedProxies 10.244.0.0/16 `
         -RedisHost 127.0.0.1 -RedisPasswordEnv MMORPG_ROLLBACK_REDIS_PASSWORD -MySqlDsnEnv MMORPG_ROLLBACK_MYSQL_DSN `
-        -RollbackDiscardTool <zone_rollback_discard> -BarrierProtocol legacy `
+        -RollbackDiscardTool <zone_rollback_discard> `
         -Apply
 #>
 param(
@@ -287,8 +229,8 @@ param(
 
     # go/db 的共享 Redis(go/db 的 ServerConfig.RedisClient;K8s 即 infra redis 的 DB 0,本机即唯一的那个 Redis)。
     # 回档工具在这里盘点并丢弃 T 之后的状态,不做 FLUSHDB。-Apply 必填,不按 db.yaml 缺省的 127.0.0.1 补;
-    # 可以是端口转发地址:实例身份由第 0 步 f 经 kubectl exec 读出线上 go/db RedisClient 的 run_id,工具每个模式按 -expect-run-id 核对
-    # (不一致即拒,回档复核 [4]);-RedisDB 由第 0 步 f 与线上 RedisClient.DB 核对。
+    # 可以是端口转发地址:实例身份由第 0 步 c 经 kubectl exec 读出线上 go/db RedisClient 的 run_id,工具每个模式按 -expect-run-id 核对
+    # (不一致即拒,回档复核 [4]);-RedisDB 由第 0 步 c 与线上 RedisClient.DB 核对。
     [string]$RedisHost = "",
     [string]$RedisPort = "6379",
     # Redis 口令所在的环境变量名(不是口令本身):原样交给工具的 -redis-password-env,本脚本不读口令值、不上命令行、不打印。
@@ -297,23 +239,6 @@ param(
     # 已废弃(2026-10-18,回档丢弃语义对抗复核 [12]):口令经命令行会进进程列表与 shell 历史。传了即在入口拒绝,改用 -RedisPasswordEnv。
     [string]$RedisPassword = "",
     [int]$RedisDB = 0,
-
-    # Kafka cluster bootstrap.
-    [string]$KafkaBootstrap = "kafka:9092",
-    # 留空 = 按 -ZoneId 与 go/db/etc/db.yaml 的 ServerConfig.Kafka.TopicGeneration 推导(lib Get-DbTaskTopicName:
-    # 世代 ≤ 1 为 db_task_zone_<id>,否则 db_task_zone_<id>_g<gen>;与 go/db DbTaskTopicForGeneration、go/login 同规则,
-    # 也与 Step 6 的 k8s_deploy.ps1 Initialize-DbConsumerGroupPlans 读的是同一个键)。
-    # 旧默认值 "db_task_topic" 是个**全仓不存在的 topic** —— offset reset 会「成功」地
-    # 重置一个空 topic，回滚后 go/db 照样重放目标时间点之后的写入。
-    # 显式给了却与推导值不同即在入口拒绝(2026-10-17,R7 复核 [6]):Step 6 只按 db.yaml 的世代号读 topic,
-    # 第 0 步 d 与 Step 5 改的若是另一个 topic,真实 topic 上的位点根本没动,而全程没有任何报错。
-    [string]$KafkaTopic = "",
-    # go/db 存盘消费组(docs/design/db-consumer-group-per-zone.md)。留空 = 按 go/db/etc/db.yaml 的
-    # ServerConfig.Kafka.GroupID 基名推导:-KafkaGroup 为 <基名>_z<ZoneId>(回档后的权威组,Step 5 重置它),
-    # -KafkaLegacyGroup 为 <基名>(K8s 上全 zone 共用的旧组,Step 5 删除它在本 topic 上的位点)。两者相同时入口即拒。
-    # 以前缺省是 legacy 组:只要别的 zone 在线,它就不是 Empty,Step 5 的重置一定被 Kafka 拒绝。
-    [string]$KafkaGroup = "",
-    [string]$KafkaLegacyGroup = "",
 
     # Zone restart args.
     #
@@ -348,7 +273,7 @@ param(
     # 默认值只留在 k8s_deploy.ps1 一处,非空才透传。Step 6 只跑 zone-up,只影响本 zone 的 gate / scene,不碰 battle 全局池。
     # ⚠ 不粘滞,回档场景后果更重:Step 1 删掉整个 zone namespace,Step 6 只按本次参数重建。该 zone 若因节点池 nofile 硬限不够而以 warn
     # 运行,回滚时漏传就落回 enforce,gate / scene 在 Step 6 拒启(CrashLoop,-WaitReady 失败并打出 "FATAL open file limit" 行)——
-    # 那时 zone 已停服、MySQL 已回档、Step 5 已丢弃积压,没有干净的中止路径,只能在失败提示给出的 Step 6 单步命令里补上
+    # 那时 zone 已停服、MySQL 已回档、Step 4b 已处置 Redis,没有干净的中止路径,只能在失败提示给出的 Step 6 单步命令里补上
     # -NodeOpenFileLimitMode warn 单独重跑。所以留空时 -Apply 由第 0 步 a 兜底(2026-10-22):同一次 kubectl 读 gate 与 scene 的模板
     # (集群装了 Agones 时另读 scene Fleet),任一个的 NODE_OPEN_FILE_LIMIT_MODE 折算成 warn、或判不出(没有 gate、kubectl / Agones 探测失败),
     # 都在 Step 1 停服之前拒绝:带 warn 时报错给出照传的 -NodeOpenFileLimitMode warn,判不出时要求确认后显式传 warn 或 enforce;
@@ -438,42 +363,31 @@ param(
     [string]$KubeConfig = "",
 
     # Skip the manual MySQL prompt (use only when PITR was done OOB earlier).
-    # -Apply 下必须同时给 -PitrRestoredTo:跳过暂停而 PITR 其实没做(或恢复到了影子库没换回来)时,工具会把 T 之后的库当成回档后的库处置,
-    # 积压却已在 Step 5 丢弃(回档丢弃语义对抗复核 [5])。
+    # -Apply 下必须同时给 -PitrRestoredTo:跳过暂停而 PITR 其实没做(或恢复到了影子库没换回来)时,工具会把 T 之后的库当成回档后的库处置
+    # (回档丢弃语义对抗复核 [5])。
     [switch]$SkipMySqlPause,
     # 操作者声明的 PITR 恢复时刻,格式同 -TargetTime,给了就必须等于 -TargetTime;写进报告目录的运行记录。
     [string]$PitrRestoredTo = "",
 
-    # 已废弃(2026-10-18):回档不再 FLUSHDB(go/db 游标、重试收据、映射、账号目录与各 zone 缓存同在一个 Redis DB,FLUSHDB 等于事故)。
+    # 已废弃(2026-10-18):回档不再 FLUSHDB(归属与位置键、交接标记、路由映射与账号目录同在一个 Redis DB,FLUSHDB 等于事故)。
     # 传了即在入口拒绝;整套环境重建走 AGENTS.md §6.2。
     [switch]$ConfirmFlushSharedRedis,
 
     # 回档工具:go/db/cmd/zone_rollback_discard 的预编译可执行文件,必须与线上 go/db 同一提交构建(回档丢弃语义对抗复核 [9]:
     # 不现场 go build —— 本地工作区未必是线上镜像的提交,键名与 Lua 契约可能对不上,运维机上也未必有 Go 工具链)。
-    # 同一提交由第 0 步 f 机械核对(回档复核 [5]):<tool> -version 的构建提交必须以线上 db 镜像的 tag 开头、两边都不是脏树构建,否则停服之前拒绝。
+    # 同一提交由第 0 步 c 机械核对(回档复核 [5]):<tool> -version 的构建提交必须以线上 db 镜像的 tag 开头、两边都不是脏树构建,否则停服之前拒绝。
     # -Apply 必填;工具契约见文件头。工具尚未落地,在它落地之前 -Apply 停在入口校验。
     [string]$RollbackDiscardTool = "",
     # zone_<id>_db 的 MySQL DSN 所在的环境变量名(不是 DSN 本身)。-Apply 必填且该变量必须非空;原样交给工具的 -mysql-dsn-env。
     [string]$MySqlDsnEnv = "",
-    # 存盘提交屏障的协议世代。-Apply 必填。legacy:线上 go/db 的 Fencing.Mode 为 legacy(不写两表 SQL ACK、不补投),工具绝不写 save_barrier;
-    # 第 0 步 f 核对它与线上 go-svc-db-config 的 Fencing.Mode 一致。legacy 只与尚未升级到严格提交屏障的旧 scene / login 同世代:
-    # 现行 scene / login 只说严格屏障,go/db 缺省 dual,且 legacy go/db 在本 zone 有世代标记 db:save_protocol:zone:<id> 或补投桶非空时拒启
-    # (2026-10-18 存盘协议世代门禁)。strict 待负责人裁决(#3:回档工具对该世代的屏障重建未定),传了即在入口拒绝;
-    # 所以按现行代码部署的 zone 在裁决之前不能执行 -Apply。
-    [ValidateSet("", "legacy", "strict")]
-    [string]$BarrierProtocol = "",
-    # 本次回档的 id:进隔离区键名 rollback:quarantine:<zone>:<rid>:* 与报告目录 run/logs/zone-rollback/<rid>/。
+    # 本次回档的 id:进报告目录 run/logs/zone-rollback/<rid>/,工具按它续跑。
     # 留空 = z<ZoneId>-<TargetTime 紧凑格式>-<当前 UTC 紧凑格式>;整脚本重跑或单步重跑必须传上一次打印的同一个值。只允许 [A-Za-z0-9_-]。
     [string]$RollbackId = "",
-    # Step 1b 两次读日志末端的间隔(秒)。下限 300 = C++ 生产者 librdkafka message.timeout.ms 的缺省值(本仓未覆盖,
-    # 见 cpp/libs/engine/infra/messaging/kafka/kafka_producer.cpp):停服前已进本地队列的消息最晚在这之后才到 broker。
-    [ValidateRange(300, 86400)]
-    [int]$QuiesceSeconds = 300,
-    # 带 blocked 玩家(torn / owner_behind / post_t_candidate / legacy_owned / unclassified)继续回档:这些玩家的缓存与屏障是隔离保留还是删除、
-    # T 之后建的角色能否以空骨架继续用,待负责人裁决(#4)。传了即在入口拒绝;4a 盘点出 blocked 时回档停在 Step 5 之前。
+    # 带 blocked 玩家(torn / owner_behind / post_t_candidate / legacy_owned / unclassified)继续回档:这些玩家的同步摘要、交接资格与资产证据是保留还是删除、
+    # T 之后建的角色能否以空骨架继续用,待负责人裁决(#4)。传了即在入口拒绝;4a 盘点出 blocked 时回档停在 Step 4b 之前。
     [ValidateRange(0, 2147483647)]
     [int]$AcceptBlockedPlayers = 0,
-    # 交给工具 preflight 的 -allow-empty-target:目标 Redis 里本 topic 一个已落库游标都没有(工具退出码 4)时仍放行。
+    # 交给工具 preflight 的 -allow-empty-target:目标 Redis 里本 zone 归属玩家一个协调键都没有(工具退出码 4)时仍放行。
     # 只用于从未落过库的新 zone;平时它说明 -RedisHost / -RedisDB 指错了实例。
     [switch]$AllowEmptyTarget,
     # 交给工具的 -acknowledge-no-post-t-writes:Step 1b 停服基线与 PITR 之后的行指纹没有任何玩家变化(工具判为没做 PITR 或连错库)时仍放行。
@@ -485,7 +399,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# topic 名必须与 go/db 实际消费的一致,否则第 5 步会「成功」重置一个不存在的 topic;推导在入口读 db.yaml 之后(见 TopicGeneration 那段)。
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 
@@ -493,13 +406,10 @@ $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 # 只为 Get-GateAddressHint 取 Get-ClientEntryContract(gate 生成器内部 env 名与端口模式取值的唯一来源);
 # 该库只定义函数、不读脚本级变量、不设 StrictMode,dot-source 无副作用。
 . (Join-Path $ScriptDir "lib\k8s_client_entry.ps1")
-# 第 0 步 c / d 解析 kafka-consumer-groups --describe 用(与 kafka_offset_reset.ps1、k8s_deploy.ps1 同一份规则);
-# 纯函数库,dot-source 无副作用。
-. (Join-Path $ScriptDir "lib" "kafka_consumer_groups.ps1")
 
 <#
 .SYNOPSIS
-    读部署脚本(k8s_deploy.ps1;第 0 步 e 另读 dev_tools.ps1 的 -InfraNamespace)参数块里若干参数的默认值,
+    读部署脚本(k8s_deploy.ps1;第 0 步 c 另读 dev_tools.ps1 的 -InfraNamespace)参数块里若干参数的默认值,
     返回 @{ 参数名 = 默认值 | $null };某项不是字符串字面常量或读不到时为 $null。
 
 .DESCRIPTION
@@ -927,7 +837,7 @@ function Get-ClusterZoneEntryState {
         读得到且确实没有才放行;namespace 里一个 gate 都没有时判不出(见 Get-ClusterZoneEntryState)。
       - nofile 模式(B0-4,2026-10-22):留空 = Step 6 按 k8s_deploy.ps1 -NodeOpenFileLimitMode 默认值重建 gate / scene
         (空串 = 不写 env,进程按 enforce)。以 warn 运行的 zone 落回 enforce 后,节点池 nofile 硬限仍不够时 gate / scene 在 Step 6 拒启,
-        那时已停服、已回档、Step 5 已丢弃积压。与默认值折算出的模式一致才放行,判不出同样拒绝。
+        那时已停服、已回档、Redis 已处置。与默认值折算出的模式一致才放行,判不出同样拒绝。
     拒绝发生在 Step 1 之前,此时没有任何改动;操作者确认后显式传参重跑即可(Ingress 的显式决定是 -GatewayIngressHost 或
     -ConfirmNoGatewayIngress)。显式给了的项不传对应开关,不在这里核对。
 #>
@@ -1010,7 +920,7 @@ function Assert-ZoneEntryKeptOnRollback {
             else { '请确认该 zone 应以哪种模式拉起,显式传 -NodeOpenFileLimitMode warn 或 -NodeOpenFileLimitMode enforce。' }
             $problems += ("nofile 豁免:未传 -NodeOpenFileLimitMode 时 Step 6 按 k8s_deploy.ps1 默认值 $defaultText 重建 gate / scene," +
                 "而它们当前为 $clusterText($($State.OpenFileLimitDetail))。两者不一致或判不出时留空可能把 nofile 模式静默翻转" +
-                "(以 warn 运行的 zone 落回 enforce,节点池 nofile 硬限仍不够时 gate / scene 在 Step 6 拒启,那时已停服、已回档、积压已丢弃," +
+                "(以 warn 运行的 zone 落回 enforce,节点池 nofile 硬限仍不够时 gate / scene 在 Step 6 拒启,那时已停服、已回档、Redis 已处置," +
                 "只能补上参数单独重跑 Step 6)。" + $keep)
         }
     }
@@ -1199,8 +1109,7 @@ function Invoke-ZoneUpStaticPreflight {
     把 -TargetTime / -PitrRestoredTo 解析成 UTC [DateTime];不是 yyyy-MM-ddTHH:mm:ss[.f{1,3}]Z 即 throw(入口校验 E1)。纯函数。
 
 .DESCRIPTION
-    Step 5 改成 -ToLatest 之后,Kafka 不再顺带校验 TargetTime(以前 --to-datetime 解析不了会报错),而 Step 3 的 PITR 命令、
-    工具 inventory 与回档报告都以它为准。只收带 Z 的 UTC 写法:空格分隔、时区偏移(+08:00)这类写法在 PITR 时最容易换算错,一律拒绝。
+    Step 3 的 PITR 命令、工具 inventory 与回档报告都以 TargetTime 为准。只收带 Z 的 UTC 写法:空格分隔、时区偏移(+08:00)这类写法在 PITR 时最容易换算错,一律拒绝。
     ParseExact 用 InvariantCulture 与 AssumeUniversal | AdjustToUniversal,结果 Kind = Utc。
 #>
 function ConvertFrom-RollbackUtcTime {
@@ -1291,7 +1200,7 @@ function Get-DiscardToolExitMeaning {
         0 { return '通过' }
         1 { return '出错(可能只做了一部分;修好后用同一 rid 重跑,幂等)' }
         3 { return '拒绝(什么都没写)' }
-        4 { return '目标看起来没在用(本 topic 一个已落库游标都没有;-RedisHost / -RedisDB 多半指错了实例)' }
+        4 { return '目标看起来没在用(本 zone 归属玩家一个协调键都没有;-RedisHost / -RedisDB 多半指错了实例)' }
         6 { return '有 blocked 玩家' }
         default { return '契约之外的退出码,按出错处理' }
     }
@@ -1332,7 +1241,7 @@ function Invoke-DiscardTool {
 
 <#
 .SYNOPSIS
-    第 0 步 f 的 kubectl 参数(只读):zone namespace 里 go/db 与 data-service 的 ConfigMap、db 与 login 的 Deployment。dry-run 打印的就是这一份。
+    第 0 步 c 的 kubectl 参数(只读):zone namespace 里 go/db 与 data-service 的 ConfigMap、db 与 login 的 Deployment。dry-run 打印的就是这一份。
 
 .DESCRIPTION
     ConfigMap 名与数据键同 k8s_deploy.ps1 的 $GoSvcCatalogue(db → go-svc-db-config / db.yaml,data-service → go-svc-data-service-config /
@@ -1348,29 +1257,21 @@ function Get-DeploySnapshotKubectlArgs {
 
 <#
 .SYNOPSIS
-    把第 0 步 f 那次 kubectl 的 JSON 输出折成非机密的部署事实 [pscustomobject](纯函数);输出为空(namespace 已删)返回 $null,
+    把第 0 步 c 那次 kubectl 的 JSON 输出折成非机密的部署事实 [pscustomobject](纯函数);输出为空(namespace 已删)返回 $null,
     必需项读不出即 throw。
 
 .DESCRIPTION
     只取白名单里的键,口令(RedisClient.Password、MySQL DSN 等)一律不读,结果可以落盘进报告目录、交给回档工具(-deploy-facts)。
-      - go-svc-db-config 的 data.db.yaml:ZoneId、ServerConfig.RedisClient.Hosts / DB(DB 缺省 0)、ServerConfig.OwnerEpochRedis.Hosts / DB、
-        Placement.Redis.Hosts / DB(两段缺省 = 复用 RedisClient,记为 $null)、ServerConfig.Fencing.Mode(整段缺省 = dual,与 go/db 的
-        FencingConfig.EffectiveMode 同口径;2026-10-18 之前缺省 legacy)、
-        ServerConfig.Kafka.TopicGeneration / PartitionCnt,以及 db 消费组的形状 KafkaGroup = { Shape; Group; HandoffFrom; Detail }:
-        按 lib ConvertFrom-LiveDbConsumerGroup(k8s_deploy.ps1 判组的同一份规则)归到 final(G) / handoff(X←Y),-LegacyGroup / -ZoneGroup 即 L / Z。
-        归不进四种形状时不 throw,记 Shape = 'unrecognized' 与原因(Detail),由 Get-DeployFactsProblems 拒绝 —— 线上 GroupID 只在 final(L) 下等于基名,
-        final(Z) 写的是 L_z<id>,交接形状根本不写 GroupID,以前拿 GroupID 原值比基名,切到 zone 组的 zone(包括回档过一次的)一律被拒(回档复核 [0]);
+      - go-svc-db-config 的 data.db.yaml:ZoneId、ServerConfig.RedisClient.Hosts / DB(DB 缺省 0)、Placement.Redis.Hosts / DB(缺省 = 复用 RedisClient,记为 $null);
       - go-svc-data-service-config 的 data.data_service.yaml:MappingRedis.Host(go-zero 的 redis 配置,固定 DB 0);
-      - db Deployment 里名为 db 的容器镜像(必需,第 0 步 f 据它核对回档工具的构建提交);login Deployment 里名为 login 的容器镜像(只记录,可缺)。
+      - db Deployment 里名为 db 的容器镜像(必需,第 0 步 c 据它核对回档工具的构建提交);login Deployment 里名为 login 的容器镜像(只记录,可缺)。
     有输出但两份 ConfigMap 缺任一、缺数据键、缺 db 镜像,都 throw:namespace 还在却读不全,说明不是本仓生成的形状,不猜。
-    Schema 2(2026-10-18):KafkaGroupBase 换成 KafkaGroup;Schema 1 的存档与现读必然不同,同一 rid 重跑时按「部署事实与存档不同」拒绝。
+    Schema 3(2026-10-30):存盘不再经 Kafka、go/db 没有 Fencing 与 OwnerEpochRedis 配置,对应字段删除;更早的存档与现读必然不同,同一 rid 重跑时按「部署事实与存档不同」拒绝。
 #>
 function ConvertFrom-ZoneDeploySnapshot {
     param(
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Json,
-        [Parameter(Mandatory = $true)][string]$Namespace,
-        [Parameter(Mandatory = $true)][string]$LegacyGroup,
-        [Parameter(Mandatory = $true)][string]$ZoneGroup
+        [Parameter(Mandatory = $true)][string]$Namespace
     )
 
     if ([string]::IsNullOrWhiteSpace($Json)) { return $null }
@@ -1378,7 +1279,7 @@ function ConvertFrom-ZoneDeploySnapshot {
         $document = $Json | ConvertFrom-Json -ErrorAction Stop
     }
     catch {
-        throw "第 0 步 f 的 kubectl 输出不是合法的 JSON(namespace $Namespace):$($_.Exception.Message)"
+        throw "第 0 步 c 的 kubectl 输出不是合法的 JSON(namespace $Namespace):$($_.Exception.Message)"
     }
     $items = if ($document.kind -eq 'List') { @($document.items) } else { @($document) }
     $items = @($items | Where-Object { $null -ne $_ })
@@ -1418,98 +1319,42 @@ function ConvertFrom-ZoneDeploySnapshot {
         return [pscustomobject][ordered]@{ Hosts = $hosts; DB = (& $scalar $Map "$Prefix.DB" '0') }
     }
 
-    $dbFile = & $readConfigMapFile 'go-svc-db-config' 'db.yaml'
-    $db = $dbFile.Scalars
+    $db = (& $readConfigMapFile 'go-svc-db-config' 'db.yaml').Scalars
     $dataService = (& $readConfigMapFile 'go-svc-data-service-config' 'data_service.yaml').Scalars
-    try {
-        $liveGroup = ConvertFrom-LiveDbConsumerGroup -DbYaml $dbFile.Text -LegacyGroup $LegacyGroup -ZoneGroup $ZoneGroup
-        $kafkaGroup = [pscustomobject][ordered]@{ Shape = $liveGroup.Shape; Group = $liveGroup.Group; HandoffFrom = $liveGroup.HandoffFrom; Detail = '' }
-    }
-    catch {
-        $kafkaGroup = [pscustomobject][ordered]@{ Shape = 'unrecognized'; Group = ''; HandoffFrom = ''; Detail = $_.Exception.Message }
-    }
     return [pscustomobject][ordered]@{
-        Schema               = 2
-        Namespace            = $Namespace
-        ZoneId               = (& $scalar $db 'ZoneId')
-        FencingMode          = (& $scalar $db 'ServerConfig.Fencing.Mode' 'dual')
-        Redis                = (& $redisSection $db 'ServerConfig.RedisClient')
-        OwnerEpochRedis      = (& $redisSection $db 'ServerConfig.OwnerEpochRedis')
-        PlacementRedis       = (& $redisSection $db 'Placement.Redis')
-        MappingRedisHost     = (& $scalar $dataService 'MappingRedis.Host')
-        KafkaGroup           = $kafkaGroup
-        KafkaTopicGeneration = (& $scalar $db 'ServerConfig.Kafka.TopicGeneration')
-        KafkaPartitionCnt    = (& $scalar $db 'ServerConfig.Kafka.PartitionCnt')
-        DbImage              = (& $readImage 'db' -Required)
-        LoginImage           = (& $readImage 'login')
+        Schema           = 3
+        Namespace        = $Namespace
+        ZoneId           = (& $scalar $db 'ZoneId')
+        Redis            = (& $redisSection $db 'ServerConfig.RedisClient')
+        PlacementRedis   = (& $redisSection $db 'Placement.Redis')
+        MappingRedisHost = (& $scalar $dataService 'MappingRedis.Host')
+        DbImage          = (& $readImage 'db' -Required)
+        LoginImage       = (& $readImage 'login')
     }
 }
 
 <#
 .SYNOPSIS
-    部署事实与本次参数、本机 go/db/etc/db.yaml 的逐项核对(纯函数),返回问题列表 [string[]];空表示放行。
+    部署事实与本次参数的逐项核对(纯函数),返回问题列表 [string[]];空表示放行。
 
 .DESCRIPTION
-      - ZoneId 必须等于 -ZoneId;Kafka 世代 / 分区数必须等于本机 db.yaml(topic 是按本机 db.yaml 推导的,
-        线上与之不同时第 0 步 c–e 与 Step 5 改的不是线上在用的 topic);
-      - db 消费组形状(回档复核 [0]):L = -LocalGroupBase(本机 db.yaml 的 GroupID 基名),Z = L_z<ZoneId>。只放行 final(L)、final(Z)、
-        handoff(Z←L)、handoff(L←Z) —— 与 k8s_deploy.ps1 生成与认定的四种形状相同;Shape 为 unrecognized(ConvertFrom-ZoneDeploySnapshot
-        归不进四种形状)或组名不属于 {L, Z} 都拒绝。存档经 JSON 往返后在这里按本机 L / Z 再判一次,不信存档里的结论;
+      - ZoneId 必须等于 -ZoneId;
       - RedisClient.Hosts 必须是单个 host:port(工具的每玩家 Lua 跨键原子执行,不支持 Cluster),DB 必须等于 -RedisDB;
         主机名不在这里比对:-RedisHost 可以是端口转发地址,实例身份由 run_id 核对(Read-GoDbRedisRunId → 工具的 -expect-run-id,回档复核 [4]);
-      - OwnerEpochRedis / Placement.Redis 要么缺省(复用 RedisClient),要么与 RedisClient 同 Hosts 同 DB;
+      - Placement.Redis 要么缺省(复用 RedisClient),要么与 RedisClient 同 Hosts 同 DB;
         data-service 的 MappingRedis.Host 必须等于 RedisClient.Hosts 且 RedisClient.DB 为 0(MappingRedis 固定 DB 0)——
-        映射、落点、归属计数器与缓存不在同一实例同一 DB 时,工具做不到「校验与删除在同一段 Lua 里」,只能拒绝(对抗复核 [1][9]);
-      - -BarrierProtocol legacy 时 Fencing.Mode 必须是 legacy(大小写不敏感):dual 下 go/db 写提交屏障 ACK、saveoutbox 在跑,
-        那是严格屏障世代,回档工具对它的处置待负责人裁决 #3。
+        映射、落点与协调键不在同一实例同一 DB 时,工具做不到「校验与删除在同一段 Lua 里」,只能拒绝(对抗复核 [1][9])。
 #>
 function Get-DeployFactsProblems {
     param(
         [Parameter(Mandatory = $true)]$Facts,
         [Parameter(Mandatory = $true)][int]$ZoneId,
-        [Parameter(Mandatory = $true)][int]$RedisDB,
-        [Parameter(Mandatory = $true)][string]$BarrierProtocol,
-        [Parameter(Mandatory = $true)][string]$LocalGroupBase,
-        [Parameter(Mandatory = $true)][int]$LocalTopicGeneration,
-        [Parameter(Mandatory = $true)][int]$LocalPartitionCnt
+        [Parameter(Mandatory = $true)][int]$RedisDB
     )
 
     $problems = [System.Collections.Generic.List[string]]::new()
     if ([string]$Facts.ZoneId -ne "$ZoneId") {
         $problems.Add("线上 go-svc-db-config 的 ZoneId 是 '$($Facts.ZoneId)',不是 -ZoneId $ZoneId(namespace 指错了 zone?)")
-    }
-    foreach ($pair in @(
-            @{ Name = 'ServerConfig.Kafka.TopicGeneration'; Live = [string]$Facts.KafkaTopicGeneration; Local = "$LocalTopicGeneration" },
-            @{ Name = 'ServerConfig.Kafka.PartitionCnt'; Live = [string]$Facts.KafkaPartitionCnt; Local = "$LocalPartitionCnt" })) {
-        if ($pair.Live -cne $pair.Local) {
-            $problems.Add("线上 $($pair.Name) 是 '$($pair.Live)',本机 go/db/etc/db.yaml 是 '$($pair.Local)':topic 按本机推导,改的就不是线上在用的那一个;先把工作树的 db.yaml 对齐到该 zone 实际部署的值")
-        }
-    }
-    # db 消费组:按本机 L / Z 判线上形状属于四种之一(不拿 GroupID 原值比基名:final(Z) 写 L_z<id>,交接形状不写 GroupID)。
-    $legacyGroup = $LocalGroupBase
-    $zoneGroup = "${LocalGroupBase}_z$ZoneId"
-    $known = "{$legacyGroup, $zoneGroup}"
-    $group = $Facts.KafkaGroup
-    $shape = if ($null -ne $group) { [string]$group.Shape } else { '' }
-    $groupName = if ($null -ne $group) { [string]$group.Group } else { '' }
-    $handoffFrom = if ($null -ne $group) { [string]$group.HandoffFrom } else { '' }
-    $groupProblem = $null
-    if ($shape -ceq 'final') {
-        if (@($legacyGroup, $zoneGroup) -cnotcontains $groupName) { $groupProblem = "最终形状 GroupID=$groupName" }
-    }
-    elseif ($shape -ceq 'handoff') {
-        $isZoneFromLegacy = ($groupName -ceq $zoneGroup -and $handoffFrom -ceq $legacyGroup)
-        $isLegacyFromZone = ($groupName -ceq $legacyGroup -and $handoffFrom -ceq $zoneGroup)
-        if (-not ($isZoneFromLegacy -or $isLegacyFromZone)) { $groupProblem = "交接形状 ConsumerGroup=$groupName GroupHandoffFrom=$handoffFrom" }
-    }
-    else {
-        $detail = if ($null -ne $group -and -not [string]::IsNullOrWhiteSpace([string]$group.Detail)) { [string]$group.Detail } else { '部署事实里没有可识别的 db 消费组形状' }
-        $groupProblem = "形状无法识别($detail)"
-    }
-    if ($null -ne $groupProblem) {
-        $problems.Add("线上 go-svc-db-config 的 db 消费组形状不属于 ${known}:$groupProblem。只认 final(L)、final(Z)、handoff(Z←L)、handoff(L←Z)" +
-            "(L 为本机 go/db/etc/db.yaml 的 GroupID 基名,Z = L_z$ZoneId);线上用的是别的组名时,Step 5 重置与退役的不是该 zone 在用的消费组。" +
-            "查清该 zone 实际在用的消费组与部署来源后再回档")
     }
     $redis = $Facts.Redis
     if ($null -eq $redis -or [string]::IsNullOrWhiteSpace([string]$redis.Hosts)) {
@@ -1522,11 +1367,9 @@ function Get-DeployFactsProblems {
         if ([string]$redis.DB -ne "$RedisDB") {
             $problems.Add("线上 RedisClient.DB 是 '$($redis.DB)',不是 -RedisDB ${RedisDB}:工具会在别的 DB 里盘点与丢弃")
         }
-        foreach ($section in @(@{ Name = 'ServerConfig.OwnerEpochRedis'; Value = $Facts.OwnerEpochRedis }, @{ Name = 'Placement.Redis'; Value = $Facts.PlacementRedis })) {
-            if ($null -eq $section.Value) { continue }
-            if ([string]$section.Value.Hosts -ne [string]$redis.Hosts -or [string]$section.Value.DB -ne [string]$redis.DB) {
-                $problems.Add("线上 $($section.Name) 是 $($section.Value.Hosts)/db$($section.Value.DB),与 RedisClient $($redis.Hosts)/db$($redis.DB) 不是同一实例同一 DB:回档工具做不到跨实例原子复核,拒绝(Redis 拆分后的回档另行设计)")
-            }
+        $placement = $Facts.PlacementRedis
+        if ($null -ne $placement -and ([string]$placement.Hosts -ne [string]$redis.Hosts -or [string]$placement.DB -ne [string]$redis.DB)) {
+            $problems.Add("线上 Placement.Redis 是 $($placement.Hosts)/db$($placement.DB),与 RedisClient $($redis.Hosts)/db$($redis.DB) 不是同一实例同一 DB:回档工具做不到跨实例原子复核,拒绝(Redis 拆分后的回档另行设计)")
         }
         if ([string]::IsNullOrWhiteSpace([string]$Facts.MappingRedisHost)) {
             $problems.Add('线上 go-svc-data-service-config 读不到 MappingRedis.Host')
@@ -1534,9 +1377,6 @@ function Get-DeployFactsProblems {
         elseif ([string]$Facts.MappingRedisHost -ne [string]$redis.Hosts -or [string]$redis.DB -ne '0') {
             $problems.Add("data-service 的 MappingRedis 是 $($Facts.MappingRedisHost)/db0,与 go/db RedisClient $($redis.Hosts)/db$($redis.DB) 不是同一实例同一 DB:归属映射与玩家键不在一处,回档工具做不到原子复核归属,拒绝")
         }
-    }
-    if ($BarrierProtocol -ceq 'legacy' -and [string]$Facts.FencingMode -ne 'legacy') {
-        $problems.Add("-BarrierProtocol legacy 与线上 go/db 的 Fencing.Mode '$($Facts.FencingMode)' 矛盾:dual 下 go/db 写提交屏障 ACK、saveoutbox 在跑,属于严格屏障世代,回档工具对它的处置待负责人裁决 #3")
     }
     return , $problems.ToArray()
 }
@@ -1553,7 +1393,7 @@ function ConvertTo-DeployFactsKey {
 
 <#
 .SYNOPSIS
-    第 0 步 f(只在 -Apply 下、Step 1 之前):读部署事实、与存档和本次参数核对、落盘 deploy-facts.json;任何问题都在停服之前抛出。返回事实。
+    第 0 步 c(只在 -Apply 下、Step 1 之前):读部署事实、与存档和本次参数核对、落盘 deploy-facts.json;任何问题都在停服之前抛出。返回事实。
 
 .DESCRIPTION
     namespace 还在:按 Get-DeploySnapshotKubectlArgs 现读;报告目录里已有同一 rid 的存档时必须与现读逐项相同(不同说明换了部署或 rid 用错了)。
@@ -1564,9 +1404,6 @@ function Resolve-ZoneDeployFacts {
     param(
         [Parameter(Mandatory = $true)][string]$Namespace,
         [Parameter(Mandatory = $true)][string]$FactsPath,
-        # db 消费组的 L / Z(本机 db.yaml 的 GroupID 基名与 <基名>_z<ZoneId>),交给 ConvertFrom-ZoneDeploySnapshot 判线上形状。
-        [Parameter(Mandatory = $true)][string]$LegacyGroup,
-        [Parameter(Mandatory = $true)][string]$ZoneGroup,
         [AllowEmptyString()][string]$KubeContext = '',
         [AllowEmptyString()][string]$KubeConfig = ''
     )
@@ -1575,10 +1412,10 @@ function Resolve-ZoneDeployFacts {
     $result = Invoke-ClientEntryKubectl -KubectlArgs (Get-DeploySnapshotKubectlArgs -Namespace $Namespace) `
         -KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
     if ($result.ExitCode -ne 0) {
-        throw ($refusal + "读不到 namespace $Namespace 的部署事实(kubectl 退出码 $($result.ExitCode)):$($result.Stderr)。读不到不等于没有,无法核对 Redis 拓扑与屏障协议。")
+        throw ($refusal + "读不到 namespace $Namespace 的部署事实(kubectl 退出码 $($result.ExitCode)):$($result.Stderr)。读不到不等于没有,无法核对 Redis 拓扑。")
     }
     try {
-        $live = ConvertFrom-ZoneDeploySnapshot -Json ([string]$result.Stdout) -Namespace $Namespace -LegacyGroup $LegacyGroup -ZoneGroup $ZoneGroup
+        $live = ConvertFrom-ZoneDeploySnapshot -Json ([string]$result.Stdout) -Namespace $Namespace
     }
     catch {
         throw ($refusal + $_.Exception.Message)
@@ -1595,7 +1432,7 @@ function Resolve-ZoneDeployFacts {
     if ($null -eq $live) {
         if ($null -eq $saved) {
             throw ($refusal + "namespace $Namespace 里一个部署对象都没有(可能已被删),报告目录里也没有同一 rollback-id 的 $FactsPath。" +
-                "namespace 删掉之后无从核对 Redis 拓扑与屏障协议;Step 1 之后重跑必须带上一次打印的 -RollbackId。")
+                "namespace 删掉之后无从核对 Redis 拓扑;Step 1 之后重跑必须带上一次打印的 -RollbackId。")
         }
         Write-Host "  namespace $Namespace is gone; reusing deploy facts saved by an earlier run with the same -RollbackId ($FactsPath)" -ForegroundColor Yellow
         return $saved
@@ -1614,7 +1451,7 @@ function Resolve-ZoneDeployFacts {
 
 <#
 .SYNOPSIS
-    第 0 步 f 读 go/db 所用 Redis 实例 run_id 的 kubectl 参数(纯函数:只拼参数,不执行;回档复核 [4])。
+    第 0 步 c 读 go/db 所用 Redis 实例 run_id 的 kubectl 参数(纯函数:只拼参数,不执行;回档复核 [4])。
 
 .DESCRIPTION
     exec 进 infra namespace 的 redis-0(redis 容器),对 deploy-facts 里 go/db RedisClient.Hosts 的地址执行 redis-cli INFO server ——
@@ -1654,7 +1491,7 @@ function ConvertFrom-RedisInfoRunId {
 
 <#
 .SYNOPSIS
-    第 0 步 f(只在 -Apply 下、Step 1 之前):按 Get-GoDbRedisRunIdExecArgs 读出 go/db 所用 Redis 实例的 run_id;exec 失败或判不出即 throw。
+    第 0 步 c(只在 -Apply 下、Step 1 之前):按 Get-GoDbRedisRunIdExecArgs 读出 go/db 所用 Redis 实例的 run_id;exec 失败或判不出即 throw。
 #>
 function Read-GoDbRedisRunId {
     param(
@@ -1675,7 +1512,7 @@ function Read-GoDbRedisRunId {
     }
     catch {
         throw ($refusal + "读不到 go/db 所用 Redis($RedisHosts)的 run_id(kubectl exec 进 $InfraNamespace 的 redis-0 执行 INFO server)," +
-            "无法证明 -RedisHost 与线上 go/db 是同一个实例:另一个环境里同 ZoneId 的 Redis 同样有这批游标,工具会在那边丢弃、目标环境原封不动。" +
+            "无法证明 -RedisHost 与线上 go/db 是同一个实例:另一个环境里同 ZoneId 的 Redis 同样有这批键,工具会在那边丢弃、目标环境原封不动。" +
             "检查部署账号对 $InfraNamespace 的 pods/exec 权限、redis-0 是否就绪、-KubeContext / -KubeConfig 是否指向目标集群后重跑。`n原因:$($_.Exception.Message)")
     }
 }
@@ -1754,11 +1591,11 @@ function Get-DiscardToolVersion {
 
 <#
 .SYNOPSIS
-    确认 zone namespace 已不存在;仍在(Terminating / 被重建)或读不到都 throw。Step 1 之后与 Step 5 之前各调一次。
+    确认 zone namespace 已不存在;仍在(Terminating / 被重建)或读不到都 throw。Step 1 之后与 Step 4b 之前各调一次。
 
 .DESCRIPTION
     dev_tools.ps1 k8s-zone-down 的 Remove-Zone 以 -AllowFailure 执行 kubectl delete namespace:删除失败也不报错、退出码照样为 0,
-    不能拿它判断「本 zone 的写者都停了」(回档丢弃语义对抗复核 [0])。Step 5 之前再调一次(回档复核 [8]):中间隔着人工 PITR,
+    不能拿它判断「本 zone 的写者都停了」(回档丢弃语义对抗复核 [0])。Step 4b 之前再调一次(回档复核 [8]):中间隔着人工 PITR,
     namespace 可能被 GitOps / CD 重建。-Refusal / -Hint 是这一阶段的拒绝前缀与后续做法,缺省为 Step 1 之后那一次的文本。
 #>
 function Assert-ZoneNamespaceGone {
@@ -1767,7 +1604,7 @@ function Assert-ZoneNamespaceGone {
         [AllowEmptyString()][string]$KubeContext = '',
         [AllowEmptyString()][string]$KubeConfig = '',
         [string]$Refusal = 'k8s-zone-rollback 在 Step 1 之后拒绝继续:k8s-zone-down 已执行,',
-        [string]$Hint = '尚未 PITR,Redis / Kafka 尚未改动;等 namespace 删净(kubectl get namespace 返回 NotFound)后用同一 -RollbackId 重跑。'
+        [string]$Hint = '尚未 PITR,Redis 尚未改动;等 namespace 删净(kubectl get namespace 返回 NotFound)后用同一 -RollbackId 重跑。'
     )
 
     $result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'namespace', $Namespace, '-o', 'name', '--ignore-not-found', '--request-timeout=15s') `
@@ -1782,344 +1619,11 @@ function Assert-ZoneNamespaceGone {
     Write-Host "  namespace $Namespace no longer exists" -ForegroundColor Green
 }
 
-<#
-.SYNOPSIS
-    本机 kafka-get-offsets.sh --time -1 读本 topic 各分区的日志末端,返回 @{ [int]分区 = [long]LEO };失败、"Error:" 行、解析不了都 throw。
-#>
-function Read-KafkaTopicLogEnd {
-    param(
-        [Parameter(Mandatory = $true)][string]$Bootstrap,
-        [Parameter(Mandatory = $true)][string]$Topic
-    )
-
-    $prevErrorAction = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $global:LASTEXITCODE = 0
-        $lines = @(& kafka-get-offsets.sh --bootstrap-server $Bootstrap --topic $Topic --time -1 2>&1 | ForEach-Object { "$_" })
-        $exitCode = $LASTEXITCODE
-    }
-    finally {
-        $ErrorActionPreference = $prevErrorAction
-    }
-    $errorLines = @($lines | Where-Object { $_ -match '^\s*Error:' })
-    if ($exitCode -ne 0 -or $errorLines.Count -gt 0) {
-        $detail = if ($errorLines.Count -gt 0) { $errorLines -join ' | ' } else { (@($lines | Select-Object -Last 5) -join ' | ') }
-        throw "kafka-get-offsets.sh --topic $Topic --time -1 失败(退出码 $exitCode):$detail"
-    }
-    return (ConvertFrom-KafkaGetOffsets -Lines $lines -Topic $Topic)
-}
-
-<#
-.SYNOPSIS
-    Step 1b (ii):停服之后确认没有消费者还挂在本 topic 上,返回问题列表;describe 判不出即 throw。
-
-.DESCRIPTION
-    zone 组:--state 必须是 Empty / Dead 或组不存在 —— zone-down 之后还有成员,说明别处还有 db 实例在消费本 topic,
-    Step 5 的重置会被 Kafka 拒绝,即使拨成功了它也会继续推进位点、把切点之后的消息落库。
-    legacy 组:别的 zone 在线时它本来就是 Stable,不看状态,只看本 topic 的行里 CONSUMER-ID 全是 '-'(没有成员被分配到本 topic 的分区)。
-    解析规则只在 lib 一份(ConvertFrom-KafkaGroupStateDescribe / Get-KafkaTopicActiveConsumers),原文格式按推定 fail-closed。
-#>
-function Get-KafkaTopicConsumerProblems {
-    param(
-        [Parameter(Mandatory = $true)][string]$Bootstrap,
-        [Parameter(Mandatory = $true)][string]$Topic,
-        [Parameter(Mandatory = $true)][string]$ZoneGroup,
-        [Parameter(Mandatory = $true)][string]$LegacyGroup
-    )
-
-    $problems = [System.Collections.Generic.List[string]]::new()
-    $zoneDescribe = Invoke-KafkaGroupDescribe -Bootstrap $Bootstrap -Group $ZoneGroup -State
-    $zoneState = ConvertFrom-KafkaGroupStateDescribe -Lines $zoneDescribe.Lines -ExitCode $zoneDescribe.ExitCode -Group $ZoneGroup
-    Write-Host "  zone group ${ZoneGroup}: state=$($zoneState.State) members=$(if ($null -ne $zoneState.Members) { $zoneState.Members } else { '-' })"
-    if (-not (Test-KafkaGroupStateInactive -State $zoneState.State)) {
-        $problems.Add("zone 组 $ZoneGroup 的状态是 $($zoneState.State)(成员 $($zoneState.Members) 个),不是 Empty / Dead:别处还有 db 实例在这个组里消费本 topic")
-    }
-    $legacyDescribe = Invoke-KafkaGroupDescribe -Bootstrap $Bootstrap -Group $LegacyGroup
-    $legacyState = Resolve-KafkaGroupTopicOffsets -Lines $legacyDescribe.Lines -ExitCode $legacyDescribe.ExitCode -Topic $Topic
-    # 这些 lib 函数以 `, $数组` 返回:直接赋值拿到数组本身;外面再套 @(...) 会多包一层,空表也成了 Count 1。
-    $active = Get-KafkaTopicActiveConsumers -Resolved $legacyState
-    Write-Host "  legacy group ${LegacyGroup}: $($legacyState.State); members assigned to ${Topic}: $($active.Count)"
-    if ($active.Count -gt 0) {
-        $problems.Add("legacy 组 $LegacyGroup 在 $Topic 上仍有成员被分配到分区($($active -join ';')):还有旧组 db 实例在消费本 topic")
-    }
-    return , $problems.ToArray()
-}
-
-<#
-.SYNOPSIS
-    读 zone 组在本 topic 上的位点并按 lib Get-KafkaGroupCutProblems 核对,返回 @{ Cut = @{ 分区 = 位点 }; Problems };describe 判不出即 throw。
-.PARAMETER ExpectedCut
-    不给 = Step 5 刚拨完、记切点(只要求每个分区 CURRENT == LOG-END);给了 = Step 5b,两者还必须都等于切点。
-#>
-function Read-ZoneGroupCut {
-    param(
-        [Parameter(Mandatory = $true)][string]$Bootstrap,
-        [Parameter(Mandatory = $true)][string]$Topic,
-        [Parameter(Mandatory = $true)][string]$ZoneGroup,
-        [Parameter(Mandatory = $true)][int]$Partitions,
-        [AllowNull()]$ExpectedCut = $null
-    )
-
-    $describe = Invoke-KafkaGroupDescribe -Bootstrap $Bootstrap -Group $ZoneGroup
-    $state = Resolve-KafkaGroupTopicOffsets -Lines $describe.Lines -ExitCode $describe.ExitCode -Topic $Topic
-    foreach ($row in (@($state.Rows) | Sort-Object Partition)) {
-        Write-Host "    $ZoneGroup $Topic partition=$($row.Partition) current=$(if ($null -ne $row.CurrentOffset) { $row.CurrentOffset } else { '-' }) end=$(if ($null -ne $row.LogEndOffset) { $row.LogEndOffset } else { '-' })"
-    }
-    $problems = Get-KafkaGroupCutProblems -Rows @($state.Rows) -Partitions $Partitions -ExpectedCut $ExpectedCut
-    return [pscustomobject]@{ Cut = $state.Committed; Problems = $problems }
-}
-
-<#
-.SYNOPSIS
-    执行一次本机 kafka-consumer-groups.sh --describe --group <g>(-State 时追加 --state),合并收集 stdout / stderr 为字符串行,
-    返回 @{ Lines; ExitCode }。不判成败。
-.DESCRIPTION
-    局部放宽 ErrorActionPreference(成败只看退出码与输出);先清零 LASTEXITCODE,不把更早一次调用的退出码当成本次的。
-    命令不存在等异常原样抛给调用方。
-#>
-function Invoke-KafkaGroupDescribe {
-    param(
-        [Parameter(Mandatory = $true)][string]$Bootstrap,
-        [Parameter(Mandatory = $true)][string]$Group,
-        [switch]$State
-    )
-
-    $describeArgs = @('--bootstrap-server', $Bootstrap, '--describe', '--group', $Group)
-    if ($State) { $describeArgs += '--state' }
-    $prevErrorAction = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $global:LASTEXITCODE = 0
-        $lines = @(& kafka-consumer-groups.sh @describeArgs 2>&1 | ForEach-Object { "$_" })
-        $exitCode = $LASTEXITCODE
-    }
-    finally {
-        $ErrorActionPreference = $prevErrorAction
-    }
-    return [pscustomobject]@{ Lines = $lines; ExitCode = $exitCode }
-}
-
-<#
-.SYNOPSIS
-    第 0 步 c 与 Step 1b (iv):Kafka LAG 只读快照。对每个组 describe 一次,只打印本 topic 的分区 / current / end / lag 与 LAG 合计。
-
-.DESCRIPTION
-    只告警、绝不抛出:它取代的是原 Step 2 的排空等待 —— zone-down 之后 LAG 不可能排空,Step 5 又会把位点拨到日志末端,
-    这些 LAG 正是要丢弃的积压,排空本来就没有意义;快照只供操作者看一眼两组在本 topic 上的进度(切组前后哪个组在用)与将丢弃的条数。
-    组不存在打印 (group does not exist);describe 失败或输出解析不了只 Write-Warning。别的 topic 的行一律不计入。
-#>
-function Show-KafkaTopicLagSnapshot {
-    param(
-        [Parameter(Mandatory = $true)][string]$Bootstrap,
-        [Parameter(Mandatory = $true)][string]$Topic,
-        [Parameter(Mandatory = $true)][string[]]$Groups
-    )
-
-    foreach ($group in $Groups) {
-        try {
-            $describe = Invoke-KafkaGroupDescribe -Bootstrap $Bootstrap -Group $group
-            $state = Resolve-KafkaGroupTopicOffsets -Lines $describe.Lines -ExitCode $describe.ExitCode -Topic $Topic
-            if ($state.State -eq 'missing') {
-                Write-Host "  group ${group}: (group does not exist)"
-                continue
-            }
-            $rows = @($state.Rows)
-            if ($rows.Count -eq 0) {
-                Write-Host "  group ${group}: no partitions of $Topic in the describe output (no committed offsets, no assignment)"
-                continue
-            }
-            $totalLag = [long]0
-            $unknownLag = 0
-            foreach ($row in ($rows | Sort-Object Partition)) {
-                $current = if ($null -ne $row.CurrentOffset) { $row.CurrentOffset } else { '-' }
-                $end = if ($null -ne $row.LogEndOffset) { $row.LogEndOffset } else { '-' }
-                $lag = '-'
-                if ($null -ne $row.Lag) {
-                    $totalLag += [long]$row.Lag
-                    $lag = $row.Lag
-                }
-                else {
-                    $unknownLag++
-                }
-                Write-Host "    $group $Topic partition=$($row.Partition) current=$current end=$end lag=$lag"
-            }
-            $unknownText = if ($unknownLag -gt 0) { " ($unknownLag partition(s) without committed offsets, lag unknown)" } else { '' }
-            Write-Host "  group ${group}: $Topic partitions=$($rows.Count) total lag=$totalLag$unknownText"
-        }
-        catch {
-            Write-Warning "Kafka LAG snapshot unavailable: group ${group}: $($_.Exception.Message)"
-        }
-    }
-}
-
-<#
-.SYNOPSIS
-    Step 1b (iv):估算 Step 5 -ToLatest 将丢弃的积压条数(回档复核 [11]),只打印、只告警,绝不抛出。
-
-.DESCRIPTION
-    口径:zone 组在本 topic 上有位点就按 zone 组算,否则按 legacy 组算 —— 回档前该 zone 实际在用哪个组,停服时的积压就是那个组的
-    LOG-END - 已提交位点。从未切过组的 zone 上 zone 组不存在,以前只打印 zone 组,得到「(group does not exist)」,看不出要丢多少。
-    两组都有位点(交接没收尾)时按 zone 组算。没有已提交位点的分区 LAG 记为未知、单独计数,不当成 0;两组都没有位点时说明估不出。
-#>
-function Show-KafkaDiscardEstimate {
-    param(
-        [Parameter(Mandatory = $true)][string]$Bootstrap,
-        [Parameter(Mandatory = $true)][string]$Topic,
-        [Parameter(Mandatory = $true)][string]$ZoneGroup,
-        [Parameter(Mandatory = $true)][string]$LegacyGroup
-    )
-
-    try {
-        $states = @{}
-        foreach ($group in @($ZoneGroup, $LegacyGroup)) {
-            $describe = Invoke-KafkaGroupDescribe -Bootstrap $Bootstrap -Group $group
-            $states[$group] = Resolve-KafkaGroupTopicOffsets -Lines $describe.Lines -ExitCode $describe.ExitCode -Topic $Topic
-        }
-        $basis = if ($states[$ZoneGroup].State -eq 'offsets') { $ZoneGroup } elseif ($states[$LegacyGroup].State -eq 'offsets') { $LegacyGroup } else { $null }
-        if ($null -eq $basis) {
-            Write-Host "  backlog that Step 5 discards: unknown (neither $ZoneGroup nor $LegacyGroup holds committed offsets on $Topic)" -ForegroundColor Yellow
-            return
-        }
-        $total = [long]0
-        $unknown = 0
-        foreach ($row in @($states[$basis].Rows | Where-Object { $null -ne $_ })) {
-            if ($null -ne $row.Lag) { $total += [long]$row.Lag } else { $unknown++ }
-        }
-        $unknownText = if ($unknown -gt 0) { "; $unknown partition(s) of $basis without committed offsets, their backlog is unknown" } else { '' }
-        Write-Host "  backlog that Step 5 discards: $total message(s) on $Topic (basis: $basis, the group this zone consumed with before the rollback$unknownText)" -ForegroundColor Yellow
-    }
-    catch {
-        Write-Warning "Backlog estimate unavailable on ${Topic}: $($_.Exception.Message)"
-    }
-}
-
-<#
-.SYNOPSIS
-    第 0 步 d:Step 5 预演(只在 -Apply 下、Step 1 之前调用)。
-
-.DESCRIPTION
-    zone 组在本 topic 上已有数值位点 → 组已存在,Step 5 的重置走的是成熟路径,跳过预演。
-    否则(组不存在 / 没有位点,即从未切过组的 zone)以 kafka_offset_reset.ps1 的 dry-run(hashtable splatting,
-    不带 -Apply 与 -RetireGroup)对 zone 组按 -ToLatest 生成重置计划(2026-10-18 起与 Step 5 一致,不再按 TargetTime);
-    它要求计划覆盖 0..Partitions-1,失败、throw、退出码非 0 都在停服之前抛出。Kafka 能否为不存在的组建出位点未在钉版镜像上实测
-    (设计文档 §11 V3(c)),这一步把「Step 5 走不通」提前到破坏性步骤之前暴露;Step 5 自己 -Apply 之后还有逐分区复核。
-    describe 本身失败同样抛出:判不出就无法证明 Step 5 走得通。
-#>
-function Invoke-Step5Rehearsal {
-    param(
-        [Parameter(Mandatory = $true)][string]$ResetScriptPath,
-        [Parameter(Mandatory = $true)][string]$Bootstrap,
-        [Parameter(Mandatory = $true)][string]$Topic,
-        [Parameter(Mandatory = $true)][string]$ZoneGroup,
-        [Parameter(Mandatory = $true)][int]$Partitions
-    )
-
-    $refusal = "k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:"
-    try {
-        $describe = Invoke-KafkaGroupDescribe -Bootstrap $Bootstrap -Group $ZoneGroup
-        $state = Resolve-KafkaGroupTopicOffsets -Lines $describe.Lines -ExitCode $describe.ExitCode -Topic $Topic
-    }
-    catch {
-        throw ($refusal + "Step 5 预演读不到 zone 组 $ZoneGroup 在 $Topic 上的位点(kafka-consumer-groups.sh --describe 失败或输出无法解析)," +
-            "判不出 Step 5 能否走通。`n原因:$($_.Exception.Message)`n确认本机 kafka-consumer-groups.sh 可用、-KafkaBootstrap 可达后重跑。")
-    }
-    if ($state.State -eq 'offsets') {
-        Write-Host "  zone group already holds offsets on ${Topic}; Step 5 rehearsal skipped" -ForegroundColor Green
-        return
-    }
-
-    Write-Host "  zone group $ZoneGroup has no committed offsets on $Topic ($($state.State)); rehearsing Step 5 with kafka_offset_reset.ps1 (dry-run)"
-    $rehearsalArgs = @{
-        BootstrapServer = $Bootstrap
-        Topic           = $Topic
-        Group           = $ZoneGroup
-        ToLatest        = $true
-        Partitions      = $Partitions
-    }
-    $failure = $null
-    # 被调脚本不以 exit 结束时 $LASTEXITCODE 保留更早的值,先清零,才能把它的非 0 判成本次失败。
-    $global:LASTEXITCODE = 0
-    try {
-        & $ResetScriptPath @rehearsalArgs
-        if ($LASTEXITCODE -ne 0) { $failure = "kafka_offset_reset.ps1 以退出码 $LASTEXITCODE 结束" }
-    }
-    catch {
-        $failure = $_.Exception.Message
-    }
-    if ($null -ne $failure) {
-        throw ($refusal + "Step 5 预演失败,Kafka 无法为 zone 组 $ZoneGroup 在 $Topic 上生成完整的重置计划(-ToLatest,分区数 $Partitions)。" +
-            "拖到 Step 5 才失败时 zone 已停服、数据已回档。见 docs/design/db-consumer-group-per-zone.md §11 V3(c)。`n原因:$failure")
-    }
-    Write-Host "  Step 5 rehearsal passed: Kafka produced a complete reset plan for $ZoneGroup on $Topic" -ForegroundColor Green
-}
-
-<#
-.SYNOPSIS
-    第 0 步 e(只在 -Apply 下、Step 1 之前):按 Step 6 的同一条访问路径读 zone 组与 legacy 组在本 topic 上的位点;
-    读不到,或与本机 CLI(-KafkaBootstrap)的结论不一致,都在停服之前抛出。
-
-.DESCRIPTION
-    Step 6 的 k8s_deploy.ps1(显式 -DbConsumerGroup zone)在写路径入口经 kubectl exec 进 infra namespace 的 kafka-0 读位点
-    (Read-DbGroupTopicFacts),读不到就拒绝部署。以前第 0 步覆盖不到这条路径:b 的静态预检带 -DryRun、不读集群,c / d 用的是本机 CLI 加
-    -KafkaBootstrap。于是部署账号缺 pods/exec、kafka-0 正在重启、容器名不对时,各项预检全过,直到 Step 6 才失败 —— 那时 zone 已停服、
-    MySQL 已回档、Redis 已处置,照提示重跑仍要同一个 exec(R7 复核 [2])。
-    这里用 lib 的同一份命令(Get-DbGroupDescribeExecArgs)与分类(Resolve-DbGroupDescribeExecResult)、同一个 kubectl 出口
-    (lib/k8s_client_entry.ps1 Invoke-ClientEntryKubectl)、同一组 -KubeContext / -KubeConfig 与 Step 6 将用的 infra namespace,
-    对两组各 exec 一次;exec 失败或输出判不出即拒绝。
-    再与本机 CLI 逐组比对「本 topic 上有没有已提交位点」:两条路径是两个访问入口(-KafkaBootstrap 可能经端口转发或 hosts 指向别的集群),
-    第 0 步 d 与 Step 5 改的是前者、Step 6 读的是后者,两边结论不同即拒绝。只比有无、不比位点值:停服之前 db 仍在消费,位点随时前进。
-    本机 describe 失败同样拒绝(第 0 步 d 本来就要求本机 CLI 可用)。
-#>
-function Assert-Step6KafkaFactsReadable {
-    param(
-        [Parameter(Mandatory = $true)][string]$InfraNamespace,
-        [Parameter(Mandatory = $true)][string]$Bootstrap,
-        [Parameter(Mandatory = $true)][string]$Topic,
-        [Parameter(Mandatory = $true)][string]$ZoneGroup,
-        [Parameter(Mandatory = $true)][string]$LegacyGroup,
-        [AllowEmptyString()][string]$KubeContext = '',
-        [AllowEmptyString()][string]$KubeConfig = ''
-    )
-
-    $refusal = "k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:"
-    $mismatches = @()
-    foreach ($group in @($ZoneGroup, $LegacyGroup)) {
-        try {
-            $execResult = Invoke-ClientEntryKubectl -KubectlArgs (Get-DbGroupDescribeExecArgs -InfraNamespace $InfraNamespace -Group $group) `
-                -KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
-            $execState = Resolve-DbGroupDescribeExecResult -Result $execResult -Topic $Topic
-        }
-        catch {
-            throw ($refusal + "Step 6 的 k8s_deploy.ps1 要 kubectl exec 进 $InfraNamespace 的 kafka-0 读消费组 $group 在 $Topic 上的位点,现在就读不到;" +
-                "拖到 Step 6 才失败时 zone 已停服、数据已回档。检查部署账号的 pods/exec 权限、kafka-0 是否就绪(多 broker 档 kafka-0 重启时同样读不到)、" +
-                "-KubeContext / -KubeConfig 是否指向目标集群后重跑。`n原因:$($_.Exception.Message)")
-        }
-        try {
-            $localDescribe = Invoke-KafkaGroupDescribe -Bootstrap $Bootstrap -Group $group
-            $localState = Resolve-KafkaGroupTopicOffsets -Lines $localDescribe.Lines -ExitCode $localDescribe.ExitCode -Topic $Topic
-        }
-        catch {
-            throw ($refusal + "本机 kafka-consumer-groups.sh(-KafkaBootstrap $Bootstrap)读不到消费组 $group 在 $Topic 上的位点,无法与 Step 6 的读法核对。" +
-                "`n原因:$($_.Exception.Message)")
-        }
-        Write-Host "  group ${group}: kubectl exec kafka-0 -> $($execState.State); local CLI (-KafkaBootstrap $Bootstrap) -> $($localState.State)"
-        if (($execState.State -ceq 'offsets') -ne ($localState.State -ceq 'offsets')) {
-            $mismatches += "消费组 $group 在 $Topic 上:kafka-0 里读到 $($execState.State),本机 CLI 读到 $($localState.State)"
-        }
-    }
-    if ($mismatches.Count -gt 0) {
-        throw ($refusal + "两条访问路径看到的 Kafka 不一致,-KafkaBootstrap 与 -KubeContext 指向的可能不是同一个 Kafka 集群:`n  - " + ($mismatches -join "`n  - ") +
-            "`n第 0 步 d 与 Step 5 改的是 -KafkaBootstrap 那一个,Step 6 读的是 -KubeContext 集群 $InfraNamespace 里的 kafka-0;核对两者后重跑。")
-    }
-    Write-Host "  Step 6 Kafka facts readable via kubectl exec, consistent with the local CLI" -ForegroundColor Green
-}
-
 # ── 入口校验(dry-run 也执行,任何改动之前) ──
 # E2:回档不再 FLUSHDB;口令不再经命令行。传了就拒绝,不静默忽略(AGENTS §11.3)。
 if ($ConfirmFlushSharedRedis) {
     throw ("k8s-zone-rollback 拒绝执行,尚未产生任何改动:回档已不做 FLUSHDB,-ConfirmFlushSharedRedis 不再有效。" +
-        "go/db 的游标、重试收据、归属映射、账号目录与各 zone 的玩家缓存同在一个 Redis DB,FLUSHDB 会清掉所有 zone 的这些键,游标没了之后重放全部重新落库。" +
+        "归属与位置键、交接标记、路由映射与账号目录同在一个 Redis DB,FLUSHDB 会清掉所有 zone 的这些键。" +
         "回档改为由 zone_rollback_discard 只丢弃 TargetTime 之后的状态;整套环境重建走 AGENTS.md §6.2。去掉该参数重跑。")
 }
 if (-not [string]::IsNullOrEmpty($RedisPassword)) {
@@ -2127,16 +1631,10 @@ if (-not [string]::IsNullOrEmpty($RedisPassword)) {
         "把口令放进一个环境变量,改传 -RedisPasswordEnv <变量名>(回档工具自己读该变量,本脚本不读、不打印)。")
 }
 # 待负责人裁决的路径一律 fail-closed(拒绝并说明),不在这里自行实现。
-if ($BarrierProtocol -eq 'strict') {
-    throw ("k8s-zone-rollback 拒绝执行,尚未产生任何改动:-BarrierProtocol strict 待负责人裁决(#3)。严格提交屏障已是现行 scene / login 的唯一协议" +
-        "(2026-10-17 落地),go/db 缺省 Fencing.Mode=dual(2026-10-18 存盘协议世代门禁);回档工具会成为 save_barrier 的新写入方,屏障按 PITR 之后的库重建的字段形状、" +
-        "以及「有 pending、无 ACK、SQL 围栏 (0,0)」这类玩家怎么处置都没有定论。在裁决之前回档只支持 -BarrierProtocol legacy,而 legacy 只对应仍跑着" +
-        "不写严格屏障的旧 scene / login、线上 Fencing.Mode=legacy 的 zone;按现行代码部署的 zone 在裁决之前不能执行 -Apply。")
-}
 if ($AcceptBlockedPlayers -gt 0) {
     throw ("k8s-zone-rollback 拒绝执行,尚未产生任何改动:-AcceptBlockedPlayers 待负责人裁决(#4)。blocked 玩家(torn / owner_behind / post_t_candidate / " +
-        "legacy_owned / unclassified,以及 T 之后建角、合入或迁入本 zone 的玩家)的父快照、子表缓存、屏障与资产证据是隔离保留还是删除,T 之后建的角色" +
-        "能否以空骨架继续使用,都没有定论。在裁决之前,Step 4a 盘点出 blocked 玩家时回档停在 Step 5 之前(Kafka 与 Redis 都没动),按中止路径恢复。")
+        "legacy_owned / unclassified,以及 T 之后建角、合入或迁入本 zone 的玩家)的同步摘要、交接资格与资产证据是保留还是删除,T 之后建的角色" +
+        "能否以空骨架继续使用,都没有定论。在裁决之前,Step 4a 盘点出 blocked 玩家时回档停在 Step 4b 之前(Redis 没动),按中止路径恢复。")
 }
 foreach ($envParam in @(@{ Name = 'RedisPasswordEnv'; Value = $RedisPasswordEnv }, @{ Name = 'MySqlDsnEnv'; Value = $MySqlDsnEnv })) {
     if (-not [string]::IsNullOrEmpty($envParam.Value) -and $envParam.Value -cnotmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
@@ -2144,7 +1642,7 @@ foreach ($envParam in @(@{ Name = 'RedisPasswordEnv'; Value = $RedisPasswordEnv 
         throw "k8s-zone-rollback 拒绝执行,尚未产生任何改动:-$($envParam.Name) 不是合法的环境变量名(只收 [A-Za-z_][A-Za-z0-9_]*,给的值不回显)。这里要的是变量名,不是口令或 DSN 本身。"
     }
 }
-# E1:TargetTime 的格式与时间。改成 -ToLatest 之后 Kafka 不再顺带校验它,而 Step 3 的 PITR 命令与回档报告都以它为准。
+# E1:TargetTime 的格式与时间。Step 3 的 PITR 命令与回档报告都以它为准。
 $targetUtc = ConvertFrom-RollbackUtcTime -Text $TargetTime -Name 'TargetTime'
 $nowUtc = [datetime]::UtcNow
 if ($targetUtc -ge $nowUtc) {
@@ -2174,43 +1672,6 @@ if ($ConfirmNoGatewayIngress -and -not [string]::IsNullOrWhiteSpace($GatewayIngr
     throw "k8s-zone-rollback 拒绝执行:-ConfirmNoGatewayIngress 与 -GatewayIngressHost 互斥,尚未产生任何改动(前者 = 回滚后不要 Ingress,后者 = 回滚后按 $GatewayIngressHost 重建 Ingress),请按该 zone 的部署记录二选一。"
 }
 
-# go/db 存盘消费组的基名与分区数从 go/db/etc/db.yaml 现读(K8s 的 db ConfigMap 由 k8s_deploy.ps1 从同一文件渲染),
-# 本脚本不抄常量;读不到就拒绝(fail-closed):组名猜错,Step 5 会重置一个没人用的组、再删掉真正在用的组的位点。
-# 分区数给 Step 5 与第 0 步 d 做逐分区的计划覆盖与 -Apply 后复核。
-$dbYamlPath = Join-Path "$RepoRoot" "go" "db" "etc" "db.yaml"
-$dbGroupBase = Get-YamlScalar -Path $dbYamlPath -KeyPath 'ServerConfig.Kafka.GroupID'
-if (-not $dbGroupBase.Found -or [string]::IsNullOrWhiteSpace([string]$dbGroupBase.Value)) {
-    throw "k8s-zone-rollback 拒绝执行,尚未产生任何改动:读不到 go/db/etc/db.yaml 的 ServerConfig.Kafka.GroupID($($dbGroupBase.Reason)),无法推导 db 消费组名。"
-}
-$dbPartitionCnt = Get-YamlScalar -Path $dbYamlPath -KeyPath 'ServerConfig.Kafka.PartitionCnt'
-$kafkaPartitionCount = 0
-if (-not $dbPartitionCnt.Found -or -not [int]::TryParse([string]$dbPartitionCnt.Value, [ref]$kafkaPartitionCount) -or $kafkaPartitionCount -le 0) {
-    throw "k8s-zone-rollback 拒绝执行,尚未产生任何改动:读不到 go/db/etc/db.yaml 的 ServerConfig.Kafka.PartitionCnt,或不是正整数('$($dbPartitionCnt.Value)' $($dbPartitionCnt.Reason)),Step 5 无法逐分区复核位点。"
-}
-# db_task topic 的世代号:Step 6 的 k8s_deploy.ps1 按同一个键推导本 zone 的 topic(Initialize-DbConsumerGroupPlans),
-# 第 0 步 c / d / e 与 Step 5 必须作用在同一个 topic 上。规则与 k8s_deploy.ps1 相同:非负整数,读不到即拒(fail-closed)。
-$dbTopicGeneration = Get-YamlScalar -Path $dbYamlPath -KeyPath 'ServerConfig.Kafka.TopicGeneration'
-$kafkaTopicGeneration = 0
-if (-not $dbTopicGeneration.Found -or -not [int]::TryParse([string]$dbTopicGeneration.Value, [ref]$kafkaTopicGeneration) -or $kafkaTopicGeneration -lt 0) {
-    throw "k8s-zone-rollback 拒绝执行,尚未产生任何改动:读不到 go/db/etc/db.yaml 的 ServerConfig.Kafka.TopicGeneration,或不是非负整数('$($dbTopicGeneration.Value)' $($dbTopicGeneration.Reason)),拼不出本 zone 的 db_task topic 名。"
-}
-$derivedKafkaTopic = Get-DbTaskTopicName -ZoneId $ZoneId -Generation $kafkaTopicGeneration
-if ([string]::IsNullOrWhiteSpace($KafkaTopic)) {
-    $KafkaTopic = $derivedKafkaTopic
-}
-elseif ($KafkaTopic -cne $derivedKafkaTopic) {
-    throw ("k8s-zone-rollback 拒绝执行,尚未产生任何改动:-KafkaTopic $KafkaTopic 与按 go/db/etc/db.yaml(TopicGeneration=$kafkaTopicGeneration)推导的 $derivedKafkaTopic 不一致。" +
-        "Step 6 的 k8s_deploy.ps1 只按 db.yaml 的世代号读 topic:第 0 步与 Step 5 改的若是另一个 topic,真实 topic 上的位点不会动。" +
-        "-KafkaTopic 留空即按推导值;要回档的确实是另一代 topic,先把工作树的 go/db/etc/db.yaml 对齐到该 zone 实际部署的世代号。")
-}
-if ([string]::IsNullOrWhiteSpace($KafkaGroup)) { $KafkaGroup = "$($dbGroupBase.Value)_z$ZoneId" }
-if ([string]::IsNullOrWhiteSpace($KafkaLegacyGroup)) { $KafkaLegacyGroup = [string]$dbGroupBase.Value }
-if ($KafkaGroup -ceq $KafkaLegacyGroup) {
-    throw ("k8s-zone-rollback 拒绝执行,尚未产生任何改动:-KafkaGroup 与 -KafkaLegacyGroup 都是 $KafkaGroup。" +
-        "Step 5 会重置这个组、再删除它自己在 $KafkaTopic 上的位点,go/db 将从 Oldest 重放整个保留期。" +
-        "回档后的权威组是 zone 组:-KafkaGroup 留空即按 go/db/etc/db.yaml 推导为 $($dbGroupBase.Value)_z$ZoneId。")
-}
-
 # E3:-Apply 时破坏性步骤要用到的目标必须显式给出。不按 db.yaml 缺省的 127.0.0.1 补:本机缺省值在 K8s 上指向的是运维机自己,
 # 回档会打到错误的目标;口令与 DSN 只给环境变量名。dry-run 不要求,缺的项在命令里打印占位符。
 if ($Apply) {
@@ -2233,9 +1694,6 @@ if ($Apply) {
     elseif (-not (Test-Path -LiteralPath $RollbackDiscardTool -PathType Leaf)) {
         $missing += "-RollbackDiscardTool $RollbackDiscardTool 不是存在的文件"
     }
-    if ([string]::IsNullOrWhiteSpace($BarrierProtocol)) {
-        $missing += '-BarrierProtocol legacy(线上 go/db 的 Fencing.Mode 为 legacy;strict 待负责人裁决 #3)'
-    }
     if ($SkipMySqlPause -and [string]::IsNullOrWhiteSpace($PitrRestoredTo)) {
         $missing += '-PitrRestoredTo <PITR 实际恢复到的时刻,须等于 -TargetTime>:带 -SkipMySqlPause 跳过暂停时必须声明 PITR 已做到哪个时刻'
     }
@@ -2244,14 +1702,13 @@ if ($Apply) {
             "`n经包装入口调用而它不透传所需参数时,直接调用 tools/scripts/k8s_zone_rollback.ps1。")
     }
 }
-$BarrierProtocol = $BarrierProtocol.ToLowerInvariant()
 
-# E4:rollback-id 与报告目录。rid 进 Redis 隔离区键名与路径,只收 [A-Za-z0-9_-];整脚本或单步重跑必须带同一个 rid。
+# E4:rollback-id 与报告目录。rid 进路径,只收 [A-Za-z0-9_-];整脚本或单步重跑必须带同一个 rid。
 if ([string]::IsNullOrWhiteSpace($RollbackId)) {
     $rollbackId = New-RollbackId -ZoneId $ZoneId -TargetUtc $targetUtc -NowUtc $nowUtc
 }
 elseif ($RollbackId -cnotmatch '^[A-Za-z0-9_-]{1,96}$') {
-    throw "k8s-zone-rollback 拒绝执行,尚未产生任何改动:-RollbackId '$RollbackId' 不合法:它会拼进 Redis 隔离区键名 rollback:quarantine:<zone>:<rid>:* 与报告目录,只收 1–96 个 [A-Za-z0-9_-]。"
+    throw "k8s-zone-rollback 拒绝执行,尚未产生任何改动:-RollbackId '$RollbackId' 不合法:它会拼进报告目录路径并交给回档工具,只收 1–96 个 [A-Za-z0-9_-]。"
 }
 else {
     $rollbackId = $RollbackId
@@ -2274,8 +1731,7 @@ Write-Host "  target time : $TargetTime (UTC; rollback discards every write afte
 Write-Host "  rollback id : $rollbackId (report directory $reportDir; pass -RollbackId $rollbackId to re-run any step)"
 Write-Host "  redis       : $(if ($RedisHost) { "$RedisHost`:$RedisPort/db$RedisDB (go/db shared Redis)" } else { '(not set; -Apply requires -RedisHost: the go/db shared Redis)' })$(if ($RedisPasswordEnv) { " password from env $RedisPasswordEnv" })"
 Write-Host "  mysql       : zone_${ZoneId}_db, DSN from env $(if ($MySqlDsnEnv) { $MySqlDsnEnv } else { '<not set; -Apply requires -MySqlDsnEnv>' })"
-Write-Host "  discard tool: $(if ($RollbackDiscardTool) { $RollbackDiscardTool } else { '(not set; -Apply requires -RollbackDiscardTool: a prebuilt zone_rollback_discard from the same commit as the live go/db)' }) barrier-protocol=$(if ($BarrierProtocol) { $BarrierProtocol } else { '<not set>' })"
-Write-Host "  kafka       : $KafkaBootstrap topic=$KafkaTopic group=$KafkaGroup retire=$KafkaLegacyGroup partitions=$kafkaPartitionCount reset=-ToLatest quiesce=${QuiesceSeconds}s"
+Write-Host "  discard tool: $(if ($RollbackDiscardTool) { $RollbackDiscardTool } else { '(not set; -Apply requires -RollbackDiscardTool: a prebuilt zone_rollback_discard from the same commit as the live go/db)' })"
 Write-Host "  pitr        : $(if ($PitrRestoredTo) { "-PitrRestoredTo $PitrRestoredTo (operator declaration)" } elseif ($SkipMySqlPause) { '(-SkipMySqlPause without -PitrRestoredTo; -Apply refuses)' } else { '(Step 3 pauses until the operator confirms PITR)' })"
 # 回退态不粘滞,留空时在摘要里就提醒:操作者在 dry-run 阶段就能看出 Step 6 会以哪种路由模式拉起 gate。
 Write-Host "  gate router : $(if ($GateRouterMode) { "-GateRouterMode $GateRouterMode" } else { '(unset; using the k8s_deploy.ps1 default. A zone running in fallback mode "0" must pass -GateRouterMode 0; -Apply checks before shutdown and rejects mismatches or unavailable state)' })"
@@ -2311,11 +1767,6 @@ $upArgs = @{
     NodeImage       = $NodeImage
     NamespacePrefix = $NamespacePrefix
     WaitReady       = $true
-    # 回档后永远落到 zone 组(docs/design/db-consumer-group-per-zone.md §6):Step 5 收尾后 zone 组有完整位点、
-    # legacy 组在本 topic 上已没有位点,k8s_deploy.ps1 的决策表真跑时落到最终形状 —— db ConfigMap 写
-    # `GroupID: "<zone 组>"`、不带 GroupHandoffFrom,交接闸之前的旧镜像也能起。第 0 步静态预检(-DryRun 不读集群)
-    # 渲染的是交接形状预览,只校验参数组合。
-    DbConsumerGroup = 'zone'
 }
 # 留空不传,由下游默认值接管(k8s_deploy.ps1 / dev_tools.ps1 各自唯一的一处);只有显式给了才覆盖(同 dev_tools.ps1 / k8s_image.ps1 的透传)。
 # 字符串非空才传,GateNodePortBase 非 -1 才传,switch 只在被指定时传(同 dev_tools.ps1 Invoke-K8sDeploy)。
@@ -2366,7 +1817,7 @@ if ($ConfirmNoGatewayIngress) { Write-Host "  Explicit -ConfirmNoGatewayIngress:
 elseif (-not $checkIngress) { Write-Host "  Explicit -GatewayIngressHost ${GatewayIngressHost}: Step 6 rebuilds Ingress gateway with gateway" }
 if (-not $checkOpenFileLimit) { Write-Host "  Explicit -NodeOpenFileLimitMode ${NodeOpenFileLimitMode}: Step 6 writes NODE_OPEN_FILE_LIMIT_MODE=$NodeOpenFileLimitMode into gate / scene without checking the current cluster value" }
 # 入口决定存档(回档复核 [10]):同一 rid 重跑时读回 —— namespace 已删就沿用存档的集群现状做核对,本次入口决定与存档不同即拒绝。
-# 首次运行在第 0 步全部通过、Step 1 之前才写(见第 0 步 f 之后):第 0 步后面任一项拒绝时不留存档,修正参数后同一 rid 重跑不受它约束。
+# 首次运行在第 0 步全部通过、Step 1 之前才写(见第 0 步 c 之后):第 0 步后面任一项拒绝时不留存档,修正参数后同一 rid 重跑不受它约束。
 $savedEntryState = $null
 $entryDecision = $null
 $zoneEntryState = $null
@@ -2541,54 +1992,17 @@ if ($Apply) {
 } else {
     Write-Host "  (not executed during dry-run; -Apply rejects a nonzero exit code before shutdown)" -ForegroundColor Yellow
 }
-# 第 0 步 c:Kafka LAG 只读快照(只告警,取代原 Step 2 的排空等待)。这些积压将被 Step 5 -ToLatest 丢弃。
-Write-Host "  Kafka LAG snapshot on $KafkaTopic (read-only, warnings only; replaces the removed Step 2 drain wait; this backlog will be discarded by Step 5 -ToLatest):"
-foreach ($snapshotGroup in @($KafkaGroup, $KafkaLegacyGroup)) {
-    Write-Host "    kafka-consumer-groups.sh --bootstrap-server $KafkaBootstrap --describe --group $snapshotGroup"
-}
-if ($Apply) {
-    Show-KafkaTopicLagSnapshot -Bootstrap $KafkaBootstrap -Topic $KafkaTopic -Groups @($KafkaGroup, $KafkaLegacyGroup)
-} else {
-    Write-Host "  (dry-run does not read Kafka)" -ForegroundColor Yellow
-}
-# 第 0 步 d:Step 5 预演。zone 组没有位点时,Kafka 能否为它按 -ToLatest 生成完整计划要在停服之前确认。
-Write-Host ("  Step 5 rehearsal: describe $KafkaGroup; when it holds no committed offsets on $KafkaTopic, run kafka_offset_reset.ps1 " +
-    "-BootstrapServer $KafkaBootstrap -Topic $KafkaTopic -Group $KafkaGroup -ToLatest -Partitions $kafkaPartitionCount (dry-run, no -RetireGroup)")
-if ($Apply) {
-    Invoke-Step5Rehearsal -ResetScriptPath (Join-Path $ScriptDir "kafka_offset_reset.ps1") -Bootstrap $KafkaBootstrap -Topic $KafkaTopic `
-        -ZoneGroup $KafkaGroup -Partitions $kafkaPartitionCount
-} else {
-    Write-Host "  (not executed during dry-run; -Apply rejects a failed describe or an incomplete reset plan before shutdown)" -ForegroundColor Yellow
-}
-# 第 0 步 e:Step 6 的 k8s_deploy.ps1 读位点的那条路径(kubectl exec 进 infra namespace 的 kafka-0)现在就要读得通,并与本机 CLI 一致。
-# infra namespace 取 Step 6 实际会用的值:Step 6 经 dev_tools.ps1 k8s-zone-up 部署、不传 -InfraNamespace,即 dev_tools.ps1 的参数默认值
-# (按语法树读,不在本脚本抄一份;读不出即拒绝)。
+# 第 0 步 c 读 run_id 的 infra namespace 取 Step 6 实际会用的值:Step 6 经 dev_tools.ps1 k8s-zone-up 部署、不传 -InfraNamespace,
+# 即 dev_tools.ps1 的参数默认值(按语法树读,不在本脚本抄一份;读不出即拒绝)。
 $devToolsPath = Join-Path $ScriptDir "dev_tools.ps1"
 $step6InfraNamespace = (Get-DeployParamDefaults -DeployScriptPath $devToolsPath -Names @('InfraNamespace'))['InfraNamespace']
 $step6InfraText = if ([string]::IsNullOrWhiteSpace($step6InfraNamespace)) { '<unreadable>' } else { $step6InfraNamespace }
-Write-Host "  Step 6 Kafka facts check (same path as k8s_deploy.ps1 Read-DbGroupTopicFacts; compared with the local CLI on $KafkaTopic):"
 # 参数函数整体返回数组，先接收再拼接；统一格式化含空白的参数，保证预告命令可直接核对。
 $kubectlDisplayBaseArgs = Get-ClientEntryKubectlBaseArgs -KubeContext $KubeContext -KubeConfig $KubeConfig
-foreach ($factGroup in @($KafkaGroup, $KafkaLegacyGroup)) {
-    # 只用于打印;-Apply 时由 Assert-Step6KafkaFactsReadable 经 Invoke-ClientEntryKubectl 执行同一份参数。
-    $describeShownArgs = Get-DbGroupDescribeExecArgs -InfraNamespace $step6InfraText -Group $factGroup
-    $factArgs = $kubectlDisplayBaseArgs + $describeShownArgs
-    Write-Host ("    " + (Format-CommandLine -Program 'kubectl' -Arguments $factArgs))
-}
-if ($Apply) {
-    if ([string]::IsNullOrWhiteSpace($step6InfraNamespace)) {
-        throw ("k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:读不到 $devToolsPath 的 -InfraNamespace 默认值(不是字面常量或文件无法解析)," +
-            "不知道 Step 6 会去哪个 infra namespace 的 kafka-0 读消费组位点。")
-    }
-    Assert-Step6KafkaFactsReadable -InfraNamespace $step6InfraNamespace -Bootstrap $KafkaBootstrap -Topic $KafkaTopic `
-        -ZoneGroup $KafkaGroup -LegacyGroup $KafkaLegacyGroup -KubeContext $KubeContext -KubeConfig $KubeConfig
-} else {
-    Write-Host "  (not executed during dry-run; -Apply rejects an unreadable kubectl exec or a mismatch with the local CLI before shutdown)" -ForegroundColor Yellow
-}
 
-# 第 0 步 f(上半):部署事实、go/db 所用 Redis 的实例身份、回档工具的构建提交(只读,先于 Step 1)。部署对象只取非机密的拓扑与世代
+# 第 0 步 c(上半):部署事实、go/db 所用 Redis 的实例身份、回档工具的构建提交(只读,先于 Step 1)。部署对象只取非机密的拓扑与世代
 # (Get-DeploySnapshotKubectlArgs / ConvertFrom-ZoneDeploySnapshot),与本次参数、本机 db.yaml 核对后落盘;namespace 删掉之后(同一 rid 重跑)复用存档。
-# run_id 要进每次工具调用的公共参数(-expect-run-id),所以先于下面组装工具参数;工具 preflight 在组装之后(第 0 步 f 下半)。
+# run_id 要进每次工具调用的公共参数(-expect-run-id),所以先于下面组装工具参数;工具 preflight 在组装之后(第 0 步 c 下半)。
 $toolShown = if ($RollbackDiscardTool) { $RollbackDiscardTool } else { '<zone_rollback_discard>' }
 $snapshotCommandArgs = Get-DeploySnapshotKubectlArgs -Namespace $zoneNamespace
 $snapshotShown = Format-CommandLine -Program 'kubectl' -Arguments ($kubectlDisplayBaseArgs + $snapshotCommandArgs)
@@ -2601,18 +2015,19 @@ Write-Host "  Discard tool build: $toolShown -version (must print commit=<40 hex
 $redisRunId = $null
 $toolVersion = $null
 if ($Apply) {
+    if ([string]::IsNullOrWhiteSpace($step6InfraNamespace)) {
+        throw ("k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:读不到 $devToolsPath 的 -InfraNamespace 默认值(不是字面常量或文件无法解析)," +
+            "不知道该去哪个 infra namespace 的 redis-0 读 go/db Redis 的 run_id。")
+    }
     New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
-    $deployFacts = Resolve-ZoneDeployFacts -Namespace $zoneNamespace -FactsPath $factsPath -LegacyGroup ([string]$dbGroupBase.Value) -ZoneGroup "$($dbGroupBase.Value)_z$ZoneId" `
-        -KubeContext $KubeContext -KubeConfig $KubeConfig
-    $liveGroupText = "$($deployFacts.KafkaGroup.Shape) $($deployFacts.KafkaGroup.Group)$(if ($deployFacts.KafkaGroup.HandoffFrom) { " <- $($deployFacts.KafkaGroup.HandoffFrom)" })"
-    Write-Host ("  live go/db: RedisClient=$($deployFacts.Redis.Hosts)/db$($deployFacts.Redis.DB) Fencing.Mode=$($deployFacts.FencingMode) consumer group=$liveGroupText image=$($deployFacts.DbImage);" +
+    $deployFacts = Resolve-ZoneDeployFacts -Namespace $zoneNamespace -FactsPath $factsPath -KubeContext $KubeContext -KubeConfig $KubeConfig
+    Write-Host ("  live go/db: RedisClient=$($deployFacts.Redis.Hosts)/db$($deployFacts.Redis.DB) image=$($deployFacts.DbImage);" +
         " the tool connects to $($RedisHost):$($RedisPort)/db$RedisDB (a port-forward is fine; the run_id below binds it to this instance)")
-    $factsProblems = Get-DeployFactsProblems -Facts $deployFacts -ZoneId $ZoneId -RedisDB $RedisDB -BarrierProtocol $BarrierProtocol `
-        -LocalGroupBase ([string]$dbGroupBase.Value) -LocalTopicGeneration $kafkaTopicGeneration -LocalPartitionCnt $kafkaPartitionCount
+    $factsProblems = Get-DeployFactsProblems -Facts $deployFacts -ZoneId $ZoneId -RedisDB $RedisDB
     if ($factsProblems.Count -gt 0) {
         throw ("k8s-zone-rollback 在停服之前拒绝执行,尚未产生任何改动:部署事实($factsPath)与本次参数不一致,$($factsProblems.Count) 项:`n  - " + ($factsProblems -join "`n  - "))
     }
-    # Redis 实例身份(回档复核 [4]):以前「目标就是 go/db 的库」只看本 topic 有没有游标,另一个环境里同 ZoneId 的 Redis 同样能过。
+    # Redis 实例身份(回档复核 [4]):以前「目标就是 go/db 的库」只看 Redis 里有没有本 zone 的键,另一个环境里同 ZoneId 的 Redis 同样能过。
     $redisRunId = Read-GoDbRedisRunId -InfraNamespace $step6InfraNamespace -RedisHosts ([string]$deployFacts.Redis.Hosts) -KubeContext $KubeContext -KubeConfig $KubeConfig
     Write-Host "  go/db Redis $($deployFacts.Redis.Hosts): run_id=$redisRunId; every discard tool call requires the instance behind $($RedisHost):$($RedisPort) to report it (-expect-run-id)" -ForegroundColor Green
     # 工具构建提交(回档复核 [5]):键名与 Lua 契约只对同一提交的 go/db 成立,以前只写进 deploy-facts、从不核对。
@@ -2635,73 +2050,48 @@ if ($Apply) {
 $toolCommon = [ordered]@{
     'deploy-facts'       = $factsPath
     'zone'               = "$ZoneId"
-    'topic-generation'   = "$kafkaTopicGeneration"
     'redis'              = $(if ($RedisHost) { "${RedisHost}:${RedisPort}" } else { '<go/db shared redis host:port>' })
     'redis-db'           = "$RedisDB"
     'redis-password-env' = $RedisPasswordEnv
-    'expect-run-id'      = $(if ($redisRunId) { $redisRunId } else { '<redis run_id read in step 0 f>' })
+    'expect-run-id'      = $(if ($redisRunId) { $redisRunId } else { '<redis run_id read in step 0 c>' })
     'mysql-dsn-env'      = $(if ($MySqlDsnEnv) { $MySqlDsnEnv } else { '<mysql dsn env var>' })
     'rollback-id'        = $rollbackId
-    'barrier-protocol'   = $(if ($BarrierProtocol) { $BarrierProtocol } else { '<legacy>' })
     'report-dir'         = $reportDir
 }
 # 判定参数(回档复核 [2]):inventory / purge / verify 共用这一份。purge 原样重跑 inventory 的判定,以前它不带 -target-time 与
-# -acknowledge-no-post-t-writes,带了 -AcknowledgeNoPostTWrites 的路径上 inventory 能过、Step 5 跑完之后 purge 必然退出 3。
+# -acknowledge-no-post-t-writes,带了 -AcknowledgeNoPostTWrites 的路径上 inventory 能过、purge 必然退出 3。
 $judgeArgs = @('-target-time', $TargetTime, '-fingerprint-baseline', $baselinePath) + @(if ($AcknowledgeNoPostTWrites) { '-acknowledge-no-post-t-writes' })
-# 租约等待覆盖 30s 租约加回收周期;handoff 等待不低于 go/shared/ownerepoch 的 HandoffTTL 300s,两者分别计时(对抗复核 [0][12])。
+# handoff 等待不低于 go/shared/ownerepoch 的 HandoffTTL 300s(对抗复核 [0][12])。
 # 行指纹基线由 stopped 在停服之后写(回档复核 [1]),preflight 不再取基线。
 $toolArgs = @{
     preflight = Get-DiscardToolArgs -Mode preflight -Common $toolCommon -Extra @(if ($AllowEmptyTarget) { '-allow-empty-target' })
-    stopped   = Get-DiscardToolArgs -Mode stopped -Common $toolCommon -Extra @('-lease-wait', '90s', '-handoff-wait', '300s', '-fingerprint-baseline', $baselinePath)
+    stopped   = Get-DiscardToolArgs -Mode stopped -Common $toolCommon -Extra @('-handoff-wait', '300s', '-fingerprint-baseline', $baselinePath)
     inventory = Get-DiscardToolArgs -Mode inventory -Common $toolCommon -Extra ($judgeArgs + @('-report', (Join-Path $reportDir 'inventory.json')))
     purge     = Get-DiscardToolArgs -Mode purge -Common $toolCommon -Extra ($judgeArgs + @('-confirm', '-report', $purgeReportPath))
+    verify    = Get-DiscardToolArgs -Mode verify -Common $toolCommon -Extra ($judgeArgs + @('-purge-report', $purgeReportPath, '-report', (Join-Path $reportDir 'verify.json')))
 }
-# verify 的 -kafka-cut 要等 Step 5 记下切点:打印与 5b 都经这一个脚本块组装,参数只有一份。
-$newVerifyArgs = {
-    param([Parameter(Mandatory = $true)][string]$CutText)
-    Get-DiscardToolArgs -Mode verify -Common $toolCommon -Extra ($judgeArgs + @('-kafka-cut', $CutText, '-purge-report', $purgeReportPath, '-report', (Join-Path $reportDir 'verify.json')))
-}
-# Step 5 的参数(hashtable splatting,理由见 Step 5)与失败时打印的单步命令先组装好。
-$kArgs = @{
-    BootstrapServer = $KafkaBootstrap
-    Topic           = $KafkaTopic
-    Group           = $KafkaGroup
-    RetireGroup     = $KafkaLegacyGroup
-    ToLatest        = $true
-    Partitions      = $kafkaPartitionCount
-}
-if ($Apply) { $kArgs.Apply = $true }
-$step5Text = "pwsh -File tools/scripts/kafka_offset_reset.ps1 -BootstrapServer $KafkaBootstrap -Topic $KafkaTopic -Group $KafkaGroup -RetireGroup $KafkaLegacyGroup -ToLatest -Partitions $kafkaPartitionCount -Apply"
+# 失败时打印的单步命令先组装好。
 $step6Text = "pwsh -File tools/scripts/dev_tools.ps1 " + (($upArgs.GetEnumerator() | Sort-Object Name | ForEach-Object { if ($_.Value -is [bool]) { "-$($_.Key)" } else { "-$($_.Key) $($_.Value)" } }) -join ' ')
-$cutDescribeText = "kafka-consumer-groups.sh --bootstrap-server $KafkaBootstrap --describe --group $KafkaGroup"
-# 中止路径的 zone-up(回档复核 [9]):与 Step 6 同一份参数,只去掉 DbConsumerGroup(即 keep)。全新 namespace 下 keep 按 Kafka 位点
-# 落到 final(L) 或 final(Z),与回档前一致;显式 zone 会把回档前还在 legacy 组上的 zone 渲染成交接形状,db 镜像没有交接闸时起不来。
-$abortUpArgs = $upArgs.Clone()
-$abortUpArgs.Remove('DbConsumerGroup')
-$abortUpText = "pwsh -File tools/scripts/dev_tools.ps1 " + (($abortUpArgs.GetEnumerator() | Sort-Object Name | ForEach-Object { if ($_.Value -is [bool]) { "-$($_.Key)" } else { "-$($_.Key) $($_.Value)" } }) -join ' ')
 $entryArgsText = if ($null -ne $entryDecision) { Format-ZoneEntryDecisionArgs -Decision $entryDecision } else { '' }
 # nofile 模式不进入口决定:显式给了就提示照传;留空时第 0 步 a 按存档里核对过的集群现状核对。
 $nofileRerunText = if ($NodeOpenFileLimitMode) { ";-NodeOpenFileLimitMode 照传 $NodeOpenFileLimitMode(本次显式给值没有核对集群,namespace 已删时重跑留空会被判为读不到)" } else { '' }
 $rerunWholeHint = if ($entryArgsText) {
     ("排除原因后用同一个 rid 整脚本重跑:加 -RollbackId $rollbackId,入口参数照传 $entryArgsText(namespace 已删时第 0 步 a 以报告目录里的 " +
-        "entry-state.json 为准,显式值必须与它相同)$nofileRerunText;第 0 步 f 复用报告目录里的 deploy-facts.json。")
+        "entry-state.json 为准,显式值必须与它相同)$nofileRerunText;第 0 步 c 复用报告目录里的 deploy-facts.json。")
 }
 else {
     ("排除原因后用同一个 rid 整脚本重跑:加 -RollbackId $rollbackId;namespace 已删,须显式传 -GateRouterMode、-ClientEntryMode、-NodeOpenFileLimitMode," +
         "并对 Ingress 表态(-GatewayIngressHost … 或 -ConfirmNoGatewayIngress)、对第三方登录表态(照传 -Login* 并加 -ConfirmLoginAuthProviderChange)," +
-        "第 0 步 f 复用报告目录里的 deploy-facts.json。")
+        "第 0 步 c 复用报告目录里的 deploy-facts.json。")
 }
-$abortBeforeStep5 = ("中止路径(Step 5 之前都可用):换回 PITR 之前保留的原库 zone_${ZoneId}_db → 不跑 Step 5 与 4b → k8s-zone-up 不带 -DbConsumerGroup" +
-    "(keep:全新 namespace 按 Kafka 位点落回回档前的 final(L) 或 final(Z),两组都有位点时 k8s_deploy.ps1 拒绝并给出收尾命令;" +
-    "不要照搬 Step 6 那份显式指定 zone 组的参数,回档前还在 legacy 组上的 zone 会被渲染成交接形状):$abortUpText。")
-$forwardHint = ("Step 5 已丢弃积压,原库缺这批写,不能再换回原库,只能向前。修好原因后用同一 rid 按顺序执行:" +
-    "`n  - Step 5(只在它没成功时):$step5Text" +
-    "`n  - 切点:$cutDescribeText(每个分区 CURRENT == LOG-END,记为切点,对照 $(Join-Path $reportDir 'kafka-cut.json'))" +
+$abortBeforePurge = ("中止路径(Step 4b 之前都可用):换回 PITR 之前保留的原库 zone_${ZoneId}_db → 不跑 4b 与 Step 5 → " +
+    "按 Step 6 的同一份参数 k8s-zone-up:$step6Text。")
+$forwardHint = ("Step 4b 已开始处置 Redis,不能再换回原库,只能向前。修好原因后用同一 rid 按顺序执行:" +
     "`n  - Step 4b:$(Format-CommandLine -Program $toolShown -Arguments $toolArgs.purge)" +
-    "`n  - Step 5b:同一条 describe 必须仍等于切点,再 $(Format-CommandLine -Program $toolShown -Arguments (& $newVerifyArgs '<切点 p=offset,…>'))" +
+    "`n  - Step 5:$(Format-CommandLine -Program $toolShown -Arguments $toolArgs.verify)" +
     "`n  - Step 6:$step6Text")
 
-# 第 0 步 f(下半):回档工具 preflight,通过之后写入口决定存档(回档复核 [10]),然后才进 Step 1。
+# 第 0 步 c(下半):回档工具 preflight,通过之后写入口决定存档(回档复核 [10]),然后才进 Step 1。
 Write-Host "  Discard tool preflight: $(Format-CommandLine -Program $toolShown -Arguments $toolArgs.preflight)"
 if ($Apply) {
     # 运行记录:每次 -Apply 追加一行,只记非机密的参数(口令与 DSN 只记环境变量名)。
@@ -2713,18 +2103,12 @@ if ($Apply) {
         targetTime       = $TargetTime
         pitrRestoredTo   = $PitrRestoredTo
         skipMySqlPause   = [bool]$SkipMySqlPause
-        topic            = $KafkaTopic
-        zoneGroup        = $KafkaGroup
-        legacyGroup      = $KafkaLegacyGroup
-        partitions       = $kafkaPartitionCount
         redis            = "$($toolCommon['redis'])/db$RedisDB"
         redisPasswordEnv = $RedisPasswordEnv
         mySqlDsnEnv      = $MySqlDsnEnv
-        barrierProtocol  = $BarrierProtocol
         discardTool      = $RollbackDiscardTool
         discardToolCommit = $toolVersion.Commit
         redisRunId       = $redisRunId
-        quiesceSeconds   = $QuiesceSeconds
         acknowledgeNoPostTWrites = [bool]$AcknowledgeNoPostTWrites
     }
     Add-Content -LiteralPath (Join-Path $reportDir 'run-log.jsonl') -Encoding utf8 -Value ($runRecord | ConvertTo-Json -Compress)
@@ -2762,7 +2146,7 @@ Write-Host ""
 
 # ── Step 1: stop the zone ────────────────────────────────────────
 Write-Host "── Step 1: k8s-zone-down ──" -ForegroundColor Cyan
-# hashtable splatting(理由同 Step 5);-KubeContext / -KubeConfig 非空才透传,与第 0 步预检、Step 6 落在同一集群。
+# hashtable splatting(理由见 $upArgs);-KubeContext / -KubeConfig 非空才透传,与第 0 步预检、Step 6 落在同一集群。
 $downArgs = @{
     Command         = "k8s-zone-down"
     ZoneName        = $ZoneName
@@ -2776,88 +2160,52 @@ $namespaceShown = Format-CommandLine -Program 'kubectl' -Arguments $namespaceArg
 Write-Host "  then: $namespaceShown must print nothing (Remove-Zone tolerates delete failures)"
 if ($Apply) {
     & "$ScriptDir/dev_tools.ps1" @downArgs
-    if ($LASTEXITCODE -ne 0) { throw "k8s-zone-down failed(退出码 $LASTEXITCODE):尚未 PITR,Redis / Kafka 尚未改动。$rerunWholeHint" }
+    if ($LASTEXITCODE -ne 0) { throw "k8s-zone-down failed(退出码 $LASTEXITCODE):尚未 PITR,Redis 尚未改动。$rerunWholeHint" }
     Assert-ZoneNamespaceGone -Namespace $zoneNamespace -KubeContext $KubeContext -KubeConfig $KubeConfig
     Write-Host "  zone $ZoneName stopped" -ForegroundColor Green
 }
 Write-Host ""
 
-# Step 2(zone-down 之后等 LAG 排空)已删除(2026-10-15):本 zone 的 db 已停,LAG 不可能排空,
-# 而 Step 5 把位点拨到日志末端(丢弃积压)。停服前的只读快照见第 0 步 c,停服后的见 Step 1b (iv)。
+# Step 2(zone-down 之后等 LAG 排空)已删除(2026-10-15):存盘已不经 Kafka,没有积压可等。编号 3–7 不变。
 
 # ── Step 1b: post-stop checks (read-only, before PITR) ──────────
-# 停服之后、PITR 之前再确认「本 topic 不会再有写入、也不会再被消费」:这里拒绝时 zone 只是停了,数据一点没动,放弃回档直接 zone-up 即可;
-# 拖到 PITR 之后才发现,MySQL 已回档、缓存还是 T 之后的,没有干净的退路(回档丢弃语义对抗复核 [6])。
+# 停服之后、PITR 之前再确认「本 zone 不会再有写入」:这里拒绝时 zone 只是停了,数据一点没动,放弃回档直接 zone-up 即可;
+# 拖到 PITR 之后才发现,MySQL 已回档、Redis 还是 T 之后的,没有干净的退路(回档丢弃语义对抗复核 [6])。
 Write-Host "── Step 1b: post-stop checks (read-only, before PITR) ──" -ForegroundColor Cyan
-# 顺序是「先证明没有写者,再取基线」(回档复核 [1]):(i)(ii) 证明 Kafka 上没有消费者、也没有生产者,(iii) 的工具再确认重试租约已过期、
-# 没有人在别处在线,最后一步才写停服行指纹基线 —— 那之后 zone_<id>_db 不再有写入,4a 拿 PITR 之后的指纹与它比较才有意义。
-Write-Host "  (i)   kafka-consumer-groups.sh --bootstrap-server $KafkaBootstrap --describe --group $KafkaGroup --state (must be Empty / Dead, or the group must not exist)"
-Write-Host "        kafka-consumer-groups.sh --bootstrap-server $KafkaBootstrap --describe --group $KafkaLegacyGroup (CONSUMER-ID must be '-' on every $KafkaTopic row)"
-Write-Host "  (ii)  kafka-get-offsets.sh --bootstrap-server $KafkaBootstrap --topic $KafkaTopic --time -1, twice, ${QuiesceSeconds}s apart (the log end must not move)"
-Write-Host "  (iii) $(Format-CommandLine -Program $toolShown -Arguments $toolArgs.stopped)"
-Write-Host "        (leases, players online elsewhere; writes the stopped-phase fingerprint baseline $baselinePath last)"
-Write-Host "  (iv)  LAG of both groups on $KafkaTopic; backlog that Step 5 -ToLatest discards = LAG of the zone group when it holds offsets on $KafkaTopic, else of the legacy group"
+# 顺序是「先证明没有写者,再取基线」(回档复核 [1]):工具 stopped 确认没有人在别处在线,最后一步才写停服行指纹基线 ——
+# 那之后 zone_<id>_db 不再有写入,4a 拿 PITR 之后的指纹与它比较才有意义。
+Write-Host "  $(Format-CommandLine -Program $toolShown -Arguments $toolArgs.stopped)"
+Write-Host "  (players online elsewhere; writes the stopped-phase fingerprint baseline $baselinePath last)"
 if ($Apply) {
-    $stopRefusal = "k8s-zone-rollback 在 Step 1b 拒绝继续:zone 已停服,尚未 PITR,尚未改动 Redis / Kafka。"
-    $stopHint = ("`n$rerunWholeHint`n放弃回档:数据都没动,k8s-zone-up 不带 -DbConsumerGroup(keep,按 Kafka 位点落回回档前的消费组形状)即可恢复:" +
-        "$abortUpText。")
-    try {
-        $consumerProblems = Get-KafkaTopicConsumerProblems -Bootstrap $KafkaBootstrap -Topic $KafkaTopic -ZoneGroup $KafkaGroup -LegacyGroup $KafkaLegacyGroup
-    }
-    catch {
-        throw ($stopRefusal + "判不出 $KafkaTopic 上还有没有消费者(kafka-consumer-groups.sh 失败或输出无法解析):$($_.Exception.Message)" + $stopHint)
-    }
-    if ($consumerProblems.Count -gt 0) {
-        throw ($stopRefusal + "$KafkaTopic 上还有消费者:`n  - " + ($consumerProblems -join "`n  - ") + $stopHint)
-    }
-    try {
-        $logEndBefore = Read-KafkaTopicLogEnd -Bootstrap $KafkaBootstrap -Topic $KafkaTopic
-        Write-Host "  log end of ${KafkaTopic}: $(ConvertTo-KafkaCutText -Cut $logEndBefore); waiting ${QuiesceSeconds}s"
-        $quiesceWatch = [System.Diagnostics.Stopwatch]::StartNew()
-        Start-Sleep -Seconds $QuiesceSeconds
-        $logEndAfter = Read-KafkaTopicLogEnd -Bootstrap $KafkaBootstrap -Topic $KafkaTopic
-        Write-Host "  log end of ${KafkaTopic} after $([Math]::Round($quiesceWatch.Elapsed.TotalSeconds, 1))s: $(ConvertTo-KafkaCutText -Cut $logEndAfter)"
-    }
-    catch {
-        throw ($stopRefusal + "读不到 $KafkaTopic 的日志末端:$($_.Exception.Message)" + $stopHint)
-    }
-    $quietProblems = Test-KafkaTopicQuiescent -First $logEndBefore -Second $logEndAfter -Partitions $kafkaPartitionCount
-    if ($quietProblems.Count -gt 0) {
-        throw ($stopRefusal + "停服之后 $KafkaTopic 仍有写入(别的 zone 的 scene 托管本 zone 归属玩家、晚到的本地队列消息或 saveoutbox 补投),现在拨位点、清 Redis 都不安全:`n  - " +
-            ($quietProblems -join "`n  - ") + "`n查清生产者(他区在线的本 zone 归属玩家要先下线)。" + $stopHint)
-    }
-    Write-Host "  $KafkaTopic is quiet" -ForegroundColor Green
-    # 工具 stopped 放在 Kafka 两项之后:它最后一步写停服行指纹基线,那一刻必须已经证明没有写者(回档复核 [1])。
+    $stopRefusal = "k8s-zone-rollback 在 Step 1b 拒绝继续:zone 已停服,尚未 PITR,尚未改动 Redis。"
+    $stopHint = ("`n$rerunWholeHint`n放弃回档:数据都没动,按 Step 6 的同一份参数 k8s-zone-up 即可恢复:$step6Text。")
     $stoppedCode = Invoke-DiscardTool -ToolPath $RollbackDiscardTool -Arguments $toolArgs.stopped
     if ($stoppedCode -ne 0) {
         throw ($stopRefusal + "回档工具 stopped 以退出码 $stoppedCode 结束($(Get-DiscardToolExitMeaning -ExitCode $stoppedCode)):" +
-            "多半还有存活的 go/db 重试租约、本 zone 归属的玩家仍在别的 zone 在线,或同一 rid 已有不是停服阶段取的行指纹基线;详见上面工具的输出。" + $stopHint)
+            "多半是本 zone 归属的玩家仍在别的 zone 在线,或同一 rid 已有不是停服阶段取的行指纹基线;详见上面工具的输出。" + $stopHint)
     }
     Write-Host "  stopped-phase fingerprint baseline: $baselinePath" -ForegroundColor Green
-    Write-Host "  LAG on $KafkaTopic (informational):"
-    Show-KafkaTopicLagSnapshot -Bootstrap $KafkaBootstrap -Topic $KafkaTopic -Groups @($KafkaGroup, $KafkaLegacyGroup)
-    Show-KafkaDiscardEstimate -Bootstrap $KafkaBootstrap -Topic $KafkaTopic -ZoneGroup $KafkaGroup -LegacyGroup $KafkaLegacyGroup
 } else {
-    Write-Host "  (not executed during dry-run; -Apply refuses before the PITR prompt when any check fails)" -ForegroundColor Yellow
+    Write-Host "  (not executed during dry-run; -Apply refuses before the PITR prompt when the check fails)" -ForegroundColor Yellow
 }
 Write-Host ""
 
 # ── Step 3: MySQL PITR (manual) ──────────────────────────────────
-# 只回退本 zone 的库:data_service 的全局库(id_segment、player_name、路由表)一起回退会重复发出 player_id;guild / mail / 收件箱 / trade
+# 只回退本 zone 的库:data_service 的全局库(player_name、路由表)一起回退会让名字登记和路由倒回去;guild / mail / 收件箱 / trade
 # 各有自己的库,不随 zone 回退(跨服务状态不回退是已接受的代价)。旧文案里的库名 game 早已不存在。
 Write-Host "── Step 3: MySQL Point-in-Time Recovery ──" -ForegroundColor Cyan
 Write-Host "  ⚠️ This step is NOT automated." -ForegroundColor Yellow
 Write-Host "  See docs/ops/mysql-backup-pitr-runbook.md §4.1 for the procedure."
 Write-Host "  Target time: $TargetTime (UTC)"
 Write-Host "  Restore ONLY zone_${ZoneId}_db, plus any placement-store databases listed by the discard tool in $reportDir."
-Write-Host "  Do NOT roll back global databases: data_service (id_segment / player_name / route tables), guild, mail, player inbox, trade."
+Write-Host "  Do NOT roll back global databases: data_service (player_name / route tables), guild, mail, player inbox, trade."
 Write-Host "  Restore into a shadow database first, then swap it in; KEEP the pre-rollback zone_${ZoneId}_db (rename it) until the Step 6 smoke test passes."
 Write-Host ""
 Write-Host "  Typical command (verify before running; mysqlbinlog reads --stop-datetime in the local time zone of its host, so run it with TZ=UTC):"
 Write-Host "    mysqlbinlog --database=zone_${ZoneId}_db --stop-datetime=`"$($targetUtc.ToString('yyyy-MM-dd HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture))`" \\"
 Write-Host "      /backup/binlog/mysql-bin.* | mysql -h shadow-host -u root -p zone_${ZoneId}_db_restore"
-Write-Host "  Abort path until Step 5 runs: swap the original zone_${ZoneId}_db back, skip Step 5 and Step 4b, then run zone-up WITHOUT -DbConsumerGroup (keep):"
-Write-Host "    $abortUpText"
+Write-Host "  Abort path until Step 4b runs: swap the original zone_${ZoneId}_db back, skip Step 4b and Step 5, then run zone-up with the Step 6 arguments:"
+Write-Host "    $step6Text"
 Write-Host ""
 
 if ($Apply -and -not $SkipMySqlPause) {
@@ -2872,136 +2220,58 @@ elseif ($Apply) {
 Write-Host ""
 
 # ── Step 4a: inventory (read-only) ──────────────────────────────
-# PITR 之后、任何写之前盘点。这里拒绝时 Kafka 与 Redis 都还没动,还能按中止路径换回原库;
+# PITR 之后、任何写之前盘点。这里拒绝时 Redis 还没动,还能按中止路径换回原库;
 # blocked 玩家怎么处置待负责人裁决 #4,裁决之前一律停在这里。盘点的行指纹与 Step 1b 的停服基线比较(回档复核 [1])。
-# 盘点通过之后、Step 5 之前再复核一次停服状态(回档复核 [8]):中间隔着人工 PITR,namespace 可能被重建、消费者可能回来。
+# 盘点通过之后、4b 之前再复核一次停服状态(回档复核 [8]):中间隔着人工 PITR,namespace 可能被重建。
 Write-Host "── Step 4a: inventory of post-TargetTime Redis state (read-only) ──" -ForegroundColor Cyan
 Write-Host "  $(Format-CommandLine -Program $toolShown -Arguments $toolArgs.inventory)"
-Write-Host "  then, before Step 5 (read-only): $namespaceShown must still print nothing; $KafkaGroup must still be Empty / Dead or missing; $KafkaLegacyGroup must still have no member on $KafkaTopic"
+Write-Host "  then, before Step 4b (read-only): $namespaceShown must still print nothing"
 if ($Apply) {
-    $inventoryRefusal = "k8s-zone-rollback 在 Step 4a 拒绝继续:zone 已停服、MySQL 已 PITR,Redis 与 Kafka 尚未改动。"
+    $inventoryRefusal = "k8s-zone-rollback 在 Step 4a 拒绝继续:zone 已停服、MySQL 已 PITR,Redis 尚未改动。"
     $inventoryCode = Invoke-DiscardTool -ToolPath $RollbackDiscardTool -Arguments $toolArgs.inventory
     if ($inventoryCode -eq 6) {
         throw ($inventoryRefusal + "盘点出 blocked 玩家(torn / owner_behind / post_t_candidate / legacy_owned / unclassified,名单见 $(Join-Path $reportDir 'inventory.json'))。" +
-            "带 blocked 玩家继续回档待负责人裁决(#4),裁决之前不放行。`n$abortBeforeStep5")
+            "带 blocked 玩家继续回档待负责人裁决(#4),裁决之前不放行。`n$abortBeforePurge")
     }
     if ($inventoryCode -ne 0) {
         throw ($inventoryRefusal + "回档工具 inventory 以退出码 $inventoryCode 结束($(Get-DiscardToolExitMeaning -ExitCode $inventoryCode)),详见上面工具的输出与 $reportDir。" +
-            "`n$abortBeforeStep5`nPITR 确已做完、排除原因后,也可以带 -RollbackId $rollbackId -SkipMySqlPause -PitrRestoredTo $TargetTime 整脚本重跑。")
+            "`n$abortBeforePurge`nPITR 确已做完、排除原因后,也可以带 -RollbackId $rollbackId -SkipMySqlPause -PitrRestoredTo $TargetTime 整脚本重跑。")
     }
     Write-Host "  inventory passed: no blocked players" -ForegroundColor Green
-    # Step 5 之前的停服复核(只读):Step 5 不可逆,拨位点之前最后一次确认「没有写者、没有消费者」。
-    $recheckRefusal = "k8s-zone-rollback 在 Step 5 之前拒绝继续:zone 已停服、MySQL 已 PITR,Redis 与 Kafka 尚未改动。"
-    $recheckHint = ("这段时间里本 zone 的写者可能已经回来,正把积压写进刚回档的库。查清原因(GitOps / CD 重建、手工拉起、别处的 db 实例)并停掉它们;" +
-        "库已被写过时只能按中止路径恢复。`n$abortBeforeStep5")
+    # Step 4b 之前的停服复核(只读):4b 之后就不能再换回原库,动 Redis 之前最后一次确认「没有写者」。
+    $recheckRefusal = "k8s-zone-rollback 在 Step 4b 之前拒绝继续:zone 已停服、MySQL 已 PITR,Redis 尚未改动。"
+    $recheckHint = ("这段时间里本 zone 的写者可能已经回来,正把存盘写进刚回档的库。查清原因(GitOps / CD 重建、手工拉起、别处的 db 实例)并停掉它们;" +
+        "库已被写过时只能按中止路径恢复。`n$abortBeforePurge")
     Assert-ZoneNamespaceGone -Namespace $zoneNamespace -KubeContext $KubeContext -KubeConfig $KubeConfig -Refusal $recheckRefusal -Hint $recheckHint
-    try {
-        $recheckProblems = Get-KafkaTopicConsumerProblems -Bootstrap $KafkaBootstrap -Topic $KafkaTopic -ZoneGroup $KafkaGroup -LegacyGroup $KafkaLegacyGroup
-    }
-    catch {
-        throw ($recheckRefusal + "判不出 $KafkaTopic 上还有没有消费者(kafka-consumer-groups.sh 失败或输出无法解析):$($_.Exception.Message)`n" + $recheckHint)
-    }
-    if ($recheckProblems.Count -gt 0) {
-        throw ($recheckRefusal + "PITR 期间 $KafkaTopic 上又出现了消费者(zone 组活跃时 Kafka 会拒绝 Step 5 的重置;legacy 组有订阅者时重置能成功、退役却失败," +
-            "而那个消费者正在落库):`n  - " + ($recheckProblems -join "`n  - ") + "`n" + $recheckHint)
-    }
-    Write-Host "  still stopped: namespace gone, no consumer on $KafkaTopic" -ForegroundColor Green
-}
-Write-Host ""
-
-# ── Step 5: Kafka offsets to the log end ─────────────────────────
-Write-Host "── Step 5: Kafka offsets to the log end ($KafkaTopic, -ToLatest) ──" -ForegroundColor Cyan
-# 必须用 hashtable splatting($kArgs 在第 0 步 f 之前组装)。之前用的是数组 splatting —— PowerShell 会把数组
-# 元素当**位置参数**依次绑定,于是 "-BootstrapServer" 这个字符串本身被绑到
-# BootstrapServer、"kafka:9092" 绑到 Group、…… 最后 "-Group" 撞上 [int]$Partitions
-# 直接类型转换失败。结果是这个灾难恢复脚本连 dry-run 都跑不到第 6 步。
-# zone 组拨到日志末端(丢弃 [T, 停服] 之间从未落库的积压:负责人 2026-10-17 裁决);kafka_offset_reset.ps1 -Apply 之后逐分区复核
-# (CURRENT-OFFSET == 计划 NEW-OFFSET),复核通过才删除 legacy 组在本 topic 上的位点(-RetireGroup)。回档后该 zone 一律以 zone 组为权威,
-# Step 6 据此落到最终形状。随后读 zone 组位点作为切点 O:之后 4b 与 5b 都以它为准,任何越过切点的写入都会在 5b 被发现。
-Write-Host ("  kafka_offset_reset.ps1 " + (($kArgs.GetEnumerator() | Sort-Object Name | ForEach-Object { "-$($_.Key) $($_.Value)" }) -join ' '))
-Write-Host "  then: $cutDescribeText (every partition CURRENT == LOG-END; recorded as the cut in $(Join-Path $reportDir 'kafka-cut.json'))"
-$kafkaCut = $null
-if ($Apply) {
-    # 先清零:被调脚本正常结束时 $LASTEXITCODE 保留的是更早一次原生命令的值。
-    $global:LASTEXITCODE = 0
-    $step5Failure = $null
-    try {
-        & "$ScriptDir/kafka_offset_reset.ps1" @kArgs
-        if ($LASTEXITCODE -ne 0) { $step5Failure = "kafka_offset_reset.ps1 以退出码 $LASTEXITCODE 结束" }
-    }
-    catch {
-        $step5Failure = $_.Exception.Message
-    }
-    if ($null -ne $step5Failure) {
-        throw ("k8s-zone-rollback 在 Step 5 失败:MySQL 已 PITR,Redis 尚未改动;zone 组的位点可能已经拨到末端、积压可能已被丢弃。原因:$step5Failure`n" + $forwardHint)
-    }
-    try {
-        $cutRead = Read-ZoneGroupCut -Bootstrap $KafkaBootstrap -Topic $KafkaTopic -ZoneGroup $KafkaGroup -Partitions $kafkaPartitionCount
-    }
-    catch {
-        throw ("k8s-zone-rollback 在 Step 5 之后读不到 zone 组 $KafkaGroup 的位点,记不下切点:$($_.Exception.Message)`n" + $forwardHint)
-    }
-    if (@($cutRead.Problems).Count -gt 0) {
-        throw ("k8s-zone-rollback 在 Step 5 之后拒绝继续:Step 5 之后又有消息写入 $KafkaTopic,或 zone 组的位点不在日志末端:`n  - " + (@($cutRead.Problems) -join "`n  - ") +
-            "`n查清生产者后单独重跑 Step 5。`n" + $forwardHint)
-    }
-    $kafkaCut = $cutRead.Cut
-    $cutRecord = [ordered]@{
-        rollbackId    = $rollbackId
-        topic         = $KafkaTopic
-        group         = $KafkaGroup
-        partitions    = $kafkaPartitionCount
-        cut           = (ConvertTo-KafkaCutText -Cut $kafkaCut)
-        capturedAtUtc = [datetime]::UtcNow.ToString('o')
-        note          = '本次回档的丢弃水位:以后任何 -ToDatetime / -ToEarliest 重置都不得越过它,否则停服时那批积压会被重新落库。'
-    }
-    Set-Content -LiteralPath (Join-Path $reportDir 'kafka-cut.json') -Encoding utf8 -Value ($cutRecord | ConvertTo-Json)
-    Write-Host "  cut recorded: $($cutRecord.cut)" -ForegroundColor Green
+    Write-Host "  still stopped: namespace gone" -ForegroundColor Green
 }
 Write-Host ""
 
 # ── Step 4b: discard post-TargetTime Redis state ─────────────────
-# 放在 Step 5 之后(回档丢弃语义对抗复核 [4]):先在 Kafka 上记下切点,再清 Redis;两步之间残留写者写进 Kafka 的消息越过切点,
-# 写进 Redis 的状态由 5b 的 verify 复核,都能被发现。工具内部先原样重跑 4a 的检查与判定(同一组判定参数 $judgeArgs,回档复核 [2]),
-# 任一不过什么都不写;同一 rid 续跑按契约的续跑规则,每次 purge 开新一轮 pass(回档复核 [3])。
+# 工具内部先原样重跑 4a 的检查与判定(同一组判定参数 $judgeArgs,回档复核 [2]),任一不过什么都不写;同一 rid 续跑按契约的续跑规则(回档复核 [3])。
 Write-Host "── Step 4b: discard post-TargetTime Redis state ──" -ForegroundColor Cyan
 Write-Host "  $(Format-CommandLine -Program $toolShown -Arguments $toolArgs.purge)"
 if ($Apply) {
     $purgeCode = Invoke-DiscardTool -ToolPath $RollbackDiscardTool -Arguments $toolArgs.purge
     if ($purgeCode -ne 0) {
-        throw ("k8s-zone-rollback 在 Step 4b 失败:回档工具 purge 以退出码 $purgeCode 结束($(Get-DiscardToolExitMeaning -ExitCode $purgeCode)),分族计数见上面工具的输出与 $purgeReportPath" +
-            "(同一 rid 重跑接着做:已改名的键不在源上,新出现的源键进下一轮 pass)。`n" + $forwardHint)
+        throw ("k8s-zone-rollback 在 Step 4b 失败:回档工具 purge 以退出码 $purgeCode 结束($(Get-DiscardToolExitMeaning -ExitCode $purgeCode)),计数见上面工具的输出与 $purgeReportPath" +
+            "(同一 rid 重跑接着做,幂等)。`n" + $forwardHint)
     }
     Write-Host "  purge finished" -ForegroundColor Green
 }
 Write-Host ""
 
-# ── Step 5b: nothing written after the cut ───────────────────────
-Write-Host "── Step 5b: verify nothing was written after the Step 5 cut ──" -ForegroundColor Cyan
-$cutText = if ($null -ne $kafkaCut) { ConvertTo-KafkaCutText -Cut $kafkaCut } else { '<Step 5 cut p=offset,...>' }
+# ── Step 5: nothing left behind ──────────────────────────────────
+Write-Host "── Step 5: verify nothing was left behind ──" -ForegroundColor Cyan
 # 判定参数与 4a / 4b 同一份;-purge-report 让 verify 逐个复核 purge 处理过的玩家(回档复核 [6])。
-$verifyArgs = & $newVerifyArgs $cutText
-Write-Host "  $cutDescribeText (every partition CURRENT == LOG-END == cut)"
-Write-Host "  $(Format-CommandLine -Program $toolShown -Arguments $verifyArgs)"
+Write-Host "  $(Format-CommandLine -Program $toolShown -Arguments $toolArgs.verify)"
 if ($Apply) {
-    try {
-        $recheck = Read-ZoneGroupCut -Bootstrap $KafkaBootstrap -Topic $KafkaTopic -ZoneGroup $KafkaGroup -Partitions $kafkaPartitionCount -ExpectedCut $kafkaCut
-    }
-    catch {
-        throw ("k8s-zone-rollback 在 Step 5b 读不到 zone 组 $KafkaGroup 的位点:$($_.Exception.Message)`n" + $forwardHint)
-    }
-    if (@($recheck.Problems).Count -gt 0) {
-        throw ("k8s-zone-rollback 在 Step 5b 拒绝继续(Step 6 之前):Step 5 之后又有消息写入 $KafkaTopic,查清生产者后单独重跑 Step 5(新的切点),再用同一 rid 重跑 4b" +
-            "(上一轮已隔离的键不受影响,重新出现的同名源键进下一轮 pass)与 5b:`n  - " +
-            (@($recheck.Problems) -join "`n  - ") + "`n" + $forwardHint)
-    }
-    $verifyCode = Invoke-DiscardTool -ToolPath $RollbackDiscardTool -Arguments $verifyArgs
+    $verifyCode = Invoke-DiscardTool -ToolPath $RollbackDiscardTool -Arguments $toolArgs.verify
     if ($verifyCode -ne 0) {
-        throw ("k8s-zone-rollback 在 Step 5b 拒绝继续(Step 6 之前):回档工具 verify 以退出码 $verifyCode 结束($(Get-DiscardToolExitMeaning -ExitCode $verifyCode)):" +
-            "本 topic 的重试族或补投桶又出现了条目、仍有存活租约、purge 处理过的玩家又长出了父快照 / 子表缓存 / sync_digest / 资产提交证据 / 屏障," +
-            "重跑盘点又归出了 T 之后的状态,或游标超过了切点(offset 回退过,须换世代)。查清残留写者后用同一 rid 重跑 4b 与 5b。`n" + $forwardHint)
+        throw ("k8s-zone-rollback 在 Step 5 拒绝继续(Step 6 之前):回档工具 verify 以退出码 $verifyCode 结束($(Get-DiscardToolExitMeaning -ExitCode $verifyCode)):" +
+            "purge 处理过的玩家又长出了同步摘要 / 资产提交证据,或重跑盘点又归出了 T 之后的状态。查清残留写者后用同一 rid 重跑 4b 与 Step 5。`n" + $forwardHint)
     }
-    Write-Host "  verified: $KafkaTopic is still at the cut and the discard tool found nothing left behind" -ForegroundColor Green
+    Write-Host "  verified: the discard tool found nothing left behind" -ForegroundColor Green
 }
 Write-Host ""
 
@@ -3012,7 +2282,7 @@ Write-Host ("  dev_tools.ps1 " + (($upArgs.GetEnumerator() | Sort-Object Name | 
 if ($Apply) {
     & "$ScriptDir/dev_tools.ps1" @upArgs
     if ($LASTEXITCODE -ne 0) {
-        throw ("k8s-zone-up failed(退出码 $LASTEXITCODE):MySQL 已回档、Redis 已处置、Kafka 已拨到切点,zone 还没起来。" +
+        throw ("k8s-zone-up failed(退出码 $LASTEXITCODE):MySQL 已回档、Redis 已处置,zone 还没起来。" +
             "修好原因后单独重跑 Step 6:$step6Text")
     }
     Write-Host "  zone $ZoneName up" -ForegroundColor Green
@@ -3020,8 +2290,7 @@ if ($Apply) {
 Write-Host ""
 
 # ── Step 7: verification checklist ───────────────────────────────
-# 键名按现行实现写:父快照 PlayerAllData:{<pid>}(玩家域 hash tag,savebarrier.ParentKey),子表缓存 <表名>:<pid>(go/db buildCacheKey = {MsgType}:{key});
-# 以前这里写的 player:{<pid>}:player_database 并不存在。
+# 键名按现行实现写:同步摘要 player:<pid>:sync_digest(shared/playersync.KeyFormat);玩家存档只在 player_store,Redis 里没有。
 Write-Host "── Step 7: post-rollback verification ──" -ForegroundColor Cyan
 Write-Host "  Run these manually:"
 $verifyKubeArgs = "$(if ($KubeContext) { " --context $KubeContext" })$(if ($KubeConfig) { " --kubeconfig $KubeConfig" })"
@@ -3029,17 +2298,12 @@ $redisShown = if ($RedisHost) { "-h $RedisHost -p $RedisPort -n $RedisDB" } else
 $redisAuthHint = if ($RedisPasswordEnv) { " (authenticate with the password in env $RedisPasswordEnv; never on the command line)" } else { '' }
 Write-Host "    1. kubectl get pods,sts,svc,ingress -n ${NamespacePrefix}-${ZoneName}$verifyKubeArgs (for external zones, confirm gate-<i> nodePort / Ingress host match their values before rollback)"
 Write-Host "    2. Robot smoke login: pwsh -File tools/scripts/dev_tools.ps1 -Command dev-robot-zones -Zones $ZoneId"
-Write-Host "    3. Before its first login, a player listed as processed in $purgeReportPath has no caches${redisAuthHint}:"
-Write-Host "       redis-cli $redisShown EXISTS 'PlayerAllData:{<pid>}' 'player_database:<pid>' 'player_database_1:<pid>'   (expect 0)"
-Write-Host "       then log that player in once (cold read from zone_${ZoneId}_db must succeed); if inventory.json lists blocked players, check one of them is refused with a clear message."
-Write-Host "    4. Metrics on the zone's db: db_ordering_guard_total{outcome=`"stale`"} must stay 0 after the rollback (a nonzero value means offsets went backwards; bump the topic generation),"
-Write-Host "       db_ordering_guard_total{outcome=`"apply_no_cursor`"} must not spike, db_save_outbox_total{result=`"published`"} should stay near 0."
-# 第 5 条不再手拼 kafka:retry* 键名(以前只列了共享 ready 与死信,漏了 :p<n> 与 processing,回档复核 [11]):本 topic 的全部重试族、
-# 补投桶与游标由 Step 5b 的 verify 按 go/db 的键名函数核对过。zone 拉起之后 go/db 已在用这些键(租约、重试),不能再拿 verify 复核。
-Write-Host "    5. Retry state of ${KafkaTopic}: Step 5b verify checked every retry family (shared ready, :p<n>, processing, instances, dead letter), the 64 replay buckets and the cursors before zone-up;"
-Write-Host "       keep $(Join-Path $reportDir 'verify.json'). Do not re-run verify now: the live go/db owns those keys again (leases, retries)."
-Write-Host "    6. Keep on record: quarantine keys rollback:quarantine:${ZoneId}:${rollbackId}:* (never re-inject them into the live queues) and the report directory $reportDir."
-Write-Host "    7. Tail scene/gate/db logs for replay errors (first 5 minutes); drop the renamed pre-rollback zone_${ZoneId}_db only after these checks pass."
+Write-Host "    3. Before its first login, a player listed as processed in $purgeReportPath has no sync digest${redisAuthHint}:"
+Write-Host "       redis-cli $redisShown EXISTS 'player:<pid>:sync_digest'   (expect 0)"
+Write-Host "       then log that player in once (LoadAndClaim from player_store in zone_${ZoneId}_db must succeed); if inventory.json lists blocked players, check one of them is refused with a clear message."
+Write-Host "    4. Metrics on the zone's db: db_player_store_requests_total{op,result} must show saves and claims succeeding, with no sustained failure result after the rollback."
+Write-Host "    5. Keep on record: the report directory $reportDir, including $(Join-Path $reportDir 'verify.json')."
+Write-Host "    6. Tail scene/gate/db logs for save errors (first 5 minutes); drop the renamed pre-rollback zone_${ZoneId}_db only after these checks pass."
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host " Rollback complete. " -ForegroundColor Cyan

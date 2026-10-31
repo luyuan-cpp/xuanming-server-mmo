@@ -269,8 +269,12 @@ spec:
             summary: "收件箱有条目被投递了 {{ $value | printf \"%.0f\" }} 次仍未终结"
             description: >-
               疑似毒消息(载荷让 scene 崩溃或处理永远失败)。只统计最近 24 小时内投递的行。
-              核对后用 PlayerInboxAdmin.VoidItem(reason=QUARANTINED)隔离:
+              先看收件箱同一时刻的 ERROR `Item delivered N times without ack` 里的 domain:
+              GM 处置域(domain=1)核对后用 PlayerInboxAdmin.VoidItem(reason=QUARANTINED)隔离,
               作废路径不解码载荷,不会再次触发崩溃。步骤与限速见 docs/ops/player-inbox-runbook.md「卡住与毒消息」。
+              例外:Battle 结算域(domain=2,PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT)禁止作废,VoidItem 对它一律回
+              kPlayerInboxItemStateConflict,Ack 也只认 APPLIED;按 runbook「Battle 域条目卡住」(§6.1)查原因,
+              不要作废、不要手改 SQL。
 
         # 在线提醒积压:提醒从流行最后一次写入起悬了 5 分钟以上还没落定(Kafka 写不进 / 节点镜像不对 / 领导者没在跑)。
         # 补发没落定时把 notify_due_ms 推到 now + 退避(评审 L6),所以积压按流行的 updated_ms 起算,退避中的流照样计入。

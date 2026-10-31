@@ -43,7 +43,7 @@ func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 		return closeErr
 	}
 	for table, required := range map[string][]string{
-		"match_authority_ticket":     {"state,enqueued_ms,player_id", "state,mode,team_id,enqueued_ms,player_id"},
+		"match_authority_ticket":     {"state,enqueued_ms,player_id", "state,mode,team_id,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,enqueued_ms,player_id"},
 		"match_ticket_region":        {"physical_region,mode,config_id,team_size,preferred_region,enqueued_ms,player_id", "physical_region,mode,config_id,team_size,enqueued_ms,player_id", "physical_region,mode,config_id,team_size,home_zone,preferred_region,enqueued_ms,player_id", "physical_region,mode,config_id,team_size,home_zone,enqueued_ms,player_id", "expires_ms,player_id,physical_region"},
 		"match_challenge_invitation": {"target_player_id,state,expires_ms,challenge_id", "challenger_player_id,state,expires_ms,challenge_id"},
 		"match_direct_intent":        {"exit_prepared,cancelled,battle_id,kind,owner_id,request_high,request_low"},
@@ -52,7 +52,7 @@ func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 		"team_authority":             {"state,idle_expires_ms,team_id"},
 		"team_invite_index":          {"invitee_id,expires_ms,team_id"},
 		"team_application_index":     {"applicant_id,expires_ms,team_id"},
-		"team_launch":                {"state,enqueued_ms,actor_id,request_high,request_low", "team_id,state,enqueued_ms,actor_id,request_high,request_low"},
+		"team_launch":                {"state,enqueued_ms,actor_id,request_high,request_low", "team_id,state,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low"},
 		"team_launch_region":         {"physical_region,mode,config_id,target_size,member_count,local_preferred,enqueued_ms,actor_id,request_high,request_low", "physical_region,mode,config_id,target_size,member_count,enqueued_ms,actor_id,request_high,request_low", "physical_region,mode,config_id,target_size,member_count,home_zone,local_preferred,enqueued_ms,actor_id,request_high,request_low", "physical_region,mode,config_id,target_size,member_count,home_zone,enqueued_ms,actor_id,request_high,request_low", "expires_ms,actor_id,request_high,request_low,physical_region"},
 		"team_launch_role":           {"player_id,state,actor_id,request_high,request_low"},
 	} {

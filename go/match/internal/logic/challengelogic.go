@@ -65,6 +65,14 @@ func (l *ChallengeLogic) ChallengePlayer(in *matchpb.ChallengePlayerRequest) (*m
 			ErrorMessage: tipErr(constants.ErrChallengeSelf, "不能挑战自己"),
 		}, nil
 	}
+	// 入口白名单(PlayMode 表,docs/design/global-match-hierarchical-pools.md §7):切磋只能用表里开放的
+	// 模板,客户端任填的 battle_config_id 一律拒绝。
+	if !l.svcCtx.Catalog.Open(matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, in.BattleConfigId) {
+		metrics.ObserveChallenge("invite", "template_not_open")
+		return &matchpb.ChallengePlayerResponse{
+			ErrorMessage: tipErr(constants.ErrModeNotOpen, "该切磋玩法暂未开放"),
+		}, nil
+	}
 	if l.svcCtx.Authority != nil {
 		return l.createGlobalChallenge(in, challengerId)
 	}
@@ -105,7 +113,7 @@ func (l *ChallengeLogic) ChallengePlayer(in *matchpb.ChallengePlayerRequest) (*m
 		}, nil
 	}
 
-	// challenge_id 与 battle_id 同源(match 节点 snowflake)。
+	// challenge_id 与 battle_id 同源(biz_tag = battle)。
 	challengeId, err := l.svcCtx.BattleIDGen.Generate()
 	if err != nil {
 		l.Errorf("[challenge] Failed to generate challenge_id challenger=%d: %v", challengerId, err)

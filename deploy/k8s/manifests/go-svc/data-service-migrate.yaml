@@ -1,4 +1,4 @@
-# data-service-migrate:全局库(mmorpg_global)的建表 / 补列 / 预建号段行 Job
+# data-service-migrate:全局库(mmorpg_global)的建表 / 补列 Job
 # (docs/design/no-single-node-horizontal-scaling-20261001.md §4;形状照 trade-migrate.yaml)。
 #
 # 与 manifests/go-svc/data-service.yaml 同一镜像、同一 ConfigMap(go-svc-data-service-config),跑服务二进制自带的迁移入口:
@@ -6,8 +6,8 @@
 # 只连 MySQL 跑 store.MigrateSchema(与 Schema.AutoMigrate=true 的启动路径是同一段代码),跑完即退;
 # 不起 gRPC、不连 etcd / Kafka。库本身由 mysql-init-sql 预建,本 Job 不建库。
 #
-# 为什么需要它:staging/prod 的 ConfigMap 固定 Schema.AutoMigrate=false、IdSegment.AllowAutoSeed=false ——
-# 启动路径不建表、不种号段行。以前这一步靠人手工跑 `-migrate`;全新集群上没人跑,data-service 起来就是
+# 为什么需要它:staging/prod 的 ConfigMap 固定 Schema.AutoMigrate=false ——
+# 启动路径不建表。以前这一步靠人手工跑 `-migrate`;全新集群上没人跑,data-service 起来就是
 # "四个 store 全不可用",而现在 Store.Required=true 会让它直接拒启。把迁移接进发布流程,这个缺口才算补上。
 #
 # 多个 zone 各有一份本 Job,迁的却是**同一个**全局库:迁移由库级命名锁(GET_LOCK)串行,语句全部幂等,
@@ -102,7 +102,7 @@ spec:
           env:
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
-          # 与 data-service.yaml 的 args 只差最后一个 -migrate:同一份 ConfigMap,库名 / 账号 / 号段清单与服务完全一致。
+          # 与 data-service.yaml 的 args 只差最后一个 -migrate:同一份 ConfigMap,库名 / 账号与服务完全一致。
           args: ["-f", "/app/etc/data_service.yaml", "-migrate"]
           volumeMounts:
             - name: svc-config

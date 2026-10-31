@@ -22,6 +22,7 @@ const (
 	MatchInternal_StartActivityBattle_FullMethodName  = "/match.MatchInternal/StartActivityBattle"
 	MatchInternal_CancelActivityBattle_FullMethodName = "/match.MatchInternal/CancelActivityBattle"
 	MatchInternal_CommitBattleOutcome_FullMethodName  = "/match.MatchInternal/CommitBattleOutcome"
+	MatchInternal_SetSpectateFeatured_FullMethodName  = "/match.MatchInternal/SetSpectateFeatured"
 )
 
 // MatchInternalClient is the client API for MatchInternal service.
@@ -31,6 +32,7 @@ type MatchInternalClient interface {
 	StartActivityBattle(ctx context.Context, in *StartActivityBattleRequest, opts ...grpc.CallOption) (*StartActivityBattleResponse, error)
 	CancelActivityBattle(ctx context.Context, in *CancelActivityBattleRequest, opts ...grpc.CallOption) (*CancelActivityBattleResponse, error)
 	CommitBattleOutcome(ctx context.Context, in *CommitBattleOutcomeRequest, opts ...grpc.CallOption) (*CommitBattleOutcomeResponse, error)
+	SetSpectateFeatured(ctx context.Context, in *SetSpectateFeaturedRequest, opts ...grpc.CallOption) (*SetSpectateFeaturedResponse, error)
 }
 
 type matchInternalClient struct {
@@ -71,6 +73,16 @@ func (c *matchInternalClient) CommitBattleOutcome(ctx context.Context, in *Commi
 	return out, nil
 }
 
+func (c *matchInternalClient) SetSpectateFeatured(ctx context.Context, in *SetSpectateFeaturedRequest, opts ...grpc.CallOption) (*SetSpectateFeaturedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSpectateFeaturedResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_SetSpectateFeatured_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchInternalServer is the server API for MatchInternal service.
 // All implementations must embed UnimplementedMatchInternalServer
 // for forward compatibility.
@@ -78,6 +90,7 @@ type MatchInternalServer interface {
 	StartActivityBattle(context.Context, *StartActivityBattleRequest) (*StartActivityBattleResponse, error)
 	CancelActivityBattle(context.Context, *CancelActivityBattleRequest) (*CancelActivityBattleResponse, error)
 	CommitBattleOutcome(context.Context, *CommitBattleOutcomeRequest) (*CommitBattleOutcomeResponse, error)
+	SetSpectateFeatured(context.Context, *SetSpectateFeaturedRequest) (*SetSpectateFeaturedResponse, error)
 	mustEmbedUnimplementedMatchInternalServer()
 }
 
@@ -96,6 +109,9 @@ func (UnimplementedMatchInternalServer) CancelActivityBattle(context.Context, *C
 }
 func (UnimplementedMatchInternalServer) CommitBattleOutcome(context.Context, *CommitBattleOutcomeRequest) (*CommitBattleOutcomeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CommitBattleOutcome not implemented")
+}
+func (UnimplementedMatchInternalServer) SetSpectateFeatured(context.Context, *SetSpectateFeaturedRequest) (*SetSpectateFeaturedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSpectateFeatured not implemented")
 }
 func (UnimplementedMatchInternalServer) mustEmbedUnimplementedMatchInternalServer() {}
 func (UnimplementedMatchInternalServer) testEmbeddedByValue()                       {}
@@ -172,6 +188,24 @@ func _MatchInternal_CommitBattleOutcome_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchInternal_SetSpectateFeatured_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSpectateFeaturedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).SetSpectateFeatured(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_SetSpectateFeatured_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).SetSpectateFeatured(ctx, req.(*SetSpectateFeaturedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchInternal_ServiceDesc is the grpc.ServiceDesc for MatchInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +224,10 @@ var MatchInternal_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CommitBattleOutcome",
 			Handler:    _MatchInternal_CommitBattleOutcome_Handler,
+		},
+		{
+			MethodName: "SetSpectateFeatured",
+			Handler:    _MatchInternal_SetSpectateFeatured_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

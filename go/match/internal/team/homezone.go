@@ -12,8 +12,8 @@ import (
 // 玩家 home zone 查询(设计文档 docs/design/team-system.md §D.3)。
 //
 // 为什么要查:队伍 zone 与成员 zone 必须写进记录(跨区校验、合服 preflight 都靠它),
-// 而客户端请求里没有、也不能信任 zone。唯一真源是 data_service 的 player:zone:{id} 映射
-// (建角登记、合服 RemapHomeZoneForMerge 搬迁),风格照 guild 的 home_zone.go。
+// 而客户端请求里没有、也不能信任 zone。唯一真源是 data_service(建角登记;读取时已解析到最终区,
+// 合服只写 zone_merged_into 别名),风格照 guild 的 home_zone.go。
 //
 // 查不到一律 fail-closed:不论 AllowCrossZone 开关如何,zone=0 不许写进记录。
 

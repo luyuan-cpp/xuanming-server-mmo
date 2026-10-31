@@ -429,7 +429,7 @@ Two Redis SETs make the destroy paths O(1) lookups instead of keyspace scans:
 
 | Key | Populated at | Used by |
 |-----|--------------|---------|
-| `node:zone:{zoneId}:{nodeId}:scenes` | every `allocateScene` / reassign | node-death reconciliation (`reconcileDeadNodeScenes`) |
+| `node:zone:{zoneId}:{nodeId}:scenes` | every `allocateScene` / reassign | node-death reconciliation: copied into the task's scope `node:zone:{zoneId}:{nodeId}:reconcile_scenes` at death time (see below) |
 | `scene:{sourceId}:mirrors` | mirror create with `source_scene_id > 0` | cascade destroy in lifecycle + `DestroyScene` RPC |
 
 Companion scalar `scene:{mirrorId}:source` lets a dying mirror `SREM`
@@ -463,17 +463,41 @@ correctly on newNode.
 ### Node-death reconciliation
 
 > 2026-10-23 更正:本节原先描述的是早期实现(`removeNodeFromRedis` 末尾直接收尾、现读 SMEMBERS、
-> 无条件 `destroyInstanceForce`、最后 DEL 整个集合),以下为现状。
+> 无条件 `destroyInstanceForce`、最后 DEL 整个集合)。2026-10-30 起收尾任务落 Redis(残余 R1 已修),以下为现状。
 
-The leader's `load_reporter.go::removeNodeFromRedis` writes `death_at`,
-removes the node from the load set, snapshots
-`node:zone:{zoneId}:{deadNodeId}:scenes` and enqueues a reconcile task
-(when `death_at` cannot be written or the load-set removal fails, the
-detach is deferred, GO-6). `reentry_barrier.go::drainPendingDeadNodeReconciles`
-runs on every 5s loadTicker and in fullSync's leader branch; it has no
-leader gate of its own (only the leader enqueues). Once the barrier has
-elapsed it calls `reconcileDeadNodeScenes(entry, snapshot)`, which checks
-`isLeader()` per member and aborts on lost leadership:
+The leader's `load_reporter.go::removeNodeFromRedis` writes `death_at`, then
+`detachDeadNode` runs one Lua script (`luaEnqueueDeadNodeReconcile`) that
+removes the node from the load set **and** writes its reconcile task
+(when `death_at` cannot be written or the script fails, the detach is
+deferred, GO-6, and nothing is written). The task lives in Redis:
+
+| Key | Type | Content |
+|-----|------|---------|
+| `scene_manager:dead_node_reconcile` | ZSET | member `{zoneId}/{nodeId}`, score = first enqueue time (Unix ms, ordering/logs only; `ZADD NX`) |
+| `node:zone:{zoneId}:{nodeId}:reconcile_scenes` | SET | the reconcile scope: `SUNIONSTORE`d from `node:zone:{zoneId}:{nodeId}:scenes` at death time (or the snapshot GO-6 captured at first deferral); members are removed as they get a verdict |
+
+Invariants (comment block in `reentry_barrier.go`, 「被屏障推迟的死节点收尾」):
+
+- **R1-I1** the moment a node leaves the load set its task is already in
+  Redis, so every dead node is discoverable by any leader — still in the
+  load set → fullSync's stale sweep, already out → the task ZSET;
+- **R1-I2** the scope is the death-time snapshot and is never re-read from
+  the reverse index (scenes a new incarnation creates on the same node_id
+  are not this death's; the owner compare cannot protect them). A second
+  death of the same node_id before the task finishes unions the scopes;
+- **R1-I3** the dead node's `scene_count` / `player_count` are deleted only
+  when the scope is empty, in the same Lua script that removes the task
+  (`luaFinishDeadNodeReconcile`), or forcibly when the task is abandoned;
+- **R1-I4** only the leader reads or writes tasks: drain returns at once on
+  a follower (and zeroes the pending gauge it had published), and a
+  mid-sweep demotion writes nothing back. A newly elected leader picks the
+  remaining scope up from Redis in its fullSync leader branch.
+
+`reentry_barrier.go::drainPendingDeadNodeReconciles` runs on every 5s
+loadTicker and in fullSync's leader branch. For each task whose barrier
+has elapsed it `SMEMBERS` the scope and calls
+`reconcileDeadNodeScenes(entry, scope)`, which checks `isLeader()` per
+member and aborts on lost leadership:
 
 1. Fast filter: members whose `scene:{id}:node` already points at another
    node are counted `stale`.
@@ -494,19 +518,37 @@ elapsed it calls `reconcileDeadNodeScenes(entry, snapshot)`, which checks
    `rollbackInstanceAllocation`, which DELs the mapping before the ZREM —
    the path that deleted it owns the rest of the cleanup). Redis errors
    count `failed`.
-4. Only snapshot members are `SREM`ed (never `DEL` the set); `failed`
-   members stay in the set, since their mapping may still point at the
-   dead node.
+4. Only scope members with a verdict are `SREM`ed from the reverse index
+   (never `DEL` the set); `failed` members stay in it, since their mapping
+   may still point at the dead node.
 
-After reconcile returns, drain runs `deleteNodeCounters` (must run after
-the sweep) and drops the task either way. No retry is scheduled for
-`failed` members, and members left by a sweep aborted on lost leadership
-are not picked up by the new leader either (its fullSync only scans load
-sets). They are only picked up if the same node_id is declared dead again,
-or by idle reclaim once their player_count drains to 0 (LeaveScene from the
-player_locator lease expiry, or the player entering elsewhere). Tracked as
-residual R1 of the `docs/PROGRESS.md` 2026-10-23 entry 「scene_manager
-死节点收尾与显式 DestroyScene 的销毁改为按认领时属主」.
+Drain then `SREM`s the members with a verdict from the scope. If anything
+is left without a verdict (a Redis error on `Zscore` / the destroy script /
+an `SREM`), the task stays and the next tick retries only what is left of
+the scope (`dead_node_reconcile_total{outcome="retry"}`). Retries are
+bounded: once this process has seen the task incomplete for
+`deadNodeReconcileGiveUpAfter` (10 min, monotonic clock, measured from its
+first incomplete pass), it abandons the task — counters, scope and task are
+deleted in one script, the unresolved members stay in the reverse index
+(picked up only if the same node_id is declared dead again, or by idle
+reclaim) — and counts `outcome="abandoned"`. The deadline is process-local:
+a new leader starts its own clock, which only delays giving up. When the
+scope is empty, `luaFinishDeadNodeReconcile` deletes the counters and the
+task together (`outcome="completed"`); if the scope grew in the meantime it
+refuses and the task carries on next tick. Re-processing a member another
+leader already handled is harmless: it falls into `stale` / `world_skipped`,
+and every destroy is a Lua claim, so side effects run once.
+
+Before 2026-10-30 the task and snapshot were only in the leader's memory:
+drain had no leader gate (a demoted leader still deleted counters and
+dropped the task), a new leader could not see tasks of nodes already off
+the load set, a restart lost the queue, and `failed` members were never
+retried (residual R1 of the `docs/PROGRESS.md` 2026-10-23 entry
+「scene_manager 死节点收尾与显式 DestroyScene 的销毁改为按认领时属主」).
+
+`tools/merge_zone -clear-source-hot-state` deletes `node:zone:{S}:*`,
+scopes included; the source zone's remaining tasks then finish on the next
+tick as "scope empty".
 
 World channels are intentionally excluded here; destroying them would
 drop every player in that shard. The existing rebalance path already
@@ -514,7 +556,10 @@ moves them to a new node and re-issues CreateScene on the C++ side.
 
 Regression: `TestReconcileDeadNode_{DestroysOrphanInstances,PreservesWorldChannels,SkipsReassignedScenes,DestroysCoLocatedMirrors,ReassignedAfterOwnerRead_LeavesNewOwnerIntact,StillOwnedByDeadNode_Destroys,DestroyScriptErrorKeepsMemberIndexed}`,
 `TestAtomicDestroyForce_{ExpectedOwnerMismatchTouchesNothing,NoExpectedOwnerWipesWhoeverOwnsIt}`,
-`TestOwnerReadInterleave_{ReconcileSkipsSceneReassignedAfterOwnerRead,ExplicitDestroyFollowsOwnerAtClaimTime}`.
+`TestOwnerReadInterleave_{ReconcileSkipsSceneReassignedAfterOwnerRead,ExplicitDestroyFollowsOwnerAtClaimTime}`,
+`TestDeadNodeReconcileTakeover_{NewLeaderFinishesTaskQueuedInBarrierWindow,FollowerLeavesCountersAndTaskAlone,FailedSceneRetriedNextTick,LeadershipLostMidSweepRestTakenOver}`
+(`dead_node_reconcile_takeover_test.go`, red on the pre-fix commit),
+`TestDeadNodeReconcile_{AbandonsAfterGiveUpDeadline,ScopeIsDeathTimeSnapshot,DropsMalformedTask}`.
 
 ### Observability (Prometheus)
 
@@ -527,6 +572,8 @@ Added counters alongside the existing gauges in
 | `scene_manager_instance_destroyed_total` | `zone_id`, `kind` (instance\|mirror), `reason` (idle\|explicit\|cascade\|node_death\|source_migrated\|source_scaled_in) | `destroyInstanceInternal` (via `destroyInstance` / `destroyInstanceForce` / `destroyOrphanOfDeadNode`), `DestroyScene`, `migrateWorldChannel`, `world_autoscale` |
 | `scene_manager_enter_scene_rejected_total` | `zone_id`, `reason` (not a fixed list here — the authoritative set of values is the metric's `Help` string in `go/scene_manager/internal/metrics/metrics.go`) | `EnterScene` reject paths (`enterscenelogic.go` / `home_zone.go`) |
 | `scene_manager_scene_orphans_reconciled_total` | `zone_id` | `reconcileDeadNodeScenes` |
+| `scene_manager_dead_node_reconcile_total` | `zone_id`, `outcome` (completed\|retry\|abandoned) | `reentry_barrier.go::reconcileDeadNodeTask` / `retryOrAbandonDeadNodeReconcile` (leader only; `retry` / `abandoned` stay 0 when healthy) |
+| `scene_manager_dead_node_reconcile_pending` (gauge) | `zone_id` | `drainPendingDeadNodeReconciles`: unfinished tasks in Redis, published by the leader |
 | `scene_manager_mirror_source_missing_total` | `zone_id` | `createInstance` source-clone refusal |
 | `scene_manager_mirror_dedup_total` | `zone_id`, `outcome` (hit\|miss\|stale) | `createInstance` when `MirrorDedupBySource=true` |
 

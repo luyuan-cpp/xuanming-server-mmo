@@ -14,7 +14,7 @@ import (
 
 func globalConfigForTest() Config {
 	c := Config{}
-	c.ServerConfig.Database.RequireTiDB = true
+	c.ServerConfig.Database.Backend = "tidb"
 	c.Placement.Required = true
 	c.Placement.RequireRouteReady = true
 	return c
@@ -33,7 +33,7 @@ func TestGlobalAuthorityRejectsSilentFallback(t *testing.T) {
 			mutate func(*Config)
 			key    string
 		}{
-			{"TiDB关闭", func(c *Config) { c.ServerConfig.Database.RequireTiDB = false }, "ServerConfig.Database.RequireTiDB"},
+			{"非法后端档位", func(c *Config) { c.ServerConfig.Database.Backend = "oracle" }, "ServerConfig.Database.Backend"},
 			{"落点可缺失", func(c *Config) { c.Placement.Required = false }, "Placement.Required"},
 			{"ready关闭", func(c *Config) { c.Placement.RequireRouteReady = false }, "Placement.RequireRouteReady"},
 		} {
@@ -53,6 +53,22 @@ func TestGlobalAuthorityRejectsSilentFallback(t *testing.T) {
 	}
 	if err := (&Config{}).ValidateGlobalAuthority(); err == nil {
 		t.Fatal("缺失Placement/数据库段不能被解释为旧非全球默认")
+	}
+}
+
+// 门禁只看档位是否合法:两档都能过全球门禁,隔离夹具也不能带非法档位(player-data-tidb-scaling-plan.md §9)。
+func TestGlobalAuthorityAcceptsEveryLegalBackend(t *testing.T) {
+	for _, backend := range []string{"", "tidb", "mysql"} {
+		c := globalConfigForTest()
+		c.ServerConfig.Database.Backend = backend
+		if err := c.ValidateGlobalAuthority(); err != nil {
+			t.Fatalf("Backend=%q 应可启动: %v", backend, err)
+		}
+	}
+	c := legacyConfigForTest()
+	c.ServerConfig.Database.Backend = "oracle"
+	if err := c.ValidateGlobalAuthority(); err == nil || !strings.Contains(err.Error(), "ServerConfig.Database.Backend") {
+		t.Fatalf("隔离夹具也必须拒绝非法档位: %v", err)
 	}
 }
 
@@ -85,11 +101,11 @@ func TestGlobalDBYamlAndLoaderRejectDisabledFlags(t *testing.T) {
 	if err := conf.LoadFromYamlBytes([]byte(text), &c); err != nil {
 		t.Fatal(err)
 	}
-	if c.LegacyNonGlobal || !c.ServerConfig.Database.RequireTiDB || !c.Placement.Required || !c.Placement.RequireRouteReady {
+	if c.LegacyNonGlobal || c.ServerConfig.Database.Backend != "tidb" || !c.Placement.Required || !c.Placement.RequireRouteReady {
 		t.Fatal("正规样例必须显式选择全球强SQL与两个落点门禁")
 	}
 	for _, pair := range []struct{ old, replacement, key string }{
-		{"    RequireTiDB: true", "    RequireTiDB: false", "ServerConfig.Database.RequireTiDB"},
+		{"    Backend: tidb", "    Backend: oracle", "ServerConfig.Database.Backend"},
 		{"  Required: true", "  Required: false", "Placement.Required"},
 		{"  RequireRouteReady: true", "  RequireRouteReady: false", "Placement.RequireRouteReady"},
 	} {
@@ -109,9 +125,8 @@ func TestGlobalDBStartupGuardsBeforeExternalWork(t *testing.T) {
 		path, function, guard string
 		effects               []string
 	}{
-		{"../../db.go", "main", "Validate", []string{"EnsureTopics", "NewServiceContext"}},
+		{"../../db.go", "main", "Validate", []string{"NewServiceContext"}},
 		{"../svc/servicecontext.go", "NewServiceContext", "ValidateGlobalAuthority", []string{"NewClient", "Ping"}},
-		{"../kafka/key_ordered_consumer.go", "Start", "startRouteReadyGate", []string{"start"}},
 	} {
 		file, err := parser.ParseFile(token.NewFileSet(), entry.path, nil, parser.SkipObjectResolution)
 		if err != nil {

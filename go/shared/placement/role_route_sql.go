@@ -10,33 +10,35 @@ import (
 	"strings"
 )
 
-var ErrRoleRouteFenced = errors.New("角色全局路由或维护围栏未允许本次事务")
+// ErrRoleRouteFenced 表示这名玩家的路由行不允许本次事务:没有归属、被冻结(搬库中),或预读之后被改过。
+// 名字保留「Fenced」是调用方的既有判据;合服围栏已经删除(docs/design/player-data-tidb-scaling-plan.md §7.1),
+// 合服不改路由行,所以它不再表示「合服中」。
+var ErrRoleRouteFenced = errors.New("角色全局路由未允许本次事务")
 var roleRouteSchemaPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
 
 type roleOriginalRoute struct {
 	player, revision uint64
 	home             uint32
 }
-type roleFenceKey struct{ zone, shard uint32 }
 
-// LockRoleRoutes预读完整route集合，再中性ODKU全部原home的pid%64片并按(zone,shard)锁，
-// 最后按route聚簇键锁且复核home/rev/frozen。返回后调用者才可取得全P。
-// 缺片沿DS正规中性记录懒建，已有active行不改；不先做缺行FOR UPDATE，避免插入锁成环。
-// 事务重入只允许同一完整玩家集合；禁止调用者持P之后补新fence或新增参与者。
+// LockRoleRoutes 预读完整路由集合,再按聚簇键 (route_shard, player_id) 升序逐行 FOR UPDATE,
+// 锁住后复核 home / rev / frozen 与预读一致。返回后调用者才可取得全部角色行锁(P)。
+//
+// 每名玩家只锁自己的路由行,互不排队,这条路径不再有全局或按区共享的热点:
+//   - 合服不改路由行(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1),所以不需要围栏:
+//     合服过程中在源区建号也不丢,归属按 ResolveMergedZone 解析到目标区;
+//   - route_meta 也移出了这条路径:可写开关管的是路由写者(RegisterHome、导入、修库),这里只读路由行、不改。
+//
+// 拿到的 home 是原始值。按区分组必须先解析成最终区,见 ResolveMergedZone / ResolveMergedZoneSQL。
+//
+// 拒绝一律回 ErrRoleRouteFenced:没有归属、被冻结(搬库中)、预读与锁住之后不一致。SQL 错误(含缺行)原样返回。
+// 同一事务重入只允许同一完整玩家集合;禁止调用者持 P 之后再锁新的路由行或新增参与者(锁序会倒置)。
 func LockRoleRoutes(ctx context.Context, tx *sql.Tx, schema string, players []uint64) error {
 	if tx == nil || !roleRouteSchemaPattern.MatchString(schema) || len(players) == 0 {
 		return ErrRoleRouteFenced
 	}
 	prefix := "`" + schema + "`."
-	var writable uint32
-	if err := tx.QueryRowContext(ctx, "SELECT writable FROM "+prefix+"route_meta WHERE id=1").Scan(&writable); err != nil {
-		return err
-	}
-	if writable != 1 {
-		return ErrRoleRouteFenced
-	}
 	routes := make([]roleOriginalRoute, 0, len(players))
-	fenceSet := map[roleFenceKey]bool{}
 	seen := map[uint64]bool{}
 	for _, player := range players {
 		if player == 0 {
@@ -52,42 +54,10 @@ func LockRoleRoutes(ctx context.Context, tx *sql.Tx, schema string, players []ui
 		if err := tx.QueryRowContext(ctx, "SELECT home_zone,rev,frozen_run_id FROM "+prefix+"player_route WHERE route_shard=? AND player_id=?", RouteRowShard(player), player).Scan(&home, &revision, &frozen); err != nil {
 			return err
 		}
-		if !home.Valid || home.Int64 <= 0 || home.Int64 > int64(^uint32(0)) || revision == 0 || frozen.Valid {
+		if !allowedRoleRoute(home, revision, frozen) {
 			return ErrRoleRouteFenced
 		}
-		route := roleOriginalRoute{player: player, home: uint32(home.Int64), revision: revision}
-		routes = append(routes, route)
-		shard, err := RouteFenceShard(player, MaxRouteFenceShards)
-		if err != nil {
-			return err
-		}
-		fenceSet[roleFenceKey{zone: route.home, shard: shard}] = true
-	}
-	fences := make([]roleFenceKey, 0, len(fenceSet))
-	for key := range fenceSet {
-		fences = append(fences, key)
-	}
-	sort.Slice(fences, func(i, j int) bool {
-		if fences[i].zone != fences[j].zone {
-			return fences[i].zone < fences[j].zone
-		}
-		return fences[i].shard < fences[j].shard
-	})
-	// 不先对缺片FOR UPDATE再INSERT；中性ODKU不改任何已有active围栏。
-	for _, key := range fences {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO "+prefix+"zone_merge_fence(zone_id,shard) VALUES(?,?) ON DUPLICATE KEY UPDATE zone_id=zone_id", key.zone, key.shard); err != nil {
-			return err
-		}
-	}
-	for _, key := range fences {
-		var active sql.NullBool
-		var run sql.NullString
-		if err := tx.QueryRowContext(ctx, "SELECT (run_id IS NOT NULL AND expires_at_ms>CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)),run_id FROM "+prefix+"zone_merge_fence WHERE zone_id=? AND shard=? FOR UPDATE", key.zone, key.shard).Scan(&active, &run); err != nil {
-			return err
-		}
-		if !active.Valid || active.Bool {
-			return ErrRoleRouteFenced
-		}
+		routes = append(routes, roleOriginalRoute{player: player, home: uint32(home.Int64), revision: revision})
 	}
 	sort.Slice(routes, func(i, j int) bool {
 		left, right := RouteRowShard(routes[i].player), RouteRowShard(routes[j].player)
@@ -110,33 +80,57 @@ func LockRoleRoutes(ctx context.Context, tx *sql.Tx, schema string, players []ui
 	return nil
 }
 
-// CheckRoleRouteContract只读核实际使用的正式列、聚簇键顺序与可写开关，不创建或修复其它服务的表。
+// allowedRoleRoute 是「这一行路由允许事务」的唯一判据:有归属、rev 非 0、没有冻结。
+func allowedRoleRoute(home sql.NullInt64, revision uint64, frozen sql.NullString) bool {
+	return home.Valid && home.Int64 > 0 && home.Int64 <= int64(^uint32(0)) && revision != 0 && !frozen.Valid
+}
+
+// CheckRoleRoute 是 LockRoleRoutes 的不加锁形态:普通读这名玩家的路由行,判据相同(allowedRoleRoute)。
+// 给不写角色资产的身份校验用(聊天)。它不和任何写者串行,读到的只是语句开始时已提交的值,提交点也不再复核,
+// 所以不能拿它保护资产,要保护资产用 LockRoleRoutes。
+//
+// 拒绝回 ErrRoleRouteFenced;SQL 错误(含缺行)原样返回,与 LockRoleRoutes 同口径。
+func CheckRoleRoute(ctx context.Context, q MergedZoneQueryer, schema string, player uint64) error {
+	if q == nil || !roleRouteSchemaPattern.MatchString(schema) || player == 0 {
+		return ErrRoleRouteFenced
+	}
+	var home sql.NullInt64
+	var revision uint64
+	var frozen sql.NullString
+	if err := q.QueryRowContext(ctx, "SELECT home_zone,rev,frozen_run_id FROM `"+schema+"`.player_route WHERE route_shard=? AND player_id=?", RouteRowShard(player), player).Scan(&home, &revision, &frozen); err != nil {
+		return err
+	}
+	if !allowedRoleRoute(home, revision, frozen) {
+		return ErrRoleRouteFenced
+	}
+	return nil
+}
+
+// CheckRoleRouteContract 只读核实际使用的正式列与聚簇键顺序,不创建或修复其它服务的表。
 func CheckRoleRouteContract(ctx context.Context, db *sql.DB, schema string) error {
 	if db == nil || !roleRouteSchemaPattern.MatchString(schema) {
 		return ErrRoleRouteFenced
 	}
 	prefix := "`" + schema + "`."
-	for _, query := range []string{"SELECT route_shard,player_id,home_zone,rev,frozen_run_id FROM " + prefix + "player_route LIMIT 0", "SELECT zone_id,shard,run_id,expires_at_ms FROM " + prefix + "zone_merge_fence LIMIT 0"} {
-		rows, err := db.QueryContext(ctx, query)
-		if err != nil {
-			return err
-		}
-		if err = rows.Close(); err != nil {
-			return err
-		}
-	}
-	rows, err := db.QueryContext(ctx, "SELECT table_name,column_name FROM information_schema.statistics WHERE table_schema=? AND index_name='PRIMARY' AND table_name IN('player_route','zone_merge_fence','route_meta') ORDER BY table_name,seq_in_index", schema)
+	columns, err := db.QueryContext(ctx, "SELECT route_shard,player_id,home_zone,rev,frozen_run_id FROM "+prefix+"player_route LIMIT 0")
 	if err != nil {
 		return err
 	}
-	keys := map[string][]string{}
+	if err = columns.Close(); err != nil {
+		return err
+	}
+	rows, err := db.QueryContext(ctx, "SELECT column_name FROM information_schema.statistics WHERE table_schema=? AND table_name='player_route' AND index_name='PRIMARY' ORDER BY seq_in_index", schema)
+	if err != nil {
+		return err
+	}
+	var primaryKey []string
 	for rows.Next() {
-		var table, column string
-		if err = rows.Scan(&table, &column); err != nil {
+		var column string
+		if err = rows.Scan(&column); err != nil {
 			rows.Close()
 			return err
 		}
-		keys[table] = append(keys[table], column)
+		primaryKey = append(primaryKey, column)
 	}
 	if err = rows.Err(); err != nil {
 		rows.Close()
@@ -145,14 +139,7 @@ func CheckRoleRouteContract(ctx context.Context, db *sql.DB, schema string) erro
 	if err = rows.Close(); err != nil {
 		return err
 	}
-	if strings.Join(keys["player_route"], ",") != "route_shard,player_id" || strings.Join(keys["zone_merge_fence"], ",") != "zone_id,shard" || strings.Join(keys["route_meta"], ",") != "id" {
-		return ErrRoleRouteFenced
-	}
-	var writable uint32
-	if err := db.QueryRowContext(ctx, "SELECT writable FROM "+prefix+"route_meta WHERE id=1").Scan(&writable); err != nil {
-		return err
-	}
-	if writable != 1 {
+	if strings.Join(primaryKey, ",") != "route_shard,player_id" {
 		return ErrRoleRouteFenced
 	}
 	return nil

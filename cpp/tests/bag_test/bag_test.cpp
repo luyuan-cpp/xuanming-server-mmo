@@ -2743,9 +2743,8 @@ namespace
     using SegClient = GuidSegmentClient;
     using SegKind = GuidSegmentClient::TimerKind;
 
-    // 号段上界 2^55 = snowflake 值域下界以下(存量 item guid ≥ 6.7e16):
-    // 用它断言"这个号是号段发的"—— 现在没有回退,任何合法号都必须落在它之下。
-    constexpr uint64_t kSnowflakeDomainFloor = uint64_t{1} << 55;
+    // 计数器的值域上界:任何合法号都必须落在它之下。
+    constexpr uint64_t kIdSpaceExclusive = uint64_t{1} << 63;
 
     struct FakeSegmentTransport
     {
@@ -2825,6 +2824,7 @@ namespace
                       uint32_t minStep = 0, uint32_t maxStep = 0)
         {
             SegClient::Options o;
+            o.mixIds = false;
             o.kindName = kind;
             o.bizTag = kind;
             o.initialStep = step;
@@ -2854,6 +2854,7 @@ namespace
         auto &item = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
         item.Reset();
         SegClient::Options o;
+        o.mixIds = false;
         o.kindName = "item";
         o.initialStep = 1000000;
         if (!item.Enable(o, transport.Send(), transport.Schedule(), transport.Clock()))
@@ -3196,6 +3197,7 @@ TEST(GuidSegmentClientTest, EnableRejectsContradictoryOptions)
     SegClient client;
     FakeSegmentTransport t;
     SegClient::Options o;
+    o.mixIds = false;
     o.kindName = "item";
     o.initialStep = 0;
     EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "step=0 没法算预取阈值";
@@ -3203,9 +3205,9 @@ TEST(GuidSegmentClientTest, EnableRejectsContradictoryOptions)
     o.prefetchAt = 0.0;
     EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule()));
     o.prefetchAt = 0.1;
-    o.maxIdExclusive = (uint64_t{1} << 55) + 1;
-    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "上界只能调小:调大就与 snowflake 值域相交";
-    o.maxIdExclusive = uint64_t{1} << 55;
+    o.maxIdExclusive = (uint64_t{1} << 63) + 1;
+    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "上界只能调小:调大就超出 63 位值域";
+    o.maxIdExclusive = uint64_t{1} << 63;
     EXPECT_FALSE(client.Enable(o, nullptr, t.Schedule()));
     o.minStep = 20;
     EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "下限高于初值";
@@ -3267,7 +3269,7 @@ TEST(GuidSegmentClientTest, SequentialUniquenessAcrossRanges)
     }
     const std::set<Guid> unique(all.begin(), all.end());
     EXPECT_EQ(all.size(), unique.size());
-    EXPECT_LT(all.back(), kSnowflakeDomainFloor);
+    EXPECT_LT(all.back(), kIdSpaceExclusive);
 
     Guid g = kInvalidGuid;
     EXPECT_FALSE(client.TryNext(g)) << "两段都空:不阻塞,立刻 false";
@@ -3377,14 +3379,14 @@ TEST(GuidSegmentClientTest, RangeValidationRejectsOverlapRegressionOverCapAndZer
     EXPECT_EQ(3u, t.requests.size());
     EXPECT_EQ(11u, client.GetStats().highWater);
 
-    // 重叠:lo < 上一段 hi
+    // 重叠:与上一段有交集
     client.OnResponse(0, 5, 15);
     EXPECT_FALSE(client.IsReady());
     EXPECT_EQ(2u, client.GetStats().rangeViolations);
     EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry)) << "上次成功后退避已复位";
     EXPECT_EQ(4u, t.requests.size());
 
-    // 回退:整段都在已发出的水位之下
+    // 重复:和发过的段一模一样
     client.OnResponse(0, 1, 11);
     EXPECT_EQ(3u, client.GetStats().rangeViolations);
     EXPECT_DOUBLE_EQ(1.0, t.Fire(SegKind::kRetry));
@@ -3396,8 +3398,8 @@ TEST(GuidSegmentClientTest, RangeValidationRejectsOverlapRegressionOverCapAndZer
     EXPECT_DOUBLE_EQ(2.0, t.Fire(SegKind::kRetry));
     EXPECT_EQ(6u, t.requests.size());
 
-    // 超上界:会与 snowflake 值域相交
-    client.OnResponse(0, (uint64_t{1} << 55) - 5, (uint64_t{1} << 55) + 5);
+    // 超上界
+    client.OnResponse(0, (uint64_t{1} << 63) - 5, (uint64_t{1} << 63) + 5);
     EXPECT_EQ(5u, client.GetStats().rangeViolations);
     EXPECT_FALSE(client.IsReady());
     EXPECT_DOUBLE_EQ(4.0, t.Fire(SegKind::kRetry));
@@ -3491,11 +3493,11 @@ TEST(GuidSegmentClientTest, LateResponseAfterTimeoutIsUsedAndSurplusIsDropped)
     EXPECT_EQ(3u, t.requests.size());
 
     client.OnResponse(0, 11, 21); // 两次发送的响应都到了
-    client.OnResponse(0, 21, 31); // 两个 buffer 都满:多出来的作废,但水位照抬
+    client.OnResponse(0, 21, 31); // 两个 buffer 都满:多出来的作废,但照样记下来
     auto s = client.GetStats();
     EXPECT_EQ(1u, s.droppedRanges);
     EXPECT_EQ(31u, s.highWater);
-    client.OnResponse(0, 25, 35); // 作废段之下的范围仍然是重叠,必须拒
+    client.OnResponse(0, 25, 35); // 和作废段重叠同样要拒
     EXPECT_EQ(1u, client.GetStats().rangeViolations);
 
     const auto rest = Drain(client, 11);
@@ -3758,12 +3760,84 @@ TEST(GuidSourcePolicyTest, ItemSegmentNotReadyFailsClosedWithNoFallback)
     EXPECT_EQ(0u, bag.OccupiedGridCount()) << "整体拒绝,零写入";
     EXPECT_TRUE(bag.IsLayerConsistent());
 
-    // 段到了就恢复,而且号一定在号段值域里 —— 没有任何路径能铸出 snowflake 域的号
+    // 段到了就恢复,而且号一定在号段值域里
     item.item().OnResponse(0, 5000, 5010);
     const Guid segmentGuid = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1, 1));
     EXPECT_EQ(5000u, segmentGuid);
-    EXPECT_LT(segmentGuid, kSnowflakeDomainFloor);
+    EXPECT_LT(segmentGuid, kIdSpaceExclusive);
     EXPECT_EQ(1u, bag.OccupiedGridCount());
+}
+
+// 与 go/shared/idsegment/mix_test.go 的 mixGolden 逐项相同。
+// 改了这张表就等于改了发出去的 id,正式发号之后绝不能改。
+TEST(GuidSegmentClientTest, MixGuidMatchesGoGolden)
+{
+    const struct
+    {
+        uint64_t in;
+        uint64_t out;
+    } golden[] = {
+        {0ULL, 0ULL},
+        {1ULL, 2558316640067307269ULL},
+        {2ULL, 6616413020432831626ULL},
+        {3ULL, 2185194620014831856ULL},
+        {100ULL, 6504034234019148180ULL},
+        {16777216ULL, 6406066033425044679ULL},
+        {16777217ULL, 442559913109642155ULL},
+        {4294967295ULL, 806922830091569532ULL},
+        {4294967296ULL, 6350277681932728639ULL},
+        {436207616000000ULL, 1867450719239334575ULL},
+        {436207616000001ULL, 3294820914267284580ULL},
+        {144115188075855871ULL, 1772925764027790080ULL},
+        {144115188075855872ULL, 5350149144691749192ULL},
+        {9223372036854775807ULL, 6514504133438201533ULL},
+    };
+    for (const auto &g : golden)
+    {
+        EXPECT_EQ(g.out, MixGuid(g.in)) << "counter=" << g.in;
+    }
+}
+
+// 缺省就是打散的:生产路径不设 mixIds。范围校验和水位仍然针对计数器值。
+TEST(GuidSegmentClientTest, TryNextEmitsMixedIdByDefault)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    SegClient::Options o;
+    o.kindName = "item";
+    o.initialStep = 10;
+    ASSERT_TRUE(client.Enable(o, t.Send(), t.Schedule()));
+    client.Warm();
+    client.OnResponse(0, 100, 102);
+    Guid first = 0;
+    Guid second = 0;
+    ASSERT_TRUE(client.TryNext(first));
+    ASSERT_TRUE(client.TryNext(second));
+    EXPECT_EQ(MixGuid(100), first);
+    EXPECT_EQ(MixGuid(101), second);
+    EXPECT_NE(first, second);
+    EXPECT_EQ(102u, client.GetStats().highWater);
+}
+
+// 发号器有多个副本,每个副本从自己的块里切段,同一个客户端先后领到的段不保证递增。
+// 只要不重叠就要接受,否则两个副本之间来回切换时客户端会把好段当成服务端 bug 拒掉。
+TEST(GuidSegmentClientTest, RangesFromDifferentIssuerReplicasMayGoBackwards)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 2);
+    client.Warm();
+    client.OnResponse(0, 1000, 1002);
+    const auto first = Drain(client, 2);
+    ASSERT_EQ(2u, first.size());
+    EXPECT_EQ(1000u, first[0]);
+    client.OnResponse(0, 100, 102);
+    const auto second = Drain(client, 2);
+    ASSERT_EQ(2u, second.size());
+    EXPECT_EQ(100u, second[0]);
+    const auto stats = client.GetStats();
+    EXPECT_EQ(0u, stats.rangeViolations);
+    EXPECT_EQ(1002u, stats.highWater);
 }
 
 TEST(GuidSourcePolicyTest, ItemKindDisabledFailsClosedToo)
@@ -3895,6 +3969,7 @@ namespace
             auto &item = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
             item.Reset();
             SegClient::Options options;
+            options.mixIds = false;
             options.kindName = "item";
             options.initialStep = 10;
             ASSERT_TRUE(item.Enable(options, starved.Send(), starved.Schedule(), starved.Clock()));

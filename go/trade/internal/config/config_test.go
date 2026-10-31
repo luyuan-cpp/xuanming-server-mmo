@@ -51,8 +51,8 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if !c.DataServiceRpc.NonBlock {
 		t.Error("DataServiceRpc.NonBlock must be true: data_service 暂未起时不阻塞 trade 起服")
 	}
-	if !c.IdSegment.Enabled || c.IdSegment.FallbackToSnowflake {
-		t.Errorf("IdSegment = %+v, want Enabled=true FallbackToSnowflake=false", c.IdSegment)
+	if !c.IdSegment.Enabled {
+		t.Errorf("IdSegment = %+v, want Enabled=true", c.IdSegment)
 	}
 	if c.Market.Scope != ScopeZone {
 		t.Errorf("Market.Scope = %q, want zone", c.Market.Scope)
@@ -226,7 +226,6 @@ func TestValidate(t *testing.T) {
 		{"MySQL.MaxOpenConn=0", func(c *Config) { c.MySQL.MaxOpenConn = 0 }},
 		{"DataServiceRpc 无目标", func(c *Config) { c.DataServiceRpc = zrpc.RpcClientConf{} }},
 		{"IdSegment 未启用", func(c *Config) { c.IdSegment.Enabled = false }},
-		{"IdSegment 开了 snowflake 回退", func(c *Config) { c.IdSegment.FallbackToSnowflake = true }},
 		{"Market.Scope 为空", func(c *Config) { c.Market.Scope = "" }},
 		{"Market.Scope 未知", func(c *Config) { c.Market.Scope = "region" }},
 		{"DefaultPageSize=0", func(c *Config) { c.Market.DefaultPageSize = 0 }},
@@ -287,19 +286,8 @@ func TestCommerceWriteRequiresGlobalTiDBAndTrustedTitles(t *testing.T) {
 		t.Fatal("无可信名称的模板不得开放")
 	}
 	c.Commerce.ItemTitles = map[string]string{"10": "玄铁"}
-	// 合同终结只认玩家 SQL 提交证据:证据开关没开时不得开放合同(db-write-fencing-mysql.md §6.6)。
-	if c.Validate() == nil {
-		t.Fatal("RequireSQLCommit 关闭时不得开放交易合同")
-	}
-	c.AssetOp.RequireSQLCommit = true
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
-	}
-	c.Commerce = CommerceConf{}
-	c.AssetOp.RequireSQLCommit = false
-	c.Mall.URL = "https://mall.invalid/api"
-	if c.Validate() == nil {
-		t.Fatal("RequireSQLCommit 关闭时不得接商城到账")
 	}
 }
 

@@ -11,7 +11,7 @@ package logic
 // 不污染其它用例。该函数定义在本文件,集成文件与这里共用同一份。
 //
 // 共用替身:clientCtx / fakeHomeZones / newCacheOnlyRepo / seedGuild 在 client_zone_test.go,
-// fakeFence 在 merge_fence_test.go,managementCall 在 guild_manage_logic_test.go。
+// managementCall 在 guild_manage_logic_test.go。
 
 import (
 	"context"
@@ -96,7 +96,7 @@ func (m *countingMinter) Mint(context.Context) (uint64, error) {
 // newEconomyLogic 把经济依赖直接挂到字段上,不经 WithEconomy:这些用例走不到 Repo,
 // 用零值依赖(Repo 为 nil)就能证明"在碰 Repo 之前就返回了"。
 func newEconomyLogic(repo *data.GuildRepo, deps EconomyDeps) *GuildLogic {
-	l := NewGuildLogic(repo, nil, nil, nil, nil)
+	l := NewGuildLogic(repo, nil, nil, nil)
 	if deps.Now == nil {
 		deps.Now = time.Now
 	}
@@ -274,7 +274,7 @@ func loadEconomyFlowTables(t *testing.T) {
 
 // TestEconomyRPCsUnavailableWithoutDeps:未接线时五个 RPC 回 Unavailable,而不是 nil 解引用崩掉整个进程。
 func TestEconomyRPCsUnavailableWithoutDeps(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 
 	for _, tc := range economyRPCs() {
 		t.Run(tc.name, func(t *testing.T) {
@@ -288,12 +288,12 @@ func TestEconomyRPCsUnavailableWithoutDeps(t *testing.T) {
 // TestWithEconomy:Repo 为 nil 不装配(半装配比不装配更危险);零值字段补默认。
 func TestWithEconomy(t *testing.T) {
 	t.Run("Repo 为 nil 不装配", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithEconomy(EconomyDeps{SyncBudget: time.Second}))
+		l := NewGuildLogic(nil, nil, nil, nil, WithEconomy(EconomyDeps{SyncBudget: time.Second}))
 
 		assert.Nil(t, l.economy)
 	})
 	t.Run("零值字段补默认", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithEconomy(EconomyDeps{Repo: &data.EconomyRepo{}}))
+		l := NewGuildLogic(nil, nil, nil, nil, WithEconomy(EconomyDeps{Repo: &data.EconomyRepo{}}))
 
 		require.NotNil(t, l.economy)
 		assert.NotNil(t, l.economy.Now)
@@ -302,7 +302,7 @@ func TestWithEconomy(t *testing.T) {
 		assert.Nil(t, l.economy.Loop, "Loop 为 nil 表示资产通道关闭,不能被补成别的值")
 	})
 	t.Run("显式值原样保留", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, nil, WithEconomy(EconomyDeps{
+		l := NewGuildLogic(nil, nil, nil, nil, WithEconomy(EconomyDeps{
 			Repo: &data.EconomyRepo{}, SyncBudget: time.Second, Lease: 30 * time.Second,
 		}))
 
@@ -843,7 +843,7 @@ func TestDonateUnknownOptionRefusesBeforeMinting(t *testing.T) {
 // 这张表是仓储哨兵变成玩家可见文案的唯一出口,错一格没有任何征兆。
 // repo 传 nil 是安全的:会复核映射的几支都经 verifyMapping,它对 nil repo 直接返回。
 func TestEconomyTipMapping(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 	ctx := context.Background()
 
 	tips := []struct {
@@ -852,8 +852,6 @@ func TestEconomyTipMapping(t *testing.T) {
 		wantID     uint32
 		wantResult string
 	}{
-		{"合服闸门", data.ErrZoneMerging, constants.ErrZoneMerging, resultFence},
-		{"闸门读失败(包了一层)", fmt.Errorf("%w: fence unreadable", data.ErrZoneMerging), constants.ErrZoneMerging, resultFence},
 		{"帮会等级不足(捐献与商店共用)", data.ErrGuildLevelTooLow, constants.ErrShopLevelTooLow, resultLevel},
 		{"今日次数用完", data.ErrDonateLimit, constants.ErrDonateLimit, resultLimit},
 		{"限购已满", data.ErrShopLimit, constants.ErrShopLimit, resultLimit},
@@ -899,48 +897,6 @@ func TestEconomyTipMapping(t *testing.T) {
 		assert.Nil(t, tip)
 		assert.Empty(t, result)
 		assert.NoError(t, err)
-	})
-}
-
-// TestEconomyFence:与 mergeFenceTip 同一套三分支,区别只是返回 data.ErrZoneMerging 让事务回滚。
-func TestEconomyFence(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("满足 data.FenceFunc", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, &fakeFence{merging: true}, nil)
-		var fence data.FenceFunc = l.economyFence
-
-		assert.ErrorIs(t, fence(ctx, 2), data.ErrZoneMerging)
-	})
-	t.Run("未配置闸门放行", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, nil, nil)
-
-		assert.NoError(t, l.economyFence(ctx, 2))
-	})
-	t.Run("zone 为 0 不查", func(t *testing.T) {
-		fence := &fakeFence{merging: true}
-		l := NewGuildLogic(nil, nil, nil, fence, nil)
-
-		assert.NoError(t, l.economyFence(ctx, 0))
-		assert.Zero(t, fence.calls)
-	})
-	t.Run("合服中拒绝,查的是传入的事务内 zone", func(t *testing.T) {
-		fence := &fakeFence{merging: true}
-		l := NewGuildLogic(nil, nil, nil, fence, nil)
-
-		assert.ErrorIs(t, l.economyFence(ctx, 7), data.ErrZoneMerging)
-		assert.Equal(t, uint32(7), fence.lastZone)
-	})
-	t.Run("读不到按封锁处理", func(t *testing.T) {
-		fence := &fakeFence{err: errors.New("dial tcp: connection refused")}
-		l := NewGuildLogic(nil, nil, nil, fence, nil)
-
-		assert.ErrorIs(t, l.economyFence(ctx, 7), data.ErrZoneMerging, "闸门读失败必须 fail-closed")
-	})
-	t.Run("未合服放行", func(t *testing.T) {
-		l := NewGuildLogic(nil, nil, nil, &fakeFence{}, nil)
-
-		assert.NoError(t, l.economyFence(ctx, 7))
 	})
 }
 
@@ -1137,7 +1093,7 @@ func TestExceptPlayer(t *testing.T) {
 
 // TestMintAssetOpID:号段取不到就整体失败,绝不用 0 或自造 id。
 func TestMintAssetOpID(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 	ctx := context.Background()
 
 	t.Run("未接线", func(t *testing.T) {
@@ -1223,7 +1179,7 @@ func TestSyncBudgetFor(t *testing.T) {
 // 端到端的"回包视图为 PENDING"需要真库,见集成文件 TestEconomyFlowDonateBudgetShortSkipsSyncDelivery。
 func TestDeliverNowSkipsWhenBudgetTooSmall(t *testing.T) {
 	loop, applier, store := newCountingLoop(t)
-	l := NewGuildLogic(nil, nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil)
 	eco := &EconomyDeps{Loop: loop, SyncBudget: defaultSyncBudget}
 	op := assetop.Op{
 		OpID:          1,
@@ -1265,7 +1221,7 @@ func TestOnAssetFinalizedPushKinds(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			n := &recordingNotifier{}
-			l := NewGuildLogic(nil, nil, nil, nil, nil, WithNotifier(n))
+			l := NewGuildLogic(nil, nil, nil, nil, WithNotifier(n))
 
 			l.OnAssetFinalized(context.Background(), data.FinalizedOp{
 				OpID: 1, PlayerID: 42, GuildID: 9, Kind: tc.kind, Status: assetop.StatusApplied,
@@ -1286,7 +1242,7 @@ func TestOnAssetFinalizedPushKinds(t *testing.T) {
 // 标记必须穿过 assetop 的 settleContext(context.WithoutCancel 只丢取消、保留值)。
 func TestOnAssetFinalizedSkipsSyncDelivery(t *testing.T) {
 	n := &recordingNotifier{}
-	l := NewGuildLogic(nil, nil, nil, nil, nil, WithNotifier(n))
+	l := NewGuildLogic(nil, nil, nil, nil, WithNotifier(n))
 	op := data.FinalizedOp{OpID: 1, PlayerID: 42, GuildID: 9,
 		Kind: pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_DONATE, Status: assetop.StatusApplied}
 
@@ -1302,7 +1258,7 @@ func TestOnAssetFinalizedSkipsSyncDelivery(t *testing.T) {
 // TestOnAssetFinalizedUnknownKindDoesNotPush:推一个猜出来的类型,客户端会去拉错的页面。
 func TestOnAssetFinalizedUnknownKindDoesNotPush(t *testing.T) {
 	n := &recordingNotifier{}
-	l := NewGuildLogic(nil, nil, nil, nil, nil, WithNotifier(n))
+	l := NewGuildLogic(nil, nil, nil, nil, WithNotifier(n))
 
 	for _, kind := range []pb.GuildAssetOpKind{pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_UNSPECIFIED, pb.GuildAssetOpKind(99)} {
 		l.OnAssetFinalized(context.Background(), data.FinalizedOp{OpID: 1, PlayerID: 42, GuildID: 9, Kind: kind})

@@ -123,11 +123,6 @@ func newPlayerNameTestCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 			Host: mr.Addr(),
 			Type: "node",
 		},
-		DevRedis: config.DevRedisConfig{
-			Host: mr.Addr(),
-			DB:   0,
-		},
-		PlayerLockTTLSec: 3,
 		PlayerName: config.PlayerNameConfig{
 			MaxOpenConn:      20,
 			MaxIdleConn:      5,
@@ -691,4 +686,25 @@ func TestBatchGetPlayerName_RejectsOversizeBatch(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, fake.batchCalls, 1)
 	assert.Len(t, fake.batchCalls[0], store.PlayerNameBatchLimit)
+}
+
+func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
+	t.Helper()
+	mr := miniredis.RunT(t)
+
+	c := config.Config{
+		MappingRedis: redis.RedisConf{
+			Host: mr.Addr(),
+			Type: "node",
+		},
+	}
+
+	r := routing.NewRouter(c)
+	t.Cleanup(func() { r.Close() })
+
+	sc := &svc.ServiceContext{
+		Config: c,
+		Router: r,
+	}
+	return sc, mr
 }

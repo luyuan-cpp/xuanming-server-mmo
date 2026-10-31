@@ -12,7 +12,7 @@ import (
 //
 // 断言对象就是 applyLoadedPlayerSession 原样填进 EnterSceneRequest 的 ZoneId / SceneId。
 // 没有从 EnterGame 入口端到端打到 SceneManager.EnterScene:那条路先要经 SendBindSessionToGate,
-// 它走 *kafka.KeyOrderedKafkaProducer(具体类型、字段私有,单测里起不出来),与
+// 它走 *kafka.CommandProducer(具体类型、字段私有,单测里起不出来),与
 // enterFailureTipPusher 注释里说的是同一个限制。
 
 const (

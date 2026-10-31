@@ -90,16 +90,15 @@ func installNodeDetachFaultsForTest(t *testing.T, mr *miniredis.Miniredis) *node
 	return f
 }
 
-// resetNodeDeathQueuesForTest 在用例前后都清空推迟摘除队列与死节点收尾队列(两者都是包级全局表)。
+// resetNodeDeathQueuesForTest 在用例前后都清空进程内的死节点状态:推迟摘除队列与收尾重试计时(包级全局表)。
+// 收尾任务本身在 Redis 里,随用例自己的 miniredis 走;用例中途调它,等价于「换成另一个进程当领导者」。
 func resetNodeDeathQueuesForTest(t *testing.T) {
 	t.Helper()
 	reset := func() {
 		deferredNodeDetachMu.Lock()
 		deferredNodeDetaches = make(map[string]deferredNodeDetach)
 		deferredNodeDetachMu.Unlock()
-		pendingDeadNodesMu.Lock()
-		pendingDeadNodes = make(map[string]deadNodeReconcile)
-		pendingDeadNodesMu.Unlock()
+		resetDeadNodeReconcileLocalState()
 	}
 	reset()
 	t.Cleanup(reset)
@@ -126,11 +125,24 @@ func deadNodeEntryForTest(zoneID uint32, nodeID string) nodeEntry {
 	return entry
 }
 
-func pendingDeadNodeForTest(zoneID uint32, nodeID string) (deadNodeReconcile, bool) {
-	pendingDeadNodesMu.Lock()
-	defer pendingDeadNodesMu.Unlock()
-	task, ok := pendingDeadNodes[pendingDeadNodeKey(zoneID, nodeID)]
-	return task, ok
+// pendingDeadNodeForTest 读 Redis 里 (zone,node) 的收尾任务:返回收尾范围(升序)与任务在不在任务表里。
+// 任务表成员资格按成员查(mr.ZScore 对缺成员回 (0, nil),理由见 loadSetMembersForTest)。
+func pendingDeadNodeForTest(t *testing.T, mr *miniredis.Miniredis, zoneID uint32, nodeID string) ([]string, bool) {
+	t.Helper()
+	tasks, err := mr.ZMembers(deadNodeReconcileTasksKey)
+	if errors.Is(err, miniredis.ErrKeyNotFound) {
+		return nil, false
+	}
+	require.NoError(t, err)
+	if !slices.Contains(tasks, pendingDeadNodeKey(zoneID, nodeID)) {
+		return nil, false
+	}
+	scenes, err := mr.Members(nodeReconcileScenesKey(zoneID, nodeID))
+	if errors.Is(err, miniredis.ErrKeyNotFound) {
+		return nil, true
+	}
+	require.NoError(t, err)
+	return scenes, true
 }
 
 // loadSetMembersForTest 返回负载集成员。**不能**用 mr.ZScore 判断成员资格:键存在、成员不存在时它
@@ -260,7 +272,7 @@ func TestRemoveNodeFromRedis_DeathMarkFailureKeepsNodeInLoadSet(t *testing.T) {
 	allowed, _ := CanReclaimDeadNode(sc, testZoneId, "10")
 	assert.False(t, allowed, "推迟态:本领导者的 CanReclaimDeadNode 必须恒拒")
 
-	_, pending := pendingDeadNodeForTest(testZoneId, "10")
+	_, pending := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 	assert.False(t, pending, "节点还在负载集里,不能提前入收尾队列")
 	task, ok := lookupDeferredNodeDetach(testZoneId, "10")
 	require.True(t, ok)
@@ -301,9 +313,9 @@ func TestRetryDeferredNodeDetaches_WritesDeathMarkBeforeLeavingLoadSet(t *testin
 
 	assert.NotContains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
 	assert.False(t, mr.Exists(nodeSceneNodeTypeKey(testZoneId, "10")))
-	reconcile, ok := pendingDeadNodeForTest(testZoneId, "10")
+	scope, ok := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 	require.True(t, ok)
-	assert.Equal(t, []string{"7001"}, reconcile.scenes, "收尾范围必须是判死时刻的快照")
+	assert.Equal(t, []string{"7001"}, scope, "收尾范围必须是判死时刻的快照")
 	assert.False(t, isNodeDetachDeferred(testZoneId, "10"))
 	allowed, _ := CanReclaimDeadNode(sc, testZoneId, "10")
 	assert.False(t, allowed, "屏障从刚写入的 death_at 起算")
@@ -324,9 +336,9 @@ func TestRetryDeferredNodeDetaches_DetachesWithoutMarkOnlyAfterBarrier(t *testin
 
 	assert.NotContains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
 	assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")))
-	reconcile, ok := pendingDeadNodeForTest(testZoneId, "10")
+	scope, ok := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 	require.True(t, ok)
-	assert.Equal(t, []string{"7001"}, reconcile.scenes)
+	assert.Equal(t, []string{"7001"}, scope)
 	assert.False(t, isNodeDetachDeferred(testZoneId, "10"))
 	assert.Equal(t, expiredBefore+1, detachOutcomeCountForTest(t, testZoneId, metrics.NodeDetachOutcomeExpired))
 	allowed, _ := CanReclaimDeadNode(sc, testZoneId, "10")
@@ -346,7 +358,7 @@ func TestRetryDeferredNodeDetaches_KeepsTaskWhileLoadSetRemovalFails(t *testing.
 		assert.True(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")))
 		assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
 		assert.True(t, mr.Exists(nodeSceneNodeTypeKey(testZoneId, "10")), "ZREM 失败时类型镜像也不删")
-		_, pending := pendingDeadNodeForTest(testZoneId, "10")
+		_, pending := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 		assert.False(t, pending, "ZREM 失败时不入收尾队列")
 		assert.True(t, isNodeDetachDeferred(testZoneId, "10"))
 		allowed, _ := CanReclaimDeadNode(sc, testZoneId, "10")
@@ -357,7 +369,7 @@ func TestRetryDeferredNodeDetaches_KeepsTaskWhileLoadSetRemovalFails(t *testing.
 		t.Cleanup(func() { takeLoadReporterResyncForTest() })
 		assert.Equal(t, 1, retryDeferredNodeDetaches(sc))
 		assert.NotContains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
-		_, pending = pendingDeadNodeForTest(testZoneId, "10")
+		_, pending = pendingDeadNodeForTest(t, mr, testZoneId, "10")
 		assert.True(t, pending)
 		assert.False(t, isNodeDetachDeferred(testZoneId, "10"))
 		assert.Equal(t, recoveredBefore+1, detachOutcomeCountForTest(t, testZoneId, metrics.NodeDetachOutcomeRecovered))
@@ -381,7 +393,7 @@ func TestRetryDeferredNodeDetaches_KeepsTaskWhileLoadSetRemovalFails(t *testing.
 		assert.Equal(t, abandonedBefore+1, detachOutcomeCountForTest(t, testZoneId, metrics.NodeDetachOutcomeAbandoned))
 		assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10", "放弃后节点留在负载集按存活处理")
 		assert.True(t, mr.Exists(nodeSceneNodeTypeKey(testZoneId, "10")))
-		_, pending := pendingDeadNodeForTest(testZoneId, "10")
+		_, pending := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 		assert.False(t, pending)
 		// 放弃时主动请求一次 fullSync:陈旧清扫会在负载集里重扫到它、重新推迟,而不是一直留到 watch 中断 / 换领导者。
 		assert.True(t, takeLoadReporterResyncForTest(), "放弃时必须请求 load reporter 重跑 fullSync")
@@ -403,9 +415,9 @@ func TestRetryDeferredNodeDetaches_DropsTaskOnReregistrationOrLostLeadership(t *
 		assert.Equal(t, droppedBefore+1, detachOutcomeCountForTest(t, testZoneId, metrics.NodeDetachOutcomeDropped))
 		assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")), "不能给活节点打死亡标记")
 		assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
-		reconcile, ok := pendingDeadNodeForTest(testZoneId, "10")
+		scope, ok := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 		require.True(t, ok, "旧化身的快照要交给收尾队列")
-		assert.Equal(t, []string{"7001"}, reconcile.scenes)
+		assert.Equal(t, []string{"7001"}, scope)
 	})
 
 	t.Run("not_leader", func(t *testing.T) {
@@ -420,7 +432,7 @@ func TestRetryDeferredNodeDetaches_DropsTaskOnReregistrationOrLostLeadership(t *
 		assert.Equal(t, droppedBefore+1, detachOutcomeCountForTest(t, testZoneId, metrics.NodeDetachOutcomeDropped))
 		assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")), "跟随者不碰 Redis")
 		assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10", "留给新领导者的 fullSync 重扫")
-		_, pending := pendingDeadNodeForTest(testZoneId, "10")
+		_, pending := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 		assert.False(t, pending)
 	})
 }
@@ -444,9 +456,9 @@ func TestHandleWatchPut_CancelsDeferredNodeDetachAndHandsOverSnapshot(t *testing
 
 	assert.False(t, isNodeDetachDeferred(testZoneId, "10"))
 	assert.Equal(t, droppedBefore+1, detachOutcomeCountForTest(t, testZoneId, metrics.NodeDetachOutcomeDropped))
-	reconcile, ok := pendingDeadNodeForTest(testZoneId, "10")
+	scope, ok := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 	require.True(t, ok)
-	assert.Equal(t, []string{"7001"}, reconcile.scenes)
+	assert.Equal(t, []string{"7001"}, scope)
 	assert.False(t, mr.Exists(nodeDeathAtKey(testZoneId, "10")))
 	assert.Contains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
 }
@@ -509,9 +521,9 @@ func TestHandleWatchPut_ZoneFlipRetiresOldZoneIdentity(t *testing.T) {
 		assert.Less(t, setAt, zremAt, "先写 death_at 再摘负载集")
 		assert.NotContains(t, loadSetMembersForTest(t, mr, testZoneId), "10")
 		assert.False(t, mr.Exists(nodeSceneNodeTypeKey(testZoneId, "10")))
-		reconcile, ok := pendingDeadNodeForTest(testZoneId, "10")
+		scope, ok := pendingDeadNodeForTest(t, mr, testZoneId, "10")
 		require.True(t, ok, "旧 zone 名下的孤儿实例要交给屏障后的收尾队列")
-		assert.Equal(t, []string{"7001"}, reconcile.scenes)
+		assert.Equal(t, []string{"7001"}, scope)
 		assert.Contains(t, loadSetMembersForTest(t, mr, newZone), "10", "新 zone 身份照常进负载集")
 		assert.True(t, localGoneBarrierBlocks(sc, testZoneId, "10"), "每个副本都要记下旧身份消失的时刻")
 

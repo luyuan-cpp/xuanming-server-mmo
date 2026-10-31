@@ -34,7 +34,6 @@
     <ClInclude Include="generated\attribute\attributedelta10framess2c_attribute_sync.h" />
     <ClInclude Include="generated\attribute\attributedelta30framess2c_attribute_sync.h" />
     <ClInclude Include="generated\attribute\attributedelta60framess2c_attribute_sync.h" />
-    <ClInclude Include="player\constants\player.h" />
     <ClInclude Include="player\system\handoff_mark_withdraw.h" />
     <ClInclude Include="player\system\exit_release_mark.h" />
     <ClInclude Include="player\system\travel_freeze_cap.h" />
@@ -44,8 +43,6 @@
     <ClInclude Include="player\system\save_seq.h" />
     <ClInclude Include="player\system\save_seq_floor.h" />
     <ClInclude Include="player\system\player_data_loader.h" />
-    <ClInclude Include="player\system\db_task_dispatch_ledger.h" />
-    <ClInclude Include="player\system\db_task_dispatch_system.h" />
     <ClInclude Include="player\system\player_exit_intent.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />
     <ClInclude Include="player\system\player_ownership_metrics.h" />
@@ -83,6 +80,7 @@
     <ClInclude Include="world\world.h" />
     <ClInclude Include="player\comp\afk_comp.h" />
     <ClInclude Include="player\comp\player_ownership_comp.h" />
+    <ClInclude Include="player\comp\player_key_progress_save_comp.h" />
     <ClInclude Include="player\comp\player_save_seq_floor_comp.h" />
     <ClInclude Include="player\comp\player_landing_comp.h" />
     <ClInclude Include="player\system\afk.h" />
@@ -95,6 +93,8 @@
     <ClInclude Include="player\system\player_inbox_registry.h" />
     <ClInclude Include="player\system\gm_sanction_inbox_executor.h" />
     <ClInclude Include="player\system\player_inbox_system.h" />
+    <ClInclude Include="player\system\player_store_client.h" />
+    <ClInclude Include="player\system\player_store_projection.h" />
     <ClInclude Include="spatial\constants\aoi_priority.h" />
   </ItemGroup>
   <ItemGroup>
@@ -139,8 +139,6 @@
     <ClCompile Include="spatial\system\view.cpp" />
     <ClCompile Include="world\scene_lifecycle.cpp" />
     <ClCompile Include="world\world.cpp" />
-    <ClCompile Include="player\system\db_task_dispatch_ledger.cpp" />
-    <ClCompile Include="player\system\db_task_dispatch_system.cpp" />
     <ClCompile Include="player\system\player_lifecycle.cpp" />
     <ClCompile Include="player\system\player_ownership_metrics.cpp" />
     <ClCompile Include="player\system\role_admission_system.cpp" />
@@ -155,6 +153,8 @@
     <ClCompile Include="player\system\player_inbox_registry.cpp" />
     <ClCompile Include="player\system\gm_sanction_inbox_executor.cpp" />
     <ClCompile Include="player\system\player_inbox_system.cpp" />
+    <ClCompile Include="player\system\player_store_client.cpp" />
+    <ClCompile Include="player\system\player_store_projection.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="player\system\player_feature_snapshot.cpp" />

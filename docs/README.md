@@ -90,6 +90,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [broadcast-message-size-analysis.md](design/broadcast-message-size-analysis.md) — BroadcastToPlayers 消息体积分析
 - [cross_scene_player_messaging.md](design/cross_scene_player_messaging.md) — Cross-Scene Player Messaging (跨场景玩家消息投递) · [EN](design/cross_scene_player_messaging_en.md) · [中文](design/cross_scene_player_messaging_zh.md)
 - [enter-scene-zone-routing.md](design/enter-scene-zone-routing.md) — EnterScene 选区路由设计
+- [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施，当前不实施）
 - [nav-spawn-fix-2026-09-05.md](design/nav-spawn-fix-2026-09-05.md) — 客户端/服务端导航数据、出生点与位置纠正契约
 - [scene-creation-architecture.md](design/scene-creation-architecture.md) — Scene Creation Architecture
 - [scene-enter-chain-residuals.md](design/scene-enter-chain-residuals.md) — 进场链余项 a–e:踢线、离场、落点、释放与断线上报的身份栅栏
@@ -105,7 +106,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
-- [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
+- [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（决策已定；§15 P1 / P2 落码契约，2026-10-30）
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
 - [global-match-hierarchical-pools.md](design/global-match-hierarchical-pools.md) — 全服匹配：按模板分池、zone→大区→全服逐级扩大范围、每池单写者（2026-10-24 拍板，分批落码）
 - [pve-team-size-matching.md](design/pve-team-size-matching.md) — PVE 人数档匹配:人越多怪越多
@@ -163,6 +164,8 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [landing-recovery-sync-digest.md](design/landing-recovery-sync-digest.md) — 落地恢复：按域版本摘要、场景侧待办唤醒与超窗处置（2026-10-14）
 - [new-player-first-enter-no-cold-read.md](design/new-player-first-enter-no-cold-read.md) — 新号首次进场免冷读:建角时写入 PlayerAllData 种子
 - [player-async-save-loss-windows.md](design/player-async-save-loss-windows.md) — 玩家异步存盘：已修复问题、剩余丢失窗口与修复任务
+- [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展：总体方案（2026-10-30；存盘直接提交 TiDB、关键变化立即存 + 拆出热行、etcd 发号 + 可逆打散、落点目录路由、预算三档、MMO/SLG/MOBA；未落码）
+- [player-save-direct-commit.md](design/player-save-direct-commit.md) — 玩家存盘直接提交 TiDB 的落码规格：`player_store` 表、写权行、判定表、C++ 状态机与分批
 - [player-inbox-service.md](design/player-inbox-service.md) — 玩家持久收件箱服务（player_inbox）设计
 - [player-route-mapping-durability-proposal.md](design/player-route-mapping-durability-proposal.md) — 玩家归属与落点映射持久化:库为真源 + Redis 完整副本 + 就绪标记(已拍板;第 0 ~ 3 批已落码,未验证;2026-10-19 起读方按身份绑定的就绪标记判可信,见 §13)
 - [player-storage-placement.md](design/player-storage-placement.md) — 玩家存储落点(Placement):归属与存储拆分、单玩家搬库、Phase 2 全局库
@@ -286,6 +289,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [audit-topic-generation-bump-runbook.md](ops/audit-topic-generation-bump-runbook.md) — 审计 topic 离线换代 Runbook(player_snapshot / transaction_log 改分区数)
 - [cross-zone-failure-test-runbook.md](ops/cross-zone-failure-test-runbook.md) — 跨 Zone 传送 / 归属交接 失败场景测试 Runbook
 - [etcd-maintenance-runbook.md](ops/etcd-maintenance-runbook.md) — etcd MVCC 压缩与空间维护 Runbook
+- [id-issuer-runbook.md](ops/id-issuer-runbook.md) — 发号器运维：首次初始化、预留记录丢失或回退的处置与恢复、演练
 - [gate-kernel-tuning-runbook.md](ops/gate-kernel-tuning-runbook.md) — Gate 内核调优 Runbook
 - [grafana-loki-local-logs.md](ops/grafana-loki-local-logs.md) — 本地日志观测台:Grafana + Loki + Alloy(C++ / Go / Java 三语言统一接入)
 - [k8s-docker-desktop-troubleshooting.md](ops/k8s-docker-desktop-troubleshooting.md) — K8s Docker Desktop Troubleshooting Guide · [EN](ops/k8s-docker-desktop-troubleshooting_en.md) · [中文](ops/k8s-docker-desktop-troubleshooting_zh.md)
@@ -373,6 +377,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [player-inbox-handoff-20261015.md](handoff/player-inbox-handoff-20261015.md) — 玩家持久收件箱：实现交接（2026-10-15）
 - [redis-ha-deploy-path-handoff-20261019.md](handoff/redis-ha-deploy-path-handoff-20261019.md) — 交接：共享 Redis 高可用形态接进部署路径（2026-10-19）
 - [redis-horizontal-scaling-requirements-20261022.md](handoff/redis-horizontal-scaling-requirements-20261022.md) — 交接：Redis 物理水平扩展需求与当前存盘链问题（2026-10-22）
+- [spectate-tiered-fanout-20261030/README.md](handoff/spectate-tiered-fanout-20261030/README.md) — 交接：观战分级扩容 B / C / P0 已落码，评审修正与 P1 / P2 待做（含落码任务说明与给 Codex 的命令，2026-10-30）
 - [redis-player-store-batch2-brief-20261023.md](handoff/redis-player-store-batch2-brief-20261023.md) — 交接：玩家态 Redis 集群化第 2 批（2a–2d）落码简报（2026-10-23）
 - [repo-layout-20261007.md](handoff/repo-layout-20261007.md) — 仓库目录整理:交接说明(2026-10-07)
 - [rpc-channel-batch7-handoff-20261015.md](handoff/rpc-channel-batch7-handoff-20261015.md) — 交接:RpcChannel 改造收尾——第 7 批、剩余调用点迁移与玩家级延后完成(2026-10-15)

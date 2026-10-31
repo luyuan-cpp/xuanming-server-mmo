@@ -84,18 +84,22 @@ func openAuthorityDatabaseWithPermission(ctx context.Context, c config.GlobalMat
 	if c.Host == "" || c.User == "" || c.Database != "mmorpg_match" {
 		return nil, errors.New("全球匹配数据库配置无效")
 	}
+	backend, err := authoritysql.ParseBackend(c.Backend)
+	if err != nil {
+		return nil, err
+	}
 	mc := mysql.NewConfig()
 	mc.User, mc.Passwd = c.User, os.Getenv(c.PasswordEnv)
 	mc.Net, mc.Addr, mc.DBName = "tcp", c.Host, c.Database
 	mc.ParseTime = true
 	mc.Timeout, mc.ReadTimeout, mc.WriteTimeout = 3*time.Second, 3*time.Second, 3*time.Second
 	mc.Params = map[string]string{"charset": "utf8mb4", "sql_mode": "'STRICT_TRANS_TABLES'", "transaction_isolation": "'READ-COMMITTED'"}
-	if c.RequireTiDB {
+	if backend == authoritysql.BackendTiDB {
 		for k, v := range map[string]string{"tidb_txn_mode": "'pessimistic'", "tidb_read_staleness": "0", "tidb_low_resolution_tso": "OFF", "tidb_replica_read": "'leader'", "tidb_read_consistency": "'strict'", "tidb_snapshot": "''"} {
 			mc.Params[k] = v
 		}
 	}
-	db, err := authoritysql.Open(ctx, mc.FormatDSN(), c.Database, c.RequireTiDB, 16, permission)
+	db, err := authoritysql.Open(ctx, mc.FormatDSN(), c.Database, backend, 16, permission)
 	if err != nil {
 		return nil, err
 	}

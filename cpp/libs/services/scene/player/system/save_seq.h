@@ -11,8 +11,8 @@
 
 // 玩家存盘序号 save_seq 的发号(docs/design/db-write-fencing-mysql.md §7.1–§7.3)。
 //
-// 用途:DBTask.save_seq 与 PlayerAllData.last_save_seq。go/db 把 DBTask 的 (owner_epoch, save_seq) 盖到两张玩家子表的
-// 行内围栏上做条件写(§4.2),所以同一玩家后发出的存盘必须拿到更大的 save_seq —— 不管中间实体重建过几次、
+// 用途:SavePlayerRequest.save_seq 与 PlayerAllData.last_save_seq。go/db 按 (owner_epoch, save_seq) 判定写权和幂等,
+// 所以同一玩家后发出的存盘必须拿到更大的 save_seq —— 不管中间实体重建过几次、
 // scene 进程是否换代(§7.1)。
 //
 // 形状:进程级发号器 SaveSeqAllocator(生产实例是 tlsIdGeneratorManager.saveSeq,scene 逻辑线程独占),不设每玩家计数

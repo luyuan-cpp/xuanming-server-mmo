@@ -1,0 +1,121 @@
+# Prometheus alert rules for go/db 玩家存盘(PlayerStore gRPC,scene 直接提交 player_store)。
+#
+# 来源:docs/design/player-save-direct-commit.md;丢失窗口的口径见 docs/design/player-data-tidb-scaling-plan.md §4。
+# 指标(go/db/internal/metrics,label 都是封闭集合,不含 player_id):
+#   db_player_store_requests_total{op,result}   op: save | claim;result 取 proto 枚举名(proto/player_store/player_store.proto),
+#                                               再加 denied / unavailable / unknown_outcome(拿到判定结果之前就结束)
+#   db_player_store_seconds{op}                 RPC 耗时,包含写权判定的语句
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/player-store-alerts.yaml
+#
+# Scrape prerequisites:
+#   - go/db 的指标端口(本地惯例 ":9160",AGENTS.md §6.1)。
+#   - A ServiceMonitor or PodMonitor pointed at that port.
+#
+# 口径:
+#   - go/db 启动时把两个 op 的全部 result 以 0 预置(metrics.PrimePlayerStore),increase 抓得到第一次。
+#   - 按 namespace 聚合(一个 zone 一个 namespace),用的是 ServiceMonitor / PodMonitor 默认附加的 namespace 标签。
+#   - 阈值没有实测基线(都是「出现或持续出现就报」),阶段 B 压测出对比表之后回头校准;DbPlayerStoreLatencyHigh 的 500ms 同样是占位。
+#   - 只进看板、不设告警:SAVE_PLAYER_EQUAL、SAVE_PLAYER_OLDER_SEQ(重试和迟到的正常结局)、LOAD_AND_CLAIM_* 的写权结局(路由过期时 scene_manager 会重试)、
+#     db_player_store_row_bytes(看 payload 增长)。
+#   - scene 侧的未落定进度只在 scene 日志里(scene 的计数不进 Prometheus,Loki ruler 未接线,同 owner-epoch-alerts.yaml 头注释)。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: player-store-alerts
+  labels:
+    app: db
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: db.player-store
+      interval: 30s
+      rules:
+        # 提交失败或结局未知。scene 用同样的内容、同一个序号退避重试,所以恢复后不丢;这段时间进度只在 scene 内存里,scene 崩溃就丢。
+        - alert: DbPlayerStoreCommitFailures
+          expr: |
+            sum by (namespace, op, result) (rate(db_player_store_requests_total{result=~"unavailable|unknown_outcome"}[5m])) > 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的玩家存盘持续失败({{ $labels.op }} / {{ $labels.result }})"
+            description: >-
+              每秒约 {{ $value | printf "%.2f" }} 次。在线玩家的进度暂时只在 scene 内存里,库恢复后 scene 的重试自动提交;这段时间不要重启 scene,
+              scene 崩溃或停机会丢掉最后一次提交之后的进度。认领失败的玩家重试 30 秒后进场失败。
+              unavailable = 选不了库或打不开库:同时看 GoDbRouteNotTrusted、DbPlacementStoreOpenErrors。
+              unknown_outcome = 提交语句出错、结果未知:看 go/db 日志 `[player_store]` 行和数据库(连接数、锁等待、TiDB 的写冲突)。
+
+        # 调用方验签失败。scene 的存盘密钥和 go/db 不一致时,这个 zone 的玩家全部存不了盘。
+        - alert: DbPlayerStoreCallerDenied
+          expr: |
+            sum by (namespace, op) (rate(db_player_store_requests_total{result="denied"}[5m])) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的 go/db 拒绝 scene 的存盘调用(验签失败)"
+            description: >-
+              每秒约 {{ $value | printf "%.2f" }} 次。核对 scene 与 go/db 的 MMORPG_PLAYER_STORE_SECRET_SCENE 是否来自同一个 Secret、改密钥之后两边是否都滚动过,
+              以及两边机器的时钟偏差。在修好之前进度只在 scene 内存里。
+
+        # payload 被拒,重试也不会好:这名玩家的进度一直存不进去。
+        - alert: DbPlayerStorePayloadRejected
+          expr: |
+            sum by (namespace, result) (increase(db_player_store_requests_total{op="save",result=~"SAVE_PLAYER_TOO_LARGE|SAVE_PLAYER_INVALID"}[10m])) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 有玩家存档被拒({{ $labels.result }})"
+            description: >-
+              过去 10 分钟 {{ $value | printf "%.0f" }} 次。TOO_LARGE = 单行 payload 超预算,这名玩家之后的进度都提交不了;先从 go/db 日志定位 player_id,
+              查是哪个 kind 超了(db_player_store_row_bytes 看分布),再决定放宽预算还是清数据。INVALID = 请求不合法,是 scene 的 bug,看 scene 与 go/db 日志。
+
+        # 世代不匹配,基本是发布顺序错了(每次升世代:go/db 全部 zone → scene)。
+        - alert: DbPlayerStoreSchemaMismatch
+          expr: |
+            sum by (namespace, result) (increase(db_player_store_requests_total{result=~"SAVE_PLAYER_SCHEMA_REGRESSED|SAVE_PLAYER_SCHEMA_TOO_NEW|LOAD_AND_CLAIM_SCHEMA_TOO_NEW"}[10m])) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的玩家存档世代不匹配({{ $labels.result }})"
+            description: >-
+              过去 10 分钟 {{ $value | printf "%.0f" }} 次。TOO_NEW = go/db 比 scene 或库里的数据旧,先把 go/db 升到不低于数据世代的版本。
+              REGRESSED = 这个 scene 的世代低于库里的世代,不要回退 scene;受影响的玩家进度只在 scene 内存里。顺序错了只会重试 / 进场失败,不丢库里的数据。
+              处理步骤见 deploy/k8s/README.md 的存档世代一节。
+
+        # 写权被拒。交接和崩溃接管时会有短暂的 STALE_OWNER / NOT_HOLDER,持续不停说明有两个实例在抢同一批玩家,或认领和存盘的状态对不上。
+        - alert: DbPlayerStoreWriterRejected
+          expr: |
+            sum by (namespace, result) (rate(db_player_store_requests_total{op="save",result=~"SAVE_PLAYER_STALE_OWNER|SAVE_PLAYER_NOT_HOLDER|SAVE_PLAYER_UNCLAIMED|SAVE_PLAYER_NO_OWNER"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的玩家存盘持续被写权判定拒绝({{ $labels.result }})"
+            description: >-
+              每秒约 {{ $value | printf "%.2f" }} 次,已持续 10 分钟。被拒的 scene 不再持有这名玩家,它内存里没提交的进度作废。
+              STALE_OWNER / NOT_HOLDER = 玩家已被接管:对照 scene_manager 的节点判死和 owner_epoch 铸造指标(owner-epoch-alerts.yaml),看是否有节点反复被判死又活过来。
+              UNCLAIMED / NO_OWNER = 没认领就存盘,或写权行不存在,属于状态对不上的 bug,看 scene 日志 `[PlayerStore]` 行。
+
+        - alert: DbPlayerStoreLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (namespace, op, le) (rate(db_player_store_seconds_bucket[5m]))) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的玩家存盘 P99 延迟 {{ $value | printf \"%.3f\" }}s({{ $labels.op }})"
+            description: >-
+              P99 持续 10 分钟超过 500ms(占位阈值,没有压测基线)。查数据库:热点行、写冲突、连接池是否排队(mysql-connection-alerts.yaml)。
+              scene 的周期存盘和关键立存都排在同一条路径上,延迟变大时丢失窗口跟着变大。

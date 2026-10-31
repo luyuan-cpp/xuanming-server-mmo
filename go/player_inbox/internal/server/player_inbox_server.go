@@ -37,23 +37,40 @@ type ConsumerStore interface {
 // PlayerInboxServer 实现 inboxpb.PlayerInboxServer。
 type PlayerInboxServer struct {
 	inboxpb.UnimplementedPlayerInboxServer
-	store         ConsumerStore
-	budget        time.Duration
-	verifier      *serviceauth.Verifier
-	matchVerifier *serviceauth.Verifier
-	matchSecret   string
+	store    ConsumerStore
+	budget   time.Duration
+	verifier *serviceauth.Verifier
+	producer MatchProducer
 }
 
-// NewPlayerInboxServer。budget 是整请求 I/O 预算(config.RequestBudget,= Timeout − 回包余量)。
-func NewPlayerInboxServer(store ConsumerStore, budget time.Duration, verifier *serviceauth.Verifier) *PlayerInboxServer {
-	s := &PlayerInboxServer{store: store, budget: budget, verifier: verifier}
-	// 专用producer面缺key只拒该面；不能把Scene/GM密钥借给Match。
-	secret := os.Getenv("MMORPG_PLAYER_INBOX_SECRET_MATCH")
-	if v, err := serviceauth.New(map[string]string{"match": secret}); err == nil {
-		s.matchVerifier = v
-		s.matchSecret = secret
+// MatchProducerSecretEnv 是 Match 结算生产面(EnqueueBattleSettlement / LookupBattleSettlement)签名密钥的环境变量名。
+// K8s 只在全球匹配启用时注入(k8s_deploy.ps1 Add-PlayerInboxMatchSecretEnv,Secret domain-service-secrets 的 player-inbox-match)。
+const MatchProducerSecretEnv = "MMORPG_PLAYER_INBOX_SECRET_MATCH"
+
+// MatchProducer 是 Match 结算生产面的验签与回执签名材料。零值 = 未装配:两个方法一律回 Unavailable。
+// 由装配层(player_inbox.go)构造后传给 NewPlayerInboxServer;构造函数不读环境变量。
+type MatchProducer struct {
+	verifier *serviceauth.Verifier
+	secret   string
+}
+
+// NewMatchProducer 用 Match 专用密钥原文构造。缺失或去掉首尾空白后不足 32 字节返回错误;
+// 专用面缺 key 只拒这一面,不能把 Scene / GM 密钥借给 Match。
+func NewMatchProducer(rawSecret string) (MatchProducer, error) {
+	verifier, err := serviceauth.New(map[string]string{"match": rawSecret})
+	if err != nil {
+		return MatchProducer{}, err
 	}
-	return s
+	return MatchProducer{verifier: verifier, secret: rawSecret}, nil
+}
+
+// Ready 报告 Match 结算生产面是否已装配签名密钥。
+func (p MatchProducer) Ready() bool { return p.verifier != nil }
+
+// NewPlayerInboxServer。budget 是整请求 I/O 预算(config.RequestBudget,= Timeout − 回包余量);
+// producer 为零值时 Battle 结算两个方法回 Unavailable(装配层 resolveMatchProducer 已据此打日志并把 gauge 置 0)。
+func NewPlayerInboxServer(store ConsumerStore, budget time.Duration, verifier *serviceauth.Verifier, producer MatchProducer) *PlayerInboxServer {
+	return &PlayerInboxServer{store: store, budget: budget, verifier: verifier, producer: producer}
 }
 
 func NewConsumerVerifier() (*serviceauth.Verifier, error) {
@@ -148,10 +165,10 @@ func (s *PlayerInboxServer) battleSettlement(ctx context.Context, in *inboxpb.Ba
 	if md, ok := metadata.FromIncomingContext(ctx); ok && len(md.Get("x-session-detail-bin")) != 0 {
 		return nil, status.Error(codes.PermissionDenied, "结算生产仅限Match内部调用")
 	}
-	if s.matchVerifier == nil {
+	if !s.producer.Ready() {
 		return nil, status.Error(codes.Unavailable, "Match结算密钥未装配")
 	}
-	caller, err := s.matchVerifier.Verify(ctx, method, in)
+	caller, err := s.producer.verifier.Verify(ctx, method, in)
 	if err != nil || caller != "match" {
 		return nil, status.Error(codes.PermissionDenied, "Match结算原件证明无效")
 	}
@@ -180,7 +197,7 @@ func (s *PlayerInboxServer) battleSettlement(ctx context.Context, in *inboxpb.Ba
 		return nil, status.Error(codes.Unavailable, "结算原收据尚未确认")
 	}
 	resp.RequestDigest = digest
-	if err = serviceauth.Sign(method+"/reply", resp, "inbox", s.matchSecret, uint64(time.Now().UnixMilli())); err != nil {
+	if err = serviceauth.Sign(method+"/reply", resp, "inbox", s.producer.secret, uint64(time.Now().UnixMilli())); err != nil {
 		return nil, status.Error(codes.Unavailable, "结算回执签名不可用")
 	}
 	return resp, nil

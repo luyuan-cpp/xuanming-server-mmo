@@ -96,7 +96,7 @@ func run(c config, migrate bool) (runErr error) {
 		return err
 	}
 	resourcesTransferred := false
-	db, err := authoritysql.Open(ctx, os.Getenv(c.DSNEnv), data.DatabaseName, c.RequireTiDB, c.MaxOpenConns, permission)
+	db, err := authoritysql.Open(ctx, os.Getenv(c.DSNEnv), data.DatabaseName, authoritysql.Backend(c.Backend), c.MaxOpenConns, permission)
 	if err != nil {
 		return err
 	}

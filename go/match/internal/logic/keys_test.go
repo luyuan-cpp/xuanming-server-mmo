@@ -130,7 +130,6 @@ func TestQueueKeysShareOneSlot(t *testing.T) {
 func TestPerEntityKeysHaveNoHashTag(t *testing.T) {
 	for _, key := range []string{
 		matchTicketKey(1), matchTicketKey(18446744073709551615),
-		matchRatingKey(1), matchRatingKey(18446744073709551615), matchRatingAppliedKey(42),
 		challengeKey(9001), challengeTargetKey(6002),
 		spectateBattleKey(42), spectateWatchingKey(7), spectateBattlesActiveKey,
 		battleLockKey(1), getPlayerLocationKey(1), playerSessionKey(1),
@@ -140,7 +139,6 @@ func TestPerEntityKeysHaveNoHashTag(t *testing.T) {
 	}
 	// 两张不同玩家的票据落不同 slot(证明确实按玩家分布,不是被某段 tag 压平)。
 	require.NotEqual(t, redisHashSlot(matchTicketKey(1)), redisHashSlot(matchTicketKey(2)))
-	require.NotEqual(t, redisHashSlot(matchRatingKey(1)), redisHashSlot(matchRatingKey(2)))
 
 	// 自定义前缀的队列 key(票据里记录的任意形态)推出的镜像 key 保留前缀、与队列同 slot。
 	derived, err := rankKeyForQueue("match:{other}:queue:3:7")

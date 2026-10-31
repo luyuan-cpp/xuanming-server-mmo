@@ -144,7 +144,7 @@ func (r *TrialLobbyRepo) createSQL(ctx context.Context, in TrialLobbyCreate) (ou
 	ids := append([]uint64(nil), in.Roster...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	err = r.guilds.inTx(withRoleTargets(ctx, ids...), opTrialRegister, func(ctx context.Context, tx *sql.Tx) error {
-		if _, _, e := lockTrialGuild(ctx, tx, in.GuildID); e != nil {
+		if _, e := lockTrialGuild(ctx, tx, in.GuildID); e != nil {
 			return e
 		}
 		now, e := trialSQLNow(ctx, tx)
@@ -279,7 +279,7 @@ func (r *TrialLobbyRepo) withSQLLobby(ctx context.Context, id uint64, fn func(co
 		return e
 	}
 	return r.guilds.inTx(withRoleTargets(ctx, lobbyPlayers(original)...), opTrialMark, func(ctx context.Context, tx *sql.Tx) error {
-		if _, _, e = lockTrialGuild(ctx, tx, original.GuildId); e != nil && !errors.Is(e, ErrGuildGone) {
+		if _, e = lockTrialGuild(ctx, tx, original.GuildId); e != nil && !errors.Is(e, ErrGuildGone) {
 			return e
 		}
 		row, e := scanTrialLobby(tx.QueryRowContext(ctx, "SELECT "+trialLobbyColumns+" FROM guild_trial_lobby WHERE lobby_id=? FOR UPDATE", id))
@@ -363,7 +363,7 @@ func (r *TrialLobbyRepo) respondSQL(ctx context.Context, id, player uint64, acce
 			return nil
 		}
 		// 清理旧邀请允许G已消失；追加同意仍须真实帮会存在，不能在解散后产生新授权。
-		if _, _, e = lockTrialGuild(ctx, tx, o.GuildId); e != nil {
+		if _, e = lockTrialGuild(ctx, tx, o.GuildId); e != nil {
 			return e
 		}
 		if e = r.guilds.requireTrialEntryFree(ctx, tx, lobbyPlayers(o), id); e != nil {
@@ -467,7 +467,7 @@ func (r *TrialLobbyRepo) finishSQL(ctx context.Context, id uint64, from, to pb.G
 		if from != pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_LAUNCHING || to != pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_LAUNCHED || battle == 0 {
 			return ErrWriteConflict
 		}
-		if _, _, e = lockTrialGuild(ctx, tx, o.GuildId); e != nil {
+		if _, e = lockTrialGuild(ctx, tx, o.GuildId); e != nil {
 			return e
 		}
 		if e = r.guilds.verifyLobbyOwners(ctx, tx, o); e != nil {

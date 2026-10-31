@@ -278,13 +278,6 @@ TEST(ResolveCommandRoute, MatchesTheContractInDeployConfig)
     EXPECT_EQ(sceneRoute.partition, route.partition);
 }
 
-// 迁移窗口没关掉之前,旧的一节点一 topic 名字必须还能拼出来。
-TEST(ResolveCommandRoute, LegacyPerNodeTopicNameIsUnchanged)
-{
-    EXPECT_EQ(node::kafka::LegacyPerNodeTopic(GateNodeService, 5), "gate-5");
-    EXPECT_EQ(node::kafka::LegacyPerNodeTopic(SceneNodeService, 77), "scene-77");
-}
-
 int main(int argc, char **argv)
 {
     // 先在换 cwd 之前记下起点,test_config_helper 会把 cwd 换到 bin/。

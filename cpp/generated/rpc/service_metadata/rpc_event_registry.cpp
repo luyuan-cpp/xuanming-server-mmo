@@ -9,6 +9,7 @@
 #include "proto/data_service/data_service.pb.h"
 #include "proto/etcd/etcd.pb.h"
 #include "proto/friend/friend.pb.h"
+#include "proto/gate/gate_client_spectate.pb.h"
 #include "proto/gate/gate_service.pb.h"
 #include "proto/guild/guild.pb.h"
 #include "proto/guild/guild_internal.pb.h"
@@ -53,6 +54,7 @@
 #include "rpc/service_metadata/data_service_service_metadata.h"
 #include "rpc/service_metadata/etcd_service_metadata.h"
 #include "rpc/service_metadata/friend_service_metadata.h"
+#include "rpc/service_metadata/gate_client_spectate_service_metadata.h"
 #include "rpc/service_metadata/gate_service_service_metadata.h"
 #include "rpc/service_metadata/guild_service_metadata.h"
 #include "rpc/service_metadata/guild_internal_service_metadata.h"
@@ -116,6 +118,8 @@ void SendBattleNodeDestroyBattleErased(entt::registry& , entt::entity , const go
 void SendBattleNodeAddObserverErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeRemoveObserverErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeIssueBattleTicketErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
+void SendBattleNodeAttachRelayGateErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
+void SendBattleNodePromoteSpectateBroadcastErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 namespace chatpb{void SendClientPlayerChatSendChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatPullChatHistoryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace client_rpc_router{void SendClientRpcRouterForwardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -227,6 +231,7 @@ namespace mailpb{void SendMailAdminSealMailCampaignErased(entt::registry& , entt
 namespace match{void SendMatchInternalStartActivityBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalCancelActivityBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalCommitBattleOutcomeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalSetSpectateFeaturedErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetNetworkProbePlanErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceCommitNetworkProbeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceJoinQueueErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -333,7 +338,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 349,
+static_assert(kMaxRpcMethodCount == 354,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -437,6 +442,16 @@ void InitMessageInfo()
         std::make_unique<::IssueBattleTicketRequest>(),
         std::make_unique<::IssueBattleTicketResponse>(),
         1, common::base::eNodeType::BattleNodeService, ::SendBattleNodeIssueBattleTicketErased};
+    gRpcMethodRegistry[BattleNodeAttachRelayGateMessageId] = RpcMethodMeta{
+        "BattleNode", "AttachRelayGate",
+        std::make_unique<::AttachRelayGateRequest>(),
+        std::make_unique<::AttachRelayGateResponse>(),
+        1, common::base::eNodeType::BattleNodeService, ::SendBattleNodeAttachRelayGateErased};
+    gRpcMethodRegistry[BattleNodePromoteSpectateBroadcastMessageId] = RpcMethodMeta{
+        "BattleNode", "PromoteSpectateBroadcast",
+        std::make_unique<::PromoteSpectateBroadcastRequest>(),
+        std::make_unique<::PromoteSpectateBroadcastResponse>(),
+        1, common::base::eNodeType::BattleNodeService, ::SendBattleNodePromoteSpectateBroadcastErased};
 
     // --- ClientPlayerChat ---
     gRpcMethodRegistry[ClientPlayerChatSendChatMessageId] = RpcMethodMeta{
@@ -757,6 +772,18 @@ void InitMessageInfo()
         std::make_unique<::Empty>(),
         1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendNotifyFriendEventErased};
 
+    // --- GateClientSpectate ---
+    gRpcMethodRegistry[GateClientSpectateSubscribeSpectateMessageId] = RpcMethodMeta{
+        "GateClientSpectate", "SubscribeSpectate",
+        std::make_unique<::SubscribeSpectateRequest>(),
+        std::make_unique<::SubscribeSpectateResponse>(),
+        0, common::base::eNodeType::GateNodeService};
+    gRpcMethodRegistry[GateClientSpectateUnsubscribeSpectateMessageId] = RpcMethodMeta{
+        "GateClientSpectate", "UnsubscribeSpectate",
+        std::make_unique<::UnsubscribeSpectateRequest>(),
+        std::make_unique<::UnsubscribeSpectateResponse>(),
+        0, common::base::eNodeType::GateNodeService};
+
     // --- Gate ---
     gRpcMethodRegistry[GateSendMessageToPlayerMessageId] = RpcMethodMeta{
         "Gate", "SendMessageToPlayer",
@@ -1064,6 +1091,11 @@ void InitMessageInfo()
         std::make_unique<::match::CommitBattleOutcomeRequest>(),
         std::make_unique<::match::CommitBattleOutcomeResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalCommitBattleOutcomeErased};
+    gRpcMethodRegistry[MatchInternalSetSpectateFeaturedMessageId] = RpcMethodMeta{
+        "MatchInternal", "SetSpectateFeatured",
+        std::make_unique<::match::SetSpectateFeaturedRequest>(),
+        std::make_unique<::match::SetSpectateFeaturedResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalSetSpectateFeaturedErased};
 
     // --- MatchService ---
     gRpcMethodRegistry[MatchServiceGetNetworkProbePlanMessageId] = RpcMethodMeta{
@@ -2162,6 +2194,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerFriendListBlocksMessageId:
 	case ClientPlayerFriendRecommendFriendsMessageId:
 	case ClientPlayerFriendNotifyFriendEventMessageId:
+	case GateClientSpectateSubscribeSpectateMessageId:
+	case GateClientSpectateUnsubscribeSpectateMessageId:
 	case GuildServiceCreateGuildMessageId:
 	case GuildServiceGetGuildMessageId:
 	case GuildServiceGetPlayerGuildMessageId:

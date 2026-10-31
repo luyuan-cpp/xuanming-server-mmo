@@ -64,7 +64,7 @@ public:
 	// called after Subscribe() succeeds; safe to call multiple times.
 	void StartBackgroundPolling(muduo::net::EventLoop* dispatchLoop);
 
-	// 先停消费入口并 join 后台 poller,但保留 producer 给停机存盘发送 DBTask。
+	// 先停消费入口并 join 后台 poller,但保留 producer 给收尾阶段发事件。
 	// 幂等,普通 Shutdown() 会再次调用。
 	void StopConsumers();
 	// 后台 poller join 之后，再等此前投递到所属 loop 的回调全部返回。
@@ -74,7 +74,7 @@ public:
 	// P3 才封全进程 producer；成功只覆盖 Kafka，不能替代 RPC/Redis 业务终局。
 	std::optional<std::string> ClosedPublicationFrontier() const;
 
-	// timeout 为零时不阻塞;Scene 停机 barrier 用它观察所有 DBTask
+	// timeout 为零时不阻塞;停机时用它观察排队的消息
 	// 是否已离开 producer 队列。
 	bool FlushProducer(std::chrono::milliseconds timeout);
 	std::size_t PendingProducerMessages() const;

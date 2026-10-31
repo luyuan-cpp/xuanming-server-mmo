@@ -11,11 +11,9 @@ import (
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/protobuf/proto"
-	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	pb "proto/friend"
 	plpb "proto/player_locator"
-	"shared/savebarrier"
 )
 
 // ErrInvalidDirectoryInput 只表示客户端参数不合法，其他错误均为依赖故障。
@@ -28,7 +26,7 @@ const (
 	directoryMaxPage    = 50
 )
 
-// OnlineDirectory 只读 player_locator 的会话与玩家展示缓存；不维护第二份在线真值。
+// OnlineDirectory 只读 player_locator 的会话，展示资料经 data_service 读 player_store；不维护第二份在线真值。
 // 共享 Redis 是 node 模式（与 SessionReader 相同约束）。home zone 经 data_service
 // 查询，不能假定 player:zone:* 和会话同库。每页最多四次 SCAN，空页仍可有续页。
 type OnlineDirectory struct {
@@ -163,14 +161,16 @@ func (d OnlineDirectory) readEntries(ctx context.Context, keys []string, skip ma
 		return entries, nil
 	}
 	ids := make([]uint64, len(keys))
-	readKeys := make([]string, 0, len(keys)*2)
+	readKeys := make([]string, 0, len(keys))
+	live := make([]uint64, 0, len(keys))
 	for i, key := range keys {
 		id, err := strconv.ParseUint(strings.TrimPrefix(key, playerSessionKeyPrefix), 10, 64)
 		if err != nil || id == 0 || skip[id] {
 			continue
 		}
 		ids[i] = id
-		readKeys = append(readKeys, key, savebarrier.ParentKey(id))
+		readKeys = append(readKeys, key)
+		live = append(live, id)
 	}
 	if len(readKeys) == 0 {
 		return entries, nil
@@ -182,33 +182,39 @@ func (d OnlineDirectory) readEntries(ctx context.Context, keys []string, skip ma
 	if len(values) != len(readKeys) {
 		return nil, errors.New("在线目录会话读取数量不符")
 	}
+	displays, err := d.readBriefs(ctx, live)
+	if err != nil {
+		return nil, err
+	}
 	candidates := make([]uint64, 0, len(keys))
 	valueIndex := 0
 	for i, id := range ids {
 		if id == 0 {
 			continue
 		}
-		sessionRaw, profileRaw := values[valueIndex], values[valueIndex+1]
-		valueIndex += 2
+		sessionRaw := values[valueIndex]
+		valueIndex++
+		brief, known := displays[id]
+		if !known {
+			continue
+		}
 		session := &plpb.PlayerSession{}
-		profile := &dbpb.PlayerAllData{}
-		if sessionRaw == "" || profileRaw == "" || proto.Unmarshal([]byte(sessionRaw), session) != nil || proto.Unmarshal([]byte(profileRaw), profile) != nil {
+		if sessionRaw == "" || proto.Unmarshal([]byte(sessionRaw), session) != nil {
 			continue
 		}
-		player := profile.GetPlayerDatabaseData()
-		if session.GetPlayerId() != id || session.GetState() != plpb.PlayerSessionState_SESSION_STATE_ONLINE || player.GetPlayerId() != id {
+		if session.GetPlayerId() != id || session.GetState() != plpb.PlayerSessionState_SESSION_STATE_ONLINE {
 			continue
 		}
-		name := strings.TrimSpace(player.GetProfileComponent().GetName())
-		// PlayerAllData 是存盘快照；新角色先在 Scene 内存设为 1 级，首次存盘前
-		// 缓存等级仍可为 0。等级只供展示，不能把未知等级当作不在线而漏掉玩家。
-		if name == "" || player.GetUint32PbComponent().GetClass() == 0 {
+		name := strings.TrimSpace(brief.name)
+		// 展示资料来自存档；新角色先在 Scene 内存设为 1 级，首次存盘前等级仍可为 0。
+		// 等级只供展示，不能把未知等级当作不在线而漏掉玩家。
+		if name == "" || brief.classID == 0 {
 			continue
 		}
 		if query != "" && !strings.Contains(strings.ToLower(name), query) && !strings.Contains(strconv.FormatUint(id, 10), query) {
 			continue
 		}
-		entries[keys[i]] = &pb.RecommendEntry{CandidatePlayerId: id, IsOnline: true, LastActiveMs: session.GetLastActiveTs(), Name: name, Level: player.GetLevelComponent().GetLevel(), ClassId: player.GetUint32PbComponent().GetClass(), Gender: player.GetProfileComponent().GetGender(), AppearanceId: player.GetProfileComponent().GetAppearanceId(), ZoneId: zone}
+		entries[keys[i]] = &pb.RecommendEntry{CandidatePlayerId: id, IsOnline: true, LastActiveMs: session.GetLastActiveTs(), Name: name, Level: brief.level, ClassId: brief.classID, Gender: brief.gender, AppearanceId: brief.appearanceID, ZoneId: zone}
 		candidates = append(candidates, id)
 	}
 	if len(candidates) == 0 {

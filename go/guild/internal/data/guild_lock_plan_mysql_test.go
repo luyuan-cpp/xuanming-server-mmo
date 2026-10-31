@@ -78,9 +78,6 @@ func TestGuildLockingStatementsArePrimaryKeyPointLookups(t *testing.T) {
 
 		// guild_player_state(位置 2):玩家守卫。
 		{"sqlLockPlayerState", sqlLockPlayerState, []any{member}, "guild_player_state", lockRead},
-		// 同一条语句锁全局插入守卫(lockGlobalInsertGuard,player_id = 0):建帮 / 审批通过 / 建状态行短事务的第一把状态行锁。
-		// 哨兵行由 resetGuildSchemaViaMigrate 按启动顺序建好;行不在时 const 判定读不到行,table / key 为 NULL,用例会红。
-		{"sqlLockPlayerState(全局插入守卫)", sqlLockPlayerState, []any{globalInsertGuardPlayerID}, "guild_player_state", lockRead},
 
 		// guild_member(位置 3):主键与 uk_guild_member 的列同时被钉死,必须选主键。
 		{"sqlLockMemberRole", sqlLockMemberRole, []any{guildID, member}, "guild_member", lockRead},
@@ -178,7 +175,7 @@ func TestGuildLockingStatementShapes(t *testing.T) {
 		{"sqlSelectMemberGuild", sqlSelectMemberGuild},
 		{"sqlCountMembers", sqlCountMembers},
 		{"sqlCountLiveApplicationsOfGuild", sqlCountLiveApplicationsOfGuild},
-		// 审批通过前的预读(完整性复核 G4):只判申请在不在,决定要不要建状态行 / 取全局插入守卫;锁内仍以 FOR UPDATE 复核。
+		// 审批通过前的预读(完整性复核 G4):只判申请在不在,决定要不要建状态行;锁内仍以 FOR UPDATE 复核。
 		{"sqlSelectApplicationExists", sqlSelectApplicationExists},
 	}
 	for _, s := range plainReads {

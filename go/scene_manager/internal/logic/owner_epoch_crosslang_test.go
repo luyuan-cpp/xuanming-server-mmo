@@ -252,7 +252,7 @@ local old,next=fence(ARGV[1]),fence(ARGV[2])
 local raw=prior()
 if not old or not next or raw==nil or old.k~='R' or next.k~='H'
     or old.i~=next.i or old.n~=next.n or old.a~=next.a or old.t==next.t
-    or next.e~=ARGV[3] or (next.e~=old.e and next.e~=plus2(old.e)) then return redis.error_reply('HANDOFF resume record') end
+    or next.e~=ARGV[3] or (next.e~=old.e and (plus2(old.e)==nil or cmp(next.e,plus2(old.e))<0)) then return redis.error_reply('HANDOFF resume record') end
 if redis.call('GET',KEYS[1])~=ARGV[3] or (redis.call('GET',location) or '')~=ARGV[4] then return 0 end
 if redis.call('EXISTS',KEYS[3])~=0 then return 0 end
 if raw==ARGV[2] then return 1 end
@@ -391,7 +391,7 @@ func TestRollbackAndInheritClearAreMutuallyExclusive(t *testing.T) {
 		require.True(t, restored)
 		require.Equal(t, uint64(3), echo)
 
-		// 迟到投递的路由让 B 载入(N = 2):owner_epoch 已是 3,A2′ 回 -1,B 拒建实体、发不出 DBTask(2)。
+		// 迟到投递的路由让 B 载入(N = 2):owner_epoch 已是 3,A2′ 回 -1,B 拒建实体、认领不了 2。
 		assert.Equal(t, "-1", inheritClear(t, sc, playerID, 2))
 		forwarded, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
 		assert.Equal(t, plan.forwardMarker, forwarded, "核对不过一个标记都不删:转写标记留给源端取证 / 改派")
@@ -494,7 +494,7 @@ func TestSourceJudgeScriptDeletesOnlyItsOwnLineageAndSeesReceipt(t *testing.T) {
 		// 源端采纳之后,任何凭这一族标记的铸造都过不了门:标记已被取证原子删掉(铸造 Lua 回 -1)。
 		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
 			[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
-			"7", "late-bytes", "7:"+savedAt)
+			mintLuaArgs("7", "late-bytes", "7:"+savedAt)...)
 		require.NoError(t, err)
 		assert.Equal(t, "-1", fmt.Sprint(result))
 		assert.Equal(t, "7", ownerEpochRaw(t, sc, playerID))
@@ -561,6 +561,44 @@ func TestPendingRegistrationCancellationPreventsLateRegisterEvenWithoutMark(t *t
 	require.Equal(t, before, mr.Dump())
 	require.False(t, mr.Exists(keys[2]))
 	require.Equal(t, revoked, mr.HGet(barrier, "handoff_fence"))
+}
+
+// 墙钟地板(zone-redis-regression-guard-20261022.md §4.3.1)之后,B5 的回滚 epoch 只保证 ≥ 原 epoch + 2(铸出毫秒值、
+// 回滚再 +1)。恢复脚本(C++ kResumeFenceLua 副本)必须接受 ≥ +2 的目标、拒绝 +1 及更小(不可能是回滚值),
+// 拒绝时 save_barrier.handoff_fence 一个字节都不改。比较按十进制串(cmp),不经 Lua double。
+func TestResumeFenceAcceptsRollbackEpochAtLeastPlusTwo(t *testing.T) {
+	for _, tc := range []struct {
+		target string
+		ok     bool
+	}{
+		{"9", true},
+		{"1760000000001", true},
+		{"8", false},
+		{"6", false},
+	} {
+		t.Run(tc.target, func(t *testing.T) {
+			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			const id = uint64(63995)
+			barrier := fmt.Sprintf("player:{%d}:save_barrier", id)
+			keys := []string{ownerepoch.OwnerEpochKey(id), barrier, ownerepoch.HandoffKey(id), getPlayerLocationKey(id)}
+			require.NoError(t, mr.Set(keys[0], tc.target))
+			require.NoError(t, mr.Set(keys[3], "original-location"))
+			revoked := "7|scene|1|" + strings.Repeat("a", 32) + "|R|" + strings.Repeat("d", 32)
+			candidate := tc.target + "|scene|1|" + strings.Repeat("a", 32) + "|H|" + strings.Repeat("e", 32)
+			mr.HSet(barrier, "handoff_fence", revoked)
+
+			v, err := sc.Redis.Eval(cppLuaResumeFence, keys, revoked, candidate, tc.target, "original-location")
+			if tc.ok {
+				require.NoError(t, err)
+				assert.Equal(t, "1", fmt.Sprint(v))
+				assert.Equal(t, candidate, mr.HGet(barrier, "handoff_fence"))
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "HANDOFF resume record")
+			assert.Equal(t, revoked, mr.HGet(barrier, "handoff_fence"), "拒绝时不改资格")
+		})
+	}
 }
 
 func TestStableHandoffTransitionCandidateRecoversLostReplies(t *testing.T) {

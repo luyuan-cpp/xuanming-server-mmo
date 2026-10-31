@@ -1,21 +1,23 @@
 // Package ownerepoch 是玩家「归属 epoch」与「跨 zone 交接落盘标记」在 Redis 里的
-// 键名 / 值格式契约,供 Go 侧的两个消费者共用:
+// 键名 / 值格式契约:
 //
-//   - scene_manager:EnterScene 是唯一的归属变更闸口,负责用 INCR 铸造 epoch、
+//   - scene_manager:EnterScene 是唯一的归属变更闸口,负责铸造 epoch(取 max(当前值 + 1, 当前毫秒))、
 //     用 Lua CAS 写 player:{id}:location,并在放行跨节点 / 跨 zone 交接前比对
 //     handoff 标记(docs/design/cross-zone-scene-travel.md CZ-4);
-//   - db:消费 DBTask 落 MySQL 前按 DBTask.owner_epoch 与当前 epoch 守卫
-//     (docs/design/scene-owner-reentry-barrier.md §6.3)。
+//   - go/db 不读这些键:写权判定在提交事务里按 player_store 写权行做
+//     (docs/design/player-save-direct-commit.md §4),代次随路由事件和认领请求传过去。
 //
-// C++ scene 节点是这两个键的另一半参与者(存盘 Lua 里做 epoch CAS、落地回调后写
-// handoff 标记),它不读本包,只按下面写死的格式镜像一份。**改格式必须两边同改**,
-// 而且改错的表现是静默的:C++ 比对失败会把正常存盘当成"已被废黜"而拒写。
+// C++ scene 节点是这两个键的另一半参与者(提交落定后写 handoff 标记),它不读本包,
+// 只按下面写死的格式镜像一份。**改格式必须两边同改**,而且改错的表现是静默的:
+// 标记比对失败时跨节点交接会一直被拒。
 //
 // 键与值(与 C++ 一字不差):
 //
-//	player:{player_id}:owner_epoch   纯十进制整数字符串。只经 scene_manager 的 INCR 前进,
-//	                                  单调递增:铸造用 INCR,路由失败的回滚也用 INCR(再进
-//	                                  一格,从不退回旧值,cross-zone-scene-travel.md §12.8);
+//	player:{player_id}:owner_epoch   纯十进制整数字符串(< 2^53)。只经 scene_manager 前进,
+//	                                  只升不降:铸造取 max(当前值 + 1, 当前毫秒墙钟)(墙钟地板,
+//	                                  zone-redis-regression-guard-20261022.md §4.3.1),不保证
+//	                                  恰好 +1;路由失败的回滚用 INCR(再进一格,从不退回旧值,
+//	                                  cross-zone-scene-travel.md §12.8);
 //	                                  键缺失时的补种只按已记录的值补回(scene_manager 按
 //	                                  location 记录值 SETNX、C++ guard 存盘按缓存值)。
 //	                                  不存在 / "0" 表示旧版未铸造,校验方一律跳过比对并计数

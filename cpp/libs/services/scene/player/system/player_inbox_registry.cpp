@@ -41,6 +41,7 @@ namespace player_inbox_registry
 			uint32_t domain{0};
 			uint32_t klass{0};
 			std::string payloadMessage;
+			uint32_t maxPayloadBytes{0}; // OptionPlayerInboxType.max_payload_bytes;0 = 没写(SelfCheck 拒绝)
 			std::string name{"unknown"};
 		};
 
@@ -74,6 +75,7 @@ namespace player_inbox_registry
 					entry.domain = static_cast<uint32_t>(spec.domain());
 					entry.klass = static_cast<uint32_t>(spec.klass());
 					entry.payloadMessage = spec.payload_message();
+					entry.maxPayloadBytes = spec.max_payload_bytes();
 				}
 				return built;
 			}();
@@ -143,6 +145,16 @@ namespace player_inbox_registry
 		return msgType < types.size() ? types[msgType].name : kUnknownTypeName;
 	}
 
+	uint32_t MaxPayloadBytes(uint32_t msgType)
+	{
+		const auto &types = Types();
+		if (msgType >= types.size() || !types[msgType].hasSpec)
+		{
+			return 0;
+		}
+		return types[msgType].maxPayloadBytes;
+	}
+
 	const std::vector<uint32_t> &ConsumerDomains()
 	{
 		static const std::vector<uint32_t> domains = []
@@ -201,6 +213,10 @@ namespace player_inbox_registry
 				google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(entry.payloadMessage) == nullptr)
 			{
 				return where + ": payload_message '" + entry.payloadMessage + "' does not resolve";
+			}
+			if (entry.maxPayloadBytes == 0)
+			{
+				return where + ": max_payload_bytes is 0";
 			}
 			if (kExecutors[static_cast<std::size_t>(number)] == nullptr)
 			{

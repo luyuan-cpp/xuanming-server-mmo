@@ -1,5 +1,6 @@
 package com.game.gateway.repository;
 
+import com.game.gateway.entity.RowIds;
 import com.game.gateway.repository.MySqlLockOrderFixture.NamedSql;
 import com.game.gateway.repository.MySqlLockOrderFixture.WriterWork;
 import org.junit.jupiter.api.AfterEach;
@@ -43,7 +44,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * <h2>为什么对照组<b>不</b>强断言「必有 1213」(2026-09-29 真库实测后改)</h2>
  * 原先它断言 {@code deadlocks == 1}。真库(MySQL 26.7.0)上这条<b>失败</b>了:两个并发 add 里一个直接拿到
  * {@code 1062 Duplicate entry '990001-880000002' for key 'zone_whitelist.uk_zone_account'},没有 1213。
- * 同日的独立探针给出了原因,也给出了概率:{@code zone_whitelist} 的主键是<b>自增</b>,新行的唯一键项必然排在
+ * 同日的独立探针给出了原因,也给出了概率:{@code zone_whitelist} 的主键当时是<b>自增</b>(现在是同样递增的
+ * {@link RowIds},本用例用的就是它),新行的唯一键项必然排在
  * 删除标记项<b>之后</b>,落在探针表里「竞争者主键都更大」那一路 —— 那一路普通 INSERT 只有 <b>2/5</b> 成环、
  * ODKU <b>0/5</b>,而且同一格在不同轮次跑出过 2/5 与 5/5,<b>随时序波动</b>。
  *
@@ -106,9 +108,9 @@ class ZoneWhitelistUpsertLockOrderMySqlTest {
     private static final NamedSql UPSERT = NamedSql.parse(ZoneWhitelistRepository.UPSERT_SQL);
     /** 与 {@link ZoneWhitelistRepository#DELETE_BY_KEY_JPQL} 等价的 SQL:按 uk_zone_account 定位的单条删除。 */
     private static final String DELETE_BY_KEY_SQL = "DELETE FROM zone_whitelist WHERE zone_id = ? AND account_id = ?";
-    /** 旧 add = save(entry)(id 为空)时 Hibernate 发出的普通 INSERT 形状,只给对照组用。 */
+    /** 旧 add = save(entry) 时 Hibernate 发出的普通 INSERT 形状,只给对照组用。 */
     private static final String LEGACY_SAVE_INSERT_SQL =
-            "INSERT INTO zone_whitelist (zone_id, account_id, note) VALUES (?, ?, ?)";
+            "INSERT INTO zone_whitelist (id, zone_id, account_id, note) VALUES (?, ?, ?, ?)";
     /** add 在同一事务里的回读,与 findByZoneIdAndAccountId 同形。 */
     private static final String READ_BACK_SQL = "SELECT id FROM zone_whitelist WHERE zone_id = ? AND account_id = ?";
 
@@ -165,12 +167,13 @@ class ZoneWhitelistUpsertLockOrderMySqlTest {
     void legacyPlainInsertBehindPendingDeleteLosesOneWriter() throws Exception {
         int deadlockRounds = 0;
         for (int round = 1; round <= LEGACY_ROUNDS; round++) {
-            cleanTestKeys(); // 每轮都从「表里没有这个键」开始:seed 才会拿到一个全新的自增 id
+            cleanTestKeys(); // 每轮都从「表里没有这个键」开始:seed 才会拿到一个全新的行号
             List<Optional<SQLException>> outcomes = runScenario(ACCOUNT_LEGACY, (c, note) -> {
                 try (PreparedStatement ps = c.prepareStatement(LEGACY_SAVE_INSERT_SQL)) {
-                    ps.setLong(1, ZONE);
-                    ps.setLong(2, ACCOUNT_LEGACY);
-                    ps.setString(3, note);
+                    ps.setLong(1, RowIds.next());
+                    ps.setLong(2, ZONE);
+                    ps.setLong(3, ACCOUNT_LEGACY);
+                    ps.setString(4, note);
                     ps.executeUpdate();
                 }
                 readBack(c, ACCOUNT_LEGACY);
@@ -212,7 +215,7 @@ class ZoneWhitelistUpsertLockOrderMySqlTest {
     }
 
     private static Map<String, Object> upsertParams(long account, String note) {
-        return Map.of("zoneId", ZONE, "accountId", account, "note", note);
+        return Map.of("id", RowIds.next(), "zoneId", ZONE, "accountId", account, "note", note);
     }
 
     private static void readBack(Connection c, long account) throws SQLException {

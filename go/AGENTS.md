@@ -48,11 +48,8 @@ cd go\db && go build ./cmd/data_stress ./cmd/verifier # build L2 stress tools
 
 ## NOTES
 - `build.bat` 仅转调 `build.ps1`；完整 `.pb.go` 重生成由 protogen 完成，流程见根 `AGENTS.md` §4。
-- `test.bat` / `test.ps1` 执行不依赖真实 Kafka/MySQL/Redis 的 L1 子集，使用 miniredis 与进程内替身。当前覆盖 db 的 `internal/kafka`、`internal/stresstest`、`internal/logic/pkg/proto_sql`、`internal/config`、`cmd/migrate`，以及 shared 的 `placement`；完整清单以 `test.ps1` 的 `L1Suites` 为准，不代表所有服务测试。
+- `test.bat` / `test.ps1` 执行不依赖真实 Kafka/MySQL/Redis 的 L1 子集，使用 miniredis 与进程内替身。当前覆盖 db 的 `internal/playerstore`、`internal/logic/pkg/proto_sql`、`internal/config`、`cmd/migrate`，以及 shared 的 `placement`；完整清单以 `test.ps1` 的 `L1Suites` 为准，不代表所有服务测试。
 - login、data_service、scene_manager 均采用 go-zero 服务装配并各自管理注册生命周期。
 - **Scene manager**: C++ scene nodes register in etcd; LoadReporter mirrors type/load into Redis. World channel moves use `RebalanceWorldChannelsForZone` (planner `PlanWorldChannelRebalance`). Before changing that path, run `cd go\scene_manager && go test ./internal/logic/ -run TestIntegration_ -count=1` and extend `integration_test.go` if you add new invariants.
-- **DB consumer** (`go/db`): the data consistency contract is "per-key monotonic last-write-wins". Three production bugs were found and fixed by the stress test suite — see `docs/design/data-consistency-stress-testing.md` §4 for details. Key mechanisms in `key_ordered_consumer.go`:
-  - **Reverse-pass coalescing** in `processTaskBatch`: reads act as barriers so writes before a read are never coalesced away.
-  - **`wrapRetryPayload` / `unwrapRetryPayload`**: carries the original Kafka offset inside the retry-queue payload so the per-key guard survives retries. Legacy payloads (bare DBTask bytes) drain as `seq=0` (fail-open).
-  - **`shouldApplyBySeq` / `markAppliedSeq`**: Redis key `consumer:applied:<topic>:<key>:<msgType>` prevents stale retries from overwriting newer state.
+- **Player store** (`go/db`): 存盘服务,scene 直接提交 TiDB,不经 Redis 和 Kafka。契约见 `docs/design/player-save-direct-commit.md`。
 - When `.proto` changes, regenerate first, then rebuild affected Go services. The `PlayerStressTestProbe` sub-message lives in `proto/common/component/player_comp.proto` and is embedded in `player_database` + `player_database_1`.

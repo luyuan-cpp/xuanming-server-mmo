@@ -4,12 +4,12 @@ package store_test
 
 // 映射持久化第 1a 批的路由表与 RouteStore 在真实 InnoDB 上的不变量。这几条只有真库能证明,
 // 假驱动(route_store_contract_test.go)一条都证不了:
-//  1. 迁移建出五张表、主键正确、route_meta / route_reconcile 各恰好种一行;第二次迁移零变更、generation 不换;
+//  1. 迁移建出四张表、主键正确、route_meta / route_reconcile 各恰好种一行;第二次迁移零变更、generation 不换;
 //  2. CHECK 约束真的生效(MySQL ≥ 8.0.16),含 G1a 的 chk_route_shard;形状守卫拦得住被改过的存量表与 G1a 之前的旧形状;
 //  3. RegisterHome 的各个分支落到库里的样子(含 NULL 绑定、冻结行);
 //  4. 并发:同一玩家 32 路并发恰好一个插入;同 zone 多玩家全部成功;
-//  5. 锁等待封顶(innodb_lock_wait_timeout=1):ctx 超时的请求不会把同一围栏分片上的建角拖成 50s;
-//  6. 围栏分片生效 / 过期、懒建分片行;meta 缺失 / 不可写一律 fail-closed;
+//  5. 锁等待封顶(innodb_lock_wait_timeout=1):持锁者不放时建角最多等约 1s,不会被拖成 50s;
+//  6. meta 缺失 / 不可写一律 fail-closed;
 //  7. 导入的分类、幂等与 rev 规则;沿聚簇键 (route_shard, player_id) 的键集翻页无漏无重;
 //  8. G1a:建池探针 P4 拒绝 chk_route_shard 不生效的库、P5 拒绝按另一个模数建的表;P5 的探针键已被真实玩家占着时
 //     撞键照常通过、不改行,被持锁时以 1205 失败、不重试;错片行只有 ScanRoutes 看得见;
@@ -46,11 +46,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// routeTestOpts 是用例统一的 store 参数(缺省分片数,固定写者)。
+// routeTestOpts 是用例统一的 store 参数(固定写者)。
 func routeTestOpts() store.RouteStoreOptions {
 	return store.RouteStoreOptions{
-		FenceShards: placement.DefaultRouteFenceShards,
-		Writer:      store.NewRouteWriterID("data_service_it", "localhost"),
+		Writer: store.NewRouteWriterID("data_service_it", "localhost"),
 	}
 }
 
@@ -184,7 +183,6 @@ func TestRouteSchema_MigrationCreatesTablesSeedsMetaAndIsIdempotent(t *testing.T
 
 	wantPK := map[string][]string{
 		store.PlayerRouteTableName:    {"route_shard", "player_id"},
-		store.ZoneMergeFenceTableName: {"zone_id", "shard"},
 		store.ZoneMergedIntoTableName: {"src_zone"},
 		store.RouteMetaTableName:      {"id"},
 		store.RouteReconcileTableName: {"id"},
@@ -249,7 +247,6 @@ func TestRouteSchema_CheckConstraintsEnforced(t *testing.T) {
 		{"rev为0", "INSERT INTO player_route (route_shard, player_id, home_zone, rev, created_at_ms, updated_at_ms) VALUES (6, 6, 7, 0, 1, 1)", ""},
 		// G1a:player_id 的唯一性靠它(主键是 (route_shard, player_id)),1 % 64 = 1 ≠ 2。
 		{"route_shard与player_id不符", "INSERT INTO player_route (route_shard, player_id, home_zone, rev, created_at_ms, updated_at_ms) VALUES (2, 1, 7, 1, 1, 1)", "chk_route_shard"},
-		{"围栏run_id与过期时间不成对", "INSERT INTO zone_merge_fence (zone_id, shard, run_id) VALUES (7, 0, 'run')", ""},
 	} {
 		_, err := db.Raw.Exec(tc.stmt)
 		require.Errorf(t, err, "%s: CHECK 没有拦住", tc.name)
@@ -305,7 +302,7 @@ func TestRouteSchema_ShapeGuardRejectsTamperedTable(t *testing.T) {
 		err = db.Migrate(ctx, store.MigrateOptions{})
 		require.Error(t, err, "G1a 之前的旧形状必须让迁移失败,且绝不自动 DROP")
 		assert.Contains(t, err.Error(), "route_shard")
-		assert.Contains(t, err.Error(), "DROP TABLE player_route, zone_merge_fence, zone_merged_into, route_meta",
+		assert.Contains(t, err.Error(), "DROP TABLE player_route, zone_merged_into, route_meta",
 			"提示必须要求 DROP 全部路由表(只 DROP player_route 会留下守卫查不出的混合态)")
 		cols := db.Columns(t, store.PlayerRouteTableName)
 		assert.True(t, cols["player_id"] && !cols["route_shard"], "迁移不许自己 DROP / 改写旧表:旧形状必须原样留着,等人处理")
@@ -554,25 +551,19 @@ func TestRouteStore_ConcurrentManyPlayersSameZone(t *testing.T) {
 		assert.Equalf(t, store.RouteRegisterInserted, o.res.Outcome, "player %d", reqs[i].PlayerID)
 	}
 	assert.EqualValues(t, players, db.Count(t, store.PlayerRouteTableName, "home_zone = 7"))
-	t.Logf("lockRetries=%d(同 zone %d 名玩家分在 %d 个分片上;只记录不断言)",
-		st.LockRetriesForTest(), players, placement.DefaultRouteFenceShards)
+	t.Logf("lockRetries=%d(同 zone %d 名玩家;只记录不断言)", st.LockRetriesForTest(), players)
 }
 
-// TestRouteStore_LockWaitBoundedAfterClientCancel(规格 M1):ctx 到期时驱动只关连接,服务端那个等锁的线程
-// 会继续占着已拿到的围栏分片锁,直到锁等待超时。默认 50s 的锁等待下,同一 (zone, shard) 上的下一个建角会被拖住;
-// 封顶 1s 之后,它最多再等约 1s。
-func TestRouteStore_LockWaitBoundedAfterClientCancel(t *testing.T) {
+// TestRouteStore_LockWaitBounded(规格 M1):持锁者不放时,同一玩家的 RegisterHome 最多等约 1s 就以 1205 失败,
+// 不会被默认 50s 的锁等待拖住(ctx 到期时驱动只关连接,服务端那个等锁的线程同样最多再占 1s)。
+func TestRouteStore_LockWaitBounded(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	st := newRouteStore(t, db)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	const zone uint32 = 7
-	// 同一**围栏**分片:4001 % 8 == 4009 % 8 == 1(用例要的是围栏分片锁的关系);
-	// 两者的**行**分片(player_id % 64)分别是 33 与 41(4001 = 62×64 + 33),与本用例无关。
-	const p, q uint64 = 4001, 4009
-	require.Equal(t, p%uint64(placement.DefaultRouteFenceShards), q%uint64(placement.DefaultRouteFenceShards))
-
+	const p uint64 = 4001
 	_, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: p, HomeZone: zone})
 	require.NoError(t, err)
 
@@ -588,100 +579,14 @@ func TestRouteStore_LockWaitBoundedAfterClientCancel(t *testing.T) {
 	var writer string
 	require.NoError(t, row.Scan(&home, &storage, &version, &frozen, &rev, &writer, &created, &updated))
 
-	// 对 p 发 RegisterHome:它先拿到 (zone, shard 1) 的分片锁,再排在 p 的行锁上,pTimeout 后客户端放弃。
-	//
-	// 余量从哪来:服务端那个失联会话在 p 的 R4 开始约 1s 后(锁等待封顶)才回滚、放开分片锁;q 的 R2 从它自己
-	// 开始等,也只等 1s。两者之差 ≈ pTimeout − p 走到 R4 之前的往返(BEGIN / R1 / R2)+ q 走到 R2 之前的往返,
-	// 所以 **p 的超时越长,q 的余量越大**(原来的 300ms 在 Windows + Docker Desktop 或高负载 CI 上偏紧)。
-	// 上限是 < 1s:p 必须是「客户端先放弃、驱动只关连接」,而不是先在服务端吃到 1205 —— 那测的就不是本用例的情形了。
-	const pTimeout = 700 * time.Millisecond
-	pctx, pcancel := context.WithTimeout(ctx, pTimeout)
-	_, err = st.RegisterHome(pctx, store.RouteRegisterRequest{PlayerID: p, HomeZone: zone})
-	pcancel()
-	require.Error(t, err, "p 的行被持有,RegisterHome 必须超时失败")
-
-	// 随即对同一分片上的 q 发 RegisterHome:服务端那个已失联的会话最多再占 ~1s 分片锁。
-	//
-	// q 吃到 1205 时用例里就地再试一次(只在用例里,生产路径 1205 不重试):InnoDB 的锁等待超时由后台线程按节拍检查,
-	// p 与 q 的超时可能在同一次检查里一起被判定,q 就会和 p 同时吃到 1205 —— 而 p 的会话随即回滚、放开分片锁,
-	// 再试一次必然拿得到。判别力不变:没有 1s 封顶时(会话默认 50s),失联会话会占着分片锁几十秒,q 两次都失败。
 	start := time.Now()
-	var res store.RouteRegisterResult
-	retried := false
-	for attempt := 1; attempt <= 2; attempt++ {
-		qctx, qcancel := context.WithTimeout(ctx, 10*time.Second)
-		res, err = st.RegisterHome(qctx, store.RouteRegisterRequest{PlayerID: q, HomeZone: zone})
-		qcancel()
-		var me *mysql.MySQLError
-		if attempt == 1 && errors.As(err, &me) && me.Number == 1205 { // ER_LOCK_WAIT_TIMEOUT
-			retried = true
-			continue
-		}
-		break
-	}
+	qctx, qcancel := context.WithTimeout(ctx, 10*time.Second)
+	_, err = st.RegisterHome(qctx, store.RouteRegisterRequest{PlayerID: p, HomeZone: zone})
+	qcancel()
 	elapsed := time.Since(start)
-	require.NoError(t, err)
-	assert.Equal(t, store.RouteRegisterInserted, res.Outcome)
-	assert.Lessf(t, elapsed, 2*time.Second, "q 等了 %v(retried_on_1205=%t):锁等待没有被 innodb_lock_wait_timeout=1 封顶", elapsed, retried)
-	t.Logf("q 在 p 超时(%v)之后 %v 完成(retried_on_1205=%t;锁等待封顶 1s 的实测)", pTimeout, elapsed, retried)
-}
-
-func TestRouteStore_FenceBlocksAndExpires(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-	const zone uint32 = 9
-	const runID = "9-10-20261012T000000Z-deadbeef"
-
-	// 持有者在一个事务里写满全部 64 个分片(placement.MaxRouteFenceShards 的契约),过期时间取库时钟 + 10 分钟。
-	tx, err := db.Raw.BeginTx(ctx, nil)
-	require.NoError(t, err)
-	for shard := uint32(0); shard < placement.MaxRouteFenceShards; shard++ {
-		_, err := tx.ExecContext(ctx,
-			"INSERT INTO zone_merge_fence (zone_id, shard, run_id, purpose, src_zone, dst_zone, expires_at_ms)"+
-				" VALUES (?, ?, ?, 'merge', ?, 10, "+store.RouteDBNowMsSQLForTest+" + 600000)",
-			zone, shard, runID, zone)
-		require.NoError(t, err)
-	}
-	require.NoError(t, tx.Commit())
-
-	res, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 5001, HomeZone: zone})
-	require.NoError(t, err)
-	assert.Equal(t, store.RouteRegisterFenced, res.Outcome)
-	assert.Equal(t, runID, res.FenceRunID)
-	assert.EqualValues(t, 0, db.Count(t, store.PlayerRouteTableName, "player_id = 5001"), "围栏生效时零写入")
-
-	// 过期之后放行(判据是库时钟,不看本机时钟)。
-	_, err = db.Raw.Exec("UPDATE zone_merge_fence SET expires_at_ms = 1 WHERE zone_id = ?", zone)
-	require.NoError(t, err)
-	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 5001, HomeZone: zone})
-	require.NoError(t, err)
-	assert.Equal(t, store.RouteRegisterInserted, res.Outcome)
-}
-
-func TestRouteStore_LazyFenceShardCreation(t *testing.T) {
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-	const zone uint32 = 11
-	assert.EqualValues(t, 0, db.Count(t, store.ZoneMergeFenceTableName, ""), "迁移不预建分片行")
-
-	for _, tc := range []struct {
-		player    uint64
-		wantRows  int64
-		wantShard uint64
-	}{
-		{6001, 1, 1},
-		{6009, 1, 1}, // 同一分片:不再加行
-		{6002, 2, 2},
-	} {
-		res, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: tc.player, HomeZone: zone})
-		require.NoError(t, err)
-		require.Equal(t, store.RouteRegisterInserted, res.Outcome)
-		assert.EqualValues(t, tc.wantRows, db.Count(t, store.ZoneMergeFenceTableName, "zone_id = ?", zone))
-		assert.EqualValues(t, 1, db.Count(t, store.ZoneMergeFenceTableName, "zone_id = ? AND shard = ? AND run_id IS NULL", zone, tc.wantShard),
-			"懒建的分片行是未封锁的空行")
-	}
+	var me *mysql.MySQLError
+	require.Truef(t, errors.As(err, &me) && me.Number == 1205, "want ER_LOCK_WAIT_TIMEOUT, got %v", err)
+	assert.Lessf(t, elapsed, 2*time.Second, "等了 %v:锁等待没有被 innodb_lock_wait_timeout=1 封顶", elapsed)
 }
 
 func TestRouteStore_MetaMissingAndNotWritableFailClosed(t *testing.T) {
@@ -1240,10 +1145,10 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 	}
 
 	require.NoError(t, store.BootstrapRouteTablesOnlyForTest(ctx, db.Raw, db.Name))
-	require.NoError(t, db.Fixture().GrantTables(ctx, db.Name, "player_route", "zone_merge_fence", "zone_merged_into", "route_reconcile"))
+	require.NoError(t, db.Fixture().GrantTables(ctx, db.Name, "player_route", "zone_merged_into", "route_reconcile"))
 	pkTypes := map[string]string{}
 	rows, err := db.Raw.QueryContext(ctx, "SELECT TABLE_NAME, TIDB_PK_TYPE FROM information_schema.TABLES"+
-		" WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('player_route', 'zone_merge_fence')", db.Name)
+		" WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('player_route')", db.Name)
 	require.NoError(t, err)
 	for rows.Next() {
 		var name, pkType string
@@ -1252,7 +1157,7 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	rows.Close()
-	assert.Equal(t, map[string]string{"player_route": "CLUSTERED", "zone_merge_fence": "CLUSTERED"}, pkTypes)
+	assert.Equal(t, map[string]string{"player_route": "CLUSTERED"}, pkTypes)
 
 	// P4 在 TiDB 上同样要拿到 3819 + chk_route_shard;P5 接着在同一个事务里插两行合法行 —— TiDB 在 P4 的语句失败
 	// 之后事务能否继续用【未核实】,这里就是取证:建池失败时原样回报报错文本。
@@ -1320,7 +1225,6 @@ func TestRouteStore_TiDBClusteredShardsAndPresplit(t *testing.T) {
 	// (这里只有 1 个 zone)。两个下限都不写字面量。
 	assert.GreaterOrEqual(t, countRegions("SHOW TABLE player_route REGIONS"), int(placement.RouteRowShards))
 	assert.GreaterOrEqual(t, countRegions("SHOW TABLE player_route INDEX idx_route_home REGIONS"), int(store.RouteTiDBPrefixSplitPointsForTest))
-	assert.GreaterOrEqual(t, countRegions("SHOW TABLE zone_merge_fence REGIONS"), 2)
 
 	// 再跑一次必须不报错(幂等)。期间并发建角:ALTER … ATTRIBUTES 是 DDL,可能让在途悲观事务以 8028 失败(HR9),
 	// 结果只记录、不断言。

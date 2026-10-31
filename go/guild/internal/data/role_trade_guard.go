@@ -18,13 +18,13 @@ var roleAuthoritySchema = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 // ConfigureRoleAuthority 只在进程装配期调用；生产传显式全局目录schema，不从DSN猜。
 // 原构造器保留给现有独立仓储夹具；在线进程必须经本函数启用提交互锁。
-func (r *GuildRepo) ConfigureRoleAuthority(schema string) error {
+func (r *GuildRepo) ConfigureRoleAuthority(schema string, backend authoritysql.Backend) error {
 	if !roleAuthoritySchema.MatchString(schema) {
 		return errors.New("全局角色目录schema未配置")
 	}
 	probe, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := authoritysql.AssertCurrentSession(probe, r.db, true); err != nil {
+	if err := authoritysql.AssertCurrentSession(probe, r.db, backend); err != nil {
 		return err
 	}
 	if err := placement.CheckRoleRouteContract(probe, r.db, schema); err != nil {
@@ -80,7 +80,8 @@ func (r *GuildRepo) lockRolePrefix(ctx context.Context, tx *sql.Tx) error {
 	if r.roleAuthority != "" && len(unique) != 0 {
 		if err := placement.LockRoleRoutes(ctx, tx, r.roleAuthority, unique); err != nil {
 			if errors.Is(err, placement.ErrRoleRouteFenced) {
-				return ErrZoneMerging
+				// 路由行被冻结(搬库中)或预读后被改过:暂时性拒绝,按写冲突让客户端稍后重试。
+				return ErrWriteConflict
 			}
 			return err
 		}

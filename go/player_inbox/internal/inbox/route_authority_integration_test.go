@@ -16,6 +16,7 @@ import (
 	"time"
 
 	inboxpb "proto/player_inbox"
+	"shared/authoritysql"
 	"shared/placement"
 
 	"google.golang.org/protobuf/proto"
@@ -39,7 +40,7 @@ func createInboxFixtureRouteTables(ctx context.Context, db *sql.DB, schema strin
 	if err != nil {
 		return fmt.Errorf("读取DS正规路由DDL: %w", err)
 	}
-	names := []string{"playerRouteBootstrapDDL", "zoneMergeFenceBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL"}
+	names := []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "routeReconcileBootstrapDDL"}
 	values := map[string]string{}
 	for _, decl := range f.Decls {
 		gd, ok := decl.(*ast.GenDecl)
@@ -73,7 +74,7 @@ func createInboxFixtureRouteTables(ctx context.Context, db *sql.DB, schema strin
 			return fmt.Errorf("DS正规路由DDL缺少%s", name)
 		}
 	}
-	for _, table := range []string{"route_reconcile", "route_meta", "zone_merged_into", "zone_merge_fence", "player_route"} {
+	for _, table := range []string{"route_reconcile", "route_meta", "zone_merged_into", "player_route"} {
 		if _, err = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
 			return err
 		}
@@ -122,26 +123,23 @@ func ensureInboxFixtureRoute(ctx context.Context, db *sql.DB, player uint64) err
 	return err
 }
 
-func setInboxFixtureMergeFence(t *testing.T, e *itEnv, player uint64) {
+// setInboxFixtureFrozenRoute 把玩家路由行置成冻结态(搬库中)。
+func setInboxFixtureFrozenRoute(t *testing.T, e *itEnv, player uint64) {
 	t.Helper()
-	shard, err := placement.RouteFenceShard(player, placement.MaxRouteFenceShards)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = e.db.ExecContext(itCtx(t), "INSERT INTO zone_merge_fence(zone_id,shard,run_id,expires_at_ms) VALUES(1,?,'inbox-it-merge',CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)+60000) ON DUPLICATE KEY UPDATE run_id=VALUES(run_id),expires_at_ms=VALUES(expires_at_ms)", shard)
+	_, err := e.db.ExecContext(itCtx(t), "UPDATE player_route SET storage_id=1,placement_version=1,frozen_run_id='inbox-it-frozen' WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestIntegrationInboxEveryMutationHonorsActualMergeFence(t *testing.T) {
+func TestIntegrationInboxEveryMutationHonorsFrozenRoute(t *testing.T) {
 	e := openIntegration(t)
-	const player = uint64(8201) // shard=9，不能误用固定63号片。
+	const player = uint64(8201)
 	first := e.mustEnqueue(t, player, 1)
 	e.epochs.set(player, 1)
 	admission := e.admission(t, player, 1)
 	beforeItem, beforeStream, beforeAudit := e.item(t, player, first.Seq), e.stream(t, player), auditCount(t, e.db, player)
-	setInboxFixtureMergeFence(t, e, player)
+	setInboxFixtureFrozenRoute(t, e, player)
 	actions := []struct {
 		name string
 		call func() error
@@ -171,16 +169,17 @@ func TestIntegrationInboxEveryMutationHonorsActualMergeFence(t *testing.T) {
 	for _, action := range actions {
 		t.Run(action.name, func(t *testing.T) {
 			if err := action.call(); !errors.Is(err, placement.ErrRoleRouteFenced) {
-				t.Fatalf("实际merge围栏必须拒绝本次提交: %v", err)
+				t.Fatalf("路由冻结必须拒绝本次提交: %v", err)
 			}
 		})
 	}
 	if !proto.Equal(beforeItem, e.item(t, player, first.Seq)) || !proto.Equal(beforeStream, e.stream(t, player)) || beforeAudit != auditCount(t, e.db, player) {
-		t.Fatal("维护围栏拒绝后Inbox原行/stream/审计发生变化")
+		t.Fatal("路由冻结拒绝后Inbox原行/stream/审计发生变化")
 	}
 }
 
-func TestIntegrationInboxMergeWinsBeforePWithoutLeavingNewItem(t *testing.T) {
+// 冻结先提交:入箱的路由前缀在 FOR UPDATE 上等到它提交,复核到 frozen,不留下新条目。
+func TestIntegrationInboxFrozenRouteWinsBeforePWithoutLeavingNewItem(t *testing.T) {
 	e := openIntegration(t)
 	const player = uint64(8202)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -188,17 +187,12 @@ func TestIntegrationInboxMergeWinsBeforePWithoutLeavingNewItem(t *testing.T) {
 	if _, err := (itPlayers{missing: map[uint64]bool{}, db: e.db}).PlayerExists(ctx, player); err != nil {
 		t.Fatal(err)
 	}
-	shard, err := placement.RouteFenceShard(player, placement.MaxRouteFenceShards)
-	if err != nil {
-		t.Fatal(err)
-	}
 	tx, err := e.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tx.Rollback()
-	// 与merge持有者相同：先片后route/P，不制造P后补片的非法锁序。
-	if _, err = tx.ExecContext(ctx, "INSERT INTO zone_merge_fence(zone_id,shard,run_id,expires_at_ms) VALUES(1,?,'inbox-it-merge-race',CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)+60000)", shard); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE player_route SET storage_id=1,placement_version=1,frozen_run_id='inbox-it-freeze-race' WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player); err != nil {
 		t.Fatal(err)
 	}
 	observed := &observedSQLRoles{inner: e.store.roles, entered: make(chan struct{})}
@@ -220,42 +214,35 @@ func TestIntegrationInboxMergeWinsBeforePWithoutLeavingNewItem(t *testing.T) {
 	select {
 	case err = <-result:
 		if !errors.Is(err, placement.ErrRoleRouteFenced) {
-			t.Fatalf("先提交的原home维护围栏必须胜出: %v", err)
+			t.Fatalf("先提交的路由冻结必须胜出: %v", err)
 		}
 	case <-ctx.Done():
-		t.Fatal("围栏提交后入箱未结束")
+		t.Fatal("冻结提交后入箱未结束")
 	}
 	var count int
 	if err = e.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM player_inbox_item WHERE shard=? AND player_id=?", RowShard(player), player).Scan(&count); err != nil || count != 0 {
-		t.Fatalf("merge胜出后仍留下Inbox条目: count=%d err=%v", count, err)
+		t.Fatalf("冻结胜出后仍留下Inbox条目: count=%d err=%v", count, err)
 	}
 }
 
-func TestIntegrationInboxRouteFrozenOrMetaUnknownRejectsEvenEmptyFetch(t *testing.T) {
+func TestIntegrationInboxRouteFrozenRejectsEvenEmptyFetch(t *testing.T) {
 	e := openIntegration(t)
 	const player = uint64(8203)
 	e.epochs.set(player, 1)
 	admission := e.admission(t, player, 1)
-	for _, update := range []string{"UPDATE route_meta SET writable=0 WHERE id=1", "UPDATE route_meta SET writable=1 WHERE id=1", "UPDATE player_route SET storage_id=1,placement_version=1,frozen_run_id='inbox-it-frozen' WHERE player_id=8203"} {
-		if _, err := e.db.ExecContext(itCtx(t), update); err != nil {
-			t.Fatal(err)
-		}
-		if update == "UPDATE route_meta SET writable=1 WHERE id=1" {
-			continue
-		}
-		_, err := e.store.Fetch(itCtx(t), &inboxpb.FetchPlayerInboxRequest{PlayerId: player, Domain: gmDomain, OwnerEpoch: 1, Admission: admission})
-		if !errors.Is(err, placement.ErrRoleRouteFenced) {
-			t.Fatalf("空箱也必须核实际路由/维护开关: %v", err)
-		}
+	setInboxFixtureFrozenRoute(t, e, player)
+	_, err := e.store.Fetch(itCtx(t), &inboxpb.FetchPlayerInboxRequest{PlayerId: player, Domain: gmDomain, OwnerEpoch: 1, Admission: admission})
+	if !errors.Is(err, placement.ErrRoleRouteFenced) {
+		t.Fatalf("空箱也必须核实际路由: %v", err)
 	}
 	var schema string
 	if err := e.db.QueryRowContext(itCtx(t), "SELECT DATABASE()").Scan(&schema); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.db.ExecContext(itCtx(t), "DROP TABLE route_meta"); err != nil {
+	if _, err := e.db.ExecContext(itCtx(t), "DROP TABLE player_route"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewSQLRoleAuthority(itCtx(t), e.db, schema); err == nil {
+	if _, err := NewSQLRoleAuthority(itCtx(t), e.db, schema, authoritysql.BackendTiDB); err == nil {
 		t.Fatal("启动缺正式路由表必须拒绝")
 	}
 }

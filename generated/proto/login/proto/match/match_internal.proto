@@ -86,8 +86,28 @@ message CommitBattleOutcomeResponse {
   common.base.ServiceCallAuth auth = 3;
 }
 
+// 运营把一场公开局标成 / 取消标成赛事局(docs/design/battle-spectate-tiered-fanout.md §15.6,Q3)。
+// 调用方为运维工具(serviceauth 调用方 "ops",只放行本方法);标记即立刻尝试升全服广播(受全服配额约束)。
+// 私密局、不存在或已结束的局一律拒绝;重复设置同值幂等成功。
+enum SpectateFeaturedReject {
+  SPECTATE_FEATURED_REJECT_NONE = 0;
+  SPECTATE_FEATURED_REJECT_NOT_FOUND = 1;   // 观战记录不存在(局不存在或已结束)
+  SPECTATE_FEATURED_REJECT_PRIVATE = 2;     // 非公开局不能标成赛事局
+  SPECTATE_FEATURED_REJECT_INTERNAL = 3;    // Redis 读写失败(可重试)
+}
+message SetSpectateFeaturedRequest {
+  uint64 battle_id = 1;
+  bool featured = 2;
+  common.base.ServiceCallAuth auth = 3;
+}
+message SetSpectateFeaturedResponse {
+  SpectateFeaturedReject reject = 1;
+  eSpectateTier tier = 2;                   // 处理后的档位(标记后升 L2 成功即为 BROADCAST;配额满时保持原档)
+}
+
 service MatchInternal {
   rpc StartActivityBattle(StartActivityBattleRequest) returns (StartActivityBattleResponse);
   rpc CancelActivityBattle(CancelActivityBattleRequest) returns (CancelActivityBattleResponse);
   rpc CommitBattleOutcome(CommitBattleOutcomeRequest) returns (CommitBattleOutcomeResponse);
+  rpc SetSpectateFeatured(SetSpectateFeaturedRequest) returns (SetSpectateFeaturedResponse);
 }

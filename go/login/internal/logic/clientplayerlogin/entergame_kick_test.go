@@ -218,6 +218,8 @@ type kickHarness struct {
 	kicker  *kickRecorder
 	events  *kickEventLog
 	state   enterGameSessionState
+	// bindSent 是最近一次 apply 记下的「Bind 已写进 Kafka」。
+	bindSent bool
 }
 
 // newKickHarness:existing 是锁内首读到的会话记录(ONLINE → ReplaceLogin);chainInstance 是本链连接所在的
@@ -266,7 +268,8 @@ func kickExistingRecord(sessionID uint32, gateInstance string) *plpb.PlayerSessi
 }
 
 func (h *kickHarness) apply(ctx context.Context) error {
-	_, err := h.l.applyLoadedPlayerSession(ctx, h.state)
+	h.bindSent = false
+	_, err := h.l.applyLoadedPlayerSession(ctx, h.state, &h.bindSent)
 	return err
 }
 

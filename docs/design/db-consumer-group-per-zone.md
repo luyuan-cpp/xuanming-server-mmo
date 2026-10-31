@@ -1,5 +1,7 @@
 # go/db 存盘消费组按 zone 拆分与不停服交接
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),go/db 不再有存盘消费组。本文只作历史保留,不再描述现行行为。
+
 > **状态**：已落码，未编译、未测试，待 Codex 验证（截至 2026-10-16 工作区）。Kafka CLI 在钉版 4.3.1 上的行为（§11）同样没有实测。
 > **2026-10-17 增补**：R7 语义复核 scripts 区域的修复（显式交接前的交接闸能力校验、`kafka_offset_reset.ps1` 的参数约束与退出码、回档第 0 步 e 与按世代号推导 topic、合服 P3 全覆盖检查、「组不存在」白名单只在没有表头时认定）已写入 §1.3、§2.2、§2.3、§3(d)、§4、§5、§6、§7、§8、§10、§11、§13。状态同上：已落码，未编译、未测试，待 Codex 验证。回档的 Kafka 语义当时待负责人裁决（已于 2026-10-17 裁决，见下一条）。
 > **2026-10-18 增补**：负责人 2026-10-17 裁决回档语义为「丢弃 TargetTime 之后的写」，已落码（`k8s_zone_rollback.ps1` 的 Step 5 改 `-ToLatest`、不清游标、不再 FLUSHDB，读 MySQL / 写 Redis 交给尚未落地的回档工具 `go/db/cmd/zone_rollback_discard`）；同日回档复核 [0]–[11] 的修复一并落码，其中 [0] 把 `ConvertFrom-LiveDbConsumerGroup` 从 `k8s_deploy.ps1` 原样移到 `lib/kafka_consumer_groups.ps1`，回档第 0 步 f 与部署脚本共用同一份四种形状规则。改动写在 §1.3、§3(d)、§6、§11、§13；完整流程以 [回档方案](zone_data_rollback.md)「2026-10-18 修订」为准。状态：已落码，未编译、未测试，待 Codex 验证。

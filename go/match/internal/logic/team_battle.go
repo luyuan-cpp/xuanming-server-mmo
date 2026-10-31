@@ -61,16 +61,22 @@ func (s *TeamBattleStarter) ReserveTeamMatch(ctx context.Context, caller uint64,
 	return reserveGlobalDirect(ctx, s.svcCtx, key, payload, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, request.BattleConfigId, roster, nil, gatherOptions{directTeamID: request.ExpectedTeamId})
 }
 
-// NewTeamBattleStarter svcCtx 需要 MatchRedis(票据)与 Config(PveTeamSizeByConfigId / matched TTL);
+// NewTeamBattleStarter svcCtx 需要 MatchRedis(票据)、Catalog(组队人数上限)与 Config(matched TTL);
 // gather 另需 BattleIDGen / SceneNodes / BattleNodes / SharedRedis(与 RunGather 相同)。
 func NewTeamBattleStarter(svcCtx *svc.ServiceContext) *TeamBattleStarter {
 	return &TeamBattleStarter{svcCtx: svcCtx}
 }
 
-// TeamSizeFor 副本 battleConfigId 的组队开战人数上限:与 JoinQueue / matcher 的 PVE_TEAM 人数上限
-// 同一口径(requiredPlayers:PveTeamSizeByConfigId,按 kMaxBattleTeamSize 收口);0 = 未开放组队。
-func (s *TeamBattleStarter) TeamSizeFor(battleConfigId uint32) uint32 {
-	return requiredPlayers(s.svcCtx, int32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), battleConfigId)
+// TeamSizeFor 模式 mode 在模板 battleConfigId 上的每队人数上限,与 JoinQueue 同一口径:
+// PlayMode 表的人数上限,按 kMaxBattleTeamSize 收口;PVP_TEAM 是每侧人数。
+// 0 = 该模板没有开放这个模式(或不是组队模式),组队入口据此拒绝。
+func (s *TeamBattleStarter) TeamSizeFor(mode, battleConfigId uint32) uint32 {
+	switch matchpb.MatchMode(mode) {
+	case matchpb.MatchMode_MATCH_MODE_PVE_TEAM, matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
+		return min(s.svcCtx.Catalog.MaxTeamSize(matchpb.MatchMode(mode), battleConfigId), kMaxBattleTeamSize)
+	default:
+		return 0
+	}
 }
 
 // MatchLockTTLSeconds memberCount 人的开战锁时长(秒,§E.1 第 6 步):matched 票 TTL(gather 最坏链路)

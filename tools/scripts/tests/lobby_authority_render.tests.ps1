@@ -23,6 +23,7 @@ $GlobalDbName = 'fixture_global'
 $GlobalAuthorityTiDBHost = 'fixture-global-tidb:4000'
 $TradeTiDBHost = $GlobalAuthorityTiDBHost; $FriendTiDBHost = $GlobalAuthorityTiDBHost
 $MatchTiDBHost = $GlobalAuthorityTiDBHost; $PhysicalRegion = 7
+$DatabaseBackend = 'tidb'
 $KafkaBrokers = 3; $OpsProfile = 'custom'
 $script:MysqlUser = 'fixture'; $script:MysqlPassword = ''; $script:RedisPassword = ''
 $script:GateTokenSecret = ''; $script:InternalAuthSecret = ''
@@ -49,7 +50,7 @@ foreach ($service in @('mail','rank')) {
     Assert-Render (Test-Path -LiteralPath (Join-Path $RepoRoot "deploy/k8s/manifests/go-svc/$service-migrate.yaml")) "$service缺迁移Job"
     $values = Read-RenderedConfig $service
     Assert-Render ($values['TableDir'] -eq '/generated/tables') "$service配表路径必须匹配Docker镜像"
-    Assert-Render ($values['RequireTiDB'] -eq 'true') "$service必须探测真实TiDB"
+    Assert-Render ($values['Backend'] -eq 'tidb') "$service缺省是 tidb 档"
     Assert-Render ($values['DataServiceRpc.Etcd.Key'] -eq 'dataservice.rpc') "$service不能拨不存在的infra data-service Service"
 }
 $mail = Read-RenderedConfig 'mail'
@@ -58,12 +59,12 @@ $guild = Read-RenderedConfig 'guild'
 Assert-Render ($guild['MySQL.DataSourceEnv'] -eq 'MMORPG_GUILD_SQL_DSN' -and [string]::IsNullOrEmpty($guild['MySQL.DataSource'])) '帮会必须从Secret读取同一全服SQL DSN'
 Assert-Render ($guild['TableDir'] -eq '/generated/tables' -and $guild['DataServiceRpc.Etcd.Key'] -eq 'dataservice.rpc' -and $guild['MatchRpc.Etcd.Key'] -eq 'matchservice.rpc') '帮会配表或内部调用未接线'
 Assert-Render ($guild['AccountRoleSchema'] -eq $GlobalDbName -and $guild['GlobalLoginSessions'] -eq 'true') '帮会角色与登录会话必须显式指向全服权威'
-foreach ($key in @('MatchAuthoritySchema','Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Activity.TrialResult.Topic','Activity.TrialResult.Partitions','IdSegment.Step','MySQL.MaxOpenConn','RedisClient.PoolSize','PlayerLocatorRedis.PoolSize','MergeMarkerRedis.PoolSize','LoginRedis.PoolSize')) {
+foreach ($key in @('MatchAuthoritySchema','Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Activity.TrialResult.Topic','Activity.TrialResult.Partitions','IdSegment.Step','MySQL.MaxOpenConn','RedisClient.PoolSize','PlayerLocatorRedis.PoolSize','LoginRedis.PoolSize')) {
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath $key
     Assert-Render ($source.Found -and $guild[$key] -eq $source.Value) "帮会$key未镜像权威配置"
 }
 $ReleaseProfile = 'prod'; $guildProd = Read-RenderedConfig 'guild'; $ReleaseProfile = 'dev'
-Assert-Render ($guildProd['Mode'] -eq 'pro' -and $guildProd['Schema.AutoMigrate'] -eq 'false' -and $guildProd['MySQL.RequireTiDB'] -eq 'true') '帮会生产实例必须使用TiDB，禁开发模式或自行迁表'
+Assert-Render ($guildProd['Mode'] -eq 'pro' -and $guildProd['Schema.AutoMigrate'] -eq 'false' -and $guildProd['MySQL.Backend'] -eq 'tidb') '帮会生产实例缺省 tidb 档，禁开发模式或自行迁表'
 Assert-Render ($guildProd['AssetOp.Enabled'] -eq 'false') '父快照围栏门禁未验收前，生产帮会资产通道不得自动启用'
 $ReleaseProfile = 'prod'; $KafkaBrokers = 1; $rejected = $false
 try { $null = Read-RenderedConfig 'guild' } catch { $rejected = $_.Exception.Message -match 'Kafka' }
@@ -77,15 +78,15 @@ $guildManifest = Get-Content -LiteralPath (Join-Path $RepoRoot 'deploy/k8s/manif
 Assert-Render ($guildManifest.Contains('name: POD_IP') -and $guildManifest.Contains('key: asset-guild')) '帮会缺可路由地址或资产签名引用'
 $guildLedger = (Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'guild' }
 $guildPools = Get-RedisPoolMirror -Target 'guild'
-$expectedPools = $guildPools['RedisClient.PoolSize'] + $guildPools['PlayerLocatorRedis.PoolSize'] + $guildPools['MergeMarkerRedis.PoolSize'] + $guildPools['LoginRedis.PoolSize']
+$expectedPools = $guildPools['RedisClient.PoolSize'] + $guildPools['PlayerLocatorRedis.PoolSize'] + $guildPools['LoginRedis.PoolSize']
 $guildSvcSource = Get-Content -LiteralPath (Join-Path $RepoRoot 'go/guild/internal/svc/servicecontext.go') -Raw
 $syncPool = [regex]::Match($guildSvcSource, '(?m)^\s*(?:const\s+)?playerSyncRedisPoolSize\s*=\s*(\d+)\s*$')
 Assert-Render ($syncPool.Success -and $guildLedger.Fixed -eq [int]$syncPool.Groups[1].Value) '帮会摘要专用池预算与实际源码不符'
-Assert-Render ($guildLedger.ConfiguredPoolConns -eq $expectedPools -and $guildLedger.PubSub -eq 1) '帮会四个池与唤醒订阅未进入Redis连接总账'
+Assert-Render ($guildLedger.ConfiguredPoolConns -eq $expectedPools -and $guildLedger.PubSub -eq 1) '帮会三个池与唤醒订阅未进入Redis连接总账'
 Assert-Render ($mail['KafkaBrokers[0]'] -eq 'kafka.fixture-infra:9092' -or $mail['KafkaBrokers'] -match 'kafka\.fixture-infra:9092') '邮件提醒不能拨本地Kafka'
 $trade = Read-RenderedConfig 'trade'
 Assert-Render ($trade['MySQL.Host'] -eq $TradeTiDBHost) '交易没有使用显式全服TiDB入口'
-Assert-Render ($trade['MySQL.RequireTiDB'] -eq 'true') '交易未开启TiDB会话门禁'
+Assert-Render ($trade['MySQL.Backend'] -eq 'tidb') '交易缺省 tidb 档'
 Assert-Render ($trade.Contains('AssetOp.Enabled') -and $trade.Contains('Commerce.AllowInstances') -and $trade.Contains('Mall.GatewaySecretEnv')) '交易域配置未镜像'
 $sourceAsset = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/trade/etc/trade.yaml') -KeyPath 'AssetOp.Enabled'
 Assert-Render ($trade['AssetOp.Enabled'] -eq $sourceAsset.Value) '资产开关与权威配置不一致'
@@ -94,8 +95,17 @@ try { $null = Get-TradeSqlSettings -Profile 'prod' -TiDBHost '' -DevelopmentHost
 catch { $rejected = $_.Exception.Message -match 'TradeTiDBHost' }
 Assert-Render $rejected '生产交易不得回落MySQL'
 $match = Read-RenderedConfig 'match'
-Assert-Render ($match['GlobalMatch.Enabled'] -eq 'true' -and $match['GlobalMatch.RequireTiDB'] -eq 'true') '全局匹配未启用TiDB权威'
+Assert-Render ($match['GlobalMatch.Enabled'] -eq 'true' -and $match['GlobalMatch.Backend'] -eq 'tidb') '全局匹配缺省 tidb 档'
 Assert-Render ($match['GlobalMatch.Host'] -eq $MatchTiDBHost -and $match['GlobalMatch.User'] -eq $script:MysqlUser) '匹配未使用显式同服SQL入口'
+# 省钱档:-DatabaseBackend mysql 一个参数切全部服务,不留写死 tidb 的 ConfigMap(方案 §9)。
+$DatabaseBackend = 'mysql'
+foreach ($check in @(
+        @{ Service = 'mail'; Key = 'Backend' }, @{ Service = 'rank'; Key = 'Backend' }, @{ Service = 'guild'; Key = 'MySQL.Backend' },
+        @{ Service = 'trade'; Key = 'MySQL.Backend' }, @{ Service = 'match'; Key = 'GlobalMatch.Backend' })) {
+    $rendered = Read-RenderedConfig $check.Service
+    Assert-Render ($rendered[$check.Key] -eq 'mysql') "$($check.Service) 的 $($check.Key) 没有跟 -DatabaseBackend mysql 走"
+}
+$DatabaseBackend = 'tidb'
 Assert-Render ($match['GlobalMatch.RankEndpoint'] -eq 'rank.fixture-infra:51100') '匹配投榜误拨本地地址'
 foreach ($key in @('GlobalMatch.GuildTrialSchema','GlobalMatch.CrossRegionWaitSeconds','GlobalMatch.HardLatencyMs','GlobalMatch.ProbeTTLSeconds','ResultTopic','RatingEnabled','RatingToleranceMaxWaitSeconds')) {
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/match/etc/match_service.yaml') -KeyPath $key

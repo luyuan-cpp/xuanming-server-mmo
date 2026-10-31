@@ -22,14 +22,19 @@
     <ClCompile Include="handler\event\scene_entry_dispatch.cpp" />
     <ClCompile Include="handler\event\gate_event_handler.cpp" />
     <ClCompile Include="handler\event\gate_kafka_command_router.cpp" />
+    <ClCompile Include="handler\gate_push_delivery.cpp" />
     <ClCompile Include="handler\rpc\client_session_handler.cpp" />
     <ClCompile Include="handler\rpc\client_request_lane.cpp" />
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp" />
     <ClCompile Include="handler\rpc\rpc_reply_bridge.cpp" />
     <ClCompile Include="handler\rpc\gate_service_handler.cpp" />
+    <ClCompile Include="handler\rpc\gate_client_spectate_handler.cpp" />
     <ClCompile Include="handler\rpc\player\player_service_interface.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="rpc_replies\register_handler.cpp" />
+    <ClCompile Include="spectate\gate_spectate_client.cpp" />
+    <ClCompile Include="spectate\gate_spectate_hub.cpp" />
+    <ClCompile Include="spectate\gate_spectate_ticket.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gate_codec.h" />
@@ -41,11 +46,16 @@
     <ClInclude Include="handler\event\scene_entry_dispatch.h" />
     <ClInclude Include="handler\event\gate_event_handler.h" />
     <ClInclude Include="handler\event\gate_kafka_command_router.h" />
+    <ClInclude Include="handler\gate_push_delivery.h" />
     <ClInclude Include="handler\rpc\client_session_handler.h" />
     <ClInclude Include="handler\rpc\client_request_lane.h" />
     <ClInclude Include="handler\rpc\router_muduo_forward.h" />
     <ClInclude Include="handler\rpc\rpc_reply_bridge.h" />
     <ClInclude Include="handler\rpc\gate_service_handler.h" />
+    <ClInclude Include="handler\rpc\gate_client_spectate_handler.h" />
+    <ClInclude Include="spectate\gate_spectate_client.h" />
+    <ClInclude Include="spectate\gate_spectate_hub.h" />
+    <ClInclude Include="spectate\gate_spectate_ticket.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

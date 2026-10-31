@@ -34,9 +34,9 @@ const (
 	// ErrModeNotOpen:该匹配模式一期未开放(5v5/3v3)或不接受直接入队(切磋);
 	// 也用于 PVE_TEAM 请求的 team_size 超过副本人数上限(复用原因见 pve-team-size-matching.md §3.1)。
 	ErrModeNotOpen = uint32(table.MatchError_kMatchModeNotOpen)
-	// ErrTeamSizeNotConfigured:PVE 组队的 battle_config_id 未配置人数上限(PveTeamSizeByConfigId 无此 id)。
+	// ErrTeamSizeNotConfigured:PVE 组队的 battle_config_id 在 PlayMode 表里没有开放的 PVE_TEAM 行。
 	ErrTeamSizeNotConfigured = uint32(table.MatchError_kMatchTeamSizeNotConfigured)
-	// ErrInternal:Redis / snowflake 等内部错误。
+	// ErrInternal:Redis / 发号器 / 匹配权威库等内部错误。表里标为 fault(2026-10-24 D8),计入服务端故障。
 	ErrInternal = uint32(table.MatchError_kMatchInternal)
 	// ErrTicketMismatch:CancelQueue 携带的 ticket 与当前记录不符。
 	ErrTicketMismatch = uint32(table.MatchError_kMatchTicketMismatch)
@@ -45,6 +45,10 @@ const (
 	// ErrNotInScene:player:{id}:location 缺失,玩家不在任何场景。没有位置的
 	// 玩家 gather 必败(no_location),入队前提前拒绝(设计决策 D6)。
 	ErrNotInScene = uint32(table.MatchError_kMatchNotInScene)
+	// ErrProbeRequired:全球匹配入队缺少有效地域探测(未探测、计划不符或已过期),客户端应重新探测后用同一 request_id 重试。
+	ErrProbeRequired = uint32(table.MatchError_kMatchProbeRequired)
+	// ErrNoRegionWithinLatency:探测有效,但没有任何机房在硬延迟以内(docs/design/global-match-hierarchical-pools.md §9)。
+	ErrNoRegionWithinLatency = uint32(table.MatchError_kMatchNoRegionWithinLatency)
 
 	// ---- 场景发起 PK(切磋) ----
 
@@ -86,4 +90,8 @@ const (
 	// ErrSpectateFull:该场直连观众席位已满。battle → match 与 match → 客户端共用这一个码
 	// (容量满是规则拒绝,不算故障);随机观战遇到满员也不换场,客户端换一场须用新的 request_id。
 	ErrSpectateFull = uint32(table.MatchError_kMatchSpectateFull)
+	// ErrSpectateTicketInvalid:观战订阅凭证无效或已过期(battle-spectate-tiered-fanout.md §15.2、§15.5)。
+	// match 只签发凭证,这个码由 gate 在 SubscribeSpectate 验签失败时回客户端;写在这里是让 match 段的全量护栏
+	// (errors_test.go)也覆盖它。
+	ErrSpectateTicketInvalid = uint32(table.MatchError_kMatchSpectateTicketInvalid)
 )

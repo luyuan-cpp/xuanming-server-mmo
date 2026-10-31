@@ -1,5 +1,7 @@
 # 玩家态 Redis 集群化：物理水平扩展设计
 
+> **部分过期(2026-10-30)**:存档相关批次(父快照、补投索引与补投器、子表缓存与 go/db 句柄)作废;位置、会话、战斗锁等协调键的分片仍要做([player-data-tidb-scaling-plan.md](./player-data-tidb-scaling-plan.md) §8.4)。
+
 > 状态：**设计 v2（2026-10-23）**。v1 经四视角对抗评审（一致性、扩展与运维、可实现性、替代方案），评审结论逐条核对源码后吸收进本版，变更见文末「修订记录」。第 1 批已落码（未编译），其余批次见 §13。所有容量数字除注明 [M] 者外都是推算 [I]，未经本仓实测；结论以 §14 的实测为准。
 >
 > 需求来源：[Redis 物理水平扩展交接](../handoff/redis-horizontal-scaling-requirements-20261022.md)（用户原话「我就想 redis 可以物理水平无限扩展」，方案由本稿自定）。源码事实来自 2026-10-22 全链只读盘点（10 路，按子系统 + 按模式两种方式扫描），行号以当时工作区为准，落码时按函数名复核。
@@ -10,7 +12,7 @@
 
 > **2026-10-24 方向变更（先读；下文原文保留）**：用户 10-24 明确「玩家数据不要 redis 存储，其他改用的地方还是要用」，记录与键族分类见 [TiDB 决策 §9](global-data-layer-tidb-decision.md)。对本稿的影响：
 > - 父快照 `PlayerAllData`、子表缓存、资产 SQL 证据、战斗结算原件属于玩家数据，不再进 Redis Cluster；补投索引与补投器随父快照移出失去现有用途（新存盘路径如果保留异步投递，另行设计）。
-> - 第 2b 批（父快照改名）在看到本变更之前已落码（未编译），保留还是回退待用户定；2c、2d 已暂停（§13）；第 4 批的子表缓存与排序锁 / 游标改名、第 8 批的结算索引，等新设计定稿后再定。下文 §1 第 3、4 条、§5.3 存盘脚本改形、§5.4、§5.5 中的子表缓存与资产证据、§10.1 的容量推算待重写。
+> - 第 2b 批（父快照改名）在看到本变更之前已落码，2026-10-29 定为保留；2c、2d 作废（§13）；第 4 批的子表缓存与排序锁 / 游标改名、第 8 批的结算索引，等新设计定稿后再定。下文 §1 第 3、4 条、§5.3 存盘脚本改形、§5.4、§5.5 中的子表缓存与资产证据、§10.1 的容量推算待重写。
 > - owner_epoch（2a，已落码）、归属与位置族（3）、player_locator（7）、战斗锁等协调键仍在 Redis，按本稿分片不变；集群规模要按剩下的键重算。
 > - 只定了方向，存盘与加载的新路径未设计、未落码。
 
@@ -388,9 +390,9 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 |---|---|---|
 | 1 | 基础契约：Go `shared/redisslot`（CRC16、HashSlot、PlayerSlot、SlotTag、保留后缀表）与 `shared/playerstore`（UniversalClient 构造器、每节点池上限、同槽 / 带 tag 守卫、MGetBySlot、ScanEachMaster）；C++ `redis_slot.h`；两侧金样测试；本设计文档 | 已落码，未编译；评审后的修补见本批补丁 |
 | 2a | owner_epoch 改名：C++ `player_ownership_comp.h` 与 `role_admission_system.cpp` 的内联拼键、存盘 Lua 的 owner 键形校验；Go `shared/ownerepoch` 与 merge_zone `save_barrier_verify` 镜像、barrierrestore；data_service 改查保留后缀表；相关测试 | 已落码，未编译（2026-10-24；另补 merge_zone blob 拷贝跳过保留后缀，见 PROGRESS） |
-| 2b | 父快照改名：C++ `redis_client.h` 父键构造与 Lua 父键校验；login dataloader、外观补齐（同批改 `MGetBySlot`）；data_service 账本与 debug 工具；friend、match 读者；merge_zone `player_rows`；barrierrestore；相关测试 | 已落码，未编译（2026-10-24；共享构造 `savebarrier.ParentKey`，见 PROGRESS）。落码时本会话尚未看到上方 10-24 方向变更；保留还是回退待用户定 |
-| 2c | 补投索引按 slot：C++ 索引键与 Lua 索引校验；saveoutbox 契约、认领、回收改按 slot 索引（本批暂保留「只认领 topic 属于本 zone 的意图」，沿用单 topic 发布器）；merge_zone P4 排空检查、barrierrestore 恢复脚本改形、debug_import 脚本改形；相关测试 | 暂停（2026-10-24）：补投索引属 TiDB 决策 §9.3 A 类，待用户按 §9 重评，未开工 |
-| 2d | 补投器分片：成员登记 + 段租约、多 topic 发布器与按 topic 熔断、逐意图闸、去掉映射读与跨 zone 迁移脚本、续约前提；相关测试 | 暂停（2026-10-24）：同 2c，未开工 |
+| 2b | 父快照改名：C++ `redis_client.h` 父键构造与 Lua 父键校验；login dataloader、外观补齐（同批改 `MGetBySlot`）；data_service 账本与 debug 工具；friend、match 读者；merge_zone `player_rows`；barrierrestore；相关测试 | 已落码，未编译（2026-10-24；共享构造 `savebarrier.ParentKey`，见 PROGRESS）。保留（2026-10-29：用户确认未上线、玩家数据可全部清空；纯改名不改语义，父快照随 TiDB 决策 §9 新存盘路径移出 Redis 时这些调用点一并删除）。Codex 10-24 全量 C++ 构建与各 Go 模块单测已覆盖这些文件 |
+| 2c | 补投索引按 slot：C++ 索引键与 Lua 索引校验；saveoutbox 契约、认领、回收改按 slot 索引（本批暂保留「只认领 topic 属于本 zone 的意图」，沿用单 topic 发布器）；merge_zone P4 排空检查、barrierrestore 恢复脚本改形、debug_import 脚本改形；相关测试 | 作废（2026-10-29）：补投索引与补投器只服务于 Redis 里的父快照与 outbox 载荷；TiDB 决策 §9 把它们移出 Redis 后（§9.4 两种存盘路径都不再在 Redis 留意图）失去用途，不为将删除的组件做分片。未开工、无代码改动 |
+| 2d | 补投器分片：成员登记 + 段租约、多 topic 发布器与按 topic 熔断、逐意图闸、去掉映射读与跨 zone 迁移脚本、续约前提；相关测试 | 作废（2026-10-29）：同 2c。未开工、无代码改动 |
 | 3 | 归属与位置族改名：handoff、location、修订、离场、去重、冷却、登录代次、同步摘要、玩家锁、合服提示；C++ 与 Go 镜像；scene_manager 离场拆分与成员集合计数（先核实预占语义） | 待做 |
 | 4 | go/db 玩家域句柄：排序锁 / 游标 / 缓存键改名，句柄拆分，expand 状态缓存 | 待做 |
 | 5a | C++ 两份 `Hiredis` 加 `formattedCommand`；`RedisClusterClient`（停等、错误归类、拓扑、资源上限）与单测；暂无调用方 | 待做 |

@@ -338,6 +338,8 @@ S2C:   mail ─读 SharedRedis player:session:{收件人}(只推 ONLINE)─▶ �
 | `DeleteReadMails` | 定向:`UPDATE … SET deleted_ms=? WHERE owner_player_id=? AND deleted_ms=0 AND read_ms>0 AND (claim_state = 0 OR (claim_state = 1 AND expire_ms <= ?)) LIMIT MaxPersonal`;系统:对有效集里本人已读且满足同一判定的做条件 upsert `deleted_ms` | 重复调用 = 成功,返回实删数 |
 | `ClaimMailAttachments` | **短路**:校验会话身份与参数形状后直接回 `MailClaimNotOpen` | 见 §4.3 |
 
+2026-10-30 起 `mail_id` 是打散过的,不代表先后:列表改按 `sent_ms DESC, mail_id DESC` 排序,`before_mail_id` 由服务端换算成 `(sent_ms, mail_id)`;游标那封已被清理时这一页到头。见 `go/mail/internal/data/inbox.go`。
+
 **删除判定是白名单,不是黑名单**(评审第 5 条):早稿写的 `NOT (claim_state IN (1,2,4) AND expire_ms>?)` 会在过期后放行 2(CLAIMING)/ 4(NEEDS_MANUAL)—— 这两态挂着未终结的资产 op,删掉就断了对账线索,与 sweep "2 / 4 永不删"矛盾。M1 只有 0 / 1 两个值,判定写成 `claim_state = 0 OR (claim_state = 1 AND expire_ms <= now)`;**M2 追加状态时只允许往白名单里加 `3`(CLAIMED),2 / 4 无论是否过期一律进 `protected_mail_ids`**,并在代码注释写明。
 
 **系统邮件的"可见"只有一个定义**:`expire_ms > now`(M1 无定时生效,§1.3)。`ReadMail` / `DeleteMails` / `DeleteReadMails` / 将来的 `ClaimMailAttachments` 对不可见的系统邮件一律回 `MailNotFound` 或 `MailExpired`,**不建 state 行**。

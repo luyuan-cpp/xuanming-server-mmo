@@ -1,83 +1,61 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    Reset a Kafka consumer group's offsets — used by zone rollback / disaster recovery —
-    and finalize a db_task consumer-group handoff.
+    Reset a Kafka consumer group's offsets on one topic, or delete and recreate a topic.
 
 .DESCRIPTION
+    通用的位点重置工具,给仍在用 Kafka 的消费组做运维与灾备,例如(按 go/*/etc/*.yaml 核对):
+      • go/data_service:data_service-transaction-log(transaction_log_topic_g<N>)、
+        data_service-player-snapshot(player_snapshot_topic_g<N>);
+      • go/match:ResultConsumerGroup match-rating(match-results);go/guild 的 guild-trial(match-results)。
+    玩家存盘不经 Kafka,这里没有与存盘相关的步骤。
+
     Wraps `kafka-consumer-groups.sh` (must be on PATH or pointed at via -KafkaBin).
     Modes (exactly one):
       • -ToDatetime: reset to a specific UTC timestamp (PITR-style)
       • -ToEarliest / -ToLatest: reset to topic boundaries
       • -DeleteAndRecreateTopic: nuke the topic and recreate it (most aggressive).
-        db_task topic(db_task_zone_<id>[_g<gen>])一律拒绝(2026-10-17,R7 复核 [1]):go/db 的已落库游标
-        consumer:applied:<topic>:<key>:<type> 只按 topic 名区分、永不过期,且在共享 DB0 里(回档有意保留它,不清)。
-        同名重建后各分区 offset 从 0 重新开始,新存盘的 seq 都不大于旧游标,被判为 orderingStale:跳过落库、照常提交位点,
-        存盘静默丢失,直到新 offset 追上旧值。要换一个空 topic,走 ServerConfig.Kafka.TopicGeneration 换代(新 topic 名就是新的游标命名空间;
-        go/db、login、merge_zone、k8s_deploy 都按它推导 topic 名)。
-        其它 topic:必须显式给 -Partitions 与 -ReplicationFactor,且都要等于现有 topic 的分区数与副本数(先 describe 核对,读不到就拒绝);
+        必须显式给 -Partitions 与 -ReplicationFactor,且都要等于现有 topic 的分区数与副本数(先 describe 核对,读不到就拒绝);
         删除后等 topic 消失(--list 失败或 30s 超时即失败,不 create),重建后再 describe 复核。
-      • -FinalizeHandoff: 交接收尾(docs/design/db-consumer-group-per-zone.md §5)。go/db 的消费组按 zone 拆分后,
-        每次正向(db_rpc_consumer_group → db_rpc_consumer_group_z<id>)或反向交接完成,都要删除旧组在本 topic 上的位点:
-        先逐分区确认新权威组(-Group)已接手(有数值位点且不小于旧组;没有位点的分区只在 earliest == latest 即空分区时放行),
-        再对旧组(-RetireGroup)执行 --delete-offsets,并 describe 复核旧组已没有本 topic 的数值位点。
-        不收尾时两组都有位点,合服门禁拒绝、go/db 交接闸的 R7 会拦住反向交接。
 
     重置模式(-ToDatetime / -ToEarliest / -ToLatest)的复核:
       • 输出里的 GROUP/TOPIC/PARTITION/NEW-OFFSET 计划表必须解析得出;给了 -Partitions N(> 0)时计划必须覆盖 0..N-1。
         dry-run 与 -Apply 都检查。
       • -Apply 时 --execute 之后再 describe 一次,逐分区断言 CURRENT-OFFSET 等于计划的 NEW-OFFSET;不符即失败。
-      • 给了 -RetireGroup 时,只有复核通过才删除 RetireGroup 在本 topic 上的位点(回档是有意回退,不做「新组 ≥ 旧组」检查)。
-        回档 Step 5 用它把 zone 落到 zone 组:zone 组拨到日志末端(-ToLatest,负责人 2026-10-17 裁决「丢弃 TargetTime 之后的写」),
-        再退役 legacy 组在本 topic 上的位点。
 
     Always defaults to dry-run (uses `--dry-run` flag of the kafka tool, which prints
     the plan without writing). Pass -Apply to actually execute.
-
-    See docs/design/zone_data_rollback.md §3 step 4 for the rollback context.
 
 .EXAMPLE
     # Preview offsets reset to a timestamp
     pwsh -File tools/scripts/kafka_offset_reset.ps1 `
         -BootstrapServer kafka:9092 `
-        -Group db_rpc_consumer_group_z101 `
-        -Topic db_task_zone_101 `
+        -Group data_service-transaction-log `
+        -Topic transaction_log_topic_g1 `
         -ToDatetime "2026-05-15T03:17:00Z" `
-        -Partitions 10
+        -Partitions 6
 
 .EXAMPLE
-    # Apply (write) the reset to the log end, verify it, then retire the legacy group's offsets on this topic (rollback Step 5)
+    # Apply (write) the reset to the log end and verify it
     pwsh -File tools/scripts/kafka_offset_reset.ps1 `
         -BootstrapServer kafka:9092 `
-        -Group db_rpc_consumer_group_z101 `
-        -RetireGroup db_rpc_consumer_group `
-        -Topic db_task_zone_101 `
+        -Group data_service-player-snapshot `
+        -Topic player_snapshot_topic_g1 `
         -ToLatest `
-        -Partitions 10 `
+        -Partitions 3 `
         -Apply
 
 .EXAMPLE
     # Reset to earliest
     pwsh -File tools/scripts/kafka_offset_reset.ps1 `
         -BootstrapServer kafka:9092 `
-        -Group db_rpc_consumer_group_z101 `
-        -Topic db_task_zone_101 `
+        -Group match-rating `
+        -Topic match-results `
         -ToEarliest `
         -Apply
 
 .EXAMPLE
-    # Finalize a forward handoff (legacy → zone group): dry-run first, then add -Apply
-    pwsh -File tools/scripts/kafka_offset_reset.ps1 `
-        -BootstrapServer kafka:9092 `
-        -Topic db_task_zone_101 `
-        -Group db_rpc_consumer_group_z101 `
-        -RetireGroup db_rpc_consumer_group `
-        -Partitions 10 `
-        -FinalizeHandoff
-
-.EXAMPLE
-    # Nuclear: delete a (non db_task) topic and recreate it with the same partition count / replication factor.
-    # db_task_zone_<id>[_g<gen>] is refused: bump go/db ServerConfig.Kafka.TopicGeneration instead (see .DESCRIPTION).
+    # Nuclear: delete a topic and recreate it with the same partition count / replication factor.
     pwsh -File tools/scripts/kafka_offset_reset.ps1 `
         -BootstrapServer kafka:9092 `
         -Topic <topic> `
@@ -91,9 +69,6 @@ param(
     [string]$BootstrapServer,
 
     [string]$Group = "",
-    # 要退役的旧组:删除它在 -Topic 上的已提交位点。只能配 -ToDatetime / -ToEarliest / -ToLatest(复核通过后删)
-    # 或 -FinalizeHandoff;必须同时给 -Partitions > 0,不能等于 -Group。
-    [string]$RetireGroup = "",
     [string]$Topic = "",
 
     # Reset modes — exactly one of:
@@ -101,10 +76,10 @@ param(
     [switch]$ToEarliest,
     [switch]$ToLatest,
     [switch]$DeleteAndRecreateTopic,
-    [switch]$FinalizeHandoff,
 
-    # Required when -DeleteAndRecreateTopic / -FinalizeHandoff / -RetireGroup.
-    # 重置模式下给了(> 0)就要求重置计划覆盖 0..N-1;取 go/db/etc/db.yaml 的 ServerConfig.Kafka.PartitionCnt。
+    # Required when -DeleteAndRecreateTopic.
+    # 重置模式下给了(> 0)就要求重置计划覆盖 0..N-1;取该 topic 的契约分区数(如 go/data_service/etc/data_service.yaml 的
+    # Kafka.TransactionLogPartitions / SnapshotPartitions、go/match/etc/match_service.yaml 的 ResultTopicPartitions)。
     [int]$Partitions = 0,
     # -DeleteAndRecreateTopic 必填(> 0),且必须等于现有 topic 的副本数。0 = 没给。
     # 以前缺省为 1:3 broker 档(min.insync.replicas=2)上重建出 RF=1 的 topic,acks=all 的写全部 NotEnoughReplicas,
@@ -115,7 +90,6 @@ param(
     # On a typical Confluent / Apache Kafka install:
     #   /opt/kafka/bin/kafka-consumer-groups.sh
     #   /opt/kafka/bin/kafka-topics.sh
-    #   /opt/kafka/bin/kafka-get-offsets.sh
     [string]$KafkaBin = "",
 
     [switch]$Apply
@@ -123,7 +97,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# describe / 重置计划 / get-offsets 的解析与收尾判定只在这一处(k8s_zone_rollback.ps1、k8s_deploy.ps1 共用)。
+# describe 与重置计划的解析只在这一处。
 . (Join-Path $PSScriptRoot "lib" "kafka_consumer_groups.ps1")
 
 function Resolve-KafkaTool {
@@ -148,9 +122,8 @@ function Resolve-KafkaTool {
 # (状态不是 Empty / Dead)的组执行 --reset-offsets:
 #   Error: Assignments can only be reset if the group 'g' is inactive, but the current state is Stable.
 # 位点根本没动(Kafka 3.x 的 ConsumerGroupCommand 打完这行就正常返回;在钉死的镜像版本上的退出码待实测,
-# 这里两种都按失败处理)。K8s 切成每 zone 一组(db_rpc_consumer_group_z<id>)之后,回档重置的是本 zone 组,zone-down 后它
-# 是 Empty;但 legacy 共享组 db_rpc_consumer_group 只要别的 zone 还在线就不是 Empty,对它重置一定被拒 —— 以前脚本照样打印 OK,
-# 回档后的 zone 带着旧位点继续消费。所以退出码之外还要看输出(fail-closed)。describe / get-offsets / delete-offsets 同样过这道判定。
+# 这里两种都按失败处理)。以前脚本照样打印 OK,消费者带着旧位点继续消费。所以退出码之外还要看输出(fail-closed)。
+# describe 与 kafka-topics 的调用同样过这道判定。
 function Assert-KafkaToolOutputClean {
     param(
         [AllowEmptyCollection()][AllowNull()][string[]]$Lines,
@@ -189,7 +162,7 @@ function Invoke-KafkaToolCaptured {
     } finally {
         $ErrorActionPreference = $prevErrorAction
         # 退出码只经返回值报告。全局 LASTEXITCODE 复位为 0:被判为可接受的非 0(如「组不存在」的 describe)不能漏到调用方 ——
-        # k8s_zone_rollback.ps1 Step 5 与 dev_tools.ps1 按 $LASTEXITCODE 判定本脚本成败(R7 复核 [5])。
+        # dev_tools.ps1 按 $LASTEXITCODE 判定本脚本成败(R7 复核 [5])。
         $global:LASTEXITCODE = 0
     }
     return [pscustomobject]@{ Lines = $lines; ExitCode = $code }
@@ -217,25 +190,6 @@ function Invoke-KafkaConsumerGroupDescribe {
 
 <#
 .SYNOPSIS
-    kafka-get-offsets.sh --time -2(earliest)/ -1(latest),返回 @{ [int]分区 = [long]位点 }。
-#>
-function Invoke-KafkaGetOffsets {
-    param(
-        [Parameter(Mandatory = $true)][string]$Tool,
-        [Parameter(Mandatory = $true)][string]$BootstrapServer,
-        [Parameter(Mandatory = $true)][string]$Topic,
-        [Parameter(Mandatory = $true)][ValidateSet("-2", "-1")][string]$Time
-    )
-    $offsetArgs = @("--bootstrap-server", $BootstrapServer, "--topic", $Topic, "--time", $Time)
-    Write-Host "  kafka-get-offsets.sh $($offsetArgs -join ' ')"
-    $result = Invoke-KafkaToolCaptured -Tool $Tool -Arguments $offsetArgs
-    $result.Lines | ForEach-Object { Write-Host "    $_" }
-    Assert-KafkaToolOutputClean -Lines $result.Lines -ExitCode $result.ExitCode -Tool "kafka-get-offsets" -Consequence '读不到日志边界'
-    return ConvertFrom-KafkaGetOffsets -Lines $result.Lines -Topic $Topic
-}
-
-<#
-.SYNOPSIS
     重置计划的覆盖检查(纯函数):-Partitions N > 0 时,计划必须恰好覆盖 0..N-1。返回问题列表。
 #>
 function Get-ResetPlanProblems {
@@ -250,7 +204,7 @@ function Get-ResetPlanProblems {
     }
     foreach ($key in @($Plan.Keys | Sort-Object)) {
         if ([int]$key -ge $Partitions) {
-            $problems.Add("重置计划里有分区 $key,超出 -Partitions $Partitions(topic 的分区数与 go/db/etc/db.yaml PartitionCnt 不一致?)")
+            $problems.Add("重置计划里有分区 $key,超出 -Partitions $Partitions(topic 的实际分区数与 -Partitions 不一致?)")
         }
     }
     return , $problems.ToArray()
@@ -291,49 +245,6 @@ function Get-ResetVerificationProblems {
         }
     }
     return , $problems.ToArray()
-}
-
-<#
-.SYNOPSIS
-    删除旧组(-RetireGroup)在 -Topic 上的已提交位点,删后 describe 复核;不带 -Apply 只打印将要执行的命令。
-
-.DESCRIPTION
-    旧组不存在或在本 topic 上没有数值位点时打印 nothing to retire 后返回(幂等,可重跑)。
-    --delete-offsets 只要还有成员订阅该 topic 就会被 broker 拒绝(GROUP_SUBSCRIBED_TO_TOPIC);
-    legacy 组即使还有别的 zone 的成员,只要没有成员订阅本 topic 就能删。删完必须复核:仍有数值位点即失败。
-#>
-function Remove-RetiredGroupTopicOffsets {
-    param(
-        [Parameter(Mandatory = $true)][string]$CgTool,
-        [Parameter(Mandatory = $true)][string]$BootstrapServer,
-        [Parameter(Mandatory = $true)][string]$RetireGroup,
-        [Parameter(Mandatory = $true)][string]$Topic,
-        [switch]$Apply
-    )
-    $before = Invoke-KafkaConsumerGroupDescribe -CgTool $CgTool -BootstrapServer $BootstrapServer -Group $RetireGroup -Topic $Topic
-    if ($before.State -ne 'offsets') {
-        Write-Host "  nothing to retire: group $RetireGroup has no committed offsets on $Topic ($($before.State))" -ForegroundColor Green
-        return
-    }
-    $deleteArgs = @("--bootstrap-server", $BootstrapServer, "--delete-offsets", "--group", $RetireGroup, "--topic", $Topic)
-    if (-not $Apply) {
-        Write-Host "[DRY-RUN] would run kafka-consumer-groups.sh $($deleteArgs -join ' ')" -ForegroundColor Yellow
-        return
-    }
-    Write-Host "  kafka-consumer-groups.sh $($deleteArgs -join ' ')"
-    $result = Invoke-KafkaToolCaptured -Tool $CgTool -Arguments $deleteArgs
-    $result.Lines | ForEach-Object { Write-Host "    $_" }
-    Assert-KafkaToolOutputClean -Lines $result.Lines -ExitCode $result.ExitCode -Tool "kafka-consumer-groups --delete-offsets" -Consequence "旧组 $RetireGroup 的位点没有删除"
-    $subscribed = @($result.Lines | Where-Object { $_ -match 'GROUP_SUBSCRIBED_TO_TOPIC|actively subscribed' })
-    if ($subscribed.Count -gt 0) {
-        throw "删除旧组 $RetireGroup 在 $Topic 上的位点被 broker 拒绝:仍有成员订阅该 topic(GROUP_SUBSCRIBED_TO_TOPIC)。先停掉仍在消费本 topic 的旧组实例再重跑:$($subscribed -join ' | ')"
-    }
-    $after = Invoke-KafkaConsumerGroupDescribe -CgTool $CgTool -BootstrapServer $BootstrapServer -Group $RetireGroup -Topic $Topic
-    if ($after.State -eq 'offsets') {
-        throw ("旧组 $RetireGroup 在 $Topic 上的位点没有删干净(复核仍有 $($after.Committed.Count) 个分区有数值位点),多半仍有成员订阅该 topic" +
-            "(GROUP_SUBSCRIBED_TO_TOPIC)。先停掉仍在消费本 topic 的旧组实例,再重跑本命令。")
-    }
-    Write-Host "  OK: group $RetireGroup has no committed offsets on $Topic anymore" -ForegroundColor Green
 }
 
 <#
@@ -401,9 +312,8 @@ if ($ToDatetime -ne "")        { $modes += "ToDatetime" }
 if ($ToEarliest)               { $modes += "ToEarliest" }
 if ($ToLatest)                 { $modes += "ToLatest" }
 if ($DeleteAndRecreateTopic)   { $modes += "DeleteAndRecreateTopic" }
-if ($FinalizeHandoff)          { $modes += "FinalizeHandoff" }
 if ($modes.Count -ne 1) {
-    throw "Pass exactly one of -ToDatetime / -ToEarliest / -ToLatest / -DeleteAndRecreateTopic / -FinalizeHandoff. Got: $($modes -join ',')"
+    throw "Pass exactly one of -ToDatetime / -ToEarliest / -ToLatest / -DeleteAndRecreateTopic. Got: $($modes -join ',')"
 }
 
 # ── Required-arg sanity ───────────────────────────────────────────
@@ -414,27 +324,7 @@ if ($modes[0] -ne "DeleteAndRecreateTopic" -and $Group -eq "") {
 if ($DeleteAndRecreateTopic -and $Partitions -le 0) {
     throw "-DeleteAndRecreateTopic requires -Partitions > 0"
 }
-if ($FinalizeHandoff -and ($RetireGroup -eq "" -or $Partitions -le 0)) {
-    throw "-FinalizeHandoff 必须同时给 -Group <新权威组>、-RetireGroup <旧组>、-Topic 与 -Partitions <分区数 > 0>(分区数取 go/db/etc/db.yaml 的 ServerConfig.Kafka.PartitionCnt)"
-}
-if ($RetireGroup -ne "") {
-    if ($DeleteAndRecreateTopic) {
-        throw "-RetireGroup 不能与 -DeleteAndRecreateTopic 同用:删 topic 会让所有组在该 topic 上的位点一起作废,没有「旧组位点」可退役"
-    }
-    if ($Partitions -le 0) {
-        throw "-RetireGroup 必须同时给 -Partitions <分区数 > 0>:删除旧组位点之前要逐分区复核权威组的位点,分区数取 go/db/etc/db.yaml 的 ServerConfig.Kafka.PartitionCnt"
-    }
-    if ($RetireGroup -ceq $Group) {
-        throw "-RetireGroup 不能等于 -Group($Group):那会删掉权威组自己在 $Topic 上的位点"
-    }
-}
-# -DeleteAndRecreateTopic 的两条拒绝放在参数组合校验之后(参数组合本身错了先报组合错误),都早于解析任何 Kafka 工具。
-if ($DeleteAndRecreateTopic -and (Test-DbTaskTopicName -Topic $Topic)) {
-    throw ("-DeleteAndRecreateTopic 拒绝 db_task topic $Topic(尚未做任何改动):go/db 的已落库游标 consumer:applied:${Topic}:* 只按 topic 名区分、永不过期," +
-        "且在共享 DB0 里(回档有意保留它,不清)。同名重建后 offset 从 0 重新开始,新存盘的 seq 都不大于旧游标,被判为 orderingStale 静默跳过,存盘丢失。" +
-        "要换一个空 topic,把 go/db / go/login 的 Kafka.TopicGeneration 加一(新 topic 名即新的游标命名空间,go/db、login、merge_zone、k8s_deploy 都按它推导)," +
-        "按 docs/design/db-task-kafka-partition-contract.md「离线扩容流程」换代;只想回到某个时间点,用 -ToDatetime / -ToEarliest / -ToLatest。")
-}
+# 拒绝放在解析任何 Kafka 工具之前。
 if ($DeleteAndRecreateTopic -and $ReplicationFactor -le 0) {
     throw "-DeleteAndRecreateTopic 必须显式给 -ReplicationFactor <副本数 > 0>,且等于现有 topic 的副本数(以前缺省 1:3 broker 档 min.insync.replicas=2 下重建出的 topic 写入全部 NotEnoughReplicas)"
 }
@@ -444,7 +334,6 @@ Write-Host "=== Kafka offset reset ($verb) ===" -ForegroundColor Cyan
 Write-Host "  bootstrap : $BootstrapServer"
 Write-Host "  topic     : $Topic"
 if ($Group -ne "") { Write-Host "  group     : $Group" }
-if ($RetireGroup -ne "") { Write-Host "  retire    : $RetireGroup (its committed offsets on $Topic are deleted after the checks pass)" }
 if ($Partitions -gt 0) { Write-Host "  partitions: $Partitions" }
 Write-Host "  mode      : $($modes[0])"
 if ($ToDatetime -ne "") { Write-Host "  datetime  : $ToDatetime" }
@@ -501,41 +390,6 @@ if ($DeleteAndRecreateTopic) {
     exit 0
 }
 
-# ── FinalizeHandoff ───────────────────────────────────────────────
-# 先确认新权威组已接手全部分区,再删旧组位点;任一检查不过就在删除之前拒绝,并一次列全问题。
-if ($FinalizeHandoff) {
-    $cgTool = Resolve-KafkaTool "kafka-consumer-groups.sh"
-    $offsetsTool = Resolve-KafkaTool "kafka-get-offsets.sh"
-
-    Write-Host "Step 1: describe new authoritative group $Group" -ForegroundColor Yellow
-    $newState = Invoke-KafkaConsumerGroupDescribe -CgTool $cgTool -BootstrapServer $BootstrapServer -Group $Group -Topic $Topic
-    Write-Host "Step 2: describe retiring group $RetireGroup" -ForegroundColor Yellow
-    $oldState = Invoke-KafkaConsumerGroupDescribe -CgTool $cgTool -BootstrapServer $BootstrapServer -Group $RetireGroup -Topic $Topic
-    Write-Host "Step 3: log boundaries of $Topic (earliest / latest)" -ForegroundColor Yellow
-    $earliest = Invoke-KafkaGetOffsets -Tool $offsetsTool -BootstrapServer $BootstrapServer -Topic $Topic -Time "-2"
-    $latest = Invoke-KafkaGetOffsets -Tool $offsetsTool -BootstrapServer $BootstrapServer -Topic $Topic -Time "-1"
-
-    $problems = Test-HandoffFinalizeReady -NewOffsets $newState.Committed -OldOffsets $oldState.Committed `
-        -Earliest $earliest -Latest $latest -Partitions $Partitions
-    if ($problems.Count -gt 0) {
-        throw ("交接收尾拒绝执行,没有删除 $RetireGroup 的任何位点:新权威组 $Group 在 $Topic 上还没有接手全部 $Partitions 个分区" +
-            "($($problems.Count) 项问题):`n  - " + ($problems -join "`n  - ") +
-            "`n确认新组的 db 实例已在消费、且旧组实例已全部停掉后重跑;方向弄反时交换 -Group 与 -RetireGroup。")
-    }
-    Write-Host "  new group $Group covers all $Partitions partitions of $Topic (empty partitions excepted) and is not behind $RetireGroup" -ForegroundColor Green
-
-    Write-Host "Step 4: retire committed offsets of $RetireGroup on $Topic" -ForegroundColor Yellow
-    Remove-RetiredGroupTopicOffsets -CgTool $cgTool -BootstrapServer $BootstrapServer -RetireGroup $RetireGroup -Topic $Topic -Apply:$Apply
-    if ($Apply) {
-        Write-Host "OK: handoff finalized; $Group is the only group with committed offsets on $Topic" -ForegroundColor Green
-        Write-Host "Next: re-run k8s_deploy.ps1 -Command zone-up for this zone with the default -DbConsumerGroup keep;"
-        Write-Host "      the db ConfigMap drops GroupHandoffFrom (renders GroupID: `"$Group`") and db rolls once."
-    } else {
-        Write-Host "[DRY-RUN] Checks passed. Re-run with -Apply to delete the retiring group's offsets." -ForegroundColor Yellow
-    }
-    exit 0
-}
-
 # ── Offset reset (group + topic mode) ─────────────────────────────
 $cgTool = Resolve-KafkaTool "kafka-consumer-groups.sh"
 
@@ -573,43 +427,29 @@ $cgOutput | ForEach-Object { Write-Host $_ }
 Assert-KafkaToolOutputClean -Lines $cgOutput -ExitCode $exitCode -Tool "kafka-consumer-groups"
 
 # dry-run 与 --execute 都打印 GROUP/TOPIC/PARTITION/NEW-OFFSET 计划表;解析不出、或不覆盖 0..N-1 都按失败处理:
-# 没有计划就没法在 -Apply 之后逐分区复核,而复核是删除 -RetireGroup 位点的前提。
+# 没有计划就没法在 -Apply 之后逐分区复核。
 $plan = ConvertFrom-KafkaResetPlan -Lines $cgOutput -Topic $Topic
 $planProblems = Get-ResetPlanProblems -Plan $plan -Partitions $Partitions
 if ($planProblems.Count -gt 0) {
-    $applied = if ($Apply) { "--execute 已执行、计划内的分区可能已写入;没有删除任何旧组位点。" } else { "" }
+    $applied = if ($Apply) { "--execute 已执行、计划内的分区可能已写入。" } else { "" }
     throw ("重置计划不完整($($planProblems.Count) 项):`n  - " + ($planProblems -join "`n  - ") + "`n$applied")
 }
 
 if ($Apply) {
-    # 复核必须先于删除 -RetireGroup 的位点:重置静默无效时再删掉旧组位点,两组都没有位点,go/db 会从 Oldest 重放整个保留期。
-    # 回档语义已定(负责人 2026-10-17 裁决:丢弃 TargetTime 之后的写):k8s_zone_rollback.ps1 Step 5 用 -ToLatest 把 zone 组拨到日志末端,
-    # 不再按 -ToDatetime 拨回 T。go/db 的已落库游标 consumer:applied* 有意保留(回档不再 FLUSHDB):seq 是 go/db 消费时算的 offset + 1,
-    # 拨到末端之后的新消息 offset 不小于切点、旧游标不大于切点,新写恒大于旧游标;本 topic 的重试收据与死信由回档工具在 Step 4b 隔离。
-    # 对 db_task topic 再做 -ToDatetime / -ToEarliest 时不得越过回档记下的切点(run/logs/zone-rollback/<rid>/kafka-cut.json):
-    # 越过即把停服时那批从未落库的积压重新落库 —— 本脚本目前不读切点,只能靠文档与操作者核对。本脚本只负责把位点改到计划值并复核。
+    # --execute 退出码为 0 不等于位点真的改了,按计划逐分区读回来核对。本脚本只负责把位点改到计划值并复核。
     Write-Host "Step: verify committed offsets of $Group on $Topic equal the plan" -ForegroundColor Yellow
     $afterReset = Invoke-KafkaConsumerGroupDescribe -CgTool $cgTool -BootstrapServer $BootstrapServer -Group $Group -Topic $Topic
     $verifyProblems = Get-ResetVerificationProblems -Plan $plan -Described $afterReset -Partitions $Partitions
     if ($verifyProblems.Count -gt 0) {
-        $notRetired = if ($RetireGroup -ne "") { ",没有删除 $RetireGroup 的位点" } else { "" }
-        throw ("重置后复核失败$notRetired($($verifyProblems.Count) 项):`n  - " + ($verifyProblems -join "`n  - ") +
+        throw ("重置后复核失败($($verifyProblems.Count) 项):`n  - " + ($verifyProblems -join "`n  - ") +
             "`n先核对 $Group 的位点(kafka-consumer-groups.sh --describe --group $Group),再重跑本命令。")
     }
     Write-Host "OK: offset reset applied and verified ($($plan.Count) partition(s))" -ForegroundColor Green
-    if ($RetireGroup -ne "") {
-        # 回档是有意回退:不做「新组 ≥ 旧组」检查(那是 -FinalizeHandoff 的前置条件)。
-        Write-Host "Step: retire committed offsets of $RetireGroup on $Topic" -ForegroundColor Yellow
-        Remove-RetiredGroupTopicOffsets -CgTool $cgTool -BootstrapServer $BootstrapServer -RetireGroup $RetireGroup -Topic $Topic -Apply
-    }
 } else {
     Write-Host "[DRY-RUN] Plan printed above ($($plan.Count) partition(s)). Re-run with -Apply to execute." -ForegroundColor Yellow
-    if ($RetireGroup -ne "") {
-        Write-Host "[DRY-RUN] With -Apply, once the reset is verified, committed offsets of $RetireGroup on $Topic are deleted (kafka-consumer-groups.sh --delete-offsets)." -ForegroundColor Yellow
-    }
 }
-# 成功路径显式以 0 退出,与 -FinalizeHandoff / -DeleteAndRecreateTopic 两个分支一致;失败一律 throw(R7 复核 [5])。
-# 调用方(k8s_zone_rollback.ps1 Step 5 与第 0 步 d、dev_tools.ps1 kafka-offset-reset)按 $LASTEXITCODE 判定成败:不显式 exit 时,
+# 成功路径显式以 0 退出,与 -DeleteAndRecreateTopic 分支一致;失败一律 throw(R7 复核 [5])。
+# 调用方(dev_tools.ps1 kafka-offset-reset)按 $LASTEXITCODE 判定成败:不显式 exit 时,
 # 它停在最后一次原生调用的退出码上 —— 「组不存在」的 describe 在有的 Kafka 版本以非 0 退出、被判为 missing 后正常返回,
-# 回档就会在 PITR 之后(Step 5 时 MySQL 已回档、Redis 尚未处置)把成功判成失败。
+# 就会把成功判成失败。
 exit 0

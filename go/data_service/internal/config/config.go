@@ -3,9 +3,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
-
-	"shared/placement"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -14,47 +13,32 @@ import (
 type Config struct {
 	zrpc.RpcServerConf
 	// 仅隔离的历史MySQL/Redis工具夹具可显式开启；dev也默认全球SQL，不因Mode=dev自动降级。
-	LegacyNonGlobal  bool `json:",optional"`
-	MappingRedis     redis.RedisConf
-	Regions          []RegionConfig
-	DevRedis         DevRedisConfig `json:",optional"`
-	PlayerLockTTLSec int            `json:",default=3"`
+	LegacyNonGlobal bool `json:",optional"`
+	MappingRedis    redis.RedisConf
 
-	// Snapshot MySQL (for rollback persistence)
+	// Snapshot MySQL(player_snapshot / transaction_log 审计库)
 	SnapshotMySQL SnapshotMySQLConfig `json:",optional"`
 	// 账号目录全局规则；各 zone 的 login 不能抬高这里的角色上限。
 	AccountDirectory AccountDirectoryConfig `json:",optional"`
 
-	// Login admin gRPC client (for orphan account cleanup during rollback)
-	LoginAdminRpc zrpc.RpcClientConf `json:",optional"`
-
 	// AdminToken 是运维专用 RPC 的共享口令,调用方放在 gRPC metadata 的 `x-admin-token` 里。
 	//
-	// **2026-10-12 起 RemapHomeZoneForMerge 已停用**(docs/design/player-route-mapping-durability-proposal.md §4.3):
-	// 不论带不带 token、token 对不对,一律回 FailedPrecondition + ErrCodeNotImplemented,改映射只走 tools/merge_zone。
-	// 所以这个 token 现在只守三个回档 RPC 与 ReleasePlayerName 的运维路径(不限登记时间的释放)。
-	// 下面关于 remap 的几段保留为历史理由 —— 它们同样适用于回档:
+	// 现在只守 ReleasePlayerName 的运维路径(不限登记时间的释放)。
 	//
 	// **空 = 该 RPC 整体停用**(fail closed),不是"免鉴权"。理由:data_service 在集群
-	// 内网是无鉴权可达的,任何一个能拨到它的进程都能调 remap;默认敞开意味着一次误配
-	// 或一个跑错环境的脚本就能把全服玩家送进别的 zone,而这个操作没有反向操作
-	// (改回去要先知道谁原本在哪个 zone,而那份信息刚被覆盖掉)。所以默认值只能是
-	// "不能用",启用是一次显式的运维动作:合服维护窗口里临时下发,窗口结束就撤掉。
+	// 内网是无鉴权可达的,任何一个能拨到它的进程都能调;默认敞开意味着一次误配
+	// 或一个跑错环境的脚本就能释放任意玩家的名字。所以默认值只能是"不能用",
+	// 启用是一次显式的运维动作:维护窗口里临时下发,窗口结束就撤掉。
 	//
 	// 不放进 yaml 明文的话可以用 k8s Secret 挂成环境变量再由 ConfigMap 引用。
-	//
-	// 2026-09-28 起三个回档 RPC(RollbackPlayer / RollbackZone / RollbackAll)也一律要求它
-	// (docs/design/guild-phase2/07-rollback-fail-closed.md §7.6.3 Q2 = ②):没配 = 回档 RPC 同样整体停用。
-	// 回档还有自己的后续闸(跨服务离线栅栏、帮会资产闸),token 泄露不等于能静默回档。
 	AdminToken string `json:",optional"`
 
 	// Prometheus /metrics HTTP listen address (host:port). Empty = disabled.
-	// Scraped by Prometheus alongside scene_manager. Exposes per-RPC outcome /
-	// latency, per-player lock contention, version mismatch, rollback counts.
+	// Scraped by Prometheus alongside scene_manager.
 	// See go/data_service/internal/metrics/metrics.go for the metric list.
 	MetricsListenAddr string `json:",optional"`
 
-	// Schema 控制全局库(SnapshotMySQL)各表的建表/补列路径:proto 驱动的五张(其中 id_segment、player_name
+	// Schema 控制全局库(SnapshotMySQL)各表的建表/补列路径:proto 驱动的四张(其中 player_name
 	// 走手写 bootstrap DDL)+ 同样走手写 DDL、proto 只作列漂移守卫的路由表(player_route 等),见 internal/store/schema.go。
 	// 整段可缺失,缺失语义见 SchemaConfig.AutoMigrate 与 ShouldAutoMigrate。
 	Schema SchemaConfig `json:",optional"`
@@ -71,8 +55,8 @@ type Config struct {
 	// data_service(Load/Save 是热路径),只记日志并每 30s 后台重试。
 	Kafka KafkaConfig `json:",optional"`
 
-	// IdSegment 控制号段表 id_segment 的**行**生命周期(表结构归 Schema 管),
-	// 见 internal/store/id_segment_store.go 与设计 §7.5 第 7 条。整段可缺失,缺失 = 生产安全值。
+	// IdSegment 是发号器(AllocateIdSegment)的配置,见 internal/idissuer 与
+	// docs/design/player-data-tidb-scaling-plan.md §6。整段可缺失,缺失 = 生产安全值。
 	IdSegment IdSegmentConfig `json:",optional"`
 
 	// PlayerName 是玩家名字注册表(全服唯一)的运行参数,见 internal/store/player_name_store.go
@@ -93,40 +77,6 @@ type Config struct {
 	// 与 scene_manager / match 同形(顶层键、默认 60)。租约丢失 = C++ 侧看到 data_service
 	// 消失,scene 的号段续段会失败(手里两段能顶 10~20 分钟),noderegistry 会 CAS 重夺 / 重分配 node_id。
 	LeaseTTL int64 `json:",default=60"`
-
-	// ── 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.5)──────
-	// 三项都只影响三个 Rollback*,配错 / 没配的后果一律是"回档被拒"(fail-closed),不拖累 Load/Save。
-
-	// GuildInternalRpc 是回档前问 guild "这些玩家自快照以来有没有已应用的资产操作"的客户端
-	// (guildpb.GuildInternal/ListAppliedAssetOpsSince)。
-	//
-	// **不配 = 回档一律被拒**(ErrCodeRollbackGuildCheckFailed),不是"跳过检查"。
-	//
-	// 只认 Endpoints / Target 直连(07 §7.11-U10 选 (c)),见 HasGuildInternalRpc:
-	//   - guild 刻意不写 go-zero 的 Etcd.Key(port-decisions D-13),按 etcd 发现永远找不到它;
-	//   - RpcClientConf.Etcd 带 `inherit`:块在但没写 Etcd(或只写了 Hosts)时会继承顶层 Etcd 的
-	//     Key=dataservice.rpc —— 拨到 data_service 自己身上。所以只有 Etcd 的配置按"没配"处理。
-	//
-	// 单次调用上限就是这里的 Timeout(ValidateGuildCheck 限 [500, 3500] ms),**不另设旋钮**:
-	// zrpc 客户端自带超时拦截器,再立一个 CallTimeoutMs 只会得到两个旋钮、小的那个悄悄生效。
-	GuildInternalRpc zrpc.RpcClientConf `json:",optional"`
-
-	// GuildClockSkewMarginMs:每个玩家查询的起点 since_ms = 快照时刻(秒)×1000 − 本值(07 §7.2)。
-	// 它要盖住两件事:data_service 与 guild 两台机器的墙钟差,**加上** guild 记下的终结时刻其实是
-	// ProcessOne 的**开始**时刻、可早于 scene 实际落盘最多一个 OpBudget(2500ms)。所以即使同机部署、
-	// 时钟差为零,它也**不得为 0**:小于"快照时刻 − 终结时刻"的余量会漏掉"快照不含这笔扣款、guild 却记在
-	// 快照之前"的行 = 回档复制资产(fail-open)。
-	// 合法区间 [MinGuildClockSkewMarginMs, MaxGuildClockSkewMarginMs];默认 300000(5 分钟,与 04 §4.32
-	// 的 ±300s 服务间时钟承诺同口径)。代价是多拒:快照前 5 分钟内终结、其实已含在快照里的行也会被列出。
-	GuildClockSkewMarginMs int64 `json:",default=300000"`
-
-	// GuildCheckBudgetSeconds:帮会检查阶段(沉降等待之后、第一笔写之前)的总预算,单调时钟。
-	// **只罩检查阶段**,不罩写阶段。耗尽 = CheckFailed、零写入,
-	// 不重试:重试只会把"guild 正在抖"伪装成"慢"。玩家很多的全服回档检查不完时调大它,并同步调大
-	// yaml 里对应方法的 MethodTimeouts。
-	// 写后复查的预算跟着它走(GuildRecheckBudget):复查与检查走同一套分块翻页、范围约等于全部写过的玩家,
-	// 所以这里每调大 1 秒,MethodTimeouts 要调大 2 秒。
-	GuildCheckBudgetSeconds int64 `json:",default=120"`
 }
 
 type AccountDirectoryConfig struct {
@@ -188,119 +138,87 @@ func (c AccountDirectoryConfig) MaxRoles() int {
 	return c.MaxPlayersPerAccount
 }
 
-// GuildRecheckBudget:写后复查调用本身的预算(不含复查前的等待)= max(MinGuildRecheckBudgetSeconds, 检查预算)。
-// 不单独做成配置项:复查的工作量由检查阶段决定(同一个 checker、同样的玩家与 since),它的预算没有独立于检查预算的取值依据;
-// 两个旋钮只会被拧成不一致 —— 检查预算调大而复查仍是 120s 时,凡是"调大了才过得了闸"的回档,数据写完后复查必然超时,
-// 每次都误报紧急的 post_write_recheck_failed,真分歧反而查不出(2026-10-08 评审)。
-func (c Config) GuildRecheckBudget() time.Duration {
-	seconds := c.GuildCheckBudgetSeconds
-	if seconds < MinGuildRecheckBudgetSeconds {
-		seconds = MinGuildRecheckBudgetSeconds
-	}
-	return time.Duration(seconds) * time.Second
-}
-
-// 回档帮会闸的配置边界(07 §7.2、§7.5.3-3)。
-const (
-	// MinGuildClockSkewMarginMs = OpBudget(2500ms)× 2:终结时刻可早于落盘一个 OpBudget,再留一倍给时钟差。
-	// 0 与 4999 一律拒绝,理由见 Config.GuildClockSkewMarginMs。
-	MinGuildClockSkewMarginMs int64 = 5000
-	// MaxGuildClockSkewMarginMs:1 小时。再大就不是"时钟差"了,而是把整段历史都当成分歧,放行日志失去照单补偿的价值。
-	MaxGuildClockSkewMarginMs int64 = 3_600_000
-
-	// MinGuildInternalRpcTimeoutMs:下限防止写 0(go-zero 把 0 当成"不设客户端超时")。
-	MinGuildInternalRpcTimeoutMs int64 = 500
-	// MaxGuildInternalRpcTimeoutMs = guild 服务端 Timeout 4000(go/guild/etc/guild.yaml)− 500 回包余量:
-	// 客户端比服务端等得久,拿到的只会是服务端的 DeadlineExceeded,多等的那段没有意义。
-	MaxGuildInternalRpcTimeoutMs int64 = 3500
-
-	// MaxGuildCheckBudgetSeconds:检查阶段总预算的上限。一小时仍检查不完的回档应当缩小范围分批做;
-	// 也防止把一个秒数误填成毫秒后 Duration 乘法溢出。
-	MaxGuildCheckBudgetSeconds int64 = 3600
-
-	// MinGuildRecheckBudgetSeconds:写后复查预算的下限(见 Config.GuildRecheckBudget)。检查预算被调得很小时
-	// 复查仍至少有这么久:数据已经写了,复查做不成的代价(紧急告警 + 人工核对)远大于多等两分钟。
-	MinGuildRecheckBudgetSeconds int64 = 120
-)
-
-// HasGuildInternalRpc:是否配置了回档帮会检查的 guild 客户端。只认 Endpoints / Target,
-// 不认 Etcd(理由见 Config.GuildInternalRpc:guild 不注册 go-zero key,且 Etcd 会继承顶层 dataservice.rpc)。
-func (c Config) HasGuildInternalRpc() bool {
-	return len(c.GuildInternalRpc.Endpoints) > 0 || c.GuildInternalRpc.Target != ""
-}
-
-// ValidateGuildCheck 检查回档帮会闸的三项配置。返回非 nil = 回档闸不装配(svc.NewServiceContext),
-// 三个 Rollback* 一律 ErrCodeRollbackGuildCheckFailed;logic 每次回档前还会再调一次(纵深防御:
-// 单测与未来的装配点绕过 NewServiceContext 时,也不会拿一个非法余量去做检查)。
-//
-// 配错**拒绝而不是纠正**,理由同 PlayerNameConfig.Validate:余量是安全边界,被悄悄改成默认值
-// 谁都不知道;拒绝的症状是回档当场全部被拒,启动日志里写清是哪个键。
-// 不拒启整个进程:这三项只关系到回档,不能为它们让 Load/Save 这条玩家数据热路径停摆。
-func (c Config) ValidateGuildCheck() error {
-	if c.GuildClockSkewMarginMs < MinGuildClockSkewMarginMs || c.GuildClockSkewMarginMs > MaxGuildClockSkewMarginMs {
-		return fmt.Errorf("GuildClockSkewMarginMs(%d)必须在 [%d, %d] 内:终结时刻是 ProcessOne 的开始时刻,可早于落盘一个 OpBudget,余量为 0 会漏行(回档复制资产)",
-			c.GuildClockSkewMarginMs, MinGuildClockSkewMarginMs, MaxGuildClockSkewMarginMs)
-	}
-	if c.GuildCheckBudgetSeconds <= 0 || c.GuildCheckBudgetSeconds > MaxGuildCheckBudgetSeconds {
-		return fmt.Errorf("GuildCheckBudgetSeconds(%d)必须在 [1, %d] 内", c.GuildCheckBudgetSeconds, MaxGuildCheckBudgetSeconds)
-	}
-	if c.HasGuildInternalRpc() {
-		t := c.GuildInternalRpc.Timeout
-		if t < MinGuildInternalRpcTimeoutMs || t > MaxGuildInternalRpcTimeoutMs {
-			return fmt.Errorf("GuildInternalRpc.Timeout(%d ms)必须在 [%d, %d] 内:0 = 不设客户端超时;上限 = guild 服务端 Timeout 4000 − 500 回包余量",
-				t, MinGuildInternalRpcTimeoutMs, MaxGuildInternalRpcTimeoutMs)
-		}
-	}
-	return nil
-}
-
-// IdSegmentConfig 号段行的种植策略。
-//
-// 背景(设计 §7.5 第 7 条):id_segment 里每一行都是一个永久身份的发号水位。行没了
-// (全局库被 drop 重建、或从旧备份恢复)而消费表(player_database / guild / 玩家 blob 里的
-// 物品)还留着已发出的号,下一次发号就会从 1 重来,login 的 INSERT ... ON DUPLICATE KEY
-// UPDATE 会**静默覆盖**别人的角色行。所以行只能由迁移显式创建,运行期"缺行就补种"仅限 dev。
+// IdSegmentConfig 是发号器的配置。
 type IdSegmentConfig struct {
-	// AllowAutoSeed=true:AllocateIdSegment 遇到表里没有的 biz_tag 时自动种一行从 1 起
-	// (今天的行为,只给 dev 用);false(生产):返回 ErrCodeIdSegmentUnknownTag,不写任何行,
-	// 行必须由 `data_service -migrate` / AutoMigrate 按 BootstrapTags 创建。
+	// AllowAutoSeed=true:两份预留记录都不存在时自动初始化(只给 dev 用,空环境起了就能建角);
+	// false(生产):拒绝发号,返回 ErrCodeIdSegmentUnknownTag,不写任何记录,由部署步骤
+	// `data_service -id-issuer-init` 显式初始化。
+	//
+	// 为什么生产不能自动初始化:两份记录都不存在,要么是首次部署,要么是两套 etcd 同时丢了数据。
+	// 后者如果自动从头发号,新号可能和存量撞上,而撞号多数不报错,只会静默串档。这个判断要留给人。
 	//
 	// 这里可以放心用裸 bool:go-zero 不下钻一个"整段 optional 且未出现"的嵌套结构,
 	// 里面的 default 标签一个都不会回填 —— 但本键的安全值恰好就是零值 false,块缺失
 	// 得到的正是生产语义(与 SchemaConfig.AutoMigrate 需要 *bool 的原因相反)。
 	AllowAutoSeed bool `json:",optional"`
 
-	// BootstrapTags 迁移时用 INSERT IGNORE 预建的 biz_tag 清单(max_id=1, step=100,
-	// version=0),幂等、绝不降低已有行的 max_id。为空 = DefaultIdSegmentBootstrapTags
-	// (原因同上:块缺失时 default 标签不生效,只能在 EffectiveBootstrapTags 里兜)。
-	// 新增一种永久身份 = 在这里加一个 tag,而不是靠运行期补种。
-	BootstrapTags []string `json:",optional"`
+	// Tags 是允许发号的 biz_tag 清单。为空 = DefaultIdSegmentTags(原因同上:块缺失时
+	// default 标签不生效,只能在 EffectiveTags 里兜)。新增一种永久身份 = 在这里加一个 tag。
+	// 所有种类共用一个计数器,清单只用来拦住拼错的 tag。
+	Tags []string `json:",optional"`
+
+	// Issuer 是预留记录的位置。
+	Issuer IdIssuerConfig `json:",optional"`
 }
 
-// DefaultIdSegmentBootstrapTags 是走号段的永久身份清单:设计 §6.4 / §7.5 第 1 条的
-// player / guild(Go login / guild)与 item / txlog / snapshot(C++ scene),
-// 以及聚宝斋 trade_listing(Go trade 的 listing_id,docs/design/jubaozhai-market.md)。
-// 与 store.DefaultIdSegmentBootstrapTags **必须一致**(config 不能 import store,只能两处各写一份),
-// 还要与 etc/data_service.yaml 的 IdSegment.BootstrapTags、k8s_deploy.ps1 data-service ConfigMap 同步。
-// trade_listing 的消费表在独占库 mmorpg_trade,不在本服务全局库里,所以不进 schema.go 的水位地板校验。
-// guild_asset_op:帮会资产指令的 op_id(Go guild,同时作资产通道的 correlation_id;
-// docs/design/guild-phase2/05-economy.md §5.8)。消费表在独占库 mmorpg_guild,同理不做地板校验。
-// friend_request:好友申请的代次号 request_id(Go friend,docs/design/friend-port-20260918.md)。
-// 消费表在独占库 mmorpg_friend,同理不做地板校验。
-// mail:邮件的 mail_id / sys_mail_id(Go mail,两种 id 共用这一个 tag,所以全局不撞号;
-// docs/design/mail-system.md §3.7)。消费表在独占库 mmorpg_mail,同理不做地板校验。
-var DefaultIdSegmentBootstrapTags = []string{"player", "guild", "item", "txlog", "snapshot", "trade_listing", "guild_asset_op", "friend_request", "trade_asset_op", "mail", "mail_asset_op", "rank_board", "rank_settlement", "rank_reward"}
+// IdIssuerConfig 是发号器预留记录的位置。两份记录都只增不减,一块号要两份都写成功才发,
+// 所以任何一份丢失或回退,另一份都盖得住发过的号。
+type IdIssuerConfig struct {
+	// Region 是地域码,0..63,写进计数器的最高位。开始发号之后不能改;发号器发现记录里的地域和
+	// 这里不一致会拒绝预留。
+	Region uint32 `json:",optional"`
 
-// EffectiveBootstrapTags 是迁移路径实际预建的 tag 清单:没配 = 默认清单。
+	// PrimaryEtcd / SecondaryEtcd 是放两份记录的两套 etcd。生产必须各配一套,地址不能有交集:
+	// 两份记录在同一套 etcd 上就失去了意义。dev(AllowAutoSeed=true)可以不写,回落到服务自己的
+	// Etcd.Hosts,两份记录放同一套 etcd 的不同键。目前两套都不开认证,与现有 etcd 部署一致。
+	PrimaryEtcd   []string `json:",optional"`
+	SecondaryEtcd []string `json:",optional"`
+}
+
+// DefaultIdSegmentTags 是走号段的永久身份清单。
+// 要与 etc/data_service.yaml 的 IdSegment.Tags、k8s_deploy.ps1 data-service ConfigMap 同步。
+var DefaultIdSegmentTags = []string{"player", "guild", "item", "txlog", "snapshot", "trade_listing", "guild_asset_op", "friend_request", "trade_asset_op", "mail", "mail_asset_op", "rank_board", "rank_settlement", "rank_reward", "battle", "snapshot_row", "rollback_audit"}
+
+// EffectiveTags 是实际允许的 tag 清单:没配 = 默认清单。
 // 返回副本,免得调用方改到包级默认值。
-func (c IdSegmentConfig) EffectiveBootstrapTags() []string {
-	src := c.BootstrapTags
+func (c IdSegmentConfig) EffectiveTags() []string {
+	src := c.Tags
 	if len(src) == 0 {
-		src = DefaultIdSegmentBootstrapTags
+		src = DefaultIdSegmentTags
 	}
 	out := make([]string, len(src))
 	copy(out, src)
 	return out
+}
+
+// IssuerEndpoints 返回两份记录各自的 etcd 地址。fallback 是服务自己的 Etcd.Hosts,只有 dev 才能回落到它。
+func (c IdSegmentConfig) IssuerEndpoints(fallback []string) (primary, secondary []string, err error) {
+	primary, secondary = c.Issuer.PrimaryEtcd, c.Issuer.SecondaryEtcd
+	if c.AllowAutoSeed {
+		if len(primary) == 0 {
+			primary = fallback
+		}
+		if len(secondary) == 0 {
+			secondary = primary
+		}
+		if len(primary) == 0 {
+			return nil, nil, errors.New("IdSegment.Issuer: no etcd endpoints (neither PrimaryEtcd nor Etcd.Hosts is set)")
+		}
+		return primary, secondary, nil
+	}
+	if len(primary) == 0 || len(secondary) == 0 {
+		return nil, nil, errors.New("IdSegment.Issuer: PrimaryEtcd and SecondaryEtcd are both required when AllowAutoSeed=false")
+	}
+	seen := make(map[string]struct{}, len(primary))
+	for _, endpoint := range primary {
+		seen[strings.ToLower(strings.TrimSpace(endpoint))] = struct{}{}
+	}
+	for _, endpoint := range secondary {
+		if _, shared := seen[strings.ToLower(strings.TrimSpace(endpoint))]; shared {
+			return nil, nil, fmt.Errorf("IdSegment.Issuer: PrimaryEtcd and SecondaryEtcd share %q; the two records must live on independent etcd clusters", endpoint)
+		}
+	}
+	return primary, secondary, nil
 }
 
 // StoreConfig 决定 MySQL 侧的 store(快照 / 流水 / 号段 / 名字注册表)装配不起来时进程怎么办。
@@ -326,29 +244,30 @@ const RouteStoreModeRedis = "redis"
 // set-if-newer 发布到 mapping Redis 并等 WAITAOF 确认落盘(routing/route_publish.go)。
 //
 // 切换顺序见 proposal §13.4(P1 冻结窗口 + 导入 + 审计 → P2 切 db_first → P3 Arm → P4 新版 merge_zone → P5 读方)。
-// 第 2 批起 merge_zone 以 -route-source=db 库先写,并在 zone_merge_fence 持有围栏;W1 在库内锁围栏分片复核,发布脚本
-// KEYS[4] 的 merge:in_progress 是围栏的镜像(merge_zone 写、对账 leader 按库对账),作为发布时的第二道复核。
-// 旧版 merge_zone 二进制直写 Redis、不写库,P4 起禁用。
+// 合服不改路由行,只写 zone_merged_into(docs/design/player-data-tidb-scaling-plan.md §7.1)。
 const RouteStoreModeDBFirst = "db_first"
 
 // RouteStore 段各键的默认值(Normalize 照抄这一份;etc/data_service.yaml 写的就是它们)。
-// FenceShards 的默认值与上限在 shared/placement(DefaultRouteFenceShards / MaxRouteFenceShards),那里同时是围栏持有者的契约;
-// 它是唯一的例外:etc/data_service.yaml 写的是 MySQL 档的 16,不是默认值 8(2026-10-13,见该文件的注释)。
 const (
-	DefaultRouteStoreMaxOpenConn        = 20
-	DefaultRouteStoreMaxIdleConn        = 5
-	DefaultRouteStorePublishAttempts    = 3
-	DefaultRouteStoreWaitAOFNumLocal    = 1
-	DefaultRouteStoreWaitAOFNumReplicas = 0
-	DefaultRouteStoreWaitAOFTimeoutMs   = 1500
+	DefaultRouteStoreMaxOpenConn          = 20
+	DefaultRouteStoreMaxIdleConn          = 5
+	DefaultRouteStorePublishAttempts      = 3
+	DefaultRouteStoreWaitAOFNumLocal      = 1
+	DefaultRouteStoreWaitAOFNumReplicas   = 0
+	DefaultRouteStoreWaitAOFTimeoutMs     = 1500
+	DefaultRouteStoreMergedZoneRefreshSec = 5
 )
 
 // RouteStore 段的上界(Validate 用)。WaitAOFTimeoutMs 的上界 = 服务端默认超时 2000ms 减去库这一段与回包的余量
 // (yaml 没配 Timeout,go-zero 默认 2000ms;go-redis 默认 ReadTimeout 3s,更大的值会先被客户端读超时截断)。
+//
+// MergedZoneRefreshSec 的上界 60:它就是合服映射的滞后上限,tools/merge_zone 写完映射后要等 2 个周期才跑业务合并任务,
+// 周期再大维护窗口就被它拖长了。
 const (
-	MaxRouteStorePublishAttempts    = 5
-	MaxRouteStoreWaitAOFNumReplicas = 16
-	MaxRouteStoreWaitAOFTimeoutMs   = 1500
+	MaxRouteStorePublishAttempts      = 5
+	MaxRouteStoreWaitAOFNumReplicas   = 16
+	MaxRouteStoreWaitAOFTimeoutMs     = 1500
+	MaxRouteStoreMergedZoneRefreshSec = 60
 )
 
 // RouteStore.PublishRedisPoolSize 的缺省值与上界(A2-1 / LR-4,2026-10-20;见该字段的注释)。
@@ -376,9 +295,6 @@ const (
 type RouteStoreConfig struct {
 	// Mode:redis(缺省)| db_first,大小写敏感。
 	Mode string `json:",optional"`
-	// FenceShards:zone_merge_fence 每个 zone 的分片数,[1, placement.MaxRouteFenceShards];0 = 默认 8。
-	// 建角只锁 player_id % N 那一片;各副本取值可以不同(围栏持有者按上限写满全部分片)。
-	FenceShards int `json:",optional"`
 	// MaxOpenConn / MaxIdleConn:route store **独立**连接池(会话级 RC + 锁等待 1s,不能与别的 store 共用池)。
 	MaxOpenConn int `json:",optional"`
 	MaxIdleConn int `json:",optional"`
@@ -397,6 +313,10 @@ type RouteStoreConfig struct {
 	// (GetPlayerHomeZone / BatchGet / 玩家锁 / 读脚本)分开、不经 go-zero 熔断器,建角尖峰不再饿住读路径(routing/publish_redis.go)。
 	// redis 模式不建这个客户端、不开连接;db_first 下是每个副本额外占 mapping Redis 的连接上限,要进共享 Redis 连接总账。
 	PublishRedisPoolSize int `json:",optional"`
+	// MergedZoneRefreshSec:定时重读 zone_merged_into 的周期(秒),[1, 60];0 = 缺省 5。它是归属解析的滞后上限
+	// (routing.MergedZoneCache,docs/design/player-data-tidb-scaling-plan.md §7.1)。启动时读不到拒启,之后读失败保留旧值。
+	// 只在 db_first 下生效:redis 模式没有 route store,也没有合服。
+	MergedZoneRefreshSec int `json:",optional"`
 	// ReadRequiresReady:第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.2)。
 	// true 时 GetPlayerHomeZone / BatchGetPlayerHomeZone / 内部路由的 home 查询只在就绪标记绑定的就是本次读所在的
 	// mapping Redis 实例(placement.VerifyRouteReady = Trusted)时信任缓存,否则回源全局库 player_route(库故障回 Unavailable,
@@ -416,9 +336,6 @@ func (r RouteStoreConfig) Normalize() RouteStoreConfig {
 	r.Reconcile = r.Reconcile.Normalize()
 	if r.Mode == "" {
 		r.Mode = RouteStoreModeRedis
-	}
-	if r.FenceShards == 0 {
-		r.FenceShards = int(placement.DefaultRouteFenceShards)
 	}
 	if r.MaxOpenConn == 0 {
 		r.MaxOpenConn = DefaultRouteStoreMaxOpenConn
@@ -443,6 +360,9 @@ func (r RouteStoreConfig) Normalize() RouteStoreConfig {
 	if r.PublishRedisPoolSize == 0 {
 		r.PublishRedisPoolSize = DefaultRouteStorePublishRedisPoolSize
 	}
+	if r.MergedZoneRefreshSec == 0 {
+		r.MergedZoneRefreshSec = DefaultRouteStoreMergedZoneRefreshSec
+	}
 	return r
 }
 
@@ -452,9 +372,6 @@ func (r RouteStoreConfig) Validate() error {
 	if r.Mode != RouteStoreModeRedis && r.Mode != RouteStoreModeDBFirst {
 		return fmt.Errorf("RouteStore.Mode %q must be exactly %q or %q (case-sensitive; a typo must not silently fall back to redis)",
 			r.Mode, RouteStoreModeRedis, RouteStoreModeDBFirst)
-	}
-	if r.FenceShards < 1 || r.FenceShards > int(placement.MaxRouteFenceShards) {
-		return fmt.Errorf("RouteStore.FenceShards must be in [1, %d], got %d", placement.MaxRouteFenceShards, r.FenceShards)
 	}
 	if r.MaxOpenConn <= 0 {
 		return fmt.Errorf("RouteStore.MaxOpenConn must be positive, got %d", r.MaxOpenConn)
@@ -485,15 +402,18 @@ func (r RouteStoreConfig) Validate() error {
 		// A1-6 / A2-2 / M1-1 / LR-6(2026-10-20):Enabled=false 时本副本不构造 leader。就绪标记没有 TTL、读方只核身份不看新鲜度,
 		// 全服都这样配时现存标记无人撤销(M4)、无人维护(孤儿行补发、M3 回档检测、淘汰 / DEBUG 自检全停),读方却继续判 Trusted,
 		// 缺键被当成权威缺席(login 退回建角 zone、go/db 写进 legacy 库)。所以读方开着时不许急停 leader;顺序见报错文案。
-		// go/db 的 Placement.RequireRouteReady 与 guild 的 MergeMarkerRedis.RequireRouteReady 本服务校验不到,只能靠 runbook 约束。
+		// go/db 的 Placement.RequireRouteReady 本服务校验不到,只能靠 runbook 约束。
 		return errors.New("RouteStore.ReadRequiresReady=true requires RouteStore.Reconcile.Enabled not false: without the reconcile leader " +
 			"nobody withdraws or maintains mapping:route:ready (no disarm withdrawal, no orphan-row republish, no rollback detection, " +
 			"no eviction / debug self-check) while readers keep trusting it. Before an emergency stop of the leader, turn off every reader switch first " +
-			"(RouteStore.ReadRequiresReady, go/db Placement.RequireRouteReady, guild MergeMarkerRedis.RequireRouteReady), then set " +
+			"(RouteStore.ReadRequiresReady, go/db Placement.RequireRouteReady), then set " +
 			"Reconcile.ArmReadyMarker=false and wait for data_service_route_reconcile_event_total{event=\"marker_dropped_disarmed\"}, and only then set Enabled=false")
 	}
 	if r.PublishRedisPoolSize < 1 || r.PublishRedisPoolSize > MaxRouteStorePublishRedisPoolSize {
 		return fmt.Errorf("RouteStore.PublishRedisPoolSize must be in [1, %d], got %d", MaxRouteStorePublishRedisPoolSize, r.PublishRedisPoolSize)
+	}
+	if r.MergedZoneRefreshSec < 1 || r.MergedZoneRefreshSec > MaxRouteStoreMergedZoneRefreshSec {
+		return fmt.Errorf("RouteStore.MergedZoneRefreshSec must be in [1, %d], got %d", MaxRouteStoreMergedZoneRefreshSec, r.MergedZoneRefreshSec)
 	}
 	if err := r.Reconcile.validate(r.Mode); err != nil {
 		return err
@@ -581,8 +501,8 @@ type RouteReconcileConfig struct {
 	// Enabled:nil = true。写 false 是急停:本副本不构造 leader —— 不再补发孤儿行、不再做回档检测、不做淘汰 / DEBUG 自检,
 	// **也不撤现存的就绪标记**(撤标记是 leader 在 ArmReadyMarker=false 时每拍做的事,leader 不在就没人做)。
 	// 所以只许在读方全部关闭之后急停(2026-10-20,Validate 拒绝 ReadRequiresReady=true 时写 false):顺序是先关全部读方开关
-	// (RouteStore.ReadRequiresReady、go/db Placement.RequireRouteReady、guild MergeMarkerRedis.RequireRouteReady)→ Arm=false 并看到
-	// marker_dropped_disarmed → 最后才 Enabled=false。go/db 与 guild 的开关本服务校验不到,靠 runbook 约束。
+	// (RouteStore.ReadRequiresReady、go/db Placement.RequireRouteReady)→ Arm=false 并看到
+	// marker_dropped_disarmed → 最后才 Enabled=false。go/db 的开关本服务校验不到,靠 runbook 约束。
 	Enabled *bool `json:",optional"`
 	// ArmReadyMarker:true 才挂就绪标记(mapping:route:ready)。只许 Mode=db_first 且 Enabled 不是 false。
 	ArmReadyMarker bool `json:",optional"`
@@ -746,12 +666,12 @@ func (rc RouteReconcileConfig) validate(mode string) error {
 
 // SchemaConfig 建表策略。
 type SchemaConfig struct {
-	// AutoMigrate 缺省(nil)= true:启动时用 proto2mysql 按 proto 定义对五张表逐张
-	// CreateOrUpdateTable(建表 / 补列 / 补主键),并预建 id_segment 的号段行。
-	// 其中 id_segment 与 player_name 两张走 schema.go 的手写 bootstrap DDL
+	// AutoMigrate 缺省(nil)= true:启动时用 proto2mysql 按 proto 定义对四张表逐张
+	// CreateOrUpdateTable(建表 / 补列 / 补主键)。
+	// 其中 player_name 走 schema.go 的手写 bootstrap DDL
 	// (proto2mysql 把 string 渲染成 MEDIUMTEXT,TEXT 列上建不了唯一键),
 	// 迁移对它们只做列漂移校验。
-	// 另有路由表(player_route / zone_merge_fence / zone_merged_into / route_meta / route_reconcile,
+	// 另有路由表(player_route / zone_merged_into / route_meta / route_reconcile,
 	// 2026-10-12 映射持久化第 1a 批与 G1a 热点修复)同样走手写 DDL,迁移按各自的 proto 只守列名与主键,
 	// 并种 route_meta / route_reconcile(id=1)。
 	// **redis 模式也依赖它们**:这一步失败时快照 / 流水 / 号段 / 名字四个 store 一并不装配(规格 g.3 第 8 条)。
@@ -765,7 +685,7 @@ type SchemaConfig struct {
 	// 一个"整段 optional 且未出现"的嵌套结构,里面的 default 标签一个都不会回填
 	// (与 go/db 的 BlobGuardConfig、login 的 IdSegment.Enabled 同一个坑)。用裸 bool
 	// 时,一份没有 `Schema:` 段的 yaml 会得到 AutoMigrate=false —— 启动路径一条 DDL 都
-	// 不跑,三个 store 打在一个没有表的库上,rollback / txlog / AllocateIdSegment 每一次
+	// 不跑,三个 store 打在一个没有表的库上,快照 / txlog / AllocateIdSegment 每一次
 	// 调用都在运行期炸;而在收口手写 DDL 之前,store 自带的 CREATE TABLE IF NOT EXISTS
 	// 还兜着这一层。指针把"没写"与"显式写了 false"区分开:nil = 用安全默认。
 	//
@@ -930,65 +850,10 @@ func topicForGeneration(base string, generation uint32) string {
 	return fmt.Sprintf("%s_g%d", base, generation)
 }
 
-type DevRedisConfig struct {
-	Host     string `json:",optional"`
-	Password string `json:",optional"`
-	DB       int    `json:",default=0"`
-	// PoolSize 是 go-redis 连接池上限(共享 Redis 连接总账,P0-E 第 3 批)。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,
-	// 随 CPU limit 漂移;负数 routing.NewRouter 拒绝。K8s 上 tools/scripts/k8s_deploy.ps1 从 etc/data_service.yaml
-	// 镜像 DevRedis.PoolSize 并要求正整数,Redis 连接总账读同一个键。
-	// MappingRedis 是 go-zero 的 redis.RedisConf,没有池参数(go-zero 固定 go-redis 缺省 10 × GOMAXPROCS、MinIdleConns 8),
-	// 总账仍按缺省池记它。
-	PoolSize int `json:",optional"`
-}
-
-// RegionConfig 是 Regions 生效时(DevRedis.Host 为空)的一段 zone → data Redis 集群表。
-//
-// 这张表只在 routing.NewRouter 启动时建一次,不热更新、不带版本:把已有 zone 改到另一个 Region 等于搬数据,
-// 必须停写、搬完该 zone 玩家的 player:{id}:*、所有副本同时换配置后再起。滚动发布期间新旧副本会把同一玩家
-// 路由到不同集群,所以不要滚动改它。
-type RegionConfig struct {
-	Id    uint32
-	Zones []uint32
-	Redis RedisClusterConfig
-}
-
-// ValidateRegions 校验 Regions 生效时的 zone → 集群表,routing.NewRouter 在建任何集群客户端之前调用;
-// 配了 DevRedis 时 Regions 整段被忽略,不校验。
-//   - 至少一个 Region:否则每个玩家都路由失败,服务起来也只能回 ErrCodeRedis;
-//   - 每个 Region 至少一个地址、至少一个 zone;
-//   - 同一个 zone 不能出现在两个 Region 里:旧实现后写的静默覆盖先写的,而 cmd/debug_fetch 取第一个命中,
-//     排障工具会报出与运行时不同的集群。
-func ValidateRegions(regions []RegionConfig) error {
-	if len(regions) == 0 {
-		return fmt.Errorf("Regions is empty and DevRedis.Host is not set: no zone can be routed to a data Redis")
-	}
-	owner := make(map[uint32]uint32)
-	for _, region := range regions {
-		if len(region.Redis.Addrs) == 0 {
-			return fmt.Errorf("Regions[id=%d]: Redis.Addrs is empty", region.Id)
-		}
-		if len(region.Zones) == 0 {
-			return fmt.Errorf("Regions[id=%d]: Zones is empty", region.Id)
-		}
-		for _, zone := range region.Zones {
-			if prev, dup := owner[zone]; dup {
-				return fmt.Errorf("zone %d is listed in both Regions[id=%d] and Regions[id=%d]: a zone must map to exactly one data Redis cluster",
-					zone, prev, region.Id)
-			}
-			owner[zone] = region.Id
-		}
-	}
-	return nil
-}
-
-type RedisClusterConfig struct {
-	Addrs    []string
-	Password string `json:",optional"`
-}
-
 type SnapshotMySQLConfig struct {
-	RequireTiDB bool   `json:",optional"`
+	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);整段缺席时是空串,同样按 tidb。
+	// 校验在 ResolveGlobalAuthority,工具入口由 authoritysql.Open 拒绝非法值。
+	Backend     string `json:",default=tidb"`
 	Host        string `json:",default=127.0.0.1:3306"`
 	User        string `json:",default=appuser"`
 	Password    string `json:",default=apppass123"`

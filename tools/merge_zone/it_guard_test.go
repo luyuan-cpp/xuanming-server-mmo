@@ -49,7 +49,7 @@ func TestIntegrationTestsCallRequireIT(t *testing.T) {
 			}
 		}
 	}
-	// integration_test.go、placement_integration_test.go、route_store_integration_test.go。
+	// integration_test.go、route_store_integration_test.go、team_authority_integration_test.go、tidb_fixture_integration_test.go。
 	if files < 3 {
 		t.Fatalf("found %d merge_integration test files, want at least 3: the build-tag detection is broken", files)
 	}

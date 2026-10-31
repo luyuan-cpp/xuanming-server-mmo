@@ -615,8 +615,7 @@ TEST_F(PlayerFeaturePersistenceTest, EquipInstanceDataRoundTripsThroughDatabaseR
 }
 
 // ── 存盘只读化(docs/design/ecs-entt-misuse-audit-20261015.md F059 / F060 / F070 / F073)──
-// 宿主里没有初始化 RedisSystem(GetPlayerDataRedis() 为空):下面的存盘用例都必须在碰 Redis 之前返回,
-// 一旦走到写盘就是空指针崩溃 —— 这本身就是「没有 fail-closed」的证据。
+// 宿主里没有认领过(PlayerStoreClient 未 Seed):下面的存盘用例都必须在 marshal 阶段就拒绝。
 
 // F059 / F060:旧 Marshal 对每个持久化组件 get_or_emplace,缺哪个就当场造一个零值组件写进记录。
 // 现在缺任何一个都整份拒绝,且不改变实体的组件集合。逐个组件各摘一次,一个都不能漏。
@@ -644,7 +643,7 @@ TEST_F(PlayerFeaturePersistenceTest, MarshalRefusesWhenAnyPersistedComponentIsMi
     ExpectMarshalRefusedWithout<PlayerDatabase1CarryComp>("PlayerDatabase1CarryComp");
 }
 
-// F059 落到存盘入口:组件不全的玩家在脏比较与写 Redis / 发 DBTask 之前就被拒绝(返回 false = 没写盘),
+// F059 落到存盘入口:组件不全的玩家在脏比较与提交之前就被拒绝(返回 false = 没写盘),
 // 不补建组件。
 // 预置的「上次落盘」快照就是旧 Marshal 补建空账本之后会写出的那份(StockedPlayer 的账本本来就是空的):
 // 旧写法 get_or_emplace 补出空账本 → 脏比较判「盘上已是同一份」→ 快路径返回 false、不碰 Redis,于是回归时的红

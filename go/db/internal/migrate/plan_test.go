@@ -17,7 +17,7 @@ import (
 func newTestSource(t *testing.T, allowModify bool) *ProtoSource {
 	t.Helper()
 	model := proto2mysql.NewDB()
-	tables := []proto.Message{&dbpb.PlayerDatabase{}, &dbpb.PlayerSnapshot{}}
+	tables := []proto.Message{&dbpb.PlayerStore{}, &dbpb.PlayerSnapshot{}}
 	for _, tbl := range tables {
 		model.RegisterTable(tbl)
 	}
@@ -55,7 +55,7 @@ func TestBaselineChecksumTracksTableSetNotDDLText(t *testing.T) {
 
 	model := proto2mysql.NewDB()
 	// 换个顺序注册同一组表,checksum 必须不变。
-	tables := []proto.Message{&dbpb.PlayerSnapshot{}, &dbpb.PlayerDatabase{}}
+	tables := []proto.Message{&dbpb.PlayerSnapshot{}, &dbpb.PlayerStore{}}
 	for _, tbl := range tables {
 		model.RegisterTable(tbl)
 	}
@@ -68,7 +68,7 @@ func TestBaselineChecksumTracksTableSetNotDDLText(t *testing.T) {
 	}
 
 	model2 := proto2mysql.NewDB()
-	tables2 := []proto.Message{&dbpb.PlayerDatabase{}}
+	tables2 := []proto.Message{&dbpb.PlayerStore{}}
 	model2.RegisterTable(tables2[0])
 	c, err := (&ProtoSource{Model: model2, Tables: tables2}).Baseline()
 	if err != nil {
@@ -118,10 +118,10 @@ func driftHandler(columns [][]driver.Value, primaries [][]driver.Value) dbtest.H
 
 func TestDriftAddsMissingColumns(t *testing.T) {
 	src := newTestSource(t, false)
-	// player_database 只建了 player_id,其余 blob 列全缺。
+	// player_store 只建了 player_id,其余 blob 列全缺。
 	db, _ := dbtest.Open(t, driftHandler(
 		[][]driver.Value{
-			{"player_database", "player_id", "bigint unsigned"},
+			{"player_store", "player_id", "bigint unsigned"},
 			{"player_snapshot", "id", "bigint unsigned"},
 			{"player_snapshot", "player_id", "bigint unsigned"},
 			{"player_snapshot", "zone_id", "int unsigned"},
@@ -131,7 +131,7 @@ func TestDriftAddsMissingColumns(t *testing.T) {
 			{"player_snapshot", "operator", "mediumtext"},
 			{"player_snapshot", "data", "mediumblob"},
 		},
-		[][]driver.Value{{"player_database"}, {"player_snapshot"}},
+		[][]driver.Value{{"player_store"}, {"player_snapshot"}},
 	))
 
 	m, warnings, err := src.Drift(context.Background(), db, "zone_1_db")
@@ -146,7 +146,7 @@ func TestDriftAddsMissingColumns(t *testing.T) {
 			t.Fatalf("drift must only emit ADD COLUMN by default, got: %s", s)
 		}
 	}
-	if !strings.Contains(strings.Join(m.Statements, "\n"), "`transform`") {
+	if !strings.Contains(strings.Join(m.Statements, "\n"), "`payload`") {
 		t.Fatalf("expected transform to be added, got %v", m.Statements)
 	}
 	if m.Version != 0 {
@@ -167,10 +167,10 @@ func TestDriftReportsTypeMismatchInsteadOfModifying(t *testing.T) {
 	src := newTestSource(t, false)
 	db, _ := dbtest.Open(t, driftHandler(
 		[][]driver.Value{
-			{"player_database", "player_id", "varchar(64)"},
+			{"player_store", "player_id", "varchar(64)"},
 			{"player_snapshot", "id", "bigint unsigned"},
 		},
-		[][]driver.Value{{"player_database"}, {"player_snapshot"}},
+		[][]driver.Value{{"player_store"}, {"player_snapshot"}},
 	))
 
 	m, warnings, err := src.Drift(context.Background(), db, "zone_1_db")
@@ -184,7 +184,7 @@ func TestDriftReportsTypeMismatchInsteadOfModifying(t *testing.T) {
 	}
 	var found bool
 	for _, w := range warnings {
-		if strings.Contains(w, "列类型漂移") && strings.Contains(w, "player_database.player_id") {
+		if strings.Contains(w, "列类型漂移") && strings.Contains(w, "player_store.player_id") {
 			found = true
 		}
 	}
@@ -196,10 +196,10 @@ func TestDriftReportsTypeMismatchInsteadOfModifying(t *testing.T) {
 	srcModify := newTestSource(t, true)
 	db2, _ := dbtest.Open(t, driftHandler(
 		[][]driver.Value{
-			{"player_database", "player_id", "varchar(64)"},
+			{"player_store", "player_id", "varchar(64)"},
 			{"player_snapshot", "id", "bigint unsigned"},
 		},
-		[][]driver.Value{{"player_database"}, {"player_snapshot"}},
+		[][]driver.Value{{"player_store"}, {"player_snapshot"}},
 	))
 	m2, _, err := srcModify.Drift(context.Background(), db2, "zone_1_db")
 	if err != nil {
@@ -216,11 +216,11 @@ func TestDriftReportsMissingPrimaryKeyAndExtraColumns(t *testing.T) {
 	src := newTestSource(t, false)
 	db, _ := dbtest.Open(t, driftHandler(
 		[][]driver.Value{
-			{"player_database", "player_id", "bigint unsigned"},
-			{"player_database", "legacy_column", "mediumblob"},
+			{"player_store", "player_id", "bigint unsigned"},
+			{"player_store", "legacy_column", "mediumblob"},
 			{"player_snapshot", "id", "bigint unsigned"},
 		},
-		// player_database 没有主键
+		// player_store 没有主键
 		[][]driver.Value{{"player_snapshot"}},
 	))
 
@@ -229,7 +229,7 @@ func TestDriftReportsMissingPrimaryKeyAndExtraColumns(t *testing.T) {
 		t.Fatalf("drift: %v", err)
 	}
 	joined := strings.Join(warnings, "\n")
-	if !strings.Contains(joined, "缺主键") || !strings.Contains(joined, "player_database") {
+	if !strings.Contains(joined, "缺主键") || !strings.Contains(joined, "player_store") {
 		t.Fatalf("missing primary key must be reported, got %v", warnings)
 	}
 	if !strings.Contains(joined, "多余列") || !strings.Contains(joined, "legacy_column") {
@@ -250,7 +250,7 @@ func TestAdvisoryLockNameIsPerDatabase(t *testing.T) {
 
 // Baseline 建出来的表必须带主键。
 //
-// 这条不是形式检查:proto2mysql v0.0.18 的 GetCreateTableSQL 对 player_database
+// 这条不是形式检查:proto2mysql v0.0.18 的 GetCreateTableSQL 对 player_store
 // 不输出 PRIMARY KEY,而 go/db/model/mysql_database_table.sql 里它是
 // PRIMARY KEY (player_id)。若原样拿生成的 DDL 建表,玩家数据表会没有主键,
 // 而存盘(Save:按主键 UPDATE,0 行再 INSERT)没有唯一键就永远不会撞 1062,
@@ -266,42 +266,17 @@ func TestBaselineAlwaysEmitsDeclaredPrimaryKey(t *testing.T) {
 			t.Fatalf("建表语句缺主键,存盘(按主键 UPDATE,0 行再 INSERT)会追加重复行:\n%s", stmt)
 		}
 	}
-	// player_database 只标了 OptionIsPlayerDatabase、没标 OptionPrimaryKey,
-	// 主键要靠玩家分表约定解出来,单独钉一次。
+	// player_store 是复合主键,单独钉一次。
 	var playerDB string
 	for _, stmt := range m.Statements {
-		if strings.Contains(stmt, "player_database") {
+		if strings.Contains(stmt, "player_store") {
 			playerDB = stmt
 		}
 	}
 	if playerDB == "" {
-		t.Fatal("baseline 里没有 player_database 建表语句")
+		t.Fatal("baseline 里没有 player_store 建表语句")
 	}
-	if !strings.Contains(playerDB, "PRIMARY KEY (`player_id`)") {
-		t.Fatalf("player_database 主键必须是 player_id,实际:\n%s", playerDB)
+	if !strings.Contains(playerDB, "PRIMARY KEY (`player_id`,`kind`)") {
+		t.Fatalf("player_store 主键必须是 (player_id, kind),实际:\n%s", playerDB)
 	}
-}
-
-// 依赖发布包必须读取 proto 中的 TiDB 选项，不能误用旧仓名同版本的缓存内容。
-func TestBaselineEmitsPlayerTiDBOptions(t *testing.T) {
-	migration, err := newTestSource(t, false).Baseline()
-	if err != nil {
-		t.Fatalf("生成基线: %v", err)
-	}
-	for _, statement := range migration.Statements {
-		if !strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS `player_database`") {
-			continue
-		}
-		for _, option := range []string{
-			"PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */",
-			"SHARD_ROW_ID_BITS=4",
-			"PRE_SPLIT_REGIONS=4",
-		} {
-			if !strings.Contains(statement, option) {
-				t.Errorf("玩家表缺少声明的 TiDB 选项 %q:\n%s", option, statement)
-			}
-		}
-		return
-	}
-	t.Fatal("基线中缺少 player_database")
 }

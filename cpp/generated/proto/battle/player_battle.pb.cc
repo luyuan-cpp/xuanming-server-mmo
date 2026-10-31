@@ -3537,33 +3537,34 @@ const char descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto[] 
     "\032RequestBattleTicketRequest\022\021\n\tbattle_id"
     "\030\001 \001(\004\"m\n\033RequestBattleTicketResponse\022&\n"
     "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022&\n"
-    "\nassignment\030\002 \001(\0132\022.BattleAssignedS2C*\210\001"
+    "\nassignment\030\002 \001(\0132\022.BattleAssignedS2C*\246\001"
     "\n\022eSpectateEndReason\022\025\n\021SPECTATE_END_NON"
     "E\020\000\022 \n\034SPECTATE_END_BATTLE_FINISHED\020\001\022\037\n"
     "\033SPECTATE_END_BATTLE_ABORTED\020\002\022\030\n\024SPECTA"
-    "TE_END_REMOVED\020\003*u\n\021eBattleTicketRole\022\033\n"
-    "\027BATTLE_TICKET_ROLE_NONE\020\000\022\"\n\036BATTLE_TIC"
-    "KET_ROLE_PARTICIPANT\020\001\022\037\n\033BATTLE_TICKET_"
-    "ROLE_OBSERVER\020\0022\345\005\n\022BattleClientPlayer\022M"
-    "\n\022SubmitBattleAction\022\032.SubmitBattleActio"
-    "nRequest\032\033.SubmitBattleActionResponse\0229\n"
-    "\016GetBattleState\022\026.GetBattleStateRequest\032"
-    "\017.BattleStateS2C\0223\n\021NotifyBattleStart\022\017."
-    "BattleStartS2C\032\006.Empty\"\005\210\231\310\001\002\0221\n\020NotifyT"
-    "urnResult\022\016.TurnResultS2C\032\006.Empty\"\005\210\231\310\001\002"
-    "\022/\n\017NotifyBattleEnd\022\r.BattleEndS2C\032\006.Emp"
-    "ty\"\005\210\231\310\001\002\022;\n\025NotifyBattleReconnect\022\023.Bat"
-    "tleReconnectS2C\032\006.Empty\"\005\210\231\310\001\002\022D\n\017StopWa"
-    "tchBattle\022\027.StopWatchBattleRequest\032\030.Sto"
-    "pWatchBattleResponse\022>\n\rSetAutoBattle\022\025."
-    "SetAutoBattleRequest\032\026.SetAutoBattleResp"
-    "onse\0227\n\023NotifySpectateState\022\021.SpectateSt"
-    "ateS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\030NotifySpectateT"
-    "urnResult\022\016.TurnResultS2C\032\006.Empty\"\005\210\231\310\001\002"
-    "\0223\n\021NotifySpectateEnd\022\017.SpectateEndS2C\032\006"
-    ".Empty\"\005\210\231\310\001\002\0229\n\024NotifyBattleAssigned\022\022."
-    "BattleAssignedS2C\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303\001\001B"
-    "\014Z\006battle\230\324a\036b\006proto3"
+    "TE_END_REMOVED\020\003\022\034\n\030SPECTATE_END_SOURCE_"
+    "LOST\020\004*u\n\021eBattleTicketRole\022\033\n\027BATTLE_TI"
+    "CKET_ROLE_NONE\020\000\022\"\n\036BATTLE_TICKET_ROLE_P"
+    "ARTICIPANT\020\001\022\037\n\033BATTLE_TICKET_ROLE_OBSER"
+    "VER\020\0022\345\005\n\022BattleClientPlayer\022M\n\022SubmitBa"
+    "ttleAction\022\032.SubmitBattleActionRequest\032\033"
+    ".SubmitBattleActionResponse\0229\n\016GetBattle"
+    "State\022\026.GetBattleStateRequest\032\017.BattleSt"
+    "ateS2C\0223\n\021NotifyBattleStart\022\017.BattleStar"
+    "tS2C\032\006.Empty\"\005\210\231\310\001\002\0221\n\020NotifyTurnResult\022"
+    "\016.TurnResultS2C\032\006.Empty\"\005\210\231\310\001\002\022/\n\017Notify"
+    "BattleEnd\022\r.BattleEndS2C\032\006.Empty\"\005\210\231\310\001\002\022"
+    ";\n\025NotifyBattleReconnect\022\023.BattleReconne"
+    "ctS2C\032\006.Empty\"\005\210\231\310\001\002\022D\n\017StopWatchBattle\022"
+    "\027.StopWatchBattleRequest\032\030.StopWatchBatt"
+    "leResponse\022>\n\rSetAutoBattle\022\025.SetAutoBat"
+    "tleRequest\032\026.SetAutoBattleResponse\0227\n\023No"
+    "tifySpectateState\022\021.SpectateStateS2C\032\006.E"
+    "mpty\"\005\210\231\310\001\002\0229\n\030NotifySpectateTurnResult\022"
+    "\016.TurnResultS2C\032\006.Empty\"\005\210\231\310\001\002\0223\n\021Notify"
+    "SpectateEnd\022\017.SpectateEndS2C\032\006.Empty\"\005\210\231"
+    "\310\001\002\0229\n\024NotifyBattleAssigned\022\022.BattleAssi"
+    "gnedS2C\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303\001\001B\014Z\006battle\230"
+    "\324a\036b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_deps[4] = {
@@ -3576,7 +3577,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fplayer_5fbattle_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto = {
     false,
     false,
-    3061,
+    3091,
     descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto,
     "proto/battle/player_battle.proto",
     &descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_once,
@@ -3595,7 +3596,7 @@ eSpectateEndReason_descriptor() {
   return file_level_enum_descriptors_proto_2fbattle_2fplayer_5fbattle_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t eSpectateEndReason_internal_data_[] = {
-    262144u, 0u, };
+    327680u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleTicketRole_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto);

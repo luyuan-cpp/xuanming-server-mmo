@@ -1,4 +1,76 @@
-# Merge-Zone Runbook(合服操作手册)
+# 不停服合服操作手册
+
+> **负责人最新要求（2026-10-30）**：合服目标改为**不停服合服**。具体方案由 **Claude Code 自行调研现有实现与成熟方案，选择最适合本项目的方式**。
+> **当前状态**：不停服方案待调研与定稿，尚不能作为已实现、已验证的操作流程执行。本次仅修改本手册，其他代码、配置、设计文档和进度文件不改。
+> **阅读边界**：先读本节。下方保留的原编号 §0～§15 及后续修订属于**旧停服流程与现状参考**；其中的“逐字可执行”、维护窗口、踢人、解散队伍、zone-down 和停服撤销等要求均描述旧方案，不是新的不停服 SOP。
+
+## 当前目标与交给 Claude Code 的任务
+
+**目标**：source 与 target 在合服过程中持续提供服务，已有游戏与对局能够继续；玩家持久数据、资产及在途充值、购买、邮件和结算保持一致。区服归属合并、玩家数据库数据归并与源存储退役分别明确完成条件；局部等待、重试或重连的必要性、影响范围与恢复方式须在方案中说明。
+
+Claude Code 按以下顺序推进：
+
+1. **核对现状**：按 `AGENTS.md` 完成启动门禁，核对当前代码、已有改动、相关设计与本手册旧流程。盘点涉及合服的读写入口、工具门禁、在途任务和恢复路径，区分已实现能力、未验证能力与需要改造的部分。
+2. **自主选型**：结合本项目架构、数据一致性要求、维护成本和成熟方案的官方资料，自行选择最合适的不停服合服方式，并把选择依据、代价和适用边界写入本手册。前文会话中讨论过的技术路线仅供比较，不视为已经拍板的实现要求。
+3. **补齐完整流程**：明确合并对象、数据与身份冲突规则、在线读写与在途操作处理、切换提交点、并发控制、幂等、失败恢复、撤销边界、核验和源资源退役条件。按需要覆盖单集群与跨集群场景，清楚标明实际支持范围。
+4. **重写操作步骤**：依据最终方案，将本手册改成有明确前置条件、实际工具命令、阶段完成判据和故障处置的不停服 SOP。现有停服校验应作为需要设计解决的约束，不得靠删除门禁、跳过检查或改写成功口径声称支持不停服。
+5. **交付验证要求**：遵守 `AGENTS.md` §10.1，Claude Code 不执行编译、测试或压测，向 Codex 提供可直接执行的命令、环境、通过标准和失败证据要求。正常在线合服、并发写入、在途结算、重复执行、进程崩溃恢复与切换后数据一致性均须有相应验证；完成前保留“未实现／未验证”状态。
+
+本节记录目标与后续任务，**本次修改不启动实现或环境操作，也不扩大其他文件的修改范围**。
+
+---
+
+## 别名合服工具现状(2026-10-30,未编译、未演练,待 Codex 验证)
+
+方案见 [总体方案 §7.1](../design/player-data-tidb-scaling-plan.md)。`tools/merge_zone` 已按它重写:合服只写一条「源区 → 目标区」的映射(全局库 `zone_merged_into`,Redis 里的 `merge:merged_into:{src}` 是镜像),玩家行、路由行都不动,`home_zone` 还是源区,各服务读归属时解析成最终区。
+
+**下方历史手册里这些东西已经不存在**:pin / copy 模式(`-MergePlayerRowsMode`)、`merge:in_progress` 围栏、`zone_merge_fence`、`player:zone` 回填、玩家表和路由表改写、`-Merge*` 约 27 个参数。
+
+**这还不是上面要求的不停服合服。** 工具仍要求源区先下线:P2 场景节点、P6 会话、P7 队伍不过就拒绝,`-apply` 还要 `normal` 维护证据。别名合服去掉了最重的玩家数据改写,但公会、聚宝斋、公会榜的业务合并、在途结算和这几道门禁怎么在线处理,都没有设计。
+
+| 模式 | 作用 |
+|---|---|
+| `merge`(缺省) | 写映射并合并公会 `zone_id`、商品 `market_zone`、公会榜,清单落盘,同一清单重跑按步续跑 |
+| `unmerge` | 按清单把榜单、商品、公会写回,最后删映射。目标区又被合走时必须先撤销那一次 |
+| `audit` | 只读。合服前门禁;加 `-verify-merged` 是合服后验证,行名 `verify:merged_into`、`verify:guild_zone`、`verify:trade_market_zone`、`verify:guild_rank` |
+
+**步骤顺序**(顺序本身是正确性的一部分,与 `merge_run.go` 对应):P1 库表就绪 → R 读既有清单 → P2 源区节点全下线 → P6 源区玩家无会话 → P7 源区玩家不在活队伍 → X 映射冲突检查 → N 公会重名断言 → M 清单落盘 → **1 写映射** → 2 等缓存(`-merged-into-settle-sec`,默认 10 秒 = data_service 两个刷新周期) → 3 公会 → 4 交易 → 5 公会榜 → 6 完成。
+
+- 映射必须先于业务合并:映射生效之后新建的号、公会、商品都归到目标区,3、4 重收一次,不会有漏网的行。
+- `go/match` 直接读 `player_route.home_zone` 的地方经 `placement.ResolveMergedZoneSQL` 解析,运行账号要有 `zone_merged_into` 的 SELECT(`appuser` 的全库授权已包含;最小权限计划要写进 `tables`)。
+- `-merged-into-settle-sec` 不能小于 `RouteStore.MergedZoneRefreshSec` 的两倍(默认 5 秒,可配到 60)。刷新失败时副本继续用旧映射,告警 `DataServiceMergedZoneRefreshFailing`;在响就不要往下走。
+- 门禁按解析链查玩家:已有 4→5 时合 5→6,原始归属 4 的玩家也要下线、也不能在队伍里。
+- **映射只能由写它的那份清单续跑或撤销。** 不带原清单、换一份新清单重跑都会被拒绝,默认清单路径带时间戳,续跑一定要带 `-manifest-path`。
+- **撤销开始之后,这份清单只能接着撤销**,不能再拿去续跑合服。撤销完成后要重新合服,用新的 `-manifest-path`。
+- 过程中出现过可恢复错误(WAITAOF 份数不足后重试成功、单行改写撞 1213 后重试成功),工具打完 Done 仍以 1 退出、不写 MAINTENANCE 原件。这是结局未知的保守处理,用同一清单重跑一次。
+- 撤销窗口里不要跑 `route_tool reconcile-from-cache`:镜像还没删干净时,它会把已撤销的映射写回库。
+- 跨集群搬迁没有重写,旧的 copy 路径已删。
+- 合服后的玩家提示(`post_merge_notice_ts`、`force_rename_required`)和源区热状态清理(`scene_manager:zones` 摘除)已随旧工具删除。陈旧位置由持有节点判死兜住,目标区没有 gate 时分配 gate 会拒绝,只留下垃圾键(读代码,未实测)。
+- 人民币寄售的 `market_zone`(`go/trade/internal/commerce/rmb.go`)不改写,按区展示的话源区寄售会消失;Go 侧 `RmbList` 不按区过滤,Java 商城没有核对。
+
+**命令**(`dev_tools.ps1` 拼公共参数,`-MergeZoneRouteDbDsn` 三个命令都必填):
+
+```bash
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn '<全局库DSN>'
+```
+
+```bash
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn '<全局库DSN>' -DryRun
+```
+
+```bash
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn '<全局库DSN>' -VerifyMerged -MergeManifestPath <清单>
+```
+
+`dev_tools.ps1` 不转发维护证据旗标(`-maintenance-run-id`、`-freeze-ticket-id`、`-freeze-receipt-sha256`、`-maintenance-runtime-plan` 等),不带 `-DryRun` 的 `merge-zone`、`merge-zone-unmerge` 会被工具拒绝。真要写,工作目录 `tools/merge_zone`,用维护框架(`tools/scripts/maintenance_drain.ps1`)产出的证据直接跑工具。mysql 档要设 `MMORPG_SQL_BACKEND=mysql`。
+
+**验证**:真库集成测试 `MERGE_ZONE_IT_*`,命令见 `docs/handoff/player-save-direct-commit-20261030/progress.md`。真二进制 `-apply` 没有用例,真实集群没有演练过。
+
+---
+
+## 历史参考：旧停服合服手册（保留原章节编号）
+
+以下原文用于核对既有工具行为、门禁和历史证据。Claude Code 定稿新方案时，应逐项处理与不停服目标不兼容的内容；旧命令不能直接当作不停服步骤执行。
 
 > **状态**: v3.2 — 2026-09-28(v3.2:`-MergeDbCapabilityZones` 去缺省 + `merge-zone-capability-check`,见修订历史)。按 [`player-storage-placement.md`](../design/player-storage-placement.md)(v2.2)同批落码的 `tools/merge_zone/` 与 `tools/scripts/dev_tools.ps1` 重写了步骤顺序、清单、验证与回滚,并新增落点运维(§14)。**这批代码落码时未编译、未测试**(AGENTS.md §10.1);2026-09-29 按用户指示跑过一轮(merge_zone 集成测试 83 条 PASS(67 个顶层 + 16 个子用例)、dev_tools 契约 16/16,PROGRESS.md「2026-09-28 玩家存储落点」条目的「运行验证」),但 `be6b4ab1d`(10-08)之后 `tools/merge_zone` 的 P4 预检与 Kafka 队列审计又改过、未编译。**首次按本版执行前,先确认 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md) 已由 Codex 在当前 HEAD 上跑绿**。截至 2026-10-12,真实集群上 pin 合服、copy 合服、搬库都没有演练过(§12)。
 > **范围**: K8s 部署形态下,把 source zone 合并进 target zone 的端到端 ops SOP,以及玩家存储落点的钉落点 / 搬库 / 退役审计。**逐字可执行**。
@@ -1076,7 +1148,7 @@ S   清单玩家不得有冻结的落点记录(与搬库互斥);有「落点记�
 5'b 对**全部清单玩家**连父快照提交屏障 `player:{id}:save_barrier` 一起删:改回源区后玩家读源库,合服后在目标库提交的 pending / 两表 ACK 不再对应他要读的行。删完之后,`owner_epoch≠0`(进过场景)的人冷登录按源库两行分流(2026-10-22 修订:login 冷加载已改由 `savebarrier.Reconcile` 判定):两行同版非零的,login 采纳 SQL 自愈(设计 V7,每人一条 `PARENT-LOAD-ADOPT-SQL`);零围栏、缺行或两行不同版的,以「历史玩家父快照与提交屏障缺失」等原因拒登 —— fail-closed、不丢数据。重建仍然必做,**完成之前不许开服**,这是保守做法:逐人回执在开服前就把零围栏、缺行、两行不同版的人暴露出来,而不是开服后才在登录时拒绝;重建之后冷加载走 V1 一致路径,不产生采纳告警。pin 模式撤销不删缓存也不删屏障,跳过本段。前向 copy 合服从 2026-10-20 起保留屏障,不需要本段;它的 `verify:save_barrier` 不是 info 时见本段末尾。
 
 1. **保持维护闸**:source / target 保持 §8 Step 1 的维护标记与 Step 2 的 zone-down,不 `k8s-zone-up`、不 `/open`;scene / login / go/db 与合服、pin、relocate、回填工具都不运行。`save_barrier_restore` 的 `-writers-stopped -queues-drained` 只是声明,工具查不了这一条。
-2. **列出要重建的人**:清单 `player_ids` 里 `player:<id>:owner_epoch` 存在且不为 `0` 的玩家。owner_epoch、屏障与父快照都在 §2.1 表 login / shared 那一行的实例(`-MergeNoticeRedisAddr` / `-MergeNoticeRedisDB`,DB 0)。owner_epoch 不存在或为 `0` 的人从没进过场景,不需要屏障,也不能放进计划(工具以「归属计数器缺失」拒绝)。再按源库两行先分出两类单独处理(2026-10-22 补;用 `SELECT player_id, fence_owner_epoch, fence_save_seq FROM zone_<SRC>_db.player_database WHERE player_id IN (<名单>)` 与 `player_database_1` 的同一查询比对名单):
+2. **列出要重建的人**:清单 `player_ids` 里 `player:{<id>}:owner_epoch` 存在且不为 `0` 的玩家(花括号是键的字面内容,即 hash tag,与 `go/shared/ownerepoch.OwnerEpochKey` 一致;例:`redis-cli -n 0 GET 'player:{<id>}:owner_epoch'`)。owner_epoch、屏障与父快照都在 §2.1 表 login / shared 那一行的实例(`-MergeNoticeRedisAddr` / `-MergeNoticeRedisDB`,DB 0)。owner_epoch 不存在或为 `0` 的人从没进过场景,不需要屏障,也不能放进计划(工具以「归属计数器缺失」拒绝)。再按源库两行先分出两类单独处理(2026-10-22 补;用 `SELECT player_id, fence_owner_epoch, fence_save_seq FROM zone_<SRC>_db.player_database WHERE player_id IN (<名单>)` 与 `player_database_1` 的同一查询比对名单):
    - **源库缺行**(两张表任一张没有这名玩家):多半是 r2-login#1 的受害者(owner 已铸、首次存盘之前失败),合服前就登录不了。恢复工具对他报「SQL 玩家行缺失」,放进计划会让整份计划在他这里退出 —— **排除出计划**,名单单独登记进维护工单,等 r2-login#1 的恢复手段。
    - **两行都是零围栏**(`fence_owner_epoch = 0 AND fence_save_seq = 0`):围栏之前的历史行。先查清 owner 为何已铸而行从未经围栏写入;确认后单独做计划,plan 加 `-allow-legacy`(落点分组与下面相同;只在 plan 给;工具先原子提交两表围栏元数据,重锁复核后才发布屏障)。两行一张零围栏、一张不是的,恢复工具按「两表 SQL 围栏不同版」拒绝,按 §10.2 查清,不放进计划。
 
@@ -1121,7 +1193,7 @@ go run ./cmd/save_barrier_restore -mode apply -schema zone_<SRC>_db -zone <SRC> 
     1. 按 [`mysql-backup-pitr-runbook.md`](mysql-backup-pitr-runbook.md) §4.1 把 §8 Step 3 的备份恢复到**影子 MySQL**,不要碰生产库。
     2. 用 `GET player:placement:<pid>` / `GET player:zone:<pid>` 确认该玩家的**有效落点库**。
     3. 在有效落点库里按主键点更新他的各玩家表行(整行 REPLACE 自影子库),一次一个玩家。
-    4. 删共享 Redis 上他的缓存 `PlayerAllData:<pid>` 与 `<消息名>:<pid>`,否则下次登录读到的仍是旧缓存。
+    4. 删共享 Redis(§2.1 表 login / shared 那一行的实例,DB 0)上他的缓存:父快照 `PlayerAllData:{<pid>}`(花括号是键的字面内容,即 hash tag,与 `go/shared/savebarrier.ParentKey` 一致)与子表缓存 `<消息名>:<pid>`(子表缓存不带花括号)。例:`redis-cli -n 0 DEL 'PlayerAllData:{<pid>}' 'player_database:<pid>' 'player_database_1:<pid>'`,再对同样三个键 `EXISTS` 核对返回 0 —— DEL 不存在的键只返回 0、不报错,键名写错不会有任何提示;键名要用单引号包住,PowerShell 会把未加引号的 `{...}` 当成脚本块。否则下次登录读到的仍是旧缓存。
     5. 登记进事故单。
   - **pin 模式**下源区库一直是真源,合服没有动过玩家行。「合服后数据不对」多半与合服无关,先按单玩家问题排查。
 - **清单丢失 / 损坏**:见 10.3。

@@ -14,7 +14,6 @@ import (
 	dspb "proto/data_service"
 	pb "proto/guild"
 	matchpb "proto/match"
-	"shared/placement"
 	"shared/roleidentity"
 
 	"github.com/stretchr/testify/require"
@@ -282,7 +281,7 @@ func TestTiDBTrialDisbandRetainsUntilBoundTerminalAndOldResultCannotClearNewLobb
 			_, e = activities.PrepareTrialLaunch(actor, 371, battle, 1, roster, testNowMs)
 			require.NoError(t, e)
 			require.NoError(t, activities.RegisterTrialBattle(ctx, battle, testNowMs))
-			_, e = repo.DisbandGuild(actor, 44, 11, testNowMs+1, nil)
+			_, e = repo.DisbandGuild(actor, 44, 11, testNowMs+1)
 			require.NoError(t, e)
 			var occupied int
 			require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_lobby_slot WHERE lobby_id=371").Scan(&occupied))
@@ -404,7 +403,7 @@ func TestTiDBTrialOppositeRosterConcurrentUsesUnsignedP(t *testing.T) {
 }
 
 func TestTiDBTrialRoutePrefixRejectsBeforeLobbyOrConsentWrite(t *testing.T) {
-	for _, condition := range []string{"meta", "active_fence", "frozen_route", "missing_route"} {
+	for _, condition := range []string{"frozen_route", "missing_route"} {
 		t.Run(condition, func(t *testing.T) {
 			ctx, db, repo, _ := guildRoleTiDB(t)
 			seedLobbyOwners(t, ctx, db)
@@ -412,12 +411,6 @@ func TestTiDBTrialRoutePrefixRejectsBeforeLobbyOrConsentWrite(t *testing.T) {
 			store, e := NewSQLTrialLobbyRepo(repo.rdb, repo, func(context.Context) (uint64, error) { return 381, nil })
 			require.NoError(t, e)
 			switch condition {
-			case "meta":
-				_, e = db.ExecContext(ctx, "UPDATE route_meta SET writable=0 WHERE id=1")
-			case "active_fence":
-				shard, err := placement.RouteFenceShard(22, placement.MaxRouteFenceShards)
-				require.NoError(t, err)
-				_, e = db.ExecContext(ctx, "INSERT INTO zone_merge_fence(zone_id,shard,run_id,expires_at_ms) VALUES(1,?,'guild-it-maintenance',CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED)+60000)", shard)
 			case "frozen_route":
 				_, e = db.ExecContext(ctx, "UPDATE player_route SET storage_id=1,placement_version=1,frozen_run_id='guild-it-maintenance' WHERE player_id=22")
 			case "missing_route":

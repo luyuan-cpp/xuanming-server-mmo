@@ -269,7 +269,23 @@ func (l *LeaveSceneLogic) LeaveScene(in *scene_manager.LeaveSceneRequest) (*base
 		return nil, err
 	}
 	if !release.verdict.deletes() {
+		// 持有节点在当前代从未登记成功(拿不出资格,§3.3 残余 1)、过了宽限仍没有释放证据时,由本服务带围栏撤销
+		// (location-release-binding.md §17,unqualified_holder_revoke.go)。撤销成功即清理完成;否则照常保留、请释放、回拒。
+		if l.revokeUnqualifiedHolderOnLeave(in, currentLoc, raw, tag, currentRole.OwnerRevision, release) {
+			return &base.Empty{}, nil
+		}
 		return l.keepLocationUntilReleased(in, currentLoc, release)
+	}
+	// 新路径:判死的持有者可能只是暂停了,先在写权行上把它挡住,再删 location。释放失败就保留 location 重试:
+	// 不释放的话 released 一直是 0,这名玩家的待放弃资产操作永远卡着。
+	// 代次用 location 记的这一代,不用 release.epoch:那是之后才读的 owner_epoch 键,这期间另一路 EnterScene 可能已经接手、铸了新代次
+	// (判死看的还是旧 location),拿它释放会把刚接手的新持有者围掉。location 没记代次时不释放:下一次认领照样抬代次把旧持有者挡住。
+	if release.verdict == leaveReleaseOwnerDead && l.svcCtx.PlayerStoreHolders != nil && currentLoc.GetOwnerEpoch() != 0 {
+		if err := l.svcCtx.PlayerStoreHolders.ReleaseDeadPlayerStoreHolder(l.ctx, in.PlayerId, currentLoc.GetOwnerEpoch()); err != nil {
+			l.Logger.Errorf("Player %d leave scene %d: releasing the dead holder's player store claim failed, returning error for retry: %v",
+				in.PlayerId, in.SceneId, err)
+			return nil, err
+		}
 	}
 	mode := leaveDeleteModeAny
 	if release.verdict == leaveReleaseReleased {

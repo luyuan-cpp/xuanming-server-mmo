@@ -47,11 +47,11 @@ func Tables() []proto.Message {
 		// (先用计数行 upsert 的 RowsAffected 判定"本人今天还能不能参与",再给帮会进度 +1);01-storage.md §2.1
 		// 与 90-consistency.md part2 §1 也已按位置 8 登记。取完 P 之后对 G / M 行的资金、帮贡 UPDATE 是对**已持有行**
 		// 的再写(与升级、捐献终结记资金同形),不算新的取锁位置。各事务的取锁序列:
-		//   - 点灯 / 团圆(op=activity):G FOR UPDATE → 闸门 → M(G,p) 主键点锁 → [缺行插 Q]
+		//   - 点灯 / 团圆(op=activity):G FOR UPDATE → M(G,p) 主键点锁 → [缺行插 Q]
 		//     → Q(p, GUILD_CREDIT) FOR UPDATE(有物品奖励时由 AllocateSeq 锁,没有物品奖励也由 sqlLockSeqGuard 点锁 ——
 		//       **恒锁 Q**,它是计数行 C 的写者守卫)→ [有物品奖励时插 O]
 		//     → C(p, ACTIVITY, activity_id, 游戏日) 带上限 upsert → P(G, activity_id, 档期键) upsert + 主键点锁读回;
-		//   - 历练结算(B6b,op=trial_settle,activity_repo.go 的 SettleTrialBattleTx,已落码):G FOR UPDATE → 闸门
+		//   - 历练结算(B6b,op=trial_settle,activity_repo.go 的 SettleTrialBattleTx,已落码):G FOR UPDATE
 		//     → [普通读 T 判重复 / 判归属,不加锁] → M(候选人主键升序逐行点锁)→ Q(合格者 player_id 升序:缺行先建、再点锁,**先锁完全部 Q**)
 		//     → [普通读各人今日计数,定得奖名单] → O(得奖者升序逐人插新行;AllocateSeq 再锁的是本事务已持有的 Q 行,不是新锁)
 		//     → C(得奖者升序,带上限 upsert)→ P(upsert + 主键点锁读回)→ 再写已持有的 G.funds / P 计数 / M 帮贡
@@ -59,7 +59,7 @@ func Tables() []proto.Message {
 		//     B6a 预先登记的写法是"逐人 (Q → O)":从第二人起持着前一人新插的 O 行去锁下一人的 Q,要靠"新插 O 行别人拿不到"
 		//     这条例外才不成环。落码时改成先锁完全部 Q 再插 O,多的只是每人一次已持有行的重复点锁,换来的是不依赖任何例外:
 		//     以后有人给 guild_asset_op 加锁定范围扫描、或按 (player_id, stream) 前缀锁行,结算也不会因此成环。
-		//   - 解散(guild_manage_repo.go 的 DisbandGuild,X-14):G → 闸门 → S(全员↑)→ M(全员↑,锁后即删)→ A↑
+		//   - 解散(guild_manage_repo.go 的 DisbandGuild,X-14):G → S(全员↑)→ M(全员↑,锁后即删)→ A↑
 		//     → O↑(提前截止)→ **删 P** → **删 T(只删本帮 STARTED 行,主键升序逐行点删)** → 删 G。
 		//     删 P / 删 T 必须插在提前截止之后、删 guild 行之前;只做到"删 guild_member 之后"不够 ——
 		//     排到删申请 / 提前截止前面,就是持着 P / T 回头取 A / O,违反全序。

@@ -125,18 +125,13 @@ function Invoke-MaintenanceWriterRetirement {
 
 function Get-NormalFiniteToolArguments {
     param([Parameter(Mandatory)][Collections.IDictionary]$Tool,[Parameter(Mandatory)][string]$RuntimeConfig)
-    if($Tool.kind -cnotin @('assetopfix','debug_import') -or -not [IO.Path]::IsPathRooted($RuntimeConfig) -or @($Tool.arguments).Count -gt 128){throw 'finite normal只接受具名工具及有限参数'}
+    if($Tool.kind -cne 'assetopfix' -or -not [IO.Path]::IsPathRooted($RuntimeConfig) -or @($Tool.arguments).Count -gt 128){throw 'finite normal只接受具名工具及有限参数'}
     $business=[Collections.Generic.List[string]]::new()
     foreach($arg in $Tool.arguments){
         if($arg -isnot [string] -or $arg.IndexOf([char]0) -ge 0 -or $arg -cmatch '^--?(maintenance-drain-(plan|dir|sha256)|f|config|db-config|file|dry-run)(=|$)'){throw 'finite参数不能覆盖固定配置、输入、写入模式或伪装维护runtime'}
         $business.Add($arg)
     }
-    if($Tool.kind -ceq 'assetopfix'){return @('-f',$RuntimeConfig,'resolve')+$business.ToArray()}
-    foreach($pair in @(@('dataServiceConfig','dataServiceConfigSha256'),@('inputFile','inputFileSha256'))){
-        $file=[string]$Tool[$pair[0]];$sha=[string]$Tool[$pair[1]]
-        if(-not [IO.Path]::IsPathRooted($file) -or $sha -cnotmatch '^[a-f0-9]{64}$' -or (Get-Item -LiteralPath $file).Attributes -band [IO.FileAttributes]::ReparsePoint -or (Get-MaintenanceSha256 $file) -cne $sha){throw 'finite导入必须固定配置及输入文件原件'}
-    }
-    return @('-db-config',$RuntimeConfig,'-config',$Tool.dataServiceConfig,'-file',$Tool.inputFile,'-dry-run=false')+$business.ToArray()
+    return @('-f',$RuntimeConfig,'resolve')+$business.ToArray()
 }
 
 function Invoke-NormalFiniteTool {
@@ -545,7 +540,6 @@ function ConvertTo-AuthorityRoleSql {
     $metadataGrants.Add("GRANT CREATE,INSERT ON $($values.AUTHORITY_SCHEMA).``route_meta`` TO $($values.SCHEMA_ACCOUNT);")
     if([IO.File]::ReadAllText((Join-Path $TemplateRoot 'authority_operator_role.sql')).Contains('`route_reconcile`')){
         $metadataGrants.Add("GRANT CREATE,INSERT ON $($values.AUTHORITY_SCHEMA).``route_reconcile`` TO $($values.SCHEMA_ACCOUNT);")
-        $metadataGrants.Add("GRANT CREATE,INSERT,UPDATE ON $($values.AUTHORITY_SCHEMA).``id_segment`` TO $($values.SCHEMA_ACCOUNT);")
     }
     if($schemaSeen.Contains('mmorpg_guild')){$metadataGrants.Add("GRANT INSERT ON ``mmorpg_guild``.``guild_player_state`` TO $($values.SCHEMA_ACCOUNT);")}
     $values.SCHEMA_DDL_GRANTS=$schemaGrants -join "`n"
@@ -634,7 +628,7 @@ function Invoke-AuthorityPhaseCli {
         if($Plan.Contains('sqlTargetAddress')){$arguments+=@('-sql-target-address',$Plan.sqlTargetAddress)}
     }
     & $exe @arguments
-    if ($LASTEXITCODE -ne 0) { throw "authority-phase $Phase失败，全部关闭保持HOLD" }
+    if ($LASTEXITCODE -ne 0) { throw "authority-phase ${Phase}失败，全部关闭保持HOLD" }
 }
 
 function Assert-MaintenanceRedisDeadline {

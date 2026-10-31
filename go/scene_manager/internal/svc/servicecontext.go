@@ -49,6 +49,8 @@ type ServiceContext struct {
 	// 调用方按「本地单区联调」处理(归属 = gate zone,WARN 计数)。
 	HomeZone      HomeZoneClient
 	RoleDirectory RoleDirectory
+	// PlayerStoreHolders:持有节点判死后释放写权。生产恒非 nil(与 RoleDirectory 同一个客户端)。
+	PlayerStoreHolders PlayerStoreHolderReleaser
 	// OwnerEpochMint 是铸造 owner_epoch 的执行面(墙钟地板 + 铸造 EVAL 与 WAITAOF 同一条连接,owner_epoch_mint.go)。
 	// 生产恒非 nil;logic 遇到 nil 一律拒绝铸造(fail-closed),不退回 Redis 字段上的无确认路径。
 	OwnerEpochMint OwnerEpochMinter
@@ -66,6 +68,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	roleSecret := configuredRoleDirectorySecret(c)
 	// 铸造落盘确认的取值越界同样在占用任何外部资源之前拒启(fail-closed,口径同 go/db 的 RedisClient.WaitAOF*)。
 	if err := c.OwnerEpochMint.Validate(); err != nil {
+		panic("scene_manager 配置非法: " + err.Error())
+	}
+	// 无资格持有者撤销的宽限(location-release-binding.md §17.4):短于在途入场登记与交接冻结之和会打断它们,同样拒启。
+	if err := c.ValidateUnqualifiedHolderRevokeGrace(); err != nil {
 		panic("scene_manager 配置非法: " + err.Error())
 	}
 	etcdCli, err := clientv3.New(clientv3.Config{
@@ -158,7 +164,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if rpc == nil {
 		panic("scene_manager必须配置DataServiceRpc以强读原角色修订")
 	}
-	sc.RoleDirectory = &roleDirectoryClient{rpc: rpc, secret: roleSecret}
+	directory := &roleDirectoryClient{rpc: rpc, secret: roleSecret}
+	sc.RoleDirectory = directory
+	sc.PlayerStoreHolders = directory
 	return sc
 }
 

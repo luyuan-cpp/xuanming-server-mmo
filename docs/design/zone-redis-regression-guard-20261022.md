@@ -1,5 +1,7 @@
 # zone Redis 回退防护：「Redis 回退一族」6 条 low 的合并设计
 
+> **部分过期(2026-10-30)**:玩家存档不再进 Redis,本文里关于存档副本、身份戳、`owner_counter_behind` 的部分已删除。协调键(`owner_epoch`、`location`、`handoff`、`handoff_fence`)的回退风险仍然按本文判断。
+
 > **2026-10-23 初始持久基底后继（待正式生成与运行验证）**：正式 Create 目录与双 SQL 初始行同一 TiDB 事务严格 INSERT，持久 marker 只在首次成功写入；保留无 actor 初始提交 `(1,1)`，首任 actor 由 SceneManager 在采纳地板后铸到 2。完整合同与免冷读种子的提交后顺序见[建角初始持久提交](new-player-first-enter-no-cold-read.md#建角初始持久提交)。空 SQL 或零序号旧缓存不能证明新号，任一真实玩家行缺失均拒绝。
 
 - **2026-10-24 方向变更（先读）**：用户 10-24 明确「玩家数据不要 redis 存储，其他改用的地方还是要用」，见 [TiDB 决策 §9](global-data-layer-tidb-decision.md)。本稿里只服务于 Redis 父快照与资产证据的部分（父快照回退检测、`verified_identity` 实例身份核验、资产放弃的 G5 闸读 Redis 副本）随新存盘路径重写，在途落码开工前先向用户确认是否还做；owner_epoch 铸造等协调键的防回退不受影响。只定了方向，未设计、未落码。
@@ -221,6 +223,14 @@ go/db 只在 SQL 提交了版本 V 之后才发布 `ACK = V`，而 V 来自 C++ 
 
 #### 4.3.1 G3a：墙钟地板（落实 §14 第 7 条）
 
+> **2026-10-30 落码定形（未编译、未测试，待 Codex 验证）**：目标值在 **Go 里一次算好**，不在 Lua 里算。location 字节在 EVAL 之前就要带上新 epoch，两处必须同值；铸造通道重发时带的是同一份 ARGV，重放识别才比得上。
+> - `mintTargetEpoch(observed, nowMs)` = max(observed + 1, nowMs)，nowMs 只经 `svc.OwnerEpochMinter.NowMs()` 取（生产 `WallClockMs`，单测注入），每次落点只取一次。目标值超过 2^53 − 2（`maxMintedOwnerEpoch`，回滚再 +1 仍在 Lua double 精确范围内）时 fail-closed，一个字节都不写、回 3。
+> - 目标值作为 `ARGV[9]` 必传。Lua 只校验并 SET：`ARGV[1]` 规范十进制、`ARGV[9]` 无前导零、严格大于 `ARGV[1]`、不超过上限，否则 `error_reply`。比较一律按十进制串逐字节比，不用 Lua double，也不用 Lua 的串 `<`（Lua 5.1 走 strcoll，Redis 按环境设了 LC_COLLATE）。
+> - 重放识别改成 `cur == ARGV[9]`。回滚仍是 `INCR`。`clock_behind` 只对真的写进 Redis 的铸造计。
+> - 同批放宽三处「回滚后恰好 +2」：C++ `ClassifyOwnership`、`ResumeTravelAfterRevocation`、`kResumeFenceLua`（及其 Go 金样副本），改为「≥ 标记 epoch + 2」并防溢出。安全性推导见 `player_lifecycle.h` `ClassifyOwnership` 注释第 3 条。
+>
+> 下面是设计时的原稿，与上面不一致处以上面为准。
+
 - `luaMintEpochAndSetLocation` 加 `ARGV` 地板毫秒，由 SM 传入 `time.Now().UnixMilli()`。`minted = max(cur + 1, floor)` 写成十进制串比较，**不经 Lua double**。
 - **重放识别**：把「`cur == ARGV[1] + 1`」改成「`cur == expected`」，其中 `expected = max(ARGV[1] + 1, floor)`，在 Lua 里用同一组 ARGV 算出。重发的 EVAL 参数完全相同，算出的值也相同，所以幂等识别不变。
   - 本请求的落点已被 bump 回滚后（`cur == expected + 1`），原样重发仍回 0。这条性质不变。
@@ -313,7 +323,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 按共享 Redis 的形态
 2. 对 EVAL 而言，MOVED / ASK / TRYAGAIN / CLUSTERDOWN / LOADING 都表示「没执行」：刷新拓扑后到新节点重发（ASK 要在同一 pipeline 里前置 `ASKING`）。这一类重发不计入「结果未知」的 3 次。
 3. EVAL 之后、WAITAOF 之前发生切主：WAITAOF 落到已降级的旧主上，回 `cannot be used with replica instances` → `error` → 回滚。回滚 Lua 在新主上做 CAS：铸造随切主丢了就回 superseded、什么都不改（状态已是铸造之前）；没丢就正常回滚。两种终态都自洽。
 
-**G3a 不在本次**：墙钟地板会让铸造不再恰好 +1，而现有两处判据都依赖「恰好 +1」：C++ `travel_outcome::ClassifyOwnership` 采纳回滚要求 `redisEpoch == markEpoch + 2`（`player_lifecycle.h`）；铸造 Lua 的重放识别比的是 `cur == ARGV[1] + 1`。G3a 要与这两处、以及 §4.3.1 列出的数值假设排查同批改，C++ 需要串行编译。svc 层的 `NowMs` 与 `owner_epoch_mint_clock_behind_total` 已经为它留好；`owner_epoch.go` 头注释已改回如实描述。
+**G3a（2026-10-30 补落，见 §4.3.1 开头）**：10-24 时 G3a 没做，因为它让铸造不再恰好 +1，而有三处判据依赖「回滚后恰好 +2」，不止当时列出的 `ClassifyOwnership` 一处：C++ `travel_outcome::ClassifyOwnership`、`ResumeTravelAfterRevocation`（`player_lifecycle.cpp`）、`handoff_sql_barrier.h` 的 `kResumeFenceLua`（Go 金样副本逐字节比对）；外加铸造 Lua 的重放识别 `cur == ARGV[1] + 1`。四处已同批改。数值假设排查结论：proto 与 C++ 全是 uint64，屏障版本 `%020d`、交接围栏数值 ≤ 20 位都放得下；go/db 行围栏、游标与 login 采纳都按 uint64 或十进制串比较；没有 uint32 截断，也没有把 epoch 当指标 label；初始提交 (1,1) 之后，首任 actor 从 2 变成当前毫秒，没有生产代码依赖「恰好是 2」。离线恢复工具 `save_barrier_restore` 与 data_service `debug_import` 的目标 owner 仍是 max + 1：它们在停写时运行，不受影响；Redis 回退之后，`AuditedOwnerUpperBound` 要按毫秒量级填，下一次 SM 铸造也会越过当前毫秒。
 
 **测试（本次新增，未运行）**
 
@@ -496,3 +506,43 @@ INFO 相关的 Lua 只能在真 Redis 上测（miniredis 不支持 `INFO server`
 3. **G3b 做不做**：取决于 R-b 压测的 EnterScene 延迟，延迟预算由负责人给。不做时，残余「铸造丢失丢 ≤300s」由 G4 检测码可观测。
 4. **R-G1-1**：上线前把 §14 第 15 条「go/db 待落写标记」落码，还是接受这条残余。
 5. **G5 的活性代价**（跨 Redis 身份变化、离线 ≥180 天的玩家放弃会推迟到他下次登录）是否可接受。
+
+## 14. 落码记录与取舍（2026-10-22 起，未编译、未测试）
+
+负责人 2026-10-22 指示「项目没上线，玩家数据可以完全清空，按最标准的方式做完」，§13 各项按推荐取：
+- 第 1 条：P1–P3 全做；
+- 第 2 条：V2 / V7 自动采纳；
+- 第 3 条：G3b 做，R-b 压测之后再定池大小与告警阈值；
+- 第 4、5 条：接受，理由见本节「与 TiDB 方向的关系」。
+
+全部改动都没有编译、没有测试，验证清单见 `docs/PROGRESS.md` 的「2026-10-30 zone Redis 回退防护落码收尾」条目，交 Codex 执行。
+
+### 14.1 各件落点
+
+| 件 | 状态 | 主要文件 |
+|---|---|---|
+| G1 加载侧身份戳、核验、自动采纳 | 已落码 | `go/shared/savebarrier/{reconcile,instance_identity}.go`（判定纯函数、身份 Lua 片段）；`go/login/internal/logic/pkg/dataloader/{parent_commit_barrier,ensure_player_all_data_async,new_player_seed,metrics}.go`；`go/login/internal/config`（`ParentLoad.VerifyOnRedisIdentityChange`，缺省开）；`go/login/login.go`（指标预置） |
+| G2 ACK 高于 pending | 已落码 | `go/db/internal/kafka/player_cache_publish.go`、`go/db/internal/metrics/pipeline.go` |
+| G3a 铸造墙钟地板 | 已落码（2026-10-30，「owner_epoch 铸造后同节点 WAITAOF 防代次回退」会话；验证清单见 PROGRESS「2026-10-30 Claude：owner_epoch 铸造墙钟地板 G3a 落码」） | `go/scene_manager/internal/logic/{owner_epoch,changesceneutil}.go`；C++ `player_lifecycle.h` 的 `travel_outcome::ClassifyOwnership`、`player_lifecycle.cpp` 的 `ResumeTravelAfterRevocation`、`handoff_sql_barrier.h` 的 `kResumeFenceLua`；跨语言金样副本 `owner_epoch_crosslang_test.go` |
+| G3b 铸造后 WAITAOF | 已落码 | `go/scene_manager/internal/svc/owner_epoch_mint.go`（专用连接、同一 pipeline、自管重发）、`internal/config`（`OwnerEpochMint`）、`internal/logic/enterscenelogic.go`（没确认就单调回滚、回 7）、`internal/metrics`、`tools/scripts/k8s_deploy.ps1`（连接总账） |
+| G4 C++ 计数器落后检测 | 已落码 | `redis_client.h`（严格屏障 Lua 回 `{4, 存储值}`、回包解析、被拒原因）、`player_lifecycle.{h,cpp}`（`owner_counter_behind` 计数与处置）、`core/system/redis.cpp`（统计行） |
+| G5 资产放弃闸 | 已落码 | `go/shared/assetop/{abandon,reconcile,ledger_dataservice,metrics}.go`；`go/data_service/internal/logic/asset_op_ledger_verified.go`、`internal/server/dataserviceserver.go`；`proto/data_service/data_service.proto`（`verify_redis_copy` / `redis_copy_verified`，**需要 Codex 重新生成协议**） |
+| 告警 | 已落码 | `deploy/k8s/owner-epoch-alerts.yaml` 的 `owner-epoch.redis-regression` 组（指标名已与实现核对） |
+
+### 14.2 相对设计稿的取舍
+
+1. **资产证据不作第三证人**（§4.1.3 第 2 条取消）：证据与 player_database 的 ACK 在 go/db 同一段 Lua、同一版本原子写入，不提供额外信息。login 引入证据键还要依赖 `shared/assetop`，会把它的全局指标注册带进 login。
+2. **r2-login#1 一并修掉**（§4.1.4 新增 V6′）：owner 已铸、父键是建角种子或缺失、两张 SQL 行也为空时放行。这是新号进场铸了 owner、首次存盘之前出故障的样子。父键不是种子（有资产却没屏障）时仍然拒绝；SQL 有历史时照常按 Reconcile 采纳。
+3. **建角种子写身份戳**：保住「新号首次进游戏不冷读」（new-player-first-enter-no-cold-read.md）。实例没换时首次登录走快路径；屏障 hash 已存在、身份未知或不是主时不写戳。
+4. **核验结论计数只按 verdict 分 label**：触发原因（冷加载 / 身份变化 / ACK 高于 pending / 历史缺口）写进采纳日志，不再单独开 label。
+5. **G2 回包是「结局 + 领先码」的整数叠加**（10 = above_pending，20 = pending_missing），不是数组。令牌脚本链路（`locker.RunTokenScript`）只认整数，改数组要动锁与租约接口。代价是 `SAVE-BARRIER-ACK-AHEAD` 日志带不回 pending 原值，排查时按日志里的 barrierKey 去读。
+6. **G3a 的目标值 ARGV 必传**：铸造脚本缺目标值直接报错，测试统一经补位辅助函数传参。依赖「铸造恰好 +1」「回滚后恰好 +2」的判据同批放宽为「严格大于标记 epoch + 1」，安全性仍由「回执逐字节匹配本次原标记 + location 整字节 CAS」保证（见上表 G3a 一行）。
+7. **混版兼容一律不做**（§6）：项目未上线，玩家数据可以清空。
+
+### 14.3 与 2026-10-24「玩家存档只存 TiDB」方向的关系
+
+[TiDB 决策](global-data-layer-tidb-decision.md) §9 定了方向：玩家数据只存 TiDB，Redis 只留协调用途（该方向未设计、未落码）。按它的判据：
+
+- **G3（墙钟地板 + 铸造持久化）不受影响。** owner_epoch 的铸造按 §9.3 C 继续留在 Redis；§9.4 第 3 条还指出，存盘改落 TiDB 后 C++ Lua 那层 owner 比对会消失，铸造本身的正确性只会更重要。
+- **G1、G2、G4、G5 只服务于 Redis 父快照、ACK 镜像与资产证据**（`verified_identity` 在 §9.3 B 被点名随载荷去留），新存盘路径落地时随载荷一起删除。它们在 10-24 之前已经开工、现已落码。保留到新路径落地，还是现在回退，按 §9.5 由负责人定；建议保留：它们修的是现行代码里真实存在的永久拒登（含 r2-login#1）与静默回档，而现行代码要一直跑到新路径落地。
+- R-G1-1（采纳之后积压里更新的任务晚到）随父快照一起消失。新路径里同类问题由 §9.4 第 3 条「单写围栏怎么闭合」回答，不再单独实现 go/db 待落写标记。

@@ -13,7 +13,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
 	dspb "proto/data_service"
+	storepb "proto/player_store"
 	"shared/accountdirectory"
+	"shared/authoritysql"
 	"shared/generated/persistschema"
 	"shared/placement"
 )
@@ -32,14 +34,18 @@ func initialPlayerSchemaForTest(t *testing.T, s *AccountDirectoryStore) (uint32,
 
 func requireInitialRowsForTest(t *testing.T, db *sql.DB, schema string, player uint64) {
 	t.Helper()
-	for _, table := range []string{"player_database", "player_database_1"} {
-		var id, epoch, sequence, generation uint64
-		require.NoError(t, db.QueryRow("SELECT player_id,fence_owner_epoch,fence_save_seq,persist_schema_gen FROM `"+schema+"`.`"+table+"` WHERE player_id=?", player).Scan(&id, &epoch, &sequence, &generation))
-		require.Equal(t, []uint64{player, 1, 1, uint64(persistschema.Gen)}, []uint64{id, epoch, sequence, generation})
+	for _, kind := range []storepb.PlayerStoreKind{
+		storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER,
+		storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT,
+		storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE,
+	} {
+		row, ok := readStoreRowForTest(t, db, schema, player, kind)
+		require.True(t, ok, kind.String())
+		require.Equal(t, []uint64{1, 1, uint64(persistschema.Gen)}, []uint64{row.epoch, row.seq, uint64(row.gen)}, kind.String())
 	}
 }
 
-func TestTiDBCreateRoleCommitsDirectoryAndBothInitialRowsOnce(t *testing.T) {
+func TestTiDBCreateRoleCommitsDirectoryAndInitialRowsOnce(t *testing.T) {
 	s, db := accountDirectoryTiDB(t)
 	_, schema := initialPlayerSchemaForTest(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -49,35 +55,67 @@ func TestTiDBCreateRoleCommitsDirectoryAndBothInitialRowsOnce(t *testing.T) {
 	out, err := s.CreateWithInitialCommit(ctx, "owner", role)
 	require.NoError(t, err)
 	require.Len(t, out.Players.Players, 1)
-	require.NotNil(t, out.InitialPlayerData)
-	require.EqualValues(t, 1, out.InitialPlayerData.LastSaveSeq)
-	require.EqualValues(t, 1, out.InitialPlayerData.PlayerDatabaseData.FenceOwnerEpoch)
-	require.EqualValues(t, 1, out.InitialPlayerData.PlayerDatabase_1Data.FenceSaveSeq)
-	require.Zero(t, out.InitialPlayerData.PlayerDatabaseData.GetUint64PbComponent().GetRegistrationTimestamp())
 	requireInitialRowsForTest(t, db, schema, role.PlayerId)
 	var marker uint64
 	require.NoError(t, db.QueryRow("SELECT initial_player_commit FROM account_role WHERE player_id=?", role.PlayerId).Scan(&marker))
 	require.EqualValues(t, 1, marker)
 
-	// 原目录幂等不能重新制造缓存写资格，也不能补回后来丢失的 SQL 行。
-	_, err = db.Exec("DELETE FROM `"+schema+"`.player_database_1 WHERE player_id=?", role.PlayerId)
+	// 原目录幂等不能补回后来丢失的 SQL 行。
+	_, err = db.Exec("DELETE FROM `"+schema+"`.player_store WHERE player_id=? AND kind=?", role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE))
 	require.NoError(t, err)
-	out, err = s.CreateWithInitialCommit(ctx, "owner", role)
+	_, err = s.CreateWithInitialCommit(ctx, "owner", role)
 	require.NoError(t, err)
-	require.Nil(t, out.InitialPlayerData)
-	var count int
-	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM `"+schema+"`.player_database_1 WHERE player_id=?", role.PlayerId).Scan(&count))
-	require.Zero(t, count)
+	_, ok := readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_PROFILE)
+	require.False(t, ok)
 }
 
-func TestTiDBCreateRoleSecondInitialRowCollisionRollsBackWholeCommit(t *testing.T) {
+// 建角不再对 route_meta 加锁:有人持着这一行(维护事务、建池探针),建角照常提交,全服不排队。
+// 冻结之后的新建角仍被拒:writable=0 时写者闸门和这里的普通读都不放行。
+func TestTiDBCreateRoleDoesNotQueueOnRouteMetaAndFrozenStillRejects(t *testing.T) {
+	s, db := accountDirectoryTiDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	role := &base.AccountSimplePlayer{PlayerId: 3111, ZoneId: 1}
+	require.NoError(t, installInitialRouteForTest(s, ctx, role))
+
+	holder, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	require.NoError(t, err)
+	defer holder.Rollback()
+	var writable uint64
+	require.NoError(t, holder.QueryRowContext(ctx, "SELECT writable FROM route_meta WHERE id=1 FOR UPDATE").Scan(&writable))
+	require.EqualValues(t, 1, writable)
+	bounded, stop := context.WithTimeout(ctx, 5*time.Second)
+	defer stop()
+	_, err = s.CreateWithInitialCommit(bounded, "route-meta-held", role)
+	require.NoError(t, err, "route_meta 被锁时建角不排队")
+	require.NoError(t, holder.Rollback())
+
+	frozen := &base.AccountSimplePlayer{PlayerId: 3112, ZoneId: 1}
+	require.NoError(t, installInitialRouteForTest(s, ctx, frozen))
+	_, err = db.ExecContext(ctx, "UPDATE route_meta SET writable=0 WHERE id=1")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		restore, done := context.WithTimeout(context.Background(), 5*time.Second)
+		defer done()
+		_, err := db.ExecContext(restore, "UPDATE route_meta SET writable=1 WHERE id=1")
+		require.NoError(t, err)
+	})
+	_, err = s.CreateWithInitialCommit(ctx, "route-meta-frozen", frozen)
+	require.Error(t, err, "冻结之后不能建角")
+	var rows int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM account_role WHERE player_id=3112").Scan(&rows))
+	require.Zero(t, rows)
+}
+
+func TestTiDBCreateRoleInitialRowCollisionRollsBackWholeCommit(t *testing.T) {
 	s, db := accountDirectoryTiDB(t)
 	_, schema := initialPlayerSchemaForTest(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	role := &base.AccountSimplePlayer{PlayerId: 3102, ZoneId: 1}
 	require.NoError(t, installInitialRouteForTest(s, ctx, role))
-	_, err := db.Exec("INSERT INTO `"+schema+"`.player_database_1(player_id,fence_owner_epoch,fence_save_seq,persist_schema_gen) VALUES (?,7,9,?)", role.PlayerId, persistschema.Gen)
+	_, err := db.Exec("INSERT INTO `"+schema+"`.player_store (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES (?,?,7,9,?,?,0,?)",
+		role.PlayerId, int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT), persistschema.Gen, []byte{}, []byte{})
 	require.NoError(t, err)
 	out, err := s.CreateWithInitialCommit(ctx, "owner", role)
 	require.ErrorIs(t, err, accountdirectory.ErrConflict)
@@ -85,18 +123,18 @@ func TestTiDBCreateRoleSecondInitialRowCollisionRollsBackWholeCommit(t *testing.
 	for _, query := range []string{
 		"SELECT COUNT(*) FROM account_directory WHERE account='owner'",
 		"SELECT COUNT(*) FROM account_role WHERE player_id=3102",
-		"SELECT COUNT(*) FROM `" + schema + "`.player_database WHERE player_id=3102",
+		"SELECT COUNT(*) FROM `" + schema + "`.player_store WHERE player_id=3102 AND kind=0",
 	} {
 		var count int
 		require.NoError(t, db.QueryRow(query).Scan(&count))
 		require.Zero(t, count, query)
 	}
-	var epoch, sequence uint64
-	require.NoError(t, db.QueryRow("SELECT fence_owner_epoch,fence_save_seq FROM `"+schema+"`.player_database_1 WHERE player_id=?", role.PlayerId).Scan(&epoch, &sequence))
-	require.Equal(t, []uint64{7, 9}, []uint64{epoch, sequence}, "严格 INSERT 不得重写旧行")
+	row, ok := readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT)
+	require.True(t, ok)
+	require.Equal(t, []uint64{7, 9}, []uint64{row.epoch, row.seq}, "严格 INSERT 不得重写旧行")
 }
 
-func TestTiDBCreateRoleConcurrentInitialReceiptIsIssuedOnce(t *testing.T) {
+func TestTiDBCreateRoleConcurrentInitialRowsAreWrittenOnce(t *testing.T) {
 	s, db := accountDirectoryTiDB(t)
 	_, schema := initialPlayerSchemaForTest(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -122,26 +160,24 @@ func TestTiDBCreateRoleConcurrentInitialReceiptIsIssuedOnce(t *testing.T) {
 	close(start)
 	workers.Wait()
 	close(results)
-	issued := 0
 	for r := range results {
 		require.NoError(t, r.err)
 		require.Len(t, r.out.Players.Players, 1)
-		if r.out.InitialPlayerData != nil {
-			issued++
-		}
 	}
-	require.Equal(t, 1, issued)
 	requireInitialRowsForTest(t, db, schema, role.PlayerId)
+	var marker uint64
+	require.NoError(t, db.QueryRow("SELECT initial_player_commit FROM account_role WHERE player_id=?", role.PlayerId).Scan(&marker))
+	require.EqualValues(t, 1, marker)
 }
 
-func TestTiDBCreateRoleMissingSecondInitialTableRollsBackWholeCommit(t *testing.T) {
+func TestTiDBCreateRoleMissingInitialTableRollsBackWholeCommit(t *testing.T) {
 	s, db := accountDirectoryTiDB(t)
 	_, schema := initialPlayerSchemaForTest(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	role := &base.AccountSimplePlayer{PlayerId: 3110, ZoneId: 1}
 	require.NoError(t, installInitialRouteForTest(s, ctx, role))
-	_, err := db.Exec("DROP TABLE `" + schema + "`.player_database_1")
+	_, err := db.Exec("DROP TABLE `" + schema + "`.player_store")
 	require.NoError(t, err)
 	out, err := s.CreateWithInitialCommit(ctx, "owner", role)
 	require.Error(t, err)
@@ -149,7 +185,6 @@ func TestTiDBCreateRoleMissingSecondInitialTableRollsBackWholeCommit(t *testing.
 	for _, query := range []string{
 		"SELECT COUNT(*) FROM account_directory WHERE account='owner'",
 		"SELECT COUNT(*) FROM account_role WHERE player_id=3110",
-		"SELECT COUNT(*) FROM `" + schema + "`.player_database WHERE player_id=3110",
 	} {
 		var count int
 		require.NoError(t, db.QueryRow(query).Scan(&count))
@@ -157,14 +192,14 @@ func TestTiDBCreateRoleMissingSecondInitialTableRollsBackWholeCommit(t *testing.
 	}
 }
 
-func TestTiDBInitialCommitIsRequiredWithoutTiDBProbeAndLegacyIsExplicit(t *testing.T) {
+func TestTiDBInitialCommitIsRequiredAndLegacyIsExplicit(t *testing.T) {
 	baseStore, db := accountDirectoryTiDB(t)
 	storage, schema := initialPlayerSchemaForTest(t, baseStore)
 	cfg, err := mysql.ParseDSN(os.Getenv("ACCOUNT_DIRECTORY_TEST_DSN"))
 	require.NoError(t, err)
 	conf := MySQLConfig{Host: cfg.Addr, User: cfg.User, Password: cfg.Passwd, DBName: baseStore.schema}
-	// dev/test 可关闭 TiDB 探针与交易 SQLProof，不能关闭正式 Create 的持久提交。
-	global, err := NewAccountDirectoryStore(conf, false, 2, 4)
+	// 后端档位与交易 SQLProof 都不决定正式 Create 的持久提交。本用例连 TiDB,所以走 tidb 档:mysql 档会拒绝 TiDB。
+	global, err := NewAccountDirectoryStore(conf, authoritysql.BackendTiDB, 2, 4)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, global.Close()) })
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -176,17 +211,15 @@ func TestTiDBInitialCommitIsRequiredWithoutTiDBProbeAndLegacyIsExplicit(t *testi
 	_, err = global.CreateWithInitialCommit(ctx, "global", role)
 	require.Error(t, err, "缺权威路由必须拒绝")
 	require.NoError(t, installInitialRouteForTest(global, ctx, role))
-	out, err := global.CreateWithInitialCommit(ctx, "global", role)
+	_, err = global.CreateWithInitialCommit(ctx, "global", role)
 	require.NoError(t, err)
-	require.NotNil(t, out.InitialPlayerData)
 	requireInitialRowsForTest(t, db, schema, role.PlayerId)
 
-	legacy, err := NewLegacyAccountDirectoryStore(conf, false, 2, 4)
+	legacy, err := NewLegacyAccountDirectoryStore(conf, authoritysql.BackendTiDB, 2, 4)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, legacy.Close()) })
-	out, err = legacy.CreateWithInitialCommit(ctx, "legacy", &base.AccountSimplePlayer{PlayerId: 3105})
+	_, err = legacy.CreateWithInitialCommit(ctx, "legacy", &base.AccountSimplePlayer{PlayerId: 3105})
 	require.NoError(t, err)
-	require.Nil(t, out.InitialPlayerData, "Legacy 隔离路径不得发初始持久资格")
 	var marker uint64
 	require.NoError(t, db.QueryRow("SELECT initial_player_commit FROM account_role WHERE player_id=3105").Scan(&marker))
 	require.Zero(t, marker)
@@ -196,8 +229,8 @@ func TestTiDBInitialCommitIsRequiredWithoutTiDBProbeAndLegacyIsExplicit(t *testi
 	require.Error(t, err)
 }
 
-func TestTiDBInitialCommitProofNeedsOriginPayloadAndNoHistoricalFloor(t *testing.T) {
-	for _, mode := range []string{"initial", "unmarked", "payload", "historical-floor"} {
+func TestTiDBInitialCommitProofNeedsInitialRowsAndNoHistoricalFloor(t *testing.T) {
+	for _, mode := range []string{"initial", "unmarked", "saved-row", "historical-floor"} {
 		t.Run(mode, func(t *testing.T) {
 			s, db := accountDirectoryTiDB(t)
 			storage, schema := initialPlayerSchemaForTest(t, s)
@@ -208,8 +241,8 @@ func TestTiDBInitialCommitProofNeedsOriginPayloadAndNoHistoricalFloor(t *testing
 			switch mode {
 			case "unmarked":
 				_, err = db.Exec("UPDATE account_role SET initial_player_commit=0 WHERE player_id=3107")
-			case "payload":
-				_, err = db.Exec("UPDATE `"+schema+"`.player_database SET `profile_component`=? WHERE player_id=3107", []byte{8, 1})
+			case "saved-row":
+				_, err = db.Exec("UPDATE `"+schema+"`.player_store SET save_seq=2 WHERE player_id=3107 AND kind=?", int32(storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT))
 			case "historical-floor":
 				admissions := NewAccountRoleAdmissionStore(s)
 				_, err = admissions.Register(ctx, admissionTestRequest(3107, 1, 1))
@@ -249,14 +282,11 @@ func TestTiDBImportAndRestoreNeverSeedInitialPlayerRows(t *testing.T) {
 	var marker uint64
 	require.NoError(t, db.QueryRow("SELECT initial_player_commit FROM account_role WHERE player_id=?", role.PlayerId).Scan(&marker))
 	require.Zero(t, marker)
-	for _, table := range []string{"player_database", "player_database_1"} {
-		var count int
-		require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM `"+schema+"`.`"+table+"` WHERE player_id=?", role.PlayerId).Scan(&count))
-		require.Zero(t, count)
-	}
+	var count int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM `"+schema+"`.player_store WHERE player_id=?", role.PlayerId).Scan(&count))
+	require.Zero(t, count)
 	// 正式 Create 也不能复活或补发这个已导入角色的资格。
 	require.NoError(t, installInitialRouteForTest(s, ctx, role))
-	out, err := s.CreateWithInitialCommit(ctx, "imported", role)
+	_, err = s.CreateWithInitialCommit(ctx, "imported", role)
 	require.NoError(t, err)
-	require.Nil(t, out.InitialPlayerData)
 }

@@ -18,7 +18,6 @@ import (
 // 为什么需要:player_route 改成聚簇 (route_shard, player_id) 之后,每条单调索引从 1 条写入尾部变成 64 条
 // (placement.RouteRowShards,2026-10-13 由 16 改为 64);但空表只有 1 个 Region,开服首日数据量到不了按大小分裂的
 // 阈值,64 条尾部仍压在同一个 Region leader 上 —— **只建片前缀、不预切,在 TiDB 上等于没做**。
-// zone_merge_fence 整表只有「zone 数 × N」行,同理。
 //
 // 为什么是显式运维命令而不是迁移里自动做:按 zone 预切要真实 zone 清单,data_service 的 yaml 里没有;
 // 开新 zone、BR / PITR 恢复之后、TRUNCATE 之后(换表 ID,预切与 table attributes 都不跟过去)都要重放,
@@ -34,12 +33,12 @@ import (
 //
 // 本文件只发 ALTER TABLE … ATTRIBUTES 与 SPLIT TABLE,不写任何一行数据(player_route 的写入只许在 route_store.go)。
 
-// routeTiDBPKTypeSQL 是 tidb-prepare 的前置核对(T1):两张要按值切的表必须是聚簇主键。只读。
+// routeTiDBPKTypeSQL 是 tidb-prepare 的前置核对(T1):要按值切的表必须是聚簇主键。只读。
 const routeTiDBPKTypeSQL = "SELECT TABLE_NAME, TIDB_PK_TYPE FROM information_schema.TABLES" +
-	" WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('player_route', 'zone_merge_fence')"
+	" WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('player_route')"
 
 // routeTiDBClusteredTables 是 T1 要求为 CLUSTERED 的表(按名排序,报错顺序稳定)。
-var routeTiDBClusteredTables = []string{PlayerRouteTableName, ZoneMergeFenceTableName}
+var routeTiDBClusteredTables = []string{PlayerRouteTableName}
 
 // RouteTiDBPrepareRequest 是 tidb-prepare 的入参。
 type RouteTiDBPrepareRequest struct {
@@ -73,8 +72,8 @@ func (r RouteTiDBPrepareReport) SplitRegions() int64 {
 	return n
 }
 
-// PrepareTiDB:校验入参 → 判引擎(MySQL 直接 Skipped)→ 核对两张表都是聚簇主键(ErrRouteTiDBNotClustered,
-// dry-run 同样核对,只读)→ ATTRIBUTES ×2 → SPLIT ×(3 + zones + storages)。
+// PrepareTiDB:校验入参 → 判引擎(MySQL 直接 Skipped)→ 核对表是聚簇主键(ErrRouteTiDBNotClustered,
+// dry-run 同样核对,只读)→ ATTRIBUTES ×1 → SPLIT ×(2 + zones + storages)。
 // 入参非法一律 ErrRouteInvalidArgument,一条语句都不发。中途失败返回已执行的步骤 + error(带第几步与语句)。
 func (s *RouteStore) PrepareTiDB(ctx context.Context, req RouteTiDBPrepareRequest) (RouteTiDBPrepareReport, error) {
 	zones, storages, err := normalizeRouteTiDBPrepareIDs(req.Zones, req.Storages)
@@ -168,28 +167,23 @@ var _ = [1]struct{}{}[placement.RouteRowShards%routeTiDBPrefixSplitPoints]
 
 // routeTiDBPrepareStatements 是纯函数:zones / storages 已规范化(去重升序、范围合法)。顺序即执行顺序:
 //
-//	ATTRIBUTES player_route / zone_merge_fence(先防合并再切)
+//	ATTRIBUTES player_route(先防合并再切)
 //	player_route 行数据:(s, 0),s = 1..63                               → 64 段,每片一段
 //	idx_route_updated:(s, 0, 0),s = 1..63                               → 64 段,每片一段
 //	idx_route_home:每个 zone 一条 (z, s, 0),s = 0、8、…、56            → 每 zone 8 段、每段 8 片(s=0 那个点同时隔开相邻 zone)
 //	idx_route_storage:每个 storage 一条 (sid, s, 0),s = 0、8、…、56    → 每个落点值 8 段、每段 8 片
-//	zone_merge_fence:(z, 0),每个 zone 一个点                             → 每 zone 一个 Region
 //
 // 行数据与 idx_route_updated 为什么仍然每片一段:这两条的切点数是常数(各 63 个),不乘 zone 数;容量模型 §4.1
 // 点名要降密度的只有「每 zone 预切」,提案 H8 担心的也只是 Z 上百时 idx_route_home 的空 Region 数。对这两条没有
-// 现成的结论,取「每条写入尾部独占一个 Region」这一档(与 16 片时相同)。Region 总数 ≈ 63 + 63 + 8·Z + 8·S + Z。
+// 现成的结论,取「每条写入尾部独占一个 Region」这一档(与 16 片时相同)。Region 总数 ≈ 63 + 63 + 8·Z + 8·S。
 //
 // 不切 idx_route_storage 的 NULL 前缀段(PinOnCreate=false 时新号 storage 为 NULL):`SPLIT … BY (NULL, …)` 的写法
 // 未核实,且这一段要等 Phase 2 打开 PinOnCreate 后才有写入尾部,届时按 -storages 1000000 切。
 // 片的上界只用 placement.RouteRowShards、间隔只用 routeTiDBPrefixSplitStride,不写字面量。
 func routeTiDBPrepareStatements(zones, storages []uint32) []string {
-	const (
-		route = "`" + PlayerRouteTableName + "`"
-		fence = "`" + ZoneMergeFenceTableName + "`"
-	)
+	const route = "`" + PlayerRouteTableName + "`"
 	stmts := []string{
 		"ALTER TABLE " + route + " ATTRIBUTES 'merge_option=deny'",
-		"ALTER TABLE " + fence + " ATTRIBUTES 'merge_option=deny'",
 	}
 
 	tuples := make([]string, 0, placement.RouteRowShards)
@@ -217,19 +211,13 @@ func routeTiDBPrepareStatements(zones, storages []uint32) []string {
 	for _, sid := range storages {
 		stmts = append(stmts, prefixed("idx_route_storage", sid))
 	}
-
-	fencePoints := make([]string, 0, len(zones))
-	for _, z := range zones {
-		fencePoints = append(fencePoints, "("+u32(z)+", 0)")
-	}
-	stmts = append(stmts, "SPLIT TABLE "+fence+" BY "+strings.Join(fencePoints, ", "))
 	return stmts
 }
 
 func u32(v uint32) string { return strconv.FormatUint(uint64(v), 10) }
 
-// assertRouteTablesClustered 是 T1:两张表在 TiDB 上必须都是聚簇主键(TIDB_PK_TYPE = CLUSTERED,大小写不敏感)。
-// 缺表或任一不是 → ErrRouteTiDBNotClustered,一条 ALTER / SPLIT 都不发:非聚簇表按主键值切毫无意义,
+// assertRouteTablesClustered 是 T1:表在 TiDB 上必须是聚簇主键(TIDB_PK_TYPE = CLUSTERED,大小写不敏感)。
+// 缺表或不是 → ErrRouteTiDBNotClustered,一条 ALTER / SPLIT 都不发:非聚簇表按主键值切毫无意义,
 // 而聚簇属性建表后改不了。
 func assertRouteTablesClustered(ctx context.Context, db *sql.DB) error {
 	rows, err := db.QueryContext(ctx, routeTiDBPKTypeSQL)

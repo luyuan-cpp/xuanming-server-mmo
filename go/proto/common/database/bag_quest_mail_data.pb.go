@@ -51,12 +51,10 @@ type ItemEntry struct {
 	Pos uint32 `protobuf:"varint,4,opt,name=pos,proto3" json:"pos,omitempty"`
 	// Which bag this entry belongs to. Mirrors BagType in
 	// cpp/libs/modules/bag/bag_system.h:
-	//
-	//	0 = kInventory (main inventory)
-	//	1 = kWarehouse
-	//	2 = kEquipment
-	//	3 = kTemporary
-	//
+	//   0 = kInventory (main inventory)
+	//   1 = kWarehouse
+	//   2 = kEquipment
+	//   3 = kTemporary
 	// Stored as uint32 not the C++ enum so wire format is stable
 	// across enum extensions.
 	BagType uint32 `protobuf:"varint,5,opt,name=bag_type,json=bagType,proto3" json:"bag_type,omitempty"`

@@ -408,7 +408,7 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	}
 	for player, key := range map[uint64]string{rig.seller: "SELLER_DSN", rig.buyer: "BUYER_DSN"} {
 		cfg := tradeFullstackDSN(t, key, true)
-		db, err := authoritysql.Open(ctx, cfg.FormatDSN(), cfg.DBName, true, 2, authoritysql.Reader())
+		db, err := authoritysql.Open(ctx, cfg.FormatDSN(), cfg.DBName, authoritysql.BackendTiDB, 2, authoritysql.Reader())
 		if err != nil {
 			t.Fatalf("实际玩家TiDB连接失败: %v", err)
 		}
@@ -556,9 +556,6 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	}
 	ops, err := data.NewAssetOpRepo(db, 3*time.Second)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := ops.EnsureSeqGuardRow(ctx, uint64(time.Now().UnixMilli())); err != nil {
 		t.Fatal(err)
 	}
 	rig.engine = &Engine{Repo: &data.CommerceRepo{DB: db, Ops: ops}, IDs: ids.IDs["trade_listing"], OpIDs: ids.IDs["trade_asset_op"], Policy: Policy{Items: []uint32{original.ConfigId}, Currencies: []uint32{0}, AllowInstances: true}, Applier: caller, Ledger: rig.ledger, Now: time.Now}

@@ -9,6 +9,7 @@ package kafka
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,6 +22,22 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
+
+// testRowIDs 发单调递增的行号。每个用例一个一次性库,从 1 起算不会撞。生产来源是 data_service 进程内的号段客户端。
+type testRowIDs struct{ next atomic.Uint64 }
+
+func (s *testRowIDs) Next(context.Context) (uint64, error) { return s.next.Add(1), nil }
+
+// newRealSnapshotStore 建一个接好行号来源的真实 store。
+func newRealSnapshotStore(t *testing.T, db *storetest.DB) *store.SnapshotStore {
+	t.Helper()
+	ss, err := store.NewSnapshotStore(db.Cfg)
+	require.NoError(t, err)
+	ids := &testRowIDs{}
+	ss.UseRowIDs(ids, ids)
+	t.Cleanup(func() { _ = ss.Close() })
+	return ss
+}
 
 // waitCommitted 轮询到 partition 的已提交最高 offset >= want。
 func waitCommitted(t *testing.T, r *fakeReader, partition int, want int64) {
@@ -54,9 +71,7 @@ func runConsumer(t *testing.T, c runner) (stop func()) {
 
 func TestSnapshotConsumer_RealStore_DedupsBySnapshotGuidAndStaysInvisibleToGm(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
-	ss, err := store.NewSnapshotStore(db.Cfg)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = ss.Close() })
+	ss := newRealSnapshotStore(t, db)
 
 	reader := newFakeReader(nil)
 	c := NewSnapshotConsumer(SnapshotConsumerConfig{DBRetryBackoff: 10 * time.Millisecond}, reader, ss)
@@ -164,9 +179,7 @@ func TestTxLogConsumer_RealStore_ReplayAfterCommitIsNoop(t *testing.T) {
 // (生产上同一 guid 只会出现在一个分区 —— key=player_id;这里故意跨分区放一条,证明去重不依赖分区归属。)
 func TestSnapshotConsumer_RealStore_BatchModeDedupsAndCommits(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
-	ss, err := store.NewSnapshotStore(db.Cfg)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = ss.Close() })
+	ss := newRealSnapshotStore(t, db)
 
 	reader := newFakeReader(nil)
 	c := NewSnapshotConsumer(SnapshotConsumerConfig{

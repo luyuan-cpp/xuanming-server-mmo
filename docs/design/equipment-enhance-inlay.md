@@ -308,10 +308,11 @@ service SceneBagClientPlayer 末尾追加(顺序不可变,CallMethod 按 method 
 ```cpp
 // 按 config 全或无扣除并逐条落销毁流水:任何一种持有量不够就一件不扣,返回 kBagInsufficientItems。
 // itemsToRemove 为空,或任一条目 count == 0 → 打 ERROR,返回 kInvalidParameter,一件不扣、不落流水
-//   (编程错误:底层对 0 数量的结果取决于玩家是否恰好持有该物品,所以在入口判掉;调用方自己跳过不需要扣的项)。
+//   (编程错误:0 数量的条目没有可扣的东西,却会进预检与流水,所以在入口判掉;调用方自己跳过不需要扣的项)。
 // 跨 zone 冻结期返回 kInvalidParameter(一件不扣)。不判战斗(D48:闸放在玩法入口层)。
 // 扣到 0 的堆会以 size == 0 留在包里,调用方随后调 MergeAndCompact(kMergeOnly) 回收(同战斗结算)。
-// 常规的「不够」请调用方先用静默的 Bag::GetTotalItemCount 预检:本函数内部的不足分支会打 ERROR 与调用栈。
+// 常规的「不够」请调用方先用静默的 Bag::CheckQuantities / CheckItemsAvailable 预检,并区分版本错位与确定不足:
+//   本函数内部的不足分支会打 ERROR 与调用栈。计数与扣除只认 ItemStore::IsCountableByConfig 的单位(混版本保护第 6 批)。
 // 按 config 抽数量**不看是不是装备**:调用方必须保证被扣的 config 不是装备(§4.3 的写入口在提交前校验)。
 static uint32_t RemoveItemsExact(
     entt::entity playerEntity,
@@ -396,7 +397,7 @@ static void SetRandomSourceForTest(std::function<uint64_t(uint64_t)> rand);
 | 4 | `cur = min(实例.enhance_level, max)`;`cur >= max` | `kEquipEnhanceMaxLevel` |
 | 5 | 取 `EquipEnhance` 第 `cur + 1` 行(缺行打 ERROR);`success_rate == 0`(必败的行不收费) | `kEquipInternalError`;`kEquipEnhanceUnavailable` |
 | 6 | 要材料(`material_id != 0 && material_count > 0`)时:材料的 Item 行必须存在且 `equip_kind == 0`(否则打 ERROR —— 按 config 扣会把装备当材料销毁) | `kEquipInternalError` |
-| 7 | 要材料时 `inventory.GetTotalItemCount(material_id) < material_count` | `kEquipEnhanceMaterialNotEnough` |
+| 7 | 要材料时 `inventory.CheckQuantities({{material_id, material_count}})`:确定不足;只有算上带更新版本字段的材料才够(版本错位,打 `metric=persist_version_skew where=equip_enhance` WARN,先于金币判定,非终态,升级后可重试) | `kEquipEnhanceMaterialNotEnough`;`kFeatureUnavailable` |
 | 8 | `cost_gold > 0` 时 `!CurrencySystem::CanAfford(player, kCurrencyGold, cost)`(`cost_gold > INT64_MAX` 视为付不起) | `kEquipEnhanceGoldNotEnough` |
 | —— | **以上全是纯校验,任何一条失败什么都没动** | |
 | 9 | `success = equiprules::RollEnhanceSuccess(row.success_rate, RandBelow)`(先掷后扣:流水的 `extra` 要带成败;结果在回包前不外露) | — |
@@ -420,7 +421,7 @@ static void SetRandomSourceForTest(std::function<uint64_t(uint64_t)> rand);
 | 3 | `!IsGem(gemConfigId)`(表里没有这一行,或它的 Item 行不存在 / 是装备) | `kEquipGemNotGem` |
 | 4 | `CheckGemFit(该部位的孔位定义, 实例 gems 里出现过的**全部** socket(原始记录,不按是否生效过滤;只有 `gem_config_id == 0` 的空壳记录视同不存在,见取下一节), socket, gem.gem_type)` | `kEquipGemSocketInvalid` / `kEquipGemSocketOccupied` / `kEquipGemTypeMismatch` |
 | 5 | 实例 `gems_size() >= kMaxGemSockets`(干净数据走不到:孔位已被第 4 步判满;走到 = 脏数据,打 ERROR) | `kEquipInternalError` |
-| 6 | `inventory.GetTotalItemCount(gemConfigId) < 1` | `kEquipGemNotOwned` |
+| 6 | `inventory.CheckQuantities({{gemConfigId, 1}})`:一颗都没有;只有带更新版本字段的堆里有(版本错位,打 `metric=persist_version_skew where=equip_inlay` WARN) | `kEquipGemNotOwned`;`kFeatureUnavailable` |
 | —— | **以上全是纯校验** | |
 | 7 | `BagService::RemoveItemsExact(player, inventory, {{gemConfigId, 1}}, TX_EQUIP_INLAY, itemId, extra)` | 打 ERROR,`kEquipInternalError`(什么都没动) |
 | 8 | **重新**取实例指针,`add_gems()` 写 `{socket, gemConfigId}` | 取不到:打 `[PlayerEquip][GEM_LOST]` ERROR(含 gem config),`kEquipInternalError` |

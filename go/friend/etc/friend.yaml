@@ -3,8 +3,8 @@
 # 本文件的键名与 internal/config/config.go、k8s_deploy.ps1 的 friend ConfigMap 三处必须逐字一致 ——
 # 键名写错 go-zero 当未知键静默忽略,现象是"线上跑的还是默认值",没有任何报错。
 Name: friend.rpc
-# 本地单机 MySQL 仅用于事务回归；生产必须 true 且全部副本连接同一 TiDB 事务域。
-RequireTiDB: false
+# 后端档位 tidb | mysql,不写就是 tidb;这份本地样例连单机 MySQL。全部副本必须连同一事务域。
+Backend: mysql
 AccountRoleSchema: testdb
 # 必须由部署显式注入实际全局 login 实例/DB；占位配置拒绝启动，不推测 localhost。
 GlobalLoginSessions: false

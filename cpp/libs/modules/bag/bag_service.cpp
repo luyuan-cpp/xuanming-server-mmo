@@ -455,10 +455,9 @@ uint32_t BagService::RemoveItemsExact(
 				  << " correlation_id=" << correlationId;
 		return PrintStackAndReturnError(kInvalidParameter);
 	}
-	// 0 数量的条目:底层的全或无预检(ItemStore::HasAll)只在遍历到同 config 的实例时才把
-	// 需求项划掉,于是 {X: 0} 在玩家持有 X 时放行、一个 X 都没有时报不足 —— 结果取决于
-	// 玩家恰好有什么,而不是取决于请求本身。入包侧为同一类问题加过前置拒绝
-	// (Bag::AddItems 的零数量预检),这里同理:整批拒,不替调用方猜它想扣什么。
+	// 0 数量的条目是编程错误:没有可扣的东西,却会进预检、回执与流水。底层预检
+	// (ItemStore::CheckQuantities)对 0 需求恒判满足,不会替调用方拦它;入包侧为同一类问题
+	// 加过前置拒绝(Bag::AddItems 的零数量预检),这里同理:整批拒,不替调用方猜它想扣什么。
 	for (const auto &[configId, count] : itemsToRemove)
 	{
 		if (count == 0)

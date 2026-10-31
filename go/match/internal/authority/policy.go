@@ -6,7 +6,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -24,14 +23,9 @@ func (s *Store) EnsureGlobalPolicy(ctx context.Context, c config.Config) error {
 		strconv.Itoa(config.TeamCapacity), strconv.FormatUint(config.TeamApplicationTTLMs, 10), strconv.Itoa(config.TeamMaxApplications),
 		strconv.FormatUint(config.TeamInviteTTLMs, 10), strconv.Itoa(config.TeamMaxInvitesPerTeam), strconv.Itoa(config.TeamMaxPendingInvitesPerInvitee), strconv.Itoa(config.TeamIdleTTLSeconds))
 	parts = append(parts, "entry-authority/v1", c.GlobalMatch.AccountRoleSchema, c.GlobalMatch.GuildTrialSchema)
-	keys := make([]string, 0, len(c.PveTeamSizeByConfigId))
-	for key := range c.PveTeamSizeByConfigId {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		parts = append(parts, key+":"+strconv.FormatUint(uint64(c.PveTeamSizeByConfigId[key]), 10))
-	}
+	// 范围树逐级放宽阈值是提交点规则（claimTx 用它复核），各副本必须一致。
+	// 模板目录（PlayMode / Dungeon / ZoneGroup 表）不进指纹：改表滚动生效，不需要停全部副本。
+	parts = append(parts, "scope-tree/v1", strconv.FormatUint(uint64(c.GlobalMatch.ScopeGroupAfterSeconds), 10), strconv.FormatUint(uint64(c.GlobalMatch.ScopeGlobalAfterSeconds), 10))
 	mac := hmac.New(sha256.New, s.Secret)
 	_, _ = mac.Write([]byte(strings.Join(parts, "\n")))
 	digest := mac.Sum(nil)

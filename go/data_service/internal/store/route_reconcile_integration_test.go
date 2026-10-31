@@ -2,8 +2,7 @@
 
 package store_test
 
-// 对账 leader 库原语(route_reconcile.go 的 R23–R31)在真实 InnoDB 上的语义。假驱动(route_reconcile_contract_test.go)证不了这几条
-// (R31 的「63 号片有行即列出」另见 TestRouteReconcile_ListMergeFenceZones):
+// 对账 leader 库原语(route_reconcile.go 的 R23–R30)在真实 InnoDB 上的语义。假驱动(route_reconcile_contract_test.go)证不了这几条:
 //  1. 租约判据真的在库时钟上:同一时刻只有一个持有者,过期(lease_until_ms 改成 1 模拟,不靠睡眠)之后才可被接管,
 //     旧 leader 的每拍与释放受影响 0 行、零写入;
 //  2. 回档检测(M3):水位键水位 > 库水位(容差 0)或世代不符 → writable=0,W1 随即 ErrRouteNotWritable;冻结时水位不动;
@@ -571,29 +570,4 @@ func TestScanRoutesUpdatedSince_UsesIdxRouteUpdated(t *testing.T) {
 		t.Logf("R29 plan: %v", plan)
 		assert.Contains(t, plan["possible_keys"], "idx_route_updated", "R29 must be able to use idx_route_updated")
 	}
-}
-
-// TestRouteReconcile_ListMergeFenceZones(核实意见 A1-4 / LR-1):R31 列出 63 号片上**有行**的全部 zone,按 zone_id 升序 ——
-// 生效、已过期、未封锁的空行都算(本方案写过镜像的 zone 都在里面);只在别的片有行的 zone 不算。没有行回空。
-func TestRouteReconcile_ListMergeFenceZones(t *testing.T) {
-	requireReadsIT(t)
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := reconcileITCtx(t)
-	const run = "71-72-20261020T000000Z-0a1b2c3d"
-	readShard := uint32(store.RouteFenceReadShardForTest)
-
-	empty, err := st.ListMergeFenceZones(ctx)
-	require.NoError(t, err)
-	assert.Empty(t, empty)
-
-	// 72 生效、71 已过期、73 是未封锁的空行(都在 63 号片,故意乱序插入);74 只在 0 号片有行。
-	seedReadFence(t, db, 72, readShard, run, 3_600_000, 2)
-	seedReadFence(t, db, 71, readShard, run, -3_600_000, 1)
-	seedReadFence(t, db, 73, readShard, "", 0, 0)
-	seedReadFence(t, db, 74, 0, run, 3_600_000, 1)
-
-	got, err := st.ListMergeFenceZones(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, []uint32{71, 72, 73}, got)
 }

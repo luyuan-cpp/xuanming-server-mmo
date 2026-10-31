@@ -414,6 +414,10 @@ type BaseDeployConfig struct {
 	// battle 节点客户端面并发直连上限。0 = 关闭运维阈值(仅 dev/test);
 	// 语义与 gate_max_connections 相同:超限连接在握手前即被拒。
 	BattleMaxConnections uint32 `protobuf:"varint,17,opt,name=battle_max_connections,json=battleMaxConnections,proto3" json:"battle_max_connections,omitempty"`
+	// 观战订阅凭证的 HMAC 共享密钥(battle-spectate-tiered-fanout.md §15.2 / D98):match 签发、gate 本地验签。
+	// 与 gate_token_secret、battle_token_secret 分域,三者必须互不相同。空值处置同 battle_token_secret:
+	// dev/test 放行并 WARN(gate 拒绝一切 SubscribeSpectate,只能走直连观战),prod 拒绝启动。
+	SpectateTokenSecret string `protobuf:"bytes,24,opt,name=spectate_token_secret,json=spectateTokenSecret,proto3" json:"spectate_token_secret,omitempty"`
 	// 集群号:部署级常量,由运维一次性设定(ConfigMap / yaml),策划不碰,默认 0。
 	// 只有 Go 的 snowflake 槽位协议(login-player / guild / scene-manager / match)消费它,
 	// 作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
@@ -603,6 +607,13 @@ func (x *BaseDeployConfig) GetBattleMaxConnections() uint32 {
 		return x.BattleMaxConnections
 	}
 	return 0
+}
+
+func (x *BaseDeployConfig) GetSpectateTokenSecret() string {
+	if x != nil {
+		return x.SpectateTokenSecret
+	}
+	return ""
 }
 
 func (x *BaseDeployConfig) GetClusterId() uint32 {
@@ -872,7 +883,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x10call_deadline_ms\x18\x01 \x03(\v2%.GrpcClientConfig.CallDeadlineMsEntryR\x0ecallDeadlineMs\x1aA\n" +
 	"\x13CallDeadlineMsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe4\b\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x98\t\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -892,7 +903,8 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x13data_root_directory\x18\x0e \x01(\tR\x11dataRootDirectory\x120\n" +
 	"\x14gate_max_connections\x18\x0f \x01(\rR\x12gateMaxConnections\x12.\n" +
 	"\x13battle_token_secret\x18\x10 \x01(\tR\x11battleTokenSecret\x124\n" +
-	"\x16battle_max_connections\x18\x11 \x01(\rR\x14battleMaxConnections\x12\x1d\n" +
+	"\x16battle_max_connections\x18\x11 \x01(\rR\x14battleMaxConnections\x122\n" +
+	"\x15spectate_token_secret\x18\x18 \x01(\tR\x13spectateTokenSecret\x12\x1d\n" +
 	"\n" +
 	"cluster_id\x18\x12 \x01(\rR\tclusterId\x12/\n" +
 	"\n" +

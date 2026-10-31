@@ -85,7 +85,7 @@ spec:
 # minAvailable 由脚本渲染:单 broker 是 1,多 broker 是 broker 数 − 1(= 一次最多自愿驱逐一个,
 # 副本数 3 + min.insync.replicas 2 正好容得下一个 broker 不在)。下面这段说的是单 broker 的情形。
 # 单 broker 的 PDB 只有一种有意义的写法:minAvailable: 1 = **不允许自愿驱逐**。
-# 这不是洁癖 —— 整个控制面(gate/scene 的命令通道)、db_task 落库、审计流水都只有这一个
+# 这不是洁癖 —— 整个控制面(gate/scene 的命令通道)、审计流水都只有这一个
 # broker,自动化的节点排空 / 集群升级把它顺手赶走时,停机窗口里产出的命令会在 librdkafka
 # 的 5 分钟消息超时后直接丢。让 `kubectl drain` 挂住,是为了逼一次人工决策。
 #
@@ -154,8 +154,7 @@ spec:
       containers:
         - name: kafka
           # 镜像钉 tag@digest(2026-10-15)。浮动的 :latest 配 PVC 上的持久日志目录,一次重启就可能让新版本 broker
-          # 去读旧版本写下的日志与 KRaft 元数据;group coordinator 与 OffsetDelete 的语义也会随镜像漂移,
-          # 而 go/db 存盘消费组按 zone 拆分的交接依赖它们。2026-10-15 核对时它与 Docker Hub 上的 latest 是同一个
+          # 去读旧版本写下的日志与 KRaft 元数据。2026-10-15 核对时它与 Docker Hub 上的 latest 是同一个
           # index digest。四处必须同改、digest 也必须相同:本文件、kafka-topic-init.yaml、deploy/docker-compose.yml
           # 的 kafka 与 kafka-topic-init。核对与升级步骤见 README「Kafka:StatefulSet + PVC」的「镜像钉版本」。
           # 改这一行会让下一次 infra-up 滚动重启 kafka StatefulSet:单 broker 档等于一次 broker 重启,
@@ -166,8 +165,8 @@ spec:
           # 文件描述符上限(R06)。K8s 没有声明 ulimit 的字段,容器运行时的 nofile **软**限
           # 因运行时/版本而异(Docker Desktop 给 1048576,不少 containerd 配置只给 1024)。
           # 而这个 broker 光控制面命令 topic 就有 2×256 个分区,每个分区至少 3 个打开文件
-          # (segment + offset index + time index),再加审计 / db_task / 迁移窗口里残留的
-          # per-node topic,以及每个客户端连接一个 fd —— 1024 是必然 "Too many open files"
+          # (segment + offset index + time index),再加审计 topic、观战帧 topic,
+          # 以及每个客户端连接一个 fd —— 1024 是必然 "Too many open files"
           # (表现为分区离线、客户端连不上,而不是一条清楚的报错)。
           #
           # 所以在 exec 真正的入口之前把软限抬到硬限。软限只能升到硬限,不需要任何特权。
@@ -255,7 +254,7 @@ spec:
               value: "__KAFKA_MIN_INSYNC_REPLICAS__"
             - name: KAFKA_DEFAULT_REPLICATION_FACTOR
               value: "__KAFKA_REPLICATION_FACTOR__"
-            # acks=all 的生产者(C++ 幂等生产者、login 的 db_task 生产者)至少要这么多副本确认才算写入成功。
+            # acks=all 的生产者(C++ 幂等生产者)至少要这么多副本确认才算写入成功。
             # 多 broker 取 2:三份里允许一份掉队,但不允许只剩一份还照常收写(那份再丢就是数据丢失)。
             # 它是 broker 级默认值,对**所有** topic 生效 —— 多 broker 集群里若有人建了副本数 1 的 topic,
             # acks=all 的写入会被 NOT_ENOUGH_REPLICAS 拒掉,这是有意的:不让假冗余悄悄跑着。
@@ -271,21 +270,17 @@ spec:
               value: "/var/lib/kafka/data"
             # --- Retention: broker 默认保留期(topic 没有自己的 retention.ms 覆盖时生效)。
             # **必须 > 消费者可能落后的最长时间**。C++ 消费者的 max.poll.interval.ms 是
-            # 900000(kafka_consumer.cpp),迁移窗口里还活着的 per-node topic
-            # (gate-<id> / scene-<id>)是 broker auto-create 出来的、只吃这个默认值 ——
-            # 保留期低于 900s 时,一个短暂落后的 gate 丢的是 BindSession / RoutePlayer,
-            # 而不是"追上来"(routing-identity-audit-20260908.md R11)。
+            # 900000(kafka_consumer.cpp):保留期低于 900s 时,一个短暂落后的 gate 丢的是 BindSession / RoutePlayer,
+            # 而不是"追上来"(routing-identity-audit-20260908.md R11)。现役 topic 都声明了自己的保留期,这个默认值只是兜底。
             # 具体数值由 k8s_deploy.ps1 的 -KafkaProfile 决定,规则写在 Apply-KafkaProfileDefaults。
-            # 有自己契约的 topic(审计 30 天、命令 topic 1 小时、db_task 见 ConfigMap)
+            # 有自己契约的 topic(审计 30 天、命令 topic 1 小时、match-results 7 天)
             # 由 kafka-topic-init Job / 各服务的 EnsureTopics 显式覆盖,不吃这个默认值。
             - name: KAFKA_LOG_RETENTION_MS
               value: "__KAFKA_LOG_RETENTION_MS__"
             - name: KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS
               value: "__KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS__"
             # 每分区的磁盘上限,是 PVC 的兜底闸(retention.ms 先到先删,这条防突发写爆盘)。
-            # broker 缺省只兜底没有自己 retention.bytes 的 topic(审计、控制面、旧的一节点一 topic);
-            # db_task 的 retention.bytes 由各 zone 的 db / login 在 topic 级设置(ConfigMap 的 Kafka.RetentionBytes,
-            # 值由 k8s_deploy.ps1 的 Get-KafkaDiskPlan 按盘预算算出)。
+            # 现役 topic 都没有 topic 级 retention.bytes,都吃这个缺省值;盘预算见 k8s_deploy.ps1 的 Get-KafkaDiskPlan。
             - name: KAFKA_LOG_RETENTION_BYTES
               value: "__KAFKA_LOG_RETENTION_BYTES__"
             - name: KAFKA_LOG_SEGMENT_BYTES
@@ -362,14 +357,12 @@ spec:
   # 一块盘,跟着 Pod 身份走。不写 storageClassName = 用集群默认 StorageClass
   # (kind 的 local-path、云上的默认盘)。
   # 大小由 k8s_deploy.ps1 的 Get-KafkaDiskPlan 按盘预算公式算,Apply-Infra 替换下面 storage 的占位:
-  #   PVC ≥ 1.3 × Σ(分区数 × (retention.bytes + segment)),另计审计 topic 与其它 topic 的预留;
+  #   PVC ≥ 1.3 × (审计分区数 × (broker 缺省 retention.bytes + segment) + 命令分区数 × segment + 其它 topic 预留),与 zone 数无关;
   #   每个 broker 按「持有每个分区的一份副本」算,不按 RF ÷ broker 数均摊:3 → N 扩容后、kafka-reassign-partitions 之前,
-  #   老 broker 仍持有全部分区,按均摊算会写爆它们(≥ 4 个 broker 时因此偏保守)。
-  # 线上已有 StatefulSet 时沿用线上模板;retention.bytes 按模板与每块 PVC 实际容量中小的那个算
-  # (盘不够就按盘收缩 db_task 的 retention.bytes 并告警);StatefulSet 不在但 PVC 在时按最小的实际 PVC。
-  # volumeClaimTemplates 不可变,扩盘不能靠改这里再 apply:按 deploy/k8s/README.md「Kafka 磁盘预算与 db_task retention.bytes」
+  #   老 broker 仍持有全部分区(≥ 4 个 broker 时因此偏保守)。
+  # 线上已有 StatefulSet 时沿用线上模板,盘小于公式值只告警;StatefulSet 不在但 PVC 在时按最小的实际 PVC。
+  # volumeClaimTemplates 不可变,扩盘不能靠改这里再 apply:按 deploy/k8s/README.md「Kafka 磁盘预算」
   # 的 runbook 先 patch PVC、再 --cascade=orphan 删 StatefulSet、最后带 -KafkaStorageGi 重跑 infra-up。
-  # db_task 的 retention.bytes 由各 zone 的 db / login 在 topic 级设置,不吃上面 KAFKA_LOG_RETENTION_BYTES 的 broker 缺省值。
   # 注意:删 StatefulSet **不会**删这块 PVC(删 namespace 才会)。infra-down 是删 namespace,
   # 所以 infra-down → infra-up 之后是一套全新的空 Kafka,必须重跑 infra-kafka-topics。
   volumeClaimTemplates:

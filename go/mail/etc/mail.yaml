@@ -8,7 +8,7 @@ Etcd:
   Hosts: [127.0.0.1:2379]
 MetricsListenAddr: 127.0.0.1:9240
 DSNEnv: MMORPG_MAIL_SQL_DSN
-RequireTiDB: true
+Backend: tidb
 MaxOpenConns: 16
 AutoMigrate: false
 TableDir: ../../generated/tables

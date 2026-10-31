@@ -12,7 +12,7 @@ import (
 	"shared/idsegment"
 )
 
-// guildIDBizTag 是 id_segment 表里 guild_id 的业务键。公会跨 zone,全球唯一号源。
+// guildIDBizTag 是发号器里 guild_id 的业务键。公会跨 zone,全球唯一号源。
 const guildIDBizTag = "guild"
 
 // guildIDWarmTimeout 是启动时同步领第一段的预算。只为把「配置错 / data_service 不通」
@@ -36,7 +36,7 @@ func (s *ServiceContext) initGuildIDSegment() {
 	cfg := s.Config.IdSegment
 	if !cfg.Enabled {
 		logx.Infof("[id-segment] guild_id minting: snowflake-only (IdSegment.Enabled=false; "+
-			"set IdSegment.Enabled=true + DataServiceRpc to mint from id_segment biz_tag=%s)", guildIDBizTag)
+			"set IdSegment.Enabled=true + DataServiceRpc to mint from the id issuer, biz_tag=%s)", guildIDBizTag)
 		return
 	}
 	if s.DataServiceClient == nil {
@@ -64,38 +64,16 @@ func (s *ServiceContext) initGuildIDSegment() {
 		panic(fmt.Errorf("guild id segment client: %w", err))
 	}
 	s.GuildIDSegment = seg
-	logx.Infof("[id-segment] guild_id minting: segment biz_tag=%s initial_step=%d step_bounds=[%d, %d] fallback_to_snowflake=%v",
-		guildIDBizTag, cfg.StepOrDefault(), cfg.MinStepOrDefault(), cfg.MaxStepOrDefault(), cfg.FallbackToSnowflake)
+	logx.Infof("[id-segment] guild_id minting: segment biz_tag=%s initial_step=%d step_bounds=[%d, %d]",
+		guildIDBizTag, cfg.StepOrDefault(), cfg.MinStepOrDefault(), cfg.MaxStepOrDefault())
 }
 
-// NewGuildIDMinter 按 IdSegment 配置组装建帮发号策略(设计稿 §6.4):
-//
-//   - Enabled=false(segment 为 nil):纯 snowflake —— 回滚开关。
-//   - Enabled=true,FallbackToSnowflake=false(默认):号段失败 → 建帮整体失败。
-//   - Enabled=true,FallbackToSnowflake=true:号段失败 → 记 ERROR 后走 snowflake。
-//
-// snowflake 是 guild.go 里申领的 shared/snowflake.Node 的 Generate:它的接线(槽位 /
-// 水位 / fence)一字不动,既是可选回退,也是解码存量 guild_id 的依据。
-func NewGuildIDMinter(cfg idsegment.Conf, segment *idsegment.Client,
-	snowflake func() (uint64, error)) *idsegment.Minter {
-	var src idsegment.Source
-	if segment != nil { // 别把 nil *Client 装进非 nil 接口
-		src = segment
-	}
-	return buildGuildIDMinter(cfg, src, snowflake)
-}
-
-// buildGuildIDMinter 是策略的纯函数版,单测直接打它(见 guild_id_minter_test.go)。
-func buildGuildIDMinter(cfg idsegment.Conf, segment idsegment.Source,
-	snowflake func() (uint64, error)) *idsegment.Minter {
+// NewGuildIDMinter 组装建帮发号:只有号段一条路,号段失败即建帮失败。
+// segment 为 nil(IdSegment.Enabled=false)时发不出 id,建帮一律失败。
+func NewGuildIDMinter(segment *idsegment.Client) *idsegment.Minter {
 	m := &idsegment.Minter{Name: "guild_id"}
-	if !cfg.Enabled || segment == nil {
-		m.Fallback = snowflake
-		return m
-	}
-	m.Segment = segment
-	if cfg.FallbackToSnowflake {
-		m.Fallback = snowflake
+	if segment != nil { // 别把 nil *Client 装进非 nil 接口
+		m.Segment = segment
 	}
 	return m
 }
@@ -108,12 +86,8 @@ func (s *ServiceContext) WarmGuildIDSegment() {
 	ctx, cancel := context.WithTimeout(context.Background(), guildIDWarmTimeout)
 	defer cancel()
 	if err := s.GuildIDSegment.Warm(ctx); err != nil {
-		mode := "fails closed"
-		if s.Config.IdSegment.FallbackToSnowflake {
-			mode = "falls back to snowflake"
-		}
 		logx.Errorf("[id-segment] guild_id first segment not available yet (data_service.AllocateIdSegment): %v "+
-			"— CreateGuild will retry per request and %s until data_service answers", err, mode)
+			"— CreateGuild will retry per request and fails closed until data_service answers", err)
 	}
 }
 

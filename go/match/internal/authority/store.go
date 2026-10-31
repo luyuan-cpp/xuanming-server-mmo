@@ -13,7 +13,9 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
+	"match/internal/catalog"
 	"match/internal/config"
+	"match/internal/scope"
 	battlepb "proto/battle"
 	pb "proto/match"
 	"schemamigrate"
@@ -29,6 +31,9 @@ type Store struct {
 	TeamConfig       config.TeamConf // 启动时由同一SQL策略指纹准入，运行中不热改。
 	roleGuard        func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error
 	entryGuard       func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error
+	// catalog 与 schedule 由 ConfigureMatchCatalog 启动时装配，之后只读（见 match_rules.go）。
+	catalog  *catalog.Catalog
+	schedule scope.Schedule
 }
 
 const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,preferred_region,owner_account,owner_revision"
@@ -180,7 +185,8 @@ func (s *Store) CommitProfile(ctx context.Context, pid uint64, plan, binding str
 		return e
 	}
 	// 整队unit固定入队时全员探测原件；单人刷新不得绕过P全员/Team/launch锁顺序改单票。
-	if e == nil && active.State == 1 && active.TeamId == 0 {
+	// 入口已关闭的票不再续命：不刷新它的有效期，最长一个探测有效期后自然过期出队。
+	if e == nil && active.State == 1 && active.TeamId == 0 && s.catalog.Open(pb.MatchMode(active.Mode), active.ConfigId) {
 		oldProfile, decodeErr := DecodeProfile(active.NetworkProfile)
 		if decodeErr != nil {
 			return decodeErr
@@ -555,16 +561,30 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 			allPreferred = false
 		}
 	}
-	if f.RequeueOnFailure && !allPreferred {
-		wait := uint64(s.Config.CrossRegionWaitSeconds) * 1000
+	// RequeueOnFailure 只在排队成局上为真；点名成局（切磋、活动、整队直接开战）名单固定，不受下面三条约束。
+	if f.RequeueOnFailure {
+		current := make([]*pb.MatchAuthorityTicketRecord, 0, len(locked))
 		for _, member := range locked {
-			if n < wait || actual[member.PlayerId].EnqueuedMs > n-wait {
-				return errors.New("跨区须全员原等待达到阈值")
+			current = append(current, actual[member.PlayerId])
+		}
+		if !s.catalog.Open(pb.MatchMode(f.Mode), f.ConfigId) {
+			return ErrTemplateClosed
+		}
+		// 组里没有陌生人时不必等跨机房阈值：首选机房没有节点就直接放到硬延迟内的机房（D3）。
+		if !allPreferred && !singleUnit(current) {
+			wait := uint64(s.Config.CrossRegionWaitSeconds) * 1000
+			for _, ticket := range current {
+				if n < wait || ticket.EnqueuedMs > n-wait {
+					return errors.New("跨区须全员原等待达到阈值")
+				}
 			}
+		}
+		if _, admitted := s.admitScope(current, n); !admitted {
+			return ErrScopeWait
 		}
 	}
 	f.CreatedMs = n
-	f.DeadlineMs = n + 300000
+	f.DeadlineMs = s.battleDeadlineMs(n, f.ConfigId)
 	f.State = 1
 	f.RetryAtMs = n
 	sides := map[uint64]uint32{}
@@ -1043,6 +1063,17 @@ func (s *Store) Unknown(ctx context.Context, work *pb.MatchFormationRecord) erro
 	return e
 }
 func (s *Store) Finish(ctx context.Context, work *pb.MatchFormationRecord, success bool) error {
+	return s.finish(ctx, work, success, nil)
+}
+
+// FinishFailed 是发房前失败的收尾，culprits 是确定由自己导致失败的成员（掉线、不在场景、配表不一致）。
+// 排队成局失败时，单排肇事者的票直接终止、不回队，其余成员保留原入队时刻回队；
+// 肇事者属于整队时整队照常回队，由队伍复核（CheckParty）决定是否撤单，绝不拆队。
+func (s *Store) FinishFailed(ctx context.Context, work *pb.MatchFormationRecord, culprits []uint64) error {
+	return s.finish(ctx, work, false, culprits)
+}
+
+func (s *Store) finish(ctx context.Context, work *pb.MatchFormationRecord, success bool, culprits []uint64) error {
 	id := work.GetBattleId()
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
@@ -1076,15 +1107,32 @@ func (s *Store) Finish(ctx context.Context, work *pb.MatchFormationRecord, succe
 	if _, e = tx.ExecContext(ctx, "UPDATE match_formation SET state=? WHERE battle_id=?", state, id); e != nil {
 		return e
 	}
+	culprit := make(map[uint64]bool, len(culprits))
+	for _, player := range culprits {
+		culprit[player] = true
+	}
 	for _, m := range f.Members {
+		memberState := ticketState
 		formationID, region := id, f.PhysicalRegion
 		var notBefore uint64
-		if ticketState == 1 {
+		if memberState == 1 && culprit[m.PlayerId] {
+			// 只终止单排票；整队成员的票带 team_id，下面的条件更新不会命中它，整队照常回队。
+			r, err := tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4,formation_id=?,selected_region=?,not_before_ms=0 WHERE player_id=? AND ticket=? AND formation_id=? AND team_id=0", id, region, m.PlayerId, m.Ticket, id)
+			if err != nil {
+				return err
+			}
+			if terminated, err := r.RowsAffected(); err != nil {
+				return err
+			} else if terminated == 1 {
+				continue
+			}
+		}
+		if memberState == 1 {
 			formationID = 0
 			region = 0
 			notBefore = n + 1000
 		}
-		if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=?,formation_id=?,selected_region=?,not_before_ms=? WHERE player_id=? AND ticket=? AND formation_id=?", ticketState, formationID, region, notBefore, m.PlayerId, m.Ticket, id); e != nil {
+		if _, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET state=?,formation_id=?,selected_region=?,not_before_ms=? WHERE player_id=? AND ticket=? AND formation_id=?", memberState, formationID, region, notBefore, m.PlayerId, m.Ticket, id); e != nil {
 			return e
 		}
 		current, readErr := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", m.PlayerId))

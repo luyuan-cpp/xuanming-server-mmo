@@ -251,7 +251,11 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 		return errors.New("缺本命令独立控制DSN")
 	}
 	first := entries[0].Request
-	db, err := authoritysql.Open(ctx, dsn, first.AuthoritySchema, true, 2, permission)
+	backend, err := authoritysql.LoadBackend(getenv)
+	if err != nil {
+		return err
+	}
+	db, err := authoritysql.Open(ctx, dsn, first.AuthoritySchema, backend, 2, permission)
 	if err != nil {
 		return err
 	}
@@ -700,7 +704,11 @@ func runPublicationValidation(ctx context.Context, command, requestPath, request
 	if dsn == "" {
 		return errors.New("publication缺独立维护控制DSN")
 	}
-	db, err := authoritysql.Open(ctx, dsn, plan.AuthoritySchema, true, 2, permission)
+	backend, err := authoritysql.LoadBackend(getenv)
+	if err != nil {
+		return err
+	}
+	db, err := authoritysql.Open(ctx, dsn, plan.AuthoritySchema, backend, 2, permission)
 	if err != nil {
 		return err
 	}

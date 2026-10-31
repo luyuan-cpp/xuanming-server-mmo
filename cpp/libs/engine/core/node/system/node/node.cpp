@@ -1215,8 +1215,8 @@ void Node::InitClientEndpoint()
 
 void Node::InitKafka()
 {
-	// 三类节点都离不开 Kafka:gate / scene 收控制面命令,scene 发存盘 DBTask,battle 发票据公告 / 确认 /
-	// 结算 / 对局结果。带着发不出消息的生产者启动,等于存盘与结算静默丢失,所以 Brokers 为空当场失败。
+	// 三类节点都离不开 Kafka:gate / scene 收控制面命令,battle 发票据公告 / 确认 /
+	// 结算 / 对局结果。带着发不出消息的生产者启动,等于结算静默丢失,所以 Brokers 为空当场失败。
 	// broker 填了但暂时连不上不在这里拒启:librdkafka 后台重连,发送失败有 ERROR。
 	if (!kafkaManager.Init(tlsNodeConfigManager.GetBaseDeployConfig().kafka()))
 	{
@@ -1466,7 +1466,7 @@ void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
 
 	// 4) 有界等待收尾落地后再退出。
 	//    旧实现是 hook 返回后立刻 LOG_FATAL(muduo 的 FATAL 会 abort),而存盘是异步的
-	//    (Redis 命令还在发送缓冲、DBTask 还在 Kafka producer 队列),abort 等于把这一
+	//    (提交请求还在发往 go/db 的路上),abort 等于把这一
 	//    批玩家数据直接丢掉。
 	StartConflictDrainWatchdog();
 }
@@ -1893,7 +1893,7 @@ void Node::ShutdownInLoop()
 
 	// 先封住 Kafka 入站并 join 后台 poller,避免 drain 期间继续向 loop 投递
 	// command(player_migrate 搬数据链已删,入站不再有 migration 消息)。
-	// producer 保持可用,供玩家存盘继续发送 DBTask。
+	// producer 保持可用,收尾阶段还要发事件。
 	kafkaManager.StopConsumers();
 
 	RpcChannel::ProcessMaintenance()->CloseSources();
@@ -1998,7 +1998,7 @@ void Node::FinalizeTeardownInLoop()
 	}
 	// 拆除前钩子(SetBeforeTeardown):排在 producer 最后一次有界 flush 之后(重入时 kafkaManager.Shutdown 只返回缓存结果,
 	// 不再 flush),排在 Redis / ECS / 注册表拆除与 logSystem.stop() 之前 —— 业务在这里停掉自己的定时器并把未落定的事
-	// 打进日志(scene:DBTask 回执 Pump 与未落定玩家清单)。只在第一次进入时调用:下面的让轮会重入本函数,
+	// 打进日志(scene:未落定玩家清单)。只在第一次进入时调用:下面的让轮会重入本函数,
 	// 先停掉的定时器也就不会在让轮期间、在半拆的节点上再推业务。
 	if (!beforeTeardownRan_)
 	{
@@ -2008,8 +2008,7 @@ void Node::FinalizeTeardownInLoop()
 			beforeTeardownFn_(*this);
 		}
 	}
-	// Hiredis 持有 muduo Channel 和待回调命令;必须在 EventLoop 与 Scene
-	// MessageAsyncClient 回调目标都存活时释放。
+	// Hiredis 持有 muduo Channel 和待回调命令;必须在 EventLoop 与回调目标都存活时释放。
 	ReleaseLocalOwnersInLoop();
 	// 阶段 0 与本函数之间、以及 Redis 取消回调里，都可能向已关闭节点 Send:那是排在本函数之后的异步本地失败。
 	// 让一轮,等它们在 ECS / 日志仍活着时执行完再拆(Kafka / Redis 的 Shutdown 可重入)。

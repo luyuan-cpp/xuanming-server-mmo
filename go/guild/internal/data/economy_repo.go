@@ -34,7 +34,7 @@ package data
 //     以前的周期行,本文件的 upsert 只写请求开头 start 所在周期的行,两者行集合不相交(C5 补遗,minCounterCleanupAge);
 //     清理与退款同为 Point_Get,同序。计数行上的完整全序见 asset_store.go 文件头。
 //  3. **SQL 不写 status / kind / stream / counter_kind / tx_type 的数字字面量**,一律绑定生成常量(90 part2 §3 末行)。
-//  4. **合服闸门在事务内**,zone 取本事务读到的 guild.zone_id,不取缓存(缓存合服后最长陈旧一个 TTL)。
+//  4. (已删:事务内的合服闸门。别名合服不再有闸门,其余约定编号不变)
 
 import (
 	"context"
@@ -97,7 +97,7 @@ ON DUPLICATE KEY UPDATE
   used_count = IF(used_count + ? <= ?, used_count + ?, used_count)`
 
 const (
-	sqlSelectGuildZoneLevel = `SELECT zone_id, level FROM guild WHERE guild_id = ?`
+	sqlSelectGuildLevel = `SELECT level FROM guild WHERE guild_id = ?`
 	// guild_member 的两条锁定语句带 FORCE INDEX (PRIMARY):完整主键等值同时钉死了 uk_guild_member(player_id),
 	// 优化器若选唯一键,取锁顺序就成了"uk 项 → 聚簇记录",与离帮 / 被踢 / 解散按主键删这一行(聚簇 → uk 项)反序成环
 	// (lock-rules H1)。MySQL 与 TiDB 都认这个子句;实际计划由 economy_lock_plan_mysql_test.go 的 EXPLAIN 回归钉住。
@@ -107,7 +107,7 @@ const (
 	sqlDebitContribution = `UPDATE guild_member FORCE INDEX (PRIMARY) SET contribution_balance = contribution_balance - ?
 	WHERE guild_id = ? AND player_id = ? AND contribution_balance >= ?`
 
-	sqlLockGuildForUpgrade = `SELECT level, funds, zone_id FROM guild WHERE guild_id = ? FOR UPDATE`
+	sqlLockGuildForUpgrade = `SELECT level, funds FROM guild WHERE guild_id = ? FOR UPDATE`
 	sqlUpgradeGuild        = `UPDATE guild SET level = ?, funds = funds - ?, max_members = ?
 	WHERE guild_id = ? AND level = ? AND funds >= ?`
 	sqlSelectMemberIDs = `SELECT player_id FROM guild_member WHERE guild_id = ? ORDER BY player_id`
@@ -165,9 +165,6 @@ const (
 	sqlInsertClientRequest = "INSERT INTO " + guildClientRequestTable +
 		" (`player_id`, `client_request_id`, `op_id`, `created_ms`) VALUES (?, ?, ?, ?)"
 )
-
-// FenceFunc:合服闸门。nil = 不设闸;返回 ErrZoneMerging(或包它)= 拒绝。zone 一律取事务内读到的 guild.zone_id。
-type FenceFunc func(ctx context.Context, zoneID uint32) error
 
 // GuildSeqTables 返回帮会的 seq 表 / 指令表与"未决"的库值。表名经 assetop 的正则校验(它们会被拼进 SQL)。
 func GuildSeqTables() (assetop.SeqTables, error) {
@@ -320,30 +317,16 @@ func queryAssetOpRows(ctx context.Context, q queryer, what, query string, args .
 
 // ── 事务内的共用步骤 ─────────────────────────────────────────
 
-// readGuildZoneLevel 非锁定读帮会的 zone 与等级(RC 读最新已提交版本)。无行 → ErrGuildGone。
-func readGuildZoneLevel(ctx context.Context, tx *sql.Tx, guildID uint64) (zoneID, level uint32, err error) {
-	err = tx.QueryRowContext(ctx, sqlSelectGuildZoneLevel, guildID).Scan(&zoneID, &level)
+// readGuildLevel 非锁定读帮会的等级(RC 读最新已提交版本)。无行 → ErrGuildGone。
+func readGuildLevel(ctx context.Context, tx *sql.Tx, guildID uint64) (level uint32, err error) {
+	err = tx.QueryRowContext(ctx, sqlSelectGuildLevel, guildID).Scan(&level)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, 0, ErrGuildGone
+		return 0, ErrGuildGone
 	}
 	if err != nil {
-		return 0, 0, fmt.Errorf("read zone and level of guild %d: %w", guildID, err)
+		return 0, fmt.Errorf("read level of guild %d: %w", guildID, err)
 	}
-	return zoneID, level, nil
-}
-
-// checkFence 调合服闸门。闸门返回的任何错误都按"拒绝"处理:读不出合服状态时放行,
-// 合服期间的一笔资产写就可能在源区与目标区各记一份(fail-closed,与 B2 §11.1 同口径)。
-// 非 ErrZoneMerging 的错误包成 ErrZoneMerging,原因留在文本里,logic 统一映射成 GuildZoneMerging。
-func checkFence(ctx context.Context, fence FenceFunc, zoneID uint32) error {
-	if fence == nil {
-		return nil
-	}
-	err := fence(ctx, zoneID)
-	if err == nil || errors.Is(err, ErrZoneMerging) {
-		return err
-	}
-	return fmt.Errorf("%w: %v", ErrZoneMerging, err)
+	return level, nil
 }
 
 // upsertCounterWithLimit 占用计数行 n 次;超过 limit 时一次都不占,返回 limited=true。
@@ -504,7 +487,6 @@ type DonationReserve struct {
 	LeaseToken                  uint64 // 非 0
 	NowMs                       uint64
 	Payload                     []byte // proto.Marshal(AssetBundle{Currencies:[{currency, cost}]}),非空
-	Fence                       FenceFunc
 	// ClientRequestID 是客户端幂等键;0 = 旧客户端,不查也不写去重记录(checkClientRequestTx / insertClientRequestTx)。
 	ClientRequestID uint64
 }
@@ -536,9 +518,9 @@ func (in DonationReserve) validate() error {
 //
 // 事务 op=donate,锁序 guild(普通读)→ guild_member → seq(缺行先在事务内插)→ seq FOR UPDATE → op → counter
 // → guild_client_request:
-// 读帮会 zone / 等级 → 等级门槛 → 合服闸门 → 锁本人成员行 → 复核去重记录(ClientRequestID 非 0 时)→
+// 读帮会等级 → 等级门槛 → 锁本人成员行 → 复核去重记录(ClientRequestID 非 0 时)→
 // 按需建 seq 行(GUILD_DEBIT,ensureSeqRowTx)→ 分 seq → 写 PENDING 行(28 列全写)→ 占今日次数 → 写去重记录。
-// 错误语义:ErrGuildGone / ErrGuildLevelTooLow / ErrZoneMerging / ErrNotGuildMember / ErrClientRequestReplayed /
+// 错误语义:ErrGuildGone / ErrGuildLevelTooLow / ErrNotGuildMember / ErrClientRequestReplayed /
 // 包了 assetop.ErrTooManyPending 的错误(errors.Is 可判)/ ErrDonateLimit / ErrWriteConflict;其余为内部错误。
 // 任何拒绝都整体回滚:seq 不前进、行不落、次数不占、去重记录不写(首次建出的 seq 行也随之回滚,下次再建,纪元取那一次的时刻)。
 func (r *EconomyRepo) ReserveDonation(ctx context.Context, in DonationReserve) (Reserved, error) {
@@ -549,15 +531,12 @@ func (r *EconomyRepo) ReserveDonation(ctx context.Context, in DonationReserve) (
 
 	var out Reserved
 	err := r.guilds.inTx(withRoleTargets(ctx, in.PlayerID), opDonate, func(ctx context.Context, tx *sql.Tx) error {
-		zoneID, level, err := readGuildZoneLevel(ctx, tx, in.GuildID)
+		level, err := readGuildLevel(ctx, tx, in.GuildID)
 		if err != nil {
 			return err
 		}
 		if level < in.MinGuildLevel {
 			return ErrGuildLevelTooLow
-		}
-		if err := checkFence(ctx, in.Fence, zoneID); err != nil {
-			return err
 		}
 		// 本人成员行加锁:同一玩家的并发捐献在这里串行,也让离帮事务(删这一行)与本事务互斥 ——
 		// 离帮先提交,这里读不到行;本事务先提交,离帮事务里的提前截止能看到这一行。
@@ -641,7 +620,6 @@ type ShopReserve struct {
 	PeriodKey                       uint32 // limit_period==0 时为 0
 	LeaseUntilMs, LeaseToken, NowMs uint64
 	Payload                         []byte // AssetBundle{Items:[{item_id, item_count*Count}]}
-	Fence                           FenceFunc
 	ClientRequestID                 uint64 // 客户端幂等键;0 = 旧客户端,不去重(同 DonationReserve.ClientRequestID)
 }
 
@@ -674,7 +652,7 @@ func (in ShopReserve) validate() error {
 // seq FOR UPDATE → op → counter,回到已锁的成员行扣帮贡(同一行再次 UPDATE 不算新加锁),最后写去重记录。
 // 去重记录的复核紧跟成员行锁、排在余额判断之前:首次请求刚把帮贡扣到不够第二份,放在后面重发会被误拒成"帮贡不足"。
 // 商店指令 deadline_ms 恒 0:物品属于玩家,永不中止。
-// 错误语义:ErrShopLimit / ErrGuildGone / ErrGuildLevelTooLow / ErrZoneMerging / ErrNotGuildMember / ErrClientRequestReplayed /
+// 错误语义:ErrShopLimit / ErrGuildGone / ErrGuildLevelTooLow / ErrNotGuildMember / ErrClientRequestReplayed /
 // ErrContributionInsufficient / 包了 assetop.ErrTooManyPending 的错误 / ErrWriteConflict;其余为内部错误。
 func (r *EconomyRepo) ReserveShopOrder(ctx context.Context, in ShopReserve) (ShopReserved, error) {
 	if err := in.validate(); err != nil {
@@ -689,15 +667,12 @@ func (r *EconomyRepo) ReserveShopOrder(ctx context.Context, in ShopReserve) (Sho
 
 	var out ShopReserved
 	err := r.guilds.inTx(withRoleTargets(ctx, in.PlayerID), opShop, func(ctx context.Context, tx *sql.Tx) error {
-		zoneID, level, err := readGuildZoneLevel(ctx, tx, in.GuildID)
+		level, err := readGuildLevel(ctx, tx, in.GuildID)
 		if err != nil {
 			return err
 		}
 		if level < in.RequiredGuildLevel {
 			return ErrGuildLevelTooLow
-		}
-		if err := checkFence(ctx, in.Fence, zoneID); err != nil {
-			return err
 		}
 		var balance uint64
 		err = tx.QueryRowContext(ctx, sqlLockMemberBalance, in.GuildID, in.PlayerID).Scan(&balance)
@@ -882,12 +857,12 @@ type UpgradeResult struct {
 // UpgradeGuild 升级事务 T-U(05 §5.18)。只动 guild 的 MySQL,不经资产通道。
 //
 // 事务 op=upgrade,锁序 guild(FOR UPDATE)→ guild_member(本人,FOR UPDATE):
-// 职位 < 长老 → ErrRankTooLow;合服闸门;expectedLevel != 0 且与当前等级不同 → 无改动提交(Changed=false,
+// 职位 < 长老 → ErrRankTooLow;expectedLevel != 0 且与当前等级不同 → 无改动提交(Changed=false,
 // NewLevel = 当前等级),挡住重复点击连升两级;当前等级行 cost == 0 → ErrGuildMaxLevel;下一级行缺 →
 // ErrGuildLevelConfigMissing;资金不足 → ErrFundsInsufficient。扣的是**当前等级行**的 upgrade_cost_funds
 // (语义:"升到下一级所需资金"),新成员上限取下一级行的 max_members。
 // 提交后 Changed 时失效帮会快照缓存;expected_level 对不上时**也**失效(见下方 staleView)。
-func (r *EconomyRepo) UpgradeGuild(ctx context.Context, guildID, playerID uint64, expectedLevel uint32, levels LevelLookup, fence FenceFunc) (UpgradeResult, error) {
+func (r *EconomyRepo) UpgradeGuild(ctx context.Context, guildID, playerID uint64, expectedLevel uint32, levels LevelLookup) (UpgradeResult, error) {
 	if levels == nil {
 		return UpgradeResult{}, fmt.Errorf("upgrade guild %d: level lookup not injected", guildID)
 	}
@@ -901,11 +876,10 @@ func (r *EconomyRepo) UpgradeGuild(ctx context.Context, guildID, playerID uint64
 	)
 	err := r.guilds.inTx(ctx, opUpgrade, func(ctx context.Context, tx *sql.Tx) error {
 		var (
-			level  uint32
-			funds  uint64
-			zoneID uint32
+			level uint32
+			funds uint64
 		)
-		err := tx.QueryRowContext(ctx, sqlLockGuildForUpgrade, guildID).Scan(&level, &funds, &zoneID)
+		err := tx.QueryRowContext(ctx, sqlLockGuildForUpgrade, guildID).Scan(&level, &funds)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrGuildGone
 		}
@@ -923,9 +897,6 @@ func (r *EconomyRepo) UpgradeGuild(ctx context.Context, guildID, playerID uint64
 		// 比 Rank 不比 role 原值:role 编码不连续,`role >= RoleOfficer` 会把未知编码一起放进来。
 		if constants.Rank(role) < constants.RankOfficer {
 			return ErrRankTooLow
-		}
-		if err := checkFence(ctx, fence, zoneID); err != nil {
-			return err
 		}
 		if expectedLevel != 0 && expectedLevel != level {
 			out, staleView = UpgradeResult{Changed: false, NewLevel: level}, true

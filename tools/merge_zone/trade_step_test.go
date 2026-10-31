@@ -58,7 +58,7 @@ func TestManifestWithoutTradeListingIDsStillLoads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.json")
 	raw, err := json.Marshal(map[string]any{
 		"version": manifestVersion, "run_id": "r-old", "source_zone": 901, "target_zone": 902,
-		"player_ids": []uint64{1, 2}, "steps": map[string]any{stepGuildMySQL: map[string]any{"done": true}},
+		"steps": map[string]any{stepGuildMySQL: map[string]any{"done": true}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -101,30 +101,6 @@ func TestManifestTradeListingIDsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestTradeResidualAbortMessage_KeepsFenceAndSaysHowToClearIt(t *testing.T) {
-	// 步骤 3b 复查中止走 log.Fatal,defer 里的 fence.release 不执行。文案只写「原命令重跑」
-	// 会让运维撞上 SETNX 被拒;所以必须带本次 run_id、两把键名、mapping Redis 位置与 DEL 指引。
-	msg := tradeResidualAbortMessage(1, 2, 1, 901, 902, "901-902-20260915T000000Z-abcd1234", "10.0.0.5:6379", 0)
-	for _, want := range []string{
-		"step " + stepTradeMySQL + " is NOT marked done",
-		"LEFT IN PLACE",
-		"run_id=901-902-20260915T000000Z-abcd1234",
-		"(10.0.0.5:6379 db=0) run GET merge:in_progress:901 and check its run_id is 901-902-20260915T000000Z-abcd1234",
-		"DEL merge:in_progress:901 merge:in_progress:902",
-		"another merge is already fencing zone", // 与 acquireMergeFence 的拒绝文案一致,运维能对上号
-		"market_zone=901",
-	} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("abort message is missing %q:\n%s", want, msg)
-		}
-	}
-	// 顺序也是契约:先 GET 核对,再 DEL,最后重跑。
-	get, del, rerun := strings.Index(msg, "GET "), strings.Index(msg, "DEL "), strings.Index(msg, "re-run the same command")
-	if get < 0 || del < 0 || rerun < 0 || !(get < del && del < rerun) {
-		t.Errorf("resume steps out of order (GET=%d DEL=%d re-run=%d):\n%s", get, del, rerun, msg)
-	}
-}
-
 func TestVerifyTradeListing_SkipIsAWarningNotAPass(t *testing.T) {
 	r := verifyTradeMarketZoneDrained(context.Background(), auditConfig{skipTrade: true, src: 901, dst: 902})
 	if r.Severity != "warn" {
@@ -151,7 +127,7 @@ func TestRunAuditMode_TradeVerifierOnlyInVerifyMode(t *testing.T) {
 	// 它是合服**后**的断言,合服前源区本来就该有商品。
 	has := func(rs []ResourceAudit) bool {
 		for _, r := range rs {
-			if r.Name == "verify:trade_listing" {
+			if r.Name == "verify:trade_market_zone" {
 				return true
 			}
 		}
@@ -159,7 +135,7 @@ func TestRunAuditMode_TradeVerifierOnlyInVerifyMode(t *testing.T) {
 	}
 	ctx := context.Background()
 	if !has(runAuditMode(ctx, auditConfig{verify: true, tradeSchema: defaultTradeSchema, src: 901, dst: 902})) {
-		t.Error("-verify-merged must include verify:trade_listing")
+		t.Error("-verify-merged must include verify:trade_market_zone")
 	}
 	if has(runAuditMode(ctx, auditConfig{verify: false, tradeSchema: defaultTradeSchema, src: 901, dst: 902})) {
 		t.Error("the pre-merge audit must not assert the source market is drained")

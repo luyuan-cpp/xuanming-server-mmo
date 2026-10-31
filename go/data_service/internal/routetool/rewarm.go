@@ -38,10 +38,9 @@ type rewarmRedis interface {
 }
 
 // rewarmDB 是 rewarm 在 -wait > 0 时对全局库的依赖,*store.RouteStore 天然满足(编译期断言在 rewarm_test.go)。
-// 库时钟借 ListActiveMergeFences 取:那条语句本来就带回判生效用的库时钟(store 没有单独取库时钟的方法),围栏本身只作提示。
 type rewarmDB interface {
 	ReadRouteMeta(ctx context.Context) (store.RouteMeta, error)
-	ListActiveMergeFences(ctx context.Context) (store.ActiveMergeFences, error)
+	DBNowMs(ctx context.Context) (uint64, error)
 }
 
 // rewarmKeys 是一条 DEL 里的三把控制键,顺序固定(单测按这个顺序核对命令参数)。
@@ -135,7 +134,7 @@ func RewarmExitCode(_ RewarmReport, err error) int {
 
 // RewarmNote 是 rewarm 在 stderr 打的第一行。
 const RewarmNote = "NOTE: rewarm drops mapping:route:ready, mapping:route:warm and mapping:route:watermark in one DEL; readers with " +
-	"RouteStore.ReadRequiresReady / Placement.RequireRouteReady / MergeMarkerRedis.RequireRouteReady on fail closed until the reconcile " +
+	"RouteStore.ReadRequiresReady / Placement.RequireRouteReady on fail closed until the reconcile " +
 	"leader re-arms the marker after a full prewarm (hours at full scale; runbook §9.4)"
 
 // Rewarm 跑一次 rewarm(步骤见文件头)。db 只在 Wait > 0 时用(Wait = 0 可传 nil)。
@@ -191,15 +190,11 @@ func Rewarm(ctx context.Context, rd rewarmRedis, db rewarmDB, opts RewarmOptions
 		if state == RewarmMarkerDecoded {
 			rep.BaselineSetAtMs = marker.SetAtMs
 		} else {
-			fences, err := db.ListActiveMergeFences(ctx)
+			now, err := db.DBNowMs(ctx)
 			if err != nil {
 				return rep, fmt.Errorf("read the DB clock (baseline for the re-armed marker): %w", err)
 			}
-			rep.BaselineSetAtMs = fences.DBNowMs
-			if len(fences.Fences) > 0 {
-				fmt.Fprintf(opts.Stderr, "WARN: %d active merge fence(s) in zone_merge_fence; the reconcile leader does not arm the marker "+
-					"until its fence-mirror reconciliation is clean\n", len(fences.Fences))
-			}
+			rep.BaselineSetAtMs = now
 		}
 	}
 
@@ -224,7 +219,7 @@ func Rewarm(ctx context.Context, rd rewarmRedis, db rewarmDB, opts RewarmOptions
 			"data_service replica: RouteStore.Mode=db_first, RouteStore.Reconcile.Enabled and RouteStore.Reconcile.ArmReadyMarker; "+
 			"data_service_route_reconcile_leader (exactly one replica at 1) and data_service_route_reconcile_arm_enabled; "+
 			"data_service_route_reconcile_event_total{event=~\"arming_refused_.*\"} and {event=\"task_aborted\"}; "+
-			"data_service_route_reconcile_push_total{result=~\"conflict|legacy_conflict|fenced|db_invalid|error\"}. "+
+			"data_service_route_reconcile_push_total{result=~\"conflict|legacy_conflict|db_invalid|error\"}. "+
 			"A full prewarm can take hours at full scale: rerun with a longer -wait (rewarm again only drops the keys again).\n", err)
 	default:
 		fmt.Fprintf(opts.Stderr, "ERROR while waiting: %v. The keys ARE dropped; the leader re-arms on its own, watch "+

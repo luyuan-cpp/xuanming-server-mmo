@@ -589,23 +589,23 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 		if (!CurrencySystem::CanAfford(player, static_cast<CurrencyType>(currency.currency_type()), static_cast<int64_t>(currency.amount())))
 		{ RejectAndRecord(player, ledgerComp, request, kAssetCurrencyInsufficient, nowMs, response); return; }
 	}
+	// 按数量扣出只认可互换的普通单位(ItemStore::IsCountableByConfig)。只有算上带更新版本字段的单位才够,
+	// 是版本错位:回 RETRY、不记账,等玩家落到认识这些字段的节点再扣;记成终态会让对侧白白退款或中止,
+	// 当成普通单位扣走则会把带新属性(例如绑定)的物品交易出去(混版本设计 §4.4 第 6 批)。
+	// 错位先记下,等下面与版本无关的确定性校验(按 guid、宝宝)都跑完再回 RETRY:那些坏包在任何版本上都不会成功,
+	// 不能因为同包里有一项错位,就把它重投到截止时刻、占着这条流的未决窗口。
+	bool quantityVersionSkew = false;
 	if (!quantities.empty() || !guids.empty())
 	{
 		if (bags == nullptr) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetPlayerNotHere); return; }
 		auto& bag = bags->bags[kInventory];
-		// 按数量扣出只认可互换的普通单位(ItemStore::IsCountableByConfig)。只有算上带更新版本字段的单位才够,
-		// 是版本错位:回 RETRY、不记账,等玩家落到认识这些字段的节点再扣;记成终态会让对侧白白退款或中止,
-		// 当成普通单位扣走则会把带新属性(例如绑定)的物品交易出去(混版本设计 §4.4 第 6 批)。
 		switch (bag.CheckQuantities(quantities))
 		{
 		case ItemStore::QuantityVerdict::kEnough:
 			break;
 		case ItemStore::QuantityVerdict::kVersionSkew:
-			LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_debit player_id=" << request.player_id()
-					 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
-					 << "; items carrying newer-version fields are not debited by quantity, answering RETRY";
-			Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
-			return;
+			quantityVersionSkew = true;
+			break;
 		case ItemStore::QuantityVerdict::kInsufficient:
 			RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
 			return;
@@ -637,6 +637,14 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 			transfer->set_name(pet.name()); transfer->set_level(pet.level()); transfer->set_instance_proto(pet.SerializeAsString());
 		}
 		if (!snapshot.has_pet()) { RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
+	}
+	if (quantityVersionSkew)
+	{
+		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_debit player_id=" << request.player_id()
+				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
+				 << "; items carrying newer-version fields are not debited by quantity, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
 	}
 	if (!HasReceiptRoom(ledgerComp, request, snapshot)) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull); return; }
 	// 所有可预知失败均在副作用前复核。提交阶段若内部不变量损坏，记 partial 阻止对侧入账。

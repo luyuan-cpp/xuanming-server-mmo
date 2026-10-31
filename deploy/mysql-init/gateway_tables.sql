@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS zone_config (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS zone_whitelist (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id         BIGINT PRIMARY KEY,
     zone_id    BIGINT NOT NULL,
     account_id BIGINT NOT NULL,
     note       VARCHAR(128) DEFAULT '',
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS zone_whitelist (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS announcement (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id         BIGINT PRIMARY KEY,
     title      VARCHAR(128) NOT NULL,
     content    TEXT,
     type       VARCHAR(32) NOT NULL DEFAULT 'notice' COMMENT 'notice/maintenance/update',

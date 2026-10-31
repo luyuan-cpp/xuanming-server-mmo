@@ -139,6 +139,11 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	if err != nil {
 		return err
 	}
+	// Match 结算生产面的密钥与场景消费密钥在同一处读;缺失不拒启(理由见 resolveMatchProducer)。
+	matchProducer, err := resolveMatchProducer(c.PlayerInbox.EnqueueTypes, os.Getenv, metrics.SetBattleProducerReady)
+	if err != nil {
+		return err
+	}
 
 	listenHost, port, err := c.ListenHostPort()
 	if err != nil {
@@ -221,7 +226,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	sanction := logic.GmSanctionDeps{Store: svcCtx.Store, Audit: inbox.InsertAudit, Now: time.Now}
 	serverReady := make(chan struct{})
 	s, err := zrpc.NewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
-		inboxpb.RegisterPlayerInboxServer(grpcServer, server.NewPlayerInboxServer(svcCtx.Store, budget, consumerVerifier))
+		inboxpb.RegisterPlayerInboxServer(grpcServer, server.NewPlayerInboxServer(svcCtx.Store, budget, consumerVerifier, matchProducer))
 		inboxpb.RegisterPlayerInboxAdminServer(grpcServer, server.NewAdminServer(svcCtx.Store, sanction, svcCtx.Ledgers, budget))
 		if config.IsRelaxedMode(c.Mode) {
 			reflection.Register(grpcServer)
@@ -324,6 +329,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	fmt.Printf("  core_redis:    %s (DB %d)\n", c.CoreRedis.Host, c.CoreRedis.DB)
 	fmt.Printf("  kafka:         %v\n", c.Kafka.Brokers)
 	fmt.Printf("  enqueue_types: %v (empty = all disabled)\n", c.PlayerInbox.EnqueueTypes)
+	fmt.Printf("  battle_producer: %s\n", battleProducerLabel(matchProducer.Ready()))
 	fmt.Printf("  admin:         %s\n", adminLabel(adminToken != ""))
 	if c.MetricsListenAddr != "" {
 		fmt.Printf("  metrics:       %s\n", c.MetricsListenAddr)
@@ -337,6 +343,37 @@ func runPlayerInbox(c config.Config) (runErr error) {
 		return fmt.Errorf("player_inbox gRPC server exited early: %v", err)
 	}
 	return nil
+}
+
+// resolveMatchProducer 在装配层读 Match 结算生产面(EnqueueBattleSettlement / LookupBattleSettlement)的签名密钥,
+// 并把装配状态写进 gauge(setReady,生产为 metrics.SetBattleProducerReady)。
+//
+// 密钥缺失或不足 32 字节时**不拒启**,这是有意的取舍:k8s_deploy.ps1 只在全球匹配启用时注入它
+// (Add-PlayerInboxMatchSecretEnv),而仓库默认的 PlayerInbox.EnqueueTypes 列了 PLAYER_INBOX_MSG_BATTLE_SETTLEMENT;
+// 拒启会让没开全球匹配的部署连 GM 处置与 scene 消费一起起不来。所以两个 Battle 方法照旧回 Unavailable
+// (Match 侧按原件重试,不丢),白名单里有 BATTLE 时启动打一条 ERROR、gauge 置 0,值班看得见,不再静默。
+// 场景消费密钥缺失仍拒启(server.NewConsumerVerifier):没有它收件箱对 scene 毫无用处,两者口径不同。
+// 返回的 error 只来自白名单解析(config.Validate 已先拦过,这里不会真的走到)。
+func resolveMatchProducer(enqueueTypes []string, getenv func(string) string, setReady func(bool)) (server.MatchProducer, error) {
+	allowed, err := config.ParseEnqueueTypes(enqueueTypes)
+	if err != nil {
+		return server.MatchProducer{}, err
+	}
+	producer, keyErr := server.NewMatchProducer(getenv(server.MatchProducerSecretEnv))
+	setReady(keyErr == nil)
+	if keyErr == nil {
+		return producer, nil
+	}
+	if _, battle := allowed[inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT]; battle {
+		logx.Errorf("[player_inbox] %s is missing or shorter than 32 bytes while PlayerInbox.EnqueueTypes lists "+
+			"PLAYER_INBOX_MSG_BATTLE_SETTLEMENT: battle settlement enqueue is unavailable (EnqueueBattleSettlement / "+
+			"LookupBattleSettlement return Unavailable and Match keeps retrying); k8s_deploy.ps1 injects it only when global "+
+			"match is enabled (Secret domain-service-secrets key player-inbox-match)", server.MatchProducerSecretEnv)
+	} else {
+		logx.Infof("[player_inbox] %s not set; battle settlement producer disabled (PLAYER_INBOX_MSG_BATTLE_SETTLEMENT is not in EnqueueTypes)",
+			server.MatchProducerSecretEnv)
+	}
+	return producer, nil
 }
 
 // watchHardDeadline 从进入退出开始计 lifecycle.HardTimeout,到点仍未收尾就强制退出(同 go/trade)。
@@ -524,6 +561,14 @@ func adminLabel(enabled bool) string {
 		return "enabled (PlayerInboxAdmin requires metadata " + server.AdminTokenMetadataKey + ")"
 	}
 	return "DISABLED (no admin token resolved from PlayerInbox.AdminToken / AdminTokenEnv; every PlayerInboxAdmin call returns PermissionDenied)"
+}
+
+// battleProducerLabel 是横幅里的 Match 结算生产面状态。**不打印密钥**,只说装没装配。
+func battleProducerLabel(ready bool) string {
+	if ready {
+		return "ready (EnqueueBattleSettlement / LookupBattleSettlement verify the Match signature)"
+	}
+	return "DISABLED (" + server.MatchProducerSecretEnv + " missing or shorter than 32 bytes; both battle settlement methods return Unavailable)"
 }
 
 // nodeInfoValueBuilder 返回 noderegistry 的 BuildValue 回调:按 C++ NodeInfo 约定生成 protojson(字段填法同 go/trade)。

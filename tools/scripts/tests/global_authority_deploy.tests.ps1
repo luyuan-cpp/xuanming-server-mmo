@@ -15,11 +15,16 @@ foreach ($taskName in @('Get-GlobalAuthoritySqlSettings','Get-FriendSqlSettings'
 Test-Case '指定单一TiDB入口时全部旧别名归一，开发缺省只用于本地' {
     $value = Get-GlobalAuthoritySqlSettings -Profile prod -CanonicalHost 'tidb.internal:4000'
     Assert-Equal -Expected 'tidb.internal:4000' -Actual $value.Host -Because '正式域必须有唯一SQL入口'
-    Assert-Equal -Expected 'true' -Actual $value.RequireTiDB -Because '显式入口必须要求后端TiDB探测'
+    Assert-Equal -Expected 'tidb' -Actual $value.Backend -Because '显式入口缺省 tidb 档,服务启动核对真实引擎'
+    Assert-True -Condition $value.Explicit -Because '显式入口要能和开发缺省区分开'
+    $mysql = Get-GlobalAuthoritySqlSettings -Profile prod -CanonicalHost 'mysql.internal:3306' -Backend mysql
+    Assert-Equal -Expected 'mysql' -Actual $mysql.Backend -Because '省钱档走同一个入口,只换档位(方案 §9)'
+    Assert-True -Condition $mysql.Explicit -Because 'mysql 档同样是显式入口,不能被当成开发缺省拒绝'
     $alias = Get-GlobalAuthoritySqlSettings -Profile prod -FriendHost 'tidb.internal:4000' -MatchHost 'tidb.internal:4000'
     Assert-Equal -Expected $value.Host -Actual $alias.Host -Because '既有一致别名可以迁移到唯一入口'
     $dev = Get-GlobalAuthoritySqlSettings -Profile dev -DevelopmentHost 'mysql.local:3306'
-    Assert-Equal -Expected 'false' -Actual $dev.RequireTiDB -Because '开发环境显式保留本机MySQL夹具'
+    Assert-Equal -Expected 'mysql' -Actual $dev.Backend -Because '开发环境显式保留本机MySQL夹具'
+    Assert-True -Condition (-not $dev.Explicit) -Because '开发缺省不算显式入口,全球服务 ConfigMap 仍然拒绝它'
 }
 Test-Case '独立SQL入口、生产缺省和带注入内容的地址全部拒绝' {
     foreach ($arguments in @(

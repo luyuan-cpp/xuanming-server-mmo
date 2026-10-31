@@ -1,5 +1,7 @@
 # 存盘管线（go/db）上线待做
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](../design/player-save-direct-commit.md)),go/db 的 Kafka 消费链已删除,本清单作废。现行的验证清单见 `docs/handoff/player-save-direct-commit-20261030/progress.md`。本文只作历史保留。
+
 > **用途**：存盘管线已经落码、但还没有验证或还没有做完的上线前事项。负责人 2026-10-13 的要求是「先实现代码，先不管测试，测试记录到上线待做里面」，所以代码先落，验证全部记在这里。
 > **执行者**：编译、测试、故障注入由 Codex 执行（AGENTS.md §10.1）；部署与集群操作由负责人执行（AGENTS.md §9）。
 > **维护**：每做完一项，在该项后面写日期、执行者和结果（通过 / 失败 + 证据位置），不要删行。新增事项追加在对应小节末尾。

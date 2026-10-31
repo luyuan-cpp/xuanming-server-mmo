@@ -241,6 +241,9 @@ func (s *AccountRoleTradeStore) Begin(ctx context.Context, in *dspb.BeginAccount
 			if !bytes.Equal(prior.RequestDigest, digest) {
 				return accountdirectory.ErrConflict
 			}
+			if err := s.fenceDeadHoldersOfOpenTrade(ctx, tx, prior); err != nil {
+				return err
+			}
 			out, err = tradeReceiptWithHolders(ctx, tx, prior)
 			return err
 		}
@@ -263,6 +266,9 @@ func (s *AccountRoleTradeStore) Begin(ctx context.Context, in *dspb.BeginAccount
 		if err = snapshotRoleTradeHolders(ctx, tx, prior); err != nil {
 			return err
 		}
+		if err = fenceDeadTradeHolders(ctx, tx, s.directory, prior); err != nil {
+			return err
+		}
 		out, err = tradeReceiptWithHolders(ctx, tx, prior)
 		return err
 	})
@@ -270,6 +276,22 @@ func (s *AccountRoleTradeStore) Begin(ctx context.Context, in *dspb.BeginAccount
 		return nil, err
 	}
 	return out, nil
+}
+
+// fenceDeadHoldersOfOpenTrade 给 Begin 的重放用:trade 的对账循环靠重放 Begin 拿收据,Seal 不到的死实例要在这里判掉,
+// 否则循环永远停在 Seal 失败,走不到 Confirm。
+func (s *AccountRoleTradeStore) fenceDeadHoldersOfOpenTrade(ctx context.Context, tx *sql.Tx, r *dbpb.AccountRoleTrade) error {
+	if r.State != uint32(dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_FREEZING) && r.State != uint32(dspb.AccountRoleTradeState_ACCOUNT_ROLE_TRADE_STATE_CANCEL_PENDING) {
+		return nil
+	}
+	owned, err := scanOwnership(tx.QueryRowContext(ctx, "SELECT account,role_proto,owner_revision,trade_listing_id FROM account_role WHERE player_id=? FOR UPDATE", r.PlayerId), r.PlayerId)
+	if err != nil {
+		return err
+	}
+	if owned.TradeListingId != r.ListingId {
+		return nil
+	}
+	return fenceDeadTradeHolders(ctx, tx, s.directory, r)
 }
 
 func (s *AccountRoleTradeStore) Confirm(ctx context.Context, in *dspb.ConfirmAccountRoleTradeFreezeRequest) (*dspb.AccountRoleTradeReceipt, error) {
@@ -304,6 +326,9 @@ func (s *AccountRoleTradeStore) Confirm(ctx context.Context, in *dspb.ConfirmAcc
 		}
 		if owned.Account != in.SellerAccount || owned.OwnerRevision != in.ExpectedOwnerRevision || owned.TradeListingId != in.ListingId {
 			return accountdirectory.ErrConflict
+		}
+		if err := fenceDeadTradeHolders(ctx, tx, s.directory, r); err != nil {
+			return err
 		}
 		evidence, err := s.verifier.VerifyFrozen(ctx, tx, proto.Clone(r).(*dbpb.AccountRoleTrade))
 		if err != nil {
@@ -386,6 +411,9 @@ func (s *AccountRoleTradeStore) Cancel(ctx context.Context, in *dspb.CancelAccou
 		}
 		if owned.Account != in.SellerAccount || owned.OwnerRevision != in.ExpectedOwnerRevision || owned.TradeListingId != in.ListingId {
 			return accountdirectory.ErrConflict
+		}
+		if err := fenceDeadTradeHolders(ctx, tx, s.directory, r); err != nil {
+			return err
 		}
 		holders, err := readRoleTradeHolders(ctx, tx, r.ListingId)
 		if err != nil {

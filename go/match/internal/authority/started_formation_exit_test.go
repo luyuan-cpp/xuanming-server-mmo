@@ -111,6 +111,10 @@ func requireAbortedOnceAndReleased(t *testing.T, s *Store, battleID uint64, tick
 	terminal, err := readTerminal(ctx, s.DB, battleID)
 	require.NoError(t, err)
 	require.Equal(t, pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, terminal.Decision)
+	var formatVersion, sourceKind uint32
+	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT format_version,source_kind FROM match_battle_completion WHERE battle_id=?", battleID).Scan(&formatVersion, &sourceKind))
+	require.Zero(t, formatVersion, "截止 ABORT 没有 Battle 原字节")
+	require.EqualValues(t, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT, sourceKind, "不冒充 BATTLE_RPC 来源")
 	f, err := s.Formation(ctx, battleID)
 	require.NoError(t, err)
 	require.EqualValues(t, 5, f.State, "formation 4→5 与 ABORT 同一事务")

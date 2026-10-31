@@ -31,8 +31,8 @@ package main
 //  4. zone_id 改写只按清单逐条主键点更新(2026-09-21 死锁审计 #17)。旧的整区
 //     `UPDATE guild SET zone_id = dst WHERE zone_id = src` 沿 idx_guild_0(zone_id)先锁二级项、
 //     再回表锁主键,与 guild 服 DisbandGuild「主键 FOR UPDATE → DELETE 删二级项」反序成环;
-//     guild 是全局服务、合服期间不停,DisbandGuild 的合服闸门只在客户端路径上查。
-//     现在锁序与在线写者同为「主键 → 二级」,改写后再复查源区计数(见 migrateGuildZone)。
+//     guild 是全局服务、合服期间不停。
+//     现在锁序与在线写者同为「主键 → 二级」,改写后再复查源区计数(见 merge_run.go migrateGuilds)。
 //     2026-09-28 起每个 id 一个显式短事务(SELECT … FOR UPDATE → UPDATE → COMMIT,A15),理由见
 //     merge_run.go 的 rewriteZoneByPrimaryKey。
 //
@@ -45,6 +45,7 @@ import (
 	"log"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -65,7 +66,7 @@ const (
 	guildNameNormColumn = "name_norm"
 )
 
-// validateGuildSchemaName 在任何 SQL 之前验库名形状(形状定义见 player_rows.go 的 schemaNamePattern)。
+// validateGuildSchemaName 在任何 SQL 之前验库名形状(形状定义见 merge_run.go 的 schemaNamePattern)。
 func validateGuildSchemaName(schema string) error {
 	if !schemaNamePattern.MatchString(schema) {
 		return fmt.Errorf("-guild-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", schema)
@@ -197,15 +198,9 @@ func assertNoGuildNameCollision(ctx context.Context, db *sql.DB, schema string, 
 // **只动清单里的 id**,且逐条主键点更新 `UPDATE guild SET zone_id = dst WHERE guild_id = ? AND zone_id = src`
 // (锁序论证见 rewriteZoneByPrimaryKey):取锁顺序与 guild 服 DisbandGuild 同为「主键 → 二级」,
 // 撞上正在解散的公会只会等它提交,等到的是已删除的行就影响 0 行。
-// 清单之外的源区公会(清单落盘之后经内部 / GM 路径建的)原地不动,由调用方改写后用 countGuildsInZone
-// 复查并拒绝继续(见 merge_run.go 步骤 3)。重跑幂等:已经改过的行不再满足 zone_id = src。
-func migrateGuildZone(ctx context.Context, db *sql.DB, schema string, guildIDs []uint64, src, dst uint32, dryRun bool) (int64, error) {
-	return migrateGuildZoneGated(ctx, db, schema, guildIDs, src, dst, dryRun, nil)
-}
-
-// migrateGuildZoneGated 同 migrateGuildZone,另在每个 guild_id 的单行事务之前查 gate(-route-source=db 的围栏失权判据,
-// 规格 §6.3「不碰映射的步骤每批之前查失权」;nil = 不查,即 migrateGuildZone 的行为)。gate 非 nil 错误即停,已改的行留在 dst。
-func migrateGuildZoneGated(ctx context.Context, db *sql.DB, schema string, guildIDs []uint64, src, dst uint32, dryRun bool,
+// 清单之外的源区公会原地不动,由调用方改写后用 countGuildsInZone 复查并拒绝继续(见 merge_run.go migrateGuilds)。
+// 重跑幂等:已经改过的行不再满足 zone_id = src。gate 在每个 guild_id 的单行事务之前查(nil = 不查),非 nil 错误即停,已改的行留在 dst。
+func migrateGuildZone(ctx context.Context, db *sql.DB, schema string, guildIDs []uint64, src, dst uint32, dryRun bool,
 	gate writeGate) (int64, error) {
 	table := guildQualified(schema, guildTable)
 	if dryRun {
@@ -224,12 +219,7 @@ func migrateGuildZoneGated(ctx context.Context, db *sql.DB, schema string, guild
 // 相同(逐条主键点更新,不用 `zone_id = ? AND guild_id IN (...)` 这种可能被规划成二级索引 range 的写法)。
 // 不在清单里的(目标区原住民)与已经不在 dst 的(去了第三个 zone,不是这次合服造成的)一律不动。
 // dry-run 数出「会被改回」的行数但不写。
-func restoreGuildZone(ctx context.Context, db *sql.DB, schema string, guildIDs []uint64, src, dst uint32, dryRun bool) (int64, error) {
-	return restoreGuildZoneGated(ctx, db, schema, guildIDs, src, dst, dryRun, nil)
-}
-
-// restoreGuildZoneGated 同 restoreGuildZone,另在每个 guild_id 的单行事务之前查 gate(见 migrateGuildZoneGated)。
-func restoreGuildZoneGated(ctx context.Context, db *sql.DB, schema string, guildIDs []uint64, src, dst uint32, dryRun bool,
+func restoreGuildZone(ctx context.Context, db *sql.DB, schema string, guildIDs []uint64, src, dst uint32, dryRun bool,
 	gate writeGate) (int64, error) {
 	table := guildQualified(schema, guildTable)
 	if dryRun {
@@ -243,7 +233,7 @@ func restoreGuildZoneGated(ctx context.Context, db *sql.DB, schema string, guild
 	return rewriteZoneByPrimaryKey(ctx, db, table, guildPKColumn, guildZoneColumn, guildIDs, dst, src, gate)
 }
 
-// countGuildsInZone 数 zone_id = zone 的公会。步骤 3 改写后的复查用;非锁定读(RC 下每条语句一个新快照)。
+// countGuildsInZone 数 zone_id = zone 的公会。改写后的复查用;非锁定读(RC 下每条语句一个新快照)。
 func countGuildsInZone(ctx context.Context, db *sql.DB, schema string, zone uint32) (int64, error) {
 	table := guildQualified(schema, guildTable)
 	var n int64
@@ -255,11 +245,11 @@ func countGuildsInZone(ctx context.Context, db *sql.DB, schema string, zone uint
 }
 
 // countGuildsInZoneAmong 数 ids 里当前 zone_id = zone 的公会(dry-run 用)。非锁定读,
-// 按 playerRowsBatchSize 分批 IN,不存在锁序问题。
+// 按 idListBatchSize 分批 IN,不存在锁序问题。
 func countGuildsInZoneAmong(ctx context.Context, db *sql.DB, schema string, ids []uint64, zone uint32) (int64, error) {
 	table := guildQualified(schema, guildTable)
 	var total int64
-	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
+	for _, batch := range chunkUint64(ids, idListBatchSize) {
 		var n int64
 		if err := db.QueryRowContext(ctx,
 			"SELECT COUNT(*) FROM "+table+" WHERE zone_id = ? AND guild_id IN ("+inListLiteral(batch)+")", zone).Scan(&n); err != nil {
@@ -332,15 +322,15 @@ func readZoneRankMembers(ctx context.Context, rdb *redis.Client, zone uint32) ([
 	return out, nil
 }
 
-// chooseRankWrite 是步骤 4 的纯判定:锁内重读的源榜决定写什么,清单快照只决定撤销依据。
+// chooseRankWrite 是榜单步骤的纯判定:锁内重读的源榜决定写什么,清单快照只决定撤销依据。
 //
 //   - 重读非空:以重读为准,写它、记它(清单阶段的快照分数旧、缺后来进榜的成员)。
 //   - 重读为空:一律不写。ZADD 与 DEL 在同一条 MULTI/EXEC 里,「源榜为空」只可能是
 //     (a) 续跑,上一次的 MULTI/EXEC 已把它并进目标榜并删掉;
-//     (b) guild 服合法清空(公会全部解散,或步骤 3 之后 RebuildRanks 按 MySQL 重建)。
+//     (b) guild 服合法清空(公会全部解散,或改写 zone_id 之后 RebuildRanks 按 MySQL 重建)。
 //     两种情况下目标榜都已是 guild 服维护的最新状态,再 ZADD 快照只会回退分数、复活已解散的公会。
-//     撤销依据:snapshotMayBeWritten(快照是上一次写入之前落盘的那一份,或旧版工具写的清单 —— 旧版步骤 4
-//     写的正是它)时沿用快照,撤销按它把成员还回源区;快照只是清单阶段读的、从没交给过任何一次写时记为空,
+//     撤销依据:snapshotMayBeWritten(快照是上一次写入之前落盘的那一份)时沿用快照,撤销按它把成员还回源区;
+//     快照只是清单阶段读的、从没交给过任何一次写时记为空,
 //     撤销不再把这些(可能已解散的)成员 ZADD 回源区。
 //
 // 返回要写的集合、要记进清单(撤销依据)的集合,以及是否走了「源榜已不在」这一支。
@@ -354,10 +344,10 @@ func chooseRankWrite(reread, snapshot []manifestRankMember, snapshotMayBeWritten
 	return nil, nil, true
 }
 
-// mergeGuildRank 是合服步骤 4(2026-09-28,player-storage-placement.md §12 A8):拿 guild_rank:maintenance_lock
+// mergeGuildRank 是榜单步骤(2026-09-28,player-storage-placement.md §12 A8):拿 guild_rank:maintenance_lock
 // → 锁内重读源榜 → 以重读结果为准 MULTI/EXEC 并进目标榜并删源榜。
 //
-// 为什么重读:清单阶段的快照(m.RankMembers)到这里隔着步骤 1~3b。guild 是全局服务、合服期间不停,分数
+// 为什么重读:清单阶段的快照(m.RankMembers)到这里隔着前面几步。guild 是全局服务、合服期间不停,分数
 // 更新与榜单重建 / 回填(后者与本步骤同一把维护锁)都可能改过源榜。照旧快照 ZADD 会把分数写回旧值,
 // 快照之后才进源榜的成员则被随后的 DEL 一并删掉 —— 它们从哪张榜上都消失了,而且撤销也找不回来。
 // 只有锁内读到的,才与 MULTI/EXEC 之间没有别的维护写者。源榜已不在时不写(chooseRankWrite)。
@@ -400,7 +390,7 @@ func mergeGuildRank(ctx context.Context, rdb *redis.Client, src, dst uint32, sna
 // 原子性来自 TxPipelined(MULTI/EXEC):ZADD 与 DEL 在同一条事务里,
 // 中途断连不会留下「源区没了、目标区也没有」的状态。
 //
-// 目标榜用 ZADD NX:目标榜里已有的源区公会成员只可能是步骤 3 把 zone_id 改成 dst 之后 guild 服写进去的
+// 目标榜用 ZADD NX:目标榜里已有的源区公会成员只可能是把 zone_id 改成 dst 之后 guild 服写进去的
 // (分数更新 / RebuildRanks 按 MySQL 重建),都比源榜里的新;公会 id 全局唯一,不会与目标区原住民撞名。
 // 覆盖它们 = 把分数回退到源榜的旧值。
 func mergeRankZSET(
@@ -482,4 +472,65 @@ func unmergeRankZSET(
 		return 0, fmt.Errorf("atomic rank unmerge %s ← %s: %w", srcKey, dstKey, err)
 	}
 	return len(members), nil
+}
+
+// ── 榜单维护锁 ────────────────────────────────────────────────
+
+const (
+	// 与 go/guild/internal/data/guild_repo.go 的常量保持一致。
+	guildRankLockKey = "guild_rank:maintenance_lock"
+	guildRankLockTTL = 5 * time.Minute
+	// 合服的 ZSET 合并是毫秒级的一条 TxPipeline,拿不到锁多等一会儿就好;
+	// guild 服自己的 acquireRankLock 用 5s,这里放宽到 30s(维护窗口不缺这点)。
+	guildRankLockWait = 30 * time.Second
+)
+
+// releaseRankLockScript 逐字抄 guild_repo.go —— 释放必须校验 token,
+// 否则会误删 guild 服自己拿到的那把锁。
+var releaseRankLockScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+end
+return 0
+`)
+
+// acquireGuildRankLock 与 guild 服互斥。返回释放函数。
+func acquireGuildRankLock(ctx context.Context, rdb *redis.Client, dryRun bool) (func(), error) {
+	if dryRun {
+		held, err := rdb.Exists(ctx, guildRankLockKey).Result()
+		if err != nil {
+			return nil, fmt.Errorf("exists %s: %w", guildRankLockKey, err)
+		}
+		if held > 0 {
+			log.Printf("WARN: %s is currently held by the guild service; a real -apply run would wait up to %s",
+				guildRankLockKey, guildRankLockWait)
+		}
+		return func() {}, nil
+	}
+	token := randomToken()
+	deadline := time.Now().Add(guildRankLockWait)
+	for {
+		ok, err := rdb.SetNX(ctx, guildRankLockKey, token, guildRankLockTTL).Result()
+		if err != nil {
+			return nil, fmt.Errorf("acquire %s: %w", guildRankLockKey, err)
+		}
+		if ok {
+			log.Printf("acquired %s (ttl=%s)", guildRankLockKey, guildRankLockTTL)
+			return func() {
+				if _, err := releaseRankLockScript.Run(context.Background(), rdb,
+					[]string{guildRankLockKey}, token).Int(); err != nil {
+					log.Printf("WARN: release %s: %v", guildRankLockKey, err)
+				}
+			}, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("timed out after %s waiting for %s — the guild service is running a rank "+
+				"rebuild/backfill; wait for it to finish", guildRankLockWait, guildRankLockKey)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }

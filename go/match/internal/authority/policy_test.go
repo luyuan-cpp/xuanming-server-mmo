@@ -16,10 +16,9 @@ func policyFixture(t *testing.T) (*Store, config.Config) {
 		t.Fatal("缺少MATCH_IT_TIDB，策略准入回归不得跳过")
 	}
 	s := testStore(t)
-	c := config.Config{GlobalMatch: config.GlobalMatchConf{CrossRegionWaitSeconds: 30, HardLatencyMs: 180, ProbeTTLSeconds: 120},
+	c := config.Config{GlobalMatch: config.GlobalMatchConf{CrossRegionWaitSeconds: 30, HardLatencyMs: 180, ProbeTTLSeconds: 120, ScopeGroupAfterSeconds: 10, ScopeGlobalAfterSeconds: 20},
 		RatingEnabled: true, RatingToleranceBase: 100, RatingToleranceStepSeconds: 5, RatingToleranceStepDelta: 100,
-		RatingToleranceMax: 1000, RatingToleranceMaxWaitSeconds: 90, ChallengeTTLSeconds: 60,
-		PveTeamSizeByConfigId: map[string]uint32{"1": 2, "7": 3}}
+		RatingToleranceMax: 1000, RatingToleranceMaxWaitSeconds: 90, ChallengeTTLSeconds: 60}
 	return s, c
 }
 
@@ -30,7 +29,7 @@ func TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRule
 	require.NoError(t, s.EnsureGlobalPolicy(ctx, original))
 	var before []byte
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT contract_digest FROM match_global_policy WHERE policy_id=1").Scan(&before))
-	for _, mode := range []string{"wait", "hard", "secret", "ttl", "rating", "challenge", "pve-team-size", "team-cross-zone", "team-fill", "entry-guild-schema", "entry-role-schema"} {
+	for _, mode := range []string{"wait", "hard", "secret", "ttl", "rating", "challenge", "scope-group", "scope-global", "team-cross-zone", "team-fill", "entry-guild-schema", "entry-role-schema"} {
 		t.Run(mode, func(t *testing.T) {
 			copyStore := *s
 			changed := original
@@ -55,8 +54,10 @@ func TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRule
 				changed.RatingToleranceBase++
 			case "challenge":
 				changed.ChallengeTTLSeconds++
-			case "pve-team-size":
-				changed.PveTeamSizeByConfigId = map[string]uint32{"1": 2, "7": 4}
+			case "scope-group":
+				changed.GlobalMatch.ScopeGroupAfterSeconds++
+			case "scope-global":
+				changed.GlobalMatch.ScopeGlobalAfterSeconds++
 			}
 			require.Error(t, copyStore.EnsureGlobalPolicy(ctx, changed))
 			var after []byte
@@ -65,10 +66,10 @@ func TestAuthorityTiDBGlobalPolicyCannotBeOverwrittenByWaitHardLimitSecretOrRule
 			require.NoError(t, s.EnsureGlobalPolicy(ctx, original))
 		})
 	}
-	// map的构造顺序不属于业务策略；同一份有效规则在新副本仍应准入。
-	reordered := original
-	reordered.PveTeamSizeByConfigId = map[string]uint32{"7": 3, "1": 2}
-	require.NoError(t, s.EnsureGlobalPolicy(ctx, reordered))
+	// 模板目录（PlayMode / Dungeon / ZoneGroup）不进指纹：只改与表相关的运行配置，同一份规则仍应准入。
+	retabled := original
+	retabled.TableDir = "another-table-dir"
+	require.NoError(t, s.EnsureGlobalPolicy(ctx, retabled))
 }
 
 func TestAuthorityTiDBConflictingInitialPoliciesHaveOnePermanentWinner(t *testing.T) {

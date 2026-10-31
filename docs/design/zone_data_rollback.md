@@ -1,5 +1,7 @@
 # Zone 数据回档方案
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),回档 RPC(`RollbackPlayer/Zone/All`)和字段快照 RPC 都已删除,灾难恢复只走 TiDB PITR,见 `docs/ops/mysql-backup-pitr-runbook.md`。本文只作历史保留,不再描述现行行为。
+
 > **修订(2026-08-15)**: 数据层迁 TiDB 后,灾难恢复级的"MySQL PITR"须改为 TiDB BR/PiTR(runbook 未改写前**不许迁生产**);Phase 2 单一全局库后 zone 粒度回档改由应用级按 home_zone 承担。见 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) §D8。
 
 ## 概述

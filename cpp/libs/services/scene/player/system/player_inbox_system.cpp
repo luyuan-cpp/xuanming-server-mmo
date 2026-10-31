@@ -9,8 +9,6 @@
 #include <string>
 #include <vector>
 
-#include <hiredis/hiredis.h>
-#include <muduo/contrib/hiredis/Hiredis.h>
 #include "muduo/base/Logging.h"
 #include "muduo_grpc/channel.h"
 
@@ -32,6 +30,7 @@
 #include "player/system/player_inbox_registry.h"
 #include "player/system/player_inbox_rules.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_store_client.h"
 #include "player/system/player_mutability.h"
 #include "proto/common/base/common.pb.h"        // NodeInfo
 #include "proto/common/base/node.pb.h"          // PlayerInboxNodeService
@@ -40,7 +39,6 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
-#include "thread_context/redis_manager.h"
 #include "utils/random/random.h"
 
 namespace
@@ -512,7 +510,7 @@ namespace
 			return;
 		}
 		// 不可改的实体不压存盘:冻结 / 交接在途时本节点无权再写盘,退出在途时退出存盘已经在飞
-		// (它 marshal 的那一份本来就含账本)。Redis快照只是候选，确认仍须核同版本双SQL ACK。
+		// (它 marshal 的那一份本来就含账本)。
 		if (!player_mutability::IsPlayerMutable(player))
 		{
 			return;
@@ -523,17 +521,14 @@ namespace
 			// false 可能是"盘上已是这一份",也可能是被拒存;一律交给 durable 判定按快照字节裁决。
 			return;
 		}
-		// 快路径(照 player_battle.cpp 的 RequestSettlementPersist):玩家存盘客户端与 tlsRedis.GetZoneRedis()
-		// 是同一个 hiredis 连接,回复按发送顺序处理;存盘成功回调同步更新 PlayerLastPersistedSnapshotComp。
-		// 所以 PING 回来时,刚才那笔存盘若已直接发出,快照就已是新的。没赶上的由 tick 每秒复查兜住。
-		auto &redis = tlsRedis.GetZoneRedis();
-		if (!redis || !redis->connected())
+		if (state.persistProbeArmed)
 		{
-			return;
+			return; // 上一个回调还没回来:go/db 不通时这里每 5 秒走一次,不重复挂就不会一直堆到落定
 		}
-		const uint32_t domain = state.domain;
-		redis->command([playerId, domain](hiredis::Hiredis *, redisReply *) { OnPersistProbe(playerId, domain); },
-					   "PING");
+		state.persistProbeArmed = true;
+		const uint32_t persistDomain = state.domain;
+		// 存盘落定时直接判。RequestPersist 自身有节流,被拒也不会变成死循环。
+		PlayerLifecycleSystem::PlayerStore().RunWhenSettled(playerId, [playerId, persistDomain] { OnPersistProbe(playerId, persistDomain); });
 	}
 
 	// 本批每一条结局是否都已出现在最后一次落盘快照里(规则见 player_inbox_rules::ClassifyDurability)。
@@ -617,47 +612,41 @@ namespace
 		state.inflightSinceMs = nowMs;
 	}
 
-	// 只读确认绑定原实体、域、轮次与完整快照。未知或过期回包只保留待确认条目，不推断SQL成功。
-	void RequestSqlConfirmedAck(entt::entity player, uint64_t playerId, PlayerInboxDomainState &state, uint64_t nowMs)
+	// 快照只在提交之后才替换(规格 §6):它属于本实体当前入场、又含本批结局,就可以发确认。
+	void AckIfSnapshotCommitted(entt::entity player, uint64_t playerId, PlayerInboxDomainState &state, uint64_t nowMs)
 	{
-		if (state.correlationId != 0 && nowMs - state.inflightSinceMs < InflightTimeoutMs()) return;
 		const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
 		if (snapshot == nullptr || !snapshot->HasSnapshot()) return;
+		if (!RoleAdmissionSystem::IsSnapshotCommitted(player, *snapshot->snapshot) || !DecisionsInPersistedSnapshot(player, playerId, state))
+		{
+			state.nextAckMs = std::max(state.nextAckMs, nowMs + player_inbox_rules::kSnapshotRecheckMs);
+			return;
+		}
+		if (!IsBattleDomain(state))
+		{
+			SendAck(player, playerId, state, nowMs);
+			return;
+		}
+		// 原Fetch载荷随本轮保留到这里；不从当前角色重新构造终局或补身份。
 		const auto domain = state.domain;
-		const auto probeId = NextCorrelationId();
-		const auto battleItems = IsBattleDomain(state) ? state.pendingItems : std::vector<player_inbox::PlayerInboxItem>{};
-		state.correlationId = probeId;
-		state.inflightSinceMs = nowMs;
-		const bool sent = RoleAdmissionSystem::ConfirmSnapshotSqlCommit(player, *snapshot->snapshot,
-			[player = player, playerId, domain, probeId, battleItems](bool committed) {
-				entt::entity live = entt::null;
-				auto *current = FindLiveState(playerId, domain, live);
-				if (current == nullptr || live != player || current->correlationId != probeId) return;
-				current->correlationId = 0;
-				current->inflightSinceMs = 0;
-				if (current->phase != PlayerInboxPhase::kAwaitDurable || current->ackQueue.empty()) return;
-				if (!committed || !DecisionsInPersistedSnapshot(player, playerId, *current)) return;
-				if (IsBattleDomain(*current)) {
-					// 原Fetch载荷随本轮保留到双ACK；不从当前角色重新构造终局或补身份。
-					for (const auto& decision : current->ackQueue) {
-						const auto item = std::find_if(battleItems.begin(), battleItems.end(), [&decision](const auto& row) {
-							return row.seq() == decision.seq() && row.request_id() == decision.request_id()
-								&& static_cast<uint32_t>(row.msg_type()) == decision.msg_type();
-						});
-						if (decision.outcome() != player_inbox::PLAYER_INBOX_OUTCOME_APPLIED || item == battleItems.end()
-							|| !PlayerBattleSystem::CompleteInboxSettlement(player, item->payload())) return;
-					}
-					// 解冻会唤醒其他域；重新取当前实体/轮次，不能继续持跨回调可失效的引用。
-					current = FindLiveState(playerId, domain, live);
-					if (!current || live != player || current->phase != PlayerInboxPhase::kAwaitDurable) return;
-				}
-				SendAck(player, playerId, *current, gNowMsFn());
+		const auto battleItems = state.pendingItems;
+		const auto decisions = state.ackQueue;
+		for (const auto& decision : decisions) {
+			const auto item = std::find_if(battleItems.begin(), battleItems.end(), [&decision](const auto& row) {
+				return row.seq() == decision.seq() && row.request_id() == decision.request_id()
+					&& static_cast<uint32_t>(row.msg_type()) == decision.msg_type();
 			});
-		// false合同不回调；不要在同步完成的分支继续持有可能已转阶段的state引用。
-		if (!sent) { state.correlationId = 0; state.inflightSinceMs = 0; }
+			if (decision.outcome() != player_inbox::PLAYER_INBOX_OUTCOME_APPLIED || item == battleItems.end()
+				|| !PlayerBattleSystem::CompleteInboxSettlement(player, item->payload())) return;
+		}
+		// 解冻会唤醒其他域；重新取当前实体/轮次，不能继续持跨回调可失效的引用。
+		entt::entity live = entt::null;
+		auto *current = FindLiveState(playerId, domain, live);
+		if (!current || live != player || current->phase != PlayerInboxPhase::kAwaitDurable) return;
+		SendAck(player, playerId, *current, gNowMsFn());
 	}
 
-	// kAwaitDurable的推进：Redis快照含结局后，再等同E/q的双SQL ACK；不复用交易排空的可变floor缓存。
+	// kAwaitDurable的推进：提交过的快照含结局就确认。
 	void TryAck(entt::entity player, uint64_t playerId, PlayerInboxDomainState &state, uint64_t nowMs)
 	{
 		if (state.phase != PlayerInboxPhase::kAwaitDurable)
@@ -684,10 +673,10 @@ namespace
 		{
 			return;
 		}
-		RequestSqlConfirmedAck(player, playerId, state, nowMs);
+		AckIfSnapshotCommitted(player, playerId, state, nowMs);
 	}
 
-	// 只切进 kAwaitDurable、不当场推进(调用方 ackQueue 非空)。之后由 PING 回调或 tick 的 TryAck 推进。
+	// 只切进 kAwaitDurable、不当场推进(调用方 ackQueue 非空)。之后由存盘落定回调或 tick 的 TryAck 推进。
 	void EnterAwaitDurable(PlayerInboxDomainState &state, uint64_t nowMs)
 	{
 		state.phase = PlayerInboxPhase::kAwaitDurable;
@@ -954,7 +943,23 @@ namespace
 					AfterBatchDecided(player, playerId, state, recorded, nowMs);
 					return;
 				}
-				const PlayerInboxExecResult result = executor(player, item.payload());
+				// 战斗结算域的同局重投(C-1,有界缓解):Match 首投回包丢失(inbox_seq 仍为 0)后收件箱库回档,重投拿到新 seq,
+				// 按 seq 判是新条目。本域最近结局环里已有同一 request_id(= battle_id)的 APPLIED,就不再调执行器、不再发奖,
+				// 直接给新 seq 记 APPLIED 并照常确认。只看最近结局环(≤ 32 条),设计上不另造永久 battle-id 集合
+				// (player_inbox_rules::HasRecentAppliedBattleSettlement 的说明)。
+				const bool duplicateBattle = IsBattleDomain(state) &&
+					player_inbox_rules::HasRecentAppliedBattleSettlement(
+						player_inbox_rules::FindCursor(ledger, state.domain), requestId);
+				if (duplicateBattle)
+				{
+					LOG_WARN << "[PlayerInbox] metric=inbox_battle_duplicate_request domain=" << state.domain << " seq=" << seq
+							 << " request_id=" << requestId << " player_id=" << playerId
+							 << "; the same battle is already APPLIED under an earlier seq in the recent ring,"
+							 << " recording APPLIED for the new seq without executing it again";
+				}
+				const PlayerInboxExecResult result = duplicateBattle
+					? PlayerInboxExecResult{PlayerInboxExecKind::kApplied, 0}
+					: executor(player, item.payload());
 				if (result.kind == PlayerInboxExecKind::kApplied)
 				{
 					decision.set_outcome(static_cast<uint32_t>(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED));
@@ -1103,7 +1108,12 @@ namespace
 	{
 		entt::entity player = entt::null;
 		auto *state = FindLiveState(playerId, domain, player);
-		if (state == nullptr || state->phase != PlayerInboxPhase::kAwaitDurable)
+		if (state == nullptr)
+		{
+			return;
+		}
+		state->persistProbeArmed = false;
+		if (state->phase != PlayerInboxPhase::kAwaitDurable)
 		{
 			return;
 		}
@@ -1334,7 +1344,7 @@ void PlayerInboxSystem::OnPlayerLeaving(entt::entity player)
 			// kIdle 带着非空 ackQueue 违反不变量(StartFetch 开头已有守卫并打 ERROR),离开时不再处理;kFetching 已在上面处理。
 			continue;
 		}
-		// 退出只作最佳努力：本地快照与双SQL ACK都确认后才发Ack，实体先销毁则留到下次落地。
+		// 退出只作最佳努力：提交过的快照含结局才发Ack，实体先销毁则留到下次落地。
 		// 没有就什么都不做,也不再压存盘(退出存盘就是最后一次),等下次落地从账本补确认。
 		if (!DecisionsInPersistedSnapshot(player, playerId, state))
 		{
@@ -1347,9 +1357,9 @@ void PlayerInboxSystem::OnPlayerLeaving(entt::entity player)
 		// 新 owner 若已推进围栏会判 STALE,无害:它加载的存档里已有这些结局,会自己补确认。
 		// SendAck 的完成回调只捕获调用身份:实体已销毁时 OnAckReply / OnAckFailed 丢弃;
 		// 同一玩家重新落地后的新实体关联号也对不上(节点级单调计数器),这里不登记额外等待状态。
-		RequestSqlConfirmedAck(player, playerId, state, nowMs);
+		AckIfSnapshotCommitted(player, playerId, state, nowMs);
 		const bool sent = state.phase == PlayerInboxPhase::kAcking;
-		LOG_INFO << "[PlayerInbox] metric=inbox_leave_ack result=" << (sent ? "sent" : "sql_pending_or_not_sent")
+		LOG_INFO << "[PlayerInbox] metric=inbox_leave_ack result=" << (sent ? "sent" : "not_sent")
 				 << " player_id=" << playerId << " domain=" << state.domain << " decisions=" << state.ackQueue.size()
 				 << " corr=" << state.correlationId << "; best effort, the reply is not awaited";
 	}

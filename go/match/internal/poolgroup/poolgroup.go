@@ -9,7 +9,8 @@
 //  1. 先本机房：组内全员的首选机房相同；再跨机房：全员都等满 CrossRegionAfterMs（D-16 区域内优先）。
 //  2. 每个机房阶段内，范围树从窄到宽：同 zone → 同大区 → 全服，锚点只走到它当前允许的层级；
 //     候选也必须已经等到这一层（scope.Admit 的双向同意）。
-//  3. 计分模式在容差内按评分就近，并要求组内极差不超过锚点容差；非计分模式按排队序装箱，预组队不拆。
+//  3. 计分模式在容差内按评分就近，并要求组内极差不超过锚点容差；非计分模式按排队序装箱，预组队不拆；
+//     分边模式（PVP_TEAM）再把一局分成人数相等的两侧，预组队整体落在同一侧。
 package poolgroup
 
 import (
@@ -45,6 +46,8 @@ type Policy struct {
 	Scope              scope.Schedule // 范围树逐级放宽阈值
 	CrossRegionAfterMs uint64         // 跨机房前全员至少要等的时长（D-16）
 	Rated              bool           // 计分模式（1V1 / 5V5）
+	// Sides：Target 人要分成人数相等的两侧（PVP_TEAM），预组队整体落在同一侧，单位人数不得超过一侧。
+	Sides bool
 	// ToleranceCenti 返回锚点等待 waitMs 时允许的组内评分极差（评分×100），须随等待单调不减。
 	// +Inf 表示不限。只在 Rated 时调用；为 nil 视为不限。
 	ToleranceCenti    func(anchorWaitMs uint64) float64
@@ -57,6 +60,7 @@ type Policy struct {
 // （之前没凑成的单位可以被后来的锚点当候选），提交点按组内最长等待者的容差复核，只会更宽、不会误拒。
 type Group struct {
 	Units  []int
+	Sides  []uint32    // 与 Units 一一对应的阵营（0 / 1），只在 Policy.Sides 时填
 	Region uint32      // 放置机房
 	Level  scope.Level // 这一组跨到的范围层级
 	Cross  bool        // 有成员的首选机房不是 Region
@@ -77,6 +81,9 @@ type unitState struct {
 func Form(units []Unit, regions map[uint32]bool, nowMs uint64, p Policy) []Group {
 	if p.Target < 1 || p.Target > MaxTarget || len(units) == 0 || len(regions) == 0 {
 		return nil
+	}
+	if p.Sides && (p.Target%2 != 0 || p.Rated) {
+		return nil // 分边模式是人数相等的两侧、不计分（PVP_TEAM）
 	}
 	f := former{units: units, regions: regions, now: nowMs, p: p}
 	f.prepare()
@@ -159,7 +166,7 @@ func (f *former) prepare() {
 func (f *former) inspect(u *Unit) unitState {
 	var st unitState
 	size := len(u.Players)
-	if size == 0 || size > f.p.Target || len(u.Members) != size || len(u.RTT) == 0 || (f.p.Rated && size != 1) {
+	if size == 0 || size > f.p.Target || len(u.Members) != size || len(u.RTT) == 0 || (f.p.Rated && size != 1) || (f.p.Sides && size > f.p.Target/2) {
 		return st
 	}
 	seen := make(map[uint64]bool, size)
@@ -261,11 +268,11 @@ func (f *former) formAround(a int, cross bool) (Group, bool) {
 		var best Group
 		found := false
 		for _, region := range f.regionsFor(anchor, cross) {
-			members := f.pack(a, f.candidates(a, level, cross, tolerance, region), tolerance)
+			members, sides := f.pack(a, f.candidates(a, level, cross, tolerance, region), tolerance)
 			if members == nil {
 				continue
 			}
-			g := Group{Units: members, Region: region, MaxRTT: f.maxRTT(members, region)}
+			g := Group{Units: members, Sides: sides, Region: region, MaxRTT: f.maxRTT(members, region)}
 			if !found || better(g, best, f.units) {
 				best, found = g, true
 			}
@@ -363,12 +370,35 @@ func (f *former) candidates(a int, level scope.Level, cross bool, tolerance floa
 	return out
 }
 
-// pack 从候选里为锚点凑满 Target 人；凑不满返回 nil。
-func (f *former) pack(a int, peers []int, tolerance float64) []int {
-	if f.p.Rated {
-		return f.packRated(a, peers, tolerance)
+// pack 从候选里为锚点凑满 Target 人；凑不满返回 nil。分边模式同时返回每个单位的阵营。
+func (f *former) pack(a int, peers []int, tolerance float64) ([]int, []uint32) {
+	switch {
+	case f.p.Sides:
+		return f.packSides(a, peers)
+	case f.p.Rated:
+		return f.packRated(a, peers, tolerance), nil
+	default:
+		return f.packFIFO(a, peers), nil
 	}
-	return f.packFIFO(a, peers)
+}
+
+// packSides 把锚点与候选按排队序装成人数相等的两侧，锚点固定在 0 侧，预组队不拆。
+// 两侧各至多 5 人，状态只有 36 个（PickPvpUnits）。
+func (f *former) packSides(a int, peers []int) ([]int, []uint32) {
+	order := append([]int{a}, peers...)
+	sizes := make([]int, len(order))
+	for i, u := range order {
+		sizes[i] = len(f.units[u].Players)
+	}
+	picked, sides := PickPvpUnits(sizes, f.p.Target/2)
+	if picked == nil {
+		return nil, nil
+	}
+	members := make([]int, len(picked))
+	for i, index := range picked {
+		members[i] = order[index]
+	}
+	return members, sides
 }
 
 // packFIFO 按排队序做精确装箱：预组队整体进出，优先排在前面的单位。人数 ≤10，候选有上限，O(候选×人数)。

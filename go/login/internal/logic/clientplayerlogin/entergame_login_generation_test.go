@@ -14,7 +14,7 @@ import (
 //
 // 铸造算法本身由 sessionmanager 的 TestMintLoginGeneration_* 覆盖;这里只盯"铸出的值有没有真的
 // 交给 player_locator",以及"铸造失败时链有没有停在踢线 / 写会话之前"。复用 newEnterWiringHarness:
-// PlayerAllData 已在 Redis(预加载走快路径),SetSession / Reconnect 回错误,链停在 persist。
+// SetSession / Reconnect 回错误,链停在 persist。
 // Bind 与 EnterScene 的携带分别由 svc 的 TestBindSessionCommandPayloadCarriesEvent 与下面的
 // TestBuildEnterSceneRequest_CarriesLoginGeneration 覆盖:那两步走不到(KafkaClient 是具体类型,
 // 单测起不出来,见 entergame_route_test.go 头注释)。

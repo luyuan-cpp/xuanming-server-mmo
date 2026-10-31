@@ -100,11 +100,11 @@ func TestRealKafkaRedisMailReminderUsesGateFenceAndNoAssetAuthority(t *testing.T
 		t.Fatalf("寻址错误: %+v", message)
 	}
 	command := &kafkapb.GateCommand{}
-	if proto.Unmarshal(message.Value, command) != nil || command.TargetInstanceId != session.GateInstanceId || command.TargetGateId != 5 || command.EventId != uint32(game.ContractsKafkaPushToPlayerEventEventId) {
+	if proto.Unmarshal(message.Value, command) != nil || command.TargetInstanceId != session.GateInstanceId || command.TargetGateId != 5 || command.EventId != uint32(game.ContractsKafkaPushToPlayerEventEventId) || command.GetPlayerId() != player {
 		t.Fatalf("实例围栏/事件错误: %+v", command)
 	}
 	event := &kafkapb.PushToPlayerEvent{}
-	if proto.Unmarshal(command.Payload, event) != nil || event.SessionId != 99 || event.MessageContent.MessageId != uint32(game.ClientPlayerMailNotifyMailChangedMessageId) {
+	if proto.Unmarshal(command.Payload, event) != nil || event.SessionId != 99 || event.GetPlayerId() != player || event.MessageContent.MessageId != uint32(game.ClientPlayerMailNotifyMailChangedMessageId) {
 		t.Fatalf("客户端寻址错误: %+v", event)
 	}
 	notice := &mailpb.MailChangedEvent{}

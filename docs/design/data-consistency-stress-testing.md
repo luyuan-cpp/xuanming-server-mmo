@@ -1,5 +1,7 @@
 # Player-Data Consistency: Stress Testing & Verification
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),go/db 的 verifier、data_stress 和机器人 data-stress 模式都已删除。本文只作历史保留,不再描述现行行为。
+
 > Status: shipped. L1 unit tests, L2 standalone driver + verifier, L3 robot
 > mode, L4 chaos harness (`tools/scripts/chaos_test.ps1`). The three consumer
 > bugs originally tracked as "known-red" (TC3 / TC5a / TC5b) are fixed and

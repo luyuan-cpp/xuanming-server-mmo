@@ -1,5 +1,7 @@
 # 共享 Redis 按用途拆实例(G4a 设计稿)
 
+> **部分过期(2026-10-30)**:玩家存档已不在 Redis([player-data-tidb-scaling-plan.md](./player-data-tidb-scaling-plan.md) §2),本文里 db_task、父快照相关的连接和容量估算作废。按用途拆实例的思路仍然适用于协调键。
+
 > **状态**:设计稿,2026-10-12 起草。**未落码、未编译、未测试、未压测**。本稿只读代码、grep 和 git 得出(AGENTS.md §10.1),
 > 行号以 HEAD `73b852f32` 加当前工作区(D1 映射持久化第 0、1a 批的在途改动)为准。
 > **起因**:用户 2026-10-12 列出开服首日的五个瓶颈,第 3 条是「共享 Redis 只有一个主节点,所有 zone 共用」,并追问「万一归属全服库成瓶颈了呢」。
@@ -201,7 +203,7 @@ merge_zone 合服与撤销时会按玩家删缓存（`playerCacheKeys`）；清�
 
 > **(2026-10-18 更正 / 增补,上面 E 表与两段说明原文保留)**
 > - **令牌发布脚本已落码**(验证口径见 §18.7),上面第 3 条的「证据发布并入令牌发布脚本之后」已成为现状:`go/db/internal/kafka/player_cache_publish.go` 的 `playerCachePublishLua`(:26)一段 Lua 的 KEYS 依次是排序锁、子表缓存、资产证据(不发布时用缓存键占位)、`player:{id}:save_barrier`(不 ACK 时占位),由 `publishDBWriteResult`(:75)经 `lease.runTokenScript` 执行。所以证据、屏障 ACK、子表缓存与排序锁今天已在同一段 Lua 里,第 2、3 批的硬前置见 §18.7。
-> - **E 表「`PlayerDatabase*`」行的读者「login 进场(父键缺失时)」已不成立**:2026-10-17 起父键缺失一律经 Kafka 读任务读 SQL 两行,不再用子表缓存拼父键(`go/login/internal/logic/pkg/dataloader/ensure_player_all_data_async.go` :89-96 的注释与循环;设计见 db-write-fencing-mysql.md 文末「2026-10-17 登录冷恢复与恢复运维门禁」)。`sync_loader.go` 的 `TriggerPlayerDataPreload`(:43)仍会 GET 子表缓存,但全仓没有调用方。现存读者只剩运维工具 go/db `cmd/verifier` 与 data_service `cmd/debug_fetch`。对拆分与缓存形态的含义见 §19。
+> - **E 表「`PlayerDatabase*`」行的读者「login 进场(父键缺失时)」已不成立**:2026-10-17 起父键缺失一律经 Kafka 读任务读 SQL 两行,不再用子表缓存拼父键(`go/login/internal/logic/pkg/dataloader/ensure_player_all_data_async.go` :89-96 的注释与循环;设计见 db-write-fencing-mysql.md 文末「2026-10-17 登录冷恢复与恢复运维门禁」)。`sync_loader.go` 的 `TriggerPlayerDataPreload`(:43)仍会 GET 子表缓存,但全仓没有调用方(2026-10-30 已删除)。现存读者只剩运维工具 go/db `cmd/verifier` 与 data_service `cmd/debug_fetch`。对拆分与缓存形态的含义见 §19。
 > - **新增键族登记**(都在核心实例,与父缓存同一 Redis;验证口径见 §18.7,其中存盘协议世代是 10-18 之后的增量,未编译、未测试):
 >   - `player:save_pending:<home_zone>:<player_id % 64>`:已有登记见上段(10-17),此处只补两处拼键点与 merge_zone P4 读者。拼键点是 `go/db/internal/saveoutbox/contract.go:40` 与 C++ `player_lifecycle.cpp` 的 `SavePlayerToRedisImpl`(约 :4413);P4 读者是 `tools/merge_zone/preflight.go` 的 `assertSaveOutboxDrained`(约 :699),逐桶 ZCARD。另有三处手拼桶键,见 §20.7 的镜像清单。
 >   - `db:save_protocol:zone:<z>` 与 `db:save_protocol:legacy_alive:zone:<z>` 必须与父缓存、`save_barrier`、补投桶同一实例(`go/db/internal/saveoutbox/generation.go` 的 `GenerationKey`、`legacyAliveKey`);详见同节 2026-10-18「存盘协议世代与补投状态」登记。
@@ -478,7 +480,7 @@ merge_zone 合服与撤销时会按玩家删缓存（`playerCacheKeys`）；清�
 
 > **(2026-10-18 更正,本节原文保留)**
 > - 「可选」作废,改为必做,见 §19(2000 万下子表缓存推算 0.6~1.2 TB,[I])。
-> - 「反过来,目标上有旧缓存就不安全:login 父键缺失时直接用子表缓存拼父键」这条风险对 login 已不成立:2026-10-17 起父键缺失一律读 SQL 两行(§2.2 E 表后的更正注)。它仍适用于没有调用方的 `TriggerPlayerDataPreload`(`sync_loader.go:43`);若有人重新接上它,风险回来。
+> - 「反过来,目标上有旧缓存就不安全:login 父键缺失时直接用子表缓存拼父键」这条风险对 login 已不成立:2026-10-17 起父键缺失一律读 SQL 两行(§2.2 E 表后的更正注)。它曾适用于没有调用方的 `TriggerPlayerDataPreload`(`sync_loader.go:43`),该函数已于 2026-10-30 删除。
 > - 「建议先做分频道」已落地为 B0-3 两批(§17)。分频道之后频道仍跟着 go/db 发布结果用的 Redis 句柄走,「go/db 与 login 全服同一拍切」的约束不变。
 > - 挪缓存之前先过 §18.7:写路径的缓存发布与排序锁、资产证据、`save_barrier` 是同一段 Lua。
 
@@ -1590,7 +1592,7 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 - **形态待拍板**(§25):
   - **Cluster**:键 `<MsgType>:<id>` 今天不带 tag。就缓存自身的 GET / SET 而言是单键操作,但**不能据此断言「Cluster 安全」**:写路径的缓存发布在令牌发布脚本里,与排序锁、证据、屏障是同一段 Lua(§18.7)。调研规格里「`PlayerDatabase*:<id>` 都是单键操作,不改名也是 Cluster 安全的」一句删去,改为受 §18.7 的硬依赖约束:选 A(值封装)之后缓存才是真正的单键(例外是两段工具脚本:`save_barrier_restore` 的 `restoreScript` 在父实例上 EXISTS 子表缓存,缓存拆走后恒为 0、前置被空过,即 fail-open,第 3 批前要加缓存句柄;`zone_rollback_discard` 契约要求每玩家一段 Lua 跨映射、核心、缓存同实例。详见 §2.3 结论注后的例外);选 B 则缓存跟核心 Cluster 走,不单独成 redis-cache。login / go/db 的缓存句柄换成集群客户端(go-redis `UniversalClient` / `ClusterClient`)。
   - **按 zone 组分实例**:读缓存的一方要先知道玩家的 home 组。
-- **(2026-10-18 新增)子表缓存今天没有生产读者**。2026-10-17 起 login 父键缺失一律经 Kafka 读任务读 SQL 两行,不再用子表缓存拼父键(§2.2 E 表后的更正);`TriggerPlayerDataPreload` 没有调用方;剩下的读者只有 `cmd/verifier` 与 `cmd/debug_fetch`。所以「子表缓存还要不要写、redis-cache 还要不要单独部署」本身成了待拍板项,本稿不自行决定;决定之前仍按必做设计,容量按写入方算。
+- **(2026-10-18 新增)子表缓存今天没有生产读者**。2026-10-17 起 login 父键缺失一律经 Kafka 读任务读 SQL 两行,不再用子表缓存拼父键(§2.2 E 表后的更正);`TriggerPlayerDataPreload` 没有调用方(2026-10-30 已删除);剩下的读者只有 `cmd/verifier` 与 `cmd/debug_fetch`。所以「子表缓存还要不要写、redis-cache 还要不要单独部署」本身成了待拍板项,本稿不自行决定;决定之前仍按必做设计,容量按写入方算。
 - **降内存的评估项**:
   - 「写任务只 DEL 不 SET」(容量模型 A2 第 4 条):与围栏的缓存语义冲突。v0.4 的缓存「只前进不后退」靠令牌脚本写入保证(围栏 §6.2、§6.5),改成只 DEL 要改这条保证,还会动证据与屏障所在的那段脚本,**需围栏线同意**。
   - 缩短 1 h TTL:没有生产读者时,代价只是工具多一次冷读,同样由围栏线确认。

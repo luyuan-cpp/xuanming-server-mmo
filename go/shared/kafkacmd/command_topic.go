@@ -45,8 +45,7 @@ const (
 	// DefaultCommandTopicPartitions 是 P 的默认值,必须与 C++ 的
 	// node_command_topic.h::kDefaultCommandTopicPartitions 逐字相同。
 	//
-	// 改这个数 = 改不可变契约(与 db_task 同一条纪律,
-	// docs/design/db-task-kafka-partition-contract.md):必须换代号、换一批新 topic,
+	// 改这个数 = 改不可变契约:必须换代号、换一批新 topic,
 	// 绝不在同名 topic 上扩分区 —— 扩分区会把 node_id % P 重映射,命令落到没人
 	// assign 的分区上,静默全丢而且 Kafka 不报错。
 	DefaultCommandTopicPartitions int32 = 256

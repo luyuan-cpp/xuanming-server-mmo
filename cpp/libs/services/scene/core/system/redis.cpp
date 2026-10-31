@@ -1,10 +1,12 @@
 #include "redis.h"
 
+#include <cstdlib>
+
 #include "muduo/net/EventLoop.h"
 
-#include "player/system/db_task_dispatch_system.h"
 #include "player/system/dirty_save_stats.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_store_client.h"
 #include "player/system/release_fence.h" // [ReleaseFence] 汇总行
 #include "player/system/save_seq.h"      // [SaveSeq] 汇总行
 #include "thread_context/ecs_context.h"
@@ -17,61 +19,38 @@ using namespace muduo::net;
 
 void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 {
+	// 存盘的启动校验放在任何玩家进场之前:字段漏标分组会静默丢数据,密钥不对则每一笔存盘都被拒。
+	std::string playerStoreError;
+	if (!ValidatePlayerStoreStartup(playerStoreError))
+	{
+		LOG_FATAL << "[PlayerStore] refused to start: " << playerStoreError;
+	}
 	shutdownBegun_ = false;
     loop_ = std::ref(*loop);
-    playerRedis = std::make_unique<PlayerDataRedis::element_type>(tlsRedis.GetZoneRedis());
-    playerRedis->SetLoadCallback(PlayerLifecycleSystem::HandlePlayerAsyncLoaded);
-    playerRedis->SetLoadFailedCallback(PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed);
-    playerRedis->SetSaveCallback(PlayerLifecycleSystem::HandlePlayerAsyncSaved);
-    playerRedis->SetSaveFailedCallback(PlayerLifecycleSystem::HandlePlayerAsyncSaveFailed);
-    // owner_epoch CAS 拒绝(Lua 比对 player:{id}:owner_epoch 不等)与"存盘失败"是两种语义:
-    // 失败要重试、拒绝是终态(本节点已被废黜,再试也是拒)。分开接线,别让废黜走进重试队列。
-    playerRedis->SetSaveRejectedCallback(PlayerLifecycleSystem::HandlePlayerSaveRejected);
-    // 严格屏障覆盖世代校验 C3(混版本持久字段保护 §5.2)的两种结局:warn 照写只计数;enforce 拒写按实体状态分派。
-    // 都不是"已被废黜",不能接到上面那条回调上。
-    playerRedis->SetSaveSchemaWarnedCallback(PlayerLifecycleSystem::HandlePlayerSaveSchemaWarned);
-    playerRedis->SetSaveSchemaRejectedCallback(PlayerLifecycleSystem::HandlePlayerSaveSchemaRejected);
-    // DBTask 投递记账:登记本线程 KafkaProducer 的逐条回执监听器,DBTask 落定后交给生命周期(下线收尾的回执闸门)。
-    // 必须早于任何存盘(存盘只可能发生在玩家进场之后)。函数指针,不绑任何对象。
-    DbTaskDispatchSystem::Initialize(&PlayerLifecycleSystem::OnDbTaskDispatchSettled);
 
-    tlsRedis.SetReconnectCallback([this]()
+    tlsRedis.SetReconnectCallback([]()
                                   {
-        LOG_INFO << "Redis reconnected, retrying pending player loads";
-        // 先补发没确认的 handoff 标记撤回,再重发玩家加载。撤回与玩家加载走同一条连接
-        // (playerRedis 持有的就是 tlsRedis.GetZoneRedis() 这个 HiredisPtr 的引用),Redis 按序执行:
-        // 撤回只要被执行,就一定排在随后重发的加载之前。但这只是顺序上的尽力 —— 撤回可能被 Redis
-        // 以 ERROR 拒掉(只读副本 / 正在加载数据集)而加载照样成功,所以正确性**不**靠这条顺序,
-        // 靠的是 PlayerLifecycleSystem::IsSceneChangeBusy:撤回没确认之前**本节点**不替该玩家发 EnterScene。
+        LOG_INFO << "Redis reconnected, retrying pending handoff marks";
+        // 补发没确认的 handoff 标记撤回。撤回可能被 Redis 以 ERROR 拒掉(只读副本 / 正在加载数据集),
+        // 所以正确性**不**靠它,靠的是 PlayerLifecycleSystem::IsSceneChangeBusy:撤回没确认之前**本节点**不替该玩家发 EnterScene。
         // (这道闸管不到不经本节点的跨节点落点,例如玩家断线后重登落到别的节点;那条路在撤回确认前
         // 仍只有标记 TTL 兜底,见 handoff_mark_withdraw.h 的契约说明。)
         PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/true);
-        // 断线期间失败、等重发的 A2′(载入前"先核归属再删"继承来的 handoff 标记)也立刻补发,排在重发的
-        // 玩家加载之前(同一条连接 FIFO)。闸门只认 A2′ 的应答,不靠这条顺序(见 exit_release_mark.h)。
+        // 断线期间失败、等重发的 A2′(载入前"先核归属再删"继承来的 handoff 标记)也立刻补发。闸门只认 A2′ 的应答(见 exit_release_mark.h)。
         PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/true);
-        // 疏散 / 排空改派的待确认表(relocate_confirm.h):断线期间没读到、在等重试的核实立刻重发(不绕过 settle 等待),
-        // 排在重发的玩家加载之前。核实读与随后的凭证补写走这条不重放的连接,是为了补写不被推迟到任意时刻(R7);
+        // 疏散 / 排空改派的待确认表(relocate_confirm.h):断线期间没读到、在等重试的核实立刻重发(不绕过 settle 等待)。
+        // 核实读与随后的凭证补写走这条不重放的连接,是为了补写不被推迟到任意时刻(R7);
         // 正确性**不**靠这条 FIFO(2026-10-23,r2-lc#2):补写在 Lua 里原子复核 owner_epoch 与条目缓存的原 H
         // (save_barrier.handoff_fence),之后的登记已换掉原件时返回 -2、不写。表空时直接返回。
-        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/true);
-        if (playerRedis)
-        {
-            playerRedis->OnReconnected();
-        } });
+        PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/true); });
 
-    // Periodically drain NIL-pending load retries and pending save retries
-    // whose backoff has elapsed. MUST NOT touch in-flight loading_queue_ —
-    // only pending queues — otherwise load_callback_ can fire twice per key.
+    // 协调用途的 Redis 写(继承标记清理、handoff 标记撤回、改派核实)的 1s 重试节拍。
     static constexpr double kRetryIntervalSec = 1.0;
-    retryTimerId_ = loop->runEvery(kRetryIntervalSec, [this]()
+    retryTimerId_ = loop->runEvery(kRetryIntervalSec, []()
                                    {
-        // A2′ 的有上限重发与截止拒绝(单调时钟,见 exit_release_mark.h)搭这个 1s 节拍,排在加载 / 存盘重试之前。
+        // A2′ 的有上限重发与截止拒绝(单调时钟,见 exit_release_mark.h)搭这个 1s 节拍。
         // 待入场表为空时直接返回。静态函数,不引入新的绑定。
         PlayerLifecycleSystem::RetryInheritedMarkClears(/*reconnected=*/false);
-        if (playerRedis)
-        {
-            playerRedis->RetryDuePending();
-        }
         // 没确认的 handoff 标记撤回也搭这个 1s 节拍重试(表为空时直接返回;条目自带 5s 重试间隔
         // 与"标记 TTL + 余量"的截止时刻,见 handoff_mark_withdraw.h)。静态函数,不引入新的绑定。
         PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/false);
@@ -81,31 +60,13 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         PlayerLifecycleSystem::SweepRelocateConfirms(relocate_confirm::Clock::now(), /*reconnected=*/false); });
     retryTimerActive_ = true;
 
-    // DBTask 投递回执的驱动点(DbTaskDispatchSystem::Pump):poll() 派发回执 → 330s 票据超时兜底 → 把落定的玩家交给
-    // PlayerLifecycleSystem::OnDbTaskDispatchSettled。回执只在本线程的 poll / flush / send 里派发,空闲节点上没有 send()
-    // 来驱动,下线收尾会一直等;50ms 让收尾正常只多 ≤ 50ms。BeginShutdown **不**取消它:停机 drain 期间被保留 / 等回执的
-    // 退出实体要靠它推完(停机谓词按 IsSaveInFlight 等这些实体)。取消在 StopDbTaskDispatch(Node 的拆除前钩子,
-    // producer 最后一次 flush 之后)。lambda 无捕获,不绑 this。
-    static constexpr double kDbTaskDispatchPumpIntervalSec = 0.05;
-    dbTaskPumpTimerId_ = loop->runEvery(kDbTaskDispatchPumpIntervalSec, []
-                                        { DbTaskDispatchSystem::Pump(); });
-    dbTaskPumpTimerActive_ = true;
-
-    // Periodically log a snapshot of internal queue sizes so operators can spot
-    // a Redis stall (rising pending_loads / pending_saves) without enabling
-    // per-call DEBUG logs. No output when all queues are empty.
+    // 每 30 秒打一轮计数快照。
     static constexpr double kQueueSnapshotIntervalSec = 30.0;
     // lastEnterFence:上一次打出 [EnterFence] 时的计数(只在本定时器里读写,逻辑线程上;初值全 0 = 第一次有计数就打)。
-    // lastDbTaskDispatch:上一次打出 [DbTaskDispatch] 时的计数(同上,只在本定时器里读写)。
     // lastReleaseFence:上一次打出 [ReleaseFence] 时的计数(同上,只在本定时器里读写)。
-    snapshotTimerId_ = loop->runEvery(kQueueSnapshotIntervalSec, [this, lastEnterFence = enter_fence_stats::Snapshot{},
-                                                                  lastDbTaskDispatch = db_task_dispatch_stats::Snapshot{},
+    snapshotTimerId_ = loop->runEvery(kQueueSnapshotIntervalSec, [lastEnterFence = enter_fence_stats::Snapshot{},
                                                                   lastReleaseFence = release_fence_stats::Snapshot{}]() mutable
                                       {
-        if (playerRedis)
-        {
-            playerRedis->LogQueueSnapshot("RedisSystem");
-        }
         // Piggyback on the same 30s tick so a fresh timer isn't needed
         // just for two counters. Format is parsed by
         // tools/scripts/stress_summarize.ps1 — keep the prefix and the
@@ -142,13 +103,12 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
             }
             LOG_WARN << line;
         }
-        // 混版本持久字段保护 C3 的结局计数(persist_schema_stats),单独一行、单独前缀,不动上面几行的解析格式。
-        // 两项正常都应恒 0;非 0 时逐次的 metric=persist_schema_regression 日志里有玩家号与 key。
+        // 覆盖世代校验拒写的计数(persist_schema_stats),单独一行、单独前缀,不动上面几行的解析格式。
+        // 正常应恒 0;非 0 时逐次的 metric=persist_schema_regression 日志里有玩家号与 key。
         const auto schemaStats = persist_schema_stats::Read();
         if (schemaStats.Any())
         {
-            LOG_WARN << "[PersistSchema] regression_warned=" << schemaStats.regressionWarned
-                     << " regression_rejected=" << schemaStats.regressionRejected;
+            LOG_WARN << "[PersistSchema] regression_rejected=" << schemaStats.regressionRejected;
         }
         // 存盘序号发号器的异常计数(save_seq.h 的 save_seq_stats;db-write-fencing-mysql.md §7.2)。单独一行、单独前缀,
         // 不动上面几行的解析格式。key=value 平铺、进程启动以来的累计值;三项正常都应恒 0,任一非 0 才打,级别 WARN
@@ -248,39 +208,11 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 LOG_INFO << line;
             }
             lastReleaseFence = releaseFenceStats;
-        }
-        // DBTask 投递记账(db_task_dispatch_system.h 的 db_task_dispatch_stats)。单独一行、单独前缀,不动上面几行的
-        // 解析格式。key=value 平铺、进程启动以来的累计值;计数有变化或还有未落定玩家时才打。这一拍里出现「MySQL 可能
-        // 落后」的增长(AlarmingIncreaseSince)升 WARN,否则 INFO。玩家号不进这一行。
-        const auto dispatchStats = db_task_dispatch_stats::Read();
-        const std::size_t unsettledPlayers = DbTaskDispatchSystem::UnsettledPlayerCount();
-        if (dispatchStats != lastDbTaskDispatch || unsettledPlayers > 0)
-        {
-            std::string line = "[DbTaskDispatch]";
-            for (std::size_t i = 0; i < dispatchStats.values.size(); ++i)
-            {
-                line += ' ';
-                line += db_task_dispatch_stats::kCounterNames[i];
-                line += '=';
-                line += std::to_string(dispatchStats.values[i]);
-            }
-            line += " unsettled_players=" + std::to_string(unsettledPlayers);
-            line += " in_flight_tickets=" + std::to_string(DbTaskDispatchSystem::InFlightTickets());
-            if (dispatchStats.AlarmingIncreaseSince(lastDbTaskDispatch))
-            {
-                LOG_WARN << line;
-            }
-            else
-            {
-                LOG_INFO << line;
-            }
-            lastDbTaskDispatch = dispatchStats;
         } });
     snapshotTimerActive_ = true;
 
-    // Periodically save all online players to Redis to bound the data-loss
-    // window if the scene node crashes. Default 300s; set
-    // SCENE_PLAYER_SAVE_INTERVAL_SECONDS=0 to disable.
+    // 周期存盘,限定 scene 崩溃时的丢失窗口。缺省 60 秒;
+    // SCENE_PLAYER_SAVE_INTERVAL_SECONDS=0 关闭。
     //
     // 分摊而不是一口气扫完:定时器每秒跑一次,只处理
     // playerId % interval == 当前槽位 的玩家 —— 每个玩家每个周期仍然被存
@@ -291,7 +223,8 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     // 数百毫秒级的全服停顿,World::Update 的固定步长累加器 clamp 在 1s,
     // 超过即直接丢模拟时间。注释里 "10k players over 300s = ~33 saves/sec"
     // 的摊销口径,现在才真的成立。
-    int periodicSaveSec = 300;
+    // 只写有变化的行,没有变化不发请求,所以周期可以短(总体方案 §4,初值,压测后定)。环境变量优先。
+    int periodicSaveSec = 60;
     if (const char* env = std::getenv("SCENE_PLAYER_SAVE_INTERVAL_SECONDS"))
     {
         const int parsed = std::atoi(env);
@@ -359,31 +292,11 @@ void RedisSystem::BeginShutdown()
 	}
 }
 
-void RedisSystem::StopDbTaskDispatch()
-{
-	// loop_ 为空 = Initialize 没跑过(监听器也没登记)或已 Shutdown(已收过账):什么都不做。这也保证析构里的第二次
-	// Shutdown 不会在 thread_local 析构期间再碰 KafkaProducer。
-	if (!loop_.has_value())
-	{
-		return;
-	}
-	// 先停 Pump 再注销监听器:之后不会再有 Pump 把落定的玩家交给下线收尾(Node 拆除前钩子之后的让轮里,Redis 已释放、
-	// etcd 已注销,那时推收尾只会制造写失败与告警噪声)。未落定的玩家由 DbTaskDispatchSystem::Shutdown 打一行 ERROR 留证;
-	// 它自身幂等,第二次调用不再打。
-	if (dbTaskPumpTimerActive_)
-	{
-		loop_->get().cancel(dbTaskPumpTimerId_);
-		dbTaskPumpTimerActive_ = false;
-	}
-	DbTaskDispatchSystem::Shutdown();
-}
-
 void RedisSystem::Shutdown()
 {
 	BeginShutdown();
 
-	// 先取消定时器与 RedisManager 回调,再释放 MessageAsyncClient,避免后续
-	// 重连回调命中已经销毁的 this。
+	// 先取消定时器,再清 RedisManager 回调。
     if (loop_.has_value())
     {
         muduo::net::EventLoop &loop = loop_->get();
@@ -397,11 +310,8 @@ void RedisSystem::Shutdown()
             loop.cancel(snapshotTimerId_);
             snapshotTimerActive_ = false;
         }
-        // 正常停机时 Node 的拆除前钩子已经调过(那时日志还活着),这里是幂等兜底:钩子没挂上 / 没走到拆除时才真正生效。
-        StopDbTaskDispatch();
     }
 	tlsRedis.SetReconnectCallback({});
-    playerRedis.reset();
 	loop_.reset();
 }
 

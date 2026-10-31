@@ -255,7 +255,7 @@ func openStore(ctx context.Context, c config.Config, permission authoritysql.Per
 	if err != nil {
 		return nil, nil, err // 该错误本身不含 DSN 原文(DSN 带口令)
 	}
-	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, c.MySQL.RequiresTiDB(), 2, permission)
+	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.MySQL.Backend), 2, permission)
 	if err != nil {
 		return nil, nil, errors.New("打开 MySQL 失败(DSN 含口令,不打印原错误)")
 	}

@@ -1,7 +1,7 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    etcd MVCC 历史压缩(P0-C 阶段 1a)的静态契约:CronJob 清单、compose 的压缩 / 配额 env,以及 etcd.yaml 没有提前做阶段 2。
+    etcd MVCC 历史压缩(P0-C)的静态契约:CronJob 清单、compose 与 StatefulSet 的压缩 / 配额 env、探针和抓取注解。
 
 .DESCRIPTION
     只读仓库里的静态文件:不调用 k8s_deploy.ps1,不访问集群、容器或网络。
@@ -13,9 +13,7 @@
       - 压缩脚本:目标来自线性一致读,不做 defrag、不解除告警,查告警不经管道(否则查询失败等于「没有告警」);
       - 取值:KEEP_REVISIONS 与 compose 的 ETCD_AUTO_COMPACTION_RETENTION 同值,配额满足「配额 × 2 + 1Gi ≤ PVC」;
       - 镜像:清单、etcd.yaml、compose 三处逐字相同,钉版本只能三处同批改;
-      - 阶段 2(给 etcd.yaml 的 StatefulSet 加压缩 / 配额 env、钉镜像 tag@摘要、加抓取注解、探针改 exclude=NOSPACE)会滚动 etcd,前置是 C++ etcd 流重建
-        验证通过(docs/design/grpc-muduo-transport.md §10.2 第 2 批)。未经负责人许可不得提前做;真做阶段 2 时把最后一条改成
-        「StatefulSet 的 env 与 compose 相等」的断言,镜像期望值改成钉住的引用。
+      - 阶段 2:StatefulSet 的 env 与 compose 相等,抓取注解在,探针排除 NOSPACE。镜像的 tag@摘要待 Codex 实测 M0 后三处同批钉。
 
     设计与取值:docs/handoff/global-singletons-p0-findings-20261014.md「## P0-C」;运维:docs/ops/etcd-maintenance-runbook.md。
 
@@ -129,7 +127,7 @@ Write-Host "== etcd MVCC 压缩契约(P0-C)=="
 Test-Case 'etcd-maintenance.yaml 只含 ConfigMap 与 CronJob,不会改到 StatefulSet etcd 的模板' {
     $text = Get-NonCommentText (Read-RepoText $script:MaintenancePath)
     $kinds = @([regex]::Matches($text, '(?m)^kind:\s*(\S+)\s*$') | ForEach-Object { $_.Groups[1].Value } | Sort-Object)
-    Assert-Equal -Expected 'ConfigMap,CronJob' -Actual ($kinds -join ',') -Because '阶段 1 只新增对象;改 etcd 的 StatefulSet 会逐个滚动成员,前置是 C++ etcd 流重建验证通过'
+    Assert-Equal -Expected 'ConfigMap,CronJob' -Actual ($kinds -join ',') -Because '维护清单只有这两种对象,etcd 本身的改动都在 etcd.yaml'
 }
 
 Test-Case 'CronJob etcd-compact:不叠跑、同一轮不重试、Pod 不重启、失败记录保留' {
@@ -203,7 +201,7 @@ Test-Case 'compose 的配额是正整数,且满足「配额 × 2 + 1Gi ≤ etcd.
     $quota = [long]$quotaText
     $pvcGi = [long](Get-SingleCapture -Text (Get-NonCommentText (Read-RepoText $script:EtcdPath)) -Pattern '(?m)^\s*storage:\s*(\d+)Gi\s*$' -What 'etcd.yaml 的 PVC storage')
     $gi = [long]1024 * 1024 * 1024
-    Assert-True -Condition (($quota * 2 + $gi) -le ($pvcGi * $gi)) -Because "defrag 期间需要临时空间:配额 $quota × 2 + 1Gi 必须 ≤ PVC ${pvcGi}Gi(PVC 的 volumeClaimTemplates 不能在线改,阶段 2 用同一个配额)"
+    Assert-True -Condition (($quota * 2 + $gi) -le ($pvcGi * $gi)) -Because "defrag 期间需要临时空间:配额 $quota × 2 + 1Gi 必须 ≤ PVC ${pvcGi}Gi(PVC 的 volumeClaimTemplates 不能在线改)"
 }
 
 Test-Case 'etcd 镜像:etcd-maintenance.yaml、etcd.yaml、compose 三处逐字相同' {
@@ -214,21 +212,18 @@ Test-Case 'etcd 镜像:etcd-maintenance.yaml、etcd.yaml、compose 三处逐字�
     Assert-Equal -Expected $etcdImage -Actual $composeImage -Because '本机 / 预发与 K8s 跑同一个 etcd 镜像;钉版本三处同批改'
 }
 
-Test-Case '阶段 2 未经许可不得提前做:etcd.yaml 的 StatefulSet 里还没有压缩 / 配额参数、没有钉镜像、没有抓取注解、探针未改' {
+Test-Case '阶段 2:StatefulSet 的压缩与配额 env 与 compose 相等,抓取注解在,探针排除 NOSPACE' {
     $code = Get-NonCommentText (Read-RepoText $script:EtcdPath)
-    Assert-NotMatch -Text $code -Pattern 'ETCD_AUTO_COMPACTION|ETCD_QUOTA_BACKEND_BYTES|auto-compaction|quota-backend-bytes' -Because '给 StatefulSet 加压缩 / 配额参数会滚动 etcd;前置是 C++ etcd 流重建(docs/design/grpc-muduo-transport.md §10.2 第 2 批)验证通过并经负责人许可。真做阶段 2 时把这条改成「StatefulSet 的 env 与 compose 相等」'
-    # 钉 tag@摘要与加 prometheus 抓取注解同样改 Pod 模板、滚动 3 个成员,也属阶段 2(etcd.yaml 镜像行上方注释、runbook §8)。
-    # 上一条「三处镜像逐字相同」会鼓励 M0 之后三处一起钉版:一起改时那条照样绿,etcd 却在前置满足之前被滚动了,所以这里单独钉住现值。
-    Assert-NotMatch -Text $code -Pattern 'prometheus\.io/' -Because '抓取注解进 Pod 模板会滚动 etcd,属阶段 2(runbook §8 步骤 1)'
-    $etcdImage = Get-SingleCapture -Text $code -Pattern '(?m)^\s*image:\s*(\S+)\s*$' -What 'etcd.yaml 的 image'
-    Assert-Equal -Expected 'bitnamilegacy/etcd:latest' -Actual $etcdImage -Because '钉镜像会滚动 etcd,属阶段 2;真做阶段 2 时与 etcd-maintenance.yaml、compose 同批改,并把这里的期望值改成钉住的 tag@摘要'
-    # 探针改 exclude=NOSPACE(runbook §2 / §7 / §8)同样改 Pod 模板、滚动 etcd,也属阶段 2;两个路径都钉住现值。
-    # runbook §7 的应急 patch 只改线上、不落库:落库对被 patch 的集群不滚动,但会让用同一份 etcd.yaml 的其他环境下次 infra-up 时滚动,
-    # 与阶段 2 同一个风险。所以只在阶段 2(或经负责人批准、逐环境全栈停机的窗口)时同批改这两条。
+    foreach ($name in 'ETCD_AUTO_COMPACTION_MODE', 'ETCD_AUTO_COMPACTION_RETENTION', 'ETCD_QUOTA_BACKEND_BYTES') {
+        $value = Get-SingleCapture -Text $code -Pattern ('name:\s*' + [regex]::Escape($name) + '\s*\n\s*value:\s*"?([^"\s]*)"?') -What "etcd.yaml 的 $name"
+        Assert-Equal -Expected (Get-ComposeEtcdEnv -Name $name) -Actual $value -Because 'K8s 与 compose 用同一组压缩和配额取值'
+    }
+    Assert-Match -Text $code -Pattern 'prometheus\.io/scrape:\s*"true"' -Because '告警要靠 etcd 自己的 /metrics(runbook §8 步骤 1)'
+    Assert-Match -Text $code -Pattern 'prometheus\.io/port:\s*"2379"' -Because 'etcd 的指标在 client 端口上'
     $readinessPath = Get-SingleCapture -Text $code -Pattern 'readinessProbe:\s*\n\s*httpGet:\s*\n\s*path:\s*(\S+)' -What 'etcd.yaml 的 readinessProbe path'
     $livenessPath = Get-SingleCapture -Text $code -Pattern 'livenessProbe:\s*\n\s*httpGet:\s*\n\s*path:\s*(\S+)' -What 'etcd.yaml 的 livenessProbe path'
-    Assert-Equal -Expected '/health' -Actual $readinessPath -Because '改 readiness 探针会滚动 etcd,属阶段 2(runbook §8 步骤 1);§7 的应急 patch 只改线上、不落库'
-    Assert-Equal -Expected '/health?serializable=true' -Actual $livenessPath -Because '改 liveness 探针会滚动 etcd,属阶段 2(runbook §8 步骤 1);§7 的应急 patch 只改线上、不落库'
+    Assert-Equal -Expected '/health?exclude=NOSPACE' -Actual $readinessPath -Because 'NOSPACE 告警时不把成员全摘掉(runbook §2 / §7)'
+    Assert-Equal -Expected '/health?exclude=NOSPACE&serializable=true' -Actual $livenessPath -Because 'NOSPACE 告警时不把三个成员一起反复重启(runbook §2 / §7)'
 }
 
 exit (Complete-TestRun -SuiteName 'etcd_maintenance_contract')

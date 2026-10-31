@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"net"
 	"os"
+	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
 	"strconv"
 	"testing"
@@ -67,15 +68,15 @@ func guildRoleTiDB(t *testing.T) (context.Context, *sql.DB, *GuildRepo, *Activit
 	}
 	createGuildRouteFixture(t, ctx, db)
 	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
-	require.NoError(t, fixture.GrantTables(ctx, schema, "route_meta", "player_route", "zone_merge_fence", "zone_merged_into", "route_reconcile"))
+	require.NoError(t, fixture.GrantTables(ctx, schema, "route_meta", "player_route", "zone_merged_into", "route_reconcile"))
 	db, err = fixture.Open(ctx, schema, 8)
 	require.NoError(t, err)
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { require.NoError(t, rdb.Close()) })
 	repo := NewGuildRepo(rdb, db, time.Minute)
-	require.NoError(t, repo.ConfigureRoleAuthority(schema))
-	require.NoError(t, repo.ConfigureMatchAuthority(schema))
+	require.NoError(t, repo.ConfigureRoleAuthority(schema, authoritysql.BackendTiDB))
+	require.NoError(t, repo.ConfigureMatchAuthority(schema, authoritysql.BackendTiDB))
 	activities, err := NewActivityRepo(repo)
 	require.NoError(t, err)
 	return ctx, db, repo, activities

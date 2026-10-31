@@ -467,3 +467,78 @@ func TestUnplaceableAnchorDoesNotUseCrossBudget(t *testing.T) {
 		t.Fatalf("无可分配机房的满员单位不应占预算: %+v", groups)
 	}
 }
+
+// party 构造一支预组队单位：全员同 zone、同首选机房、同时入队。
+func party(id uint64, zone, group uint32, waitedMs uint64, players ...uint64) Unit {
+	enq := testNow - waitedMs
+	u := Unit{ID: id, Players: players, EnqueuedMs: enq, Preferred: regionEast, RTT: east()}
+	for range players {
+		u.Members = append(u.Members, scope.Member{Node: scope.Node{Zone: zone, Group: group}, EnqueuedMs: enq})
+	}
+	return u
+}
+
+func sidesPolicy(perSide int) Policy {
+	return Policy{Target: perSide * 2, Scope: testScope, CrossRegionAfterMs: crossWaitMs, Sides: true}
+}
+
+func TestSidesKeepPartiesTogetherAndBalance(t *testing.T) {
+	units := []Unit{
+		party(100, 5, 1, 1_000, 100, 101), // 最早入队，做锚点
+		solo(1, 5, 1, 0, regionEast, east()),
+		solo(2, 5, 1, 0, regionEast, east()),
+		solo(3, 5, 1, 0, regionEast, east()),
+		solo(4, 5, 1, 0, regionEast, east()),
+	}
+	groups := Form(units, bothRegions(), testNow, sidesPolicy(3))
+	if len(groups) != 1 || len(groups[0].Sides) != len(groups[0].Units) {
+		t.Fatalf("3v3 应成一组且每个单位都有阵营: %+v", groups)
+	}
+	var counts [2]int
+	for i, u := range groups[0].Units {
+		counts[groups[0].Sides[i]] += len(units[u].Players)
+	}
+	if counts != [2]int{3, 3} || groups[0].Units[0] != 0 || groups[0].Sides[0] != 0 {
+		t.Fatalf("两侧人数应相等、锚点在 0 侧: units=%v sides=%v counts=%v", groups[0].Units, groups[0].Sides, counts)
+	}
+}
+
+func TestSidesWaitForRealOpponents(t *testing.T) {
+	// 满一侧的队伍也必须等真人对手，不能自己成局。
+	units := []Unit{party(100, 5, 1, 0, 100, 101, 102)}
+	if groups := Form(units, bothRegions(), testNow, sidesPolicy(3)); len(groups) != 0 {
+		t.Fatalf("没有对手不应成局: %+v", groups)
+	}
+	units = append(units, party(200, 5, 1, 0, 200, 201, 202))
+	groups := Form(units, bothRegions(), testNow, sidesPolicy(3))
+	if len(groups) != 1 || !reflect.DeepEqual(groups[0].Sides, []uint32{0, 1}) {
+		t.Fatalf("两支满侧队伍应分在两边: %+v", groups)
+	}
+}
+
+func TestSidesRejectOversizedUnitAndOddTarget(t *testing.T) {
+	units := []Unit{party(100, 5, 1, 0, 100, 101, 102, 103), solo(1, 5, 1, 0, regionEast, east()), solo(2, 5, 1, 0, regionEast, east())}
+	for _, g := range Form(units, bothRegions(), testNow, sidesPolicy(2)) {
+		for _, u := range g.Units {
+			if u == 0 {
+				t.Fatal("超过一侧人数的队伍不能参加")
+			}
+		}
+	}
+	odd := Policy{Target: 3, Scope: testScope, Sides: true}
+	if Form(units, bothRegions(), testNow, odd) != nil {
+		t.Fatal("分边模式人数必须是偶数")
+	}
+}
+
+func TestSidesRespectScopeTree(t *testing.T) {
+	// 1v1 分边：不同大区、都只等了 5 秒，不能成局；等满全服阈值才成局。
+	units := []Unit{solo(1, 5, 1, 5_000, regionEast, east()), solo(2, 205, 2, 5_000, regionEast, east())}
+	if groups := Form(units, bothRegions(), testNow, sidesPolicy(1)); len(groups) != 0 {
+		t.Fatalf("未等满全服阈值不应跨大区: %+v", groups)
+	}
+	units = []Unit{solo(1, 5, 1, 20_000, regionEast, east()), solo(2, 205, 2, 20_000, regionEast, east())}
+	if groups := Form(units, bothRegions(), testNow, sidesPolicy(1)); len(groups) != 1 || groups[0].Level != scope.LevelGlobal {
+		t.Fatalf("等满全服阈值应成局: %+v", groups)
+	}
+}

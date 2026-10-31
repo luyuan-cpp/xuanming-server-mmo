@@ -10,7 +10,7 @@
 // (data_service.go 的 -route-tool;一次性 Job / Pod 跑,见 runbook §9.4)。cmd/route_tool 只留一个薄包装,给 dev 的 `go run`
 // 与既有 runbook 命令用,命令行逐字兼容。
 //
-// 子命令与退出码(0 干净 / 1 需要人工处理 / 2 失败 / 3 有生效的合服围栏):
+// 子命令与退出码(0 干净 / 1 需要人工处理 / 2 失败 / 3 导入期间 merge:merged_into 变过):
 //   - import-from-redis、audit、tidb-prepare:第 1a 批,语义不变;audit 新增 -frozen-recovery(冻结期恢复口径);
 //   - freeze / reconcile-from-cache / unfreeze:第 1b-1 批,全局库回档后的恢复流程(freeze → reconcile-from-cache →
 //     audit -frozen-recovery → unfreeze),只碰映射写者的冻结开关与反向修库,不改服务的运行行为;
@@ -112,7 +112,7 @@ redis_rev_behind 非 0;rewarm:-wait 内没等到 leader 重挂);2 失败(参数 
 db_first 下真导入没加 -allow-db-first,redis 模式下跑 reconcile-from-cache / audit -frozen-recovery / audit -require-maprev / rewarm -wait、
 或 unfreeze 没加 -cache-was-not-verified-acknowledged,没冻结就修库,unfreeze 没加 -confirm-audited 或确认不了缓存、
 水位键版本更新或不是 string,rewarm -wait 时映射写者是冻结的);
-3 有生效的合服围栏、或导入期间 merge:merged_into 变过(import-from-redis / reconcile-from-cache)。
+3 导入期间 merge:merged_into 变过(import-from-redis)。
 tidb-prepare:0 完成或 MySQL 上跳过(MySQL 没有 Region);2 失败。
 恢复流程(全局库回档之后,runbook §9.4):freeze → reconcile-from-cache(先 dry-run)→ audit -frozen-recovery(退出码 0)→ unfreeze -confirm-audited。
 redis 模式下撤销 freeze:unfreeze -confirm-audited -cache-was-not-verified-acknowledged(不连 mapping Redis,最低水位 0)。
@@ -165,8 +165,8 @@ type routeStore interface {
 	RepairMergedIntoFromCache(ctx context.Context, rows []store.MergedIntoRow, dryRun bool) (store.MergedIntoImportStats, error)
 	FreezeRouteWriters(ctx context.Context) (bool, error)
 	UnfreezeRouteWriters(ctx context.Context, minWatermarkMs uint64) (bool, error)
-	// ListActiveMergeFences 只给 rewarm -wait 取库时钟(见 routetool.Rewarm)。
-	ListActiveMergeFences(ctx context.Context) (store.ActiveMergeFences, error)
+	// DBNowMs 只给 rewarm -wait 取库时钟(见 routetool.Rewarm)。
+	DBNowMs(ctx context.Context) (uint64, error)
 	Close() error
 }
 
@@ -223,6 +223,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, d deps) (
 	var c config.Config
 	if err := conf.Load(a.configPath, &c); err != nil {
 		fmt.Fprintf(stderr, "route_tool: load %s: %v\n", a.configPath, err)
+		return routetool.ExitFailed
+	}
+	// 先于消费一次性 writer 资格:档位写错不能白白烧掉一份 boot grant。
+	if _, err := authoritysql.ParseBackend(c.SnapshotMySQL.Backend); err != nil {
+		fmt.Fprintf(stderr, "route_tool: invalid SnapshotMySQL.Backend in %s: %v\n", a.configPath, err)
 		return routetool.ExitFailed
 	}
 	c.RouteStore = c.RouteStore.Normalize()
@@ -834,7 +839,6 @@ func openRouteStore(c config.Config, permission authoritysql.Permission, frozen 
 	cfg.MaxIdleConn = c.RouteStore.MaxIdleConn
 	host, _ := os.Hostname() // 取不到时 NewRouteWriterID 用 "unknown"
 	st, err := store.NewRouteStore(cfg, store.RouteStoreOptions{
-		FenceShards:       uint32(c.RouteStore.FenceShards),
 		Writer:            store.NewRouteWriterID("route_tool", host),
 		MaintenanceFreeze: frozen,
 	})
@@ -971,7 +975,7 @@ func openMaintenance(ctx context.Context, c config.Config, a cliArgs) (*maintena
 	dsn.Addr = cfg.Host
 	dsn.DBName = plan.AuthoritySchema
 	dsn.ParseTime = true
-	db, err := authoritysql.Open(ctx, dsn.FormatDSN(), plan.AuthoritySchema, true, 2, permission)
+	db, err := authoritysql.Open(ctx, dsn.FormatDSN(), plan.AuthoritySchema, cfg.Backend, 2, permission)
 	if err != nil {
 		return nil, err
 	}
@@ -1663,15 +1667,15 @@ func sameRouteRecoveryRedis(first, last *pb.SqlWriterMaintenanceReceipt_RouteRec
 }
 
 func routeRecoveryStats(report routetool.AuditReport) (*pb.SqlWriterMaintenanceReceipt_RouteRecoveryStats, error) {
-	for _, n := range []int{report.DBRows, report.RedisPlayers, report.DBOnlyUnpublished, report.MissingInRedis, report.MissingInDB, report.ValueMismatch, report.RedisMalformed, report.DBInvalid, report.RedisRevAhead, report.RedisRevBehind, report.MergedIntoMissingInRedis, report.MergedIntoMissingInDB, report.MergedIntoMismatch, report.RedisFencesActive, report.TransientCleared} {
+	for _, n := range []int{report.DBRows, report.RedisPlayers, report.DBOnlyUnpublished, report.MissingInRedis, report.MissingInDB, report.ValueMismatch, report.RedisMalformed, report.DBInvalid, report.RedisRevAhead, report.RedisRevBehind, report.MergedIntoMissingInRedis, report.MergedIntoMissingInDB, report.MergedIntoMismatch, report.TransientCleared} {
 		if n < 0 {
 			return nil, errors.New("P7实际审核返回负计数")
 		}
 	}
-	if !report.FrozenRecovery || report.RequireMapRev || report.DBOnlyUnpublished > report.DBRows || report.MissingInRedis != 0 || report.MissingInDB != 0 || report.ValueMismatch != 0 || report.RedisMalformed != 0 || report.DBInvalid != 0 || report.RedisRevAhead != 0 || report.RedisRevBehind != 0 || report.MergedIntoMissingInRedis != 0 || report.MergedIntoMissingInDB != 0 || report.MergedIntoMismatch != 0 || report.RedisFencesActive != 0 || report.TransientCleared != 0 {
-		return nil, errors.New("P7实际审核仍有阻断差异、围栏或并发清除")
+	if !report.FrozenRecovery || report.RequireMapRev || report.DBOnlyUnpublished > report.DBRows || report.MissingInRedis != 0 || report.MissingInDB != 0 || report.ValueMismatch != 0 || report.RedisMalformed != 0 || report.DBInvalid != 0 || report.RedisRevAhead != 0 || report.RedisRevBehind != 0 || report.MergedIntoMissingInRedis != 0 || report.MergedIntoMissingInDB != 0 || report.MergedIntoMismatch != 0 || report.TransientCleared != 0 {
+		return nil, errors.New("P7实际审核仍有阻断差异或并发清除")
 	}
-	return &pb.SqlWriterMaintenanceReceipt_RouteRecoveryStats{DbRows: uint64(report.DBRows), RedisPlayers: uint64(report.RedisPlayers), DbOnlyUnpublished: uint64(report.DBOnlyUnpublished), MissingInRedis: uint64(report.MissingInRedis), MissingInDb: uint64(report.MissingInDB), ValueMismatch: uint64(report.ValueMismatch), RedisMalformed: uint64(report.RedisMalformed), DbInvalid: uint64(report.DBInvalid), RedisRevAhead: uint64(report.RedisRevAhead), RedisRevBehind: uint64(report.RedisRevBehind), MergedIntoMissingInRedis: uint64(report.MergedIntoMissingInRedis), MergedIntoMissingInDb: uint64(report.MergedIntoMissingInDB), MergedIntoMismatch: uint64(report.MergedIntoMismatch), RedisFencesActive: uint64(report.RedisFencesActive), TransientCleared: uint64(report.TransientCleared), FrozenRecovery: report.FrozenRecovery, RequireMapRev: report.RequireMapRev}, nil
+	return &pb.SqlWriterMaintenanceReceipt_RouteRecoveryStats{DbRows: uint64(report.DBRows), RedisPlayers: uint64(report.RedisPlayers), DbOnlyUnpublished: uint64(report.DBOnlyUnpublished), MissingInRedis: uint64(report.MissingInRedis), MissingInDb: uint64(report.MissingInDB), ValueMismatch: uint64(report.ValueMismatch), RedisMalformed: uint64(report.RedisMalformed), DbInvalid: uint64(report.DBInvalid), RedisRevAhead: uint64(report.RedisRevAhead), RedisRevBehind: uint64(report.RedisRevBehind), MergedIntoMissingInRedis: uint64(report.MergedIntoMissingInRedis), MergedIntoMissingInDb: uint64(report.MergedIntoMissingInDB), MergedIntoMismatch: uint64(report.MergedIntoMismatch), TransientCleared: uint64(report.TransientCleared), FrozenRecovery: report.FrozenRecovery, RequireMapRev: report.RequireMapRev}, nil
 }
 
 func publishRouteRecoveryAudit(ctx context.Context, file string, audit *pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit, resources []io.Closer, write func(string, []byte) error) error {

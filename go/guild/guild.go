@@ -45,7 +45,6 @@ import (
 	"shared/idsegment"
 	"shared/kafkautil"
 	"shared/killswitch"
-	"shared/placement"
 	"shared/safego"
 	"shared/serverbase"
 	"shared/snowflakealloc"
@@ -75,9 +74,6 @@ const nodeType = uint32(base.ENodeType_GuildNodeService)
 // 不足 300ms 就不同步投递、交给重投循环。与 AssetOp.OpBudgetMs 默认值同为 2500ms 只是巧合:
 // ProcessOne 内部自己按 OpBudget 切投递 / 落库,这里只限"本请求最多陪它等多久"。
 const economySyncBudget = 2500 * time.Millisecond
-
-// routeReadyProbeTimeout 是 MergeMarkerRedis.RequireRouteReady=true 时启动探针(一次读脚本)的预算。
-const routeReadyProbeTimeout = 3 * time.Second
 
 var maintenancePlan = flag.String("maintenance-drain-plan", "", "正式 typed 排空 runtime 原件")
 var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原件目录")
@@ -154,10 +150,11 @@ func main() {
 	if err := repo.BindPublication(relay); err != nil {
 		panic(err)
 	}
-	if err := repo.ConfigureRoleAuthority(config.AppConfig.AccountRoleSchema); err != nil {
+	sqlBackend := authoritysql.Backend(config.AppConfig.MySQL.Backend)
+	if err := repo.ConfigureRoleAuthority(config.AppConfig.AccountRoleSchema, sqlBackend); err != nil {
 		logx.Must(err)
 	}
-	if err := repo.ConfigureMatchAuthority(config.AppConfig.MatchAuthoritySchema); err != nil {
+	if err := repo.ConfigureMatchAuthority(config.AppConfig.MatchAuthoritySchema, sqlBackend); err != nil {
 		logx.Must(err)
 	}
 	loginPool := config.AppConfig.LoginRedis.PoolSize
@@ -181,7 +178,7 @@ func main() {
 	// 帮会写事务"不成环"的推演只对 TiDB(悲观 + RC)与 MySQL 8.0.29+ 成立 —— 审批通过重插删除标记成员行的 S → X 升级
 	// 依赖 InnoDB Bug #11745929 的修复。低于下限、MariaDB 或版本串解析不出一律拒启,不降级成告警:
 	// 带着会成环的锁语义上线,出事时只表现为偶发的 1213 与"稍后重试",很难回溯到版本。
-	// 放在全局插入守卫之前:版本不对的实例连哨兵行都不该去建,更不该注册进 etcd。
+	// 版本不对的实例不该注册进 etcd。
 	verCtx, verCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	dbVersion, verErr := repo.CheckServerVersion(verCtx)
 	verCancel()
@@ -189,17 +186,6 @@ func main() {
 		logx.Must(fmt.Errorf("guild database version check: %w", verErr))
 	}
 	logx.Infof("[guild] Database version %s meets minimum requirement (TiDB or MySQL 8.0.29+)", dbVersion)
-
-	// 全局插入守卫哨兵行(guild_player_state.player_id = 0;data/guild_manage_repo.go 文件头 (d)):
-	// 建帮、审批通过、首次建状态行都在事务内锁它,缺了一律 fail-closed。所以放在建表之后、创建 repo 之后、
-	// 节点注册与任何 goroutine / RPC 启动之前:建不出来的实例既不能对外服务,也不该注册进 etcd。
-	// 常驻启动只读核对；哨兵缺失必须先运行独立 Schema -migrate，不在 NORMAL 池补种或取命名锁。
-	guardCtx, guardCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	guardErr := repo.VerifyGlobalInsertGuard(guardCtx)
-	guardCancel()
-	if guardErr != nil {
-		logx.Must(fmt.Errorf("ensure guild global insert guard row: %w", guardErr))
-	}
 
 	// Register node with etcd
 	host, port, err := splitHostPort(config.AppConfig.ListenOn)
@@ -296,18 +282,16 @@ func main() {
 	// 前任借过逻辑秒这三类"启动 guard 挡不住"的重号。
 	sf := sfHandle.NewNode()
 
-	// repo 已在建表之后创建(全局插入守卫要在节点注册之前建好)。
+	// repo 已在建表之后创建。
 	// 每次启动从 MySQL 权威快照重建全局 / 分区榜;失败拒绝启动,避免对外提供不完整榜单。
 	if err := repo.RebuildRanks(context.Background()); err != nil {
 		panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
 	}
 	onlineResolver := logic.NewOnlineStatusResolver(svcCtx.PlayerLocatorRedisClient)
 
-	// guild_id 发号策略(设计稿 §6.4):号段(svcCtx.GuildIDSegment,IdSegment.Enabled 时
-	// 已在 NewServiceContext 里接好 data_service)优先;是否回退到上面这个 snowflake 节点
-	// 由 IdSegment.FallbackToSnowflake 决定,默认不回退。snowflake 节点本身照旧申领 /
-	// 写水位 / 失租 fence —— 它既是可选回退,也是解码存量 guild_id 的依据。
-	guildIDs := svc.NewGuildIDMinter(config.AppConfig.IdSegment, svcCtx.GuildIDSegment, sf.Generate)
+	// guild_id 只由号段发(svcCtx.GuildIDSegment,IdSegment.Enabled 时已在 NewServiceContext
+	// 里接好 data_service),号段失败即建帮失败。
+	guildIDs := svc.NewGuildIDMinter(svcCtx.GuildIDSegment)
 	if finish, err := root.Enter(); err == nil {
 		func() { defer finish(); svcCtx.WarmGuildIDSegment() }()
 	}
@@ -326,7 +310,7 @@ func main() {
 
 	// op_id 发号器。号段关着时 svcCtx.AssetOpIDSegment 是 nil *Client:必须让 assetOpIDs 保持
 	// **nil 接口**,不能把 nil 指针包进 Minter 或直接赋给接口 —— 那样 logic 里 `OpIDs == nil` 为 false,
-	// 每次捐献都会去调一个空客户端(与上面 mergeFence 同一个坑)。不设 Fallback:op_id 是 outbox 主键,
+	// 每次捐献都会去调一个空客户端。op_id 是 outbox 主键,
 	// 号段失败就整体拒绝(kGuildIdGenUnavailable),绝不自造 id。
 	var assetOpIDs logic.IDMinter
 	if svcCtx.AssetOpIDSegment != nil {
@@ -353,10 +337,9 @@ func main() {
 		if err != nil {
 			logx.Must(fmt.Errorf("guild asset pipeline: %w", err))
 		}
-		// 已落盘账本(离线读账本 / 自动放弃;AssetOp.RequireSQLCommit 打开时也是在线终结的 SQL 提交证据)
-		// 必须紧跟建管线、在把 Loop 交给同步投递路径(下面的 EconomyDeps.Loop / ActivityDeps.Loop)与 Start 之前接上
-		// —— Loop.Ledger 是无锁字段。没配 DataServiceRpc 时方法保持 Ledger=nil;开关打开时随后的 CheckWiring 拒启
-		// (docs/design/db-write-fencing-mysql.md §6.6),开关关闭时按 HEAD 口径只是少了离线读账本与自动放弃。
+		// 已落盘账本(在线 / 离线终结与自动放弃都靠它)必须紧跟建管线、在把 Loop 交给同步投递路径
+		// (下面的 EconomyDeps.Loop / ActivityDeps.Loop)与 Start 之前接上 —— Loop.Ledger 是无锁字段。
+		// 没配 DataServiceRpc 时随后的 CheckWiring 拒启。
 		assetPipe.Loop.Relay = relay
 		assetPipe.AttachPersistedLedger(svcCtx.DataServiceClient)
 		if err := assetPipe.Loop.CheckWiring(); err != nil {
@@ -364,7 +347,7 @@ func main() {
 		}
 		// 日对账 + 自动放弃(落地恢复 §6.2 / §6.3)的选主:锁在 guild 全局 Redis(全体副本共享),只有当选副本跑维护。
 		// 同样必须在 Start 之前接上。竞选者标识用节点 uuid(每个进程实例唯一,与历练巡检租约的持有者标识同源)。
-		// 自动放弃另需 Loop.Ledger(上一行;没配 DataServiceRpc 时不放弃)与 Loop.Locator(NewAssetPipeline 已接),缺一不跑。
+		// 自动放弃另需 Loop.Ledger(上一行)。
 		assetPipe.AttachMaintenanceLeader(svcCtx.RedisClient, n.Info.NodeUuid)
 		if finish, err := relay.Enter(); err == nil {
 			func() { defer finish(); svcCtx.WarmAssetOpIDSegment() }()
@@ -417,7 +400,7 @@ func main() {
 	// **没有结算就不许开战**:结果消费跑不起来(没显式开 Activity.TrialResult.Enabled,或没配 Kafka.Brokers)时,
 	// 把 Match 留成 nil 接口 → 视图显示未开放、两个历练写 RPC 回 kGuildActivityNotOpen。否则玩家打完一局,
 	// 帮贡、资金、物品都无人发放。
-	// 注意 nil 接口的坑(同上面的 assetOpIDs / 下面的 mergeFence):svcCtx.MatchInternal 本身是接口类型,没配 MatchRpc 时
+	// 注意 nil 接口的坑(同上面的 assetOpIDs):svcCtx.MatchInternal 本身是接口类型,没配 MatchRpc 时
 	// 是 nil 接口;这里显式判过再赋值,trialMatch 要么是可用的客户端、要么是 nil 接口,不会出现"装着 nil 指针的非 nil 接口"。
 	trialResultActive := config.AppConfig.TrialResultActive()
 	matchConfigured := svcCtx.MatchInternal != nil
@@ -451,31 +434,6 @@ func main() {
 		activities.Loop != nil, trialMatch != nil, matchConfigured, trialResultActive)
 	logTrialClosedReason(config.AppConfig, matchConfigured)
 
-	// 合服闸门(可选):没配 MergeMarkerRedis 时 NewRedisMergeFence 返回 nil 指针,
-	// 必须显式转成 nil **接口** 再传下去 —— 直接传一个 nil 的具体类型指针,
-	// GuildLogic 里的 `l.mergeFence == nil` 会是 false,于是每次建帮都去调一个
-	// 空实现,反而把"未配置"变成一条隐蔽的运行期分支。
-	var mergeFence logic.MergeFence
-	if config.AppConfig.MergeMarkerRedis.RequireRouteReady {
-		// D1 第 3 批读方门禁(docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.4、§13.2 第 2 条):
-		// 闸门只在就绪标记可信时按 merge:in_progress:{zone} 判。启动期试跑一次读脚本,执行不了(连不上、INFO 在脚本里不可用、
-		// 回复形状不对)就拒启;标记暂不可信不拒启,运行期经闸门的公会写一律按封锁拒绝。Validate 已保证此时配了 Host。
-		f := logic.NewRouteReadyMergeFence(svcCtx.MergeMarkerRedisClient)
-		probeCtx, cancelProbe := context.WithTimeout(context.Background(), routeReadyProbeTimeout)
-		verdict, err := f.Probe(probeCtx)
-		cancelProbe()
-		if err != nil {
-			logx.Must(fmt.Errorf("guild merge fence route ready startup probe (MergeMarkerRedis.RequireRouteReady=true): %w", err))
-		}
-		if verdict == placement.RouteReadyTrusted {
-			logx.Infof("[guild] Merge gate requires route ready marker: startup probe verdict=%s", verdict)
-		} else {
-			logx.Errorf("[guild] Merge gate requires route ready marker: startup probe verdict=%s; guild writes gated by the merge fence are refused (fail closed) until the marker is trusted", verdict)
-		}
-		mergeFence = f
-	} else if f := logic.NewRedisMergeFence(svcCtx.MergeMarkerRedisClient); f != nil {
-		mergeFence = f
-	}
 	// 帮会按 zone 隔离:客户端请求的 zone 取 data_service 的玩家归属映射(logic/home_zone.go)。
 	// 没配 DataServiceRpc 时保持 nil 接口:内部调用照常,客户端请求一律按服务不可用拒绝。
 	//
@@ -493,8 +451,7 @@ func main() {
 	// 推送出口与"申请推送冷却"在这里一次装配(设计 §13.7 / §10.1)。
 	//
 	// NewGuildNotifier 自己判 nil:没配 Kafka(Brokers 为空 → KafkaWriter 为 nil)时它退回
-	// NoopNotifier,所以这里不必再包一层 if。这跟上面 mergeFence 的写法不同不是疏忽 ——
-	// 那边要躲的是"具体类型的 nil 指针装进接口后 != nil"这个坑,而这里拿到的已经是接口值。
+	// NoopNotifier,所以这里不必再包一层 if:这里拿到的已经是接口值,没有"具体类型的 nil 指针装进接口后 != nil"这个坑。
 	//
 	// TryMarkApplyPush 是 Redis SetNX 冷却键,挡的是"申请 → 撤回 → 申请"对审批人的刷屏;
 	// 不注入 = 总是放行,只有单测才会走那条默认。
@@ -520,7 +477,7 @@ func main() {
 	if err != nil {
 		logx.Must(err)
 	}
-	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones,
+	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, homeZones,
 		logic.WithApplicationQuota(applicationQuota),
 		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient, relay)),
 		logic.WithApplyPushGate(repo.TryMarkApplyPush),
@@ -553,9 +510,6 @@ func main() {
 	// 必须在 MustNewServer 之后:go-zero 指标的全局开关由它内部的 SetUp → StartAgent 打开,之前写的样本会被丢弃
 	// (理由与告警口径见 server.PrimeGuildInternalMetrics)。
 	server.PrimeGuildInternalMetrics()
-	if config.AppConfig.MergeMarkerRedis.RequireRouteReady {
-		logic.PrimeRouteReadyMetrics()
-	}
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root))
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(loginRedis, repo.CheckOriginalRole))...)
 	defer s.Stop()
@@ -875,12 +829,12 @@ func trialConsumerConfigFrom(c config.Config) guildkafka.TrialResultConsumerConf
 	return guildkafka.TrialResultConsumerConfig{
 		Brokers: c.Kafka.Brokers, Topic: c.Activity.TrialResult.Topic,
 		GroupID: c.Activity.TrialResult.GroupID, Partitions: c.Activity.TrialResult.Partitions,
-		RequireDurability: c.MySQL.RequiresTiDB(),
+		RequireDurability: c.TrialResultRequiresDurability(),
 	}
 }
 
 func ensureTrialResultTopic(c config.Config, ensure func([]string, []kafkautil.TopicSpec) error) error {
-	if !c.MySQL.RequiresTiDB() || !c.TrialResultActive() {
+	if !c.TrialResultRequiresDurability() || !c.TrialResultActive() {
 		return nil
 	}
 	cfg := trialConsumerConfigFrom(c)
@@ -1069,13 +1023,6 @@ func runMigration(c config.Config) int {
 		if missErr := missingIndexError(report); missErr != nil {
 			fmt.Fprintf(os.Stderr, "schema migration needs manual action (exit %d): %v\n", schemamigrate.ExitManual, missErr)
 			return schemamigrate.ExitManual
-		}
-		seedCtx, seedCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		seedErr := data.SeedGlobalInsertGuard(seedCtx, db, uint64(time.Now().UnixMilli()))
-		seedCancel()
-		if seedErr != nil {
-			fmt.Fprintf(os.Stderr, "guild Schema 守卫播种失败: %v\n", seedErr)
-			return schemamigrate.ExitFailed
 		}
 	}
 	switch {

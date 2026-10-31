@@ -9,6 +9,7 @@ import (
 
 	base "proto/common/base"
 	dspb "proto/data_service"
+	"shared/authoritysql"
 	"shared/roleidentity"
 
 	"github.com/stretchr/testify/require"
@@ -30,8 +31,8 @@ func roleIdentityTiDBPair(t *testing.T) (*FriendRepo, *FriendRepo, context.Conte
 	require.NoError(t, err)
 	_, err = first.db.ExecContext(ctx, "INSERT INTO `"+schema+"`.account_role(player_id,account,owner_revision) VALUES(11,'peer',3),(22,'original',7)")
 	require.NoError(t, err)
-	require.NoError(t, first.ConfigureRoleAuthority(schema))
-	require.NoError(t, second.ConfigureRoleAuthority(schema))
+	require.NoError(t, first.ConfigureRoleAuthority(schema, authoritysql.BackendTiDB))
+	require.NoError(t, second.ConfigureRoleAuthority(schema, authoritysql.BackendTiDB))
 	return first, second, ctx, schema
 }
 

@@ -16,6 +16,7 @@ import (
 	matchpb "proto/match"
 	scenepb "proto/scene"
 	smpb "proto/scene_manager"
+	"shared/generated/tip"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
@@ -69,6 +70,11 @@ const battleNotAllocatableMessage = "battle_not_allocatable"
 // (调用方用 errors.Is 判定,据此跳过 DestroyBattle、换节点重试)。
 var errBattleNotAllocatable = errors.New("battle 节点暂不可分配(" + battleNotAllocatableMessage + ")")
 
+// errPrepareRejected 标记确定由玩家自身状态导致的备战失败:不在线或未进场、scene 以业务码(非故障码)拒绝。
+// 全球成局只凭它给玩家定罪(终止其单排票);读位置失败、RPC 超时或断连、scene 内部故障码等结果未知的
+// 失败不定罪(docs/design/global-match-hierarchical-pools.md §5.5)。
+var errPrepareRejected = errors.New("玩家当前不能备战")
+
 // gather 对 scene / battle 节点的四个 gRPC 调用抽成包级函数变量:生产走
 // *RPC 实现(DialEndpoint 连接缓存 + 各自超时),测试换成 fake —— 现有
 // runGatherFn 只能绕开整条 gather,验证指纹比对 / 补偿路径要让 gather 真跑。
@@ -81,7 +87,7 @@ var (
 
 // RunGather 执行开局管线(设计文档 §3.1/§3.2):
 //
-//	battle_id = snowflake(match 节点专属生产,17-bit 布局)
+//	battle_id = 向发号器申请(biz_tag = battle)
 //	→ 选 battle 节点(etcd watch 缓存,v1 随机)
 //	→ 逐参与者:读 player:{id}:location 定位 scene 节点 → gRPC Scene.PrepareBattle 收快照
 //	→ 全齐后 gRPC BattleNode.CreateBattle(seed 用 crypto/rand)
@@ -177,7 +183,9 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 	fail := func(outcome string, failedPlayer uint64, prepared []preparedMember, battleId uint64) bool {
 		if opts.formation != nil {
 			if globalDestroy(svcCtx.Authority, opts.formation) {
-				globalAbortPrepared(svcCtx, opts.formation)
+				// 肇事者(掉线、不在场景、配表不一致)的单排票直接终止,其余成员保留原入队时刻回队,
+				// 与 Redis 路径"肇事者出局删票、幸存者回队首"同语义。
+				globalAbortPrepared(svcCtx, opts.formation, failedPlayer)
 			} else {
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 				_ = svcCtx.Authority.Unknown(ctx, opts.formation)
@@ -220,8 +228,8 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 		return false
 	}
 
-	// 1. battle_id:只能由 match 节点生产(宪法 §7 SnowFlake 节点隔离)。
-	//    ErrFenced/ErrBorrowLimitExceeded 一律 fail-closed,不得用 0 顶替。
+	// 1. battle_id:向发号器申请(biz_tag = battle)。
+	//    发号失败一律 fail-closed,不得用 0 顶替。
 	//    活动开局由调用方预先发号(opts.presetBattleID,同一个生成器),这里不再发。
 	battleId := opts.presetBattleID
 	if battleId == 0 {
@@ -293,7 +301,11 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 			if endpoint == "" {
 				outcome = "no_location"
 			}
-			return fail(outcome, playerId, prepared, battleId)
+			culprit := playerId
+			if opts.formation != nil && !errors.Is(err, errPrepareRejected) {
+				culprit = 0 // 全球成局:结果未知的失败不定罪,全员保留原入队时刻回队
+			}
+			return fail(outcome, culprit, prepared, battleId)
 		}
 		snapshot := resp.GetSnapshot()
 		snapshot.TeamIndex = teams[i]
@@ -331,15 +343,16 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 	}
 	createdAtMs := nowMs()
 	createReq := &battlepb.CreateBattleRequest{
-		BattleId:         battleId,
-		BattleConfigId:   battleConfigId,
-		Players:          snapshots,
-		Seed:             seed,
-		MatchMode:        uint32(mode),
-		CreatedAtMs:      createdAtMs,
-		DeadlineMs:       deadlineMs,
-		TableFingerprint: tableFingerprint,
-		ActivityContext:  opts.activityContext,
+		BattleId:           battleId,
+		BattleConfigId:     battleConfigId,
+		Players:            snapshots,
+		Seed:               seed,
+		MatchMode:          uint32(mode),
+		CreatedAtMs:        createdAtMs,
+		DeadlineMs:         deadlineMs,
+		TableFingerprint:   tableFingerprint,
+		ActivityContext:    opts.activityContext,
+		SpectateVisibility: spectateVisibilityFor(mode, opts.activityContext),
 	}
 	if opts.formation != nil {
 		f := opts.formation
@@ -387,7 +400,8 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 	//     肇事者删票。建房之前失败则是无副作用的干净失败:不发 DestroyBattle,解冻必然有效(outcome=index_failed)。
 	//     记录先于房间存在的窗口:活跃集合要等开局成功才加入(第 6 步),battle_id 此刻只有活动开局的
 	//     调用方知道;窗口里被按 battle_id 观战懒剔除的记录由第 6 步补写。
-	record := newSpectateRecord(battleId, battleNode.NodeId, mode, battleConfigId, playerNames, createdAtMs)
+	record := newSpectateRecord(battleId, battleNode.NodeId, mode, battleConfigId, playerNames, createdAtMs,
+		createReq.GetSpectateVisibility())
 	if err := writeSpectateRecord(svcCtx, record); err != nil {
 		if opts.formation != nil {
 			logx.Errorf("[gather] 全球 SQL 落点已持久化，观战展示投影待恢复 battle=%d: %v", battleId, err)
@@ -436,6 +450,11 @@ func runGatherWithOptions(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, ba
 	}
 	if err != nil {
 		if opts.formation != nil {
+			if errors.Is(err, errBattleNotAllocatable) && svcCtx.Placement != nil {
+				// 节点级准入拒绝:本副本短时熔断这个实例,后续成局在同机房换节点。
+				// 原件仍按下面的 UNKNOWN 走唯一 SQL 终局,不因"房间必未建成"提前释放。
+				svcCtx.Placement.MarkUnavailable(opts.formation.TargetInstanceId)
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			var adoption *outcomeAdoptionError
 			if errors.As(err, &adoption) {
@@ -567,7 +586,7 @@ func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, 
 		return "", nil, err
 	}
 	if loc == nil {
-		return "", nil, fmt.Errorf("玩家位置不存在(不在线或未进场)")
+		return "", nil, fmt.Errorf("玩家位置不存在(不在线或未进场): %w", errPrepareRejected)
 	}
 
 	endpoint, err := svcCtx.SceneNodes.EndpointOf(loc.ZoneId, loc.NodeId)
@@ -590,8 +609,11 @@ func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, 
 	if err != nil {
 		return endpoint, nil, fmt.Errorf("PrepareBattle RPC 失败: %w", err)
 	}
-	if resp.GetErrorMessage().GetId() != 0 {
-		return endpoint, nil, fmt.Errorf("scene 拒绝备战 tip_id=%d", resp.GetErrorMessage().GetId())
+	if id := resp.GetErrorMessage().GetId(); id != 0 {
+		if tip.IsFault(id) {
+			return endpoint, nil, fmt.Errorf("scene 备战内部故障 tip_id=%d", id)
+		}
+		return endpoint, nil, fmt.Errorf("scene 拒绝备战 tip_id=%d: %w", id, errPrepareRejected)
 	}
 	if resp.GetSnapshot() == nil {
 		return endpoint, nil, fmt.Errorf("scene 返回空快照")
@@ -820,7 +842,7 @@ func destroyBattleRPC(endpoint string, req *battlepb.DestroyBattleRequest) error
 
 // teamAssignment 给一组成员分队,返回与 members 同下标的队号。5v5 读各成员
 // 评分后按 assignBalancedTeams 蛇形平衡(§11;评分读失败者按默认分参与),
-// 其余模式走 teamIndexFor 的弹出序语义。
+// 其余模式走 teamIndexFor 的弹出序语义;1v1 再按 battle_id 决定两人是否对调。
 func teamAssignment(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleId uint64, members []uint64) []uint32 {
 	if mode == matchpb.MatchMode_MATCH_MODE_5V5 {
 		ratings := loadRatings(svcCtx, members)
@@ -836,7 +858,22 @@ func teamAssignment(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleId
 	for i := range members {
 		teams[i] = teamIndexFor(mode, i, len(members))
 	}
+	if mode == matchpb.MatchMode_MATCH_MODE_1V1 && len(members) == 2 {
+		// 0 队不再恒归排在前面的锚点(等待最久者):按 battle_id 决定是否对调,同一局重放结果不变
+		// (docs/design/global-match-hierarchical-pools.md §8)。切磋保持发起者在 0 队。
+		flip := sideFlip(battleId)
+		teams[0], teams[1] = teams[0]^flip, teams[1]^flip
+	}
 	return teams
+}
+
+// sideFlip 是 battle_id 经 splitmix64 终混后的最低位(0 或 1)。battle_id 现在已经打散,低位本身也均匀;
+// 终混是 snowflake 时期留下的(当时低位是秒内序号,低并发时几乎恒为 0),保留它不依赖 id 的布局。
+func sideFlip(battleId uint64) uint32 {
+	x := battleId + 0x9e3779b97f4a7c15
+	x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9
+	x = (x ^ (x >> 27)) * 0x94d049bb133111eb
+	return uint32((x ^ (x >> 31)) & 1)
 }
 
 // teamIndexFor 决定参与者的队伍编号:1v1/切磋语义不变(memberIndex 即队号,

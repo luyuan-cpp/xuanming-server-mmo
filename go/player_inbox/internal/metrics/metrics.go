@@ -152,6 +152,15 @@ var (
 			"backed-off retries included (leader-only scan).",
 	})
 
+	// battleProducerReady 是 Match 结算生产面是否装配了签名密钥(2026-10-30):装配层启动时写一次,每个副本各报一份。
+	// 未启用全球匹配的部署不注入这把密钥,读数为 0 是预期;启用了却为 0 就是 Battle 结算入箱整面不可用。
+	battleProducerReady = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace, Name: "battle_producer_ready",
+		Help: "1 = the Match battle settlement producer (EnqueueBattleSettlement / LookupBattleSettlement) has a valid " +
+			"MMORPG_PLAYER_INBOX_SECRET_MATCH; 0 = the key is missing or shorter than 32 bytes and both methods return " +
+			"Unavailable. Set once per replica at startup; 0 is expected where global match is disabled (the key is only injected there).",
+	})
+
 	registerOnce sync.Once
 )
 
@@ -237,6 +246,15 @@ func SetScanGauges(g ScanGauges) {
 // ResetScanGauges 在卸任时把本副本的扫描型 gauge 归零。
 func ResetScanGauges() { SetScanGauges(ScanGauges{}) }
 
+// SetBattleProducerReady 写 Match 结算生产面的装配状态(1 = 已装配签名密钥,0 = 未装配)。启动时由装配层写一次。
+func SetBattleProducerReady(ready bool) {
+	if ready {
+		battleProducerReady.Set(1)
+		return
+	}
+	battleProducerReady.Set(0)
+}
+
 // Register 把全部指标与连接池指标挂进默认注册表(只执行一次)。db 可为 nil(不出池指标)。
 func Register(db *sql.DB) {
 	registerOnce.Do(func() {
@@ -246,7 +264,7 @@ func Register(db *sql.DB) {
 			reconcileInconsistentRows, reconcileTruncatedTotal, reconcileRoundsTotal, reconcileReadTotal,
 			sweepDeletedTotal, fetchScannedRows,
 			deliveredUnacked, deliveredUnackedStale, deliveredUnackedOldestSeconds, openItems, oldestOpenAgeSeconds,
-			maxDeliveryCount, notifyBacklog,
+			maxDeliveryCount, notifyBacklog, battleProducerReady,
 		)
 		if db != nil {
 			// 连接池单独出池指标(设计 §9.4):go_sql_* 带 db_name="player_inbox"。

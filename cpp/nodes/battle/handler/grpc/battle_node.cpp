@@ -108,6 +108,22 @@ void BattleNodeImpl::HandleIssueBattleTicket(const ::IssueBattleTicketRequest* r
     ///<<< END WRITING YOUR CODE
 }
 
+void BattleNodeImpl::HandleAttachRelayGate(const ::AttachRelayGateRequest* request,
+    ::AttachRelayGateResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    BattleRoomManager::Instance().HandleAttachRelayGate(*request, *response);
+///<<< END WRITING YOUR CODE
+}
+
+void BattleNodeImpl::HandlePromoteSpectateBroadcast(const ::PromoteSpectateBroadcastRequest* request,
+    ::PromoteSpectateBroadcastResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    BattleRoomManager::Instance().HandlePromoteSpectateBroadcast(*request, *response);
+///<<< END WRITING YOUR CODE
+}
+
 void BattleNodeImpl::QueryObserver(const std::shared_ptr<QueryObserverCall>& call)
 {
     [[maybe_unused]] const ::QueryObserverRequest* request = &call->request();
@@ -214,6 +230,22 @@ void BattleNodeImpl::IssueBattleTicket(const std::shared_ptr<IssueBattleTicketCa
     call->Proceed();
 }
 
+void BattleNodeImpl::AttachRelayGate(const std::shared_ptr<AttachRelayGateCall>& call)
+{
+    [[maybe_unused]] const ::AttachRelayGateRequest* request = &call->request();
+    ///<<< BEGIN WRITING YOUR CODE: grpc.AttachRelayGate.guard
+    ///<<< END WRITING YOUR CODE
+    call->Proceed();
+}
+
+void BattleNodeImpl::PromoteSpectateBroadcast(const std::shared_ptr<PromoteSpectateBroadcastCall>& call)
+{
+    [[maybe_unused]] const ::PromoteSpectateBroadcastRequest* request = &call->request();
+    ///<<< BEGIN WRITING YOUR CODE: grpc.PromoteSpectateBroadcast.guard
+    ///<<< END WRITING YOUR CODE
+    call->Proceed();
+}
+
 void BattleNodeImpl::RegisterMethods(muduo_grpc::MethodTable& table)
 {
     table.AddUnary(std::string(kQueryObserverPath),
@@ -278,6 +310,24 @@ void BattleNodeImpl::RegisterMethods(muduo_grpc::MethodTable& table)
             if (call->ParseRequest(requestBytes))
             {
                 IssueBattleTicket(call);
+            }
+        });
+    table.AddUnary(std::string(kAttachRelayGatePath),
+        [this](muduo_grpc::ServerCall serverCall, std::string_view requestBytes)
+        {
+            const auto call = AttachRelayGateCall::Create(std::move(serverCall), &HandleAttachRelayGate);
+            if (call->ParseRequest(requestBytes))
+            {
+                AttachRelayGate(call);
+            }
+        });
+    table.AddUnary(std::string(kPromoteSpectateBroadcastPath),
+        [this](muduo_grpc::ServerCall serverCall, std::string_view requestBytes)
+        {
+            const auto call = PromoteSpectateBroadcastCall::Create(std::move(serverCall), &HandlePromoteSpectateBroadcast);
+            if (call->ParseRequest(requestBytes))
+            {
+                PromoteSpectateBroadcast(call);
             }
         });
 }

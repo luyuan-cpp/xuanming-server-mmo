@@ -127,7 +127,6 @@ function Reset-MigrateFixture {
         ConfigFile = 'match_service.yaml'; ImageName = 'mmorpg-match'; Port = 50500; Global = $true
     }
     $script:MatchGlobalEnabled = $true
-    $script:MatchRatingSnapshotPublish = '0'
     Set-Item Function:script:Get-GlobalMatchDeploymentSettings {
         param($Profile, $TiDBHost, $Region)
         return [pscustomobject]@{ Enabled = $script:MatchGlobalEnabled }

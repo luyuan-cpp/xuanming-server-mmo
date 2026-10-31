@@ -9,6 +9,29 @@
 #include "rpc/service_metadata/kafka_command_event_whitelist.h"
 #include "muduo/base/Logging.h"
 
+#include <cstdint>
+#include <unordered_map>
+
+namespace {
+
+// 需要载荷的事件(含 message / repeated 字段,GateCommand 信封装不下)收到空载荷:只可能是生产者缺陷。
+// 不构造缺字段的空事件下发 —— 那会给客户端推一个空帧,广播则静默变成空操作。按事件计数并采样留痕:
+// 每个事件第一条必打,此后每 1024 条一行;metric= 行只带低基数的 event_id 与累计值,topic 只进明细行。
+// 只在 gate 主 loop 线程调用;键只可能是生成器标记为需要载荷的那几个事件号,集合有界。
+void RejectEmptyPayload(const std::string& topic, uint32_t eventId)
+{
+    thread_local std::unordered_map<uint32_t, uint64_t> rejectedByEventId;
+    const uint64_t total = ++rejectedByEventId[eventId];
+    if ((total & 0x3FF) != 1) {
+        return;
+    }
+    LOG_ERROR << "metric=gate_kafka_empty_payload_rejected event_id=" << eventId << " total=" << total;
+    LOG_ERROR << "GateCommand rejected: the event requires a payload but it is empty (sampled), topic=" << topic
+              << ", event_id=" << eventId;
+}
+
+} // namespace
+
 void DispatchGateKafkaCommand(const std::string& topic, const contracts::kafka::GateCommand& command)
 {
     if (command.event_id() == 0) {
@@ -121,7 +144,8 @@ void DispatchGateKafkaCommand(const std::string& topic, const contracts::kafka::
         return;
     }
 
-    // 空载荷使用信封中的字段,仍只调用白名单入口。
+    // 空载荷的信封分支,仍只调用白名单入口:只有标量字段的事件用信封里同名同型的字段构造;
+    // 含 message / repeated 字段的事件信封装不下,一律拒绝(生成器 PayloadRequired)。
     switch (command.event_id()) {
     case ContractsKafkaRoutePlayerEventEventId: {
         contracts::kafka::RoutePlayerEvent event;
@@ -161,24 +185,19 @@ void DispatchGateKafkaCommand(const std::string& topic, const contracts::kafka::
         return;
     }
     case ContractsKafkaPushToPlayerEventEventId: {
-        contracts::kafka::PushToPlayerEvent event;
-        event.set_session_id(command.session_id());
-        GateEventHandler::PushToPlayerEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     case ContractsKafkaBroadcastToPlayersEventEventId: {
-        contracts::kafka::BroadcastToPlayersEvent event;
-        GateEventHandler::BroadcastToPlayersEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     case ContractsKafkaBroadcastToSceneEventEventId: {
-        contracts::kafka::BroadcastToSceneEvent event;
-        GateEventHandler::BroadcastToSceneEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     case ContractsKafkaBroadcastToAllEventEventId: {
-        contracts::kafka::BroadcastToAllEvent event;
-        GateEventHandler::BroadcastToAllEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     default:

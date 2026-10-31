@@ -24,8 +24,7 @@ import (
 //     这一行在本次审计里就完全没比对过:只漏报不误报,但「audit 为 0」就不覆盖它了;
 //  3. merged_into:库的全量列表对 Redis 的全量列表;
 //  4. 复核:有差异的玩家不超过 MaxRecheck 时,等 RecheckDelay 后重读这些 id 的两边,只有两次都在的差异才计入,
-//     被复核清掉的记 transient_cleared;超过上限就全部照首读计入并打 WARN;
-//  5. 有生效的合服围栏只做提示(redis_fences_active + WARN):合服窗口内的结果可能含瞬时差异。
+//     被复核清掉的记 transient_cleared;超过上限就全部照首读计入并打 WARN。
 //
 // 分类(按玩家、按种类各计一次;一名玩家可以同时落进多类):
 //
@@ -118,9 +117,8 @@ type AuditReport struct {
 	MergedIntoMissingInDB    int
 	MergedIntoMismatch       int
 
-	// RedisFencesActive 与 TransientCleared 只做提示,不算差异。
-	RedisFencesActive int
-	TransientCleared  int
+	// TransientCleared 只做提示,不算差异。
+	TransientCleared int
 
 	// FrozenRecovery 记下本次是否按冻结期恢复口径判退出码(AuditOptions.FrozenRecovery 原样带出;不进统计行)。
 	FrozenRecovery bool
@@ -128,7 +126,7 @@ type AuditReport struct {
 	RequireMapRev bool
 }
 
-// Differences 是全部差异计数之和(不含 RedisFencesActive / TransientCleared)。
+// Differences 是全部差异计数之和(不含 TransientCleared)。
 func (r AuditReport) Differences() int {
 	return r.DBOnlyUnpublished + r.MissingInRedis + r.MissingInDB + r.ValueMismatch + r.RedisMalformed +
 		r.DBInvalid + r.RedisRevAhead + r.RedisRevBehind + r.MergedIntoMissingInRedis + r.MergedIntoMissingInDB + r.MergedIntoMismatch
@@ -146,10 +144,10 @@ func (r AuditReport) BlockingDifferences() int {
 func (r AuditReport) SummaryLine() string {
 	line := fmt.Sprintf("route_audit db_rows=%d redis_players=%d db_only_unpublished=%d missing_in_redis=%d missing_in_db=%d "+
 		"value_mismatch=%d redis_malformed=%d db_invalid=%d redis_rev_ahead=%d merged_into_missing_in_redis=%d "+
-		"merged_into_missing_in_db=%d merged_into_mismatch=%d redis_fences_active=%d transient_cleared=%d",
+		"merged_into_missing_in_db=%d merged_into_mismatch=%d transient_cleared=%d",
 		r.DBRows, r.RedisPlayers, r.DBOnlyUnpublished, r.MissingInRedis, r.MissingInDB,
 		r.ValueMismatch, r.RedisMalformed, r.DBInvalid, r.RedisRevAhead, r.MergedIntoMissingInRedis,
-		r.MergedIntoMissingInDB, r.MergedIntoMismatch, r.RedisFencesActive, r.TransientCleared)
+		r.MergedIntoMissingInDB, r.MergedIntoMismatch, r.TransientCleared)
 	if r.RequireMapRev {
 		line += fmt.Sprintf(" redis_rev_behind=%d", r.RedisRevBehind)
 	}
@@ -376,7 +374,7 @@ func Audit(ctx context.Context, rd mappingReader, db routeDB, opts AuditOptions)
 	a.report.FrozenRecovery = opts.FrozenRecovery
 	a.report.RequireMapRev = opts.RequireMapRev
 
-	steps := []func(context.Context) error{a.checkFences, a.auditDBRows, a.auditRedisKeys, a.auditMergedInto, a.settle}
+	steps := []func(context.Context) error{a.auditDBRows, a.auditRedisKeys, a.auditMergedInto, a.settle}
 	for _, step := range steps {
 		if err := step(ctx); err != nil {
 			a.detail.finish()
@@ -397,19 +395,6 @@ func Audit(ctx context.Context, rd mappingReader, db routeDB, opts AuditOptions)
 	}
 	fmt.Fprintln(opts.Stdout, a.report.SummaryLine())
 	return a.report, nil
-}
-
-// checkFences 第 5 步:围栏只做提示。
-func (a *auditor) checkFences(ctx context.Context) error {
-	fences, err := listActiveFences(ctx, a.rd, int64(a.opts.Batch))
-	if err != nil {
-		return err
-	}
-	a.report.RedisFencesActive = len(fences)
-	if len(fences) > 0 {
-		fmt.Fprintf(a.opts.Stderr, "WARN: %d active merge fence(s) %v: audit results may include transient differences during merge window\n", len(fences), fences)
-	}
-	return nil
 }
 
 // auditDBRows 方向 A。游标是上一页最后一行的聚簇键 (route_shard, player_id)。

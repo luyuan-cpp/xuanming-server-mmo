@@ -1,80 +1,55 @@
 package main
 
-// merge:merged_into:{src} —— 「这个 zone 已经被合进哪个区」的标记(player-storage-placement.md §12 A10)。
+// 「这个 zone 已经被合进哪个区」的映射(docs/design/player-data-tidb-scaling-plan.md §7.1)。
 //
-// 为什么要有:合服把源区玩家的 player:zone 改成 dst 之后,「源库有行 = 归属源区」就不成立了 —— copy 模式下
-// 源区库里的行成了冷副本;pin 模式(player-storage-placement.md §10.1)下行还是真源,但靠 player:placement
-// 记录指过去,归属已经是 dst。此时若 mapping Redis 丢了数据(整体丢失 / 误删),照 runbook 的老习惯对源区跑
-// -backfill-home-zone,回填把这些人 SETNX 回源区 —— 钉回一个已下线的 zone,登不上,而且没有任何报错。标记让
-// 回填认得出「这个 zone 已经合走了」并拒绝;映射丢失的正确恢复是按清单重放(runbook),不是回填。
+// 真源是全局库的 zone_merged_into(route_store.go 的 MarkMergedInto / ClearMergedInto),映射是永久记录:源区合出去之后就一直是
+// 合出去的,直到撤销。mapping Redis 的 merge:merged_into:{src} 是它的镜像,值是 JSON {"dst": <zone>, "run_id": "<清单 run_id>"},无 TTL。
 //
-// 契约(写者、读者、销毁者都在本文件):
+//	writer : 合服步骤 1,库提交之后写镜像 + WAITAOF(stepMarkMergedInto)。库已写、镜像未确认时步骤不算完成,
+//	         重跑走同 dst 的幂等分支、再写一次镜像
+//	reader : 合服清单落盘之前的冲突检查(stepCheckMergedIntoBeforeMerge,读库);撤销的前置(checkUnmergeAllowed,读库);
+//	         data_service 按库解析归属,对账 leader 把缺失的镜像补回来(只增不改)
+//	delete : -mode unmerge 写回业务数据之后(stepClearMergedInto):先删库,再按完整值 compare-and-delete 镜像
 //
-//	key    : merge:merged_into:{src}
-//	where  : mapping Redis(DB 0),与 player:zone / merge:in_progress 同库 —— 回填读写的就是这个库
-//	value  : JSON {"dst": <zone>, "run_id": "<清单 run_id>"}
-//	TTL    : 无。源区合出去之后就一直是合出去的,直到撤销
-//	writer : 合服步骤 5 改映射**之前**(markMergedInto);改到一半中止时标记已在,回填同样被挡住
-//	reader : -backfill-home-zone(refuseBackfillOfMergedZone,存在即拒绝);合服清单落盘之前
-//	         (checkMergedIntoBeforeMerge:源区已合进别处 / 目标区自己已被合走 即拒绝)
-//	delete : -mode unmerge 把映射改回源区之后(clearMergedInto),只删 dst 与 run_id 都对得上的那一把
-//
-// -route-source=db(规格 §6.3 W6 / 5'a):真源是全局库的 zone_merged_into(route_store.go 的 MarkMergedInto / ClearMergedInto,
-// 事务内校验围栏属于本次),上面的 Redis 键降为镜像:库提交 → 镜像 SET + WAITAOF(写)/ 按完整值 compare-and-delete(删)。
-// 读方(合服前置核对、回填、pin-placement)在 db 源下读库,Redis 丢了也拦得住。见文件末尾的 *DB 函数与 step* 分派。
+// 连续合服(5→6→7)沿链解析,所以源区可以有人合进来;但目标区必须还在,不能把玩家合进一个已下线的 zone。
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"strconv"
-
-	"github.com/redis/go-redis/v9"
 )
 
-// mergedIntoKey 是标记的键;zone 是**被合走的那个**(源区)。
+// mergedIntoKey 是镜像的键;zone 是**被合走的那个**(源区)。
 func mergedIntoKey(zone uint32) string {
 	return "merge:merged_into:" + strconv.FormatUint(uint64(zone), 10)
 }
 
-// mergedIntoValue 是标记的 JSON 值。字段只增不改名(回填的拒绝文案会原样打出它)。
+// mergedIntoValue 是镜像的 JSON 值。字段只增不改名(shared/placement.EncodeMergedIntoValue 同一形状)。
 type mergedIntoValue struct {
 	Dst   uint32 `json:"dst"`
 	RunID string `json:"run_id"` // 清单的 run_id(续跑沿用首跑的那个),撤销按它认领
 }
 
-// readMergedInto 读标记。键不存在返回 (nil, "", nil);值不是本工具写的形状时返回原文与解析错误,
-// 由调用方决定 fail-closed 的方式。
-func readMergedInto(ctx context.Context, rdb *redis.Client, zone uint32) (*mergedIntoValue, string, error) {
-	key := mergedIntoKey(zone)
-	raw, err := rdb.Get(ctx, key).Result()
-	if errors.Is(err, redis.Nil) {
-		return nil, "", nil
+// validRunID 限定 run_id 只含 [A-Za-z0-9_-]、非空且不超过 64 字节(zone_merged_into.run_id 的列宽与字符集)。
+func validRunID(runID string) bool {
+	if runID == "" || len(runID) > 64 {
+		return false
 	}
-	if err != nil {
-		return nil, "", fmt.Errorf("get %s: %w", key, err)
+	for _, c := range runID {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '-':
+		default:
+			return false
+		}
 	}
-	var v mergedIntoValue
-	if jerr := json.Unmarshal([]byte(raw), &v); jerr != nil {
-		return nil, raw, fmt.Errorf("%s holds %q, which is not a merged_into value: %w", key, raw, jerr)
-	}
-	return &v, raw, nil
+	return true
 }
 
-// checkMergedIntoBeforeMerge 是合服在清单落盘之前(第一次写之前)的只读前置:与 markMergedInto 同一判定,
-// 另加「目标区自己已被合走」。读失败 / 值读不懂同样拒绝(fail-closed):证明不了就不动手。
-func checkMergedIntoBeforeMerge(ctx context.Context, rdb *redis.Client, src, dst uint32) error {
-	srcCur, srcRaw, srcErr := readMergedInto(ctx, rdb, src)
-	dstCur, dstRaw, dstErr := readMergedInto(ctx, rdb, dst)
-	return mergedIntoConflict(src, dst, srcCur, srcRaw, srcErr, dstCur, dstRaw, dstErr)
-}
-
-// mergedIntoConflict 是 checkMergedIntoBeforeMerge 的纯判定(单测直接喂读结果)。
-//   - 源区标记指向同一个 dst:续跑 / 撤销后重合同一对 zone,放行(步骤 5 会覆盖成本次 run_id)。
-//   - 源区标记指向别的 zone:源区曾被合进另一个区而没有撤销,拒绝。
-//   - 目标区有任何标记:目标区已下线,不能把玩家归属改过去,拒绝。
+// mergedIntoConflict 是合服前置检查的纯判定(单测直接喂读结果)。读失败同样拒绝(fail-closed):证明不了就不动手。
+//   - 源区映射指向同一个 dst:放行,是不是这份清单写的由 checkMergedIntoOwnedByManifest 核对。
+//   - 源区映射指向别的 zone:源区曾被合进另一个区而没有撤销,拒绝。
+//   - 目标区有任何映射:目标区已下线,不能把玩家合过去,拒绝(连续合服要合进链的末端)。
 func mergedIntoConflict(src, dst uint32, srcCur *mergedIntoValue, srcRaw string, srcErr error,
 	dstCur *mergedIntoValue, dstRaw string, dstErr error) error {
 	if srcErr != nil {
@@ -88,94 +63,13 @@ func mergedIntoConflict(src, dst uint32, srcCur *mergedIntoValue, srcRaw string,
 		return fmt.Errorf("merged_into: cannot prove target zone %d was not merged away: %w", dst, dstErr)
 	}
 	if dstCur != nil {
-		return fmt.Errorf("%s = %s: target zone %d was itself merged into zone %d; refusing to re-home players into "+
+		return fmt.Errorf("%s = %s: target zone %d was itself merged into zone %d; refusing to merge into "+
 			"a retired zone (merge into %d instead)", mergedIntoKey(dst), dstRaw, dst, dstCur.Dst, dstCur.Dst)
 	}
 	return nil
 }
 
-// markMergedInto 在改映射之前写标记。已有标记且指向同一个 dst(续跑 / 撤销后重合同一对 zone)就覆盖成
-// 本次 run_id;指向别的 zone 或读不懂就拒绝 —— 那说明源区曾被合进另一个区而没有撤销,不是这次能决定的事。
-// 写者只有本工具,且调用方持有 src 的合服围栏,所以「读 → 判 → 写」之间没有别的写者。
-func markMergedInto(ctx context.Context, rdb *redis.Client, src, dst uint32, runID string, dryRun bool) error {
-	key := mergedIntoKey(src)
-	cur, raw, err := readMergedInto(ctx, rdb, src)
-	if err != nil {
-		return err
-	}
-	if cur != nil && cur.Dst != dst {
-		return fmt.Errorf("%s already says zone %d was merged into zone %d (%s) — refusing to overwrite it with %d",
-			key, src, cur.Dst, raw, dst)
-	}
-	payload, err := json.Marshal(mergedIntoValue{Dst: dst, RunID: runID})
-	if err != nil {
-		return fmt.Errorf("marshal %s: %w", key, err)
-	}
-	if dryRun {
-		log.Printf("[DRY-RUN] would SET %s %s (no TTL) before remapping", key, payload)
-		return nil
-	}
-	if err := rdb.Set(ctx, key, payload, 0).Err(); err != nil {
-		return fmt.Errorf("set %s: %w", key, err)
-	}
-	log.Printf("merged_into marker set: %s = %s", key, payload)
-	return nil
-}
-
-// refuseBackfillOfMergedZone 是回填的前置:zone 已被合走(标记存在)就拒绝。读失败同样拒绝(fail-closed):
-// 证明不了「没合走」就不能往 mapping 里 SETNX。
-func refuseBackfillOfMergedZone(ctx context.Context, rdb *redis.Client, zone uint32) error {
-	key := mergedIntoKey(zone)
-	raw, err := rdb.Get(ctx, key).Result()
-	if errors.Is(err, redis.Nil) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("get %s: %w — cannot prove zone %d was not merged away; refusing to backfill", key, err, zone)
-	}
-	return fmt.Errorf("zone %d was merged away (%s = %s): its players were re-homed by that merge (copy mode left cold copies "+
-		"of their rows here; pin mode keeps their live rows here behind player:placement records), and backfilling would pin "+
-		"those players back to a dead zone. If the mapping Redis lost player:zone keys, restore them by replaying the merge "+
-		"manifest (runbook), not by backfill. If the merge was reverted by hand without -mode unmerge, DEL %s after confirming it",
-		zone, key, raw, key)
-}
-
-// clearMergedInto 是撤销的收尾:映射改回源区之后删标记。只删 dst 与 run_id 都与清单一致的那一把 ——
-// 对不上说明这把标记是另一次合服写的,撤销这一次不该越权删它(打 WARN,留给人判断)。
-// 返回是否删了(dry-run 返回「会不会删」)。
-func clearMergedInto(ctx context.Context, rdb *redis.Client, src, dst uint32, runID string, dryRun bool) (bool, error) {
-	key := mergedIntoKey(src)
-	cur, raw, err := readMergedInto(ctx, rdb, src)
-	if err != nil {
-		// 读不懂的值同样不删:它不是本工具按这份清单写的。
-		if raw != "" {
-			log.Printf("WARN: %v — left untouched", err)
-			return false, nil
-		}
-		return false, err
-	}
-	if cur == nil {
-		// 合服没走到步骤 5(或旧版工具合的),本来就没有标记。
-		return false, nil
-	}
-	if cur.Dst != dst || cur.RunID != runID {
-		log.Printf("WARN: %s = %s was written by another merge (manifest: dst=%d run_id=%s) — left untouched; "+
-			"-backfill-home-zone -zone %d stays refused until someone who knows that merge removes it", key, raw, dst, runID, src)
-		return false, nil
-	}
-	if dryRun {
-		log.Printf("[DRY-RUN] would DEL %s", key)
-		return true, nil
-	}
-	if err := rdb.Del(ctx, key).Err(); err != nil {
-		return false, fmt.Errorf("del %s: %w", key, err)
-	}
-	return true, nil
-}
-
-// ── -route-source=db(W6 / 5'a / R8)───────────────────────────────────────────
-
-// routeMergedIntoValue 把库里读到的 zone_merged_into 行还原成与 Redis 版同形状的读结果(值与原文),供 mergedIntoConflict 复用。
+// routeMergedIntoValue 把库里读到的 zone_merged_into 行还原成读结果(值与原文),供 mergedIntoConflict 复用。
 func routeMergedIntoValue(dst uint32, runID string, found bool) (*mergedIntoValue, string) {
 	if !found {
 		return nil, ""
@@ -188,28 +82,79 @@ func routeMergedIntoValue(dst uint32, runID string, found bool) (*mergedIntoValu
 	return v, raw
 }
 
-// checkMergedIntoBeforeMergeDB 是 checkMergedIntoBeforeMerge 的库版(R8):读 zone_merged_into,判定与 Redis 版同一个纯函数。
-func checkMergedIntoBeforeMergeDB(ctx context.Context, db routeDBOps, src, dst uint32) error {
-	sd, sr, sf, srcErr := db.ReadMergedInto(ctx, src)
+// stepCheckMergedIntoBeforeMerge 是合服在清单落盘之前(第一次写之前)的映射冲突检查:读库,判定见 mergedIntoConflict。
+// 续跑同样要过:链上的目标区在两次运行之间被合走时,继续改写只会把公会改到一个已下线的 zone。
+func stepCheckMergedIntoBeforeMerge(ctx context.Context, rb *routeBackend, src, dst uint32) error {
+	sd, sr, sf, srcErr := rb.db.ReadMergedInto(ctx, src)
 	srcCur, srcRaw := routeMergedIntoValue(sd, sr, sf)
-	dd, dr, df, dstErr := db.ReadMergedInto(ctx, dst)
+	dd, dr, df, dstErr := rb.db.ReadMergedInto(ctx, dst)
 	dstCur, dstRaw := routeMergedIntoValue(dd, dr, df)
 	return mergedIntoConflict(src, dst, srcCur, srcRaw, srcErr, dstCur, dstRaw, dstErr)
 }
 
-// stepCheckMergedIntoBeforeMerge 按源分派合服前置核对 X:rb == nil → Redis 版(逐字不变);否则读库。
-func stepCheckMergedIntoBeforeMerge(ctx context.Context, rb *routeBackend, rdb *redis.Client, src, dst uint32) error {
-	if rb == nil {
-		return checkMergedIntoBeforeMerge(ctx, rdb, src, dst)
+// checkMergedIntoOwnedByManifest 拒绝换清单重跑:映射已经是 src→dst,却不是这份清单写的(或者根本没带清单)。
+// 放行的话步骤 1 会把 run_id 改成新清单,而新清单只收到还在源区的对象,撤销就不再是逆操作:旧清单被 checkUnmergeAllowed
+// 拒绝,只撤新清单又会删掉映射,旧清单搬走的公会和商品留在目标区,源区玩家看不到。读失败同样拒绝。
+func checkMergedIntoOwnedByManifest(ctx context.Context, rb *routeBackend, m *mergeManifest, src, dst uint32) error {
+	cur, run, found, err := rb.db.ReadMergedInto(ctx, src)
+	if err != nil {
+		return err
 	}
-	return checkMergedIntoBeforeMergeDB(ctx, rb.db, src, dst)
+	if !found || cur != dst || (m != nil && m.RunID == run) {
+		return nil // 映射指向别的 dst 由 mergedIntoConflict 拒绝
+	}
+	return fmt.Errorf("zone_merged_into(%d) -> %d was written by run_id %s: pass that run's -manifest-path to resume or to unmerge; "+
+		"a new manifest would take over the mapping and leave the objects moved by that run behind", src, dst, run)
 }
 
-// markMergedIntoDB 是 markMergedInto 的库版(W6,规格 §6.3):一个库事务(围栏属于本次 fenceRunID → 加锁读 zone_merged_into(src)
-// → 无行插入 / 同 dst 改 run_id 为 markRunID / 异 dst 拒绝)→ 提交 → 镜像 SET + WAITAOF。镜像确认之后才返回,调用方才改映射。
-// 库已写、镜像未确认时返回错误:库里的标记已能拦住 W9 / W10(它们读库),重跑同 dst 走幂等分支、再写一次镜像。
+// checkResumeMergedInto 拒绝「清单说映射已写、库里却没有」的续跑。这份清单对应的合服已被撤销(或这一行被人工删过),
+// 按它续跑只会把每一步都跳过、打出 Done,而什么都没合。要重新合服用一个新的 -manifest-path。
+func checkResumeMergedInto(ctx context.Context, rb *routeBackend, m *mergeManifest, src, dst uint32) error {
+	if !m.stepDone(stepMergedInto) {
+		return nil
+	}
+	cur, _, found, err := rb.db.ReadMergedInto(ctx, src)
+	if err != nil {
+		return err
+	}
+	if !found || cur != dst {
+		return fmt.Errorf("the manifest records step %s as done, but zone_merged_into(%d) no longer maps to zone %d: this merge was "+
+			"unmerged or the row was removed by hand. Refusing to resume from it (every step would be skipped); "+
+			"pass a new -manifest-path to merge again", stepMergedInto, src, dst)
+	}
+	return nil
+}
+
+// checkUnmergeAllowed 是撤销在第一次写之前的前置(读库,读失败同样拒绝):
+//   - 目标区之后又被合走(5→6 之后又 6→7):这批公会 / 商品已经在 7 区,这里只写回还在 6 区的,结果是半撤销。必须逆序撤销;
+//   - 源区的映射不是这份清单写的:另一次合服的映射不该由这一次撤销来删。
+//
+// 源区没有映射放行:撤销重跑(上一次已删),或合服没走到步骤 1。
+func checkUnmergeAllowed(ctx context.Context, rb *routeBackend, m *mergeManifest) error {
+	src, dst := m.SourceZone, m.TargetZone
+	next, nextRun, merged, err := rb.db.ReadMergedInto(ctx, dst)
+	if err != nil {
+		return fmt.Errorf("merged_into: cannot prove target zone %d was not merged away: %w", dst, err)
+	}
+	if merged {
+		return fmt.Errorf("target zone %d was merged into zone %d afterwards (run_id %s): unmerge that merge first, merges are undone in reverse order",
+			dst, next, nextRun)
+	}
+	cur, curRun, found, err := rb.db.ReadMergedInto(ctx, src)
+	if err != nil {
+		return fmt.Errorf("merged_into: cannot read zone_merged_into(%d): %w", src, err)
+	}
+	if found && (cur != dst || curRun != m.RunID) {
+		return fmt.Errorf("zone_merged_into(%d) = dst %d run_id %s was written by another merge (manifest: dst=%d run_id=%s): "+
+			"this manifest cannot undo it", src, cur, curRun, dst, m.RunID)
+	}
+	return nil
+}
+
+// stepMarkMergedInto 写映射(合服步骤 1):库事务提交 → 镜像 SET + WAITAOF。镜像确认之后才返回,调用方才往下走。
+// 库已写、镜像未确认时返回错误:库里的映射已经生效,重跑同 dst 走幂等分支、再写一次镜像。
 // dry-run 只读库,按同一判定预报。
-func markMergedIntoDB(ctx context.Context, rb *routeBackend, src, dst uint32, fenceRunID, markRunID string, dryRun bool) error {
+func stepMarkMergedInto(ctx context.Context, rb *routeBackend, src, dst uint32, markRunID string, dryRun bool) error {
 	key := mergedIntoKey(src)
 	if dryRun {
 		cur, run, found, err := rb.db.ReadMergedInto(ctx, src)
@@ -220,35 +165,25 @@ func markMergedIntoDB(ctx context.Context, rb *routeBackend, src, dst uint32, fe
 			return fmt.Errorf("zone_merged_into(%d) already says zone %d was merged into zone %d (run_id %s) — refusing to overwrite it with %d",
 				src, src, cur, run, dst)
 		}
-		log.Printf("[DRY-RUN] would record zone_merged_into(%d) = dst %d run_id %s and mirror it to %s (no TTL) before remapping",
-			src, dst, markRunID, key)
+		log.Printf("[DRY-RUN] would record zone_merged_into(%d) = dst %d run_id %s and mirror it to %s (no TTL)", src, dst, markRunID, key)
 		return nil
 	}
-	value, err := rb.db.MarkMergedInto(ctx, src, dst, fenceRunID, markRunID)
+	value, err := rb.db.MarkMergedInto(ctx, src, dst, markRunID)
 	if err != nil {
 		return err
 	}
 	if err := rb.pub.setMergedIntoMirror(ctx, src, value); err != nil {
-		return fmt.Errorf("zone_merged_into(%d) is committed, but its mirror %s was not confirmed (re-run: the marker takes the "+
+		return fmt.Errorf("zone_merged_into(%d) is committed, but its mirror %s was not confirmed (re-run: the row takes the "+
 			"idempotent branch and the mirror is written again): %w", src, key, err)
 	}
-	log.Printf("merged_into marker recorded in zone_merged_into and mirrored: %s = %s", key, value)
+	log.Printf("merged_into recorded in zone_merged_into and mirrored: %s = %s", key, value)
 	return nil
 }
 
-// stepMarkMergedInto 按源分派 W6:rb == nil → markMergedInto(Redis 先读后写,逐字不变,只认 markRunID);否则 markMergedIntoDB。
-func stepMarkMergedInto(ctx context.Context, rb *routeBackend, rdb *redis.Client, src, dst uint32, fenceRunID, markRunID string, dryRun bool) error {
-	if rb == nil {
-		return markMergedInto(ctx, rdb, src, dst, markRunID, dryRun)
-	}
-	return markMergedIntoDB(ctx, rb, src, dst, fenceRunID, markRunID, dryRun)
-}
-
-// clearMergedIntoDB 是 clearMergedInto 的库版(撤销 5'a,规格 §6.3):库事务(围栏属于本次撤销 fenceRunID)按
-// (src, dst, run_id = 当初合服的清单 run_id markRunID)删 → 提交 → 镜像按完整值 compare-and-delete。
-// 库里没删到(本来不在 / 是另一次合服写的)只打 WARN、留给人判断;镜像照样按本次的完整值删(上一次删了库、没删镜像的也补上;
-// 值不是本次的不会被删,另一次合服的标记由 leader 按库补回镜像)。返回库里是否删了一行。dry-run 只读库预报。
-func clearMergedIntoDB(ctx context.Context, rb *routeBackend, src, dst uint32, fenceRunID, markRunID string, dryRun bool) (bool, error) {
+// stepClearMergedInto 删映射(撤销的最后一步):库事务按 (src, dst, run_id = 当初合服的清单 run_id) 删 → 提交 → 镜像按完整值
+// compare-and-delete。库里没删到 = 本来不在(撤销重跑);镜像照样按本次的完整值删(上一次删了库、没删镜像的也补上;
+// 值不是本次的不会被删)。返回库里是否删了一行。dry-run 只读库预报。
+func stepClearMergedInto(ctx context.Context, rb *routeBackend, src, dst uint32, markRunID string, dryRun bool) (bool, error) {
 	key := mergedIntoKey(src)
 	value, err := encodeRouteMergedIntoValue(dst, markRunID)
 	if err != nil {
@@ -260,36 +195,20 @@ func clearMergedIntoDB(ctx context.Context, rb *routeBackend, src, dst uint32, f
 			return false, err
 		}
 		would := found && cur == dst && run == markRunID
-		switch {
-		case would:
+		if would {
 			log.Printf("[DRY-RUN] would DELETE zone_merged_into(%d) and compare-and-delete its mirror %s", src, key)
-		case found:
-			log.Printf("WARN: zone_merged_into(%d) = dst %d run_id %s was written by another merge (manifest: dst=%d run_id=%s) — "+
-				"it would be left untouched", src, cur, run, dst, markRunID)
 		}
 		return would, nil
 	}
-	deleted, err := rb.db.ClearMergedInto(ctx, src, dst, fenceRunID, markRunID)
+	deleted, err := rb.db.ClearMergedInto(ctx, src, dst, markRunID)
 	if err != nil {
 		return false, err
 	}
-	if !deleted {
-		log.Printf("WARN: zone_merged_into(%d) had no row for dst=%d run_id=%s (never written, already cleared, or written by another "+
-			"merge) — any other merge's marker is left untouched; -backfill-home-zone -zone %d stays refused while one exists",
-			src, dst, markRunID, src)
-	}
 	mirrorDeleted, err := rb.pub.deleteMergedIntoMirror(ctx, src, value)
 	if err != nil {
-		return deleted, fmt.Errorf("zone_merged_into(%d) cleared=%v, but the compare-and-delete of its mirror %s failed: %w", src, deleted, key, err)
+		return deleted, fmt.Errorf("zone_merged_into(%d) cleared=%v, but the compare-and-delete of its mirror %s failed (re-run: the "+
+			"delete is idempotent): %w", src, deleted, key, err)
 	}
-	log.Printf("merged_into mirror %s: compare-and-delete removed=%v", key, mirrorDeleted)
+	log.Printf("merged_into: zone_merged_into(%d) cleared=%v, mirror %s removed=%v", src, deleted, key, mirrorDeleted)
 	return deleted, nil
-}
-
-// stepClearMergedInto 按源分派撤销 5'a:rb == nil → clearMergedInto(Redis,逐字不变);否则 clearMergedIntoDB。
-func stepClearMergedInto(ctx context.Context, rb *routeBackend, rdb *redis.Client, src, dst uint32, fenceRunID, markRunID string, dryRun bool) (bool, error) {
-	if rb == nil {
-		return clearMergedInto(ctx, rdb, src, dst, markRunID, dryRun)
-	}
-	return clearMergedIntoDB(ctx, rb, src, dst, fenceRunID, markRunID, dryRun)
 }

@@ -1,0 +1,23 @@
+syntax = "proto3";
+option go_package = "db/proto/gate";
+
+// 观战订阅凭证(docs/design/battle-spectate-tiered-fanout.md §15.2,D98):match 签发、gate 本地验签。
+// 只在 match 与 gate 之间约定,客户端只透传 WatchBattleResponse.spectate_ticket(= SpectateTicket 的序列化字节)。
+// 签名 = hex(HMAC-SHA256(BaseDeployConfig.spectate_token_secret / match 的同值密钥, payload)),
+// 与 gate_token_secret、battle_token_secret 分域。gate 校验:签名、player_id 等于会话玩家、battle_id 与请求一致、
+// 按 gate 墙钟未过 expire_at_ms。凭证只决定「能不能订阅」,订阅建立后的寿命由战斗终局 / 期限 / 会话决定。
+
+message SpectateTicketPayload {
+  uint64 battle_id = 1;
+  uint64 player_id = 2;
+  string battle_instance_id = 3;  // 帧来源实例;gate 只接受该实例发出的观战帧(防僵尸)
+  uint64 deadline_ms = 4;         // 战斗最长期限(Unix 毫秒),gate 过期 + 宽限仍无终局帧即本地收尾
+  uint64 expire_at_ms = 5;        // 凭证本身的过期时刻(Unix 毫秒,签发时 + TicketTTLSeconds)
+}
+
+message SpectateTicket {
+  bytes payload = 1;              // SpectateTicketPayload 的序列化字节(验签对象,gate 验过再反序列化)
+  // 小写十六进制的 HMAC-SHA256(64 个 ASCII 字符),与 battle 直连票据、gate 登录令牌同口径:
+  // C++ 用 token_security::HmacSha256Hex + ConstantTimeEquals 校验,Go 用 hmac.New(sha256.New, secret) + hex 编码签发。
+  bytes signature = 2;
+}

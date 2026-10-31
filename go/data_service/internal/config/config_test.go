@@ -18,12 +18,6 @@ ListenOn: 0.0.0.0:9000
 MappingRedis:
   Host: 127.0.0.1:6379
   Type: node
-Regions:
-  - Id: 1
-    Zones: [1]
-    Redis:
-      Addrs:
-        - 127.0.0.1:7001
 `
 
 func TestAccountDirectoryRoleTradeSQLProofRequiresExplicitConfig(t *testing.T) {
@@ -118,21 +112,21 @@ Schema: {}
 	}
 }
 
-// TestIdSegmentDefaultsWhenBlockAbsent 锁死设计 §7.5 第 7 条的生产安全值:yaml 里没有
-// `IdSegment:` 段时,运行期**不得**自动补种号段行(AllowAutoSeed=false),而迁移仍然要
-// 预建默认清单里每种永久身份的行。这里 AllowAutoSeed 用的是裸 bool:go-zero 不回填未出现结构里的
-// default,但本键的安全值恰好就是零值,所以块缺失得到的正是生产语义。
+// 块缺失就是生产安全值:不自动初始化,而且没有配两套 etcd 就发不了号。
 func TestIdSegmentDefaultsWhenBlockAbsent(t *testing.T) {
 	c := loadYaml(t, minimalYaml)
 	if c.IdSegment.AllowAutoSeed {
-		t.Fatal("an absent IdSegment block must NOT allow runtime auto-seeding (production semantics)")
+		t.Fatal("an absent IdSegment block must NOT allow auto init (production semantics)")
 	}
-	if got, want := c.IdSegment.EffectiveBootstrapTags(), DefaultIdSegmentBootstrapTags; !equalStrings(got, want) {
-		t.Fatalf("bootstrap tags without a block = %v, want the default set %v", got, want)
+	if got, want := c.IdSegment.EffectiveTags(), DefaultIdSegmentTags; !equalStrings(got, want) {
+		t.Fatalf("tags without a block = %v, want the default set %v", got, want)
+	}
+	if _, _, err := c.IdSegment.IssuerEndpoints([]string{"etcd:2379"}); err == nil {
+		t.Fatal("production must not fall back to the service's own etcd")
 	}
 }
 
-// TestIdSegmentBlockPresentWithoutKeys 只写 `IdSegment:` 却不写键,语义与缺失一致。
+// 只写 `IdSegment:` 却不写键,语义与缺失一致。
 func TestIdSegmentBlockPresentWithoutKeys(t *testing.T) {
 	c := loadYaml(t, minimalYaml+`
 IdSegment: {}
@@ -140,40 +134,92 @@ IdSegment: {}
 	if c.IdSegment.AllowAutoSeed {
 		t.Fatal("an empty IdSegment block must keep AllowAutoSeed=false")
 	}
-	if got, want := c.IdSegment.EffectiveBootstrapTags(), DefaultIdSegmentBootstrapTags; !equalStrings(got, want) {
-		t.Fatalf("bootstrap tags with an empty block = %v, want %v", got, want)
+	if got, want := c.IdSegment.EffectiveTags(), DefaultIdSegmentTags; !equalStrings(got, want) {
+		t.Fatalf("tags with an empty block = %v, want %v", got, want)
 	}
 }
 
-// TestIdSegmentAllowAutoSeedHonoured dev yaml 显式打开补种(仅 dev)。
-func TestIdSegmentAllowAutoSeedHonoured(t *testing.T) {
+// 显式清单覆盖默认;返回的是副本,改它不能污染默认清单。
+func TestIdSegmentTagsOverride(t *testing.T) {
 	c := loadYaml(t, minimalYaml+`
 IdSegment:
-  AllowAutoSeed: true
+  Tags: [player, pet]
 `)
-	if !c.IdSegment.AllowAutoSeed {
-		t.Fatal("IdSegment.AllowAutoSeed=true must be honoured")
-	}
-	// 只写 AllowAutoSeed 不写 BootstrapTags:清单仍是默认清单,不是空。
-	if got, want := c.IdSegment.EffectiveBootstrapTags(), DefaultIdSegmentBootstrapTags; !equalStrings(got, want) {
-		t.Fatalf("bootstrap tags = %v, want %v", got, want)
-	}
-}
-
-// TestIdSegmentBootstrapTagsOverride 显式清单覆盖默认;返回的是副本,改它不能污染包级默认值。
-func TestIdSegmentBootstrapTagsOverride(t *testing.T) {
-	c := loadYaml(t, minimalYaml+`
-IdSegment:
-  BootstrapTags: [player, pet]
-`)
-	got := c.IdSegment.EffectiveBootstrapTags()
+	got := c.IdSegment.EffectiveTags()
 	if !equalStrings(got, []string{"player", "pet"}) {
-		t.Fatalf("bootstrap tags = %v, want [player pet]", got)
+		t.Fatalf("tags = %v, want [player pet]", got)
 	}
-	defaults := IdSegmentConfig{}.EffectiveBootstrapTags()
+	defaults := IdSegmentConfig{}.EffectiveTags()
 	defaults[0] = "mutated"
-	if DefaultIdSegmentBootstrapTags[0] != "player" {
-		t.Fatal("EffectiveBootstrapTags must return a copy, not the package-level default slice")
+	if DefaultIdSegmentTags[0] != "player" {
+		t.Fatal("EffectiveTags must return a copy, not the package-level default slice")
+	}
+}
+
+func TestIdSegmentIssuerBlockLoaded(t *testing.T) {
+	c := loadYaml(t, minimalYaml+`
+IdSegment:
+  Issuer:
+    Region: 5
+    PrimaryEtcd: ["a:2379", "b:2379"]
+    SecondaryEtcd: ["c:2379"]
+`)
+	if c.IdSegment.Issuer.Region != 5 {
+		t.Fatalf("Region = %d", c.IdSegment.Issuer.Region)
+	}
+	primary, secondary, err := c.IdSegment.IssuerEndpoints(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !equalStrings(primary, []string{"a:2379", "b:2379"}) || !equalStrings(secondary, []string{"c:2379"}) {
+		t.Fatalf("primary=%v secondary=%v", primary, secondary)
+	}
+}
+
+func TestIdSegmentIssuerEndpoints(t *testing.T) {
+	own := []string{"own:2379"}
+	cases := []struct {
+		name          string
+		cfg           IdSegmentConfig
+		wantPrimary   []string
+		wantSecondary []string
+		wantErr       bool
+	}{
+		{name: "production needs both", wantErr: true},
+		{name: "production missing secondary", cfg: IdSegmentConfig{Issuer: IdIssuerConfig{PrimaryEtcd: []string{"a:2379"}}}, wantErr: true},
+		{name: "production missing primary", cfg: IdSegmentConfig{Issuer: IdIssuerConfig{SecondaryEtcd: []string{"a:2379"}}}, wantErr: true},
+		{
+			name:    "production shared endpoint",
+			cfg:     IdSegmentConfig{Issuer: IdIssuerConfig{PrimaryEtcd: []string{"a:2379", "b:2379"}, SecondaryEtcd: []string{"c:2379", " B:2379 "}}},
+			wantErr: true,
+		},
+		{
+			name:          "production independent clusters",
+			cfg:           IdSegmentConfig{Issuer: IdIssuerConfig{PrimaryEtcd: []string{"a:2379"}, SecondaryEtcd: []string{"b:2379"}}},
+			wantPrimary:   []string{"a:2379"},
+			wantSecondary: []string{"b:2379"},
+		},
+		{name: "dev falls back to own etcd", cfg: IdSegmentConfig{AllowAutoSeed: true}, wantPrimary: own, wantSecondary: own},
+		{
+			name:          "dev may share one cluster",
+			cfg:           IdSegmentConfig{AllowAutoSeed: true, Issuer: IdIssuerConfig{PrimaryEtcd: []string{"a:2379"}}},
+			wantPrimary:   []string{"a:2379"},
+			wantSecondary: []string{"a:2379"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			primary, secondary, err := tc.cfg.IssuerEndpoints(own)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if !equalStrings(primary, tc.wantPrimary) || !equalStrings(secondary, tc.wantSecondary) {
+				t.Fatalf("primary=%v secondary=%v", primary, secondary)
+			}
+		})
+	}
+	if _, _, err := (IdSegmentConfig{AllowAutoSeed: true}).IssuerEndpoints(nil); err == nil {
+		t.Fatal("dev without any etcd must be rejected")
 	}
 }
 
@@ -240,7 +286,7 @@ Kafka:
 	}
 }
 
-// ── AdminToken(运维 RPC 鉴权:Rollback* 与 ReleasePlayerName;RemapHomeZoneForMerge 已停用)────────────
+// ── AdminToken(运维 RPC 鉴权:Rollback* 与 ReleasePlayerName)────────────
 
 // TestAdminTokenAbsentMeansDisabled 钉住默认形态:yaml 里没有 AdminToken 时它是空串,
 // 而空串在 server 侧的语义是**该 RPC 停用**(不是免鉴权)。
@@ -417,186 +463,6 @@ func TestShippedYamlPlayerNameMatchesDefaults(t *testing.T) {
 
 // ── 回档帮会闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.5.5,测试 C1)──────────
 
-// TestGuildCheckDefaultsWhenKeysAbsent:三项都不写时,余量与预算取文档默认值且合法;
-// GuildInternalRpc 缺席 = 未配置(回档闸不装配 → 回档一律被拒),而不是"跳过检查"。
-func TestGuildCheckDefaultsWhenKeysAbsent(t *testing.T) {
-	c := loadYaml(t, minimalYaml)
-	if c.GuildClockSkewMarginMs != 300000 {
-		t.Fatalf("GuildClockSkewMarginMs default = %d, want 300000", c.GuildClockSkewMarginMs)
-	}
-	if c.GuildCheckBudgetSeconds != 120 {
-		t.Fatalf("GuildCheckBudgetSeconds default = %d, want 120", c.GuildCheckBudgetSeconds)
-	}
-	if c.HasGuildInternalRpc() {
-		t.Fatal("an absent GuildInternalRpc block must read as not configured")
-	}
-	if err := c.ValidateGuildCheck(); err != nil {
-		t.Fatalf("defaults must validate: %v", err)
-	}
-}
-
-// TestGuildClockSkewMarginBounds 是 C1 的前半:余量 0 / 4999 拒绝,5000 过。
-// 下界 = OpBudget × 2:guild 记下的终结时刻是 ProcessOne 的开始时刻,可早于落盘一个 OpBudget;
-// 余量为 0 时"快照不含这笔扣款、guild 却记在快照之前"的行会漏掉 = 回档复制资产。
-func TestGuildClockSkewMarginBounds(t *testing.T) {
-	cases := []struct {
-		margin  int64
-		wantErr bool
-	}{
-		{-1, true}, {0, true}, {4999, true}, {5000, false}, {300000, false}, {3600000, false}, {3600001, true},
-	}
-	for _, tc := range cases {
-		c := loadYaml(t, minimalYaml)
-		c.GuildClockSkewMarginMs = tc.margin
-		if err := c.ValidateGuildCheck(); (err != nil) != tc.wantErr {
-			t.Fatalf("GuildClockSkewMarginMs=%d: err=%v, wantErr=%t", tc.margin, err, tc.wantErr)
-		}
-	}
-}
-
-// TestGuildInternalRpcTimeoutBounds 是 C1 的后半:已配 GuildInternalRpc 时 Timeout 499 / 3501 拒绝,
-// 500 / 3500 过;块里不写 Timeout 时取 go-zero 默认 2000,同样合法。
-func TestGuildInternalRpcTimeoutBounds(t *testing.T) {
-	c := loadYaml(t, minimalYaml+`
-GuildInternalRpc:
-  Endpoints:
-    - 127.0.0.1:50300
-`)
-	if !c.HasGuildInternalRpc() {
-		t.Fatal("Endpoints must count as configured")
-	}
-	if err := c.ValidateGuildCheck(); err != nil {
-		t.Fatalf("default Timeout (%d) must validate: %v", c.GuildInternalRpc.Timeout, err)
-	}
-	cases := []struct {
-		timeout int64
-		wantErr bool
-	}{
-		{0, true}, {499, true}, {500, false}, {3000, false}, {3500, false}, {3501, true},
-	}
-	for _, tc := range cases {
-		cc := c
-		cc.GuildInternalRpc.Timeout = tc.timeout
-		if err := cc.ValidateGuildCheck(); (err != nil) != tc.wantErr {
-			t.Fatalf("GuildInternalRpc.Timeout=%d: err=%v, wantErr=%t", tc.timeout, err, tc.wantErr)
-		}
-	}
-}
-
-// TestGuildInternalRpcEtcdOnlyIsNotConfigured:只写了 Etcd(或什么目标都没写)的块按"没配"处理。
-// RpcClientConf.Etcd 带 inherit,块里不写 Etcd 时会继承顶层 Etcd 的 Key=dataservice.rpc,拨到自己身上;
-// 而 guild 本来就不注册 go-zero key(D-13)。两种都不能被当成"配好了"。
-func TestGuildInternalRpcEtcdOnlyIsNotConfigured(t *testing.T) {
-	c := loadYaml(t, minimalYaml+`
-Etcd:
-  Hosts:
-    - 127.0.0.1:2379
-  Key: dataservice.rpc
-GuildInternalRpc:
-  Timeout: 3000
-`)
-	if c.HasGuildInternalRpc() {
-		t.Fatalf("a GuildInternalRpc block without Endpoints/Target must not count as configured (etcd=%+v)", c.GuildInternalRpc.Etcd)
-	}
-
-	c = loadYaml(t, minimalYaml+`
-GuildInternalRpc:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    Key: guild.rpc
-`)
-	if c.HasGuildInternalRpc() {
-		t.Fatal("etcd discovery of guild is not supported (guild registers no go-zero key); it must read as not configured")
-	}
-}
-
-// TestGuildCheckBudgetBounds:检查预算 [1, 3600] 秒。
-func TestGuildCheckBudgetBounds(t *testing.T) {
-	cases := []struct {
-		budget  int64
-		wantErr bool
-	}{
-		{-1, true}, {0, true}, {1, false}, {120, false}, {3600, false}, {3601, true},
-	}
-	for _, tc := range cases {
-		c := loadYaml(t, minimalYaml)
-		c.GuildCheckBudgetSeconds = tc.budget
-		if err := c.ValidateGuildCheck(); (err != nil) != tc.wantErr {
-			t.Fatalf("GuildCheckBudgetSeconds=%d: err=%v, wantErr=%t", tc.budget, err, tc.wantErr)
-		}
-	}
-}
-
-// TestGuildRecheckBudgetFollowsCheckBudget:写后复查预算 = max(120s, 检查预算)。复查重走检查的分块翻页,
-// 检查预算调大而复查停在 120s 时,数据写完后复查必然超时(每次都误报紧急告警)。
-func TestGuildRecheckBudgetFollowsCheckBudget(t *testing.T) {
-	cases := []struct {
-		checkSeconds int64
-		want         time.Duration
-	}{
-		{1, 120 * time.Second}, {119, 120 * time.Second}, {120, 120 * time.Second},
-		{121, 121 * time.Second}, {600, 600 * time.Second}, {MaxGuildCheckBudgetSeconds, time.Hour},
-	}
-	for _, tc := range cases {
-		c := loadYaml(t, minimalYaml)
-		c.GuildCheckBudgetSeconds = tc.checkSeconds
-		if got := c.GuildRecheckBudget(); got != tc.want {
-			t.Fatalf("GuildCheckBudgetSeconds=%d: GuildRecheckBudget() = %v, want %v", tc.checkSeconds, got, tc.want)
-		}
-	}
-}
-
-// TestShippedYamlGuildCheck 钉住仓库里那份 dev yaml 的回档闸配置(07 §7.5.5、§7.5.3-3、§7.9.1):
-// 直连 guild 的 ListenOn、单次超时合法、NonBlock、Breaker 关;MetricsListenAddr 已开;三个 Rollback* 配了
-// MethodTimeouts,且 RollbackPlayer 的值盖得住"沉降 30 + 检查预算 + 复查等待 10 + 复查预算"
-// (沉降 30s 与复查等待 10s 两个常量在 internal/logic/rollback_logic.go;本包不能 import logic,这里照抄数值;
-// 复查预算取 Config.GuildRecheckBudget())。
-func TestShippedYamlGuildCheck(t *testing.T) {
-	var c Config
-	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
-		t.Fatalf("load etc/data_service.yaml: %v", err)
-	}
-	if !c.HasGuildInternalRpc() {
-		t.Fatal("etc/data_service.yaml must configure GuildInternalRpc (otherwise every local rollback is rejected)")
-	}
-	if got := c.GuildInternalRpc.Endpoints; len(got) != 1 || got[0] != "127.0.0.1:50300" {
-		t.Fatalf("GuildInternalRpc.Endpoints = %v, want [127.0.0.1:50300] (= go/guild/etc/guild.yaml ListenOn)", got)
-	}
-	if !c.GuildInternalRpc.NonBlock {
-		t.Fatal("GuildInternalRpc.NonBlock must be true: guild being down must not block data_service startup")
-	}
-	if c.GuildInternalRpc.Middlewares.Breaker {
-		t.Fatal("GuildInternalRpc.Middlewares.Breaker must be false: the check never retries, a breaker only muddies the error")
-	}
-	if err := c.ValidateGuildCheck(); err != nil {
-		t.Fatalf("shipped guild check config must validate: %v", err)
-	}
-	if c.MetricsListenAddr == "" {
-		t.Fatal("MetricsListenAddr must be set: the rollback guild alerts need /metrics")
-	}
-
-	want := map[string]time.Duration{
-		"/data_service.DataService/RollbackPlayer": 0,
-		"/data_service.DataService/RollbackZone":   0,
-		"/data_service.DataService/RollbackAll":    0,
-	}
-	for _, mt := range c.MethodTimeouts {
-		if _, ok := want[mt.FullMethod]; ok {
-			want[mt.FullMethod] = mt.Timeout
-		}
-	}
-	for method, got := range want {
-		if got <= 0 {
-			t.Fatalf("MethodTimeouts has no entry for %s (go-zero's 2000ms default would cut every rollback short)", method)
-		}
-	}
-	minPlayer := 30*time.Second + time.Duration(c.GuildCheckBudgetSeconds)*time.Second + 10*time.Second + c.GuildRecheckBudget()
-	if got := want["/data_service.DataService/RollbackPlayer"]; got < minPlayer {
-		t.Fatalf("RollbackPlayer MethodTimeout %v < settle + check budget + recheck delay + recheck budget = %v", got, minPlayer)
-	}
-}
-
 // ── RouteStore(映射提交点,docs/design/player-route-mapping-durability-proposal.md §4、§11.2)──────────
 
 func intPtr(v int) *int { return &v }
@@ -604,7 +470,7 @@ func intPtr(v int) *int { return &v }
 // assertRouteStoreDefaults 断言 got 是 Normalize 之后的默认形态(redis、8、20/5、3、1/0/1500)。
 func assertRouteStoreDefaults(t *testing.T, got RouteStoreConfig) {
 	t.Helper()
-	if got.Mode != RouteStoreModeRedis || got.FenceShards != 8 || got.MaxOpenConn != 20 || got.MaxIdleConn != 5 ||
+	if got.Mode != RouteStoreModeRedis || got.MergedZoneRefreshSec != 5 || got.MaxOpenConn != 20 || got.MaxIdleConn != 5 ||
 		got.PublishAttempts != 3 || got.NumLocal() != 1 || got.NumReplicas() != 0 || got.WaitAOFTimeoutMs != 1500 {
 		t.Fatalf("RouteStore = %+v (numlocal=%d numreplicas=%d), want redis / 8 / 20,5 / 3 / 1,0,1500",
 			got, got.NumLocal(), got.NumReplicas())
@@ -655,8 +521,8 @@ func TestRouteStoreValidateRejects(t *testing.T) {
 		{"Mode 连字符", func(r *RouteStoreConfig) { r.Mode = "db-first" }},
 		{"Mode 未知值", func(r *RouteStoreConfig) { r.Mode = "mysql" }},
 		{"Mode 首字母大写", func(r *RouteStoreConfig) { r.Mode = "Redis" }},
-		{"FenceShards 为负", func(r *RouteStoreConfig) { r.FenceShards = -1 }},
-		{"FenceShards 超过 64", func(r *RouteStoreConfig) { r.FenceShards = 65 }},
+		{"MergedZoneRefreshSec 为负", func(r *RouteStoreConfig) { r.MergedZoneRefreshSec = -1 }},
+		{"MergedZoneRefreshSec 超过 60", func(r *RouteStoreConfig) { r.MergedZoneRefreshSec = 61 }},
 		{"MaxOpenConn 为负", func(r *RouteStoreConfig) { r.MaxOpenConn = -1 }},
 		{"MaxIdleConn 为负", func(r *RouteStoreConfig) { r.MaxIdleConn = -1 }},
 		{"MaxIdleConn 超过 MaxOpenConn", func(r *RouteStoreConfig) { r.MaxIdleConn = r.MaxOpenConn + 1 }},
@@ -692,8 +558,8 @@ func TestRouteStoreValidateRejects(t *testing.T) {
 		mutate func(r *RouteStoreConfig)
 	}{
 		{"db_first", func(r *RouteStoreConfig) { r.Mode = RouteStoreModeDBFirst }},
-		{"FenceShards=1", func(r *RouteStoreConfig) { r.FenceShards = 1 }},
-		{"FenceShards=64", func(r *RouteStoreConfig) { r.FenceShards = 64 }},
+		{"MergedZoneRefreshSec=1", func(r *RouteStoreConfig) { r.MergedZoneRefreshSec = 1 }},
+		{"MergedZoneRefreshSec=60", func(r *RouteStoreConfig) { r.MergedZoneRefreshSec = 60 }},
 		{"MaxIdleConn=MaxOpenConn", func(r *RouteStoreConfig) { r.MaxIdleConn = r.MaxOpenConn }},
 		{"PublishAttempts=1", func(r *RouteStoreConfig) { r.PublishAttempts = 1 }},
 		{"PublishAttempts=5", func(r *RouteStoreConfig) { r.PublishAttempts = 5 }},
@@ -741,7 +607,7 @@ RouteStore:
 	}
 }
 
-// 随仓库配置采用全球 TiDB 提交点和 64 围栏分片；其余池与发布参数沿用组件默认值。
+// 随仓库配置采用全球 TiDB 提交点；其余池与发布参数沿用组件默认值。
 func TestShippedYamlRouteStoreIsDBFirstAndValid(t *testing.T) {
 	var c Config
 	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
@@ -753,14 +619,9 @@ func TestShippedYamlRouteStoreIsDBFirstAndValid(t *testing.T) {
 	if c.RouteStore.WaitAOFNumLocal == nil || c.RouteStore.WaitAOFNumReplicas == nil {
 		t.Fatal("etc/data_service.yaml must spell out both WaitAOF keys (their safe default is not the zero value)")
 	}
-	if c.RouteStore.FenceShards != 64 {
-		t.Fatalf("etc/data_service.yaml RouteStore.FenceShards = %d, want 64 (the global TiDB tier)",
-			c.RouteStore.FenceShards)
-	}
 	// 已单独断言全球覆盖值；下面只比较未覆盖的组件默认参数。
 	rest := c.RouteStore
 	rest.Mode = RouteStoreModeRedis
-	rest.FenceShards = 8
 	assertRouteStoreDefaults(t, rest)
 	if err := c.RouteStore.Validate(); err != nil {
 		t.Fatalf("shipped RouteStore block must validate: %v", err)
@@ -1053,35 +914,6 @@ func TestShippedYamlKafkaConsumerKnobsAreRowByRowAndValid(t *testing.T) {
 	}
 	if err := k.Normalize().ValidateConsumers(c.SnapshotMySQL.MaxOpenConn); err != nil {
 		t.Fatalf("shipped Kafka consumer knobs must validate: %v", err)
-	}
-}
-
-// TestValidateRegions:Regions 生效时(没配 DevRedis)zone → 集群表必须一对一、地址与 zone 都不能为空。
-// 同一 zone 出现在两个 Region 时,旧实现后写覆盖先写、debug_fetch 取先写,两边报的集群不一样。
-func TestValidateRegions(t *testing.T) {
-	region := func(id uint32, zones ...uint32) RegionConfig {
-		return RegionConfig{Id: id, Zones: zones, Redis: RedisClusterConfig{Addrs: []string{"10.0.0.1:6379"}}}
-	}
-	if err := ValidateRegions([]RegionConfig{region(1, 1, 2), region(2, 3)}); err != nil {
-		t.Fatalf("disjoint regions must validate: %v", err)
-	}
-
-	noAddrs := region(1, 1)
-	noAddrs.Redis.Addrs = nil
-	for name, tc := range map[string]struct {
-		regions []RegionConfig
-		want    string
-	}{
-		"empty":          {nil, "Regions is empty"},
-		"no addrs":       {[]RegionConfig{noAddrs}, "Redis.Addrs is empty"},
-		"no zones":       {[]RegionConfig{region(1)}, "Zones is empty"},
-		"duplicate zone": {[]RegionConfig{region(1, 1, 2), region(2, 2)}, "zone 2 is listed in both"},
-		"dup in one":     {[]RegionConfig{region(1, 5, 5)}, "zone 5 is listed in both"},
-	} {
-		err := ValidateRegions(tc.regions)
-		if err == nil || !strings.Contains(err.Error(), tc.want) {
-			t.Errorf("%s: want error containing %q, got %v", name, tc.want, err)
-		}
 	}
 }
 

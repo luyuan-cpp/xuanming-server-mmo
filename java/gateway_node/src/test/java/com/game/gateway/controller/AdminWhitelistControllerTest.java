@@ -142,6 +142,15 @@ class AdminWhitelistControllerTest {
         verify(repo, times(1)).upsert(ZONE, ACCOUNT, "n");
     }
 
+    /** 行号撞上别的行:ODKU 改了那一行,这一行还是旧 note。必须抛错让事务回滚,不能回 200。 */
+    @Test
+    void addFailsLoudlyWhenReadBackNoteIsNotOurs() {
+        when(repo.findByZoneIdAndAccountId(ZONE, ACCOUNT)).thenReturn(Optional.of(row(5L, "old")));
+
+        assertThrows(IllegalStateException.class, () -> controller.add(request(ZONE, ACCOUNT, "n")));
+        verify(repo, times(1)).upsert(ZONE, ACCOUNT, "n");
+    }
+
     @Test
     void removeDeletesByNaturalKeyAndAlwaysReturnsNoContent() {
         when(repo.deleteByZoneIdAndAccountId(ZONE, ACCOUNT)).thenReturn(0);

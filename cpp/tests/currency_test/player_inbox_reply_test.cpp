@@ -185,10 +185,6 @@ protected:
 		identity.set_generation(++generation_); identity.set_owner_revision(1);
 		identity.set_scene_instance_id("inbox-reply-test");
 		deps.confirmedAdmissions.push_back(identity);
-		deps.readSqlAck = [this](Guid id, auto done) {
-			EXPECT_EQ(kPlayerId, id); ++sqlReads_;
-			done(sqlAck_); return true;
-		};
 		admission_ = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(deps));
 		player_ = tlsEcs.actorRegistry.create();
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player_, kPlayerId);
@@ -225,7 +221,7 @@ protected:
 		ASSERT_EQ(1u, gPersistCalls);
 		ASSERT_TRUE(gAckRequests.empty()) << "未落盘时不能确认";
 
-		// 同原保存链先捕获不可变E/q提交原件，成功hook先于全局Replace；Redis与SQL是两份独立证据。
+		// 同原保存链先捕获不可变E/q提交原件，成功hook先于全局Replace。
 		auto payload = std::make_shared<PlayerAllData>();
 		payload->set_last_save_seq(1);
 		payload->mutable_player_database_data()->set_player_id(kPlayerId);
@@ -237,11 +233,8 @@ protected:
 		committed();
 		auto &snapshot = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_);
 		snapshot.Replace(*payload);
-		const std::string version = "00000000000000000001:00000000000000000001";
-		sqlAck_ = RoleAdmissionSystem::SqlAck{"1", version, version, version};
 		PlayerInboxSystem::Tick();
 		ASSERT_EQ(1u, gAckRequests.size());
-		ASSERT_EQ(1u, sqlReads_);
 		ASSERT_EQ(PlayerInboxPhase::kAcking, State().phase);
 	}
 
@@ -252,8 +245,6 @@ protected:
 
 	entt::entity player_{entt::null};
 	uint64_t generation_{0};
-	uint32_t sqlReads_{0};
-	std::optional<RoleAdmissionSystem::SqlAck> sqlAck_;
 	std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission_;
 };
 

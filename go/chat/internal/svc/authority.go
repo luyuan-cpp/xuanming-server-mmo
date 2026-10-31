@@ -15,8 +15,9 @@ import (
 )
 
 func OpenAuthority(ctx context.Context, c config.Config, migrate bool) (*sql.DB, *authority.Store, error) {
-	if !c.RequireTiDB {
-		return nil, nil, errors.New("聊天权威存储只允许TiDB")
+	// 先于消费一次性 writer 资格:档位写错不能白白烧掉一份 boot grant。
+	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
+		return nil, nil, err
 	}
 	var permission authoritysql.Permission
 	var loadErr error
@@ -38,15 +39,15 @@ func OpenAuthority(ctx context.Context, c config.Config, migrate bool) (*sql.DB,
 
 // OpenAuthorityWithPermission 由进程显式传同一已消费 boot，避免 SQL 与排空身份分裂。
 func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate bool, permission authoritysql.Permission) (*sql.DB, *authority.Store, error) {
-	if !c.RequireTiDB {
-		return nil, nil, errors.New("聊天权威存储只允许TiDB")
+	backend, err := authoritysql.ParseBackend(c.Backend)
+	if err != nil {
+		return nil, nil, err
 	}
 	var db *sql.DB
-	var err error
 	if migrate {
-		db, err = authoritysql.OpenForMigration(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, true, permission)
+		db, err = authoritysql.OpenForMigration(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, backend, permission)
 	} else {
-		db, err = authoritysql.Open(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, true, c.MaxOpenConns, permission)
+		db, err = authoritysql.Open(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, backend, c.MaxOpenConns, permission)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -58,7 +59,7 @@ func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate b
 		}
 		return db, nil, nil
 	}
-	store, err := authority.New(ctx, db, c.AccountRoleSchema, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, SensitiveWords: c.SensitiveWords})
+	store, err := authority.New(ctx, db, c.AccountRoleSchema, backend, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, SensitiveWords: c.SensitiveWords, ActorVerifyTTLSeconds: c.ActorVerifyTTLSeconds})
 	if err != nil {
 		db.Close()
 		return nil, nil, err

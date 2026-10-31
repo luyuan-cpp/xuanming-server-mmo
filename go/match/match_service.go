@@ -151,6 +151,8 @@ func main() {
 	// 组队给 scene 发 PlayerTeamRefreshEvent 也从这里取 NodeUuid)。
 	svcCtx.LaunchRelayTask("match.watch.scene", func() { svcCtx.SceneNodes.Run(ctx, svcCtx.Etcd) })
 	svcCtx.LaunchRelayTask("match.watch.battle", func() { svcCtx.BattleNodes.Run(ctx, svcCtx.Etcd) })
+	// match 实例自身的注册:按池撮合用它作成员表,决定每个池由哪个副本负责(internal/poolowner)。
+	svcCtx.LaunchRelayTask("match.watch.match", func() { svcCtx.MatchNodes.Run(ctx, svcCtx.Etcd) })
 
 	// 全球结果来源归档独立于评分开关，PVE与不计分局也必须保全完整个人原件。
 	// 启动接线先于matcher与RPC注册；旧兼容模式仍只在启用评分时消费。
@@ -171,29 +173,8 @@ func main() {
 				return err
 			}, recorder...)
 		}
-		// 排行榜评分快照 topic(docs/design/leaderboard-system.md §2.4):RatingEnabled=true 时不论发布开关开没开,都由 match
-		// 声明分区契约与保留期 —— rank 先起时 topic 以 broker 默认保留期建出(rank Ensure 传 RetentionMs: -1 不改写),
-		// match 一起来就按配置写正。
-		ensureSnapshotTopic := func() error {
-			return matchkafka.EnsureRatingSnapshotTopic(c.Kafka.Brokers, c.RatingSnapshotTopic,
-				c.RatingSnapshotTopicPartitions, c.RatingSnapshotRetentionMs())
-		}
-		// 发布开关打开时,结果消费者必须在快照 topic 声明成功**之后**才起:共享 writer 开着 AllowAutoTopicCreation,
-		// 声明失败期间消费到的对局一发布,broker 就会按默认分区数(本地 compose 与 K8s 都是 1)自动建 topic,
-		// 3 分区契约从此永久破坏,match 与 rank 的 Ensure 都永远失败,只能手工删 topic(R1 评审)。
-		// 所以两步串成一步重试:声明不成功,评分入账就停在当前值(排队 / 凑单照常),日志每 30s 报一次原因。
-		// 开关关闭时两者各自重试:快照 topic 的问题(比如分区数与 broker 不一致)不能连带停掉评分入账。
-		consumeResults := startResults
-		if c.RatingEnabled && !c.GlobalMatch.Enabled && c.RatingSnapshotPublishEnabled {
-			consumeResults = func() error {
-				if err := ensureSnapshotTopic(); err != nil {
-					return fmt.Errorf("快照发布已打开,必须先声明评分快照 topic %s 才能起结果消费者: %w", c.RatingSnapshotTopic, err)
-				}
-				return startResults()
-			}
-		}
 		// 全球来源归档必须同步装配成功；只有显式旧兼容模式的软评分允许告警后后台重试。
-		if err := consumeResults(); err != nil {
+		if err := startResults(); err != nil {
 			if c.GlobalMatch.Enabled {
 				cancel()
 				panic(fmt.Errorf("全球匹配完整结算来源消费者未就绪，拒绝启动: %w", err))
@@ -206,7 +187,7 @@ func main() {
 						return
 					case <-time.After(30 * time.Second):
 					}
-					if err := consumeResults(); err != nil {
+					if err := startResults(); err != nil {
 						logx.Errorf("[rating] Failed to restart battle result consumer; retrying after 30s: %v", err)
 						continue
 					}
@@ -215,29 +196,6 @@ func main() {
 				}
 			})
 		}
-		// 开关关闭:快照 topic 只在后台声明、失败每 30s 重试(开关打开时已经在 startRating 里先于结果消费者同步声明)。
-		// 不在这里同步试第一次:Kafka 能建连却不回包时一次 admin 调用最坏要几十秒,叠在 startRating 之后会把 gRPC 起服推迟一倍,
-		// 被 liveness 探针杀掉重启 —— 而开关关着时没有任何东西等这个 topic。
-		if c.RatingEnabled && !c.GlobalMatch.Enabled && !c.RatingSnapshotPublishEnabled {
-			svcCtx.LaunchRelayTask("match.kafka.rating_snapshot_topic", func() {
-				for {
-					err := ensureSnapshotTopic()
-					if err == nil {
-						logx.Infof("[rating] Rating snapshot topic %s declared (publish disabled)", c.RatingSnapshotTopic)
-						return
-					}
-					logx.Errorf("[rating] Failed to declare rating snapshot topic %s (publish disabled); retrying after 30s: %v",
-						c.RatingSnapshotTopic, err)
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(30 * time.Second):
-					}
-				}
-			})
-		}
-		logx.Infof("[rating] Leaderboard rating snapshot publish enabled=%t topic=%s partitions=%d retention=%dh",
-			c.RatingSnapshotPublishEnabled, c.RatingSnapshotTopic, c.RatingSnapshotTopicPartitions, c.RatingSnapshotRetentionHours)
 	}
 
 	// 组队(team-system.md §A.3,port-decisions D-2 / feasibility D7):与 match 同进程、同一个
@@ -258,9 +216,8 @@ func main() {
 		os.Exit(1)
 	}
 	teamService.StartSQLMaintenance(ctx)
-	matchlogic.StartGlobalTeamMatcher(ctx, svcCtx)
 	matchlogic.StartGlobalSpectatorRecovery(ctx, svcCtx)
-	// 完整结果归档与队伍反向端口均就绪后才开放成局。
+	// 完整结果归档与队伍反向端口均就绪后才开放成局。全球模式下单排、整队与 PVP 都由同一个按池撮合循环负责。
 	matchlogic.StartMatcherLoop(ctx, svcCtx)
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
@@ -308,13 +265,15 @@ func main() {
 	regs, err := registerNodes(svcCtx.Etcd, c, advertiseHost, port)
 	if err != nil {
 		// §A.3 第 4 条:不用 logx.Must(直接 os.Exit,defer 不执行)。registerNodes 已把成功的那一次
-		// 注册 Close(发现 key 立刻消失),这里再释放 snowflake 租约、刷 Kafka、刷日志后退出。
+		// 注册 Close(发现 key 立刻消失),这里再排空号段、刷 Kafka、刷日志后退出。
 		logx.Errorf("[match] Failed to register node in etcd; exiting: %v", err)
 		cancel()
 		svcCtx.Stop()
 		s.Stop() // go-zero RpcServer.Stop 只做 logx.Close
 		os.Exit(1)
 	}
+	// 注册成功后才参与池归属:成员表来自 etcd 里的 MatchNodeService 注册,本实例用同一个 NodeUuid。
+	svcCtx.SetPoolMember(regs.match.Info.NodeUuid)
 
 	controlCtx, cancelControl := context.WithCancel(context.Background())
 	controlDone := make(chan struct{})
@@ -366,22 +325,6 @@ func main() {
 	fmt.Printf("  kafka:       %v\n", c.Kafka.Brokers)
 	fmt.Println("=============================================================")
 
-	// Snowflake worker id 失租 = 本进程不再是该 worker id 的合法持有者,
-	// 继续用 BattleIDGen 发号就是确定性撞号(battle_id/challenge_id/team_id 都会撞)。
-	// 与 scene_manager 同口径:先 fence 发号器,再注销两个发现 key(§A.3 第 5 条:os.Exit 不执行 defer,
-	// 不主动注销的话路由服 / gate 会在 LeaseTTL 内继续把请求打到将退出的进程),flush Kafka,再退出重启换 id。
-	if lost := svcCtx.SnowflakeLost(); lost != nil {
-		go func() {
-			<-lost
-			svcCtx.BattleIDGen.Fence() // 先关闸:此后 Generate 一律 ErrFenced,gather / 建队整体失败
-			logx.Error("[match] snowflake worker id lease lost; generator fenced, closing node registrations and flushing Kafka before exit")
-			regs.Close()  // 发现 key 立刻消失
-			svcCtx.Stop() // flush Kafka 在途批次,再释放 worker lease
-			logx.Close()  // 冲掉日志缓冲
-			os.Exit(1)    // 退出;重启后拿新 worker id
-		}()
-	}
-
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	select {
@@ -397,8 +340,10 @@ func main() {
 	//  ② 等 gRPC 排空:go-zero 的 RpcServer.Stop() 只 logx.Close(),真正的 GracefulStop 由 proc 的
 	//    shutdown listener 在收到信号 1s 后执行,所以这里等 serveDone(有上限);
 	//  ③ 停后台循环(节点发现 / matcher / 评分消费);
-	//  ④ svcCtx.Stop()(flush Kafka、释放 snowflake 租约)→ s.Stop()(logx.Close 放最后,前面的错误日志不丢)。
+	//  ④ svcCtx.Stop()(排空号段、flush Kafka)→ s.Stop()(logx.Close 放最后,前面的错误日志不丢)。
 	// 组队已接纳的异步推送与清锁由同 boot RELAY 等待；TTL 不作为完成证据。
+	// 先放弃池归属再注销:其余副本在 watch 到注销后接手本实例负责的池。
+	svcCtx.SetPoolMember("")
 	regs.Close()
 	select {
 	case <-serveDone:
@@ -419,8 +364,12 @@ func validateMigrationFlags(migrateOnly, allowModify bool) error {
 
 // runMigration 不构造ServiceContext，因此不申请号源、不连接etcd/Redis/Kafka、不监听RPC。
 func runMigration(c config.Config, allowModify bool, migrate func(context.Context, config.GlobalMatchConf, bool) (schemamigrate.Report, error)) int {
-	if !c.GlobalMatch.Enabled || (c.Mode != service.DevMode && c.Mode != service.TestMode && !c.GlobalMatch.RequireTiDB) {
-		fmt.Fprintln(os.Stderr, "匹配迁移必须显式启用全球SQL权威，生产必须使用TiDB")
+	if !c.GlobalMatch.Enabled {
+		fmt.Fprintln(os.Stderr, "匹配迁移必须显式启用全球SQL权威")
+		return schemamigrate.ExitFailed
+	}
+	if _, err := authoritysql.ParseBackend(c.GlobalMatch.Backend); err != nil {
+		fmt.Fprintf(os.Stderr, "GlobalMatch.Backend: %v\n", err)
 		return schemamigrate.ExitFailed
 	}
 	// 迁移凭据不进入常驻配置；缺少任一项都不能拿runtime账号补做DDL。
@@ -446,8 +395,7 @@ func runMigration(c config.Config, allowModify bool, migrate func(context.Contex
 	return schemamigrate.ExitCode(report, err)
 }
 
-// nodeRegistrations 本进程在 etcd 的两份节点注册。Close 幂等、可并发调用
-// (信号退出与 snowflake 失租强退可能同时走到)。
+// nodeRegistrations 本进程在 etcd 的两份节点注册。Close 幂等、可并发调用。
 type nodeRegistrations struct {
 	team  *sharedregistry.Registration // TeamNodeService:shared/noderegistry
 	match *noderegistry.NodeRegistration

@@ -121,7 +121,8 @@ message TeamLaunchData {
 message TeamLaunchRecord {
   option (OptionTableName) = "team_launch";
   option (OptionPrimaryKey) = "actor_id,request_high,request_low";
-  option (OptionIndex) = "state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low";
+  // 第三条是按池读排队整队的索引（authority.PoolTeamLaunches）。
+  option (OptionIndex) = "state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low";
   uint64 actor_id = 1;
   uint64 request_high = 2;
   uint64 request_low = 3;

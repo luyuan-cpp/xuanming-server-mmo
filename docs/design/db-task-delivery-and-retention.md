@@ -1,5 +1,7 @@
 # scene DBTask 投递失败后的重存与 db_task 保留期 / Kafka 盘预算（S5）
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),DBTask、`db_task_zone_*` 和相应的保留期、盘预算都已删除。本文只作历史保留,不再描述现行行为。
+
 > **状态**：已落码，未编译、未测试，待 Codex 验证（AGENTS.md §10.1）。在 Codex 给出结果之前，本文任何一句都不等于「编译通过」或「已验证」。
 > **范围**：§A = S5a（C++ scene：发 DBTask 失败后的脏快照）；§B = S5b（Go + 部署脚本：db_task 的 retention.bytes 与 Kafka PVC 预算）。go/db、go/login 与 `tools/scripts/k8s_deploy.ps1` 的注释按「本文 §B」引用，章节号不要改。
 > **依据**：[S5 实现规格](../handoff/godb-pipeline-impl-20261015/S5-dirty-snapshot-retention-spec.md)（B-01…B-22）；S5a 的落码报告 [batch-reports.md](../handoff/godb-pipeline-impl-20261015/batch-reports.md) §C2；S5b 由主会话在 R3（Go 与部署脚本）与 R5a（复核修正）中落码，没有单独的阶段报告。**表述以截至 2026-10-16 的工作区代码为准**，与规格、阶段报告不一致的地方列在 §A.13 与 §B.9。

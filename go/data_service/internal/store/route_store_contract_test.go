@@ -69,8 +69,7 @@ var errFakeRouteScriptExhausted = errors.New("fake route db: 脚本用尽,被测
 
 // 本用例集固定的 store 参数。
 const (
-	fakeRouteWriter        = "data_service@unit-test"
-	fakeRouteShards uint32 = 8
+	fakeRouteWriter = "data_service@unit-test"
 )
 
 func newFakeRouteDB(script fakeRouteScript) *fakeRouteDB {
@@ -90,7 +89,7 @@ func newFakeRouteStore(t *testing.T, script fakeRouteScript) (*RouteStore, *fake
 	fake := newFakeRouteDB(script)
 	db := sql.OpenDB(fakeRouteConnector{fake: fake})
 	t.Cleanup(func() { _ = db.Close() })
-	return &RouteStore{db: db, fenceShards: fakeRouteShards, writer: fakeRouteWriter}, fake
+	return &RouteStore{db: db, writer: fakeRouteWriter}, fake
 }
 
 // routeStmtLabel 把 SQL 文本映射成规格 b.4 的编号。只认**逐字相同**的生产文本(动态语句认前缀,
@@ -105,10 +104,6 @@ func routeStmtLabel(query string) string {
 		return "TXN_MODE"
 	case routeReadWritableSQL:
 		return "R1"
-	case routeLockFenceShardSQL:
-		return "R2"
-	case routeEnsureFenceShardSQL:
-		return "R3"
 	case routeInsertNewSQL:
 		return "R4"
 	case routeLockRowSQL:
@@ -420,10 +415,9 @@ func dvStr(s string) driver.Value {
 }
 
 const (
-	fakeRouteCreatedMs  int64 = 1_760_000_000_000
-	fakeRouteUpdatedMs  int64 = 1_760_000_000_500
-	fakeRouteOldWriter        = "data_service@old"
-	fakeRouteFenceRunID       = "102-7-20261012T000000Z-deadbeef"
+	fakeRouteCreatedMs int64 = 1_760_000_000_000
+	fakeRouteUpdatedMs int64 = 1_760_000_000_500
+	fakeRouteOldWriter       = "data_service@old"
 )
 
 // r5Reply 是 R5 读到的一行(列序同 routeRowColumnsSQL)。
@@ -447,9 +441,8 @@ func routeRowValuesWithShard(shard, player uint64, home, storage uint32, version
 }
 
 var (
-	replyWritable  = fakeRouteReply{rows: [][]driver.Value{{int64(1)}}}
-	replyFenceOpen = fakeRouteReply{rows: [][]driver.Value{{int64(0), nil}}}
-	replyNoRows    = fakeRouteReply{}
+	replyWritable = fakeRouteReply{rows: [][]driver.Value{{int64(1)}}}
+	replyNoRows   = fakeRouteReply{}
 )
 
 func replyAffected(n int64) fakeRouteReply { return fakeRouteReply{affected: n} }
@@ -459,9 +452,8 @@ func replyErr(err error) fakeRouteReply { return fakeRouteReply{err: err} }
 // ── W1:RegisterHome 的终局契约 ─────────────────────────────────────────────────
 
 const (
-	// contractPlayer:围栏片 4242 % 8 = 2,行片 4242 % 64 = 18(4242 = 66×64 + 18)—— 两者不相等,绑错片的实现
-	// 在用它的用例里会被 assertRegisterArgs 拦下(行片还是 16 片时两者恰好都是 2,区分不了)。把两个片号按字面量、
-	// 逐下标钉死的仍是 TestRegisterHomeBindsRowShardNotFenceShard(4250)。
+	// contractPlayer:行片 4242 % 64 = 18(4242 = 66×64 + 18)。把片号按字面量、
+	// 逐下标钉死的是 TestRegisterHomeBindsRowShard(4250)。
 	contractPlayer  uint64 = 4242
 	contractHome    uint32 = 7
 	contractStorage uint32 = 1000000
@@ -469,11 +461,9 @@ const (
 
 // wantRegisterArgs 是每条 W1 语句应有的实参(经 mysqlLikeConvert:无符号整数一律 uint64,NULL 为 nil)。
 // rowRev 是 R5 读到的 rev(R6 的 CAS 条件)。
-// 两个「片」分开算:fenceShard 是围栏片(player_id % FenceShards,只进 R2 / R3),
 // rowShard 是 player_route 的行片(placement.RouteRowShard,即 player_id % 64,进 R4 / R5 / R6)。
 func wantRegisterArgs(t *testing.T, label string, req RouteRegisterRequest, rowRev uint64) []driver.Value {
 	t.Helper()
-	fenceShard := req.PlayerID % uint64(fakeRouteShards)
 	rowShard := uint64(placement.RouteRowShard(req.PlayerID))
 	var storage, version driver.Value
 	if req.StorageID != 0 {
@@ -482,8 +472,6 @@ func wantRegisterArgs(t *testing.T, label string, req RouteRegisterRequest, rowR
 	switch label {
 	case "BEGIN", "COMMIT", "ROLLBACK", "R1":
 		return nil
-	case "R2", "R3":
-		return []driver.Value{uint64(req.HomeZone), fenceShard}
 	case "R4":
 		return []driver.Value{rowShard, req.PlayerID, uint64(req.HomeZone), storage, version, fakeRouteWriter}
 	case "R5":
@@ -528,7 +516,6 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 		wantOutcome  RouteRegisterOutcome
 		wantRow      *RouteRow
 		wantExisting uint32
-		wantRunID    string
 		wantErr      error // 非 nil:errors.Is
 		anyErr       bool  // 只要求报错(没有专门的哨兵)
 		wantLabels   []string
@@ -537,211 +524,168 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			name: "R4插入1行_Inserted",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(1)},
+				"R1": {replyWritable}, "R4": {replyAffected(1)},
 			},
 			wantOutcome: RouteRegisterInserted,
 			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage,
 				PlacementVersion: 1, Rev: 1, UpdatedBy: fakeRouteWriter},
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "COMMIT"},
 		},
 		{
 			name: "R4插入1行_不带落点",
 			req:  noStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(1)},
+				"R1": {replyWritable}, "R4": {replyAffected(1)},
 			},
 			wantOutcome: RouteRegisterInserted,
 			wantRow:     &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, Rev: 1, UpdatedBy: fakeRouteWriter},
-			wantLabels:  []string{"BEGIN", "R1", "R2", "R4", "COMMIT"},
+			wantLabels:  []string{"BEGIN", "R1", "R4", "COMMIT"},
 		},
 		{
 			name: "R4撞键_R5同home_AlreadySame_回滚",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(contractHome, contractStorage, 1, "", 3)},
 			},
 			wantOutcome: RouteRegisterAlreadySame,
 			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage, PlacementVersion: 1,
 				Rev: 3, UpdatedBy: fakeRouteOldWriter, CreatedAtMs: uint64(fakeRouteCreatedMs), UpdatedAtMs: uint64(fakeRouteUpdatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "ROLLBACK"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "ROLLBACK"},
 		},
 		{
 			name: "R4受影响2行_fail_closed",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(2)},
+				"R1": {replyWritable}, "R4": {replyAffected(2)},
 			},
 			anyErr:     true,
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "ROLLBACK"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "ROLLBACK"},
 		},
 		{
 			name: "R4报CHECK违例_不重试",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyErr(mysqlErrNo(3819))},
+				"R1": {replyWritable}, "R4": {replyErr(mysqlErrNo(3819))},
 			},
 			anyErr:     true,
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "ROLLBACK"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "ROLLBACK"},
 		},
 		{
 			name: "ExistingRowOnly_R5缺行_RowMissing_不插",
 			req:  known,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R5": {replyNoRows},
+				"R1": {replyWritable}, "R5": {replyNoRows},
 			},
 			wantOutcome: RouteRegisterRowMissing,
 			wantRow:     &RouteRow{},
-			wantLabels:  []string{"BEGIN", "R1", "R2", "R5", "ROLLBACK"},
+			wantLabels:  []string{"BEGIN", "R1", "R5", "ROLLBACK"},
 		},
 		{
 			name: "R4撞键后R5缺行_行消失",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)}, "R5": {replyNoRows},
+				"R1": {replyWritable}, "R4": {replyAffected(0)}, "R5": {replyNoRows},
 			},
 			wantErr:    ErrRouteRowVanished,
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "ROLLBACK"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "ROLLBACK"},
 		},
 		{
 			name: "ExistingRowOnly_R5同home_AlreadySame",
 			req:  known,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R5": {r5Reply(contractHome, 0, 0, "", 2)},
+				"R1": {replyWritable}, "R5": {r5Reply(contractHome, 0, 0, "", 2)},
 			},
 			wantOutcome: RouteRegisterAlreadySame,
 			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, Rev: 2, UpdatedBy: fakeRouteOldWriter,
 				CreatedAtMs: uint64(fakeRouteCreatedMs), UpdatedAtMs: uint64(fakeRouteUpdatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R2", "R5", "ROLLBACK"},
+			wantLabels: []string{"BEGIN", "R1", "R5", "ROLLBACK"},
 		},
 		{
 			name: "R5异home_Conflict_带既有值",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(9, contractStorage, 1, "", 3)},
 			},
 			wantOutcome:  RouteRegisterConflict,
 			wantRow:      &RouteRow{},
 			wantExisting: 9,
-			wantLabels:   []string{"BEGIN", "R1", "R2", "R4", "R5", "ROLLBACK"},
+			wantLabels:   []string{"BEGIN", "R1", "R4", "R5", "ROLLBACK"},
 		},
 		{
 			name: "home为NULL_落点为NULL_请求带storage_R6b",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(0, 0, 0, "", 4)}, "R6b": {replyAffected(1)},
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHome,
 			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage, PlacementVersion: 1,
 				Rev: 5, UpdatedBy: fakeRouteWriter, CreatedAtMs: uint64(fakeRouteCreatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "R6b", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6b", "COMMIT"},
 		},
 		{
 			name: "home为NULL_已有落点_请求带storage_R6a_落点保留",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(0, 55, 3, "", 4)}, "R6a": {replyAffected(1)},
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHomePlacementKept,
 			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: 55, PlacementVersion: 3,
 				Rev: 5, UpdatedBy: fakeRouteWriter, CreatedAtMs: uint64(fakeRouteCreatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "R6a", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
 		},
 		{
 			name: "home为NULL_冻结落点_请求带storage_R6a_冻结态原样带回",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(0, 55, 3, "run-x", 4)}, "R6a": {replyAffected(1)},
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHomePlacementKept,
 			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: 55, PlacementVersion: 3, FrozenRunID: "run-x",
 				Rev: 5, UpdatedBy: fakeRouteWriter, CreatedAtMs: uint64(fakeRouteCreatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "R6a", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
 		},
 		{
 			name: "home为NULL_请求不带storage_R6a_FilledHome",
 			req:  noStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(0, 55, 3, "", 4)}, "R6a": {replyAffected(1)},
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHome,
 			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: 55, PlacementVersion: 3,
 				Rev: 5, UpdatedBy: fakeRouteWriter, CreatedAtMs: uint64(fakeRouteCreatedMs)},
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "R6a", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
 		},
 		{
 			name: "R6a受影响0行_fail_closed",
 			req:  noStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(0, 0, 0, "", 4)}, "R6a": {replyAffected(0)},
 			},
 			rowRev:     4,
 			anyErr:     true,
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "R6a", "ROLLBACK"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "ROLLBACK"},
 		},
 		{
 			name: "R6b受影响2行_fail_closed",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(0, 0, 0, "", 4)}, "R6b": {replyAffected(2)},
 			},
 			rowRev:     4,
 			anyErr:     true,
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "R6b", "ROLLBACK"},
-		},
-		{
-			name: "R2缺分片行_事务外R3补行_重开后插入",
-			req:  withStorage,
-			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable, replyWritable}, "R2": {replyNoRows, replyFenceOpen},
-				"R3": {replyAffected(1)}, "R4": {replyAffected(1)},
-			},
-			wantOutcome: RouteRegisterInserted,
-			wantRow: &RouteRow{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: contractStorage,
-				PlacementVersion: 1, Rev: 1, UpdatedBy: fakeRouteWriter},
-			wantLabels: []string{"BEGIN", "R1", "R2", "ROLLBACK", "R3", "BEGIN", "R1", "R2", "R4", "COMMIT"},
-		},
-		{
-			name: "R2补行后仍缺_分片行消失",
-			req:  withStorage,
-			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable, replyWritable}, "R2": {replyNoRows, replyNoRows}, "R3": {replyAffected(0)},
-			},
-			wantErr:    ErrRouteFenceShardVanished,
-			wantLabels: []string{"BEGIN", "R1", "R2", "ROLLBACK", "R3", "BEGIN", "R1", "R2", "ROLLBACK"},
-		},
-		{
-			name: "围栏生效_Fenced带run_id_零写入",
-			req:  withStorage,
-			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {{rows: [][]driver.Value{{int64(1), fakeRouteFenceRunID}}}},
-			},
-			wantOutcome: RouteRegisterFenced,
-			wantRow:     &RouteRow{},
-			wantRunID:   fakeRouteFenceRunID,
-			wantLabels:  []string{"BEGIN", "R1", "R2", "ROLLBACK"},
-		},
-		{
-			name: "围栏active为NULL_按生效处理",
-			req:  withStorage,
-			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {{rows: [][]driver.Value{{nil, "half-written"}}}},
-			},
-			wantOutcome: RouteRegisterFenced,
-			wantRow:     &RouteRow{},
-			wantRunID:   "half-written",
-			wantLabels:  []string{"BEGIN", "R1", "R2", "ROLLBACK"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6b", "ROLLBACK"},
 		},
 		{
 			name:       "meta行缺失",
@@ -761,11 +705,11 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			name: "COMMIT失败_结果不确定_按错误返回不重试",
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(1)},
+				"R1": {replyWritable}, "R4": {replyAffected(1)},
 			},
 			commitErrs: []error{boom},
 			wantErr:    boom,
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "COMMIT"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -794,9 +738,6 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 				if res.ExistingHome != tc.wantExisting {
 					t.Fatalf("ExistingHome = %d, want %d(只有 Conflict 才带)", res.ExistingHome, tc.wantExisting)
 				}
-				if res.FenceRunID != tc.wantRunID {
-					t.Fatalf("FenceRunID = %q, want %q(只有 Fenced 才带)", res.FenceRunID, tc.wantRunID)
-				}
 			}
 			if got := fake.labels(); !reflect.DeepEqual(got, tc.wantLabels) {
 				t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, tc.wantLabels)
@@ -820,7 +761,7 @@ func TestRegisterHomeBindsNullForAbsentPlacement(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(1)},
+				"R1": {replyWritable}, "R4": {replyAffected(1)},
 			}})
 			if _, err := st.RegisterHome(context.Background(),
 				RouteRegisterRequest{PlayerID: contractPlayer, HomeZone: contractHome, StorageID: tc.storage}); err != nil {
@@ -846,22 +787,14 @@ func TestRegisterHomeBindsNullForAbsentPlacement(t *testing.T) {
 	}
 }
 
-// TestRegisterHomeBindsRowShardNotFenceShard:R2 / R3 绑围栏片(player_id % FenceShards),R4 / R5 / R6 绑行片
-// (player_id % 64)。两者绑反了的后果:R4 对两种片不相等的新号(FenceShards=8 时占 7/8)撞 chk_route_shard(3819)
-// 建角失败;R5 / R6 按错片点查读不到行 → ErrRouteRowVanished。这里用 4250,两个片号按字面量钉死:
-// 围栏片 4250 % 8 = 2,行片 4250 % 64 = 26(4250 = 66×64 + 26)。
-func TestRegisterHomeBindsRowShardNotFenceShard(t *testing.T) {
+// TestRegisterHomeBindsRowShard:R4 / R5 / R6 绑行片(player_id % 64)。绑错的后果:R4 撞 chk_route_shard(3819)
+// 建角失败;R5 / R6 按错片点查读不到行 → ErrRouteRowVanished。这里用 4250,片号按字面量钉死:
+// 行片 4250 % 64 = 26(4250 = 66×64 + 26)。
+func TestRegisterHomeBindsRowShard(t *testing.T) {
 	const player uint64 = 4250
-	const wantFence, wantRow = uint64(2), uint64(26)
-	// 先确认用例本身没有退化:两种片必须不同,否则下面的断言什么也证明不了。
-	probe := RouteRegisterRequest{PlayerID: player, HomeZone: contractHome}
-	fenceArg := wantRegisterArgs(t, "R2", probe, 0)[1]
-	rowArg := wantRegisterArgs(t, "R5", probe, 0)[0]
-	if fenceArg != wantFence || rowArg != wantRow {
-		t.Fatalf("wantRegisterArgs 算出的围栏片 / 行片 = (%#v, %#v), want (%d, %d)", fenceArg, rowArg, wantFence, wantRow)
-	}
-	if fenceArg == rowArg {
-		t.Fatal("用例退化:围栏片与行片相等,区分不了绑错片的实现")
+	const wantRow = uint64(26)
+	if rowArg := wantRegisterArgs(t, "R5", RouteRegisterRequest{PlayerID: player, HomeZone: contractHome}, 0)[0]; rowArg != wantRow {
+		t.Fatalf("wantRegisterArgs 算出的行片 = %#v, want %d", rowArg, wantRow)
 	}
 
 	for _, tc := range []struct {
@@ -877,31 +810,31 @@ func TestRegisterHomeBindsRowShardNotFenceShard(t *testing.T) {
 			name: "新插",
 			req:  RouteRegisterRequest{PlayerID: player, HomeZone: contractHome, StorageID: contractStorage},
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(1)},
+				"R1": {replyWritable}, "R4": {replyAffected(1)},
 			},
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "COMMIT"},
 			rowShardAt: map[string]int{"R4": 0},
 		},
 		{
 			name: "补home",
 			req:  RouteRegisterRequest{PlayerID: player, HomeZone: contractHome},
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(0, 55, 3, "", 4)}, "R6a": {replyAffected(1)},
 			},
 			rowRev:     4,
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "R6a", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
 			rowShardAt: map[string]int{"R4": 0, "R5": 0, "R6a": 2},
 		},
 		{
 			name: "补home与落点",
 			req:  RouteRegisterRequest{PlayerID: player, HomeZone: contractHome, StorageID: contractStorage},
 			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R2": {replyFenceOpen}, "R4": {replyAffected(0)},
+				"R1": {replyWritable}, "R4": {replyAffected(0)},
 				"R5": {r5Reply(0, 0, 0, "", 4)}, "R6b": {replyAffected(1)},
 			},
 			rowRev:     4,
-			wantLabels: []string{"BEGIN", "R1", "R2", "R4", "R5", "R6b", "COMMIT"},
+			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6b", "COMMIT"},
 			rowShardAt: map[string]int{"R4": 0, "R5": 0, "R6b": 3},
 		},
 	} {
@@ -913,14 +846,10 @@ func TestRegisterHomeBindsRowShardNotFenceShard(t *testing.T) {
 			if got := fake.labels(); !reflect.DeepEqual(got, tc.wantLabels) {
 				t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, tc.wantLabels)
 			}
-			r2 := fake.callsWithLabel("R2")
-			if len(r2) != 1 || len(r2[0].args) != 2 || r2[0].args[1] != wantFence {
-				t.Fatalf("R2 实参 = %+v, want 围栏片 %d 在下标 1", r2, wantFence)
-			}
 			for label, idx := range tc.rowShardAt {
 				calls := fake.callsWithLabel(label)
 				if len(calls) != 1 || len(calls[0].args) <= idx || calls[0].args[idx] != wantRow {
-					t.Fatalf("%s 实参 = %+v, want 行片 %d 在下标 %d(绑成了围栏片 %d?)", label, calls, wantRow, idx, wantFence)
+					t.Fatalf("%s 实参 = %+v, want 行片 %d 在下标 %d", label, calls, wantRow, idx)
 				}
 			}
 			assertRegisterArgs(t, fake, tc.req, tc.rowRev)
@@ -958,7 +887,6 @@ func TestRegisterHomeRetriesDeadlockAndWriteConflict(t *testing.T) {
 	t.Run("1213与9007各一次后成功", func(t *testing.T) {
 		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 			"R1": {replyWritable, replyWritable, replyWritable},
-			"R2": {replyFenceOpen, replyFenceOpen, replyFenceOpen},
 			"R4": {replyErr(mysqlErrNo(mysqlErrDeadlock)), replyErr(mysqlErrNo(tidbErrWriteConflict)), replyAffected(1)},
 		}})
 		res, err := st.RegisterHome(context.Background(), req)
@@ -969,9 +897,9 @@ func TestRegisterHomeRetriesDeadlockAndWriteConflict(t *testing.T) {
 			t.Fatalf("lockRetries = %d, want 2", got)
 		}
 		want := []string{
-			"BEGIN", "R1", "R2", "R4", "ROLLBACK",
-			"BEGIN", "R1", "R2", "R4", "ROLLBACK",
-			"BEGIN", "R1", "R2", "R4", "COMMIT",
+			"BEGIN", "R1", "R4", "ROLLBACK",
+			"BEGIN", "R1", "R4", "ROLLBACK",
+			"BEGIN", "R1", "R4", "COMMIT",
 		}
 		if got := fake.labels(); !reflect.DeepEqual(got, want) {
 			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, want)
@@ -981,14 +909,12 @@ func TestRegisterHomeRetriesDeadlockAndWriteConflict(t *testing.T) {
 	t.Run("用尽预算", func(t *testing.T) {
 		deadlocks := make([]fakeRouteReply, routeTxAttempts)
 		writable := make([]fakeRouteReply, routeTxAttempts)
-		fences := make([]fakeRouteReply, routeTxAttempts)
 		for i := range deadlocks {
 			deadlocks[i] = replyErr(mysqlErrNo(mysqlErrDeadlock))
 			writable[i] = replyWritable
-			fences[i] = replyFenceOpen
 		}
 		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-			"R1": writable, "R2": fences, "R4": deadlocks,
+			"R1": writable, "R4": deadlocks,
 		}})
 		_, err := st.RegisterHome(context.Background(), req)
 		var me *mysql.MySQLError
@@ -1008,7 +934,7 @@ func TestRegisterHomeRetriesDeadlockAndWriteConflict(t *testing.T) {
 // 结论不会变 —— 只发一次,原样按存储错误返回(guild 先例)。
 func TestRegisterHomeDoesNotRetryLockWaitTimeout(t *testing.T) {
 	st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-		"R1": {replyWritable, replyWritable}, "R2": {replyFenceOpen, replyFenceOpen},
+		"R1": {replyWritable, replyWritable},
 		"R4": {replyErr(mysqlErrNo(mysqlErrLockWaitTimeout)), replyAffected(1)},
 	}})
 	_, err := st.RegisterHome(context.Background(),
@@ -1032,7 +958,7 @@ func TestRegisterHomeRetryStopsOnCanceledContext(t *testing.T) {
 	st, fake := newFakeRouteStore(t, fakeRouteScript{
 		replies: map[string][]fakeRouteReply{
 			// 第二轮的应答刻意留着:真的重来了就能看出来。
-			"R1": {replyWritable, replyWritable}, "R2": {replyFenceOpen, replyFenceOpen},
+			"R1": {replyWritable, replyWritable},
 			"R4": {replyErr(mysqlErrNo(mysqlErrDeadlock)), replyAffected(1)},
 		},
 		onRollback: cancel,
@@ -1431,7 +1357,7 @@ func TestNewRouteStoreProbeFailClosed(t *testing.T) {
 	sessionOK := fakeRouteReply{rows: [][]driver.Value{{"READ-COMMITTED", int64(1)}}}
 	mysqlVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.36"}}}
 	tidbVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.11-TiDB-v7.5.0"}}}
-	goodOpts := RouteStoreOptions{FenceShards: fakeRouteShards, Writer: fakeRouteWriter}
+	goodOpts := RouteStoreOptions{Writer: fakeRouteWriter}
 	// P4 期望的应答:3819 且点名 chk_route_shard(MySQL 8.0 的原文格式)。
 	checkEnforced := replyErr(&mysql.MySQLError{Number: 3819, Message: "Check constraint 'chk_route_shard' is violated."})
 	// P5 期望的应答:两行按当前模数合法的行都被接受(必然回滚的事务里,受影响 1 行)。
@@ -1513,7 +1439,7 @@ func TestNewRouteStoreProbeFailClosed(t *testing.T) {
 		},
 		{
 			name:    "选项非法_一条语句都不发",
-			opts:    RouteStoreOptions{FenceShards: 0, Writer: fakeRouteWriter},
+			opts:    RouteStoreOptions{Writer: "bad writer"},
 			wantErr: ErrRouteInvalidArgument,
 		},
 		{
@@ -1607,7 +1533,7 @@ func TestNewRouteStoreProbeFailClosed(t *testing.T) {
 				if err != nil || st == nil {
 					t.Fatalf("探针应通过:st=%v err=%v", st, err)
 				}
-				if st.fenceShards != tc.opts.FenceShards || st.writer != tc.opts.Writer {
+				if st.writer != tc.opts.Writer {
 					t.Fatalf("store 参数没装上:%+v", st)
 				}
 			}
@@ -1716,7 +1642,7 @@ func TestNewRouteStoreShardModulusProbeContract(t *testing.T) {
 			t.Cleanup(func() { _ = db.Close() })
 			ctx := context.Background()
 
-			st, err := newRouteStoreFromDB(ctx, db, RouteStoreOptions{FenceShards: fakeRouteShards, Writer: fakeRouteWriter})
+			st, err := newRouteStoreFromDB(ctx, db, RouteStoreOptions{Writer: fakeRouteWriter})
 			wantFail := tc.wantMismatch || tc.wantErrNo != 0 || tc.wantErrIs != nil
 			if !wantFail && (err != nil || st == nil) {
 				t.Fatalf("探针应通过:st=%v err=%v", st, err)
@@ -1769,7 +1695,7 @@ func TestNewRouteStoreProbeRetriesLockConflict(t *testing.T) {
 	mysqlVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.36"}}}
 	shardCheckViolated := replyErr(&mysql.MySQLError{Number: 3819, Message: "Check constraint 'chk_route_shard' is violated."})
 	deadlock := replyErr(mysqlErrNo(mysqlErrDeadlock))
-	opts := RouteStoreOptions{FenceShards: fakeRouteShards, Writer: fakeRouteWriter}
+	opts := RouteStoreOptions{Writer: fakeRouteWriter}
 	// script:P1–P3 各一份应答;P4 每次尝试一份「3819 且点名 chk_route_shard」(= P4 通过);P5 按 modulus 排队。
 	script := func(attempts int, modulus ...fakeRouteReply) map[string][]fakeRouteReply {
 		checks := make([]fakeRouteReply, attempts)
@@ -1920,12 +1846,12 @@ func TestPrepareTiDBContract(t *testing.T) {
 		t.Fatalf("2 个 zone + 1 个 storage 应生成 8 条语句,got %d", len(wantSQL))
 	}
 	tidbVersion := fakeRouteReply{rows: [][]driver.Value{{"8.0.11-TiDB-v8.5.2"}}}
-	clustered := fakeRouteReply{rows: [][]driver.Value{{"player_route", "CLUSTERED"}, {"zone_merge_fence", "CLUSTERED"}}}
+	clustered := fakeRouteReply{rows: [][]driver.Value{{"player_route", "CLUSTERED"}}}
 	splitReply := func(k int64) fakeRouteReply {
 		return fakeRouteReply{rows: [][]driver.Value{{k, float64(1)}}}
 	}
-	sixSplits := func() []fakeRouteReply {
-		out := make([]fakeRouteReply, 6)
+	fiveSplits := func() []fakeRouteReply {
+		out := make([]fakeRouteReply, 5)
 		for i := range out {
 			out[i] = splitReply(int64(i + 1))
 		}
@@ -1948,13 +1874,13 @@ func TestPrepareTiDBContract(t *testing.T) {
 	t.Run("TiDB_核对后逐条执行", func(t *testing.T) {
 		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 			"VERSION": {tidbVersion}, "PK_TYPE": {clustered},
-			"ALTER_ATTR": {replyAffected(0), replyAffected(0)}, "SPLIT": sixSplits(),
+			"ALTER_ATTR": {replyAffected(0)}, "SPLIT": fiveSplits(),
 		}})
 		rep, err := st.PrepareTiDB(ctx, req)
 		if err != nil || rep.Skipped || rep.Engine != "tidb" {
 			t.Fatalf("PrepareTiDB = (%+v, %v)", rep, err)
 		}
-		wantLabels := []string{"VERSION", "PK_TYPE", "ALTER_ATTR", "ALTER_ATTR", "SPLIT", "SPLIT", "SPLIT", "SPLIT", "SPLIT", "SPLIT"}
+		wantLabels := []string{"VERSION", "PK_TYPE", "ALTER_ATTR", "SPLIT", "SPLIT", "SPLIT", "SPLIT", "SPLIT"}
 		if got := fake.labels(); !reflect.DeepEqual(got, wantLabels) {
 			t.Fatalf("语句序列不对:\n got=%v\nwant=%v", got, wantLabels)
 		}
@@ -1975,15 +1901,15 @@ func TestPrepareTiDBContract(t *testing.T) {
 				t.Fatalf("第 %d 步 = %+v, want Executed 且 SQL 相同", i+1, step)
 			}
 		}
-		if got := rep.SplitRegions(); got != 1+2+3+4+5+6 {
-			t.Fatalf("SplitRegions() = %d, want 21(各条 SPLIT 首列之和;ALTER 记 0)", got)
+		if got := rep.SplitRegions(); got != 1+2+3+4+5 {
+			t.Fatalf("SplitRegions() = %d, want 15(各条 SPLIT 首列之和;ALTER 记 0)", got)
 		}
 	})
 
 	t.Run("非聚簇_零ALTER零SPLIT", func(t *testing.T) {
 		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 			"VERSION": {tidbVersion},
-			"PK_TYPE": {{rows: [][]driver.Value{{"player_route", "NONCLUSTERED"}, {"zone_merge_fence", "CLUSTERED"}}}},
+			"PK_TYPE": {{rows: [][]driver.Value{{"player_route", "NONCLUSTERED"}}}},
 		}})
 		if _, err := st.PrepareTiDB(ctx, req); !errors.Is(err, ErrRouteTiDBNotClustered) {
 			t.Fatalf("err = %v, want ErrRouteTiDBNotClustered", err)
@@ -2014,15 +1940,15 @@ func TestPrepareTiDBContract(t *testing.T) {
 	})
 
 	t.Run("第4条SPLIT失败_报第几步且不再发", func(t *testing.T) {
-		splits := sixSplits()
+		splits := fiveSplits()
 		splits[3] = replyErr(mysqlErrNo(1105))
 		st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 			"VERSION": {tidbVersion}, "PK_TYPE": {clustered},
-			"ALTER_ATTR": {replyAffected(0), replyAffected(0)}, "SPLIT": splits,
+			"ALTER_ATTR": {replyAffected(0)}, "SPLIT": splits,
 		}})
 		rep, err := st.PrepareTiDB(ctx, req)
-		if err == nil || !strings.Contains(err.Error(), "step 6/8") {
-			t.Fatalf("err = %v, want 带 step 6/8", err)
+		if err == nil || !strings.Contains(err.Error(), "step 5/6") {
+			t.Fatalf("err = %v, want 带 step 5/6", err)
 		}
 		var me *mysql.MySQLError
 		if !errors.As(err, &me) || me.Number != 1105 {
@@ -2032,7 +1958,7 @@ func TestPrepareTiDBContract(t *testing.T) {
 			t.Fatalf("失败时 Steps 仍应是完整清单:%+v", rep.Steps)
 		}
 		for i, step := range rep.Steps {
-			if want := i < 5; step.Executed != want {
+			if want := i < 4; step.Executed != want {
 				t.Fatalf("第 %d 步 Executed = %t, want %t", i+1, step.Executed, want)
 			}
 		}
@@ -2060,7 +1986,7 @@ func TestPrepareTiDBContract(t *testing.T) {
 			splits[0] = tc.reply
 			st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 				"VERSION": {tidbVersion}, "PK_TYPE": {clustered},
-				"ALTER_ATTR": {replyAffected(0), replyAffected(0)}, "SPLIT": splits,
+				"ALTER_ATTR": {replyAffected(0)}, "SPLIT": splits,
 			}})
 			rep, err := st.PrepareTiDB(ctx, req)
 			if err == nil || !strings.Contains(err.Error(), "step 3/8") || !strings.Contains(err.Error(), tc.wantErr) {
@@ -2370,7 +2296,7 @@ func TestUnfreezeRaisesWatermarkBeforeFlippingWritable(t *testing.T) {
 		}
 	}
 	if got := fake.labels(); len(got) != 0 {
-		t.Fatalf("退役入口仍写水位/围栏: %v", got)
+		t.Fatalf("退役入口仍写水位: %v", got)
 	}
 }
 

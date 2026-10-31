@@ -44,36 +44,13 @@ PlayerLocatorRedis:
   DB: 0
   PoolSize: 20
 
-# 合服闸门(可选):指向 data_service 的 **mapping Redis**,guild 只读一把键
-# merge:in_progress:{zone}。键存在 = 该 zone 正在合服 → CreateGuild 拒绝
-# (见 internal/logic/merge_fence.go 顶部的完整契约)。
-#
-# DB 必须与 data_service 实际使用的一致 = **0**。注意 data_service 的
-# etc/data_service.yaml 里 MappingRedis 段**没有 DB 键**且不能加:go-zero 的
-# redis.RedisConf 根本没有 DB 字段,写了会被静默忽略(那份 yaml 里有详细说明)。
-# 填错库 = 闸门永远看不到标记 = 合服窗口内照样能在源 zone 建帮。
-#
-# 整段删掉 = 闸门不生效,启动时会打一条 "MergeMarkerRedis 未配置" 的 Info。
-#
-# RequireRouteReady(D1 第 3 批读方门禁,缺省 false = 上面的 EXISTS 判据,行为不变):
-# true 时只有 mapping Redis 的就绪标记 mapping:route:ready 可信(记下的身份就是本实例)才按闸门键判,
-# 不可信时经闸门的公会写(建帮、入帮、经济、活动等)一律按封锁拒绝;启动期试跑一次读脚本,执行不了就拒启。只在 data_service 已是 db_first、
-# 对账 leader 已挂上标记之后打开(上线顺序 P5:go/db → data_service → guild),回退时先关它。
-# 见 docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md §5.4 / §8。
-MergeMarkerRedis:
-  Host: 127.0.0.1:6379
-  Pass: ""
-  DB: 0
-  PoolSize: 20
-  RequireRouteReady: false
-
 # ---- 独占库 mmorpg_guild(D-14 §1/§5,§8 已修订)----
 # 库由 deploy/mysql-init/00_init_zone_dbs.sql 预建(存量卷需 root 手工执行那两行);表由 go/schemamigrate
 # 按 proto/guild/guild_db.proto 建。DSN 库名必须是 mmorpg_guild(config.Validate 断言)。
 # 账号用 appuser(与 go/trade/etc/trade.yaml 同账号,只对独占库有 ALL 权限)。
 MySQL:
-  # 角色归属与帮会资产共用同一TiDB强权威池，缺省拒绝本地旧MySQL。
-  RequireTiDB: true
+  # 角色归属与帮会资产共用同一事务域。后端档位 tidb | mysql,不写就是 tidb;mysql 档必须连主库。
+  Backend: tidb
   DataSource: "appuser:apppass123@tcp(127.0.0.1:3306)/mmorpg_guild?charset=utf8mb4&parseTime=true&loc=Local"
   # 连接池上限(每个副本)。不写 = 20 / 5;MaxIdleConn ≤ MaxOpenConn。K8s ConfigMap 从这两个键镜像,
   # MySQL 连接总账(k8s_deploy.ps1 Get-MysqlConnectionLedger)按 MaxOpenConn × 副本数记账。
@@ -112,7 +89,7 @@ Kafka:
 # guild 用它查角色归属区(GetPlayerHomeZone)及领取 guild_id 号段(AllocateIdSegment)。
 # 配置目标即拨号,IdSegment.Enabled=false 只关闭号段发号,不关闭归属区查询。
 # NonBlock: true —— 号段是弱依赖(设计稿 §6.5):data_service 没起时 guild 照常起服,
-# 领段失败按 IdSegment.FallbackToSnowflake 决定回退还是拒绝建帮。
+# 领段失败即拒绝建帮。
 DataServiceRpc:
   Etcd:
     Hosts:
@@ -125,19 +102,16 @@ DataServiceRpc:
     Breaker: false
 
 # guild_id 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
-# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 纯 snowflake 老路径(回滚开关)。
+# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 发不出 id,建帮一律失败。
 # Step:**初始**领段长度;之后按 Leaf 口径动态调整 —— 一段不到 15 分钟用完则下次翻倍,
 #   超过 30 分钟则减半,夹在 [MinStep, MaxStep] 内(缺省 [10, 1000])。每天重启一次时浪费
 #   最多两段(当前段 + 预取段),动态 step 把它压到最小;双 buffer 意味着库倒下后还能发完两段。
-# FallbackToSnowflake:号段失败时回退 snowflake。回退是安全的(号段 [1, 2^55) 与存量
-#   snowflake guild_id ≈6.7e16 起的值域不相交),但会让 snowflake 机器永远留着 ——
-#   默认 false:号段失败即建帮失败(tip kGuildIdGenUnavailable),§6.4 的决定。
+# 号段失败即建帮失败(tip kGuildIdGenUnavailable),没有回退:发号打散之后与 snowflake 的值域不再不相交。
 IdSegment:
   Enabled: true
   Step: 100
   MinStep: 10
   MaxStep: 1000
-  FallbackToSnowflake: false
 
 # ---- 帮会资产通道(B5b,docs/design/guild-phase2/05-economy.md §5.29;循环参数见 90-consistency.md Y-06)----
 # 捐献扣货币、商店兑换发物品都经这条通道投给玩家所在的 scene(AssetDebit / AssetCredit)。
@@ -170,13 +144,6 @@ AssetOp:
   PoisonDelayMs: 3600000
   # 连续几次投不出去之后才读已落盘账本(B5d 接上 Ledger 之前不生效)。
   LedgerReadMinAttempts: 3
-  # 资产 SQL 提交证据开关(docs/design/db-write-fencing-mysql.md §6.6 / §8.7)。不写或 false = HEAD 口径:在线按 scene
-  #   回包的 durable 终结,离线读账本与自动放弃读 Redis 父键 blob。true = 在线 / 离线终结只认 go/db 发布的 SQL 提交证据,
-  #   自动放弃要 blob 与证据都确认未见。
-  # !! 只有 guild 会投递到的 zone 全部已切 go/db Fencing.Mode=dual、已上新版 C++,并观察到证据在持续发布之后才打开;
-  #   打开前接受「已离线、尚无证据的玩家待办要等他再次存盘」。打开时没有 DataServiceRpc 即拒启。
-  #   回退顺序:先把这里改回 false,再把 zone 切回 legacy 或回退 C++。
-  RequireSQLCommit: false
   # 终态行 / 过期计数行清理(goroutine guild.asset_op_cleanup,每个副本都跑,删除幂等,PENDING 与
   # APPLIED_PARTIAL 永不删)。TerminalRetentionDays 同时是 B5d 回档检查可追溯窗口的下界,调小前先看
   # 07-rollback-fail-closed.md §7.4.2。

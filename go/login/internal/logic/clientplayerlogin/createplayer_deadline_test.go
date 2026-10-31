@@ -14,6 +14,7 @@ import (
 	"login/internal/constants"
 	"login/internal/logic/pkg/homezone"
 	dspb "proto/data_service"
+	loginpb "proto/login"
 	"shared/generated/pb/table"
 	"shared/idsegment"
 	"shared/playername"
@@ -23,7 +24,7 @@ import (
 // 建角不再发出任何新的写,只做补偿。截止之后 go-zero 超时拦截器已经给路由服回了错,gate 随即放行同一会话的
 // 下一条请求,这时再发出的写都可能晚于下一条落地。
 //
-// harness 沿用 createplayer_name_test.go(newNameHarness)与 createplayer_seed_test.go(setNewPlayerSeed)。
+// harness 沿用 createplayer_name_test.go(newNameHarness)与 本文件的 requireCreated。
 // 不能一开始就传已取消的 ctx:那样第 2 步 GetAccount 先失败,根本走不到持锁之后的那几次写;所以每个用例
 // 都在某一步**返回之后**才取消,模拟截止恰好落在两步之间。
 //
@@ -127,7 +128,6 @@ func TestCreatePlayer_RequestDoneMidCreateCommitsNothing(t *testing.T) {
 	const requested = "云中君"
 	accountKey := constants.GetAccountDataKey(hzAccount)
 	reverseKey := constants.PlayerToAccountKey(hzPlayerID)
-	seedKey := seedParentKeyFor(hzPlayerID)
 
 	cancelOnRegister := func(n *nameHarness, cancel context.CancelFunc, _ *commandProbe) {
 		n.l.svcCtx.HomeZone = homezone.New(&registerHookClient{fakeRegisterClient: n.fake, after: cancel}, 0, 0, 0)
@@ -135,14 +135,11 @@ func TestCreatePlayer_RequestDoneMidCreateCommitsNothing(t *testing.T) {
 
 	cases := []struct {
 		name       string
-		seed       bool // NewPlayerSeed.Enabled
 		arm        func(n *nameHarness, cancel context.CancelFunc, probe *commandProbe)
 		wantEvents string // data_service 调用序列
-		wantSeed   bool   // 结束时种子父键是否在
 	}{
 		{
 			name: "发号之后:名字登记一个 RPC 都不发",
-			seed: true,
 			arm: func(n *nameHarness, cancel context.CancelFunc, _ *commandProbe) {
 				n.l.svcCtx.PlayerIDMinter = &idsegment.Minter{Name: "player_id", Segment: &cancellingSegment{id: hzPlayerID, cancel: cancel}}
 			},
@@ -150,7 +147,6 @@ func TestCreatePlayer_RequestDoneMidCreateCommitsNothing(t *testing.T) {
 		},
 		{
 			name: "名字登记之后:不登记 player:zone,名字释放一次",
-			seed: true,
 			arm: func(n *nameHarness, cancel context.CancelFunc, _ *commandProbe) {
 				n.fake.reserve = func(int, *dspb.ReservePlayerNameRequest) (*dspb.ReservePlayerNameResponse, error) {
 					cancel()
@@ -160,21 +156,13 @@ func TestCreatePlayer_RequestDoneMidCreateCommitsNothing(t *testing.T) {
 			wantEvents: "reserve,release",
 		},
 		{
-			name:       "player:zone 登记之后(种子关):不发围栏写",
-			seed:       false,
-			arm:        cancelOnRegister,
-			wantEvents: "reserve,register,release",
-		},
-		{
-			name:       "player:zone 登记之后(种子开):不写种子,也不发围栏写",
-			seed:       true,
+			name:       "player:zone 登记之后:不发围栏写",
 			arm:        cancelOnRegister,
 			wantEvents: "reserve,register,release",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			setNewPlayerSeed(t, tc.seed)
 			n := newNameHarness(t)
 			before, err := n.mr.Get(accountKey)
 			if err != nil {
@@ -212,9 +200,6 @@ func TestCreatePlayer_RequestDoneMidCreateCommitsNothing(t *testing.T) {
 				if slices.Contains(args, reverseKey) {
 					t.Fatalf("command %q touched the reverse mapping after the request ctx ended", args)
 				}
-				if slices.Contains(args, seedKey) {
-					t.Fatalf("command %q touched the new-player seed after the request ctx ended", args)
-				}
 			}
 			// 下面直接读 miniredis,不经挂了钩子的客户端。
 			if after, err := n.mr.Get(accountKey); err != nil || after != before {
@@ -226,54 +211,16 @@ func TestCreatePlayer_RequestDoneMidCreateCommitsNothing(t *testing.T) {
 			if n.mr.Exists(nameCreateKey) {
 				t.Fatal("create lock still held after CreatePlayer returned on an ended request ctx")
 			}
-			if got := n.mr.Exists(seedKey); got != tc.wantSeed {
-				t.Fatalf("seed parent key exists = %v, want %v", got, tc.wantSeed)
-			}
 		})
 	}
 }
 
-// 原种子返回后取消场景迁到真实提交点之后：缓存不是SQL提交的回滚权。
-func TestCreatePlayer_DeadlineAfterCommittedSeedKeepsSQLRoleAndName(t *testing.T) {
-	const requested = "云中君"
-	setNewPlayerSeed(t, true)
-	n := newNameHarness(t)
-	ctx, cancel := context.WithCancel(n.l.ctx)
-	defer cancel()
-	n.l.ctx = ctx
-	seedKey := seedParentKeyFor(hzPlayerID)
-	commits := 0
-	fixtureDirectory(t, n.rdb).afterCommit = func() { commits++ }
-	probe := &commandProbe{req: ctx, cancel: cancel}
-	probe.cancelWhen = func(cmd redis.Cmder) bool {
-		return commits == 1 && slices.Contains(cmdArgs(cmd), seedKey)
+func requireCreated(t *testing.T, resp *loginpb.CreatePlayerResponse, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("CreatePlayer: %v", err)
 	}
-	n.rdb.AddHook(probe)
-
-	resp := n.create(t, requested)
-	if commits != 1 || ctx.Err() == nil || !n.mr.Exists(seedKey) {
-		t.Fatalf("提交后种子取消前提不成立: commits=%d canceled=%v seed=%v", commits, ctx.Err(), n.mr.Exists(seedKey))
-	}
-	requireCreated(t, resp, nil)
-	owned, err := n.l.svcCtx.AccountDirectory.Lookup(context.Background(), hzPlayerID)
-	if err != nil || owned == nil || owned.Account != hzAccount || owned.Role.GetName() != requested {
-		t.Fatalf("已提交SQL角色/名字未保留: %v/%v", owned, err)
-	}
-	players := storedPlayers(t, context.Background(), n.rdb)
-	if len(players) != 1 || players[0].GetPlayerId() != hzPlayerID || players[0].GetName() != requested {
-		t.Fatalf("已提交SQL目录未保留: %v", players)
-	}
-	if got := strings.Join(n.fake.events, ","); got != "reserve,register" || len(n.fake.releaseReqs) != 0 || len(n.scheduled) != 0 {
-		t.Fatalf("提交后错误释放名字或发送后续目录写: events=%q releases=%d delayed=%v", got, len(n.fake.releaseReqs), n.scheduled)
-	}
-	for _, args := range probe.afterDone {
-		for _, key := range []string{constants.GetAccountDataKey(hzAccount), constants.PlayerToAccountKey(hzPlayerID), seedKey} {
-			if slices.Contains(args, key) {
-				t.Fatalf("取消后仍触碰账号/反查/种子缓存: %q", args)
-			}
-		}
-	}
-	if n.mr.Exists(nameCreateKey) {
-		t.Fatal("提交后请求取消仍未释放建角锁")
+	if resp.ErrorMessage != nil {
+		t.Fatalf("unexpected tip %v", resp.ErrorMessage)
 	}
 }

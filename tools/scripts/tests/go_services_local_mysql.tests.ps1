@@ -38,14 +38,13 @@ ListenOn: 0.0.0.0:6000
 ZoneId: 1
 ServerConfig:
   Database:
-    RequireTiDB: true # 保持源严格配置
+    Backend: tidb # 保持源严格配置
     Hosts: "127.0.0.1:3306"
     Passwd: fixture-only
     AutoCreateDatabase: false
     AutoMigrateSchema: false
-  Fencing:
-    Mode: dual
-    EpochOverride: true
+  PlayerStore:
+    MaxRowBytes: 1048576
 '@
 $fixture = ($fixture -replace '\r?\n', "`r`n") + "`r`n"
 $sourceConfig = Join-Path $GoRoot 'db/etc/db.yaml'
@@ -88,7 +87,7 @@ try {
         Assert-Equal 1 $parameter.Count '正式入口显式声明 LocalMySQL'
         Assert-Equal $null $parameter[0].DefaultValue '开关没有默认开启表达式'
     }
-    Test-Case '本机副本只改布尔值，源和dual/围栏其余字节不变' {
+    Test-Case '本机副本只改布尔值，源和其余字节不变' {
         Reset-Fixture
         $LocalMySQL = $true
         $sourceHash = (Get-FileHash -LiteralPath $sourceConfig -Algorithm SHA256).Hash
@@ -96,13 +95,13 @@ try {
         Assert-Equal (Join-Path $DerivedEtcDir 'db.yaml') $result.Path '标准派生绝对路径'
         Assert-Equal $true $result.Derived '显式本机档必定派生'
         $actual = Get-Content -LiteralPath $result.Path -Raw
-        Assert-Equal ($fixture.Replace('RequireTiDB: true', 'RequireTiDB: false')) $actual '只替换该布尔值，保留 CRLF 和所有其它配置'
+        Assert-Equal ($fixture.Replace('Backend: tidb', 'Backend: mysql')) $actual '只替换该布尔值，保留 CRLF 和所有其它配置'
         Assert-Equal $sourceHash (Get-FileHash -LiteralPath $sourceConfig -Algorithm SHA256).Hash '源文件字节不变'
     }
     foreach ($address in @('localhost:3306', '[::1]:3306', '127.0.0.2:3306')) {
         Test-Case "回环单端点 $address 可显式使用本机档" {
             $content = $fixture.Replace('127.0.0.1:3306', $address)
-            Assert-Equal ($content.Replace('RequireTiDB: true', 'RequireTiDB: false')) (ConvertTo-LocalMySQLDbConfig $content) '回环地址可转换且不改其它内容'
+            Assert-Equal ($content.Replace('Backend: tidb', 'Backend: mysql')) (ConvertTo-LocalMySQLDbConfig $content) '回环地址可转换且不改其它内容'
         }
     }
     foreach ($address in @('203.0.113.9:3306', 'mysql.example.com:3306', 'localhost.example.com:3306', '127.0.0.1:0', '127.0.0.1:65536', '127.0.0.999:3306')) {
@@ -113,7 +112,7 @@ try {
     Test-Case '重复字段、缺少字段和别名均拒绝，不静默猜测' {
         foreach ($invalid in @(
             $fixture.Replace('    Hosts:', "    Hosts: 127.0.0.1:3306`r`n    Hosts:"),
-            $fixture.Replace('    RequireTiDB: true # 保持源严格配置', ''),
+            $fixture.Replace('    Backend: tidb # 保持源严格配置', ''),
             $fixture.Replace('  Database:', '  Database: *other')
         )) { Assert-True (-not [string]::IsNullOrEmpty((Get-ThrownMessage { ConvertTo-LocalMySQLDbConfig $invalid }))) '歧义配置明确拒绝' }
     }
@@ -134,7 +133,7 @@ try {
         Assert-Equal $true $result.Derived '显式全球地址仍触发正式派生流程'
         $actual = Get-Content -LiteralPath $result.Path -Raw
         Assert-Match $actual 'Hosts: "tidb\.example\.com:4000"' '进程使用显式全球地址'
-        Assert-Match $actual 'RequireTiDB: true' '未启用本机档不降低 TiDB 要求'
+        Assert-Match $actual 'Backend: tidb' '未启用本机档不降低 TiDB 要求'
         Assert-Equal $sourceHash (Get-FileHash -LiteralPath $sourceConfig -Algorithm SHA256).Hash '源配置不变'
     }
     Test-Case '全球 SQL 地址覆盖不能绕过本机档的回环护栏' {
@@ -156,8 +155,8 @@ try {
         Assert-Equal (Join-Path $DerivedEtcDir 'db.yaml') $result.Path '组合开关使用同一正式派生路径'
         $actual = Get-Content -LiteralPath $result.Path -Raw
         Assert-Match $actual 'Hosts: "127\.0\.0\.2:4000"' '最终回环覆盖地址生效'
-        Assert-Match $actual 'RequireTiDB: false' '明确回环端点可以启用本机档'
-        Assert-Match $actual 'Mode: dual' '组合开关保留围栏模式'
+        Assert-Match $actual 'Backend: mysql' '明确回环端点可以启用本机档'
+        Assert-Match $actual 'MaxRowBytes: 1048576' 'combined switches keep the rest of the config'
         Assert-Equal $sourceHash (Get-FileHash -LiteralPath $sourceConfig -Algorithm SHA256).Hash '源配置不变'
     }
     Test-Case '端口避让仍使用同一标准派生路径并保留本机档' {
@@ -168,7 +167,7 @@ try {
         Assert-Equal 6001 $result.Port '保留既有端口分配结果'
         Assert-Equal (Join-Path $DerivedEtcDir 'db.yaml') $result.Path '不创建平行配置路径'
         Assert-Match (Get-Content -LiteralPath $result.Path -Raw) 'ListenOn: 0.0.0.0:6001' '配置监听端口一致'
-        Assert-Match (Get-Content -LiteralPath $result.Path -Raw) 'RequireTiDB: false' '避让不丢本机档'
+        Assert-Match (Get-Content -LiteralPath $result.Path -Raw) 'Backend: mysql' '避让不丢本机档'
     }
     Test-Case '本机档不改变其他服务的 TiDB 配置' {
         Reset-Fixture
@@ -178,7 +177,7 @@ try {
         Set-Content -LiteralPath $otherConfig -Value ($fixture.Replace('127.0.0.1:3306', '203.0.113.9:3306')) -NoNewline
         $result = Resolve-InstanceConfig -Name data_service -Info $ServiceCatalogue.data_service -Index 1 -Total 1
         Assert-Equal $false $result.Derived '其他服务不受本机db档影响'
-        Assert-Match (Get-Content -LiteralPath $otherConfig -Raw) 'RequireTiDB: true' '其他服务的严格要求不变'
+        Assert-Match (Get-Content -LiteralPath $otherConfig -Raw) 'Backend: tidb' '其他服务的严格要求不变'
     }
     Test-Case '多区仍沿用正式区前缀路径和监听位移' {
         Reset-Fixture
@@ -187,8 +186,8 @@ try {
         $result = Resolve-InstanceConfig -Name db -Info $ServiceCatalogue.db -Index 1 -Total 1
         Assert-Equal (Join-Path $DerivedEtcDir 'z2_db.yaml') $result.Path '多区继续使用正式路径'
         Assert-Equal 7000 $result.Port '沿用区端口位移'
-        Assert-Match (Get-Content -LiteralPath $result.Path -Raw) 'RequireTiDB: false' '多区显式本机档生效'
-        Assert-Match (Get-Content -LiteralPath $result.Path -Raw) 'Mode: dual' '多区仍保留dual'
+        Assert-Match (Get-Content -LiteralPath $result.Path -Raw) 'Backend: mysql' '多区显式本机档生效'
+        Assert-Match (Get-Content -LiteralPath $result.Path -Raw) 'MaxRowBytes: 1048576' 'multi-zone keeps the rest of the config'
     }
     Test-Case '正式进程启动收到派生配置，普通PID身份核对也承认' {
         Reset-Fixture

@@ -3595,7 +3595,7 @@ const char descriptor_table_protodef_proto_2fteam_2fteam_5fauthority_2eproto[] A
     "cord\030\003 \001(\0132\022.teampb.TeamRecord\022,\n\010origin"
     "al\030\004 \001(\0132\032.teampb.TeamLaunchOriginal\0224\n\017"
     "spectator_exits\030\005 \003(\0132\033.match.MatchSpect"
-    "atorRecord\"\221\004\n\020TeamLaunchRecord\022\020\n\010actor"
+    "atorRecord\"\341\004\n\020TeamLaunchRecord\022\020\n\010actor"
     "_id\030\001 \001(\004\022\024\n\014request_high\030\002 \001(\004\022\023\n\013reque"
     "st_low\030\003 \001(\004\022\017\n\007team_id\030\004 \001(\004\022\024\n\014team_ve"
     "rsion\030\005 \001(\004\022\022\n\nlock_token\030\006 \001(\t\022\021\n\tconfi"
@@ -3604,10 +3604,12 @@ const char descriptor_table_protodef_proto_2fteam_2fteam_5fauthority_2eproto[] A
     "_ms\030\013 \001(\004\022\025\n\rnot_before_ms\030\014 \001(\004\022\021\n\tbatt"
     "le_id\030\r \001(\004\022\017\n\007payload\030\016 \001(\014\022\025\n\rowner_ac"
     "count\030\017 \001(\t\022\026\n\016owner_revision\030\020 \001(\004\022\014\n\004m"
-    "ode\030\021 \001(\r:\252\001\212\222\364\001\013team_launch\222\222\364\001!actor_i"
-    "d,request_high,request_low\332\222\364\001ostate,enq"
-    "ueued_ms,actor_id,request_high,request_l"
-    "ow;team_id,state,enqueued_ms,actor_id,re"
+    "ode\030\021 \001(\r:\372\001\212\222\364\001\013team_launch\222\222\364\001!actor_i"
+    "d,request_high,request_low\332\222\364\001\276\001state,en"
+    "queued_ms,actor_id,request_high,request_"
+    "low;team_id,state,enqueued_ms,actor_id,r"
+    "equest_high,request_low;state,mode,confi"
+    "g_id,target_size,enqueued_ms,actor_id,re"
     "quest_high,request_low\"\201\007\n\026TeamLaunchReg"
     "ionRecord\022\020\n\010actor_id\030\001 \001(\004\022\024\n\014request_h"
     "igh\030\002 \001(\004\022\023\n\013request_low\030\003 \001(\004\022\027\n\017physic"
@@ -3655,7 +3657,7 @@ static ::absl::once_flag descriptor_table_proto_2fteam_2fteam_5fauthority_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fteam_2fteam_5fauthority_2eproto = {
     false,
     false,
-    4456,
+    4536,
     descriptor_table_protodef_proto_2fteam_2fteam_5fauthority_2eproto,
     "proto/team/team_authority.proto",
     &descriptor_table_proto_2fteam_2fteam_5fauthority_2eproto_once,

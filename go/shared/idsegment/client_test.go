@@ -99,8 +99,28 @@ func mustNew(t *testing.T, rpc AllocateFunc, opt Options) *Client {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 这个文件的用例断言的是计数器值;打散本身由 TestNext_EmitsMixedID 和 mix_test.go 覆盖。
+	c.emit = func(x uint64) uint64 { return x }
 	t.Cleanup(c.Close)
 	return c
+}
+
+// 生产构造的客户端发出去的必须是打散后的 id,不能是计数器值。
+func TestNext_EmitsMixedID(t *testing.T) {
+	c, err := New(newCounterAlloc().Allocate, Options{BizTag: "player", Step: 10, Logger: &capLog{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(c.Close)
+	for want := uint64(1); want <= 3; want++ {
+		id, err := c.Next(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if id != MixID(want) {
+			t.Fatalf("Next = %d, want MixID(%d) = %d", id, want, MixID(want))
+		}
+	}
 }
 
 func TestNew_RejectsInvalidOptions(t *testing.T) {
@@ -114,7 +134,7 @@ func TestNew_RejectsInvalidOptions(t *testing.T) {
 		{"empty biz tag", ok, Options{Step: 1}},
 		{"zero step", ok, Options{BizTag: "x"}},
 		{"prefetch > 1", ok, Options{BizTag: "x", Step: 1, PrefetchAt: 1.5}},
-		{"max id above 2^55", ok, Options{BizTag: "x", Step: 1, MaxIDExclusive: DefaultMaxIDExclusive + 1}},
+		{"max id above 2^63", ok, Options{BizTag: "x", Step: 1, MaxIDExclusive: DefaultMaxIDExclusive + 1}},
 		{"min step above step", ok, Options{BizTag: "x", Step: 5, MinStep: 6}},
 		{"max step below step", ok, Options{BizTag: "x", Step: 50, MaxStep: 40}},
 	}
@@ -302,8 +322,9 @@ func TestValidation_RejectsBadRanges(t *testing.T) {
 		{"empty range", [][2]uint64{{5, 5}}, "hi <= lo"},
 		{"inverted range", [][2]uint64{{10, 5}}, "hi <= lo"},
 		{"hi above cap", [][2]uint64{{DefaultMaxIDExclusive - 5, DefaultMaxIDExclusive + 5}}, "max_id_exclusive"},
-		{"overlap with previous", [][2]uint64{{1, 11}, {5, 15}}, "regressed/overlapped"},
-		{"regression", [][2]uint64{{100, 110}, {1, 11}}, "regressed/overlapped"},
+		{"overlap with previous", [][2]uint64{{1, 11}, {5, 15}}, "overlaps"},
+		{"same range twice", [][2]uint64{{100, 110}, {100, 110}}, "overlaps"},
+		{"overlap with an older range", [][2]uint64{{100, 110}, {200, 210}, {105, 115}}, "overlaps"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -877,5 +898,40 @@ func TestDrainAndReportPreservesInvalidRange(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// 发号器有多个副本,每个副本从自己的块里切段,同一个客户端先后领到的段不保证递增。
+// 只要不重叠就要接受,否则两个副本之间来回切换时客户端会把好段当成服务端 bug 拒掉。
+func TestRangesFromDifferentIssuerReplicasMayGoBackwards(t *testing.T) {
+	ranges := [][2]uint64{{1000, 1002}, {100, 102}, {2000, 2002}}
+	var mu sync.Mutex
+	i := 0
+	c := mustNew(t, func(context.Context, string, uint32) (uint64, uint64, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if i >= len(ranges) {
+			return 0, 0, errors.New("no more scripted ranges")
+		}
+		r := ranges[i]
+		i++
+		return r[0], r[1], nil
+	}, Options{BizTag: "player", Step: 2, RetryBackoff: time.Millisecond})
+	want := []uint64{1000, 1001, 100, 101, 2000, 2001}
+	for _, id := range want {
+		got, err := c.Next(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != id {
+			t.Fatalf("Next = %d, want %d", got, id)
+		}
+	}
+	st := c.Stats()
+	if st.RangeViolations != 0 {
+		t.Fatalf("RangeViolations = %d, want 0", st.RangeViolations)
+	}
+	if st.HighWater != 2002 {
+		t.Fatalf("HighWater = %d, want 2002", st.HighWater)
 	}
 }

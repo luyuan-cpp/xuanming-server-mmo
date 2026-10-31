@@ -19,6 +19,7 @@
 | topic | 时间保留配置 | 配置与恢复语义 |
 |---|---|---|
 | `gate-cmd_g<N>`、`scene-cmd_g<N>` | 显式 1 小时 | 初始化脚本预建；节点 assign 固定分区、启动从末尾消费，不提交共享 offset。`target_instance_id` 必填；重启期间命令的恢复由上层负责。见[控制面分区契约](./control-plane-topic-partitioning-20260908.md)。 |
+| `gate-spectate_g<N>`、`spectate-bcast_g<N>` | 显式 10 分钟 | 观战帧（battle-spectate-tiered-fanout.md §15.3）。初始化脚本预建，gate 从末尾消费、不提交 offset；帧过期无用，每帧都带全量状态，丢了由下一帧自愈。 |
 | `gate-<id>`、`scene-<id>` | 继承 broker 配置，除非另有 topic 覆盖 | 兼容消费路径，不再预建。本机 `DisableLegacyPerNodeTopic=false`，K8s 节点模板为 `true`；按目标环境核对。 |
 | `game-events` | Compose 显式 1 小时 | 本机初始化保留的共享事件 topic；不能据此推断已有业务消费者。K8s 初始化 Job 只预建命令与审计 topic。 |
 | `db_task_zone_<zone>`；世代 ≥2 带 `_g<N>` | 本机 Go 缺省 24 小时；K8s 按档位，见下节 | login 与 db 启动时共同声明相同的分区及保留配置。实际缓冲还受容量限制，投递、补投与盘预算见[DBTask 设计 §B](./db-task-delivery-and-retention.md)。 |

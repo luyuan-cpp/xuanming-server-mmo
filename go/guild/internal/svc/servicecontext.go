@@ -76,10 +76,6 @@ type ServiceContext struct {
 	// IdSegment.Enabled=false 时为 nil。**没有** snowflake 回退(op_id 是 outbox 主键),
 	// guild.go 据 nil 把 EconomyDeps.OpIDs 留成 nil 接口。见 asset_op.go 的 initAssetOpIDSegment。
 	AssetOpIDSegment *idsegment.Client
-	// MergeMarkerRedisClient 指向 data_service 的 mapping Redis,只用来读
-	// merge:in_progress:{zone}(合服闸门,见 internal/logic/merge_fence.go)。
-	// 没配 MergeMarkerRedis 时为 nil = 闸门不生效。
-	MergeMarkerRedisClient *redis.Client
 	// MatchInternal 是 match 内部服务的客户端(同道历练确认开战,06-activities.md §6.22 / §6.26)。
 	// 没配 MatchRpc 目标时是 **nil 接口** = 历练未开放;guild.go 把它原样赋给 logic.ActivityDeps.Match
 	// (接口赋接口,nil 仍是 nil),并在 !Config.TrialResultActive() 时改传 nil —— 没有结算就不许开战。
@@ -201,7 +197,6 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		DB:                       db,
 		KafkaWriter:              w,
 		GateCommandBuilder:       guildkafka.NewGateCommandBuilder(),
-		MergeMarkerRedisClient:   newMergeMarkerRedis(c),
 		// 服务名 "guild" 只作 player_sync_bump_total 的 service label(有界常量,不带任何 id)。
 		PlayerSyncBumper:      playersync.NewBumper(playersync.NewGoRedisEvaler(syncRdb), playerSyncServiceName),
 		PlayerSyncRedisClient: syncRdb,
@@ -235,7 +230,7 @@ func openMySQL(ctx context.Context, c config.MySQLConf, permission authoritysql.
 		return nil, err
 	}
 	maxOpen, maxIdle := c.EffectivePool()
-	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, c.RequiresTiDB(), maxOpen, permission)
+	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.Backend), maxOpen, permission)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +248,7 @@ func OpenSchemaMySQL(ctx context.Context, c config.MySQLConf) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return authoritysql.OpenForMigration(ctx, dsn, data.DatabaseName, c.RequiresTiDB(), permission)
+	return authoritysql.OpenForMigration(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.Backend), permission)
 }
 
 // initMatchInternalClient 按 MatchRpc 建 match 内部服务客户端;没配目标时保持 nil 接口(历练未开放)。
@@ -302,32 +297,6 @@ func newPlayerSyncRedis(conf config.RedisConf) *redis.Client {
 		WriteTimeout:          playerSyncRedisIOTimeout,
 		PoolSize:              playerSyncRedisPoolSize,
 	})
-}
-
-// newMergeMarkerRedis 建合服闸门用的只读 Redis 客户端;没配 = nil = 闸门不生效。
-//
-// 与上面两个客户端刻意不同:**Ping 失败不 panic**。那两个是 guild 的命脉(缓存 /
-// 在场查询),连不上就没有可用形态;这一个只喂一次 EXISTS,而且运行期读失败已经
-// fail-closed(见 logic.mergeFenceTip:查不到就拒绝建帮)。为一个可选加固的
-// 瞬时不可达而拒启,等于把"合服期多一道锁"换成"平时多一个启动失败点"。
-func newMergeMarkerRedis(c config.Config) *redis.Client {
-	if !c.MergeMarkerRedis.Enabled() {
-		logx.Info("[ServiceContext] MergeMarkerRedis not configured: merge gate inactive, CreateGuild does not check merge:in_progress:{zone} (guilds can still be created in source zone during merge maintenance)")
-		return nil
-	}
-	cli := redis.NewClient(&redis.Options{
-		Addr:     c.MergeMarkerRedis.Host,
-		Password: c.MergeMarkerRedis.Pass,
-		DB:       c.MergeMarkerRedis.DB,
-		PoolSize: c.MergeMarkerRedis.PoolSize,
-	})
-	if err := cli.Ping(context.Background()).Err(); err != nil {
-		logx.Errorf("[ServiceContext] Merge gate Redis %s DB=%d temporarily unreachable (client retained, automatic reconnect); CreateGuild will reject fail-closed until recovery: %v",
-			c.MergeMarkerRedis.Host, c.MergeMarkerRedis.DB, err)
-		return cli
-	}
-	logx.Infof("[ServiceContext] Merge gate enabled: %s DB=%d, key merge:in_progress:{zone}", c.MergeMarkerRedis.Host, c.MergeMarkerRedis.DB)
-	return cli
 }
 
 // BindDrainRuntime 将维护原件绑定到已经消费的同一 SQL boot，不重新读 grant。
@@ -467,9 +436,6 @@ func (s *ServiceContext) StopAndReport(ctx context.Context) error {
 	var result error
 	if s.PlayerSyncRedisClient != nil {
 		result = errors.Join(result, s.PlayerSyncRedisClient.Close())
-	}
-	if s.MergeMarkerRedisClient != nil {
-		result = errors.Join(result, s.MergeMarkerRedisClient.Close())
 	}
 	if s.PlayerLocatorRedisClient != nil {
 		result = errors.Join(result, s.PlayerLocatorRedisClient.Close())

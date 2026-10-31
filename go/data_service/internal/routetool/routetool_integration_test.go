@@ -35,7 +35,7 @@ func toolMaintenanceStore(t *testing.T, db *storetest.DB, receipt *pb.SqlWriterM
 	t.Helper()
 	cfg, err := db.MaintenanceCfg(context.Background())
 	require.NoError(t, err)
-	st, err := store.NewRouteStore(cfg, store.RouteStoreOptions{FenceShards: placement.DefaultRouteFenceShards, Writer: store.NewRouteWriterID("route_tool_it", "localhost"), MaintenanceFreeze: receipt})
+	st, err := store.NewRouteStore(cfg, store.RouteStoreOptions{Writer: store.NewRouteWriterID("route_tool_it", "localhost"), MaintenanceFreeze: receipt})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	return st
@@ -44,8 +44,7 @@ func toolMaintenanceStore(t *testing.T, db *storetest.DB, receipt *pb.SqlWriterM
 func TestRouteToolImportThenAuditOnRealStore(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	st, err := store.NewRouteStore(db.Cfg, store.RouteStoreOptions{
-		FenceShards: placement.DefaultRouteFenceShards,
-		Writer:      store.NewRouteWriterID("route_tool_it", "localhost"),
+		Writer: store.NewRouteWriterID("route_tool_it", "localhost"),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
@@ -142,8 +141,7 @@ func TestRouteToolImportThenAuditOnRealStore(t *testing.T) {
 func TestReconcileFromCache_RealDBEndToEnd(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	st, err := store.NewRouteStore(db.Cfg, store.RouteStoreOptions{
-		FenceShards: placement.DefaultRouteFenceShards,
-		Writer:      store.NewRouteWriterID("route_tool_it", "localhost"),
+		Writer: store.NewRouteWriterID("route_tool_it", "localhost"),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
@@ -231,7 +229,7 @@ func TestReconcileFromCache_RealDBEndToEnd(t *testing.T) {
 	require.Equal(t, ExitClean, UnfreezeExitCode(urep, err), uerr.String())
 	assert.True(t, urep.Changed)
 	require.NoError(t, db.ReopenAfterRelease(ctx))
-	normal, err := store.NewRouteStore(db.Cfg, store.RouteStoreOptions{FenceShards: placement.DefaultRouteFenceShards, Writer: store.NewRouteWriterID("route_tool_it", "localhost")})
+	normal, err := store.NewRouteStore(db.Cfg, store.RouteStoreOptions{Writer: store.NewRouteWriterID("route_tool_it", "localhost")})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = normal.Close() })
 	res, err := normal.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 9199, HomeZone: 1})
@@ -245,8 +243,7 @@ func TestReconcileFromCache_RealDBEndToEnd(t *testing.T) {
 func TestUnfreeze_RealDBRaisesWatermarkToKey(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	st, err := store.NewRouteStore(db.Cfg, store.RouteStoreOptions{
-		FenceShards: placement.DefaultRouteFenceShards,
-		Writer:      store.NewRouteWriterID("route_tool_it", "localhost"),
+		Writer: store.NewRouteWriterID("route_tool_it", "localhost"),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })

@@ -1617,6 +1617,7 @@ foreach ($case in $NoDriftCases) {
 # 不经错误视图折行,可以整句断言。其余生产密钥给齐合法值,保证拒绝只能来自这一把。
 $ProdSecretEnv = @{
     MMORPG_GATE_TOKEN_SECRET    = 'contract-ce-gate-token-0123456789abcdef0123'
+    MMORPG_SPECTATE_TOKEN_SECRET = 'contract-ce-spectate-token-0123456789abcdef'
     MMORPG_INTERNAL_AUTH_SECRET = 'contract-ce-internal-auth-0123456789abcdef'
     MMORPG_MYSQL_USER           = 'contract_ce_app'
     MMORPG_MYSQL_PASSWORD       = 'contract-ce-mysql-pw-01'
@@ -1739,11 +1740,11 @@ $ClientEntryWrapperKeys = @('ClientEntryMode', 'ClientPublicHost', 'GateClientHo
 $RedisSplitWrapperKeys = @('RedisSplit', 'ConfirmRedisSplitSwitch', 'RedisQueueMaxMemory')
 $WrapperPairs = @(
     @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'
-        Forwarded = $ClientEntryWrapperKeys + @('GatewayIngressHost', 'GatewayIngressClassName', 'GatewayIngressTlsSecret', 'GatewayTrustedProxies', 'LoginDevPasswordAuth', 'GateRouterMode', 'DbConsumerGroup',
+        Forwarded = $ClientEntryWrapperKeys + @('GatewayIngressHost', 'GatewayIngressClassName', 'GatewayIngressTlsSecret', 'GatewayTrustedProxies', 'LoginDevPasswordAuth', 'GateRouterMode',
             # login 第三方登录(微信 / QQ)与它的防误关确认开关:不粘滞,包装入口漏传 = 重新部署时关掉或改掉线上第三方登录。
             'LoginWeChatAppId', 'LoginWeChatEndpoint', 'LoginWeChatAllowOpenId', 'LoginQQAppId', 'LoginQQEndpoint', 'LoginQQAllowOpenId', 'ConfirmLoginAuthProviderChange',
             # D1 映射开关与它的粘滞确认开关:k8s_deploy 读线上现状防翻转,包装入口漏传 = 集群切 db_first 之后经本入口的部署一律被拒。
-            'RouteStoreMode', 'RouteReconcileArm', 'RouteReadRequiresReady', 'DbPlacementRequireRouteReady', 'GuildRequireRouteReady', 'ConfirmRouteSwitchChange',
+            'RouteStoreMode', 'RouteReconcileArm', 'RouteReadRequiresReady', 'DbPlacementRequireRouteReady', 'ConfirmRouteSwitchChange',
             # B0-4 nofile 豁免开关:不粘滞,包装入口漏传 = 以 warn 运行的环境经包装入口重新部署时落回 enforce、硬限不够即拒启。
             # 其后 + 拼上共享 Redis 按用途拆实例(G4a 第 1a 批)的键:漏传 -RedisSplit = 想切回共享拓扑(被 k8s_deploy 的切换闸拦下),
             # 漏传确认 / 容量 = 切不过去;k8s-redis-wipe 的确认开关只走这一条包装链。用 + 拼接而不写进本逗号列表:逗号比 + 结合得紧,会变成嵌套数组。

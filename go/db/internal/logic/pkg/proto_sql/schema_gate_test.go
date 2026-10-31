@@ -112,7 +112,7 @@ func TestSchemaGateRejectsMissingColumn(t *testing.T) {
 }
 
 // 缺表且 up 会跑基线时必须拒启。zone 库由 deploy/mysql-init 预建成空库、启动器与 K8s 都不跑迁移,
-// 若只把「查不到表」当告警,进程照常起、每条 db_task 以 Error 1146 进死信 —— 正是这道闸要防的静默故障。
+// 若只把「查不到表」当告警,进程照常起、每次存盘都以 Error 1146 失败 —— 正是这道闸要防的静默故障。
 func TestSchemaGateRejectsMissingTableWithoutCleanBaseline(t *testing.T) {
 	cases := []struct {
 		name          string

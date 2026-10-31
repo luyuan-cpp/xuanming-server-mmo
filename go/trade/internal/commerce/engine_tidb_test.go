@@ -68,7 +68,6 @@ func openEngineDB(t *testing.T, dsn string, requireTiDB bool) *Engine {
 	require.NoError(t, err)
 	ops, err := data.NewAssetOpRepo(db, 3*time.Second)
 	require.NoError(t, err)
-	require.NoError(t, ops.EnsureSeqGuardRow(context.Background(), uint64(time.Now().UnixMilli())))
 	return &Engine{Repo: &data.CommerceRepo{DB: db, Ops: ops}, IDs: &testIDs{}, OpIDs: &testIDs{}, Policy: Policy{Items: []uint32{10}, ItemTitles: map[uint32]string{10: "玄铁"}, Currencies: []uint32{1}}, Now: time.Now, Roles: fixtureRoles{}}
 }
 func tick(t *testing.T, e *Engine) {
@@ -166,6 +165,52 @@ func TestTiDBPlayerTradeRequiresBothEscrowSummariesAndReturnsOnCancel(t *testing
 	settleLegs(t, e, 2)
 	tick(t, e)
 	r, _ = state(t, e, offer.CommerceId)
+	require.Equal(t, Cancelled, r.Status)
+}
+
+// 材料订单的托管腿没有截止(ExpiresMs=0)。托管扣款可能一直回 RETRY 而不记终态(按数量扣出遇到带更新版本字段的
+// 物品,混版本设计 §4.4 第 6 批),所以卖家在托管阶段必须能撤:撤单把在途托管扣款截止到当下,资产通道据此改发 Abort。
+// 没扣到 → 按取消收口、无可退;Abort 输给已落地的扣款 → 照常进盘口后立刻按撤单整单退回。
+func TestTiDBSellerCancelsMarketOrderStillInEscrow(t *testing.T) {
+	e := tiDBEngine(t)
+	ctx := context.Background()
+	place := func(requestID string) (uint64, uint64) {
+		r, err := e.PlaceMarket(ctx, 11, &tradepb.PlaceMarketOrderRequest{ClientRequestId: requestID, MarketId: 1, ItemConfigId: 10, Side: 2, UnitPrice: 10, Quantity: 2, CurrencyType: 1})
+		require.NoError(t, err)
+		require.NoError(t, e.advance(ctx, r))
+		var opID, deadline uint64
+		require.NoError(t, e.Repo.DB.QueryRow("SELECT op_id,deadline_ms FROM trade_asset_op WHERE ref_id=? AND stream=3", r.CommerceId).Scan(&opID, &deadline))
+		require.Zero(t, deadline, "材料订单的托管扣款没有截止")
+		_, w := state(t, e, r.CommerceId)
+		require.Equal(t, "escrow", w.Stage)
+		_, err = e.Mutate(ctx, 11, r.CommerceId, "cancel")
+		require.NoError(t, err, "托管阶段卖家可以撤单")
+		require.NoError(t, e.Repo.DB.QueryRow("SELECT deadline_ms FROM trade_asset_op WHERE op_id=?", opID).Scan(&deadline))
+		require.NotZero(t, deadline, "撤单把在途托管扣款截止到当下")
+		return r.CommerceId, opID
+	}
+
+	aborted, _ := place("market-escrow-cancel-aborted")
+	settleLegs(t, e, uint32(tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_ABORTED))
+	r, _ := state(t, e, aborted)
+	require.NoError(t, e.advance(ctx, r))
+	r, w := state(t, e, aborted)
+	require.Equal(t, Cancelled, r.Status, "没扣到:按取消收口")
+	require.Nil(t, leg(w, "seller_return"), "没扣到就没有可退的")
+
+	applied, _ := place("market-escrow-cancel-applied")
+	settleLegs(t, e, uint32(tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_APPLIED))
+	r, _ = state(t, e, applied)
+	require.NoError(t, e.advance(ctx, r))
+	r, w = state(t, e, applied)
+	require.Equal(t, CancelPending, r.Status)
+	require.Equal(t, "return", w.Stage, "已扣到:不进盘口撮合,直接按撤单退回")
+	require.NotNil(t, leg(w, "seller_return"))
+	require.EqualValues(t, 2, leg(w, "seller_return").Bundle.Items[0].Count, "整单未成交,全数退回")
+	settleLegs(t, e, uint32(tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_APPLIED))
+	r, _ = state(t, e, applied)
+	require.NoError(t, e.advance(ctx, r))
+	r, _ = state(t, e, applied)
 	require.Equal(t, Cancelled, r.Status)
 }
 

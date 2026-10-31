@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/luyuancpp/proto2mysql"
+	messageoption "github.com/luyuancpp/protooption"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -38,6 +39,10 @@ func extractMessageNamesFromProto(protoFile string) ([]string, error) {
 
 		pkgName := fileDesc.GetPackage()
 		for _, msgDesc := range fileDesc.GetMessageType() {
+			// 只有声明了表名的消息才建表:player_database / player_database_1 是存盘的内存形状,不是表。
+			if tableName, _ := proto.GetExtension(msgDesc.GetOptions(), messageoption.E_OptionTableName).(string); tableName == "" {
+				continue
+			}
 			var fullName string
 			if pkgName == "" {
 				fullName = msgDesc.GetName() // no package, use message name directly

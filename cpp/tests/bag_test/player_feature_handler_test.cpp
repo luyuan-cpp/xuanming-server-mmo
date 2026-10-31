@@ -134,6 +134,7 @@ protected:
         auto& segment = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
         segment.Reset();
         GuidSegmentClient::Options options;
+        options.mixIds = false;
         options.kindName = "item";
         options.initialStep = 100000;
         if (!segment.Enable(options, [](const std::string&, uint32_t) { return true; },
@@ -742,7 +743,8 @@ protected:
     uint32_t playerDimensionId{0};
 };
 
-// 本版本表里没有的维度、角色池维度(宝宝身上归不到宝宝池):加载、升级重算、再加载与序列化往返都原样携带。
+// 本版本表里没有的维度、角色池维度(宝宝身上归不到宝宝池):加载、升级重算、再加载都原样携带。
+// 经真实存盘入口的往返由 PersistRoundTripTest.ValueDomainsBeyondThisBuildSurviveLoadAndSave 覆盖。
 TEST_F(PetAllocationTest, UnknownDimensionSurvivesLoadAndRecalculation) {
     (*Pet().mutable_allocated())[kFutureDimension] = kFuturePoints;
     (*Pet().mutable_allocated())[playerDimensionId] = kForeignPoints;
@@ -755,11 +757,6 @@ TEST_F(PetAllocationTest, UnknownDimensionSurvivesLoadAndRecalculation) {
     EXPECT_EQ(expected, AllocationOf(Pet()));
     PetSystem::RecalculateAll(player, PetSystem::RecalcReason::kLoad);
     EXPECT_EQ(expected, AllocationOf(Pet()));
-
-    PlayerPetComp reloaded;
-    ASSERT_TRUE(reloaded.ParseFromString(Comp().SerializeAsString()));
-    ASSERT_EQ(1, reloaded.pets_size());
-    EXPECT_EQ(expected, AllocationOf(reloaded.pets(0)));
 }
 
 // 未知键计入已用、减少剩余点,但永不生效:二级属性、列表维度与战斗快照都等于不带这些键的孪生宝宝。
@@ -976,5 +973,105 @@ TEST_F(PetAllocationTest, SummonOfNonActiveHigherLevelPetIsRejected) {
 
     EXPECT_EQ(kPetOwnerLevelNotEnough, PetSystem::Summon(player, kPetId));
     EXPECT_EQ(0u, Comp().active_pet_id());
+}
+
+// 宝宝存储等级超过本版本种类上限(新版本调高上限后回滚,或经交易从上限更高的版本带进来):存储等级原样携带,
+// 列表等级、总点数与二级属性都按上限算(PetEffectiveLevel,与主人的 CappedLevel 同一条规则,
+// mixed-version-persist-field-protection.md §12.2);只有上限之上的等级才挣得到的加点,在本版本整池不生效。
+TEST_F(PetAllocationTest, StoredLevelAboveSpeciesCapIsEffectiveAtTheCap) {
+    const auto* row = PetTableManager::Instance().FindById(petTableId).first;
+    ASSERT_NE(nullptr, row);
+    ASSERT_GT(row->level_cap(), 0u) << "the species needs a level cap for this case to mean anything";
+    const uint32_t cap = row->level_cap();
+    const uint32_t stored = cap + 10;
+    const auto totalAt = [this](uint32_t level) {
+        return Pool().base_points() + Pool().points_per_level() * (level - Pool().unlock_level() + 1);
+    };
+    ASSERT_GT(totalAt(stored), totalAt(cap)) << "the pet pool must grow with level";
+    Pet().set_level(stored);
+    (*Pet().mutable_allocated())[dimensionId] = totalAt(cap) + 1;  // 只有上限之上的等级才挣得到这么多点
+    auto& twin = AddTwin(kTwinPetId);                               // 同种类、正好在上限、一点没加
+    twin.set_level(cap);
+
+    PetSystem::InitializeOnLoad(player);
+    EXPECT_EQ(stored, Pet().level()) << "the stored level is carried as-is";
+    ASSERT_EQ(1u, Pet().allocated().size());
+    EXPECT_EQ(totalAt(cap) + 1, Pet().allocated().at(dimensionId)) << "the allocation is carried, not refunded";
+
+    PetListInfo list;
+    ASSERT_EQ(kSuccess, PetSystem::BuildList(player, list));
+    const auto* carrying = FindInfo(list, kPetId);
+    const auto* plain = FindInfo(list, kTwinPetId);
+    ASSERT_NE(nullptr, carrying);
+    ASSERT_NE(nullptr, plain);
+    EXPECT_EQ(cap, carrying->level());
+    EXPECT_EQ(totalAt(cap), carrying->total_points());
+    EXPECT_EQ(0u, carrying->remaining_points()) << "points only a level above the cap could earn do not take effect";
+    EXPECT_TRUE(MessageDifferencer::Equals(plain->derived(), carrying->derived()))
+        << "a pet above its species cap is no stronger than one exactly at the cap";
+}
+
+// 召唤与参战的"主人等级不低于宝宝"比的是两边的生效等级:种类上限压低之后,存储等级更高的宝宝按上限比较,
+// 主人够得着上限就能召唤、能带进战斗,快照等级是上限;存储等级不动。种类上限在本用例里临时改小,用例结束还原。
+TEST_F(PetAllocationTest, SummonAndBattleCompareOwnerLevelWithTheCappedPetLevel) {
+    auto& row = const_cast<PetTable&>(*PetTableManager::Instance().FindById(petTableId).first);
+    struct CapRestore {
+        PetTable& row;
+        uint32_t saved;
+        ~CapRestore() { row.set_level_cap(saved); }
+    } restore{row, row.level_cap()};
+    constexpr uint32_t kCap = 50;
+    constexpr uint32_t kOwnerAboveCap = 60;
+    constexpr uint32_t kOwnerBelowCap = 40;
+    ASSERT_LT(kCap, kSavedLevel);
+    ASSERT_LE(row.unlock_level(), kOwnerBelowCap);
+    row.set_level_cap(kCap);
+
+    auto& ownerLevel = tlsEcs.actorRegistry.get<LevelComp>(player);
+    ownerLevel.set_level(kOwnerBelowCap);
+    PetSystem::InitializeOnLoad(player);
+    EXPECT_EQ(kSavedLevel, Pet().level());
+    EXPECT_EQ(kPetOwnerLevelNotEnough, PetSystem::Summon(player, kPetId)) << "an owner below the capped level is refused";
+
+    ownerLevel.set_level(kOwnerAboveCap);
+    ASSERT_EQ(kSuccess, PetSystem::Summon(player, kPetId)) << "the stored level above the cap must not block the owner";
+    BattlePetSnapshot battle;
+    ASSERT_TRUE(PetSystem::BuildBattleSnapshot(player, battle));
+    EXPECT_EQ(kCap, battle.level());
+    PetSystem::RecalculateAll(player, PetSystem::RecalcReason::kLevelChanged);
+    EXPECT_EQ(kPetId, Comp().active_pet_id()) << "the capped pet level does not exceed its owner";
+    EXPECT_EQ(kSavedLevel, Pet().level()) << "the stored level is carried as-is";
+}
+
+// 宝宝自动加点与加点同一个剩余点判定:未知键占着的点不再被建议出去,建议原样提交能通过并恰好用完;
+// 加点不生效(超额)时没有可分的点,回「无可分配」。
+TEST_F(PetAllocationTest, AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys) {
+    (*Pet().mutable_allocated())[kFutureDimension] = kFuturePoints;
+    PetSystem::InitializeOnLoad(player);
+
+    std::map<uint32_t, uint32_t> suggested;
+    ASSERT_EQ(kSuccess, PetSystem::AutoAllocate(player, kPetId, suggested));
+    EXPECT_FALSE(suggested.contains(kFutureDimension)) << "a suggestion only covers dimensions the pet pool knows";
+    uint64_t added = 0;
+    for (const auto& [suggestedDimension, want] : suggested) {
+        const uint32_t current =
+            Pet().allocated().contains(suggestedDimension) ? Pet().allocated().at(suggestedDimension) : 0;
+        ASSERT_GE(want, current) << "dimension " << suggestedDimension;
+        added += want - current;
+    }
+    EXPECT_EQ(Total() - kKnownPoints - kFuturePoints, added) << "points parked on the unknown key are not suggested again";
+
+    ASSERT_EQ(kSuccess, PetSystem::Allocate(player, kPetId, suggested)) << "the suggestion must pass the commit check as-is";
+    PetListInfo list;
+    ASSERT_EQ(kSuccess, PetSystem::BuildList(player, list));
+    const auto* info = FindInfo(list, kPetId);
+    ASSERT_NE(nullptr, info);
+    EXPECT_EQ(0u, info->remaining_points());
+    ASSERT_TRUE(Pet().allocated().contains(kFutureDimension));
+    EXPECT_EQ(kFuturePoints, Pet().allocated().at(kFutureDimension));
+
+    (*Pet().mutable_allocated())[dimensionId] = Total() + 1;  // 超额:这份加点在本版本不生效
+    suggested.clear();
+    EXPECT_EQ(kPetNothingToChange, PetSystem::AutoAllocate(player, kPetId, suggested));
 }
 } // namespace

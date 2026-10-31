@@ -24,6 +24,7 @@
 // 线程模型:所有方法都必须在 scene 节点 loop 线程调用(gRPC 入口:muduo_grpc 服务端在 loop 线程上派发)。
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 #include "entt/src/entt/entity/entity.hpp"
@@ -36,6 +37,9 @@ namespace muduo
 		class EventLoop;
 	}
 }
+
+// hiredis 的应答结构(hiredis.h 里是 typedef struct redisReply {...} redisReply),测试注入点的签名只用到指针。
+struct redisReply;
 
 // 定义在 services/battle/settlement/settlement_outbox.h(按锁重建的裁决);底层类型必须与定义一致。
 namespace battle_settlement
@@ -81,7 +85,7 @@ public:
 	// battle --Kafka--> scene:CreateBattle 成功确认(battle 侧开局后一段时间内周期补发,幂等)。
 	// 在线且 InBattleComp.battle_id 匹配且 state==PREPARING -> state=FIGHTING、
 	// deadline_ms=event.deadline_ms、battle:lock 条件续期 + ctx 覆写(值==battle_id 才 EXPIRE 到
-	// deadline-now+60s);已 FIGHTING / battle_id 不匹配 -> 幂等忽略;
+	// 冻结到期时刻 - now + 60s,冻结到期见 FreezeExpiresAtMs);已 FIGHTING / battle_id 不匹配 -> 幂等忽略;
 	// 在线但无 InBattleComp(备战到期被摘 / 登录重建未命中)-> 锁值==battle_id 则重建 FIGHTING 冻结;
 	// 玩家不在本节点 -> 锁值匹配才续期,并把 FIGHTING/deadline 落进 ctx 供登录重建。
 	static void ConfirmBattle(const ::BattleConfirmedEvent& event);
@@ -109,9 +113,9 @@ public:
 	static bool IsInBattle(entt::entity player);
 
 	// reaper:30s 低频定时器,扫描 InBattleComp:PREPARING 按 prepare_deadline_ms 过期只摘组件、
-	// 锁保留到 TTL(prepare_deadline+60s)自然过期给迟到确认留重建余量;FIGHTING 按 deadline_ms
-	// 过期摘组件 + 条件删锁,并对仍在本节点的实体补读一次待结算记录(RecoverPendingSettlementAfterFreezeExpiry);
-	// 之后排空已应用未销账的账本条目,最后重跑登录复查(RunLoginRechecks)。
+	// 锁保留到 TTL(prepare_deadline+60s)自然过期给迟到确认留重建余量;FIGHTING 按 FreezeExpiresAtMs
+	// (deadline_ms + 终局提交宽限 + 收件箱投递余量)过期摘组件 + 条件删锁,并对仍在本节点的实体补读一次待结算记录
+	// (RecoverPendingSettlementAfterFreezeExpiry);之后排空已应用未销账的账本条目,最后重跑登录复查(RunLoginRechecks)。
 	// 结构化日志 metric=battle_prepare_expired / battle_freeze_expired。
 	// 不进 20FPS 帧循环;在 main.cpp 里随节点启动注册、随节点停止注销。
 	static void StartReaper(muduo::net::EventLoop* loop);
@@ -120,13 +124,55 @@ public:
 	// reaper 扫描间隔(秒)。战斗作废的时间精度要求是"分钟级",30s 足够。
 	static constexpr double kReaperIntervalSec = 30.0;
 
+	// ── 冻结何时算到期(reaper 判作废与按锁重建续锁共用,2026-10-30)──────────────────────
+	// Battle 在 deadline_ms 才强制平局,Match 还允许 deadline 之后 kTerminalOutcomeGraceMs 内提交 COMPLETE,
+	// 结算再经 Match 发件箱入箱、本节点拉取应用又要一段时间。FIGHTING 冻结若在 deadline 一过就摘,reaper 节拍
+	// 很可能落在「deadline 之后、收件箱结算应用之前」:资产通道的战斗闸(只看 InBattleComp)提前放开,玩家能先把
+	// 本局用掉的药挂托管扣走,结算晚到时消耗只能按当时持有量夹紧、HP/MP 按终值覆盖 —— 可逐局刷的有界资产复制。
+	// 所以 FIGHTING 的到期 = deadline_ms + 终局提交宽限 + 收件箱投递余量;PREPARING 判据不变(备战期没有终局可等)。
+	//
+	// 终局提交宽限:须与 go/match/internal/authority/completion.go 的 terminalOutcomeGraceMs 及
+	// Java GlobalMatchStore.TERMINAL_OUTCOME_GRACE_MS 同值(三处任一改动,其余两处同批改)。
+	static constexpr uint64_t kTerminalOutcomeGraceMs = 60ULL * 1000ULL;
+	// 收件箱投递余量:COMPLETE 落库之后 Match 发件箱入箱、收件箱提醒、本节点 Fetch 并应用结算所需的余量。
+	static constexpr uint64_t kInboxSettlementDeliveryMarginMs = 60ULL * 1000ULL;
+	// 冻结的到期时刻(Unix 毫秒,与 InBattleComp 的期限同一时钟)。返回 0 = 没有期限,reaper 不判到期。
+	//   preparing = true:prepare_deadline_ms,为 0(旧版 match / 存量组件)时退回 deadline_ms;
+	//   否则(FIGHTING):deadline_ms + kTerminalOutcomeGraceMs + kInboxSettlementDeliveryMarginMs,上溢时饱和。
+	// reaper 在 nowMs 严格大于它时才摘冻结;按锁重建与确认续期按它算锁 TTL(锁必须活得比冻结久)。纯函数。
+	static constexpr uint64_t FreezeExpiresAtMs(bool preparing, uint64_t deadlineMs, uint64_t prepareDeadlineMs)
+	{
+		if (preparing)
+		{
+			return prepareDeadlineMs != 0 ? prepareDeadlineMs : deadlineMs;
+		}
+		if (deadlineMs == 0)
+		{
+			return 0;
+		}
+		constexpr uint64_t kWindowMs = kTerminalOutcomeGraceMs + kInboxSettlementDeliveryMarginMs;
+		return deadlineMs > UINT64_MAX - kWindowMs ? UINT64_MAX : deadlineMs + kWindowMs;
+	}
+
 	// 存盘注入点。与通用资产通道同形状(PlayerAssetOpSystem::SetPersistFnForTest):
 	// 生产恒为 PlayerLifecycleSystem::SavePlayerToRedis,单测用它把「结算应用后立刻压一次
 	// 存盘」这一步替掉,避免单测被迫连 Redis。传 nullptr 恢复生产实现。
 	using PersistFn = bool (*)(entt::entity);
 	static void SetPersistFnForTest(PersistFn fn);
-	// battle:lock 的 EX 在 deadline 之上的余量(秒):锁必须活得比 InBattleComp 久,
-	// 避免"组件还在、锁先没了"让 match 放进第二场。
+
+	// 销账命令的发送注入点(与 SetPersistFnForTest 同形状)。生产恒为空:销账走 tlsRedis 发 kAckSettlementScript。
+	// 单测注入后,销账在判 Redis 可用之前优先交给它:返回 true = 已接管,回包由调用方经 onReply 回灌 —— 进的是与生产
+	// 同一个具名回包处理函数(摘账本条目 + 放锁后的跟随唤醒);返回 false = 没发出去,onReply 不会被调。
+	// 传 nullptr 恢复生产实现。生产代码**不调用**这些 setter。
+	using SettlementAckSender = bool (*)(uint64_t playerId, uint64_t battleId, std::function<void(redisReply*)> onReply);
+	static void SetSettlementAckSenderForTest(SettlementAckSender sender);
+	// 战斗系统的组队跟随唤醒(摘冻结、放锁之后补一次跟随检查)注入点。生产恒为 PlayerTeamSystem::OnBattleFreezeCleared;
+	// 单测用它观察「锁真正放掉之后补一次跟随」有没有发生、落在哪个实体上。传 nullptr 恢复生产实现。
+	using FollowWakeFn = void (*)(entt::entity);
+	static void SetFollowWakeFnForTest(FollowWakeFn fn);
+	// battle:lock 的 EX 在冻结到期时刻(FreezeExpiresAtMs:PREPARING 是备战期限,FIGHTING 是 deadline + 宽限 + 余量)
+	// 之上的余量(秒):锁必须活得比 InBattleComp 久,避免"组件还在、锁先没了"让 match 放进第二场,
+	// 也保证宽限期内重登仍能按锁重建冻结。
 	static constexpr uint32_t kLockExtraTtlSec = 60;
 	// 结算应用后锁至少续到的秒数:锁要留到这一局落盘销账才删(见 player_battle.cpp 的
 	// ReleaseFreezeKeepLock),在那之前不能自然过期,否则重投会把「锁不在」读成「已作废」。
@@ -185,6 +231,11 @@ private:
 	// reaper 判定 FIGHTING 到期之后的收尾:记下这一局已作废(BattleFreezeExpiredComp)→ 条件删锁 + 摘冻结 →
 	// 对仍在本节点、不在退出中的实体补读一次待结算记录。从 reaper 循环里抽出来只为能单测;只由 reaper 调用。
 	static void ReleaseExpiredFightingFreeze(entt::entity player, uint64_t playerId, uint64_t battleId);
+
+	// reaper 第一遍:按 FreezeExpiresAtMs 收集 nowMs 时已到期的冻结,PREPARING 只摘组件(锁留到 TTL),
+	// FIGHTING 走 ReleaseExpiredFightingFreeze。nowMs 由调用方给(reaper 取 TimeSystem::NowMillisecondsUTC),
+	// 抽出来只为单测能用显式时刻驱动;只由 reaper 调用。
+	static void ReapExpiredFreezes(uint64_t nowMs);
 
 	// 登录钩子第一步(读挂起结算 → 没有再按锁重建冻结)。OnPlayerEnterScene 与登录复查共用。
 	// 没问到时记入登录复查(player_battle.cpp 的 BattleLoginRecheckComp),不按锁重建。

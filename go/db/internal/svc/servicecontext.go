@@ -59,8 +59,7 @@ func NewServiceContext() *ServiceContext {
 			PoolSize:         pr.PoolSize,
 			DisableIndentity: true, // suppress CLIENT SETINFO on Redis < 7.2
 		})
-		// 与上面 RedisClient 同口径只记日志不拒启:连不上时每条任务的选库 MGET 都失败,
-		// 按 lookup_error 延后重试(fail-closed),不会写错库。
+		// 与上面 RedisClient 同口径只记日志不拒启:连不上时选库失败,认领回「暂不可用」,不会写错库。
 		if err := placementRedis.Ping(context.Background()).Err(); err != nil {
 			logx.Errorf("Failed to connect to placement Redis at %s: %v", pr.Hosts, err)
 		}

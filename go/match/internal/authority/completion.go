@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
@@ -18,6 +17,7 @@ import (
 	kafkapb "proto/contracts/kafka"
 	pb "proto/match"
 	inboxpb "proto/player_inbox"
+	"shared/inboxcontract"
 	"shared/serviceauth"
 )
 
@@ -212,13 +212,18 @@ func validateTerminalPayload(event *kafkapb.BattleResultEvent, raw []byte) error
 	if event.SettlementFormatVersion != 1 || completionHasUnknown(event.ProtoReflect()) {
 		return errors.New("终局执行要求完整已知语义的版本1原件")
 	}
+	// 个人原件要整份入 Inbox:上限只读 proto 类型规格(shared/inboxcontract,与收件箱校验同一来源),读不到按未知拒绝。
+	limit, limited := inboxcontract.MaxPayloadBytes(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT)
+	if !limited {
+		return errors.New("Inbox载荷上限未知，整局不能提交COMPLETE")
+	}
 	for _, s := range event.Settlements {
 		body, err := proto.MarshalOptions{Deterministic: true}.Marshal(s)
 		if err != nil {
 			return err
 		}
-		if len(body) > 16384 {
-			return errors.New("个人结算超过Inbox16KiB，整局不能提交COMPLETE")
+		if len(body) > limit {
+			return fmt.Errorf("个人结算%d字节超过Inbox载荷上限%d字节，整局不能提交COMPLETE", len(body), limit)
 		}
 	}
 	// Guild等全局消费者读取这两份索引，必须与同一原个人结果一致。
@@ -475,7 +480,8 @@ func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchForm
 	if f.State != 2 && f.State != 3 && f.State != 4 && f.State != 5 {
 		return 0, nil
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO match_battle_completion(battle_id,raw_payload,payload_digest,format_version,archived_ms,source_topic,source_partition,source_offset,decision,source_kind,placement_operation_id,target_instance_id,outcome_protocol_version,result_published,next_retry_ms) VALUES(?,?,?,1,?,'',0,0,2,2,?,?,1,1,0)", f.BattleId, []byte{}, []byte{}, stamp, f.OperationId, f.TargetInstanceId)
+	// 截止裁决的 ABORT 没有 Battle 原字节：format_version=0、来源记为 MATCH_DEADLINE_ABORT，不冒充 BATTLE_RPC。
+	_, err = tx.ExecContext(ctx, "INSERT INTO match_battle_completion(battle_id,raw_payload,payload_digest,format_version,archived_ms,source_topic,source_partition,source_offset,decision,source_kind,placement_operation_id,target_instance_id,outcome_protocol_version,result_published,next_retry_ms) VALUES(?,?,?,0,?,'',0,0,?,?,?,?,1,1,0)", f.BattleId, []byte{}, []byte{}, stamp, uint32(pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT), uint32(pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT), f.OperationId, f.TargetInstanceId)
 	if err != nil {
 		return 0, err
 	}
@@ -490,123 +496,11 @@ func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchForm
 	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, nil
 }
 
-// 两类outbox逐recipient以SQL截止租约claim；失败项推后，下一页不会永远被前8项占住。
-// 回执丢失只重签认证并重放原正文。SQL写序列/原owner从不在投递时重算。
+// PublishBattleOutcomesOnce 按默认参数(DefaultOutcomeOutboxOptions:结果 8 行、首投 4 行、等待 4 行、逐行串行,
+// 与 2026-10-30 之前写死的行为一致)投递一轮终局发件箱,不计数。生产循环改走带 GlobalMatch.OutcomeOutbox 配置的
+// PublishBattleOutcomes(outcome_outbox.go,实现与语义都在那里);这里留给只要默认参数的调用方与用例。
 func (s *Store) PublishBattleOutcomesOnce(ctx context.Context, client func(context.Context) (inboxpb.PlayerInboxClient, error), secret string, publish func(context.Context, uint64, []byte) error) error {
-	if client == nil || publish == nil {
-		return errors.New("终局投递端口未装配")
-	}
-	stamp, err := s.Now(ctx)
-	if err != nil {
-		return err
-	}
-	rows, err := s.DB.QueryContext(ctx, "SELECT battle_id,raw_payload,payload_digest,next_retry_ms FROM match_battle_completion WHERE decision=1 AND result_published=0 AND next_retry_ms<=? ORDER BY next_retry_ms,battle_id LIMIT 8", stamp)
-	if err != nil {
-		return err
-	}
-	var results []*pb.MatchBattleCompletionRecord
-	for rows.Next() {
-		r := &pb.MatchBattleCompletionRecord{}
-		if err = rows.Scan(&r.BattleId, &r.RawPayload, &r.PayloadDigest, &r.NextRetryMs); err != nil {
-			rows.Close()
-			return err
-		}
-		results = append(results, r)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
-	}
-	var failures []error
-	for _, r := range results {
-		lease := stamp + 30000
-		changed, err := s.DB.ExecContext(ctx, "UPDATE match_battle_completion SET next_retry_ms=? WHERE battle_id=? AND decision=1 AND result_published=0 AND next_retry_ms=?", lease, r.BattleId, r.NextRetryMs)
-		if err != nil {
-			return err
-		}
-		n, err := changed.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			continue
-		}
-		d := sha256.Sum256(r.RawPayload)
-		if !bytes.Equal(d[:], r.PayloadDigest) {
-			failures = append(failures, errors.New("结果outbox摘要损坏"))
-			continue
-		}
-		call, cancel := context.WithTimeout(ctx, 2*time.Second)
-		err = publish(call, r.BattleId, r.RawPayload)
-		cancel()
-		if err != nil {
-			failures = append(failures, err)
-			continue
-		}
-		if _, err = s.DB.ExecContext(ctx, "UPDATE match_battle_completion SET result_published=1 WHERE battle_id=? AND decision=1 AND result_published=0 AND next_retry_ms=?", r.BattleId, lease); err != nil {
-			return err
-		}
-	}
-	var people []*pb.MatchBattleSettlementSourceRecord
-	// 首投与等待APPLIED各保四个名额，总预算仍八人；离线积压不能占满首投页。
-	for _, seqCondition := range []string{"=0", ">0"} {
-		rows, err = s.DB.QueryContext(ctx, "SELECT battle_id,player_id,settlement_proto,payload_digest,owner_account,owner_revision,issued_at_ms,inbox_seq,next_retry_ms FROM match_battle_settlement_source WHERE dispatch_state=1 AND inbox_seq"+seqCondition+" AND next_retry_ms<=? ORDER BY next_retry_ms,battle_id,player_id LIMIT 4", stamp)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			r := &pb.MatchBattleSettlementSourceRecord{}
-			if err = rows.Scan(&r.BattleId, &r.PlayerId, &r.SettlementProto, &r.PayloadDigest, &r.OwnerAccount, &r.OwnerRevision, &r.IssuedAtMs, &r.InboxSeq, &r.NextRetryMs); err != nil {
-				rows.Close()
-				return err
-			}
-			people = append(people, r)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-	}
-	for _, r := range people {
-		lease := stamp + 30000
-		changed, err := s.DB.ExecContext(ctx, "UPDATE match_battle_settlement_source SET next_retry_ms=? WHERE battle_id=? AND player_id=? AND dispatch_state=1 AND next_retry_ms=?", lease, r.BattleId, r.PlayerId, r.NextRetryMs)
-		if err != nil {
-			return err
-		}
-		n, err := changed.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if n == 0 {
-			continue
-		}
-		d := sha256.Sum256(r.SettlementProto)
-		if !bytes.Equal(d[:], r.PayloadDigest) {
-			failures = append(failures, errors.New("个人outbox摘要损坏"))
-			continue
-		}
-		call, cancel := context.WithTimeout(ctx, 2*time.Second)
-		seq, state, err := deliverBattleOriginal(call, r, client, secret)
-		cancel()
-		if err != nil {
-			failures = append(failures, err)
-			continue
-		}
-		dispatch := uint32(1)
-		if state == inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_APPLIED {
-			dispatch = 2
-		}
-		next := stamp + pendingSettlementDelayMs(r.IssuedAtMs, stamp)
-		if dispatch == 2 {
-			next = 0
-		}
-		if _, err = s.DB.ExecContext(ctx, "UPDATE match_battle_settlement_source SET inbox_seq=?,inbox_state=?,dispatch_state=?,next_retry_ms=? WHERE battle_id=? AND player_id=? AND dispatch_state=1 AND next_retry_ms=? AND (inbox_seq=0 OR inbox_seq=?)", seq, uint32(state), dispatch, next, r.BattleId, r.PlayerId, lease, seq); err != nil {
-			return err
-		}
-	}
-	return errors.Join(failures...)
+	return s.PublishBattleOutcomes(ctx, client, secret, publish, DefaultOutcomeOutboxOptions())
 }
 
 // 由原签发时间和SQL时钟决定5秒至5分钟的有界退避，不改原件或新增重试账本。
@@ -669,13 +563,8 @@ func deliverBattleOriginal(ctx context.Context, r *pb.MatchBattleSettlementSourc
 	if err != nil {
 		return 0, 0, err
 	}
-	var head [12]byte
-	binary.BigEndian.PutUint32(head[:4], uint32(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT))
-	binary.BigEndian.PutUint64(head[4:], req.IssuedAtMs)
-	h := sha256.New()
-	h.Write(head[:])
-	h.Write(req.SettlementPayload)
-	content := h.Sum(nil)
+	// 收件箱写进条目的同一份内容摘要(布局只在 shared/inboxcontract 写一份)。
+	content := inboxcontract.ContentSHA256(uint32(inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_BATTLE_SETTLEMENT), req.IssuedAtMs, req.SettlementPayload)
 	validate := func(method string, resp *inboxpb.BattleSettlementInboxResponse) error {
 		if resp == nil {
 			return errors.New("Inbox原收据缺失")

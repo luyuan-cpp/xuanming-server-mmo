@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"friend/internal/data"
+	"shared/authoritysql"
 
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -86,9 +87,9 @@ type Config struct {
 	// MySQL:独占库 mmorpg_friend 的连接参数(D-14)。用结构化字段而不是一整串 DSN:
 	// K8s 的用户名与密码分开注入,DSN 由 svc.BuildDSN 统一拼(带严格模式,见那边注释)。
 	MySQL MySQLConf `json:"MySQL"`
-	// RequireTiDB 强制好友权威数据落同一个 TiDB 事务域；生产不得关闭。
-	// 本地 dev/test 可用单机 MySQL 验证事务行为，但不代表分布式部署已验收。
-	RequireTiDB bool `json:",optional"`
+	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);非法值拒启。
+	// 不管哪一档,全部副本都必须连同一个事务域(同一 TiDB 集群或同一 MySQL 主库)。
+	Backend string `json:",default=tidb"`
 
 	// Schema:建表策略,见 SchemaConf.AutoMigrate。整段可缺失。
 	Schema SchemaConf `json:",optional"`
@@ -281,13 +282,13 @@ func IsRelaxedMode(mode string) bool {
 // 每一条拒绝的都是"进程能起来、但行为静默出错"的配置 —— 逐条理由写在各分支旁边。
 func (c *Config) Validate() error {
 	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) {
-		return errors.New("好友 AccountRoleSchema 必须显式指定同 TiDB 的全局角色目录")
+		return errors.New("好友 AccountRoleSchema 必须显式指定同事务域的全局角色目录")
 	}
 	if !c.GlobalLoginSessions || strings.TrimSpace(c.LoginRedis.Host) == "" || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSize <= 0 {
 		return errors.New("好友必须显式配置全局同 login 的 LoginRedis 实例/DB/正池上限")
 	}
-	if !IsRelaxedMode(c.Mode) && !c.RequireTiDB {
-		return errors.New("生产好友服务必须设置 RequireTiDB=true，并让全部副本连接同一权威 TiDB 事务域")
+	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
+		return err
 	}
 	// ZoneId=0:注册路径变成 <Prefix>/zone/0/...,路由服按 zone 过滤时看不见本节点,
 	// 表现为"服务起来了、客户端却说好友功能不可用",日志里一个错都没有。

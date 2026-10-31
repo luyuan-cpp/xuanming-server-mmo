@@ -5,7 +5,7 @@ package reconcile
 // # 为什么需要它
 //
 // internal/data 那边的 TestEscrowTransactionLockOrder 是自己按"正确答案"依次调 repo 的两个方法,
-// 证的是 data 层各自发什么;而真正会把环装回去的是**调用点**:把 EnsureSeqRows 挪到业务事务里面、
+// 证的是 data 层各自发什么;而真正会把锁序搅乱的是**调用点**:把 EnsureSeqRows 挪到业务事务里面、
 // 或者在业务事务里再补一次建行,data 层的用例一条都不会红。
 // 上一轮复审点名的正是这个缺口:"仓库对同类前提已经用源码扫描机械看住,唯独最能把环装回去的
 // 这一条只有注释"。
@@ -14,9 +14,8 @@ package reconcile
 //
 // 用录制驱动把 EnqueueEscrowDebit 真正发出去的语句按序录下来,断言:
 //  1. 建行与分配**分属两个事务**,建行那个先提交(BEGIN…COMMIT 各两段);
-//  2. 哨兵守卫行的锁定读只出现在**第一个**事务里,业务事务一次都不碰它
-//     —— 这是"消环"论证的核心,业务事务里出现哨兵行就等于把反向边画回来;
-//  3. 守卫行的下标严格小于第一条 `SELECT next_seq, epoch`(分配永远排在建行之后);
+//  2. 建行短事务里只有建行语句,不碰任何全局共用的行;业务事务里不建行;
+//  3. 建行的下标严格小于第一条 `SELECT next_seq, epoch`(分配永远排在建行之后);
 //  4. outbox 的插入排在分配之后、与分配同一个事务。
 //
 // 提交后的那次同步投递(ProcessOne)必然失败(Caller 没有 Resolver),但 EnqueueEscrowDebit
@@ -98,9 +97,8 @@ func (c *lockOrderConn) QueryContext(_ context.Context, query string, _ []driver
 	defer c.s.mu.Unlock()
 	switch {
 	case strings.HasPrefix(query, "SELECT 1 FROM "+data.AssetOpSeqTableName):
-		// 哨兵守卫行的存在性:用例里它总是已 bootstrap,所以一律返回一行。
 		// 玩家行按 seqRowExists 决定,好让用例从"缺行"起跑。
-		if strings.Contains(query, "FOR UPDATE") || c.s.seqRowExists {
+		if c.s.seqRowExists {
 			return &lockOrderRows{cols: []string{"1"}, data: [][]driver.Value{{int64(1)}}}, nil
 		}
 		return &lockOrderRows{cols: []string{"1"}}, nil
@@ -204,7 +202,7 @@ func enqueueStatements(t *testing.T, script *lockOrderScript) []string {
 
 // TestEnqueueEscrowDebitStatementOrder 钉住产品调用点的端到端语句顺序。
 //
-// 把 pipeline.go 里的 EnsureSeqRows 挪进 WithTxRetry 的事务体,本用例会在"哨兵行出现在业务事务里"
+// 把 pipeline.go 里的 EnsureSeqRows 挪进 WithTxRetry 的事务体,本用例会在"业务事务里出现建行"
 // 那条断言上稳定变红 —— 那正是上一轮复审指出的、除注释之外没人看着的那个改动。
 func TestEnqueueEscrowDebitStatementOrder(t *testing.T) {
 	script := &lockOrderScript{}
@@ -232,13 +230,6 @@ func TestEnqueueEscrowDebitStatementOrder(t *testing.T) {
 	got := enqueueStatements(t, script)
 	dump := strings.Join(got, "\n")
 
-	guardStmt := "SELECT 1 FROM " + data.AssetOpSeqTableName
-	guardAt := indexOfMatch(got, func(s string) bool {
-		return strings.HasPrefix(s, guardStmt) && strings.Contains(s, "FOR UPDATE")
-	})
-	if guardAt < 0 {
-		t.Fatalf("没有看到哨兵守卫行的锁定读:缺行时必须先锁它再建行\n%s", dump)
-	}
 	insertSeqAt := indexOfPrefix(got, "INSERT IGNORE INTO "+data.AssetOpSeqTableName)
 	allocAt := indexOfPrefix(got, "SELECT next_seq, epoch FROM "+data.AssetOpSeqTableName)
 	insertOpAt := indexOfPrefix(got, "INSERT INTO "+data.AssetOpTableName)
@@ -247,13 +238,8 @@ func TestEnqueueEscrowDebitStatementOrder(t *testing.T) {
 		t.Fatalf("建行 / 分配 / 插 outbox 至少缺一条(建行=%d 分配=%d 插行=%d)\n%s",
 			insertSeqAt, allocAt, insertOpAt, dump)
 	}
-	if !(guardAt < insertSeqAt) {
-		t.Fatalf("守卫行的锁定读排在建行之后(守卫=%d 建行=%d):那一把锁白拿了\n%s", guardAt, insertSeqAt, dump)
-	}
-	// 上一轮复审点名要钉的那一条:守卫语句的下标严格小于第一条 SELECT next_seq。
-	if !(guardAt < allocAt) {
-		t.Fatalf("守卫行的锁定读排在分配之后(守卫=%d 分配=%d):\"持玩家 seq 行、等守卫行\" 与正常路径反序成环\n%s",
-			guardAt, allocAt, dump)
+	if !(insertSeqAt < allocAt) {
+		t.Fatalf("分配排在建行之前(建行=%d 分配=%d)\n%s", insertSeqAt, allocAt, dump)
 	}
 	if !(allocAt < insertOpAt) {
 		t.Fatalf("插 outbox 行排在分配之前(分配=%d 插行=%d)\n%s", allocAt, insertOpAt, dump)
@@ -268,21 +254,23 @@ func TestEnqueueEscrowDebitStatementOrder(t *testing.T) {
 	}
 	shortTxCommit := commits[0]
 	businessTxBegin := begins[1]
-	if !(guardAt < shortTxCommit && shortTxCommit < businessTxBegin) {
-		t.Fatalf("哨兵守卫行没有落在第一个(短)事务里,或短事务没有在业务事务之前提交:"+
-			"守卫=%d 短事务提交=%d 业务事务开始=%d\n%s", guardAt, shortTxCommit, businessTxBegin, dump)
+	if !(insertSeqAt < shortTxCommit && shortTxCommit < businessTxBegin) {
+		t.Fatalf("建行没有落在第一个(短)事务里,或短事务没有在业务事务之前提交:"+
+			"建行=%d 短事务提交=%d 业务事务开始=%d\n%s", insertSeqAt, shortTxCommit, businessTxBegin, dump)
+	}
+	// 建行短事务里只有建行语句:不碰任何全局共用的行,否则开服首日全服上架排在那一行上。
+	for i := begins[0] + 1; i < shortTxCommit; i++ {
+		if !strings.HasPrefix(got[i], "INSERT IGNORE INTO "+data.AssetOpSeqTableName) {
+			t.Fatalf("建行短事务里出现了别的语句(第 %d 条):\n%s", i, dump)
+		}
 	}
 	if !(businessTxBegin < allocAt && allocAt < insertOpAt && insertOpAt < commits[1]) {
 		t.Fatalf("分配与插 outbox 行没有落在同一个业务事务里:"+
 			"业务事务=[%d,%d] 分配=%d 插行=%d\n%s", businessTxBegin, commits[1], allocAt, insertOpAt, dump)
 	}
 
-	// 核心断言:业务事务里一次都不许碰哨兵守卫行。
-	// 碰了就说明"持业务锁 → 等哨兵行"这条反向边又画得出来了,消环论证当场作废。
+	// 业务事务里不建行:建行必须留在它自己的短事务里。
 	for i := businessTxBegin; i <= commits[1]; i++ {
-		if strings.HasPrefix(got[i], guardStmt) && strings.Contains(got[i], "FOR UPDATE") {
-			t.Fatalf("业务事务里出现了哨兵守卫行的锁定读(第 %d 条):建行必须留在它自己的短事务里\n%s", i, dump)
-		}
 		if strings.HasPrefix(got[i], "INSERT IGNORE INTO "+data.AssetOpSeqTableName) {
 			t.Fatalf("业务事务里出现了建 seq 行(第 %d 条):业务事务只做普通读确认,不建行\n%s", i, dump)
 		}
@@ -325,7 +313,7 @@ func TestEnqueueEscrowDebitSkipsShortTxWhenSeqRowExists(t *testing.T) {
 			t.Fatalf("行已存在却发了建行语句: %s\n%s", s, dump)
 		}
 		if strings.HasPrefix(s, "SELECT 1 FROM "+data.AssetOpSeqTableName) && strings.Contains(s, "FOR UPDATE") {
-			t.Fatalf("行已存在却去锁了哨兵守卫行(稳态多一把全局锁 = 全服上架串行): %s\n%s", s, dump)
+			t.Fatalf("存在性探针不该加锁: %s\n%s", s, dump)
 		}
 	}
 }

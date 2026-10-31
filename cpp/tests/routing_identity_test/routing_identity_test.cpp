@@ -27,6 +27,7 @@
 
 #include "proto/common/base/common.pb.h" // NodeInfo(无 package,全局命名空间)
 #include "proto/common/base/message.pb.h"
+#include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/gate/gate_service.pb.h"
 #include "../../nodes/gate/handler/rpc/login_admission.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -235,6 +236,170 @@ TEST(BroadcastTargetCodec, OnlyTheHijackedSessionIsDroppedByTheFence)
 		});
 	EXPECT_EQ(dropped, 1) << "session 10 的目标是 A、当前主人是 B,必须丢";
 	EXPECT_EQ(delivered, 1) << "session 20 的目标与主人一致,必须投";
+}
+
+// ===========================================================================
+// R13-C:同一份编解码服务 RPC 请求与 Kafka 事件(battle-spectate-tiered-fanout.md §14 G2)
+// ===========================================================================
+//
+// scene 按 RPC 的 BroadcastToPlayersRequest 编码,Go 按 Kafka 的 BroadcastToPlayersEvent 编码,gate 两条入口
+// 用同一份 ForEach 解码(handler/gate_push_delivery.cpp)。两种消息的目标字段必须同号:proto 注释写的是
+// 「字段号、语义、顺序契约完全相同」,这里把它变成编译期条件。
+
+namespace
+{
+	// 两边的字段号常量分属各自消息里的匿名枚举;不同枚举直接 == 自 C++20 起已弃用,先按 int 传进来再比。
+	constexpr bool SameFieldNumber(int rpcFieldNumber, int kafkaFieldNumber)
+	{
+		return rpcFieldNumber == kafkaFieldNumber;
+	}
+} // namespace
+
+static_assert(SameFieldNumber(BroadcastToPlayersRequest::kSessionListFieldNumber,
+							  contracts::kafka::BroadcastToPlayersEvent::kSessionListFieldNumber));
+static_assert(SameFieldNumber(BroadcastToPlayersRequest::kMessageContentFieldNumber,
+							  contracts::kafka::BroadcastToPlayersEvent::kMessageContentFieldNumber));
+static_assert(SameFieldNumber(BroadcastToPlayersRequest::kSessionBitmapBaseFieldNumber,
+							  contracts::kafka::BroadcastToPlayersEvent::kSessionBitmapBaseFieldNumber));
+static_assert(SameFieldNumber(BroadcastToPlayersRequest::kSessionBitmapFieldNumber,
+							  contracts::kafka::BroadcastToPlayersEvent::kSessionBitmapFieldNumber));
+static_assert(SameFieldNumber(BroadcastToPlayersRequest::kPlayerListFieldNumber,
+							  contracts::kafka::BroadcastToPlayersEvent::kPlayerListFieldNumber));
+
+namespace
+{
+	using TargetPair = std::pair<uint32_t, uint64_t>;
+
+	template <typename BroadcastMsg>
+	std::vector<TargetPair> DecodePairs(const BroadcastMsg &msg)
+	{
+		std::vector<TargetPair> out;
+		broadcast_targets::ForEach(msg, [&out](uint32_t sessionId, uint64_t playerId)
+								   { out.emplace_back(sessionId, playerId); });
+		return out;
+	}
+} // namespace
+
+// 同一组目标编进两种消息,解出来必须逐对一致,且两种形态都要覆盖:少量乱序目标走 list,
+// 64 个密集目标(≥ kBitmapThreshold)必须走 bitmap。字段号相同、编码相同,wire 字节也必须相同 ——
+// 同一份字节不论交给 RPC 入口还是 Kafka 入口解,结论都一样。
+TEST(BroadcastTargetCodec, KafkaEventAndRpcRequestDecodeToTheSamePairs)
+{
+	std::vector<broadcast_targets::Target> dense;
+	for (int i = 63; i >= 0; --i)
+	{
+		dense.push_back({static_cast<uint32_t>(3000 + i), 7000000000ull + static_cast<uint64_t>(i)});
+	}
+	const std::vector<std::vector<broadcast_targets::Target>> inputs{
+		{{300, kPlayerA}, {100, kPlayerB}, {200, 777}},
+		dense,
+	};
+
+	for (const auto &input : inputs)
+	{
+		auto rpcTargets = input;
+		auto kafkaTargets = input;
+		BroadcastToPlayersRequest request;
+		contracts::kafka::BroadcastToPlayersEvent event;
+		broadcast_targets::Encode(request, rpcTargets);
+		broadcast_targets::Encode(event, kafkaTargets);
+
+		const bool expectBitmap = input.size() >= broadcast_targets::kBitmapThreshold;
+		EXPECT_EQ(!request.session_bitmap().empty(), expectBitmap) << "targets=" << input.size();
+		EXPECT_EQ(!event.session_bitmap().empty(), expectBitmap) << "targets=" << input.size();
+		EXPECT_EQ(event.SerializeAsString(), request.SerializeAsString()) << "targets=" << input.size();
+		EXPECT_TRUE(broadcast_targets::PlayerListAligned(request));
+		EXPECT_TRUE(broadcast_targets::PlayerListAligned(event));
+
+		const auto fromRpc = DecodePairs(request);
+		const auto fromKafka = DecodePairs(event);
+		ASSERT_EQ(fromRpc.size(), input.size());
+		EXPECT_EQ(fromKafka, fromRpc) << "targets=" << input.size();
+		for (size_t i = 1; i < fromRpc.size(); ++i)
+		{
+			EXPECT_LT(fromRpc[i - 1].first, fromRpc[i].first) << "第 " << i << " 项不是 session 升序";
+		}
+	}
+	// 密集那一组逐项核对:倒序喂进去,解出来按 session 升序且玩家跟着走。
+	auto denseTargets = dense;
+	contracts::kafka::BroadcastToPlayersEvent denseEvent;
+	broadcast_targets::Encode(denseEvent, denseTargets);
+	const auto decoded = DecodePairs(denseEvent);
+	ASSERT_EQ(decoded.size(), 64u);
+	for (size_t i = 0; i < decoded.size(); ++i)
+	{
+		EXPECT_EQ(decoded[i], TargetPair(3000u + static_cast<uint32_t>(i), 7000000000ull + static_cast<uint64_t>(i)))
+			<< "第 " << i << " 项错位 —— 身份会被比对成别人的";
+	}
+}
+
+// 同一 session 出现多次只保留输入里的**第一个**目标(稳定排序 + unique)。旧实现用 std::sort,同 session 带不同玩家
+// 时留下哪一个取决于标准库实现,Go 侧 EncodeBroadcastTargets 与共享向量无法逐字对齐。两种形态都要成立;
+// bitmap 那组用 128 项,超过标准库插入排序的小区间阈值,不稳定的排序在这里才会真的打乱同 session 的先后。
+TEST(BroadcastTargetCodec, DuplicateSessionKeepsTheFirstTargetInInputOrder)
+{
+	std::vector<broadcast_targets::Target> listTargets{{500, kPlayerA}, {400, kPlayerB}, {500, 777}, {400, 888}};
+	contracts::kafka::BroadcastToPlayersEvent listEvent;
+	broadcast_targets::Encode(listEvent, listTargets);
+	ASSERT_TRUE(listEvent.session_bitmap().empty());
+	EXPECT_EQ(DecodePairs(listEvent), (std::vector<TargetPair>{{400, kPlayerB}, {500, kPlayerA}}));
+	EXPECT_TRUE(broadcast_targets::PlayerListAligned(listEvent));
+
+	// 每个 session 先出现真正的主人,再出现一个冒名的重复项;输入按 session 倒序给,逼编码器自己排序。
+	std::vector<broadcast_targets::Target> bitmapTargets;
+	for (int i = 63; i >= 0; --i)
+	{
+		const auto sessionId = static_cast<uint32_t>(2000 + i);
+		bitmapTargets.push_back({sessionId, 6000000000ull + static_cast<uint64_t>(i)});
+		bitmapTargets.push_back({sessionId, kPlayerB});
+	}
+	BroadcastToPlayersRequest bitmapRequest;
+	broadcast_targets::Encode(bitmapRequest, bitmapTargets);
+	ASSERT_FALSE(bitmapRequest.session_bitmap().empty()) << "去重后 64 个密集 session 应当走 bitmap";
+	const auto decoded = DecodePairs(bitmapRequest);
+	ASSERT_EQ(decoded.size(), 64u);
+	for (size_t i = 0; i < decoded.size(); ++i)
+	{
+		EXPECT_EQ(decoded[i], TargetPair(2000u + static_cast<uint32_t>(i), 6000000000ull + static_cast<uint64_t>(i)))
+			<< "第 " << i << " 项留下的不是输入里的第一个目标";
+	}
+}
+
+// player_list 非空却与目标数不齐:无法按位置对应,gate 整条拒绝(PlayerListAligned 为假);留空是兼容位,放行。
+// 目标数在 bitmap 形态按置位数算,同时钉住字节内位序(低位在前)。
+TEST(BroadcastTargetCodec, PlayerListLengthMismatchIsRejected)
+{
+	contracts::kafka::BroadcastToPlayersEvent listEvent;
+	for (const uint32_t sessionId : {11u, 22u, 33u})
+	{
+		listEvent.add_session_list(sessionId);
+	}
+	EXPECT_TRUE(broadcast_targets::PlayerListAligned(listEvent)) << "留空 = 老发送方的兼容位";
+	listEvent.add_player_list(kPlayerA);
+	listEvent.add_player_list(kPlayerB);
+	EXPECT_FALSE(broadcast_targets::PlayerListAligned(listEvent)) << "短一项";
+	listEvent.add_player_list(777);
+	EXPECT_TRUE(broadcast_targets::PlayerListAligned(listEvent));
+	listEvent.add_player_list(888);
+	EXPECT_FALSE(broadcast_targets::PlayerListAligned(listEvent)) << "多一项";
+
+	// 0x0b = 0b0000'1011:第 0、1、3 位置位 → session 100、101、103。
+	BroadcastToPlayersRequest bitmapRequest;
+	bitmapRequest.set_session_bitmap_base(100);
+	bitmapRequest.set_session_bitmap(std::string("\x0b", 1));
+	bitmapRequest.add_player_list(kPlayerA);
+	bitmapRequest.add_player_list(kPlayerB);
+	EXPECT_EQ(broadcast_targets::TargetCount(bitmapRequest), 3u);
+	EXPECT_FALSE(broadcast_targets::PlayerListAligned(bitmapRequest));
+	bitmapRequest.add_player_list(777);
+	EXPECT_TRUE(broadcast_targets::PlayerListAligned(bitmapRequest));
+	EXPECT_EQ(DecodePairs(bitmapRequest), (std::vector<TargetPair>{{100, kPlayerA}, {101, kPlayerB}, {103, 777}}));
+
+	// 没有任何目标却带了 player_list:同样不齐。
+	contracts::kafka::BroadcastToPlayersEvent noTargets;
+	noTargets.add_player_list(kPlayerA);
+	EXPECT_EQ(broadcast_targets::TargetCount(noTargets), 0u);
+	EXPECT_FALSE(broadcast_targets::PlayerListAligned(noTargets));
 }
 
 // NodeMessageHeader 的兼容位:未设置时读出来必须是 0(proto3 隐式存在),

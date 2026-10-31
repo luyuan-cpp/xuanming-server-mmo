@@ -1,5 +1,7 @@
 # Zone Data Rollback Plan
 
+> **Obsolete (2026-10-30)**: player saves now commit directly to TiDB `player_store` ([player-save-direct-commit.md](./player-save-direct-commit.md)); the rollback RPCs were removed. Kept for history only.
+
 ## Overview
 
 Zone data rollback operates at two levels:

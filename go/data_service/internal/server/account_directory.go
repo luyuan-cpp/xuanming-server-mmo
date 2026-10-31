@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"data_service/internal/metrics"
+	"data_service/internal/store"
 	"errors"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
@@ -113,6 +114,38 @@ func (s *DataServiceServer) LookupAccountRole(ctx context.Context, in *dspb.Look
 	out, err := s.svcCtx.AccountDirectory.Lookup(ctx, in.PlayerId)
 	return out, directoryError(err)
 }
+
+// BatchGetPlayerDisplay 只读、不鉴权,与 BatchGetPlayerName 同级:只有展示字段。
+func (s *DataServiceServer) BatchGetPlayerDisplay(ctx context.Context, in *dspb.BatchGetPlayerDisplayRequest) (*dspb.BatchGetPlayerDisplayResponse, error) {
+	if s.svcCtx.PlayerStoreDisplays == nil {
+		return nil, status.Error(codes.Unavailable, "player store not configured")
+	}
+	if len(in.GetPlayerIds()) > store.PlayerDisplayBatchLimit {
+		return nil, status.Errorf(codes.InvalidArgument, "player_ids exceed the limit of %d", store.PlayerDisplayBatchLimit)
+	}
+	players, err := s.svcCtx.PlayerStoreDisplays.ReadPlayerDisplays(ctx, in.GetPlayerIds())
+	if err != nil {
+		return nil, directoryError(err)
+	}
+	return &dspb.BatchGetPlayerDisplayResponse{Players: players}, nil
+}
+
+// ReleaseDeadPlayerStoreHolder 见 store.AccountDirectoryStore.ReleaseDeadPlayerStoreHolder。只有 scene_manager 能调,
+// 新路径没打开时回 Unavailable:scene_manager 那边同样按开关调,走到这里说明两边配置不一致,不能假装释放了。
+func (s *DataServiceServer) ReleaseDeadPlayerStoreHolder(ctx context.Context, in *dspb.ReleaseDeadPlayerStoreHolderRequest) (*emptypb.Empty, error) {
+	if s.svcCtx.PlayerStoreHolders == nil || s.svcCtx.SceneManagerDirectoryAuth == nil {
+		return nil, status.Error(codes.Unavailable, "玩家存盘写权释放未就绪")
+	}
+	caller, err := s.svcCtx.SceneManagerDirectoryAuth.Verify(ctx, accountdirectory.MethodPrefix+"ReleaseDeadPlayerStoreHolder", in)
+	if err != nil || caller != "scene_manager" {
+		return nil, status.Error(codes.PermissionDenied, "caller denied")
+	}
+	if err := s.svcCtx.PlayerStoreHolders.ReleaseDeadPlayerStoreHolder(ctx, in.GetPlayerId(), in.GetOwnerEpoch()); err != nil {
+		return nil, directoryError(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
 func (s *DataServiceServer) RepairAccountRole(ctx context.Context, in *dspb.RepairAccountRoleRequest) (_ *dspb.AccountDirectoryResponse, err error) {
 	defer observeDirectoryRPC(metrics.AccountDirectoryRPCRepair, time.Now(), &err)
 	if err := s.admitDirectory(ctx, "RepairAccountRole", in); err != nil {

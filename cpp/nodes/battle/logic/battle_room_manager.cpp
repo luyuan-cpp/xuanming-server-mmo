@@ -80,13 +80,33 @@ namespace
     constexpr size_t kMaxSpectatorOperations = 100000;
     using battle_security::ValidSpectatorOperation;
 
+    // 客户端 S2C 的信封(MessageContent,与大厅连接同一线协议)。直连单发、观众帧编码一次与中继 / 广播的 client_frame
+    // 共用这一处,几条出口的字节一致。
+    ::MessageContent ClientEnvelope(const uint32_t messageId, const ::google::protobuf::Message &message)
+    {
+        ::MessageContent content;
+        content.set_message_id(messageId);
+        content.set_serialized_message(message.SerializeAsString());
+        return content;
+    }
+
     // ---- Kafka 出站(设计文档 D6;不变量:target_instance_id 必填 + key=业务实体 ID) ----
 
     // 发一条 GateCommand 到目标 gate 的 topic。
     // key=player_id:同一玩家的大厅公告在 gate 侧保序(宪法 §7 不变量 3)。
+    // battle 发往 gate 的命令只有给某个玩家的大厅公告,信封一律带目标 player_id。
     void SendGateCommand(const ::BattleRouting &routing, const uint64_t playerId,
                          const uint32_t eventId, std::string payload)
     {
+        // 目标玩家身份栅栏 fail-closed(gate_event.proto PushToPlayerEvent.player_id):gate 对 0 放行不校验,
+        // 等于把栅栏关掉,生产者一侧拒发。唯一调用方 PushMessageViaGate 把同一个值填进事件,这里一处同时拦住
+        // 信封与事件。
+        if (playerId == 0)
+        {
+            LOG_ERROR << "battle outbound GateCommand rejected: player_id is 0, event_id=" << eventId
+                      << " gate_node_id=" << routing.gate_node_id();
+            return;
+        }
         // 不变量 2 fail-closed:空 instance id 会关闭 gate 侧防僵尸过滤,宁可丢弃并报错。
         if (routing.gate_instance_id().empty())
         {
@@ -97,6 +117,7 @@ namespace
 
         contracts::kafka::GateCommand command;
         command.set_event_id(eventId);
+        command.set_player_id(playerId);
         // target_gate_id 是共享分区之后的**第一级**过滤:一个分区上坐着几百个 gate,
         // 数字比对先把绝大多数命令挡掉,再轮到 target_instance_id 的字符串比对
         // (node_kafka_command_filter.h)。以前一节点一 topic 时留 0 也能跑,现在留 0
@@ -126,6 +147,9 @@ namespace
     {
         contracts::kafka::PushToPlayerEvent event;
         event.set_session_id(routing.session_id());
+        // session_id 的高位是会立即复用的 gate node_id、低位序号也会回绕,gate 投递前按它核对会话当前玩家
+        // (routing-identity-audit-20260908.md R13);0 由 SendGateCommand 拒发。
+        event.set_player_id(playerId);
         auto *content = event.mutable_message_content();
         content->set_message_id(messageId);
         content->set_serialized_message(message.SerializeAsString());
@@ -691,6 +715,8 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     room->battleConfigId = request.battle_config_id();
     // 活动上下文原样保存(未填 = kind NONE);FinishBattle 回显并据此选结果通道(§6.20)
     room->activityContext = request.activity_context();
+    // 观战可见性随原件冻结,只在这里赋值一次(AddObserver 的第二道闸据此执法;未填 = 不可观战)
+    room->spectateVisibility = request.spectate_visibility();
     room->requiresResultConfirmation = !request.placement_operation_id().empty();
     room->outcomeProtocol = request.outcome_protocol_version();
     room->placementOperation = request.placement_operation_id();
@@ -803,6 +829,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
              << " battle_config_id=" << request.battle_config_id()
              << " match_mode=" << request.match_mode()
              << " deadline_ms=" << deadlineMs
+             << " spectate_visibility=" << ::eSpectateVisibility_Name(request.spectate_visibility())
              << " activity_kind=" << ::eBattleActivityKind_Name(request.activity_context().kind())
              << " activity_id=" << request.activity_context().activity_id()
              << " guild_id=" << request.activity_context().guild_id();
@@ -1020,9 +1047,16 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
     const auto canonical = request.SerializeAsString();
     auto operation = spectatorOperations_.find(key);
     if (operation != spectatorOperations_.end()) {
-        if (operation->second.cancelled || operation->second.admitBeforeMs != request.admit_before_ms()
+        if (operation->second.admitBeforeMs != request.admit_before_ms()
             || operation->second.canonicalRequest != canonical) {
             response.mutable_error_message()->set_id(kInvalidParameter);
+            return;
+        }
+        if (operation->second.cancelled) {
+            // 同 op、同请求的重放回首次拒绝码:match 的前台请求与后台恢复可能并发发同一个 op,先到的回满员,
+            // 后到的若回 kInvalidParameter,这次观战会被永久记成「无法观战」,而不是转中继档。
+            const uint32_t firstReject = operation->second.rejectTip;
+            response.mutable_error_message()->set_id(firstReject != 0 ? firstReject : kInvalidParameter);
             return;
         }
     } else {
@@ -1037,6 +1071,21 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
     }
     // 所有失败都封闭原意图；只在完成准入/精确重放的成功分支恢复为active。
     operation->second.cancelled = true;
+    // 下面有多个拒绝出口,首次拒绝码在退出时统一记进墓碑。按 key 重查、不握迭代器:拒绝路径上的 RetireObserver 可能已删掉这条墓碑。
+    struct FirstRejectRecorder
+    {
+        std::map<SpectatorKey, SpectatorOperation> &operations;
+        const SpectatorKey &key;
+        const ::AddObserverResponse &response;
+        ~FirstRejectRecorder()
+        {
+            const auto recorded = operations.find(key);
+            if (recorded != operations.end() && recorded->second.cancelled && recorded->second.rejectTip == 0)
+            {
+                recorded->second.rejectTip = response.error_message().id();
+            }
+        }
+    } recordFirstReject{spectatorOperations_, key, response};
     auto *room = FindRoom(battleId);
     if (room == nullptr)
     {
@@ -1132,12 +1181,34 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         return;
     }
 
+    // 可见性第二道闸(battle-spectate-tiered-fanout.md §10 第 6 条):match 已按同一份冻结的可见性拦过一道,
+    // battle 再拦一次,match 漏判或绕过 match 的 Add 都进不了私密局。默认拒绝:只放行 PUBLIC,未填与 PRIVATE
+    // 一样拒。回 kInvalidParameter:房间还在,不能回 kEntityIsNull(match 会懒剔除观战索引);也不是满员
+    // (满员会驱动 match 转中继档)。墓碑沿用上面已封闭的状态,同 op 迟到的 Add 不会翻成准入。
+    if (room->spectateVisibility != ::SPECTATE_VISIBILITY_PUBLIC)
+    {
+        LOG_WARN << "AddObserver rejected: battle is not open to spectators, battle_id=" << battleId
+                 << " observer=" << observerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
     // 席位按名单人数计:名单含已挂直连、待连接(登记后宽限内)与断线宽限中的观众,
     // 后两类到期由 ReclaimExpiredObserverSeats 回收腾位。幂等重放已在上面放行,不受满员影响。
     if (room->routingByObserver.size() >= kMaxObserversPerRoom)
     {
         LOG_INFO << "AddObserver spectator capacity reached: battle_id=" << battleId
                  << " observer=" << observerId << " cap=" << kMaxObserversPerRoom;
+        response.mutable_error_message()->set_id(kMatchSpectateFull);
+        return;
+    }
+    // 节点级观众席配额(口径同上按名单人数,跨全部房间求和):观众与参战者共用直连面的连接上限,
+    // 全节点观众席封顶在注入的配额。与单房间满员同码,对 match 都是「直连席已满」。
+    if (const auto nodeSeats = RegisteredObserverSeats(); nodeSeats >= observerSeatQuota_)
+    {
+        LOG_INFO << "AddObserver node spectator quota reached: battle_id=" << battleId
+                 << " observer=" << observerId << " node_observers=" << nodeSeats
+                 << " quota=" << observerSeatQuota_;
         response.mutable_error_message()->set_id(kMatchSpectateFull);
         return;
     }
@@ -1575,17 +1646,29 @@ void BattleRoomManager::PumpSqlOutcomes()
     const std::vector<uint64_t> ids(sqlOutcomeRooms_.begin(), sqlOutcomeRooms_.end());
     for (const auto battleId : ids) {
         auto* room = FindRoom(battleId);
-        if (!room || !room->outcomePending || room->outcomeExhausted) { sqlOutcomeRooms_.erase(battleId); continue; }
-        if (now - room->outcomeSince >= turnbattle::kMaxStagingSpan) {
-            // 有界重试耗尽不是ABORT；保留冻结可见状态，Match仍能由持久preflight裁决恢复。
-            room->outcomeExhausted = true; sqlOutcomeRooms_.erase(battleId);
+        if (!room || !room->outcomePending) { sqlOutcomeRooms_.erase(battleId); continue; }
+        // 三段节奏见 result_commit.h 的 SqlOutcomeRetryInterval 说明(2026-10-30):快速重放 → 越界后慢速重放 → 上限后本地删房。
+        const auto sinceFrozen = now - room->outcomeSince;
+        if (turnbattle::SqlOutcomeReplayAbandoned(sinceFrozen)) {
+            // 越界后又慢速重放满 kSqlOutcomeSlowReplaySpan 仍无决定(Match 长期不可达):本地删房。这不是 ABORT,
+            // 不发布任何终局;终局仍由 Match 凭持久原件恢复裁决。在途回包到来时 FindRoom 落空,直接丢弃。
+            LOG_ERROR << "metric=battle_sql_outcome_abandoned battle_id=" << battleId << " attempts=" << room->outcomeAttempt
+                      << ",no SQL decision long after the replay span;room erased locally, match decides from its persisted original";
+            CloseDirectConnections(*room, "sql_outcome_abandoned");
+            sqlOutcomeRooms_.erase(battleId);
+            EraseRoom(battleId);
+            continue;
+        }
+        if (!room->outcomeExhausted && turnbattle::SqlOutcomeSpanExceeded(sinceFrozen)) {
+            // 快速重放跨度用尽不是 ABORT:保留冻结可见状态,转为慢速重放(不再移出待提交集合,否则房间永远留在节点上)。
+            // Match 对同一原件按持久决定幂等回放,到权威截止后的 ABORT 也由 Match 自己落,慢速重放迟早拿到决定。
+            room->outcomeExhausted = true;
             LOG_ERROR << "metric=battle_sql_outcome_unconfirmed battle_id=" << battleId;
             // 之后由报数定时器每 60s 报 sql_unconfirmed=(ReportExhaustedStagingRooms,2026-10-22 评审补)。
             EnsureSettlementBacklogReporter();
-            continue;
         }
         if (room->outcomeInFlight || now < room->nextOutcomeAttempt) continue;
-        room->nextOutcomeAttempt = now + std::chrono::seconds(5);
+        room->nextOutcomeAttempt = now + turnbattle::SqlOutcomeRetryInterval(room->outcomeExhausted);
         const char* secret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
         if (!OutcomeSigningKeyReady(secret ? secret : "") || room->targetInstance.empty() || room->placementOperation.empty()) continue;
         auto& registry = tlsNodeContextManager.GetRegistry(common::base::MatchNodeService);
@@ -1975,16 +2058,14 @@ void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::Turn
         PushBattleFrame(room, playerId, BattleClientPlayerNotifyTurnResultMessageId, personal);
     }
     // 观众版只做一份(全员冷却都剔除、不带任何人的道具余量),消息号不同
-    //(D8:客户端观战/参战两套状态机互不干扰)
-    if (!room.routingByObserver.empty())
+    //(D8:客户端观战/参战两套状态机互不干扰);观众帧与收信人无关,同一份信封写给 L0 观众与中继 / 广播通道
+    if (room.HasSpectateAudience())
     {
         ::TurnResultS2C spectate = result;
         RedactStateForViewer(*spectate.mutable_state(), 0);
-        for (const auto &[observerId, routing] : room.routingByObserver)
-        {
-            PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateTurnResultMessageId,
-                            spectate);
-        }
+        const auto envelope = ClientEnvelope(BattleClientPlayerNotifySpectateTurnResultMessageId, spectate);
+        PushSpectatorFrame(room, envelope);
+        PublishSpectateTurn(room, result.round_index(), envelope);
     }
 }
 
@@ -2025,7 +2106,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
     }
 }
 
-void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t observerId) const
+::SpectateStateS2C BattleRoomManager::BuildSpectatorState(const BattleRoom &room, const uint32_t observerCount) const
 {
     ::SpectateStateS2C state;
     *state.mutable_state() = room.pendingVisibleState ? *room.pendingVisibleState : room.engine.BuildStateSnapshot();
@@ -2034,10 +2115,15 @@ void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t
     state.mutable_state()->set_action_deadline_ms(room.actionDeadlineMs);
     // 观众视角:全员冷却剔除,不带任何人的道具余量(G7)
     RedactStateForViewer(*state.mutable_state(), 0);
-    // 只数有活直连的观众:待连接 / 断线宽限中的席位不算"正在看"(满员判定另按名单人数)
-    state.set_observer_count(LiveObserverCount(room));
+    state.set_observer_count(observerCount);
+    return state;
+}
 
-    PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateStateMessageId, state);
+void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t observerId) const
+{
+    // 只数有活直连的观众:待连接 / 断线宽限中的席位不算"正在看"(满员判定另按名单人数)
+    PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateStateMessageId,
+                    BuildSpectatorState(room, LiveObserverCount(room)));
 }
 
 uint32_t BattleRoomManager::LiveObserverCount(const BattleRoom &room) const
@@ -2053,13 +2139,26 @@ uint32_t BattleRoomManager::LiveObserverCount(const BattleRoom &room) const
     return count;
 }
 
+size_t BattleRoomManager::RegisteredObserverSeats() const
+{
+    size_t seats = 0;
+    for (const auto battleId : rooms_.Ids())
+    {
+        if (const auto *room = rooms_.Find(battleId); room != nullptr)
+        {
+            seats += room->routingByObserver.size();
+        }
+    }
+    return seats;
+}
+
 void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
                                                   const ::eSpectateEndReason reason,
                                                   const ::eBattleOutcome outcome)
 {
     // 房间收尾 / 作废:观众席不再回收(房间对象析构时定时器也会取消,这里显式收口)
     room.observerSeatTimer.Cancel();
-    if (room.routingByObserver.empty())
+    if (!room.HasSpectateAudience())
     {
         return;
     }
@@ -2068,6 +2167,13 @@ void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
     end.set_battle_id(room.battleId);
     end.set_outcome(outcome);
     end.set_reason(reason);
+    // 同一帧只序列化一次:中继 / 广播通道与 L0 观众共用这份信封,reason 同值
+    const auto envelope = ClientEnvelope(BattleClientPlayerNotifySpectateEndMessageId, end);
+    PublishSpectateEnd(room, envelope);
+    if (room.routingByObserver.empty())
+    {
+        return;
+    }
 
     // 先抄名单再逐个摘除:RetireObserver 会改 routingByObserver
     std::vector<uint64_t> observers;
@@ -2076,11 +2182,11 @@ void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
     {
         observers.push_back(observerId);
     }
-    // 同一条直连先推终局包再关(关闭推迟到本轮 loop 之后,shutdown 等输出缓冲排空再 FIN):
-    // 观众先看到结束原因。没有直连的观众收不到它(战斗帧不回落,§22 D68)
+    // 先把同一帧终局包推给全部观众(编码一次),再逐个摘除。关闭推迟到本轮 loop 之后(shutdown 等输出缓冲
+    // 排空再 FIN),每条直连上仍是终局包先于 FIN,观众先看到结束原因。没有直连的观众收不到它(战斗帧不回落,§22 D68)
+    PushSpectatorFrame(room, envelope);
     for (const auto observerId : observers)
     {
-        PushBattleFrame(room, observerId, BattleClientPlayerNotifySpectateEndMessageId, end);
         RetireObserver(room, observerId, "spectate_end");
     }
 
@@ -2293,6 +2399,21 @@ void BattleRoomManager::StopSqlOutcomes()
 
 // ---- 客户端直连(设计文档 §18,D23-D28;下行出口 turn-based §22 D68) ----
 
+void BattleRoomManager::SetClientEdge(BattleClientEdge *edge)
+{
+    if (edge == nullptr)
+    {
+        edge_.reset();
+        return;
+    }
+    edge_ = std::ref(*edge);
+    // 观众配额是直连面连接预算的一部分,随借用直连面注入一次(调用时机见头文件)。
+    const size_t effectiveMax = edge->EffectiveMaxConnections();
+    SetObserverSeatQuota(ObserverSeatQuotaFor(effectiveMax));
+    LOG_INFO << "battle observer seat quota set: quota=" << observerSeatQuota_
+             << " effective_max_connections=" << effectiveMax;
+}
+
 muduo::net::TcpConnectionPtr BattleRoomManager::LiveDirectConnOf(const BattleRoom &room,
                                                                  const uint64_t playerId) const
 {
@@ -2316,33 +2437,56 @@ muduo::net::TcpConnectionPtr BattleRoomManager::LiveDirectConnOf(const BattleRoo
 
 namespace
 {
-    // 经已验证的直连写一条 S2C(MessageContent 信封,与大厅连接同一线协议)。
+    // 经已验证的直连写一条 S2C。
     void SendOverDirect(const BattleClientEdge &edge, const muduo::net::TcpConnectionPtr &conn,
                         const uint32_t messageId, const ::google::protobuf::Message &message)
     {
-        ::MessageContent content;
-        content.set_message_id(messageId);
-        content.set_serialized_message(message.SerializeAsString());
-        edge.Send(conn, content);
+        edge.Send(conn, ClientEnvelope(messageId, message));
     }
 } // namespace
+
+muduo::net::TcpConnectionPtr BattleRoomManager::BattleFrameConnOf(const BattleRoom &room, const uint64_t playerId,
+                                                                  const uint32_t messageId) const
+{
+    auto conn = LiveDirectConnOf(room, playerId);
+    switch (battle_push_policy::Decide(battle_push_policy::PushCategory::kBattleFrame, conn != nullptr))
+    {
+    case battle_push_policy::PushRoute::kDirect:
+        return conn;
+    case battle_push_policy::PushRoute::kViaGate:
+        // 战斗帧的判定不会产出 kViaGate(tests/battle_push_policy_test.cpp 钉住);
+        // 本出口也没有路由可回落,防御性按丢弃处理
+    case battle_push_policy::PushRoute::kDrop:
+        break;
+    }
+    LogBattleFrameDroppedSampled(room.battleId, playerId, messageId);
+    return nullptr;
+}
 
 void BattleRoomManager::PushBattleFrame(const BattleRoom &room, const uint64_t playerId,
                                         const uint32_t messageId,
                                         const ::google::protobuf::Message &message) const
 {
-    const auto conn = LiveDirectConnOf(room, playerId);
-    switch (battle_push_policy::Decide(battle_push_policy::PushCategory::kBattleFrame, conn != nullptr))
+    if (const auto conn = BattleFrameConnOf(room, playerId, messageId))
     {
-    case battle_push_policy::PushRoute::kDirect:
         SendOverDirect(edge_->get(), conn, messageId, message);
+    }
+}
+
+void BattleRoomManager::PushSpectatorFrame(const BattleRoom &room, const ::MessageContent &envelope) const
+{
+    if (room.routingByObserver.empty())
+    {
         return;
-    case battle_push_policy::PushRoute::kViaGate:
-        // 战斗帧的判定不会产出 kViaGate(tests/battle_push_policy_test.cpp 钉住);
-        // 本出口也没有路由可回落,防御性按丢弃处理
-    case battle_push_policy::PushRoute::kDrop:
-        LogBattleFrameDroppedSampled(room.battleId, playerId, messageId);
-        return;
+    }
+    // 一帧只分帧一次,逐条直连写出同一份字节(共享字节的写法约束见 BattleClientEdge::SendEncoded)
+    const auto frame = BattleClientEdge::EncodeFrame(envelope);
+    for (const auto &[observerId, routing] : room.routingByObserver)
+    {
+        if (const auto conn = BattleFrameConnOf(room, observerId, envelope.message_id()))
+        {
+            edge_->get().SendEncoded(conn, frame);
+        }
     }
 }
 
@@ -3270,4 +3414,170 @@ void BattleRoomManager::HandleIssueBattleTicket(const ::IssueBattleTicketRequest
     }
     LOG_INFO << "IssueBattleTicket reissuance succeeded: battle_id=" << request.battle_id()
              << " player_id=" << playerId << " role=" << ::eBattleTicketRole_Name(role);
+}
+
+// ---- 观战中继(L1)/ 全服广播(L2)(battle-spectate-tiered-fanout.md §15.4) ----
+
+BattleRoomManager::BattleRoom *BattleRoomManager::FindSpectateChannelRoom(const uint64_t battleId,
+                                                                          const std::string &targetInstanceId,
+                                                                          uint32_t &rejectTip)
+{
+    if (!gNode || targetInstanceId != gNode->GetNodeInfo().node_uuid())
+    {
+        LOG_WARN << "spectate channel request rejected: target instance mismatch, battle_id=" << battleId
+                 << " target_instance_id=" << targetInstanceId;
+        rejectTip = kInvalidParameter;
+        return nullptr;
+    }
+    auto *room = FindRoom(battleId);
+    if (room == nullptr)
+    {
+        // kEntityIsNull 是 match 懒剔除观战索引的信号(同 AddObserver),别换 tip
+        LOG_INFO << "spectate channel request: room does not exist, battle_id=" << battleId;
+        rejectTip = kEntityIsNull;
+        return nullptr;
+    }
+    // 可见性闸(同 AddObserver 第二道闸):只放行 PUBLIC,未填与 PRIVATE 一样拒。房间其实还在,不能回 kEntityIsNull
+    if (room->spectateVisibility != ::SPECTATE_VISIBILITY_PUBLIC)
+    {
+        LOG_WARN << "spectate channel request rejected: battle is not open to spectators, battle_id=" << battleId;
+        rejectTip = kInvalidParameter;
+        return nullptr;
+    }
+    return room;
+}
+
+void BattleRoomManager::HandleAttachRelayGate(const ::AttachRelayGateRequest &request,
+                                              ::AttachRelayGateResponse &response)
+{
+    const auto battleId = request.battle_id();
+    uint32_t rejectTip = 0;
+    auto *room = FindSpectateChannelRoom(battleId, request.target_instance_id(), rejectTip);
+    if (room == nullptr)
+    {
+        response.mutable_error_message()->set_id(rejectTip);
+        return;
+    }
+    const auto gateNodeId = request.gate_node_id();
+    const auto &gateInstanceId = request.gate_instance_id();
+    // fail-closed(AGENTS.md §7.2):空目标会关掉 gate 侧的目标过滤,这样的 gate 不能进中继表
+    if (gateNodeId == 0 || gateInstanceId.empty())
+    {
+        LOG_ERROR << "AttachRelayGate invalid gate target: battle_id=" << battleId << " gate_node_id=" << gateNodeId
+                  << " gate_instance_id=" << gateInstanceId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    response.set_battle_instance_id(gNode->GetNodeInfo().node_uuid());
+    response.set_deadline_ms(room->deadlineMs);
+    if (room->spectateBroadcast)
+    {
+        response.set_broadcast(true);
+        return;
+    }
+    auto &attachedInstanceId = room->relayGates[gateNodeId];
+    if (attachedInstanceId == gateInstanceId)
+    {
+        return;
+    }
+    attachedInstanceId = gateInstanceId;
+    // 只给这台 gate 补发关键帧:它从这一刻才开始读本场,其它 gate 已有缓存
+    auto frame = BuildSpectateStateFrame(*room);
+    spectateFramePublisher_.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
+    LOG_INFO << "AttachRelayGate succeeded: battle_id=" << battleId << " gate_node_id=" << gateNodeId
+             << " gate_instance_id=" << gateInstanceId << " relay_gates=" << room->relayGates.size();
+}
+
+void BattleRoomManager::HandlePromoteSpectateBroadcast(const ::PromoteSpectateBroadcastRequest &request,
+                                                       ::PromoteSpectateBroadcastResponse &response)
+{
+    const auto battleId = request.battle_id();
+    uint32_t rejectTip = 0;
+    auto *room = FindSpectateChannelRoom(battleId, request.target_instance_id(), rejectTip);
+    if (room == nullptr)
+    {
+        response.mutable_error_message()->set_id(rejectTip);
+        return;
+    }
+
+    response.set_battle_instance_id(gNode->GetNodeInfo().node_uuid());
+    response.set_deadline_ms(room->deadlineMs);
+    if (room->spectateBroadcast)
+    {
+        return;
+    }
+    room->spectateBroadcast = true;
+    auto frame = BuildSpectateStateFrame(*room);
+    spectateFramePublisher_.PublishToBroadcast(frame);
+    LOG_INFO << "PromoteSpectateBroadcast succeeded: battle_id=" << battleId
+             << " relay_gates=" << room->relayGates.size();
+}
+
+::contracts::kafka::SpectateFrameEvent BattleRoomManager::NewSpectateFrame(const BattleRoom &room,
+                                                                           const ::contracts::kafka::eSpectateFrameKind kind,
+                                                                           const uint32_t roundIndex,
+                                                                           const ::MessageContent &envelope) const
+{
+    ::contracts::kafka::SpectateFrameEvent frame;
+    frame.set_battle_id(room.battleId);
+    // 通道都是核对过本实例之后才开的,走到这里 gNode 恒非空;真为空时实例留空,gate 按实例不符丢弃,不会误收
+    if (gNode != nullptr)
+    {
+        frame.set_battle_instance_id(gNode->GetNodeInfo().node_uuid());
+    }
+    frame.set_round_index(roundIndex);
+    frame.set_kind(kind);
+    frame.set_client_frame(envelope.SerializeAsString());
+    frame.set_deadline_ms(room.deadlineMs);
+    return frame;
+}
+
+::contracts::kafka::SpectateFrameEvent BattleRoomManager::BuildSpectateStateFrame(const BattleRoom &room) const
+{
+    // observer_count = 0:中继 / 广播档的观众分散在各 gate,battle 不知道人数,0 表示未知(§15.1)
+    const auto state = BuildSpectatorState(room, 0);
+    return NewSpectateFrame(room, ::contracts::kafka::SPECTATE_FRAME_STATE, state.state().round_index(),
+                            ClientEnvelope(BattleClientPlayerNotifySpectateStateMessageId, state));
+}
+
+void BattleRoomManager::PublishSpectateTurn(const BattleRoom &room, const uint32_t roundIndex,
+                                            const ::MessageContent &envelope)
+{
+    if (!room.spectateBroadcast && room.relayGates.empty())
+    {
+        return;
+    }
+    auto frame = NewSpectateFrame(room, ::contracts::kafka::SPECTATE_FRAME_TURN, roundIndex, envelope);
+    // 升档之后只发广播:每台 gate 都在读它,再逐台中继只会让 battle 的产出继续随 gate 数增长(§3 档位规则)
+    if (room.spectateBroadcast)
+    {
+        spectateFramePublisher_.PublishToBroadcast(frame);
+        return;
+    }
+    for (const auto &[gateNodeId, gateInstanceId] : room.relayGates)
+    {
+        spectateFramePublisher_.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
+    }
+}
+
+void BattleRoomManager::PublishSpectateEnd(const BattleRoom &room, const ::MessageContent &envelope)
+{
+    if (!room.spectateBroadcast && room.relayGates.empty())
+    {
+        return;
+    }
+    auto frame = NewSpectateFrame(room, ::contracts::kafka::SPECTATE_FRAME_END, room.engine.BuildStateSnapshot().round_index(),
+                                  envelope);
+    // 升档之后只发广播:与最后一回合的 TURN 同分区保序。再发给升档前挂的 gate 的话,两条 topic 之间没有顺序,
+    // 中继 END 可能先到,gate 收尾后把随后到的广播 TURN 丢掉,观众看不到最后一回合。
+    if (room.spectateBroadcast)
+    {
+        spectateFramePublisher_.PublishToBroadcast(frame);
+        return;
+    }
+    for (const auto &[gateNodeId, gateInstanceId] : room.relayGates)
+    {
+        spectateFramePublisher_.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
+    }
 }

@@ -263,7 +263,7 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_profile_component()->CopyFrom(*profile);
     bag_marshal::Marshal(player, *message.mutable_bag_component());
     mission_marshal::Marshal(player, *message.mutable_mission_component());
-	// 资产通道账本与 currency / bag_component 同记录同 DBTask(不变量 I3)。
+	// 资产通道账本与 currency / bag_component 同记录同一次提交(不变量 I3)。
 	// 位置必须在下面那对 currency CopyFrom / SaveToProto **之外** —— 夹在中间会把
 	// 刚写进去的补缴欠款抹掉(见下条注释)。
 	message.mutable_asset_op_ledger()->CopyFrom(*assetOpLedger);

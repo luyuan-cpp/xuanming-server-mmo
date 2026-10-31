@@ -62,6 +62,8 @@ enum ActivityBattleReject : int;
 extern const uint32_t ActivityBattleReject_internal_data_[];
 enum BattleOutcomeDecision : int;
 extern const uint32_t BattleOutcomeDecision_internal_data_[];
+enum SpectateFeaturedReject : int;
+extern const uint32_t SpectateFeaturedReject_internal_data_[];
 class CancelActivityBattleRequest;
 struct CancelActivityBattleRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -94,6 +96,22 @@ extern const ::google::protobuf::internal::ClassDataFull CommitBattleOutcomeResp
 #else
 extern const CommitBattleOutcomeResponseGlobalsTypeInternal CommitBattleOutcomeResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetSpectateFeaturedRequest;
+struct SetSpectateFeaturedRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetSpectateFeaturedRequestGlobalsTypeInternal SetSpectateFeaturedRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetSpectateFeaturedRequest_class_data_;
+#else
+extern const SetSpectateFeaturedRequestGlobalsTypeInternal SetSpectateFeaturedRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetSpectateFeaturedResponse;
+struct SetSpectateFeaturedResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetSpectateFeaturedResponseGlobalsTypeInternal SetSpectateFeaturedResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetSpectateFeaturedResponse_class_data_;
+#else
+extern const SetSpectateFeaturedResponseGlobalsTypeInternal SetSpectateFeaturedResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class StartActivityBattleRequest;
 struct StartActivityBattleRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -119,6 +137,9 @@ internal::EnumTraitsT<::match::ActivityBattleReject_internal_data_>
 template <>
 internal::EnumTraitsT<::match::BattleOutcomeDecision_internal_data_>
     internal::EnumTraitsImpl::value<::match::BattleOutcomeDecision>;
+template <>
+internal::EnumTraitsT<::match::SpectateFeaturedReject_internal_data_>
+    internal::EnumTraitsImpl::value<::match::SpectateFeaturedReject>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -206,6 +227,48 @@ template <>
 [[nodiscard]] inline bool BattleOutcomeDecision_Parse(
     ::absl::string_view name, BattleOutcomeDecision* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<BattleOutcomeDecision>(BattleOutcomeDecision_descriptor(), name,
+                                           value);
+}
+enum SpectateFeaturedReject : int {
+  SPECTATE_FEATURED_REJECT_NONE = 0,
+  SPECTATE_FEATURED_REJECT_NOT_FOUND = 1,
+  SPECTATE_FEATURED_REJECT_PRIVATE = 2,
+  SPECTATE_FEATURED_REJECT_INTERNAL = 3,
+  SpectateFeaturedReject_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  SpectateFeaturedReject_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t SpectateFeaturedReject_internal_data_[];
+inline constexpr SpectateFeaturedReject SpectateFeaturedReject_MIN =
+    static_cast<SpectateFeaturedReject>(0);
+inline constexpr SpectateFeaturedReject SpectateFeaturedReject_MAX =
+    static_cast<SpectateFeaturedReject>(3);
+[[nodiscard]] inline bool SpectateFeaturedReject_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int SpectateFeaturedReject_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+SpectateFeaturedReject_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(SpectateFeaturedReject) {
+  return SpectateFeaturedReject_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& SpectateFeaturedReject_Name(T value) {
+  static_assert(::std::is_same<T, SpectateFeaturedReject>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to SpectateFeaturedReject_Name().");
+  return SpectateFeaturedReject_Name(static_cast<SpectateFeaturedReject>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& SpectateFeaturedReject_Name(SpectateFeaturedReject value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<SpectateFeaturedReject_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool SpectateFeaturedReject_Parse(
+    ::absl::string_view name, SpectateFeaturedReject* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<SpectateFeaturedReject>(SpectateFeaturedReject_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -446,6 +509,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartActivityBattleResponse final :
     int reject_;
     ::uint32_t formation_state_;
     ::uint64_t battle_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5finternal_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetSpectateFeaturedResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SetSpectateFeaturedResponse) */ {
+ public:
+  inline SetSpectateFeaturedResponse() : SetSpectateFeaturedResponse(nullptr) {}
+  ~SetSpectateFeaturedResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetSpectateFeaturedResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetSpectateFeaturedResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetSpectateFeaturedResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetSpectateFeaturedResponse(const SetSpectateFeaturedResponse& from) : SetSpectateFeaturedResponse(nullptr, from) {}
+  inline SetSpectateFeaturedResponse(SetSpectateFeaturedResponse&& from) noexcept : SetSpectateFeaturedResponse(nullptr, ::std::move(from)) {}
+  inline SetSpectateFeaturedResponse& operator=(const SetSpectateFeaturedResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetSpectateFeaturedResponse& operator=(SetSpectateFeaturedResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetSpectateFeaturedResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetSpectateFeaturedResponse>(&SetSpectateFeaturedResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 7;
+  friend void swap(SetSpectateFeaturedResponse& a, SetSpectateFeaturedResponse& b) { a.Swap(&b); }
+  inline void Swap(SetSpectateFeaturedResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetSpectateFeaturedResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetSpectateFeaturedResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetSpectateFeaturedResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetSpectateFeaturedResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetSpectateFeaturedResponse& from) { SetSpectateFeaturedResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetSpectateFeaturedResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SetSpectateFeaturedResponse"; }
+
+  explicit SetSpectateFeaturedResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetSpectateFeaturedResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetSpectateFeaturedResponse& from);
+  SetSpectateFeaturedResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetSpectateFeaturedResponse&& from) noexcept
+      : SetSpectateFeaturedResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRejectFieldNumber = 1,
+    kTierFieldNumber = 2,
+  };
+  // .match.SpectateFeaturedReject reject = 1;
+  void clear_reject() ;
+  [[nodiscard]] ::match::SpectateFeaturedReject reject() const;
+  void set_reject(::match::SpectateFeaturedReject value);
+
+  private:
+  ::match::SpectateFeaturedReject _internal_reject() const;
+  void _internal_set_reject(::match::SpectateFeaturedReject value);
+
+  public:
+  // .eSpectateTier tier = 2;
+  void clear_tier() ;
+  [[nodiscard]] ::eSpectateTier tier() const;
+  void set_tier(::eSpectateTier value);
+
+  private:
+  ::eSpectateTier _internal_tier() const;
+  void _internal_set_tier(::eSpectateTier value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SetSpectateFeaturedResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetSpectateFeaturedResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int reject_;
+    int tier_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -700,6 +976,237 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartActivityBattleRequest final : 
     ::BattleActivityContext* PROTOBUF_NULLABLE activity_context_;
     ::uint64_t request_id_;
     ::uint32_t battle_config_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5finternal_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetSpectateFeaturedRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SetSpectateFeaturedRequest) */ {
+ public:
+  inline SetSpectateFeaturedRequest() : SetSpectateFeaturedRequest(nullptr) {}
+  ~SetSpectateFeaturedRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetSpectateFeaturedRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetSpectateFeaturedRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetSpectateFeaturedRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetSpectateFeaturedRequest(const SetSpectateFeaturedRequest& from) : SetSpectateFeaturedRequest(nullptr, from) {}
+  inline SetSpectateFeaturedRequest(SetSpectateFeaturedRequest&& from) noexcept : SetSpectateFeaturedRequest(nullptr, ::std::move(from)) {}
+  inline SetSpectateFeaturedRequest& operator=(const SetSpectateFeaturedRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetSpectateFeaturedRequest& operator=(SetSpectateFeaturedRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetSpectateFeaturedRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetSpectateFeaturedRequest>(&SetSpectateFeaturedRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 6;
+  friend void swap(SetSpectateFeaturedRequest& a, SetSpectateFeaturedRequest& b) { a.Swap(&b); }
+  inline void Swap(SetSpectateFeaturedRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetSpectateFeaturedRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetSpectateFeaturedRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetSpectateFeaturedRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetSpectateFeaturedRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetSpectateFeaturedRequest& from) { SetSpectateFeaturedRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetSpectateFeaturedRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SetSpectateFeaturedRequest"; }
+
+  explicit SetSpectateFeaturedRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetSpectateFeaturedRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetSpectateFeaturedRequest& from);
+  SetSpectateFeaturedRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetSpectateFeaturedRequest&& from) noexcept
+      : SetSpectateFeaturedRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAuthFieldNumber = 3,
+    kBattleIdFieldNumber = 1,
+    kFeaturedFieldNumber = 2,
+  };
+  // .common.base.ServiceCallAuth auth = 3;
+  [[nodiscard]] bool has_auth()
+      const;
+  void clear_auth() ;
+  [[nodiscard]] const ::common::base::ServiceCallAuth& auth() const;
+  [[nodiscard]] ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE release_auth();
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL mutable_auth();
+  void set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE unsafe_arena_release_auth();
+
+  private:
+  const ::common::base::ServiceCallAuth& _internal_auth() const;
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // uint64 battle_id = 1;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // bool featured = 2;
+  void clear_featured() ;
+  [[nodiscard]] bool featured() const;
+  void set_featured(bool value);
+
+  private:
+  bool _internal_featured() const;
+  void _internal_set_featured(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SetSpectateFeaturedRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetSpectateFeaturedRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::uint64_t battle_id_;
+    bool featured_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2967,6 +3474,203 @@ inline void CommitBattleOutcomeResponse::set_allocated_auth(::common::base::Serv
   // @@protoc_insertion_point(field_set_allocated:match.CommitBattleOutcomeResponse.auth)
 }
 
+// -------------------------------------------------------------------
+
+// SetSpectateFeaturedRequest
+
+// uint64 battle_id = 1;
+inline void SetSpectateFeaturedRequest::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t SetSpectateFeaturedRequest::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.SetSpectateFeaturedRequest.battle_id)
+  return _internal_battle_id();
+}
+inline void SetSpectateFeaturedRequest::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.SetSpectateFeaturedRequest.battle_id)
+}
+inline ::uint64_t SetSpectateFeaturedRequest::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void SetSpectateFeaturedRequest::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// bool featured = 2;
+inline void SetSpectateFeaturedRequest::clear_featured() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.featured_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool SetSpectateFeaturedRequest::featured() const {
+  // @@protoc_insertion_point(field_get:match.SetSpectateFeaturedRequest.featured)
+  return _internal_featured();
+}
+inline void SetSpectateFeaturedRequest::set_featured(bool value) {
+  _internal_set_featured(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.SetSpectateFeaturedRequest.featured)
+}
+inline bool SetSpectateFeaturedRequest::_internal_featured() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.featured_;
+}
+inline void SetSpectateFeaturedRequest::_internal_set_featured(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.featured_ = value;
+}
+
+// .common.base.ServiceCallAuth auth = 3;
+inline bool SetSpectateFeaturedRequest::has_auth() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.auth_ != nullptr);
+  return value;
+}
+inline const ::common::base::ServiceCallAuth& SetSpectateFeaturedRequest::_internal_auth() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::ServiceCallAuth* p = _impl_.auth_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::ServiceCallAuth>(&::common::base::ServiceCallAuth_globals_);
+}
+inline const ::common::base::ServiceCallAuth& SetSpectateFeaturedRequest::auth() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SetSpectateFeaturedRequest.auth)
+  return _internal_auth();
+}
+inline void SetSpectateFeaturedRequest::unsafe_arena_set_allocated_auth(
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SetSpectateFeaturedRequest.auth)
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE SetSpectateFeaturedRequest::release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::common::base::ServiceCallAuth* released = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE SetSpectateFeaturedRequest::unsafe_arena_release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SetSpectateFeaturedRequest.auth)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::common::base::ServiceCallAuth* temp = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  return temp;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL SetSpectateFeaturedRequest::_internal_mutable_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::ServiceCallAuth>(GetArena());
+    _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(p);
+  }
+  return _impl_.auth_;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL SetSpectateFeaturedRequest::mutable_auth()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::common::base::ServiceCallAuth* _msg = _internal_mutable_auth();
+  // @@protoc_insertion_point(field_mutable:match.SetSpectateFeaturedRequest.auth)
+  return _msg;
+}
+inline void SetSpectateFeaturedRequest::set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SetSpectateFeaturedRequest.auth)
+}
+
+// -------------------------------------------------------------------
+
+// SetSpectateFeaturedResponse
+
+// .match.SpectateFeaturedReject reject = 1;
+inline void SetSpectateFeaturedResponse::clear_reject() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::match::SpectateFeaturedReject SetSpectateFeaturedResponse::reject() const {
+  // @@protoc_insertion_point(field_get:match.SetSpectateFeaturedResponse.reject)
+  return _internal_reject();
+}
+inline void SetSpectateFeaturedResponse::set_reject(::match::SpectateFeaturedReject value) {
+  _internal_set_reject(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.SetSpectateFeaturedResponse.reject)
+}
+inline ::match::SpectateFeaturedReject SetSpectateFeaturedResponse::_internal_reject() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::SpectateFeaturedReject>(_impl_.reject_);
+}
+inline void SetSpectateFeaturedResponse::_internal_set_reject(::match::SpectateFeaturedReject value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reject_ = value;
+}
+
+// .eSpectateTier tier = 2;
+inline void SetSpectateFeaturedResponse::clear_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::eSpectateTier SetSpectateFeaturedResponse::tier() const {
+  // @@protoc_insertion_point(field_get:match.SetSpectateFeaturedResponse.tier)
+  return _internal_tier();
+}
+inline void SetSpectateFeaturedResponse::set_tier(::eSpectateTier value) {
+  _internal_set_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.SetSpectateFeaturedResponse.tier)
+}
+inline ::eSpectateTier SetSpectateFeaturedResponse::_internal_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::eSpectateTier>(_impl_.tier_);
+}
+inline void SetSpectateFeaturedResponse::_internal_set_tier(::eSpectateTier value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_ = value;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -2989,6 +3693,12 @@ struct is_proto_enum<::match::BattleOutcomeDecision> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::BattleOutcomeDecision>() {
   return ::match::BattleOutcomeDecision_descriptor();
+}
+template <>
+struct is_proto_enum<::match::SpectateFeaturedReject> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::SpectateFeaturedReject>() {
+  return ::match::SpectateFeaturedReject_descriptor();
 }
 
 }  // namespace protobuf

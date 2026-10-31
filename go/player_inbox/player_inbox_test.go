@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"player_inbox/internal/config"
 	"player_inbox/internal/data"
@@ -36,6 +37,63 @@ func chainUnary(interceptors []grpc.UnaryServerInterceptor, info *grpc.UnaryServ
 		}
 	}
 	return next
+}
+
+// TestResolveMatchProducerDoesNotRefuseStartup 钉住 2026-10-30 的取舍(评审 B-2):白名单含 BATTLE 而 Match 密钥
+// 缺失 / 不足 32 字节时不拒启(k8s_deploy.ps1 只在全球匹配启用时注入它),但启动打一条 ERROR、gauge 置 0,
+// 两个 Battle 方法回 Unavailable;有效密钥则就绪、gauge 置 1、不打 ERROR。白名单没有 BATTLE 时缺键只记 INFO。
+func TestResolveMatchProducerDoesNotRefuseStartup(t *testing.T) {
+	const validSecret = "fixture-only-match-inbox-secret-000000000000"
+	battle := []string{"PLAYER_INBOX_MSG_BATTLE_SETTLEMENT"}
+	gmOnly := []string{"PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN"}
+	cases := []struct {
+		name      string
+		types     []string
+		secret    string
+		wantReady bool
+		wantError bool // 启动时那条 ERROR
+	}{
+		{"启用BATTLE+缺键", battle, "", false, true},
+		{"启用BATTLE+密钥过短", battle, "short-match-secret", false, true},
+		{"启用BATTLE+有效键", battle, validSecret, true, false},
+		{"未启用BATTLE+缺键", gmOnly, "", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logs := logtest.NewCollector(t)
+			var gauge []bool
+			getenv := func(name string) string {
+				if name != server.MatchProducerSecretEnv {
+					t.Fatalf("只应读 %s,读了 %s", server.MatchProducerSecretEnv, name)
+				}
+				return tc.secret
+			}
+			producer, err := resolveMatchProducer(tc.types, getenv, func(ready bool) { gauge = append(gauge, ready) })
+			if err != nil {
+				t.Fatalf("缺 Match 密钥不能拒启: %v", err)
+			}
+			if producer.Ready() != tc.wantReady || len(gauge) != 1 || gauge[0] != tc.wantReady {
+				t.Fatalf("ready=%v gauge=%v, want %v", producer.Ready(), gauge, tc.wantReady)
+			}
+			if logged := strings.Contains(logs.String(), server.MatchProducerSecretEnv+" is missing"); logged != tc.wantError {
+				t.Fatalf("启动 ERROR 出现=%v, want %v:\n%s", logged, tc.wantError, logs.String())
+			}
+			if tc.wantReady {
+				return
+			}
+			s := server.NewPlayerInboxServer(nil, time.Second, nil, producer)
+			req := &inboxpb.BattleSettlementInboxRequest{PlayerId: 11, BattleId: 21}
+			if _, err := s.EnqueueBattleSettlement(context.Background(), req); status.Code(err) != codes.Unavailable {
+				t.Fatalf("EnqueueBattleSettlement 应回 Unavailable: %v", err)
+			}
+			if _, err := s.LookupBattleSettlement(context.Background(), req); status.Code(err) != codes.Unavailable {
+				t.Fatalf("LookupBattleSettlement 应回 Unavailable: %v", err)
+			}
+		})
+	}
+	if _, err := resolveMatchProducer([]string{"NOT_A_TYPE"}, func(string) string { return validSecret }, func(bool) {}); err == nil {
+		t.Fatal("白名单解析失败应返回错误")
+	}
 }
 
 // TestUnaryChainGatesAdminMethods:链长 4(grpcstats / killswitch / 运维鉴权 / serverbase);

@@ -93,13 +93,6 @@ const (
 
 	// R30 库时钟(epoch 毫秒)。
 	routeDBNowSQL = "SELECT " + dbNowMsSQL
-
-	// R31 列出 zone_merge_fence 63 号片上**有行**的全部 zone(含已释放、已过期的;不加锁,一致读)。给 leader 的围栏镜像对账:
-	// 本方案只会给这些 zone 写 merge:in_progress:{zone}(leader 按 63 号片的生效围栏写,新版 merge_zone 获取前先确保 64 片行都在),
-	// 所以「删本方案写的过期镜像」只需按这份名单 MGET,不必每拍 SCAN 整个 mapping 库(核实意见 A1-4 / LR-1)。
-	// 片行由写者 ODKU 常驻、不删,名单只增。没有以 shard 开头的索引:与 RD4 一样是 (zone 数 × 已建分片行) 的全表扫,千 zone 量级是万行级。
-	// 实参:围栏片(63)。
-	routeListFenceZonesSQL = "SELECT zone_id FROM zone_merge_fence WHERE shard = ? ORDER BY zone_id"
 )
 
 // leader 标识的形状:route_leader@{洗过的 host,至多 74 字节}:{8 个十六进制字符},最长 13 + 74 + 1 + 8 = 96 字节,
@@ -724,33 +717,6 @@ func (s *RouteStore) ScanRoutesUpdatedSince(ctx context.Context, shard uint32, a
 	}
 	if len(out) > limit {
 		return nil, fmt.Errorf("scan player_route shard %d returned %d rows for limit %d", shard, len(out), limit)
-	}
-	return out, nil
-}
-
-// ListMergeFenceZones 列出 zone_merge_fence 63 号片上有行的全部 zone(R31,事务外一致读),按 zone_id 严格升序。
-// 给对账 leader 的围栏镜像对账:本方案写过镜像的 zone 都在这份名单里(见 R31 的注释),Redis 里这些 zone 的镜像按名单 MGET 复核;
-// 名单之外的 merge:in_progress:* 只能由 leader 的跨拍增量 SCAN 发现。没有行回空切片。
-// 主键 (zone_id, shard) 固定 shard 后 zone_id 唯一:重复或不升序说明回复形状坏了,报错(这份名单决定 leader 复核哪些镜像)。
-func (s *RouteStore) ListMergeFenceZones(ctx context.Context) ([]uint32, error) {
-	rows, err := s.db.QueryContext(ctx, routeListFenceZonesSQL, uint64(routeFenceReadShard))
-	if err != nil {
-		return nil, fmt.Errorf("list zone_merge_fence zones (shard %d): %w", routeFenceReadShard, err)
-	}
-	defer rows.Close()
-	var out []uint32
-	for rows.Next() {
-		var zone uint32
-		if err := rows.Scan(&zone); err != nil {
-			return nil, fmt.Errorf("scan zone_merge_fence zone: %w", err)
-		}
-		if n := len(out); n > 0 && out[n-1] >= zone {
-			return nil, fmt.Errorf("list zone_merge_fence zones: zone_id %d after %d (not strictly increasing; reply shape broken)", zone, out[n-1])
-		}
-		out = append(out, zone)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate zone_merge_fence zones: %w", err)
 	}
 	return out, nil
 }

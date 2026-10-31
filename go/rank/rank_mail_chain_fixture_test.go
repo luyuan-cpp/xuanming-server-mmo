@@ -97,7 +97,7 @@ func TestRankMailChainFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	install, err := authoritysql.OpenForMigration(ctx, adminDSN, database, true, schemaPermission)
+	install, err := authoritysql.OpenForMigration(ctx, adminDSN, database, authoritysql.BackendTiDB, schemaPermission)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestRankMailChainFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := authoritysql.Open(ctx, normalDSN, database, true, 2, authoritysql.Writer(writer))
+	db, err := authoritysql.Open(ctx, normalDSN, database, authoritysql.BackendTiDB, 2, authoritysql.Writer(writer))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -197,13 +197,13 @@ done | mysqlbinlog \
 kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$SHADOW_NS" \
   exec mysql-shadow -- sh -ec \
   'export MYSQL_PWD="${MYSQL_ROOT_PASSWORD:?影子容器未注入 root 凭据}"; exec mysql -uroot "$@"' \
-  mysql-client -e "SELECT COUNT(*) FROM zone_101_db.player_database;"
+  mysql-client -e "SELECT COUNT(DISTINCT player_id) FROM zone_101_db.player_store;"
 # zone_101_db 仅为示例,必须替换为本次恢复计划中的真实业务库。
 
 # 7a. 若仅是抽取单个玩家:从影子库 dump 该玩家行 → 导回生产
 # 7b. 若是全库回档:停生产 mysql,把影子 PVC 推上去
 #     ⚠ 全库回档 = 连同 mmorpg_global 里 id_segment 的发号水位一起倒回目标时刻,这是 ID 安全事件。
-#     MySQL 里的消费表虽然一起回档,但 Kafka 里的 tx_id / snapshot_id、Redis 里在线玩家 blob 的物品 guid、
+#     MySQL 里的消费表虽然一起回档,但 Kafka 里的 tx_id / snapshot_id、
 #     各进程内存里已经领走的号段都不会回退;不处理,下一次领段就把用过的号再发一遍
 #     (login 的 ON DUPLICATE KEY UPDATE 静默覆盖别人的角色行,流水表 INSERT IGNORE 静默丢新流水)。
 #     推上去之后、放开流量之前,按 deploy/k8s/README.md「恢复全局库前须先核对 id_segment.max_id」三步做完:
@@ -211,35 +211,27 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$SHADOW_NS" \
 #       ② 逐个 biz_tag 拿消费侧最大号(含各 zone 库、Kafka 两个 topic、mmorpg_trade / mmorpg_guild 独占库);
 #       ③ max_id 不大于该最大号的,抬到「最大号 + 1 + 至少一个 step」。
 #     7a 的单玩家抽取不涉及水位,不需要这一步。
-# 7c. 7a / 7b 之后、放开流量之前:删除受影响玩家的资产 SQL 提交证据 player:{<player_id>}:asset_sql_commit
-#     (共享 Redis DB 0;7b 为该 zone 全部玩家)。证据指向已被回滚的提交,不删的话资产通道会拿回滚前的账本终结
-#     对侧账,回档后的新存盘也发布不上去(docs/design/db-write-fencing-mysql.md §6.6、§9.2)。删除方向安全:
-#     待办等玩家下一次存盘重新发布。
 ```
 
 ### 4.2 单玩家 / 单 zone 数据抽取(更常见)
 
 合服失败 / 客服补单这种场景,只想从 PITR 影子库抽某玩家的几行,**不要替换整库**。
 
-> **2026-10-19 更正**:原示例没有 `--no-create-info`。mysqldump 默认带 `--opt`(含 `--add-drop-table`),
-> 导出的文件以 `DROP TABLE IF EXISTS` + `CREATE TABLE` 开头,照下面「在生产库 review 后再灌」执行会**清空生产 zone 库整张
-> `player_database`**。抽单玩家必须加 `--no-create-info --skip-add-drop-table`;`--single-transaction` 保证两张表同一快照,
-> `--hex-blob` 让 blob 列以十六进制出现、文件可审阅;两张玩家表要一起抽。
+> **2026-10-30 更正**:玩家存档只在 `player_store`(`player_id, kind` 一行一组,写权行是 `kind=0`)。必须加 `--no-create-info --skip-add-drop-table`,
+> 否则导出的文件会先 `DROP TABLE`,照下面灌回去会清空整张表。`--replace` 让它按主键覆盖,`--single-transaction` 保证这名玩家所有行是同一快照,
+> `--hex-blob` 让 payload 以十六进制出现、文件可审阅。
 >
-> 另外,灌回生产的旧行带着旧的行内围栏(`fence_owner_epoch` / `fence_save_seq`),与玩家当前的存盘屏障对不上,
-> login 冷加载会拒绝该玩家(「SQL 子表围栏尚未对齐父快照提交屏障」)。回灌生产不是本节能单独完成的操作,
-> 必须按 [db-write-fencing-mysql.md](../design/db-write-fencing-mysql.md) 的恢复流程处理屏障与归属计数器。
-> 只想在本地看或复现,用 [online-debug-data-fetch.md](online-debug-data-fetch.md) 的 player-bundle 导出 / 导入。
+> **灌回生产之前玩家必须离线**:写权行 `released=1`,没有现任。灌回的写权行代次比 Redis 的 owner 计数器旧,下次认领时 E 更大,go/db 按正常认领处理,不需要额外修屏障。
 
 ```bash
-# 在影子库上 dump 单玩家(两张玩家表,同一快照,不带建表 / 删表语句)
+# 在影子库上 dump 单玩家(同一快照,不带建表 / 删表语句)
 kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$SHADOW_NS" \
   exec mysql-shadow -- sh -ec \
   'export MYSQL_PWD="${MYSQL_ROOT_PASSWORD:?影子容器未注入 root 凭据}"; exec mysqldump -uroot "$@"' \
   mysqldump-client \
-  --no-create-info --skip-add-drop-table --single-transaction --hex-blob \
+  --no-create-info --skip-add-drop-table --replace --single-transaction --hex-blob \
   --where="player_id=12345678" \
-  zone_101_db player_database player_database_1 \
+  zone_101_db player_store \
   > player-12345678-recovered.sql
 
 # 在生产库 review 后再灌
@@ -269,7 +261,6 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 ### 5.2 zone 灾难回档(zone_data_rollback.md §3)
 
 §3 列的「步骤 2 MySQL PITR」直接用本文 §4.1 的流程。**先恢复到影子库**,确认无误后再决定换正式库还是抽数据。
-没有整体清空共享 Redis 时(`k8s_zone_rollback.ps1` 默认拒绝 FLUSHDB),按 §4.1 第 7c 步逐个删除该 zone 玩家的资产 SQL 提交证据键。
 
 ---
 
@@ -304,6 +295,9 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 - **2026-10-15**:首次安装与升级改用正规 infra 入口,明确 `mysql-init-sql`、目标 context / namespace、备份 CronJob 仍须单独安装及存量初始化边界。仅修订手册,未执行部署或恢复演练。
 - **2026-10-15 补充**:现行命令显式携带目标 context / kubeconfig / namespace;SQL 工具改为在容器内读 root 凭据;备份与影子实例先准备匹配目标环境的 Secret 引用清单,不再发布开发固定口令。
 - **2026-10-16**:§4.1 加第 7c 步、§5.2 加一句:回档后删除受影响玩家的资产 SQL 提交证据键 `player:{id}:asset_sql_commit`(db-write-fencing-mysql.md §6.6、§9.2)。仅修订手册,未演练。
+- **2026-10-30**:玩家存档只在 `player_store`,§4.1 第 7c 步和 §4.2 的两张表抽取随旧路径删除。仅修订手册,未演练。
+
+> **2026-10-30:本节以下到文末全部作废,只作历史保留。** 玩家存档已不在 Redis,恢复之后不需要重建存盘屏障,也没有 outbox 要裁决。`save_barrier_restore` 现在只剩 `-authority-phase`,其余模式退出码 2。恢复玩家数据只需要按 §4 恢复 `player_store`,放流前清掉 Redis 里的 `location`、`handoff` 这些协调键或等 scene_manager 判死,玩家下次认领时代次比库里新,按正常流程进场。
 
 ### 2026-10-17 父快照屏障的追加恢复要求
 

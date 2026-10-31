@@ -465,12 +465,8 @@ func TestMergeRecoveryAuditRequiresActualCompleteChecksAndFixedInputs(t *testing
 	fact := &pb.SqlWriterMaintenanceReceipt{RunId: plan.RunId, Generation: "fixture", AttemptRevision: 1, PlanProto: manifest, Evidence: &pb.SqlWriterMaintenanceReceipt_Evidence{OperationId: plan.RunId, ManifestDigest: digest[:], Detail: &pb.SqlWriterMaintenanceReceipt_Evidence_ReleaseReadiness{ReleaseReadiness: &pb.SqlWriterMaintenanceReceipt_ReleaseReadiness{MaintenancePublication: publication}}}}
 	manifestPin := authorityTestPin(t, "merge-manifest.json", []byte(`{"run_id":"merge-1-2","source_zone":1,"target_zone":2,"route_source":"db"}`))
 	audit := &pb.SqlWriterMaintenanceReceipt_MergeRecoveryAudit{AuditInstanceId: bytes.Repeat([]byte{25}, 16), RunId: plan.RunId, Generation: fact.Generation, AttemptRevision: 1, PlanDigest: digest[:], OriginalFreezeReceiptId: frozen.RequestId, OriginalFreezeReceiptDigest: frozen.ReceiptDigest, MaintenancePublication: publication, MergeManifest: manifestPin, MergeRunId: "merge-1-2", SourceZone: 1, TargetZone: 2, VerifyMerged: true, ObservedStartMs: 13, ObservedEndMs: 14, AuditSourcePins: []*pb.SqlWriterMaintenanceReceipt_SourcePin{plan.SourcePins[0]}}
-	for _, name := range []string{"player.name (global)", "friend", "friend_request", "guild_member", "verify:mapping_src", "verify:manifest_mapping", "verify:guild_zone", "verify:guild_rank", "verify:trade_listing", "verify:manifest_rows", "verify:save_barrier", "verify:source_hot_state", "verify:merge_fence", "verify:route_cache"} {
-		kind := pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_OBSERVATION
-		if name == "player.name (global)" {
-			kind = pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_RULE
-		}
-		audit.Checks = append(audit.Checks, &pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck{Name: name, Kind: kind, Status: pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_COMPLETE, Severity: "info", UniqueScope: "global", QuerySourcePins: audit.AuditSourcePins})
+	for _, name := range []string{"verify:merged_into", "verify:guild_zone", "verify:trade_market_zone", "verify:guild_rank"} {
+		audit.Checks = append(audit.Checks, &pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck{Name: name, Kind: pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_OBSERVATION, Status: pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_COMPLETE, Severity: "info", UniqueScope: "global", QuerySourcePins: audit.AuditSourcePins})
 	}
 	if err := verifyMergeRecoveryAudit(plan, fact, frozen, audit); err != nil {
 		t.Fatal("完整正式审计被拒绝", err)
@@ -486,7 +482,7 @@ func TestMergeRecoveryAuditRequiresActualCompleteChecksAndFixedInputs(t *testing
 		{"漏检查", func(a *pb.SqlWriterMaintenanceReceipt_MergeRecoveryAudit) { a.Checks = a.Checks[:len(a.Checks)-1] }},
 		{"重复检查", func(a *pb.SqlWriterMaintenanceReceipt_MergeRecoveryAudit) { a.Checks[1] = a.Checks[0] }},
 		{"规则冒充查询", func(a *pb.SqlWriterMaintenanceReceipt_MergeRecoveryAudit) {
-			a.Checks[0].Kind = pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_OBSERVATION
+			a.Checks[0].Kind = pb.SqlWriterMaintenanceReceipt_MergeRecoveryCheck_RULE
 		}},
 		{"警告不可绿化", func(a *pb.SqlWriterMaintenanceReceipt_MergeRecoveryAudit) { a.Checks[1].Severity = "warn" }},
 		{"查询未完成", func(a *pb.SqlWriterMaintenanceReceipt_MergeRecoveryAudit) {
@@ -553,7 +549,6 @@ func TestRouteRecoveryAuditPreservesFrozenAuditMeaningAndActualWatermark(t *test
 		{"未完成", func(a *pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit) { a.Stats.Completed = false }},
 		{"非冻结口径", func(a *pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit) { a.Stats.FrozenRecovery = false }},
 		{"真实差异", func(a *pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit) { a.Stats.MissingInDb = 1 }},
-		{"活跃合服围栏", func(a *pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit) { a.Stats.RedisFencesActive = 1 }},
 		{"审核中变化", func(a *pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit) { a.Stats.TransientCleared = 1 }},
 		{"伪完整缺marker", func(a *pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit) { a.ReadyMarkerRaw = nil }},
 		{"另一Redis", func(a *pb.SqlWriterMaintenanceReceipt_RouteRecoveryAudit) {

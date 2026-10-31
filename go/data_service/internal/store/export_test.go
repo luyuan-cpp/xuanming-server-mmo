@@ -4,6 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync/atomic"
+	"time"
+
+	"shared/idsegment"
 
 	"github.com/luyuancpp/proto2mysql"
 )
@@ -19,16 +23,39 @@ const (
 	// 同 guid 的排队者不成环。用例拿它扮演另一个并发写者。
 	InsertSnapshotOnDuplicateKeepSQLForTest = insertSnapshotOnDuplicateKeepSQL
 	// InsertSnapshotIfGuidAbsentLegacySQLForTest 唯一键不存在时的 NOT EXISTS 形态。
-	// 它同时是"旧版本二进制"的写法:滚动升级窗口的回归用它对着**新**表结构跑。
 	// 实参 = SnapshotInsertArgsForTest(row) 再追加一次 row.SnapshotGuid。
 	InsertSnapshotIfGuidAbsentLegacySQLForTest = insertSnapshotIfGuidAbsentLegacySQL
 	// LookupSnapshotIDByGuidNzSQLForTest 按唯一键点查已有 id 的语句(EXPLAIN 回归用)。
 	LookupSnapshotIDByGuidNzSQLForTest = lookupSnapshotIDByGuidNzSQL
 )
 
-// SnapshotInsertArgsForTest 按 InsertSnapshotSQLForTest 的占位符顺序展开一行,
+// testRowID 是用例共用的行号计数器:单调递增,所以「id 小 = 先到」这类用例语义不变(生产的行号是打散的,没有这个性质)。
+// 从当前纳秒起算,TiDB 用例共用一个库,重跑不会撞上次留下的行。
+var testRowID atomic.Uint64
+
+func init() { testRowID.Store(uint64(time.Now().UnixNano())) }
+
+type rowIDsForTest struct{}
+
+func (rowIDsForTest) Next(context.Context) (uint64, error) { return testRowID.Add(1), nil }
+
+// RowIDsForTest 是 SnapshotStore.UseRowIDs 的用例来源。
+var RowIDsForTest idsegment.Source = rowIDsForTest{}
+
+type mixedRowIDsForTest struct{}
+
+func (mixedRowIDsForTest) Next(context.Context) (uint64, error) {
+	return idsegment.MixID(testRowID.Add(1)), nil
+}
+
+// MixedRowIDsForTest 发打散的行号,与生产同形:写入落在主键中间,不在末尾。锁相关的用例用它再跑一轮。
+var MixedRowIDsForTest idsegment.Source = mixedRowIDsForTest{}
+
+// SnapshotInsertArgsForTest 按 InsertSnapshotSQLForTest 的占位符顺序展开一行,行号取自 RowIDsForTest(实参第一个),
 // 让用例不必再抄一份占位符顺序(抄了就会在加列时与生产漂移)。
-func SnapshotInsertArgsForTest(row *SnapshotRow) []any { return snapshotInsertArgs(row) }
+func SnapshotInsertArgsForTest(row *SnapshotRow) []any {
+	return snapshotInsertArgs(testRowID.Add(1), row)
+}
 
 // DeadlockRetriesForTest 返回本 store 因 1213 就地重跑 InsertSnapshotIfGuidAbsent / InsertSnapshotsIfGuidAbsent 的累计次数。
 func (s *SnapshotStore) DeadlockRetriesForTest() uint64 { return s.deadlockRetries.Load() }
@@ -60,9 +87,6 @@ const (
 // DedupePointDeleteSQLForTest 迁移去重那一步的**主键点删**语句(EXPLAIN 回归用:
 // 必须走 PRIMARY、key_len=8,不能退化成二级索引上的范围删)。
 func DedupePointDeleteSQLForTest(table string) string { return dedupePointDeleteSQL(table) }
-
-// SnapshotGuidNzExprForTest 生成列的表达式,真库用例造"同名但形状不对的列"时要用到它的反面。
-const SnapshotGuidNzExprForTest = snapshotGuidNzExpr
 
 // PlayerNameReserveSQLForTest / PlayerNameReleaseSQLForTest 让用例用与生产**同一段文本**扮演并发的
 // Reserve / 未提交的 Release(生产路径是自动提交,停不在提交之前,编排时只能把同一条语句放进显式事务)。
@@ -96,7 +120,7 @@ func PrimaryKeyColumnsForTest(ctx context.Context, db *sql.DB, dbName, tableName
 }
 
 // MySQLErrDeadlockForTest / MySQLErrDupEntryForTest 让真库用例按错误号判定时引用本包唯一的权威定义
-// (mysqlErrDeadlock 在 id_segment_store.go、mysqlErrDupEntry 在 player_name_store.go),不在用例里再写一份字面量。
+// (mysqlErrDeadlock 在 mysql_errors.go、mysqlErrDupEntry 在 player_name_store.go),不在用例里再写一份字面量。
 const (
 	MySQLErrDeadlockForTest = mysqlErrDeadlock
 	MySQLErrDupEntryForTest = mysqlErrDupEntry
@@ -109,8 +133,6 @@ func MigrateLockNameForTest(dbName string) string { return migrateLockName(dbNam
 // 免得用例里抄一份语句、改生产时两边漂移。编号同规格 b.4。
 const (
 	RouteReadWritableSQLForTest      = routeReadWritableSQL      // R1
-	RouteLockFenceShardSQLForTest    = routeLockFenceShardSQL    // R2
-	RouteEnsureFenceShardSQLForTest  = routeEnsureFenceShardSQL  // R3
 	RouteInsertNewSQLForTest         = routeInsertNewSQL         // R4
 	RouteLockRowSQLForTest           = routeLockRowSQL           // R5
 	RouteFillHomeSQLForTest          = routeFillHomeSQL          // R6a
@@ -120,7 +142,7 @@ const (
 	RouteMetaSeedSQLForTest          = routeMetaSeedSQL          // R15
 	RouteReconcileSeedSQLForTest     = routeReconcileSeedSQL     // R16
 	RouteProbeShardCheckSQLForTest   = routeProbeShardCheckSQL   // P4
-	// RouteDBNowMsSQLForTest 是库时钟毫秒的表达式:用例按库时钟造围栏的过期时刻,不用本机时钟。
+	// RouteDBNowMsSQLForTest 是库时钟毫秒的表达式:用例按库时钟取时刻,不用本机时钟。
 	RouteDBNowMsSQLForTest = dbNowMsSQL
 )
 

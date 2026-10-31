@@ -1,5 +1,5 @@
 # Kafka topic 预建 Job(一次性、幂等;2026-09-08,node-id-overhaul-plan §2.0c)。
-# 建两类按分区契约寻址的 topic:
+# 建三类按分区契约寻址的 topic:
 #   1) data_service 的两个审计 topic(见下);
 #   2) 控制面命令 topic gate-cmd_g<N> / scene-cmd_g<N>
 #      (docs/design/control-plane-topic-partitioning-20260908.md)。gate/scene 不再一个
@@ -7,7 +7,11 @@
 #      topic 名与 consumer group 名里都带被回收复用的 node_id,冻结的前任会把继任者的
 #      命令消费掉再丢弃。现在按 partition = node_id % P 寻址、消费端 assign 不进 group,
 #      所以分区数必须在任何节点起来之前按契约建好:少一个分区就有一批 node_id 永远收不到命令。
-#      旧的 per-node topic 不再预建,生产者切完后按 retention 自然过期。
+#      旧的 per-node topic 已退役,不再预建;
+#   3) 观战帧 topic gate-spectate_g<N> / spectate-bcast_g<N>(docs/design/battle-spectate-tiered-fanout.md §15.3),
+#      代号与命令 topic 同源。gate-spectate 与 gate 命令 topic 同一分区契约(partition = gate node_id % P);
+#      spectate-bcast 固定 16 分区(partition = battle_id % 16),每台 gate assign 全部分区,
+#      分区数与 C++ 常量 kSpectateBroadcastTopicPartitions(node_command_topic.h)相等,改数走换代号。
 #
 # 为什么要由部署侧建:kafka.yaml 的 broker 开着 auto.create.topics.enable 且 num.partitions=1,
 # C++ scene 一发消息就会把 topic 自动建成 1 分区;而 data_service 的 kafkautil.EnsureTopics
@@ -32,6 +36,8 @@
 # C++ 的 gate / scene 消费者把 max.poll.interval.ms 钉在 900000(15 分钟),所以命令 topic
 # 取 1 小时(4×)。本 Job 不只在建 topic 时带 --config,建完还会用 kafka-configs.sh --alter
 # 重新声明并读回核对 —— 否则一个被 auto-create 抢先建出来的 topic 会静默吃 broker 默认保留期。
+# 观战帧 topic 是这条规则的例外,同样显式声明:gate 都 assign + startAtEnd、不提交位点,帧过时即作废,没有回放,
+# 落后的 gate 丢的只是几帧画面,下一帧就追上(丢的不是 BindSession 这类命令)。所以广播档只留 10 分钟,中继档 1 小时同 gate-cmd。
 #
 # 幂等:--if-not-exists 建 topic,再 --describe 核对 PartitionCount,不符即失败(不假装成功);
 # retention.ms 每次都重新声明 + 回读核对。脚本每次都先 delete 再 apply 本 Job:template 不可变,
@@ -85,6 +91,14 @@ spec:
               value: "__KAFKA_SCENE_COMMAND_TOPIC__"
             - name: COMMAND_PARTITIONS
               value: "__KAFKA_COMMAND_PARTITIONS__"
+            # 观战帧 topic(docs/design/battle-spectate-tiered-fanout.md §15.3)。名字由 Apply-KafkaTopicInitJob 按命令 topic 的代号拼;
+            # gate-spectate 的分区数就是上面的 COMMAND_PARTITIONS,广播 topic 的分区数单独注入。
+            - name: GATE_SPECTATE_TOPIC
+              value: "__KAFKA_GATE_SPECTATE_TOPIC__"
+            - name: SPECTATE_BROADCAST_TOPIC
+              value: "__KAFKA_SPECTATE_BROADCAST_TOPIC__"
+            - name: SPECTATE_BROADCAST_PARTITIONS
+              value: "__KAFKA_SPECTATE_BROADCAST_PARTITIONS__"
             # topic 副本数:单 broker 是 1,多 broker 是 3(由 Apply-KafkaTopicInitJob 按 -KafkaBrokers 注入,
             # 与 kafka.yaml 的 broker 默认值、注入给 Go 服务的 KAFKA_TOPIC_REPLICATION_FACTOR 同源)。
             - name: REPLICATION_FACTOR
@@ -144,7 +158,8 @@ spec:
                 if [ "$got" != "$2" ]; then
                   echo "ERROR: topic $1 has PartitionCount=${got:-?} but the contract is $2." >&2
                   echo "       Audit-topic contracts are defined in go/data_service/etc/data_service.yaml;" >&2
-                  echo "       Command-topic contracts are defined by Kafka.CommandTopicPartitions in bin/etc/base_deploy_config.yaml." >&2
+                  echo "       Command-topic contracts are defined by Kafka.CommandTopicPartitions in bin/etc/base_deploy_config.yaml (also used by gate-spectate)." >&2
+                  echo "       spectate-bcast partitions are kSpectateBroadcastTopicPartitions in node_command_topic.h." >&2
                   echo "       Partition counts are immutable: bump the topic generation (new *_gN topic); never expand in place." >&2
                   echo "       If a producer auto-created this topic before this Job ran, delete the topic and re-run: k8s_deploy.ps1 -Command infra-kafka-topics" >&2
                   exit 1
@@ -183,7 +198,10 @@ spec:
               # 启动时新生成的 uuid)。保留期长只是白占磁盘。
               ensure_topic "$GATE_COMMAND_TOPIC" "$COMMAND_PARTITIONS" 3600000
               ensure_topic "$SCENE_COMMAND_TOPIC" "$COMMAND_PARTITIONS" 3600000
-              echo "kafka topic bootstrap done (audit + control-plane commands)"
+              # 观战帧 topic:中继保留 1 小时同 gate-cmd,广播只留 10 分钟(理由见文件头保留期一节)。
+              ensure_topic "$GATE_SPECTATE_TOPIC" "$COMMAND_PARTITIONS" 600000
+              ensure_topic "$SPECTATE_BROADCAST_TOPIC" "$SPECTATE_BROADCAST_PARTITIONS" 600000
+              echo "kafka topic bootstrap done (audit + control-plane commands + spectate frames)"
           resources:
             requests:
               cpu: 100m

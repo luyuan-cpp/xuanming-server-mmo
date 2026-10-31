@@ -27,10 +27,6 @@
 //   sceneIdAtExit / clientDisconnected 两个字段只在这两处写:HandleExitGameNode 首次挂组件时抄场景、按原因置位,
 //   MergeExitCause 在又来一次客户端断线时粘性置位。读它们的是疏散 / 排空改派的票据判定与确认核实
 //   (PlayerLifecycleSystem::DispatchEmergencyRelocate,relocate_confirm.h)。
-//   awaitingDbTaskAck / dbTaskResaveRounds 是下线收尾的 DBTask 回执闸门(player_exit::DecideDbTaskGate):
-//   awaitingDbTaskAck 只由 PlayerLifecycleSystem::FinishExitOrAwaitDbTaskAck 置位或清除;
-//   dbTaskResaveRounds 只由 FinishExitOrAwaitDbTaskAck 的重存分支递增,由 HandleExitGameNode 的"已在退出中"分支
-//   (ShouldRekickDbTaskExhausted 成立时)清零。读 awaitingDbTaskAck 的是 PlayerLifecycleSystem::OnDbTaskDispatchSettled。
 
 // 退出原因。A1′(断线释放标记)按它判定能不能写(exit_release_mark.h 的 DecideExitReleaseMark,
 // §12.6.3 第二步)。默认值 kUnspecified = 来源不明 = 不写标记:漏标只会少写。
@@ -81,13 +77,6 @@ struct PlayerExitIntentComp
 	// location 停在一个从未载入该玩家的节点上。与 cause 分开记:cause 只保留第一次的原因,排空 / 疏散发起的退出之后
 	// 才断线的玩家,cause 仍是 kSceneDrain / kIdentityConflict。
 	bool clientDisconnected{false};
-	// 退出存盘已收敛(Redis 已是当前内存),正在等本玩家在途 DBTask 的 Kafka 回执,或因投递失败重存 / 超限保留。
-	// 只由 PlayerLifecycleSystem::FinishExitOrAwaitDbTaskAck 置位或清除;PlayerLifecycleSystem::OnDbTaskDispatchSettled
-	// 据此决定回执落定后要不要恢复收尾(没置位 = 收尾还没走到闸门,由 Redis 落地回调自己走过来)。
-	bool awaitingDbTaskAck{false};
-	// 闸门因 DBTask 投递失败已经做过的重存轮次,上限 player_exit::kMaxExitDbTaskResaveRounds。与 resaveRounds
-	// (Redis 落地内容不收敛的重存)分开计:两种失败的成因与出口都不同。
-	uint8_t dbTaskResaveRounds{0};
 };
 
 namespace player_exit
@@ -232,76 +221,6 @@ namespace player_exit
 		return resaveRounds >= maxResaveRounds && !hasUnsettledSave;
 	}
 
-	// ── 下线收尾的 DBTask 回执闸门(scene 发 DBTask 失败后的脏快照修复,S5a)──────────────────────
-	// Redis 落地只证明 Redis 有了当前内存;MySQL 那一份走 DBTask(Kafka → go/db)。旧实现落地即销毁实体,
-	// DBTask 同步被拒 / 回执失败时 MySQL 永久落后、而能补写的内存已经没了。闸门让收尾等本玩家所有在途 DBTask
-	// 拿到回执:成功才销毁;投递失败按当前内存有界重存;超限保留实体(不销毁、不丢差额)。
-
-	// 闸门因投递失败重存的轮次上限。Kafka 不可用时重存只会再次失败,多试无益;超限后保留实体,出口是周期存盘
-	// (欠账时强制真写)、再一次退出请求(HandleExitGameNode 的 rekick)或停机看门狗。
-	// 只管可重试的失败:永久失败(消息过大等)不重存、不保留,见 DecideDbTaskGate 的 kFinishUnsynced。
-	inline constexpr uint8_t kMaxExitDbTaskResaveRounds = 3;
-
-	enum class DbTaskGateDecision : uint8_t
-	{
-		kFinish,          // 没有在途 DBTask、也不欠 MySQL:收尾销毁
-		kAwaitAck,        // 只有在途 DBTask:等回执(Pump 处理完回执后恢复收尾)
-		kResave,          // 有投递失败、还没到轮次上限:按当前内存重存一次
-		kRetainExhausted, // 有投递失败、已到上限:保留实体
-		kFinishUnsynced,  // 欠账的那次失败是永久性的(消息过大 / 无写权限等):重存必然失败,带着 MySQL 落后收尾销毁
-
-		kCount
-	};
-
-	constexpr std::size_t kDbTaskGateDecisionCount = static_cast<std::size_t>(DbTaskGateDecision::kCount);
-
-	inline constexpr const char *kDbTaskGateDecisionNames[] = {
-		"finish",
-		"await_ack",
-		"resave",
-		"retain_exhausted",
-		"finish_unsynced",
-	};
-	static_assert(std::size(kDbTaskGateDecisionNames) == kDbTaskGateDecisionCount,
-				  "kDbTaskGateDecisionNames 必须与 DbTaskGateDecision 一一对应");
-
-	constexpr const char *DbTaskGateDecisionName(DbTaskGateDecision decision)
-	{
-		const auto index = static_cast<std::size_t>(decision);
-		return index < kDbTaskGateDecisionCount ? kDbTaskGateDecisionNames[index] : "?";
-	}
-
-	// 需要重存优先于等回执:失败已经确定,再等剩下的回执也补不回那一份;重存发的是当前内存整份,
-	// 剩下的旧票据之后成败都会被它盖过(db_task_dispatch::DeliveryEffect::kFailedSuperseded)。
-	// failureIsPermanent(DbTaskDispatchSystem::PermanentFailure 有值;只在 needsResave 时有意义):欠账的那一代里有
-	// 永久失败 —— 例如某张子表超过 message.max.bytes,produce() 同步拒绝,重存在几次 Redis RTT 内就把轮次耗尽,
-	// 之后保留实体没有任何出口能补上(Kafka「恢复」不会让消息变小)。这时不论轮次、也不等剩下的回执(它们成败都改变不了
-	// 结论),直接收尾销毁;MySQL 的落后由新属主的首存补写(仍会撞同一个错误时同样补不上,有 ERROR 与计数可查)。
-	// 可重试的失败(队列满、fatal 冷却期、超时……)仍按轮次上限重存 / 保留,与改动前相同。
-	constexpr DbTaskGateDecision DecideDbTaskGate(uint32_t inFlight, bool needsResave, bool failureIsPermanent,
-												  uint8_t rounds, uint8_t maxRounds)
-	{
-		if (needsResave)
-		{
-			if (failureIsPermanent)
-			{
-				return DbTaskGateDecision::kFinishUnsynced;
-			}
-			return rounds < maxRounds ? DbTaskGateDecision::kResave : DbTaskGateDecision::kRetainExhausted;
-		}
-		return inFlight > 0 ? DbTaskGateDecision::kAwaitAck : DbTaskGateDecision::kFinish;
-	}
-
-	// 已在退出中又收到一次退出请求时,要不要给"因 DBTask 投递失败重存到上限、被保留"的实体重新开始重存:
-	// 实体停在闸门上(awaitingDbTaskAck)、确实欠 MySQL(needsResave)、轮次已到上限、没有在途 DBTask(有的话等它的回执)、
-	// 也没有在途 / 排队中的 Redis 存盘(有的话等它落地,由退出分支照常判定)。与 ShouldRekickExhaustedExit 是同一种出口:
-	// 停机时周期存盘已取消,exitAllPlayers 这一次就是它最后的重存机会。
-	constexpr bool ShouldRekickDbTaskExhausted(bool awaitingDbTaskAck, uint8_t rounds, uint8_t maxRounds, uint32_t inFlight,
-											   bool needsResave, bool hasUnsettledSave)
-	{
-		return awaitingDbTaskAck && needsResave && rounds >= maxRounds && inFlight == 0 && !hasUnsettledSave;
-	}
-
 	// 进场路由命中本节点上一个旧实体(仍在退出中的,或不在交接中的活实体)时,它是否已被别的持有者废黜过、
 	// 不得复用(复用 = 旧内存成真身,下一次带新 epoch 的存盘覆盖别处的进度,§12.6.1(d) 回档)。
 	// 活实体同样适用(复审 ownership-minor):中间有别的持有者时,它未落盘的改动带旧 epoch,本来也会被 CAS 拒。
@@ -317,6 +236,13 @@ namespace player_exit
 	//     再落回本节点铸出 E+3 —— 中间其实没有人持有过。此时丢弃重载属于安全方向(盘上是最新的已落盘状态;实体上
 	//     带旧 epoch 的未落盘改动本来也会被 CAS 拒,不会复制),代价是"退出重存超限被保留"的实体与活僵尸丢掉尚未
 	//     收敛的那段差额,exit_deposed_on_reentry 不再恒为 0(cross-zone-scene-travel.md §12.8 风险 4)。判据不变。
+	//   * G3a 墙钟地板(2026-10-30,zone-redis-regression-guard-20261022.md §4.3.1)之后铸造取 max(E+1, 当前毫秒),
+	//     几乎每一次铸造都跳 ≥2:中间没有别的持有者、只是落回本节点的那次首次落点,也会判成被废黜、丢弃重载。
+	//     仍是安全方向,而且生产配置下不丢进度:location 只在持有者的释放证据(退出存盘已落 Redis 之后写的释放标记)
+	//     到位之后才会被 LeaveScene 删掉(location-release-binding.md,等待超时不再授权删除),所以这次重载读到的就是
+	//     最新状态;「退出重存超限被保留」的实体,其 MySQL 补齐由存盘意图补投承担。代价是这类重登多一次冷读,
+	//     exit_deposed_on_reentry 的基线随铸造次数抬高。精确判据要靠路由事件带上「铸造所据的观察值」(观察值 == 缓存值
+	//     即中间无人持有),需要改协议与 gate → scene 透传,未做。判据不变。
 	//   * incoming 为 0(上游未填)或不大于缓存值(乱序的旧路由):无从判断 / 不新,照常复用。
 	//   * 缓存值为 0 同样无从判断,照常复用(与 incoming 为 0 对称,复审 liveness-minor):0 的约定语义是
 	//     "未知 / 上游未填"(player_ownership_comp.h),scene_manager 对 epoch 0 的落点一律铸造(§12.6.9 ③),

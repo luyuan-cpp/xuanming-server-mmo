@@ -96,7 +96,7 @@ func NewEmptyDB(t *testing.T) *DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 本组既有集成测试允许显式MySQL兼容端点；锁资格仍须runner提供真实原件。
+	// 本组既有集成测试 MySQL 与 TiDB 端点都能跑,档位按真实引擎选；锁资格仍须runner提供真实原件。
 	opts.AllowMySQL = true
 	fixture, err := sqltest.New(ctx, t, opts)
 	if err != nil {
@@ -110,7 +110,7 @@ func NewEmptyDB(t *testing.T) *DB {
 	if err = fixture.Schema.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&schemaPrincipal); err != nil {
 		t.Fatal(err)
 	}
-	common := store.MySQLConfig{Host: host, DBName: name, MaxOpenConn: 40, MaxIdleConn: 8}
+	common := store.MySQLConfig{Backend: fixture.Backend(), Host: host, DBName: name, MaxOpenConn: 40, MaxIdleConn: 8}
 	normalCfg := common
 	normalCfg.User, normalCfg.Password, normalCfg.Permission = normal.User, normal.Passwd, fixture.Permission
 	schemaCfg := common
@@ -141,9 +141,7 @@ func (d *DB) Migrate(ctx context.Context, opts store.MigrateOptions) error {
 
 // NewMigratedDB 建库并跑一遍 store.MigrateSchema(五张表就位)。
 //
-// 刻意**不**预建任何 id_segment 行(MigrateOptions 为零值):多数用例要的是"表在、行空"
-// 的起点,好断言首次使用 / 拒绝路径对表零写入。需要 bootstrap 行的用例自己再调一次
-// store.MigrateSchema 并传 BootstrapTags(迁移幂等,重复跑不改已建好的表)。
+// MigrateOptions 为零值,多数用例要的是"表在、行空"的起点,好断言首次使用 / 拒绝路径对表零写入。
 func NewMigratedDB(t *testing.T) *DB {
 	t.Helper()
 	db := NewEmptyDB(t)

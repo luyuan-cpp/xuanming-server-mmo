@@ -192,7 +192,13 @@
     <ClCompile Include="../../nodes/battle/tests/battle_observer_contract_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="../../nodes/battle/tests/battle_spectate_relay_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="../../nodes/battle/logic/battle_room_manager.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="../../nodes/battle/logic/battle_spectate_relay.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="../../nodes/battle/client/battle_client_edge.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

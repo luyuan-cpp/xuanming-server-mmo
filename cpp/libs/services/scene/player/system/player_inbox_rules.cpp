@@ -194,6 +194,26 @@ namespace player_inbox_rules
 		return DeliveryClass::kReplay;
 	}
 
+	bool HasRecentAppliedBattleSettlement(const PlayerInboxDomainCursor *cursor, uint64_t requestId)
+	{
+		if (cursor == nullptr || requestId == 0)
+		{
+			return false;
+		}
+		const auto battleSettlement = static_cast<uint32_t>(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT);
+		const auto applied = static_cast<uint32_t>(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED);
+		// 环 ≤ kRecentCapacity 条,线性扫即可(同 FindRecent)。
+		for (const auto &decision : cursor->recent())
+		{
+			if (decision.request_id() == requestId && decision.msg_type() == battleSettlement &&
+				decision.outcome() == applied)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	const char *ItemActionName(ItemAction action)
 	{
 		const auto index = static_cast<std::size_t>(action);

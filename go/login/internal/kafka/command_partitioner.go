@@ -7,11 +7,9 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"shared/kafkacmd"
-	"shared/kafkautil"
 )
 
-// NewCommandAwarePartitioner 是控制面命令 topic 的分区器,装在**非事务的
-// plainProducer** 上(见 key_ordered_producer.go 的 plainCfg)。
+// NewCommandAwarePartitioner 是控制面命令 topic 的分区器,装在 CommandProducer 上。
 //
 // 为什么需要它:控制面命令改成"一个节点类型一个 topic + partition = node_id % P"
 // 之后(docs/design/control-plane-topic-partitioning-20260908.md),消息落在哪个分区
@@ -23,18 +21,10 @@ import (
 // login 用的是 sarama,shared 那个 Balancer 接的是 kafka-go 的 Writer,接口不通用,
 // 但两边的规则必须逐字相同 —— 命令 topic 走显式分区,其它 topic 保持原行为。
 //
-// sarama 是**按 topic 各建一个 Partitioner** 的,所以可以按 topic 类别分别选型:
-// db_task 不经 plainProducer 发送;主生产者用 kafkautil.NewDBTaskPartitioner;
-// plainProducer 遇到 db_task_zone_ 前缀同样装契约分区器;其它非命令 topic 保持 sarama.NewHashPartitioner。
+// sarama 是**按 topic 各建一个 Partitioner** 的,所以可以按 topic 类别分别选型:其它非命令 topic 保持 sarama.NewHashPartitioner。
 func NewCommandAwarePartitioner(topic string) sarama.Partitioner {
 	if kafkacmd.IsCommandTopic(topic) {
 		return &commandPartitioner{topic: topic}
-	}
-	// db_task 的分区函数只有一个权威来源(kafkautil,db-task-kafka-partition-contract.md)。
-	// plainProducer 本来就不该发 db_task(SendToTopic 与 SendToTopicPartition 都会拒绝),
-	// 这里仍然装契约分区器,保证万一有绕过的路径也落在与 C++ 写同一个分区上。
-	if kafkautil.IsDBTaskTopic(topic) {
-		return kafkautil.NewDBTaskPartitioner(topic)
 	}
 	// 其它非命令 topic:原样保持 sarama.NewConfig() 的默认分区器。
 	return sarama.NewHashPartitioner(topic)

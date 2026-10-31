@@ -430,7 +430,7 @@ func TestStartActivityBattleIDGenFailure(t *testing.T) {
 	rec := stubActivityGather(t)
 	members := []uint64{9691, 9692}
 	readyActivityMembers(t, mr, members)
-	svcCtx.BattleIDGen.Fence()
+	svcCtx.BattleIDGen = fencedIDGen()
 
 	resp, err := startActivityBattle(context.Background(), svcCtx, activityRequest(members...))
 
@@ -533,7 +533,7 @@ func mustCreateActivityTickets(t *testing.T, svcCtx *svc.ServiceContext, members
 func TestRunActivityGatherPassesPresetIDAndContext(t *testing.T) {
 	svcCtx, mr := newGatherSvcCtx(t)
 	fake := stubGatherRPCs(t, nil)
-	svcCtx.BattleIDGen.Fence()
+	svcCtx.BattleIDGen = fencedIDGen()
 	members := []uint64{9722, 9721}
 	for _, pid := range members {
 		setPlayerLocation(t, mr, pid, 1)
@@ -604,7 +604,7 @@ func TestRunGatherWithoutOptionsUnchanged(t *testing.T) {
 		setPlayerLocation(t, mr, pid, 1)
 	}
 	otherTickets := mustCreateActivityTickets(t, svcCtx, others)
-	svcCtx.BattleIDGen.Fence()
+	svcCtx.BattleIDGen = fencedIDGen()
 	preparesBefore := len(fake.prepares)
 
 	require.False(t, RunTeamGather(svcCtx, testActivityConfigId, others, otherTickets))

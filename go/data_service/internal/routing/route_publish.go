@@ -7,9 +7,7 @@ package routing
 // player:placement / player:maprev 只是发布出去的副本:库先提交,再用 placement.PublishRouteScript
 // 按 maprev 做 set-if-newer,并在**同一条连接**上用 WAITAOF 确认落盘,三步都过才算登记成功。
 //
-// 合服围栏:第 2 批起 merge_zone 以 -route-source=db 在 zone_merge_fence 持有围栏(W1 在库内锁围栏分片复核);
-// 发布脚本的 KEYS[4](merge:in_progress:{home})是围栏的镜像,作为发布时的第二道复核。切换顺序见提案 §13.4,
-// 旧版 merge_zone 二进制(直写 Redis、不写库)P4 起禁用。
+// 合服不改 player_route、也不改这几把键(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1),W1 不看合服状态。
 //
 // 本文件不碰 SQL(store 的职责),也不改 redis 模式的任何一行(router.go 里那段 SETNX 脚本)。
 
@@ -104,21 +102,19 @@ const (
 // registerPlayerZoneDBFirst 是 RouteStore.Mode=db_first 时的 W1(规格 c.1):
 //  1. 参数校验:player_id 为 0 或 home 越界 → ErrInvalidRegistration,不碰 Redis 也不碰库;
 //  2. store 没装配 → ErrRouteStore;
-//  3. Redis 预检(两次往返,都在调库之前):先 EXISTS 合服围栏(与 redis 模式同一个 IsMergeInProgress,
-//     查询失败按封锁;命中 → ErrZoneMergeInProgress,不进库,保证「围栏先于冲突」);再一次 MGET 取
-//     zone / placement / maprev:zone 是别的值 → 冲突(解析不了用 redis 模式同一文案),不进库;
+//  3. Redis 预检(调库之前一次 MGET)取 zone / placement / maprev:zone 是别的值 → 冲突(解析不了用 redis 模式同一文案),不进库;
 //     三键任一在 = 缓存认得这名玩家 → 库里必须已有行(ExistingRowOnly);
-//  4. 库内提交(RegisterHome:围栏分片 FOR UPDATE + ODKU / 加锁读),业务结局走 Outcome;
+//  4. 库内提交(RegisterHome:ODKU / 加锁读),业务结局走 Outcome;
 //  5. 发布(set-if-newer 脚本 + WAITAOF)。幂等分支(AlreadySame)同样要发,用来补齐上次失败的发布;
 //  6. FilledHomePlacementKept:打与 redis 模式同一条 ERROR,返回 nil。
 //
 // 失败语义(gRPC 映射见 dataserviceserver.go 的 RegisterPlayerZone):
-//   - 冲突 → *HomeZoneConflictError;围栏(预检、库分片、发布脚本的 KEYS[4])→ ErrZoneMergeInProgress;
+//   - 冲突 → *HomeZoneConflictError;
 //   - 库故障、缺行 → ErrRouteStore(缺行另包 ErrRouteUnknownToStore);参数非法 → ErrInvalidRegistration;
 //   - 已提交但发布失败或未确认落盘 → 发布错误(**不**包 ErrRouteStore)。库里的行留下,调用方重试会落到幂等分支补发。
 //
 // 事务里绝不做 Redis 读写:预检在调库之前,发布在提交之后(store 侧同一条不变量)。
-// 每次调用恰好计一次 route_register_total{outcome};Redis 预检本身出错(EXISTS / MGET 失败、MGET 长度不对、
+// 每次调用恰好计一次 route_register_total{outcome};Redis 预检本身出错(MGET 失败、MGET 长度不对、
 // 既有值解析不了)计 precheck_error —— error_code 只在 gRPC message 里,不单独计这类拒绝在指标上就看不见。
 func (r *Router) registerPlayerZoneDBFirst(ctx context.Context, playerID uint64, homeZoneID, storageID uint32) error {
 	if playerID == 0 || homeZoneID == 0 || homeZoneID > store.RouteHomeZoneMax {
@@ -131,19 +127,7 @@ func (r *Router) registerPlayerZoneDBFirst(ctx context.Context, playerID uint64,
 		return fmt.Errorf("%w: route store not assembled (RouteStore.Mode=db_first)", ErrRouteStore)
 	}
 
-	// 预检 a:合服围栏。不并进下面的 MGET:MGET 对非 string 类型的键回 nil、空串值也会被当成缺席,
-	// 而围栏的判据是「键存在即封锁」(router.go 顶部的闸门契约)。
-	merging, err := r.IsMergeInProgress(ctx, homeZoneID)
-	if err != nil {
-		metrics.ObserveRouteRegister(metrics.RouteRegisterPrecheckError)
-		return fmt.Errorf("merge fence check for zone %d failed (treated as fenced): %w", homeZoneID, err)
-	}
-	if merging {
-		metrics.ObserveRouteRegister(metrics.RouteRegisterPrecheckFenced)
-		return fmt.Errorf("%w: zone %d (player %d)", ErrZoneMergeInProgress, homeZoneID, playerID)
-	}
-
-	// 预检 b:三键一次 MGET。
+	// 预检:三键一次 MGET。
 	vals, err := r.mappingRedis.MgetCtx(ctx, mappingKey(playerID), placement.Key(playerID), placement.MapRevKey(playerID))
 	if err != nil {
 		metrics.ObserveRouteRegister(metrics.RouteRegisterPrecheckError)
@@ -181,10 +165,6 @@ func (r *Router) registerPlayerZoneDBFirst(ctx context.Context, playerID uint64,
 		return fmt.Errorf("%w: %w", ErrRouteStore, err)
 	}
 	switch res.Outcome {
-	case store.RouteRegisterFenced:
-		metrics.ObserveRouteRegister(metrics.RouteRegisterFenced)
-		return fmt.Errorf("%w: zone %d (player %d) fenced in zone_merge_fence (run_id=%q)",
-			ErrZoneMergeInProgress, homeZoneID, playerID, res.FenceRunID)
 	case store.RouteRegisterConflict:
 		metrics.ObserveRouteRegister(metrics.RouteRegisterConflict)
 		return &HomeZoneConflictError{PlayerID: playerID, Existing: res.ExistingHome, Requested: homeZoneID}
@@ -241,18 +221,18 @@ func registerOutcomeLabel(o store.RouteRegisterOutcome) string {
 
 // publishRoute 把库里提交后的一行发布到 mapping Redis(规格 c.1「publishRoute 的细节」)。
 //
-// 每次尝试是一个 pipeline,在同一条连接上发 EVAL(PublishRouteScript,带第 4 把围栏键)与 WAITAOF ——
+// 每次尝试是一个 pipeline,在同一条连接上发 EVAL(PublishRouteScript)与 WAITAOF ——
 // 不能用 go-redis 的 WaitAOF:它返回 *IntCmd,而 WAITAOF 回的是两元素数组,会被当成解析错误(规格 d 节末)。
 // pipeline 走 r.publishRedis(publish_redis.go:与 mapping Redis 同一实例、独立连接池、不经 go-zero 熔断器;2026-10-20 起,
-// 此前走 r.mappingRedis,与读路径共用池与熔断器)。预检(IsMergeInProgress、MGET)仍走 mappingRedis:那两次是普通短读。
+// 此前走 r.mappingRedis,与读路径共用池与熔断器)。预检 MGET 仍走 mappingRedis:那是普通短读。
 //
 // 判定:
 //   - Redis 错误回复(脚本拒绝坏 rev / 畸形 maprev、WRONGTYPE、OOM,appendonly 关着时 WAITAOF 的 ERR)是确定性的,不重试;
 //   - 网络错误(含取连接失败 / 池满等到 ctx 截止)与 WAITAOF 确认份数不足:退避 10–50ms 后**整条 pipeline 一起重发**。
 //     只重发 WAITAOF 不行:新连接的写偏移可能比上次写入低,会误报已落盘;脚本在「缓存已是这一版或更新」的分支
 //     会把 maprev 原值写回一次(touch),所以重发后的 WAITAOF 仍覆盖缓存此刻的状态;
-//   - 回复形状不对 → fail-closed,不重试;Fenced → ErrZoneMergeInProgress;Conflict / LegacyConflict、
-//     以及 Superseded 而 home 不同(W1 只建 home、不改 home;home 只由持围栏的 merge_zone 改写,而 W1 撞不进围栏,
+//   - 回复形状不对 → fail-closed,不重试;Conflict / LegacyConflict、
+//     以及 Superseded 而 home 不同(home 写定之后不再改,合服也不改它,
 //     所以只可能是库被回档或有写者绕过了脚本)→ ErrRoutePublishConflict;
 //   - Applied / Confirmed / home 相同的 Superseded:WAITAOF 满足才算成功。
 //
@@ -281,7 +261,7 @@ func (r *Router) publishRoute(ctx context.Context, row store.RouteRow) error {
 		return fmt.Errorf("%w: player_route row invalid: player_id=%d home_zone=%d rev=%d",
 			ErrRouteStore, row.PlayerID, row.HomeZone, row.Rev)
 	}
-	keys := placement.PublishRouteKeys(row.PlayerID, row.HomeZone)
+	keys := placement.PublishRouteKeys(row.PlayerID)
 	deadline, hasDeadline := ctx.Deadline()
 
 	var lastErr error
@@ -344,10 +324,6 @@ func (r *Router) publishRoute(ctx context.Context, row store.RouteRow) error {
 			return fmt.Errorf("route publish for player %d rev=%s: %w", row.PlayerID, rev, err)
 		}
 		switch {
-		case reply.Outcome == placement.PublishFenced:
-			result = metrics.RoutePublishFenced
-			return fmt.Errorf("%w: zone %d (player %d) fenced at publish; player_route row rev=%d committed but unpublished",
-				ErrZoneMergeInProgress, row.HomeZone, row.PlayerID, row.Rev)
 		case reply.Outcome == placement.PublishConflict:
 			result = metrics.RoutePublishConflict
 			return publishConflictError(row.PlayerID, rev, home, plc, reply, "same_rev_different_value")

@@ -47,8 +47,8 @@ if ($LogDir) {
 
 # 能编能跑的工程。不在表里的是「被测代码已被删除」的死工程,修不了配置就能救活,
 # 需要连测试源码一起重写或直接删,别贸然加进来(当前:
-# consistent_hash_node_test = ConsistentHashNode 没了;redis_test / mrediscli_test =
-# 引用 common/src/pb/pbc 那棵已删的 proto 树)。
+# consistent_hash_node_test = ConsistentHashNode 没了;mrediscli_test =
+# 引用 common/src/pb/pbc 那棵已删的 proto 树。redis_test 已于 2026-10-30 随 MessageSyncRedisClient 一起删除)。
 $projects = [ordered]@{
     'agones_lifecycle_test'    = 'cpp\tests\agones_lifecycle_test\agones_lifecycle_test.vcxproj'
     'aoi_delivery_test'        = 'cpp\tests\aoi_delivery_test\aoi_delivery_test.vcxproj'

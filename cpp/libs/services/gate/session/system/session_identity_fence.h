@@ -17,7 +17,9 @@
 // 三态而不是两态:灰度窗口里老发送方不带 player_id(0),必须放行,否则升级顺序一反
 // 就是全服推送静默消失。但"放行"和"校验通过"必须能被区分,否则迁移完成与否无从观测 ——
 // kDeliverUnfenced 就是给这一条用的,调用方只在**首次**打一行 INFO。
-// 灰度一个版本之后本枚举删掉 kDeliverUnfenced,0 直接归 kDrop。
+// 2026-10-30 起 kDeliverUnfenced 不再计划删除(原计划灰度一个版本后把 0 归 kDrop):Bind 之前的登录失败提示还要靠它送达,
+// 这时会话没有绑定玩家,带真实 player_id 必被判 kDrop,所以 login 显式发 0(见 login gate_command.go)。
+// 这是「生产者拒发 0」的唯一例外;内容是固定 tip,target_instance_id 已挡住 node_id 复用,残余只有序号回绕。
 
 #include <cstdint>
 #include <string_view>
@@ -28,7 +30,7 @@ namespace gate_session_fence
 	{
 		// 目标玩家与会话当前绑定一致:正常投递。
 		kDeliver,
-		// 发送方没带 player_id(老版本):放行,但调用方应记一次 INFO 供迁移观测。
+		// 发送方没带 player_id(老版本,或 Bind 之前的登录失败提示):放行,但调用方应记一次 INFO 供观测。
 		kDeliverUnfenced,
 		// 目标玩家与会话当前绑定不一致:**丢弃**。这正是 node_id 复用 / session 序号回绕
 		// 之后本该发生的事 —— 宁可丢一条推送,也不能把它写进别人的 socket。
@@ -53,8 +55,9 @@ namespace gate_session_fence
 		// 还没登录的新连接,而 scene 仍在用旧 session 5 推 A 的结算。放行等于把战斗
 		// 结算写进一个陌生人的 socket。
 		//
-		// 反过来"会话未绑定却收到指名推送"在正常时序下不可能发生:scene 只会给
-		// 已进场景的玩家推送,而进场景必然晚于 gate 侧 BindSession 落地。
+		// 正常时序下要推给未绑定会话的只有一种:Bind 之前的登录失败提示。它以 player_id = 0 显式走
+		// 兼容位(上面的 kDeliverUnfenced),走不到这里,见 login gate_command.go。其余生产者不会碰上未绑定会话:
+		// scene 只给已进场景的玩家推送,而进场景必然晚于 gate 侧 BindSession 落地。
 		return PushVerdict::kDrop;
 	}
 

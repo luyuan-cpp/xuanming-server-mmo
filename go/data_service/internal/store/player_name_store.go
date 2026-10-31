@@ -215,8 +215,8 @@ func (o ReleaseOutcome) String() string {
 
 // PlayerNameStore 是 player_name 表的读写。
 //
-// 连接池独立于 snapshot / transaction_log / id_segment:建角路径上每个请求都要同步走一条
-// INSERT,与快照落库、号段续段挤同一个默认 5 连接的池会互相拖慢。池大小由装配层用
+// 连接池独立于 snapshot / transaction_log:建角路径上每个请求都要同步走一条
+// INSERT,与快照落库挤同一个默认 5 连接的池会互相拖慢。池大小由装配层用
 // config 的 PlayerName 段覆盖 MySQLConfig.MaxOpenConn/MaxIdleConn 后传进来。
 type PlayerNameStore struct {
 	db *sql.DB
@@ -401,8 +401,8 @@ func (s *PlayerNameStore) Close() error {
 //
 // 三条可以直接读出来的事实:
 //  1. **只改写法不够**。旧结构配 ODKU 在"竞争者 id 小于原主人"那一路仍然 5/5 成环,而那正是生产常态:
-//     号段发的 player_id 都 < 2^55(IdSegmentCap),存量角色是更大的 snowflake id,新号抢老角色释放的
-//     名字时恒满足。前几轮注释里"ODKU 拆掉了一半"只在"都大于"那一路成立。
+//     当时号段发的 player_id 都小于存量的 snowflake id,新号抢老角色释放的名字时恒满足(2026-10-30 起
+//     id 已打散,大小关系随机,三路都会出现)。前几轮注释里"ODKU 拆掉了一半"只在"都大于"那一路成立。
 //  2. **只改结构也不够**。新结构配普通 INSERT 是 15/15 全成环 —— 聚簇记录上的重复检查取 S,
 //     两个 S 同时被授予之后各自要把它升级成 X(原地改写),互相挡住(手册 E1 的三会话例就建在聚簇主键上)。
 //  3. **两个一起上才是 0/15**。这就是现在的形态:name_norm 当主键(schema.go 的 playerNameBootstrapDDL)

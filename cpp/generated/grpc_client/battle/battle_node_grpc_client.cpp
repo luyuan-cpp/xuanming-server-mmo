@@ -634,6 +634,180 @@ void SendBattleNodeIssueBattleTicketErased(entt::registry& registry, entt::entit
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::IssueBattleTicketResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region BattleNodeAttachRelayGate
+namespace {
+void QueueLocalBattleNodeAttachRelayGateFailure(GrpcDone<::AttachRelayGateResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartBattleNodeAttachRelayGateCall(entt::registry& registry, entt::entity nodeEntity, const ::AttachRelayGateRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::AttachRelayGateResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC BattleNode.AttachRelayGate requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kBattleNodeAttachRelayGateGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalBattleNodeAttachRelayGateFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalBattleNodeAttachRelayGateFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::AttachRelayGateResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the BattleNode.AttachRelayGate response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendBattleNodeAttachRelayGate(entt::registry& registry, entt::entity nodeEntity, const ::AttachRelayGateRequest& request,
+                                            GrpcDone<::AttachRelayGateResponse> done, const GrpcCallOptions& options) {
+    StartBattleNodeAttachRelayGateCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendBattleNodeAttachRelayGateErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC BattleNode.AttachRelayGate requires a done callback";
+    }
+    if (message.GetDescriptor() != ::AttachRelayGateRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC BattleNode.AttachRelayGate: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::AttachRelayGateRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC BattleNode.AttachRelayGate: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartBattleNodeAttachRelayGateCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::AttachRelayGateResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region BattleNodePromoteSpectateBroadcast
+namespace {
+void QueueLocalBattleNodePromoteSpectateBroadcastFailure(GrpcDone<::PromoteSpectateBroadcastResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartBattleNodePromoteSpectateBroadcastCall(entt::registry& registry, entt::entity nodeEntity, const ::PromoteSpectateBroadcastRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::PromoteSpectateBroadcastResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC BattleNode.PromoteSpectateBroadcast requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kBattleNodePromoteSpectateBroadcastGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalBattleNodePromoteSpectateBroadcastFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalBattleNodePromoteSpectateBroadcastFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::PromoteSpectateBroadcastResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the BattleNode.PromoteSpectateBroadcast response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendBattleNodePromoteSpectateBroadcast(entt::registry& registry, entt::entity nodeEntity, const ::PromoteSpectateBroadcastRequest& request,
+                                            GrpcDone<::PromoteSpectateBroadcastResponse> done, const GrpcCallOptions& options) {
+    StartBattleNodePromoteSpectateBroadcastCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendBattleNodePromoteSpectateBroadcastErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC BattleNode.PromoteSpectateBroadcast requires a done callback";
+    }
+    if (message.GetDescriptor() != ::PromoteSpectateBroadcastRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC BattleNode.PromoteSpectateBroadcast: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::PromoteSpectateBroadcastRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC BattleNode.PromoteSpectateBroadcast: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartBattleNodePromoteSpectateBroadcastCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::PromoteSpectateBroadcastResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 
 void SetBattleNodeCallDeadline(std::chrono::milliseconds deadline) {
     callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);

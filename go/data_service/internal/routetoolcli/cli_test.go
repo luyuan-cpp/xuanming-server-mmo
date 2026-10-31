@@ -719,7 +719,7 @@ type fakeStore struct {
 	logOnFreeze string
 	// releaseFloor 是测试排列时固定的正式请求水位，不由被测工具回填。
 	releaseFloor uint64
-	// dbNowMs 是 ListActiveMergeFences 回的库时钟(rewarm -wait 的基线);clockCalls 记调用次数。
+	// dbNowMs 是 DBNowMs 回的库时钟(rewarm -wait 的基线);clockCalls 记调用次数。
 	dbNowMs    uint64
 	clockCalls int
 }
@@ -744,13 +744,13 @@ func (f *fakeStore) UnfreezeRouteWriters(_ context.Context, minWatermarkMs uint6
 
 func (f *fakeStore) Close() error { return nil }
 
-// ListActiveMergeFences 只给 rewarm -wait 取库时钟(没有生效围栏)。dbNowMs 为 0 时按库时钟读不到回错(与真 store 同口径)。
-func (f *fakeStore) ListActiveMergeFences(context.Context) (store.ActiveMergeFences, error) {
+// DBNowMs 只给 rewarm -wait 取库时钟。dbNowMs 为 0 时按库时钟读不到回错(与真 store 同口径)。
+func (f *fakeStore) DBNowMs(context.Context) (uint64, error) {
 	f.clockCalls++
 	if f.dbNowMs == 0 {
-		return store.ActiveMergeFences{}, fmt.Errorf("fake store: database clock read as 0")
+		return 0, fmt.Errorf("fake store: database clock read as 0")
 	}
-	return store.ActiveMergeFences{DBNowMs: f.dbNowMs}, nil
+	return f.dbNowMs, nil
 }
 
 // fakeDeps 用真 connectMappingRedis(miniredis 或不可达地址都行)、假库,身份读取默认报错(用例按需替换)。
@@ -1168,7 +1168,7 @@ func TestRouteRecoveryStatsUseActualAuditAndRejectEveryBlockingObservation(t *te
 		func(r *routetool.AuditReport) { r.DBOnlyUnpublished = 1 }, func(r *routetool.AuditReport) { r.MissingInRedis = 1 }, func(r *routetool.AuditReport) { r.MissingInDB = 1 },
 		func(r *routetool.AuditReport) { r.ValueMismatch = 1 }, func(r *routetool.AuditReport) { r.RedisMalformed = 1 }, func(r *routetool.AuditReport) { r.DBInvalid = 1 },
 		func(r *routetool.AuditReport) { r.RedisRevAhead = 1 }, func(r *routetool.AuditReport) { r.RedisRevBehind = 1 }, func(r *routetool.AuditReport) { r.MergedIntoMissingInRedis = 1 },
-		func(r *routetool.AuditReport) { r.MergedIntoMissingInDB = 1 }, func(r *routetool.AuditReport) { r.MergedIntoMismatch = 1 }, func(r *routetool.AuditReport) { r.RedisFencesActive = 1 },
+		func(r *routetool.AuditReport) { r.MergedIntoMissingInDB = 1 }, func(r *routetool.AuditReport) { r.MergedIntoMismatch = 1 },
 		func(r *routetool.AuditReport) { r.TransientCleared = 1 }, func(r *routetool.AuditReport) { r.RequireMapRev = true }, func(r *routetool.AuditReport) { r.FrozenRecovery = false },
 	} {
 		bad := report

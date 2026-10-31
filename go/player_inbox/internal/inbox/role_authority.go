@@ -57,11 +57,11 @@ func CheckAuthorityIndexes(ctx context.Context, db *sql.DB) error {
 	return errors.New("inbox: 缺(shard,player_id,state)挂起索引，先执行迁移计划再接流")
 }
 
-func NewSQLRoleAuthority(ctx context.Context, db *sql.DB, schema string) (*SQLRoleAuthority, error) {
+func NewSQLRoleAuthority(ctx context.Context, db *sql.DB, schema string, backend authoritysql.Backend) (*SQLRoleAuthority, error) {
 	if db == nil || !roleSchemaPattern.MatchString(schema) {
 		return nil, ErrOriginalRole
 	}
-	if err := authoritysql.AssertCurrentSession(ctx, db, true); err != nil {
+	if err := authoritysql.AssertCurrentSession(ctx, db, backend); err != nil {
 		return nil, err
 	}
 	rows, err := db.QueryContext(ctx, "SELECT player_id,account,owner_revision,trade_listing_id FROM `"+schema+"`.account_role LIMIT 0")

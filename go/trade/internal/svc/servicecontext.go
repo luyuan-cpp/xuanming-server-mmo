@@ -34,7 +34,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-// ListingIDBizTag 是 id_segment 表里 listing_id 的业务键。必须登记进 data_service 的 BootstrapTags
+// ListingIDBizTag 是发号器里 listing_id 的业务键。必须登记进 data_service 的 Tags
 // (代码默认清单、etc/data_service.yaml、K8s ConfigMap 三处),否则生产 AllowAutoSeed=false 下发号被拒。
 const ListingIDBizTag = "trade_listing"
 
@@ -43,7 +43,7 @@ const (
 	etcdDialTimeout = 5 * time.Second
 	// mysqlPingTimeout 启动期探库上限,与 data_service store.openMySQL 同值。
 	mysqlPingTimeout = 5 * time.Second
-	// listingIDWarmTimeout 启动时同步领第一段的预算:只为把"BootstrapTags 漏登记 / data_service 不通"
+	// listingIDWarmTimeout 启动时同步领第一段的预算:只为把"Tags 漏登记 / data_service 不通"
 	// 尽早暴露在启动日志里;失败不阻止起服,之后每次 Next 会自己再试(号段是弱依赖)。
 	listingIDWarmTimeout = 5 * time.Second
 )
@@ -183,8 +183,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 			Policy:  commerce.Policy{Items: c.Commerce.ItemConfigs, ItemTitles: titles, Pets: c.Commerce.PetConfigs, Currencies: c.Commerce.CurrencyTypes, AllowInstances: c.Commerce.AllowInstances},
 			Applier: assets.Caller, Ledger: persistedLedger(dsClient), Now: time.Now}
 		roles, roleErr := commerce.NewRoleAuthority(c.AccountRoleSchema)
-		if roleErr != nil || !c.MySQL.RequiresTiDB() {
-			panic("交易角色提交互锁必须显式配置同TiDB全局目录")
+		if roleErr != nil {
+			panic("交易角色提交互锁必须显式配置同事务域全局目录")
 		}
 		commerceEngine.Roles = roles
 		assets.Commerce = commerceEngine
@@ -224,91 +224,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	return sc
 }
 
-// StartAssetChannel 先补 seq 表的哨兵守卫行,再起 scene 节点镜像与资产重投循环。ctx 取消即后两者退出。
+// StartAssetChannel 起 scene 节点镜像与资产重投循环。ctx 取消即退出。
 // 放在起 gRPC 之前调用:循环只依赖 MySQL 与 etcd,早一点开始把积压的 outbox 投出去。
-// AssetOp.Enabled=false 时 Assets 为 nil,这里整体是空操作(不建行、不起任何后台 goroutine)。
+// AssetOp.Enabled=false 时 Assets 为 nil,这里整体是空操作(不起任何后台 goroutine)。
 func (sc *ServiceContext) StartAssetChannel(ctx context.Context) {
-	sc.bootstrapAssetOpSeqGuardRow(ctx)
 	sc.Assets.Start(ctx, sc.Etcd)
-}
-
-// seqGuardBootstrapTimeout 是补哨兵守卫行的启动期预算。只发一条 INSERT IGNORE(带 assetop 的
-// 有界重试与退避),给 5s 与 mysqlPingTimeout 同量级;超了就按失败处理,不拖住起服。
-const seqGuardBootstrapTimeout = 5 * time.Second
-
-// bootstrapAssetOpSeqGuardRow 补 trade_player_op_seq 的哨兵守卫行 (player_id=0, stream=0)。
-//
-// 这一行是"首次建 seq 行"的串行化载体:业务事务里缺行时先锁它再 INSERT IGNORE,所有首次建行者
-// 因此排在一行已提交的记录锁上,而不是排在别人未提交的 seq 记录上(那会在首插者回滚时让排队者继承
-// 间隙锁、互等 1213)。完整论证见 data.AssetOpRepo 上方的守卫一节。
-//
-// 为什么在这里建、而不是在 schemamigrate 里:那一层只按 proto 出 DDL、不播种业务行。这里跑在
-// trade.go 的 ensureSchema **之后**,表一定已经在;语句幂等,多副本同时启动都跑一遍没有副作用。
-//
-// 失败**不拒启**,只打 ERROR + 计一次 trade_assetop_seq_guard_bootstrap_failures_total:
-//   - 请求路径已经 fail-closed —— 守卫行不在时 data.EnsureSeqRows 回 data.ErrSeqGuardRowMissing,
-//     首次上架当场失败,既不会绕过守卫建行、也不会写进任何库(与"能签名却投不出去"那种拒启理由不同,
-//     那一种会把托管写进 outbox 再永远卡在 ESCROWING);
-//   - 浏览 / 详情 / 收藏不依赖它,为一条补行语句把只读流量一起带下线不划算。
-//
-// 日志是**启动那一刻**的信号,几小时后没人会去翻;所以两条失败分支都同时打点,让"全集群首次上架
-// 静默失败"在监控里有一条现在时的序列(AGENTS §11.3)。
-//
-// 失败原因要分叉,不能一律说"行不存在":EnsureSeqGuardRow 发的 INSERT IGNORE 在撞重复键时要在那条
-// 索引记录上取 S(MySQL 手册 "Locks Set by Different SQL Statements in InnoDB"),所以滚动重启时,
-// 只要集群里有别的副本正持着哨兵行的 X(有人在首次建行),本次 bootstrap 就会排队等它提交;
-// 5s 预算等超了,事实是"行在、只是被锁着",而不是"没建表"。照"去跑 -migrate"那条文案排查是白跑。
-func (sc *ServiceContext) bootstrapAssetOpSeqGuardRow(ctx context.Context) {
-	if sc.Assets == nil || sc.Assets.Ops == nil {
-		return // AssetOp.Enabled=false:通道整体没装配
-	}
-	finish, enterErr := sc.RelayAdmission.Enter()
-	if enterErr != nil {
-		sc.RelayAdmission.Hold()
-		return
-	}
-	defer finish()
-	bootCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), seqGuardBootstrapTimeout)
-	defer cancel()
-	nowMs := time.Now().UnixMilli()
-	if nowMs <= 0 {
-		// 纪元必须为正(assetop 的硬前置)。系统时钟早于 1970 只会出现在配置坏掉的机器上。
-		data.ObserveSeqGuardBootstrapFailure()
-		logx.Errorf("[trade] Invalid system clock (UnixMilli=%d); not backfilling trade_player_op_seq sentinel guard row: "+
-			"first listing will fail due to missing seq guard row. Synchronize machine clock, then restart this service", nowMs)
-		return
-	}
-	if err := sc.Assets.Ops.EnsureSeqGuardRow(bootCtx, uint64(nowMs)); err != nil {
-		sc.RelayAdmission.Hold()
-		data.ObserveSeqGuardBootstrapFailure()
-		if isLockContentionErr(err) {
-			logx.Errorf("[trade] Could not confirm trade_player_op_seq sentinel guard row within %v (lock contention / budget exhausted): %v -- "+
-				"this does not mean the row is absent: it may exist but be locked by an in-flight transaction (another replica creating it for the first time), "+
-				"so confirmation failed. Do not investigate by running -migrate. First inspect lock waits for %s on mmorpg_trade "+
-				"(performance_schema.data_lock_waits), then restart after load subsides; until confirmed, "+
-				"every player's first listing escrow on this replica will fail due to missing seq guard row",
-				seqGuardBootstrapTimeout, err, "trade_player_op_seq")
-			return
-		}
-		logx.Errorf("[trade] Failed to backfill trade_player_op_seq sentinel guard row: %v -- "+
-			"until backfilled, every player's first listing escrow will fail due to missing seq guard row (players with existing seq rows unaffected); "+
-			"browse / detail / favorites unaffected. Confirm mmorpg_trade is writable and trade_player_op_seq exists "+
-			"(trade -f etc/trade.yaml -migrate), then restart this service", err)
-		return
-	}
-	logx.Info("[trade] trade_player_op_seq sentinel guard row ready (serializes first seq row creation)")
-}
-
-// isLockContentionErr 判断 bootstrap 的失败是不是"锁冲突 / 等不到"这一类 —— 那一类的事实是
-// "行可能已经在,只是被锁着",与"行不存在"正好相反,运维动作也完全不同。
-//
-// 判据只取两类,刻意窄:data.IsRetryableTxError 认的那几个码(1213 / 1205 / 9007),
-// 以及 ctx 超时(EnsureSeqRowRetry 的退避可取消,等不到就带着 ctx 错误返回)。
-// 判不出来时走原来那条"行不存在"的文案 —— 宁可措辞保守,也不要把真的没建表说成锁冲突。
-func isLockContentionErr(err error) bool {
-	return data.IsRetryableTxError(err) ||
-		errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, context.Canceled)
 }
 
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:
@@ -318,7 +238,7 @@ func isLockContentionErr(err error) bool {
 // transaction_isolation=%27READ-COMMITTED%27 把整个连接池的会话隔离级别设成 RC(驱动建连时发 SET),
 // 与 go/friend 的 BuildDSN 同口径。显式事务本来就经 assetop.WithTxRetry 固定 RC(建 seq 行的短事务
 // 与业务事务都走它);这一项管的是事务**之外**的自动提交语句(Claim / Reschedule / 毒行的主键 UPDATE、
-// InsertListing、EnsureSeqGuardRow 的哨兵行 INSERT(DeleteFavorite 2026-10-16 起改走 WithTxRetry 单语句事务),以及 data.EnsureSeqRows 那条
+// InsertListing(DeleteFavorite 2026-10-16 起改走 WithTxRetry 单语句事务),以及 data.EnsureSeqRows 那条
 // 自动提交的普通读探针 —— 玩家 seq 行的建行 2026-09-29 起在它自己的 RC 短事务里),
 // 它们原先落在服务器全局默认的 REPEATABLE-READ 上,删不到行 / 撞上删除标记时会拿间隙锁或 next-key 锁,
 // 与别人的插入意向锁互等。RC 下只剩记录锁。自动提交语句每条各取新快照,读语义与 RR 下相同。
@@ -358,14 +278,14 @@ func OpenSchemaMySQL(c config.MySQLConf) (*sql.DB, error) {
 func openMySQL(c config.MySQLConf, permission authoritysql.Permission) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	return authoritysql.Open(ctx, BuildDSN(c), c.DBName, c.RequiresTiDB(), c.MaxOpenConn, permission)
+	return authoritysql.Open(ctx, BuildDSN(c), c.DBName, authoritysql.Backend(c.Backend), c.MaxOpenConn, permission)
 }
 
 // NewListingIDSegment 按 IdSegment 配置建 listing_id 号段客户端。Enabled=false 或客户端为 nil 直接报错:
 // trade 没有 snowflake,静默退化只会让所有上架在运行期失败。
 func NewListingIDSegment(cfg idsegment.Conf, client dspb.DataServiceClient, roles ...*drainproof.Session) (*idsegment.Client, error) {
 	if !cfg.Enabled {
-		return nil, errors.New("IdSegment.Enabled=false: trade mints listing_id only from id_segment (biz_tag=" + ListingIDBizTag + ")")
+		return nil, errors.New("IdSegment.Enabled=false: trade mints listing_id only from the id issuer (biz_tag=" + ListingIDBizTag + ")")
 	}
 	if client == nil {
 		return nil, errors.New("data_service client is nil: listing_id minting needs data_service.AllocateIdSegment")
@@ -393,7 +313,7 @@ func (sc *ServiceContext) WarmListingIDSegment() {
 	if err := sc.ListingIDSegment.Warm(ctx); err != nil {
 		logx.Errorf("[trade] listing_id first segment not available yet (data_service.AllocateIdSegment biz_tag=%s): %v "+
 			"— SeedListing fails closed with kServiceUnavailable until data_service answers; "+
-			"in production also check that %s is in data_service BootstrapTags", ListingIDBizTag, err, ListingIDBizTag)
+			"in production also check that %s is in data_service Tags", ListingIDBizTag, err, ListingIDBizTag)
 	}
 }
 

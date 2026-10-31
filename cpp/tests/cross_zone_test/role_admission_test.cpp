@@ -54,9 +54,6 @@ protected:
         dependencies.ackDrain = [this](auto request, auto reply) {
             acks.push_back(std::move(request)); ackReplies.push_back(std::move(reply)); return true;
         };
-        dependencies.readSqlAck = [this](Guid player, auto reply) {
-            EXPECT_EQ(kPlayer, player); sqlReplies.push_back(std::move(reply)); return true;
-        };
         dependencies.registerHandoffFence = [this](Guid player, std::string candidate, std::optional<std::string> prior,
             std::function<bool(const std::string&)> stillQualified, Admission::FenceReply reply) {
             EXPECT_EQ(kPlayer, player);
@@ -82,6 +79,7 @@ protected:
         dependencies.freeze = [this](Guid player) { EXPECT_EQ(kPlayer, player); ++freezes; };
         dependencies.reject = [this](Guid player, uint32_t) { EXPECT_TRUE(player == 0 || player == kPlayer); ++rejections; };
         dependencies.hasPendingLoad = [this](Guid) { return pendingLoad; };
+        dependencies.hasUnsettledSave = [this](Guid) { return unsettledSave; };
         scope = std::make_unique<Admission::ScopedDependencies>(std::move(dependencies));
         ASSERT_EQ(scene, PlayerSceneSystem::FindSceneById(kScene)) << "夹具场景必须能被生产查找入口解析";
         ASSERT_EQ(kSuccess, PlayerSceneSystem::CheckEnterScene(kPlayer, scene));
@@ -148,13 +146,6 @@ protected:
         return seal;
     }
     void Tick() { now += 2s; Admission::Tick(); }
-    void Sql(size_t index, uint64_t epoch, uint64_t seq) {
-        ASSERT_LT(index, sqlReplies.size());
-        auto completed = std::move(sqlReplies[index]);
-        ASSERT_TRUE(static_cast<bool>(completed));
-        const auto version = Version(epoch, seq);
-        completed(Admission::SqlAck{std::to_string(epoch), version, version, version});
-    }
     void AddEntity() {
         entity = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, kPlayer);
@@ -176,12 +167,12 @@ protected:
     std::vector<Admission::CloseReply> closeReplies;
     std::vector<data_service::AckRoleTradeDrainRequest> acks;
     std::vector<std::function<void(bool)>> ackReplies;
-    std::vector<std::function<void(std::optional<Admission::SqlAck>)>> sqlReplies;
     std::vector<PlayerEnterContext> activated;
     uint32_t freezes{0}, rejections{0};
     uint32_t localNodeReads{0}, clockReads{0};
     std::string lastEnterPreconditions;
     bool pendingLoad{false};
+    bool unsettledSave{false};
     bool delayFence{false};
     bool delayFenceReply{false};
     std::vector<std::function<void()>> fenceReplies;
@@ -198,7 +189,6 @@ TEST_F(RoleAdmissionTest, LiveBattleFinishesBeforeTradeFreezesOrUnloadsThePlayer
     PlayerLifecycleSystem::FreezeRoleForTrade(kPlayer);
     EXPECT_TRUE(tlsEcs.actorRegistry.valid(entity));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(entity));
-    EXPECT_TRUE(sqlReplies.empty());
     EXPECT_TRUE(acks.empty());
 }
 
@@ -312,35 +302,28 @@ TEST_F(RoleAdmissionTest, DrainWaitsForEntityCallbacksAndActualForcedSave) {
     ASSERT_TRUE(Admission::Seal(SealFor()));
     EXPECT_TRUE(Admission::IsSealed(kPlayer));
     EXPECT_FALSE(Admission::Allows(kPlayer, registers[0].identity().generation(), kRevision));
-    Tick(); EXPECT_TRUE(sqlReplies.empty()); EXPECT_TRUE(acks.empty());
+    Tick(); EXPECT_TRUE(acks.empty());
     RemoveEntity(); Admission::OnDestroyed(kPlayer); Tick();
-    EXPECT_TRUE(sqlReplies.empty());
+    EXPECT_TRUE(acks.empty());
     Admission::EndCallback(kPlayer); Tick();
-    EXPECT_TRUE(sqlReplies.empty()) << "未成功排入强制存盘，旧SQL满足也不能排空";
+    EXPECT_TRUE(acks.empty()) << "未成功排入强制存盘，旧SQL满足也不能排空";
     now += 90s; Tick();
     EXPECT_TRUE(Admission::IsSealed(kPlayer)); EXPECT_TRUE(acks.empty());
+    unsettledSave = true;
     Admission::ObserveTradeSaveQueued(kPlayer, 8, 3); Tick();
-    ASSERT_EQ(1u, sqlReplies.size()); Sql(0, 8, 3); Tick();
+    EXPECT_TRUE(acks.empty()) << "这一笔还没提交,不能排空";
+    unsettledSave = false; Tick();
     ASSERT_EQ(1u, acks.size());
     EXPECT_EQ(3u, acks[0].required_save_seq());
 }
 
-TEST_F(RoleAdmissionTest, StrictAckNeedsExactBothRowsAndCompleteUint64Version) {
+TEST_F(RoleAdmissionTest, DrainAckCarriesCompleteUint64SaveSeq) {
     ASSERT_NO_FATAL_FAILURE(Enter());
     ASSERT_NO_FATAL_FAILURE(CompleteRegister(0));
     constexpr uint64_t seq = UINT64_MAX;
     Admission::ObserveSave(kPlayer, 8, seq);
     ASSERT_TRUE(Admission::Seal(SealFor()));
-    ASSERT_EQ(1u, sqlReplies.size());
-    const auto version = Version(8, seq);
-    auto callback = std::move(sqlReplies[0]);
-    callback(Admission::SqlAck{"8", version, version, Version(8, seq - 1)});
-    Tick(); EXPECT_TRUE(acks.empty());
-    ASSERT_EQ(2u, sqlReplies.size());
-    auto malformed = std::move(sqlReplies[1]);
-    malformed(Admission::SqlAck{"08", version, version, version});
-    Tick(); EXPECT_TRUE(acks.empty());
-    ASSERT_EQ(3u, sqlReplies.size()); Sql(2, 8, seq); Tick();
+    Tick();
     ASSERT_EQ(1u, acks.size()); EXPECT_EQ(seq, acks.front().required_save_seq());
 }
 
@@ -363,16 +346,13 @@ TEST_F(RoleAdmissionTest, LateLoadCannotActivateAndItsOriginalFenceRaisesDrainFl
     loaded.mutable_player_database_1_data()->set_fence_owner_epoch(9);
     loaded.mutable_player_database_1_data()->set_fence_save_seq(2);
     PlayerLifecycleSystem::HandlePlayerAsyncLoaded(kPlayer, loaded);
-    EXPECT_EQ(1u, activated.size()); EXPECT_TRUE(sqlReplies.empty());
+    EXPECT_EQ(1u, activated.size());
     Tick(); EXPECT_TRUE(acks.empty());
     pendingLoad = false; Admission::EndCallback(kPlayer);
     auto& pending = PlayerLifecycleSystem::GetPendingEnterMap();
     pending.at(kPlayer).inheritClear.outstandingReplies = 0;
     Tick();
     EXPECT_EQ(0u, pending.count(kPlayer)); EXPECT_FALSE(SessionMap().contains(91));
-    ASSERT_EQ(1u, sqlReplies.size()); Sql(0, 9, 1); Tick();
-    EXPECT_TRUE(acks.empty());
-    ASSERT_EQ(2u, sqlReplies.size()); Sql(1, 9, 2); Tick();
     ASSERT_EQ(1u, acks.size()); EXPECT_EQ(9u, acks[0].required_owner_epoch()); EXPECT_EQ(2u, acks[0].required_save_seq());
 }
 
@@ -389,7 +369,6 @@ TEST_F(RoleAdmissionTest, OldHolderSealDuringUnconfirmedNewRegisterStillFreezesO
     ASSERT_NO_FATAL_FAILURE(CompleteRegister(1, false));
     EXPECT_EQ(1u, activated.size());
     Admission::ObserveTradeSaveQueued(kPlayer, 8, 2); RemoveEntity(); Tick();
-    ASSERT_EQ(1u, sqlReplies.size()); Sql(0, 8, 2); Tick();
     ASSERT_EQ(1u, acks.size());
     EXPECT_EQ(oldSeal.SerializeAsString(), acks[0].seal().SerializeAsString());
     auto ack = std::move(ackReplies[0]); ack(true);
@@ -420,6 +399,20 @@ TEST_F(RoleAdmissionTest, CloseKeepsHistoricalFloorAndClosedAuthorizationNeverRe
     Admission::ObserveSave(kPlayer, 0, 0); Tick();
     ASSERT_EQ(2u, closes.size());
     EXPECT_EQ(8u, closes[1].required_owner_epoch()); EXPECT_EQ(12u, closes[1].required_save_seq());
+}
+
+// 存盘下限在提交后才抬高:实体没了、存盘还未落定时不能关闭,否则下限漏掉这一笔,它会在冻结之后落地改行。
+TEST_F(RoleAdmissionTest, CloseWaitsUntilTheLastSaveSettles) {
+    ASSERT_NO_FATAL_FAILURE(Enter());
+    ASSERT_NO_FATAL_FAILURE(CompleteRegister(0));
+    unsettledSave = true;
+    Tick(); Tick();
+    EXPECT_TRUE(closes.empty());
+    Admission::ObserveSave(kPlayer, 8, 12);
+    unsettledSave = false;
+    Tick();
+    ASSERT_EQ(1u, closes.size());
+    EXPECT_EQ(8u, closes[0].required_owner_epoch()); EXPECT_EQ(12u, closes[0].required_save_seq());
 }
 
 TEST_F(RoleAdmissionTest, HolderCapturedBeforeCloseStillReceivesListingAckAfterClose) {

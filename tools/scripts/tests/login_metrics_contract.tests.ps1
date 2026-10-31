@@ -3,7 +3,7 @@
 .SYNOPSIS
     K8s 上 login 指标端点的契约测试(L-18 观测批,2026-10-23)。
 .DESCRIPTION
-    login 的 go-zero 指标(rpc_client_requests_*、login_gate_directory_reads_total、login_task_result_delivery_total 等)
+    login 的 go-zero 指标(rpc_client_requests_*、login_gate_directory_reads_total 等)
     只有在 ConfigMap 写了 Prometheus 段时才会被记录与导出;集群按 Pod 模板的 prometheus.io/* 注解抓取,
     容器还要声明同一个端口。三处必须一致、同批发布,任一处漏改都会让 L-14 压测里 login 侧整张表变成 n/a。
     本测试只读文本(tools/scripts/k8s_deploy.ps1 的 login ConfigMap 分支与 Pod 注解写入段、

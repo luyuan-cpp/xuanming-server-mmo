@@ -17,6 +17,8 @@
 #include "scene_route_helper.h"
 #include "scene_entry_dispatch.h"
 #include "handler/rpc/client_request_lane.h"
+#include "handler/gate_push_delivery.h"
+#include "spectate/gate_spectate_client.h"
 #include <session/system/session_identity_fence.h>
 
 #include <chrono>
@@ -28,7 +30,7 @@ namespace
 {
     // 旧版 login 的踢线不带 player_id(ClassifyKick 判 kKickUnfenced):按 session_id 踢(旧行为)。
     // 迁移窗口里每条踢线都成立,只在本线程首次记一行 INFO,看到它 = login 灰度尚未完成
-    // (docs/design/scene-enter-chain-residuals.md §2.5)。做法同 gate_service_handler.cpp 的 LogFenceUnfencedOnce;
+    // (docs/design/scene-enter-chain-residuals.md §2.5)。做法同 handler/gate_push_delivery.cpp 的 LogFenceUnfencedOnce;
     // 标记用 thread_local,与 tlsSessionManager 同一线程归属,不引入跨线程共享状态。
     void LogKickUnfencedOnce(uint32_t sessionId)
     {
@@ -220,8 +222,9 @@ void GateEventHandler::PlayerLeaseExpiredEventHandler(const contracts::kafka::Pl
     // 无 conn 的残留会话:断开回调永远不会来,只能就地摘除。
     LOG_INFO << "LeaseExpired: removing connectionless session. session_id=" << sessionId
              << " player_id=" << event.player_id();
-    // 与正常断开同一收尾:先注销路由 lane 的在途调用、丢弃排队项,再摘会话(client-request-ordering.md §4.6)。
+    // 与正常断开同一收尾:先注销路由 lane 的在途调用、丢弃排队项,摘掉观战订阅,再摘会话(client-request-ordering.md §4.6)。
     gate_lane::OnSessionClosing(it->second);
+    gate_spectate::OnSessionClosed(sessionId);
     sessions.erase(it);
 ///<<< END WRITING YOUR CODE
 }
@@ -329,69 +332,31 @@ void GateEventHandler::RedirectToGateEventHandler(const contracts::kafka::Redire
 void GateEventHandler::PushToPlayerEventHandler(const contracts::kafka::PushToPlayerEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
-auto sessionIt = tlsSessionManager.sessions().find(event.session_id());
-if (sessionIt == tlsSessionManager.sessions().end())
-{
-    // Normal race: player disconnected before this push landed.
-    LOG_WARN << "PushToPlayer: session already gone (disconnect race), session_id=" << event.session_id();
-    return;
-}
-// 会话不持有连接；发送前锁定，连接已释放时丢弃本次推送。
-auto conn = sessionIt->second.conn.lock();
-if (!conn)
-{
-    LOG_ERROR << "PushToPlayer: session has no connection, session_id=" << event.session_id();
-    return;
-}
-GetGateCodec().send(conn, event.message_content());
+    // 查会话、lock 连接、身份栅栏(R13,目标玩家 = event.player_id)与写 socket,
+    // 与 RPC 版 SendMessageToPlayer 同一份实现(handler/gate_push_delivery.h)。
+    gate_push::DeliverToSession(gate_push::Path::kKafka, event.session_id(), event.player_id(),
+                                gate_push::ContentOf(event));
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::BroadcastToPlayersEventHandler(const contracts::kafka::BroadcastToPlayersEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
-auto sendToSession = [&](uint32_t sessionId)
-{
-    auto sessionIt = tlsSessionManager.sessions().find(sessionId);
-    if (sessionIt == tlsSessionManager.sessions().end())
-        return;
-    auto conn = sessionIt->second.conn.lock();
-    if (!conn)
-        return;
-    GetGateCodec().send(conn, event.message_content());
-};
-
-if (!event.session_bitmap().empty())
-{
-    const uint32_t base = event.session_bitmap_base();
-    const auto &bitmap = event.session_bitmap();
-    for (size_t i = 0; i < bitmap.size(); ++i)
-    {
-        const uint8_t byte = static_cast<uint8_t>(bitmap[i]);
-        for (int bit = 0; bit < 8; ++bit)
-        {
-            if (byte & (1 << bit))
-            {
-                sendToSession(base + static_cast<uint32_t>(i * 8 + bit));
-            }
-        }
-    }
-}
-else
-{
-    for (auto sessionId : event.session_list())
-    {
-        sendToSession(sessionId);
-    }
-}
+    // (session_id, player_id) 按 broadcast_target_codec.h 的顺序契约解码、整条校验(player_list 不齐整条拒绝)、
+    // 逐个目标过身份栅栏(R13)、编码一次后复用字节扇出,与 RPC 版 BroadcastToPlayers 同一份实现。
+    gate_push::DeliverToTargets(gate_push::Path::kKafka, event);
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::BroadcastToSceneEventHandler(const contracts::kafka::BroadcastToSceneEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
+    // 只推本场景内已绑定玩家的会话,scene_id 为 0 整条拒绝;与 RPC 版 BroadcastToScene 同一份实现。
+    gate_push::DeliverToScene(gate_push::Path::kKafka, event.scene_id(), gate_push::ContentOf(event));
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::BroadcastToAllEventHandler(const contracts::kafka::BroadcastToAllEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
+    // 只推已绑定玩家的会话(未登录的连接不收游戏广播);与 RPC 版 BroadcastToAll 同一份实现。
+    gate_push::DeliverToAll(gate_push::Path::kKafka, gate_push::ContentOf(event));
 ///<<< END WRITING YOUR CODE
 }

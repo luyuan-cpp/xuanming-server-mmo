@@ -174,23 +174,14 @@ type Applier interface {
 	Do(ctx context.Context, rpc RPC, req *assetpb.AssetOpRequest) (Result, error)
 }
 
-// LedgerReader 读玩家**已落盘**的账本(zone Redis 里的玩家父键 blob,HEAD 口径)。
-// 实现在 B5(data_service 只读 RPC GetPlayerAssetOpLedger,DataServiceLedger)。
-// 玩家从未落过盘时返回 (nil, nil)。
-//
-// LoopConfig.RequireSQLCommit 打开时,终结改认 SQL 提交证据:Ledger 还必须实现 SQLCommitLedgerReader
-// (Loop.CheckWiring 在启动时断言),blob 只剩自动放弃的「两份都未见」那一半(abandon.go)。
-// LoopConfig.RequireVerifiedRedisCopy 打开时,自动放弃读 blob 改走 VerifiedLedgerReader(abandon.go 的 G5 闸)。
+// LedgerReader 读玩家**已落盘**的账本(player_store 的 kAsset 行)。实现是 DataServiceLedger。
+// 玩家没有写权行时返回 (nil, nil)。
 type LedgerReader interface {
 	ReadPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error)
 }
 
-// SQLCommitLedgerReader 读 go/db 在玩家 SQL 行提交后发布的资产 SQL 提交证据里的账本
-// (docs/design/db-write-fencing-mysql.md §6.6)。证据缺失时返回 (nil, nil),调用方继续等,
-// 不得退回 Redis blob;读失败返回 error。DataServiceLedger 实现它。
-//
-// 不并进 LedgerReader:开关关闭的服务(以及各业务的测试替身)只需要 blob 一种读法,
-// 并进去会逼所有实现同批改。
+// SQLCommitLedgerReader 读 SQL 已提交的账本:没有写权行时返回 (nil, nil),调用方继续等;读失败返回 error。
+// DataServiceLedger 实现它,和 LedgerReader 读的是同一份。不并进 LedgerReader:只在乎已落盘结局的测试替身不需要它。
 type SQLCommitLedgerReader interface {
 	ReadSQLCommittedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error)
 }
@@ -333,30 +324,11 @@ type LoopConfig struct {
 	// AuditInterval 是 RunMaintenance 两轮日对账之间的间隔;0 = 不跑对账,负数非法。
 	AuditInterval time.Duration
 
-	// RequireSQLCommit 是资产 SQL 提交证据的开关(docs/design/db-write-fencing-mysql.md §6.6、§8.7、§14 第 23 条)。
-	//
-	// false(零值,缺省):HEAD 口径。在线按 scene 回包的 durable 终结,离线读账本与自动放弃读 Redis 父键 blob;
-	// Ledger 可选。true:在线 / 离线终结都只认 SQL 提交证据(SQLCommitLedgerReader),Result.SQLCommitted 只在这时为真;
-	// 自动放弃要 Redis blob 与 SQL 证据都「确定未见」才放弃;Ledger 必填并实现 SQLCommitLedgerReader(CheckWiring 拒启)。
-	//
-	// **只有本服务会投递到的 zone 全部已切 Fencing.Mode=dual、已上新版 C++,并观察到证据在持续发布之后才打开**
-	// (§8.7 第 ⑤ 步)。打开前要接受:已离线、新链路上线前没有证据的玩家,待办要等他再次存盘才能终结。
-	// 回退时先关它,再把 zone 切回 legacy 或回退 C++。
+	// RequireSQLCommit:在线 / 离线终结都只认 data_service 强读 player_store 得到的账本(SQLCommitLedgerReader),
+	// 不认 scene 回包,Result.SQLCommitted 只在这时为真。Ledger 必填(CheckWiring 拒启)。
+	// 生产装配恒为 true(guild、trade、mail;配置项已删,见 docs/design/player-data-tidb-scaling-plan.md §3.4)。
+	// false 只留给单测:投递语义的用例不必每个都造一份账本。
 	RequireSQLCommit bool
-
-	// RequireVerifiedRedisCopy 是自动放弃的「Redis 副本已核验」闸(docs/design/zone-redis-regression-guard-20261022.md §4.5,
-	// abandon.go 条件 5)。DefaultLoopConfig 取 true。
-	//
-	// true:Redis 父键 blob 给出「确定未见」时,还要这份副本经过当前实例身份核验(读 blob 的同一段 Lua 里,
-	// 实例身份 == 屏障身份戳 verified_identity 且 role=master)才放弃;未核验、身份未知、读失败一律跳过并还租约
-	// (redis_unverified)。Ledger 必须实现 VerifiedLedgerReader,否则自动放弃不运行。「已见」照常终结,不受影响。
-	// false:闸之前的口径,任何 blob 都可以作证据;Redis 回退之后可能把 SQL 已应用的一笔放弃掉(复制或白扣),
-	// 每个进程第一轮放弃时打一次 ERROR。
-	//
-	// **身份戳只由 login 的核验刷新**:login 的 ParentLoad.VerifyOnRedisIdentityChange 关闭时戳不再更新,
-	// Redis 身份一变本闸就挡住全部放弃(只是推迟,不是错放)。运维关 login 核验时要同时知道这一点。
-	// 直接写 LoopConfig 字面量的调用方必须显式透传本项:零值 false 等于关闭闸。
-	RequireVerifiedRedisCopy bool
 }
 
 // DefaultLoopConfig 是规格 §4.37 的取值,加上落地恢复设计 §6 的取值。
@@ -379,8 +351,6 @@ func DefaultLoopConfig() LoopConfig {
 		AbandonBatch:          200,
 		AbandonInterval:       time.Hour,
 		AuditInterval:         24 * time.Hour,
-
-		RequireVerifiedRedisCopy: true,
 	}
 }
 
@@ -461,9 +431,7 @@ type Loop struct {
 	metrics *Metrics
 	now     func() time.Time
 
-	// Ledger 读已落盘账本。开关关闭(LoopConfig.RequireSQLCommit=false)时可选:能读时长期离线且已记账的行
-	// 可以提前终结(规格 §4.37),它也是自动放弃的证据来源,没有它两者都不运行。开关打开时必填,且必须实现
-	// SQLCommitLedgerReader:在线 / 离线终结都靠它确认 SQL 已提交。
+	// Ledger 读已落盘账本:在线 / 离线终结靠它确认 SQL 已提交,自动放弃也靠它(要实现 StoreLedgerReader)。
 	// 在 Run / ProcessOne 之前设置,设置完调 CheckWiring;运行期间不允许修改。
 	Ledger LedgerReader
 	// Manual 可选:人工终结通道(规格 §4.38)。只服务于「进程里已经有 Loop」的调用方;
@@ -471,9 +439,6 @@ type Loop struct {
 	Manual ManualResolver
 	// Rand 可选:退避抖动的随机源,单测注入确定值。为 nil 时取中值,不抖动。
 	Rand func() float64
-	// Locator 可选:自动放弃前重新解析玩家位置(abandon.go 条件 3)。生产与 Caller.Resolver
-	// 共用同一个 scenenode.Locator。为 nil 时自动放弃不运行(fail-closed)。在 RunMaintenance 之前设置。
-	Locator Resolver
 
 	// slots 是本副本「同时在途的资产 RPC」的唯一预算,容量 = Workers:Tick 的 worker 与 WakePlayer
 	// 都要先拿到一个名额才领行(LoopConfig.Workers 的理由对两者同样成立)。业务写 RPC 直接调
@@ -490,8 +455,6 @@ type Loop struct {
 	// 「功能没装配齐、不运行」各只打一次 INFO,免得每一轮都刷一遍。
 	auditOffOnce   sync.Once
 	abandonOffOnce sync.Once
-	// abandonUnverifiedOnce:RequireVerifiedRedisCopy 关闭时第一轮放弃打一次 ERROR —— 闸被关掉是要有人知道的事。
-	abandonUnverifiedOnce sync.Once
 }
 
 // NewLoop 校验配置并组装循环。校验失败就别启动服务:这些都是一眼能看出的配置错,
@@ -516,20 +479,20 @@ func NewLoop(cfg LoopConfig, store Store, applier Applier, m *Metrics, now func(
 	}, nil
 }
 
-// CheckWiring 在可选字段(Ledger 等)挂好之后、Run / ProcessOne 之前调用:开关要求的依赖缺了就回错误,
-// 装配方据此拒启。开关打开却没有 SQL 证据读取器时,每一笔终结都只能停在 AwaitDurable,
+// CheckWiring 在可选字段(Ledger 等)挂好之后、Run / ProcessOne 之前调用:要求的依赖缺了就回错误,
+// 装配方据此拒启。没有账本读取器时,每一笔终结都只能停在 AwaitDurable,
 // 这种装配必须在启动时炸,不能留到运行期静默卡住(fence-inflight.md F6 (b))。
 func (l *Loop) CheckWiring() error {
 	if l.cfg.RequireSQLCommit && l.sqlLedger() == nil {
-		return errors.New("assetop: 打开了 RequireSQLCommit 却没有挂实现 SQLCommitLedgerReader 的 Loop.Ledger(检查 DataServiceRpc 配置)")
+		return errors.New("assetop: 没有挂实现 SQLCommitLedgerReader 的 Loop.Ledger(检查 DataServiceRpc 配置)")
 	}
 	return nil
 }
 
-// RequireSQLCommit 报告本循环是否打开了资产 SQL 提交证据开关(LoopConfig.RequireSQLCommit),供装配方打日志。
+// RequireSQLCommit 报告 LoopConfig.RequireSQLCommit,供装配方打日志。
 func (l *Loop) RequireSQLCommit() bool { return l.cfg.RequireSQLCommit }
 
-// sqlLedger 返回能读 SQL 提交证据的那份 Ledger;没挂或没实现时为 nil。
+// sqlLedger 返回能读 SQL 已提交账本的那份 Ledger;没挂或没实现时为 nil。
 func (l *Loop) sqlLedger() SQLCommitLedgerReader {
 	if l.Ledger == nil {
 		return nil
@@ -538,12 +501,11 @@ func (l *Loop) sqlLedger() SQLCommitLedgerReader {
 	return reader
 }
 
-// verifiedLedger 返回能报告「Redis 副本是否已核验」的那份 Ledger(abandon.go 的 G5 闸);没挂或没实现时为 nil。
-func (l *Loop) verifiedLedger() VerifiedLedgerReader {
+func (l *Loop) storeLedger() StoreLedgerReader {
 	if l.Ledger == nil {
 		return nil
 	}
-	reader, _ := l.Ledger.(VerifiedLedgerReader)
+	reader, _ := l.Ledger.(StoreLedgerReader)
 	return reader
 }
 
@@ -922,8 +884,7 @@ func (l *Loop) processOne(ctx context.Context, op Op, callerApplyDeadline time.T
 	if err == nil && res.Local {
 		res = l.tryPersistedLedger(applyCtx, op, res)
 	}
-	// 终结前的证据核对按开关分两种口径(LoopConfig.RequireSQLCommit):打开时只认 SQL 提交证据;
-	// 关闭时回到 HEAD 口径(scene 回包的 durable / Redis blob),托管扣出另要求原件与本笔身份一致。
+	// 终结前核对已提交账本(LoopConfig.RequireSQLCommit);关闭只在单测里出现,托管扣出另要求原件与本笔身份一致。
 	if err == nil && !res.SQLCommitted && isSceneTerminal(res.Outcome) {
 		if l.cfg.RequireSQLCommit {
 			res, err = l.verifySQLCommit(applyCtx, op, res)
@@ -973,8 +934,8 @@ func (l *Loop) processOne(ctx context.Context, op Op, callerApplyDeadline time.T
 	}
 }
 
-// verifySQLCommit 将 scene 的结局与 SQL 提交证据核对(只在 LoopConfig.RequireSQLCommit 打开时调用)。
-// durable=false 的 scene 回包也可能已在随后提交，反之 Redis durable=true 绝不能单独使跨服务对侧入账。
+// verifySQLCommit 将 scene 的结局与已提交账本核对(只在 LoopConfig.RequireSQLCommit 打开时调用)。
+// durable=false 的 scene 回包也可能已在随后提交，反之 scene 回包绝不能单独使跨服务对侧入账。
 // 拿不到证据(读失败、缺证据、证据未见本笔)一律按未落盘返回,由 Decide 走 AwaitDurable 重排,不终结。
 func (l *Loop) verifySQLCommit(ctx context.Context, op Op, res Result) (Result, error) {
 	res.Durable = false
@@ -1212,8 +1173,7 @@ func carryPartialReason(op Op, res Result) Result {
 // tryPersistedLedger 在玩家长期不在线时,从已落盘账本里把结局读回来。
 //
 // 为什么安全:读的是已经落盘的那份数据,而已记账的结局永不改变(不变量 I2),
-// 所以玩家在不在线都不影响结论,读到的结局天然就是 durable 的。读哪一份按开关定(readFinalLedger):
-// 关闭时是 Redis 父键 blob(HEAD 口径),打开时只认 SQL 提交证据,结果才带 SQLCommitted。
+// 所以玩家在不在线都不影响结论,读到的结局天然就是 durable 的。
 // 读不到结局的行**不**在 Go 侧自行判中止(不变量 I7):scene 没记账就无法保证
 // 这个 seq 将来不会被一个晚到的请求应用。
 func (l *Loop) tryPersistedLedger(ctx context.Context, op Op, res Result) Result {
@@ -1249,8 +1209,7 @@ func (l *Loop) tryPersistedLedger(ctx context.Context, op Op, res Result) Result
 	return proved
 }
 
-// readFinalLedger 读「终结所认的那份已落盘账本」:开关打开读 SQL 提交证据,关闭读 Redis 父键 blob(HEAD 口径)。
-// 开关打开却没有 SQL 读取器时回错误(CheckWiring 本应在启动时拦下),绝不退回读 blob。
+// readFinalLedger 读「终结所认的那份已落盘账本」。没有 SQL 读取器时回错误(CheckWiring 本应在启动时拦下)。
 func (l *Loop) readFinalLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, error) {
 	if !l.cfg.RequireSQLCommit {
 		return l.Ledger.ReadPersistedLedger(ctx, playerID)

@@ -2,6 +2,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <memory>
@@ -11,7 +12,10 @@
 #include <unordered_map>
 #include "engine/core/type_define/type_define.h"
 #include "engine/core/utils/registry/scene_entity.h"
-#include "engine/infra/storage/redis_client/redis_client.h"
+#include "engine/infra/storage/redis_cluster/redis_slot.h"
+#include "deps/hiredis/hiredis.h"
+#include "muduo/base/Logging.h"
+#include "muduo/contrib/hiredis/Hiredis.h"
 #include "proto/common/database/player_cache.pb.h"
 #include "proto/common/component/player_async_comp.pb.h"
 // ExitCause:HandleExitGameNode 的参数。写全路径:本头也被 modules 库(bag_service / currency_system)包含,
@@ -31,11 +35,18 @@ namespace storage { class PlayerLocation; }
 // 按值传给 PlayerLifecycleSystem::HandleSceneChangeEnterSceneReply;定义在 player/comp/player_ownership_comp.h。
 // 只前置声明:函数声明里的按值参数不要求完整类型,定义与调用都在 player_lifecycle.cpp(那里包含了组件头)。
 struct PlayerSceneChangeInFlightComp;
+class PlayerStoreClient;
+struct PlayerStoreSaveResult;
+struct PlayerStoreTransport;
+namespace playerstore
+{
+class LoadAndClaimResponse;
+}
 
 // player:{id}:location 的解析(键名见 player_ownership_comp.h 的 LocationRedisKey)。全 C++ 只此一份,
 // 读 location 的地方(ResolveTravelOutcome、队伍跟随、改派确认的只读核实)一律调它,不许再各抄一份。
 // 放在这里而不是 player_ownership_comp.h:那个头被 player_frozen_comp.h 带进二十来个业务系统,
-// 不该让它们都去包含 hiredis 与 storage.pb.h;本头本来就包含 redis_client.h(redisReply 已完整)。
+// 不该让它们都去包含 hiredis 与 storage.pb.h;本头本来就包含 hiredis(redisReply 已完整)。
 namespace player_ownership
 {
 	// 解析一条 Redis 应答元素(GET 的应答,或 MGET 数组里的一项)里的 PlayerLocation 二进制。
@@ -90,8 +101,15 @@ struct PlayerEnterContext
 	InheritClearState inheritClear;
 };
 
-// Map of player_id → enter-context for players whose Redis load is in flight.
-// Replaces the std::any extra_data on MessageAsyncClient.
+// 载入失败的原因。kDataNotFound:没有写权行(不是新号,新号的初始行由建角事务写好);kStoreError:连接、解析或回包故障。
+// 两种都 fail-closed,不构造空存档。
+enum class PlayerLoadFailureReason : uint8_t
+{
+	kDataNotFound,
+	kStoreError,
+};
+
+// Map of player_id → enter-context for players whose load is in flight.
 using PendingEnterMap = std::unordered_map<Guid, PlayerEnterContext>;
 
 // 疏散 / 排空的改派票据,定义在 player_lifecycle.cpp(只有那里需要它的字段)。
@@ -103,31 +121,11 @@ struct EmergencyRelocateTicket;
 //
 //   stale_owner_write_rejected  存盘被 Redis epoch CAS 拒绝的次数。压测期应恒 0
 //                               (cross-zone-scene-travel.md §6.3);非 0 = 曾出现双主。
-//   home_zone_unknown           存盘时 PlayerHomeZoneComp 为 0、被迫 fail-closed 落进程 zone
-//                               的次数。非 0 = 路由链上有一环没填 home_zone_id。
-//   owner_epoch_unknown         存盘时 epoch 为 0、跳过 CAS 的次数。滚动升级窗口内允许非 0,
-//                               全链升级完成后应恒 0,否则等于假防护。
 //   stale_owner_rejected_exiting stale_owner_write_rejected 中实体正在退出的那一部分:退出存盘从未落地就被拒、差额
 //                               随实体丢弃 = 回档的直接证据(docs/design/location-release-binding.md §3.7)。应恒 0。
-//   owner_counter_behind        存盘时 Redis 的 owner 计数器比实体缓存的 epoch 还小、实体按废黜销毁的次数
-//                               (docs/design/zone-redis-regression-guard-20261022.md §4.4)。计数器只由铸造抬高,比持有者
-//                               缓存的还小 = Redis 回退丢了那次铸造。应恒 0;非 0 = 这名玩家本次在线的未落盘进度随实体丢弃。
-//                               成因不是双主,不计入 stale_owner_write_rejected。
 namespace owner_epoch_stats
 {
 	inline std::atomic<uint64_t>& StaleOwnerWriteRejected()
-	{
-		static std::atomic<uint64_t> g_counter{0};
-		return g_counter;
-	}
-
-	inline std::atomic<uint64_t>& HomeZoneUnknown()
-	{
-		static std::atomic<uint64_t> g_counter{0};
-		return g_counter;
-	}
-
-	inline std::atomic<uint64_t>& OwnerEpochUnknown()
 	{
 		static std::atomic<uint64_t> g_counter{0};
 		return g_counter;
@@ -141,29 +139,17 @@ namespace owner_epoch_stats
 		return g_counter;
 	}
 
-	inline std::atomic<uint64_t>& OwnerCounterBehind()
-	{
-		static std::atomic<uint64_t> g_counter{0};
-		return g_counter;
-	}
-
 	inline void IncStaleOwnerWriteRejected() { StaleOwnerWriteRejected().fetch_add(1, std::memory_order_relaxed); }
-	inline void IncHomeZoneUnknown() { HomeZoneUnknown().fetch_add(1, std::memory_order_relaxed); }
-	inline void IncOwnerEpochUnknown() { OwnerEpochUnknown().fetch_add(1, std::memory_order_relaxed); }
 	inline void IncStaleOwnerRejectedExiting() { StaleOwnerRejectedExiting().fetch_add(1, std::memory_order_relaxed); }
-	inline void IncOwnerCounterBehind() { OwnerCounterBehind().fetch_add(1, std::memory_order_relaxed); }
 
 	struct Snapshot
 	{
 		uint64_t staleOwnerWriteRejected;
-		uint64_t homeZoneUnknown;
-		uint64_t ownerEpochUnknown;
 		uint64_t staleOwnerRejectedExiting;
-		uint64_t ownerCounterBehind;
 
 		bool Any() const
 		{
-			return staleOwnerWriteRejected + homeZoneUnknown + ownerEpochUnknown + staleOwnerRejectedExiting + ownerCounterBehind > 0;
+			return staleOwnerWriteRejected + staleOwnerRejectedExiting > 0;
 		}
 	};
 
@@ -171,10 +157,7 @@ namespace owner_epoch_stats
 	{
 		return Snapshot{
 			StaleOwnerWriteRejected().load(std::memory_order_relaxed),
-			HomeZoneUnknown().load(std::memory_order_relaxed),
-			OwnerEpochUnknown().load(std::memory_order_relaxed),
-			StaleOwnerRejectedExiting().load(std::memory_order_relaxed),
-			OwnerCounterBehind().load(std::memory_order_relaxed)};
+			StaleOwnerRejectedExiting().load(std::memory_order_relaxed)};
 	}
 
 	// [OwnerEpoch] 汇总行与 Prometheus 导出(scene_owner_epoch_events_total{event=key})共用的字段表,顺序即汇总行的顺序。
@@ -186,52 +169,37 @@ namespace owner_epoch_stats
 
 	inline constexpr Field kFields[] = {
 		{"stale_owner_write_rejected", &Snapshot::staleOwnerWriteRejected},
-		{"home_zone_unknown", &Snapshot::homeZoneUnknown},
-		{"owner_epoch_unknown", &Snapshot::ownerEpochUnknown},
 		{"stale_owner_rejected_exiting", &Snapshot::staleOwnerRejectedExiting},
-		{"owner_counter_behind", &Snapshot::ownerCounterBehind},
 	};
 	static_assert(sizeof(Snapshot) == std::size(kFields) * sizeof(uint64_t),
 				  "owner_epoch_stats::kFields must list every Snapshot counter");
 } // namespace owner_epoch_stats
 
-// 混版本持久字段保护:严格提交屏障覆盖世代校验 C3 的结局计数(docs/design/mixed-version-persist-field-protection.md §5.2)。
+// 混版本持久字段保护:go/db 覆盖世代校验的拒写计数(docs/design/mixed-version-persist-field-protection.md §5.2)。
 // 与 owner_epoch_stats 同一套写法(relaxed atomic、不接 Prometheus;C++ 节点没有 Prometheus 出口),由 core/system/redis.cpp
 // 每 30s 打成一行 [PersistSchema] 日志(有计数才打,级别 WARN)。逐次另有一条带 metric=persist_schema_regression 的日志
-// 供 LogQL 查询(deploy/k8s/README.md「玩家持久 schema 世代」小节)。两项正常都应恒 0:
-//   regression_warned    warn 模式下判定倒退(加载世代 < 屏障记录的世代,或记录值损坏)但照写的写方数(同一写方之后的写入
-//                        还会返回 2,按写方令牌去重只记一次;回包丢失也不会漏)。非 0 就不能切 enforce。
-//   regression_rejected  enforce 模式下判定倒退、拒写的次数。该玩家本次在线进度不落盘。
+// 供 LogQL 查询(deploy/k8s/README.md「玩家持久 schema 世代」小节)。正常应恒 0:
+//   regression_rejected  判定倒退、拒写的次数。该玩家本次在线进度不落盘。
 namespace persist_schema_stats
 {
-	inline std::atomic<uint64_t>& RegressionWarned()
-	{
-		static std::atomic<uint64_t> g_counter{0};
-		return g_counter;
-	}
-
 	inline std::atomic<uint64_t>& RegressionRejected()
 	{
 		static std::atomic<uint64_t> g_counter{0};
 		return g_counter;
 	}
 
-	inline void IncRegressionWarned() { RegressionWarned().fetch_add(1, std::memory_order_relaxed); }
 	inline void IncRegressionRejected() { RegressionRejected().fetch_add(1, std::memory_order_relaxed); }
 
 	struct Snapshot
 	{
-		uint64_t regressionWarned;
 		uint64_t regressionRejected;
 
-		bool Any() const { return regressionWarned + regressionRejected > 0; }
+		bool Any() const { return regressionRejected > 0; }
 	};
 
 	inline Snapshot Read()
 	{
-		return Snapshot{
-			RegressionWarned().load(std::memory_order_relaxed),
-			RegressionRejected().load(std::memory_order_relaxed)};
+		return Snapshot{RegressionRejected().load(std::memory_order_relaxed)};
 	}
 } // namespace persist_schema_stats
 
@@ -303,12 +271,6 @@ namespace persist_schema_stats
 //                          owner_epoch 键被淘汰读成 0)。不解冻,沿用"已放行"分支不存盘销毁,同时计入 granted。基线 0
 //   rollback_receipt_anomaly B6:回执是本次标记原文,其余交叉校验却不成立(键被淘汰后补种 / 新旧 scene_manager 混跑 /
 //                          数据写坏)。按"标记已发出"收口(ConcludeHandoffAfterMarkSent,同时计入 mark_sent_destroyed)。应恒 0
-//   ── 交接 SQL 屏障(handoff_sql_barrier.h:写标记前要等冻结快照两张子表的 SQL ACK 与 pending 同版)──
-//   sql_barrier_waited     至少等过一次 SQL ACK 的交接数(每次交接最多计一次,见 PlayerTravelHandoffComp::sqlBarrierWaits)。
-//                          go/db 跟得上时 ACK 通常在交接存盘落地后很快追平,所以它是趋势值;与 started 同涨说明 go/db 落后
-//   sql_barrier_expired    等过 SQL ACK 之后,交接在标记写成前收口(30s 存盘看门狗 / 35s 晚发闸 / 冻结上限,由
-//                          AbortTravelHandoff 的共同出口归因,同时计入 aborted),或标记写成太晚、被 enter_scene 阶段的晚发闸拦下
-//                          (同时计入 mark_sent_destroyed)。日志 WARN [ZoneTravel][SqlBarrier] … ended_by=…。基线 0
 //   sql_owner_rejected     标记脚本回 -1 / -2:同一冻结代次已被 Redis 归属明确废黜,实体不存盘销毁(DestroyDeposedPlayer,
 //                          handoff_sql_owner_rejected)。这是独立终态,不计入 granted / aborted / exit_wins / mark_sent_destroyed。应恒 0
 //
@@ -347,8 +309,6 @@ namespace travel_handoff_stats
 		std::atomic<uint64_t> returnedAfterGrant{0};
 		std::atomic<uint64_t> rollbackReceiptAnomaly{0};
 		// 交接 SQL 屏障三项,含义见上面的字段说明。
-		std::atomic<uint64_t> sqlBarrierWaited{0};
-		std::atomic<uint64_t> sqlBarrierExpired{0};
 		std::atomic<uint64_t> sqlOwnerRejected{0};
 	};
 
@@ -402,8 +362,6 @@ namespace travel_handoff_stats
 		uint64_t rolledBackAdopted{0};
 		uint64_t returnedAfterGrant{0};
 		uint64_t rollbackReceiptAnomaly{0};
-		uint64_t sqlBarrierWaited{0};
-		uint64_t sqlBarrierExpired{0};
 		uint64_t sqlOwnerRejected{0};
 
 		bool operator==(const Snapshot&) const = default;
@@ -441,8 +399,6 @@ namespace travel_handoff_stats
 		snapshot.rolledBackAdopted = counters.rolledBackAdopted.load(std::memory_order_relaxed);
 		snapshot.returnedAfterGrant = counters.returnedAfterGrant.load(std::memory_order_relaxed);
 		snapshot.rollbackReceiptAnomaly = counters.rollbackReceiptAnomaly.load(std::memory_order_relaxed);
-		snapshot.sqlBarrierWaited = counters.sqlBarrierWaited.load(std::memory_order_relaxed);
-		snapshot.sqlBarrierExpired = counters.sqlBarrierExpired.load(std::memory_order_relaxed);
 		snapshot.sqlOwnerRejected = counters.sqlOwnerRejected.load(std::memory_order_relaxed);
 		return snapshot;
 	}
@@ -494,8 +450,6 @@ namespace travel_handoff_stats
 		{"rolled_back_adopted", &Snapshot::rolledBackAdopted, FieldKind::kEvent},
 		{"returned_after_grant", &Snapshot::returnedAfterGrant, FieldKind::kEvent},
 		{"rollback_receipt_anomaly", &Snapshot::rollbackReceiptAnomaly, FieldKind::kEvent},
-		{"sql_barrier_waited", &Snapshot::sqlBarrierWaited, FieldKind::kEvent},
-		{"sql_barrier_expired", &Snapshot::sqlBarrierExpired, FieldKind::kEvent},
 		{"sql_owner_rejected", &Snapshot::sqlOwnerRejected, FieldKind::kEvent},
 	};
 	// Snapshot 只有 uint64 计数成员:加了成员却没进字段表,汇总行与指标都会漏掉它,这里在编译期拦住。
@@ -513,7 +467,7 @@ namespace travel_handoff_stats
 //   exit_intent_missing    带 UnregisterPlayer 却没有 PlayerExitIntentComp(成对约定被破坏)。fail-closed
 //                          保留实体、摘 UnregisterPlayer。应恒 0,非 0 = 有路径漏挂 / 漏摘
 //   exit_resave            落地内容与当前内存不一致,更新快照后重存。("还有未落地的存盘"只在落地回调之外的
-//                          收尾口成立;落地回调里 HasUnsettledSave 恒为 false,见 redis_client.h 的说明)
+//                          收尾口成立;落地回调里 HasUnsettledSave 恒为 false,见 player_store_client.h 的说明)
 //                          偶发正常(退出存盘在途时的战斗结算 / 客户端操作已被拦,但仍有别的改动来源)
 //   exit_resave_capped     重存到上限仍不收敛,fail-closed 保留实体(交周期存盘 / 再次退出请求 / 停机看门狗)。
 //                          已知的逐帧改动源(客户端消息、战斗结算、移动积分)都已关掉,应接近 0;持续非 0 =
@@ -917,7 +871,7 @@ namespace travel_outcome
 	// 为什么是一段脚本(不变量 I0 机制 2):删除与读取在同一段原子脚本里,"拿到有效应答 ⇒ 本族标记已删、读数是删除之后
 	//   那一刻的",不依赖连接的执行顺序。它**取代**了改动前"同一条不重放连接上先 DEL 后 MGET"的顺序保证。以后若拆回
 	//   两条命令,**必须**走不重放的同一连接(tlsRedis.GetZoneRedis() 的 muduo hiredis::Hiredis:command() 是
-	//   redisvAsyncCommand 的薄封装,无队列、无重放);改走 redis_client.h 那类带重试队列的接口会无声地打破这条保证。
+	//   redisvAsyncCommand 的薄封装,无队列、无重放);改走带重试队列的接口会无声地打破这条保证。
     // 新金样复制 handoff_sql_barrier 的共享校验与具名脚本；取证先H/F→R撤资格、条件删本族，再读原owner/location。
 
 	inline const std::string& kLuaJudgeTravelOutcome = handoff_sql_barrier::kJudgeOutcomeLua;
@@ -969,10 +923,15 @@ namespace travel_outcome
 
 	// 判定顺序即优先级,每一步都只可能落向更保守的一侧:
 	//   1. epoch 未变最先判,不看 location 与回执:脚本已在同一原子步骤里删掉本族标记,"未变"同时证明此前从未放行
-	//      (epoch 只经 INCR 前进,回滚也是 INCR)、此后也再放不出去;
+	//      (epoch 只升不降:铸造取 max(当前值 + 1, 墙钟毫秒),回滚是 INCR)、此后也再放不出去;
 	//   2. location 解析不了就不看回执(回执就存在 location 里);
-	//   3. 回执是本次原文时,只有"回滚之后再无任何落点"的全部交叉校验成立才采纳:markEpoch 就是缓存值、epoch 恰好前进两格
-	//      (本次铸造一格 + bump 回滚一格)、location 记的 epoch 与键一致、location 指回本节点本 zone。任一不成立即异常,不采纳;
+	//   3. 回执是本次原文时,只有"回滚之后再无任何落点"的全部交叉校验成立才采纳:markEpoch 就是缓存值、epoch 至少前进两格
+	//      (本次铸造至少一格 + bump 回滚一格;墙钟地板之后铸造不再恰好 +1,zone-redis-regression-guard-20261022.md
+	//      §4.3.1)、location 记的 epoch 与键一致、location 指回本节点本 zone。任一不成立即异常,不采纳。
+	//      只要求「至少两格」仍然安全:回执只可能由凭本次标记原文铸造的那一次落点的 bump 回滚写出(回滚同时把标记转写成
+	//      新 epoch,原文从此不在 Redis 里,不会有第二次凭它的铸造);回滚之后任何铸造或不铸造的落点都整条重写 location、
+	//      不带这份回执;只改身份的同落点写保留回执,但不动 epoch。所以「回执是本次原文 + location 记的 epoch 等于键」
+	//      就证明键值是那次回滚写下的;
 	//   4. 其余按 location 指向分"回到本节点"与"在别处"。回执对不上时没有任何一条会走到采纳。
 	constexpr Ownership ClassifyOwnership(const OwnershipFacts &facts)
 	{
@@ -987,7 +946,7 @@ namespace travel_outcome
 		if (facts.receiptIsMine)
 		{
 			const bool consistent = facts.markEpoch != 0 && facts.markEpoch == facts.cachedEpoch &&
-									facts.redisEpoch == facts.markEpoch + 2 &&
+									facts.markEpoch <= UINT64_MAX - 2 && facts.redisEpoch >= facts.markEpoch + 2 &&
 									facts.locationOwnerEpoch == facts.redisEpoch && facts.locationOnSelf;
 			return consistent ? Ownership::kRolledBackToSelf : Ownership::kReceiptAnomaly;
 		}
@@ -1118,50 +1077,24 @@ public:
 	static void FreezeRoleForTrade(Guid playerId);
 
 	static void HandlePlayerAsyncLoaded(Guid player_id, const PlayerAllData& message);
-	static void HandlePlayerAsyncLoadFailed(Guid player_id,
-											MessageAsyncClient<Guid, PlayerAllData>::LoadFailureReason reason);
+	static void HandlePlayerAsyncLoadFailed(Guid player_id, PlayerLoadFailureReason reason);
 	static void HandlePlayerAsyncSaved(Guid player_id, PlayerAllData& message);
 
-	// 存盘被 Redis 侧 owner_epoch CAS 拒绝:本节点缓存的 epoch 已不是 Redis 当前值,
+	// 存盘被写权行拒绝(STALE_OWNER / NOT_HOLDER / UNCLAIMED):本节点缓存的 epoch 已不是当前值,
 	// 说明 scene_manager 已把该玩家改派给别的节点 —— 我已被废黜。
 	//
 	// 处理是终态的:计数 stale_owner_write_rejected、LOG_ERROR,然后销毁本地实体、清
 	// playerList / session 映射。**不再存盘、不发 relocate**:再存只会再被拒,改派也走
-	// EnterScene、会拿着旧 epoch 撞门。同一次存盘并行发出的 DBTask 由 db 服务按
-	// DBTask.owner_epoch 独立拒绝(reentry-barrier §6.3),这里不用管。
-	// rejection.reason == kOwnerCounterBehind(严格屏障发现 Redis 的计数器比被拒的 epoch 还小 = Redis 回退丢了铸造,
-	// zone-redis-regression-guard-20261022.md §4.4):处置相同(不存盘销毁,原因 owner_counter_behind),只检测、不修复 ——
-	// 不前推计数器、不换值重存;改计 owner_counter_behind(不计 stale_owner_write_rejected),ERROR 日志带存储值与缓存值。
-	// 被拒的值与实体当前缓存不等时两种成因都先用当前 epoch 重存一次,由 Lua 按同一判据重新回答。
-	// 由 MessageAsyncClient::SetSaveRejectedCallback 接线(core/system/redis.cpp)。
-	static void HandlePlayerSaveRejected(Guid player_id, const std::string& redisKey, const std::string& rejectedEpoch,
-										 const RedisSaveOwnerRejection& rejection);
+	// EnterScene、会拿着旧 epoch 撞门。被拒的值与实体当前缓存不等时先用当前 epoch 重存一次。
+	static void HandlePlayerSaveRejected(Guid player_id, const std::string& redisKey, const std::string& rejectedEpoch);
 
-	// 严格屏障覆盖世代校验 C3 的两种结局(docs/design/mixed-version-persist-field-protection.md §5.2)。
-	// 由 MessageAsyncClient::SetSaveSchemaWarnedCallback / SetSaveSchemaRejectedCallback 接线(core/system/redis.cpp)。
-	//
-	// Warned(脚本返回 2,warn 模式):已照写、照常提交,这里只计数 regression_warned 并打一条 metric 日志。
-	// 同一写方被判过倒退后每次写入都会再返回 2(防判定那次回包丢失),按写方令牌去重:当前实体就是 writer 且已报过只打 DEBUG。
-	// 在提交钩子之前同步调用,不得重入存盘。
-	//
-	// Rejected(脚本返回 3,enforce 模式):这份数据被判为截断过,Redis 一个键都没动,也不会有落地回调。
-	// 不能复用 HandlePlayerSaveRejected:那条按 epoch 重存会无限循环,或按"已废黜"销毁,语义都不对。按实体状态分派:
+	// 存档的世代比这个进程新(SCHEMA_REGRESSED,docs/design/mixed-version-persist-field-protection.md):这份数据被判为
+	// 截断过,一行都没动,也不会有落地回调。按实体状态分派:
 	//   退出中(UnregisterPlayer)        → DestroyDeposedPlayer 不存盘收尾(否则退出永远等不到落地回调);
 	//   交接中且标记未发(requestedAtMs=0) → AbortTravelHandoff 解冻回 tip(SET 还没发,解冻安全);
 	//   其余                            → 保留实体、打 ERROR、本次不落盘;之后每次存盘仍会被比较、仍会被拒。
 	// 计数 regression_rejected。
-	static void HandlePlayerSaveSchemaWarned(Guid player_id, const std::string& redisKey, const std::string& writer);
 	static void HandlePlayerSaveSchemaRejected(Guid player_id, const std::string& redisKey, const std::string& guardExpected);
-
-	// 存盘连续失败达到告警阈值后的通知。底层仍保留最新 payload 继续重试。
-	//
-	// 必须存在的理由:退出流程在 SavePlayerToRedis 返回 true 后,把"销毁实体、
-	// 清 session、清 playerList"整段收尾都挂在 HandlePlayerAsyncSaved 上。
-	// 旧实现达到上限后丢弃最新值且不通知调用方;调用方既无法告警,也无法
-	// 区分"仍在重试"与"已经没有任何最新副本"。现在回调只用于高危告警,
-	// **绝不**更新 PlayerLastPersistedSnapshotComp,也不在失败点销毁唯一内存态。
-	// 详见 docs/design/player-async-save-loss-windows.md §4.1。
-	static void HandlePlayerAsyncSaveFailed(Guid player_id, const std::string& redisKey, int retryCount);
 
 	// ── 入场(PlayerEnterGameNode)与入场会话栅栏(enter_fence.h;scene-enter-session-fence.md §5)──
 
@@ -1241,8 +1174,8 @@ public:
 	static void BeginInheritedMarkClear(Guid playerId);
 
 	// 有上限地重发失败的 A2′,并对超过截止时刻的(失败或在途)拒建实体。由 RedisSystem 驱动:
-	//   reconnected = true  → Redis 重连回调里、playerRedis->OnReconnected() 之前调,忽略退避;
-	//   reconnected = false → 1s 周期定时器里、RetryDuePending() 之前调,只发退避已到的。
+	//   reconnected = true  → Redis 重连回调里调,忽略退避;
+	//   reconnected = false → 1s 周期定时器里调,只发退避已到的。
 	// 待入场表为空时零开销。
 	static void RetryInheritedMarkClears(bool reconnected);
 
@@ -1279,16 +1212,37 @@ public:
 
 	static entt::entity InitPlayerFromAllData(const PlayerAllData& playerAllData, const PlayerEnterContext& ctx);
 
-	// 返回 true 表示"确实向 Redis / DB 队列压了一次写,稍后会有 HandlePlayerAsyncSaved 回调";
+	// 返回 true 表示"确实排入了一次提交,稍后会有 HandlePlayerAsyncSaved 回调";
 	// 返回 false 只表示本次没有排入写入,包括已落盘相等、交接已发起以及校验拒绝。
 	// 本接口保留资产/结算的 bool 函数指针契约;false 不能作为销毁实体或交接的成功凭据。
 	// 生命周期内部通过 SavePlayerToRedisImpl 的 SaveResult 区分这些结果。
 	//
-	// 落库目的地由 PlayerHomeZoneComp 决定(CZ-2),Redis 写带 owner_epoch CAS(CZ-4 ①),
-	// DBTask 带 owner_epoch(reentry-barrier §6.3)。
+	// 直接提交 player_store,落点用认领时返回的那个,写权在 go/db 的提交事务里判定(player-save-direct-commit.md §4)。
 	static bool SavePlayerToRedis(entt::entity player);
-	// 资产重查可重建丢失的 SQL 提交证据，必须重投当前整份载荷，不能被 Redis 快照相等跳过。
+	// 资产重查要求这一笔真的提交，必须重投当前整份载荷，不能被快照相等跳过。
 	static bool SavePlayerForAssetCommit(entt::entity player);
+
+	// 关键进度存盘(docs/design/player-data-tidb-scaling-plan.md §4):等级、任务这类玩家投入了时间的变化不等定时存盘。
+	// 存盘不在调用方的栈上发生,调用方可能正处在一连串状态变化的中间(完成任务 → 自动领奖 → 接下一环)。
+	// 每名玩家 1 秒内最多触发一次,窗口内的多次变化合并成到期时的一次;没有变化就不写。reason 只进 DEBUG 日志。
+	static void RequestKeyProgressSave(entt::entity player, const char* reason);
+
+	// 本线程的存盘状态机。第一次取用时按生产接线创建。
+	static PlayerStoreClient& PlayerStore();
+
+	// 这名玩家还有未落定的存盘(在途或排队)。
+	static bool IsPlayerSaveUnsettled(Guid playerId);
+
+	// 发起载入:从 TiDB 认领写权并读存档。结果走 HandlePlayerAsyncLoaded / HandlePlayerAsyncLoadFailed。
+	static void RequestPlayerLoad(Guid playerId);
+	// 这名玩家的载入还没有结果。
+	static bool HasPendingPlayerLoad(Guid playerId);
+	// 认领结束(PlayerStoreClient 的回调)。CLAIMED:把片段拼回 PlayerAllData、填回元数据,走 HandlePlayerAsyncLoaded;
+	// 其余和没有结论:走 HandlePlayerAsyncLoadFailed(回 tip、清待入场条目、补写继承标记)。
+	static void HandlePlayerStoreClaimed(Guid playerId, const playerstore::LoadAndClaimResponse* response);
+
+	// 停机拆除前留证据:存盘还没有明确结果的玩家,他们最后一次提交之后的进度随进程丢失。旧路径上是空操作。
+	static void LogUnsettledPlayerStoreSaves();
 
 	// ── 归属交接:源端释放链(CZ-5)──────────────────────────────────────────────
 	// 跨 zone 传送与同 zone 跨节点换图共用同一条链,区别只有目标 zone 是不是本 zone。
@@ -1305,9 +1259,9 @@ public:
 	// 改那边必须同步这里。全 C++ 只此一处定义,别处一律引用它,不许再写字面量 18。
 	static constexpr uint32_t kSmErrHandoffPending = 18;
 
-	// scene_manager.EnterScene 的另外八个拒绝码,只供下面的 SmRejectedBeforeAnyPlacementWrite 使用。与
+	// scene_manager.EnterScene 的另外七个拒绝码,只供下面的 SmRejectedBeforeAnyPlacementWrite 使用。与
 	// kSmErrHandoffPending 同一条纪律:数值手抄自 go/scene_manager/internal/constants/errors.go(依次是 ErrNoAvailableNode /
-	// ErrInvalidNodeID / ErrInvalidGateID / ErrRedis / ErrSceneReentryBarrier / ErrHomeZoneUnavailable / ErrHomeZoneMerging /
+	// ErrInvalidNodeID / ErrInvalidGateID / ErrRedis / ErrSceneReentryBarrier / ErrHomeZoneUnavailable /
 	// ErrPlacementSessionSuperseded),
 	// 走的是 scene_manager 自己的 error_code 轴、两边没有共享的生成物,改那边必须同步这里;全 C++ 只此一处定义,
 	// 别处一律引用具名常量,不许再写字面量。
@@ -1317,7 +1271,6 @@ public:
 	static constexpr uint32_t kSmErrRedis = 8;
 	static constexpr uint32_t kSmErrSceneReentryBarrier = 17;
 	static constexpr uint32_t kSmErrHomeZoneUnavailable = 20;
-	static constexpr uint32_t kSmErrHomeZoneMerging = 21;
 	// 落点会话身份已被更新的登录取代(stale 或 conflict),scene_manager 一个字节都没改;陈旧请求方不应以同一会话重试
 	// (docs/design/scene-enter-chain-residuals.md §5.2 ⑤)。交接收到它走 ResolveTravelOutcome(kFailed),与其余非 0 码相同。
 	static constexpr uint32_t kSmErrPlacementSessionSuperseded = 25;
@@ -1350,7 +1303,6 @@ public:
 		case kSmErrSceneReentryBarrier:
 		case kSmErrHandoffPending:
 		case kSmErrHomeZoneUnavailable:
-		case kSmErrHomeZoneMerging:
 		case kSmErrPlacementSessionSuperseded:
 			return true;
 		default:
@@ -1612,10 +1564,6 @@ public:
 	// player_locator 30s lease. This method exposes the saving state for callers
 	// that want to log / reject / wait when the save outruns those mechanisms.
 	//
-	// 「在途」现在也包括 Redis 已落地、但下线收尾还在等本玩家 DBTask 的 Kafka 回执(或因投递失败重存 / 超限保留)
-	// 的那段时间(FinishExitOrAwaitDbTaskAck 的闸门):这期间 UnregisterPlayer 一直挂着,本函数照常返回 true,
-	// 停机 drain 据此继续等待。
-	//
 	// THREADING (Review O3, 2026-05-17): MUST be called from the ECS thread
 	// only. Internally does tlsEcs.GetPlayer(playerId) +
 	// tlsEcs.actorRegistry.any_of<UnregisterPlayer>(...), both of which touch
@@ -1626,32 +1574,13 @@ public:
 	// the result back via a future / channel.
 	static bool IsSaveInFlight(Guid playerId);
 
-	// 下线收尾的 DBTask 回执闸门(player_exit::DecideDbTaskGate)。退出存盘已收敛(Redis 已是当前内存)之后,原来直接调
-	// FinishExitAfterPersist 的五个收尾口(落地回调的收敛 / 重存收敛、HandleExitGameNode 的快路径与 rekick、
-	// HandlePlayerSaveRejected)一律改走这里:
-	//   没有在途 DBTask、也不欠 MySQL → FinishExitAfterPersist,返回 true(实体已销毁);
-	//   只有在途 DBTask              → 置 awaitingDbTaskAck,返回 false,等 OnDbTaskDispatchSettled 恢复;
-	//   有投递失败、未到上限          → 按当前内存重存一次(SavePlayerToRedisImpl 不走快路径),返回 false;
-	//                                  无法再重存时(交接已发起)带着 MySQL 落后收尾(exit_unsynced),返回 true;
-	//                                  拒存(持久组件缺失)时 DestroyDeposedPlayer 不存盘丢弃(不写 A1′、交接标记,不发改派),返回 true;
-	//   有投递失败、已到上限          → 保留实体,返回 false。
-	//   欠账的失败是永久性的          → 不论轮次、不等剩下的回执,带着 MySQL 落后收尾(exit_unsynced,ERROR 带错误码),
-	//   (DbTaskDispatchSystem::PermanentFailure,消息过大 / 无写权限等)  返回 true。
-	// 实体无效或意图组件缺失时沿用旧行为直接收尾、返回 true。返回 true 之后调用方不得再用实体上的任何组件指针。
-	static bool FinishExitOrAwaitDbTaskAck(Guid playerId);
-
-	// DbTaskDispatchSystem::Pump 的回调(只能在 loop 顶层调用):该玩家的 DBTask 落定了(在途归零,或出现了需要重存的失败)。
-	// 实体已不在 → 回收账本条目;实体停在闸门上(awaitingDbTaskAck)且没有未落地的 Redis 存盘 → 核对收敛后
-	// 回到 FinishExitOrAwaitDbTaskAck。自身只用 GetPlayer / valid / try_get 读组件、不 get_or_emplace;重存与收尾交给既有入口。
-	static void OnDbTaskDispatchSettled(Guid playerId);
-
 private:
 	// 仅供内存回归驱动真实取证应答入口,不增加产品调用面或替换归属判定。
 	friend class PlayerTravelOutcomeTestAccess;
+	friend class PlayerStoreDirectTestAccess;
 
 	// 存盘确实落地之后的统一收尾:紧急疏散改派(如果在疏散中)-> 断线释放标记(A1′,条件满足才写)
 	// -> 摘会话 -> 销毁实体。异步存盘回调与"快路径没写盘"两条路径都走这里,避免两份收尾逻辑漂移。
-	// 退出收尾口不要直接调它:先过 FinishExitOrAwaitDbTaskAck 的 DBTask 回执闸门(MySQL 那一份确认送达才销毁)。
 	static void FinishExitAfterPersist(Guid playerId);
 
 	// 向 SceneManager 请求把该玩家改派到大世界频道。只在疏散票据存在时生效,
@@ -1698,13 +1627,38 @@ private:
 	//   * StartTravelHandoff 的快路径补写(handoff_fastpath_forced):保证写 handoff 标记之前没有更早的未落地存盘,
 	//     也就是"SET 发出 ⇒ Redis ⊇ 冻结内存"(骨架 I1);
 	//   * ResolveTravelOutcome 的 B5 采纳(rolled_back_adopted,GO-2 §12.8):采纳回滚后的 epoch(E+2)、解冻之后立即写一次。
-	//     一是让 DBTask(E+2) 立刻越过兼容窗口里幽灵持有者可能落下的 DBTask(E+1);二是恢复"快照 == Redis"的前提 ——
-	//     兼容窗口里旧版目标节点若在回滚前写过一份 Redis blob,不强制写的话 dirty-save 快路径会误判"盘上已是同一份"。
-	//   * 下线收尾的 DBTask 回执闸门(FinishExitOrAwaitDbTaskAck / OnDbTaskDispatchSettled):快照只证明那份字节进了 Redis,
-	//     DbTaskDispatchSystem 记着 MySQL 欠账(NeedsResave)时必须按当前内存整份重发,不能走快路径。
-	//   * SavePlayerForAssetCommit:资产重查需要重建 SQL 提交证据,即使 Redis 快照相等也必须重投整份载荷。
+	//     一是把写权行抬到 E+2,挡住幽灵持有者可能落下的 E+1;二是恢复"快照 == 库"的前提 ——
+	//     目标节点若在回滚前提交过一份,不强制写的话 dirty-save 快路径会误判"盘上已是同一份"。
+	//   * SavePlayerForAssetCommit:资产重查要求这一笔真的提交,即使快照相等也必须重投整份载荷。
 	// 不给 SavePlayerToRedis 加默认参数:它以函数指针形式被引用(asset_op_system.cpp 的 PersistFn)。
 	static SaveResult SavePlayerToRedisImpl(entt::entity player, bool allowSkipWhenPersisted);
+
+	// 存盘的后半段(docs/design/player-save-direct-commit.md §5.1):校验、marshal、交接跳过
+	// 都在 SavePlayerToRedisImpl 里;这里投影成行、交给状态机。是否跳过由状态机比对库里已确认的字节决定:
+	// allowSkipWhenPersisted = false 或快照上没有当前代次的提交时强制写一笔;退出中的每一笔都带 release,
+	// 所以挂机下线也会真的发出去、等到回调。
+	static SaveResult SavePlayerDirect(entt::entity player, Guid playerId, const std::shared_ptr<PlayerAllData>& message,
+									   bool allowSkipWhenPersisted);
+
+	// 状态机的回调。提交成功走 HandlePlayerAsyncSaved(有排队的快照时不走:这份不是最终态);
+	// 拒绝映射:STALE_OWNER / NOT_HOLDER / UNCLAIMED → HandlePlayerSaveRejected,
+	// SCHEMA_REGRESSED → HandlePlayerSaveSchemaRejected,OLDER_SEQ → 抬序号重存,其余 → HandlePlayerSaveRefused。
+	static void OnPlayerStoreSaveDone(Guid playerId, const std::shared_ptr<PlayerAllData>& message,
+									  bool tradeFreezeSave, const PlayerStoreSaveResult& result);
+
+	// 确定性拒绝(INVALID、TOO_LARGE、序号饱和):这一笔没有写,库里还是上一次提交的内容。按 DisposeRefusedSave 处置。
+	static void HandlePlayerSaveRefused(Guid playerId, const PlayerStoreSaveResult& result);
+
+	// 一笔存盘被明确拒绝、不会再有落地回调时,按实体状态收尾:
+	//   退出中(UnregisterPlayer)        → 回 tip 并踢线(会话还在时),不存盘销毁,否则退出永远等不到收尾;
+	//   交接中且标记未发(requestedAtMs=0) → AbortTravelHandoff;
+	//   其余                            → 保留实体,这次不落盘,之后的存盘照常再试。
+	static void DisposeRefusedSave(Guid playerId, const char* exitReasonTag, const char* handoffAbortReason);
+
+	// 持有状态机实例的线程局部槽。单测经它重置。
+	static std::unique_ptr<PlayerStoreClient>& PlayerStoreSlot();
+	// 按生产接线重建状态机,只把传输与定时器换成给定的。仅供单测。
+	static void InstallPlayerStoreTransport(const PlayerStoreTransport& transport);
 
 	// "我已被废黜"的统一销毁:不存盘、不改派(疏散票据作废)、摘冻结 / 交接标记、摘场景、摘会话、销毁实体。
 	// 入口:存盘被 epoch CAS 拒(HandlePlayerSaveRejected)、交接被放行(EnterScene 应答 Redirect /
@@ -1755,7 +1709,7 @@ private:
 	//   B4  kUnchanged        epoch == 缓存值 → 正向证据一:markEpoch 清 0(脚本已删本族标记,不再登记撤回 —— 否则撤回
 	//                         应答之前 Redis 一断,IsSceneChangeBusy 会把玩家挡 ~305s),AbortTravelHandoff 解冻
 	//                         (kSucceeded 静默,其余回失败 tip)。
-	//   B5  kRolledBackToSelf 回执 == 本次标记原文、markEpoch == 缓存值、epoch == markEpoch+2 == location.owner_epoch、
+	//   B5  kRolledBackToSelf 回执 == 本次标记原文、markEpoch == 缓存值、epoch ≥ markEpoch+2 且 == location.owner_epoch、
 	//                         location 指回本节点本 zone → 正向证据二:采纳 epoch(PlayerOwnerEpochComp 取 max)→ markEpoch 清 0
 	//                         → rolled_back_adopted +1 → AbortTravelHandoff 解冻 → SavePlayerToRedisImpl(强制写一次)。
 	//                         这是"节点不得自己读 Redis 取 epoch"(CZ-3)的唯一例外,三条前提写死:原子脚本先删本族标记;

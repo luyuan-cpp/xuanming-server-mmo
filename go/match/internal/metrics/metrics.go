@@ -87,14 +87,48 @@ var (
 
 	// watchBattleTotal WatchBattle 每个出口记一次(Redis 与全局两条路径同一组标签;一个进程只走一条路径)。
 	// full = battle 回观众席位已满;closed = 全局路径重放已关闭且未记录原因的原请求;
-	// pending = 全局路径原操作尚未拿到 battle 的终局证明,复用原 request_id 重试;internal 含参数错与服务端故障。
-	// 口径差异:全局路径的 outcome 由意图上持久化的客户端 tip 推出,16018(成局已变 / 准入截止 / battle 的各类拒绝,
-	// 含房间不存在)一律记 not_found,不出 rejected;Redis 路径对 battle 的非「房间不存在」拒绝记 rejected。
+	// pending = 全局路径原操作尚未拿到 battle 的终局证明,复用原 request_id 重试;internal 含参数错与服务端故障;
+	// private = Redis 路径按 battle_id 指定了私密局(可见性闸,客户端收到的与 not_found 相同,不泄露存在性)。
+	// ok = L0 直连席准入;lobby = L1 / L2 准入(凭观战凭证经大厅连接收帧,battle-spectate-tiered-fanout.md §15.6)。
+	// 口径差异:全局路径的 outcome 由意图上持久化的客户端 tip 推出,16018(成局已变 / 准入截止 / 私密局 / battle 的
+	// 各类拒绝,含房间不存在)一律记 not_found,不出 rejected / private;Redis 路径对 battle 的非「房间不存在」拒绝记 rejected。
 	watchBattleTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "watch_battle_total",
-		Help:      "WatchBattle requests by outcome (ok|queued|in_battle|already_watching|offline|no_battle|not_found|rejected|full|closed|pending|internal). Global path counts every 16018 close as not_found.",
+		Help:      "WatchBattle requests by outcome (ok|lobby|queued|in_battle|already_watching|offline|no_battle|not_found|private|rejected|full|closed|pending|internal). Global path counts every 16018 close as not_found.",
 	}, []string{"outcome"})
+
+	// spectateTierTotal 观众按档位的准入次数:回答「观众都落在哪一档」,与 watch_battle_total 的 ok / lobby 同口径,
+	// 只是把 lobby 再拆成 relay 与 broadcast。标签只有三个固定取值(SpectateTier*)。
+	spectateTierTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "spectate_tier_total",
+		Help:      "Spectator admissions by delivery tier (direct|relay|broadcast).",
+	}, []string{"tier"})
+
+	// spectatePromoteTotal 升 L2 全服广播的尝试结果:quota_full = 全服配额 B 已满,本场留在 L1(不是错误);
+	// rpc_failed = 抢租约、抢配额的 Redis 调用或 battle 的 PromoteSpectateBroadcast 失败,配额已退还,本场留在原档;
+	// throttled = 同一场的短租约还在,这名观众没有去抢配额、也没有调 battle,直接按当前档签票(不是错误)。
+	spectatePromoteTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "spectate_promote_total",
+		Help:      "Attempts to promote a battle to global spectate broadcast by result (ok|quota_full|rpc_failed|throttled).",
+	}, []string{"result"})
+
+	// spectatorUnprovenCloseTotal 全局观战原件在拿不到 battle 取消证明时被关闭的次数,reason 见 SpectatorUnprovenClose*。
+	// 持续增长说明有 battle 实例崩溃或被替换;原件照常关闭,玩家不再卡在观战占用上。
+	spectatorUnprovenCloseTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "spectator_unproven_close_total",
+		Help:      "Global spectator originals closed without a battle cancel proof because the original instance is gone, by reason (formation_ended|instance_replaced).",
+	}, []string{"reason"})
+
+	// spectatorIntentPurgedTotal 保留期清理删除的 match_spectator_intent 行数。
+	spectatorIntentPurgedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "spectator_intent_purged_total",
+		Help:      "Closed non-head match_spectator_intent rows deleted by the retention purge.",
+	})
 
 	// requestBattleTicketTotal 丢票补签(MatchService.RequestBattleTicket → BattleNode.IssueBattleTicket)
 	// 的出口分布:rejected = battle 核对名单后拒签,no_node = 观战索引指向的 battle 节点未发现。
@@ -115,15 +149,6 @@ var (
 		Name:      "rating_update_total",
 		Help:      "Battle result events consumed from Kafka by mode and outcome (applied|duplicate|ignored|partial|error|decode_error); error also covers a failed leaderboard snapshot publish (all members applied, marker left applying for retry).",
 	}, []string{"mode", "outcome"})
-
-	// ratingSnapshotPublishTotal 排行榜评分快照的发布结果(docs/design/leaderboard-system.md §3.6),**按消息条数**计:
-	// 一局 N 人的批量写成功记 ok += N,失败记 error += N(失败的那一局会走续写重试,重发当前快照)。
-	// rank 的告警 RankConsumerStalled 以 "match 15 分钟内确实发过(ok 增长)" 为前提,所以 ok / error 两条序列在注册时预建为 0。
-	ratingSnapshotPublishTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Subsystem: subsystem,
-		Name:      "rating_snapshot_publish_total",
-		Help:      "Leaderboard rating snapshot events published to Kafka, counted per message, by outcome (ok|error).",
-	}, []string{"outcome"})
 
 	// groupRatingSpread 每次凑组成功时组内最高分与最低分之差:分布右移说明
 	// 容差放宽得太快或某段位人太少。
@@ -251,9 +276,12 @@ func register() {
 			discoveredNodes,
 			kafkaPushTotal,
 			watchBattleTotal,
+			spectateTierTotal,
+			spectatePromoteTotal,
+			spectatorUnprovenCloseTotal,
+			spectatorIntentPurgedTotal,
 			requestBattleTicketTotal,
 			ratingUpdateTotal,
-			ratingSnapshotPublishTotal,
 			groupRatingSpread,
 			waitSeconds,
 			starvedAnchorWait,
@@ -268,9 +296,8 @@ func register() {
 			teamCrossZoneAllowed,
 			teamFillQueueDisabled,
 		)
-		for _, outcome := range []string{RatingSnapshotPublishOK, RatingSnapshotPublishError} {
-			ratingSnapshotPublishTotal.WithLabelValues(outcome)
-		}
+		prometheus.MustRegister(poolCollectors()...)    // 按池撮合(pool.go)
+		prometheus.MustRegister(outcomeCollectors()...) // 全球终局恢复与终局发件箱(outcome.go)
 	})
 }
 
@@ -281,20 +308,6 @@ func ObserveProbeRTT(ms uint32)               { probeRTT.Observe(float64(ms)) }
 // teamSize 是 PVE 人数档("2".."5";没有人数档的队列传 "0"),见 SetQueueDepth。
 func SetStarvedAnchorWait(mode string, config string, teamSize string, seconds float64) {
 	starvedAnchorWait.WithLabelValues(mode, config, teamSize).Set(seconds)
-}
-
-// 评分快照发布的 outcome label(有限枚举)。
-const (
-	RatingSnapshotPublishOK    = "ok"
-	RatingSnapshotPublishError = "error"
-)
-
-// ObserveRatingSnapshotPublish 记录一次批量发布涉及的消息条数(outcome 取 RatingSnapshotPublish* 之一)。
-func ObserveRatingSnapshotPublish(outcome string, messages int) {
-	if messages <= 0 {
-		return
-	}
-	ratingSnapshotPublishTotal.WithLabelValues(outcome).Add(float64(messages))
 }
 
 // ObserveRatingRoundCapDraw 记录一局回合打满被改按平局结算。
@@ -320,15 +333,6 @@ func ObserveRatingUpdate(mode string, outcome string) {
 func RatingUpdateValue(mode string, outcome string) float64 {
 	var m dto.Metric
 	if err := ratingUpdateTotal.WithLabelValues(mode, outcome).Write(&m); err != nil {
-		return 0
-	}
-	return m.GetCounter().GetValue()
-}
-
-// RatingSnapshotPublishValue 读评分快照发布计数(测试与诊断用)。
-func RatingSnapshotPublishValue(outcome string) float64 {
-	var m dto.Metric
-	if err := ratingSnapshotPublishTotal.WithLabelValues(outcome).Write(&m); err != nil {
 		return 0
 	}
 	return m.GetCounter().GetValue()
@@ -416,6 +420,64 @@ func ObserveWatchBattle(outcome string) {
 // WatchBattleValue 读回某 outcome 的 WatchBattle 计数,只给单测断言用。
 func WatchBattleValue(outcome string) float64 {
 	return counterVecValue(watchBattleTotal, outcome)
+}
+
+// match_spectate_tier_total 的 tier 标签(有限枚举)。
+const (
+	SpectateTierDirect    = "direct"
+	SpectateTierRelay     = "relay"
+	SpectateTierBroadcast = "broadcast"
+)
+
+// match_spectate_promote_total 的 result 标签(有限枚举)。
+const (
+	SpectatePromoteOK        = "ok"
+	SpectatePromoteQuotaFull = "quota_full"
+	SpectatePromoteRPCFailed = "rpc_failed"
+	SpectatePromoteThrottled = "throttled"
+)
+
+// match_spectator_unproven_close_total 的 reason 标签(有限枚举)。
+const (
+	SpectatorUnprovenCloseFormationEnded   = "formation_ended"
+	SpectatorUnprovenCloseInstanceReplaced = "instance_replaced"
+)
+
+// ObserveSpectateTier 记录一次观众准入落在哪一档(tier 取 SpectateTier* 之一)。
+func ObserveSpectateTier(tier string) {
+	spectateTierTotal.WithLabelValues(tier).Inc()
+}
+
+// SpectateTierValue 读回某档位的准入计数,只给单测断言用。
+func SpectateTierValue(tier string) float64 {
+	return counterVecValue(spectateTierTotal, tier)
+}
+
+// ObserveSpectatePromote 记录一次升 L2 尝试的结果(result 取 SpectatePromote* 之一)。
+func ObserveSpectatePromote(result string) {
+	spectatePromoteTotal.WithLabelValues(result).Inc()
+}
+
+// SpectatePromoteValue 读回某结果的升 L2 计数,只给单测断言用。
+func SpectatePromoteValue(result string) float64 {
+	return counterVecValue(spectatePromoteTotal, result)
+}
+
+// ObserveSpectatorUnprovenClose 记录一次不带取消证明的原件关闭(reason 取 SpectatorUnprovenClose* 之一)。
+func ObserveSpectatorUnprovenClose(reason string) {
+	spectatorUnprovenCloseTotal.WithLabelValues(reason).Inc()
+}
+
+// SpectatorUnprovenCloseValue 读回某原因的关闭计数,只给单测断言用。
+func SpectatorUnprovenCloseValue(reason string) float64 {
+	return counterVecValue(spectatorUnprovenCloseTotal, reason)
+}
+
+// ObserveSpectatorIntentPurged 记录一轮保留期清理删除的意图行数。
+func ObserveSpectatorIntentPurged(rows int64) {
+	if rows > 0 {
+		spectatorIntentPurgedTotal.Add(float64(rows))
+	}
 }
 
 // ObserveRequestBattleTicket 记录一次 RequestBattleTicket(丢票补签)请求结果。

@@ -89,7 +89,7 @@ func TestTiDBTrialStartedBattleReleasesOnlyOnSignedSQLAbort(t *testing.T) {
 			// 开局成功：match 编队 Finish(true) 到 formation=4，guild 登记对局，launch 进 state2。
 			require.NoError(t, activities.RegisterTrialBattle(ctx, battle, testNowMs))
 			if disband {
-				_, err = repo.DisbandGuild(actor, 44, 11, testNowMs+1, nil)
+				_, err = repo.DisbandGuild(actor, 44, 11, testNowMs+1)
 				require.NoError(t, err)
 			}
 			started := readTrialLaunchOccupancy(t, ctx, db, requestID)

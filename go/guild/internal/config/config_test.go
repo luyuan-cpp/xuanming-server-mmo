@@ -23,8 +23,8 @@ func TestEtcTemplateRequiresExplicitGlobalSessions(t *testing.T) {
 	if err := loadEtcWithAuthorityForTest(t, &c); err != nil {
 		t.Fatalf("当前样例显式全局权威配置应可加载: %v", err)
 	}
-	if c.AccountRoleSchema == "" || !c.MySQL.RequiresTiDB() || c.MatchAuthoritySchema == "" || !c.GlobalLoginSessions || strings.TrimSpace(c.LoginRedis.Host) == "" {
-		t.Fatal("生产样例必须显式声明同TiDB权威库、Match权威库和全局LoginRedis")
+	if c.AccountRoleSchema == "" || c.MySQL.Backend != "tidb" || c.MatchAuthoritySchema == "" || !c.GlobalLoginSessions || strings.TrimSpace(c.LoginRedis.Host) == "" {
+		t.Fatal("生产样例必须显式声明同事务域权威库、Match权威库和全局LoginRedis")
 	}
 	for _, test := range []struct {
 		name   string
@@ -76,84 +76,7 @@ func TestEtcYamlEnablesPrometheus(t *testing.T) {
 	}
 }
 
-// ── 合服闸门配置(MergeMarkerRedis)─────────────────────────────
-
-// TestMergeMarkerRedisAbsentMeansFenceInactive 钉住"整段缺失 = 闸门不生效"这条契约。
-// 这是刻意的降级形态:guild 与 data_service 目前没有别的连线,强制它连一个新 Redis
-// 会让所有还没配这段的环境直接起不来;闸门只是合服窗口里的加固。
-func TestMergeMarkerRedisAbsentMeansFenceInactive(t *testing.T) {
-	var c Config
-	if err := conf.LoadFromYamlBytes([]byte(minimalGuildYaml), &c); err != nil {
-		t.Fatalf("加载最小配置失败: %v", err)
-	}
-	if c.MergeMarkerRedis.Enabled() {
-		t.Fatalf("没写 MergeMarkerRedis 时闸门必须是关的,got %+v", c.MergeMarkerRedis)
-	}
-}
-
-// TestEtcYamlWiresMergeMarkerRedis:仓库里那份 dev 配置要把闸门接上,
-// 否则本地根本演练不到合服流程。
-//
-// DB 必须是 0:data_service 的 mapping Redis 恒在 DB 0
-// (go-zero 的 redis.RedisConf 没有 DB 字段,etc/data_service.yaml 里写 DB 会被静默忽略)。
-// 填成别的库 = 闸门永远看不到 merge:in_progress:{zone},合服窗口内照样能建帮。
-func TestEtcYamlWiresMergeMarkerRedis(t *testing.T) {
-	var c Config
-	if err := loadEtcWithAuthorityForTest(t, &c); err != nil {
-		t.Fatalf("加载 etc/guild.yaml 失败: %v", err)
-	}
-	if !c.MergeMarkerRedis.Enabled() {
-		t.Fatal("etc/guild.yaml 应当接上 MergeMarkerRedis,否则本地演练不到合服闸门")
-	}
-	if c.MergeMarkerRedis.DB != 0 {
-		t.Errorf("MergeMarkerRedis.DB = %d;data_service 的 mapping Redis 恒在 DB 0,填别的库闸门必然失效",
-			c.MergeMarkerRedis.DB)
-	}
-	// D1 第 3 批读方门禁缺省关(spec_D1_batch1b2_2_3.md §5.1):仓库 dev 配置不得默认打开,
-	// 否则没有对账 leader 挂标记的本地环境一律建不了帮。
-	if c.MergeMarkerRedis.RequireRouteReady {
-		t.Error("etc/guild.yaml 的 MergeMarkerRedis.RequireRouteReady 必须保持 false(上线顺序 P5 由负责人逐阶段打开)")
-	}
-}
-
-// TestMergeMarkerRedisRequireRouteReadyDefaultsFalse:不写这个键 = false = 今天的 EXISTS 判据。
-func TestMergeMarkerRedisRequireRouteReadyDefaultsFalse(t *testing.T) {
-	input := minimalGuildYaml + "MergeMarkerRedis:\n  Host: 127.0.0.1:6379\n"
-	var c Config
-	if err := conf.LoadFromYamlBytes([]byte(input), &c); err != nil {
-		t.Fatalf("加载配置失败: %v", err)
-	}
-	if !c.MergeMarkerRedis.Enabled() || c.MergeMarkerRedis.RequireRouteReady {
-		t.Fatalf("只配 Host 时闸门应开、RequireRouteReady 应为 false,got %+v", c.MergeMarkerRedis)
-	}
-}
-
-// TestMergeMarkerRedisRequireRouteReadyParsesAndNeedsHost:键名能被解析;开关开着却没接闸门必须拒启
-// (否则闸门整体不生效,运维却以为它在 fail-closed)。
-func TestMergeMarkerRedisRequireRouteReadyParsesAndNeedsHost(t *testing.T) {
-	var c Config
-	input := minimalGuildYaml + "MergeMarkerRedis:\n  Host: 127.0.0.1:6379\n  RequireRouteReady: true\n"
-	if err := conf.LoadFromYamlBytes([]byte(input), &c); err != nil {
-		t.Fatalf("配了 Host 时打开 RequireRouteReady 应能通过校验: %v", err)
-	}
-	if !c.MergeMarkerRedis.RequireRouteReady {
-		t.Fatal("RequireRouteReady: true 没有被解析进配置(键名或 tag 写错会静默保持 false)")
-	}
-
-	c.MergeMarkerRedis.Host = ""
-	err := c.Validate()
-	if err == nil || !strings.Contains(err.Error(), "RequireRouteReady") {
-		t.Fatalf("RequireRouteReady=true 而 Host 为空必须拒启,得到 %v", err)
-	}
-
-	var fromYaml Config
-	noHost := minimalGuildYaml + "MergeMarkerRedis:\n  RequireRouteReady: true\n"
-	if err := conf.LoadFromYamlBytes([]byte(noHost), &fromYaml); err == nil || !strings.Contains(err.Error(), "RequireRouteReady") {
-		t.Fatalf("yaml 里只写 RequireRouteReady 不写 Host 必须加载失败,得到 %v", err)
-	}
-}
-
-// minimalGuildYaml 是一份能过 go-zero 必填校验的最小配置(不含 MergeMarkerRedis)。
+// minimalGuildYaml 是一份能过 go-zero 必填校验的最小配置。
 const minimalGuildYaml = `
 Name: guild.rpc
 ListenOn: 127.0.0.1:50300
@@ -196,29 +119,29 @@ func loadMinimal(t *testing.T) Config {
 	return c
 }
 
-func TestProductionGuildCannotDisableTiDBAuthority(t *testing.T) {
+// 门禁只看档位是否合法,不看 Mode:两档都能上生产(player-data-tidb-scaling-plan.md §9)。
+func TestGuildBackendMustBeLegalInEveryMode(t *testing.T) {
 	for _, mode := range []string{"pro", "pre", "test", "dev"} {
-		t.Run(mode, func(t *testing.T) {
-			input := "Mode: " + mode + "\n" + strings.Replace(minimalGuildYaml, "MySQL:\n", "MySQL:\n  RequireTiDB: false\n", 1)
-			var c Config
-			err := conf.LoadFromYamlBytes([]byte(input), &c)
-			if mode == "dev" || mode == "test" {
-				if err != nil {
-					t.Fatalf("显式本地旧MySQL兼容应放行: %v", err)
+		for backend, legal := range map[string]bool{"tidb": true, "mysql": true, "oracle": false} {
+			t.Run(mode+"/"+backend, func(t *testing.T) {
+				input := "Mode: " + mode + "\n" + strings.Replace(minimalGuildYaml, "MySQL:\n", "MySQL:\n  Backend: "+backend+"\n", 1)
+				var c Config
+				err := conf.LoadFromYamlBytes([]byte(input), &c)
+				if legal && err != nil {
+					t.Fatalf("合法档位应放行: %v", err)
 				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), "TiDB") {
-				t.Fatalf("%s 模式关闭TiDB门禁必须拒启,得到 %v", mode, err)
-			}
-		})
+				if !legal && (err == nil || !strings.Contains(err.Error(), "MySQL.Backend")) {
+					t.Fatalf("非法档位必须拒启,得到 %v", err)
+				}
+			})
+		}
 	}
 }
 
 func TestGuildAuthorityDefaultsAndPoolBounds(t *testing.T) {
 	c := loadMinimal(t)
-	if !c.MySQL.RequiresTiDB() || c.MySQL.MaxOpenConn != 20 {
-		t.Fatal("未配置时必须开启TiDB门禁且固定连接池默认20")
+	if c.MySQL.Backend != "tidb" || c.MySQL.MaxOpenConn != 20 {
+		t.Fatal("未配置时必须是tidb档且固定连接池默认20")
 	}
 	c.MySQL.MaxOpenConn = 0
 	if err := c.Validate(); err != nil {
@@ -522,9 +445,6 @@ func TestAssetOpEnabledFillsY06Defaults(t *testing.T) {
 	}
 	if a.CleanupEnabled {
 		t.Error("CleanupEnabled 没写时应为 false(只有显式打开才清理)")
-	}
-	if a.RequireSQLCommit {
-		t.Error("RequireSQLCommit 没写时应为 false(HEAD 口径,db-write-fencing-mysql.md §6.6)")
 	}
 	// 常量与 struct tag 是同一个默认值的两处写法:段缺失时回档检查按常量回落(svc.RollbackProofRetention),
 	// 两处分叉会让"段缺失的副本"与"段出现但没写这个键的副本"对同一次回档给出不同结论。

@@ -11,7 +11,6 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
-#include "services/scene/player/system/travel_freeze_cap.h"
 
 // 归属只在冻结快照双 SQL ACK 齐备后切换。登记下限和 H/F/R 资格是永久字段，
 // 发布以同一 Lua 的 H→F 与 SET 提交；未知应答只重放原候选，不以标记 TTL 推断撤销。
@@ -181,12 +180,6 @@ local function prior()
     if not parsed then return nil,nil end
     return raw,parsed
 end
-local function version(s)
-    return type(s)=='string' and #s==41 and string.sub(s,21,21)==':'
-        and string.match(s,'^%d+:%d+$')~=nil
-        and bytecmp(string.sub(s,1,20),'18446744073709551615')<=0
-        and bytecmp(string.sub(s,22),'18446744073709551615')<=0 and string.sub(s,22)~=string.rep('0',20)
-end
 local function marker(s,e)
     local owner,time=string.match(s or '','^(%d+):(%d+)$')
     return owner==e and uint(time)
@@ -284,7 +277,7 @@ return 1
 
     // A1、疏散和放弃载入补写只消费原 H；不读当前 holder 给旧调用补授权。
     // 返回 1 写成(同一 F 已在也算,幂等);0 owner_epoch 已不是 E;-2 原 H 已被轮换(更新的登记 / 撤销 / 发布),
-    // 与 kPublishMarkLua 同码,调用方据此区分"归属已推进"与"资格已被取代"(2026-10-23,r2-lc 评审)。
+    // 与 kPublishMarkDirectLua 同码,调用方据此区分"归属已推进"与"资格已被取代"(2026-10-23,r2-lc 评审)。
     inline const std::string kReleaseMarkLua = std::string(kFenceLuaHelpers) + R"(
 if #ARGV~=5 or not types3() then return redis.error_reply('HANDOFF release shape') end
 local held,next=fence(ARGV[4]),fence(ARGV[5])
@@ -321,23 +314,8 @@ redis.call('SET',KEYS[3],ARGV[2],'EX',ARGV[3])
 return 1
 )";
 
-    inline constexpr std::chrono::milliseconds kRetryInterval{250};
-
-    inline travel_freeze_cap::Clock::time_point RetryDueAt(
-        travel_freeze_cap::Clock::time_point frozenAt, travel_freeze_cap::Clock::time_point now)
-    {
-        return std::min(now + kRetryInterval, frozenAt + travel_freeze_cap::kDispatchWindow);
-    }
-
-    // timer 只认原冻结代次,退出、组件销毁重建或已有另一条标记命令都使它失效。
-    inline bool IsCurrentWait(travel_freeze_cap::Clock::time_point expectedFrozenAt,
-        travel_freeze_cap::Clock::time_point currentFrozenAt, uint64_t requestedAtMs, bool exiting)
-    {
-        return !exiting && expectedFrozenAt == currentFrozenAt && requestedAtMs == 0;
-    }
-
-    // 发布和资格转换是同一提交点：原 H -> 本轮 F，双 ACK 必须仍齐备。
-    inline const std::string kPublishMarkLua = std::string(kFenceLuaHelpers) + R"(
+    // 发布和资格转换是同一提交点：原 H -> 本轮 F。调用方在最终存盘明确成功之后才到这里(docs/design/player-save-direct-commit.md §6)。
+    inline const std::string kPublishMarkDirectLua = std::string(kFenceLuaHelpers) + R"(
 if #ARGV~=5 or not types3() then return redis.error_reply('HANDOFF_SQL shape') end
 local held,next=fence(ARGV[4]),fence(ARGV[5])
 local raw=prior()
@@ -347,11 +325,6 @@ if not held or not next or raw==nil or held.k~='H' or next.k~='F' or not samehol
 if redis.call('GET',KEYS[1])~=ARGV[1] then return -1 end
 if raw==ARGV[5] then return 1 end
 if raw~=ARGV[4] then return -2 end
-local ack=redis.call('HMGET',KEYS[2],'pending','player_database','player_database_1')
-if not version(ack[1]) or (ack[2] and not version(ack[2])) or (ack[3] and not version(ack[3]))
-    or string.sub(ack[1],1,20)~=string.rep('0',20-#ARGV[1])..ARGV[1] then
-    return redis.error_reply('HANDOFF_SQL stored version') end
-if ack[2]~=ack[1] or ack[3]~=ack[1] then return 0 end
 redis.call('HSET',KEYS[2],'handoff_fence',ARGV[5])
 redis.call('SET',KEYS[3],ARGV[2],'EX',ARGV[3])
 return 1
@@ -385,7 +358,8 @@ if stamp==ARGV[4] then redis.call('DEL',KEYS[3]) end
 return {owner,redis.call('GET',location)}
 )";
 
-    // B4/B5 的唯一恢复口：原 R 原件与 location 整字节 CAS；B5 只采纳已交叉核过的 E+2。
+    // B4/B5 的唯一恢复口：原 R 原件与 location 整字节 CAS；B5 只采纳已交叉核过的回滚 epoch（≥ E+2：墙钟地板之后
+    // 铸造不再恰好 +1，zone-redis-regression-guard-20261022.md §4.3.1），按十进制串比较。
     inline const std::string kResumeFenceLua = std::string(kFenceLuaHelpers) + R"(
 if #KEYS~=4 or #ARGV~=4 then return redis.error_reply('HANDOFF resume shape') end
 local location=KEYS[4]
@@ -396,7 +370,7 @@ local old,next=fence(ARGV[1]),fence(ARGV[2])
 local raw=prior()
 if not old or not next or raw==nil or old.k~='R' or next.k~='H'
     or old.i~=next.i or old.n~=next.n or old.a~=next.a or old.t==next.t
-    or next.e~=ARGV[3] or (next.e~=old.e and next.e~=plus2(old.e)) then return redis.error_reply('HANDOFF resume record') end
+    or next.e~=ARGV[3] or (next.e~=old.e and (plus2(old.e)==nil or cmp(next.e,plus2(old.e))<0)) then return redis.error_reply('HANDOFF resume record') end
 if redis.call('GET',KEYS[1])~=ARGV[3] or (redis.call('GET',location) or '')~=ARGV[4] then return 0 end
 if redis.call('EXISTS',KEYS[3])~=0 then return 0 end
 if raw==ARGV[2] then return 1 end

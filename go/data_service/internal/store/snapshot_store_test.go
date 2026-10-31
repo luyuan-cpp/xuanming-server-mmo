@@ -312,7 +312,7 @@ func TestGuidDedupeStatementFollowsProbe(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &SnapshotStore{uniqueGuidKey: tc.hasKey}
-			query, args := s.guidDedupeStatement(row)
+			query, args := s.guidDedupeStatement(99, row)
 			if query != tc.wantInsert {
 				t.Fatalf("选错了写入语句:\n%s", query)
 			}
@@ -328,14 +328,14 @@ func TestGuidDedupeStatementFollowsProbe(t *testing.T) {
 		})
 	}
 
-	// 普通 INSERT 与 NOT EXISTS 的前九个实参必须一致:两条语句列清单相同,顺序只在 snapshotInsertArgs 定义一次。
-	base := snapshotInsertArgs(row)
-	if len(base) != 9 {
-		t.Fatalf("列清单是 9 列,snapshotInsertArgs 给了 %d 个", len(base))
+	// 普通 INSERT 与 NOT EXISTS 的前十个实参必须一致:两条语句列清单相同,顺序只在 snapshotInsertArgs 定义一次。
+	base := snapshotInsertArgs(99, row)
+	if len(base) != 10 {
+		t.Fatalf("列清单是 10 列,snapshotInsertArgs 给了 %d 个", len(base))
 	}
-	_, legacyArgs := (&SnapshotStore{}).guidDedupeStatement(row)
+	_, legacyArgs := (&SnapshotStore{}).guidDedupeStatement(99, row)
 	if len(legacyArgs) != len(base)+1 || legacyArgs[len(legacyArgs)-1] != any(row.SnapshotGuid) {
-		t.Fatalf("NOT EXISTS 形态应在九个实参之后再绑一次 guid,got %v", legacyArgs)
+		t.Fatalf("NOT EXISTS 形态应在十个实参之后再绑一次 guid,got %v", legacyArgs)
 	}
 }
 
@@ -359,7 +359,7 @@ func TestInsertSnapshotOnDuplicateKeepSQLShape(t *testing.T) {
 		t.Fatalf("撞键时必须只写 `id` = LAST_INSERT_ID(`id`)(值不变 + 回带已有 id);"+
 			"赋成别的值就是一次真实修改,快照不再是不可变记录:\n%s", stmt)
 	}
-	// 撞键分支不许多出占位符:多一个就会与 snapshotInsertArgs 的九个实参对不上,
+	// 撞键分支不许多出占位符:多一个就会与 snapshotInsertArgs 的十个实参对不上,
 	// 且只在"真的撞键"时才暴露成运行期 Column count doesn't match。
 	if got, want := strings.Count(stmt, "?"), strings.Count(insertSnapshotSQL, "?"); got != want {
 		t.Fatalf("ODKU 段不该引入新的占位符:got %d,want %d\n%s", got, want, stmt)
@@ -466,10 +466,10 @@ func TestIsDupEntryMySQL(t *testing.T) {
 // ── G2a 批量落库(InsertSnapshotsIfGuidAbsent)的纯逻辑部分;真库行为见 snapshot_store_integration_test.go ──
 
 // TestInsertSnapshotsSQLShape 钉住批量路径两条语句的形状(死锁审计 #19 / #20,事故文档 §9.6):
-//   - 多行写是**普通 INSERT**:不许带 ON DUPLICATE KEY UPDATE(撞已存在行会留下自增主键末尾的间隙锁直到语句结束,
-//     rebalance 重叠时成环;给自增列赋值还会在批内重复时 1869),也不许带 IGNORE(会把 1062 吞成 warning,
+//   - 多行写是**普通 INSERT**:不许带 ON DUPLICATE KEY UPDATE(撞已存在行会在主键上留下间隙锁直到语句结束,
+//     rebalance 重叠时成环),也不许带 IGNORE(会把 1062 吞成 warning,
 //     「撞键 → 整条回滚 → 逐行」这条兜底就失效了);n=1 与 insertSnapshotSQL 逐字相同,列清单只定义一次;
-//   - n 行就有 9n 个占位符;行数上限的占位符总数低于预处理语句 65535 的硬上限;
+//   - n 行就有 10n 个占位符;行数上限的占位符总数低于预处理语句 65535 的硬上限;
 //   - 预读按唯一键 snapshot_guid_nz 走等值 IN,且是**普通读**:不许 FOR UPDATE / FOR SHARE / LOCK IN SHARE MODE。
 //   - 单行 ODKU 仍是同一个 INSERT 主体 + 回带 id 的尾巴(单行路径不受影响)。
 //
@@ -486,11 +486,11 @@ func TestInsertSnapshotsSQLShape(t *testing.T) {
 	if !strings.HasPrefix(stmt, insertSnapshotSQL) {
 		t.Fatalf("批量语句必须由 insertSnapshotSQL 接出来(列清单只定义一次):\n%s", stmt)
 	}
-	if got := strings.Count(stmt, "?"); got != 27 {
-		t.Fatalf("3 行应有 27 个占位符,got %d:\n%s", got, stmt)
+	if got := strings.Count(stmt, "?"); got != 30 {
+		t.Fatalf("3 行应有 30 个占位符,got %d:\n%s", got, stmt)
 	}
-	if MaxSnapshotBatchRows*9 >= 65535 {
-		t.Fatalf("MaxSnapshotBatchRows=%d 时占位符 %d 个,超过预处理语句 65535 的上限", MaxSnapshotBatchRows, MaxSnapshotBatchRows*9)
+	if MaxSnapshotBatchRows*10 >= 65535 {
+		t.Fatalf("MaxSnapshotBatchRows=%d 时占位符 %d 个,超过预处理语句 65535 的上限", MaxSnapshotBatchRows, MaxSnapshotBatchRows*10)
 	}
 	pre := existingSnapshotGuidsSQL(3)
 	if want := "SELECT snapshot_guid_nz FROM player_snapshot WHERE snapshot_guid_nz IN (?,?,?)"; pre != want {

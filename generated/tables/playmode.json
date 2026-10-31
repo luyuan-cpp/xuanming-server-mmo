@@ -1,0 +1,46 @@
+{
+ "data": [
+  {
+   "battle_config_id": 1,
+   "enabled": true,
+   "id": 1,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 1,
+   "enabled": true,
+   "id": 2,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 1,
+   "enabled": true,
+   "id": 3,
+   "match_mode": 3,
+   "team_size_max": 0
+  },
+  {
+   "battle_config_id": 1,
+   "enabled": true,
+   "id": 4,
+   "match_mode": 1,
+   "team_size_max": 0
+  },
+  {
+   "battle_config_id": 0,
+   "enabled": true,
+   "id": 5,
+   "match_mode": 6,
+   "team_size_max": 0
+  },
+  {
+   "battle_config_id": 1,
+   "enabled": true,
+   "id": 6,
+   "match_mode": 7,
+   "team_size_max": 5
+  }
+ ]
+}

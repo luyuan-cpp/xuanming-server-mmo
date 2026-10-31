@@ -179,14 +179,9 @@ func TestLoopConfigFromMapsY06(t *testing.T) {
 		t.Errorf("落地恢复默认值与 assetop.DefaultLoopConfig 不一致: guild=%+v assetop=%+v", cfg, def)
 	}
 
-	// 资产 SQL 提交证据开关(db-write-fencing-mysql.md §6.6)原样透传;缺省关 = HEAD 口径。
-	if cfg.RequireSQLCommit {
-		t.Fatal("RequireSQLCommit 缺省必须关闭")
-	}
-	on := y06Defaults()
-	on.RequireSQLCommit = true
-	if !LoopConfigFrom(on, 1500*time.Millisecond).RequireSQLCommit {
-		t.Fatal("AssetOp.RequireSQLCommit 必须透传到 assetop.LoopConfig")
+	// 终结只认已提交账本,没有配置项可以关。
+	if !cfg.RequireSQLCommit {
+		t.Fatal("RequireSQLCommit 必须恒开")
 	}
 }
 

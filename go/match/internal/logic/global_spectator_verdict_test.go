@@ -5,7 +5,8 @@ package logic
 //   - globalWatchErrVerdict:全局路径错误 → 客户端结论,钉住判定顺序与故障口径;
 //   - closedWatchVerdict:意图上持久化的关闭原因 → 重放结论;
 //   - 首答(按错误判定)与重放(按持久化原因判定)逐字一致;
-//   - 全局入口参数错在任何 SQL 之前拒绝且计指标。
+//   - 全局入口参数错在任何 SQL 之前拒绝且计指标;
+//   - globalFormationWatchable:全局路径的可见性闸(成局 state 4 且建房原件冻结为 PUBLIC)。
 // 全局路径的 SQL 状态机由 authority 包的 *_native_test.go(MATCH_IT_TIDB)覆盖。
 
 import (
@@ -20,12 +21,14 @@ import (
 	"match/internal/metrics"
 	"match/internal/svc"
 
+	battlepb "proto/battle"
 	pb "proto/match"
 
 	"shared/generated/pb/table"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestSpectateRejectVerdict(t *testing.T) {
@@ -167,5 +170,40 @@ func TestGlobalWatchRejectsMalformedRequestBeforeSQL(t *testing.T) {
 		require.Equal(t, constants.ErrInternal, resp.GetErrorMessage().GetId())
 		require.Empty(t, resp.GetSpectatorOperationId(), "未通过校验的请求不回显操作编号")
 		require.Equal(t, before+1, metrics.WatchBattleValue("internal"))
+	}
+}
+
+// 全局路径的可见性闸:成局已开房(state 4)且建房原件冻结为 PUBLIC 才接纳观众。私密 / 未填 / 原件缺失或损坏、
+// 以及未开房或已中止的成局一律不接纳,prepareGlobalWatch 以 16018 关闭意图(与 Redis 路径同一文案,结论可重放)。
+func TestGlobalFormationWatchable(t *testing.T) {
+	createRequest := func(visibility battlepb.ESpectateVisibility) []byte {
+		raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(&battlepb.CreateBattleRequest{
+			BattleId:           880_900_101,
+			SpectateVisibility: visibility,
+		})
+		require.NoError(t, err)
+		return raw
+	}
+	public := createRequest(visPublic)
+	cases := []struct {
+		name      string
+		formation *pb.MatchFormationRecord
+		want      bool
+	}{
+		{"已开房的公开局", &pb.MatchFormationRecord{State: 4, CreateRequest: public}, true},
+		{"已开房的私密局", &pb.MatchFormationRecord{State: 4, CreateRequest: createRequest(visPrivate)}, false},
+		{"已开房但原件未填可见性", &pb.MatchFormationRecord{State: 4,
+			CreateRequest: createRequest(battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_UNSPECIFIED)}, false},
+		{"已开房但原件缺失", &pb.MatchFormationRecord{State: 4}, false},
+		{"已开房但原件损坏", &pb.MatchFormationRecord{State: 4, CreateRequest: []byte{0x08}}, false},
+		{"已持久化创建请求、尚未开房", &pb.MatchFormationRecord{State: 2, CreateRequest: public}, false},
+		{"建房结果未知", &pb.MatchFormationRecord{State: 3, CreateRequest: public}, false},
+		{"已安全中止", &pb.MatchFormationRecord{State: 5, CreateRequest: public}, false},
+		{"没有成局", nil, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.Equal(t, c.want, globalFormationWatchable(c.formation))
+		})
 	}
 }

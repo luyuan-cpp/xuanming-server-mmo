@@ -35,8 +35,7 @@ namespace node::kafka {
 //   4) deploy/k8s/manifests/infra/kafka-topic-init.yaml(经 k8s_deploy.ps1 注入),
 // 并且**换一个代号**(kDefaultCommandTopicGeneration +1)换一批新 topic。
 // 绝不在同名 topic 上扩分区:扩分区会把 node_id % P 重映射,命令落到没人 assign
-// 的分区上静默全丢(与 db_task 的分区契约同一条纪律,
-// docs/design/db-task-kafka-partition-contract.md)。
+// 的分区上静默全丢。
 inline constexpr uint32_t kDefaultCommandTopicPartitions = 256;
 
 // 代号。与 data_service 的 transaction_log_topic_g1 / player_snapshot_topic_g1 同形:
@@ -85,6 +84,25 @@ inline std::string CommandTopicName(const std::string& baseName, uint32_t genera
 inline int32_t CommandPartitionForNode(uint64_t nodeId, uint32_t partitions)
 {
     return static_cast<int32_t>(nodeId % NormalizeCommandTopicPartitions(partitions));
+}
+
+// ---- 观战帧 topic(docs/design/battle-spectate-tiered-fanout.md §15.3)----
+// 两条 topic 都与命令 topic 共用代号(CommandTopicGeneration),名字一律 `<基名>_g<代号>`。
+//
+// L1 中继:`gate-spectate_g<N>`,与 gate 命令 topic 同一分区契约(partition = gate node_id % 命令 topic 分区数),
+// 生产端(battle)用 CommandPartitionForNode 定分区,消费端(gate)assign 自己那个分区。
+// 单独开 topic 是为了不让每回合的观战帧挤占踢人、路由这类控制命令的通道。
+inline constexpr const char* kSpectateRelayTopicBase = "gate-spectate";
+
+// L2 广播:`spectate-bcast_g<N>`,固定 16 分区,partition = battle_id % 16;每台 gate assign 全部分区。
+// 分区数同样是不可变契约:要改就换代号,不在同名 topic 上扩分区(改了 battle_id % P 的映射,在途帧会落到
+// 旧分区之外,gate 当前状态可以自愈,但这条纪律与命令 topic 保持一致,不开例外)。
+inline constexpr const char* kSpectateBroadcastTopicBase = "spectate-bcast";
+inline constexpr uint32_t kSpectateBroadcastTopicPartitions = 16;
+
+inline int32_t SpectateBroadcastPartitionForBattle(uint64_t battleId)
+{
+    return static_cast<int32_t>(battleId % kSpectateBroadcastTopicPartitions);
 }
 
 } // namespace node::kafka

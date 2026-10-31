@@ -87,6 +87,13 @@ func stubGatherRPCs(t *testing.T, fingerprints map[uint64]string) *fakeGatherRPC
 	return f
 }
 
+// fencedIDGen 是发不出号的生成器,用来测发号失败的路径。
+func fencedIDGen() *snowflake.Node {
+	n := snowflake.NewNode(1)
+	n.Fence()
+	return n
+}
+
 // newGatherSvcCtx 在 newTestSvcCtx 之上补齐 gather 需要的发号器与节点镜像:
 // zone1 / zone2 各一个 node_id=1 的 scene(与 setPlayerLocation 写的 NodeId "1"
 // 对齐),battle 池一个节点。

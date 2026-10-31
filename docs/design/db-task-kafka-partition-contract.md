@@ -1,5 +1,7 @@
 # DB Task Kafka 分区不可变契约
 
+> **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),`db_task_zone_*` 和这份分区契约都已删除。命令 topic 的分区约定见 `cpp/libs/engine/core/node/system/node/node_command_topic.h`。本文只作历史保留,不再描述现行行为。
+
 > 2026-10-16 订正(① 读写分区对齐,S3):「原因」、代码门禁 3 / 6、离线扩容第 3 步、「已知边界」第 2 条按已落码的代码订正;
 > 文末新增「分区函数契约」「golden 向量」「滚动对齐步骤与观测」「屏障覆盖范围与剩余缺口」四节。
 > 状态:**已落码,未编译、未测试,待 Codex 验证**。与落码规格(`docs/handoff/godb-pipeline-impl-20261015/S3-partition-align-spec.md`)

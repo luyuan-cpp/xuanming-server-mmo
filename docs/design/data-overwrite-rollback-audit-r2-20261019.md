@@ -229,6 +229,29 @@
 | r2-low#1 | 核心 Redis 丢 owner 键后，在线玩家存盘永久报错重试、实体被钉住，进度只在内存，节点排空时丢失；`missing owner` 错误回复和其他 Lua 错误混在同一行 ERROR，没有专用指标与告警；两份设计文档仍写"自动补种" | `cpp/libs/engine/infra/storage/redis_client/redis_client.h:131-139`、`:984-1025`、`:1073-1096`；`player_lifecycle.cpp:2096-2125`；`db-write-fencing-mysql.md:1058`、`:1549`；`scene-owner-reentry-barrier.md:108-131` | 需核心 Redis 数据丢失，属一致性核对 §2.2 的 Redis 回退一族 | 部分登记：行为是设计意图（`:1549`），后果与缺告警未登记 | 很可能 |
 | r2-low#2 | 合服 P3 覆盖校验用 describe 时刻的 LAG，不比较 CURRENT-OFFSET 与新取的 latest；三次读之间有写入时会放行 | `tools/merge_zone/preflight.go:92-116`、`:307-321` | 要 P3 期间仍有生产者往 src 的 db_task 写，zone-down 前提下没有 | 未登记 | 很可能 |
 
+### 3.9 第四波：换视角查找第 1 轮（2026-10-30，基线 HEAD `720179638` 加工作区）
+
+三路：按资产追踪；按入口（客户端 handler、Kafka 消费者、周期任务）；按故障（两步之间崩溃、超时后实际成功、分区与租约、时钟、事务冲突重跑）。三路都避开了将被"映射直读 TiDB""玩家数据移出 Redis"重写的机制。去重依据是四份审计文档：第一轮、本文、一致性核对、全球经济评审；草稿目录里的已知清单文件跨天被清掉了，没用上。
+
+结果：没有 high；新 medium 2 条，其中 r2-v1#1 由三路中的两路独立报出；low 3 条。按"连续两轮无新发现才停"，还要跑第 2 轮。
+
+**medium：**
+
+| 编号 | 问题 | 位置 | 触发时序 | 可达性 | 已登记 | 自信度 |
+|---|---|---|---|---|---|---|
+| r2-kc#1 | **match / guild 的结果消费者遇到一次再均衡或暂时失败，就永久停止消费。** 由 `886dd2cee` 的维护排空框架 `BoundConsumerGroup` 引入 | `go/shared/kafkautil/group_lag.go` 的 `consumePartition`（约 :1133 起，出错后 :1200 `c.fail` 加 `StopFetching`，此后 :920 永久不取）；`Run` 只能跑一次，退出时 `group.Close`（约 :978）离组，再触发一次再均衡；`go/guild/internal/kafka/trial_result_consumer.go` :191-201、:418-440、:255-259；`go/match/internal/kafka/result_consumer.go` :113-132、:215-232；relay 恒非 nil（`go/shared/serverbase/interceptor.go:346`）；接线 `go/guild/guild.go:625`、`go/match/match_service.go:129-131`。`go/data_service/internal/kafka/consumer.go` 也用它，修复时一并核对 | ① 任一副本重启、扩缩容或滚动发布，引起消费组再均衡（kafka-go eager 协议，全组代次结束）。② 恰有消息在 handler 或提交中，返回"代次已失效"，该副本永久停止取消息。③ 它离组再触发再均衡，可连锁停掉其余副本。④ TiDB 抖动超过约 3s（match）或 5 分钟（guild）同样停。后果：帮会历练结算停摆，v1 局不写 `battle:activity_result`，巡检器无从兜底，参与者的 `guild_trial_launch_role` 不释放，进不了任何匹配；全球评分停更，排行与封榜奖励跟着停。位点没提交、重启后幂等重放，不丢；但 topic 只保留 7 天 | 缺省配置可达：staging / prod 强制全球匹配，match 走 RequireSQLCommit 的 Bound 路径；guild 消费者无条件启动。告警只有 guild 的 `GuildTrialResultOverdue`（30 分钟）能间接发现，match 评分没有 | 未登记；`group_lag_test` 没有"暂时失败""在途时再均衡"用例 | 很可能 |
+| r2-v1#1 | **v1 全球局 scene reaper 到截止就解冻，早于收件箱结算应用。** 结算到达时消耗按当时持有量夹紧、HP/MP 按终值覆盖 | `cpp/libs/services/scene/battle/system/player_battle.cpp` reaper 判据 `effectiveDeadlineMs < nowMs` 无宽限、不分 v1（10-30 约 :2875 / :2954，拍间隔 30s）→ `ReleaseExpiredFightingFreeze` → `ClearBattleFreeze`；`HasCompleteBattleEffectInputs` 无 InBattleComp 时放行；消耗夹紧（约 :2208，`battle_inbox_consumption_shortfall`）；资产通道战斗闸只看 InBattleComp（`asset_op_system.cpp` 约 :1029-1037）；match 允许截止后 60s 内 COMPLETE（`go/match/internal/authority/completion.go:30-40`） | ① v1 局打满时限，强制平局必然晚于截止。② reaper 下一拍摘冻结与锁。③ 收件箱结算还在路上，资产通道的战斗闸已失效，玩家可经交易托管或帮会捐献把本局喝掉的药移走。④ 结算到达后按持有量扣消耗，照记 APPLIED。药白喝、可逐局刷；没有扣物品入口时只是解冻后的 HP/MP、宠物状态被终值改回 | 缺省只剩状态覆盖（low）；打开交易或帮会资产通道后是有界资产复制（medium） | 已登记变种：cross-service-assets#1 只写了旧路径丢奖；`cross-zone-matchmaking.md` :529、:731、:798-800 只给 match 加了宽限 | 很可能 |
+
+**low：**
+
+| 编号 | 问题 | 位置 | 可达性 | 已登记 | 自信度 |
+|---|---|---|---|---|---|
+| r2-v1#2 | v1 收件箱路径遇货币或物品获取封禁就整笔延后，cpp-economy#1 的"只跳过被封币种"修复在生产上走不到（生产全是 v1 局）；解封后被封部分照发，与本地路径、资产通道的口径相反；延后期间票停在 state 3，玩家进不了全球匹配、角色也上不了架 | `player_battle.cpp` 的 `CanCreditWholeBattleCurrency`、`HasCompleteBattleEffectInputs`、`ApplyInboxSettlement`（kDefer）；本地路径 `kAssetBlocked && !fromInbox`；用例 `InboxGoldBlockDefersWholeSettlementAndRetryAppliesAllEffects` | 门控：单人封禁在生产只来自收件箱 GM 域，`player_inbox.yaml` 的 `EnqueueTypes` 现只有 BATTLE_SETTLEMENT；打开 GM 封禁类后为 medium | 部分登记：`docs/ops/player-inbox-runbook.md:471`（工作区草稿，"待负责人定"） | 确定 |
+| r2-inbox#1 | 收件箱消费开关与 Battle 域耦合：照手册关入箱或关消费，所有全球局个人结算停在 PENDING，玩家票卡在 state 3；手册 §11 第 3 步的 VoidItem 对 Battle 域一律被拒，流程走不通 | `bin/etc/game_config.yaml:34-36`；`go/player_inbox/etc/player_inbox.yaml:122`；`tools/scripts/k8s_deploy.ps1:5417-5418`；`player_inbox_system.cpp` 的 `OnPlayerLanded`、`CheckApplyGate`；runbook :70、:73、:662-668 | 只在运维照手册操作时触发；仓库默认配置会被部署门禁拦 | 未登记 | 确定 |
+| r2-equip#1 | `EnhanceEquip` 没有幂等键（`UpgradeSkill` 有 `expected_rank`）：gate→scene 超时回 1003（结局未知）后客户端重发，会再扣一次金币与材料、再掷一次，失败掉级时连掉两级 | `cpp/nodes/scene/handler/rpc/player/` 的装备强化 handler 与 `player_equip.cpp`；`docs/design/client-request-ordering.md:320` | 需玩家重发；只损玩家自己的资产 | 未登记 | 很可能 |
+
+**附带观察：** 活跃度账本（`player_activity.cpp`）的领取记录永不清理，满 4096 条后该功能对这名玩家永久回 `kServiceUnavailable`，按日周期约 800 天；仓内 `game_config.yaml` 的 `consumer_enabled=false` 与 `player_inbox.yaml` 的 `EnqueueTypes` 组合，本地按这份配置起服时全球结算不会被应用（K8s 部署门禁会拒绝这种组合）。
+
 ## 4. 已排除（尝试推翻成功）
 
 
@@ -296,7 +319,7 @@
 | r2-rr#3 | 检测到三键清空或水位键缺席的那一拍，先经 `AdvanceReconcile` 把 `cache_verified_ms` 写成 0，再 SET NX 水位键；或 Arm=false 下 VI 为空时暂不 SET NX，等全量追平完成再写。补用例：清空 → 追平中途换届或推送报错 → 下一拍起点仍为 0 |
 | r2-rr#4 | `MirrorMergedInto` 对 SET NX 成功的键再复读一次库，库里已无此行就按刚写的完整值 CAD 撤掉；或由 leader 对"库里没有、值为本方案编码"的镜像做受控删除 |
 | r2-mm#1 | 间隔不一致且旧轮仍在停留期内时，scene_manager 不强制覆盖，等旧轮结束再写新轮；或玩家记录按轮次保留最近 2~3 轮，`RecordPurchase` 不再整份清空。Java 版实现时一并规避 |
-| r2-lc#1 / r2-lc#2 | 在存储侧用围栏令牌拒绝迟到的旧标记写，不依赖连接顺序或墙钟。**已修（2026-10-20～24，未编译、未测试，待 Codex）**：围栏主体由其他会话随 `9d2784fbf` / `526d0895f` / `693781d90` 提交，做法是每玩家永久资格 `save_barrier.handoff_fence`（E\|S\|N\|A\|K\|T）。发布、A1′、A2′ 放弃补写、疏散改派、改派补写只消费缓存的原资格做 CAS；取证在同一原子步骤把资格撤成 R，恢复为新资格后才解冻；同节点重载按 prior 做 CAS 并原子清标记。本会话复核成立，在其上补了：会话结束凭证改为按观察到的原件做带围栏的 CAS（评审必修项，原先"一律拒发"会让 location 永不释放）；Go 与 C++ 回归，Go 按 Redis 实际执行顺序重放两种迟到序列，C++ 用两条真实连接、旧帧最后才发出；去掉代码与文档里"依赖同连接 FIFO"的说法。说明见 [cross-zone-scene-travel.md](cross-zone-scene-travel.md) 文末写入口对照节、[location-release-binding.md](location-release-binding.md)、[shared-redis-split-by-purpose.md](shared-redis-split-by-purpose.md) §20.6。残余：Redis 自身回退丢掉已确认的资格写（归 zone Redis 回退防护）；围栏脚本 KEYS 跨 hash tag，上 Cluster 前要改形。Java 版不适用：Java 交接是一笔 MySQL 交出事务，没有这条标记链 |
+| r2-lc#1 / r2-lc#2 | 在存储侧用围栏令牌拒绝迟到的旧标记写，不依赖连接顺序或墙钟。**已修（2026-10-20～24，未编译、未测试，待 Codex）**：围栏主体由其他会话随 `9d2784fbf` / `526d0895f` / `693781d90` 提交，做法是每玩家永久资格 `save_barrier.handoff_fence`（E\|S\|N\|A\|K\|T）。发布、A1′、A2′ 放弃补写、疏散改派、改派补写只消费缓存的原资格做 CAS；取证在同一原子步骤把资格撤成 R，恢复为新资格后才解冻；同节点重载按 prior 做 CAS 并原子清标记。本会话复核成立，在其上补了：会话结束凭证改为按观察到的原件做带围栏的 CAS（评审必修项，原先"一律拒发"会让 location 永不释放）；Go 与 C++ 回归，Go 按 Redis 实际执行顺序重放两种迟到序列，C++ 用两条真实连接、旧帧最后才发出；去掉代码与文档里"依赖同连接 FIFO"的说法。说明见 [cross-zone-scene-travel.md](cross-zone-scene-travel.md) 文末写入口对照节、[location-release-binding.md](location-release-binding.md)、[shared-redis-split-by-purpose.md](shared-redis-split-by-purpose.md) §20.6。残余：Redis 自身回退丢掉已确认的资格写（归 zone Redis 回退防护）；围栏脚本 KEYS 跨 hash tag，上 Cluster 前要改形。Java 版不适用：Java 交接是一笔 MySQL 交出事务，没有这条标记链。持有节点在 location 记的 E 下从未登记成功、拿不出资格（`no_qualification`）的活性残余，2026-10-30 已按 [location-release-binding.md](location-release-binding.md) §17 落码收口（scene_manager 带围栏撤销，未编译、未测试，见 §17.9） |
 | r2-login#1 | login 在"无 pending、owner≠0"时不信父键、走 SQL 核验；SQL 两行为空且父键是建角种子或缺失时，按"铸过 owner、从未存过盘"的新号放行。**已修（2026-10-23，「设计 zone Redis 回退时的存档防护」会话，未编译、未测试，待 Codex）**：`go/login/internal/logic/pkg/dataloader/parent_commit_barrier.go` 新增快照字段 `unsavedNewPlayer`，历史缺口一律走 SQL 核验；SQL 有非零围栏时按 `savebarrier.Reconcile` 判定（同版本采纳 SQL，版本不同可重试拒绝，ACK 高于 SQL 时 fail-closed）。用例在 `parent_load_identity_test.go`。说明见 [zone-redis-regression-guard-20261022.md](zone-redis-regression-guard-20261022.md) §4.1。恢复工具对没有 SQL 行的玩家仍拒绝，登录侧放行后不再需要它 |
 | r2-guild#1 | 给 formation=4 且确认无结果的局一条可证明的终局：match 在确认战斗已不存在时把编队迁到"已开局但作废"的终态并签进取消回执，guild 据此终结 launch；或 battle 停机作废时对带活动上下文的房间落一份作废结果。另补带审计的人工释放 CLI，更正 `06-activities.md` §6.21 的 R1 / R2。**归「数据覆盖审计交接文档」会话修**（与 social-match-battle#0、r2-battle#2 同一批文件），修复状态以该会话在本表的标注为准。**已修主路径（2026-10-23，Claude，复核成立，未编译，待 Codex；独立评审因周额度推迟）**：formation 4→5 的可证明终局由并行 v1 终局接缝轨道的 `abortTerminalTx`（截止后原子 ABORT，原票置 4）与 `CancelActivity` 提供；本批把 guild 释放规则收成一处 `data.TrialCancelReceiptIsTerminal`（只认零 battle 取消墓碑，或 formation=5 且不是 COMPLETE，矛盾回执 fail-closed），recoverOne 与 `FinishCancelledTrialLaunch` 共用；battle 停机补提交见 r2-battle#2。按「只依据权威终态释放」不改：解散释放仍为空函数、`ExpireTrialBattle` 不碰 launch、`checkWork` 不放宽。**未做**：带审计的人工释放 CLI。`06-activities.md` §6.21 R1 / R2、`account-role-authority.md` 已更正。真 TiDB 回归 `TestTiDBTrialStartedBattleReleasesOnlyOnSignedSQLAbort`、`TestStartedActivityFormationTiDBCancelSignsAbortOnlyAfterDeadline` 等。前提同 r2-battle#2。Java 待做，已登记 PARITY |
 | r2-match#1 | 负责人 2026-10-23 拍板首发开全球匹配（见 §3.7）。r2-battle#1/#4 的 Codex 验证列为上线门禁，social-match-battle#0 与 r2-battle#2 列为上线阻塞，归「数据覆盖审计交接文档」会话 |
@@ -311,8 +334,43 @@
 | r2-dcc#1 | 新增 `-guild-redis-addr` / `-guild-redis-db`（缺省 DB 2），榜单检查改用这个句柄；guild 表读不到时报 fail 或 warn「NOT CHECKED」，不再报 info |
 | r2-low#1 | 更正 `scene-owner-reentry-barrier.md` §6.2 与 `db-write-fencing-mysql.md:1058`；把 `missing owner` 错误回复单独计数并配告警；写在线玩家受控恢复手册。并入 zone Redis 回退防护的统一设计 |
 | r2-low#2 | P3 把 `row.current != high` 也记为问题；或把 describe 放到 get-offsets 之后再跑一次 |
+| r2-kc#1 | handler 本身幂等，代次失效或暂时失败时只"不提交"，回到 `group.Next` 重新领分区；或在外层做有界退避后重建 owner。只有控制面真的调用了 StopFetching（维护排空）时，才把未知结局计为 HOLD。补"在途时再均衡后仍继续消费""SQL 抖动后恢复"两类用例；给 match 评分消费组加 lag 告警。核对 data_service 消费者是否同病。**2026-10-30 无人认领，由本审计续做会话在 5 小时额度窗口重置后修** |
+| r2-v1#1 | v1 局 FIGHTING 冻结到期判据加宽限，至少盖住 match 终局宽限与收件箱投递；或只凭收件箱 APPLIED / SQL ABORT 的证据解冻。**已转交「全球经济系统代码审核」会话（2026-10-30 核实成立，C++ / Java 两版同改，修复代理 C-8 / D-11）**：判据改为截止 + 终局提交宽限（与 match 同值的 60s 具名常量）+ 收件箱投递余量 60s，PREPARING 不变；按锁重建与登录复查用同一判据，战斗锁 TTL 同步覆盖；冻结释放后仍夹紧时打专用指标；补"窗口内冻结保留、资产通道扣款得 RETRY"回归。"只凭证据解冻"要 match 新增向 scene 的 ABORT 通知，记为后续候选。修复记录见 `docs/handoff/global-economy-claude-review-20261022.md` 末尾 |
+| r2-v1#2 | **要负责人定口径。** 建议与本地路径、资产通道统一：v1 收件箱路径对被封币种同样"跳过并记账"，整笔照常 APPLIED；同步改用例与 runbook :471 |
+| r2-inbox#1 | 按域拆分消费开关；或在手册写明关消费会停掉全球结算，§11 第 3 步把 Battle 域排除 |
+| r2-equip#1 | 强化请求带 `expected_level`（与 `UpgradeSkill` 的 `expected_rank` 同构）做乐观比较；改客户端可见 proto，客户端与协议生成交 Codex |
 
 ## 6. 后续各波（待周额度重置）
+
+**2026-10-30 进度与未关条目盘点**（只读盘点，以当日工作区为准）：
+
+- 换视角查找第 1 轮已跑（§3.9），有新发现，按规则还要跑第 2 轮。
+- **已修或被覆盖**（均未编译、待 Codex）：第一轮 §4 第 10、11 条；login-session-route#2（账号目录迁 TiDB）；cross-service-assets#2；social-global-v#1；r2-ps#5、#8、#9；Redis 回退一族（zone Redis 回退防护 G1–G5）；handover-single-writer#1（GO-3）；social-match-battle#0、r2-battle#1/#2/#4、r2-guild#1、r2-mz#1、r2-ds#1/#2、交易两条（§5）。
+- **随方向重写作废或重评，现在不修**：映射直读 TiDB 会删除的 r2-rr#1、r2-rr#4、data-service#3；玩家数据移出 Redis 会重写的 r2-db#2、r2-ps#4、r2-low#1 代码部分、第一轮 §4 第 2 条、player-save#3、go-db-pipeline#3/#4、social-global#1、identity-routing-redis#2；r2-ps#3 只改注释与 README。
+- **待补评审（上线阻塞）**：r2-battle#2 / r2-guild#1 的独立语义评审至今没人补，排在修复之前。评审要基于 10-29 之后的现状（`321f5e1ab` 又改了 battle 的 `main.cpp` 与 `battle_room_manager`）。
+- **仍开着、无人认领的修复批次**（文件互不相交）：
+  - 批 1，C++ 货币：第一轮第 6 条（AttachDebt 让过期欠款复活）、第 5 条（AddCurrency 溢出）、r2-ps#6。
+  - 批 2，邮件与排行奖励：r2-mail#2 / social-global#2（奖励永久投不出）、r2-mail#1。
+  - 批 3，神秘商人：r2-mm#1（按方案 A：旧轮停留期内不强制覆盖，不改持久 proto）、r2-ps#7、字段号文档。
+  - 批 4，ID 发号原语：第 20 条 FenceClock、data-service#2、第 22、21 条，与 `docs/handoff/global-id-prelaunch-claude-20261028.md`（无人认领）合并做。
+  - 批 5，登录与 gate：第 9 条会话栅栏 TTL、客户端可发 Disconnect（58）。
+  - 批 6，文档与注释：r2-mz#2、r2-low#1 文档、r2-ps#3 注释、`jubaozhai-market.md:329`、`enterscenelogic.go` 两处注释。
+  - 批 7，台账门禁：r2-ps#10（仅上线后有意义）。
+  - 批 8，Java 管理面：第 18、19 条。
+  - 批 9，合服与运维工具：ops-tools-java#0、r2-low#2 与第 13 条、r2-dcc#1、第 14、15、17 条。要等映射直读的 B3 收尾，它会改同目录。
+  - 批 10，C++ 战斗结算：r2-battle#3。要等 `player_battle.cpp` 的在途会话（全球经济审核、cross-service-assets#1 恢复分支）收尾。
+  - 新增：r2-kc#1（排空框架消费者永久停止），本会话认领；r2-inbox#1、r2-equip#1 并入批 6、批 5 一侧处理。
+- **cross-service-assets#1**：修复已从一个已归档会话的记录里恢复到分支 `claude/recover-battle-settlement-f39089db`（worktree `D:\luyuan\wt-recover-battle-settlement`，基点 `940ef974`，未编译、未提交），还没合回 main。它和全球经济审核会话在 `player_battle.cpp`、`battle_room_manager`、`result_commit.h` 上会冲突，何时、怎样合回 main 要负责人定。截止竞态的 match 一侧已有 60s 宽限（`completion.go` 的 `terminalOutcomeGraceMs`），scene 一侧并入 r2-v1#1。
+- **需要负责人拍板的**：
+  1. TiDB 决策 §9.4 第 1 条存盘路径二选一（它决定上面"作废或重评"各条何时真正关闭），以及映射直读 TiDB 开工前的三项。
+  2. data_service 字段 KV 族（GM 快照、回档）删除还是重建到 TiDB：决定 cross-service-assets#3、data-service#0。
+  3. cpp-economy#2 临时格：新增"临时格→背包"RPC（改客户端可见 proto 与界面），还是溢出改发邮件。满 200 个按 FIFO 淘汰会真丢物品。
+  4. 旧 Kafka 加 Redis pending 结算路径首发是否保留（本地模式、协议 0）。建议确认首发没有非 v1 对局后，随 §9.3 A 删除旧路径，不单独修 cross-service-assets#1 的旧路径部分。
+  5. r2-battle#2 遗留：停止闸移位与 v1 验收探针口径冲突，改探针口径还是把闸移回。
+  6. r2-v1#2 的封禁口径（建议与本地路径统一为"跳过被封币种、整笔照常应用"）。
+  7. handover-single-writer-v#1：接受"失租只丢不盖"、只更正注释，还是让 C++ 失租时冻结并疏散。
+  8. cross-service-assets#1 恢复分支的合回时机。
+  9. `global-id-prelaunch-claude-20261028.md` 由谁认领。
 
 **2026-10-24 进度**：medium 的复核改由各修复会话按"先复核成立才修、修后独立评审"完成：r2-lc#1/#2、r2-rr#5 本会话修复与评审都判成立；r2-login#1 由 zone Redis 回退会话修；r2-guild#1、social-match-battle#0、r2-battle#2 由「数据覆盖审计交接文档」会话修；r2-match#1 已由负责人拍板；r2-ps#1 由主会话裁决为 medium（§5）。所以下面"对抗复核"一项只剩换视角查找新出的 high / medium。**剩下的只有换视角查找**：周额度 81% 时停下（会话组约定超过 80% 只做风险最高的事，这一轮给了改到一半的 r2-lc 续做），等 2026-10-29 20:00 UTC 重置后用下面的脚本跑，`args` 为 `{"dRound": 0, "seenTitles": [...]}`，已知问题清单在 PROGRESS 2026-10-24 条目所指的 §3、§5 里，跑完一轮看新发现再决定下一轮。
 

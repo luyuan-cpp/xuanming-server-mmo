@@ -90,7 +90,8 @@ func sqlTeamSnapshot(player, teamID, stamp uint64, index IndexEntry, row *sqlTea
 }
 
 func (s *sqlTeamStore) read(ctx context.Context, player, teamID uint64, free bool) (*Snapshot, error) {
-	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: !free && !s.authority.Config.RequireTiDB, Isolation: sql.LevelRepeatableRead})
+	// 不设 ReadOnly:写者资格门要在同一事务里锁 writer_slot,MySQL 的 READ ONLY 事务里 FOR UPDATE / UPDATE 都是 1792。
+	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +134,8 @@ func (s *sqlTeamStore) read(ctx context.Context, player, teamID uint64, free boo
 }
 
 func (s *sqlTeamStore) readMembers(ctx context.Context, teamID uint64) (*MembersSnapshot, error) {
-	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: !s.authority.Config.RequireTiDB, Isolation: sql.LevelRepeatableRead})
+	// 不设 ReadOnly,理由同 read。
+	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}

@@ -29,6 +29,7 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/common/base/message.pb.h"
 #include "proto/common/options/event_ingress_option.pb.h"
@@ -57,6 +58,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_prot
 }  // extern "C"
 namespace contracts {
 namespace kafka {
+enum eSpectateFrameKind : int;
+extern const uint32_t eSpectateFrameKind_internal_data_[];
 class BindSessionEvent;
 struct BindSessionEventGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -137,19 +140,374 @@ extern const ::google::protobuf::internal::ClassDataFull RoutePlayerEvent_class_
 #else
 extern const RoutePlayerEventGlobalsTypeInternal RoutePlayerEvent_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SpectateFrameEvent;
+struct SpectateFrameEventGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SpectateFrameEventGlobalsTypeInternal SpectateFrameEvent_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SpectateFrameEvent_class_data_;
+#else
+extern const SpectateFrameEventGlobalsTypeInternal SpectateFrameEvent_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 }  // namespace kafka
 }  // namespace contracts
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::contracts::kafka::eSpectateFrameKind_internal_data_>
+    internal::EnumTraitsImpl::value<::contracts::kafka::eSpectateFrameKind>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace contracts {
 namespace kafka {
+enum eSpectateFrameKind : int {
+  SPECTATE_FRAME_NONE = 0,
+  SPECTATE_FRAME_STATE = 1,
+  SPECTATE_FRAME_TURN = 2,
+  SPECTATE_FRAME_END = 3,
+  eSpectateFrameKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  eSpectateFrameKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t eSpectateFrameKind_internal_data_[];
+inline constexpr eSpectateFrameKind eSpectateFrameKind_MIN =
+    static_cast<eSpectateFrameKind>(0);
+inline constexpr eSpectateFrameKind eSpectateFrameKind_MAX =
+    static_cast<eSpectateFrameKind>(3);
+[[nodiscard]] inline bool eSpectateFrameKind_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int eSpectateFrameKind_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+eSpectateFrameKind_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eSpectateFrameKind) {
+  return eSpectateFrameKind_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& eSpectateFrameKind_Name(T value) {
+  static_assert(::std::is_same<T, eSpectateFrameKind>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to eSpectateFrameKind_Name().");
+  return eSpectateFrameKind_Name(static_cast<eSpectateFrameKind>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& eSpectateFrameKind_Name(eSpectateFrameKind value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<eSpectateFrameKind_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool eSpectateFrameKind_Parse(
+    ::absl::string_view name, eSpectateFrameKind* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<eSpectateFrameKind>(eSpectateFrameKind_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateFrameEvent final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:contracts.kafka.SpectateFrameEvent) */ {
+ public:
+  inline SpectateFrameEvent() : SpectateFrameEvent(nullptr) {}
+  ~SpectateFrameEvent() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SpectateFrameEvent* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SpectateFrameEvent));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SpectateFrameEvent(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SpectateFrameEvent(const SpectateFrameEvent& from) : SpectateFrameEvent(nullptr, from) {}
+  inline SpectateFrameEvent(SpectateFrameEvent&& from) noexcept : SpectateFrameEvent(nullptr, ::std::move(from)) {}
+  inline SpectateFrameEvent& operator=(const SpectateFrameEvent& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SpectateFrameEvent& operator=(SpectateFrameEvent&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SpectateFrameEvent& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SpectateFrameEvent>(&SpectateFrameEvent_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(SpectateFrameEvent& a, SpectateFrameEvent& b) { a.Swap(&b); }
+  inline void Swap(SpectateFrameEvent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SpectateFrameEvent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SpectateFrameEvent* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SpectateFrameEvent>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SpectateFrameEvent& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SpectateFrameEvent& from) { SpectateFrameEvent::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SpectateFrameEvent* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "contracts.kafka.SpectateFrameEvent"; }
+
+  explicit SpectateFrameEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SpectateFrameEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SpectateFrameEvent& from);
+  SpectateFrameEvent(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SpectateFrameEvent&& from) noexcept
+      : SpectateFrameEvent(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBattleInstanceIdFieldNumber = 2,
+    kClientFrameFieldNumber = 5,
+    kTargetInstanceIdFieldNumber = 8,
+    kBattleIdFieldNumber = 1,
+    kRoundIndexFieldNumber = 3,
+    kKindFieldNumber = 4,
+    kDeadlineMsFieldNumber = 6,
+    kTargetGateIdFieldNumber = 7,
+  };
+  // string battle_instance_id = 2;
+  void clear_battle_instance_id() ;
+  [[nodiscard]] const ::std::string& battle_instance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_battle_instance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_battle_instance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_battle_instance_id();
+  void set_allocated_battle_instance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_battle_instance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_battle_instance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_battle_instance_id();
+
+  public:
+  // bytes client_frame = 5;
+  void clear_client_frame() ;
+  [[nodiscard]] const ::std::string& client_frame() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_frame(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_frame();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_frame();
+  void set_allocated_client_frame(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_frame() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_frame(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_frame();
+
+  public:
+  // string target_instance_id = 8;
+  void clear_target_instance_id() ;
+  [[nodiscard]] const ::std::string& target_instance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_instance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_instance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_instance_id();
+  void set_allocated_target_instance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_instance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_instance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_instance_id();
+
+  public:
+  // uint64 battle_id = 1;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint32 round_index = 3;
+  void clear_round_index() ;
+  [[nodiscard]] ::uint32_t round_index() const;
+  void set_round_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_round_index() const;
+  void _internal_set_round_index(::uint32_t value);
+
+  public:
+  // .contracts.kafka.eSpectateFrameKind kind = 4;
+  void clear_kind() ;
+  [[nodiscard]] ::contracts::kafka::eSpectateFrameKind kind() const;
+  void set_kind(::contracts::kafka::eSpectateFrameKind value);
+
+  private:
+  ::contracts::kafka::eSpectateFrameKind _internal_kind() const;
+  void _internal_set_kind(::contracts::kafka::eSpectateFrameKind value);
+
+  public:
+  // uint64 deadline_ms = 6;
+  void clear_deadline_ms() ;
+  [[nodiscard]] ::uint64_t deadline_ms() const;
+  void set_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_deadline_ms() const;
+  void _internal_set_deadline_ms(::uint64_t value);
+
+  public:
+  // uint32 target_gate_id = 7;
+  void clear_target_gate_id() ;
+  [[nodiscard]] ::uint32_t target_gate_id() const;
+  void set_target_gate_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_gate_id() const;
+  void _internal_set_target_gate_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:contracts.kafka.SpectateFrameEvent)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 87,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SpectateFrameEvent& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr battle_instance_id_;
+    ::google::protobuf::internal::ArenaStringPtr client_frame_;
+    ::google::protobuf::internal::ArenaStringPtr target_instance_id_;
+    ::uint64_t battle_id_;
+    ::uint32_t round_index_;
+    int kind_;
+    ::uint64_t deadline_ms_;
+    ::uint32_t target_gate_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RoutePlayerEvent final : public ::google::protobuf::Message
@@ -1871,6 +2229,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PushToPlayerEvent final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kMessageContentFieldNumber = 2,
+    kPlayerIdFieldNumber = 3,
     kSessionIdFieldNumber = 1,
   };
   // .MessageContent message_content = 2;
@@ -1889,6 +2248,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PushToPlayerEvent final : public ::
   ::MessageContent* PROTOBUF_NONNULL _internal_mutable_message_content();
 
   public:
+  // uint64 player_id = 3;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
   // uint32 session_id = 1;
   void clear_session_id() ;
   [[nodiscard]] ::uint32_t session_id() const;
@@ -1903,7 +2272,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PushToPlayerEvent final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1933,6 +2302,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PushToPlayerEvent final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::MessageContent* PROTOBUF_NULLABLE message_content_;
+    ::uint64_t player_id_;
     ::uint32_t session_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2309,6 +2679,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersEvent final : pub
   // accessors -------------------------------------------------------
   enum : int {
     kSessionListFieldNumber = 1,
+    kPlayerListFieldNumber = 5,
     kSessionBitmapFieldNumber = 4,
     kMessageContentFieldNumber = 2,
     kSessionBitmapBaseFieldNumber = 3,
@@ -2331,6 +2702,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersEvent final : pub
   private:
   const ::google::protobuf::RepeatedField<::uint32_t>& _internal_session_list() const;
   ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_session_list();
+
+  public:
+  // repeated uint64 player_list = 5;
+  [[nodiscard]] int player_list_size()
+      const;
+  private:
+  int _internal_player_list_size() const;
+
+  public:
+  void clear_player_list() ;
+  [[nodiscard]] ::uint64_t player_list(int index) const;
+  void set_player_list(int index, ::uint64_t value);
+  void add_player_list(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_list()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_list();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_list() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_list();
 
   public:
   // bytes session_bitmap = 4;
@@ -2378,7 +2769,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersEvent final : pub
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2409,6 +2800,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersEvent final : pub
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedField<::uint32_t> session_list_;
     ::google::protobuf::internal::CachedSize _session_list_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> player_list_;
+    ::google::protobuf::internal::CachedSize _player_list_cached_byte_size_;
     ::google::protobuf::internal::ArenaStringPtr session_bitmap_;
     ::MessageContent* PROTOBUF_NULLABLE message_content_;
     ::uint32_t session_bitmap_base_;
@@ -3781,7 +4174,7 @@ inline void RedirectToGateEvent::_internal_set_token_deadline(::int64_t value) {
 inline void PushToPlayerEvent::clear_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t PushToPlayerEvent::session_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.PushToPlayerEvent.session_id)
@@ -3789,7 +4182,7 @@ inline ::uint32_t PushToPlayerEvent::session_id() const {
 }
 inline void PushToPlayerEvent::set_session_id(::uint32_t value) {
   _internal_set_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:contracts.kafka.PushToPlayerEvent.session_id)
 }
 inline ::uint32_t PushToPlayerEvent::_internal_session_id() const {
@@ -3894,6 +4287,30 @@ inline void PushToPlayerEvent::set_allocated_message_content(::MessageContent* P
   // @@protoc_insertion_point(field_set_allocated:contracts.kafka.PushToPlayerEvent.message_content)
 }
 
+// uint64 player_id = 3;
+inline void PushToPlayerEvent::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t PushToPlayerEvent::player_id() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.PushToPlayerEvent.player_id)
+  return _internal_player_id();
+}
+inline void PushToPlayerEvent::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.PushToPlayerEvent.player_id)
+}
+inline ::uint64_t PushToPlayerEvent::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void PushToPlayerEvent::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // BroadcastToPlayersEvent
@@ -3951,7 +4368,7 @@ BroadcastToPlayersEvent::_internal_mutable_session_list() {
 
 // .MessageContent message_content = 2;
 inline bool BroadcastToPlayersEvent::has_message_content() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.message_content_ != nullptr);
   return value;
 }
@@ -3972,16 +4389,16 @@ inline void BroadcastToPlayersEvent::unsafe_arena_set_allocated_message_content(
   }
   _impl_.message_content_ = reinterpret_cast<::MessageContent*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:contracts.kafka.BroadcastToPlayersEvent.message_content)
 }
 inline ::MessageContent* PROTOBUF_NULLABLE BroadcastToPlayersEvent::release_message_content() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::MessageContent* released = _impl_.message_content_;
   _impl_.message_content_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4001,7 +4418,7 @@ inline ::MessageContent* PROTOBUF_NULLABLE BroadcastToPlayersEvent::unsafe_arena
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:contracts.kafka.BroadcastToPlayersEvent.message_content)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::MessageContent* temp = _impl_.message_content_;
   _impl_.message_content_ = nullptr;
   return temp;
@@ -4016,7 +4433,7 @@ inline ::MessageContent* PROTOBUF_NONNULL BroadcastToPlayersEvent::_internal_mut
 }
 inline ::MessageContent* PROTOBUF_NONNULL BroadcastToPlayersEvent::mutable_message_content()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::MessageContent* _msg = _internal_mutable_message_content();
   // @@protoc_insertion_point(field_mutable:contracts.kafka.BroadcastToPlayersEvent.message_content)
   return _msg;
@@ -4033,9 +4450,9 @@ inline void BroadcastToPlayersEvent::set_allocated_message_content(::MessageCont
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.message_content_ = reinterpret_cast<::MessageContent*>(value);
@@ -4046,7 +4463,7 @@ inline void BroadcastToPlayersEvent::set_allocated_message_content(::MessageCont
 inline void BroadcastToPlayersEvent::clear_session_bitmap_base() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_bitmap_base_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t BroadcastToPlayersEvent::session_bitmap_base() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BroadcastToPlayersEvent.session_bitmap_base)
@@ -4054,7 +4471,7 @@ inline ::uint32_t BroadcastToPlayersEvent::session_bitmap_base() const {
 }
 inline void BroadcastToPlayersEvent::set_session_bitmap_base(::uint32_t value) {
   _internal_set_session_bitmap_base(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BroadcastToPlayersEvent.session_bitmap_base)
 }
 inline ::uint32_t BroadcastToPlayersEvent::_internal_session_bitmap_base() const {
@@ -4070,7 +4487,7 @@ inline void BroadcastToPlayersEvent::_internal_set_session_bitmap_base(::uint32_
 inline void BroadcastToPlayersEvent::clear_session_bitmap() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_bitmap_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& BroadcastToPlayersEvent::session_bitmap() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -4080,13 +4497,13 @@ inline const ::std::string& BroadcastToPlayersEvent::session_bitmap() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BroadcastToPlayersEvent::set_session_bitmap(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.session_bitmap_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:contracts.kafka.BroadcastToPlayersEvent.session_bitmap)
 }
 inline ::std::string* PROTOBUF_NONNULL BroadcastToPlayersEvent::mutable_session_bitmap()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_session_bitmap();
   // @@protoc_insertion_point(field_mutable:contracts.kafka.BroadcastToPlayersEvent.session_bitmap)
   return _s;
@@ -4106,10 +4523,10 @@ inline ::std::string* PROTOBUF_NONNULL BroadcastToPlayersEvent::_internal_mutabl
 inline ::std::string* PROTOBUF_NULLABLE BroadcastToPlayersEvent::release_session_bitmap() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:contracts.kafka.BroadcastToPlayersEvent.session_bitmap)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.session_bitmap_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.session_bitmap_.Set("", GetArena());
@@ -4119,15 +4536,66 @@ inline ::std::string* PROTOBUF_NULLABLE BroadcastToPlayersEvent::release_session
 inline void BroadcastToPlayersEvent::set_allocated_session_bitmap(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.session_bitmap_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_bitmap_.IsDefault()) {
     _impl_.session_bitmap_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:contracts.kafka.BroadcastToPlayersEvent.session_bitmap)
+}
+
+// repeated uint64 player_list = 5;
+inline int BroadcastToPlayersEvent::_internal_player_list_size() const {
+  return _internal_player_list().size();
+}
+inline int BroadcastToPlayersEvent::player_list_size() const {
+  return _internal_player_list_size();
+}
+inline void BroadcastToPlayersEvent::clear_player_list() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_list_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t BroadcastToPlayersEvent::player_list(int index) const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.BroadcastToPlayersEvent.player_list)
+  return _internal_player_list().Get(index);
+}
+inline void BroadcastToPlayersEvent::set_player_list(int index, ::uint64_t value) {
+  _internal_mutable_player_list()->Set(index, value);
+  // @@protoc_insertion_point(field_set:contracts.kafka.BroadcastToPlayersEvent.player_list)
+}
+inline void BroadcastToPlayersEvent::add_player_list(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_player_list()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:contracts.kafka.BroadcastToPlayersEvent.player_list)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& BroadcastToPlayersEvent::player_list() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:contracts.kafka.BroadcastToPlayersEvent.player_list)
+  return _internal_player_list();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL BroadcastToPlayersEvent::mutable_player_list()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:contracts.kafka.BroadcastToPlayersEvent.player_list)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_list();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+BroadcastToPlayersEvent::_internal_player_list() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_list_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+BroadcastToPlayersEvent::_internal_mutable_player_list() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_list_;
 }
 
 // -------------------------------------------------------------------
@@ -4348,6 +4816,322 @@ inline void BroadcastToAllEvent::set_allocated_message_content(::MessageContent*
   // @@protoc_insertion_point(field_set_allocated:contracts.kafka.BroadcastToAllEvent.message_content)
 }
 
+// -------------------------------------------------------------------
+
+// SpectateFrameEvent
+
+// uint64 battle_id = 1;
+inline void SpectateFrameEvent::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t SpectateFrameEvent::battle_id() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.SpectateFrameEvent.battle_id)
+  return _internal_battle_id();
+}
+inline void SpectateFrameEvent::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.SpectateFrameEvent.battle_id)
+}
+inline ::uint64_t SpectateFrameEvent::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void SpectateFrameEvent::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// string battle_instance_id = 2;
+inline void SpectateFrameEvent::clear_battle_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_instance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SpectateFrameEvent::battle_instance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:contracts.kafka.SpectateFrameEvent.battle_instance_id)
+  return _internal_battle_instance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SpectateFrameEvent::set_battle_instance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.battle_instance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:contracts.kafka.SpectateFrameEvent.battle_instance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateFrameEvent::mutable_battle_instance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_battle_instance_id();
+  // @@protoc_insertion_point(field_mutable:contracts.kafka.SpectateFrameEvent.battle_instance_id)
+  return _s;
+}
+inline const ::std::string& SpectateFrameEvent::_internal_battle_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_instance_id_.Get();
+}
+inline void SpectateFrameEvent::_internal_set_battle_instance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_instance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateFrameEvent::_internal_mutable_battle_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.battle_instance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SpectateFrameEvent::release_battle_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:contracts.kafka.SpectateFrameEvent.battle_instance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.battle_instance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.battle_instance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SpectateFrameEvent::set_allocated_battle_instance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.battle_instance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.battle_instance_id_.IsDefault()) {
+    _impl_.battle_instance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:contracts.kafka.SpectateFrameEvent.battle_instance_id)
+}
+
+// uint32 round_index = 3;
+inline void SpectateFrameEvent::clear_round_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_index_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t SpectateFrameEvent::round_index() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.SpectateFrameEvent.round_index)
+  return _internal_round_index();
+}
+inline void SpectateFrameEvent::set_round_index(::uint32_t value) {
+  _internal_set_round_index(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.SpectateFrameEvent.round_index)
+}
+inline ::uint32_t SpectateFrameEvent::_internal_round_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.round_index_;
+}
+inline void SpectateFrameEvent::_internal_set_round_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_index_ = value;
+}
+
+// .contracts.kafka.eSpectateFrameKind kind = 4;
+inline void SpectateFrameEvent::clear_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::contracts::kafka::eSpectateFrameKind SpectateFrameEvent::kind() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.SpectateFrameEvent.kind)
+  return _internal_kind();
+}
+inline void SpectateFrameEvent::set_kind(::contracts::kafka::eSpectateFrameKind value) {
+  _internal_set_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.SpectateFrameEvent.kind)
+}
+inline ::contracts::kafka::eSpectateFrameKind SpectateFrameEvent::_internal_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::contracts::kafka::eSpectateFrameKind>(_impl_.kind_);
+}
+inline void SpectateFrameEvent::_internal_set_kind(::contracts::kafka::eSpectateFrameKind value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_ = value;
+}
+
+// bytes client_frame = 5;
+inline void SpectateFrameEvent::clear_client_frame() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_frame_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SpectateFrameEvent::client_frame() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:contracts.kafka.SpectateFrameEvent.client_frame)
+  return _internal_client_frame();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SpectateFrameEvent::set_client_frame(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.client_frame_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:contracts.kafka.SpectateFrameEvent.client_frame)
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateFrameEvent::mutable_client_frame()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_client_frame();
+  // @@protoc_insertion_point(field_mutable:contracts.kafka.SpectateFrameEvent.client_frame)
+  return _s;
+}
+inline const ::std::string& SpectateFrameEvent::_internal_client_frame() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_frame_.Get();
+}
+inline void SpectateFrameEvent::_internal_set_client_frame(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_frame_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateFrameEvent::_internal_mutable_client_frame() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_frame_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SpectateFrameEvent::release_client_frame() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:contracts.kafka.SpectateFrameEvent.client_frame)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.client_frame_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_frame_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SpectateFrameEvent::set_allocated_client_frame(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.client_frame_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_frame_.IsDefault()) {
+    _impl_.client_frame_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:contracts.kafka.SpectateFrameEvent.client_frame)
+}
+
+// uint64 deadline_ms = 6;
+inline void SpectateFrameEvent::clear_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t SpectateFrameEvent::deadline_ms() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.SpectateFrameEvent.deadline_ms)
+  return _internal_deadline_ms();
+}
+inline void SpectateFrameEvent::set_deadline_ms(::uint64_t value) {
+  _internal_set_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.SpectateFrameEvent.deadline_ms)
+}
+inline ::uint64_t SpectateFrameEvent::_internal_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deadline_ms_;
+}
+inline void SpectateFrameEvent::_internal_set_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deadline_ms_ = value;
+}
+
+// uint32 target_gate_id = 7;
+inline void SpectateFrameEvent::clear_target_gate_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_gate_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t SpectateFrameEvent::target_gate_id() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.SpectateFrameEvent.target_gate_id)
+  return _internal_target_gate_id();
+}
+inline void SpectateFrameEvent::set_target_gate_id(::uint32_t value) {
+  _internal_set_target_gate_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.SpectateFrameEvent.target_gate_id)
+}
+inline ::uint32_t SpectateFrameEvent::_internal_target_gate_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_gate_id_;
+}
+inline void SpectateFrameEvent::_internal_set_target_gate_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_gate_id_ = value;
+}
+
+// string target_instance_id = 8;
+inline void SpectateFrameEvent::clear_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_instance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& SpectateFrameEvent::target_instance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:contracts.kafka.SpectateFrameEvent.target_instance_id)
+  return _internal_target_instance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SpectateFrameEvent::set_target_instance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.target_instance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:contracts.kafka.SpectateFrameEvent.target_instance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateFrameEvent::mutable_target_instance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_target_instance_id();
+  // @@protoc_insertion_point(field_mutable:contracts.kafka.SpectateFrameEvent.target_instance_id)
+  return _s;
+}
+inline const ::std::string& SpectateFrameEvent::_internal_target_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_instance_id_.Get();
+}
+inline void SpectateFrameEvent::_internal_set_target_instance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_instance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SpectateFrameEvent::_internal_mutable_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_instance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SpectateFrameEvent::release_target_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:contracts.kafka.SpectateFrameEvent.target_instance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.target_instance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_instance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SpectateFrameEvent::set_allocated_target_instance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.target_instance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_instance_id_.IsDefault()) {
+    _impl_.target_instance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:contracts.kafka.SpectateFrameEvent.target_instance_id)
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -4356,6 +5140,19 @@ inline void BroadcastToAllEvent::set_allocated_message_content(::MessageContent*
 }  // namespace kafka
 }  // namespace contracts
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::contracts::kafka::eSpectateFrameKind> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::contracts::kafka::eSpectateFrameKind>() {
+  return ::contracts::kafka::eSpectateFrameKind_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

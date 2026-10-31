@@ -125,16 +125,11 @@ type Deps struct {
 	Metrics *assetop.Metrics
 	// Now 注入时钟,单测可控;nil 时用 time.Now。
 	Now func() time.Time
-	// Ledger 读玩家已落盘的资产账本(生产是 assetop.DataServiceLedger)。RequireSQLCommit 关闭时可选:挂上之后,
-	// 长期离线且已记账的行可以提前终结;它也是自动放弃"账本确定未见"那条证据的唯一来源 —— 没有它自动放弃不运行
-	// (fail-closed)。RequireSQLCommit 打开时必填且必须能读 SQL 提交证据,否则 New 拒绝构造(Loop.CheckWiring)。
+	// Ledger 读玩家已落盘的资产账本(生产是 assetop.DataServiceLedger):在线 / 离线终结和自动放弃都靠它。
+	// RequireSQLCommit 打开时必填,否则 New 拒绝构造(Loop.CheckWiring)。
 	Ledger assetop.LedgerReader
-	// RequireSQLCommit 是资产 SQL 提交证据开关(config.AssetOpConf.RequireSQLCommit,原样进 assetop.LoopConfig;
-	// docs/design/db-write-fencing-mysql.md §6.6)。零值 = HEAD 口径。
+	// RequireSQLCommit 原样进 assetop.LoopConfig。生产恒 true(svc.newAssetChannel),false 只给单测。
 	RequireSQLCommit bool
-	// Locator 可选:自动放弃前重新解析玩家位置(生产与 Caller.Resolver 是同一个 scenenode.Locator)。
-	// 为 nil 时自动放弃不运行(fail-closed)。
-	Locator assetop.Resolver
 	// Recovery 是落地恢复的循环参数(停放档 / 自动放弃 / 日对账);零值 = 全部关闭。
 	Recovery Recovery
 }
@@ -225,9 +220,6 @@ func New(d Deps) (*Pipeline, error) {
 	if d.Ledger != nil {
 		loop.Ledger = d.Ledger
 	}
-	if d.Locator != nil {
-		loop.Locator = d.Locator
-	}
 	// 开关打开却没有能读 SQL 证据的 Ledger:每笔终结都只能停在 AwaitDurable,必须在构造时拒绝。
 	if err := loop.CheckWiring(); err != nil {
 		return nil, fmt.Errorf("trade: %w", err)
@@ -307,7 +299,7 @@ func (p *Pipeline) MaintenanceEnabled() bool {
 //
 // **只该在一个副本上跑**:svc 用 shared/leader 选主,当选时以领导权的 ctx 调用、卸任时取消
 // (设计 §6.2;多副本同时跑不会出错,只是按类 gauge 有多份、候选扫描重复)。
-// 自动放弃另需 Deps.Ledger 与 Deps.Locator 都挂上,缺一个 assetop 只打一次 INFO、不运行(fail-closed)。
+// 自动放弃另需 Deps.Ledger 挂上,缺了 assetop 只打一次 INFO、不运行(fail-closed)。
 // 空接收者直接返回。
 func (p *Pipeline) RunMaintenance(ctx context.Context) {
 	if p == nil {
@@ -321,21 +313,18 @@ func (p *Pipeline) RunMaintenance(ctx context.Context) {
 // 步骤(顺序固定):
 //  1. 号段发 op_id —— 发不出就当场失败,绝不自造 id;
 //  2. **建 seq 行的短事务(全序里的"事务 A")**:EnsureSeqRows 自己开一个 RC 事务,
-//     普通读探针 →(仅缺行时)锁哨兵守卫行 → 按 (player_id, stream) 升序 INSERT IGNORE → **提交**。
+//     普通读探针 →(仅缺行时)按 (player_id, stream) 升序 INSERT IGNORE → **提交**。
 //     稳态下探针全命中,它连事务都不开;
 //  3. **业务事务("事务 B")**:AllocateSeqsTx(普通读确认行在 → 按升序逐个 FOR UPDATE 分配 seq,
 //     含 I5 未决数守卫)→ 插 outbox 行。P3 的商品状态迁移必须并进这同一个事务(否则会出现
 //     "扣了但商品没进 ESCROWING"),且商品 / 订单行的锁要排在 AllocateSeqsTx **之前**;
 //  4. 提交后同步投一次(复用重投循环的同一个 ProcessOne,不另写一条路径)。
 //
-// 第 2 步为什么是独立的短事务(2026-09-29):把它并进业务事务的话,全局哨兵行的 X 要一直持到业务
-// 事务提交 —— 中间还夹着分配 seq 与插 outbox 行。开服 / 新区首日几乎每一次上架都是首次建行,
-// 那段窗口里全服托管入队全局串行。拆开之后持锁时间只剩一次点查 + 几条 INSERT IGNORE,而"消环"
-// 的性质不受影响:它来自"所有首次建行者排在同一行已提交、永不删除的记录锁上",与是否同事务无关。
-// 完整论证(含"短事务提交后 seq 行为什么不可能消失")见 data.AssetOpRepo 上方的守卫一节。
+// 第 2 步为什么是独立的短事务:建行不和业务事务持锁重叠,业务事务回滚也不会把建行带走。
+// 完整论证(含"短事务提交后 seq 行为什么不可能消失")见 data.AssetOpRepo 上方"seq 行的建行"一节。
 //
-// 第 2 步失败 = 本次上架失败,**不降级成在业务事务里建行**:那会把"持业务锁再拿哨兵锁"的反向边
-// 画回来。第 4 步失败不回滚第 3 步:行已在 outbox,循环会接着投。只有 1–3 步失败才算本次上架失败。
+// 第 2 步失败 = 本次上架失败,**不降级成在业务事务里建行**。
+// 第 4 步失败不回滚第 3 步:行已在 outbox,循环会接着投。只有 1–3 步失败才算本次上架失败。
 func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (EscrowResult, error) {
 	// 空接收者 = 降级形态(密钥缺失,svc 没建管线)。以错误返回而不是 panic:
 	// 调用方本来就要处理"托管失败",多一种 panic 只会让整个请求线程炸掉。
@@ -371,7 +360,7 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 	}
 
 	var alloc assetop.Alloc
-	// 事务 B:业务写。它只对 seq 表做普通读确认 + 升序 FOR UPDATE,一行都不建,也不碰哨兵行。
+	// 事务 B:业务写。它只对 seq 表做普通读确认 + 升序 FOR UPDATE,一行都不建。
 	txErr := assetop.WithTxRetry(ctx, p.ops.DB(), 2, data.IsRetryableTxError, func(tx *sql.Tx) error {
 		// 每次重试都重新分配:上一次尝试的 seq 随事务一起回滚了,复用会写出空洞。
 		allocs, err := p.ops.AllocateSeqsTx(ctx, tx, p.nowMs(), sellerKey)

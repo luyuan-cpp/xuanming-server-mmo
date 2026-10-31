@@ -59,13 +59,18 @@ func run(account, dsnEnv string, passwordStdin bool) error {
 	if err != nil || parsedDSN.DBName == "" {
 		return fmt.Errorf("migration MySQL DSN is invalid or has no database")
 	}
+	// 先于消费一次性 writer 资格:档位写错不能白白烧掉一份 boot grant。
+	backend, err := authoritysql.LoadBackend(os.Getenv)
+	if err != nil {
+		return err
+	}
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
 		return fmt.Errorf("口令迁移缺一次性writer资格: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, parsedDSN.FormatDSN(), parsedDSN.DBName, os.Getenv("LOGIN_PASSWORD_MIGRATION_ALLOW_LOCAL_MYSQL") != "1", 1, authoritysql.Writer(writer))
+	db, err := authoritysql.Open(ctx, parsedDSN.FormatDSN(), parsedDSN.DBName, backend, 1, authoritysql.Writer(writer))
 	if err != nil {
 		return fmt.Errorf("open MySQL: %w", err)
 	}

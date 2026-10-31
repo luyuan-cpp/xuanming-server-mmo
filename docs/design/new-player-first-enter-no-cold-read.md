@@ -159,7 +159,7 @@
 | B1 新号标记,由 scene 按新号初始化 | 建角写 `player:{id}:new`(短 TTL);预加载看到标记就放行,不写父键 | login,加上 scene_manager 路由事件加字段,加上 C++ | scene 读父键得 NIL,要等约 31.5s 有界重试才判新号(`redis_client.h` 的 `BackoffForRetry`)。想跳过,就得给 `RoutePlayerEvent` / `PlayerEnterGameNode` 加「新号」位,proto、Go、C++ 三处同改。标记过期前若已有存盘、父键又丢了(合服失效缓存、Redis 丢键),scene 会用空档覆盖真实进度 | 否决 |
 | B2 新号标记,login 看到标记就写空父键 | 首次进场时,login 原子地执行「标记在、父键不在 → 写骨架、删标记」 | login | 要安全,必须再加「owner_epoch 不存在」这个判据;加上之后标记本身就多余了 | 否决。等于把 A 推迟到首次进场,还多一个键、多一个状态源 |
 | C1 账号记录加 `first_enter_pending` | 在账号 blob 里标「未进场」 | login | 和 B 一样有「标记已过时却仍被当真」的问题;清标记要再拿一次账号锁写 blob | 否决 |
-| C2 建角后异步预热 | 建角后 fire-and-forget 发读任务(`TriggerPlayerDataPreload`,`sync_loader.go:35-78`,目前没有调用方) | login | 等待挪出了玩家路径,但每个新号的 2 次 DB 读一次不少,全局库首日的读负载不变;子表缓存 1h 过期后,首登仍要冷读 | 否决,解决不了负载 |
+| C2 建角后异步预热 | 建角后 fire-and-forget 发读任务(`TriggerPlayerDataPreload`,`sync_loader.go:35-78`,当时没有调用方,2026-10-30 已删除) | login | 等待挪出了玩家路径,但每个新号的 2 次 DB 读一次不少,全局库首日的读负载不变;子表缓存 1h 过期后,首登仍要冷读 | 否决,解决不了负载 |
 | C3 go/db 负缓存 | 把「无行」结果缓存起来 | go/db | 第一次读仍然要打库 | 否决 |
 | C4 scene 读到 NIL 立刻当新号 | 去掉 NIL 重试 | C++ | scene 分不清「新号」和「缓存丢了的老号」,老号会被空档覆盖 | 否决 |
 

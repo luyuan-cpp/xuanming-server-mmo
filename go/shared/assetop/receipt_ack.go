@@ -12,8 +12,7 @@ import (
 // 已滑出窗口的操作不能再分类，但原件已在业务SQL；仅结束清理，不据此完成原资产操作。
 // done=false 保留相同待办，离线、证据缓存丢失、SQL 在途均可重投，不另占资产 seq。
 //
-// 证据只认 SQL 提交证据（reader 必须实现 SQLCommitLedgerReader，读 ReadSQLCommittedLedger），与 Loop 的
-// RequireSQLCommit 开关无关：托管原件只在交易合同里出现，而交易合同的终结本身就要求 SQL 证据。
+// 证据只认已提交账本（reader 必须实现 SQLCommitLedgerReader，读 ReadSQLCommittedLedger）。
 // reader 只会读 Redis 父键 blob 时回错误，不退回 blob 判定。
 func AcknowledgeReceipt(ctx context.Context, applier Applier, reader LedgerReader, req *assetpb.AssetOpRequest) (done bool, err error) {
 	if err := ctx.Err(); err != nil {

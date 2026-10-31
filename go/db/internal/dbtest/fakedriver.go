@@ -5,7 +5,8 @@
 // 没有 sqlmock 之类的依赖,也不打算为单测引入新依赖,所以这里做一个自包含的。
 //
 // 只实现被测代码真正用到的那几个接口:ExecerContext / QueryerContext / Pinger。
-// 不支持事务与 Prepare —— 用到了就说明被测代码走了预期外的路径,直接报错更好。
+// 不支持 Prepare。事务只有 OpenTx 打开的连接才支持;用 Open 打开的连接开事务直接报错,
+// 用到了就说明被测代码走了预期外的路径。
 package dbtest
 
 import (
@@ -60,13 +61,31 @@ func (r *Recorder) Contains(substr string) bool {
 
 var driverSeq atomic.Int64
 
+// OpenTx 连出来的连接开事务时,Recorder 里记下的语句。Handler 看不到这三条。
+const (
+	StatementBegin    = "BEGIN"
+	StatementCommit   = "COMMIT"
+	StatementRollback = "ROLLBACK"
+)
+
 // Open 注册一个一次性驱动并返回连上它的 *sql.DB。
 // t.Cleanup 负责关闭,调用方不需要再管。
 func Open(t *testing.T, h Handler) (*sql.DB, *Recorder) {
 	t.Helper()
+	return open(t, h, false)
+}
+
+// OpenTx 与 Open 相同,但连接支持事务,事务边界记进 Recorder。
+func OpenTx(t *testing.T, h Handler) (*sql.DB, *Recorder) {
+	t.Helper()
+	return open(t, h, true)
+}
+
+func open(t *testing.T, h Handler, allowTx bool) (*sql.DB, *Recorder) {
+	t.Helper()
 	rec := &Recorder{}
 	name := fmt.Sprintf("dbtest-%d", driverSeq.Add(1))
-	sql.Register(name, &fakeDriver{handler: h, recorder: rec})
+	sql.Register(name, &fakeDriver{handler: h, recorder: rec, allowTx: allowTx})
 	db, err := sql.Open(name, "")
 	if err != nil {
 		t.Fatalf("open fake driver: %v", err)
@@ -78,15 +97,17 @@ func Open(t *testing.T, h Handler) (*sql.DB, *Recorder) {
 type fakeDriver struct {
 	handler  Handler
 	recorder *Recorder
+	allowTx  bool
 }
 
 func (d *fakeDriver) Open(string) (driver.Conn, error) {
-	return &fakeConn{handler: d.handler, recorder: d.recorder}, nil
+	return &fakeConn{handler: d.handler, recorder: d.recorder, allowTx: d.allowTx}, nil
 }
 
 type fakeConn struct {
 	handler  Handler
 	recorder *Recorder
+	allowTx  bool
 }
 
 var (
@@ -94,6 +115,7 @@ var (
 	_ driver.ExecerContext  = (*fakeConn)(nil)
 	_ driver.QueryerContext = (*fakeConn)(nil)
 	_ driver.Pinger         = (*fakeConn)(nil)
+	_ driver.ConnBeginTx    = (*fakeConn)(nil)
 )
 
 func (c *fakeConn) Prepare(query string) (driver.Stmt, error) {
@@ -104,6 +126,29 @@ func (c *fakeConn) Close() error { return nil }
 
 func (c *fakeConn) Begin() (driver.Tx, error) {
 	return nil, fmt.Errorf("dbtest: transactions are not supported")
+}
+
+// BeginTx 接受任意隔离级别:这里只记录事务边界,不模拟隔离。
+func (c *fakeConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
+	if !c.allowTx {
+		return nil, fmt.Errorf("dbtest: transactions are not supported")
+	}
+	c.recorder.record(StatementBegin)
+	return &fakeTx{recorder: c.recorder}, nil
+}
+
+type fakeTx struct {
+	recorder *Recorder
+}
+
+func (t *fakeTx) Commit() error {
+	t.recorder.record(StatementCommit)
+	return nil
+}
+
+func (t *fakeTx) Rollback() error {
+	t.recorder.record(StatementRollback)
+	return nil
 }
 
 func (c *fakeConn) Ping(context.Context) error { return nil }

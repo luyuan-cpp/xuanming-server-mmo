@@ -84,10 +84,23 @@ func (r *Repo) List(ctx context.Context, player uint64, in *mailpb.ListMailsRequ
 	args := []any{player, player, player, player, now}
 	query := "SELECT " + columns("m.") + "," + stateColumns() + base
 	if in.BeforeMailId != 0 {
-		query += " AND m.mail_id<?"
-		args = append(args, in.BeforeMailId)
+		// 游标是上一页最后一封的 mail_id。id 是打散过的,不代表先后,要换算成 (sent_ms, mail_id)。
+		var beforeSentMs uint64
+		err = tx.QueryRowContext(ctx, "SELECT sent_ms FROM mail_message WHERE mail_id=?", in.BeforeMailId).Scan(&beforeSentMs)
+		if errors.Is(err, sql.ErrNoRows) {
+			// 游标那封已被清理,定位不到了:这一页到头,重新打开邮箱能看到其余的。
+			if err = tx.Commit(); err != nil {
+				return nil, err
+			}
+			return result, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		query += " AND (m.sent_ms<? OR (m.sent_ms=? AND m.mail_id<?))"
+		args = append(args, beforeSentMs, beforeSentMs, in.BeforeMailId)
 	}
-	query += " ORDER BY m.mail_id DESC LIMIT ?"
+	query += " ORDER BY m.sent_ms DESC,m.mail_id DESC LIMIT ?"
 	args = append(args, limit+1)
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {

@@ -2,11 +2,11 @@ package cpp
 
 // gate Kafka 路由信封分支的「同名同型自动映射」(docs/design/scene-enter-chain-residuals.md §2.4 第 9 条、§2.7)。
 //
-// KickPlayerEvent 加了 player_id(uint64)= 2、login_generation(uint64)= 3 之后,老格式的踢线(payload 为空)
-// 由信封分支处理:生成器按「GateCommand 上有同名、同型、非 repeated 的字段」自动生成赋值,于是 player_id 从
-// GateCommand.player_id 映射过来,gate 的 ClassifyKick 才拿得到被踢玩家。这条前提没有别处钉着 ——
-// 哪天有人把事件里的 player_id 写成 uint32,生成器只打一行 Warn 就跳过,踢线退化成不核对玩家,零编译错误。
-// login_generation 在 GateCommand 上没有对应字段,只能经 payload 到 gate,信封分支不得凭空映射它。
+// 映射规则只有一条:GateCommand 上有同名、同型、非 repeated 的字段才从信封赋值(envelopeCarriesField)。
+// 2026-10-30 起(battle-spectate-tiered-fanout.md §14 顺带发现的修正)事件只要有一个字段映射不到就整条要求载荷,
+// 不再构造缺字段的事件:KickPlayerEvent 带 login_generation(GateCommand 没有对应字段),空载荷的踢线直接拒绝,
+// 全部在树的生产者都带 payload。所以信封分支只服务「全部字段都在信封上」的事件;事件里的字段写错类型
+// (比如 player_id 写成 uint32)也不再静默丢字段,而是变成要求载荷。
 //
 // 本文件自带描述符安装函数 installAutomapGateRouterDescriptors(GateCommand 带字段),不改、也不依赖同包的
 // installGateRouterDescriptors(它的 GateCommand 没有字段,且所在文件正被入口生成器重构改写,§7)。
@@ -55,6 +55,17 @@ func automapKickEvent(playerIDType descriptorpb.FieldDescriptorProto_Type) *desc
 	return event
 }
 
+// automapEnvelopeOnlyEvent 构造全部字段都能从信封映射的事件;playerIDType 决定 player_id 的类型(正确的是 uint64)。
+func automapEnvelopeOnlyEvent(playerIDType descriptorpb.FieldDescriptorProto_Type) *descriptorpb.DescriptorProto {
+	event := ingressTestMessage(true)
+	event.Name = proto.String("EnvelopeOnlyEvent")
+	event.Field = []*descriptorpb.FieldDescriptorProto{
+		automapScalarField("session_id", 1, descriptorpb.FieldDescriptorProto_TYPE_UINT32),
+		automapScalarField("player_id", 2, playerIDType),
+	}
+	return event
+}
+
 func installAutomapGateRouterDescriptors(t *testing.T, commandFields []*descriptorpb.FieldDescriptorProto, events ...*descriptorpb.DescriptorProto) {
 	t.Helper()
 	previous := internal.FdSet
@@ -66,7 +77,7 @@ func installAutomapGateRouterDescriptors(t *testing.T, commandFields []*descript
 	}}
 }
 
-// 类型不匹配的分支会调 logger.Global.Warn,而 logger.Global 默认为 nil;不设会 panic(照 grpc_handler_routing_test.go)。
+// 类型不匹配的分支(envelopeCarriesField)会调 logger.Global.Warn,而 logger.Global 默认为 nil;不设会 panic(照 grpc_handler_routing_test.go)。
 func useAutomapNopLogger(t *testing.T) {
 	t.Helper()
 	previous := logger.Global
@@ -80,8 +91,8 @@ func automapSingleCase(t *testing.T) gateKafkaRouterCase {
 	if err != nil {
 		t.Fatalf("buildGateKafkaRouterCases: %v", err)
 	}
-	if len(cases) != 1 || cases[0].EventMessageName != "KickPlayerEvent" {
-		t.Fatalf("cases = %+v, want exactly the KickPlayerEvent case", cases)
+	if len(cases) != 1 {
+		t.Fatalf("cases = %+v, want exactly one case", cases)
 	}
 	return cases[0]
 }
@@ -89,36 +100,43 @@ func automapSingleCase(t *testing.T) gateKafkaRouterCase {
 func TestGateKafkaRouterAutoMapsSameNameSameTypeFields(t *testing.T) {
 	useAutomapNopLogger(t)
 	installAutomapGateRouterDescriptors(t, automapGateCommandFields(),
-		automapKickEvent(descriptorpb.FieldDescriptorProto_TYPE_UINT64))
+		automapEnvelopeOnlyEvent(descriptorpb.FieldDescriptorProto_TYPE_UINT64))
 
-	got := automapSingleCase(t).Assignments
+	envelopeOnly := automapSingleCase(t)
+	if envelopeOnly.PayloadRequired {
+		t.Fatalf("%+v: every field is on the envelope, it must not require a payload", envelopeOnly)
+	}
 	for _, want := range []string{
 		"event.set_session_id(command.session_id());",
 		"event.set_player_id(command.player_id());",
 	} {
-		if !slices.Contains(got, want) {
-			t.Fatalf("assignments = %v, want %q (envelope-path kicks must carry the player for ClassifyKick)", got, want)
-		}
-	}
-	for _, assignment := range got {
-		if assignment == "event.set_login_generation(command.login_generation());" {
-			t.Fatalf("assignments = %v; GateCommand has no login_generation, it must only travel in the payload", got)
+		if !slices.Contains(envelopeOnly.Assignments, want) {
+			t.Fatalf("assignments = %v, want %q", envelopeOnly.Assignments, want)
 		}
 	}
 }
 
-// 事件里的 player_id 若是 uint32(与 GateCommand.player_id 的 uint64 不同型),生成器跳过它:
-// 这条用例把「必须同型」的前提固化下来 —— 信封路径要拿到 player_id,proto 里就必须是 uint64。
-func TestGateKafkaRouterSkipsSameNameDifferentTypeField(t *testing.T) {
+// KickPlayerEvent 带 login_generation,GateCommand 上没有对应字段:信封分支映射不出它,踢线会丢掉代次栅栏,所以要求载荷。
+func TestGateKafkaRouterKickWithLoginGenerationRequiresPayload(t *testing.T) {
 	useAutomapNopLogger(t)
 	installAutomapGateRouterDescriptors(t, automapGateCommandFields(),
-		automapKickEvent(descriptorpb.FieldDescriptorProto_TYPE_UINT32))
+		automapKickEvent(descriptorpb.FieldDescriptorProto_TYPE_UINT64))
 
-	got := automapSingleCase(t).Assignments
-	if !slices.Contains(got, "event.set_session_id(command.session_id());") {
-		t.Fatalf("assignments = %v, want session_id still mapped", got)
+	kick := automapSingleCase(t)
+	if !kick.PayloadRequired || len(kick.Assignments) != 0 {
+		t.Fatalf("%+v: login_generation only travels in the payload, want PayloadRequired and no envelope mapping", kick)
 	}
-	if slices.Contains(got, "event.set_player_id(command.player_id());") {
-		t.Fatalf("assignments = %v; a uint32 player_id must not be auto-mapped from the uint64 GateCommand.player_id", got)
+}
+
+// 事件里的 player_id 若是 uint32(与 GateCommand.player_id 的 uint64 不同型),信封映射不了:
+// 这条用例把「必须同型」的前提固化下来 —— 写错类型不会静默丢字段,而是变成要求载荷。
+func TestGateKafkaRouterSameNameDifferentTypeFieldRequiresPayload(t *testing.T) {
+	useAutomapNopLogger(t)
+	installAutomapGateRouterDescriptors(t, automapGateCommandFields(),
+		automapEnvelopeOnlyEvent(descriptorpb.FieldDescriptorProto_TYPE_UINT32))
+
+	got := automapSingleCase(t)
+	if !got.PayloadRequired || len(got.Assignments) != 0 {
+		t.Fatalf("%+v: a uint32 player_id cannot be mapped from the uint64 GateCommand.player_id", got)
 	}
 }

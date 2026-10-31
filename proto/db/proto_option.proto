@@ -138,6 +138,11 @@ extend google.protobuf.FieldOptions {
 	// (docs/design/mixed-version-persist-field-protection.md §3.2)。C++ 往返一致性测试不经由它注入;
 	// 只经这类字段可达的消息类型不进入往返测试,也不受冻结规则约束。编号说明同 OptionPersistFrozen。
 	optional bool OptionPersistUncarried = 600040;
+
+	// 玩家表字段属于 player_store 的哪一组,取值是 playerstore.PlayerStoreKind 的数值;0 表示元数据,不进片段
+	// (docs/design/player-save-direct-commit.md §1.1)。player_database 每个字段都必须声明,
+	// 漏标 scene 拒绝启动,不会静默丢数据。用 uint32 而不是枚举:这个文件被全部 proto 依赖,不能反过来依赖业务 proto。
+	optional uint32 OptionPersistGroup = 600041;
 }
 
 // ==============================================================================

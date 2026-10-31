@@ -18,6 +18,11 @@ type globalReadyCursor struct{ enqueuedMs, player uint64 }
 
 // 独立于撮合循环的有界维护：一次最多8张原票、8个并发、每次3秒。
 // 本地游标不代表已完成；UNKNOWN也推进，扫到末尾重新开始，避免未知队首永久挡住离线玩家。
+//
+// 巡检尊重个人结算的等待退避(2026-10-30,评审 B-6):本地 ReleaseCompletedReady 放不了的票,只有它的等待行
+// next_retry_ms 已到(Store.SettlementLookupDue)才向 Inbox Lookup。每 500ms 一轮,不看退避就会对每个离线玩家每轮查一次
+// Inbox,绕过发件箱给等待行定的 5 秒到 5 分钟退避;到期确认本来就由终局发件箱负责,跳过不影响释放。
+// JoinQueue / GetQueueStatus 的按需路径照旧立即 Lookup。
 func (cursor *globalReadyCursor) round(ctx context.Context, s *svc.ServiceContext) {
 	ready, err := s.Authority.ReadyAfter(ctx, cursor.enqueuedMs, cursor.player)
 	if err != nil {
@@ -46,7 +51,10 @@ func (cursor *globalReadyCursor) round(ctx context.Context, s *svc.ServiceContex
 				return
 			}
 			if err == nil {
-				_, err = releaseGlobalFinished(call, s, original)
+				var due bool
+				if due, err = s.Authority.SettlementLookupDue(call, original); err == nil && due {
+					_, err = releaseGlobalFinished(call, s, original)
+				}
 			}
 			if err != nil {
 				s.HoldRelay(err)

@@ -110,7 +110,7 @@ func TestActivityTxRejectsMalformedInputBeforeTouchingStorage(t *testing.T) {
 	}
 	businessRejections := []error{
 		ErrActivityAlreadyClaimed, ErrActivityJoinTooRecent, ErrActivityThresholdNotReached,
-		ErrGuildGone, ErrNotGuildMember, ErrGuildLevelTooLow, ErrZoneMerging, ErrWriteConflict,
+		ErrGuildGone, ErrNotGuildMember, ErrGuildLevelTooLow, ErrWriteConflict,
 	}
 	for _, b := range breakers {
 		in := good()
@@ -384,8 +384,8 @@ func TestActivityStatementsShape(t *testing.T) {
 func TestActivityLockOrderInSource(t *testing.T) {
 	cases := []pointLockOrderCase{
 		{"activity_repo.go", "participate", []string{
-			// G → 闸门 → M
-			"sqlLockActivityGuild", "checkFence", "sqlLockActivityMember",
+			// G → M
+			"sqlLockActivityGuild", "sqlLockActivityMember",
 			// Q(建行 / 分配 / 守卫)→ O
 			"ensureSeqRowTx", "AllocateSeq", "insertAssetOp", "sqlLockSeqGuard",
 			// C
@@ -398,13 +398,13 @@ func TestActivityLockOrderInSource(t *testing.T) {
 		{"activity_repo.go", "deleteGuildActivityProgress", []string{"readActivityProgressKeys", "sqlDeleteActivityProgress"}},
 		{"activity_repo.go", "deleteGuildTrialBattles", []string{"sqlSelectStartedTrialBattlesOfGuild", "sqlDeleteTrialBattle"}},
 		{"guild_manage_repo.go", "DisbandGuild", []string{
-			"lockGuildRow", "checkFence", "lockAllMembers", "sqlDeleteMember", "deleteApplicationRows",
+			"lockGuildRow", "lockAllMembers", "sqlDeleteMember", "deleteApplicationRows",
 			"accelerateDonationDeadlines", "deleteGuildActivityProgress", "deleteGuildTrialBattles", "sqlDeleteGuild",
 		}},
 
-		// 历练结算:G → 闸门 → [T 普通读] → M → Q(全部)→ [C 普通读] → O → C → P(+ 再写 G)→ 再写 M → T → W。
+		// 历练结算:G → [T 普通读] → M → Q(全部)→ [C 普通读] → O → C → P(+ 再写 G)→ 再写 M → T → W。
 		{"activity_repo.go", "settleTrialBattle", []string{
-			"lockTrialGuild", "checkFence", "readTrialGate",
+			"lockTrialGuild", "readTrialGate",
 			"lockTrialMembers", "lockTrialSeqGuards", "readTrialRewarded",
 			"enqueueTrialRewards", "occupyTrialCounters", "grantTrialFunds", "creditTrialContribution",
 			"writeTrialBattleState", "insertOwedRewards",

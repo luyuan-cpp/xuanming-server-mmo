@@ -5,10 +5,7 @@ services:
   #
   # 镜像钉 tag@digest(2026-10-15),不再用浮动的 apache/kafka:latest。原因:
   #   - 下面的命名卷 kafka-data 让日志目录与 KRaft 元数据跨容器重建保留,浮动 tag 一次 pull
-  #     就可能让新版本 broker 去读旧版本写下的目录,版本在无人察觉时漂移;
-  #   - group coordinator 的状态机与 OffsetDelete(kafka-consumer-groups.sh --delete-offsets)的语义
-  #     会随镜像变化,go/db 存盘消费组按 zone 拆分后的交接闸与 tools/scripts/kafka_offset_reset.ps1
-  #     的收尾都依赖它们。
+  #     就可能让新版本 broker 去读旧版本写下的目录,版本在无人察觉时漂移。
   # 2026-10-15 核对 Docker Hub:latest 与 4.3.1 是同一个 index digest,钉版不改变当时 latest 对应的版本。
   # 但本机缓存的 latest 可能更旧,核对与升级步骤见 deploy/k8s/README.md「镜像钉版本」。
   # 升级时四处同改、digest 也必须相同:本文件的 kafka 与 kafka-topic-init、
@@ -37,9 +34,8 @@ services:
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
       - KAFKA_HEAP_OPTS=${KAFKA_HEAP_OPTS:--Xms128m -Xmx256m}
       # Broker default retention, i.e. the retention of every topic that does
-      # NOT declare its own: the per-node command topics (gate-<id>/scene-<id>)
-      # that the migration window still auto-creates, and game-events.
-      # It MUST exceed the longest a consumer can legally fall behind. The C++
+      # NOT declare its own; every topic with a contract declares its own, so
+      # this is only a fallback. It MUST exceed the longest a consumer can legally fall behind. The C++
       # consumers pin max.poll.interval.ms=900000 (15 min,
       # cpp/libs/engine/infra/messaging/kafka/kafka_consumer.cpp), so anything
       # under 900s means a briefly-lagging gate loses BindSession/RoutePlayer
@@ -74,7 +70,7 @@ services:
   # 一个节点一个 topic 在 10 万个 scene 进程下会把 controller 元数据压垮,
   # 而且 topic 名与 consumer group 名里都带被回收复用的 node_id,冻结的前任会把
   # 继任者的命令消费掉再丢弃(P1)。现在按 partition = node_id % P 寻址,
-  # 消费端 assign 自己的分区、不进 group。旧 topic 不再预建,停写后按 retention 过期。
+  # 消费端 assign 自己的分区、不进 group。旧 topic 已退役,不再预建。
   #
   # Also pre-creates data_service's two audit topics with their contracted
   # partition counts (go/data_service/etc/data_service.yaml:
@@ -92,6 +88,11 @@ services:
   # per-player ordering. Idempotent (--if-not-exists); an existing *_gN topic
   # with the wrong PartitionCount makes this container exit 1 instead of
   # pretending — delete the auto-created topic and re-run kafka-topic-init.
+  #
+  # 观战帧 topic(docs/design/battle-spectate-tiered-fanout.md §15.3)同样在这里预建,代号与命令 topic 同源:
+  # gate-spectate_g<N> 的分区数等于命令 topic 分区数(partition = gate node_id % P);
+  # spectate-bcast_g<N> 固定 16 分区(partition = battle_id % 16),与 C++ 常量 kSpectateBroadcastTopicPartitions
+  # (node_command_topic.h)相等,改数走换代号。
   kafka-topic-init:
     # 与上面 kafka 服务同一个钉版引用(tag 与 digest 都相同),见 kafka 服务上方的注释。
     image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
@@ -168,7 +169,8 @@ services:
           if [ "$$_got" != "$$2" ]; then
             echo "ERROR: topic $$1 has PartitionCount=$${_got:-?} but the contract is $$2" >&2
             echo "       (audit topics: go/data_service/etc/data_service.yaml; command topics:" >&2
-            echo "        bin/etc/base_deploy_config.yaml Kafka.CommandTopicPartitions)." >&2
+            echo "        bin/etc/base_deploy_config.yaml Kafka.CommandTopicPartitions, also used by gate-spectate;" >&2
+            echo "        spectate-bcast: kSpectateBroadcastTopicPartitions in node_command_topic.h)." >&2
             echo "       Partition counts are immutable: bump the topic generation (new *_gN topic); never expand in place." >&2
             echo "       If a producer auto-created this topic before this init ran, delete the topic and re-run kafka-topic-init." >&2
             exit 1
@@ -176,10 +178,7 @@ services:
           echo "  verified: $$1 partitions=$$2"
         }
         # 控制面命令 topic:一个节点类型一个 topic,固定分区数,partition = node_id % P。
-        # 旧的 per-node topic(gate-1..N / scene-1..N / centre-1..N)不再预建 ——
-        # 它们随生产者切换而停止被写入,已存在的按 retention 自然过期。
-        # 迁移窗口内老的消费路径还开着(Kafka.DisableLegacyPerNodeTopic=false),
-        # 那条路径上的 topic 由 broker 的 auto.create 兜底建成 1 分区,足够用。
+        # 旧的 per-node topic 已退役,不再预建。
         cg="$${KAFKA_INIT_COMMAND_TOPIC_GENERATION}"
         cparts="$${KAFKA_INIT_COMMAND_PARTITIONS}"
         echo "Pre-creating control-plane command topics (generation g$$cg, partitions $$cparts)..."
@@ -191,11 +190,16 @@ services:
         create_topic "scene-cmd_g$$cg" "$$cparts" "retention.ms=3600000"
         assert_partitions "scene-cmd_g$$cg" "$$cparts"
         ensure_retention "scene-cmd_g$$cg" 3600000
-        # base_deploy_config.yaml 的 Kafka.Topics 里列着的共享事件 topic。目前没有消费者:没有节点为它
-        # 注册消费回调,KafkaManager::Init 也不做任何顶层 subscribe(2026-10-15 起与 Kafka.GroupID 无关,
-        # 见 P0-B 批 1)。仍然显式声明保留期,免得哪天有人接上消费者时取决于 broker 默认值。
-        create_topic "game-events" 1 "retention.ms=3600000"
-        ensure_retention "game-events" 3600000
+        # 观战帧 topic。gate 都 assign + startAtEnd、不提交位点,帧过时即作废,没有回放:落后的 gate 丢的只是几帧画面,
+        # 下一帧就追上,不适用命令 topic 那条「保留期要盖住消费者落后时长」的规则(R11)。
+        # 中继保留 1 小时同 gate-cmd;广播只留 10 分钟。
+        echo "Pre-creating spectate frame topics (generation g$$cg)..."
+        create_topic "gate-spectate_g$$cg" "$$cparts" "retention.ms=600000"
+        assert_partitions "gate-spectate_g$$cg" "$$cparts"
+        ensure_retention "gate-spectate_g$$cg" 600000
+        create_topic "spectate-bcast_g$$cg" 16 "retention.ms=600000"
+        assert_partitions "spectate-bcast_g$$cg" 16
+        ensure_retention "spectate-bcast_g$$cg" 600000
         # data_service audit topics (see the comment above): contracted partitions + 30d retention.
         g="$${KAFKA_INIT_AUDIT_TOPIC_GENERATION}"
         echo "Pre-creating data_service audit topics (generation g$$g)..."
@@ -502,8 +506,7 @@ services:
       # 这份 compose 也是 Linux 预发压测机的 etcd,那里没有 K8s CronJob,只能靠这三项。
       #   - 自动压缩按 revision 保留最近 1000000 个版本,必须与 deploy/k8s/manifests/infra/etcd-maintenance.yaml
       #     的 KEEP_REVISIONS 相同(etcd_maintenance_contract.tests.ps1 守住)。
-      #   - 配额 3GiB:满足「配额 × 2 + 1Gi ≤ etcd.yaml 的 PVC 8Gi」,给 defrag 的临时文件留余量。K8s 的 etcd 在阶段 2
-      #     之前仍是默认配额。
+      #   - 配额 3GiB:满足「配额 × 2 + 1Gi ≤ etcd.yaml 的 PVC 8Gi」,给 defrag 的临时文件留余量。K8s 的 etcd.yaml 同值。
       # 只对新建的容器生效:start_game.ps1 起 compose 带 --no-recreate,既有 etcd 容器要
       #   docker --context desktop-linux compose -f deploy/docker-compose.yml up -d --force-recreate etcd
       # 才会带上。这等于重启本机 etcd(数据在命名卷 etcd-data 里,不丢),应与整栈重启一起做:C++ etcd 流重建

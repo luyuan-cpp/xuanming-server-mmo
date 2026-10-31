@@ -23,6 +23,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 观战中继 / 广播帧的种类(battle-spectate-tiered-fanout.md §15.3–§15.5)。
+type ESpectateFrameKind int32
+
+const (
+	ESpectateFrameKind_SPECTATE_FRAME_NONE  ESpectateFrameKind = 0
+	ESpectateFrameKind_SPECTATE_FRAME_STATE ESpectateFrameKind = 1 // 关键帧(161 SpectateState):挂接 / 升档时补发,gate 只用它更新缓存与给新订阅者发首帧
+	ESpectateFrameKind_SPECTATE_FRAME_TURN  ESpectateFrameKind = 2 // 每回合结算(158 SpectateTurnResult)
+	ESpectateFrameKind_SPECTATE_FRAME_END   ESpectateFrameKind = 3 // 终局(166 SpectateEnd):gate 扇出后结束该场的全部订阅
+)
+
+// Enum value maps for ESpectateFrameKind.
+var (
+	ESpectateFrameKind_name = map[int32]string{
+		0: "SPECTATE_FRAME_NONE",
+		1: "SPECTATE_FRAME_STATE",
+		2: "SPECTATE_FRAME_TURN",
+		3: "SPECTATE_FRAME_END",
+	}
+	ESpectateFrameKind_value = map[string]int32{
+		"SPECTATE_FRAME_NONE":  0,
+		"SPECTATE_FRAME_STATE": 1,
+		"SPECTATE_FRAME_TURN":  2,
+		"SPECTATE_FRAME_END":   3,
+	}
+)
+
+func (x ESpectateFrameKind) Enum() *ESpectateFrameKind {
+	p := new(ESpectateFrameKind)
+	*p = x
+	return p
+}
+
+func (x ESpectateFrameKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ESpectateFrameKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_contracts_kafka_gate_event_proto_enumTypes[0].Descriptor()
+}
+
+func (ESpectateFrameKind) Type() protoreflect.EnumType {
+	return &file_proto_contracts_kafka_gate_event_proto_enumTypes[0]
+}
+
+func (x ESpectateFrameKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ESpectateFrameKind.Descriptor instead.
+func (ESpectateFrameKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{0}
+}
+
 // In-process events decoded from Gate Kafka transport payloads.
 // These are intentionally modeled like node event protos so handlers can stay split by file/domain.
 type RoutePlayerEvent struct {
@@ -535,8 +588,14 @@ type PushToPlayerEvent struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SessionId      uint32                 `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	MessageContent *base.MessageContent   `protobuf:"bytes,2,opt,name=message_content,json=messageContent,proto3" json:"message_content,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 目标玩家身份栅栏(routing-identity-audit-20260908.md R13,与 gate_service.proto
+	// BroadcastToPlayersRequest.player_list 同一理由):session_id 的高位是立刻复用的 gate node_id,
+	// 低位序号在单个 gate 实例内也会回绕,单靠 session_id 会把推送写进另一个玩家的连接。
+	// gate 投递前核对「会话当前玩家 == player_id」,不符即丢弃并计数。所有生产者都必须填;
+	// 0 只为与 RPC 版同口径的兼容判定(gate 放行不校验),生产者一侧拒绝发 0。
+	PlayerId      uint64 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PushToPlayerEvent) Reset() {
@@ -583,6 +642,13 @@ func (x *PushToPlayerEvent) GetMessageContent() *base.MessageContent {
 	return nil
 }
 
+func (x *PushToPlayerEvent) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
 // Go service broadcasts the same message to multiple players on the same Gate.
 // Sender groups players by gate_id and sends one Kafka message per Gate.
 // Flow: Go service -> Kafka gate-{gate_id} -> Gate -> N client TCP connections
@@ -592,8 +658,14 @@ type BroadcastToPlayersEvent struct {
 	MessageContent    *base.MessageContent   `protobuf:"bytes,2,opt,name=message_content,json=messageContent,proto3" json:"message_content,omitempty"`
 	SessionBitmapBase uint32                 `protobuf:"varint,3,opt,name=session_bitmap_base,json=sessionBitmapBase,proto3" json:"session_bitmap_base,omitempty"`
 	SessionBitmap     []byte                 `protobuf:"bytes,4,opt,name=session_bitmap,json=sessionBitmap,proto3" json:"session_bitmap,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 目标玩家身份栅栏,与 gate_service.proto BroadcastToPlayersRequest.player_list 字段号、
+	// 语义、顺序契约完全相同(两条入口共用 cpp/libs/engine/core/network/broadcast_target_codec.h):
+	// player_list[i] 对应「按 session_id 升序」的第 i 个目标——session_list 形态按升序逐项对应;
+	// bitmap 形态按 bit 序(= session_id 升序)第 i 个置位的 session 对应 player_list[i]。
+	// 非空但长度与目标数不等 → gate 整条拒绝并计数。所有生产者都必须填;留空只为与 RPC 版同口径的兼容判定。
+	PlayerList    []uint64 `protobuf:"varint,5,rep,packed,name=player_list,json=playerList,proto3" json:"player_list,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BroadcastToPlayersEvent) Reset() {
@@ -650,6 +722,13 @@ func (x *BroadcastToPlayersEvent) GetSessionBitmapBase() uint32 {
 func (x *BroadcastToPlayersEvent) GetSessionBitmap() []byte {
 	if x != nil {
 		return x.SessionBitmap
+	}
+	return nil
+}
+
+func (x *BroadcastToPlayersEvent) GetPlayerList() []uint64 {
+	if x != nil {
+		return x.PlayerList
 	}
 	return nil
 }
@@ -754,6 +833,116 @@ func (x *BroadcastToAllEvent) GetMessageContent() *base.MessageContent {
 	return nil
 }
 
+// battle → gate 的观战帧。gate 只做转发与本机扇出,不改帧内容(给新订阅者合成首帧 161 时除外)。
+// 观战帧 topic 的 Kafka 消息体**就是本消息**(不套 GateCommand 信封,不进 gate-cmd 路由),所以不标
+// OptionKafkaIngress:gate 用 RegisterKafkaCommandHandler<SpectateFrameEvent> 的同一套按分区 assign 与
+// target_gate_id / target_instance_id 反射过滤(node_kafka_command_filter.h)直接消费,不生成 gate-cmd handler。
+//   - L1 中继:发往 gate-spectate_g<N>,分区 = 目标 gate node_id % 命令 topic 分区数;target_gate_id 与
+//     target_instance_id 必填(AGENTS §7.2);同一场到同一台 gate 落在同一分区,单生产者有序。
+//   - L2 广播:发往 spectate-bcast_g<N>,分区 = battle_id % 16;两个目标字段留空(广播);gate 以 battle_instance_id 防僵尸。
+//
+// gate 按 (battle_instance_id, round_index) 单调去重,中继与广播重叠或缺一帧都能自愈:每帧都带全量状态。
+type SpectateFrameEvent struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	BattleId         uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	BattleInstanceId string                 `protobuf:"bytes,2,opt,name=battle_instance_id,json=battleInstanceId,proto3" json:"battle_instance_id,omitempty"` // 产出帧的 battle 实例 UUID;与订阅凭证不符的帧一律丢弃
+	RoundIndex       uint32                 `protobuf:"varint,3,opt,name=round_index,json=roundIndex,proto3" json:"round_index,omitempty"`                    // STATE 取快照回合;TURN 取刚结算的回合;END 取最后一回合
+	Kind             ESpectateFrameKind     `protobuf:"varint,4,opt,name=kind,proto3,enum=contracts.kafka.ESpectateFrameKind" json:"kind,omitempty"`
+	ClientFrame      []byte                 `protobuf:"bytes,5,opt,name=client_frame,json=clientFrame,proto3" json:"client_frame,omitempty"` // 已编码的客户端 MessageContent 序列化字节(message_id 为 161 / 158 / 166,
+	//   serialized_message 为对应 S2C 消息);gate 只加自己的帧头后原样转发
+	DeadlineMs       uint64 `protobuf:"varint,6,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                    // 战斗最长期限(Unix 毫秒),gate 过期 + 宽限仍无 END 即本地收尾
+	TargetGateId     uint32 `protobuf:"varint,7,opt,name=target_gate_id,json=targetGateId,proto3" json:"target_gate_id,omitempty"`            // L1 必填(目标 gate 的 node_id);L2 为 0
+	TargetInstanceId string `protobuf:"bytes,8,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"` // L1 必填(目标 gate 实例 UUID);L2 为空
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SpectateFrameEvent) Reset() {
+	*x = SpectateFrameEvent{}
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SpectateFrameEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpectateFrameEvent) ProtoMessage() {}
+
+func (x *SpectateFrameEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_contracts_kafka_gate_event_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpectateFrameEvent.ProtoReflect.Descriptor instead.
+func (*SpectateFrameEvent) Descriptor() ([]byte, []int) {
+	return file_proto_contracts_kafka_gate_event_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SpectateFrameEvent) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *SpectateFrameEvent) GetBattleInstanceId() string {
+	if x != nil {
+		return x.BattleInstanceId
+	}
+	return ""
+}
+
+func (x *SpectateFrameEvent) GetRoundIndex() uint32 {
+	if x != nil {
+		return x.RoundIndex
+	}
+	return 0
+}
+
+func (x *SpectateFrameEvent) GetKind() ESpectateFrameKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ESpectateFrameKind_SPECTATE_FRAME_NONE
+}
+
+func (x *SpectateFrameEvent) GetClientFrame() []byte {
+	if x != nil {
+		return x.ClientFrame
+	}
+	return nil
+}
+
+func (x *SpectateFrameEvent) GetDeadlineMs() uint64 {
+	if x != nil {
+		return x.DeadlineMs
+	}
+	return 0
+}
+
+func (x *SpectateFrameEvent) GetTargetGateId() uint32 {
+	if x != nil {
+		return x.TargetGateId
+	}
+	return 0
+}
+
+func (x *SpectateFrameEvent) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
 var File_proto_contracts_kafka_gate_event_proto protoreflect.FileDescriptor
 
 const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
@@ -805,21 +994,40 @@ const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"\x10target_gate_port\x18\x04 \x01(\rR\x0etargetGatePort\x12#\n" +
 	"\rtoken_payload\x18\x05 \x01(\fR\ftokenPayload\x12'\n" +
 	"\x0ftoken_signature\x18\x06 \x01(\fR\x0etokenSignature\x12%\n" +
-	"\x0etoken_deadline\x18\a \x01(\x03R\rtokenDeadline:\x05\x88\xe6\xd5\x02\x01\"s\n" +
+	"\x0etoken_deadline\x18\a \x01(\x03R\rtokenDeadline:\x05\x88\xe6\xd5\x02\x01\"\x90\x01\n" +
 	"\x11PushToPlayerEvent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x128\n" +
-	"\x0fmessage_content\x18\x02 \x01(\v2\x0f.MessageContentR\x0emessageContent:\x05\x88\xe6\xd5\x02\x01\"\xd4\x01\n" +
+	"\x0fmessage_content\x18\x02 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12\x1b\n" +
+	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId:\x05\x88\xe6\xd5\x02\x01\"\xf5\x01\n" +
 	"\x17BroadcastToPlayersEvent\x12!\n" +
 	"\fsession_list\x18\x01 \x03(\rR\vsessionList\x128\n" +
 	"\x0fmessage_content\x18\x02 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12.\n" +
 	"\x13session_bitmap_base\x18\x03 \x01(\rR\x11sessionBitmapBase\x12%\n" +
-	"\x0esession_bitmap\x18\x04 \x01(\fR\rsessionBitmap:\x05\x88\xe6\xd5\x02\x01\"s\n" +
+	"\x0esession_bitmap\x18\x04 \x01(\fR\rsessionBitmap\x12\x1f\n" +
+	"\vplayer_list\x18\x05 \x03(\x04R\n" +
+	"playerList:\x05\x88\xe6\xd5\x02\x01\"s\n" +
 	"\x15BroadcastToSceneEvent\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x128\n" +
 	"\x0fmessage_content\x18\x02 \x01(\v2\x0f.MessageContentR\x0emessageContent:\x05\x88\xe6\xd5\x02\x01\"V\n" +
 	"\x13BroadcastToAllEvent\x128\n" +
-	"\x0fmessage_content\x18\x01 \x01(\v2\x0f.MessageContentR\x0emessageContent:\x05\x88\xe6\xd5\x02\x01B\x17Z\x15proto/contracts/kafkab\x06proto3"
+	"\x0fmessage_content\x18\x01 \x01(\v2\x0f.MessageContentR\x0emessageContent:\x05\x88\xe6\xd5\x02\x01\"\xd1\x02\n" +
+	"\x12SpectateFrameEvent\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12,\n" +
+	"\x12battle_instance_id\x18\x02 \x01(\tR\x10battleInstanceId\x12\x1f\n" +
+	"\vround_index\x18\x03 \x01(\rR\n" +
+	"roundIndex\x127\n" +
+	"\x04kind\x18\x04 \x01(\x0e2#.contracts.kafka.eSpectateFrameKindR\x04kind\x12!\n" +
+	"\fclient_frame\x18\x05 \x01(\fR\vclientFrame\x12\x1f\n" +
+	"\vdeadline_ms\x18\x06 \x01(\x04R\n" +
+	"deadlineMs\x12$\n" +
+	"\x0etarget_gate_id\x18\a \x01(\rR\ftargetGateId\x12,\n" +
+	"\x12target_instance_id\x18\b \x01(\tR\x10targetInstanceId*x\n" +
+	"\x12eSpectateFrameKind\x12\x17\n" +
+	"\x13SPECTATE_FRAME_NONE\x10\x00\x12\x18\n" +
+	"\x14SPECTATE_FRAME_STATE\x10\x01\x12\x17\n" +
+	"\x13SPECTATE_FRAME_TURN\x10\x02\x12\x16\n" +
+	"\x12SPECTATE_FRAME_END\x10\x03B\x17Z\x15proto/contracts/kafkab\x06proto3"
 
 var (
 	file_proto_contracts_kafka_gate_event_proto_rawDescOnce sync.Once
@@ -833,30 +1041,34 @@ func file_proto_contracts_kafka_gate_event_proto_rawDescGZIP() []byte {
 	return file_proto_contracts_kafka_gate_event_proto_rawDescData
 }
 
-var file_proto_contracts_kafka_gate_event_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_contracts_kafka_gate_event_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_proto_contracts_kafka_gate_event_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_contracts_kafka_gate_event_proto_goTypes = []any{
-	(*RoutePlayerEvent)(nil),        // 0: contracts.kafka.RoutePlayerEvent
-	(*KickPlayerEvent)(nil),         // 1: contracts.kafka.KickPlayerEvent
-	(*PlayerDisconnectedEvent)(nil), // 2: contracts.kafka.PlayerDisconnectedEvent
-	(*PlayerLeaseExpiredEvent)(nil), // 3: contracts.kafka.PlayerLeaseExpiredEvent
-	(*BindSessionEvent)(nil),        // 4: contracts.kafka.BindSessionEvent
-	(*RedirectToGateEvent)(nil),     // 5: contracts.kafka.RedirectToGateEvent
-	(*PushToPlayerEvent)(nil),       // 6: contracts.kafka.PushToPlayerEvent
-	(*BroadcastToPlayersEvent)(nil), // 7: contracts.kafka.BroadcastToPlayersEvent
-	(*BroadcastToSceneEvent)(nil),   // 8: contracts.kafka.BroadcastToSceneEvent
-	(*BroadcastToAllEvent)(nil),     // 9: contracts.kafka.BroadcastToAllEvent
-	(*base.MessageContent)(nil),     // 10: MessageContent
+	(ESpectateFrameKind)(0),         // 0: contracts.kafka.eSpectateFrameKind
+	(*RoutePlayerEvent)(nil),        // 1: contracts.kafka.RoutePlayerEvent
+	(*KickPlayerEvent)(nil),         // 2: contracts.kafka.KickPlayerEvent
+	(*PlayerDisconnectedEvent)(nil), // 3: contracts.kafka.PlayerDisconnectedEvent
+	(*PlayerLeaseExpiredEvent)(nil), // 4: contracts.kafka.PlayerLeaseExpiredEvent
+	(*BindSessionEvent)(nil),        // 5: contracts.kafka.BindSessionEvent
+	(*RedirectToGateEvent)(nil),     // 6: contracts.kafka.RedirectToGateEvent
+	(*PushToPlayerEvent)(nil),       // 7: contracts.kafka.PushToPlayerEvent
+	(*BroadcastToPlayersEvent)(nil), // 8: contracts.kafka.BroadcastToPlayersEvent
+	(*BroadcastToSceneEvent)(nil),   // 9: contracts.kafka.BroadcastToSceneEvent
+	(*BroadcastToAllEvent)(nil),     // 10: contracts.kafka.BroadcastToAllEvent
+	(*SpectateFrameEvent)(nil),      // 11: contracts.kafka.SpectateFrameEvent
+	(*base.MessageContent)(nil),     // 12: MessageContent
 }
 var file_proto_contracts_kafka_gate_event_proto_depIdxs = []int32{
-	10, // 0: contracts.kafka.PushToPlayerEvent.message_content:type_name -> MessageContent
-	10, // 1: contracts.kafka.BroadcastToPlayersEvent.message_content:type_name -> MessageContent
-	10, // 2: contracts.kafka.BroadcastToSceneEvent.message_content:type_name -> MessageContent
-	10, // 3: contracts.kafka.BroadcastToAllEvent.message_content:type_name -> MessageContent
-	4,  // [4:4] is the sub-list for method output_type
-	4,  // [4:4] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	12, // 0: contracts.kafka.PushToPlayerEvent.message_content:type_name -> MessageContent
+	12, // 1: contracts.kafka.BroadcastToPlayersEvent.message_content:type_name -> MessageContent
+	12, // 2: contracts.kafka.BroadcastToSceneEvent.message_content:type_name -> MessageContent
+	12, // 3: contracts.kafka.BroadcastToAllEvent.message_content:type_name -> MessageContent
+	0,  // 4: contracts.kafka.SpectateFrameEvent.kind:type_name -> contracts.kafka.eSpectateFrameKind
+	5,  // [5:5] is the sub-list for method output_type
+	5,  // [5:5] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_contracts_kafka_gate_event_proto_init() }
@@ -869,13 +1081,14 @@ func file_proto_contracts_kafka_gate_event_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_contracts_kafka_gate_event_proto_rawDesc), len(file_proto_contracts_kafka_gate_event_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   10,
+			NumEnums:      1,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_contracts_kafka_gate_event_proto_goTypes,
 		DependencyIndexes: file_proto_contracts_kafka_gate_event_proto_depIdxs,
+		EnumInfos:         file_proto_contracts_kafka_gate_event_proto_enumTypes,
 		MessageInfos:      file_proto_contracts_kafka_gate_event_proto_msgTypes,
 	}.Build()
 	File_proto_contracts_kafka_gate_event_proto = out.File

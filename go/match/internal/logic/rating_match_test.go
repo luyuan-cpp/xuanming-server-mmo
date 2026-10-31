@@ -7,13 +7,9 @@ package logic
 
 import (
 	"context"
-	"math"
 	"strconv"
 	"testing"
 	"time"
-
-	"match/internal/metrics"
-	"match/internal/svc"
 
 	battlepb "proto/battle"
 	kafkapb "proto/contracts/kafka"
@@ -42,10 +38,24 @@ func assertQueueMirrorConsistent(t *testing.T, mr *miniredis.Miniredis, queueKey
 	require.ElementsMatch(t, list, members, "list 与 ZSET 成员集合必须相同 queue=%s", queueKey)
 }
 
-// setRating 直接写玩家评分 hash(模拟历史对局结果)。
+// testRatings 是 setRating 写入的评分,经 ratingOverrideForTest 喂给 loadRating。
+var testRatings map[uint64]float64
+
+// setRating 设玩家评分(模拟历史对局结果)。评分不在 Redis,mr 只为保持调用形状。
 func setRating(t *testing.T, mr *miniredis.Miniredis, playerId uint64, rating float64) {
 	t.Helper()
-	mr.HSet(matchRatingKey(playerId), ratingFieldRating, formatRating(rating))
+	if ratingOverrideForTest == nil {
+		testRatings = map[uint64]float64{}
+		ratingOverrideForTest = func(id uint64) (float64, bool) {
+			r, ok := testRatings[id]
+			return r, ok
+		}
+		t.Cleanup(func() {
+			ratingOverrideForTest = nil
+			testRatings = nil
+		})
+	}
+	testRatings[playerId] = rating
 }
 
 // setEnqueuedAgo 把票据的入队时刻回拨(模拟已等待 d),容差随之放宽。
@@ -219,7 +229,7 @@ func TestHeadAnchorDoesNotBlockLaterAnchors(t *testing.T) {
 // PVE 组队不看评分:分差 2000 的三人按等待序立即成组;镜像照样维护。
 func TestPveTeamIgnoresRating(t *testing.T) {
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.Config.PveTeamSizeByConfigId = map[string]uint32{"1": 3}
+	useTestCatalog(t, svcCtx, map[uint32]uint32{1: 3})
 	groups := stubGather(t)
 	// 不填 team_size = 副本上限(3 人档);PVE_TEAM 的队列 key 带人数段。
 	queueKey := matchSizedQueueKey(int32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), 1, 3)
@@ -351,95 +361,6 @@ func resultEvent(battleId uint64, mode matchpb.MatchMode, outcome battlepb.EBatt
 	}
 }
 
-func ratingOf(t *testing.T, svcCtx *svc.ServiceContext, playerId uint64) float64 {
-	t.Helper()
-	r, err := loadRating(svcCtx, playerId)
-	require.NoError(t, err)
-	return r
-}
-
-// 1V1:胜者 +16 / 败者 -16(同分 K=32);同一 battle_id 再投递一次不重复入账;
-// 平局按 0.5;PVE 忽略;计数器按 outcome 分别 +1。
-func TestApplyBattleResultEloAndIdempotent(t *testing.T) {
-	svcCtx, mr := newTestSvcCtx(t)
-	mode := matchpb.MatchMode_MATCH_MODE_1V1
-	modeName := mode.String()
-	applied := metrics.RatingUpdateValue(modeName, ratingOutcomeApplied)
-	dup := metrics.RatingUpdateValue(modeName, ratingOutcomeDuplicate)
-
-	outcome, err := ApplyBattleResult(svcCtx, resultEvent(9001, mode, battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN, []uint64{12001}, []uint64{12002}))
-	require.NoError(t, err)
-	require.Equal(t, ratingOutcomeApplied, outcome)
-	require.InDelta(t, 1516, ratingOf(t, svcCtx, 12001), 0.01)
-	require.InDelta(t, 1484, ratingOf(t, svcCtx, 12002), 0.01)
-	require.Equal(t, "1", mr.HGet(matchRatingKey(12001), ratingFieldGames))
-	require.NotEmpty(t, mr.HGet(matchRatingKey(12001), ratingFieldUpdatedAt))
-	require.True(t, mr.Exists(matchRatingAppliedKey(9001)))
-	ttl := mr.TTL(matchRatingAppliedKey(9001))
-	require.Greater(t, ttl, 6*24*time.Hour)
-	require.LessOrEqual(t, ttl, 7*24*time.Hour)
-	require.Equal(t, applied+1, metrics.RatingUpdateValue(modeName, ratingOutcomeApplied))
-
-	// 重复投递:评分与局数都不变。
-	outcome, err = ApplyBattleResult(svcCtx, resultEvent(9001, mode, battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN, []uint64{12001}, []uint64{12002}))
-	require.NoError(t, err)
-	require.Equal(t, ratingOutcomeDuplicate, outcome)
-	require.InDelta(t, 1516, ratingOf(t, svcCtx, 12001), 0.01)
-	require.Equal(t, "1", mr.HGet(matchRatingKey(12001), ratingFieldGames))
-	require.Equal(t, dup+1, metrics.RatingUpdateValue(modeName, ratingOutcomeDuplicate))
-
-	// 平局:高分方期望 > 0.5,平局即失分。
-	expectedA := 1 / (1 + math.Pow(10, (1484-1516)/400.0))
-	deltaA := 32 * (0.5 - expectedA)
-	outcome, err = ApplyBattleResult(svcCtx, resultEvent(9002, mode, battlepb.EBattleOutcome_BATTLE_OUTCOME_DRAW, []uint64{12001}, []uint64{12002}))
-	require.NoError(t, err)
-	require.Equal(t, ratingOutcomeApplied, outcome)
-	require.Less(t, deltaA, 0.0)
-	require.InDelta(t, 1516+deltaA, ratingOf(t, svcCtx, 12001), 0.02)
-	require.InDelta(t, 1484-deltaA, ratingOf(t, svcCtx, 12002), 0.02)
-	require.Equal(t, "2", mr.HGet(matchRatingKey(12001), ratingFieldGames))
-
-	// B 胜(team 1):胜者 = team 1。
-	before := ratingOf(t, svcCtx, 12002)
-	outcome, err = ApplyBattleResult(svcCtx, resultEvent(9003, mode, battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN, []uint64{12001}, []uint64{12002}))
-	require.NoError(t, err)
-	require.Equal(t, ratingOutcomeApplied, outcome)
-	require.Greater(t, ratingOf(t, svcCtx, 12002), before)
-
-	// PVE / 未结束 / 队伍形态异常:忽略,不写标记也不改分。
-	ignored := metrics.RatingUpdateValue(matchpb.MatchMode_MATCH_MODE_PVE_TEAM.String(), ratingOutcomeIgnored)
-	outcome, err = ApplyBattleResult(svcCtx, resultEvent(9004, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN, []uint64{12003}, []uint64{}))
-	require.NoError(t, err)
-	require.Equal(t, ratingOutcomeIgnored, outcome)
-	require.False(t, mr.Exists(matchRatingAppliedKey(9004)))
-	require.False(t, mr.Exists(matchRatingKey(12003)))
-	require.Equal(t, ignored+1, metrics.RatingUpdateValue(matchpb.MatchMode_MATCH_MODE_PVE_TEAM.String(), ratingOutcomeIgnored))
-	outcome, err = ApplyBattleResult(svcCtx, resultEvent(9005, mode, battlepb.EBattleOutcome_BATTLE_OUTCOME_ONGOING, []uint64{12001}, []uint64{12002}))
-	require.NoError(t, err)
-	require.Equal(t, ratingOutcomeIgnored, outcome)
-	outcome, err = ApplyBattleResult(svcCtx, resultEvent(9006, mode, battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN, []uint64{12001}, nil))
-	require.NoError(t, err)
-	require.Equal(t, ratingOutcomeIgnored, outcome, "空队伍不计分")
-	require.False(t, mr.Exists(matchRatingAppliedKey(9006)))
-	require.Equal(t, "3", mr.HGet(matchRatingKey(12001), ratingFieldGames), "忽略的局不计入局数")
-}
-
-// 5V5:队伍用平均分算期望,同队每人同一增量。A 队 1600/1400(均 1500)对
-// B 队 1500/1500,B 胜 → A 队每人 -16、B 队每人 +16。
-func TestApplyBattleResult5v5UsesTeamAverage(t *testing.T) {
-	svcCtx, mr := newTestSvcCtx(t)
-	setRating(t, mr, 12101, 1600)
-	setRating(t, mr, 12102, 1400)
-	outcome, err := ApplyBattleResult(svcCtx, resultEvent(9101, matchpb.MatchMode_MATCH_MODE_5V5,
-		battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN, []uint64{12101, 12102}, []uint64{12103, 12104}))
-	require.NoError(t, err)
-	require.Equal(t, ratingOutcomeApplied, outcome)
-	require.InDelta(t, 1584, ratingOf(t, svcCtx, 12101), 0.01)
-	require.InDelta(t, 1384, ratingOf(t, svcCtx, 12102), 0.01)
-	require.InDelta(t, 1516, ratingOf(t, svcCtx, 12103), 0.01)
-	require.InDelta(t, 1516, ratingOf(t, svcCtx, 12104), 0.01)
-}
-
 // ---- 5v5 蛇形分队 ----
 
 // 按评分降序蛇形 0/1/1/0/0/1/1/0/0/1:第 1、4、5、8、9 名一队,其余一队;同分按弹出序稳定。
@@ -508,9 +429,27 @@ func TestGather5v5SnakeTeamsReachCreateBattle(t *testing.T) {
 	}
 	require.Equal(t, [2]int{5, 5}, count)
 
-	// 1v1 语义不变:前后两人各一队。
-	teams := teamAssignment(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 1, []uint64{1, 2})
-	require.Equal(t, []uint32{0, 1}, teams)
-	teams = teamAssignment(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 1, []uint64{1, 2, 3})
+	// 1v1:两人各一队,谁在 0 队由 battle_id 决定(splitmix64 终混最低位:id 1 → 1,id 2 → 0),
+	// 不再恒归排在前面的锚点;切磋保持发起者在 0 队。
+	require.Equal(t, []uint32{1, 0}, teamAssignment(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 1, []uint64{1, 2}))
+	require.Equal(t, []uint32{0, 1}, teamAssignment(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 2, []uint64{1, 2}))
+	require.Equal(t, []uint32{0, 1}, teamAssignment(svcCtx, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, 1, []uint64{1, 2}))
+	flips := 0
+	for battleId := uint64(1); battleId <= 1000; battleId++ {
+		flips += int(sideFlip(battleId))
+	}
+	require.InDelta(t, 500, flips, 50, "两侧机会均等(id 1..1000 实为 495)")
+	teams := teamAssignment(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 1, []uint64{1, 2, 3})
 	require.Equal(t, []uint32{0, 0, 0}, teams)
+}
+
+// 评分只在全球权威库:没有权威库(dev / test 档)时结果不入账、评分仍是默认值。
+func TestApplyBattleResultWithoutAuthorityIsIgnored(t *testing.T) {
+	svcCtx, _ := newTestSvcCtx(t)
+	outcome, err := ApplyBattleResult(svcCtx, resultEvent(9001, matchpb.MatchMode_MATCH_MODE_1V1, battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_A_WIN, []uint64{12001}, []uint64{12002}))
+	require.NoError(t, err)
+	require.Equal(t, ratingOutcomeIgnored, outcome)
+	rating, err := loadRating(svcCtx, 12001)
+	require.NoError(t, err)
+	require.Equal(t, float64(defaultRating), rating)
 }

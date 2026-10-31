@@ -126,6 +126,9 @@ func (s *Store) joinProfileTx(ctx context.Context, tx *sql.Tx, ticket *pb.MatchA
 	var raw []byte
 	var expires uint64
 	if err := tx.QueryRowContext(ctx, "SELECT payload,expires_ms FROM match_network_profile WHERE player_id=?", ticket.PlayerId).Scan(&raw, &expires); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, 0, ErrProbeRequired
+		}
 		return nil, 0, err
 	}
 	profile, err := DecodeProfile(raw)
@@ -136,8 +139,11 @@ func (s *Store) joinProfileTx(ctx context.Context, tx *sql.Tx, ticket *pb.MatchA
 	if err != nil {
 		return nil, 0, err
 	}
-	if profile.PlanId != plan || profile.SessionBinding != binding || expires <= n || len(Latencies(profile, n, s.Config.HardLatencyMs)) == 0 {
-		return nil, 0, errors.New("缺少有效地域探测")
+	if profile.PlanId != plan || profile.SessionBinding != binding || expires <= n {
+		return nil, 0, ErrProbeRequired
+	}
+	if len(Latencies(profile, n, s.Config.HardLatencyMs)) == 0 {
+		return nil, 0, ErrNoRegionWithinLatency
 	}
 	if profile.OwnerAccount != ticket.OwnerAccount || profile.OwnerRevision != ticket.OwnerRevision {
 		return nil, 0, ErrOriginalPlayer

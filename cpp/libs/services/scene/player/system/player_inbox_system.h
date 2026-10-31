@@ -37,7 +37,10 @@
 //     账本有效、域规格要求时不在战斗中、有 READY 节点。**确认不受前置闸限制**:Ack 只报告已落盘的事实。
 //     应用前不过闸就丢掉本地条目、下次重拉(看得到期间新挂的 VOID);只有执行器 DEFER 才在本地续做(评审 L1)。
 //   * **判定顺序**(评审 M1):先按账本分类(回放 / UNKNOWN / MISMATCH),新条目再看指令(VOID 直接 SKIPPED),
-//     最后才查执行器;见 player_inbox_rules::PlanItem。
+//     最后才查执行器;见 player_inbox_rules::PlanItem。战斗结算域的新条目在调执行器之前再按最近结局环认一次同局重投
+//     (同一 request_id = battle_id 已 APPLIED → 只记 APPLIED、不重放效果,metric=inbox_battle_duplicate_request);
+//     环只有 32 条,是有界缓解(player_inbox_rules::HasRecentAppliedBattleSettlement)。
+//   * **SQL 确认探测有退避**:只读确认没证明两张 SQL 行已提交时,按 1s→5s 退避再探(nextAckMs),不在每个 Tick 都探。
 //   * **单飞**:同一 (玩家, 域) 同一时刻至多一个在途请求;上一批全部确认之前不拉下一批(设计 §7.4)。
 //     回到 Idle 时 ackQueue 必为空:丢弃本地条目的路径若还有已定前缀,先确认再重拉(评审 L2)。
 //     Ack 回 kInvalidParameter 是确定性协议错误,按协议异常停用,不当故障重发。

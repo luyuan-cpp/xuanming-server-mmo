@@ -471,7 +471,7 @@ func TestTrialBackgroundConfValidate(t *testing.T) {
 // 间隔取一小时:首轮延迟在 [0, 1h) 内随机,stop 之前几乎不可能开始第一轮;即使开始了,stop 也只是等它跑完。
 // 兜底等待只防整个测试进程挂死,不是结论的一部分。
 func TestStartTrialBackgroundStops(t *testing.T) {
-	_, err := NewGuildLogic(nil, nil, nil, nil, nil).StartTrialBackground(trialSweepConf())
+	_, err := NewGuildLogic(nil, nil, nil, nil).StartTrialBackground(trialSweepConf())
 	require.Error(t, err, "活动依赖未装配时不启动")
 
 	useTrialTables(t, nil, nil)

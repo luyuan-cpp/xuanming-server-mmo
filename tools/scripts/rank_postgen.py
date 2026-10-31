@@ -8,8 +8,7 @@
     漏登记的后果是 msbuild 全量链接期才报 LNK2001 / LNK2019;
   - robot 走 vendor(-mod=vendor):go/proto/rank 是新包,不同步进 robot/vendor 并在 modules.txt 登记,生成器给 robot 出的
     ClientPlayerRank handler 桩就 import 不到它;
-  - 生成结果有几条硬性验收(恰好 1 个消息号、路由表 1 条客户端协议、目标节点 RankNodeService、match_event.proto 新增的
-    PlayerRatingSnapshotEvent 拿到了事件号),机械核对。
+  - 生成结果有几条硬性验收(方法号齐全且已有方法号不变、路由表里客户端方法与 admin 方法分开准入、目标节点 RankNodeService),机械核对。
 
 通用的工程文件登记机制(两阶段写盘、按原 BOM / 换行写回、逐条判断是否已登记、以 friend 的条目为锚点)在 mail_postgen.py 里,
 本文件只描述 rank 域的产物清单,不另写第二份机制。rank 没有 tip 段(v1 不开 21000,设计 §4.5),所以没有 table 工程的登记。
@@ -26,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import filecmp
-import re
 import shutil
 import sys
 from pathlib import Path
@@ -58,7 +56,6 @@ PROTO_STEMS = ("rank", "rank_admin", "rank_table")
 GRPC_CLIENT_STEMS = ("rank", "rank_admin")
 GO_PROTO_FILES = ("rank.pb.go", "rank_grpc.pb.go", "rank_admin.pb.go", "rank_admin_grpc.pb.go", "rank_table.pb.go")
 TIP_GO_FILE = "rank_error_tip.pb.go"
-SNAPSHOT_EVENT = "PlayerRatingSnapshotEvent"
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -106,30 +103,9 @@ def cmd_verify(_dry_run: bool) -> None:
         if not (go_dir / name).is_file():
             problems.append(f"缺 {rel(go_dir / name)}")
     if (REPO / "go" / "rank" / "go.mod").is_file():
-        for name in ("message_id.go", "event_id.go"):
-            p = REPO / "go" / "rank" / "generated" / "pb" / "game" / name
-            if not p.is_file():
-                problems.append(f"缺 {rel(p)}")
-
-    # 事件号的权威账本在 proto/event_id.txt;_unified 是生成前拷贝的暂存输入,本轮新号不会回写那里。
-    # 同时核对 C++ 与 rank Go 常量的数字,避免仅检查符号存在却漏掉跨语言号值漂移。
-    event_ids = REPO / "proto" / "event_id.txt"
-    event_key = "ContractsKafka" + SNAPSHOT_EVENT
-    event_text = event_ids.read_text(encoding="utf-8") if event_ids.is_file() else ""
-    event_numbers = re.findall(r"(?m)^(\d+)=" + re.escape(event_key) + r"\s*$", event_text)
-    if len(event_numbers) != 1:
-        problems.append(f"{rel(event_ids)} 必须恰有一条 {event_key} 的事件号记录")
-    else:
-        expected_number = int(event_numbers[0])
-        event_outputs = (
-            REPO / "cpp" / "generated" / "rpc" / "service_metadata" / "contracts_kafka_match_event_event_id.h",
-            REPO / "go" / "rank" / "generated" / "pb" / "game" / "event_id.go",
-        )
-        for output in event_outputs:
-            output_text = output.read_text(encoding="utf-8") if output.is_file() else ""
-            numbers = re.findall(r"\b" + re.escape(event_key + "EventId") + r"\s*=\s*(\d+)\b", output_text)
-            if len(numbers) != 1 or int(numbers[0]) != expected_number:
-                problems.append(f"{rel(output)} 的 {event_key}EventId 必须恰有一项且等于权威事件号 {expected_number}")
+        p = REPO / "go" / "rank" / "generated" / "pb" / "game" / "message_id.go"
+        if not p.is_file():
+            problems.append(f"缺 {rel(p)}")
 
     if problems:
         print("[FAIL] proto-gen output check (rank):")
@@ -137,8 +113,7 @@ def cmd_verify(_dry_run: bool) -> None:
             print("  - " + p)
         sys.exit(1)
     print("[OK] rank message IDs: " + ", ".join(f"{k}={ids[k]}" for k in wanted))
-    print("[OK] route table: client and admin methods target RankNodeService with separate admission; Go bindings present;"
-          f" {SNAPSHOT_EVENT} has an event id.")
+    print("[OK] route table: client and admin methods target RankNodeService with separate admission; Go bindings present.")
 
 
 # ════════════════════════════════════════════════════════════════════════════

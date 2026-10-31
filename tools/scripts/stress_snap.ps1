@@ -5,9 +5,9 @@
 # prom-snapshots/ folder for stress_summarize.ps1 to consume.
 #
 # Round 16+ scrapes these endpoints one after another at every stage:
-#   :9101  login            (entergame_*, dataloader_preload_*, rpc_client_requests_*)
+#   :9101  login            (entergame_*, login_create_player_*, rpc_client_requests_*)
 #   :9150  scene_manager    (scene_manager_enter_scene_stage_seconds, …)
-#   :9160  db               (db_task_stage_seconds, db_task_result_total)
+#   :9160  db               (db_player_store_seconds, db_player_store_requests_total, db_player_store_row_bytes)
 #   :9260  data_service     (data_service_home_zone_read_seconds, data_service_account_directory_rpc_seconds,
 #                            data_service_route_read_total;2026-10-23 起,L-18 观测批)
 #
@@ -96,7 +96,7 @@ function Assert-RedisTargetName {
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Name)
     # -cmatch:大小写敏感。Bad_Name 这类写法必须拒绝,文件名分流正则只认小写。
     if ($Name -cnotmatch '^[a-z][a-z0-9-]{0,31}$') {
-        throw "Redis target 名 '$Name' 非法:必须匹配 ^[a-z][a-z0-9-]{0,31}$(小写字母开头,只含小写字母、数字、连字符)"
+        throw "Redis target 名 '$Name' 非法:必须匹配 ^[a-z][a-z0-9-]{0,31}`$(小写字母开头,只含小写字母、数字、连字符)"
     }
     if ($ReservedRedisTargetNames -ccontains $Name) {
         throw "Redis target 名 '$Name' 与 prom 快照后缀冲突(保留名 $($ReservedRedisTargetNames -join ' / ')),stress_summarize.ps1 会把 t<N>m_redis_$Name.txt 当成 _$Name 快照"

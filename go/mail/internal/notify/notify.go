@@ -89,7 +89,8 @@ func (n *Notifier) publish(ctx context.Context, player, mail uint64) (string, er
 	if err != nil {
 		return "", err
 	}
-	payload, err := proto.Marshal(&kafkapb.PushToPlayerEvent{SessionId: session.SessionId, MessageContent: &base.MessageContent{MessageId: uint32(game.ClientPlayerMailNotifyMailChangedMessageId), SerializedMessage: body}})
+	// player_id是gate的目标玩家身份栅栏：session会被复用，gate投递前核对会话当前玩家，不符即丢弃。
+	payload, err := proto.Marshal(&kafkapb.PushToPlayerEvent{SessionId: session.SessionId, PlayerId: player, MessageContent: &base.MessageContent{MessageId: uint32(game.ClientPlayerMailNotifyMailChangedMessageId), SerializedMessage: body}})
 	if err != nil {
 		return "", err
 	}

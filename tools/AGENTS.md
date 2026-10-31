@@ -12,7 +12,6 @@
 | Main script entrypoint | `scripts/dev_tools.ps1` | proto-gen (pbgen), k8s, tree, naming audit/apply |
 | proto-gen source | `proto_generator/protogen/` | Canonical generator project |
 | 旧工具目录说明 | `proto/` | 仅保留弃用文档，不包含可运行的兼容生成器 |
-| Robot data-stress mode | 仓库根 `robot/data_stress.go` | L3 e2e: login→enter→play→logout cycles, publishes expected seq to Redis for verifier |
 | **配置表 schema（事实源）** | `data/schema/*.proto` | 类型/owner/键/索引/外键/位序/注释;词表在 `cfg_options.proto` |
 | **配置表全表索引** | `data/AGENTS.md` | 哪张表有主键/索引/外键/位序,由 `gen_schema_index.py` 生成 |
 | 表怎么被读进来 | `data_table_exporter/core/table_source.py` | 按 sheet 名派发:有权威 schema 走 schema-first |

@@ -1,19 +1,13 @@
 package constants
 
 const (
-	ErrCodeOK              uint32 = 0
-	ErrCodeRedis           uint32 = 1 // Redis 读写失败;也含玩家数据路由失败(映射缺席 / 映射库故障或熔断 / 回源失败 / zone 未配集群),原因见 [DataRoute] 日志
-	ErrCodeLockConflict    uint32 = 2 // Another writer holds the player lock
-	ErrCodeVersionMismatch uint32 = 3 // Optimistic lock version mismatch
-	ErrCodeNotFound        uint32 = 4 // CreatePlayerSnapshot:玩家无数据。in-band 数据入口从不用它表示映射缺席(「无映射」只出现在 GetPlayerHomeZone 的 gRPC status)
+	ErrCodeOK       uint32 = 0
+	ErrCodeRedis    uint32 = 1 // Redis 读写失败
+	ErrCodeNotFound uint32 = 4 // GetPlayerHomeZone:映射缺席
 
-	// Snapshot / Rollback errors
-	ErrCodeSnapshotNotFound uint32 = 10 // No snapshot found matching criteria
-	ErrCodeSnapshotDBError  uint32 = 11 // MySQL error during snapshot operation
-	ErrCodeRollbackFailed   uint32 = 12 // Rollback execution failed
-	ErrCodePlayerOnline     uint32 = 13 // Player must be offline for rollback
-	ErrCodeInvalidRequest   uint32 = 14 // Missing required fields
-	ErrCodeZoneNotFound     uint32 = 15 // Zone has no players
+	// 2、3、10、12、13、15 是字段 KV 和回档用过的号,已随它们一起删除,不再分配。
+	ErrCodeSnapshotDBError uint32 = 11 // MySQL error during snapshot operation
+	ErrCodeInvalidRequest  uint32 = 14 // Missing required fields
 
 	// ErrCodeNotImplemented 表示这条请求语义上合法,但服务端**没有真正执行**。
 	// 存在的理由:宁可让调用方看到一次明确失败,也不能让"什么都没做"伪装成成功
@@ -26,91 +20,57 @@ const (
 
 	// ── AllocateIdSegment(号段发号,设计 §6.2)──────────────────────────────
 
-	// ErrCodeIdSegmentDBError:id_segment 表读写失败,或号段 store 根本没配起来。
-	// 与 ErrCodeSnapshotDBError 分开:两者虽同库,但告警要能一眼分清"回滚库坏了"
-	// 与"发号源坏了"——后者会让 login 建角色 / 建公会 / 铸物品全部停摆。
-	ErrCodeIdSegmentDBError uint32 = 18
+	// ErrCodeIdSegmentSourceError:发号器读写预留记录失败,或者根本没配起来。
+	// 告警要能一眼分清,这个码意味着 login 建角色 / 建公会 / 铸物品全部停摆。
+	ErrCodeIdSegmentSourceError uint32 = 18
 
-	// ErrCodeIdSegmentExhausted:max_id + step 会越过 2^55 值域上限,fail-closed 拒绝
-	// (号段值域与存量 snowflake 号不能相交,见设计 §6.3)。表里的 CHECK 是最后一道闸,
-	// 这里在 UPDATE 之前就拒绝,表状态零变更。理论上万年内不会命中,命中即事故。
+	// ErrCodeIdSegmentExhausted:本地域的值域见底,fail-closed 拒绝。理论上万年内不会命中,命中即事故。
 	ErrCodeIdSegmentExhausted uint32 = 19
 
-	// ErrCodeIdSegmentUnknownTag:表里没有这个 biz_tag 的行,且 IdSegment.AllowAutoSeed=false
-	// (生产形态),拒绝发号、不写任何行。
-	//
-	// 为什么不像以前那样运行期自动种一行从 1 起(设计 §7.5 第 7 条):行只会在全局库被
-	// drop 重建、或从旧备份恢复时消失,而消费表(player_database / guild / 玩家 blob 里的物品)
-	// 还留着已发出的号 —— 此时从 1 重发,login 的 INSERT ... ON DUPLICATE KEY UPDATE 会静默
-	// 覆盖别人的角色行。缺行是 ID 安全事件:行必须由 `data_service -migrate`(或 dev 的
-	// AutoMigrate)按 IdSegment.BootstrapTags 显式创建,迁移顺带把 max_id 抬到消费表最大号 +1。
-	// 与 InvalidRequest 分开:调用方 tag 拼错是"业务拒绝",而合法 tag 缺行是必须告警的故障。
+	// ErrCodeIdSegmentUnknownTag:发号器确定地拒绝发号,不写任何记录。两种原因:
+	//   - biz_tag 没登记进 IdSegment.Tags:配置漏了;
+	//   - 两份预留记录都不存在,且 IdSegment.AllowAutoSeed=false(生产形态)。首次部署要显式跑
+	//     `data_service -id-issuer-init`;如果不是首次部署,就是两套 etcd 同时丢了数据,这是 ID 安全事件,
+	//     按 docs/ops/id-issuer-runbook.md 处理。
+	// 与 InvalidRequest 分开:调用方 tag 拼错是"业务拒绝",而这里是必须告警的故障。
 	ErrCodeIdSegmentUnknownTag uint32 = 20
 
-	// ── 合服(RegisterPlayerZone / RemapHomeZoneForMerge,remap 已停用)────────
+	// ── 归属登记(RegisterPlayerZone)────────
 
 	// ErrCodeZoneMappingConflict:player:zone:{id} 已经存在**且值与请求不同**,
 	// RegisterPlayerZone 拒绝覆盖(SETNX 语义),不写任何键。
 	//
-	// 为什么必须拒绝而不是覆盖:这个映射是玩家数据 / 公会 / 榜的归属权威。
-	// 合服把它从源 zone 改写成目标 zone 之后,任何一次"按建角 zone 重新登记"
-	// (login 重试建角、debug_import 重跑、旧版本回滚)都会把玩家送回已下线的
-	// 源区,而且没有任何痕迹。覆盖是一次静默的数据事故,拒绝只是一次可见的失败。
+	// 为什么必须拒绝而不是覆盖:home_zone 建号后不再改(合服只写 zone_merged_into 别名,
+	// docs/design/player-data-tidb-scaling-plan.md §7.1),它还决定 go/db 选库。一次覆盖会让玩家的
+	// 数据找不到、归属跟着错,而且没有任何痕迹。覆盖是一次静默的数据事故,拒绝只是一次可见的失败。
 	//
 	// 值相同 = 幂等成功(不占这个码):login 的 CreatePlayer 允许重试。
 	ErrCodeZoneMappingConflict uint32 = 21
 
-	// ErrCodeZoneMergeInProgress:mapping Redis 里存在 merge:in_progress:{zone},
-	// 该 zone 正处在合服维护窗口,写入类操作 fail-closed 拒绝。
-	//
-	// 契约刻意只有一条:**键存在即封锁**。值(JSON,含 started_at)与 TTL 都不解析
-	// —— 解析就意味着多一种"值坏了怎么办"的分支,而这个闸门的唯一正确失败方向是
-	// 拒绝。键由 tools/merge_zone 在写阶段之前写入、跑完删除,TTL 只是进程被杀时的兜底。
-	//
-	// 与 ErrCodeZoneMappingConflict 分开:那个是"这条映射本来就有主",这个是
-	// "整个 zone 现在不接受新映射",运维看到后者要去查合服跑完没有。
-	//
-	// 2026-10-19 起 SavePlayerData / SetPlayerField / DeletePlayerData 也以 in-band error_code 返回它:
-	// home zone(src 或 dst)处在合服围栏内,或拿锁后复核发现 home 已被合服 / 撤销合服改写
-	// (routing.AcquirePlayerWriteLock)。零写入,调用方在合服结束后重试。ReadRequiresReady=true 且回源 SQL 时,
-	// 围栏取自 zone_merge_fence(merge_zone 目前只写 Redis 围栏,沿用 db_first 冻结窗口的前提)。
-	ErrCodeZoneMergeInProgress uint32 = 22
+	// 22 已删除,号不复用:曾是 ErrCodeZoneMergeInProgress(合服围栏拒绝登记)。
+	// 别名合服之后登记不再看围栏(docs/design/player-data-tidb-scaling-plan.md §7.1),旧日志里还可能出现这个号。
 
 	// ErrCodeAdminAuthRequired:运维 RPC 缺少 / 带错 x-admin-token,或服务端根本没配 AdminToken
 	// (= 该 RPC 整体停用)。
 	//
-	// 现在守的是三个 Rollback* RPC 与 ReleasePlayerName 的运维路径(不限登记时间的释放)。
-	// 这个码最初是为 RemapHomeZoneForMerge 设的;remap 自 2026-10-12 起已停用
-	// (docs/design/player-route-mapping-durability-proposal.md §4.3:不论 token 一律回
-	// FailedPrecondition + ErrCodeNotImplemented,不再经过这道鉴权)。下面这段理由以 remap 为例写成,
-	// 对回档同样成立:
+	// 现在守的是 ReleasePlayerName 的运维路径(不限登记时间的释放)。
 	//
-	// 没配 = 停用 而不是 免鉴权:一个默认敞开的 remap 接口意味着任何能连到
-	// data_service 的进程都能把全服玩家的归属 zone 改掉,而 data_service 在集群内
+	// 没配 = 停用 而不是 免鉴权:一个默认敞开的运维接口意味着任何能连到
+	// data_service 的进程都能释放任意玩家的名字,而 data_service 在集群内
 	// 是无鉴权可达的。默认值必须是"不能用",开启是一次显式的运维动作。
 	ErrCodeAdminAuthRequired uint32 = 23
 
-	// ErrCodeMergeFenceMissing:RemapHomeZoneForMerge 找不到 merge:in_progress:{source},
-	// 拒绝执行。
-	//
-	// 这是"线上误调用"的防线:合服工具必须先立标记再改写,标记同时也在挡住
-	// RegisterPlayerZone(见 ErrCodeZoneMergeInProgress)。没有标记就改写,说明要么
-	// 有人拿着 admin token 手工调了这个接口,要么工具的步骤被跳过了 —— 两种情况下
-	// 源 zone 都还在线接受新映射,改写会与在线写入交错,产生一批指向源 zone 的漏网玩家。
-	//
-	// **已停用,号不复用**(2026-10-12,docs/design/player-route-mapping-durability-proposal.md §4.3):
-	// RemapHomeZoneForMerge 一律回 FailedPrecondition + ErrCodeNotImplemented,本码不再产生。
-	// 留着常量只为占住 24 这个号 —— 旧日志与告警规则里还可能出现它,换给别的语义会让它们对不上。
-	ErrCodeMergeFenceMissing uint32 = 24
+	// 24 已删除,号不复用:曾是 ErrCodeMergeFenceMissing(RemapHomeZoneForMerge 找不到合服标记)。
+	// 该 RPC 已随别名合服删除,旧日志与告警规则里还可能出现这个号。
 
 	// ── 玩家名字注册表(docs/design/guild-phase2/03-names.md §3.1)────────────
 
 	// ErrCodePlayerNameDBError:player_name 表读写失败,或名字 store 根本没装配起来
 	// (建表失败 / 连不上全局库 / PlayerName 段配置非法)。
 	//
-	// 与 ErrCodeSnapshotDBError、ErrCodeIdSegmentDBError 分开:三者同库,但告警必须
+	// 与 ErrCodeSnapshotDBError 分开:两者同库,但告警必须
 	// 一眼分清坏的是哪条路 —— 名字挂了的症状是**建角全线拒绝**(名字登记是 CreatePlayer
-	// 的同步前置),而回滚库挂了只影响 GM 工具。混成一个码,值班只能挨个试。
+	// 的同步前置),而审计库挂了只影响 GM 工具。混成一个码,值班只能挨个试。
 	//
 	// 方向是 fail-closed:读不到名字可以降级成空名展示,但**登记**结果不确定时绝不能
 	// 放行 —— 两个角色拿到同一个名字之后没有任何事后修复手段(v1 不支持改名)。
@@ -127,33 +87,6 @@ const (
 	// 互相矛盾,重试一万次都是同一个答案。
 	ErrCodePlayerNameConflict uint32 = 26
 
-	// ── 回档的帮会资产闸(docs/design/guild-phase2/07-rollback-fail-closed.md §7.3.3)────────
-	//
-	// 三个码的分工一句话:Divergence = "带合法放行能过";CheckFailed = "放行也过不了,先修环境或缩小范围";
-	// DivergedAfterWrite = "数据已经写了,需要人工"。
-
-	// ErrCodeRollbackGuildDivergence:回档目标玩家在各自快照时刻之后,帮会侧有已终结为已应用的资产操作
-	// (回档会复制资产或让玩家白亏),**或**有玩家的快照早于帮会流水保留期、无法证明没有(07 R2b),
-	// 且请求未合法放行。零玩家数据写入。两种原因靠响应里的 guild_divergence_count 与
-	// guild_unprovable_player_count 区分。
-	//
-	// 规则拒绝,口径同 ErrCodePlayerOnline,不算故障(不进 FaultCodeSet):闸在正常工作。
-	ErrCodeRollbackGuildDivergence uint32 = 27
-
-	// ErrCodeRollbackGuildCheckFailed:帮会检查**没做成** —— guild 客户端未配置 / 不可达 / 超时 /
-	// Unimplemented(旧版 guild)/ 任一页失败 / 保留期拒绝但解析不出下界 / 过滤后分歧超过上限 /
-	// 检查预算耗尽 / 执行期快照早于计划值(07 R5)。零玩家数据写入,**放行开关无效**:不存在"问不到就当没有"。
-	//
-	// 算故障(进 FaultCodeSet):否则 guild 挂了导致的全部回档被拒只会被记成业务拒绝,没人被叫醒。
-	ErrCodeRollbackGuildCheckFailed uint32 = 28
-
-	// ErrCodeRollbackGuildDivergedAfterWrite:回档**已经写完**,写后复查发现了检查阶段没有的新分歧,
-	// 或复查本身没做成(无法证明没有新分歧)。数据不自动撤销(07 §7.6.3 Q3 = ①):按日志
-	// `[Rollback][GuildDivergence] post-write` 逐行人工补偿,或用响应里的 pre_rollback_snapshot_id 撤销这次回档。
-	//
-	// 算故障(进 FaultCodeSet):这是紧急告警口径。
-	ErrCodeRollbackGuildDivergedAfterWrite uint32 = 29
-
 	// ── 玩家归属映射持久化(docs/design/player-route-mapping-durability-proposal.md,第 1a 批)────────
 
 	// ErrCodeRouteStoreError:RouteStore.Mode=db_first 时 RegisterPlayerZone 的库这一段出了故障 ——
@@ -166,7 +99,6 @@ const (
 	//
 	// 2026-10-19 更正:不只 RegisterPlayerZone。第 3 批读方门禁(RouteStore.ReadRequiresReady=true)下,GetPlayerHomeZone /
 	// BatchGetPlayerHomeZone 在缓存不可信、回源 player_route 又失败时(routing.ErrRouteReadUnavailable)同样回 Unavailable + 30
-	// (同样只在 status message 里;绝不回 NotFound)。in-band 入口(LoadPlayerData / SavePlayerData 等)的回源失败仍折成
-	// ErrCodeRedis(1),不出 30。
+	// (同样只在 status message 里;绝不回 NotFound)。
 	ErrCodeRouteStoreError uint32 = 30
 )

@@ -63,10 +63,6 @@ type abandonEntry struct {
 
 func abandonEntries() []abandonEntry {
 	return []abandonEntry{
-		{metrics.RouteReadPathHomeFence, func(r *Router, ctx context.Context) error {
-			_, _, err := r.GetPlayerHomeZoneAndMergeFence(ctx, 8901)
-			return err
-		}},
 		{metrics.RouteReadPathHome, func(r *Router, ctx context.Context) error {
 			_, err := r.GetPlayerHomeZone(ctx, 8901)
 			return err
@@ -103,7 +99,6 @@ func TestReadGate_CallerAbandonedIsNotAFault(t *testing.T) {
 			assert.ErrorIs(t, err, context.Canceled, e.path)
 			assert.NotErrorIs(t, err, ErrRouteReadUnavailable, "%s: the caller's cancellation is not a player_route failure", e.path)
 			assert.NotErrorIs(t, err, ErrHomeZoneNotMapped, e.path)
-			assert.Empty(t, reader.homeFenceCalls, "%s: no fallback with a finished ctx", e.path)
 			assert.Empty(t, reader.getRoutesCalls, "%s: no fallback with a finished ctx", e.path)
 			assert.Equal(t, scriptErrBefore, routeReadyVerdictCount(t, metrics.RouteReadyVerdictScriptError), "%s: not a script_error", e.path)
 			assert.Equal(t, sqlErrBefore, routeReadSQLErrorCount(t, e.path), "%s: not a sql_error", e.path)
@@ -127,16 +122,6 @@ func TestReadGate_CallerAbandonedIsNotAFault(t *testing.T) {
 			assert.Equal(t, absentBefore+1, routeReadyVerdictCount(t, placement.RouteReadyAbsent.String()),
 				"%s: the script did run, its verdict is still counted", e.path)
 		}
-
-		// R7(enumerate):db_first 下与开关无关,一律读库。
-		reader := &readFakeReader{err: context.DeadlineExceeded}
-		r, _, _ := newReadGateRouter(t, false, reader)
-		before := routeReadSQLErrorCount(t, metrics.RouteReadPathEnumerate)
-		_, err := r.GetAllPlayerIDsInZone(expired, 7)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, context.DeadlineExceeded)
-		assert.NotErrorIs(t, err, ErrRouteReadUnavailable)
-		assert.Equal(t, before, routeReadSQLErrorCount(t, metrics.RouteReadPathEnumerate), "enumerate: not a sql_error")
 	})
 
 	t.Run("control: a live ctx still counts sql_error", func(t *testing.T) {

@@ -12,10 +12,10 @@
 //     把玩家送去正确的 zone(见 ResolveEnterZone)。
 //
 // 为什么需要它:账号 blob 里 AccountSimplePlayer.zone_id 是**建角那一刻**盖的章,
-// 之后再也不更新(createplayerlogic.go);合服(tools/merge_zone /
-// RemapHomeZoneForMerge)只改映射不改账号 blob。于是合服之后角色列表仍指向已下线
-// 的源 zone,客户端按它自动选区就会被引向一个空壳;而经源 zone 进来的玩家会在源
-// zone 的 scene 进程里玩、数据/公会/榜却按目标 zone 分组。映射才是唯一真源,所以
+// 之后再也不更新(createplayerlogic.go);合服(tools/merge_zone)只写区别名,不改账号
+// blob。于是合服之后角色列表仍指向已下线的源 zone,客户端按它自动选区就会被引向一个空壳;
+// 而经源 zone 进来的玩家会在源 zone 的 scene 进程里玩、数据/公会/榜却按目标 zone 分组。
+// data_service 返回的是解析到最终区的归属,才是唯一真源,所以
 // 这里只读映射、只在返回给客户端的那一份上覆盖,**刻意不回写账号 blob**:
 // 一旦回写就有了第二份「真相」,再次合服 / 回滚时两份必然打架。
 //

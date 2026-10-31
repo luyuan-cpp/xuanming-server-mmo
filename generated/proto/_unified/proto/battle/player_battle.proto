@@ -18,6 +18,9 @@ option (OptionFileDefaultNode) = NODE_BATTLE;
 //   无直连即不发;只有直连建立之前的大厅公告 NotifyBattleAssigned / NotifyBattleStart 在无直连时经
 //   Kafka gate-cmd 的 PushToPlayerEvent 走大厅连接。scene 发的 NotifyBattleReconnect 与 scene 结算后推的
 //   NotifyBattleEnd 也走大厅(scene 自己的下行);客户端两条连接都挂 NotifyBattleEnd,按 battle_id 幂等。
+// 观战例外(D94,battle-spectate-tiered-fanout.md §15):WatchBattleResponse.delivery = LOBBY 的观众不建直连,
+//   SpectateState / SpectateTurnResult / SpectateEnd 三条观战帧由 gate 经大厅连接下发(gate 中继 / 全服广播档);
+//   客户端在大厅连接上也注册这三条,按 (battle_id, round_index) 去重。参战帧仍然只走直连。
 // 设计依据:docs/design/turn-based-battle-server.md §5.2、§18、§22。
 
 // ---- 战斗全量状态(开战下发 / 回合后同步 / 重连补拉,v1 全量同步免客户端预测) ----
@@ -74,6 +77,9 @@ enum eSpectateEndReason {
   SPECTATE_END_BATTLE_FINISHED = 1;  // 战斗正常分出胜负
   SPECTATE_END_BATTLE_ABORTED = 2;   // 战斗作废(节点停机/deadline 强制收尾)
   SPECTATE_END_REMOVED = 3;          // 观众被移除(自己去排队/开战导致互斥清退)
+  // 中继 / 广播档(大厅连接收帧)由 gate 本地收尾:源站 battle 失联或过了战斗期限仍无终局帧。
+  // 旧客户端不认识本值时按 BATTLE_ABORTED 处理(battle-spectate-tiered-fanout.md §15.2)。
+  SPECTATE_END_SOURCE_LOST = 4;
 }
 
 message SpectateEndS2C {

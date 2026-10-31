@@ -7,6 +7,7 @@ import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/admin/whitelist")
@@ -40,6 +41,8 @@ public class AdminWhitelistController {
      *
      * <p>upsert 与回读在同一个事务里:upsert 持有该行的 X 直到提交,其间并发的 remove 删不掉它,回读必然命中;
      * 回读是普通一致性读、不加锁,整个事务的锁集与单条 upsert 相同。
+     * 回读还兜住行号撞号(不同副本同一毫秒,见 {@code com.game.gateway.entity.RowIds}):ODKU 这时改的是别人那一行的 note、
+     * 这一行没写进去,回读不到,或者读到的 note 不是这次写的,就抛错,整个事务回滚,那一行的 note 也还原。
      *
      * <p>整事务包在 {@link InnoDbDeadlockRetry#execute} 里:ODKU 已拆掉 #18 的环,那里只兜 InnoDB 固有的
      * 1213,收敛论证也在那里。
@@ -54,9 +57,13 @@ public class AdminWhitelistController {
         String note = entry.getNote();
         ZoneWhitelist stored = InnoDbDeadlockRetry.execute(tx, "whitelist add", zoneId, () -> {
             whitelistRepo.upsert(zoneId, accountId, note);
-            return whitelistRepo.findByZoneIdAndAccountId(zoneId, accountId)
+            ZoneWhitelist row = whitelistRepo.findByZoneIdAndAccountId(zoneId, accountId)
                     .orElseThrow(() -> new IllegalStateException(
-                            "zone_whitelist upsert 之后同一事务内回读不到该行,违反事务可见性,zone_id=" + zoneId));
+                            "zone_whitelist upsert 之后同一事务内回读不到该行(行号撞号,或违反事务可见性),zone_id=" + zoneId));
+            if (!Objects.equals(row.getNote(), note)) {
+                throw new IllegalStateException("zone_whitelist upsert hit another row (row id collision), zone_id=" + zoneId);
+            }
+            return row;
         });
         return ResponseEntity.ok(stored);
     }

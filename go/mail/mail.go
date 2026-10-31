@@ -121,7 +121,7 @@ func run(c config, migrate bool) (runErr error) {
 		return err
 	}
 	resourcesTransferred := false
-	db, err := authoritysql.Open(ctx, os.Getenv(c.DSNEnv), data.DatabaseName, c.RequireTiDB, c.MaxOpenConns, permission)
+	db, err := authoritysql.Open(ctx, os.Getenv(c.DSNEnv), data.DatabaseName, authoritysql.Backend(c.Backend), c.MaxOpenConns, permission)
 	if err != nil {
 		return err
 	}
@@ -155,8 +155,8 @@ func run(c config, migrate bool) (runErr error) {
 	if migrate {
 		return nil
 	}
-	if !c.RequireTiDB || !c.GlobalLoginSessions || c.LoginRedis.Host == "" || c.LoginRedis.DB < 0 {
-		return errors.New("邮件必须显式装配同TiDB角色权威与全局登录态Redis")
+	if !c.GlobalLoginSessions || c.LoginRedis.Host == "" || c.LoginRedis.DB < 0 {
+		return errors.New("邮件必须显式装配同SQL事务域角色权威与全局登录态Redis")
 	}
 	// 同一物理连接跨库只读；不同集群或未授SELECT权限会启动失败，不降级成缓存资格。
 	rows, err := db.QueryContext(ctx, "SELECT player_id,guild_id FROM mmorpg_guild.guild_member LIMIT 0")

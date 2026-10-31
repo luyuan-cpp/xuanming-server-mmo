@@ -30,7 +30,7 @@ package data
 //
 // 历练结算(SettleTrialBattleTx → settleTrialBattle,op=trial_settle):
 //
-//	G(guild_id) FOR UPDATE → 闸门 → [T 普通读:判重复 / 判归属,不加锁]
+//	G(guild_id) FOR UPDATE → [T 普通读:判重复 / 判归属,不加锁]
 //	→ M(G, 候选人) 主键升序逐行点锁(FORCE INDEX (PRIMARY);不在帮的人跳过)
 //	→ Q(合格者, GUILD_CREDIT) 按 player_id 升序:缺行在事务内建、再 sqlLockSeqGuard 点锁 —— **碰 O 之前锁完全部 Q**
 //	→ [C 普通读:各人该游戏日已用次数,定得奖名单]
@@ -116,8 +116,8 @@ import (
 	"guild/internal/activity"
 )
 
-// 活动事务的业务拒绝。帮会不存在 / 不是成员 / 帮会等级不足 / 合服闸门 / 写冲突 / 未决指令过多直接复用已有哨兵
-// (ErrGuildGone / ErrNotGuildMember / ErrGuildLevelTooLow / ErrZoneMerging / ErrWriteConflict / assetop.ErrTooManyPending),
+// 活动事务的业务拒绝。帮会不存在 / 不是成员 / 帮会等级不足 / 写冲突 / 未决指令过多直接复用已有哨兵
+// (ErrGuildGone / ErrNotGuildMember / ErrGuildLevelTooLow / ErrWriteConflict / assetop.ErrTooManyPending),
 // 不另造同义错误。定义在本文件而不是 guild_repo.go 的哨兵块:B6a-srv 的文件清单不含 guild_repo.go(交付说明已登记)。
 var (
 	// ErrActivityJoinTooRecent:入帮未满 GuildRule.activity_join_min_hours(事务内按成员行 join_time_ms 复核)。
@@ -155,7 +155,7 @@ const (
 
 const (
 	// sqlLockActivityGuild:锁序位置 1。选 funds 是为了在 Go 里判资金溢出并算出新值(见 sqlSetActivityFunds)。
-	sqlLockActivityGuild = `SELECT level, zone_id, funds FROM guild WHERE guild_id = ? FOR UPDATE`
+	sqlLockActivityGuild = `SELECT level, funds FROM guild WHERE guild_id = ? FOR UPDATE`
 
 	// sqlLockActivityMember:锁序位置 3。FORCE INDEX (PRIMARY) 的理由同 guild_manage_repo.go 的 sqlLockMemberRole:
 	// 完整主键等值同时钉死了 uk_guild_member(player_id),走 uk 就是"先二级后主键",与按主键删成员行反序。
@@ -280,9 +280,6 @@ type ActivityTxInput struct {
 
 	// Reward 为 nil = 本活动没有物品奖励(reward_id = 0 或奖励包合并后为空)。
 	Reward *ActivityRewardOp
-
-	// Fence 是合服闸门;zone 一律取本事务锁住的 guild.zone_id(90 part2 §2 第 10 条)。nil = 不设闸。
-	Fence FenceFunc
 }
 
 // ActivityTxResult 是一次成功参与的结果。
@@ -337,12 +334,12 @@ func (in ActivityTxInput) validate(typ uint32) error {
 
 // LightLanternTx 元宵灯会点灯事务(06 §6.11.2,按 §12.2 的锁序订正)。
 //
-// 事务 op=activity,取锁序列见文件头。在一个事务里:复核帮会等级 → 合服闸门 → 锁本人成员行、复核入帮时长 →
+// 事务 op=activity,取锁序列见文件头。在一个事务里:复核帮会等级 → 锁本人成员行、复核入帮时长 →
 // [发物品:分 seq、插指令行] → 占今日次数 → 帮会本档期进度 +1 并加锁读回 → 本次恰好达到阈值则写锁存、
 // 本档期资金未发且 guild_funds > 0 则发资金 → 加个人帮贡。
 //
 // 错误语义:ErrGuildGone / ErrNotGuildMember(logic 按 Y-01 调 VerifyPlayerGuildID 自愈后回 NotInGuild)/
-// ErrGuildLevelTooLow / ErrZoneMerging / ErrActivityJoinTooRecent / ErrActivityAlreadyClaimed /
+// ErrGuildLevelTooLow / ErrActivityJoinTooRecent / ErrActivityAlreadyClaimed /
 // 包了 assetop.ErrTooManyPending 的错误(errors.Is 可判,回 GuildAssetPending)/ ErrActivityPoison / ErrWriteConflict;
 // 其余为内部错误。任何拒绝都整体回滚:次数、进度、资金、帮贡、指令行、seq 一起不动(06 §6.13 C1)。
 // 同一玩家并发:第二个事务排在 G 行锁上,拿到后计数 upsert 判达上限 → ErrActivityAlreadyClaimed(C10);
@@ -379,10 +376,10 @@ func (r *ActivityRepo) participate(ctx context.Context, in ActivityTxInput, typ 
 	err := r.guilds.inTx(withRoleTargets(ctx, in.PlayerID), opActivity, func(ctx context.Context, tx *sql.Tx) error {
 		// G:锁序位置 1。之后对 guild 行的资金写是再写已持有行,不再新增锁。
 		var (
-			level, zoneID uint32
-			funds         uint64
+			level uint32
+			funds uint64
 		)
-		err := tx.QueryRowContext(ctx, sqlLockActivityGuild, in.GuildID).Scan(&level, &zoneID, &funds)
+		err := tx.QueryRowContext(ctx, sqlLockActivityGuild, in.GuildID).Scan(&level, &funds)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrGuildGone
 		}
@@ -391,9 +388,6 @@ func (r *ActivityRepo) participate(ctx context.Context, in ActivityTxInput, typ 
 		}
 		if level < row.GetMinGuildLevel() {
 			return ErrGuildLevelTooLow
-		}
-		if err := checkFence(ctx, in.Fence, zoneID); err != nil {
-			return err
 		}
 
 		// M:锁序位置 3。成员行锁也是下面建 seq 行的守卫(ensureSeqRowTx 的前置,C2)。
@@ -864,8 +858,8 @@ var trialAfterCounterReadHook func(ctx context.Context)
 // G 行与成员 / 计数的历练专用语句。
 const (
 	// sqlLockTrialGuild:历练各写事务的第一把锁(锁序位置 1),同时是 T 行的守卫(文件头第 10 条)。
-	// 取 zone_id 给合服闸门,取 funds 给资金溢出判定与新值计算(写回用 sqlSetActivityFunds)。
-	sqlLockTrialGuild = "SELECT zone_id, funds FROM guild WHERE guild_id = ? FOR UPDATE"
+	// 取 funds 给资金溢出判定与新值计算(写回用 sqlSetActivityFunds)。
+	sqlLockTrialGuild = "SELECT funds FROM guild WHERE guild_id = ? FOR UPDATE"
 
 	// sqlSelectActivityCounter:结算在持有 Q 之后读某人某游戏日的已用次数(普通读,完整主键等值)。
 	sqlSelectActivityCounter = "SELECT used_count FROM guild_daily_counter WHERE player_id = ? AND counter_kind = ? AND ref_id = ? AND period_key = ?"
@@ -998,16 +992,16 @@ type trialGate struct {
 	state  pb.GuildTrialBattleState
 }
 
-// lockTrialGuild 锁帮会行(锁序位置 1),返回行里的 zone 与资金。帮会不存在 → ErrGuildGone。
-func lockTrialGuild(ctx context.Context, tx *sql.Tx, guildID uint64) (zoneID uint32, funds uint64, err error) {
-	err = tx.QueryRowContext(ctx, sqlLockTrialGuild, guildID).Scan(&zoneID, &funds)
+// lockTrialGuild 锁帮会行(锁序位置 1),返回行里的资金。帮会不存在 → ErrGuildGone。
+func lockTrialGuild(ctx context.Context, tx *sql.Tx, guildID uint64) (funds uint64, err error) {
+	err = tx.QueryRowContext(ctx, sqlLockTrialGuild, guildID).Scan(&funds)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, 0, ErrGuildGone
+		return 0, ErrGuildGone
 	}
 	if err != nil {
-		return 0, 0, fmt.Errorf("lock guild %d for trial: %w", guildID, err)
+		return 0, fmt.Errorf("lock guild %d for trial: %w", guildID, err)
 	}
-	return zoneID, funds, nil
+	return funds, nil
 }
 
 // readTrialGate 普通读登记行。前置:调用方已持有 battle.GuildID 的 G 行锁 —— 同帮的 T 写者都排在它后面,
@@ -1095,7 +1089,7 @@ func (r *ActivityRepo) RegisterTrialBattle(ctx context.Context, battle TrialBatt
 		return err
 	}
 	err := r.guilds.inTx(withRoleTargets(ctx, launchPlayers(original)...), opTrialRegister, func(ctx context.Context, tx *sql.Tx) error {
-		if _, _, err := lockTrialGuild(ctx, tx, battle.GuildID); err != nil {
+		if _, err := lockTrialGuild(ctx, tx, battle.GuildID); err != nil {
 			return err
 		}
 		gate, err := readTrialGate(ctx, tx, battle)
@@ -1163,10 +1157,6 @@ type TrialSettleInput struct {
 	// NowMs 是**本次调用开始时**的墙钟(UTC 毫秒)。每次重试都要重取,不得沿用事件里的时刻:
 	// "结果是否过旧"(trialCounterPeriodWritable)按它判。
 	NowMs uint64
-
-	// Fence 是合服闸门,zone 取事务内锁住的 guild.zone_id。nil = 不设闸。拒绝时回 ErrZoneMerging,
-	// 消费者应按暂时性错误退避重试(合服结束后照常结算),不是毒消息。
-	Fence FenceFunc
 }
 
 // TrialSettleStatus 是结算事务的去向。零值无效。
@@ -1299,7 +1289,7 @@ func trialCounterPeriodWritable(periodKey uint32, nowMs uint64) bool {
 
 // SettleTrialBattleTx 结算一局历练(06 §6.29 / §6.30,取锁序列按 §12.2 订正,见文件头)。
 //
-// 一个事务(op=trial_settle)里:锁帮会行 → 合服闸门 → 判重复 / 判归属 → [发奖的局:锁候选人成员行,在帮者为合格者 →
+// 一个事务(op=trial_settle)里:锁帮会行 → 判重复 / 判归属 → [发奖的局:锁候选人成员行,在帮者为合格者 →
 // 锁合格者的 seq 行 → 读各人该游戏日次数,未满者得奖 → 逐人分 seq、插物品指令行(未决已满者改记待入队)→
 // 逐人占次数 → 当天计资金胜场未满则帮会资金 +guild_funds、胜场 +1 → 逐人加帮贡] → 对局行进 SETTLED → 插待入队物品行。
 //
@@ -1310,7 +1300,7 @@ func trialCounterPeriodWritable(periodKey uint32, nowMs uint64) bool {
 // 错误语义:
 //   - ErrTrialInputInvalid(碰库之前)/ ErrActivityPoison(帮贡或资金溢出、结果过旧):**确定性失败**,整体回滚,
 //     调用方走 MarkTrialBattlePoison 并销账,不重试;
-//   - ErrZoneMerging / ErrWriteConflict(含 errRetryTx、1213 / 9007 重跑耗尽、1205、子预算到期)/ 其余错误:暂时性,
+//   - ErrWriteConflict(含 errRetryTx、1213 / 9007 重跑耗尽、1205、子预算到期)/ 其余错误:暂时性,
 //     调用方退避后带着**新的 NowMs** 重调;沿用同一批 OpID 是安全的(上一轮已整体回滚)。
 //
 // 幂等与并发:同一帮的结算在 G 行锁上串行;重复事件(重发、重放、巡检器与消费者同时处理)后到者读到 SETTLED,
@@ -1376,7 +1366,7 @@ func (r *ActivityRepo) settleTrialBattle(ctx context.Context, tx *sql.Tx, in Tri
 	}
 
 	// G:锁序位置 1,也是 T 行的守卫。之后对 guild 行的资金写是再写已持有行。
-	zoneID, funds, err := lockTrialGuild(ctx, tx, battle.GuildID)
+	funds, err := lockTrialGuild(ctx, tx, battle.GuildID)
 	if errors.Is(err, ErrGuildGone) && original != nil {
 		// 真实终局结果仍须结清永久原合同；帮会消失只阻止发奖，不能把角色永远钉在ACTIVE。
 		// 不补造G/T，不用缺票或F4代替终局；原battle全上下文、全员身份由同P原launch核验。
@@ -1389,9 +1379,6 @@ func (r *ActivityRepo) settleTrialBattle(ctx context.Context, tx *sql.Tx, in Tri
 		return TrialSettleResult{Status: TrialSettleGuildGone}, nil
 	}
 	if err != nil {
-		return TrialSettleResult{}, err
-	}
-	if err := checkFence(ctx, in.Fence, zoneID); err != nil {
 		return TrialSettleResult{}, err
 	}
 	// T 的普通读:重复事件与归属不符在这里就结束,不必先把奖发一遍再回滚。
@@ -1684,7 +1671,7 @@ const (
 //
 // 五种去向都返回 nil error,表示"这一局不必再处理",调用方销账并提交 offset。
 // 错误语义:ErrTrialInputInvalid(键为 0)/ ErrWriteConflict 与其余错误为暂时性,调用方下轮再试(不销账)。
-// 不设合服闸门:只写一行状态,不动任何资产。
+// 只写一行状态,不动任何资产。
 func (r *ActivityRepo) MarkTrialBattlePoison(ctx context.Context, battle TrialBattleKey, finishedAtMs, nowMs uint64) (TrialMarkOutcome, error) {
 	if err := battle.validateIdentity(); err != nil {
 		return 0, err
@@ -1702,7 +1689,7 @@ func (r *ActivityRepo) MarkTrialBattlePoison(ctx context.Context, battle TrialBa
 	}
 	guildGone := false
 	err := r.guilds.inTx(withRoleTargets(ctx, launchPlayers(original)...), opTrialMark, func(ctx context.Context, tx *sql.Tx) error {
-		if _, _, err := lockTrialGuild(ctx, tx, battle.GuildID); err != nil {
+		if _, err := lockTrialGuild(ctx, tx, battle.GuildID); err != nil {
 			if errors.Is(err, ErrGuildGone) && original != nil {
 				if finishedAtMs == 0 {
 					return ErrWriteConflict
@@ -1764,7 +1751,7 @@ func (r *ActivityRepo) ExpireTrialBattle(ctx context.Context, battleID, guildID,
 	expired := false
 	err := r.guilds.inTx(ctx, opTrialMark, func(ctx context.Context, tx *sql.Tx) error {
 		expired = false // 重试契约:每一轮从头判
-		if _, _, err := lockTrialGuild(ctx, tx, guildID); err != nil {
+		if _, err := lockTrialGuild(ctx, tx, guildID); err != nil {
 			return err
 		}
 		gate, err := readTrialGate(ctx, tx, battle)

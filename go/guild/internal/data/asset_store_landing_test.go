@@ -28,7 +28,6 @@ import (
 	pb "proto/guild"
 
 	"shared/assetop"
-	"shared/scenenode"
 
 	"guild/internal/constants"
 )
@@ -216,17 +215,7 @@ func landingCountsByKey(counts []assetop.ClassCount) map[landingClassKey]assetop
 	return out
 }
 
-// landingLocator 是 assetop.Resolver 的替身:登记了的玩家按登记的错误回(nil = 有位置),没登记的一律"位置键不存在"。
-type landingLocator map[uint64]error
-
-func (l landingLocator) Resolve(_ context.Context, playerID uint64) (scenenode.Target, error) {
-	if err, ok := l[playerID]; ok {
-		return scenenode.Target{}, err
-	}
-	return scenenode.Target{}, scenenode.ErrNotOnline
-}
-
-// landingLedger 是 assetop.LedgerReader 的替身:每个玩家都有一份空 blob。对纪元非 0 的 seq 它给出"确定未见"
+// landingLedger 是 assetop.LedgerReader 的替身:每个玩家都有一份空账本,写权行已释放。对纪元非 0 的 seq 它给出"确定未见"
 // (assetop.ClassifySeq:请求纪元比账本新 → 按空账本看,seq 在窗内即未见)。
 type landingLedger struct{}
 
@@ -234,11 +223,9 @@ func (landingLedger) ReadPersistedLedger(context.Context, uint64) (*componentpb.
 	return &componentpb.PlayerAssetOpLedgerComp{}, nil
 }
 
-// ReadVerifiedPersistedLedger 的替身代表同次读取已核验的空账本，保留生产默认核验门禁。
-// 缺账本或读取错误不构成已核验事实。
-func (l landingLedger) ReadVerifiedPersistedLedger(ctx context.Context, playerID uint64) (*componentpb.PlayerAssetOpLedgerComp, bool, error) {
-	ledger, err := l.ReadPersistedLedger(ctx, playerID)
-	return ledger, ledger != nil && err == nil, err
+// ReadStoreLedger 让自动放弃读到「没有持有者、账本为空」。
+func (landingLedger) ReadStoreLedger(context.Context, uint64) (assetop.StoreLedger, error) {
+	return assetop.StoreLedger{Found: true, Released: true, Ledger: &componentpb.PlayerAssetOpLedgerComp{}}, nil
 }
 
 // landingApplier 记下每一次投递并一律回"已落盘的全额应用"。WakePlayer 逐行串行,锁只为让读取方不与写入竞争。
@@ -884,7 +871,6 @@ func TestAbandonOnce_EndToEndWithGuildStore(t *testing.T) {
 	loop, err := assetop.NewLoop(assetop.DefaultLoopConfig(), f.store, applier, nil,
 		func() time.Time { return time.UnixMilli(int64(nowMs)) })
 	require.NoError(t, err)
-	loop.Locator = landingLocator{online: nil}
 	loop.Ledger = landingLedger{}
 
 	abandoned, err := loop.AbandonOnce(f.ctx, nowMs)

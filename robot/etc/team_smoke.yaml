@@ -19,7 +19,7 @@
 #      否则 team 消息号吃默认 3 次 / 窗口限速,可能被信封拒绝。
 #   4. zone_a 只有 1 个 scene 节点,或 A、B 恰好分到同一 scene 节点(设计 DV-6:v1 只做同节点跟随);
 #      follow_scene_config_ids 里的地图在该节点上都有主世界场景。
-#   5. match 的 PveTeamSizeByConfigId 配了 battle_config_id(本地 "1": 5);队伍 2~3 人,不超过该值即可开战(J-5)。
+#   5. PlayMode 表开放了该 battle_config_id 的 PVE_TEAM(本地模板 1 上限 5);队伍 2~3 人,不超过该值即可开战(J-5)。
 #   6. robot_9301 / 9302 / 9303 首次在 zone_a 建角、robot_9304 首次在 zone_b 建角(home zone 在建角时登记);
 #      在别的区登录过的账号,S1"队伍 zone == zone_a"与 X2"C 的 zone_id == zone_b"断言会失败。
 #   7. 两种 AllowCrossZone 形态各跑一次(都要求 cross_zone: true 与双 zone 环境):
@@ -53,7 +53,7 @@ team_smoke:
   expect_cross_zone_allowed: false # 必须与 match 的 Team.AllowCrossZone 一致;true 仅在 cross_zone=true 时允许
   zone_a: 1 # A(队长)、B、D 登录的 zone
   zone_b: 2 # C 登录的 zone;cross_zone=true 时必须与 zone_a 不同
-  battle_config_id: 1 # S7/S8/X2 开战用的 DungeonTable id,必须在 match 的 PveTeamSizeByConfigId 里
+  battle_config_id: 1 # S7/S8/X2 开战用的 DungeonTable id,必须是 PlayMode 表里开放的 PVE_TEAM 模板
   # 换图候选(BaseScene id):S6 取第一个与 A、B 当前地图都不同的,X2 取第一个与 A 当前地图不同的。
   # 至少 3 个互不相同的值,保证无论两人停在哪张图都选得出来。
   follow_scene_config_ids: [2, 3, 1]

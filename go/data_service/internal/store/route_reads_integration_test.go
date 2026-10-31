@@ -2,11 +2,8 @@
 
 package store_test
 
-// 第 3 批读方(route_reads.go 的 RD1–RD4)在真实 InnoDB 上的语义。假驱动(route_reads_contract_test.go)证不了这几条:
-//  1. RD1 的 LEFT JOIN:没有围栏片行 / run_id 为 NULL / 已过期都读成「未封锁」,生效读成「封锁」,判据是库时钟;
-//     只读 63 号片(只在 0 号片生效的围栏读不到 —— 持有者写满 64 片的契约由第 2 批的写者守住);
-//  2. RD2 / RD3 沿 (route_shard, player_id) 键集翻页无漏无重、不混入别的 zone / 落点,计划能用上 idx_route_home / idx_route_storage;
-//  3. RD4 没有生效围栏时也回库时钟,有时只列 63 号片上生效的行。
+// 第 3 批读方(route_reads.go 的 RD2–RD3)在真实 InnoDB 上的语义。假驱动(route_reads_contract_test.go)证不了这几条:
+//  1. RD2 / RD3 沿 (route_shard, player_id) 键集翻页无漏无重、不混入别的 zone / 落点,计划能用上 idx_route_home / idx_route_storage;
 //
 // 跑法同 route_store_integration_test.go(本地 docker 的 appuser 没有建库权限,用 root):
 //   DATA_SERVICE_IT_MYSQL_USER=root DATA_SERVICE_IT_MYSQL_PASSWORD=<deploy/docker-compose.yml> \
@@ -18,7 +15,6 @@ import (
 	"context"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -50,86 +46,12 @@ func requireReadsIT(t *testing.T) {
 	})
 }
 
-// seedReadFence 绕过任何 store 直接造一行围栏分片(第 2 批之前库里没有围栏写者)。runID 为空 = 未封锁的空行;
-// 否则 expires_at_ms = 库时钟 + offsetMs(负数 = 已过期),holder_json 带 fence_epoch。
-func seedReadFence(t *testing.T, db *storetest.DB, zone, shard uint32, runID string, offsetMs int64, epoch uint64) {
-	t.Helper()
-	if runID == "" {
-		_, err := db.Raw.Exec("INSERT INTO zone_merge_fence (zone_id, shard) VALUES (?, ?)", zone, shard)
-		require.NoError(t, err)
-		return
-	}
-	holder := `{"run_id":"` + runID + `","fence_epoch":` + strconv.FormatUint(epoch, 10) + `}`
-	_, err := db.Raw.Exec(
-		"INSERT INTO zone_merge_fence (zone_id, shard, run_id, purpose, src_zone, dst_zone, expires_at_ms, holder_json, fence_epoch)"+
-			" VALUES (?, ?, ?, 'merge', ?, ?, "+store.RouteDBNowMsSQLForTest+" + ?, ?, ?)",
-		zone, shard, runID, zone, zone+100, offsetMs, holder, epoch)
-	require.NoError(t, err)
-}
-
 // readDBNowMs 读一次库时钟(与 store 同一个表达式),用来夹住 RD4 回的 now_ms。
 func readDBNowMs(t *testing.T, db *storetest.DB) uint64 {
 	t.Helper()
 	var ms uint64
 	require.NoError(t, db.Raw.QueryRow("SELECT "+store.RouteDBNowMsSQLForTest).Scan(&ms))
 	return ms
-}
-
-// TestRouteReads_GetHomeAndFence_RealDB:RD1 在真库上的每一种情形。
-func TestRouteReads_GetHomeAndFence_RealDB(t *testing.T) {
-	requireReadsIT(t)
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-	const run = "42-43-20261018T000000Z-0a1b2c3d"
-	readShard := uint32(store.RouteFenceReadShardForTest)
-
-	// 7101:zone 41 没有任何围栏行。
-	seedRouteRow(t, db, 7101, 41, 0, 0, "", 1)
-	// 7102:zone 42 的 63 号片生效。
-	seedRouteRow(t, db, 7102, 42, 0, 0, "", 1)
-	seedReadFence(t, db, 42, readShard, run, 3_600_000, 1)
-	// 7103:zone 43 的 63 号片已过期(判据是库时钟)。
-	seedRouteRow(t, db, 7103, 43, 0, 0, "", 1)
-	seedReadFence(t, db, 43, readShard, run, -3_600_000, 1)
-	// 7104:只有落点、没有 home。
-	seedRouteRow(t, db, 7104, 0, placement.DefaultGlobalStorageID, 1, "", 2)
-	// 7105:没有这一行。
-	// 7106:zone 44 只在 0 号片生效(读方只读 63 号片;持有者写满 64 片的契约由第 2 批的写者守住)。
-	seedRouteRow(t, db, 7106, 44, 0, 0, "", 1)
-	seedReadFence(t, db, 44, 0, run, 3_600_000, 1)
-	// 7107:zone 45 的 63 号片是未封锁的空行(W1 懒建的形状)。
-	seedRouteRow(t, db, 7107, 45, 0, 0, "", 1)
-	seedReadFence(t, db, 45, readShard, "", 0, 0)
-
-	for _, tc := range []struct {
-		player uint64
-		want   store.RouteHomeFence
-	}{
-		{7101, store.RouteHomeFence{HomeZone: 41}},
-		{7102, store.RouteHomeFence{HomeZone: 42, Fenced: true}},
-		{7103, store.RouteHomeFence{HomeZone: 43}},
-		{7104, store.RouteHomeFence{}},
-		{7105, store.RouteHomeFence{}},
-		{7106, store.RouteHomeFence{HomeZone: 44}},
-		{7107, store.RouteHomeFence{HomeZone: 45}},
-	} {
-		got, err := st.GetHomeAndFence(ctx, tc.player)
-		require.NoError(t, err, "player %d", tc.player)
-		assert.Equal(t, tc.want, got, "player %d", tc.player)
-	}
-
-	// 库不可用是错误,不是缺席(路由层据此回 Unavailable)。另开一个 store 关掉,免得影响上面的 cleanup。
-	broken, err := store.NewRouteStore(db.Cfg, routeTestOpts())
-	require.NoError(t, err)
-	require.NoError(t, broken.Close())
-	_, err = broken.GetHomeAndFence(ctx, 7101)
-	require.Error(t, err, "a closed pool must surface as an error, never as absence")
-
-	// 计划取证(MySQL):按聚簇键点查 player_route。原样留档;TiDB 的计划形状不同,只记不判。
-	stmt := inlineRouteArgs(t, store.RouteReadHomeFenceSQLForTest,
-		[]uint64{uint64(readShard), uint64(placement.RouteRowShard(7102)), 7102})
-	logExplainUnlessTiDB(t, db, "RD1", stmt)
 }
 
 // TestRouteReads_ScanRoutesByHome_RealDB:RD2 沿键集翻页覆盖本 zone 全部玩家(跨多个行片)、不重不漏、不混入别的 zone,
@@ -229,49 +151,6 @@ func TestRouteReads_ScanRoutesByStorage_RealDB(t *testing.T) {
 		t.Logf("RD3 plan: %v", plan)
 		assert.Contains(t, plan["possible_keys"], "idx_route_storage", "RD3 must be able to use idx_route_storage")
 	}
-}
-
-// TestRouteReads_ListActiveMergeFences_RealDB:RD4 没有生效围栏时也回库时钟;有时只列 63 号片上生效的行,按 zone 升序。
-func TestRouteReads_ListActiveMergeFences_RealDB(t *testing.T) {
-	requireReadsIT(t)
-	db := storetest.NewMigratedDB(t)
-	st := newRouteStore(t, db)
-	ctx := context.Background()
-	const run = "61-62-20261018T000000Z-0a1b2c3d"
-	readShard := uint32(store.RouteFenceReadShardForTest)
-
-	before := readDBNowMs(t, db)
-	empty, err := st.ListActiveMergeFences(ctx)
-	require.NoError(t, err)
-	after := readDBNowMs(t, db)
-	assert.Empty(t, empty.Fences)
-	assert.GreaterOrEqual(t, empty.DBNowMs, before, "now_ms must be the database clock")
-	assert.LessOrEqual(t, empty.DBNowMs, after, "now_ms must be the database clock")
-
-	// 61 / 62 在 63 号片生效(故意倒序插入,结果要按 zone 升序);63 已过期;64 只在 0 号片生效;65 是未封锁的空行。
-	seedReadFence(t, db, 62, readShard, run, 3_600_000, 5)
-	seedReadFence(t, db, 61, readShard, run, 3_600_000, 3)
-	seedReadFence(t, db, 63, readShard, run, -3_600_000, 1)
-	seedReadFence(t, db, 64, 0, run, 3_600_000, 1)
-	seedReadFence(t, db, 65, readShard, "", 0, 0)
-
-	got, err := st.ListActiveMergeFences(ctx)
-	require.NoError(t, err)
-	require.Len(t, got.Fences, 2, "only the two active fences on shard %d: %+v", readShard, got.Fences)
-	for i, wantZone := range []uint32{61, 62} {
-		f := got.Fences[i]
-		assert.Equal(t, wantZone, f.ZoneID)
-		assert.Equal(t, run, f.RunID)
-		assert.Equal(t, "merge", f.Purpose)
-		assert.Equal(t, wantZone, f.SrcZone)
-		assert.Equal(t, wantZone+100, f.DstZone)
-		assert.Greater(t, f.ExpiresAtMs, got.DBNowMs, "an active fence expires after the clock it was judged with")
-		epoch, ok := placement.MergeFenceHolderEpoch(f.HolderJSON)
-		assert.True(t, ok, "holder_json %q", f.HolderJSON)
-		assert.Equal(t, f.FenceEpoch, epoch, "holder_json and fence_epoch must agree")
-	}
-	assert.EqualValues(t, 3, got.Fences[0].FenceEpoch)
-	assert.EqualValues(t, 5, got.Fences[1].FenceEpoch)
 }
 
 // explainUnlessTiDB 在 MySQL 上取 EXPLAIN FORMAT=TRADITIONAL 的第一行;TiDB 上计划形状不同,只记一笔、回 ok=false(不 Skip:

@@ -129,6 +129,11 @@ message BaseDeployConfig {
     // 语义与 gate_max_connections 相同:超限连接在握手前即被拒。
     uint32 battle_max_connections = 17;
 
+    // 观战订阅凭证的 HMAC 共享密钥(battle-spectate-tiered-fanout.md §15.2 / D98):match 签发、gate 本地验签。
+    // 与 gate_token_secret、battle_token_secret 分域,三者必须互不相同。空值处置同 battle_token_secret:
+    // dev/test 放行并 WARN(gate 拒绝一切 SubscribeSpectate,只能走直连观战),prod 拒绝启动。
+    string spectate_token_secret = 24;
+
     // 集群号:部署级常量,由运维一次性设定(ConfigMap / yaml),策划不碰,默认 0。
     // 只有 Go 的 snowflake 槽位协议(login-player / guild / scene-manager / match)消费它,
     // 作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者

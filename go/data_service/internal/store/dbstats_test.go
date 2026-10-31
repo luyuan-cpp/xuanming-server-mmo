@@ -28,7 +28,6 @@ func TestDBStatsOfReportsEachStorePool(t *testing.T) {
 	}{
 		{name: "snapshot", store: &SnapshotStore{db: pool(11)}, wantOK: true, wantMaxOpen: 11},
 		{name: "transaction_log", store: &TransactionLogStore{db: pool(12)}, wantOK: true, wantMaxOpen: 12},
-		{name: "id_segment", store: &IdSegmentStore{db: pool(13)}, wantOK: true, wantMaxOpen: 13},
 		{name: "player_name", store: &PlayerNameStore{db: pool(14)}, wantOK: true, wantMaxOpen: 14},
 		{name: "player_route", store: &RouteStore{db: pool(15)}, wantOK: true, wantMaxOpen: 15},
 		{name: "nil snapshot pointer", store: (*SnapshotStore)(nil)},

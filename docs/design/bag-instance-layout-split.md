@@ -111,7 +111,7 @@ Bag            ← 桥:需要两层才能回答的玩法规则(堆叠 + 摆放 +
 拥有:`items_`（`Guid -> ItemComp`），单一字典同时承载实例身份和状态；2026-10-15 第 3 批已去掉私有 EnTT registry。
 
 - 身份与生命期:`Insert` / `Erase` / `Clear` / `Find` / `Contains` / `ForEach`
-- 数量:`TotalCountOf` / `HasAll` / `DrainStacks`
+- 数量:`TotalCountOf` / `CheckQuantities` / `DrainStacks`。三者只认 `IsCountableByConfig` 的单位(带本版本不认识字段的堆不计、不扣);`CheckQuantities` 是三态(够 / 版本错位 / 确定不足),2026-10-30 起取代 `HasAll`(混版本持久字段保护第 6 批)
 - 堆叠语义:`MeasureFreeRoomPerConfig` / `PlanStackIntoExistingStacks` / `ApplyStackFill` / `HasMergeablePartials` / `MergePartialStacks` / `CanStack` / `StacksNeededFor`
 - guid 发号:`MintGuid` / `IsInvalidGuid`
 
@@ -212,7 +212,7 @@ commit  : 两层一起写;失败一定发生在 reserve 之前,绝无半写状�
 | `InsertItemEntity` / `ClearAllItems` | `Insert` / `Clear` |
 | `DestroyItem` 里销毁实体的那半 | `Erase(guid)` |
 | `GetItemCompByGuid` / `GetTotalItemCount` / `ForEachItem` | `Find` / `TotalCountOf` / `ForEach` |
-| `CheckItemsAvailable` 的判定 | `HasAll(required)`(返回 bool,错误码留在桥层) |
+| `CheckItemsAvailable` 的判定 | `CheckQuantities(required)`(三态,错误码留在桥层:kSuccess / kFeatureUnavailable / kBagInsufficientItems;原 `HasAll` 已删) |
 | `CanStack` / `DrainItemStacks` / `MeasureFreeRoomPerConfig` | 同名(`DrainStacks`) |
 | `PlanStackIntoExistingStacks` / `ApplyStackFill` / `StackFill` | 同名 |
 | `IsAlreadyMergedAndCompact()` 的第 ① 条(可合并性) | `HasMergeablePartials()` |

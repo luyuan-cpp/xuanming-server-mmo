@@ -3,11 +3,15 @@
 Name: chat.rpc
 ListenOn: 127.0.0.1:50700
 
-# 同一TiDB事务域内的聊天原件库与角色目录；这里只写环境变量名。
+# 聊天原件库与角色目录走同一连接池(目录只做普通读)；这里只写环境变量名。
 DSNEnv: CHAT_AUTHORITY_DSN
-RequireTiDB: true
+# 后端档位 tidb | mysql,不写就是 tidb;mysql 档必须连主库。
+Backend: tidb
 MaxOpenConns: 16
 AccountRoleSchema: mmorpg_global
+# 身份校验结果的进程内缓存秒数,发送和拉取不再每条都读路由和角色目录。0 = 每次都校验。
+# 代价:角色被挂牌或过户之后,旧会话最多还能发这么久的聊天(聊天不是资产)。
+ActorVerifyTTLSeconds: 30
 GlobalLoginSessions: true
 LoginRedis:
   Host: 127.0.0.1:6379

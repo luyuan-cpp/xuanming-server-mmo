@@ -45,9 +45,10 @@ func stubRoomMissing(t *testing.T, beforeReply func()) *fakeObserverRPCs {
 }
 
 // preWriteRecord 按 gather 第 4.1 步的样子只写记录、不入活跃集合(node 7 = newGatherSvcCtx 灌的 battle 节点)。
+// 记录是公开局(PVE_TEAM):私密局在选场处就被可见性闸拒绝,到不了建房窗口判定。
 func preWriteRecord(t *testing.T, svcCtx *svc.ServiceContext, battleId, createdAtMs uint64) *matchpb.SpectateBattleRecord {
 	t.Helper()
-	record := newSpectateRecord(battleId, 7, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 0, []string{"甲"}, createdAtMs)
+	record := newSpectateRecord(battleId, 7, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 0, []string{"甲"}, createdAtMs, visPublic)
 	require.NoError(t, writeSpectateRecord(svcCtx, record))
 	return record
 }
@@ -152,7 +153,7 @@ func TestWatchBattleMissingRoomRecordRewrittenToRetryNodeKeepsRecord(t *testing.
 	prev := beforeAcquireWatchingHook
 	beforeAcquireWatchingHook = func(uint64) {
 		rewritten := newSpectateRecord(battleId, retryNodeId, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, 0,
-			[]string{"甲"}, createdAtMs)
+			[]string{"甲"}, createdAtMs, visPublic)
 		require.NoError(t, writeSpectateRecord(svcCtx, rewritten))
 		publishSpectateBattle(svcCtx, rewritten)
 	}

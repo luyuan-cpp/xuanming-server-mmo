@@ -27,8 +27,8 @@
     默认 0 = 按服务取值(目录键 StopTimeoutSeconds,db 为 35,未写的服务为 25)。
 
 .PARAMETER LocalMySQL
-    本机 MySQL 兼容档。仅为 db 派生运行配置并关闭 RequireTiDB；只接受回环 SQL 地址。
-    不改源配置、dual 围栏或其他服务，默认关闭。
+    本机 MySQL 兼容档。仅为 db 派生运行配置并把档位改成 mysql；只接受回环 SQL 地址。
+    不改源配置或其他服务，默认关闭。
 
 .EXAMPLE
     # Start every implemented Go service
@@ -60,7 +60,7 @@ param(
     # Service name keys must match the catalogue. Count <= 1 means single instance
     # (uses the original etc/<svc>.yaml). Count > 1 generates derived yaml files
     # under run/etc/go_services/<svc>_<i>.yaml with ListenOn port = base + (i-1).
-    # 'db' can run several instances too since 2026-10 (retry receipts are owned per instance, see go/db/internal/kafka/retry_ownership.go).
+    # 'db' can run several instances too: it only serves PlayerStore gRPC, and write ownership is fenced per player in SQL (player_store owner_epoch).
     [object]$Counts = @{},
 
     # Base port offset between instances. The N-th instance (1-based) listens on
@@ -84,8 +84,8 @@ param(
     #     with `ZoneId: N` rewritten and `ListenOn` port shifted by (Zone-1)*ZonePortShift
     #     to avoid TCP port collisions.
     #   * `db` is launched once per zone by default since each
-    #     zone owns its own Kafka topic + MySQL DB; pass -Counts db=N to run several per zone
-    #     (they join the zone's consumer group and split its partitions).
+    #     zone owns its own MySQL DB; pass -Counts db=N to run several per zone
+    #     (scene discovers them under PlayerStoreNodeService.rpc; any of them can serve any player of the zone).
     # Zone=0 (default) keeps legacy single-zone behaviour.
     [int]$Zone = 0,
 
@@ -158,14 +158,14 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 #               Tier 3 = login (top of the dial chain)
 #   StopTimeoutSeconds  可选。stop 时 Ctrl+C 之后等该服务自行退出的秒数,超时强杀进程树;不写取 25
 #               (盖住 chat / trade / friend / guild lifecycle 的 24s 硬截止)。-StopTimeoutSeconds >0 时整体覆盖。
-#               db 取 35:它的 Stop 先撤拉取、排空已分发任务并在会话释放时提交位点(上限 claimDrainTimeout 10s
-#               + 5s 余量),再离组、等 worker 收尾,比其它服务慢;K8s 侧对应 45s 宽限减 5s preStop。
-#               超时被强杀不丢数据(排序锁留到 TTL、重试收据租约过期后回收),只是失去优雅停的收益。
+#               db 取 35:存盘 RPC 的服务端预算是 12s(etc/db.yaml MethodTimeouts),在途的 SavePlayer / LoadAndClaim
+#               要能跑完,比其它服务留得宽;K8s 侧对应 45s 宽限减 5s preStop。
+#               超时被强杀不丢已提交的数据:提交点在 SQL 事务,没回包的存盘结局未知,由 scene 按序号重发(同序号幂等)。
 $ServiceCatalogue = [ordered]@{
     mail = @{ Dir = "mail"; Entry = "mail.go"; Port = 50900; Desc = "邮件（全局权威邮箱与附件到账）"; ConfigFlag = "-f"; ConfigFile = "etc/mail.yaml"; AllowMultiInstance = $true; Tier = 1 }
     rank = @{ Dir = "rank"; Entry = "rank.go"; Port = 51100; Desc = "排行榜（全局代次、封榜与奖励）"; ConfigFlag = "-f"; ConfigFile = "etc/rank.yaml"; AllowMultiInstance = $true; Tier = 1 }
-    db              = @{ Dir = "db";              Entry = "db.go";                    Port = 6000;  Desc = "DB (Kafka consumer + MySQL)";       ConfigFlag = "-f";            ConfigFile = "etc/db.yaml";                    AllowMultiInstance = $true;  Tier = 0; StopTimeoutSeconds = 35 }
-    data_service    = @{ Dir = "data_service";    Entry = "data_service.go";          Port = 9000;  Desc = "Data Service (multi-zone Redis)"; ConfigFlag = "-f";            ConfigFile = "etc/data_service.yaml";          AllowMultiInstance = $true;  Tier = 0 }
+    db              = @{ Dir = "db";              Entry = "db.go";                    Port = 6000;  Desc = "DB (PlayerStore gRPC + TiDB)";      ConfigFlag = "-f";            ConfigFile = "etc/db.yaml";                    AllowMultiInstance = $true;  Tier = 0; StopTimeoutSeconds = 35 }
+    data_service    = @{ Dir = "data_service";    Entry = "data_service.go";          Port = 9000;  Desc = "Data Service (global directory + id issuer)"; ConfigFlag = "-f";            ConfigFile = "etc/data_service.yaml";          AllowMultiInstance = $true;  Tier = 0 }
     # Base ports for the zRPC services were originally 50000/50200 but Windows
     # reserves dynamic-port ranges that frequently land on 50000-50171 and a
     # few apps (Manager.exe in dev environments) reuse 50200. Zone 1 (= base
@@ -400,7 +400,7 @@ function Resolve-BindablePort {
 }
 
 # 只接受仓库配置的明确层级/单值；不解释 YAML 别名或表达式，也不回显包含凭据的原文。
-# 按字符位置只替换布尔值，保证 dual、围栏与其他配置字节原样保留。
+# 按字符位置只替换布尔值，保证其他配置字节原样保留。
 function ConvertTo-LocalMySQLDbConfig([string]$Content) {
     $lines = [regex]::Matches($Content, '(?m)^[^\r\n]*(?:\r?\n|$)')
     $serverHeaders = @(for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -426,10 +426,10 @@ function ConvertTo-LocalMySQLDbConfig([string]$Content) {
     for ($i = $databaseStart + 1; $i -lt $databaseEnd; $i++) {
         $line = $lines[$i].Value.TrimEnd("`r", "`n")
         if ($line -match '^    Hosts:') { $hosts += $i }
-        if ($line -match '^    RequireTiDB:') { $requirements += $i }
+        if ($line -match '^    Backend:') { $requirements += $i }
     }
     if ($hosts.Count -ne 1 -or $requirements.Count -ne 1) {
-        throw 'LocalMySQL 要求 Database.Hosts 与 RequireTiDB 各有一个显式标量。'
+        throw 'LocalMySQL 要求 Database.Hosts 与 Backend 各有一个显式标量。'
     }
     $hostMatch = [regex]::Match($lines[$hosts[0]].Value.TrimEnd("`r", "`n"),
         '^    Hosts:[ \t]*(?:"(?<endpoint>[^"\r\n]+)"|''(?<endpoint>[^''\r\n]+)''|(?<endpoint>[^#\s"'']+))[ \t]*(?:#.*)?$')
@@ -443,27 +443,27 @@ function ConvertTo-LocalMySQLDbConfig([string]$Content) {
         ([Net.IPAddress]::TryParse($hostName, [ref]$localAddress) -and [Net.IPAddress]::IsLoopback($localAddress))
     if (-not $hostMatch.Success -or -not $endpointMatch.Success -or -not $loopback -or
         -not [int]::TryParse($endpointMatch.Groups['port'].Value, [ref]$port) -or $port -lt 1 -or $port -gt 65535) {
-        throw 'LocalMySQL 只允许显式的回环 SQL 单端点，不会降低远端数据库的 TiDB 要求。'
+        throw 'LocalMySQL 只允许显式的回环 SQL 单端点，远端数据库的档位不由它改。'
     }
     $requirementLine = $lines[$requirements[0]]
     $requirementMatch = [regex]::Match($requirementLine.Value.TrimEnd("`r", "`n"),
-        '^    RequireTiDB:[ \t]*(?<value>true|false)[ \t]*(?:#.*)?$')
-    if (-not $requirementMatch.Success) { throw 'LocalMySQL 的 RequireTiDB 必须是明确的 true/false。' }
+        '^    Backend:[ \t]*(?<value>tidb|mysql)[ \t]*(?:#.*)?$')
+    if (-not $requirementMatch.Success) { throw 'LocalMySQL 的 Backend 必须是明确的 tidb/mysql。' }
     $value = $requirementMatch.Groups['value']
     $offset = $requirementLine.Index + $value.Index
-    return $Content.Remove($offset, $value.Length).Insert($offset, 'false')
+    return $Content.Remove($offset, $value.Length).Insert($offset, 'mysql')
 }
 
 function Get-LocalChatAuthoritySettings {
     param([string]$ConfigPath, [switch]$RequireDsn)
     $values = @{}
-    foreach ($key in @('DSNEnv', 'RequireTiDB', 'GlobalLoginSessions', 'MaxOpenConns', 'AccountRoleSchema', 'LoginRedis.Host', 'LoginRedis.DB', 'LoginRedis.PasswordEnv', 'LoginRedis.PoolSize')) {
+    foreach ($key in @('DSNEnv', 'Backend', 'GlobalLoginSessions', 'MaxOpenConns', 'AccountRoleSchema', 'LoginRedis.Host', 'LoginRedis.DB', 'LoginRedis.PasswordEnv', 'LoginRedis.PoolSize')) {
         $value = Get-YamlScalar -Path $ConfigPath -KeyPath $key
         if (-not $value.Found) { throw "Chat启动缺少显式权威配置字段 $key" }
         $values[$key] = $value.Value
     }
-    if ($values.DSNEnv -cne 'CHAT_AUTHORITY_DSN' -or $values.RequireTiDB -cne 'true' -or $values.GlobalLoginSessions -cne 'true' -or $values['LoginRedis.PasswordEnv'] -cne 'LOGIN_REDIS_PASSWORD') {
-        throw 'Chat必须使用TiDB及原登录态；禁止旧Redis历史/幂等权威回退。'
+    if ($values.DSNEnv -cne 'CHAT_AUTHORITY_DSN' -or $values.Backend -cnotin @('tidb', 'mysql') -or $values.GlobalLoginSessions -cne 'true' -or $values['LoginRedis.PasswordEnv'] -cne 'LOGIN_REDIS_PASSWORD') {
+        throw 'Chat必须使用SQL权威及原登录态；禁止旧Redis历史/幂等权威回退。'
     }
     if ($values.MaxOpenConns -notmatch '^\d+$' -or [int]$values.MaxOpenConns -lt 2 -or [int]$values.MaxOpenConns -gt 128 -or $values['LoginRedis.PoolSize'] -notmatch '^\d+$' -or [int]$values['LoginRedis.PoolSize'] -lt 1 -or [int]$values['LoginRedis.PoolSize'] -gt 128) {
         throw 'Chat SQL和登录Redis池必须显式有界，不能采用随CPU变化的缺省池。'
@@ -594,7 +594,7 @@ function Resolve-InstanceConfig {
         # Suffix every etcd RPC discovery key with .z<Zone> so each zone's
         # zrpc clients/servers form their own isolated load-balancer set.
         # Matches both the server's own Etcd.Key (e.g. 'Key: scenemanagerservice.rpc')
-        # and every RpcClient.Etcd.Key (e.g. 'SceneManagerRpc.Etcd.Key', 'LoginAdminRpc.Etcd.Key').
+        # and every RpcClient.Etcd.Key (e.g. 'SceneManagerRpc.Etcd.Key', 'DataServiceRpc.Etcd.Key').
         # Deliberately scoped to identifiers ending in '.rpc' to avoid touching
         # Redis cache prefixes (e.g. scene_manager.yaml has 'Redis.Key: scenemanagerservice').
         $keyRegex = [regex]::new('(?m)^(?<lead>\s*Key:\s*)(?<id>[\w.-]+\.rpc)\s*$')
@@ -605,7 +605,7 @@ function Resolve-InstanceConfig {
 
         # Suffix Kafka consumer group IDs so two zones do not race for the
         # same partitions when they happen to subscribe to overlapping topics
-        # (defence in depth -- per-zone topics are already used in practice).
+        # (defence in depth; today no service yaml has a quoted GroupID, guild's trial group is deliberately unquoted).
         $groupRegex = [regex]::new('(?m)^(?<lead>\s*GroupID:\s*")(?<id>[^"\r\n]+)(?<tail>"\s*(#.*)?)$')
         $content = $groupRegex.Replace(
             $content,
@@ -895,6 +895,7 @@ function Start-ServiceInstance {
 	$savedMatchMigrationUser = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_USER', 'Process')
 	$savedMatchMigrationPassword = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', 'Process')
 	$savedDatabaseAllowlist = [Environment]::GetEnvironmentVariable('DB_ALLOWED_DATABASES','Process')
+	$savedDbAutoMigrate = [Environment]::GetEnvironmentVariable('DB_AUTO_MIGRATE_SCHEMA','Process')
     try {
         if($null -ne $writerEnvironment){$savedWriterEnvironment=Enter-SqlWriterBootEnvironment -Environment $writerEnvironment}
         if ($Name -eq 'chat') { $null = Get-LocalChatAuthoritySettings -ConfigPath $cfg.FullPath -RequireDsn }
@@ -906,10 +907,12 @@ function Start-ServiceInstance {
 			if ([string]::IsNullOrWhiteSpace($declaredDatabases)) { throw '全球DS/DB必须显式提供同一DB_ALLOWED_DATABASES（或MMORPG_DB_ALLOWED_DATABASES），不得从当前Zone推导玩家库白名单。' }
 			[Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES',$declaredDatabases,'Process')
 		}
+        # go/db 缺 player_store 就拒启。K8s 和 compose 由迁移任务建表，本机没有迁移步骤，启动时建；只给 db，已显式设置时不覆盖。
+        if ($Name -eq 'db' -and [string]::IsNullOrWhiteSpace($savedDbAutoMigrate)) { [Environment]::SetEnvironmentVariable('DB_AUTO_MIGRATE_SCHEMA','1','Process') }
         # 聊天SQL账号仅交给chat；其它本机服务不得顺带继承此能力。
         if ($Name -ne 'chat') { [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN', $null, 'Process') }
         $accountDirectoryService = $Name.Replace('_','-')
-        if ($accountDirectoryService -in @('data-service','login','trade','match','scene-manager')) {
+        if ($accountDirectoryService -in @('data-service','login','trade','match','scene-manager','db')) {
             $previousAccountDirectorySecrets = Backup-AccountDirectoryDevSecrets -Service $accountDirectoryService
             Initialize-AccountDirectoryDevSecrets -RepoRoot $RepoRoot -Service $accountDirectoryService
         }
@@ -961,6 +964,7 @@ function Start-ServiceInstance {
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_USER', $savedMatchMigrationUser, 'Process')
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', $savedMatchMigrationPassword, 'Process')
 		[Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES',$savedDatabaseAllowlist,'Process')
+		[Environment]::SetEnvironmentVariable('DB_AUTO_MIGRATE_SCHEMA',$savedDbAutoMigrate,'Process')
         [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN', $savedChatDsn, 'Process')
         # 没注入过就没什么可还原的($prevAssetOpSecrets 仍是 $null);还原同时把摘掉的 trade 那把放回去。
         if ($injectAssetOpSecret) { Restore-AssetOpDevSecrets $prevAssetOpSecrets }
@@ -1202,7 +1206,7 @@ function Get-StopClockSeconds {
     return [double][System.Diagnostics.Stopwatch]::GetTimestamp() / [double][System.Diagnostics.Stopwatch]::Frequency
 }
 
-# 停止本脚本启动的实例。默认优雅停,分三段(G9,docs/design/db-task-pipeline-bottlenecks.md §4.4):
+# 停止本脚本启动的实例。默认优雅停,分三段:
 #   1. 对全部存活目标投递 Ctrl+C(-ForceStop 时直接强杀);投递不出去的立刻强杀进程树。
 #   2. 按各自的截止时间逐个等退出(Ctrl+C 是一起发的,所以等待是并行计时的);超时强杀进程树。
 #   3. 已退出或查不到的实例照旧输出 [gone]。

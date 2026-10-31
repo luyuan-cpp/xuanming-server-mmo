@@ -77,8 +77,9 @@ param(
     # match the robot config's zone_id (robot.currency-crash.yaml -> zone_id: 1).
     [int]$Zone = 1,
     # data_service 全局库(go/data_service/etc/data_service.yaml 的 SnapshotMySQL.DBName):
-    # 映射持久化的路由表在这里(见 Clear-GlobalRouteTables)。
-    [string]$GlobalDbName = "testdb",
+    # 映射持久化的路由表与账号目录在这里(见 Clear-GlobalRouteTables):只清 player_store 不清账号目录,
+    # 下一条用例登录会读到旧角色,认领时写权行已经没了(LOAD_AND_CLAIM_NO_OWNER)。
+    [string]$GlobalDbName = "mmorpg_global",
     # 全局库里还有在任的映射对账 leader(db_first)时照样清库(见 Assert-NoRunningRouteReconcileLeader;D1 第 1b-3 批)。
     [switch]$AllowWithRunningLeader
 )
@@ -119,7 +120,7 @@ Write-Host "Out dir: $OutDir" -ForegroundColor Cyan
 # 本脚本只连本机 mysql 容器。TiDB 环境的清库按 docs/design/tidb-phase1-and-launch-readiness.md §3.5 做:
 # TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`。
 # 既有全量本地 reset 同时清全局角色目录；Redis清空不再删除SQL归属。仅原显式wipe门禁允许执行。
-$RouteDataTables        = @('account_role_import_receipt', 'account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role', 'account_directory', 'player_route', 'zone_merge_fence', 'zone_merged_into')
+$RouteDataTables        = @('account_role_import_receipt', 'account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role', 'account_directory', 'player_route', 'zone_merged_into')
 $RouteMetaResetSql      = 'UPDATE route_meta SET writable=1 WHERE id=1;'
 $RouteReconcileResetSql = 'UPDATE route_reconcile SET leader=NULL, lease_until_ms=NULL, watermark_ms=0, cache_verified_ms=0 WHERE id=1;'
 
@@ -285,7 +286,7 @@ function Invoke-DataReset {
         Invoke-GlobalDbSql -Sql $Sql -What $What -MysqlPwd $mysqlPwd -HasDocker $hasDocker
     }
 
-    # Redis full flush — we want a clean PlayerAllData parent-key state.
+    # Redis full flush — clears the coordination keys (owner_epoch, location, save_barrier, handoff marks).
     if (Get-Command redis-cli -ErrorAction SilentlyContinue) {
         & redis-cli FLUSHALL | Out-Null
     } elseif ($hasDocker) {
@@ -294,15 +295,15 @@ function Invoke-DataReset {
         throw "[reset] redis-cli not on PATH and docker unavailable — cannot flush redis"
     }
 
-    # MySQL: truncate the player tables in the zone-isolated schema (zone_<N>_db,
+    # MySQL: truncate the player tables in the zone-isolated schema (zone_<N>_db;
+    # saves live in player_store,
     # see repo memory db-zone-isolation). Keep table definitions (DROP would force
     # a re-init dance). We touch only the tables this verification reads.
     # ($mysqlPwd 已在函数开头解析:对账 leader 的探测要先用它。)
     $dbName = "zone_${Zone}_db"
     $sql = @"
 SET FOREIGN_KEY_CHECKS=0;
-TRUNCATE TABLE player_database;
-TRUNCATE TABLE player_database_1;
+TRUNCATE TABLE player_store;
 TRUNCATE TABLE player_centre_database;
 TRUNCATE TABLE user_accounts;
 TRUNCATE TABLE account_share_database;
@@ -319,11 +320,11 @@ SET FOREIGN_KEY_CHECKS=1;
     # 全局库的路由表(fail-closed,理由见 Clear-GlobalRouteTables 上方注释)。
     Clear-GlobalRouteTables -MysqlPwd $mysqlPwd -HasDocker $hasDocker
 
-    # Kafka offset reset — best-effort only. After a full redis flush + mysql
-    # truncate, fresh accounts get brand-new SnowFlake player_ids, so any stale
-    # db-task messages reference ids that no longer exist and age out within the
-    # 60s topic retention. Resetting also requires the consumer group to be idle,
-    # which it isn't while the db service runs, so we treat failure as non-fatal.
+    # Kafka offset reset — best-effort only. Player saves do not go through Kafka;
+    # the groups left are the data_service audit consumers and match results, and
+    # skipping their backlog keeps the previous case's audit rows out of this one.
+    # Resetting also requires the consumer group to be idle, which it isn't while
+    # data_service runs, so we treat failure as non-fatal.
     if ($hasDocker) {
         try {
             & docker exec kafka /opt/kafka/bin/kafka-consumer-groups.sh `
@@ -361,9 +362,9 @@ function Start-Scene {
         $env:SCENE_PLAYER_SAVE_INTERVAL_SECONDS = "$SaveIntervalSec"
         Write-Host "[scene] starting with SCENE_PLAYER_SAVE_INTERVAL_SECONDS=$SaveIntervalSec" -ForegroundColor DarkCyan
     } else {
-        # Clear so the next start uses the default 300s.
+        # Clear so the next start uses the default 60s.
         Remove-Item env:SCENE_PLAYER_SAVE_INTERVAL_SECONDS -ErrorAction SilentlyContinue
-        Write-Host "[scene] starting with default save interval (300s)" -ForegroundColor DarkCyan
+        Write-Host "[scene] starting with default save interval (60s)" -ForegroundColor DarkCyan
     }
     $cppNodes = Join-Path $RepoRoot "tools\scripts\cpp_nodes.ps1"
 
@@ -532,8 +533,9 @@ function Invoke-CrashCase {
 
 # ── Cases ────────────────────────────────────────────────────────────────
 
-# A: kill 5s after add → expect loss (within default 300s save period).
-# B: wait 350s with default 300s period → expect preserved (one save tick fired).
+# A: kill 5s after add → expect loss. Pins the period to 300s: the default 60s spreads players over
+#    60 one-second slots, so about one run in twelve would save inside the 5s window and turn this red.
+# B: wait 350s, well past the default 60s period → expect preserved (a save tick fired).
 # C: same as B but with SCENE_PLAYER_SAVE_INTERVAL_SECONDS=10 + wait 15s.
 # D: no kill, normal scenario in-process — separate path; reuse case A
 #    accounts but Kill=$false so leg2 reads back the freshly-added gold.
@@ -544,7 +546,7 @@ foreach ($c in $caseList) {
     switch ($c) {
         "A" {
             $results += Invoke-CrashCase -Name "A" -Account "robot_0001" `
-                -WaitSeconds 5 -SaveIntervalSec 0 -Kill $true -Expected "lost"
+                -WaitSeconds 5 -SaveIntervalSec 300 -Kill $true -Expected "lost"
         }
         "B" {
             $results += Invoke-CrashCase -Name "B" -Account "robot_0002" `

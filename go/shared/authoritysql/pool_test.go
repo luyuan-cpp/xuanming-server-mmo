@@ -12,13 +12,13 @@ import (
 )
 
 func TestOpenRejectsWrongDatabaseBeforeConnecting(t *testing.T) {
-	if _, err := Open(context.Background(), "root@tcp(127.0.0.1:1)/other", "expected", true, 4, Reader()); err == nil {
+	if _, err := Open(context.Background(), "root@tcp(127.0.0.1:1)/other", "expected", BackendTiDB, 4, Reader()); err == nil {
 		t.Fatal("不应连接错误库")
 	}
 }
 
 func TestMigrationRejectsWrongDatabaseBeforeConnecting(t *testing.T) {
-	if _, err := OpenForMigration(context.Background(), "root@tcp(127.0.0.1:1)/other", "expected", true, Schema("schema_fixture@%")); err == nil {
+	if _, err := OpenForMigration(context.Background(), "root@tcp(127.0.0.1:1)/other", "expected", BackendTiDB, Schema("schema_fixture@%")); err == nil {
 		t.Fatal("迁移不应连接错误库")
 	}
 }

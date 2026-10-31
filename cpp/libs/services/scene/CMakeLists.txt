@@ -98,11 +98,11 @@ set(SOURCE_FILES
     player/system/player_inbox_registry.cpp
     player/system/gm_sanction_inbox_executor.cpp
     player/system/player_inbox_system.cpp
+    player/system/player_store_client.cpp
+    player/system/player_store_projection.cpp
     player/system/player_database_loader.cpp
     player/system/player_database_1_loader.cpp
     battle/system/player_battle.cpp
-    player/system/db_task_dispatch_ledger.cpp
-    player/system/db_task_dispatch_system.cpp
     player/system/player_lifecycle.cpp
     player/system/player_ownership_metrics.cpp
     player/system/role_admission_system.cpp

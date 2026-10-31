@@ -44,6 +44,7 @@
 #include "mysterymerchantspot_table.h"
 #include "pet_table.h"
 #include "petrule_table.h"
+#include "playmode_table.h"
 #include "reward_table.h"
 #include "rolenamerule_table.h"
 #include "skill_table.h"
@@ -51,6 +52,7 @@
 #include "test_table.h"
 #include "testmultikey_table.h"
 #include "world_table.h"
+#include "zonegroup_table.h"
 
 
 LoadSuccessCallback loadSuccessCallback;
@@ -137,6 +139,8 @@ void LoadTables() {
 
     PetRuleTableManager::Instance().Load();
 
+    PlayModeTableManager::Instance().Load();
+
     RewardTableManager::Instance().Load();
 
     RoleNameRuleTableManager::Instance().Load();
@@ -150,6 +154,8 @@ void LoadTables() {
     TestMultiKeyTableManager::Instance().Load();
 
     WorldTableManager::Instance().Load();
+
+    ZoneGroupTableManager::Instance().Load();
 
 
 
@@ -233,6 +239,8 @@ void LoadTables() {
 
     PetRuleTableManager::Instance().LoadSuccess();
 
+    PlayModeTableManager::Instance().LoadSuccess();
+
     RewardTableManager::Instance().LoadSuccess();
 
     RoleNameRuleTableManager::Instance().LoadSuccess();
@@ -247,6 +255,8 @@ void LoadTables() {
 
     WorldTableManager::Instance().LoadSuccess();
 
+    ZoneGroupTableManager::Instance().LoadSuccess();
+
 
     if (loadSuccessCallback) {
         loadSuccessCallback();
@@ -254,7 +264,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(47);
+    static muduo::CountDownLatch latch(49);
 
     std::thread ActivityScheduleLoadThread([]() {
         void InitThreadLocalConfig();
@@ -576,6 +586,14 @@ void LoadTablesAsync() {
     });
     PetRuleLoadThread.detach();
 
+    std::thread PlayModeLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        PlayModeTableManager::Instance().Load();
+        latch.countDown();
+    });
+    PlayModeLoadThread.detach();
+
     std::thread RewardLoadThread([]() {
         void InitThreadLocalConfig();
         InitThreadLocalConfig();
@@ -631,6 +649,14 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     WorldLoadThread.detach();
+
+    std::thread ZoneGroupLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        ZoneGroupTableManager::Instance().Load();
+        latch.countDown();
+    });
+    ZoneGroupLoadThread.detach();
 
     latch.wait();
 
@@ -715,6 +741,8 @@ void LoadTablesAsync() {
 
     PetRuleTableManager::Instance().LoadSuccess();
 
+    PlayModeTableManager::Instance().LoadSuccess();
+
     RewardTableManager::Instance().LoadSuccess();
 
     RoleNameRuleTableManager::Instance().LoadSuccess();
@@ -728,6 +756,8 @@ void LoadTablesAsync() {
     TestMultiKeyTableManager::Instance().LoadSuccess();
 
     WorldTableManager::Instance().LoadSuccess();
+
+    ZoneGroupTableManager::Instance().LoadSuccess();
 
     if (loadSuccessCallback) {
         loadSuccessCallback();

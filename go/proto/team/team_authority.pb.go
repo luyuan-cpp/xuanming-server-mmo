@@ -1455,7 +1455,7 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"\vteam_record\x18\x03 \x01(\v2\x12.teampb.TeamRecordR\n" +
 	"teamRecord\x126\n" +
 	"\boriginal\x18\x04 \x01(\v2\x1a.teampb.TeamLaunchOriginalR\boriginal\x12D\n" +
-	"\x0fspectator_exits\x18\x05 \x03(\v2\x1b.match.MatchSpectatorRecordR\x0espectatorExits\"\xcc\x05\n" +
+	"\x0fspectator_exits\x18\x05 \x03(\v2\x1b.match.MatchSpectatorRecordR\x0espectatorExits\"\x9c\x06\n" +
 	"\x10TeamLaunchRecord\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +
@@ -1478,7 +1478,7 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"\apayload\x18\x0e \x01(\fR\apayload\x12#\n" +
 	"\rowner_account\x18\x0f \x01(\tR\fownerAccount\x12%\n" +
 	"\x0eowner_revision\x18\x10 \x01(\x04R\rownerRevision\x12\x12\n" +
-	"\x04mode\x18\x11 \x01(\rR\x04mode:\xaa\x01\x8a\x92\xf4\x01\vteam_launch\x92\x92\xf4\x01!actor_id,request_high,request_lowڒ\xf4\x01ostate,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low\"\x97\b\n" +
+	"\x04mode\x18\x11 \x01(\rR\x04mode:\xfa\x01\x8a\x92\xf4\x01\vteam_launch\x92\x92\xf4\x01!actor_id,request_high,request_lowڒ\xf4\x01\xbe\x01state,enqueued_ms,actor_id,request_high,request_low;team_id,state,enqueued_ms,actor_id,request_high,request_low;state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low\"\x97\b\n" +
 	"\x16TeamLaunchRegionRecord\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x12!\n" +
 	"\frequest_high\x18\x02 \x01(\x04R\vrequestHigh\x12\x1f\n" +

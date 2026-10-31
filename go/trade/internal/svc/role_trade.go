@@ -89,9 +89,6 @@ func (sc *ServiceContext) initRmb() error {
 	if sc.Assets == nil || !sc.Config.Rmb.GlobalLoginSessions || sc.Config.Rmb.LoginRedis.Host == "" {
 		return errors.New("交易必须显式装配资产通道与全局login态Redis")
 	}
-	if !sc.Config.MySQL.RequiresTiDB() {
-		return errors.New("人民币跨域提交互锁只支持同TiDB权威集群")
-	}
 	for _, c := range sc.Config.Rmb.CurrencyTypes {
 		if c > 1 {
 			return errors.New("人民币寄售货币只允许金币或显式开启钻石，绑定币禁售")

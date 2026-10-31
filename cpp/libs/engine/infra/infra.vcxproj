@@ -28,7 +28,6 @@
     <ClInclude Include="messaging\kafka\kafka_manager.h" />
     <ClInclude Include="messaging\kafka\kafka_producer.h" />
     <ClInclude Include="messaging\kafka\kafka_producer_policy.h" />
-    <ClInclude Include="storage\redis_client\redis_client.h" />
   </ItemGroup>
   <ItemGroup>
     <!-- librdkafka 的 C++ 包装层随本工程从源码编译,不链接预编译的 rdkafka++.dll。
@@ -82,7 +81,6 @@
     <ClCompile Include="messaging\kafka\kafka_consumer.cpp" />
     <ClCompile Include="messaging\kafka\kafka_manager.cpp" />
     <ClCompile Include="messaging\kafka\kafka_producer.cpp" />
-    <ClCompile Include="storage\redis_client\redis_client.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

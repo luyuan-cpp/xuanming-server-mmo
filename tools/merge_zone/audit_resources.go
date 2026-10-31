@@ -1,37 +1,11 @@
 package main
 
-// Resource audit for server merge — companion to main.go's 5-step merge.
+// -mode audit:合服的只读审计。
 //
-// Why this exists:
-//   tools/merge_zone/main.go covers guild MySQL + guild ranking ZSET + player
-//   home_zone mapping + (optional) player blob copy. It does NOT examine the
-//   ~half-dozen other tables and Redis structures that hang off player_id and
-//   may also need attention during merge:
-//     - friend / friend_request (per-player tables, both sides may move)
-//     - mail / mail_attachment (mail recipients & attached items)
-//     - auction (in-flight auctions hanging off seller_id / bidder_id)
-//     - chat_history (per-zone or global?)
-//     - guild_application (applicant_id pointing into either zone)
-//     - player.name conflicts (the missing P0-G check)
-//     - online status keys (Redis TTL keys that may shadow re-login)
+//   - 合服前(缺省):源区是否停干净、会被业务合并牵动的几张表的体量与数据质量,写进维护单给人看;
+//   - 合服后(-verify-merged):四行 block 级断言,verify:merged_into、verify:guild_zone、verify:trade_market_zone、verify:guild_rank。
 //
-//   This file scans those resources during a merge dry-run and reports
-//   discrepancies BEFORE main.go's destructive write phase. See
-//   docs/design/server-merge-gap-fixes.md §2 (P0-J) and
-//   docs/ops/merge-zone-runbook.md §4.2.
-//
-// What it does NOT do:
-//   - Does not fix the discrepancies. Some need schema decisions
-//     (chat history retention), some need a force-rename UI in the
-//     client (P0-G), some are runtime-state issues that just need a
-//     "wait until target zone is fully drained" gate.
-//   - Does not touch data unless invoked with -VerifyMerged AND the
-//     verify-merged path discovers leftover source-zone state worth
-//     printing (still read-only).
-//
-// Wiring:
-//   `dev_tools.ps1 -Command merge-zone-audit -MergeSourceZone <s> -MergeTargetZone <d>`
-//   forwards to `merge_zone.exe -mode audit ...` (see main.go's flag wiring).
+// 不修复任何东西;main.go 的 merge / unmerge 是仅有的写者。
 
 import (
 	"context"
@@ -52,13 +26,19 @@ import (
 // look like?" Fields are deliberately denormalized; the audit prints them
 // as a markdown table so ops can eyeball before the maintenance window.
 type ResourceAudit struct {
-	Name          string // resource short name (e.g. "mail", "friend")
+	Name          string // resource short name (e.g. "friend", "verify:guild_zone")
 	SourceCount   int64  // rows / keys in source zone
 	TargetCount   int64  // rows / keys in target zone
 	UniqueScope   string // "global" / "per_zone" / "none" — affects merge safety
-	ConflictCount int64  // post-merge collision count (e.g. duplicate player names)
+	ConflictCount int64  // post-merge collision count
 	Severity      string // "info" / "warn" / "block"
 	Notes         string // free-form observations + remediation hint
+}
+
+// routeAuditReader 是审计读路由库的接缝(生产 *mergeRouteStore;单测注入假实现)。全部是事务外一致读、不加锁。
+type routeAuditReader interface {
+	routeHomeScanner
+	ReadMergedInto(ctx context.Context, src uint32) (dst uint32, runID string, found bool, err error)
 }
 
 // auditConfig bundles inputs every per-resource auditor needs.
@@ -66,30 +46,20 @@ type ResourceAudit struct {
 // We pass this around instead of a global so the auditor can be unit-tested
 // with mocked DB / Redis. Keep this struct small — anything zone-wide goes
 // into a closure if needed.
-// Redis DB 分布(实地核对 2026-09-08,来源见每行括注)。审计跨了四个 DB,
-// 把它们混成一个句柄正是旧 auditOnlineKeys 恒不告警的根因,所以这里一人一格。
+// Redis DB 分布(实地核对 2026-09-08,来源见每行括注)。审计跨了几个句柄,把它们混成一个句柄
+// 正是旧审计恒不告警的根因,所以这里一人一格。
 //
-//	mapping  DB 0   player:zone:{id} / lock:player:{id} / merge:in_progress:{zone}
+//	mapping  DB 0   merge:merged_into:{src} / mapping:route:watermark
 //	                (go/data_service/etc/data_service.yaml MappingRedis)
 //	guild    DB 0   guild_rank:zone:{z} / guild:v2:{id} / guild_rank:maintenance_lock
 //	                (go/guild/etc/guild.yaml RedisClient;2026-10-23 由 DB 2 改为 0)
-//	shared   DB 0   player:session:{pid} / kafka:{retry,dead}:queue:* /
-//	                PlayerAllData:{pid} / {MsgType}:{pid} / player_merge_notice:{pid}
-//	                (go/login, go/db, go/player_locator, scene_manager 都是 DB 0)
-//
-// friend 的 DB 3 一行已删(2026-09-18,friend 移植 F3):那一格里唯一的键 friend:online:{pid}
-// 已退役(全仓无写者,读者在 F2 删),移植后的 go/friend 私有缓存住 FriendRedis 且**可以是
-// Cluster**,不再是这张「一人一格」表能表达的形状;审计也不需要它 —— friend 的在线判定
-// 与本工具一样读 shared 的 player:session。
+//	shared   DB 0   player:session:{pid}(go/login, go/player_locator 都是 DB 0)
 type auditConfig struct {
-	db        *sql.DB       // game MySQL — zone_{N}_db;帮会表在 guildSchema、好友在 friendSchema、聚宝斋在 tradeSchema
+	db        *sql.DB       // 全局 SQL:帮会表在 guildSchema、好友在 friendSchema、聚宝斋在 tradeSchema
 	mappingDB *redis.Client // DB 0(go-zero RedisConf 无 DB 字段)
 	rankRDB   *redis.Client // guild 的 RedisClient,DB 0
 	sharedRDB *redis.Client // DB 0
 	sceneRDB  *redis.Client // scene_manager Redis (DB 0 by default)
-	// dataRDB: per-zone player data Redis(standalone 或 cluster)。可选:
-	// 只有配了 -source-data-redis 才有,用来查 player:{id}:__lock。
-	dataRDB redis.UniversalClient
 	// sceneNodes: etcd 场景节点注册表(scene_registry.go)。nil = 没给 -etcd-endpoints 或地址非法。
 	sceneNodes sceneRegistry
 
@@ -97,22 +67,16 @@ type auditConfig struct {
 	// 否则「0 在线」这种结论没法复核。
 	sharedDBIndex int
 
-	src     uint32        // source zone (merging FROM)
-	dst     uint32        // target zone (merging INTO)
-	verify  bool          // post-merge verification mode (-verify-merged)
-	timeout time.Duration // per-query timeout — keep short, audit must be fast
+	src    uint32 // source zone (merging FROM)
+	dst    uint32 // target zone (merging INTO)
+	verify bool   // post-merge verification mode (-verify-merged)
 
-	// expectedSrcPlayers: T-1 彩排记下来的源区玩家数,-1 = 未提供。
-	// -verify-merged 用它与清单人数互相核对(拿错清单的最后一道拦截)。
-	expectedSrcPlayers int64
-	// manifest / manifestErr:-verify-merged 逐 id 核对用的那份清单(A6),由 runAuditEntry 按 -manifest-path 读。
+	// manifest / manifestErr:-verify-merged 用的那份清单,由 runAuditEntry 按 -manifest-path 读。
 	// 读不出 / 是 dry-run 预览 / src-dst 对不上时 manifest 为 nil、manifestErr 说明原因,相关断言报 INFRA。
 	manifest    *mergeManifest
 	manifestErr error
-	// topicGeneration: db_task topic 的代号(go/db/etc/db.yaml Kafka.TopicGeneration)。
-	topicGeneration uint32
 	// tradeSchema / skipTrade:聚宝斋库名与跳过声明(-trade-schema / -skip-trade-mysql)。
-	// 跳过时 verify:trade_listing 标 warn「NOT VERIFIED」,不伪装成通过。
+	// 跳过时 verify:trade_market_zone 标 warn「NOT VERIFIED」,不伪装成通过。
 	tradeSchema string
 	skipTrade   bool
 	// guildSchema:帮会独占库名(-guild-schema,默认 mmorpg_guild)。帮会表不在
@@ -126,28 +90,24 @@ type auditConfig struct {
 	// 与 tradeSchema 同一口径:经同一个 -mysql-dsn 以「库名.表名」访问,flag 只为集成测试
 	// 的一次性库留口子(否则集成测试只能去动真实的 mmorpg_friend)。
 	friendSchema string
-	// routeSource 是 -route-source(db / redis;决定是否跑 verify:route_cache)。
-	routeSource string
-	// routes:映射的读方(D1 第 2 批,规格 §6.3 R8)。-route-source=redis 读 mapping Redis(今天的口径),db 读全局库。
-	// nil = 读方没装成(mapping Redis 连不上 / 库打不开 / 库与 Redis 不成对,原因在 routeErr),依赖它的检查一律报 INFRA。
-	routes   routeReadSide
+	// routes:路由库的读方。nil = 没装成(mapping Redis 连不上 / 库打不开 / 库与 Redis 不成对,原因在 routeErr),
+	// 依赖它的检查一律报 INFRA。
+	routes   routeAuditReader
 	routeErr error
-	// routeDB:-route-source=db 时的全局库(只读);redis 源为 nil。verify:route_cache 与库里的围栏复核用它。
-	routeDB routeDBReader
 }
 
-// routeReads 返回映射读方;没装成时返回原因(调用方报 INFRA,不能当作「没有玩家」)。
-func (c auditConfig) routeReads() (routeReadSide, error) {
+// routeReads 返回路由库读方;没装成时返回原因(调用方报 INFRA,不能当作「没有玩家」)。
+func (c auditConfig) routeReads() (routeAuditReader, error) {
 	switch {
 	case c.routes != nil:
 		return c.routes, nil
 	case c.routeErr != nil:
 		return nil, c.routeErr
 	}
-	return nil, errors.New("no route read side (mapping Redis unreachable, or the route source was not set up)")
+	return nil, errors.New("no route DB read side (mapping Redis unreachable, or the route DB was not set up)")
 }
 
-// verifyManifest 返回 -verify-merged 逐 id 核对用的清单;没有可用清单时返回原因(调用方报 INFRA)。
+// verifyManifest 返回 -verify-merged 核对用的清单;没有可用清单时返回原因(调用方报 INFRA)。
 func (c auditConfig) verifyManifest() (*mergeManifest, error) {
 	if c.manifestErr != nil {
 		return nil, c.manifestErr
@@ -184,21 +144,14 @@ type auditEntryParams struct {
 	// etcdEndpoints: -etcd-endpoints 原文;空 = 没给,source_scene_nodes 报 INFRA。
 	etcdEndpoints string
 
-	dataAddrs []string
-	dataPwd   string
-	dataDB    int
-
-	verifyMerged       bool
-	manifestPath       string
-	expectedSrcPlayers int64
-	topicGeneration    uint32
-	tradeSchema        string
-	skipTrade          bool
-	skipGuild          bool
-	guildSchema        string
-	friendSchema       string
-	// route 是 -route-source 与路由库参数(main 装配,routeEntryOptionsOf;DSN 含口令,不进日志)。
-	// source 为空 = 装配层没传:映射相关检查报 INFRA(exit 2),绝不默认成某一种来源。
+	verifyMerged bool
+	manifestPath string
+	tradeSchema  string
+	skipTrade    bool
+	skipGuild    bool
+	guildSchema  string
+	friendSchema string
+	// route 是路由库参数(main 装配,routeEntryOptionsOf;DSN 含口令,不进日志)。
 	route routeEntryOptions
 }
 
@@ -209,6 +162,15 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// openAuditRoutes 开路由库并核对它与 mapping Redis 成对。审计从不写:探针只读,发布器只用来读水位键,WAITAOF 参数用不到。
+func openAuditRoutes(ctx context.Context, ro routeEntryOptions, mapping *redis.Client) (*mergeRouteStore, error) {
+	if mapping == nil {
+		return nil, errors.New("no mapping Redis handle: cannot check whether the route DB and the mapping Redis are paired " +
+			"(" + routeWatermarkKey + ")")
+	}
+	return openPairedRouteStore(ctx, ro.dbDSN, ro.sqlBackend, newRoutePublisher(mapping, routeDurability{}))
 }
 
 // runAuditEntry is the -mode=audit dispatch from main.go. It opens the
@@ -226,7 +188,7 @@ func runAuditEntry(p auditEntryParams) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	db, err := openCurrentTiDB(ctx, p.mysqlDSN)
+	db, err := openCurrentSession(ctx, p.mysqlDSN, p.route.sqlBackend)
 	if err != nil {
 		log.Printf("ERROR: mysql open: %v — MySQL-backed checks will report INFRA", err)
 		db = nil
@@ -254,17 +216,6 @@ func runAuditEntry(p auditEntryParams) {
 			defer c.Close()
 		}
 	}
-	var dataRdb redis.UniversalClient
-	if len(p.dataAddrs) > 0 {
-		dataRdb = newDataRedisClient(p.dataAddrs, p.dataPwd, p.dataDB)
-		if dataRdb != nil {
-			defer dataRdb.Close()
-			if err := dataRdb.Ping(ctx).Err(); err != nil {
-				log.Printf("ERROR: data redis ping (%v): %v", p.dataAddrs, err)
-				dataRdb = nil
-			}
-		}
-	}
 
 	var sceneNodes sceneRegistry
 	if p.etcdEndpoints != "" {
@@ -276,48 +227,39 @@ func runAuditEntry(p auditEntryParams) {
 	}
 
 	cfg := auditConfig{
-		db:                 db,
-		mappingDB:          mapRdb,
-		rankRDB:            rankRdb,
-		sharedRDB:          sharedRdb,
-		sceneRDB:           sceneRdb,
-		dataRDB:            dataRdb,
-		sceneNodes:         sceneNodes,
-		sharedDBIndex:      p.sharedDB,
-		src:                p.src,
-		dst:                p.dst,
-		verify:             p.verifyMerged,
-		timeout:            30 * time.Second,
-		expectedSrcPlayers: p.expectedSrcPlayers,
-		topicGeneration:    p.topicGeneration,
-		tradeSchema:        p.tradeSchema,
-		skipTrade:          p.skipTrade,
-		skipGuild:          p.skipGuild,
-		guildSchema:        p.guildSchema,
-		friendSchema:       p.friendSchema,
+		db:            db,
+		mappingDB:     mapRdb,
+		rankRDB:       rankRdb,
+		sharedRDB:     sharedRdb,
+		sceneRDB:      sceneRdb,
+		sceneNodes:    sceneNodes,
+		sharedDBIndex: p.sharedDB,
+		src:           p.src,
+		dst:           p.dst,
+		verify:        p.verifyMerged,
+		tradeSchema:   p.tradeSchema,
+		skipTrade:     p.skipTrade,
+		skipGuild:     p.skipGuild,
+		guildSchema:   p.guildSchema,
+		friendSchema:  p.friendSchema,
 	}
-	// 映射读方(规格 §6.3 R8):db 源一律读全局库;开库前先核对库与 mapping Redis 成对(§13.3 第 3 条)。
-	// 装不成不整个退出:其余检查照跑,依赖映射的检查报 INFRA,整个审计以 exit 2 结束(结论不可信)。
-	cfg.routeSource = p.route.source
-	routes, routeStore, rerr := openRouteReadSide(ctx, p.route, mapRdb, "audit")
+	// 路由库读方:开库前先核对库与 mapping Redis 成对。装不成不整个退出:其余检查照跑,依赖它的检查报 INFRA,
+	// 整个审计以 exit 2 结束(结论不可信)。
+	routeStore, rerr := openAuditRoutes(ctx, p.route, mapRdb)
 	if rerr != nil {
-		cfg.routeErr = fmt.Errorf("route source %q: %w", p.route.source, rerr)
-		log.Printf("ERROR: %v — the mapping-backed checks will report INFRA", cfg.routeErr)
+		cfg.routeErr = fmt.Errorf("route DB: %w", rerr)
+		log.Printf("ERROR: %v — the route-backed checks will report INFRA", cfg.routeErr)
 	} else {
-		cfg.routes = routes
-		if routeStore != nil {
-			defer routeStore.Close()
-			cfg.routeDB = routeStore
-		}
-		log.Printf("route mapping is read from %s", routes.source())
+		cfg.routes = routeStore
+		defer routeStore.Close()
 	}
 	if p.verifyMerged {
-		// 读不出不整个退出:其余断言照跑,逐 id 那两条报 INFRA,整个审计以 exit 2 结束(结论不可信)。
+		// 读不出不整个退出:其余断言照跑,依赖清单的那一条报 INFRA,整个审计以 exit 2 结束(结论不可信)。
 		cfg.manifest, cfg.manifestErr = loadVerifyManifest(p.manifestPath, p.src, p.dst)
 		if cfg.manifestErr != nil {
-			log.Printf("ERROR: %v — the per-player verifications will report INFRA", cfg.manifestErr)
+			log.Printf("ERROR: %v — the manifest-backed verification will report INFRA", cfg.manifestErr)
 		} else {
-			log.Printf("verify: manifest %s (run_id=%s, %d players)", p.manifestPath, cfg.manifest.RunID, len(cfg.manifest.PlayerIDs))
+			log.Printf("verify: manifest %s (run_id=%s)", p.manifestPath, cfg.manifest.RunID)
 		}
 	}
 
@@ -331,7 +273,7 @@ func runAuditEntry(p auditEntryParams) {
 	blockCount, _ := printAuditReport(results)
 
 	// exit 2 优先于 exit 1:「审计本身没跑成」和「审计跑成了并发现问题」
-	// 对 ops 脚本是两件事。文档一直这么写,以前从没真的返回过。
+	// 对 ops 脚本是两件事。
 	infra := 0
 	for _, r := range results {
 		if isInfraAudit(r) {
@@ -353,72 +295,34 @@ func runAuditEntry(p auditEntryParams) {
 // The contract:
 //   - Read-only. Never writes. Refusing to write is a safety property of the
 //     audit — main.go is the only writer, this file is the inspector.
-//   - Returns a non-nil slice; never nil. Empty slice means "no resources
-//     known to audit," which is itself worth printing so ops doesn't think
-//     audit silently skipped.
+//   - Returns a non-nil slice; never nil.
 //
-// 2026-05-23 schema-reality reconciliation:
-//
-//	The earlier shape of this file ran ten auditors covering
-//	player.name / mail / mail_attachment / auction / chat_history /
-//	guild_application — all assuming standalone MySQL tables that
-//	*do not actually exist in this codebase*. The real schema lives
-//	in deploy/mysql-init/ and go/db/model/mysql_database_table.sql:
-//	only `guild`, `guild_member`, `friend`, `friend_request`, and the
-//	blob-form `player_database` exist. Player nicknames are inside
-//	`player_database`'s MEDIUMBLOB, not a column.
-//
-//	Running auditors against tables that don't exist returns the
-//	"table not present — nothing to audit" placeholder I built as a
-//	"graceful degradation" path. In practice that placeholder *misleads*
-//	ops into thinking the audit ran cleanly. Removed those auditors;
-//	only checks that exercise schema we *actually have* survived.
-//
-//	The Player-name conflict check survives in a different shape: a
-//	single info row stating the naming rule that applies to a merge.
-//	2026-09(帮会二期 B3a)起角色名由 data_service 全局库 player_name
-//	保证全服唯一,这一行写的是「合服无冲突、不改名」,详见
-//	auditPlayerNameConflicts 的注释与 docs/ops/merge-zone-runbook.md §7.1。
+// -verify-merged 的四行与 mergeRecoveryRowNames 一一对应,P7 审计与 go/db barrierrestore 按这组行名校验;
+// 这里加行必须两边同批改。
 func runAuditMode(ctx context.Context, cfg auditConfig) []ResourceAudit {
-	auditors := []func(context.Context, auditConfig) ResourceAudit{
-		auditPlayerNameConflicts, // 名字全服唯一(data_service player_name),合服无冲突 —— 只出一条 info 说明行
-		auditFriend,              // mmorpg_friend.friend:keyed by player_id;survives merge automatically
-		auditFriendRequest,       // mmorpg_friend.friend_request:same
-		auditGuildMembers,        // global guild_member table; surfaces volume + zone-cross hints
-	}
+	var auditors []func(context.Context, auditConfig) ResourceAudit
 	if cfg.verify {
-		// 合服后验证:runbook §5 Step 5 的那张表,逐条 block 级断言。
-		auditors = append(auditors,
-			verifyMappingDrained,
-			verifyManifestMapping, // 清单里每个玩家的 player:zone == dst(A6,取代「dst 总数 >= 期望值」的下界)
-			verifyGuildZoneDrained,
-			verifyGuildRankZSets,
+		auditors = []func(context.Context, auditConfig) ResourceAudit{
+			verifyMergedInto,             // 映射已写、是这份清单写的,Redis 标记与库一致
+			verifyGuildZoneDrained,       // guild.zone_id=src 必须为 0
 			verifyTradeMarketZoneDrained, // trade_listing.market_zone=src 必须为 0(trade_step.go)
-			verifyManifestRows,           // 清单里每个玩家的主数据行在该在的库里(A6,取代 verify:target_zone_rows)
-			verifySaveBarriers,           // 按 login 冷加载预判有存盘历史的清单玩家:一致 / 采纳 SQL / 拒登(r2-mz#1,save_barrier_verify.go)
-			verifySourceHotStateGone,
-			verifyFenceReleased,
-		)
-		// -route-source=db:库是真源,还要证明 mapping Redis 里清单玩家的那一份与库逐字节一致(rev 相等、值相同),
-		// dst 开服之前读方看到的才是库里的结论(规格 §6.3 R8、P-6)。redis 源没有第二份可比,不跑、不出这一行。
-		if cfg.routeSource == routeSourceDB {
-			auditors = append(auditors, verifyRouteCache)
+			verifyGuildRankZSets,         // 源榜已删,目标榜成员数与公会行数一致
 		}
 	} else {
-		// 合服前门禁:每一条都能真的拦住 -apply。
-		auditors = append(auditors,
-			auditSourceZoneNodes, // scene_nodes:zone:{src}:load 必须空
-			auditOnlinePresence,  // player:session(DB 0);friend:online 已退役,见 audit_checks.go
-			auditPlayerLocks,     // lock:player:*(mapping DB) + player:{id}:__lock(data)
-			auditKafkaQueues,     // kafka:retry/processing/dead(DB 0)
-			auditPlayerInbox,     // 两个 zone 库都有 player_database.inbox_ledger 列 + 收件箱 PENDING 量(只读,见 player_inbox_audit.go)
-		)
+		auditors = []func(context.Context, auditConfig) ResourceAudit{
+			auditPlayerNameConflicts, // 名字全服唯一(data_service player_name),合服无冲突 —— 只出一条 info 说明行
+			auditFriend,              // mmorpg_friend.friend:keyed by player_id;survives merge automatically
+			auditFriendRequest,       // mmorpg_friend.friend_request:same
+			auditGuildMembers,        // global guild_member table; surfaces volume + zone-cross hints
+			auditSourceZoneNodes,     // 源区场景节点:etcd 注册表 + 负载集
+			auditOnlinePresence,      // player:session(DB 0)
+		}
 	}
 
 	results := make([]ResourceAudit, 0, len(auditors))
 	for _, fn := range auditors {
 		// Each auditor gets its own derived context so a slow scan on one
-		// resource (e.g. mail with millions of rows) cannot stall the rest.
+		// resource cannot stall the rest.
 		// 30s is generous — if any auditor needs more, it's broken.
 		auditCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		results = append(results, fn(auditCtx, cfg))
@@ -472,64 +376,14 @@ func printAuditReport(results []ResourceAudit) (blockCount, warnCount int) {
 // optional table (e.g. chat_history not deployed yet) should not break
 // the merge gate.
 
-// auditPlayerNameConflicts —— 角色名口径的说明行:名字全服唯一,合服无冲突(2026-09 起,
-// 见本注释末尾)。此前它依次是:静默失败的 P0-G 检查(到 2026-05-23)→「未实现」提示 →
-// 「不适用」提示。
+// auditPlayerNameConflicts —— 角色名口径的说明行:名字全服唯一,合服无冲突。
 //
-// History (kept as a cautionary comment for future engineers; describes the
-// codebase as of 2026-05-23, BEFORE role names existed):
+// 角色名的唯一性**不按 zone**:真源是 data_service 全局库的 player_name 表(uk_player_name 全服唯一,
+// docs/design/guild-phase2/03-names.md §3.16),login 建角时先 ReservePlayerName 占名再建角。两个 zone 里不可能各有一个
+// 「剑圣」,合服也就没有重名可撞。注册表在全局库,合服不搬不改。
 //
-//	The earliest shape ran SQL against `player.name` / `player.zone_id`.
-//	Both columns are entirely fictional in this codebase — the real
-//	`player_database` schema has only `player_id BIGINT` plus seven
-//	MEDIUMBLOB component columns. Discovering that triggered v1.1 of
-//	this audit, which turned the row into a block-severity "not
-//	implemented; see merge-zone-runbook.md §4.4" hint pointing at a
-//	manual rename procedure.
-//
-//	Then I went looking for *which* protobuf field actually holds the
-//	nickname so a future protobuf-decoding implementation knew where
-//	to look. Result:
-//	  - CreatePlayerRequest is an empty message — no nickname on creation
-//	  - AccountSimplePlayer carries only player_id
-//	  - PlayerUint32Comp / PlayerUint64Comp carry class /
-//	    registration_timestamp respectively, no name field
-//	  - user.display_name column exists in the SQL schema but
-//	    grep across go/ + cpp/ shows zero readers and zero writers;
-//	    it's a placeholder column on a placeholder table
-//
-//	So the project today has NO PLAYER NICKNAME at all. Players are
-//	identified to other players by player_id (uint64). The "two
-//	players named 剑圣 in different zones merge" scenario described
-//	in server-merge-gap-fixes.md §1 cannot happen because nobody has
-//	a name to clash on.
-//
-//	The force_rename plumbing (PlayerMergeStateComp + Redis flag +
-//	EnterGameResponse field + post_merge_stamp.go's parameter seam)
-//	is NOT dead code — it's pre-wired for the day someone enables a
-//	nickname surface. Until then this auditor reports the situation
-//	so operators don't blindly follow a manual procedure for a
-//	problem they don't have.
-//
-// 2026-09 帮会二期 B3a(docs/design/guild-phase2/03-names.md §3.16)—— 上面那段
-// 「项目没有昵称」的结论自此作废,保留只为说明这一行的来历:
-//
-//	角色名已经存在,但它的唯一性**不按 zone**:真源是 data_service 全局库的
-//	player_name 表(uk_player_name 全服唯一),login 建角时先 ReservePlayerName
-//	占名再建角。两个 zone 里不可能各有一个「剑圣」,合服也就没有重名可撞。
-//	注册表在全局库,合服不搬不改。两份名字副本各走各的路:
-//	player_database.profile_component 里的那份在 zone 库,随玩家行由 copyPlayerRows
-//	带走;账号 blob(login 共享 Redis 的 account:<acct>)按账号存放、不分 zone,
-//	本工具不读不写,其中的 AccountSimplePlayer.name 原样保留。
-//
-// 这个 auditor 现在做什么:
-//
-//	返回一条 info 行,写明「名字全服唯一,合服无冲突、不改名」。不查库:
-//	唯一性由 data_service 的唯一键在写入时保证,不是合服期能靠扫描发现的问题;
-//	这里查一遍只会制造第二份「名字是否唯一」的判据。级别刻意是 info 而不是
-//	block —— 一条守不住任何东西的 block 只会逼运维学会跳过门禁。
-//	force_rename 管线(force_rename_required + player_force_rename:{id})
-//	保持未启用、原样保留,不在本批改动范围内。
+// 不查库:唯一性由 data_service 的唯一键在写入时保证,不是合服期能靠扫描发现的问题;这里查一遍只会制造第二份
+// 「名字是否唯一」的判据。级别刻意是 info 而不是 block —— 一条守不住任何东西的 block 只会逼运维学会跳过门禁。
 func auditPlayerNameConflicts(ctx context.Context, cfg auditConfig) ResourceAudit {
 	return ResourceAudit{
 		Name:        "player.name (global)",
@@ -559,11 +413,9 @@ const defaultFriendSchema = "mmorpg_friend"
 // validateFriendSchemaName 在任何 SQL 之前验库名形状。库名直接拼进语句(标识符不能用
 // 占位符),这是这条拼接唯一的注入防线。
 //
-// 刻意复用 player_rows.go 的公共 schemaNamePattern 而不是再抄一份正则:三个 flag
+// 刻意复用 merge_run.go 的公共 schemaNamePattern 而不是再抄一份正则:三个 flag
 // (-guild-schema / -trade-schema / -friend-schema)防的是同一件事(「是不是一个朴素
 // 标识符」),抄三份迟早会漂移成三套注入防线。
-// (本函数原先引用的是 trade_step.go 的 tradeSchemaNamePattern;帮会二期 B1b 把那份
-// 正则提到了 player_rows.go 并改名为 schemaNamePattern,合并后旧名已不存在。)
 func validateFriendSchemaName(schema string) error {
 	if !schemaNamePattern.MatchString(schema) {
 		return fmt.Errorf("-friend-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", schema)
@@ -696,10 +548,3 @@ func auditGuildMembers(ctx context.Context, cfg auditConfig) ResourceAudit {
 	}
 	return r
 }
-
-// (auditOnlineKeys 已删除,由 audit_checks.go 的 auditOnlinePresence 取代。
-//
-//	它查错了 Redis DB:friend:online:{pid} 由 go/friend 写在 **DB 3**,而旧实现
-//	在 mapping Redis(DB 0)上查,恒查不到 ⇒ 恒 "all source-zone players offline ✅"。
-//	pipeline 错误还被 `_, _ = pipe.Exec(ctx)` 吞掉,超时同样落到「0 在线」。
-//	一个从设计上就不可能返回 block 的 block 级门禁,比没有门禁更危险。)

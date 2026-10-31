@@ -4,7 +4,7 @@
 //
 //   - 旧行为里 InitDB() 会对 11 张表逐张跑 CreateOrUpdateTable。多 zone ×
 //     多副本同时启动时,这些 ALTER 会并发落到同一张大表上,MDL 阻塞会让整个
-//     zone 的 db_task 消费停摆;
+//     zone 的存盘停摆;
 //   - proto2mysql 在列类型不匹配时会自动拼 MODIFY COLUMN 并 Exec,没有版本
 //     记录、没有 lock 超时 —— 一次无人批准的在线 DDL。
 //
@@ -239,16 +239,9 @@ var primaryKeyRe = regexp.MustCompile(`PRIMARY KEY \(([^)]*)\)`)
 //
 // **权威顺序刻意是「proto 选项 → 建表 SQL」而不是反过来。**
 //
-// 原因是 proto2mysql v0.0.18 的 GetCreateTableSQL 对 player_database 这类表
-// 根本不输出 PRIMARY KEY 子句(实测:整条 CREATE 里没有 PRIMARY KEY),而
-// go/db/model/mysql_database_table.sql 里它明明写着 PRIMARY KEY (player_id)。
-// 两个"真源"不一致。若只按建表 SQL 反向正则:
-//
-//   - 缺主键告警永远不可能触发(regex 永远匹配不到),这条守卫等于没写;
-//   - 更糟的是 Baseline() 也用同一份 CREATE SQL,于是用本工具建出来的表会
-//     **没有主键**,而 player_database 的存盘(proto2mysql Save:按主键 UPDATE,
-//     0 行再 INSERT)没有主键时不会撞 1062 —— 内容未变(UPDATE 返回 0 行)或
-//     并发首写都会追加一行新记录,玩家数据表会无限膨胀且读出来的是任意一行。
+// 原因是 proto2mysql v0.0.18 的 GetCreateTableSQL 对部分表不输出 PRIMARY KEY 子句。
+// 若只按建表 SQL 反向正则,缺主键告警永远不可能触发,Baseline() 用同一份 CREATE SQL
+// 建出来的表也会没有主键。
 //
 // 所以这里直接读 proto 的 OptionPrimaryKey 扩展(它才是人写下的意图),
 // 建表 SQL 只作为回退。
@@ -268,8 +261,6 @@ func declaredPrimaryKey(model *proto2mysql.DB, msg proto.Message) string {
 // 两条来源,优先级从高到低:
 //  1. OptionPrimaryKey —— 显式声明,可以是 "user_id,provider" 这样的复合键;
 //  2. OptionIsPlayerDatabase —— 玩家分表约定,主键恒为 player_id。
-//     player_database / player_database_1 只标了这个选项、没标 OptionPrimaryKey,
-//     但 mysql_database_table.sql 里它们确实是 PRIMARY KEY (player_id)。
 //
 // 两者都没有时返回空串,表示"proto 没表达过主键意图",调用方不产生告警
 // (避免对 KV 型辅助表误报)。
@@ -294,8 +285,7 @@ func primaryKeyFromOptions(msg proto.Message) string {
 
 // ensurePrimaryKey 在建表语句缺 PRIMARY KEY 时把 proto 声明的主键补进去。
 //
-// 为什么必须补而不是只告警:proto2mysql v0.0.18 的 GetCreateTableSQL 对
-// player_database / player_database_1 不输出 PRIMARY KEY 子句。若原样拿它建表,
+// 为什么必须补而不是只告警:proto2mysql v0.0.18 的 GetCreateTableSQL 对部分表不输出 PRIMARY KEY 子句。若原样拿它建表,
 // 建出来的玩家数据表**没有主键**,而存盘(proto2mysql Save:按主键 UPDATE,0 行再
 // INSERT)没有唯一键就永远不会撞 1062 —— 内容未变或并发首写都会追加一行新记录:
 // 表无限膨胀,读回来的是任意一行,等于玩家数据静默损坏。

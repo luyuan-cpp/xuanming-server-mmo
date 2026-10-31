@@ -76,22 +76,21 @@ namespace kafka_producer_stats {
 //
 // 投递语义(2026-09 起):
 //  - enable.idempotence=true。librdkafka 内部重试时同一分区内**保序、不重复**。仓库不变量
-//    (AGENTS §7.3)靠「同一业务实体 key 有序」保证旧存档不会盖掉新存档;不开幂等时
+//    (AGENTS §7.3)靠「同一业务实体 key 有序」;不开幂等时
 //    max.in.flight 取默认大值,一次内部重试就可能让同 key 的两条消息乱序到达。
 //  - 消息**仍然可能丢**:broker 不可用超过 message.timeout.ms(librdkafka 默认 5 分钟)后,
 //    队列里的消息以失败回执收场。这里保证的是「丢得明明白白」——逐条 ERROR 日志带 topic / key
-//    (限流)+ DeliveryFailed 计数;不在回执里自动重发旧载荷:对存档这类「后写覆盖前写」的消息,
-//    把一份过期载荷补发到更新的载荷之后,比丢掉它更糟。补救靠调用方重发**当前**状态(在线玩家的
-//    周期存盘天然如此)。
+//    (限流)+ DeliveryFailed 计数;不在回执里自动重发旧载荷:对「后写覆盖前写」的消息,
+//    把一份过期载荷补发到更新的载荷之后,比丢掉它更糟。补救靠调用方重发**当前**状态。
 //  - 幂等生产者遇到不可恢复的序列错误会进入 fatal,此后该实例的 produce() 一律返回 ERR__FATAL。
 //    send() 识别后重建实例并把当前这条消息在新实例上重试一次;旧实例队列里的消息按丢失计数。
 //
-// 逐条回执契约(sendTracked + setDeliveryListener,2026-10 起;scene 侧的用法见
-// cpp/libs/services/scene/player/system/db_task_dispatch_system.h):
+// 逐条回执契约(sendTracked + setDeliveryListener,2026-10 起;battle 的结果日志用它确认 acks=all,
+// 见 cpp/nodes/battle/logic/battle_room_manager.cpp):
 //  - sendTracked 带一个非 0 关联号,经 msg_opaque 随消息进 librdkafka,回执时原样带回。0 等价于 send()。
 //  - 返回值不是 ERR_NO_ERROR = 没有入队,**永远不会**有回执;返回 ERR_NO_ERROR = 之后恰好一次 DeliveryReport,
 //    来源三选一:librdkafka 的投递回执;实例因 fatal 重建时为旧实例里来不及派发的消息合成的 ERR__PURGE_QUEUE
-//    (synthesized = true);调用方自己的超时兜底(scene 侧 DbTaskDispatch 的票据超时,见 createProducer 的注释)。
+//    (synthesized = true);调用方自己的超时兜底。
 //  - 监听器只在本线程的 poll() / flush() / send()(队列满重试与重建路径)调用栈里**同步**回调。监听器只许记账:
 //    不得再调 send / sendTracked / poll / flush,不得在回调里换监听器,也不得改 ECS 组件集合 —— 后续处理由调用方
 //    在自己的 loop 顶层做。
