@@ -92,4 +92,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="player_store\player_store_grpc_client.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="player_store\player_store_grpc_client.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

@@ -770,4 +770,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="player_store\player_store.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="player_store\player_store.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

@@ -14,8 +14,8 @@
 
 namespace {
 
-// 需要载荷的事件(含 message / repeated 字段,GateCommand 信封装不下)收到空载荷:只可能是生产者缺陷。
-// 不构造缺字段的空事件下发 —— 那会给客户端推一个空帧,广播则静默变成空操作。按事件计数并采样留痕:
+// 需要载荷的事件(有 GateCommand 信封装不下的字段)收到空载荷:只可能是生产者缺陷。
+// 不构造缺字段的事件下发 —— 那会给客户端推一个空帧,广播静默变成空操作,重定向与踢线丢掉关键字段。按事件计数并采样留痕:
 // 每个事件第一条必打,此后每 1024 条一行;metric= 行只带低基数的 event_id 与累计值,topic 只进明细行。
 // 只在 gate 主 loop 线程调用;键只可能是生成器标记为需要载荷的那几个事件号,集合有界。
 void RejectEmptyPayload(const std::string& topic, uint32_t eventId)
@@ -144,44 +144,27 @@ void DispatchGateKafkaCommand(const std::string& topic, const contracts::kafka::
         return;
     }
 
-    // 空载荷的信封分支,仍只调用白名单入口:只有标量字段的事件用信封里同名同型的字段构造;
-    // 含 message / repeated 字段的事件信封装不下,一律拒绝(生成器 PayloadRequired)。
+    // 空载荷的信封分支,仍只调用白名单入口:全部字段都能从信封同名同型映射的事件才由信封构造;
+    // 其余事件信封装不下,一律拒绝(生成器 PayloadRequired)。
     switch (command.event_id()) {
     case ContractsKafkaRoutePlayerEventEventId: {
-        contracts::kafka::RoutePlayerEvent event;
-        event.set_session_id(command.session_id());
-        event.set_target_node_id(command.target_node_id());
-        event.set_player_id(command.player_id());
-        GateEventHandler::RoutePlayerEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     case ContractsKafkaKickPlayerEventEventId: {
-        contracts::kafka::KickPlayerEvent event;
-        event.set_session_id(command.session_id());
-        event.set_player_id(command.player_id());
-        GateEventHandler::KickPlayerEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     case ContractsKafkaPlayerLeaseExpiredEventEventId: {
-        contracts::kafka::PlayerLeaseExpiredEvent event;
-        event.set_player_id(command.player_id());
-        event.set_session_id(command.session_id());
-        GateEventHandler::PlayerLeaseExpiredEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     case ContractsKafkaBindSessionEventEventId: {
-        contracts::kafka::BindSessionEvent event;
-        event.set_session_id(command.session_id());
-        event.set_player_id(command.player_id());
-        event.set_enter_gs_type(command.enter_gs_type());
-        GateEventHandler::BindSessionEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     case ContractsKafkaRedirectToGateEventEventId: {
-        contracts::kafka::RedirectToGateEvent event;
-        event.set_player_id(command.player_id());
-        event.set_session_id(command.session_id());
-        GateEventHandler::RedirectToGateEventHandler(event);
+        RejectEmptyPayload(topic, command.event_id());
         return;
     }
     case ContractsKafkaPushToPlayerEventEventId: {

@@ -1,0 +1,98 @@
+syntax = "proto3";
+// 包名不能叫 player_store:mysql_database_table.proto 没有 package,里面的表消息 player_store
+// 全名就是 player_store,同名的包会和它撞(表名守卫要求消息全名等于表名,那边不能改)。
+package playerstore;
+
+option go_package = "db/proto/player_store";
+option cc_generic_services = false;
+
+import "proto/common/base/service_call_auth.proto";
+
+// 玩家存盘直接提交 TiDB 的协议,规格见 docs/design/player-save-direct-commit.md。
+// go/db 提供,只有 scene 调用。内部服务,不进客户端协议。
+//
+// 字段号上线后不复用,删字段写 reserved(AGENTS §4)。
+
+service PlayerStore {
+  // 认领写权并读出完整存档,一个事务。
+  rpc LoadAndClaim(LoadAndClaimRequest) returns (LoadAndClaimResponse) {}
+  // 一次存盘,一个事务。返回 gRPC 错误就是结果未知,用同样的内容、同一个序号重试。
+  rpc SavePlayer(SavePlayerRequest) returns (SavePlayerResponse) {}
+}
+
+// player_store 表一个玩家一组行。kind 0 是写权行,其余每个 kind 一行,payload 是
+// player_database 按字段投影出来的一段序列化结果。分组由 proto 字段选项声明(§1.1)。
+enum PlayerStoreKind {
+  PLAYER_STORE_KIND_OWNER = 0;    // 写权行,payload 恒为空
+  PLAYER_STORE_KIND_HOT = 1;      // 位置、等级与频繁变化的数值
+  PLAYER_STORE_KIND_ASSET = 2;    // 货币、背包与账本
+  PLAYER_STORE_KIND_GROWTH = 3;   // 技能、属性、宠物、任务
+  PLAYER_STORE_KIND_PROFILE = 4;  // 身份与其余低频字段
+  PLAYER_STORE_KIND_LEGACY1 = 5;  // player_database_1 整个消息
+}
+
+message PlayerStoreRow {
+  PlayerStoreKind kind = 1;
+  bytes payload = 2;
+}
+
+// 判定表见规格 §4。COMMITTED 与 EQUAL 都算提交成功。
+enum SavePlayerResult {
+  SAVE_PLAYER_RESULT_UNSPECIFIED = 0;
+  SAVE_PLAYER_COMMITTED = 1;         // 本次写入并提交
+  SAVE_PLAYER_EQUAL = 2;             // 同序号已经提交过,幂等成功
+  SAVE_PLAYER_NO_OWNER = 3;          // 写权行不存在
+  SAVE_PLAYER_INVALID = 4;           // 请求不合法:E、q、实例为空,或 kind 非法、重复
+  SAVE_PLAYER_STALE_OWNER = 5;       // 请求的代次比库里低,已被接管
+  SAVE_PLAYER_NOT_HOLDER = 6;        // 同代次,但持有者不是这个实例
+  SAVE_PLAYER_UNCLAIMED = 7;         // 代次更高,但持有者不是这个实例,没有认领过
+  SAVE_PLAYER_OLDER_SEQ = 8;         // 迟到的旧序号
+  SAVE_PLAYER_SCHEMA_REGRESSED = 9;  // 世代低于库里的世代
+  SAVE_PLAYER_SCHEMA_TOO_NEW = 10;   // 世代高于 go/db 认识的世代,发布顺序问题
+  SAVE_PLAYER_TOO_LARGE = 11;        // payload 超预算
+}
+
+message SavePlayerRequest {
+  common.base.ServiceCallAuth auth = 1;
+  uint64 player_id = 2;
+  uint32 storage_id = 3;             // 认领时返回的落点;0 只用于实体已没的空行释放,由 go/db 查落点
+  uint64 owner_epoch = 4;
+  uint64 save_seq = 5;
+  uint32 schema_gen = 6;
+  bytes instance_id = 7;             // scene_instance_id
+  repeated PlayerStoreRow rows = 8;  // 有变化的片段,可以为空
+  bool release = 9;                  // 最终存盘:提交后释放写权
+}
+
+message SavePlayerResponse {
+  SavePlayerResult result = 1;
+  uint64 row_owner_epoch = 2;  // 拒绝时带回库里的值
+  uint64 row_save_seq = 3;
+}
+
+enum LoadAndClaimResult {
+  LOAD_AND_CLAIM_RESULT_UNSPECIFIED = 0;
+  LOAD_AND_CLAIM_CLAIMED = 1;        // 认领成功,响应里是完整存档
+  LOAD_AND_CLAIM_NO_OWNER = 2;       // 写权行不存在:角色不存在或未建完,不造空档
+  LOAD_AND_CLAIM_INVALID = 3;        // 请求不合法:E 或实例为空
+  LOAD_AND_CLAIM_STALE_OWNER = 4;    // 路由过期,候选代次比库里低
+  LOAD_AND_CLAIM_NOT_HOLDER = 5;     // 同代次已被别的实例持有
+  LOAD_AND_CLAIM_SCHEMA_TOO_NEW = 6; // 库里的世代比本进程新,拒绝加载
+}
+
+message LoadAndClaimRequest {
+  common.base.ServiceCallAuth auth = 1;
+  uint64 player_id = 2;
+  uint64 owner_epoch = 3;       // 路由带来的候选代次
+  bytes instance_id = 4;
+  uint32 binary_schema_gen = 5;
+}
+
+message LoadAndClaimResponse {
+  LoadAndClaimResult result = 1;
+  uint32 storage_id = 2;
+  uint64 owner_epoch = 3;       // 写权行当前值
+  uint64 save_seq = 4;
+  uint32 schema_gen = 5;
+  repeated PlayerStoreRow rows = 6;
+}

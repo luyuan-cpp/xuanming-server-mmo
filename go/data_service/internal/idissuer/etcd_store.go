@@ -38,15 +38,16 @@ func (s *EtcdStore) Read(ctx context.Context) (Record, error) {
 	if err != nil {
 		return Record{}, err
 	}
+	clusterID := resp.Header.ClusterId
 	if len(resp.Kvs) == 0 {
-		return Record{}, nil
+		return Record{ClusterID: clusterID}, nil
 	}
 	kv := resp.Kvs[0]
 	value, err := strconv.ParseUint(string(kv.Value), 10, 64)
 	if err != nil {
 		return Record{}, fmt.Errorf("id issuer: record %s is corrupt: %w", s.key, err)
 	}
-	return Record{Value: value, Revision: kv.ModRevision, Exists: true}, nil
+	return Record{Value: value, Revision: kv.ModRevision, Exists: true, ClusterID: clusterID}, nil
 }
 
 // CompareAndSwap 用 Txn 比较版本。超时等错误一律是结果未知,见 CounterStore 的契约。

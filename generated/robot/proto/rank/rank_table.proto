@@ -16,7 +16,7 @@ message RankBoardRecord {
   uint64 generation = 6;
   string producer = 7;
   uint64 source_epoch = 8;
-  uint64 committed_cursor = 9;
+  uint64 committed_cursor = 9; // 本代已落账的批次总数(各片之和),封榜按它核齐;各片游标看 rank_input_receipt。
   uint32 ascending = 10;
   uint32 state = 11;
   uint64 settlement_id = 12;
@@ -36,17 +36,19 @@ message RankScoreRecord {
   int64 score = 4;
   uint64 achieved_ms = 5;
   uint64 source_cursor = 6;
+  uint64 score_version = 7; // 最后写入这一行的批次版本,0 = 生产者不带版本。
 }
-// 每一游标的完整请求摘要保留至本代保留窗结束，晚重试不能冒充新一批。
+// 每一片每一游标的完整请求摘要保留至本代保留窗结束，晚重试不能冒充新一批。
 message RankInputReceiptRecord {
   option (OptionTableName) = "rank_input_receipt";
-  option (OptionPrimaryKey) = "board_id,generation,source_cursor";
+  option (OptionPrimaryKey) = "board_id,generation,source_shard,source_cursor";
   uint64 board_id = 1;
   uint64 generation = 2;
   uint64 source_cursor = 3;
   uint64 request_id = 4;
   string request_hash = 5;
   uint64 committed_ms = 6;
+  uint32 source_shard = 7;
 }
 message RankSettlementRecord {
   option (OptionTableName) = "rank_settlement";

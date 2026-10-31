@@ -33,6 +33,7 @@ bool IsTcpNodeType(uint32_t nodeType) {
 		common::base::eNodeType::BattleNodeService,
 		common::base::eNodeType::ClientRpcRouterNodeService,
 		common::base::eNodeType::PlayerInboxNodeService,
+		common::base::eNodeType::PlayerStoreNodeService,
 	};
 
 	return validTypes.contains(nodeType);

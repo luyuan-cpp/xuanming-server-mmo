@@ -25,6 +25,7 @@ import (
 	"shared/sqlpoolstats"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/service"
 )
 
 // SnapshotStore 描述 logic 层实际依赖的快照/审计能力。使用接口既让启动失败时
@@ -542,6 +543,10 @@ const (
 func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if c.IdSegment.Issuer.Region > uint32(idissuer.MaxRegion) {
 		return nil, fmt.Errorf("IdSegment.Issuer.Region = %d exceeds %d", c.IdSegment.Issuer.Region, idissuer.MaxRegion)
+	}
+	// 两套独立 etcd 是强规定(AGENTS §7)。AllowAutoSeed 会让两份记录回落到同一套,只有 dev、test 能开。
+	if c.IdSegment.AllowAutoSeed && c.Mode != service.DevMode && c.Mode != service.TestMode {
+		return nil, fmt.Errorf("IdSegment.AllowAutoSeed=true requires Mode=dev or test, got %q", c.Mode)
 	}
 	primaryHosts, secondaryHosts, err := c.IdSegment.IssuerEndpoints(c.Etcd.Hosts)
 	if err != nil {

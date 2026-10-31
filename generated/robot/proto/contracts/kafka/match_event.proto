@@ -4,14 +4,13 @@ option go_package = "robot/proto/contracts/kafka";
 
 import "proto/battle/battle_data.proto";
 
-// battle -> match(评分回流,二期 MMR,消费组 match-rating)/ guild(帮会同道历练结算,消费组 guild-trial)。
+// 对局结果:battle 打完之后把它序列化成终局原件,经 CommitBattleOutcome 提交 match SQL;
+// match 的持久发件箱再投 Kafka,下游是 match 评分(二期 MMR,消费组 match-rating)与
+// guild 帮会同道历练结算(消费组 guild-trial)。battle 不直接发、不写 Redis(player-data-tidb-scaling-plan.md §5.4)。
 // Kafka 投递:topic = match-results(全局,无 zone 段),key = battle_id(同局保序即可);
 // 无目标实例语义(任一 match / guild 实例消费即可)。
-// battle 作废(DestroyBattle / AbortAllRooms)不发本事件:评分只按真实打完的局更新。
-// 带活动上下文(activity_context.kind != NONE)的事件另有持久记录:battle 先把本事件序列化字节写入
-// SharedRedis battle:activity_result:{battle_id}(TTL 7 天)再发 Kafka,每 10s 查键、仍在则按原字节重发(≤30 次);
-// guild 该局进入终态后 DEL 销账。见 docs/design/guild-phase2/06-activities.md §6.19。
-// 因此同一 battle_id 的带上下文事件可能被投递多次,消费方必须按 battle_id 幂等。
+// match 判 ABORT 的局不发本事件:评分只按真实打完的局更新。
+// 发件箱是至少一次投递,同一 battle_id 的事件可能被投递多次,消费方必须按 battle_id 幂等。
 message BattleResultTeam {
   uint32 team_index = 1;
   repeated uint64 player_ids = 2;
@@ -32,40 +31,11 @@ message BattleResultEvent {
   // 结算时 BattleSettlementData.is_dead == true 的玩家,升序去重;所有对局都填。
   // 用户决策 U2(阵亡也得奖):guild 发奖候选 = team 0 − fled_player_ids,本字段不参与过滤,只供统计与日后回退。
   repeated uint64 dead_player_ids = 11;
-  // 完整个人结算源：提交结果前固定，之后的终局包与旧R07投递复用原值。
-  // 仅作恢复原件；没有玩家源版本与SQL收据时，消费者不得据此自动重发资产或销账。
+  // 完整个人结算源：提交结果前固定，match 发件箱投 player_inbox 的个人结算取自这份原件。
+  // 仅作恢复原件；没有玩家源版本与SQL收据时，消费者不得据此自动重发资产。
   repeated BattleSettlementData settlements = 12;
   // 0是没有完整个人原件的历史结果；1要求成员集合与settlements严格一一对应。
   // 未知版本拒绝推进消费位点，不能把默认0冒充完整原件。
   uint32 settlement_format_version = 13;
 }
 
-// match -> rank(排行榜写分,docs/design/leaderboard-system.md §2.4,2026-09-20 已拍板方案 (a))。
-// Kafka 投递:topic = match-rating-snapshot(全局,无 zone 段,3 分区,保留 7 天;保留期只由 match 在 EnsureTopics 时声明,
-// rank 侧 Ensure 传 RetentionMs: -1),key = player_id(同一玩家有序,AGENTS §7 #3);不套信封;无目标实例语义。
-// 发布开关 match_service.yaml 的 RatingSnapshotPublishEnabled(v1 默认 false,是 rank 上线的唯一闸门)。
-//
-// 这是**快照**不是增量:match 在一局全员评分写完、把入账标记置 done 之前,对每个参赛玩家各发一条当前评分。
-// 续写路径(写到一半失败后重投)上 Lua 返回 written=0 也照发 —— 分数没"变",发的是当前状态,所以刻意不叫 RatingChanged。
-// 丢一条会被该玩家下一局的快照覆盖(自愈);消费方按 (rating_gen, games) 字典序比较版本,旧的拒掉。
-//
-// match 对外承诺(rank 的幂等与乱序处理依赖它):
-//   - 同一 rating_gen 内 games 严格单调递增(games 由 match 的 Lua HINCRBY 维护);
-//   - rating_gen 只增不减(评分 hash 被淘汰 / 清空后首次写入时以当时的毫秒时间重建,比旧值大)。
-// rating_centi / games / updated_at_ms / rating_gen 四个值由同一次 Lua 原子读出,彼此同源。
-//
-// 刻意没有的字段(字段号上线后不复用,AGENTS §4,所以无消费方的字段一律不加):
-//   - zone:match 入账路径拿不到归属 zone,合服还会改写归属(§3.4),v1 只有全服榜;
-//   - Δ:0 分下限使实际变化可能小于 Δ,续写路径拿不到可靠的赛前分,快照语义不需要它;
-//   - match_mode:评分跨模式累计(1V1 / 5V5 共用一个分),带上会让消费者误以为是"该模式的分"。
-message PlayerRatingSnapshotEvent {
-  uint64 player_id = 1;
-  // 分 × 100 的**精确**整数:match 存的是 "%.2f" 字符串,按十进制字符串解析,禁止 uint32(f*100) 截断
-  // ("0.29" 截断成 28,展示少 0.01 并与真差 0.01 的玩家变成同分)。
-  uint32 rating_centi = 2;
-  uint64 games = 3;            // 累计排位局数,> 0
-  uint64 updated_at_ms = 4;    // 评分 hash 的 updated_at_ms(与 rating / games 同一次 Lua 读出),不是发布时刻
-  uint64 rating_gen = 5;       // 评分 hash 的代际(首次写入时 HSETNX 的毫秒时间);键丢失重建后变大
-  uint64 battle_id = 6;        // 诊断:触发这次发布的对局;不参与版本判定
-  uint64 finished_at_ms = 7;   // 诊断:该局结束时刻(BattleResultEvent.finished_at_ms),rank 用它算消费延迟
-}

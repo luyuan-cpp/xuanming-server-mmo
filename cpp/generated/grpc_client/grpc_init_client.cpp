@@ -69,6 +69,10 @@ namespace playerlocator {
     void SetPlayerLocatorCallDeadline(std::chrono::milliseconds deadline);
 }
 
+namespace playerstore {
+    void SetPlayerStoreCallDeadline(std::chrono::milliseconds deadline);
+}
+
 namespace rankpb {
     void SetRankCallDeadline(std::chrono::milliseconds deadline);
 }
@@ -152,6 +156,9 @@ void SetGrpcCallDeadline(uint32_t nodeType, std::chrono::milliseconds deadline){
     }
     if (static_cast<uint32_t>(common::base::eNodeType::PlayerLocatorNodeService) == nodeType) {
         playerlocator::SetPlayerLocatorCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::PlayerStoreNodeService) == nodeType) {
+        playerstore::SetPlayerStoreCallDeadline(deadline);
     }
     if (static_cast<uint32_t>(common::base::eNodeType::RankNodeService) == nodeType) {
         rankpb::SetRankCallDeadline(deadline);

@@ -51,98 +51,62 @@ constexpr uint32_t DataServiceAckRoleTradeDrainMessageId = 329;
 constexpr uint32_t DataServiceAckRoleTradeDrainIndex = 11;
 #define DataServiceAckRoleTradeDrainMethod  ::DataService_Stub::descriptor()->method(11)
 
-constexpr uint32_t DataServiceLoadPlayerDataMessageId = 90;
-constexpr uint32_t DataServiceLoadPlayerDataIndex = 12;
-#define DataServiceLoadPlayerDataMethod  ::DataService_Stub::descriptor()->method(12)
-
-constexpr uint32_t DataServiceSavePlayerDataMessageId = 92;
-constexpr uint32_t DataServiceSavePlayerDataIndex = 13;
-#define DataServiceSavePlayerDataMethod  ::DataService_Stub::descriptor()->method(13)
-
-constexpr uint32_t DataServiceGetPlayerFieldMessageId = 91;
-constexpr uint32_t DataServiceGetPlayerFieldIndex = 14;
-#define DataServiceGetPlayerFieldMethod  ::DataService_Stub::descriptor()->method(14)
-
-constexpr uint32_t DataServiceSetPlayerFieldMessageId = 89;
-constexpr uint32_t DataServiceSetPlayerFieldIndex = 15;
-#define DataServiceSetPlayerFieldMethod  ::DataService_Stub::descriptor()->method(15)
+constexpr uint32_t DataServiceReleaseDeadPlayerStoreHolderMessageId = 354;
+constexpr uint32_t DataServiceReleaseDeadPlayerStoreHolderIndex = 12;
+#define DataServiceReleaseDeadPlayerStoreHolderMethod  ::DataService_Stub::descriptor()->method(12)
 
 constexpr uint32_t DataServiceRegisterPlayerZoneMessageId = 86;
-constexpr uint32_t DataServiceRegisterPlayerZoneIndex = 16;
-#define DataServiceRegisterPlayerZoneMethod  ::DataService_Stub::descriptor()->method(16)
+constexpr uint32_t DataServiceRegisterPlayerZoneIndex = 13;
+#define DataServiceRegisterPlayerZoneMethod  ::DataService_Stub::descriptor()->method(13)
 
 constexpr uint32_t DataServiceGetPlayerHomeZoneMessageId = 93;
-constexpr uint32_t DataServiceGetPlayerHomeZoneIndex = 17;
-#define DataServiceGetPlayerHomeZoneMethod  ::DataService_Stub::descriptor()->method(17)
+constexpr uint32_t DataServiceGetPlayerHomeZoneIndex = 14;
+#define DataServiceGetPlayerHomeZoneMethod  ::DataService_Stub::descriptor()->method(14)
 
 constexpr uint32_t DataServiceBatchGetPlayerHomeZoneMessageId = 87;
-constexpr uint32_t DataServiceBatchGetPlayerHomeZoneIndex = 18;
-#define DataServiceBatchGetPlayerHomeZoneMethod  ::DataService_Stub::descriptor()->method(18)
+constexpr uint32_t DataServiceBatchGetPlayerHomeZoneIndex = 15;
+#define DataServiceBatchGetPlayerHomeZoneMethod  ::DataService_Stub::descriptor()->method(15)
 
-constexpr uint32_t DataServiceRemapHomeZoneForMergeMessageId = 129;
-constexpr uint32_t DataServiceRemapHomeZoneForMergeIndex = 19;
-#define DataServiceRemapHomeZoneForMergeMethod  ::DataService_Stub::descriptor()->method(19)
-
-constexpr uint32_t DataServiceDeletePlayerDataMessageId = 88;
-constexpr uint32_t DataServiceDeletePlayerDataIndex = 20;
-#define DataServiceDeletePlayerDataMethod  ::DataService_Stub::descriptor()->method(20)
-
-constexpr uint32_t DataServiceCreatePlayerSnapshotMessageId = 96;
-constexpr uint32_t DataServiceCreatePlayerSnapshotIndex = 21;
-#define DataServiceCreatePlayerSnapshotMethod  ::DataService_Stub::descriptor()->method(21)
+constexpr uint32_t DataServiceGetMergedZonesMessageId = 355;
+constexpr uint32_t DataServiceGetMergedZonesIndex = 16;
+#define DataServiceGetMergedZonesMethod  ::DataService_Stub::descriptor()->method(16)
 
 constexpr uint32_t DataServiceListPlayerSnapshotsMessageId = 97;
-constexpr uint32_t DataServiceListPlayerSnapshotsIndex = 22;
-#define DataServiceListPlayerSnapshotsMethod  ::DataService_Stub::descriptor()->method(22)
-
-constexpr uint32_t DataServiceGetPlayerSnapshotDiffMessageId = 98;
-constexpr uint32_t DataServiceGetPlayerSnapshotDiffIndex = 23;
-#define DataServiceGetPlayerSnapshotDiffMethod  ::DataService_Stub::descriptor()->method(23)
-
-constexpr uint32_t DataServiceRollbackPlayerMessageId = 99;
-constexpr uint32_t DataServiceRollbackPlayerIndex = 24;
-#define DataServiceRollbackPlayerMethod  ::DataService_Stub::descriptor()->method(24)
-
-constexpr uint32_t DataServiceRollbackZoneMessageId = 100;
-constexpr uint32_t DataServiceRollbackZoneIndex = 25;
-#define DataServiceRollbackZoneMethod  ::DataService_Stub::descriptor()->method(25)
-
-constexpr uint32_t DataServiceRollbackAllMessageId = 101;
-constexpr uint32_t DataServiceRollbackAllIndex = 26;
-#define DataServiceRollbackAllMethod  ::DataService_Stub::descriptor()->method(26)
+constexpr uint32_t DataServiceListPlayerSnapshotsIndex = 17;
+#define DataServiceListPlayerSnapshotsMethod  ::DataService_Stub::descriptor()->method(17)
 
 constexpr uint32_t DataServiceBatchRecallItemsMessageId = 108;
-constexpr uint32_t DataServiceBatchRecallItemsIndex = 27;
-#define DataServiceBatchRecallItemsMethod  ::DataService_Stub::descriptor()->method(27)
+constexpr uint32_t DataServiceBatchRecallItemsIndex = 18;
+#define DataServiceBatchRecallItemsMethod  ::DataService_Stub::descriptor()->method(18)
 
 constexpr uint32_t DataServiceQueryTransactionLogMessageId = 114;
-constexpr uint32_t DataServiceQueryTransactionLogIndex = 28;
-#define DataServiceQueryTransactionLogMethod  ::DataService_Stub::descriptor()->method(28)
-
-constexpr uint32_t DataServiceCreateEventSnapshotMessageId = 105;
-constexpr uint32_t DataServiceCreateEventSnapshotIndex = 29;
-#define DataServiceCreateEventSnapshotMethod  ::DataService_Stub::descriptor()->method(29)
+constexpr uint32_t DataServiceQueryTransactionLogIndex = 19;
+#define DataServiceQueryTransactionLogMethod  ::DataService_Stub::descriptor()->method(19)
 
 constexpr uint32_t DataServiceAllocateIdSegmentMessageId = 180;
-constexpr uint32_t DataServiceAllocateIdSegmentIndex = 30;
-#define DataServiceAllocateIdSegmentMethod  ::DataService_Stub::descriptor()->method(30)
+constexpr uint32_t DataServiceAllocateIdSegmentIndex = 20;
+#define DataServiceAllocateIdSegmentMethod  ::DataService_Stub::descriptor()->method(20)
 
 constexpr uint32_t DataServiceReservePlayerNameMessageId = 229;
-constexpr uint32_t DataServiceReservePlayerNameIndex = 31;
-#define DataServiceReservePlayerNameMethod  ::DataService_Stub::descriptor()->method(31)
+constexpr uint32_t DataServiceReservePlayerNameIndex = 21;
+#define DataServiceReservePlayerNameMethod  ::DataService_Stub::descriptor()->method(21)
 
 constexpr uint32_t DataServiceReleasePlayerNameMessageId = 237;
-constexpr uint32_t DataServiceReleasePlayerNameIndex = 32;
-#define DataServiceReleasePlayerNameMethod  ::DataService_Stub::descriptor()->method(32)
+constexpr uint32_t DataServiceReleasePlayerNameIndex = 22;
+#define DataServiceReleasePlayerNameMethod  ::DataService_Stub::descriptor()->method(22)
 
 constexpr uint32_t DataServiceBatchGetPlayerNameMessageId = 231;
-constexpr uint32_t DataServiceBatchGetPlayerNameIndex = 33;
-#define DataServiceBatchGetPlayerNameMethod  ::DataService_Stub::descriptor()->method(33)
+constexpr uint32_t DataServiceBatchGetPlayerNameIndex = 23;
+#define DataServiceBatchGetPlayerNameMethod  ::DataService_Stub::descriptor()->method(23)
+
+constexpr uint32_t DataServiceBatchGetPlayerDisplayMessageId = 356;
+constexpr uint32_t DataServiceBatchGetPlayerDisplayIndex = 24;
+#define DataServiceBatchGetPlayerDisplayMethod  ::DataService_Stub::descriptor()->method(24)
 
 constexpr uint32_t DataServiceGetPlayerAssetOpLedgerMessageId = 248;
-constexpr uint32_t DataServiceGetPlayerAssetOpLedgerIndex = 34;
-#define DataServiceGetPlayerAssetOpLedgerMethod  ::DataService_Stub::descriptor()->method(34)
+constexpr uint32_t DataServiceGetPlayerAssetOpLedgerIndex = 25;
+#define DataServiceGetPlayerAssetOpLedgerMethod  ::DataService_Stub::descriptor()->method(25)
 
 constexpr uint32_t DataServiceGetPlayerInboxLedgerMessageId = 258;
-constexpr uint32_t DataServiceGetPlayerInboxLedgerIndex = 35;
-#define DataServiceGetPlayerInboxLedgerMethod  ::DataService_Stub::descriptor()->method(35)
+constexpr uint32_t DataServiceGetPlayerInboxLedgerIndex = 26;
+#define DataServiceGetPlayerInboxLedgerMethod  ::DataService_Stub::descriptor()->method(26)

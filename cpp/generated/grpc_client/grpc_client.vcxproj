@@ -223,4 +223,8 @@
     <ClCompile Include="team\team_authority_grpc_client.cpp" />
     <ClInclude Include="team\team_authority_grpc_client.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="player_store\player_store_grpc_client.cpp" />
+    <ClInclude Include="player_store\player_store_grpc_client.h" />
+  </ItemGroup>
 </Project>

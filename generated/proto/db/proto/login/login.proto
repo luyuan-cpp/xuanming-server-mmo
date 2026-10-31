@@ -82,39 +82,8 @@ message EnterGameResponse
   TipInfoMessage error_message = 1;
   uint64 player_id  = 2;
 
-  // ─── Post-merge one-shot signals (server-merge-gap-fixes.md §1 / §5) ───
-  //
-  // These two fields are non-zero **only on the first successful EnterGame
-  // after a server merge**. They drive client UI:
-  //
-  //   • post_merge_notice_ts > 0  →  client SHOULD show a one-shot
-  //     "Your zone was merged into <new_zone_name> on <date>" notice.
-  //     The timestamp is the merge wall-clock millis (set by
-  //     tools/merge_zone/post_merge_stamp.go), useful for the notice
-  //     copy. Login server clears the underlying Redis flag before
-  //     returning, so the value is non-zero exactly once per merge.
-  //
-  //   • force_rename_required = true  →  client MUST show a forced-rename
-  //     UI before letting the player into the world. Set when the
-  //     player's name collided with an existing name in the merge
-  //     target zone.
-  //
-  //     2026-09 现状更新:角色名已经落地(CreatePlayerRequest.name),
-  //     真源是 data_service 全局库的 player_name 表,名字**全服唯一**
-  //     (docs/design/guild-phase2/03-names.md)。正因为是全服唯一,合服时
-  //     不可能再出现"两个区重名"——force_rename 这条管线因此保持未启用:
-  //     merge 工具仍可盖标记、login 仍原样下发,但正常运营不会置位。
-  //     将来若真的做改名 RPC,由它在改名成功后 DEL
-  //     `player_force_rename:{player_id}` Redis key —— login 不在 EnterGame 清,
-  //     否则客户端把改名 UI 关掉就绕过了这道闸
-  //     (见 go/login/.../entergamelogic.go::consumePostMergeFlags)。
-  //
-  // Wire compat: pre-this-field clients ignore both — they still enter
-  // the game; they just don't see the notice / rename UI. That's fine
-  // for staged rollout: server starts populating the fields whenever
-  // the post_merge_stamp lands, no client gate needed.
-  int64 post_merge_notice_ts    = 3;
-  bool  force_rename_required   = 4;
+  // 3 / 4 是合服一次性提示:合服不再碰玩家数据,这两个字段没有来源,已删除。
+  reserved 3, 4;
 }
 
 message LeaveGameRequest

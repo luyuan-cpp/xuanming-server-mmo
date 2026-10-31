@@ -22,13 +22,12 @@ inline constexpr std::array<std::string_view, 6> kFrozenMessageTypes = {
 };
 
 // 存盘时不原样携带的持久字段 "<消息全名>.<字段名>"(§3.2)。往返一致性测试不经由它们注入。
-inline constexpr std::array<std::string_view, 8> kUncarriedFields = {
+inline constexpr std::array<std::string_view, 7> kUncarriedFields = {
     "ItemEntry.equip",
     "PlayerAllData.bag_data",
     "PlayerAllData.mail_data",
     "PlayerAllData.quest_data",
     "QuestAllData.active",
-    "player_database.merge_state",
     "player_database.stress_test_probe",
     "player_database_1.stress_test_probe",
 };
@@ -40,7 +39,14 @@ struct RetiredField
     std::string_view message; // 消息全名,不带前导点
     int number;
 };
-inline constexpr std::array<RetiredField, 0> kRetiredFields = {};
+inline constexpr std::array<RetiredField, 6> kRetiredFields = {{
+    {"player_database", 10},
+    {"player_database", 17},
+    {"player_database", 18},
+    {"player_database", 19},
+    {"player_database_1", 3},
+    {"player_database_1", 4},
+}};
 
 // 字段 <message>#<number> 是否已退役。
 [[nodiscard]] constexpr bool IsRetiredField(std::string_view message, int number)

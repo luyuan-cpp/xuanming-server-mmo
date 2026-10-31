@@ -21,6 +21,7 @@
 #include "proto/player_inbox/player_inbox.pb.h"
 #include "proto/player_inbox/player_inbox_admin.pb.h"
 #include "proto/player_locator/player_locator.pb.h"
+#include "proto/player_store/player_store.pb.h"
 #include "proto/rank/rank.pb.h"
 #include "proto/rank/rank_admin.pb.h"
 #include "proto/scene/client_player_common.pb.h"
@@ -66,6 +67,7 @@
 #include "rpc/service_metadata/player_inbox_service_metadata.h"
 #include "rpc/service_metadata/player_inbox_admin_service_metadata.h"
 #include "rpc/service_metadata/player_locator_service_metadata.h"
+#include "rpc/service_metadata/player_store_service_metadata.h"
 #include "rpc/service_metadata/rank_service_metadata.h"
 #include "rpc/service_metadata/rank_admin_service_metadata.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
@@ -135,28 +137,19 @@ namespace data_service{void SendDataServiceTransferAccountRoleErased(entt::regis
 namespace data_service{void SendDataServiceRegisterRoleAdmissionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCloseRoleAdmissionsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceAckRoleTradeDrainErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceLoadPlayerDataErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceSavePlayerDataErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceGetPlayerFieldErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceSetPlayerFieldErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceReleaseDeadPlayerStoreHolderErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceRegisterPlayerZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerHomeZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBatchGetPlayerHomeZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceRemapHomeZoneForMergeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceDeletePlayerDataErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceCreatePlayerSnapshotErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceGetMergedZonesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceListPlayerSnapshotsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceGetPlayerSnapshotDiffErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceRollbackPlayerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceRollbackZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceRollbackAllErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBatchRecallItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceQueryTransactionLogErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace data_service{void SendDataServiceCreateEventSnapshotErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceAllocateIdSegmentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReservePlayerNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReleasePlayerNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBatchGetPlayerNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceBatchGetPlayerDisplayErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerAssetOpLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVRangeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -261,6 +254,8 @@ namespace playerlocator{void SendPlayerLocatorSetSessionErased(entt::registry& ,
 namespace playerlocator{void SendPlayerLocatorGetSessionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace playerlocator{void SendPlayerLocatorSetDisconnectingErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace playerlocator{void SendPlayerLocatorReconnectErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace playerstore{void SendPlayerStoreLoadAndClaimErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace playerstore{void SendPlayerStoreSavePlayerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace rankpb{void SendClientPlayerRankGetRankPageErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace rankpb{void SendClientPlayerRankGetRankAroundErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace rankpb{void SendRankAdminOpenRankGenerationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -338,7 +333,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 354,
+static_assert(kMaxRpcMethodCount == 359,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -533,26 +528,11 @@ void InitMessageInfo()
         std::make_unique<::data_service::AckRoleTradeDrainRequest>(),
         std::make_unique<::google::protobuf::Empty>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceAckRoleTradeDrainErased};
-    gRpcMethodRegistry[DataServiceLoadPlayerDataMessageId] = RpcMethodMeta{
-        "DataService", "LoadPlayerData",
-        std::make_unique<::data_service::LoadPlayerDataRequest>(),
-        std::make_unique<::data_service::LoadPlayerDataResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceLoadPlayerDataErased};
-    gRpcMethodRegistry[DataServiceSavePlayerDataMessageId] = RpcMethodMeta{
-        "DataService", "SavePlayerData",
-        std::make_unique<::data_service::SavePlayerDataRequest>(),
-        std::make_unique<::data_service::SavePlayerDataResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceSavePlayerDataErased};
-    gRpcMethodRegistry[DataServiceGetPlayerFieldMessageId] = RpcMethodMeta{
-        "DataService", "GetPlayerField",
-        std::make_unique<::data_service::GetPlayerFieldRequest>(),
-        std::make_unique<::data_service::GetPlayerFieldResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetPlayerFieldErased};
-    gRpcMethodRegistry[DataServiceSetPlayerFieldMessageId] = RpcMethodMeta{
-        "DataService", "SetPlayerField",
-        std::make_unique<::data_service::SetPlayerFieldRequest>(),
-        std::make_unique<::data_service::SetPlayerFieldResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceSetPlayerFieldErased};
+    gRpcMethodRegistry[DataServiceReleaseDeadPlayerStoreHolderMessageId] = RpcMethodMeta{
+        "DataService", "ReleaseDeadPlayerStoreHolder",
+        std::make_unique<::data_service::ReleaseDeadPlayerStoreHolderRequest>(),
+        std::make_unique<::google::protobuf::Empty>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceReleaseDeadPlayerStoreHolderErased};
     gRpcMethodRegistry[DataServiceRegisterPlayerZoneMessageId] = RpcMethodMeta{
         "DataService", "RegisterPlayerZone",
         std::make_unique<::data_service::RegisterPlayerZoneRequest>(),
@@ -568,46 +548,16 @@ void InitMessageInfo()
         std::make_unique<::data_service::BatchGetPlayerHomeZoneRequest>(),
         std::make_unique<::data_service::BatchGetPlayerHomeZoneResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceBatchGetPlayerHomeZoneErased};
-    gRpcMethodRegistry[DataServiceRemapHomeZoneForMergeMessageId] = RpcMethodMeta{
-        "DataService", "RemapHomeZoneForMerge",
-        std::make_unique<::data_service::RemapHomeZoneForMergeRequest>(),
-        std::make_unique<::data_service::RemapHomeZoneForMergeResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceRemapHomeZoneForMergeErased};
-    gRpcMethodRegistry[DataServiceDeletePlayerDataMessageId] = RpcMethodMeta{
-        "DataService", "DeletePlayerData",
-        std::make_unique<::data_service::DeletePlayerDataRequest>(),
-        std::make_unique<::data_service::DeletePlayerDataResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceDeletePlayerDataErased};
-    gRpcMethodRegistry[DataServiceCreatePlayerSnapshotMessageId] = RpcMethodMeta{
-        "DataService", "CreatePlayerSnapshot",
-        std::make_unique<::data_service::CreatePlayerSnapshotRequest>(),
-        std::make_unique<::data_service::CreatePlayerSnapshotResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceCreatePlayerSnapshotErased};
+    gRpcMethodRegistry[DataServiceGetMergedZonesMessageId] = RpcMethodMeta{
+        "DataService", "GetMergedZones",
+        std::make_unique<::google::protobuf::Empty>(),
+        std::make_unique<::data_service::GetMergedZonesResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetMergedZonesErased};
     gRpcMethodRegistry[DataServiceListPlayerSnapshotsMessageId] = RpcMethodMeta{
         "DataService", "ListPlayerSnapshots",
         std::make_unique<::data_service::ListPlayerSnapshotsRequest>(),
         std::make_unique<::data_service::ListPlayerSnapshotsResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceListPlayerSnapshotsErased};
-    gRpcMethodRegistry[DataServiceGetPlayerSnapshotDiffMessageId] = RpcMethodMeta{
-        "DataService", "GetPlayerSnapshotDiff",
-        std::make_unique<::data_service::GetPlayerSnapshotDiffRequest>(),
-        std::make_unique<::data_service::GetPlayerSnapshotDiffResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetPlayerSnapshotDiffErased};
-    gRpcMethodRegistry[DataServiceRollbackPlayerMessageId] = RpcMethodMeta{
-        "DataService", "RollbackPlayer",
-        std::make_unique<::data_service::RollbackPlayerRequest>(),
-        std::make_unique<::data_service::RollbackPlayerResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceRollbackPlayerErased};
-    gRpcMethodRegistry[DataServiceRollbackZoneMessageId] = RpcMethodMeta{
-        "DataService", "RollbackZone",
-        std::make_unique<::data_service::RollbackZoneRequest>(),
-        std::make_unique<::data_service::RollbackZoneResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceRollbackZoneErased};
-    gRpcMethodRegistry[DataServiceRollbackAllMessageId] = RpcMethodMeta{
-        "DataService", "RollbackAll",
-        std::make_unique<::data_service::RollbackAllRequest>(),
-        std::make_unique<::data_service::RollbackAllResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceRollbackAllErased};
     gRpcMethodRegistry[DataServiceBatchRecallItemsMessageId] = RpcMethodMeta{
         "DataService", "BatchRecallItems",
         std::make_unique<::data_service::BatchRecallItemsRequest>(),
@@ -618,11 +568,6 @@ void InitMessageInfo()
         std::make_unique<::data_service::QueryTransactionLogRequest>(),
         std::make_unique<::data_service::QueryTransactionLogResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceQueryTransactionLogErased};
-    gRpcMethodRegistry[DataServiceCreateEventSnapshotMessageId] = RpcMethodMeta{
-        "DataService", "CreateEventSnapshot",
-        std::make_unique<::data_service::CreateEventSnapshotRequest>(),
-        std::make_unique<::data_service::CreateEventSnapshotResponse>(),
-        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceCreateEventSnapshotErased};
     gRpcMethodRegistry[DataServiceAllocateIdSegmentMessageId] = RpcMethodMeta{
         "DataService", "AllocateIdSegment",
         std::make_unique<::data_service::AllocateIdSegmentRequest>(),
@@ -643,6 +588,11 @@ void InitMessageInfo()
         std::make_unique<::data_service::BatchGetPlayerNameRequest>(),
         std::make_unique<::data_service::BatchGetPlayerNameResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceBatchGetPlayerNameErased};
+    gRpcMethodRegistry[DataServiceBatchGetPlayerDisplayMessageId] = RpcMethodMeta{
+        "DataService", "BatchGetPlayerDisplay",
+        std::make_unique<::data_service::BatchGetPlayerDisplayRequest>(),
+        std::make_unique<::data_service::BatchGetPlayerDisplayResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceBatchGetPlayerDisplayErased};
     gRpcMethodRegistry[DataServiceGetPlayerAssetOpLedgerMessageId] = RpcMethodMeta{
         "DataService", "GetPlayerAssetOpLedger",
         std::make_unique<::data_service::GetPlayerAssetOpLedgerRequest>(),
@@ -1249,6 +1199,18 @@ void InitMessageInfo()
         std::make_unique<::playerlocator::ReconnectRequest>(),
         std::make_unique<::playerlocator::ReconnectResponse>(),
         1, common::base::eNodeType::PlayerLocatorNodeService, playerlocator::SendPlayerLocatorReconnectErased};
+
+    // --- PlayerStore ---
+    gRpcMethodRegistry[PlayerStoreLoadAndClaimMessageId] = RpcMethodMeta{
+        "PlayerStore", "LoadAndClaim",
+        std::make_unique<::playerstore::LoadAndClaimRequest>(),
+        std::make_unique<::playerstore::LoadAndClaimResponse>(),
+        1, common::base::eNodeType::PlayerStoreNodeService, playerstore::SendPlayerStoreLoadAndClaimErased};
+    gRpcMethodRegistry[PlayerStoreSavePlayerMessageId] = RpcMethodMeta{
+        "PlayerStore", "SavePlayer",
+        std::make_unique<::playerstore::SavePlayerRequest>(),
+        std::make_unique<::playerstore::SavePlayerResponse>(),
+        1, common::base::eNodeType::PlayerStoreNodeService, playerstore::SendPlayerStoreSavePlayerErased};
 
     // --- ClientPlayerRank ---
     gRpcMethodRegistry[ClientPlayerRankGetRankPageMessageId] = RpcMethodMeta{

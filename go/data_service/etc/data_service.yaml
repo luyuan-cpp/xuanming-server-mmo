@@ -1,5 +1,7 @@
 Name: dataservice.rpc
 ListenOn: 0.0.0.0:9000
+# dev only:IdSegment.AllowAutoSeed=true 只在 Mode=dev、test 下生效,k8s 的 staging、prod 不写这一行。
+Mode: dev
 Etcd:
   Hosts:
     - 127.0.0.1:2379
@@ -139,7 +141,7 @@ Schema:
 #   Issuer.PrimaryEtcd / SecondaryEtcd: 放两份记录的两套 etcd。生产必须各配一套,地址不能有交集。
 #     dev 可以不写,回落到上面的 Etcd.Hosts,两份记录放同一套 etcd 的不同键。
 IdSegment:
-  AllowAutoSeed: true      # dev only;生产必须 false
+  AllowAutoSeed: true      # dev only;生产必须 false,Mode 不是 dev、test 时写 true 发号器不装配
   Tags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op, friend_request, trade_asset_op, mail, mail_asset_op, rank_board, rank_settlement, rank_reward, battle, snapshot_row, rollback_audit]
 
 # C++ scene 产出的交易流水 / 玩家快照落库消费者。Brokers 留空 = 不消费(本地无 Kafka 合法)。

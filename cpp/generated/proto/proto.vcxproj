@@ -432,4 +432,8 @@
     <ClInclude Include="gate\gate_client_spectate.pb.h" />
     <ClInclude Include="gate\gate_spectate_ticket.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="player_store\player_store.pb.cc" />
+    <ClInclude Include="player_store\player_store.pb.h" />
+  </ItemGroup>
 </Project>

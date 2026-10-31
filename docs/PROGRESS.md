@@ -19081,3 +19081,12 @@ Java 版:0.1.0-SNAPSHOT 不涉及客户端契约,部署与工具都是服务端�
 没有编译、没有运行。只做过 `gofmt -l`、PowerShell 语法解析、YAML 解析。
 
 Java 版:0.1.0-SNAPSHOT。这一条是服务端内部,不动客户端契约,`PARITY.md` 不加行。Java 仓 `PARITY.md` 第 420 行的不停服合服待做行还没提交。
+
+### 2026-10-31 Codex:核对当前状态并执行首轮协议生成,协议验收未通过
+
+- **基线更正**:本次开始时 HEAD 为 `65c69f4a922d51014d8feed9be882fcd065ffdb6`(保存服务端现有改动),已包含上一轮服务器源码;不是交接清单中仍写的 `fc504300b` 加约 880 个未提交文件。开始时 `git status --porcelain=v1 -uall` 为 28 条:4 个第三方子模块脏状态、24 个未跟踪的 Java 编译产物,未覆盖或清理。GitHub 只读 API 查询当前打开的 PR、Issue 均为空。Redis 设计 §13 的 2c、2d、4、8 均为作废,不是待写批次。
+- **生成器构建通过**:`pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`,退出码 0。
+- **首轮生成失败已保留**:使用 `proto_gen.no-unity.yaml`,消息号保护拒绝一次退役 12 个 RPC(默认上限 4)。将生成器列出的 12 个方法与 `fc504300b^..HEAD` 的 DataService 源协议删除逐项核对,集合完全一致;描述符成功读取。既有保护回归 `TestCheckMessageIdInputComplete*`、`TestAssignMessageIdsTombstones*`、`TestAssignMessageIdsRouteFamilyRemoval` 实跑通过。随后仅对该次子进程显式设置 `PROTOGEN_ALLOW_MASS_MESSAGE_TOMBSTONE=1`,生成命令退出码 0,进程环境恢复;12 个旧号均保留 `reserved:` 墓碑。
+- **生成命令成功不代表协议验收通过**:`go/proto/player_store/`、`cpp/generated/grpc_client/player_store/` 已存在;主建表清单已含 `player_store` 且不含两张旧表;6 个持久字段退役台账正确;退役的 RPC/消息符号搜索无命中;scene Kafka 路由器相对 HEAD 无差异。但 `go/db/data/mysql_database_table_list.json` 仍只有 `player_database`、`player_database_1`,没有 `player_store`;两份已删源协议 `db_task`、`battle_settlement_ledger_comp` 的旧绑定与暂存副本共残留 12 个文件,C++ 三份工程清单共残留 10 条引用。当前生成流程未同步 go/db 建表清单,也未清退这些普通协议文件及工程引用。没有手改生成物来掩盖。
+- **停在协议验收**:按交接总清单「一步失败先报告」返回上述阻塞。服务编译、Go 依赖整理、业务单测、真库、冒烟、Redis 集群故障/迁移验证及压测均未启动;scene、gate、battle 仍为 10-27 旧程序。不能声明源码编译通过、能够运行或整体验收完成。
+- **证据与后续**:完整日志、12 个已核对退役 RPC、协议验收 JSON/文本、生成前后工作区状态均保存在已忽略的 `run/validation/player-store-20261031/`。生成结果在当前工作区,未提交;本次没有 commit、push。先补齐协议清单同步和退役产物清理,验收通过后再按总清单继续。Java 独立服务器版及客户端本次未验证,未修改;本仓 Java 网关的 A7c 验证也尚未执行。

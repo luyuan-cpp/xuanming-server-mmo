@@ -94,6 +94,9 @@ enum SpectateFeaturedReject {
   SPECTATE_FEATURED_REJECT_NOT_FOUND = 1;   // 观战记录不存在(局不存在或已结束)
   SPECTATE_FEATURED_REJECT_PRIVATE = 2;     // 非公开局不能标成赛事局
   SPECTATE_FEATURED_REJECT_INTERNAL = 3;    // Redis 读写失败(可重试)
+  // 入口未开启或调用方验签失败。走业务拒绝而不是 gRPC PermissionDenied:拒绝发生在任何副作用之前,
+  // 结局是确定的,不能让发布准入把它记成未知结局而拖住本实例的排空证明(go/shared/drainproof)。
+  SPECTATE_FEATURED_REJECT_DENIED = 4;
 }
 message SetSpectateFeaturedRequest {
   uint64 battle_id = 1;

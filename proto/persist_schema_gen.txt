@@ -227,3 +227,10 @@ state=bootstrap
 1=PlayerActivityPointSource#4 optional uint64 configuration_revision
 1=PlayerActivityPointSource#5 optional uint64 period_id
 1=PlayerActivityPointSource#6 optional uint32 points
+
+retired=player_database#10
+retired=player_database#17
+retired=player_database#18
+retired=player_database#19
+retired=player_database_1#3
+retired=player_database_1#4

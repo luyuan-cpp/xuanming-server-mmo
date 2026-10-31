@@ -5,8 +5,8 @@ option go_package = "db/proto/common/component";
 // 设计文档:docs/design/mystery-merchant.md §5.3。
 //
 // 为什么落在玩家存档里而不是放 Redis 或节点内存:
-//   - 它必须与 currency / bag_component 同在 player_database 一行、同一次存盘落地(与 asset_op_ledger、
-//     settlement_ledger 是同一条不变量 I3):崩溃回档时「钱、货、已购数」三样一起退回同一个时刻,
+//   - 它必须与 currency / bag_component 同在 player_database 一行、同一次存盘落地(与 asset_op_ledger
+//     是同一条不变量 I3):崩溃回档时「钱、货、已购数」三样一起退回同一个时刻,
 //     不会出现「货没了但限购名额已经用掉」或「货还在但名额被清零可以再买一遍」。
 //   - 商人所在的线会换节点(节点判死后在别的节点重建、空线被 rebalance 迁走),放节点内存的话
 //     换一次节点名额就清零一次。

@@ -33,6 +33,7 @@ enum eNodeType {
 	BattleNodeService       = 28; // 回合制战斗节点(gRPC,全局池,不分 zone)
 	ClientRpcRouterNodeService = 29; // 客户端 RPC 路由服(Go-Zero,全局池):gate 唯一的 gRPC 目标,按 message_id 不透明转发到各业务 Go 服务(docs/design/client-rpc-router.md)
 	PlayerInboxNodeService  = 30; // 玩家持久收件箱(Go-Zero,独占库 mmorpg_player_inbox):scene 经 etcd 前缀 PlayerInboxNodeService.rpc 发现(docs/design/player-inbox-service.md §1.4)
+	PlayerStoreNodeService  = 31; // 玩家存盘(go/db 提供,scene 调用,按 zone 发现)
 };
 
 enum eSceneNodeType

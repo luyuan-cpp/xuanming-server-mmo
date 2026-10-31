@@ -40,7 +40,7 @@
 39=ContractsKafkaPushToPlayerEvent
 40=ContractsKafkaBroadcastToSceneEvent
 41=reserved:PlayerMigrationAckEvent
-42=BattleSettlementEvent
+42=reserved:BattleSettlementEvent
 43=reserved:ContractsKafkaBindBattleEvent
 44=reserved:ContractsKafkaUnbindBattleEvent
 45=BattleConfirmedEvent
@@ -48,5 +48,5 @@
 47=ContractsKafkaBattleResultTeam
 48=PlayerTeamRefreshEvent
 49=PlayerInboxNotifyEvent
-50=ContractsKafkaPlayerRatingSnapshotEvent
+50=reserved:ContractsKafkaPlayerRatingSnapshotEvent
 51=ContractsKafkaSpectateFrameEvent

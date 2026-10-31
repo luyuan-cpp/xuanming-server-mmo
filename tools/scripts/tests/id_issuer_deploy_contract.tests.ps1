@@ -65,6 +65,7 @@ Test-Case '部署脚本只在非 dev 档起第二套 etcd,并把两套地址写�
     $text = Read-RepoText $script:DeployPath
     Assert-Match -Text $text -Pattern "(?s)if \(\`$ReleaseProfile -ne 'dev'\) \{\s*\`$infraManifests \+= `"etcd-id-secondary\.yaml`"" -Because 'dev 档两份记录放同一套 etcd,不多起 3 个 Pod'
     Assert-Match -Text $text -Pattern "(?s)if \(\`$ReleaseProfile -ne 'dev'\) \{\s*Wait-ForStatefulSetReady -Namespace \`$InfraNamespace -StatefulSetName `"etcd-id-secondary`"" -Because '-WaitReady 要等它成 quorum'
+    Assert-Match -Text $text -Pattern "\`$dataServiceModeLine = if \(\`$SvcName -eq 'data-service' -and \`$ReleaseProfile -eq 'dev'\) \{ 'Mode: dev' \}" -Because '只有 dev 档能把两份记录放同一套 etcd,staging、prod 不写 Mode'
     Assert-Match -Text $text -Pattern 'PrimaryEtcd: \["etcd\.\$\{InfraNamespace\}:2379"\]' -Because '主记录放现有 etcd'
     Assert-Match -Text $text -Pattern 'SecondaryEtcd: \["etcd-id-secondary\.\$\{InfraNamespace\}:2379"\]' -Because '副记录放独立 etcd,漏了生产发号器装配失败'
 }

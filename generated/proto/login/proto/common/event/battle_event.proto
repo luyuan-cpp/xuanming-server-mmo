@@ -1,21 +1,12 @@
 syntax = "proto3";
 option go_package = "login/proto/common/event";
 
-import "proto/battle/battle_data.proto";
 import "proto/common/options/event_ingress_option.proto";
 
 // 回合制战斗事件(经 SceneCommand{DispatchEvent} 进 scene 节点进程内分发)。
 // Kafka 投递要求:topic = scene-{node_id},key = player_id(保序),
 // target_instance_id = 快照 BattleRouting.scene_instance_id(防僵尸,宪法 §7 不变量 2)。
-
-// battle -> scene:战斗结算。scene 是唯一应用者:
-// 校验 InBattleComp.battle_id 匹配 -> 应用 -> 摘 InBattleComp + DEL battle:lock;
-// 不匹配丢弃并告警;玩家不在场 -> 写 battle:settlement:pending:{player_id}(不过期,并进积压索引
-// battle:settlement:pending:index,见 docs/design/landing-recovery-sync-digest.md §7)。
-message BattleSettlementEvent {
-  option (OptionKafkaIngress) = true;
-  BattleSettlementData settlement = 1;
-}
+// 结算不走这里:battle 把终局提交 match SQL,match 发件箱投 player_inbox(player-data-tidb-scaling-plan.md §5.4)。
 
 // battle -> scene:CreateBattle 成功后每个参战玩家一条。scene 校验 InBattleComp.battle_id 匹配且
 // state==PREPARING -> state=FIGHTING、deadline_ms=event.deadline_ms、battle:lock 按正式期限续期;

@@ -5,7 +5,7 @@ import "proto/db/proto_option.proto";
 import "proto/common/database/mysql_database_table.proto";
 import "proto/common/database/bag_quest_mail_data.proto";
 
-// PlayerAllData — the player's full persisted snapshot: written by SavePlayerToRedis (periodic, logout and the
+// PlayerAllData — the player's full persisted snapshot: written by SavePlayer (periodic, logout and the
 // ownership-handoff save before a cross-node / cross-zone move), loaded by whichever node owns the player next,
 // and snapshot'd for rollback. (The old cross-zone "migration" chain that shipped it over Kafka was removed, CZ-1.)
 //

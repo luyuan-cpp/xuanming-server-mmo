@@ -2,7 +2,6 @@ syntax = "proto3";
 option go_package = "robot/proto/common/component";
 
 
-
 // Normal login
 message NormalLogin
 {
@@ -24,7 +23,7 @@ message Account
 
 message UnregisterPlayer
 {
-	// Wall-clock millis when HandleExitGameNode was called (and SavePlayerToRedis
+	// Wall-clock millis when HandleExitGameNode was called (and SavePlayer
 	// was enqueued). Used to detect saves that outrun the player_locator
 	// reconnect lease (30s). See todo.md #280 / NOTES Part 2 P0.
 	int64 logout_initiated_ms = 1;
@@ -64,7 +63,7 @@ message PlayerProfileComp
 
 // Stress-test instrumentation for player-data persistence.
 //
-// Stamped by the producer (Scene's SavePlayerToRedis when an env-var probe
+// Stamped by the producer (Scene's SavePlayer when an env-var probe
 // is enabled, or by the data_stress driver / robot data-stress mode) and
 // verified by tools/cmd/verifier so we can prove "last write wins" through
 // the Kafka -> DB -> MySQL+Redis pipeline without doing per-field deep
@@ -82,62 +81,3 @@ message PlayerStressTestProbe
 	bytes  test_sig = 2;
 }
 
-// Server-merge state attached to a player whose home zone was folded into
-// another zone. Both fields default to zero / false during normal play and
-// only get populated by `tools/merge_zone/` (P0-G stamp + P3-H notice
-// stamp) right before the merge maintenance window ends.
-//
-// Why a dedicated component instead of stuffing the flags into
-// PlayerUint32Comp:
-//   1. Persistence locality — these fields live and die with the merge
-//      lifecycle (set during merge → cleared on first post-merge action).
-//      Co-locating them with `class` would mix transient migration state
-//      with permanent identity state, making the field-level history
-//      harder to read in audit logs.
-//   2. Clear ownership — `tools/merge_zone/` is the only writer for set,
-//      `go/login/internal/logic/clientplayerlogin/` is the only writer
-//      for clear. Anchoring the schema to a separate component lets us
-//      grep for "merge state writer" without false hits.
-//   3. Forward-compat — if the merge story grows additional flags
-//      (post-merge guild-membership reconciliation, post-merge auction
-//      payout receipt, etc.) they belong here, not bolted onto unrelated
-//      components.
-//
-// See:
-//   - docs/design/server-merge-gap-fixes.md §1 (force_rename design)
-//   - docs/design/server-merge-gap-fixes.md §5 (post-merge notice)
-//   - docs/ops/merge-zone-runbook.md §4.4 / §7
-message PlayerMergeStateComp
-{
-	// Stamped to true by tools/merge_zone/ when this player's nickname
-	// collides with an existing nickname in the merge target zone (the
-	// schema is per-zone UNIQUE, see server-merge-gap-fixes.md §1.2).
-	//
-	// Login flow contract: when a client's player blob has this flag set,
-	// the client MUST surface a forced-rename UI before the player can
-	// enter the world. The server-side rename RPC clears the flag on a
-	// successful name change. CLAUDE.md §9 forbids adding a 5th
-	// `enter_gs_type`, so the gating happens client-side; see
-	// server-merge-gap-fixes.md §1.4 for why.
-	bool force_rename_required = 1;
-
-	// Wall-clock millis when force_rename_required was stamped. Used by
-	// the merge runbook (§7.1) to monitor the post-merge improvement
-	// curve — if a stamp is older than 7 days the player has been
-	// dodging the rename UI and ops should reach out. Audit-only field;
-	// no game logic should branch on it.
-	int64 force_rename_stamped_ms = 2;
-
-	// Wall-clock millis the post-merge notice was last shown to the
-	// player. Zero means "never shown / not stamped". Stamped by
-	// tools/merge_zone/ to (now - 1) so the very next login triggers
-	// the notice exactly once; the login pipeline updates it to the
-	// current ms once the client ACKs the notice. This is the P3-H
-	// (post-merge announcement) hook — see server-merge-gap-fixes.md §5.
-	//
-	// We deliberately use a timestamp (not a bool) so future merges
-	// re-stamp the same field instead of needing a new flag — a player
-	// surviving two merges (zone1→zone2→zone3) gets two notices, not
-	// one bool that flips.
-	int64 post_merge_notice_seen_ms = 3;
-}

@@ -78,6 +78,8 @@ var (
 	// ErrCounterMissing:两份预留记录都不存在,而且不允许自动初始化。这是 id 安全事件。
 	ErrCounterMissing = errors.New("id issuer: both reservation records are missing; " +
 		"follow the id issuer runbook in docs/ops/id-issuer-runbook.md, then run data_service -id-issuer-init")
+	// ErrSameCluster:两份记录落在同一套 etcd 上。两套独立 etcd 是强规定(AGENTS §7),只有 dev 例外。
+	ErrSameCluster = errors.New("id issuer: both reservation records are on the same etcd cluster")
 	// ErrRegionMismatch:记录里的地域和本发号器配置的不一致。
 	ErrRegionMismatch = errors.New("id issuer: reservation record belongs to another region")
 	// ErrExhausted:值域见底,或者时间字段溢出。
@@ -102,6 +104,8 @@ type Record struct {
 	Value    uint64
 	Revision int64
 	Exists   bool
+	// ClusterID 是存储自己报的集群号,记录不存在时也要给。0 = 这种存储给不出(只有内存实现)。
+	ClusterID uint64
 }
 
 // CounterStore 是一份预留记录。两份实例必须落在互相独立的存储上。
@@ -124,7 +128,7 @@ type Options struct {
 	Region uint8
 	// BlockSize 是一块的大小,0 取 DefaultBlockSize。
 	BlockSize uint64
-	// AllowBootstrap=true:两份记录都不存在时自动初始化(只给 dev)。
+	// AllowBootstrap=true:两份记录都不存在时自动初始化,也允许两份记录放在同一套存储上(只给 dev)。
 	AllowBootstrap bool
 	// Tags 是允许的 biz_tag 清单,不能为空。
 	Tags []string
@@ -307,6 +311,9 @@ func (i *Issuer) Bootstrap(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if err := i.requireIndependent(p, s); err != nil {
+		return false, err
+	}
 	if p.Exists || s.Exists {
 		return false, nil
 	}
@@ -372,6 +379,10 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 			i.observe(ReserveStoreError)
 			return block{}, fmt.Errorf("read secondary record: %w", err)
 		}
+		if err := i.requireIndependent(p, s); err != nil {
+			i.observe(ReserveRefused)
+			return block{}, err
+		}
 		start, err := i.nextStart(p, s)
 		if err != nil {
 			i.observe(ReserveRefused)
@@ -408,6 +419,15 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 		return block{pos: start, end: end, halfway: start + i.opt.BlockSize/2}, nil
 	}
 	return block{}, ErrContended
+}
+
+// requireIndependent 核对两份记录确实在两套 etcd 上。配置校验只比地址字符串,DNS 别名、负载均衡、IP 和域名混写都能骗过它,
+// 所以运行期再比 etcd 自己报的集群号。第二套 etcd 故障时读记录就失败了,走不到这里。
+func (i *Issuer) requireIndependent(p, s Record) error {
+	if i.opt.AllowBootstrap || p.ClusterID == 0 || p.ClusterID != s.ClusterID {
+		return nil
+	}
+	return fmt.Errorf("%w: cluster_id=%x", ErrSameCluster, p.ClusterID)
 }
 
 // nextStart 算下一块的起点:两份记录与时间下限的较大者。

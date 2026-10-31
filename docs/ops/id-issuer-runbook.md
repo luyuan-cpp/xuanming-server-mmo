@@ -16,7 +16,8 @@
 - 第三道防线是时间下限:每块的起点不低于当前时间对应的计数器值。它只会把起点往上抬,坏时钟不会造成重号,也不会让发号停下来。
 - 记录的值是 `地域 << 57 | 秒 << 24`,秒从 2026-01-01 UTC 起算。地域现在都是 0。
 - 发号器不用全局库。**恢复 `mmorpg_global` 不再影响发号**。
-- dev 档(`IdSegment.AllowAutoSeed=true`)两份记录放同一套 etcd,记录不存在时自动初始化,不需要下面任何操作。压测前清空 etcd 没有问题。
+- **两套独立 etcd 是强规定**(AGENTS §7,负责人 2026-10-31 定):配置校验要求两套地址没有交集;每次预留和初始化再比 etcd 自己报的集群号,相同就拒绝,指标 `result=refused`,错误里带 `same etcd cluster`。`AllowAutoSeed=true` 只在 `Mode=dev`、`test` 下生效。
+- dev 档(`Mode: dev` 且 `IdSegment.AllowAutoSeed=true`)两份记录放同一套 etcd,记录不存在时自动初始化,不需要下面任何操作。压测前清空 etcd 没有问题。
 
 ## 2. 首次部署(staging / prod)
 

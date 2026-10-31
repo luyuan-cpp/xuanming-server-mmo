@@ -128,6 +128,7 @@
      仍由这套号源生成的 scene_id 等值可用 C++ `ParseGuid` 解，不能仅凭字段名选择解析器。
    - `bwmarrin/snowflake`：**13-bit** node / 9-bit step / **毫秒**级 epoch。只有 login 的旧号源是这套，新角色已不用它。
    - **发号器发的永久 ID**（player_id、guild_id、物品 guid、流水号、battle_id、challenge_id、team_id 等，`data_service.AllocateIdSegment`）：打散过的计数器值，63 位以内，不单调、不连续、没有位布局。**不能用 `ParseGuid` 解析，不能靠大小判断先后**（排序和翻页用时间列），Lua 里只当字符串，不进有序集合的分数。没有回退号源，发号失败就是操作失败。详见 [发号器设计](docs/design/player-data-tidb-scaling-plan.md) §6 与 [运维手册](docs/ops/id-issuer-runbook.md)。
+   **强规定(负责人 2026-10-31 定)**:发号器的预留记录必须写两套独立的 etcd,两份都写成功才发号。任何生产环境、任何预算档都不许省掉第二套,也不许把两份放在同一套;只有 `Mode=dev`、`test` 例外。
 2. **Kafka 防僵尸**：发往 `{type}-{id}` topic 的消息必须填 `target_instance_id`（目标节点 UUID），空值则关闭过滤
 3. **kafka topic key = 业务实体 ID**（同一玩家 / 同一对局事件有序）
 4. **proto 字段编号上线后不复用**（见 §4）

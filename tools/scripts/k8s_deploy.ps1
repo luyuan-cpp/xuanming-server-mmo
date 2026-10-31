@@ -9288,6 +9288,8 @@ function New-GoSvcConfigMapYaml {
 	# 两份都不存在可能是两套 etcd 同时丢了数据,自动从头发号会静默串档,必须由人判断后跑 -id-issuer-init
 	# (docs/ops/id-issuer-runbook.md)。false 时 = ErrCodeIdSegmentUnknownTag,不写任何记录。
 	$dataServiceAllowAutoSeed = 'false'
+	# AllowAutoSeed=true 要求 Mode=dev(svc.NewIdIssuer):两份记录放同一套 etcd 只有 dev 档能用。staging/prod 不写,默认 pro。
+	$dataServiceModeLine = if ($SvcName -eq 'data-service' -and $ReleaseProfile -eq 'dev') { 'Mode: dev' } else { '' }
 	if ($SvcName -eq 'data-service' -and $ReleaseProfile -eq 'dev') {
 		$dataServiceAllowAutoSeed = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'IdSegment.AllowAutoSeed'
 	}
@@ -9550,6 +9552,7 @@ MetricsListenAddr: ":9260"
 # 发号器(见生成器注释):AllowAutoSeed dev = 服务 yaml 的值;staging/prod = false,两份预留记录都不存在时拒绝发号,
 # 由人判断后跑 -id-issuer-init(docs/ops/id-issuer-runbook.md)。
 # Tags 与服务 yaml / DefaultIdSegmentTags 同一份清单,新增永久身份三处同加(id_issuer_deploy_contract.tests.ps1 钉住)。
+${dataServiceModeLine}
 IdSegment:
   AllowAutoSeed: ${dataServiceAllowAutoSeed}
   Tags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op, friend_request, trade_asset_op, mail, mail_asset_op, rank_board, rank_settlement, rank_reward, battle, snapshot_row, rollback_audit]

@@ -41,15 +41,15 @@ message CreateBattleRequest {
   string table_fingerprint = 8;            // match 确认的全员一致指纹;battle 与自身指纹不一致按配置拒开局/告警
   // 活动对局上下文(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.17/§6.19)。
   // 可空:普通对局不填(等价 kind == NONE)。match 的 RunActivityGather 原样填入;battle 存进房间,
-  // 结算时回显进 BattleResultEvent.activity_context,并且 kind != NONE 时先落 SharedRedis
-  // battle:activity_result:{battle_id} 再发 Kafka(未被 guild 销账就重发)。battle 不解释其余字段。
+  // 结算时回显进 BattleResultEvent.activity_context,随终局原件提交 match SQL,结果由 match 发件箱投 Kafka。
+  // battle 不解释其余字段。
   BattleActivityContext activity_context = 9;
   uint32 required_physical_region = 10;
   string placement_operation_id = 11;
   string target_instance_id = 12;
   // 首次创建必须早于备战截止；重复同操作只查询/重放既有结果，不能在备战自愈后重新建房。
   uint64 admit_before_ms = 13;
-  // 1：个人副作用之前必须先取得 Match SQL 的 COMPLETE；0 保持旧协议且不得追认。
+  // 只接受 1：个人副作用之前必须先取得 Match SQL 的 COMPLETE；其它值 battle 一律拒绝建房。
   uint32 outcome_protocol_version = 14;
   // 观战可见性,由 match 按 spectateVisibilityFor 决定后冻结进本原件(全局模式随 formation 的
   // create_request 持久)。battle 存进房间,AddObserver 对非 PUBLIC 一律拒绝(第二道闸)。

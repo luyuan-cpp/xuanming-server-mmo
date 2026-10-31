@@ -21,7 +21,7 @@ message KafkaConfig {
     // 三个字段都是 0 = 用编译期默认值(node_command_topic.h 里的常量),
     // 这样存量 yaml 不改也能起。
 
-    // P:分区数。**不可变契约**,与 db_task / 审计 topic 同一套纪律
+    // P:分区数。**不可变契约**,与审计 topic 同一套纪律
     // (docs/design/db-task-kafka-partition-contract.md):要改就 +1 代号换一批
     // 新 topic,绝不原地扩分区 —— 扩分区会把 node_id % P 重映射,
     // 命令就发到没人 assign 的分区上,静默全丢。0 = 256。
@@ -31,18 +31,11 @@ message KafkaConfig {
     // transaction_log_topic_g1 同形)。0 = 1。
     uint32 command_topic_generation = 7;
 
-    // 迁移窗口开关:true = **不再**消费旧的 `<类型>-<node_id>` per-node topic。
-    // 默认 false(仍消费),因为生产者是分批切的(Go login 由另一路发布切换),
-    // producer 还在写老 topic 时把消费端关掉 = 命令全丢。
-    // 全部生产者切完后置 true,P1(僵尸进程与继任者共用 consumer group、
-    // 分区被判给僵尸导致继任者饿死)才算彻底关闭 —— 老路径仍是 group 订阅。
-    bool disable_legacy_per_node_topic = 8;
 }
 
 // 一种永久 guid 的号段配置(docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5)。
-// 号段 = scene 经 DataService.AllocateIdSegment 从全局库 id_segment 表领 [lo, hi),
-// 值域 [1, 2^55) 与存量 snowflake 号(≥ 6.7e16)不相交,新旧号在同一张表 / 玩家 blob 里共存、不迁数据。
-// 一种 GUID 一个客户端实例(C++ GuidSegmentRegistry),kind 名 = 注册表种类名 = id_segment.biz_tag。
+// 号段 = scene 经 DataService.AllocateIdSegment 领 [lo, hi)。
+// 一种 GUID 一个客户端实例(C++ GuidSegmentRegistry),kind 名 = 注册表种类名 = 发号器的 biz_tag。
 message IdSegmentKindConfig {
     // 种类名:item / txlog / snapshot(以后 pet / guild …)。不认识的名字被忽略并记 ERROR。
     string kind = 1;
@@ -157,26 +150,6 @@ message BaseDeployConfig {
 
     // C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
     GrpcClientConfig grpc_client = 21;
-
-    // 玩家存盘 DBTask topic(db_task_zone_{zone})的**世代号**。有效名:
-    // `<= 1` → `db_task_zone_{zone}`(不带后缀),`>= 2` → `db_task_zone_{zone}_g{N}`。
-    // 注意与 audit_topic_generation **第一代就带 _g1** 的规则不同:db_task 第一代的名字早已上线,
-    // 换规则等于换 topic,只能沿用 go/db、go/login 的 DbTaskTopicForGeneration 口径。
-    // 0 当 1 处理(proto3 没有 presence,存量 yaml 不写这一键也能起,名字不变)。
-    //
-    // **必须等于 go/db 的 ServerConfig.Kafka.TopicGeneration 与 go/login 的 Kafka.TopicGeneration**:
-    // C++ scene 按 home_zone 往这个 topic 写玩家存盘,go/db 是唯一的消费者。分家不报任何错 ——
-    // 换代后 scene 仍写旧代 topic,存盘静默积压在一个已排空、没人消费的 topic 里。
-    // 换代流程见 docs/design/db-task-kafka-partition-contract.md;设计见 player-storage-placement.md §7。
-    uint32 db_task_topic_generation = 22;
-
-    // 混版本持久字段保护:严格提交屏障 C3 的模式(docs/design/mixed-version-persist-field-protection.md §5.2)。
-    // 只认 "warn" / "enforce":warn 照写并计数,enforce 拒写、本次在线进度不落盘。
-    // readBaseDeployConfig 读入时归一化(cpp/libs/engine/config/persist_schema_regression_mode.h):
-    // 缺键 / 空串 = "warn"(proto3 无 presence,存量 yaml 不写也能起);其余非法值拒绝启动。
-    // 运行期这里只会是两个字面量之一,原样作为严格屏障 Lua 的 ARGV[10]。
-    // 切 enforce 的放行条件见设计 §8.1 第 5 步;k8s 侧由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 镜像。
-    string persist_schema_regression_mode = 23;
 }
 
 // Game config
@@ -204,4 +177,15 @@ message GameConfig {
     }
 
     PlayerInboxConfig player_inbox = 8;
+
+    // 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;控制域仍是 zone_redis。
+    // 由 readGameConfig 手工逐键解析,yaml 键名 player_redis。**整段缺失时加载器显式取默认**:standalone,
+    // 地址与口令沿用 zone_redis,开发环境不用改配置。
+    message PlayerRedisConfig {
+        string mode = 1;             // standalone | cluster;取值由 scene 启动时校验,配错拒绝启动
+        repeated string seeds = 2;   // host:port。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
+        string password = 3;         // 空 = 不认证;可被环境变量 PLAYER_REDIS_PASSWORD 覆盖,值不进日志
+    }
+
+    PlayerRedisConfig player_redis = 9;
 }

@@ -19,6 +19,7 @@ type memStore struct {
 	// beforeWrite 在 CAS 比较之前调用,用来插入并发写。
 	beforeWrite func()
 	closed      bool
+	clusterID   uint64
 }
 
 func (m *memStore) Read(context.Context) (Record, error) {
@@ -27,7 +28,7 @@ func (m *memStore) Read(context.Context) (Record, error) {
 	if m.readErr != nil {
 		return Record{}, m.readErr
 	}
-	return Record{Value: m.value, Revision: m.revision, Exists: m.exists}, nil
+	return Record{Value: m.value, Revision: m.revision, Exists: m.exists, ClusterID: m.clusterID}, nil
 }
 
 func (m *memStore) CompareAndSwap(_ context.Context, prev Record, next uint64) (bool, error) {
@@ -125,6 +126,46 @@ func (h *harness) issuer(mut func(*Options)) *Issuer {
 		h.t.Fatal(err)
 	}
 	return iss
+}
+
+// 两份记录在同一套 etcd 上:生产拒绝预留,也拒绝初始化,什么都不写。比的是 etcd 报的集群号,换一种地址写法绕不过去。
+func TestSameClusterIsRefusedInProduction(t *testing.T) {
+	h := newHarness(t)
+	h.primary.clusterID, h.secondary.clusterID = 7, 7
+	iss := h.issuer(func(o *Options) { o.AllowBootstrap = false })
+	defer iss.Close()
+
+	if _, _, err := iss.Allocate(context.Background(), "player", 1); !errors.Is(err, ErrSameCluster) {
+		t.Fatalf("allocate: want ErrSameCluster, got %v", err)
+	}
+	if created, err := iss.Bootstrap(context.Background()); created || !errors.Is(err, ErrSameCluster) {
+		t.Fatalf("bootstrap: want ErrSameCluster, got created=%v err=%v", created, err)
+	}
+	if h.primary.get() != 0 || h.secondary.get() != 0 {
+		t.Fatal("nothing may be written when the two records share a cluster")
+	}
+}
+
+// 两套不同的 etcd 正常发号;dev 允许两份记录在同一套上。
+func TestClusterCheckAllowsIndependentClustersAndDev(t *testing.T) {
+	independent := newHarness(t)
+	independent.primary.clusterID, independent.secondary.clusterID = 7, 8
+	production := independent.issuer(func(o *Options) { o.AllowBootstrap = false })
+	defer production.Close()
+	if _, err := production.Bootstrap(context.Background()); err != nil {
+		t.Fatalf("independent clusters: %v", err)
+	}
+	if _, _, err := production.Allocate(context.Background(), "player", 1); err != nil {
+		t.Fatalf("independent clusters: %v", err)
+	}
+
+	shared := newHarness(t)
+	shared.primary.clusterID, shared.secondary.clusterID = 7, 7
+	dev := shared.issuer(nil)
+	defer dev.Close()
+	if _, _, err := dev.Allocate(context.Background(), "player", 1); err != nil {
+		t.Fatalf("dev may share a cluster: %v", err)
+	}
 }
 
 // allocated 记下发过的所有段,断言互不重叠。

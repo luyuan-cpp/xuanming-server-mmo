@@ -347,3 +347,8 @@
 346=PlayerInboxEnqueueBattleSettlement
 347=PlayerInboxLookupBattleSettlement
 348=SceneActivityClientPlayerClaimActivityVitalityReward
+349=BattleNodeAttachRelayGate
+350=BattleNodePromoteSpectateBroadcast
+351=GateClientSpectateSubscribeSpectate
+352=GateClientSpectateUnsubscribeSpectate
+353=MatchInternalSetSpectateFeatured

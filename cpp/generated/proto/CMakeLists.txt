@@ -164,6 +164,7 @@ set(SOURCE_FILES
     common/base/currency_type.pb.cc
     gate/gate_client_spectate.pb.cc
     gate/gate_spectate_ticket.pb.cc
+    player_store/player_store.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

@@ -20,7 +20,8 @@ option (OptionFileDefaultNode) = NODE_BATTLE;
 //   NotifyBattleEnd 也走大厅(scene 自己的下行);客户端两条连接都挂 NotifyBattleEnd,按 battle_id 幂等。
 // 观战例外(D94,battle-spectate-tiered-fanout.md §15):WatchBattleResponse.delivery = LOBBY 的观众不建直连,
 //   SpectateState / SpectateTurnResult / SpectateEnd 三条观战帧由 gate 经大厅连接下发(gate 中继 / 全服广播档);
-//   客户端在大厅连接上也注册这三条,按 (battle_id, round_index) 去重。参战帧仍然只走直连。
+//   客户端在大厅连接上也注册这三条;去重时 158 只与 158 比较 round_index,161 不推进水位
+//   (161 是结算前的快照,紧接着同回合的 158 必须照常处理)。参战帧仍然只走直连。
 // 设计依据:docs/design/turn-based-battle-server.md §5.2、§18、§22。
 
 // ---- 战斗全量状态(开战下发 / 回合后同步 / 重连补拉,v1 全量同步免客户端预测) ----
