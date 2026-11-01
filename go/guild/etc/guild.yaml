@@ -1,9 +1,6 @@
 # Guild Service Configuration
 Name: guild.rpc
 Mode: dev
-AccountRoleSchema: mmorpg_global
-# 同主TiDB连接池跨库只读核验真实Match/Team表；缺表或配置缺失拒启。
-MatchAuthoritySchema: mmorpg_match
 # 必须指向login实际使用的同一全局实例/DB；不能按gateNodeId猜zone或回退本地缓存。
 GlobalLoginSessions: true
 LoginRedis:
@@ -212,7 +209,7 @@ MatchRpc:
     Breaker: false
 
 # 历练的后台节律与对局结果消费。
-#   TrialResultOverdueSeconds:对局登记多久后仍无结果,巡检器去读 MatchAuthoritySchema 库的 SQL 终局(match_battle_completion)兜底。
+#   TrialResultOverdueSeconds:对局登记多久后仍无结果,巡检器经 MatchInternal.GetBattleCompletion 读 SQL 终局兜底。
 #   TrialAbandonSeconds:多久后仍无结果也无终局则判 EXPIRED(迟到的结果仍可结算);必须 ≥ 上一项 + 600,≤ 604800(7 天)。
 #   TrialSweepIntervalSeconds:巡检间隔 [10, 600];多副本靠全局 Redis 的 guild:trial:sweep:lease 互斥。
 #   OwedLoopIntervalSeconds:待入队物品循环间隔 [1, 60](结算时未决指令已满者的物品,等窗口有空位再入队)。

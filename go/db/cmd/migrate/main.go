@@ -46,6 +46,8 @@ import (
 	"db/internal/dbguard"
 	"db/internal/logic/pkg/proto_sql"
 	"db/internal/migrate"
+	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/placement"
 
 	"github.com/go-sql-driver/mysql"
@@ -94,6 +96,25 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
+
+	// 库搬走之后连当前集群;搬库期间(state=MOVING)拒绝 DDL,只读的 status、plan 照常。
+	resolved, err := dbplacement.ResolveOnce(ctx, config.AppConfig.DbPlacement, target)
+	if err != nil {
+		log.Fatalf("read db placement: %v", err)
+	}
+	if *command == "up" {
+		// 没有 DbPlacement 段就看不到 MOVING。status、plan 只读,不受影响。
+		if err := dbplacement.RequireForMigration(config.AppConfig.DbPlacement, os.Getenv); err != nil {
+			log.Fatalf("%v", err)
+		}
+		if err := resolved.RefuseMoving(target); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}
+	if resolved.Addr != "" {
+		config.AppConfig.ServerConfig.Database.Hosts = resolved.Addr
+		logf("db placement: %s is on cluster %s", target, resolved.Placement.Cluster)
+	}
 
 	if *createDatabase {
 		if *command != "up" {
@@ -253,6 +274,12 @@ func runUp(ctx context.Context, runner *migrate.Runner, db *sql.DB, allowModify 
 	}
 	for _, w := range report.Warnings {
 		logf("  NEEDS-REVIEW %s", w)
+	}
+	// 闸门跟着逻辑库走:每个落点库自带一份。建表和种行都幂等,已有的一个字节不动。
+	if !report.DryRun {
+		if err := authoritysql.EnsureCatalogSchema(ctx, db, report.Database); err != nil {
+			log.Fatalf("ensure writer gate tables on %s: %v", report.Database, err)
+		}
 	}
 	if len(report.Warnings) > 0 {
 		// 退 4 = 迁移本身成功,但有需要人工过目的漂移。部署脚本可以据此告警

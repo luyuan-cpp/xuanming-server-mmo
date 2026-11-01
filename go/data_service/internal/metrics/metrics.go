@@ -213,8 +213,9 @@ const (
 
 // route_read_total{path,result} 的取值(封闭集合,PrimeRoute 逐个预置;新增取值必须同时加进 routeReadSeries)。
 const (
-	RouteReadPathHome  = "home"
-	RouteReadPathBatch = "batch"
+	RouteReadPathHome      = "home"
+	RouteReadPathBatch     = "batch"
+	RouteReadPathPlacement = "placement" // go/db 选库读落点(GetPlayerRoute)
 
 	RouteReadResultOK       = "ok"
 	RouteReadResultNotFound = "not_found"
@@ -232,7 +233,7 @@ var (
 		RouteRegisterInvalid,
 	}
 
-	// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(5 条):batch 没有逐 id 的缺席结论,
+	// routeReadSeries 是 route_read_total 里**会出现**的 path × result 组合(8 条):batch 没有逐 id 的缺席结论,
 	// 不出现的组合不预置,免得面板上多出恒为 0、看着像「在跑」的序列。
 	routeReadSeries = [][2]string{
 		{RouteReadPathHome, RouteReadResultOK},
@@ -240,6 +241,9 @@ var (
 		{RouteReadPathHome, RouteReadResultError},
 		{RouteReadPathBatch, RouteReadResultOK},
 		{RouteReadPathBatch, RouteReadResultError},
+		{RouteReadPathPlacement, RouteReadResultOK},
+		{RouteReadPathPlacement, RouteReadResultNotFound},
+		{RouteReadPathPlacement, RouteReadResultError},
 	}
 )
 
@@ -261,7 +265,7 @@ func register() {
 	})
 }
 
-// PrimeRoute 把 route_register_total(7 条)与 route_read_total(5 条)的封闭集合逐个预置为 0(data_service.go 启动路径):
+// PrimeRoute 把 route_register_total(7 条)与 route_read_total(8 条)的封闭集合逐个预置为 0(data_service.go 启动路径):
 // store_error 这类一辈子可能只发生几次的结局,序列不预先存在的话 `increase(...) > 0` 恰好漏掉第一次。
 func PrimeRoute() {
 	register()
@@ -322,13 +326,14 @@ func ObserveMergedZoneRefresh(result string) {
 const (
 	PoolSnapshot       = "snapshot"        // player_snapshot / rollback_audit_log(SnapshotMySQL.MaxOpenConn)
 	PoolTransactionLog = "transaction_log" // transaction_log(SnapshotMySQL.MaxOpenConn)
+	PoolRecall         = "recall"          // gm_recall_* / 流水库的 role_fence(SnapshotMySQL.MaxOpenConn)
 	PoolPlayerName     = "player_name"     // player_name(PlayerName.MaxOpenConn)
 	PoolPlayerRoute    = "player_route"    // 路由表(RouteStore.MaxOpenConn)
 )
 
 // NewSQLPoolCollector 只构造不注册(单测用自己的注册表)。sql_client 取本包的 subsystem("data_service")。
 func NewSQLPoolCollector(source sqlpoolstats.Source) prometheus.Collector {
-	return sqlpoolstats.NewCollector(subsystem, []string{PoolSnapshot, PoolTransactionLog, PoolPlayerName, PoolPlayerRoute}, source)
+	return sqlpoolstats.NewCollector(subsystem, []string{PoolSnapshot, PoolTransactionLog, PoolRecall, PoolPlayerName, PoolPlayerRoute}, source)
 }
 
 // RegisterSQLPools 把连接池快照接到默认注册表(Start 暴露的那个)。进程内调一次(data_service.go 启动路径;

@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	databasepb "proto/common/database"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/kafkautil"
 	"strings"
@@ -346,7 +347,21 @@ func runAuthorityPhase(ctx context.Context, o options, out, errOut io.Writer) in
 	if err != nil {
 		return fail(err)
 	}
-	db, err := authoritysql.Open(budget, os.Getenv(o.dsnEnv), runtime.Plan.AuthoritySchema, backend, 1, permission)
+	// 维护账号的连接串按 Plan 指的逻辑库定位:排空逐库做,同集群的库共用一条。
+	dsn, err := authoritysql.DSNForSchema(os.Getenv(o.dsnEnv), runtime.Plan.AuthoritySchema)
+	if err != nil {
+		return fail(err)
+	}
+	// 库搬到别的集群之后,地址按映射给;没设 MMORPG_DB_PLACEMENT 时就是连接串里的地址。
+	placementConfig, err := dbplacement.ConfigFromEnv(os.Getenv)
+	if err != nil {
+		return fail(err)
+	}
+	placementOptions, err := dbplacement.ForOneShot(budget, placementConfig, runtime.Plan.AuthoritySchema)
+	if err != nil {
+		return fail(err)
+	}
+	db, err := authoritysql.Open(budget, dsn, runtime.Plan.AuthoritySchema, backend, 1, permission, placementOptions...)
 	if err != nil {
 		return fail(err)
 	}

@@ -31,10 +31,11 @@ import (
 type Options struct {
 	// AllowMySQL 表示这组用例在 MySQL 与 TiDB 上都要能跑:按真实引擎选档位(fixtureBackend),各自走正式核对。
 	// 不写就只接受 TiDB。没有「什么都不核对」的第三种连接。
-	AllowMySQL              bool
-	AdminDSN                string
-	AuthoritySchema         string
-	Generation              string
+	AllowMySQL      bool
+	AdminDSN        string
+	AuthoritySchema string // 主逻辑库:Fixture.Catalog / Config / Permission / Freeze 都指它
+	Generation      string
+	// ProtectedSchemas 是夹具要建的全部逻辑库,含 AuthoritySchema。每个库各一份闸门和写资格,用 CatalogFor / PermissionFor 取。
 	ProtectedSchemas        []string
 	PhysicalAuthoritySHA256 []byte
 	LockPrimitive           pb.SqlWriterBootGrant_LockPrimitive
@@ -59,18 +60,22 @@ type Fixture struct {
 	Permission          authoritysql.Permission
 	Config              authoritysql.WriterConfig
 	Generation          string
-	authority           string
-	base                *mysql.Config
-	user                string
-	created             []string
-	userCreated         bool
-	owner               []byte
-	physical            []byte
-	receiptPath         string
-	mu                  sync.Mutex
-	pools               []*sql.DB
-	cleanup             sync.Once
-	t                   testing.TB
+	// 每个逻辑库一份:闸门 Catalog、它的 operator 池、写资格。主逻辑库的和上面三个字段相同。
+	catalogs    map[string]*authoritysql.Catalog
+	operators   map[string]*sql.DB
+	writers     map[string]authoritysql.WriterConfig
+	authority   string
+	base        *mysql.Config
+	user        string
+	created     []string
+	userCreated bool
+	owner       []byte
+	physical    []byte
+	receiptPath string
+	mu          sync.Mutex
+	pools       []*sql.DB
+	cleanup     sync.Once
+	t           testing.TB
 }
 
 func randomBytes(size int) ([]byte, error) {
@@ -259,15 +264,43 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 	if err = opts.PrepareAuthority(ctx, schema, opts.AuthoritySchema, generation); err != nil {
 		return nil, err
 	}
-	operator, err := authoritysql.Open(ctx, base.FormatDSN(), opts.AuthoritySchema, f.backend, 2, authoritysql.Operator(principal))
-	if err != nil {
-		return nil, err
+	// 闸门跟着逻辑库走:其余库各建一份,世代都用这个夹具的 generation。
+	for _, name := range schemas {
+		if name == opts.AuthoritySchema {
+			continue
+		}
+		cfg := base.Clone()
+		cfg.DBName = name
+		prepare, err := authoritysql.OpenForMigration(ctx, cfg.FormatDSN(), name, f.backend, authoritysql.Schema(principal))
+		if err != nil {
+			return nil, err
+		}
+		err = authoritysql.PrepareCatalogSchema(ctx, prepare, name, generation)
+		if closeErr := prepare.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
-	f.Operator = operator
-	f.Catalog, err = authoritysql.NewCatalog(operator, authoritysql.CatalogConfig{AuthoritySchema: opts.AuthoritySchema, Generation: generation, ProtectedSchemas: schemas, PhysicalAuthoritySHA256: opts.PhysicalAuthoritySHA256, Principal: principal})
-	if err != nil {
-		return nil, err
+	f.catalogs = make(map[string]*authoritysql.Catalog, len(schemas))
+	f.operators = make(map[string]*sql.DB, len(schemas))
+	f.writers = make(map[string]authoritysql.WriterConfig, len(schemas))
+	for _, name := range schemas {
+		cfg := base.Clone()
+		cfg.DBName = name
+		operator, err := authoritysql.Open(ctx, cfg.FormatDSN(), name, f.backend, 2, authoritysql.Operator(principal))
+		if err != nil {
+			return nil, err
+		}
+		f.operators[name] = operator
+		f.catalogs[name], err = authoritysql.NewCatalog(operator, authoritysql.CatalogConfig{AuthoritySchema: name, Generation: generation, ProtectedSchemas: []string{name}, PhysicalAuthoritySHA256: opts.PhysicalAuthoritySHA256, Principal: principal})
+		if err != nil {
+			return nil, err
+		}
 	}
+	f.Operator = f.operators[opts.AuthoritySchema]
+	f.Catalog = f.catalogs[opts.AuthoritySchema]
 	name, err := randomBytes(8)
 	if err != nil {
 		return nil, err
@@ -293,14 +326,16 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 			return nil, errors.New("fixture写入自有schema主体原件未确认")
 		}
 	}
-	for _, table := range []string{"route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt"} {
-		if _, err = schema.ExecContext(ctx, "GRANT SELECT ON "+q(opts.AuthoritySchema)+"."+q(table)+" TO '"+f.user+"'@'%'"); err != nil {
-			return nil, err
+	for _, name := range schemas {
+		for _, table := range []string{"route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt"} {
+			if _, err = schema.ExecContext(ctx, "GRANT SELECT ON "+q(name)+"."+q(table)+" TO '"+f.user+"'@'%'"); err != nil {
+				return nil, err
+			}
 		}
-	}
-	if opts.LockPrimitive == pb.SqlWriterBootGrant_LOCK_TOUCH {
-		if _, err = schema.ExecContext(ctx, "GRANT UPDATE(lock_touch) ON "+q(opts.AuthoritySchema)+".`writer_slot` TO '"+f.user+"'@'%'"); err != nil {
-			return nil, err
+		if opts.LockPrimitive == pb.SqlWriterBootGrant_LOCK_TOUCH {
+			if _, err = schema.ExecContext(ctx, "GRANT UPDATE(lock_touch) ON "+q(name)+".`writer_slot` TO '"+f.user+"'@'%'"); err != nil {
+				return nil, err
+			}
 		}
 	}
 	f.bootOptions = opts
@@ -308,10 +343,28 @@ func New(ctx context.Context, t testing.TB, opts Options) (result *Fixture, resu
 	f.base = base.Clone()
 	f.base.User = f.user
 	f.base.Passwd = password
-	if err = f.registerBoot(ctx, nil); err != nil {
+	if err = f.registerBoot(ctx, nil, schemas); err != nil {
 		return nil, err
 	}
 	return f, nil
+}
+
+// CatalogFor 返回某个逻辑库的闸门;多逻辑库用例用它单独冻结一个库。
+func (f *Fixture) CatalogFor(schema string) (*authoritysql.Catalog, error) {
+	catalog, ok := f.catalogs[schema]
+	if !ok {
+		return nil, errors.New("SQL fixture拒绝非自有schema闸门")
+	}
+	return catalog, nil
+}
+
+// PermissionFor 返回某个逻辑库的写资格。闸门只放行自己库的连接,业务池要用它库自己的这一份。
+func (f *Fixture) PermissionFor(schema string) (authoritysql.Permission, error) {
+	writer, ok := f.writers[schema]
+	if !ok {
+		return authoritysql.Permission{}, errors.New("SQL fixture拒绝非自有schema写资格")
+	}
+	return authoritysql.Writer(writer), nil
 }
 func (f *Fixture) DSN(schema string) string {
 	cfg := f.base.Clone()
@@ -344,16 +397,11 @@ func fixtureBackend(ctx context.Context, base *mysql.Config, allowMySQL bool) (a
 	return authoritysql.BackendMySQL, nil
 }
 func (f *Fixture) Open(ctx context.Context, schema string, maxOpen int) (*sql.DB, error) {
-	allowed := false
-	for _, name := range f.created {
-		if name == schema {
-			allowed = true
-		}
-	}
-	if !allowed {
+	permission, err := f.PermissionFor(schema)
+	if err != nil {
 		return nil, errors.New("SQL fixture拒绝非自有schema")
 	}
-	db, err := authoritysql.Open(ctx, f.DSN(schema), schema, f.backend, maxOpen, f.Permission)
+	db, err := authoritysql.Open(ctx, f.DSN(schema), schema, f.backend, maxOpen, permission)
 	if err != nil {
 		return nil, err
 	}
@@ -422,11 +470,9 @@ func (f *Fixture) GrantTables(ctx context.Context, schema string, tables ...stri
 		if table == "__sql_fixture_owner" {
 			return errors.New("SQL fixture禁止normal修改归属原件")
 		}
-		if schema == f.authority {
-			switch table {
-			case "route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt":
-				return errors.New("SQL fixture禁止normal写authority元数据")
-			}
+		switch table {
+		case "route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt":
+			return errors.New("SQL fixture禁止normal写authority元数据")
 		}
 		if _, err := f.Schema.ExecContext(ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+q(schema)+"."+q(table)+" TO '"+f.user+"'@'%'"); err != nil {
 			return err
@@ -444,8 +490,8 @@ func (f *Fixture) Close() {
 				f.t.Errorf("fixture关闭业务池: %v", err)
 			}
 		}
-		if f.Operator != nil {
-			if err := f.Operator.Close(); err != nil {
+		for _, operator := range f.operators {
+			if err := operator.Close(); err != nil {
 				f.t.Errorf("fixture关闭operator池: %v", err)
 			}
 		}
@@ -526,7 +572,8 @@ func (f *Fixture) PrepareOwnedSchema(ctx context.Context, schema string, prepare
 }
 
 // registerBoot每次形成永久新身份；释放后从不重新激活旧writer或复用消费标记。
-func (f *Fixture) registerBoot(ctx context.Context, runID []byte) error {
+// schemas 里每个逻辑库各注册一份，同一身份、同一账号，写进一个grant集合文件，和真实进程的启动形状相同。
+func (f *Fixture) registerBoot(ctx context.Context, runID []byte, schemas []string) error {
 	opts := f.bootOptions
 	writerID, err := randomBytes(16)
 	if err != nil {
@@ -536,38 +583,47 @@ func (f *Fixture) registerBoot(ctx context.Context, runID []byte) error {
 	if err != nil {
 		return err
 	}
-	requestID, err := randomBytes(16)
-	if err != nil {
-		return err
-	}
-	grantID, err := randomBytes(16)
-	if err != nil {
-		return err
-	}
-	writer := &pb.SqlWriterRegistry{WriterKey: writerID, Generation: f.Generation, InstanceId: instance, SqlPrincipal: []byte(f.user + "@%"), State: pb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli())}
-	meta, err := f.Catalog.CurrentMeta(ctx)
-	if err != nil {
-		return err
-	}
+	registeredMs := uint64(time.Now().UnixMilli())
 	deployment := "fixture-" + hex.EncodeToString(instance)
-	request := &pb.SqlWriterLifecycleReceipt_Request{RequestId: requestID, Kind: pb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedEpoch: meta.WriterEpoch, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: f.authority, ProtectedSchemas: opts.ProtectedSchemas, DeploymentDigest: f.physical, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256, MaintenanceRunId: bytes.Clone(runID)}
-	request, err = authoritysql.CanonicalRegistrationRequest(request)
-	if err != nil {
-		return err
-	}
-	writer = request.Writer
-	// 在第一次提交前保存同一canonical请求并置pending；错误可能发生于提交之后，禁止清理猜测。
-	f.registration = request
-	f.registrationReceipt = nil
+	set := &pb.SqlWriterBootGrantSet{Format: authoritysql.GrantSetFormat}
+	// 在第一次提交前置pending；错误可能发生于提交之后，禁止清理猜测。
 	f.registrationPending = true
-	registered, err := f.Catalog.Register(ctx, request)
-	if err != nil {
-		return err
+	for _, schema := range schemas {
+		catalog := f.catalogs[schema]
+		meta, err := catalog.CurrentMeta(ctx)
+		if err != nil {
+			return err
+		}
+		requestID, err := randomBytes(16)
+		if err != nil {
+			return err
+		}
+		grantID, err := randomBytes(16)
+		if err != nil {
+			return err
+		}
+		writer := &pb.SqlWriterRegistry{WriterKey: writerID, Generation: f.Generation, InstanceId: instance, SqlPrincipal: []byte(f.user + "@%"), State: pb.SqlWriterRegistry_ACTIVE, RegisteredMs: registeredMs}
+		request := &pb.SqlWriterLifecycleReceipt_Request{RequestId: requestID, Kind: pb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: schema, ProtectedSchemas: []string{schema}, DeploymentDigest: f.physical, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256, MaintenanceRunId: bytes.Clone(runID)}
+		request, err = authoritysql.CanonicalRegistrationRequest(request)
+		if err != nil {
+			return err
+		}
+		writer = request.Writer
+		if schema == f.authority {
+			f.registration = request
+			f.registrationReceipt = nil
+		}
+		registered, err := catalog.Register(ctx, request)
+		if err != nil {
+			return err
+		}
+		// REGISTER已经确认；随后的本机grant/Config失败也必须保留这次真实登记，不覆盖或换身份重试。
+		if schema == f.authority {
+			f.registrationReceipt = registered
+		}
+		set.Grants = append(set.Grants, &pb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: writerID, InstanceId: instance, Generation: f.Generation, AuthoritySchema: schema, ProtectedSchemas: []string{schema}, SqlPrincipal: writer.SqlPrincipal, RegistrationDigest: writer.RegistrationDigest, DeploymentId: deployment, GrantId: grantID, GrantedMs: writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: f.physical, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256, MaintenanceRunId: bytes.Clone(runID)})
 	}
-	// REGISTER已经确认；随后的本机grant/Config失败也必须保留这次真实登记，不覆盖或换身份重试。
-	f.registrationReceipt = registered
-	grant := &pb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: writerID, InstanceId: instance, Generation: f.Generation, AuthoritySchema: f.authority, ProtectedSchemas: opts.ProtectedSchemas, SqlPrincipal: writer.SqlPrincipal, RegistrationDigest: writer.RegistrationDigest, DeploymentId: deployment, GrantId: grantID, GrantedMs: writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: f.physical, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256, MaintenanceRunId: bytes.Clone(runID)}
-	raw, err := protojson.Marshal(grant)
+	raw, err := protojson.Marshal(set)
 	if err != nil {
 		return err
 	}
@@ -575,17 +631,20 @@ func (f *Fixture) registerBoot(ctx context.Context, runID []byte) error {
 	// 复用New已核私有ACL且保留原件的本run目录；Windows的Chmod不提供私有DACL。
 	// grantID每次登记都是新随机原件，CREATE_NEW拒碰撞，消费标记也只属于本次grant。
 	dir := filepath.Dir(f.receiptPath)
-	path := filepath.Join(dir, "fixture-grant-"+hex.EncodeToString(grantID)+".json")
+	path := filepath.Join(dir, "fixture-grant-"+hex.EncodeToString(set.Grants[0].GrantId)+".json")
 	if err = authoritysql.WritePrivateControlFile(path, raw); err != nil {
 		return err
 	}
-	env := map[string]string{"MMORPG_SQL_WRITER_GRANT_FILE": path, "MMORPG_SQL_WRITER_GRANT_SHA256": hex.EncodeToString(sum[:]), "MMORPG_SQL_WRITER_CONSUME_DIR": dir, "MMORPG_SQL_DEPLOYMENT_ID": grant.DeploymentId, "MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256": hex.EncodeToString(f.physical)}
-	config, err := authoritysql.LoadWriterConfig(func(name string) string { return env[name] })
+	env := map[string]string{"MMORPG_SQL_WRITER_GRANT_FILE": path, "MMORPG_SQL_WRITER_GRANT_SHA256": hex.EncodeToString(sum[:]), "MMORPG_SQL_WRITER_CONSUME_DIR": dir, "MMORPG_SQL_DEPLOYMENT_ID": deployment, "MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256": hex.EncodeToString(f.physical)}
+	configs, err := authoritysql.LoadWriterConfigs(func(name string) string { return env[name] })
 	if err != nil {
 		return err
 	}
-	f.Config = config
-	f.Permission = authoritysql.Writer(config)
+	for schema, config := range configs {
+		f.writers[schema] = config
+	}
+	f.Config = f.writers[f.authority]
+	f.Permission = authoritysql.Writer(f.Config)
 	f.registrationPending = false
 	return nil
 }
@@ -673,7 +732,7 @@ func (f *Fixture) Freeze(ctx context.Context) (*pb.SqlWriterMaintenanceReceipt, 
 		return nil, err
 	}
 	seed := &pb.SqlWriterMaintenanceReceipt_IssuerClosure{IssuerId: issuerID, InstanceId: f.Config.InstanceID(), PhysicalWriterKey: f.Config.WriterKey(), LogicalRole: "SOURCE", PermanentRevivalFenceId: revival, SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{pin}}
-	m := &fixtureMaintenance{plan: &pb.SqlWriterMaintenanceReceipt_Plan{PhysicalClusterIdentity: f.physical, AuthoritySchema: f.authority, ProtectedSchemas: f.bootOptions.ProtectedSchemas, RunId: runID, BeforeEpoch: meta.WriterEpoch, CatalogRevision: meta.CatalogRevision, ActiveWriterKeys: [][]byte{f.Config.WriterKey()}, RootIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}}}
+	m := &fixtureMaintenance{plan: &pb.SqlWriterMaintenanceReceipt_Plan{PhysicalClusterIdentity: f.physical, AuthoritySchema: f.authority, ProtectedSchemas: []string{f.authority}, RunId: runID, BeforeEpoch: meta.WriterEpoch, CatalogRevision: meta.CatalogRevision, ActiveWriterKeys: [][]byte{f.Config.WriterKey()}, RootIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}}}
 	f.maintenance = m
 	m.planRaw, err = (proto.MarshalOptions{Deterministic: true}).Marshal(m.plan)
 	if err != nil {
@@ -856,7 +915,8 @@ func (f *Fixture) reopenAfterRelease(ctx context.Context) error {
 	}
 	m.released = released
 	m.latest = released
-	if err = f.registerBoot(ctx, m.plan.RunId); err != nil {
+	// 冻结和退休的只是主逻辑库,其余库的写资格还在用,不重新登记。
+	if err = f.registerBoot(ctx, m.plan.RunId, []string{f.authority}); err != nil {
 		return err
 	}
 	raw, err := protojson.Marshal(f.registrationReceipt)

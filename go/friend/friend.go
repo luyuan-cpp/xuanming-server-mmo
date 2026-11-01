@@ -11,7 +11,7 @@
 //   - 常驻服务(默认):建表 / 查表 → metrics → killswitch → gRPC → 注册 etcd;
 //     申请代次复用 data_service 的 friend_request 号段，好友边仍用玩家对主键。
 //   - `-migrate`:只连 MySQL 跑一次 schemamigrate.Up,按 D-14 退出码退出(K8s friend-migrate Job 用),
-//     不起 gRPC、不连 etcd。
+//     不起 gRPC;etcd 只在配了 DbPlacement 时读一次映射(state=MOVING 拒绝)。
 package main
 
 import (
@@ -26,6 +26,7 @@ import (
 	"os/signal"
 	"shared/authoritysql"
 	"shared/drainproof"
+	"shared/rolefence"
 	"strconv"
 	"strings"
 	"syscall"
@@ -43,6 +44,7 @@ import (
 
 	base "proto/common/base"
 	friendpb "proto/friend"
+	rfpb "proto/role_fence"
 
 	"schemamigrate"
 
@@ -115,7 +117,7 @@ func main() {
 		openAuthority := func(mysqlConf config.MySQLConf) (*sql.DB, error) {
 			return svc.OpenSchemaMySQL(mysqlConf, authoritysql.Backend(c.Backend))
 		}
-		os.Exit(runMigration(c, *allowModify, openAuthority, schemamigrate.Up))
+		os.Exit(runMigration(c, *allowModify, openAuthority, migrateUp))
 	}
 	if err := runFriend(c); err != nil {
 		fmt.Fprintf(os.Stderr, "[friend] %v\n", err)
@@ -199,9 +201,17 @@ func runFriend(c config.Config) (runErr error) {
 	}
 	indexCtx, indexCancel := context.WithTimeout(ctx, 5*time.Second)
 	indexErr := data.CheckRequestIDLookupIndex(indexCtx, svcCtx.DB)
+	if indexErr == nil {
+		indexErr = rolefence.VerifySchema(indexCtx, svcCtx.DB)
+	}
 	indexCancel()
 	if indexErr != nil {
 		return indexErr
+	}
+	// 好友没有挂起全集,只冻结。没配协调者密钥拒启:参与者不可达时过户和删角会一直被拒,不如在启动时暴露。
+	participant, err := rolefence.NewParticipantServer(svcCtx.DB, rolefence.NoPending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	if err != nil {
+		return fmt.Errorf("[friend] 角色护栏参与者装配失败: %w", err)
 	}
 	if exitRequested(ctx) {
 		return nil
@@ -241,6 +251,8 @@ func runFriend(c config.Config) (runErr error) {
 		// 只挂一个服务:ClientPlayerFriend 标了 OptionIsClientProtocolService=true,
 		// 客户端来源的方法级准入由 internal/session 的白名单负责(S2C 的 NotifyFriendEvent 必须挡住)。
 		friendpb.RegisterClientPlayerFriendServer(grpcServer, server.NewFriendServer(deps))
+		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权;带会话的调用被白名单挡住。
+		rfpb.RegisterRoleFenceParticipantServer(grpcServer, participant)
 		if config.IsRelaxedMode(c.Mode) {
 			reflection.Register(grpcServer)
 		}
@@ -505,9 +517,21 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 	return missingIndexError(report)
 }
 
-// runMigration 是 -migrate 的实现:只连 MySQL,不起 gRPC、不连 etcd。
+// runMigration 是 -migrate 的实现:只连 MySQL(配了 DbPlacement 时先读一次 etcd 里的映射),不起 gRPC。
 // allowModify 只接收本次显式迁移的命令行授权,启动期 ensureSchema 不使用它。
 // 输出走 stdout / stderr,退出码按 schemamigrate.ExitCode(D-14),部署脚本与 K8s Job 直接读。
+// migrateUp 是 -migrate 的迁移动作:业务表之外,建本逻辑库自带的写者闸门表和角色护栏副本表(都跟着库走,见 docs/design/horizontal-scale-logical-db.md §2、§3)。
+func migrateUp(ctx context.Context, db *sql.DB, opts schemamigrate.Options) (schemamigrate.Report, error) {
+	report, err := schemamigrate.Up(ctx, db, opts)
+	if err != nil {
+		return report, err
+	}
+	if err = authoritysql.EnsureCatalogSchema(ctx, db, opts.Database); err != nil {
+		return report, err
+	}
+	return report, rolefence.EnsureSchema(ctx, db)
+}
+
 func runMigration(c config.Config, allowModify bool, openMySQL func(config.MySQLConf) (*sql.DB, error), up schemaRunner) int {
 	fmt.Printf("friend schema migration: %s\n", svc.MySQLTarget(c.MySQL))
 	db, err := openMySQL(c.MySQL)

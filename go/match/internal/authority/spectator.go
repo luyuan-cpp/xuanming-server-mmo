@@ -169,7 +169,12 @@ func validLobbyPin(pin *pb.MatchSpectatorRecord, intent *pb.MatchSpectatorIntent
 
 // 进入Watch即持久请求头和原payload。重放永久旧UUID绝不再推进head，旧handler也不能
 // 在选场/清退之间越过更新的请求。尚未prepare的旧意图无需网络证明即可安全关闭。
-func (s *Store) SpectatorIntent(ctx context.Context, player uint64, request *pb.WatchBattleRequest) (*pb.MatchSpectatorIntentRecord, error) {
+func (s *Store) SpectatorIntent(ctx context.Context, player uint64, request *pb.WatchBattleRequest) (intent *pb.MatchSpectatorIntentRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { intent, e = s.spectatorIntentOnce(ctx, player, request); return e })
+	return intent, err
+}
+
+func (s *Store) spectatorIntentOnce(ctx context.Context, player uint64, request *pb.WatchBattleRequest) (*pb.MatchSpectatorIntentRecord, error) {
 	high, low, err := joinRequestParts(request.GetRequestId())
 	if err != nil {
 		return nil, err
@@ -255,7 +260,12 @@ func (s *Store) SpectatorIntent(ctx context.Context, player uint64, request *pb.
 
 // 未准备原件还没有网络副作用；明确拒绝（无场可选、成局不可观战、会话已断开）时关闭UUID并记下原因，
 // 重试不能重新选择另一局。先写的原因为准：返回意图上实际保存的原因，首答与同request_id重放一致。
-func (s *Store) CloseUnpreparedSpectator(ctx context.Context, player uint64, request *pb.WatchBattleRequest, closeTip uint32) (uint32, error) {
+func (s *Store) CloseUnpreparedSpectator(ctx context.Context, player uint64, request *pb.WatchBattleRequest, closeTip uint32) (tip uint32, err error) {
+	err = s.Fenced(ctx, func() (e error) { tip, e = s.closeUnpreparedSpectatorOnce(ctx, player, request, closeTip); return e })
+	return tip, err
+}
+
+func (s *Store) closeUnpreparedSpectatorOnce(ctx context.Context, player uint64, request *pb.WatchBattleRequest, closeTip uint32) (uint32, error) {
 	high, low, err := joinRequestParts(request.GetRequestId())
 	if err != nil {
 		return 0, err
@@ -307,7 +317,12 @@ func (s *Store) lockHeadSpectatorIntentTx(ctx context.Context, tx *sql.Tx, playe
 // CloseLobbySpectator 以 LOBBY 结案尚未发出Add的意图(L1 / L2 观众,battle-spectate-tiered-fanout.md §15.6):不写 match_spectator、
 // 不锁 match_formation,目标场固定在意图原件上,重放不换场。调用方在中继准入成功之后才调。
 // 意图已关闭时不改写,返回意图上先写的结论(delivery 不是 LOBBY 时调用方回关闭原因,这次准入的凭证不发出去)。
-func (s *Store) CloseLobbySpectator(ctx context.Context, player uint64, request *pb.WatchBattleRequest, battle uint64) (*pb.MatchSpectatorIntentRecord, error) {
+func (s *Store) CloseLobbySpectator(ctx context.Context, player uint64, request *pb.WatchBattleRequest, battle uint64) (intent *pb.MatchSpectatorIntentRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { intent, e = s.closeLobbySpectatorOnce(ctx, player, request, battle); return e })
+	return intent, err
+}
+
+func (s *Store) closeLobbySpectatorOnce(ctx context.Context, player uint64, request *pb.WatchBattleRequest, battle uint64) (*pb.MatchSpectatorIntentRecord, error) {
 	high, low, err := joinRequestParts(request.GetRequestId())
 	if err != nil {
 		return nil, err
@@ -349,6 +364,10 @@ func (s *Store) CloseLobbySpectator(ctx context.Context, player uint64, request 
 // 不复核的话,旧请求的重放能在玩家已开新观战、已排队或已开战之后重新拿到凭证。不符时返回与首次进入相同的错误
 // (ErrSpectatorSuperseded、匹配票占用细分),客户端得到同样的结论。只读:L1 / L2 是软互斥(Q1),这里不留任何占用。
 func (s *Store) RequireLobbyReplay(ctx context.Context, player uint64, requestID string) error {
+	return s.Fenced(ctx, func() error { return s.requireLobbyReplayOnce(ctx, player, requestID) })
+}
+
+func (s *Store) requireLobbyReplayOnce(ctx context.Context, player uint64, requestID string) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -370,7 +389,12 @@ func (s *Store) RequireLobbyReplay(ctx context.Context, player uint64, requestID
 	return tx.Commit()
 }
 
-func (s *Store) SpectatorForActor(ctx context.Context, player uint64, expectedHead string) (*pb.MatchSpectatorRecord, error) {
+func (s *Store) SpectatorForActor(ctx context.Context, player uint64, expectedHead string) (spectator *pb.MatchSpectatorRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { spectator, e = s.spectatorForActorOnce(ctx, player, expectedHead); return e })
+	return spectator, err
+}
+
+func (s *Store) spectatorForActorOnce(ctx context.Context, player uint64, expectedHead string) (*pb.MatchSpectatorRecord, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -397,7 +421,12 @@ func (s *Store) SpectatorForActor(ctx context.Context, player uint64, expectedHe
 }
 
 // 原Add在网络副作用前落SQL；随机选择只在首次prepare固定。head复核与占用提交同一P。
-func (s *Store) BeginSpectator(ctx context.Context, player uint64, request *pb.WatchBattleRequest, formation *pb.MatchFormationRecord, add *battlepb.AddObserverRequest) (*pb.MatchSpectatorRecord, error) {
+func (s *Store) BeginSpectator(ctx context.Context, player uint64, request *pb.WatchBattleRequest, formation *pb.MatchFormationRecord, add *battlepb.AddObserverRequest) (spectator *pb.MatchSpectatorRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { spectator, e = s.beginSpectatorOnce(ctx, player, request, formation, add); return e })
+	return spectator, err
+}
+
+func (s *Store) beginSpectatorOnce(ctx context.Context, player uint64, request *pb.WatchBattleRequest, formation *pb.MatchFormationRecord, add *battlepb.AddObserverRequest) (*pb.MatchSpectatorRecord, error) {
 	high, low, err := joinRequestParts(request.GetRequestId())
 	if err != nil {
 		return nil, err
@@ -533,7 +562,15 @@ type spectatorConclusion struct {
 }
 
 // conclusion非零时与状态推进同事务记下结论（只在推进成功时写）。
-func (s *Store) advanceSpectator(ctx context.Context, original *pb.MatchSpectatorRecord, state uint32, expectedHead string, conclusion spectatorConclusion) (bool, error) {
+func (s *Store) advanceSpectator(ctx context.Context, original *pb.MatchSpectatorRecord, state uint32, expectedHead string, conclusion spectatorConclusion) (advanced bool, err error) {
+	err = s.Fenced(ctx, func() (e error) {
+		advanced, e = s.advanceSpectatorOnce(ctx, original, state, expectedHead, conclusion)
+		return e
+	})
+	return advanced, err
+}
+
+func (s *Store) advanceSpectatorOnce(ctx context.Context, original *pb.MatchSpectatorRecord, state uint32, expectedHead string, conclusion spectatorConclusion) (bool, error) {
 	if validateSpectator(original) != nil || state < 2 || state > 5 {
 		return false, ErrOriginalPlayer
 	}
@@ -616,7 +653,12 @@ func (s *Store) SpectatorRecoveryHighWater(ctx context.Context) (uint64, error) 
 
 // 恢复重读原op，不能用旧扫描页中的state发Add；新head接纳后若前台崩溃，后台仍应
 // 收尾旧占用，而不是把旧active永久保留。head仅决定需取消，不作为后台原op的授权。
-func (s *Store) SpectatorRecoveryCurrent(ctx context.Context, observed *pb.MatchSpectatorRecord) (*pb.MatchSpectatorRecord, bool, error) {
+func (s *Store) SpectatorRecoveryCurrent(ctx context.Context, observed *pb.MatchSpectatorRecord) (spectator *pb.MatchSpectatorRecord, needCancel bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { spectator, needCancel, e = s.spectatorRecoveryCurrentOnce(ctx, observed); return e })
+	return spectator, needCancel, err
+}
+
+func (s *Store) spectatorRecoveryCurrentOnce(ctx context.Context, observed *pb.MatchSpectatorRecord) (*pb.MatchSpectatorRecord, bool, error) {
 	if validateSpectator(observed) != nil {
 		return nil, false, ErrOriginalPlayer
 	}
@@ -819,7 +861,12 @@ func (s *Store) RequireNoSpectators(ctx context.Context, tx *sql.Tx, players []u
 	}
 	return nil
 }
-func (s *Store) AuthorizeBattleTicket(ctx context.Context, player, battle uint64) (string, error) {
+func (s *Store) AuthorizeBattleTicket(ctx context.Context, player, battle uint64) (operation string, err error) {
+	err = s.Fenced(ctx, func() (e error) { operation, e = s.authorizeBattleTicketOnce(ctx, player, battle); return e })
+	return operation, err
+}
+
+func (s *Store) authorizeBattleTicketOnce(ctx context.Context, player, battle uint64) (string, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err

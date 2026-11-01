@@ -8,6 +8,8 @@ import (
 	"os"
 	"regexp"
 	"shared/authoritysql"
+	"shared/dirshard"
+	"shared/rolefence"
 	"sort"
 	"strings"
 	"time"
@@ -22,9 +24,16 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// 全局库(SnapshotMySQL)的表结构只有一个真源:
+// data_service 的表结构只有一个真源:
 // proto/common/database/rollback_database_table.proto。建表 / 补列走
 // proto2mysql.CreateOrUpdateTable,与 go/db 的 zone 库同一套机制。
+//
+// 表放在哪个逻辑库(docs/design/horizontal-scale-logical-db.md §1、§5.1):
+//   - 目录 K 片(directoryTableMessages):账号、玩家、名字目录和路由。K=1 时库名就是基名,否则 <base>_00..。
+//   - 流水库 <base>_ledger(ledgerTableMessages):transaction_log、player_snapshot、rollback_audit_log,写入量大,不和目录抢闸门和写入;
+//     GM 回收的 gm_recall_batch、gm_recall_op、gm_recall_seq、gm_recall_source 和护栏副本 role_fence 也在这里。
+//
+// 每个逻辑库自带一份写者闸门表。
 //
 // 本包**不再**手写任何 CREATE TABLE。历史上 snapshot_store / transaction_log_store
 // 各自手写 DDL,已经与 proto 漂移过三次(rollback_audit_log 多一列、transaction_log
@@ -42,19 +51,13 @@ import (
 //
 // 这张表是"名字全服唯一"的唯一真源(设计 docs/design/guild-phase2/03-names.md §3.0):
 // zone 库 player_database.profile_component 与账号里的 AccountSimplePlayer.name 都只是
-// 只读副本,可能缺失,读侧一律回源 BatchGetPlayerName。所以它只能放全局库一处 ——
-// 每个 zone 一份就退化成"区内唯一",跨区必然重名。
+// 只读副本,可能缺失,读侧一律回源 BatchGetPlayerName。所以它只能放目录 —— 按 name_norm 分片,
+// 同一个名字只落在一片上,主键照样兜住全服唯一;每个 zone 一份就退化成"区内唯一",跨区必然重名。
 const PlayerNameTableName = "player_name"
 
-// PlayerNameOwnerUniqueKey 是 player_name 上建在 player_id 的唯一键名。
-//
-// 新结构里 name_norm 是**聚簇主键**(根治审计 #12,见 playerNameKeyedByNameDDL),player_id 退成
-// 这条二级唯一键。它承担的不变量是"一个 player_id 只登记一个名字":Reserve 的 ODKU 靠它把
-// "这个 player_id 已经有别的名字"变成受影响 0 行(进而判成 ReserveConflict),
-// ownedNormOf 也靠它做点查。键没了 = 同一个 player_id 能占多个名字,且 Reserve 会当成插入成功。
-//
-// 名字集中在这里(与 SnapshotGuidUniqueKey 同理):建表 DDL、迁移与真库用例引用同一个常量。
-const PlayerNameOwnerUniqueKey = "uk_player_name_owner"
+// PlayerNameOwnerTableName 是玩家名下名字的索引表名,放玩家分片。BatchGetPlayerName 按玩家读它,不做全分片扫描;
+// 两边不一致时以 player_name 为准(docs/design/horizontal-scale-logical-db.md §5.5)。
+const PlayerNameOwnerTableName = "player_name_owner"
 
 // playerNameBootstrapDDL 是第二段手写 DDL,成因与 id_segment 同源,但后果更硬。
 //
@@ -87,16 +90,13 @@ const PlayerNameOwnerUniqueKey = "uk_player_name_owner"
 // (row_ins_clust_index_entry_by_modify),取的是 LOCK_X + LOCK_REC_NOT_GAP(**不带间隙**),
 // **根本不申请插入意向锁** —— 没有插入意向锁,就没有"插入意向锁被对方排队中的请求挡住"这条边。
 //
-// # 代价(记在这里,免得下次被当成"这么改不划算")
+// 表上现在只有这一个键:player_id 的唯一性搬到了玩家分片的 player_name_owner(目录分片之后两者不在一个库,
+// 二级键保不住"一个角色只登记一个名字")。上面最后一行实测时表上还有 UNIQUE(player_id),去掉之后没有重测;
+// 少一个索引只少一条取锁路径,原先那两形"同一个 player_id 上并发写不同名字"的环随之消失。
 //
-//   - 聚簇主键宽了:VARCHAR(191) utf8mb4_bin 最长 764 字节(DYNAMIC 行格式的索引键上限 3072,够用),
-//     每条二级索引项都要带上主键值,所以 uk_player_name_owner 的项是 (player_id, name_norm)。
-//     本表一个角色一行、只有一条二级索引,量级可忽略。
-//   - 按 player_id 读(BatchGet / ownedNormOf)从聚簇点查变成"二级唯一索引点查 + 回表",多一次页访问;
-//     按名字读(ownerOfNorm)反过来从二级索引点查变成聚簇点查,省一次回表。两者都还是点查。
-//   - TiDB 上 `/*T![clustered_index] NONCLUSTERED */` 让主键仍是二级索引形态(要配 SHARD_ROW_ID_BITS),
-//     所以"名字是聚簇键"这个前提在 TiDB 上**不成立**;但 TiDB 没有间隙锁与插入意向锁,上面那三类形状
-//     按官方文档本来就不存在(**未在 TiDB 上实测**)。迁移在 TiDB 上跳过,见 ensurePlayerNameKeyedByName。
+// TiDB 上 `/*T![clustered_index] NONCLUSTERED */` 让主键仍是二级索引形态(要配 SHARD_ROW_ID_BITS),
+// 所以"名字是聚簇键"这个前提在 TiDB 上**不成立**;但 TiDB 没有间隙锁与插入意向锁,上面那三类形状
+// 按官方文档本来就不存在(**未在 TiDB 上实测**)。
 //
 // COLLATE=utf8mb4_bin 见下;主键建在 name_norm 上之后,它同时决定"库认为哪两个名字是同一个主键"。
 //
@@ -110,33 +110,39 @@ const PlayerNameOwnerUniqueKey = "uk_player_name_owner"
 // 767 字节索引上限留下的安全长度,唯一键直接覆盖整列,不需要写前缀索引。
 //
 // 与 id_segment 同理:预建之后**不能**再对本表跑 CreateOrUpdateTable(proto2mysql 会把
-// VARCHAR 判成与 MEDIUMTEXT 不兼容而 MODIFY COLUMN,重新撞 1170),所以 migrateSchemaOn
+// VARCHAR 判成与 MEDIUMTEXT 不兼容而 MODIFY COLUMN,重新撞 1170),所以迁移
 // 对它只做"proto 每个字段都有同名列"的漂移检查。列注释 pb:N 与 proto2mysql 生成列同格式,
 // 日后的迁移工具仍能按字段号识别列。
 //
 // 改了 rollback_database_table.proto 里的 message player_name,就必须同步改这里,
 // 否则启动期的 assertColumnsPresent 会直接拒绝迁移(这正是它存在的意义)。
-//
-// 列的顺序 / 类型 / 注释与改主键之前逐字相同(只动了键),这样存量表跑完迁移之后
-// `SHOW CREATE TABLE` 与新建库一致,"二次迁移零变更"的回归才有意义。
 const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 	"  `player_id` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:1',\n" +
 	"  `name` VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'pb:2',\n" +
 	"  `name_norm` VARCHAR(191) NOT NULL COMMENT 'pb:3',\n" +
 	"  `created_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:4',\n" +
-	"  PRIMARY KEY (`name_norm`) /*T![clustered_index] NONCLUSTERED */,\n" +
-	"  UNIQUE KEY `" + PlayerNameOwnerUniqueKey + "` (`player_id`)\n" +
+	"  PRIMARY KEY (`name_norm`) /*T![clustered_index] NONCLUSTERED */\n" +
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin" +
 	" /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */ COMMENT='player_name';"
 
+// playerNameOwnerBootstrapDDL 手写的理由同 player_name:name_norm 要和 player_name 同列型、同排序规则。
+// 主键 player_id 是"一个角色只登记一个名字"的全部实现,写入顺序见 PlayerNameStore.Reserve。
+const playerNameOwnerBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name_owner` (\n" +
+	"  `player_id` bigint unsigned NOT NULL COMMENT 'pb:1',\n" +
+	"  `name_norm` VARCHAR(191) NOT NULL COMMENT 'pb:2',\n" +
+	"  `name` VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'pb:3',\n" +
+	"  PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */\n" +
+	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin" +
+	" /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */ COMMENT='player_name_owner';"
+
 // ── 映射持久化的路由表(第 1a 批,docs/design/player-route-mapping-durability-proposal.md §3.2)──────
 //
-// 为什么也走手写 DDL:要 VARCHAR 的 run_id、可空列、二级索引与 CHECK,而 proto2mysql 把 string 渲染成
+// 为什么也走手写 DDL:要可空列、二级索引与 CHECK,而 proto2mysql 把 string 渲染成
 // MEDIUMTEXT、标量一律 NOT NULL DEFAULT 0(TEXT 列不能做无前缀主键,MySQL 错误 1170)。列漂移守卫的事实源是
 // proto/common/database/rollback_database_table.proto 的同名 message(routeTableMessages):它们进 TableMessages
 // 只为表名守卫,同步循环跳过它们,形状由 ensureRouteTables 守。改了 DDL 就要同步改 proto,反之亦然。
 // 三张表每列的注释 pb:N 都等于 proto 字段号(route_store_test 的 TestRouteBootstrapDDLContract 钉住):player_route 的
-// pb:1..10 是第 1a 批预留的(route_shard 是 10,player_id 仍是 1);另外两张是 2026-10-20 补 proto 时按列序新定、同时补进
+// pb:1..10 是第 1a 批预留的(route_shard 是 10,player_id 仍是 1;pb:5 原是 frozen_run_id,已删,proto 里 reserved);另外两张是 2026-10-20 补 proto 时按列序新定、同时补进
 // DDL 的。CREATE TABLE IF NOT EXISTS 不改已存在的表,所以补注释前建过表的库列上仍没有这些注释:形状守卫只按列名比对,
 // 不受影响;项目尚未上线,只是这类库的 SHOW CREATE TABLE 与新建库差在列注释上。
 //
@@ -178,7 +184,6 @@ const playerRouteBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_route` (\n" 
 	"  `home_zone` int unsigned NULL COMMENT 'pb:2',\n" +
 	"  `storage_id` int unsigned NULL COMMENT 'pb:3',\n" +
 	"  `placement_version` bigint unsigned NULL COMMENT 'pb:4',\n" +
-	"  `frozen_run_id` varchar(64) CHARACTER SET ascii COLLATE ascii_bin NULL COMMENT 'pb:5',\n" +
 	"  `rev` bigint unsigned NOT NULL COMMENT 'pb:6',\n" +
 	"  `updated_by` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT '' COMMENT 'pb:7',\n" +
 	"  `created_at_ms` bigint unsigned NOT NULL COMMENT 'pb:8',\n" +
@@ -190,7 +195,6 @@ const playerRouteBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_route` (\n" 
 	"  CONSTRAINT `chk_route_home` CHECK (`home_zone` IS NULL OR `home_zone` BETWEEN 1 AND 999999),\n" +
 	"  CONSTRAINT `chk_route_place` CHECK ((`storage_id` IS NULL) = (`placement_version` IS NULL)),\n" +
 	"  CONSTRAINT `chk_route_ver` CHECK (`placement_version` IS NULL OR `placement_version` >= 1),\n" +
-	"  CONSTRAINT `chk_route_frozen` CHECK (`frozen_run_id` IS NULL OR `storage_id` IS NOT NULL),\n" +
 	"  CONSTRAINT `chk_route_rev` CHECK (`rev` >= 1)\n" +
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='player_route';"
 
@@ -223,13 +227,16 @@ var writerFreezeTicketBootstrapDDL = authoritysql.CatalogBootstrapStatements()["
 
 var writerMaintenanceReceiptBootstrapDDL = authoritysql.CatalogBootstrapStatements()["sql_writer_maintenance_receipt"]
 
+// moveSentinelBootstrapDDL 是搬库的哨兵表,和闸门表一起预建(tools/dbmove,docs/design/horizontal-scale-logical-db.md §8)。
+var moveSentinelBootstrapDDL = authoritysql.CatalogBootstrapStatements()[authoritysql.MoveSentinelTable]
+
 // bootstrapTables 是走手写 DDL 预建、**不**交给 proto2mysql 同步的表:表名 → 建表语句。
 //
 // 迁移时先逐条执行(全部 CREATE TABLE IF NOT EXISTS,幂等),之后只做形状守卫,事实源都是 TableMessages 里的 proto:
-// id_segment、player_name 由同步循环查列漂移与唯一键;
-// 路由表由 ensureRouteTables → assertRouteTableShapes 按 routeTableMessages 查列名与主键(同步循环跳过它们)。
-// 再加一张这类表 = 在这里加一行 + 在 proto 里加 message(路由表再进 routeTableMessages),
-// 不要回到 migrateSchemaOn 里加 if 分支;清单化是为了让"哪些表不由 proto 驱动建"这件事只有一处答案。
+// player_name、player_name_owner 由同步循环查列漂移与唯一键;
+// 路由表由 ensureRouteTables → assertRouteTableShapes 按所在逻辑库的路由表清单查列名与主键(同步循环跳过它们)。
+// 再加一张这类表 = 在这里加一行 + 在 proto 里加 message + 进 directoryTableMessages / ledgerTableMessages,
+// 不要回到 migrateLogicalDB 里加 if 分支;清单化是为了让"哪些表不由 proto 驱动建"这件事只有一处答案。
 var bootstrapTables = map[string]string{
 	"writer_registry":                writerRegistryBootstrapDDL,
 	"writer_slot":                    writerSlotBootstrapDDL,
@@ -237,13 +244,18 @@ var bootstrapTables = map[string]string{
 	"sql_writer_drain_run":           writerDrainRunBootstrapDDL,
 	"sql_writer_freeze_ticket":       writerFreezeTicketBootstrapDDL,
 	"sql_writer_maintenance_receipt": writerMaintenanceReceiptBootstrapDDL,
+	authoritysql.MoveSentinelTable:   moveSentinelBootstrapDDL,
 	AccountDirectoryTableName:        accountDirectoryDDL,
 	AccountRoleTableName:             accountRoleDDL,
 	AccountRoleTradeTableName:        accountRoleTradeDDL,
 	AccountRoleTransferTableName:     accountRoleTransferDDL,
 	AccountRoleAdmissionTableName:    accountRoleAdmissionDDL,
 	AccountRoleTradeHolderTableName:  accountRoleTradeHolderDDL,
+	AccountRoleRemovalTableName:      accountRoleRemovalDDL,
+	AccountRoleRefTableName:          accountRoleRefDDL,
+	DirectoryShardTableName:          directoryShardDDL,
 	PlayerNameTableName:              playerNameBootstrapDDL,
+	PlayerNameOwnerTableName:         playerNameOwnerBootstrapDDL,
 	PlayerRouteTableName:             playerRouteBootstrapDDL,
 	ZoneMergedIntoTableName:          zoneMergedIntoBootstrapDDL,
 	RouteMetaTableName:               routeMetaBootstrapDDL,
@@ -270,11 +282,12 @@ const playerRouteG1aShapeHint = "if this is the pre-G1a shape of the 1a batch (n
 // proto2mysql 的类型映射(string → MEDIUMTEXT、标量 NOT NULL)与这几张表的 DDL 本来就不同,按类型比只会误报;
 // 类型、可空与 CHECK 由 DDL 常量和 route_store_test 的 DDL 契约钉住。
 func routeTableMessages() []proto.Message {
-	return []proto.Message{
-		&dbpb.PlayerRoute{},
-		&dbpb.RouteMeta{},
-		&dbpb.ZoneMergedInto{},
-	}
+	return append(shardRouteTableMessages(), &dbpb.ZoneMergedInto{})
+}
+
+// shardRouteTableMessages 是目录每片都有的路由表。zone_merged_into 只在第 0 片。
+func shardRouteTableMessages() []proto.Message {
+	return []proto.Message{&dbpb.PlayerRoute{}, &dbpb.RouteMeta{}}
 }
 
 func writerAuthorityTableMessages() []proto.Message {
@@ -326,10 +339,10 @@ func primaryKeyFromOption(message protoreflect.FullName, opts proto.Message) ([]
 	return cols, nil
 }
 
-// assertRouteTableShapes 对 routeTableMessages 里的每张表查列名(proto 字段都有同名列)与主键列序(= OptionPrimaryKey)。
+// assertRouteTableShapes 对 tables 里的每张路由表查列名(proto 字段都有同名列)与主键列序(= OptionPrimaryKey)。
 // 任一不符即 fail-closed:迁移失败,拒绝带着坏形状启动(与 assertColumnsPresent / assertUniqueColumns 同口径)。
-func assertRouteTableShapes(ctx context.Context, db *sql.DB, dbName string) error {
-	for _, m := range routeTableMessages() {
+func assertRouteTableShapes(ctx context.Context, db *sql.DB, dbName string, tables []proto.Message) error {
+	for _, m := range tables {
 		name, ok := proto2mysql.TableNameFromDescriptor(m.ProtoReflect().Descriptor())
 		if !ok || name == "" {
 			return fmt.Errorf("route table message %s declares no OptionTableName", m.ProtoReflect().Descriptor().FullName())
@@ -362,12 +375,12 @@ func assertRouteTableShapes(ctx context.Context, db *sql.DB, dbName string) erro
 	return nil
 }
 
-// ensureRouteTables 在 bootstrapTables 全部执行之后调用(migrateSchemaOn 与 TiDB 用例的测试钩子共用):
+// ensureRouteTables 在这个逻辑库的预建表全部执行之后调用(migrateLogicalDB 与 TiDB 用例的测试钩子共用):
 // 形状守卫 → 种 route_meta(id=1)。任一步失败整次迁移失败
 // (表形状不对时 RouteStore 的判定会安静地错,不能带着它启动)。
 // 种行放在形状守卫之后:列不齐时 INSERT 会以列错误失败,文案不如守卫清楚。
-func ensureRouteTables(ctx context.Context, db *sql.DB, dbName string) error {
-	if err := assertRouteTableShapes(ctx, db, dbName); err != nil {
+func ensureRouteTables(ctx context.Context, db *sql.DB, dbName string, tables []proto.Message) error {
+	if err := assertRouteTableShapes(ctx, db, dbName, tables); err != nil {
 		return err
 	}
 	return bootstrapRouteMetaRow(ctx, db)
@@ -411,390 +424,10 @@ func isBootstrapTable(tableName string) bool {
 // (不是静默),不存在 player_name 这种"坏了也没人知道"的形态;给它加一条只会让一批存量 dev 库
 // 在启动期 fail-closed,代价大于收益。真要加时在这里加一行即可。
 //
-// 两列都要:这条守卫刻意**不区分**新旧主键形态(新结构 PRIMARY(name_norm) + UNIQUE(player_id),
-// 旧结构 PRIMARY(player_id) + UNIQUE(name_norm) —— 两种形态在这条判据上都通过)。
-// 哪一种形态、要不要迁移由 ensurePlayerNameKeyedByName 负责;本条只回答"两条唯一性还在不在",
-// 因为它们各自都是一条业务不变量的全部实现:name_norm 是"名字全服唯一",
-// player_id 是"一个角色只登记一个名字"(没有它,Reserve 的 ID 复用检测会静默失效)。
+// player_name_owner.player_id 是"一个角色只登记一个名字"的全部实现:没有它,Reserve 的 ID 复用检测会静默失效。
 var bootstrapUniqueColumns = map[string][]string{
-	PlayerNameTableName: {"name_norm", "player_id"},
-}
-
-// ── player_name 主键迁移:player_id → name_norm(审计 #12 的根治)────────────────────
-//
-// 目标形态见 playerNameBootstrapDDL;为什么必须改成"名字当聚簇主键"见那里的实测表格。
-// 本段只解决一件事:**存量库上那张 PRIMARY KEY(player_id) 的表,怎么安全地换成目标形态**。
-//
-// # 做法:一条 ALTER 同时换主键与唯一键,不走"建新表 → 拷数据 → 改名替换"
-//
-// 影子表 + RENAME 的那条路要求**停写**:拷贝开始到改名之间落进旧表的行会被整段丢掉
-// (login 的建角刚占到的名字会凭空消失,而 login 那边已经按成功继续建角了)。
-// 单条 ALTER 没有这个窗口 —— MySQL 8.0 手册 "Online DDL Operations" 的 Table 17.17
-// (https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html)对
-// "Dropping a primary key and adding another"给出的是 In Place = Yes、Rebuilds Table = Yes、
-// **Permits Concurrent DML = Yes**:执行期间的写入进 online row log,在提交阶段被重放,不丢。
-// (同表的 "Dropping a primary key" 单独一条是 In Place = No —— 所以两个动作**必须写在同一条
-// ALTER 里**,拆成两条会退化成 COPY 且中间有一段没有主键的窗口。)
-//
-// 刻意**不写** `ALGORITHM=INPLACE, LOCK=NONE`:同一张表里手册还写着"Adding a primary key using
-// ALGORITHM=INPLACE is only permitted when the SQL_MODE setting includes strict_trans_tables or
-// strict_all_tables flags"。显式钉死算法时,一个 sql_mode 不含 strict 的实例上迁移会直接失败,
-// 而失败的代价是整条 MigrateSchema 失败 → AutoMigrate 路径把 store 全置 nil → 业务瘫掉。
-// 不钉死时服务端自行退回 ALGORITHM=COPY:**语义仍然正确**(COPY 默认 LOCK=SHARED,读可以、写被
-// 阻塞到 ALTER 结束,阻塞不是丢失),只是这段时间建角会排队。两种算法下都不需要停写,
-// 区别只是"写入被排队"还是"写入照常"。**本仓实例实际走的是哪一种,未在真库验证。**
-//
-// # 幂等 / 可重跑
-//
-// 每次都先读当前主键形态再决定做什么:已是 PRIMARY(name_norm) → 交给 convergePlayerNameKeyShape
-// 把**其余两把键**收敛到目标形态(新建库与已迁移库在那里一条 DDL 都不发);
-// 仍是 PRIMARY(player_id) → 执行这条 ALTER;两者都不是 → fail-closed 报错,不猜。
-// ALTER 失败时 MySQL 8.0 的 DDL 是原子的(要么全成要么全不成,崩溃也不会留半张表),
-// 所以"再跑一次 -migrate"总是安全的,不需要人工清理中间态。
-//
-// **"主键对了"不等于"形状对了"**:回滚只做了一半、或有人手工只执行了 ADD PRIMARY KEY(name_norm)
-// 而没 DROP 旧的 uk_player_name 时,库里会留下两种中间态 ——
-//  1. PRIMARY(name_norm) + **残留的** uk_player_name(name_norm):多出来的那条二级唯一索引会让写路径
-//     在二级索引上多取一次锁(Reserve 插入新名字时要往它里面插项,那条路上有插入意向锁),
-//     把改主键消掉的形状带回来,而且是静默的 —— 功能全对,只是又开始死锁;
-//  2. PRIMARY(name_norm) + **缺** uk_player_name_owner:"一个角色只登记一个名字"没有实现了,
-//     Reserve 的 ID 复用检测(ReserveConflict)与 ownedNormOf 一起静默失效。
-//
-// 这两种形态**都通不过**人工审视之外的任何一道既有守卫:assertUniqueColumns 只问"这一列上有没有
-// 单列唯一约束"(第 1 种里 PRIMARY 就满足,第 2 种由它拦下但文案指不出缺的是哪条键),
-// NewPlayerNameStore 也只看主键形态。所以收敛这两条是迁移的职责,不能留在"快路径 return nil"里。
-//
-// # 回滚(可执行,不是口号)
-//
-// 停掉 data_service 的**全部**副本(现在是多副本 Deployment,见 deploy/k8s/manifests/go-svc/data-service.yaml;
-// 先 `kubectl scale deployment data-service --replicas=0`,所有 zone 的都要停 —— 它们共用这一个全局库),
-// 然后:
-//
-//	ALTER TABLE `player_name`
-//	  DROP PRIMARY KEY,
-//	  DROP INDEX `uk_player_name_owner`,
-//	  ADD PRIMARY KEY (`player_id`),
-//	  ADD UNIQUE KEY `uk_player_name` (`name_norm`);
-//
-// 一行数据都不会丢(两种形态的列完全一样,只是键换了位置),回滚之后本服务的新二进制会探到
-// 旧形态并自动切回旧 Release 语句(见 NewPlayerNameStore),仍然可用,只是又回到"靠有界重试吸收
-// 死锁"的形态。
-//
-// # 新旧版本并存窗口
-//
-// data_service 的部署不变量是 **replicas=1 + strategy: Recreate**,所以正常升级路径上
-// **不存在**新旧二进制同时在线的窗口。两个方向各自的行为:
-//   - **新二进制 + 旧表结构**(忘了跑 -migrate、或迁移在 TiDB 上被跳过):安全。
-//     NewPlayerNameStore 探到旧主键形态,Release 自动改用带 FORCE INDEX (uk_player_name) 的旧语句,
-//     取锁顺序与 Reserve 的 ODKU 仍然一致;死锁回到"生产常态那一路 5/5"的老形态,由有界重试兜住。
-//     启动日志里会打一条 Error 指明"跑 -migrate 才能根治"。
-//   - **旧二进制 + 新表结构**(跑完迁移又把镜像回滚了):**不安全,必须连 DDL 一起回滚**。
-//     旧二进制的 Release 语句写死 `FORCE INDEX (uk_player_name)`,而那条索引在新结构上已经不存在,
-//     于是每一条 Release 都以 ER_KEY_DOES_NOT_EXIST(1176)失败 —— 建角补偿释放全线失效,
-//     孤儿名字只涨不消。**注意 Reserve 不受影响**(ODKU 不点索引名),所以不会重名、不会写坏数据,
-//     症状是"名字占着不放"这一种,可以在回滚 DDL(或滚回新镜像)之后用运维口的
-//     ReleasePlayerName(minCreatedMs=0)清掉。
-//     运维口径:**回滚镜像之前先按上面那条 ALTER 回滚 DDL**。
-//
-// # 失败时的运维出路
-//
-//   - 报"主键形态既不是 name_norm 也不是 player_id":表被人工改过。先 `SHOW CREATE TABLE player_name`
-//     看清现状,人工改成两种形态之一再重跑 -migrate;本步骤拒绝在看不懂的形状上下发 ALTER。
-//   - 报"找不到 name_norm 上的单列唯一索引":这张表上"名字全服唯一"已经没有实现了(比它更严重)。
-//     先查重 `SELECT name_norm, COUNT(*) FROM player_name GROUP BY name_norm HAVING COUNT(*) > 1`,
-//     清掉重复行之后 `ALTER TABLE player_name ADD UNIQUE KEY uk_player_name (name_norm)` 再重跑。
-//   - 主键已是 name_norm、但**残留了 name_norm 上的二级唯一键**或**缺 uk_player_name_owner**
-//     (上面"主键对了不等于形状对了"那两种中间态,典型来源是回滚只做了一半):**不需要人工处置**,
-//     convergePlayerNameKeyShape 会自动 DROP / ADD 收敛,且幂等。它补 uk_player_name_owner 时若以
-//     1062 失败,说明库里已经有"同一个 player_id 占了多个名字"的行 —— 那是数据事故,按错误文案里的
-//     查重语句先人工定夺留哪一行,不要靠迁移去猜。
-//   - ALTER 本身超时 / 被 MDL 挡住:这条 ALTER 要重建整张表,启动期 AutoMigrate 只给 5 分钟
-//     (svc.autoMigrateTimeout)。生产请用部署阶段的 `data_service -f <yaml> -migrate`(不设时限);
-//     被长事务挡住 MDL 时先 `SHOW PROCESSLIST` 找到那个事务。ALTER 是原子的,超时重跑即可。
-//   - **这条 ALTER 在本实例上跑不动**(表太大 / 窗口不够 / 反复被 MDL 挡住),而其余迁移
-//     (另外四张表的列同步、可空唯一列、id_segment 地板校验)是无关且必要的:打开
-//     MigrateOptions.AllowLegacyPlayerNamePrimaryKey,本步骤会打一条 Error 说明"本实例仍是旧形态、
-//     名字抢注的环仍在、由有界重试兜住"然后 return nil,其余迁移照跑。与 TiDB 那一支同口径。
-//     打开之后 NewPlayerNameStore 会探到旧形态、**自动退回**带 FORCE INDEX (uk_player_name) 的旧
-//     Release 语句(这条链路本来就有,不必新写),锁序仍然一致,功能完全正确 —— 代价只是
-//     "生产常态那一路仍然 5/5 成环、靠 1213 重试吸收"。这是一次有意的推迟,不是可忽略的告警。
-
-// playerNamePKShape 是 player_name 当前的主键形态。
-type playerNamePKShape int
-
-const (
-	// playerNamePKUnknown 主键不是我们认识的两种形态之一(被人工改过 / 表不存在)。
-	playerNamePKUnknown playerNamePKShape = iota
-	// playerNamePKByName 目标形态:PRIMARY KEY(name_norm)。
-	playerNamePKByName
-	// playerNamePKByPlayerID 旧形态:PRIMARY KEY(player_id),等待本迁移换掉。
-	playerNamePKByPlayerID
-)
-
-// ensurePlayerNameKeyedByName 把存量 player_name 的主键换成 name_norm,幂等。
-// tableName 不是 player_name 时直接返回(调用点在 bootstrap 表的循环里,不为一张表加 if 分支)。
-//
-// 顺序上它排在 assertColumnsPresent 之后、assertUniqueColumns 之前:
-// 先确认列齐(不然读到的形状没有意义),再换键,最后由 assertUniqueColumns 复核
-// **迁移之后**两条唯一性都还在 —— 那一条同时守住新旧两种形态,不必在这里重复判。
-func ensurePlayerNameKeyedByName(ctx context.Context, db *sql.DB, dbName, tableName string, opts MigrateOptions) error {
-	if tableName != PlayerNameTableName {
-		return nil
-	}
-
-	pkCols, err := primaryKeyColumns(ctx, db, dbName, tableName)
-	if err != nil {
-		return err
-	}
-	switch playerNamePKShapeOf(pkCols) {
-	case playerNamePKByName:
-		// 新建库与已迁移库都走这里,但**不是**什么都不做:主键对了不等于另外两把键也对
-		// (见本段头注"主键对了不等于形状对了"的两种中间态)。收敛那两条同样幂等,
-		// 没事可做时一条 DDL 都不发、也不打日志 —— 这条路径每次启动都会走到。
-		return convergePlayerNameKeyShape(ctx, db, dbName, tableName)
-	case playerNamePKByPlayerID:
-		// 继续往下迁移。
-	default:
-		return fmt.Errorf("table %s: 主键是 %v(空 = 表没有主键),既不是目标形态 (name_norm) 也不是待迁移的旧形态 (player_id):"+
-			"这张表被人工改过,拒绝在看不懂的形状上下发 ALTER。先 `SHOW CREATE TABLE %s` 看清现状,"+
-			"改回两种形态之一再重跑 `data_service -f <yaml> -migrate`",
-			tableName, pkCols, tableName)
-	}
-
-	if opts.AllowLegacyPlayerNamePrimaryKey {
-		// 运维显式选择"这条 ALTER 本实例先不跑",理由与出路见本段「失败时的运维出路」最后一条。
-		// 与 TiDB 那一支同口径:打 Error 说明失效范围,然后放行,好让其余四张表的迁移照常完成。
-		// 位置要紧:它排在"认不出的主键形状"那一支**之后** —— 这个开关只免掉"迁不迁",
-		// 不免"看不懂的形状要 fail-closed",后者与表大小、维护窗口都无关。
-		logx.Errorf("[schema] table %s: skipping primary key change to name_norm -- MigrateOptions.AllowLegacyPlayerNamePrimaryKey explicitly enabled. "+
-			"This instance still uses legacy PRIMARY KEY(player_id) + UNIQUE(name_norm): functionality remains correct (names globally unique), "+
-			"but production name reservation (new segment ids claiming names released by existing characters) still forms a lock cycle -- observed in 5/5 real-database runs, "+
-			"handled only by bounded 1213 retries. NewPlayerNameStore detects the legacy shape and automatically uses the legacy Release statement with FORCE INDEX (%s), "+
-			"maintaining consistent lock order. This is a deliberate deferral: disable the option and rerun -migrate during a suitable window to eliminate the cause",
-			tableName, PlayerNameLegacyNormUniqueKey)
-		return nil
-	}
-
-	isTiDB, version, err := serverIsTiDB(ctx, db)
-	if err != nil {
-		return err
-	}
-	if isTiDB {
-		// TiDB 上**不迁**,而且这不是 fail-closed 的场合:旧形态在功能上完全正确(名字仍然全服唯一),
-		// 它只是在 InnoDB 上更容易成环 —— 而 TiDB 的悲观事务没有间隙锁与插入意向锁,那几类形状
-		// 按官方文档本来就不存在(**未在 TiDB 上实测**)。在这里报错只会让整条 MigrateSchema 失败、
-		// 三个 store 全置 nil,拿一次确定的业务中断去换一个在本引擎上并不存在的收益。
-		// 另外 TiDB 对"一条 ALTER 里同时增删主键"的支持随版本而异,盲目下发反而可能留下中间态。
-		logx.Errorf("[schema] table %s: skipping primary key change to name_norm -- server is TiDB(%s). "+
-			"Table retains legacy PRIMARY KEY(player_id) + UNIQUE(name_norm); functionality correct (names globally unique); "+
-			"NewPlayerNameStore detects the legacy shape and automatically uses the legacy Release statement with FORCE INDEX. "+
-			"Eliminating the cause on TiDB requires deciding the TiDB table schema (candidate: define name_norm as primary key at creation "+
-			"and remove conflicting SHARD_ROW_ID_BITS); decision pending",
-			tableName, version)
-		return nil
-	}
-
-	uniqueIndexes, err := loadUniqueIndexColumns(ctx, db, dbName, tableName)
-	if err != nil {
-		return err
-	}
-	// name_norm 上承担"名字全服唯一"的那条(或那几条)二级唯一索引:主键换到 name_norm 之后它们
-	// 全部多余,必须**在同一条 ALTER 里**一起 DROP 掉 —— 留一条下来就是上面说的中间态 1。
-	normIndexes := strayNameNormUniqueIndexNames(uniqueIndexes)
-	if len(normIndexes) == 0 {
-		return fmt.Errorf("table %s: 主键还是旧形态 (player_id),但找不到 name_norm 上的单列全长唯一索引 —— "+
-			"「名字全服唯一」这条不变量在这张表上已经没有实现了,先处理它再谈迁移。"+
-			"查重:`SELECT name_norm, COUNT(*) FROM %s GROUP BY name_norm HAVING COUNT(*) > 1`;"+
-			"清干净后 `ALTER TABLE %s ADD UNIQUE KEY uk_player_name (name_norm)`,再重跑 `data_service -f <yaml> -migrate`",
-			tableName, tableName, tableName)
-	}
-
-	// player_id 那条唯一键可能已经在了(上一次迁移在非原子的实现上只做了一半,或有人先手工加过)。
-	// 已在就不重复 ADD,让本步骤在任何中间态上都能重跑。
-	hasOwnerKey, err := hasUniqueIndex(ctx, db, dbName, tableName, PlayerNameOwnerUniqueKey)
-	if err != nil {
-		return err
-	}
-
-	clauses := []string{"DROP PRIMARY KEY"}
-	for _, idx := range normIndexes {
-		clauses = append(clauses, "DROP INDEX `"+idx+"`")
-	}
-	clauses = append(clauses, "ADD PRIMARY KEY (`name_norm`)")
-	if !hasOwnerKey {
-		clauses = append(clauses, "ADD UNIQUE KEY `"+PlayerNameOwnerUniqueKey+"` (`player_id`)")
-	}
-	alter := "ALTER TABLE `" + tableName + "` " + strings.Join(clauses, ", ")
-
-	logx.Infof("[schema] table %s: changing primary key from player_id to name_norm (eliminates name reservation deadlock from audit #12). "+
-		"This ALTER rebuilds the entire table; manual Table 17.17 permits online execution (concurrent DML allowed), "+
-		"fallback to ALGORITHM=COPY blocks writes without loss; large tables should use data_service -f <yaml> -migrate during deployment, "+
-		"rather than startup AutoMigrate's 5-minute budget. Statement: %s", tableName, alter)
-	if _, err := db.ExecContext(ctx, alter); err != nil {
-		return fmt.Errorf("table %s: 换主键失败(表未被改动,MySQL 8.0 的 DDL 是原子的,修好原因后重跑 -migrate 即可): %w",
-			tableName, err)
-	}
-
-	// 回读复核:与 assertNullableUniqueKey 同一个理由 —— ALTER 在个别兼容层上会被解析后忽略,
-	// 那种"成功"正是最不能出现的失败形态(store 以为名字是聚簇主键、按新锁序发语句)。
-	if err := assertPlayerNameTargetShape(ctx, db, dbName, tableName, "换主键的 ALTER"); err != nil {
-		return err
-	}
-	logx.Infof("[schema] table %s: primary key already name_norm, %s in place, no redundant secondary unique index on name_norm",
-		tableName, PlayerNameOwnerUniqueKey)
-	return nil
-}
-
-// convergePlayerNameKeyShape 在"主键已经是 name_norm"的表上,把**另外两把键**收敛到目标形态,幂等:
-//   - DROP 掉 name_norm 上多余的单列唯一索引(主键已经覆盖了这条唯一性,多出来的那条只会让 Reserve
-//     插入新名字时多往一个二级唯一索引里插项 —— 那条路上有插入意向锁,正是改主键消掉的形状);
-//   - 缺 uk_player_name_owner 就补建(它是"一个角色只登记一个名字"的全部实现)。
-//
-// 两件事都不需要做时一条 DDL 都不发、也不打日志:新建库与已迁移库每次启动都会走到这里。
-// 要做时用**一条** ALTER(DROP 与 ADD 在同一条里,与换主键那条同样只留一个提交点),做完回读复核。
-//
-// 为什么放在迁移里而不是让 store 拒绝启动:这两种中间态在**功能上都是对的**(名字仍全服唯一;
-// 第 2 种缺的那条键会被紧随其后的 assertUniqueColumns 拦下,只是文案指不出缺的是哪条),
-// 而修它们只要两条不重建表的 DDL。拿一次确定的业务中断去换一个迁移顺手就能修好的形状不划算 ——
-// 与 NewPlayerNameStore"探到旧形态不拒启动"同一条取舍。
-//
-// 这一步**不按引擎分叉**(与换主键那条不同):它只增删二级索引,不碰主键,没有"一条 ALTER 同时增删主键"
-// 那种随版本而异的支持度问题,TiDB 上同样是支持的 DDL。但 TiDB 上新建库的主键本来就是 NONCLUSTERED
-// (见 playerNameBootstrapDDL 的「代价」),走到这里时通常无事可做。**未在 TiDB 上实测。**
-//
-// **未在真库验证**:DROP INDEX / ADD UNIQUE KEY 在 InnoDB 上按手册是 In Place、不重建表,
-// 但本仓实例上的实际算法与耗时本轮没有实测。
-func convergePlayerNameKeyShape(ctx context.Context, db *sql.DB, dbName, tableName string) error {
-	uniqueIndexes, err := loadUniqueIndexColumns(ctx, db, dbName, tableName)
-	if err != nil {
-		return err
-	}
-	strays := strayNameNormUniqueIndexNames(uniqueIndexes)
-	hasOwnerKey, err := hasUniqueIndex(ctx, db, dbName, tableName, PlayerNameOwnerUniqueKey)
-	if err != nil {
-		return err
-	}
-	if len(strays) == 0 && hasOwnerKey {
-		return nil
-	}
-
-	clauses := make([]string, 0, len(strays)+1)
-	for _, idx := range strays {
-		clauses = append(clauses, "DROP INDEX `"+idx+"`")
-	}
-	if !hasOwnerKey {
-		clauses = append(clauses, "ADD UNIQUE KEY `"+PlayerNameOwnerUniqueKey+"` (`player_id`)")
-	}
-	alter := "ALTER TABLE `" + tableName + "` " + strings.Join(clauses, ", ")
-
-	// 打 Error 而不是 Info:主键已经换过、却还留着这种形状,只可能来自"回滚做了一半"或人工改表,
-	// 运维应当知道自己的库经历过什么,而不是让它在 Info 里划过去。
-	logx.Errorf("[schema] table %s: primary key already name_norm but index shape has not converged (redundant name_norm unique indexes %v; "+
-		"%s present = %v) -- typically caused by partial rollback using the reverse ALTER from comments or manually running only ADD PRIMARY KEY. "+
-		"Redundant index silently restores name reservation deadlocks; missing %s silently disables Reserve's id reuse detection. Converging now: %s",
-		tableName, strays, PlayerNameOwnerUniqueKey, hasOwnerKey, PlayerNameOwnerUniqueKey, alter)
-	if _, err := db.ExecContext(ctx, alter); err != nil {
-		return fmt.Errorf("table %s: 收敛键形状失败(DDL 原子,修好原因后重跑 -migrate 即可)。"+
-			"若是以 1062 失败,说明库里已经有「同一个 player_id 占了多个名字」的行,那是数据事故,不能由迁移去猜留哪一行 —— "+
-			"先 `SELECT player_id, COUNT(*) FROM %s GROUP BY player_id HAVING COUNT(*) > 1` 查出来人工定夺。语句: %s: %w",
-			tableName, tableName, alter, err)
-	}
-	if err := assertPlayerNameTargetShape(ctx, db, dbName, tableName, "收敛键形状的 ALTER"); err != nil {
-		return err
-	}
-	logx.Infof("[schema] table %s: index shape converged to target (PRIMARY(name_norm) + UNIQUE %s(player_id))",
-		tableName, PlayerNameOwnerUniqueKey)
-	return nil
-}
-
-// assertPlayerNameTargetShape 回读复核这张表确实是目标形态:主键 name_norm、name_norm 上没有多余的
-// 单列唯一索引、uk_player_name_owner 就位。ALTER 报成功之后必须走一次 —— 理由与 assertNullableUniqueKey
-// 相同:ALTER 在个别兼容层(代理 / 旧版本)上会被解析后忽略,而那种"成功"正是最不能出现的失败形态
-// (store 以为名字是聚簇主键、按新锁序发语句,或以为 ID 复用检测还在)。
-func assertPlayerNameTargetShape(ctx context.Context, db *sql.DB, dbName, tableName, after string) error {
-	pkCols, err := primaryKeyColumns(ctx, db, dbName, tableName)
-	if err != nil {
-		return err
-	}
-	if playerNamePKShapeOf(pkCols) != playerNamePKByName {
-		return fmt.Errorf("table %s: %s 报成功,回读主键却仍是 %v —— 拒绝继续"+
-			"(这一步是名字抢注死锁根治的全部依据,形状没换成功就必须停在这里)", tableName, after, pkCols)
-	}
-	uniqueIndexes, err := loadUniqueIndexColumns(ctx, db, dbName, tableName)
-	if err != nil {
-		return err
-	}
-	if strays := strayNameNormUniqueIndexNames(uniqueIndexes); len(strays) > 0 {
-		return fmt.Errorf("table %s: %s 报成功,name_norm 上却仍有多余的单列唯一索引 %v —— 拒绝继续"+
-			"(主键已经覆盖这条唯一性,多出来的那条会让 Reserve 插入新名字时多走一次二级唯一索引的插入路径,"+
-			"把改主键消掉的死锁形状带回来,而且功能全对、毫无报错)。处置:`ALTER TABLE %s DROP INDEX <名字>`",
-			tableName, after, strays, tableName)
-	}
-	hasOwnerKey, err := hasUniqueIndex(ctx, db, dbName, tableName, PlayerNameOwnerUniqueKey)
-	if err != nil {
-		return err
-	}
-	if !hasOwnerKey {
-		return fmt.Errorf("table %s: %s 报成功,%s 却不在 —— 拒绝继续"+
-			"(它是「一个角色只登记一个名字」的全部实现:没有它,Reserve 的 ID 复用检测与 ownedNormOf 一起静默失效)。"+
-			"处置:`ALTER TABLE %s ADD UNIQUE KEY %s (player_id)`",
-			tableName, after, PlayerNameOwnerUniqueKey, tableName, PlayerNameOwnerUniqueKey)
-	}
-	return nil
-}
-
-// playerNamePKShapeOf 把主键列清单归到两种已知形态之一。列名大小写不敏感(MySQL 列名如此)。
-func playerNamePKShapeOf(pkCols []string) playerNamePKShape {
-	if len(pkCols) != 1 {
-		return playerNamePKUnknown
-	}
-	switch {
-	case strings.EqualFold(pkCols[0], "name_norm"):
-		return playerNamePKByName
-	case strings.EqualFold(pkCols[0], "player_id"):
-		return playerNamePKByPlayerID
-	default:
-		return playerNamePKUnknown
-	}
-}
-
-// strayNameNormUniqueIndexNames 列出 name_norm 上**除 PRIMARY 之外**的单列全长唯一索引名,按名字排序。
-//
-// 同一份清单在两处有**相反**的含义,所以只能有一个实现:
-//   - 旧形态(主键是 player_id):它们承担着"名字全服唯一",换主键那条 ALTER 必须把它们全部 DROP 掉;
-//   - 目标形态(主键是 name_norm):主键已经覆盖这条唯一性,它们全是多余的残留,同样要 DROP。
-//
-// 按形状找名字而不是写死 "uk_player_name":存量库上这条键可能是手工建的、叫别的名字
-// (NewPlayerNameStore 的错误文案也写着这种可能)。**全部**返回而不是只挑一条,是因为 DDL 要一次收敛干净 ——
-// 只删一条会留下下一次运行才发现的中间态。排序由 singleColumnUniqueIndexNames 保证:
-// map 遍历顺序随机,而调用方据此下发 DROP INDEX,顺序不定就会让同一张表在两次运行里生成不同的语句。
-//
-// 只看**唯一**索引:非唯一的 name_norm 索引不是本迁移任何一条路径会产生的形态(反向 ALTER 建的是
-// UNIQUE KEY),而它可能是别人为查询有意加的,迁移不该替他删。新建库上"name_norm 上一条二级索引都没有"
-// 由真库用例 TestPlayerName_BootstrapDDLIsVarcharUniqueBin 钉住。
-func strayNameNormUniqueIndexNames(uniqueIndexes map[string]uniqueIndexColumns) []string {
-	names := singleColumnUniqueIndexNames(uniqueIndexes, "name_norm")
-	strays := make([]string, 0, len(names))
-	for _, n := range names {
-		if strings.EqualFold(n, "PRIMARY") {
-			continue
-		}
-		strays = append(strays, n)
-	}
-	if len(strays) == 0 {
-		return nil
-	}
-	return strays
-}
-
-// playerNameStrayNormUniqueIndexes 是 strayNameNormUniqueIndexNames 的连库版本,给 NewPlayerNameStore
-// 在建店时探一次形状用(它只打日志、不下发 DDL,见那里的注释)。
-func playerNameStrayNormUniqueIndexes(ctx context.Context, db *sql.DB, dbName string) ([]string, error) {
-	uniqueIndexes, err := loadUniqueIndexColumns(ctx, db, dbName, PlayerNameTableName)
-	if err != nil {
-		return nil, err
-	}
-	return strayNameNormUniqueIndexNames(uniqueIndexes), nil
+	PlayerNameTableName:      {"name_norm"},
+	PlayerNameOwnerTableName: {"player_id"},
 }
 
 // primaryKeyColumns 读一张表主键的列序(按 SEQ_IN_INDEX)。表没有主键时返回空切片、不报错 ——
@@ -937,7 +570,7 @@ const (
 // nullableUniqueKey 描述一条"可空唯一列":一个由表达式算出的生成列 + 建在它上面的唯一键,
 // 外加建键之前必须先做的历史去重(唯一键建不上去,ALTER 会以 1062 失败)。
 //
-// 做成清单而不是在 migrateSchemaOn 里写 if 分支,理由与 bootstrapTables 相同:
+// 做成清单而不是在迁移引擎里写 if 分支,理由与 bootstrapTables 相同:
 // "哪些表有非 proto 驱动的列与键"这件事只该有一处答案。再加一条 = 在 nullableUniqueKeys 里加一项。
 type nullableUniqueKey struct {
 	table         string // 表名
@@ -1454,23 +1087,55 @@ func serverIsTiDB(ctx context.Context, db *sql.DB) (bool, string, error) {
 	return strings.Contains(strings.ToUpper(version+" "+comment.String), "TIDB"), version, nil
 }
 
-// TableMessages 返回全局库全部表的 proto 原型,顺序即迁移顺序。
-// 前三张由 proto2mysql 建表与同步;其余都在 bootstrapTables 里(手写 DDL 预建):
-// id_segment、player_name 由同步循环做列漂移与唯一键检查;
-// 路由表(routeTableMessages)由 ensureRouteTables 守列名与主键,同步循环跳过。
-func TableMessages() []proto.Message {
-	return append(append([]proto.Message{
-		&dbpb.TransactionLog{},
-		&dbpb.PlayerSnapshot{},
-		&dbpb.RollbackAuditLog{},
+// directoryTableMessages 是目录第 slot 片的表,顺序即迁移顺序。全部是预建表:名字表由同步循环做列漂移与唯一键检查,
+// 路由表由 ensureRouteTables 守列名与主键,同步循环跳过。zone_merged_into 只在第 0 片。
+func directoryTableMessages(slot int) []proto.Message {
+	tables := []proto.Message{
 		&dbpb.PlayerName{},
+		&dbpb.PlayerNameOwner{},
+		&dbpb.DirectoryShard{},
 		&dbpb.AccountDirectory{},
 		&dbpb.AccountRole{},
+		&dbpb.AccountRoleRef{},
 		&dbpb.AccountRoleTrade{},
 		&dbpb.AccountRoleTransferReceipt{},
 		&dbpb.AccountRoleAdmission{},
 		&dbpb.AccountRoleTradeHolder{},
-	}, routeTableMessages()...), writerAuthorityTableMessages()...)
+		&dbpb.AccountRoleRemoval{},
+	}
+	if slot == 0 {
+		tables = append(tables, routeTableMessages()...)
+	} else {
+		tables = append(tables, shardRouteTableMessages()...)
+	}
+	return append(tables, writerAuthorityTableMessages()...)
+}
+
+// ledgerTableMessages 是流水库的表。三张业务表由 proto2mysql 建表与同步。route_meta 和写者表是这个库自己的闸门。
+func ledgerTableMessages() []proto.Message {
+	return append([]proto.Message{
+		&dbpb.TransactionLog{},
+		&dbpb.PlayerSnapshot{},
+		&dbpb.RollbackAuditLog{},
+		&dbpb.GmRecallBatch{},
+		&dbpb.GmRecallOp{},
+		&dbpb.GmRecallSeq{},
+		&dbpb.GmRecallSource{},
+		&dbpb.RouteMeta{},
+	}, writerAuthorityTableMessages()...)
+}
+
+// TableMessages 是全部表,合在一个库里只有夹具这么建(migrateSchemaOn);表名和列的契约测试也按它遍历。
+func TableMessages() []proto.Message {
+	return append([]proto.Message{
+		&dbpb.TransactionLog{},
+		&dbpb.PlayerSnapshot{},
+		&dbpb.RollbackAuditLog{},
+		&dbpb.GmRecallBatch{},
+		&dbpb.GmRecallOp{},
+		&dbpb.GmRecallSeq{},
+		&dbpb.GmRecallSource{},
+	}, directoryTableMessages(0)...)
 }
 
 // ddlTableNameRegex 从生成的建表语句里解出表名,用于启动期表名守卫。
@@ -1511,21 +1176,6 @@ type MigrateOptions struct {
 	// `-migrate` 用默认值(锁忙就以退出码 3 让部署侧重试,不在 Job 里无限等)。
 	LockWait time.Duration
 
-	// AllowLegacyPlayerNamePrimaryKey 允许**跳过** player_name 的换主键迁移,让其余迁移照常跑完。
-	//
-	// 默认 false = 照常执行那条 ALTER。打开它等于明确接受「本实例的 player_name 仍是旧形态
-	// PRIMARY KEY(player_id):功能完全正确,但名字抢注在生产常态那一路仍然成环(真库实测 5/5),
-	// 靠有界 1213 重试吸收」。存在的理由是那条 ALTER 要**重建整张表**:表太大 / 窗口不够 /
-	// 反复被长事务挡住 MDL 时,没有这个开关运维就只能整条 -migrate 都不跑,连带停掉另外四张表的
-	// 列同步与 id_segment 地板校验 —— 那些是无关且必要的。与 AllowMissingGuidUniqueKey 同一形态的逃生口。
-	//
-	// 打开之后 NewPlayerNameStore 会探到旧形态、自动退回带 FORCE INDEX (uk_player_name) 的旧 Release 语句
-	// (这条链路本来就有),锁序仍然一致;启动与迁移各打一条 Error 写明失效范围。
-	//
-	// 注:与 AllowMissingGuidUniqueKey 一样,把它接到 yaml 配置项上要改 internal/config 与 internal/svc,
-	// 不在本次改动范围内,所以现在它只有零值一条路 —— 即默认必迁,这正是期望行为。
-	AllowLegacyPlayerNamePrimaryKey bool
-
 	// SnapshotGuidDedupeMaxRows 一次迁移最多删多少行重复快照;<=0 取 snapshotGuidDedupeMaxRows(10 万)。
 	//
 	// 做成选项而不是只留编译期常量:超上限的分支是**运维要处理的局面**,而常量只能靠重新编译发版来调,
@@ -1541,9 +1191,14 @@ func (o MigrateOptions) dedupeMaxRows() int64 {
 	return snapshotGuidDedupeMaxRows
 }
 
-// MigrateSchema 打开一条短连接跑迁移,跑完即关。
-// 启动路径(Schema.AutoMigrate=true)与显式入口(`data_service -migrate`)共用这一个函数,
-// 生产用后者:多副本同时启动会对同一张表并发 ALTER,MDL 阻塞会让 GM 回滚/流水查询停摆。
+// MigrateSchema 给目录全部片和流水库建表。启动路径不走这里,`data_service -migrate` 是唯一入口。每个 zone、每次部署都会跑,所以可以重复跑。
+//
+// 逐库开短连接、拿迁移锁,**先判定完全部库再动手**:
+//   - 空库:建表。
+//   - 表齐全、片号和 K 对得上、闸门行在:跳过,一个字节都不动(尤其不换 generation:写者名册按它渲染)。
+//   - 半成品(有表但不齐,或者表齐了片号、闸门行不对):一张表都不建,保留现场。已有表不自动升级或修补。
+//
+// 中途崩过时,已经建好的库跳过,没动过的库接着建。崩在建表当中的那一个库是半成品,人工删掉再跑。
 func MigrateSchema(ctx context.Context, cfg MySQLConfig, opts MigrateOptions) error {
 	// -migrate 是唯一 schema 装配入口；normal 启动既不调用本函数，也不持此主体。
 	if cfg.Permission.Kind() != "schema" {
@@ -1553,35 +1208,116 @@ func MigrateSchema(ctx context.Context, cfg MySQLConfig, opts MigrateOptions) er
 		}
 		cfg.Permission = permission
 	}
-	db, err := openMySQL(cfg)
-	if err != nil {
+	// 每个库都用同一个 schema 主体,不按库换写者。
+	cfg.PermissionFor = nil
+	k := dirshard.Normalize(cfg.LogicalShards)
+	if err := dirshard.Validate(k); err != nil {
 		return err
 	}
-	defer db.Close()
-	// 迁移锁会占住池里一条连接直到迁移结束;池上限是 1 时,迁移语句会永远等不到连接。
-	if cfg.MaxOpenConn == 1 {
-		db.SetMaxOpenConns(2)
+	type target struct {
+		schema string
+		tables []proto.Message
+		// verify 核一个表齐全的库确实是这一片。流水库没有片号。
+		verify  func(*sql.DB) error
+		migrate func(*sql.DB, string) error
+		db      *sql.DB
 	}
-	release, err := acquireMigrateLock(ctx, db, cfg.DBName, opts.LockWait)
-	if err != nil {
-		return err
+	targets := make([]*target, 0, k+1)
+	for slot, schema := range dirshard.DirectoryDBNames(cfg.DBName, k) {
+		targets = append(targets, &target{schema: schema, tables: directoryTableMessages(slot),
+			verify: func(db *sql.DB) error { return verifyDirectoryShard(ctx, db, slot, k) },
+			migrate: func(db *sql.DB, name string) error {
+				return migrateDirectoryShard(ctx, db, name, slot, k, opts)
+			}})
 	}
-	defer release()
-	// v4仅开放fresh-prestart。已有表（含中途失败留下的部分表）必须走独立审核，不能自动升级或修补。
-	for _, message := range TableMessages() {
-		name, ok := proto2mysql.TableNameFromDescriptor(message.ProtoReflect().Descriptor())
-		if !ok || name == "" {
-			return errors.New("fresh-prestart表契约缺少正式表名")
-		}
-		var count uint64
-		if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=? AND table_name=?", cfg.DBName, name).Scan(&count); err != nil {
+	targets = append(targets, &target{schema: dirshard.LedgerDBName(cfg.DBName), tables: ledgerTableMessages(),
+		verify: func(*sql.DB) error { return nil },
+		migrate: func(db *sql.DB, name string) error {
+			return migrateLedger(ctx, db, name, opts)
+		}})
+	for _, t := range targets {
+		one, err := cfg.ForSchema(t.schema)
+		if err != nil {
 			return err
 		}
-		if count != 0 {
-			return errors.New("fresh-prestart拒绝已有表，保留现有数据与失败现场")
+		db, err := openMySQL(one)
+		if err != nil {
+			return fmt.Errorf("migrate %s: %w", t.schema, err)
+		}
+		defer db.Close()
+		// 迁移锁会占住池里一条连接直到迁移结束;池上限是 1 时,迁移语句会永远等不到连接。
+		if one.MaxOpenConn == 1 {
+			db.SetMaxOpenConns(2)
+		}
+		release, err := acquireMigrateLock(ctx, db, t.schema, opts.LockWait)
+		if err != nil {
+			return err
+		}
+		defer release()
+		present, missing, err := schemaTablePresence(ctx, db, t.schema, t.tables)
+		if err != nil {
+			return err
+		}
+		switch {
+		case len(present) == 0:
+			// player_route 的唯一性靠 CHECK,TiDB 默认不执行。建表之前开关要开着,建完才发现的话常驻进程拒启,事后打开也不一定补上约束。
+			if err := requireTiDBCheckSwitch(ctx, db); err != nil {
+				return err
+			}
+			t.db = db
+		case len(missing) != 0:
+			return fmt.Errorf("%s is half built (has %s, missing %s). Nothing was changed: existing tables are never upgraded or repaired here. Drop this database by hand and re-run -migrate", t.schema, strings.Join(present, ","), strings.Join(missing, ","))
+		default:
+			if err := verifyMigratedSchema(ctx, db, t.verify); err != nil {
+				return fmt.Errorf("%s has every table but is not usable. Nothing was changed: %w", t.schema, err)
+			}
+			logx.Infof("[schema] %s is complete, skipped", t.schema)
 		}
 	}
-	return migrateSchemaOn(ctx, db, cfg.DBName, opts)
+	for _, t := range targets {
+		if t.db == nil {
+			continue
+		}
+		if err := t.migrate(t.db, t.schema); err != nil {
+			return fmt.Errorf("migrate %s: %w", t.schema, err)
+		}
+	}
+	return nil
+}
+
+// schemaTablePresence 按表清单分成已有的和缺的。
+func schemaTablePresence(ctx context.Context, db *sql.DB, schema string, tables []proto.Message) (present, missing []string, err error) {
+	for _, message := range tables {
+		name, ok := proto2mysql.TableNameFromDescriptor(message.ProtoReflect().Descriptor())
+		if !ok || name == "" {
+			return nil, nil, errors.New("schema table contract has no table name")
+		}
+		var count uint64
+		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=? AND table_name=?", schema, name).Scan(&count); err != nil {
+			return nil, nil, err
+		}
+		if count != 0 {
+			present = append(present, name)
+		} else {
+			missing = append(missing, name)
+		}
+	}
+	return present, missing, nil
+}
+
+// verifyMigratedSchema 核一个表齐全的库迁移做完了:片号对得上,闸门行在。崩在建完表、种行之前的库走这里拒绝。
+func verifyMigratedSchema(ctx context.Context, db *sql.DB, verify func(*sql.DB) error) error {
+	if err := verify(db); err != nil {
+		return err
+	}
+	var rows int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM route_meta WHERE id=?", routeMetaRowID).Scan(&rows); err != nil {
+		return fmt.Errorf("read route_meta: %w", err)
+	}
+	if rows == 0 {
+		return errors.New("route_meta has no row id=1: the previous migration stopped before seeding it, drop this database by hand and re-run -migrate")
+	}
+	return nil
 }
 
 // ── 迁移互斥 ─────────────────────────────────────────────────────────────
@@ -1675,34 +1411,64 @@ func acquireMigrateLock(ctx context.Context, db *sql.DB, dbName string, wait tim
 	}, nil
 }
 
-// migrateSchemaOn 注册 TableMessages 的全部表 → 表名守卫 → 预建 bootstrapTables(手写 DDL 的 id_segment、
-// player_name 与路由表)→ 路由表按各自的 proto 查列名与主键,并种 route_meta(id=1)
-// (ensureRouteTables)
-// → 有 proto 的 bootstrap 表只做形状守卫(列齐 + 单列唯一键还在)、其余三张 CreateOrUpdateTable
-// → 补缺失索引 → 补 nullableUniqueKeys 的可空唯一列(player_snapshot.snapshot_guid_nz)
-// (2026-10-30 起发号不再用 id_segment 表,迁移也不再预建号段行,见 internal/idissuer)。
+// migrateSchemaOn 把全部表建在一个库里,当 K=1 的第 0 片。只有夹具这么建,生产的流水库总是单独一个库。
+func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts MigrateOptions) error {
+	if err := migrateLogicalDB(ctx, db, dbName, TableMessages(), opts); err != nil {
+		return err
+	}
+	return seedDirectoryShard(ctx, db, 0, 1)
+}
+
+// migrateDirectoryShard 建目录第 slot 片的表,记下这个库是 K 片里的第几片。
+func migrateDirectoryShard(ctx context.Context, db *sql.DB, dbName string, slot, k int, opts MigrateOptions) error {
+	if err := migrateLogicalDB(ctx, db, dbName, directoryTableMessages(slot), opts); err != nil {
+		return err
+	}
+	return seedDirectoryShard(ctx, db, slot, k)
+}
+
+// migrateLedger 建流水库的表。
+func migrateLedger(ctx context.Context, db *sql.DB, dbName string, opts MigrateOptions) error {
+	if err := migrateLogicalDB(ctx, db, dbName, ledgerTableMessages(), opts); err != nil {
+		return err
+	}
+	// GM 回收的护栏副本。流水库是第七个参与者,见 docs/design/exploit_loss_prevention_zh.md。
+	return rolefence.EnsureSchema(ctx, db)
+}
+
+// migrateLogicalDB 在一个逻辑库上:注册 tables → 表名守卫 → 预建其中的手写 DDL 表和闸门哨兵表 → 路由表查列名与主键,
+// 并种 route_meta(id=1)(ensureRouteTables)→ 目录表核形状 → 其余预建表只做形状守卫(列齐 + 单列唯一键还在)、
+// 非预建表 CreateOrUpdateTable → 补缺失索引 → 补 nullableUniqueKeys 的可空唯一列(player_snapshot.snapshot_guid_nz)。
+// (2026-10-30 起发号不再用 id_segment 表,迁移也不再预建号段行,见 internal/idissuer。)
 //
 // 路由表那一步失败同样让整次迁移失败。这是刻意的:表形状不对时 RouteStore 的判定会安静地错,不能带着它启动。
-func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts MigrateOptions) error {
+func migrateLogicalDB(ctx context.Context, db *sql.DB, dbName string, tables []proto.Message, opts MigrateOptions) error {
 	model := proto2mysql.NewDB().WithContext(ctx)
 	if err := model.OpenDB(db, dbName); err != nil {
 		return fmt.Errorf("proto2mysql open %s: %w", dbName, err)
 	}
 
-	tables := TableMessages()
+	// 哨兵表没有 proto,每个逻辑库都建。
+	bootstrapNames := []string{authoritysql.MoveSentinelTable}
+	var routeTables []proto.Message
+	directory := false
 	for _, t := range tables {
 		model.RegisterTable(t)
 		if err := assertTableNameLocked(model, t); err != nil {
 			return err
 		}
+		name, _ := proto2mysql.TableNameFromDescriptor(t.ProtoReflect().Descriptor())
+		if isBootstrapTable(name) {
+			bootstrapNames = append(bootstrapNames, name)
+		}
+		if isRouteTable(name) {
+			routeTables = append(routeTables, t)
+		}
+		directory = directory || name == AccountRoleTableName
 	}
 
 	// 手写 DDL 的例外,必须在 CreateOrUpdateTable 之前(见各自常量注释)。
 	// 按表名排序只为让日志与失败顺序稳定;这几条建表语句互不依赖(路由表之间没有外键)。
-	bootstrapNames := make([]string, 0, len(bootstrapTables))
-	for name := range bootstrapTables {
-		bootstrapNames = append(bootstrapNames, name)
-	}
 	sort.Strings(bootstrapNames)
 	for _, name := range bootstrapNames {
 		if _, err := db.ExecContext(ctx, bootstrapTables[name]); err != nil {
@@ -1710,21 +1476,23 @@ func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts Migrat
 		}
 	}
 
-	// 路由表在这里单独守形状(列名 + 主键,事实源是各自的 proto),再种两张单行表的行;下面的循环跳过它们。
-	if err := ensureRouteTables(ctx, db, dbName); err != nil {
+	// 路由表在这里单独守形状(列名 + 主键,事实源是各自的 proto),再种单行表的行;下面的循环跳过它们。
+	if err := ensureRouteTables(ctx, db, dbName, routeTables); err != nil {
 		return err
 	}
 	if err := assertWriterAuthoritySchema(ctx, db, dbName); err != nil {
 		return err
 	}
-	if err := ensureInitialPlayerCommitSchema(ctx, db, dbName); err != nil {
-		return err
-	}
-	if err := ensureAccountRoleTradeSchema(ctx, db, dbName); err != nil {
-		return err
-	}
-	if err := assertAccountDirectoryShape(ctx, db, dbName); err != nil {
-		return err
+	if directory {
+		if err := ensureInitialPlayerCommitSchema(ctx, db, dbName); err != nil {
+			return err
+		}
+		if err := ensureAccountRoleTradeSchema(ctx, db, dbName); err != nil {
+			return err
+		}
+		if err := assertAccountDirectoryShape(ctx, db, dbName); err != nil {
+			return err
+		}
 	}
 
 	for _, t := range tables {
@@ -1734,12 +1502,6 @@ func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts Migrat
 		}
 		if isBootstrapTable(name) {
 			if err := assertColumnsPresent(ctx, db, dbName, t, name); err != nil {
-				return err
-			}
-			// 存量 player_name 换主键(name_norm 当聚簇主键,根治审计 #12)。排在列检查之后、
-			// 唯一键检查之前:列不齐时读到的形状没有意义,而换完键正好由下面那条复核。
-			// 主键已经对了的库在这里收敛另外两把键(见 convergePlayerNameKeyShape)。
-			if err := ensurePlayerNameKeyedByName(ctx, db, dbName, name, opts); err != nil {
 				return err
 			}
 			// 与 assertColumnsPresent 同级的第二道形状守卫:列名对不代表键还在(见
@@ -2043,7 +1805,7 @@ type uniqueIndexColumns struct {
 // 值是按 SEQ_IN_INDEX 排好的列序 + 是否带前缀长度。
 //
 // 两个调用方共用:assertUniqueColumns(判"这一列上有没有单列唯一约束")与
-// ensurePlayerNameKeyedByName(要知道旧形态里承担名字唯一的**那条索引叫什么**)。
+// hasNullableUniqueIndex(核唯一键恰好覆盖生成列全长)。
 // "怎么读一张表的唯一索引"是同一条知识,抄第二份迟早在 SUB_PART 这类细节上漂移。
 func loadUniqueIndexColumns(ctx context.Context, db *sql.DB, dbName, tableName string) (map[string]uniqueIndexColumns, error) {
 	// SUB_PART 非 NULL = 这一列用了前缀长度,必须连列数一起读回来判(见 uniqueIndexColumns)。
@@ -2075,8 +1837,7 @@ func loadUniqueIndexColumns(ctx context.Context, db *sql.DB, dbName, tableName s
 }
 
 // singleColumnUniqueIndexNames 返回 uniqueIndexes 里**只含 col 这一列、且不带前缀长度**的索引名
-// (含 PRIMARY;列名大小写不敏感:MySQL 列名如此)。结果按名字排序,好让调用方的选择是确定的 ——
-// map 遍历顺序随机,而调用方之一要据此下发 DROP INDEX。
+// (含 PRIMARY;列名大小写不敏感:MySQL 列名如此)。结果按名字排序,好让调用方的选择是确定的。
 //
 // prefixed 必须连着整条索引一起判,不能在查询里 `AND SUB_PART IS NULL` 过滤掉带前缀的行 ——
 // 那会把 UNIQUE KEY (name_norm, other(10)) 削成只剩一列,反而把一条**组合**唯一键误判成

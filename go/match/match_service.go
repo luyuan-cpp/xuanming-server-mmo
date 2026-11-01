@@ -33,11 +33,13 @@ import (
 	base "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	matchpb "proto/match"
+	rfpb "proto/role_fence"
 	teampb "proto/team"
 
 	"shared/buildinfo"
 	"shared/grpcstats"
 	sharedregistry "shared/noderegistry"
+	"shared/rolefence"
 	"shared/serverbase"
 	"shared/serviceauth"
 
@@ -111,14 +113,14 @@ func main() {
 		panic(err)
 	}
 	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root, relay)
-	// 独立内部取消证明；未配置时保持nil并在RPC入口拒绝，绝不降级为无签名取消。
+	// guild 调 MatchInternal 的独立证明；未配置时保持nil并在RPC入口拒绝，绝不降级为无签名。
 	if secret := strings.TrimSpace(os.Getenv("MMORPG_MATCH_INTERNAL_SECRET_GUILD")); secret != "" {
 		verifier, err := serviceauth.New(map[string]string{"guild": secret})
 		if err != nil {
-			logx.Must(fmt.Errorf("活动取消独立签名配置非法"))
+			logx.Must(fmt.Errorf("guild内部调用独立签名配置非法"))
 		}
-		svcCtx.ActivityCancelAuth = verifier
-		svcCtx.ActivityCancelSecret = secret
+		svcCtx.GuildCallAuth = verifier
+		svcCtx.GuildCallSecret = secret
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -167,7 +169,7 @@ func main() {
 
 	// 组队(team-system.md §A.3,port-decisions D-2 / feasibility D7):与 match 同进程、同一个
 	// zrpc server,协议独立(ClientPlayerTeam service + TeamNodeService 第二次节点注册)。
-	//   - home zone 查询读全局库 player_route(记录要写原始区,data_service 回的是最终区);
+	//   - home zone 查询经 data_service 读目录里的原始区(记录要写原始区,不解析合服);
 	//   - 整队开战的票据域端口由 logic.TeamBattleStarter 实现,这一行同时是
 	//     *logic.TeamBattleStarter 满足 team.BattleStarter 的编译期保证(team 与 logic 互不 import)。
 	teamService := team.NewService(svcCtx,
@@ -177,6 +179,14 @@ func main() {
 	teamAuthority, teamAuthorityErr := team.NewAuthorityServer(svcCtx)
 	if teamAuthorityErr != nil {
 		logx.Errorf("SQL队伍场景读取契约未就绪，拒绝启动: %v", teamAuthorityErr)
+		cancel()
+		svcCtx.Stop()
+		os.Exit(1)
+	}
+	// 角色护栏参与者(docs/design/horizontal-scale-logical-db.md §3.4):data_service 过户、删角之前先冻结本库副本并核挂起。
+	roleFence, roleFenceErr := rolefence.NewParticipantServer(svcCtx.Authority.DB, authority.RoleFencePending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	if roleFenceErr != nil {
+		logx.Errorf("角色护栏参与者未就绪，拒绝启动: %v", roleFenceErr)
 		cancel()
 		svcCtx.Stop()
 		os.Exit(1)
@@ -193,6 +203,7 @@ func main() {
 		matchpb.RegisterMatchInternalServer(grpcServer, server.NewMatchInternalServer(svcCtx))
 		teampb.RegisterClientPlayerTeamServer(grpcServer, team.NewServer(teamService))
 		teampb.RegisterTeamAuthorityServer(grpcServer, teamAuthority)
+		rfpb.RegisterRoleFenceParticipantServer(grpcServer, roleFence)
 
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)
@@ -207,10 +218,14 @@ func main() {
 			matchpb.MatchInternal_StartActivityBattle_FullMethodName:  true,
 			matchpb.MatchInternal_CancelActivityBattle_FullMethodName: true,
 			matchpb.MatchInternal_CommitBattleOutcome_FullMethodName:  true,
+			// guild 收尾已开始的历练:放开占用、读终局。新占用(Acquire)和护栏冻结属于新工作,走 SOURCE。
+			matchpb.MatchInternal_ReleaseTrialOccupancy_FullMethodName: true,
+			matchpb.MatchInternal_GetBattleCompletion_FullMethodName:   true,
 		}, svcCtx.RelayIngress),
 		sessionInterceptor,
 		originalRoleInterceptor(svcCtx),
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
+		serverbase.WriterFrozenInterceptor(),
 	)
 
 	// **先起 gRPC,再注册**(§A.3 第 2 条,照 chat):Start 阻塞到服务退出,所以放后台 goroutine;

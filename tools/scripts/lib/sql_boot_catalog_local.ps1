@@ -7,7 +7,8 @@
     一条命令备齐 start_game.ps1 / go_services.ps1 需要的写者授权:
       1. 用本机 root 建库、建表(各服务自己的 -migrate 与 go/db cmd/migrate;常驻账号没有 DDL)。
       2. 按 deploy/sql 的角色模板(maintenance_drain.ps1 的 ConvertTo-AuthorityRoleSql)给每个实例建独立账号。
-      3. 每个实例调一次正式的 writer_authority register,拿到单次启动授权和选中配置。
+      3. 每个实例调一次正式的 writer_authority register,拿到单次启动授权和选中配置。闸门跟着逻辑库走:
+         实例要写几个逻辑库,一次注册就在几个库各登记一份,授权文件是这些份的集合。
       4. 写出 Get-SqlWriterBootEnvironment 认的目录,并用它自检一遍。
 
     脚本自己只做正式链路里本来就归部署者的事:建账号(模板写明「账号创建由独立本地部署者完成」)、
@@ -51,7 +52,7 @@ function Get-LocalSqlBootNonWriterServices {
 
 # 权限真值表:角色模板已给 runtime 只读,renderer 拒绝它们进业务表清单。
 function Get-LocalSqlBootAuthorityTables {
-    @('route_meta', 'writer_registry', 'writer_slot', 'writer_lifecycle_receipt', 'sql_writer_drain_run', 'sql_writer_freeze_ticket', 'sql_writer_maintenance_receipt')
+    @('route_meta', 'writer_registry', 'writer_slot', 'writer_lifecycle_receipt', 'sql_writer_drain_run', 'sql_writer_freeze_ticket', 'sql_writer_maintenance_receipt', 'db_move_sentinel')
 }
 
 function Get-LocalSqlBootRoot {
@@ -215,6 +216,11 @@ function New-LocalSqlBootSettings {
         [Parameter(Mandatory)][string]$LoginConfigPath
     )
     $globalSchema = Get-LocalSqlBootYamlRequired -Path $DataServiceConfigPath -KeyPath 'SnapshotMySQL.DBName'
+    # 片数和 data_service 同一来源;没写按 1,和 Directory.Shards() 一样。
+    $shardsValue = Get-YamlScalar -Path $DataServiceConfigPath -KeyPath 'Directory.LogicalShards'
+    $logicalShards = if ($shardsValue.Found -and -not [string]::IsNullOrEmpty($shardsValue.Value)) { [int]$shardsValue.Value } else { 1 }
+    $directoryShards = [string[]]@(Get-DirectoryDbNames -Base $globalSchema -LogicalShards $logicalShards)
+    $ledgerSchema = Get-DirectoryLedgerDbName -Base $globalSchema
     $zoneId = Get-LocalSqlBootYamlRequired -Path $DbConfigPath -KeyPath 'ZoneId'
     if ($zoneId -cnotmatch '^[1-9][0-9]*$') { throw 'go/db ZoneId must be a positive integer.' }
     $zoneDatabase = "zone_${zoneId}_db"
@@ -227,15 +233,16 @@ function New-LocalSqlBootSettings {
     $loginRedisHost = Get-LocalSqlBootYamlRequired -Path $LoginConfigPath -KeyPath 'Node.RedisClient.Host'
     $loginRedisDb = Get-LocalSqlBootYamlRequired -Path $LoginConfigPath -KeyPath 'Node.RedisClient.DB'
 
-    # gateway 的 mmorpg 也在保护集合里:写者连接的 DATABASE() 必须落在集合内(authoritysql pool.go、Java WriterAuthority)。
-    $schemas = ConvertTo-LocalSqlBootOrdinalSet -Values (@('mmorpg', $globalSchema, 'mmorpg_chat', 'mmorpg_friend', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_match', 'mmorpg_player_inbox', 'mmorpg_rank', 'mmorpg_trade') + $playerDatabases)
+    # 本机全部逻辑库。每个库自带一份写者闸门,写者连接的 DATABASE() 必须等于它的闸门所在的库(authoritysql pool.go、Java WriterAuthority)。
+    $schemas = ConvertTo-LocalSqlBootOrdinalSet -Values (@('mmorpg', $ledgerSchema, 'mmorpg_chat', 'mmorpg_friend', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_match', 'mmorpg_player_inbox', 'mmorpg_rank', 'mmorpg_trade') + $directoryShards + $playerDatabases)
     foreach ($schema in $schemas) { $null = ConvertTo-AuthoritySqlIdentifier $schema }
 
     return [pscustomobject]@{
         Endpoint = $Endpoint; EndpointName = $EndpointName; Port = $Port
         RootUser = $RootUser; RootPassword = $RootPassword; RootPrincipal = $RootPrincipal
-        GlobalSchema = $globalSchema; ZoneDatabase = $zoneDatabase; PlayerDatabases = $playerDatabases
-        ProtectedSchemas = [string[]]@($schemas); LoginRedisHost = $loginRedisHost; LoginRedisDb = $loginRedisDb
+        GlobalSchema = $globalSchema; DirectoryShards = $directoryShards; DirectorySchema = $directoryShards[0]; LedgerSchema = $ledgerSchema
+        ZoneDatabase = $zoneDatabase; PlayerDatabases = $playerDatabases
+        LogicalDatabases = [string[]]@($schemas); LoginRedisHost = $loginRedisHost; LoginRedisDb = $loginRedisDb
         Executor = $null; Backend = ''; LockPrimitive = ''
     }
 }
@@ -408,7 +415,6 @@ function Get-LocalSqlBootConfigPatch {
     $endpoint = ConvertTo-LocalSqlBootYamlString -Value $Settings.Endpoint
     $userLiteral = ConvertTo-LocalSqlBootYamlString -Value $User
     $passwordLiteral = ConvertTo-LocalSqlBootYamlString -Value $Password
-    $schema = $Settings.GlobalSchema
     $redisHost = ConvertTo-LocalSqlBootYamlString -Value $Settings.LoginRedisHost
     $redisDb = $Settings.LoginRedisDb
     $values = [ordered]@{}
@@ -431,7 +437,6 @@ function Get-LocalSqlBootConfigPatch {
         'chat' { $values['Backend'] = $backend }
         'friend' {
             $values['Backend'] = $backend
-            $values['AccountRoleSchema'] = $schema
             $values['GlobalLoginSessions'] = 'true'
             $values['LoginRedis.Addrs'] = "[$redisHost]"
             $values['LoginRedis.DB'] = $redisDb
@@ -449,7 +454,6 @@ function Get-LocalSqlBootConfigPatch {
             # 源配置缺 Etcd.Key,go-zero 加载就失败;必须显式空串(契约 D-13,同 friend.yaml)。
             $values['Etcd.Key'] = '""'
             $values['Backend'] = $backend
-            $values['AccountRoleSchema'] = $schema
             $values['GlobalLoginSessions'] = 'true'
             $values['LoginRedis.Addrs'] = "[$redisHost]"
             $values['LoginRedis.DB'] = $redisDb
@@ -462,7 +466,6 @@ function Get-LocalSqlBootConfigPatch {
             $values['GlobalMatch.Backend'] = $backend
             $values['GlobalMatch.Host'] = $endpoint
             $values['GlobalMatch.User'] = $userLiteral
-            $values['GlobalMatch.AccountRoleSchema'] = $schema
             $values['LoginRedis.Addrs'] = "[$redisHost]"
             $values['LoginRedis.DB'] = $redisDb
         }
@@ -471,14 +474,12 @@ function Get-LocalSqlBootConfigPatch {
             $values['MySQL.Host'] = $endpoint
             $values['MySQL.User'] = $userLiteral
             $values['MySQL.Password'] = $passwordLiteral
-            $values['AccountRoleSchema'] = $schema
         }
         'player_inbox' {
             $values['MySQL.Backend'] = $backend
             $values['MySQL.Host'] = $endpoint
             $values['MySQL.User'] = $userLiteral
             $values['MySQL.Password'] = $passwordLiteral
-            $values['AccountRoleSchema'] = $schema
         }
         'login' { }
         default { throw "No local SQL config patch for service $Service." }
@@ -542,25 +543,37 @@ function Resolve-LocalSqlBootTool {
 # 建库与 deploy/mysql-init 同口径:已有卷不会重跑 initdb,这里幂等补齐。gateway 的表同样补,脚本本身可重复执行。
 function Initialize-LocalSqlBootDatabases {
     param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$RepoRoot, [string[]]$Requested = @())
-    $statements = foreach ($schema in $Settings.ProtectedSchemas) {
+    $statements = foreach ($schema in $Settings.LogicalDatabases) {
         $identifier = ConvertTo-AuthoritySqlIdentifier $schema
         if ($schema -ceq 'mmorpg' -or $schema -cin $Settings.PlayerDatabases) { "CREATE DATABASE IF NOT EXISTS $identifier;" }
         else { "CREATE DATABASE IF NOT EXISTS $identifier DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" }
     }
     $null = Invoke-LocalSqlBootSql -Settings $Settings -Sql (($statements -join "`n") + "`n") -Label 'create local databases'
-    if ('gateway' -cin $Requested) {
+    # mmorpg 的闸门表也在这份脚本里:网关和 login 的写资格都登记在这个库,它们没有自己的 -migrate。
+    if ('gateway' -cin $Requested -or 'login' -cin $Requested) {
         $gatewayTables = [IO.File]::ReadAllText((Join-Path $RepoRoot 'deploy/mysql-init/gateway_tables.sql'))
         $null = Invoke-LocalSqlBootSql -Settings $Settings -Sql $gatewayTables -Label 'create gateway tables'
     }
 }
 
-# fresh:库是空的,跑 -migrate。ready:权威表齐全,跳过(-migrate 拒绝已有表)。partial:半成品或旧布局,不替人删数据。
+# data_service -migrate 一次建目录各片和流水库。fresh:这些库全是空的,跑 -migrate。ready:每个库的权威表都齐,跳过(-migrate 拒绝已有表)。
+# partial:半成品或旧布局,不替人删数据。
 function Get-LocalSqlBootGlobalSchemaState {
     param([Parameter(Mandatory)]$Settings)
-    $rows = @(Invoke-LocalSqlBootSql -Settings $Settings -Sql "SELECT table_name FROM information_schema.tables WHERE table_schema='$($Settings.GlobalSchema)';" -Label 'inspect the global schema')
-    if ($rows.Count -eq 0) { return [pscustomobject]@{ State = 'fresh'; Missing = @() } }
-    $missing = @(Get-LocalSqlBootAuthorityTables | Where-Object { $_ -cnotin $rows })
-    return [pscustomobject]@{ State = $(if ($missing.Count -eq 0) { 'ready' } else { 'partial' }); Missing = $missing }
+    $databases = @($Settings.DirectoryShards) + @($Settings.LedgerSchema)
+    $empty = 0
+    $missing = [Collections.Generic.List[string]]::new()
+    foreach ($database in $databases) {
+        $rows = @(Invoke-LocalSqlBootSql -Settings $Settings -Sql "SELECT table_name FROM information_schema.tables WHERE table_schema='$database';" -Label "inspect $database")
+        if ($rows.Count -eq 0) {
+            $empty++
+            $missing.Add("$database (empty)")
+            continue
+        }
+        foreach ($table in @(Get-LocalSqlBootAuthorityTables | Where-Object { $_ -cnotin $rows })) { $missing.Add("$database.$table") }
+    }
+    if ($empty -eq $databases.Count) { return [pscustomobject]@{ State = 'fresh'; Missing = @() } }
+    return [pscustomobject]@{ State = $(if ($missing.Count -eq 0) { 'ready' } else { 'partial' }); Missing = $missing.ToArray() }
 }
 
 function Invoke-LocalSqlBootServiceMigration {
@@ -583,7 +596,16 @@ function Invoke-LocalSqlBootServiceMigration {
     if ($result.Code -ne 0) { throw "$Service -migrate failed (exit code $($result.Code)): $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Err + [string]$result.Out))" }
 }
 
+# 存档库名到编号(placement.StorageIDFromDBName):zone_<n>_db、player_store_<n>_db。
+function Get-LocalSqlBootStorageId {
+    param([Parameter(Mandatory)][string]$Database)
+    $match = [regex]::Match($Database, '\A(?:zone|player_store)_(?<id>[1-9][0-9]*)_db\z')
+    if (-not $match.Success) { throw "$Database is not a canonical player database name." }
+    return $match.Groups['id'].Value
+}
+
 # go/db 的正式入口是 cmd/migrate,不走 authoritysql。退出码 4 = 迁移成功、有待人工过目的漂移(cmd/migrate/main.go),不拦。
+# 白名单里每个存档库都迁:data_service 的写资格要覆盖全部存档库,没有闸门表的库注册不了。本 zone 的库按 ZoneId 推导,其余给 -storage-id。
 function Invoke-LocalSqlBootDbMigration {
     param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$WorkDirectory)
     $tool = Resolve-LocalSqlBootTool -RepoRoot $RepoRoot -Name 'db_migrate'
@@ -591,11 +613,15 @@ function Invoke-LocalSqlBootDbMigration {
     $source = [IO.File]::ReadAllText((Get-LocalSqlBootSourceConfigPath -RepoRoot $RepoRoot -Service 'db'))
     Write-LocalSqlBootText -Path $config -Text (ConvertTo-LocalSqlBootConfig -Settings $Settings -Service 'db' -Content $source -User $Settings.RootUser -Password $Settings.RootPassword)
     $workingDirectory = [IO.Path]::GetFullPath((Join-Path $RepoRoot 'go/db'))
-    $result = Invoke-LocalSqlBootProcess -FilePath $tool -Arguments @('-f', $config, '-command', 'up') -Environment @{ DB_ALLOWED_DATABASES = ($Settings.PlayerDatabases -join ',') } -WorkingDirectory $workingDirectory -TimeoutSeconds 600
-    if ($result.Code -eq 4) {
-        Write-Warning "go/db migrate reported drift that needs manual review: $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Out))"
-    } elseif ($result.Code -ne 0) {
-        throw "go/db migrate failed (exit code $($result.Code)): $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Err + [string]$result.Out))"
+    foreach ($database in @($Settings.PlayerDatabases)) {
+        $arguments = @('-f', $config, '-command', 'up')
+        if ($database -cne $Settings.ZoneDatabase) { $arguments += @('-storage-id', (Get-LocalSqlBootStorageId -Database $database)) }
+        $result = Invoke-LocalSqlBootProcess -FilePath $tool -Arguments $arguments -Environment @{ DB_ALLOWED_DATABASES = ($Settings.PlayerDatabases -join ',') } -WorkingDirectory $workingDirectory -TimeoutSeconds 600
+        if ($result.Code -eq 4) {
+            Write-Warning "go/db migrate of $database reported drift that needs manual review: $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Out))"
+        } elseif ($result.Code -ne 0) {
+            throw "go/db migrate of $database failed (exit code $($result.Code)): $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Err + [string]$result.Out))"
+        }
     }
 }
 
@@ -634,22 +660,54 @@ function Invoke-LocalSqlBootMigrations {
     return $skipped.ToArray()
 }
 
+# 每个写者服务要写的逻辑库:闸门跟着库走,按库各注册一份。
+# login 没有自己的库,它的目录条目只为领每 boot 配置,挂在网关那个库上。go/db 只取已经建好闸门表的落点库(cmd/migrate 建的);本 zone 库必须在。
+# data_service 恰好是目录各片、流水库和全部存档库(Config.WriterSchemas),多一份少一份都拒绝启动。
+function Get-LocalSqlBootWriterDatabases {
+    param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$Service, [Parameter(Mandatory)][hashtable]$TablesBySchema)
+    switch -CaseSensitive ($Service) {
+        'data_service' {
+            foreach ($database in @($Settings.PlayerDatabases)) {
+                if (@($TablesBySchema[$database]) -cnotcontains 'route_meta') { throw "$database has no writer gate tables; go/db cmd/migrate has not completed." }
+            }
+            return @($Settings.DirectoryShards) + @($Settings.LedgerSchema) + @($Settings.PlayerDatabases)
+        }
+        'gateway' { return @('mmorpg') }
+        'login' { return @('mmorpg') }
+        'db' {
+            $ready = @($Settings.PlayerDatabases | Where-Object { @($TablesBySchema[$_]) -ccontains 'route_meta' })
+            if ($Settings.ZoneDatabase -cnotin $ready) { throw "$($Settings.ZoneDatabase) has no writer gate tables; go/db cmd/migrate has not completed." }
+            return $ready
+        }
+    }
+    return @("mmorpg_$Service")
+}
+
+# 读一个逻辑库的闸门元行。schema 账号的 -migrate 种的行,没有就是迁移没跑完。
 function Get-LocalSqlBootRouteMeta {
-    param([Parameter(Mandatory)]$Settings)
-    $schema = ConvertTo-AuthoritySqlIdentifier $Settings.GlobalSchema
-    $rows = @(Invoke-LocalSqlBootSql -Settings $Settings -Sql "SELECT generation,writable,writer_epoch,LENGTH(freeze_run_id) FROM $schema.``route_meta`` WHERE id=1;" -Label 'read route_meta')
-    if ($rows.Count -ne 1) { throw 'route_meta has no seed row; data_service -migrate has not completed.' }
+    param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$Database)
+    $schema = ConvertTo-AuthoritySqlIdentifier $Database
+    $rows = @(Invoke-LocalSqlBootSql -Settings $Settings -Sql "SELECT generation,writable,writer_epoch,LENGTH(freeze_run_id) FROM $schema.``route_meta`` WHERE id=1;" -Label "read route_meta of $Database")
+    if ($rows.Count -ne 1) { throw "route_meta of $Database has no seed row; its schema migration has not completed." }
     $fields = $rows[0].Split("`t")
     $epoch = [uint64]0
     if ($fields.Count -ne 4 -or $fields[0] -cnotmatch '^[0-9a-fA-F]{1,32}$' -or -not [uint64]::TryParse($fields[2], [ref]$epoch) -or $epoch -eq 0) { throw 'route_meta seed row has an unexpected shape.' }
     # 冻结或未释放的维护 run 里不能发普通授权,Register 也会拒绝;这里先报清楚。
-    if ($fields[1] -cne '1' -or $fields[3] -cne '0') { throw 'route_meta is frozen by a maintenance run; refusing to register writers.' }
+    if ($fields[1] -cne '1' -or $fields[3] -cne '0') { throw "route_meta of $Database is frozen by a maintenance run; refusing to register writers." }
     return [pscustomobject]@{ Generation = $fields[0]; WriterEpoch = $epoch }
+}
+
+# 一批实例要写的全部逻辑库的闸门元行。
+function Get-LocalSqlBootMetaByDatabase {
+    param([Parameter(Mandatory)]$Settings, [string[]]$Databases = @())
+    $meta = @{}
+    foreach ($database in @($Databases | Select-Object -Unique)) { $meta[$database] = Get-LocalSqlBootRouteMeta -Settings $Settings -Database $database }
+    return $meta
 }
 
 function Get-LocalSqlBootTablesBySchema {
     param([Parameter(Mandatory)]$Settings)
-    $names = ($Settings.ProtectedSchemas | ForEach-Object { "'$_'" }) -join ','
+    $names = ($Settings.LogicalDatabases | ForEach-Object { "'$_'" }) -join ','
     $rows = @(Invoke-LocalSqlBootSql -Settings $Settings -Sql "SELECT table_schema,table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema IN ($names);" -Label 'list business tables')
     $tables = @{}
     foreach ($row in $rows) {
@@ -661,44 +719,30 @@ function Get-LocalSqlBootTablesBySchema {
     return $tables
 }
 
-# 每个写者能碰什么。本库 DML;跨库按常驻代码实际访问的表(MySQL 的 SELECT ... FOR UPDATE 除 SELECT 外还要 UPDATE,所以锁读授 SELECT,UPDATE)。
-# data_service 的角色交易证明要锁多个域的多张表,按库放开、逐表枚举,域里加表不用改这里;模板要求逐表 GRANT,没有 schema.*。
+# 每个写者能碰什么:只有自己的库的 DML,不跨库。唯一的例外是 data_service 在存档库的那部分:
+# 建角、判死、过户证明写 player_store,空路由启动判据读 player_centre_database 和 user_accounts(route_bootstrap.go)。模板要求逐表 GRANT,没有 schema.*。
 function Get-LocalSqlBootGrantManifest {
     param([Parameter(Mandatory)]$Settings)
-    $authority = $Settings.GlobalSchema
     $read = @('SELECT')
-    $lock = @('SELECT', 'UPDATE')
     $write = @('SELECT', 'INSERT', 'UPDATE', 'DELETE')
     $dataServiceCross = [Collections.Generic.List[object]]::new()
-    foreach ($schema in @('mmorpg_guild', 'mmorpg_mail', 'mmorpg_match', 'mmorpg_player_inbox', 'mmorpg_trade')) { $dataServiceCross.Add(@{ Schema = $schema; Operations = $lock }) }
-    foreach ($schema in $Settings.PlayerDatabases) { $dataServiceCross.Add(@{ Schema = $schema; Operations = $write }) }
+    foreach ($schema in $Settings.PlayerDatabases) {
+        $dataServiceCross.Add(@{ Schema = $schema; Tables = @('player_store'); Operations = $write })
+        $dataServiceCross.Add(@{ Schema = $schema; Tables = @('player_centre_database', 'user_accounts'); Operations = $read })
+    }
     return @{
-        data_service = @{ Own = @($authority); Cross = $dataServiceCross.ToArray() }
-        db = @{ Own = @($Settings.ZoneDatabase); Cross = @(@{ Schema = $authority; Tables = @('player_route'); Operations = $read }) }
+        data_service = @{ Own = @(@($Settings.DirectoryShards) + @($Settings.LedgerSchema)); Cross = $dataServiceCross.ToArray() }
+        db = @{ Own = @($Settings.PlayerDatabases); Cross = @() }
         login = @{ Own = @(); Cross = @() }
         gateway = @{ Own = @('mmorpg'); Cross = @() }
-        chat = @{ Own = @('mmorpg_chat'); Cross = @(@{ Schema = $authority; Tables = @('account_role', 'player_route'); Operations = $read }) }
-        friend = @{ Own = @('mmorpg_friend'); Cross = @(@{ Schema = $authority; Tables = @('account_role'); Operations = $lock }) }
-        guild = @{ Own = @('mmorpg_guild'); Cross = @(
-                @{ Schema = $authority; Tables = @('account_role', 'player_route'); Operations = $lock }
-                @{ Schema = 'mmorpg_match'; Tables = @('match_authority_ticket', 'team_launch', 'team_launch_role'); Operations = $lock }
-                @{ Schema = 'mmorpg_match'; Tables = @('match_battle_completion'); Operations = $read }
-            )
-        }
-        mail = @{ Own = @('mmorpg_mail'); Cross = @(
-                @{ Schema = $authority; Tables = @('account_role'); Operations = $lock }
-                @{ Schema = 'mmorpg_guild'; Tables = @('guild_member'); Operations = $read }
-            )
-        }
+        chat = @{ Own = @('mmorpg_chat'); Cross = @() }
+        friend = @{ Own = @('mmorpg_friend'); Cross = @() }
+        guild = @{ Own = @('mmorpg_guild'); Cross = @() }
+        mail = @{ Own = @('mmorpg_mail'); Cross = @() }
         rank = @{ Own = @('mmorpg_rank'); Cross = @() }
-        match = @{ Own = @('mmorpg_match'); Cross = @(
-                @{ Schema = $authority; Tables = @('account_role', 'account_role_admission', 'player_route'); Operations = $lock }
-                @{ Schema = $authority; Tables = @('zone_merged_into'); Operations = $read }
-                @{ Schema = 'mmorpg_guild'; Tables = @('guild_trial_launch', 'guild_trial_launch_role', 'guild_trial_lobby', 'guild_trial_lobby_slot'); Operations = $read }
-            )
-        }
-        trade = @{ Own = @('mmorpg_trade'); Cross = @(@{ Schema = $authority; Tables = @('account_role'); Operations = $lock }) }
-        player_inbox = @{ Own = @('mmorpg_player_inbox'); Cross = @(@{ Schema = $authority; Tables = @('account_role', 'account_role_admission', 'player_route'); Operations = $lock }) }
+        match = @{ Own = @('mmorpg_match'); Cross = @() }
+        trade = @{ Own = @('mmorpg_trade'); Cross = @() }
+        player_inbox = @{ Own = @('mmorpg_player_inbox'); Cross = @() }
     }
 }
 
@@ -770,6 +814,7 @@ function New-LocalSqlBootAccountName {
 
 # 为一个实例备齐注册原件:私有配置、环境值、正式 Request 与单条目 roster。不碰数据库。
 # 账号每次启动都换新:writer_registry.sql_principal 永久唯一,主体不能复用。
+# 实例要写的每个逻辑库一份 Request,身份和账号相同;writer_authority 把它们注册在各自的库,grant 写成一个集合。
 function New-LocalSqlBootInstanceFiles {
     param(
         [Parameter(Mandatory)]$Settings,
@@ -777,7 +822,8 @@ function New-LocalSqlBootInstanceFiles {
         [Parameter(Mandatory)]$Instance,
         [Parameter(Mandatory)][string]$BootRoot,
         [Parameter(Mandatory)][string]$BootId,
-        [Parameter(Mandatory)]$Meta,
+        [Parameter(Mandatory)][string[]]$Databases,
+        [Parameter(Mandatory)][hashtable]$MetaByDatabase,
         [Parameter(Mandatory)][string]$PhysicalSha256,
         [Parameter(Mandatory)][string]$QualificationFile
     )
@@ -818,29 +864,38 @@ function New-LocalSqlBootInstanceFiles {
     $qualificationCopy = Join-Path $inputRoot 'lock-qualification.original'
     [IO.File]::Copy($QualificationFile, $qualificationCopy)
     $deploymentId = "local-$BootId-$key"
-    $request = [ordered]@{
-        requestId = (New-LocalSqlBootIdentity)
-        kind = 'REGISTER'
-        writer = [ordered]@{
-            writerKey = (New-LocalSqlBootIdentity)
-            generation = $Meta.Generation
-            instanceId = (New-LocalSqlBootIdentity)
-            sqlPrincipal = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($principal))
-            state = 'ACTIVE'
-            registeredMs = [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $writerKey = New-LocalSqlBootIdentity
+    $instanceId = New-LocalSqlBootIdentity
+    $registeredMs = [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $requests = [Collections.Generic.List[object]]::new()
+    $registrations = [Collections.Generic.List[object]]::new()
+    foreach ($database in $Databases) {
+        $meta = $MetaByDatabase[$database]
+        $request = [ordered]@{
+            requestId = (New-LocalSqlBootIdentity)
+            kind = 'REGISTER'
+            writer = [ordered]@{
+                writerKey = $writerKey
+                generation = $meta.Generation
+                instanceId = $instanceId
+                sqlPrincipal = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($principal))
+                state = 'ACTIVE'
+                registeredMs = $registeredMs
+            }
+            authoritySchema = $database
+            protectedSchemas = [string[]]@($database)
+            deploymentDigest = (ConvertTo-LocalSqlBootBase64 -Hex $PhysicalSha256)
+            deploymentId = $deploymentId
+            lockPrimitive = $Settings.LockPrimitive
+            lockQualificationSha256 = (ConvertTo-LocalSqlBootBase64 -Hex (Get-MaintenanceSha256 -Path $qualificationCopy))
         }
-        expectedEpoch = [string]$Meta.WriterEpoch
-        authoritySchema = $Settings.GlobalSchema
-        protectedSchemas = [string[]]$Settings.ProtectedSchemas
-        deploymentDigest = (ConvertTo-LocalSqlBootBase64 -Hex $PhysicalSha256)
-        deploymentId = $deploymentId
-        lockPrimitive = $Settings.LockPrimitive
-        lockQualificationSha256 = (ConvertTo-LocalSqlBootBase64 -Hex (Get-MaintenanceSha256 -Path $qualificationCopy))
+        $requestFile = Join-Path $inputRoot "request.$database.json"
+        $requestSha256 = Write-MaintenanceImmutableJson -Path $requestFile -Value $request
+        $requests.Add($request)
+        $registrations.Add([pscustomobject]@{ Database = $database; RequestFile = $requestFile; RequestSha256 = $requestSha256 })
     }
-    $requestFile = Join-Path $inputRoot 'request.json'
-    $requestSha256 = Write-MaintenanceImmutableJson -Path $requestFile -Value $request
     $entry = [ordered]@{
-        request = $request
+        requests = [object[]]$requests.ToArray()
         runtimeConfigPath = 'runtime.yaml'
         runtimeConfigSha256 = (ConvertTo-LocalSqlBootBase64 -Hex (Get-MaintenanceSha256 -Path $inputConfig))
     }
@@ -851,7 +906,7 @@ function New-LocalSqlBootInstanceFiles {
     return [pscustomobject]@{
         InstanceKey = $key; Service = $service; User = $user; Password = $password; Principal = $principal
         InputRoot = $inputRoot; RosterFile = $rosterFile; RosterSha256 = $rosterSha256
-        RequestFile = $requestFile; RequestSha256 = $requestSha256; QualificationFile = $qualificationCopy
+        Registrations = [object[]]$registrations.ToArray(); QualificationFile = $qualificationCopy
         GrantFile = (Join-Path $grantDirectory 'boot-grant.json'); RuntimeFile = (Join-Path $runtimeDirectory "$key.yaml")
         EnvironmentDirectory = $environmentDirectory; EnvironmentNames = [string[]]$environmentNames.ToArray()
         ConsumeDirectory = $consumeDirectory; DeploymentId = $deploymentId
@@ -871,34 +926,38 @@ function New-LocalSqlBootAccountSql {
     $templateRoot = Join-Path $RepoRoot 'deploy/sql'
     $rootAccount = ConvertTo-AuthoritySqlAccount $Settings.RootPrincipal
     $builder = [Text.StringBuilder]::new()
-    $operatorDone = $false
+    foreach ($operator in @($Operators.registrar, $Operators.maintenance)) {
+        $account = ConvertTo-AuthoritySqlAccount $operator.principal
+        $null = $builder.AppendLine("CREATE USER IF NOT EXISTS $account IDENTIFIED BY '$($operator.password)';")
+        $null = $builder.AppendLine("ALTER USER $account IDENTIFIED BY '$($operator.password)';")
+    }
+    # 注册、维护账号按逻辑库授权,每个库一遍。闸门表的权限也按库:写者只看得见自己要写的库的闸门。
+    $operatorDone = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($item in $Prepared) {
         $tables = @(Get-LocalSqlBootInstanceTables -Grant $Manifest[$item.Service] -TablesBySchema $TablesBySchema)
-        $roles = ConvertTo-AuthorityRoleSql -TemplateRoot $templateRoot -Plan @{
-            authoritySchema = $Settings.GlobalSchema
-            runtimePrincipal = $item.Principal
-            registrarPrincipal = $Operators.registrar.principal
-            maintenancePrincipal = $Operators.maintenance.principal
-            schemaPrincipal = $Settings.RootPrincipal
-            registrationRequestFile = $item.RequestFile
-            registrationRequestSha256 = $item.RequestSha256
-            lockQualificationFile = $item.QualificationFile
-            tables = $tables
-            schemaDatabases = @($Settings.GlobalSchema)
-        }
-        if (-not $operatorDone) {
-            foreach ($operator in @($Operators.registrar, $Operators.maintenance)) {
-                $account = ConvertTo-AuthoritySqlAccount $operator.principal
-                $null = $builder.AppendLine("CREATE USER IF NOT EXISTS $account IDENTIFIED BY '$($operator.password)';")
-                $null = $builder.AppendLine("ALTER USER $account IDENTIFIED BY '$($operator.password)';")
-            }
-            foreach ($line in ($roles.operator -split '\r?\n')) {
-                if (-not $line.EndsWith(" TO $rootAccount;")) { $null = $builder.AppendLine($line) }
-            }
-            $operatorDone = $true
-        }
         $null = $builder.AppendLine("CREATE USER IF NOT EXISTS $(ConvertTo-AuthoritySqlAccount $item.Principal) IDENTIFIED BY '$($item.Password)';")
-        $null = $builder.AppendLine($roles.runtime)
+        foreach ($registration in @($item.Registrations)) {
+            $roles = ConvertTo-AuthorityRoleSql -TemplateRoot $templateRoot -Plan @{
+                authoritySchema = $registration.Database
+                directorySchema = $Settings.DirectorySchema
+                directoryShard = ($registration.Database -cin @($Settings.DirectoryShards))
+                runtimePrincipal = $item.Principal
+                registrarPrincipal = $Operators.registrar.principal
+                maintenancePrincipal = $Operators.maintenance.principal
+                schemaPrincipal = $Settings.RootPrincipal
+                registrationRequestFile = $registration.RequestFile
+                registrationRequestSha256 = $registration.RequestSha256
+                lockQualificationFile = $item.QualificationFile
+                tables = $tables
+                schemaDatabases = @($registration.Database)
+            }
+            if ($operatorDone.Add($registration.Database)) {
+                foreach ($line in ($roles.operator -split '\r?\n')) {
+                    if (-not $line.EndsWith(" TO $rootAccount;")) { $null = $builder.AppendLine($line) }
+                }
+            }
+            $null = $builder.AppendLine($roles.runtime)
+        }
     }
     return $builder.ToString()
 }
@@ -909,7 +968,7 @@ function New-LocalSqlBootControlEnvironment {
     return @{
         MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256 = $PhysicalSha256
         MMORPG_SQL_OPERATOR_PRINCIPAL = $Operators.registrar.principal
-        MMORPG_SQL_REGISTRAR_DSN = (New-LocalSqlBootDsn -User $Operators.registrar.user -Password $Operators.registrar.password -Endpoint $Settings.Endpoint -Database $Settings.GlobalSchema)
+        MMORPG_SQL_REGISTRAR_DSN = (New-LocalSqlBootDsn -User $Operators.registrar.user -Password $Operators.registrar.password -Endpoint $Settings.Endpoint -Database $Settings.DirectorySchema)
         MMORPG_SQL_BACKEND = $Settings.Backend
     }
 }
@@ -1049,7 +1108,6 @@ function New-LocalSqlBootCatalog {
 
         Initialize-LocalSqlBootDatabases -Settings $settings -RepoRoot $repo -Requested $requested
         $skipped = @(Invoke-LocalSqlBootMigrations -Settings $settings -RepoRoot $repo -Requested $requested -WorkDirectory $schemaWork)
-        $meta = Get-LocalSqlBootRouteMeta -Settings $settings
         $tablesBySchema = Get-LocalSqlBootTablesBySchema -Settings $settings
 
         $instances = @(Get-LocalSqlBootInstancePlan -Settings $settings -RepoRoot $repo -Requested @($requested | Where-Object { $_ -cnotin $skipped }) -WorkDirectory $bootRoot)
@@ -1065,8 +1123,11 @@ function New-LocalSqlBootCatalog {
             $physical = Get-LocalSqlBootPhysicalAuthority -Settings $settings -PrivateRoot $root
             $qualification = Get-LocalSqlBootLockQualification -Settings $settings -PrivateRoot $root
             $operators = Get-LocalSqlBootOperators -PrivateRoot $root
+            $databasesByInstance = @{}
+            foreach ($instance in $pending) { $databasesByInstance[$instance.InstanceKey] = @(Get-LocalSqlBootWriterDatabases -Settings $settings -Service $instance.Service -TablesBySchema $tablesBySchema) }
+            $metaByDatabase = Get-LocalSqlBootMetaByDatabase -Settings $settings -Databases @($databasesByInstance.Values | ForEach-Object { $_ })
             $prepared = @(foreach ($instance in $pending) {
-                    New-LocalSqlBootInstanceFiles -Settings $settings -RepoRoot $repo -Instance $instance -BootRoot $bootRoot -BootId $bootId -Meta $meta -PhysicalSha256 $physical -QualificationFile $qualification
+                    New-LocalSqlBootInstanceFiles -Settings $settings -RepoRoot $repo -Instance $instance -BootRoot $bootRoot -BootId $bootId -Databases $databasesByInstance[$instance.InstanceKey] -MetaByDatabase $metaByDatabase -PhysicalSha256 $physical -QualificationFile $qualification
                 })
             # 先记账再建账号:中途失败时下一轮也能按记录清掉,DROP USER IF EXISTS 对没建成的账号是空操作。
             $accountRecords = @($accountPlan.Keep) + @($prepared | ForEach-Object { [pscustomobject]@{ principal = $_.Principal; instanceKey = $_.InstanceKey } })

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"trade/internal/commerce"
 	"trade/internal/config"
 	"trade/internal/constants"
 	"trade/internal/data"
@@ -18,7 +19,10 @@ import (
 	base "proto/common/base"
 	tradepb "proto/trade"
 
+	"shared/generated/pb/table"
 	"shared/placement"
+	"shared/rolefence"
+	"shared/serverbase"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -328,6 +332,26 @@ func browseRequest() *tradepb.BrowseListingsRequest {
 // ---------------------------------------------------------------------------
 // 无会话
 // ---------------------------------------------------------------------------
+
+// 规格 §3.6:自愈读不到目录、目录里没有这名角色时事务已回滚,回非故障 tip,RootAdmission 不能打 Hold。真正的故障照旧。
+func TestCommerceCodeRoleFenceFailuresAreNotFaults(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err  error
+		want uint32
+	}{
+		"目录读不到":  {errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")), uint32(commerce.ErrConflict)},
+		"目录里没有":  {&rolefence.RoleNotFoundError{Players: []uint64{11}}, uint32(table.TradeError_kTradeCounterpartyUnknown)},
+		"角色冲突照旧": {commerce.ErrConflict, uint32(commerce.ErrConflict)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			code := commerceCode(tc.err)
+			require.Equal(t, tc.want, code)
+			require.Equal(t, serverbase.VerdictBizReject, serverbase.TipVerdict(code), "不能是故障码")
+		})
+	}
+	require.Equal(t, constants.ErrServiceUnavailable, commerceCode(errors.New("db down")))
+	require.Equal(t, serverbase.VerdictFault, serverbase.TipVerdict(commerceCode(errors.New("db down"))))
+}
 
 func TestClientMethodsWithoutSessionRejected(t *testing.T) {
 	for name, ctx := range map[string]context.Context{

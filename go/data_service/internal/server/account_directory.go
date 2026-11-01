@@ -32,6 +32,14 @@ func directoryError(err error) error {
 		return nil
 	}
 	switch {
+	case errors.Is(err, accountdirectory.ErrNotCommitted):
+		// 排在最前:它包着原因,原因可能也是别的哨兵。login 收到这个码才释放名字,所以提交结局未知的错误绝不能走到这里。
+		logx.Errorf("[account-directory] create failed before the commit point: %v", err)
+		return status.Error(codes.Aborted, "账号角色未提交")
+	case errors.Is(err, accountdirectory.ErrRetryLater):
+		// 排在哨兵前面:它可能包着读失败的原因。这次调用没有结局未知的写,回 Aborted 不打成 Hold(规格 §3.6)。客户端按方法解读这个码,只有建角才算确定没提交。
+		logx.Infof("[account-directory] unfinished, the caller replays the same request: %v", err)
+		return status.Error(codes.Aborted, "account directory operation unfinished, replay the same request")
 	case errors.Is(err, accountdirectory.ErrInvalid):
 		return status.Error(codes.InvalidArgument, "账号目录参数非法")
 	case errors.Is(err, accountdirectory.ErrMissing):
@@ -54,8 +62,8 @@ func observeDirectoryRPC(rpc string, start time.Time, err *error) {
 
 // directoryRPCResult 按 handler 实际回给调用方的 gRPC code 归类,与 admitDirectory / admitRoleTrade / directoryError 的映射一一对应:
 // NotFound(ErrMissing)→ not_found;PermissionDenied(调用证明无效)、InvalidArgument(ErrInvalid)、ResourceExhausted(ErrFull)、
-// FailedPrecondition(ErrConflict)是明确拒绝 → rejected;Unavailable(目录未就绪、SQL 依赖失败)与其余一切
-// (调用方取消 / 超时等)→ error。
+// FailedPrecondition(ErrConflict)是明确拒绝 → rejected;Unavailable(目录未就绪、SQL 依赖失败)、
+// Aborted(ErrNotCommitted 是提交点之前的依赖失败,ErrRetryLater 是投票问不齐、收尾没做完)与其余一切(调用方取消 / 超时等)→ error。
 func directoryRPCResult(err error) string {
 	switch status.Code(err) {
 	case codes.OK:

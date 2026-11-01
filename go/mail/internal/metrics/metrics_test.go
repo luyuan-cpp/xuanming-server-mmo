@@ -22,14 +22,15 @@ func TestPrebuiltZeroSeries(t *testing.T) {
 		got[mf.GetName()] = len(mf.GetMetric())
 	}
 	for name, want := range map[string]int{
-		"mail_admin_send_total":          3 * 7 * 5, // method × sender_kind × outcome
-		"mail_push_total":                4,
-		"mail_claim_short_circuit_total": 1,
-		"mail_list_truncated_total":      1,
-		"mail_sweep_candidate_rows":      3 * 2, // table × mode
-		"mail_sweep_deleted_total":       3,
-		"mail_sweep_invalid_rows_total":  3,
-		"mail_sweep_last_run_unixtime":   1,
+		"mail_admin_send_total":            3 * 7 * 5, // method × sender_kind × outcome
+		"mail_push_total":                  4,
+		"mail_claim_short_circuit_total":   1,
+		"mail_list_truncated_total":        1,
+		"mail_guild_lookup_failures_total": 1,
+		"mail_sweep_candidate_rows":        3 * 2, // table × mode
+		"mail_sweep_deleted_total":         3,
+		"mail_sweep_invalid_rows_total":    3,
+		"mail_sweep_last_run_unixtime":     1,
 	} {
 		assert.Equal(t, want, got[name], "%s 应恰好预建 %d 条序列", name, want)
 	}

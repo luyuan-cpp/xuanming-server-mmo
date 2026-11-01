@@ -14,11 +14,11 @@ import (
 	"time"
 
 	base "proto/common/base"
-	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	pb "proto/guild"
 	matchpb "proto/match"
-	teampb "proto/team"
+	"shared/rolefence"
+	"shared/rolefence/fencetest"
 	"shared/roleidentity"
 
 	"github.com/alicebob/miniredis/v2"
@@ -26,11 +26,18 @@ import (
 	"github.com/luyuancpp/proto2mysql"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 )
 
-// 只建删本例随机库，所有表来自正式PB；本例验证guild提交接缝，DS真实Begin并发由目录跨域例覆盖。
+// 只建删本例随机库，所有表来自正式PB；本例验证guild提交接缝。
+// 用例直接改副本行摆状态,自愈读回副本现状,不改变任何东西;真正从目录自愈的路径见 role_fence_tidb_test.go。match 上的占用是替身。
 func guildRoleTiDB(t *testing.T) (context.Context, *sql.DB, *GuildRepo, *ActivityRepo) {
+	t.Helper()
+	ctx, _, db, repo, activities := guildRoleTiDBWithInstall(t)
+	return ctx, db, repo, activities
+}
+
+// guildRoleTiDBWithInstall 多回一条建表账号的连接:写者账号只有 DML,用例要破坏表结构时用它。
+func guildRoleTiDBWithInstall(t *testing.T) (context.Context, *sql.DB, *sql.DB, *GuildRepo, *ActivityRepo) {
 	t.Helper()
 	dsn := os.Getenv("GUILD_ROLE_TEST_DSN")
 	if dsn == "" {
@@ -57,89 +64,46 @@ func guildRoleTiDB(t *testing.T) (context.Context, *sql.DB, *GuildRepo, *Activit
 	require.NoError(t, err)
 	fixture, err := sqltest.New(ctx, t, opts)
 	require.NoError(t, err)
-	db, err := fixture.OpenSchema(ctx, schema)
+	install, err := fixture.OpenSchema(ctx, schema)
 	require.NoError(t, err)
 	model := proto2mysql.NewDB()
-	require.NoError(t, model.OpenDB(db, schema))
-	tables := append(Tables(), []proto.Message{&dbpb.AccountRole{}, &matchpb.MatchAuthorityTicketRecord{}, &matchpb.MatchBattleCompletionRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRoleRecord{}}...)
+	require.NoError(t, model.OpenDB(install, schema))
+	tables := Tables()
 	for _, row := range tables {
 		model.RegisterTable(row)
 		require.NoError(t, model.CreateOrUpdateTable(row))
 	}
-	createGuildRouteFixture(t, ctx, db)
+	require.NoError(t, rolefence.EnsureSchema(ctx, install))
 	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
-	require.NoError(t, fixture.GrantTables(ctx, schema, "route_meta", "player_route", "zone_merged_into"))
-	db, err = fixture.Open(ctx, schema, 8)
+	require.NoError(t, fixture.GrantTables(ctx, schema, rolefence.TableName))
+	db, err := fixture.Open(ctx, schema, 8)
 	require.NoError(t, err)
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { require.NoError(t, rdb.Close()) })
 	repo := NewGuildRepo(rdb, db, time.Minute)
-	require.NoError(t, repo.ConfigureRoleAuthority(schema, authoritysql.BackendTiDB))
-	require.NoError(t, repo.ConfigureMatchAuthority(schema, authoritysql.BackendTiDB))
+	require.NoError(t, repo.ConfigureRoleFence(fencetest.ReplicaReader{DB: db}, authoritysql.BackendTiDB))
+	repo.BindTrialOccupancy(&fakeTrialOccupancy{})
 	activities, err := NewActivityRepo(repo)
 	require.NoError(t, err)
-	return ctx, db, repo, activities
-}
-
-// 巡检器读 match 的 SQL 终局:COMPLETE 原样读回原字节(protobuf 字节,不是文本);ABORT 没有 battle 原字节,等于没有结果,
-// 走超时语义;没有行同样是没有结果;SQL 故障必须报错,不能伪装成没有结果。
-func TestTiDBTrialResultRecordsReadMatchTerminal(t *testing.T) {
-	ctx, db, repo, _ := guildRoleTiDB(t)
-	_, err := NewTrialResultRecords(nil)
-	require.Error(t, err)
-	_, err = NewTrialResultRecords(NewGuildRepo(nil, db, time.Minute))
-	require.Error(t, err, "没配 MatchAuthoritySchema 不能装配")
-	records, err := NewTrialResultRecords(repo)
-	require.NoError(t, err)
-
-	const completed, aborted, absent uint64 = 9_007_199_254_741_001, 9_007_199_254_741_002, 9_007_199_254_741_003
-	payload := []byte{0x08, 0x00, 0xff, 0x10, 0x01}
-	insert := func(battle uint64, raw []byte, decision matchpb.BattleOutcomeDecision) {
-		_, err := db.ExecContext(ctx, "INSERT INTO match_battle_completion(battle_id,raw_payload,payload_digest,format_version,archived_ms,source_topic,source_partition,source_offset,decision,source_kind,placement_operation_id,target_instance_id,outcome_protocol_version,result_published,next_retry_ms) VALUES(?,?,?,1,1,'',0,0,?,2,'op','instance',1,0,0)",
-			battle, raw, []byte{1}, uint32(decision))
-		require.NoError(t, err)
-	}
-	insert(completed, payload, matchpb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE)
-	insert(aborted, []byte{}, matchpb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT)
-
-	got, found, err := records.Load(ctx, completed)
-	require.NoError(t, err)
-	require.True(t, found)
-	require.Equal(t, payload, got)
-	for _, battle := range []uint64{aborted, absent} {
-		_, found, err = records.Load(ctx, battle)
-		require.NoError(t, err)
-		require.False(t, found, "battle=%d", battle)
-	}
-	_, _, err = records.Load(ctx, 0)
-	require.Error(t, err)
-
-	cancelled, cancel := context.WithCancel(ctx)
-	cancel()
-	_, found, err = records.Load(cancelled, completed)
-	require.Error(t, err, "读不到不是没有结果")
-	require.False(t, found)
+	return ctx, install, db, repo, activities
 }
 
 func TestTiDBGuildCommitRechecksActorAndTrialOriginalsAndRetainsFrozenOwed(t *testing.T) {
 	ctx, db, repo, activities := guildRoleTiDB(t)
 	seedManagedGuild(t, ctx, db, 44, 1, 1, 30, 11, map[uint64]uint32{22: 1})
 	for _, p := range []uint64{11, 22} {
-		_, err := db.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,trade_listing_id) VALUES(?,'seller',?,1,1,0)", p, []byte{})
-		require.NoError(t, err)
+		fencetest.Seed(t, ctx, db, p, "seller", 1)
 	}
 	originalCtx, err := roleidentity.Capture(ctx, &dspb.AccountRoleOwnership{Account: "seller", OwnerRevision: 1, Role: &base.AccountSimplePlayer{PlayerId: 11}})
 	require.NoError(t, err)
 	require.NoError(t, repo.UpdateAnnouncementAuthorized(originalCtx, 44, 11, "original"))
-	_, err = db.ExecContext(ctx, "UPDATE account_role SET account='buyer',owner_revision=2 WHERE player_id=11")
-	require.NoError(t, err)
+	fencetest.Update(t, ctx, db, 11, "buyer", 2, 0)
 	require.ErrorIs(t, repo.UpdateAnnouncementAuthorized(originalCtx, 44, 11, "must-not-commit"), ErrWriteConflict)
 	var text string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT announcement FROM guild WHERE guild_id=44").Scan(&text))
 	require.Equal(t, "original", text)
-	_, err = db.ExecContext(ctx, "UPDATE account_role SET account='seller',owner_revision=1 WHERE player_id=11")
-	require.NoError(t, err)
+	fencetest.Update(t, ctx, db, 11, "seller", 1, 0)
 	battle := actTrialKey(actTrialRow(), 900, 44, 11, testNowMs)
 	battle.LaunchRequestID = 51
 	roster := []*pb.GuildTrialRoleIdentity{{PlayerId: 11, Account: "seller", OwnerRevision: 1}, {PlayerId: 22, Account: "seller", OwnerRevision: 1}}
@@ -147,11 +111,9 @@ func TestTiDBGuildCommitRechecksActorAndTrialOriginalsAndRetainsFrozenOwed(t *te
 	prepared, err := activities.PrepareTrialLaunch(originalCtx, 51, battle, 1, roster, testNowMs)
 	require.NoError(t, err)
 	require.NotNil(t, prepared)
-	_, err = db.ExecContext(ctx, "UPDATE account_role SET account='buyer',owner_revision=2 WHERE player_id=22")
-	require.NoError(t, err)
+	fencetest.Update(t, ctx, db, 22, "buyer", 2, 0)
 	require.ErrorIs(t, activities.RegisterTrialBattle(ctx, battle, testNowMs), ErrWriteConflict)
-	_, err = db.ExecContext(ctx, "UPDATE account_role SET account='seller',owner_revision=1 WHERE player_id=22")
-	require.NoError(t, err)
+	fencetest.Update(t, ctx, db, 22, "seller", 1, 0)
 	require.NoError(t, activities.RegisterTrialBattle(ctx, battle, testNowMs))
 	expired, err := activities.ExpireTrialBattle(ctx, 900, 44, testNowMs+1)
 	require.NoError(t, err)
@@ -177,8 +139,7 @@ func TestTiDBGuildCommitRechecksActorAndTrialOriginalsAndRetainsFrozenOwed(t *te
 	require.Zero(t, active)
 	_, err = db.ExecContext(ctx, "INSERT INTO guild_trial_reward_owed("+owedRewardColumns+") VALUES(22,901,44,3,20231001,?,0,?)", []byte{1}, testNowMs)
 	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, "UPDATE account_role SET trade_listing_id=99 WHERE player_id=22")
-	require.NoError(t, err)
+	fencetest.Update(t, ctx, db, 22, "seller", 1, 99)
 	_, err = activities.ConvertOwedReward(ctx, OwedReward{PlayerID: 22, BattleID: 901, GuildID: 44, ActivityID: 3, PeriodKey: 20231001, Payload: []byte{1}}, 999, testNowMs+3)
 	require.ErrorIs(t, err, ErrWriteConflict)
 	var owed, ops int

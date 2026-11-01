@@ -51,18 +51,17 @@ func TestDecodeRowKeepsBundleUsableWhenPayloadIsBad(t *testing.T) {
 	}
 }
 
-func TestAnalyzeReportsHeldAndFrozen(t *testing.T) {
-	route := Route{FrozenRunID: "run-1"}
+func TestAnalyzeReportsHeld(t *testing.T) {
 	rows := []Row{{Kind: ownerKind, SaveSeq: 7, SchemaGen: 3, HolderInstance: "scene-a"}}
-	got := Analyze(route, rows)
-	if !got.Online || !got.Frozen || got.SaveSeq != 7 || got.SchemaGen != 3 || len(got.Warnings) != 2 {
+	got := Analyze(rows)
+	if !got.Online || got.SaveSeq != 7 || got.SchemaGen != 3 || len(got.Warnings) != 1 {
 		t.Fatalf("analysis: %+v", got)
 	}
-	released := Analyze(Route{}, []Row{{Kind: ownerKind, HolderInstance: "scene-a", Released: 1}})
+	released := Analyze([]Row{{Kind: ownerKind, HolderInstance: "scene-a", Released: 1}})
 	if released.Online {
 		t.Fatalf("released holder is not online: %+v", released)
 	}
-	missing := Analyze(Route{}, nil)
+	missing := Analyze(nil)
 	if len(missing.Warnings) != 1 {
 		t.Fatalf("missing owner row must warn: %+v", missing)
 	}

@@ -23,13 +23,14 @@ Test-Case 'Chat渲染必须携原会话与同域目录，账号值不进ConfigMa
     $stop=$source.IndexOf('"client-rpc-router" {',$start)
     Assert-True ($start-ge 0-and $stop-gt $start) '能够定位正式Chat渲染分支'
     $chat=$source.Substring($start,$stop-$start)
-    foreach($pattern in @('DSNEnv: \$\{chatSqlDsnEnv\}','Backend: \$\{DatabaseBackend\}','MaxOpenConns: \$\{chatSqlMaxOpen\}','AccountRoleSchema: \$\{GlobalDbName\}','GlobalLoginSessions: true','\$\{loginRedisBlock\}')) {
+    foreach($pattern in @('DSNEnv: \$\{chatSqlDsnEnv\}','Backend: \$\{DatabaseBackend\}','MaxOpenConns: \$\{chatSqlMaxOpen\}','GlobalLoginSessions: true','\$\{loginRedisBlock\}','(?m)^DataServiceRpc:','(?m)^\$\{dbPlacementTop\}')) {
         Assert-Match $chat $pattern '不能遗漏正式SQL或原登录态字段'
     }
     # 登录态段由公共准备段渲染(New-PlayerRedisConfigYaml):不建玩家域集群时指向 login 的实例与 DB,口令只写环境变量名。
     Assert-Match $source "'chat' \{ \`$loginRedisArgs\.StandalonePasswordEnv = 'LOGIN_REDIS_PASSWORD' \}" '单实例时口令走环境变量'
     Assert-Match $source "loginRedisArgs\.StandaloneDb = \[int\]\(Get-AuthoritativeScalar -RelativePath 'go/login/etc/login\.yaml' -KeyPath 'Node\.RedisClient\.DB'\)" '库号与 login 相同'
     Assert-NotMatch $chat '(?m)^ChatRedis:|^\s+(?:Pass|Password):' '旧缓存不能恢复成聊天权威，也不在兼容配置内写密码值'
+    Assert-NotMatch $chat 'AccountRoleSchema' '身份校验走目录 RPC，聊天不再跨库读角色目录'
     $config=Join-Path $chatRepo 'go/chat/etc/chat.yaml'
     Assert-Equal 'CHAT_AUTHORITY_DSN' (Get-YamlScalar -Path $config -KeyPath 'DSNEnv').Value '镜像正规环境名'
     Assert-Equal 'tidb' (Get-YamlScalar -Path $config -KeyPath 'Backend').Value '源配置缺省 tidb 档,部署按 -DatabaseBackend 覆写'
@@ -39,7 +40,8 @@ Test-Case 'Chat业务角色无DDL或聊天记录改删权，迁移角色没有�
     $runtime=ChatSource 'deploy/sql/chat_runtime_role.sql'
     $migration=ChatSource 'deploy/sql/chat_migration_role.sql'
     $grants=@(($runtime-split "`n")|Where-Object {$_-match '^GRANT '})
-    Assert-Equal 4 $grants.Count '逐表具名授权，不给全局库ALL'
+    Assert-Equal 2 $grants.Count '逐表具名授权，只有聊天库两张表'
+    Assert-NotMatch ($grants-join "`n") '`mmorpg_global`' '身份校验走目录RPC，运行角色不碰全局库'
     Assert-Match $runtime 'GRANT SELECT, INSERT ON `mmorpg_chat`.`chat_send_authority`' '永久消息原件只允许读和追加'
     Assert-NotMatch ($grants-join "`n") '\b(?:ALL|CREATE|ALTER|DROP|DELETE|INDEX|GRANT OPTION)\b' '常驻账号没有迁移、删除或转授权能力'
     Assert-NotMatch $migration '`mmorpg_global`' '迁移角色无全局归属写权限'

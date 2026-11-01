@@ -314,7 +314,7 @@ kubectl -n "$NS" delete pvc -l app=redis-player
 | 容量基准 | `redis_cluster_capacity.ps1`,见 `tools/scripts/README.md`。没压到饱和时退出码 2,数字不算证据(设计 §14.3) |
 | 维护排空 P0 / P4 | 计划的 `redisTargets` 把每个主节点列成一条(上限 128),`address` 写本机端口转发的地址。取样不跟随重定向,指纹对不上或少了主节点就判未闭合(`go/db/internal/maintenancephase`)。主节点数变了要重新生成计划 |
 | 分批脚本 | `deploy-staging.sh`、`stress-linux-tier.sh` 用环境变量 `REDIS_PLAYER_NODES="host:port host:port ..."` 列全部节点 |
-| zone 回档 | `k8s_zone_rollback.ps1` 线上是集群时要给 `-PlayerRedisMasters`、`-PlayerRedisSeeds`,口令用 `-PlayerRedisPasswordEnv`。回档工具本身还没有落地,见脚本头注释 |
+| 灾难恢复 | 走 [PITR 手册](./mysql-backup-pitr-runbook.md) §4.0,Redis 不回退也不清。起服时 `-PlayerRedisMasters` 照传 |
 
 ## 11. 告警对照
 

@@ -39,17 +39,15 @@ type Bundle struct {
 type Analysis struct {
 	// Online:写权行有持有者且没有释放。玩家在线,或者上次没有正常释放;这时导出的不是最终态。
 	Online    bool     `json:"online"`
-	Frozen    bool     `json:"frozen"`
 	SaveSeq   uint64   `json:"save_seq,string"`
 	SchemaGen uint32   `json:"schema_gen"`
 	Warnings  []string `json:"warnings,omitempty"`
 }
 
-// Route 是全局库 player_route 的一行。
+// Route 是目录 player_route 的一行。
 type Route struct {
 	HomeZone    uint32 `json:"home_zone"`
 	StorageID   uint32 `json:"storage_id"`
-	FrozenRunID string `json:"frozen_run_id,omitempty"`
 	Rev         uint64 `json:"rev"`
 	StoreSchema string `json:"store_schema"`
 }
@@ -68,7 +66,7 @@ type Row struct {
 	DecodeNote     string          `json:"decode_note,omitempty"`
 }
 
-// Global 是全局库里和这个玩家有关的记录,用来对比和追查。读不到只记 Errors,不影响存档部分。
+// Global 是目录和流水库里和这个玩家有关的记录,用来对比和追查。读不到只记 Errors,不影响存档部分。
 type Global struct {
 	Account        []map[string]any `json:"account,omitempty"`
 	Snapshots      []map[string]any `json:"snapshots,omitempty"`
@@ -114,12 +112,9 @@ func (r *Row) Decode() {
 	}
 }
 
-// Analyze 从路由和存档行算出 Analysis。
-func Analyze(route Route, rows []Row) Analysis {
-	a := Analysis{Frozen: route.FrozenRunID != ""}
-	if a.Frozen {
-		a.Warnings = append(a.Warnings, "route is frozen by run "+route.FrozenRunID)
-	}
+// Analyze 从存档行算出 Analysis。
+func Analyze(rows []Row) Analysis {
+	var a Analysis
 	owner := findOwner(rows)
 	if owner == nil {
 		a.Warnings = append(a.Warnings, "no owner row: the role does not exist or was never finished")
@@ -207,19 +202,18 @@ func PlanImport(b *Bundle, local LocalOwner, binaryGen uint32) (ImportPlan, erro
 	return plan, nil
 }
 
-// ReadRoute 读一个玩家的路由并算出存档所在的库。found=false 是没有路由行或者路由没有落点。
-func ReadRoute(ctx context.Context, global *sql.DB, playerID uint64) (route Route, found bool, err error) {
+// ReadRoute 读一个玩家的路由并算出存档所在的库。directory 必须是这名玩家所在的目录片。found=false 是没有路由行或者路由没有落点。
+func ReadRoute(ctx context.Context, directory *sql.DB, playerID uint64) (route Route, found bool, err error) {
 	var home, storage sql.NullInt64
-	var frozen sql.NullString
-	err = global.QueryRowContext(ctx, "SELECT home_zone,storage_id,frozen_run_id,rev FROM player_route WHERE route_shard=? AND player_id=?",
-		playerID%64, playerID).Scan(&home, &storage, &frozen, &route.Rev)
+	err = directory.QueryRowContext(ctx, "SELECT home_zone,storage_id,rev FROM player_route WHERE route_shard=? AND player_id=?",
+		placement.RouteRowShard(playerID), playerID).Scan(&home, &storage, &route.Rev)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Route{}, false, nil
 	}
 	if err != nil {
 		return Route{}, false, fmt.Errorf("read player_route: %w", err)
 	}
-	route.HomeZone, route.StorageID, route.FrozenRunID = uint32(home.Int64), uint32(storage.Int64), frozen.String
+	route.HomeZone, route.StorageID = uint32(home.Int64), uint32(storage.Int64)
 	// 建角恒写落点,没有落点就是路由不完整,和 go/db 一样不猜库。
 	schema, ok := placement.StoreDBName(route.StorageID)
 	if !ok {

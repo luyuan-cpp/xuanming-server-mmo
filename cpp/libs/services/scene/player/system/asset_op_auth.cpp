@@ -52,6 +52,7 @@ constexpr AssetOpCallerRule kAssetOpCallerRules[] = {
 	 {ASSET_OP_STREAM_TRADE_DEBIT, ASSET_OP_STREAM_TRADE_CREDIT},
 	 2},
 	{"mail", "MMORPG_ASSET_OP_SECRET_MAIL", {ASSET_OP_STREAM_SYSTEM_CREDIT, ASSET_OP_STREAM_UNSPECIFIED}, 1},
+	{"data_service", "MMORPG_ASSET_OP_SECRET_DATA_SERVICE", {ASSET_OP_STREAM_GM_RECALL, ASSET_OP_STREAM_UNSPECIFIED}, 1},
 };
 
 constexpr size_t kAssetOpCallerRuleCount = std::size(kAssetOpCallerRules);

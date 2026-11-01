@@ -14,6 +14,7 @@ import (
 
 	componentpb "proto/common/component"
 	inboxpb "proto/player_inbox"
+	"shared/rolefence"
 
 	"github.com/zeromicro/go-zero/core/logx/logtest"
 	"google.golang.org/grpc/peer"
@@ -200,6 +201,23 @@ func TestAdminServerFoldsStoreFaultsInBand(t *testing.T) {
 		if !f.store.sawDeadline[m] {
 			t.Errorf("%s 没有套整请求预算的截止时间", m)
 		}
+	}
+}
+
+// 规格 §3.4:作废时角色冻结或目录读不到,事务已回滚,回非故障 tip,排空证明不能 Hold。
+func TestAdminVoidRoleNotVerifiedIsNotAFault(t *testing.T) {
+	for name, cause := range map[string]error{
+		"冻结或归属变了": inbox.ErrOriginalRole,
+		"目录读不到":   errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")),
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newAdminFixture(t)
+			f.store.err = cause
+			void, err := f.server.VoidItem(peerCtx(), &inboxpb.VoidPlayerInboxItemRequest{PlayerId: 42, Domain: gmDomain, Seq: 3})
+			if err != nil || void.GetErrorMessage().GetId() != constants.ErrStaleOwner {
+				t.Fatalf("VoidItem = %+v, %v", void, err)
+			}
+		})
 	}
 }
 

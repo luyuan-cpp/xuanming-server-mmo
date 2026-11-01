@@ -3,13 +3,16 @@ package authoritysql
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"math"
 	"sort"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	databasepb "proto/common/database"
@@ -30,7 +33,7 @@ type Catalog struct {
 }
 
 func NewCatalog(db *sql.DB, config CatalogConfig) (*Catalog, error) {
-	if db == nil || !validIdentifier(config.AuthoritySchema) || !validGeneration(config.Generation) || !validSchemas(config.ProtectedSchemas) || len(config.PhysicalAuthoritySHA256) != 32 || !validPrincipal(config.Principal) {
+	if db == nil || !soleSchema(config.AuthoritySchema, config.ProtectedSchemas) || !validGeneration(config.Generation) || len(config.PhysicalAuthoritySHA256) != 32 || !validPrincipal(config.Principal) {
 		return nil, ErrWriterDenied
 	}
 	config.ProtectedSchemas = append([]string(nil), config.ProtectedSchemas...)
@@ -226,7 +229,11 @@ func (c *Catalog) readLifecycleReceipt(ctx context.Context, q interface {
 		return nil, ErrWriterDenied
 	}
 	raw, digest, err := c.validateLifecycle(request, r.Kind)
-	if err != nil || !bytes.Equal(request.RequestId, id) || !bytes.Equal(raw, r.RequestProto) || !bytes.Equal(digest, r.RequestDigest) || r.PreviousEpoch != request.ExpectedEpoch || r.ResultingEpoch != r.PreviousEpoch || r.CatalogRevision == 0 {
+	if err != nil || !bytes.Equal(request.RequestId, id) || !bytes.Equal(raw, r.RequestProto) || !bytes.Equal(digest, r.RequestDigest) || r.PreviousEpoch == 0 || r.ResultingEpoch != r.PreviousEpoch || r.CatalogRevision == 0 {
+		return nil, ErrWriterDenied
+	}
+	// REGISTER 的收据记落地时的实际 epoch,请求里不带;RETIRE 要等于请求绑定的那个。
+	if r.Kind == databasepb.SqlWriterLifecycleReceipt_RETIRE && r.PreviousEpoch != request.ExpectedEpoch {
 		return nil, ErrWriterDenied
 	}
 	if request.ExpectedCatalogRevision != 0 && (request.ExpectedCatalogRevision == math.MaxUint64 || r.CatalogRevision != request.ExpectedCatalogRevision+1) {
@@ -241,7 +248,14 @@ func (c *Catalog) validateLifecycle(request *databasepb.SqlWriterLifecycleReceip
 	if request == nil || request.Writer == nil || len(request.RequestId) != 16 || request.Kind != kind || request.AuthoritySchema != c.config.AuthoritySchema || !equalStrings(request.ProtectedSchemas, c.config.ProtectedSchemas) || !bytes.Equal(request.DeploymentDigest, c.config.PhysicalAuthoritySHA256) || len(request.Writer.WriterKey) != 16 || request.Writer.Generation != c.config.Generation {
 		return nil, nil, ErrWriterDenied
 	}
-	if request.ExpectedEpoch == 0 || kind == databasepb.SqlWriterLifecycleReceipt_RETIRE && request.ExpectedCatalogRevision == 0 || request.DeploymentId == "" || len(request.DeploymentId) > 256 {
+	// REGISTER 不绑 epoch:名册是预先渲染的,每次 cutover 或回滚 epoch 都加 2,绑了整份名册就废了(规格 §2)。RETIRE 绑,它要和同 epoch 的维护 run 对账。
+	if kind == databasepb.SqlWriterLifecycleReceipt_REGISTER && request.ExpectedEpoch != 0 {
+		return nil, nil, ErrWriterDenied
+	}
+	if kind == databasepb.SqlWriterLifecycleReceipt_RETIRE && (request.ExpectedEpoch == 0 || request.ExpectedCatalogRevision == 0) {
+		return nil, nil, ErrWriterDenied
+	}
+	if request.DeploymentId == "" || len(request.DeploymentId) > 256 {
 		return nil, nil, ErrWriterDenied
 	}
 	if len(request.Writer.InstanceId) != 16 || !validPrincipal(string(request.Writer.SqlPrincipal)) || len(request.Writer.RegistrationDigest) != 32 || request.Writer.State != databasepb.SqlWriterRegistry_ACTIVE || len(request.MaintenanceRunId) != 0 && len(request.MaintenanceRunId) != 16 {
@@ -338,7 +352,30 @@ func (c *Catalog) insertLifecycle(ctx context.Context, tx *sql.Tx, request *data
 	return err
 }
 
+// RegistrationReady 只读核这份 REGISTER 此刻能不能落地:世代、闸门、维护 run。
+// 一个 boot 要注册几个逻辑库时先逐库过一遍,第一份写下去之前就知道有没有注定失败的库,少留半套注册。
+// 闸门冻结回 ErrWriterFrozen,重试就好;别的不符回 ErrWriterDenied。提交点仍是 Register 自己持 meta 锁再判一次。
+func (c *Catalog) RegistrationReady(ctx context.Context, request *databasepb.SqlWriterLifecycleReceipt_Request) error {
+	if _, _, err := c.validateLifecycle(request, databasepb.SqlWriterLifecycleReceipt_REGISTER); err != nil {
+		return err
+	}
+	meta, err := c.CurrentMeta(ctx)
+	if err != nil {
+		return err
+	}
+	if meta.Writable != 1 {
+		return ErrWriterFrozen
+	}
+	if !bytes.Equal(meta.FreezeRunId, request.MaintenanceRunId) {
+		return ErrWriterDenied
+	}
+	return nil
+}
+
 // Register只在metaX后INSERT全新key；不查修旧slot，不等待旧slot前缀。
+//
+// 不核请求里的 epoch:新写者的 slot 按持 meta 锁读到的当前 epoch 建,收据记这个实际值,安全性论证见规格 §2。
+// 闸门冻结回 ErrWriterFrozen:事务已回滚,确定没有落地,调用方可以用同一请求重试。
 func (c *Catalog) Register(ctx context.Context, request *databasepb.SqlWriterLifecycleReceipt_Request) (*databasepb.SqlWriterLifecycleReceipt, error) {
 	raw, digest, err := c.validateLifecycle(request, databasepb.SqlWriterLifecycleReceipt_REGISTER)
 	if err != nil {
@@ -361,7 +398,10 @@ func (c *Catalog) Register(ctx context.Context, request *databasepb.SqlWriterLif
 		if err != nil {
 			return err
 		}
-		if meta.Writable != 1 || meta.WriterEpoch != request.ExpectedEpoch || request.ExpectedCatalogRevision != 0 && meta.CatalogRevision != request.ExpectedCatalogRevision {
+		if meta.Writable != 1 {
+			return ErrWriterFrozen
+		}
+		if request.ExpectedCatalogRevision != 0 && meta.CatalogRevision != request.ExpectedCatalogRevision {
 			return ErrWriterDenied
 		}
 		if len(meta.FreezeRunId) != 0 {
@@ -479,6 +519,96 @@ func (c *Catalog) Retire(ctx context.Context, request *databasepb.SqlWriterLifec
 	return c.LifecycleReceipt(ctx, request.RequestId)
 }
 
+// FreezeWriters 冻结本逻辑库的闸门，不停服搬库（tools/dbmove cutover）的第一步。
+// 先按 (writer_key,slot) 锁全部 ACTIVE 写者的全部 slot，再锁 meta：拿齐说明之前持 slot 的写事务都已结束。
+// 提交后 writable=0、epoch+1，之后的写事务在闸门上回 ErrWriterFrozen；写者不用退休，身份和 boot 授权都不变。
+// runID 是这次搬库的 16 字节标识，存进 freeze_run_id，排空 run 开着时拒绝，同 runID 重放幂等。
+// 锁等不到（1205）原样返回，调用方在预算内重试；没有持锁写者时一笔短事务完成。
+func (c *Catalog) FreezeWriters(ctx context.Context, runID []byte) (*databasepb.RouteMeta, error) {
+	return c.changeGate(ctx, runID, false)
+}
+
+// ReleaseWriters 解冻同一个 runID 冻结的闸门，epoch 再 +1。两处用它：cutover 超预算时解冻源库；
+// 复制追上之后解冻目标库（闸门表随复制过去，目标上的状态就是冻结点）。已解冻时重放幂等。
+func (c *Catalog) ReleaseWriters(ctx context.Context, runID []byte) (*databasepb.RouteMeta, error) {
+	return c.changeGate(ctx, runID, true)
+}
+
+func (c *Catalog) changeGate(ctx context.Context, runID []byte, release bool) (*databasepb.RouteMeta, error) {
+	if len(runID) != 16 {
+		return nil, ErrWriterDenied
+	}
+	before, err := c.CurrentMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if release && before.Writable == 1 && len(before.FreezeRunId) == 0 || !release && before.Writable == 0 && bytes.Equal(before.FreezeRunId, runID) {
+		return before, nil
+	}
+	if !gateChangeAllowed(before, runID, release) {
+		return nil, ErrWriterDenied
+	}
+	// 锁序同 changeWritable 与业务事务的进入路径：slot → meta。预读只为知道要锁谁，事务里按 CURRENT 复核。
+	keys, err := c.ActiveWriterKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	next, err := checkedIncrement(before.WriterEpoch)
+	if err != nil {
+		return nil, err
+	}
+	after := proto.Clone(before).(*databasepb.RouteMeta)
+	after.WriterEpoch = next
+	after.Writable = 0
+	after.FreezeRunId = bytes.Clone(runID)
+	if release {
+		after.Writable = 1
+		after.FreezeRunId = []byte{}
+	}
+	err = c.transaction(ctx, func(tx *sql.Tx) error {
+		if err := c.lockSlots(ctx, tx, keys, before.WriterEpoch); err != nil {
+			return err
+		}
+		meta, err := c.meta(ctx, tx, true)
+		if err != nil {
+			return err
+		}
+		if meta.WriterEpoch != before.WriterEpoch || meta.CatalogRevision != before.CatalogRevision || !gateChangeAllowed(meta, runID, release) {
+			return ErrWriterDenied
+		}
+		current, err := c.active(ctx, tx, true)
+		if err != nil {
+			return err
+		}
+		if !exactKeys(current, keys) {
+			return ErrWriterDenied
+		}
+		for _, key := range keys {
+			result, err := tx.ExecContext(ctx, "UPDATE "+c.table("writer_slot")+" SET writer_epoch=? WHERE writer_key=? AND writer_epoch=? AND state=1", next, key, before.WriterEpoch)
+			if err != nil {
+				return err
+			}
+			if err = affected(result, WriterSlotCount); err != nil {
+				return err
+			}
+		}
+		_, err = tx.ExecContext(ctx, "UPDATE "+c.table("route_meta")+" SET writer_epoch=?,writable=?,freeze_run_id=? WHERE id=1", after.WriterEpoch, after.Writable, after.FreezeRunId)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return after, nil
+}
+
+// 冻结只从「可写、没有维护 run」出发；解冻只认冻结它的那个 runID。
+func gateChangeAllowed(meta *databasepb.RouteMeta, runID []byte, release bool) bool {
+	if release {
+		return meta.Writable == 0 && bytes.Equal(meta.FreezeRunId, runID)
+	}
+	return meta.Writable == 1 && len(meta.FreezeRunId) == 0
+}
+
 func (c *Catalog) ActiveWriterKeys(ctx context.Context) ([][]byte, error) {
 	return c.active(ctx, c.db, false)
 }
@@ -494,7 +624,7 @@ func sortedWriterKeys(values [][]byte) [][]byte {
 	return keys
 }
 
-// CatalogBootstrapStatements 返回本仓正式proto对应的唯一预建DDL副本。
+// CatalogBootstrapStatements 返回本仓正式proto对应的唯一预建DDL副本：每个逻辑库各建一份，闸门跟着库走。
 // schema预建与跨Go模块fixture共用这里，调用者不得复制一份目录表DDL。
 func CatalogBootstrapStatements() map[string]string {
 	return map[string]string{
@@ -505,6 +635,7 @@ func CatalogBootstrapStatements() map[string]string {
 		"sql_writer_drain_run":           catalogWriterDrainRunBootstrapDDL,
 		"sql_writer_freeze_ticket":       catalogWriterFreezeTicketBootstrapDDL,
 		"sql_writer_maintenance_receipt": catalogWriterMaintenanceReceiptBootstrapDDL,
+		MoveSentinelTable:                catalogMoveSentinelBootstrapDDL,
 	}
 }
 
@@ -543,6 +674,49 @@ func PrepareCatalogSchema(ctx context.Context, db *sql.DB, schema, generation st
 	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO route_meta(id,generation,writable,writer_epoch,catalog_revision,freeze_run_id) VALUES(1,?,1,1,1,?)", generation, []byte{}); err != nil {
 		return err
+	}
+	return VerifyCatalogSchema(ctx, db, schema)
+}
+
+// EnsureCatalogSchema 是各服务 -migrate 的入口：在当前逻辑库建闸门表并种 route_meta，然后核形状。可重复执行。
+// 和 PrepareCatalogSchema 的区别：这里已有的表和行一个字节都不动（尤其不换 generation，写者资格的每个事务都核它）。
+// 不用 ON DUPLICATE KEY：schema 账号对 route_meta 只有 CREATE、INSERT。
+func EnsureCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
+	if db == nil || !validIdentifier(schema) {
+		return ErrWriterDenied
+	}
+	var actual string
+	if err := db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&actual); err != nil {
+		return err
+	}
+	if actual != schema {
+		return ErrWriterDenied
+	}
+	statements := CatalogBootstrapStatements()
+	names := make([]string, 0, len(statements))
+	for name := range statements {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if _, err := db.ExecContext(ctx, statements[name]); err != nil {
+			return err
+		}
+	}
+	var rows int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM route_meta WHERE id=1").Scan(&rows); err != nil {
+		return err
+	}
+	if rows == 0 {
+		var seed [16]byte
+		if _, err := rand.Read(seed[:]); err != nil {
+			return err
+		}
+		_, err := db.ExecContext(ctx, "INSERT INTO route_meta(id,generation,writable,writer_epoch,catalog_revision,freeze_run_id) VALUES(1,?,1,1,1,?)", hex.EncodeToString(seed[:]), []byte{})
+		var server *mysql.MySQLError
+		if err != nil && !(errors.As(err, &server) && server.Number == mysqlErrDuplicateEntry) {
+			return err
+		}
 	}
 	return VerifyCatalogSchema(ctx, db, schema)
 }
@@ -687,6 +861,18 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 	}
 	return nil
 }
+
+// MoveSentinelTable 是搬库的哨兵表:tools/dbmove 冻结源库之后写一行,目标能读到这一行才算复制追上。
+// 和闸门表一样每个逻辑库预建一份、随复制过去,切换时不需要 DDL,也不需要新账号。没有写者读写它。
+const MoveSentinelTable = "db_move_sentinel"
+
+const catalogMoveSentinelBootstrapDDL = `CREATE TABLE IF NOT EXISTS db_move_sentinel (
+ nonce BINARY(16) NOT NULL,
+ run_id BINARY(16) NOT NULL,
+ writer_epoch BIGINT UNSIGNED NOT NULL,
+ written_ms BIGINT UNSIGNED NOT NULL,
+ PRIMARY KEY(nonce)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='db_move_sentinel';`
 
 const catalogRouteMetaBootstrapDDL = "CREATE TABLE IF NOT EXISTS `route_meta` (\n" +
 	"  `id` tinyint unsigned NOT NULL COMMENT 'pb:1',\n" +

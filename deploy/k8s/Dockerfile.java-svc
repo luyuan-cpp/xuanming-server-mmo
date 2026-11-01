@@ -86,4 +86,5 @@ RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
 
 USER 10001:10001
 
-ENTRYPOINT ["/bin/sh","-ec","if [ -n \"$MMORPG_SQL_WRITER_GRANT_FILE\" ]; then MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat \"$MMORPG_SQL_WRITER_GRANT_FILE.sha256\")\"; export MMORPG_SQL_WRITER_GRANT_SHA256; fi; exec java -jar /app/service.jar \"$@\"","--"]
+# K8s 上消费目录是 emptyDir 挂载根下的私有子目录,挂载根过不了 WriterAuthority 的私有目录校验,这里建;已存在时(调试栈)不动。umask 只在子 shell 里改,不带进 JVM。
+ENTRYPOINT ["/bin/sh","-ec","if [ -n \"$MMORPG_SQL_WRITER_CONSUME_DIR\" ]; then (umask 077; mkdir -p \"$MMORPG_SQL_WRITER_CONSUME_DIR\"); if ls \"$MMORPG_SQL_WRITER_CONSUME_DIR\"/*.consumed >/dev/null 2>&1; then echo sql writer grant already consumed, the reaper replaces this pod >&2; exit 78; fi; fi; if [ -n \"$MMORPG_SQL_WRITER_GRANT_FILE\" ]; then MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat \"$MMORPG_SQL_WRITER_GRANT_FILE.sha256\")\"; export MMORPG_SQL_WRITER_GRANT_SHA256; fi; exec java -jar /app/service.jar \"$@\"","--"]

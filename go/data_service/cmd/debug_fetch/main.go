@@ -21,11 +21,14 @@ import (
 
 	"data_service/internal/playerbundle"
 	"shared/authoritysql"
+	"shared/dbplacement"
+	"shared/dirshard"
 )
 
 type options struct {
 	dsnEnv     string
 	globalDB   string
+	shards     int
 	player     uint64
 	reason     string
 	revision   string
@@ -38,7 +41,8 @@ type options struct {
 func main() {
 	var o options
 	flag.StringVar(&o.dsnEnv, "dsn-env", "", "name of the environment variable holding the MySQL/TiDB DSN (required)")
-	flag.StringVar(&o.globalDB, "global-db", "mmorpg_global", "global schema holding player_route")
+	flag.StringVar(&o.globalDB, "global-db", "mmorpg_global", "directory base name (SnapshotMySQL.DBName)")
+	flag.IntVar(&o.shards, "logical-shards", 1, "directory shard count (Directory.LogicalShards)")
 	flag.Uint64Var(&o.player, "player", 0, "player id (required)")
 	flag.StringVar(&o.reason, "reason", "", "ticket or report the export is for (required)")
 	flag.StringVar(&o.revision, "server-revision", "", "server image revision; decoding uses the local checkout, so check out this revision first")
@@ -56,6 +60,10 @@ func run(o options) error {
 	if o.dsnEnv == "" || o.player == 0 || o.reason == "" || o.out == "" {
 		return errors.New("-dsn-env, -player, -reason and -out are required")
 	}
+	o.shards = dirshard.Normalize(o.shards)
+	if err := dirshard.Validate(o.shards); err != nil {
+		return err
+	}
 	dsn := os.Getenv(o.dsnEnv)
 	if dsn == "" {
 		return fmt.Errorf("environment variable %s is empty", o.dsnEnv)
@@ -64,22 +72,27 @@ func run(o options) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
-	defer cancel()
-
-	global, err := openReader(ctx, dsn, o.globalDB, backend)
+	placement, err := dbplacement.ConfigFromEnv(os.Getenv)
 	if err != nil {
 		return err
 	}
-	defer global.Close()
-	route, found, err := playerbundle.ReadRoute(ctx, global, o.player)
+	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	defer cancel()
+
+	directorySchema := dirshard.DirectoryDBName(o.globalDB, dirshard.SlotOfPlayer(o.player, o.shards), o.shards)
+	directory, err := openReader(ctx, dsn, directorySchema, backend, placement)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	route, found, err := playerbundle.ReadRoute(ctx, directory, o.player)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return fmt.Errorf("player %d has no route with a storage target", o.player)
 	}
-	store, err := openReader(ctx, dsn, route.StoreSchema, backend)
+	store, err := openReader(ctx, dsn, route.StoreSchema, backend, placement)
 	if err != nil {
 		return err
 	}
@@ -95,12 +108,16 @@ func run(o options) error {
 		ExportedAtMs:   time.Now().UnixMilli(),
 		Reason:         o.reason,
 		ServerRevision: o.revision,
-		Analysis:       playerbundle.Analyze(route, rows),
+		Analysis:       playerbundle.Analyze(rows),
 		Route:          route,
 		Rows:           rows,
 	}
 	if !o.skipGlobal {
-		bundle.Global = readGlobal(ctx, global, o.player, o.limit)
+		ledger, err := openReader(ctx, dsn, dirshard.LedgerDBName(o.globalDB), backend, placement)
+		if err == nil {
+			defer ledger.Close()
+		}
+		bundle.Global = readGlobal(ctx, directory, ledger, err, o.player, o.limit)
 	}
 	raw, err := json.MarshalIndent(bundle, "", "  ")
 	if err != nil {
@@ -109,18 +126,24 @@ func run(o options) error {
 	if err := os.WriteFile(o.out, raw, 0o600); err != nil {
 		return err
 	}
-	fmt.Printf("exported player %d from %s: %d rows, save_seq=%d online=%v frozen=%v warnings=%d -> %s\n", o.player, route.StoreSchema, len(rows),
-		bundle.Analysis.SaveSeq, bundle.Analysis.Online, bundle.Analysis.Frozen, len(bundle.Analysis.Warnings), o.out)
+	fmt.Printf("exported player %d from %s: %d rows, save_seq=%d online=%v warnings=%d -> %s\n", o.player, route.StoreSchema, len(rows),
+		bundle.Analysis.SaveSeq, bundle.Analysis.Online, len(bundle.Analysis.Warnings), o.out)
 	return nil
 }
 
-func openReader(ctx context.Context, dsn, schema string, backend authoritysql.Backend) (*sql.DB, error) {
+// openReader 按映射连(环境变量 MMORPG_DB_PLACEMENT,docs/ops/db-move-runbook.md §2):目录片、流水库和玩家库可能不在一个集群,
+// 搬走的库连旧地址读到的是冻结时的数据。
+func openReader(ctx context.Context, dsn, schema string, backend authoritysql.Backend, placement dbplacement.Config) (*sql.DB, error) {
 	cfg, err := mysql.ParseDSN(dsn)
 	if err != nil {
 		return nil, errors.New("cannot parse the DSN") // 解析错误会带上 DSN 原文,不往外打
 	}
 	cfg.DBName = schema
-	return authoritysql.Open(ctx, cfg.FormatDSN(), schema, backend, 2, authoritysql.Reader())
+	options, err := dbplacement.ForOneShot(ctx, placement, schema)
+	if err != nil {
+		return nil, err
+	}
+	return authoritysql.Open(ctx, cfg.FormatDSN(), schema, backend, 2, authoritysql.Reader(), options...)
 }
 
 // readStoreRows 一条语句读出全部行:写权行和数据行是同一个时刻的。
@@ -147,19 +170,23 @@ func readStoreRows(ctx context.Context, store *sql.DB, playerID uint64) ([]playe
 	return out, nil
 }
 
-// readGlobal 读账号归属、快照和流水。读不到只记下来:存档已经到手,不能因为这些丢掉整个导出。
-func readGlobal(ctx context.Context, global *sql.DB, playerID uint64, limit int) playerbundle.Global {
+// readGlobal 读账号归属(玩家所在的目录片)、快照和流水(流水库)。读不到只记下来:存档已经到手,不能因为这些丢掉整个导出。
+func readGlobal(ctx context.Context, directory, ledger *sql.DB, ledgerErr error, playerID uint64, limit int) playerbundle.Global {
 	var out playerbundle.Global
-	read := func(name, query string, args ...any) []map[string]any {
-		rows, err := queryMaps(ctx, global, query, args...)
+	read := func(db *sql.DB, name, query string, args ...any) []map[string]any {
+		rows, err := queryMaps(ctx, db, query, args...)
 		if err != nil {
 			out.Errors = append(out.Errors, name+": "+err.Error())
 		}
 		return rows
 	}
-	out.Account = read("account_role", "SELECT account,owner_revision,role_proto FROM account_role WHERE player_id=?", playerID)
-	out.Snapshots = read("player_snapshot", "SELECT * FROM player_snapshot WHERE player_id=? ORDER BY created_at DESC LIMIT ?", playerID, limit)
-	out.TransactionLog = read("transaction_log",
+	out.Account = read(directory, "account_role", "SELECT account,owner_revision,role_proto FROM account_role WHERE player_id=?", playerID)
+	if ledgerErr != nil {
+		out.Errors = append(out.Errors, "ledger: "+ledgerErr.Error())
+		return out
+	}
+	out.Snapshots = read(ledger, "player_snapshot", "SELECT * FROM player_snapshot WHERE player_id=? ORDER BY created_at DESC LIMIT ?", playerID, limit)
+	out.TransactionLog = read(ledger, "transaction_log",
 		"SELECT * FROM (SELECT * FROM transaction_log WHERE from_player=? ORDER BY timestamp_sec DESC LIMIT ?) a "+
 			"UNION SELECT * FROM (SELECT * FROM transaction_log WHERE to_player=? ORDER BY timestamp_sec DESC LIMIT ?) b",
 		playerID, limit, playerID, limit)

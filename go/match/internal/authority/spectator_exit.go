@@ -145,7 +145,12 @@ func spectatorExitClosedTx(ctx context.Context, tx *sql.Tx, original *pb.MatchSp
 	}
 	return receipt.State == 5 && actual.State == 5, nil
 }
-func (s *Store) SpectatorExitClosed(ctx context.Context, original *pb.MatchSpectatorRecord) (bool, error) {
+func (s *Store) SpectatorExitClosed(ctx context.Context, original *pb.MatchSpectatorRecord) (closed bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { closed, e = s.spectatorExitClosedOnce(ctx, original); return e })
+	return closed, err
+}
+
+func (s *Store) spectatorExitClosedOnce(ctx context.Context, original *pb.MatchSpectatorRecord) (bool, error) {
 	if validateSpectator(original) != nil {
 		return false, ErrOriginalPlayer
 	}

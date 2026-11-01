@@ -20,6 +20,8 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/redis"
 
 	"friend/internal/sqldialect"
+	"shared/rolefence"
+	"shared/roleidentity"
 )
 
 // ── 哨兵错误与它们在 logic 层的映射(改这里必须同步 logic 的 switch)──────────────
@@ -256,10 +258,10 @@ type FriendRequestEntry struct {
 // FriendRepo 是 mmorpg_friend 的权威存储访问层。好友边、申请和黑名单列表直接读 SQL；
 // Redis 只服务限流及非权威派生数据，不能用旧列表缓存作权限或申请处理依据。
 type FriendRepo struct {
-	roleAuthority string
-	rdb           *redis.Redis
-	db            *sql.DB
-	defaultTTL    time.Duration
+	guard      *rolefence.Guard
+	rdb        *redis.Redis
+	db         *sql.DB
+	defaultTTL time.Duration
 	// listReadHardLimit 是列表类读的 SQL LIMIT(Friend.ListReadHardLimit)。
 	// 放在 repo 上而不是每次调用传:缓存里存的是**已经截断过**的列表,
 	// 逐调用传值会让"缓存里那份按谁的上限截的"取决于谁先回填,排查时无从下手。
@@ -882,15 +884,13 @@ func (r *FriendRepo) runGuardedWriteOnce(ctx context.Context, playerA, playerB u
 
 // beginWriteTx 开一个 friend 写事务。隔离级别固定 READ COMMITTED,理由见 friendWriteTxIsolation。
 func (r *FriendRepo) beginWriteTx(ctx context.Context, players ...uint64) (*sql.Tx, error) {
-	tx, err := r.beginSystemWriteTx(ctx)
-	if err != nil {
-		return nil, err
+	if r.guard != nil {
+		return r.beginGuardedTx(ctx, players...)
 	}
-	if err := r.lockRolePrefix(ctx, tx, players...); err != nil {
-		_ = tx.Rollback()
-		return nil, err
+	if _, ok := roleidentity.Original(ctx); ok {
+		return nil, ErrOriginalRole
 	}
-	return tx, nil
+	return r.beginSystemWriteTx(ctx)
 }
 
 // sweep 没有客户端主体，只维护既有终态与容量卫生，显式保留系统事务入口。
@@ -1162,7 +1162,7 @@ func (r *FriendRepo) invalidateCachesAfterCommit(ctx context.Context, keys ...st
 // "COUNT + INSERT"这一对语句有上限地重跑(ensureDeadlockMaxAttempts):COUNT 必须一起重跑,
 // 否则重试写下去的是上一遍的陈旧边数。只认 1213,其它错误一律原样上抛;每遍之前先看 ctx。
 func (r *FriendRepo) ensureFriendCapacityRows(ctx context.Context, playerIDs ...uint64) error {
-	if r.roleAuthority != "" {
+	if r.guard != nil {
 		return r.ensureBoundCapacity(ctx, playerIDs...)
 	}
 	for _, playerID := range ascendingUniqueIDs(playerIDs) {

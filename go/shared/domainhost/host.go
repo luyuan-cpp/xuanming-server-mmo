@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -47,6 +48,8 @@ type Config struct {
 	DataServiceRpc    zrpc.RpcClientConf `json:"DataServiceRpc"`
 	// 值只是环境变量名；密钥值不得写YAML或日志。
 	Producers map[string]string `json:"Producers"`
+	// DbPlacement:按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 DSN 的地址。
+	DbPlacement dbplacement.Config `json:",optional"`
 }
 
 func (c Config) Validate() error {

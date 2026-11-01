@@ -11,10 +11,10 @@
 #     PodMonitor(或按注解抓取的配置),否则下面全部规则没有数据:空表达式不报错,和「一切正常」长得一样。
 #   - namespace、pod 两个 label 由抓取配置附加。规则用 pod=~"redis-player-[0-9]+" 限定在本集群,不用任何玩家维度(低基数)。
 #
-# 指标名按 redis_exporter v1.62.0 的命名凭记忆写成,**未在本机核实**(同 redis-alerts.yaml):redis_up、redis_cluster_state、redis_cluster_slots_assigned、
-#   redis_cluster_slots_ok、redis_cluster_known_nodes、redis_memory_used_bytes、redis_memory_max_bytes、redis_errorstat_total{err}、
-#   redis_rejected_connections_total、redis_connected_clients、redis_config_maxclients、redis_aof_last_write_status、redis_master_link_up、
-#   redis_instantaneous_ops_per_sec。部署后逐个对着 exporter 的 /metrics 核对,对不上就改这里 —— 指标名写错的规则不报错,只是永远不响。
+# 指标名已对照 redis_exporter v1.62.0 源码核对(2026-10-31,同 redis-alerts.yaml),还没有对着运行中的 exporter 验证:redis_up、redis_cluster_state、redis_cluster_slots_assigned、
+#   redis_cluster_slots_ok、redis_cluster_known_nodes、redis_memory_used_bytes、redis_memory_max_bytes、redis_errors_total{err}、
+#   redis_rejected_connections_total、redis_connected_clients、redis_config_maxclients、redis_aof_last_write_status、redis_master_link_up。
+#   部署后逐个对着 exporter 的 /metrics 核对,对不上就改这里 —— 指标名写错的规则不报错,只是永远不响。
 #
 # 阈值与 for 时长是占位值,**待压测确认**(设计 §14.3、AGENTS.md §6:没有压测对比不下容量结论)。
 #
@@ -115,7 +115,7 @@ spec:
         # 已经有写命令因为写满被拒。不是「快满了」,是已经在丢写。
         - alert: RedisPlayerOomRejected
           expr: |
-            increase(redis_errorstat_total{pod=~"redis-player-[0-9]+", err="OOM"}[5m]) > 0
+            increase(redis_errors_total{pod=~"redis-player-[0-9]+", err="OOM"}[5m]) > 0
           for: 0m
           labels:
             severity: critical

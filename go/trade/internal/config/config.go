@@ -25,6 +25,7 @@ import (
 	"shared/assetopwake"
 	"shared/authoritysql"
 	"shared/currencytype"
+	"shared/dbplacement"
 	"shared/idsegment"
 
 	"github.com/zeromicro/go-zero/core/service"
@@ -128,9 +129,7 @@ type Config struct {
 	// 服务端准入白名单，默认空；实例config只信scene扣出快照，不信玩家声明。
 	Commerce CommerceConf `json:"Commerce,optional"`
 	Mall     MallConf     `json:"Mall,optional"`
-	// 与data_service相同TiDB集群的显式全局目录schema；资产合同提交先锁角色。
-	AccountRoleSchema string  `json:",optional"`
-	Rmb               RmbConf `json:",optional"`
+	Rmb      RmbConf      `json:",optional"`
 }
 
 type RmbConf struct {
@@ -412,6 +411,8 @@ type MySQLConf struct {
 	MaxIdleConn int    `json:"MaxIdleConn,default=5"`
 	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);非法值拒启。
 	Backend string `json:",default=tidb"`
+	// DbPlacement:按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Host。
+	DbPlacement dbplacement.Config `json:",optional"`
 }
 
 // SchemaConf 建表策略(D-14 第 4 条)。
@@ -598,8 +599,8 @@ func (c *Config) Validate() error {
 	}
 	// 落地恢复参数只在通道开着时有消费者(停放 / 放弃 / 对账 / 唤醒都挂在重投循环上),关着时一概不查。
 	if c.AssetOp.Enabled {
-		if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) || !c.Rmb.GlobalLoginSessions || !c.Rmb.LoginRedis.HasAddr() {
-			return errors.New("交易写面必须显式配置全局角色schema与全局login会话Redis，不允许从SharedRedis推测")
+		if !c.Rmb.GlobalLoginSessions || !c.Rmb.LoginRedis.HasAddr() {
+			return errors.New("交易写面必须显式配置全局login会话Redis，不允许从SharedRedis推测")
 		}
 		if c.Rmb.LoginRedis.DB < 0 || c.Rmb.LoginRedis.PoolSizePerNode < 0 {
 			return errors.New("登录态Redis库号/连接池非法")

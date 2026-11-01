@@ -23,6 +23,7 @@ foreach ($definition in $ast.FindAll({ param($node) $node -is [System.Management
 . (Join-Path $PSScriptRoot '../lib/producer_dev_secret.ps1')
 . (Join-Path $PSScriptRoot '../lib/assetop_dev_secret.ps1')
 . (Join-Path $PSScriptRoot '../lib/account_directory_dev_secret.ps1')
+. (Join-Path $PSScriptRoot '../lib/role_fence_dev_secret.ps1')
 . (Join-Path $PSScriptRoot '../lib/release_common.ps1')
 
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('mmorpg-go-ports-tests-' + [guid]::NewGuid().ToString('N'))
@@ -117,7 +118,7 @@ try {
     foreach ($configName in @('login','data_service')) { New-Item -ItemType Directory -Path (Join-Path $GoRoot "$configName/etc") -Force | Out-Null }
     Set-Content -LiteralPath (Join-Path $GoRoot 'login/etc/login.yaml') -Value "Node:`n  RedisClient:`n    Host: 127.0.0.1:26379`n    DB: 0"
     Set-Content -LiteralPath (Join-Path $GoRoot 'data_service/etc/data_service.yaml') -Value "SnapshotMySQL:`n  DBName: testdb"
-    Add-Content -LiteralPath (Join-Path $GoRoot 'chat/etc/chat.yaml') -Value "`nDSNEnv: CHAT_AUTHORITY_DSN`nBackend: tidb`nGlobalLoginSessions: true`nMaxOpenConns: 16`nAccountRoleSchema: mmorpg_global`nLoginRedis:`n  Addrs: [127.0.0.1:6379]`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: 0`n  PoolSizePerNode: 4"
+    Add-Content -LiteralPath (Join-Path $GoRoot 'chat/etc/chat.yaml') -Value "`nDSNEnv: CHAT_AUTHORITY_DSN`nBackend: tidb`nGlobalLoginSessions: true`nMaxOpenConns: 16`nLoginRedis:`n  Addrs: [127.0.0.1:6379]`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: 0`n  PoolSizePerNode: 4"
 
     New-Item -ItemType Directory -Path $GoBinDir, $DerivedEtcDir -Force | Out-Null
     foreach ($name in $ServiceCatalogue.Keys) { Set-Content -LiteralPath (Join-Path $GoBinDir "$name.exe") -Value '进程桩占位文件' }
@@ -162,10 +163,16 @@ try {
             [Environment]::SetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', $savedPassword, 'Process')
         }
     }
-    Test-Case 'Chat派生目录和原登录Redis取现有权威配置，不按zone分裂' {
+    Test-Case '协调者直连参与者:-Zone 2 起 RoleFence 段的端口跟着位移,段外的地址不动,没有这一段时原样返回' {
+        $source = "Etcd:`n  Endpoints: [127.0.0.1:2379]`nRoleFence:`n  Participants:`n    - Name: guild`n      Endpoints: [127.0.0.1:50300]`n    - Name: friend`n      Endpoints: [127.0.0.1:50400]`nMetricsListenAddr: `":9260`"`n"
+        $expected = $source.Replace('127.0.0.1:50300', '127.0.0.1:51300').Replace('127.0.0.1:50400', '127.0.0.1:51400')
+        Assert-Equal $expected (ConvertTo-ZoneShiftedRoleFenceConfig -Content $source -ZoneShift 1000) '只动参与者的端口'
+        Assert-Equal "ListenOn: 0.0.0.0:9000`n" (ConvertTo-ZoneShiftedRoleFenceConfig -Content "ListenOn: 0.0.0.0:9000`n" -ZoneShift 1000) '没有这一段就没什么可移'
+    }
+    Test-Case 'Chat派生原登录Redis取现有权威配置，不按zone分裂，不再有角色目录的库名' {
         Reset-TestState
         $cfg = Resolve-InstanceConfig -Name chat -Info $ServiceCatalogue.chat -Index 1 -Total 1
-        Assert-Equal 'testdb' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'AccountRoleSchema').Value '本地角色目录取data_service全局库'
+        Assert-Equal $false (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'AccountRoleSchema').Found '身份校验走目录 RPC'
         Assert-Equal '[127.0.0.1:26379]' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'LoginRedis.Addrs').Value '地址与login一致'
         Assert-Equal '0' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'LoginRedis.DB').Value 'DB与login一致'
         Assert-Equal 'tidb' (Get-YamlScalar -Path $cfg.FullPath -KeyPath 'Backend').Value '本机也不能降级旧Redis权威'

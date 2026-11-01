@@ -23,6 +23,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"data_service/internal/playerbundle"
+	"shared/dirshard"
 	"shared/generated/persistschema"
 )
 
@@ -32,6 +33,7 @@ type options struct {
 	file      string
 	dsnEnv    string
 	globalDB  string
+	shards    int
 	player    uint64
 	allowHost string
 	dryRun    bool
@@ -42,7 +44,8 @@ func main() {
 	var o options
 	flag.StringVar(&o.file, "file", "", "bundle written by debug_fetch (required)")
 	flag.StringVar(&o.dsnEnv, "dsn-env", "", "name of the environment variable holding the local MySQL/TiDB DSN (required)")
-	flag.StringVar(&o.globalDB, "global-db", "mmorpg_global", "global schema holding player_route")
+	flag.StringVar(&o.globalDB, "global-db", "mmorpg_global", "directory base name (SnapshotMySQL.DBName)")
+	flag.IntVar(&o.shards, "logical-shards", 1, "directory shard count (Directory.LogicalShards)")
 	flag.Uint64Var(&o.player, "local-player", 0, "existing local player to overwrite (required)")
 	flag.StringVar(&o.allowHost, "allow-target-host", "", "local service name allowed besides loopback, for example a docker service")
 	flag.BoolVar(&o.dryRun, "dry-run", true, "only print the plan")
@@ -56,6 +59,10 @@ func main() {
 func run(o options) error {
 	if o.file == "" || o.dsnEnv == "" || o.player == 0 {
 		return errors.New("-file, -dsn-env and -local-player are required")
+	}
+	o.shards = dirshard.Normalize(o.shards)
+	if err := dirshard.Validate(o.shards); err != nil {
+		return err
 	}
 	raw, err := os.ReadFile(o.file)
 	if err != nil {
@@ -79,20 +86,17 @@ func run(o options) error {
 	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
 	defer cancel()
 
-	global, err := openSchema(cfg, o.globalDB)
+	directory, err := openSchema(cfg, dirshard.DirectoryDBName(o.globalDB, dirshard.SlotOfPlayer(o.player, o.shards), o.shards))
 	if err != nil {
 		return err
 	}
-	defer global.Close()
-	route, found, err := playerbundle.ReadRoute(ctx, global, o.player)
+	defer directory.Close()
+	route, found, err := playerbundle.ReadRoute(ctx, directory, o.player)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return fmt.Errorf("local player %d has no route: create the role with a local client or robot first", o.player)
-	}
-	if route.FrozenRunID != "" {
-		return fmt.Errorf("local route of player %d is frozen by run %s", o.player, route.FrozenRunID)
 	}
 	store, err := openSchema(cfg, route.StoreSchema)
 	if err != nil {

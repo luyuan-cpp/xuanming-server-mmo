@@ -106,6 +106,50 @@ func testOpen(t *testing.T, ctx context.Context, r *Repo) *rankpb.OpenRankGenera
 	}
 	return out
 }
+
+// 移除之后迟到的旧批次不能把人带回榜上;同一批的其他实体照常写,游标照常推进;换一代不受影响。
+func TestTiDBRemovedEntryStaysRemovedAgainstLateBatch(t *testing.T) {
+	ctx, db, next := rankFixture(t)
+	r := New(db, next, next, next, func(uint32) bool { return true })
+	board := testOpen(t, ctx, r)
+	first := &rankpb.SubmitRankScoresRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, SourceShard: 1, SourceCursor: 1, RequestId: 10, Mode: rankpb.RankSubmitMode_RANK_SUBMIT_SET, Entries: []*rankpb.RankScoreInput{{EntityId: 7, Score: 100, AchievedMs: 10, ScoreVersion: 5}}}
+	if _, err := r.Submit(ctx, "match", first); err != nil {
+		t.Fatal(err)
+	}
+	remove := &rankpb.RemoveRankEntryRequest{BoardId: board.BoardId, Generation: 1, EntityId: 7, RequestId: 30}
+	if err := r.Remove(ctx, "match", remove, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Remove(ctx, "match", proto.Clone(remove).(*rankpb.RemoveRankEntryRequest), false); err != nil {
+		t.Fatalf("重放移除: %v", err)
+	}
+	// 另一片的旧批次版本比被删的行小。行已经没了,只靠版本比较挡不住。
+	late := &rankpb.SubmitRankScoresRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, SourceShard: 2, SourceCursor: 1, RequestId: 11, Mode: rankpb.RankSubmitMode_RANK_SUBMIT_SET, Entries: []*rankpb.RankScoreInput{{EntityId: 7, Score: 90, AchievedMs: 5, ScoreVersion: 3}, {EntityId: 8, Score: 80, AchievedMs: 6, ScoreVersion: 1}}}
+	out, err := r.Submit(ctx, "match", late)
+	if err != nil || out.CommittedCursor != 1 || out.Duplicated {
+		t.Fatalf("迟到批次: %v %+v", err, out)
+	}
+	var removedCount, keptCount int
+	if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM rank_score WHERE board_id=? AND generation=1 AND entity_id=7", board.BoardId).Scan(&removedCount); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM rank_score WHERE board_id=? AND generation=1 AND entity_id=8", board.BoardId).Scan(&keptCount); err != nil {
+		t.Fatal(err)
+	}
+	if removedCount != 0 || keptCount != 1 {
+		t.Fatalf("被移除的实体回到榜上或其他实体被连带跳过: removed=%d kept=%d", removedCount, keptCount)
+	}
+	newer := &rankpb.SubmitRankScoresRequest{BoardId: board.BoardId, Generation: 1, SourceEpoch: 11, SourceShard: 1, SourceCursor: 2, RequestId: 12, Mode: rankpb.RankSubmitMode_RANK_SUBMIT_SET, Entries: []*rankpb.RankScoreInput{{EntityId: 7, Score: 200, AchievedMs: 20, ScoreVersion: 9}}}
+	if _, err = r.Submit(ctx, "match", newer); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM rank_score WHERE board_id=? AND generation=1 AND entity_id=7", board.BoardId).Scan(&removedCount); err != nil {
+		t.Fatal(err)
+	}
+	if removedCount != 0 {
+		t.Fatal("移除在这一代内是终局,版本更新的批次也不能带回来")
+	}
+}
 func TestTiDBOrderedScoresFreezeAndReliableRewardIntents(t *testing.T) {
 	ctx, db, next := rankFixture(t)
 	r := New(db, next, next, next, func(uint32) bool { return true })

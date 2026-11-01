@@ -21,7 +21,12 @@ func (s *Store) TeamStartCancelledTx(ctx context.Context, tx *sql.Tx, actor, hig
 }
 
 // 只允许原actor撤销尚无formation的持久Start或queued整单；forming以后不能按意愿清占用。
-func (s *Store) CancelTeamLaunchForActor(ctx context.Context, actor uint64, observed *teampb.TeamLaunchRecord) ([]uint64, error) {
+func (s *Store) CancelTeamLaunchForActor(ctx context.Context, actor uint64, observed *teampb.TeamLaunchRecord) (members []uint64, err error) {
+	err = s.Fenced(ctx, func() (e error) { members, e = s.cancelTeamLaunchForActorOnce(ctx, actor, observed); return e })
+	return members, err
+}
+
+func (s *Store) cancelTeamLaunchForActorOnce(ctx context.Context, actor uint64, observed *teampb.TeamLaunchRecord) ([]uint64, error) {
 	data, err := DecodeTeamLaunch(observed)
 	if err != nil {
 		return nil, err

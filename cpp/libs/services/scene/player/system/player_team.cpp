@@ -201,6 +201,8 @@ void PlayerTeamSystem::RefreshMembership(entt::entity player, FollowMode mode)
                 || reply->request_digest() != digest
                 || !service_call_auth::Verify(std::string(kTeamReadMethod) + "/reply", *reply, reply->auth(),
                                               "team", responseSecret, TimeSystem::NowMillisecondsUTC())) return;
+            // 这一次没读成,队伍字段都是空的,不能当成没有队伍。和调用失败一样,这一轮不更新。
+            if (reply->retry()) return;
             const auto* applied = tlsEcs.actorRegistry.try_get<TeamSnapshotVersion>(player);
             if (applied != nullptr && (reply->membership_epoch() < applied->epoch
                 || (reply->membership_epoch() == applied->epoch && reply->version() < applied->version))) return;

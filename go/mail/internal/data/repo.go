@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"regexp"
 	"time"
 	"unicode/utf8"
 
@@ -14,6 +13,7 @@ import (
 	mailpb "proto/mail"
 	"shared/assetop"
 	"shared/mailgrant"
+	"shared/rolefence"
 	"shared/serviceauth"
 )
 
@@ -37,26 +37,30 @@ type Repo struct {
 	db             *sql.DB
 	mailIDs, opIDs NextID
 	exists         func(uint32) bool
-	guildDatabase  string
+	guilds         GuildDirectory
 	now            func() time.Time
 	seq            assetop.SeqTables
-	roleAuthority  string
+	guard          *rolefence.Guard
 }
 
-func New(db *sql.DB, mailIDs, opIDs NextID, exists func(uint32) bool, guildDatabase string) *Repo {
-	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(guildDatabase) {
-		panic("帮会权威库名无效")
+func New(db *sql.DB, mailIDs, opIDs NextID, exists func(uint32) bool, guilds GuildDirectory) *Repo {
+	if guilds == nil {
+		panic("帮会目录未装配")
 	}
 	seq, err := assetop.NewSeqTables("mail_player_op_seq", "mail_asset_op", 1)
 	if err != nil {
 		panic(err)
 	}
-	return &Repo{db: db, mailIDs: mailIDs, opIDs: opIDs, exists: exists, guildDatabase: guildDatabase, now: time.Now, seq: seq}
+	return &Repo{db: db, mailIDs: mailIDs, opIDs: opIDs, exists: exists, guilds: guilds, now: time.Now, seq: seq}
 }
 func Tables() []proto.Message {
 	return []proto.Message{&mailpb.MailRecord{}, &mailpb.MailBoxRecord{}, &mailpb.MailStateRecord{}, &mailpb.MailPlayerOpSeqRecord{}, &mailpb.MailAssetOpRecord{}, &mailpb.MailCampaignRecord{}, &mailpb.MailCampaignShardRecord{}, &mailpb.MailCampaignRecipientRecord{}}
 }
 func (r *Repo) tx(ctx context.Context, fn func(*sql.Tx) error) error {
+	return r.runGuarded(ctx, func() error { return r.txRetry(ctx, fn) })
+}
+
+func (r *Repo) txRetry(ctx context.Context, fn func(*sql.Tx) error) error {
 	for attempt := 0; attempt < 3; attempt++ {
 		tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 		if err != nil {

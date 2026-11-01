@@ -19,6 +19,8 @@ func ReceiptDigest(op Op) ([sha256.Size]byte, bool) {
 		caller = "trade"
 	case assetpb.AssetOpStream_ASSET_OP_STREAM_SYSTEM_CREDIT:
 		caller = "mail"
+	case assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL:
+		caller = "data_service"
 	default:
 		return [sha256.Size]byte{}, false
 	}

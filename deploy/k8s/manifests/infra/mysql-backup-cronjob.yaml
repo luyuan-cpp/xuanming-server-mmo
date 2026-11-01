@@ -1,9 +1,9 @@
 # MySQL backup CronJob — daily mysqldump + binlog snapshot.
 #
 # Why this exists:
-#   docs/design/zone_data_rollback.md §3 lists "MySQL binlog 归档" as
-#   priority HIGH. Without it, the灾难恢复级 PITR procedure documented
-#   in §3.2 is theatre — there's nothing to point-in-time-recover from.
+#   The PITR procedure in docs/ops/mysql-backup-pitr-runbook.md §4 needs a
+#   dump plus binlogs. Without them there's nothing to point-in-time-recover
+#   from.
 #
 # What it does (every day at 03:17 UTC):
 #   1. mysqldump --all-databases --single-transaction --master-data=2
@@ -17,7 +17,7 @@
 #     CronJob — depends on cloud provider. The PVC bought us "survives pod
 #     restart"; off-cluster archival buys us "survives cluster loss".
 #   • Verify the dump is restorable. Run a periodic restore drill manually
-#     (see Runbook §"演练" in zone_data_rollback.md).
+#     (see docs/ops/mysql-backup-pitr-runbook.md §4.1).
 #
 # Manual trigger:
 #   kubectl create job --from=cronjob/mysql-backup mysql-backup-manual-$(date +%s)

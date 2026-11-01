@@ -399,6 +399,19 @@ domain_meta:
         handler: "cpp/generated/player_store/handler"
         grpc: "cpp/generated/player_store/grpc"
 
+  # 角色护栏(docs/design/horizontal-scale-logical-db.md §3):guild、trade、mail、match、player_inbox、friend 提供,
+  # data_service 调用。形状照 trade:只出 Go outputs;C++ 的 pb 由全量生成照常产出,data_service.proto import 它。
+  # proto_gen.yaml 与 proto_gen.no-unity.yaml 必须同步。
+  role_fence:
+    source: "{{proto_dir}}role_fence/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/role_fence/proto"
+        handler: "go/generated/role_fence/handler"
+        grpc: "go/generated/role_fence/grpc"
+
   etcd:
     source: "{{proto_dir}}etcd/"
     rpc:

@@ -498,6 +498,11 @@ func (l *GuildLogic) startGuildTrial(ctx context.Context, req *pb.StartGuildTria
 		Cooldown:   time.Duration(pre.rule.GetTrialInviteCooldownSeconds()) * time.Second,
 		NowMs:      nowMs,
 	})
+	if errors.Is(err, data.ErrTrialMatchUnavailable) {
+		// 建房要先在 match 上占位。match 不可达和开战调不通同一个答复,不是 guild 的故障。
+		logx.Errorf("[GuildTrial] create lobby could not reach match (guild %d, initiator %d): %v", a.guild.GuildID, a.playerID, err)
+		return trialServiceBusy().tip(), nil, nil
+	}
 	if err != nil {
 		// 房间 Redis 故障(或配表的邀请有效期被错误热更成 0):guild 自己的故障,不折成业务提示(06 §6.27 L7)。
 		return nil, nil, fmt.Errorf("create trial lobby (guild %d, initiator %d): %w", a.guild.GuildID, a.playerID, err)
@@ -577,6 +582,10 @@ func (l *GuildLogic) respondGuildTrialInvite(ctx context.Context, req *pb.Respon
 		return trialRespondOutcome{tip: trialInviteExpiredTip()}, nil
 	}
 	res, err := d.Lobby.Respond(ctx, lobby.LobbyID, a.playerID, req.GetAccept(), nowMs, trialLaunchWindow)
+	if errors.Is(err, data.ErrTrialMatchUnavailable) {
+		logx.Errorf("[GuildTrial] respond could not reach match (lobby %d, player %d): %v", lobby.LobbyID, a.playerID, err)
+		return trialRespondOutcome{tip: trialServiceBusy().tip()}, nil
+	}
 	if err != nil {
 		return trialRespondOutcome{}, fmt.Errorf("respond to trial lobby %d (player %d): %w", lobby.LobbyID, a.playerID, err)
 	}
@@ -688,6 +697,10 @@ func (l *GuildLogic) startTrialBattle(ctx context.Context, d *ActivityDeps, lobb
 		InitiatorPlayerID: lobby.InitiatorID,
 	}
 	if err := prepareOriginalTrialLaunch(ctx, d, lobby, &battle, row.GetDungeonId(), nowMs); err != nil {
+		if errors.Is(err, data.ErrTrialMatchUnavailable) {
+			logx.Errorf("[GuildTrial] launch could not reach match, lobby ends as service busy (guild %d lobby %d): %v", lobby.GuildID, lobby.LobbyID, err)
+			return data.TrialBattleKey{}, trialServiceBusy(), nil
+		}
 		return data.TrialBattleKey{}, trialEnd{}, err
 	}
 	if battle.LaunchRequestID != 0 {

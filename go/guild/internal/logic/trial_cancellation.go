@@ -12,6 +12,30 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// signedTrialStarter 给开局请求加 guild 的签名:match 读不到 guild 的库,原件由这个签名担保(docs/design/horizontal-scale-logical-db.md §4)。
+type signedTrialStarter struct {
+	client TrialBattleStarter
+	secret string
+}
+
+// NewSignedTrialStarter 装配。secret 和取消用同一把:guild 调 MatchInternal 只有这一把密钥。
+func NewSignedTrialStarter(client TrialBattleStarter, secret string) (TrialBattleStarter, error) {
+	if client == nil {
+		return nil, errors.New("历练开局客户端未装配")
+	}
+	if _, err := serviceauth.New(map[string]string{"guild": secret}); err != nil {
+		return nil, err
+	}
+	return &signedTrialStarter{client: client, secret: secret}, nil
+}
+
+func (s *signedTrialStarter) StartActivityBattle(ctx context.Context, in *matchpb.StartActivityBattleRequest, opts ...grpc.CallOption) (*matchpb.StartActivityBattleResponse, error) {
+	if err := serviceauth.Sign(matchpb.MatchInternal_StartActivityBattle_FullMethodName, in, "guild", s.secret, uint64(time.Now().UnixMilli())); err != nil {
+		return nil, err
+	}
+	return s.client.StartActivityBattle(ctx, in, opts...)
+}
+
 type TrialBattleCanceller interface {
 	CancelActivityBattle(context.Context, *matchpb.CancelActivityBattleRequest, ...grpc.CallOption) (*matchpb.CancelActivityBattleResponse, error)
 }

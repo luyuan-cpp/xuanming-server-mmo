@@ -27,25 +27,28 @@ GO_CONFIGS = {
     "match": "match_service.yaml",
     # 全球匹配成局的个人结算写进收件箱，scene 再从这里拉取。
     "player_inbox": "player_inbox.yaml",
-    # 调试栈不常驻 guild，只用这份配置建表：match 启动要核对 guild 的历练表（compose 的 guild-migrate）。
-    "guild": "guild.yaml",
 }
 SERVICE_IP_OFFSETS = {
     "login": 10, "db": 11, "data_service": 12, "player_locator": 13,
     "scene_manager": 14, "client_rpc_router": 15, "match": 16, "player_inbox": 17,
     "gate": 30, "scene": 31, "battle": 32,
 }
-# 观战两把密钥、存盘接口密钥、匹配链路四把密钥和账号目录四把调用方密钥晚于已准备好的 .env 引入，也不写进任何数据卷，补生成不算轮换。
+# 观战两把密钥、存盘接口密钥、匹配链路四把密钥、账号目录四把调用方密钥和角色护栏九把密钥晚于已准备好的 .env 引入，也不写进任何数据卷，补生成不算轮换。
 ADDITIVE_SECRET_NAMES = ("SPECTATE_TOKEN_SECRET", "MATCH_OPS_CALLER_SECRET", "PLAYER_STORE_SCENE_SECRET",
                          "MATCH_PROBE_SECRET", "RANK_PRODUCER_SECRET_MATCH", "MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "MMORPG_PLAYER_INBOX_SECRET_MATCH",
                          "MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN", "MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE",
-                         "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE", "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER")
+                         "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE", "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER",
+                         "MMORPG_ROLE_FENCE_SECRET_COORDINATOR", "MMORPG_ROLE_FENCE_SECRET_GUILD", "MMORPG_ROLE_FENCE_SECRET_TRADE",
+                         "MMORPG_ROLE_FENCE_SECRET_MAIL", "MMORPG_ROLE_FENCE_SECRET_MATCH", "MMORPG_ROLE_FENCE_SECRET_PLAYER_INBOX",
+                         "MMORPG_ROLE_FENCE_SECRET_FRIEND", "MMORPG_ROLE_FENCE_SECRET_CHAT", "MMORPG_ROLE_FENCE_SECRET_DB")
 SECRET_NAMES = (
     "MYSQL_ROOT_PASSWORD", "GATE_TOKEN_SECRET",
     "QUEUE_TOKEN_SECRET", "INTERNAL_AUTH_SECRET", "BATTLE_TOKEN_SECRET",
     "LOGIN_DEV_PASSWORD_SHARED_SECRET", "GATEWAY_ADMIN_API_KEY",
     *ADDITIVE_SECRET_NAMES,
 )
+# 角色护栏参与者（go/shared/rolefence 的 Participants）的 compose 服务名。协调者直连，端口取源配置。
+ROLE_FENCE_PARTICIPANT_HOSTS = {"guild": "guild", "trade": "trade", "mail": "mail", "match": "match", "player_inbox": "player-inbox", "friend": "friend"}
 # 与 C++ kSpectateBroadcastTopicPartitions（node_command_topic.h）相等；分区数是不可变契约，改数走换代号。
 SPECTATE_BROADCAST_PARTITIONS = 16
 # 写者注册步骤（compose 的 sql-boot、<服务>-sql-boot）在容器里复用的脚本、角色模板和原件。按仓库相对路径复制：dot-source 和模板都按这个布局找。
@@ -298,25 +301,26 @@ def main() -> None:
     for key in ("User", "Password"):
         data["SnapshotMySQL"].pop(key, None)
     data["Schema"]["AutoMigrate"] = False
+    # 这个栈没有给 data_service 配资产签名密钥：回收只能预览，执行回 ErrCodeRecallDisabled。
+    data["Recall"]["Enabled"] = False
+    # guild、trade、mail、friend 不在这个栈里，名字解析不到，调用时算不可达：过户和删角拒绝，其余不受影响。
+    for participant in data["RoleFence"]["Participants"]:
+        port = participant["Endpoints"][0].rsplit(":", 1)[1]
+        participant["Endpoints"] = [f"{ROLE_FENCE_PARTICIPANT_HOSTS[participant['Name']]}:{port}"]
     scene_manager = configs["scene_manager"]
     scene_manager["GateTokenSecret"] = environment["GATE_TOKEN_SECRET"]
     scene_manager["RequireClientEndpoint"] = True
     # 本机只需要一个主世界分线；显式避免沿用压测配置为出生图建立 16 份场景。
     scene_manager["WorldChannelCountByConfId"] = {}
     match = configs["match"]
-    # 匹配只有 SQL 权威一条路径：连 compose 的 MySQL，库由 mysql-init 预建，表由 match-migrate 建；全局角色库与 data_service 同库。
-    match["GlobalMatch"].update(Backend="mysql", Host="mysql:3306", User="root", AccountRoleSchema=data["SnapshotMySQL"]["DBName"])
+    # 匹配只有 SQL 权威一条路径：连 compose 的 MySQL，库由 mysql-init 预建，表由 match-migrate 建。
+    match["GlobalMatch"].update(Backend="mysql", Host="mysql:3306", User="root")
     match.pop("MatchRedis", None)
-    guild = configs["guild"]
-    # 连接串只走环境变量（compose 的 guild-migrate），root 口令不落这份配置。
-    guild["MySQL"].pop("DataSource", None)
-    guild["MySQL"].update(Backend="mysql", DataSourceEnv="MMORPG_GUILD_SQL_DSN")
     player_inbox = configs["player_inbox"]
-    # 独占库由 mysql-init 预建，表由 player-inbox-migrate 建；常驻账号同样来自注册步骤写的运行配置。角色目录与 data_service 同库。
+    # 独占库由 mysql-init 预建，表由 player-inbox-migrate 建；常驻账号同样来自注册步骤写的运行配置。
     player_inbox["MySQL"].update(Backend="mysql", Host="mysql:3306")
     for key in ("User", "Password"):
         player_inbox["MySQL"].pop(key, None)
-    player_inbox["AccountRoleSchema"] = data["SnapshotMySQL"]["DBName"]
     player_inbox["Schema"]["AutoMigrate"] = False
     # TicketSecret 与下面 C++ 的 SpectateTokenSecret 同值：match 签发、gate 验签。
     match["Spectate"].update(TicketSecret=environment["SPECTATE_TOKEN_SECRET"], OpsCallerSecret=environment["MATCH_OPS_CALLER_SECRET"])

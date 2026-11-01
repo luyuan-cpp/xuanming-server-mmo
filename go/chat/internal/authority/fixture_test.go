@@ -3,17 +3,12 @@ package authority
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
-	"path/filepath"
-	"runtime"
 	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,12 +16,69 @@ import (
 	"github.com/stretchr/testify/require"
 	base "proto/common/base"
 	dspb "proto/data_service"
-	"shared/placement"
+	rfpb "proto/role_fence"
+	"shared/rolefence"
 	"shared/roleidentity"
 )
 
 func fixtureRules() Rules {
 	return Rules{MaxContentBytes: 512, RateLimitPerSecond: 5, HistoryMaxEntries: 200, HistoryTTLSeconds: 604800, HistoryDefaultLimit: 20, HistoryMaxLimit: 50, SensitiveWords: []string{"广告"}}
+}
+
+// fixtureRoleStates 是目录 GetRoleFenceState 的替身:聊天只经这个 RPC 读角色归属,不碰目录的表。
+// 没登记过的角色默认是 original-<id>、修订 7、未冻结。
+type fixtureRoleStates struct {
+	mu      sync.Mutex
+	states  map[uint64]*rfpb.RoleFenceState
+	missing map[uint64]bool
+	err     error
+	reads   int
+}
+
+func newFixtureRoleStates() *fixtureRoleStates {
+	return &fixtureRoleStates{states: map[uint64]*rfpb.RoleFenceState{}, missing: map[uint64]bool{}}
+}
+
+func (f *fixtureRoleStates) GetRoleFenceState(_ context.Context, player uint64) (*rfpb.RoleFenceState, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reads++
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.missing[player] {
+		return nil, rolefence.ErrRoleNotFound
+	}
+	if state, ok := f.states[player]; ok {
+		return state, nil
+	}
+	return &rfpb.RoleFenceState{PlayerId: player, Account: "original-" + strconv.FormatUint(player, 10), OwnerRevision: 7, Version: 1, HomeZone: 1}, nil
+}
+
+// set 把角色改成给定的归属,token 非 0 表示被最终冻结。
+func (f *fixtureRoleStates) set(player uint64, account string, revision, token uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.states[player] = &rfpb.RoleFenceState{PlayerId: player, Account: account, OwnerRevision: revision, FreezeToken: token, FreezeFinal: token != 0, Version: 2, HomeZone: 1}
+}
+
+// setPreparing 把角色改成还在投票:有令牌,不是最终冻结。
+func (f *fixtureRoleStates) setPreparing(player uint64, account string, revision, token uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.states[player] = &rfpb.RoleFenceState{PlayerId: player, Account: account, OwnerRevision: revision, FreezeToken: token, Version: 2, HomeZone: 1}
+}
+
+func (f *fixtureRoleStates) remove(player uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.missing[player] = true
+}
+
+func (f *fixtureRoleStates) readCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.reads
 }
 
 func nativeStore(t *testing.T, configured ...Rules) *Store {
@@ -69,8 +121,7 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 	db, err := fixture.OpenSchema(ctx, name)
 	require.NoError(t, err)
 	require.NoError(t, Migrate(ctx, db))
-	loadFormalRoleFixtures(t, ctx, db)
-	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy", "account_role", "player_route", "zone_merged_into", "route_meta"))
+	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy"))
 	runtimeDB, err := fixture.Open(ctx, name, 8)
 	require.NoError(t, err)
 	rules := fixtureRules()
@@ -78,72 +129,24 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 	if len(configured) == 1 {
 		rules = configured[0]
 	}
-	s, err := New(ctx, runtimeDB, name, authoritysql.BackendTiDB, rules)
+	s, err := New(ctx, runtimeDB, newFixtureRoleStates(), authoritysql.BackendTiDB, rules)
 	require.NoError(t, err)
 	return s, fixture
 }
 
-// AST读取DS唯一正式nullable路由及account_role DDL，不复制第二份权威表形状。
-func loadFormalRoleFixtures(t *testing.T, ctx context.Context, db *sql.DB) {
+// roleStatesOf 取夹具给 Store 装的目录替身,用例用它改角色归属。
+func roleStatesOf(t *testing.T, s *Store) *fixtureRoleStates {
 	t.Helper()
-	_, source, _, ok := runtime.Caller(0)
-	require.True(t, ok)
-	root := filepath.Join(filepath.Dir(source), "..", "..", "..", "data_service", "internal", "store")
-	wanted := map[string]bool{"playerRouteBootstrapDDL": true, "zoneMergedIntoBootstrapDDL": true, "accountRoleDDL": true}
-	catalogDDL := authoritysql.CatalogBootstrapStatements()
-	values := map[string]string{"routeMetaBootstrapDDL": catalogDDL["route_meta"]}
-	var literal func(ast.Expr) string
-	literal = func(e ast.Expr) string {
-		switch v := e.(type) {
-		case *ast.BasicLit:
-			require.Equal(t, token.STRING, v.Kind)
-			s, err := strconv.Unquote(v.Value)
-			require.NoError(t, err)
-			return s
-		case *ast.BinaryExpr:
-			require.Equal(t, token.ADD, v.Op)
-			return literal(v.X) + literal(v.Y)
-		default:
-			t.Fatalf("DS正规DDL表达式须显式审阅：%T", e)
-			return ""
-		}
-	}
-	for _, name := range []string{"schema.go", "account_directory_store.go"} {
-		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, name), nil, parser.SkipObjectResolution)
-		require.NoError(t, err)
-		for _, decl := range file.Decls {
-			group, ok := decl.(*ast.GenDecl)
-			if !ok || group.Tok != token.CONST {
-				continue
-			}
-			for _, spec := range group.Specs {
-				v, ok := spec.(*ast.ValueSpec)
-				if !ok {
-					continue
-				}
-				for i, key := range v.Names {
-					if wanted[key.Name] {
-						require.Less(t, i, len(v.Values))
-						values[key.Name] = literal(v.Values[i])
-					}
-				}
-			}
-		}
-	}
-	for _, name := range []string{"playerRouteBootstrapDDL", "zoneMergedIntoBootstrapDDL", "routeMetaBootstrapDDL", "accountRoleDDL"} {
-		ddl, ok := values[name]
-		require.True(t, ok, "缺正规DDL %s", name)
-		_, err := db.ExecContext(ctx, ddl)
-		require.NoError(t, err)
-	}
-	_, err := db.ExecContext(ctx, "INSERT INTO route_meta(id,generation,writable) VALUES(1,'636861742d6974',1)")
-	require.NoError(t, err)
-	for _, player := range []uint64{11, 22, ^uint64(0)} {
-		_, err = db.ExecContext(ctx, "INSERT INTO player_route(route_shard,player_id,home_zone,rev,updated_by,created_at_ms,updated_at_ms) VALUES(?,?,1,1,'chat-it',1,1)", placement.RouteRowShard(player), player)
-		require.NoError(t, err)
-		_, err = db.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,trade_listing_id) VALUES(?,?,?,7,1,0)", player, []byte("original-"+strconv.FormatUint(player, 10)), []byte{})
-		require.NoError(t, err)
-	}
+	states, ok := s.states.(*fixtureRoleStates)
+	require.True(t, ok, "Store 没装目录替身")
+	return states
+}
+
+func storeSchema(t *testing.T, s *Store) string {
+	t.Helper()
+	var schema string
+	require.NoError(t, s.db.QueryRow("SELECT DATABASE()").Scan(&schema))
+	return schema
 }
 
 func actor(t *testing.T, id uint64, account string, revision uint64) context.Context {

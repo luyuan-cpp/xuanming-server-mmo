@@ -22,7 +22,7 @@ import (
 
 // 玩家名字注册表(设计 docs/design/guild-phase2/03-names.md §3.3 / §3.4)在真实 InnoDB 上
 // 的不变量。这几条只有真库能证明,fake store 一条都证不了:
-//  1. bootstrap DDL 真的建成了 VARCHAR + utf8mb4_bin + **PRIMARY KEY(name_norm)** + UNIQUE(player_id) ——
+//  1. bootstrap DDL 真的建成了 VARCHAR + utf8mb4_bin + **PRIMARY KEY(name_norm)**,player_name_owner 的主键是 player_id ——
 //     名字当聚簇主键是审计 #12 根治的全部前提,collation 决定了"库认为哪两个名字相同";
 //  2. Reserve 幂等 / 撞名能回出 owner / 同 id 换名是 Conflict;
 //  3. 32 个并发抢同一个名字,**恰好**一个成功 —— 应用层的"先查后插"在这里必漏,
@@ -31,8 +31,8 @@ import (
 //  5. 锁模式(审计 #12 的根治):未提交的 Release 后面排着两个同名 Reserve,按"持锁现场 × player_id 顺序"
 //     逐一摆出(文件末尾一节,红绿对照 + 产品路径):**三种顺序 × 两种现场一律零 1213、零重试**,
 //     终局都正确。红对照在用例自建的**旧结构**临时表上跑普通 INSERT,证明这套编排确实能把环摆出来。
-//     以及 Release 先锁聚簇、后锁二级索引项(EXPLAIN 钉 key = PRIMARY);
-//  6. 换主键那次迁移本身:旧结构的存量表跑完 -migrate 之后形状对、数据一行不少、再跑一次零变更。
+//     以及 Release 走聚簇主键(EXPLAIN 钉 key = PRIMARY);
+//  6. 表形状认不出来、片号对不上时拒绝建 store。
 
 // newPlayerNameStore 开一个指向一次性库的 store,用例结束自动关。
 func newPlayerNameStore(t *testing.T, db *storetest.DB) *store.PlayerNameStore {
@@ -52,7 +52,7 @@ func playerNameNowMs() uint64 {
 // 一旦有人"顺手把 player_name 收口回 CreateOrUpdateTable",列会变回 MEDIUMTEXT,
 // 主键 / 唯一键建不出来(1170),而迁移可能只是报错、也可能在某些版本上静默少一个约束 ——
 // 那时名字唯一性就只剩应用层的先查后插,并发建角必然重名且全程零报错。
-// 同时钉住新结构的键形状:主键 name_norm(根治的前提)、player_id 上另有一条唯一键。
+// 同时钉住键形状:主键 name_norm(根治的前提),表上没有别的索引;player_id 的唯一性在 player_name_owner 的主键上。
 func TestPlayerName_BootstrapDDLIsVarcharUniqueBin(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 
@@ -80,25 +80,18 @@ func TestPlayerName_BootstrapDDLIsVarcharUniqueBin(t *testing.T) {
 		"主键必须是 name_norm:名字抢注死锁的根治就是「被争抢的键做成聚簇主键」,"+
 			"改回 player_id 会让生产常态那一路重新成环(真库实测 5/5)")
 
-	var nonUnique int
-	var idxCol string
-	require.NoError(t, db.Raw.QueryRow(
-		`SELECT NON_UNIQUE, COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS
-		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? AND SEQ_IN_INDEX = 1`,
-		db.Name, store.PlayerNameTableName, store.PlayerNameOwnerUniqueKey).Scan(&nonUnique, &idxCol),
-		"%s 必须存在:Reserve 靠它把「这个 player_id 已经有别的名字」判成 Conflict", store.PlayerNameOwnerUniqueKey)
-	assert.Equal(t, 0, nonUnique, "%s 必须是唯一索引", store.PlayerNameOwnerUniqueKey)
-	assert.Equal(t, "player_id", idxCol)
+	ownerPK, err := store.PrimaryKeyColumnsForTest(context.Background(), db.Raw, db.Name, store.PlayerNameOwnerTableName)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"player_id"}, ownerPK, "player_name_owner 的主键是「一个角色只登记一个名字」的全部实现")
 
-	// name_norm 上**不能**再有二级唯一索引:ODKU 的重复扫描会连它一起取 X next-key,
+	// player_name 上**不能**再有二级索引:name_norm 上的二级唯一索引会让 ODKU 多取一把 X next-key,
 	// 把改主键消掉的那条环原样带回来(而且是静默的 —— 功能全对,只是又开始死锁)。
-	var normSecondary int
+	var secondary int
 	require.NoError(t, db.Raw.QueryRow(
 		`SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
-		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'name_norm' AND INDEX_NAME <> 'PRIMARY'`,
-		db.Name, store.PlayerNameTableName).Scan(&normSecondary))
-	assert.Equal(t, 0, normSecondary,
-		"name_norm 上出现了二级索引:主键已经覆盖它,多出来的那条只会让 ODKU 多取一把 X next-key,把环带回来")
+		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME <> 'PRIMARY'`,
+		db.Name, store.PlayerNameTableName).Scan(&secondary))
+	assert.Equal(t, 0, secondary, "player_name 上出现了二级索引")
 
 	// 二次迁移零变更:生产每次部署都会重复跑 -migrate,这张表不能每次被 MODIFY 一遍。
 	before := db.ShowCreateTable(t, store.PlayerNameTableName)
@@ -134,6 +127,7 @@ func TestPlayerName_ReserveIdempotentAndTaken(t *testing.T) {
 	// 重试不刷新 created_ms:释放窗口必须以**首次**登记时刻为准,否则反复重试能把
 	// 一个早该过窗的登记一直续在窗口里。
 	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "player_id = ? AND created_ms = ?", playerA, now))
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ? AND name_norm = ?", playerA, "ab12"), "owner 行和名字行一起写")
 
 	// 别人来占同一个 norm:Taken,且 owner 要能回出去(login 据此识别"自己上次建角的重试")。
 	outcome, owner, err = st.Reserve(ctx, playerB, "AB12", "ab12", now)
@@ -141,6 +135,7 @@ func TestPlayerName_ReserveIdempotentAndTaken(t *testing.T) {
 	assert.Equal(t, store.ReserveTaken, outcome)
 	assert.Equal(t, playerA, owner)
 	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "name_norm = ?", "ab12"))
+	assert.Equal(t, int64(0), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ?", playerB), "撞名不写 owner 行")
 
 	// 同一个 player_id 换名字:v1 无改名,只能是 Conflict,而且一个字节都不许写。
 	outcome, owner, err = st.Reserve(ctx, playerA, "Cd34", "cd34", now)
@@ -149,6 +144,25 @@ func TestPlayerName_ReserveIdempotentAndTaken(t *testing.T) {
 	assert.Zero(t, owner)
 	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "player_id = ?", playerA))
 	assert.Equal(t, int64(0), db.Count(t, store.PlayerNameTableName, "name_norm = ?", "cd34"))
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ? AND name_norm = ?", playerA, "ab12"))
+
+	// 上次 Release 把名字行删了、owner 行没删掉:这条 owner 行是陈旧的,再登记别的名字不算事故。
+	const playerC uint64 = 1003
+	_, err = db.Raw.ExecContext(ctx, "INSERT INTO player_name_owner (player_id, name_norm, name) VALUES (?, ?, ?)", playerC, "gone", "Gone")
+	require.NoError(t, err)
+	outcome, _, err = st.Reserve(ctx, playerC, "Ef56", "ef56", now)
+	require.NoError(t, err)
+	assert.Equal(t, store.ReserveInserted, outcome)
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ? AND name_norm = ?", playerC, "ef56"))
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ?", playerC))
+
+	// 第 2 步失败之后的重放:名字行在、owner 行缺,同参数重放把 owner 行补上。
+	_, err = db.Raw.ExecContext(ctx, "DELETE FROM player_name_owner WHERE player_id = ?", playerC)
+	require.NoError(t, err)
+	outcome, _, err = st.Reserve(ctx, playerC, "Ef56", "ef56", now)
+	require.NoError(t, err)
+	assert.Equal(t, store.ReserveAlreadyOwned, outcome)
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ? AND name_norm = ?", playerC, "ef56"))
 }
 
 // TestPlayerName_ConcurrentSameName 是本文件里最重要的一条:32 个不同 player_id 同时抢
@@ -208,6 +222,8 @@ func TestPlayerName_ConcurrentSameName(t *testing.T) {
 			assert.Equalf(t, winner, owners[i], "goroutine %d 拿到的 owner 必须是那个插入成功的 id", i)
 		}
 	}
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ?", winner))
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "name_norm = ?", norm), "输家不写 owner 行")
 }
 
 // TestPlayerName_ReleaseConditional 覆盖条件删除的四个分支。
@@ -248,12 +264,14 @@ func TestPlayerName_ReleaseConditional(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, store.ReleaseOutsideWindow, rel)
 	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameTableName, "player_id = ?", playerA))
+	assert.Equal(t, int64(1), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ?", playerA), "窗口外两边都不动")
 
 	// 窗口内:login 建角补偿的正常形态。
 	rel, err = st.Release(ctx, playerA, norm, now-1)
 	require.NoError(t, err)
 	assert.Equal(t, store.ReleaseDeleted, rel)
 	assert.Equal(t, int64(0), db.Count(t, store.PlayerNameTableName, "player_id = ?", playerA))
+	assert.Equal(t, int64(0), db.Count(t, store.PlayerNameOwnerTableName, "player_id = ?", playerA), "owner 行一起删")
 
 	// 幂等:login 的"立即 + 延迟 10s"两次释放,第二次必须不是错误(否则每次都记一条孤儿)。
 	rel, err = st.Release(ctx, playerA, norm, now-1)
@@ -619,18 +637,15 @@ func (sc *nameRaceScene) deleteName(t *testing.T, fx nameRaceFixture, player uin
 	require.Equalf(t, store.ReleaseDeleted, rel, "夹具:%s 应已释放", norm)
 }
 
-// requirePlayerNameKeyedByName 确认生产表真的跑过了主键迁移。
-// 这不是可选的:本节绿用例的全部结论都建立在"名字是聚簇主键"之上,跑在旧结构上会得到完全不同的结果
+// requirePlayerNameKeyedByName 确认生产表的主键是 name_norm。
+// 这不是可选的:本节绿用例的全部结论都建立在"名字是聚簇主键"之上,跑在别的结构上会得到完全不同的结果
 // (生产常态那一路 5/5 成环),而失败信息会把人引向"锁行为与推演不符"这个错误方向。
 func requirePlayerNameKeyedByName(t *testing.T, sc *nameRaceScene) {
 	t.Helper()
 	pkCols, err := store.PrimaryKeyColumnsForTest(sc.ctx, sc.db.Raw, sc.db.Name, store.PlayerNameTableName)
 	require.NoError(t, err)
-	require.Truef(t, store.PlayerNamePKShapeIsByNameForTest(pkCols),
-		"%s 的主键是 %v,不是 name_norm:MigrateSchema 没有把主键换过来,本节的判据不适用于这张表",
-		store.PlayerNameTableName, pkCols)
-	require.Falsef(t, sc.st.LegacyKeyedByPlayerIDForTest(),
-		"store 探到的是旧主键形态,与 INFORMATION_SCHEMA 读出来的 %v 不一致 —— 探测逻辑坏了", pkCols)
+	require.Equalf(t, []string{"name_norm"}, pkCols,
+		"%s 的主键不是 name_norm,本节的判据不适用于这张表", store.PlayerNameTableName)
 }
 
 // awaitQueued 确认 want 个事务排进了本现场那张表的锁等待队列;读不了 performance_schema 时跳过(不代表通过)。
@@ -846,9 +861,8 @@ func nameOwner(t *testing.T, sc *nameRaceScene) uint64 {
 // 判据为什么是"零"而不是"看顺序分情况"(前几轮的写法):名字现在是**聚簇主键**,两个竞争者的重复检查必然
 // 落在**同一条**聚簇记录上,被那把 X **串行化** —— 同一时刻只有一个事务往下走,凑不出"两个排队者各持间隙锁、
 // 互挡插入意向"的形状,新项插在删除标记项之前还是之后也就不再是一件事。
-// 注意**不能**说成"整条路上没有插入意向锁":第一个拿到 X 的竞争者要去**复活**那条删除标记的聚簇记录,
-// 那会把 uk_player_name_owner 上的新 (player_id) 项**插**出来,是一次真插入(完整推导见 player_name_store.go
-// 的「与其它写者的交错」)。2026-09-29 真库探针在这三种顺序上各跑 5 次,**0/15 未复现** —— 是"没复现",不是"不可能"。
+// 2026-09-29 真库探针在这三种顺序上各跑 5 次,**0/15 未复现** —— 是"没复现",不是"不可能"。
+// 探针那时表上还有 UNIQUE(player_id),目录分片之后这条索引搬到了 player_name_owner 的主键;少一个索引只少一条取锁路径,本用例就是重测。
 // 任何一格变红,先查主键是不是被改回 player_id 了(红对照 TestPlayerName_LegacyPrimaryKeyPlainInsertDeadlocks
 // 证明的正是那张表上会成环),而不是把断言放宽。
 func TestPlayerName_ReleaseRacesTwoReservesConverges(t *testing.T) {
@@ -1020,19 +1034,13 @@ func TestPlayerName_ReserveBehindPendingReleaseOutcome(t *testing.T) {
 // Reserve 的 ODKU 从聚簇索引开始,Release 必须同序,否则两者在同一行上反序成环。
 // 锁序只取决于执行计划,并发用例只能按概率撞上,而 EXPLAIN 每次都答得出来。
 //
-// 对生产代码里**同一个 SQL 常量**做 EXPLAIN,断言 key = PRIMARY **且是单行点查**;有人去掉 FORCE INDEX
-// (优化器可能改挑 uk_player_name_owner,那就是先二级、后聚簇 = 反序)、或把 name_norm 等值条件从 WHERE 里
-// 拿掉(FORCE INDEX 会把它退化成全索引扫描,key 不变、锁覆盖面却从一条记录放大到整张聚簇索引),
-// 本用例都会变红。
+// 对生产代码里**同一个 SQL 常量**做 EXPLAIN,断言 key = PRIMARY **且是单行点查**;有人把 name_norm 等值条件从 WHERE 里
+// 拿掉(FORCE INDEX 会把它退化成全索引扫描,key 不变、锁覆盖面却从一条记录放大到整张聚簇索引),本用例会变红。
 func TestPlayerName_ReleaseStatementLocksClusteredKeyFirst(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	st := newPlayerNameStore(t, db)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-
-	require.Equalf(t, store.PlayerNameReleaseSQLForTest, st.ReleaseSQLForTest(),
-		"迁移之后 store 应当选定新结构那条 Release 语句,实际选的是 %q —— 形态探测或迁移有一个没生效",
-		st.ReleaseSQLForTest())
 
 	const (
 		player uint64 = 7001
@@ -1067,7 +1075,7 @@ func TestPlayerName_ReleaseStatementLocksClusteredKeyFirst(t *testing.T) {
 	}
 	t.Logf("Release 的执行计划: %v", plan)
 	assert.Equal(t, store.PlayerNameReleaseForcedIndexForTest, plan["key"],
-		"Release 必须先锁聚簇记录、后锁二级索引项(与 Reserve 的 ODKU 同序):FORCE INDEX (PRIMARY) 被去掉或没生效")
+		"Release 必须走聚簇主键(与 Reserve 的 ODKU 同序):FORCE INDEX (PRIMARY) 被去掉或没生效")
 
 	// 光看 key 不够:WHERE 里丢掉 name_norm 等值条件之后,FORCE INDEX 会退化成**全索引扫描**(type=index),
 	// key 仍是 PRIMARY、上面那条断言照样绿,而运行期会对索引上每一项取 next-key ——
@@ -1086,415 +1094,33 @@ func TestPlayerName_ReleaseStatementLocksClusteredKeyFirst(t *testing.T) {
 		plan)
 }
 
-// TestPlayerName_MigrationSwitchesPrimaryKeyFromPlayerID 是**迁移本身**的回归:
-// 造一张旧结构的 player_name(带几行数据),跑 MigrateSchema,断言主键换成了 name_norm、
-// player_id 上有了唯一键、数据一行不少,而且再跑一次是零变更(幂等)。
-//
-// 为什么必须有这一条:新建库走的是 bootstrap DDL,**永远不会**走到换主键那段代码;
-// 存量库才会,而那正是唯一一次不可回头的结构变更。
-func TestPlayerName_MigrationSwitchesPrimaryKeyFromPlayerID(t *testing.T) {
-	db := storetest.NewEmptyDB(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	// 先手工建出**旧结构**的生产表名,再跑迁移 —— CREATE TABLE IF NOT EXISTS 会跳过建表,
-	// 于是迁移必须靠换主键那一步把它救回来。
-	legacyDDL := strings.Replace(legacyPlayerNamePKTableDDL, legacyPlayerNamePKTable, store.PlayerNameTableName, 1)
-	_, err := db.Raw.ExecContext(ctx, legacyDDL)
-	require.NoError(t, err, "夹具:建旧结构的 player_name 失败")
-
-	now := playerNameNowMs()
-	seeded := map[uint64]string{4001: "laoyi", 4002: "laoer", 9001: "laosan"}
-	for id, norm := range seeded {
-		_, err := db.Raw.ExecContext(ctx,
-			"INSERT INTO `"+store.PlayerNameTableName+"` (player_id, name, name_norm, created_ms) VALUES (?, ?, ?, ?)",
-			id, strings.ToUpper(norm), norm, now)
-		require.NoError(t, err, "夹具:种 %s 失败", norm)
+// 主键认不出来就建不出 store:主键不对时 ODKU 撞不到键,"名字全服唯一"会静默失效。
+func TestPlayerName_StoreRefusesUnknownPrimaryKey(t *testing.T) {
+	for table, alter := range map[string]string{
+		store.PlayerNameTableName:      "ALTER TABLE `player_name` DROP PRIMARY KEY, ADD PRIMARY KEY (`player_id`)",
+		store.PlayerNameOwnerTableName: "ALTER TABLE `player_name_owner` DROP PRIMARY KEY, ADD PRIMARY KEY (`player_id`, `name_norm`)",
+	} {
+		t.Run(table, func(t *testing.T) {
+			db := storetest.NewMigratedDB(t)
+			_, err := db.Raw.Exec(alter)
+			require.NoError(t, err, "夹具:改主键失败")
+			st, err := store.NewPlayerNameStore(db.Cfg)
+			if err == nil {
+				_ = st.Close()
+			}
+			require.ErrorContains(t, err, table)
+		})
 	}
-
-	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "迁移应当把旧结构换成新结构")
-
-	pkCols, err := store.PrimaryKeyColumnsForTest(ctx, db.Raw, db.Name, store.PlayerNameTableName)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"name_norm"}, pkCols, "迁移之后主键必须是 name_norm(审计 #12 根治的全部前提)")
-
-	var nonUnique int
-	var ownerCol string
-	require.NoError(t, db.Raw.QueryRowContext(ctx,
-		`SELECT NON_UNIQUE, COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS
-		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? AND SEQ_IN_INDEX = 1`,
-		db.Name, store.PlayerNameTableName, store.PlayerNameOwnerUniqueKey).Scan(&nonUnique, &ownerCol),
-		"迁移之后必须建出 %s", store.PlayerNameOwnerUniqueKey)
-	assert.Equal(t, 0, nonUnique)
-	assert.Equal(t, "player_id", ownerCol)
-
-	// 旧的二级唯一键必须**消失**:留着它,ODKU 的重复扫描会连它一起取 X next-key,把根治掉的环带回来。
-	var legacyIdx int
-	require.NoError(t, db.Raw.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
-		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?`,
-		db.Name, store.PlayerNameTableName, store.PlayerNameLegacyNormUniqueKey).Scan(&legacyIdx))
-	assert.Equal(t, 0, legacyIdx, "%s 应当在换主键时被一并 DROP 掉", store.PlayerNameLegacyNormUniqueKey)
-
-	// 数据一行不少(这条 ALTER 会重建整张表,丢行是最不能接受的失败形态)。
-	for id, norm := range seeded {
-		assert.Equalf(t, int64(1), db.Count(t, store.PlayerNameTableName, "player_id = ? AND name_norm = ?", id, norm),
-			"迁移丢了 player %d 的名字 %s", id, norm)
-	}
-	assert.Equal(t, int64(len(seeded)), db.Count(t, store.PlayerNameTableName, ""))
-
-	// 幂等:生产每次部署都会重复跑 -migrate,第二次必须零变更。
-	before := db.ShowCreateTable(t, store.PlayerNameTableName)
-	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration must be a no-op")
-	assert.Equal(t, before, db.ShowCreateTable(t, store.PlayerNameTableName), "player_name DDL changed on second migration")
-
-	// 迁移之后 store 必须探到新形态,并选新结构那条 Release 语句。
-	st, err := store.NewPlayerNameStore(db.Cfg)
-	require.NoError(t, err)
-	defer st.Close()
-	assert.False(t, st.LegacyKeyedByPlayerIDForTest(), "迁移之后不该再被探成旧形态")
-	assert.Equal(t, store.PlayerNameReleaseSQLForTest, st.ReleaseSQLForTest())
-
-	// 迁移之后名字唯一性仍然由库兜住(换的是键的位置,不是有没有这条约束)。
-	_, err = db.Raw.ExecContext(ctx,
-		"INSERT INTO `"+store.PlayerNameTableName+"` (player_id, name, name_norm, created_ms) VALUES (?, ?, ?, ?)",
-		7777, "LaoYi", "laoyi", now)
-	require.Error(t, err, "迁移之后重名必须仍被库拒绝")
-	assert.Truef(t, isMySQLErrNumber(err, store.MySQLErrDupEntryForTest), "重名应当是 1062,实际: %v", err)
 }
 
-// TestPlayerName_MigrationRefusesUnknownPrimaryKeyShape:主键既不是 name_norm 也不是 player_id 时,
-// 迁移必须**停住**而不是猜着下发 ALTER。看不懂的形状上继续,要么删错索引,要么建出一张两种语句都不匹配的表。
-func TestPlayerName_MigrationRefusesUnknownPrimaryKeyShape(t *testing.T) {
-	db := storetest.NewEmptyDB(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	// 复合主键 (player_id, name_norm):两条唯一性看起来都"在",但谁也不是单列唯一 —— 一个人能占多个名字。
-	_, err := db.Raw.ExecContext(ctx, "CREATE TABLE `"+store.PlayerNameTableName+"` (\n"+
-		"  `player_id` bigint unsigned NOT NULL DEFAULT 0,\n"+
-		"  `name` VARCHAR(64) NOT NULL DEFAULT '',\n"+
-		"  `name_norm` VARCHAR(191) NOT NULL,\n"+
-		"  `created_ms` bigint unsigned NOT NULL DEFAULT 0,\n"+
-		"  PRIMARY KEY (`player_id`, `name_norm`)\n"+
-		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin")
-	require.NoError(t, err)
-
-	err = db.Migrate(ctx, store.MigrateOptions{})
-	require.Error(t, err, "认不出的主键形状上必须 fail-closed,不许猜着 ALTER")
-	assert.Contains(t, err.Error(), store.PlayerNameTableName)
-
-	// 顺带证明 store 也不会在这种表上建出来(两条判据同口径,免得一处拦一处放)。
-	_, err = store.NewPlayerNameStore(db.Cfg)
-	assert.Error(t, err, "形态认不出来时 NewPlayerNameStore 必须拒绝(CreatePlayer 当场 fail-closed)")
-}
-
-// TestPlayerName_LegacyShapeStorePicksLegacyRelease:迁移还没跑过的库上(主键仍是 player_id),
-// store 必须探到旧形态并改用带 FORCE INDEX (uk_player_name) 的旧 Release 语句 ——
-// 在旧表上发新语句 = 与 Reserve 反序取锁,凭空多出一类两方环。
-//
-// 这同时是"新二进制 + 旧表结构"这个并存窗口的行为证据:不拒启动、功能正确、锁序仍然一致。
-func TestPlayerName_LegacyShapeStorePicksLegacyRelease(t *testing.T) {
-	db := storetest.NewEmptyDB(t)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	legacyDDL := strings.Replace(legacyPlayerNamePKTableDDL, legacyPlayerNamePKTable, store.PlayerNameTableName, 1)
-	_, err := db.Raw.ExecContext(ctx, legacyDDL)
-	require.NoError(t, err, "夹具:建旧结构的 player_name 失败")
-
-	require.NoError(t, db.Fixture().GrantTables(ctx, db.Name, store.PlayerNameTableName))
-	st, err := store.NewPlayerNameStore(db.Cfg)
-	require.NoError(t, err, "旧结构不该拒绝建 store:它功能正确,只是更容易成环(TiDB 上迁移会跳过,拒启动等于让 player_name 不可用)")
-	defer st.Close()
-	assert.True(t, st.LegacyKeyedByPlayerIDForTest())
-	assert.Equal(t, store.PlayerNameReleaseLegacySQLForTest, st.ReleaseSQLForTest(),
-		"旧结构上必须用带 FORCE INDEX (%s) 的那条 Release:发新语句会与 Reserve 反序取锁",
-		store.PlayerNameLegacyNormUniqueKey)
-
-	// 对外语义在旧结构上一个字都不变(Reserve 四种终局里的三种 + Release 幂等)。
-	now := playerNameNowMs()
-	outcome, owner, err := st.Reserve(ctx, 4001, "LaoYi", "laoyi", now)
-	require.NoError(t, err)
-	require.Equal(t, store.ReserveInserted, outcome)
-	require.Zero(t, owner)
-
-	outcome, owner, err = st.Reserve(ctx, 9001, "LAOYI", "laoyi", now)
-	require.NoError(t, err)
-	assert.Equal(t, store.ReserveTaken, outcome)
-	assert.Equal(t, uint64(4001), owner)
-
-	rel, err := st.Release(ctx, 4001, "laoyi", 0)
-	require.NoError(t, err)
-	assert.Equal(t, store.ReleaseDeleted, rel)
-	rel, err = st.Release(ctx, 4001, "laoyi", 0)
-	require.NoError(t, err)
-	assert.Equal(t, store.ReleaseAbsent, rel, "幂等")
-}
-
-// TestPlayerName_MigrationConvergesLeftoverKeyShape:**"主键对了"不等于"形状对了"**。
-//
-// 造的是运维照注释里的反向 ALTER **只回滚了一半**(或手工只执行了 ADD PRIMARY KEY)之后的中间态:
-// PRIMARY KEY(name_norm) 已经换好,但旧的 uk_player_name(name_norm) 还留着、uk_player_name_owner 还没建。
-// 这个形态在本次改动之前会一路静默通过:迁移在"主键已是 name_norm"的快路径直接 return nil,
-// assertUniqueColumns 只问"这一列上有没有单列唯一约束"(PRIMARY 就满足),NewPlayerNameStore 也只看主键形态 ——
-// 全链路零报错,而多出来的那条二级唯一索引会把根治掉的死锁形状带回来,缺的那条键会让 Reserve 的
-// ID 复用检测静默失效。所以迁移必须在这一支上**收敛**,而不是跳过。
-func TestPlayerName_MigrationConvergesLeftoverKeyShape(t *testing.T) {
-	db := storetest.NewEmptyDB(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	// 先建旧结构,再执行"回滚做了一半"的那一半:换主键、但不 DROP 旧键、也不建 owner 键。
-	legacyDDL := strings.Replace(legacyPlayerNamePKTableDDL, legacyPlayerNamePKTable, store.PlayerNameTableName, 1)
-	_, err := db.Raw.ExecContext(ctx, legacyDDL)
-	require.NoError(t, err, "夹具:建旧结构的 player_name 失败")
-
-	now := playerNameNowMs()
-	seeded := map[uint64]string{4101: "banjiu", 9101: "banshi"}
-	for id, norm := range seeded {
-		_, err := db.Raw.ExecContext(ctx,
-			"INSERT INTO `"+store.PlayerNameTableName+"` (player_id, name, name_norm, created_ms) VALUES (?, ?, ?, ?)",
-			id, strings.ToUpper(norm), norm, now)
-		require.NoError(t, err, "夹具:种 %s 失败", norm)
-	}
-
-	_, err = db.Raw.ExecContext(ctx, "ALTER TABLE `"+store.PlayerNameTableName+
-		"` DROP PRIMARY KEY, ADD PRIMARY KEY (`name_norm`)")
-	require.NoError(t, err, "夹具:摆出「主键换了、旧键还在、owner 键没建」的中间态失败")
-
-	// 夹具自检:确实是那个中间态,而不是被 MySQL 顺手整理过。
-	var leftover int
-	require.NoError(t, db.Raw.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
-		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?`,
-		db.Name, store.PlayerNameTableName, store.PlayerNameLegacyNormUniqueKey).Scan(&leftover))
-	require.Equal(t, 1, leftover, "夹具:中间态里旧的 %s 必须还在", store.PlayerNameLegacyNormUniqueKey)
-
-	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}),
-		"主键已对但形状没收敛时,迁移必须把它收敛掉,而不是在快路径直接跳过")
-
-	pkCols, err := store.PrimaryKeyColumnsForTest(ctx, db.Raw, db.Name, store.PlayerNameTableName)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"name_norm"}, pkCols)
-
-	require.NoError(t, db.Raw.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
-		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'name_norm' AND INDEX_NAME <> 'PRIMARY'`,
-		db.Name, store.PlayerNameTableName).Scan(&leftover))
-	assert.Equal(t, 0, leftover,
-		"残留的 name_norm 二级唯一索引必须被 DROP 掉:留着它,Reserve 插入新名字时会多走一次二级唯一索引的插入路径,"+
-			"把改主键消掉的死锁形状带回来(而且功能全对、零报错)")
-
-	var nonUnique int
-	var ownerCol string
-	require.NoError(t, db.Raw.QueryRowContext(ctx,
-		`SELECT NON_UNIQUE, COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS
-		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? AND SEQ_IN_INDEX = 1`,
-		db.Name, store.PlayerNameTableName, store.PlayerNameOwnerUniqueKey).Scan(&nonUnique, &ownerCol),
-		"缺失的 %s 必须被补建", store.PlayerNameOwnerUniqueKey)
-	assert.Equal(t, 0, nonUnique)
-	assert.Equal(t, "player_id", ownerCol)
-
-	for id, norm := range seeded {
-		assert.Equalf(t, int64(1), db.Count(t, store.PlayerNameTableName, "player_id = ? AND name_norm = ?", id, norm),
-			"收敛键形状丢了 player %d 的名字 %s", id, norm)
-	}
-
-	// 幂等:收敛过的表再跑一次必须零变更(收敛这一步每次启动都会走到)。
-	before := db.ShowCreateTable(t, store.PlayerNameTableName)
-	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}), "second migration must be a no-op")
-	assert.Equal(t, before, db.ShowCreateTable(t, store.PlayerNameTableName), "player_name DDL changed on second migration")
-
-	st, err := store.NewPlayerNameStore(db.Cfg)
-	require.NoError(t, err)
-	defer st.Close()
-	assert.False(t, st.LegacyKeyedByPlayerIDForTest())
-	assert.Equal(t, store.PlayerNameReleaseSQLForTest, st.ReleaseSQLForTest())
-}
-
-// TestPlayerName_MigrationCanSkipPrimaryKeySwitchByOption:换主键那条 ALTER 要重建整张表,
-// 表太大 / 窗口不够 / 反复被 MDL 挡住时,运维必须能"先把其余迁移跑完、这一条稍后单独做" ——
-// 否则唯一的选择是整条 -migrate 都不跑,连带停掉另外四张表的列同步与 id_segment 地板校验。
-//
-// 打开这个开关的代价写在选项注释里:本实例停在旧形态,名字抢注在生产常态那一路仍然成环(实测 5/5),
-// 靠有界 1213 重试吸收。所以本用例同时钉住"退路是完整的":store 必须能在这张表上建出来并选**旧**语句。
-func TestPlayerName_MigrationCanSkipPrimaryKeySwitchByOption(t *testing.T) {
-	db := storetest.NewEmptyDB(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	legacyDDL := strings.Replace(legacyPlayerNamePKTableDDL, legacyPlayerNamePKTable, store.PlayerNameTableName, 1)
-	_, err := db.Raw.ExecContext(ctx, legacyDDL)
-	require.NoError(t, err, "夹具:建旧结构的 player_name 失败")
-
-	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{AllowLegacyPlayerNamePrimaryKey: true}),
-		"开关打开时整条迁移必须跑完(其余四张表的列同步与地板校验是无关且必要的)")
-
-	pkCols, err := store.PrimaryKeyColumnsForTest(ctx, db.Raw, db.Name, store.PlayerNameTableName)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"player_id"}, pkCols, "开关打开时**不**换主键,表保持旧形态")
-
-	st, err := store.NewPlayerNameStore(db.Cfg)
-	require.NoError(t, err, "旧形态下 store 必须仍然建得出来,否则这个逃生口等于关掉了建角")
-	defer st.Close()
-	assert.True(t, st.LegacyKeyedByPlayerIDForTest())
-	assert.Equal(t, store.PlayerNameReleaseLegacySQLForTest, st.ReleaseSQLForTest(),
-		"旧形态下必须自动退回带 FORCE INDEX (%s) 的旧 Release 语句,锁序才与 Reserve 一致",
-		store.PlayerNameLegacyNormUniqueKey)
-
-	// 关掉开关重跑一次就该根治 —— 逃生口是"推迟",不是"永久跳过"。
-	require.NoError(t, db.Migrate(ctx, store.MigrateOptions{}))
-	pkCols, err = store.PrimaryKeyColumnsForTest(ctx, db.Raw, db.Name, store.PlayerNameTableName)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"name_norm"}, pkCols)
-}
-
-// ── 「残余 B2」:Reserve(P, N2) × Release(P, N1) 这条**改主键新引入**的反序对 ──────────────
-//
-// 这一对是同一个 player_id 的**两个不同名字**,走的是 uk_player_name_owner 那条二级唯一索引。
-// 2026-09-29 的 v3 探针已经把它在真库上跑过:两个写者直接对撞,现行主键与候选主键两种结构各 20 次,
-// **0/20 未复现 1213**(同批还测了 B1"并发登记两个不同名字",同样 0/20)。所以下面的推演目前是
-// "**推演成环、实测未复现**",本用例仍然只记录不断言 —— 20 次不是证明,换 MySQL 版本时拿它复核。
-// 推演(完整版在 player_name_store.go 的「与其它写者的交错」):
-//   - Reserve(P,N2):聚簇 N2 → 二级 (P) → 聚簇 N1(ODKU 顺着二级项定位到旧名字那一行做 no-op 更新);
-//   - Release(P,N1):聚簇 N1 → 二级 (P)(删行时连带把 owner 项删除标记)。
-//
-// 在 (P) 与 N1 这两处恰好互为反序,两方即可成环。
-//
-// # 编排为什么要把 Release 切成两步
-//
-// 生产的 Release 是**一条**自动提交的 DELETE,停不在"已拿到聚簇 N1、还没去要二级 (P)"那一刻,
-// 而那正是成环必需的交错。所以这里用 `SELECT ... FORCE INDEX (PRIMARY) ... FOR UPDATE` 先把聚簇 N1 的 X
-// 拿到手(与 DELETE 在这一步取的锁同形:唯一索引 + 唯一等值条件 → X 记录锁),把两个竞争者摆好之后,
-// 再用**生产那一段 SQL 文本**发真正的 DELETE。
-// 也就是说:本用例证明的是"这两条语句的取锁顺序互为反序、能成环",**不是**"生产上多久会撞上一次" ——
-// 真实并发下这个交错是概率事件,而正常路径根本到不了(可达性论证见 player_name_store.go,
-// 要 ID 复用事故叠加 login 延迟约 10s 的第二次补偿 Release)。
-//
-// # 为什么**不设**成环与否的强制判据
-//
-// 两个方向的断言现在都会说谎:断言"必成环"——v3 探针 0/20 直接把它证伪了;断言"不成环"——20 次复现不出来
-// 不等于不存在,把它写死就是拿样本当证明。所以本用例只做三件事:
-//  1. require 编排确实摆到了预期交错(竞争者进了锁等待队列)—— 这一步失败说明取锁顺序与推演不符,是真信息;
-//  2. require 两条语句都终结、且错误只可能是 1213(出现别的错误 = 编排坏了);
-//  3. t.Logf 报出 1213 的计数,交给编排方回报。
-//
-// 拿到实测之后的两条路都已经写在 player_name_store.go 里:确认成环 → 候选根治是把 Release 也改成
-// FORCE INDEX (uk_player_name_owner)(两者在 (P) 上同序),但那会让探针 0/15 那份证据失效,必须连
-// "抢同一个名字"那组形状一起重测;确认不成环 → 把「残余 B2」从清单里降级并记上实测出处。
-const (
-	reverseOwner               uint64 = 8001
-	reverseOldDisplay                 = "LaoJiu"
-	reverseOldNorm                    = "laojiu" // N1:先登记好、随后被 Release 删的那个
-	reverseNewDisplay                 = "LaoShi"
-	reverseNewNorm                    = "laoshi" // N2:同一个 player_id 去登记的另一个名字
-	reverseHoldClusteredKeySQL        = "SELECT player_id FROM `" + store.PlayerNameTableName +
-		"` FORCE INDEX (PRIMARY) WHERE name_norm = ? FOR UPDATE"
-)
-
-func TestPlayerName_ReserveOtherNameRacesReleaseSameOwner(t *testing.T) {
+// directory_shard 对不上就拒绝启动:配错 K 会把玩家路由到别的片,读到「角色不存在」而且没有报错。
+func TestPlayerName_StoreRefusesWrongDirectoryShard(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
-	requireGlobalRepeatableRead(t, db)
-	requireDeadlockDetect(t, db.Raw)
-	// purge 这里不需要挡板(两条语句碰的都是活行),但仍要给编排留出连接:两个事务 + 轮询锁等待。
-	db.Raw.SetMaxOpenConns(8)
-	st := newPlayerNameStore(t, db)
-
-	ctx, cancel := context.WithTimeout(context.Background(), nameRaceBudget)
-	defer cancel()
-	var mysqlVersion string
-	require.NoError(t, db.Raw.QueryRowContext(ctx, `SELECT VERSION()`).Scan(&mysqlVersion))
-	requirePlayerNameKeyedByName(t, &nameRaceScene{ctx: ctx, db: db, st: st})
-
-	now := playerNameNowMs()
-	outcome, _, err := st.Reserve(ctx, reverseOwner, reverseOldDisplay, reverseOldNorm, now)
-	require.NoError(t, err)
-	require.Equal(t, store.ReserveInserted, outcome, "夹具:%s 应先归 player %d", reverseOldNorm, reverseOwner)
-
-	// T1:Release 的第一步 —— 拿到聚簇 N1 的 X(与 DELETE 在这一步取的锁同形),停在这里。
-	releaseTx, err := db.Raw.BeginTx(ctx, nil)
-	require.NoError(t, err, "夹具:开 Release 事务失败")
-	defer func() { _ = releaseTx.Rollback() }()
-	var held uint64
-	require.NoError(t, releaseTx.QueryRowContext(ctx, reverseHoldClusteredKeySQL, reverseOldNorm).Scan(&held),
-		"夹具:锁住 %s 那条聚簇记录失败", reverseOldNorm)
-	require.Equal(t, reverseOwner, held)
-
-	// T2:同一个 player_id 登记另一个名字。它会先把 N2 插进聚簇索引,再在 uk_player_name_owner 的 (P) 项上
-	// 取 X,然后顺着那条二级项去要**聚簇 N1** 的 X —— 正好撞在 T1 手里,于是卡住。
-	reserveTx, err := db.Raw.BeginTx(ctx, nil)
-	require.NoError(t, err, "夹具:开 Reserve 事务失败")
-	defer func() { _ = reserveTx.Rollback() }()
-	var reserveErr error
-	var reserveAffected int64
-	reserveDone := make(chan struct{})
-	go func() {
-		defer close(reserveDone)
-		res, e := reserveTx.ExecContext(ctx, store.PlayerNameReserveSQLForTest,
-			reverseOwner, reverseNewDisplay, reverseNewNorm, now+1)
-		if e == nil {
-			reserveAffected, e = res.RowsAffected()
-		}
-		reserveErr = e
-	}()
-
-	if waitErr := awaitLockWaiters(ctx, db.Raw, store.PlayerNameTableName, 1, nameStepBudget); waitErr != nil {
-		skipOrFailOnLockWait(t, waitErr,
-			"Reserve(P,N2) 应当持着 uk_player_name_owner 上的 (P) 项、卡在聚簇 N1 的 X 上;"+
-				"它要是没卡住,说明 ODKU 定位重复行的取锁顺序与推演不符 —— 那本身就是要回报的结论")
+	_, err := db.Raw.Exec("UPDATE directory_shard SET logical_shards=4,slot=1 WHERE id=1")
+	require.NoError(t, err, "夹具:改片号失败")
+	st, err := store.NewPlayerNameStore(db.Cfg)
+	if err == nil {
+		_ = st.Close()
 	}
-
-	// T1 的第二步:发**生产那一段** Release。它已持有聚簇 N1,接着要去删 (P) 那条二级项 —— 而那把 X 在 T2 手里。
-	var releaseErr error
-	var releaseAffected int64
-	releaseDone := make(chan struct{})
-	go func() {
-		defer close(releaseDone)
-		res, e := releaseTx.ExecContext(ctx, store.PlayerNameReleaseSQLForTest, reverseOwner, reverseOldNorm, uint64(0))
-		if e == nil {
-			releaseAffected, e = res.RowsAffected()
-		}
-		releaseErr = e
-	}()
-
-	// Release 两条路上都会返回:成环时它要么是牺牲者、要么在对方被牺牲后前进;不成环时它根本不必等。
-	select {
-	case <-releaseDone:
-	case <-time.After(nameStepBudget):
-		t.Fatalf("%v 内 Release 没有返回,而 Reserve 仍在等它 —— 两者互等却没有被 InnoDB 判成死锁?"+
-			"先确认 innodb_deadlock_detect 真的是 ON(MySQL %s)", nameStepBudget, mysqlVersion)
-	}
-	// 放掉 Release 的锁,让仍在排队的 Reserve 走完(它若已是牺牲者,这两步都无害)。
-	_ = releaseTx.Commit()
-	select {
-	case <-reserveDone:
-	case <-time.After(nameStepBudget):
-		t.Fatalf("Release 返回并提交之后 %v 内 Reserve 仍没有返回(MySQL %s)", nameStepBudget, mysqlVersion)
-	}
-	_ = reserveTx.Commit()
-
-	deadlocks := 0
-	for _, e := range []struct {
-		label string
-		err   error
-	}{{"Release(P,N1)", releaseErr}, {"Reserve(P,N2)", reserveErr}} {
-		switch {
-		case e.err == nil:
-		case isMySQLErrNumber(e.err, store.MySQLErrDeadlockForTest):
-			deadlocks++
-		default:
-			t.Fatalf("%s 出现了既不是成功、也不是 1213 的错误,编排坏了: %v", e.label, e.err)
-		}
-	}
-
-	// 这条是本用例唯一的"结论",而且刻意只进日志:编排方把它回报之后,才谈得上收紧或降级。
-	t.Logf("【残余 B2 实测】Reserve(P,N2) × Release(P,N1):1213=%d(Release affected=%d err=%v;"+
-		"Reserve affected=%d err=%v;MySQL %s)。1213>0 = 反序对确实成环,按 player_name_store.go"+
-		"「残余」一节的候选方案(Release 改钉 %s)重测两组形状;1213=0 = 推演偏保守,把该条降级并记上本次出处。",
-		deadlocks, releaseAffected, releaseErr, reserveAffected, reserveErr, mysqlVersion, store.PlayerNameOwnerUniqueKey)
-
-	// 无论成没成环,库里都不许出现"一个 player_id 占两个名字"(那条唯一键就是拦它的)。
-	assert.LessOrEqual(t, db.Count(t, store.PlayerNameTableName, "player_id = ?", reverseOwner), int64(1),
-		"同一个 player_id 占了多个名字:%s 失效了", store.PlayerNameOwnerUniqueKey)
+	require.ErrorContains(t, err, "slot 1 of 4")
 }

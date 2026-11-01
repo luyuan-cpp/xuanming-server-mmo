@@ -13,12 +13,12 @@ import (
 	"shared/mailgrant"
 )
 
-func (r *Repo) visiblePredicate() string {
-	return `(m.kind IN (1,2,3) AND (m.owner_player_id=? OR (m.owner_player_id=0 AND (
+// visiblePredicate 的三个参数依次是 player、player、player 所在的帮(guildOf,没有帮传 0)。
+// 帮会文本邮件的 guild_id 非 0(Send 校验),所以没有帮的玩家不会命中。
+const visiblePredicate = `(m.kind IN (1,2,3) AND (m.owner_player_id=? OR (m.owner_player_id=0 AND (
 (m.campaign_id>0 AND EXISTS (SELECT 1 FROM mail_campaign_recipient q WHERE q.sender_kind=m.sender_kind AND q.campaign_id=m.campaign_id AND q.manifest_generation=m.manifest_generation AND q.player_id=?))
 OR (m.kind=2 AND m.campaign_id=0)
-OR (m.kind=3 AND m.campaign_id=0 AND EXISTS (SELECT 1 FROM ` + r.guildDatabase + `.guild_member gm WHERE gm.player_id=? AND gm.guild_id=m.guild_id))))))`
-}
+OR (m.kind=3 AND m.campaign_id=0 AND m.guild_id=?)))))`
 
 func columns(prefix string) string {
 	return prefix + strings.ReplaceAll(messageColumns, ",", ","+prefix)
@@ -65,6 +65,19 @@ func (r *Repo) List(ctx context.Context, player uint64, in *mailpb.ListMailsRequ
 	if limit > 100 {
 		limit = 100
 	}
+	guild := r.guildOf(ctx, player)
+	var result *mailpb.ListMailsResponse
+	err := r.runGuarded(ctx, func() (e error) {
+		result, e = r.listOnce(ctx, player, guild, in, limit)
+		return e
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *Repo) listOnce(ctx context.Context, player, guild uint64, in *mailpb.ListMailsRequest, limit uint32) (*mailpb.ListMailsResponse, error) {
 	now := uint64(r.now().UnixMilli())
 	// 两条只读查询共享同一RR快照，列表和计数不会混用两个版本；写事务仍固定RC。
 	// TiDB8.5默认不支持START TRANSACTION READ ONLY；只发SELECT，不能为此开启全局noop。
@@ -76,12 +89,12 @@ func (r *Repo) List(ctx context.Context, player uint64, in *mailpb.ListMailsRequ
 	if err = r.lockActor(ctx, tx); err != nil {
 		return nil, err
 	}
-	base := " FROM mail_message m LEFT JOIN mail_state s ON s.player_id=? AND s.mail_id=m.mail_id WHERE " + r.visiblePredicate() + " AND COALESCE(s.deleted_ms,0)=0 AND (m.expire_ms>? OR s.claim_state NOT IN (0,1,3))"
+	base := " FROM mail_message m LEFT JOIN mail_state s ON s.player_id=? AND s.mail_id=m.mail_id WHERE " + visiblePredicate + " AND COALESCE(s.deleted_ms,0)=0 AND (m.expire_ms>? OR s.claim_state NOT IN (0,1,3))"
 	result := &mailpb.ListMailsResponse{ServerNowMs: now}
-	if err = tx.QueryRowContext(ctx, "SELECT COALESCE(SUM(COALESCE(s.read_ms,0)=0),0),COALESCE(SUM(m.expire_ms>? AND COALESCE(s.claim_state,IF(LENGTH(m.attachments)>0,1,0))=1),0)"+base, now, player, player, player, player, now).Scan(&result.UnreadCount, &result.ClaimableCount); err != nil {
+	if err = tx.QueryRowContext(ctx, "SELECT COALESCE(SUM(COALESCE(s.read_ms,0)=0),0),COALESCE(SUM(m.expire_ms>? AND COALESCE(s.claim_state,IF(LENGTH(m.attachments)>0,1,0))=1),0)"+base, now, player, player, player, guild, now).Scan(&result.UnreadCount, &result.ClaimableCount); err != nil {
 		return nil, err
 	}
-	args := []any{player, player, player, player, now}
+	args := []any{player, player, player, guild, now}
 	query := "SELECT " + columns("m.") + "," + stateColumns() + base
 	if in.BeforeMailId != 0 {
 		// 游标是上一页最后一封的 mail_id。id 是打散过的,不代表先后,要换算成 (sent_ms, mail_id)。
@@ -141,8 +154,8 @@ func (r *Repo) lockBox(ctx context.Context, tx *sql.Tx, player uint64) error {
 }
 
 // 调用方先锁mail_box；所有物化/领取/清理共用此顺序，避免不存在状态行的并发升级。
-func (r *Repo) materialize(ctx context.Context, tx *sql.Tx, player, id, now uint64) (*mailpb.MailRecord, *mailpb.MailStateRecord, error) {
-	m, err := scanMessage(tx.QueryRowContext(ctx, "SELECT "+columns("m.")+" FROM mail_message m WHERE m.mail_id=? AND "+r.visiblePredicate(), id, player, player, player))
+func (r *Repo) materialize(ctx context.Context, tx *sql.Tx, player, guild, id, now uint64) (*mailpb.MailRecord, *mailpb.MailStateRecord, error) {
+	m, err := scanMessage(tx.QueryRowContext(ctx, "SELECT "+columns("m.")+" FROM mail_message m WHERE m.mail_id=? AND "+visiblePredicate, id, player, player, guild))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -173,12 +186,13 @@ func (r *Repo) Read(ctx context.Context, player, id uint64) (*mailpb.MailView, e
 		return nil, ErrInvalid
 	}
 	now := uint64(r.now().UnixMilli())
+	guild := r.guildOf(ctx, player)
 	var result *mailpb.MailView
 	err := r.tx(ctx, func(tx *sql.Tx) error {
 		if e := r.lockBox(ctx, tx, player); e != nil {
 			return e
 		}
-		m, s, e := r.materialize(ctx, tx, player, id, now)
+		m, s, e := r.materialize(ctx, tx, player, guild, id, now)
 		if e != nil {
 			return e
 		}
@@ -202,6 +216,7 @@ func (r *Repo) Delete(ctx context.Context, player uint64, ids []uint64, clear bo
 		return nil, nil, ErrInvalid
 	}
 	now := uint64(r.now().UnixMilli())
+	guild := r.guildOf(ctx, player)
 	var deleted, protected []uint64
 	err := r.tx(ctx, func(tx *sql.Tx) error {
 		deleted = nil
@@ -211,7 +226,7 @@ func (r *Repo) Delete(ctx context.Context, player uint64, ids []uint64, clear bo
 		}
 		targets := ids
 		if clear {
-			rows, e := tx.QueryContext(ctx, "SELECT m.mail_id FROM mail_message m JOIN mail_state s ON s.mail_id=m.mail_id AND s.player_id=? WHERE s.read_ms>0 AND s.deleted_ms=0 AND "+r.visiblePredicate()+" ORDER BY m.mail_id LIMIT 1000", player, player, player, player)
+			rows, e := tx.QueryContext(ctx, "SELECT m.mail_id FROM mail_message m JOIN mail_state s ON s.mail_id=m.mail_id AND s.player_id=? WHERE s.read_ms>0 AND s.deleted_ms=0 AND "+visiblePredicate+" ORDER BY m.mail_id LIMIT 1000", player, player, player, guild)
 			if e != nil {
 				return e
 			}
@@ -236,7 +251,7 @@ func (r *Repo) Delete(ctx context.Context, player uint64, ids []uint64, clear bo
 				continue
 			}
 			seen[id] = true
-			m, s, e := r.materialize(ctx, tx, player, id, now)
+			m, s, e := r.materialize(ctx, tx, player, guild, id, now)
 			if errors.Is(e, ErrNotFound) || errors.Is(e, ErrExpired) {
 				continue
 			}

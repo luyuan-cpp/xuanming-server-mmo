@@ -43,7 +43,15 @@ func matchesChallengeOriginal(a, b *pb.MatchChallengeInvitationRecord) bool {
 }
 
 // 新意图在双方P锁下捕获对端；已有同正文邀请只回放原编号/有效期，绝不刷新TTL或换主。
-func (s *Store) CreateChallenge(ctx context.Context, id, challenger, target uint64, config uint32, ttlMs uint64) (*pb.MatchChallengeInvitationRecord, error) {
+func (s *Store) CreateChallenge(ctx context.Context, id, challenger, target uint64, config uint32, ttlMs uint64) (invitation *pb.MatchChallengeInvitationRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) {
+		invitation, e = s.createChallengeOnce(ctx, id, challenger, target, config, ttlMs)
+		return e
+	})
+	return invitation, err
+}
+
+func (s *Store) createChallengeOnce(ctx context.Context, id, challenger, target uint64, config uint32, ttlMs uint64) (*pb.MatchChallengeInvitationRecord, error) {
 	if id == 0 || challenger == 0 || target == 0 || challenger == target || ttlMs == 0 {
 		return nil, errors.New("切磋邀请参数无效")
 	}
@@ -121,7 +129,12 @@ func (s *Store) CreateChallenge(ctx context.Context, id, challenger, target uint
 }
 
 // 非锁定预读仅用于定位固定原身份；授权在P首锁之后重新核验，Redis正文不参与。
-func (s *Store) ChallengeForActor(ctx context.Context, id, responder uint64) (*pb.MatchChallengeInvitationRecord, error) {
+func (s *Store) ChallengeForActor(ctx context.Context, id, responder uint64) (invitation *pb.MatchChallengeInvitationRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { invitation, e = s.challengeForActorOnce(ctx, id, responder); return e })
+	return invitation, err
+}
+
+func (s *Store) challengeForActorOnce(ctx context.Context, id, responder uint64) (*pb.MatchChallengeInvitationRecord, error) {
 	if id == 0 || responder == 0 {
 		return nil, ErrChallengeExpired
 	}
@@ -174,7 +187,15 @@ func (s *Store) ChallengeForActor(ctx context.Context, id, responder uint64) (*p
 
 // DecideChallenge先将原接受决定、direct退出原件及全组pending占用同事务提交。
 // 原Remove正证明后CompletePreparedDirect才成局；重放不换config/名册/测量或退出对象。
-func (s *Store) DecideChallenge(ctx context.Context, observed *pb.MatchChallengeInvitationRecord, accept bool, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchFormationRecord, bool, error) {
+func (s *Store) DecideChallenge(ctx context.Context, observed *pb.MatchChallengeInvitationRecord, accept bool, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (formation *pb.MatchFormationRecord, decided bool, err error) {
+	err = s.Fenced(ctx, func() (e error) {
+		formation, decided, e = s.decideChallengeOnce(ctx, observed, accept, f, group)
+		return e
+	})
+	return formation, decided, err
+}
+
+func (s *Store) decideChallengeOnce(ctx context.Context, observed *pb.MatchChallengeInvitationRecord, accept bool, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchFormationRecord, bool, error) {
 	if observed == nil || observed.ChallengeId == 0 {
 		return nil, false, ErrChallengeExpired
 	}

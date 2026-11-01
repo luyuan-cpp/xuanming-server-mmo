@@ -1817,7 +1817,7 @@ FinalizeShutdownInLoop(阶段 0)
 
 `tools/scripts/k8s_deploy.ps1` 的 `Assert-GrpcClientDeadlineBudget` 在 zone-up / infra-up / all-up 的集群写入前核对上表六个 Go 目标。六项 C++ deadline 必须显式为正整数；服务顶层 Timeout 缺席按 2000ms，写出后必须为正整数。任一预算不成立即拒绝部署，down / status 不经此门禁。node 与 battle-node ConfigMap 从 `bin/etc` 原样镜像整个 `GrpcClient` 块，缺块在生成期拒绝；Go ConfigMap 的服务端超时必须与其服务 YAML 一致。
 
-`Get-ZrpcMethodTimeouts` 逐条解析方法超时，`Get-GrpcClientDeadlineBudgetViolations` 同时核对顶层和方法预算。唯一免于与 C++ deadline 比大小的例外，由 `Get-GrpcClientMethodsNotCalledFromCpp` 显式登记：当前仅 DataService 的 `/data_service.DataService/RollbackPlayer`、`RollbackZone`、`RollbackAll`。例外仍须有合法方法名、可解析时长和对应 YAML 条目；data-service ConfigMap 现已镜像这些 MethodTimeouts，旧版“不镜像”的限制已失效。
+`Get-ZrpcMethodTimeouts` 逐条解析方法超时，`Get-GrpcClientDeadlineBudgetViolations` 同时核对顶层和方法预算。唯一免于与 C++ deadline 比大小的例外，由 `Get-GrpcClientMethodsNotCalledFromCpp` 显式登记：当前仅 DataService 的 GM 回收 `/data_service.DataService/BatchRecallItems`、`GetRecallBatch`、`CancelRecallBatch`（2026-11-01；原来的三个回档 RPC 已删）。例外仍须有合法方法名、可解析时长和对应 YAML 条目；data-service ConfigMap 现已镜像这些 MethodTimeouts，旧版“不镜像”的限制已失效。
 
 登记“不由 C++ 调用”必须同时排除手写代码的 typed / Erased / 消息号调用，以及 gate 根据生成 `IsClientMessageId` 的直连转发。契约测试还拒绝已不在 YAML 中的过期登记；部署脚本自身不扫描 C++。当前 deploy-config-tests 的路径触发不覆盖仅 C++ 的改动，发版流程必跑；增加调用方时须主动运行相应契约测试，不能等部署入口发现。
 

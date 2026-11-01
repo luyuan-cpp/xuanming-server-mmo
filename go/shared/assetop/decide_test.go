@@ -242,6 +242,7 @@ func TestApplyRPCOf(t *testing.T) {
 		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT:   RPCDebit,
 		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_CREDIT:  RPCCredit,
 		assetpb.AssetOpStream_ASSET_OP_STREAM_SYSTEM_CREDIT: RPCCredit,
+		assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL:     RPCDebit,
 	}
 	for stream, want := range cases {
 		got, ok := ApplyRPCOf(stream)

@@ -82,11 +82,13 @@ func runOwners(ctx context.Context, runtime *drainproof.Runtime, stores *proto_s
 			return err
 		}
 		// 所有同boot SQL调用已确定join，永久禁用原grant，防止同进程重开物理池。
-		writer, err := proto_sql.CurrentWriterConfig()
+		writers, err := proto_sql.CurrentWriterConfigs()
 		if err != nil {
 			return err
 		}
-		writer.Seal()
+		for _, writer := range writers {
+			writer.Seal()
+		}
 		if err = stores.Close(); err != nil {
 			return err
 		}

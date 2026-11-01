@@ -14,7 +14,7 @@
 //   zone that no longer exists, or that disagree with the route table on a
 //   given player_id's home_zone.
 //
-//   归属只读 -route-db-dsn 指向的全局库 player_route(真源,见 route_source.go)。
+//   归属只读 -route-db-dsn 指向的目录各片的 player_route(真源,见 route_source.go)。
 //   guild_rank:zone:* 不是映射,读 -redis-addr 指向的 Redis。
 //
 //   It complements:
@@ -75,9 +75,10 @@ var guildSchemaNamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
 // runConfig is what each checker needs. We pass it by value because
 // every field is a handle / int — no ownership concerns.
 type runConfig struct {
-	accountDB *sql.DB // P0-b全局目录；复用-route-db-dsn，不读zone账号表。
-	db        *sql.DB
-	rankRedis *redis.Client // guild_rank:zone:* 所在的 Redis
+	// accountDBs 是目录各片(P0-b)。复用-route-db-dsn，不读zone账号表。路由行和角色行都按玩家分片，所以各片各自能 JOIN。
+	accountDBs []*sql.DB
+	db         *sql.DB
+	rankRedis  *redis.Client // guild_rank:zone:* 所在的 Redis
 	// friendDB 是好友独占库 mmorpg_friend 的第二个连接(port-decisions D-14,2026-09-18)。
 	//
 	// 为什么不共用 db:-mysql-dsn 指的是 `mmorpg`(公会 / 账号那套),friend 已经搬走。
@@ -118,9 +119,10 @@ func main() {
 	redisAddr := flag.String("redis-addr", "127.0.0.1:6379", "Redis address holding guild_rank:zone:* keys")
 	redisPwd := flag.String("redis-password", "", "Redis password")
 	redisDB := flag.Int("redis-db", 0, "Redis DB number")
-	// 映射的真源是全局库 player_route(dev 是 testdb,K8s 是 mmorpg_global):live zones / 玩家数 / 好友端是否有归属都按它查。
+	// 映射的真源是目录的 player_route(dev 基名是 testdb,K8s 是 mmorpg_global):live zones / 玩家数 / 好友端是否有归属都按它查。
 	routeDSN := flag.String("route-db-dsn", "",
-		"Global route database DSN, required (the database holding player_route, the source of truth for home zones)")
+		"Directory database DSN, required. Its database name is the directory base name (SnapshotMySQL.DBName); the player_route source of truth lives on <base> or <base>_00..")
+	routeLogicalShards := flag.Int("route-logical-shards", 1, "Directory shard count (Directory.LogicalShards), a divisor of 64")
 
 	// Live zones is a CSV the operator passes in (or we infer from the route table).
 	// Inference is the default because operators forget to update flags;
@@ -197,17 +199,28 @@ func main() {
 		log.Fatalf("-route-db-dsn cannot be parsed (error not printed: it may contain the password)")
 	}
 	if parsed.DBName == "" {
-		log.Fatalf("-route-db-dsn must name the database that holds player_route")
+		log.Fatalf("-route-db-dsn must name the directory base database")
 	}
-	routeDB, err := sql.Open("mysql", *routeDSN)
-	if err != nil {
-		log.Fatalf("route db open: %v", err)
+	if !routeShardsValid(*routeLogicalShards) {
+		log.Fatalf("-route-logical-shards %d must be a divisor of %d", *routeLogicalShards, routeRowShards)
 	}
-	defer routeDB.Close()
-	if err := routeDB.PingContext(ctx); err != nil {
-		log.Fatalf("route db ping: %v", err)
+	routeDBs := make([]*sql.DB, *routeLogicalShards)
+	routeTables := make([]routeTable, *routeLogicalShards)
+	for slot := range routeDBs {
+		shard := parsed.Clone()
+		shard.DBName = routeShardDBName(parsed.DBName, slot, *routeLogicalShards)
+		routeDB, err := sql.Open("mysql", shard.FormatDSN())
+		if err != nil {
+			log.Fatalf("route db open %s: %v", shard.DBName, err)
+		}
+		defer routeDB.Close()
+		if err := routeDB.PingContext(ctx); err != nil {
+			log.Fatalf("route db ping %s: %v", shard.DBName, err)
+		}
+		routeDBs[slot] = routeDB
+		routeTables[slot] = sqlRouteTable{db: routeDB}
 	}
-	var routes routeSource = dbRouteSource{t: sqlRouteTable{db: routeDB}, dbName: parsed.DBName}
+	var routes routeSource = dbRouteSource{t: shardedRouteTable{shards: routeTables}, dbName: parsed.DBName}
 	log.Println(routes.Describe())
 
 	// ── build "known zones" set ──────────────────────────────────
@@ -248,7 +261,7 @@ func main() {
 	}
 	log.Printf("Live zones: %v", sortedKeys(knownZones))
 
-	cfg := runConfig{accountDB: routeDB, db: db, rankRedis: rdb, friendDB: friendDB, routes: routes, mailDB: mailDB, knownZones: knownZones, guildSchema: *guildSchema}
+	cfg := runConfig{accountDBs: routeDBs, db: db, rankRedis: rdb, friendDB: friendDB, routes: routes, mailDB: mailDB, knownZones: knownZones, guildSchema: *guildSchema}
 
 	// ── run checks ───────────────────────────────────────────────
 	//
@@ -420,18 +433,23 @@ func checkPlayerHomeZoneVsAccount(ctx context.Context, cfg runConfig) CheckResul
 		r.SampleNotes = fmt.Sprintf("CHECK FAILED (player count unknown): %v", err)
 		return r
 	}
-	if cfg.accountDB == nil {
+	if len(cfg.accountDBs) == 0 {
 		r.Severity = "warn"
-		r.SampleNotes = "NOT CHECKED: -route-db-dsn must point at the global player_route/account_role database"
+		r.SampleNotes = "NOT CHECKED: -route-db-dsn must point at the directory holding player_route/account_role"
 		return r
 	}
-	var bad sql.NullInt64
-	if err := cfg.accountDB.QueryRowContext(ctx, accountLinkageSQL).Scan(&r.TotalCount, &bad); err != nil {
-		r.Severity = "fail"
-		r.SampleNotes = fmt.Sprintf("CHECK FAILED: global SQL account_role linkage unreadable: %v", err)
-		return r
+	for _, db := range cfg.accountDBs {
+		var total int64
+		var bad sql.NullInt64
+		if err := db.QueryRowContext(ctx, accountLinkageSQL).Scan(&total, &bad); err != nil {
+			r.Severity = "fail"
+			r.BadCount, r.TotalCount = 0, 0
+			r.SampleNotes = fmt.Sprintf("CHECK FAILED: global SQL account_role linkage unreadable: %v", err)
+			return r
+		}
+		r.TotalCount += total
+		r.BadCount += bad.Int64
 	}
-	r.BadCount = bad.Int64
 	if r.BadCount > 0 {
 		r.Severity = "block"
 		r.SampleNotes = "路由玩家缺少有效SQL账号目录（缺行或已删除墓碑）；不能按Redis反向键恢复"

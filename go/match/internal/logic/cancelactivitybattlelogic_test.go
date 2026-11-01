@@ -23,7 +23,7 @@ func cancellationContext(t *testing.T) *svc.ServiceContext {
 	secret := strings.Repeat("s", 32)
 	verifier, err := serviceauth.New(map[string]string{"guild": secret})
 	require.NoError(t, err)
-	return &svc.ServiceContext{Authority: &authority.Store{}, ActivityCancelAuth: verifier, ActivityCancelSecret: secret}
+	return &svc.ServiceContext{Authority: &authority.Store{}, GuildCallAuth: verifier, GuildCallSecret: secret}
 }
 func TestActivityCancellationRejectsProofFailureBeforeAnySQL(t *testing.T) {
 	for _, mode := range []string{"unsigned", "wrong-caller", "wrong-method", "changed-body", "expired", "missing-auth", "client"} {
@@ -46,13 +46,13 @@ func TestActivityCancellationRejectsProofFailureBeforeAnySQL(t *testing.T) {
 				if mode == "expired" {
 					stamp = 1
 				}
-				require.NoError(t, serviceauth.Sign(method, in, caller, sc.ActivityCancelSecret, stamp))
+				require.NoError(t, serviceauth.Sign(method, in, caller, sc.GuildCallSecret, stamp))
 			}
 			if mode == "changed-body" {
 				in.Original.MemberPlayerIds[1] = 23
 			}
 			if mode == "missing-auth" {
-				sc.ActivityCancelAuth = nil
+				sc.GuildCallAuth = nil
 				expected = codes.Unavailable
 			}
 			if mode == "client" {
@@ -68,7 +68,7 @@ func TestActivityCancellationRequiresPersistedLaunchIdentityEvenWithValidProof(t
 	original := activityRequest(11, 22)
 	original.RequestId = 51
 	in := &pb.CancelActivityBattleRequest{Original: original}
-	require.NoError(t, serviceauth.Sign(pb.MatchInternal_CancelActivityBattle_FullMethodName, in, "guild", sc.ActivityCancelSecret, uint64(time.Now().UnixMilli())))
+	require.NoError(t, serviceauth.Sign(pb.MatchInternal_CancelActivityBattle_FullMethodName, in, "guild", sc.GuildCallSecret, uint64(time.Now().UnixMilli())))
 	_, err := NewCancelActivityBattleLogic(context.Background(), sc).CancelActivityBattle(in)
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }

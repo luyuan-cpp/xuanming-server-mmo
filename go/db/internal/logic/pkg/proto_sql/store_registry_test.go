@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"db/internal/metrics"
 
 	dbpb "proto/common/database"
+	"shared/authoritysql"
 
 	"github.com/luyuancpp/proto2mysql"
 	"google.golang.org/protobuf/proto"
@@ -286,6 +288,32 @@ func TestStoreRegistryOpenFailureBacksOffThenRetries(t *testing.T) {
 	}
 	if n := opener.count("player_store_1000000_db"); n != 2 {
 		t.Fatalf("a resident store must not be reopened, opened %d times", n)
+	}
+}
+
+// 闸门冻结是搬库窗口,秒级,库没有坏:不进冷却,窗口一过下一条任务就能打开。错误链要分得清冻结。
+func TestStoreRegistryFrozenGateDoesNotBackOff(t *testing.T) {
+	opener := newFakeOpener()
+	opener.setErr(fmt.Errorf("read the schema: %w", authoritysql.ErrWriterFrozen))
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	registry := newTestRegistry(t, opener, dbguard.Allowlist{}, true, clock)
+	ctx := context.Background()
+	for attempt := 1; attempt <= 2; attempt++ {
+		_, err := registry.Store(ctx, 1000000)
+		if !errors.Is(err, ErrStoreUnavailable) || !errors.Is(err, authoritysql.ErrWriterFrozen) {
+			t.Fatalf("attempt %d: err = %v", attempt, err)
+		}
+		if n := opener.count("player_store_1000000_db"); n != attempt {
+			t.Fatalf("a frozen gate must not back off: opened %d times after %d attempts", n, attempt)
+		}
+	}
+	opener.setErr(nil)
+	store, err := registry.Store(ctx, 1000000)
+	if err != nil {
+		t.Fatalf("after the window: %v", err)
+	}
+	if store.SqlModel.DBName != "player_store_1000000_db" {
+		t.Fatalf("store = %q", store.SqlModel.DBName)
 	}
 }
 

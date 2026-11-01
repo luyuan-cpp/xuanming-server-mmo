@@ -8,7 +8,7 @@
 // 两种运行形态(同 go/trade):
 //   - 常驻服务(默认):建表 / 查表 → metrics → 依赖(节点镜像、后台循环)→ killswitch → gRPC → 注册 etcd;
 //   - `-migrate`:只连 MySQL 跑一次 schemamigrate.Up,按 D-14 退出码退出(K8s player-inbox-migrate Job 用),
-//     不起 gRPC、不连 etcd / Redis / Kafka / data_service。
+//     不起 gRPC、不连 Redis / Kafka / data_service;etcd 只在配了 DbPlacement 时读一次映射(state=MOVING 拒绝)。
 package main
 
 import (
@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"shared/authoritysql"
 	"shared/drainproof"
+	"shared/rolefence"
 	"strconv"
 	"syscall"
 	"time"
@@ -39,6 +40,7 @@ import (
 
 	base "proto/common/base"
 	inboxpb "proto/player_inbox"
+	rfpb "proto/role_fence"
 
 	"schemamigrate"
 
@@ -106,7 +108,7 @@ func main() {
 	conf.MustLoad(*configFile, &c)
 
 	if *migrateOnly {
-		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, schemamigrate.Up, checkRowShardLayout))
+		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, migrateUp, checkRowShardLayout))
 	}
 	if err := runPlayerInbox(c); err != nil {
 		fmt.Fprintf(os.Stderr, "[player_inbox] %v\n", err)
@@ -115,6 +117,18 @@ func main() {
 }
 
 // validateMigrationFlags 在读配置、连接数据库之前拒绝意外的常驻改列授权。
+// migrateUp 是 -migrate 的迁移动作:业务表之外,建本逻辑库自带的写者闸门表和角色护栏副本表(都跟着库走,见 docs/design/horizontal-scale-logical-db.md §2、§3)。
+func migrateUp(ctx context.Context, db *sql.DB, opts schemamigrate.Options) (schemamigrate.Report, error) {
+	report, err := schemamigrate.Up(ctx, db, opts)
+	if err != nil {
+		return report, err
+	}
+	if err = authoritysql.EnsureCatalogSchema(ctx, db, opts.Database); err != nil {
+		return report, err
+	}
+	return report, rolefence.EnsureSchema(ctx, db)
+}
+
 func validateMigrationFlags(migrateOnly, allowModify bool) error {
 	if allowModify && !migrateOnly {
 		return errors.New("-allow-modify must be used together with -migrate; resident startup never allows MODIFY COLUMN")
@@ -206,6 +220,11 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	if indexErr != nil {
 		return indexErr
 	}
+	// 没配协调者密钥拒启:参与者不可达时过户和删角会一直被拒,不如在启动时暴露。
+	participant, err := rolefence.NewParticipantServer(svcCtx.DB, inbox.RolePending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	if err != nil {
+		return fmt.Errorf("[player_inbox] role fence participant: %w", err)
+	}
 	if exitRequested(ctx) {
 		return nil
 	}
@@ -228,6 +247,8 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	s, err := zrpc.NewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		inboxpb.RegisterPlayerInboxServer(grpcServer, server.NewPlayerInboxServer(svcCtx.Store, budget, consumerVerifier, matchProducer))
 		inboxpb.RegisterPlayerInboxAdminServer(grpcServer, server.NewAdminServer(svcCtx.Store, sanction, svcCtx.Ledgers, budget))
+		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权。
+		rfpb.RegisterRoleFenceParticipantServer(grpcServer, participant)
 		if config.IsRelaxedMode(c.Mode) {
 			reflection.Register(grpcServer)
 		}

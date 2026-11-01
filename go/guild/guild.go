@@ -39,6 +39,7 @@ import (
 	base "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	pb "proto/guild"
+	rfpb "proto/role_fence"
 	"schemamigrate"
 	"shared/buildinfo"
 	"shared/grpcstats"
@@ -46,6 +47,7 @@ import (
 	"shared/kafkautil"
 	"shared/killswitch"
 	"shared/playerredis"
+	"shared/rolefence"
 	"shared/safego"
 	"shared/serverbase"
 	"shared/snowflakealloc"
@@ -160,12 +162,18 @@ func main() {
 	repo.BindMergedZones(mergedZones)
 	mergedZones.Start()
 	defer mergedZones.Stop()
-	sqlBackend := authoritysql.Backend(config.AppConfig.MySQL.Backend)
-	if err := repo.ConfigureRoleAuthority(config.AppConfig.AccountRoleSchema, sqlBackend); err != nil {
+	// 角色归属锁本库的护栏副本,副本判不了时读目录的权威状态(docs/design/horizontal-scale-logical-db.md §3)。
+	fenceStates, err := rolefence.NewDirectoryReader(svcCtx.DataServiceClient, "guild", os.Getenv(rolefence.SecretEnv("guild")))
+	if err != nil {
+		logx.Must(fmt.Errorf("guild role fence reader: %w", err))
+	}
+	if err := repo.ConfigureRoleFence(fenceStates, authoritysql.Backend(config.AppConfig.MySQL.Backend)); err != nil {
 		logx.Must(err)
 	}
-	if err := repo.ConfigureMatchAuthority(config.AppConfig.MatchAuthoritySchema, sqlBackend); err != nil {
-		logx.Must(err)
+	// data_service 过户、删角之前先冻结本库副本并核挂起全集。
+	roleFence, err := rolefence.NewParticipantServer(svcCtx.DB, data.RoleFencePending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	if err != nil {
+		logx.Must(fmt.Errorf("guild role fence participant: %w", err))
 	}
 	loginRedis, err := playerredis.New(config.AppConfig.LoginRedis.ClientConfig(playerredis.Config{
 		PoolSizePerNode: 8, DialTimeoutMs: 5000, ReadTimeoutMs: 3000, WriteTimeoutMs: 3000, PoolTimeoutMs: 1000,
@@ -393,19 +401,32 @@ func main() {
 		logx.Must(fmt.Errorf("guild activity repo: %w", err))
 	}
 	// ── 同道历练(B6b,06-activities.md §6.22–§6.33)──
-	// 邀请SQL权威与结果记录仓储无条件装配：历练此刻开不开,只由下面的
+	// 邀请SQL权威无条件装配：历练此刻开不开,只由下面的
 	// trialMatch 是不是 nil 决定;而结算、巡检器、待入队循环在历练关着时也要跑(关之前留下的在途对局与待入队物品
-	// 仍要处理完),它们需要这两个仓储。
-	//   - 邀请/同意/占位使用同TiDB原角色P锁，Redis只保留巡检租约，清空不会丢失原件；
-	//   - 结果记录读 match 权威库的 SQL 终局(MatchAuthoritySchema,启动期已核列);
+	// 仍要处理完),它们需要这个仓储。
+	//   - 邀请/同意/占位使用本库角色副本行锁，Redis只保留巡检租约，清空不会丢失原件；
+	//   - 占用和结果记录都经 match 内部服务(docs/design/horizontal-scale-logical-db.md §4)。没配 MatchRpc 时没有这两样:
+	//     历练关着,在途对局的结算只靠 Kafka 结果事件;
 	//   - 战斗锁在玩家域(PlayerRedis):它必须与 scene 写 battle:lock:{id} 的是同一个存储域。
+	// guild 调 MatchInternal 只有这一把密钥:开局、取消、占用、终局读。
+	matchSecret := os.Getenv("MMORPG_MATCH_INTERNAL_SECRET_GUILD")
+	matchConfigured := svcCtx.MatchInternal != nil
+	var trialResults logic.TrialResultSource
+	if matchConfigured {
+		occupancy, err := data.NewMatchOccupancyClient(svcCtx.MatchInternal, matchSecret)
+		if err != nil {
+			logx.Must(fmt.Errorf("guild trial occupancy client: %w", err))
+		}
+		repo.BindTrialOccupancy(occupancy)
+		records, err := data.NewTrialResultRecords(svcCtx.MatchInternal, matchSecret)
+		if err != nil {
+			logx.Must(fmt.Errorf("guild trial result records: %w", err))
+		}
+		trialResults = records
+	}
 	trialLobby, err := data.NewSQLTrialLobbyRepo(svcCtx.RedisClient, repo, guildIDs.Mint)
 	if err != nil {
 		logx.Must(fmt.Errorf("guild trial lobby repo: %w", err))
-	}
-	trialResults, err := data.NewTrialResultRecords(repo)
-	if err != nil {
-		logx.Must(fmt.Errorf("guild trial result records: %w", err))
 	}
 	// **没有结算就不许开战**:结果消费跑不起来(没显式开 Activity.TrialResult.Enabled,或没配 Kafka.Brokers)时,
 	// 把 Match 留成 nil 接口 → 视图显示未开放、两个历练写 RPC 回 kGuildActivityNotOpen。否则玩家打完一局,
@@ -413,14 +434,16 @@ func main() {
 	// 注意 nil 接口的坑(同上面的 assetOpIDs):svcCtx.MatchInternal 本身是接口类型,没配 MatchRpc 时
 	// 是 nil 接口;这里显式判过再赋值,trialMatch 要么是可用的客户端、要么是 nil 接口,不会出现"装着 nil 指针的非 nil 接口"。
 	trialResultActive := config.AppConfig.TrialResultActive()
-	matchConfigured := svcCtx.MatchInternal != nil
 	var trialMatch logic.TrialBattleStarter
 	if trialResultActive && matchConfigured {
-		trialMatch = svcCtx.MatchInternal
+		trialMatch, err = logic.NewSignedTrialStarter(svcCtx.MatchInternal, matchSecret)
+		if err != nil {
+			logx.Must(errors.New("历练开局签名依赖未就绪"))
+		}
 	}
 	var trialCancellation logic.TrialCancellation
 	if matchConfigured {
-		trialCancellation, err = logic.NewTrialCancellation(svcCtx.MatchInternal, os.Getenv("MMORPG_MATCH_INTERNAL_SECRET_GUILD"))
+		trialCancellation, err = logic.NewTrialCancellation(svcCtx.MatchInternal, matchSecret)
 		if err != nil {
 			logx.Must(errors.New("历练原请求取消签名依赖未就绪"))
 		}
@@ -505,6 +528,7 @@ func main() {
 		// data_service 的所有回档被拒且放行无效,上一行说的"通道关着也要答得出来"就不成立了。
 		pb.RegisterGuildInternalServer(grpcServer, server.NewGuildInternalServer(assetStore,
 			svc.RollbackProofRetention(config.AppConfig.AssetOp), time.Now))
+		rfpb.RegisterRoleFenceParticipantServer(grpcServer, roleFence)
 		if config.AppConfig.Mode == service.DevMode || config.AppConfig.Mode == service.TestMode {
 			reflection.Register(grpcServer)
 		}
@@ -514,7 +538,9 @@ func main() {
 	server.PrimeGuildInternalMetrics()
 	svc.PrimeMergedZoneMetrics()
 	s.AddUnaryInterceptors(serverbase.RootAdmission(root))
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(loginRedis, repo.CheckOriginalRole))...)
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(loginRedis, repo.CheckOriginalRole, func(err error) bool {
+		return errors.Is(err, data.ErrWriteConflict) || errors.Is(err, rolefence.ErrRoleNotFound)
+	}))...)
 	defer s.Stop()
 
 	// 资产通道后台 goroutine(guild.scene_node_watch / guild.asset_op_reconcile / guild.asset_op_cleanup,
@@ -753,8 +779,11 @@ func startAssetOpCleanup(store *data.GuildAssetStore, c data.CleanupConf, admiss
 				work, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 				defer cancel()
 				if err := store.CleanupOnce(work, time.Now(), c); err != nil {
-					root.Hold()
-					logx.Errorf("guild cleanup HOLD: %v", err)
+					// 闸门冻结是确定没写,下一轮接着清,不算结局未知。
+					if !authoritysql.IsWriterFrozen(err) {
+						root.Hold()
+					}
+					logx.Errorf("guild cleanup failed: %v", err)
 				}
 			})
 			timer.Reset(c.Interval)
@@ -1004,9 +1033,21 @@ func missingIndexError(r schemamigrate.Report) error {
 		data.DatabaseName, len(missing), strings.Join(missing, "; "))
 }
 
-// runMigration 是 -migrate 的实现:只连 MySQL,不起 gRPC、不连 etcd / data_service。
+// runMigration 是 -migrate 的实现:只连 MySQL(配了 DbPlacement 时先读一次 etcd 里的映射),不起 gRPC、不连 data_service。
 // 输出走 stdout / stderr,退出码按 schemamigrate.ExitCode(D-14),部署脚本与 K8s Job 直接读。
 // 只打印库名,不打印 DSN(含口令)。
+// migrateUp 是 -migrate 的迁移动作:业务表之外,建本逻辑库自带的写者闸门表和角色护栏副本表(都跟着库走,见 docs/design/horizontal-scale-logical-db.md §2、§3)。
+func migrateUp(ctx context.Context, db *sql.DB, opts schemamigrate.Options) (schemamigrate.Report, error) {
+	report, err := schemamigrate.Up(ctx, db, opts)
+	if err != nil {
+		return report, err
+	}
+	if err = authoritysql.EnsureCatalogSchema(ctx, db, opts.Database); err != nil {
+		return report, err
+	}
+	return report, rolefence.EnsureSchema(ctx, db)
+}
+
 func runMigration(c config.Config) int {
 	fmt.Printf("guild schema migration: database=%s\n", data.DatabaseName)
 	pingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1019,7 +1060,7 @@ func runMigration(c config.Config) int {
 	}
 	defer func() { _ = db.Close() }()
 
-	report, err := schemamigrate.Up(context.Background(), db, schemaOptions())
+	report, err := migrateUp(context.Background(), db, schemaOptions())
 	printReport(os.Stdout, report)
 	code := schemamigrate.ExitCode(report, err)
 	if code == 0 {

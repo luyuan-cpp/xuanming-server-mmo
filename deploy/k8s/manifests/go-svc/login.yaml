@@ -49,6 +49,10 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
+            # LoginAdmin 的运维口令(x-admin-token)。没有这个 key 时运维面整体停用,所以 optional。
+            - name: MMORPG_LOGIN_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: login-admin-token, optional: true}
             - name: MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: account-directory-login, optional: false}

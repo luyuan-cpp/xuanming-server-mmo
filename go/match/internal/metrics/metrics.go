@@ -218,7 +218,7 @@ var (
 	})
 )
 
-// match_merged_zone_refresh_total{result} 的取值:定时重读 zone_merged_into 的结局(placement.MergedZoneCache)。
+// match_merged_zone_refresh_total{result} 的取值:定时经 data_service 重读合服映射的结局(placement.MergedZoneCache)。
 const (
 	MergedZoneRefreshOK    = "ok"
 	MergedZoneRefreshError = "error"
@@ -229,7 +229,7 @@ const (
 var mergedZoneRefreshTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: subsystem,
 	Name:      "merged_zone_refresh_total",
-	Help:      "Periodic reads of zone_merged_into by result (ok|error). On error the previous mapping stays in use.",
+	Help:      "Periodic reads of the merged zone mapping from data_service by result (ok|error). On error the previous mapping stays in use.",
 }, []string{"result"})
 
 var registerOnce sync.Once

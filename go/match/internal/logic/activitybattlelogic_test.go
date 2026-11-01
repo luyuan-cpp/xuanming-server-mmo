@@ -7,6 +7,7 @@ package logic
 import (
 	"context"
 	"testing"
+	"time"
 
 	"match/internal/metrics"
 	"match/internal/pkg/ctxkeys"
@@ -17,6 +18,7 @@ import (
 	base "proto/common/base"
 	matchpb "proto/match"
 	plpb "proto/player_locator"
+	"shared/serviceauth"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/require"
@@ -154,6 +156,60 @@ func TestStartActivityBattleValidates(t *testing.T) {
 	resp, err := startActivityBattle(sessionCtx, svcCtx, activityRequest(9601, 9602))
 	require.Nil(t, resp)
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// match 读不到 guild 的库,开局原件由 guild 的签名担保。这里的 ServiceContext 没有 Authority,放行的请求走到 SQL 就 panic。
+func TestStartActivityBattleRequiresGuildSignature(t *testing.T) {
+	const secret = "fixture-only-guild-call-secret-00000000"
+	verifier, err := serviceauth.New(map[string]string{"guild": secret})
+	require.NoError(t, err)
+	valid := func() *matchpb.StartActivityBattleRequest {
+		req := activityRequest(9601, 9602)
+		req.RequestId = 51
+		req.ActivityContext.LaunchRequestId = 51
+		return req
+	}
+	sign := func(t *testing.T, req *matchpb.StartActivityBattleRequest, method, caller string) *matchpb.StartActivityBattleRequest {
+		t.Helper()
+		require.NoError(t, serviceauth.Sign(method, req, caller, secret, uint64(time.Now().UnixMilli())))
+		return req
+	}
+	method := matchpb.MatchInternal_StartActivityBattle_FullMethodName
+	tampered := sign(t, valid(), method, "guild")
+	tampered.BattleConfigId++
+	cases := []struct {
+		name string
+		auth *serviceauth.Verifier
+		req  *matchpb.StartActivityBattleRequest
+	}{
+		{"没有签名", verifier, valid()},
+		{"别的调用方", verifier, sign(t, valid(), method, "ops")},
+		{"别的方法的签名", verifier, sign(t, valid(), matchpb.MatchInternal_CancelActivityBattle_FullMethodName, "guild")},
+		{"签完改了正文", verifier, tampered},
+		{"没配密钥", nil, sign(t, valid(), method, "guild")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svcCtx, _ := newTestSvcCtx(t)
+			svcCtx.GuildCallAuth = tc.auth
+			resp, err := startActivityBattle(context.Background(), svcCtx, tc.req)
+			requireActivityRejected(t, resp, err, matchpb.ActivityBattleReject_ACTIVITY_BATTLE_REJECT_INTERNAL, 0)
+		})
+	}
+}
+
+// 持久化的意图正文不含签名:每次重试的时间戳不同,取消也按这份正文比。
+func TestActivityStartPayloadIgnoresAuth(t *testing.T) {
+	const secret = "fixture-only-guild-call-secret-00000000"
+	req := activityRequest(9601, 9602)
+	req.RequestId = 51
+	unsigned, err := activityStartPayload(req)
+	require.NoError(t, err)
+	require.NoError(t, serviceauth.Sign(matchpb.MatchInternal_StartActivityBattle_FullMethodName, req, "guild", secret, uint64(time.Now().UnixMilli())))
+	signed, err := activityStartPayload(req)
+	require.NoError(t, err)
+	require.Equal(t, unsigned, signed)
+	require.NotNil(t, req.Auth, "不改调用方手里的请求")
 }
 
 // 成员预检的固定顺序:会话 → 战斗锁 → 位置;票据那一步读 SQL,在 authority 包覆盖。Redis 故障 fail-closed。

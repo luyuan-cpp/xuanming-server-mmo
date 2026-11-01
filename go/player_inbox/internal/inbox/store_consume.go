@@ -91,7 +91,7 @@ func (s *Store) reportFenceReject(ctx context.Context, rpc string, v inboxpb.Pla
 	}
 }
 
-// Fetch在同P内核完整已登记入场，再读stream并按seq投递。空流也不能绕过原件授权。
+// Fetch先在事务外向目录核完整已登记入场，再在副本行锁内核归属修订、读stream并按seq投递。空流也不能绕过原件授权。
 // SQL stream高水位只升；Redis仅参与诊断。CursorAhead仍只抬next_seq，不重放旧业务效果。
 func (s *Store) Fetch(ctx context.Context, req *inboxpb.FetchPlayerInboxRequest) (*inboxpb.FetchPlayerInboxResponse, error) {
 	resp := &inboxpb.FetchPlayerInboxResponse{
@@ -118,6 +118,12 @@ func (s *Store) Fetch(ctx context.Context, req *inboxpb.FetchPlayerInboxRequest)
 		return nil, ErrOriginalRole
 	}
 	decidedThrough := req.GetConsumerDecidedThrough()
+	if s.roles == nil {
+		return nil, ErrOriginalRole
+	}
+	if err := s.roles.VerifyAdmission(ctx, req.GetAdmission()); err != nil {
+		return nil, err
+	}
 
 	// ── 加锁路径 ──
 	maxItems := clampFetchItems(req.GetMaxItems(), constants.FetchDefaultItems, constants.FetchMaxItems)
@@ -134,7 +140,7 @@ func (s *Store) Fetch(ctx context.Context, req *inboxpb.FetchPlayerInboxRequest)
 	err := s.withPlayerTx(ctx, playerID, func(tx *sql.Tx, original *dspb.AccountRoleOwnership) error {
 		verdict, lockedFence, items, hasMore, cursorAhead, raisedTo, scanBound, scanWhole =
 			inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_UNSPECIFIED, 0, nil, false, false, 0, 0, false
-		if err := s.roles.VerifyAdmission(ctx, tx, original, req.GetAdmission()); err != nil {
+		if err := requireAdmissionOriginal(req.GetAdmission(), original); err != nil {
 			return err
 		}
 		if err := requirePendingOriginalsTx(ctx, tx, original); err != nil {
@@ -283,7 +289,7 @@ func (s *Store) countScannedRows(ctx context.Context, shard uint32, playerID uin
 	return n, nil
 }
 
-// Ack在同P内核完整原入场与条目owner后，登记消费方已落盘结局。
+// Ack先在事务外向目录核完整原入场，再在副本行锁内核归属修订与条目owner，登记消费方已落盘结局。
 // 按seq逐项判定并条件终结，open_count与SQL fence_epoch同事务提交。
 func (s *Store) Ack(ctx context.Context, req *inboxpb.AckPlayerInboxRequest) (*inboxpb.AckPlayerInboxResponse, error) {
 	resp := &inboxpb.AckPlayerInboxResponse{
@@ -311,6 +317,13 @@ func (s *Store) Ack(ctx context.Context, req *inboxpb.AckPlayerInboxRequest) (*i
 		return nil, ErrOriginalRole
 	}
 
+	if s.roles == nil {
+		return nil, ErrOriginalRole
+	}
+	if err := s.roles.VerifyAdmission(ctx, req.GetAdmission()); err != nil {
+		return nil, err
+	}
+
 	seqs := make([]uint64, 0, len(req.GetDecisions()))
 	for _, d := range req.GetDecisions() {
 		seqs = append(seqs, d.GetSeq())
@@ -322,7 +335,7 @@ func (s *Store) Ack(ctx context.Context, req *inboxpb.AckPlayerInboxRequest) (*i
 	)
 	err := s.withPlayerTx(ctx, playerID, func(tx *sql.Tx, original *dspb.AccountRoleOwnership) error {
 		verdict, lockedFence, results = inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_UNSPECIFIED, 0, nil
-		if err := s.roles.VerifyAdmission(ctx, tx, original, req.GetAdmission()); err != nil {
+		if err := requireAdmissionOriginal(req.GetAdmission(), original); err != nil {
 			return err
 		}
 		if err := requirePendingOriginalsTx(ctx, tx, original); err != nil {

@@ -189,7 +189,7 @@ kubectl --context $ctx -n $ns exec etcd-0 -- etcdctl endpoint status --cluster -
   C++ etcd 流重建(`docs/design/grpc-muduo-transport.md` §10.2 第 2 批)修好之前,单独重启 etcd 会让在跑的 C++ 节点进入约 181s 一轮的
   失租重注册循环。
 - **未验证**(待 Codex 实测 M3 探针 B / B2):`bitnamilegacy/etcd` 镜像是否把这些 `ETCD_*` 环境变量交给 etcd(若它改用配置文件启动,
-  etcd 会忽略环境变量)、已有数据目录重启后是否仍生效。核对办法(指标名凭记忆,待核对):
+  etcd 会忽略环境变量)、已有数据目录重启后是否仍生效。核对办法(指标名已对照 etcd v3.5.0 源码核对):
 
   ```powershell
   curl.exe -s http://127.0.0.1:2379/metrics | Select-String 'etcd_server_quota_backend_bytes'   # 期望 3.221225472e+09
@@ -241,8 +241,8 @@ Git Bash 下,以 `/` 开头的参数(容器内路径、`/mmorpg/killswitch/...` 
 
   `containers/0` 就是 etcd 容器(StatefulSet 里只有这一个容器);patch 前可用
   `kubectl --context $ctx -n $ns get sts etcd -o jsonpath='{.spec.template.spec.containers[0].name}'` 核对是 `etcd`。
-- patch 前确认正在跑的版本认 `exclude` 参数:`kubectl --context $ctx -n $ns exec etcd-0 -- etcd --version`(该参数的最低版本凭记忆是 3.5,
-  待 §9 探针 A 实测;不认识的版本会忽略它,patch 等于没打)。
+- patch 前确认正在跑的版本认 `exclude` 参数:`kubectl --context $ctx -n $ns exec etcd-0 -- etcd --version`(已对照源码,v3.5.0 的
+  `/health` 就读这个参数;更早的版本会忽略它,patch 等于没打)。
 - **告警解除后,会 apply `etcd.yaml` 的命令都会把探针改回去并再滚动一次 3 个成员**:`infra-up`、不带 `-SkipInfra` 的 `all-up`
   (含 `dev_tools.ps1` 的 `k8s-infra-up` / `k8s-all-up` / `k8s-release-all`)、单独 apply。Redis 重启闸不管 etcd,没有任何闸会拦。
   **把这两条探针落进仓库也不是免费的**:对打过 patch 的这个集群,仓库模板与线上一致,apply 不产生新的 controller revision、不滚动;

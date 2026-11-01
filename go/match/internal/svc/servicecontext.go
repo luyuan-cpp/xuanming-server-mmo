@@ -32,6 +32,7 @@ import (
 	"shared/placement"
 	"shared/playerredis"
 	"shared/playersync"
+	"shared/rolefence"
 	"shared/serviceauth"
 
 	redv9 "github.com/redis/go-redis/v9"
@@ -51,6 +52,9 @@ const (
 	PlayerInboxRpcPrefix = "PlayerInboxNodeService.rpc/"
 )
 
+// roleFenceCaller 是 match 读目录权威状态时的 ServiceCallAuth.caller。
+const roleFenceCaller = "match"
+
 type ServiceContext struct {
 	lifecycleMu      sync.Mutex
 	sourceMu         sync.Mutex
@@ -69,11 +73,11 @@ type ServiceContext struct {
 	Config           config.Config
 	Authority        *authority.Store
 	LoginSessions    redv9.UniversalClient
-	// 仅main显式装配，缺失时CancelActivityBattle拒绝；不复用网络探测或其它服务秘密。
-	ActivityCancelAuth   *serviceauth.Verifier
-	ActivityCancelSecret string
-	BattleOutcomeAuth    *serviceauth.Verifier
-	BattleOutcomeSecret  string
+	// guild 调 MatchInternal 的签名(开局、取消、占用、终局读)。仅main显式装配，缺失时这些入口拒绝；不复用网络探测或其它服务秘密。
+	GuildCallAuth       *serviceauth.Verifier
+	GuildCallSecret     string
+	BattleOutcomeAuth   *serviceauth.Verifier
+	BattleOutcomeSecret string
 	// SpectateOpsAuth 校验运营工具调 SetSpectateFeatured 的调用证明。Spectate.OpsCallerSecret 为空时保持 nil,入口一律回 SPECTATE_FEATURED_REJECT_DENIED。
 	SpectateOpsAuth *serviceauth.Verifier
 	// 启动时装配，随后只读；调用方必须在取得SQL/P锁之前调用。
@@ -133,7 +137,7 @@ type ServiceContext struct {
 	// 不阻塞 match 起服,调用时才返回 Unavailable。
 	DataServiceClient dspb.DataServiceClient
 
-	// MergedZones 是 zone_merged_into 的进程内副本,Authority 按它解析同区(authority/merged_zones.go)。
+	// MergedZones 是合服映射的进程内副本,经 data_service 读,Authority 按它解析同区(authority/merged_zones.go)。
 	// 启动时读不到拒绝启动;StopAndReport 在关库之前停它的定时重读。
 	MergedZones *placement.MergedZoneCache
 
@@ -322,20 +326,16 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		sc.Stop()
 		panic(fmt.Errorf("全球匹配范围规则无效: %w", err))
 	}
-	if err := store.ConfigureRoleAuthority(ctx, c.GlobalMatch.AccountRoleSchema); err != nil {
+	// 角色归属锁本库的护栏副本,自愈、事务外的读和入场校验走 data_service(docs/design/horizontal-scale-logical-db.md §3)。
+	if err := sc.configureRoleFence(ctx, store); err != nil {
 		sc.Stop()
-		panic("全球匹配角色目录不可用")
+		panic(fmt.Errorf("全球匹配角色护栏不可用: %w", err))
 	}
 	// 分不清「没有合服」和「读不到」的实例不能对外服务,同区判定全靠这份映射。
-	if err := sc.loadMergedZones(ctx, store); err != nil {
+	if err := sc.loadMergedZones(context.Background(), store); err != nil {
 		sc.Stop()
-		panic(fmt.Errorf("match: cannot read %s.zone_merged_into, refusing to start (the account needs SELECT on it): %w", c.GlobalMatch.AccountRoleSchema, err))
+		panic(fmt.Errorf("match: cannot read merged zones from data_service, refusing to start: %w", err))
 	}
-	if err := store.ConfigureMatchEntryAuthority(ctx, c.GlobalMatch.GuildTrialSchema); err != nil {
-		sc.Stop()
-		panic(fmt.Errorf("全球匹配跨域提交围栏不可用: %w", err))
-	}
-	// 先只读核准全部跨域真源；错误schema不能先固化为不可覆盖的全局策略原件。
 	if err := sc.RunRelay(func() error { return store.EnsureGlobalPolicy(ctx, c) }); err != nil {
 		sc.Stop()
 		panic(err)
@@ -426,7 +426,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 						relay.Hold()
 						panic(recovered)
 					}
-					if resultErr != nil {
+					if resultErr != nil && !authoritysql.IsWriterFrozen(resultErr) {
 						relay.Hold()
 					}
 				}()
@@ -446,6 +446,20 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	go func() { publishers.Wait(); close(sc.rankPublisherDone) }()
 
 	return sc
+}
+
+// configureRoleFence 给 Authority 接上目录客户端。调用方密钥缺失就拒绝启动:没有它读不到权威状态,角色副本永远自愈不了。
+func (sc *ServiceContext) configureRoleFence(ctx context.Context, store *authority.Store) error {
+	secret := os.Getenv(rolefence.SecretEnv(roleFenceCaller))
+	states, err := rolefence.NewDirectoryReader(sc.DataServiceClient, roleFenceCaller, secret)
+	if err != nil {
+		return err
+	}
+	admissions, err := rolefence.NewAdmissionVerifier(sc.DataServiceClient, roleFenceCaller, secret)
+	if err != nil {
+		return err
+	}
+	return store.ConfigureRoleFence(ctx, states, admissions)
 }
 
 // NewDataServiceClient 按配置建 data_service 客户端;配置里没有任何目标(etcd key /
@@ -690,9 +704,7 @@ func (sc *ServiceContext) LaunchRelay(point string, fn func() error) bool {
 				panic(recovered)
 			}
 		}()
-		if err := fn(); err != nil {
-			sc.RelayAdmission.Hold()
-		}
+		sc.HoldRelay(fn())
 	})
 	return true
 }
@@ -714,14 +726,13 @@ func (sc *ServiceContext) RunRelay(fn func() error) error {
 		}
 	}()
 	err = fn()
-	if err != nil {
-		sc.RelayAdmission.Hold()
-	}
+	sc.HoldRelay(err)
 	return err
 }
 
+// HoldRelay 把失败记成排空 HOLD。闸门冻结不算:搬库窗口里这笔确定没写,持久待办留给下一轮。
 func (sc *ServiceContext) HoldRelay(err error) {
-	if err != nil && sc.RelayAdmission != nil {
+	if err != nil && sc.RelayAdmission != nil && !authoritysql.IsWriterFrozen(err) {
 		sc.RelayAdmission.Hold()
 	}
 }

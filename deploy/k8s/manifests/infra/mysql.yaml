@@ -40,8 +40,8 @@ spec:
       storage: 50Gi
 ---
 # my.cnf fragment that enables binary logging.
-# Without log-bin=ON, Point-in-Time Recovery (PITR) is impossible — and
-# zone_data_rollback.md §3 §"当前缺失基建" lists this as priority HIGH.
+# Without log-bin=ON, Point-in-Time Recovery (PITR) is impossible
+# (docs/ops/mysql-backup-pitr-runbook.md §4).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -82,7 +82,9 @@ data:
     # 2026-10-16 加入邮件 mail(2 副本 × 池 20,全局;docs/design/mail-system.md §12.3)时重做了规划档:guild 加入后峰值已是 1780(余量 20),
     # 再加 mail 稳态 +40、滚动余量 +40,峰值 1860,超过旧值 1800。本值调到 2100:峰值 1860、余量 240(约 11%,回到原先「约 10%」的口径)。
     # 内存按下面 Deployment 的核算重算过(+300 条连接 ≈ +0.3Gi,仍在 5Gi limits 之内),limits 不动。
-    # 运行中的实例不会自己变:上线前按本段末尾两种做法(维护窗口 rollout restart / SET GLOBAL)任选其一让 mysqld 拿到 2100,否则总账按 2100 通过、线上仍是 1800。
+    # 2026-10-31 逻辑库拆分(docs/design/horizontal-scale-logical-db.md):data_service 多了流水库和全部存档库的池,go/db 不变,match 的池(固定 16)第一次进总账。
+    # 规划档峰值 1860 → 2386,超过 2100。本值调到 2600:余量 214(约 8%)。K=64 的生产档不走这台 MySQL,上限换 TiDB 预算,见 Get-MysqlConnectionPlan。
+    # 运行中的实例不会自己变:上线前按本段末尾两种做法(维护窗口 rollout restart / SET GLOBAL)任选其一让 mysqld 拿到 2600,否则总账按 2600 通过、线上仍是旧值。
     # 以前的 500 只够 2 个 zone 的稳态(恰好 500,零余量);4 个 zone 稳态就要 920(docs/PROGRESS.md 2026-10-12)。
     # 超限的后果不只是变慢:go/db 把 1040 当普通错误,耗尽重试后进没有消费者的死信(读代码推断,未实测)。
     # 改本值必须同步改下面 Deployment 的内存 limits(按每条连接约 1MiB 常驻估,待实测)。
@@ -91,7 +93,7 @@ data:
     # (只改运行值,立即生效;重启后仍读本文件,所以本文件必须已是新值)。
     # SET PERSIST 会把值写进 datadir(在 PVC 上)的 mysqld-auto.cnf,启动时优先于本文件(MySQL 8.0 文档,凭记忆,未在本机核实):
     # 用过之后再改本值 + 重启都不生效,而总账与契约测试照样按本文件的值通过;已经用过的,先 `RESET PERSIST max_connections` 再改。
-    max_connections = 2100
+    max_connections = 2600
 
     # ── Misc ─────────────────────────────────────────────────────────
     skip-name-resolve = ON
@@ -174,9 +176,9 @@ spec:
               mountPath: /docker-entrypoint-initdb.d
               readOnly: true
           # 内存随 max_connections 同步(2026-10-12 G2b;待压测确认):
-          #   innodb_buffer_pool_size 默认 128Mi + 全局开销约 0.5Gi + 2100 条连接 × 约 1MiB
-          #   + 活跃会话缓冲与大包约 0.6Gi + TempTable(temptable_max_ram 默认 1Gi)≈ 4.3Gi,
-          #   各项都是经验值,留约 0.7Gi → limits 5Gi(2026-10-16 max_connections 1800 → 2100 时重算,limits 不变)。
+          #   innodb_buffer_pool_size 默认 128Mi + 全局开销约 0.5Gi + 2600 条连接 × 约 1MiB
+          #   + 活跃会话缓冲与大包约 0.6Gi + TempTable(temptable_max_ram 默认 1Gi)≈ 4.8Gi,
+          #   各项都是经验值,留约 1.2Gi → limits 6Gi(2026-10-31 max_connections 2100 → 2600 时重算)。
           #   超过 limits 是 OOMKill:单实例 MySQL 整体重启,比 1040 更糟。
           # requests 只提到 1Gi,保证 dev kind 节点能调度;生产应 requests = limits(Guaranteed),见 G2b 待拍板。
           # CPU 不在本次调整范围:1 核仍是开服硬瓶颈(docs/design/tidb-phase1-and-launch-readiness.md §1.5)。
@@ -186,7 +188,7 @@ spec:
               memory: 1Gi
             limits:
               cpu: "1"
-              memory: 5Gi
+              memory: 6Gi
           readinessProbe:
             exec:
               command:

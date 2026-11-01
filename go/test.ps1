@@ -22,7 +22,11 @@
       * shared/placement           – key / value codec vectors (separate
                                      go module, run from go/shared).
       * shared/kafkautil           – topic init / durability / gate push.
+      * shared/dbplacement         – logical database mapping and its watcher
+                                     (fake etcd; the real-etcd case Skips).
       * login/internal/kafka       – command producer and partitioner.
+      * tools/dbmove               – the database move state machine (fake etcd
+                                     and SQL; the real-database cases Skip).
 
     Anything that imports a real broker (sarama integration tests) is left
     out — those need KAFKA_INTEGRATION_BROKER.
@@ -66,12 +70,19 @@ $L1Suites = @(
         Packages = @(
             './placement/...'
             './kafkautil/...'
+            './dbplacement/...'
         )
     }
     @{
         Dir      = Join-Path $GoRoot 'login'
         Packages = @(
             './internal/kafka/...'
+        )
+    }
+    @{
+        Dir      = Join-Path $GoRoot '../tools/dbmove'
+        Packages = @(
+            './...'
         )
     }
 )

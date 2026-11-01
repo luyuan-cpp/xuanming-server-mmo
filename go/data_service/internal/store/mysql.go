@@ -25,6 +25,40 @@ type MySQLConfig struct {
 	DBName      string
 	MaxOpenConn int
 	MaxIdleConn int
+	// PoolOptions 是 authoritysql.Open 的可选项:按映射拨号时由装配入口传入(dbplacement),没有时固定连 Host。
+	PoolOptions []authoritysql.OpenOption
+
+	// LogicalShards 是目录分片数 K,0 按 1。DBName 这时是基名,片库名由 dirshard.DirectoryDBName 派生。
+	// 只有目录的 store 看它;流水库和存档库是单个逻辑库,经 ForSchema 拿到自己的参数。
+	LogicalShards int
+	// PermissionFor 按逻辑库给 SQL 权限:闸门跟着库走,每个库一份写资格。nil 时所有库都用 Permission(一次性工具的 Operator、Reader)。
+	PermissionFor func(schema string) (authoritysql.Permission, error)
+	// PoolOptionsFor 按逻辑库给拨号选项。一次性工具用它逐库读一次映射;常驻服务的 Watcher 本身按库解析,用 PoolOptions。
+	PoolOptionsFor func(schema string) ([]authoritysql.OpenOption, error)
+}
+
+// ForSchema 给出连某个逻辑库的参数:库名、权限、拨号选项都换成这个库的。账号口令和连接池上限不变。
+func (c MySQLConfig) ForSchema(schema string) (MySQLConfig, error) {
+	out := c
+	out.DBName = schema
+	out.LogicalShards = 0
+	out.PermissionFor = nil
+	out.PoolOptionsFor = nil
+	if c.PermissionFor != nil {
+		permission, err := c.PermissionFor(schema)
+		if err != nil {
+			return MySQLConfig{}, err
+		}
+		out.Permission = permission
+	}
+	if c.PoolOptionsFor != nil {
+		options, err := c.PoolOptionsFor(schema)
+		if err != nil {
+			return MySQLConfig{}, err
+		}
+		out.PoolOptions = options
+	}
+	return out, nil
 }
 
 const mysqlPingTimeout = 5 * time.Second
@@ -73,7 +107,7 @@ func openMySQLWithDSN(cfg MySQLConfig, dsn string) (*sql.DB, error) {
 	if maxOpen <= 0 {
 		maxOpen = 5
 	}
-	db, err := authoritysql.Open(ctx, dsn, cfg.DBName, cfg.Backend, maxOpen, cfg.Permission)
+	db, err := authoritysql.Open(ctx, dsn, cfg.DBName, cfg.Backend, maxOpen, cfg.Permission, cfg.PoolOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
 	}

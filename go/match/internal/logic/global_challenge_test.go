@@ -6,10 +6,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc"
+	"match/internal/authority"
+	"match/internal/constants"
 	"match/internal/svc"
 	dspb "proto/data_service"
 	pb "proto/match"
+	"shared/rolefence"
+	"shared/serverbase"
 )
 
 func TestGlobalChallengeNoticeDoesNotExposePrivateOriginalAccount(t *testing.T) {
@@ -19,6 +24,26 @@ func TestGlobalChallengeNoticeDoesNotExposePrivateOriginalAccount(t *testing.T) 
 	require.Equal(t, invitation.ChallengeId, shown.ChallengeId)
 	require.Equal(t, invitation.ConfigId, shown.BattleConfigId)
 	require.Empty(t, globalChallengeInvitationNotice(invitation, "").ChallengerName, "公开来源缺失也不能回退到私有原账号")
+}
+
+// 规格 §3.6:自愈读不到目录时事务已回滚,回非故障 tip,排空证明不能 Hold。走到提交的失败才是「尚未确认」,照旧是故障。
+func TestGlobalChallengeCreateFailureKeepsUnknownApart(t *testing.T) {
+	l := &ChallengeLogic{Logger: logx.WithContext(context.Background())}
+	for name, tc := range map[string]struct {
+		err  error
+		want uint32
+	}{
+		"已有邀请":   {authority.ErrChallengePending, constants.ErrChallengePending},
+		"归属变了":   {authority.ErrOriginalPlayer, constants.ErrChallengeExpired},
+		"目录读不到":  {errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")), constants.ErrChallengeExpired},
+		"提交结局未知": {errors.New("commit failed"), constants.ErrInternal},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.want, l.globalChallengeCreateFailure(tc.err).GetErrorMessage().GetId())
+		})
+	}
+	require.Equal(t, serverbase.VerdictBizReject, serverbase.TipVerdict(constants.ErrChallengeExpired))
+	require.Equal(t, serverbase.VerdictFault, serverbase.TipVerdict(constants.ErrInternal))
 }
 
 type challengeNameClient struct {

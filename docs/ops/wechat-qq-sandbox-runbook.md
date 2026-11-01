@@ -87,7 +87,6 @@ zone,之后每次重新部署都要照传同一组参数,部署机上也要再�
 |---|---|---|
 | 直接调 `k8s_deploy.ps1 -Command zone-up / all-up` | 原样生效 | 写操作之前拒绝(见下) |
 | `dev_tools.ps1 -Command k8s-zone-up / k8s-all-up` | 同名参数,非空 / 被指定才透传 | 同上(由 `k8s_deploy.ps1` 拒绝) |
-| `dev_tools.ps1 -Command k8s-zone-rollback`、`k8s_zone_rollback.ps1` | 同名参数,转给 Step 6 | 第 0 步在停服之前拒绝 |
 | `k8s_image.ps1`、`dev_tools.ps1 -Command k8s-image-* / k8s-release-*` | 不支持(这条路不部署 login,也碰不到 login 的 ConfigMap 与 Secret) | `dev_tools.ps1` 显式给了即拒绝 |
 
 **防误关(fail-closed)**:本次要部署 login 时,脚本先读每个 zone 线上的 login ConfigMap(`AuthProviders` 段)和 Secret
@@ -102,8 +101,8 @@ zone,之后每次重新部署都要照传同一组参数,部署机上也要再�
 报错里给出照传现状的参数串,例如 `要保持现状请照传 -LoginWeChatAppId wx0123456789abcdef -LoginQQAppId 101234567`。线上没开、本次新开,不需要确认。
 
 确要关闭或改动时加 `-ConfirmLoginAuthProviderChange`。它是许可,不是指令:线上和本次一致时给了也不改任何东西。`-DryRun` 不读集群,
-所以不做这道核对。zone 回滚的 Step 1 会连 namespace 一起删掉 ConfigMap 和 Secret,所以核对提前到第 0 步。同一 rollback-id 重跑、
-namespace 已删时,以 `run/logs/zone-rollback/<rid>/entry-state.json` 里首次读到的现状为准。
+所以不做这道核对。`zone-down` 会连 namespace 一起删掉 ConfigMap 和 Secret,之后的 `zone-up` 没有现状可比,这道核对不会触发。
+灾难恢复([PITR 手册](./mysql-backup-pitr-runbook.md) §4.0)要在 `zone-down` 之前记下线上的这组值,起服时照传。
 
 ```powershell
 # 例:已开微信(沙箱 mock)+ QQ 的 staging zone,经包装入口重新部署
@@ -404,7 +403,7 @@ curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/js
 - 代码: `go/login/internal/logic/pkg/auth/providers.go`(WeChatProvider / QQProvider)
 - 代码: `go/login/internal/svc/auth_init.go`(provider 注册)
 - 代码: `java/gateway_node/.../grpc/LoginRpcClient.java`(auth_type/auth_token wire 透传)
-- 部署: `tools/scripts/k8s_deploy.ps1`(`-LoginWeChatAppId` 等六个参数、`Assert-LoginAuthProviderClusterState` 防误关)、`tools/scripts/k8s_zone_rollback.ps1` 第 0 步
+- 部署: `tools/scripts/k8s_deploy.ps1`(`-LoginWeChatAppId` 等六个参数、`Assert-LoginAuthProviderClusterState` 防误关)
 
 ---
 
@@ -417,7 +416,7 @@ curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/js
 - §C.3 账号目录键前缀是 `account:`,不是 `account_data:`;账号目录只在 Redis,没有 MySQL `UserAccounts` 表可查。
 - §C.2 / §G.3 的失败返回按网关实际行为改为 `upstream_err=<tip 码>`;渠道故障与签发失败有了独立故障码 2035 / 2036。
 - §D.4 / §G.3:拿不到 unionid 缺省拒绝,不再回落 openid。
-- §B K8s(同日补):包装入口(`dev_tools.ps1` 的 k8s-zone-up / k8s-all-up / k8s-zone-rollback、`k8s_zone_rollback.ps1`)照传六个第三方登录参数;
+- §B K8s(同日补):包装入口(`dev_tools.ps1` 的 k8s-zone-up / k8s-all-up)照传六个第三方登录参数;
   线上已开的第三方登录会被本次参数关掉或改掉时 fail-closed,确要改加 `-ConfirmLoginAuthProviderChange`(判据在
   `tools/scripts/lib/k8s_client_entry.ps1` `Get-LoginAuthProviderDrift`)。以前经包装入口重部署会静默关掉微信 / QQ 登录并删掉 Secret `login-oauth`。
 - §C.2 / §G.3(2026-10-19 补):网关按 `Tip.xlsx` 的 `fault` 列定性后,2035 / 2036 / 2021 / 2022 回 `code:500`,不再是 401;

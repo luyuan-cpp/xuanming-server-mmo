@@ -24,6 +24,7 @@
 #include "engine/infra/storage/redis_cluster/redis_slot.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/comp/player_currency_comp.h"
+#include "engine/core/time/system/time.h"
 #include "modules/currency/system/currency_system.h"
 #include "modules/transaction_log/anomaly_detector.h"
 #include "player/comp/player_frozen_comp.h" // 冻结用例:IsCrossZoneFrozen 就是 any_of<PlayerFrozenComp>
@@ -208,6 +209,43 @@ TEST(CurrencyTest, DebtDeductsFromGain)
     // Add 100 gold — 60 goes to debt, 40 is credited.
     EXPECT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
     EXPECT_EQ(40u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+// 已过期的旧欠款不再收,新的一笔不能把它复活(data-overwrite-rollback-audit-r2-20261019.md 第 6 条)。
+TEST(CurrencyTest, AttachDebtWritesOffExpiredDebtBeforeMerging)
+{
+    auto player = CreateTestPlayer();
+    const uint64_t past = TimeSystem::NowSecondsUTC() - 10;
+
+    EXPECT_EQ(kSuccess, CurrencySystem::AttachDebt(player, kCurrencyGold, 500, "old", "gm", past));
+    EXPECT_EQ(kSuccess, CurrencySystem::AttachDebt(player, kCurrencyGold, 60, "new", "gm", 0));
+
+    const auto debts = CurrencySystem::QueryDebts(player);
+    ASSERT_EQ(1u, debts.size());
+    EXPECT_EQ(60u, debts[0].owed());
+    EXPECT_EQ(0u, debts[0].expires_at());
+
+    DestroyTestPlayer(player);
+}
+
+// 到期时间取较晚的,0 是不过期:小单不能让大单提前失效。
+TEST(CurrencyTest, AttachDebtKeepsTheLaterExpiryWhenMerging)
+{
+    auto player = CreateTestPlayer();
+    const uint64_t soon = TimeSystem::NowSecondsUTC() + 100;
+    const uint64_t later = soon + 100;
+
+    EXPECT_EQ(kSuccess, CurrencySystem::AttachDebt(player, kCurrencyGold, 500, "big", "gm", later));
+    EXPECT_EQ(kSuccess, CurrencySystem::AttachDebt(player, kCurrencyGold, 1, "small", "gm", soon));
+    EXPECT_EQ(later, CurrencySystem::QueryDebts(player)[0].expires_at());
+
+    EXPECT_EQ(kSuccess, CurrencySystem::AttachDebt(player, kCurrencyGold, 1, "forever", "gm", 0));
+    EXPECT_EQ(0u, CurrencySystem::QueryDebts(player)[0].expires_at());
+
+    EXPECT_EQ(kSuccess, CurrencySystem::AttachDebt(player, kCurrencyGold, 1, "small again", "gm", soon));
+    EXPECT_EQ(0u, CurrencySystem::QueryDebts(player)[0].expires_at()) << "不过期的不能被改回有期限";
 
     DestroyTestPlayer(player);
 }

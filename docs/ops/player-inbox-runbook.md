@@ -92,7 +92,7 @@ NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, Rec
 
 ### 2.1 消费开关与写前门禁(评审 H1)
 
-以前 `-PlayerInboxConsumer` 默认 off、不粘滞,包装入口也不透传。开了消费之后,任何一次 `k8s-release-zone` / `zone-up` / `zone-rollback`
+以前 `-PlayerInboxConsumer` 默认 off、不粘滞,包装入口也不透传。开了消费之后,任何一次 `k8s-release-zone` / `zone-up`
 都会把它写回 `false`;GM 处置照样回 `created=true`,却一条都不执行,也进不了任何告警。现在的规则:
 
 - **权威值只有一份**:git 跟踪的 `bin/etc/game_config.yaml` 的 `player_inbox.consumer_enabled`,与 `EnqueueTypes` 取服务 yaml 同口径。
@@ -119,14 +119,14 @@ NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, Rec
   3. **来源**:staging / prod 的真部署要求两份 yaml 已提交(见上)。
   - 明知如此仍要部署(例如紧急关消费,来不及先清白名单):直接调 `tools/scripts/k8s_deploy.ps1`,显式传 `-AllowPlayerInboxConsumerOff`。
     它只豁免第 1、2 层,打一条警告放行,不改渲染值。staging / prod 仍要先提交改过的 yaml(第 3 层不豁免)。
-  - **包装入口没有这个开关**:`dev_tools.ps1`、`k8s_image.ps1`、`k8s_zone_rollback.ps1` 都不认它(加上只会报「找不到参数」)。
-    紧急关消费之后 git 停在「`false` + 白名单非空」,此后包装入口的部署与 zone 回档(第 0 步的 DryRun 预检)都会被拒。
+  - **包装入口没有这个开关**:`dev_tools.ps1`、`k8s_image.ps1` 都不认它(加上只会报「找不到参数」)。
+    紧急关消费之后 git 停在「`false` + 白名单非空」,此后包装入口的部署都会被拒。
     出路是先把 `EnqueueTypes` 改回 `[]` 并提交、重跑 `infra-up`,也就是下面的正常顺序,门禁随之放行。
-  - **zone 回档**(`k8s_zone_rollback.ps1`)的第 0 步预检带 `-DryRun`:只判第 1 层;第 2 层不读集群,第 3 层只告警。
-    这两层要到第 6 步真 `zone-up` 才判,那时 zone 已经停服。所以回档之前先核对两件事,否则第 6 步被拒、zone 停在停服状态:
+  - **灾难恢复**走 [PITR 手册](./mysql-backup-pitr-runbook.md) §4.0,起服时的 `zone-up` 同样过这道门禁。`zone-up -DryRun` 只判第 1 层;第 2 层不读集群,第 3 层只告警。
+    这两层要到真 `zone-up` 才判,那时 zone 已经停服。所以停服之前先核对两件事,否则 `zone-up` 被拒、zone 停在停服状态:
     - 当前检出 yaml 里 `consumer_enabled=false` 时,infra 线上的 `EnqueueTypes` 必须已经是空的
       (`kubectl -n mmorpg-infra get cm go-svc-player-inbox-config -o yaml` 里找 `EnqueueTypes`);
-    - staging / prod:两份 yaml 没有未提交改动(第 0 步的输出里不能有 `player-inbox consumer gate: ... 有未提交改动` 这条警告)。
+    - staging / prod:两份 yaml 没有未提交改动(`zone-up -DryRun` 的输出里不能有 `player-inbox consumer gate: ... 有未提交改动` 这条警告)。
   - 放行时打一行 `player-inbox consumer gate: consumer_enabled=<值> (...) enqueue_types=<N> (...) head=<sha> worktree=<clean|dirty> live=<线上核对> OK`,
     发布记录里会留着它。
 - **正常关消费的顺序**:
@@ -749,8 +749,7 @@ SHOW TABLE mmorpg_player_inbox.player_inbox_item INDEX `uk_player_inbox_item` RE
   `enqueue_total` / `fetch_total` / `void_total` 的取值改名不会红,改的时候对照告警文件头的「label 取值契约」。
 - 批量处置脚本的限速值(§4.2)待压测确认。
 - K8s 上的抓取前提(指向 9270 的 ServiceMonitor / PodMonitor)仓库里没有,与其它 go-svc 同一缺口。
-- **写前门禁的线上核对**(§2.1 第 2 层)看的是 ConfigMap 不是进程;`k8s_zone_rollback.ps1` 第 0 步不读集群,这一层到第 6 步才判。
-  在第 0 步预读(照 db 消费组第 0 步 e 的做法)未做,属于回档脚本那条线。
+- **写前门禁的线上核对**(§2.1 第 2 层)看的是 ConfigMap 不是进程。
 - **还没同步的文档与配置**(本手册之外,不在收件箱这批的改动范围):
   - `docs/ops/release-checklist.md` 回滚一节的 gateway 例外仍写「改用旧 commit 重跑 `k8s_deploy.ps1 zone-up`」,开消费之后照做会连消费一起关掉(§2「回滚」);
     同一节「部署上一版本」用当前脚本换旧镜像参数,不受影响;

@@ -4,53 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"regexp"
-	"sort"
 	"time"
 
-	"shared/accountdirectory"
 	"shared/authoritysql"
-	"shared/placement"
+	"shared/rolefence"
 	"shared/roleidentity"
 )
 
-var roleAuthoritySchema = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
-
-// ConfigureRoleAuthority 只在进程装配期调用；生产传显式全局目录schema，不从DSN猜。
-// 原构造器保留给现有独立仓储夹具；在线进程必须经本函数启用提交互锁。
-func (r *GuildRepo) ConfigureRoleAuthority(schema string, backend authoritysql.Backend) error {
-	if !roleAuthoritySchema.MatchString(schema) {
-		return errors.New("全局角色目录schema未配置")
+// ConfigureRoleFence 只在进程装配期调用。角色归属锁本库的护栏副本(docs/design/horizontal-scale-logical-db.md §3),
+// 目录只有 data_service 连,这里不跨库读。副本表由 -migrate 建,这里只读核形状。
+// 不调用就是现有独立仓储夹具,不加护栏;在线进程必须经本函数启用提交互锁。
+func (r *GuildRepo) ConfigureRoleFence(reader rolefence.StateReader, backend authoritysql.Backend) error {
+	if reader == nil {
+		return errors.New("帮会角色护栏缺目录客户端")
 	}
 	probe, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := authoritysql.AssertCurrentSession(probe, r.db, backend); err != nil {
 		return err
 	}
-	if err := placement.CheckRoleRouteContract(probe, r.db, schema); err != nil {
+	if err := rolefence.VerifySchema(probe, r.db); err != nil {
 		return err
 	}
-	r.roleAuthority = schema
-	return nil
-}
-
-// 只在统一角色前缀内调用；按player升序先于原G→state→member→seq→outbox锁序。
-func (r *GuildRepo) lockRoleForMembership(ctx context.Context, tx *sql.Tx, player uint64) error {
-	if r.roleAuthority == "" {
-		return nil
-	} // 仅原独立仓储测试构造；在线装配拒绝空schema。
-	var listing, revision uint64
-	var account []byte
-	err := tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+r.roleAuthority+"`.account_role WHERE player_id=? FOR UPDATE", player).Scan(&account, &revision, &listing)
-	if err != nil {
-		return err
-	}
-	if !accountdirectory.ValidAccount(string(account)) || revision == 0 || listing != 0 {
-		return ErrWriteConflict
-	}
-	if original, ok := roleidentity.Original(ctx); ok && original.Role.PlayerId == player && (original.Account != string(account) || original.OwnerRevision != revision) {
-		return ErrWriteConflict
-	}
+	r.fence = rolefence.NewGuard(r.db, reader)
 	return nil
 }
 
@@ -61,52 +37,37 @@ func withRoleTargets(ctx context.Context, players ...uint64) context.Context {
 	old, _ := ctx.Value(roleTargetsKey{}).([]uint64)
 	return context.WithValue(ctx, roleTargetsKey{}, append(append([]uint64(nil), old...), players...))
 }
+
+// lockRolePrefix 按player升序锁全部副本行,先于原G→state→member→seq→outbox锁序。
+// 目标只判冻结和删除;原actor还要核会话捕获的账号、修订。副本判不了回 *StaleError,由 inTx 在事务外自愈后重来。
 func (r *GuildRepo) lockRolePrefix(ctx context.Context, tx *sql.Tx) error {
+	if r.fence == nil {
+		return nil // 仅原独立仓储测试构造；在线装配拒绝空护栏。
+	}
 	players, _ := ctx.Value(roleTargetsKey{}).([]uint64)
-	players = append([]uint64(nil), players...)
-	if original, ok := roleidentity.Original(ctx); ok {
-		players = append(players, original.Role.PlayerId)
-	}
-	sort.Slice(players, func(i, j int) bool { return players[i] < players[j] })
-	unique := players[:0]
-	var previous uint64
+	expects := make([]rolefence.Expect, 0, len(players)+1)
 	for _, player := range players {
-		if player == 0 || player == previous {
-			continue
-		}
-		previous = player
-		unique = append(unique, player)
-	}
-	if r.roleAuthority != "" && len(unique) != 0 {
-		if err := placement.LockRoleRoutes(ctx, tx, r.roleAuthority, unique); err != nil {
-			if errors.Is(err, placement.ErrRoleRouteFenced) {
-				// 路由行被冻结(搬库中)或预读后被改过:暂时性拒绝,按写冲突让客户端稍后重试。
-				return ErrWriteConflict
-			}
-			return err
+		if player != 0 {
+			expects = append(expects, rolefence.Expect{PlayerID: player, Reject: ErrWriteConflict})
 		}
 	}
-	for _, player := range unique {
-		if err := r.lockRoleForMembership(ctx, tx, player); err != nil {
-			return err
-		}
+	if original, ok := roleidentity.Original(ctx); ok && original.Role.PlayerId != 0 {
+		expects = append(expects, rolefence.Expect{PlayerID: original.Role.PlayerId, Account: original.Account, OwnerRevision: original.OwnerRevision, Reject: ErrWriteConflict})
 	}
-	return nil
+	_, err := rolefence.LockAll(ctx, tx, expects...)
+	return err
 }
 
-// 受理预检用于读接口；所有写仍在runTxBody持P锁复核同一份原会话。
+// 受理预检用于读接口；读本库副本,不加锁。所有写仍在runTxBody持副本行锁复核同一份原会话。
 func (r *GuildRepo) CheckOriginalRole(ctx context.Context) error {
 	original, ok := roleidentity.Original(ctx)
-	if !ok || !roleAuthoritySchema.MatchString(r.roleAuthority) {
+	if !ok || r.fence == nil {
 		return ErrWriteConflict
 	}
-	var account string
-	var revision, listing uint64
-	if err := r.db.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+r.roleAuthority+"`.account_role WHERE player_id=?", original.Role.PlayerId).Scan(&account, &revision, &listing); err != nil {
-		return err
-	}
-	if account != original.Account || revision != original.OwnerRevision || listing != 0 {
-		return ErrWriteConflict
-	}
-	return nil
+	player := original.Role.PlayerId
+	expect := rolefence.Expect{PlayerID: player, Account: original.Account, OwnerRevision: original.OwnerRevision, Reject: ErrWriteConflict}
+	return r.fence.RunTx(ctx, func() error {
+		fence, err := rolefence.Read(ctx, r.db, player)
+		return rolefence.Check(fence, err, expect)
+	})
 }

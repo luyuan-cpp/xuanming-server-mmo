@@ -9,14 +9,13 @@
       - 判据(lib/k8s_client_entry.ps1 第 9 节):ConvertFrom-LoginAuthProvidersYaml / Get-LoginAuthProviderDrift 两个纯函数的每条
         判定与报错文本;Get-LoginAuthProviderLiveState 只读两次 kubectl(ConfigMap -o json、Secret -o name),读不全即 throw;
       - 生成器(k8s_deploy.ps1 New-LoginAuthProvidersYaml)与解析器口径一致:同一组参数渲染再解析,差异为零,照传串还原参数;
-      - 存档往返(k8s_zone_rollback.ps1 的 entry-state.json 经 JSON 往返后 Providers 是 pscustomobject)判定不变;
+      - JSON 往返(Providers 变成 pscustomobject)判定不变;
       - 报错与照传串不回显手改进 ConfigMap 的任意文本(内联 AppSecret、带用户信息的 Endpoint、带空白的 AppId);
       - k8s_deploy.ps1 Assert-LoginAuthProviderClusterState:全部 zone 判完再一次拒绝(all-up 不留半截部署),
         -ConfirmLoginAuthProviderChange 只告警放行;只在 Assert-ClientEntryDeployPreflight 的非 DryRun 分支、本次部署 login 时调用;
       - 库契约里的三个名字与 k8s_deploy.ps1 的 $script:GoSvcInfo.login / $script:LoginOAuthSecretName 逐字相等;
-      - dev_tools.ps1 Invoke-K8sDeploy 非空 / 被指定才透传这七个参数。
-    回滚脚本(第 0 步核对、Step 6 透传、入口决定存档)与 dev_tools.ps1 的 k8s-zone-rollback / k8s-image-* 入口在
-    k8s_zone_rollback_gate_router_mode.tests.ps1;包装层 splat 键的 AST 契约在 k8s_client_entry_contract.tests.ps1。
+      - dev_tools.ps1 Invoke-K8sDeploy 非空 / 被指定才透传这七个参数;Invoke-K8sImage 在调 k8s_image.ps1 之前逐个拒绝它们。
+    包装层 splat 键的 AST 契约在 k8s_client_entry_contract.tests.ps1。
     全部在进程内跑,kubectl 一律由同名替身函数顶替(函数先于外部命令解析),不碰任何集群。
     负向用例一律断错误文本,不只断有没有抛异常。
 
@@ -61,7 +60,7 @@ function New-AuthYaml {
 }
 
 # 把 AuthProviders 段嵌进一份 login.yaml 的前后文(插入点同 New-GoSvcConfigMapYaml:RequireClientEndpoint 之后、Kafka 之前)。
-# 前面带一个假口令:断言它从不进报错、照传串与存档。
+# 前面带一个假口令:断言它从不进报错、照传串与读回的现状。
 function New-LoginYamlWith {
     param([AllowEmptyString()][string]$AuthYaml = '')
     $lines = @('Name: login.rpc', 'Secrets:', '  InternalAuth:', '    Value: "contract-guard-secret-never-echoed"', 'RequireClientEndpoint: false')
@@ -233,12 +232,12 @@ Test-Case '照传串只在值落进安全字符集时回显:带空白 / 分号�
     }
 }
 
-Test-Case '存档往返:线上现状经 ConvertTo-Json / ConvertFrom-Json(Providers 变成 pscustomobject)后判定与照传串不变' {
+Test-Case 'JSON 往返:线上现状经 ConvertTo-Json / ConvertFrom-Json(Providers 变成 pscustomobject)后判定与照传串不变' {
     $state = [pscustomobject]@{ ConfigMapPresent = $true; Live = $LiveFull; OAuthSecretPresent = $true }
     $restored = $state | ConvertTo-Json -Depth 6 | ConvertFrom-Json
     $direct = Get-Drift -Live $LiveFull -Secret $true
     $roundTripped = Get-Drift -Live $restored.Live -Secret ([bool]$restored.OAuthSecretPresent)
-    Assert-Equal -Expected ($direct.Drifts -join ' | ') -Actual ($roundTripped.Drifts -join ' | ') -Because '同一 rid 重跑以存档为准,判定必须与首次一致'
+    Assert-Equal -Expected ($direct.Drifts -join ' | ') -Actual ($roundTripped.Drifts -join ' | ') -Because 'the verdict must be identical before and after the JSON round trip'
     Assert-Equal -Expected 2 -Actual $roundTripped.Drifts.Count -Because '前提:全部漏传时两个 provider 都算差异'
     Assert-Equal -Expected $FullKeepText -Actual $roundTripped.KeepArgs -Because '照传串同样不变'
     Assert-Equal -Expected 0 -Actual (Get-Drift -Live $restored.Live -Secret $true -P $FullParams).Drifts.Count -Because '照传全部即放行'
@@ -282,7 +281,7 @@ foreach ($liveCase in $LiveStateCases) {
             Assert-Equal -Expected 'contract-ctx' -Actual $call.KubeContext -Because '查询必须携带调用方给的 context'
             Assert-Equal -Expected 'C:/contract/kubeconfig' -Actual $call.KubeConfig -Because '查询必须携带调用方给的 kubeconfig'
         }
-        Assert-NotMatch -Text (($state | ConvertTo-Json -Depth 8)) -Pattern 'contract-guard-secret-never-echoed' -Because '读回的现状只有 AuthProviders 的公开值,不带 ConfigMap 里别的值(它会进回滚存档)'
+        Assert-NotMatch -Text (($state | ConvertTo-Json -Depth 8)) -Pattern 'contract-guard-secret-never-echoed' -Because '读回的现状只有 AuthProviders 的公开值,不带 ConfigMap 里别的值'
     }
 }
 
@@ -381,7 +380,7 @@ Test-Case 'k8s_deploy 接入位置:防误关闸全文件只调一次,在 Assert-
 Test-Case '库契约 LoginConfigMapName / LoginConfigMapKey / LoginOAuthSecretName 与 k8s_deploy.ps1 逐字相等;参数注释不再写「包装入口不透传」' {
     $contract = Get-ClientEntryContract
     $deployText = Get-Content -LiteralPath $DeployScriptPath -Raw -Encoding utf8
-    Assert-Match -Text $deployText -Pattern ('(?m)^\s*login\s+= @\{ ConfigMap = "' + [regex]::Escape($contract.LoginConfigMapName) + '";[^\r\n]*ConfigFile = "' + [regex]::Escape($contract.LoginConfigMapKey) + '"') -Because '防误关读的 ConfigMap 名与数据键必须是部署脚本生成的那一份(k8s_zone_rollback.ps1 只能经库契约取)'
+    Assert-Match -Text $deployText -Pattern ('(?m)^\s*login\s+= @\{ ConfigMap = "' + [regex]::Escape($contract.LoginConfigMapName) + '";[^\r\n]*ConfigFile = "' + [regex]::Escape($contract.LoginConfigMapKey) + '"') -Because '防误关读的 ConfigMap 名与数据键必须是部署脚本生成的那一份'
     Assert-Match -Text $deployText -Pattern ('(?m)^\$script:LoginOAuthSecretName = "' + [regex]::Escape($contract.LoginOAuthSecretName) + '"\s*$') -Because '防误关探测的 Secret 必须是部署脚本建 / 删的那一个'
     Assert-NotMatch -Text $deployText -Pattern '目前不透传这六个参数' -Because '包装入口已照传,参数注释要同步'
 }
@@ -442,6 +441,87 @@ Test-Case 'dev_tools Invoke-K8sDeploy:七个第三方登录参数非空 / 被指
     foreach ($expected in @('LoginWeChatAppId=wx0123456789abcdef', 'LoginWeChatEndpoint=https://wechat-mock.contract.test:18090', 'LoginWeChatAllowOpenId=True',
             'LoginQQAppId=100000001', 'LoginQQEndpoint=https://qq-mock.contract.test', 'LoginQQAllowOpenId=True', 'ConfirmLoginAuthProviderChange=True')) {
         Assert-Match -Text $all -Pattern ('(?m)^' + [regex]::Escape($expected) + '\r?$') -Because "给了就原样透传($expected),漏一个重部署就关掉或改掉线上第三方登录"
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 7. dev_tools.ps1 Invoke-K8sImage:k8s_image.ps1 不部署 login,显式给了就拒绝
+# ─────────────────────────────────────────────────────────────────
+
+# dev_tools.ps1 Invoke-K8sImage:按 AST 取出函数,$ScriptDir 指到假 k8s_image.ps1 所在的临时目录(照 k8s_deploy_contract.tests.ps1)。
+function Get-DevToolsFunctionText {
+    param([Parameter(Mandatory = $true)][string]$FunctionName)
+    $path = Join-Path (Get-ToolsScriptsDir) 'dev_tools.ps1'
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$parseErrors)
+    if ($parseErrors.Count) { throw "dev_tools.ps1 解析失败: $($parseErrors | Out-String)" }
+    $definition = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $FunctionName }, $true)
+    if ($null -eq $definition) { throw "dev_tools.ps1 里找不到函数 $FunctionName(契约测试的前提被改掉了)" }
+    return $definition.Extent.Text
+}
+
+<#
+.SYNOPSIS
+    以给定的脚本级参数值调一次 dev_tools.ps1 的 Invoke-K8sImage -ImageCommand release-zone,返回 @{ Error; DownstreamCalled; DownstreamArgs }。
+    被测函数按动态作用域读 dev_tools.ps1 的脚本级参数:这里在本函数作用域里设置 -Variables 给的那几个,其余未设即 $null(开关视为未指定)。
+    下游是假 k8s_image.ps1,只把收到的参数($args 以空格拼接)写进标记文件:即使拒绝失效,也不会真的构建、推送或部署。
+    假脚本不声明参数块,splat 进来的具名参数全部落进 $args,形如 "-Name:" 后跟值;没被调到时 DownstreamArgs 为 $null。
+#>
+function Invoke-DevToolsK8sImageWith {
+    param([Parameter(Mandatory = $true)][hashtable]$Variables)
+    $fakeDir = Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-k8s-image-reject-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $fakeDir | Out-Null
+    try {
+        $marker = Join-Path $fakeDir 'k8s_image.called'
+        Set-Content -LiteralPath (Join-Path $fakeDir 'k8s_image.ps1') -Encoding utf8 -Value ('Set-Content -LiteralPath ''{0}'' -Value ($args -join '' ''); exit 0' -f $marker.Replace("'", "''"))
+        $ScriptDir = $fakeDir
+        foreach ($variableName in $Variables.Keys) { Set-Variable -Name $variableName -Value $Variables[$variableName] }
+        . ([scriptblock]::Create((Get-DevToolsFunctionText -FunctionName 'Invoke-K8sImage')))
+        $errorText = $null
+        try { Invoke-K8sImage -ImageCommand 'release-zone' *>&1 | Out-Null } catch { $errorText = $_.Exception.Message }
+        $called = Test-Path -LiteralPath $marker
+        $downstreamArgs = if ($called) { Get-Content -LiteralPath $marker -Raw } else { $null }
+        return [pscustomobject]@{ Error = $errorText; DownstreamCalled = $called; DownstreamArgs = $downstreamArgs }
+    }
+    finally {
+        Remove-Item -LiteralPath $fakeDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+Test-Case 'dev_tools Invoke-K8sImage:-LoginDevPasswordAuth 在调 k8s_image.ps1 之前拒绝;-RequireClientEndpoint 原样透传给 k8s_image.ps1' {
+    # 对照组:什么都不给时必须真的调到假下游,否则"没调到"的断言在这套替身下会空转通过。
+    $control = Invoke-DevToolsK8sImageWith -Variables @{}
+    Assert-True -Condition ($null -eq $control.Error -and $control.DownstreamCalled) -Because "对照组必须调到假 k8s_image.ps1。错误: $($control.Error)"
+    Assert-NotMatch -Text $control.DownstreamArgs -Pattern 'RequireClientEndpoint' -Because '留空不透传,由 k8s_deploy.ps1 的默认值接管(默认值只在一处)'
+
+    # -LoginDevPasswordAuth 只落在 login 上,k8s_image.ps1 不部署 login、也不声明它:显式给了必须拒绝而不是静默吞掉。
+    $reject = Invoke-DevToolsK8sImageWith -Variables @{ LoginDevPasswordAuth = $true }
+    Assert-True -Condition ($null -ne $reject.Error) -Because '-LoginDevPasswordAuth 经 k8s-release-* 不生效,显式给了必须拒绝'
+    Assert-Match -Text $reject.Error -Pattern 'k8s-image-\* / k8s-release-\* 不支持 [^:]*-LoginDevPasswordAuth' -Because '错误文本必须点名 -LoginDevPasswordAuth'
+    Assert-True -Condition (-not $reject.DownstreamCalled) -Because '-LoginDevPasswordAuth:拒绝必须早于调用 k8s_image.ps1(镜像构建与推送都在那边)'
+
+    # -RequireClientEndpoint 以前在这里被拒;现在 k8s_image.ps1 声明并透传它(只参与 k8s_deploy.ps1 的组合预检,
+    # 不改写 login / scene_manager 的 ConfigMap,给了由 k8s_image.ps1 告警说明)。
+    $forward = Invoke-DevToolsK8sImageWith -Variables @{ RequireClientEndpoint = 'true' }
+    Assert-True -Condition ($null -eq $forward.Error -and $forward.DownstreamCalled) -Because "-RequireClientEndpoint 不再拒绝,必须调到 k8s_image.ps1。错误: $($forward.Error)"
+    Assert-Match -Text $forward.DownstreamArgs -Pattern '(^|\s)-RequireClientEndpoint:?\s*true(\s|$)' -Because 'dev_tools.ps1 必须把 -RequireClientEndpoint 原样透传给 k8s_image.ps1,不能静默吞掉'
+}
+
+Test-Case 'dev_tools Invoke-K8sImage:第三方登录 -Login* 与 -ConfirmLoginAuthProviderChange 在调 k8s_image.ps1 之前逐个拒绝(k8s_image.ps1 不部署 login)' {
+    $control = Invoke-DevToolsK8sImageWith -Variables @{}
+    Assert-True -Condition ($null -eq $control.Error -and $control.DownstreamCalled) -Because "对照组必须调到假 k8s_image.ps1。错误: $($control.Error)"
+    Assert-NotMatch -Text $control.DownstreamArgs -Pattern 'LoginWeChat|LoginQQ|ConfirmLogin' -Because '没给就不出现在下游参数里'
+    $cases = @(
+        @{ LoginWeChatAppId = 'wx0123456789abcdef' }, @{ LoginWeChatEndpoint = 'https://wechat-mock.contract.test' }, @{ LoginWeChatAllowOpenId = $true },
+        @{ LoginQQAppId = '100000001' }, @{ LoginQQEndpoint = 'https://qq-mock.contract.test' }, @{ LoginQQAllowOpenId = $true },
+        @{ ConfirmLoginAuthProviderChange = $true }
+    )
+    foreach ($variables in $cases) {
+        $name = @($variables.Keys)[0]
+        $reject = Invoke-DevToolsK8sImageWith -Variables $variables
+        Assert-True -Condition ($null -ne $reject.Error) -Because "-$name 经 k8s-release-* 不生效(k8s_image.ps1 不部署 login),显式给了必须拒绝而不是静默吞掉"
+        Assert-Match -Text $reject.Error -Pattern "k8s-image-\* / k8s-release-\* 不支持 [^:]*-$name(,|:)" -Because "错误文本必须点名 -$name"
+        Assert-True -Condition (-not $reject.DownstreamCalled) -Because "-${name}:拒绝必须早于调用 k8s_image.ps1(镜像构建与推送都在那边)"
     }
 }
 

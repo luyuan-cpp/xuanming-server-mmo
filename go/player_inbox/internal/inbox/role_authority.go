@@ -5,31 +5,41 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"regexp"
 	"strings"
 
-	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
 	dspb "proto/data_service"
 	inboxpb "proto/player_inbox"
+	rfpb "proto/role_fence"
 	"shared/accountdirectory"
 	"shared/assetop"
-	"shared/authoritysql"
-	"shared/placement"
+	"shared/rolefence"
 )
 
 var ErrOriginalRole = errors.New("inbox: 原角色身份缺失、已换主或冻结")
 
-var roleSchemaPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
-
-// RoleAuthority 隔离同事务域SQL目录依赖。原件由首次新入箱捕获，历史条目只核验、不补写。
-// LockCurrent先取得完整meta/64片/route前缀，再取得原account_role P；成功后全部持有到提交。
+// RoleAuthority 隔离角色护栏依赖(docs/design/horizontal-scale-logical-db.md §3)。原件由首次新入箱捕获，历史条目只核验、不补写。
 type RoleAuthority interface {
-	LockCurrent(context.Context, *sql.Tx, uint64) (*dspb.AccountRoleOwnership, error)
-	VerifyAdmission(context.Context, *sql.Tx, *dspb.AccountRoleOwnership, *base.RoleAdmissionIdentity) error
+	// RunTx 跑一次 action;action 回 *rolefence.StaleError 时读权威状态写入副本,再跑一次。action 自己开事务,RPC 只发生在两次之间。
+	RunTx(ctx context.Context, action func() error) error
+	// LockCurrent 锁本库副本,回当前归属。成功后持有到提交。副本判不了回 *rolefence.StaleError,冻结或已删除回 ErrOriginalRole。
+	LockCurrent(ctx context.Context, tx *sql.Tx, player uint64) (*dspb.AccountRoleOwnership, error)
+	// VerifyAdmission 在事务外向目录核完整入场原件,事务里不调 RPC。
+	VerifyAdmission(ctx context.Context, admission *base.RoleAdmissionIdentity) error
 }
 
-type SQLRoleAuthority struct{ schema string }
+// FenceRoleAuthority 读本库的 role_fence 副本,入场登记走目录 RPC。
+type FenceRoleAuthority struct {
+	guard      *rolefence.Guard
+	admissions rolefence.AdmissionVerifier
+}
+
+func NewFenceRoleAuthority(db *sql.DB, states rolefence.StateReader, admissions rolefence.AdmissionVerifier) (*FenceRoleAuthority, error) {
+	if db == nil || states == nil || admissions == nil {
+		return nil, errors.New("inbox: 角色护栏缺连接、权威状态读取或入场登记校验")
+	}
+	return &FenceRoleAuthority{guard: rolefence.NewGuard(db, states), admissions: admissions}, nil
+}
 
 // 永久终态历史不能让每次挂起核验退化为扫描全部历史；旧表缺索引须先执行正规迁移。
 func CheckAuthorityIndexes(ctx context.Context, db *sql.DB) error {
@@ -57,89 +67,67 @@ func CheckAuthorityIndexes(ctx context.Context, db *sql.DB) error {
 	return errors.New("inbox: 缺(shard,player_id,state)挂起索引，先执行迁移计划再接流")
 }
 
-func NewSQLRoleAuthority(ctx context.Context, db *sql.DB, schema string, backend authoritysql.Backend) (*SQLRoleAuthority, error) {
-	if db == nil || !roleSchemaPattern.MatchString(schema) {
-		return nil, ErrOriginalRole
-	}
-	if err := authoritysql.AssertCurrentSession(ctx, db, backend); err != nil {
-		return nil, err
-	}
-	rows, err := db.QueryContext(ctx, "SELECT player_id,account,owner_revision,trade_listing_id FROM `"+schema+"`.account_role LIMIT 0")
-	if err != nil {
-		return nil, err
-	}
-	if err = rows.Close(); err != nil {
-		return nil, err
-	}
-	rows, err = db.QueryContext(ctx, "SELECT player_id,scene_instance_id,highest_generation,closed_through,identity_proto FROM `"+schema+"`.account_role_admission LIMIT 0")
-	if err != nil {
-		return nil, err
-	}
-	if err = rows.Close(); err != nil {
-		return nil, err
-	}
-	if err = placement.CheckRoleRouteContract(ctx, db, schema); err != nil {
-		return nil, err
-	}
-	return &SQLRoleAuthority{schema: schema}, nil
+func (s *FenceRoleAuthority) RunTx(ctx context.Context, action func() error) error {
+	return s.guard.RunTx(ctx, action)
 }
 
-func (s *SQLRoleAuthority) VerifyAdmission(ctx context.Context, tx *sql.Tx, original *dspb.AccountRoleOwnership, admission *base.RoleAdmissionIdentity) error {
-	if !accountdirectory.ValidAdmission(admission) || admission.PlayerId != original.GetRole().GetPlayerId() || admission.OwnerRevision != original.GetOwnerRevision() {
+// VerifyAdmission 不再和 CloseRoleAdmissions 同事务串行:校验之后、事务提交之前,这一世代可能刚好关闭。
+// 不影响资产:归属变更先要冻结全部副本,事务在副本行锁上被拒;scene 关闭世代之前已结束自己的实体和回调,
+// 迟到的 Fetch 只多记一次投递,迟到的 Ack 报的是它已落盘的结局,流行的 fence_epoch 照常挡旧 owner_epoch。
+func (s *FenceRoleAuthority) VerifyAdmission(ctx context.Context, admission *base.RoleAdmissionIdentity) error {
+	if !accountdirectory.ValidAdmission(admission) {
 		return ErrOriginalRole
 	}
-	var highest, closed uint64
-	var raw []byte
-	err := tx.QueryRowContext(ctx, "SELECT highest_generation,closed_through,identity_proto FROM `"+s.schema+"`.account_role_admission WHERE player_id=? AND scene_instance_id=? FOR UPDATE", admission.PlayerId, []byte(admission.SceneInstanceId)).Scan(&highest, &closed, &raw)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrOriginalRole
-	}
+	valid, err := s.admissions.VerifyRoleAdmission(ctx, admission)
 	if err != nil {
 		return err
 	}
-	registered := &base.RoleAdmissionIdentity{}
-	if proto.Unmarshal(raw, registered) != nil || highest != admission.Generation || closed >= admission.Generation || !proto.Equal(registered, admission) {
+	if !valid {
 		return ErrOriginalRole
 	}
 	return nil
 }
 
-func (s *SQLRoleAuthority) LockCurrent(ctx context.Context, tx *sql.Tx, player uint64) (*dspb.AccountRoleOwnership, error) {
-	if s == nil || tx == nil || player == 0 || !roleSchemaPattern.MatchString(s.schema) {
+func (s *FenceRoleAuthority) LockCurrent(ctx context.Context, tx *sql.Tx, player uint64) (*dspb.AccountRoleOwnership, error) {
+	if s == nil || tx == nil || player == 0 {
 		return nil, ErrOriginalRole
 	}
-	if err := placement.LockRoleRoutes(ctx, tx, s.schema, []uint64{player}); err != nil {
-		return nil, err
-	}
-	var account []byte
-	var revision, listing uint64
-	err := tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+s.schema+"`.account_role WHERE player_id=? FOR UPDATE", player).Scan(&account, &revision, &listing)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrOriginalRole
-	}
+	fences, err := rolefence.LockAll(ctx, tx, rolefence.Expect{PlayerID: player, Reject: ErrOriginalRole})
 	if err != nil {
 		return nil, err
 	}
-	if !accountdirectory.ValidAccount(string(account)) || revision == 0 || listing != 0 {
-		return nil, ErrOriginalRole
-	}
-	return &dspb.AccountRoleOwnership{Account: string(account), OwnerRevision: revision, Role: &base.AccountSimplePlayer{PlayerId: player}}, nil
+	fence := fences[player]
+	return &dspb.AccountRoleOwnership{Account: fence.Account, OwnerRevision: fence.OwnerRevision, Role: &base.AccountSimplePlayer{PlayerId: player}}, nil
 }
 
 func (s *Store) withPlayerTx(ctx context.Context, player uint64, action func(*sql.Tx, *dspb.AccountRoleOwnership) error) error {
 	if s.roles == nil {
 		return ErrOriginalRole
 	}
-	return assetop.WithTxRetryConfig(ctx, s.db, s.txCfg, func(tx *sql.Tx) error {
-		original, err := s.roles.LockCurrent(ctx, tx, player)
-		if err != nil {
-			return err
-		}
-		if original.GetRole().GetPlayerId() != player || !accountdirectory.ValidAccount(original.GetAccount()) || original.GetOwnerRevision() == 0 {
-			return ErrOriginalRole
-		}
-		return action(tx, original)
+	err := s.roles.RunTx(ctx, func() error {
+		return assetop.WithTxRetryConfig(ctx, s.db, s.txCfg, func(tx *sql.Tx) error {
+			original, err := s.roles.LockCurrent(ctx, tx, player)
+			if err != nil {
+				return err
+			}
+			if original.GetRole().GetPlayerId() != player || !accountdirectory.ValidAccount(original.GetAccount()) || original.GetOwnerRevision() == 0 {
+				return ErrOriginalRole
+			}
+			return action(tx, original)
+		})
 	})
+	if errors.Is(err, rolefence.ErrRoleNotFound) {
+		return ErrOriginalRole
+	}
+	return err
+}
+
+// requireAdmissionOriginal 在持锁的事务里核入场原件的归属修订。原件本身已在事务外由目录核过(VerifyAdmission)。
+func requireAdmissionOriginal(admission *base.RoleAdmissionIdentity, original *dspb.AccountRoleOwnership) error {
+	if admission.GetPlayerId() != original.GetRole().GetPlayerId() || admission.GetOwnerRevision() != original.GetOwnerRevision() {
+		return ErrOriginalRole
+	}
+	return nil
 }
 
 func requireItemOriginal(row *inboxpb.PlayerInboxItemRow, original *dspb.AccountRoleOwnership) error {
@@ -165,4 +153,21 @@ func requirePendingOriginalsTx(ctx context.Context, tx *sql.Tx, original *dspb.A
 		return err
 	}
 	return ErrOriginalRole
+}
+
+// roleBlockerItem 是低基数枚举,进协调者的指标 label。
+const roleBlockerItem = "player_inbox_item"
+
+// RolePending 是收件箱的挂起全集,在 PrepareRoleFreeze 的事务里跑,此时已持有副本行锁。
+// 未知/未终局条目属于原主,不能在维护或交易中换主。
+func RolePending(ctx context.Context, tx *sql.Tx, state *rfpb.RoleFenceState) (string, error) {
+	var pending uint64
+	err := tx.QueryRowContext(ctx, "SELECT player_id FROM "+itemTable+" WHERE shard=? AND player_id=? AND (state IS NULL OR state NOT IN "+terminalStatesSQL+") LIMIT 1 FOR UPDATE", RowShard(state.PlayerId), state.PlayerId).Scan(&pending)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return roleBlockerItem, nil
 }

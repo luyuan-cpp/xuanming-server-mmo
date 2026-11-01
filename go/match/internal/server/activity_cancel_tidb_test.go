@@ -65,7 +65,7 @@ func TestTiDBActivityCancellationRPCSignsOriginalReceiptAndBlocksLateStart(t *te
 	secret := strings.Repeat("z", 32)
 	verifier, err := serviceauth.New(map[string]string{"guild": secret})
 	require.NoError(t, err)
-	server := NewMatchInternalServer(&svc.ServiceContext{Authority: &authority.Store{DB: db}, ActivityCancelAuth: verifier, ActivityCancelSecret: secret})
+	server := NewMatchInternalServer(&svc.ServiceContext{Authority: &authority.Store{DB: db}, GuildCallAuth: verifier, GuildCallSecret: secret})
 	original := &pb.StartActivityBattleRequest{RequestId: 51, BattleConfigId: 1, MemberPlayerIds: []uint64{11, 22}, ActivityContext: &battlepb.BattleActivityContext{Kind: battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL, GuildId: 44, ActivityId: 3, PeriodKey: 20261021, GuildPeriodKey: 20261021, InitiatorPlayerId: 11, LaunchRequestId: 51}}
 	in := &pb.CancelActivityBattleRequest{Original: original}
 	method := pb.MatchInternal_CancelActivityBattle_FullMethodName

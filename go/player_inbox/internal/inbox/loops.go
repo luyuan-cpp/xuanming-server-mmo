@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	mathrand "math/rand/v2"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"sync"
 	"time"
@@ -302,7 +303,8 @@ func (l *Loops) sweepRound(ctx context.Context) {
 		return
 	}
 	deleted, err := l.store.SweepTerminal(ctx, nowMs-retentionMs, sweepBudgetPerRound)
-	if err != nil && l.RootAdmission != nil {
+	// 闸门冻结是确定没写,下一轮接着清,不算结局未知。
+	if err != nil && l.RootAdmission != nil && !authoritysql.IsWriterFrozen(err) {
 		l.RootAdmission.Hold()
 	}
 	if err != nil && !errors.Is(err, context.Canceled) {

@@ -87,7 +87,7 @@ func newFakeRouteStore(t *testing.T, script fakeRouteScript) (*RouteStore, *fake
 	fake := newFakeRouteDB(script)
 	db := sql.OpenDB(fakeRouteConnector{fake: fake})
 	t.Cleanup(func() { _ = db.Close() })
-	return &RouteStore{db: db, writer: fakeRouteWriter}, fake
+	return &RouteStore{pools: singleShardPools(db, ""), writer: fakeRouteWriter}, fake
 }
 
 // routeStmtLabel 把 SQL 文本映射成规格 b.4 的编号。只认**逐字相同**的生产文本(动态语句认前缀,
@@ -360,7 +360,7 @@ func mysqlLikeConvert(v any) (driver.Value, error) {
 
 // ── 应答的小工具 ───────────────────────────────────────────────────────────────
 
-// dv32 / dv64 / dvStr 把「0 / 空串 = NULL」翻成驱动吐出的列值(go-sql-driver 对小整数吐 int64)。
+// dv32 / dv64 把「0 = NULL」翻成驱动吐出的列值(go-sql-driver 对小整数吐 int64)。
 func dv32(v uint32) driver.Value {
 	if v == 0 {
 		return nil
@@ -375,13 +375,6 @@ func dv64(v uint64) driver.Value {
 	return int64(v)
 }
 
-func dvStr(s string) driver.Value {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
 const (
 	fakeRouteCreatedMs int64 = 1_760_000_000_000
 	fakeRouteUpdatedMs int64 = 1_760_000_000_500
@@ -389,21 +382,21 @@ const (
 )
 
 // r5Reply 是 R5 读到的一行(列序同 routeRowColumnsSQL)。
-func r5Reply(home, storage uint32, version uint64, frozenRun string, rev uint64) fakeRouteReply {
+func r5Reply(home, storage uint32, version, rev uint64) fakeRouteReply {
 	return fakeRouteReply{rows: [][]driver.Value{{
-		dv32(home), dv32(storage), dv64(version), dvStr(frozenRun), int64(rev), fakeRouteOldWriter, fakeRouteCreatedMs, fakeRouteUpdatedMs,
+		dv32(home), dv32(storage), dv64(version), int64(rev), fakeRouteOldWriter, fakeRouteCreatedMs, fakeRouteUpdatedMs,
 	}}}
 }
 
 // routeRowValues 是 R13 读到的一行(最前面多两列聚簇键 route_shard, player_id;片按正确的算法给)。
-func routeRowValues(player uint64, home, storage uint32, version uint64, frozenRun string, rev uint64) []driver.Value {
-	return routeRowValuesWithShard(uint64(placement.RouteRowShard(player)), player, home, storage, version, frozenRun, rev)
+func routeRowValues(player uint64, home, storage uint32, version, rev uint64) []driver.Value {
+	return routeRowValuesWithShard(uint64(placement.RouteRowShard(player)), player, home, storage, version, rev)
 }
 
 // routeRowValuesWithShard 同 routeRowValues,但 route_shard 由用例指定:造「库里存的片与 player_id 不符」的行。
-func routeRowValuesWithShard(shard, player uint64, home, storage uint32, version uint64, frozenRun string, rev uint64) []driver.Value {
+func routeRowValuesWithShard(shard, player uint64, home, storage uint32, version, rev uint64) []driver.Value {
 	return []driver.Value{
-		int64(shard), int64(player), dv32(home), dv32(storage), dv64(version), dvStr(frozenRun), int64(rev),
+		int64(shard), int64(player), dv32(home), dv32(storage), dv64(version), int64(rev),
 		fakeRouteOldWriter, fakeRouteCreatedMs, fakeRouteUpdatedMs,
 	}
 }
@@ -509,7 +502,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(contractHome, contractStorage, 1, "", 3)},
+				"R5": {r5Reply(contractHome, contractStorage, 1, 3)},
 			},
 			wantOutcome: RouteRegisterAlreadySame,
 			wantLabels:  []string{"BEGIN", "R1", "R4", "R5", "ROLLBACK"},
@@ -546,7 +539,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(9, contractStorage, 1, "", 3)},
+				"R5": {r5Reply(9, contractStorage, 1, 3)},
 			},
 			wantOutcome:  RouteRegisterConflict,
 			wantExisting: 9,
@@ -557,7 +550,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(0, 0, 0, "", 4)}, "R6b": {replyAffected(1)},
+				"R5": {r5Reply(0, 0, 0, 4)}, "R6b": {replyAffected(1)},
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHome,
@@ -568,18 +561,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(0, 55, 3, "", 4)}, "R6a": {replyAffected(1)},
-			},
-			rowRev:      4,
-			wantOutcome: RouteRegisterFilledHomePlacementKept,
-			wantLabels:  []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
-		},
-		{
-			name: "home为NULL_冻结落点_请求带storage_R6a_落点保留",
-			req:  withStorage,
-			replies: map[string][]fakeRouteReply{
-				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(0, 55, 3, "run-x", 4)}, "R6a": {replyAffected(1)},
+				"R5": {r5Reply(0, 55, 3, 4)}, "R6a": {replyAffected(1)},
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHomePlacementKept,
@@ -590,7 +572,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			req:  noStorage,
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(0, 55, 3, "", 4)}, "R6a": {replyAffected(1)},
+				"R5": {r5Reply(0, 55, 3, 4)}, "R6a": {replyAffected(1)},
 			},
 			rowRev:      4,
 			wantOutcome: RouteRegisterFilledHome,
@@ -601,7 +583,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			req:  noStorage,
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(0, 0, 0, "", 4)}, "R6a": {replyAffected(0)},
+				"R5": {r5Reply(0, 0, 0, 4)}, "R6a": {replyAffected(0)},
 			},
 			rowRev:     4,
 			anyErr:     true,
@@ -612,7 +594,7 @@ func TestRegisterHomeOutcomeContract(t *testing.T) {
 			req:  withStorage,
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(0, 0, 0, "", 4)}, "R6b": {replyAffected(2)},
+				"R5": {r5Reply(0, 0, 0, 4)}, "R6b": {replyAffected(2)},
 			},
 			rowRev:     4,
 			anyErr:     true,
@@ -748,7 +730,7 @@ func TestRegisterHomeBindsRowShard(t *testing.T) {
 			req:  RouteRegisterRequest{PlayerID: player, HomeZone: contractHome},
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(0, 55, 3, "", 4)}, "R6a": {replyAffected(1)},
+				"R5": {r5Reply(0, 55, 3, 4)}, "R6a": {replyAffected(1)},
 			},
 			rowRev:     4,
 			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6a", "COMMIT"},
@@ -759,7 +741,7 @@ func TestRegisterHomeBindsRowShard(t *testing.T) {
 			req:  RouteRegisterRequest{PlayerID: player, HomeZone: contractHome, StorageID: contractStorage},
 			replies: map[string][]fakeRouteReply{
 				"R1": {replyWritable}, "R4": {replyAffected(0)},
-				"R5": {r5Reply(0, 0, 0, "", 4)}, "R6b": {replyAffected(1)},
+				"R5": {r5Reply(0, 0, 0, 4)}, "R6b": {replyAffected(1)},
 			},
 			rowRev:     4,
 			wantLabels: []string{"BEGIN", "R1", "R4", "R5", "R6b", "COMMIT"},
@@ -911,7 +893,7 @@ func TestRouteReadQueriesShapes(t *testing.T) {
 	const bigVersion uint64 = 1<<63 + 5
 	st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 		"R13": {
-			{rows: [][]driver.Value{routeRowValues(9, 7, 0, 0, "", 1)}},
+			{rows: [][]driver.Value{routeRowValues(9, 7, 0, 0, 1)}},
 			{rows: [][]driver.Value{{int64(6), int64(6), nil, int64(7), bigVersion, nil, int64(3), "w", int64(1), int64(2)}}},
 		},
 		"R14": {{rows: [][]driver.Value{{int64(101), int64(102), "101-102-a", int64(5)}}}},
@@ -952,7 +934,7 @@ func TestRouteReadQueriesShapes(t *testing.T) {
 // 「正确片 + id」点查,库里的错片行对它不可见、表现为缺席。这里只钉住「万一 SQL 文本被改错、读回了错片行,也不会被当成正常行」。
 func TestRouteReadsRejectShardMismatchRows(t *testing.T) {
 	st, _ := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
-		"R13": {{rows: [][]driver.Value{routeRowValuesWithShard(3, 6, 7, 0, 0, "", 1)}}}, // 6 % 64 = 6 ≠ 3
+		"R13": {{rows: [][]driver.Value{routeRowValuesWithShard(3, 6, 7, 0, 0, 1)}}}, // 6 % 64 = 6 ≠ 3
 	}})
 	got, err := st.GetRoutes(context.Background(), []uint64{6})
 	if !errors.Is(err, ErrRouteShardMismatch) || got != nil {
@@ -1453,7 +1435,7 @@ func TestNewRouteStoreProbeRetriesLockConflict(t *testing.T) {
 func TestPrepareTiDBContract(t *testing.T) {
 	ctx := context.Background()
 	req := RouteTiDBPrepareRequest{Zones: []uint32{2, 1}, Storages: []uint32{1000000}}
-	wantSQL := routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000})
+	wantSQL := routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000}, 0, 1)
 	if len(wantSQL) != 5 {
 		t.Fatalf("2 个 zone + 1 个 storage 应生成 5 条语句(ATTRIBUTES + 行数据 SPLIT + 3 条索引 SPLIT),got %d", len(wantSQL))
 	}

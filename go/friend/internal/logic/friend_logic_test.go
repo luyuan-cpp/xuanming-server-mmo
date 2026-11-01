@@ -60,6 +60,7 @@ import (
 	pb "proto/friend"
 	plpb "proto/player_locator"
 	"shared/playerredis"
+	"shared/rolefence"
 )
 
 // ── 假 store ────────────────────────────────────────────────────
@@ -651,6 +652,9 @@ func TestAddFriendMapsStoreErrors(t *testing.T) {
 		{"我的好友数满", data.ErrSenderFriendsFull, constants.ErrFriendListFull},
 		{"对方好友数满", data.ErrAcceptorFriendsFull, constants.ErrTargetFriendListFull},
 		{"未知错误 = 存储故障", errors.New("dial tcp: connection refused"), constants.ErrStorage},
+		// 规格 §3.6:对端挂着寄售是正常状态,目录读不到也确定没写,都不能回故障码,否则排空证明被打成 Hold。
+		{"角色冻结或换主", data.ErrOriginalRole, constants.ErrRoleNotVerified},
+		{"目录读不到", errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")), constants.ErrRoleNotVerified},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

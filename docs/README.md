@@ -165,6 +165,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [new-player-first-enter-no-cold-read.md](design/new-player-first-enter-no-cold-read.md) — 新号首次进场免冷读:建角时写入 PlayerAllData 种子
 - [player-async-save-loss-windows.md](design/player-async-save-loss-windows.md) — 玩家异步存盘：已修复问题、剩余丢失窗口与修复任务
 - [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展：总体方案（2026-10-30；存盘直接提交 TiDB、关键变化立即存 + 拆出热行、etcd 发号 + 可逆打散、落点目录路由、预算三档、MMO/SLG/MOBA；未落码）
+- [horizontal-scale-logical-db.md](design/horizontal-scale-logical-db.md) — 全层水平扩展规格：逻辑库自治、每库一份写者闸门、角色护栏、目录分片、不停服迁移物理库、多地域（2026-10-31，落码中）
 - [player-save-direct-commit.md](design/player-save-direct-commit.md) — 玩家存盘直接提交 TiDB 的落码规格：`player_store` 表、写权行、判定表、C++ 状态机与分批
 - [player-inbox-service.md](design/player-inbox-service.md) — 玩家持久收件箱服务（player_inbox）设计
 - [player-route-mapping-durability-proposal.md](design/player-route-mapping-durability-proposal.md) — 玩家归属与落点映射持久化:库为真源 + Redis 完整副本 + 就绪标记(已拍板;第 0 ~ 3 批已落码,未验证;2026-10-19 起读方按身份绑定的就绪标记判可信,见 §13)
@@ -288,6 +289,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 - [audit-topic-generation-bump-runbook.md](ops/audit-topic-generation-bump-runbook.md) — 审计 topic 离线换代 Runbook(player_snapshot / transaction_log 改分区数)
 - [cross-zone-failure-test-runbook.md](ops/cross-zone-failure-test-runbook.md) — 跨 Zone 传送 / 归属交接 失败场景测试 Runbook
+- [db-move-runbook.md](ops/db-move-runbook.md) — 不停服搬逻辑库操作手册
 - [etcd-maintenance-runbook.md](ops/etcd-maintenance-runbook.md) — etcd MVCC 压缩与空间维护 Runbook
 - [id-issuer-runbook.md](ops/id-issuer-runbook.md) — 发号器运维：首次初始化、预留记录丢失或回退的处置与恢复、演练
 - [gate-kernel-tuning-runbook.md](ops/gate-kernel-tuning-runbook.md) — Gate 内核调优 Runbook
@@ -301,6 +303,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [merge-zone-runbook.md](ops/merge-zone-runbook.md) — 不停服合服操作手册
 - [mysql-backup-pitr-runbook.md](ops/mysql-backup-pitr-runbook.md) — MySQL Backup & PITR Runbook
 - [online-debug-data-fetch.md](ops/online-debug-data-fetch.md) — 线上玩家数据拉取与本地复现
+- [open-new-region-runbook.md](ops/open-new-region-runbook.md) — 开新地域手册
 - [player-inbox-runbook.md](ops/player-inbox-runbook.md) — 玩家持久收件箱(player_inbox)运维手册
 - [redis-player-cluster-runbook.md](ops/redis-player-cluster-runbook.md) — 玩家域 Redis Cluster 运维手册
 - [release-checklist.md](ops/release-checklist.md) — 服务端发布清单

@@ -130,9 +130,8 @@ func TestEtcYamlZoneRewriteAnchors(t *testing.T) {
 
 func validConfig() Config {
 	c := Config{
-		AccountRoleSchema: "testdb",
-		ZoneId:            1,
-		LeaseTTL:          60,
+		ZoneId:   1,
+		LeaseTTL: 60,
 		MySQL: MySQLConf{
 			Host: "127.0.0.1:3306", User: "appuser", DBName: data.DatabaseName, MaxOpenConn: 20, MaxIdleConn: 5,
 		},

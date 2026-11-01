@@ -10,7 +10,7 @@ $assignment=$ast.Find({param($n)$n -is [Management.Automation.Language.Assignmen
 if($null -eq $assignment){throw '缺正式镜像Catalogue'}
 $Catalogue=& ([scriptblock]::Create($assignment.Right.Extent.Text))
 Test-Case '原guild/mail/rank重复键最小修正且每服务只出现一次' {
-    foreach($name in @('guild','mail','rank','writer-authority')){
+    foreach($name in @('guild','mail','rank','writer-authority','db-migrate')){
         Assert-Equal -Expected 1 -Actual @($Catalogue.Keys | Where-Object {$_ -ceq $name}).Count -Because '有序目录必须唯一，重复键原脚本应解析失败'
     }
 }
@@ -21,6 +21,15 @@ Test-Case 'registrar是真实可构建cmd工件，不借业务服务命令分支
     Assert-Equal -Expected 'mmorpg-writer-authority' -Actual $entry.ImageName -Because '部署init有独立镜像工件'
     $root=Join-Path $PSScriptRoot '../../..'
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $root 'go/data_service/cmd/writer_authority/main.go')) -Because '主命令必须真实存在，目录项不能只作说明'
+}
+Test-Case 'go/db 的迁移入口是真实可构建cmd工件，名字和部署目录配对' {
+    $entry=$Catalogue['db-migrate']
+    Assert-Equal -Expected 'db' -Actual $entry.Dir -Because '复用db模块，/app/data 才带表清单'
+    Assert-Equal -Expected './cmd/migrate' -Actual $entry.Entry -Because '编译完整cmd包'
+    Assert-Equal -Expected 'mmorpg-db-migrate' -Actual $entry.ImageName -Because 'db-migrate Job用的独立镜像'
+    $root=Join-Path $PSScriptRoot '../../..'
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $root 'go/db/cmd/migrate/main.go')) -Because '主命令必须真实存在'
+    Assert-Match -Text (Get-Content -LiteralPath (Join-Path $root 'tools/scripts/k8s_deploy.ps1') -Raw) -Pattern 'MigrateImageName = "mmorpg-db-migrate"' -Because '部署目录要配对，否则Job拉不到镜像'
 }
 Test-Case '镜像构建Interface确实传入registrar module和完整ENTRY' {
     foreach($name in @('Get-ImageFullName','Invoke-BuildAll')){

@@ -3,51 +3,161 @@ package admin
 import (
 	"context"
 	"errors"
-	"github.com/zeromicro/go-zero/core/logx"
+	"time"
+	"unicode/utf8"
+
 	"login/internal/svc"
 	dspb "proto/data_service"
+	loginpb "proto/login"
 	"shared/accountdirectory"
+
+	"github.com/zeromicro/go-zero/core/logx"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-type RemovePlayersFromAccountsReq struct{ PlayerIDs []uint64 }
-type RemovePlayersFromAccountsResp struct{ RemovedCount, NotFoundCount, FailedCount uint32 }
+const (
+	// MaxRemovePlayers 是一次请求的上限。每名角色一轮目录删角流程(问全部参与者),RPC 预算内做不了太多,没做完的回 RETRY。
+	MaxRemovePlayers = 100
+	maxOperatorBytes = 64
+	maxReasonBytes   = 256
+	// removeRoleBudget 是摘一名角色的全部下游调用的上限:核对读加一轮删角(目录客户端单次上限 2.5 秒)。超了回 RETRY,重跑幂等。
+	removeRoleBudget = 3 * time.Second
+	// removeReplyMargin 是回响应要留的时间。RPC 预算就是 login 的全局 Timeout(4 秒):login 在路由服的预算链里,门禁不许用 MethodTimeouts 放宽。
+	// 剩余不够预算加余量就不开始下一名,回 RETRY:拖到 RPC 超时的话,已经摘掉的名单也回不到调用方。
+	removeReplyMargin = 500 * time.Millisecond
+)
 
-// 回档孤儿清理只读全局 SQL 归属；陈旧 Redis 反向键不再授权删除。
-// 当前 LoginAdmin RPC 仍未接线；本函数是待受控管理调用者接入的目录删除接缝，不授权公开调用。
+// RemovePlayersFromAccountsReq 是一次摘孤儿。Operator、Reason 只进日志,谁在什么时候摘了谁要查得到。
+type RemovePlayersFromAccountsReq struct {
+	PlayerIDs []uint64
+	Operator  string
+	Reason    string
+	DryRun    bool
+	PeerAddr  string
+}
+
+// RemovePlayerResult 是一名角色的结局。
+type RemovePlayerResult struct {
+	PlayerID uint64
+	Outcome  loginpb.RemovePlayerOutcome
+}
+
+// RemovePlayersFromAccountsResp 的计数和 Results 同一口径,FailedCount 是 CONFLICT + RETRY。
+type RemovePlayersFromAccountsResp struct {
+	RemovedCount   uint32
+	NotFoundCount  uint32
+	FailedCount    uint32
+	NotOrphanCount uint32
+	Results        []RemovePlayerResult
+}
+
+func (r *RemovePlayersFromAccountsResp) record(player uint64, outcome loginpb.RemovePlayerOutcome) {
+	switch outcome {
+	case loginpb.RemovePlayerOutcome_REMOVE_PLAYER_REMOVED:
+		r.RemovedCount++
+	case loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_FOUND:
+		r.NotFoundCount++
+	case loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_ORPHAN:
+		r.NotOrphanCount++
+	default:
+		r.FailedCount++
+	}
+	r.Results = append(r.Results, RemovePlayerResult{PlayerID: player, Outcome: outcome})
+}
+
+func validText(text string, maxBytes int) bool {
+	return text != "" && len(text) <= maxBytes && utf8.ValidString(text)
+}
+
+// RemovePlayersFromAccounts 摘孤儿角色:目录里有归属、player_store 里没有写权行的角色。它们进不了场,白占账号的角色名额。
+//
+// 判定和删除都走目录,不再碰 Redis。一名一名走:目录的删角是逐名两阶段提交,整组提交时中途失败已经删了前面几名,算不清谁成了。
+//
+// 墓碑不可逆,所以证明不了是孤儿的一律 NOT_ORPHAN:手滑输错 id 不能把在役角色删掉。有存档的不是孤儿;路由缺失时存档查不到,
+// 也证明不了(路由和角色行同片,缺了只可能是库被人动过)。没读到存档状态回 RETRY,不当成没有存档。
+// 名字不释放:输入里可能有在役角色的 id,释放不可逆,运维按日志带 token 调 ReleasePlayerName(guild-phase2/03-names.md)。
+//
+// 重跑幂等:删过的回 NOT_FOUND。鉴权在拦截器(x-admin-token),本函数不判。
 func RemovePlayersFromAccounts(ctx context.Context, sc *svc.ServiceContext, req *RemovePlayersFromAccountsReq) (*RemovePlayersFromAccountsResp, error) {
 	out := &RemovePlayersFromAccountsResp{}
-	if sc.AccountDirectory == nil {
+	if sc.AccountDirectory == nil || sc.DataServiceClient == nil {
 		return out, accountdirectory.ErrUnavailable
 	}
-	if req == nil || len(req.PlayerIDs) > 10000 {
+	if req == nil || len(req.PlayerIDs) > MaxRemovePlayers || !validText(req.Operator, maxOperatorBytes) || !validText(req.Reason, maxReasonBytes) {
 		return out, accountdirectory.ErrInvalid
 	}
-	groups := map[string][]*dspb.AccountRoleVersion{}
-	seen := map[uint64]bool{}
-	for _, pid := range req.PlayerIDs {
-		if seen[pid] {
+	seen := make(map[uint64]bool, len(req.PlayerIDs))
+	for _, player := range req.PlayerIDs {
+		if seen[player] {
 			continue
 		}
-		seen[pid] = true
-		owned, err := sc.AccountDirectory.Lookup(ctx, pid)
-		if errors.Is(err, accountdirectory.ErrMissing) {
-			out.NotFoundCount++
+		seen[player] = true
+		if player == 0 {
+			out.record(player, loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_FOUND)
 			continue
 		}
-		if err != nil {
-			out.FailedCount++
-			logx.Errorf("[account-directory] 孤儿归属查询失败: %v", err)
-			continue
-		}
-		groups[owned.Account] = append(groups[owned.Account], &dspb.AccountRoleVersion{PlayerId: pid, OwnerRevision: owned.OwnerRevision})
-	}
-	for account, versions := range groups {
-		if err := sc.AccountDirectory.Remove(ctx, account, versions); err != nil {
-			out.FailedCount += uint32(len(versions))
-			logx.Errorf("[account-directory] 孤儿清理失败，保留原归属: %v", err)
-			continue
-		}
-		out.RemovedCount += uint32(len(versions))
+		outcome := removeOrphan(ctx, sc, req, player)
+		out.record(player, outcome)
+		logx.WithContext(ctx).Infof("[LoginAdmin] RemovePlayersFromAccounts player=%d outcome=%s dry_run=%t operator=%q reason=%q peer=%s",
+			player, outcome, req.DryRun, req.Operator, req.Reason, req.PeerAddr)
 	}
 	return out, nil
+}
+
+func outOfBudget(ctx context.Context) bool {
+	if ctx.Err() != nil {
+		return true
+	}
+	deadline, ok := ctx.Deadline()
+	return ok && time.Until(deadline) < removeRoleBudget+removeReplyMargin
+}
+
+func removeOrphan(ctx context.Context, sc *svc.ServiceContext, req *RemovePlayersFromAccountsReq, player uint64) loginpb.RemovePlayerOutcome {
+	if outOfBudget(ctx) {
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_RETRY
+	}
+	ctx, cancel := context.WithTimeout(ctx, removeRoleBudget)
+	defer cancel()
+	owned, err := sc.AccountDirectory.Lookup(ctx, player)
+	if errors.Is(err, accountdirectory.ErrMissing) {
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_FOUND
+	}
+	if err != nil {
+		logx.WithContext(ctx).Errorf("[LoginAdmin] orphan ownership lookup failed: player=%d: %v", player, err)
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_RETRY
+	}
+	ledger, err := sc.DataServiceClient.GetPlayerAssetOpLedger(ctx, &dspb.GetPlayerAssetOpLedgerRequest{PlayerId: player})
+	if err != nil {
+		logx.WithContext(ctx).Errorf("[LoginAdmin] orphan player_store check failed: player=%d: %v", player, err)
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_RETRY
+	}
+	if ledger.GetFound() {
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_ORPHAN
+	}
+	// 账本读在路由缺失时同样回 found=false。路由没了说明不了存档也没了,不能据此写不可逆的墓碑。
+	if _, err = sc.DataServiceClient.GetPlayerHomeZone(ctx, &dspb.GetPlayerHomeZoneRequest{PlayerId: player}); err != nil {
+		if status.Code(err) == codes.NotFound {
+			logx.WithContext(ctx).Errorf("[LoginAdmin] role has an owner but no route; refusing to treat it as an orphan: player=%d", player)
+			return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_ORPHAN
+		}
+		logx.WithContext(ctx).Errorf("[LoginAdmin] orphan route check failed: player=%d: %v", player, err)
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_RETRY
+	}
+	if req.DryRun {
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_REMOVED
+	}
+	err = sc.AccountDirectory.Remove(ctx, owned.Account, []*dspb.AccountRoleVersion{{PlayerId: player, OwnerRevision: owned.OwnerRevision}})
+	switch {
+	case err == nil:
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_REMOVED
+	case errors.Is(err, accountdirectory.ErrMissing):
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_NOT_FOUND
+	case errors.Is(err, accountdirectory.ErrConflict):
+		// 有未结束的业务,或归属在 Lookup 之后变了。目录已清令牌,不能按新归属偷偷重试。
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_CONFLICT
+	default:
+		logx.WithContext(ctx).Errorf("[LoginAdmin] orphan removal not finished, safe to rerun: player=%d: %v", player, err)
+		return loginpb.RemovePlayerOutcome_REMOVE_PLAYER_RETRY
+	}
 }

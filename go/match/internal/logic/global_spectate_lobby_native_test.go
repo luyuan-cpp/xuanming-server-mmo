@@ -28,11 +28,12 @@ import (
 	base "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	dspb "proto/data_service"
-	guildpb "proto/guild"
 	pb "proto/match"
 	"schemamigrate"
 	"shared/authoritysql/sqltest"
 	"shared/generated/pb/table"
+	"shared/rolefence"
+	"shared/rolefence/fencetest"
 	"shared/roleidentity"
 	"shared/serviceauth"
 
@@ -193,18 +194,16 @@ func newGlobalLobbyFixture(t *testing.T) *globalLobbyFixture {
 	require.NoError(t, err)
 	install, err := fixture.OpenSchema(ctx, schema)
 	require.NoError(t, err)
-	tables := append(authority.Tables(), &guildpb.GuildTrialLaunchRecord{}, &guildpb.GuildTrialLaunchRoleRecord{}, &guildpb.GuildTrialLobbyRecord{}, &guildpb.GuildTrialLobbySlotRecord{})
+	tables := authority.Tables()
 	_, err = schemamigrate.Up(ctx, install, schemamigrate.Options{Database: schema, Tables: tables})
 	require.NoError(t, err)
-	_, err = install.ExecContext(ctx, "CREATE TABLE account_role(player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0)")
-	require.NoError(t, err)
+	require.NoError(t, rolefence.EnsureSchema(ctx, install))
 	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
-	require.NoError(t, fixture.GrantTables(ctx, schema, "account_role"))
+	require.NoError(t, fixture.GrantTables(ctx, schema, rolefence.TableName))
 	db, err := fixture.Open(ctx, schema, 16)
 	require.NoError(t, err)
 	store := &authority.Store{DB: db, Config: config.GlobalMatchConf{Backend: "tidb", HardLatencyMs: 180, CrossRegionWaitSeconds: 30}}
-	require.NoError(t, store.ConfigureRoleAuthority(ctx, schema))
-	require.NoError(t, store.ConfigureMatchEntryAuthority(ctx, schema))
+	require.NoError(t, store.ConfigureRoleFence(ctx, fencetest.ReplicaReader{DB: db}, fencetest.Admissions{Valid: true}))
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -290,8 +289,7 @@ func (f *globalLobbyFixture) addCompletableFormation(t *testing.T, battleId, pla
 // addViewer 建角色目录行并把会话挂到 gate 3。
 func (f *globalLobbyFixture) addViewer(t *testing.T, player uint64) {
 	t.Helper()
-	_, err := f.db.Exec("INSERT INTO account_role VALUES(?,?,7,0)", player, []byte(lobbyFixtureAccount(player)))
-	require.NoError(t, err)
+	fencetest.Seed(t, context.Background(), f.db, player, lobbyFixtureAccount(player), 7)
 	setPlayerSessionOnGate(t, f.mr, player, "3", "gate-inst-3")
 }
 

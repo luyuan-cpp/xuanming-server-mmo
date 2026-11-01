@@ -482,25 +482,27 @@ func chainBootEnvironment(t *testing.T, ctx context.Context, fixture *sqltest.Fi
 		require.NoError(t, err)
 	})
 	for _, table := range []string{"route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt"} {
-		_, err = fixture.Schema.ExecContext(ctx, "GRANT SELECT ON "+fixture.Config.AuthoritySchema()+"."+table+" TO '"+normal.User+"'@'%'")
+		_, err = fixture.Schema.ExecContext(ctx, "GRANT SELECT ON "+database+"."+table+" TO '"+normal.User+"'@'%'")
 		require.NoError(t, err)
 	}
 	if opts.LockPrimitive == dbpb.SqlWriterBootGrant_LOCK_TOUCH {
-		_, err = fixture.Schema.ExecContext(ctx, "GRANT UPDATE(lock_touch) ON "+fixture.Config.AuthoritySchema()+".writer_slot TO '"+normal.User+"'@'%'")
+		_, err = fixture.Schema.ExecContext(ctx, "GRANT UPDATE(lock_touch) ON "+database+".writer_slot TO '"+normal.User+"'@'%'")
 		require.NoError(t, err)
 	}
-	meta, err := fixture.Catalog.CurrentMeta(ctx)
+	catalog, err := fixture.CatalogFor(database)
+	require.NoError(t, err)
+	meta, err := catalog.CurrentMeta(ctx)
 	require.NoError(t, err)
 	deployment := "chain-" + hex.EncodeToString(instance[:])
-	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Config.Generation(), SqlPrincipal: []byte(normal.User + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli())}
-	request := &dbpb.SqlWriterLifecycleReceipt_Request{RequestId: requestID[:], Kind: dbpb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedEpoch: meta.WriterEpoch, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: fixture.Config.AuthoritySchema(), ProtectedSchemas: fixture.Config.ProtectedSchemas(), DeploymentDigest: opts.PhysicalAuthoritySHA256, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
+	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Generation, SqlPrincipal: []byte(normal.User + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli())}
+	request := &dbpb.SqlWriterLifecycleReceipt_Request{RequestId: requestID[:], Kind: dbpb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: database, ProtectedSchemas: []string{database}, DeploymentDigest: opts.PhysicalAuthoritySHA256, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
 	request, err = authoritysql.CanonicalRegistrationRequest(request)
 	require.NoError(t, err)
-	_, err = fixture.Catalog.Register(ctx, request)
+	_, err = catalog.Register(ctx, request)
 	require.NoError(t, err)
 	writer = request.Writer
-	grant := &dbpb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: writerID[:], InstanceId: instance[:], Generation: writer.Generation, AuthoritySchema: fixture.Config.AuthoritySchema(), ProtectedSchemas: fixture.Config.ProtectedSchemas(), SqlPrincipal: writer.SqlPrincipal, RegistrationDigest: writer.RegistrationDigest, DeploymentId: deployment, GrantId: grantID[:], GrantedMs: writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: opts.PhysicalAuthoritySHA256, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
-	raw, err := protojson.Marshal(grant)
+	grant := &dbpb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: writerID[:], InstanceId: instance[:], Generation: writer.Generation, AuthoritySchema: database, ProtectedSchemas: []string{database}, SqlPrincipal: writer.SqlPrincipal, RegistrationDigest: writer.RegistrationDigest, DeploymentId: deployment, GrantId: grantID[:], GrantedMs: writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: opts.PhysicalAuthoritySHA256, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
+	raw, err := protojson.Marshal(&dbpb.SqlWriterBootGrantSet{Format: authoritysql.GrantSetFormat, Grants: []*dbpb.SqlWriterBootGrant{grant}})
 	require.NoError(t, err)
 	sum := sha256.Sum256(raw)
 	grantDirectory := t.TempDir()

@@ -704,3 +704,43 @@ function Resolve-InjectedSecret {
 
     return $value
 }
+
+# ── 逻辑库命名与每片连接池(docs/design/horizontal-scale-logical-db.md §1、§5.1)──
+# 与 go/shared/dirshard 同一规则。部署脚本、本机写者启动目录、连接总账、本地 reset 都从这里取,不各写一份库名规则。
+
+# 目录分片数 K 必须是 64 的约数(dirshard.Validate)。
+function Assert-DirectoryLogicalShards {
+    param([Parameter(Mandatory = $true)][int]$LogicalShards)
+    if ($LogicalShards -lt 1 -or $LogicalShards -gt 64 -or (64 % $LogicalShards) -ne 0) {
+        throw "Directory logical shards $LogicalShards must be a divisor of 64."
+    }
+}
+
+# 目录全部片的库名,下标就是片号:K=1 是基名,否则 <基名>_00..(dirshard.DirectoryDBNames)。
+function Get-DirectoryDbNames {
+    param(
+        [Parameter(Mandatory = $true)][string]$Base,
+        [Parameter(Mandatory = $true)][int]$LogicalShards
+    )
+    Assert-DirectoryLogicalShards -LogicalShards $LogicalShards
+    if ($LogicalShards -eq 1) { return @($Base) }
+    return @(0..($LogicalShards - 1) | ForEach-Object { '{0}_{1:d2}' -f $Base, $_ })
+}
+
+# 流水和快照的逻辑库(dirshard.LedgerDBName)。
+function Get-DirectoryLedgerDbName {
+    param([Parameter(Mandatory = $true)][string]$Base)
+    return "${Base}_ledger"
+}
+
+# 每片连接池的上限:服务 yaml 写的是 K=1 的预算,K 大的时候按片摊开。每片至少 2 条:事务之外还要留一条给同片的短读,1 条会自己等自己。
+# K=64 时 AccountDirectory、PlayerName、RouteStore 都是每片 2 条,一个 data_service 实例在目录上最多 64×6=384 条,总账见 k8s_deploy.ps1 Get-MysqlConnectionLedger。
+function Get-DirectoryShardPoolLimit {
+    param(
+        [Parameter(Mandatory = $true)][int]$Base,
+        [Parameter(Mandatory = $true)][int]$LogicalShards
+    )
+    Assert-DirectoryLogicalShards -LogicalShards $LogicalShards
+    if ($LogicalShards -eq 1) { return $Base }
+    return [int][Math]::Max(2, [Math]::Ceiling($Base / [double]$LogicalShards))
+}

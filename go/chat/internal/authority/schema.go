@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"shared/authoritysql"
 	"strings"
 )
 
@@ -41,6 +42,14 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, ddl); err != nil {
 			return err
 		}
+	}
+	var database string
+	if err := db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&database); err != nil {
+		return err
+	}
+	// 闸门跟着逻辑库走:聊天库自带一份。
+	if err := authoritysql.EnsureCatalogSchema(ctx, db, database); err != nil {
+		return err
 	}
 	return CheckSchema(ctx, db)
 }

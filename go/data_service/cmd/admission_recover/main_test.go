@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"shared/accountdirectory"
+	"shared/authoritysql"
+	"shared/dbplacement"
 
 	"github.com/stretchr/testify/require"
 )
@@ -48,6 +51,32 @@ func TestRecoveryPlanOnlyChecksAndApplyWrites(t *testing.T) {
 		require.Equal(t, 0, code, errOut.String())
 		require.Contains(t, out.String(), "owner_epoch_before=7")
 	}
+}
+
+// 闸门冻结:这个工具不过闸门,store 同事务查到冻结就拒绝,这里要报清楚,不说成结局未知。
+func TestRecoveryRefusesFrozenGate(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := runRecovery(context.Background(), recoveryFixture("apply"), &out, &errOut, func(context.Context, uint64, string, bool) (uint64, error) {
+		return 0, fmt.Errorf("release holder: %w", authoritysql.ErrWriterFrozen)
+	})
+	require.Equal(t, 1, code)
+	require.Contains(t, errOut.String(), "frozen")
+	require.Empty(t, out.String())
+}
+
+// 没有映射就不知道库在哪:拒绝,不连连接串里的地址。
+func TestRecoveryRequiresDbPlacement(t *testing.T) {
+	t.Setenv(authoritysql.BackendEnv, "mysql")
+	t.Setenv("MMORPG_SQL_OPERATOR_PRINCIPAL", "maintenance@%")
+	t.Setenv("ADMISSION_RECOVER_TEST_DSN", "u:p@tcp(127.0.0.1:1)/mmorpg_global")
+	t.Setenv(dbplacement.EnvConfig, "")
+	o := recoveryFixture("plan")
+	o.dsnEnv, o.schema, o.stores = "ADMISSION_RECOVER_TEST_DSN", "mmorpg_global", "1"
+	var out, errOut bytes.Buffer
+	code := runRecovery(context.Background(), o, &out, &errOut, nil)
+	require.Equal(t, 2, code)
+	require.Contains(t, errOut.String(), dbplacement.EnvConfig)
+	require.Empty(t, out.String())
 }
 
 // 错误只输出固定文案:底层错误可能带连接串。

@@ -16,8 +16,6 @@ GlobalMatch:
   Host: 127.0.0.1:4000
   User: root
   Database: mmorpg_match
-  AccountRoleSchema: mmorpg_global
-  GuildTrialSchema: mmorpg_guild
   PasswordEnv: MATCH_MYSQL_PASSWORD
   ProbeSecretEnv: MATCH_PROBE_SECRET
   CrossRegionWaitSeconds: 30
@@ -194,8 +192,8 @@ Spectate:
   TicketSecret: "local-dev-spectate-token-secret-a1b2c3d4e5f60718"
   OpsCallerSecret: "local-dev-match-ops-caller-secret-0f1e2d3c4b5a6978"
 
-# data_service gRPC 客户端(etcd 发现):领号段、查玩家昵称与展示资料。
-# 玩家归属和合服映射不走这里,直接读全局库(GlobalMatch.AccountRoleSchema 的 player_route、zone_merged_into)。
+# data_service gRPC 客户端(etcd 发现):领号段、查玩家昵称与展示资料、读角色护栏权威状态、读合服映射、校验入场登记。
+# 全局库只有 data_service 连,match 不再跨库读(docs/design/horizontal-scale-logical-db.md §1)。
 # NonBlock: true 是硬要求:客户端在 ServiceContext 里构造,早于节点注册与起服;阻塞建连会让
 #   data_service 没起时整个 match(排队 / 切磋 / 观战)起不来。Go 侧对 false 也会强制改成 true。
 # Timeout: 1500 小于 team 自己的 3500ms 请求预算。

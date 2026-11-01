@@ -31,7 +31,7 @@ func TestGlobalEmptyRouteBootstrapRequiresEmptySQLHistory(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := tc.fixture
-			err := checkEmptyRouteBootstrap(context.Background(), &f, []uint32{1})
+			err := checkEmptyRouteBootstrap(context.Background(), &f, &f, []uint32{1})
 			if tc.wantErr {
 				require.Error(t, err)
 				return

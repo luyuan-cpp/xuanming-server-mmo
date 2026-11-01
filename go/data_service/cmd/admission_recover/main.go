@@ -26,10 +26,12 @@ import (
 
 	"shared/accountdirectory"
 	"shared/authoritysql"
+	"shared/dbplacement"
 )
 
 type recoveryOptions struct {
 	dsnEnv, schema, stores, mode, instance string
+	logicalShards                          int
 	playerID                               uint64
 	confirmedDead                          bool
 }
@@ -37,7 +39,8 @@ type recoveryOptions struct {
 func main() {
 	var o recoveryOptions
 	flag.StringVar(&o.dsnEnv, "dsn-env", "ADMISSION_RECOVER_DSN", "全局库 DSN 所在的环境变量名")
-	flag.StringVar(&o.schema, "schema", "", "全局库名")
+	flag.StringVar(&o.schema, "schema", "", "目录基名(SnapshotMySQL.DBName),DSN 的库名要写它")
+	flag.IntVar(&o.logicalShards, "logical-shards", 1, "目录分片数(Directory.LogicalShards)")
 	flag.StringVar(&o.stores, "storage-ids", "", "允许访问的 storage_id,逗号分隔")
 	flag.Uint64Var(&o.playerID, "player-id", 0, "玩家")
 	flag.StringVar(&o.instance, "holder-instance", "", "要摘掉的 scene 实例号,必须等于写权行的现任")
@@ -89,13 +92,29 @@ func runRecovery(ctx context.Context, o recoveryOptions, out, errOut io.Writer, 
 			fmt.Fprintln(errOut, "invalid SQL connection parameters")
 			return 2
 		}
-		directory, err := store.NewAccountDirectoryStore(store.MySQLConfig{Host: cfg.Addr, User: cfg.User, Password: cfg.Passwd, DBName: o.schema, Permission: permission}, backend, 100, 1)
+		placement, err := dbplacement.ConfigFromEnv(os.Getenv)
+		if err != nil {
+			fmt.Fprintln(errOut, "invalid database placement")
+			return 2
+		}
+		// 没有映射就连连接串里的地址:库搬走之后那是冻结的旧库,这个工具不过写者闸门,不能猜。
+		if !placement.Enabled() {
+			fmt.Fprintln(errOut, dbplacement.EnvConfig+" is required: without it this tool cannot tell where the database lives")
+			return 2
+		}
+		directory, err := store.NewAccountDirectoryStore(store.MySQLConfig{
+			Host: cfg.Addr, User: cfg.User, Password: cfg.Passwd, DBName: o.schema, Permission: permission, LogicalShards: o.logicalShards,
+			// 目录片和存档库可能不在一个集群,逐库读一次映射。
+			PoolOptionsFor: func(schema string) ([]authoritysql.OpenOption, error) {
+				return dbplacement.ForOneShot(ctx, placement, schema)
+			},
+		}, backend, 100, 1)
 		if err != nil {
 			fmt.Fprintln(errOut, "cannot open the account directory")
 			return 2
 		}
 		defer directory.Close()
-		if err := directory.ConfigureInitialPlayerCommit(ids); err != nil {
+		if err := directory.ConfigurePlayerStores(ids, store.PlayerStorePoolOptions{MaxOpenConn: 1, MaxIdleConn: 1}); err != nil {
 			fmt.Fprintln(errOut, "invalid storage-ids")
 			return 2
 		}
@@ -105,6 +124,8 @@ func runRecovery(ctx context.Context, o recoveryOptions, out, errOut io.Writer, 
 	if err != nil {
 		// 底层错误可能含连接细节,只输出固定文案。
 		switch {
+		case errors.Is(err, authoritysql.ErrWriterFrozen):
+			fmt.Fprintln(errOut, "refused: the writer gate of this database is frozen by a database move or a maintenance run; rerun after it ends")
 		case errors.Is(err, accountdirectory.ErrConflict):
 			fmt.Fprintln(errOut, "refused: the instance is not the current holder of this player")
 		case errors.Is(err, accountdirectory.ErrMissing):

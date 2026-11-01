@@ -56,10 +56,17 @@ public final class WriterAuthority {
         JsonNode list=root.get("protectedSchemas");if(!list.isArray()||list.isEmpty()||list.size()>1024)throw new IOException("缺少完整protected schema集合");
         List<String> schemas=new ArrayList<>();String previous="";
         for(JsonNode value:list){String next=value.asText();if(!value.isTextual()||!next.matches("[A-Za-z0-9_]{1,64}")||previous.compareTo(next)>=0)throw new IOException("protected schema必须完整有序且无重复");schemas.add(next);previous=next;}
-        if(!schemas.contains(schema))throw new IOException("authority schema必须在保护集合");
+        if(schemas.size()!=1||!schemas.get(0).equals(schema))throw new IOException("闸门只保护它所在的逻辑库，protected schema必须恰好是authority schema");
         protectedSchemas=List.copyOf(schemas);
         try{var stamp=new java.math.BigInteger(text(root,"grantedMs"));if(stamp.signum()<=0||stamp.bitLength()>64)throw new IOException("grant时刻非法");}
         catch(NumberFormatException bad){throw new IOException("grant时刻非法",bad);}
+    }
+    /** 授权文件是一个boot的全部写资格（每个逻辑库一份）；网关只写一个逻辑库，集合里必须恰好一份。 */
+    private static JsonNode soleGrant(JsonNode root)throws IOException {
+        if(!root.isObject()||root.size()!=2||!"SQL_WRITER_BOOT_SET_V1".equals(text(root,"format")))throw new IOException("启动grant集合格式不符");
+        JsonNode grants=root.get("grants");
+        if(grants==null||!grants.isArray()||grants.size()!=1)throw new IOException("网关只写一个逻辑库，启动grant集合必须恰好一份");
+        return grants.get(0);
     }
     public static WriterAuthority consume(Map<String,String> env)throws IOException {
         String file=required(env,"MMORPG_SQL_WRITER_GRANT_FILE"), expected=required(env,"MMORPG_SQL_WRITER_GRANT_SHA256");
@@ -67,7 +74,7 @@ public final class WriterAuthority {
         Path path=Path.of(file).toAbsolutePath().normalize();
         byte[] encoded=readPrivateControlFile(path,1024*1024,env);
         if(!MessageDigest.isEqual(hex(expected),sha(encoded)))throw new IOException("grant原bytes摘要不匹配");
-        WriterAuthority identity=new WriterAuthority(JSON.readTree(encoded));
+        WriterAuthority identity=new WriterAuthority(soleGrant(JSON.readTree(encoded)));
         if(!identity.deployment.equals(required(env,"MMORPG_SQL_DEPLOYMENT_ID"))
                 ||!MessageDigest.isEqual(identity.physical,hex(required(env,"MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))))
             throw new IOException("deployment或physical authority原件不符");
@@ -259,8 +266,9 @@ public final class WriterAuthority {
     private Epoch current(Connection raw)throws SQLException {
         try(var s=raw.prepareStatement("SELECT generation,writer_epoch,writable,catalog_revision,freeze_run_id FROM "+table("route_meta")+" WHERE id=1")){
             s.setQueryTimeout(3);try(var r=s.executeQuery()){
-                if(!r.next()||!generation.equals(r.getString(1))||u64(r,2)==0||r.getInt(3)!=1||u64(r,4)==0||r.getBytes(5)==null||(r.getBytes(5).length!=0&&r.getBytes(5).length!=16))
-                    throw new SQLException("authority已冻结或epoch/meta原件非法");
+                if(!r.next()||!generation.equals(r.getString(1))||u64(r,2)==0||(r.getInt(3)!=0&&r.getInt(3)!=1)||u64(r,4)==0||r.getBytes(5)==null||(r.getBytes(5).length!=0&&r.getBytes(5).length!=16))
+                    throw new SQLException("authority epoch/meta原件非法");
+                if(r.getInt(3)==0)throw new WriterFrozenException();
                 Epoch result=new Epoch(u64(r,2),u64(r,4),r.getBytes(5));if(r.next())throw new SQLException("重复meta");return result;
             }
         }

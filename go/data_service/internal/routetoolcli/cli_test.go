@@ -454,3 +454,26 @@ func twoClosedLocalAddrs(t *testing.T) (string, string) {
 	require.NoError(t, b.Close())
 	return first, second
 }
+
+// 一次维护只管一个库,库名由原件给:只认目录片和流水库,别的服务的库和存档库不归这个工具管。
+func TestIsDirectorySchema(t *testing.T) {
+	var c config.Config
+	c.SnapshotMySQL.DBName = "mmorpg_global"
+	for schema, want := range map[string]bool{"mmorpg_global": true, "mmorpg_global_ledger": true, "mmorpg_global_00": false, "zone_1_db": false, "mmorpg_guild": false} {
+		assert.Equal(t, want, isDirectorySchema(c, schema), schema)
+	}
+	c.Directory.LogicalShards = 2
+	for schema, want := range map[string]bool{"mmorpg_global": false, "mmorpg_global_00": true, "mmorpg_global_01": true, "mmorpg_global_02": false, "mmorpg_global_ledger": true} {
+		assert.Equal(t, want, isDirectorySchema(c, schema), schema)
+	}
+	c.Directory.LogicalShards = 3
+	assert.False(t, isDirectorySchema(c, "mmorpg_global_ledger"), "K 非法时什么都不认")
+}
+
+func TestGlobalDBTargetShowsShardCountOnlyWhenSharded(t *testing.T) {
+	var c config.Config
+	c.SnapshotMySQL.Host, c.SnapshotMySQL.DBName = "h:1", "g"
+	assert.Equal(t, "route_tool freeze: global_db=h:1/g", globalDBTarget(cliArgs{sub: subFreeze}, c))
+	c.Directory.LogicalShards = 4
+	assert.Equal(t, "route_tool freeze: global_db=h:1/g logical_shards=4", globalDBTarget(cliArgs{sub: subFreeze}, c))
+}

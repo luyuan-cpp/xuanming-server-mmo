@@ -13,8 +13,11 @@ import (
 	base "proto/common/base"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
+	"shared/drainproof"
+	"shared/serverbase"
 	"shared/serviceauth"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -259,6 +262,74 @@ func TestAccountDirectoryRPCPreservesInputsAndResults(t *testing.T) {
 	}
 }
 
+// 规格 §3.6:经真的发布准入跑一遍。确定的拒绝不打成 Hold,结局未知照旧。Hold 不会自己清零,打错了排空证明就过不去。
+func TestAccountDirectoryRejectionsHoldDrainOnlyWhenOutcomeUnknown(t *testing.T) {
+	for _, rpc := range directoryRPCCases() {
+		for _, failure := range []struct {
+			name string
+			err  error
+			hold bool
+		}{
+			{"invalid", accountdirectory.ErrInvalid, false},
+			{"missing", accountdirectory.ErrMissing, false},
+			{"changed-owner", accountdirectory.ErrConflict, false},
+			{"not-committed", fmt.Errorf("%w: %w", accountdirectory.ErrNotCommitted, errors.New("存档库故障")), false},
+			// 投票问不齐、过户已提交但收尾没做完:结局已知,等重放,不能打成 Hold。
+			{"retry-later", accountdirectory.ErrRetryLater, false},
+			{"retry-later-with-cause", fmt.Errorf("%w: %w", accountdirectory.ErrRetryLater, errors.New("读失败")), false},
+			{"unavailable", accountdirectory.ErrUnavailable, true},
+			{"sql-failure", errors.New("提交结局未知"), true},
+			// 满位是确定的拒绝,规格 §3.6。
+			{"full", accountdirectory.ErrFull, false},
+		} {
+			t.Run(rpc.name+"/"+failure.name, func(t *testing.T) {
+				s := NewDataServiceServer(&svc.ServiceContext{AccountDirectory: &serverDirectoryFake{failure: failure.err}, AccountDirectoryAuth: directoryVerifier(t)})
+				request := rpc.request()
+				signDirectoryRequest(t, rpc.name, request, "login", uint64(time.Now().UnixMilli()))
+				requireDrainHold(t, failure.hold, func(ctx context.Context) error {
+					_, err := rpc.invoke(ctx, s, request)
+					return err
+				})
+			})
+		}
+	}
+}
+
+// 没有证明的调用什么都没做。
+func TestAccountDirectoryBadProofDoesNotHoldDrain(t *testing.T) {
+	for _, rpc := range directoryRPCCases() {
+		t.Run(rpc.name, func(t *testing.T) {
+			s := NewDataServiceServer(&svc.ServiceContext{AccountDirectory: &serverDirectoryFake{}, AccountDirectoryAuth: directoryVerifier(t)})
+			request := rpc.request()
+			requireDrainHold(t, false, func(ctx context.Context) error {
+				_, err := rpc.invoke(ctx, s, request)
+				if status.Code(err) != codes.PermissionDenied {
+					t.Fatalf("没有证明应该拒绝: %v", err)
+				}
+				return err
+			})
+		})
+	}
+}
+
+func requireDrainHold(t *testing.T, want bool, call func(context.Context) error) {
+	t.Helper()
+	gate := drainproof.New()
+	_, _ = serverbase.RootAdmission(gate)(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/data_service.DataService/Test"}, func(ctx context.Context, _ any) (any, error) {
+		return nil, call(ctx)
+	})
+	gate.CloseAdmission()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := gate.Wait(ctx)
+	if want && !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("结局未知必须 Hold: %v", err)
+	}
+	if !want && err != nil {
+		t.Fatalf("确定的拒绝不该 Hold: %v", err)
+	}
+}
+
 func TestAccountDirectoryRPCErrorsRemainDistinct(t *testing.T) {
 	for _, rpc := range directoryRPCCases() {
 		for _, failure := range []struct {
@@ -272,6 +343,11 @@ func TestAccountDirectoryRPCErrorsRemainDistinct(t *testing.T) {
 			{"changed-owner", accountdirectory.ErrConflict, codes.FailedPrecondition},
 			{"unavailable", accountdirectory.ErrUnavailable, codes.Unavailable},
 			{"sql-failure", errors.New("不应回给调用方的SQL依赖细节"), codes.Unavailable},
+			{"not-committed", accountdirectory.ErrNotCommitted, codes.Aborted},
+			// 包着的原因不能把码带偏:login 只有收到 Aborted 才释放名字。
+			{"not-committed-with-cause", fmt.Errorf("%w: %w", accountdirectory.ErrNotCommitted, accountdirectory.ErrUnavailable), codes.Aborted},
+			// 错误链上有 ErrUnavailable,不能落到 default 回 Unavailable。
+			{"retry-later", accountdirectory.ErrRetryLater, codes.Aborted},
 		} {
 			t.Run(rpc.name+"/"+failure.name, func(t *testing.T) {
 				fake := &serverDirectoryFake{failure: fmt.Errorf("目录依赖: %w", failure.err)}

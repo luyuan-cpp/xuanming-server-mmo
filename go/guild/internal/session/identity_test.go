@@ -29,6 +29,8 @@ func (f *loginAccountFixture) Get(ctx context.Context, key string) *redis.String
 	return out
 }
 
+var errRoleChangedForTest = errors.New("当前已是买家修订8")
+
 func TestOriginalGuildSessionRejectsMissingAccountZeroRevisionAndChangedOwner(t *testing.T) {
 	for _, test := range []struct {
 		name, account     string
@@ -39,7 +41,8 @@ func TestOriginalGuildSessionRejectsMissingAccountZeroRevisionAndChangedOwner(t 
 		{"valid-original", " seller ", 7, nil, nil, codes.OK},
 		{"expired-session", "", 7, redis.Nil, nil, codes.Unauthenticated},
 		{"zero-revision", "seller", 0, nil, nil, codes.Unauthenticated},
-		{"transferred", "seller", 7, nil, errors.New("当前已是买家修订8"), codes.PermissionDenied},
+		{"transferred", "seller", 7, nil, errRoleChangedForTest, codes.PermissionDenied},
+		{"inconclusive", "seller", 7, nil, errors.New("目录读不到"), codes.Aborted},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			reader := &loginAccountFixture{account: test.account, err: test.readErr}
@@ -52,7 +55,7 @@ func TestOriginalGuildSessionRejectsMissingAccountZeroRevisionAndChangedOwner(t 
 				require.Equal(t, test.account, original.Account)
 				require.Equal(t, test.revision, original.OwnerRevision)
 				return test.checkErr
-			})
+			}, func(err error) bool { return errors.Is(err, errRoleChangedForTest) })
 			ctx := WithDetails(context.Background(), &base.SessionDetails{SessionId: 1, PlayerId: 11, GateInstanceId: "原gate", SessionIncarnation: 8, OwnerRevision: test.revision})
 			_, err := guard(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) { called = true; return nil, nil })
 			require.Equal(t, test.code, status.Code(err))

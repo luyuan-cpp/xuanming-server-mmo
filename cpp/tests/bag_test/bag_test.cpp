@@ -3910,6 +3910,42 @@ TEST(GuidSourcePolicyTest, TxLogFailsClosedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.destroy(player);
 }
 
+// 不可叠加物品发多件时一件一条流水:item_uuid 是回收和追溯的键,只记第一件的话其余几件无从点名(exploit_loss_prevention_zh.md)。
+// 可叠加物品的 guid 会随并堆变,还是记一条总量。单测读不到流水内容,数的是 txlog 号段发过几个号:每条流水恰好要一次。
+TEST(GuidSourcePolicyTest, GrantLogsOncePerNonStackableInstanceAndOnceForAStack)
+{
+    ScopedItemSegmentOverride item(100);
+    item.item().Warm();
+    item.item().OnResponse(0, 1000, 1100);
+    ScopedKindOverride tx(GuidKind::kTxLog, 100);
+    tx.client().Warm();
+    tx.client().OnResponse(0, 1, 101);
+    const auto player = tlsEcs.actorRegistry.create();
+    tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{4242});
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+
+    // 三个发放入口同一口径。
+    ItemCountMap instances;
+    instances[kNonStack1] = 3;
+    EXPECT_EQ(kSuccess, BagService::AddItems(player, bag, instances));
+    EXPECT_EQ(3u, tx.client().GetStats().issued);
+
+    EXPECT_EQ(kSuccess, BagService::AddItem(player, bag, MakeItem(kNonStack1, 2)));
+    EXPECT_EQ(5u, tx.client().GetStats().issued);
+
+    const std::vector<InitItemParam> pieces{MakeItem(kNonStack1, 2)};
+    EXPECT_EQ(kSuccess, BagService::AddItems(player, bag, pieces));
+    EXPECT_EQ(7u, tx.client().GetStats().issued);
+
+    ItemCountMap stack;
+    stack[kStack10] = 3;
+    EXPECT_EQ(kSuccess, BagService::AddItems(player, bag, stack));
+    EXPECT_EQ(8u, tx.client().GetStats().issued) << "可叠加记一条总量";
+
+    tlsEcs.actorRegistry.destroy(player);
+}
+
 TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
 {
     ScopedKindOverride snap(GuidKind::kSnapshot, 10); // 启用、未领段

@@ -2,6 +2,7 @@ package _go
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -239,7 +240,27 @@ func logMessageFields(msgName string, msg proto.Message) {
 		)
 	}
 }
+
+// tableListOutputPaths 是建表清单的全部落点,一次生成写出,字节相同。go/db 按部署方式读其中一份:
+//   - generated/data:本机。go/db/etc/db.yaml 的 JsonPath 指向它,merge_zone 也读它。
+//   - go/db/data:容器。deploy/k8s/Dockerfile.go-svc 把它拷到 /app/data/,
+//     k8s_deploy.ps1 与 prepare_docker_debug.py 生成的 JsonPath 指向那里。
+//
+// 两种部署注册的表必须相同:data_service 的 HasHistoricalPlayers 要读每个落点库的
+// player_centre_database、user_accounts,这些表都由 go/db 的迁移按这份清单建出来。
+func tableListOutputPaths() []string {
+	name := _config.Global.Naming.DbTableListJson
+	return []string{
+		filepath.Join(_config.Global.Paths.TableGeneratorDir, name),
+		filepath.Join(_config.Global.Paths.NodeGoDir, "db", "data", name),
+	}
+}
+
 func writeMessageNamesToJSON(messages []string) error {
+	// go/db 启动时拒绝空清单。这里写出去只会盖掉上一份好的,把报错推迟到部署之后。
+	if len(messages) == 0 {
+		return errors.New("table list is empty; refusing to overwrite the existing files")
+	}
 	data, err := json.MarshalIndent(&MessageListConfig{Messages: messages}, "", "  ")
 	if err != nil {
 		logger.Global.Error("JSON serialization failed",
@@ -249,19 +270,20 @@ func writeMessageNamesToJSON(messages []string) error {
 		return err
 	}
 
-	outputPath := _config.Global.Paths.TableGeneratorDir + _config.Global.Naming.DbTableListJson
-	if err := utils2.WriteFileIfChanged(outputPath, data); err != nil {
-		logger.Global.Error("Failed to write JSON config file",
-			zap.String("output_path", outputPath),
-			zap.Error(err),
-		)
-		return err
-	}
+	for _, outputPath := range tableListOutputPaths() {
+		if err := utils2.WriteFileIfChanged(outputPath, data); err != nil {
+			logger.Global.Error("Failed to write JSON config file",
+				zap.String("output_path", outputPath),
+				zap.Error(err),
+			)
+			return err
+		}
 
-	logger.Global.Info("Config file generated",
-		zap.String("output_path", outputPath),
-		zap.Int("message_count", len(messages)),
-	)
+		logger.Global.Info("Config file generated",
+			zap.String("output_path", outputPath),
+			zap.Int("message_count", len(messages)),
+		)
+	}
 	return nil
 }
 

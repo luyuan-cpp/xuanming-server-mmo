@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"strings"
 	"time"
@@ -25,9 +26,9 @@ import (
 //   - 所有事务都是 READ COMMITTED,经 assetop.WithTxRetryConfig 执行,并**显式注入**可重试判定
 //     (1213 / 1205 / 9007,IsRetryableTxError)—— IsRetryable 为 nil 时一次都不重试(assetop/seq.go)。
 //     RC 的理由同 assetop/seq.go:TiDB 悲观事务没有间隙锁;锁内的普通读必须看得见前一个持锁者已提交的行。
-//   - 锁顺序固定:原角色P→消费原admission→流行→条目主键→审计行插入。
+//   - 锁顺序固定:角色护栏副本行→流行→条目主键→审计行插入。入场原件在事务外向目录核,事务里不调 RPC。
 //     条目行一律先普通读、再按主键条件写,**不做**二级索引上的加锁读(二级索引加锁读与主键 CAS 加锁顺序相反会成环)。
-//   - 角色封存与所有域内变更共用同P；原账号/owner_revision持久在条目，旧空原件不修复。
+//   - 角色冻结(PrepareRoleFreeze)与所有域内变更共用同一行副本锁；原账号/owner_revision持久在条目，旧空原件不修复。
 //   - Redis 读只在事务外进行,不在持有行锁时等待 Redis。
 //
 // Store 构造后只读,可被多个 RPC 与后台循环并发使用。
@@ -474,23 +475,18 @@ func ensureStreamTx(ctx context.Context, tx *sql.Tx, shard uint32, playerID uint
 // ClearNotifyDue 在提醒成功后把 notify_due_ms 置 0,**以 next_seq 做 CAS 令牌**(设计 §6.3):
 // 这期间只要又有新的入箱,next_seq 就变了,CAS 失败,notify_due_ms 留给补发循环 —— 最多多发一次提醒,不会丢。
 // 不用毫秒值当令牌:同一毫秒两次入箱会让旧令牌碰巧相等(ABA)。返回是否真的清掉了。
+//
+// 提醒标记是纯簿记,不过角色护栏:notify_due_ms 只决定补发循环什么时候再提醒一次,不碰条目和资产,条目的消费都在持护栏的事务里。
+// 过护栏的话,条目终结之后角色被冻结(挂寄售),这一行就永远清不掉:每轮补发都回 ErrOriginalRole 打排空 Hold,还占着扫描名额。
+// 一条语句、只锁流行,不持别的锁,和入箱的锁序(副本 → 流行)成不了环。
 func (s *Store) ClearNotifyDue(ctx context.Context, playerID uint64, domain inboxpb.PlayerInboxDomain, expectNextSeq uint64) (bool, error) {
-	changed := false
-	err := s.withPlayerTx(ctx, playerID, func(tx *sql.Tx, original *dspb.AccountRoleOwnership) error {
-		changed = false
-		if err := requirePendingOriginalsTx(ctx, tx, original); err != nil {
-			return err
-		}
-		res, err := tx.ExecContext(ctx, "UPDATE "+streamTable+" SET `notify_due_ms` = 0 WHERE "+streamPK+
-			" AND `next_seq` = ? AND `notify_due_ms` <> 0", RowShard(playerID), playerID, uint32(domain), expectNextSeq)
-		if err != nil {
-			return err
-		}
-		n, err := res.RowsAffected()
-		changed = n == 1
-		return err
-	})
-	return changed && err == nil, err
+	res, err := s.db.ExecContext(ctx, "UPDATE "+streamTable+" SET `notify_due_ms` = 0 WHERE "+streamPK+
+		" AND `next_seq` = ? AND `notify_due_ms` <> 0", RowShard(playerID), playerID, uint32(domain), expectNextSeq)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1 && err == nil, err
 }
 
 // notifyAndClear 发一次在线提醒;提醒已落定(送达 / 离线 / 等待落点)时按 next_seq 做 CAS 清 notify_due_ms。
@@ -504,6 +500,10 @@ func (s *Store) notifyAndClear(ctx context.Context, playerID uint64, domain inbo
 		return result
 	}
 	if _, err := s.ClearNotifyDue(ctx, playerID, domain, expectNextSeq); err != nil {
+		// 提醒已经发出去了,只是清标记被冻结的闸门挡住:确定没写,补发循环下一轮再发一次再清,提醒本来就是至少一次。
+		if authoritysql.IsWriterFrozen(err) {
+			return result
+		}
 		if s.RelayAdmission != nil {
 			s.RelayAdmission.Hold()
 		}

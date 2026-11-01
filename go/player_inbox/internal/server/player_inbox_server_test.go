@@ -12,9 +12,13 @@ import (
 	"player_inbox/internal/inbox"
 
 	inboxpb "proto/player_inbox"
+	"shared/drainproof"
+	"shared/rolefence"
+	"shared/serverbase"
 	"shared/serviceauth"
 
 	"github.com/zeromicro/go-zero/core/logx/logtest"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -262,6 +266,73 @@ func TestConsumerServerFoldsFaultsInBand(t *testing.T) {
 	fetch, err = callFetch(t, s, &inboxpb.FetchPlayerInboxRequest{PlayerId: 8})
 	if err != nil || fetch.GetErrorMessage() != nil || fetch.GetFence() != inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_NO_STREAM {
 		t.Fatalf("成功路径应原样透传: %+v, %v", fetch, err)
+	}
+}
+
+// 规格 §3.4:角色身份这一次核不过、目录读不到都不是故障:带内回非故障 tip,fence 留空,scene 退避重试。
+// 这两条路径要么没开事务、要么已回滚,没有结局未知,排空证明不能 Hold。真正的存储故障照旧是故障。
+func TestConsumerServerRoleNotVerifiedIsNotAFault(t *testing.T) {
+	logtest.Discard(t)
+	domain := inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION
+	for name, cause := range map[string]error{
+		"冻结或归属变了": inbox.ErrOriginalRole,
+		"目录读不到":   errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")),
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := newTestConsumer(t, &fakeConsumer{err: cause}, time.Second)
+			gate := drainproof.New()
+			admission := serverbase.RootAdmission(gate)
+			out, err := admission(context.Background(), &inboxpb.FetchPlayerInboxRequest{PlayerId: 7, Domain: domain, CorrelationId: 11}, &grpc.UnaryServerInfo{FullMethod: "/player_inbox.PlayerInbox/FetchItems"}, func(_ context.Context, req any) (any, error) {
+				return callFetch(t, s, req.(*inboxpb.FetchPlayerInboxRequest))
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			fetch := out.(*inboxpb.FetchPlayerInboxResponse)
+			if fetch.GetErrorMessage().GetId() != constants.ErrStaleOwner || fetch.GetPlayerId() != 7 || fetch.GetDomain() != domain || fetch.GetCorrelationId() != 11 {
+				t.Fatalf("FetchItems = %+v", fetch)
+			}
+			if fetch.GetFence() != inboxpb.PlayerInboxFenceVerdict_PLAYER_INBOX_FENCE_UNSPECIFIED {
+				t.Fatalf("fence 要留空,否则 scene 会当成围栏判决: %v", fetch.GetFence())
+			}
+			if serverbase.TipVerdict(fetch.GetErrorMessage().GetId()) == serverbase.VerdictFault {
+				t.Fatal("不能是故障码")
+			}
+			out, err = admission(context.Background(), &inboxpb.AckPlayerInboxRequest{PlayerId: 7, Domain: domain, CorrelationId: 12}, &grpc.UnaryServerInfo{FullMethod: "/player_inbox.PlayerInbox/AckItems"}, func(_ context.Context, req any) (any, error) {
+				return callAck(t, s, req.(*inboxpb.AckPlayerInboxRequest))
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ack := out.(*inboxpb.AckPlayerInboxResponse)
+			if ack.GetErrorMessage().GetId() != constants.ErrStaleOwner || ack.GetCorrelationId() != 12 {
+				t.Fatalf("AckItems = %+v", ack)
+			}
+			gate.CloseAdmission()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := gate.Wait(ctx); err != nil {
+				t.Fatalf("排空证明不该 Hold: %v", err)
+			}
+		})
+	}
+}
+
+// 真正的存储故障结局可能未知,照旧是故障码,排空证明要 Hold。
+func TestConsumerServerStoreFaultStillHoldsDrain(t *testing.T) {
+	logtest.Discard(t)
+	s := newTestConsumer(t, &fakeConsumer{err: errors.New("db down")}, time.Second)
+	gate := drainproof.New()
+	if _, err := serverbase.RootAdmission(gate)(context.Background(), &inboxpb.FetchPlayerInboxRequest{PlayerId: 7}, &grpc.UnaryServerInfo{FullMethod: "/player_inbox.PlayerInbox/FetchItems"}, func(_ context.Context, req any) (any, error) {
+		return callFetch(t, s, req.(*inboxpb.FetchPlayerInboxRequest))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	gate.CloseAdmission()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := gate.Wait(ctx); !errors.Is(err, drainproof.ErrHold) {
+		t.Fatalf("存储故障要 Hold: %v", err)
 	}
 }
 

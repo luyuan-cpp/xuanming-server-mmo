@@ -20,7 +20,18 @@ import (
 	"match/internal/config"
 	pb "proto/match"
 	"schemamigrate"
+	"shared/rolefence"
 )
+
+// testInstalls 记每个 testStore 的建表连接。写者账号只有 DML,改表结构摆坏数据的用例走它。
+var testInstalls sync.Map
+
+func testInstall(t *testing.T, s *Store) *sql.DB {
+	t.Helper()
+	install, ok := testInstalls.Load(s)
+	require.True(t, ok)
+	return install.(*sql.DB)
+}
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
@@ -52,13 +63,17 @@ func testStore(t *testing.T) *Store {
 	require.Contains(t, strings.ToLower(version+comment), "tidb", "隔离端口必须是真实TiDB，不能回退MySQL")
 	_, e = schemamigrate.Up(ctx, install, schemamigrate.Options{Database: name, Tables: Tables()})
 	require.NoError(t, e)
+	require.NoError(t, rolefence.EnsureSchema(ctx, install))
 	require.NoError(t, fixture.GrantProtoTables(ctx, name, Tables()))
+	require.NoError(t, fixture.GrantTables(ctx, name, rolefence.TableName))
 	db, e := fixture.Open(ctx, name, 16)
 	require.NoError(t, e)
 	// 本夹具只验证独立匹配SQL状态机，明确注入P与跨域准入替身；原生夹具覆盖实际原件围栏。
-	return &Store{DB: db, Secret: []byte("fixture-only-probe-key-00000000000"), Config: config.GlobalMatchConf{Backend: "tidb", HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, roleGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return nil }, entryGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error {
+	s := &Store{DB: db, Secret: []byte("fixture-only-probe-key-00000000000"), Config: config.GlobalMatchConf{Backend: "tidb", HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, roleGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return nil }, entryGuard: func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error {
 		return nil
 	}}
+	testInstalls.Store(s, install)
+	return s
 }
 
 func requireNativeTiDBAddress(t *testing.T, address string) {

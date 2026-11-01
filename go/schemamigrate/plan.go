@@ -20,6 +20,19 @@ import (
 // SchemaMigrationsTable 是版本台账表名,与 go/db 相同。
 const SchemaMigrationsTable = "schema_migrations"
 
+// writerGateTables 是每个逻辑库自带的写者闸门表(shared/authoritysql.EnsureCatalogSchema 建,本 module 不许 import shared)。
+// 它们不在服务的 proto 表清单里,不算多余表。
+var writerGateTables = map[string]bool{
+	"route_meta":                     true,
+	"writer_registry":                true,
+	"writer_slot":                    true,
+	"writer_lifecycle_receipt":       true,
+	"sql_writer_drain_run":           true,
+	"sql_writer_freeze_ticket":       true,
+	"sql_writer_maintenance_receipt": true,
+	"db_move_sentinel":               true, // 搬库的哨兵表,和闸门表一起建
+}
+
 // BaselineVersion 是「按表清单建全套表」这条迁移的固定版本号,与 go/db 相同。
 const BaselineVersion int64 = 1
 
@@ -359,7 +372,7 @@ func (s *schema) drift(live liveSchema, o driftOptions) driftResult {
 	}
 
 	for _, name := range live.tableNames() {
-		if name == SchemaMigrationsTable {
+		if name == SchemaMigrationsTable || writerGateTables[name] {
 			continue
 		}
 		if _, ok := declared[name]; !ok {

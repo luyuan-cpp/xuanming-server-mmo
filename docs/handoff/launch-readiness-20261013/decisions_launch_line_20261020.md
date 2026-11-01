@@ -113,7 +113,7 @@
 |---|---|---|---|---|
 | L-1 | 是否打开新号免冷读(`NewPlayerSeed.Enabled`)作为开服前置 | 容量模型 §6 #12 建议默认打开;代码已落码、默认关、未验证 | 首次上线前 | D1 提案 §12.1;tidb-phase1 §7 L-05 |
 | L-2 | 单台 gate 的连接上限怎么让 login 知道;死 gate 新鲜度过滤做不做 | 做或不做;随机二选一要每 zone ≥3 台 gate 才有实际收益 | 无时限(L-18 核对) | D1 提案 §12.1、§12.2 第 4 步 |
-| L-3 | 运维摘孤儿 `RemovePlayersFromAccounts` 要不要接上 gRPC 入口 | 接线(另开任务)或保持没有生产入口 | 无时限 | D1 提案 §12.1 |
+| L-3 | 运维摘孤儿 `RemovePlayersFromAccounts` 要不要接上 gRPC 入口 | 接线(另开任务)或保持没有生产入口。**2026-11-01 已定:接线**,见 [account-role-authority.md](../../design/account-role-authority.md)「摘孤儿角色」(未编译) | 无时限 | D1 提案 §12.1 |
 | U-1 | refresh token:每账号最多 32 枚,签发时不作废旧枚 | (a) 不改协议,把上限收紧到 `MaxDevicesPerAccount` 量级(3~5),或签发时作废同账号旧令牌;(b) 每设备 1 枚,`LoginRequest` 要加 device_id,属于客户端契约,两版同批改。Java 有同样问题(`RedisLoginTokens.MAX_REFRESH_PER_ACCOUNT = 32`) | 首次上线前 | 交接 §3 第 6 项;`go/login/internal/logic/pkg/token/token.go` |
 | U-2 | 单 zone 目标在线 C_z | 45k 或 10 万。定了之后同批改:`java/gateway_node` 的 schema.sql 与 ZoneConfig 默认值 5000、`k8s_deploy.ps1` 的 `LoginQueueZoneCapacity = 5000` 及契约测试。打开排队前这两处 5000 都不会拒登。Java 版排队直接拿 capacity 当放行预算,同样要改 | 打开排队前 | 容量模型第 781 行附近第 4 条;交接 §3 第 6 项 |
 | B1-1 | B0-1 的 etcd 存活集合理性闸门:etcd 成功返回空的或残缺的 gate 存活集时,约 2 拍后会把全部在线会话判死 | 需要另做设计;方向是存活集为空时整拍跳过,骤降超过某个比例时进确认态并告警。阈值请负责人定 | 无时限(既有行为,不是本线回归) | 交接 §3 第 5 项;player-locator-gate-session-index.md §8 |

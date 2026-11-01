@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"strconv"
 	"sync"
@@ -220,6 +221,14 @@ func processResultRecord(ctx context.Context, msg kafkago.Message, handle Result
 			return nil
 		}
 		logx.Errorf("结果处理未确认 attempt=%d/%d battle=%d mode=%s: %v", attempt, resultHandleMaxAttempts, event.GetBattleId(), matchpb.MatchMode(event.GetMatchMode()).String(), last)
+		// 闸门冻结是搬库窗口:确定没写,不占重试次数,不然窗口稍长消费者就停了。等到 handler 的预算用完为止。
+		if authoritysql.IsWriterFrozen(last) {
+			attempt--
+			if !wait(ctx, resultHandleBackoff) {
+				return errors.Join(last, ctx.Err())
+			}
+			continue
+		}
 		if attempt < resultHandleMaxAttempts && !wait(ctx, resultHandleBackoff) {
 			return errors.Join(last, ctx.Err())
 		}

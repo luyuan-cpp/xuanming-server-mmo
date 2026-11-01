@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"strconv"
 	"strings"
@@ -22,13 +23,26 @@ func (s *Store) EnsureGlobalPolicy(ctx context.Context, c config.Config) error {
 	parts = append(parts, "team-atomic-unit-home/v2", strconv.FormatBool(c.Team.AllowCrossZone), strconv.FormatBool(c.Team.FillQueueDisabled),
 		strconv.Itoa(config.TeamCapacity), strconv.FormatUint(config.TeamApplicationTTLMs, 10), strconv.Itoa(config.TeamMaxApplications),
 		strconv.FormatUint(config.TeamInviteTTLMs, 10), strconv.Itoa(config.TeamMaxInvitesPerTeam), strconv.Itoa(config.TeamMaxPendingInvitesPerInvitee), strconv.Itoa(config.TeamIdleTTLSeconds))
-	parts = append(parts, "entry-authority/v1", c.GlobalMatch.AccountRoleSchema, c.GlobalMatch.GuildTrialSchema)
 	// 范围树逐级放宽阈值是提交点规则（claimTx 用它复核），各副本必须一致。
 	// 模板目录（PlayMode / Dungeon / ZoneGroup 表）不进指纹：改表滚动生效，不需要停全部副本。
 	parts = append(parts, "scope-tree/v1", strconv.FormatUint(uint64(c.GlobalMatch.ScopeGroupAfterSeconds), 10), strconv.FormatUint(uint64(c.GlobalMatch.ScopeGlobalAfterSeconds), 10))
 	mac := hmac.New(sha256.New, s.Secret)
 	_, _ = mac.Write([]byte(strings.Join(parts, "\n")))
 	digest := mac.Sum(nil)
+	const policyMismatch = "同一全局匹配事务域的策略不一致；须停全部副本后受控调整，禁止进程自动覆盖"
+	// 策略行写过一次就不再变,重启只读。启动撞上闸门冻结时读能过、写不能,写资格是一次性的,不能因为搬库窗口让进程起不来。
+	var current []byte
+	err := s.DB.QueryRowContext(ctx, "SELECT contract_digest FROM match_global_policy WHERE policy_id=1").Scan(&current)
+	if err == nil {
+		if !bytes.Equal(current, digest) {
+			return errors.New(policyMismatch)
+		}
+		s.TeamConfig = c.Team
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -37,12 +51,11 @@ func (s *Store) EnsureGlobalPolicy(ctx context.Context, c config.Config) error {
 	if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_global_policy(policy_id,contract_digest) VALUES(1,?)", digest); err != nil {
 		return err
 	}
-	var current []byte
 	if err = tx.QueryRowContext(ctx, "SELECT contract_digest FROM match_global_policy WHERE policy_id=1 FOR UPDATE").Scan(&current); err != nil {
 		return err
 	}
 	if !bytes.Equal(current, digest) {
-		return errors.New("同一全局匹配事务域的策略不一致；须停全部副本后受控调整，禁止进程自动覆盖")
+		return errors.New(policyMismatch)
 	}
 	if err = tx.Commit(); err != nil {
 		return err

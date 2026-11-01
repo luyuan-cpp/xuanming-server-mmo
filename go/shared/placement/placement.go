@@ -1,15 +1,14 @@
-// Package placement 是玩家路由的公共契约:落点编号与库名的换算、落点记录的合法性(本文件),player_route 的行分片(route.go),
-// 事务里读路由行(role_route_sql.go),别名合服的归属解析(merged_zone.go)。
+// Package placement 是玩家路由的公共契约:落点编号与库名的换算(本文件),player_route 的行分片(route.go),
+// 别名合服的归属解析(merged_zone.go)。
 //
-// home_zone 回答「玩家建号时属于哪个区」,storage_id 回答「玩家主数据在哪个库」,都只在全局库 player_route 一份
-// (docs/design/player-route-mapping-durability-proposal.md §15)。合服不改这两个值,只写一条 zone_merged_into 别名;搬库只改落点。
-// 选库只在 go/db 一处发生:认领时按路由行选,生产者消息里不带任何落点信息(docs/design/player-storage-placement.md §0.2、§3 P-3)。
+// home_zone 回答「玩家建号时属于哪个区」,storage_id 回答「玩家主数据在哪个库」,都只在目录 player_route 一份
+// (docs/design/horizontal-scale-logical-db.md §5.6)。合服不改这两个值,只写一条 zone_merged_into 别名;storage_id 建角后不变。
+// 选库只在 go/db 一处发生:认领时调 GetPlayerRoute 选,生产者消息里不带任何落点信息(docs/design/player-storage-placement.md §0.2、§3 P-3)。
 //
 // 本包只依赖标准库:读写各自用自己的连接。
 package placement
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -68,46 +67,4 @@ func StorageIDFromDBName(name string) (uint32, bool) {
 		return 0, false
 	}
 	return storageID, true
-}
-
-// Record 是一条落点记录。
-type Record struct {
-	StorageID uint32
-	Version   uint64
-	// Frozen 为 true 表示搬库进行中:go/db 拒绝认领,调用方过一会儿重试。
-	Frozen bool
-	// RunID 仅在 Frozen 时有意义:持有这次搬迁的工具运行号。
-	RunID string
-}
-
-// ErrMalformed 表示落点记录的值不符合格式。读方必须 fail-closed。
-var ErrMalformed = errors.New("placement: malformed placement record")
-
-// Validate 检查记录各字段:storage_id、version 必须 > 0;冻结态必须带合法 run_id。
-func (r Record) Validate() error {
-	if r.StorageID == 0 || r.Version == 0 {
-		return fmt.Errorf("%w: storage_id and version must be > 0 (got %d:%d)", ErrMalformed, r.StorageID, r.Version)
-	}
-	if r.Frozen && !ValidRunID(r.RunID) {
-		return fmt.Errorf("%w: invalid run_id %q", ErrMalformed, r.RunID)
-	}
-	if !r.Frozen && r.RunID != "" {
-		return fmt.Errorf("%w: stable record must not carry run_id", ErrMalformed)
-	}
-	return nil
-}
-
-// ValidRunID 限定 run_id 只含 [A-Za-z0-9_-]、非空且不超过 64 字节,保证它不会引入分隔符。
-func ValidRunID(runID string) bool {
-	if runID == "" || len(runID) > 64 {
-		return false
-	}
-	for _, c := range runID {
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '-':
-		default:
-			return false
-		}
-	}
-	return true
 }

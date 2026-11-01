@@ -41,6 +41,7 @@ spec:
       labels:
         app: match
         tier: go-svc
+        mmorpg.io/sql-writer: "true"
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9170"
@@ -66,7 +67,7 @@ spec:
         - name: sql-writer-registrar
           image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
           command: ["/bin/sh", "-ec"]
-          args: ["umask 077; mkdir -p /run/sql-writer/runtime/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/match_service.yaml","-runtime-env-output","/run/sql-writer/runtime/env","-boot-output","/run/sql-writer/grant/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
+          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/match_service.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
           env:
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
@@ -90,9 +91,9 @@ spec:
           env:
           # grant只读，consume留在同PodemptyDir；同Podrestart不得重复消费boot。
             - name: MMORPG_SQL_WRITER_GRANT_FILE
-              value: /run/sql-writer/grant/boot-grant.json
+              value: /run/sql-writer/grant/private/boot-grant.json
             - name: MMORPG_SQL_WRITER_CONSUME_DIR
-              value: /run/sql-writer/consume
+              value: /run/sql-writer/consume/private
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
             - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
@@ -105,6 +106,13 @@ spec:
             - name: MMORPG_MATCH_INTERNAL_SECRET_GUILD
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: match-internal-guild, optional: false}
+            # 角色护栏:MATCH 读 data_service 的权威状态,COORDINATOR 验协调者的调用。缺了拒绝启动。
+            - name: MMORPG_ROLE_FENCE_SECRET_MATCH
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-match, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_COORDINATOR
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-coordinator, optional: false}
             - name: MMORPG_LOGIN_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef: {name: redis-auth, key: password, optional: true}
@@ -117,7 +125,7 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
           command: ["/bin/sh", "-ec"]
-          args: ["MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; MATCH_MYSQL_PASSWORD=\"$(cat /app/etc/env/MATCH_MYSQL_PASSWORD)\"; export MATCH_MYSQL_PASSWORD; exec /app/service \"$@\"","--","-f","/app/etc/match_service.yaml"]
+          args: ["(umask 077; mkdir -p /run/sql-writer/consume/private); if ls /run/sql-writer/consume/private/*.consumed >/dev/null 2>&1; then echo sql writer grant already consumed, the reaper replaces this pod >&2; exit 78; fi; MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/private/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; MATCH_MYSQL_PASSWORD=\"$(cat /app/etc/private/env/MATCH_MYSQL_PASSWORD)\"; export MATCH_MYSQL_PASSWORD; exec /app/service \"$@\"","--","-f","/app/etc/private/match_service.yaml"]
           ports:
             - containerPort: 50500
               name: grpc

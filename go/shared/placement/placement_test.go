@@ -1,7 +1,6 @@
 package placement
 
 import (
-	"errors"
 	"testing"
 )
 
@@ -39,29 +38,6 @@ func TestStorageIDFromDBNameRejectsOutsideFamilies(t *testing.T) {
 	} {
 		if id, ok := StorageIDFromDBName(name); ok {
 			t.Fatalf("StorageIDFromDBName(%q) = %d, want rejection", name, id)
-		}
-	}
-}
-
-func TestValidateRecord(t *testing.T) {
-	for _, good := range []Record{
-		{StorageID: 102, Version: 1},
-		{StorageID: 1000000, Version: 7},
-		{StorageID: 102, Version: 3, Frozen: true, RunID: "run-20260928_a"},
-	} {
-		if err := good.Validate(); err != nil {
-			t.Fatalf("%+v must be valid, got %v", good, err)
-		}
-	}
-	for _, bad := range []Record{
-		{Version: 1},
-		{StorageID: 102},
-		{StorageID: 102, Version: 1, RunID: "x"},
-		{StorageID: 102, Version: 1, Frozen: true},
-		{StorageID: 102, Version: 1, Frozen: true, RunID: "bad run"},
-	} {
-		if err := bad.Validate(); !errors.Is(err, ErrMalformed) {
-			t.Fatalf("%+v must be malformed, got %v", bad, err)
 		}
 	}
 }

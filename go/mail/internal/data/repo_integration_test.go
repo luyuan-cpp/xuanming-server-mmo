@@ -21,12 +21,80 @@ import (
 	basepb "proto/common/base"
 	dspb "proto/data_service"
 	mailpb "proto/mail"
+	rfpb "proto/role_fence"
 	"schemamigrate"
 	"shared/assetop"
+	"shared/rolefence"
 	"shared/roleidentity"
 )
 
+// mailTestDirectory 是帮会目录和角色目录的替身:邮件库不跨库读,这两样都经 RPC。
+type mailTestDirectory struct {
+	mu       sync.Mutex
+	guilds   map[uint64]uint64
+	guildErr error
+	roles    map[uint64]*rfpb.RoleFenceState
+	version  uint64
+	reads    int
+}
+
+func newMailTestDirectory() *mailTestDirectory {
+	return &mailTestDirectory{guilds: map[uint64]uint64{}, roles: map[uint64]*rfpb.RoleFenceState{}}
+}
+
+func (d *mailTestDirectory) GuildOf(_ context.Context, player uint64) (uint64, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.guilds[player], d.guildErr
+}
+
+func (d *mailTestDirectory) GetRoleFenceState(_ context.Context, player uint64) (*rfpb.RoleFenceState, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.reads++
+	state, ok := d.roles[player]
+	if !ok {
+		return nil, rolefence.ErrRoleNotFound
+	}
+	return state, nil
+}
+
+func (d *mailTestDirectory) setGuild(player, guild uint64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.guilds[player] = guild
+}
+
+func (d *mailTestDirectory) setGuildErr(err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.guildErr = err
+}
+
+// setRole 改权威状态,版本加 1,回新状态。
+func (d *mailTestDirectory) setRole(player uint64, account string, revision, token uint64) *rfpb.RoleFenceState {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.version++
+	state := &rfpb.RoleFenceState{PlayerId: player, Account: account, OwnerRevision: revision, FreezeToken: token, Version: d.version, HomeZone: 1}
+	d.roles[player] = state
+	return state
+}
+
+func (d *mailTestDirectory) readCount() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.reads
+}
+
 func mailFixture(t *testing.T) (context.Context, *sql.DB, *Repo) {
+	t.Helper()
+	ctx, db, r, _ := mailFixtureWithInstall(t)
+	return ctx, db, r
+}
+
+// mailFixtureWithInstall 另外回安装账号的连接池,给要改表结构或写坏数据的夹具用。
+func mailFixtureWithInstall(t *testing.T) (context.Context, *sql.DB, *Repo, *sql.DB) {
 	t.Helper()
 	address := os.Getenv("MAIL_RANK_TEST_TIDB")
 	if address == "" {
@@ -45,8 +113,7 @@ func mailFixture(t *testing.T) (context.Context, *sql.DB, *Repo) {
 		t.Fatal(err)
 	}
 	database := "mail_it_" + hex.EncodeToString(random[:])
-	guildDB := "mail_guild_it_" + hex.EncodeToString(random[:])
-	opts, err := sqltest.OptionsFromEnv("root@tcp("+address+")/mysql", database+"_writer", database, guildDB)
+	opts, err := sqltest.OptionsFromEnv("root@tcp("+address+")/mysql", database+"_writer", database)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,19 +129,13 @@ func mailFixture(t *testing.T) (context.Context, *sql.DB, *Repo) {
 	if err != nil || len(report.Manual) > 0 {
 		t.Fatalf("schema: %v %+v", err, report)
 	}
-	if _, err = install.ExecContext(ctx, "CREATE TABLE "+guildDB+".guild_member (guild_id BIGINT UNSIGNED NOT NULL,player_id BIGINT UNSIGNED NOT NULL,PRIMARY KEY(guild_id,player_id),UNIQUE KEY player_id(player_id))"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = install.ExecContext(ctx, "CREATE TABLE account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
+	if err = rolefence.EnsureSchema(ctx, install); err != nil {
 		t.Fatal(err)
 	}
 	if err = fixture.GrantProtoTables(ctx, database, Tables()); err != nil {
 		t.Fatal(err)
 	}
-	if err = fixture.GrantTables(ctx, database, "account_role"); err != nil {
-		t.Fatal(err)
-	}
-	if err = fixture.GrantTables(ctx, guildDB, "guild_member"); err != nil {
+	if err = fixture.GrantTables(ctx, database, rolefence.TableName); err != nil {
 		t.Fatal(err)
 	}
 	db, err := fixture.Open(ctx, database, 12)
@@ -82,8 +143,8 @@ func mailFixture(t *testing.T) (context.Context, *sql.DB, *Repo) {
 		t.Fatal(err)
 	}
 	var next atomic.Uint64
-	r := New(db, func(context.Context) (uint64, error) { return next.Add(1), nil }, func(context.Context) (uint64, error) { return next.Add(1), nil }, func(id uint32) bool { return id == 42 }, guildDB)
-	return ctx, db, r
+	r := New(db, func(context.Context) (uint64, error) { return next.Add(1), nil }, func(context.Context) (uint64, error) { return next.Add(1), nil }, func(id uint32) bool { return id == 42 }, newMailTestDirectory())
+	return ctx, db, r, install
 }
 
 func mailDataFixtureEndpoint(address string) error {
@@ -114,18 +175,14 @@ func personal(request, player uint64) *mailpb.SendMailRequest {
 	return &mailpb.SendMailRequest{SenderKind: 3, RequestId: request, RecipientPlayerId: player, Title: "奖励", Body: "离线也可领取", Attachments: &mailpb.MailAttachments{Currencies: []*mailpb.MailCurrency{{Amount: 10}}, Items: []*mailpb.MailItem{{ConfigId: 42, Count: 2}}}}
 }
 
+// mailRoleOwner 把角色 7 改成给定的归属,并把状态推到本库副本(和协调者的 Prepare、Push 一样),回这个身份的会话。
 func mailRoleOwner(t *testing.T, ctx context.Context, db *sql.DB, r *Repo, account string, revision, listing uint64) context.Context {
 	t.Helper()
-	if _, err := db.ExecContext(ctx, "INSERT INTO account_role VALUES (7,?,?,?) ON DUPLICATE KEY UPDATE account=?,owner_revision=?,trade_listing_id=?", []byte(account), revision, listing, []byte(account), revision, listing); err != nil {
+	directory := r.guilds.(*mailTestDirectory)
+	if _, err := rolefence.Apply(ctx, db, directory.setRole(7, account, revision, listing)); err != nil {
 		t.Fatal(err)
 	}
-	var schema string
-	if err := db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&schema); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.ConfigureRoleAuthority(ctx, schema); err != nil {
-		t.Fatal(err)
-	}
+	r.ConfigureRoleFence(rolefence.NewGuard(db, directory))
 	actor, err := roleidentity.Capture(ctx, &dspb.AccountRoleOwnership{Account: account, OwnerRevision: revision, Role: &basepb.AccountSimplePlayer{PlayerId: 7}})
 	if err != nil {
 		t.Fatal(err)
@@ -472,11 +529,10 @@ func TestTiDBManifestSealFreezesBroadcastRecipients(t *testing.T) {
 	}
 }
 
-func TestTiDBGuildTextUsesSameClusterAuthorityAndFrozenRewardsSurviveLeave(t *testing.T) {
-	ctx, db, r := mailFixture(t)
-	if _, err := db.ExecContext(ctx, "INSERT INTO "+r.guildDatabase+".guild_member (guild_id,player_id) VALUES (77,7)"); err != nil {
-		t.Fatal(err)
-	}
+func TestTiDBGuildTextFollowsCurrentGuildAndFrozenRewardsSurviveLeave(t *testing.T) {
+	ctx, _, r := mailFixture(t)
+	directory := r.guilds.(*mailTestDirectory)
+	directory.setGuild(7, 77)
 	sent, err := r.Send(ctx, "guild", mailpb.MailKind_MAIL_KIND_GUILD, &mailpb.SendMailRequest{SenderKind: 2, RequestId: 1, GuildId: 77, Title: "帮会通知", Body: "当前成员可读"})
 	if err != nil {
 		t.Fatal(err)
@@ -485,9 +541,7 @@ func TestTiDBGuildTextUsesSameClusterAuthorityAndFrozenRewardsSurviveLeave(t *te
 	if err != nil || len(page.Mails) != 1 {
 		t.Fatalf("成员文本: %v %+v", err, page)
 	}
-	if _, err = db.ExecContext(ctx, "DELETE FROM "+r.guildDatabase+".guild_member WHERE guild_id=77 AND player_id=7"); err != nil {
-		t.Fatal(err)
-	}
+	directory.setGuild(7, 0)
 	if _, err = r.Read(ctx, 7, sent.MailId); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("离帮文本资格没有复核: %v", err)
 	}

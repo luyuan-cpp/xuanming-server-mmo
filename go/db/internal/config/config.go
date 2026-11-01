@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"shared/authoritysql"
+	"shared/dbplacement"
 
 	"github.com/zeromicro/go-zero/zrpc"
 )
@@ -24,9 +25,16 @@ type Config struct {
 	// Placement 是落点库的放行与连接池参数(docs/design/player-storage-placement.md §6)。
 	// 整块可缺省,缺省语义见 PlacementConfig。
 	Placement PlacementConfig `json:"Placement,optional"`
+
+	// DataServiceRpc:认领前读玩家落点(GetPlayerRoute),go/db 不连目录。必填,调用方密钥在环境变量 MMORPG_ROLE_FENCE_SECRET_DB。
+	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
+
+	// DbPlacement:逻辑库按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Database.Hosts。
+	// 和上面的 Placement 不是一回事:Placement 管玩家落在哪个库,DbPlacement 管库落在哪个物理集群。
+	DbPlacement dbplacement.Config `json:"DbPlacement,optional"`
 }
 
-// PlacementConfig 控制 go/db 能打开哪些落点库、每个库的连接池多大。选库本身读全局库 player_route,不用配。
+// PlacementConfig 控制 go/db 能打开哪些落点库、每个库的连接池多大。
 //
 // go-zero 对整段 optional 且未出现的嵌套结构不回填内层 default 标签,所以这里不写 default:
 //   - AllowStoreFamilies 用 *bool,nil(没写)按 true 读,经 StoreFamiliesAllowed 取值;

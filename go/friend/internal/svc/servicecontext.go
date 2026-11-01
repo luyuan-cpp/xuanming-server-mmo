@@ -22,6 +22,7 @@ import (
 
 	redv9 "github.com/redis/go-redis/v9"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/idsegment"
 	"shared/kafkacmd"
@@ -157,7 +158,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 
 	backend := authoritysql.Backend(c.Backend)
-	db, err := openMySQL(c.MySQL, backend, authoritysql.Writer(writer))
+	dbPlacement, err := dbplacement.Start(context.Background(), c.MySQL.DbPlacement)
+	if err != nil {
+		panic(fmt.Errorf("friend: %w", err))
+	}
+	db, err := openMySQL(c.MySQL, backend, authoritysql.Writer(writer), dbPlacement.OpenOptions()...)
 	if err != nil {
 		panic(fmt.Errorf("friend: %w", err))
 	}
@@ -339,13 +344,20 @@ func OpenSchemaMySQL(c config.MySQLConf, backend authoritysql.Backend) (*sql.DB,
 	if err != nil {
 		return nil, err
 	}
-	return openMySQL(c, backend, permission)
-}
-
-func openMySQL(c config.MySQLConf, backend authoritysql.Backend, permission authoritysql.Permission) (*sql.DB, error) {
+	// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, BuildDSN(c, backend), c.DBName, backend, c.MaxOpenConn, permission)
+	options, err := dbplacement.ForMigration(ctx, c.DbPlacement, c.DBName)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(c, backend, permission, options...)
+}
+
+func openMySQL(c config.MySQLConf, backend authoritysql.Backend, permission authoritysql.Permission, options ...authoritysql.OpenOption) (*sql.DB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
+	defer cancel()
+	db, err := authoritysql.Open(ctx, BuildDSN(c, backend), c.DBName, backend, c.MaxOpenConn, permission, options...)
 	if err != nil {
 		return nil, fmt.Errorf("open MySQL %s: %w", MySQLTarget(c), err)
 	}

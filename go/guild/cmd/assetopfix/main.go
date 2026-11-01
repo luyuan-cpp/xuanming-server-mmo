@@ -9,7 +9,7 @@
 // 边界:
 //   - 只连 MySQL(DSN 经 data.WithLockWaitTimeout,与服务进程同一套锁等待上限)与缓存 Redis
 //     (终结会改帮会资金 / 成员帮贡,必须失效缓存);不起 RPC、不 LoadTables、不连 Kafka /
-//     data_service / etcd,因此不推送(GuildAssetStore.OnFinalized 保持 nil)。
+//     data_service(etcd 只在配了 DbPlacement 时读一次映射),因此不推送(GuildAssetStore.OnFinalized 保持 nil)。
 //   - 人工终结**不置 durable**(那不是 scene 的确认),只开放 applied / aborted 两种结局(裁决 E);
 //     对侧账与自动终结共用 GuildAssetStore 里的同一个函数。
 //   - 走包级 assetop.ResolveManually,不造 Loop(那需要假 Applier 和假循环参数,造出来就会被人拿去真跑)。
@@ -42,6 +42,7 @@ import (
 	pb "proto/guild"
 	"shared/assetop"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/drainproof"
 )
 
@@ -255,7 +256,11 @@ func openStore(ctx context.Context, c config.Config, permission authoritysql.Per
 	if err != nil {
 		return nil, nil, err // 该错误本身不含 DSN 原文(DSN 带口令)
 	}
-	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.MySQL.Backend), 2, permission)
+	placementOptions, err := dbplacement.ForOneShot(ctx, c.MySQL.DbPlacement, data.DatabaseName)
+	if err != nil {
+		return nil, nil, err
+	}
+	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.MySQL.Backend), 2, permission, placementOptions...)
 	if err != nil {
 		return nil, nil, errors.New("打开 MySQL 失败(DSN 含口令,不打印原错误)")
 	}

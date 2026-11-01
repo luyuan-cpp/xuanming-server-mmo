@@ -75,6 +75,8 @@ $RepoRoot  = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 $DevTools  = Join-Path $ScriptDir 'dev_tools.ps1'
 $SnapPs1   = Join-Path $ScriptDir 'stress_snap.ps1'
 $SummPs1   = Join-Path $ScriptDir 'stress_summarize.ps1'
+# 目录的片数和库名(Get-YamlScalar、Get-DirectoryDbNames),见 Get-GlobalResetDatabases。
+. (Join-Path $ScriptDir 'lib/release_common.ps1')
 
 function Hdr($t)  { Write-Host "`n=== $t ===" -ForegroundColor Cyan }
 function Plan($t) { Write-Host "  [plan] $t" -ForegroundColor DarkGray }
@@ -113,8 +115,16 @@ function Invoke-Baseline {
 # 本脚本只连本机 mysql 容器。TiDB 环境的清库按 docs/design/tidb-phase1-and-launch-readiness.md §3.5 做:
 # TiDB 上 TRUNCATE 会换表 ID、丢掉预切与 table attributes,清完要重跑 `route_tool -f <yaml> tidb-prepare -zones=… -dry-run=false`。
 # 既有全量本地 reset 同时清全局角色目录；Redis清空不再删除SQL归属。仅原显式wipe门禁允许执行。
-$RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role', 'account_directory', 'player_route', 'zone_merged_into')
+# 目录每片一个库(zone_merged_into 只在第 0 片,只清已存在的表),流水库没有这些表,只复位 route_meta。
+$RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role', 'account_role_ref', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into')
 $RouteMetaResetSql = 'UPDATE route_meta SET writable=1 WHERE id=1;'
+
+# 目录各片(Directory.LogicalShards,与 data_service 同一来源;K=1 时库名就是基名)和流水库。
+function Get-GlobalResetDatabases {
+    $shards = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/data_service/etc/data_service.yaml') -KeyPath 'Directory.LogicalShards'
+    $k = if ($shards.Found -and -not [string]::IsNullOrEmpty($shards.Value)) { [int]$shards.Value } else { 1 }
+    return [pscustomobject]@{ Directory = @(Get-DirectoryDbNames -Base $GlobalDbName -LogicalShards $k); Ledger = (Get-DirectoryLedgerDbName -Base $GlobalDbName) }
+}
 
 # 在全局库所在的 MySQL 上执行一段 SQL(不指定默认库,语句自己带库名或 USE),非 0 退出码即 throw。
 # 返回 stdout 的非空行(-N -B:不带列名、tab 分隔);stderr(含口令警告)不进返回值。
@@ -151,20 +161,23 @@ function Clear-GlobalRouteTables {
     # 库名要拼进 SQL:只认普通标识符,防的是参数里带引号 / 分号。
     if ($GlobalDbName -notmatch '^[A-Za-z0-9_]+$') { throw "GlobalDbName '$GlobalDbName' is not a plain identifier" }
     $names = (@($RouteDataTables) + @('route_meta') | ForEach-Object { "'$_'" }) -join ','
-    $existing = @(Invoke-GlobalDbSql -HasDocker $HasDocker -What 'route table lookup' -Sql (
-        "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '$GlobalDbName' AND TABLE_NAME IN ($names);"))
-    $stmts = @()
-    foreach ($t in $RouteDataTables) {
-        if ($existing -contains $t) { $stmts += "TRUNCATE TABLE $t;" }
+    $databases = Get-GlobalResetDatabases
+    foreach ($database in @($databases.Directory) + @($databases.Ledger)) {
+        $existing = @(Invoke-GlobalDbSql -HasDocker $HasDocker -What 'route table lookup' -Sql (
+            "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '$database' AND TABLE_NAME IN ($names);"))
+        $stmts = @()
+        foreach ($t in $RouteDataTables) {
+            if ($existing -contains $t) { $stmts += "TRUNCATE TABLE $t;" }
+        }
+        if ($existing -contains 'route_meta') { $stmts += $RouteMetaResetSql }
+        if ($stmts.Count -eq 0) {
+            Warn "no route tables in $database (migration never ran) - nothing to wipe"
+            continue
+        }
+        $sql = (@("USE $database;") + $stmts) -join "`n"
+        Invoke-GlobalDbSql -HasDocker $HasDocker -What 'route table wipe' -Sql $sql | Out-Null
+        Do1 "global DB ${database}: $($stmts -join ' ')"
     }
-    if ($existing -contains 'route_meta') { $stmts += $RouteMetaResetSql }
-    if ($stmts.Count -eq 0) {
-        Warn "no route tables in $GlobalDbName (migration never ran) - nothing to wipe"
-        return
-    }
-    $sql = (@("USE $GlobalDbName;") + $stmts) -join "`n"
-    Invoke-GlobalDbSql -HasDocker $HasDocker -What 'route table wipe' -Sql $sql | Out-Null
-    Do1 "global DB ${GlobalDbName}: $($stmts -join ' ')"
 }
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -175,8 +188,8 @@ function Invoke-Wipe {
     if (-not $Execute -or -not $WipeData) {
         Plan 'redis : FLUSHALL the local redis and every primary of redis-player-cluster-* when running (lib/redis_local_flush.ps1)'
         Plan "mysql : TRUNCATE $($MySqlTables -join ', ') in $DbName"
-        Plan "mysql : TRUNCATE $($RouteDataTables -join ', ') in $GlobalDbName (only tables that exist; fail-closed)"
-        Plan "mysql : route_meta(id=1) writable reset in place in ${GlobalDbName}: $RouteMetaResetSql"
+        Plan "mysql : TRUNCATE $($RouteDataTables -join ', ') in every directory shard of $GlobalDbName (only tables that exist; fail-closed)"
+        Plan "mysql : route_meta(id=1) writable reset in place in every directory shard and the ledger of ${GlobalDbName}: $RouteMetaResetSql"
         Plan 'etcd  : docker exec etcd etcdctl del "" --prefix'
         Plan 'kafka : reset all consumer groups --to-latest (best-effort)'
         Plan 'logs  : prune robot/logs/stress-* (keep newest 1), bin/log/*, run/logs/*'

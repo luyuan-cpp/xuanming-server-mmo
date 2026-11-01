@@ -2,7 +2,7 @@ package main
 
 // merge_zone —— 不停服合服工具(方案 docs/design/player-data-tidb-scaling-plan.md §7.1,操作步骤 docs/ops/merge-zone-runbook.md)。
 //
-// 合服只写一条映射:全局库 zone_merged_into 的「源区 → 目标区」。玩家、公会、商品、榜单一行都不动,各服务读的时候
+// 合服只写一条映射:目录第 0 片 zone_merged_into 的「源区 → 目标区」。玩家、公会、商品、榜单一行都不动,各服务读的时候
 // 把记录里的原始区解析成最终区(placement.MergedZones)。没有数据搬动,就没有「搬动期间的一致性」问题,
 // 所以这里没有清单、没有前置门禁、不踢人,也不碰 Redis。
 //
@@ -110,7 +110,7 @@ func parseOptions(args []string, errOut io.Writer) (options, error) {
 	source := fs.Uint("source-zone", 0, "zone merged away (merge / unmerge)")
 	target := fs.Uint("target-zone", 0, "zone it is merged into (merge / unmerge)")
 	fs.StringVar(&o.routeDSN, "route-db-dsn", "",
-		"DSN of the global database that holds zone_merged_into and route_meta (dev: testdb, K8s: mmorpg_global). Required, never logged")
+		"DSN of directory shard 0, the only one that holds zone_merged_into (the base name when Directory.LogicalShards=1, otherwise <base>_00; dev: testdb, K8s: mmorpg_global_00). Required, never logged")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "merge / unmerge: validate and print what would happen, write nothing")
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
@@ -120,7 +120,7 @@ func parseOptions(args []string, errOut io.Writer) (options, error) {
 		return options{}, fmt.Errorf("%d unexpected positional argument(s); their values are not echoed", fs.NArg())
 	}
 	if o.routeDSN == "" {
-		return options{}, errors.New("-route-db-dsn is required: the global database that holds zone_merged_into is the only source of truth for the mapping")
+		return options{}, errors.New("-route-db-dsn is required: directory shard 0, which holds zone_merged_into, is the only source of truth for the mapping")
 	}
 	switch o.mode {
 	case modeMerge, modeUnmerge:

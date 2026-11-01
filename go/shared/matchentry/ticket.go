@@ -1,9 +1,10 @@
-// Package matchentry 保存各域提交点共同消费的匹配占用事实；不获取角色锁、不访问远端服务。
+// Package matchentry 保存匹配票占用的判定；不获取角色锁、不访问远端服务。
+// 现在只有 match 自己用:别的服务不再跨库读票,要占用经 match 的 AcquireTrialOccupancy(docs/design/horizontal-scale-logical-db.md §4)。
 package matchentry
 
 import pb "proto/match"
 
-// TicketOccupiedSQL用于已持角色P的单表查询，不含表名、玩家条件或行锁。
+// TicketOccupiedSQL用于已持护栏副本行锁的单表查询，不含表名、玩家条件或行锁。
 // NULL一律拒绝；state4是精确终态，state0允许登记player/owner，其余15项业务值须全空。
 const TicketOccupiedSQL = `(state IS NULL OR (state<>4 AND (state<>0
  OR ticket IS NULL OR ticket<>'' OR request_id IS NULL OR request_id<>''

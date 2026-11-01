@@ -128,7 +128,8 @@ func (r RPC) String() string {
 func ApplyRPCOf(stream assetpb.AssetOpStream) (RPC, bool) {
 	switch stream {
 	case assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_DEBIT,
-		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT:
+		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT,
+		assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL:
 		return RPCDebit, true
 	case assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT,
 		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_CREDIT,

@@ -59,11 +59,11 @@ func NewAccountRoleAdmissionStore(d *AccountDirectoryStore) *AccountRoleAdmissio
 var _ accountdirectory.Admissions = (*AccountRoleAdmissionStore)(nil)
 
 func (s *AccountRoleAdmissionStore) ready() bool {
-	return s != nil && s.directory != nil && s.directory.db != nil
+	return s != nil && s.directory != nil && s.directory.shards != nil
 }
 
 func lockAdmissionRole(ctx context.Context, tx *sql.Tx, player, revision uint64) (*dspb.AccountRoleOwnership, error) {
-	r, err := scanOwnership(tx.QueryRowContext(ctx, "SELECT account,role_proto,owner_revision,trade_listing_id FROM account_role WHERE player_id=? FOR UPDATE", player), player)
+	r, err := scanOwnership(tx.QueryRowContext(ctx, lockOwnershipSQL, player), player)
 	if err != nil {
 		return nil, err
 	}
@@ -127,11 +127,12 @@ func (s *AccountRoleAdmissionStore) Register(ctx context.Context, in *dspb.Regis
 		return nil, err
 	}
 	var out *dspb.RegisterRoleAdmissionResponse
-	err = s.directory.transaction(ctx, func(tx *sql.Tx) error {
+	err = s.directory.playerTx(ctx, i.PlayerId, func(tx *sql.Tx) error {
 		owned, err := lockAdmissionRole(ctx, tx, i.PlayerId, i.OwnerRevision)
 		if err != nil {
 			return err
 		}
+		// 只看最终令牌:准备令牌还在投票,这时进场的实例由转 FREEZING 的事务持同一把行锁快照进 holder,删角由墓碑事务持这把锁核登记已关闭。规格 §3.5。
 		if owned.TradeListingId != 0 {
 			return accountdirectory.ErrConflict
 		}
@@ -187,9 +188,19 @@ func (s *AccountRoleAdmissionStore) CloseAdmissions(ctx context.Context, in *dsp
 		return nil, err
 	}
 	var out *dspb.CloseRoleAdmissionsResponse
-	err = s.directory.transaction(ctx, func(tx *sql.Tx) error {
-		if _, err := lockAdmissionRole(ctx, tx, in.PlayerId, in.OwnerRevision); err != nil {
+	err = s.directory.playerTx(ctx, in.PlayerId, func(tx *sql.Tx) error {
+		role, err := scanOwnership(tx.QueryRowContext(ctx, lockOwnershipSQL, in.PlayerId), in.PlayerId)
+		if err != nil {
 			return err
+		}
+		// 修订变了说明过户已经完成,旧修订的持有者当时已经排空或判死,写权行也进不去了,没有东西要关。
+		// 回冲突的话,scene 会每秒重发一次,直到这名玩家再进这个实例或进程重启。
+		if role.OwnerRevision > in.OwnerRevision {
+			out = &dspb.CloseRoleAdmissionsResponse{ClosedThrough: in.ThroughGeneration}
+			return nil
+		}
+		if role.OwnerRevision != in.OwnerRevision {
+			return accountdirectory.ErrConflict
 		}
 		r, err := readAdmission(ctx, tx, in.PlayerId, in.SceneInstanceId)
 		if err != nil {
@@ -306,26 +317,17 @@ func (s *AccountRoleAdmissionStore) AckDrain(ctx context.Context, in *dspb.AckRo
 		return err
 	}
 	seal := in.Seal
-	// 先普通读不可变卖家，再遵守账号→listing→role 的既有锁序，不能从 role 回头锁账号。
-	var seller string
-	if err = s.directory.db.QueryRowContext(ctx, "SELECT seller_account FROM account_role_trade WHERE listing_id=?", seal.ListingId).Scan(&seller); errors.Is(err, sql.ErrNoRows) {
-		return accountdirectory.ErrMissing
-	} else if err != nil {
-		return err
-	}
-	return s.directory.transaction(ctx, func(tx *sql.Tx) error {
-		if err := lockAccounts(ctx, tx, seller); err != nil {
-			return err
-		}
+	// 锁序是 listing → role → 入场登记 → holder。不再锁账号 guard:它在账号分片,这里只有玩家分片。
+	return s.directory.playerTx(ctx, seal.PlayerId, func(tx *sql.Tx) error {
 		r, err := readRoleTrade(ctx, tx, seal.ListingId)
 		if err != nil {
 			return err
 		}
-		if r.SellerAccount != seller || r.PlayerId != seal.PlayerId || r.SellerOwnerRevision != seal.OwnerRevision {
+		if r.PlayerId != seal.PlayerId || r.SellerOwnerRevision != seal.OwnerRevision {
 			return accountdirectory.ErrConflict
 		}
 		// 终局重放可能已经发生下一次过户；先锁当前行但不拿旧修订阻断原 ACK 回放。
-		owned, err := scanOwnership(tx.QueryRowContext(ctx, "SELECT account,role_proto,owner_revision,trade_listing_id FROM account_role WHERE player_id=? FOR UPDATE", seal.PlayerId), seal.PlayerId)
+		owned, err := scanOwnership(tx.QueryRowContext(ctx, lockOwnershipSQL, seal.PlayerId), seal.PlayerId)
 		if err != nil {
 			return err
 		}

@@ -128,7 +128,15 @@ func (s *Service) resumeSQLTeamLaunch(ctx context.Context, caller uint64, launch
 	return response
 }
 
-func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller uint64, request *teampb.StartTeamMatchRequest, token string, roster []uint64, ttl uint32) (*PinnedResult, *teampb.TeamLaunchRecord, error) {
+func (s *sqlTeamStore) createLaunch(ctx context.Context, snap *Snapshot, caller uint64, request *teampb.StartTeamMatchRequest, token string, roster []uint64, ttl uint32) (pinned *PinnedResult, launch *teampb.TeamLaunchRecord, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) {
+		pinned, launch, e = s.createLaunchOnce(ctx, snap, caller, request, token, roster, ttl)
+		return e
+	})
+	return pinned, launch, err
+}
+
+func (s *sqlTeamStore) createLaunchOnce(ctx context.Context, snap *Snapshot, caller uint64, request *teampb.StartTeamMatchRequest, token string, roster []uint64, ttl uint32) (*PinnedResult, *teampb.TeamLaunchRecord, error) {
 	key, err := authority.DirectUUIDKey(1, caller, request.RequestId)
 	if err != nil {
 		return nil, nil, err

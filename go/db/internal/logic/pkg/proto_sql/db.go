@@ -14,6 +14,7 @@ import (
 	_ "proto/common/database"
 	"regexp"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"strconv"
 	"strings"
 	"time"
@@ -27,10 +28,12 @@ import (
 )
 
 type GameDB struct {
-	// writer 由进程唯一启动入口消费一次，按需落点池复用该身份，不重新登记。
-	writer   authoritysql.WriterConfig
-	SqlModel *proto2mysql.DB
-	DB       *sql.DB
+	// writers 由进程唯一启动入口消费一次：每个落点库一份，闸门跟着库走；按需落点池按库名取，不重新登记。
+	writers map[string]authoritysql.WriterConfig
+	// placement 是逻辑库映射(没配 DbPlacement 时 nil,固定连配置的地址)。和 writers 一样由启动入口装配一次,本 zone 库和按需打开的落点库共用。
+	placement authoritysql.PlacementResolver
+	SqlModel  *proto2mysql.DB
+	DB        *sql.DB
 	// Connector 是建这个连接池用的连接器。探活(store_health.go)用它绕过连接池新建一条连接:
 	// 池里的空闲连接可能早已失效(Windows 上驱动不做空闲连接活性检查),池满时取连接还要排队,
 	// 两种情况都会把活着的库误判成不可达。为 nil(单测里只带库名的模型)时退回连接池的 PingContext。
@@ -282,14 +285,22 @@ func isUnknownDatabaseError(err error) bool {
 }
 
 func newPlayerConnector(cfg *mysql.Config) (driver.Connector, error) {
-	if DB == nil || DB.writer.AuthoritySchema() == "" {
+	if DB == nil {
 		return nil, errors.New("玩家SQL池缺少本boot已消费写资格")
+	}
+	writer, ok := DB.writers[cfg.DBName]
+	if !ok {
+		return nil, fmt.Errorf("本boot没有落点库 %s 的写资格", cfg.DBName)
+	}
+	backend := authoritysql.Backend(config.AppConfig.ServerConfig.Database.Backend)
+	if DB.placement != nil {
+		return authoritysql.PinPlacedSession(cfg, DB.placement, backend, authoritysql.Writer(writer))
 	}
 	inner, err := mysql.NewConnector(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return authoritysql.PinCurrentSession(inner, authoritysql.Backend(config.AppConfig.ServerConfig.Database.Backend), authoritysql.Writer(DB.writer))
+	return authoritysql.PinCurrentSession(inner, backend, authoritysql.Writer(writer))
 }
 
 func openDB(policy DDLPolicy) error {
@@ -340,9 +351,10 @@ func openDB(policy DDLPolicy) error {
 		return err
 	}
 
-	writer := DB.writer
+	writers, placement := DB.writers, DB.placement
 	DB = &GameDB{
-		writer:    writer,
+		writers:   writers,
+		placement: placement,
 		DB:        databaseHandle,
 		SqlModel:  proto2mysql.NewDB(),
 		Connector: conn,
@@ -546,17 +558,17 @@ func InitDB() error {
 	if policy.AllowCreateDatabase || policy.AllowCreateOrUpdateTable {
 		return errors.New("常驻db进程禁止启动DDL，请由独立schema入口预建")
 	}
-	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+	writers, err := authoritysql.LoadWriterConfigs(os.Getenv)
 	if err != nil {
 		return err
 	}
-	return InitDBWithWriter(writer)
+	return InitDBWithWriters(writers)
 }
 
-// InitDBWithWriter 供进程装配与自有fixture显式复用已消费的同boot资格。
-func InitDBWithWriter(writer authoritysql.WriterConfig) error {
-	if writer.AuthoritySchema() == "" {
-		return errors.New("玩家SQL启动缺少完整writer资格")
+// InitDBWithWriters 供进程装配与自有fixture显式复用已消费的同boot资格。必须含本 zone 库那一份，其余落点库按需打开时才用。
+func InitDBWithWriters(writers map[string]authoritysql.WriterConfig) error {
+	if _, ok := writers[config.AppConfig.ServerConfig.Database.DBName]; !ok {
+		return errors.New("玩家SQL启动缺少本 zone 库的writer资格")
 	}
 	if DB != nil && DB.DB != nil {
 		return errors.New("玩家SQL启动已完成，禁止更换boot身份")
@@ -565,7 +577,13 @@ func InitDBWithWriter(writer authoritysql.WriterConfig) error {
 	if policy.AllowCreateDatabase || policy.AllowCreateOrUpdateTable {
 		return errors.New("常驻db进程禁止启动DDL，请由独立schema入口预建")
 	}
-	DB = &GameDB{writer: writer}
+	placementCtx, placementCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer placementCancel()
+	dbPlacement, err := dbplacement.Start(placementCtx, config.AppConfig.DbPlacement)
+	if err != nil {
+		return err
+	}
+	DB = &GameDB{writers: writers, placement: dbPlacement.Resolver()}
 	logx.Infof("db DDL policy: createDatabase=%v createOrUpdateTable=%v source=%s",
 		policy.AllowCreateDatabase, policy.AllowCreateOrUpdateTable, policy.Source)
 
@@ -593,12 +611,12 @@ func InitDBWithWriter(writer authoritysql.WriterConfig) error {
 	return CreateOrUpdateTables(tables)
 }
 
-// CurrentWriterConfig 只返回同一个不可变normal能力，不含连接或operator权限。
-func CurrentWriterConfig() (authoritysql.WriterConfig, error) {
-	if DB == nil || DB.DB == nil || DB.writer.AuthoritySchema() == "" {
-		return authoritysql.WriterConfig{}, errors.New("本boot玩家SQL尚未装配")
+// CurrentWriterConfigs 只返回同一批不可变normal能力（每个落点库一份），不含连接或operator权限。
+func CurrentWriterConfigs() (map[string]authoritysql.WriterConfig, error) {
+	if DB == nil || DB.DB == nil || len(DB.writers) == 0 {
+		return nil, errors.New("本boot玩家SQL尚未装配")
 	}
-	return DB.writer, nil
+	return DB.writers, nil
 }
 
 // Close 的调用前提是全部consumer、outbox、retry及按需开池调用已确定join。

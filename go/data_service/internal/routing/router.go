@@ -1,6 +1,6 @@
 package routing
 
-// 玩家归属映射的读写入口。player_route 只在全局库一份,这里直接走 SQL,提交即完成
+// 玩家归属映射的读写入口。player_route 只在目录一份(按玩家分片),这里直接走 SQL,提交即完成
 // (docs/design/player-route-mapping-durability-proposal.md §15)。
 //
 // 这里的 home_zone 都是原始值;对外回答归属时由 handler 解析成最终区(placement.MergedZones)。
@@ -43,6 +43,10 @@ var (
 	// 文案是**契约的一部分**:login 的 homezone.IsUnmapped 除了认 NotFound,还认这段文案。
 	// 改文案 = 让调用方把「没有映射」当成故障,登录整体失败。
 	ErrHomeZoneNotMapped = errors.New("no home zone mapping")
+
+	// ErrPlacementNotMapped 表示 player_route 里确实没有这名玩家的落点(没有行,或 storage_id 为 NULL),**不是**库故障。
+	// gRPC 层翻成 codes.NotFound,go/db 据此拒绝认领;库出故障时是 codes.Unavailable,go/db 回暂不可用,两者必须分得开。
+	ErrPlacementNotMapped = errors.New("no placement mapping")
 )
 
 // HomeZoneConflictError 表示 player_route 里已有另一个 home_zone。
@@ -145,6 +149,25 @@ func (r *Router) GetPlayerHomeZone(ctx context.Context, playerID uint64) (uint32
 	}
 	metrics.ObserveRouteRead(path, metrics.RouteReadResultOK)
 	return row.HomeZone, nil
+}
+
+// GetPlayerRoute 读一名玩家的路由行,给 go/db 选库用(docs/design/horizontal-scale-logical-db.md §7)。
+//
+// 没有行或没有落点 → 包 ErrPlacementNotMapped;库故障 → 包 ErrRouteStore;
+// 调用方已放弃(ctx 取消 / 超时)→ 带 ctx 错误,两者都不包,也不计 route_read_total。
+func (r *Router) GetPlayerRoute(ctx context.Context, playerID uint64) (store.RouteRow, error) {
+	const path = metrics.RouteReadPathPlacement
+	rows, err := r.readRoutes(ctx, path, []uint64{playerID})
+	if err != nil {
+		return store.RouteRow{}, err
+	}
+	row, ok := rows[playerID]
+	if !ok || !row.HasPlacement() {
+		metrics.ObserveRouteRead(path, metrics.RouteReadResultNotFound)
+		return store.RouteRow{}, fmt.Errorf("%w for player %d", ErrPlacementNotMapped, playerID)
+	}
+	metrics.ObserveRouteRead(path, metrics.RouteReadResultOK)
+	return row, nil
 }
 
 // BatchGetPlayerHomeZone 批量读 home_zone,返回原始值。缺席的 id(没有行或 home_zone 为 NULL)不出现在结果里,不是错误,

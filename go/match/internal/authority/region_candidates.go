@@ -294,17 +294,22 @@ func (s *Store) RepairCandidateRegionsThrough(ctx context.Context, afterMs, afte
 }
 
 func (s *Store) repairCandidateRegions(ctx context.Context, observed *pb.MatchAuthorityTicketRecord) error {
+	err := s.Fenced(ctx, func() error { return s.repairCandidateRegionsOnce(ctx, observed) })
+	// 目录已换主/冻结是旧票失效，不能阻塞后续有效票的有界维护。
+	// 原票仍由提交点拒绝；不把维护错误伪装成可成局候选。
+	if errors.Is(err, ErrOriginalPlayer) {
+		return nil
+	}
+	return err
+}
+
+func (s *Store) repairCandidateRegionsOnce(ctx context.Context, observed *pb.MatchAuthorityTicketRecord) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	if err = s.lockOriginalPlayers(ctx, tx, []*pb.MatchAuthorityTicketRecord{observed}); err != nil {
-		// 目录已换主/冻结是旧票失效，不能阻塞后续有效票的有界维护。
-		// 原票仍由提交点拒绝；不把维护错误伪装成可成局候选。
-		if errors.Is(err, ErrOriginalPlayer) {
-			return nil
-		}
 		return err
 	}
 	current, err := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", observed.PlayerId))

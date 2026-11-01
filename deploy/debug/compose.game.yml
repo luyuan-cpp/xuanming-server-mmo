@@ -45,8 +45,6 @@ x-sql-boot-deps: &sql-boot-deps
     condition: service_completed_successfully
   match-migrate:
     condition: service_completed_successfully
-  guild-migrate:
-    condition: service_completed_successfully
   player-inbox-migrate:
     condition: service_completed_successfully
 
@@ -160,7 +158,7 @@ services:
       kafka:
         condition: service_healthy
 
-  # 每次 up 先跑：补库，生成注册步骤共用的口令和原件（只进 sql-boot-private），判定全局库要不要跑 data_service -migrate。
+  # 每次 up 先跑：补库，生成注册步骤共用的口令和原件（只进 sql-boot-private），判定目录和流水库要不要跑 data_service -migrate。
   # 镜像基于 deploy/debug/Dockerfile.sql-boot，writer_authority 由 build_docker_go_debug.py 叠到 /app/service。
   sql-boot:
     <<: *sql-boot
@@ -206,7 +204,6 @@ services:
       sql-boot:
         condition: service_completed_successfully
 
-  # match 与 guild 启动时互相核对对方的表，两边的表都要先于 match 建好。
   match-migrate:
     <<: *app
     image: ${MATCH_IMAGE:-local/mmorpg-match:debug-20261020}
@@ -217,22 +214,6 @@ services:
       MMORPG_SQL_SCHEMA_PRINCIPAL: root@%
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/match.yaml:/app/etc/service.yaml:ro
-    depends_on:
-      mysql:
-        condition: service_healthy
-      sql-boot:
-        condition: service_completed_successfully
-
-  # 调试栈不常驻 guild，只借镜像建表。build_docker_go_debug.py 不管它，镜像用 go_svc_image.ps1 构建后经 GUILD_IMAGE 指定。
-  guild-migrate:
-    <<: *app
-    image: ${GUILD_IMAGE:-local/mmorpg-guild:debug-20261020}
-    command: [-f, /app/etc/service.yaml, -migrate]
-    environment:
-      MMORPG_GUILD_SQL_DSN: "root:${MYSQL_ROOT_PASSWORD:?请先准备配置}@tcp(mysql:3306)/mmorpg_guild?charset=utf8mb4&parseTime=true&loc=Local"
-      MMORPG_SQL_SCHEMA_PRINCIPAL: root@%
-    volumes:
-      - ${DEBUG_RUN_DIR:?请先准备配置}/config/guild.yaml:/app/etc/service.yaml:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -275,6 +256,8 @@ services:
       DB_ALLOWED_DATABASES: zone_1_db
       POD_IP: ${DB_IP:?请先准备配置}
       MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
+      # 认领前调 data_service 的 GetPlayerRoute 选库，缺了拒启。
+      MMORPG_ROLE_FENCE_SECRET_DB: ${MMORPG_ROLE_FENCE_SECRET_DB:?请先准备配置}
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
       - db-sql-writer:/run/sql-writer:ro
@@ -318,6 +301,16 @@ services:
       MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE:?请先准备配置}
       MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
       MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER:?请先准备配置}
+      # 角色护栏：COORDINATOR 调参与者，其余验各调用方读权威状态。
+      MMORPG_ROLE_FENCE_SECRET_COORDINATOR: ${MMORPG_ROLE_FENCE_SECRET_COORDINATOR:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_GUILD: ${MMORPG_ROLE_FENCE_SECRET_GUILD:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_TRADE: ${MMORPG_ROLE_FENCE_SECRET_TRADE:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_MAIL: ${MMORPG_ROLE_FENCE_SECRET_MAIL:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_MATCH: ${MMORPG_ROLE_FENCE_SECRET_MATCH:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_PLAYER_INBOX: ${MMORPG_ROLE_FENCE_SECRET_PLAYER_INBOX:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_FRIEND: ${MMORPG_ROLE_FENCE_SECRET_FRIEND:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_CHAT: ${MMORPG_ROLE_FENCE_SECRET_CHAT:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_DB: ${MMORPG_ROLE_FENCE_SECRET_DB:?请先准备配置}
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
       - data-service-sql-writer:/run/sql-writer:ro
@@ -474,6 +467,9 @@ services:
       RANK_PRODUCER_SECRET_MATCH: ${RANK_PRODUCER_SECRET_MATCH:?请先准备配置}
       MMORPG_PLAYER_INBOX_SECRET_MATCH: ${MMORPG_PLAYER_INBOX_SECRET_MATCH:?请先准备配置}
       MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
+      # 角色护栏参与者：MATCH 读权威状态，COORDINATOR 验协调者。缺了拒启。
+      MMORPG_ROLE_FENCE_SECRET_MATCH: ${MMORPG_ROLE_FENCE_SECRET_MATCH:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_COORDINATOR: ${MMORPG_ROLE_FENCE_SECRET_COORDINATOR:?请先准备配置}
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
       - match-sql-writer:/run/sql-writer:ro
@@ -518,6 +514,9 @@ services:
       MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
       # match 结算入箱验这一把，缺失时入箱回 Unavailable。
       MMORPG_PLAYER_INBOX_SECRET_MATCH: ${MMORPG_PLAYER_INBOX_SECRET_MATCH:?请先准备配置}
+      # 角色护栏参与者：PLAYER_INBOX 读权威状态，COORDINATOR 验协调者。缺了拒启。
+      MMORPG_ROLE_FENCE_SECRET_PLAYER_INBOX: ${MMORPG_ROLE_FENCE_SECRET_PLAYER_INBOX:?请先准备配置}
+      MMORPG_ROLE_FENCE_SECRET_COORDINATOR: ${MMORPG_ROLE_FENCE_SECRET_COORDINATOR:?请先准备配置}
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
       - player-inbox-sql-writer:/run/sql-writer:ro

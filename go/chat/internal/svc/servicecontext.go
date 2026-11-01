@@ -24,6 +24,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"google.golang.org/grpc"
 )
 
 type ServiceContext struct {
@@ -31,6 +32,8 @@ type ServiceContext struct {
 	Authority     authority.Service
 	AuthorityDB   *sql.DB
 	LoginSessions redv9.UniversalClient
+	// directoryConn 是读角色权威状态的 data_service 连接,聊天不写资产,校验走 RPC。
+	directoryConn *grpc.ClientConn
 
 	// 保留旧缓存配置接口；正式发送/拉取只依赖Authority，不向这些句柄回落授权或历史。
 	ChatRedis   *redis.Redis
@@ -70,12 +73,18 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	db, store, err := OpenAuthorityWithPermission(ctx, c, false, authoritysql.Writer(writer))
+	directoryConn, states, err := openDirectory(c)
 	if err != nil {
+		panic(err)
+	}
+	db, store, err := OpenAuthorityWithPermission(ctx, c, false, authoritysql.Writer(writer), states)
+	if err != nil {
+		directoryConn.Close()
 		panic("聊天权威SQL初始化失败：" + err.Error())
 	}
 	login, err := openLoginSessions(ctx, c)
 	if err != nil {
+		directoryConn.Close()
 		db.Close()
 		panic(err)
 	}
@@ -85,13 +94,14 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	})
 	if err != nil {
 		login.Close()
+		directoryConn.Close()
 		db.Close()
 		panic("failed to create etcd client: " + err.Error())
 	}
 
 	chatRds, sharedRds, target := NewRedisHandles(c)
 	return &ServiceContext{
-		Authority: store, AuthorityDB: db, LoginSessions: login,
+		Authority: store, AuthorityDB: db, LoginSessions: login, directoryConn: directoryConn,
 		WriterConfig: writer, RootAdmission: root,
 		Config:          c,
 		ChatRedis:       chatRds,
@@ -157,6 +167,9 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	sc.stopOnce.Do(func() {
 		if sc.LoginSessions != nil {
 			sc.stopErr = errors.Join(sc.stopErr, sc.LoginSessions.Close())
+		}
+		if sc.directoryConn != nil {
+			sc.stopErr = errors.Join(sc.stopErr, sc.directoryConn.Close())
 		}
 		if sc.AuthorityDB != nil {
 			sc.stopErr = errors.Join(sc.stopErr, sc.AuthorityDB.Close())

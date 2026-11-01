@@ -7,8 +7,8 @@
 #       data_service_route_register_total{outcome}     每次 RegisterPlayerZone 恰好计一次
 #       data_service_route_read_total{path,result}     player_route 的 SQL 读,home 每次读计一次,batch 每块计一次
 #   - 定时重读合服映射(placement.MergedZoneCache),四个服务同一形状,result = ok | error,启动时以 0 预置:
-#       data_service_merged_zone_refresh_total         读全局库 zone_merged_into
-#       match_merged_zone_refresh_total                读全局库 zone_merged_into
+#       data_service_merged_zone_refresh_total         读目录第 0 片的 zone_merged_into
+#       match_merged_zone_refresh_total                读 data_service.GetMergedZones
 #       guild_merged_zone_refresh_total                读 data_service.GetMergedZones
 #       trade_merged_zone_refresh_total                读 data_service.GetMergedZones
 #
@@ -91,7 +91,7 @@ spec:
               落在那里的新公会、新商品没有人再收。查全局库连接和 zone_merged_into 的读权限;正在合服时先别往下走,
               恢复之后等两个刷新周期(RouteStore.MergedZoneRefreshSec,默认 5 秒)。
 
-        # match 直读全局库。合服之后旧映射会把两个区当成不同的区,回一次可重试的拒绝。
+        # match 经 data_service 重读。合服之后旧映射会把两个区当成不同的区,回一次可重试的拒绝。
         - alert: MatchMergedZoneRefreshFailing
           expr: |
             sum by (namespace) (increase(match_merged_zone_refresh_total{result="error"}[5m])) > 0
@@ -102,7 +102,7 @@ spec:
             summary: "{{ $labels.namespace }} 的 match 重读合服映射持续失败"
             description: >-
               过去 5 分钟约 {{ $value | printf "%.0f" }} 次失败,已持续 5 分钟。这些副本还在用旧映射,合服之后同区判定可能回一次可重试的拒绝,
-              没有错误数据。查全局库连接和 zone_merged_into 的读权限(match 的运行账号要在写者计划里有这张表的 SELECT);
+              没有错误数据。查 data_service 是否就绪,以及 match 到它的连接(DataServiceRpc);
               恢复之后等一个刷新周期。
 
         # guild 经 data_service 读映射。合服之后旧映射会把两个区当成不同的区,回一次可重试的拒绝。

@@ -21,8 +21,7 @@ SharedRedisAddr: 127.0.0.1:6379
 # PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。读写与取连接 300ms、拨号 1s 沿用这条路径原来的口径。
 PlayerRedis:
   PoolSizePerNode: 8
-# 与data_service同TiDB集群的全局目录；不是玩家分片。启动必须声明真实全局登录态命名空间。
-AccountRoleSchema: testdb
+# 启动必须声明真实全局登录态命名空间。
 GlobalLoginSessions: false
 LoginRedis:
   Addrs: []
@@ -33,6 +32,11 @@ AssetSecretEnv: MMORPG_ASSET_OP_SECRET_MAIL
 DataServiceRpc:
   Endpoints: [127.0.0.1:9000]
   Timeout: 2000
+# 读玩家所在的帮,给帮会文本邮件判可见。guild 没起时邮件照常起服,这一次按没有帮算(mail_guild_lookup_failures_total)。
+GuildRpc:
+  Endpoints: [127.0.0.1:50300]
+  Timeout: 500
+  NonBlock: true
 Producers:
   admin: MAIL_PRODUCER_SECRET_ADMIN
   rank: MAIL_PRODUCER_SECRET_RANK

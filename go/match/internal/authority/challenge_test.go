@@ -12,6 +12,7 @@ import (
 	base "proto/common/base"
 	dspb "proto/data_service"
 	pb "proto/match"
+	"shared/rolefence/fencetest"
 	"shared/roleidentity"
 )
 
@@ -26,13 +27,11 @@ func challengeActor(t *testing.T, id uint64, account string, revision uint64) co
 func challengeStore(t *testing.T) (*Store, context.Context, context.Context) {
 	t.Helper()
 	s := testStore(t)
-	_, err := s.DB.Exec(`CREATE TABLE account_role(player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0)`)
-	require.NoError(t, err)
-	_, err = s.DB.Exec("INSERT INTO account_role(player_id,account,owner_revision) VALUES(1,'challenger',3),(2,'target',7),(3,'other',1)")
-	require.NoError(t, err)
-	var schema string
-	require.NoError(t, s.DB.QueryRow("SELECT DATABASE()").Scan(&schema))
-	require.NoError(t, s.ConfigureRoleAuthority(context.Background(), schema))
+	ctx := context.Background()
+	fencetest.Seed(t, ctx, s.DB, 1, "challenger", 3)
+	fencetest.Seed(t, ctx, s.DB, 2, "target", 7)
+	fencetest.Seed(t, ctx, s.DB, 3, "other", 1)
+	require.NoError(t, s.ConfigureRoleFence(ctx, fencetest.ReplicaReader{DB: s.DB}, fencetest.Admissions{Valid: true}))
 	return s, challengeActor(t, 1, "challenger", 3), challengeActor(t, 2, "target", 7)
 }
 
@@ -75,8 +74,7 @@ func TestChallengeTiDBNewInvitationFreezesBothOwnersAndReplaysOriginal(t *testin
 	require.NoError(t, err)
 	require.Equal(t, "challenger", stored.ChallengerAccount)
 	require.EqualValues(t, 7, stored.TargetRevision)
-	_, err = s.DB.Exec("UPDATE account_role SET account='new-target',owner_revision=8 WHERE player_id=2")
-	require.NoError(t, err)
+	fencetest.Update(t, context.Background(), s.DB, 2, "new-target", 8, 0)
 	_, err = s.CreateChallenge(challenger, 104, 1, 2, 7, 60000)
 	require.ErrorIs(t, err, ErrOriginalPlayer, "旧邀请不能随当前目录自动换target原件")
 	_, err = s.ChallengeForActor(challengeActor(t, 2, "new-target", 8), 100, 2)
@@ -121,10 +119,8 @@ func TestChallengeTiDBAcceptanceRecoversSameFormationAndRejectsAlteredConfig(t *
 	require.NoError(t, err)
 	require.Equal(t, f.BattleId, found.BattleId)
 	// 新服务对象重读SQL，不持有旧实例内存；重复接受只回原formation。
-	var schema string
-	require.NoError(t, s.DB.QueryRow("SELECT DATABASE()").Scan(&schema))
 	restarted := &Store{DB: s.DB, Config: s.Config}
-	require.NoError(t, restarted.ConfigureRoleAuthority(context.Background(), schema))
+	require.NoError(t, restarted.ConfigureRoleFence(context.Background(), fencetest.ReplicaReader{DB: s.DB}, fencetest.Admissions{Valid: true}))
 	stored, err := restarted.ChallengeForActor(target, 100, 2)
 	require.NoError(t, err)
 	replayed, changed, err := restarted.DecideChallenge(target, stored, true, nil, nil)
@@ -136,8 +132,7 @@ func TestChallengeTiDBAcceptanceRecoversSameFormationAndRejectsAlteredConfig(t *
 	require.NoError(t, s.DB.QueryRow("SELECT COUNT(*) FROM match_direct_intent WHERE kind=3").Scan(&directs))
 	require.Equal(t, 1, formations)
 	require.Equal(t, 1, directs)
-	_, err = s.DB.Exec("UPDATE account_role SET account='other-owner',owner_revision=8 WHERE player_id=2")
-	require.NoError(t, err)
+	fencetest.Update(t, context.Background(), s.DB, 2, "other-owner", 8, 0)
 	_, _, err = restarted.DecideChallenge(target, stored, true, nil, nil)
 	require.ErrorIs(t, err, ErrOriginalPlayer, "终态幂等也不能绕原owner围栏")
 }

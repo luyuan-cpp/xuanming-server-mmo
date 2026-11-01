@@ -18,10 +18,12 @@ import (
 	base "proto/common/base"
 	dspb "proto/data_service"
 	pb "proto/match"
+	"shared/rolefence/fencetest"
 	"shared/roleidentity"
 )
 
-// 复用独占TiDB建表/清理，但显式用真实account_role首锁覆盖旧状态机夹具的fake guard。
+// 复用独占TiDB建表/清理，但显式用真实护栏副本首锁覆盖旧状态机夹具的fake guard。
+// 用例直接改副本行摆状态,自愈读回副本现状,不改变任何东西。真正从目录自愈的路径见 occupancy_native_test.go。
 func nativeRoleStore(t *testing.T) *Store {
 	t.Helper()
 	if os.Getenv("MATCH_IT_REQUIRE_TIDB") == "1" && os.Getenv("MATCH_IT_TIDB") == "" {
@@ -30,11 +32,7 @@ func nativeRoleStore(t *testing.T) *Store {
 	s := testStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err := s.DB.ExecContext(ctx, "CREATE TABLE account_role(player_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)")
-	require.NoError(t, err)
-	var schema string
-	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&schema))
-	require.NoError(t, s.ConfigureRoleAuthority(ctx, schema))
+	require.NoError(t, s.ConfigureRoleFence(ctx, fencetest.ReplicaReader{DB: s.DB}, fencetest.Admissions{Valid: true}))
 	return s
 }
 
@@ -48,8 +46,7 @@ func nativeRoleActor(t *testing.T, ctx context.Context, player uint64, account s
 func nativeRoleJoin(t *testing.T, s *Store, ctx context.Context, player uint64) (context.Context, *pb.MatchAuthorityTicketRecord, *pb.MatchNetworkProfile) {
 	t.Helper()
 	account := fmt.Sprintf("original-%d", player)
-	_, err := s.DB.ExecContext(ctx, "INSERT INTO account_role VALUES(?,?,7,0)", player, []byte(account))
-	require.NoError(t, err)
+	fencetest.Seed(t, ctx, s.DB, player, account, 7)
 	actor := nativeRoleActor(t, ctx, player, account, 7)
 	n, err := s.Now(ctx)
 	require.NoError(t, err)
@@ -114,15 +111,12 @@ func TestAuthorityTiDBOriginalRoleRejectsTransferABAAndFreezeBeforeAnyMatchWrite
 			actor, ticket, profile := nativeRoleJoin(t, s, ctx, 11)
 			before := nativeMatchSnapshot(t, s, ctx)
 			if mode == "transfer" || mode == "same-account-ABA" {
-				_, err := s.DB.ExecContext(ctx, "UPDATE account_role SET account='new-account',owner_revision=8 WHERE player_id=11")
-				require.NoError(t, err)
+				fencetest.Update(t, ctx, s.DB, 11, "new-account", 8, 0)
 				if mode == "same-account-ABA" {
-					_, err = s.DB.ExecContext(ctx, "UPDATE account_role SET account='original-11',owner_revision=9 WHERE player_id=11")
-					require.NoError(t, err)
+					fencetest.Update(t, ctx, s.DB, 11, "original-11", 9, 0)
 				}
 			} else {
-				_, err := s.DB.ExecContext(ctx, "UPDATE account_role SET trade_listing_id=901 WHERE player_id=11")
-				require.NoError(t, err)
+				fencetest.Update(t, ctx, s.DB, 11, "original-11", 7, 901)
 			}
 			require.ErrorIs(t, s.SavePlan(actor, 11, profile, ticket.ExpiresMs), ErrOriginalPlayer)
 			require.Equal(t, before, nativeMatchSnapshot(t, s, ctx))
@@ -151,8 +145,7 @@ func TestAuthorityTiDBNewOwnerCannotReplayOldJoinUUIDOrOldProfile(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	_, ticket, profile := nativeRoleJoin(t, s, ctx, 11)
-	_, err := s.DB.ExecContext(ctx, "UPDATE account_role SET account='new-owner',owner_revision=8 WHERE player_id=11")
-	require.NoError(t, err)
+	fencetest.Update(t, ctx, s.DB, 11, "new-owner", 8, 0)
 	actor := nativeRoleActor(t, ctx, 11, "new-owner", 8)
 	before := nativeMatchSnapshot(t, s, ctx)
 	replayed, created, err := s.Join(actor, ticket, profile.PlanId, profile.SessionBinding)
@@ -177,8 +170,7 @@ func TestAuthorityTiDBClaimRejectsOwnerAndProfileChangesAfterCandidateRead(t *te
 			_, a, _ := nativeRoleJoin(t, s, ctx, 11)
 			actor, b, profile := nativeRoleJoin(t, s, ctx, 22)
 			if mode == "owner" {
-				_, err := s.DB.ExecContext(ctx, "UPDATE account_role SET owner_revision=8 WHERE player_id=22")
-				require.NoError(t, err)
+				fencetest.Update(t, ctx, s.DB, 22, "original-22", 8, 0)
 			} else {
 				changed := proto.Clone(profile.Receipts[0]).(*pb.NetworkProbeReceipt)
 				changed.RttMs++

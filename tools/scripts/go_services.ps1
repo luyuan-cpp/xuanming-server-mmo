@@ -13,7 +13,7 @@
     status  – show which services are currently running
     list    – print the available service catalogue
     build   – compile native binaries for selected services -> bin\go_services\
-    migrate – 本机 MySQL 档(-LocalMySQL)为 match / guild 建表后退出;两边启动时互相核对对方的表,须先于常驻进程
+    migrate – 本机 MySQL 档(-LocalMySQL)为 match / guild 建表后退出,须先于常驻进程
     plan-instances – 不起进程,把各实例的派生配置与实际端口写到 -InstancePlanOutput(本机写者启动目录生成器用)
 
 .PARAMETER Services
@@ -142,6 +142,8 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 . (Join-Path $ScriptDir "lib\mail_admin_dev_token.ps1")
 # 邮件、排行榜其余生产者签名密钥的本机开发值,按服务只给各自那几把。
 . (Join-Path $ScriptDir "lib\producer_dev_secret.ps1")
+# 角色护栏(docs/design/horizontal-scale-logical-db.md §3.3)的本机开发密钥,按服务只给各自那几把;用法见 Start-ServiceInstance。
+. (Join-Path $ScriptDir "lib\role_fence_dev_secret.ps1")
 
 # ── Service catalogue ────────────────────────────────────────────────
 # Order matters: infrastructure-layer services first, then domain services.
@@ -478,19 +480,18 @@ function ConvertTo-LocalMySQLDbConfig([string]$Content) {
 
 # 全局角色库与登录 Redis 的本机真相:chat / match 都取 data_service 与 login 的原件,缺失时不猜测。
 function Get-LocalAccountDirectorySources {
-    $schema = Get-YamlScalar -Path (Join-Path $GoRoot 'data_service/etc/data_service.yaml') -KeyPath 'SnapshotMySQL.DBName'
     $redisHost = Get-YamlScalar -Path (Join-Path $GoRoot 'login/etc/login.yaml') -KeyPath 'Node.RedisClient.Host'
     $redisDb = Get-YamlScalar -Path (Join-Path $GoRoot 'login/etc/login.yaml') -KeyPath 'Node.RedisClient.DB'
-    if (-not $schema.Found -or $schema.Value -notmatch '^[a-z][a-z0-9_]{0,63}$' -or -not $redisHost.Found -or $redisHost.Value -notmatch '^(?:[A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9A-Fa-f:]+\]):[0-9]{1,5}$' -or -not $redisDb.Found -or $redisDb.Value -notmatch '^\d+$') {
-        throw '本机必须能读取同data_service全局角色库与同login Redis地址/DB，缺失时不猜测。'
+    if (-not $redisHost.Found -or $redisHost.Value -notmatch '^(?:[A-Za-z0-9][A-Za-z0-9.-]*|\[[0-9A-Fa-f:]+\]):[0-9]{1,5}$' -or -not $redisDb.Found -or $redisDb.Value -notmatch '^\d+$') {
+        throw '本机必须能读取同login Redis地址/DB，缺失时不猜测。'
     }
-    return @{ Schema = $schema.Value; RedisHost = $redisHost.Value; RedisDb = $redisDb.Value }
+    return @{ RedisHost = $redisHost.Value; RedisDb = $redisDb.Value }
 }
 
 function Get-LocalChatAuthoritySettings {
     param([string]$ConfigPath, [switch]$RequireDsn)
     $values = @{}
-    foreach ($key in @('DSNEnv', 'Backend', 'GlobalLoginSessions', 'MaxOpenConns', 'AccountRoleSchema', 'LoginRedis.Addrs', 'LoginRedis.DB', 'LoginRedis.PasswordEnv', 'LoginRedis.PoolSizePerNode')) {
+    foreach ($key in @('DSNEnv', 'Backend', 'GlobalLoginSessions', 'MaxOpenConns', 'LoginRedis.Addrs', 'LoginRedis.DB', 'LoginRedis.PasswordEnv', 'LoginRedis.PoolSizePerNode')) {
         $value = Get-YamlScalar -Path $ConfigPath -KeyPath $key
         if (-not $value.Found) { throw "Chat启动缺少显式权威配置字段 $key" }
         $values[$key] = $value.Value
@@ -507,14 +508,14 @@ function Get-LocalChatAuthoritySettings {
         if ([string]::IsNullOrWhiteSpace($dsn) -or $dsn.Contains("`r") -or $dsn.Contains("`n")) {
             throw 'Chat缺少合法CHAT_AUTHORITY_DSN环境值；请先以迁移账号显式-migrate，再提供无DDL权限的运行账号DSN。值不会写入配置或日志。'
         }
-        if ($values.AccountRoleSchema -cne $sources.Schema -or $values['LoginRedis.Addrs'] -cne "[$($sources.RedisHost)]" -or $values['LoginRedis.DB'] -cne $sources.RedisDb) {
-            throw '派生Chat配置与当前全局角色库/login Redis原件不一致，拒绝启动。'
+        if ($values['LoginRedis.Addrs'] -cne "[$($sources.RedisHost)]" -or $values['LoginRedis.DB'] -cne $sources.RedisDb) {
+            throw '派生Chat配置与当前login Redis原件不一致，拒绝启动。'
         }
     }
     return $sources
 }
 
-# match 的本机 MySQL 档:SQL 入口取 go/db 的原件,全局角色库和登录 Redis 同 chat。源配置写的是 TiDB 入口,不改。
+# match 的本机 MySQL 档:SQL 入口取 go/db 的原件,登录 Redis 同 chat。源配置写的是 TiDB 入口,不改。
 function Get-LocalMatchAuthoritySettings {
     $sources = Get-LocalAccountDirectorySources
     $sqlHost = Get-YamlScalar -Path (Join-Path $GoRoot 'db/etc/db.yaml') -KeyPath 'ServerConfig.Database.Hosts'
@@ -522,7 +523,7 @@ function Get-LocalMatchAuthoritySettings {
     $endpoint = [string][Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST', 'Process')
     if ([string]::IsNullOrWhiteSpace($endpoint)) { $endpoint = $sqlHost.Value }
     Assert-LoopbackSqlEndpoint $endpoint
-    return @{ SqlHost = $endpoint; Schema = $sources.Schema; RedisHost = $sources.RedisHost; RedisDb = $sources.RedisDb }
+    return @{ SqlHost = $endpoint; RedisHost = $sources.RedisHost; RedisDb = $sources.RedisDb }
 }
 
 # 只替换顶层配置段内两格缩进的标量,其余字节原样保留;段或字段不唯一就拒绝,不猜。
@@ -541,7 +542,7 @@ function Set-TopLevelBlockScalars {
 
 function ConvertTo-LocalMySQLMatchConfig {
     param([string]$Content, [hashtable]$Settings)
-    $Content = Set-TopLevelBlockScalars -Content $Content -Block 'GlobalMatch' -Values ([ordered]@{ Backend = 'mysql'; Host = $Settings.SqlHost; AccountRoleSchema = $Settings.Schema })
+    $Content = Set-TopLevelBlockScalars -Content $Content -Block 'GlobalMatch' -Values ([ordered]@{ Backend = 'mysql'; Host = $Settings.SqlHost })
     return Set-TopLevelBlockScalars -Content $Content -Block 'LoginRedis' -Values ([ordered]@{ Addrs = "[$($Settings.RedisHost)]"; DB = $Settings.RedisDb })
 }
 
@@ -585,8 +586,8 @@ function Invoke-ServiceMigrationProcess {
     } finally { Pop-Location }
 }
 
-# 本机 MySQL 档的显式建表入口(start_game.ps1 在起常驻服务前调用)。只建表就退出,不需要写者启动授权,不连 etcd / Redis / Kafka。
-# 只管 match 与 guild:两边启动时互相核对对方的表,任何一边的表缺失,另一边都起不来,必须先于两者的常驻进程。
+# 本机 MySQL 档的显式建表入口。只建表就退出,不需要写者启动授权,不连 etcd / Redis / Kafka。
+# 只管 match 与 guild,其余服务的表由写者启动目录生成器建(lib/sql_boot_catalog_local.ps1)。
 # DDL 账号只注入这个前台子进程,结束就还原;常驻进程照旧拿不到(见 Start-ServiceInstance)。
 function Invoke-LocalSchemaMigrate {
     if (-not $LocalMySQL) { throw '-Command migrate 只支持 -LocalMySQL；TiDB 用独立迁移账号显式运行各服务的 -migrate。' }
@@ -624,6 +625,17 @@ function Invoke-LocalSchemaMigrate {
         foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key], 'Process') }
         if (Test-Path -LiteralPath $guildMigrationConfig) { Remove-Item -LiteralPath $guildMigrationConfig -Force }
     }
+}
+
+# data_service 的 RoleFence.Participants 按 zone 位移端口,其余字节原样保留。没有这一段就没什么可移;段重复就拒绝,不猜。
+function ConvertTo-ZoneShiftedRoleFenceConfig {
+    param([string]$Content, [int]$ZoneShift)
+    $blocks = [regex]::Matches($Content, '(?m)^RoleFence:[ \t]*\r?\n(?:[ \t]+[^\r\n]*\r?\n|[ \t]*\r?\n)*')
+    if ($blocks.Count -eq 0) { return $Content }
+    if ($blocks.Count -gt 1) { throw 'data_service 配置的 RoleFence 段重复，拒绝派生。' }
+    $endpoint = [regex]::new('(?m)^(?<lead>[ \t]+Endpoints:[ \t]*\[[^:\]\r\n]+:)(?<port>[0-9]+)(?<tail>\])')
+    $text = $endpoint.Replace($blocks[0].Value, { param($m) "$($m.Groups['lead'].Value)$([int]$m.Groups['port'].Value + $ZoneShift)$($m.Groups['tail'].Value)" })
+    return $Content.Substring(0, $blocks[0].Index) + $text + $Content.Substring($blocks[0].Index + $blocks[0].Length)
 }
 
 function Resolve-InstanceConfig {
@@ -684,10 +696,8 @@ function Resolve-InstanceConfig {
     }
     if ($Name -eq 'chat') {
         $chatAuthority = Get-LocalChatAuthoritySettings -ConfigPath $baseYaml
-        $schemaPattern = [regex]::new('(?m)^AccountRoleSchema:\s*[^\r\n]+$')
         $loginPattern = [regex]::new('(?m)^LoginRedis:\r?\n(?:[ \t]+[^\r\n]*(?:\r?\n|$))+')
-        if ($schemaPattern.Matches($content).Count -ne 1 -or $loginPattern.Matches($content).Count -ne 1) { throw 'Chat权威配置块缺失或重复，拒绝派生。' }
-        $content = $schemaPattern.Replace($content, "AccountRoleSchema: $($chatAuthority.Schema)", 1)
+        if ($loginPattern.Matches($content).Count -ne 1) { throw 'Chat权威配置块缺失或重复，拒绝派生。' }
         $loginBlock = "LoginRedis:`n  Addrs: [$($chatAuthority.RedisHost)]`n  PasswordEnv: LOGIN_REDIS_PASSWORD`n  DB: $($chatAuthority.RedisDb)`n  PoolSizePerNode: $((Get-YamlScalar -Path $baseYaml -KeyPath 'LoginRedis.PoolSizePerNode').Value)`n"
         $content = $loginPattern.Replace($content, $loginBlock, 1)
     }
@@ -722,6 +732,8 @@ function Resolve-InstanceConfig {
     # Rewrite first ZoneId entry (handles both top-level 'ZoneId: N' and the
     # nested 'Node:\n  ZoneId: N' shape used by login/guild/player_locator).
     if ($Zone -gt 0) {
+        # 参与者是直连地址,没有 .rpc 键可以加后缀:端口和 ListenOn 一样按 zone 位移,协调者才连得到本 zone 的参与者。
+        if ($Name -eq 'data_service' -and $zoneShift -ne 0) { $content = ConvertTo-ZoneShiftedRoleFenceConfig -Content $content -ZoneShift $zoneShift }
         $zoneRegex = [regex]::new('(?m)^(?<lead>\s*)ZoneId:\s*\d+\s*$')
         if ($zoneRegex.IsMatch($content)) {
             $content = $zoneRegex.Replace(
@@ -1026,7 +1038,7 @@ function Start-ServiceInstance {
     # **只对 guild 注入,且只给 guild 这一把**:lib 会把两把都补进环境,trade 那把在启动 guild 前摘掉,
     # 按最小权限给(AGENTS §11.3,同 cpp_nodes.ps1 只给 scene 注入)。trade 的注入不在本批范围。
     # 仅限本机 dev:预发 / 生产的密钥由部署侧注入(k8s_deploy.ps1 Resolve-InjectedSecret -MinLength 32)。
-    $injectAssetOpSecret = ($Name -in @('guild', 'mail'))
+    $injectAssetOpSecret = ($Name -in @('guild', 'mail', 'data_service'))
     $prevAssetOpSecrets = $null
     $previousAccountDirectorySecrets = $null
     # MailAdmin admin 生产者签名密钥(docs/design/mail-system.md §2.3):**只对 mail 注入、只给这一把**;值取自 run/secrets/mail-admin-producer-dev.env
@@ -1044,6 +1056,9 @@ function Start-ServiceInstance {
     # mail、rank 的生产者签名密钥,同样只在分支里调用、finally 里还原;部署链从不调用这里。
     $producerDevSecretService = if ($Name -in @('mail','rank')) { $Name } else { '' }
     $prevProducerDevSecrets = $null
+    # 角色护栏的密钥:data_service 拿全部,参与者拿自己和协调者那把,chat、go/db 只拿自己那把。同样只在分支里调用、finally 里还原;部署链从不调用这里。
+    $roleFenceDevSecretService = if ($Name -in @('data_service','guild','trade','mail','match','player_inbox','friend','chat','db')) { $Name.Replace('_','-') } else { '' }
+    $prevRoleFenceDevSecrets = $null
     $savedWriterEnvironment = $null
     $savedChatDsn = [Environment]::GetEnvironmentVariable('CHAT_AUTHORITY_DSN', 'Process')
 	$savedMatchMigrationUser = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_USER', 'Process')
@@ -1073,7 +1088,9 @@ function Start-ServiceInstance {
             $prevAssetOpSecrets = Backup-AssetOpDevSecrets
             Initialize-AssetOpDevSecrets -RepoRoot $RepoRoot | Out-Null
             Remove-Item Env:MMORPG_ASSET_OP_SECRET_TRADE -ErrorAction SilentlyContinue
-            if ($Name -eq 'mail') { Remove-Item Env:MMORPG_ASSET_OP_SECRET_GUILD -ErrorAction SilentlyContinue }
+            if ($Name -ne 'guild') { Remove-Item Env:MMORPG_ASSET_OP_SECRET_GUILD -ErrorAction SilentlyContinue }
+            if ($Name -ne 'mail') { Remove-Item Env:MMORPG_ASSET_OP_SECRET_MAIL -ErrorAction SilentlyContinue }
+            if ($Name -ne 'data_service') { Remove-Item Env:MMORPG_ASSET_OP_SECRET_DATA_SERVICE -ErrorAction SilentlyContinue }
         }
         if ($injectMailAdminToken) {
             $prevMailAdminToken = Backup-MailAdminDevToken
@@ -1086,6 +1103,10 @@ function Start-ServiceInstance {
         if ($producerDevSecretService) {
             $prevProducerDevSecrets = Backup-ProducerDevSecrets -Service $producerDevSecretService
             Initialize-ProducerDevSecrets -RepoRoot $RepoRoot -Service $producerDevSecretService
+        }
+        if ($roleFenceDevSecretService) {
+            $prevRoleFenceDevSecrets = Backup-RoleFenceDevSecrets -Service $roleFenceDevSecretService
+            Initialize-RoleFenceDevSecrets -RepoRoot $RepoRoot -Service $roleFenceDevSecretService
         }
 
         # 下面两处 Start-Process 必须保持每个实例一个独立(隐藏)控制台:-WindowStyle Hidden,且不得加 -NoNewWindow。
@@ -1132,6 +1153,7 @@ function Start-ServiceInstance {
         if ($injectMailAdminToken) { Restore-MailAdminDevToken $prevMailAdminToken }
         if ($matchDevSecretService) { Restore-MatchDevSecrets $prevMatchDevSecrets }
         if ($producerDevSecretService) { Restore-ProducerDevSecrets $prevProducerDevSecrets }
+        if ($roleFenceDevSecretService) { Restore-RoleFenceDevSecrets $prevRoleFenceDevSecrets }
     }
 
     $entry = [pscustomobject]@{

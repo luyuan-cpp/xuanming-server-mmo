@@ -51,7 +51,8 @@ function New-MockPod {
 function Reset-MigrateFixture {
     foreach ($name in @('Apply-OneGoSvc', 'Apply-GoSvcMigrateJob', 'Get-GoSvcMigrateJobState',
         'Wait-GoSvcMigrateJobSettled', 'Assert-GoSvcMigrateJobNotInFlight', 'Wait-ForGoSvcMigrateJob',
-        'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcEnvEntries', 'Add-GoSvcCommandTopicEnv', 'Add-GoSvcTopicReplicationEnv')) {
+        'Write-GoSvcMigrateJobDiagnostics', 'Add-GoSvcEnvEntries', 'Add-GoSvcCommandTopicEnv', 'Add-GoSvcTopicReplicationEnv',
+        'Get-SqlRuntimeManifestRange', 'Add-SchemaPermissionManifest', 'Get-DbAllowedDatabaseNames', 'Apply-GoSvcManifests', 'Get-ZoneScopedGoSvcNames')) {
         Restore-ProductionFunction $name
     }
     # Add-GoSvcEnvEntries:Add-GoSvcCommandTopicEnv / Add-GoSvcSecretEnv 共用的 env 注入助手,由 k8s_deploy 属主从两者中抽出。
@@ -126,8 +127,22 @@ function Reset-MigrateFixture {
         ConfigMap = 'go-svc-match-config'; Manifest = 'match.yaml'; MigrateJob = 'match-migrate.yaml'
         ConfigFile = 'match_service.yaml'; ImageName = 'mmorpg-match'; Port = 50500; Global = $true
     }
+    # go/db 的迁移入口是单独的 cmd/migrate,Job 用单独的镜像(目录字段 MigrateImageName)。
+    $script:GoSvcCatalogue['db'] = @{
+        ConfigMap = 'go-svc-db-config'; Manifest = 'db.yaml'; MigrateJob = 'db-migrate.yaml'; MigrateImageName = 'mmorpg-db-migrate'
+        ConfigFile = 'db.yaml'; ImageName = 'mmorpg-db'; Port = 6000
+    }
+    $script:SqlSchemaOnly = $false
     # 本套只核迁移门禁，常驻三把密钥的注入由部署合同测试覆盖。
     Set-Item Function:script:Add-MatchAuthoritySecretEnv { param($ManifestContent) return $ManifestContent }
+    # 写者启动授权和逻辑库同样不归本套：注入、名册核对在 k8s_deploy_contract、logical_db_deploy_contract。
+    Set-Item Function:script:Add-SqlWriterBootManifest { param($ManifestContent, $Namespace, $SvcName, $RuntimeKind) $script:Events.Add("render:boot:$SvcName"); return $ManifestContent }
+    Set-Item Function:script:Add-SqlWriterPlacementEnv { param($ManifestContent) return $ManifestContent }
+    Set-Item Function:script:Assert-DataServiceRosterSchemas { param($Namespace) $script:Events.Add('check:roster') }
+    Set-Item Function:script:Add-IdIssuerExpectedRegionEnv { param($ManifestContent) return $ManifestContent }
+    Set-Item Function:script:Add-PlayerInboxMatchSecretEnv { param($ManifestContent) return $ManifestContent }
+    # schema Job 的注入用真函数,目录条目只有它要的两个 Secret:迁移 Job 在名册定下来之前就要跑。
+    Set-Item Function:script:Get-SqlWriterCatalogEntry { param($Namespace, $SvcName) return [ordered]@{ schemaConfigSecret = 'fixture-schema-config'; schemaPermissionSecret = 'fixture-schema-permission' } }
     $script:GrpcAllowLists = @{ guild = @{ PolicyName = 'guild-grpc-allowlist' } }
     $script:MailAdminTokenSecretName = 'mail-admin-auth'
     $script:MailAdminTokenSecretKey = 'token'
@@ -272,6 +287,119 @@ Test-Case '-Stage Workload 只起进程:不重写 ConfigMap、不重跑迁移 Jo
         Assert-True -Condition ($events -notcontains $absent) -Because "Workload 不该有 $absent:ConfigMap 与 Job 第一步已经做过"
     }
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade') -ge 0 -and [Array]::IndexOf($events, 'apply:Secret:asset-op-secret-trade') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'secretKeyRef 不是 optional,Secret 必须先于 Deployment'
+}
+
+# 全新集群的 data-service、db 走同一个 Prepare:名册要按 Job 种下的 generation 写,所以这一步不读名册。
+foreach ($svc in @('data-service', 'db')) {
+    Test-Case "$svc -Stage Prepare 只跑 ConfigMap 与迁移 Job,不渲染写者名册" {
+        Reset-MigrateFixture
+        $script:JobAbsentBeforeApply = $true
+        Apply-OneGoSvc -SvcName $svc -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0 -Stage Prepare
+        $events = @($script:Events)
+        Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -ge 0 -and [Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Prepare 先 ConfigMap 再 Job'
+        Assert-True -Condition ($events -notcontains 'apply:Deployment') -Because '名册没定之前不起进程'
+        Assert-True -Condition ($events -notcontains "render:boot:$svc") -Because '这一步还没有 generation,不能要求名册'
+        Assert-True -Condition ($events -notcontains 'check:roster') -Because '同上'
+    }
+}
+
+Test-Case 'data-service 重复部署:Job 再跑一遍(-migrate 对齐全的库返回 0),名册这时才核,然后才 apply Deployment' {
+    Reset-MigrateFixture
+    $script:JobAbsentBeforeApply = $true
+    Apply-OneGoSvc -SvcName 'data-service' -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0
+    $events = @($script:Events)
+    Assert-True -Condition ([Array]::IndexOf($events, 'check:roster') -ge 0 -and [Array]::IndexOf($events, 'check:roster') -lt [Array]::IndexOf($events, 'apply:ConfigMap')) -Because '名册不对在写操作之前拦下'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'Job 先于 Deployment'
+}
+
+Test-Case 'db 的迁移 Job:单独的镜像,库清单来自 MMORPG_DB_ALLOWED_DATABASES,排在 db Deployment 之前' {
+    Reset-MigrateFixture
+    $script:JobAbsentBeforeApply = $true
+    $saved = [Environment]::GetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES')
+    try {
+        [Environment]::SetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES', 'zone_1_db, zone_2_db,player_store_1000000_db')
+        Apply-OneGoSvc -SvcName db -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0
+    } finally { [Environment]::SetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES', $saved) }
+    $events = @($script:Events)
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'db 的闸门表由这个 Job 建,registrar 要等它'
+    $job = $script:MigrationContent
+    Assert-Match -Text $job -Pattern 'image: registry\.invalid/audit/mmorpg-db-migrate:test' -Because 'cmd/migrate 不在服务二进制里'
+    Assert-Match -Text $script:DeploymentContent -Pattern 'image: registry\.invalid/audit/mmorpg-db:test' -Because 'Deployment 仍是服务镜像'
+    Assert-Match -Text $job -Pattern 'name: DB_ALLOWED_DATABASES\s+value: "zone_1_db,zone_2_db,player_store_1000000_db"' -Because '逐库迁全部存档库'
+    Assert-Match -Text $job -Pattern 'secretName: fixture-schema-config' -Because '配置来自 schemaConfigSecret'
+    Assert-NotMatch -Text $job -Pattern 'configMap:|PLACEHOLDER_|__INFRA_NAMESPACE__' -Because '占位全部替换,配置卷换成 Secret'
+}
+
+Test-Case 'Apply-GoSvcManifests -Stage Prepare 只跑带迁移 Job 的 zone 服务,db 在 data-service 之前' {
+    Reset-MigrateFixture
+    $script:SkipGoSvc = $false
+    $script:Called = [Collections.Generic.List[string]]::new()
+    $script:GoSvcCatalogue['login'] = @{ ConfigMap = 'go-svc-login-config'; Manifest = 'login.yaml' }
+    Set-Item Function:script:Apply-OneGoSvc {
+        param($SvcName, $Namespace, $CurrentZoneId, $CurrentClusterId, $Stage)
+        $script:Called.Add("${SvcName}:$Stage")
+    }
+    Apply-GoSvcManifests -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0 -Stage Prepare
+    Assert-Equal -Expected 'db:Prepare,data-service:Prepare' -Actual (@($script:Called) -join ',') -Because '-SqlSchemaOnly 只碰有迁移 Job 的服务;全局服务不在 zone 循环里'
+    $script:Called.Clear()
+    Apply-GoSvcManifests -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0
+    Assert-Equal -Expected 'db:All,data-service:All,login:All' -Actual (@($script:Called) -join ',') -Because '正常部署全部 zone 服务,db-migrate 先于 data-service 的 registrar'
+}
+
+Test-Case '-SqlSchemaOnly 恒等 Job 结束,dev 也等:下一步要读 generation' {
+    Reset-MigrateFixture
+    $script:ReleaseProfile = 'dev'
+    $script:SqlSchemaOnly = $true
+    $script:JobAbsentBeforeApply = $true
+    $script:AfterApplyCondition = 'Failed'
+    $failure = Get-ThrownMessage { Apply-OneGoSvc -SvcName 'data-service' -Namespace audit-zone -CurrentZoneId 1 -CurrentClusterId 0 -Stage Prepare }
+    Assert-Match -Text $failure -Pattern 'data-service-migrate.*failed' -Because 'Job 失败要报出来,不能当它做完了去读 generation'
+}
+
+# 写者的 schema Job 有块式(trade、friend、player-inbox、data-service、db)和流式(guild、mail、rank、match、chat)两种 configMap 写法,注入都要认。
+foreach ($case in @(
+        @{ Svc = 'trade'; File = 'trade-migrate.yaml'; ConfigMap = 'go-svc-trade-config' }
+        @{ Svc = 'friend'; File = 'friend-migrate.yaml'; ConfigMap = 'go-svc-friend-config' }
+        @{ Svc = 'player-inbox'; File = 'player-inbox-migrate.yaml'; ConfigMap = 'go-svc-player-inbox-config' }
+        @{ Svc = 'data-service'; File = 'data-service-migrate.yaml'; ConfigMap = 'go-svc-data-service-config' }
+        @{ Svc = 'db'; File = 'db-migrate.yaml'; ConfigMap = 'go-svc-db-config' }
+        @{ Svc = 'guild'; File = 'guild-migrate.yaml'; ConfigMap = 'go-svc-guild-config' }
+        @{ Svc = 'mail'; File = 'mail-migrate.yaml'; ConfigMap = 'go-svc-mail-config' }
+        @{ Svc = 'rank'; File = 'rank-migrate.yaml'; ConfigMap = 'go-svc-rank-config' }
+        @{ Svc = 'match'; File = 'match-migrate.yaml'; ConfigMap = 'go-svc-match-config' }
+        @{ Svc = 'chat'; File = 'chat-migrate.yaml'; ConfigMap = 'go-svc-chat-config' }
+    )) {
+    Test-Case "schema Job 注入:$($case.Svc) 的配置卷换成 schemaConfigSecret,带上 schema 主体" {
+        Reset-MigrateFixture
+        $text = [IO.File]::ReadAllText((Join-Path $script:GoSvcManifestsDir $case.File))
+        Assert-True -Condition ($text.Contains($case.ConfigMap)) -Because '清单确实挂这个 ConfigMap(前提)'
+        $rendered = Add-SchemaPermissionManifest -Content $text -Namespace audit-infra -SvcName $case.Svc
+        Assert-Match -Text $rendered -Pattern '- name: svc-config\s+secret:\s+secretName: fixture-schema-config' -Because '配置卷换成 schema 账号那一份'
+        # 清单头的注释会提到 ConfigMap 名,只看非注释行。
+        $renderedNoComment = ($rendered -split "`r?`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+        Assert-NotMatch -Text $renderedNoComment -Pattern ([regex]::Escape($case.ConfigMap)) -Because 'ConfigMap 里没有 schema 账号,不能留着'
+        Assert-Match -Text $rendered -Pattern 'name: MMORPG_SQL_SCHEMA_PRINCIPAL\s+valueFrom: \{secretKeyRef: \{name: fixture-schema-permission, key: principal, optional: false\}\}' -Because 'LoadSchemaPermission 读它'
+        Assert-NotMatch -Text $rendered -Pattern 'MMORPG_SQL_SCHEMA_DSN' -Because '没有程序读这个变量'
+        Assert-Match -Text $rendered -Pattern 'name: MMORPG_DB_PLACEMENT_REQUIRED' -Because 'prod 的夹具要求配置带 DbPlacement'
+    }
+}
+
+Test-Case 'schema Job 注入:两个 configMap 写法都找不到时拒绝,不猜' {
+    Reset-MigrateFixture
+    $text = [IO.File]::ReadAllText((Join-Path $script:GoSvcManifestsDir 'guild-migrate.yaml'))
+    $broken = $text.Replace('configMap: {name: go-svc-guild-config}', 'emptyDir: {}')
+    Assert-Match -Text (Get-ThrownMessage { Add-SchemaPermissionManifest -Content $broken -Namespace audit-infra -SvcName guild }) -Pattern 'schema Job必须唯一独立配置挂载' -Because '形状变了要报错'
+}
+
+foreach ($case in @(@{ Svc = 'guild'; File = 'guild-migrate.yaml'; Env = 'MMORPG_GUILD_SQL_DSN' }, @{ Svc = 'mail'; File = 'mail-migrate.yaml'; Env = 'MMORPG_MAIL_SQL_DSN' }, @{ Svc = 'rank'; File = 'rank-migrate.yaml'; Env = 'MMORPG_RANK_SQL_DSN' })) {
+    Test-Case "$($case.Svc) 的 Job:DSN 和主体出自同一个 schemaPermissionSecret" {
+        Reset-MigrateFixture
+        $text = [IO.File]::ReadAllText((Join-Path $script:GoSvcManifestsDir $case.File))
+        Assert-NotMatch -Text $text -Pattern 'domain-service-secrets' -Because '常驻账号不是 schema 主体,Job 会报「权威SQL受限主体不匹配」'
+        $rendered = Add-SchemaPermissionManifest -Content $text -Namespace audit-infra -SvcName $case.Svc
+        Assert-Match -Text $rendered -Pattern ("name: $($case.Env)\s+valueFrom:\s+secretKeyRef: \{name: fixture-schema-permission, key: dsn, optional: false\}") -Because 'DSN 取 schemaPermissionSecret 的 dsn'
+        Assert-NotMatch -Text $rendered -Pattern 'PLACEHOLDER_SCHEMA_PERMISSION_SECRET' -Because '占位要替换'
+    }
 }
 
 # friend（好友，D-14 独占库 mmorpg_friend）是第二个带 MigrateJob 的建表服务。用真 manifest 名跑一遍，
@@ -433,9 +561,8 @@ Test-Case 'guild 资产off仅移除唯一inline资产env，SQL与Match签名保�
     Apply-OneGoSvc -SvcName guild -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
     $content = $script:DeploymentContent
     Assert-NotMatch -Text $content -Pattern 'MMORPG_ASSET_OP_SECRET_GUILD|key: asset-guild|PLACEHOLDER_ASSET_OP_SECRET_HASH|mmorpg.io/asset-op-secret-guild-hash:' -Because 'off不能保留本域资产密钥或滚动指纹'
-    foreach ($required in @('MMORPG_GUILD_SQL_DSN', 'MMORPG_MATCH_INTERNAL_SECRET_GUILD')) {
-        Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, ('(?m)^\s*- name: ' + $required + '\s*$')).Count) -Because "off不能删除常驻必需$required"
-    }
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($content, '(?m)^\s*- name: MMORPG_MATCH_INTERNAL_SECRET_GUILD\s*$').Count) -Because 'off不能删除常驻必需MMORPG_MATCH_INTERNAL_SECRET_GUILD'
+    Assert-Match -Text $content -Pattern 'MMORPG_GUILD_SQL_DSN=\\"\$\(cat /app/etc/private/env/MMORPG_GUILD_SQL_DSN\)\\"' -Because 'off不能删除常驻必需的SQL连接串;它来自本boot选中的环境文件'
     Assert-True -Condition (-not ($script:Events | Where-Object { $_ -like 'apply:Secret:*' })) -Because 'off不创建可选资产Secret'
     $events = @($script:Events)
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '资产off不能旁路正式SQL迁移门禁'

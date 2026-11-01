@@ -17,6 +17,7 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"mail/internal/data"
@@ -26,18 +27,25 @@ import (
 	"mail/internal/server"
 	assetpb "proto/common/asset"
 	base "proto/common/base"
+	guildpb "proto/guild"
 	mailpb "proto/mail"
+	rfpb "proto/role_fence"
 	"schemamigrate"
 	"shared/assetop"
 	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/dbplacement"
 	"shared/domainhost"
 	tables "shared/generated/table"
 	"shared/kafkacmd"
 	"shared/playerredis"
+	"shared/rolefence"
 	"shared/scenenode"
 	"shared/serviceauth"
 )
+
+// roleFenceCaller 是邮件读角色护栏权威状态时的调用方身份,密钥在 rolefence.SecretEnv(roleFenceCaller)。
+const roleFenceCaller = "mail"
 
 type config struct {
 	domainhost.Config
@@ -50,9 +58,10 @@ type config struct {
 	PlayerRedis         playerredis.Config            `json:",optional"`
 	AssetSecretEnv      string                        `json:"AssetSecretEnv"`
 	KafkaBrokers        []string                      `json:"KafkaBrokers"`
-	AccountRoleSchema   string                        `json:"AccountRoleSchema"`
 	GlobalLoginSessions bool                          `json:"GlobalLoginSessions"`
 	LoginRedis          playerredis.LoginReaderConfig `json:"LoginRedis"`
+	// GuildRpc:读玩家所在的帮,给帮会文本邮件判可见。帮会表归 guild 服务,邮件库不跨库读。
+	GuildRpc zrpc.RpcClientConf `json:"GuildRpc"`
 }
 
 // playerRedisConfig 返回生效的玩家域配置。没写 PlayerRedis.Addrs 时指向 SharedRedisAddr 那一个实例,池与超时沿用这条路径原来的口径。
@@ -118,14 +127,24 @@ func run(c config, migrate bool) (runErr error) {
 	var runtime *drainproof.Runtime
 	var root, relay *drainproof.Session
 	relayIngress := drainproof.New()
+	var poolOptions []authoritysql.OpenOption
 	var err error
 	if migrate {
 		permission, err = authoritysql.LoadSchemaPermission(os.Getenv)
+		if err == nil {
+			// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。
+			poolOptions, err = dbplacement.ForMigration(ctx, c.DbPlacement, data.DatabaseName)
+		}
 	} else {
 		runtime, root, relay, err = serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 		if err != nil {
 			return err
 		}
+		var placement *dbplacement.Watcher
+		if placement, err = dbplacement.Start(ctx, c.DbPlacement); err != nil {
+			return err
+		}
+		poolOptions = placement.OpenOptions()
 		sqlWriter, err = authoritysql.LoadWriterConfig(os.Getenv)
 		permission = authoritysql.Writer(sqlWriter)
 	}
@@ -133,7 +152,7 @@ func run(c config, migrate bool) (runErr error) {
 		return err
 	}
 	resourcesTransferred := false
-	db, err := authoritysql.Open(ctx, os.Getenv(c.DSNEnv), data.DatabaseName, authoritysql.Backend(c.Backend), c.MaxOpenConns, permission)
+	db, err := authoritysql.Open(ctx, os.Getenv(c.DSNEnv), data.DatabaseName, authoritysql.Backend(c.Backend), c.MaxOpenConns, permission, poolOptions...)
 	if err != nil {
 		return err
 	}
@@ -146,6 +165,13 @@ func run(c config, migrate bool) (runErr error) {
 	var report schemamigrate.Report
 	if migrate {
 		report, err = schemamigrate.Up(ctx, db, options)
+		// 闸门和角色护栏副本跟着逻辑库走:本库自带一份。
+		if err == nil {
+			err = authoritysql.EnsureCatalogSchema(ctx, db, data.DatabaseName)
+		}
+		if err == nil {
+			err = rolefence.EnsureSchema(ctx, db)
+		}
 	} else {
 		report, err = schemamigrate.Plan(ctx, db, options)
 	}
@@ -168,14 +194,24 @@ func run(c config, migrate bool) (runErr error) {
 		return nil
 	}
 	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 {
-		return errors.New("邮件必须显式装配同SQL事务域角色权威与全局登录态Redis")
+		return errors.New("邮件必须显式装配全局登录态Redis")
 	}
-	// 同一物理连接跨库只读；不同集群或未授SELECT权限会启动失败，不降级成缓存资格。
-	rows, err := db.QueryContext(ctx, "SELECT player_id,guild_id FROM mmorpg_guild.guild_member LIMIT 0")
+	if err = rolefence.VerifySchema(ctx, db); err != nil {
+		return fmt.Errorf("role_fence 表不可用,先运行 mail -migrate: %w", err)
+	}
+	participant, err := rolefence.NewParticipantServer(db, data.RolePending, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if err != nil {
-		return errors.New("邮箱必须能在同SQL集群只读权威guild_member")
+		return fmt.Errorf("角色护栏参与者装配失败: %w", err)
 	}
-	_ = rows.Close()
+	guildRPC, err := zrpc.NewClient(c.GuildRpc)
+	if err != nil {
+		return fmt.Errorf("帮会客户端装配失败: %w", err)
+	}
+	defer func() {
+		if !resourcesTransferred {
+			runErr = errors.Join(runErr, guildRPC.Conn().Close())
+		}
+	}()
 	secrets, err := c.Secrets()
 	if err != nil {
 		return err
@@ -206,13 +242,12 @@ func run(c config, migrate bool) (runErr error) {
 			ids.Close()
 		}
 	}()
-	repo := data.New(db, ids.IDs["mail"].Next, ids.IDs["mail_asset_op"].Next, func(id uint32) bool { _, ok := tables.ItemTableManagerInstance.FindById(id); return ok }, "mmorpg_guild")
-	roleCheck, cancelRoleCheck := context.WithTimeout(ctx, 3*time.Second)
-	err = repo.ConfigureRoleAuthority(roleCheck, c.AccountRoleSchema)
-	cancelRoleCheck()
+	repo := data.New(db, ids.IDs["mail"].Next, ids.IDs["mail_asset_op"].Next, func(id uint32) bool { _, ok := tables.ItemTableManagerInstance.FindById(id); return ok }, data.GuildRPCDirectory{Client: guildpb.NewGuildServiceClient(guildRPC.Conn())})
+	roleStates, err := rolefence.NewDirectoryReader(ids.Data, roleFenceCaller, os.Getenv(rolefence.SecretEnv(roleFenceCaller)))
 	if err != nil {
-		return errors.New("邮件同集群角色目录不可用")
+		return fmt.Errorf("角色护栏调用方密钥 %s 不可用: %w", rolefence.SecretEnv(roleFenceCaller), err)
 	}
+	repo.ConfigureRoleFence(rolefence.NewGuard(db, roleStates))
 	if err := repo.ConfigureLimits(c.Mail); err != nil {
 		return err
 	}
@@ -373,7 +408,7 @@ func run(c config, migrate bool) (runErr error) {
 		}
 		sqlWriter.Seal()
 		conns.Close()
-		relayErr = errors.Join(ids.RPC.Conn().Close(), loginRedis.Close(), playerRedis.Close(), etcd.Close(), db.Close())
+		relayErr = errors.Join(ids.RPC.Conn().Close(), guildRPC.Conn().Close(), loginRedis.Close(), playerRedis.Close(), etcd.Close(), db.Close())
 		relayClosed = true
 		if relayErr != nil {
 			relay.Hold()
@@ -412,6 +447,8 @@ func run(c config, migrate bool) (runErr error) {
 	return domainhost.ServeWithReady(ctx, c.Config, base.ENodeType_MailNodeService, server.ClientMethods(), func(s *grpc.Server) {
 		mailpb.RegisterClientPlayerMailServer(s, handler)
 		mailpb.RegisterMailAdminServer(s, handler)
+		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权;带会话的调用被 domainhost.Guard 挡住。
+		rfpb.RegisterRoleFenceParticipantServer(s, participant)
 	}, func() { close(listening) }, root, relay, relayIngress)
 }
 

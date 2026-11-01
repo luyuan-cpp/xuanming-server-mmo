@@ -66,6 +66,7 @@ import (
 
 	"friend/internal/config"
 	"friend/internal/metrics"
+	"shared/authoritysql"
 	"shared/safego"
 )
 
@@ -223,7 +224,7 @@ func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf) 
 	pending, deleted, err := d.Sweeps.SweepTerminalRequests(
 		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
 	if err != nil {
-		if cfg.Mode == config.SweepModeDelete && d.SvcCtx.RootAdmission != nil {
+		if cfg.Mode == config.SweepModeDelete && d.SvcCtx.RootAdmission != nil && !authoritysql.IsWriterFrozen(err) {
 			d.SvcCtx.RootAdmission.Hold()
 		}
 		// data 层逐行按主键删,出错时已删的行是真删了:行数要进日志(与容量行回收那一支同口径)。
@@ -275,7 +276,7 @@ func (d *Deps) sweepIdleCapacityRows(ctx context.Context, cfg config.SweepConf) 
 	idle, deleted, err := d.Sweeps.SweepIdleCapacityRows(
 		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
 	if err != nil {
-		if cfg.Mode == config.SweepModeDelete && d.SvcCtx.RootAdmission != nil {
+		if cfg.Mode == config.SweepModeDelete && d.SvcCtx.RootAdmission != nil && !authoritysql.IsWriterFrozen(err) {
 			d.SvcCtx.RootAdmission.Hold()
 		}
 		// data 层出错时仍返回已删行数(逐行独立提交),这里必须带进日志,否则已删的行无处可查。

@@ -54,6 +54,8 @@ func decideSave(row *ownerRow, ownerEpoch, saveSeq uint64, schemaGen uint32, ins
 
 // decideClaim 是 LoadAndClaim 的写权判定(规格 §4)。row 为 nil 表示写权行不存在:
 // 角色不存在或未建完,不造空档。
+//
+// 同实例同代次的重新认领也放行,判定不看 claim_seq:它只在写入时加 1,给判死比较用。
 func decideClaim(row *ownerRow, ownerEpoch uint64, instance []byte, binarySchemaGen uint32) storepb.LoadAndClaimResult {
 	switch {
 	case row == nil:

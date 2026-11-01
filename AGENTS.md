@@ -142,7 +142,8 @@
    服务里不许再手写故障码集合——那会把「段和发号分家」的病在分类上重新制造一遍。
    详见 [docs/design/tip-code-axis.md](docs/design/tip-code-axis.md)。
 5. **ECS 组件访问**：修改或评审组件创建、读取、存盘与快照前，先按 [组件访问规则](docs/design/ecs-component-access-rules.md) 区分持久数据、按需状态和派生运行时数据；创建职责与缺失语义以该文档为准，读路径只读，跨实体查询用 `try_get`。
-6. **保证修改代码的正确性、数据一致性**
+6. **逻辑库自治**(负责人 2026-10-31 定,[规格](docs/design/horizontal-scale-logical-db.md)):一个逻辑库只归一个服务,服务之间**不许跨库 SQL**,只走 RPC(`CrossDatabase` 契约测试守着)。每个逻辑库自带一份写者闸门。服务提交点锁本库 `role_fence`,不碰目录;事务里不调 RPC。目录分片数 `Directory.LogicalShards` 上线后不能改,扩容靠把逻辑库搬到新集群(`tools/dbmove`)。
+7. **保证修改代码的正确性、数据一致性**
 
 ## 8. 命名规范
 

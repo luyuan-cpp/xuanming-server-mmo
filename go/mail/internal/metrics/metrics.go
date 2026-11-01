@@ -96,6 +96,12 @@ var (
 		Help:      "ListMails calls whose active system mail set hit Mail.MaxActiveSystemMails (players see fewer system mails).",
 	})
 
+	guildLookupFailuresTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "guild_lookup_failures_total",
+		Help:      "Reads of a player's guild from the guild service that failed; guild text mails stay hidden for that request.",
+	})
+
 	sweepCandidateRows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "sweep_candidate_rows",
@@ -144,6 +150,11 @@ func ObserveListTruncated() {
 	listTruncatedTotal.Inc()
 }
 
+// ObserveGuildLookupFailure 记一次读所在帮会失败:这一次按没有帮算,帮会文本邮件看不到。
+func ObserveGuildLookupFailure() {
+	guildLookupFailuresTotal.Inc()
+}
+
 // SetSweepCandidateRows 刷新某张表在某个 sweep 模式下本轮的候选行数。每轮都要写,**包括 0**。
 func SetSweepCandidateRows(table, mode string, rows float64) {
 	sweepCandidateRows.WithLabelValues(table, mode).Set(rows)
@@ -172,6 +183,7 @@ func Register() {
 			pushTotal,
 			claimShortCircuitTotal,
 			listTruncatedTotal,
+			guildLookupFailuresTotal,
 			sweepCandidateRows,
 			sweepDeletedTotal,
 			sweepInvalidRows,

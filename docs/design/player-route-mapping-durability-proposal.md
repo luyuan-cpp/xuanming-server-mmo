@@ -1334,7 +1334,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 - K8s 与 compose 栈的 login `DataServiceRpc` 熔断与本地对齐为开；
 - EnterGame 账号目录自愈原为无锁 GET + 整块 SET，改为账号锁 + 锁内重读 + 整字节 CAS，提交点复核反向索引；
-- 运维 `RemovePlayersFromAccounts` 的实现改为同一把账号锁内原子摘孤儿并删反向索引（脚本可重发）。**它目前没有生产入口**：gRPC `LoginAdmin.RemovePlayersFromAccounts` 原是返回空成功的生成桩，已改为明确返回 Unimplemented，接线另开任务。
+- 运维 `RemovePlayersFromAccounts` 的实现改为同一把账号锁内原子摘孤儿并删反向索引（脚本可重发）。**它目前没有生产入口**：gRPC `LoginAdmin.RemovePlayersFromAccounts` 原是返回空成功的生成桩，已改为明确返回 Unimplemented，接线另开任务。(2026-11-01 更正:已接线,改走目录的删角流程,见 [account-role-authority.md](./account-role-authority.md)「摘孤儿角色」。)
 
 **开服前复核**：本节结论不能直接沿用到开服，开服前由 AI 按 §12.2 对着当时的代码、部署与压测重做一遍（L-18）。（2026-10-20 补：静态部分已按 §12.2 第 1~4、6 步复核，结论不变，订正与补漏见 §12.3；第 5 步压测未做。）
 

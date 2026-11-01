@@ -319,3 +319,45 @@ func TestRouter_CallerAbandonedIsNotAFault(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPlayerRoute(t *testing.T) {
+	ctx := context.Background()
+	fake := &fakeRouteStore{rows: map[uint64]store.RouteRow{
+		1: {PlayerID: 1, HomeZone: 5, StorageID: 7, PlacementVersion: 1, Rev: 1},
+		2: {PlayerID: 2, HomeZone: 5, Rev: 1},
+	}}
+	r := NewRouter(fake)
+
+	okBefore := readCount(t, "placement", "ok")
+	row, err := r.GetPlayerRoute(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(7), row.StorageID)
+	assert.Equal(t, uint32(5), row.HomeZone)
+	assert.Equal(t, okBefore+1, readCount(t, "placement", "ok"))
+
+	missingBefore := readCount(t, "placement", "not_found")
+	for _, player := range []uint64{2, 3} {
+		_, err = r.GetPlayerRoute(ctx, player)
+		require.ErrorIs(t, err, ErrPlacementNotMapped, "没有落点或没有行")
+		assert.NotErrorIs(t, err, ErrRouteStore, "不是库故障")
+	}
+	assert.Equal(t, missingBefore+2, readCount(t, "placement", "not_found"))
+
+	failedBefore := readCount(t, "placement", "error")
+	fake.readErr = errors.New("Error 1205")
+	_, err = r.GetPlayerRoute(ctx, 1)
+	require.ErrorIs(t, err, ErrRouteStore)
+	assert.NotErrorIs(t, err, ErrPlacementNotMapped, "库故障不能伪装成没有落点")
+	assert.Equal(t, failedBefore+1, readCount(t, "placement", "error"))
+
+	_, err = NewRouter(nil).GetPlayerRoute(ctx, 1)
+	require.ErrorIs(t, err, ErrRouteStore, "没装配时 fail-closed")
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	failedBefore = readCount(t, "placement", "error")
+	_, err = r.GetPlayerRoute(canceled, 1)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.NotErrorIs(t, err, ErrRouteStore, "调用方放弃不算库故障")
+	assert.Equal(t, failedBefore, readCount(t, "placement", "error"))
+}

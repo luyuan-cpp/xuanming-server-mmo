@@ -6,8 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math"
-	"sort"
+	"slices"
+	"sync/atomic"
 	"time"
 
 	base "proto/common/base"
@@ -16,107 +16,112 @@ import (
 	"shared/accountdirectory"
 	"shared/authoritysql"
 
-	"github.com/go-sql-driver/mysql"
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 )
 
 const AccountDirectoryTableName = "account_directory"
 const AccountRoleTableName = "account_role"
 const accountDirectoryDDL = "CREATE TABLE IF NOT EXISTS account_directory (account VARBINARY(191) NOT NULL COMMENT 'pb:1',created_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:2',PRIMARY KEY(account)) ENGINE=InnoDB"
-const accountRoleDDL = "CREATE TABLE IF NOT EXISTS account_role (player_id BIGINT UNSIGNED NOT NULL COMMENT 'pb:1',account VARBINARY(191) NOT NULL COMMENT 'pb:2',role_proto MEDIUMBLOB NOT NULL COMMENT 'pb:3',owner_revision BIGINT UNSIGNED NOT NULL COMMENT 'pb:4',updated_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:5',trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:6',initial_player_commit BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:7',PRIMARY KEY(player_id) /*T![clustered_index] NONCLUSTERED */,INDEX idx_account_role_owner(account,player_id)) ENGINE=InnoDB /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */"
+const accountRoleDDL = "CREATE TABLE IF NOT EXISTS account_role (player_id BIGINT UNSIGNED NOT NULL COMMENT 'pb:1',account VARBINARY(191) NOT NULL COMMENT 'pb:2',role_proto MEDIUMBLOB NOT NULL COMMENT 'pb:3',owner_revision BIGINT UNSIGNED NOT NULL COMMENT 'pb:4',updated_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:5',trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:6',initial_player_commit BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:7',fence_version BIGINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'pb:8',prepare_token BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:9',PRIMARY KEY(player_id) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */"
 
-// AccountDirectoryStore 只拥有全局目录；与快照池隔离，不访问认证 password 或 Redis。
+// AccountDirectoryStore 拥有账号目录和角色归属(docs/design/horizontal-scale-logical-db.md §5)。不访问认证 password 或 Redis。
+//
+// 目录分片:账号目录和 ref 按账号,角色行、入场登记、过户收据按玩家。事务只开在一个逻辑库上,跨片一律分步,每步幂等。
+// 真相永远是玩家分片的 account_role.account,ref 只是索引,见 account_role_ref.go。
 type AccountDirectoryStore struct {
-	db            *sql.DB
-	backend       authoritysql.Backend
-	maxRoles      int
-	contracts     *roleAssetContractGuard
-	schema        string
-	initialStores map[uint32]bool
+	shards   *shardPools
+	steps    directorySteps
+	backend  authoritysql.Backend
+	maxRoles int
+	fences   FenceCoordinator // 过户和删角的两阶段,nil 时都拒绝。见 ConfigureFenceCoordinator
+	cfg      MySQLConfig
+	stores   *PlayerStorePools // 按 storage_id 的存档库连接池,见 ConfigurePlayerStores
+	// 读路径发现的陈旧 ref,等后台清。
+	staleRefs chan staleRefKey
 	// 账本和展示资料读的名额,见 acquirePlayerStoreRead。
 	playerStoreReads chan struct{}
+	// removalCursor 让删角收尾逐轮换起点。
+	removalCursor atomic.Uint64
+	// preparingCursor 让超时 PREPARING 的撤销逐轮换起点。
+	preparingCursor atomic.Uint64
 }
 
-// maxOpenConn 是本池的连接上限(config.AccountDirectoryConfig.PoolMaxOpenConn),显式传入而不读 cfg.MaxOpenConn:
-// cfg 是共用的全局库连接参数,那里的 MaxOpenConn 属于快照池。越界由 authoritysql.Open 拒绝。
+// maxOpenConn 是每片连接池的上限(config.AccountDirectoryConfig.PoolMaxOpenConn),显式传入而不读 cfg.MaxOpenConn:
+// cfg 是共用的目录连接参数,那里的 MaxOpenConn 属于快照池。越界由 authoritysql.Open 拒绝。
 func NewAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, maxRoles, maxOpenConn int) (*AccountDirectoryStore, error) {
-	if maxRoles < 1 || maxRoles > 100 {
+	if maxRoles < 1 || maxRoles > maxRefRows {
 		return nil, accountdirectory.ErrInvalid
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	db, err := authoritysql.Open(ctx, buildDSN(cfg), cfg.DBName, backend, maxOpenConn, cfg.Permission)
+	shards, err := openShardPools(cfg, func(one MySQLConfig) (*sql.DB, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		db, err := authoritysql.Open(ctx, buildDSN(one), one.DBName, backend, maxOpenConn, one.Permission, one.PoolOptions...)
+		if err != nil {
+			return nil, err
+		}
+		if err = assertAccountDirectoryShape(ctx, db, one.DBName); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		return db, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if err = assertAccountDirectoryShape(ctx, db, cfg.DBName); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	return &AccountDirectoryStore{db: db, backend: backend, maxRoles: maxRoles, schema: cfg.DBName,
-		playerStoreReads: make(chan struct{}, playerStoreReadLimit(maxOpenConn))}, nil
+	s := &AccountDirectoryStore{shards: shards, backend: backend, maxRoles: maxRoles, cfg: cfg,
+		staleRefs:        make(chan staleRefKey, staleRefQueueSize),
+		playerStoreReads: make(chan struct{}, playerStoreReadLimit(maxOpenConn))}
+	s.steps = &sqlDirectorySteps{shards: shards, directory: s}
+	return s, nil
 }
-func (s *AccountDirectoryStore) Close() error { return s.db.Close() }
+
+// Close 关闭目录各片和已打开的存档库。
+func (s *AccountDirectoryStore) Close() error {
+	return errors.Join(s.shards.Close(), s.stores.Close())
+}
 
 func assertAccountDirectoryShape(ctx context.Context, db *sql.DB, name string) error {
 	if err := assertInitialPlayerCommitShape(ctx, db, name); err != nil {
 		return err
 	}
-	for _, model := range []proto.Message{&dbpb.AccountDirectory{}, &dbpb.AccountRole{}} {
-		table := AccountDirectoryTableName
-		key := "account"
-		if _, ok := model.(*dbpb.AccountRole); ok {
-			table = AccountRoleTableName
-			key = "player_id"
-		}
-		if err := assertColumnsPresent(ctx, db, name, model, table); err != nil {
+	for _, shape := range []struct {
+		model proto.Message
+		table string
+		keys  []string
+	}{
+		{&dbpb.AccountDirectory{}, AccountDirectoryTableName, []string{"account"}},
+		{&dbpb.AccountRole{}, AccountRoleTableName, []string{"player_id"}},
+		{&dbpb.AccountRoleRemoval{}, AccountRoleRemovalTableName, []string{"player_id"}},
+		{&dbpb.AccountRoleRef{}, AccountRoleRefTableName, []string{"account", "player_id"}},
+	} {
+		if err := assertColumnsPresent(ctx, db, name, shape.model, shape.table); err != nil {
 			return err
 		}
-		keys, err := primaryKeyColumns(ctx, db, name, table)
+		keys, err := primaryKeyColumns(ctx, db, name, shape.table)
 		if err != nil {
 			return err
 		}
-		if len(keys) != 1 || keys[0] != key {
-			return fmt.Errorf("账号目录主键不符: %s", table)
+		if !slices.Equal(keys, shape.keys) {
+			return fmt.Errorf("账号目录主键不符: %s", shape.table)
 		}
 		var typ string
 		var width sql.NullInt64
-		if err := db.QueryRowContext(ctx, "SELECT DATA_TYPE,CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME='account'", name, table).Scan(&typ, &width); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT DATA_TYPE,CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME='account'", name, shape.table).Scan(&typ, &width); err != nil {
 			return err
 		}
 		if typ != "varbinary" || !width.Valid || width.Int64 != 191 {
-			return fmt.Errorf("账号目录必须逐字节比较: %s", table)
+			return fmt.Errorf("账号目录必须逐字节比较: %s", shape.table)
 		}
 	}
-	indexes, err := loadIndexColumns(ctx, db, name, AccountRoleTableName)
-	if err != nil {
-		return err
-	}
-	for _, cols := range indexes {
-		if len(cols) == 2 && cols[0] == "account" && cols[1] == "player_id" {
-			return nil
-		}
-	}
-	return errors.New("账号角色归属索引缺失")
+	return nil
 }
 
-func (s *AccountDirectoryStore) transaction(ctx context.Context, action func(*sql.Tx) error) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err = action(tx); err != nil {
-		return err
-	}
-	if err = ctx.Err(); err != nil {
-		return err
-	}
-	return tx.Commit()
+// playerTx 在这名玩家所在的片上跑一个事务。
+func (s *AccountDirectoryStore) playerTx(ctx context.Context, player uint64, action func(*sql.Tx) error) error {
+	return shardTx(ctx, s.shards.forPlayer(player), action)
 }
+
 func lockDirectory(ctx context.Context, tx *sql.Tx, account string, create bool) error {
 	if !accountdirectory.ValidAccount(account) {
 		return accountdirectory.ErrInvalid
@@ -138,107 +143,123 @@ type directoryQuery interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
-func readRoles(ctx context.Context, q directoryQuery, account string) (*base.AccountSimplePlayerList, error) {
-	rows, err := q.QueryContext(ctx, "SELECT player_id,role_proto,owner_revision FROM account_role WHERE account=? ORDER BY player_id LIMIT 101", []byte(account))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := &base.AccountSimplePlayerList{}
-	for rows.Next() {
-		var id, rev uint64
-		var raw []byte
-		if err = rows.Scan(&id, &raw, &rev); err != nil {
-			return nil, err
-		}
-		role := &base.AccountSimplePlayer{}
-		if len(raw) > 16384 {
-			return nil, errors.New("账号角色原件越界")
-		}
-		if err = proto.Unmarshal(raw, role); err != nil || id == 0 || role.PlayerId != id || rev == 0 {
-			return nil, errors.New("账号角色原件损坏")
-		}
-		out.Players = append(out.Players, role)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	if len(out.Players) > 100 {
-		return nil, errors.New("账号角色目录超过硬上限")
-	}
-	return out, nil
-}
-
 // Read 读账号的角色列表。登录每次都走这里,所以先无锁读,目录行已在就只读返回,不碰任何行锁
 // (docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条)。
-// 只有 create=true 且目录行不存在才进入加锁建行的路径,那条路径在锁内复核。
+// 只有 create=true 且目录行不存在才进入加锁建行的路径。
 //
-// 不加锁之后 Read 不再排在同账号在途的 Create / Repair / Remove 后面:对方提交之前读到的是提交之前的列表,
-// 提交之后才开始的 Read 一定读得到(强读会话,TiDB 读 leader、MySQL 档连主库)。调用方不依赖那次排队:
-// 列表只用来展示和选角,改归属的操作在各自事务里按 owner_revision 复核,入场用 Lookup 强读复核;
-// 建角超时的恢复是先 Lookup 确认已提交,再 Read。目录行只增不删,所以目录行与角色列表分两条语句读没有一致性问题。
+// 读 ref,按玩家分片批量读 account_role,只留真相是这个账号的。ref 在提交点之前写,所以提交之后才开始的 Read 一定读得到
+// (强读会话,TiDB 读 leader、MySQL 档连主库)。调用方不依赖和在途操作排队:列表只用来展示和选角,改归属的操作在各自事务里
+// 按 owner_revision 复核,入场用 Lookup 强读复核;建角超时的恢复是先 Lookup 确认已提交,再 Read。
+// 目录行只增不删,所以目录行与 ref 分两条语句读没有一致性问题。
 func (s *AccountDirectoryStore) Read(ctx context.Context, account string, create bool) (*base.AccountSimplePlayerList, error) {
 	if !accountdirectory.ValidAccount(account) {
 		return nil, accountdirectory.ErrInvalid
 	}
-	var out *base.AccountSimplePlayerList
-	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		var stored []byte
-		err := tx.QueryRowContext(ctx, "SELECT account FROM account_directory WHERE account=?", []byte(account)).Scan(&stored)
-		if errors.Is(err, sql.ErrNoRows) {
-			return accountdirectory.ErrMissing
-		}
-		if err != nil {
-			return err
-		}
-		out, err = readRoles(ctx, tx, account)
-		return err
-	})
-	if !create || !errors.Is(err, accountdirectory.ErrMissing) {
-		return out, err
+	exists, refs, err := s.steps.readAccount(ctx, account)
+	if err != nil {
+		return nil, err
 	}
-	err = s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := lockDirectory(ctx, tx, account, true); err != nil {
-			return err
+	if !exists {
+		if !create {
+			return nil, accountdirectory.ErrMissing
 		}
-		var err error
-		out, err = readRoles(ctx, tx, account)
-		return err
-	})
-	return out, err
+		if err := s.steps.ensureAccount(ctx, account); err != nil {
+			return nil, err
+		}
+		// 刚建的目录行上可能已经有并发建角写的 ref。
+		if _, refs, err = s.steps.readAccount(ctx, account); err != nil {
+			return nil, err
+		}
+	}
+	return s.rolesOfRefs(ctx, account, refs)
 }
+
+// readRoleList 读当前列表。写操作提交之后用它回应答:读失败时调用方把结果当未知,按 player_id 强读消歧。
+func (s *AccountDirectoryStore) readRoleList(ctx context.Context, account string) (*base.AccountSimplePlayerList, error) {
+	_, refs, err := s.steps.readAccount(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	return s.rolesOfRefs(ctx, account, refs)
+}
+
+// rolesOfRefs 按真相过滤 ref。陈旧的 ref 不进列表,交给后台清。结果按 player_id 升序。
+func (s *AccountDirectoryStore) rolesOfRefs(ctx context.Context, account string, refs []roleRef) (*base.AccountSimplePlayerList, error) {
+	out := &base.AccountSimplePlayerList{}
+	if len(refs) == 0 {
+		return out, nil
+	}
+	ids := make([]uint64, 0, len(refs))
+	for _, ref := range refs {
+		ids = append(ids, ref.PlayerID)
+	}
+	owners, err := s.steps.readOwners(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, ref := range refs {
+		if owned := owners[ref.PlayerID]; owned != nil && owned.Account == account {
+			out.Players = append(out.Players, owned.Role)
+			continue
+		}
+		s.noteStaleRef(account, ref.PlayerID)
+	}
+	return out, nil
+}
+
+const ownershipColumns = "account,role_proto,owner_revision,trade_listing_id,prepare_token"
+
+// lockOwnershipSQL 锁角色行,读归属和两个令牌。
+const lockOwnershipSQL = "SELECT " + ownershipColumns + " FROM account_role WHERE player_id=? FOR UPDATE"
+
 func scanOwnership(row interface{ Scan(...any) error }, id uint64) (*dspb.AccountRoleOwnership, error) {
 	var account string
 	var raw []byte
-	var rev, listing uint64
-	if err := row.Scan(&account, &raw, &rev, &listing); err != nil {
+	var rev, listing, prepare uint64
+	if err := row.Scan(&account, &raw, &rev, &listing, &prepare); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, accountdirectory.ErrMissing
 		}
 		return nil, err
 	}
+	return decodeOwnership(id, account, raw, rev, listing, prepare)
+}
+
+// decodeOwnership 还原一行归属。墓碑不带令牌,准备令牌进 FREEZING 时才换成最终令牌,两个不会同时非零。
+func decodeOwnership(id uint64, account string, raw []byte, rev, listing, prepare uint64) (*dspb.AccountRoleOwnership, error) {
 	role := &base.AccountSimplePlayer{}
 	if len(raw) > 16384 {
 		return nil, errors.New("角色归属原件越界")
 	}
-	if err := proto.Unmarshal(raw, role); err != nil || role.PlayerId != id || id == 0 || rev == 0 || (account != "" && !accountdirectory.ValidAccount(account)) || (account == "" && listing != 0) {
+	if err := proto.Unmarshal(raw, role); err != nil || role.PlayerId != id || id == 0 || rev == 0 || (account != "" && !accountdirectory.ValidAccount(account)) || (account == "" && (listing != 0 || prepare != 0)) || (listing != 0 && prepare != 0) {
 		return nil, errors.New("角色归属原件损坏")
 	}
-	return &dspb.AccountRoleOwnership{Account: account, Role: role, OwnerRevision: rev, TradeListingId: listing}, nil
+	return &dspb.AccountRoleOwnership{Account: account, Role: role, OwnerRevision: rev, TradeListingId: listing, PrepareToken: prepare}, nil
 }
+
+// Lookup 强读玩家所在分片。墓碑算不存在。
+//
+// 入场和归属判定只看 trade_listing_id。准备令牌还在投票,撤销了角色就回来了,不出目录:调用方看到的是这名角色没有冻结,
+// 玩家照常进场。这时进场的实例在转 FREEZING 的事务里按同一把行锁快照进 holder,此后 Register 才被挡,规格 §3.5。
 func (s *AccountDirectoryStore) Lookup(ctx context.Context, id uint64) (*dspb.AccountRoleOwnership, error) {
 	if id == 0 {
 		return nil, accountdirectory.ErrInvalid
 	}
-	owned, err := scanOwnership(s.db.QueryRowContext(ctx, "SELECT account,role_proto,owner_revision,trade_listing_id FROM account_role WHERE player_id=?", id), id)
-	if err == nil && owned.Account == "" {
+	owned, err := s.steps.readOwner(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if owned == nil || owned.Account == "" {
 		return nil, accountdirectory.ErrMissing
 	}
-	return owned, err
+	owned.PrepareToken = 0
+	return owned, nil
 }
+
 func validRole(role *base.AccountSimplePlayer) bool {
 	return role != nil && role.PlayerId != 0 && proto.Size(role) <= 16384
 }
+
 func (s *AccountDirectoryStore) Create(ctx context.Context, account string, role *base.AccountSimplePlayer) (*base.AccountSimplePlayerList, error) {
 	out, err := s.CreateWithInitialCommit(ctx, account, role)
 	if err != nil {
@@ -247,7 +268,7 @@ func (s *AccountDirectoryStore) Create(ctx context.Context, account string, role
 	return out.Players, nil
 }
 
-// CreateWithInitialCommit 严格新建:同一事务写角色目录和 player_store 初始行。未知提交由原 Lookup 恢复。
+// CreateWithInitialCommit 严格新建。提交点之前的失败回 ErrNotCommitted,未知提交由原 Lookup 恢复。
 func (s *AccountDirectoryStore) CreateWithInitialCommit(ctx context.Context, account string, role *base.AccountSimplePlayer) (*dspb.AccountDirectoryResponse, error) {
 	players, err := s.createRoleWithInitialRows(ctx, account, role)
 	if err != nil {
@@ -256,65 +277,140 @@ func (s *AccountDirectoryStore) CreateWithInitialCommit(ctx context.Context, acc
 	return &dspb.AccountDirectoryResponse{Players: players}, nil
 }
 
-// createRoleWithInitialRows 在一个事务里写角色目录行和 player_store 初始行。同账号同角色的重放只读回列表;
-// 归属不同、已挂寄售或已删除(墓碑)一律冲突,删除后的角色不能复活。
+// createRoleWithInitialRows 是建角的四步(规格 §5.3),每步幂等:
+//
+//  1. 账号分片事务:锁目录行,核上限,写 ref(PENDING)。
+//  2. 存档库:写初始行。目录没提交时没人读得到,失败只留下孤儿行。
+//  3. 玩家分片事务:核路由行,严格插入 account_role。这是提交点。
+//  4. 账号分片:ref 改 ACTIVE。失败无害。
+//
+// 第 3 步之前的失败都回 ErrNotCommitted,第 3 步 BEGIN 就被拒绝也算:这次调用没有写角色行,这次写的 ref 当场删掉,立刻退还名额。
+// 第 3 步之后的失败才是结局未知,login 按 player_id 强读消歧。两者不能混:login 收到 ErrNotCommitted 就释放名字。
+//
+// 第 3 步之后重放走预读那条路,不再碰存档:玩家可能已经存过盘。
+// 同账号同角色的重放只读回列表;归属不同、已挂寄售或已删除(墓碑)一律冲突,删除后的角色不能复活。
 func (s *AccountDirectoryStore) createRoleWithInitialRows(ctx context.Context, account string, role *base.AccountSimplePlayer) (*base.AccountSimplePlayerList, error) {
-	if !validRole(role) {
+	if !validRole(role) || !accountdirectory.ValidAccount(account) {
 		return nil, accountdirectory.ErrInvalid
 	}
 	raw, err := proto.Marshal(role)
 	if err != nil {
+		return nil, notCommitted(err)
+	}
+	old, err := s.steps.readOwner(ctx, role.PlayerId)
+	if err != nil {
+		return nil, notCommitted(err)
+	}
+	if old != nil {
+		if err := checkCreateReplay(old, account, role); err != nil {
+			return nil, err
+		}
+		s.activateRefBestEffort(ctx, account, role.PlayerId)
+		return s.readRoleList(ctx, account)
+	}
+	storage, err := s.initialStorage(ctx, role)
+	if err != nil {
+		return nil, notCommitted(err)
+	}
+	ref := roleRef{PlayerID: role.PlayerId, HomeZone: role.ZoneId, Nonce: newRefNonce()}
+	if err := s.reserveRefWithEviction(ctx, account, ref); err != nil {
+		if !errors.Is(err, accountdirectory.ErrFull) {
+			// 这一步本身可能结局未知:ref 写没写成都按这次的 nonce 删。满位时什么都没写。
+			s.releaseOwnRef(ctx, account, ref)
+		}
+		return nil, notCommitted(err)
+	}
+	if err := s.steps.writeInitialRows(ctx, storage, role); err != nil {
+		s.releaseOwnRef(ctx, account, ref)
+		return nil, notCommitted(err)
+	}
+	if err := s.steps.commitRole(ctx, account, role, raw, storage); err != nil {
+		switch {
+		case errors.Is(err, accountdirectory.ErrNotCommitted):
+			s.releaseOwnRef(ctx, account, ref)
+		case errors.Is(err, accountdirectory.ErrConflict):
+			// 别人先建了或已删除:这条 ref 现在就能证明陈旧。证明不了的(路由不符)留给后台。
+			s.reapOwnRef(ctx, account, role.PlayerId)
+		}
 		return nil, err
 	}
-	var out *base.AccountSimplePlayerList
-	err = s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := lockDirectory(ctx, tx, account, true); err != nil {
-			return err
-		}
-		if err := s.lockInitialPlayerRoute(ctx, tx, role); err != nil {
-			return err
-		}
-		old, err := scanOwnership(tx.QueryRowContext(ctx, "SELECT account,role_proto,owner_revision,trade_listing_id FROM account_role WHERE player_id=? FOR UPDATE", role.PlayerId), role.PlayerId)
-		if err == nil && old.Account != "" {
-			if old.TradeListingId != 0 {
-				return accountdirectory.ErrConflict
-			}
-			if old.Account != account || !proto.Equal(old.Role, role) {
-				return accountdirectory.ErrConflict
-			}
-			out, err = readRoles(ctx, tx, account)
-			return err
-		}
-		if err != nil && !errors.Is(err, accountdirectory.ErrMissing) {
-			return err
-		}
-		if old != nil {
-			return accountdirectory.ErrConflict
-		}
-		out, err = readRoles(ctx, tx, account)
-		if err != nil {
-			return err
-		}
-		if len(out.Players) >= s.maxRoles {
-			return accountdirectory.ErrFull
-		}
-		if err = s.insertInitialPlayerRows(ctx, tx, role); err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,initial_player_commit) VALUES (?,?,?,1,UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000,1)", role.PlayerId, []byte(account), raw)
-		if err != nil {
-			var duplicate *mysql.MySQLError
-			if errors.As(err, &duplicate) && duplicate.Number == 1062 {
-				return accountdirectory.ErrConflict
-			}
-			return err
-		}
-		out.Players = append(out.Players, proto.Clone(role).(*base.AccountSimplePlayer))
-		sort.Slice(out.Players, func(i, j int) bool { return out.Players[i].PlayerId < out.Players[j].PlayerId })
-		return nil
-	})
-	return out, err
+	s.activateRefBestEffort(ctx, account, role.PlayerId)
+	return s.readRoleList(ctx, account)
 }
+
+// notCommitted 把提交点之前的失败标成确定没写。已经是确定拒绝的原样回:login 对它们有各自的处理。
+func notCommitted(err error) error {
+	if errors.Is(err, accountdirectory.ErrConflict) || errors.Is(err, accountdirectory.ErrFull) || errors.Is(err, accountdirectory.ErrInvalid) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", accountdirectory.ErrNotCommitted, err)
+}
+
+// definiteRejections 是 RPC 层映射成确定性拒绝的哨兵(directoryError):调用方看到它们就认为这笔被拒绝了。
+var definiteRejections = []error{accountdirectory.ErrConflict, accountdirectory.ErrMissing, accountdirectory.ErrFull, accountdirectory.ErrInvalid, accountdirectory.ErrNotCommitted}
+
+// notRejection 用在已经写了东西之后的失败上:调用方把确定性的拒绝当成「这笔没写」,所以这时改成 ErrRetryLater,让它重放(规格 §3.6)。
+// 这些哨兵都是事务回滚之后才回的:这一步确定没写,前面的提交结局已知,排空证明不用 Hold。不留错误链:链上有哨兵的话 RPC 层还是按它映射。
+// 别的错误(SQL 失败、提交结局未知)原样回,RPC 层回 Unavailable,按结局未知算。
+func notRejection(err error) error {
+	for _, rejection := range definiteRejections {
+		if errors.Is(err, rejection) {
+			return fmt.Errorf("%w: %v", accountdirectory.ErrRetryLater, err)
+		}
+	}
+	return err
+}
+
+// readFailed 用在只读步骤的失败上,这一步没有写。确定性的拒绝原样回,其余回 ErrRetryLater:排空证明不用 Hold(规格 §3.6)。
+// 这次调用前面写过东西也成立:走到这里说明那些提交的结局都已知,结局未知的提交在原地就返回了。原因留在错误链上。
+func readFailed(err error) error {
+	if err == nil {
+		return nil
+	}
+	for _, rejection := range definiteRejections {
+		if errors.Is(err, rejection) {
+			return err
+		}
+	}
+	return fmt.Errorf("%w: %w", accountdirectory.ErrRetryLater, err)
+}
+
+// activateRefBestEffort 是第 4 步:失败无害,ref 还在,读路径照常按真相过滤,后台会补。
+func (s *AccountDirectoryStore) activateRefBestEffort(ctx context.Context, account string, player uint64) {
+	if err := s.steps.activateRef(ctx, account, player, 0); err != nil {
+		logx.Errorf("[account-role-ref] activate failed, the background sweep retries: player=%d: %v", player, err)
+	}
+}
+
+// checkCreateReplay 判一个已有的角色行是不是这次建角的重放。令牌在投票也算有令牌:建角重放不该把这名角色当成空闲的回给 login。
+func checkCreateReplay(old *dspb.AccountRoleOwnership, account string, role *base.AccountSimplePlayer) error {
+	if old.Account == "" || old.TradeListingId != 0 || old.PrepareToken != 0 || old.Account != account || !proto.Equal(old.Role, role) {
+		return accountdirectory.ErrConflict
+	}
+	return nil
+}
+
+// initialStorage 给建角选存档库:只认权威路由,和 go/db 一样不回落 home_zone,猜一个库写初始行比拒绝更糟。
+func (s *AccountDirectoryStore) initialStorage(ctx context.Context, role *base.AccountSimplePlayer) (uint32, error) {
+	if role.GetZoneId() == 0 {
+		return 0, accountdirectory.ErrUnavailable
+	}
+	route, found, err := s.steps.readRoute(ctx, role.PlayerId)
+	if err != nil {
+		return 0, err
+	}
+	if !found || !route.HasHome() {
+		return 0, fmt.Errorf("%w: player %d has no route", accountdirectory.ErrUnavailable, role.PlayerId)
+	}
+	if route.HomeZone != role.ZoneId || route.Rev == 0 || !route.HasPlacement() {
+		return 0, accountdirectory.ErrConflict
+	}
+	if !s.steps.storageAllowed(route.StorageID) {
+		return 0, accountdirectory.ErrUnavailable
+	}
+	return route.StorageID, nil
+}
+
 func mergeRole(old, patch *base.AccountSimplePlayer) (*base.AccountSimplePlayer, error) {
 	copy := proto.Clone(old).(*base.AccountSimplePlayer)
 	if patch.ClassId != 0 {
@@ -343,20 +439,18 @@ func mergeRole(old, patch *base.AccountSimplePlayer) (*base.AccountSimplePlayer,
 	}
 	return copy, nil
 }
+
+// Repair 只补缺失的身份字段,不改归属,所以不碰账号分片的目录行。
 func (s *AccountDirectoryStore) Repair(ctx context.Context, account string, role *base.AccountSimplePlayer, rev uint64) (*base.AccountSimplePlayerList, error) {
-	if !validRole(role) || rev == 0 {
+	if !validRole(role) || rev == 0 || !accountdirectory.ValidAccount(account) {
 		return nil, accountdirectory.ErrInvalid
 	}
-	var out *base.AccountSimplePlayerList
-	err := s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := lockDirectory(ctx, tx, account, false); err != nil {
-			return err
-		}
-		old, err := scanOwnership(tx.QueryRowContext(ctx, "SELECT account,role_proto,owner_revision,trade_listing_id FROM account_role WHERE player_id=? FOR UPDATE", role.PlayerId), role.PlayerId)
+	err := s.playerTx(ctx, role.PlayerId, func(tx *sql.Tx) error {
+		old, err := scanOwnership(tx.QueryRowContext(ctx, lockOwnershipSQL, role.PlayerId), role.PlayerId)
 		if err != nil {
 			return err
 		}
-		if old.Account != account || old.OwnerRevision != rev || old.TradeListingId != 0 {
+		if old.Account != account || old.OwnerRevision != rev || old.TradeListingId != 0 || old.PrepareToken != 0 {
 			return accountdirectory.ErrConflict
 		}
 		merged, err := mergeRole(old.Role, role)
@@ -371,62 +465,14 @@ func (s *AccountDirectoryStore) Repair(ctx context.Context, account string, role
 		if err != nil {
 			return err
 		}
-		if !bytes.Equal(before, raw) {
-			if _, err = tx.ExecContext(ctx, "UPDATE account_role SET role_proto=?,updated_ms=UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 WHERE player_id=? AND account=? AND owner_revision=?", raw, role.PlayerId, []byte(account), rev); err != nil {
-				return err
-			}
+		if bytes.Equal(before, raw) {
+			return nil
 		}
-		out, err = readRoles(ctx, tx, account)
+		_, err = tx.ExecContext(ctx, "UPDATE account_role SET role_proto=?,updated_ms=UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 WHERE player_id=? AND account=? AND owner_revision=?", raw, role.PlayerId, []byte(account), rev)
 		return err
 	})
-	return out, err
-}
-func (s *AccountDirectoryStore) Remove(ctx context.Context, account string, roles []*dspb.AccountRoleVersion) error {
-	if len(roles) == 0 || len(roles) > 100 {
-		return accountdirectory.ErrInvalid
+	if err != nil {
+		return nil, err
 	}
-	ordered := append([]*dspb.AccountRoleVersion(nil), roles...)
-	for _, r := range ordered {
-		if r == nil || r.PlayerId == 0 || r.OwnerRevision == 0 {
-			return accountdirectory.ErrInvalid
-		}
-	}
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].PlayerId < ordered[j].PlayerId })
-	return s.transaction(ctx, func(tx *sql.Tx) error {
-		if err := lockDirectory(ctx, tx, account, false); err != nil {
-			return err
-		}
-		for i, r := range ordered {
-			if i > 0 && r.PlayerId == ordered[i-1].PlayerId {
-				return accountdirectory.ErrInvalid
-			}
-			old, err := scanOwnership(tx.QueryRowContext(ctx, "SELECT account,role_proto,owner_revision,trade_listing_id FROM account_role WHERE player_id=? FOR UPDATE", r.PlayerId), r.PlayerId)
-			if errors.Is(err, accountdirectory.ErrMissing) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			if old.Account == "" {
-				continue
-			}
-			if old.Account != account || old.OwnerRevision != r.OwnerRevision || old.TradeListingId != 0 {
-				return accountdirectory.ErrConflict
-			}
-			if old.OwnerRevision == math.MaxUint64 {
-				return errors.New("角色归属修订号耗尽")
-			}
-			if err := requireClosedAdmissions(ctx, tx, r.PlayerId); err != nil {
-				return err
-			}
-			if err := s.requireNoAssetContracts(ctx, tx, r.PlayerId); err != nil {
-				return err
-			}
-			// 保留墓碑与单调修订号:删除后这个 player_id 不能再建角,旧登录链也不能通过 ABA 重获修改权。
-			if _, err = tx.ExecContext(ctx, "UPDATE account_role SET account='',owner_revision=owner_revision+1,updated_ms=UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 WHERE player_id=? AND account=? AND owner_revision=?", r.PlayerId, []byte(account), r.OwnerRevision); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return s.readRoleList(ctx, account)
 }

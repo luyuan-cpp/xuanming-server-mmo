@@ -142,7 +142,7 @@ func TestTiDBSameRunRetirementAndFreeze(t *testing.T) {
 			}
 			sourceDigest := sha256.Sum256(source)
 			seed := &pb.SqlWriterMaintenanceReceipt_IssuerClosure{IssuerId: fixtureID(t), InstanceId: fixture.Config.InstanceID(), PhysicalWriterKey: fixture.Config.WriterKey(), LogicalRole: "SOURCE", PermanentRevivalFenceId: fixtureID(t), SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{{AbsolutePath: sourcePath, Sha256: sourceDigest[:]}}}
-			plan := &pb.SqlWriterMaintenanceReceipt_Plan{PhysicalClusterIdentity: opts.PhysicalAuthoritySHA256, AuthoritySchema: opts.AuthoritySchema, ProtectedSchemas: opts.ProtectedSchemas, RunId: runID, BeforeEpoch: meta.WriterEpoch, CatalogRevision: meta.CatalogRevision, ActiveWriterKeys: [][]byte{fixture.Config.WriterKey()}, RootIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}}
+			plan := &pb.SqlWriterMaintenanceReceipt_Plan{PhysicalClusterIdentity: opts.PhysicalAuthoritySHA256, AuthoritySchema: opts.AuthoritySchema, ProtectedSchemas: []string{opts.AuthoritySchema}, RunId: runID, BeforeEpoch: meta.WriterEpoch, CatalogRevision: meta.CatalogRevision, ActiveWriterKeys: [][]byte{fixture.Config.WriterKey()}, RootIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{seed}}
 			var relaySeed *pb.SqlWriterMaintenanceReceipt_IssuerClosure
 			if withRelay {
 				relaySeed = proto.Clone(seed).(*pb.SqlWriterMaintenanceReceipt_IssuerClosure)
@@ -510,7 +510,7 @@ func TestTiDBOldEpochWaitingSlotCannotSendBusinessSQL(t *testing.T) {
 			}
 			select {
 			case err = <-done:
-				if !errors.Is(err, authoritysql.ErrWriterDenied) {
+				if !errors.Is(err, authoritysql.ErrWriterFrozen) || !errors.Is(err, authoritysql.ErrWriterDenied) {
 					t.Fatalf("旧E事务未被围栏拒绝: %v", err)
 				}
 			case <-ctx.Done():

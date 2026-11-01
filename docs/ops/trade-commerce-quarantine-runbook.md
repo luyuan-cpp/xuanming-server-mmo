@@ -82,13 +82,15 @@ ORDER BY op_id;
 先用日志 `[Commerce] Contract blocked by a party role` 取 `commerce_id`，再用 §3.1 的查询把 `WHERE status = 10` 换成 `WHERE commerce_id = ?` 查出参与者，然后到账号角色目录库里查这些角色（schema 是 trade 配置里的角色目录 schema）：
 
 ```sql
-SELECT player_id, account, owner_revision, trade_listing_id
+SELECT player_id, account, owner_revision, trade_listing_id, prepare_token
 FROM <角色目录schema>.account_role
 WHERE player_id IN (?, ?);
 ```
 
 - `trade_listing_id ≠ 0`：角色正被一条人民币挂单冻结。这是暂时状态，冻结解除后合同最多再等约 5 分钟会自动恢复推进。
-- `trade_listing_id = 0`：原主已换（`owner_revision` 只增不减，合同里存的原归属身份永远对不上），或者目录行本身不合格。合同不会自己恢复，见 §4.3。
+- `prepare_token ≠ 0`：角色正在准备冻结或删除，参与者库还在投票。约 30 秒内有结局：通过就转成 `trade_listing_id`，超时由目录撤销。合同最多再等约 5 分钟会重判。
+- 两列都是 0，合同 `kind=6` 且卖的就是这个角色：目录拒绝了这次冻结，多半是角色在某个参与者库还有挂起（判定见 [`horizontal-scale-logical-db.md`](../design/horizontal-scale-logical-db.md) §3.5）。合同每约 5 分钟复查一次，到 `expires_ms` 自动走取消，见 §4.3。
+- 两列都是 0，其余情况：原主已换（`owner_revision` 只增不减，合同里存的原归属身份永远对不上），或者目录行本身不合格。合同不会自己恢复，见 §4.3。
 
 ## 4. 处置
 
@@ -111,7 +113,8 @@ WHERE player_id IN (?, ?);
 
 ### 4.3 角色冲突
 
-- 暂时冻结：不用处理，等冻结解除。
+- 暂时冻结、还在投票：不用处理，等结局。
+- 角色寄售被目录拒绝：不用处理，到 `expires_ms` 自动取消。这时角色没有冻结过，托管也还没进商城。
 - 原主已换：托管资产是从原归属身份扣出的。退回角色就等于交给新主，所以引擎按设计拒绝发放。谁应该拿到这份资产，需要产品或运营做决定，本手册不替他们决定。按 §4.2 的流程取证并登记工单。
 
 ### 4.4 盘口

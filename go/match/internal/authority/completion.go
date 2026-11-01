@@ -294,7 +294,12 @@ func validateTerminalResult(f *pb.MatchFormationRecord, event *kafkapb.BattleRes
 }
 
 // 原票的owner不能从当前目录补造。P首锁后再锁formation，COMPLETE与ABORT争同一行。
-func (s *Store) terminalFormation(ctx context.Context, id uint64) (*sql.Tx, *pb.MatchFormationRecord, []*pb.MatchAuthorityTicketRecord, error) {
+func (s *Store) terminalFormation(ctx context.Context, id uint64) (tx *sql.Tx, locked *pb.MatchFormationRecord, originals []*pb.MatchAuthorityTicketRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { tx, locked, originals, e = s.terminalFormationOnce(ctx, id); return e })
+	return tx, locked, originals, err
+}
+
+func (s *Store) terminalFormationOnce(ctx context.Context, id uint64) (*sql.Tx, *pb.MatchFormationRecord, []*pb.MatchAuthorityTicketRecord, error) {
 	f, err := s.Formation(ctx, id)
 	if err != nil {
 		return nil, nil, nil, err

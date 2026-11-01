@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
-	"shared/authoritysql"
 	"shared/drainproof"
 	"strings"
 	"sync"
@@ -64,7 +63,6 @@ func redisClosed(c *redis.Client) bool {
 
 func testConfig() config.Config {
 	var c config.Config
-	c.AccountRoleSchema = "fixture_directory"
 	c.Etcd.Hosts = []string{"127.0.0.1:2379"}
 	c.MySQL = configMySQL()
 	c.CoreRedis = config.RedisConf{Host: "127.0.0.1:6379"}
@@ -157,8 +155,14 @@ func (r *recordingDeps) deps() externalDeps {
 			return r.db, nil
 		},
 		// 只验证装配/回收；不冒充任何真实SQL原角色围栏证据。
-		newRoleAuthority: func(context.Context, *sql.DB, string, authoritysql.Backend) (inbox.RoleAuthority, error) {
+		checkRoleFence: func(context.Context, *sql.DB) error {
 			if r.failAt == "role" {
+				return errInjected
+			}
+			return nil
+		},
+		newRoleAuthority: func(*sql.DB, dspb.DataServiceClient) (inbox.RoleAuthority, error) {
+			if r.failAt == "role_authority" {
 				return nil, errInjected
 			}
 			return assemblyRoles{}, nil
@@ -198,10 +202,13 @@ func (r *recordingDeps) deps() externalDeps {
 
 type assemblyRoles struct{}
 
+func (assemblyRoles) RunTx(context.Context, func() error) error {
+	return errors.New("装配替身禁止业务调用")
+}
 func (assemblyRoles) LockCurrent(context.Context, *sql.Tx, uint64) (*dspb.AccountRoleOwnership, error) {
 	return nil, errors.New("装配替身禁止业务调用")
 }
-func (assemblyRoles) VerifyAdmission(context.Context, *sql.Tx, *dspb.AccountRoleOwnership, *base.RoleAdmissionIdentity) error {
+func (assemblyRoles) VerifyAdmission(context.Context, *base.RoleAdmissionIdentity) error {
 	return errors.New("装配替身禁止业务调用")
 }
 
@@ -268,6 +275,15 @@ func TestNewServiceContextClosesOpenedResourcesOnFailure(t *testing.T) {
 	}
 	if !redisClosed(rec.rds) || !redisClosed(rec.player) || !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
 		t.Error("data_service 失败时 Redis / MySQL / etcd 都应已关闭")
+	}
+
+	rec = newRecordingDeps(t)
+	rec.failAt = "role_authority"
+	if sc, err := newServiceContext(testConfig(), rec.deps()); err == nil || sc != nil || !errors.Is(err, errInjected) {
+		t.Fatalf("角色护栏装配失败应返回错误(比如调用方密钥缺失): sc=%v err=%v", sc, err)
+	}
+	if rec.conn.GetState() != connectivity.Shutdown || !redisClosed(rec.rds) || !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
+		t.Error("角色护栏装配失败时 data_service / Redis / MySQL / etcd 都应已关闭")
 	}
 }
 

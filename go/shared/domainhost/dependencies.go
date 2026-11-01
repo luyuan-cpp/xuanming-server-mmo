@@ -2,13 +2,16 @@ package domainhost
 
 import (
 	"context"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
 	dspb "proto/data_service"
 	"shared/idsegment"
 	"time"
 )
 
-// IDClients同一实际DataService连接，按领域tag独占号段；启动预取验证服务已部署这些tag。
+// IDClients同一实际DataService连接，按领域tag独占号段。
+// 启动时预取一次，只为尽早暴露问题，失败只告警（和 guild、trade、login 一样）：首次部署时发号器记录要等 -id-issuer-init，
+// data_service 也可能还没起来，这些都不该挡住进程启动。没好时取号回错误，好了自动恢复，不用重启。
 // Close只关闭调用方创建的资源，不关闭共享或全局客户端。
 type IDClients struct {
 	RPC  zrpc.Client
@@ -42,7 +45,7 @@ func OpenIDs(ctx context.Context, c zrpc.RpcClientConf, tags ...string) (result 
 		_, e = ids.Next(check)
 		cancel()
 		if e != nil {
-			return nil, e
+			logx.Errorf("[domainhost] warming the id segment %s failed, id allocation will keep retrying: %v", tag, e)
 		}
 	}
 	ready = true

@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -24,9 +23,16 @@ type playerStoreProofRow struct {
 	holderInstance, bytes []byte
 }
 
-// readPlayerStoreProofRows 锁住并读出这名玩家的所有行,写权行在最前。读完就关游标:同一事务后面还要发语句。
-func readPlayerStoreProofRows(ctx context.Context, tx *sql.Tx, schema string, player uint64) ([]playerStoreProofRow, error) {
-	rows, err := tx.QueryContext(ctx, "SELECT kind,owner_epoch,save_seq,schema_gen,released,holder_instance,payload FROM `"+schema+"`.`player_store` WHERE player_id=? ORDER BY kind FOR UPDATE", player)
+const playerStoreProofSQL = "SELECT kind,owner_epoch,save_seq,schema_gen,released,holder_instance,payload FROM player_store WHERE player_id=? ORDER BY kind"
+
+// readPlayerStoreProofRows 读出这名玩家的所有行,写权行在最前。一条语句读完,看到的是同一个时刻。
+// lock 为 true 时锁住这些行,只在存档库自己的事务里用。读完就关游标:同一事务后面还要发语句。
+func readPlayerStoreProofRows(ctx context.Context, q directoryQuery, player uint64, lock bool) ([]playerStoreProofRow, error) {
+	query := playerStoreProofSQL
+	if lock {
+		query += " FOR UPDATE"
+	}
+	rows, err := q.QueryContext(ctx, query, player)
 	if err != nil {
 		return nil, err
 	}
@@ -85,11 +91,9 @@ func isInitialPlayerStore(rows []playerStoreProofRow) bool {
 	return true
 }
 
-func (v *SQLRoleFreezeVerifier) verifyFrozenPlayerStore(ctx context.Context, tx *sql.Tx, r *dbpb.AccountRoleTrade, holders int, schema string) (*dspb.AccountRoleFreezeEvidence, error) {
-	rows, err := readPlayerStoreProofRows(ctx, tx, schema, r.PlayerId)
-	if err != nil {
-		return nil, err
-	}
+// decideFrozenEvidence 由存档行得出证据候选。读到的版本低于下限、世代超前、初始形态对不上都拒绝。
+// 初始提交还要在目录事务里核 initial_player_commit 和修订号(checkEvidenceInTx)。
+func decideFrozenEvidence(r *dbpb.AccountRoleTrade, holders int, schema string, rows []playerStoreProofRow) (*dspb.AccountRoleFreezeEvidence, error) {
 	owner := rows[0]
 	if !accountdirectory.ValidSaveFloor(owner.ownerEpoch, owner.saveSeq) {
 		return nil, errors.New("玩家 SQL 证据围栏非法")
@@ -103,13 +107,6 @@ func (v *SQLRoleFreezeVerifier) verifyFrozenPlayerStore(ctx context.Context, tx 
 	kind := dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE
 	if owner.ownerEpoch == accountdirectory.InitialOwnerEpoch && owner.saveSeq == accountdirectory.InitialSaveSeq {
 		if r.RequiredOwnerEpoch != 0 || r.RequiredSaveSeq != 0 || holders != 0 || !isInitialPlayerStore(rows) {
-			return nil, accountdirectory.ErrConflict
-		}
-		var marker, revision uint64
-		if err := tx.QueryRowContext(ctx, "SELECT initial_player_commit,owner_revision FROM account_role WHERE player_id=? FOR UPDATE", r.PlayerId).Scan(&marker, &revision); err != nil {
-			return nil, err
-		}
-		if marker != 1 || revision != 1 || r.SellerOwnerRevision != revision {
 			return nil, accountdirectory.ErrConflict
 		}
 		kind = dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT

@@ -11,6 +11,7 @@ import (
 	pb "proto/guild"
 	matchpb "proto/match"
 	"shared/accountdirectory"
+	"shared/rolefence"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -18,7 +19,7 @@ import (
 const trialLaunchColumns = "request_id,battle_id,state,original_proto,request_digest,created_ms,updated_ms,cancel_receipt"
 
 func (r *ActivityRepo) TrialLaunchEnabled() bool {
-	return r != nil && r.guilds != nil && r.guilds.roleAuthority != ""
+	return r != nil && r.guilds != nil && r.guilds.fence != nil
 }
 
 func decodeTrialLaunch(row *pb.GuildTrialLaunchRecord) (*pb.GuildTrialLaunchOriginal, error) {
@@ -73,7 +74,7 @@ func (r *ActivityRepo) TrialLaunch(ctx context.Context, id uint64) (*pb.GuildTri
 
 // 原同意身份来自私有lobby值；首次提交前逐项核原account/revision，未知提交后只重放永久原件。
 func (r *ActivityRepo) PrepareTrialLaunch(ctx context.Context, requestID uint64, battle TrialBattleKey, dungeon uint32, roster []*pb.GuildTrialRoleIdentity, nowMs uint64) (*pb.GuildTrialLaunchOriginal, error) {
-	if r.guilds == nil || r.guilds.roleAuthority == "" {
+	if r.guilds == nil || r.guilds.fence == nil {
 		return nil, nil
 	} // 旧独立仓储夹具；在线装配强制权威。
 	if requestID == 0 || dungeon == 0 || len(roster) < minTrialLobbyRoster || len(roster) > maxTrialLobbyRoster {
@@ -99,8 +100,18 @@ func (r *ActivityRepo) PrepareTrialLaunch(ctx context.Context, requestID uint64,
 	if !initiator {
 		return nil, ErrWriteConflict
 	}
+	// 首次 Prepare 之前续租并复核票和整队开战,对应旧 requireTrialEntryFree 在事务里读 match 的两条(规格 §4)。
+	// 已有原件的重放不再占:Start 可能已经写了票,这时 Acquire 一定拒绝,结论由事务里的原件比对给出。
+	var existing uint64
+	err := r.db.QueryRowContext(ctx, "SELECT request_id FROM guild_trial_launch WHERE request_id=?", requestID).Scan(&existing)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = r.guilds.acquireTrialOccupancy(ctx, requestID, proposed.Roster, trialOccupancyMargin)
+	}
+	if err != nil {
+		return nil, err
+	}
 	var result *pb.GuildTrialLaunchOriginal
-	err := r.guilds.inTx(withRoleTargets(ctx, launchPlayers(proposed)...), opTrialRegister, func(ctx context.Context, tx *sql.Tx) error {
+	err = r.guilds.inTx(withRoleTargets(ctx, launchPlayers(proposed)...), opTrialRegister, func(ctx context.Context, tx *sql.Tx) error {
 		if _, err := lockTrialGuild(ctx, tx, battle.GuildID); err != nil {
 			return err
 		}
@@ -174,26 +185,21 @@ func (r *ActivityRepo) PrepareTrialLaunch(ctx context.Context, requestID uint64,
 }
 func (r *ActivityRepo) verifyTrialOwners(ctx context.Context, tx *sql.Tx, original *pb.GuildTrialLaunchOriginal) error {
 	seen := map[uint64]bool{}
+	expects := make([]rolefence.Expect, 0, len(original.Roster))
 	for _, p := range original.Roster {
 		if p.GetPlayerId() == 0 || seen[p.PlayerId] || !accountdirectory.ValidAccount(p.Account) || p.OwnerRevision == 0 {
 			return ErrWriteConflict
 		}
 		seen[p.PlayerId] = true
-		var account string
-		var revision, listing uint64
-		if err := tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+r.guilds.roleAuthority+"`.account_role WHERE player_id=? FOR UPDATE", p.PlayerId).Scan(&account, &revision, &listing); err != nil {
-			return err
-		}
-		if account != p.Account || revision != p.OwnerRevision || listing != 0 {
-			return ErrWriteConflict
-		}
+		expects = append(expects, rolefence.Expect{PlayerID: p.PlayerId, Account: p.Account, OwnerRevision: p.OwnerRevision, Reject: ErrWriteConflict})
 	}
-	return nil
+	_, err := rolefence.LockAll(ctx, tx, expects...)
+	return err
 }
 
 // caller已按全员P升序后持G；既有launch和其ACTIVE投影必须与永久原件完全一致。
 func (r *ActivityRepo) lockTrialLaunch(ctx context.Context, tx *sql.Tx, battle TrialBattleKey, original *pb.GuildTrialLaunchOriginal, terminal bool, nowMs uint64) error {
-	if r.guilds.roleAuthority == "" {
+	if r.guilds.fence == nil {
 		return nil
 	}
 	if original == nil || battle.LaunchRequestID == 0 {
@@ -252,7 +258,7 @@ func (r *ActivityRepo) lockTrialLaunch(ctx context.Context, tx *sql.Tx, battle T
 	return nil
 }
 func (r *ActivityRepo) trialLaunchOriginal(ctx context.Context, battle *TrialBattleKey) (*pb.GuildTrialLaunchOriginal, error) {
-	if r.guilds == nil || r.guilds.roleAuthority == "" {
+	if r.guilds == nil || r.guilds.fence == nil {
 		return nil, nil
 	}
 	if battle.LaunchRequestID == 0 && battle.BattleID != 0 {
@@ -274,7 +280,7 @@ func releaseGuildTrialLaunches(ctx context.Context, tx *sql.Tx, guildID, nowMs u
 
 // 持久扫描按request_id轮转；失败也前进，原行仍保留等待下一圈，离线队头不阻挡后续合同。
 func (r *ActivityRepo) PendingTrialLaunches(ctx context.Context, after uint64, limit int) ([]*pb.GuildTrialLaunchOriginal, error) {
-	if r.guilds.roleAuthority == "" {
+	if r.guilds.fence == nil {
 		return nil, nil
 	}
 	if limit < 1 || limit > 100 {
@@ -333,7 +339,7 @@ func (r *ActivityRepo) FinishCancelledTrialLaunch(ctx context.Context, original 
 	if err != nil {
 		return err
 	}
-	return r.guilds.inTx(withRoleTargets(ctx, launchPlayers(original)...), opTrialMark, func(ctx context.Context, tx *sql.Tx) error {
+	err = r.guilds.inTx(withRoleTargets(ctx, launchPlayers(original)...), opTrialMark, func(ctx context.Context, tx *sql.Tx) error {
 		// 已解散帮会也须消费可信取消证明；G缺失时不补造帮会或奖项。
 		if _, err := lockTrialGuild(ctx, tx, original.GuildId); err != nil && !errors.Is(err, ErrGuildGone) {
 			return err
@@ -385,4 +391,8 @@ func (r *ActivityRepo) FinishCancelledTrialLaunch(ctx context.Context, original 
 		}
 		return closeProvenTrialLobby(ctx, tx, lobby, nowMs)
 	})
+	if err == nil {
+		r.guilds.releaseTrialOccupancy(ctx, original.RequestId, launchPlayers(original))
+	}
+	return err
 }

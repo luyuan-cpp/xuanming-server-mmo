@@ -41,7 +41,8 @@ function New-SqlWriterCatalogFixture {
 
     $null = [System.IO.Directory]::CreateDirectory($Root)
     $rosterPath = Join-Path $Root 'roster.json'
-    [System.IO.File]::WriteAllText($rosterPath, '{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[{},{}]}', [System.Text.UTF8Encoding]::new($false))
+    # 两副本要至少 12 条(k8s_deploy.ps1 Get-SqlWriterRosterMinimumEntries)。
+    [System.IO.File]::WriteAllText($rosterPath, ('{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[' + ((@('{}') * 12) -join ',') + ']}'), [System.Text.UTF8Encoding]::new($false))
     $rosterSha = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $catalog = @{}
     foreach ($namespace in $Namespaces) {
@@ -60,13 +61,15 @@ function New-SqlWriterCatalogFixture {
 
 <#
 .SYNOPSIS
-    给跑 k8s_deploy.ps1 的子进程补玩家域 Redis Cluster 的参数,返回 @{ Arguments; Env }。
+    给跑 k8s_deploy.ps1 的子进程补玩家域 Redis Cluster 和逻辑库的参数,返回 @{ Arguments; Env }。
 
 .DESCRIPTION
     staging / prod 必须显式给 -PlayerRedisMasters,要 apply 集群时还要容量,开了集群还要口令(docs/design/redis-player-store-cluster.md §5.1)。
-    绝大多数用例测的不是这条闸,不补的话全部非 dev 档的 DryRun 都停在这里。
+    同样必须显式给 -DirectoryLogicalShards(prod 只能是 64)和 -Region(docs/design/horizontal-scale-logical-db.md §5.1、§9)。
+    绝大多数用例测的不是这些闸,不补的话全部非 dev 档的 DryRun 都停在这里。
     用例自己给了 -PlayerRedisMasters(含 0,测闸本身)就原样不动;-Env 写了 MMORPG_PLAYER_REDIS_PASSWORD(含空串)就用它。
-    dev 档不补:dev 缺省不建集群,这是要钉住的行为。
+    -DirectoryLogicalShards、-Region 同理(测闸本身时给 0、-1)。
+    dev 档不补:dev 缺省不建集群,K=1、地域 0,这是要钉住的行为。
 #>
 function Add-PlayerRedisDeployFixture {
     param(
@@ -77,11 +80,15 @@ function Add-PlayerRedisDeployFixture {
     $result = @{ Arguments = $Arguments; Env = $Env }
     $profileAt = [array]::IndexOf($Arguments, '-ReleaseProfile')
     if ($profileAt -lt 0 -or ($profileAt + 1) -ge $Arguments.Count -or $Arguments[$profileAt + 1] -notin @('staging', 'prod')) { return $result }
+    $logicalDb = @()
+    if ($Arguments -notcontains '-DirectoryLogicalShards') { $logicalDb += @('-DirectoryLogicalShards', '64') }
+    if ($Arguments -notcontains '-Region') { $logicalDb += @('-Region', '1') }
+    $result.Arguments = @($Arguments) + $logicalDb
     if ($Arguments -contains '-PlayerRedisMasters') { return $result }
     $added = @('-PlayerRedisMasters', '3')
     # 容量只在本次 apply 集群时生效,zone-up 带上它只会多一条 NoEffect 警告。
     if (($Arguments -contains 'infra-up') -or ($Arguments -contains 'all-up')) { $added += @('-PlayerRedisMaxMemory', '1gb', '-PlayerRedisStorage', '8Gi') }
-    $result.Arguments = @($Arguments) + $added
+    $result.Arguments = @($result.Arguments) + $added
     if (-not $Env.ContainsKey('MMORPG_PLAYER_REDIS_PASSWORD')) {
         $result.Env = @{} + $Env
         $result.Env['MMORPG_PLAYER_REDIS_PASSWORD'] = 'contract-player-redis-pw-01'

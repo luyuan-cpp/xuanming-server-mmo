@@ -37,7 +37,7 @@
 
 ### 三个完成条件
 
-- **归属合并**:映射提交即完成,各服务 2 个刷新周期内生效(data_service、match 重读全局库 5 秒,guild、trade 重读 data_service 5 秒,共约 10 秒)。
+- **归属合并**:映射提交即完成,各服务 2 个刷新周期内生效(data_service 重读目录第 0 片 5 秒,guild、trade、match 重读 data_service 5 秒,共约 10 秒)。
 - **数据归并**:不需要。玩家存档留在原来的库,靠 `player_route.storage_id` 找到。
 - **源资源退役**:场景节点、gate 按现有排空流程随时下线,和合服解耦(§8)。源库不退役。
 
@@ -96,12 +96,12 @@
 5. **环境变量**。DSN 含口令,不写进 shell 历史:
 
    ```powershell
-   $env:MERGE_ZONE_ROUTE_DB_DSN = '<账号:口令@tcp(地址:端口)/全局库>'   # dev: testdb, K8s: mmorpg_global
+   $env:MERGE_ZONE_ROUTE_DB_DSN = '<账号:口令@tcp(地址:端口)/目录第 0 片>'   # K=1: dev testdb, K8s mmorpg_global;否则 <全局库>_00
    $env:MMORPG_SQL_OPERATOR_PRINCIPAL = '<账号@主机>'                   # 这个账号 SELECT CURRENT_USER() 的结果,真写才要
    $env:MMORPG_SQL_BACKEND = 'mysql'                                    # 只有 mysql 档要设,缺省 tidb
    ```
 
-6. **账号权限**:操作员账号要有 `route_meta` 的 SELECT、UPDATE(`FOR UPDATE` 要它),`zone_merged_into` 的 SELECT、INSERT、DELETE,都在 `deploy/sql/authority_operator_role.sql` 的 maintenance 身份里。dry-run 和审计只要 SELECT。match 的运行账号要有全局库 `zone_merged_into` 的 SELECT,和 `player_route` 同样列进写者计划的 `tables`;没有的话 match 起不来。
+6. **账号权限**:操作员账号要有 `route_meta` 的 SELECT、UPDATE(`FOR UPDATE` 要它),`zone_merged_into` 的 SELECT、INSERT、DELETE,都在 `deploy/sql/authority_operator_role.sql` 的 maintenance 身份里。dry-run 和审计只要 SELECT。`zone_merged_into` 只在目录第 0 片,操作员的授权由这个库的 `render-roles` 计划(`directorySchema`)带出。match、guild、trade 读映射走 `GetMergedZones`,运行账号不用这张表的权限。
 
 ## 4. 操作步骤
 
@@ -173,8 +173,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRoute
 | 映射提交了,服务迟迟不生效 | 看刷新指标和日志 | 下面两行 |
 | `DataServiceMergedZoneRefreshFailing` | data_service 读不到全局库,继续用旧映射 | 查全局库连接和 `zone_merged_into` 读权限。旧映射下玩家归属还是原值,最坏是同区判定拒绝,没有错误数据。恢复后等 2 个周期。**正在合服时先别做业务核对** |
 | `GuildMergedZoneRefreshFailing`、`TradeMergedZoneRefreshFailing` | 读不到 data_service,继续用旧映射 | 查 data_service。恢复后等 1 个周期 |
-| `MatchMergedZoneRefreshFailing` | match 读不到全局库,继续用旧映射 | 查全局库连接和 `zone_merged_into` 读权限。旧映射下最坏是同区判定拒绝和多等一拍,没有错误数据。恢复后等 1 个周期 |
-| match 起不来,报 `cannot read <全局库>.zone_merged_into` | 全局库连不上、账号没有这张表的 SELECT,或者映射表写坏 | 按错误原文处理,权限见 §3 第 6 条。这是有意的:分不清「没有合服」和「读不到」的实例不能对外服务 |
+| `MatchMergedZoneRefreshFailing` | match 读不到 data_service,继续用旧映射 | 查 data_service 是否就绪,以及 match 到它的连接(`DataServiceRpc`)。旧映射下最坏是同区判定拒绝和多等一拍,没有错误数据。恢复后等 1 个周期 |
+| match 起不来,启动日志说读不到合服映射 | data_service 没起、连不上,或者映射表写坏 | 启动时等 60 秒读不到就退出,和 guild、trade 同一套。先让 data_service 就绪,按错误原文处理。这是有意的:分不清「没有合服」和「读不到」的实例不能对外服务 |
 | 开战回 `kTeamCrossZoneDenied`,队里的人明明一直在一起 | 撤销合服留下的跨原始区队伍(§7) | 踢人或离队之后再开。要合就重新合服 |
 | `does not resolve` 同时刷新一直失败 | 映射表写坏,缓存拒绝坏表、保留旧值 | 按审计结果用 `merge-zone-unmerge` 删掉坏的那一行(撤销不校验整张表)。修好之前不要重启服务:启动读到坏表会拒绝启动 |
 | guild 或 trade 起不来,报 `GetMergedZones` | 启动时等了 60 秒还读不到映射 | 先起 data_service(zone 级,`zone-up` 才有)。这是有意的:分不清「没有合服」和「读不到」的实例不能对外服务 |

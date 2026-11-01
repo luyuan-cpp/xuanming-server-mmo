@@ -5,7 +5,7 @@ package inbox
 // 真TiDB集成测试:go test -tags integration ./internal/inbox/... -count=1 -v
 // 环境变量MYSQL字样仅保留历史名称兼容，连接必须是数值loopback端点且通过TiDB强读探针。
 // 本任务实证端点为127.0.0.1:24000，运行前仍须核对Docker任务标签与端口归属。
-// 独立目录P与完整admission均为此一次性测试库内的真实SQL夹具，不是生产授权替身。
+// 角色护栏副本是此一次性测试库内的真实表;目录(权威状态、入场登记)是替身(itDirectory),生产经 RPC 读。
 //
 // PLAYER_INBOX_TEST_MYSQL_DSN 为空则整组 Skip。⚠ 只能指向**一次性**测试库:每个用例都会 DROP 并重建
 // player_inbox_stream / player_inbox_item / player_inbox_audit / schema_migrations。DSN 必须带库名,
@@ -40,8 +40,8 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
+	"shared/rolefence"
 	"sort"
 	"strconv"
 	"strings"
@@ -58,6 +58,7 @@ import (
 	base "proto/common/base"
 	componentpb "proto/common/component"
 	inboxpb "proto/player_inbox"
+	rfpb "proto/role_fence"
 
 	"schemamigrate"
 
@@ -73,29 +74,94 @@ func (c *itClock) Now() time.Time    { return time.UnixMilli(c.ms.Load()) }
 func (c *itClock) set(ms uint64)     { c.ms.Store(int64(ms)) }
 func (c *itClock) advance(ms uint64) { c.ms.Add(int64(ms)) }
 
-type itPlayers struct {
-	missing map[uint64]bool
-	db      *sql.DB
+// itDirectory 是目录的替身:角色权威状态和入场登记都经 RPC 读,收件箱库不跨库。副本表和自愈走真的。
+type itDirectory struct {
+	mu         sync.Mutex
+	states     map[uint64]*rfpb.RoleFenceState
+	version    uint64
+	admissions map[string]*base.RoleAdmissionIdentity
+	closed     map[string]bool
 }
 
-func (p itPlayers) PlayerExists(ctx context.Context, id uint64) (bool, error) {
+func newItDirectory() *itDirectory {
+	return &itDirectory{states: map[uint64]*rfpb.RoleFenceState{}, admissions: map[string]*base.RoleAdmissionIdentity{}, closed: map[string]bool{}}
+}
+
+func (d *itDirectory) GetRoleFenceState(_ context.Context, player uint64) (*rfpb.RoleFenceState, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	state, ok := d.states[player]
+	if !ok {
+		return nil, rolefence.ErrRoleNotFound
+	}
+	return state, nil
+}
+
+func admissionKey(identity *base.RoleAdmissionIdentity) string {
+	return strconv.FormatUint(identity.GetPlayerId(), 10) + "/" + identity.GetSceneInstanceId()
+}
+
+// VerifyRoleAdmission 和目录同口径:这份原件就是登记的那一份,而且没有关闭。
+func (d *itDirectory) VerifyRoleAdmission(_ context.Context, admission *base.RoleAdmissionIdentity) (bool, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	key := admissionKey(admission)
+	registered, ok := d.admissions[key]
+	return ok && !d.closed[key] && proto.Equal(registered, admission), nil
+}
+
+// ensure 第一次见到的玩家默认归 inbox-fixture-<id>、修订 1。
+func (d *itDirectory) ensure(player uint64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.states[player]; !ok {
+		d.version++
+		d.states[player] = &rfpb.RoleFenceState{PlayerId: player, Account: "inbox-fixture-" + strconv.FormatUint(player, 10), OwnerRevision: 1, Version: d.version, HomeZone: 1}
+	}
+}
+
+func (d *itDirectory) revision(player uint64) uint64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.states[player].GetOwnerRevision()
+}
+
+// set 改权威状态,版本加 1。不碰副本:相当于推送丢了。
+func (d *itDirectory) set(player uint64, account string, revision, token uint64) *rfpb.RoleFenceState {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.version++
+	state := &rfpb.RoleFenceState{PlayerId: player, Account: account, OwnerRevision: revision, FreezeToken: token, Version: d.version, HomeZone: 1}
+	d.states[player] = state
+	return state
+}
+
+// register 先到的登记有效,和目录的主键一样。
+func (d *itDirectory) register(identity *base.RoleAdmissionIdentity) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.admissions[admissionKey(identity)]; !ok {
+		d.admissions[admissionKey(identity)] = identity
+	}
+}
+
+func (d *itDirectory) closeAdmission(identity *base.RoleAdmissionIdentity) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.closed[admissionKey(identity)] = true
+}
+
+type itPlayers struct {
+	missing   map[uint64]bool
+	directory *itDirectory
+}
+
+func (p itPlayers) PlayerExists(_ context.Context, id uint64) (bool, error) {
 	if p.missing[id] {
 		return false, nil
 	}
-	var existing uint64
-	err := p.db.QueryRowContext(ctx, "SELECT player_id FROM account_role WHERE player_id=?", id).Scan(&existing)
-	if err == nil {
-		err = ensureInboxFixtureRoute(ctx, p.db, id)
-		return err == nil, err
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return false, err
-	}
-	_, err = p.db.ExecContext(ctx, "INSERT INTO account_role(player_id,account,owner_revision,trade_listing_id) VALUES(?,?,1,0) ON DUPLICATE KEY UPDATE player_id=player_id", id, "inbox-fixture-"+strconv.FormatUint(id, 10))
-	if err == nil {
-		err = ensureInboxFixtureRoute(ctx, p.db, id)
-	}
-	return err == nil, err
+	p.directory.ensure(id)
+	return true, nil
 }
 
 type itEpochs struct {
@@ -139,12 +205,22 @@ func (n *itNotifier) setResult(r NotifyResult) {
 }
 
 type itEnv struct {
-	db       *sql.DB
-	store    *Store
-	clock    *itClock
-	epochs   *itEpochs
-	notifier *itNotifier
-	missing  map[uint64]bool
+	db        *sql.DB
+	install   *sql.DB
+	store     *Store
+	clock     *itClock
+	epochs    *itEpochs
+	notifier  *itNotifier
+	missing   map[uint64]bool
+	directory *itDirectory
+}
+
+// push 改权威状态并写进副本,相当于协调者的 Prepare 或 Push 到了。
+func (e *itEnv) push(t *testing.T, player uint64, account string, revision, token uint64) {
+	t.Helper()
+	if _, err := rolefence.Apply(itCtx(t), e.db, e.directory.set(player, account, revision, token)); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestIntegrationBattleSettlementKeepsPermanentOriginalUntilApplied(t *testing.T) {
@@ -199,9 +275,7 @@ func TestIntegrationBattleSettlementKeepsPermanentOriginalUntilApplied(t *testin
 	if err != nil || again.State != stateApplied || again.Seq != first.Seq {
 		t.Fatalf("老来源不可复活/换seq: %+v %v", again, err)
 	}
-	if _, err = e.db.ExecContext(ctx, "UPDATE account_role SET account='new-owner',owner_revision=2 WHERE player_id=?", player); err != nil {
-		t.Fatal(err)
-	}
+	e.push(t, player, "new-owner", 2, 0)
 	if _, err = e.store.LookupBattleSettlement(ctx, r); err == nil {
 		t.Fatal("换主后不能以旧来源补权")
 	}
@@ -249,8 +323,7 @@ func openIntegration(t *testing.T) *itEnv {
 		t.Fatal(err)
 	}
 	for _, stmt := range []string{
-		"DROP TABLE IF EXISTS account_role_admission",
-		"DROP TABLE IF EXISTS account_role",
+		"DROP TABLE IF EXISTS role_fence",
 		"DROP TABLE IF EXISTS player_inbox_audit",
 		"DROP TABLE IF EXISTS player_inbox_item",
 		"DROP TABLE IF EXISTS player_inbox_stream",
@@ -267,28 +340,25 @@ func openIntegration(t *testing.T) *itEnv {
 	if len(report.Manual) != 0 {
 		t.Fatalf("新建库不应出现需人工项: %v", report.Manual)
 	}
-	for _, statement := range []string{
-		"CREATE TABLE account_role(player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0)",
-		"CREATE TABLE account_role_admission(player_id BIGINT UNSIGNED NOT NULL,scene_instance_id VARBINARY(36) NOT NULL,highest_generation BIGINT UNSIGNED NOT NULL,closed_through BIGINT UNSIGNED NOT NULL,identity_proto MEDIUMBLOB NOT NULL,PRIMARY KEY(player_id,scene_instance_id))",
-	} {
-		if _, err := db.ExecContext(ctx, statement); err != nil {
-			t.Fatal(err)
-		}
+	if err = rolefence.EnsureSchema(ctx, db); err != nil {
+		t.Fatal(err)
 	}
-	if err = createInboxFixtureRouteTables(ctx, db, dbName); err != nil {
+	if err = CheckAuthorityIndexes(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	if err = fixture.GrantProtoTables(ctx, dbName, data.Tables()); err != nil {
 		t.Fatal(err)
 	}
-	if err = fixture.GrantTables(ctx, dbName, "account_role", "account_role_admission", "route_meta", "player_route", "zone_merged_into"); err != nil {
+	if err = fixture.GrantTables(ctx, dbName, rolefence.TableName); err != nil {
 		t.Fatal(err)
 	}
+	install := db
 	db, err = fixture.Open(ctx, dbName, 64)
 	if err != nil {
 		t.Fatal(err)
 	}
-	roles, err := NewSQLRoleAuthority(ctx, db, dbName, authoritysql.BackendTiDB)
+	directory := newItDirectory()
+	roles, err := NewFenceRoleAuthority(db, directory, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,18 +368,20 @@ func openIntegration(t *testing.T) *itEnv {
 		t.Fatal(err)
 	}
 	env := &itEnv{
-		db:       db,
-		clock:    &itClock{},
-		epochs:   &itEpochs{m: map[uint64]uint64{}},
-		notifier: &itNotifier{result: NotifySent},
-		missing:  map[uint64]bool{},
+		db:        db,
+		install:   install,
+		clock:     &itClock{},
+		epochs:    &itEpochs{m: map[uint64]uint64{}},
+		notifier:  &itNotifier{result: NotifySent},
+		missing:   map[uint64]bool{},
+		directory: directory,
 	}
 	env.clock.set(testNowMs)
 	env.store, err = NewStore(StoreDeps{
 		DB:       db,
 		Registry: reg,
 		Allowed:  allTypesAllowed(),
-		Players:  itPlayers{missing: env.missing, db: db},
+		Players:  itPlayers{missing: env.missing, directory: directory},
 		Epochs:   env.epochs,
 		Notifier: env.notifier,
 		Now:      env.clock.Now,
@@ -407,28 +479,15 @@ func (e *itEnv) ack(t *testing.T, playerID, epoch uint64, reports ...*inboxpb.Pl
 	return resp
 }
 
-// 用真实SQL注册完整入场原件；不把目录替身/E整数当作消费授权。
+// 在目录替身里登记完整入场原件;不把E整数当作消费授权。
 func (e *itEnv) admission(t *testing.T, player, epoch uint64) *base.RoleAdmissionIdentity {
 	t.Helper()
 	if epoch == 0 {
 		return nil
 	}
-	if _, err := (itPlayers{missing: map[uint64]bool{}, db: e.db}).PlayerExists(itCtx(t), player); err != nil {
-		t.Fatal(err)
-	}
-	var revision uint64
-	if err := e.db.QueryRow("SELECT owner_revision FROM account_role WHERE player_id=?", player).Scan(&revision); err != nil {
-		t.Fatal(err)
-	}
-	identity := &base.RoleAdmissionIdentity{PlayerId: player, SceneInstanceId: fmt.Sprintf("10000000-0000-4000-8000-%012x", epoch), Generation: 1, OwnerRevision: revision, OwnerEpoch: epoch, SceneNodeId: "7", SceneId: 99, ZoneId: 1, SessionId: 1, LoginGeneration: 1}
-	raw, err := proto.Marshal(identity)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = e.db.Exec("INSERT INTO account_role_admission VALUES(?,?,1,0,?) ON DUPLICATE KEY UPDATE identity_proto=identity_proto", player, []byte(identity.SceneInstanceId), raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	e.directory.ensure(player)
+	identity := &base.RoleAdmissionIdentity{PlayerId: player, SceneInstanceId: fmt.Sprintf("10000000-0000-4000-8000-%012x", epoch), Generation: 1, OwnerRevision: e.directory.revision(player), OwnerEpoch: epoch, SceneNodeId: "7", SceneId: 99, ZoneId: 1, SessionId: 1, LoginGeneration: 1}
+	e.directory.register(identity)
 	return identity
 }
 

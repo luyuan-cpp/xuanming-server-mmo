@@ -19090,3 +19090,107 @@ Java 版:0.1.0-SNAPSHOT。这一条是服务端内部,不动客户端契约,`PAR
 - **生成命令成功不代表协议验收通过**:`go/proto/player_store/`、`cpp/generated/grpc_client/player_store/` 已存在;主建表清单已含 `player_store` 且不含两张旧表;6 个持久字段退役台账正确;退役的 RPC/消息符号搜索无命中;scene Kafka 路由器相对 HEAD 无差异。但 `go/db/data/mysql_database_table_list.json` 仍只有 `player_database`、`player_database_1`,没有 `player_store`;两份已删源协议 `db_task`、`battle_settlement_ledger_comp` 的旧绑定与暂存副本共残留 12 个文件,C++ 三份工程清单共残留 10 条引用。当前生成流程未同步 go/db 建表清单,也未清退这些普通协议文件及工程引用。没有手改生成物来掩盖。
 - **停在协议验收**:按交接总清单「一步失败先报告」返回上述阻塞。服务编译、Go 依赖整理、业务单测、真库、冒烟、Redis 集群故障/迁移验证及压测均未启动;scene、gate、battle 仍为 10-27 旧程序。不能声明源码编译通过、能够运行或整体验收完成。
 - **证据与后续**:完整日志、12 个已核对退役 RPC、协议验收 JSON/文本、生成前后工作区状态均保存在已忽略的 `run/validation/player-store-20261031/`。生成结果在当前工作区,未提交;本次没有 commit、push。先补齐协议清单同步和退役产物清理,验收通过后再按总清单继续。Java 独立服务器版及客户端本次未验证,未修改;本仓 Java 网关的 A7c 验证也尚未执行。
+
+### 2026-10-31 Claude:全层水平扩展写完,三路评审已修(未编译,待 Codex 验证)
+
+负责人 10-31:「全部按最标准的修复,我不怕改动,而且我确实会有不停服迁移物理库的」,并要求角色护栏、过户逐服务冻结、目录哈希分片优先写代码。规格 [horizontal-scale-logical-db.md](design/horizontal-scale-logical-db.md),验证清单 [progress.md](handoff/player-save-direct-commit-20261030/progress.md) §13。
+
+**写了什么**:
+
+- **写者闸门每个逻辑库一份**,服务之间不再有跨库 SQL,`CrossDatabase` 契约测试守着。
+- **角色护栏**:各服务提交点锁本库 `role_fence`,过户由协调者逐服务两阶段冻结;准备中的令牌和最终冻结分开,投票期间玩家照常进场,不可逆的退款只认最终冻结。
+- **历练和匹配**:match 是战斗入口占用的唯一仲裁,`match_role_occupancy` 带租约。
+- **目录分片**:账号、玩家、名字按哈希分到 K 个逻辑库(生产 64,开发 1)。建角四步、过户三步。流水和快照独立成 `<base>_ledger`。
+- **存档和目录分开**:建角初始行、过户证明、判死都分步。go/db 经 `GetPlayerRoute` 选库,不再连目录。
+- **不停服搬库**:`shared/dbplacement`、连接层按映射拨号、`tools/dbmove`、手册 [db-move-runbook.md](ops/db-move-runbook.md)。
+- **多地域**:每个地域一整套,`-Region`,手册 [open-new-region-runbook.md](ops/open-new-region-runbook.md)。
+- **第二套 etcd 强规定**:写进 AGENTS §7,运行期比 etcd 集群号。
+- **生成器**:同步 go/db 建表清单,自动清退退役产物,解决上一轮协议验收卡住的两个问题。
+
+**评审**:三路只读,共 26 条,全部修了。没有发现旧主能写、复制资产或一号两主的路径。重的几条:投票期间令牌被当成最终冻结触发不可逆退款;过户提交和陈旧 ref 清理竞争导致买家丢索引;复制断过重建后带缺口切换;目标库在复制期可写;每搬一次库新 Pod 注册不了;冻结把排空证明打成 HOLD。修复本身没有再评审。
+
+**决定**:ID 低 63 位;mysql 档不放开 RF3;不做按玩家搬库;不做全局账号目录;跨地域实时对战等有玩法再写。
+
+没有编译、没有运行。只做过 `gofmt -l`、PowerShell 语法解析、YAML 解析。
+
+Java 版:0.1.0-SNAPSHOT,未动,`PARITY.md` 已记待做。客户端契约没有变化。
+
+### 2026-10-31 Claude:地域码 0 只给 dev,发号恢复公式补上地域码(未编译,待 Codex 验证)
+
+负责人追问「目录分片数和地域码上线后不能改」时核对代码,发现三处和开新地域手册对不上,已修:
+
+- 手册写 0「不进生产」,但部署脚本和契约测试都放行 prod 的 `-Region 0`。`Region` 是可选字段,漏写就是 0,所以现在 staging、prod 部署拒绝 0;`Mode` 不是 dev、test 时,data_service 启动和 `-id-issuer-init` 也拒绝(`svc.NewIdIssuer`)。第一个生产地域用 1。
+- 发号器手册 §4.2 的恢复公式只算得出地域 0 的值。生产地域照抄会写出地域不对的记录,发号器拒绝,恢复走不通。公式已补上地域码。
+- 手册把地域码说成写在「永久 ID 的最高位」。实际写在计数器最高位,`MixID` 打散之后 ID 上看不出来,已更正,并写明只有值域见底这类事故才换码(发号器手册 §4.4)。
+
+Codex 验证:`logical_db_deploy_contract` 部署契约;`go/data_service` 下 `go test ./internal/svc/`,新增 `TestNewIdIssuer_RegionZeroReservedForDevAndTest`、`TestNewIdIssuer_RegionAccepted`。
+
+没有编译、没有运行。只做过 `gofmt -l`、PowerShell 语法解析。
+
+Java 版:0.1.0-SNAPSHOT,未动,`PARITY.md` 的「全层水平扩展」待做行已含地域码。客户端契约没有变化。
+
+### 2026-11-01 Claude:第二轮评审,部署跑不起来等问题已修(未编译,待 Codex 验证)
+
+负责人 10-31 追问「全部做完了吗」,要求没做完就按最标准的方式做完。逐条过了已知残余,又做了三路评审,上一轮的修复和部署脚本这次都覆盖了。**上一轮说的「代码写完了」不准确:部署脚本按当时的写法,K8s 三个档位都拉不起来。**
+
+**部署(15 条,按当时的脚本必定失败)**:写者控制目录是 emptyDir 挂载根,过不了私有目录校验,全部写者起不来,改用 `private` 子目录。schema Job 的正则不认流式 configMap,`infra-up` 直接 throw。`-migrate` 只接受空库,第二个 zone 就失败;改成完整的库跳过,半成品拒绝。首次部署的 generation 死循环,加 `-SqlSchemaOnly` 先建表、再定名册。registrar 没有 `MMORPG_SQL_BACKEND`。schema 账号对 `route_meta` 没有 UPDATE,种行改成先读后 INSERT。go/db 在 K8s 没有迁移路径,加 `db-migrate`。角色 SQL 在空库上执行不了,拆成迁移前后两段。其余见验证清单 §13。
+
+**写资格的消费时机**:写资格一次性,原来进程一启动就消费,之后任何依赖没就绪退出,Pod 就废了。改成第一条写语句之前才写标记:还没写过就退出,同一个 Pod 重启接着用,不烧名册。写过之后崩溃的,入口脚本以退出码 78 退出,新增 `sql-writer-pod-reaper` CronJob 每分钟删这种 Pod,换名册下一条。mail、rank 的发号器预领失败改成只告警,首次部署不再卡在 `-id-issuer-init` 之前。
+
+**不停服搬库(10 条)**:最重的是 etcd 回档之后重跑 cutover 或 rollback 会解冻源库,两边同时可写。cutover、重跑 prepare 现在都先读翻转标记;解冻之前核「目标闸门被这个 run 打开过且写者连着」,成立就不解冻,退出码 3。冻结之后再比一次复制流身份;身份里加目标库建表时间,删库重建之后旧的 verify 记录不算数。TiCDC 查不存在的 changefeed 回 400 不是 404,已按源码修。其余:反向再搬时 MySQL GTID 比对、共享账号其实锁着、`already done` 分支解锁账号、重跑 prepare 核连接串、verify 容忍闸门多一次 release、TiDB 管理账号缺 PROCESS、源副本连接串指到目标。
+
+**角色护栏**:没有发现一物两得、资产丢失或归属错误。5 条都是确定性结局被打成排空 Hold,或买家体验问题,都修了:投票问不齐、trade 后台循环、自愈读不到目录、收件箱提醒簿记、friend 和 guild 的身份检查。**买家账号满位时已付款订单原来卡死,现在 `Cancel` 成功才退款**,和过户提交点抢同一把锁,不会既退款又过户。`Engine.Tick` 的提交结局未知补回 Hold,这条原来是漏的。
+
+**其他残余**:单 zone 回档脚本 `k8s_zone_rollback.ps1` 退役,它依赖的工具设计已作废;灾难恢复只走 `docs/ops/mysql-backup-pitr-runbook.md` §4.0,整个地域一起回档,手册去掉已失效的发号水位,补上 TiDB 的 BR 恢复和 Kafka 位点。过户之后迟到的 Close 回成功,不再每秒空转。`RemoveRankEntry` 加墓碑,旧批次不能把人带回榜上。地域码 0 只给 dev、test。发号恢复公式补上地域码。
+
+**核对外部事实**:TiCDC 字段和 syncpoint 表对照 tiflow 源码,没有问题。redis_exporter 对照 v1.62.0 源码,`redis_errorstat_total` 不存在,两条 OOM 告警永远不会响,改成 `redis_errors_total`。etcd 的指标名和 `exclude` 参数对照 v3.5.0 源码,没有问题。
+
+没有编译、没有运行。只做过 `gofmt -l`、PowerShell 语法解析、YAML 解析。验证清单见 `docs/handoff/player-save-direct-commit-20261030/progress.md` §13 第 10、11 条。
+
+Java 版:0.1.0-SNAPSHOT,未动,`PARITY.md` 的「全层水平扩展」待做行已补。客户端契约没有变化。
+
+### 2026-11-01 Claude:GM 批量回收真正执行,摘孤儿接线(未编译,待 Codex 验证)
+
+两个上线前运营要用的入口,原来都明确回错误。现在都有真实行为。方案:[漏洞止损与回收](design/exploit_loss_prevention_zh.md)「BatchRecallItems 执行方案」、[账号角色目录](design/account-role-authority.md)「摘孤儿角色」。验证清单:[progress.md](handoff/player-save-direct-commit-20261030/progress.md) §14。
+
+**GM 批量回收**:走资产通道,新开流 `ASSET_OP_STREAM_GM_RECALL`,data_service 独占,outbox 在流水库。
+
+- **怎么进存档**:scene 在玩家身上改资产,账本和资产同一行提交到 `player_store`。Go 只认 SQL 已提交账本里的结局和回收明细(`AssetRecallLine`),不按请求金额记账。
+- **离线**:行一直 PENDING,进场由 `assetop:wake` 立刻投。不开自动放弃:放弃等于玩家躲够时间就把赃物带回来。
+- **不够扣**:货币扣到 0,差额挂不过期的 `AttachDebt`。道具有多少收多少,差额记 `shortfall`。结果如实报:`error_code == 0` 只说明全部全额,受理回 35,有缺口回 36。
+- **幂等**:`request_id` + 过滤条件摘要;`tx_id` 主键(一条流水只能回收一次,跨批次也算);`op_id`;scene 账本。
+- **先审后做**:执行必须带预览回的 `plan_digest`,重算不相等就拒绝。
+- **审计**:受理、取消、结束各一行 `rollback_audit_log`,和状态变化同事务。
+- **角色护栏**:流水库有自己的 `role_fence`,data_service 作为第七个参与者接在协调者上,进程内调用。有未结束回收的角色不能过户、不能删。
+
+顺带修的:
+
+- **银两回收不了**:币种 0 是银两,原来 `currency_type == 0` 既表示没填也表示银两。请求加 `recall_kind`,`QueryLog` 加 `ExactCurrency`。
+- **`BatchRecallItems` 没有鉴权**:现在四个回收 RPC 都要 `x-admin-token`。
+- **`AttachDebt` 合并**:已过期的旧欠款先作废,不被新欠款复活;到期时间取较晚的。r2 审计第 6 条。
+- **名单外的交易对方**:`QueryLog` 按 `from OR to` 查,带名单时只回收名单里收到的。
+
+**`RemovePlayersFromAccounts`**:判断要留。它是目录删角流程唯一的生产入口;目录和存档分库之后,地域恢复还会留下孤儿。接到目录的 `Remove`,逐名走。墓碑不可逆,所以有存档的角色一律 `NOT_ORPHAN`,存档读不到回 `RETRY`,带 `dry_run`。`LoginAdmin` 加 `x-admin-token` 拦截器,口令走环境变量 `MMORPG_LOGIN_ADMIN_TOKEN`,没配就停用。
+
+**部署**:data-service 新增 `Recall`、`SharedRedis`、`PlayerRedis`、`MethodTimeouts`,`gm_recall_op` 进 `IdSegment.Tags`,Redis 连接总账加一行。K8s 的 `Recall.Enabled` 跟 `-AssetOps` 走。Secret 新增 `asset-data-service`、`login-admin-token`,都是 `optional: true`,清单见开服手册 §1。docker 调试栈关掉回收。
+
+**没配告警**:离线玩家的行正常就会很老,阈值要等真实数据。
+
+没有编译、没有运行。只做过 `gofmt -l`、PowerShell 语法解析、YAML 解析。
+
+Java 版:0.1.0-SNAPSHOT,未动,`PARITY.md` 已记待做。客户端契约没有变化:新增的都是内部 RPC 和存档账本字段。`login.proto` 的 `LoginAdmin` 消息不给客户端用。
+
+### 2026-11-01 Claude:GM 回收和摘孤儿的评审修正(未编译,待 Codex 验证)
+
+上一条写完之后做了一路只读评审,报 19 条,都处理了(其中 `SUM` 溢出上一轮已改)。修的时候又自查出部署门禁和流水的遗漏。最重的几条:
+
+- **取消和派发竞争**:取消先数 PLANNED 再改,派发不碰批次行,数到的行可能正被没提交的派发改走。`open_ops` 多减,批次提前结束,那一行以后再也终结不了,角色也一直不能过户。改成先改后数。
+- **没回收到的流水被永久占住**:取消、被拒、中止、角色不存在的行,流水还算消费过,改对条件重新预览时计划为空,执行还回 0。现在这些行把流水放回去;部分应用的不放。空计划回新码 37,不回 0。
+- **会销毁同配置的无辜实例**:同一件装备来回交易时流水有两条,scene 扣掉点名的那件之后按配置补足,扣到别的实例,而回收不留原件。不可叠加物品改成只销毁点名的实例,点不到的进缺口。原来发多件时只记第一件的 guid,其余几件点不到名,所以 `BagService` 三个发放入口改成不可叠加物品一件一条流水。
+- **部署门禁会拒绝**:data-service 的 `MethodTimeouts` 高于 C++ deadline,又没登记「C++ 不调用」,`zone-up` 会在入口拒绝;旧契约用例还禁止 ConfigMap 写这个键。现在登记三个方法,用例改成核对和服务 yaml 一致。login 不加 `MethodTimeouts`:它在路由服预算链里,门禁一律拒绝。摘孤儿一名的下游调用限 3 秒,剩余不够 3.5 秒就不开始下一名,回 `RETRY`,长名单多跑几次。
+
+其余:路由缺失不再当孤儿(账本读这时同样回没有存档,墓碑不可逆);重放要带同一份 `plan_digest`;预览不写审计;提交之后读不回来回 Pending;流水库连接钉 READ COMMITTED 和 1 秒锁等待;`PendingForRole` 改普通读,和 settle 不再反序;`ListPlanned` 读失败不打 Hold;部分应用的报错不再写「nothing recalled」;销毁穿戴实例半途失败也重算属性;`scene-grpc-allowlist` 加 data-service,否则 `-NetworkPolicies on` 时回收到不了 scene。C++ 用例补 include、装备槽表加载和前置断言,`TestGlobalTableDDLContract` 补四张表。
+
+没有编译、没有运行。验证清单在 [progress.md](handoff/player-save-direct-commit-20261030/progress.md) §14。
+
+Java 版:0.1.0-SNAPSHOT,未动,`PARITY.md` 那一行已补这几条要点。

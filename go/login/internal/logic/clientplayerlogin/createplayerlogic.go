@@ -583,6 +583,7 @@ func recordNameOrphan(account string, playerID uint64, name string, err error) {
 
 // persistAccountRole 把单个原角色提交到全局目录；SQL 账号锁裁决上限与唯一归属。
 // 已失去本次入口锁时不再发新写；SQL 提交结果未知时只强读原 player_id 恢复。
+// 提交点之前就失败时(ErrNotCommitted)角色确定没建成,释放名字,玩家重试不会撞上自己占住的名字。
 func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locker.Lock, role *login_proto_common.AccountSimplePlayer, directory *login_data_base.UserAccounts) *login_proto_common.TipInfoMessage {
 	if role == nil || l.svcCtx.AccountDirectory == nil {
 		return loginTip(table.LoginError_kLoginDataSerializeFailed)
@@ -602,6 +603,12 @@ func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locke
 		if errors.Is(err, accountdirectory.ErrFull) {
 			return loginTip(table.LoginError_kLoginAccountPlayerFull)
 		}
+		return loginTip(table.LoginError_kLoginDataSerializeFailed)
+	}
+	if errors.Is(err, accountdirectory.ErrNotCommitted) {
+		// 这个 player_id 只发过这一次建角,它又没走到提交点,所以不会再有在途的提交。tip 是「稍后重试」,玩家重试时铸新 id。
+		logx.Errorf("Account directory failed before the commit point, releasing the name: player_id=%d account=%s", playerID, account)
+		l.releaseName(account, playerID, name, false)
 		return loginTip(table.LoginError_kLoginDataSerializeFailed)
 	}
 	// 超时可能发生在提交后；仅原账号、原 player_id、原载荷一致才恢复成功。

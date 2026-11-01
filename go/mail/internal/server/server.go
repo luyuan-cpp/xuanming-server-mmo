@@ -17,6 +17,7 @@ import (
 	"shared/domainhost"
 	table "shared/generated/pb/table"
 	"shared/loginsession"
+	"shared/rolefence"
 	"shared/roleidentity"
 	"shared/serviceauth"
 )
@@ -87,6 +88,10 @@ func rejection(err error) *base.TipInfoMessage {
 		code = uint32(table.MailError_kMailAttachmentProtected)
 	case errors.Is(err, assetop.ErrTooManyPending):
 		code = uint32(table.MailError_kMailClaimPending)
+	case errors.Is(err, rolefence.ErrUnavailable):
+		// 自愈读不到目录:事务已回滚,没有结局未知。回故障 tip 的话排空证明会被打成 Hold(规格 §3.6)。目录里没有这名角色在 runGuarded 里已转成 ErrDenied。
+		logx.Infof("[mail] role fence authority unavailable: %v", err)
+		code = uint32(table.CommonError_kFeatureUnavailable)
 	}
 	if code == uint32(table.CommonError_kServiceUnavailable) {
 		logx.Error("[mail] 权威邮件请求失败")

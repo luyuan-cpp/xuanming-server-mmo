@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 #include <algorithm>
 #include <openssl/sha.h>
 
@@ -24,6 +25,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/asset_op_ledger.h"
+#include "player/system/player_attribute.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h" // HasFencedOwnership / IsPlayerMutable(与玩家收件箱共用,D12)
 #include "player/system/player_pet.h"
@@ -98,8 +100,10 @@ constexpr AssetOpStreamRule kAssetOpStreamRules[] = {
 	 {TX_AUCTION_BUY, TX_TRADE, TX_UNKNOWN}},
 	{ASSET_OP_STREAM_SYSTEM_CREDIT, AssetOpDirection::kCredit, 3,
 	 {TX_SYSTEM_GRANT, TX_MAIL_ATTACHMENT, TX_GM_GRANT}},
+	{ASSET_OP_STREAM_GM_RECALL, AssetOpDirection::kDebit, 1,
+	 {TX_BATCH_RECALL, TX_UNKNOWN, TX_UNKNOWN}},
 };
-static_assert(std::size(kAssetOpStreamRules) == 5, "流规则表与 AssetOpStream 的 5 条流脱节");
+static_assert(std::size(kAssetOpStreamRules) == 6, "流规则表与 AssetOpStream 的 6 条流脱节");
 
 const AssetOpStreamRule* FindStreamRule(AssetOpStream stream)
 {
@@ -173,7 +177,7 @@ void StoreReceipt(PlayerAssetOpLedgerComp& comp, const AssetOpRequest& request, 
 	receipt->set_seq(request.seq());
 	receipt->set_correlation_id(request.correlation_id());
 	receipt->set_request_digest(ReceiptDigest(request));
-	if (snapshot.items_size() != 0 || snapshot.has_pet()) *receipt->mutable_snapshot() = snapshot;
+	if (snapshot.items_size() != 0 || snapshot.has_pet() || snapshot.recall_lines_size() != 0) *receipt->mutable_snapshot() = snapshot;
 	else receipt->clear_snapshot();
 	std::sort(ledger.mutable_receipts()->begin(), ledger.mutable_receipts()->end(),
 		[](const auto& lhs, const auto& rhs) { return lhs.seq() < rhs.seq(); });
@@ -522,6 +526,53 @@ bool ValidateCreditBundle(const ::AssetBundle& bundle, std::string& why)
 	return true;
 }
 
+// GM 回收恰好一种资产:一条货币,或者一个配置号的道具(可带实例号线索)。Go 按 (玩家, 资产) 汇总,见 go/data_service/internal/logic/recall_plan.go。
+constexpr int kAssetOpMaxRecallHints = 64;
+
+bool ValidateRecallBundle(const ::AssetBundle& bundle, std::string& why)
+{
+	if (bundle.pet_id() != 0 || bundle.item_instances_size() != 0 || bundle.has_pet_instance())
+	{
+		why = "recall does not take pets or complete instances";
+		return false;
+	}
+	if (bundle.currencies_size() == 1 && bundle.items_size() == 0 && bundle.item_uuids_size() == 0)
+	{
+		if (!IsCurrencyAmountValid(bundle.currencies(0)))
+		{
+			why = "recall currency amount out of range";
+			return false;
+		}
+		return true;
+	}
+	if (bundle.currencies_size() != 0 || bundle.items_size() != 1)
+	{
+		why = "recall needs exactly one currency or one item config";
+		return false;
+	}
+	const auto& item = bundle.items(0);
+	if (item.count() == 0 || ItemTableManager::Instance().FindByIdSilent(item.config_id()).first == nullptr)
+	{
+		why = "recall item count is 0 or config_id is absent from Item table";
+		return false;
+	}
+	if (bundle.item_uuids_size() > kAssetOpMaxRecallHints)
+	{
+		why = "too many recall instance hints";
+		return false;
+	}
+	std::unordered_set<uint64_t> hints;
+	for (const auto guid : bundle.item_uuids())
+	{
+		if (guid == 0 || !hints.insert(guid).second)
+		{
+			why = "recall instance hint is 0 or duplicated";
+			return false;
+		}
+	}
+	return true;
+}
+
 // ── 应用段 ──────────────────────────────────────────────────────────────────
 
 void ApplyCurrencyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request,
@@ -683,6 +734,285 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	Answer(response, ASSET_OP_OUTCOME_APPLIED, partial ? kAssetPartialApplied : 0);
 	response.set_partial(partial);
 	response.set_durable(PersistAndProbeDurable(player, request, true, nowMs));
+}
+
+// ── GM 回收(docs/design/exploit_loss_prevention_zh.md)──────────────────────
+//
+// 和 ApplyDebit 的差别:回收按实际持有扣,不够不拒绝。结局记 APPLIED,扣到多少写进收据明细,
+// 和资产同一次提交;Go 只认这份明细。一件没扣到也是 APPLIED,明细里 shortfall == requested,Go 按失败报。
+
+// 欠款的 reason / gm_operator 随存档进玩家数据,不带工单内容:操作人和理由在 gm_recall_batch,按 correlation_id 查。
+constexpr const char* kRecallDebtOperator = "data_service";
+
+// 预算要在任何改动之前核,明细按最大取值估:收据超限存档会被判账本损坏,该玩家的资产通道整个关掉。
+bool HasRecallReceiptRoom(const PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request, const ::AssetRecallLine& line)
+{
+	AssetSnapshot prospective;
+	auto* worst = prospective.add_recall_lines();
+	*worst = line;
+	worst->set_taken(line.requested());
+	worst->set_debt(line.requested());
+	worst->set_shortfall(line.requested());
+	return HasReceiptRoom(ledgerComp, request, prospective);
+}
+
+void FinishRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request,
+	const ::AssetRecallLine& line, bool partial, int64_t nowMs, ::AssetOpResponse& response)
+{
+	AssetSnapshot snapshot;
+	*snapshot.add_recall_lines() = line;
+	if (!RecordOutcome(ledgerComp, request, partial ? AssetOpRecordKind::kAppliedPartial : AssetOpRecordKind::kApplied, 0))
+	{
+		// 资产已经动了却记不上账,重投会再扣一次。只能大声报错,交人工按流水(correlation_id)对账。正常路径不可达。
+		LOG_ERROR << "[AssetOp] Recall applied but ledger precondition violated player_id=" << request.player_id()
+				  << " stream=" << static_cast<int>(request.stream()) << " epoch=" << request.stream_epoch()
+				  << " seq=" << request.seq() << " corr=" << request.correlation_id();
+		Answer(response, ASSET_OP_OUTCOME_UNKNOWN, 0);
+		return;
+	}
+	StoreReceipt(ledgerComp, request, snapshot);
+	*response.mutable_snapshot() = snapshot;
+	Answer(response, ASSET_OP_OUTCOME_APPLIED, partial ? kAssetPartialApplied : 0);
+	response.set_partial(partial);
+	response.set_durable(PersistAndProbeDurable(player, request, /*expectApplied=*/true, nowMs));
+}
+
+// 货币:有多少扣多少,差额挂补缴欠款,之后的 AddCurrency 先抵扣。余额不会变负。
+void ApplyCurrencyRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request,
+	int64_t nowMs, ::AssetOpResponse& response)
+{
+	const auto& currency = request.bundle().currencies(0);
+	const auto type = static_cast<CurrencyType>(currency.currency_type());
+	const uint64_t requested = currency.amount();
+	const uint64_t taken = std::min(CurrencySystem::GetBalance(player, type), requested);
+	const uint64_t debt = requested - taken;
+
+	AssetRecallLine line;
+	line.set_currency_type(currency.currency_type());
+	line.set_requested(requested);
+	if (!HasRecallReceiptRoom(ledgerComp, request, line))
+	{
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull);
+		return;
+	}
+	// 挂不上欠款的情况要判在扣钱之前。欠款带新版本字段是版本错位,不是确定性失败:回 RETRY、不记账,等玩家落到认识这些字段的节点。
+	if (debt > 0 && CurrencySystem::DebtCarriesUnknownFields(player, type))
+	{
+		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_recall_debt player_id=" << request.player_id()
+				 << " seq=" << request.seq() << " currency_type=" << currency.currency_type()
+				 << "; existing debt carries fields unknown to this version, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
+
+	const auto txType = static_cast<TransactionType>(request.tx_type());
+	if (taken > 0)
+	{
+		const uint32_t error = CurrencySystem::DeductCurrency(player, type, static_cast<int64_t>(taken), txType, request.correlation_id());
+		if (error != kSuccess)
+		{
+			// 闸门和余额都核过,这里不该失败。一点没改,不记账,回 RETRY。
+			LOG_ERROR << "[AssetOp] Recall deduction failed after admission check player_id=" << request.player_id()
+					  << " seq=" << request.seq() << " currency_type=" << currency.currency_type()
+					  << " amount=" << taken << " err=" << error;
+			Answer(response, ASSET_OP_OUTCOME_RETRY, error);
+			return;
+		}
+	}
+	uint32_t debtError = kSuccess;
+	if (debt > 0)
+	{
+		const std::string reason = "gm_recall op=" + std::to_string(request.correlation_id());
+		// 0 = 不过期:回收的欠款不能到点自动免除。
+		debtError = CurrencySystem::AttachDebt(player, type, static_cast<int64_t>(debt), reason, kRecallDebtOperator, 0);
+	}
+	if (debtError != kSuccess && taken == 0)
+	{
+		// 只可能是累计欠款溢出 uint64:确定性失败,资产没动,记终局拒绝。
+		LOG_ERROR << "[AssetOp] Recall debt rejected player_id=" << request.player_id() << " seq=" << request.seq()
+				  << " currency_type=" << currency.currency_type() << " debt=" << debt << " err=" << debtError;
+		RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+		return;
+	}
+	const bool partial = debtError != kSuccess;
+	if (partial)
+	{
+		LOG_ERROR << "[AssetOp] partial recall: deducted but debt not attached player_id=" << request.player_id()
+				  << " stream=" << static_cast<int>(request.stream()) << " seq=" << request.seq()
+				  << " corr=" << request.correlation_id() << " taken=" << taken << " debt=" << debt << " err=" << debtError;
+	}
+	line.set_taken(taken);
+	line.set_debt(partial ? 0 : debt);
+	line.set_shortfall(partial ? debt : 0);
+	FinishRecall(player, ledgerComp, request, line, partial, nowMs, response);
+}
+
+// 按扣除优先级给出玩家的全部包:人物背包 → 仓库 → 临时格 → 动态包(按 id 升序)→ 装备栏。穿在身上的最后才动。
+std::vector<Bag*> RecallBagOrder(PlayerBagsComp& bags)
+{
+	std::vector<uint64_t> dynamicIds;
+	dynamicIds.reserve(bags.dynamicBags_.size());
+	for (const auto& entry : bags.dynamicBags_) dynamicIds.push_back(entry.first);
+	std::sort(dynamicIds.begin(), dynamicIds.end());
+
+	std::vector<Bag*> order{&bags.bags[kInventory], &bags.bags[kWarehouse], &bags.bags[kTemporary]};
+	for (const auto id : dynamicIds) order.push_back(&bags.dynamicBags_.at(id));
+	order.push_back(&bags.bags[kEquipment]);
+	return order;
+}
+
+bool HasUncountableUnits(const Bag& bag, uint32_t configId)
+{
+	bool found = false;
+	bag.ForEachItem([&](Guid, const ItemComp& item)
+	{
+		if (item.config_id() == configId && !ItemStore::IsCountableByConfig(item)) found = true;
+	});
+	return found;
+}
+
+// 这一件能不能按配置号回收:不可叠加物品按实例销毁,实例 size 必须是 1,带新版本字段的不当普通单位扣。
+bool IsRecallableInstance(const ItemComp& item, uint32_t configId)
+{
+	return item.config_id() == configId && item.size() == 1 && ItemStore::IsCountableByConfig(item);
+}
+
+struct RecallPick
+{
+	Bag* bag;
+	std::vector<Guid> guids;
+};
+
+// 选出要销毁的不可叠加实例,不改任何状态。只认流水点名的实例:同配置的别的实例可能是玩家正当得来、强化过的,销毁了恢复不了。
+// 点不到的数量记缺口,让 GM 看见。同一实例来回交易时流水有两条,这里只扣一件,多出来的也进缺口,这是往少扣的方向错。
+std::vector<RecallPick> PickRecallInstances(const std::vector<Bag*>& order, const ::AssetOpRequest& request, uint32_t configId, uint64_t requested)
+{
+	std::vector<RecallPick> picks;
+	picks.reserve(order.size());
+	for (auto* bag : order) picks.push_back(RecallPick{bag, {}});
+
+	uint64_t chosen = 0;
+	for (const auto hint : request.bundle().item_uuids())
+	{
+		if (chosen >= requested) break;
+		for (auto& pick : picks)
+		{
+			const auto* item = pick.bag->ContainsGuid(hint) ? pick.bag->GetItemCompByGuid(hint) : nullptr;
+			if (item != nullptr && IsRecallableInstance(*item, configId))
+			{
+				pick.guids.push_back(hint);
+				++chosen;
+				break;
+			}
+		}
+	}
+	return picks;
+}
+
+// 道具:有多少收多少,差额记 shortfall。不按价折算成货币:折算表不存在,不替 GM 猜。
+void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request,
+	int64_t nowMs, ::AssetOpResponse& response)
+{
+	const auto& grant = request.bundle().items(0);
+	const uint32_t configId = grant.config_id();
+	const uint64_t requested = grant.count();
+	const auto* row = ItemTableManager::Instance().FindByIdSilent(configId).first; // ValidateRecallBundle 核过
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
+	const auto order = RecallBagOrder(bags);
+	const auto txType = static_cast<TransactionType>(request.tx_type());
+
+	AssetRecallLine line;
+	line.set_config_id(configId);
+	line.set_requested(requested);
+	if (!HasRecallReceiptRoom(ledgerComp, request, line))
+	{
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull);
+		return;
+	}
+	// 可计单位不够、又有带新版本字段的单位:差额可能就在它们身上。版本错位不是确定性结果,回 RETRY、不记账。
+	uint64_t countable = 0;
+	bool uncountable = false;
+	for (const auto* bag : order)
+	{
+		countable += bag->GetTotalItemCount(configId);
+		uncountable = uncountable || HasUncountableUnits(*bag, configId);
+	}
+	if (countable < requested && uncountable)
+	{
+		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_recall player_id=" << request.player_id()
+				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
+				 << " config_id=" << configId << "; items carrying newer-version fields are not recalled, answering RETRY";
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kFeatureUnavailable);
+		return;
+	}
+
+	uint64_t taken = 0;
+	bool mutated = false;
+	bool wornRemoved = false;
+	uint32_t error = kSuccess;
+	if (row->max_stack_size() > 1)
+	{
+		for (auto* bag : order)
+		{
+			const uint64_t remaining = requested - taken;
+			const uint64_t want = std::min<uint64_t>(bag->GetTotalItemCount(configId), remaining);
+			if (want == 0) continue;
+			error = BagService::RemoveItemsExact(player, *bag, ItemCountMap{{configId, static_cast<uint32_t>(want)}}, txType, request.correlation_id());
+			if (error != kSuccess) break;
+			taken += want;
+			mutated = true;
+			wornRemoved = wornRemoved || bag == &bags.bags[kEquipment];
+		}
+	}
+	else
+	{
+		for (const auto& pick : PickRecallInstances(order, request, configId, requested))
+		{
+			if (pick.guids.empty()) continue;
+			bool removed = false;
+			error = BagService::RemoveItemsByGuid(player, *pick.bag, pick.guids, txType, request.correlation_id(), nullptr, &removed);
+			mutated = mutated || removed;
+			wornRemoved = wornRemoved || (removed && pick.bag == &bags.bags[kEquipment]);
+			if (error != kSuccess) break;
+			taken += pick.guids.size();
+		}
+	}
+	if (error != kSuccess && !mutated)
+	{
+		// 预检都过了,这里不该失败。一件没动,不记账,回 RETRY。
+		LOG_ERROR << "[AssetOp] Recall removal failed before any change player_id=" << request.player_id()
+				  << " seq=" << request.seq() << " config_id=" << configId << " err=" << error;
+		Answer(response, ASSET_OP_OUTCOME_RETRY, error);
+		return;
+	}
+	if (wornRemoved)
+	{
+		// 数值不能停在「还穿着它」的状态,和 PlayerEquipSystem::Unequip 同一口径。
+		PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);
+		PlayerAttributeSystem::PushPanel(player);
+	}
+	const bool partial = error != kSuccess;
+	if (partial)
+	{
+		// 批次半截且没有回滚手段(BagService::RemoveItemsByGuid 的契约)。taken 只数已经确认的那几批,实际扣除以流水为准。
+		LOG_ERROR << "[AssetOp] partial recall player_id=" << request.player_id()
+				  << " stream=" << static_cast<int>(request.stream()) << " seq=" << request.seq()
+				  << " corr=" << request.correlation_id() << " config_id=" << configId << " taken=" << taken << " err=" << error;
+	}
+	line.set_taken(taken);
+	line.set_shortfall(requested - taken);
+	FinishRecall(player, ledgerComp, request, line, partial, nowMs, response);
+}
+
+void ApplyRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request,
+	int64_t nowMs, ::AssetOpResponse& response)
+{
+	if (request.bundle().currencies_size() == 1)
+	{
+		ApplyCurrencyRecall(player, ledgerComp, request, nowMs, response);
+		return;
+	}
+	ApplyItemRecall(player, ledgerComp, request, nowMs, response);
 }
 
 void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request,
@@ -887,7 +1217,7 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 		Answer(response, ASSET_OP_OUTCOME_UNKNOWN, kAssetInvalidBundle);
 		return;
 	}
-	// AssetAbortDebit 收全部 5 条流(它只是给未见 seq 记一个拒绝占位),也不校验 tx_type。
+	// AssetAbortDebit 收全部流(它只是给未见 seq 记一个拒绝占位),也不校验 tx_type。
 	if (!isAbort)
 	{
 		const auto wanted =
@@ -1062,12 +1392,14 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 		return;
 	}
 	// 8. 包内容校验(确定性失败 → 记 REJECTED,免得 Go 无限重投同一个坏包)
-	if (request.stream() != ASSET_OP_STREAM_TRADE_DEBIT && request.stream() != ASSET_OP_STREAM_TRADE_CREDIT &&
+	const bool isRecall = request.stream() == ASSET_OP_STREAM_GM_RECALL;
+	if (!isRecall && request.stream() != ASSET_OP_STREAM_TRADE_DEBIT && request.stream() != ASSET_OP_STREAM_TRADE_CREDIT &&
 		(request.bundle().item_uuids_size() > 0 || request.bundle().item_instances_size() > 0 || request.bundle().pet_id() != 0 || request.bundle().has_pet_instance()))
 	{ RejectAndRecord(player, *ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
 	std::string why;
-	const bool bundleOk = (rpc == AssetOpRpc::kDebit) ? ValidateDebitBundle(request.bundle(), why)
-													  : ValidateCreditBundle(request.bundle(), why);
+	const bool bundleOk = isRecall ? ValidateRecallBundle(request.bundle(), why)
+		: (rpc == AssetOpRpc::kDebit) ? ValidateDebitBundle(request.bundle(), why)
+									  : ValidateCreditBundle(request.bundle(), why);
 	if (!bundleOk)
 	{
 		LOG_WARN << "[AssetOp] Invalid payload rpc=" << RpcName(rpc) << " player_id=" << request.player_id()
@@ -1098,7 +1430,11 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 	}
 
 	// 9 / 10. 应用
-	if (rpc == AssetOpRpc::kDebit)
+	if (isRecall)
+	{
+		ApplyRecall(player, *ledgerComp, request, nowMs, response);
+	}
+	else if (rpc == AssetOpRpc::kDebit)
 	{
 		ApplyDebit(player, *ledgerComp, request, nowMs, response);
 	}

@@ -2,21 +2,19 @@ package authority
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"sync"
 	"time"
 
 	"shared/accountdirectory"
-	"shared/placement"
+	"shared/rolefence"
 	"shared/roleidentity"
 )
 
-// 聊天的身份校验(docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条)。
+// 聊天的身份校验(docs/design/player-data-tidb-scaling-plan.md §8.1 第 2 条、horizontal-scale-logical-db.md §3.4)。
 //
-// 旧做法是每条消息都在发送事务里 LockRoleRoutes 再对 account_role 加 FOR UPDATE。聊天是全服事务量最大的路径,
-// 而且把聊天库和角色目录绑进了同一个事务,拆多集群时这笔事务会跨集群(§8.2)。现在校验放在发送事务之外:
-// 普通读 player_route 和 account_role,成功结果按 (actor, account, owner_revision) 在进程内缓存 TTL 秒。
+// 聊天不写资产,不是角色护栏的参与者,没有副本表。校验放在发送事务之外:调目录的 GetRoleFenceState,
+// 成功结果按 (actor, account, owner_revision) 在进程内缓存 TTL 秒,全服事务量最大的路径不是每条消息都打一次 RPC。
 //
 // 代价,聊天不是资产,这些都可以接受:
 //   - 角色被挂牌或过户之后,旧会话最多还能发 TTL 秒的聊天、拉 TTL 秒的历史。校验不再和过户串行,所以 TTL=0 也有
@@ -112,26 +110,17 @@ func (s *Store) verifyActor(ctx context.Context) (uint64, role, error) {
 	return key.player, role{account: key.account, revision: key.revision}, nil
 }
 
-// readActor 普通读路由行和角色目录,不取任何锁。两条读放进一个短事务只为只过一次写者闸门,读完回滚即可,没有东西要提交;
-// 读已提交下每条语句各取快照,两行之间没有一致性要求:任何一行不允许就拒绝。
+// readActor 读目录的权威状态,不取任何锁。目录里没有、已删除、换了主、被最终冻结都拒绝;读不到是故障,不写缓存,原样往外。
+// 还在投票的准备令牌不拒绝:聊天不写资产,不是参与者,不用替投票拦写入。玩家这时照常进场,聊天也照常。
 func (s *Store) readActor(ctx context.Context, key actorVerifyKey) error {
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	state, err := s.states.GetRoleFenceState(ctx, key.player)
+	if errors.Is(err, rolefence.ErrRoleNotFound) {
+		return ErrOriginal
+	}
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	if err = placement.CheckRoleRoute(ctx, tx, s.roleSchema, key.player); err != nil {
-		return err
-	}
-	var account []byte
-	var revision, listing uint64
-	if err = tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+s.roleSchema+"`.account_role WHERE player_id=?", key.player).Scan(&account, &revision, &listing); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrOriginal
-		}
-		return err
-	}
-	if !accountdirectory.ValidAccount(string(account)) || revision == 0 || string(account) != key.account || revision != key.revision || listing != 0 {
+	if !accountdirectory.ValidAccount(state.GetAccount()) || state.GetOwnerRevision() == 0 || state.GetAccount() != key.account || state.GetOwnerRevision() != key.revision || state.GetFreezeFinal() {
 		return ErrOriginal
 	}
 	return nil

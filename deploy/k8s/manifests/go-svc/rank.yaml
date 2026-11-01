@@ -24,7 +24,7 @@ spec:
     matchLabels: {app: rank}
   template:
     metadata:
-      labels: {app: rank, tier: go-svc}
+      labels: {app: rank, tier: go-svc, mmorpg.io/sql-writer: "true"}
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9250"
@@ -49,7 +49,7 @@ spec:
         - name: sql-writer-registrar
           image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
           command: ["/bin/sh", "-ec"]
-          args: ["umask 077; mkdir -p /run/sql-writer/runtime/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/rank.yaml","-runtime-env-output","/run/sql-writer/runtime/env","-boot-output","/run/sql-writer/grant/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
+          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/rank.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
           env:
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
@@ -71,13 +71,13 @@ spec:
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           command: ["/bin/sh", "-ec"]
-          args: ["MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; MMORPG_RANK_SQL_DSN=\"$(cat /app/etc/env/MMORPG_RANK_SQL_DSN)\"; export MMORPG_RANK_SQL_DSN; exec /app/service \"$@\"","--","-f","/app/etc/rank.yaml"]
+          args: ["(umask 077; mkdir -p /run/sql-writer/consume/private); if ls /run/sql-writer/consume/private/*.consumed >/dev/null 2>&1; then echo sql writer grant already consumed, the reaper replaces this pod >&2; exit 78; fi; MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/private/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; MMORPG_RANK_SQL_DSN=\"$(cat /app/etc/private/env/MMORPG_RANK_SQL_DSN)\"; export MMORPG_RANK_SQL_DSN; exec /app/service \"$@\"","--","-f","/app/etc/private/rank.yaml"]
           env:
           # grant只读，consume留在同PodemptyDir；同Podrestart不得重复消费boot。
             - name: MMORPG_SQL_WRITER_GRANT_FILE
-              value: /run/sql-writer/grant/boot-grant.json
+              value: /run/sql-writer/grant/private/boot-grant.json
             - name: MMORPG_SQL_WRITER_CONSUME_DIR
-              value: /run/sql-writer/consume
+              value: /run/sql-writer/consume/private
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
             - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256

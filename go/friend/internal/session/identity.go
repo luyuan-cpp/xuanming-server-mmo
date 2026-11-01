@@ -2,13 +2,16 @@ package session
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"friend/internal/data"
 	base "proto/common/base"
 	dspb "proto/data_service"
 	"shared/loginsession"
 	"shared/roleidentity"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -45,7 +48,13 @@ func OriginalIdentityInterceptor(login loginsession.Reader, budget time.Duration
 			return nil, status.Error(codes.Unauthenticated, "好友原登录身份非法")
 		}
 		if err := check(ctx); err != nil {
-			return nil, status.Error(codes.PermissionDenied, "好友角色归属已变化或被冻结")
+			if errors.Is(err, data.ErrOriginalRole) {
+				return nil, status.Error(codes.PermissionDenied, "好友角色归属已变化或被冻结")
+			}
+			// 闸门冻结、目录读不到、库故障:这次判不了,客户端要能重试,不能告诉它角色变了。
+			// 这一层在 serverbase 外面,冻结不会被拦截器改写。不回 Unavailable:外层的 RootAdmission 会按结局未知打成 Hold,而这里只读,确定没写。
+			logx.WithContext(ctx).Infof("[friend] original identity check inconclusive: %v", err)
+			return nil, status.Error(codes.Aborted, "role identity not verified, retry")
 		}
 		return next(ctx, req)
 	}

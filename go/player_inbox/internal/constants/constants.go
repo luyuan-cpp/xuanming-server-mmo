@@ -39,6 +39,8 @@ const (
 	// ErrIdempotencyConflict:同一 (producer_kind, request_id) 已存在、内容摘要不同(IB-2)。
 	ErrIdempotencyConflict = uint32(table.PlayerInboxError_kPlayerInboxIdempotencyConflict)
 	// ErrStaleOwner:围栏判 STALE(请求的 owner_epoch 小于流上的高水位)。
+	// Fetch、Ack 的角色身份这一次核不过(冻结、归属或入场登记变了、目录读不到)也回它,响应的 fence 留空:
+	// 都不是故障,scene 退避重试,不能用 ErrStoreUnavailable,那会把排空证明打成 Hold。
 	ErrStaleOwner = uint32(table.PlayerInboxError_kPlayerInboxStaleOwner)
 	// ErrEpochRequired:请求的 owner_epoch 为 0(fail-closed,设计 §7.8)。
 	ErrEpochRequired = uint32(table.PlayerInboxError_kPlayerInboxEpochRequired)

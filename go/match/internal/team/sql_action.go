@@ -176,7 +176,12 @@ func writeSQLAction(ctx context.Context, tx *sql.Tx, action *sqlAction, response
 	return err
 }
 
-func (s *sqlTeamStore) replayAction(ctx context.Context, action *sqlAction) (*teampb.TeamResponse, error) {
+func (s *sqlTeamStore) replayAction(ctx context.Context, action *sqlAction) (response *teampb.TeamResponse, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) { response, e = s.replayActionOnce(ctx, action); return e })
+	return response, err
+}
+
+func (s *sqlTeamStore) replayActionOnce(ctx context.Context, action *sqlAction) (*teampb.TeamResponse, error) {
 	tx, err := s.authority.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -193,6 +198,10 @@ func (s *sqlTeamStore) replayAction(ctx context.Context, action *sqlAction) (*te
 }
 
 func (s *sqlTeamStore) recordNoMutationAction(ctx context.Context, action *sqlAction, response *teampb.TeamResponse) error {
+	return s.authority.Fenced(ctx, func() error { return s.recordNoMutationActionOnce(ctx, action, response) })
+}
+
+func (s *sqlTeamStore) recordNoMutationActionOnce(ctx context.Context, action *sqlAction, response *teampb.TeamResponse) error {
 	tx, err := s.authority.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err

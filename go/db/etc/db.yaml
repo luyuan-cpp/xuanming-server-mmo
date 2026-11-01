@@ -67,8 +67,15 @@ ServerConfig:
     Net: ""
 
 # ── 玩家存储落点(docs/design/player-storage-placement.md §6)────────────────
-# 认领和实体已没的空行释放读全局库 player_route 的 storage_id 选库,全局库名取写者配置的 AuthoritySchema,这里不用配。
-# 没有路由行或 storage_id 为 NULL 一律拒绝,不回落 home_zone 或本 zone 库;行被冻结(搬库中)→ 暂不可用。
+# 认领和实体已没的空行释放调 data_service 的 GetPlayerRoute 选库,go/db 不连目录。调用方密钥在环境变量 MMORPG_ROLE_FENCE_SECRET_DB。
+# 没有路由行或 storage_id 为 NULL 一律拒绝,不回落 home_zone 或本 zone 库;读不到 → 暂不可用,scene 过一会儿重试。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: dataservice.rpc
+  Timeout: 2000
+  NonBlock: true
 Placement:
   # 允许按需打开 zone_{1..999999}_db / player_store_{>=1000000}_db 两个家族的库(不在上面的
   # 库名白名单里也行)。按需打开只 Ping + 只读 schema 闸,**从不建库**,白名单防「ZoneId 填错

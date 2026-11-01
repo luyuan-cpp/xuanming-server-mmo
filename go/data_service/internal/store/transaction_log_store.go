@@ -42,8 +42,10 @@ type TransactionLogQuery struct {
 	TxTypes      []uint32 // empty = all types
 	ItemConfigID uint32   // 0 = no filter
 	CurrencyType uint32   // 0 = no filter
-	Limit        uint32   // default 100
-	Offset       uint64
+	// ExactCurrency:只要这个币种的货币流水,CurrencyType 为 0 也按银两过滤。币种 0 就是银两,上面的 0 = 不过滤表达不了它。
+	ExactCurrency bool
+	Limit         uint32 // default 100
+	Offset        uint64
 }
 
 // txLogHasZoneColumn:表结构真源是 proto(rollback_database_table.proto 的 transaction_log),
@@ -183,7 +185,10 @@ func (s *TransactionLogStore) QueryLog(ctx context.Context, q *TransactionLogQue
 		conditions = append(conditions, "item_config_id = ?")
 		args = append(args, q.ItemConfigID)
 	}
-	if q.CurrencyType > 0 {
+	if q.ExactCurrency {
+		conditions = append(conditions, "item_config_id = 0", "currency_type = ?")
+		args = append(args, q.CurrencyType)
+	} else if q.CurrencyType > 0 {
 		conditions = append(conditions, "currency_type = ?")
 		args = append(args, q.CurrencyType)
 	}

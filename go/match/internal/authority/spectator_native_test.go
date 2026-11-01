@@ -13,6 +13,7 @@ import (
 	"match/internal/constants"
 	battlepb "proto/battle"
 	pb "proto/match"
+	"shared/rolefence/fencetest"
 )
 
 type nativeSpectatorFixture struct {
@@ -22,7 +23,7 @@ type nativeSpectatorFixture struct {
 	add       *battlepb.AddObserverRequest
 }
 
-// 真实TiDB隔离库和原生account_role P围栏；房间4也沿Claim/Finish提交，不用目录fake。
+// 真实TiDB隔离库和原生护栏副本P围栏；房间4也沿Claim/Finish提交，不用目录fake。
 func nativeSpectator(t *testing.T) *nativeSpectatorFixture {
 	t.Helper()
 	s := nativeRoleStore(t)
@@ -37,8 +38,7 @@ func nativeSpectator(t *testing.T) *nativeSpectatorFixture {
 	require.NoError(t, s.Finish(ctx, work, true))
 	f, err = s.Formation(ctx, f.BattleId)
 	require.NoError(t, err)
-	_, err = s.DB.ExecContext(ctx, "INSERT INTO account_role VALUES(11,'spectator-original',7,0)")
-	require.NoError(t, err)
+	fencetest.Seed(t, ctx, s.DB, 11, "spectator-original", 7)
 	actor := nativeRoleActor(t, ctx, 11, "spectator-original", 7)
 	return &nativeSpectatorFixture{store: s, actor: actor, formation: f, add: &battlepb.AddObserverRequest{ObserverName: "公开角色名", Routing: &battlepb.BattleRouting{SessionId: 1, GateNodeId: 2, GateInstanceId: uuid.NewString(), ZoneId: 1}}}
 }
@@ -134,11 +134,9 @@ func TestSpectatorTiDBOriginalOwnerTransferAndFreezeRejectWithoutChangingIntents
 			request := f.request()
 			original := f.begin(t, request)
 			if freeze {
-				_, err := f.store.DB.ExecContext(f.actor, "UPDATE account_role SET trade_listing_id=99 WHERE player_id=11")
-				require.NoError(t, err)
+				fencetest.Update(t, f.actor, f.store.DB, 11, "spectator-original", 7, 99)
 			} else {
-				_, err := f.store.DB.ExecContext(f.actor, "UPDATE account_role SET account='new-owner',owner_revision=8 WHERE player_id=11")
-				require.NoError(t, err)
+				fencetest.Update(t, f.actor, f.store.DB, 11, "new-owner", 8, 0)
 			}
 			_, err := f.store.SpectatorIntent(f.actor, 11, request)
 			require.ErrorIs(t, err, ErrOriginalPlayer)
@@ -224,8 +222,7 @@ func TestSpectatorTiDBClosedOriginalAllowsNewOwnerNewIntentWithoutReauthorizingO
 	ok, err := f.store.AdvanceSpectator(context.Background(), original, 5)
 	require.NoError(t, err)
 	require.True(t, ok)
-	_, err = f.store.DB.ExecContext(f.actor, "UPDATE account_role SET account='new-owner',owner_revision=8 WHERE player_id=11")
-	require.NoError(t, err)
+	fencetest.Update(t, f.actor, f.store.DB, 11, "new-owner", 8, 0)
 	actor := nativeRoleActor(t, f.actor, 11, "new-owner", 8)
 	_, err = f.store.SpectatorIntent(actor, 11, oldRequest)
 	require.ErrorIs(t, err, ErrOriginalPlayer)
@@ -279,11 +276,10 @@ func TestSpectatorTiDBFixedRecoveryWatermarkAndBoundedStatePages(t *testing.T) {
 	var active []uint64
 	for player := uint64(30); player < 48; player++ {
 		account := fmt.Sprintf("observer-%d", player)
-		_, err := f.store.DB.ExecContext(f.actor, "INSERT INTO account_role VALUES(?,?,7,0)", player, account)
-		require.NoError(t, err)
+		fencetest.Seed(t, f.actor, f.store.DB, player, account, 7)
 		actor := nativeRoleActor(t, f.actor, player, account, 7)
 		request := f.request()
-		_, err = f.store.SpectatorIntent(actor, player, request)
+		_, err := f.store.SpectatorIntent(actor, player, request)
 		require.NoError(t, err)
 		original, err := f.store.BeginSpectator(actor, player, request, f.formation, f.add)
 		require.NoError(t, err)
@@ -300,8 +296,7 @@ func TestSpectatorTiDBFixedRecoveryWatermarkAndBoundedStatePages(t *testing.T) {
 	through, err := f.store.SpectatorRecoveryHighWater(f.actor)
 	require.NoError(t, err)
 	require.Equal(t, uint64(47), through)
-	_, err = f.store.DB.ExecContext(f.actor, "INSERT INTO account_role VALUES(90,'observer-later',7,0)")
-	require.NoError(t, err)
+	fencetest.Seed(t, f.actor, f.store.DB, 90, "observer-later", 7)
 	laterActor := nativeRoleActor(t, f.actor, 90, "observer-later", 7)
 	laterRequest := f.request()
 	_, err = f.store.SpectatorIntent(laterActor, 90, laterRequest)
@@ -737,8 +732,7 @@ func (f intentRetentionFixture) exists(player uint64, request *pb.WatchBattleReq
 func (f intentRetentionFixture) newObserver(player uint64) context.Context {
 	f.t.Helper()
 	account := fmt.Sprintf("observer-%d", player)
-	_, err := f.store.DB.ExecContext(f.actor, "INSERT INTO account_role VALUES(?,?,7,0)", player, account)
-	require.NoError(f.t, err)
+	fencetest.Seed(f.t, f.actor, f.store.DB, player, account, 7)
 	return nativeRoleActor(f.t, f.actor, player, account, 7)
 }
 

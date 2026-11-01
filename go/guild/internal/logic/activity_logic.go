@@ -59,7 +59,7 @@ type TrialResultSource interface {
 // ActivityDeps 是帮会活动 RPC 的全部外部依赖,由 guild.go 经 WithActivities 一次装配(90 Y-02)。
 //
 // 与 06 §6.6 原稿的差异:删 Notifier(推送走 l.notify,Y-02)、删 HandlerBudget(裁决 K:预算一律从 ctx 截止时间倒推);
-// LocatorRedis 只剩 BattleLocks(只读战斗锁);巡检器的结果来源是 Results(match 权威库的 SQL 终局)。
+// LocatorRedis 只剩 BattleLocks(只读战斗锁);巡检器的结果来源是 Results(经 RPC 读 match 的 SQL 终局)。
 type ActivityDeps struct {
 	// Repo 是活动事务与读查询的唯一入口。nil → WithActivities 不装配(五个 RPC 回 kGuildActivityNotOpen,见 activitiesNotWiredTip)。
 	Repo *data.ActivityRepo
@@ -90,7 +90,7 @@ type ActivityDeps struct {
 	// 第一次开战就 nil 解引用)。svc.ServiceContext.MatchInternal 本身就是接口类型,原样赋值即可。
 	Match        TrialBattleStarter
 	Cancellation TrialCancellation
-	// Results 读 match 权威库里一局的 SQL 终局(生产实现 data.TrialResultRecords),巡检器靠它兜住
+	// Results 经 RPC 读 match 上一局的 SQL 终局(生产实现 data.TrialResultRecords),巡检器靠它兜住
 	// "结果事件没到或消费卡住"。同样要传 nil 接口,不能装 nil 指针。
 	Results TrialResultSource
 	// BattleLocks 是玩家域句柄(PlayerRedis),本包只读一把键 battle:lock:{player_id}(scene 写,值 = battle_id),

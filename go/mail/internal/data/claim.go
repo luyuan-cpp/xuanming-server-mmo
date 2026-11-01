@@ -26,12 +26,13 @@ func (r *Repo) Claim(ctx context.Context, player, id uint64) (*mailpb.MailAction
 		return nil, err
 	}
 	now := uint64(r.now().UnixMilli())
+	guild := r.guildOf(ctx, player)
 	result := &mailpb.MailActionResult{MailId: id}
 	err = r.tx(ctx, func(tx *sql.Tx) error {
 		if e := r.lockBox(ctx, tx, player); e != nil {
 			return e
 		}
-		m, s, e := r.materialize(ctx, tx, player, id, now)
+		m, s, e := r.materialize(ctx, tx, player, guild, id, now)
 		if e != nil {
 			return e
 		}

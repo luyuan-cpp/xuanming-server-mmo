@@ -12,6 +12,8 @@ import (
 	"player_inbox/internal/inbox"
 
 	inboxpb "proto/player_inbox"
+	"shared/rolefence"
+	"shared/serverbase"
 
 	"github.com/zeromicro/go-zero/core/logx/logtest"
 	"google.golang.org/protobuf/proto"
@@ -205,5 +207,26 @@ func TestGmSanctionOutcomes(t *testing.T) {
 	resp := GmSanctionPlayer(context.Background(), newDeps(t, store, &audits), validRequest(), "p")
 	if resp.GetErrorMessage() != nil || resp.GetCreated() || resp.GetSeq() != 9 || resp.GetState() != inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_APPLIED {
 		t.Errorf("DUPLICATE 应返回原 seq 与当前状态: %+v", resp)
+	}
+}
+
+// 规格 §3.4:处罚被冻结的角色、自愈读不到目录都是确定没写,不能回故障码:排空证明会被打成 Hold。真正的存储故障照旧。
+func TestGmSanctionRoleNotVerifiedIsNotAFault(t *testing.T) {
+	logtest.Discard(t)
+	for name, cause := range map[string]error{
+		"角色冻结或换主": inbox.ErrOriginalRole,
+		"目录读不到":   errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var audits []*inboxpb.PlayerInboxAudit
+			store := &fakeSanctionStore{err: cause}
+			resp := GmSanctionPlayer(context.Background(), newDeps(t, store, &audits), validRequest(), "p")
+			if resp.GetErrorMessage().GetId() != constants.ErrStaleOwner {
+				t.Fatalf("resp = %+v", resp)
+			}
+			if serverbase.TipVerdict(resp.GetErrorMessage().GetId()) == serverbase.VerdictFault {
+				t.Fatal("不能是故障码")
+			}
+		})
 	}
 }

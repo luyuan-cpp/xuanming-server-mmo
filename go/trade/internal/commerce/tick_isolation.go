@@ -23,7 +23,10 @@ import (
 	"time"
 
 	tradepb "proto/trade"
+	"shared/accountdirectory"
 	"shared/assetop"
+	"shared/authoritysql"
+	"shared/rolefence"
 	"trade/internal/data"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -55,7 +58,7 @@ const (
 	tickPendingBackoff = 60 * time.Second
 	// tickRoleConflictBackoff:role_conflict(参与角色已换主、被人民币寄售冻结或目录行不合格)的推迟中值,±20% 抖动。
 	// 这是长期状态:换主不可逆(owner_revision 只增不减),冻结按公示 / 寄售期以天计。每 10 秒重试只会刷 ERROR,
-	// 分钟级复查足够;冻结解除后合同最多晚这么久恢复推进。
+	// 分钟级复查足够;冻结解除后合同最多晚这么久恢复推进。目录拒绝角色寄售的 Begin(角色还有挂起)也按它退避,到挂单期限走取消。
 	tickRoleConflictBackoff = 5 * time.Minute
 	// bidHeldRecheck / bidHeldMaxWait:持有竞价等拍品结算时的推迟下限与上限。拍品截止前它不可能结算,
 	// 所以推迟到拍品截止,但至少 bidHeldRecheck、至多 bidHeldMaxWait(拍品卡在 Manual 时仍有界地复查)。
@@ -87,6 +90,77 @@ func asRoleConflict(err error) error {
 		return fmt.Errorf("%w: %w", errRoleConflict, err)
 	}
 	return err
+}
+
+// roleDirectoryError 把目录回的 ErrConflict(角色还有挂起、被别的挂单占着、已换主)标成 role_conflict;
+// 目录暂不可用原样返回,按一般暂时失败退避。
+func roleDirectoryError(err error) error {
+	if errors.Is(err, accountdirectory.ErrConflict) {
+		return fmt.Errorf("%w: %w", roleConflict(), err)
+	}
+	return err
+}
+
+// noWriteError 标记这条失败确定没写:没开事务,或者事务已回滚。排空证明不用 Hold(docs/design/horizontal-scale-logical-db.md §3.6)。
+// 错误链不变,errors.Is、errors.As 照常。OutcomeKnown 走到它就停:里面的原因可能是别的依赖错误,比如自愈时读目录的 gRPC 错误。
+type noWriteError struct{ cause error }
+
+func (e *noWriteError) Error() string { return e.cause.Error() }
+func (e *noWriteError) Unwrap() error { return e.cause }
+
+// noWrite 只在能证明确定没写的地方调:只读的步骤、事务外的校验、商城的只读拉取。
+// 这里不看 ErrOutcomeUnknown:连接层不分读写,只读语句传输失败或者被取消也报结局未知,但这条语句本来没写,没有结局可未知。
+func noWrite(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &noWriteError{cause: err}
+}
+
+// rolledBack 认带角色锁的合同事务回来的确定性拒绝:
+//   - errRolePreparing、Rejection(含 errRoleConflict、errStaleObservation):事务里判的,事务已回滚。
+//   - rolefence.ErrUnavailable、rolefence.ErrRoleNotFound:副本判不了,事务回滚之后才去读目录,读不到或者目录里没有。
+//
+// 其余错误(SQL 失败、提交失败)拿不准,原样回。错误树里有结局未知也原样回,结局未知优先:事务可能卡在提交上。
+func rolledBack(err error) error {
+	if errors.Is(err, authoritysql.ErrOutcomeUnknown) {
+		return err
+	}
+	var rejection Rejection
+	if errors.As(err, &rejection) || errors.Is(err, errRolePreparing) || errors.Is(err, rolefence.ErrUnavailable) || errors.Is(err, rolefence.ErrRoleNotFound) {
+		return noWrite(err)
+	}
+	return err
+}
+
+// OutcomeKnown 报告后台一轮回来的错误是不是全都确定没写,调用方据此决定要不要打排空 Hold。
+// 一轮常把多条错误 Join 起来,每个分支都要确定才算,混进一个别的失败(尤其结局未知)就不算。闸门冻结也算确定。
+func OutcomeKnown(err error) bool {
+	if err == nil {
+		return false
+	}
+	if err == errRolePreparing || err == errRoleConflict || err == errStaleObservation || authoritysql.IsWriterFrozen(err) {
+		return true
+	}
+	switch e := err.(type) {
+	case *noWriteError, Rejection:
+		return true
+	case interface{ Unwrap() []error }:
+		known := false
+		for _, child := range e.Unwrap() {
+			if child == nil {
+				continue
+			}
+			if !OutcomeKnown(child) {
+				return false
+			}
+			known = true
+		}
+		return known
+	case interface{ Unwrap() error }:
+		return OutcomeKnown(e.Unwrap())
+	}
+	return false
 }
 
 // 失败分类,即 tickRowFailuresTotal / marketMatchFailuresTotal 的 class label(低基数常量,不带任何玩家或合同 id)。
@@ -302,7 +376,7 @@ func (e *Engine) deferCommerce(parent context.Context, r *tradepb.TradeCommerceR
 			r.CommerceId, r.Kind, deferred, untilMs, cause)
 	case failureRoleConflict:
 		// 长期状态:合同与对方的托管会一直扣着,需要人工判断(docs/ops/trade-commerce-quarantine-runbook.md)。
-		logx.Errorf("[Commerce] Contract blocked by a party role (owner changed, frozen by a listing, or directory row invalid) commerce_id=%d kind=%d status=%d deferred=%t until_ms=%d: %v",
+		logx.Errorf("[Commerce] Contract blocked by a party role (owner changed, frozen by a listing, pending items in a participant, or directory row invalid) commerce_id=%d kind=%d status=%d deferred=%t until_ms=%d: %v",
 			r.CommerceId, r.Kind, r.Status, deferred, untilMs, cause)
 	default:
 		logx.Errorf("[Commerce] Contract step failed commerce_id=%d kind=%d status=%d class=%s deferred=%t until_ms=%d: %v",
@@ -387,12 +461,12 @@ func (e *Engine) ackReceipts(ctx context.Context) error {
 	}
 	ops, err := e.Repo.AckDue(ctx, e.ackAfterOpID, tickAckLimit)
 	if err != nil {
-		return err
+		return noWrite(err)
 	}
 	var failures error
 	for _, op := range ops {
 		if err := ctx.Err(); err != nil {
-			return errors.Join(failures, err)
+			return errors.Join(failures, noWrite(err))
 		}
 		if op.Bundle == nil {
 			logx.Errorf("[Commerce] Receipt ack skipped: asset op payload undecodable op_id=%d stream=%d", op.OpID, int32(op.Stream))

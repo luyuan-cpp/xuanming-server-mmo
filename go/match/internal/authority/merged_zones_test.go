@@ -36,25 +36,6 @@ func TestMergedZonesWithoutACacheMeansNoMerges(t *testing.T) {
 	require.Equal(t, []uint32{4, 5, 6}, s.MergedZones().Members(5))
 }
 
-// 读映射要全局库:没配 schema 就是没装配,不能当成「没有合服」。
-func TestLoadMergedZonesNeedsTheGlobalSchema(t *testing.T) {
-	var absent *Store
-	_, err := absent.LoadMergedZones(context.Background(), placement.MergedZoneCacheOptions{})
-	require.Error(t, err)
-	_, err = (&Store{}).LoadMergedZones(context.Background(), placement.MergedZoneCacheOptions{})
-	require.Error(t, err)
-}
-
-// 启动门禁的真库口径:全局库里读不到 zone_merged_into(没有表或没有权限)就回错误,调用方拒绝启动。
-func TestAuthorityTiDBLoadMergedZonesFailsWhenTheTableIsUnreadable(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&s.roleSchema))
-	cache, err := s.LoadMergedZones(ctx, placement.MergedZoneCacheOptions{})
-	require.Error(t, err, "testStore 的库里没有 zone_merged_into")
-	require.Nil(t, cache)
-}
-
 func TestZoneInSQL(t *testing.T) {
 	clause, args := zoneInSQL("r.home_zone", []uint32{5})
 	require.Equal(t, "r.home_zone IN(?)", clause, "单个成员和原来的等值条件一样走索引")

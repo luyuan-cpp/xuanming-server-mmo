@@ -24,13 +24,14 @@ import (
 	battlepb "proto/battle"
 	base "proto/common/base"
 	dspb "proto/data_service"
-	guildpb "proto/guild"
 	matchpb "proto/match"
 	plpb "proto/player_locator"
 	teampb "proto/team"
 	"schemamigrate"
 	"shared/placement"
 	"shared/playerredis"
+	"shared/rolefence"
+	"shared/rolefence/fencetest"
 	"shared/roleidentity"
 
 	"github.com/alicebob/miniredis/v2"
@@ -82,33 +83,19 @@ func newNativeTeamFixture(t *testing.T) *nativeTeamFixture {
 	var engine string
 	require.NoError(t, db.QueryRow("SELECT VERSION()").Scan(&engine))
 	require.Contains(t, strings.ToLower(engine), "tidb")
-	tables := []proto.Message{&matchpb.MatchAuthorityTicketRecord{}, &matchpb.MatchNetworkProfileRecord{}, &matchpb.MatchTicketRegionRecord{}, &matchpb.MatchJoinIntentRecord{}, &matchpb.MatchDirectIntentRecord{}, &matchpb.MatchFormationRecord{}, &matchpb.MatchSpectatorRecord{}, &matchpb.MatchSpectatorIntentRecord{}, &matchpb.MatchSpectatorHeadRecord{}, &teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{}, &teampb.TeamApplicationIndexRecord{}, &teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRegionRecord{}, &teampb.TeamLaunchRoleRecord{}, &guildpb.GuildTrialLaunchRecord{}, &guildpb.GuildTrialLaunchRoleRecord{}, &guildpb.GuildTrialLobbyRecord{}, &guildpb.GuildTrialLobbySlotRecord{}}
+	tables := []proto.Message{&matchpb.MatchAuthorityTicketRecord{}, &matchpb.MatchNetworkProfileRecord{}, &matchpb.MatchTicketRegionRecord{}, &matchpb.MatchJoinIntentRecord{}, &matchpb.MatchDirectIntentRecord{}, &matchpb.MatchFormationRecord{}, &matchpb.MatchSpectatorRecord{}, &matchpb.MatchSpectatorIntentRecord{}, &matchpb.MatchSpectatorHeadRecord{}, &matchpb.MatchRoleOccupancyRecord{}, &teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{}, &teampb.TeamApplicationIndexRecord{}, &teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRegionRecord{}, &teampb.TeamLaunchRoleRecord{}}
 	_, err = schemamigrate.Up(ctx, db, schemamigrate.Options{Database: schema, Tables: tables})
 	require.NoError(t, err)
-	for _, statement := range []string{
-		"CREATE TABLE account_role(player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0)",
-		"CREATE TABLE route_meta(id INT PRIMARY KEY,writable INT NOT NULL)",
-		"INSERT INTO route_meta VALUES(1,1)",
-		"CREATE TABLE player_route(route_shard INT UNSIGNED NOT NULL,player_id BIGINT UNSIGNED NOT NULL,home_zone INT UNSIGNED NULL,rev BIGINT UNSIGNED NOT NULL,frozen_run_id VARBINARY(96) NULL,PRIMARY KEY(route_shard,player_id))",
-		"CREATE TABLE zone_merged_into(src_zone INT UNSIGNED NOT NULL PRIMARY KEY,dst_zone INT UNSIGNED NOT NULL,run_id VARBINARY(64) NOT NULL,merged_at_ms BIGINT UNSIGNED NOT NULL)",
-	} {
-		_, err = db.ExecContext(ctx, statement)
-		require.NoError(t, err)
-	}
-	for player := uint64(1); player <= 16; player++ {
-		_, err = db.ExecContext(ctx, "INSERT INTO account_role VALUES(?,?,7,0)", player, fmt.Sprintf("team-original-%d", player))
-		require.NoError(t, err)
-		_, err = db.ExecContext(ctx, "INSERT INTO player_route VALUES(?,?,1,1,NULL)", placement.RouteRowShard(player), player)
-		require.NoError(t, err)
-	}
+	require.NoError(t, rolefence.EnsureSchema(ctx, db))
 	require.NoError(t, fixture.GrantProtoTables(ctx, schema, tables))
-	require.NoError(t, fixture.GrantTables(ctx, schema, "account_role", "route_meta", "player_route", "zone_merged_into"))
+	require.NoError(t, fixture.GrantTables(ctx, schema, rolefence.TableName))
 	db, err = fixture.Open(ctx, schema, 16)
 	require.NoError(t, err)
+	for player := uint64(1); player <= 16; player++ {
+		fencetest.Seed(t, ctx, db, player, fmt.Sprintf("team-original-%d", player), 7)
+	}
 	owner := &authority.Store{DB: db, Secret: []byte("fixture-only-network-secret-0000000000"), Config: config.GlobalMatchConf{Backend: "tidb", HardLatencyMs: 180, CrossRegionWaitSeconds: 30}, TeamConfig: config.TeamConf{AllowCrossZone: true}}
-	require.NoError(t, owner.ConfigureRoleAuthority(ctx, schema))
-	require.NoError(t, owner.ConfigureMatchEntryAuthority(ctx, schema))
-	require.NoError(t, owner.CheckTeamRouteContract(ctx))
+	require.NoError(t, owner.ConfigureRoleFence(ctx, fencetest.ReplicaReader{DB: db}, fencetest.Admissions{Valid: true}))
 	loader := func(_ context.Context, players []uint64) Sessions {
 		out := Sessions{}
 		for _, player := range players {
@@ -199,8 +186,7 @@ func TestTeamTiDBOldInvitationCannotAuthorizeNewOwner(t *testing.T) {
 	ctx := fixtureTeamAction(t, f.actor(t, 1), 1, OpInvite, invite)
 	_, err := f.store.Mutate(ctx, BindCaller(1, 101), InviteOp(1, 2, 1))
 	require.NoError(t, err)
-	_, err = f.owner.DB.Exec("UPDATE account_role SET account='buyer',owner_revision=8 WHERE player_id=2")
-	require.NoError(t, err)
+	fencetest.Update(t, context.Background(), f.owner.DB, 2, "buyer", 8, 0)
 	buyer, err := roleidentity.Capture(context.Background(), &dspb.AccountRoleOwnership{Account: "buyer", OwnerRevision: 8, Role: &base.AccountSimplePlayer{PlayerId: 2}})
 	require.NoError(t, err)
 	for _, actor := range []context.Context{f.actor(t, 2), buyer} {
@@ -471,8 +457,7 @@ func TestTeamTiDBFinalHomeFiltersWholeUnitsBeforeLimit(t *testing.T) {
 		f.inviteAndAccept(t, leader, leader+1, 1000+leader)
 	}
 	for player := uint64(4); player <= 13; player++ {
-		_, err := f.owner.DB.Exec("UPDATE player_route SET home_zone=2,rev=rev+1 WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player)
-		require.NoError(t, err)
+		f.setHome(t, player, 2)
 	}
 	anchor := f.queued(t, 1, 101)
 	var foreign []*teampb.TeamLaunchRecord
@@ -506,8 +491,7 @@ func TestTeamTiDBFinalHomeFiltersWholeUnitsBeforeLimit(t *testing.T) {
 	right, err = f.owner.TeamLaunchTickets(context.Background(), same)
 	require.NoError(t, err)
 	// 已排队后route换home，不能用旧投影/旧launch或新当前home补权。
-	_, err = f.owner.DB.Exec("UPDATE player_route SET home_zone=2,rev=rev+1 WHERE route_shard=? AND player_id=14", placement.RouteRowShard(14))
-	require.NoError(t, err)
+	f.setHome(t, 14, 2)
 	require.ErrorIs(t, f.owner.ClaimTeamUnits(context.Background(), formation, append(append([]*matchpb.MatchAuthorityTicketRecord(nil), left...), right...), []*teampb.TeamLaunchRecord{anchor, same}), authority.ErrTeamRoute)
 }
 
@@ -520,8 +504,7 @@ func TestTeamTiDBFinalHomeFiltersSoloPeersBeforeLimit(t *testing.T) {
 		home := uint32(1)
 		if player >= 2 && player <= 6 {
 			home = 2
-			_, err := f.owner.DB.Exec("UPDATE player_route SET home_zone=2,rev=rev+1 WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player)
-			require.NoError(t, err)
+			f.setHome(t, player, 2)
 		}
 		f.profile(t, player)
 		var payload []byte
@@ -601,25 +584,19 @@ func TestTeamTiDBFailedFormationRequeuesWholeOriginalUnit(t *testing.T) {
 	}
 }
 
-// setMergedZones 改写 zone_merged_into 并重读一次:走真表、真读数函数、真缓存,和启动时同一条路径。
-// 不 Start,映射什么时候生效由用例自己掌握。
+// setMergedZones 换一份合服映射:真缓存,不 Start,映射什么时候生效由用例自己掌握。映射读取走 data_service,这里不连它。
 func (f *nativeTeamFixture) setMergedZones(t *testing.T, merges map[uint32]uint32) {
 	t.Helper()
-	ctx := context.Background()
-	_, err := f.owner.DB.ExecContext(ctx, "DELETE FROM zone_merged_into")
-	require.NoError(t, err)
-	for src, dst := range merges {
-		_, err = f.owner.DB.ExecContext(ctx, "INSERT INTO zone_merged_into(src_zone,dst_zone,run_id,merged_at_ms) VALUES(?,?,?,1)", src, dst, fmt.Sprintf("fixture-merge-%d", src))
-		require.NoError(t, err)
-	}
-	cache, err := f.owner.LoadMergedZones(ctx, placement.MergedZoneCacheOptions{})
+	cache, err := placement.NewMergedZoneCache(context.Background(), func(context.Context) (map[uint32]uint32, error) {
+		return merges, nil
+	}, placement.MergedZoneCacheOptions{})
 	require.NoError(t, err)
 	f.owner.BindMergedZones(cache)
 }
 
 func (f *nativeTeamFixture) setHome(t *testing.T, player uint64, zone uint32) {
 	t.Helper()
-	_, err := f.owner.DB.Exec("UPDATE player_route SET home_zone=?,rev=rev+1 WHERE route_shard=? AND player_id=?", zone, placement.RouteRowShard(player), player)
+	_, err := f.owner.DB.Exec("UPDATE role_fence SET home_zone=?,version=version+1 WHERE player_id=?", zone, player)
 	require.NoError(t, err)
 }
 
@@ -631,7 +608,7 @@ func (f *nativeTeamFixture) launchRegionHome(t *testing.T, actor uint64) uint32 
 	return home
 }
 
-// 别名合服:路由行和记录里都是原始区,PlayerHomeZone 不解析,提交点复核两边解析到最终区(5→6→7 这样的链也沿到底)。
+// 别名合服:护栏副本和记录里都是原始区,PlayerHomeZone 不解析,提交点复核两边解析到最终区(5→6→7 这样的链也沿到底)。
 func TestTeamTiDBHomeZoneResolvesMergedZone(t *testing.T) {
 	f := newNativeTeamFixture(t)
 	ctx := context.Background()
@@ -643,7 +620,7 @@ func TestTeamTiDBHomeZoneResolvesMergedZone(t *testing.T) {
 		return f.owner.RequireTeamHomeZoneTx(ctx, tx, 1, expected)
 	}
 	require.NoError(t, check(1))
-	require.ErrorIs(t, check(3), authority.ErrTeamRoute, "没合服,3 区和路由行的 1 区不同区")
+	require.ErrorIs(t, check(3), authority.ErrTeamRoute, "没合服,3 区和副本行的 1 区不同区")
 
 	f.setMergedZones(t, map[uint32]uint32{1: 2, 2: 3})
 	home, err := f.owner.PlayerHomeZone(ctx, 1)
@@ -654,7 +631,7 @@ func TestTeamTiDBHomeZoneResolvesMergedZone(t *testing.T) {
 	require.NoError(t, check(3))
 	require.ErrorIs(t, check(9), authority.ErrTeamRoute, "没参与合服的区还是别的区")
 
-	// 组队查归属读的也是路由行上的原始区;没有路由行不是故障,缺项交给调用方回 ErrHomeZoneUnknown。
+	// 组队查归属读的也是目录里的原始区;目录里没有不是故障,缺项交给调用方回 ErrHomeZoneUnknown。
 	zones, err := NewAuthorityHomeZone(f.owner, 0).HomeZones(ctx, []uint64{1, 9999})
 	require.NoError(t, err)
 	require.Equal(t, map[uint64]uint32{1: 1}, zones)
@@ -662,16 +639,6 @@ func TestTeamTiDBHomeZoneResolvesMergedZone(t *testing.T) {
 	f.setMergedZones(t, nil)
 	require.NoError(t, check(1), "撤销后原始区照样对得上,在途的票不会卡死")
 	require.ErrorIs(t, check(3), authority.ErrTeamRoute)
-}
-
-// 启动门禁:映射表写坏(成环)和读不到一样拒绝启动,坏映射不能进快照。
-func TestTeamTiDBLoadMergedZonesRejectsABrokenTable(t *testing.T) {
-	f := newNativeTeamFixture(t)
-	_, err := f.owner.DB.Exec("INSERT INTO zone_merged_into(src_zone,dst_zone,run_id,merged_at_ms) VALUES(1,2,'fixture-merge-1',1),(2,1,'fixture-merge-2',2)")
-	require.NoError(t, err)
-	cache, err := f.owner.LoadMergedZones(context.Background(), placement.MergedZoneCacheOptions{})
-	require.ErrorIs(t, err, placement.ErrMergedZoneUnresolvable)
-	require.Nil(t, cache)
 }
 
 // 名册的四个入口:合服后两个原始区算同区,没合服仍然不同区;记录里一直是原始区;
@@ -995,14 +962,13 @@ func TestTeamTiDBFullLaunchReservesWithOriginalZones(t *testing.T) {
 	require.Equal(t, uint64(907), reserved.BattleId)
 }
 
-func TestTeamTiDBFrozenRouteRejectsBeforeMembership(t *testing.T) {
+func TestTeamTiDBFrozenRoleRejectsBeforeMembership(t *testing.T) {
 	f := newNativeTeamFixture(t)
-	_, err := f.owner.DB.Exec("UPDATE player_route SET frozen_run_id='fixture-frozen' WHERE player_id=1")
-	require.NoError(t, err)
+	fencetest.Update(t, context.Background(), f.owner.DB, 1, "team-original-1", 7, 901)
 	request := &teampb.CreateTeamRequest{RequestId: uuid.NewString()}
 	ctx := fixtureTeamAction(t, f.actor(t, 1), 1, OpCreate, request)
-	_, err = f.store.Mutate(ctx, BindCreate(1, 101), CreateOp(1, 101, 1))
-	require.ErrorIs(t, err, authority.ErrTeamRoute)
+	_, err := f.store.Mutate(ctx, BindCreate(1, 101), CreateOp(1, 101, 1))
+	require.ErrorIs(t, err, authority.ErrOriginalPlayer)
 	var count int
 	require.NoError(t, f.owner.DB.QueryRow("SELECT COUNT(*) FROM team_membership").Scan(&count))
 	require.Zero(t, count)

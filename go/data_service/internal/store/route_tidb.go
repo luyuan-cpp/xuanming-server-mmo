@@ -49,6 +49,8 @@ type RouteTiDBPrepareRequest struct {
 
 // RouteTiDBPrepareStep 是一条语句及其执行结果。
 type RouteTiDBPrepareStep struct {
+	// Schema 是这条语句打在哪一片上。K=1 时留空,输出和没分片时相同。
+	Schema       string
 	SQL          string
 	Executed     bool
 	SplitRegions int64 // SPLIT 返回的首列(TOTAL_SPLIT_REGION);ALTER 为 0
@@ -72,15 +74,15 @@ func (r RouteTiDBPrepareReport) SplitRegions() int64 {
 	return n
 }
 
-// PrepareTiDB:校验入参 → 判引擎(MySQL 直接 Skipped)→ 核对表是聚簇主键(ErrRouteTiDBNotClustered,
-// dry-run 同样核对,只读)→ ATTRIBUTES ×1 → SPLIT ×(1 + zones + storages)。
-// 入参非法一律 ErrRouteInvalidArgument,一条语句都不发。中途失败返回已执行的步骤 + error(带第几步与语句)。
+// PrepareTiDB 逐片做:校验入参 → 判引擎(MySQL 直接 Skipped)→ 核对表是聚簇主键(ErrRouteTiDBNotClustered,
+// dry-run 同样核对,只读)→ ATTRIBUTES ×1 → SPLIT。入参非法一律 ErrRouteInvalidArgument,一条语句都不发。
+// 中途失败返回已执行的步骤 + error(带第几步与语句)。每条语句都幂等,重跑即可。
 func (s *RouteStore) PrepareTiDB(ctx context.Context, req RouteTiDBPrepareRequest) (RouteTiDBPrepareReport, error) {
 	zones, storages, err := normalizeRouteTiDBPrepareIDs(req.Zones, req.Storages)
 	if err != nil {
 		return RouteTiDBPrepareReport{}, err
 	}
-	isTiDB, version, err := serverIsTiDB(ctx, s.db)
+	isTiDB, version, err := serverIsTiDB(ctx, s.pools.first())
 	if err != nil {
 		return RouteTiDBPrepareReport{}, fmt.Errorf("tidb-prepare: %w", err)
 	}
@@ -88,25 +90,37 @@ func (s *RouteStore) PrepareTiDB(ctx context.Context, req RouteTiDBPrepareReques
 		return RouteTiDBPrepareReport{Engine: "mysql", Version: version, Skipped: true}, nil
 	}
 	rep := RouteTiDBPrepareReport{Engine: "tidb", Version: version}
-	if err := assertRouteTablesClustered(ctx, s.db); err != nil {
-		return rep, err
-	}
-
-	stmts := routeTiDBPrepareStatements(zones, storages)
-	rep.Steps = make([]RouteTiDBPrepareStep, len(stmts))
-	for i, q := range stmts {
-		rep.Steps[i].SQL = q
+	for slot, db := range s.pools.pools {
+		if err := assertRouteTablesClustered(ctx, db); err != nil {
+			return rep, err
+		}
+		schema := ""
+		if s.pools.k > 1 {
+			schema = s.pools.names[slot]
+		}
+		for _, q := range routeTiDBPrepareStatements(zones, storages, slot, s.pools.k) {
+			rep.Steps = append(rep.Steps, RouteTiDBPrepareStep{Schema: schema, SQL: q})
+		}
 	}
 	if req.DryRun {
 		return rep, nil
 	}
-	for i, q := range stmts {
-		n, err := execRouteTiDBPrepareStep(ctx, s.db, q)
-		if err != nil {
-			return rep, fmt.Errorf("tidb-prepare step %d/%d: %s: %w", i+1, len(stmts), q, err)
+	byName := make(map[string]*sql.DB, len(s.pools.pools))
+	for slot, db := range s.pools.pools {
+		name := ""
+		if s.pools.k > 1 {
+			name = s.pools.names[slot]
 		}
-		rep.Steps[i].Executed = true
-		rep.Steps[i].SplitRegions = n
+		byName[name] = db
+	}
+	for i := range rep.Steps {
+		step := &rep.Steps[i]
+		n, err := execRouteTiDBPrepareStep(ctx, byName[step.Schema], step.SQL)
+		if err != nil {
+			return rep, fmt.Errorf("tidb-prepare step %d/%d: %s: %w", i+1, len(rep.Steps), step.SQL, err)
+		}
+		step.Executed = true
+		step.SplitRegions = n
 	}
 	return rep, nil
 }
@@ -165,7 +179,19 @@ const (
 // 切点数为 0 时上面的间隔是「除以零」的编译错误。
 var _ = [1]struct{}{}[placement.RouteRowShards%routeTiDBPrefixSplitPoints]
 
-// routeTiDBPrepareStatements 是纯函数:zones / storages 已规范化(去重升序、范围合法)。顺序即执行顺序:
+// routeShardsOfSlot 是落在这一片上的行分片,升序。K=64 时每片只有一个行分片。
+func routeShardsOfSlot(slot, k int) []uint32 {
+	shards := make([]uint32, 0, int(placement.RouteRowShards)/k)
+	for sh := uint32(0); sh < placement.RouteRowShards; sh++ {
+		if int(sh)%k == slot {
+			shards = append(shards, sh)
+		}
+	}
+	return shards
+}
+
+// routeTiDBPrepareStatements 是纯函数:zones / storages 已规范化(去重升序、范围合法)。slot、k 是这条语句打在哪一片。
+// 顺序即执行顺序(下面按 K=1 举例;K>1 时只切落在这一片上的行分片,其余行分片这一片上没有行,切了只是空 Region):
 //
 //	ATTRIBUTES player_route(先防合并再切)
 //	player_route 行数据:(s, 0),s = 1..63                               → 64 段,每片一段
@@ -177,23 +203,28 @@ var _ = [1]struct{}{}[placement.RouteRowShards%routeTiDBPrefixSplitPoints]
 // 这一档(与 16 片时相同)。Region 总数 ≈ 63 + 8·Z + 8·S。
 //
 // 不切 idx_route_storage 的 NULL 前缀段:建角恒写落点,这一段没有写入。
-// 片的上界只用 placement.RouteRowShards、间隔只用 routeTiDBPrefixSplitStride,不写字面量。
-func routeTiDBPrepareStatements(zones, storages []uint32) []string {
+// 片的上界只用 placement.RouteRowShards,不写字面量。
+func routeTiDBPrepareStatements(zones, storages []uint32, slot, k int) []string {
 	const route = "`" + PlayerRouteTableName + "`"
 	stmts := []string{
 		"ALTER TABLE " + route + " ATTRIBUTES 'merge_option=deny'",
 	}
+	shards := routeShardsOfSlot(slot, k)
 
-	tuples := make([]string, 0, placement.RouteRowShards)
-	for sh := uint32(1); sh < placement.RouteRowShards; sh++ {
-		tuples = append(tuples, "("+u32(sh)+", 0)")
+	// 第一个行分片的起点就是表的起点,不用切。
+	if len(shards) > 1 {
+		tuples := make([]string, 0, len(shards)-1)
+		for _, sh := range shards[1:] {
+			tuples = append(tuples, "("+u32(sh)+", 0)")
+		}
+		stmts = append(stmts, "SPLIT TABLE "+route+" BY "+strings.Join(tuples, ", "))
 	}
-	stmts = append(stmts, "SPLIT TABLE "+route+" BY "+strings.Join(tuples, ", "))
 
+	stride := max(1, len(shards)/int(routeTiDBPrefixSplitPoints))
 	prefixed := func(index string, lead uint32) string {
 		parts := make([]string, 0, routeTiDBPrefixSplitPoints)
-		for sh := uint32(0); sh < placement.RouteRowShards; sh += routeTiDBPrefixSplitStride {
-			parts = append(parts, "("+u32(lead)+", "+u32(sh)+", 0)")
+		for i := 0; i < len(shards); i += stride {
+			parts = append(parts, "("+u32(lead)+", "+u32(shards[i])+", 0)")
 		}
 		return "SPLIT TABLE " + route + " INDEX `" + index + "` BY " + strings.Join(parts, ", ")
 	}

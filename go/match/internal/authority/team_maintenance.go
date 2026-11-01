@@ -12,7 +12,12 @@ import (
 )
 
 // MaintainQueuedTeam 永不按成员缓存缺失拆队；只用SQL原票/原profile到期撤整单。
-func (s *Store) MaintainQueuedTeam(ctx context.Context, observed *teampb.TeamLaunchRecord) (bool, error) {
+func (s *Store) MaintainQueuedTeam(ctx context.Context, observed *teampb.TeamLaunchRecord) (closed bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { closed, e = s.maintainQueuedTeamOnce(ctx, observed); return e })
+	return closed, err
+}
+
+func (s *Store) maintainQueuedTeamOnce(ctx context.Context, observed *teampb.TeamLaunchRecord) (bool, error) {
 	data, err := DecodeTeamLaunch(observed)
 	if err != nil {
 		return false, err
@@ -61,7 +66,12 @@ func (s *Store) MaintainQueuedTeam(ctx context.Context, observed *teampb.TeamLau
 	return false, tx.Commit()
 }
 
-func (s *Store) WithdrawObservedTeamQueue(ctx context.Context, observed *teampb.TeamLaunchRecord) (bool, error) {
+func (s *Store) WithdrawObservedTeamQueue(ctx context.Context, observed *teampb.TeamLaunchRecord) (closed bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { closed, e = s.withdrawObservedTeamQueueOnce(ctx, observed); return e })
+	return closed, err
+}
+
+func (s *Store) withdrawObservedTeamQueueOnce(ctx context.Context, observed *teampb.TeamLaunchRecord) (bool, error) {
 	data, err := DecodeTeamLaunch(observed)
 	if err != nil {
 		return false, err
@@ -87,7 +97,12 @@ func (s *Store) WithdrawObservedTeamQueue(ctx context.Context, observed *teampb.
 	return true, tx.Commit()
 }
 
-func (s *Store) CancelTeamQueueForActor(ctx context.Context, actor uint64, observed *pb.MatchAuthorityTicketRecord) ([]uint64, error) {
+func (s *Store) CancelTeamQueueForActor(ctx context.Context, actor uint64, observed *pb.MatchAuthorityTicketRecord) (members []uint64, err error) {
+	err = s.Fenced(ctx, func() (e error) { members, e = s.cancelTeamQueueForActorOnce(ctx, actor, observed); return e })
+	return members, err
+}
+
+func (s *Store) cancelTeamQueueForActorOnce(ctx context.Context, actor uint64, observed *pb.MatchAuthorityTicketRecord) ([]uint64, error) {
 	if observed == nil || observed.TeamId == 0 || observed.PlayerId != actor || observed.State != 1 {
 		return nil, nil
 	}
@@ -264,6 +279,10 @@ func (s *Store) requeueFailedTeamLaunchTx(ctx context.Context, tx *sql.Tx, launc
 // 建房成功只能解名册锁；原成员全部由ready终态CAS释放后，才关闭挂起域原件。
 // 队伍可以已经解散，恢复仍沿原launch/P，不把当前名单当成旧对局的成员。
 func (s *Store) CloseCompletedTeamLaunch(ctx context.Context, observed *teampb.TeamLaunchRecord) error {
+	return s.Fenced(ctx, func() error { return s.closeCompletedTeamLaunchOnce(ctx, observed) })
+}
+
+func (s *Store) closeCompletedTeamLaunchOnce(ctx context.Context, observed *teampb.TeamLaunchRecord) error {
 	data, err := DecodeTeamLaunch(observed)
 	if err != nil {
 		return err

@@ -167,10 +167,9 @@ func ValidateAuthorityPlan(plan *databasepb.SqlWriterMaintenanceReceipt_Plan) er
 			return errors.New("ACTIVE物理writer全集不规范")
 		}
 	}
-	for i, schema := range plan.ProtectedSchemas {
-		if !validSchema(schema) || i > 0 && plan.ProtectedSchemas[i-1] >= schema {
-			return errors.New("受保护schema全集不规范")
-		}
+	// 排空逐逻辑库做:一个 run 只保护它自己的闸门所在的库。
+	if len(plan.ProtectedSchemas) != 1 || plan.ProtectedSchemas[0] != plan.AuthoritySchema {
+		return errors.New("排空计划的受保护schema必须恰好是本逻辑库")
 	}
 	issuers := map[string]bool{}
 	for _, roles := range [][]*databasepb.SqlWriterMaintenanceReceipt_IssuerClosure{plan.RootIssuers, plan.QueueMutators, plan.MaintenanceIssuers} {

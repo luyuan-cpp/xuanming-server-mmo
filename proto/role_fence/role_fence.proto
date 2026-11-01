@@ -1,0 +1,57 @@
+syntax = "proto3";
+package rolefence;
+
+option go_package = "role_fence/role_fence";
+option cc_generic_services = false;
+
+import "proto/common/base/service_call_auth.proto";
+
+// 角色护栏协议,规格见 docs/design/horizontal-scale-logical-db.md §3。
+// data_service 是协调者;guild、trade、mail、match、player_inbox、friend 是参与者,各自的 gRPC 服务器注册这同一个 service。
+// 内部服务,不进客户端协议。
+//
+// 两个方法幂等、有版本保护,没有结局未知。内部失败(SQL、超时、取消)带内回 retry,不走 gRPC 错误:
+// PublicationAdmission 把任何 gRPC 错误都算成排空证明要 Hold。gRPC 错误只留给鉴权失败和非法参数。
+//
+// 字段号上线后不复用,删字段写 reserved(AGENTS §4)。
+
+service RoleFenceParticipant {
+  // 一个事务:写入副本,再 FOR UPDATE 读本库的挂起全集。有挂起就回滚,本库不冻结。
+  // dry_run 只读挂起全集,不写副本,事务回滚。
+  rpc PrepareRoleFreeze(PrepareRoleFreezeRequest) returns (PrepareRoleFreezeResponse) {}
+  // 版本更大才覆盖。尽力推送,丢了由下一次访问自愈。
+  rpc ApplyRoleFence(ApplyRoleFenceRequest) returns (ApplyRoleFenceResponse) {}
+}
+
+// 目录 account_role 一行的护栏字段。所有副本写入的合并规则只有一条:version 大的赢。
+message RoleFenceState {
+  uint64 player_id = 1;
+  string account = 2;        // 空串 = 已删除
+  uint64 owner_revision = 3;
+  uint64 freeze_token = 4;   // 0 = 未冻结;trade_listing_id 非 0 时取它,否则取 prepare_token。过户是 listing id,删角是 1<<63 | player_id
+  uint64 version = 5;        // account_role.fence_version
+  uint32 home_zone = 6;      // 原始区,不解析
+  bool freeze_final = 7;     // trade_listing_id 非 0。业务写入不看它,令牌非 0 就拒绝;只有不可逆的判定(退款)要认它
+}
+
+message PrepareRoleFreezeRequest {
+  RoleFenceState state = 1;
+  common.base.ServiceCallAuth auth = 2;
+  bool dry_run = 3; // 只问有没有挂起:不写副本,事务回滚。真正的 Prepare 仍是提交点判定
+}
+
+message PrepareRoleFreezeResponse {
+  bool clean = 1;     // 本库已冻结,没有挂起。dry_run 时只表示这一刻没有挂起
+  string blocker = 2; // 低基数枚举串,进指标 label,不含玩家信息
+  bool stale = 3;     // 副本版本更大,这个状态已经过时
+  bool retry = 4;     // 这一次没判成,协调者按不可达处理
+}
+
+message ApplyRoleFenceRequest {
+  RoleFenceState state = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+
+message ApplyRoleFenceResponse {
+  bool retry = 1;     // 这一次没写成。丢了不要紧,副本下一次访问自愈
+}

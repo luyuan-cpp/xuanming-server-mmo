@@ -1426,6 +1426,9 @@ function Invoke-DeployWithFakeKubectl {
     # 补上参数与口令,让假 kubectl 答集群已在。用例自己的规则不匹配这条调用,放在最前不影响它们。
     if ([string]$DeployArgs.ReleaseProfile -in @('staging', 'prod')) {
         $all.PlayerRedisMasters = 3
+        # 逻辑库的闸同理(Assert-LogicalDbPreflight)。
+        $all.DirectoryLogicalShards = 64
+        $all.Region = 1
         $Rules = @(@{ Pattern = '^get statefulset redis-player\b'; ExitCode = 0; Stdout = '6' }) + @($Rules)
         if (-not $Env.ContainsKey('MMORPG_PLAYER_REDIS_PASSWORD')) {
             $Env = @{} + $Env
@@ -1750,6 +1753,8 @@ $ClientEntryWrapperKeys = @('ClientEntryMode', 'ClientPublicHost', 'GateClientHo
 $RedisSplitWrapperKeys = @('RedisSplit', 'ConfirmRedisSplitSwitch', 'RedisQueueMaxMemory')
 # 玩家域 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例。
 $PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage')
+# 逻辑库只走 dev_tools → k8s_deploy(给了才传):k8s_image.ps1 不部署 Go 服务,用不到它们。不粘滞:漏传 = staging / prod 被拒。
+$LogicalDbWrapperKeys = @('DirectoryLogicalShards', 'Region', 'SqlClusters', 'SqlDefaultCluster')
 $WrapperPairs = @(
     @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'
         Forwarded = $ClientEntryWrapperKeys + @('GatewayIngressHost', 'GatewayIngressClassName', 'GatewayIngressTlsSecret', 'GatewayTrustedProxies', 'LoginDevPasswordAuth', 'GateRouterMode',
@@ -1758,7 +1763,7 @@ $WrapperPairs = @(
             # B0-4 nofile 豁免开关:不粘滞,包装入口漏传 = 以 warn 运行的环境经包装入口重新部署时落回 enforce、硬限不够即拒启。
             # 其后 + 拼上共享 Redis 按用途拆实例(G4a 第 1a 批)的键:漏传 -RedisSplit = 想切回共享拓扑(被 k8s_deploy 的切换闸拦下),
             # 漏传确认 / 容量 = 切不过去;k8s-redis-wipe 的确认开关只走这一条包装链。用 + 拼接而不写进本逗号列表:逗号比 + 结合得紧,会变成嵌套数组。
-            'NodeOpenFileLimitMode') + $RedisSplitWrapperKeys + @('ConfirmWipeAllRedis') + $PlayerRedisWrapperKeys },
+            'NodeOpenFileLimitMode') + $RedisSplitWrapperKeys + @('ConfirmWipeAllRedis') + $PlayerRedisWrapperKeys + $LogicalDbWrapperKeys },
     @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sImage'; Downstream = 'k8s_image.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode') + $RedisSplitWrapperKeys + $PlayerRedisWrapperKeys },
     @{ Source = 'k8s_image.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode') + $RedisSplitWrapperKeys + $PlayerRedisWrapperKeys }
 )

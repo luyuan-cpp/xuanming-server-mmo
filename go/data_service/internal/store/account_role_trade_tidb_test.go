@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"sync"
 	"testing"
@@ -18,29 +17,19 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type roleFreezeVerifierFunc func(context.Context, *sql.Tx, *dbpb.AccountRoleTrade) (*dspb.AccountRoleFreezeEvidence, error)
+type roleFreezeVerifierFunc func(context.Context, *dbpb.AccountRoleTrade, int) (*dspb.AccountRoleFreezeEvidence, error)
 
 func newTestAccountRoleTradeStore(directory *AccountDirectoryStore, verifier RoleFreezeVerifier) *AccountRoleTradeStore {
-	s := NewAccountRoleTradeStore(directory, verifier)
-	// 原状态机用例不证明离帮；显式关业务策略，正式并发guard用例另装真实表。
-	s.requireGuildExit = false
-	return s
+	return NewAccountRoleTradeStore(directory, verifier)
 }
 
-func (f roleFreezeVerifierFunc) VerifyFrozen(ctx context.Context, tx *sql.Tx, r *dbpb.AccountRoleTrade) (*dspb.AccountRoleFreezeEvidence, error) {
-	return f(ctx, tx, r)
+func (f roleFreezeVerifierFunc) ReadFrozenEvidence(ctx context.Context, r *dbpb.AccountRoleTrade, holders int) (*dspb.AccountRoleFreezeEvidence, error) {
+	return f(ctx, r, holders)
 }
 
 // 这是显式测试验证器，仅验证状态机装配与 SQL 原子范围；不冒充原生卸载／旧入场排空证据。
 func testRoleFreezeVerifier() RoleFreezeVerifier {
-	return roleFreezeVerifierFunc(func(ctx context.Context, tx *sql.Tx, r *dbpb.AccountRoleTrade) (*dspb.AccountRoleFreezeEvidence, error) {
-		var listing uint64
-		if err := tx.QueryRowContext(ctx, "SELECT trade_listing_id FROM account_role WHERE player_id=?", r.PlayerId).Scan(&listing); err != nil {
-			return nil, err
-		}
-		if listing != r.ListingId {
-			return nil, accountdirectory.ErrConflict
-		}
+	return roleFreezeVerifierFunc(func(_ context.Context, r *dbpb.AccountRoleTrade, _ int) (*dspb.AccountRoleFreezeEvidence, error) {
 		return &dspb.AccountRoleFreezeEvidence{PlayerId: r.PlayerId, ListingId: r.ListingId, OwnerRevision: r.SellerOwnerRevision, OwnerEpoch: 17, SaveSeq: 3, PersistedDigest: make([]byte, 32), Kind: dspb.AccountRoleFreezeEvidenceKind_ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE}, nil
 	})
 }
@@ -90,7 +79,7 @@ func TestTiDBRoleTradeFreezeCancelDoesNotRefreezeOrClearNewListing(t *testing.T)
 	confirmation := &dspb.ConfirmAccountRoleTradeFreezeRequest{ListingId: 101, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1}
 	_, err = s.Confirm(ctx, confirmation)
 	require.ErrorIs(t, err, accountdirectory.ErrUnavailable, "生产未装配 verifier 不能生成 FROZEN")
-	s.verifier = roleFreezeVerifierFunc(func(context.Context, *sql.Tx, *dbpb.AccountRoleTrade) (*dspb.AccountRoleFreezeEvidence, error) {
+	s.verifier = roleFreezeVerifierFunc(func(context.Context, *dbpb.AccountRoleTrade, int) (*dspb.AccountRoleFreezeEvidence, error) {
 		return nil, errors.New("SQL proof unavailable")
 	})
 	_, err = s.Confirm(ctx, confirmation)

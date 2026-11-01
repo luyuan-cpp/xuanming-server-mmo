@@ -19,6 +19,7 @@ import (
 	base "proto/common/base"
 	inboxpb "proto/player_inbox"
 	"shared/accountdirectory"
+	"shared/rolefence"
 	"shared/serviceauth"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -99,6 +100,16 @@ func storeUnavailable() *base.TipInfoMessage {
 	return &base.TipInfoMessage{Id: constants.ErrStoreUnavailable}
 }
 
+// roleNotVerified 判这次失败是不是角色身份这一次核不过:冻结、归属或入场登记变了,或者目录读不到。
+// 这时要么还没开事务,要么事务已经回滚,没有结局未知,所以回非故障 tip,scene 照样退避重试。
+// 回故障 tip 的话 PublicationAdmission 会把排空证明打成 Hold。真正的存储故障不在此列。
+func roleNotVerified(err error) *base.TipInfoMessage {
+	if errors.Is(err, inbox.ErrOriginalRole) || errors.Is(err, rolefence.ErrUnavailable) {
+		return &base.TipInfoMessage{Id: constants.ErrStaleOwner}
+	}
+	return nil
+}
+
 // withBudget 给一次请求的全部 I/O 套同一个更早的截止时间:依赖变慢时先在预算内 in-band 回故障码,
 // 不让 go-zero 的超时拦截器抢先回 DeadlineExceeded(同 trade P1-9)。
 func withBudget(ctx context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
@@ -116,6 +127,14 @@ func (s *PlayerInboxServer) FetchItems(ctx context.Context, in *inboxpb.FetchPla
 	ctx, cancel := withBudget(ctx, s.budget)
 	defer cancel()
 	resp, err := s.store.Fetch(ctx, in)
+	if tip := roleNotVerified(err); tip != nil {
+		logx.WithContext(ctx).Infof("[player_inbox] FetchItems role not verified player=%d domain=%d epoch=%d scene_node_id=%d: %v",
+			in.GetPlayerId(), in.GetDomain(), in.GetOwnerEpoch(), in.GetSceneNodeId(), err)
+		return &inboxpb.FetchPlayerInboxResponse{
+			ErrorMessage: tip,
+			PlayerId:     in.GetPlayerId(), Domain: in.GetDomain(), CorrelationId: in.GetCorrelationId(),
+		}, nil
+	}
 	if err != nil {
 		logx.WithContext(ctx).Errorf("[player_inbox] FetchItems failed player=%d domain=%d epoch=%d scene_node_id=%d: %v",
 			in.GetPlayerId(), in.GetDomain(), in.GetOwnerEpoch(), in.GetSceneNodeId(), err)
@@ -135,6 +154,14 @@ func (s *PlayerInboxServer) AckItems(ctx context.Context, in *inboxpb.AckPlayerI
 	ctx, cancel := withBudget(ctx, s.budget)
 	defer cancel()
 	resp, err := s.store.Ack(ctx, in)
+	if tip := roleNotVerified(err); tip != nil {
+		logx.WithContext(ctx).Infof("[player_inbox] AckItems role not verified player=%d domain=%d epoch=%d decisions=%d scene_node_id=%d: %v",
+			in.GetPlayerId(), in.GetDomain(), in.GetOwnerEpoch(), len(in.GetDecisions()), in.GetSceneNodeId(), err)
+		return &inboxpb.AckPlayerInboxResponse{
+			ErrorMessage: tip,
+			PlayerId:     in.GetPlayerId(), Domain: in.GetDomain(), CorrelationId: in.GetCorrelationId(),
+		}, nil
+	}
 	if err != nil {
 		logx.WithContext(ctx).Errorf("[player_inbox] AckItems failed player=%d domain=%d epoch=%d decisions=%d scene_node_id=%d: %v",
 			in.GetPlayerId(), in.GetDomain(), in.GetOwnerEpoch(), len(in.GetDecisions()), in.GetSceneNodeId(), err)

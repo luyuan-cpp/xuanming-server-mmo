@@ -6,7 +6,7 @@ import (
 
 	base "proto/common/base"
 	dspb "proto/data_service"
-	"shared/authoritysql"
+	"shared/rolefence"
 	"shared/roleidentity"
 
 	"github.com/stretchr/testify/require"
@@ -21,8 +21,8 @@ func TestOriginalRoleNeverFallsBackToUnconfiguredSystemRepo(t *testing.T) {
 	_, err = repo.GetFriendList(ctx, 22)
 	require.ErrorIs(t, err, ErrOriginalRole)
 	require.ErrorIs(t, repo.Unblock(ctx, 22, 11), ErrOriginalRole)
-	require.Error(t, repo.ConfigureRoleAuthority("bad.schema", authoritysql.BackendTiDB))
-	repo.roleAuthority = "test_global"
+	require.ErrorIs(t, repo.CheckOriginalRole(ctx), ErrOriginalRole, "没装护栏时预检不能放行")
+	repo.ConfigureRoleFence(rolefence.NewGuard(nil, nil))
 	_, err = repo.GetFriendList(context.Background(), 22)
 	require.ErrorIs(t, err, ErrOriginalRole)
 	_, err = repo.GetFriendList(ctx, 11)

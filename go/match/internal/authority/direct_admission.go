@@ -79,7 +79,15 @@ func validateDirectActor(ctx context.Context, key *pb.MatchDirectIntentRecord, g
 }
 
 // 业务首次P内固定直接开战原件、退出列表与全员pending0。网络只在提交以后发送。
-func (s *Store) PrepareDirectAdmission(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchDirectIntentRecord, error) {
+func (s *Store) PrepareDirectAdmission(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (intent *pb.MatchDirectIntentRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) {
+		intent, e = s.prepareDirectAdmissionOnce(ctx, key, payload, formation, group)
+		return e
+	})
+	return intent, err
+}
+
+func (s *Store) prepareDirectAdmissionOnce(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchDirectIntentRecord, error) {
 	if key == nil || key.Kind < 1 || key.Kind > 3 || key.OwnerId == 0 || (key.RequestHigh == 0 && key.RequestLow == 0) || len(payload) == 0 {
 		return nil, ErrDirectConflict
 	}
@@ -210,6 +218,11 @@ func (s *Store) prepareDirectAdmissionTx(ctx context.Context, tx *sql.Tx, key *p
 			return nil, err
 		}
 	}
+	if key.Kind == 2 {
+		if err = s.extendOccupancyForBattleTx(ctx, tx, key.RequestLow, formation.ConfigId, stamp); err != nil {
+			return nil, err
+		}
+	}
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(original)
 	if err != nil {
 		return nil, err
@@ -228,7 +241,12 @@ func (s *Store) prepareDirectAdmissionTx(ctx context.Context, tx *sql.Tx, key *p
 	return out, err
 }
 
-func (s *Store) CompletePreparedDirect(ctx context.Context, observed *pb.MatchDirectIntentRecord) (*pb.MatchFormationRecord, error) {
+func (s *Store) CompletePreparedDirect(ctx context.Context, observed *pb.MatchDirectIntentRecord) (formation *pb.MatchFormationRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { formation, e = s.completePreparedDirectOnce(ctx, observed); return e })
+	return formation, err
+}
+
+func (s *Store) completePreparedDirectOnce(ctx context.Context, observed *pb.MatchDirectIntentRecord) (*pb.MatchFormationRecord, error) {
 	original, err := DecodeDirectStart(observed)
 	if err != nil {
 		return nil, err
@@ -307,7 +325,7 @@ func (s *Store) CompletePreparedDirect(ctx context.Context, observed *pb.MatchDi
 		}
 	}
 	f := proto.Clone(original.Formation).(*pb.MatchFormationRecord)
-	if err = s.claimTx(ctx, tx, f, original.Tickets, &matchEntryOriginal{direct: current, payload: current.Payload, formation: f, battleID: f.BattleId}); err != nil {
+	if err = s.claimTx(ctx, tx, f, original.Tickets, &matchEntryOriginal{direct: current, payload: current.Payload, formation: f, battleID: f.BattleId, admitted: true}); err != nil {
 		return nil, err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE match_direct_intent SET battle_id=? WHERE kind=? AND owner_id=? AND request_high=? AND request_low=? AND battle_id=0 AND cancelled=0", f.BattleId, current.Kind, current.OwnerId, current.RequestHigh, current.RequestLow); err != nil {

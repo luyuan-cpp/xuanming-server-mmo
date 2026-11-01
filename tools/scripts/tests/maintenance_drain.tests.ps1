@@ -36,22 +36,41 @@ try {
         [IO.File]::WriteAllText($qual,'仅纯renderer夹具，不是数据库资格')
         $qsha=Get-MaintenanceSha256 $qual
         $requestPath=Join-Path $taskRoot 'registration.fixture.json'
-        $request=@{lockPrimitive='LOCK_TOUCH';lockQualificationSha256=[Convert]::ToBase64String([Convert]::FromHexString($qsha));writer=@{sqlPrincipal=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('runtime_boot@%'))}}
+        $request=@{authoritySchema='authority_fixture';protectedSchemas=@('authority_fixture');lockPrimitive='LOCK_TOUCH';lockQualificationSha256=[Convert]::ToBase64String([Convert]::FromHexString($qsha));writer=@{sqlPrincipal=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('runtime_boot@%'))}}
         $rsha=Write-MaintenanceImmutableJson -Path $requestPath -Value $request
-        $plan=@{authoritySchema='authority_fixture';runtimePrincipal='runtime_boot@%';registrarPrincipal='registrar_fixture@%';maintenancePrincipal='maintenance_fixture@%';schemaPrincipal='schema_fixture@%';registrationRequestFile=$requestPath;registrationRequestSha256=$rsha;lockQualificationFile=$qual;tables=@(@{schema='domain_fixture';table='player';operations=@('SELECT','INSERT','UPDATE')});schemaDatabases=@('authority_fixture','domain_fixture')}
+        $plan=@{authoritySchema='authority_fixture';directorySchema='authority_fixture';runtimePrincipal='runtime_boot@%';registrarPrincipal='registrar_fixture@%';maintenancePrincipal='maintenance_fixture@%';schemaPrincipal='schema_fixture@%';registrationRequestFile=$requestPath;registrationRequestSha256=$rsha;lockQualificationFile=$qual;tables=@(@{schema='domain_fixture';table='player';operations=@('SELECT','INSERT','UPDATE')});schemaDatabases=@('authority_fixture','domain_fixture')}
         $roles=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
         $runtimeStatements=($roles.runtime -split "`r?`n" | Where-Object { $_ -notmatch '^\s*--' }) -join "`n"
         Assert-Match -Text $roles.runtime -Pattern 'UPDATE \(lock_touch\)' -Because '只授无权限意义列锁写'
         Assert-Match -Text $roles.runtime -Pattern 'writer_lifecycle_receipt' -Because 'normal强读原REGISTER核部署/原语'
         Assert-True -Condition ($runtimeStatements -notmatch '(?i)ALL PRIVILEGES|CREATE|ALTER|GRANT OPTION|ON\s+[^;]+\.\*') -Because 'runtime没有DDL/全schema/注册能力'
-        Assert-Match -Text $roles.operator -Pattern 'schema_fixture' -Because 'fresh schema独立principal'
-        Assert-True -Condition ($roles.operator -notmatch 'id_segment') -Because '发号器不用 SQL,schema 账号不该再有 id_segment 的写权限'
-        Assert-Match -Text $roles.operator -Pattern 'CREATE,INSERT,UPDATE ON `domain_fixture`\.`schema_migrations`' -Because '迁移账本只给具名表写权限'
-        Assert-True -Condition ($roles.operator -notmatch 'guild_player_state') -Because '没有具名guild schema时不额外授哨兵写权限'
+        Assert-Match -Text $roles.schema -Pattern 'schema_fixture' -Because 'fresh schema独立principal'
+        Assert-True -Condition ($roles.operator -notmatch 'schema_fixture') -Because 'operator 块在迁移之后执行,schema 账号的授权要在迁移之前,不能混在一起'
+        Assert-True -Condition ($roles.schema -notmatch 'id_segment') -Because '发号器不用 SQL,schema 账号不该再有 id_segment 的写权限'
+        Assert-Match -Text $roles.schema -Pattern 'CREATE,INSERT,UPDATE ON `domain_fixture`\.`schema_migrations`' -Because '迁移账本只给具名表写权限'
+        Assert-True -Condition ($roles.schema -notmatch 'guild_player_state') -Because '没有具名guild schema时不额外授哨兵写权限'
         $plan.schemaDatabases=@('authority_fixture','domain_fixture','mmorpg_guild')
         $guildRoles=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
-        Assert-Match -Text $guildRoles.operator -Pattern 'GRANT INSERT ON `mmorpg_guild`\.`guild_player_state`' -Because 'guild正式migrate只给固定哨兵表INSERT'
+        Assert-Match -Text $guildRoles.schema -Pattern 'GRANT CREATE,INSERT ON `mmorpg_guild`\.`guild_player_state`' -Because 'guild正式migrate只给固定哨兵表INSERT;带CREATE才能在表建出来之前授权'
         Assert-True -Condition ($guildRoles.runtime -notmatch 'guild_player_state') -Because 'Schema seed能力不进入normal业务grant'
+        Assert-True -Condition ($roles.schema -notmatch 'directory_shard') -Because '不是目录片的库不授 directory_shard'
+        $plan.directoryShard=$true
+        $shardRoles=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
+        Assert-Match -Text $shardRoles.schema -Pattern ([regex]::Escape('GRANT CREATE,INSERT,UPDATE ON `authority_fixture`.`directory_shard` TO ''schema_fixture''@''%''')) -Because 'migrate 用 INSERT ... ON DUPLICATE KEY UPDATE 种目录片的 directory_shard;带CREATE才能在表建出来之前授权'
+        # 空库上执行:表级 GRANT 不带 CREATE 时表不存在就报 1146(MySQL、TiDB 同一规则),所以 schema 块的表级 GRANT 都要带 CREATE,否则还没到迁移就失败。
+        foreach($statement in @($shardRoles.schema -split "`r?`n" | Where-Object { $_ -match '^GRANT ' -and $_ -notmatch '\.\* TO ' })){
+            Assert-Match -Text $statement -Pattern '^GRANT [A-Z,]*CREATE' -Because "空库上执行不了:$statement"
+        }
+        Assert-True -Condition (@($guildRoles.schema -split "`r?`n" | Where-Object { $_ -match '^GRANT ' -and $_ -notmatch '\.\* TO ' -and $_ -notmatch '^GRANT [A-Z,]*CREATE' }).Count -eq 0) -Because 'guild 的哨兵表同样要能在空库上授权'
+        # 迁移之前还没有 generation,也就没有 REGISTER 原件:schema 块不能要它。同一份完整计划也要能用。
+        $schemaOnly=ConvertTo-AuthoritySchemaRoleSql -Plan @{authoritySchema='authority_fixture';schemaPrincipal='schema_fixture@%';schemaDatabases=@('authority_fixture');directoryShard=$true}
+        Assert-Match -Text $schemaOnly -Pattern ([regex]::Escape('GRANT SELECT,CREATE,ALTER,INDEX ON `authority_fixture`.* TO ''schema_fixture''@''%'';')) -Because '库级授权'
+        Assert-Match -Text $schemaOnly -Pattern ([regex]::Escape('GRANT CREATE,INSERT ON `authority_fixture`.`route_meta`')) -Because '-migrate 种闸门行'
+        Assert-True -Condition (($shardRoles.schema) -ceq (ConvertTo-AuthoritySchemaRoleSql -Plan $plan)) -Because 'render-roles 的 schema 段和 render-schema-role 是同一份'
+        $operatorTemplate=[IO.File]::ReadAllText((Join-Path $PSScriptRoot '../../../deploy/sql/authority_operator_role.sql'))
+        Assert-True -Condition ($operatorTemplate -notmatch 'SCHEMA_') -Because 'operator 模板不再带 schema 块'
+        Assert-True -Condition ($shardRoles.runtime -notmatch 'directory_shard') -Because 'Schema seed能力不进入normal业务grant'
+        $plan.Remove('directoryShard')
         $plan.tables=@(@{schema='authority_fixture';table='writer_registry';operations=@('UPDATE')})
         $message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message}
         Assert-Match -Text $message -Pattern '权限真值' -Because '业务表清单不能混入registry自助篡改'
@@ -60,6 +79,10 @@ try {
         Assert-Match -Text $route.runtime -Pattern ([regex]::Escape('GRANT SELECT ON `authority_fixture`.`player_route`')) -Because 'go/db认领前按player_route选库，只读授权由计划tables给出'
         Assert-True -Condition (($route.runtime+$route.operator) -notmatch 'route_reconcile') -Because '对账表已删除，任何账号都不再授权'
         Assert-Match -Text $route.operator -Pattern ([regex]::Escape('GRANT SELECT,INSERT,DELETE ON `authority_fixture`.`zone_merged_into`')) -Because '合服工具的操作员身份要能写映射表'
+        $plan.directorySchema='other_directory'
+        $notDirectory=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')
+        Assert-True -Condition ($notDirectory.operator -notmatch 'zone_merged_into') -Because '只有目录库有合服映射表，别的逻辑库不授权'
+        $plan.directorySchema='authority_fixture'
         Assert-True -Condition ($route.runtime -notmatch 'zone_merged_into') -Because '运行账号只有计划tables列出时才有映射表的读权限，操作员的写权限不进runtime'
         $plan.tables=@(@{schema='authority_fixture';table='zone_merged_into';operations=@('SELECT')})
         $merged=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')

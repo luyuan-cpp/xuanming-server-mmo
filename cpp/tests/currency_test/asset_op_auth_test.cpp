@@ -395,6 +395,26 @@ TEST(AssetOpAuthTest, SystemCreditOnlyMailAllowed)
 	EXPECT_EQ(AssetOpAuthVerdict::kOk, VerifyGolden(request, "credit"));
 }
 
+// GM_RECALL 只认 data_service:别的调用方的密钥泄了也扣不了玩家的钱。
+TEST(AssetOpAuthTest, GmRecallOnlyDataServiceAllowed)
+{
+	for (const char* caller : {"guild", "trade", "mail", "system", ""})
+	{
+		::AssetOpRequest request = MakeGoldenRequest();
+		request.set_stream(ASSET_OP_STREAM_GM_RECALL);
+		request.mutable_auth()->set_caller(caller);
+		SignRequest("debit", request);
+
+		EXPECT_EQ(AssetOpAuthVerdict::kCallerNotAllowed, VerifyGolden(request, "debit"))
+			<< "caller=" << caller;
+	}
+	::AssetOpRequest request = MakeGoldenRequest();
+	request.set_stream(ASSET_OP_STREAM_GM_RECALL);
+	request.mutable_auth()->set_caller("data_service");
+	SignRequest("debit", request);
+	EXPECT_EQ(AssetOpAuthVerdict::kOk, VerifyGolden(request, "debit"));
+}
+
 // 白名单必须排在取密钥之前:caller 来自不可信请求,而默认查表要拿它去拼环境变量名。
 // 白名单没过就问密钥,等于让外部输入决定读哪个环境变量。
 TEST(AssetOpAuthTest, SecretLookupOnlySeesWhitelistedCaller)

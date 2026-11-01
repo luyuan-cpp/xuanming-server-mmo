@@ -28,6 +28,7 @@ import (
 	"schemamigrate"
 	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/dbplacement"
 	"shared/domainhost"
 	tables "shared/generated/table"
 	"shared/serviceauth"
@@ -81,14 +82,24 @@ func run(c config, migrate bool) (runErr error) {
 	var runtime *drainproof.Runtime
 	var root, relay *drainproof.Session
 	relayIngress := drainproof.New()
+	var poolOptions []authoritysql.OpenOption
 	var err error
 	if migrate {
 		permission, err = authoritysql.LoadSchemaPermission(os.Getenv)
+		if err == nil {
+			// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。
+			poolOptions, err = dbplacement.ForMigration(ctx, c.DbPlacement, data.DatabaseName)
+		}
 	} else {
 		runtime, root, relay, err = serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 		if err != nil {
 			return err
 		}
+		var placement *dbplacement.Watcher
+		if placement, err = dbplacement.Start(ctx, c.DbPlacement); err != nil {
+			return err
+		}
+		poolOptions = placement.OpenOptions()
 		sqlWriter, err = authoritysql.LoadWriterConfig(os.Getenv)
 		permission = authoritysql.Writer(sqlWriter)
 	}
@@ -96,7 +107,7 @@ func run(c config, migrate bool) (runErr error) {
 		return err
 	}
 	resourcesTransferred := false
-	db, err := authoritysql.Open(ctx, os.Getenv(c.DSNEnv), data.DatabaseName, authoritysql.Backend(c.Backend), c.MaxOpenConns, permission)
+	db, err := authoritysql.Open(ctx, os.Getenv(c.DSNEnv), data.DatabaseName, authoritysql.Backend(c.Backend), c.MaxOpenConns, permission, poolOptions...)
 	if err != nil {
 		return err
 	}
@@ -109,6 +120,10 @@ func run(c config, migrate bool) (runErr error) {
 	var report schemamigrate.Report
 	if migrate {
 		report, err = schemamigrate.Up(ctx, db, options)
+		// 闸门跟着逻辑库走:本库自带一份。
+		if err == nil {
+			err = authoritysql.EnsureCatalogSchema(ctx, db, data.DatabaseName)
+		}
 	} else {
 		report, err = schemamigrate.Plan(ctx, db, options)
 	}

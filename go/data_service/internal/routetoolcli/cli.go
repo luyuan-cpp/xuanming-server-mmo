@@ -11,7 +11,8 @@
 //   - tidb-prepare:对路由表设防合并并预切 Region;MySQL 上跳过(没有 Region)。
 //   - freeze / unfreeze:经正式维护原件与票据冻结 / 解冻映射写者(route_meta.writable)。
 //
-// 与 data_service 读同一份 yaml:全局库取 SnapshotMySQL 段,连接池大小取 RouteStore 段;整段仍按服务的口径校验(非法即退出码 2)。
+// 与 data_service 读同一份 yaml:目录取 SnapshotMySQL、Directory 段,连接池大小取 RouteStore 段,tidb-prepare 逐片做;
+// freeze / unfreeze 一次一个逻辑库,库名在维护原件里。整段仍按服务的口径校验(非法即退出码 2)。
 package routetoolcli
 
 import (
@@ -39,6 +40,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "proto/common/database"
 	"shared/authoritysql"
+	"shared/dbplacement"
+	"shared/dirshard"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -194,7 +197,11 @@ func runMaintenance(ctx context.Context, a cliArgs, c config.Config, d deps, std
 
 // globalDBTarget 是 stderr 第一行:只打 host 与库名,不打 DSN / 口令。
 func globalDBTarget(a cliArgs, c config.Config) string {
-	return fmt.Sprintf("route_tool %s: global_db=%s/%s", a.sub, c.SnapshotMySQL.Host, c.SnapshotMySQL.DBName)
+	target := fmt.Sprintf("route_tool %s: global_db=%s/%s", a.sub, c.SnapshotMySQL.Host, c.SnapshotMySQL.DBName)
+	if k := c.Directory.Shards(); k > 1 {
+		target += fmt.Sprintf(" logical_shards=%d", k)
+	}
+	return target
 }
 
 // closeGlobalDB 关闭本次命令持有的 SQL 连接。关闭失败算整次失败:不能确认连接上的语句都结束了。
@@ -315,6 +322,12 @@ func openRouteStore(c config.Config, permission authoritysql.Permission) (routeS
 	cfg.Permission = permission
 	cfg.MaxOpenConn = c.RouteStore.MaxOpenConn
 	cfg.MaxIdleConn = c.RouteStore.MaxIdleConn
+	// 逐片读一次映射,片可能在不同集群。
+	cfg.PoolOptionsFor = func(schema string) ([]authoritysql.OpenOption, error) {
+		placementCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return dbplacement.ForOneShot(placementCtx, c.SnapshotMySQL.DbPlacement, schema)
+	}
 	host, _ := os.Hostname() // 取不到时 NewRouteWriterID 用 "unknown"
 	st, err := store.NewRouteStore(cfg, store.RouteStoreOptions{Writer: store.NewRouteWriterID("route_tool", host)})
 	if err != nil {
@@ -331,6 +344,23 @@ func tidbPreparePermission(dryRun bool) (authoritysql.Permission, error) {
 		return authoritysql.Reader(), nil
 	}
 	return authoritysql.LoadSchemaPermission(os.Getenv)
+}
+
+// isDirectorySchema 判断库是不是 data_service 的目录片或流水库。一次维护只管一个库,库名由原件给。
+func isDirectorySchema(c config.Config, schema string) bool {
+	k := c.Directory.Shards()
+	if dirshard.Validate(k) != nil {
+		return false
+	}
+	if schema == dirshard.LedgerDBName(c.SnapshotMySQL.DBName) {
+		return true
+	}
+	for _, name := range dirshard.DirectoryDBNames(c.SnapshotMySQL.DBName, k) {
+		if schema == name {
+			return true
+		}
+	}
+	return false
 }
 
 // maintenanceInput 只保存本次命令的正式原件与连接,不持久化另一份维护协议。
@@ -381,7 +411,7 @@ func openMaintenance(ctx context.Context, c config.Config, a cliArgs) (*maintena
 	}
 	manifestSum := sha256.Sum256(request.PlanProto)
 	physical, err := hex.DecodeString(os.Getenv("MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))
-	if err != nil || len(physical) != 32 || !bytes.Equal(physical, plan.PhysicalClusterIdentity) || plan.AuthoritySchema != c.SnapshotMySQL.DBName || !bytes.Equal(plan.RunId, request.RunId) || request.Evidence == nil || !bytes.Equal(manifestSum[:], request.Evidence.ManifestDigest) {
+	if err != nil || len(physical) != 32 || !bytes.Equal(physical, plan.PhysicalClusterIdentity) || !isDirectorySchema(c, plan.AuthoritySchema) || !bytes.Equal(plan.RunId, request.RunId) || request.Evidence == nil || !bytes.Equal(manifestSum[:], request.Evidence.ManifestDigest) {
 		return bad()
 	}
 	if a.sub == subFreeze && request.Kind != pb.SqlWriterMaintenanceReceipt_FREEZE && request.Kind != pb.SqlWriterMaintenanceReceipt_EMERGENCY_FREEZE {
@@ -405,7 +435,11 @@ func openMaintenance(ctx context.Context, c config.Config, a cliArgs) (*maintena
 	dsn.Addr = cfg.Host
 	dsn.DBName = plan.AuthoritySchema
 	dsn.ParseTime = true
-	db, err := authoritysql.Open(ctx, dsn.FormatDSN(), plan.AuthoritySchema, cfg.Backend, 2, permission)
+	options, err := dbplacement.ForOneShot(ctx, c.SnapshotMySQL.DbPlacement, plan.AuthoritySchema)
+	if err != nil {
+		return nil, err
+	}
+	db, err := authoritysql.Open(ctx, dsn.FormatDSN(), plan.AuthoritySchema, cfg.Backend, 2, permission, options...)
 	if err != nil {
 		return nil, err
 	}

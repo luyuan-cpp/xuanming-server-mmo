@@ -22,12 +22,12 @@ import (
 	"google.golang.org/grpc/status"
 	"mail/internal/data"
 	"mail/internal/server"
-	guildpb "proto/guild"
 	mailpb "proto/mail"
 	"schemamigrate"
 	"shared/authoritysql"
 	"shared/domainhost"
 	"shared/redisslot"
+	"shared/rolefence"
 	"shared/serviceauth"
 )
 
@@ -78,7 +78,7 @@ func TestRankMailChainFixture(t *testing.T) {
 			t.Errorf("关闭安装池: %v", err)
 		}
 	})
-	tables := append(data.Tables(), &guildpb.GuildMemberRecord{})
+	tables := data.Tables()
 	if report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: database, Tables: tables}); err != nil || len(report.Manual) != 0 {
 		t.Fatalf("整链schema: %v %+v", err, report)
 	}
@@ -91,11 +91,11 @@ func TestRankMailChainFixture(t *testing.T) {
 			t.Fatal("整链具名业务表授权失败")
 		}
 	}
-	if _, err = install.ExecContext(ctx, "CREATE TABLE account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
+	if err = rolefence.EnsureSchema(ctx, install); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = install.ExecContext(ctx, "GRANT SELECT,INSERT,UPDATE ON `"+database+"`.account_role TO '"+normalConfig.User+"'@'%'"); err != nil {
-		t.Fatal("整链角色原件授权失败")
+	if _, err = install.ExecContext(ctx, "GRANT SELECT,INSERT,UPDATE ON `"+database+"`.`"+rolefence.TableName+"` TO '"+normalConfig.User+"'@'%'"); err != nil {
+		t.Fatal("整链角色护栏授权失败")
 	}
 	writer, err := authoritysql.LoadWriterConfig(os.Getenv)
 	if err != nil {
@@ -112,16 +112,9 @@ func TestRankMailChainFixture(t *testing.T) {
 	})
 	var ids atomic.Uint64
 	next := func(context.Context) (uint64, error) { return ids.Add(1), nil }
-	repo := data.New(db, next, next, func(uint32) bool { return true }, database)
-	// 全局角色目录与原登录态是客户端列表的真实依赖；只在此随机夹具库种原件。
-	for _, player := range []uint64{7, 8} {
-		if _, err := db.ExecContext(ctx, "INSERT INTO account_role VALUES (?, ?,3,0)", player, []byte("整链原账号")); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := repo.ConfigureRoleAuthority(ctx, database); err != nil {
-		t.Fatal(err)
-	}
+	repo := data.New(db, next, next, func(uint32) bool { return true }, noGuilds{})
+	// 角色权威状态与原登录态是客户端列表的真实依赖;目录这边用替身,副本和自愈走真的。
+	repo.ConfigureRoleFence(rolefence.NewGuard(db, fixedRoleOwner{account: "整链原账号", revision: 3}))
 	loginCache := miniredis.RunT(t)
 	loginCache.Set(redisslot.LoginSessionKey("mail-rank-chain-original:19"), "整链原账号")
 	loginReader := redis.NewClient(&redis.Options{Addr: loginCache.Addr()})

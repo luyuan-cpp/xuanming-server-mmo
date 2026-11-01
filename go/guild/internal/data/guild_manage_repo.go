@@ -60,6 +60,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/metric"
 
+	"shared/rolefence"
 	"shared/safego"
 
 	"guild/internal/constants"
@@ -127,8 +128,18 @@ func txBudgetFor(op string) time.Duration {
 // (刻意遮蔽外层同名变量),这样闭包里每一条语句都自动挂在子预算上 —— 漏挂一条,
 // 那条语句就会一直等到请求预算耗尽,子预算等于白设。
 // 提交之后的副作用(推送、缓存失效)都在闭包**之外**,用的仍是请求 ctx,不受遮蔽影响。
+//
+// 角色护栏副本判不了时事务回 *rolefence.StaleError,这里在事务之外读权威状态写入副本,再整个跑一次(规格 §3.3)。
+// 第二次还判不了就是真实拒绝,回 ErrWriteConflict。权威状态这次读不到、目录里没有这名角色,同样让客户端稍后重试。
 func (r *GuildRepo) inTx(ctx context.Context, op string, fn func(ctx context.Context, tx *sql.Tx) error) error {
-	return retryOnDeadlock(ctx, op, func() error { return r.runTxOnce(ctx, op, fn) })
+	err := r.fence.RunTx(ctx, func() error {
+		return retryOnDeadlock(ctx, op, func() error { return r.runTxOnce(ctx, op, fn) })
+	})
+	if errors.Is(err, rolefence.ErrUnavailable) || errors.Is(err, rolefence.ErrRoleNotFound) {
+		logx.Errorf("[guild] %s: role fence heal failed: %v", op, err)
+		return ErrWriteConflict
+	}
+	return err
 }
 
 func (r *GuildRepo) runTxOnce(ctx context.Context, op string, fn func(ctx context.Context, tx *sql.Tx) error) error {
@@ -2196,7 +2207,7 @@ func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint
 		if err := deleteGuildTrialBattles(ctx, tx, guildID); err != nil {
 			return err
 		}
-		if r.roleAuthority != "" {
+		if r.fence != nil {
 			if err := releaseGuildTrialLaunches(ctx, tx, guildID, now); err != nil {
 				return err
 			}

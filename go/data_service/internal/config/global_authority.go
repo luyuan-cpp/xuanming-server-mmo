@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"shared/authoritysql"
+	"shared/dirshard"
 	"shared/placement"
 )
 
@@ -24,6 +25,9 @@ func (c Config) ResolveGlobalAuthority(getenv func(string) string) (Config, erro
 	}
 	if err := c.RouteStore.Validate(); err != nil {
 		return c, err
+	}
+	if err := dirshard.Validate(c.Directory.Shards()); err != nil {
+		return c, fmt.Errorf("Directory.LogicalShards: %w", err)
 	}
 	proof := c.AccountDirectory.RoleTradeSQLProof
 	envName := proof.AllowedDatabasesEnv
@@ -61,6 +65,25 @@ func (c Config) ResolveGlobalAuthority(getenv func(string) string) (Config, erro
 	c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs = ids
 	c.AccountDirectory.RoleTradeSQLProof.AllowedDatabasesEnv = envName
 	return c, nil
+}
+
+// WriterSchemas 是本进程要写的全部逻辑库:目录各片、流水库、配置的存档库。闸门跟着库走,每个库一份写资格。
+// 写者启动目录按这份清单注册,多一份少一份都拒绝启动。
+func (c Config) WriterSchemas() ([]string, error) {
+	k := c.Directory.Shards()
+	if err := dirshard.Validate(k); err != nil {
+		return nil, fmt.Errorf("Directory.LogicalShards: %w", err)
+	}
+	schemas := dirshard.DirectoryDBNames(c.SnapshotMySQL.DBName, k)
+	schemas = append(schemas, dirshard.LedgerDBName(c.SnapshotMySQL.DBName))
+	for _, id := range c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs {
+		schema, ok := placement.StoreDBName(id)
+		if !ok {
+			return nil, fmt.Errorf("角色SQL证明storage_id非法: %d", id)
+		}
+		schemas = append(schemas, schema)
+	}
+	return schemas, nil
 }
 
 func StorageIDsFromDatabases(value string) ([]uint32, error) {

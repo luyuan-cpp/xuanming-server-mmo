@@ -12,6 +12,7 @@ import (
 	"match/internal/svc"
 	dspb "proto/data_service"
 	pb "proto/match"
+	"shared/rolefence"
 )
 
 func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, challenger uint64) (*pb.ChallengePlayerResponse, error) {
@@ -41,14 +42,7 @@ func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, ch
 	}
 	invitation, err := l.svcCtx.Authority.CreateChallenge(l.ctx, id, challenger, in.TargetPlayerId, in.BattleConfigId, uint64(l.challengeTTL())*1000)
 	if err != nil {
-		if errors.Is(err, authority.ErrChallengePending) {
-			return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrChallengePending, "对方已有待处理的切磋邀请")}, nil
-		}
-		if errors.Is(err, authority.ErrOriginalPlayer) {
-			return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrChallengeExpired, "原角色归属已变化，请重新发起")}, nil
-		}
-		l.Error("全球切磋邀请原件提交未确认")
-		return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrInternal, "邀请结果尚未确认，请重试原请求")}, nil
+		return l.globalChallengeCreateFailure(err), nil
 	}
 	challengerName := challengePublicName(l.ctx, l.svcCtx, challenger)
 	notification := globalChallengeInvitationNotice(invitation, challengerName)
@@ -59,6 +53,24 @@ func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, ch
 	}
 	metrics.ObserveChallenge("invite", "ok")
 	return &pb.ChallengePlayerResponse{ChallengeId: invitation.ChallengeId}, nil
+}
+
+// globalChallengeCreateFailure 把发起切磋的失败映射成客户端结论。
+//
+// 自愈读不到目录时事务已回滚,邀请确定没写。回故障 tip 的话排空证明会被打成 Hold(规格 §3.6),所以回非故障的 tip,玩家重新发起就行。
+// 只有走到提交的失败才是「尚未确认」。
+func (l *ChallengeLogic) globalChallengeCreateFailure(err error) *pb.ChallengePlayerResponse {
+	switch {
+	case errors.Is(err, authority.ErrChallengePending):
+		return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrChallengePending, "对方已有待处理的切磋邀请")}
+	case errors.Is(err, authority.ErrOriginalPlayer):
+		return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrChallengeExpired, "原角色归属已变化，请重新发起")}
+	case errors.Is(err, rolefence.ErrUnavailable):
+		return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrChallengeExpired, "角色状态暂时无法确认，请重新发起")}
+	default:
+		l.Error("全球切磋邀请原件提交未确认")
+		return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrInternal, "邀请结果尚未确认，请重试原请求")}
+	}
 }
 
 func globalChallengeInvitationNotice(invitation *pb.MatchChallengeInvitationRecord, publicName string) *pb.ChallengeInviteS2C {

@@ -36,10 +36,10 @@ python tools/scripts/rebuild_docker_debug.py go --services player-inbox
 写者授权与 K8s 的 registrar init 同形状，门禁与生产相同，没有 dev 旁路：
 
 - `sql-boot` 每次 `up` 先跑：补库，生成注册和维护账号的口令、物理 authority 原件、锁资格声明（命名卷 `sql-boot-private`，口令随机，不进被跟踪文件），判定全局库要不要跑 `data_service -migrate`（它只接受空库）。全局库是半成品时直接报错，不替人删数据，用 `down -v` 重来；已有数据卷的权威表不全同样如此。
-- `db-migrate`、`data-migrate`、`match-migrate`、`guild-migrate`、`player-inbox-migrate` 用 root 建表。
+- `db-migrate`、`data-migrate`、`match-migrate`、`player-inbox-migrate` 用 root 建表。`data-migrate` 建目录 `testdb` 和流水库 `testdb_ledger`。
 - `db`、`data-service`、`login`、`match`、`player-inbox`、`gateway` 前各有一个一次性的 `<服务>-sql-boot`（`service_completed_successfully`）：用 `lib/sql_boot_catalog_local.ps1` 的授权清单和 `deploy/sql` 的角色模板建这一 boot 的账号 `lw_<boot>_<服务>`，调 `writer_authority -command register`，把单次授权、运行配置和 SQL 变量写进命名卷 `<服务>-sql-writer`。常驻容器只读挂载它，由 `sql-writer-entry.sh` 取出摘要和变量再启动业务进程；消费标记写在 `<服务>-sql-consume`。
 - 上一轮的账号没有连接就删，还有连接（服务还在跑）就留到下一轮。`writer_registry` 里的旧行不删，只是停用账号的历史记录。
-- login 进程不连 SQL、不消费授权，这一步只为和 `go_services.ps1`、K8s 的写者清单同形状。chat、friend、guild、mail、rank、trade 不在这个栈里；要加时照 `match-sql-boot` 写一段，并在 `prepare_docker_debug.py` 的 `GO_CONFIGS` 加配置。
+- login 进程不连 SQL、不消费授权，这一步只为和 `go_services.ps1`、K8s 的写者清单同形状。chat、friend、guild、mail、rank、trade 不在这个栈里，其中 guild、trade、mail、friend 是角色护栏的参与者，协调者连不上它们，这个栈里过户和删角一律拒绝；要加时照 `match-sql-boot` 写一段，并在 `prepare_docker_debug.py` 的 `GO_CONFIGS` 加配置。
 - `player-inbox` 收全球匹配成局的个人结算：match 用 `MMORPG_PLAYER_INBOX_SECRET_MATCH` 签名入箱，scene 用 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE` 签名拉取。这个栈的 `game_config.yaml` 由 `prepare_docker_debug.py` 打开 `player_inbox.consumer_enabled`（源配置默认关），否则结算只进箱、到不了玩家。调试端口 `127.0.0.1:2352`。
 
 单次授权启动即消费，**`docker compose restart <写者>` 会被拒启**（`SQL writer启动grant缺失、漂移或已消费`）。要重启就连注册步骤一起重建，`rebuild_docker_debug.py` 更新写者时也是这样做：
@@ -142,7 +142,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local -GoServic
 - 本机 TiDB 或其他端口：`$env:MMORPG_GLOBAL_AUTHORITY_TIDB_HOST='127.0.0.1:4000'`，PATH 上要有 `mysql.exe`，root 要有口令（match 迁移拒绝空口令）。档位自动探测：MySQL 用 `LOCK_TOUCH`，TiDB 用 `SELECT_ONLY`。
 - 仓库在固定 NTFS 盘：授权文件要落私有 ACL。
 
-步骤：建库 → 建表（go/db `cmd/migrate`、data_service `-migrate` 仅空库、其余服务 `-migrate`；账号都是 root，常驻账号没有 DDL）→ 按 `deploy/sql` 模板给每个实例建账号 `lw_<boot>_<实例>`，口令本机随机 → 每实例调一次 `writer_authority -command register`（单条目 roster）→ 写目录，用 `Get-SqlWriterBootEnvironment` 自检。可选服务（chat、friend、mail、rank、trade、player_inbox）建表失败只跳过它们，必需服务失败就中止。
+步骤：建库 → 建表（go/db `cmd/migrate`、data_service `-migrate` 仅空库、其余服务 `-migrate`；账号都是 root，常驻账号没有 DDL）→ 按 `deploy/sql` 模板给每个实例建账号 `lw_<boot>_<实例>`，口令本机随机 → 每实例调一次 `writer_authority -command register`（单条目 roster，实例要写的每个逻辑库一份 Request，闸门跟着库走）→ 写目录，用 `Get-SqlWriterBootEnvironment` 自检。可选服务（chat、friend、mail、rank、trade、player_inbox）建表失败只跳过它们，必需服务失败就中止。
 
 产物都在 `run/secrets/sql-boot-local/`（`.gitignore` 的 `run/*` 覆盖，目录 ACL 只留当前账号、SYSTEM、Administrators），不打印口令：
 
@@ -159,11 +159,13 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local -GoServic
 重来：
 
 - 只换授权：重跑命令。已停实例的账号和旧 `boots/<boot>` 会清掉；运行中实例的账号保留，`writer_registry` 里的旧行不删（只是停用账号的历史记录，不影响新实例）。
-- 报 `has tables but lacks the authority set`：`mmorpg_global` 是旧布局或半成品，`data_service -migrate` 只跑空库，脚本不替人删数据。项目未上线，先停服（`dev_tools.ps1 -Command dev-stop`，网关另停），再 `docker --context desktop-linux compose -f deploy/docker-compose.yml --profile redis-cluster down -v` 清掉本机卷（含 Redis、etcd、Kafka），删掉 `run/secrets/sql-boot-local`，重新启动。
+- 报 `has tables but lacks the authority set`：`mmorpg_global`、`mmorpg_global_ledger` 是旧布局或半成品（一个是空的、一个有表也算），`data_service -migrate` 只跑空库，脚本不替人删数据。项目未上线，先停服（`dev_tools.ps1 -Command dev-stop`，网关另停），再 `docker --context desktop-linux compose -f deploy/docker-compose.yml --profile redis-cluster down -v` 清掉本机卷（含 Redis、etcd、Kafka），删掉 `run/secrets/sql-boot-local`，重新启动。
 
 已知限制：
 
 - mail、rank 的生产者签名密钥由 `go_services.ps1` 注入本机开发值（`run/secrets/producer-dev.env`、`mail-admin-producer-dev.env`、`assetop-dev.env`），调用方已设置的值优先。
+- 角色护栏的九把密钥（`MMORPG_ROLE_FENCE_SECRET_*`）同样由 `go_services.ps1` 注入本机开发值（`run/secrets/role-fence-dev.env`，`lib/role_fence_dev_secret.ps1`），data_service 拿全部，参与者拿自己和协调者那把，chat、go/db 只拿自己那把。
+- 本机目录 K=1（`go/data_service/etc/data_service.yaml` 的 `Directory.LogicalShards`），`MMORPG_DB_ALLOWED_DATABASES` 里的每个存档库都用 `db_migrate` 迁移，data_service 的写资格覆盖全部存档库。
 - 只管单区、每服务一个实例（`start_game.ps1` 的形态）。多区要另外给 `MMORPG_DB_ALLOWED_DATABASES`，实例键也不同，目前不支持。
 - Windows 保留端口让服务挪了端口时，生成目录和启动之间端口变了会明确拒启（`ListenOn` 对不上），重跑即可。
 - 这条命令只管本机进程。Docker 调试栈在容器里注册，见 prepare_docker_debug.py 一节。
@@ -186,6 +188,7 @@ Supported commands include:
 - `no-raw-pointer-setup`
 - `iwyu-run`
 - `sql-boot-catalog-local`（本机写者启动目录，见 start_game.ps1 一节）
+- `db-move`（不停服搬逻辑库，见 `docs/ops/db-move-runbook.md`）
 - `k8s-*`
 
 Proto generator naming references:
@@ -478,6 +481,7 @@ Kubernetes-only deployment entrypoint used by `dev_tools.ps1`.
 - Do not assume `LoadBalancer` across all environments: managed cloud K8s usually prefers `LoadBalancer`, while self-hosted / bare metal K8s should usually prefer `NodePort` plus an external L4 load balancer.
 - Prefer passing `-OpsProfile managed-cloud` or `-OpsProfile bare-metal` so the exposure choice is explicit in commands and change records.
 - In `custom` mode, the default `-GateServiceType` baseline is `NodePort` (safer for clusters without mature LB support).
+- 逻辑库参数：`-DirectoryLogicalShards`（prod 必须 64，staging 必须显式，dev 缺省 1）、`-Region`（地域码，staging、prod 必须显式给 1..63，0 只给 dev，见 `docs/ops/open-new-region-runbook.md`）、`-SqlClusters` 和 `-SqlDefaultCluster`（搬库时的物理集群清单，见 `docs/ops/db-move-runbook.md`）。都不粘滞，`dev_tools.ps1` 同名转发。
 
 Quick exposure preflight (dry-run + assertions):
 

@@ -22,15 +22,52 @@ const admissionTestInstance = "11111111-2222-3333-4444-555555555555"
 // holdPlayerStoreForTest 让写权行显示 admissionTestInstance 是现任:现任不会被判死,要等真实的 ACK。
 func holdPlayerStoreForTest(t *testing.T, ctx context.Context, d *AccountDirectoryStore, player uint64) {
 	t.Helper()
-	schema, err := d.playerStoreSchema(ctx, d.db, player)
+	storage, err := d.playerStorage(ctx, player)
 	require.NoError(t, err)
-	_, err = d.db.ExecContext(ctx, "UPDATE `"+schema+"`.`player_store` SET holder_instance=?,released=0 WHERE player_id=? AND kind=?", []byte(admissionTestInstance), player, playerStoreOwnerKind)
+	db, _, err := d.stores.DB(ctx, storage)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "UPDATE player_store SET holder_instance=?,released=0 WHERE player_id=? AND kind=?", []byte(admissionTestInstance), player, playerStoreOwnerKind)
 	require.NoError(t, err)
 }
 
 func admissionTestRequest(player, generation, revision uint64) *dspb.RegisterRoleAdmissionRequest {
 	return &dspb.RegisterRoleAdmissionRequest{Identity: &base.RoleAdmissionIdentity{PlayerId: player, SceneInstanceId: admissionTestInstance, Generation: generation, OwnerRevision: revision, OwnerEpoch: 17, SceneNodeId: "11", SceneId: 111, ZoneId: 1, SessionId: 7, LoginGeneration: 999}}
 }
+
+// 规格 §3.7:只有当前最高世代、没有关闭、原件逐字段相等才算有效。
+func TestTiDBRoleAdmissionVerifyFollowsGenerationAndClose(t *testing.T) {
+	d, _ := accountDirectoryTiDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
+	require.NoError(t, err)
+	a := NewAccountRoleAdmissionStore(d)
+	first := admissionTestRequest(11, 1, 1)
+	check := func(identity *base.RoleAdmissionIdentity, want bool) {
+		t.Helper()
+		valid, err := d.VerifyRoleAdmission(ctx, identity)
+		require.NoError(t, err)
+		require.Equal(t, want, valid)
+	}
+	check(first.Identity, false)
+	_, err = a.Register(ctx, first)
+	require.NoError(t, err)
+	check(first.Identity, true)
+	changed := proto.Clone(first.Identity).(*base.RoleAdmissionIdentity)
+	changed.OwnerEpoch++
+	check(changed, false)
+	second := admissionTestRequest(11, 2, 1)
+	_, err = a.Register(ctx, second)
+	require.NoError(t, err)
+	check(first.Identity, false)
+	check(second.Identity, true)
+	_, err = a.CloseAdmissions(ctx, &dspb.CloseRoleAdmissionsRequest{PlayerId: 11, SceneInstanceId: admissionTestInstance, OwnerRevision: 1, ThroughGeneration: 2})
+	require.NoError(t, err)
+	check(second.Identity, false)
+	_, err = d.VerifyRoleAdmission(ctx, &base.RoleAdmissionIdentity{PlayerId: 11})
+	require.ErrorIs(t, err, accountdirectory.ErrInvalid)
+}
+
 func TestTiDBRoleAdmissionFixedHolderCancelAndLateGenerations(t *testing.T) {
 	d, db := accountDirectoryTiDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
@@ -161,7 +198,7 @@ func TestTiDBRoleAdmissionStrongSQLProofRejectsUnsyncedRowsAndKeepsReceipt(t *te
 	require.NoError(t, err)
 	// 目录按正式初始事务建立后，本例再把路由切到专门的旧版/追盘证据夹具。
 	id, _, rows := roleProofStorage(t, global, 11, fixture)
-	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
+	v, err := NewSQLRoleFreezeVerifier(d, []uint32{id})
 	require.NoError(t, err)
 	trades, admissions := newTestAccountRoleTradeStore(d, v), NewAccountRoleAdmissionStore(d)
 	_, err = admissions.Register(ctx, admissionTestRequest(11, 1, 1))
@@ -206,7 +243,7 @@ func TestTiDBRoleAdmissionSQLProofNoAdmissionAndHistoricalFloor(t *testing.T) {
 	require.NoError(t, err)
 	// 目录按正式初始事务建立后，本例再把路由切到专门的旧版/追盘证据夹具。
 	id, _, rows := roleProofStorage(t, global, 11, fixture)
-	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
+	v, err := NewSQLRoleFreezeVerifier(d, []uint32{id})
 	require.NoError(t, err)
 	trades := newTestAccountRoleTradeStore(d, v)
 	_, err = trades.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 101, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
@@ -275,19 +312,19 @@ func TestTiDBRoleAdmissionSQLProofRejectsRouteAndSchemaFailures(t *testing.T) {
 	require.NoError(t, err)
 	// 目录按正式初始事务建立后，本例再把路由切到专门的旧版/追盘证据夹具。
 	id, _, rows := roleProofStorage(t, global, 11, fixture)
-	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
+	v, err := NewSQLRoleFreezeVerifier(d, []uint32{id})
 	require.NoError(t, err)
 	trades := newTestAccountRoleTradeStore(d, v)
 	_, err = trades.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 101, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1})
 	require.NoError(t, err)
 	confirm := &dspb.ConfirmAccountRoleTradeFreezeRequest{ListingId: 101, PlayerId: 11, SellerAccount: "seller", ExpectedOwnerRevision: 1}
-	_, err = global.Exec("UPDATE player_route SET frozen_run_id='proof-maintenance' WHERE player_id=11")
+	_, err = global.Exec("UPDATE player_route SET home_zone=NULL WHERE player_id=11")
 	require.NoError(t, err)
 	_, err = trades.Confirm(ctx, confirm)
-	require.ErrorIs(t, err, accountdirectory.ErrConflict)
-	_, err = global.Exec("UPDATE player_route SET frozen_run_id=NULL WHERE player_id=11")
+	require.ErrorIs(t, err, accountdirectory.ErrConflict, "路由不完整不能做证明")
+	_, err = global.Exec("UPDATE player_route SET home_zone=1 WHERE player_id=11")
 	require.NoError(t, err)
-	deny, err := NewSQLRoleFreezeVerifier([]uint32{id + 1})
+	deny, err := NewSQLRoleFreezeVerifier(d, []uint32{id + 1})
 	require.NoError(t, err)
 	trades.verifier = deny
 	_, err = trades.Confirm(ctx, confirm)
@@ -339,7 +376,7 @@ func TestTiDBRoleTradeDeadHolderIsFencedWithoutAck(t *testing.T) {
 	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
 	require.NoError(t, err)
 	id, _, rows := roleProofStorage(t, global, 11, fixture)
-	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
+	v, err := NewSQLRoleFreezeVerifier(d, []uint32{id})
 	require.NoError(t, err)
 	trades, admissions := newTestAccountRoleTradeStore(d, v), NewAccountRoleAdmissionStore(d)
 	_, err = admissions.Register(ctx, admissionTestRequest(11, 1, 1))
@@ -366,6 +403,34 @@ func TestTiDBRoleTradeDeadHolderIsFencedWithoutAck(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// 过户之后迟到的 Close 没有东西要关,回成功才能让 scene 停止重发;修订比当前新的 Close 不可能合法,仍然冲突。
+func TestTiDBRoleAdmissionCloseAfterOwnerChangedIsMoot(t *testing.T) {
+	d, global, _ := accountDirectoryTiDBWithWriter(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
+	require.NoError(t, err)
+	a := NewAccountRoleAdmissionStore(d)
+	_, err = a.Register(ctx, admissionTestRequest(11, 1, 1))
+	require.NoError(t, err)
+	_, err = global.ExecContext(ctx, "UPDATE account_role SET owner_revision=2 WHERE player_id=11")
+	require.NoError(t, err)
+
+	late := &dspb.CloseRoleAdmissionsRequest{PlayerId: 11, SceneInstanceId: admissionTestInstance, OwnerRevision: 1, ThroughGeneration: 1, RequiredOwnerEpoch: 17, RequiredSaveSeq: 9}
+	out, err := a.CloseAdmissions(ctx, late)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, out.ClosedThrough)
+	var closed, floorEpoch uint64
+	require.NoError(t, global.QueryRowContext(ctx, "SELECT closed_through,required_owner_epoch FROM account_role_admission WHERE player_id=11").Scan(&closed, &floorEpoch))
+	require.Zero(t, closed, "旧修订的 Close 不改登记行")
+	require.Zero(t, floorEpoch, "旧修订的 Close 不抬存盘下限")
+
+	future := proto.Clone(late).(*dspb.CloseRoleAdmissionsRequest)
+	future.OwnerRevision = 3
+	_, err = a.CloseAdmissions(ctx, future)
+	require.ErrorIs(t, err, accountdirectory.ErrConflict)
+}
+
 // 释放不是终态:断线后 30 秒内重连会复用实体接着存,released=1 的现任照样要等真实的 ACK。
 // 它真死了(释放之后、关登记之前崩溃)由运维确认后摘掉。
 func TestTiDBRoleTradeReleasedCurrentHolderStillWaitsForAck(t *testing.T) {
@@ -375,7 +440,7 @@ func TestTiDBRoleTradeReleasedCurrentHolderStillWaitsForAck(t *testing.T) {
 	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
 	require.NoError(t, err)
 	id, _, rows := roleProofStorage(t, global, 11, fixture)
-	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
+	v, err := NewSQLRoleFreezeVerifier(d, []uint32{id})
 	require.NoError(t, err)
 	trades, admissions := newTestAccountRoleTradeStore(d, v), NewAccountRoleAdmissionStore(d)
 	_, err = admissions.Register(ctx, admissionTestRequest(11, 1, 1))
@@ -402,7 +467,7 @@ func TestTiDBRoleTradeCurrentHolderBlocksUntilReleased(t *testing.T) {
 	_, err := createInitialRoleForTest(d, ctx, "seller", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: 11})
 	require.NoError(t, err)
 	id, _, rows := roleProofStorage(t, global, 11, fixture)
-	v, err := NewSQLRoleFreezeVerifier([]uint32{id})
+	v, err := NewSQLRoleFreezeVerifier(d, []uint32{id})
 	require.NoError(t, err)
 	trades, admissions := newTestAccountRoleTradeStore(d, v), NewAccountRoleAdmissionStore(d)
 	_, err = admissions.Register(ctx, admissionTestRequest(11, 1, 1))

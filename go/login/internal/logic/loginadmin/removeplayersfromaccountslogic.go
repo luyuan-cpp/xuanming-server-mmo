@@ -2,12 +2,16 @@ package loginadminlogic
 
 import (
 	"context"
+	"errors"
 
+	"login/internal/logic/admin"
 	"login/internal/svc"
 	"proto/login"
+	"shared/accountdirectory"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -25,13 +29,39 @@ func NewRemovePlayersFromAccountsLogic(ctx context.Context, svcCtx *svc.ServiceC
 	}
 }
 
-// Remove orphan characters from their accounts' SimplePlayers lists.
-//
-// 2026-10-18 起明确返回 Unimplemented:这个 gRPC 入口从生成起就是空桩,此前回一个 0/0/0、无错误的空响应,
-// 调用方会误以为「没有孤儿要清」而实际什么都没执行。实现在 login/internal/logic/admin.RemovePlayersFromAccounts
-// (账号锁内原子摘孤儿并删反向索引),但还没有生产接线;要接上需另开任务:先确认 LoginAdmin 的鉴权拦截,
-// 再把三个计数映射到 removed_count / not_found_count / failed_count,并把「账号忙时重跑」的语义写进 proto 注释。
+// RemovePlayersFromAccounts 摘孤儿角色,判定和结局语义见 admin.RemovePlayersFromAccounts。鉴权在拦截器(x-admin-token)。
 func (l *RemovePlayersFromAccountsLogic) RemovePlayersFromAccounts(in *login.RemovePlayersFromAccountsRequest) (*login.RemovePlayersFromAccountsResponse, error) {
-	return nil, status.Error(codes.Unimplemented,
-		"RemovePlayersFromAccounts has no production wiring yet; see login/internal/logic/admin.RemovePlayersFromAccounts")
+	out, err := admin.RemovePlayersFromAccounts(l.ctx, l.svcCtx, &admin.RemovePlayersFromAccountsReq{
+		PlayerIDs: in.GetPlayerIds(),
+		Operator:  in.GetOperator(),
+		Reason:    in.GetReason(),
+		DryRun:    in.GetDryRun(),
+		PeerAddr:  peerAddrOf(l.ctx),
+	})
+	switch {
+	case errors.Is(err, accountdirectory.ErrInvalid):
+		return nil, status.Error(codes.InvalidArgument, "player_ids must be at most 100 entries; operator and reason are required")
+	case errors.Is(err, accountdirectory.ErrUnavailable):
+		return nil, status.Error(codes.Unavailable, "account directory is not ready")
+	case err != nil:
+		return nil, status.Error(codes.Internal, "remove players failed")
+	}
+	resp := &login.RemovePlayersFromAccountsResponse{
+		RemovedCount:   out.RemovedCount,
+		NotFoundCount:  out.NotFoundCount,
+		FailedCount:    out.FailedCount,
+		NotOrphanCount: out.NotOrphanCount,
+		Results:        make([]*login.RemovePlayerResult, 0, len(out.Results)),
+	}
+	for _, r := range out.Results {
+		resp.Results = append(resp.Results, &login.RemovePlayerResult{PlayerId: r.PlayerID, Outcome: r.Outcome})
+	}
+	return resp, nil
+}
+
+func peerAddrOf(ctx context.Context) string {
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		return p.Addr.String()
+	}
+	return "unknown"
 }

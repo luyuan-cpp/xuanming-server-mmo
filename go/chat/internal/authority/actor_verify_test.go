@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"shared/rolefence"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -151,4 +153,66 @@ func TestActorVerifyIsSafeForConcurrentUse(t *testing.T) {
 	wg.Wait()
 	require.Positive(t, reads.Load())
 	require.LessOrEqual(t, len(c.expires), 8)
+}
+
+// 校验走目录 RPC,不碰 SQL:Store 没有 db 也能判。TTL 内不重复打 RPC,这是全服事务量最大的路径。
+func TestVerifyActorReadsDirectoryOverRPCAndCaches(t *testing.T) {
+	states := newFixtureRoleStates()
+	var now time.Duration
+	s := &Store{states: states, actors: newActorVerifyCache(30*time.Second, 16, func() time.Duration { return now })}
+	ctx := actor(t, 11, "original-11", 7)
+	for range 3 {
+		player, owned, err := s.verifyActor(ctx)
+		require.NoError(t, err)
+		require.EqualValues(t, 11, player)
+		require.Equal(t, role{account: "original-11", revision: 7}, owned)
+	}
+	require.Equal(t, 1, states.readCount(), "TTL 内只打一次 RPC")
+
+	now += 31 * time.Second
+	_, _, err := s.verifyActor(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 2, states.readCount(), "过期后重读")
+}
+
+func TestReadActorRejectsEveryNonOwnerState(t *testing.T) {
+	key := actorVerifyKey{player: 11, account: "owner", revision: 7}
+	for _, tc := range []struct {
+		name    string
+		prepare func(*fixtureRoleStates)
+	}{
+		{"目录里没有", func(f *fixtureRoleStates) { f.remove(11) }},
+		{"已删除", func(f *fixtureRoleStates) { f.set(11, "", 8, 0) }},
+		{"换了账号", func(f *fixtureRoleStates) { f.set(11, "buyer", 8, 0) }},
+		{"账号回到原主但修订号变了", func(f *fixtureRoleStates) { f.set(11, "owner", 9, 0) }},
+		{"修订号落后", func(f *fixtureRoleStates) { f.set(11, "owner", 6, 0) }},
+		{"被冻结", func(f *fixtureRoleStates) { f.set(11, "owner", 7, 99) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			states := newFixtureRoleStates()
+			tc.prepare(states)
+			require.ErrorIs(t, (&Store{states: states}).readActor(context.Background(), key), ErrOriginal)
+		})
+	}
+	states := newFixtureRoleStates()
+	states.set(11, "owner", 7, 0)
+	require.NoError(t, (&Store{states: states}).readActor(context.Background(), key))
+	// 还在投票的准备令牌不是最终冻结:聊天不写资产,不替投票拦写入。
+	states.setPreparing(11, "owner", 7, 99)
+	require.NoError(t, (&Store{states: states}).readActor(context.Background(), key))
+}
+
+// 读不到权威状态是故障,不是"原身份失效":不能把存储抖动回成玩家归属变了,也不能写缓存。
+func TestVerifyActorDirectoryFailureIsNotARejectionAndNotCached(t *testing.T) {
+	states := newFixtureRoleStates()
+	states.err = rolefence.ErrUnavailable
+	s := &Store{states: states, actors: newActorVerifyCache(30*time.Second, 16, func() time.Duration { return 0 })}
+	ctx := actor(t, 11, "original-11", 7)
+	_, _, err := s.verifyActor(ctx)
+	require.ErrorIs(t, err, rolefence.ErrUnavailable)
+	require.NotErrorIs(t, err, ErrOriginal)
+	states.err = nil
+	_, _, err = s.verifyActor(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 2, states.readCount(), "失败不进缓存,恢复之后马上重读")
 }

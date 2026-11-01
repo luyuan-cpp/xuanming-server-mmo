@@ -1,5 +1,7 @@
 # 玩家存盘 MySQL 条件写（围栏）：go/db、C++、proto、schema 详细设计
 
+> **2026-10-31**:写者闸门从全局库改成每个逻辑库一份,见 [全层水平扩展 §2](./horizontal-scale-logical-db.md)。下文写「全局库的 route_meta / writer_slot」的地方,现在指各逻辑库自己的那份。
+
 > **已过期(2026-10-30)**:玩家存盘改成 scene 直接提交 TiDB 的 `player_store`([player-save-direct-commit.md](./player-save-direct-commit.md)),两张表的行内围栏、Redis 屏障和条件写都已删除,写权改由 `player_store` 的写权行判定。文末「上线状态」一节仍然有效(AGENTS.md 引用它),其余只作历史保留。
 
 > **2026-10-23 初始持久基底后继（待正式生成与运行验证）**：正式 Create 目录与双 SQL 初始行同一 TiDB 事务严格 INSERT，持久 marker 只在首次成功写入；保留无 actor 初始提交 `(1,1)`，首任 actor 由 SceneManager 在采纳地板后铸到 2。完整合同与免冷读种子的提交后顺序见[建角初始持久提交](new-player-first-enter-no-cold-read.md#建角初始持久提交)。空 SQL 或零序号旧缓存不能证明新号，任一真实玩家行缺失均拒绝。

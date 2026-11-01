@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"shared/assetop"
+	"shared/authoritysql"
+	"shared/rolefence"
 
 	"github.com/stretchr/testify/require"
 )
@@ -50,6 +52,56 @@ func TestTickConflictClassification(t *testing.T) {
 	require.Equal(t, failureRetry, failureClass(asRoleConflict(storage)))
 
 	require.Equal(t, failureCorrupt, failureClass(corrupt(roleConflict())), "坏数据仍然优先")
+}
+
+// 规格 §3.6:后台一轮回来的错误,确定没写的不打排空 Hold,拿不准的都算未知。一轮常把多条 Join 起来,每个分支都要确定才算。
+func TestOutcomeKnown(t *testing.T) {
+	heal := errors.Join(rolefence.ErrUnavailable, errors.New("rpc error: code = Unavailable"))
+	unknown := fmt.Errorf("commit: %w", authoritysql.ErrOutcomeUnknown)
+	for name, tc := range map[string]struct {
+		err  error
+		want bool
+	}{
+		"没有错误":         {nil, false},
+		"投票期":          {errRolePreparing, true},
+		"投票期标过":        {rolledBack(errRolePreparing), true},
+		"角色冲突":         {roleConflict(), true},
+		"角色冲突标过":       {rolledBack(roleConflict()), true},
+		"乐观冲突":         {rolledBack(staleObservation()), true},
+		"业务拒绝":         {ErrReplay, true},
+		"自愈读不到目录":      {rolledBack(heal), true},
+		"目录里没有":        {rolledBack(&rolefence.RoleNotFoundError{Players: []uint64{1}}), true},
+		"闸门冻结":         {fmt.Errorf("save: %w", authoritysql.ErrWriterFrozen), true},
+		"只读步骤失败":       {noWrite(errors.New("read failed")), true},
+		"包了一层":         {fmt.Errorf("商城交付意图 %q: %w", "o", rolledBack(heal)), true},
+		"几条都确定":        {errors.Join(rolledBack(errRolePreparing), fmt.Errorf("商城交付意图 %q: %w", "o", rolledBack(roleConflict()))), true},
+		"没标过的自愈错误":     {heal, false},
+		"提交失败":         {rolledBack(errors.New("assetop: 提交失败: broken pipe")), false},
+		"结局未知":         {rolledBack(unknown), false},
+		"结局未知优先于拒绝":    {rolledBack(errors.Join(roleConflict(), unknown)), false},
+		"只读语句传输失败":     {noWrite(unknown), true},
+		"混进一条结局未知":     {errors.Join(rolledBack(errRolePreparing), unknown), false},
+		"混进一条别的失败":     {errors.Join(rolledBack(errRolePreparing), errors.New("HTTP 500")), false},
+		"裸错误":          {errors.New("mall receipt failed"), false},
+		"context 超时裸错": {context.DeadlineExceeded, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.want, OutcomeKnown(tc.err), "%v", tc.err)
+		})
+	}
+}
+
+// 标记不改错误链:客户端的 tip、失败分类都还认得出来。
+func TestRolledBackKeepsErrorChain(t *testing.T) {
+	marked := rolledBack(roleConflict())
+	require.ErrorIs(t, marked, errRoleConflict)
+	require.ErrorIs(t, marked, ErrConflict)
+	var rejection Rejection
+	require.ErrorAs(t, marked, &rejection)
+	require.Equal(t, ErrConflict, rejection)
+	require.Equal(t, failureRoleConflict, failureClass(marked))
+	require.NoError(t, rolledBack(nil))
+	require.NoError(t, noWrite(nil))
 }
 
 // must_fix(2026-10-22 复核):单行子预算必须从父截止时刻推出、严格早于它结束,并给推迟 / 隔离与收据 ACK 留出余量。

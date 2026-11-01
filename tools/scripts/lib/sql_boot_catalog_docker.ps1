@@ -72,7 +72,7 @@ function Invoke-DockerSqlBootPrepare {
         $null = Get-LocalSqlBootPhysicalAuthority -Settings $settings -PrivateRoot $Paths.PrivateRoot
         $null = Get-LocalSqlBootLockQualification -Settings $settings -PrivateRoot $Paths.PrivateRoot
         $null = Get-LocalSqlBootOperators -PrivateRoot $Paths.PrivateRoot
-        # data_service -migrate 只接受空库,而每次 up 都会重跑一次性容器:权威表齐全时留标记,data-migrate 见到就跳过。
+        # data_service -migrate 只接受空库,而每次 up 都会重跑一次性容器:目录和流水库的权威表齐全时留标记,data-migrate 见到就跳过。
         $marker = Join-Path $Paths.StateRoot 'global-schema-ready'
         $inspection = Get-LocalSqlBootGlobalSchemaState -Settings $settings
         switch -CaseSensitive ($inspection.State) {
@@ -121,13 +121,15 @@ function Invoke-DockerSqlBootRegister {
     $settings = New-DockerSqlBootSettings -Paths $Paths
     try {
         Set-DockerSqlBootBackend -Settings $settings
-        $meta = Get-LocalSqlBootRouteMeta -Settings $settings
+        $tablesBySchema = Get-LocalSqlBootTablesBySchema -Settings $settings
+        $databases = @(Get-LocalSqlBootWriterDatabases -Settings $settings -Service $Service -TablesBySchema $tablesBySchema)
+        $metaByDatabase = Get-LocalSqlBootMetaByDatabase -Settings $settings -Databases $databases
         $physical = Get-LocalSqlBootPhysicalAuthority -Settings $settings -PrivateRoot $Paths.PrivateRoot
         $qualification = Get-LocalSqlBootLockQualification -Settings $settings -PrivateRoot $Paths.PrivateRoot
         $operators = Get-LocalSqlBootOperators -PrivateRoot $Paths.PrivateRoot
         $bootId = New-LocalSqlBootSecret -Bytes 4
         $instance = [pscustomobject]@{ InstanceKey = $Service; Service = $Service; ConfigPath = (Join-Path $Paths.ConfigRoot "$Service.yaml") }
-        $item = New-LocalSqlBootInstanceFiles -Settings $settings -RepoRoot $Paths.RepoRoot -Instance $instance -BootRoot $Paths.BootRoot -BootId $bootId -Meta $meta -PhysicalSha256 $physical -QualificationFile $qualification
+        $item = New-LocalSqlBootInstanceFiles -Settings $settings -RepoRoot $Paths.RepoRoot -Instance $instance -BootRoot $Paths.BootRoot -BootId $bootId -Databases $databases -MetaByDatabase $metaByDatabase -PhysicalSha256 $physical -QualificationFile $qualification
 
         # 账号记录每服务一份:注册步骤并行跑,共用一个文件会互相覆盖。先记账再建账号,中途失败时下一轮也能按记录清掉。
         $accountsPath = Join-Path $Paths.PrivateRoot "runtime-accounts.$Service.json"
@@ -137,7 +139,6 @@ function Invoke-DockerSqlBootRegister {
         $records = @($accountPlan.Keep) + @([pscustomobject]@{ principal = $item.Principal; instanceKey = $Service })
         Write-LocalSqlBootText -Path $accountsPath -Text (ConvertTo-Json -InputObject ([object[]]$records) -Depth 3)
         $dropSql = @($accountPlan.Drop | ForEach-Object { "DROP USER IF EXISTS $(ConvertTo-AuthoritySqlAccount $_.principal);" }) -join "`n"
-        $tablesBySchema = Get-LocalSqlBootTablesBySchema -Settings $settings
         $manifest = Get-LocalSqlBootGrantManifest -Settings $settings
         $accountSql = New-LocalSqlBootAccountSql -Settings $settings -RepoRoot $Paths.RepoRoot -Operators $operators -Prepared @($item) -TablesBySchema $tablesBySchema -Manifest $manifest
         $null = Invoke-LocalSqlBootSql -Settings $settings -Sql ($dropSql + "`n" + $accountSql) -Label 'create writer account'

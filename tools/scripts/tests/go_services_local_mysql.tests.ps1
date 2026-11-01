@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/lib/test_harness.ps1"
 . "$PSScriptRoot/../lib/account_directory_dev_secret.ps1"
 . "$PSScriptRoot/../lib/match_dev_secret.ps1"
+. "$PSScriptRoot/../lib/role_fence_dev_secret.ps1"
 . "$PSScriptRoot/../lib/release_common.ps1"
 $parseErrors = $null
 $launcherAst = [System.Management.Automation.Language.Parser]::ParseFile($LauncherPath, [ref]$null, [ref]$parseErrors)
@@ -66,7 +67,6 @@ GlobalMatch:
   Host: 127.0.0.1:4000
   User: root
   Database: mmorpg_match
-  AccountRoleSchema: mmorpg_global
   OutcomeOutbox:
     IntervalMs: 2000
 ListenOn: 127.0.0.1:50500
@@ -291,14 +291,14 @@ try {
             Assert-Match $call.Extent.Text '-LocalMySQL:\$LocalMySQL' '不静默丢失显式档位'
         }
     }
-    Test-Case 'match 本机档只改档位、SQL入口、全局角色库和登录 Redis' {
+    Test-Case 'match 本机档只改档位、SQL入口和登录 Redis' {
         Write-MatchFixture
         $LocalMySQL = $true
         $sourceHash = (Get-FileHash -LiteralPath (Join-Path $GoRoot 'match/etc/match_service.yaml') -Algorithm SHA256).Hash
         $result = Resolve-InstanceConfig -Name match -Info $ServiceCatalogue.match -Index 1 -Total 1
         Assert-Equal (Join-Path $DerivedEtcDir 'match.yaml') $result.Path '标准派生路径'
-        $expected = $matchFixture.Replace('  Backend: tidb', '  Backend: mysql').Replace('  Host: 127.0.0.1:4000', '  Host: 127.0.0.1:3306').Replace('  AccountRoleSchema: mmorpg_global', '  AccountRoleSchema: fixture_global').Replace('  Addrs: [127.0.0.1:6379]', '  Addrs: [127.0.0.1:26379]').Replace('  DB: 0', '  DB: 2')
-        Assert-Equal $expected (Get-Content -LiteralPath $result.Path -Raw) '只改这五个标量，其余字节不变'
+        $expected = $matchFixture.Replace('  Backend: tidb', '  Backend: mysql').Replace('  Host: 127.0.0.1:4000', '  Host: 127.0.0.1:3306').Replace('  Addrs: [127.0.0.1:6379]', '  Addrs: [127.0.0.1:26379]').Replace('  DB: 0', '  DB: 2')
+        Assert-Equal $expected (Get-Content -LiteralPath $result.Path -Raw) '只改这四个标量，其余字节不变'
         Assert-Equal $sourceHash (Get-FileHash -LiteralPath (Join-Path $GoRoot 'match/etc/match_service.yaml') -Algorithm SHA256).Hash '源配置不变'
     }
     Test-Case 'match 未启用本机档时用源配置的 TiDB 入口' {
@@ -323,6 +323,38 @@ try {
         Set-Content -LiteralPath $sourceConfig -Value ($fixture.Replace('127.0.0.1:3306', '203.0.113.9:3306')) -NoNewline
         Assert-Match (Get-ThrownMessage { Resolve-InstanceConfig -Name match -Info $ServiceCatalogue.match -Index 1 -Total 1 }) '回环 SQL 单端点' '远端不走本机档'
         Assert-Equal $false (Test-Path -LiteralPath (Join-Path $DerivedEtcDir 'match.yaml')) '没有生成降级副本'
+    }
+    Test-Case '角色护栏开发密钥:各服务只拿自己那几把,调用方已设置的优先,不回显,父环境原样恢复' {
+        Assert-Equal 9 @(Get-RoleFenceDevSecretNames -Service data-service).Count 'data_service 验全部调用方、调全部参与者'
+        foreach ($case in @(@{ Service = 'guild'; Env = 'GUILD' }, @{ Service = 'trade'; Env = 'TRADE' }, @{ Service = 'mail'; Env = 'MAIL' }, @{ Service = 'match'; Env = 'MATCH' }, @{ Service = 'player-inbox'; Env = 'PLAYER_INBOX' }, @{ Service = 'friend'; Env = 'FRIEND' })) {
+            Assert-Equal "MMORPG_ROLE_FENCE_SECRET_$($case.Env),MMORPG_ROLE_FENCE_SECRET_COORDINATOR" (@(Get-RoleFenceDevSecretNames -Service $case.Service) -join ',') "$($case.Service) 是参与者:自己那把加协调者那把"
+        }
+        Assert-Equal 'MMORPG_ROLE_FENCE_SECRET_CHAT' (@(Get-RoleFenceDevSecretNames -Service chat) -join ',') 'chat 只读,只要自己那把'
+        Assert-Equal 'MMORPG_ROLE_FENCE_SECRET_DB' (@(Get-RoleFenceDevSecretNames -Service db) -join ',') 'go/db 只要自己那把'
+        $names = @(Get-RoleFenceDevSecretAllNames)
+        $saved = @{}; foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process'); [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
+        $fixtureRepo = Join-Path $testRoot 'role-fence-dev'
+        try {
+            $backup = Backup-RoleFenceDevSecrets -Service guild
+            $supplied = 'fixture-coordinator-secret-0123456789abcdef'
+            [Environment]::SetEnvironmentVariable('MMORPG_ROLE_FENCE_SECRET_COORDINATOR', $supplied, 'Process')
+            $output = & { Initialize-RoleFenceDevSecrets -RepoRoot $fixtureRepo -Service guild } *>&1 | Out-String
+            Assert-Equal $supplied $env:MMORPG_ROLE_FENCE_SECRET_COORDINATOR '调用方已设置的优先'
+            Assert-True ($env:MMORPG_ROLE_FENCE_SECRET_GUILD.Length -ge 32) '没设的随机生成,不短于 32 字节'
+            Assert-True ([string]::IsNullOrEmpty($env:MMORPG_ROLE_FENCE_SECRET_TRADE)) '别的服务的不注入'
+            $file = [IO.File]::ReadAllText((Join-Path $fixtureRepo 'run/secrets/role-fence-dev.env'))
+            Assert-True ($file.Contains("MMORPG_ROLE_FENCE_SECRET_COORDINATOR=$supplied")) '写回文件,后起的对端拿到同一把'
+            Assert-True ($output -notmatch [regex]::Escape($supplied) -and $output -notmatch [regex]::Escape($env:MMORPG_ROLE_FENCE_SECRET_GUILD)) '不回显'
+            $generated = $env:MMORPG_ROLE_FENCE_SECRET_GUILD
+            Restore-RoleFenceDevSecrets $backup
+            Assert-True ([string]::IsNullOrEmpty($env:MMORPG_ROLE_FENCE_SECRET_GUILD)) '父环境恢复'
+            Initialize-RoleFenceDevSecrets -RepoRoot $fixtureRepo -Service data-service
+            Assert-Equal $generated $env:MMORPG_ROLE_FENCE_SECRET_GUILD '协调者拿到的和参与者是同一把'
+            Assert-Equal $supplied $env:MMORPG_ROLE_FENCE_SECRET_COORDINATOR '文件里的协调者密钥沿用'
+            Assert-True (@($names | ForEach-Object { [Environment]::GetEnvironmentVariable($_, 'Process') } | Select-Object -Unique).Count -eq $names.Count) '九把互不相同,data_service 拒绝跨用途复用'
+            [Environment]::SetEnvironmentVariable('MMORPG_ROLE_FENCE_SECRET_CHAT', "two`nlines", 'Process')
+            Assert-Match (Get-ThrownMessage { Initialize-RoleFenceDevSecrets -RepoRoot $fixtureRepo -Service chat }) 'line breaks' '换行拒绝'
+        } finally { foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') } }
     }
     Test-Case 'match 启动拿到开发密钥，不继承建表账号，父环境原样恢复' {
         Write-MatchFixture

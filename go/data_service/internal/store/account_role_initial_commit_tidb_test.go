@@ -3,12 +3,10 @@ package store
 import (
 	"context"
 	"database/sql"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
@@ -22,14 +20,12 @@ import (
 
 func initialPlayerSchemaForTest(t *testing.T, s *AccountDirectoryStore) (uint32, string) {
 	t.Helper()
-	require.Len(t, s.initialStores, 1)
-	for id := range s.initialStores {
-		name, ok := placement.StoreDBName(id)
-		require.True(t, ok)
-		return id, name
-	}
-	t.Fatal("缺夹具落点")
-	return 0, ""
+	storage, ok := initialStorageForTest.Load(s)
+	require.True(t, ok, "缺夹具落点")
+	id := storage.(uint32)
+	name, ok := placement.StoreDBName(id)
+	require.True(t, ok)
+	return id, name
 }
 
 func requireInitialRowsForTest(t *testing.T, db *sql.DB, schema string, player uint64) {
@@ -107,7 +103,8 @@ func TestTiDBCreateRoleDoesNotQueueOnRouteMetaAndFrozenStillRejects(t *testing.T
 	require.Zero(t, rows)
 }
 
-func TestTiDBCreateRoleInitialRowCollisionRollsBackWholeCommit(t *testing.T) {
+// 目录和存档不再同事务:第 1 步的账号目录行已经提交,不回退。角色行没有写,读列表看不到这个角色,PENDING ref 当场删掉,名额退还。
+func TestTiDBCreateRoleInitialRowCollisionLeavesNoRole(t *testing.T) {
 	s, db := accountDirectoryTiDB(t)
 	_, schema := initialPlayerSchemaForTest(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -121,7 +118,6 @@ func TestTiDBCreateRoleInitialRowCollisionRollsBackWholeCommit(t *testing.T) {
 	require.ErrorIs(t, err, accountdirectory.ErrConflict)
 	require.Nil(t, out)
 	for _, query := range []string{
-		"SELECT COUNT(*) FROM account_directory WHERE account='owner'",
 		"SELECT COUNT(*) FROM account_role WHERE player_id=3102",
 		"SELECT COUNT(*) FROM `" + schema + "`.player_store WHERE player_id=3102 AND kind=0",
 	} {
@@ -129,6 +125,7 @@ func TestTiDBCreateRoleInitialRowCollisionRollsBackWholeCommit(t *testing.T) {
 		require.NoError(t, db.QueryRow(query).Scan(&count))
 		require.Zero(t, count, query)
 	}
+	requireSlotReturnedForTest(t, s, db, "owner", role.PlayerId)
 	row, ok := readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_HOT)
 	require.True(t, ok)
 	require.Equal(t, []uint64{7, 9}, []uint64{row.epoch, row.seq}, "严格 INSERT 不得重写旧行")
@@ -170,7 +167,8 @@ func TestTiDBCreateRoleConcurrentInitialRowsAreWrittenOnce(t *testing.T) {
 	require.EqualValues(t, 1, marker)
 }
 
-func TestTiDBCreateRoleMissingInitialTableRollsBackWholeCommit(t *testing.T) {
+// 语义同上:存档库写不进去,不产生角色。这是提交点之前的确定失败,login 据此释放名字。
+func TestTiDBCreateRoleMissingInitialTableLeavesNoRole(t *testing.T) {
 	s, db := accountDirectoryTiDB(t)
 	_, schema := initialPlayerSchemaForTest(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -180,41 +178,48 @@ func TestTiDBCreateRoleMissingInitialTableRollsBackWholeCommit(t *testing.T) {
 	_, err := db.Exec("DROP TABLE `" + schema + "`.player_store")
 	require.NoError(t, err)
 	out, err := s.CreateWithInitialCommit(ctx, "owner", role)
-	require.Error(t, err)
+	require.ErrorIs(t, err, accountdirectory.ErrNotCommitted)
 	require.Nil(t, out)
-	for _, query := range []string{
-		"SELECT COUNT(*) FROM account_directory WHERE account='owner'",
-		"SELECT COUNT(*) FROM account_role WHERE player_id=3110",
-	} {
-		var count int
-		require.NoError(t, db.QueryRow(query).Scan(&count))
-		require.Zero(t, count, query)
-	}
+	var count int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM account_role WHERE player_id=3110").Scan(&count))
+	require.Zero(t, count)
+	requireSlotReturnedForTest(t, s, db, "owner", role.PlayerId)
+}
+
+// requireSlotReturnedForTest:第 1 步留下的只有目录行,这次写的 ref 已经删了,列表里没有这个角色。
+func requireSlotReturnedForTest(t *testing.T, s *AccountDirectoryStore, db *sql.DB, account string, player uint64) {
+	t.Helper()
+	var count int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM account_role_ref WHERE account=? AND player_id=?", []byte(account), player).Scan(&count))
+	require.Zero(t, count, "名额立刻退还")
+	roles, err := s.Read(context.Background(), account, false)
+	require.NoError(t, err)
+	require.Empty(t, roles.Players)
 }
 
 func TestTiDBInitialCommitIsRequiredAndLegacyIsExplicit(t *testing.T) {
 	baseStore, db := accountDirectoryTiDB(t)
 	storage, schema := initialPlayerSchemaForTest(t, baseStore)
-	cfg, err := mysql.ParseDSN(os.Getenv("ACCOUNT_DIRECTORY_TEST_DSN"))
-	require.NoError(t, err)
-	conf := MySQLConfig{Host: cfg.Addr, User: cfg.User, Password: cfg.Passwd, DBName: baseStore.schema}
 	// 后端档位与交易 SQLProof 都不决定正式 Create 的持久提交。本用例连 TiDB,所以走 tidb 档:mysql 档会拒绝 TiDB。
-	global, err := NewAccountDirectoryStore(conf, authoritysql.BackendTiDB, 2, 4)
+	global, err := NewAccountDirectoryStore(baseStore.cfg, authoritysql.BackendTiDB, 2, 4)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, global.Close()) })
+	initialStorageForTest.Store(global, storage)
+	t.Cleanup(func() {
+		initialStorageForTest.Delete(global)
+		require.NoError(t, global.Close())
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	role := &base.AccountSimplePlayer{PlayerId: 3104, ZoneId: 1}
 	_, err = global.CreateWithInitialCommit(ctx, "global", role)
-	require.ErrorIs(t, err, accountdirectory.ErrUnavailable, "缺持久提交白名单必须拒绝")
-	require.NoError(t, global.ConfigureInitialPlayerCommit([]uint32{storage}))
-	_, err = global.CreateWithInitialCommit(ctx, "global", role)
-	require.Error(t, err, "缺权威路由必须拒绝")
+	require.ErrorIs(t, err, accountdirectory.ErrUnavailable, "缺权威路由必须拒绝")
 	require.NoError(t, installInitialRouteForTest(global, ctx, role))
+	_, err = global.CreateWithInitialCommit(ctx, "global", role)
+	require.ErrorIs(t, err, accountdirectory.ErrUnavailable, "缺存档库白名单必须拒绝")
+	require.NoError(t, global.ConfigurePlayerStores([]uint32{storage}, PlayerStorePoolOptions{}))
 	_, err = global.CreateWithInitialCommit(ctx, "global", role)
 	require.NoError(t, err)
 	requireInitialRowsForTest(t, db, schema, role.PlayerId)
-
 }
 
 func TestTiDBInitialCommitProofNeedsInitialRowsAndNoHistoricalFloor(t *testing.T) {
@@ -238,7 +243,7 @@ func TestTiDBInitialCommitProofNeedsInitialRowsAndNoHistoricalFloor(t *testing.T
 				_, err = admissions.CloseAdmissions(ctx, &dspb.CloseRoleAdmissionsRequest{PlayerId: 3107, SceneInstanceId: admissionTestInstance, OwnerRevision: 1, ThroughGeneration: 1, RequiredOwnerEpoch: 17, RequiredSaveSeq: 3})
 			}
 			require.NoError(t, err)
-			verifier, err := NewSQLRoleFreezeVerifier([]uint32{storage})
+			verifier, err := NewSQLRoleFreezeVerifier(s, []uint32{storage})
 			require.NoError(t, err)
 			trades := newTestAccountRoleTradeStore(s, verifier)
 			_, err = trades.Begin(ctx, &dspb.BeginAccountRoleTradeRequest{ListingId: 3108, PlayerId: 3107, SellerAccount: "seller", ExpectedOwnerRevision: 1})

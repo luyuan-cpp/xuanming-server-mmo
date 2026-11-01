@@ -2,6 +2,11 @@
 
 状态：2026-10-21 P0-b 账号目录源码收口，P4 目录登记／holder／SQL 证明与原生接线实施中。尚未执行本批协议生成、构建和运行验收。SQL 确认器已有源码装配，但缺显式强读配置或原生排空证据时仍拒绝；不能据此声明角色交易可用。认证密码与钱包不在本文模块内。
 
+> 2026-10-31(批 D1,未编译):目录按账号、玩家、名字分片,存档和目录不再同事务,流程以[全层水平扩展规格](./horizontal-scale-logical-db.md) §5、§6 为准。下面的正文有三处口径变了:
+> - 「账号 guard + 角色行同事务」改成分步:账号到角色的索引是账号分片的 `account_role_ref`,真相仍是玩家分片的 `account_role.account`。建角、过户的上限按 ref 在账号分片判,真实角色数不超过 ref 数。补齐、删除、入场登记、排空都只开玩家分片的事务,不再锁账号 guard;过户只锁买家一个 guard,没有两个账号的锁序。
+> - `RoleFreezeVerifier.VerifyFrozen(ctx, tx, r)` 改成事务外的 `ReadFrozenEvidence(ctx, r, holders)`,目录事务内再核收据、下限、持有者和初始提交标记。判据不变,读的位置变了。
+> - 建角初始行和判死抬代次不在目录事务里:建角先写存档再提交目录,判死先抬代次再记 holder。
+
 ## 职责与权威
 
 data_service 的账号目录模块负责“角色属于哪个账号”和账号角色数上限。所有 zone 读取同一个逻辑 TiDB 全局库。认证继续使用原密码／第三方认证模块；玩家玩法数据继续由 scene 与现有 SQL 存盘围栏负责。`user_accounts.password` 不迁、不复制。
@@ -58,7 +63,7 @@ SQL 事务内不访问 Redis、Kafka 或 scene。RPC 和事务共享可取消截
 
 内部写面按四个动作收口：发起冻结、确认实际冻结、取消冻结、原子过户。请求均使用现有 `ServiceCallAuth`，独立 trade 调用者密钥，完整方法与确定性正文绑定；login 的目录读写权限不能代替交易过户权限。确认冻结的实现必须验证上述场景／SQL 证据，未装配验证者拒绝，不能 nil 降级。失败不给部分成功应答，也不写假的过户收据。
 
-每笔过户以唯一 `tx_id` 保存永久 SQL 收据及原请求摘要。原请求包含 listing、角色、卖家、买家与卖家原归属修订；同 tx_id 仅全部业务参数一致时返回原收据，之后再次过户也不改变旧收据。不同参数拒绝；买家满位属于可重试条件，不写成功收据。事务提交点复核卖家仍拥有原修订、角色与冻结收据都锁定同一 listing、冻结已完成、买卖账号不同、买家未超过全局角色上限，然后只改角色行归属、递增 owner_revision、清当前交易锁，并把 listing 收据标为 TRANSFERRED；这些变化与 tx_id 收据同事务提交。
+每笔过户以唯一 `tx_id` 保存永久 SQL 收据及原请求摘要。原请求包含 listing、角色、卖家、买家与卖家原归属修订；同 tx_id 仅全部业务参数一致时返回原收据，之后再次过户也不改变旧收据。不同参数拒绝；买家满位在目录这一层属于可重试条件，不写成功收据（2026-10-31：trade 的人民币寄售不等腾位，买家已付款又没有通知通道，满位时先 `Cancel` 成功再退款，见 [全层水平扩展规格](horizontal-scale-logical-db.md)「买家满位的退款出口」）。事务提交点复核卖家仍拥有原修订、角色与冻结收据都锁定同一 listing、冻结已完成、买卖账号不同、买家未超过全局角色上限，然后只改角色行归属、递增 owner_revision、清当前交易锁，并把 listing 收据标为 TRANSFERRED；这些变化与 tx_id 收据同事务提交。
 
 所有账号 guard 按 UTF-8 原始字节升序锁定，去重后最多两条；然后锁 listing 收据、tx_id 收据、角色行（角色有多条时按 player_id 升序）。不能先锁角色再回头锁第二个账号。现有建角／补齐／删除同样先账号后角色，避免双向过户与建角互锁。事务内不调用 Redis、scene、支付或 Kafka；超时／未知提交只用原 tx_id 强读消歧，禁止发新 tx_id 补做。home_zone、名字注册与玩法资产保持原记录，不重建反向 Redis 权威。
 
@@ -84,7 +89,7 @@ Close/Ack 的 0/0 只表示本次没有新的激活实体存盘，不清除历�
 
 新增回归源码覆盖并发 Register/Begin 提交竞态、八次原请求重放、换载荷拒绝、取消前保持锁、旧 ACK 不关闭新世代、两 SQL 落后／错版、NO_ADMISSION 边界、历史下限不归零、过户后原卖家拒绝、维护导入仅首次换修订和错误阶段零后续副作用。真 TiDB 夹具要求本线程独有 `ACCOUNT_DIRECTORY_TEST_DSN`，只创建／清理本例随机全局库和随机合法 player_store 库，通过正式 proto2mysql 建两张完整玩家表；Require 门控下缺 DSN 为失败，普通 Skip 不算通过。本批只执行格式化与静态检查，尚未生成、编译或运行这些回归。
 
-P4 完整验收至少包括：冻结持久化后新登录拒绝、冻结前已受理的异步登录不能在确认后重新进场、SQL 确认未到时不公示或过户、清 Redis 后锁仍在、同 listing 解冻／旧 Lock 重放不复冻、同 tx_id 原请求重放保持原修订、换载荷拒绝、双向并发过户遵守锁序、买家满位后腾位重试、旧卖家与旧 owner_revision 均不能补齐／删除／入场、未知提交重读无双过户。两版实现与真库／在线故障证据分别登记；本节不是角色链已经实现或运行通过的声明。
+P4 完整验收至少包括：冻结持久化后新登录拒绝、冻结前已受理的异步登录不能在确认后重新进场、SQL 确认未到时不公示或过户、清 Redis 后锁仍在、同 listing 解冻／旧 Lock 重放不复冻、同 tx_id 原请求重放保持原修订、换载荷拒绝、双向并发过户遵守锁序、买家满位后目录层腾位重试且 trade 走退款出口、旧卖家与旧 owner_revision 均不能补齐／删除／入场、未知提交重读无双过户。两版实现与真库／在线故障证据分别登记；本节不是角色链已经实现或运行通过的声明。
 
 ## 业务原会话与资产合同提交互锁（2026-10-21，源码候选）
 
@@ -107,6 +112,8 @@ trade普通交易、寄售、拍卖、撮合和人民币合同的所有新增参
 装配还必须显式配置trade／guild的`AccountRoleSchema`、`GlobalLoginSessions`和`LoginRedis`；进程实际断言TiDB pessimistic／RC／leader／strict／无快照／无staleness，不能只看配置布尔值。普通独立交易状态机测试可显式注入fixture角色接口，旧目录隔离测试可显式关闭跨域guard；它们不能当原生验收。新增真TiDB回归分别使用独占`ACCOUNT_DIRECTORY_TEST_DSN`、`COMMERCE_TEST_DSN`与`GUILD_ROLE_TEST_DSN`及对应REQUIRE开关，fullstack还必须显式给`TRADE_ASSET_FULLSTACK_GLOBAL_SCHEMA`。本批只执行源码格式化和静态检查，正式生成、编译、真实SQL与双区在线验收须另记实际证据。
 
 ## 跨域挂起守卫的终态白名单（2026-10-21 源码补充）
+
+> 2026-10-31：目录不再跨库读。`RoleTrade*Schema`、`ConfigureAssetContracts`、`ConfigureGuildExit` 已删除，改成每个服务锁自己库里的副本，挂起判据逐条搬到各参与者，见 [全层水平扩展规格](./horizontal-scale-logical-db.md) §3。下面记的判据仍是搬过去之后的口径。
 
 data_service 的 `AccountDirectory.RoleTradeTradeSchema`、`RoleTradeGuildSchema`、`RoleTradeMailSchema`、`RoleTradeMatchSchema` 必须显式指定同一实际 TiDB 事务域内的权威 schema，不从 DSN、当前默认库或玩家区号猜测。启动装配先检查实际强读会话，再对所有守卫所需表列执行只读零行查询；不替其他服务建表。任一 schema、表、列或查询不可用则撤掉挂起守卫配置，Begin、Remove 与受控 Import 继续拒绝，不能沿用旧的不完整装配。目录普通读取不因此停用。
 
@@ -133,3 +140,29 @@ Match 使用显式 `RoleTradeMatchSchema` 下的 `match_authority_ticket` 原件
 Redis 维护撤销与 SQL 提交不宣称跨存储 ACID：任一阶段失败保留维护闸和原证据，未知结果复用同一原件消歧，不签恢复成功。CLI 默认只生成可审计划，显式 apply 绑定精确摘要；连接、命名空间和目标范围沿现有本地维护工具约束，秘密仅取环境变量。缺任一行、SQL 两版不齐、世代超前、route 变化、待投仍高于已提交版本、撤销资格不明或权限不足时均拒绝且不关闭原登记。
 
 Java 版按自己的 SQL owner 与最终存盘模型实现。旧 OPEN 只有准入、没有最终快照载荷；现有七天清理的安全依据是同 P／route 锁内的持久更高 E 与最终状态条件，七天本身只是保留期。新工具只退休已固定 listing 的指定旧 OPEN，并持久保存恢复原件；PENDING、未知状态、Match／Inbox／资产待投不进入退休集合，不伪造 EXACT_APPLIED。更高 E 已入场时要求原 SCENE_ACK 与实际 SQL APPLIED；更高 E 仅 claim、尚未 load 时，要求该 E 的最终准入实际缺席及非 NULL 原存档，计划固定剩余旧 OPEN 集合、数量和最后一条语义，仅最后一条退休时复用正式封闭形成真实 SQL_NO_ADMISSION。load 与冻结以同 P 决定先后，不能借无准入分支替已经入场的实体造 ACK。两版必须分别验证真实崩溃后阻断、合法恢复、旧写者迟到拒绝、B5 反例、未确认 pending 拒绝、并发 Cancel／Register／过户、提交未知及原件重放。
+
+## 摘孤儿角色(2026-11-01,未编译,待 Codex 验证)
+
+`LoginAdmin.RemovePlayersFromAccounts` 保留并接线。原来的调用方是单 zone 回档,那条路已经退役,但这个入口还得留:
+
+- 它是目录删角流程(`RemoveAccountRoles`)唯一的生产入口。删掉之后那套两阶段就没有调用方了。
+- 孤儿还会出现。目录和存档分库之后,整个地域恢复到一个时间点时,各库的恢复点有差距,目录里可能留下存档没有的角色。这种角色进不了场,白占账号的角色名额,没有别的办法清。
+
+**孤儿的判定**:目录有归属,路由还在,`player_store` 没有写权行。建角先写存档再提交目录,所以正常角色一定有这一行。墓碑不可逆,所以:
+
+- 有写权行的一律回 `NOT_ORPHAN`,输错 id 删不掉在役角色。
+- 路由缺失也回 `NOT_ORPHAN`:账本读这时同样回没有存档,但路由没了说明不了存档也没了。路由和目录的角色行同片,地域恢复留下的孤儿路由还在,缺了只可能是库被人动过,要人看。路由行在、落点列为空的情况这里分不出来(`GetPlayerHomeZone` 只看 `home_zone`),建角恒写落点,go/db 也不认领这种角色。
+- 存档状态读不到回 `RETRY`,不当成没有存档。
+- `dry_run` 只核对,不写。
+
+**流程**:逐名走目录的删角,不是整组提交。目录的删角本来就是逐名两阶段,整组提交时中途失败前面的已经删了,算不清谁成了。有未结束的业务(资产指令、帮会、组队),或角色还在线,目录回冲突,这里回 `CONFLICT`,处理掉再重跑。问不齐参与者回 `RETRY`,重跑幂等,删过的回 `NOT_FOUND`。一次最多 100 名。
+
+**预算**:一次 RPC 的预算是 login 的全局 `Timeout`(4 秒)。摘一名的下游调用限在 3 秒内,剩余不够 3.5 秒就不开始下一名,没做的回 `RETRY`,已摘的名单能回到调用方,同参数重跑。不用 `MethodTimeouts` 放宽:login 在路由服的预算链里,部署门禁不许有方法级超时(`Assert-RouterForwardBudget`)。名单长的要多跑几次,这个入口只给运维用,接受。
+
+**不释放名字**:输入里可能有在役角色的 id,释放不可逆。要释放按日志带 token 调 `ReleasePlayerName`(`guild-phase2/03-names.md`)。
+
+**鉴权**:`x-admin-token`,值是环境变量 `MMORPG_LOGIN_ADMIN_TOKEN`(Secret `domain-service-secrets` 的 `login-admin-token`),至少 16 字节。没配就停用。login 的 gRPC 端口对外接受未鉴权调用,身份闸门只校验带了身份声明的调用,所以 `LoginAdmin` 单独加一道拦截器,所有方法都过。操作人、理由、对端地址只进日志,目录的删角没有审计表。
+
+```bash
+grpcurl -H "x-admin-token: $TOKEN" -d '{"player_ids":[1001],"operator":"张三","reason":"工单 123","dry_run":true}' $LOGIN loginpb.LoginAdmin/RemovePlayersFromAccounts
+```

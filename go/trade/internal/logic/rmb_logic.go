@@ -134,6 +134,10 @@ func (l *JubaozhaiLogic) BuyRmbConsignment(in *tradepb.BuyRmbConsignmentRequest)
 	if err != nil {
 		return orderAnswer(nil, err), nil
 	}
+	// 买的是角色而账号已满:不让付款。不算数,付款之后满了由交付走退款(规格 §5.4)。
+	if err = l.deps.Rmb.CheckBuyerSlot(l.ctx, owned.Account, in.GetListingId()); err != nil {
+		return orderAnswer(nil, err), nil
+	}
 	out, err := l.deps.Mall.RmbBuy(l.ctx, owned.Account, owned.Role.PlayerId, owned.OwnerRevision, in)
 	if err != nil {
 		return orderAnswer(nil, err), nil

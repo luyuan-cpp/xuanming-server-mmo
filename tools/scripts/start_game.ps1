@@ -539,7 +539,7 @@ try {
         # chat / guild 与路由服同为 Tier 1（chat 只依赖 etcd + Redis；guild 另依赖 MySQL 与 data_service）；
         # 直连模式下它们也照样起，只是玩家不可达（见 -GateRouterMode）。
         # 第 1 步因缺 exe 跳过的可选服务不在这里启动，否则 Start-LocalGoServices 会因“没有启动记录”抛错。
-        # match 与 guild 启动时互相核对对方的表：两边的表已在第 3 步生成写者启动目录时建好。
+        # match 与 guild 的表已在第 3 步生成写者启动目录时建好。
         Start-LocalGoServices @(@('client_rpc_router','scene_manager','player_locator','login','match','chat','guild') | Where-Object { $_ -notin $skippedServices })
         # 聚宝斋 trade 单独一批：被跳过（缺 exe，或第 2 步预检发现 mmorpg_trade 未就绪）时不调用，避免把空列表传给 -GoServices（空 = 全部服务）。
         if ('trade' -notin $skippedServices) { Start-LocalGoServices @('trade') }

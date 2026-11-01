@@ -160,9 +160,9 @@ func TestServer_DetachedReleaseResolvesStorage(t *testing.T) {
 	if _, err := down.SavePlayer(ctx, detached()); grpcCode(err) != codes.Unavailable {
 		t.Fatalf("resolved storage down: %v", err)
 	}
-	frozen := testServer(t, db, func(context.Context, uint64) (uint32, error) { return 0, ErrStorageFrozen })
-	if _, err := frozen.SavePlayer(ctx, detached()); grpcCode(err) != codes.Unavailable {
-		t.Fatalf("frozen: %v", err)
+	unresolved := testServer(t, db, func(context.Context, uint64) (uint32, error) { return 0, ErrPlayerStorageMissing })
+	if _, err := unresolved.SavePlayer(ctx, detached()); grpcCode(err) != codes.Unavailable {
+		t.Fatalf("no placement: %v", err)
 	}
 }
 
@@ -193,14 +193,10 @@ func TestServer_MissingStorageIsOnlyForDetachedRelease(t *testing.T) {
 	}
 }
 
-// 库打不开、落点查不到、搬库冻结,都回 Unavailable,scene 退避重试。
+// 库打不开、落点查不到,都回 Unavailable,scene 退避重试。
 func TestServer_UnavailableDependencies(t *testing.T) {
 	db, rec := dbtest.OpenTx(t, noQuery(t))
 	ctx := context.Background()
-	frozen := testServer(t, db, func(context.Context, uint64) (uint32, error) { return 0, ErrStorageFrozen })
-	if _, err := frozen.LoadAndClaim(ctx, signed(t, methodLoadAndClaim, validClaim(), sceneCaller, testSecret)); grpcCode(err) != codes.Unavailable {
-		t.Fatalf("frozen: %v", err)
-	}
 	for name, failure := range map[string]error{"no placement": ErrPlayerStorageMissing, "route read failed": errors.New("Error 2013: secret route detail")} {
 		unresolved := testServer(t, db, func(context.Context, uint64) (uint32, error) { return 0, failure })
 		_, err := unresolved.LoadAndClaim(ctx, signed(t, methodLoadAndClaim, validClaim(), sceneCaller, testSecret))

@@ -43,6 +43,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -54,9 +55,12 @@ import (
 	base "proto/common/base"
 	pb "proto/friend"
 	scenepb "proto/scene"
-	"shared/authoritysql"
+	"shared/rolefence"
 	"shared/roleidentity"
 )
+
+// roleFenceCaller 是好友读角色护栏权威状态时的调用方身份,密钥在 rolefence.SecretEnv(roleFenceCaller)。
+const roleFenceCaller = "friend"
 
 func tipErr(id uint32, msg string) *base.TipInfoMessage {
 	return &base.TipInfoMessage{Id: id, Parameters: []string{msg}}
@@ -184,9 +188,11 @@ func NewDeps(svcCtx *svc.ServiceContext) *Deps {
 		SQLDialect:                svcCtx.SQLDialect,
 		RecommendStatementTimeout: svcCtx.Config.RequestBudget(),
 	})
-	if err := repo.ConfigureRoleAuthority(svcCtx.Config.AccountRoleSchema, authoritysql.Backend(svcCtx.Config.Backend)); err != nil {
-		panic("好友原会话 SQL 权威装配失败：" + err.Error())
+	roleStates, err := rolefence.NewDirectoryReader(svcCtx.DataService, roleFenceCaller, os.Getenv(rolefence.SecretEnv(roleFenceCaller)))
+	if err != nil {
+		panic("好友角色护栏的调用方密钥 " + rolefence.SecretEnv(roleFenceCaller) + " 不可用：" + err.Error())
 	}
+	repo.ConfigureRoleFence(rolefence.NewGuard(svcCtx.DB, roleStates))
 	return &Deps{
 		CheckOriginalRole: repo.CheckOriginalRole,
 		SvcCtx:            svcCtx,
@@ -255,7 +261,14 @@ func (l *FriendLogic) requireCaller(ctx context.Context, method string) (uint64,
 //
 // 日志是**唯一**能看到原始 err 的地方:回给客户端的只有 tip 码与一句固定文案 ——
 // 库名、SQL、连接串都不能出信封(AGENTS.md §11.3 敏感信息最少暴露)。
+//
+// 角色身份这一次核不了不算依赖故障:冻结或换主(对端可能挂着寄售,这是正常状态)、自愈读不到目录。
+// 这些情况要么没开事务,要么事务已回滚,没有结局未知。回 ErrStorage 的话 RootAdmission 会把排空证明打成 Hold(规格 §3.6)。
 func (l *FriendLogic) storageFailure(ctx context.Context, method string, err error) *base.TipInfoMessage {
+	if errors.Is(err, data.ErrOriginalRole) || errors.Is(err, rolefence.ErrUnavailable) {
+		logx.WithContext(ctx).Infof("[friend] %s role not verified: %v", method, err)
+		return tipErr(constants.ErrRoleNotVerified, "role not verified, retry later")
+	}
 	logx.WithContext(ctx).Errorf("[friend] %s dependency failure: %v", method, err)
 	return tipErr(constants.ErrStorage, "storage unavailable")
 }

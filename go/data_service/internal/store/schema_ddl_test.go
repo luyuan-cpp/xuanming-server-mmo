@@ -20,6 +20,10 @@ func TestGlobalTableDDLContract(t *testing.T) {
 		"transaction_log":    "tx_id",
 		"player_snapshot":    "id",
 		"rollback_audit_log": "id",
+		"gm_recall_batch":    "request_id",
+		"gm_recall_op":       "op_id",
+		"gm_recall_seq":      "player_id`,`stream",
+		"gm_recall_source":   "tx_id",
 	}
 	for _, table := range TableMessages() {
 		name, ok := proto2mysql.TableNameFromDescriptor(table.ProtoReflect().Descriptor())

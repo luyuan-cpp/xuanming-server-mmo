@@ -26,6 +26,7 @@
 #include "modules/id_segment/guid_segment_registry.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
 #include "player/comp/player_frozen_comp.h"
+#include "table/code/equipslot_table.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/asset_op_auth.h"
 #include "player/system/asset_op_ledger.h"
@@ -1442,5 +1443,315 @@ TEST_F(AssetOpSystemTest, AbortStillClosesASeqWhoseBundleCarriesAnUnknownCurrenc
 	PlayerAssetOpSystem::Debit(debit, replay);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, replay.outcome()) << "已见 seq 先回放原结局,不走到 8b";
 	EXPECT_EQ(100u, Gold());
+}
+
+// ── GM 回收(docs/design/exploit_loss_prevention_zh.md)──────────────────────
+
+::AssetOpRequest SignedRecallRequest(::AssetOpRequest request)
+{
+	auto* auth = request.mutable_auth();
+	auth->set_caller("data_service");
+	auth->set_timestamp_ms(static_cast<uint64_t>(g_fakeNowMs));
+	auth->set_signature_hex(token_security::HmacSha256Hex(kFixtureSecret, AssetOpCanonical("debit", request)));
+	return request;
+}
+
+class AssetOpRecallTest : public AssetOpSystemTest
+{
+protected:
+	static ::AssetOpRequest CurrencyRecall(uint64_t seq, uint64_t amount)
+	{
+		return SignedRecallRequest(MakeCurrencyRequest(ASSET_OP_STREAM_GM_RECALL, seq, amount, TX_BATCH_RECALL, 900 + seq));
+	}
+
+	static ::AssetOpRequest ItemRecall(uint64_t seq, uint32_t config, uint32_t count, const std::vector<uint64_t>& hints = {})
+	{
+		::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_GM_RECALL, seq, 1, TX_BATCH_RECALL, 900 + seq);
+		request.clear_bundle();
+		auto* item = request.mutable_bundle()->add_items();
+		item->set_config_id(config);
+		item->set_count(count);
+		for (const auto hint : hints) request.mutable_bundle()->add_item_uuids(hint);
+		return SignedRecallRequest(std::move(request));
+	}
+
+	void ExpectLine(const ::AssetOpResponse& response, uint64_t requested, uint64_t taken, uint64_t debt, uint64_t shortfall)
+	{
+		ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, response.outcome());
+		EXPECT_FALSE(response.partial());
+		ASSERT_EQ(1, response.snapshot().recall_lines_size());
+		const auto& line = response.snapshot().recall_lines(0);
+		EXPECT_EQ(requested, line.requested());
+		EXPECT_EQ(taken, line.taken());
+		EXPECT_EQ(debt, line.debt());
+		EXPECT_EQ(shortfall, line.shortfall());
+		EXPECT_EQ(requested, line.taken() + line.debt() + line.shortfall()) << "明细要对得上请求金额";
+	}
+};
+
+TEST_F(AssetOpRecallTest, CurrencyWithEnoughBalanceHasNoDebt)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), response);
+	ExpectLine(response, 30, 30, 0, 0);
+	EXPECT_EQ(70u, Gold());
+	EXPECT_TRUE(CurrencySystem::QueryDebts(player_).empty());
+}
+
+TEST_F(AssetOpRecallTest, CurrencyShortfallBecomesDebtAndBalanceNeverGoesNegative)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 20));
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 50), response);
+	ExpectLine(response, 50, 20, 30, 0);
+	EXPECT_EQ(0u, Gold());
+
+	const auto debts = CurrencySystem::QueryDebts(player_);
+	ASSERT_EQ(1u, debts.size());
+	EXPECT_EQ(30u, debts[0].owed());
+	EXPECT_EQ(0u, debts[0].expires_at()) << "回收的欠款不能到点自动免除";
+
+	// 之后的收入先抵扣。
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 40));
+	EXPECT_EQ(10u, Gold());
+}
+
+TEST_F(AssetOpRecallTest, CurrencyOverBalanceIsNotRejected)
+{
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 50), response);
+	ExpectLine(response, 50, 0, 50, 0);
+}
+
+TEST_F(AssetOpRecallTest, ReplayAnswersOriginalReceiptWithoutSecondDeduction)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	::AssetOpResponse first;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), first);
+	ExpectLine(first, 30, 30, 0, 0);
+	CompleteFakeSave();
+
+	::AssetOpResponse replay;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), replay);
+	ExpectLine(replay, 30, 30, 0, 0);
+	EXPECT_TRUE(replay.durable());
+	EXPECT_EQ(70u, Gold()) << "同 seq 只读答复,不再扣";
+	EXPECT_TRUE(ValidateAssetOpLedger(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_)).empty())
+		<< "只带明细的收据要过账本校验,否则下次加载整个资产通道关掉";
+}
+
+TEST_F(AssetOpRecallTest, ReplayWithChangedAmountIsUnknownNotApplied)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	::AssetOpResponse first;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), first);
+	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, first.outcome());
+
+	::AssetOpResponse tampered;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 31), tampered);
+	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, tampered.outcome());
+	EXPECT_EQ(70u, Gold());
+}
+
+TEST_F(AssetOpRecallTest, AbortOfUnseenSeqNeverApplies)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	::AssetOpRequest abort = MakeCurrencyRequest(ASSET_OP_STREAM_GM_RECALL, 1, 30, TX_BATCH_RECALL, 901);
+	auto* auth = abort.mutable_auth();
+	auth->set_caller("data_service");
+	auth->set_timestamp_ms(static_cast<uint64_t>(g_fakeNowMs));
+	auth->set_signature_hex(token_security::HmacSha256Hex(kFixtureSecret, AssetOpCanonical("abort_debit", abort)));
+	::AssetOpResponse aborted;
+	PlayerAssetOpSystem::AbortDebit(abort, aborted);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, aborted.outcome());
+	EXPECT_EQ(0u, aborted.reason().id());
+
+	::AssetOpResponse late;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), late);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, late.outcome()) << "中止之后这个 seq 永远拒绝";
+	EXPECT_EQ(100u, Gold());
+}
+
+TEST_F(AssetOpRecallTest, FrozenRetriesWithoutRecording)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), response);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, response.outcome());
+	EXPECT_EQ(100u, Gold());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GM_RECALL));
+}
+
+TEST_F(AssetOpRecallTest, OtherCallersCannotUseTheStream)
+{
+	for (const char* caller : {"guild", "trade", "mail", ""})
+	{
+		::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_GM_RECALL, 1, 30, TX_BATCH_RECALL);
+		SignForTest("debit", request, caller);
+		::AssetOpResponse response;
+		PlayerAssetOpSystem::Debit(request, response);
+		EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, response.outcome()) << "caller=" << caller;
+		EXPECT_EQ(static_cast<uint32_t>(kAssetAuthFailed), response.reason().id());
+	}
+}
+
+TEST_F(AssetOpRecallTest, OtherTxTypesAreOutsideTheAllowlist)
+{
+	::AssetOpRequest request = MakeCurrencyRequest(ASSET_OP_STREAM_GM_RECALL, 1, 30, TX_GM_DEDUCT);
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(SignedRecallRequest(request), response);
+	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, response.outcome());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GM_RECALL));
+}
+
+TEST_F(AssetOpRecallTest, InvalidBundlesAreRejectedAndRecorded)
+{
+	GiveBags();
+	::AssetOpRequest twoKinds = MakeCurrencyRequest(ASSET_OP_STREAM_GM_RECALL, 1, 30, TX_BATCH_RECALL);
+	auto* item = twoKinds.mutable_bundle()->add_items();
+	item->set_config_id(10);
+	item->set_count(1);
+	::AssetOpResponse mixed;
+	PlayerAssetOpSystem::Debit(SignedRecallRequest(twoKinds), mixed);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, mixed.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), mixed.reason().id());
+
+	::AssetOpResponse unknownConfig;
+	PlayerAssetOpSystem::Debit(ItemRecall(2, 999999999, 1), unknownConfig);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, unknownConfig.outcome());
+
+	::AssetOpResponse duplicateHints;
+	PlayerAssetOpSystem::Debit(ItemRecall(3, 10, 1, {7, 7}), duplicateHints);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, duplicateHints.outcome());
+}
+
+TEST_F(AssetOpRecallTest, StackableTakesWhatIsHeldAcrossBagsAndReportsShortfall)
+{
+	constexpr uint32_t kStackableConfig = 10;
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	GiveBags();
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	ItemComp inInventory;
+	inInventory.set_item_id(950199001); inInventory.set_config_id(kStackableConfig); inInventory.set_size(2);
+	ItemComp inWarehouse;
+	inWarehouse.set_item_id(950199002); inWarehouse.set_config_id(kStackableConfig); inWarehouse.set_size(3);
+	bags.bags[kInventory].RestoreItems({{inInventory, 0}});
+	bags.bags[kWarehouse].RestoreItems({{inWarehouse, 0}});
+
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(ItemRecall(1, kStackableConfig, 7), response);
+	ExpectLine(response, 7, 5, 0, 2);
+	EXPECT_EQ(0u, bags.bags[kInventory].GetTotalItemCount(kStackableConfig));
+	EXPECT_EQ(0u, bags.bags[kWarehouse].GetTotalItemCount(kStackableConfig));
+}
+
+TEST_F(AssetOpRecallTest, NothingHeldIsAppliedWithFullShortfallNotSuccess)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	GiveBags();
+	::AssetOpResponse response;
+	PlayerAssetOpSystem::Debit(ItemRecall(1, 10, 4), response);
+	ExpectLine(response, 4, 0, 0, 4);
+}
+
+TEST_F(AssetOpRecallTest, UnitsCarryingNewerFieldsRetryInsteadOfReportingShortfall)
+{
+	constexpr uint32_t kStackableConfig = 10;
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	GiveBags();
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ItemComp plain;
+	plain.set_item_id(950199011); plain.set_config_id(kStackableConfig); plain.set_size(2);
+	ItemComp fromNewerVersion;
+	fromNewerVersion.set_item_id(950199012); fromNewerVersion.set_config_id(kStackableConfig); fromNewerVersion.set_size(5);
+	fromNewerVersion.mutable_unknown_fields()->AddVarint(412345, 1);
+	inventory.RestoreItems({{plain, 0}, {fromNewerVersion, 1}});
+
+	::AssetOpResponse skewed;
+	PlayerAssetOpSystem::Debit(ItemRecall(1, kStackableConfig, 4), skewed);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, skewed.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), skewed.reason().id());
+	EXPECT_EQ(2u, inventory.GetTotalItemCount(kStackableConfig)) << "版本错位不动资产";
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GM_RECALL));
+
+	// 普通单位够的时候不碰带新字段的那堆。
+	::AssetOpResponse enough;
+	PlayerAssetOpSystem::Debit(ItemRecall(1, kStackableConfig, 2), enough);
+	ExpectLine(enough, 2, 2, 0, 0);
+}
+
+// 只销毁流水点名的实例:同配置的别的实例可能是玩家正当得来、强化过的,销毁了恢复不了。
+TEST_F(AssetOpRecallTest, InstancesAreRecalledOnlyByName)
+{
+	constexpr uint32_t kInstanceConfig = 1;
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	GiveBags();
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	const auto put = [&inventory](uint64_t guid)
+	{
+		ItemComp item;
+		item.set_item_id(guid); item.set_config_id(kInstanceConfig); item.set_size(1);
+		ASSERT_EQ(kSuccess, inventory.PutInstance(item));
+	};
+	put(950199021);
+	put(950199022);
+	put(950199023);
+
+	::AssetOpResponse hinted;
+	PlayerAssetOpSystem::Debit(ItemRecall(1, kInstanceConfig, 1, {950199023}), hinted);
+	ExpectLine(hinted, 1, 1, 0, 0);
+	EXPECT_FALSE(inventory.ContainsGuid(950199023)) << "点名的实例要扣";
+	EXPECT_TRUE(inventory.ContainsGuid(950199021));
+	EXPECT_TRUE(inventory.ContainsGuid(950199022));
+
+	// 点名的已经不在了:同配置的别的实例不动,数量进缺口。
+	::AssetOpResponse gone;
+	PlayerAssetOpSystem::Debit(ItemRecall(2, kInstanceConfig, 1, {950199023}), gone);
+	ExpectLine(gone, 1, 0, 0, 1);
+	EXPECT_TRUE(inventory.ContainsGuid(950199021)) << "不能拿别的实例顶";
+	EXPECT_TRUE(inventory.ContainsGuid(950199022));
+
+	// 没有线索(流水没记实例号):一件都不动。
+	::AssetOpResponse unnamed;
+	PlayerAssetOpSystem::Debit(ItemRecall(3, kInstanceConfig, 2), unnamed);
+	ExpectLine(unnamed, 2, 0, 0, 2);
+
+	// 数量比点名的多(同一件来回交易,流水两条):只扣点名的。
+	::AssetOpResponse repeated;
+	PlayerAssetOpSystem::Debit(ItemRecall(4, kInstanceConfig, 2, {950199021}), repeated);
+	ExpectLine(repeated, 2, 1, 0, 1);
+	EXPECT_FALSE(inventory.ContainsGuid(950199021));
+	EXPECT_TRUE(inventory.ContainsGuid(950199022));
+	EXPECT_TRUE(ValidateAssetOpLedger(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_)).empty());
+}
+
+// 点名的实例在哪个包里都能回收,穿在身上的也不例外。
+TEST_F(AssetOpRecallTest, NamedInstanceIsRecalledFromAnyBagIncludingWornGear)
+{
+	constexpr uint32_t kInstanceConfig = 1;
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	EquipSlotTableManager::Instance().Load(); // 装备栏的槽位来自这张表,没加载就放不进去
+	GiveBags();
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	ItemComp worn;
+	worn.set_item_id(950199031); worn.set_config_id(kInstanceConfig); worn.set_size(1);
+	ItemComp spare;
+	spare.set_item_id(950199032); spare.set_config_id(kInstanceConfig); spare.set_size(1);
+	ASSERT_EQ(kSuccess, bags.bags[kEquipment].PutInstance(worn));
+	ASSERT_EQ(kSuccess, bags.bags[kWarehouse].PutInstance(spare));
+
+	::AssetOpResponse fromWarehouse;
+	PlayerAssetOpSystem::Debit(ItemRecall(1, kInstanceConfig, 1, {950199032}), fromWarehouse);
+	ExpectLine(fromWarehouse, 1, 1, 0, 0);
+	EXPECT_FALSE(bags.bags[kWarehouse].ContainsGuid(950199032));
+	EXPECT_TRUE(bags.bags[kEquipment].ContainsGuid(950199031)) << "没点名的不动";
+
+	// 夹具没有属性组件,重算和推面板都按缺组件跳过:这里只钉资产。
+	::AssetOpResponse fromWorn;
+	PlayerAssetOpSystem::Debit(ItemRecall(2, kInstanceConfig, 1, {950199031}), fromWorn);
+	ExpectLine(fromWorn, 1, 1, 0, 0);
+	EXPECT_FALSE(bags.bags[kEquipment].ContainsGuid(950199031));
 }
 } // namespace

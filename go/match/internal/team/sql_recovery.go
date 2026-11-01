@@ -14,7 +14,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (s *sqlTeamStore) endMatch(ctx context.Context, teamID uint64, token string) (EndMatchStop, *PinnedResult, error) {
+func (s *sqlTeamStore) endMatch(ctx context.Context, teamID uint64, token string) (stop EndMatchStop, pinned *PinnedResult, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) { stop, pinned, e = s.endMatchOnce(ctx, teamID, token); return e })
+	return stop, pinned, err
+}
+
+func (s *sqlTeamStore) endMatchOnce(ctx context.Context, teamID uint64, token string) (EndMatchStop, *PinnedResult, error) {
 	launch, err := s.authority.TeamLaunchByToken(ctx, teamID, token)
 	if err != nil {
 		return 0, nil, err
@@ -176,7 +181,12 @@ func (s *Service) expireSQLTeams(ctx context.Context, afterExpiry, afterTeam uin
 	return afterExpiry, afterTeam
 }
 
-func (s *sqlTeamStore) expireIdle(ctx context.Context, teamID uint64) (*CommitResult, error) {
+func (s *sqlTeamStore) expireIdle(ctx context.Context, teamID uint64) (commit *CommitResult, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) { commit, e = s.expireIdleOnce(ctx, teamID); return e })
+	return commit, err
+}
+
+func (s *sqlTeamStore) expireIdleOnce(ctx context.Context, teamID uint64) (*CommitResult, error) {
 	observed, err := loadSQLTeam(ctx, s.authority.DB, teamID, false)
 	if err != nil {
 		return nil, err

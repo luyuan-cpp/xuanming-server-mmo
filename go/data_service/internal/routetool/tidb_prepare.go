@@ -9,10 +9,10 @@ import (
 	"data_service/internal/store"
 )
 
-// tidb-prepare(TiDB-only,2026-10-12 G1a):对全局库的路由表设防合并并按片 / 按 zone 预切 Region
+// tidb-prepare(TiDB-only,2026-10-12 G1a):对目录各片的路由表设防合并并按片 / 按 zone 预切 Region
 // (docs/design/player-route-mapping-durability-proposal.md §11.2「第 1a 批热点修复」)。
 //
-// 只碰全局库。MySQL 上整步跳过(没有 Region),退出码 0。语句与执行都在
+// 只碰目录。MySQL 上整步跳过(没有 Region),退出码 0。语句与执行都在
 // store.RouteStore.PrepareTiDB;这里只做输出与退出码。
 //
 // 真执行只能使用独立 schema 主体，在服务启动前完成；normal / operator 不借用 DDL 能力。
@@ -20,7 +20,7 @@ import (
 // TiDB 建表、恢复或重建后，先预切再启动业务 writer。
 // 漏跑只影响性能(回到单尾热点),不影响正确性。全部语句幂等,重跑即可。
 
-// tidbPreparer 是本子命令对全局库的全部依赖,*store.RouteStore 天然满足(编译期断言在 tidb_prepare_test.go)。
+// tidbPreparer 是本子命令对目录的全部依赖,*store.RouteStore 天然满足(编译期断言在 tidb_prepare_test.go)。
 type tidbPreparer interface {
 	PrepareTiDB(ctx context.Context, req store.RouteTiDBPrepareRequest) (store.RouteTiDBPrepareReport, error)
 }
@@ -39,8 +39,8 @@ type TiDBPrepareOptions struct {
 
 // TiDBPrepare 跑一次 tidb-prepare。只有完整跑完(含 MySQL 跳过)才往 Stdout 写统计行;出错时退出码为 2。
 //
-// stderr:Target;MySQL 时一行 SKIP;TiDB 时每步一行 PLAN <sql>(dry-run)或 DONE <sql> split_regions=<n>;
-// 失败时先列出已经 DONE 的步骤,再一行 FAILED(错误里带第几步与语句)。
+// stderr:Target;MySQL 时一行 SKIP;TiDB 时每步一行 PLAN <sql>(dry-run)或 DONE <sql> split_regions=<n>,
+// 目录分片时 <sql> 前带片库名;失败时先列出已经 DONE 的步骤,再一行 FAILED(错误里带第几步与语句)。
 func TiDBPrepare(ctx context.Context, p tidbPreparer, opts TiDBPrepareOptions) (store.RouteTiDBPrepareReport, error) {
 	if opts.Stdout == nil || opts.Stderr == nil {
 		return store.RouteTiDBPrepareReport{}, errors.New("stdout / stderr writers are required")
@@ -52,7 +52,7 @@ func TiDBPrepare(ctx context.Context, p tidbPreparer, opts TiDBPrepareOptions) (
 	if err != nil {
 		for _, step := range rep.Steps {
 			if step.Executed {
-				fmt.Fprintf(opts.Stderr, "DONE %s split_regions=%d\n", step.SQL, step.SplitRegions)
+				fmt.Fprintf(opts.Stderr, "DONE %s split_regions=%d\n", stepLabel(step), step.SplitRegions)
 			}
 		}
 		fmt.Fprintf(opts.Stderr, "FAILED: %v\n", err)
@@ -66,15 +66,23 @@ func TiDBPrepare(ctx context.Context, p tidbPreparer, opts TiDBPrepareOptions) (
 	for _, step := range rep.Steps {
 		if step.Executed {
 			executed++
-			fmt.Fprintf(opts.Stderr, "DONE %s split_regions=%d\n", step.SQL, step.SplitRegions)
+			fmt.Fprintf(opts.Stderr, "DONE %s split_regions=%d\n", stepLabel(step), step.SplitRegions)
 		} else {
-			fmt.Fprintf(opts.Stderr, "PLAN %s\n", step.SQL)
+			fmt.Fprintf(opts.Stderr, "PLAN %s\n", stepLabel(step))
 		}
 	}
 	fmt.Fprintf(opts.Stdout, "route_tidb_prepare engine=%s skipped=%t dry_run=%t zones=%d storages=%d statements=%d executed=%d split_regions=%d\n",
 		rep.Engine, rep.Skipped, opts.DryRun, distinctCount(opts.Zones), distinctCount(opts.Storages),
 		len(rep.Steps), executed, rep.SplitRegions())
 	return rep, nil
+}
+
+// stepLabel 是一步的输出:目录分片时带上语句打在哪一片。K=1 时和没分片一样,只有语句。
+func stepLabel(step store.RouteTiDBPrepareStep) string {
+	if step.Schema == "" {
+		return step.SQL
+	}
+	return step.Schema + ": " + step.SQL
 }
 
 // TiDBPrepareExitCode 把一次 tidb-prepare 的结果映射成退出码:出错 2;完成或 MySQL 跳过 0。

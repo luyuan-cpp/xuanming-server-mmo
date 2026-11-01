@@ -24,6 +24,7 @@ import (
 	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
 	"shared/placement"
+	"shared/rolefence"
 )
 
 // 显式专用 TiDB DSN；每例只建／删自己的随机库，不借用其它任务的现有库或端口假设。
@@ -32,6 +33,10 @@ type directorySQLFixture struct {
 	InitialStorageID uint32
 	ProofStorageID   uint32
 }
+
+// initialStorageForTest 记每个夹具建角用的落点(*AccountDirectoryStore → uint32)。
+// 白名单里还有 proof 库,不能从白名单猜:猜到 proof 库的话,roleProofStorage 写初始行会撞主键。
+var initialStorageForTest sync.Map
 
 func accountDirectoryTiDB(t *testing.T) (*AccountDirectoryStore, *sql.DB) {
 	t.Helper()
@@ -101,14 +106,18 @@ func accountDirectoryTiDBWithWriter(t *testing.T) (*AccountDirectoryStore, *sql.
 	}
 	normal, err := mysql.ParseDSN(fixture.DSN(name))
 	require.NoError(t, err)
-	conf := MySQLConfig{Host: normal.Addr, User: normal.User, Password: normal.Passwd, DBName: name, MaxOpenConn: 8, MaxIdleConn: 2, Permission: fixture.Permission}
+	conf := MySQLConfig{Host: normal.Addr, User: normal.User, Password: normal.Passwd, DBName: name, MaxOpenConn: 8, MaxIdleConn: 2, Permission: fixture.Permission, PermissionFor: fixture.PermissionFor}
 	directory, err := NewAccountDirectoryStore(conf, authoritysql.BackendTiDB, 2, 8)
 	require.NoError(t, err)
 	// 证据夹具会把路由切到 proof 库,两个库都要在白名单里。
-	require.NoError(t, directory.ConfigureInitialPlayerCommit([]uint32{storageID, proofStorageID}))
-	// 只隔离原目录契约；跨域资产互锁仍由对应正式用例装配。
-	directory.contracts = &roleAssetContractGuard{disabled: true}
-	t.Cleanup(func() { require.NoError(t, directory.Close()) })
+	require.NoError(t, directory.ConfigurePlayerStores([]uint32{storageID, proofStorageID}, PlayerStorePoolOptions{MaxOpenConn: 8, MaxIdleConn: 2}))
+	initialStorageForTest.Store(directory, storageID)
+	// 只隔离目录一侧的契约:参与者一律通过。要别的结论的用例用 fencesOf 改。
+	directory.ConfigureFenceCoordinator(&fakeFences{outcome: rolefence.PrepareClean})
+	t.Cleanup(func() {
+		initialStorageForTest.Delete(directory)
+		require.NoError(t, directory.Close())
+	})
 	return directory, fixture.Schema, &directorySQLFixture{SQL: fixture, InitialStorageID: storageID, ProofStorageID: proofStorageID}
 }
 
@@ -279,7 +288,7 @@ func TestTiDBAccountDirectoryPreservesExactAccountIdentity(t *testing.T) {
 		require.EqualValues(t, 100+i, roles.Players[0].PlayerId)
 	}
 	for i := 0; i < 4; i++ {
-		conn, err := s.db.Conn(ctx)
+		conn, err := s.shards.first().Conn(ctx)
 		require.NoError(t, err)
 		var isolation, mode, replica string
 		require.NoError(t, conn.QueryRowContext(ctx, "SELECT @@transaction_isolation,@@tidb_txn_mode,@@tidb_replica_read").Scan(&isolation, &mode, &replica))
@@ -303,13 +312,10 @@ func installInitialRouteForTest(s *AccountDirectoryStore, ctx context.Context, r
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if len(s.initialStores) != 1 {
+	storage, ok := initialStorageForTest.Load(s)
+	if !ok {
 		return accountdirectory.ErrUnavailable
 	}
-	var storage uint32
-	for id := range s.initialStores {
-		storage = id
-	}
-	_, err := s.db.ExecContext(ctx, "INSERT INTO player_route(route_shard,player_id,home_zone,storage_id,placement_version,rev,updated_by,created_at_ms,updated_at_ms) VALUES (?,?,?, ?,1,1,'initial-commit-test',1,1) ON DUPLICATE KEY UPDATE player_id=player_id", placement.RouteRowShard(role.GetPlayerId()), role.GetPlayerId(), role.GetZoneId(), storage)
+	_, err := s.shards.forPlayer(role.GetPlayerId()).ExecContext(ctx, "INSERT INTO player_route(route_shard,player_id,home_zone,storage_id,placement_version,rev,updated_by,created_at_ms,updated_at_ms) VALUES (?,?,?, ?,1,1,'initial-commit-test',1,1) ON DUPLICATE KEY UPDATE player_id=player_id", placement.RouteRowShard(role.GetPlayerId()), role.GetPlayerId(), role.GetZoneId(), storage)
 	return err
 }

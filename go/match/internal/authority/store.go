@@ -19,19 +19,23 @@ import (
 	battlepb "proto/battle"
 	pb "proto/match"
 	"schemamigrate"
+	"shared/dbplacement"
 	"shared/placement"
+	"shared/rolefence"
 	"shared/roleidentity"
 )
 
 type Store struct {
-	roleSchema       string
-	entryGuildSchema string
-	DB               *sql.DB
-	Secret           []byte
-	Config           config.GlobalMatchConf
-	TeamConfig       config.TeamConf // 启动时由同一SQL策略指纹准入，运行中不热改。
-	roleGuard        func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error
-	entryGuard       func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error
+	DB         *sql.DB
+	Secret     []byte
+	Config     config.GlobalMatchConf
+	TeamConfig config.TeamConf // 启动时由同一SQL策略指纹准入，运行中不热改。
+	roleGuard  func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error
+	entryGuard func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord, *matchEntryOriginal) error
+	// fence、fenceStates、admissions 由 ConfigureRoleFence 启动时装配，之后只读（见 role_identity.go）。
+	fence       *rolefence.Guard
+	fenceStates rolefence.StateReader
+	admissions  rolefence.AdmissionVerifier
 	// catalog 与 schedule 由 ConfigureMatchCatalog 启动时装配，之后只读（见 match_rules.go）。
 	catalog  *catalog.Catalog
 	schedule scope.Schedule
@@ -61,7 +65,11 @@ func OpenWithPermission(ctx context.Context, c config.GlobalMatchConf, permissio
 	if c.CrossRegionWaitSeconds == 0 || c.HardLatencyMs < 20 || c.HardLatencyMs > 1000 || c.ProbeTTLSeconds < 30 || c.ProbeTTLSeconds > 600 {
 		return nil, errors.New("全球匹配数据库或地域配置无效")
 	}
-	db, err := openAuthorityDatabaseWithPermission(ctx, c, permission)
+	dbPlacement, err := dbplacement.Start(ctx, c.DbPlacement)
+	if err != nil {
+		return nil, err
+	}
+	db, err := openAuthorityDatabaseWithPermission(ctx, c, permission, dbPlacement.OpenOptions()...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +120,10 @@ func now(ctx context.Context, q interface {
 func (s *Store) Now(ctx context.Context) (uint64, error) { return now(ctx, s.DB) }
 
 func (s *Store) SavePlan(ctx context.Context, pid uint64, p *pb.MatchNetworkProfile, expires uint64) error {
+	return s.Fenced(ctx, func() error { return s.savePlanOnce(ctx, pid, p, expires) })
+}
+
+func (s *Store) savePlanOnce(ctx context.Context, pid uint64, p *pb.MatchNetworkProfile, expires uint64) error {
 	if p == nil {
 		return ErrOriginalPlayer
 	}
@@ -146,6 +158,10 @@ func (s *Store) Profile(ctx context.Context, pid uint64) (*pb.MatchNetworkProfil
 	return p, expires, e
 }
 func (s *Store) CommitProfile(ctx context.Context, pid uint64, plan, binding string, receipts []*pb.NetworkProbeReceipt, expires uint64) error {
+	return s.Fenced(ctx, func() error { return s.commitProfileOnce(ctx, pid, plan, binding, receipts, expires) })
+}
+
+func (s *Store) commitProfileOnce(ctx context.Context, pid uint64, plan, binding string, receipts []*pb.NetworkProbeReceipt, expires uint64) error {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
 		return e
@@ -208,7 +224,12 @@ func (s *Store) CommitProfile(ctx context.Context, pid uint64, plan, binding str
 }
 
 // Join 的锁和提交只在 SQL：同请求回放返回原票，不重置最初等待时间。
-func (s *Store) Join(ctx context.Context, t *pb.MatchAuthorityTicketRecord, plan, binding string) (*pb.MatchAuthorityTicketRecord, bool, error) {
+func (s *Store) Join(ctx context.Context, t *pb.MatchAuthorityTicketRecord, plan, binding string) (ticket *pb.MatchAuthorityTicketRecord, created bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { ticket, created, e = s.joinOnce(ctx, t, plan, binding); return e })
+	return ticket, created, err
+}
+
+func (s *Store) joinOnce(ctx context.Context, t *pb.MatchAuthorityTicketRecord, plan, binding string) (*pb.MatchAuthorityTicketRecord, bool, error) {
 	if t == nil {
 		return nil, false, ErrOriginalPlayer
 	}
@@ -386,6 +407,10 @@ func joinRequestParts(request string) (uint64, uint64, error) {
 
 // CancelIntent 的提交是 UNKNOWN Join 可以安全放弃的唯一依据。墓碑不影响玩家的新 request_id。
 func (s *Store) CancelIntent(ctx context.Context, pid uint64, ticket, request string) error {
+	return s.Fenced(ctx, func() error { return s.cancelIntentOnce(ctx, pid, ticket, request) })
+}
+
+func (s *Store) cancelIntentOnce(ctx context.Context, pid uint64, ticket, request string) error {
 	if request != "" {
 		if _, _, e := joinRequestParts(request); e != nil {
 			return e
@@ -444,7 +469,12 @@ func (s *Store) CancelIntent(ctx context.Context, pid uint64, ticket, request st
 	return tx.Commit()
 }
 
-func (s *Store) RequestCancelled(ctx context.Context, pid uint64, request string) (bool, error) {
+func (s *Store) RequestCancelled(ctx context.Context, pid uint64, request string) (cancelled bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { cancelled, e = s.requestCancelledOnce(ctx, pid, request); return e })
+	return cancelled, err
+}
+
+func (s *Store) requestCancelledOnce(ctx context.Context, pid uint64, request string) (bool, error) {
 	if request == "" {
 		return false, nil
 	}
@@ -497,6 +527,10 @@ func (s *Store) CandidatesAfter(ctx context.Context, afterMs, afterPlayer uint64
 }
 
 func (s *Store) Claim(ctx context.Context, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) error {
+	return s.Fenced(ctx, func() error { return s.claimOnce(ctx, f, group) })
+}
+
+func (s *Store) claimOnce(ctx context.Context, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) error {
 	tx, e := s.DB.BeginTx(ctx, nil)
 	if e != nil {
 		return e
@@ -624,6 +658,10 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 
 // ReserveGroup 与成局在同一事务提交，预组队不会短暂暴露为可拆散的单人候选。
 func (s *Store) ReserveGroup(ctx context.Context, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) error {
+	return s.Fenced(ctx, func() error { return s.reserveGroupOnce(ctx, f, group) })
+}
+
+func (s *Store) reserveGroupOnce(ctx context.Context, f *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) error {
 	if len(group) == 0 || len(group) > 10 {
 		return errors.New("整组人数无效")
 	}
@@ -708,7 +746,12 @@ func (s *Store) reserveGroupTx(ctx context.Context, tx *sql.Tx, f *pb.MatchForma
 }
 
 // FindDirect 是同一业务意图的恢复入口。查询缺失只表示当前没有已提交成局，不能授权换请求号重试。
-func (s *Store) FindDirect(ctx context.Context, key *pb.MatchDirectIntentRecord) (*pb.MatchFormationRecord, []byte, error) {
+func (s *Store) FindDirect(ctx context.Context, key *pb.MatchDirectIntentRecord) (formation *pb.MatchFormationRecord, payload []byte, err error) {
+	err = s.Fenced(ctx, func() (e error) { formation, payload, e = s.findDirectOnce(ctx, key); return e })
+	return formation, payload, err
+}
+
+func (s *Store) findDirectOnce(ctx context.Context, key *pb.MatchDirectIntentRecord) (*pb.MatchFormationRecord, []byte, error) {
 	if key == nil {
 		return nil, nil, ErrDirectConflict
 	}
@@ -752,7 +795,12 @@ func (s *Store) FindDirect(ctx context.Context, key *pb.MatchDirectIntentRecord)
 }
 
 // 拒战和应战竞争相同意图主键；拒战墓碑没有成局，迟到接受不能越过它。
-func (s *Store) DeclineDirect(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte) (bool, error) {
+func (s *Store) DeclineDirect(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte) (declined bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { declined, e = s.declineDirectOnce(ctx, key, payload); return e })
+	return declined, err
+}
+
+func (s *Store) declineDirectOnce(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte) (bool, error) {
 	if key == nil || key.Kind != 3 || key.OwnerId == 0 || (key.RequestHigh == 0 && key.RequestLow == 0) || len(payload) == 0 {
 		return false, errors.New("拒战原意图无效")
 	}

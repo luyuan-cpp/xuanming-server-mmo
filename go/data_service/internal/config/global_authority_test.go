@@ -57,3 +57,43 @@ func TestGlobalAuthorityAcceptsEveryLegalBackend(t *testing.T) {
 		require.NoError(t, err, "Backend=%q", backend)
 	}
 }
+
+func TestGlobalAuthorityValidatesLogicalShards(t *testing.T) {
+	for k, ok := range map[int]bool{0: true, 1: true, 2: true, 4: true, 64: true, 3: false, -1: false, 128: false} {
+		c := globalAuthorityFixture()
+		c.Directory.LogicalShards = k
+		_, err := c.ResolveGlobalAuthority(func(string) string { return "zone_1_db" })
+		if ok {
+			require.NoError(t, err, "K=%d", k)
+		} else {
+			require.ErrorContains(t, err, "Directory.LogicalShards", "K=%d", k)
+		}
+	}
+}
+
+// 写资格清单:目录各片、流水库、配置的存档库,一个不多一个不少。
+func TestWriterSchemasListsEveryLogicalDatabase(t *testing.T) {
+	c := globalAuthorityFixture()
+	c.SnapshotMySQL.DBName = "mmorpg_global"
+	c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs = []uint32{1, 1000000}
+	got, err := c.WriterSchemas()
+	require.NoError(t, err)
+	require.Equal(t, []string{"mmorpg_global", "mmorpg_global_ledger", "zone_1_db", "player_store_1000000_db"}, got)
+
+	c.Directory.LogicalShards = 2
+	got, err = c.WriterSchemas()
+	require.NoError(t, err)
+	require.Equal(t, []string{"mmorpg_global_00", "mmorpg_global_01", "mmorpg_global_ledger", "zone_1_db", "player_store_1000000_db"}, got)
+
+	c.Directory.LogicalShards = 3
+	_, err = c.WriterSchemas()
+	require.Error(t, err)
+}
+
+func TestDirectoryConfigFromYaml(t *testing.T) {
+	c := loadYaml(t, minimalYaml)
+	require.Equal(t, 1, c.Directory.Shards(), "没写按 1")
+	c = loadYaml(t, minimalYaml+"\nDirectory:\n  LogicalShards: 64\n  StoragePools:\n    MaxOpenConn: 4\n    MaxIdleConn: 1\n    ConnMaxIdleSeconds: 30\n")
+	require.Equal(t, 64, c.Directory.Shards())
+	require.Equal(t, StoragePoolConfig{MaxOpenConn: 4, MaxIdleConn: 1, ConnMaxIdleSeconds: 30}, c.Directory.StoragePools)
+}

@@ -32,6 +32,7 @@ import (
 	dspb "proto/data_service"
 	tradepb "proto/trade"
 	"shared/assetop"
+	"shared/rolefence"
 	"trade/internal/data"
 
 	"github.com/stretchr/testify/require"
@@ -609,18 +610,18 @@ func TestRealDBReceiptAckSkipsUndecodablePayload(t *testing.T) {
 const productionTickBudget = 3 * time.Second
 
 // stallingRoles 让涉及 stalled 玩家的角色互锁一直等到 ctx 结束才返回,模拟"一行卡住":
-// 在 account_role 上等锁、目录事务持锁、依赖 RPC 不回包,表现都是只在调用方的 ctx 到期时才返回。
+// 在副本行上等锁、冻结事务持锁,表现都是只在调用方的 ctx 到期时才返回。
 type stallingRoles struct {
 	fixtureRoles
 	stalled uint64
 }
 
-func (s stallingRoles) Lock(ctx context.Context, tx *sql.Tx, listing uint64, players ...uint64) error {
-	if slices.Contains(players, s.stalled) {
+func (s stallingRoles) Lock(ctx context.Context, tx *sql.Tx, expects ...rolefence.Expect) error {
+	if slices.Contains(lockedPlayers(expects), s.stalled) {
 		<-ctx.Done()
 		return ctx.Err()
 	}
-	return s.fixtureRoles.Lock(ctx, tx, listing, players...)
+	return s.fixtureRoles.Lock(ctx, tx, expects...)
 }
 
 // 复核 must_fix:单行子预算以前固定 5s,比 svc 给的 3s 还长,卡住的队头与父 ctx 同时到期,
@@ -790,13 +791,14 @@ type racingRoles struct {
 	race              func(context.Context) error
 }
 
-func (r racingRoles) Lock(ctx context.Context, tx *sql.Tx, listing uint64, players ...uint64) error {
+func (r racingRoles) Lock(ctx context.Context, tx *sql.Tx, expects ...rolefence.Expect) error {
+	players := lockedPlayers(expects)
 	if slices.Contains(players, r.bidder) && slices.Contains(players, r.lotSeller) && r.fired.CompareAndSwap(false, true) {
 		if err := r.race(ctx); err != nil {
 			return err
 		}
 	}
-	return r.fixtureRoles.Lock(ctx, tx, listing, players...)
+	return r.fixtureRoles.Lock(ctx, tx, expects...)
 }
 
 // 复核 should_fix:乐观冲突以前按暂时失败推迟 10 秒。拍品临近截止时,这会把一条已冻结的有效高价出价拖过截止、
@@ -1004,7 +1006,9 @@ func TestRealDBTwoReplicasTickingTogetherCompensateOnce(t *testing.T) {
 		return w.Stage == "return" && leg(w, "seller_return").GetOpId() != 0
 	})
 	settleLegs(t, a, 2)
-	untilAll("结案", func(r *tradepb.TradeCommerceRecord, _ *tradepb.TradeCommerceWorkflow) bool { return r.Status == Cancelled })
+	untilAll("结案", func(r *tradepb.TradeCommerceRecord, _ *tradepb.TradeCommerceWorkflow) bool {
+		return r.Status == Cancelled
+	})
 
 	for i := range offers {
 		require.Equal(t, 1, opCount(t, a, sellers[i], 3), "卖家托管扣款只发一次")

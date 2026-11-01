@@ -96,6 +96,11 @@ func (s *AdminServer) VoidItem(ctx context.Context, in *inboxpb.VoidPlayerInboxI
 		PeerAddr: inbox.PeerAddr(ctx),
 		Mode:     in.GetMode(),
 	}, s.ledgers)
+	if tip := roleNotVerified(err); tip != nil {
+		logx.WithContext(ctx).Infof("[player_inbox] VoidItem role not verified player=%d domain=%d seq=%d mode=%s operator=%q %s: %v",
+			in.GetPlayerId(), in.GetDomain(), in.GetSeq(), in.GetMode(), in.GetOperator(), callerIdentity(ctx), err)
+		return &inboxpb.VoidPlayerInboxItemResponse{ErrorMessage: tip}, nil
+	}
 	if err != nil {
 		logx.WithContext(ctx).Errorf("[player_inbox] VoidItem failed player=%d domain=%d seq=%d mode=%s operator=%q %s: %v",
 			in.GetPlayerId(), in.GetDomain(), in.GetSeq(), in.GetMode(), in.GetOperator(), callerIdentity(ctx), err)

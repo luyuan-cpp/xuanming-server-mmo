@@ -47,6 +47,7 @@ spec:
       labels:
         app: db
         tier: go-svc
+        mmorpg.io/sql-writer: "true"
       # /metrics(2026-10-12 G2b):以前 K8s 上 db 的 ConfigMap 不写 MetricsListenAddr(缺省空串 = 不起端口),
       # 连接池指标 mmorpg_sql_pool_* 与 db_player_store_* 的抓取前提在集群里都不成立。
       # 端口与 ConfigMap 的 MetricsListenAddr ":9160" 一致(9160 与本地 go/db/etc/db.yaml 同值)。
@@ -75,7 +76,7 @@ spec:
         - name: sql-writer-registrar
           image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
           command: ["/bin/sh", "-ec"]
-          args: ["umask 077; mkdir -p /run/sql-writer/runtime/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/db.yaml","-runtime-env-output","/run/sql-writer/runtime/env","-boot-output","/run/sql-writer/grant/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
+          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/db.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
           env:
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
@@ -101,19 +102,28 @@ spec:
             - name: MMORPG_PLAYER_STORE_SECRET_SCENE
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: player-store-scene, optional: false}
+            # 认领前调 data_service 的 GetPlayerRoute 选库,验调用方用这一把。缺了拒绝启动。
+            - name: MMORPG_ROLE_FENCE_SECRET_DB
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-db, optional: false}
           # grant只读，consume留在同PodemptyDir；同Podrestart不得重复消费boot。
             - name: MMORPG_SQL_WRITER_GRANT_FILE
-              value: /run/sql-writer/grant/boot-grant.json
+              value: /run/sql-writer/grant/private/boot-grant.json
             - name: MMORPG_SQL_WRITER_CONSUME_DIR
-              value: /run/sql-writer/consume
+              value: /run/sql-writer/consume/private
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
             - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
               value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
+            # C++ 约定注册写进 NodeInfo 的对外 IP(go/db/player_store_wiring.go advertisedHost):ListenOn 是 0.0.0.0,其它 Pod 连不上它,必须写 Pod 自己的 IP。与 data-service.yaml 同一写法。
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           command: ["/bin/sh", "-ec"]
-          args: ["MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; exec /app/service \"$@\"","--","-f","/app/etc/db.yaml"]
+          args: ["(umask 077; mkdir -p /run/sql-writer/consume/private); if ls /run/sql-writer/consume/private/*.consumed >/dev/null 2>&1; then echo sql writer grant already consumed, the reaper replaces this pod >&2; exit 78; fi; MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/private/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; exec /app/service \"$@\"","--","-f","/app/etc/private/db.yaml"]
           ports:
             - containerPort: 6000
               name: grpc

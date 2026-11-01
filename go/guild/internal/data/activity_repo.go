@@ -1326,6 +1326,10 @@ func (r *ActivityRepo) SettleTrialBattleTx(ctx context.Context, in TrialSettleIn
 	})
 	switch {
 	case err == nil:
+		// 原 launch 已在同一事务终结,match 上的占用随之放开。
+		if original != nil {
+			r.guilds.releaseTrialOccupancy(ctx, original.RequestId, launchPlayers(original))
+		}
 	case errors.Is(err, ErrGuildGone):
 		return TrialSettleResult{Status: TrialSettleGuildGone}, nil
 	case errors.Is(err, errTrialAlreadySettled):
@@ -1714,6 +1718,10 @@ func (r *ActivityRepo) MarkTrialBattlePoison(ctx context.Context, battle TrialBa
 		}
 		return r.lockTrialLaunch(ctx, tx, battle, original, true, nowMs)
 	})
+	// 两条成功路径都在同一事务终结了原 launch,match 上的占用随之放开。
+	if err == nil && original != nil {
+		r.guilds.releaseTrialOccupancy(ctx, original.RequestId, launchPlayers(original))
+	}
 	switch {
 	case err == nil && guildGone:
 		return TrialMarkGuildGone, nil

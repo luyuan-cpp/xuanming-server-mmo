@@ -14,6 +14,7 @@ import (
 	"data_service/internal/store"
 	"data_service/internal/svc"
 	"proto/data_service"
+	"shared/accountdirectory"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
@@ -116,6 +117,30 @@ func (s *DataServiceServer) GetPlayerHomeZone(ctx context.Context, req *data_ser
 		return nil, errMergedZonesUnavailable()
 	}
 	return &data_service.GetPlayerHomeZoneResponse{HomeZoneId: zones.Final(home)}, nil
+}
+
+// GetPlayerRoute 回玩家的落点和原始 home_zone(docs/design/horizontal-scale-logical-db.md §7),强读。
+// 只有 go/db 调,用自己的密钥。没有行或没有落点回 found=false,go/db 据此拒绝认领;读不到回 retry=true,不能伪装成「没有落点」。
+// 只读,没有结局未知,都带内回:读失败回 Unavailable 的话,PublicationAdmission 会把排空证明打成 Hold。
+func (s *DataServiceServer) GetPlayerRoute(ctx context.Context, req *data_service.GetPlayerRouteRequest) (*data_service.GetPlayerRouteResponse, error) {
+	if s.svcCtx.PlayerRouteAuth == nil {
+		return nil, status.Error(codes.Unavailable, "玩家落点读取未就绪")
+	}
+	if _, err := s.svcCtx.PlayerRouteAuth.Verify(ctx, accountdirectory.MethodPrefix+"GetPlayerRoute", req); err != nil {
+		return nil, status.Error(codes.PermissionDenied, "玩家落点调用证明无效")
+	}
+	row, err := s.svcCtx.Router.GetPlayerRoute(ctx, req.GetPlayerId())
+	if err != nil {
+		if ctx.Err() != nil {
+			return &data_service.GetPlayerRouteResponse{Retry: true}, nil
+		}
+		if errors.Is(err, routing.ErrPlacementNotMapped) {
+			return &data_service.GetPlayerRouteResponse{}, nil
+		}
+		logx.Errorf("[DataRoute] GetPlayerRoute player=%d: %v", req.GetPlayerId(), err)
+		return &data_service.GetPlayerRouteResponse{Retry: true}, nil
+	}
+	return &data_service.GetPlayerRouteResponse{Found: true, StorageId: row.StorageID, HomeZone: row.HomeZone}, nil
 }
 
 // BatchGetPlayerHomeZone 与单查刻意不同:**缺席的 id 直接不出现在 map 里**,不是错误。
@@ -272,40 +297,102 @@ func (s *DataServiceServer) ListPlayerSnapshots(ctx context.Context, req *data_s
 
 // ── Batch Recall / Transaction Log Query ──────
 
-func (s *DataServiceServer) BatchRecallItems(ctx context.Context, req *data_service.BatchRecallItemsRequest) (*data_service.BatchRecallItemsResponse, error) {
-	resp, err := logic.BatchRecallItems(ctx, s.svcCtx, &logic.BatchRecallReq{
-		PlayerIDs:    req.PlayerIds,
-		ItemConfigID: req.ItemConfigId,
-		CurrencyType: req.CurrencyType,
-		TimeStart:    req.TimeStart,
-		TimeEnd:      req.TimeEnd,
-		TxTypes:      req.TxTypes,
-		Reason:       req.Reason,
-		Operator:     req.Operator,
-		DryRun:       req.DryRun,
-	})
-	if err != nil {
-		return &data_service.BatchRecallItemsResponse{ErrorCode: resp.ErrorCode}, nil
-	}
+// 四个回收入口全部要 x-admin-token。回收会真改玩家资产,而 data_service 在集群内是无鉴权可达的。
 
+func (s *DataServiceServer) BatchRecallItems(ctx context.Context, req *data_service.BatchRecallItemsRequest) (*data_service.BatchRecallItemsResponse, error) {
+	if err := s.authorizeAdmin(ctx, "BatchRecallItems"); err != nil {
+		return nil, err
+	}
+	resp, err := logic.BatchRecallItems(ctx, s.svcCtx, &logic.BatchRecallReq{
+		PlayerIDs:          req.PlayerIds,
+		Kind:               req.RecallKind,
+		ItemConfigID:       req.ItemConfigId,
+		CurrencyType:       req.CurrencyType,
+		TimeStart:          req.TimeStart,
+		TimeEnd:            req.TimeEnd,
+		TxTypes:            req.TxTypes,
+		Reason:             req.Reason,
+		Operator:           req.Operator,
+		DryRun:             req.DryRun,
+		RequestID:          req.RequestId,
+		ExpectedPlanDigest: req.ExpectedPlanDigest,
+		PeerAddr:           peerAddrOf(ctx),
+	})
+	return batchRecallResponse(ctx, "BatchRecallItems", resp, err), nil
+}
+
+func (s *DataServiceServer) GetRecallBatch(ctx context.Context, req *data_service.GetRecallBatchRequest) (*data_service.BatchRecallItemsResponse, error) {
+	if err := s.authorizeAdmin(ctx, "GetRecallBatch"); err != nil {
+		return nil, err
+	}
+	resp, err := logic.GetRecallBatch(ctx, s.svcCtx, req.GetRequestId())
+	return batchRecallResponse(ctx, "GetRecallBatch", resp, err), nil
+}
+
+func (s *DataServiceServer) CancelRecallBatch(ctx context.Context, req *data_service.CancelRecallBatchRequest) (*data_service.BatchRecallItemsResponse, error) {
+	if err := s.authorizeAdmin(ctx, "CancelRecallBatch"); err != nil {
+		return nil, err
+	}
+	resp, err := logic.CancelRecallBatch(ctx, s.svcCtx, req.GetRequestId(), req.GetOperator(), req.GetReason(), peerAddrOf(ctx))
+	return batchRecallResponse(ctx, "CancelRecallBatch", resp, err), nil
+}
+
+func (s *DataServiceServer) ResolveRecallOp(ctx context.Context, req *data_service.ResolveRecallOpRequest) (*data_service.ResolveRecallOpResponse, error) {
+	if err := s.authorizeAdmin(ctx, "ResolveRecallOp"); err != nil {
+		return nil, err
+	}
+	resolved, code, err := logic.ResolveRecallOp(ctx, s.svcCtx, req.GetOpId(), req.GetFinalStatus(), req.GetOperator(), req.GetReason())
+	if err != nil {
+		logx.Errorf("[BatchRecall] ResolveRecallOp failed: op_id=%d caller=%s: %v", req.GetOpId(), callerIdentity(ctx), err)
+	}
+	return &data_service.ResolveRecallOpResponse{ErrorCode: code, Resolved: resolved}, nil
+}
+
+// batchRecallResponse 把结果翻成响应。失败走带内码,原因只进日志。
+func batchRecallResponse(ctx context.Context, rpcName string, resp *logic.BatchRecallResp, err error) *data_service.BatchRecallItemsResponse {
+	if err != nil {
+		logx.Errorf("[BatchRecall] %s failed: caller=%s: %v", rpcName, callerIdentity(ctx), err)
+	}
 	results := make([]*data_service.RecallResult, 0, len(resp.Results))
 	for _, r := range resp.Results {
 		results = append(results, &data_service.RecallResult{
 			PlayerId:     r.PlayerID,
-			ItemUuid:     r.ItemUUID,
 			ItemConfigId: r.ItemConfigID,
+			CurrencyType: r.CurrencyType,
 			Amount:       r.Amount,
+			OpId:         r.OpID,
+			Status:       r.Status,
+			Taken:        r.Taken,
+			Debt:         r.Debt,
+			Shortfall:    r.Shortfall,
 			Success:      r.Success,
 			ErrorDetail:  r.ErrorDetail,
 		})
 	}
 	return &data_service.BatchRecallItemsResponse{
-		ErrorCode:     resp.ErrorCode,
-		TotalMatched:  resp.TotalMatched,
-		TotalRecalled: resp.TotalRecalled,
-		TotalFailed:   resp.TotalFailed,
-		Results:       results,
-	}, nil
+		ErrorCode:       resp.ErrorCode,
+		TotalMatched:    resp.TotalMatched,
+		TotalRecalled:   resp.TotalRecalled,
+		TotalFailed:     resp.TotalFailed,
+		TotalPending:    resp.TotalPending,
+		Results:         results,
+		PlanDigest:      resp.PlanDigest,
+		RequestId:       resp.RequestID,
+		BatchState:      resp.BatchState,
+		AmountRequested: resp.AmountRequested,
+		AmountTaken:     resp.AmountTaken,
+		AmountDebt:      resp.AmountDebt,
+		AmountShortfall: resp.AmountShortfall,
+		CancelledMs:     resp.CancelledMs,
+	}
+}
+
+// peerAddrOf 是调用方对端地址,唯一不可伪造的部分。进批次行。
+func peerAddrOf(ctx context.Context) string {
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		return p.Addr.String()
+	}
+	return "unknown"
 }
 
 func (s *DataServiceServer) QueryTransactionLog(ctx context.Context, req *data_service.QueryTransactionLogRequest) (*data_service.QueryTransactionLogResponse, error) {

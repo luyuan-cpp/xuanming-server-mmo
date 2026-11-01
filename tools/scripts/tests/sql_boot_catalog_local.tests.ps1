@@ -38,17 +38,19 @@ function Get-FixtureTableRows {
     foreach ($table in $script:GlobalTables) { $rows.Add("mmorpg_global`t$table") }
     $business = [ordered]@{
         mmorpg = @('zone_config', 'zone_whitelist', 'announcement')
+        mmorpg_global_ledger = @('transaction_log', 'player_snapshot', 'rollback_audit_log')
         mmorpg_chat = @('chat_send_authority', 'chat_policy')
-        mmorpg_friend = @('friend', 'friend_request', 'schema_migrations')
+        mmorpg_friend = @('friend', 'friend_request', 'role_fence', 'schema_migrations')
         mmorpg_guild = @('guild', 'guild_member', 'guild_asset_op', 'guild_trial_launch', 'guild_trial_launch_role', 'guild_trial_lobby', 'guild_trial_lobby_slot', 'schema_migrations')
         mmorpg_mail = @('mail_message', 'mail_asset_op', 'schema_migrations')
         mmorpg_match = @('match_authority_ticket', 'match_battle_completion', 'team_launch', 'team_launch_role', 'schema_migrations')
         mmorpg_player_inbox = @('player_inbox_item', 'schema_migrations')
         mmorpg_rank = @('rank_score', 'schema_migrations')
         mmorpg_trade = @('trade_commerce', 'trade_asset_op', 'schema_migrations')
-        zone_1_db = @('player_store', 'user_accounts', 'schema_migrations')
+        zone_1_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
     }
-    foreach ($schema in $business.Keys) { foreach ($table in $business[$schema]) { $rows.Add("$schema`t$table") } }
+    # 每个逻辑库自带一份闸门表。
+    foreach ($schema in $business.Keys) { foreach ($table in @($business[$schema]) + @(Get-LocalSqlBootAuthorityTables)) { $rows.Add("$schema`t$table") } }
     return ($rows -join "`n")
 }
 
@@ -57,7 +59,7 @@ function Get-FixtureSqlReply {
     $script:SqlScripts.Add($Sql)
     $out = ''
     if ($Sql -match 'SELECT VERSION') { $out = "$($script:ServerVersion)`tfixture server`n" }
-    elseif ($Sql -match "table_schema='mmorpg_global'") { $out = (@($script:GlobalTables) -join "`n") }
+    elseif ($Sql -match "table_schema='mmorpg_global(_ledger)?'") { $out = (@($script:GlobalTables) -join "`n") }
     elseif ($Sql -match 'route_meta` WHERE id=1') { $out = "$($script:Generation)`t1`t7`t0`n" }
     elseif ($Sql -match 'SELECT table_schema,table_name') { $out = Get-FixtureTableRows }
     return [pscustomobject]@{ Code = 0; Out = $out; Err = '' }
@@ -86,21 +88,25 @@ function Invoke-FixtureRegister {
     if ($rosterSha -cne $map['-roster-sha256']) { return [pscustomobject]@{ Code = 1; Out = ''; Err = 'roster sha mismatch' } }
     $roster = Get-Content -LiteralPath $map['-roster'] -Raw | ConvertFrom-Json -AsHashtable
     $entry = $roster.entries[0]
-    $request = $entry.request
     $configBytes = [IO.File]::ReadAllBytes((Join-Path $map['-input-root'] $entry.runtimeConfigPath))
     [IO.File]::WriteAllBytes($map['-runtime-config-output'], $configBytes)
     foreach ($variable in @($entry.runtimeEnvironment)) {
         if ($null -eq $variable) { continue }
         [IO.File]::WriteAllBytes((Join-Path $map['-runtime-env-output'] $variable.name), [IO.File]::ReadAllBytes((Join-Path $map['-input-root'] $variable.valuePath)))
     }
-    $grant = [ordered]@{
-        format = 'SQL_WRITER_BOOT_V1'; writerKey = $request.writer.writerKey; instanceId = $request.writer.instanceId; generation = $request.writer.generation
-        authoritySchema = $request.authoritySchema; protectedSchemas = $request.protectedSchemas; sqlPrincipal = $request.writer.sqlPrincipal
-        registrationDigest = [Convert]::ToBase64String([byte[]]::new(32)); deploymentId = $map['-deployment-id']; grantId = $request.requestId
-        grantedMs = $request.writer.registeredMs; permission = 'NORMAL'; physicalAuthoritySha256 = $request.deploymentDigest
-        lockPrimitive = $request.lockPrimitive; lockQualificationSha256 = $request.lockQualificationSha256
+    # 每个逻辑库一份,写成一个集合文件。
+    $grants = [Collections.Generic.List[object]]::new()
+    foreach ($request in @($entry.requests)) {
+        $grants.Add([ordered]@{
+                format = 'SQL_WRITER_BOOT_V1'; writerKey = $request.writer.writerKey; instanceId = $request.writer.instanceId; generation = $request.writer.generation
+                authoritySchema = $request.authoritySchema; protectedSchemas = [string[]]@($request.protectedSchemas); sqlPrincipal = $request.writer.sqlPrincipal
+                registrationDigest = [Convert]::ToBase64String([byte[]]::new(32)); deploymentId = $map['-deployment-id']; grantId = $request.requestId
+                grantedMs = $request.writer.registeredMs; permission = 'NORMAL'; physicalAuthoritySha256 = $request.deploymentDigest
+                lockPrimitive = $request.lockPrimitive; lockQualificationSha256 = $request.lockQualificationSha256
+            })
     }
-    [IO.File]::WriteAllText($map['-boot-output'], (ConvertTo-Json -InputObject $grant -Depth 4 -Compress), [Text.UTF8Encoding]::new($false))
+    $grantSet = [ordered]@{ format = 'SQL_WRITER_BOOT_SET_V1'; grants = [object[]]$grants.ToArray() }
+    [IO.File]::WriteAllText($map['-boot-output'], (ConvertTo-Json -InputObject $grantSet -Depth 6 -Compress), [Text.UTF8Encoding]::new($false))
     $grantSha = (Get-FileHash -LiteralPath $map['-boot-output'] -Algorithm SHA256).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText("$($map['-boot-output']).sha256", "$grantSha`n")
     return [pscustomobject]@{ Code = 0; Out = 'writer_authority command=register confirmed=true'; Err = '' }
@@ -157,12 +163,13 @@ function Get-SqlText { return ($script:SqlScripts -join "`n") }
 function Get-AccountBlock {
     param([string]$User)
     # 账号自己的 CREATE USER 到下一个 CREATE USER 之间就是它的角色文本。
+    # 一个逻辑库第一次出现时,注册和维护账号的授权夹在这中间(按库授权),只留授给这个账号的语句。
     $text = Get-SqlText
     $start = $text.IndexOf("CREATE USER IF NOT EXISTS '$User'@'%'")
     if ($start -lt 0) { throw "no account block for $User" }
     $next = $text.IndexOf('CREATE USER IF NOT EXISTS', $start + 10)
-    if ($next -lt 0) { return $text.Substring($start) }
-    return $text.Substring($start, $next - $start)
+    $block = if ($next -lt 0) { $text.Substring($start) } else { $text.Substring($start, $next - $start) }
+    return (@($block -split "`r?`n" | Where-Object { $_.Contains("'$User'@'%'") }) -join "`n")
 }
 function Get-ConfigValue { param($Summary, [string]$Key, [string]$KeyPath)
     $catalog = Read-MaintenanceJson -Path $Summary.catalog
@@ -170,8 +177,8 @@ function Get-ConfigValue { param($Summary, [string]$Key, [string]$KeyPath)
 }
 function Get-BootUser { param($Summary, [string]$Key)
     $catalog = Read-MaintenanceJson -Path $Summary.catalog
-    $grant = Read-MaintenanceJson -Path $catalog[$Key].grantFile
-    return ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($grant.sqlPrincipal))).Split('@')[0]
+    $grantSet = Read-MaintenanceJson -Path $catalog[$Key].grantFile
+    return ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(@($grantSet.grants)[0].sqlPrincipal))).Split('@')[0]
 }
 
 $savedEnvironment = @{}
@@ -247,7 +254,6 @@ try {
                 @{ Key = 'db'; Path = 'ServerConfig.Database.Hosts'; Value = '127.0.0.1:3306' }
                 @{ Key = 'chat'; Path = 'Backend'; Value = 'mysql' }
                 @{ Key = 'friend'; Path = 'Backend'; Value = 'mysql' }
-                @{ Key = 'friend'; Path = 'AccountRoleSchema'; Value = 'mmorpg_global' }
                 @{ Key = 'friend'; Path = 'GlobalLoginSessions'; Value = 'true' }
                 @{ Key = 'friend'; Path = 'LoginRedis.Addrs'; Value = '["127.0.0.1:6379"]' }
                 @{ Key = 'friend'; Path = 'MySQL.Host'; Value = '127.0.0.1:3306' }
@@ -255,7 +261,6 @@ try {
                 @{ Key = 'guild'; Path = 'MySQL.DataSourceEnv'; Value = 'MMORPG_GUILD_SQL_DSN' }
                 @{ Key = 'mail'; Path = 'Etcd.Key'; Value = '' }
                 @{ Key = 'mail'; Path = 'Backend'; Value = 'mysql' }
-                @{ Key = 'mail'; Path = 'AccountRoleSchema'; Value = 'mmorpg_global' }
                 @{ Key = 'mail'; Path = 'GlobalLoginSessions'; Value = 'true' }
                 @{ Key = 'rank'; Path = 'Etcd.Key'; Value = '' }
                 @{ Key = 'rank'; Path = 'Backend'; Value = 'mysql' }
@@ -265,13 +270,23 @@ try {
                 @{ Key = 'trade'; Path = 'MySQL.Host'; Value = '127.0.0.1:3306' }
                 @{ Key = 'player_inbox'; Path = 'MySQL.Backend'; Value = 'mysql' }
                 @{ Key = 'player_inbox'; Path = 'MySQL.Host'; Value = '127.0.0.1:3306' }
-                @{ Key = 'player_inbox'; Path = 'AccountRoleSchema'; Value = 'mmorpg_global' }
             )) {
             $actual = Get-ConfigValue -Summary $summary -Key $check.Key -KeyPath $check.Path
             Assert-True $actual.Found "$($check.Key) 缺 $($check.Path)"
             Assert-Equal $check.Value $actual.Value "$($check.Key) 的 $($check.Path)"
         }
         Assert-Equal $false (Get-ConfigValue -Summary $summary -Key 'guild' -KeyPath 'MySQL.DataSource').Found 'guild 配置不留连接串原文'
+        # 这些键 go 代码已经不读(设计 §11),生成器不能再往配置里插。
+        foreach ($check in @(
+                @{ Key = 'friend'; Path = 'AccountRoleSchema' }
+                @{ Key = 'mail'; Path = 'AccountRoleSchema' }
+                @{ Key = 'trade'; Path = 'AccountRoleSchema' }
+                @{ Key = 'player_inbox'; Path = 'AccountRoleSchema' }
+                @{ Key = 'match'; Path = 'GlobalMatch.AccountRoleSchema' }
+                @{ Key = 'db'; Path = 'Placement.RouteSchema' }
+            )) {
+            Assert-Equal $false (Get-ConfigValue -Summary $summary -Key $check.Key -KeyPath $check.Path).Found "$($check.Key) 不再有 $($check.Path)"
+        }
         foreach ($key in @('data_service', 'db', 'friend', 'trade', 'player_inbox')) {
             $catalog = Read-MaintenanceJson -Path $summary.catalog
             $text = [IO.File]::ReadAllText($catalog[$key].runtimeConfigFile)
@@ -311,20 +326,24 @@ try {
         Assert-True ([string]::IsNullOrEmpty($env:MMORPG_SQL_OPERATOR_PRINCIPAL)) '父环境没有控制主体'
         $catalog = Read-MaintenanceJson -Path $summary.catalog
         foreach ($key in @($catalog.Keys)) {
-            $grant = Read-MaintenanceJson -Path $catalog[$key].grantFile
-            foreach ($value in @($grant.grantId, $grant.writerKey, $grant.instanceId, $grant.sqlPrincipal)) {
+            $grantSet = Read-MaintenanceJson -Path $catalog[$key].grantFile
+            Assert-Equal 'SQL_WRITER_BOOT_SET_V1' $grantSet.format '授权文件是一个 boot 的写资格集合'
+            $grants = @($grantSet.grants)
+            $identity = $grants[0]
+            foreach ($value in @($identity.writerKey, $identity.instanceId, $identity.sqlPrincipal)) {
                 Assert-True (-not $identities.ContainsKey($value)) '身份和主体逐实例不同'
                 $identities[$value] = $true
             }
-            Assert-Equal $script:Generation $grant.generation 'generation 取库里 route_meta'
-            Assert-Equal 'LOCK_TOUCH' $grant.lockPrimitive 'mysql 档 LOCK_TOUCH'
-            Assert-Equal 'mmorpg_global' $grant.authoritySchema '权威库取 data_service 配置'
-            $schemas = @($grant.protectedSchemas)
-            Assert-True ($schemas -ccontains 'mmorpg') 'gateway 的库在保护集合'
-            Assert-True ($schemas -ccontains 'zone_1_db') 'go/db 的库在保护集合'
-            $sorted = [string[]]@($schemas)
-            [Array]::Sort($sorted, [StringComparer]::Ordinal)
-            Assert-Equal ($sorted -join ',') ($schemas -join ',') 'protected schemas 必须按字节序(validSchemas)'
+            foreach ($grant in $grants) {
+                Assert-True (-not $identities.ContainsKey($grant.grantId)) '每份授权的 id 不同'
+                $identities[$grant.grantId] = $true
+                Assert-Equal $identity.writerKey $grant.writerKey '同一 boot 在各逻辑库身份相同'
+                Assert-Equal $script:Generation $grant.generation 'generation 取库里 route_meta'
+                Assert-Equal 'LOCK_TOUCH' $grant.lockPrimitive 'mysql 档 LOCK_TOUCH'
+                Assert-Equal $grant.authoritySchema (@($grant.protectedSchemas) -join ',') '闸门只保护它所在的逻辑库'
+            }
+            $expected = switch -CaseSensitive ($key) { 'data_service' { 'mmorpg_global,mmorpg_global_ledger,zone_1_db' } 'db' { 'zone_1_db' } 'gateway' { 'mmorpg' } 'login' { 'mmorpg' } default { "mmorpg_$key" } }
+            if ($key -cnotmatch '_[0-9]+$') { Assert-Equal $expected (@($grants | ForEach-Object { $_.authoritySchema }) -join ',') '写资格在实例自己的逻辑库' }
         }
     }
 
@@ -336,29 +355,102 @@ try {
             $block = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key $key)
             $statements = ($block -split "`r?`n" | Where-Object { $_ -notmatch '^\s*--' }) -join "`n"
             Assert-NotMatch $statements '(?i)ALL PRIVILEGES|GRANT OPTION|\bCREATE,|\bALTER\b|ON\s+\S+\.\*' "$key 没有 DDL / 全库授权"
-            Assert-Match $statements 'GRANT UPDATE \(lock_touch\) ON `mmorpg_global`\.`writer_slot`' "$key 有列级锁写"
-            Assert-Match $statements 'GRANT SELECT ON `mmorpg_global`\.`writer_lifecycle_receipt`' "$key 能读原 REGISTER"
+            # 闸门每库一份(设计 §2),账号只在自己要写的库上有这两条。
+            Assert-Match $statements 'GRANT UPDATE \(lock_touch\) ON `[a-z0-9_]+`\.`writer_slot`' "$key 有列级锁写"
+            Assert-Match $statements 'GRANT SELECT ON `[a-z0-9_]+`\.`writer_lifecycle_receipt`' "$key 能读原 REGISTER"
             foreach ($table in $authorityTables) { Assert-NotMatch $statements "GRANT (INSERT|DELETE|SELECT,INSERT)[^;]*``$table``" "$key 不能写权限真值表 $table" }
         }
         $friend = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key 'friend')
         Assert-Match $friend 'GRANT SELECT,INSERT,UPDATE,DELETE ON `mmorpg_friend`\.`friend`' '本库 DML'
         Assert-Match $friend 'GRANT SELECT ON `mmorpg_friend`\.`schema_migrations`' '台账只读:Plan 要看得见,不该写'
-        Assert-Match $friend 'GRANT SELECT,UPDATE ON `mmorpg_global`\.`account_role`' 'FOR UPDATE 在 MySQL 上要 UPDATE'
-        Assert-NotMatch $friend 'mmorpg_guild|mmorpg_match' '不碰别的域'
+        Assert-Match $friend 'GRANT SELECT,INSERT,UPDATE,DELETE ON `mmorpg_friend`\.`role_fence`' '提交点锁本库的护栏副本'
+        Assert-NotMatch $friend 'mmorpg_global|mmorpg_guild|mmorpg_match' '只有自己的库,不跨库'
+        Assert-Match $friend 'GRANT SELECT ON `mmorpg_friend`\.`route_meta`' '闸门表权限在自己的库'
+        Assert-NotMatch $friend 'ON `mmorpg_global`\.`(route_meta|writer_slot|writer_registry|writer_lifecycle_receipt)`' '不再需要全局库闸门表的权限'
         $db = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key 'db')
-        Assert-Match $db 'GRANT SELECT ON `mmorpg_global`\.`player_route`' 'go/db 只读路由表'
+        Assert-NotMatch $db 'mmorpg_global' 'go/db 选库调 GetPlayerRoute,不连目录'
         Assert-Match $db 'GRANT SELECT,INSERT,UPDATE,DELETE ON `zone_1_db`\.`player_store`' 'go/db 写玩家库'
         $dataService = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key 'data_service')
-        Assert-Match $dataService 'GRANT SELECT,UPDATE ON `mmorpg_guild`\.`guild_member`' '角色交易证明的跨域锁读'
+        Assert-NotMatch $dataService 'mmorpg_(guild|mail|match|player_inbox|trade|friend|chat|rank)' '不再跨库碰别的域'
+        Assert-Match $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `zone_1_db`\.`player_store`' '建角、判死、过户证明写存档库的 player_store'
+        Assert-Match $dataService 'GRANT SELECT ON `zone_1_db`\.`player_centre_database`' '空路由启动判据只读'
+        Assert-Match $dataService 'GRANT SELECT ON `zone_1_db`\.`user_accounts`' '空路由启动判据只读'
+        Assert-NotMatch $dataService 'GRANT [^\r\n]*(INSERT|UPDATE|DELETE)[^\r\n]*ON `zone_1_db`\.`(player_centre_database|user_accounts)`' '只读的表不写'
+        Assert-Match $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `mmorpg_global_ledger`\.`transaction_log`' '流水库 DML'
+        Assert-Match $dataService 'GRANT SELECT ON `mmorpg_global_ledger`\.`route_meta`' '流水库的闸门表只读'
         Assert-Match $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `mmorpg_global`\.`player_name`' '全局库 DML'
         Assert-NotMatch $dataService 'GRANT SELECT,INSERT,UPDATE,DELETE ON `mmorpg_global`\.`route_meta`' 'route_meta 不进业务表'
+        Assert-Match $dataService 'GRANT SELECT ON `mmorpg_global`\.`route_meta`' '目录库的闸门表只读'
         $login = Get-AccountBlock -User (Get-BootUser -Summary $summary -Key 'login')
         Assert-NotMatch $login 'mmorpg_friend|zone_1_db' 'login 没有业务表'
         $text = Get-SqlText
         Assert-Match $text "GRANT SELECT,INSERT ON ``mmorpg_global``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号按 operator 模板'
         Assert-Match $text "GRANT SELECT,INSERT,UPDATE ON ``mmorpg_global``\.``sql_writer_drain_run`` TO 'mmorpg_local_maintenance'@'%'" '维护账号按 operator 模板'
+        Assert-Match $text "GRANT SELECT,INSERT ON ``mmorpg_friend``\.``writer_registry`` TO 'mmorpg_local_registrar'@'%'" '注册账号逐逻辑库授权'
+        Assert-Match $text "GRANT SELECT,INSERT,DELETE ON ``mmorpg_global``\.``zone_merged_into`` TO 'mmorpg_local_maintenance'@'%'" '合服工具的映射表只在目录库'
+        Assert-NotMatch $text "ON ``mmorpg_friend``\.``zone_merged_into``" '别的库没有合服映射表'
         Assert-NotMatch $text "TO 'root'@'%'" '本机 schema 身份就是 root,不再给 root 授权'
         Assert-NotMatch $text 'appuser' '不碰旧共享账号'
+    }
+
+    Test-Case '目录分片:K 取 data_service 的配置,库名按片算,写资格恰好是片库、流水库和全部存档库;存档库逐个迁移' {
+        Reset-Fixture
+        $configRoot = Join-Path $fixtureRoot ('shards-' + [guid]::NewGuid().ToString('N'))
+        $null = New-Item -ItemType Directory -Path $configRoot -Force
+        Set-Content -LiteralPath (Join-Path $configRoot 'db.yaml') -Value "ZoneId: 1`n" -NoNewline
+        Set-Content -LiteralPath (Join-Path $configRoot 'data_service.yaml') -Value "Directory:`n  LogicalShards: 4`nSnapshotMySQL:`n  DBName: fixture_global`n" -NoNewline
+        Set-Content -LiteralPath (Join-Path $configRoot 'login.yaml') -Value "Node:`n  RedisClient:`n    Host: 127.0.0.1:6379`n    DB: 0`n" -NoNewline
+        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_1_db,zone_2_db,player_store_1000000_db', 'Process')
+        try {
+            $settings = New-LocalSqlBootSettings -Endpoint '127.0.0.1:3306' -EndpointName '127.0.0.1' -Port 3306 -RootUser 'root' -RootPassword 'fixture-password' -RootPrincipal 'root@%' `
+                -DbConfigPath (Join-Path $configRoot 'db.yaml') -DataServiceConfigPath (Join-Path $configRoot 'data_service.yaml') -LoginConfigPath (Join-Path $configRoot 'login.yaml')
+            Assert-Equal 'fixture_global_00,fixture_global_01,fixture_global_02,fixture_global_03' (@($settings.DirectoryShards) -join ',') '片库名与 dirshard.DirectoryDBNames 同形'
+            Assert-Equal 'fixture_global_00' $settings.DirectorySchema '第 0 片放 zone_merged_into,注册账号也连它'
+            Assert-Equal 'fixture_global_ledger' $settings.LedgerSchema '流水库'
+            Assert-True ('fixture_global' -cnotin @($settings.LogicalDatabases)) 'K>1 时基名不是库'
+            foreach ($database in @('fixture_global_00', 'fixture_global_03', 'fixture_global_ledger', 'zone_2_db', 'player_store_1000000_db')) { Assert-True ($database -cin @($settings.LogicalDatabases)) "$database 要建" }
+
+            $ready = [Collections.Generic.List[string]]::new(); $ready.Add('route_meta')
+            $tables = @{ zone_1_db = $ready; zone_2_db = $ready; player_store_1000000_db = $ready }
+            $expected = 'fixture_global_00,fixture_global_01,fixture_global_02,fixture_global_03,fixture_global_ledger,zone_1_db,zone_2_db,player_store_1000000_db'
+            Assert-Equal $expected (@(Get-LocalSqlBootWriterDatabases -Settings $settings -Service 'data_service' -TablesBySchema $tables) -join ',') '多一份少一份 data_service 都拒启'
+            $tables.Remove('zone_2_db')
+            Assert-Match (Get-ThrownMessage { Get-LocalSqlBootWriterDatabases -Settings $settings -Service 'data_service' -TablesBySchema $tables }) 'zone_2_db has no writer gate tables' '存档库没迁完不注册'
+
+            $manifest = Get-LocalSqlBootGrantManifest -Settings $settings
+            Assert-Equal 'fixture_global_00,fixture_global_01,fixture_global_02,fixture_global_03,fixture_global_ledger' (@($manifest.data_service.Own) -join ',') 'data_service 本库是片库和流水库'
+            Assert-Equal 'zone_1_db,zone_2_db,player_store_1000000_db' (@($manifest.db.Own) -join ',') 'go/db 写全部存档库'
+            foreach ($service in @('chat', 'friend', 'guild', 'mail', 'rank', 'match', 'trade', 'player_inbox', 'gateway')) { Assert-Equal 0 @($manifest[$service].Cross).Count "$service 不跨库" }
+
+            $repo = New-FixtureRepo
+            $null = New-Item -ItemType Directory -Path (Join-Path $repo 'schema-work') -Force
+            Invoke-LocalSqlBootDbMigration -Settings $settings -RepoRoot $repo -WorkDirectory (Join-Path $repo 'schema-work')
+            $migrations = @($script:Calls | Where-Object { $_.Leaf -ceq 'db_migrate.exe' })
+            Assert-Equal 3 $migrations.Count '每个存档库一次'
+            Assert-True ($migrations[0].Arguments -cnotcontains '-storage-id') '本 zone 的库按 ZoneId 推导'
+            Assert-Equal '2' $migrations[1].Arguments[[array]::IndexOf($migrations[1].Arguments, '-storage-id') + 1] 'zone 家族给编号'
+            Assert-Equal '1000000' $migrations[2].Arguments[[array]::IndexOf($migrations[2].Arguments, '-storage-id') + 1] 'player_store 家族给编号'
+            Assert-Match (Get-ThrownMessage { Get-LocalSqlBootStorageId -Database 'mmorpg_guild' }) 'not a canonical player database' '不是存档库名拒绝'
+        } finally {
+            [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $null, 'Process')
+        }
+    }
+
+    Test-Case '全局库状态按库核:都空才跑 -migrate,都齐才跳过,一个空一个有表算半成品' {
+        Reset-Fixture
+        $repo = New-FixtureRepo
+        $settings = Resolve-LocalSqlBootSettings -RepoRoot $repo -Endpoint '127.0.0.1:3306'
+        $settings.Executor = [pscustomobject]@{ Kind = 'client'; Path = 'mysql.exe'; Container = ''; DefaultsFile = 'fixture.cnf' }
+        $script:GlobalTables = @()
+        Assert-Equal 'fresh' (Get-LocalSqlBootGlobalSchemaState -Settings $settings).State '全空'
+        $script:GlobalTables = @($authorityTables)
+        Assert-Equal 'ready' (Get-LocalSqlBootGlobalSchemaState -Settings $settings).State '全齐'
+        $queried = @($script:SqlScripts | Where-Object { $_ -match "table_schema='mmorpg_global_ledger'" })
+        Assert-True ($queried.Count -gt 0) '流水库也要核'
+        $script:GlobalTables = @('route_meta')
+        $partial = Get-LocalSqlBootGlobalSchemaState -Settings $settings
+        Assert-Equal 'partial' $partial.State '缺闸门表'
+        Assert-True (@($partial.Missing) -ccontains 'mmorpg_global_ledger.writer_slot') '点名哪个库缺哪张表'
     }
 
     Test-Case '只授已存在的表:GRANT 表级不存在的表 MySQL 直接报错' {
@@ -447,7 +539,7 @@ try {
         $firstCatalog = Read-MaintenanceJson -Path $first.catalog
         $firstDb = Get-BootUser -Summary $first -Key 'db'
         $firstChat = Get-BootUser -Summary $first -Key 'chat'
-        $firstGrant = (Read-MaintenanceJson -Path $firstCatalog['chat'].grantFile).grantId
+        $firstGrant = @((Read-MaintenanceJson -Path $firstCatalog['chat'].grantFile).grants)[0].grantId
         $firstBoot = $first.bootId
         $script:SqlScripts.Clear()
         $script:RunningKeys = @('db')
@@ -456,7 +548,7 @@ try {
         Assert-True (-not $secondCatalog.Contains('db')) '运行中的实例 start 会 skip,不发新授权'
         Assert-Match ($second.running -join ',') '^db$' '摘要记下运行中的实例'
         Assert-True ((Get-BootUser -Summary $second -Key 'chat') -cne $firstChat) 'sql_principal 永久唯一,每次换新账号'
-        Assert-True ((Read-MaintenanceJson -Path $secondCatalog['chat'].grantFile).grantId -cne $firstGrant) 'grant 全新'
+        Assert-True (@((Read-MaintenanceJson -Path $secondCatalog['chat'].grantFile).grants)[0].grantId -cne $firstGrant) 'grant 全新'
         $text = Get-SqlText
         Assert-Match $text "DROP USER IF EXISTS '$firstChat'@'%'" '已停实例的账号删掉'
         Assert-NotMatch $text "DROP USER IF EXISTS '$firstDb'@'%'" '运行中实例的账号留着,它的连接池还要重连'

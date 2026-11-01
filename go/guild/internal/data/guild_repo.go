@@ -9,6 +9,7 @@ import (
 	"math"
 	"shared/drainproof"
 	"shared/placement"
+	"shared/rolefence"
 	"slices"
 	"strconv"
 	"strings"
@@ -129,8 +130,9 @@ type GuildRepo struct {
 	db               *sql.DB
 	defaultTTL       time.Duration
 	cacheLoadMu      sync.Mutex
-	roleAuthority    string
-	matchAuthority   string
+	// fence 是角色护栏,ConfigureRoleFence 启动时写一次;occupancy 是 match 上的历练占用,BindTrialOccupancy 启动时写一次。之后都只读。
+	fence     *rolefence.Guard
+	occupancy TrialOccupancy
 	// zones 是合服映射缓存,BindMergedZones 在 repo 交给任何调用方之前写一次,之后只读。
 	zones *placement.MergedZoneCache
 }

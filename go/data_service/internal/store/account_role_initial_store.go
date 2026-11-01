@@ -1,13 +1,12 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
 
 	base "proto/common/base"
@@ -54,9 +53,11 @@ func initialPlayerStoreRows(role *base.AccountSimplePlayer) ([]initialStoreRow, 
 	}, nil
 }
 
-// insertInitialPlayerStoreRows 在建角事务里严格插入初始行。schema 只由权威落点产生。
-// 严格 INSERT:旧行或并发撞键整批回滚,不能 REPLACE / ODKU。
-func insertInitialPlayerStoreRows(ctx context.Context, tx *sql.Tx, schema string, role *base.AccountSimplePlayer) error {
+// upsertInitialPlayerStoreRows 在存档库的一个事务里写初始行,可以重放:行已在且就是这些初始行算成功。
+//
+// 目录提交之前没人读得到这些行(认领要先有入场登记,登记要先有角色行),所以重放时看到的只可能是上一次尝试写的。
+// 看到别的内容就是撞上了不属于这次建角的行,回 ErrConflict,事务回滚,旧行一个字节不改。
+func upsertInitialPlayerStoreRows(ctx context.Context, tx *sql.Tx, role *base.AccountSimplePlayer) error {
 	rows, err := initialPlayerStoreRows(role)
 	if err != nil {
 		return err
@@ -69,19 +70,33 @@ func insertInitialPlayerStoreRows(ctx context.Context, tx *sql.Tx, schema string
 		args = append(args, role.PlayerId, int32(row.kind), accountdirectory.InitialOwnerEpoch, accountdirectory.InitialSaveSeq,
 			persistschema.Gen, []byte{}, row.released, row.payload)
 	}
-	query := "INSERT INTO `" + schema + "`.`player_store` (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES " +
-		strings.Join(placeholders, ",")
-	result, err := tx.ExecContext(ctx, query, args...)
-	if err != nil {
-		var duplicate *mysql.MySQLError
-		if errors.As(err, &duplicate) && duplicate.Number == 1062 {
-			return accountdirectory.ErrConflict
-		}
-		return fmt.Errorf("提交玩家初始存档行: %w", err)
+	query := "INSERT INTO player_store (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES " +
+		strings.Join(placeholders, ",") + " ON DUPLICATE KEY UPDATE player_id=player_id"
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		return err
 	}
-	count, err := result.RowsAffected()
-	if err != nil || count != int64(len(rows)) {
-		return errors.New("玩家初始存档行未严格插入")
+	existing, err := readPlayerStoreProofRows(ctx, tx, role.PlayerId, true)
+	if err != nil {
+		return err
+	}
+	if !sameInitialRows(existing, rows) {
+		return accountdirectory.ErrConflict
 	}
 	return nil
+}
+
+// sameInitialRows 判库里的行是不是这些初始行。schema_gen 只要不超前:上一次尝试可能是旧二进制写的,内容相同就是同一批。
+func sameInitialRows(existing []playerStoreProofRow, want []initialStoreRow) bool {
+	if len(existing) != len(want) {
+		return false
+	}
+	// 两边都按 kind 升序:readPlayerStoreProofRows 按 kind 排序,initialPlayerStoreRows 的 kind 就是升序。
+	for i, row := range want {
+		got := existing[i]
+		if got.kind != int32(row.kind) || got.ownerEpoch != accountdirectory.InitialOwnerEpoch || got.saveSeq != accountdirectory.InitialSaveSeq ||
+			uint64(got.schemaGen) > uint64(persistschema.Gen) || got.released != row.released || len(got.holderInstance) != 0 || !bytes.Equal(got.bytes, row.payload) {
+			return false
+		}
+	}
+	return true
 }

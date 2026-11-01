@@ -179,11 +179,12 @@ var streamLabels = [...]string{
 	"trade_debit",
 	"trade_credit",
 	"system_credit",
+	"gm_recall",
 }
 
 // 编译期断言:表长必须正好覆盖到最后一个流。新增流忘了加 label 时这行报错,
 // 而不是等到线上看见一堆 "other"。
-var _ = [1]struct{}{}[len(streamLabels)-1-int(assetpb.AssetOpStream_ASSET_OP_STREAM_SYSTEM_CREDIT)]
+var _ = [1]struct{}{}[len(streamLabels)-1-int(assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL)]
 
 // StreamLabel 把流号转成低基数 label;越界值统一归到 "other",绝不把原始数值放进 label。
 func StreamLabel(s assetpb.AssetOpStream) string {

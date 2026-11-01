@@ -6,7 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"shared/rolefence"
+
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/discov"
 )
 
 // minimalYaml 是一份**没有 Schema / Kafka 段**的配置:线上 ConfigMap 与本地脚本都可能
@@ -31,21 +34,51 @@ func TestAccountDirectoryRoleTradeSQLProofRequiresExplicitConfig(t *testing.T) {
 	}
 }
 
-func TestAccountDirectoryPendingSchemasAreExplicitAndMatchIsParsed(t *testing.T) {
-	absent := loadYaml(t, minimalYaml).AccountDirectory
-	if absent.RoleTradeTradeSchema != "" || absent.RoleTradeGuildSchema != "" || absent.RoleTradeMailSchema != "" || absent.RoleTradeMatchSchema != "" || absent.RoleTradeInboxSchema != "" {
-		t.Fatal("跨域挂起schema缺失不能从DSN或其它服务配置补齐")
-	}
-	explicit := loadYaml(t, minimalYaml+"\nAccountDirectory:\n  RoleTradeTradeSchema: peer_trade\n  RoleTradeGuildSchema: peer_guild\n  RoleTradeMailSchema: peer_mail\n  RoleTradeMatchSchema: peer_match\n  RoleTradeInboxSchema: peer_inbox\n").AccountDirectory
-	if explicit.RoleTradeTradeSchema != "peer_trade" || explicit.RoleTradeGuildSchema != "peer_guild" || explicit.RoleTradeMailSchema != "peer_mail" || explicit.RoleTradeMatchSchema != "peer_match" || explicit.RoleTradeInboxSchema != "peer_inbox" {
-		t.Fatal("显式trade/guild/mail/match权威schema必须完整保留")
+// 参与者少配一个就是漏冻结,所以缺配置、缺一个、多一个、地址不明确都不合法,不装配协调者。
+func TestRoleFenceParticipantsMustMatchExactly(t *testing.T) {
+	if err := loadYaml(t, minimalYaml).RoleFence.Validate(); err == nil {
+		t.Fatal("没配参与者不能算合法")
 	}
 	var shipped Config
 	if err := conf.Load("../../etc/data_service.yaml", &shipped); err != nil {
 		t.Fatal(err)
 	}
-	if shipped.AccountDirectory.RoleTradeMatchSchema != "mmorpg_match" || shipped.AccountDirectory.RoleTradeInboxSchema != "mmorpg_player_inbox" {
-		t.Fatal("仓库配置必须显式登记匹配挂起权威schema")
+	if err := shipped.RoleFence.Validate(); err != nil {
+		t.Fatalf("仓库配置必须列全参与者: %v", err)
+	}
+	full := func() []RoleFenceParticipantConfig {
+		var out []RoleFenceParticipantConfig
+		for _, name := range rolefence.Participants {
+			out = append(out, RoleFenceParticipantConfig{Name: name, Endpoints: []string{"127.0.0.1:1"}})
+		}
+		return out
+	}
+	if err := (RoleFenceConfig{Participants: full()}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	withEtcd := full()
+	withEtcd[0] = RoleFenceParticipantConfig{Name: withEtcd[0].Name, Etcd: discov.EtcdConf{Hosts: []string{"127.0.0.1:2379"}, Key: "guild.rpc"}}
+	if err := (RoleFenceConfig{Participants: withEtcd}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func([]RoleFenceParticipantConfig) []RoleFenceParticipantConfig{
+		"缺一个": func(p []RoleFenceParticipantConfig) []RoleFenceParticipantConfig { return p[1:] },
+		"重复":  func(p []RoleFenceParticipantConfig) []RoleFenceParticipantConfig { return append(p, p[0]) },
+		"多一个": func(p []RoleFenceParticipantConfig) []RoleFenceParticipantConfig {
+			return append(p, RoleFenceParticipantConfig{Name: "chat", Endpoints: []string{"127.0.0.1:1"}})
+		},
+		"没地址": func(p []RoleFenceParticipantConfig) []RoleFenceParticipantConfig {
+			p[0].Endpoints = nil
+			return p
+		},
+		"两种地址": func(p []RoleFenceParticipantConfig) []RoleFenceParticipantConfig {
+			p[0].Etcd = discov.EtcdConf{Hosts: []string{"127.0.0.1:2379"}, Key: "guild.rpc"}
+			return p
+		},
+	} {
+		if err := (RoleFenceConfig{Participants: mutate(full())}).Validate(); err == nil {
+			t.Fatalf("%s 不能算合法", name)
+		}
 	}
 }
 
@@ -684,5 +717,47 @@ func TestShippedYamlKafkaConsumerKnobsAreRowByRowAndValid(t *testing.T) {
 	}
 	if err := k.Normalize().ValidateConsumers(c.SnapshotMySQL.MaxOpenConn); err != nil {
 		t.Fatalf("shipped Kafka consumer knobs must validate: %v", err)
+	}
+}
+
+func TestValidateRecall_OnlyRequiresRedisWhenEnabled(t *testing.T) {
+	var off Config
+	if err := off.ValidateRecall(); err != nil {
+		t.Fatalf("关着不该要求配置: %v", err)
+	}
+	on := Config{Recall: RecallConfig{Enabled: true}}
+	if err := on.ValidateRecall(); err == nil {
+		t.Fatal("开着缺 SharedRedis.Host 要拒绝")
+	}
+	on.SharedRedis.Host = "127.0.0.1:6379"
+	if err := on.ValidateRecall(); err != nil {
+		t.Fatalf("配置齐全: %v", err)
+	}
+	on.SharedRedis.PoolSize = -1
+	if err := on.ValidateRecall(); err == nil {
+		t.Fatal("负的连接池要拒绝")
+	}
+}
+
+func TestEffectivePlayerRedis_FallsBackToSharedRedis(t *testing.T) {
+	c := Config{SharedRedis: SharedRedisConf{Host: "redis:6379", Password: "p", PoolSize: 8}}
+	got := c.EffectivePlayerRedis()
+	if len(got.Addrs) != 1 || got.Addrs[0] != "redis:6379" || got.Password != "p" {
+		t.Fatalf("没写 Addrs 要指向 SharedRedis: %+v", got)
+	}
+	c.PlayerRedis.Addrs = []string{"player:7000"}
+	if got := c.EffectivePlayerRedis(); len(got.Addrs) != 1 || got.Addrs[0] != "player:7000" {
+		t.Fatalf("写了 Addrs 用它: %+v", got)
+	}
+}
+
+// 新增永久身份要登记,否则发号被拒,回收冻结不了计划。
+func TestDefaultIdSegmentTagsCarryRecallOps(t *testing.T) {
+	found := false
+	for _, tag := range DefaultIdSegmentTags {
+		found = found || tag == "gm_recall_op"
+	}
+	if !found {
+		t.Fatal("DefaultIdSegmentTags 缺 gm_recall_op")
 	}
 }

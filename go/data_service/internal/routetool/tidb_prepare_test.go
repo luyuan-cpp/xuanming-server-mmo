@@ -110,3 +110,9 @@ func TestRouteTiDBPrepareOutputAndExitCodes(t *testing.T) {
 		assert.Equal(t, ExitFailed, TiDBPrepareExitCode(rep, err))
 	})
 }
+
+// 目录分片时每步带上片库名,K=1 时和没分片一样只有语句。
+func TestTiDBPrepareStepLabel(t *testing.T) {
+	assert.Equal(t, "SPLIT TABLE t BY (1, 0)", stepLabel(store.RouteTiDBPrepareStep{SQL: "SPLIT TABLE t BY (1, 0)"}))
+	assert.Equal(t, "g_03: SPLIT TABLE t BY (1, 0)", stepLabel(store.RouteTiDBPrepareStep{Schema: "g_03", SQL: "SPLIT TABLE t BY (1, 0)"}))
+}

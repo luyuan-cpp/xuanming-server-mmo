@@ -22,10 +22,12 @@ import (
 
 	"shared/assetop"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/idsegment"
 	"shared/mergedzone"
 	"shared/placement"
+	"shared/rolefence"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
@@ -39,6 +41,9 @@ import (
 // ListingIDBizTag 是发号器里 listing_id 的业务键。必须登记进 data_service 的 Tags
 // (代码默认清单、etc/data_service.yaml、K8s ConfigMap 三处),否则生产 AllowAutoSeed=false 下发号被拒。
 const ListingIDBizTag = "trade_listing"
+
+// RoleFenceCaller 是 trade 读角色护栏权威状态时的调用方身份,密钥在 rolefence.SecretEnv(RoleFenceCaller)。
+const RoleFenceCaller = "trade"
 
 const (
 	// etcdDialTimeout 与 chat 同值。
@@ -123,7 +128,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic("trade: failed to create etcd client: " + err.Error())
 	}
 
-	db, err := openMySQL(c.MySQL, authoritysql.Writer(writer))
+	dbPlacement, err := dbplacement.Start(context.Background(), c.MySQL.DbPlacement)
+	if err != nil {
+		panic(fmt.Errorf("trade: %w", err))
+	}
+	db, err := openMySQL(c.MySQL, authoritysql.Writer(writer), dbPlacement.OpenOptions()...)
 	if err != nil {
 		panic(fmt.Errorf("trade: %w", err))
 	}
@@ -188,9 +197,13 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		commerceEngine = &commerce.Engine{Repo: &data.CommerceRepo{DB: db, Ops: assets.Ops}, IDs: seg, OpIDs: assets.OpIDs,
 			Policy:  commerce.Policy{Items: c.Commerce.ItemConfigs, ItemTitles: titles, Pets: c.Commerce.PetConfigs, Currencies: c.Commerce.CurrencyTypes, AllowInstances: c.Commerce.AllowInstances},
 			Applier: assets.Caller, Ledger: persistedLedger(dsClient), Now: time.Now}
-		roles, roleErr := commerce.NewRoleAuthority(c.AccountRoleSchema)
+		reader, roleErr := rolefence.NewDirectoryReader(dsClient, RoleFenceCaller, os.Getenv(rolefence.SecretEnv(RoleFenceCaller)))
 		if roleErr != nil {
-			panic("交易角色提交互锁必须显式配置同事务域全局目录")
+			panic(fmt.Errorf("交易角色护栏的调用方密钥 %s 不可用: %w", rolefence.SecretEnv(RoleFenceCaller), roleErr))
+		}
+		roles, roleErr := commerce.NewRoleAuthority(db, reader)
+		if roleErr != nil {
+			panic(fmt.Errorf("交易角色护栏装配失败: %w", roleErr))
 		}
 		commerceEngine.Roles = roles
 		assets.Commerce = commerceEngine
@@ -306,13 +319,20 @@ func OpenSchemaMySQL(c config.MySQLConf) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return openMySQL(c, permission)
-}
-
-func openMySQL(c config.MySQLConf, permission authoritysql.Permission) (*sql.DB, error) {
+	// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	return authoritysql.Open(ctx, BuildDSN(c), c.DBName, authoritysql.Backend(c.Backend), c.MaxOpenConn, permission)
+	options, err := dbplacement.ForMigration(ctx, c.DbPlacement, c.DBName)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(c, permission, options...)
+}
+
+func openMySQL(c config.MySQLConf, permission authoritysql.Permission, options ...authoritysql.OpenOption) (*sql.DB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
+	defer cancel()
+	return authoritysql.Open(ctx, BuildDSN(c), c.DBName, authoritysql.Backend(c.Backend), c.MaxOpenConn, permission, options...)
 }
 
 // NewListingIDSegment 按 IdSegment 配置建 listing_id 号段客户端。Enabled=false 或客户端为 nil 直接报错:

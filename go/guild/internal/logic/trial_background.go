@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"sync"
 	"time"
@@ -428,7 +429,7 @@ func (l *GuildLogic) trialSweepRound(ctx context.Context, d *ActivityDeps, c Tri
 			}
 		case row.CreatedMs < nowMs-abandonMs:
 			expired, err := d.trials.ExpireTrialBattle(ctx, row.BattleID, row.GuildID, nowMs)
-			if err != nil && c.RelayAdmission != nil {
+			if err != nil && c.RelayAdmission != nil && !authoritysql.IsWriterFrozen(err) {
 				c.RelayAdmission.Hold()
 			}
 			switch {
@@ -460,8 +461,9 @@ func (l *GuildLogic) trialSweepRound(ctx context.Context, d *ActivityDeps, c Tri
 // 把这一局标成 POISON —— 否则它会永远停在候选里(有记录就不会被判过期)。
 // 结算回暂时性错误时什么都不做,下一轮再来。
 func (l *GuildLogic) recoverTrialResult(ctx context.Context, d *ActivityDeps, row data.OverdueTrialBattle, payload []byte, nowMs uint64, admissions ...*drainproof.Session) bool {
-	hold := func() {
-		if len(admissions) == 1 && admissions[0] != nil {
+	// 闸门冻结是确定没写,这一局下一轮再来,不算结局未知。
+	hold := func(err error) {
+		if len(admissions) == 1 && admissions[0] != nil && !authoritysql.IsWriterFrozen(err) {
 			admissions[0].Hold()
 		}
 	}
@@ -477,7 +479,7 @@ func (l *GuildLogic) recoverTrialResult(ctx context.Context, d *ActivityDeps, ro
 	}
 	if cause != "" {
 		if _, err := l.poisonTrialBattle(ctx, d, key, 0, nowMs, cause); err != nil {
-			hold()
+			hold(err)
 			if ctx.Err() == nil {
 				logx.Errorf("[GuildTrial] sweeper could not mark battle %d as poison, will retry next round: %v", row.BattleID, err)
 			}
@@ -487,7 +489,7 @@ func (l *GuildLogic) recoverTrialResult(ctx context.Context, d *ActivityDeps, ro
 	}
 	outcome, err := l.SettleTrialResult(ctx, ev)
 	if err != nil {
-		hold()
+		hold(err)
 		if ctx.Err() == nil {
 			logx.Errorf("[GuildTrial] sweeper could not settle battle %d of guild %d from its result record, will retry next round: %v",
 				row.BattleID, row.GuildID, err)

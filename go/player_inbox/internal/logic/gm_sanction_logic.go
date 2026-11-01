@@ -13,6 +13,7 @@ import (
 
 	base "proto/common/base"
 	inboxpb "proto/player_inbox"
+	"shared/rolefence"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
@@ -46,7 +47,7 @@ type GmSanctionDeps struct {
 //  4. 返回 seq / created / state。DUPLICATE 时 created=false,返回原 seq 与当前状态。
 //
 // 载荷用确定性序列化:内容摘要包含载荷,同一请求的重试必须得到同一份字节,否则会被判成幂等冲突。
-// 业务拒绝 in-band 回 tip;库 / data_service 故障回 kPlayerInboxStoreUnavailable(fault)。
+// 业务拒绝 in-band 回 tip;库 / data_service 故障回 kPlayerInboxStoreUnavailable(fault)。角色身份这一次核不了不是故障,回 kPlayerInboxStaleOwner。
 func GmSanctionPlayer(ctx context.Context, deps GmSanctionDeps, in *inboxpb.GmSanctionPlayerRequest, peerAddr string) *inboxpb.GmSanctionPlayerResponse {
 	reject := func(code uint32) *inboxpb.GmSanctionPlayerResponse {
 		return &inboxpb.GmSanctionPlayerResponse{ErrorMessage: &base.TipInfoMessage{Id: code}}
@@ -111,6 +112,12 @@ func GmSanctionPlayer(ctx context.Context, deps GmSanctionDeps, in *inboxpb.GmSa
 		Note: in.GetReason(),
 	}, auditFn)
 	log := logx.WithContext(ctx)
+	if errors.Is(err, inbox.ErrOriginalRole) || errors.Is(err, rolefence.ErrUnavailable) {
+		// 角色冻结、换了主,或者自愈读不到目录:事务已回滚,没有结局未知。回故障 tip 的话排空证明会被打成 Hold(规格 §3.4)。GM 稍后重试,同一 request_id 幂等。
+		log.Infof("[player_inbox] GmSanctionPlayer role not verified player=%d request_id=%d type=%s operator=%q peer=%s: %v",
+			in.GetPlayerId(), in.GetRequestId(), inbox.TypeLabel(msgType), in.GetOperator(), peerAddr, err)
+		return reject(constants.ErrStaleOwner)
+	}
 	if err != nil {
 		log.Errorf("[player_inbox] GmSanctionPlayer failed player=%d request_id=%d type=%s operator=%q peer=%s: %v",
 			in.GetPlayerId(), in.GetRequestId(), inbox.TypeLabel(msgType), in.GetOperator(), peerAddr, err)

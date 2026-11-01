@@ -28,8 +28,9 @@ func TestDBStatsOfReportsEachStorePool(t *testing.T) {
 	}{
 		{name: "snapshot", store: &SnapshotStore{db: pool(11)}, wantOK: true, wantMaxOpen: 11},
 		{name: "transaction_log", store: &TransactionLogStore{db: pool(12)}, wantOK: true, wantMaxOpen: 12},
-		{name: "player_name", store: &PlayerNameStore{db: pool(14)}, wantOK: true, wantMaxOpen: 14},
-		{name: "player_route", store: &RouteStore{db: pool(15)}, wantOK: true, wantMaxOpen: 15},
+		{name: "player_name", store: &PlayerNameStore{pools: singleShardPools(pool(14), "")}, wantOK: true, wantMaxOpen: 14},
+		{name: "player_route", store: &RouteStore{pools: singleShardPools(pool(15), "")}, wantOK: true, wantMaxOpen: 15},
+		{name: "两片的池按总数报", store: &PlayerNameStore{pools: &shardPools{k: 2, names: []string{"a", "b"}, pools: []*sql.DB{pool(6), pool(7)}}}, wantOK: true, wantMaxOpen: 13},
 		{name: "nil snapshot pointer", store: (*SnapshotStore)(nil)},
 		{name: "nil route pointer", store: (*RouteStore)(nil)},
 		{name: "store without a pool", store: &TransactionLogStore{}},

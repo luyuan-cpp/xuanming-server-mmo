@@ -35,6 +35,23 @@ static Guid PrimaryWrittenGuid(const std::vector<Guid> &writtenGuids)
 	return writtenGuids.empty() ? kInvalidGuid : writtenGuids.front();
 }
 
+// 发放的流水。不可叠加物品一件一条:item_uuid 是回收和追溯的键,只记第一件的话其余几件无从点名,回收也动不了它们。
+// 可叠加物品的 guid 会随并堆变,记一条总量。
+static void LogItemsCreated(entt::entity playerEntity, const std::vector<Guid> &writtenGuids, uint32_t configId, uint32_t count,
+	TransactionType txType, uint64_t correlationId = 0, const std::string &extra = {})
+{
+	const auto *row = ItemTableManager::Instance().FindByIdSilent(configId).first;
+	if (row != nullptr && row->max_stack_size() == 1 && writtenGuids.size() == count)
+	{
+		for (const auto guid : writtenGuids)
+		{
+			TransactionLogSystem::LogItemCreate(playerEntity, guid, configId, 1, txType, correlationId, extra);
+		}
+		return;
+	}
+	TransactionLogSystem::LogItemCreate(playerEntity, PrimaryWrittenGuid(writtenGuids), configId, count, txType, correlationId, extra);
+}
+
 // 为腾位而被挤掉的实例:逐条落 LogItemDestroy。
 //
 // 与 MergeAndCompact 那条路径同一个理由 —— `item_uuid` 是 transaction_log 做外挂
@@ -125,11 +142,7 @@ uint32_t BagService::AddItem(
 	// ── Post-success: transaction log + anomaly detection ────────────────
 	if (result == kSuccess)
 	{
-		TransactionLogSystem::LogItemCreate(
-			playerEntity, PrimaryWrittenGuid(writtenGuids),
-			param.itemPBComp.config_id(),
-			param.itemPBComp.size(),
-			TX_SYSTEM_GRANT);
+		LogItemsCreated(playerEntity, writtenGuids, param.itemPBComp.config_id(), param.itemPBComp.size(), TX_SYSTEM_GRANT);
 
 		AnomalyDetector::RecordItemGain(
 			playerEntity, param.itemPBComp.config_id(),
@@ -178,8 +191,7 @@ uint32_t BagService::AddItems(
     for (std::size_t i = 0; i < ordered.size(); ++i)
     {
         const auto &[configId, count] = ordered[i];
-        TransactionLogSystem::LogItemCreate(
-            playerEntity, PrimaryWrittenGuid(written[i]), configId, count, txType, correlationId, extra);
+        LogItemsCreated(playerEntity, written[i], configId, count, txType, correlationId, extra);
         AnomalyDetector::RecordItemGain(playerEntity, configId, count);
     }
 
@@ -294,8 +306,7 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     const auto ordered = SortedByConfigId(gained);
     for (std::size_t i = 0; i < ordered.size(); ++i) {
         const auto& [config, count] = ordered[i];
-        TransactionLogSystem::LogItemCreate(playerEntity, PrimaryWrittenGuid(written[i]), config, count,
-            TX_ITEM_AWARD, correlationId, extra);
+        LogItemsCreated(playerEntity, written[i], config, count, TX_ITEM_AWARD, correlationId, extra);
         AnomalyDetector::RecordItemGain(playerEntity, config, count);
     }
     return kSuccess;
@@ -353,8 +364,7 @@ uint32_t BagService::AddItems(
     for (std::size_t i = 0; i < itemsToAdd.size(); ++i)
     {
         const auto &item = itemsToAdd[i].itemPBComp;
-        TransactionLogSystem::LogItemCreate(
-            playerEntity, PrimaryWrittenGuid(written[i]), item.config_id(), item.size(), txType);
+        LogItemsCreated(playerEntity, written[i], item.config_id(), item.size(), txType);
         AnomalyDetector::RecordItemGain(playerEntity, item.config_id(), item.size());
     }
 

@@ -66,8 +66,21 @@ Test-Case '部署脚本只在非 dev 档起第二套 etcd,并把两套地址写�
     Assert-Match -Text $text -Pattern "(?s)if \(\`$ReleaseProfile -ne 'dev'\) \{\s*\`$infraManifests \+= `"etcd-id-secondary\.yaml`"" -Because 'dev 档两份记录放同一套 etcd,不多起 3 个 Pod'
     Assert-Match -Text $text -Pattern "(?s)if \(\`$ReleaseProfile -ne 'dev'\) \{\s*Wait-ForStatefulSetReady -Namespace \`$InfraNamespace -StatefulSetName `"etcd-id-secondary`"" -Because '-WaitReady 要等它成 quorum'
     Assert-Match -Text $text -Pattern "\`$dataServiceModeLine = if \(\`$SvcName -eq 'data-service' -and \`$ReleaseProfile -eq 'dev'\) \{ 'Mode: dev' \}" -Because '只有 dev 档能把两份记录放同一套 etcd,staging、prod 不写 Mode'
-    Assert-Match -Text $text -Pattern 'PrimaryEtcd: \["etcd\.\$\{InfraNamespace\}:2379"\]' -Because '主记录放现有 etcd'
-    Assert-Match -Text $text -Pattern 'SecondaryEtcd: \["etcd-id-secondary\.\$\{InfraNamespace\}:2379"\]' -Because '副记录放独立 etcd,漏了生产发号器装配失败'
+    # 脚本里引号带 PowerShell 的反引号转义。
+    Assert-Match -Text $text -Pattern 'PrimaryEtcd: \[`?"etcd\.\$\{InfraNamespace\}:2379`?"\]' -Because '主记录放现有 etcd'
+    Assert-Match -Text $text -Pattern 'SecondaryEtcd: \[`?"etcd-id-secondary\.\$\{InfraNamespace\}:2379`?"\]' -Because '副记录放独立 etcd,漏了生产发号器装配失败'
+}
+
+Test-Case '-Region 注入 data-service 主容器,初始化命令用私有目录里生效的配置' {
+    $deploy = Read-RepoText $script:DeployPath
+    Assert-Match -Text $deploy -Pattern 'MMORPG_ID_ISSUER_EXPECTED_REGION = \[string\]\(Resolve-IdIssuerRegion\)' -Because '值来自 -Region,所有档位都写'
+    Assert-Match -Text $deploy -Pattern "\`$SvcName -eq 'data-service'\) \{\s+if \(\`$Stage -ne 'Prepare'\) \{ Assert-DataServiceRosterSchemas -Namespace \`$Namespace \}\s+\`$manifestContent = Add-IdIssuerExpectedRegionEnv" -Because '只给 data-service'
+    Assert-NotMatch -Text (Read-RepoText (Join-Path $script:RepoRoot 'deploy/k8s/manifests/go-svc/data-service.yaml')) -Pattern 'MMORPG_ID_ISSUER_EXPECTED_REGION' -Because '由脚本注入,清单手写就是第二份真相'
+    foreach ($runbook in @('docs/ops/id-issuer-runbook.md', 'docs/ops/open-new-region-runbook.md', 'docs/ops/k8s-open-server-runbook.md')) {
+        $text = Read-RepoText (Join-Path $script:RepoRoot $runbook)
+        Assert-Match -Text $text -Pattern '/app/etc/private/data_service\.yaml -id-issuer-init' -Because "$runbook 的命令要读写者启动目录选中的那份配置"
+        Assert-Match -Text $text -Pattern '就绪之后、放流量之前' -Because "$runbook 写明什么时候做"
+    }
 }
 
 Test-Case 'biz_tag 清单在代码默认值、服务 yaml、K8s ConfigMap 三处一致' {

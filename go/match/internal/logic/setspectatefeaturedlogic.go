@@ -38,8 +38,7 @@ func NewSetSpectateFeaturedLogic(ctx context.Context, svcCtx *svc.ServiceContext
 func (l *SetSpectateFeaturedLogic) SetSpectateFeatured(in *pb.SetSpectateFeaturedRequest) (*pb.SetSpectateFeaturedResponse, error) {
 	battleId := in.GetBattleId()
 	if !l.callerAllowed(in) {
-		// 拒绝发生在任何副作用之前,结局是确定的,走业务拒绝。回 gRPC 错误会被发布准入记成未知结局,
-		// 密钥配错或时钟偏差调用一次,本副本的排空证明就一直 HOLD(go/shared/drainproof)。
+		// 拒绝发生在任何副作用之前,结局是确定的,走业务拒绝。
 		l.Infof("[spectate] SetSpectateFeatured denied battle=%d", battleId)
 		return &pb.SetSpectateFeaturedResponse{Reject: pb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_DENIED}, nil
 	}

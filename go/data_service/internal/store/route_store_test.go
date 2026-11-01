@@ -88,7 +88,7 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 			t.Fatalf("%s 有 %d 个 ascii 列,只有 %d 个显式 COLLATE ascii_bin(MySQL 默认 ascii_general_ci、TiDB 只有 ascii_bin)", name, n, m)
 		}
 	}
-	// 12张业务/路由表之外，正式authority catalog新增六张永久写资格控制表。
+	// 14张业务/路由表之外，正式authority catalog新增六张永久写资格控制表，外加搬库的哨兵表。
 	writerControlDDLs := map[string]string{
 		"writer_registry":                writerRegistryBootstrapDDL,
 		"writer_slot":                    writerSlotBootstrapDDL,
@@ -96,9 +96,10 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		"sql_writer_drain_run":           writerDrainRunBootstrapDDL,
 		"sql_writer_freeze_ticket":       writerFreezeTicketBootstrapDDL,
 		"sql_writer_maintenance_receipt": writerMaintenanceReceiptBootstrapDDL,
+		"db_move_sentinel":               moveSentinelBootstrapDDL,
 	}
-	if got, want := len(bootstrapTables), 12+len(writerControlDDLs); got != want {
-		t.Fatalf("bootstrapTables 有 %d 项,want %d(12张业务/路由表加六张正式authority控制表)", got, want)
+	if got, want := len(bootstrapTables), 14+len(writerControlDDLs); got != want {
+		t.Fatalf("bootstrapTables 有 %d 项,want %d(14张业务/路由表加七张闸门表)", got, want)
 	}
 	for name, ddl := range writerControlDDLs {
 		if bootstrapTables[name] != ddl {
@@ -118,7 +119,6 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		"CONSTRAINT `chk_route_home` CHECK (`home_zone` IS NULL OR `home_zone` BETWEEN 1 AND " + strconv.FormatUint(uint64(RouteHomeZoneMax), 10) + ")",
 		"CONSTRAINT `chk_route_place` CHECK",
 		"CONSTRAINT `chk_route_ver` CHECK",
-		"CONSTRAINT `chk_route_frozen` CHECK",
 		"CONSTRAINT `chk_route_rev` CHECK (`rev` >= 1)",
 	} {
 		if !strings.Contains(playerRouteBootstrapDDL, want) {
@@ -131,8 +131,8 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 			t.Fatalf("player_route 的 DDL 里出现了 %s(G1a 之后是聚簇 (route_shard, player_id),预切由 route_tool tidb-prepare 做)", banned)
 		}
 	}
-	if n := strings.Count(playerRouteBootstrapDDL, "CONSTRAINT `chk_route_"); n != 6 {
-		t.Fatalf("player_route 有 %d 个 chk_route_* 约束,want 6", n)
+	if n := strings.Count(playerRouteBootstrapDDL, "CONSTRAINT `chk_route_"); n != 5 {
+		t.Fatalf("player_route 有 %d 个 chk_route_* 约束,want 5", n)
 	}
 	if n := strings.Count(playerRouteBootstrapDDL, "KEY `idx_route_"); n != 2 {
 		t.Fatalf("player_route 有 %d 个 idx_route_* 索引,want 2", n)
@@ -384,7 +384,7 @@ func allRouteSQLForTest() map[string]string {
 		"ddl_merged_into": zoneMergedIntoBootstrapDDL,
 		"ddl_meta":        routeMetaBootstrapDDL,
 	}
-	for i, stmt := range routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000}) {
+	for i, stmt := range routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000}, 0, 1) {
 		out["T2/T3("+strconv.Itoa(i)+")"] = stmt
 	}
 	return out
@@ -405,6 +405,13 @@ func TestRouteSQLNeverUsesInsertIgnore(t *testing.T) {
 	}
 }
 
+// schema 账号对 route_meta 只有 INSERT,这样它改不了可写开关。ODKU 还要 UPDATE 权限,会报 1142。
+func TestRouteMetaSeedHasNoODKU(t *testing.T) {
+	if strings.Contains(strings.ToUpper(routeMetaSeedSQL), "ON DUPLICATE KEY") {
+		t.Fatalf("R15 不能用 ODKU:%q", routeMetaSeedSQL)
+	}
+}
+
 // TestRouteODKUClausesAreNoOp:每条 ODKU 的更新子句都必须是 no-op(引用已有行自己的列值,不是 VALUES())。
 // 一旦它真改了数据,受影响行数会变成 2,「1=插入 / 0=撞键」的口径就失效 —— 判定会安静地错。
 func TestRouteODKUClausesAreNoOp(t *testing.T) {
@@ -412,7 +419,6 @@ func TestRouteODKUClausesAreNoOp(t *testing.T) {
 		name, stmt, clause string
 	}{
 		{"R4", routeInsertNewSQL, "player_id = player_id"},
-		{"R15", routeMetaSeedSQL, "id = id"},
 	} {
 		const marker = "ON DUPLICATE KEY UPDATE"
 		idx := strings.Index(tc.stmt, marker)
@@ -574,39 +580,6 @@ func TestRouteMetaWritesOnlyInStoreFiles(t *testing.T) {
 	}
 }
 
-// TestRouteRowPlacement:行的落点三列 → 落点记录。坏行必须报 ErrMalformed:读方不能按一条坏行选库。
-func TestRouteRowPlacement(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		row     RouteRow
-		want    placement.Record
-		wantOK  bool
-		wantErr bool
-	}{
-		{name: "无落点", row: RouteRow{PlayerID: 1, HomeZone: 7}},
-		{name: "稳定态", row: RouteRow{PlayerID: 1, StorageID: 1000000, PlacementVersion: 3}, want: placement.Record{StorageID: 1000000, Version: 3}, wantOK: true},
-		{name: "冻结态", row: RouteRow{PlayerID: 1, StorageID: 102, PlacementVersion: 3, FrozenRunID: "run-1"}, want: placement.Record{StorageID: 102, Version: 3, Frozen: true, RunID: "run-1"}, wantOK: true},
-		{name: "version为0", row: RouteRow{PlayerID: 1, StorageID: 102}, wantErr: true},
-		{name: "冻结run_id不合法", row: RouteRow{PlayerID: 1, StorageID: 102, PlacementVersion: 1, FrozenRunID: "bad run"}, wantErr: true},
-		{name: "没有storage却带version", row: RouteRow{PlayerID: 1, PlacementVersion: 3}, wantErr: true},
-		{name: "没有storage却带run_id", row: RouteRow{PlayerID: 1, FrozenRunID: "run-1"}, wantErr: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got, ok, err := tc.row.Placement()
-			if tc.wantErr {
-				if !errors.Is(err, placement.ErrMalformed) {
-					t.Fatalf("Placement() = (%+v, %t, %v), want ErrMalformed", got, ok, err)
-				}
-				return
-			}
-			if err != nil || ok != tc.wantOK || got != tc.want {
-				t.Fatalf("Placement() = (%+v, %t, %v), want (%+v, %t, nil)", got, ok, err, tc.want, tc.wantOK)
-			}
-		})
-	}
-
-}
-
 // TestNewRouteWriterID:写者标识只留 [A-Za-z0-9._@:-]、不超过 updated_by 列宽,host 为空时用 unknown。
 func TestNewRouteWriterID(t *testing.T) {
 	for _, tc := range []struct {
@@ -743,7 +716,7 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 		!strings.HasSuffix(want[1], ", (62, 0), (63, 0)") || strings.Count(want[1], "(") != 63 {
 		t.Fatalf("用例自己的期望拼错了(行数据):%q", want[1])
 	}
-	got := routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000})
+	got := routeTiDBPrepareStatements([]uint32{1, 2}, []uint32{1000000}, 0, 1)
 	if len(got) != len(want) {
 		t.Fatalf("routeTiDBPrepareStatements 给了 %d 条,want %d:\n%s", len(got), len(want), strings.Join(got, "\n"))
 	}
@@ -752,13 +725,33 @@ func TestRouteTiDBPrepareStatements(t *testing.T) {
 			t.Fatalf("第 %d 条:\n got=%q\nwant=%q", i, got[i], want[i])
 		}
 	}
-	if n := len(routeTiDBPrepareStatements([]uint32{7}, nil)); n != 1+1+1+0 {
+	if n := len(routeTiDBPrepareStatements([]uint32{7}, nil, 0, 1)); n != 1+1+1+0 {
 		t.Fatalf("1 个 zone、0 个 storage 应生成 3 条语句,got %d", n)
 	}
 	// 切点密度的两个常量:8 个点、间隔 8 片(64 / 8);切点数必须整除行片数(route_tidb.go 另有编译期断言)。
 	if routeTiDBPrefixSplitPoints != 8 || routeTiDBPrefixSplitStride != 8 || placement.RouteRowShards%routeTiDBPrefixSplitPoints != 0 {
 		t.Fatalf("切点数 / 间隔 = %d / %d(行片 %d),want 8 / 8 且切点数整除行片数:改密度要同步容量模型 §4.1 与提案 H8",
 			routeTiDBPrefixSplitPoints, routeTiDBPrefixSplitStride, placement.RouteRowShards)
+	}
+
+	// 分片之后每片只切落在自己身上的行分片。K=4 第 1 片是行分片 1、5、…、61,共 16 个:行数据 15 个切点,前缀每隔 2 个取一个,仍是 8 个点。
+	shard1of4 := routeTiDBPrepareStatements([]uint32{1}, nil, 1, 4)
+	wantShard1of4 := []string{
+		"ALTER TABLE `player_route` ATTRIBUTES 'merge_option=deny'",
+		"SPLIT TABLE `player_route` BY (5, 0), (9, 0), (13, 0), (17, 0), (21, 0), (25, 0), (29, 0), (33, 0), (37, 0), (41, 0), (45, 0), (49, 0), (53, 0), (57, 0), (61, 0)",
+		"SPLIT TABLE `player_route` INDEX `idx_route_home` BY (1, 1, 0), (1, 9, 0), (1, 17, 0), (1, 25, 0), (1, 33, 0), (1, 41, 0), (1, 49, 0), (1, 57, 0)",
+	}
+	if !slices.Equal(shard1of4, wantShard1of4) {
+		t.Fatalf("K=4 第 1 片:\n got=%q\nwant=%q", shard1of4, wantShard1of4)
+	}
+	// K=64 每片只有一个行分片:行数据不用切,前缀只有一个点。
+	shard5of64 := routeTiDBPrepareStatements([]uint32{1}, nil, 5, 64)
+	wantShard5of64 := []string{
+		"ALTER TABLE `player_route` ATTRIBUTES 'merge_option=deny'",
+		"SPLIT TABLE `player_route` INDEX `idx_route_home` BY (1, 5, 0)",
+	}
+	if !slices.Equal(shard5of64, wantShard5of64) {
+		t.Fatalf("K=64 第 5 片:\n got=%q\nwant=%q", shard5of64, wantShard5of64)
 	}
 
 	zones, storages, err := normalizeRouteTiDBPrepareIDs([]uint32{3, 1, 3}, []uint32{1000000, 1000000})

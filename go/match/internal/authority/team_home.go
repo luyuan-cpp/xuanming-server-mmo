@@ -46,7 +46,7 @@ func TeamUnitHomeZone(group []*pb.MatchAuthorityTicketRecord, zones *placement.M
 	return 0, nil
 }
 
-// 完整route/fence/P前缀已经由事务入口锁齐；这里只读复核，不追加任何锁集合。
+// 全部P已经由事务入口锁齐；这里只读复核，不追加任何锁集合。
 // 只逐人核归属没有变，不判同区：同区只在 launch 诞生时判一次（requireTeamLaunchHomesTx），之后映射怎么变都不重判。
 // 这里还给已进队列、已成局的在途 launch 用，它们报错恢复循环就会反复失败、撤不掉也开不了局；
 // 撤销合服后留下的跨区 unit 走完这一局，见 docs/ops/merge-zone-runbook.md §7。
@@ -84,8 +84,8 @@ func (s *Store) requireTeamLaunchHomesTx(ctx context.Context, tx *sql.Tx, data *
 	return nil
 }
 
-// TeamHomeZonesTx 读 players 每人路由行上的原始 home，写进开战原件（TeamLaunchOriginal.zones，之后抄到票上）。
-// 调用方已在本事务锁住这些路由行，不会把预检期间的旧 home 写进原件。
+// TeamHomeZonesTx 读 players 每人副本行上的原始 home，写进开战原件（TeamLaunchOriginal.zones，之后抄到票上）。
+// 调用方已在本事务锁住这些副本行，不会把预检期间的旧 home 写进原件。
 // 记归属、不记玩家当前位置：位置是物理节点的 zone，访客和还连着源区节点的玩家都和归属对不上。
 func (s *Store) TeamHomeZonesTx(ctx context.Context, tx *sql.Tx, players []uint64) (map[uint64]uint32, error) {
 	homes := make(map[uint64]uint32, len(players))

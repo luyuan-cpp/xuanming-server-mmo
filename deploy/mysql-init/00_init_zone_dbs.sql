@@ -10,7 +10,10 @@ CREATE DATABASE IF NOT EXISTS mmorpg_player_inbox DEFAULT CHARACTER SET utf8mb4 
 CREATE DATABASE IF NOT EXISTS mmorpg_mail DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mmorpg_rank DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mmorpg_chat DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
--- 匹配与组队的 SQL 权威；表由 match -migrate 建（与 guild 互相核对对方的表）。
+-- 匹配与组队的 SQL 权威；表由 match -migrate 建，只建自己的库。
 CREATE DATABASE IF NOT EXISTS mmorpg_match DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
--- 全局库（account_role 等），本机 data_service 与 match 共用，K8s 另由 02_k8s_global_db.sql 建同名库。
+-- 目录（account_role 等）和流水。本机 K=1：目录就是基名这一个库；K8s 由 02_k8s_global_db.sql 按 -DirectoryLogicalShards 建片库和流水库。
 CREATE DATABASE IF NOT EXISTS mmorpg_global DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS mmorpg_global_ledger DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- docker 调试栈的 data_service 用 testdb 当全局库基名。
+CREATE DATABASE IF NOT EXISTS testdb_ledger DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

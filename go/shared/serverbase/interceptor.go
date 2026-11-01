@@ -14,6 +14,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"shared/grpcstats"
 )
@@ -88,7 +89,7 @@ func (o Options) methodName(fullMethod string) string {
 
 // UnaryInterceptor 返回一个把 in-band 业务失败翻成日志 + 指标的拦截器。
 //
-// 它**不改动响应内容、不吞错、不把业务码翻成 gRPC status**
+// 除了「写者闸门冻结」和「自愈读不到目录」这两种确定没写的失败(见 retryableWriterFailure),它**不改动响应内容、不吞错、不把业务码翻成 gRPC status**
 // —— 只观测。挂上它对客户端完全无感。
 func UnaryInterceptor(opts Options) grpc.UnaryServerInterceptor {
 	return func(
@@ -98,7 +99,9 @@ func UnaryInterceptor(opts Options) grpc.UnaryServerInterceptor {
 		handler grpc.UnaryHandler,
 	) (any, error) {
 		start := time.Now()
+		ctx, frozen := authoritysql.ObserveWriterFrozen(ctx)
 		resp, err := handler(ctx, req)
+		resp, err = retryableWriterFailure(ctx, frozen, resp, err)
 		elapsed := time.Since(start)
 
 		method := opts.methodName(info.FullMethod)
@@ -137,6 +140,71 @@ func UnaryInterceptor(opts Options) grpc.UnaryServerInterceptor {
 	}
 }
 
+// errWriterFrozen 是写者闸门冻结时回给调用方的状态:搬库切换窗口里这笔没写进去,原样重试就能成功。
+// 这个值本身就是结论「结局已知」,PublicationAdmission 按值认它,不 Hold(definiteRejection)。
+var errWriterFrozen = status.Error(codes.Unavailable, "sql writer gate frozen, retry")
+
+// errWriterFrozenOutcomeUnknown 同样让调用方重试,但这次请求之前有过结局未知的 SQL,不能说确定没写,排空证明要 Hold。
+var errWriterFrozenOutcomeUnknown = status.Error(codes.Unavailable, "sql writer gate frozen after an unknown outcome, retry")
+
+// errNoWriteRetry 是自愈读不到目录、handler 又报了故障时回给调用方的状态:事务已回滚,原样重试就行。按值认它,不 Hold(definiteRejection)。
+var errNoWriteRetry = status.Error(codes.Unavailable, "role fence authority unavailable, retry")
+
+// writerFrozenStatus 选冻结时回哪个状态。ctx 必须是 ObserveWriterFrozen 返回的那条。
+func writerFrozenStatus(ctx context.Context) error {
+	if authoritysql.WriterOutcomeUnknownSeen(ctx) {
+		return errWriterFrozenOutcomeUnknown
+	}
+	return errWriterFrozen
+}
+
+// retryableWriterFailure 把「确定没写、重试就行」的失败改写成可重试的状态,其余原样回。ctx 必须是 ObserveWriterFrozen 返回的那条。
+func retryableWriterFailure(ctx context.Context, frozen func() bool, resp any, err error) (any, error) {
+	switch {
+	case writerFrozenFailure(frozen, resp, err):
+		return nil, writerFrozenStatus(ctx)
+	case noWriteRetryFailure(ctx, resp, err):
+		return nil, errNoWriteRetry
+	default:
+		return resp, err
+	}
+}
+
+// noWriteRetryFailure 判 handler 是不是把「自愈读不到目录」报成了会 Hold 的失败。调用方自己映射成非故障 tip 的不动:比如 guild、player_inbox,客户端要的是 tip。
+// 这次请求有过结局未知的 SQL 就不改,照旧 Hold。
+func noWriteRetryFailure(ctx context.Context, resp any, err error) bool {
+	if !authoritysql.NoWriteRetrySeen(ctx) || authoritysql.WriterOutcomeUnknownSeen(ctx) {
+		return false
+	}
+	return publicationOutcomeUnknown(resp, err)
+}
+
+// writerFrozenFailure 判断这次请求是不是因为写者闸门冻结而失败。
+//
+// 各服务的 handler 常把存储错误翻成带内错误码或 Internal,哨兵错误到不了这里,所以看连接层置的观察位。
+// 只有 handler 报告了失败才算:handler 吞掉冻结错误、照常回成功(尽力而为的旁路写)时不改它的结果。
+//
+// Aborted 也不改:这是 handler 自己下的结论「提交点之前就失败了」,比「请重试」确切。建角撞上冻结的闸门回的就是它,
+// 改成 Unavailable 的话 login 只能按结局未知处理,名字释放不掉。
+func writerFrozenFailure(frozen func() bool, resp any, err error) bool {
+	if err != nil {
+		if status.Code(err) == codes.Aborted {
+			return false
+		}
+		return frozen() || authoritysql.IsWriterFrozen(err)
+	}
+	return frozen() && ExtractBizCode(resp).Code != 0
+}
+
+// WriterFrozenInterceptor 给没挂 UnaryInterceptor 的服务单独提供「闸门冻结回 Unavailable」。
+func WriterFrozenInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		ctx, frozen := authoritysql.ObserveWriterFrozen(ctx)
+		resp, err := handler(ctx, req)
+		return retryableWriterFailure(ctx, frozen, resp, err)
+	}
+}
+
 // codeDomainLabel 只对 tip 码给得出域名;私有码表没有域的概念。
 func codeDomainLabel(bc BizCode) string {
 	if bc.Source == SourceTipInfo {
@@ -148,6 +216,46 @@ func codeDomainLabel(bc BizCode) string {
 // RootAdmission 覆盖同步根调用；异步工作必须在实际发布 owner 另计 RELAY。
 func RootAdmission(gate *drainproof.Session) grpc.UnaryServerInterceptor {
 	return PublicationAdmission(gate, nil, nil)
+}
+
+// publicationOutcomeUnknown 判这次请求的结局是不是未知。未知就要 Hold,排空证明从此过不去,要人工处理。
+// 带内错误码按码表定性,gRPC 错误见 definiteRejection。
+func publicationOutcomeUnknown(response any, err error) bool {
+	if err != nil {
+		return !definiteRejection(err)
+	}
+	verdict := (Options{}).Classify(ExtractBizCode(response))
+	return verdict == VerdictFault || verdict == VerdictUnknown
+}
+
+// definiteRejection 判这个错误是不是确定的拒绝:服务端明确没有写入,结局已知,不用 Hold。
+// 这是排空证明的安全边界,全仓核对过这些码的来源,结论在 docs/design/horizontal-scale-logical-db.md §3.6。handler 新回这些码之前先看那一节。
+//
+// 拿不准的都算未知:
+//   - Unavailable、DeadlineExceeded、Canceled、Internal、Unknown:提交可能已经成了。闸门冻结、自愈读不到目录也回 Unavailable,但内层拦截器看过观察位,
+//     确定没有结局未知才回 errWriterFrozen、errNoWriteRetry,这里按值认它们。这一次请求之前提交成功的写结局是已知的,不影响排空。
+//   - Unimplemented、DataLoss:没有逐个证明过。
+//   - 非 gRPC 错误(SQL、context):handler 没下结论。
+//   - 包了一层的 gRPC 错误(fmt.Errorf("...: %w", rpcErr)):转发的是下游的结论,说不准这边写没写。所以这里只认错误本身就是 status。
+//
+// Aborted 在表里:语义是这次请求没有结局未知的写。目录的 accountdirectory.ErrNotCommitted(建角提交点之前失败)、ErrRetryLater(结局已知、同参数重放)回它,
+// friend 的身份检查(只读)也回它。handler 回这个码之前要能证明这一点,结局未知的提交不能走到这里。
+// ResourceExhausted 在表里:全仓只有目录的「账号角色数已满」回它,建角和过户都在提交点之前拒绝。别的 handler 不要拿它表示过载。
+func definiteRejection(err error) bool {
+	if err == errWriterFrozen || err == errNoWriteRetry {
+		return true
+	}
+	direct, ok := err.(interface{ GRPCStatus() *status.Status })
+	if !ok {
+		return false
+	}
+	switch direct.GRPCStatus().Code() {
+	case codes.NotFound, codes.InvalidArgument, codes.FailedPrecondition, codes.AlreadyExists,
+		codes.PermissionDenied, codes.Unauthenticated, codes.OutOfRange, codes.Aborted, codes.ResourceExhausted:
+		return true
+	default:
+		return false
+	}
 }
 
 // PublicationAdmission 按实际内部方法白名单区分派生工作；关闭 SOURCE 不会阻断已接收工作的 RELAY。
@@ -183,8 +291,7 @@ func PublicationAdmission(root, relay *drainproof.Session, relayMethods map[stri
 				gate.Hold()
 				panic(recovered)
 			}
-			verdict := (Options{}).Classify(ExtractBizCode(response))
-			if resultErr != nil || verdict == VerdictFault || verdict == VerdictUnknown {
+			if publicationOutcomeUnknown(response, resultErr) {
 				gate.Hold()
 			}
 		}()

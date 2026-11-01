@@ -1,7 +1,7 @@
 #requires -Version 7
 [CmdletBinding()]
 param(
-    [ValidateSet('library','render-roles','close-publication','activate-runtime','close-source','close-relay','retire-source-writers','retire-relay-writers','open-source','stop-and-collect','seed-redis-nonce','collect-redis','collect-kafka','manual-baseline','manual-sampling-request','normal-tool','verify-and-advance')]
+    [ValidateSet('library','render-schema-role','render-roles','close-publication','activate-runtime','close-source','close-relay','retire-source-writers','retire-relay-writers','open-source','stop-and-collect','seed-redis-nonce','collect-redis','collect-kafka','manual-baseline','manual-sampling-request','normal-tool','verify-and-advance')]
     [string]$MaintenanceCommand = 'library',
     [string]$PlanPath = '',
     [string]$OutputPath = ''
@@ -143,7 +143,9 @@ function Invoke-NormalFiniteTool {
     $seconds=[int]$tool.timeoutSeconds;if($seconds -le 0 -or $seconds -gt 3600){throw 'finite normal执行预算必须在1至3600秒'}
     if(-not [IO.Path]::IsPathRooted($OutputDirectory) -or -not [IO.Directory]::Exists($OutputDirectory) -or (Get-Item -LiteralPath $OutputDirectory).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'finite输出必须已有私有目录'}
     $config='';$environment=Get-SqlWriterBootEnvironment -InstanceKey $tool.instanceKey -RepoRoot $RepoRoot -SelectedRuntimeConfigFile ([ref]$config)
-    $grant=Read-MaintenanceJson -Path $environment.MMORPG_SQL_WRITER_GRANT_FILE -ExpectedSha256 $environment.MMORPG_SQL_WRITER_GRANT_SHA256
+    $grantSet=Read-MaintenanceJson -Path $environment.MMORPG_SQL_WRITER_GRANT_FILE -ExpectedSha256 $environment.MMORPG_SQL_WRITER_GRANT_SHA256
+    if(@($grantSet.grants).Count -ne 1){throw 'finite工具只写一个逻辑库，grant集合必须恰好一份'}
+    $grant=@($grantSet.grants)[0]
     if(-not [string]::IsNullOrEmpty([string]$grant.maintenanceRunId)){throw '此入口只运行非run NORMAL工具；已绑定run必须走存活应用的正式排空'}
     $arguments=@(Get-NormalFiniteToolArguments -Tool $tool -RuntimeConfig $config)
     if(-not [IO.Path]::IsPathRooted($tool.retirementRequestFile) -or $tool.retirementRequestSha256 -cnotmatch '^[a-f0-9]{64}$'){throw 'finite退休必须固定绝对Request与原bytes SHA'}
@@ -292,13 +294,24 @@ function Get-SqlWriterBootEnvironment {
     Assert-MaintenanceProperties -Value $entry -Required @('grantFile','grantSha256','consumeDir','deploymentId','physicalAuthoritySha256','runtimeConfigFile','runtimeConfigSha256') -Optional @('runtimeEnvironment','maintenanceControlDir','prepareRuntimeFile','prepareRuntimeSha256','prepareDrainDirectory')
     foreach ($digest in @($entry.grantSha256,$entry.physicalAuthoritySha256)) { if ($digest -cnotmatch '^[a-f0-9]{64}$') { throw 'boot授权摘要格式不符' } }
     if ((Get-MaintenanceSha256 -Path $entry.grantFile) -cne $entry.grantSha256) { throw 'boot授权文件摘要不符' }
-    $grant = Read-MaintenanceJson -Path $entry.grantFile -MaxBytes 65536 -ExpectedSha256 $entry.grantSha256
-    Assert-MaintenanceProperties -Value $grant -Required @('format','writerKey','instanceId','generation','authoritySchema','protectedSchemas','sqlPrincipal','registrationDigest','deploymentId','grantId','grantedMs','permission','physicalAuthoritySha256','lockPrimitive','lockQualificationSha256') -Optional @('maintenanceRunId')
-    if($grant.lockPrimitive -cnotin @('SELECT_ONLY','LOCK_TOUCH') -or [Convert]::FromBase64String($grant.lockQualificationSha256).Length -ne 32){throw 'boot缺真实I3锁资格绑定，不自探针或扩权'}
-    if ($grant.format -cne 'SQL_WRITER_BOOT_V1' -or $grant.permission -cne 'NORMAL' -or $grant.deploymentId -cne $entry.deploymentId -or [uint64]$grant.grantedMs -eq 0) { throw 'boot原件用途/部署身份不符' }
-    $physical = [Convert]::FromBase64String($grant.physicalAuthoritySha256)
-    if ($physical.Length -ne 32 -or [Convert]::ToHexString($physical).ToLowerInvariant() -cne $entry.physicalAuthoritySha256) { throw 'boot物理authority原件不符' }
-    if ([Convert]::FromBase64String($grant.writerKey).Length -ne 16 -or [Convert]::FromBase64String($grant.instanceId).Length -ne 16 -or [Convert]::FromBase64String($grant.grantId).Length -ne 16 -or [Convert]::FromBase64String($grant.registrationDigest).Length -ne 32) { throw 'boot身份长度不符' }
+    # 授权文件是这个 boot 的全部写资格:进程要写的每个逻辑库各一份,闸门跟着库走。
+    $grantSet = Read-MaintenanceJson -Path $entry.grantFile -MaxBytes 1048576 -ExpectedSha256 $entry.grantSha256
+    Assert-MaintenanceProperties -Value $grantSet -Required @('format','grants')
+    if ($grantSet.format -cne 'SQL_WRITER_BOOT_SET_V1' -or @($grantSet.grants).Count -lt 1 -or @($grantSet.grants).Count -gt 1024) { throw 'boot授权集合格式不符' }
+    $grantDatabases=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($grant in $grantSet.grants) {
+        Assert-MaintenanceProperties -Value $grant -Required @('format','writerKey','instanceId','generation','authoritySchema','protectedSchemas','sqlPrincipal','registrationDigest','deploymentId','grantId','grantedMs','permission','physicalAuthoritySha256','lockPrimitive','lockQualificationSha256') -Optional @('maintenanceRunId')
+        if($grant.lockPrimitive -cnotin @('SELECT_ONLY','LOCK_TOUCH') -or [Convert]::FromBase64String($grant.lockQualificationSha256).Length -ne 32){throw 'boot缺真实I3锁资格绑定，不自探针或扩权'}
+        if ($grant.format -cne 'SQL_WRITER_BOOT_V1' -or $grant.permission -cne 'NORMAL' -or $grant.deploymentId -cne $entry.deploymentId -or [uint64]$grant.grantedMs -eq 0) { throw 'boot原件用途/部署身份不符' }
+        if (@($grant.protectedSchemas).Count -ne 1 -or @($grant.protectedSchemas)[0] -cne $grant.authoritySchema -or -not $grantDatabases.Add([string]$grant.authoritySchema)) { throw 'boot授权必须每个逻辑库一份，闸门只保护它所在的库' }
+        $physical = [Convert]::FromBase64String($grant.physicalAuthoritySha256)
+        if ($physical.Length -ne 32 -or [Convert]::ToHexString($physical).ToLowerInvariant() -cne $entry.physicalAuthoritySha256) { throw 'boot物理authority原件不符' }
+        if ([Convert]::FromBase64String($grant.writerKey).Length -ne 16 -or [Convert]::FromBase64String($grant.instanceId).Length -ne 16 -or [Convert]::FromBase64String($grant.grantId).Length -ne 16 -or [Convert]::FromBase64String($grant.registrationDigest).Length -ne 32) { throw 'boot身份长度不符' }
+    }
+    # 恢复 boot 只绑一个 run,一个 run 只管一个逻辑库。
+    $runGrants=@($grantSet.grants | Where-Object { -not [string]::IsNullOrEmpty([string]$_.maintenanceRunId) })
+    if($runGrants.Count -gt 1){throw '一次恢复boot只绑定一个逻辑库的维护run'}
+    $grant=if($runGrants.Count -eq 1){$runGrants[0]}else{$null}
     if (-not [IO.Path]::IsPathRooted($entry.consumeDir) -or -not [IO.Directory]::Exists($entry.consumeDir)) { throw 'boot消费目录必须已由受控启动器创建为私有持久目录' }
     if ((Get-Item -LiteralPath $entry.consumeDir).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'boot消费目录不允许重解析点' }
     if(-not [IO.Path]::IsPathRooted($entry.runtimeConfigFile) -or $entry.runtimeConfigSha256 -cnotmatch '^[a-f0-9]{64}$' -or (Get-MaintenanceSha256 $entry.runtimeConfigFile) -cne $entry.runtimeConfigSha256){throw '每boot完整私有配置缺固定绝对路径/SHA，禁止沿用共享配置'}
@@ -306,7 +319,7 @@ function Get-SqlWriterBootEnvironment {
     if($configInfo.PSIsContainer -or $configInfo.Attributes -band [IO.FileAttributes]::ReparsePoint -or $configInfo.Length -gt 16777216){throw '每boot私有配置类型/大小不符'}
     if($null -ne $SelectedRuntimeConfigFile){$SelectedRuntimeConfigFile.Value=[IO.Path]::GetFullPath($entry.runtimeConfigFile)}
     $prepared=$null
-    if(-not [string]::IsNullOrEmpty([string]$grant.maintenanceRunId)){
+    if($null -ne $grant){
         if(-not $PrepareOnlySupported -or -not $entry.Contains('prepareRuntimeFile') -or -not $entry.Contains('prepareRuntimeSha256')){throw '该应用尚无正式prepare-only owner，禁止拿恢复grant直接放root流量'}
         $prepared=Read-MaintenanceJson -Path $entry.prepareRuntimeFile -ExpectedSha256 $entry.prepareRuntimeSha256
         if($prepared.runPhase -cne 'SQL_RELEASED' -or $prepared.runId -cne $grant.maintenanceRunId){throw '恢复runtime不是同run SQL_RELEASED'}
@@ -482,9 +495,41 @@ function ConvertTo-AuthoritySqlAccount {
     return ("'"+$Matches.user+"'@'"+$Matches.host+"'")
 }
 
+# schema 账号的授权,在迁移之前执行,所以只认库级 GRANT 和带 CREATE 的表级 GRANT:表还不存在时,表级 GRANT 不带 CREATE 会报 1146(MySQL、TiDB 同一规则)。
+# 表级那几条带 CREATE 不多给权限,库级 GRANT 已经有 CREATE。这一步还没有 generation,所以计划不要 REGISTER 原件;同一份计划文件也能用,别的字段不读。
+function ConvertTo-AuthoritySchemaRoleSql {
+    param([Parameter(Mandatory)][Collections.IDictionary]$Plan)
+    Assert-MaintenanceProperties -Value $Plan -Required @('authoritySchema','schemaPrincipal','schemaDatabases') -Optional @('directorySchema','directoryShard','runtimePrincipal','registrarPrincipal','maintenancePrincipal','registrationRequestFile','registrationRequestSha256','lockQualificationFile','tables')
+    $authority=ConvertTo-AuthoritySqlIdentifier $Plan.authoritySchema
+    $account=ConvertTo-AuthoritySqlAccount $Plan.schemaPrincipal
+    $schemaGrants=[Collections.Generic.List[string]]::new()
+    $metadataGrants=[Collections.Generic.List[string]]::new()
+    $schemaSeen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach($database in $Plan.schemaDatabases){
+        $identifier=ConvertTo-AuthoritySqlIdentifier $database
+        if(-not $schemaSeen.Add($database)){throw 'fresh schema授权库重复'}
+        $schemaGrants.Add("GRANT SELECT,CREATE,ALTER,INDEX ON $identifier.* TO $account;")
+        $metadataGrants.Add("GRANT CREATE,INSERT,UPDATE ON $identifier.``schema_migrations`` TO $account;")
+    }
+    if($schemaGrants.Count -eq 0){throw 'fresh prestart schema必须显式具名库清单，不能由业务表暗推'}
+    if(-not $schemaSeen.Contains([string]$Plan.authoritySchema)){throw 'fresh schema清单必须包含同authority，不能从业务表旁路建控制表'}
+    $metadataGrants.Add("GRANT CREATE,INSERT ON $authority.``route_meta`` TO $account;")
+    if($schemaSeen.Contains('mmorpg_guild')){$metadataGrants.Add("GRANT CREATE,INSERT ON ``mmorpg_guild``.``guild_player_state`` TO $account;")}
+    # 目录每片一行 directory_shard:-migrate 用 INSERT ... ON DUPLICATE KEY UPDATE 种,两个权限都要。
+    if($Plan.Contains('directoryShard') -and $Plan.directoryShard -eq $true){$metadataGrants.Add("GRANT CREATE,INSERT,UPDATE ON $authority.``directory_shard`` TO $account;")}
+    return @(
+        '-- schema身份仅供LoadSchemaPermission确认的fresh prestart；冻结run内不执行DDL。在迁移之前执行。'
+        '-- schemaDatabases是独立审批的fresh prestart具名库清单，不从runtime业务表推断。'
+        $schemaGrants
+        '-- 元数据点表能力用于fresh prestart种子与schema_migrations台账，不授权业务schema.*的DML。目录片多一张记片号的表，由计划的directoryShard带出。'
+        $metadataGrants
+        '-- 不授DROP/GRANT OPTION。'
+    ) -join "`n"
+}
+
 function ConvertTo-AuthorityRoleSql {
     param([Parameter(Mandatory)][Collections.IDictionary]$Plan,[Parameter(Mandatory)][string]$TemplateRoot)
-    Assert-MaintenanceProperties -Value $Plan -Required @('authoritySchema','runtimePrincipal','registrarPrincipal','maintenancePrincipal','schemaPrincipal','registrationRequestFile','registrationRequestSha256','lockQualificationFile','tables','schemaDatabases')
+    Assert-MaintenanceProperties -Value $Plan -Required @('authoritySchema','runtimePrincipal','registrarPrincipal','maintenancePrincipal','schemaPrincipal','registrationRequestFile','registrationRequestSha256','lockQualificationFile','tables','schemaDatabases') -Optional @('directorySchema','directoryShard')
     $principals=@($Plan.runtimePrincipal,$Plan.registrarPrincipal,$Plan.maintenancePrincipal,$Plan.schemaPrincipal)
     if (($principals | Select-Object -Unique).Count -ne 4) { throw 'runtime/registrar/maintenance/schema必须不同principal' }
     $values = @{
@@ -492,16 +537,16 @@ function ConvertTo-AuthorityRoleSql {
         RUNTIME_ACCOUNT=(ConvertTo-AuthoritySqlAccount $Plan.runtimePrincipal)
         REGISTRAR_ACCOUNT=(ConvertTo-AuthoritySqlAccount $Plan.registrarPrincipal)
         MAINTENANCE_ACCOUNT=(ConvertTo-AuthoritySqlAccount $Plan.maintenancePrincipal)
-        SCHEMA_ACCOUNT=(ConvertTo-AuthoritySqlAccount $Plan.schemaPrincipal)
         LOCK_TOUCH_GRANT=''
-        SCHEMA_DDL_GRANTS=''
-        SCHEMA_METADATA_GRANTS=''
+        MERGE_ZONE_GRANT=''
     }
     $registration=Read-MaintenanceJson -Path $Plan.registrationRequestFile -ExpectedSha256 $Plan.registrationRequestSha256
     if($registration.lockPrimitive -cnotin @('SELECT_ONLY','LOCK_TOUCH') -or -not $registration.Contains('lockQualificationSha256')){throw '正式REGISTER原件缺已资格锁原语'}
     $qualification=[Convert]::FromBase64String($registration.lockQualificationSha256)
     if($qualification.Length -ne 32 -or (Get-MaintenanceSha256 -Path $Plan.lockQualificationFile) -cne [Convert]::ToHexString($qualification).ToLowerInvariant()){throw '锁资格不是已固定I3原件SHA'}
     if([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($registration.writer.sqlPrincipal)) -cne $Plan.runtimePrincipal){throw '角色主体与正式REGISTER原件不一致'}
+    if($registration.authoritySchema -cne $Plan.authoritySchema -or @($registration.protectedSchemas).Count -ne 1 -or @($registration.protectedSchemas)[0] -cne $Plan.authoritySchema){throw '正式REGISTER原件必须绑定本逻辑库的闸门，受保护库只有它自己'}
+    if($Plan.Contains('directorySchema') -and $Plan.directorySchema -ceq $Plan.authoritySchema){$values.MERGE_ZONE_GRANT="GRANT SELECT,INSERT,DELETE ON $($values.AUTHORITY_SCHEMA).``zone_merged_into`` TO $($values.MAINTENANCE_ACCOUNT);"}
     if ($registration.lockPrimitive -ceq 'LOCK_TOUCH') { $values.LOCK_TOUCH_GRANT="GRANT UPDATE (lock_touch) ON $($values.AUTHORITY_SCHEMA).``writer_slot`` TO $($values.RUNTIME_ACCOUNT);" }
     $business = [Collections.Generic.List[string]]::new()
     $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -512,30 +557,17 @@ function ConvertTo-AuthorityRoleSql {
         $ops = @($table.operations)
         if ($ops.Count -eq 0 -or ($ops | Select-Object -Unique).Count -ne $ops.Count) { throw '业务GRANT操作空或重复' }
         foreach ($op in $ops) { if ($op -cnotin @('SELECT','INSERT','UPDATE','DELETE')) { throw 'runtime禁止DDL/GRANT/注册能力' } }
-        if ($table.table -iin @('route_meta','writer_registry','writer_slot','writer_lifecycle_receipt','sql_writer_drain_run','sql_writer_freeze_ticket','sql_writer_maintenance_receipt')) { throw '业务GRANT重复或触及权限真值表' }
+        if ($table.table -iin @('route_meta','writer_registry','writer_slot','writer_lifecycle_receipt','sql_writer_drain_run','sql_writer_freeze_ticket','sql_writer_maintenance_receipt','db_move_sentinel')) { throw '业务GRANT重复或触及权限真值表' }
         $business.Add("GRANT $($ops -join ',') ON $schema.$name TO $($values.RUNTIME_ACCOUNT);")
     }
     $values.BUSINESS_TABLE_GRANTS=$business -join "`n"
-    $schemaGrants=[Collections.Generic.List[string]]::new()
-    $metadataGrants=[Collections.Generic.List[string]]::new()
-    $schemaSeen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-    foreach($database in $Plan.schemaDatabases){
-        $identifier=ConvertTo-AuthoritySqlIdentifier $database
-        if(-not $schemaSeen.Add($database)){throw 'fresh schema授权库重复'}
-        $schemaGrants.Add("GRANT SELECT,CREATE,ALTER,INDEX ON $identifier.* TO $($values.SCHEMA_ACCOUNT);")
-        $metadataGrants.Add("GRANT CREATE,INSERT,UPDATE ON $identifier.``schema_migrations`` TO $($values.SCHEMA_ACCOUNT);")
-    }
-    if($schemaGrants.Count -eq 0){throw 'fresh prestart schema必须显式具名库清单，不能由业务表暗推'}
-    if(-not $schemaSeen.Contains([string]$Plan.authoritySchema)){throw 'fresh schema清单必须包含同authority，不能从业务表旁路建控制表'}
-    $metadataGrants.Add("GRANT CREATE,INSERT ON $($values.AUTHORITY_SCHEMA).``route_meta`` TO $($values.SCHEMA_ACCOUNT);")
-    if($schemaSeen.Contains('mmorpg_guild')){$metadataGrants.Add("GRANT INSERT ON ``mmorpg_guild``.``guild_player_state`` TO $($values.SCHEMA_ACCOUNT);")}
-    $values.SCHEMA_DDL_GRANTS=$schemaGrants -join "`n"
-    $values.SCHEMA_METADATA_GRANTS=$metadataGrants -join "`n"
+    $schema=ConvertTo-AuthoritySchemaRoleSql -Plan $Plan
     $runtime=[IO.File]::ReadAllText((Join-Path $TemplateRoot 'authority_runtime_role.sql'))
     $operator=[IO.File]::ReadAllText((Join-Path $TemplateRoot 'authority_operator_role.sql'))
     foreach ($key in $values.Keys) { $runtime=$runtime.Replace('{{'+$key+'}}',[string]$values[$key]);$operator=$operator.Replace('{{'+$key+'}}',[string]$values[$key]) }
     if (($runtime+$operator) -match '\{\{[A-Z_]+\}\}') { throw '权限叶有未绑定占位' }
-    return [ordered]@{runtime=$runtime;operator=$operator}
+    # schema 块排第一,执行顺序也是它在先:schema 在迁移之前,operator、runtime 在迁移之后(手册 docs/ops/k8s-open-server-runbook.md §1)。
+    return [ordered]@{schema=$schema;operator=$operator;runtime=$runtime}
 }
 
 
@@ -999,6 +1031,10 @@ if ($MyInvocation.InvocationName -ne '.' -and $MaintenanceCommand -ne 'library')
     $maintenanceRepo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
     switch ($MaintenanceCommand) {
         'normal-tool' { Invoke-NormalFiniteTool -Plan $maintenancePlan -OutputDirectory $OutputPath -RepoRoot $maintenanceRepo }
+        'render-schema-role' {
+            # 迁移之前:这时还没有 generation,也就没有 REGISTER 原件,render-roles 的计划写不出来。输出是一段 SQL,逐库执行。
+            $null=Write-MaintenanceImmutableBytes -Path $OutputPath -Bytes ([Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-AuthoritySchemaRoleSql -Plan $maintenancePlan)+"`n"))
+        }
         'render-roles' {
             $roles=ConvertTo-AuthorityRoleSql -Plan $maintenancePlan -TemplateRoot (Join-Path $maintenanceRepo 'deploy/sql')
             $null=Write-MaintenanceImmutableJson -Path $OutputPath -Value $roles

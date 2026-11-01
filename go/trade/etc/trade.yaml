@@ -203,8 +203,6 @@ Mall:
   GatewaySecretEnv: COMMERCE_GATEWAY_SECRET
   DeliverySecretEnv: COMMERCE_DELIVERY_SECRET
 
-# 全局角色目录与交易表必须位于同一TiDB集群；不是玩家分片库。
-AccountRoleSchema: testdb
 Rmb:
   Enabled: false
   GlobalLoginSessions: false

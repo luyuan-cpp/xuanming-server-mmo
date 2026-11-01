@@ -8,8 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -37,10 +37,40 @@ type writerBoot struct {
 	grant  *databasepb.SqlWriterBootGrant
 	next   atomic.Uint64
 	closed atomic.Bool
+	// admitted:这个 boot 在这个逻辑库上有事务过过闸门。之前都算启动阶段,见 guardedConn.readPassesFrozenGateLocked。
+	admitted atomic.Bool
+	frozen   frozenGate
+	// marker 是这份写资格的消费标记。测试直接造的 boot 没有,不用消费。
+	marker *grantMarker
 }
 
-// WriterConfig身份永久固定，调度计数属于同boot共享状态；复制它不再消费grant。
+// grantMarker 在这份写资格第一次写之前落盘。写资格一次性,是因为进程写过之后崩了,重启时内存里的 boot 状态没了,
+// 排空证明也接不上。进程还没写过就退出没有东西丢:启动时依赖没就绪,同一个 Pod 重启接着用这份,不用烧名册。
+type grantMarker struct {
+	dir, name string
+	content   []byte
+	once      sync.Once
+	err       error
+}
+
+// consume 幂等。写不成就一直回这个错误,这个 boot 在这个库上写不了。
+func (m *grantMarker) consume() error {
+	if m == nil {
+		return nil
+	}
+	m.once.Do(func() { m.err = consumeGrantMarker(m.dir, m.name, m.content) })
+	return m.err
+}
+
+// WriterConfig 是一个逻辑库上的写资格。闸门跟着逻辑库走，所以一个进程写几个库就持几份。
+// 身份永久固定，调度计数属于同boot共享状态；复制它不再消费grant。
 type WriterConfig struct{ boot *writerBoot }
+
+// GrantSetFormat 是 MMORPG_SQL_WRITER_GRANT_FILE 指向文件的格式：一个boot持有的全部写资格。
+const GrantSetFormat = "SQL_WRITER_BOOT_SET_V1"
+
+// 一个进程最多写这么多逻辑库；与注册名册的既有预算同值。
+const maxBootGrants = 1024
 
 func Reader() Permission { return Permission{kind: permissionReader} }
 func Schema(expectedPrincipal string) Permission {
@@ -118,11 +148,12 @@ func (c WriterConfig) ProtectedSchemas() []string {
 	return append([]string(nil), c.boot.grant.ProtectedSchemas...)
 }
 
-// LoadWriterConfig只由进程装配owner调用一次；不读取隐式全局env，不生成身份或注册。
-// protojson拒未知/重复字段；marker已存在或写/flush未确定时永远不删除或覆盖。
-func LoadWriterConfig(getenv func(string) string) (WriterConfig, error) {
-	bad := func() (WriterConfig, error) {
-		return WriterConfig{}, errors.New("SQL writer启动grant缺失、漂移或已消费")
+// LoadWriterConfigs只由进程装配owner调用一次：读本boot的全部写资格，按逻辑库返回，进程要写的每个逻辑库各一份。
+// 不读取隐式全局env，不生成身份或注册。protojson拒未知/重复字段；marker已存在说明上一个进程写过，拒绝。
+// 这里不写marker，第一条写语句之前才写（grantMarker），写/flush未确定时永远不删除或覆盖。
+func LoadWriterConfigs(getenv func(string) string) (map[string]WriterConfig, error) {
+	bad := func() (map[string]WriterConfig, error) {
+		return nil, errors.New("SQL writer启动grant缺失、漂移或已消费")
 	}
 	if getenv == nil {
 		return bad()
@@ -141,26 +172,72 @@ func LoadWriterConfig(getenv func(string) string) (WriterConfig, error) {
 	if !bytes.Equal(actual[:], expected) {
 		return bad()
 	}
-	grant := &databasepb.SqlWriterBootGrant{}
-	if err = (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, grant); err != nil {
+	set := &databasepb.SqlWriterBootGrantSet{}
+	if err = (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(raw, set); err != nil {
 		return bad()
 	}
 	physical, err := hex.DecodeString(getenv("MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))
-	if err != nil || len(physical) != sha256.Size || !bytes.Equal(physical, grant.PhysicalAuthoritySha256) {
+	if err != nil || len(physical) != sha256.Size {
 		return bad()
 	}
-	if grant.Format != "SQL_WRITER_BOOT_V1" || grant.Permission != "NORMAL" || grant.DeploymentId == "" || grant.DeploymentId != getenv("MMORPG_SQL_DEPLOYMENT_ID") ||
-		len(grant.WriterKey) != 16 || len(grant.InstanceId) != 16 || len(grant.GrantId) != 16 || len(grant.RegistrationDigest) != 32 || grant.GrantedMs == 0 ||
-		!validGeneration(grant.Generation) || !validIdentifier(grant.AuthoritySchema) || !validPrincipal(string(grant.SqlPrincipal)) || !validSchemas(grant.ProtectedSchemas) {
+	if set.Format != GrantSetFormat || len(set.Grants) == 0 || len(set.Grants) > maxBootGrants {
 		return bad()
+	}
+	deployment := getenv("MMORPG_SQL_DEPLOYMENT_ID")
+	// 目录现在就核:到第一条写语句才发现目录不对,进程已经起来对外服务了。
+	if err = checkPrivateControlDirectory(dir); err != nil {
+		return bad()
+	}
+	configs := make(map[string]WriterConfig, len(set.Grants))
+	content := append([]byte(hex.EncodeToString(actual[:])), '\n')
+	for _, grant := range set.Grants {
+		if !validBootGrant(grant, deployment, physical) {
+			return bad()
+		}
+		if _, duplicate := configs[grant.AuthoritySchema]; duplicate {
+			return bad()
+		}
+		name := hex.EncodeToString(grant.GrantId) + ".consumed"
+		if _, statErr := os.Lstat(filepath.Join(dir, name)); !errors.Is(statErr, os.ErrNotExist) {
+			return bad()
+		}
+		configs[grant.AuthoritySchema] = WriterConfig{boot: &writerBoot{
+			grant:  proto.Clone(grant).(*databasepb.SqlWriterBootGrant),
+			marker: &grantMarker{dir: dir, name: name, content: content},
+		}}
+	}
+	return configs, nil
+}
+
+// LoadWriterConfig 是只写一个逻辑库的进程的入口：多给或少给一份都是部署配错。
+// 库名不在这里比：连接池建连时核 DATABASE()==AuthoritySchema，配错的 grant 打不开池。
+func LoadWriterConfig(getenv func(string) string) (WriterConfig, error) {
+	configs, err := LoadWriterConfigs(getenv)
+	if err != nil {
+		return WriterConfig{}, err
+	}
+	if len(configs) != 1 {
+		return WriterConfig{}, errors.New("本进程只写一个逻辑库，SQL writer启动grant数量不符")
+	}
+	for _, config := range configs {
+		return config, nil
+	}
+	return WriterConfig{}, errors.New("SQL writer启动grant缺失")
+}
+
+func validBootGrant(grant *databasepb.SqlWriterBootGrant, deployment string, physical []byte) bool {
+	if grant == nil || !bytes.Equal(physical, grant.PhysicalAuthoritySha256) {
+		return false
+	}
+	if grant.Format != "SQL_WRITER_BOOT_V1" || grant.Permission != "NORMAL" || grant.DeploymentId == "" || grant.DeploymentId != deployment ||
+		len(grant.WriterKey) != 16 || len(grant.InstanceId) != 16 || len(grant.GrantId) != 16 || len(grant.RegistrationDigest) != 32 || grant.GrantedMs == 0 ||
+		!validGeneration(grant.Generation) || !validIdentifier(grant.AuthoritySchema) || !validPrincipal(string(grant.SqlPrincipal)) || !soleSchema(grant.AuthoritySchema, grant.ProtectedSchemas) {
+		return false
 	}
 	if len(grant.MaintenanceRunId) != 0 && len(grant.MaintenanceRunId) != 16 || len(grant.LockQualificationSha256) != 32 || (grant.LockPrimitive != databasepb.SqlWriterBootGrant_SELECT_ONLY && grant.LockPrimitive != databasepb.SqlWriterBootGrant_LOCK_TOUCH) {
-		return bad()
+		return false
 	}
-	if err = consumeGrantMarker(dir, hex.EncodeToString(grant.GrantId)+".consumed", append([]byte(hex.EncodeToString(actual[:])), '\n')); err != nil {
-		return bad()
-	}
-	return WriterConfig{boot: &writerBoot{grant: proto.Clone(grant).(*databasepb.SqlWriterBootGrant)}}, nil
+	return true
 }
 
 type grantMarkerFile interface {
@@ -219,16 +296,10 @@ func validGeneration(value string) bool {
 	}
 	return true
 }
-func validSchemas(values []string) bool {
-	if len(values) == 0 || !sort.StringsAreSorted(values) {
-		return false
-	}
-	for i, value := range values {
-		if !validIdentifier(value) || i > 0 && value == values[i-1] {
-			return false
-		}
-	}
-	return true
+
+// soleSchema:闸门只保护它所在的逻辑库。受保护清单恰好是这个库自己,其它形状都是没按逻辑库拆开的部署。
+func soleSchema(authority string, values []string) bool {
+	return validIdentifier(authority) && len(values) == 1 && values[0] == authority
 }
 
 // 私有控制文件的单一平台owner；调用方不得先验证再自行重开路径。

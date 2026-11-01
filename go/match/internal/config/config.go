@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/playerredis"
 
@@ -154,17 +155,17 @@ type Config struct {
 }
 
 type GlobalMatchConf struct {
-	Backend                string `json:",default=tidb"` // tidb | mysql,不写就是 tidb
-	Host                   string
-	User                   string
-	PasswordEnv            string `json:",default=MATCH_MYSQL_PASSWORD"`
-	Database               string `json:",default=mmorpg_match"`
-	AccountRoleSchema      string
-	GuildTrialSchema       string
-	ProbeSecretEnv         string `json:",default=MATCH_PROBE_SECRET"`
-	CrossRegionWaitSeconds uint32 `json:",default=30"`
-	HardLatencyMs          uint32 `json:",default=180"`
-	ProbeTTLSeconds        uint32 `json:",default=120"`
+	Backend     string `json:",default=tidb"` // tidb | mysql,不写就是 tidb
+	Host        string
+	User        string
+	PasswordEnv string `json:",default=MATCH_MYSQL_PASSWORD"`
+	Database    string `json:",default=mmorpg_match"`
+	// DbPlacement:按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Host。
+	DbPlacement            dbplacement.Config `json:",optional"`
+	ProbeSecretEnv         string             `json:",default=MATCH_PROBE_SECRET"`
+	CrossRegionWaitSeconds uint32             `json:",default=30"`
+	HardLatencyMs          uint32             `json:",default=180"`
+	ProbeTTLSeconds        uint32             `json:",default=120"`
 	// 匹配范围树逐级放宽(docs/design/global-match-hierarchical-pools.md §3.2):入队后先只和同 zone 的人凑,
 	// 等满 ScopeGroupAfterSeconds 可到同大区,等满 ScopeGlobalAfterSeconds 可到全服;从原始入队时刻起算。
 	// 两者都是提交点规则,进全局策略指纹,各副本必须一致。初值待按真实等待分布定标(D-16)。

@@ -30,7 +30,7 @@ func Tables() []proto.Message {
 		&pb.GuildRecord{},
 		&pb.GuildTrialLobbyRecord{},
 		&pb.GuildTrialLobbySlotRecord{},
-		// 全局account_role前缀之后，G串行化本帮launch原件与参与投影；同G内建帮员/结算原序继续保持。
+		// 角色护栏副本(role_fence,不归本清单管,-migrate 另建)前缀之后，G串行化本帮launch原件与参与投影；同G内建帮员/结算原序继续保持。
 		&pb.GuildTrialLaunchRecord{},
 		&pb.GuildTrialLaunchRoleRecord{},
 		&pb.GuildPlayerStateRecord{},

@@ -61,6 +61,7 @@ func commonTipCodes() map[string]uint32 {
 	return map[string]uint32{
 		"ErrInvalidParameter": ErrInvalidParameter,
 		"ErrRateLimited":      ErrRateLimited,
+		"ErrRoleNotVerified":  ErrRoleNotVerified,
 		"ErrStorage":          ErrStorage,
 	}
 }
@@ -129,7 +130,7 @@ func TestTipCodesStayInFriendSegment(t *testing.T) {
 	}
 }
 
-// TestCommonTipCodesAreCommonSegment 钉死「复用的三个码真的是 common 段的码」。
+// TestCommonTipCodesAreCommonSegment 钉死「复用的这几个码真的是 common 段的码」。
 //
 // 这条防的是「以后有人图省事,把 ErrStorage 改成指向某个域私有的故障码」:
 // 那样 friend 的存储故障就不再和其它服务聚合在同一个码上,

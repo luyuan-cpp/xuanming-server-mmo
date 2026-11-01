@@ -526,7 +526,13 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	if ks := newKillSwitch(watchCtx, cfg, etcdCli); ks != nil {
 		interceptors = append(interceptors, ks.UnaryServerInterceptor())
 	}
+	// LoginAdmin 的口令闸门排在身份闸门前面:身份闸门只校验带了身份声明的调用,挡不住运维接口。
+	adminToken := os.Getenv(loginadminserver.AdminTokenEnv)
+	if adminToken != "" && len(adminToken) < loginadminserver.MinAdminTokenBytes {
+		return fmt.Errorf("%s is shorter than %d bytes", loginadminserver.AdminTokenEnv, loginadminserver.MinAdminTokenBytes)
+	}
 	interceptors = append(interceptors,
+		loginadminserver.AdminAuthInterceptor(adminToken),
 		newSessionInterceptor(cfg),
 		serverbase.UnaryInterceptor(serverbase.Options{}),
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),

@@ -1,12 +1,12 @@
 package main
 
-// 本文件是本工具读「玩家归属映射」的全部读法:读全局库 player_route,它是映射唯一的真源
-// (docs/design/player-route-mapping-durability-proposal.md §15)。活区在 idx_route_home 上逐个跳取 home_zone,
+// 本文件是本工具读「玩家归属映射」的全部读法:读目录各片的 player_route,它是映射唯一的真源
+// (docs/design/player-route-mapping-durability-proposal.md §15,分片见 docs/design/horizontal-scale-logical-db.md §5.6)。活区在 idx_route_home 上逐个跳取 home_zone,
 // 玩家数在 idx_route_home 上一条 COUNT(*) 数完;按 id 点查走主键 (route_shard, player_id)(提案 §11.2 G1a「读方模板」)。
 //
 // 读失败一律报错,绝不把「没读到」当成「没有归属」;值形状不合规的条目计数并在报告里列出,不静默跳过。
 //
-// 本 module 不依赖 go/shared(避免 go.mod / go.sum 引入 shared 的整棵依赖树):行片数与 home_zone 上限镜像在这里,
+// 本 module 不依赖 go/shared(避免 go.mod / go.sum 引入 shared 的整棵依赖树):行片数、home_zone 上限和分片规则镜像在这里,
 // 由 route_source_test.go 的 TestMirroredRouteConstantsMatchSources 逐字核对源头。
 
 import (
@@ -22,6 +22,24 @@ const routeRowShards uint64 = 64
 // maxHomeZone 镜像 player_route 的 chk_route_home(home_zone BETWEEN 1 AND 999999)。
 // CHECK 在 MySQL < 8.0.16 / TiDB 未开 tidb_enable_check_constraint 时不生效,所以读方仍按它判畸形。
 const maxHomeZone uint32 = 999999
+
+// routeShardsValid 镜像 shared/dirshard.Validate:K 必须是 64 的约数。
+func routeShardsValid(k int) bool {
+	return k >= 1 && uint64(k) <= routeRowShards && routeRowShards%uint64(k) == 0
+}
+
+// routeShardDBName 镜像 shared/dirshard.DirectoryDBName:K=1 就是基名,否则 <base>_00。
+func routeShardDBName(base string, slot, k int) string {
+	if k == 1 {
+		return base
+	}
+	return fmt.Sprintf("%s_%02d", base, slot)
+}
+
+// routeSlotOfPlayer 镜像 shared/dirshard.SlotOfPlayer。
+func routeSlotOfPlayer(playerID uint64, k int) int {
+	return int(playerID%routeRowShards) % k
+}
 
 // shapeSampleLimit 是报告里列出的畸形样本上限。
 const shapeSampleLimit = 10
@@ -116,6 +134,42 @@ func (t sqlRouteTable) HomeOf(ctx context.Context, playerID uint64) (uint32, boo
 		return 0, false, nil
 	}
 	return uint32(home.Int64), true, nil
+}
+
+// shardedRouteTable 是目录 K 片的路由表,下标就是片号:活区取各片的最小值,玩家数求和,点查去玩家所在的片。任一片读失败就报错。
+type shardedRouteTable struct {
+	shards []routeTable
+}
+
+func (t shardedRouteTable) NextHomeZone(ctx context.Context, from uint64) (uint32, bool, error) {
+	var best uint32
+	found := false
+	for _, shard := range t.shards {
+		zone, ok, err := shard.NextHomeZone(ctx, from)
+		if err != nil {
+			return 0, false, err
+		}
+		if ok && (!found || zone < best) {
+			best, found = zone, true
+		}
+	}
+	return best, found, nil
+}
+
+func (t shardedRouteTable) CountWithHome(ctx context.Context) (int64, error) {
+	var total int64
+	for _, shard := range t.shards {
+		n, err := shard.CountWithHome(ctx)
+		if err != nil {
+			return 0, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t shardedRouteTable) HomeOf(ctx context.Context, playerID uint64) (uint32, bool, error) {
+	return t.shards[routeSlotOfPlayer(playerID, len(t.shards))].HomeOf(ctx, playerID)
 }
 
 type dbRouteSource struct {

@@ -14,7 +14,7 @@
 
 - 任何一份丢失或回退,另一份都盖得住发过的号,下一块自动跳到它之上,不用人工处理。
 - 第三道防线是时间下限:每块的起点不低于当前时间对应的计数器值。它只会把起点往上抬,坏时钟不会造成重号,也不会让发号停下来。
-- 记录的值是 `地域 << 57 | 秒 << 24`,秒从 2026-01-01 UTC 起算。地域现在都是 0。
+- 记录的值是 `地域 << 57 | 秒 << 24`,秒从 2026-01-01 UTC 起算。dev、test 的地域是 0,生产和 staging 的地域码见[开新地域手册](open-new-region-runbook.md) §3。
 - 发号器不用全局库。**恢复 `mmorpg_global` 不再影响发号**。
 - **两套独立 etcd 是强规定**(AGENTS §7,负责人 2026-10-31 定):配置校验要求两套地址没有交集;每次预留和初始化再比 etcd 自己报的集群号,相同就拒绝,指标 `result=refused`,错误里带 `same etcd cluster`。`AllowAutoSeed=true` 只在 `Mode=dev`、`test` 下生效。
 - dev 档(`Mode: dev` 且 `IdSegment.AllowAutoSeed=true`)两份记录放同一套 etcd,记录不存在时自动初始化,不需要下面任何操作。压测前清空 etcd 没有问题。
@@ -23,10 +23,10 @@
 
 新环境的两份记录都不存在,发号器会拒绝发号。scene 的「id segments ready」门禁不放行,建角也会失败,日志里是 `REFUSED ... both reservation records are missing`。这是刻意的:发号器分不清「首次部署」和「两套 etcd 同时丢了数据」。
 
-确认是全新环境后,在任意一个 data-service Pod 里跑一次:
+确认是全新环境后,在第一个 zone 的 data-service 就绪之后、放流量之前,在任意一个 data-service Pod 里跑一次(配置在本 Pod 的私有目录,写者启动目录选中的那一份):
 
 ```bash
-kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc/data_service.yaml -id-issuer-init
+kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc/private/data_service.yaml -id-issuer-init
 ```
 
 输出 `both reservation records created` 就完成了。只要有一份记录存在,这条命令什么也不做,重复执行是安全的。不需要重启任何服务:scene 和 login 的客户端会按退避自动重试。
@@ -47,6 +47,7 @@ kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc
 | `result="refused"`、`outcome="records_missing"` | 两份记录都不存在 | 首次部署走 §2;否则走 §4.2,这是 ID 安全事件 |
 | `result="ahead_of_clock"` | 计数器比时钟超前 7 天以上,时钟曾跳到未来 | 不影响唯一性,但时间下限在追上来之前不起作用。先修时钟,记下来;追上之前如果发生 §4.2 要手工抬高 |
 | 日志 `belongs to another region` | 记录的地域和配置不一致 | 配错了 `IdSegment.Issuer.Region`。改回去,不要改记录 |
+| 启动报 `reserved for dev and test` | `Mode` 不是 dev、test,`IdSegment.Issuer.Region` 漏写或写了 0 | 配上这个地域的地域码,见[开新地域手册](open-new-region-runbook.md) §3 |
 | `outcome="exhausted"` | 本地域的值域见底 | 事故。只可能是时钟曾跳到很远的未来。换一个没用过的地域码(§4.4) |
 | `outcome="unknown_tag"` | 种类没登记 | 加进 `IdSegment.Tags`(`config.go`、`data_service.yaml`、`k8s_deploy.ps1` 三处) |
 
@@ -71,10 +72,10 @@ kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc
    - 确认时钟从没出过问题(没有 `ahead_of_clock` 指标,也没有时钟告警):直接跑 §2 的 `-id-issuer-init`,它会留一天余量。两份都存在但值回退了的话,用下面的 `etcdctl` 抬高,余量同样给一天。
    - 不确定:把余量加大到 30 天。值域按时间算有 272 年,30 天不算什么。
 
-   算出要写的值(地域 0):
+   算出要写的值,`REGION` 填这个地域的地域码(配置里的 `IdSegment.Issuer.Region`)。漏掉地域码写出来的记录会被发号器拒绝:
 
    ```bash
-   echo $(( ($(date +%s) + 30 * 86400 - 1767225600) << 24 ))
+   REGION=<地域码>; echo $(( (REGION << 57) | (($(date +%s) + 30 * 86400 - 1767225600) << 24) ))
    ```
 
    两份都写上,写之前先看一眼当前值,只能往上抬:
@@ -105,7 +106,7 @@ kubectl -n <zone-namespace> exec deploy/data-service -- /app/service -f /app/etc
 
 ### 4.4 换地域码
 
-值域见底或者多地域部署时用。地域码写在 `IdSegment.Issuer.Region`,值 0 到 63。新地域的值域和旧地域不相交,所以换码本身不会重号。
+值域见底或者多地域部署时用。地域码写在 `IdSegment.Issuer.Region`,生产和 staging 的值 1 到 63,0 只给 dev、test。新地域的值域和旧地域不相交,所以换码本身不会重号。
 
 发号器发现记录里的地域和配置不一致会拒绝预留,所以换码时要同时清掉两份记录,再跑 §2 的初始化。绝不能把用过的地域码再分配给别的地域。
 

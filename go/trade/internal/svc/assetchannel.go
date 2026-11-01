@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"sync"
 	"time"
@@ -406,7 +407,9 @@ func StartAssetOpCleanup(db *sql.DB, c config.AssetOpConf, roots ...*drainproof.
 					budget, release := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 					defer release()
 					if _, err := repo.CleanupTerminalOps(budget, time.Now(), conf.TerminalRetention); err != nil {
-						owner.Hold()
+						if !authoritysql.IsWriterFrozen(err) {
+							owner.Hold()
+						}
 						logx.Errorf("trade cleanup 失败: %v", err)
 					}
 				}()
@@ -519,9 +522,7 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 									}
 								}
 								release()
-								if err != nil && a.RelayAdmission != nil {
-									a.RelayAdmission.Hold()
-								}
+								a.holdUnknownTick(err)
 								if err != nil && loopCtx.Err() == nil {
 									logx.Errorf("交易恢复通道失败 phase=%d: %v", (phase+n)%3, err)
 								}
@@ -544,6 +545,14 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 		logx.Infof("[trade] Asset channel started: maintenance_election=%t landing_wake=%t",
 			a.maintenance != nil, a.Wake != nil)
 	})
+}
+
+// holdUnknownTick 把恢复通道一轮的失败记成排空 HOLD。确定没写的不算(闸门冻结、投票期和角色冲突的拒绝、自愈读不到目录、只读步骤失败),
+// 下一轮接着做,见 commerce.OutcomeKnown。拿不准的都算未知。
+func (a *AssetChannel) holdUnknownTick(err error) {
+	if err != nil && a.RelayAdmission != nil && !commerce.OutcomeKnown(err) {
+		a.RelayAdmission.Hold()
+	}
 }
 
 // Close 停循环并关连接。幂等;调用方须保证它先于 etcd 客户端、MySQL 的关闭。

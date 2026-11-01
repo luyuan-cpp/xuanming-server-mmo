@@ -82,16 +82,19 @@ Test-Case '参数块:-ZoneName / -RouteToolArgs 必填;-TimeoutSeconds 缺省 24
     Assert-Equal -Expected 1 -Actual $zonePattern.Count -Because '-ZoneName 必须有 ValidatePattern(进 namespace 名,只许 DNS 标签字符)'
 }
 
-Test-Case '契约字面量与源头一致:固定 args 前缀 == data-service.yaml 的 args;ConfigMap 名 == 服务 Deployment 与 migrate Job;cli.go 的每个子命令都在白名单里;镜像 ENTRYPOINT 是 /app/service' {
+Test-Case '契约字面量与源头一致:固定 args 的配置文件名 == data-service.yaml 选中的那一份;ConfigMap 名 == migrate Job 与部署目录;cli.go 的每个子命令都在白名单里;镜像 ENTRYPOINT 是 /app/service' {
     $c = Get-RouteToolContract
     $serviceManifest = Read-RepoText 'deploy/k8s/manifests/go-svc/data-service.yaml'
-    $serviceArgs = [regex]::Match($serviceManifest, '(?m)^[ ]+args:[ ]*(?<v>\[.*\])[ ]*$')
-    Assert-True -Condition $serviceArgs.Success -Because 'data-service.yaml 里应当有一行 args: [...]'
-    $serviceArgList = [string[]]@($serviceArgs.Groups['v'].Value | ConvertFrom-Json)
-    Assert-Equal -Expected ($serviceArgList -join ' ') -Actual (@($c.FixedArgs | Select-Object -First 2) -join ' ') -Because 'route-tool 与在役服务读同一份配置文件(-f /app/etc/data_service.yaml)'
+    # 第一行 args 是 registrar init,取带 -f 的那一行(主容器)。常驻进程读本 boot 选中的配置(私有子目录),route-tool 的 Job 读 ConfigMap 挂载的模板,文件名相同。
+    $serviceArgs = @([regex]::Matches($serviceManifest, '(?m)^[ ]+args:[ ]*(?<v>\[.*\])[ ]*$') | Where-Object { $_.Groups['v'].Value -match '"-f"' })
+    Assert-Equal -Expected 1 -Actual $serviceArgs.Count -Because 'data-service.yaml 里主容器应当有一行带 -f 的 args: [...]'
+    $serviceArgList = [string[]]@($serviceArgs[0].Groups['v'].Value | ConvertFrom-Json)
+    Assert-Equal -Expected '-f /app/etc/private/data_service.yaml' -Actual (@($serviceArgList | Select-Object -Last 2) -join ' ') -Because '在役服务读写者启动目录选中的配置'
+    Assert-Equal -Expected '-f /app/etc/data_service.yaml' -Actual (@($c.FixedArgs | Select-Object -First 2) -join ' ') -Because 'route-tool 读同名配置文件,挂 ConfigMap'
     Assert-Equal -Expected '-route-tool' -Actual $c.FixedArgs[2] -Because 'data_service.go 的工具入口 flag 是 -route-tool'
     Assert-Match -Text (Read-RepoText 'go/data_service/data_service.go') -Pattern '"route-tool"' -Because 'data_service.go 里要有 -route-tool 这个 flag'
-    foreach ($path in @('deploy/k8s/manifests/go-svc/data-service.yaml', 'deploy/k8s/manifests/go-svc/data-service-migrate.yaml', $c.JobTemplate)) {
+    # data-service.yaml 不挂这个 ConfigMap:常驻进程的配置在本 Pod 的私有 emptyDir(Add-SqlWriterBootManifest、manifests/go-svc/data-service.yaml)。
+    foreach ($path in @('deploy/k8s/manifests/go-svc/data-service-migrate.yaml', $c.JobTemplate)) {
         Assert-Match -Text (Read-RepoText $path) -Pattern ('(?m)^[ ]+name:[ ]*' + [regex]::Escape($c.ConfigMapName) + '[ ]*$') -Because "$path 挂的是同一个 ConfigMap $($c.ConfigMapName)"
     }
     Assert-Match -Text (Read-RepoText 'tools/scripts/k8s_deploy.ps1') -Pattern ('"data-service"\s*=\s*@\{\s*ConfigMap\s*=\s*"' + [regex]::Escape($c.ConfigMapName) + '"') -Because 'ConfigMap 名来自部署目录 $GoSvcCatalogue."data-service"'

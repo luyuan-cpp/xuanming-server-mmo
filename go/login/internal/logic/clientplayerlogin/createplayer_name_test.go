@@ -23,6 +23,7 @@ import (
 	pbdb "proto/common/database"
 	dspb "proto/data_service"
 	loginpb "proto/login"
+	"shared/accountdirectory"
 	"shared/generated/pb/table"
 	gametable "shared/generated/table"
 	"shared/idsegment"
@@ -722,6 +723,40 @@ func TestCreatePlayerName_SQLCommitReplyLostKeepsOriginalRoleAndName(t *testing.
 	}
 	if len(storedPlayers(t, n.ctx, n.rdb)) != 1 || len(n.fake.releaseReqs) != 0 {
 		t.Fatal("原角色和名字必须保留")
+	}
+}
+
+// 规格 §5.3:提交点之前就失败时角色确定没建成。名字当场释放,不记孤儿,玩家重试不会撞上自己占住的名字。
+func TestCreatePlayerName_SQLNotCommittedReleasesNameAndRetrySucceeds(t *testing.T) {
+	n := newNameHarness(t)
+	d := fixtureDirectory(t, n.rdb)
+	d.createErr = accountdirectory.ErrNotCommitted
+	// 这时不该再强读:结论已经是确定的。
+	d.lookupErr = errors.New("不该走到强读")
+	before := orphanCount(t)
+	resp := n.create(t, "云中君")
+	requireTip(t, resp, table.LoginError_kLoginDataSerializeFailed)
+	if len(n.fake.releaseReqs) != 1 || n.fake.releaseReqs[0].GetName() != "云中君" {
+		t.Fatalf("确定没写必须释放本次名字: %v", n.fake.releaseReqs)
+	}
+	if orphanCount(t) != before {
+		t.Fatal("确定没写不是孤儿")
+	}
+	if len(n.scheduled) != 0 {
+		t.Fatalf("确定没写不需要延迟的第二次释放: %v", n.scheduled)
+	}
+	if len(storedPlayers(t, n.ctx, n.rdb)) != 0 {
+		t.Fatal("没提交不能有角色")
+	}
+
+	// 名字释放了,玩家重试走到底。
+	d.createErr, d.lookupErr = nil, nil
+	resp = n.create(t, "云中君")
+	if resp.ErrorMessage != nil {
+		t.Fatalf("重试应该成功: %v", resp.ErrorMessage)
+	}
+	if players := storedPlayers(t, n.ctx, n.rdb); len(players) != 1 || players[0].GetName() != "云中君" {
+		t.Fatalf("重试之后的角色: %v", players)
 	}
 }
 

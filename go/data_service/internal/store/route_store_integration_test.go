@@ -89,21 +89,14 @@ func itNull64(v uint64) any {
 	return v
 }
 
-func itNullStr(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-// seedRouteRow 绕过 store 直接造一行(home 为 NULL 的存量行、冻结行这类 W1 自己写不出来的形状)。
+// seedRouteRow 绕过 store 直接造一行(home 为 NULL 的存量行这类 W1 自己写不出来的形状)。
 // route_shard 按 placement.RouteRowShard 给(聚簇主键首列,chk_route_shard 钉住)。
-func seedRouteRow(t *testing.T, db *storetest.DB, player uint64, home, storage uint32, version uint64, frozen string, rev uint64) {
+func seedRouteRow(t *testing.T, db *storetest.DB, player uint64, home, storage uint32, version, rev uint64) {
 	t.Helper()
 	_, err := db.Raw.Exec(
-		"INSERT INTO player_route (route_shard, player_id, home_zone, storage_id, placement_version, frozen_run_id, rev, updated_by, created_at_ms, updated_at_ms)"+
-			" VALUES (?, ?, ?, ?, ?, ?, ?, 'it-seed', 1, 1)",
-		uint64(placement.RouteRowShard(player)), player, itNull32(home), itNull32(storage), itNull64(version), itNullStr(frozen), rev)
+		"INSERT INTO player_route (route_shard, player_id, home_zone, storage_id, placement_version, rev, updated_by, created_at_ms, updated_at_ms)"+
+			" VALUES (?, ?, ?, ?, ?, ?, 'it-seed', 1, 1)",
+		uint64(placement.RouteRowShard(player)), player, itNull32(home), itNull32(storage), itNull64(version), rev)
 	require.NoError(t, err)
 }
 
@@ -213,7 +206,6 @@ func TestRouteSchema_CheckConstraintsEnforced(t *testing.T) {
 		{"home越界", "INSERT INTO player_route (route_shard, player_id, home_zone, rev, created_at_ms, updated_at_ms) VALUES (2, 2, 1000000, 1, 1, 1)", ""},
 		{"有storage没有version", "INSERT INTO player_route (route_shard, player_id, storage_id, rev, created_at_ms, updated_at_ms) VALUES (3, 3, 7, 1, 1, 1)", ""},
 		{"version为0", "INSERT INTO player_route (route_shard, player_id, storage_id, placement_version, rev, created_at_ms, updated_at_ms) VALUES (4, 4, 7, 0, 1, 1, 1)", ""},
-		{"冻结却没有storage", "INSERT INTO player_route (route_shard, player_id, frozen_run_id, rev, created_at_ms, updated_at_ms) VALUES (5, 5, 'run', 1, 1, 1)", ""},
 		{"rev为0", "INSERT INTO player_route (route_shard, player_id, home_zone, rev, created_at_ms, updated_at_ms) VALUES (6, 6, 7, 0, 1, 1)", ""},
 		// G1a:player_id 的唯一性靠它(主键是 (route_shard, player_id)),1 % 64 = 1 ≠ 2。
 		{"route_shard与player_id不符", "INSERT INTO player_route (route_shard, player_id, home_zone, rev, created_at_ms, updated_at_ms) VALUES (2, 1, 7, 1, 1, 1)", "chk_route_shard"},
@@ -342,7 +334,7 @@ func TestRouteStore_RegisterHomeBranches(t *testing.T) {
 	assert.Equal(t, row, after, "冲突不许改行")
 
 	// home 为 NULL、落点为 NULL、请求带 storage:补 home + 落点
-	seedRouteRow(t, db, 1002, 0, 0, 0, "", 3)
+	seedRouteRow(t, db, 1002, 0, 0, 0, 3)
 	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1002, HomeZone: home, StorageID: storage})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterFilledHome, res.Outcome)
@@ -353,7 +345,7 @@ func TestRouteStore_RegisterHomeBranches(t *testing.T) {
 	assert.Equal(t, uint64(4), row.Rev)
 
 	// home 为 NULL、请求不带 storage:只补 home
-	seedRouteRow(t, db, 1003, 0, 0, 0, "", 1)
+	seedRouteRow(t, db, 1003, 0, 0, 0, 1)
 	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1003, HomeZone: home})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterFilledHome, res.Outcome)
@@ -363,7 +355,7 @@ func TestRouteStore_RegisterHomeBranches(t *testing.T) {
 	assert.Equal(t, uint64(2), row.Rev)
 
 	// home 为 NULL、已有落点、请求带 storage:补 home,落点保留
-	seedRouteRow(t, db, 1004, 0, 55, 3, "", 2)
+	seedRouteRow(t, db, 1004, 0, 55, 3, 2)
 	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1004, HomeZone: home, StorageID: storage})
 	require.NoError(t, err)
 	assert.Equal(t, store.RouteRegisterFilledHomePlacementKept, res.Outcome)
@@ -371,15 +363,6 @@ func TestRouteStore_RegisterHomeBranches(t *testing.T) {
 	assert.Equal(t, uint32(55), row.StorageID, "已有落点指向数据真正所在的库,不许被请求盖掉")
 	assert.Equal(t, uint64(3), row.PlacementVersion)
 	assert.Equal(t, uint64(3), row.Rev)
-
-	// 冻结行:补 home 时冻结态原样留着
-	seedRouteRow(t, db, 1005, 0, 55, 3, "run-x", 2)
-	res, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 1005, HomeZone: home, StorageID: storage})
-	require.NoError(t, err)
-	assert.Equal(t, store.RouteRegisterFilledHomePlacementKept, res.Outcome)
-	row, _ = readRoute(t, st, 1005)
-	assert.Equal(t, "run-x", row.FrozenRunID, "补 home 不许动冻结态")
-	assert.Equal(t, uint32(55), row.StorageID)
 }
 
 func TestRouteStore_NullPlacementBindsNull(t *testing.T) {
@@ -390,12 +373,12 @@ func TestRouteStore_NullPlacementBindsNull(t *testing.T) {
 	res, err := st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 2001, HomeZone: 7})
 	require.NoError(t, err)
 	require.Equal(t, store.RouteRegisterInserted, res.Outcome)
-	var storageNull, versionNull, frozenNull bool
+	var storageNull, versionNull bool
 	require.NoError(t, db.Raw.QueryRow(
-		"SELECT storage_id IS NULL, placement_version IS NULL, frozen_run_id IS NULL FROM player_route WHERE route_shard = ? AND player_id = ?",
+		"SELECT storage_id IS NULL, placement_version IS NULL FROM player_route WHERE route_shard = ? AND player_id = ?",
 		uint64(placement.RouteRowShard(2001)), 2001).
-		Scan(&storageNull, &versionNull, &frozenNull))
-	assert.True(t, storageNull && versionNull && frozenNull, "不带落点时三列都必须是 NULL,不是 0")
+		Scan(&storageNull, &versionNull))
+	assert.True(t, storageNull && versionNull, "不带落点时两列都必须是 NULL,不是 0")
 
 	_, err = st.RegisterHome(ctx, store.RouteRegisterRequest{PlayerID: 2002, HomeZone: 7, StorageID: 1000000})
 	require.NoError(t, err)
@@ -526,10 +509,9 @@ func TestRouteStore_LockWaitBounded(t *testing.T) {
 	row := holder.QueryRowContext(ctx, store.RouteLockRowSQLForTest, uint64(placement.RouteRowShard(p)), p)
 	var home, storage sql.NullInt64
 	var version sql.NullInt64
-	var frozen sql.NullString
 	var rev, created, updated uint64
 	var writer string
-	require.NoError(t, row.Scan(&home, &storage, &version, &frozen, &rev, &writer, &created, &updated))
+	require.NoError(t, row.Scan(&home, &storage, &version, &rev, &writer, &created, &updated))
 
 	start := time.Now()
 	qctx, qcancel := context.WithTimeout(ctx, 10*time.Second)
@@ -653,7 +635,7 @@ func TestRouteStore_ProbeRejectsTableBuiltWithAnotherShardModulus(t *testing.T) 
 	// 按 % 16 建并 seed 64 号((0, 64) 在 % 16 下合法)→ (0, 64) 撞键被接受、(63, 63) 被 chk_route_shard 拒 → 模数哨兵;
 	// seed 的那一行原样留着,探针什么也没留下。
 	rebuild(t, 16)
-	seedRouteRow(t, db, uint64(placement.RouteRowShards), 7, 0, 0, "", 1)
+	seedRouteRow(t, db, uint64(placement.RouteRowShards), 7, 0, 0, 1)
 	_, err := store.NewRouteStore(db.Cfg, routeTestOpts())
 	require.ErrorIs(t, err, store.ErrRouteShardModulusMismatch, "首行撞键之后第二行照常判定,按模数 16 建的表仍要被认出")
 	assert.EqualValues(t, 1, db.Count(t, store.PlayerRouteTableName, ""), "只剩 seed 的那一行")
@@ -681,7 +663,7 @@ func TestRouteStore_ProbeKeysHeldByRealPlayers(t *testing.T) {
 	n := uint64(placement.RouteRowShards)
 	probeIDs := []uint64{n, n - 1} // 与 routeShardModulusProbeKeys 同:(0, 64)、(63, 63)
 	for _, id := range probeIDs {
-		seedRouteRow(t, db, id, 7, 0, 0, "", 1)
+		seedRouteRow(t, db, id, 7, 0, 0, 1)
 	}
 	requireSeedUntouched := func(t *testing.T) {
 		t.Helper()

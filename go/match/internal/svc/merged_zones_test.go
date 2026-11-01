@@ -27,7 +27,7 @@ func TestObserveMergedZoneRefreshCountsEachResult(t *testing.T) {
 func TestLoadMergedZonesFailureLeavesNothingBound(t *testing.T) {
 	sc := &ServiceContext{}
 	store := &authority.Store{}
-	require.Error(t, sc.loadMergedZones(context.Background(), store), "没配全局库 schema")
+	require.Error(t, sc.loadMergedZones(context.Background(), store), "没配 data_service 客户端")
 	require.Nil(t, sc.MergedZones)
 	require.Nil(t, store.MergedZones())
 	sc.MergedZones.Stop()

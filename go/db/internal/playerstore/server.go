@@ -13,6 +13,7 @@ import (
 	"db/internal/metrics"
 
 	storepb "proto/player_store"
+	"shared/authoritysql"
 	"shared/serviceauth"
 )
 
@@ -27,9 +28,6 @@ const (
 	opSave  = "save"
 	opClaim = "claim"
 )
-
-// ErrStorageFrozen 表示玩家正在搬库,暂时不能认领。调用方过一会儿重试。
-var ErrStorageFrozen = errors.New("playerstore: player storage is frozen")
 
 // StoreOpener 按落点编号给出已打开的库。返回的错误一律按「落点库暂不可用」处理。
 type StoreOpener func(ctx context.Context, storageID uint32) (*sql.DB, error)
@@ -99,9 +97,7 @@ func (s *Server) SavePlayer(ctx context.Context, req *storepb.SavePlayerRequest)
 		resolved, err := s.resolve(ctx, req.GetPlayerId())
 		if err != nil {
 			metrics.ObservePlayerStore(opSave, metrics.PlayerStoreUnavailable, time.Since(start))
-			if !errors.Is(err, ErrStorageFrozen) {
-				logx.Errorf("[player_store] resolve storage of player %d: %v", req.GetPlayerId(), err)
-			}
+			logx.Errorf("[player_store] resolve storage of player %d: %v", req.GetPlayerId(), err)
 			return nil, status.Error(codes.Unavailable, "player store: storage not resolved")
 		}
 		storageID = resolved
@@ -117,6 +113,11 @@ func (s *Server) SavePlayer(ctx context.Context, req *storepb.SavePlayerRequest)
 		return nil, status.Error(codes.Internal, "player store: not configured")
 	}
 	resp, err := store.Save(ctx, req)
+	if errors.Is(err, authoritysql.ErrWriterFrozen) {
+		// 闸门冻结(搬库切换窗口):这笔没写进去,结局是确定的。scene 按原序号退避重试,不算未知结局,也不打错误日志。
+		metrics.ObservePlayerStore(opSave, metrics.PlayerStoreUnavailable, time.Since(start))
+		return nil, status.Error(codes.Unavailable, "player store: writer gate frozen")
+	}
 	if err != nil {
 		metrics.ObservePlayerStore(opSave, metrics.PlayerStoreUnknown, time.Since(start))
 		logx.Errorf("[player_store] save player %d seq %d: %v", req.GetPlayerId(), req.GetSaveSeq(), err)
@@ -141,9 +142,7 @@ func (s *Server) LoadAndClaim(ctx context.Context, req *storepb.LoadAndClaimRequ
 	storageID, err := s.resolve(ctx, req.GetPlayerId())
 	if err != nil {
 		metrics.ObservePlayerStore(opClaim, metrics.PlayerStoreUnavailable, time.Since(start))
-		if !errors.Is(err, ErrStorageFrozen) {
-			logx.Errorf("[player_store] resolve storage of player %d: %v", req.GetPlayerId(), err)
-		}
+		logx.Errorf("[player_store] resolve storage of player %d: %v", req.GetPlayerId(), err)
 		return nil, status.Error(codes.Unavailable, "player store: storage not resolved")
 	}
 	db, err := s.open(ctx, storageID)
@@ -157,6 +156,10 @@ func (s *Server) LoadAndClaim(ctx context.Context, req *storepb.LoadAndClaimRequ
 		return nil, status.Error(codes.Internal, "player store: not configured")
 	}
 	resp, err := store.LoadAndClaim(ctx, req)
+	if errors.Is(err, authoritysql.ErrWriterFrozen) {
+		metrics.ObservePlayerStore(opClaim, metrics.PlayerStoreUnavailable, time.Since(start))
+		return nil, status.Error(codes.Unavailable, "player store: writer gate frozen")
+	}
 	if err != nil {
 		metrics.ObservePlayerStore(opClaim, metrics.PlayerStoreUnknown, time.Since(start))
 		logx.Errorf("[player_store] claim player %d: %v", req.GetPlayerId(), err)

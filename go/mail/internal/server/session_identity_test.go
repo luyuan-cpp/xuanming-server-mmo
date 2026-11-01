@@ -3,13 +3,17 @@ package server
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"testing"
 	"time"
 
 	base "proto/common/base"
 	mailpb "proto/mail"
 	"shared/domainhost"
+	table "shared/generated/pb/table"
 	"shared/redisslot"
+	"shared/rolefence"
+	"shared/serverbase"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -17,6 +21,17 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
+
+// 规格 §3.6:自愈读不到目录时事务已回滚,回非故障 tip,排空证明不能 Hold。真正的故障照旧。
+func TestRejectionRoleFenceUnavailableIsNotAFault(t *testing.T) {
+	tip := rejection(errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")))
+	if tip.GetId() == uint32(table.CommonError_kServiceUnavailable) || serverbase.TipVerdict(tip.GetId()) != serverbase.VerdictBizReject {
+		t.Fatalf("tip = %d", tip.GetId())
+	}
+	if fault := rejection(errors.New("db down")); fault.GetId() != uint32(table.CommonError_kServiceUnavailable) {
+		t.Fatalf("真正的故障 tip = %d", fault.GetId())
+	}
+}
 
 func TestMailRejectsIncompleteOrRevokedSessionBeforeRepository(t *testing.T) {
 	cache := miniredis.RunT(t)

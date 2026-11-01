@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -18,6 +19,8 @@ import (
 	dspb "proto/data_service"
 	"shared/accountdirectory"
 	"shared/authoritysql"
+	"shared/dbplacement"
+	"shared/dirshard"
 	"shared/drainproof"
 	"shared/idsegment"
 	"shared/placement"
@@ -111,6 +114,7 @@ type PlayerRouteStore interface {
 type ServiceContext struct {
 	// 与所有业务池共用的本boot；main必须先关闭接纳并join真实工作，再Seal。
 	Writer                    authoritysql.WriterConfig
+	Writers                   map[string]authoritysql.WriterConfig
 	RootAdmission             *drainproof.Session
 	RelayAdmission            *drainproof.Session
 	RelayIngress              *drainproof.Session
@@ -127,15 +131,32 @@ type ServiceContext struct {
 	AccountRoleTradeAuth      *serviceauth.Verifier
 	RoleAdmissions            accountdirectory.Admissions
 	RoleAdmissionAuth         *serviceauth.Verifier
-	accountDirectoryCloser    interface{ Close() error }
-	Config                    config.Config
-	Router                    *routing.Router
-	PlayerNameCache           *routing.PlayerNameCache // 只放可丢弃的读缓存;nil 时名字读写直接走库
-	SnapshotStore             SnapshotStore
-	TxLogStore                TransactionLogStore
-	IdSegmentStore            IdSegmentStore
-	rowIDSegments             []*idsegment.Client // player_snapshot、rollback_audit_log 的行号来源,Close 时关
-	PlayerNameStore           PlayerNameStore     // nil = 名字注册表不可用,Reserve/Release/BatchGet 全部 fail-closed
+	// RoleFenceStates、RoleAdmissionChecks、RoleFenceAuth 给 GetRoleFenceState、VerifyRoleAdmission 用。RoleRemovals 是删角的后台收尾,协调者缺席时为 nil。
+	// RoleRefs 是陈旧账号角色索引的后台清理,RolePreparing 撤销没人重放的超时 PREPARING,都不依赖协调者。见 configureRoleFence。
+	RoleFenceStates        RoleFenceStateReader
+	RoleAdmissionChecks    RoleAdmissionChecker
+	RoleFenceAuth          *serviceauth.Verifier
+	RoleRemovals           RoleRemovalResumer
+	RoleRefs               RoleRefSweeper
+	RolePreparing          RolePreparingAborter
+	PlayerRouteAuth        *serviceauth.Verifier // GetPlayerRoute 的调用证明,缺席时回 Unavailable
+	roleFenceCoordinator   io.Closer
+	stopRemovalResumer     func(context.Context) error
+	accountDirectoryCloser interface{ Close() error }
+	Config                 config.Config
+	Router                 *routing.Router
+	PlayerNameCache        *routing.PlayerNameCache // 只放可丢弃的读缓存;nil 时名字读写直接走库
+	SnapshotStore          SnapshotStore
+	TxLogStore             TransactionLogStore
+	IdSegmentStore         IdSegmentStore
+	rowIDSegments          []*idsegment.Client // player_snapshot、rollback_audit_log 的行号来源,Close 时关
+	PlayerNameStore        PlayerNameStore     // nil = 名字注册表不可用,Reserve/Release/BatchGet 全部 fail-closed
+	// Recall 是 GM 批量回收的 outbox。RecallReady 只有资产通道装配起来才为真,为假时执行回 ErrCodeRecallDisabled。
+	Recall      RecallStore
+	RecallReady bool
+	RecallOpIDs idsegment.Source
+	recall      *RecallChannel
+	recallStore *store.RecallStore
 
 	// PlayerStoreAssets、PlayerStoreHolders、PlayerStoreDisplays 在账号目录装配不起来时为 nil,对应的读回 Unavailable。
 	PlayerStoreAssets   PlayerStoreAssetReader
@@ -160,16 +181,31 @@ const autoMigrateTimeout = 5 * time.Minute
 const mergedZoneInitialReadTimeout = 3 * time.Second
 
 // MySQLConfigOf 把 yaml 的 SnapshotMySQL 段转成 store 的连接参数;main 的 -migrate 入口也用它。
+// DBName 是基名,片库和流水库的名字由它派生(shared/dirshard)。
 func MySQLConfigOf(c config.Config) store.MySQLConfig {
 	return store.MySQLConfig{
-		Host:        c.SnapshotMySQL.Host,
-		User:        c.SnapshotMySQL.User,
-		Password:    c.SnapshotMySQL.Password,
-		DBName:      c.SnapshotMySQL.DBName,
-		MaxOpenConn: c.SnapshotMySQL.MaxOpenConn,
-		MaxIdleConn: c.SnapshotMySQL.MaxIdleConn,
-		Backend:     authoritysql.Backend(c.SnapshotMySQL.Backend),
+		Host:          c.SnapshotMySQL.Host,
+		User:          c.SnapshotMySQL.User,
+		Password:      c.SnapshotMySQL.Password,
+		DBName:        c.SnapshotMySQL.DBName,
+		MaxOpenConn:   c.SnapshotMySQL.MaxOpenConn,
+		MaxIdleConn:   c.SnapshotMySQL.MaxIdleConn,
+		Backend:       authoritysql.Backend(c.SnapshotMySQL.Backend),
+		LogicalShards: c.Directory.Shards(),
 	}
+}
+
+// checkWriterSchemas 核写资格恰好覆盖要写的逻辑库。少一份那个库打不开,多一份说明名册和配置不是同一次部署。
+func checkWriterSchemas(writers map[string]authoritysql.WriterConfig, schemas []string) error {
+	for _, schema := range schemas {
+		if _, ok := writers[schema]; !ok {
+			return fmt.Errorf("写者启动授权缺逻辑库 %s", schema)
+		}
+	}
+	if len(writers) != len(schemas) {
+		return fmt.Errorf("写者启动授权有 %d 份,配置要写 %d 个逻辑库", len(writers), len(schemas))
+	}
+	return nil
 }
 
 // MissingStores 返回没装配起来的 MySQL store 的名字(固定顺序);全部就绪时返回 nil。
@@ -193,6 +229,9 @@ func (s *ServiceContext) MissingStores() []string {
 	}
 	if s.PlayerRouteStore == nil {
 		missing = append(missing, "player_route")
+	}
+	if s.Recall == nil {
+		missing = append(missing, "recall")
 	}
 	return missing
 }
@@ -234,6 +273,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	c.RouteStore = c.RouteStore.Normalize()
 
 	mysqlCfg := MySQLConfigOf(c)
+	var writerConfigs map[string]authoritysql.WriterConfig
 	var writerConfig authoritysql.WriterConfig
 	// 常驻进程没有 schema 凭据。历史上缺省启动迁移的行为在这里收口，
 	// 显式要求自动迁移则拒启；未配置时仅使用部署阶段已准备的表。
@@ -241,12 +281,35 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		panic("常驻 data_service 禁止 Schema.AutoMigrate，请使用独立 -migrate 部署入口")
 	}
 	if mysqlCfg.Host != "" {
-		writer, err := authoritysql.LoadWriterConfig(os.Getenv)
+		// 全部 store 共用一个映射 Watcher,先于消费一次性写资格:etcd 读不到时不白烧 boot grant。
+		dbPlacement, err := dbplacement.Start(context.Background(), c.SnapshotMySQL.DbPlacement)
+		if err != nil {
+			panic(fmt.Sprintf("data_service 逻辑库映射读取失败: %v", err))
+		}
+		mysqlCfg.PoolOptions = dbPlacement.OpenOptions()
+		// 目录各片、流水库、存档库各一份写资格。
+		writers, err := authoritysql.LoadWriterConfigs(os.Getenv)
 		if err != nil {
 			panic(fmt.Sprintf("data_service 写者启动授权拒绝: %v", err))
 		}
-		writerConfig = writer
+		schemas, err := c.WriterSchemas()
+		if err != nil {
+			panic(fmt.Sprintf("data_service 逻辑库清单无效: %v", err))
+		}
+		if err := checkWriterSchemas(writers, schemas); err != nil {
+			panic(fmt.Sprintf("data_service %v", err))
+		}
+		writerConfigs = writers
+		// 一个 boot 的写者身份在每个库上相同,取哪一份都一样。
+		writerConfig = writers[schemas[0]]
 		mysqlCfg.Permission = authoritysql.Writer(writerConfig)
+		mysqlCfg.PermissionFor = func(schema string) (authoritysql.Permission, error) {
+			writer, ok := writers[schema]
+			if !ok {
+				return authoritysql.Permission{}, fmt.Errorf("写者启动授权缺逻辑库 %s", schema)
+			}
+			return authoritysql.Writer(writer), nil
+		}
 	}
 	schemaReady := true
 	logx.Info("[ServiceContext] 常驻启动只读核对表形状；schema 必须由独立 -migrate 入口预建")
@@ -266,22 +329,26 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		idSegmentStore = issuer
 	}
 	if schemaReady {
-		if ss, err := store.NewSnapshotStore(mysqlCfg); err != nil {
-			logx.Errorf("[ServiceContext] snapshot store init failed (rollback disabled): %v", err)
-		} else if ss != nil {
-			snapshotStore = ss
-			rowIDSegments = useSnapshotRowIDs(ss, idSegmentStore)
+		// 流水和快照写入量大,在单独的流水库,不和目录抢闸门和写入。
+		if ledgerCfg, err := mysqlCfg.ForSchema(dirshard.LedgerDBName(mysqlCfg.DBName)); err != nil {
+			logx.Errorf("[ServiceContext] ledger database unavailable (rollback, recall and query disabled): %v", err)
+		} else {
+			if ss, err := store.NewSnapshotStore(ledgerCfg); err != nil {
+				logx.Errorf("[ServiceContext] snapshot store init failed (rollback disabled): %v", err)
+			} else if ss != nil {
+				snapshotStore = ss
+				rowIDSegments = useSnapshotRowIDs(ss, idSegmentStore)
+			}
+
+			if txLog, err := store.NewTransactionLogStore(ledgerCfg); err != nil {
+				logx.Errorf("[ServiceContext] transaction log store init failed (recall/query disabled): %v", err)
+			} else if txLog != nil {
+				transactionLogStore = txLog
+			}
 		}
 
-		if txLog, err := store.NewTransactionLogStore(mysqlCfg); err != nil {
-			logx.Errorf("[ServiceContext] transaction log store init failed (recall/query disabled): %v", err)
-		} else if txLog != nil {
-			transactionLogStore = txLog
-		}
-
-		// 名字注册表用**独立连接池**:建角路径上每次都有一条同步 INSERT,与快照
-		// 共用 SnapshotMySQL 那几条连接时,一次 GM 批量回滚就能把全服建角卡住。
-		// 只覆盖池大小,库/账号仍是同一个全局库。
+		// 名字注册表用**独立连接池**(每片一个):建角路径上每次都有同步写,与别的 store 共用连接时会互相拖慢。
+		// 只覆盖池大小,库/账号不变。
 		//
 		// 配置非法时**不装配**(nil),而不是纠正成默认值:那三个时间窗里有一个是安全
 		// 边界(ReleaseWindow),被悄悄放宽了谁都不知道;nil 的症状是建角当场全线拒绝,
@@ -313,9 +380,13 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		} else if ds, err := store.NewAccountDirectoryStore(mysqlCfg, mysqlCfg.Backend, c.AccountDirectory.MaxRoles(), maxOpen); err != nil {
 			logx.Errorf("[account-directory] SQL store init failed: %v", err)
 		} else {
-			if err := ds.ConfigureInitialPlayerCommit(c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {
+			if err := ds.ConfigurePlayerStores(c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs, store.PlayerStorePoolOptions{
+				MaxOpenConn:     c.Directory.StoragePools.MaxOpenConn,
+				MaxIdleConn:     c.Directory.StoragePools.MaxIdleConn,
+				ConnMaxIdleTime: time.Duration(c.Directory.StoragePools.ConnMaxIdleSeconds) * time.Second,
+			}); err != nil {
 				_ = ds.Close()
-				logx.Errorf("[account-directory] initial SQL commit unavailable: %v", err)
+				logx.Errorf("[account-directory] player store pools unavailable: %v", err)
 			} else {
 				directory = ds
 				directoryAuth = auth
@@ -329,7 +400,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	//
 	// 判空之后才赋给接口(「nil 接口陷阱」:把 nil 的 *store.RouteStore 直接转成接口,就是「非 nil 接口包着 nil 指针」,
 	// 判空拦不住、调用即 panic)。routerStore 同理:Router 的 RouteStore 是另一个接口类型。
-	routeStore := newPlayerRouteStore(c, mysqlCfg)
+	routeStore := newPlayerRouteStore(c, mysqlCfg, directory)
 	var (
 		playerRouteStore PlayerRouteStore
 		routerStore      routing.RouteStore
@@ -344,6 +415,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	s := &ServiceContext{
 		upstreamClosers:      upstreamClosers,
 		Writer:               writerConfig,
+		Writers:              writerConfigs,
 		RootAdmission:        root,
 		RelayAdmission:       relay,
 		RelayIngress:         drainproof.New(),
@@ -359,6 +431,11 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		PlayerRouteStore:     playerRouteStore,
 		MergedZones:          newMergedZoneCache(c, routeStore),
 	}
+	if auth, err := serviceauth.New(map[string]string{accountdirectory.RouteCaller: os.Getenv(accountdirectory.RouteSecretEnv)}); err != nil {
+		logx.Errorf("[player-route] %s is unavailable; GetPlayerRoute disabled", accountdirectory.RouteSecretEnv)
+	} else {
+		s.PlayerRouteAuth = auth
+	}
 	if directory != nil {
 		s.AccountDirectory = directory
 		s.accountDirectoryCloser = directory
@@ -367,7 +444,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		s.PlayerStoreDisplays = directory
 		var verifier store.RoleFreezeVerifier
 		if c.AccountDirectory.RoleTradeSQLProof.Enabled {
-			if v, err := store.NewSQLRoleFreezeVerifier(c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {
+			if v, err := store.NewSQLRoleFreezeVerifier(directory, c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {
 				logx.Errorf("[account-role-trade] SQL proof storage allowlist invalid; Confirm disabled")
 			} else {
 				verifier = v
@@ -375,14 +452,9 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		} else {
 			logx.Info("[account-role-trade] explicit SQL proof configuration absent; Confirm disabled")
 		}
-		trades := store.NewAccountRoleTradeStore(directory, verifier)
-		if err := trades.ConfigureGuildExit(c.AccountDirectory.MustLeaveGuild(), c.AccountDirectory.RoleTradeGuildSchema); err != nil {
-			logx.Error("[account-role-trade] guild authority schema absent; new role freezing disabled")
-		}
-		if err := trades.ConfigureAssetContracts(c.AccountDirectory.RoleTradeTradeSchema, c.AccountDirectory.RoleTradeGuildSchema, c.AccountDirectory.RoleTradeMailSchema, c.AccountDirectory.RoleTradeMatchSchema, c.AccountDirectory.RoleTradeInboxSchema); err != nil {
-			logx.Error("[account-role-trade] 跨域挂起权威schema或表列不可用；冻结、删除及维护导入保持拒绝")
-		}
-		s.AccountRoleTrades = trades
+		s.configureRecall(c, mysqlCfg, directory, os.Getenv)
+		s.configureRoleFence(c, directory, os.Getenv)
+		s.AccountRoleTrades = store.NewAccountRoleTradeStore(directory, verifier)
 		s.RoleAdmissions = store.NewAccountRoleAdmissionStore(directory)
 		if auth, err := serviceauth.New(map[string]string{"scene_manager": os.Getenv("MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER")}); err != nil {
 			logx.Error("[account-directory] scene_manager独立只读密钥不可用；仅其Lookup关闭")
@@ -491,11 +563,16 @@ func observeMergedZoneRefresh(err error) {
 
 // newPlayerRouteStore 装配 player_route 的读写。配置非法、开库失败或空环境判据不过时只记 ERROR、回 nil。
 //
-// 连接参数用全局库(MySQLConfigOf),池大小覆盖为 RouteStore 段的值 —— route store 的会话变量(RC + 锁等待 1s)
+// 连接参数用目录(MySQLConfigOf),池大小覆盖为 RouteStore 段的值,每片一个池 —— route store 的会话变量(RC + 锁等待 1s)
 // 不能带给别的 store,所以它总是自己开池(store.NewRouteStore)。写者标识 "data_service@{hostname}" 写进
 // player_route.updated_by,排障时能看出是哪个副本写的;hostname 取不到时 NewRouteWriterID 用 "unknown"。
+// directory 回答空环境判据里的角色历史,没有它判不了,不装配。
 // 返回具体类型(失败为 nil):同一个实例要交给 Router 与 ServiceContext 两个接口,调用方判空之后再分别赋值。
-func newPlayerRouteStore(c config.Config, mysqlCfg store.MySQLConfig) *store.RouteStore {
+func newPlayerRouteStore(c config.Config, mysqlCfg store.MySQLConfig, directory *store.AccountDirectoryStore) *store.RouteStore {
+	if directory == nil {
+		logx.Errorf("[ServiceContext] route store init failed (RegisterPlayerZone will fail closed): the account directory is not assembled, see the error above")
+		return nil
+	}
 	if err := c.RouteStore.Validate(); err != nil {
 		logx.Errorf("[ServiceContext] route store init failed (RegisterPlayerZone will fail closed): invalid RouteStore config: %v", err)
 		return nil
@@ -514,7 +591,7 @@ func newPlayerRouteStore(c config.Config, mysqlCfg store.MySQLConfig) *store.Rou
 		logx.Errorf("[ServiceContext] route store init failed (RegisterPlayerZone will fail closed; %s): %v", store.OpenRouteStoreHint("<yaml>", err), err)
 		return nil
 	}
-	if err := checkEmptyRouteBootstrap(context.Background(), rs, c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {
+	if err := checkEmptyRouteBootstrap(context.Background(), rs, directory, c.AccountDirectory.RoleTradeSQLProof.AllowedStorageIDs); err != nil {
 		_ = rs.Close()
 		logx.Errorf("[route-bootstrap] 全球路由启动拒绝: %v", err)
 		return nil
@@ -539,10 +616,29 @@ const (
 	idIssuerSecondaryKey = "/id_issuer/counter/secondary"
 )
 
+// envExpectedIdRegion 是部署脚本注入的地域码(k8s_deploy.ps1 的 -Region)。
+const envExpectedIdRegion = "MMORPG_ID_ISSUER_EXPECTED_REGION"
+
+// checkExpectedRegion 比部署参数和配置里的地域码。staging、prod 的配置来自运维预置的 Secret,抄错了不报错,只会和别的地域撞号。
+// 本机路径没有这个环境变量,不比。
+func checkExpectedRegion(expected string, region uint32) error {
+	if expected != "" && expected != fmt.Sprint(region) {
+		return fmt.Errorf("IdSegment.Issuer.Region = %d but the deployment says -Region %s: fix the runtime config", region, expected)
+	}
+	return nil
+}
+
 // NewIdIssuer 按配置装配发号器。只校验配置,不连 etcd。服务启动和 -id-issuer-init 共用。
 func NewIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	if c.IdSegment.Issuer.Region > uint32(idissuer.MaxRegion) {
 		return nil, fmt.Errorf("IdSegment.Issuer.Region = %d exceeds %d", c.IdSegment.Issuer.Region, idissuer.MaxRegion)
+	}
+	// 地域码 0 只给 dev、test。Region 是可选字段,漏写就是 0;生产也能用 0 的话,两个地域都漏写时 ID 会撞,而且不报错。
+	if c.IdSegment.Issuer.Region == 0 && c.Mode != service.DevMode && c.Mode != service.TestMode {
+		return nil, fmt.Errorf("IdSegment.Issuer.Region must be 1..%d when Mode=%q: 0 is reserved for dev and test", idissuer.MaxRegion, c.Mode)
+	}
+	if err := checkExpectedRegion(os.Getenv(envExpectedIdRegion), c.IdSegment.Issuer.Region); err != nil {
+		return nil, err
 	}
 	// 两套独立 etcd 是强规定(AGENTS §7)。AllowAutoSeed 会让两份记录回落到同一套,只有 dev、test 能开。
 	if c.IdSegment.AllowAutoSeed && c.Mode != service.DevMode && c.Mode != service.TestMode {
@@ -579,6 +675,7 @@ func (s *ServiceContext) namedStores() []namedStore {
 	return []namedStore{
 		{pool: metrics.PoolSnapshot, store: s.SnapshotStore},
 		{pool: metrics.PoolTransactionLog, store: s.TxLogStore},
+		{pool: metrics.PoolRecall, store: s.Recall},
 		{pool: metrics.PoolPlayerName, store: s.PlayerNameStore},
 		{pool: metrics.PoolPlayerRoute, store: s.PlayerRouteStore},
 	}
@@ -661,11 +758,16 @@ func (s *ServiceContext) CloseAndReport() error {
 	s.closeOnce.Do(func() {
 		// 先停合服映射的定时重读:它读 route store 的池,池关了之后的那一拍只会报假故障。
 		s.MergedZones.Stop()
-		s.Writer.Seal()
+		for _, writer := range s.Writers {
+			writer.Seal()
+		}
 		for _, closer := range s.upstreamClosers {
 			if closer != nil {
 				s.closeErr = errors.Join(s.closeErr, closer.Close())
 			}
+		}
+		if s.roleFenceCoordinator != nil {
+			s.closeErr = errors.Join(s.closeErr, s.roleFenceCoordinator.Close())
 		}
 		if s.accountDirectoryCloser != nil {
 			s.closeErr = errors.Join(s.closeErr, s.accountDirectoryCloser.Close())
@@ -678,6 +780,12 @@ func (s *ServiceContext) CloseAndReport() error {
 		}
 		if s.TxLogStore != nil {
 			s.closeErr = errors.Join(s.closeErr, s.TxLogStore.Close())
+		}
+		if s.recall != nil {
+			s.closeErr = errors.Join(s.closeErr, s.recall.closeResources())
+		}
+		if s.Recall != nil {
+			s.closeErr = errors.Join(s.closeErr, s.Recall.Close())
 		}
 		if s.IdSegmentStore != nil {
 			s.closeErr = errors.Join(s.closeErr, s.IdSegmentStore.Close())

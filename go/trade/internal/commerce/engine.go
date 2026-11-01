@@ -16,6 +16,7 @@ import (
 	rollbackpb "proto/common/rollback"
 	tradepb "proto/trade"
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/generated/pb/table"
 	"shared/roleidentity"
 	"sort"
@@ -50,6 +51,8 @@ var (
 	ErrNotTradable = Rejection(table.TradeError_kTradeAssetNotTradable)
 	ErrBid         = Rejection(table.TradeError_kTradeBidTooLow)
 	ErrEnded       = Rejection(table.TradeError_kTradeAuctionEnded)
+	// ErrBuyerFull 是买家账号的角色名额满了。文案和建角满位同一条。
+	ErrBuyerFull = Rejection(table.LoginError_kLoginAccountPlayerFull)
 )
 
 type IDs interface {
@@ -240,7 +243,7 @@ func (e *Engine) Create(ctx context.Context, player uint64, id string, input pro
 	if err != nil {
 		return nil, err
 	}
-	err = e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+	err = e.roleTx(ctx, func(tx *sql.Tx) error {
 		if err := e.lockRoles(ctx, tx, 0, r.SellerPlayerId, r.BuyerPlayerId); err != nil {
 			return err
 		}
@@ -251,6 +254,9 @@ func (e *Engine) Create(ctx context.Context, player uint64, id string, input pro
 			owned, err := e.Roles.Ownership(ctx, tx, r.SellerPlayerId)
 			if err != nil {
 				return err
+			}
+			if owned.OwnerRevision < w.Rmb.SellerOwnerRevision {
+				return staleRole(r.SellerPlayerId)
 			}
 			if owned.Account != w.Rmb.SellerAccount || owned.OwnerRevision != w.Rmb.SellerOwnerRevision || owned.TradeListingId != 0 {
 				return ErrConflict
@@ -344,7 +350,7 @@ func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, reque
 	if err != nil {
 		return nil, err
 	}
-	err = e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+	err = e.roleTx(ctx, func(tx *sql.Tx) error {
 		if err := e.lockRoles(ctx, tx, 0, me, before.SellerPlayerId, before.BuyerPlayerId); err != nil {
 			return err
 		}
@@ -762,7 +768,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 			return err
 		}
 	}
-	return e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+	return e.roleTx(ctx, func(tx *sql.Tx) error {
 		if err := e.lockRoles(ctx, tx, 0, old.SellerPlayerId, old.BuyerPlayerId, w.HighestBidder); err != nil {
 			return err
 		}
@@ -910,14 +916,18 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 //
 // 剩余预算只够收据 ACK 时停止开新行(计 trade_commerce_tick_truncated_total),没轮到的行仍到期,下一轮或别的副本接着推进。
 // 只有 Due / AckDue 查询本身失败(存储级)、收据 ACK 依赖失败,或整轮被取消(关停)时才返回错误;取消时不推迟任何行。
+// 调用方按 OutcomeKnown 决定要不要打排空 Hold。
 func (e *Engine) Tick(ctx context.Context) error {
 	rows, err := e.Repo.Due(ctx, e.now(), tickDueLimit)
 	if err != nil {
-		return err
+		return noWrite(err)
 	}
+	// 单行失败只算它自己的,不停这一轮。但提交结局未知要报上去打排空 Hold:这笔可能已经写进去了。
+	// 只看 COMMIT:行锁等待超过子预算时语句被取消也报结局未知,那种事务回滚了,打 Hold 就是误报。
+	var commitUnknown error
 	for _, r := range rows {
 		if err := ctx.Err(); err != nil {
-			return err
+			return noWrite(err)
 		}
 		budget, ok := rowBudgetFor(ctx, time.Now())
 		if !ok {
@@ -932,9 +942,13 @@ func (e *Engine) Tick(ctx context.Context) error {
 		}
 		if ctx.Err() != nil {
 			// 子预算早于父截止时刻结束,走到这里只可能是整轮被取消(关停):不是这一行的错,不推迟。
-			return ctx.Err()
+			// 这一行的 step 可能卡在提交上,所以不标确定没写。
+			return errors.Join(commitUnknown, ctx.Err())
+		}
+		if authoritysql.IsCommitOutcomeUnknown(err) {
+			commitUnknown = errors.Join(commitUnknown, err)
 		}
 		e.deferCommerce(ctx, r, err)
 	}
-	return e.ackReceipts(ctx)
+	return errors.Join(commitUnknown, e.ackReceipts(ctx))
 }

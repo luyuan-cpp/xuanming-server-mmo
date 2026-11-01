@@ -57,7 +57,12 @@ func sameSQLTeam(a, b *sqlTeamRow) bool {
 	return a.version == b.version && a.state == b.state && proto.Equal(a.data, b.data)
 }
 
-func (s *sqlTeamStore) mutate(ctx context.Context, store *Store, bind Binding, op Op) (*MutateResult, error) {
+func (s *sqlTeamStore) mutate(ctx context.Context, store *Store, bind Binding, op Op) (result *MutateResult, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) { result, e = s.mutateOnce(ctx, store, bind, op); return e })
+	return result, err
+}
+
+func (s *sqlTeamStore) mutateOnce(ctx context.Context, store *Store, bind Binding, op Op) (*MutateResult, error) {
 	if op.Kind != OpRefresh {
 		action, ok := ctx.Value(sqlActionKey{}).(*sqlAction)
 		if !ok || action.method != uint32(op.Kind) || action.actor.GetPlayerId() != op.Caller {

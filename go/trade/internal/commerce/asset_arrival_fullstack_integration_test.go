@@ -57,6 +57,7 @@ import (
 	"shared/authoritysql"
 	"shared/domainhost"
 	tables "shared/generated/table"
+	"shared/rolefence"
 	"shared/scenenode"
 	"trade/internal/data"
 )
@@ -507,13 +508,16 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	schemaTables := append(data.Tables(), &playerpb.AccountRole{})
+	schemaTables := data.Tables()
 	report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: name, Tables: schemaTables})
 	if err != nil || len(report.Manual) != 0 {
 		t.Fatalf("正式业务schema迁移未完成: %v", err)
 	}
+	if err = rolefence.EnsureSchema(ctx, install); err != nil {
+		t.Fatalf("角色护栏副本表未建好: %v", err)
+	}
 	// 本用例只验专用角色资产到账，不验角色过户。真实目录仅以正式trade签名Lookup读取；
-	// 原账号、owner_revision、完整role proto与交易锁原值来自同run实际角色，禁止伪造归属。
+	// 原账号、owner_revision与交易锁原值来自同run实际角色，禁止伪造归属。
 	if strings.TrimSpace(os.Getenv(accountdirectory.TradeSecretEnv)) == "" {
 		t.Fatal("缺少当前DataService一致的TRADE目录只读Lookup签名密钥")
 	}
@@ -523,19 +527,6 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 		owned, err := roleDirectory.Lookup(ctx, player)
 		if err != nil || owned == nil || owned.Role == nil || owned.Role.PlayerId != player || !accountdirectory.ValidAccount(owned.Account) || owned.OwnerRevision == 0 || owned.TradeListingId != 0 {
 			t.Fatalf("当前专用角色目录原件缺失、归属无效或有交易锁: %v", err)
-		}
-		raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(owned.Role)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// updated_ms仅是本fixture种子写入时间，initial_player_commit不冒充真实玩家建档凭据。
-		row := &playerpb.AccountRole{PlayerId: player, Account: owned.Account, RoleProto: raw, OwnerRevision: owned.OwnerRevision, UpdatedMs: uint64(time.Now().UnixMilli()), TradeListingId: owned.TradeListingId}
-		result, err := install.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,trade_listing_id,initial_player_commit) VALUES(?,?,?,?,?,?,?)", row.PlayerId, []byte(row.Account), row.RoleProto, row.OwnerRevision, row.UpdatedMs, row.TradeListingId, row.InitialPlayerCommit)
-		if err != nil {
-			t.Fatalf("仅在本fixture自有目录写入真实角色原件失败: %v", err)
-		}
-		if count, err := result.RowsAffected(); err != nil || count != 1 {
-			t.Fatalf("本fixture角色种子未唯一提交: %v", err)
 		}
 		roleSnapshots[player] = proto.Clone(owned).(*dspb.AccountRoleOwnership)
 	}
@@ -551,6 +542,9 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 	if err = fixture.GrantProtoTables(ctx, name, schemaTables); err != nil {
 		t.Fatal(err)
 	}
+	if err = fixture.GrantTables(ctx, name, rolefence.TableName); err != nil {
+		t.Fatal(err)
+	}
 	db, err := fixture.Open(ctx, name, 2)
 	if err != nil {
 		t.Fatal(err)
@@ -560,7 +554,12 @@ func newTradeFullstackRig(t *testing.T) *tradeFullstackRig {
 		t.Fatal(err)
 	}
 	rig.engine = &Engine{Repo: &data.CommerceRepo{DB: db, Ops: ops}, IDs: ids.IDs["trade_listing"], OpIDs: ids.IDs["trade_asset_op"], Policy: Policy{Items: []uint32{original.ConfigId}, Currencies: []uint32{0}, AllowInstances: true}, Applier: caller, Ledger: rig.ledger, Now: time.Now}
-	roles, err := NewRoleAuthority(name)
+	// 副本经正式 GetRoleFenceState 自愈,密钥和 data_service 一致才读得到。
+	roleStates, err := rolefence.NewDirectoryReader(ids.Data, "trade", os.Getenv(rolefence.SecretEnv("trade")))
+	if err != nil {
+		t.Fatalf("缺少当前DataService一致的TRADE角色护栏签名密钥: %v", err)
+	}
+	roles, err := NewRoleAuthority(db, roleStates)
 	if err != nil {
 		t.Fatal(err)
 	}

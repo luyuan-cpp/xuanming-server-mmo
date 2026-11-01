@@ -119,6 +119,144 @@ message rollback_audit_log
 }
 
 // ============================================================================
+// GM 批量回收(docs/design/exploit_loss_prevention_zh.md「BatchRecallItems 执行方案」)。
+// 四张表都在流水库 <base>_ledger,只有 data_service 写。
+// ============================================================================
+
+// 一批回收的状态。open_ops 减到 0 时变成 FINISHED,取消不是单独的状态,看 cancelled_ms。
+enum GmRecallBatchState {
+  GM_RECALL_BATCH_UNSPECIFIED = 0;
+  GM_RECALL_BATCH_RUNNING = 1;
+  GM_RECALL_BATCH_FINISHED = 2;
+}
+
+// 一行回收指令的状态。APPLIED 只说明 scene 已记账,扣到多少看 taken / debt / shortfall。
+enum GmRecallOpStatus {
+  GM_RECALL_OP_UNSPECIFIED = 0;
+  GM_RECALL_OP_PENDING = 1;    // 已分配 seq,投递中。只有它能被领取
+  GM_RECALL_OP_APPLIED = 2;
+  GM_RECALL_OP_REJECTED = 3;   // scene 判拒,资产没动
+  GM_RECALL_OP_ABORTED = 4;    // 取消生效,这个 seq 永不再应用
+  GM_RECALL_OP_PARTIAL = 5;    // 应用到一半内部出错,要人工核对
+  GM_RECALL_OP_PLANNED = 6;    // 计划已冻结,还没分配 seq
+  GM_RECALL_OP_CANCELLED = 7;  // 还没分配 seq 就被取消,scene 没见过
+  GM_RECALL_OP_ROLE_GONE = 8;  // 角色已删除或目录里没有,无从回收
+}
+
+message gm_recall_batch
+{
+  option(OptionTableName) = "gm_recall_batch";
+  option(OptionPrimaryKey) = "request_id";
+  option(OptionIndex) = "state,created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 request_id = 1;       // 运维工具按工单生成一次,重试原样带回。幂等键
+  bytes request_digest = 2;    // 过滤条件的 sha256,同 request_id 不同条件回冲突
+  bytes plan_digest = 3;       // 冻结时的计划摘要,等于预览回的 plan_digest
+  uint32 recall_kind = 4;      // RecallKind
+  uint32 item_config_id = 5;
+  uint32 currency_type = 6;
+  uint64 time_start = 7;
+  uint64 time_end = 8;
+  string operator = 9;
+  string reason = 10;
+  string peer_addr = 11;       // 调用方对端地址,唯一不可伪造的部分
+  uint32 state = 12;           // GmRecallBatchState
+  uint32 player_count = 13;
+  uint32 op_count = 14;
+  uint32 open_ops = 15;        // 还没有终局的行数,PLANNED + PENDING
+  uint32 source_rows = 16;     // 冻结时消费的流水条数
+  uint32 ops_complete = 17;    // 全额兜底的行:shortfall == 0,scene 已记账
+  uint32 ops_shortfall = 18;   // 有缺口的行
+  uint32 ops_failed = 19;      // 没有回收结果的行:REJECTED / ABORTED / PARTIAL / CANCELLED / ROLE_GONE
+  uint64 amount_requested = 20;
+  uint64 amount_taken = 21;
+  uint64 amount_debt = 22;
+  uint64 amount_shortfall = 23;
+  uint64 cancelled_ms = 24;    // 0 = 没取消
+  uint64 created_ms = 25;
+  uint64 updated_ms = 26;
+  uint64 finished_ms = 27;
+}
+
+message gm_recall_op
+{
+  option(OptionTableName) = "gm_recall_op";
+  option(OptionPrimaryKey) = "op_id";
+  // PLANNED 行没有 seq,stream_epoch = 0、seq = op_id 占唯一键:真实纪元恒非 0,不会和已派发的行撞。
+  option(OptionUniqueKey) = "player_id,stream,stream_epoch,seq";
+  option(OptionIndex) = "status,next_attempt_ms;player_id,stream,stream_epoch,status,seq;player_id,status;request_id,op_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 op_id = 1;            // 同时是 correlation_id,进 scene 的 transaction_log
+  uint64 request_id = 2;
+  uint64 player_id = 3;
+  uint32 stream = 4;
+  uint64 seq = 5;
+  uint64 stream_epoch = 6;
+  uint32 status = 7;           // GmRecallOpStatus
+  bytes payload = 8;           // AssetBundle 序列化,签名和收据身份都按它算
+  uint32 tx_type = 9;
+  uint32 attempts = 10;
+  uint64 next_attempt_ms = 11;
+  uint64 lease_until_ms = 12;
+  uint64 lease_token = 13;
+  uint32 last_outcome = 14;
+  uint32 last_reason = 15;
+  uint32 durable = 16;
+  uint64 deadline_ms = 17;     // 0 = 永不中止。取消把它改成当前时刻,下一次投递改发中止
+  uint64 created_ms = 18;
+  uint64 updated_ms = 19;
+  uint64 last_send_ms = 20;
+  uint32 recall_kind = 21;     // RecallKind
+  uint32 currency_type = 22;
+  uint32 item_config_id = 23;
+  uint64 requested = 24;
+  uint64 taken = 25;
+  uint64 debt = 26;
+  uint64 shortfall = 27;
+  string resolved_by = 28;
+  string resolve_reason = 29;
+}
+
+message gm_recall_seq
+{
+  option(OptionTableName) = "gm_recall_seq";
+  option(OptionPrimaryKey) = "player_id,stream";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint32 stream = 2;
+  uint64 next_seq = 3;
+  uint64 updated_ms = 4;
+  uint64 epoch = 5;
+}
+
+// 一条流水只能被回收一次,跨批次也算。计划先按它剔除,提交时主键再兜一次。
+// 确定没回收到东西的行(拒绝、中止、取消、角色不存在)把流水放回去。
+message gm_recall_source
+{
+  option(OptionTableName) = "gm_recall_source";
+  option(OptionPrimaryKey) = "tx_id";
+  option(OptionIndex) = "request_id;op_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 tx_id = 1;
+  uint64 request_id = 2;
+  uint64 player_id = 3;
+  uint64 op_id = 4;
+  uint64 created_ms = 5;
+}
+
+// ============================================================================
 // Player Debt — deferred-clawback (补缴) records; separate from CurrencyComp
 // so GM tool can query/manage offline.
 //
@@ -185,15 +323,15 @@ message rollback_audit
 // 只作为列漂移校验的事实源 —— 改了这里就必须同步改 bootstrap DDL,否则启动校验会报。
 // VARCHAR 长度 < 191,唯一键覆盖整列,不需要 D-14 §2 的 191 前缀写法。
 //
-// D-14 §2 复核:主键是整数列 player_id;全表只有一个唯一键(name_norm);
-// 按 §D3 声明 NONCLUSTERED + 打散(雪花 player_id 做主键 = 写热点)。
+// 主键是 name_norm,按名字分片(docs/design/horizontal-scale-logical-db.md §5.5);
+// 一个角色只有一个名字由玩家分片的 player_name_owner 保证,这张表上没有 player_id 的索引。
+// 按 §D3 声明 NONCLUSTERED + 打散。
 // 设计见 docs/design/guild-phase2/03-names.md §3.2 / §3.3。
 // ============================================================================
 message player_name
 {
   option(OptionTableName) = "player_name";
-  option(OptionPrimaryKey) = "player_id";
-  option(OptionUniqueKey) = "name_norm";
+  option(OptionPrimaryKey) = "name_norm";
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -208,6 +346,34 @@ message player_name
   // 只删落在 PlayerName.ReleaseWindow 内的行(login 建角失败的补偿),
   // 超窗的孤儿行只能由运维带 x-admin-token 清 —— 没有这一列就没法区分两者。
   uint64 created_ms = 4;
+}
+
+// 玩家分片上「这个角色登记的名字」。BatchGetPlayerName 读它,不用扫全部名字分片;
+// 主键 player_id 同时是「一个角色只有一个名字」的实现。和 player_name 不一致时以 player_name 为准,
+// 写入和释放的顺序见 docs/design/horizontal-scale-logical-db.md §5.5。
+message player_name_owner
+{
+  option(OptionTableName) = "player_name_owner";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  string name_norm = 2;
+  string name      = 3; // 展示名,player_name.name 的副本
+}
+
+// 目录每片一行:这个库是 K 片里的第几片。-migrate 写入,所有目录连接池打开时核对。
+// 配错 K 会把玩家路由到别的片,读到「角色不存在」,而且没有报错,所以拒绝启动。
+message directory_shard
+{
+  option(OptionTableName) = "directory_shard";
+  option(OptionPrimaryKey) = "id";
+
+  uint32 id             = 1;
+  uint32 logical_shards = 2;
+  uint32 slot           = 3;
 }
 
 // ============================================================================
@@ -239,7 +405,7 @@ message player_route
   uint32 home_zone         = 2;  // 0 = NULL(没有归属区)
   uint32 storage_id        = 3;  // 0 = NULL;与 placement_version 同 NULL(chk_route_place)
   uint64 placement_version = 4;  // 0 = NULL;有落点时 >= 1
-  string frozen_run_id     = 5;  // 空串 = NULL;非空 = 搬库冻结态
+  reserved 5;                    // 原 frozen_run_id:不做按玩家搬库,搬物理库走闸门(horizontal-scale-logical-db.md §7)
   uint64 rev               = 6;  // 本行任一列变化 +1,是行版本
   string updated_by        = 7;  // 写者标识(ASCII,<= 96)
   uint64 created_at_ms     = 8;  // 库时钟 Unix 毫秒
@@ -282,6 +448,24 @@ message account_directory {
   uint64 created_ms = 2;
 }
 
+// 账号到角色的索引,放账号所在分片。不变量:ref 集合包含全部归属真相;真相永远是 account_role.account。
+// 规格见 docs/design/horizontal-scale-logical-db.md §5.2。
+message account_role_ref {
+  option(OptionTableName) = "account_role_ref";
+  option(OptionPrimaryKey) = "account,player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+  string account = 1;
+  uint64 player_id = 2;
+  uint32 state = 3;       // 1 = PENDING,提交点之前写;2 = ACTIVE
+  uint64 tx_id = 4;       // PENDING 是过户时非 0;建角是 0
+  uint64 listing_id = 5;  // 和 tx_id 成对
+  uint32 home_zone = 6;   // PENDING 是建角时非 0,判陈旧时给墓碑用
+  uint64 nonce = 7;       // 每次写换一个随机值。清理按它比较并删除,挡住「读完之后又被重新占用」
+  uint64 created_ms = 8;
+}
+
 message account_role {
   option(OptionTableName) = "account_role";
   option(OptionPrimaryKey) = "player_id";
@@ -293,9 +477,27 @@ message account_role {
   bytes role_proto = 3; // AccountSimplePlayer 原件，保留未知字段。
   uint64 owner_revision = 4; // 账号归属修订号，绝不等同 scene owner_epoch。
   uint64 updated_ms = 5;
-  uint64 trade_listing_id = 6; // 0 表示无交易锁；非零时入场、身份补齐和删除均拒绝。
+  uint64 trade_listing_id = 6; // 最终冻结令牌。0 表示未冻结；只有过户走到 FREEZING 才写，是 listing id；非零时入场、身份补齐和删除均拒绝。
   // 仅首次目录与两张玩家行同事务提交为 1；旧角色及导入保持 0。
   uint64 initial_player_commit = 7;
+  // 角色护栏版本:改 account、owner_revision、trade_listing_id、prepare_token 的事务都加 1。副本按它合并,大的赢。
+  uint64 fence_version = 8;
+  // 准备令牌,全部参与者投票期间写。过户是 listing id,删角是 1<<63|player_id。
+  // 入场和 Lookup 不看它,玩家照常进场;建角重放、身份补齐、删角、新的 Begin 看到它就拒绝。不和 trade_listing_id 同时非零。
+  uint64 prepare_token = 9;
+}
+
+// 删角两阶段的进行中记录。第 1 步写入,墓碑或放弃时删除;data_service 后台接着做超时的行。
+message account_role_removal {
+  option(OptionTableName) = "account_role_removal";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+  uint64 player_id = 1;
+  string account = 2;
+  uint64 owner_revision = 3;
+  uint64 started_ms = 4;
 }
 
 // listing 级永久冻结收据；取消后保留，旧冻结请求重放不能再次冻结。
@@ -408,7 +610,7 @@ message sql_writer_lifecycle_receipt {
     bytes request_id = 1;
     Kind kind = 2;
     sql_writer_registry writer = 3;
-    uint64 expected_epoch = 4;
+    uint64 expected_epoch = 4; // 只有RETIRE绑定；REGISTER必须为0：名册预渲染，每次搬库或回滚epoch都变，收据记落地时的实际epoch。
     uint64 expected_catalog_revision = 5;
     string authority_schema = 6;
     repeated string protected_schemas = 7;
@@ -443,6 +645,13 @@ message sql_writer_boot_grant {
 
 // r3唯一schema候选，不执行生成。正式落地前核即时源/字段号，沿no-unity正规生成。
 // 仅服务端内部；Java用自己的正式源实现语义，不经ContractSync复制。
+// 一个boot持有的全部写资格：进程要写的每个逻辑库各一份，闸门跟着逻辑库走。
+// MMORPG_SQL_WRITER_GRANT_FILE指向它，runtime先核整文件SHA，再逐份消费。
+message sql_writer_boot_grant_set {
+  string format = 1; // 必须SQL_WRITER_BOOT_SET_V1。
+  repeated sql_writer_boot_grant grants = 2; // authority_schema不重复。
+}
+
 message sql_writer_drain_run {
   option(OptionTableName) = "sql_writer_drain_run";
   option(OptionPrimaryKey) = "operation_id";
@@ -759,7 +968,7 @@ message sql_writer_boot_roster {
   string format = 1; // SQL_WRITER_BOOT_ROSTER_V1。
   repeated Entry entries = 2; // 至多现有issuer预算1024，duplicate key/instance/principal/request拒绝。
   message Entry {
-    sql_writer_lifecycle_receipt.Request request = 1;
+    repeated sql_writer_lifecycle_receipt.Request requests = 1; // 这个boot要写的每个逻辑库各一份，同一账号；任一份已被别的boot消费，整条entry就算用掉。
     string runtime_config_path = 2; // 只在受限init input-root内解析，normal只挂选中副本。
     bytes runtime_config_sha256 = 3;
     repeated RuntimeEnvironment runtime_environment = 4; // 仅固定SQL环境变量白名单；原件只存私有文件路径/SHA，不存秘密值。

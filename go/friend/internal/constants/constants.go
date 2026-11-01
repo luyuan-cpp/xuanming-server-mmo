@@ -107,6 +107,12 @@ const (
 	// 所以这个码只在「真的超了」时出现,永远不代表依赖故障。
 	ErrRateLimited = uint32(table.CommonError_kRateLimitExceeded)
 
+	// ErrRoleNotVerified:这一次核不了角色身份:角色被冻结或换了主(自己或对端),或者自愈读不到目录。
+	//
+	// 不是故障:这些情况事务都已回滚,确定没写,回故障码会把排空证明打成 Hold(docs/design/horizontal-scale-logical-db.md §3.6)。
+	// 不复用 ErrRateLimited:那个码只代表「真的超了」。
+	ErrRoleNotVerified = uint32(table.CommonError_kFeatureUnavailable)
+
 	// ErrStorage:MySQL / Redis 真故障。**本包唯一允许当 fault 的码**
 	// (Tip.xlsx fault 列为 1,serverbase 记成 rpc_inband_fault 并配告警)。
 	//

@@ -4,88 +4,101 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"regexp"
-	"sort"
 
 	base "proto/common/base"
 	dspb "proto/data_service"
+	rfpb "proto/role_fence"
 	tradepb "proto/trade"
 	"shared/accountdirectory"
+	"shared/rolefence"
 	"shared/roleidentity"
 	"trade/internal/data"
+
+	"google.golang.org/protobuf/proto"
 )
 
-// RoleLocker 的事务来自同TiDB强会话池。所有新增参与者先锁角色，再锁合同；不在事务内调用RPC。
+// RoleLocker 是合同事务和角色护栏的接缝(docs/design/horizontal-scale-logical-db.md §3)。
+// 所有新增参与者先锁角色,再锁合同;事务里不调 RPC。
 type RoleLocker interface {
-	Lock(context.Context, *sql.Tx, uint64, ...uint64) error
-	Ownership(context.Context, *sql.Tx, uint64) (*dspb.AccountRoleOwnership, error)
+	// RunTx 跑一次 action;action 回 *rolefence.StaleError 时读权威状态写入副本,再跑一次。action 自己开事务,RPC 只发生在两次之间。
+	RunTx(ctx context.Context, action func() error) error
+	// Lock 按 player_id 升序锁全部角色的副本并逐个判定。确定拒绝回 Expect.Reject,副本判不了回 *rolefence.StaleError。
+	Lock(ctx context.Context, tx *sql.Tx, expects ...rolefence.Expect) error
+	// Ownership 读本事务要用的角色归属。trade_listing_id 是最终令牌,prepare_token 是还在投票的令牌。调用方须已 Lock 过这名角色。
+	Ownership(ctx context.Context, tx *sql.Tx, player uint64) (*dspb.AccountRoleOwnership, error)
 }
-type RoleAuthority struct{ Schema string }
 
-var authoritySchema = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+// RoleAuthority 读本库的 role_fence 副本。目录是唯一权威,副本判不了的交给 Guard 自愈。
+type RoleAuthority struct{ guard *rolefence.Guard }
 
-func NewRoleAuthority(schema string) (*RoleAuthority, error) {
-	if !authoritySchema.MatchString(schema) {
-		return nil, errors.New("交易角色目录schema未显式配置")
+func NewRoleAuthority(db *sql.DB, reader rolefence.StateReader) (*RoleAuthority, error) {
+	if db == nil || reader == nil {
+		return nil, errors.New("交易角色护栏缺连接或权威状态读取")
 	}
-	return &RoleAuthority{Schema: schema}, nil
+	return &RoleAuthority{guard: rolefence.NewGuard(db, reader)}, nil
 }
+
+func (a *RoleAuthority) RunTx(ctx context.Context, action func() error) error {
+	return a.guard.RunTx(ctx, action)
+}
+
+func (a *RoleAuthority) Lock(ctx context.Context, tx *sql.Tx, expects ...rolefence.Expect) error {
+	_, err := rolefence.LockAll(ctx, tx, expects...)
+	return err
+}
+
 func (a *RoleAuthority) Ownership(ctx context.Context, tx *sql.Tx, player uint64) (*dspb.AccountRoleOwnership, error) {
-	if a == nil || !authoritySchema.MatchString(a.Schema) || player == 0 {
-		return nil, errors.New("交易角色权威未装配")
-	}
-	out := &dspb.AccountRoleOwnership{Role: &base.AccountSimplePlayer{PlayerId: player}}
-	if err := tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+a.Schema+"`.account_role WHERE player_id=? FOR UPDATE", player).Scan(&out.Account, &out.OwnerRevision, &out.TradeListingId); err != nil {
-		return nil, err
-	}
-	if !accountdirectory.ValidAccount(out.Account) || out.OwnerRevision == 0 {
+	if player == 0 {
 		return nil, ErrConflict
 	}
-	return out, nil
-}
-func (a *RoleAuthority) Lock(ctx context.Context, tx *sql.Tx, allowListing uint64, players ...uint64) error {
-	ids := append([]uint64(nil), players...)
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	var previous uint64
-	for _, id := range ids {
-		if id == 0 || id == previous {
-			continue
-		}
-		previous = id
-		role, err := a.Ownership(ctx, tx, id)
-		if err != nil {
-			return err
-		}
-		if role.TradeListingId != 0 && role.TradeListingId != allowListing {
-			return ErrConflict
-		}
+	fence, err := rolefence.Lock(ctx, tx, player)
+	if errors.Is(err, rolefence.ErrMissing) {
+		return nil, staleRole(player)
 	}
-	return nil
+	if err != nil {
+		return nil, err
+	}
+	if fence.Account == "" {
+		return nil, ErrConflict
+	}
+	owned := &dspb.AccountRoleOwnership{Account: fence.Account, OwnerRevision: fence.OwnerRevision, Role: &base.AccountSimplePlayer{PlayerId: player}}
+	// 两个令牌分开给:把「角色被冻结」当最终结论的地方(退款)只认最终令牌。
+	if fence.FreezeFinal {
+		owned.TradeListingId = fence.FreezeToken
+	} else {
+		owned.PrepareToken = fence.FreezeToken
+	}
+	return owned, nil
 }
-func (e *Engine) lockRoles(ctx context.Context, tx *sql.Tx, allowListing uint64, players ...uint64) error {
+
+// staleRole 表示副本判不了这名角色,要读权威状态再判一次。还判不了就是角色冲突。
+func staleRole(player uint64) error {
+	return &rolefence.StaleError{Players: []uint64{player}, Reject: roleConflict()}
+}
+
+// roleTx 是带角色锁的合同事务入口。副本判不了时事务已回滚,读完权威状态整笔重跑一次。
+func (e *Engine) roleTx(ctx context.Context, body func(*sql.Tx) error) error {
 	if e.Roles == nil {
 		return errors.New("交易角色提交互锁未配置")
 	}
-	// 客户端actor可能也是交易参与者；并入同一升序首锁，不能先锁参与者再回头锁actor。
-	original, present := roleidentity.Original(ctx)
-	if present {
-		players = append(players, original.Role.PlayerId)
-	}
-	// 目录给出的 ErrConflict(角色被另一条挂单冻结、目录行不合格)与换主一样是长期状态,标成 role_conflict
-	// 供后台推进分钟级复查(2026-10-22);客户端拿到的 tip 码不变。
-	if err := e.Roles.Lock(ctx, tx, allowListing, players...); err != nil {
-		return asRoleConflict(err)
-	}
-	if present {
-		current, err := e.Roles.Ownership(ctx, tx, original.Role.PlayerId)
-		if err != nil {
-			return asRoleConflict(err)
-		}
-		if current.Account != original.Account || current.OwnerRevision != original.OwnerRevision {
-			return roleConflict()
+	return rolledBack(e.Roles.RunTx(ctx, func() error { return e.Repo.Tx(ctx, body) }))
+}
+
+// lockRoles 是合同事务的第一把锁。allowListing 是这笔业务自己持有的令牌:令牌等于自己的 listing 才放行,别的角色和合同不获得这份例外。
+//
+// 拒绝一律标成 role_conflict:角色被另一条挂单冻结、已删除、换了主都是长期状态,供后台推进分钟级复查(2026-10-22);客户端拿到的 tip 码不变。
+func (e *Engine) lockRoles(ctx context.Context, tx *sql.Tx, allowListing uint64, players ...uint64) error {
+	expects := make([]rolefence.Expect, 0, len(players)+1)
+	for _, player := range players {
+		if player != 0 {
+			expects = append(expects, rolefence.Expect{PlayerID: player, AllowToken: allowListing, Reject: roleConflict()})
 		}
 	}
-	return nil
+	// 客户端actor可能也是交易参与者;并入同一升序首锁,不能先锁参与者再回头锁actor。
+	if original, present := roleidentity.Original(ctx); present {
+		expects = append(expects, rolefence.Expect{PlayerID: original.Role.PlayerId, Account: original.Account, OwnerRevision: original.OwnerRevision, AllowToken: allowListing, Reject: roleConflict()})
+	}
+	return e.Roles.Lock(ctx, tx, expects...)
 }
 
 // 后台不重新制造调用者身份：只核持久合同原账号/修订，缺原件或已换主均保留合同拒发资产。
@@ -103,6 +116,9 @@ func (e *Engine) checkContractIdentities(ctx context.Context, tx *sql.Tx, r *tra
 		owned, err := e.Roles.Ownership(ctx, tx, party.player)
 		if err != nil {
 			return asRoleConflict(err)
+		}
+		if owned.OwnerRevision < party.identity.OwnerRevision {
+			return staleRole(party.player)
 		}
 		if owned.Account != party.identity.Account || owned.OwnerRevision != party.identity.OwnerRevision {
 			// 原主已换(owner_revision 只增不减,不会再对上):合同与对方托管保留,等人工,不按存储抖动每 10 秒重试。
@@ -143,5 +159,70 @@ func (e *Engine) verifyReplayActor(ctx context.Context, old *tradepb.TradeCommer
 			allow = old.CommerceId
 		}
 	}
-	return e.Repo.Tx(ctx, func(tx *sql.Tx) error { return e.lockRoles(ctx, tx, allow) })
+	return e.roleTx(ctx, func(tx *sql.Tx) error { return e.lockRoles(ctx, tx, allow) })
+}
+
+// 挂起 blocker 是低基数枚举,进协调者的指标 label。
+const (
+	roleBlockerCommerce     = "trade_commerce"
+	roleBlockerAssetOp      = "trade_asset_op"
+	roleBlockerTooManyDeals = "too_many_contracts"
+)
+
+// maxRolePendingCommerce 是一名角色名下的未终局合同上限。超过就是挂起:不能截断全集后宣称无挂起合同。
+// 它是确定性结论,不能回错误:那样协调者按不可达处理,令牌留着等重放,而重放还是同样的结果。
+const maxRolePendingCommerce = 256
+
+// RolePending 是 trade 的挂起全集,在 PrepareRoleFreeze 的事务里跑,此时已持有副本行锁。
+// 在途资产属于原账号,不能随角色过户给新主;撮合/竞价子单由未终局父合同在同事务派生,故所有资产合同类型均检查,不只人民币寄售。
+//
+// 两条例外,判据一条都不能松:官方退款合同已确定零新增资产腿,商城仍完成原款退款,不阻止后续出售;
+// 角色寄售自己的 rmb_freezing 只放行令牌等于本 listing、原账号和修订都对得上的那一条。
+func RolePending(ctx context.Context, tx *sql.Tx, state *rfpb.RoleFenceState) (string, error) {
+	blocker, err := rolePendingCommerce(ctx, tx, state)
+	if err != nil || blocker != "" {
+		return blocker, err
+	}
+	// 6=ABANDONED 已证明 scene 未见过该 seq;完整终态以外(含 0、manual、未知)全部阻塞。
+	var op uint64
+	err = tx.QueryRowContext(ctx, "SELECT op_id FROM trade_asset_op WHERE player_id=? AND (status NOT IN (2,3,4,6) OR status IS NULL) LIMIT 1 FOR UPDATE", state.PlayerId).Scan(&op)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return roleBlockerAssetOp, nil
+}
+
+func rolePendingCommerce(ctx context.Context, tx *sql.Tx, state *rfpb.RoleFenceState) (string, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT commerce_id,kind,status,workflow_proto FROM trade_commerce WHERE (seller_player_id=? OR buyer_player_id=?) AND (status NOT IN (7,11) OR status IS NULL) ORDER BY commerce_id LIMIT ? FOR UPDATE", state.PlayerId, state.PlayerId, maxRolePendingCommerce+1)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+		if count > maxRolePendingCommerce {
+			return roleBlockerTooManyDeals, nil
+		}
+		var id uint64
+		var kind, status uint32
+		var raw []byte
+		if err := rows.Scan(&id, &kind, &status, &raw); err != nil {
+			return "", err
+		}
+		w := &tradepb.TradeCommerceWorkflow{}
+		if len(raw) > 1<<20 || proto.Unmarshal(raw, w) != nil {
+			return roleBlockerCommerce, nil
+		}
+		if kind == 1 && status == 8 && w.Stage == "official_refund" {
+			continue
+		}
+		if id != state.FreezeToken || kind != 6 || status != 3 || w.Rmb == nil || w.Rmb.CharacterPlayerId != state.PlayerId || w.Rmb.SellerAccount != state.Account || w.Rmb.SellerOwnerRevision != state.OwnerRevision || w.Stage != "rmb_freezing" {
+			return roleBlockerCommerce, nil
+		}
+	}
+	return "", rows.Err()
 }

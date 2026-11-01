@@ -3,11 +3,17 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	"friend/internal/data"
 	base "proto/common/base"
+	"shared/authoritysql"
+	"shared/drainproof"
+	"shared/rolefence"
 	"shared/roleidentity"
+	"shared/serverbase"
 
 	redv9 "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
@@ -55,6 +61,30 @@ func TestOriginalIdentityPreservesGateRevisionAndLoginAccount(t *testing.T) {
 	require.Equal(t, "login_session:{原gate:8}", reader.key)
 }
 
+// 规格 §3.6:身份检查只读。经真的发布准入跑一遍,角色变了、判不了都不打成 Hold。
+func TestOriginalIdentityFailureDoesNotHoldDrain(t *testing.T) {
+	for name, checkErr := range map[string]error{
+		"role-changed":   data.ErrOriginalRole,
+		"gate-frozen":    authoritysql.ErrWriterFrozen,
+		"directory-down": errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")),
+		"storage":        errors.New("dial tcp: connection refused"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			guard := OriginalIdentityInterceptor(&identityReader{account: "old"}, time.Second, func(context.Context) error { return checkErr })
+			gate := drainproof.New()
+			detail := &base.SessionDetails{PlayerId: 11, SessionId: 1, GateInstanceId: "gate", SessionIncarnation: 8, OwnerRevision: 7}
+			_, err := serverbase.RootAdmission(gate)(WithDetails(context.Background(), detail), nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
+				return guard(ctx, req, &grpc.UnaryServerInfo{}, func(context.Context, any) (any, error) { t.Fatal("没核过身份进入业务"); return nil, nil })
+			})
+			require.Error(t, err)
+			gate.CloseAdmission()
+			wait, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			require.NoError(t, gate.Wait(wait))
+		})
+	}
+}
+
 func TestOriginalIdentityMissingLegacyOrStaleNeverReachesBusiness(t *testing.T) {
 	for _, test := range []struct {
 		name               string
@@ -66,7 +96,11 @@ func TestOriginalIdentityMissingLegacyOrStaleNeverReachesBusiness(t *testing.T) 
 		{"zero", 0, "gate", nil, nil, codes.Unauthenticated},
 		{"legacy", 7, "", nil, nil, codes.Unauthenticated},
 		{"missing-login", 7, "gate", redv9.Nil, nil, codes.Unauthenticated},
-		{"transferred-or-frozen", 7, "gate", nil, errors.New("stale"), codes.PermissionDenied},
+		{"transferred-or-frozen", 7, "gate", nil, data.ErrOriginalRole, codes.PermissionDenied},
+		// 判不了不是拒绝:客户端要能重试。回 Aborted 不回 Unavailable,这一层在 serverbase 外面,Unavailable 会被 RootAdmission 打成 Hold。
+		{"writer-gate-frozen", 7, "gate", nil, fmt.Errorf("begin: %w", authoritysql.ErrWriterFrozen), codes.Aborted},
+		{"directory-unavailable", 7, "gate", nil, errors.Join(rolefence.ErrUnavailable, errors.New("data_service down")), codes.Aborted},
+		{"storage-failure", 7, "gate", nil, errors.New("dial tcp: connection refused"), codes.Aborted},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			reader := &identityReader{account: "old", err: test.loginErr}

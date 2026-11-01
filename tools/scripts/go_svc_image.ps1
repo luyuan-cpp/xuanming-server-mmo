@@ -142,6 +142,9 @@ $Catalogue = [ordered]@{
     # 独立registrar工件：复用data_service模块与既有Dockerfile，ENTRY编译完整cmd包。
     "writer-authority" = @{ Dir = "data_service"; Entry = "./cmd/writer_authority"; ImageName = "mmorpg-writer-authority" }
     db              = @{ Dir = "db";              Entry = ".";                      ImageName = "mmorpg-db" }
+    # go/db 的迁移入口是单独的 cmd/migrate,不在服务二进制里。复用 db 模块与既有 Dockerfile:/app/service 就是迁移程序,/app/data 带表清单。
+    # 与 k8s_deploy.ps1 $GoSvcCatalogue 的 db 条目 MigrateImageName 配对,K8s 的 db-migrate Job 用它(调试栈的 db-migrate 同名)。
+    "db-migrate"    = @{ Dir = "db";              Entry = "./cmd/migrate";          ImageName = "mmorpg-db-migrate" }
     "data-service"  = @{ Dir = "data_service";    Entry = "data_service.go";         ImageName = "mmorpg-data-service" }
     login           = @{ Dir = "login";           Entry = "login.go";               ImageName = "mmorpg-login" }
     "player-locator"= @{ Dir = "player_locator";  Entry = "player_locator.go";      ImageName = "mmorpg-player-locator" }

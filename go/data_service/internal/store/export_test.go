@@ -90,29 +90,15 @@ func DedupePointDeleteSQLForTest(table string) string { return dedupePointDelete
 
 // PlayerNameReserveSQLForTest / PlayerNameReleaseSQLForTest 让用例用与生产**同一段文本**扮演并发的
 // Reserve / 未提交的 Release(生产路径是自动提交,停不在提交之前,编排时只能把同一条语句放进显式事务)。
-// PlayerNameReleaseLegacySQLForTest 是旧主键形态下的那一条(迁移未跑 / TiDB 的窗口)。
 const (
-	PlayerNameReserveSQLForTest       = playerNameReserveSQL
-	PlayerNameReleaseSQLForTest       = playerNameReleaseSQL
-	PlayerNameReleaseLegacySQLForTest = playerNameReleaseLegacySQL
+	PlayerNameReserveSQLForTest = playerNameReserveSQL
+	PlayerNameReleaseSQLForTest = playerNameReleaseSQL
 	// PlayerNameReleaseForcedIndexForTest 是新结构下 Release 钉死的索引名(EXPLAIN 回归拿它当期望值)。
 	PlayerNameReleaseForcedIndexForTest = playerNameReleaseForcedIndex
 )
 
 // LockRetriesForTest 返回本 store 的 Reserve / Release 因 1213/1205 重来的累计次数。
 func (s *PlayerNameStore) LockRetriesForTest() uint64 { return s.lockRetries.Load() }
-
-// LegacyKeyedByPlayerIDForTest 返回建 store 时探到的表形态:true = 主键还是 player_id(迁移没跑过 / TiDB)。
-// 真库用例靠它确认自己跑在哪一种结构上 —— 新结构的"零死锁"判据在旧结构上并不成立。
-func (s *PlayerNameStore) LegacyKeyedByPlayerIDForTest() bool { return s.legacyKeyedByPlayerID }
-
-// ReleaseSQLForTest 返回本实例实际在用的 Release 语句(按形态选定)。
-func (s *PlayerNameStore) ReleaseSQLForTest() string { return s.releaseSQL }
-
-// PlayerNamePKShapeIsByNameForTest 给用例判断一组主键列是不是目标形态(name_norm)。
-func PlayerNamePKShapeIsByNameForTest(pkCols []string) bool {
-	return playerNamePKShapeOf(pkCols) == playerNamePKByName
-}
 
 // PrimaryKeyColumnsForTest 读一张表主键的列序,给真库用例断言迁移结果用。
 func PrimaryKeyColumnsForTest(ctx context.Context, db *sql.DB, dbName, tableName string) ([]string, error) {
@@ -155,7 +141,7 @@ const PlayerRouteBootstrapDDLForTest = playerRouteBootstrapDDL
 const RouteTiDBPrefixSplitPointsForTest = routeTiDBPrefixSplitPoints
 
 // BootstrapRouteTablesOnlyForTest 只建路由表(按 routeTableMessages 的顺序——即表名升序——执行它们的 bootstrap DDL),
-// 再跑 ensureRouteTables(形状守卫 + 种 route_meta 的行)。给真 TiDB 用例用:全局库的整套迁移在 TiDB 上会因
+// 再跑 ensureRouteTables(形状守卫 + 种 route_meta 的行),并把这个库记成 K=1 的第 0 片,NewRouteStore 要核这一行。给真 TiDB 用例用:全局库的整套迁移在 TiDB 上会因
 // player_snapshot 的可空唯一键失败,用不了 NewMigratedDB。
 func BootstrapRouteTablesOnlyForTest(ctx context.Context, db *sql.DB, dbName string) error {
 	for _, m := range routeTableMessages() {
@@ -168,7 +154,13 @@ func BootstrapRouteTablesOnlyForTest(ctx context.Context, db *sql.DB, dbName str
 			return fmt.Errorf("bootstrap route table %s: %w", name, err)
 		}
 	}
-	return ensureRouteTables(ctx, db, dbName)
+	if err := ensureRouteTables(ctx, db, dbName, routeTableMessages()); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, directoryShardDDL); err != nil {
+		return fmt.Errorf("bootstrap directory_shard: %w", err)
+	}
+	return seedDirectoryShard(ctx, db, 0, 1)
 }
 
 // LockRetriesForTest 返回本 store 因 1213 / 9007 重来的累计次数。
@@ -186,3 +178,6 @@ const (
 func NewRouteStoreFromDBForTest(ctx context.Context, db *sql.DB, opts RouteStoreOptions) (*RouteStore, error) {
 	return newRouteStoreFromDB(ctx, db, opts)
 }
+
+// NewRecallStoreForTest 用一条现成的连接建回收存储,集成测试用管理连接,不走写者闸门。
+func NewRecallStoreForTest(db *sql.DB) *RecallStore { return &RecallStore{db: db} }

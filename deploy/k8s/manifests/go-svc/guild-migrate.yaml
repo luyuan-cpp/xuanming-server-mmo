@@ -1,5 +1,5 @@
 # 现役配置以服务 YAML 为源；不恢复历史 M1 表、AdminToken 或 Redis 权威榜运行时。
-# 只迁移结构，与常驻实例使用同一份权威 DSN；不需要资产签名密钥。
+# 只迁移结构，不需要资产签名密钥。DSN 的账号是 schema 主体，和 Add-SchemaPermissionManifest 注入的 MMORPG_SQL_SCHEMA_PRINCIPAL 出自同一个 schemaPermissionSecret（键 dsn、principal），占位由它替换。
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -27,7 +27,7 @@ spec:
           env:
             - name: MMORPG_GUILD_SQL_DSN
               valueFrom:
-                secretKeyRef: {name: domain-service-secrets, key: guild-sql-dsn, optional: false}
+                secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false}
           resources:
             requests: {cpu: 100m, memory: 128Mi}
             limits: {cpu: 1000m, memory: 512Mi}

@@ -2,7 +2,8 @@
 
 > **状态**: v1 — 2026-05-15
 > **范围**: K8s 部署的 MySQL(`deploy/k8s/manifests/infra/mysql.yaml` + `mysql-backup-cronjob.yaml`)的备份、归档、恢复 SOP。
-> **关联文档**: `docs/design/zone_data_rollback.md` §3(灾难恢复级 zone 回档),`docs/design/server_merge_design.md` §5.1(合服前备份要求)。
+> **灾难恢复从 §4.0 开始看。** 它覆盖 TiDB 和 MySQL 两档,文件名是历史原因。
+> **关联文档**: `docs/design/server_merge_design.md` §5.1(合服前备份要求)。
 
 ---
 
@@ -152,6 +153,40 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 
 ## 4. 灾难恢复 / PITR(Point-in-Time Recovery)
 
+### 4.0 恢复的整体做法(2026-10-31,未演练)
+
+回档就是回到目标时刻 T 库里已经提交的状态,T 之后的写全部丢弃(负责人 2026-10-17 定)。玩家存档只在数据库里。回档 RPC 和单 zone 回档脚本都已删除,灾难恢复只走本节。
+
+**默认整个地域一起回档**,所有逻辑库回到同一个 T,这样跨库的资产、目录和存档才对得上。只回一个库是例外,要按 §4.1a 处理并人工核账。
+
+1. **挑 T。** T 不能落在搬库或排空的冻结窗口里,否则恢复出来的闸门是关的,写者全部被挡。
+2. **先记下部署参数,再停写。** 部署参数不粘滞,namespace 删掉之后 `k8s_deploy.ps1` 没有现状可比,防误关和形态核对都不会触发,漏传的参数会静默落回默认值。所以先从发布记录取出上一次部署的完整命令,对照线上核实,至少包括 `-ReleaseProfile`、`-Region`、`-DirectoryLogicalShards`、`-SqlClusters`、`-GateRouterMode`、`-ClientEntryMode` 和入口地址、`-RedisSplit`、`-PlayerRedisMasters`、`-NodeOpenFileLimitMode`、`-Login*`。然后逐个 zone 跑 `dev_tools.ps1 -Command k8s-zone-down -ZoneName <zone>`,再用 `kubectl get namespace` 确认已删除。这个命令失败时不报错,不能只看退出码。单独部署的全局服务也要停。
+3. **恢复。** TiDB 档按 §4.1b,MySQL 档按 §4.1。先恢复到影子库或新集群核对,原库保留到开流量之后。T 之后搬过库的,恢复到映射现在指向的集群,但备份要用 T 时刻那个集群的。
+4. **核对闸门。** 每个逻辑库执行 `SELECT writable,HEX(freeze_run_id) FROM route_meta`,结果应该是可写、没有冻结标记。
+5. **跳过 `match-results` 的积压。** T 之后的对局结果和数据库一起丢弃。起服之前把 `match-rating`、`guild-trial` 两个消费组的位点都重置到最新:
+
+   ```powershell
+   pwsh -File tools/scripts/dev_tools.ps1 -Command kafka-offset-reset -KafkaTopic match-results -KafkaGroup match-rating -KafkaToLatest
+   ```
+
+   ```powershell
+   pwsh -File tools/scripts/dev_tools.ps1 -Command kafka-offset-reset -KafkaTopic match-results -KafkaGroup guild-trial -KafkaToLatest
+   ```
+
+   不能重置到 T,也不能留着积压:T 之后才开的历练,开局记录已经不在库里,消费者会一直重试这条结果,堵住整个分区。T 时刻还在打的对局走正常的崩溃路径,到期判过期,不发奖。
+6. **起服。** 照传第 2 步记下的全部参数。恢复到了新集群的话,只把 `-SqlClusters` 里这个集群的地址改过去。
+7. **开流量前**用测试账号把建角、登录、存盘、领奖各走一遍,确认消费组没有卡住。
+
+**这些不用回退,也不用清:**
+
+| 东西 | 为什么 |
+|---|---|
+| 发号器 | 计数器在两套 etcd 里,不随数据库回退,只增不减。回档之后发的号不会和 T 之后发过的撞 |
+| Redis | 没有玩家存档。同步摘要只是提示,回档了只会让客户端多拉一次。`owner_epoch` 铸造取「当前值 + 1」和墙钟的较大者,比回档后的写权行大。会话、位置、战斗锁靠 TTL 或判死收敛 |
+| 映射 `/mmorpg/db_placement/*` | 在 etcd 里,描述的是库在哪,不是库里有什么 |
+| `gate-cmd`、`scene-cmd` | 命令带目标实例号,重启后的新实例不接旧命令 |
+| `transaction_log_topic_g<N>`、`player_snapshot_topic_g<N>` | 只是审计和归档,不影响玩家状态。T 之后的记录照常落库,留作痕迹 |
+
 ### 4.1 完整时间点恢复(从 dump + binlog)
 
 **场景**:数据被误删 / Bug 导致脏写,需要恢复到 `2026-05-15 14:23:00 UTC` 的状态。
@@ -201,17 +236,77 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$SHADOW_NS" \
 # zone_101_db 仅为示例,必须替换为本次恢复计划中的真实业务库。
 
 # 7a. 若仅是抽取单个玩家:从影子库 dump 该玩家行 → 导回生产
-# 7b. 若是全库回档:停生产 mysql,把影子 PVC 推上去
-#     ⚠ 全库回档 = 连同 mmorpg_global 里 id_segment 的发号水位一起倒回目标时刻,这是 ID 安全事件。
-#     MySQL 里的消费表虽然一起回档,但 Kafka 里的 tx_id / snapshot_id、
-#     各进程内存里已经领走的号段都不会回退;不处理,下一次领段就把用过的号再发一遍
-#     (login 的 ON DUPLICATE KEY UPDATE 静默覆盖别人的角色行,流水表 INSERT IGNORE 静默丢新流水)。
-#     推上去之后、放开流量之前,按 deploy/k8s/README.md「恢复全局库前须先核对 id_segment.max_id」三步做完:
-#       ① 停 data-service,重启所有持有号段的进程(login / guild / scene);
-#       ② 逐个 biz_tag 拿消费侧最大号(含各 zone 库、Kafka 两个 topic、mmorpg_trade / mmorpg_guild 独占库);
-#       ③ max_id 不大于该最大号的,抬到「最大号 + 1 + 至少一个 step」。
-#     7a 的单玩家抽取不涉及水位,不需要这一步。
+# 7b. 若是全库回档:停生产 mysql,把影子 PVC 推上去。之后接着做 §4.0 的第 4~7 步。
+#     发号器的计数器在 etcd 里,不随数据库回退,这里不用处理发号(§4.0)。
 ```
+
+### 4.1a 单库回档和角色护栏(2026-10-31,未演练)
+
+规格见 [角色护栏](../design/horizontal-scale-logical-db.md) §3。目录(`account_role`)是权威,每个参与者库(`mmorpg_guild`、`mmorpg_trade`、`mmorpg_mail`、`mmorpg_match`、`mmorpg_player_inbox`、`mmorpg_friend`)有一张副本表 `role_fence`,合并规则是**版本大的赢**。只回档其中一个库,版本就对不上了。两个方向处理不同,**都要在开流量之前做完**。
+
+**参与者库回档后:清空本库 `role_fence`。** 回档出来的副本可能比目录旧:目录已经解冻或过户,副本还是冻结或旧主。清空之后下一次访问读权威状态自愈成当前值,不用逐行核对。
+
+```sql
+-- 在回档的那个参与者库上执行。目录不用动。
+TRUNCATE TABLE role_fence;
+```
+
+**目录回档后:把所有 `fence_version` 抬过任何副本可能的值,再开流量。** 回档会让 `fence_version` 倒退,而副本还留着更大的版本。不抬的话目录之后写出来的解冻、过户状态版本比副本小,副本一律不接受,自愈也修不了。
+
+1. 保持停写。逐个参与者库查出 `role_fence` 的最大版本,记下其中最大的一个:
+
+   ```sql
+   -- 每个参与者库各跑一次。
+   SELECT COALESCE(MAX(version), 0) AS max_version FROM role_fence;
+   ```
+
+2. 目录每一片都抬,`<抬升值>` 取「上一步的最大值 + 1000000」,留够余量。**全部片抬同一个值,只增不减**:
+
+   ```sql
+   -- K>1 时每个 mmorpg_global_NN 各跑一次。
+   UPDATE account_role SET fence_version = GREATEST(fence_version, <抬升值>) + 1;
+   ```
+
+3. 目录回档可能把 `prepare_token`、`trade_listing_id` 和收据一起倒回去,投票或冻结状态和回档点一致,不用手工改。等开流量之后 Begin 的重放或后台收尾接着处理:超过 30 秒的 `PREPARING` 会被撤销。
+4. 抬完版本的状态比副本都新,副本下一次访问或下一次推送就跟上了,不需要动参与者库。
+
+**过户和回档的关系。** 回档点之后提交的过户,在目录和参与者两边可能只留下一边,这不是护栏能修的:
+
+| 回档的库 | 回档点之后发生过过户或删角 | 处理 |
+|---|---|---|
+| 参与者库 | 目录还记着新主。回档出来的库里可能有过户之前已经结束、回档后又回到未终局的挂起行(合同、资产指令、票) | 清空 `role_fence` 只能修护栏,修不了这些行。要按手册核账,这批角色的挂起行由人工裁决。不能让它们按旧主继续发资产 |
+| 目录 | 目录倒回旧主,参与者库和存档已经按新主写过 | 买卖双方的归属要人工核对,必要时按回档点之后的 `account_role_transfer_receipt` 备份和商城订单重放。抬版本只保证副本能跟上目录,不能证明目录的归属是对的 |
+
+**只回档存档库(`zone_<n>_db`、`player_store_<id>_db`)。** 写权行的代次倒退不用处理,玩家下次认领时代次比库里新。但回档点之后已经提交的资产结果(收件箱、公会、交易的资产指令)在发起方那边已经终局,存档里却没有了,这批玩家要核账。所以能全库一起回就不要只回存档库。
+
+全库一起回档(§4.0)时目录和参与者是同一时刻,版本一致,不用做上面这些。
+
+### 4.1b TiDB 档:BR 时间点恢复(2026-10-31,未演练)
+
+命令来自 TiDB 官方文档,按实际版本核对。**日常要先开起来**,没有开日志备份就恢复不到任意时刻。集群不随本仓库部署,由运维负责:
+
+```bash
+# 日志备份,一个集群只跑一个任务,持续运行。
+tiup br log start --task-name=pitr --pd "${PD_IP}:2379" --storage 's3://<桶>/logbackup'
+```
+
+```bash
+# 快照备份,定期跑(比如每两天一次),恢复点之前要有一份。
+tiup br backup full --pd "${PD_IP}:2379" --storage "s3://<桶>/snapshot-${date}"
+```
+
+恢复(接 §4.0 第 3 步):
+
+1. 建一个新集群,恢复到它上面。原集群保留到开流量之后。
+2. 执行恢复。`--restored-ts` 要早于 `tiup br log status` 显示的 `checkpoint[global]`:
+
+   ```bash
+   tiup br restore point --pd "${NEW_PD_IP}:2379" --storage 's3://<桶>/logbackup' --full-backup-storage "s3://<桶>/snapshot-${date}" --restored-ts '<T,如 2026-05-15 18:00:00+0800>'
+   ```
+
+3. 恢复期间这些表不能读写,等命令结束再核对。核对之后接着做 §4.0 第 4~7 步。
+
+一个地域的逻辑库分布在多个集群时,每个集群各恢复一次,`--restored-ts` 用同一个 T。跨集群的提交没有全局一致的时间点,贴着 T 的跨库操作可能只留下一边,这部分按 §4.1a 的表核账。
 
 ### 4.2 单玩家 / 单 zone 数据抽取(更常见)
 
@@ -258,9 +353,9 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
   wait --for=condition=complete --timeout=2h "job/$BACKUP_JOB"
 ```
 
-### 5.2 zone 灾难回档(zone_data_rollback.md §3)
+### 5.2 不再有单 zone 回档
 
-§3 列的「步骤 2 MySQL PITR」直接用本文 §4.1 的流程。**先恢复到影子库**,确认无误后再决定换正式库还是抽数据。
+单 zone 回档脚本 `k8s_zone_rollback.ps1` 和它依赖的清理工具 2026-10-31 退役。玩家不按 zone 存,所有 zone 都能写同一个存档库,停一个 zone 挡不住写入。回档按 §4.0 整个地域一起做,只修一个库走 §4.1a,抽单个玩家走 §4.2。
 
 ---
 
@@ -296,6 +391,8 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 - **2026-10-15 补充**:现行命令显式携带目标 context / kubeconfig / namespace;SQL 工具改为在容器内读 root 凭据;备份与影子实例先准备匹配目标环境的 Secret 引用清单,不再发布开发固定口令。
 - **2026-10-16**:§4.1 加第 7c 步、§5.2 加一句:回档后删除受影响玩家的资产 SQL 提交证据键 `player:{id}:asset_sql_commit`(db-write-fencing-mysql.md §6.6、§9.2)。仅修订手册,未演练。
 - **2026-10-30**:玩家存档只在 `player_store`,§4.1 第 7c 步和 §4.2 的两张表抽取随旧路径删除。仅修订手册,未演练。
+- **2026-10-31**:加 §4.1a,单库回档和角色护栏:参与者库回档清空 `role_fence`,目录回档抬 `fence_version`,过户和回档的关系。仅修订手册,未演练。
+- **2026-10-31 补充**:加 §4.0 整体做法和 §4.1b TiDB 档;§4.1 第 7b 步去掉已失效的发号水位(发号器已搬到 etcd);单 zone 回档脚本退役,§5.2 随之改写。仅修订手册,未演练。
 
 > **2026-10-30:本节以下到文末全部作废,只作历史保留。** 玩家存档已不在 Redis,恢复之后不需要重建存盘屏障,也没有 outbox 要裁决。工具 `save_barrier_restore` 已改名 `go/db/cmd/maintenance_phase`,只剩 `-authority-phase`,下文的 `-mode` 都不存在了。恢复玩家数据只需要按 §4 恢复 `player_store`,放流前清掉 Redis 里的 `location`、`handoff` 这些协调键或等 scene_manager 判死,玩家下次认领时代次比库里新,按正常流程进场。
 

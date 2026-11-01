@@ -95,6 +95,20 @@ message MatchAuthorityTicketRecord {
   uint64 owner_revision = 19;
 }
 
+// 帮会历练的战斗入口占用(docs/design/horizontal-scale-logical-db.md §4)。写者都先持本库 role_fence 行锁，
+// 和入场、冻结同一个串行点。到期视为空闲；开局之后留到 guild 释放或到期，票终局之后结算之前也不放新入场。
+message MatchRoleOccupancyRecord {
+  option (OptionTableName) = "match_role_occupancy";
+  option (OptionPrimaryKey) = "player_id";
+  option (OptionIndex) = "owner_kind,owner_id,player_id";
+  uint64 player_id = 1;
+  uint32 owner_kind = 2;  // 1 帮会历练大厅
+  uint64 owner_id = 3;    // 大厅号
+  string account = 4;
+  uint64 owner_revision = 5;
+  uint64 expires_ms = 6;  // match 库的时钟
+}
+
 // 仅作可重建候选索引，票与完整签名profile仍是提交点真相。
 // 同原票锁更新/清理；查询必须JOIN当前ticket代次，最终Claim复核原profile和原角色身份。
 message MatchTicketRegionRecord {

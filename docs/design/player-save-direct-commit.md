@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS `player_store` (
   `holder_instance` MEDIUMBLOB      NOT NULL,            -- 只写权行用:持有者的 scene_instance_id
   `released`        INT UNSIGNED    NOT NULL,            -- 只写权行用:1 = 持有者已最终存盘并释放
   `payload`         MEDIUMBLOB      NOT NULL,
+  `claim_seq`       BIGINT UNSIGNED NOT NULL DEFAULT 0,  -- 只写权行用:每次认领加 1,判死比较用,见 horizontal-scale-logical-db.md §6
   PRIMARY KEY (`player_id`, `kind`) /*T![clustered_index] CLUSTERED */
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 ```
@@ -233,7 +234,7 @@ Deadline:go/db 的 zrpc `Timeout` 显式配置并大于 SQL 锁等待 10s(今天
 - **账本读**:`data_service` 新增 `AccountDirectoryStore.ReadPlayerStoreAsset`,按 `player_route` 选库,一条语句读 kind 0、2。`GetPlayerAssetOpLedger` 的三种读法(普通、`verify_redis_copy`、`require_sql_commit`)和 `GetPlayerInboxLedger` 都走它:只有一个来源,核验恒真,证据就是账本本身。写权行在、kAsset 行不在是「账本为空」,不是「没有存档」。
 - **自动放弃**:`GetPlayerAssetOpLedger` 加 `read_player_store`,回带 `player_released`。`assetop.Loop` 先问一次:对端走新路径就用 `judgeWithPlayerStore`(`released=1` 代替「没有位置」,与账本同一次读),走旧路径回到原判定,不读 Redis。不给 guild、trade、mail 各加一个开关:判断跟着 data_service 走,不会分叉。
 - **判死释放**:`LeaveScene` 判出 `owner_dead` 时,先调 `data_service.ReleaseDeadPlayerStoreHolder`,再删 location;失败就保留 location 重试。事务里 E 抬到 `location 这一代 + 1`、持有者清空、`released=1`。库里已比它新就不动,所以幂等。代次用 location 记的这一代,不用之后才读的 `owner_epoch` 键:这期间另一路 `EnterScene` 可能已经接手、铸了新代次,拿新值释放会把刚接手的新持有者围掉(它已认领就丢认领后未提交的进度,没认领就进不了场)。location 没记代次时不释放,下一次认领照样抬代次把旧持有者挡住。写在 data_service 是因为它已有跨库写、scene_manager 已有它的客户端和独立密钥,不用给 scene_manager 再接一条 go/db 的发现与鉴权。`EnterScene` 判死接管不用调:新认领抬 E 就把旧持有者挡住了。
-- **交易冻结证据**:`SQLRoleFreezeVerifier.UsePlayerStore` 后读 `player_store`,版本取写权行,摘要覆盖这名玩家所有行的所有列;初始提交判定改成「所有行还是 (1, 1)」。
+- **交易冻结证据**:`SQLRoleFreezeVerifier.UsePlayerStore` 后读 `player_store`,版本取写权行,摘要覆盖这名玩家所有行的所有列(`claim_seq` 除外:它不是存档内容,冻结期间也没有人能认领);初始提交判定改成「所有行还是 (1, 1)」。
 - **维护恢复**(`verifyMaintenanceRecovery`)建立在 Redis 屏障和两张旧表的提升上,新路径先拒绝(`maintenance_recovery_not_on_player_store`)。崩溃持有者在交易冻结上卡住时要人工处理;是否要做新路径的恢复证明放到旧路径删除时一起定。
 
 ### 5.6 B7 落码时定下的细节
@@ -331,7 +332,7 @@ FIFO 依赖要逐处拆掉:PING 快路径、A2′ 先于 GET、重连补发顺�
 
 11. **崩溃的持有者卡住角色交易(2026-10-30 定,B7 留下的待决项)**。崩溃的 scene 实例永远不发 `AckDrain`,它的 `account_role_admission` 也永远不关,交易会卡在 FREEZING,取消卡在 CANCEL_PENDING,这个角色之后每一笔交易都会再次卡住。旧的人工恢复工具建立在 Redis 屏障和两张旧表上,已删除。
     - **判据**:持有者 I 能提交存档的前提是写权行的 `holder_instance` 是它。释放不是终态(§4),`released=1` 的现任也算现任,断线后 30 秒内重连会复用实体接着存。`fenceDeadTradeHolders`(`go/data_service/internal/store/account_role_dead_holder.go`)在 Begin(含重放)、Confirm、Cancel 的事务里检查:只要有一个未排空的持有者还是写权行的现任,就什么都不做,它可能活着、内存里还有没落盘的进度。否则这些持有者都写不了存档,只剩「认领在途」一种可能。认领带的是登记时的代次(`RoleAdmissionIdentity.owner_epoch`),那是铸造时的墙钟,通常远大于库里的代次,所以要把代次抬到**所有待判持有者登记的代次之上**,否则在途的认领照样成功,冻结证据作废(评审第 1 条,10-30 修正)。判为排空,关掉登记。`trade_listing_id` 非 0 时 `Register` 拒绝,持有者拿不到更高的代次;下一个合法持有者的代次由 scene_manager 铸造,取「观察值 + 1」和墙钟的较大者,不小于这个值。
-    - **迟到的真实 ACK 和 Close**:按成功重放,不算冲突(判死时 `ack_digest`、`close_digest` 记标记)。过户之后迟到的 Close 带旧修订,仍然回冲突,scene 每秒重发一次直到这名玩家再进这个实例或进程重启,不丢数据,只是空转。
+    - **迟到的真实 ACK 和 Close**:按成功重放,不算冲突(判死时 `ack_digest`、`close_digest` 记标记)。过户或删角之后迟到的 Close 带旧修订:旧修订的持有者当时已经排空或判死,没有东西要关,回成功,不改登记行,scene 就此停止重发(2026-10-31,原来回冲突,scene 会每秒空转)。
     - **现任崩溃**:scene_manager 判死时释放(`ReleaseDeadPlayerStoreHolder`)。节点在写 location 之前就死了,或者玩家释放之后、关登记之前死了,判死够不着,运维确认实例已死之后用 `go/data_service/cmd/admission_recover` 摘掉,交易的下一次重试就能走完。
     - **代价**:现任活着却被运维误摘,它内存里没落盘的进度会丢。
 

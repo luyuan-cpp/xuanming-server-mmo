@@ -18,6 +18,7 @@ import (
 
 	inboxpb "proto/player_inbox"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/service"
@@ -86,9 +87,6 @@ type Config struct {
 	// MySQL:独占库 mmorpg_player_inbox(D-14)。连接池即设计 §10 的「独立连接池」:
 	// 审计与入箱同库同事务；逐物理连接由shared/authoritysql按 MySQL.Backend 档位固定当前读。
 	MySQL MySQLConf `json:"MySQL"`
-
-	// 同一SQL入口中的角色目录schema；入箱、消费、运维、后台均在业务事务首锁原角色P。
-	AccountRoleSchema string `json:",optional"`
 
 	// Schema:建表策略,见 SchemaConf.AutoMigrate。整段可缺失。
 	Schema SchemaConf `json:",optional"`
@@ -197,6 +195,8 @@ type MySQLConf struct {
 	MaxIdleConn int    `json:"MaxIdleConn,default=5"`
 	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);非法值拒启。
 	Backend string `json:",default=tidb"`
+	// DbPlacement:按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Host。
+	DbPlacement dbplacement.Config `json:",optional"`
 }
 
 // SchemaConf 建表策略(D-14 第 4 条)。AutoMigrate 为 nil(没写)或 false 时常驻启动仅核对；显式迁移才跑 schemamigrate.Up;
@@ -324,9 +324,6 @@ func (c *Config) Validate() error {
 	}
 	if _, err := authoritysql.ParseBackend(c.MySQL.Backend); err != nil {
 		return fmt.Errorf("MySQL.Backend: %w", err)
-	}
-	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) {
-		return errors.New("AccountRoleSchema必须显式配置同事务域角色目录schema")
 	}
 	if c.MySQL.DBName != data.DatabaseName {
 		return fmt.Errorf("MySQL.DBName 必须是 %q(得到 %q):收件箱独占该库,表不许建进别的库(D-14)",

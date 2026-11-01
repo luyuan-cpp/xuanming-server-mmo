@@ -3,6 +3,7 @@ package authority
 import (
 	"context"
 	"errors"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"sort"
 	"time"
@@ -57,7 +58,7 @@ func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, ad
 						relay.Hold()
 						panic(recovered)
 					}
-					if resultErr != nil {
+					if resultErr != nil && !authoritysql.IsWriterFrozen(resultErr) {
 						relay.Hold()
 					}
 				}()

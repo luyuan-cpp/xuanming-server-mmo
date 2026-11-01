@@ -20,6 +20,8 @@ type RoleTrades interface {
 	Confirm(context.Context, *dspb.ConfirmAccountRoleTradeFreezeRequest) (*dspb.AccountRoleTradeReceipt, error)
 	Cancel(context.Context, *dspb.CancelAccountRoleTradeRequest) (*dspb.AccountRoleTradeReceipt, error)
 	Transfer(context.Context, *dspb.TransferAccountRoleRequest) (*dspb.AccountRoleTransferReceipt, error)
+	// RoleSlotFull 报告这个账号的存活角色数是不是到了上限。只读,结论不算数:名额的判定在 Transfer 第 1 步。
+	RoleSlotFull(ctx context.Context, account string) (bool, error)
 }
 
 // TradeClient 与 login 目录客户端分开装配，防止 login 的读写证明扩大成角色过户权限。
@@ -145,4 +147,22 @@ func (c *TradeClient) Transfer(ctx context.Context, in *dspb.TransferAccountRole
 		return nil, ErrUnavailable
 	}
 	return out, nil
+}
+
+// RoleSlotFull 读不到回 ErrRetryLater,不能当成有名额。
+func (c *TradeClient) RoleSlotFull(ctx context.Context, account string) (bool, error) {
+	in := &dspb.CheckAccountRoleSlotRequest{Account: account}
+	call, cancel, err := c.prepare(ctx, "CheckAccountRoleSlot", in)
+	if err != nil {
+		return false, err
+	}
+	defer cancel()
+	out, err := c.rpc.CheckAccountRoleSlot(call, in)
+	if err != nil {
+		return false, classify(err)
+	}
+	if out.GetRetry() {
+		return false, ErrRetryLater
+	}
+	return out.GetFull(), nil
 }

@@ -26,9 +26,6 @@ services:
   match-migrate:
     entrypoint: [/app/service]
 
-  guild-migrate:
-    entrypoint: [/app/service]
-
   player-inbox-migrate:
     entrypoint: [/app/service]
 

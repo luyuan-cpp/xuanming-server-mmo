@@ -326,6 +326,45 @@ func TestLoadAndClaim_ClaimsThenReadsInOneTransaction(t *testing.T) {
 	}
 }
 
+// 同实例同代次重新认领:判定放行,写入照样带 claim_seq+1。不带的话 (owner_epoch, holder_instance) 写回原值,挂住的判死比不出来。
+func TestLoadAndClaim_ReclaimBySameHolderBumpsClaimSeq(t *testing.T) {
+	var claimQuery string
+	var claimArgs []driver.NamedValue
+	store, _ := openStore(t, func(_ context.Context, query string, args []driver.NamedValue) (*dbtest.Rows, error) {
+		switch {
+		case strings.Contains(query, "FOR UPDATE"):
+			return ownerValues(11, 5, 1, instanceA), nil
+		case strings.HasPrefix(query, "UPDATE"):
+			claimQuery, claimArgs = query, args
+			return nil, nil
+		case strings.Contains(query, "kind>0"):
+			return &dbtest.Rows{Columns: []string{"kind", "payload"}}, nil
+		}
+		return nil, nil
+	})
+	resp, err := store.LoadAndClaim(context.Background(), validClaim())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.GetResult() != storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED {
+		t.Fatalf("result = %v", resp.GetResult())
+	}
+	if !strings.Contains(claimQuery, "claim_seq=claim_seq+1") {
+		t.Fatalf("claim must bump claim_seq: %s", claimQuery)
+	}
+	if claimArgs[0].Value != int64(11) || string(claimArgs[1].Value.([]byte)) != string(instanceA) {
+		t.Fatalf("claim args = %v", claimArgs)
+	}
+}
+
+// 存盘不是认领,不动 claim_seq:判死比较的是有没有人重新认领过,不是有没有人存过盘。
+func TestSave_DoesNotTouchClaimSeq(t *testing.T) {
+	query, _ := buildSave(validSave())
+	if strings.Contains(query, "claim_seq") {
+		t.Fatalf("save must leave claim_seq alone: %s", query)
+	}
+}
+
 // 被拒绝时不抬代次、不读数据。
 func TestLoadAndClaim_RejectionDoesNotTouchRows(t *testing.T) {
 	store, rec := openStore(t, func(context.Context, string, []driver.NamedValue) (*dbtest.Rows, error) {
@@ -353,13 +392,18 @@ func TestVerifySchema(t *testing.T) {
 			return out, nil
 		}
 	}
-	store, _ := openStore(t, columns("player_id", "kind", "owner_epoch", "save_seq", "schema_gen", "holder_instance", "released", "PAYLOAD"))
+	store, _ := openStore(t, columns("player_id", "kind", "owner_epoch", "save_seq", "schema_gen", "holder_instance", "released", "PAYLOAD", "claim_seq"))
 	if err := store.VerifySchema(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	missingColumn, _ := openStore(t, columns("player_id", "kind"))
 	if err := missingColumn.VerifySchema(context.Background()); err == nil {
 		t.Fatal("missing columns must be rejected")
+	}
+	// 缺 claim_seq:判死比不出同实例重新认领,会踢掉在线玩家。
+	noClaimSeq, _ := openStore(t, columns("player_id", "kind", "owner_epoch", "save_seq", "schema_gen", "holder_instance", "released", "payload"))
+	if err := noClaimSeq.VerifySchema(context.Background()); err == nil {
+		t.Fatal("missing claim_seq must be rejected")
 	}
 	noTable, _ := openStore(t, columns())
 	if err := noTable.VerifySchema(context.Background()); err == nil {

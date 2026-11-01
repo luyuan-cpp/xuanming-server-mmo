@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"sync"
 	"sync/atomic"
@@ -661,13 +662,18 @@ func (l *Loop) claimAndProcess(ctx context.Context, opID uint64) bool {
 		return false
 	}
 	if _, err := l.processOne(work, op, time.Time{}); err != nil {
-		if l.Relay != nil {
-			l.Relay.Hold()
-		}
+		l.holdUnlessFrozen(err)
 		logx.Errorf("[AssetOp] Failed to process pending row op_id=%d stream=%d seq=%d: %v",
 			op.OpID, op.Stream, op.Seq, err)
 	}
 	return true
+}
+
+// holdUnlessFrozen 把失败记成排空 HOLD。闸门冻结不算:搬库窗口里这笔确定没写,行还是 PENDING,窗口过了照常重投。
+func (l *Loop) holdUnlessFrozen(err error) {
+	if err != nil && l.Relay != nil && !authoritysql.IsWriterFrozen(err) {
+		l.Relay.Hold()
+	}
 }
 
 // acquireSlot 拿一个在途名额;ctx 先结束则返回 false。
@@ -800,9 +806,7 @@ func (l *Loop) claim(ctx context.Context, opID uint64) (Op, claimResult) {
 		logx.Errorf("[AssetOp] Could not decode pending row payload; postponed for manual handling op_id=%d", opID)
 		return Op{}, claimLost
 	case err != nil:
-		if l.Relay != nil {
-			l.Relay.Hold()
-		}
+		l.holdUnlessFrozen(err)
 		l.metrics.incStoreError("claim")
 		logx.Errorf("[AssetOp] Failed to claim pending row op_id=%d: %v", opID, err)
 		return Op{}, claimFailed
@@ -834,9 +838,7 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (out Processed, resultErr 
 				l.Relay.Hold()
 				panic(recovered)
 			}
-			if resultErr != nil {
-				l.Relay.Hold()
-			}
+			l.holdUnlessFrozen(resultErr)
 		}()
 	}
 	// 同步调用方的绝对截止只约束投递与取证，不恢复父取消传播。
@@ -898,9 +900,7 @@ func (l *Loop) processOne(ctx context.Context, op Op, callerApplyDeadline time.T
 			reason = "offline"
 		}
 		if err != nil {
-			if l.Relay != nil {
-				l.Relay.Hold()
-			}
+			l.holdUnlessFrozen(err)
 			return l.rescheduleTransportFailure(ctx, op, next, res, nowMs)
 		}
 		return l.reschedule(ctx, op, next, res, nowMs, reason)
@@ -975,6 +975,16 @@ func resultWithReceipt(ledger *componentpb.PlayerAssetOpLedgerComp, op Op, res R
 	if receipt == nil {
 		return Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN}
 	}
+	if op.Stream == assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL {
+		// 回收扣到多少只有收据明细说得清,没有明细就不能终结:不按请求金额记账。
+		if res.Outcome == assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED {
+			if _, ok := RecallLineOf(op, receipt.GetSnapshot()); !ok {
+				return Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN}
+			}
+			res.Snapshot = proto.Clone(receipt.GetSnapshot()).(*assetpb.AssetSnapshot)
+		}
+		return res
+	}
 	if res.Outcome == assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_APPLIED && escrowsInstances(op) {
 		if !receiptSnapshotMatches(op, receipt.GetSnapshot()) {
 			return Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN}
@@ -984,6 +994,36 @@ func resultWithReceipt(ledger *componentpb.PlayerAssetOpLedgerComp, op Op, res R
 		return Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_UNKNOWN}
 	}
 	return res
+}
+
+// RecallLineOf 取回收收据的明细,并核它和原请求对得上:恰好一条,资产和数量都是请求里的,requested = taken + debt + shortfall。
+// 对不上回 false,调用方不得终结。
+func RecallLineOf(op Op, snapshot *assetpb.AssetSnapshot) (*assetpb.AssetRecallLine, bool) {
+	if snapshot == nil || len(snapshot.GetRecallLines()) != 1 || snapshotHasInstances(snapshot) {
+		return nil, false
+	}
+	line := snapshot.GetRecallLines()[0]
+	requested := line.GetRequested()
+	if line.GetTaken() > requested || line.GetDebt() > requested-line.GetTaken() ||
+		line.GetShortfall() != requested-line.GetTaken()-line.GetDebt() {
+		return nil, false
+	}
+	bundle := op.Bundle
+	switch {
+	case len(bundle.GetCurrencies()) == 1 && len(bundle.GetItems()) == 0:
+		currency := bundle.GetCurrencies()[0]
+		if line.GetConfigId() != 0 || line.GetCurrencyType() != currency.GetCurrencyType() || requested != currency.GetAmount() {
+			return nil, false
+		}
+	case len(bundle.GetItems()) == 1 && len(bundle.GetCurrencies()) == 0:
+		item := bundle.GetItems()[0]
+		if line.GetConfigId() != item.GetConfigId() || requested != uint64(item.GetCount()) || line.GetDebt() != 0 {
+			return nil, false
+		}
+	default:
+		return nil, false
+	}
+	return line, true
 }
 
 // escrowsInstances:本笔是实例扣出(按道具 guid 或宝宝 id 扣出已有实例)。

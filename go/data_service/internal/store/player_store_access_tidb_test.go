@@ -164,6 +164,45 @@ func TestTiDBReleaseDeadPlayerStoreHolder(t *testing.T) {
 	require.NoError(t, s.ReleaseDeadPlayerStoreHolder(ctx, 987654321, 7))
 }
 
+// 玩家同节点重登:(owner_epoch, holder_instance) 写回原值,只有 claim_seq 变。判死比较并写要比得出来,否则踢掉在线玩家。
+func TestTiDBRaiseStoreEpochComparesClaimSeq(t *testing.T) {
+	s, db := accountDirectoryTiDB(t)
+	storage, schema := initialPlayerSchemaForTest(t, s)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	role := directRoleForTest(t, s, ctx, 3206)
+	setOwner := func(claimSeq uint64) {
+		t.Helper()
+		_, err := db.Exec("UPDATE `"+schema+"`.`player_store` SET owner_epoch=30,released=0,holder_instance=?,claim_seq=? WHERE player_id=? AND kind=0", []byte("instance-a"), claimSeq, role.PlayerId)
+		require.NoError(t, err)
+	}
+	setOwner(4)
+	seen, err := s.steps.readStoreOwner(ctx, storage, role.PlayerId)
+	require.NoError(t, err)
+	require.EqualValues(t, 4, seen.claimSeq)
+
+	setOwner(5)
+	raised, err := s.steps.raiseStoreEpoch(ctx, storage, role.PlayerId, *seen, 31)
+	require.NoError(t, err)
+	require.False(t, raised, "同实例同代次重新认领过了")
+	owner, ok := readStoreRowForTest(t, db, schema, role.PlayerId, storepb.PlayerStoreKind_PLAYER_STORE_KIND_OWNER)
+	require.True(t, ok)
+	require.EqualValues(t, 30, owner.epoch)
+	require.EqualValues(t, 0, owner.released)
+	require.Equal(t, []byte("instance-a"), owner.holder)
+
+	seen, err = s.steps.readStoreOwner(ctx, storage, role.PlayerId)
+	require.NoError(t, err)
+	raised, err = s.steps.raiseStoreEpoch(ctx, storage, role.PlayerId, *seen, 31)
+	require.NoError(t, err)
+	require.True(t, raised)
+	seen, err = s.steps.readStoreOwner(ctx, storage, role.PlayerId)
+	require.NoError(t, err)
+	require.EqualValues(t, 31, seen.ownerEpoch)
+	require.Empty(t, seen.holder)
+	require.EqualValues(t, 5, seen.claimSeq, "判死不是认领")
+}
+
 func TestTiDBVerifyFrozenOnPlayerStore(t *testing.T) {
 	s, db := accountDirectoryTiDB(t)
 	storageID, schema := initialPlayerSchemaForTest(t, s)
@@ -171,14 +210,11 @@ func TestTiDBVerifyFrozenOnPlayerStore(t *testing.T) {
 	defer cancel()
 	role := directRoleForTest(t, s, ctx, 3204)
 
-	verifier, err := NewSQLRoleFreezeVerifier([]uint32{storageID})
+	verifier, err := NewSQLRoleFreezeVerifier(s, []uint32{storageID})
 	require.NoError(t, err)
 	verify := func(required uint64, holders int) (*dspb.AccountRoleFreezeEvidence, error) {
-		tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-		require.NoError(t, err)
-		defer tx.Rollback()
 		trade := &databasepb.AccountRoleTrade{PlayerId: role.PlayerId, ListingId: 1, SellerOwnerRevision: 1, RequiredOwnerEpoch: required, RequiredSaveSeq: required}
-		return verifier.verifyFrozenPlayerStore(ctx, tx, trade, holders, schema)
+		return verifier.ReadFrozenEvidence(ctx, trade, holders)
 	}
 
 	// 从没进过场:初始提交。

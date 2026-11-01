@@ -192,7 +192,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   - **怎么判断「写过」**:login 建角恒写落点,所以有过玩家就算写过。全局库 `player_route` 里有 `storage_id IS NOT NULL` 的行(`SELECT 1 FROM player_route WHERE storage_id IS NOT NULL LIMIT 1`)即是。拿不准就按「写过」处理。
   - **写过之后**:同样不许把 login / data_service 回滚到不支持 storage_id 的版本。
 - [ ] **回滚后核对**:按 §3.1 确认 Pod `imageID` digest、启动版本行、`/app/BUILD_INFO` 都已是上一版本;再做附录 E.3"回滚后必做"。
-- **数据不随代码回滚**:库结构迁移只前进(`go/schemamigrate` 只有 `Up`;trade 的迁移 Job 以 `-migrate` 运行),回滚前确认上一版本能在当前库结构上运行。需要把数据回到某个时间点时走 `tools/scripts/k8s_zone_rollback.ps1`(`-NodeImage` 必填,且必须是不可变引用)与 [zone_data_rollback.md](../design/zone_data_rollback.md)。
+- **数据不随代码回滚**:库结构迁移只前进(`go/schemamigrate` 只有 `Up`;trade 的迁移 Job 以 `-migrate` 运行),回滚前确认上一版本能在当前库结构上运行。需要把数据回到某个时间点时走 [MySQL 备份与 PITR 手册](./mysql-backup-pitr-runbook.md) §4。
 
 ---
 

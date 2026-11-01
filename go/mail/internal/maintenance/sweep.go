@@ -8,6 +8,7 @@ import (
 	"mail/internal/data"
 	"mail/internal/metrics"
 	"math/rand/v2"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"time"
 )
@@ -86,7 +87,8 @@ func Run(ctx context.Context, repo *data.Repo, c Config, admissions ...*drainpro
 							panic(recovered)
 						}
 					}()
-					if err := sweepRound(context.WithoutCancel(ctx), repo, c); err != nil && c.Mode == config.SweepModeDelete {
+					// 闸门冻结是确定没写,下一轮接着清,不算结局未知。
+					if err := sweepRound(context.WithoutCancel(ctx), repo, c); err != nil && c.Mode == config.SweepModeDelete && !authoritysql.IsWriterFrozen(err) {
 						root.Hold()
 					}
 				}()

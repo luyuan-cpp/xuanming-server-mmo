@@ -3,6 +3,7 @@ package svc
 import (
 	"fmt"
 	"shared/accountdirectory"
+	"shared/rolefence"
 	"shared/serviceauth"
 	"strings"
 )
@@ -17,6 +18,24 @@ func validateGlobalCallerSecrets(getenv func(string) string) error {
 		}
 		if seen[secret] {
 			return fmt.Errorf("全球目录caller密钥不能跨用途复用")
+		}
+		seen[secret] = true
+	}
+	// 角色护栏的密钥缺了只关闭对应能力(见 configureRoleFence),不拒启;配了就同样不能跨用途复用。
+	guarded := map[string]string{rolefence.CoordinatorCaller: rolefence.CoordinatorSecretEnv, accountdirectory.RouteCaller: accountdirectory.RouteSecretEnv}
+	for _, caller := range rolefence.Callers {
+		guarded[caller] = rolefence.SecretEnv(caller)
+	}
+	for caller, env := range guarded {
+		secret := strings.TrimSpace(getenv(env))
+		if secret == "" {
+			continue
+		}
+		if _, err := serviceauth.New(map[string]string{caller: secret}); err != nil {
+			return fmt.Errorf("角色护栏caller %s密钥非法", caller)
+		}
+		if seen[secret] {
+			return fmt.Errorf("角色护栏caller %s的密钥不能跨用途复用", caller)
 		}
 		seen[secret] = true
 	}

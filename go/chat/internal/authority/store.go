@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"strings"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 	chatpb "proto/chat"
 	"shared/accountdirectory"
 	"shared/authoritysql"
-	"shared/placement"
+	"shared/rolefence"
 
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
@@ -64,12 +63,12 @@ type Service interface {
 }
 
 type Store struct {
-	db         *sql.DB
-	roleSchema string
-	rules      Rules
-	filter     *textfilter.Filter
-	clock      func(context.Context, *sql.Tx) (uint64, error)
-	actors     *actorVerifyCache
+	db     *sql.DB
+	states rolefence.StateReader
+	rules  Rules
+	filter *textfilter.Filter
+	clock  func(context.Context, *sql.Tx) (uint64, error)
+	actors *actorVerifyCache
 }
 
 // receipt只描述SQL元数据；业务原件始终是原PB字节，不复制PB字段定义。
@@ -90,8 +89,8 @@ type role struct {
 	revision uint64
 }
 
-func New(ctx context.Context, db *sql.DB, schema string, backend authoritysql.Backend, rules Rules) (*Store, error) {
-	if db == nil || !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(schema) || rules.MaxContentBytes <= 0 || rules.RateLimitPerSecond <= 0 || rules.HistoryMaxEntries <= 0 || rules.HistoryDefaultLimit <= 0 || rules.HistoryMaxLimit < rules.HistoryDefaultLimit || rules.HistoryMaxLimit > constants.MaxHistoryPullLimit || rules.HistoryTTLSeconds <= 0 || uint64(rules.HistoryTTLSeconds) > math.MaxUint64/1000 || rules.ActorVerifyTTLSeconds < 0 || rules.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds {
+func New(ctx context.Context, db *sql.DB, states rolefence.StateReader, backend authoritysql.Backend, rules Rules) (*Store, error) {
+	if db == nil || states == nil || rules.MaxContentBytes <= 0 || rules.RateLimitPerSecond <= 0 || rules.HistoryMaxEntries <= 0 || rules.HistoryDefaultLimit <= 0 || rules.HistoryMaxLimit < rules.HistoryDefaultLimit || rules.HistoryMaxLimit > constants.MaxHistoryPullLimit || rules.HistoryTTLSeconds <= 0 || uint64(rules.HistoryTTLSeconds) > math.MaxUint64/1000 || rules.ActorVerifyTTLSeconds < 0 || rules.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds {
 		return nil, ErrInvalid
 	}
 	if err := authoritysql.AssertCurrentSession(ctx, db, backend); err != nil {
@@ -100,22 +99,12 @@ func New(ctx context.Context, db *sql.DB, schema string, backend authoritysql.Ba
 	if err := CheckSchema(ctx, db); err != nil {
 		return nil, err
 	}
-	if err := placement.CheckRoleRouteContract(ctx, db, schema); err != nil {
-		return nil, err
-	}
-	rows, err := db.QueryContext(ctx, "SELECT player_id,account,owner_revision,trade_listing_id FROM `"+schema+"`.account_role LIMIT 0")
-	if err != nil {
-		return nil, err
-	}
-	if err = rows.Close(); err != nil {
-		return nil, err
-	}
 	filter, err := textfilter.New(rules.SensitiveWords)
 	if err != nil {
 		return nil, err
 	}
 	rules.SensitiveWords = append([]string(nil), rules.SensitiveWords...)
-	s := &Store{db: db, roleSchema: schema, rules: rules, filter: filter, clock: databaseNow,
+	s := &Store{db: db, states: states, rules: rules, filter: filter, clock: databaseNow,
 		actors: newActorVerifyCache(time.Duration(rules.ActorVerifyTTLSeconds)*time.Second, actorVerifyMaxEntries, monotonicSinceStart())}
 	if err = s.ensurePolicy(ctx); err != nil {
 		return nil, err
@@ -132,6 +121,18 @@ func databaseNow(ctx context.Context, tx *sql.Tx) (uint64, error) {
 func (s *Store) ensurePolicy(ctx context.Context) error {
 	raw := policyBytes(s.rules)
 	digest := sha256.Sum256(raw)
+	// 策略行写过一次就不再变,重启只读。启动撞上闸门冻结时读能过、写不能,写资格是一次性的,不能因为搬库窗口让进程起不来。
+	var existing []byte
+	err := s.db.QueryRowContext(ctx, "SELECT policy_hash FROM chat_policy WHERE id=1").Scan(&existing)
+	if err == nil {
+		if !bytes.Equal(existing, digest[:]) {
+			return ErrPolicy
+		}
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return err

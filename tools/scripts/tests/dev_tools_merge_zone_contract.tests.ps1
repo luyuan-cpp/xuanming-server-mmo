@@ -114,7 +114,7 @@ try {
         }
     }
 
-    # 源码断言:dev_tools.ps1 与回滚脚本 / kafka_offset_reset.ps1 的透传口径(2026-10-30:存盘不再经 Kafka,相关参数全部删除)。
+    # 源码断言:dev_tools.ps1 与 kafka_offset_reset.ps1 的透传口径(2026-10-30:存盘不再经 Kafka,相关参数全部删除)。
     # 分支文本按 switch 分支的起止锚点切出,只断本分支,不受参数块注释影响。
     function Get-DevToolsBranchText([string]$Branch, [string]$NextBranch) {
         $start = $devToolsSource.IndexOf("    `"$Branch`" {")
@@ -123,14 +123,20 @@ try {
         return $devToolsSource.Substring($start, $end - $start)
     }
 
-    Test-Case 'k8s-zone-rollback 分支:不转发任何 Kafka 参数(回滚脚本不再声明它们,再转发会以「找不到参数」失败)' {
-        $branch = Get-DevToolsBranchText 'k8s-zone-rollback' 'dev-robot-zones'
-        Assert-NotMatch $branch '\$rbArgs\.(Kafka|QuiesceSeconds|BarrierProtocol)|KafkaBootstrap\s*=|KafkaTopic\s*=' '回滚脚本已不声明 Kafka、静默窗口与屏障协议参数'
-        Assert-NotMatch $branch 'DbConsumerGroup' '回滚脚本的 Step 6 不再传消费组'
+    # 整 zone 回档脚本已退役(灾难恢复只走 docs/ops/mysql-backup-pitr-runbook.md),入口与它专用的参数不许再出现。
+    Test-Case 'k8s-zone-rollback is retired: no ValidateSet entry, no dispatch branch, no -Rollback* parameters' {
+        $commandParam = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Command' }
+        $validateSet = $commandParam.Attributes | Where-Object { $_.TypeName.Name -eq 'ValidateSet' }
+        $allowed = @($validateSet.PositionalArguments | ForEach-Object { $_.Value })
+        Assert-True ('kafka-offset-reset' -in $allowed) 'fixture precondition: ValidateSet returned the real command list'
+        Assert-True (-not ('k8s-zone-rollback' -in $allowed)) '-Command must no longer accept k8s-zone-rollback'
+        Assert-NotMatch $devToolsSource 'k8s-zone-rollback|k8s_zone_rollback' 'dev_tools.ps1 must not dispatch to or mention the deleted rollback script'
+        $rollbackParams = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath } | Where-Object { $_ -like 'Rollback*' })
+        Assert-Equal '' ($rollbackParams -join '|') '-Rollback* parameters only served the rollback script and must stay deleted'
     }
 
     Test-Case 'kafka-offset-reset 分支:hashtable splatting,不再转发 -RetireGroup 与 -FinalizeHandoff' {
-        $branch = Get-DevToolsBranchText 'kafka-offset-reset' 'k8s-zone-rollback'
+        $branch = Get-DevToolsBranchText 'kafka-offset-reset' 'dev-robot-zones'
         Assert-NotMatch $branch '\$kArgs\s*=\s*@\(' '数组 splatting 按位置绑定,topic 名会撞上 [int]$Partitions;必须用 hashtable'
         Assert-Match $branch '\$kArgs\s*=\s*@\{' '必须用 hashtable splatting'
         Assert-NotMatch $branch 'RetireGroup|FinalizeHandoff' 'kafka_offset_reset.ps1 已删除这两个参数'

@@ -13,6 +13,8 @@ import (
 	teampb "proto/team"
 	"schemamigrate"
 	"shared/authoritysql"
+	"shared/dbplacement"
+	"shared/rolefence"
 
 	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
@@ -26,7 +28,7 @@ func Tables() []proto.Message {
 		&pb.MatchChallengeInvitationRecord{}, &pb.MatchGlobalPolicyRecord{}, &pb.MatchJoinIntentRecord{},
 		&pb.MatchDirectIntentRecord{}, &pb.MatchFormationRecord{}, &pb.MatchRatingRecord{},
 		&pb.MatchRatingAppliedRecord{}, &pb.MatchRankSourceRecord{}, &pb.MatchRankOutboxRecord{},
-		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{},
+		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{}, &pb.MatchRoleOccupancyRecord{},
 		&teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{},
 		&teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{}, &teampb.TeamLaunchRegionRecord{},
 		&teampb.TeamApplicationIndexRecord{}, &teampb.TeamLaunchRoleRecord{},
@@ -54,7 +56,12 @@ func Migrate(ctx context.Context, c config.GlobalMatchConf, allowModify bool) (s
 	if err != nil {
 		return schemamigrate.Report{}, err
 	}
-	db, err := openAuthorityDatabaseWithPermission(ctx, c, permission)
+	// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。
+	options, err := dbplacement.ForMigration(ctx, c.DbPlacement, c.Database)
+	if err != nil {
+		return schemamigrate.Report{}, err
+	}
+	db, err := openAuthorityDatabaseWithPermission(ctx, c, permission, options...)
 	if err != nil {
 		return schemamigrate.Report{}, err
 	}
@@ -62,6 +69,13 @@ func Migrate(ctx context.Context, c config.GlobalMatchConf, allowModify bool) (s
 	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{
 		Database: c.Database, Tables: Tables(), AllowModifyColumn: allowModify,
 	})
+	// 闸门跟着逻辑库走:匹配库自带一份。角色护栏副本同样每个参与者的库一张。
+	if err == nil {
+		err = authoritysql.EnsureCatalogSchema(ctx, db, c.Database)
+	}
+	if err == nil {
+		err = rolefence.EnsureSchema(ctx, db)
+	}
 	// 普通索引的历史漂移不由迁移器擅自改写；Job也不能将其误报为已可接流。
 	if err == nil && len(report.Manual) == 0 {
 		if indexErr := (&Store{DB: db}).CheckCandidateIndexes(ctx); indexErr != nil {
@@ -80,7 +94,7 @@ func openAuthorityDatabase(ctx context.Context, c config.GlobalMatchConf) (*sql.
 	return openAuthorityDatabaseWithPermission(ctx, c, authoritysql.Writer(writer))
 }
 
-func openAuthorityDatabaseWithPermission(ctx context.Context, c config.GlobalMatchConf, permission authoritysql.Permission) (*sql.DB, error) {
+func openAuthorityDatabaseWithPermission(ctx context.Context, c config.GlobalMatchConf, permission authoritysql.Permission, options ...authoritysql.OpenOption) (*sql.DB, error) {
 	if c.Host == "" || c.User == "" || c.Database != "mmorpg_match" {
 		return nil, errors.New("全球匹配数据库配置无效")
 	}
@@ -99,7 +113,7 @@ func openAuthorityDatabaseWithPermission(ctx context.Context, c config.GlobalMat
 			mc.Params[k] = v
 		}
 	}
-	db, err := authoritysql.Open(ctx, mc.FormatDSN(), c.Database, backend, 16, permission)
+	db, err := authoritysql.Open(ctx, mc.FormatDSN(), c.Database, backend, 16, permission, options...)
 	if err != nil {
 		return nil, err
 	}

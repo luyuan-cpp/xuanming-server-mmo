@@ -167,7 +167,11 @@ func (c *writerFakeConnector) Connect(context.Context) (driver.Conn, error) {
 }
 func (*writerFakeConnector) Driver() driver.Driver { return opaqueDriver{} }
 func writerFixture(wire *writerFakeWire) *guardedConn {
-	connector, err := newGuardedConnector(&writerFakeConnector{wire: wire}, &writerFakeGate{wire: wire}, writerFakeSession{wire: wire}, mysqlStatementPolicy{}, writerUnitPermission())
+	return writerFixtureWith(wire, writerUnitPermission())
+}
+
+func writerFixtureWith(wire *writerFakeWire, permission Permission) *guardedConn {
+	connector, err := newGuardedConnector(&writerFakeConnector{wire: wire}, &writerFakeGate{wire: wire}, writerFakeSession{wire: wire}, mysqlStatementPolicy{}, permission)
 	if err != nil {
 		panic(err)
 	}
@@ -185,7 +189,7 @@ func writerUnitPermission() Permission {
 		Format: "SQL_WRITER_BOOT_V1", Permission: "NORMAL", Generation: "0123456789abcdef0123456789abcdef",
 		WriterKey: bytes.Repeat([]byte{1}, 16), InstanceId: bytes.Repeat([]byte{2}, 16),
 		GrantId: bytes.Repeat([]byte{3}, 16), RegistrationDigest: bytes.Repeat([]byte{4}, 32),
-		AuthoritySchema: "authority_test", ProtectedSchemas: []string{"authority_test", "game_test"},
+		AuthoritySchema: "authority_test", ProtectedSchemas: []string{"authority_test"},
 		SqlPrincipal: []byte("writer_test@%"), DeploymentId: "unit-boot", GrantedMs: 1,
 		PhysicalAuthoritySha256: bytes.Repeat([]byte{5}, 32), LockPrimitive: pb.SqlWriterBootGrant_SELECT_ONLY,
 		LockQualificationSha256: bytes.Repeat([]byte{6}, 32),
@@ -543,6 +547,19 @@ func TestWriterDriverCommit1062IsUnknownNotStatementRejected(t *testing.T) {
 	}
 }
 
+// 提交结局未知要置上观察位:拦截器靠它判断这次请求能不能说「确定没写」。
+func TestWriterDriverCommitUnknownIsObserved(t *testing.T) {
+	w := &writerFakeWire{commitErr: &mysql.MySQLError{Number: 1062}}
+	c := writerFixture(w)
+	ctx, _ := ObserveWriterFrozen(context.Background())
+	if _, err := c.ExecContext(ctx, "UPDATE t SET n=n+1", nil); !errors.Is(err, ErrOutcomeUnknown) {
+		t.Fatalf("COMMIT 阶段应为结局未知: %v", err)
+	}
+	if !WriterOutcomeUnknownSeen(ctx) {
+		t.Fatal("结局未知没有置上观察位")
+	}
+}
+
 func TestWriterDriverRows1062WithCleanupFailureIsUnknown(t *testing.T) {
 	for _, failStmt := range []bool{false, true} {
 		w := &writerFakeWire{rowsNextErr: &mysql.MySQLError{Number: 1062}}
@@ -772,7 +789,7 @@ func retirementPlanFixture(t *testing.T) (*Catalog, *pb.SqlWriterMaintenanceRece
 	key := bytes.Repeat([]byte{1}, 16)
 	instance := bytes.Repeat([]byte{2}, 16)
 	run := bytes.Repeat([]byte{3}, 16)
-	c := &Catalog{config: CatalogConfig{AuthoritySchema: "authority", Generation: "abcdef", ProtectedSchemas: []string{"authority", "game"}, PhysicalAuthoritySHA256: bytes.Repeat([]byte{4}, 32), Principal: "operator@%"}}
+	c := &Catalog{config: CatalogConfig{AuthoritySchema: "authority", Generation: "abcdef", ProtectedSchemas: []string{"authority"}, PhysicalAuthoritySHA256: bytes.Repeat([]byte{4}, 32), Principal: "operator@%"}}
 	plan := &pb.SqlWriterMaintenanceReceipt_Plan{AuthoritySchema: c.config.AuthoritySchema, ProtectedSchemas: c.config.ProtectedSchemas, PhysicalClusterIdentity: c.config.PhysicalAuthoritySHA256, RunId: run, BeforeEpoch: 7, CatalogRevision: 11, ActiveWriterKeys: [][]byte{key}, RootIssuers: []*pb.SqlWriterMaintenanceReceipt_IssuerClosure{{IssuerId: bytes.Repeat([]byte{5}, 16), InstanceId: instance, PhysicalWriterKey: key, LogicalRole: "SOURCE", PermanentRevivalFenceId: bytes.Repeat([]byte{6}, 16), SourceEvidence: []*pb.SqlWriterMaintenanceReceipt_SourcePin{{AbsolutePath: "/fixture/launcher", Sha256: bytes.Repeat([]byte{7}, 32)}}}}}
 	request := &pb.SqlWriterLifecycleReceipt_Request{RequestId: bytes.Repeat([]byte{8}, 16), Kind: pb.SqlWriterLifecycleReceipt_RETIRE, Writer: &pb.SqlWriterRegistry{WriterKey: key, InstanceId: instance, Generation: c.config.Generation, SqlPrincipal: []byte("writer@%"), RegistrationDigest: bytes.Repeat([]byte{9}, 32), State: pb.SqlWriterRegistry_ACTIVE}, ExpectedEpoch: 7, ExpectedCatalogRevision: 11, AuthoritySchema: c.config.AuthoritySchema, ProtectedSchemas: c.config.ProtectedSchemas, DeploymentDigest: c.config.PhysicalAuthoritySHA256, DeploymentId: "fixture-boot", MaintenanceRunId: run}
 	raw, digest, err := c.validateLifecycle(request, pb.SqlWriterLifecycleReceipt_RETIRE)

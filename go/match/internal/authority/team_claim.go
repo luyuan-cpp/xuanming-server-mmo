@@ -16,6 +16,10 @@ import (
 // ClaimTeamUnits 将所有完整队伍与单排占用一次提交。全部P→全部Team→全部launch
 // →全部票→formation，不得让两个实例把同一队拆进不同房间。
 func (s *Store) ClaimTeamUnits(ctx context.Context, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord, units []*teampb.TeamLaunchRecord) error {
+	return s.Fenced(ctx, func() error { return s.claimTeamUnitsOnce(ctx, formation, group, units) })
+}
+
+func (s *Store) claimTeamUnitsOnce(ctx context.Context, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord, units []*teampb.TeamLaunchRecord) error {
 	target := uint32(len(group))
 	maxPlayers := config.TeamCapacity
 	if formation.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {

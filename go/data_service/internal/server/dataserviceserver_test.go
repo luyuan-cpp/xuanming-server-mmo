@@ -842,3 +842,36 @@ func TestBatchGetPlayerName_SqlErrorReturnsNoPartialResult(t *testing.T) {
 	assert.Equal(t, codes.Unavailable, st.Code())
 	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodePlayerNameDBError))
 }
+
+// 四个回收入口全部要 x-admin-token:回收会真改玩家资产,而 data_service 在集群内是无鉴权可达的。
+func TestRecallRPCsRequireAdminToken(t *testing.T) {
+	calls := map[string]func(*DataServiceServer, context.Context) error{
+		"BatchRecallItems": func(s *DataServiceServer, ctx context.Context) error {
+			_, err := s.BatchRecallItems(ctx, &data_service.BatchRecallItemsRequest{})
+			return err
+		},
+		"GetRecallBatch": func(s *DataServiceServer, ctx context.Context) error {
+			_, err := s.GetRecallBatch(ctx, &data_service.GetRecallBatchRequest{})
+			return err
+		},
+		"CancelRecallBatch": func(s *DataServiceServer, ctx context.Context) error {
+			_, err := s.CancelRecallBatch(ctx, &data_service.CancelRecallBatchRequest{})
+			return err
+		},
+		"ResolveRecallOp": func(s *DataServiceServer, ctx context.Context) error {
+			_, err := s.ResolveRecallOp(ctx, &data_service.ResolveRecallOpRequest{})
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			disabled := NewDataServiceServer(&svc.ServiceContext{})
+			require.Equal(t, codes.PermissionDenied, status.Code(call(disabled, adminCtx(testAdminToken))), "没配 AdminToken 就停用")
+
+			enabled := NewDataServiceServer(&svc.ServiceContext{Config: config.Config{AdminToken: testAdminToken}})
+			require.Equal(t, codes.PermissionDenied, status.Code(call(enabled, context.Background())), "没带口令")
+			require.Equal(t, codes.PermissionDenied, status.Code(call(enabled, adminCtx("wrong-token"))), "口令不对")
+			require.NoError(t, call(enabled, adminCtx(testAdminToken)), "过了鉴权之后的结论走带内码")
+		})
+	}
+}

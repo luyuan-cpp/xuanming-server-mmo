@@ -19,10 +19,12 @@ import (
 	dspb "proto/data_service"
 
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/kafkacmd"
 	"shared/leader"
 	"shared/playerredis"
+	"shared/rolefence"
 	"shared/safego"
 	"shared/scenenode"
 
@@ -35,6 +37,9 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 )
+
+// RoleFenceCaller 是收件箱读角色护栏权威状态和入场登记时的调用方身份,密钥在 rolefence.SecretEnv(RoleFenceCaller)。
+const RoleFenceCaller = "player_inbox"
 
 const (
 	etcdDialTimeout      = 5 * time.Second
@@ -116,9 +121,12 @@ type backgroundTask struct {
 // externalDeps 是 NewServiceContext 建外部连接的入口(AGENTS §11.2 显式依赖)。生产为 productionDeps();
 // 单测注入假实现,只验证装配顺序、失败时的回收与接线,不连真实的 etcd / MySQL / 核心 Redis / data_service。
 type externalDeps struct {
-	openEtcd         func(hosts []string) (*clientv3.Client, error)
-	openMySQL        func(config.MySQLConf) (*sql.DB, error)
-	newRoleAuthority func(context.Context, *sql.DB, string, authoritysql.Backend) (inbox.RoleAuthority, error)
+	openEtcd  func(hosts []string) (*clientv3.Client, error)
+	openMySQL func(config.MySQLConf) (*sql.DB, error)
+	// checkRoleFence 只读核本库的 role_fence 表,缺表拒启。
+	checkRoleFence func(context.Context, *sql.DB) error
+	// newRoleAuthority 建角色护栏:本库副本 + 经 data_service 读权威状态和入场登记。
+	newRoleAuthority func(*sql.DB, dspb.DataServiceClient) (inbox.RoleAuthority, error)
 	// openCoreRedis 建核心 Redis 客户端并探活;返回错误时自己负责关掉已建的客户端。
 	openCoreRedis func(config.RedisConf) (*redis.Client, error)
 	// openPlayerRedis 建玩家域客户端并探活;返回错误时自己负责关掉已建的客户端。
@@ -134,12 +142,11 @@ func productionDeps() externalDeps {
 		openEtcd: func(hosts []string) (*clientv3.Client, error) {
 			return clientv3.New(clientv3.Config{Endpoints: hosts, DialTimeout: etcdDialTimeout})
 		},
-		openMySQL: OpenMySQL,
-		newRoleAuthority: func(ctx context.Context, db *sql.DB, schema string, backend authoritysql.Backend) (inbox.RoleAuthority, error) {
-			return inbox.NewSQLRoleAuthority(ctx, db, schema, backend)
-		},
-		openCoreRedis:   openCoreRedis,
-		openPlayerRedis: openPlayerRedis,
+		openMySQL:        OpenMySQL,
+		checkRoleFence:   rolefence.VerifySchema,
+		newRoleAuthority: newFenceRoleAuthority,
+		openCoreRedis:    openCoreRedis,
+		openPlayerRedis:  openPlayerRedis,
 		openDataService: func(c zrpc.RpcClientConf) (*grpc.ClientConn, error) {
 			// 不用 MustNewClient:它在配置错误时直接退出进程,跳过本函数「返回错误、关闭已建资源」的契约。
 			cli, err := zrpc.NewClient(c)
@@ -150,6 +157,20 @@ func productionDeps() externalDeps {
 		},
 		registerer: prometheus.DefaultRegisterer,
 	}
+}
+
+// newFenceRoleAuthority 是生产用的角色护栏。调用方密钥缺失拒启:读不了权威状态,副本就没法自愈。
+func newFenceRoleAuthority(db *sql.DB, client dspb.DataServiceClient) (inbox.RoleAuthority, error) {
+	secret := os.Getenv(rolefence.SecretEnv(RoleFenceCaller))
+	states, err := rolefence.NewDirectoryReader(client, RoleFenceCaller, secret)
+	if err != nil {
+		return nil, fmt.Errorf("role fence caller secret %s: %w", rolefence.SecretEnv(RoleFenceCaller), err)
+	}
+	admissions, err := rolefence.NewAdmissionVerifier(client, RoleFenceCaller, secret)
+	if err != nil {
+		return nil, err
+	}
+	return inbox.NewFenceRoleAuthority(db, states, admissions)
 }
 
 // coreRedisOptions 是核心 Redis 客户端的选项(评审 L7):
@@ -224,7 +245,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 	deps := productionDeps()
 	deps.openMySQL = func(c config.MySQLConf) (*sql.DB, error) {
-		return openMySQL(c, authoritysql.Writer(writer))
+		dbPlacement, err := dbplacement.Start(context.Background(), c.DbPlacement)
+		if err != nil {
+			return nil, err
+		}
+		return openMySQL(c, authoritysql.Writer(writer), dbPlacement.OpenOptions()...)
 	}
 	return newServiceContextWithAdmission(c, deps, writer, root, relay)
 }
@@ -264,10 +289,10 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 		return nil, fmt.Errorf("player_inbox: %w", err)
 	}
 	roleCtx, roleCancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
-	roles, err := deps.newRoleAuthority(roleCtx, sc.DB, c.AccountRoleSchema, authoritysql.Backend(c.MySQL.Backend))
+	err = deps.checkRoleFence(roleCtx, sc.DB)
 	roleCancel()
 	if err != nil {
-		return nil, fmt.Errorf("player_inbox: SQL角色原件不可用: %w", err)
+		return nil, fmt.Errorf("player_inbox: role_fence 表不可用,先执行 -migrate: %w", err)
 	}
 
 	sc.CoreRedis, err = deps.openCoreRedis(c.CoreRedis)
@@ -301,6 +326,10 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 		return nil, fmt.Errorf("player_inbox: create data_service client: %w", err)
 	}
 	sc.DataService = dspb.NewDataServiceClient(sc.dataServiceConn)
+	roles, err := deps.newRoleAuthority(sc.DB, sc.DataService)
+	if err != nil {
+		return nil, fmt.Errorf("player_inbox: 角色护栏装配失败: %w", err)
+	}
 
 	// 事件号来自 player_inbox/generated/pb/game(proto-gen 产物,随仓库跟踪):干净检出不跑生成也能编译。
 	sc.notifier = &inbox.KafkaNotifier{
@@ -574,13 +603,20 @@ func OpenSchemaMySQL(c config.MySQLConf) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return openMySQL(c, permission)
-}
-
-func openMySQL(c config.MySQLConf, permission authoritysql.Permission) (*sql.DB, error) {
+	// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	db, err := authoritysql.Open(ctx, BuildDSN(c), c.DBName, authoritysql.Backend(c.Backend), c.MaxOpenConn, permission)
+	options, err := dbplacement.ForMigration(ctx, c.DbPlacement, c.DBName)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(c, permission, options...)
+}
+
+func openMySQL(c config.MySQLConf, permission authoritysql.Permission, options ...authoritysql.OpenOption) (*sql.DB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
+	defer cancel()
+	db, err := authoritysql.Open(ctx, BuildDSN(c), c.DBName, authoritysql.Backend(c.Backend), c.MaxOpenConn, permission, options...)
 	if err != nil {
 		return nil, err
 	}

@@ -40,7 +40,8 @@ Set-StrictMode -Off
 $script:AssetOpDevSecretEnvNames = @(
     'MMORPG_ASSET_OP_SECRET_GUILD',
     'MMORPG_ASSET_OP_SECRET_TRADE',
-    'MMORPG_ASSET_OP_SECRET_MAIL'
+    'MMORPG_ASSET_OP_SECRET_MAIL',
+    'MMORPG_ASSET_OP_SECRET_DATA_SERVICE'
 )
 
 # 与 go/shared/assetop.MinSecretLen、C++ kAssetOpAuthMinSecretBytes 同值。去首尾空白后不足这么长

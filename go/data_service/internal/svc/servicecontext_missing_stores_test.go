@@ -13,7 +13,7 @@ import (
 // MissingStores 是 Store.Required 拒启判定的唯一依据:各个 store 各自独立上报,顺序固定(日志与告警可比对)。
 // 这里只需要"是不是 nil",所以直接用零值结构,不连库。
 func TestMissingStoresReportsEachNilStore(t *testing.T) {
-	all := []string{"account_directory", "snapshot", "transaction_log", "id_segment", "player_name", "player_route"}
+	all := []string{"account_directory", "snapshot", "transaction_log", "id_segment", "player_name", "player_route", "recall"}
 	if got := (&ServiceContext{}).MissingStores(); !reflect.DeepEqual(got, all) {
 		t.Fatalf("a context with no stores must report all of them in order, got %v", got)
 	}
@@ -26,6 +26,7 @@ type stubSnapshotStore struct{ SnapshotStore }
 type stubTxLogStore struct{ TransactionLogStore }
 type stubIdSegmentStore struct{ IdSegmentStore }
 type stubPlayerNameStore struct{ PlayerNameStore }
+type stubRecallStore struct{ RecallStore }
 
 // stubPlayerRouteStore 是 PlayerRouteStore 的最小实现。
 type stubPlayerRouteStore struct{}
@@ -51,6 +52,7 @@ func TestMissingStoresReportsPlayerRoute(t *testing.T) {
 			IdSegmentStore:   stubIdSegmentStore{},
 			PlayerNameStore:  stubPlayerNameStore{},
 			PlayerRouteStore: route,
+			Recall:           stubRecallStore{},
 		}
 	}
 	if got := ready(nil).MissingStores(); !reflect.DeepEqual(got, []string{"player_route"}) {

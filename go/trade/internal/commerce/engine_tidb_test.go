@@ -3,6 +3,7 @@ package commerce
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"schemamigrate"
 	"shared/assetop"
 	"shared/authoritysql/sqltest"
+	"shared/rolefence"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -31,6 +33,13 @@ func (i *testIDs) Next(context.Context) (uint64, error) { return i.value.Add(1),
 // 每例仅清理自身随机库；不复用、更不删除本地游戏库。
 func tiDBEngine(t *testing.T) *Engine {
 	t.Helper()
+	e, _ := tiDBEngineWithInstall(t)
+	return e
+}
+
+// tiDBEngineWithInstall 另外回安装账号的连接池,给要改表结构或写坏数据的夹具用。
+func tiDBEngineWithInstall(t *testing.T) (*Engine, *sql.DB) {
+	t.Helper()
 	dsn := os.Getenv("COMMERCE_TEST_DSN")
 	if dsn == "" {
 		if os.Getenv("COMMERCE_REQUIRE_TIDB") == "1" {
@@ -38,12 +47,18 @@ func tiDBEngine(t *testing.T) *Engine {
 		}
 		t.Skip("未配置隔离TiDB")
 	}
-	return openEngineDB(t, dsn, true)
+	return openEngineFixture(t, dsn, true)
 }
 
 // openEngineDB 在 dsn 指向的实例上新建随机库、按 proto 建表并装配 Engine;用例结束删库。
 // requireTiDB=false 给一次性 MySQL 用(tick_isolation_db_test.go 的 realDBEngine):会话仍固定 RC,只是不设 TiDB 专用变量。
 func openEngineDB(t *testing.T, dsn string, requireTiDB bool) *Engine {
+	t.Helper()
+	e, _ := openEngineFixture(t, dsn, requireTiDB)
+	return e
+}
+
+func openEngineFixture(t *testing.T, dsn string, requireTiDB bool) (*Engine, *sql.DB) {
 	t.Helper()
 	if !requireTiDB {
 		t.Fatal("全球writer真实fixture必须使用已核TiDB资格，不能将MySQL冒充TiDB")
@@ -63,12 +78,14 @@ func openEngineDB(t *testing.T, dsn string, requireTiDB bool) *Engine {
 	report, err := schemamigrate.Up(ctx, migrationDB, schemamigrate.Options{Database: name, Tables: data.Tables()})
 	require.NoError(t, err)
 	require.Empty(t, report.Manual)
+	require.NoError(t, rolefence.EnsureSchema(ctx, migrationDB))
 	require.NoError(t, fixture.GrantProtoTables(ctx, name, data.Tables()))
+	require.NoError(t, fixture.GrantTables(ctx, name, rolefence.TableName))
 	db, err := fixture.Open(ctx, name, 12)
 	require.NoError(t, err)
 	ops, err := data.NewAssetOpRepo(db, 3*time.Second)
 	require.NoError(t, err)
-	return &Engine{Repo: &data.CommerceRepo{DB: db, Ops: ops}, IDs: &testIDs{}, OpIDs: &testIDs{}, Policy: Policy{Items: []uint32{10}, ItemTitles: map[uint32]string{10: "玄铁"}, Currencies: []uint32{1}}, Now: time.Now, Roles: fixtureRoles{}}
+	return &Engine{Repo: &data.CommerceRepo{DB: db, Ops: ops}, IDs: &testIDs{}, OpIDs: &testIDs{}, Policy: Policy{Items: []uint32{10}, ItemTitles: map[uint32]string{10: "玄铁"}, Currencies: []uint32{1}}, Now: time.Now, Roles: fixtureRoles{}}, migrationDB
 }
 func tick(t *testing.T, e *Engine) {
 	t.Helper()

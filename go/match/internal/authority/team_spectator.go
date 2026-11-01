@@ -11,6 +11,10 @@ import (
 // 旧观战已获得原Remove正证明后，prepared整队在同事务清名册锁并进入完整queue unit。
 // 后来新watch不会被这个旧Start清退；只允许原退出列表均关闭且此刻确实没有观战占用。
 func (s *Store) EnqueuePreparedTeamLaunch(ctx context.Context, observed *teampb.TeamLaunchRecord) error {
+	return s.Fenced(ctx, func() error { return s.enqueuePreparedTeamLaunchOnce(ctx, observed) })
+}
+
+func (s *Store) enqueuePreparedTeamLaunchOnce(ctx context.Context, observed *teampb.TeamLaunchRecord) error {
 	data, err := DecodeTeamLaunch(observed)
 	if err != nil {
 		return err

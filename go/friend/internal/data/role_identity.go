@@ -4,42 +4,23 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"regexp"
 	"time"
 
-	"shared/accountdirectory"
-	"shared/authoritysql"
+	"shared/rolefence"
 	"shared/roleidentity"
 )
 
-var roleAuthoritySchema = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 var ErrOriginalRole = errors.New("好友原会话角色归属已失效或被冻结")
 
-// ConfigureRoleAuthority 仅在启动装配调用；目录和好友表必须位于同一事务域(同一 TiDB 集群或同一 MySQL 主库)。
+// ConfigureRoleFence 仅在启动装配调用(docs/design/horizontal-scale-logical-db.md §3)。
 // 未配置构造器只供显式系统/旧独立仓储夹具；带原会话的请求绝不回落到该路径。
-func (r *FriendRepo) ConfigureRoleAuthority(schema string, backend authoritysql.Backend) error {
-	if !roleAuthoritySchema.MatchString(schema) {
-		return errors.New("好友全局角色目录schema未配置")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := authoritysql.AssertCurrentSession(ctx, r.db, backend); err != nil {
-		return err
-	}
-	rows, err := r.db.QueryContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+schema+"`.account_role LIMIT 0")
-	if err != nil {
-		return err
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	r.roleAuthority = schema
-	return nil
+func (r *FriendRepo) ConfigureRoleFence(guard *rolefence.Guard) {
+	r.guard = guard
 }
 
 func (r *FriendRepo) requireRoleActor(ctx context.Context, player uint64) error {
 	original, ok := roleidentity.Original(ctx)
-	if r.roleAuthority == "" {
+	if r.guard == nil {
 		if ok {
 			return ErrOriginalRole
 		}
@@ -51,48 +32,35 @@ func (r *FriendRepo) requireRoleActor(ctx context.Context, player uint64) error 
 	return nil
 }
 
-func (r *FriendRepo) lockRolePrefix(ctx context.Context, tx *sql.Tx, players ...uint64) error {
+// lockRolePrefix 是好友事务的第一把锁:按 player_id 升序锁 actor 和对端的副本。
+// actor 要核原身份;对端没有原身份,只判冻结和删除。absent 是目录里确认不存在的对端,不锁、不写副本。
+func (r *FriendRepo) lockRolePrefix(ctx context.Context, tx *sql.Tx, absent map[uint64]bool, players ...uint64) error {
 	original, ok := roleidentity.Original(ctx)
-	if r.roleAuthority == "" {
-		if ok {
-			return ErrOriginalRole
-		}
-		return nil
-	}
 	if !ok {
 		return ErrOriginalRole
 	}
+	actor := original.Role.GetPlayerId()
 	if len(players) == 0 {
-		players = []uint64{original.Role.GetPlayerId()}
+		players = []uint64{actor}
 	}
+	expects := make([]rolefence.Expect, 0, 2)
 	included := false
 	for _, player := range ascendingUniqueIDs(players) {
-		if player == 0 {
+		switch {
+		case player == 0:
 			return ErrOriginalRole
-		}
-		var account []byte
-		var revision, listing uint64
-		err := tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+r.roleAuthority+"`.account_role WHERE player_id=? FOR UPDATE", player).Scan(&account, &revision, &listing)
-		if errors.Is(err, sql.ErrNoRows) && player != original.Role.GetPlayerId() {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if !accountdirectory.ValidAccount(string(account)) || revision == 0 || listing != 0 {
-			return ErrOriginalRole
-		}
-		if player == original.Role.GetPlayerId() {
+		case player == actor:
 			included = true
-			if string(account) != original.Account || revision != original.OwnerRevision {
-				return ErrOriginalRole
-			}
+			expects = append(expects, rolefence.Expect{PlayerID: actor, Account: original.Account, OwnerRevision: original.OwnerRevision, Reject: ErrOriginalRole})
+		case !absent[player]:
+			expects = append(expects, rolefence.Expect{PlayerID: player, Reject: ErrOriginalRole})
 		}
 	}
 	if !included {
 		return ErrOriginalRole
 	}
-	return nil
+	_, err := rolefence.LockAll(ctx, tx, expects...)
+	return err
 }
 
 type roleSQLReader interface {
@@ -105,7 +73,7 @@ func (r *FriendRepo) roleReader(ctx context.Context, player uint64) (roleSQLRead
 	if err := r.requireRoleActor(ctx, player); err != nil {
 		return nil, nil, err
 	}
-	if r.roleAuthority == "" {
+	if r.guard == nil {
 		return r.db, func() {}, nil
 	}
 	tx, err := r.beginWriteTx(ctx, player)
@@ -118,7 +86,7 @@ func (r *FriendRepo) roleReader(ctx context.Context, player uint64) (roleSQLRead
 // 受理预检覆盖 Redis 在线目录；关系写仍在最终事务重新持 P 复核原件。
 func (r *FriendRepo) CheckOriginalRole(ctx context.Context) error {
 	original, ok := roleidentity.Original(ctx)
-	if !ok || r.roleAuthority == "" {
+	if !ok || r.guard == nil {
 		return ErrOriginalRole
 	}
 	_, closeRead, err := r.roleReader(ctx, original.Role.GetPlayerId())
@@ -148,4 +116,44 @@ func (r *FriendRepo) ensureBoundCapacity(ctx context.Context, players ...uint64)
 		return err
 	}
 	return tx.Commit()
+}
+
+// beginLockedTx 开事务并取角色锁。取锁失败时事务已回滚,所以 RunTx 能在两次之间调 RPC。
+func (r *FriendRepo) beginLockedTx(ctx context.Context, absent map[uint64]bool, players ...uint64) (*sql.Tx, error) {
+	tx, err := r.beginSystemWriteTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.lockRolePrefix(ctx, tx, absent, players...); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
+}
+
+// beginGuardedTx 开一个已持角色锁的事务。副本判不了时读权威状态再开一次。
+// 对端在目录里不存在时不写副本,按原逻辑跳过:本来就没有归属可保护,关系写由守卫之后的业务判定收口。actor 自己不存在是拒绝。
+func (r *FriendRepo) beginGuardedTx(ctx context.Context, players ...uint64) (*sql.Tx, error) {
+	var tx *sql.Tx
+	var absent map[uint64]bool
+	begin := func() (err error) {
+		tx, err = r.beginLockedTx(ctx, absent, players...)
+		return err
+	}
+	err := r.guard.RunTx(ctx, begin)
+	var missing *rolefence.RoleNotFoundError
+	if errors.As(err, &missing) {
+		absent = make(map[uint64]bool, len(missing.Players))
+		for _, player := range missing.Players {
+			absent[player] = true
+		}
+		err = r.guard.RunTx(ctx, begin)
+	}
+	if errors.Is(err, rolefence.ErrRoleNotFound) {
+		return nil, ErrOriginalRole
+	}
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
 }

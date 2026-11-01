@@ -5,7 +5,6 @@
 Name: friend.rpc
 # 后端档位 tidb | mysql,不写就是 tidb;这份本地样例连单机 MySQL。全部副本必须连同一事务域。
 Backend: mysql
-AccountRoleSchema: testdb
 # 必须由部署显式注入实际全局 login 实例/DB；占位配置拒绝启动，不推测 localhost。
 GlobalLoginSessions: false
 ListenOn: 127.0.0.1:50400

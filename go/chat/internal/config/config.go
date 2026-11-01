@@ -11,6 +11,7 @@ import (
 	"chat/internal/constants"
 	"chat/internal/textfilter"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -34,12 +35,15 @@ const MaxRpcTimeoutMs int64 = 4000
 type Config struct {
 	zrpc.RpcServerConf
 
-	// 聊天原件与角色目录走同一连接池(同一 TiDB 集群或同一 MySQL 主库),目录只做跨库普通读、不同事务；环境变量名不含凭据值。
+	// 聊天原件库的连接；环境变量名不含凭据值。
 	DSNEnv string `json:",optional"`
 	// Backend:tidb | mysql,不写就是 tidb(docs/design/player-data-tidb-scaling-plan.md §9);非法值拒启。
-	Backend           string `json:",default=tidb"`
-	MaxOpenConns      int    `json:",default=16"`
-	AccountRoleSchema string `json:",optional"`
+	Backend      string `json:",default=tidb"`
+	MaxOpenConns int    `json:",default=16"`
+	// DbPlacement:按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 DSN 的地址。
+	DbPlacement dbplacement.Config `json:",optional"`
+	// DataServiceRpc:读角色权威状态(GetRoleFenceState)。聊天不跨库读目录。
+	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
 	// ActorVerifyTTLSeconds:身份校验结果的进程内缓存秒数,0 = 每次都校验。
 	// 代价:角色被挂牌或过户之后,旧会话最多还能发这么久的聊天(authority/actor_verify.go)。
 	ActorVerifyTTLSeconds int                           `json:",default=30"`
@@ -121,8 +125,11 @@ func (c *Config) Validate() error {
 	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
 		return err
 	}
-	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.DSNEnv) || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 || !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) || !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 1 || c.LoginRedis.PoolSizePerNode > 128 {
-		return errors.New("聊天必须显式配置SQL原件库、同域角色目录与全局原登录态只读句柄")
+	if !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.DSNEnv) || c.MaxOpenConns < 2 || c.MaxOpenConns > 128 || !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 1 || c.LoginRedis.PoolSizePerNode > 128 {
+		return errors.New("聊天必须显式配置SQL原件库与全局原登录态只读句柄")
+	}
+	if c.DataServiceRpc.Etcd.Key == "" && len(c.DataServiceRpc.Endpoints) == 0 && c.DataServiceRpc.Target == "" {
+		return errors.New("DataServiceRpc 必须配置 Etcd.Key / Endpoints / Target 之一:聊天的身份校验走目录 RPC")
 	}
 	if c.ActorVerifyTTLSeconds < 0 || c.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds {
 		return fmt.Errorf("ActorVerifyTTLSeconds(%d)必须在 [0, %d] 内", c.ActorVerifyTTLSeconds, constants.MaxActorVerifyTTLSeconds)

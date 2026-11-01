@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"time"
 
@@ -79,7 +80,8 @@ func (w *Worker) process(ctx context.Context, id uint64) (err error) {
 				w.Relay.Hold()
 				panic(recovered)
 			}
-			if err != nil {
+			// 闸门冻结是确定没写,下一轮再领再发。
+			if err != nil && !authoritysql.IsWriterFrozen(err) {
 				w.Relay.Hold()
 			}
 		}()

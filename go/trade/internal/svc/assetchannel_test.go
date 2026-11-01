@@ -3,11 +3,16 @@ package svc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"shared/assetop"
+	"shared/authoritysql"
+	"shared/drainproof"
 	"shared/idsegment"
+	"trade/internal/commerce"
 )
 
 // 资产通道装配的纯单测:不连 Redis / MySQL / etcd。
@@ -16,6 +21,32 @@ import (
 // 32 字节的测试密钥。刻意不是真实开发值:测试里出现的字符串会被 grep 到,
 // 不该让人误以为某个具体值有特殊含义。
 const testSecret32 = "trade-test-secret-0123456789abc0"
+
+// 规格 §3.6:恢复通道一轮的失败,确定没写的不打排空 Hold,拿不准的都算未知。
+func TestHoldUnknownTick(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err  error
+		hold bool
+	}{
+		"没有错误": {nil, false},
+		"闸门冻结": {fmt.Errorf("tick: %w", authoritysql.ErrWriterFrozen), false},
+		"业务拒绝": {fmt.Errorf("商城交付意图: %w", commerce.ErrConflict), false},
+		"结局未知": {fmt.Errorf("commit: %w", authoritysql.ErrOutcomeUnknown), true},
+		"裸错误":  {errors.New("mall receipt failed"), true},
+		"混合":   {errors.Join(commerce.ErrConflict, errors.New("mall receipt failed")), true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			relay := drainproof.New()
+			(&AssetChannel{RelayAdmission: relay}).holdUnknownTick(tc.err)
+			relay.CloseAdmission()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := relay.Wait(ctx); tc.hold != errors.Is(err, drainproof.ErrHold) {
+				t.Fatalf("Wait = %v,应 Hold = %t", err, tc.hold)
+			}
+		})
+	}
+}
 
 func TestNewAssetOpSignerRequiresSecret(t *testing.T) {
 	t.Setenv(AssetOpSecretEnv, "")

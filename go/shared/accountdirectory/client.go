@@ -4,6 +4,7 @@ package accountdirectory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 	"unicode/utf8"
 
@@ -25,6 +26,15 @@ var (
 	ErrConflict    = errors.New("角色归属或身份冲突")
 	ErrFull        = errors.New("账号角色数量已达全局上限")
 	ErrInvalid     = errors.New("账号目录参数非法")
+	// ErrNotCommitted 表示建角走到提交点之前就失败了,这次调用确定没有写角色行。login 对一个 player_id 只发一次建角,
+	// 所以收到它就能确定角色没建成,可以释放名字。ErrUnavailable 不同:那是结局未知,提交可能已经成了。
+	// 规格 docs/design/horizontal-scale-logical-db.md §5.3。
+	ErrNotCommitted = errors.New("账号角色未提交")
+	// ErrRetryLater 表示这次调用的结局已知,但还没做完,用同样的参数重放。投票问不齐、过户已提交但收尾没做完、前面的角色已删后面的被拒都走它。
+	// 这次调用可能什么都没写,也可能已经提交过东西,所以它不等于「没提交」:退款、释放名字这类不可逆的判定不能凭它下结论,要走各自的串行点。
+	// 和结局未知的 ErrUnavailable 不同,这次调用没有结局未知的写,RPC 回 Aborted,排空证明按确定算。错误链上有 ErrUnavailable:只认识后者的调用方照旧按「重试」处理。
+	// 规格 docs/design/horizontal-scale-logical-db.md §3.6。
+	ErrRetryLater = fmt.Errorf("%w: 结局已知,同参数重放", ErrUnavailable)
 )
 
 // Directory 的所有成功写应答均表示 SQL 已提交；未知结果必须强读原 player_id。
@@ -81,6 +91,15 @@ func (c *Client) prepare(ctx context.Context, method string, in proto.Message) (
 	}
 	return call, cancel, nil
 }
+
+// classifyCreate 只给建角用:只有建角的 Aborted 是「确定没提交」,login 收到它释放名字。别的方法回 Aborted 不能这样解读。
+func classifyCreate(err error) error {
+	if status.Code(err) == codes.Aborted {
+		return ErrNotCommitted
+	}
+	return classify(err)
+}
+
 func classify(err error) error {
 	if err == nil {
 		return nil
@@ -88,8 +107,10 @@ func classify(err error) error {
 	switch status.Code(err) {
 	case codes.NotFound:
 		return ErrMissing
-	case codes.AlreadyExists, codes.FailedPrecondition, codes.Aborted:
+	case codes.AlreadyExists, codes.FailedPrecondition:
 		return ErrConflict
+	case codes.Aborted:
+		return ErrRetryLater
 	case codes.ResourceExhausted:
 		return ErrFull
 	case codes.InvalidArgument:
@@ -131,7 +152,7 @@ func (c *Client) CreateWithInitialCommit(ctx context.Context, account string, ro
 	defer cancel()
 	out, err := c.rpc.CreateAccountRole(call, in)
 	if err != nil {
-		return nil, classify(err)
+		return nil, classifyCreate(err)
 	}
 	if out == nil || out.Players == nil {
 		return nil, ErrUnavailable

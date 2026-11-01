@@ -24,7 +24,7 @@ import (
 // ───────────────────────── 落点库注册表(player-storage-placement.md §6.1)─────────────────────────
 //
 // 玩家主数据可以落在本 zone 库之外的库里(合服 pin 之后留在源区库、搬库之后在目标库、Phase 2 的全局库)。
-// 选库只在 go/db 一处发生(internal/playerstore 读 player_route 选),本文件负责把「落点编号」变成「一个已打开、
+// 选库只在 go/db 一处发生(internal/playerstore 经 data_service 的 GetPlayerRoute 选),本文件负责把「落点编号」变成「一个已打开、
 // 已核对过的库」:
 //   - 本 zone 库在启动期由 InitDB 打开并过全部既有断言,这里只登记为落点 ZoneId;
 //   - 其余库第一次被指向时按需打开(同一个库并发只打开一次),之后常驻;
@@ -389,6 +389,11 @@ func (r *StoreRegistry) openOnce(storageID uint32) (*GameDB, error) {
 	}
 	if err != nil {
 		wrapped := fmt.Errorf("%w: open %s: %w", ErrStoreUnavailable, name, err)
+		// 闸门冻结是搬库窗口,秒级,库本身没有坏:不进冷却,窗口一过下一条任务就能打开。
+		if authoritysql.IsWriterFrozen(err) {
+			logx.Infof("[placement] store open hit a frozen writer gate, not backing off: storage=%d db=%s", storageID, name)
+			return nil, wrapped
+		}
 		r.recordFailure(storageID, wrapped)
 		metrics.CountPlacementStoreOpen(metrics.StoreOpenError)
 		logx.Errorf("[placement] store open failed (writes for its players keep being deferred without consuming retries; next attempt in %v): storage=%d admitted_by=%s err=%v",

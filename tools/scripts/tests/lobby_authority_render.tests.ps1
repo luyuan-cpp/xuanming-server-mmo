@@ -54,14 +54,22 @@ foreach ($service in @('mail','rank')) {
     Assert-Render ($values['TableDir'] -eq '/generated/tables') "$service配表路径必须匹配Docker镜像"
     Assert-Render ($values['Backend'] -eq 'tidb') "$service缺省是 tidb 档"
     Assert-Render ($values['DataServiceRpc.Etcd.Key'] -eq 'dataservice.rpc') "$service不能拨不存在的infra data-service Service"
+    # go-zero 的 discov.EtcdConf.Key 是必填,这两个服务刻意不写发现键(D-13),显式空串;模板抄进 Secret 后才加载得了。
+    Assert-Render ($values.Contains('Etcd.Key') -and $values['Etcd.Key'] -eq '') "$service的Etcd.Key必须显式写空串"
+    Assert-Render ($values['Etcd.Hosts'] -eq '[etcd.fixture-infra:2379]') "$service的Etcd.Hosts要指向infra的etcd"
 }
 $mail = Read-RenderedConfig 'mail'
 Assert-Render ([bool]$GoSvcCatalogue['guild'].Global) '帮会必须进全局池'
 $guild = Read-RenderedConfig 'guild'
 Assert-Render ($guild['MySQL.DataSourceEnv'] -eq 'MMORPG_GUILD_SQL_DSN' -and [string]::IsNullOrEmpty($guild['MySQL.DataSource'])) '帮会必须从Secret读取同一全服SQL DSN'
 Assert-Render ($guild['TableDir'] -eq '/generated/tables' -and $guild['DataServiceRpc.Etcd.Key'] -eq 'dataservice.rpc' -and $guild['MatchRpc.Etcd.Key'] -eq 'matchservice.rpc') '帮会配表或内部调用未接线'
-Assert-Render ($guild['AccountRoleSchema'] -eq $GlobalDbName -and $guild['GlobalLoginSessions'] -eq 'true') '帮会角色与登录会话必须显式指向全服权威'
-foreach ($key in @('MatchAuthoritySchema','Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Activity.TrialResult.Topic','Activity.TrialResult.Partitions','IdSegment.Step','MySQL.MaxOpenConn','RedisClient.PoolSize','PlayerLocatorRedis.PoolSize')) {
+Assert-Render ($guild['GlobalLoginSessions'] -eq 'true') '帮会登录会话必须显式指向全服权威'
+foreach ($removed in @('AccountRoleSchema', 'MatchAuthoritySchema')) { Assert-Render (-not $guild.Contains($removed)) "帮会不再跨库，不该渲染 $removed" }
+# 按映射拨号（docs/ops/db-move-runbook.md §2）：guild 的段在 MySQL 下，mail 在顶层。
+Assert-Render ($guild['MySQL.DbPlacement.DefaultCluster'] -eq 'main' -and $guild['MySQL.DbPlacement.SqlClusters.main.Hosts'] -eq $GlobalAuthorityTiDBHost) '帮会缺 DbPlacement，或默认集群不是权威入口'
+Assert-Render ($mail['DbPlacement.DefaultCluster'] -eq 'main' -and $mail['DbPlacement.SqlClusters.main.Hosts'] -eq $GlobalAuthorityTiDBHost) '邮件缺顶层 DbPlacement'
+Assert-Render ($mail['GuildRpc.Endpoints'] -eq '[guild.fixture-infra:50300]') '邮件读帮会要连 infra 里的 guild Service，不是本机地址'
+foreach ($key in @('Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Activity.TrialResult.Topic','Activity.TrialResult.Partitions','IdSegment.Step','MySQL.MaxOpenConn','RedisClient.PoolSize','PlayerLocatorRedis.PoolSize')) {
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath $key
     Assert-Render ($source.Found -and $guild[$key] -eq $source.Value) "帮会$key未镜像权威配置"
 }
@@ -79,11 +87,11 @@ $ReleaseProfile = 'prod'; $PlayerRedisMasters = 3; $KafkaBrokers = 1; $rejected 
 try { $null = Read-RenderedConfig 'guild' } catch { $rejected = $_.Exception.Message -match 'Kafka' }
 $ReleaseProfile = 'dev'; $PlayerRedisMasters = 0; $KafkaBrokers = 3
 Assert-Render $rejected '全球帮会历练不得在单broker上部署'
-foreach ($manifest in @('guild.yaml','guild-migrate.yaml')) {
-    $guildManifest = Get-Content -LiteralPath (Join-Path $RepoRoot "deploy/k8s/manifests/go-svc/$manifest") -Raw
-    Assert-Render ($guildManifest.Contains('key: guild-sql-dsn') -and $guildManifest.Contains('secretKeyRef:')) '帮会实例和迁移必须共享Secret DSN'
-}
+# 帮会实例的 DSN 来自本 boot 选中的环境文件,迁移 Job 的 DSN 来自 schemaPermissionSecret(账号是 schema 主体)。
+$guildMigrate = Get-Content -LiteralPath (Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/guild-migrate.yaml') -Raw
+Assert-Render ($guildMigrate.Contains('name: MMORPG_GUILD_SQL_DSN') -and $guildMigrate.Contains('secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false}')) '帮会迁移的DSN必须取schema主体的Secret'
 $guildManifest = Get-Content -LiteralPath (Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/guild.yaml') -Raw
+Assert-Render ($guildManifest.Contains('MMORPG_GUILD_SQL_DSN="$(cat /app/etc/private/env/MMORPG_GUILD_SQL_DSN)"'.Replace('"', '\"'))) '帮会实例的DSN必须来自本boot选中的环境文件'
 Assert-Render ($guildManifest.Contains('name: POD_IP') -and $guildManifest.Contains('key: asset-guild')) '帮会缺可路由地址或资产签名引用'
 $guildLedger = (Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'guild' }
 $guildPools = Get-RedisPoolMirror -Target 'guild'
@@ -122,7 +130,9 @@ foreach ($check in @(
 }
 $DatabaseBackend = 'tidb'
 Assert-Render ($match['GlobalMatch.RankEndpoint'] -eq 'rank.fixture-infra:51100') '匹配投榜误拨本地地址'
-foreach ($key in @('GlobalMatch.GuildTrialSchema','GlobalMatch.CrossRegionWaitSeconds','GlobalMatch.HardLatencyMs','GlobalMatch.ProbeTTLSeconds','ResultTopic','RatingEnabled','RatingToleranceMaxWaitSeconds')) {
+Assert-Render (-not $match.Contains('GlobalMatch.GuildTrialSchema') -and -not $match.Contains('GlobalMatch.AccountRoleSchema')) '匹配不再跨库，不该渲染这些库名'
+Assert-Render ($match['GlobalMatch.DbPlacement.DefaultCluster'] -eq 'main') '匹配的 DbPlacement 段要在 GlobalMatch 下'
+foreach ($key in @('GlobalMatch.CrossRegionWaitSeconds','GlobalMatch.HardLatencyMs','GlobalMatch.ProbeTTLSeconds','ResultTopic','RatingEnabled','RatingToleranceMaxWaitSeconds')) {
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/match/etc/match_service.yaml') -KeyPath $key
     Assert-Render ($match[$key] -eq $source.Value) "匹配策略$key未镜像"
 }

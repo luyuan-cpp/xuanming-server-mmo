@@ -2,20 +2,18 @@ package inbox
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
 	"player_inbox/internal/constants"
 	"player_inbox/internal/metrics"
 
-	dspb "proto/data_service"
 	inboxpb "proto/player_inbox"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// 后台只读扫描仍不持锁；提醒CAS经原P及挂起原件核验。item永久保存原唯一收据。
+// 后台只读扫描仍不持锁；提醒CAS是纯簿记,只比 next_seq,不过角色护栏(见 ClearNotifyDue)。item永久保存原唯一收据。
 
 // SweepTerminal 保留原调度接口，终态item作为永久幂等收据不再物删。
 func (s *Store) SweepTerminal(ctx context.Context, cutoffMs uint64, budget int) (int, error) {
@@ -100,24 +98,15 @@ func (s *Store) ResendNotify(ctx context.Context, d NotifyDue) NotifyResult {
 // DeferNotifyDue 把一条没落定的提醒推迟到 dueMs 再补发,与 ClearNotifyDue 用同一个 next_seq CAS 令牌(评审 L6):
 // 这期间只要又有新的入箱,next_seq 就变了,CAS 失败,notify_due_ms 保持入箱写下的 now。
 // **不碰 updated_ms**:它是退避的起算点(notifyRetryDueMs),提醒的簿记不算流的业务写入(ClearNotifyDue 同样不碰)。
-// 返回是否真的改了。
+// 和 ClearNotifyDue 一样不过角色护栏。返回是否真的改了。
 func (s *Store) DeferNotifyDue(ctx context.Context, playerID uint64, domain inboxpb.PlayerInboxDomain, expectNextSeq, dueMs uint64) (bool, error) {
-	changed := false
-	err := s.withPlayerTx(ctx, playerID, func(tx *sql.Tx, original *dspb.AccountRoleOwnership) error {
-		changed = false
-		if err := requirePendingOriginalsTx(ctx, tx, original); err != nil {
-			return err
-		}
-		res, err := tx.ExecContext(ctx, "UPDATE "+streamTable+" SET `notify_due_ms` = ? WHERE "+streamPK+
-			" AND `next_seq` = ? AND `notify_due_ms` <> 0", dueMs, RowShard(playerID), playerID, uint32(domain), expectNextSeq)
-		if err != nil {
-			return err
-		}
-		n, err := res.RowsAffected()
-		changed = n == 1
-		return err
-	})
-	return changed && err == nil, err
+	res, err := s.db.ExecContext(ctx, "UPDATE "+streamTable+" SET `notify_due_ms` = ? WHERE "+streamPK+
+		" AND `next_seq` = ? AND `notify_due_ms` <> 0", dueMs, RowShard(playerID), playerID, uint32(domain), expectNextSeq)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1 && err == nil, err
 }
 
 // GaugeCutoffs 是一次扫描型 gauge 用到的时间截止(Unix 毫秒,由后台循环按 now 算出,见 gaugeCutoffs)。

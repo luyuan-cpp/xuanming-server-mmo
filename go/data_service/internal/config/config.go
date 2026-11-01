@@ -6,6 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"shared/dbplacement"
+	"shared/dirshard"
+	"shared/playerredis"
+	"shared/rolefence"
+
+	"github.com/zeromicro/go-zero/core/discov"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
@@ -13,13 +19,24 @@ import (
 type Config struct {
 	zrpc.RpcServerConf
 	// NameCacheRedis 只放可丢弃的读缓存(player:name:{id},routing.PlayerNameCache):里面没有任何权威数据,
-	// 整个实例丢了,名字读路径回源一次全局库,建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
+	// 整个实例丢了,名字读路径回源一次目录,建角和归属都不受影响。不要往上面加要落盘或要保证一致的东西。
 	NameCacheRedis redis.RedisConf
 
 	// Snapshot MySQL(player_snapshot / transaction_log 审计库)
 	SnapshotMySQL SnapshotMySQLConfig `json:",optional"`
 	// 账号目录全局规则；各 zone 的 login 不能抬高这里的角色上限。
 	AccountDirectory AccountDirectoryConfig `json:",optional"`
+	// Directory 是目录分片和存档库连接池,见 DirectoryConfig。
+	Directory DirectoryConfig `json:",optional"`
+	// RoleFence 是角色护栏协调者的配置,见 RoleFenceConfig。
+	RoleFence RoleFenceConfig `json:",optional"`
+	// Recall 是 GM 批量回收的资产通道,见 RecallConfig。
+	Recall RecallConfig `json:",optional"`
+	// SharedRedis 是控制域:落地唤醒频道 assetop:wake 和去重键,必须和 scene 发布的是同一实例。实例指错的表现是永远收不到唤醒,且不报错。
+	// 只有 Recall.Enabled=true 时才连。
+	SharedRedis SharedRedisConf `json:",optional"`
+	// PlayerRedis 是玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 SharedRedis。只有 Recall.Enabled=true 时才连。
+	PlayerRedis playerredis.Config `json:",optional"`
 
 	// AdminToken 是运维专用 RPC 的共享口令,调用方放在 gRPC metadata 的 `x-admin-token` 里。
 	//
@@ -38,8 +55,8 @@ type Config struct {
 	// See go/data_service/internal/metrics/metrics.go for the metric list.
 	MetricsListenAddr string `json:",optional"`
 
-	// Schema 控制全局库(SnapshotMySQL)各表的建表/补列路径:proto 驱动的四张(其中 player_name
-	// 走手写 bootstrap DDL)+ 同样走手写 DDL、proto 只作列漂移守卫的路由表(player_route 等),见 internal/store/schema.go。
+	// Schema 控制目录各片和流水库各表的建表/补列路径:proto 驱动的流水表 + 走手写 DDL、proto 只作列漂移守卫的目录表和路由表,
+	// 见 internal/store/schema.go。
 	// 整段可缺失,缺失语义见 SchemaConfig.AutoMigrate 与 ShouldAutoMigrate。
 	Schema SchemaConfig `json:",optional"`
 
@@ -79,13 +96,7 @@ type Config struct {
 }
 
 type AccountDirectoryConfig struct {
-	MaxPlayersPerAccount      int    `json:",optional"`
-	RoleTradeRequireGuildExit *bool  `json:",optional"`
-	RoleTradeGuildSchema      string `json:",optional"`
-	RoleTradeTradeSchema      string `json:",optional"`
-	RoleTradeMailSchema       string `json:",optional"`
-	RoleTradeMatchSchema      string `json:",optional"`
-	RoleTradeInboxSchema      string `json:",optional"`
+	MaxPlayersPerAccount int `json:",optional"`
 	// 必须显式配置；使用同 TiDB 权威池跨 schema 强读，不新配另一份资产源。
 	RoleTradeSQLProof RoleTradeSQLProofConfig `json:",optional"`
 	// MaxOpenConn 是账号目录独立 SQL 池(store.NewAccountDirectoryStore → authoritysql.Open)的连接上限,经 PoolMaxOpenConn 取用。
@@ -119,9 +130,24 @@ func (c AccountDirectoryConfig) PoolMaxOpenConn() (int, error) {
 	return c.MaxOpenConn, nil
 }
 
-func (c AccountDirectoryConfig) MustLeaveGuild() bool {
-	return c.RoleTradeRequireGuildExit == nil || *c.RoleTradeRequireGuildExit
+// DirectoryConfig 是目录分片(docs/design/horizontal-scale-logical-db.md §5.1)和存档库连接池(§6)。
+type DirectoryConfig struct {
+	// LogicalShards 是目录分片数 K,必须是 64 的约数。0 = 1。生产首次上线定 64,开发定 1。
+	// 上线后不能改:每片的 directory_shard 记着 K,配错拒启。
+	LogicalShards int `json:",optional"`
+	// StoragePools 是连每个存档库的连接池,按需打开。
+	StoragePools StoragePoolConfig `json:",optional"`
 }
+
+// StoragePoolConfig 零值按 store.NewPlayerStorePools 的缺省。这些连接计入每个存档库的连接总账。
+type StoragePoolConfig struct {
+	MaxOpenConn        int `json:",optional"`
+	MaxIdleConn        int `json:",optional"`
+	ConnMaxIdleSeconds int `json:",optional"`
+}
+
+// Shards 是实际的分片数:0 按 1。合法性由 dirshard.Validate 判。
+func (d DirectoryConfig) Shards() int { return dirshard.Normalize(d.LogicalShards) }
 
 type RoleTradeSQLProofConfig struct {
 	Enabled           bool     `json:",optional"`
@@ -135,6 +161,96 @@ func (c AccountDirectoryConfig) MaxRoles() int {
 		return 5
 	}
 	return c.MaxPlayersPerAccount
+}
+
+// RecallConfig 是 GM 批量回收的资产通道(docs/design/exploit_loss_prevention_zh.md)。
+//
+// Enabled=false:预览照常,执行回 ErrCodeRecallDisabled,不连 Redis、不起循环。已有的未结束行留在库里,护栏照样挡过户。
+// Enabled=true:依赖装配失败就拒启。资产路径没有降级:签名密钥 MMORPG_ASSET_OP_SECRET_DATA_SERVICE 必须和 scene 同值。
+type RecallConfig struct {
+	Enabled bool `json:",optional"`
+}
+
+// SharedRedisConf 是 SharedRedis 的连接参数。
+type SharedRedisConf struct {
+	Host     string `json:",optional"`
+	Password string `json:",optional"`
+	DB       int    `json:",optional"`
+	// PoolSize 是连接池上限。0 / 不写 = go-redis 缺省 10 × GOMAXPROCS。
+	PoolSize int `json:",optional"`
+}
+
+// recallPlayerRedisFallbackPoolSize、IOTimeoutMs:没写 PlayerRedis.Addrs 且 SharedRedis.PoolSize 也没写时的取值,和 trade 同口径。
+const (
+	recallPlayerRedisFallbackPoolSize    = 20
+	recallPlayerRedisFallbackIOTimeoutMs = 3000
+)
+
+// ValidateRecall 只在 Recall.Enabled 时要求配置齐全。
+func (c Config) ValidateRecall() error {
+	if !c.Recall.Enabled {
+		return nil
+	}
+	if c.SharedRedis.Host == "" {
+		return errors.New("SharedRedis.Host is required when Recall.Enabled=true")
+	}
+	if c.SharedRedis.PoolSize < 0 {
+		return fmt.Errorf("SharedRedis.PoolSize must not be negative, got %d", c.SharedRedis.PoolSize)
+	}
+	return nil
+}
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 SharedRedis 那一个实例。
+func (c Config) EffectivePlayerRedis() playerredis.Config {
+	pool := c.SharedRedis.PoolSize
+	if pool == 0 {
+		pool = recallPlayerRedisFallbackPoolSize
+	}
+	return c.PlayerRedis.OrDefault(playerredis.Config{
+		Addrs:           []string{c.SharedRedis.Host},
+		Password:        c.SharedRedis.Password,
+		PoolSizePerNode: min(pool, playerredis.MaxPoolSizePerNode),
+		ReadTimeoutMs:   recallPlayerRedisFallbackIOTimeoutMs,
+		WriteTimeoutMs:  recallPlayerRedisFallbackIOTimeoutMs,
+	})
+}
+
+// RoleFenceConfig 是角色护栏协调者的配置(docs/design/horizontal-scale-logical-db.md §3.5)。
+type RoleFenceConfig struct {
+	// Participants 必须逐个对上 rolefence.Participants。少配一个就是漏冻结,所以不是「配了几个问几个」。
+	// 整段缺失或不合法时不装配协调者,过户和删角全部拒绝。
+	Participants []RoleFenceParticipantConfig `json:",optional"`
+}
+
+// RoleFenceParticipantConfig 是一个参与者的地址:Endpoints 直连,或 Etcd 服务发现,二选一。
+// Etcd 不用 inherit:缺地址时继承顶层 Etcd 会解析到 data_service 自己。
+type RoleFenceParticipantConfig struct {
+	Name      string
+	Endpoints []string        `json:",optional"`
+	Etcd      discov.EtcdConf `json:",optional"`
+}
+
+// Validate 核参与者清单。
+func (c RoleFenceConfig) Validate() error {
+	seen := make(map[string]bool, len(c.Participants))
+	for _, p := range c.Participants {
+		if seen[p.Name] {
+			return fmt.Errorf("RoleFence.Participants: %q listed twice", p.Name)
+		}
+		seen[p.Name] = true
+		if hasEtcd := len(p.Etcd.Hosts) > 0 && p.Etcd.Key != ""; hasEtcd == (len(p.Endpoints) > 0) {
+			return fmt.Errorf("RoleFence.Participants: %q needs exactly one of Endpoints and Etcd", p.Name)
+		}
+	}
+	for _, name := range rolefence.Participants {
+		if !seen[name] {
+			return fmt.Errorf("RoleFence.Participants: %q is missing", name)
+		}
+	}
+	if len(c.Participants) != len(rolefence.Participants) {
+		return fmt.Errorf("RoleFence.Participants: must list exactly %v", rolefence.Participants)
+	}
+	return nil
 }
 
 // IdSegmentConfig 是发号器的配置。
@@ -163,8 +279,8 @@ type IdSegmentConfig struct {
 // IdIssuerConfig 是发号器预留记录的位置。两份记录都只增不减,一块号要两份都写成功才发,
 // 所以任何一份丢失或回退,另一份都盖得住发过的号。
 type IdIssuerConfig struct {
-	// Region 是地域码,0..63,写进计数器的最高位。开始发号之后不能改;发号器发现记录里的地域和
-	// 这里不一致会拒绝预留。
+	// Region 是地域码,0..63,写进计数器的最高位。0 只给 Mode=dev、test:这个字段漏写也是 0,
+	// 其他模式拒绝启动。开始发号之后不能改;发号器发现记录里的地域和这里不一致会拒绝预留。
 	Region uint32 `json:",optional"`
 
 	// PrimaryEtcd / SecondaryEtcd 是放两份记录的两套 etcd。生产必须各配一套,地址不能有交集:
@@ -176,7 +292,7 @@ type IdIssuerConfig struct {
 
 // DefaultIdSegmentTags 是走号段的永久身份清单。
 // 要与 etc/data_service.yaml 的 IdSegment.Tags、k8s_deploy.ps1 data-service ConfigMap 同步。
-var DefaultIdSegmentTags = []string{"player", "guild", "item", "txlog", "snapshot", "trade_listing", "guild_asset_op", "friend_request", "trade_asset_op", "mail", "mail_asset_op", "rank_board", "rank_settlement", "rank_reward", "battle", "snapshot_row", "rollback_audit"}
+var DefaultIdSegmentTags = []string{"player", "guild", "item", "txlog", "snapshot", "trade_listing", "guild_asset_op", "friend_request", "trade_asset_op", "mail", "mail_asset_op", "rank_board", "rank_settlement", "rank_reward", "battle", "snapshot_row", "rollback_audit", "gm_recall_op"}
 
 // EffectiveTags 是实际允许的 tag 清单:没配 = 默认清单。
 // 返回副本,免得调用方改到包级默认值。
@@ -486,6 +602,8 @@ type SnapshotMySQLConfig struct {
 	DBName      string `json:",default=testdb"`
 	MaxOpenConn int    `json:",default=5"`
 	MaxIdleConn int    `json:",default=2"`
+	// DbPlacement:按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Host。
+	DbPlacement dbplacement.Config `json:",optional"`
 }
 
 // ── 玩家名字注册表(docs/design/guild-phase2/03-names.md §3.6a)──────────────

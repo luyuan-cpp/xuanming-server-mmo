@@ -117,11 +117,11 @@ func main() {
 	metrics.RegisterStoreCooldown(stores.CooldownCounts)
 
 	if maintenanceRuntime != nil {
-		writerConfig, err := proto_sql.CurrentWriterConfig()
+		writerConfigs, err := proto_sql.CurrentWriterConfigs()
 		if err != nil {
 			panic(fmt.Sprintf("维护writer身份HOLD: %v", err))
 		}
-		if err = bindMaintenanceRuntime(maintenanceRuntime, writerConfig); err != nil {
+		if err = bindMaintenanceRuntime(maintenanceRuntime, writerConfigs); err != nil {
 			panic(fmt.Sprintf("维护同boot身份HOLD: %v", err))
 		}
 	}
@@ -249,9 +249,9 @@ func main() {
 				}
 				return
 			}
-			writer, err := proto_sql.CurrentWriterConfig()
+			writers, err := proto_sql.CurrentWriterConfigs()
 			if err == nil {
-				err = bindMaintenanceRuntime(runtime, writer)
+				err = bindMaintenanceRuntime(runtime, writers)
 			}
 			if err != nil {
 				rootAdmission.CloseAdmission()
@@ -333,12 +333,17 @@ func newKillSwitchEtcdClient(cfg discov.EtcdConf) *clientv3.Client {
 	return cli
 }
 
-func bindMaintenanceRuntime(runtime *drainproof.Runtime, writer authoritysql.WriterConfig) error {
+// 一次排空 run 只管一个逻辑库：绑 Plan 指的那一份写资格，本 boot 没有那一份就不是这个 run 的写者。
+func bindMaintenanceRuntime(runtime *drainproof.Runtime, writers map[string]authoritysql.WriterConfig) error {
 	physical, err := hex.DecodeString(os.Getenv("MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256"))
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(physical, runtime.Plan.PhysicalClusterIdentity) || writer.AuthoritySchema() != runtime.Plan.AuthoritySchema || writer.Generation() != runtime.Request.Generation || strings.Join(writer.ProtectedSchemas(), ",") != strings.Join(runtime.Plan.ProtectedSchemas, ",") {
+	writer, ok := writers[runtime.Plan.AuthoritySchema]
+	if !ok {
+		return drainproof.ErrHold
+	}
+	if !bytes.Equal(physical, runtime.Plan.PhysicalClusterIdentity) || writer.Generation() != runtime.Request.Generation || strings.Join(writer.ProtectedSchemas(), ",") != strings.Join(runtime.Plan.ProtectedSchemas, ",") {
 		return drainproof.ErrHold
 	}
 	return runtime.BindBoot(writer.InstanceID(), writer.WriterKey())

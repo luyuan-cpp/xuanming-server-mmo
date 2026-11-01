@@ -177,7 +177,15 @@ func (r *Repo) Submit(ctx context.Context, caller string, in *rankpb.SubmitRankS
 		if committed == math.MaxUint64 || in.SourceCursor != committed+1 {
 			return ErrCursor
 		}
+		removed, err := removedEntries(ctx, tx, in.BoardId, in.Generation)
+		if err != nil {
+			return err
+		}
 		for _, entry := range entries {
+			// 移除在这一代内是终局。这一批照样推进游标,其他实体照常写。
+			if removed[entry.EntityId] {
+				continue
+			}
 			var old int64
 			var achieved, version uint64
 			err := tx.QueryRowContext(ctx, "SELECT score,achieved_ms,score_version FROM rank_score WHERE board_id=? AND generation=? AND entity_id=?", in.BoardId, in.Generation, entry.EntityId).Scan(&old, &achieved, &version)

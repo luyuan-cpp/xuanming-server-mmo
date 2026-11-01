@@ -2,7 +2,6 @@ package authority
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -15,32 +14,24 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	battlepb "proto/battle"
-	guildpb "proto/guild"
 	pb "proto/match"
 	teampb "proto/team"
-	"schemamigrate"
 	"shared/matchentry"
+	"shared/rolefence/fencetest"
 )
 
-// 原角色P和四张正规Guild表都在独占TiDB库；不沿用独立状态机的跨域fixture guard。
+// 原角色P在独占TiDB库的护栏副本上；不沿用独立状态机的跨域fixture guard。
 func nativeEntryStore(t *testing.T) *Store {
 	t.Helper()
 	s := nativeRoleStore(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	var schema string
-	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&schema))
-	_, err := schemamigrate.Up(ctx, s.DB, schemamigrate.Options{Database: schema, Tables: []proto.Message{&guildpb.GuildTrialLaunchRecord{}, &guildpb.GuildTrialLaunchRoleRecord{}, &guildpb.GuildTrialLobbyRecord{}, &guildpb.GuildTrialLobbySlotRecord{}}})
-	require.NoError(t, err)
-	require.NoError(t, s.ConfigureMatchEntryAuthority(ctx, schema))
+	s.entryGuard = s.requireEntryOriginalsTx
 	return s
 }
 
 func nativeEntryActor(t *testing.T, s *Store, player uint64) (context.Context, *pb.MatchAuthorityTicketRecord, *pb.JoinQueueRequest) {
 	t.Helper()
 	account := fmt.Sprintf("entry-original-%d", player)
-	_, err := s.DB.Exec("INSERT INTO account_role VALUES(?,?,7,0)", player, []byte(account))
-	require.NoError(t, err)
+	fencetest.Seed(t, context.Background(), s.DB, player, account, 7)
 	actor := nativeRoleActor(t, context.Background(), player, account, 7)
 	now, err := s.Now(actor)
 	require.NoError(t, err)
@@ -183,7 +174,7 @@ func TestEntryTiDBOwnTeamExceptionRequiresActorUUIDAndWholeOriginalRoster(t *tes
 }
 
 func TestEntryTiDBNullRoleOrParentNeverDisappearsThroughSQLThreeValuedLogic(t *testing.T) {
-	for _, domain := range []string{"team-role", "team-parent", "trial-role", "trial-parent"} {
+	for _, domain := range []string{"team-role", "team-parent", "occupancy"} {
 		t.Run(domain, func(t *testing.T) {
 			s := nativeEntryStore(t)
 			actor, first, _ := nativeEntryActor(t, s, 11)
@@ -201,22 +192,14 @@ func TestEntryTiDBNullRoleOrParentNeverDisappearsThroughSQLThreeValuedLogic(t *t
 				if domain == "team-parent" {
 					table = "team_launch"
 				}
-				_, err = s.DB.Exec("ALTER TABLE " + table + " MODIFY COLUMN state INT UNSIGNED NULL")
+				_, err = testInstall(t, s).Exec("ALTER TABLE " + table + " MODIFY COLUMN state INT UNSIGNED NULL")
 				require.NoError(t, err)
 				_, err = s.DB.Exec("UPDATE " + table + " SET state=NULL")
 				require.NoError(t, err)
 			} else {
-				_, err := s.DB.Exec("INSERT INTO guild_trial_launch(request_id,battle_id,state,original_proto,request_digest,created_ms,updated_ms,cancel_receipt) VALUES(71,0,3,?,?,1,1,?)", []byte{}, []byte{}, []byte{})
+				_, err := testInstall(t, s).Exec("ALTER TABLE match_role_occupancy MODIFY COLUMN expires_ms BIGINT UNSIGNED NULL")
 				require.NoError(t, err)
-				_, err = s.DB.Exec("INSERT INTO guild_trial_launch_role(player_id,request_id,account,owner_revision,state) VALUES(11,71,?,7,2)", first.OwnerAccount)
-				require.NoError(t, err)
-				table := "guild_trial_launch_role"
-				if domain == "trial-parent" {
-					table = "guild_trial_launch"
-				}
-				_, err = s.DB.Exec("ALTER TABLE " + table + " MODIFY COLUMN state INT UNSIGNED NULL")
-				require.NoError(t, err)
-				_, err = s.DB.Exec("UPDATE " + table + " SET state=NULL")
+				_, err = s.DB.Exec("INSERT INTO match_role_occupancy("+occupancyColumns+") VALUES(11,?,71,?,7,NULL)", occupancyKindTrial, first.OwnerAccount)
 				require.NoError(t, err)
 			}
 			tx, err := s.DB.BeginTx(actor, nil)
@@ -228,8 +211,8 @@ func TestEntryTiDBNullRoleOrParentNeverDisappearsThroughSQLThreeValuedLogic(t *t
 	}
 }
 
-func TestEntryTiDBRoleTerminalNeedsActualParentTerminalAndPrivateLobbyCannotExpireAway(t *testing.T) {
-	for _, domain := range []string{"team", "trial", "private"} {
+func TestEntryTiDBRoleTerminalNeedsActualParentTerminalAndOccupancyOnlyEndsWithItsLease(t *testing.T) {
+	for _, domain := range []string{"team", "occupancy"} {
 		t.Run(domain, func(t *testing.T) {
 			s := nativeEntryStore(t)
 			actor, first, request := nativeEntryActor(t, s, 11)
@@ -252,30 +235,15 @@ func TestEntryTiDBRoleTerminalNeedsActualParentTerminalAndPrivateLobbyCannotExpi
 				require.NoError(t, err)
 				_, _, _, err = s.PrepareJoin(ctx, first, request, "entry-bound")
 				require.ErrorIs(t, err, ErrMatchEntryOccupied)
-			case "trial":
-				_, err := s.DB.ExecContext(ctx, "INSERT INTO guild_trial_launch(request_id,battle_id,state,original_proto,request_digest,created_ms,updated_ms,cancel_receipt) VALUES(71,0,1,?, ?,1,1,?)", []byte{}, []byte{}, []byte{})
-				require.NoError(t, err)
-				_, err = s.DB.ExecContext(ctx, "INSERT INTO guild_trial_launch_role(player_id,request_id,account,owner_revision,state) VALUES(11,71,?,7,2)", first.OwnerAccount)
+			case "occupancy":
+				_, err := s.AcquireTrialOccupancy(ctx, 71, []*pb.TrialOccupancyRole{{PlayerId: 11}, {PlayerId: 22}}, 60000)
 				require.NoError(t, err)
 				_, _, _, err = s.PrepareJoin(ctx, first, request, "entry-bound")
 				require.ErrorIs(t, err, ErrMatchEntryOccupied)
-				_, err = s.DB.ExecContext(ctx, "UPDATE guild_trial_launch SET state=3")
+				_, err = s.DB.ExecContext(ctx, "UPDATE match_role_occupancy SET expires_ms=1")
 				require.NoError(t, err)
 				_, _, _, err = s.PrepareJoin(ctx, first, request, "entry-bound")
-				require.NoError(t, err)
-			case "private":
-				_, err := s.DB.ExecContext(ctx, "INSERT INTO guild_trial_lobby_slot(player_id,lobby_id,cooldown_until_ms) VALUES(11,71,0)")
-				require.NoError(t, err)
-				_, _, _, err = s.PrepareJoin(ctx, first, request, "entry-bound")
-				require.ErrorIs(t, err, ErrMatchEntryOccupied)
-				_, err = s.DB.ExecContext(ctx, "INSERT INTO guild_trial_lobby(lobby_id,guild_id,activity_id,initiator_player_id,state,view_proto,original_proto,consent_proto,expires_ms,launch_deadline_ms,battle_id,created_ms,updated_ms) VALUES(71,1,1,11,2,?,?,?,1,1,0,1,1)", []byte{}, []byte{}, []byte{})
-				require.NoError(t, err)
-				_, _, _, err = s.PrepareJoin(ctx, first, request, "entry-bound")
-				require.ErrorIs(t, err, ErrMatchEntryOccupied)
-				_, err = s.DB.ExecContext(ctx, "UPDATE guild_trial_lobby SET state=4")
-				require.NoError(t, err)
-				_, _, _, err = s.PrepareJoin(ctx, first, request, "entry-bound")
-				require.NoError(t, err)
+				require.NoError(t, err, "租约过期视为空闲")
 			}
 		})
 	}
@@ -326,69 +294,61 @@ func TestEntryTiDBOccupiedSQLMatchesAllFifteenProtoFieldsAndRejectsNull(t *testi
 	}
 }
 
-// 此函数同时给活动原件回归固定SQL私有大厅，不依赖Redis或当前owner补原意图。
-func insertNativeEntryTrial(t *testing.T, s *Store, tx *sql.Tx, group []*pb.MatchAuthorityTicketRecord) (*pb.StartActivityBattleRequest, *pb.MatchFormationRecord) {
+// 活动开局的固定原件:大厅 71 的占用已在 match 上,请求由 guild 签名(签名在 logic 层核)。
+func nativeEntryTrial(t *testing.T, s *Store, group []*pb.MatchAuthorityTicketRecord) (*pb.StartActivityBattleRequest, *pb.MatchFormationRecord) {
 	t.Helper()
-	original := &guildpb.GuildTrialLaunchOriginal{RequestId: 71, GuildId: 1, ActivityId: 1, PeriodKey: 20261021, GuildPeriodKey: 20261021, InitiatorPlayerId: group[0].PlayerId, DungeonId: 1, CreatedMs: 1}
-	lobbyOriginal := &guildpb.GuildTrialLobbyOriginal{LobbyId: 71, GuildId: 1, ActivityId: 1, InitiatorPlayerId: group[0].PlayerId, CreatedMs: 1, ExpiresMs: 1}
-	consents := &guildpb.GuildTrialLobbyConsents{}
-	view := &guildpb.GuildTrialLobbyView{LobbyId: 71, InitiatorPlayerId: group[0].PlayerId, State: guildpb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_LAUNCHING, ExpireAtMs: 1}
+	roster := make([]*pb.TrialOccupancyRole, 0, len(group))
+	members := make([]uint64, 0, len(group))
 	for _, ticket := range group {
-		role := &guildpb.GuildTrialRoleIdentity{PlayerId: ticket.PlayerId, Account: ticket.OwnerAccount, OwnerRevision: ticket.OwnerRevision}
-		original.Roster = append(original.Roster, role)
-		lobbyOriginal.Roster = append(lobbyOriginal.Roster, role)
-		consents.Consents = append(consents.Consents, &guildpb.GuildTrialLobbyConsent{LobbyId: 71, Identity: role})
-		view.MemberPlayerIds = append(view.MemberPlayerIds, role.PlayerId)
-		view.AcceptedPlayerIds = append(view.AcceptedPlayerIds, role.PlayerId)
+		roster = append(roster, &pb.TrialOccupancyRole{PlayerId: ticket.PlayerId, Account: ticket.OwnerAccount, OwnerRevision: ticket.OwnerRevision})
+		members = append(members, ticket.PlayerId)
 	}
-	marshal := func(message proto.Message) []byte {
-		raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
-		require.NoError(t, err)
-		return raw
-	}
-	raw := marshal(original)
-	sum := sha256.Sum256(raw)
-	_, err := tx.Exec("INSERT INTO guild_trial_launch(request_id,battle_id,state,original_proto,request_digest,created_ms,updated_ms,cancel_receipt) VALUES(71,0,1,?,?,1,1,?)", raw, sum[:], []byte{})
+	_, err := s.AcquireTrialOccupancy(context.Background(), 71, roster, 60000)
 	require.NoError(t, err)
-	_, err = tx.Exec("INSERT INTO guild_trial_lobby(lobby_id,guild_id,activity_id,initiator_player_id,state,view_proto,original_proto,consent_proto,expires_ms,launch_deadline_ms,battle_id,created_ms,updated_ms) VALUES(71,1,1,?,2,?,?,?,1,1,0,1,1)", group[0].PlayerId, marshal(view), marshal(lobbyOriginal), marshal(consents))
-	require.NoError(t, err)
-	for _, member := range group {
-		_, err = tx.Exec("INSERT INTO guild_trial_launch_role(player_id,request_id,account,owner_revision,state) VALUES(?,71,?, ?,1)", member.PlayerId, member.OwnerAccount, member.OwnerRevision)
-		require.NoError(t, err)
-		_, err = tx.Exec("INSERT INTO guild_trial_lobby_slot(player_id,lobby_id,cooldown_until_ms) VALUES(?,71,0)", member.PlayerId)
-		require.NoError(t, err)
-	}
-	request := &pb.StartActivityBattleRequest{RequestId: 71, BattleConfigId: 1, MemberPlayerIds: view.MemberPlayerIds, ActivityContext: &battlepb.BattleActivityContext{Kind: battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL, GuildId: 1, ActivityId: 1, PeriodKey: 20261021, GuildPeriodKey: 20261021, InitiatorPlayerId: group[0].PlayerId, LaunchRequestId: 71}}
-	formation := &pb.MatchFormationRecord{BattleId: 901, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1, ActivityContext: marshal(request.ActivityContext)}
-	return request, formation
+	request := &pb.StartActivityBattleRequest{RequestId: 71, BattleConfigId: 1, MemberPlayerIds: members, ActivityContext: &battlepb.BattleActivityContext{Kind: battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL, GuildId: 1, ActivityId: 1, PeriodKey: 20261021, GuildPeriodKey: 20261021, InitiatorPlayerId: group[0].PlayerId, LaunchRequestId: 71}}
+	return request, nativeTrialFormation(t, request)
 }
 
-func TestEntryTiDBTrialOnlyExactOriginalMayConsumeItsOwnPrivateLaunch(t *testing.T) {
-	s := nativeEntryStore(t)
-	actor, first, solo := nativeEntryActor(t, s, 11)
-	_, second, _ := nativeEntryActor(t, s, 22)
+func nativeTrialFormation(t *testing.T, request *pb.StartActivityBattleRequest) *pb.MatchFormationRecord {
+	t.Helper()
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(request.ActivityContext)
+	require.NoError(t, err)
+	return &pb.MatchFormationRecord{BattleId: 901, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1, ActivityContext: raw}
+}
+
+func nativeTrialGroup(first, second *pb.MatchAuthorityTicketRecord) []*pb.MatchAuthorityTicketRecord {
 	group := []*pb.MatchAuthorityTicketRecord{proto.Clone(first).(*pb.MatchAuthorityTicketRecord), proto.Clone(second).(*pb.MatchAuthorityTicketRecord)}
 	for _, member := range group {
 		member.Mode = uint32(pb.MatchMode_MATCH_MODE_PVE_TEAM)
 	}
-	tx, err := s.DB.BeginTx(actor, nil)
-	require.NoError(t, err)
-	defer tx.Rollback()
-	require.NoError(t, s.lockOriginalPlayers(actor, tx, group))
-	request, formation := insertNativeEntryTrial(t, s, tx, group)
-	require.NoError(t, tx.Commit())
-	_, _, _, err = s.PrepareJoin(actor, first, solo, "entry-bound")
+	return group
+}
+
+func TestEntryTiDBTrialOnlyExactOwnerMayConsumeItsOwnOccupancy(t *testing.T) {
+	s := nativeEntryStore(t)
+	actor, first, solo := nativeEntryActor(t, s, 11)
+	_, second, _ := nativeEntryActor(t, s, 22)
+	group := nativeTrialGroup(first, second)
+	request, formation := nativeEntryTrial(t, s, group)
+	_, _, _, err := s.PrepareJoin(actor, first, solo, "entry-bound")
 	require.ErrorIs(t, err, ErrMatchEntryOccupied)
-	bad := proto.Clone(request).(*pb.StartActivityBattleRequest)
-	bad.ActivityContext.GuildPeriodKey++
-	badRaw, err := proto.MarshalOptions{Deterministic: true}.Marshal(bad)
+	// 别的大厅不能用这份占用开局。
+	other := proto.Clone(request).(*pb.StartActivityBattleRequest)
+	other.RequestId, other.ActivityContext.LaunchRequestId = 72, 72
+	otherRaw, err := proto.MarshalOptions{Deterministic: true}.Marshal(other)
 	require.NoError(t, err)
-	wrongFormation := proto.Clone(formation).(*pb.MatchFormationRecord)
-	wrongFormation.ActivityContext, err = proto.Marshal(bad.ActivityContext)
+	_, err = s.PrepareDirectAdmission(actor, &pb.MatchDirectIntentRecord{Kind: 2, OwnerId: 1, RequestLow: 72}, otherRaw, nativeTrialFormation(t, other), group)
+	require.ErrorIs(t, err, ErrMatchEntryOccupied)
+	// 名单少一个人也不行:这个大厅还占着名单之外的角色。
+	partial := proto.Clone(request).(*pb.StartActivityBattleRequest)
+	partial.MemberPlayerIds = partial.MemberPlayerIds[:1]
+	partialRaw, err := proto.MarshalOptions{Deterministic: true}.Marshal(partial)
 	require.NoError(t, err)
 	key := &pb.MatchDirectIntentRecord{Kind: 2, OwnerId: 1, RequestLow: 71}
-	_, err = s.PrepareDirectAdmission(actor, key, badRaw, wrongFormation, group)
+	_, err = s.PrepareDirectAdmission(actor, key, partialRaw, formation, group[:1])
 	require.ErrorIs(t, err, ErrMatchEntryOccupied)
+	_, err = s.DB.Exec("DELETE FROM match_direct_intent")
+	require.NoError(t, err)
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
 	require.NoError(t, err)
 	prepared, err := s.PrepareDirectAdmission(actor, key, raw, formation, group)

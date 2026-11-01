@@ -14,6 +14,8 @@ import (
 	dspb "proto/data_service"
 	pb "proto/guild"
 	matchpb "proto/match"
+	"shared/rolefence"
+	"shared/rolefence/fencetest"
 	"shared/roleidentity"
 
 	"github.com/stretchr/testify/require"
@@ -44,8 +46,7 @@ func seedLobbyOwners(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 	seedManagedGuild(t, ctx, db, 44, 1, 1, 30, 11, map[uint64]uint32{22: 1})
 	for _, p := range []uint64{11, 22} {
-		_, e := db.ExecContext(ctx, "INSERT INTO account_role(player_id,account,role_proto,owner_revision,updated_ms,trade_listing_id) VALUES(?,'seller',?,1,1,0)", p, []byte{})
-		require.NoError(t, e)
+		fencetest.Seed(t, ctx, db, p, "seller", 1)
 	}
 }
 
@@ -73,12 +74,10 @@ func TestTiDBTrialSQLLobbyRedisLossPendingAndOriginalOwner(t *testing.T) {
 	public, e := json.Marshal(loaded)
 	require.NoError(t, e)
 	require.NotContains(t, string(public), "seller")
-	_, e = db.ExecContext(ctx, "UPDATE account_role SET account='buyer',owner_revision=2 WHERE player_id=11")
-	require.NoError(t, e)
+	fencetest.Update(t, ctx, db, 11, "buyer", 2, 0)
 	_, e = copyStore.Respond(lobbyActor(t, ctx, 11, "buyer", 2), 301, 11, true, 1, time.Second)
 	require.ErrorIs(t, e, ErrWriteConflict)
-	_, e = db.ExecContext(ctx, "UPDATE account_role SET account='seller',owner_revision=3 WHERE player_id=11")
-	require.NoError(t, e)
+	fencetest.Update(t, ctx, db, 11, "seller", 3, 0)
 	_, e = copyStore.Respond(lobbyActor(t, ctx, 11, "seller", 3), 301, 11, true, 1, time.Second)
 	require.ErrorIs(t, e, ErrWriteConflict)
 	var state uint32
@@ -179,8 +178,7 @@ func TestTiDBTrialExpiredUnpreparedCleanupDoesNotRegrantChangedOwner(t *testing.
 	require.NoError(t, e)
 	_, e = db.ExecContext(ctx, "UPDATE guild_trial_lobby SET created_ms=1,expires_ms=2,original_proto=?,view_proto=? WHERE lobby_id=355", raw, view)
 	require.NoError(t, e)
-	_, e = db.ExecContext(ctx, "UPDATE account_role SET account='buyer',owner_revision=2 WHERE player_id=22")
-	require.NoError(t, e)
+	fencetest.Update(t, ctx, db, 22, "buyer", 2, 0)
 	_, e = store.ExpirePendingSQL(ctx, 0)
 	require.NoError(t, e, "取消未许可外部动作的旧邀请，不重新授予旧owner权限")
 	lb, e := store.Load(ctx, 355)
@@ -195,14 +193,15 @@ func TestTiDBTrialExpiredUnpreparedCleanupDoesNotRegrantChangedOwner(t *testing.
 	var occupied int
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_lobby_slot WHERE lobby_id=355").Scan(&occupied))
 	require.Zero(t, occupied)
-	var account string
-	var revision uint64
-	require.NoError(t, db.QueryRowContext(ctx, "SELECT account,owner_revision FROM account_role WHERE player_id=22").Scan(&account, &revision))
-	require.Equal(t, "buyer", account)
-	require.EqualValues(t, 2, revision)
+	fence, e := rolefence.Read(ctx, db, 22)
+	require.NoError(t, e)
+	require.Equal(t, "buyer", fence.Account)
+	require.EqualValues(t, 2, fence.OwnerRevision)
 }
 
-func TestTiDBTrialPrepareReverseGuardAfterConsentsAndTeamUnknown(t *testing.T) {
+// 同意之后Match先写了在途票或整队开战(占用租约丢了之后才可能),Trial不能提交ACTIVE后才依靠远端拒绝。
+// 票和整队开战的判据本身在 go/match/internal/authority/occupancy_native_test.go。
+func TestTiDBTrialPrepareReverseGuardAfterConsents(t *testing.T) {
 	ctx, db, repo, activities := guildRoleTiDB(t)
 	seedLobbyOwners(t, ctx, db)
 	actor := lobbyActor(t, ctx, 11, "seller", 1)
@@ -211,9 +210,8 @@ func TestTiDBTrialPrepareReverseGuardAfterConsentsAndTeamUnknown(t *testing.T) {
 	require.NoError(t, e)
 	roster, e := store.LoadConsents(ctx, lb)
 	require.NoError(t, e)
-	// 同意之后Match先取得同P并写在途票，Trial不能提交ACTIVE后才依靠远端拒绝。
-	_, e = db.ExecContext(ctx, "INSERT INTO match_authority_ticket(player_id,state) VALUES(22,1)")
-	require.NoError(t, e)
+	occupancy := occupancyOf(repo)
+	occupancy.setAcquireErr(ErrWriteConflict)
 	battle := actTrialKey(actTrialRow(), 900, 44, 11, testNowMs)
 	battle.LaunchRequestID = 361
 	_, e = activities.PrepareTrialLaunch(actor, 361, battle, 1, roster, testNowMs)
@@ -221,18 +219,23 @@ func TestTiDBTrialPrepareReverseGuardAfterConsentsAndTeamUnknown(t *testing.T) {
 	var count int
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_launch_role WHERE request_id=361").Scan(&count))
 	require.Zero(t, count)
-	_, e = db.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4 WHERE player_id=22")
-	require.NoError(t, e)
-	_, e = db.ExecContext(ctx, "INSERT INTO team_launch(actor_id,request_high,request_low,state) VALUES(11,1,1,4)")
-	require.NoError(t, e)
-	_, e = db.ExecContext(ctx, "INSERT INTO team_launch_role(actor_id,request_high,request_low,player_id,state) VALUES(11,1,1,22,5)")
-	require.NoError(t, e)
+	require.Empty(t, occupancy.released(), "大厅还在,占用不放")
+	occupancy.setAcquireErr(ErrTrialMatchUnavailable)
 	_, e = activities.PrepareTrialLaunch(actor, 361, battle, 1, roster, testNowMs)
-	require.ErrorIs(t, e, ErrWriteConflict, "Team父4未有关闭正证明，role5也不放行")
-	_, e = db.ExecContext(ctx, "UPDATE team_launch SET state=5 WHERE actor_id=11 AND request_high=1 AND request_low=1")
-	require.NoError(t, e)
+	require.ErrorIs(t, e, ErrTrialMatchUnavailable, "问不到 match 不是业务拒绝")
+	occupancy.setAcquireErr(nil)
 	_, e = activities.PrepareTrialLaunch(actor, 361, battle, 1, roster, testNowMs)
 	require.NoError(t, e)
+	last := occupancy.lastAcquire()
+	require.EqualValues(t, 361, last.owner)
+	require.Equal(t, trialOccupancyMargin, last.ttl)
+	requireSameRoster(t, roster, last.roster, "Prepare 带大厅原件的全部身份")
+	// 已有原件的重放不再占:Start 可能已经写了票,这时 match 一定拒绝。
+	calls := occupancy.acquireCount()
+	occupancy.setAcquireErr(ErrWriteConflict)
+	_, e = activities.PrepareTrialLaunch(actor, 361, battle, 1, roster, testNowMs)
+	require.NoError(t, e)
+	require.Equal(t, calls, occupancy.acquireCount())
 }
 
 func TestTrialLobbyDecoderKeepsInitiatorSeparateFromSortedAuthorization(t *testing.T) {
@@ -286,6 +289,7 @@ func TestTiDBTrialDisbandRetainsUntilBoundTerminalAndOldResultCannotClearNewLobb
 			var occupied int
 			require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_lobby_slot WHERE lobby_id=371").Scan(&occupied))
 			require.Equal(t, 2, occupied, "解散不是取消证明")
+			require.NotContains(t, occupancyOf(repo).released(), uint64(371), "解散不放占用")
 			var state uint32
 			require.NoError(t, db.QueryRowContext(ctx, "SELECT state FROM guild_trial_launch WHERE request_id=371").Scan(&state))
 			require.EqualValues(t, 2, state)
@@ -315,6 +319,7 @@ func TestTiDBTrialDisbandRetainsUntilBoundTerminalAndOldResultCannotClearNewLobb
 			}
 			require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_lobby_slot WHERE lobby_id=371").Scan(&occupied))
 			require.Zero(t, occupied)
+			require.Contains(t, occupancyOf(repo).released(), uint64(371), "原 launch 终结,占用随之放开")
 			for _, table := range []string{"guild", "guild_trial_battle", "guild_asset_op", "guild_trial_reward_owed"} {
 				var count int
 				require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count))
@@ -335,32 +340,165 @@ func TestTiDBTrialDisbandRetainsUntilBoundTerminalAndOldResultCannotClearNewLobb
 	}
 }
 
+// match 拒绝占用(票先赢)时不建房;同意时被拒不留半份同意。判据本身在 go/match/internal/authority/occupancy_native_test.go。
 func TestTiDBTrialMatchWinsBeforePrivateCreateAndNoPartialConsent(t *testing.T) {
 	ctx, db, repo, _ := guildRoleTiDB(t)
 	seedLobbyOwners(t, ctx, db)
 	actor := lobbyActor(t, ctx, 11, "seller", 1)
 	store, e := NewSQLTrialLobbyRepo(repo.rdb, repo, func(context.Context) (uint64, error) { return 321, nil })
 	require.NoError(t, e)
-	// Match先持P提交非空pending0；不能因其state0或expires已过而当成空票。
-	_, e = db.ExecContext(ctx, "INSERT INTO match_authority_ticket(player_id,state,ticket,request_id,formation_id,mode,config_id,team_size,enqueued_ms,not_before_ms,zone_id,rating_centi,team_id,network_profile,expires_ms,selected_region,preferred_region) VALUES(22,0,'','pending-exit',0,0,0,0,0,0,0,0,0,?,0,0,0)", []byte{})
-	require.NoError(t, e)
+	occupancy := occupancyOf(repo)
+	occupancy.setAcquireErr(ErrWriteConflict)
 	_, e = store.Create(actor, TrialLobbyCreate{GuildID: 44, ActivityID: 3, Roster: []uint64{11, 22}, TTL: time.Minute, NowMs: 1})
 	require.ErrorIs(t, e, ErrWriteConflict)
 	var count int
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_lobby").Scan(&count))
 	require.Zero(t, count)
-	_, e = db.ExecContext(ctx, "UPDATE match_authority_ticket SET state=4 WHERE player_id=22")
-	require.NoError(t, e)
+	require.Equal(t, []uint64{321}, occupancy.released(), "放开挂在 Acquire 之前,确定拒绝时是空操作")
+	occupancy.setAcquireErr(nil)
 	created, e := store.Create(actor, TrialLobbyCreate{GuildID: 44, ActivityID: 3, Roster: []uint64{11, 22}, TTL: time.Minute, NowMs: 1})
 	require.NoError(t, e)
 	require.Equal(t, TrialLobbyCreated, created.Status)
-	_, e = db.ExecContext(ctx, "UPDATE match_authority_ticket SET state=255 WHERE player_id=22")
-	require.NoError(t, e)
+	// 建房时发起人带会话身份,对端留空由 match 捕获;租约盖住邀请有效期。
+	first := occupancy.lastAcquire()
+	require.EqualValues(t, 321, first.owner)
+	require.Equal(t, time.Minute+trialOccupancyMargin, first.ttl)
+	requireSameRoster(t, []*pb.GuildTrialRoleIdentity{{PlayerId: 11, Account: "seller", OwnerRevision: 1}, {PlayerId: 22}}, first.roster, "建房")
+	occupancy.setAcquireErr(ErrWriteConflict)
 	_, e = store.Respond(lobbyActor(t, ctx, 22, "seller", 1), 321, 22, true, 1, time.Second)
 	require.ErrorIs(t, e, ErrWriteConflict)
 	lb, e := store.Load(ctx, 321)
 	require.NoError(t, e)
 	require.Equal(t, []uint64{11}, lb.Accepted())
+	occupancy.setAcquireErr(nil)
+	calls := occupancy.acquireCount()
+	reply, e := store.Respond(lobbyActor(t, ctx, 22, "seller", 1), 321, 22, true, 1, time.Second)
+	require.NoError(t, e)
+	require.Equal(t, TrialLobbyRespondLaunch, reply.Status)
+	require.Equal(t, calls+1, occupancy.acquireCount(), "同意之前续租")
+	renewed := occupancy.lastAcquire()
+	require.Equal(t, time.Minute+trialOccupancyMargin, renewed.ttl, "续租按邀请时长")
+	requireSameRoster(t, []*pb.GuildTrialRoleIdentity{{PlayerId: 11, Account: "seller", OwnerRevision: 1}, {PlayerId: 22, Account: "seller", OwnerRevision: 1}}, renewed.roster, "续租带大厅原件的全部身份")
+	// 重复同意的结论在事务里出,不再问 match。
+	_, e = store.Respond(lobbyActor(t, ctx, 22, "seller", 1), 321, 22, true, 1, time.Second)
+	require.NoError(t, e)
+	require.Equal(t, calls+1, occupancy.acquireCount())
+}
+
+// 规格 §4:事务提交失败就放开,大厅结束也放开。本库先答的拒绝不走到 match。
+func TestTiDBTrialOccupancyIsReleasedWhenLobbyIsNotCreatedOrEnds(t *testing.T) {
+	ctx, db, repo, activities := guildRoleTiDB(t)
+	seedLobbyOwners(t, ctx, db)
+	actor := lobbyActor(t, ctx, 11, "seller", 1)
+	occupancy := occupancyOf(repo)
+	newStore := func(id uint64) *TrialLobbyRepo {
+		store, e := NewSQLTrialLobbyRepo(repo.rdb, repo, func(context.Context) (uint64, error) { return id, nil })
+		require.NoError(t, e)
+		return store
+	}
+	// 事务里才发现的拒绝(帮会不存在):占用已拿,要放开。
+	_, e := newStore(401).Create(actor, TrialLobbyCreate{GuildID: 999, ActivityID: 3, Roster: []uint64{11, 22}, TTL: time.Minute, NowMs: 1})
+	require.Error(t, e)
+	require.Equal(t, []uint64{401}, occupancy.released())
+
+	// 建房成功不放;发起人取消就放。
+	created, e := newStore(402).Create(actor, TrialLobbyCreate{GuildID: 44, ActivityID: 3, Roster: []uint64{11, 22}, TTL: time.Minute, Cooldown: time.Hour, NowMs: 1})
+	require.NoError(t, e)
+	require.Equal(t, TrialLobbyCreated, created.Status)
+	require.Equal(t, []uint64{401}, occupancy.released())
+
+	// 别的大厅占着、发起人冷却中:本库先答,不问 match。
+	calls := occupancy.acquireCount()
+	busy, e := newStore(403).Create(lobbyActor(t, ctx, 22, "seller", 1), TrialLobbyCreate{GuildID: 44, ActivityID: 3, Roster: []uint64{22, 11}, TTL: time.Minute, NowMs: 1})
+	require.NoError(t, e)
+	require.Equal(t, TrialLobbyMemberBusy, busy.Status)
+	require.Equal(t, calls, occupancy.acquireCount())
+
+	reply, e := newStore(402).Respond(actor, 402, 11, false, 1, time.Second)
+	require.NoError(t, e)
+	require.Equal(t, TrialLobbyRespondDeclined, reply.Status)
+	require.Equal(t, []uint64{401, 402}, occupancy.released())
+
+	cooling, e := newStore(404).Create(actor, TrialLobbyCreate{GuildID: 44, ActivityID: 3, Roster: []uint64{11, 22}, TTL: time.Minute, NowMs: 1})
+	require.NoError(t, e)
+	require.Equal(t, TrialLobbyCooldown, cooling.Status)
+	require.Equal(t, calls, occupancy.acquireCount())
+
+	// 取消证明之后放开。launch 还在途时大厅结束不了,占用也不放。
+	_, e = db.ExecContext(ctx, "UPDATE guild_trial_lobby_slot SET cooldown_until_ms=0")
+	require.NoError(t, e)
+	store := consentedSQLLobby(t, actor, repo, 405, 44, 3, 11, 22)
+	lb, e := store.Load(ctx, 405)
+	require.NoError(t, e)
+	roster, e := store.LoadConsents(ctx, lb)
+	require.NoError(t, e)
+	battle := actTrialKey(actTrialRow(), 900, 44, 11, testNowMs)
+	battle.LaunchRequestID = 405
+	prepared, e := activities.PrepareTrialLaunch(actor, 405, battle, 1, roster, testNowMs)
+	require.NoError(t, e)
+	_, e = store.Finish(ctx, 405, pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_LAUNCHING, pb.GuildTrialLobbyState_GUILD_TRIAL_LOBBY_STATE_ENDED, 0, 0, nil)
+	require.ErrorIs(t, e, ErrWriteConflict)
+	require.Equal(t, []uint64{401, 402}, occupancy.released())
+	require.NoError(t, activities.FinishCancelledTrialLaunch(ctx, prepared, &matchpb.CancelActivityBattleResponse{RequestCancelled: true}, testNowMs+1))
+	require.Equal(t, []uint64{401, 402, 405}, occupancy.released())
+
+	// 结算之后放开:票终局到结算之间,这一行接着挡新入场。
+	store = consentedSQLLobby(t, actor, repo, 406, 44, 3, 11, 22)
+	lb, e = store.Load(ctx, 406)
+	require.NoError(t, e)
+	roster, e = store.LoadConsents(ctx, lb)
+	require.NoError(t, e)
+	battle = actTrialKey(actTrialRow(), 901, 44, 11, testNowMs)
+	battle.LaunchRequestID = 406
+	_, e = activities.PrepareTrialLaunch(actor, 406, battle, 1, roster, testNowMs)
+	require.NoError(t, e)
+	require.NoError(t, activities.RegisterTrialBattle(ctx, battle, testNowMs))
+	require.Equal(t, []uint64{401, 402, 405}, occupancy.released())
+	_, e = activities.SettleTrialBattleTx(ctx, TrialSettleInput{Battle: battle, Activity: actTrialRow(), Candidates: []uint64{11, 22}, NowMs: testNowMs + 2})
+	require.NoError(t, e)
+	require.Equal(t, []uint64{401, 402, 405, 406}, occupancy.released())
+}
+
+// 规格 §4:Acquire 超时时 match 可能已经写了占用,没建成房也要放,不能让这批人等到租约到期。
+func TestTiDBTrialOccupancyIsReleasedWhenAcquireOutcomeIsUnknown(t *testing.T) {
+	ctx, db, repo, _ := guildRoleTiDB(t)
+	seedLobbyOwners(t, ctx, db)
+	actor := lobbyActor(t, ctx, 11, "seller", 1)
+	store, e := NewSQLTrialLobbyRepo(repo.rdb, repo, func(context.Context) (uint64, error) { return 411, nil })
+	require.NoError(t, e)
+	occupancy := occupancyOf(repo)
+	occupancy.setAcquireErr(ErrTrialMatchUnavailable)
+	_, e = store.Create(actor, TrialLobbyCreate{GuildID: 44, ActivityID: 3, Roster: []uint64{11, 22}, TTL: time.Minute, NowMs: 1})
+	require.ErrorIs(t, e, ErrTrialMatchUnavailable)
+	require.Equal(t, []uint64{411}, occupancy.released())
+	var count int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_lobby").Scan(&count))
+	require.Zero(t, count)
+}
+
+// 规格 §4:同意之前的续租排在别人结束大厅之后,把占用又写回去了。同意的事务看到大厅已结束,补一次放开,不留到租约到期。
+func TestTiDBTrialOccupancyIsReleasedWhenRenewalLosesToLobbyEnd(t *testing.T) {
+	ctx, db, repo, _ := guildRoleTiDB(t)
+	seedLobbyOwners(t, ctx, db)
+	initiator := lobbyActor(t, ctx, 11, "seller", 1)
+	store, e := NewSQLTrialLobbyRepo(repo.rdb, repo, func(context.Context) (uint64, error) { return 412, nil })
+	require.NoError(t, e)
+	occupancy := occupancyOf(repo)
+	created, e := store.Create(initiator, TrialLobbyCreate{GuildID: 44, ActivityID: 3, Roster: []uint64{11, 22}, TTL: time.Minute, NowMs: 1})
+	require.NoError(t, e)
+	require.Equal(t, TrialLobbyCreated, created.Status)
+	require.Empty(t, occupancy.released())
+
+	occupancy.beforeAcquire(func() {
+		declined, e := store.Respond(initiator, 412, 11, false, 1, time.Second)
+		require.NoError(t, e)
+		require.Equal(t, TrialLobbyRespondDeclined, declined.Status)
+		require.Equal(t, []uint64{412}, occupancy.released())
+	})
+	reply, e := store.Respond(lobbyActor(t, ctx, 22, "seller", 1), 412, 22, true, 1, time.Second)
+	require.NoError(t, e)
+	require.Equal(t, TrialLobbyRespondNotPending, reply.Status)
+	require.Equal(t, []uint64{412, 412}, occupancy.released(), "续租在第一次放开之后,要补一次")
 }
 
 func TestTiDBTrialOppositeRosterConcurrentUsesUnsignedP(t *testing.T) {
@@ -402,8 +540,8 @@ func TestTiDBTrialOppositeRosterConcurrentUsesUnsignedP(t *testing.T) {
 	require.Equal(t, 1, busy)
 }
 
-func TestTiDBTrialRoutePrefixRejectsBeforeLobbyOrConsentWrite(t *testing.T) {
-	for _, condition := range []string{"frozen_route", "missing_route"} {
+func TestTiDBTrialRoleFencePrefixRejectsBeforeLobbyOrConsentWrite(t *testing.T) {
+	for _, condition := range []string{"frozen_role", "missing_role"} {
 		t.Run(condition, func(t *testing.T) {
 			ctx, db, repo, _ := guildRoleTiDB(t)
 			seedLobbyOwners(t, ctx, db)
@@ -411,14 +549,15 @@ func TestTiDBTrialRoutePrefixRejectsBeforeLobbyOrConsentWrite(t *testing.T) {
 			store, e := NewSQLTrialLobbyRepo(repo.rdb, repo, func(context.Context) (uint64, error) { return 381, nil })
 			require.NoError(t, e)
 			switch condition {
-			case "frozen_route":
-				_, e = db.ExecContext(ctx, "UPDATE player_route SET storage_id=1,placement_version=1,frozen_run_id='guild-it-maintenance' WHERE player_id=22")
-			case "missing_route":
-				_, e = db.ExecContext(ctx, "DELETE FROM player_route WHERE player_id=22")
+			case "frozen_role":
+				fencetest.Update(t, ctx, db, 22, "seller", 1, 901)
+			case "missing_role":
+				_, e = db.ExecContext(ctx, "DELETE FROM role_fence WHERE player_id=22")
+				require.NoError(t, e)
 			}
-			require.NoError(t, e)
 			_, e = store.Create(actor, TrialLobbyCreate{GuildID: 44, ActivityID: 3, Roster: []uint64{11, 22}, TTL: time.Minute, NowMs: 1})
-			require.Error(t, e)
+			require.ErrorIs(t, e, ErrWriteConflict)
+			require.Equal(t, []uint64{381}, occupancyOf(repo).released(), "占用已拿,房间没建成要放开")
 			var count int
 			require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_trial_lobby").Scan(&count))
 			require.Zero(t, count)

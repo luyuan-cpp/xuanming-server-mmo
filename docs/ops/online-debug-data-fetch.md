@@ -10,10 +10,10 @@
 |---|---|---|
 | scene 进程内存(ECS) | 在线玩家的真实最新态 | 只能等玩家下线、最终存盘后再拉 |
 | 落点库 `player_store` | 写权行(kind 0:代次、序号、世代、持有者)和 5 个数据行(kHot、kAsset、kGrowth、kProfile、kLegacy1) | 周期存盘最多落后内存约 300 秒;资产操作和关键事件立存 |
-| 全局库 `player_route` | 归属区、落点、冻结状态 | 强一致,没有缓存副本 |
-| 全局库 `account_role` | 角色归属的账号 | 强一致 |
-| 全局库 `player_snapshot` | 登录、登出时拍的快照 | 历史对比用 |
-| 全局库 `transaction_log` | 货币、物品流水(按 `from_player`、`to_player`) | 「东西丢了」的主要凭证;投递失败不阻塞玩法,可能有缺口 |
+| 目录 `player_route`(玩家所在的片) | 归属区、落点 | 强一致,没有缓存副本 |
+| 目录 `account_role`(玩家所在的片) | 角色归属的账号 | 强一致 |
+| 流水库 `player_snapshot` | 登录、登出时拍的快照 | 历史对比用 |
+| 流水库 `transaction_log` | 货币、物品流水(按 `from_player`、`to_player`) | 「东西丢了」的主要凭证;投递失败不阻塞玩法,可能有缺口 |
 
 玩家存档不在 Redis,没有 Redis 键要导出。
 
@@ -23,6 +23,7 @@
 - 导出包含完整存档和账号名。文件权限 0600,不要放进仓库或工单附件,用完删除。
 - `debug_fetch` 用 `authoritysql` 的 Reader 权限打开连接,只发固定的 SELECT。
 - DSN 只从环境变量取(`-dsn-env` 给变量名),工具不打印,解析失败的错误也不带原文。
+- 库搬过集群时设 `MMORPG_DB_PLACEMENT`,工具按映射连,见[搬库手册](db-move-runbook.md) §2。
 
 ## 3. 导出
 
@@ -37,7 +38,8 @@ go run ./cmd/debug_fetch -dsn-env DBG_TIDB_DSN -player <player_id> -reason "<工
 
 | 参数 | 说明 |
 |---|---|
-| `-global-db` | 全局库名,默认 `mmorpg_global` |
+| `-global-db` | 目录基名(`SnapshotMySQL.DBName`),默认 `mmorpg_global`。流水库是 `<基名>_ledger` |
+| `-logical-shards` | 目录分片数(`Directory.LogicalShards`),默认 1。配错会读到别的片,报「没有路由」 |
 | `-limit` | 快照和流水最多导多少行,默认 20 |
 | `-timeout` | 总超时,默认 1 分钟 |
 | `-skip-global` | 只导路由和存档 |
@@ -81,7 +83,7 @@ go run ./cmd/debug_import -dsn-env DBG_LOCAL_DSN -file D:\secure\player-<player_
 
 限制:
 
-- 只导存档。好友、公会、邮件、交易、收件箱等其他服务的数据不导;角色名以全局库 `player_name` 为准,显示可能和存档里的副本不同。
+- 只导存档。好友、公会、邮件、交易、收件箱等其他服务的数据不导;角色名以目录 `player_name` 为准,显示可能和存档里的副本不同。
 - 存档里的物品 ID 是线上发的,和本地发号器理论上可能重复,复现问题时可以忽略,不要拿导入后的本地库做资产验证。
 - 不写 `player_snapshot` 和 `transaction_log`。
 

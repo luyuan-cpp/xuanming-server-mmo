@@ -12,7 +12,15 @@ import (
 
 // PrepareJoin先持久原请求、原票和一次性观战退出原件，再允许发送Remove。
 // 非空state0票是待提交占用；Cancel或成功Join才能释放，TTL不冒充远端取消证明。
-func (s *Store) PrepareJoin(ctx context.Context, offered *pb.MatchAuthorityTicketRecord, request *pb.JoinQueueRequest, binding string) (*pb.MatchAuthorityTicketRecord, *pb.MatchSpectatorRecord, bool, error) {
+func (s *Store) PrepareJoin(ctx context.Context, offered *pb.MatchAuthorityTicketRecord, request *pb.JoinQueueRequest, binding string) (ticket *pb.MatchAuthorityTicketRecord, exit *pb.MatchSpectatorRecord, pending bool, err error) {
+	err = s.Fenced(ctx, func() (e error) {
+		ticket, exit, pending, e = s.prepareJoinOnce(ctx, offered, request, binding)
+		return e
+	})
+	return ticket, exit, pending, err
+}
+
+func (s *Store) prepareJoinOnce(ctx context.Context, offered *pb.MatchAuthorityTicketRecord, request *pb.JoinQueueRequest, binding string) (*pb.MatchAuthorityTicketRecord, *pb.MatchSpectatorRecord, bool, error) {
 	if offered == nil || request == nil || offered.RequestId != request.RequestId || offered.PlayerId == 0 || offered.Ticket == "" {
 		return nil, nil, false, ErrOriginalPlayer
 	}

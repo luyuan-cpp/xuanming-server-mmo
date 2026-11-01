@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 	dbpb "proto/common/database"
 	"shared/authoritysql"
-	"shared/placement"
 )
 
 // TestChatTiDBLeastPrivilegeRuntimeContract只使用本例随机库、角色和用户。
@@ -31,17 +30,17 @@ func TestChatTiDBLeastPrivilegeRuntimeContract(t *testing.T) {
 	s, fixture := nativeStoreFixture(t, true)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	admin, err := fixture.OpenSchema(ctx, s.roleSchema)
-	chatPrivilegeNoError(t, "取得本例安装能力", err)
-	var chatSchema string
-	chatPrivilegeNoError(t, "读取本例库名", admin.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&chatSchema))
+	chatSchema := storeSchema(t, s)
 	require.Regexp(t, `^chat_it_[0-9a-f]{32}$`, chatSchema)
-	require.Equal(t, chatSchema, s.roleSchema)
+	admin, err := fixture.OpenSchema(ctx, chatSchema)
+	chatPrivilegeNoError(t, "取得本例安装能力", err)
 
+	// 聊天的身份校验走目录 RPC,运行账号对全局库没有任何权限。这张表只为证明这一点,不是正式目录的形状。
 	globalSchema := chatSchema + "_global"
 	globalAdmin, err := fixture.OpenSchema(ctx, globalSchema)
 	chatPrivilegeNoError(t, "取得本例全局目录安装能力", err)
-	loadFormalRoleFixtures(t, ctx, globalAdmin)
+	chatPrivilegeNoError(t, "预建全局归属替身表", chatPrivilegeExec(ctx, globalAdmin, "CREATE TABLE account_role(player_id BIGINT UNSIGNED PRIMARY KEY,owner_revision BIGINT UNSIGNED NOT NULL)"))
+	chatPrivilegeNoError(t, "写入全局归属替身行", chatPrivilegeExec(ctx, globalAdmin, "INSERT INTO account_role(player_id,owner_revision) VALUES(11,7)"))
 	chatPrivilegeNoError(t, "预建自有主体原件表", chatPrivilegeExec(ctx, admin, "CREATE TABLE __chat_privilege_owner(kind VARBINARY(16) NOT NULL,name VARBINARY(64) NOT NULL,owner_nonce BINARY(32) NOT NULL,physical_sha256 BINARY(32) NOT NULL,PRIMARY KEY(kind,name))"))
 	runtimeRole := chatPrivilegeUUID(t)
 	migrationRole := chatPrivilegeUUID(t)
@@ -56,12 +55,12 @@ func TestChatTiDBLeastPrivilegeRuntimeContract(t *testing.T) {
 	chatPrivilegeCreateUser(t, ctx, admin, runtimeUser, runtimePassword, runtimeRole)
 	chatPrivilegeCreateUser(t, ctx, admin, migrationUser, migrationPassword, migrationRole)
 
-	runtimePermission := chatPrivilegeWriter(t, ctx, fixture, runtimeUser)
+	runtimePermission := chatPrivilegeWriter(t, ctx, fixture, chatSchema, runtimeUser)
 	runtimeDB := chatPrivilegeOpen(t, ctx, runtimeUser, runtimePassword, chatSchema, false, runtimePermission)
 	migrationDB := chatPrivilegeOpen(t, ctx, migrationUser, migrationPassword, chatSchema, true, authoritysql.Schema(migrationUser+"@%"))
 	chatPrivilegeDefaultRole(t, ctx, runtimeDB, runtimeRole)
 	chatPrivilegeDefaultRole(t, ctx, migrationDB, migrationRole)
-	limited, err := New(ctx, runtimeDB, globalSchema, authoritysql.BackendTiDB, s.rules)
+	limited, err := New(ctx, runtimeDB, s.states, authoritysql.BackendTiDB, s.rules)
 	chatPrivilegeNoError(t, "有限业务账号启动权威存储", err)
 	originalContext, cancelOriginal := context.WithTimeout(original(t, 11), 90*time.Second)
 	defer cancelOriginal()
@@ -75,13 +74,10 @@ func TestChatTiDBLeastPrivilegeRuntimeContract(t *testing.T) {
 	require.True(t, replayed.Duplicate)
 	require.Len(t, pull(t, limited, originalContext, 22), 1)
 	require.Equal(t, 1, count(t, limited))
-	// 运行期对角色目录和路由只有普通读,不持锁(actor_verify.go);发送原件只增不改,判重也是普通读。
-	// 显式用有限账号证明这三条读,而非用管理员的New/Send/Pull替代。
+	// 发送原件只增不改,判重是普通读。显式用有限账号证明这条读,而非用管理员的New/Send/Pull替代。
 	var revision uint64
-	chatPrivilegeNoError(t, "有限业务账号普通读角色目录", runtimeDB.QueryRowContext(ctx,
+	chatPrivilegeDenied(t, "业务账号读不到全局归属", runtimeDB.QueryRowContext(ctx,
 		"SELECT owner_revision FROM `"+globalSchema+"`.account_role WHERE player_id=11").Scan(&revision))
-	require.EqualValues(t, 7, revision)
-	chatPrivilegeNoError(t, "有限业务账号普通读路由", placement.CheckRoleRoute(ctx, runtimeDB, globalSchema, 11))
 	var originalBytes []byte
 	chatPrivilegeNoError(t, "有限业务账号读原发送收据", runtimeDB.QueryRowContext(ctx,
 		"SELECT request_payload FROM chat_send_authority WHERE player_id=11 AND request_id=?", []byte(in.RequestId)).Scan(&originalBytes))
@@ -135,7 +131,7 @@ func TestChatTiDBLeastPrivilegeRuntimeContract(t *testing.T) {
 		chatPrivilegeDenied(t, "有限迁移账号不得越界DDL或写业务/全局归属", err)
 	}
 
-	afterCreate, err := New(ctx, runtimeDB, globalSchema, authoritysql.BackendTiDB, s.rules)
+	afterCreate, err := New(ctx, runtimeDB, s.states, authoritysql.BackendTiDB, s.rules)
 	chatPrivilegeNoError(t, "迁移后有限业务账号重新启动", err)
 	accepted, err := afterCreate.Send(originalContext, sendRequest("least-privilege-after-create", 22))
 	chatPrivilegeNoError(t, "真正CREATE后有限业务账号发言", err)
@@ -334,34 +330,36 @@ func chatPrivilegeRecordOwner(t *testing.T, ctx context.Context, admin *sql.DB, 
 }
 
 // 模板runtime账号拥有独立正式writer资格；只增加authority锁所需权限，保留业务最小权限矩阵。
-func chatPrivilegeWriter(t *testing.T, ctx context.Context, fixture *sqltest.Fixture, user string) authoritysql.Permission {
+func chatPrivilegeWriter(t *testing.T, ctx context.Context, fixture *sqltest.Fixture, schema, user string) authoritysql.Permission {
 	t.Helper()
 	require.Regexp(t, "^[0-9a-f]{32}$", user)
-	opts, err := sqltest.OptionsFromEnv(fixture.DSN(fixture.Config.AuthoritySchema()), fixture.Config.AuthoritySchema(), fixture.Config.ProtectedSchemas()...)
+	opts, err := sqltest.OptionsFromEnv(fixture.DSN(schema), schema)
 	require.NoError(t, err)
 	for _, table := range []string{"route_meta", "writer_registry", "writer_slot", "writer_lifecycle_receipt", "sql_writer_drain_run", "sql_writer_freeze_ticket", "sql_writer_maintenance_receipt"} {
-		chatPrivilegeNoError(t, "授予正式authority只读原件", chatPrivilegeExec(ctx, fixture.Schema, "GRANT SELECT ON "+fixture.Config.AuthoritySchema()+"."+table+" TO '"+user+"'@'%'"))
+		chatPrivilegeNoError(t, "授予正式authority只读原件", chatPrivilegeExec(ctx, fixture.Schema, "GRANT SELECT ON "+schema+"."+table+" TO '"+user+"'@'%'"))
 	}
 	if opts.LockPrimitive == dbpb.SqlWriterBootGrant_LOCK_TOUCH {
-		chatPrivilegeNoError(t, "授予已核最小锁列", chatPrivilegeExec(ctx, fixture.Schema, "GRANT UPDATE(lock_touch) ON "+fixture.Config.AuthoritySchema()+".writer_slot TO '"+user+"'@'%'"))
+		chatPrivilegeNoError(t, "授予已核最小锁列", chatPrivilegeExec(ctx, fixture.Schema, "GRANT UPDATE(lock_touch) ON "+schema+".writer_slot TO '"+user+"'@'%'"))
 	}
 	var writerID, instance, requestID, grantID [16]byte
 	for _, value := range [][]byte{writerID[:], instance[:], requestID[:], grantID[:]} {
 		_, err = rand.Read(value)
 		require.NoError(t, err)
 	}
-	meta, err := fixture.Catalog.CurrentMeta(ctx)
+	catalog, err := fixture.CatalogFor(schema)
+	require.NoError(t, err)
+	meta, err := catalog.CurrentMeta(ctx)
 	require.NoError(t, err)
 	deployment := "chat-privilege-" + hex.EncodeToString(instance[:])
-	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Config.Generation(), SqlPrincipal: []byte(user + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli())}
-	request := &dbpb.SqlWriterLifecycleReceipt_Request{RequestId: requestID[:], Kind: dbpb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedEpoch: meta.WriterEpoch, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: fixture.Config.AuthoritySchema(), ProtectedSchemas: fixture.Config.ProtectedSchemas(), DeploymentDigest: opts.PhysicalAuthoritySHA256, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
+	writer := &dbpb.SqlWriterRegistry{WriterKey: writerID[:], InstanceId: instance[:], Generation: fixture.Generation, SqlPrincipal: []byte(user + "@%"), State: dbpb.SqlWriterRegistry_ACTIVE, RegisteredMs: uint64(time.Now().UnixMilli())}
+	request := &dbpb.SqlWriterLifecycleReceipt_Request{RequestId: requestID[:], Kind: dbpb.SqlWriterLifecycleReceipt_REGISTER, Writer: writer, ExpectedCatalogRevision: meta.CatalogRevision, AuthoritySchema: schema, ProtectedSchemas: []string{schema}, DeploymentDigest: opts.PhysicalAuthoritySHA256, DeploymentId: deployment, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
 	request, err = authoritysql.CanonicalRegistrationRequest(request)
 	require.NoError(t, err)
-	_, err = fixture.Catalog.Register(ctx, request)
+	_, err = catalog.Register(ctx, request)
 	require.NoError(t, err)
 	writer = request.Writer
-	grant := &dbpb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: writerID[:], InstanceId: instance[:], Generation: writer.Generation, AuthoritySchema: fixture.Config.AuthoritySchema(), ProtectedSchemas: fixture.Config.ProtectedSchemas(), SqlPrincipal: writer.SqlPrincipal, RegistrationDigest: writer.RegistrationDigest, DeploymentId: deployment, GrantId: grantID[:], GrantedMs: writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: opts.PhysicalAuthoritySHA256, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
-	raw, err := protojson.Marshal(grant)
+	grant := &dbpb.SqlWriterBootGrant{Format: "SQL_WRITER_BOOT_V1", WriterKey: writerID[:], InstanceId: instance[:], Generation: writer.Generation, AuthoritySchema: schema, ProtectedSchemas: []string{schema}, SqlPrincipal: writer.SqlPrincipal, RegistrationDigest: writer.RegistrationDigest, DeploymentId: deployment, GrantId: grantID[:], GrantedMs: writer.RegisteredMs, Permission: "NORMAL", PhysicalAuthoritySha256: opts.PhysicalAuthoritySHA256, LockPrimitive: opts.LockPrimitive, LockQualificationSha256: opts.LockQualificationSHA256}
+	raw, err := protojson.Marshal(&dbpb.SqlWriterBootGrantSet{Format: authoritysql.GrantSetFormat, Grants: []*dbpb.SqlWriterBootGrant{grant}})
 	require.NoError(t, err)
 	sum := sha256.Sum256(raw)
 	directory := t.TempDir()

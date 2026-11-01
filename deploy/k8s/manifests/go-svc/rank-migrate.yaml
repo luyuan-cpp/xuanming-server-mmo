@@ -1,3 +1,4 @@
+# 只迁结构。DSN 的账号是 schema 主体，和 Add-SchemaPermissionManifest 注入的 MMORPG_SQL_SCHEMA_PRINCIPAL 出自同一个 schemaPermissionSecret（键 dsn、principal），占位由它替换。
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -25,7 +26,7 @@ spec:
           env:
             - name: MMORPG_RANK_SQL_DSN
               valueFrom:
-                secretKeyRef: {name: domain-service-secrets, key: rank-sql-dsn, optional: false}
+                secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false}
           resources:
             requests: {cpu: 100m, memory: 128Mi}
             limits: {cpu: 1000m, memory: 512Mi}

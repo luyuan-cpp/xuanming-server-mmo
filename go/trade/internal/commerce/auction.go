@@ -51,7 +51,7 @@ func (e *Engine) acceptBid(ctx context.Context, bidID uint64) error {
 	if parentErr == nil {
 		parentSeller, parentBuyer = parent.SellerPlayerId, parent.BuyerPlayerId
 	}
-	return e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+	return e.roleTx(ctx, func(tx *sql.Tx) error {
 		if err := e.lockRoles(ctx, tx, 0, candidate.SellerPlayerId, parentSeller, parentBuyer); err != nil {
 			return err
 		}

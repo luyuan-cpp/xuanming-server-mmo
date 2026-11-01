@@ -229,7 +229,12 @@ func (s *Store) ReadyAfter(ctx context.Context, afterMs, afterPlayer uint64) ([]
 
 // ReleaseCompletedReady 只认已归档且校验完整的本玩家结算原件，不使用客户端
 // 状态、缓存或超时猜测房间结束。原角色P锁先于票锁；旧巡检不能释放新一轮票。
-func (s *Store) ReleaseCompletedReady(ctx context.Context, observed *pb.MatchAuthorityTicketRecord) (bool, error) {
+func (s *Store) ReleaseCompletedReady(ctx context.Context, observed *pb.MatchAuthorityTicketRecord) (released bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { released, e = s.releaseCompletedReadyOnce(ctx, observed); return e })
+	return released, err
+}
+
+func (s *Store) releaseCompletedReadyOnce(ctx context.Context, observed *pb.MatchAuthorityTicketRecord) (bool, error) {
 	if observed == nil || observed.State != 3 || observed.FormationId == 0 || observed.Ticket == "" {
 		return false, nil
 	}

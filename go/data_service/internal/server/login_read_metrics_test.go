@@ -62,6 +62,8 @@ func TestDirectoryRPCResultFollowsDirectoryErrorMapping(t *testing.T) {
 		{"conflict", directoryError(accountdirectory.ErrConflict), metrics.AccountDirectoryResultRejected},
 		{"unavailable", directoryError(accountdirectory.ErrUnavailable), metrics.AccountDirectoryResultError},
 		{"sql failure", directoryError(errors.New("SQL 依赖失败")), metrics.AccountDirectoryResultError},
+		{"not committed", directoryError(accountdirectory.ErrNotCommitted), metrics.AccountDirectoryResultError},
+		{"retry later", directoryError(accountdirectory.ErrRetryLater), metrics.AccountDirectoryResultError},
 		{"directory unready", unready.admitDirectory(context.Background(), "ReadAccountDirectory", unsigned), metrics.AccountDirectoryResultError},
 		{"bad proof", ready.admitDirectory(context.Background(), "ReadAccountDirectory", unsigned), metrics.AccountDirectoryResultRejected},
 		{"caller canceled", status.FromContextError(context.Canceled).Err(), metrics.AccountDirectoryResultError},

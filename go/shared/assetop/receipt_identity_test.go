@@ -19,10 +19,20 @@ func identityReceiptFixture(op Op) *componentpb.AssetOpReceipt {
 		caller = "trade"
 	case assetpb.AssetOpStream_ASSET_OP_STREAM_SYSTEM_CREDIT:
 		caller = "mail"
+	case assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL:
+		caller = "data_service"
 	}
 	req.Auth = &assetpb.AssetOpAuth{Caller: caller}
 	digest := sha256.Sum256(Canonical(RPCDebit, req, 0))
-	return &componentpb.AssetOpReceipt{Seq: op.Seq, CorrelationId: op.CorrelationID, RequestDigest: digest[:]}
+	receipt := &componentpb.AssetOpReceipt{Seq: op.Seq, CorrelationId: op.CorrelationID, RequestDigest: digest[:]}
+	if op.Stream == assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL {
+		// 回收的已应用结局要有明细才能终结。testOp 的包是一条货币。
+		currency := op.Bundle.GetCurrencies()[0]
+		receipt.Snapshot = &assetpb.AssetSnapshot{RecallLines: []*assetpb.AssetRecallLine{{
+			CurrencyType: currency.GetCurrencyType(), Requested: currency.GetAmount(), Taken: currency.GetAmount(),
+		}}}
+	}
+	return receipt
 }
 
 func TestSQLProofBindsEveryOutcomeToOriginalRequest(t *testing.T) {
@@ -32,6 +42,7 @@ func TestSQLProofBindsEveryOutcomeToOriginalRequest(t *testing.T) {
 		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT,
 		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_CREDIT,
 		assetpb.AssetOpStream_ASSET_OP_STREAM_SYSTEM_CREDIT,
+		assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL,
 	} {
 		for _, applied := range []bool{true, false} {
 			op := testOp(1)

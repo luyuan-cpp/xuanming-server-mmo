@@ -45,9 +45,6 @@ LeaseTTL: 60
 # 必须是顶层单行:-Zone 的端口位移正则只认这个形状。指标清单见 internal/metrics/metrics.go(前缀 player_inbox_)。
 MetricsListenAddr: ":9270"
 
-# 与data_service目录共用同一个TiDB物理入口；无Redis归属回填。
-AccountRoleSchema: testdb
-
 # RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。留空 = 默认 /mmorpg/killswitch/。
 KillSwitchPrefix: ""
 

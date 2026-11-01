@@ -177,6 +177,66 @@ func TestDBRouteSourceErrorsAreErrors(t *testing.T) {
 	}
 }
 
+// 分片:活区取各片的最小值,玩家数求和,点查只问玩家所在的片,任一片失败都不能算没有。
+func TestShardedRouteTable(t *testing.T) {
+	one, two := zonePtr(3), zonePtr(7)
+	shards := []routeTable{
+		&fakeRouteTable{homes: map[uint64]*uint32{4: two}},
+		&fakeRouteTable{homes: map[uint64]*uint32{1: one, 5: nil}},
+	}
+	src := dbRouteSource{t: shardedRouteTable{shards: shards}, dbName: "base"}
+	zones, _, err := src.LiveZones(context.Background())
+	if err != nil || fmt.Sprint(sortedKeys(zones)) != "[3 7]" {
+		t.Fatalf("zones = %v, %v", sortedKeys(zones), err)
+	}
+	if n, err := src.CountPlayers(context.Background()); err != nil || n != 2 {
+		t.Fatalf("count = %d, %v", n, err)
+	}
+	for id, want := range map[uint64]bool{1: true, 4: true, 5: false, 3: false} {
+		if has, err := src.HasHome(context.Background(), id); err != nil || has != want {
+			t.Errorf("HasHome(%d) = %v, %v; want %v", id, has, err, want)
+		}
+	}
+	boom := errors.New("Error 2013: lost connection")
+	broken := dbRouteSource{t: shardedRouteTable{shards: []routeTable{
+		shards[0],
+		&fakeRouteTable{countErr: boom, errOn: boom, next: func(uint64) (uint32, bool, error) { return 0, false, boom }},
+	}}}
+	if _, _, err := broken.LiveZones(context.Background()); !errors.Is(err, boom) {
+		t.Fatalf("LiveZones = %v", err)
+	}
+	if _, err := broken.CountPlayers(context.Background()); !errors.Is(err, boom) {
+		t.Fatalf("CountPlayers = %v", err)
+	}
+	if _, err := broken.HasHome(context.Background(), 1); !errors.Is(err, boom) {
+		t.Fatalf("HasHome = %v", err)
+	}
+}
+
+// 分片规则的金样,和 go/shared/dirshard 的 TestSlotOfPlayerGoldenValues 同一组值。
+func TestRouteShardRulesMirrorDirshard(t *testing.T) {
+	for k, want := range map[int]bool{0: false, -1: false, 1: true, 2: true, 3: false, 4: true, 64: true, 128: false} {
+		if routeShardsValid(k) != want {
+			t.Errorf("routeShardsValid(%d) = %v", k, !want)
+		}
+	}
+	if got := routeShardDBName("mmorpg_global", 0, 1); got != "mmorpg_global" {
+		t.Errorf("K=1 keeps the base name: %q", got)
+	}
+	if got := routeShardDBName("mmorpg_global", 7, 64); got != "mmorpg_global_07" {
+		t.Errorf("K=64 slot 7: %q", got)
+	}
+	if got := routeSlotOfPlayer(130, 64); got != 2 {
+		t.Errorf("player 130 of 64: %d", got)
+	}
+	if got := routeSlotOfPlayer(130, 4); got != 2 {
+		t.Errorf("player 130 of 4: %d", got)
+	}
+	if got := routeSlotOfPlayer(130, 1); got != 0 {
+		t.Errorf("player 130 of 1: %d", got)
+	}
+}
+
 func TestDBRouteSourceHasHome(t *testing.T) {
 	src := dbRouteSource{t: &fakeRouteTable{homes: map[uint64]*uint32{1: zonePtr(3), 2: nil}}}
 	for id, want := range map[uint64]bool{1: true, 2: false, 3: false} {
@@ -418,6 +478,20 @@ func TestMirroredRouteConstantsMatchSources(t *testing.T) {
 		t.Fatalf("placement.RouteRowShards = %q, mirrored routeRowShards = %d", found, routeRowShards)
 	}
 
+	dirshard, err := os.ReadFile("../../go/shared/dirshard/dirshard.go")
+	if err != nil {
+		t.Fatalf("read shared/dirshard/dirshard.go: %v", err)
+	}
+	for _, want := range []string{
+		"Slots%k != 0",
+		`fmt.Sprintf("%s_%02d", base, slot)`,
+		"int(placement.RouteRowShard(id)) % k",
+	} {
+		if !strings.Contains(string(dirshard), want) {
+			t.Errorf("shared/dirshard no longer contains %q: update route_source.go together with it", want)
+		}
+	}
+
 	schema, err := os.ReadFile("../../go/data_service/internal/store/schema.go")
 	if err != nil {
 		t.Fatalf("read data_service store/schema.go: %v", err)
@@ -575,9 +649,14 @@ func TestPlayerHomeZoneUsesGlobalSQLRoleLinkage(t *testing.T) {
 				}
 				return []string{"total", "bad"}, [][]driver.Value{{tc.total, tc.bad}}, nil
 			})
-			r := checkPlayerHomeZoneVsAccount(context.Background(), runConfig{accountDB: db, routes: &fakeRoutes{count: tc.total}})
+			r := checkPlayerHomeZoneVsAccount(context.Background(), runConfig{accountDBs: []*sql.DB{db}, routes: &fakeRoutes{count: tc.total}})
 			if r.Severity != tc.severity || r.BadCount != tc.bad || r.TotalCount != tc.total {
 				t.Fatalf("result=%+v", r)
+			}
+			// 路由行和角色行都按玩家分片,各片各算各的,结果求和。
+			r = checkPlayerHomeZoneVsAccount(context.Background(), runConfig{accountDBs: []*sql.DB{db, db}, routes: &fakeRoutes{count: tc.total}})
+			if r.Severity != tc.severity || r.BadCount != 2*tc.bad || r.TotalCount != 2*tc.total {
+				t.Fatalf("two shards: result=%+v", r)
 			}
 		})
 	}
@@ -588,7 +667,7 @@ func TestPlayerHomeZoneMissingGlobalHandleAndSQLFailureAreVisible(t *testing.T) 
 		t.Fatalf("missing global handle=%+v", r)
 	}
 	db, _ := openFakeSQL(t, func(string, []any) ([]string, [][]driver.Value, error) { return nil, nil, errors.New("SQL down") })
-	r = checkPlayerHomeZoneVsAccount(context.Background(), runConfig{accountDB: db, routes: &fakeRoutes{}})
+	r = checkPlayerHomeZoneVsAccount(context.Background(), runConfig{accountDBs: []*sql.DB{db}, routes: &fakeRoutes{}})
 	if r.Severity != "fail" || !strings.Contains(r.SampleNotes, "SQL down") {
 		t.Fatalf("dependency failure=%+v", r)
 	}

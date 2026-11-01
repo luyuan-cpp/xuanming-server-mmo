@@ -91,7 +91,7 @@ func TestJoinTiDBPreparedCancellationAndOwnerABARejectLateCompletion(t *testing.
 	request, offered = spectatorJoinRequest(t, f)
 	prepared, _, _, err = f.store.PrepareJoin(f.actor, offered, request, "spectator-bound")
 	require.NoError(t, err)
-	_, err = f.store.DB.ExecContext(f.actor, "UPDATE account_role SET owner_revision=9 WHERE player_id=11")
+	_, err = f.store.DB.ExecContext(f.actor, "UPDATE role_fence SET owner_revision=9,version=version+1 WHERE player_id=11")
 	require.NoError(t, err)
 	_, _, err = f.store.Join(f.actor, prepared, request.NetworkPlanId, "spectator-bound")
 	require.ErrorIs(t, err, ErrOriginalPlayer)

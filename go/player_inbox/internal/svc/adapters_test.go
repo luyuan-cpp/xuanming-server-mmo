@@ -8,8 +8,13 @@ import (
 
 	"player_inbox/internal/config"
 
+	base "proto/common/base"
 	componentpb "proto/common/component"
 	dspb "proto/data_service"
+
+	"shared/accountdirectory"
+	"shared/rolefence"
+	"shared/serviceauth"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -23,6 +28,18 @@ type fakeDataService struct {
 	homeZoneErr error
 	ledger      *dspb.GetPlayerInboxLedgerResponse
 	ledgerErr   error
+
+	admissionIn    *dspb.VerifyRoleAdmissionRequest
+	admissionValid bool
+	admissionErr   error
+}
+
+func (f *fakeDataService) VerifyRoleAdmission(_ context.Context, in *dspb.VerifyRoleAdmissionRequest, _ ...grpc.CallOption) (*dspb.VerifyRoleAdmissionResponse, error) {
+	f.admissionIn = in
+	if f.admissionErr != nil {
+		return nil, f.admissionErr
+	}
+	return &dspb.VerifyRoleAdmissionResponse{Valid: f.admissionValid}, nil
 }
 
 func (f *fakeDataService) GetPlayerHomeZone(context.Context, *dspb.GetPlayerHomeZoneRequest, ...grpc.CallOption) (*dspb.GetPlayerHomeZoneResponse, error) {
@@ -96,4 +113,40 @@ func TestBuildDSNPinsSessionSettings(t *testing.T) {
 
 func configMySQL() config.MySQLConf {
 	return config.MySQLConf{Host: "127.0.0.1:3306", User: "appuser", Password: "secret-pass", DBName: "mmorpg_player_inbox"}
+}
+
+// TestRoleAdmissionVerifier 钉住收件箱用的入场登记校验:请求带 player_inbox 的调用证明,false 不是错误,RPC 失败是错误(不能当成登记失效)。
+func TestRoleAdmissionVerifier(t *testing.T) {
+	secret := strings.Repeat("i", 32)
+	admission := &base.RoleAdmissionIdentity{PlayerId: 11, OwnerRevision: 1}
+	ds := &fakeDataService{admissionValid: true}
+	a, err := rolefence.NewAdmissionVerifier(ds, RoleFenceCaller, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, err := a.VerifyRoleAdmission(context.Background(), admission)
+	if err != nil || !valid {
+		t.Fatalf("valid=%v err=%v", valid, err)
+	}
+	auth, err := serviceauth.New(map[string]string{RoleFenceCaller: secret})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if caller, err := auth.Verify(context.Background(), accountdirectory.MethodPrefix+"VerifyRoleAdmission", ds.admissionIn); err != nil || caller != RoleFenceCaller {
+		t.Fatalf("调用证明 caller=%q err=%v", caller, err)
+	}
+	ds.admissionValid = false
+	if valid, err = a.VerifyRoleAdmission(context.Background(), admission); err != nil || valid {
+		t.Fatalf("登记失效是 false,不是错误: valid=%v err=%v", valid, err)
+	}
+	ds.admissionErr = status.Error(codes.Unavailable, "down")
+	if _, err = a.VerifyRoleAdmission(context.Background(), admission); !errors.Is(err, rolefence.ErrUnavailable) {
+		t.Fatalf("RPC 失败必须报不可用: %v", err)
+	}
+	if _, err = rolefence.NewAdmissionVerifier(nil, RoleFenceCaller, secret); err == nil {
+		t.Fatal("未装配客户端必须报错")
+	}
+	if _, err = rolefence.NewAdmissionVerifier(ds, RoleFenceCaller, "short"); err == nil {
+		t.Fatal("密钥不合法必须报错")
+	}
 }

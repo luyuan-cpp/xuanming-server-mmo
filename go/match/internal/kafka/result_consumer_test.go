@@ -3,10 +3,12 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	kafkapb "proto/contracts/kafka"
+	"shared/authoritysql"
 	"testing"
 	"time"
 )
@@ -50,6 +52,29 @@ func TestGlobalResultsNeverCommitAfterSqlRetryBudgetIsExhausted(t *testing.T) {
 	require.Equal(t, 1, r.fetched)
 	require.Zero(t, r.committed)
 }
+
+// 闸门冻结是搬库窗口:确定没写,不占重试次数,否则窗口稍长消费者就停了。
+func TestProcessResultRecordFrozenGateDoesNotUseAttempts(t *testing.T) {
+	body, e := proto.Marshal(&kafkapb.BattleResultEvent{BattleId: 7})
+	require.NoError(t, e)
+	attempts := 0
+	err := processResultRecord(context.Background(), kafkago.Message{Value: body}, func(context.Context, *kafkapb.BattleResultEvent) error {
+		attempts++
+		if attempts <= resultHandleMaxAttempts+2 {
+			return fmt.Errorf("commit: %w", authoritysql.ErrWriterFrozen)
+		}
+		return nil
+	}, func(context.Context, time.Duration) bool { return true }, noArchive)
+	require.NoError(t, err)
+	require.Equal(t, resultHandleMaxAttempts+3, attempts)
+
+	// 预算用完(等待返回 false)就停,错误带着冻结和超时,不算确定没写:消费者的 owner 按未知处理。
+	err = processResultRecord(context.Background(), kafkago.Message{Value: body}, func(context.Context, *kafkapb.BattleResultEvent) error {
+		return authoritysql.ErrWriterFrozen
+	}, func(context.Context, time.Duration) bool { return false }, noArchive)
+	require.ErrorIs(t, err, authoritysql.ErrWriterFrozen)
+}
+
 func TestGlobalResultsRetrySameMessageAndCommitOnlyAfterSuccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

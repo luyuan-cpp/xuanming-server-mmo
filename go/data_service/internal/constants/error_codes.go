@@ -8,10 +8,28 @@ const (
 	ErrCodeSnapshotDBError uint32 = 11 // MySQL error during snapshot operation
 	ErrCodeInvalidRequest  uint32 = 14 // Missing required fields
 
-	// ErrCodeNotImplemented 表示这条请求语义上合法,但服务端**没有真正执行**。
-	// 存在的理由:宁可让调用方看到一次明确失败,也不能让"什么都没做"伪装成成功
-	// —— 后者会让运营以为刷金资产已被回收、事故已处置完毕。
-	ErrCodeNotImplemented uint32 = 16
+	// 16 已删除,号不复用:曾是 ErrCodeNotImplemented(批量回收的真正执行还没写)。
+
+	// ── GM 批量回收(docs/design/exploit_loss_prevention_zh.md)─────────────────
+	//
+	// error_code == 0 只说明这批已经全部全额回收。Pending、Incomplete 都不是拒绝:批次已提交,进度看响应体。
+	// 都是确定的业务结论,不进 FaultCodeSet。
+
+	// ErrCodeRecallRequestConflict:这个 request_id 用过,过滤条件不一样。零变更。
+	ErrCodeRecallRequestConflict uint32 = 31
+	// ErrCodeRecallPlanChanged:重算的计划和人审过的 plan_digest 不一样。零变更,重新预览。
+	ErrCodeRecallPlanChanged uint32 = 32
+	// ErrCodeRecallDisabled:Recall.Enabled 没开,或资产通道的依赖没装配起来。只有预览可用,零变更。
+	ErrCodeRecallDisabled uint32 = 33
+	// ErrCodeRecallNotFound:没有这个 request_id。
+	ErrCodeRecallNotFound uint32 = 34
+	// ErrCodeRecallPending:计划已冻结,还有行没有结局。不代表事故已处置。
+	ErrCodeRecallPending uint32 = 35
+	// ErrCodeRecallIncomplete:全部有结局了,但有缺口或没回收到的行。看 results 和 amount_shortfall。
+	ErrCodeRecallIncomplete uint32 = 36
+	// ErrCodeRecallNothingToRecall:这个条件下没有可回收的流水,都不是收益或都已经回收过。零变更,不写批次。
+	// 不回 0:0 说的是这批全额回收了,这里什么都没动。
+	ErrCodeRecallNothingToRecall uint32 = 37
 
 	// ErrCodeResultTruncated 表示筛选命中数超过本次能安全返回/处理的上限。
 	// 返回该码时本次操作必须为零变更，调用方应缩小时间或玩家范围后重试。

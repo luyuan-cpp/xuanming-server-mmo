@@ -43,7 +43,7 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 	// 本事务把坏对手单移出盘口时记下原因与原 stage,提交成功之后才计数、记日志(事务可能回滚重跑)。
 	var defect error
 	var defectStage string
-	err = e.Repo.Tx(ctx, func(tx *sql.Tx) error {
+	err = e.roleTx(ctx, func(tx *sql.Tx) error {
 		defect, defectStage = nil, ""
 		if err := e.lockRoles(ctx, tx, 0, taker.SellerPlayerId, observed.SellerPlayerId); err != nil {
 			return err

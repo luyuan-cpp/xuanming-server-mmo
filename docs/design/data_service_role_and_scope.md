@@ -10,7 +10,7 @@
 2. **永久 ID 与角色名** — `AllocateIdSegment`, `ReservePlayerName`, `ReleasePlayerName`, `BatchGetPlayerName`。
 3. **按归属路由的数据操作** — `LoadPlayerData`, `SavePlayerData`, `GetPlayerField`, `SetPlayerField`；这些 RPC 的存在不代表 Scene 的普通存盘经此中转。
 4. **快照、流水与回档入口** — `CreatePlayerSnapshot`, `GetPlayerSnapshotDiff`, `CreateEventSnapshot`, `QueryTransactionLog`，以及两条审计 Kafka 消费者。`RollbackPlayer/Zone/All` 的生产 `RollbackFence` 尚未装配，真实执行保持 fail-closed，见 [zone_data_rollback.md](./zone_data_rollback.md)。
-5. **GM 回收入口** — `BatchRecallItems` 的 dry-run 查询可用，真实回收尚未实现；勿把 RPC 骨架视为可执行回收能力。
+5. **GM 回收入口** — `BatchRecallItems`、`GetRecallBatch`、`CancelRecallBatch`、`ResolveRecallOp`。2026-11-01 起真实回收走资产通道新流 `ASSET_OP_STREAM_GM_RECALL`(未编译,待 Codex 验证),data_service 是这条流唯一的调用方,outbox 在流水库。方案见 [漏洞止损与回收](./exploit_loss_prevention_zh.md)。这是 data_service 第一次连 `SharedRedis`、`PlayerRedis` 和 scene 节点,都只在 `Recall.Enabled=true` 时才连。
 
 ## 与 Login 的关系
 

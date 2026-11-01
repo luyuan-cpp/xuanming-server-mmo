@@ -43,6 +43,36 @@ func (f cancellationRPCFixture) CancelActivityBattle(ctx context.Context, in *ma
 	}
 	return out, nil
 }
+
+type startRPCFixture struct {
+	got *matchpb.StartActivityBattleRequest
+}
+
+func (f *startRPCFixture) StartActivityBattle(_ context.Context, in *matchpb.StartActivityBattleRequest, _ ...grpc.CallOption) (*matchpb.StartActivityBattleResponse, error) {
+	f.got = in
+	return &matchpb.StartActivityBattleResponse{BattleId: 900}, nil
+}
+
+// match 读不到 guild 的库,开局原件由 guild 的签名担保。
+func TestSignedTrialStarterSignsTheOriginalRequest(t *testing.T) {
+	secret := strings.Repeat("k", 32)
+	rpc := &startRPCFixture{}
+	starter, err := NewSignedTrialStarter(rpc, secret)
+	require.NoError(t, err)
+	out, err := starter.StartActivityBattle(context.Background(), &matchpb.StartActivityBattleRequest{RequestId: 51, BattleConfigId: 1, MemberPlayerIds: []uint64{11, 22}})
+	require.NoError(t, err)
+	require.EqualValues(t, 900, out.BattleId)
+	verifier, err := serviceauth.New(map[string]string{"guild": secret})
+	require.NoError(t, err)
+	caller, err := verifier.Verify(context.Background(), matchpb.MatchInternal_StartActivityBattle_FullMethodName, rpc.got)
+	require.NoError(t, err)
+	require.Equal(t, "guild", caller)
+	_, err = NewSignedTrialStarter(nil, secret)
+	require.Error(t, err)
+	_, err = NewSignedTrialStarter(rpc, "short")
+	require.Error(t, err)
+}
+
 func TestTrialCancellationVerifiesReplySignatureAndOriginalRequestDigest(t *testing.T) {
 	for _, mode := range []string{"valid", "unsigned", "wrong-original", "wrong-method", "tampered"} {
 		t.Run(mode, func(t *testing.T) {

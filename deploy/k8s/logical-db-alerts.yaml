@@ -1,0 +1,180 @@
+# Prometheus alert rules for 逻辑库映射(db_placement)与角色护栏(role_fence)。
+#
+# 来源:docs/design/horizontal-scale-logical-db.md §3.5(协调者)、§8.1(映射)与 docs/ops/db-move-runbook.md(不停服搬库)。
+# 指标定义(名字以代码为准,本文件只引用;tools/scripts/tests/logical_db_deploy_contract.tests.ps1 从源码核对):
+#   - 映射(go/shared/dbplacement/metrics.go,配了 DbPlacement 的每个进程都有,首次用到时才注册):
+#       db_placement_version{logical_db}      这个进程看到的映射版本。配了映射就上报 etcd 里每个有键的逻辑库,没有键的库连过才报
+#       db_placement_known_cluster{cluster}   这个进程配置里认识的物理集群,恒为 1。dbmove cutover 冻结之前核,这里不设告警
+#       db_placement_sync_fail_total          读映射或 Watch 失败。失败时继续用最后读到的映射
+#       db_placement_rejected_total{reason}   没有接受的映射变化:bad_value(值解析不了)、version_regress(版本回退)、
+#                                             deleted_after_move(搬过的库的键被删)、revision_regress(etcd 回档没带 --bump-revision)
+#   - 闸门(go/shared/authoritysql/metrics.go,进程第一次撞到冻结才注册):
+#       writer_frozen_seconds{logical_db}     这个进程观察到闸门连续冻结了多少秒。解冻后第一笔过闸归零
+#   - 协调者(go/data_service/internal/metrics/role_fence.go,PrimeRoleFence 启动时以 0 预置全部取值):
+#       data_service_role_fence_prepare_total{participant,result}  result = clean | blocked | stale | unreachable
+#       data_service_role_fence_blocker_total{participant,blocker} 只进看板
+#       data_service_role_fence_push_total{participant,result}     result = ok | failed
+#   - 写者注册(kube-state-metrics,不是服务指标):
+#       kube_pod_init_container_status_restarts_total{container="sql-writer-registrar"}  写者 Pod 的 init 容器重启次数。init 容器名写在 manifests/go-svc/data-service.yaml,注入到 login、gateway 的也是它
+#
+# writer_frozen_seconds 只有写者撞到闸门时才看得到:15 秒没再撞到就回 0。所以它回答的是「有业务被挡住了多久」,不是「闸门冻结了多久」。
+# 完全没有写流量的库冻结再久也不响,这种情况查库(各逻辑库的 route_meta.writable、freeze_run_id)。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/logical-db-alerts.yaml
+#
+# Scrape prerequisites(未满足时下面全部是哑的):
+#   - 这些服务只有 Prometheus 注解(manifests/go-svc/ 下的 prometheus.io/scrape|port|path),**没有 ServiceMonitor / PodMonitor**,
+#     接入哪种抓取方式(ServiceMonitor / PodMonitor,或按注解抓取的 job)要在上线前定下来并验证有数。
+#   - 协调者的规则按 namespace 分组(data_service 一个 zone 一个 namespace),用的是 ServiceMonitor / PodMonitor 默认附加的 namespace 标签;
+#     改用按注解抓取的 job 时 relabel 必须同样写出它。映射的规则跨 namespace 比版本,不按 namespace 分组。
+#   - SqlWriterRegistrarFailing 读 kube-state-metrics,集群里没有它时这一条是哑的。kube-prometheus stack 自带。
+#
+# 口径:
+#   - 映射版本落后的进程还连着旧集群。旧集群的闸门是冻结的,这些进程写不进去(RPC 回 Unavailable),不分叉但一直失败,所以是 critical。
+#     搬库的 audit 也要等它归零(docs/ops/db-move-runbook.md)。
+#   - 搬库窗口是秒级(docs/ops/db-move-runbook.md §5),读写都暂停。超过 2 分钟多半是工具被杀,或者翻转结局未知,所以是 critical。
+#     排空(maintenance_drain)也冻结闸门,时间更长,排空期间这条会响,按排空的计划静默。
+#   - 写者 Pod 的 init 反复失败时这个副本一直起不来。回收 CronJob 刻意不删它们(deploy/k8s/manifests/go-svc/sql-writer-pod-reaper.yaml),删了白烧名册,所以要靠这条告警发现,是 critical。
+#     最要紧的原因是名册用完,处置见 docs/ops/k8s-open-server-runbook.md §1。
+#   - 协调者 fail-closed:参与者不可达或副本过时,过户和删角拒绝,不会放过去。玩家看到的是操作失败,数据没事。
+#   - result=blocked 是业务拒绝(参与者还有挂起项),只进看板,不设告警。
+#   - 推送失败在下次访问时自愈,所以是 warning。
+#   - 阈值没有实测基线(任何一次持续即报),压测出对比表之后回头校准。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: logical-db-alerts
+  labels:
+    app: data-service
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: logical-db.placement
+      interval: 30s
+      rules:
+        # 同一个逻辑库,不同进程看到的版本不一样:落后的进程还在连旧集群,冻结的闸门拦住它的写。翻转之后正常几秒内跟上。
+        - alert: DbPlacementVersionLagging
+          expr: |
+            max by (logical_db) (db_placement_version) - min by (logical_db) (db_placement_version) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "逻辑库 {{ $labels.logical_db }} 的映射版本有进程落后"
+            description: >-
+              同一个库最新和最旧的版本差 {{ $value | printf "%.0f" }},持续 5 分钟。落后的进程还连着旧集群,写都被冻结的闸门拒绝。
+              用 `db_placement_version{logical_db="{{ $labels.logical_db }}"}` 找到落后的实例,查它和 DbPlacement.EtcdHosts 的连通性,
+              以及 db_placement_sync_fail_total。滚动重启它会重新读映射。手册 docs/ops/db-move-runbook.md。
+
+        # 读映射或 Watch 失败。进程继续用最后读到的映射,这时翻转它跟不上,所以有这条就别开始搬库。
+        - alert: DbPlacementSyncFailing
+          expr: |
+            sum by (namespace, pod) (increase(db_placement_sync_fail_total[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 读逻辑库映射持续失败"
+            description: >-
+              过去 5 分钟约 {{ $value | printf "%.0f" }} 次。进程继续用最后读到的映射,现有连接不受影响;这时翻转映射它跟不上。
+              查 etcd 和 DbPlacement.EtcdHosts,修好之前不要开始搬库。
+
+        # 工具不会写出这些变化。有它就是有人手改了 /mmorpg/db_placement/ 下的键,工具之外的东西在写,或者 etcd 回档了。
+        - alert: DbPlacementRejected
+          expr: |
+            sum by (namespace, pod, reason) (increase(db_placement_rejected_total[5m])) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 拒绝了逻辑库映射的变化({{ $labels.reason }})"
+            description: >-
+              过去 5 分钟约 {{ $value | printf "%.0f" }} 次。tools/dbmove 不会写出这种值(解析不了、版本回退、搬过的库的键被删),
+              所以是手改或者别的写者。reason=revision_regress 是 etcd 从备份恢复时没带 --bump-revision。这个进程继续用旧映射。
+              对照 etcd 里 /mmorpg/db_placement/ 的值和 `dbmove audit` 查清楚,按手册 §6 恢复。
+
+    - name: logical-db.writer-gate
+      interval: 30s
+      rules:
+        # 搬库窗口是秒级。这么久没解冻,要么工具被杀了,要么翻转结局未知,要么在排空。这段时间这个库读写全停。
+        - alert: WriterGateFrozenTooLong
+          expr: |
+            max by (logical_db) (writer_frozen_seconds) > 120
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "逻辑库 {{ $labels.logical_db }} 的写者闸门冻结超过 2 分钟"
+            description: >-
+              已经冻结约 {{ $value | printf "%.0f" }} 秒,这个库读写都回可重试错误,玩家操作一直失败。
+              没有排空在跑时多半是 dbmove cutover 中途被杀:重跑同样的 cutover,或者 rollback,别手改闸门表。
+              先看映射的 state,再按手册 docs/ops/db-move-runbook.md §6 处置。
+
+    - name: logical-db.writer-boot
+      interval: 30s
+      rules:
+        # 写者 Pod 卡在 Init:名册用完、账号或名册配错、闸门表还没建。排空和搬库的冻结窗口是秒级,init 重试几次就过去了,不会撑到 for 的时长。
+        - alert: SqlWriterRegistrarFailing
+          expr: |
+            sum by (namespace, pod) (increase(kube_pod_init_container_status_restarts_total{container="sql-writer-registrar"}[15m])) >= 3
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 的写者注册反复失败,这个副本起不来"
+            description: >-
+              过去 15 分钟 init 容器 sql-writer-registrar 重启约 {{ $value | printf "%.0f" }} 次。回收 CronJob 不删这种 Pod。
+              看 `kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c sql-writer-registrar --previous`。
+              日志是「有限roster全部已由其它明确boot消费」就是名册用完了:按手册 docs/ops/k8s-open-server-runbook.md §1 换一份新名册重新部署,在这之前还活着的副本不受影响,但再少一个就补不回来。
+              其余按日志查账号、generation 和闸门表。
+
+    - name: logical-db.role-fence
+      interval: 30s
+      rules:
+        # 协调者连不上参与者:过户和删角都拒绝(fail-closed),其余不受影响。
+        - alert: RoleFencePrepareUnreachable
+          expr: |
+            sum by (namespace, participant) (increase(data_service_role_fence_prepare_total{result="unreachable"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的协调者连不上角色护栏参与者 {{ $labels.participant }}"
+            description: >-
+              过去 5 分钟约 {{ $value | printf "%.0f" }} 次 PrepareRoleFreeze 不可达,这段时间过户和删角全部被拒。
+              查这个服务是否就绪、data_service 的 RoleFence.Participants 地址、NetworkPolicy,
+              以及两边的 MMORPG_ROLE_FENCE_SECRET_COORDINATOR 是不是同值(不同值同样算调用失败)。
+
+        # 参与者手里的副本比协调者新或旧,这一次重试。持续出现说明推送一直没到,或者版本卡住了。
+        - alert: RoleFencePrepareStale
+          expr: |
+            sum by (namespace, participant) (increase(data_service_role_fence_prepare_total{result="stale"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的角色护栏参与者 {{ $labels.participant }} 持续回版本过时"
+            description: >-
+              过去 5 分钟约 {{ $value | printf "%.0f" }} 次。这些过户和删角回可重试的错误。
+              偶发是并发,持续出现要查 data_service_role_fence_push_total{result="failed"} 和这个服务 role_fence 表的 fence_version。
+
+        # 冻结结果没推到参与者,它下次访问时自己读权威状态,所以自愈。一直失败说明这个服务多半连不上。
+        - alert: RoleFencePushFailing
+          expr: |
+            sum by (namespace, participant) (increase(data_service_role_fence_push_total{result="failed"}[5m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 向角色护栏参与者 {{ $labels.participant }} 推送持续失败"
+            description: >-
+              过去 5 分钟约 {{ $value | printf "%.0f" }} 次 ApplyRoleFence 失败。下次访问时参与者自己读权威状态,数据不会错,
+              只是那一次慢一点。一直失败时按 RoleFencePrepareUnreachable 的步骤查连通性和密钥。

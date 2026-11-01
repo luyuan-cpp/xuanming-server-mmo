@@ -174,7 +174,7 @@ function Get-ClientEntryContract {
 		LoginDevPasswordPrefixes   = @('robot_', 'dev_')
 		# login 第三方登录防误关闸(Get-LoginAuthProviderLiveState)读线上现状用的三个名字:login 的 ConfigMap 与其中的配置键
 		# (k8s_deploy.ps1 $script:GoSvcInfo.login 的 ConfigMap / ConfigFile)、微信 AppSecret 的 Secret(k8s_deploy.ps1
-		# $script:LoginOAuthSecretName)。k8s_zone_rollback.ps1 第 0 步只能经这里取值;与 k8s_deploy.ps1 那两处的逐字相等由
+		# $script:LoginOAuthSecretName)。与 k8s_deploy.ps1 那两处的逐字相等由
 		# k8s_login_auth_provider_guard.tests.ps1 钉住。
 		LoginConfigMapName         = 'go-svc-login-config'
 		LoginConfigMapKey          = 'login.yaml'
@@ -2284,8 +2284,7 @@ function Remove-StaleGateOrdinalServices {
 # k8s_deploy.ps1 的 -LoginWeChatAppId / -LoginWeChatEndpoint / -LoginWeChatAllowOpenId / -LoginQQAppId / -LoginQQEndpoint /
 # -LoginQQAllowOpenId 不粘滞:漏传就按「没开」渲染 login ConfigMap,上次开着的 provider 随新 Pod 关闭,微信的 Secret login-oauth
 # 被删掉;漏传 Endpoint 把沙箱改连生产地址,漏传 AllowOpenId 把 RequireUnionId 翻回 true。apply 不报错,玩家却登不上。
-# 本节给两个调用方共用同一份判据:k8s_deploy.ps1 Assert-LoginAuthProviderClusterState(写操作之前)与
-# k8s_zone_rollback.ps1 第 0 步(Step 1 删 namespace 之前;删完以后 k8s_deploy.ps1 在 Step 6 面对的是空 namespace,一条都触发不了)。
+# 本节的判据由 k8s_deploy.ps1 Assert-LoginAuthProviderClusterState 在写操作之前调用。
 
 # 内部辅助:login.yaml 里一个块映射值的标量 → 字符串;认不出返回 $null。只认生成器会写的形状:双引号(内部不含 \ 与 ")、
 # 单引号(内部不含 ')、裸标量(不以引号 / # 开头),都可带「空白 + #」的行尾注释;冒号后什么都没有 = 空串(YAML null)。
@@ -2439,7 +2438,7 @@ function Get-LoginAuthProviderDrift {
 	$secretName = $contract.LoginOAuthSecretName
 	$drifts = [System.Collections.Generic.List[string]]::new()
 	$keepArgs = [System.Collections.Generic.List[string]]::new()
-	# Providers 是解析结果里的 [ordered] 表,也可能是存档(k8s_zone_rollback.ps1 的 entry-state.json)经 JSON 往返后的 pscustomobject:
+	# Providers 是解析结果里的 [ordered] 表,也可能是经 JSON 往返后的 pscustomobject:
 	# 取值一律经 Get-ClientEntryMember(两者都不区分大小写),名字表按两种形状分别列。
 	$liveProviders = Get-ClientEntryMember -Object $Live -Path 'Providers'
 	$liveProviderNames = @()

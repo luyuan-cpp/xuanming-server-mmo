@@ -1,6 +1,6 @@
 package data
 
-// 生产大厅唯一权威：完整角色P升序→G→真实大厅→占位。所有参与者原owner一次捕获，
+// 生产大厅唯一权威：完整角色副本行升序→G→真实大厅→占位。所有参与者原owner一次捕获，
 // 私有同意与状态同事务；Redis仅用于巡检租约。终局原行和slot墓碑永久保留。
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 	"guild/internal/constants"
 	pb "proto/guild"
 	"shared/accountdirectory"
+	"shared/rolefence"
 	"shared/roleidentity"
 
 	"github.com/redis/go-redis/v9"
@@ -23,7 +24,7 @@ import (
 const trialLobbyColumns = "lobby_id,guild_id,activity_id,initiator_player_id,state,view_proto,original_proto,consent_proto,expires_ms,launch_deadline_ms,battle_id,created_ms,updated_ms"
 
 func NewSQLTrialLobbyRepo(rdb *redis.Client, guilds *GuildRepo, mint func(context.Context) (uint64, error)) (*TrialLobbyRepo, error) {
-	if rdb == nil || guilds == nil || guilds.roleAuthority == "" || guilds.matchAuthority == "" || mint == nil {
+	if rdb == nil || guilds == nil || guilds.fence == nil || mint == nil {
 		return nil, errors.New("历练SQL大厅权威依赖缺失")
 	}
 	return &TrialLobbyRepo{rdb: rdb, guilds: guilds, mint: mint}, nil
@@ -117,6 +118,7 @@ func writeLobby(ctx context.Context, tx *sql.Tx, row *pb.GuildTrialLobbyRecord, 
 	if err != nil {
 		return err
 	}
+	row.State = uint32(v.State)
 	_, err = tx.ExecContext(ctx, "UPDATE guild_trial_lobby SET state=?,view_proto=?,consent_proto=?,launch_deadline_ms=?,battle_id=?,updated_ms=? WHERE lobby_id=?", uint32(v.State), row.ViewProto, row.ConsentProto, row.LaunchDeadlineMs, v.BattleId, now, row.LobbyId)
 	return err
 }
@@ -143,6 +145,28 @@ func (r *TrialLobbyRepo) createSQL(ctx context.Context, in TrialLobbyCreate) (ou
 	}
 	ids := append([]uint64(nil), in.Roster...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	if early, answered, e := r.precheckCreate(ctx, ids, actor.Role.PlayerId); e != nil || answered {
+		return early, e
+	}
+	// 战斗入口占用在进事务之前拿(规格 §4)。发起人的身份来自会话,对端留空,由 match 从它的副本捕获;之后每次重放都带大厅原件的身份。
+	occupants := make([]*pb.GuildTrialRoleIdentity, 0, len(ids))
+	for _, p := range ids {
+		role := &pb.GuildTrialRoleIdentity{PlayerId: p}
+		if p == actor.Role.PlayerId {
+			role.Account, role.OwnerRevision = actor.Account, actor.OwnerRevision
+		}
+		occupants = append(occupants, role)
+	}
+	// 房间没建成就放开。放开挂在 Acquire 之前:Acquire 超时时 match 可能已经写了占用,不放的话这批人要等租约到期才能入场。
+	// 确定拒绝时 match 什么都没写,放开是空操作。提交结果不明时房间也可能建成了:占用放了也安全,开局那一步核不到占用会拒绝。
+	defer func() {
+		if err != nil || out.Status != TrialLobbyCreated {
+			r.guilds.releaseTrialOccupancy(ctx, id, ids)
+		}
+	}()
+	if err = r.guilds.acquireTrialOccupancy(ctx, id, occupants, in.TTL+trialOccupancyMargin); err != nil {
+		return out, err
+	}
 	err = r.guilds.inTx(withRoleTargets(ctx, ids...), opTrialRegister, func(ctx context.Context, tx *sql.Tx) error {
 		if _, e := lockTrialGuild(ctx, tx, in.GuildID); e != nil {
 			return e
@@ -153,18 +177,15 @@ func (r *TrialLobbyRepo) createSQL(ctx context.Context, in TrialLobbyCreate) (ou
 		}
 		o := &pb.GuildTrialLobbyOriginal{LobbyId: id, GuildId: in.GuildID, ActivityId: in.ActivityID, InitiatorPlayerId: actor.Role.PlayerId, CreatedMs: now, ExpiresMs: now + uint64(in.TTL.Milliseconds())}
 		for _, p := range ids {
-			var account string
-			var revision, listing, member uint64
-			if e = tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+r.guilds.roleAuthority+"`.account_role WHERE player_id=? FOR UPDATE", p).Scan(&account, &revision, &listing); e != nil {
+			var member uint64
+			fence, e := rolefence.Lock(ctx, tx, p)
+			if e = rolefence.Check(fence, e, rolefence.Expect{PlayerID: p, Reject: ErrWriteConflict}); e != nil {
 				return e
-			}
-			if !accountdirectory.ValidAccount(account) || revision == 0 || listing != 0 {
-				return ErrWriteConflict
 			}
 			if e = tx.QueryRowContext(ctx, "SELECT player_id FROM guild_member WHERE guild_id=? AND player_id=? FOR UPDATE", in.GuildID, p).Scan(&member); e != nil {
 				return e
 			}
-			o.Roster = append(o.Roster, &pb.GuildTrialRoleIdentity{PlayerId: p, Account: account, OwnerRevision: revision})
+			o.Roster = append(o.Roster, &pb.GuildTrialRoleIdentity{PlayerId: p, Account: fence.Account, OwnerRevision: fence.OwnerRevision})
 			var old, cd uint64
 			e = tx.QueryRowContext(ctx, "SELECT lobby_id,cooldown_until_ms FROM guild_trial_lobby_slot WHERE player_id=? FOR UPDATE", p).Scan(&old, &cd)
 			if e != nil && !errors.Is(e, sql.ErrNoRows) {
@@ -239,6 +260,38 @@ func (r *TrialLobbyRepo) createSQL(ctx context.Context, in TrialLobbyCreate) (ou
 	return
 }
 
+// precheckCreate 在拿占用之前先看本库:冷却和「别的大厅占着」是业务答复,不走到 match,也不让正在冷却的人占住自己。事务里按锁复核。
+func (r *TrialLobbyRepo) precheckCreate(ctx context.Context, ids []uint64, initiator uint64) (out TrialLobbyCreateResult, answered bool, err error) {
+	for _, p := range ids {
+		var old, cd, now uint64
+		err = r.guilds.db.QueryRowContext(ctx, "SELECT lobby_id,cooldown_until_ms,CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED) FROM guild_trial_lobby_slot WHERE player_id=?", p).Scan(&old, &cd, &now)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return out, false, err
+		}
+		if p == initiator && cd > now {
+			return TrialLobbyCreateResult{Status: TrialLobbyCooldown, CooldownRemaining: time.Duration(cd-now) * time.Millisecond}, true, nil
+		}
+		if old == 0 {
+			continue
+		}
+		var state uint32
+		err = r.guilds.db.QueryRowContext(ctx, "SELECT state FROM guild_trial_lobby WHERE lobby_id=?", old).Scan(&state)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue // 占位指向不存在的大厅:交给事务里的同一条判断。
+		}
+		if err != nil {
+			return out, false, err
+		}
+		if state != 4 {
+			return TrialLobbyCreateResult{Status: TrialLobbyMemberBusy, BusyPlayerID: p}, true, nil
+		}
+	}
+	return out, false, nil
+}
+
 func (r *TrialLobbyRepo) loadSQL(ctx context.Context, id uint64) (*TrialLobby, error) {
 	row, e := scanTrialLobby(r.guilds.db.QueryRowContext(ctx, "SELECT "+trialLobbyColumns+" FROM guild_trial_lobby WHERE lobby_id=?", id))
 	if errors.Is(e, sql.ErrNoRows) {
@@ -278,8 +331,9 @@ func (r *TrialLobbyRepo) withSQLLobby(ctx context.Context, id uint64, fn func(co
 	if e != nil {
 		return e
 	}
-	return r.guilds.inTx(withRoleTargets(ctx, lobbyPlayers(original)...), opTrialMark, func(ctx context.Context, tx *sql.Tx) error {
-		if _, e = lockTrialGuild(ctx, tx, original.GuildId); e != nil && !errors.Is(e, ErrGuildGone) {
+	var final *pb.GuildTrialLobbyRecord
+	e = r.guilds.inTx(withRoleTargets(ctx, lobbyPlayers(original)...), opTrialMark, func(ctx context.Context, tx *sql.Tx) error {
+		if _, e := lockTrialGuild(ctx, tx, original.GuildId); e != nil && !errors.Is(e, ErrGuildGone) {
 			return e
 		}
 		row, e := scanTrialLobby(tx.QueryRowContext(ctx, "SELECT "+trialLobbyColumns+" FROM guild_trial_lobby WHERE lobby_id=? FOR UPDATE", id))
@@ -293,26 +347,58 @@ func (r *TrialLobbyRepo) withSQLLobby(ctx context.Context, id uint64, fn func(co
 		if !bytes.Equal(row.OriginalProto, pre.OriginalProto) {
 			return ErrWriteConflict
 		}
+		final = row
 		return fn(ctx, tx, row, o, c)
 	})
+	// 大厅结束了,占用随之放开。launch 走自己的终局出口,不经过这里。
+	// 不只是这一次结束的:同意之前的续租可能排在别人结束大厅之后,又把占用写回去。这里补一次,只删这个大厅的行,幂等。
+	if e == nil && final != nil && final.State == 4 {
+		r.guilds.releaseTrialOccupancy(ctx, id, lobbyPlayers(original))
+	}
+	return e
 }
 func (r *GuildRepo) verifyLobbyOwners(ctx context.Context, tx *sql.Tx, o *pb.GuildTrialLobbyOriginal) error {
+	expects := make([]rolefence.Expect, 0, len(o.Roster))
 	for _, p := range o.Roster {
-		var account string
-		var revision, listing uint64
-		if e := tx.QueryRowContext(ctx, "SELECT account,owner_revision,trade_listing_id FROM `"+r.roleAuthority+"`.account_role WHERE player_id=? FOR UPDATE", p.PlayerId).Scan(&account, &revision, &listing); e != nil {
-			return e
-		}
-		if account != p.Account || revision != p.OwnerRevision || listing != 0 {
-			return ErrWriteConflict
+		expects = append(expects, rolefence.Expect{PlayerID: p.PlayerId, Account: p.Account, OwnerRevision: p.OwnerRevision, Reject: ErrWriteConflict})
+	}
+	_, err := rolefence.LockAll(ctx, tx, expects...)
+	return err
+}
+
+// renewOccupancyForAccept 在同意之前续租并复核票和整队开战,对应旧 requireTrialEntryFree 在同意事务里读 match 的两条。
+// 只有这次同意真的要写才调 match:房间不在等待确认、本人已同意,结论都在事务里出,不需要 match。
+func (r *TrialLobbyRepo) renewOccupancyForAccept(ctx context.Context, id, player uint64) error {
+	pre, e := scanTrialLobby(r.guilds.db.QueryRowContext(ctx, "SELECT "+trialLobbyColumns+" FROM guild_trial_lobby WHERE lobby_id=?", id))
+	if errors.Is(e, sql.ErrNoRows) {
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	_, o, c, e := lobbyView(pre)
+	if e != nil {
+		return e
+	}
+	if pre.State != 1 {
+		return nil
+	}
+	for _, consent := range c.Consents {
+		if consent.Identity.PlayerId == player {
+			return nil
 		}
 	}
-	return nil
+	return r.guilds.acquireTrialOccupancy(ctx, id, o.Roster, time.Duration(pre.ExpiresMs-pre.CreatedMs)*time.Millisecond+trialOccupancyMargin)
 }
 func (r *TrialLobbyRepo) respondSQL(ctx context.Context, id, player uint64, accept bool, window time.Duration) (out TrialLobbyRespondResult, err error) {
 	actor, ok := roleidentity.Original(ctx)
 	if !ok || actor.Role.PlayerId != player || id == 0 || window <= 0 {
 		return out, ErrWriteConflict
+	}
+	if accept {
+		if err = r.renewOccupancyForAccept(ctx, id, player); err != nil {
+			return out, err
+		}
 	}
 	err = r.withSQLLobby(ctx, id, func(ctx context.Context, tx *sql.Tx, row *pb.GuildTrialLobbyRecord, o *pb.GuildTrialLobbyOriginal, c *pb.GuildTrialLobbyConsents) error {
 		if err := r.guilds.verifyLobbyOwners(ctx, tx, o); err != nil {

@@ -7,7 +7,12 @@ import (
 	teampb "proto/team"
 )
 
-func (s *sqlTeamStore) touch(ctx context.Context, snap *Snapshot) (bool, error) {
+func (s *sqlTeamStore) touch(ctx context.Context, snap *Snapshot) (touched bool, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) { touched, e = s.touchOnce(ctx, snap); return e })
+	return touched, err
+}
+
+func (s *sqlTeamStore) touchOnce(ctx context.Context, snap *Snapshot) (bool, error) {
 	if snap == nil || snap.Record == nil {
 		return false, nil
 	}
@@ -43,7 +48,12 @@ func (s *sqlTeamStore) touch(ctx context.Context, snap *Snapshot) (bool, error) 
 	return true, tx.Commit()
 }
 
-func (s *sqlTeamStore) pruneInvite(ctx context.Context, player, teamID uint64, score string) (bool, error) {
+func (s *sqlTeamStore) pruneInvite(ctx context.Context, player, teamID uint64, score string) (changed bool, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) { changed, e = s.pruneInviteOnce(ctx, player, teamID, score); return e })
+	return changed, err
+}
+
+func (s *sqlTeamStore) pruneInviteOnce(ctx context.Context, player, teamID uint64, score string) (bool, error) {
 	expectedExpiry, err := strconv.ParseUint(score, 10, 64)
 	if err != nil {
 		return false, err

@@ -14,6 +14,7 @@ import (
 	"guild/internal/data"
 	"shared/assetopwake"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/playerredis"
 )
@@ -46,11 +47,9 @@ type SchemaConf struct {
 }
 
 type Config struct {
-	// 全局目录与帮会必须位于同一TiDB集群；成员新增事务跨schema锁同一角色行。
-	AccountRoleSchema    string                        `json:",optional"`
-	MatchAuthoritySchema string                        `json:",optional"`
-	GlobalLoginSessions  bool                          `json:",optional"`
-	LoginRedis           playerredis.LoginReaderConfig `json:",optional"`
+	// 原会话账号读全局 LoginRedis;角色归属锁本库护栏副本(docs/design/horizontal-scale-logical-db.md §3),不再跨库。
+	GlobalLoginSessions bool                          `json:",optional"`
+	LoginRedis          playerredis.LoginReaderConfig `json:",optional"`
 	zrpc.RpcServerConf
 	RedisClient RedisConf `json:"RedisClient"`
 	// PlayerLocatorRedis 现在只承担控制域:scene 发布的 assetop:wake 频道与它的跨副本去重键。键名留着,部署配置不用跟着改。
@@ -595,10 +594,7 @@ func (c *Config) Validate() error {
 	if _, err := authoritysql.ParseBackend(c.MySQL.Backend); err != nil {
 		return fmt.Errorf("MySQL.Backend: %w", err)
 	}
-	if c.AccountRoleSchema != "" && strings.TrimSpace(c.MatchAuthoritySchema) == "" {
-		return errors.New("MatchAuthoritySchema必须显式指向同事务域的Match/Team权威库")
-	}
-	if c.AccountRoleSchema != "" && (!c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 0) {
+	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode < 0 {
 		return errors.New("角色归属互锁须显式声明全局LoginRedis，同库登录态缺失拒绝")
 	}
 	if maxOpen, _ := c.MySQL.EffectivePool(); maxOpen < 1 || maxOpen > 128 {
@@ -737,6 +733,8 @@ type MySQLConf struct {
 	Backend     string `json:",default=tidb"`
 	MaxOpenConn int    `json:",default=20"`
 	MaxIdleConn int    `json:",optional"`
+	// DbPlacement:按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 DSN 的地址。
+	DbPlacement dbplacement.Config `json:",optional"`
 }
 
 // 连接池预算与部署总账共用，强会话初始化仍由 authoritysql 负责。

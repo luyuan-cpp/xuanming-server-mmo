@@ -9,7 +9,7 @@ import (
 	"match/internal/scope"
 
 	pb "proto/match"
-	"shared/placement"
+	"shared/rolefence"
 )
 
 // 排队成局在提交点复核的玩法规则（docs/design/global-match-hierarchical-pools.md §5.5）。
@@ -93,23 +93,25 @@ func (s *Store) admitScope(group []*pb.MatchAuthorityTicketRecord, nowMs uint64)
 	return scope.Admit(s.schedule, members, nowMs)
 }
 
-// PlayerHomeZone 读玩家的 home zone（角色归属，不是当前所在场景的 zone）：路由行上的原始区，不解析。
+// PlayerHomeZone 读玩家的 home zone（角色归属，不是当前所在场景的 zone）：目录里的原始区，不解析。这是事务外的读，走 RPC。
 // 票和队伍记录写的就是它，合服不改写，比较时才解析到最终区（别名合服，docs/design/player-data-tidb-scaling-plan.md §7.1）。
-// 写原始区还是最终区决定撤销合服之后的结局：记原始区，撤销后票上的 home 和路由行照样对得上，在途的票不会卡死。
+// 写原始区还是最终区决定撤销合服之后的结局：记原始区，撤销后票上的 home 和副本行照样对得上，在途的票不会卡死。
 // 没有归属回 ErrTeamRoute。
 func (s *Store) PlayerHomeZone(ctx context.Context, player uint64) (uint32, error) {
-	var home sql.NullInt64
-	err := s.DB.QueryRowContext(ctx, "SELECT home_zone FROM `"+s.roleSchema+"`.player_route WHERE route_shard=? AND player_id=?", placement.RouteRowShard(player), player).Scan(&home)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && (!home.Valid || home.Int64 <= 0)) {
+	if s == nil || s.fenceStates == nil {
+		return 0, ErrTeamRoute
+	}
+	state, err := s.fenceStates.GetRoleFenceState(ctx, player)
+	if errors.Is(err, rolefence.ErrRoleNotFound) {
 		return 0, ErrTeamRoute
 	}
 	if err != nil {
 		return 0, err
 	}
-	return uint32(home.Int64), nil
+	return state.GetHomeZone(), nil
 }
 
-// requireTicketHomesTx 在调用方已锁住的 route 前缀下，逐人核对票上的 home zone 解析后仍是当前 home 的最终区。
+// requireTicketHomesTx 在调用方已锁住的副本行下，逐人核对票上的 home zone 解析后仍是当前 home 的最终区。
 // 不要求全组同 home：跨 home 成局由范围树双向同意决定（admitScope），这里只防归属真的变了。
 func (s *Store) requireTicketHomesTx(ctx context.Context, tx *sql.Tx, group []*pb.MatchAuthorityTicketRecord) error {
 	if _, err := TeamUnitHomeZone(group, nil); err != nil {

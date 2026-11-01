@@ -13,8 +13,8 @@
 #     否则下面全部规则没有数据:空表达式不报错,和「一切正常」长得一样。
 #   - namespace、pod 两个 label 由抓取配置附加。告警只用这两个 label,不用任何玩家维度(低基数)。
 #
-# 指标名按 redis_exporter v1.62.0 的命名凭记忆写成,**未在本机核实**:
-#   redis_up、redis_memory_used_bytes、redis_memory_max_bytes、redis_errorstat_total{err}、redis_rejected_connections_total、
+# 指标名已对照 redis_exporter v1.62.0 源码核对(2026-10-31),还没有对着运行中的 exporter 验证:
+#   redis_up、redis_memory_used_bytes、redis_memory_max_bytes、redis_errors_total{err}、redis_rejected_connections_total、
 #   redis_connected_clients、redis_config_maxclients、redis_aof_last_write_status、redis_master_link_up、redis_cluster_state。
 #   部署后逐个对着 exporter 的 /metrics 核对,对不上就改这里 —— 指标名写错的规则不报错,只是永远不响。
 #
@@ -67,7 +67,7 @@ spec:
         # 已经有写命令因为写满被拒(noeviction 的 OOM 错误)。不是「快满了」,是已经在丢写。
         - alert: RedisOomRejected
           expr: |
-            increase(redis_errorstat_total{err="OOM"}[5m]) > 0
+            increase(redis_errors_total{err="OOM"}[5m]) > 0
           for: 0m
           labels:
             severity: critical

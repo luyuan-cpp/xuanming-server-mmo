@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/netx"
+	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -20,6 +20,8 @@ import (
 	"db/internal/playerstore"
 
 	"proto/common/base"
+	dspb "proto/data_service"
+	"shared/accountdirectory"
 	"shared/generated/persistschema"
 	"shared/noderegistry"
 )
@@ -65,19 +67,9 @@ func newPlayerStoreServer(c *config.Config, stores *proto_sql.StoreRegistry) (*p
 	if err := store.VerifySchema(verifyCtx); err != nil {
 		return nil, err
 	}
-	writer, err := proto_sql.CurrentWriterConfig()
+	resolve, err := newStorageResolver(c)
 	if err != nil {
 		return nil, err
-	}
-	// 读路由用本 zone 库的池:写者闸门本来就在这个池的连接上按库名读 <AuthoritySchema>.route_meta / writer_slot,全局库与落点库在同一个
-	// TiDB 集群,账号和严格读会话都现成;它在启动期打开并核过,不像额外落点库那样要按需打开、可能在冷却。路由表就在写权目录那个库里,库名不另配。
-	resolve, err := playerstore.NewStorageResolver(playerstore.ResolverOptions{DB: home, RouteSchema: writer.AuthoritySchema()})
-	if err != nil {
-		return nil, err
-	}
-	// 启动时读一次:缺表或缺授权时每次认领都回暂不可用,玩家进不了游戏,不如拒绝启动。player_id 0 不是玩家,读到「没有落点」就说明读得通。
-	if _, err := resolve(verifyCtx, 0); err != nil && !errors.Is(err, playerstore.ErrPlayerStorageMissing) {
-		return nil, fmt.Errorf("verify route table: %w", err)
 	}
 	return playerstore.NewServer(playerstore.ServerOptions{
 		Secret:   os.Getenv(playerstore.SceneSecretEnv),
@@ -86,6 +78,23 @@ func newPlayerStoreServer(c *config.Config, stores *proto_sql.StoreRegistry) (*p
 		KnownGen: persistschema.Gen,
 		Limits:   limits,
 	})
+}
+
+// newStorageResolver 经目录 RPC 选库,go/db 不连目录(docs/design/horizontal-scale-logical-db.md §7)。
+// 缺配置或缺密钥拒绝启动。不在启动时读一次:data_service 可能还没起来,认领时读不到回暂不可用,scene 过一会儿重试。
+func newStorageResolver(c *config.Config) (playerstore.StorageResolver, error) {
+	if c.DataServiceRpc.Etcd.Key == "" && len(c.DataServiceRpc.Endpoints) == 0 && c.DataServiceRpc.Target == "" {
+		return nil, fmt.Errorf("DataServiceRpc needs one of Etcd.Key, Endpoints or Target: go/db reads player placements through data_service")
+	}
+	client, err := zrpc.NewClient(c.DataServiceRpc)
+	if err != nil {
+		return nil, fmt.Errorf("connect data_service: %w", err)
+	}
+	routes, err := accountdirectory.NewRouteClient(dspb.NewDataServiceClient(client.Conn()), os.Getenv(accountdirectory.RouteSecretEnv))
+	if err != nil {
+		return nil, fmt.Errorf("route client (%s): %w", accountdirectory.RouteSecretEnv, err)
+	}
+	return playerstore.NewStorageResolver(routes)
 }
 
 // registerPlayerStoreNode 写 C++ 约定的 etcd 注册:scene 靠它发现本 zone 的 go/db。

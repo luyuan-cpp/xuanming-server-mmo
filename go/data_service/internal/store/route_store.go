@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,7 +21,8 @@ import (
 )
 
 // 玩家归属与落点映射的真源(docs/design/player-route-mapping-durability-proposal.md §15):
-// player_route 只在全局库一份,data_service 直接 SQL 读写,提交即完成。
+// player_route 只在目录一份,按玩家分片(docs/design/horizontal-scale-logical-db.md §5.6),data_service 直接 SQL 读写,提交即完成。
+// 每片一个连接池、一份 route_meta;批量读按片拆组;zone_merged_into 只在第 0 片。
 //
 // 路由表(建表语句在 schema.go 的 bootstrapTables):
 //   - player_route:每个玩家一行,home_zone 与落点同行;rev 本行任何列变化 +1,是行版本。
@@ -142,7 +144,7 @@ var (
 const dbNowMsSQL = "CAST(UNIX_TIMESTAMP(NOW(3)) * 1000 AS UNSIGNED)"
 
 // routeRowColumnsSQL 是 RouteRow 除聚簇键 (route_shard, player_id) 外的列,顺序与 scanRouteRow 的 Scan 目标一一对应。
-const routeRowColumnsSQL = "home_zone, storage_id, placement_version, frozen_run_id, rev, updated_by, created_at_ms, updated_at_ms"
+const routeRowColumnsSQL = "home_zone, storage_id, placement_version, rev, updated_by, created_at_ms, updated_at_ms"
 
 // 本 store 的全部 SQL(G1a 起按 player_id 的读写都带 route_shard)。
 // 抽成常量是为了让契约用例 / 真库用例执行**同一段文本**。
@@ -152,12 +154,12 @@ const (
 	routeProbeTiDBTxnModeSQL = "SELECT @@tidb_txn_mode"
 
 	// P4 探针:一行**只违反 chk_route_shard** 的插入(player_id=0 → 片应为 0,这里绑 1;其余列都合法:
-	// home / 落点 / 冻结全 NULL、rev=1),包在必然回滚的事务里(probeRouteShardCheck)。
+	// home / 落点全 NULL、rev=1),包在必然回滚的事务里(probeRouteShardCheck)。
 	routeProbeShardCheckSQL = "INSERT INTO player_route (route_shard, player_id, rev, updated_by, created_at_ms, updated_at_ms)" +
 		" VALUES (1, 0, 1, 'route-probe', 0, 0)"
 
 	// P5 正向探针:一行**按 placement.RouteRowShards 合法**的插入(实参:行片、player_id,取自 routeShardModulusProbeKeys;
-	// 其余列与 P4 相同:home / 落点 / 冻结全 NULL、rev=1,满足 player_route 上其余五条 CHECK 与全部 NOT NULL),
+	// 其余列与 P4 相同:home / 落点全 NULL、rev=1,满足 player_route 上其余四条 CHECK 与全部 NOT NULL),
 	// 与 P4 在同一个必然回滚的事务里(probeRouteShardModulus)。
 	routeProbeShardModulusSQL = "INSERT INTO player_route (route_shard, player_id, rev, updated_by, created_at_ms, updated_at_ms)" +
 		" VALUES (?, ?, 1, 'route-probe', 0, 0)"
@@ -169,9 +171,9 @@ const (
 
 	// R4 新行。没有落点时 storage / version 都绑 NULL。受影响 1 = 插入,0 = 撞键 no-op。
 	// 实参:行片、player_id、home、storage、version、writer。
-	routeInsertNewSQL = "INSERT INTO player_route (route_shard, player_id, home_zone, storage_id, placement_version, frozen_run_id," +
+	routeInsertNewSQL = "INSERT INTO player_route (route_shard, player_id, home_zone, storage_id, placement_version," +
 		" rev, updated_by, created_at_ms, updated_at_ms)" +
-		" VALUES (?, ?, ?, ?, ?, NULL, 1, ?, " + dbNowMsSQL + ", " + dbNowMsSQL + ")" +
+		" VALUES (?, ?, ?, ?, ?, 1, ?, " + dbNowMsSQL + ", " + dbNowMsSQL + ")" +
 		" ON DUPLICATE KEY UPDATE player_id = player_id"
 
 	// R5 加锁读(W1 的判定只认它)。按聚簇键点查:行片、player_id。
@@ -196,9 +198,8 @@ const (
 	// R14 列 merged_into(一致读,不取锁)。
 	routeListMergedIntoSQL = "SELECT src_zone, dst_zone, run_id, merged_at_ms FROM zone_merged_into ORDER BY src_zone"
 
-	// R15 迁移种 meta 行(ODKU no-op:已存在时 generation / writable 一个字节都不改)。
-	routeMetaSeedSQL = "INSERT INTO route_meta (id, generation, writable)" +
-		" VALUES (1, ?, 1) ON DUPLICATE KEY UPDATE id = id"
+	// R15 迁移种 meta 行。不用 ON DUPLICATE KEY:schema 账号对 route_meta 只有 INSERT,没有 UPDATE,这样它改不了可写开关。
+	routeMetaSeedSQL = "INSERT INTO route_meta (id, generation, writable) VALUES (1, ?, 1)"
 )
 
 // RouteFreezeTimeoutMin 是冻结 / 解冻(Catalog.Freeze / Release)至少要给的时限。TiDB 把 route_meta 设成缓存表之后
@@ -285,7 +286,7 @@ func (o RouteStoreOptions) validate() error {
 // 与快照 / 流水 / 名字共用池会把这两个会话变量带给别人,也会互相拖慢建角路径。
 // 并发安全(sql.DB 与 atomic 计数器都是)。
 type RouteStore struct {
-	db     *sql.DB
+	pools  *shardPools
 	writer string
 
 	// lockRetries 累计因 1213 / 9007 重来的次数(按实例)。只给日志与真库用例用:
@@ -293,51 +294,52 @@ type RouteStore struct {
 	lockRetries atomic.Uint64
 }
 
-// NewRouteStore 在全局库上开自己的池(DSN 见 buildRouteDSN),跑探针,任一步失败就关池返回 error(fail-closed)。
-// 探针失败最常见的原因是迁移没跑过(route_meta 不存在 → 1146,或没有 id=1 → ErrRouteMetaMissing)。
+// NewRouteStore 逐片开自己的池(DSN 见 buildRouteDSN),跑只读核验,任一片失败就全关返回 error(fail-closed)。
+// 核验失败最常见的原因是迁移没跑过(route_meta 不存在 → 1146,或没有 id=1 → ErrRouteMetaMissing)。
 func NewRouteStore(cfg MySQLConfig, opts RouteStoreOptions) (*RouteStore, error) {
 	if err := opts.validate(); err != nil {
 		return nil, err
 	}
-	db, err := openMySQLWithDSN(cfg, buildRouteDSN(cfg))
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), routeProbeTimeout)
-	defer cancel()
-	st, err := newVerifiedRouteStoreFromDB(ctx, db, opts, cfg.DBName)
+	shards, err := openShardPools(cfg, func(one MySQLConfig) (*sql.DB, error) {
+		db, err := openMySQLWithDSN(one, buildRouteDSN(one))
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), routeProbeTimeout)
+		defer cancel()
+		if err := verifyRouteShard(ctx, db, one.DBName); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		return db, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("route store on %s/%s: %w", cfg.Host, cfg.DBName, err)
 	}
-	logx.Infof("[RouteStore] connected to %s/%s max_open_conn=%d max_idle_conn=%d writer=%s "+
+	logx.Infof("[RouteStore] connected to %s/%s logical_shards=%d max_open_conn=%d max_idle_conn=%d writer=%s "+
 		"(session READ-COMMITTED, innodb_lock_wait_timeout=%ds)",
-		cfg.Host, cfg.DBName, cfg.MaxOpenConn, cfg.MaxIdleConn, opts.Writer, routeLockWaitTimeoutSec)
-	return st, nil
+		cfg.Host, cfg.DBName, shards.k, cfg.MaxOpenConn, cfg.MaxIdleConn, opts.Writer, routeLockWaitTimeoutSec)
+	return &RouteStore{pools: shards, writer: opts.Writer}, nil
 }
 
-// newVerifiedRouteStoreFromDB 是常驻/工具的只读启动核验。
+// verifyRouteShard 是常驻/工具对一片的只读启动核验。
 // CHECK 的行为探针留给独立 schema/真库验收，normal 不为启动探针取得 metaX。
-func newVerifiedRouteStoreFromDB(ctx context.Context, db *sql.DB, opts RouteStoreOptions, schema string) (*RouteStore, error) {
-	fail := func(err error) (*RouteStore, error) { _ = db.Close(); return nil, err }
-	if err := opts.validate(); err != nil {
-		return fail(err)
-	}
+// zone_merged_into 只在第 0 片,这里只核每片都有的路由表;第 0 片由迁移守形状,读它的 ListMergedInto 在启动时就会读一次。
+func verifyRouteShard(ctx context.Context, db *sql.DB, schema string) error {
 	if err := probeRouteSession(ctx, db); err != nil {
-		return fail(err)
+		return err
 	}
-	if err := assertRouteTableShapes(ctx, db, schema); err != nil {
-		return fail(err)
+	if err := assertRouteTableShapes(ctx, db, schema, shardRouteTableMessages()); err != nil {
+		return err
 	}
 	if err := verifyRouteShardConstraint(ctx, db, schema); err != nil {
-		return fail(err)
+		return err
 	}
 	if err := assertWriterAuthoritySchema(ctx, db, schema); err != nil {
-		return fail(err)
+		return err
 	}
-	if _, err := readRouteWritable(ctx, db); err != nil {
-		return fail(err)
-	}
-	return &RouteStore{db: db, writer: opts.Writer}, nil
+	_, err := readRouteWritable(ctx, db)
+	return err
 }
 
 // verifyRouteShardConstraint 在正常启动时只读校验，避免用业务写探针绕过写者首锁。
@@ -354,18 +356,24 @@ func verifyRouteShardConstraint(ctx context.Context, db *sql.DB, schema string) 
 	if !routeShardClauseMatches(clause) {
 		return fmt.Errorf("%w: chk_route_shard does not match route_shard = player_id %% %d", ErrRouteShardModulusMismatch, placement.RouteRowShards)
 	}
+	return requireTiDBCheckSwitch(ctx, db)
+}
+
+// requireTiDBCheckSwitch 核 TiDB 的 CHECK 总开关开着。MySQL 上没有这个开关。
+func requireTiDBCheckSwitch(ctx context.Context, db *sql.DB) error {
 	isTiDB, _, err := serverIsTiDB(ctx, db)
 	if err != nil {
 		return err
 	}
-	if isTiDB {
-		var enabled string
-		if err := db.QueryRowContext(ctx, "SELECT @@GLOBAL.tidb_enable_check_constraint").Scan(&enabled); err != nil {
-			return fmt.Errorf("%w: read TiDB CHECK switch: %v", ErrRouteCheckNotEnforced, err)
-		}
-		if enabled != "1" && !strings.EqualFold(enabled, "ON") {
-			return fmt.Errorf("%w: TiDB CHECK switch is disabled", ErrRouteCheckNotEnforced)
-		}
+	if !isTiDB {
+		return nil
+	}
+	var enabled string
+	if err := db.QueryRowContext(ctx, "SELECT @@GLOBAL.tidb_enable_check_constraint").Scan(&enabled); err != nil {
+		return fmt.Errorf("%w: read TiDB CHECK switch: %v", ErrRouteCheckNotEnforced, err)
+	}
+	if enabled != "1" && !strings.EqualFold(enabled, "ON") {
+		return fmt.Errorf("%w: TiDB CHECK switch is disabled", ErrRouteCheckNotEnforced)
 	}
 	return nil
 }
@@ -516,7 +524,7 @@ func newRouteStoreFromDB(ctx context.Context, db *sql.DB, opts RouteStoreOptions
 	if err := retryRouteTx(ctx, "chk_route_shard probes", nil, func() error { return probeRouteShardCheck(ctx, db) }); err != nil {
 		return fail(err)
 	}
-	return &RouteStore{db: db, writer: opts.Writer}, nil
+	return &RouteStore{pools: singleShardPools(db, ""), writer: opts.Writer}, nil
 }
 
 // probeRouteShardCheck 是探针第 4 步(P4):player_id 的唯一性现在靠 chk_route_shard(主键是 (route_shard, player_id)),
@@ -742,9 +750,9 @@ func requireRouteWritable(ctx context.Context, q routeQueryer) error {
 	return nil
 }
 
-// Close 关闭连接池。
+// Close 关闭全部片的连接池。
 func (s *RouteStore) Close() error {
-	return s.db.Close()
+	return s.pools.Close()
 }
 
 // NewRouteWriterID 生成写进 updated_by 的写者标识 "{component}@{host}":只留 [A-Za-z0-9._@:-]
@@ -801,18 +809,17 @@ func validRouteWriter(w string) bool {
 
 // ── 行 ──────────────────────────────────────────────────────────────────────────
 
-// RouteRow 是 player_route 的一行,**领域类型**:带 HasHome / Placement 等判定,是 SQL 扫描的载体。
+// RouteRow 是 player_route 的一行,**领域类型**:带 HasHome / HasPlacement 等判定,是 SQL 扫描的载体。
 // 表的列契约是 proto 的 dbpb.PlayerRoute(只作列漂移守卫,不作读写载体,见 schema.go routeTableMessages)。
 // 两者逐字段对应(proto 字段名 snake_case → 这里的 CamelCase,类型相同,0 / 空串 = NULL 的约定也相同);
 // 唯一的例外是 route_shard:它由 player_id 唯一决定(placement.RouteRowShard,chk_route_shard),这里不存,
 // SQL 绑定时现算。新增列 = proto、DDL、这里三处同改,route_store_test 的 TestRouteRowMirrorsPlayerRouteProto 钉住对应关系。
-// 「0 / 空串 = NULL」:HomeZone、StorageID(与 PlacementVersion 同 NULL)、FrozenRunID。
+// 「0 = NULL」:HomeZone、StorageID(与 PlacementVersion 同 NULL)。
 type RouteRow struct {
 	PlayerID         uint64
 	HomeZone         uint32 // 0 = NULL
 	StorageID        uint32 // 0 = NULL(与 PlacementVersion 同 NULL,chk_route_place)
 	PlacementVersion uint64
-	FrozenRunID      string // "" = NULL;非空 = 冻结态(搬库进行中)
 	Rev              uint64
 	UpdatedBy        string
 	// CreatedAtMs / UpdatedAtMs 取库时钟。
@@ -825,29 +832,6 @@ func (r RouteRow) HasHome() bool { return r.HomeZone != 0 }
 
 // HasPlacement 报告这一行有没有落点记录。
 func (r RouteRow) HasPlacement() bool { return r.StorageID != 0 }
-
-// Placement 把落点三列还原成 placement.Record。没有落点时回 (零值, false, nil)。
-// 有落点就 Validate,三列不自洽(version 为 0、冻结 run_id 不合法、没有落点却带着 version / run_id)
-// 一律回 ErrMalformed —— 读方必须 fail-closed,绝不能按一条坏行选库。
-func (r RouteRow) Placement() (placement.Record, bool, error) {
-	if r.StorageID == 0 {
-		if r.PlacementVersion != 0 || r.FrozenRunID != "" {
-			return placement.Record{}, false, fmt.Errorf("%w: player_route player_id=%d has no storage_id but placement_version=%d frozen_run_id=%q",
-				placement.ErrMalformed, r.PlayerID, r.PlacementVersion, r.FrozenRunID)
-		}
-		return placement.Record{}, false, nil
-	}
-	rec := placement.Record{
-		StorageID: r.StorageID,
-		Version:   r.PlacementVersion,
-		Frozen:    r.FrozenRunID != "",
-		RunID:     r.FrozenRunID,
-	}
-	if err := rec.Validate(); err != nil {
-		return placement.Record{}, false, fmt.Errorf("player_route player_id=%d: %w", r.PlayerID, err)
-	}
-	return rec, true, nil
-}
 
 // routeScanner 是 *sql.Row 与 *sql.Rows 共有的 Scan。
 type routeScanner interface {
@@ -862,9 +846,8 @@ type routeScanner interface {
 func scanRouteRow(sc routeScanner, row *RouteRow, withKey bool) error {
 	var home, storage sql.Null[uint32]
 	var version sql.Null[uint64]
-	var frozen sql.NullString
 	var storedShard uint64
-	dest := []any{&home, &storage, &version, &frozen, &row.Rev, &row.UpdatedBy, &row.CreatedAtMs, &row.UpdatedAtMs}
+	dest := []any{&home, &storage, &version, &row.Rev, &row.UpdatedBy, &row.CreatedAtMs, &row.UpdatedAtMs}
 	if withKey {
 		dest = append([]any{&storedShard, &row.PlayerID}, dest...)
 	}
@@ -876,7 +859,7 @@ func scanRouteRow(sc routeScanner, row *RouteRow, withKey bool) error {
 			return fmt.Errorf("%w: player_id=%d route_shard=%d want %d", ErrRouteShardMismatch, row.PlayerID, storedShard, want)
 		}
 	}
-	row.HomeZone, row.StorageID, row.PlacementVersion, row.FrozenRunID = 0, 0, 0, ""
+	row.HomeZone, row.StorageID, row.PlacementVersion = 0, 0, 0
 	if home.Valid {
 		row.HomeZone = home.V
 	}
@@ -885,9 +868,6 @@ func scanRouteRow(sc routeScanner, row *RouteRow, withKey bool) error {
 	}
 	if version.Valid {
 		row.PlacementVersion = version.V
-	}
-	if frozen.Valid {
-		row.FrozenRunID = frozen.String
 	}
 	return nil
 }
@@ -988,7 +968,7 @@ func (s *RouteStore) registerHomeTx(ctx context.Context, req RouteRegisterReques
 		return RouteRegisterResult{}, fmt.Errorf("player_route register player_id=%d: storage/version binding out of sync (internal bug)", req.PlayerID)
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.pools.forPlayer(req.PlayerID).BeginTx(ctx, nil)
 	if err != nil {
 		return RouteRegisterResult{}, fmt.Errorf("begin player_route register tx player_id=%d: %w", req.PlayerID, err)
 	}
@@ -1162,7 +1142,29 @@ func (s *RouteStore) GetRoutes(ctx context.Context, ids []uint64) (map[uint64]Ro
 	if len(nonZero) == 0 {
 		return map[uint64]RouteRow{}, nil
 	}
-	return loadRoutes(ctx, s.db, nonZero)
+	return routesAcrossShards(ctx, s.pools, nonZero)
+}
+
+// routesAcrossShards 按玩家分片拆组批量读。任一片失败整批报错,结果按 player_id 索引。
+func routesAcrossShards(ctx context.Context, shards *shardPools, ids []uint64) (map[uint64]RouteRow, error) {
+	out := make(map[uint64]RouteRow, len(ids))
+	var mu sync.Mutex
+	err := shards.eachPlayerGroup(ids, func(db *sql.DB, players []uint64) error {
+		rows, err := loadRoutes(ctx, db, players)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		for id, row := range rows {
+			out[id] = row
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // loadRoutes 按 id 批量读(R13)。实参按聚簇键升序交错给出 (行片, player_id)(拷一份再排,不改调用方的切片);
@@ -1194,9 +1196,9 @@ func loadRoutes(ctx context.Context, q routeQueryer, ids []uint64) (map[uint64]R
 	return out, nil
 }
 
-// ListMergedInto 列出全部合走标记,按 src_zone 升序(行数 = 合过的区数,不分页)。
+// ListMergedInto 列出全部合走标记,按 src_zone 升序(行数 = 合过的区数,不分页)。zone_merged_into 只在第 0 片。
 func (s *RouteStore) ListMergedInto(ctx context.Context) ([]MergedIntoRow, error) {
-	rows, err := s.db.QueryContext(ctx, routeListMergedIntoSQL)
+	rows, err := s.pools.first().QueryContext(ctx, routeListMergedIntoSQL)
 	if err != nil {
 		return nil, fmt.Errorf("list zone_merged_into: %w", err)
 	}
@@ -1219,30 +1221,31 @@ func (s *RouteStore) ListMergedInto(ctx context.Context) ([]MergedIntoRow, error
 // ── 迁移期的行管理(由 schema.go 的 migrateSchemaOn 在表就位、形状守卫通过之后调用)────────────
 
 // bootstrapRouteMetaRow 种 route_meta(id=1):generation 是 16 字节 crypto/rand 的十六进制(32 字符),
-// writable=1。ODKU no-op:已存在的行一个字节都不碰(尤其不换 generation:写者资格框架的每个事务都核它)。
-// 日志区分「新种了一行」与「已存在,未改」。
+// writable=1。已存在的行一个字节都不碰(尤其不换 generation:写者资格框架的每个事务都核它)。
+// 先读后 INSERT,和 authoritysql.EnsureCatalogSchema 同一做法。迁移锁把并发迁移串起来了,撞键只可能是那条连接断过、锁丢了,对方已经种好。
 func bootstrapRouteMetaRow(ctx context.Context, db *sql.DB) error {
+	var rows int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM route_meta WHERE id=?", routeMetaRowID).Scan(&rows); err != nil {
+		return fmt.Errorf("read route_meta row id=%d: %w", routeMetaRowID, err)
+	}
+	if rows != 0 {
+		logx.Infof("[schema] route_meta: row id=%d already present, left untouched", routeMetaRowID)
+		return nil
+	}
 	generation, err := newRouteGeneration()
 	if err != nil {
 		return err
 	}
-	res, err := db.ExecContext(ctx, routeMetaSeedSQL, generation)
+	_, err = db.ExecContext(ctx, routeMetaSeedSQL, generation)
+	var server *mysql.MySQLError
+	if errors.As(err, &server) && server.Number == mysqlErrDupEntry {
+		logx.Infof("[schema] route_meta: row id=%d seeded concurrently, left untouched", routeMetaRowID)
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("bootstrap route_meta row id=%d: %w", routeMetaRowID, err)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("bootstrap route_meta row id=%d rows affected: %w", routeMetaRowID, err)
-	}
-	switch n {
-	case 1:
-		logx.Infof("[schema] route_meta: seeded row id=%d generation=%s writable=1", routeMetaRowID, generation)
-	case 0:
-		logx.Infof("[schema] route_meta: row id=%d already present, left untouched", routeMetaRowID)
-	default:
-		return fmt.Errorf("bootstrap route_meta row id=%d: 受影响行数 %d 不在 {1=新种, 0=已存在} 之内,"+
-			"routeMetaSeedSQL 的 ON DUPLICATE KEY UPDATE 必须保持 no-op", routeMetaRowID, n)
-	}
+	logx.Infof("[schema] route_meta: seeded row id=%d generation=%s writable=1", routeMetaRowID, generation)
 	return nil
 }
 

@@ -30,6 +30,7 @@ import (
 	"schemamigrate"
 	"shared/domainhost"
 	"shared/redisslot"
+	"shared/rolefence"
 	"shared/serviceauth"
 )
 
@@ -105,16 +106,13 @@ func TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection(t *testing.T) {
 	if report, e := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: database, Tables: data.Tables()}); e != nil || len(report.Manual) > 0 {
 		t.Fatalf("schema: %v %+v", e, report)
 	}
-	if _, err = install.ExecContext(ctx, "CREATE TABLE guild_member (guild_id BIGINT UNSIGNED NOT NULL,player_id BIGINT UNSIGNED NOT NULL,PRIMARY KEY(guild_id,player_id))"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = install.ExecContext(ctx, "CREATE TABLE account_role (player_id BIGINT UNSIGNED PRIMARY KEY,account VARBINARY(191) NOT NULL,owner_revision BIGINT UNSIGNED NOT NULL,trade_listing_id BIGINT UNSIGNED NOT NULL)"); err != nil {
+	if err = rolefence.EnsureSchema(ctx, install); err != nil {
 		t.Fatal(err)
 	}
 	if err = fixture.GrantProtoTables(ctx, database, data.Tables()); err != nil {
 		t.Fatal(err)
 	}
-	if err = fixture.GrantTables(ctx, database, "guild_member", "account_role"); err != nil {
+	if err = fixture.GrantTables(ctx, database, rolefence.TableName); err != nil {
 		t.Fatal(err)
 	}
 	db, err := fixture.Open(ctx, database, 8)
@@ -123,13 +121,8 @@ func TestTiDBRealRPCAuthSendOfflineReadClaimAndDeleteProtection(t *testing.T) {
 	}
 	var ids atomic.Uint64
 	next := func(context.Context) (uint64, error) { return ids.Add(1), nil }
-	repo := data.New(db, next, next, func(uint32) bool { return true }, database)
-	if _, err = db.ExecContext(ctx, "INSERT INTO account_role VALUES (7,?,3,0)", []byte("邮件原账号")); err != nil {
-		t.Fatal(err)
-	}
-	if err = repo.ConfigureRoleAuthority(ctx, database); err != nil {
-		t.Fatal(err)
-	}
+	repo := data.New(db, next, next, func(uint32) bool { return true }, noGuilds{})
+	repo.ConfigureRoleFence(rolefence.NewGuard(db, fixedRoleOwner{account: "邮件原账号", revision: 3}))
 	loginCache := miniredis.RunT(t)
 	loginCache.Set(redisslot.LoginSessionKey("mail-rpc-original:19"), "邮件原账号")
 	loginReader := redis.NewClient(&redis.Options{Addr: loginCache.Addr()})

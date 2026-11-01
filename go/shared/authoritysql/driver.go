@@ -38,6 +38,16 @@ func (e *unknownError) Is(target error) bool {
 	return target == ErrOutcomeUnknown
 }
 
+// phaseCommit:COMMIT 发出去之后没拿到结果,这笔事务可能已经提交。
+const phaseCommit = "事务提交"
+
+// IsCommitOutcomeUnknown 报告错误是不是 COMMIT 结局未知。其他结局未知多半是事务中途语句被取消,事务回滚了,
+// 只想知道「有没有一笔可能已经写进去」的调用方(后台循环的排空 Hold)看这个。
+func IsCommitOutcomeUnknown(err error) bool {
+	var commit *unknownError
+	return errors.As(err, &commit) && commit.phase == phaseCommit
+}
+
 func unknown(phase string, cause error) error {
 	return &unknownError{phase: phase, canceled: errors.Is(cause, context.Canceled), deadline: errors.Is(cause, context.DeadlineExceeded)}
 }
@@ -102,9 +112,11 @@ type guardedConnector struct {
 	gate       writerGate
 	session    sessionPolicy
 	outcomes   serverOutcomePolicy
+	// stale 见 guardedConn.stale,按映射拨号时才有值。
+	stale func() bool
 }
 
-func newGuardedConnector(inner driver.Connector, gate writerGate, session sessionPolicy, outcomes serverOutcomePolicy, permission Permission) (driver.Connector, error) {
+func newGuardedConnector(inner driver.Connector, gate writerGate, session sessionPolicy, outcomes serverOutcomePolicy, permission Permission) (*guardedConnector, error) {
 	if err := permission.validate(); err != nil {
 		return nil, err
 	}
@@ -134,7 +146,7 @@ func (c *guardedConnector) Connect(ctx context.Context) (driver.Conn, error) {
 		}
 		return nil, errors.New("权威SQL物理会话或boot身份核验失败")
 	}
-	return &guardedConn{raw: raw, gate: c.gate, session: c.session, outcomes: c.outcomes, permission: c.permission}, nil
+	return &guardedConn{raw: raw, gate: c.gate, session: c.session, outcomes: c.outcomes, permission: c.permission, stale: c.stale}, nil
 }
 
 // mu只属于一个物理连接，串行化raw调用及Tx/Rows/Close状态迁移。
@@ -154,6 +166,9 @@ type guardedConn struct {
 	rows        *guardedRows
 	closed      bool
 	quarantined bool
+	// stale 报告建连时记下的映射版本是否已过期(搬库翻转了),nil = 这个连接池不按映射拨号。
+	// 在途事务不受影响:它还在旧集群上,旧集群已冻结,闸门拒绝,调用方重试时拿到新集群的连接。
+	stale func() bool
 }
 
 type guardedTx struct {
@@ -204,6 +219,7 @@ func (c *guardedConn) beginLocked(ctx context.Context, opts driver.TxOptions, au
 	// 必须在BEGIN之前；不能挪入RR快照再读。
 	attempt, err := c.gate.beforeBegin(ctx, c.raw)
 	if err != nil {
+		NoteWriterFrozen(ctx, err)
 		return nil, c.preBusinessErrorLocked(err)
 	}
 	if attempt == nil {
@@ -228,6 +244,7 @@ func (c *guardedConn) beginLocked(ctx context.Context, opts driver.TxOptions, au
 	tx := &guardedTx{owner: c, raw: rawTx, ctx: ctx, automatic: automatic}
 	c.tx = tx
 	if err = attempt.enter(ctx, c.raw); err != nil {
+		NoteWriterFrozen(ctx, err)
 		if rollbackErr := c.endLocked(tx, false); rollbackErr != nil {
 			return nil, rollbackErr
 		}
@@ -254,6 +271,9 @@ func (c *guardedConn) failLocked(tx *guardedTx, cause error) error {
 	if outcome == outcomeUnknown {
 		c.quarantined = true
 		result = unknown("业务发送后", cause)
+		if tx != nil {
+			NoteWriterOutcomeUnknown(tx.ctx, result)
+		}
 	}
 	if tx != nil && !tx.done {
 		if rollbackErr := c.endLocked(tx, false); rollbackErr != nil {
@@ -299,7 +319,12 @@ func (c *guardedConn) endLocked(tx *guardedTx, commit bool) error {
 	c.tx = nil
 	if err != nil {
 		c.quarantined = true
-		tx.failure = unknown("事务结束", err)
+		phase := "事务结束"
+		if committing {
+			phase = phaseCommit
+		}
+		tx.failure = unknown(phase, err)
+		NoteWriterOutcomeUnknown(tx.ctx, tx.failure)
 		return tx.failure
 	}
 	// 已收到成功COMMIT不能因随后取消而伪报失败；发送前已取消则确认回滚后返回取消。
@@ -391,6 +416,11 @@ func (c *guardedConn) Ping(ctx context.Context) error {
 func (c *guardedConn) ResetSession(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// 空闲时翻转的连接在这里丢弃。database/sql 只认 ErrBadConn:关掉这条连接,取下一条重试,取完空闲连接就新建,新建的按新映射拨号。
+	// 这时什么语句都没发,不存在结局未知。
+	if c.stale != nil && c.stale() {
+		return driver.ErrBadConn
+	}
 	if err := c.usableLocked(); err != nil {
 		return err
 	}
@@ -416,6 +446,10 @@ func (c *guardedConn) IsValid() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed || c.quarantined || c.tx != nil || c.rows != nil {
+		return false
+	}
+	// 用完归还时映射已翻转:不放回连接池。
+	if c.stale != nil && c.stale() {
 		return false
 	}
 	if validator, ok := c.raw.(driver.Validator); ok {
@@ -448,6 +482,9 @@ func (c *guardedConn) execLocked(ctx context.Context, query string, call func() 
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := c.consumeBeforeWriteLocked(); err != nil {
 		return nil, err
 	}
 	tx := c.tx
@@ -503,6 +540,12 @@ func (c *guardedConn) queryLocked(ctx context.Context, query string, call func()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// 走 Query 的写(比如 SELECT ... FOR UPDATE 之外的语句)同样要先消费。纯读不消费:启动期的只读核对不烧写资格。
+	if validatePermissionStatement(query, permissionReader) != nil {
+		if err := c.consumeBeforeWriteLocked(); err != nil {
+			return nil, err
+		}
+	}
 	tx := c.tx
 	if tx != nil && tx.ctx.Err() != nil {
 		if err := c.endLocked(tx, false); err != nil {
@@ -514,7 +557,10 @@ func (c *guardedConn) queryLocked(ctx context.Context, query string, call func()
 		var err error
 		tx, err = c.beginLocked(ctx, driver.TxOptions{}, true)
 		if err != nil {
-			return nil, err
+			if !c.readPassesFrozenGateLocked(ctx, query, err) {
+				return nil, err
+			}
+			tx = nil
 		}
 	}
 	raw, closeStmt, err := call()
@@ -549,6 +595,41 @@ func (c *guardedConn) queryLocked(ctx context.Context, query string, call func()
 	rows := &guardedRows{owner: c, raw: raw, tx: tx, ctx: ctx, closeStmt: closeStmt}
 	c.rows = rows
 	return rows, nil
+}
+
+// consumeBeforeWriteLocked 在这个 boot 写这个逻辑库之前写下消费标记。写不成就不发这条语句,确定没写。
+func (c *guardedConn) consumeBeforeWriteLocked() error {
+	if c.permission.kind != permissionWriter {
+		return nil
+	}
+	return c.permission.writer.boot.marker.consume()
+}
+
+// startupProbeKey 标记 Open 自己的核对:这几条读不碰业务数据,不管 boot 处在哪个阶段都不该撞闸门。
+type startupProbeKey struct{}
+
+func startupProbe(ctx context.Context) context.Context {
+	return context.WithValue(ctx, startupProbeKey{}, true)
+}
+
+// readPassesFrozenGateLocked 决定闸门冻结时这条读能不能不开事务直接走。
+//
+// 写者池上的读也要过闸门,冻结窗口里回 ErrWriterFrozen,这是有意的。例外只有启动阶段:写资格是一次性的,消费之后进程起不来这个 Pod 就废了,
+// 而各服务开池之后都有一串只读核对(表形状、连接串指向、片号),窗口恰好撞上不该让进程退出。所以这个 boot 在这个库上还没有事务过过闸门时,
+// 不带事务的读语句放行。第一笔事务过闸之后就回到常规语义。
+//
+// 放行的只是读,拿到的是冻结时的数据,和不经闸门的只读连接池一样。显式事务和写一律不放:提交点的语义不变。规格 §2「启动路径」。
+func (c *guardedConn) readPassesFrozenGateLocked(ctx context.Context, query string, gateErr error) bool {
+	if !errors.Is(gateErr, ErrWriterFrozen) || errors.Is(gateErr, ErrOutcomeUnknown) || c.closed || c.quarantined {
+		return false
+	}
+	if validatePermissionStatement(query, permissionReader) != nil {
+		return false
+	}
+	if ctx.Value(startupProbeKey{}) != nil {
+		return true
+	}
+	return !c.permission.writer.boot.admitted.Load()
 }
 
 func (c *guardedConn) Prepare(query string) (driver.Stmt, error) {

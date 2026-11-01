@@ -31,8 +31,8 @@ spec:
   # 多副本的两个前提在服务侧:启动期迁移由库级命名锁串行(store.acquireMigrateLock);store 装配不起来就拒启
   # (ConfigMap 的 Store.Required: true),不让一个每次调用都报错的实例进发现池、按比例吃掉请求。
   # 消费并行度的上限是分区数(transaction_log 6 / player_snapshot 3),副本超过它只是多一份 RPC 容量。
-  # MySQL 连接预算:每个实例最多 35 条(三个 store 各 5 + 名字注册表 20;RouteStore 切 db_first 后再 +20),
-  # 按 zone 数 × 副本数计入共用 MySQL 的总账,公式与规划见 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger。
+  # MySQL 连接预算:目录三个池每片一个,存档库每库一个,流水库一个;K=1 时每实例约 90 条,K=64 时每片收窄后约 426 条。
+  # 按 zone 数 × 副本数计入总账,公式与规划见 tools/scripts/k8s_deploy.ps1 Get-MysqlConnectionLedger。
   replicas: 2
   # 先起新的、Ready 之后再停旧的:任何时刻至少有 2 个实例在发号。scene 启动要领的首个 GUID 号段、
   # login 建角要领的 PlayerId 号段都从这里来,发布期间不能出现"一个都没有"的窗口。
@@ -49,6 +49,7 @@ spec:
       labels:
         app: data-service
         tier: go-svc
+        mmorpg.io/sql-writer: "true"
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9260"
@@ -65,6 +66,8 @@ spec:
                     app: data-service
                 topologyKey: kubernetes.io/hostname
       # 独立registrar只在init读取有限预批准roster与控制凭据；normal只见本Pod选中配置。
+      # 控制目录都在 emptyDir 挂载根下的 private 子目录:Memory 介质的挂载根是 drwxrwsrwt、属主 root,过不了私有目录校验(go/shared/authoritysql/config_marker_other.go,
+      # Java 的 WriterAuthority 还要求属主是自己),uid 10001 也改不了它的权限。sticky 的父目录校验放行,子目录用 umask 077 建。不需要 root 容器。
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -74,7 +77,7 @@ spec:
         - name: sql-writer-registrar
           image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
           command: ["/bin/sh", "-ec"]
-          args: ["umask 077; mkdir -p /run/sql-writer/runtime/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/data_service.yaml","-runtime-env-output","/run/sql-writer/runtime/env","-boot-output","/run/sql-writer/grant/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
+          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/data_service.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)"]
           env:
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
@@ -98,9 +101,9 @@ spec:
           env:
           # grant只读，consume留在同PodemptyDir；同Podrestart不得重复消费boot。
             - name: MMORPG_SQL_WRITER_GRANT_FILE
-              value: /run/sql-writer/grant/boot-grant.json
+              value: /run/sql-writer/grant/private/boot-grant.json
             - name: MMORPG_SQL_WRITER_CONSUME_DIR
-              value: /run/sql-writer/consume
+              value: /run/sql-writer/consume/private
             - name: MMORPG_SQL_DEPLOYMENT_ID
               valueFrom: {fieldRef: {fieldPath: metadata.uid}}
             - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
@@ -117,6 +120,39 @@ spec:
             - name: MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: account-directory-scene, optional: false}
+            # GM 批量回收的资产指令签名,和 scene 同值。-AssetOps on 时 Recall.Enabled=true,这时缺它拒启。没开时用不到,所以 optional。
+            - name: MMORPG_ASSET_OP_SECRET_DATA_SERVICE
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: asset-data-service, optional: true}
+            # 角色护栏(docs/design/horizontal-scale-logical-db.md §3.3):协调者调参与者用 COORDINATOR,
+            # 其余各把验调用方读权威状态。缺一把拒绝启动,所以不写 optional: true。
+            - name: MMORPG_ROLE_FENCE_SECRET_COORDINATOR
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-coordinator, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_GUILD
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-guild, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_TRADE
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-trade, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_MAIL
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-mail, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_MATCH
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-match, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_PLAYER_INBOX
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-player-inbox, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_FRIEND
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-friend, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_CHAT
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-chat, optional: false}
+            - name: MMORPG_ROLE_FENCE_SECRET_DB
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: role-fence-db, optional: false}
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
             # C++ 约定注册(DataServiceNodeService.rpc)写进 NodeInfo 的对外 IP(data_service.go advertisedHost):
@@ -126,7 +162,7 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
           command: ["/bin/sh", "-ec"]
-          args: ["MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; exec /app/service \"$@\"","--","-f","/app/etc/data_service.yaml"]
+          args: ["(umask 077; mkdir -p /run/sql-writer/consume/private); if ls /run/sql-writer/consume/private/*.consumed >/dev/null 2>&1; then echo sql writer grant already consumed, the reaper replaces this pod >&2; exit 78; fi; MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/private/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; exec /app/service \"$@\"","--","-f","/app/etc/private/data_service.yaml"]
           ports:
             - containerPort: 9000
               name: grpc

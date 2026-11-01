@@ -22,6 +22,7 @@ import (
 	dspb "proto/data_service"
 	matchpb "proto/match"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/generated/table"
 	"shared/idsegment"
@@ -158,7 +159,12 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	// 而这是正确性约束、不是部署偏好。解析失败一律拒启,且错误里不含 DSN 原文(它带口令)。
 	// 迁移使用独立强会话池；DDL的元数据锁与socket预算由迁移器单独约束。
 	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	db, err := openMySQL(dbCtx, c.MySQL, authoritysql.Writer(writer))
+	dbPlacement, err := dbplacement.Start(dbCtx, c.MySQL.DbPlacement)
+	if err != nil {
+		dbCancel()
+		panic(fmt.Errorf("guild: %w", err))
+	}
+	db, err := openMySQL(dbCtx, c.MySQL, authoritysql.Writer(writer), dbPlacement.OpenOptions()...)
 	dbCancel()
 	if err != nil {
 		panic(fmt.Errorf("failed to connect authoritative SQL: %w", err))
@@ -236,16 +242,20 @@ func OpenMySQL(ctx context.Context, c config.MySQLConf) (*sql.DB, error) {
 
 // OpenReadOnlyMySQL只用于常驻启动期的只读schema核对。
 func OpenReadOnlyMySQL(ctx context.Context, c config.MySQLConf) (*sql.DB, error) {
-	return openMySQL(ctx, c, authoritysql.Reader())
+	options, err := dbplacement.ForOneShot(ctx, c.DbPlacement, data.DatabaseName)
+	if err != nil {
+		return nil, err
+	}
+	return openMySQL(ctx, c, authoritysql.Reader(), options...)
 }
 
-func openMySQL(ctx context.Context, c config.MySQLConf, permission authoritysql.Permission) (*sql.DB, error) {
+func openMySQL(ctx context.Context, c config.MySQLConf, permission authoritysql.Permission, options ...authoritysql.OpenOption) (*sql.DB, error) {
 	dsn, err := data.WithLockWaitTimeout(c.DataSource)
 	if err != nil {
 		return nil, err
 	}
 	maxOpen, maxIdle := c.EffectivePool()
-	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.Backend), maxOpen, permission)
+	db, err := authoritysql.Open(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.Backend), maxOpen, permission, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +273,12 @@ func OpenSchemaMySQL(ctx context.Context, c config.MySQLConf) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return authoritysql.OpenForMigration(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.Backend), permission)
+	// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。
+	options, err := dbplacement.ForMigration(ctx, c.DbPlacement, data.DatabaseName)
+	if err != nil {
+		return nil, err
+	}
+	return authoritysql.OpenForMigration(ctx, dsn, data.DatabaseName, authoritysql.Backend(c.Backend), permission, options...)
 }
 
 // initMatchInternalClient 按 MatchRpc 建 match 内部服务客户端;没配目标时保持 nil 接口(历练未开放)。

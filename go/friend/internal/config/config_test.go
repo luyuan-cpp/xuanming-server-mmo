@@ -40,7 +40,6 @@ func TestOriginalLoginConfigMustBeExplicit(t *testing.T) {
 		t.Fatal("占位全局登录态不应静默获授权")
 	}
 	for _, mutate := range []func(*Config){
-		func(c *Config) { c.AccountRoleSchema = "" }, func(c *Config) { c.AccountRoleSchema = "bad.schema" },
 		func(c *Config) { c.GlobalLoginSessions = false }, func(c *Config) { c.LoginRedis.Addrs = nil },
 		func(c *Config) { c.LoginRedis.DB = -1 }, func(c *Config) { c.LoginRedis.PoolSizePerNode = 0 },
 	} {
@@ -314,12 +313,12 @@ func TestSharedRedisDBAnchorScope(t *testing.T) {
 // 刻意不从 yaml 读:yaml 里任何一处被改坏,负向用例就会因为"基准本来就不合法"而集体误报。
 func validConfig() Config {
 	c := Config{
-		AccountRoleSchema: "testdb", GlobalLoginSessions: true,
-		LoginRedis:        playerredis.LoginReaderConfig{Addrs: []string{"127.0.0.1:6379"}, DB: 3, PoolSizePerNode: 8},
-		Backend:           "tidb",
-		ZoneId:            1,
-		LeaseTTL:          60,
-		MetricsListenAddr: ":9180",
+		GlobalLoginSessions: true,
+		LoginRedis:          playerredis.LoginReaderConfig{Addrs: []string{"127.0.0.1:6379"}, DB: 3, PoolSizePerNode: 8},
+		Backend:             "tidb",
+		ZoneId:              1,
+		LeaseTTL:            60,
+		MetricsListenAddr:   ":9180",
 		MySQL: MySQLConf{
 			Host: "127.0.0.1:3306", User: "appuser", DBName: data.DatabaseName,
 			MaxOpenConn: 20, MaxIdleConn: 5,

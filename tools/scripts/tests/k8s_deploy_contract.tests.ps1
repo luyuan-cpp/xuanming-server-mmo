@@ -39,14 +39,19 @@ function Invoke-DeployDryRun {
     if (-not ($fixtureArgs | Where-Object { $_ -match '^-GlobalAuthorityTiDBHost(?::|$)' })) {
         $fixtureArgs += @('-GlobalAuthorityTiDBHost', 'tidb.invalid:4000')
     }
-    # 仅部署渲染夹具：两条空entry检验有限容量；实际registrar仍必须校验完整正式请求，不能用本夹具注册。
+    # 仅部署渲染夹具：12条entry满足两副本的最小容量（副本数×6）；实际registrar仍必须校验完整正式请求，不能用本夹具注册。
     $fixtureRoot=Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-roster-render-'+[Guid]::NewGuid().ToString('N'))
     $null=[IO.Directory]::CreateDirectory($fixtureRoot)
     try {
         if(-not $fixtureEnv.ContainsKey('MMORPG_SQL_K8S_BOOT_CATALOG')){
             $rosterPath=Join-Path $fixtureRoot 'roster.json'
-            [IO.File]::WriteAllText($rosterPath,'{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":[{},{}]}',[Text.UTF8Encoding]::new($false))
+            $rosterEntry='{"requests":[{"authoritySchema":"fixture_db","protectedSchemas":["fixture_db"]}]}'
+            [IO.File]::WriteAllText($rosterPath,('{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":['+((@($rosterEntry)*12) -join ',')+']}'),[Text.UTF8Encoding]::new($false))
             $rosterSha=(Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            # data-service 的名册要恰好覆盖片库、流水库和存档库，部署脚本会核（Assert-DataServiceRosterSchemas）；空 entry 不核，只验容量。
+            $dataServiceRosterPath=Join-Path $fixtureRoot 'roster-data-service.json'
+            [IO.File]::WriteAllText($dataServiceRosterPath,('{"format":"SQL_WRITER_BOOT_ROSTER_V1","entries":['+((@('{}')*12) -join ',')+']}'),[Text.UTF8Encoding]::new($false))
+            $dataServiceRosterSha=(Get-FileHash -LiteralPath $dataServiceRosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
             $zone='contract-test';$prefix='mmorpg-zone';$infra='mmorpg-infra';$zonesPath=Join-Path (Get-RepoRoot) 'deploy/k8s/zones.json'
             for($i=0;$i -lt $fixtureArgs.Count-1;$i++){
                 switch($fixtureArgs[$i]){'-ZoneName'{$zone=$fixtureArgs[$i+1]};'-NamespacePrefix'{$prefix=$fixtureArgs[$i+1]};'-InfraNamespace'{$infra=$fixtureArgs[$i+1]};'-ZonesConfigPath'{$zonesPath=$fixtureArgs[$i+1]}}
@@ -57,7 +62,7 @@ function Invoke-DeployDryRun {
             $catalog=@{}
             foreach($ns in @(@($zoneNames | Sort-Object -Unique | ForEach-Object {$prefix+'-'+$_})+$infra)){
                 foreach($svc in @('login','gateway','data-service','db','chat','friend','guild','mail','match','player-inbox','rank','trade')){
-                    $catalog[$ns+'/'+$svc]=@{requestSecret='fixture-request';registrarSecret='fixture-registrar';registrarImage=('fixture.invalid/registrar@sha256:'+('a'*64));physicalAuthoritySha256=('b'*64);runtimeConfigSecret='fixture-runtime';replicas=2;rosterFile=$rosterPath;rosterSha256=$rosterSha;schemaConfigSecret='fixture-schema-config';schemaPermissionSecret='fixture-schema-permission'}
+                    $catalog[$ns+'/'+$svc]=@{requestSecret='fixture-request';registrarSecret='fixture-registrar';registrarImage=('fixture.invalid/registrar@sha256:'+('a'*64));physicalAuthoritySha256=('b'*64);runtimeConfigSecret='fixture-runtime';replicas=2;rosterFile=$(if($svc -ceq 'data-service'){$dataServiceRosterPath}else{$rosterPath});rosterSha256=$(if($svc -ceq 'data-service'){$dataServiceRosterSha}else{$rosterSha});schemaConfigSecret='fixture-schema-config';schemaPermissionSecret='fixture-schema-permission'}
                 }
             }
             $catalogPath=Join-Path $fixtureRoot 'catalog.json'
@@ -167,7 +172,7 @@ Test-Case "ConfigMap 镜像 MySQL 池参数 == 服务 yaml(db Placement、data-s
         @{ ConfigMap = 'go-svc-db-config'; Prefix = 'data.db.yaml.'; Source = 'go/db/etc/db.yaml'
            PoolKeys = @('Placement.ZoneStoreMaxOpenConn', 'Placement.ZoneStoreMaxIdleConn', 'Placement.NonZoneStoreMaxOpenConn', 'Placement.NonZoneStoreMaxIdleConn', 'Placement.ExtraStoreConnMaxIdleSeconds') }
         @{ ConfigMap = 'go-svc-data-service-config'; Prefix = 'data.data_service.yaml.'; Source = 'go/data_service/etc/data_service.yaml'
-           PoolKeys = @('PlayerName.MaxOpenConn', 'PlayerName.MaxIdleConn', 'RouteStore.MaxOpenConn', 'RouteStore.MaxIdleConn') }
+           PoolKeys = @('PlayerName.MaxOpenConn', 'PlayerName.MaxIdleConn', 'RouteStore.MaxOpenConn', 'RouteStore.MaxIdleConn', 'Directory.StoragePools.MaxOpenConn', 'Directory.StoragePools.MaxIdleConn', 'Directory.StoragePools.ConnMaxIdleSeconds') }
         @{ ConfigMap = 'java-svc-gateway-config'; Prefix = 'data.application.yaml.'; Source = 'java/gateway_node/src/main/resources/application.yaml'
            PoolKeys = @('spring.datasource.hikari.maximum-pool-size', 'spring.datasource.hikari.minimum-idle', 'spring.datasource.hikari.connection-timeout') }
     )
@@ -954,7 +959,7 @@ Test-Case "通过时回显按「C++ 不调用」放行的 MethodTimeouts 条目(
 
 Test-Case "「C++ 不调用」表名副其实:表里的方法 C++ 既不直接调用、gate 也不会按消息号转发,且每一项都对应服务 yaml 里的一条 MethodTimeouts(没有过期项)" {
     # 表里的目标 → 它的服务 yaml。新增目标时在这里补一行(与 Assert-GrpcClientDeadlineBudget 的 $targetSources 同值)。
-    # 现在表是空的(回档 RPC 已删),下面的搜索判据保留:以后有人往表里加方法,这里立刻核它。
+    # 现在表里是 GM 回收的三个方法,运维直连。以后有人往表里加方法,这里立刻核它。
     $serviceYamlOf = @{ DataServiceNodeService = 'go/data_service/etc/data_service.yaml'; PlayerStoreNodeService = 'go/db/etc/db.yaml' }
 
     # 手写 C++ = cpp/ 下除生成物(cpp/generated,生成客户端自身的定义就在那里)与内嵌 muduo 之外的全部源码。
@@ -1056,7 +1061,7 @@ Test-Case "data-service 的 NameCacheRedis 指向共享 Redis、不写 DB 键;go
     foreach ($key in @('NameCacheRedis.DB', 'MappingRedis', 'LegacyNonGlobal')) {
         Assert-Equal -Expected 0 -Actual @(Get-FlatSubtreeKeys -Flat $dsFlat -Path "data.data_service.yaml.$key").Count -Because "data-service ConfigMap 不该再写 $key"
     }
-    # go/db 不连 Redis,选库读全局库 player_route;这些键已从 go/db/internal/config 删掉,写了也没人读。
+    # go/db 不连 Redis,选库调 data_service 的 GetPlayerRoute;这些键已从 go/db/internal/config 删掉,写了也没人读。
     $dbFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-db-config")
     foreach ($key in @('ServerConfig.RedisClient', 'Placement.Redis', 'Placement.Required', 'Placement.RequireRouteReady', 'LegacyNonGlobal')) {
         Assert-Equal -Expected 0 -Actual @(Get-FlatSubtreeKeys -Flat $dbFlat -Path "data.db.yaml.$key").Count -Because "go/db ConfigMap 不该再写 $key"
@@ -1146,16 +1151,19 @@ Test-Case "prod 档位 + 注入环境变量时生成器可以正常出产物" {
     Assert-Equal -Expected 0 -Actual $prodRun.ExitCode -Because "注入齐全时不该失败。输出: $($prodRun.Output)"
 }
 
-Test-Case 'data-service ConfigMap 的 RouteStore 段只写连接池与合服映射刷新周期,取值镜像服务 yaml' {
+Test-Case 'data-service ConfigMap 的 RouteStore 段只写连接池与合服映射刷新周期,取值镜像服务 yaml,池按目录片数摊开' {
     $source = 'go/data_service/etc/data_service.yaml'
-    foreach ($case in @(@{ Label = 'dev'; Output = $devOut }, @{ Label = 'prod'; Output = $prodRun.Output })) {
+    # dev 缺省 K=1,池就是服务 yaml 的值;prod 是 K=64,每片一个池,按 Get-DirectoryShardPoolLimit 收窄(设计 §5.1,总账用同一条规则)。
+    foreach ($case in @(@{ Label = 'dev'; Output = $devOut; LogicalShards = 1 }, @{ Label = 'prod'; Output = $prodRun.Output; LogicalShards = 64 })) {
         $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $case.Output -Name 'go-svc-data-service-config')
         $prefix = 'data.data_service.yaml.RouteStore'
         $keys = @(Get-FlatSubtreeKeys -Flat $flat -Path $prefix | Where-Object { $_ -cne $prefix } | Sort-Object)
         Assert-Equal -Expected ("$prefix.MaxIdleConn,$prefix.MaxOpenConn,$prefix.MergedZoneRefreshSec") -Actual ($keys -join ',') -Because "$($case.Label):映射直读全局库之后 RouteStore 只剩这三项,Mode / ReadRequiresReady / Reconcile / WaitAOF* / Publish* 都已删除"
-        foreach ($key in @('MaxOpenConn', 'MaxIdleConn', 'MergedZoneRefreshSec')) {
-            Assert-Equal -Expected (Get-EtcValue -RelativePath $source -KeyPath "RouteStore.$key") -Actual (Get-FlatValue -Flat $flat -KeyPath "$prefix.$key") -Because "$($case.Label):RouteStore.$key 镜像服务 yaml"
-        }
+        $expectedOpen = Get-DirectoryShardPoolLimit -Base ([int](Get-EtcValue -RelativePath $source -KeyPath 'RouteStore.MaxOpenConn')) -LogicalShards $case.LogicalShards
+        $expectedIdle = [Math]::Min([int](Get-EtcValue -RelativePath $source -KeyPath 'RouteStore.MaxIdleConn'), $expectedOpen)
+        Assert-Equal -Expected $expectedOpen -Actual (Get-FlatValue -Flat $flat -KeyPath "$prefix.MaxOpenConn") -Because "$($case.Label):RouteStore.MaxOpenConn 是服务 yaml 的预算按 K=$($case.LogicalShards) 摊开"
+        Assert-Equal -Expected $expectedIdle -Actual (Get-FlatValue -Flat $flat -KeyPath "$prefix.MaxIdleConn") -Because "$($case.Label):RouteStore.MaxIdleConn 不超过每片上限"
+        Assert-Equal -Expected (Get-EtcValue -RelativePath $source -KeyPath 'RouteStore.MergedZoneRefreshSec') -Actual (Get-FlatValue -Flat $flat -KeyPath "$prefix.MergedZoneRefreshSec") -Because "$($case.Label):RouteStore.MergedZoneRefreshSec 镜像服务 yaml"
         Assert-Equal -Expected 'tidb.invalid:4000' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.SnapshotMySQL.Host') -Because '同一明确虚构TiDB入口，不回落zone MySQL'
         Assert-Equal -Expected 'tidb' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.data_service.yaml.SnapshotMySQL.Backend') -Because '部署缺省 tidb 档，实际身份由服务启动核验'
     }
@@ -2168,30 +2176,6 @@ Test-Case "负向:zone-down / zone-status 不受发布门禁影响(止血路径�
     Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "出事时看状态/关 zone 绝不能被发布预检挡住。输出: $($run.Output)"
 }
 
-# ─────────────────────────────────────────────────────────────────
-# 5. 灾难回滚脚本
-# ─────────────────────────────────────────────────────────────────
-
-Test-Case "负向:k8s_zone_rollback 拒绝可变 tag 作为回滚目标" {
-    $run = Invoke-ToolScript -ScriptName "k8s_zone_rollback.ps1" -Arguments @(
-        "-ZoneName", "contract-test", "-ZoneId", "101",
-        "-TargetTime", "2026-05-15T14:23:00Z",
-        "-NodeImage", "ghcr.io/luyuancpp/mmorpg-node:latest"
-    )
-    Assert-True -Condition ($run.ExitCode -ne 0) -Because "灾难回滚指向可变 tag = 数据回档了、代码没回"
-    Assert-Match -Text $run.Output -Pattern '灾难回滚拒绝' -Because "错误文本要点明是回滚脚本自己拒的"
-}
-
-Test-Case "k8s_zone_rollback 接受不可变 tag(dry-run 走完全流程)" {
-    $run = Invoke-ToolScript -ScriptName "k8s_zone_rollback.ps1" -Arguments @(
-        "-ZoneName", "contract-test", "-ZoneId", "101",
-        "-TargetTime", "2026-05-15T14:23:00Z",
-        "-NodeImage", "ghcr.io/luyuancpp/mmorpg-node:0123456789ab"
-    )
-    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "dry-run 不该失败。输出: $($run.Output)"
-    Assert-Match -Text $run.Output -Pattern 'DRY-RUN' -Because "默认必须是 dry-run"
-}
-
 # battle 全局池与命令 topic 的跨文件部署契约。
 Test-Case 'node ConfigMap 的 Kafka 命令 topic 世代和分区数必须与预建 Job 同源' {
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name 'node-config')
@@ -2528,7 +2512,7 @@ Test-Case '玩家收件箱写前门禁:线上交叉核对 —— 本次渲染 fa
         try { Assert-PlayerInboxConsumerGate -LiveFacts $live 6>&1 3>&1 | Out-Null } catch { $message = $_.Exception.Message }
         Assert-Match -Text $message -Pattern '^拒绝部署:本次把 consumer_enabled=false 渲染进 node-config,而线上 namespace contract-infra 的 ConfigMap go-svc-player-inbox-config 的 PlayerInbox\.EnqueueTypes 非空\(PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN\)' -Because '两份 yaml 不矛盾也要拒绝:另一侧线上已经开了入箱'
         Assert-Match -Text $message -Pattern '用当前 HEAD 的脚本配旧 -NodeImage,或 kubectl rollout undo' -Because '拒绝时写明开消费之后该怎么回滚 zone'
-        Assert-Match -Text $message -Pattern 'k8s_zone_rollback\.ps1\)没有这个开关' -Because '包装入口没有豁免开关,拒绝文案必须写明'
+        Assert-Match -Text $message -Pattern 'k8s_image\.ps1\)没有这个开关' -Because '包装入口没有豁免开关,拒绝文案必须写明'
         Assert-Match -Text $message -Pattern 'EnqueueTypes 改回 \[\] 并提交、重跑 infra-up\(正常关消费的顺序\),门禁随之放行' -Because '给出包装入口可执行的恢复路径'
 
         $printed = [string](Assert-PlayerInboxConsumerGate -LiveFacts $live -AllowConsumerOff $true 6>&1 3>&1 | Out-String -Width 4096)
@@ -3140,6 +3124,8 @@ Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 �
             MaxConnections = 500
             DbReplicas = 2; DbHomeMaxOpen = 60; DbZoneStoreMaxOpen = 8; DbNonZoneStoreMaxOpen = 8
             DsReplicas = 2; DsAuditStorePools = 3; DsAuditMaxOpen = 5; DsPlayerNameMaxOpen = 20; DsDirectoryMaxOpen = $directoryPool; DsRouteMaxOpen = 20
+            # 2026-10-31 逻辑库拆分:data_service 每个存档库一个池(建角、判死、过户证明)。当时的核算里没有它,E_z=0 时也有本 zone 这一个库。
+            DsStoragePoolMaxOpen = 8
             GatewayReplicas = 2; GatewayMaxPool = 10
             FriendReplicas = 2; FriendMaxOpen = 20; TradeReplicas = 2; TradeMaxOpen = 20
             # 2026-10-15 起全局池多了玩家收件箱(player-inbox,docs/design/player-inbox-service.md §10);当时的核算里没有它。
@@ -3150,6 +3136,8 @@ Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 �
             MailReplicas = 2; MailMaxOpen = 20
             RankReplicas = 2; RankMaxOpen = 20
             ChatReplicas = 2; ChatMaxOpen = 16
+            # 2026-10-31 match 第一次进总账(它的池写死在 go/match/internal/authority/schema.go);同样不在当时的核算里。
+            MatchReplicas = 2; MatchMaxOpen = 16
         }
     }
 
@@ -3157,15 +3145,18 @@ Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 �
     # 每 zone = 2 × (db 60 + ds 35 + gateway 10) = 210;全局 = friend 2 × 20 + trade 2 × 20 = 80。
     # 收件箱(2 × 20 = 40)是后加的全局池:断言按「2026-10-12 的核算 + 40」比,历史那份核算本身仍逐项复现。
     # 帮会(2 × 20 = 40)同理是 2026-10-16 后加的全局池,下面的断言一并加上;邮件(2 × 20 = 40)同日加入,同样一并加上。
-    $inboxGlobal = 2 * 20 + 2 * 20 + 2 * 20 + 2 * 20 + 2 * 16
+    # chat 同样(2 × 16),match 同样(2 × 16)。
+    $inboxGlobal = 2 * 20 + 2 * 20 + 2 * 20 + 2 * 20 + 2 * 16 + 2 * 16
     $routePool = 20
+    # data_service 每实例多出来的独立池:目录、路由、本 zone 存档库。
+    $dsOwnPools = $directoryPool + $routePool + 8
     $nominalShape = @{ ExtraZoneStores = 0; NonZoneStores = 0; RolloutExtraPodsPerDeployment = 0; OpsReserve = 0 }
     foreach ($case in @(@{ Zones = 4; Steady = 920 }, @{ Zones = 2; Steady = 500 })) {
         $ledger = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -ZoneCount $case.Zones @nominalShape
-        Assert-Equal -Expected ('60/{0}/10/{1}/{2}' -f (35 + $directoryPool + $routePool), (210 + 2 * ($directoryPool + $routePool)), (80 + $inboxGlobal)) -Actual ('{0}/{1}/{2}/{3}/{4}' -f $ledger.DbPerInstance, $ledger.DsPerInstance, $ledger.GatewayPerInstance, $ledger.PerZone, $ledger.Global) -Because "Z=$($case.Zones):db / ds / gateway 每实例、每 zone、全局(friend + trade + 收件箱) 五项"
-        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * ($directoryPool + $routePool)) -Actual $ledger.Steady -Because "Z=$($case.Zones) 的稳态应为历史核算、现役全局池与每zone目录池、路由池总和"
-        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * ($directoryPool + $routePool)) -Actual $ledger.Peak -Because '不含滚动余量与运维余量时,峰值 = 稳态'
-        Assert-Equal -Expected (500 - $case.Steady - $inboxGlobal - $case.Zones * 2 * ($directoryPool + $routePool)) -Actual $ledger.Headroom -Because '余量 = max_connections − 峰值(当时 Z=2 恰好为 0,加上收件箱后两者都为负)'
+        Assert-Equal -Expected ('60/{0}/10/{1}/{2}' -f (35 + $dsOwnPools), (210 + 2 * $dsOwnPools), (80 + $inboxGlobal)) -Actual ('{0}/{1}/{2}/{3}/{4}' -f $ledger.DbPerInstance, $ledger.DsPerInstance, $ledger.GatewayPerInstance, $ledger.PerZone, $ledger.Global) -Because "Z=$($case.Zones):db / ds / gateway 每实例、每 zone、全局(friend + trade + 收件箱) 五项"
+        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * $dsOwnPools) -Actual $ledger.Steady -Because "Z=$($case.Zones) 的稳态应为历史核算、现役全局池与每zone目录池、路由池、存档库池总和"
+        Assert-Equal -Expected ($case.Steady + $inboxGlobal + $case.Zones * 2 * $dsOwnPools) -Actual $ledger.Peak -Because '不含滚动余量与运维余量时,峰值 = 稳态'
+        Assert-Equal -Expected (500 - $case.Steady - $inboxGlobal - $case.Zones * 2 * $dsOwnPools) -Actual $ledger.Headroom -Because '余量 = max_connections − 峰值(当时 Z=2 恰好为 0,加上收件箱后两者都为负)'
     }
 
     # 旧上限 500 对规划档必须判超限(峰值 > max_connections,余量为负)—— 这就是上限要跟着规划档走的原因。
@@ -3182,19 +3173,21 @@ Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 �
     $rolloutShape = @{ ZoneCount = 4; ExtraZoneStores = 0; NonZoneStores = 0; OpsReserve = 0 }
     $withoutRollout = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -RolloutExtraPodsPerDeployment 0 @rolloutShape
     $withRollout = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -RolloutExtraPodsPerDeployment 2 @rolloutShape
-    Assert-Equal -Expected (2 * (241 + $directoryPool + $routePool)) -Actual ($withRollout.Peak - $withoutRollout.Peak) -Because 'R=2 与 R=0 的峰值之差必须是 2 × (db + ds + gateway + friend + trade + 收件箱 + 帮会 + 邮件 每实例之和)'
-    Assert-Equal -Expected (2 * (241 + $directoryPool + $routePool)) -Actual $withRollout.RolloutSurge -Because '这个差值就是分项里的 RolloutSurge'
+    # 265 = db 60 + ds 审计 15 + 名字 20 + 存档库 8 + gateway 10 + friend / trade / 收件箱 / 帮会 / 邮件 / 排行 各 20 + chat 16 + match 16。
+    Assert-Equal -Expected (2 * (265 + $directoryPool + $routePool)) -Actual ($withRollout.Peak - $withoutRollout.Peak) -Because 'R=2 与 R=0 的峰值之差必须是 2 × (db + ds + gateway + friend + trade + 收件箱 + 帮会 + 邮件 + 排行 + chat + match 每实例之和)'
+    Assert-Equal -Expected (2 * (265 + $directoryPool + $routePool)) -Actual $withRollout.RolloutSurge -Because '这个差值就是分项里的 RolloutSurge'
     Assert-Equal -Expected $withoutRollout.Steady -Actual $withRollout.Steady -Because '滚动余量不进稳态'
 
     # 逐项钉公式:副本数、池上限、形态参数各取互不相同的值,任何一项漏算、两个额外库旋钮接反、副本数错配,结果都对不上。
     #   db 每实例 = 60 + 2 × 7(zone 家族额外库)+ 1 × 11(非 zone 落点库)= 85
-    #   ds 每实例 = 3 × 5 + 20 + 13(独立目录池) + 30(route store)= 78
-    #   每zone=2×85+3×78+4×10=444；全局550含rank/chat；稳态3×444+550=1882。
-    #   滚动255；峰值1882+255+7=2144；余量5000−2144=2856。
+    #   ds 每实例 = 3 × 5 + 20 + 13(独立目录池) + 30(route store)+ (2 + 1 + 1) × 3(每个存档库一个池)= 90
+    #   每zone=2×85+3×90+4×10=480；全局610含rank/chat/match；稳态3×480+610=2050。
+    #   滚动272；峰值2050+272+7=2329；余量5000−2329=2671。
     $distinctInputs = [ordered]@{
         MaxConnections = 5000
         DbReplicas = 2; DbHomeMaxOpen = 60; DbZoneStoreMaxOpen = 7; DbNonZoneStoreMaxOpen = 11
         DsReplicas = 3; DsAuditStorePools = 3; DsAuditMaxOpen = 5; DsPlayerNameMaxOpen = 20; DsDirectoryMaxOpen = 13; DsRouteMaxOpen = 30
+        DsStoragePoolMaxOpen = 3
         GatewayReplicas = 4; GatewayMaxPool = 10
         FriendReplicas = 5; FriendMaxOpen = 20; TradeReplicas = 6; TradeMaxOpen = 40
         PlayerInboxReplicas = 7; PlayerInboxMaxOpen = 3
@@ -3202,9 +3195,10 @@ Test-Case '自检:总账公式复现 2026-10-12 核算(历史Z=4 → 920、Z=2 �
         MailReplicas = 9; MailMaxOpen = 4
         RankReplicas = 10; RankMaxOpen = 6
         ChatReplicas = 11; ChatMaxOpen = 7
+        MatchReplicas = 12; MatchMaxOpen = 5
     }
     $distinct = Get-MysqlConnectionLedger -Inputs $distinctInputs -ZoneCount 3 -ExtraZoneStores 2 -NonZoneStores 1 -RolloutExtraPodsPerDeployment 1 -OpsReserve 7
-    Assert-Equal -Expected '85/78/10/444/550/1882/255/7/2144/5000/2856' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}/{6}/{7}/{8}/{9}/{10}' -f $distinct.DbPerInstance, $distinct.DsPerInstance, $distinct.GatewayPerInstance, $distinct.PerZone, $distinct.Global, $distinct.Steady, $distinct.RolloutSurge, $distinct.OpsReserve, $distinct.Peak, $distinct.MaxConnections, $distinct.Headroom) -Because '分项依次是 db / ds / gateway 每实例、每 zone、全局、稳态、滚动余量、运维余量、峰值、上限、余量'
+    Assert-Equal -Expected '85/90/10/480/610/2050/272/7/2329/5000/2671' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}/{6}/{7}/{8}/{9}/{10}' -f $distinct.DbPerInstance, $distinct.DsPerInstance, $distinct.GatewayPerInstance, $distinct.PerZone, $distinct.Global, $distinct.Steady, $distinct.RolloutSurge, $distinct.OpsReserve, $distinct.Peak, $distinct.MaxConnections, $distinct.Headroom) -Because '分项依次是 db / ds / gateway 每实例、每 zone、全局、稳态、滚动余量、运维余量、峰值、上限、余量'
 
     # 输入非法一律 throw 并点名是哪个键(fail-closed:不能拿一个猜出来的连接数去和上限比)。
     $missingKey = & $newLegacyInputs
@@ -3252,11 +3246,11 @@ Test-Case '连 MySQL 的 ConfigMap 只有总账认识的那些(zone-up 三个、
         $authorityFlat = ConvertTo-FlatManifest -Block $authorityBlock
         $authorityPrefix = "data.$authorityService.yaml."
         Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'GlobalLoginSessions')) -Because "$authorityService 必须声明真实全局登录态，不沿用本地占位false"
-        Assert-Match -Text (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'AccountRoleSchema')) -Pattern '^[a-z][a-z0-9_]{0,63}$' -Because "$authorityService 必须显式指定全局角色目录"
+        Assert-Equal -Expected 0 -Actual @(Get-FlatSubtreeKeys -Flat $authorityFlat -Path ($authorityPrefix + 'AccountRoleSchema')).Count -Because "$authorityService 不再跨库读角色目录,角色状态走本库 role_fence 或目录 RPC"
         Assert-Match -Text (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'LoginRedis.Addrs[0]')) -Pattern '^redis\..+:6379$' -Because "$authorityService 必须连接部署的全局login Redis，不能空地址"
         Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.RedisClient.DB') -Actual (Get-FlatValue -Flat $authorityFlat -KeyPath ($authorityPrefix + 'LoginRedis.DB')) -Because "$authorityService 原会话账号读取必须与login同DB"
     }
-    $infraExpected = @('go-svc-friend-config', 'go-svc-trade-config', 'go-svc-player-inbox-config', 'go-svc-guild-config', 'go-svc-mail-config', 'go-svc-rank-config', 'go-svc-chat-config' | Sort-Object) -join ','
+    $infraExpected = @('go-svc-friend-config', 'go-svc-trade-config', 'go-svc-player-inbox-config', 'go-svc-guild-config', 'go-svc-mail-config', 'go-svc-rank-config', 'go-svc-chat-config', 'go-svc-match-config' | Sort-Object) -join ','
     Assert-Equal -Expected $infraExpected -Actual (@(Get-MysqlClientConfigMapNames -Output $infraRun.Output) -join ',') -Because 'infra-up 产物里连 MySQL 的 ConfigMap 必须恰好是 friend / trade / player-inbox / guild / mail 五个(总账的全局部分只算了它们)'
     $friendConfig = Select-ManifestByName -Output $infraRun.Output -Name 'go-svc-friend-config'
     Assert-Match -Text $friendConfig -Pattern '(?m)^\s*Backend: tidb\s*$' -Because '显式入口缺省 tidb 档，dev 也不回落区域 MySQL'
@@ -3502,6 +3496,8 @@ Test-Case '负向:ConfigMap 要镜像的 MySQL 池参数不合格时,入口门�
         foreach ($bad in @(
             @{ Why = 'RouteStore 空闲数超过上限'; File = 'go/data_service/etc/data_service.yaml'; KeyPath = 'RouteStore.MaxIdleConn'; Value = [string]($routeStoreMaxOpen + 1) }
             @{ Why = 'PlayerName 上限为 0'; File = 'go/data_service/etc/data_service.yaml'; KeyPath = 'PlayerName.MaxOpenConn'; Value = '0' }
+            @{ Why = '存档库池上限为 0'; File = 'go/data_service/etc/data_service.yaml'; KeyPath = 'Directory.StoragePools.MaxOpenConn'; Value = '0' }
+            @{ Why = '存档库池空闲连接回收秒数为 0(冷库的池回不到 0 条,总账就不是这个账了)'; File = 'go/data_service/etc/data_service.yaml'; KeyPath = 'Directory.StoragePools.ConnMaxIdleSeconds'; Value = '0' }
             @{ Why = 'zone 家族额外库空闲数为 0(Go 侧下限 1)'; File = 'go/db/etc/db.yaml'; KeyPath = 'Placement.ZoneStoreMaxIdleConn'; Value = '0' }
             @{ Why = '额外库空闲连接回收秒数为 0'; File = 'go/db/etc/db.yaml'; KeyPath = 'Placement.ExtraStoreConnMaxIdleSeconds'; Value = '0' }
             @{ Why = 'Hikari minimum-idle 为负(下限 0)'; File = 'java/gateway_node/src/main/resources/application.yaml'; KeyPath = 'spring.datasource.hikari.minimum-idle'; Value = '-1' }
@@ -4418,7 +4414,7 @@ Test-Case 'zone 写路径的 Redis 拓扑判定:没给 -RedisReplicas 跟随线�
         @{ Live = $null; Requested = 0; Resolved = 3; Expected = 'resolved'; Why = 'infra 还没部署,不替 infra-up 判断' },
         @{ Live = 3; Requested = 0; Resolved = 3; Expected = 'resolved'; Why = '线上与档位缺省一致' },
         @{ Live = 1; Requested = 1; Resolved = 1; Expected = 'resolved'; Why = '显式值与线上一致' },
-        @{ Live = 1; Requested = 0; Resolved = 3; Expected = 'live'; Why = 'staging / prod 还在单实例上:没给参数就跟随线上,zone 回滚 Step 6 照常可用' },
+        @{ Live = 1; Requested = 0; Resolved = 3; Expected = 'live'; Why = 'staging / prod 还在单实例上:没给参数就跟随线上,zone-up 照常可用' },
         @{ Live = 3; Requested = 0; Resolved = 1; Expected = 'live'; Why = 'dev 档上手工切过高可用:跟随线上,不把 WAITAOF 降回 0' },
         @{ Live = 1; Requested = 3; Resolved = 3; Expected = 'refuse'; Why = '显式 3 而线上 1:WAITAOF 写 1 没有副本可等,scene-manager 拒启' },
         @{ Live = 3; Requested = 1; Resolved = 1; Expected = 'refuse'; Why = '显式 1 而线上 3:WAITAOF 写 0,切主时静默丢已确认写入' },
@@ -4759,12 +4755,17 @@ Test-Case 'guild ConfigMap 镜像 go/guild/etc/guild.yaml;AssetOp / Activity 整
     Assert-Equal -Expected $schemaDev -Actual ([string]$flat['Schema.AutoMigrate']) -Because 'dev 档镜像服务 yaml 的建表策略'
 }
 
-Test-Case 'data-service ConfigMap 只写 config.go 认的键:Regions / DevRedis / PlayerLockTTLSec / GuildInternalRpc / 回档 MethodTimeouts / PlayerStorePath 都不再写' {
+Test-Case 'data-service ConfigMap 只写 config.go 认的键:Regions / DevRedis / PlayerLockTTLSec / GuildInternalRpc / PlayerStorePath 都不再写;MethodTimeouts 和服务 yaml 一致' {
     $cm = Select-ManifestByName -Output $devOut -Name 'go-svc-data-service-config'
     $embedded = Get-ConfigMapEmbeddedText -Block $cm -FileName 'data_service.yaml'
-    foreach ($key in @('Regions', 'DevRedis', 'PlayerLockTTLSec', 'GuildInternalRpc', 'GuildClockSkewMarginMs', 'GuildCheckBudgetSeconds', 'MethodTimeouts', 'PlayerStorePath', 'LoginAdminRpc')) {
+    foreach ($key in @('Regions', 'DevRedis', 'PlayerLockTTLSec', 'GuildInternalRpc', 'GuildClockSkewMarginMs', 'GuildCheckBudgetSeconds', 'PlayerStorePath', 'LoginAdminRpc')) {
         Assert-NotMatch -Text $embedded -Pattern ('(?m)^' + [regex]::Escape($key) + '\s*:') -Because "$key 已从 go/data_service 的配置里删掉"
     }
+    # GM 回收的方法级超时在模板里手写了一份。和服务 yaml 分家的话,集群退回默认 2 秒,冻结一批就超时。
+    $methodTimeoutsOf = { param([string]$Text) return (@(Get-ZrpcMethodTimeouts -Text $Text | ForEach-Object { "$($_.FullMethod)=$($_.Timeout)" }) -join ',') }
+    $expectedTimeouts = & $methodTimeoutsOf (Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'go/data_service/etc/data_service.yaml') -Raw)
+    Assert-Match -Text $expectedTimeouts -Pattern 'BatchRecallItems=' -Because '服务 yaml 要给冻结计划放宽预算'
+    Assert-Equal -Expected $expectedTimeouts -Actual (& $methodTimeoutsOf $embedded) -Because 'ConfigMap 的 MethodTimeouts 要和服务 yaml 一样'
     Assert-Match -Text $embedded -Pattern '(?m)^NameCacheRedis:\s*\n\s+Host: redis\.mmorpg-infra:6379\s*$' -Because 'NameCacheRedis 指向共享 Redis'
 }
 
@@ -4845,7 +4846,7 @@ Test-Case 'mail 非dev运行门禁:生产模式、后端档位和禁止自动迁
 
 Test-Case 'mail 迁移作业只读取结构迁移DSN，不加载producer或资产密钥' {
     $manifest = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/mail-migrate.yaml') -Raw
-    Assert-Match -Text $manifest -Pattern 'name: MMORPG_MAIL_SQL_DSN' -Because '迁移与常驻进程使用相同DSN'
+    Assert-Match -Text $manifest -Pattern 'name: MMORPG_MAIL_SQL_DSN\s+valueFrom:\s+secretKeyRef: \{name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false\}' -Because 'Job 的账号是 schema 主体,和注入的 principal 出自同一个 Secret'
     Assert-Match -Text $manifest -Pattern '"-migrate"' -Because '仅运行迁移入口'
     Assert-Match -Text $manifest -Pattern 'values: \[1, 4\]' -Because '不可重试迁移错误立即FailJob'
     Assert-NotMatch -Text $manifest -Pattern 'name: MAIL_PRODUCER|name: MMORPG_ASSET_OP' -Because '迁移不需要发件或资产权限'
@@ -5261,7 +5262,9 @@ Test-Case 'rank 部署形态:全局池 2 副本滚动 + PDB + 反亲和 + POD_IP
     }
     $migration = Select-RankManifestDocument -Output $guildInfraRun.Output -Kind 'Job' -Name 'rank-migrate'
     Assert-Match -Text $migration -Pattern '"-migrate"' -Because 'SQL正规Job必须实际渲染'
-    Assert-Match -Text $migration -Pattern 'name: MMORPG_RANK_SQL_DSN' -Because '与常驻进程共用本域SQL凭证引用'
+    Assert-Match -Text $migration -Pattern 'name: MMORPG_RANK_SQL_DSN\s+valueFrom:\s+secretKeyRef: \{name: fixture-schema-permission, key: dsn, optional: false\}' -Because 'Job 的 DSN 和 MMORPG_SQL_SCHEMA_PRINCIPAL 出自同一个 schemaPermissionSecret'
+    Assert-Match -Text $migration -Pattern 'name: MMORPG_SQL_SCHEMA_PRINCIPAL\s+valueFrom: \{secretKeyRef: \{name: fixture-schema-permission, key: principal, optional: false\}\}' -Because '主体和账号来自同一个 Secret'
+    Assert-NotMatch -Text $migration -Pattern 'key: rank-sql-dsn|MMORPG_SQL_SCHEMA_DSN' -Because '不再用常驻账号,也不留没人读的变量'
 }
 
 Test-Case 'rank ConfigMap现役源:SQL权威、邮件奖励及分用途producer' {
@@ -5272,9 +5275,9 @@ Test-Case 'rank ConfigMap现役源:SQL权威、邮件奖励及分用途producer'
     Assert-NotMatch -Text $source -Pattern '(?m)^RankRedis:|(?m)^RatingConsumerGroup:' -Because '不能同时启动R2b旧评分写者'
 }
 
-Test-Case 'rank 迁移与常驻进程共享SQL凭证，目录登记迁移门禁' {
+Test-Case 'rank 迁移的DSN取schema主体，目录登记迁移门禁' {
     $manifest = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/rank-migrate.yaml') -Raw
-    Assert-Match -Text $manifest -Pattern 'name: MMORPG_RANK_SQL_DSN' -Because '迁移只使用本域权威DSN'
+    Assert-Match -Text $manifest -Pattern 'name: MMORPG_RANK_SQL_DSN\s+valueFrom:\s+secretKeyRef: \{name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false\}' -Because '迁移用 schema 账号,不用常驻账号'
     Assert-Match -Text $manifest -Pattern '"-migrate"' -Because '部署先迁结构再启动'
     $scriptText = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'tools/scripts/k8s_deploy.ps1') -Raw
     Assert-Match -Text $scriptText -Pattern 'rank = .*MigrateJob = "rank-migrate.yaml"' -Because 'rank必须经过统一迁移完成门禁'
@@ -5548,7 +5551,7 @@ Test-Case 'scene 的 gRPC 口准入:目标 = 三种 scene 池,放行名单逐字
     Assert-True -Condition ($null -ne $policy) -Because '打开时 zone 里要有 scene-grpc-allowlist'
     $shape = Get-GrpcAllowListShape -Block $policy
     Assert-Equal -Expected 'scene,scene-world,scene-instance' -Actual ($shape.TargetApps -join ',') -Because 'legacy 单池与拆分两池都要被选中'
-    Assert-Equal -Expected 'scene-manager,match,player-inbox,guild,trade,mail' -Actual ($shape.AllowedApps -join ',') -Because '调用方名单(k8s_deploy.ps1 $script:GrpcAllowLists 注释里的调用点);增删要同时改这里'
+    Assert-Equal -Expected 'scene-manager,match,player-inbox,guild,trade,mail,data-service' -Actual ($shape.AllowedApps -join ',') -Because '调用方名单(k8s_deploy.ps1 $script:GrpcAllowLists 注释里的调用点);增删要同时改这里'
     $scene = Select-ManifestByName -Output $devOut -Name 'scene'
     $grpcDeclared = [regex]::Match($scene, 'containerPort: (?<p>\d+)\s+name: grpc')
     Assert-True -Condition $grpcDeclared.Success -Because '夹具前提:scene Deployment 声明了 grpc 口'
@@ -5591,8 +5594,9 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
     Assert-Equal -Expected (ConvertTo-NonBlankLines -Text $expectedTrade) -Actual (ConvertTo-NonBlankLines -Text (Get-TopLevelYamlBlockText -Text $tradeEmbedded -Key 'AssetOp')) -Because 'trade 打开:落地恢复与 Cleanup* 键连同 Enabled=true 一起进 ConfigMap(go/trade/etc/trade.yaml 注释)'
     Assert-Match -Text $tradeEmbedded -Pattern '(?m)^  SecretEnv: MMORPG_ASSET_OP_SECRET_TRADE\s*$' -Because 'SecretEnv 必须是部署侧注入的变量名'
     $policies = @(
-        @{ Name = 'guild-grpc-allowlist'; Svc = 'guild'; Allowed = 'client-rpc-router,data-service'; Port = 50300 }
-        @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate'; Port = 50500 }
+        # data-service 是协调者(PrepareRoleFreeze、ApplyRoleFence),mail 读玩家所在的帮(GuildRpc)。
+        @{ Name = 'guild-grpc-allowlist'; Svc = 'guild'; Allowed = 'client-rpc-router,data-service,mail'; Port = 50300 }
+        @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service'; Port = 50500 }
     )
     foreach ($p in $policies) {
         $policy = Select-ManifestByName -Output $out -Name $p.Name
@@ -6794,7 +6798,7 @@ Test-Case 'G3b zone-up DryRun:scene-manager ConfigMap 的 OwnerEpochMint.WaitAOF
 # ─────────────────────────────────────────────────────────────────
 # 玩家归属直读全局库之后的部署形状(docs/design/player-route-mapping-durability-proposal.md §15.9)
 # ─────────────────────────────────────────────────────────────────
-# 路由只在全局库 player_route 一份,没有可切换的模式,部署脚本不再有开关与粘滞核对。
+# 路由只在目录 player_route 一份,没有可切换的模式,部署脚本不再有开关与粘滞核对。
 
 Test-Case '路由开关已删:参数块里没有,给了就在参数绑定处失败,早于任何写操作;粘滞核对与 WAITAOF 渲染的旧函数都不在了' {
     $paramNames = @($deadlineDeployAst.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
@@ -6877,6 +6881,24 @@ Test-Case 'all-up:全局服务的迁移 Job 先于 data-service,进程排在第�
         Assert-Equal -Expected 1 -Actual $configMaps.Count -Because "$svc 的 ConfigMap 只在第一步写一次"
     }
     Assert-True -Condition ((Get-OutputIndex -Text $out -Needle '[applied] client-rpc-router ->') -lt $dataServiceApplied) -Because 'gate 的依赖门要等路由服,它排在 zone 之前'
+}
+
+Test-Case 'all-up -SqlSchemaOnly:infra 和全局服务的 Job 照跑,zone 只跑 db、data-service 的 Job,不起写者进程' {
+    $schemaOnlyArgs = @($GlobalOrderArgs | Where-Object { $_ -ne '-WaitReady' }) + @('-SqlSchemaOnly')
+    $run = Invoke-DeployDryRun -Arguments $schemaOnlyArgs -Env $BattleTestEnv
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "输出: $($run.Output)"
+    $out = $run.Output
+    foreach ($svc in @('db', 'data-service') + $GlobalSvcAfterDataService) {
+        Assert-Match -Text $out -Pattern ('\[prepared\] ' + [regex]::Escape($svc) + ' ->') -Because "$svc 的迁移 Job 要跑,下一步读它种下的 generation"
+        Assert-NotMatch -Text $out -Pattern ('\[applied\] ' + [regex]::Escape($svc) + ' ->') -Because "$svc 的进程这一遍不起:名册还没定"
+    }
+    Assert-Match -Text $out -Pattern '\[applied\] client-rpc-router ->' -Because '路由服不是写者,照常起'
+    Assert-Match -Text $out -Pattern 'name: db-migrate' -Because 'db 的迁移 Job 要渲染'
+    Assert-NotMatch -Text $out -Pattern 'Starting global Go services|Applying zone deployment:|\[applied\] login ->|name: sql-writer-pod-reaper' -Because '没有写者,不起 gate、scene,也不要回收 CronJob'
+    Assert-Match -Text $out -Pattern 'Zone schema Jobs finished, no workload was started' -Because '告诉操作者下一步'
+    foreach ($job in @('db-migrate', 'data-service-migrate')) {
+        Assert-Match -Text $out -Pattern ("wait job/$job -n ") -Because "$job 恒等 Job 结束,dev 也等:下一步要读 generation"
+    }
 }
 
 Test-Case 'infra-up:DryRun 按「已有 zone」渲染升级路径,全局服务的进程排在 data-service 就绪之后;zone-up 不碰全局服务' {
@@ -7537,7 +7559,7 @@ Test-Case '有限roster模板绑定真实PodUID且normal不持registrar或其他
     $source=Join-Path $PSScriptRoot '../k8s_deploy.ps1'
     $tk=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tk,[ref]$errors)
     if($errors.Count){throw '部署源解析失败，不能用其它断言掩盖'}
-    foreach($name in @('Get-SqlRuntimeManifestRange','Get-SqlWriterDeploymentEntry','Add-SqlWriterBootManifest')){
+    foreach($name in @('Get-SqlRuntimeManifestRange','Get-SqlWriterCatalogEntry','Get-SqlWriterRosterMinimumEntries','Get-SqlWriterDeploymentEntry','Add-SqlWriterBootManifest')){
         $definition=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
         Set-Item -Path "Function:script:$name" -Value $definition.Body.GetScriptBlock()
     }
@@ -7550,7 +7572,9 @@ Test-Case '有限roster模板绑定真实PodUID且normal不持registrar或其他
         $template=Get-Content -LiteralPath (Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/data-service.yaml') -Raw
         # 容量来自正式roster原件；每个Pod只能由init领取一个未消费的entry。
         $single=[regex]::Replace($template,'(?m)^  replicas:\s*\d+\s*$','  replicas: 1')
-        $roster=Join-Path $taskRoot 'roster.json';$null=Write-MaintenanceImmutableJson -Path $roster -Value @{format='SQL_WRITER_BOOT_ROSTER_V1';entries=@(@{},@{})}
+        # 12 条:够 2 个副本(副本数 × 6),不够 3 个。
+        $DatabaseBackend='tidb'
+        $roster=Join-Path $taskRoot 'roster.json';$null=Write-MaintenanceImmutableJson -Path $roster -Value @{format='SQL_WRITER_BOOT_ROSTER_V1';entries=@(1..12 | ForEach-Object {@{requests=@(@{authoritySchema='fixture_db';protectedSchemas=@('fixture_db')})}})}
         $entry=@{requestSecret='fixture-request';registrarSecret='fixture-registrar';registrarImage=('fixture.invalid/registrar@sha256:'+('a'*64));physicalAuthoritySha256=('b'*64);runtimeConfigSecret='fixture-runtime';replicas=1;rosterFile=$roster;rosterSha256=(Get-FileHash -LiteralPath $roster -Algorithm SHA256).Hash.ToLowerInvariant()}
         $catalog=Join-Path $taskRoot 'catalog.json';$null=Write-MaintenanceImmutableJson -Path $catalog -Value @{'fixture/data-service'=$entry}
         [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$catalog,'Process')
@@ -7558,6 +7582,7 @@ Test-Case '有限roster模板绑定真实PodUID且normal不持registrar或其他
         Assert-True -Condition ($rendered -notmatch 'PLACEHOLDER_SQL_WRITER_') -Because '真实boot占位全部必须固定'
         Assert-Match -Text $rendered -Pattern 'fieldPath: metadata.uid' -Because '部署身份必须来自真实PodUID'
         Assert-Match -Text $rendered -Pattern '"-roster-sha256"' -Because 'init必须再次核已批准有限roster原件'
+        Assert-Match -Text $rendered -Pattern 'name: MMORPG_SQL_BACKEND\s+value: "tidb"' -Because 'registrar 按它核真实引擎,不设就是 tidb,mysql 档必败'
         $range=Get-SqlRuntimeManifestRange -ManifestContent $rendered -SvcName data-service
         $normal=$rendered.Substring($range.Start,$range.End-$range.Start)
         Assert-True -Condition ($normal -notmatch 'MMORPG_SQL_REGISTRAR_DSN|MMORPG_SQL_OPERATOR_PRINCIPAL|name: sql-writer-runtime-input|name: sql-writer-request') -Because 'init控制能力和其他boot完整凭据不泄漏给normal容器'
@@ -7569,12 +7594,25 @@ Test-Case '有限roster模板绑定真实PodUID且normal不持registrar或其他
         $multiCatalog=Join-Path $taskRoot 'multi-catalog.json';$null=Write-MaintenanceImmutableJson -Path $multiCatalog -Value @{'fixture/data-service'=$entry}
         [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$multiCatalog,'Process')
         $renderedMulti=Add-SqlWriterBootManifest -ManifestContent $multi -Namespace fixture -SvcName data-service
-        Assert-Match -Text $renderedMulti -Pattern '(?m)^  replicas: 2\s*$' -Because '两个独立entry允许两个Pod，不得退化为强制单副本'
+        Assert-Match -Text $renderedMulti -Pattern '(?m)^  replicas: 2\s*$' -Because '名册条数够余量时允许两个Pod，不得退化为强制单副本'
         $entry.replicas=3
         $tooManyCatalog=Join-Path $taskRoot 'too-many-catalog.json';$null=Write-MaintenanceImmutableJson -Path $tooManyCatalog -Value @{'fixture/data-service'=$entry}
         [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$tooManyCatalog,'Process')
         $message='';try{$null=Get-SqlWriterDeploymentEntry -Namespace fixture -SvcName data-service}catch{$message=$_.Exception.Message}
-        Assert-Match -Text $message -Pattern '有限roster不能覆盖' -Because '容量不足必须在渲染前拒绝，不能由重启临时补entry'
+        Assert-Match -Text $message -Pattern '3 replicas need at least 18 entries and at most 1024, it has 12' -Because '容量不足必须在渲染前拒绝，不能由重启临时补entry;条数要留余量,每次Pod启动都永久烧一条'
+        # 只有两个 schema Secret 的条目:迁移 Job 的那一遍够了,要起进程时点名名册没定。
+        $entry=@{schemaConfigSecret='fixture-schema-config';schemaPermissionSecret='fixture-schema-permission'}
+        $schemaOnlyCatalog=Join-Path $taskRoot 'schema-only-catalog.json';$null=Write-MaintenanceImmutableJson -Path $schemaOnlyCatalog -Value @{'fixture/data-service'=$entry}
+        [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$schemaOnlyCatalog,'Process')
+        Assert-Equal -Expected 'fixture-schema-config' -Actual (Get-SqlWriterCatalogEntry -Namespace fixture -SvcName data-service).schemaConfigSecret -Because '迁移 Job 只读这一层,不要名册'
+        $message='';try{$null=Get-SqlWriterDeploymentEntry -Namespace fixture -SvcName data-service}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '维护原件缺字段' -Because '起进程要完整条目'
+        $entry=@{requestSecret='fixture-request';registrarSecret='fixture-registrar';registrarImage=('fixture.invalid/registrar@sha256:'+('a'*64));physicalAuthoritySha256=('b'*64);runtimeConfigSecret='fixture-runtime';replicas=2}
+        $noRosterCatalog=Join-Path $taskRoot 'no-roster-catalog.json';$null=Write-MaintenanceImmutableJson -Path $noRosterCatalog -Value @{'fixture/data-service'=$entry}
+        [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$noRosterCatalog,'Process')
+        $message='';try{$null=Get-SqlWriterDeploymentEntry -Namespace fixture -SvcName data-service}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern 'boot roster of fixture/data-service is not set yet' -Because '点名这个服务'
+        Assert-Match -Text $message -Pattern '-SqlSchemaOnly' -Because '告诉操作者先跑 Job 拿 generation'
     } finally {
         $RepoRoot=$savedRepo
         [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$savedCatalog,'Process')

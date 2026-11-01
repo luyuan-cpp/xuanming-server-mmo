@@ -24,7 +24,10 @@ import (
 	"data_service/internal/svc"
 	base "proto/common/base"
 	"proto/data_service"
+	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/dbplacement"
+	"shared/dirshard"
 	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -49,11 +52,10 @@ var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有排空原�
 var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime 原文件 SHA256")
 var maintenanceControlDir = flag.String("maintenance-drain-control-dir", os.Getenv("MMORPG_MAINTENANCE_CONTROL_DIR"), "同一 boot 接收排空的私有目录")
 
-// migrateOnly 是生产用的显式建表入口:`data_service -f <yaml> -migrate` 对全局库跑一次
-// store.MigrateSchema(proto 驱动的五张 + 手写 DDL 的路由表,并种 route_meta 行;与
-// Schema.AutoMigrate=true 的启动路径是同一段代码),跑完即退出,不起 gRPC、不连 Redis。
-// 生产把 AutoMigrate 设 false,部署阶段单进程跑这个。
-var migrateOnly = flag.Bool("migrate", false, "run the global-DB schema migration (proto2mysql) and exit")
+// migrateOnly 是生产用的显式建表入口:`data_service -f <yaml> -migrate` 对目录全部片和流水库跑一次
+// store.MigrateSchema(目录表、路由表和闸门表走手写 DDL,流水表由 proto 驱动),跑完即退出,不起 gRPC、不连 Redis。
+// 库要提前建好。生产把 AutoMigrate 设 false,部署阶段单进程跑这个。
+var migrateOnly = flag.Bool("migrate", false, "run the directory and ledger schema migration and exit")
 
 // idIssuerInit 把发号器的两份预留记录初始化到当前时间之上,跑完即退出。只在首次部署,或确认过
 // 两套 etcd 同时丢数据的影响之后跑(docs/ops/id-issuer-runbook.md)。不并进 -migrate:部署每次都跑
@@ -215,6 +217,10 @@ func runDataService(c config.Config) (runErr error) {
 	}
 	// 定时重读合服映射;CloseAndReport 里停。上面的自检没过时不起,也就不用单独收回。
 	svcCtx.MergedZones.Start()
+	// 删角的后台收尾走 RELAY 门禁,closeRelay 排空之前停。
+	svcCtx.StartRoleRemovalResumer()
+	// GM 回收的派发和重投同样走 RELAY 门禁。
+	svcCtx.StartRecallChannel()
 
 	kafkaOwner, err := dskafka.NewConsumerOwner(relay, svcCtx.RelayIngress)
 	if err != nil {
@@ -245,6 +251,8 @@ func runDataService(c config.Config) (runErr error) {
 		digest, err := kafkaStart.StopAndReport(ctx)
 		result = errors.Join(result, err)
 		result = errors.Join(result, svcCtx.RelayIngress.Wait(ctx))
+		result = errors.Join(result, svcCtx.StopRoleRemovalResumer(ctx))
+		result = errors.Join(result, svcCtx.StopRecallChannel(ctx))
 		result = errors.Join(result, relay.WaitIdle(ctx))
 		result = errors.Join(result, stopAuxiliary(ctx))
 		if result != nil {
@@ -524,12 +532,17 @@ func runDataService(c config.Config) (runErr error) {
 // 输出走 stdout/stderr,方便部署脚本直接读退出码。
 func runMigration(c config.Config) int {
 	cfg := svc.MySQLConfigOf(c)
-	fmt.Printf("data_service schema migration: %s/%s\n", cfg.Host, cfg.DBName)
+	fmt.Printf("data_service schema migration: %s/%s logical_shards=%d\n", cfg.Host, cfg.DBName, cfg.LogicalShards)
+	// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。逐库读一次映射。
+	cfg.PoolOptionsFor = func(schema string) ([]authoritysql.OpenOption, error) {
+		return dbplacement.ForMigration(context.Background(), c.SnapshotMySQL.DbPlacement, schema)
+	}
 	if err := store.MigrateSchema(context.Background(), cfg, store.MigrateOptions{}); err != nil {
 		fmt.Fprintf(os.Stderr, "schema migration FAILED: %v\n", err)
 		return migrateExitCode(err)
 	}
-	fmt.Printf("schema migration OK: transaction_log, player_snapshot, rollback_audit_log synced from proto; route tables player_route, zone_merged_into, route_meta in place (route_meta row id=1 seeded if absent)\n")
+	fmt.Printf("schema migration OK: directory tables in place on %d shard(s), directory_shard and route_meta seeded; transaction_log, player_snapshot, rollback_audit_log synced from proto on %s\n",
+		cfg.LogicalShards, dirshard.LedgerDBName(cfg.DBName))
 	return 0
 }
 
@@ -956,11 +969,15 @@ func dataServiceRelayMethods() map[string]bool {
 		"/data_service.DataService/ConfirmAccountRoleTradeFreeze": true,
 		"/data_service.DataService/CancelAccountRoleTrade":        true,
 		"/data_service.DataService/TransferAccountRole":           true,
+		"/data_service.DataService/CheckAccountRoleSlot":          true,
+		"/data_service.DataService/GetRoleFenceState":             true,
+		"/data_service.DataService/VerifyRoleAdmission":           true,
 		"/data_service.DataService/RegisterRoleAdmission":         true,
 		"/data_service.DataService/CloseRoleAdmissions":           true,
 		"/data_service.DataService/AckRoleTradeDrain":             true,
 		"/data_service.DataService/ReleaseDeadPlayerStoreHolder":  true,
 		"/data_service.DataService/RegisterPlayerZone":            true,
+		"/data_service.DataService/GetPlayerRoute":                true,
 		"/data_service.DataService/GetPlayerHomeZone":             true,
 		"/data_service.DataService/BatchGetPlayerHomeZone":        true,
 		"/data_service.DataService/GetMergedZones":                true,

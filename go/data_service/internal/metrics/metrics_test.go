@@ -43,7 +43,7 @@ func TestSetKafkaConsumerUpCreatesChildSeries(t *testing.T) {
 }
 
 // TestPrimeRouteCreatesAllSeries 锁死归属映射告警的前提:PrimeRoute 之后,route_register_total{outcome} 的 7 条与
-// route_read_total{path,result} 的 5 条子序列**全部存在且为 0**,且没有多出不会出现的组合(batch 没有 not_found)。
+// route_read_total{path,result} 的 8 条子序列**全部存在且为 0**,且没有多出不会出现的组合(batch 没有 not_found)。
 // store_error 这类结局可能一辈子只发生几次,序列不预先存在,`increase(...) > 0` 恰好漏掉第一次。
 func TestPrimeRouteCreatesAllSeries(t *testing.T) {
 	PrimeRoute()
@@ -52,8 +52,8 @@ func TestPrimeRouteCreatesAllSeries(t *testing.T) {
 	for _, s := range routeReadSeries {
 		wantRead[s[0]+"/"+s[1]] = true
 	}
-	if len(wantRead) != 5 || wantRead[RouteReadPathBatch+"/"+RouteReadResultNotFound] {
-		t.Fatalf("routeReadSeries = %v, want 5 combinations without batch/not_found", wantRead)
+	if len(wantRead) != 8 || wantRead[RouteReadPathBatch+"/"+RouteReadResultNotFound] {
+		t.Fatalf("routeReadSeries = %v, want 8 combinations without batch/not_found", wantRead)
 	}
 	wantRegister := map[string]bool{}
 	for _, outcome := range routeRegisterOutcomes {
@@ -198,7 +198,7 @@ func TestSetKafkaConsumerLagWritesAllThreeGauges(t *testing.T) {
 // TestSQLPoolCollectorDeclaresEveryStorePool 钉住 data_service 连接池类别的声明集合(G2b):四个 store 各一个池,
 // 常量 label sql_client="data_service"。
 func TestSQLPoolCollectorDeclaresEveryStorePool(t *testing.T) {
-	want := []string{PoolSnapshot, PoolTransactionLog, PoolPlayerName, PoolPlayerRoute}
+	want := []string{PoolSnapshot, PoolTransactionLog, PoolRecall, PoolPlayerName, PoolPlayerRoute}
 	reg := prometheus.NewPedanticRegistry()
 	if err := reg.Register(NewSQLPoolCollector(nil)); err != nil {
 		t.Fatalf("register: %v", err)

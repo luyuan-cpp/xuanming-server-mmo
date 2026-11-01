@@ -12,12 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"regexp"
 	"strconv"
 	"time"
 
 	"friend/internal/data"
 	"shared/authoritysql"
+	"shared/dbplacement"
 	"shared/playerredis"
 
 	"github.com/zeromicro/go-zero/core/service"
@@ -61,8 +61,7 @@ const (
 // 报 "conflict key Redis"(core/conf/config.go addOrMergeFields)。共享库一律用 c.Redis.RedisConf
 // —— 与 chat / match / trade 同一写法。
 type Config struct {
-	AccountRoleSchema   string `json:",optional"`
-	GlobalLoginSessions bool   `json:",optional"`
+	GlobalLoginSessions bool `json:",optional"`
 	// LoginRedis 只读原登录态，必须显式指定全局同 login 的实例/DB，不能由 Redis 段猜测。
 	LoginRedis playerredis.LoginReaderConfig `json:",optional"`
 	zrpc.RpcServerConf
@@ -162,6 +161,8 @@ type MySQLConf struct {
 	DBName      string `json:"DBName"`
 	MaxOpenConn int    `json:"MaxOpenConn,default=20"`
 	MaxIdleConn int    `json:"MaxIdleConn,default=5"`
+	// DbPlacement:按映射拨号(docs/design/horizontal-scale-logical-db.md §8.1),没写就固定连 Host。
+	DbPlacement dbplacement.Config `json:",optional"`
 }
 
 // KafkaConf 是控制面 / 推送 topic 的 broker 地址。形状与 go/guild/internal/config 的同名结构一致。
@@ -302,9 +303,6 @@ func IsRelaxedMode(mode string) bool {
 //
 // 每一条拒绝的都是"进程能起来、但行为静默出错"的配置 —— 逐条理由写在各分支旁边。
 func (c *Config) Validate() error {
-	if !regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`).MatchString(c.AccountRoleSchema) {
-		return errors.New("好友 AccountRoleSchema 必须显式指定同事务域的全局角色目录")
-	}
 	if !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() || c.LoginRedis.DB < 0 || c.LoginRedis.PoolSizePerNode <= 0 {
 		return errors.New("好友必须显式配置全局同 login 的 LoginRedis 实例/DB/正池上限")
 	}

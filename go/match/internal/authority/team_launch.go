@@ -113,7 +113,12 @@ func teamLaunchOriginals(data *teampb.TeamLaunchData) []*teampb.TeamOriginalRole
 	return out
 }
 
-func (s *Store) TeamLaunch(ctx context.Context, actor uint64, request string) (*teampb.TeamLaunchRecord, error) {
+func (s *Store) TeamLaunch(ctx context.Context, actor uint64, request string) (launch *teampb.TeamLaunchRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { launch, e = s.teamLaunchOnce(ctx, actor, request); return e })
+	return launch, err
+}
+
+func (s *Store) teamLaunchOnce(ctx context.Context, actor uint64, request string) (*teampb.TeamLaunchRecord, error) {
 	key, err := DirectUUIDKey(1, actor, request)
 	if err != nil {
 		return nil, err
@@ -205,7 +210,12 @@ func sameTeamLaunchRoster(team *teampb.TeamAuthorityData, data *teampb.TeamLaunc
 	return true
 }
 
-func (s *Store) ReserveTeamLaunch(ctx context.Context, observed *teampb.TeamLaunchRecord, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchFormationRecord, error) {
+func (s *Store) ReserveTeamLaunch(ctx context.Context, observed *teampb.TeamLaunchRecord, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (reserved *pb.MatchFormationRecord, err error) {
+	err = s.Fenced(ctx, func() (e error) { reserved, e = s.reserveTeamLaunchOnce(ctx, observed, formation, group); return e })
+	return reserved, err
+}
+
+func (s *Store) reserveTeamLaunchOnce(ctx context.Context, observed *teampb.TeamLaunchRecord, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchFormationRecord, error) {
 	data, err := DecodeTeamLaunch(observed)
 	if err != nil {
 		return nil, err

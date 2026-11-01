@@ -83,4 +83,6 @@ func runGenerationPipeline(runner *ExecutionRunner) {
 		}},
 	})
 	runner.RunTaskWithWG("prototools.SyncCppBuildProjects", prototools.SyncCppBuildProjects)
+	// 排在最后:前面任何一步终止都不会走到这里,工程清单也已经不再引用要删的文件。
+	runner.RunTaskWithWG("prototools.RetireOrphanedOutputs", prototools.RetireOrphanedOutputs)
 }

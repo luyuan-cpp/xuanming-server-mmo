@@ -29,7 +29,12 @@ func (s *Store) CancelActivity(ctx context.Context, key *pb.MatchDirectIntentRec
 	return nil, errors.New("活动原件并发变化，需复用原取消请求重试")
 }
 
-func (s *Store) cancelActivityAttempt(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte) (*pb.CancelActivityBattleResponse, bool, error) {
+func (s *Store) cancelActivityAttempt(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte) (out *pb.CancelActivityBattleResponse, changed bool, err error) {
+	err = s.Fenced(ctx, func() (e error) { out, changed, e = s.cancelActivityOnce(ctx, key, payload); return e })
+	return out, changed, err
+}
+
+func (s *Store) cancelActivityOnce(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte) (*pb.CancelActivityBattleResponse, bool, error) {
 	observed, err := s.DirectAdmission(ctx, key)
 	if err != nil {
 		return nil, false, err

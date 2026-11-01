@@ -7,7 +7,7 @@
 // 两种运行形态:
 //   - 常驻服务(默认):建表 / 查表 → metrics → killswitch → gRPC → 注册 etcd;
 //   - `-migrate`:只连 MySQL 跑一次 schemamigrate.Up,按 D-14 退出码退出(K8s trade-migrate Job 用),
-//     不起 gRPC、不连 etcd、不连 data_service。
+//     不起 gRPC、不连 data_service;etcd 只在配了 DbPlacement 时读一次映射(state=MOVING 拒绝)。
 package main
 
 import (
@@ -22,10 +22,12 @@ import (
 	"os/signal"
 	"shared/authoritysql"
 	"shared/drainproof"
+	"shared/rolefence"
 	"strconv"
 	"syscall"
 	"time"
 
+	"trade/internal/commerce"
 	"trade/internal/config"
 	"trade/internal/constants"
 	"trade/internal/data"
@@ -36,6 +38,7 @@ import (
 	"trade/internal/svc"
 
 	base "proto/common/base"
+	rfpb "proto/role_fence"
 	tradepb "proto/trade"
 
 	"schemamigrate"
@@ -78,6 +81,8 @@ const (
 	listenProbeTimeout = 30 * time.Second
 	// registerTimeout:注册整体(探端口 + etcd CAS)的上限,须大于 listenProbeTimeout。
 	registerTimeout = 45 * time.Second
+	// mysqlFenceCheckTimeout:启动时核 role_fence 表的上限。
+	mysqlFenceCheckTimeout = 5 * time.Second
 )
 
 // migrateRemedyCommand 是 Schema.AutoMigrate=false 且库与 proto 不一致时打印给运维的补救命令。
@@ -106,7 +111,7 @@ func main() {
 	conf.MustLoad(*configFile, &c)
 
 	if *migrateOnly {
-		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, schemamigrate.Up))
+		os.Exit(runMigration(c, *allowModify, svc.OpenSchemaMySQL, migrateUp))
 	}
 	if err := runTrade(c); err != nil {
 		fmt.Fprintf(os.Stderr, "[trade] %v\n", err)
@@ -115,6 +120,18 @@ func main() {
 }
 
 // validateMigrationFlags 在读配置、连接数据库之前拒绝意外的常驻改列授权。
+// migrateUp 是 -migrate 的迁移动作:业务表之外,建本逻辑库自带的写者闸门表和角色护栏副本表(都跟着库走,见 docs/design/horizontal-scale-logical-db.md §2、§3)。
+func migrateUp(ctx context.Context, db *sql.DB, opts schemamigrate.Options) (schemamigrate.Report, error) {
+	report, err := schemamigrate.Up(ctx, db, opts)
+	if err != nil {
+		return report, err
+	}
+	if err = authoritysql.EnsureCatalogSchema(ctx, db, opts.Database); err != nil {
+		return report, err
+	}
+	return report, rolefence.EnsureSchema(ctx, db)
+}
+
 func validateMigrationFlags(migrateOnly, allowModify bool) error {
 	if allowModify && !migrateOnly {
 		return errors.New("-allow-modify 必须与 -migrate 一起使用;常驻启动不允许 MODIFY COLUMN")
@@ -203,6 +220,17 @@ func runTrade(c config.Config) (runErr error) {
 	if err := ensureSchema(context.Background(), svcCtx.DB, c, schemamigrate.Up, schemamigrate.Plan); err != nil {
 		return err
 	}
+	fenceCtx, fenceCancel := context.WithTimeout(context.Background(), mysqlFenceCheckTimeout)
+	fenceErr := rolefence.VerifySchema(fenceCtx, svcCtx.DB)
+	fenceCancel()
+	if fenceErr != nil {
+		return fmt.Errorf("[trade] role_fence 表不可用,先执行 %s: %w", migrateRemedyCommand, fenceErr)
+	}
+	// 没配协调者密钥拒启:参与者不可达时过户和删角会一直被拒,不如在启动时暴露。
+	participant, err := rolefence.NewParticipantServer(svcCtx.DB, commerce.RolePending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	if err != nil {
+		return fmt.Errorf("[trade] 角色护栏参与者装配失败: %w", err)
+	}
 	if exitRequested(ctx) {
 		return nil
 	}
@@ -255,6 +283,8 @@ func runTrade(c config.Config) (runErr error) {
 		// 方法白名单(internal/session),以及 gate / 路由服不认 TradeAdmin 的消息号。
 		tradepb.RegisterClientPlayerJubaozhaiServer(grpcServer, server.NewJubaozhaiServer(deps))
 		tradepb.RegisterTradeAdminServer(grpcServer, server.NewAdminServer(deps))
+		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权;带会话的调用被 ③ 挡住。
+		rfpb.RegisterRoleFenceParticipantServer(grpcServer, participant)
 		if config.IsRelaxedMode(c.Mode) {
 			reflection.Register(grpcServer)
 		}
@@ -464,7 +494,7 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 	return nil
 }
 
-// runMigration 是 -migrate 的实现:只连 MySQL,不起 gRPC、不连 etcd / data_service。
+// runMigration 是 -migrate 的实现:只连 MySQL(配了 DbPlacement 时先读一次 etcd 里的映射),不起 gRPC、不连 data_service。
 // allowModify 只接收本次显式迁移的命令行授权,启动期 ensureSchema 不使用它。
 // 输出走 stdout / stderr,退出码按 schemamigrate.ExitCode(D-14),部署脚本与 K8s Job 直接读。
 func runMigration(c config.Config, allowModify bool, openMySQL func(config.MySQLConf) (*sql.DB, error), up schemaRunner) int {

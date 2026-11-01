@@ -46,7 +46,6 @@ import (
 	assetpb "proto/common/asset"
 	componentpb "proto/common/component"
 	playerpb "proto/common/database"
-	guildpb "proto/guild"
 	mailpb "proto/mail"
 	storepb "proto/player_store"
 	"schemamigrate"
@@ -315,7 +314,7 @@ func newMailFullstackRig(t *testing.T) *mailFullstackRig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	schemaTables := append(Tables(), &guildpb.GuildMemberRecord{})
+	schemaTables := Tables()
 	report, err := schemamigrate.Up(ctx, install, schemamigrate.Options{Database: name, Tables: schemaTables})
 	if err != nil || len(report.Manual) != 0 {
 		t.Fatalf("正式业务schema迁移未完成: %v", err)
@@ -327,8 +326,8 @@ func newMailFullstackRig(t *testing.T) *mailFullstackRig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rig.repo = New(db, ids.IDs["mail"].Next, ids.IDs["mail_asset_op"].Next, func(id uint32) bool { _, ok := items.FindById(id); return ok }, name)
-	rows, err := db.QueryContext(ctx, "SELECT m.mail_id FROM mail_message m WHERE "+rig.repo.visiblePredicate()+" LIMIT 0", 0, 0, 0)
+	rig.repo = New(db, ids.IDs["mail"].Next, ids.IDs["mail_asset_op"].Next, func(id uint32) bool { _, ok := items.FindById(id); return ok }, newMailTestDirectory())
+	rows, err := db.QueryContext(ctx, "SELECT m.mail_id FROM mail_message m WHERE "+visiblePredicate+" LIMIT 0", 0, 0, 0)
 	if err != nil {
 		t.Fatalf("正式邮件可见性 schema 依赖未完成: %v", err)
 	}

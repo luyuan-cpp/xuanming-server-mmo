@@ -1,0 +1,138 @@
+# db-migrate:存档库(MMORPG_DB_ALLOWED_DATABASES 列出的 zone_<n>_db、player_store_<n>_db)的建表 Job,每个 zone 一份,迁的是同一批库。
+#
+# 为什么要它:存档库的表和闸门表(route_meta、writer_slot 等)只有 go/db 的 cmd/migrate 建。常驻 go/db 没有 DDL 权限,而 go/db 和 data-service 的
+# registrar 都要在这些库上注册写者(data_service 的写资格覆盖全部存档库,k8s_deploy.ps1 Get-DataServiceWriterSchemas):
+# 库上没有闸门表,两边的 init 都过不去。所以它排在 db、data-service 的 Deployment 之前(Apply-OneGoSvc、Get-ZoneScopedGoSvcNames)。
+#
+# 镜像:cmd/migrate 不在服务二进制里,单独打一个 mmorpg-db-migrate(tools/scripts/go_svc_image.ps1 的 db-migrate 条目,/app/service 就是迁移程序,/app/data 带表清单)。
+# 配置:schema 账号的 /app/etc/db.yaml,来自 schemaConfigSecret(Add-SchemaPermissionManifest 把下面的 ConfigMap 换成它),DbPlacement 段要抄进去。
+# 库要预先建好(MySQL 档 mysql-init-sql,TiDB 档运维),本 Job 不带 -create-database,库不在就以退出码 1 失败。
+#
+# 重复跑是幂等的,每次部署、每个 zone 都跑:基线按 schema_migrations 台账跳过,结构没有漂移时没有语句,闸门表 CREATE IF NOT EXISTS,route_meta 已有的行一个字节不动(不换 generation)。
+#
+# 退出码(go/db/cmd/migrate/main.go)与 Job 语义:
+#   0 成功
+#   3 迁移锁被另一个 Job 持有 → 可重试:不命中下面的 FailJob 规则,按 backoffLimit 退避重试
+#   4 迁移成功,但有要人工过目的结构漂移 → 脚本记一行告警接着迁下一个库。cmd/migrate 的约定是告警不中断发布,与本机写者启动目录同一处理(lib/sql_boot_catalog_local.ps1)
+#   1 失败(库不存在、连不上、dirty 台账、DDL 报错) → 不可重试:podFailurePolicy FailJob,发布停在 Deployment 之前。脚本遇到非 0、非 4 立刻停,不迁后面的库
+# 存档库很多时给大一点的 -WaitTimeoutSeconds:脚本等 Job 的预算默认 300 秒(k8s_deploy.ps1 $GoSvcMigrateJobMinWaitSeconds)。
+# ⚠ podFailurePolicy 需要 Kubernetes ≥ 1.26;前提是 Pod 模板 restartPolicy: Never。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  labels:
+    # 刻意不用 app: db:Service / PDB 的 selector 是 app=db,迁移 Pod 混进去会被当成 gRPC 后端。
+    app: db-migrate
+    tier: go-svc
+spec:
+  backoffLimit: 4
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          containerName: db-migrate
+          operator: In
+          values: [1]
+      - action: Ignore
+        onPodConditions:
+          - type: DisruptionTarget
+  template:
+    metadata:
+      labels:
+        app: db-migrate
+        tier: go-svc
+    spec:
+      restartPolicy: Never
+      initContainers:
+        # 等 MySQL 的 3306 真正可连再跑迁移(理由与时间预算的算法见 trade-migrate.yaml 同名 initContainer 的注释)。
+        - name: wait-mysql
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: MYSQL_ADDR
+              value: "mysql.__INFRA_NAMESPACE__"
+            - name: WAIT_MYSQL_TIMEOUT_SECONDS
+              value: "150"
+          command:
+            - sh
+            - -c
+            - |
+              if ! command -v nc >/dev/null 2>&1; then
+                echo "nc not found in image, skip waiting for $MYSQL_ADDR:3306"
+                exit 0
+              fi
+              uptime_s() { cut -d. -f1 /proc/uptime; }
+              deadline=$(( $(uptime_s) + $WAIT_MYSQL_TIMEOUT_SECONDS ))
+              while :; do
+                if nc -z -w 3 "$MYSQL_ADDR" 3306; then
+                  echo "$MYSQL_ADDR:3306 reachable"
+                  exit 0
+                fi
+                now=$(uptime_s)
+                if [ "$now" -ge "$deadline" ]; then
+                  echo "ERROR: $MYSQL_ADDR:3306 not reachable within ${WAIT_MYSQL_TIMEOUT_SECONDS}s" >&2
+                  exit 1
+                fi
+                echo "waiting for $MYSQL_ADDR:3306 ($(( deadline - now ))s left)..."
+                sleep 5
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      containers:
+        - name: db-migrate
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+            # cmd/migrate 按这份白名单放行目标库,下面的脚本也按它逐库迁。值由 Apply-GoSvcMigrateJob 从 MMORPG_DB_ALLOWED_DATABASES 渲染。
+            - name: DB_ALLOWED_DATABASES
+              value: "PLACEHOLDER_DB_ALLOWED_DATABASES"
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              # 库名和编号的对应与 placement.StoreDBName 相同:zone_<n>_db、player_store_<n>_db。
+              for database in $(echo "$DB_ALLOWED_DATABASES" | tr ',' ' '); do
+                storage_id="${database#zone_}"
+                storage_id="${storage_id#player_store_}"
+                storage_id="${storage_id%_db}"
+                case "$storage_id" in
+                  ''|*[!0-9]*)
+                    echo "ERROR: $database is not a zone_<n>_db or player_store_<n>_db name" >&2
+                    exit 1
+                    ;;
+                esac
+                echo "migrating $database (storage id $storage_id)"
+                code=0
+                /app/service -f /app/etc/db.yaml -command up -storage-id "$storage_id" || code=$?
+                case "$code" in
+                  0) ;;
+                  4) echo "WARNING: $database migrated, but its schema has drift that needs manual review; see the NEEDS-REVIEW lines above" >&2 ;;
+                  *)
+                    echo "ERROR: migrating $database failed with exit code $code" >&2
+                    exit "$code"
+                    ;;
+                esac
+              done
+              echo "all player databases migrated: $DB_ALLOWED_DATABASES"
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-db-config

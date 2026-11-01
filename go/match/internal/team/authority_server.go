@@ -15,6 +15,7 @@ import (
 	"shared/accountdirectory"
 	"shared/serviceauth"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -31,11 +32,6 @@ type AuthorityServer struct {
 }
 
 func NewAuthorityServer(s *svc.ServiceContext) (*AuthorityServer, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := s.Authority.CheckTeamRouteContract(ctx); err != nil {
-		return nil, errors.New("team: SQL路由契约缺失或不可读")
-	}
 	secret := strings.TrimSpace(os.Getenv(accountdirectory.SceneSecretEnv))
 	verifier, err := serviceauth.New(map[string]string{"scene": secret})
 	if err != nil {
@@ -57,24 +53,28 @@ func (s *AuthorityServer) ReadMembership(ctx context.Context, request *teampb.Re
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	member, record, err := s.svc.Authority.ReadTeamAdmission(ctx, request.GetAdmission())
-	if err != nil {
-		if errors.Is(err, authority.ErrOriginalPlayer) {
-			return nil, status.Error(codes.FailedPrecondition, "原入场世代已失效")
-		}
-		return nil, status.Error(codes.Unavailable, "SQL队伍原件读取失败")
-	}
 	digest, err := serviceauth.Digest(request)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "请求摘要失败")
 	}
-	response := &teampb.ReadTeamMembershipResponse{TeamId: member.TeamId, MembershipEpoch: member.Epoch, RequestDigest: digest}
-	if record != nil {
-		data := &teampb.TeamAuthorityData{}
-		if proto.Unmarshal(record.Payload, data) != nil {
-			return nil, status.Error(codes.DataLoss, "SQL队伍原件损坏")
+	response := &teampb.ReadTeamMembershipResponse{RequestDigest: digest}
+	member, record, err := s.svc.Authority.ReadTeamAdmission(ctx, request.GetAdmission())
+	if err != nil {
+		// 只读校验,没有结局未知:登记失效、角色冻结、目录这次读不到都带内回。回 Unavailable 的话 PublicationAdmission 会把排空证明打成 Hold。
+		// 登记失效和冻结是常态,只有读失败才记错误。
+		if !errors.Is(err, authority.ErrOriginalPlayer) {
+			logx.WithContext(ctx).Errorf("[team] read membership failed: player=%d err=%v", request.GetAdmission().GetPlayerId(), err)
 		}
-		response.Version, response.Record = record.Version, data.Record
+		response.Retry = true
+	} else {
+		response.TeamId, response.MembershipEpoch = member.TeamId, member.Epoch
+		if record != nil {
+			data := &teampb.TeamAuthorityData{}
+			if proto.Unmarshal(record.Payload, data) != nil {
+				return nil, status.Error(codes.DataLoss, "SQL队伍原件损坏")
+			}
+			response.Version, response.Record = record.Version, data.Record
+		}
 	}
 	if err = serviceauth.Sign(teamMembershipMethod+"/reply", response, "team", s.secret, uint64(time.Now().UnixMilli())); err != nil {
 		return nil, status.Error(codes.Internal, "响应签名失败")

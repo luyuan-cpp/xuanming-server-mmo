@@ -129,6 +129,9 @@ type MallOrder struct {
 
 var mallOrderID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
+// errRolePreparing 表示买家角色还在投票,这一轮判不了退不退款。不是拒绝:商城的待办还在,下一轮绕回来再判。
+var errRolePreparing = errors.New("买家角色还在冻结投票,下一轮再判")
+
 type mallSKU struct {
 	ID        uint64 `json:"skuId"`
 	Title     string `json:"title"`
@@ -325,7 +328,7 @@ func (m *Mall) accept(ctx context.Context, in mallIntent) (*tradepb.TradeCommerc
 	}
 	id, err := m.Engine.IDs.Next(ctx)
 	if err != nil {
-		return nil, err
+		return nil, noWrite(err)
 	}
 	now := m.Engine.now()
 	w := &tradepb.TradeCommerceWorkflow{Stage: "official_deliver", ExternalOrderSn: in.OrderID, SkuId: in.SKU, SkuQuantity: in.Quantity, ExternalAmount: in.Amount, ExternalCurrency: in.Currency, OfficialBundle: &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: in.Config, Count: in.Count}}}}
@@ -335,25 +338,37 @@ func (m *Mall) accept(ctx context.Context, in mallIntent) (*tradepb.TradeCommerc
 		return nil, err
 	}
 	r := &tradepb.TradeCommerceRecord{CommerceId: id, RequestKey: key, RequestDigest: hash[:], Kind: 1, Status: Delivering, BuyerPlayerId: player, CreatedMs: now, UpdatedMs: now, Version: 1, WorkflowProto: payload}
-	err = m.Engine.Repo.Tx(ctx, func(tx *sql.Tx) error {
-		if m.Engine.Roles == nil {
-			return errors.New("官方交付角色提交互锁未配置")
-		}
-		owned, err := m.Engine.Roles.Ownership(ctx, tx, player)
-		if err != nil {
-			return err
-		}
-		if owned.Account != in.BuyerAccount || owned.OwnerRevision != revision || owned.TradeListingId != 0 {
-			// 尚无任何资产op：先持久原意图的退款结局，再回报商城，另一副本不能改发给当前新主。
-			w.Stage = "official_refund"
-			r.Status = 8
-			r.WorkflowProto, err = proto.MarshalOptions{Deterministic: true}.Marshal(w)
+	if m.Engine.Roles == nil {
+		return nil, errors.New("官方交付角色提交互锁未配置")
+	}
+	// 退款结局不可逆,不能凭可能落后的副本下判断:冻结态或修订号落后时(解冻或过户的推送丢了)先读权威状态,第二遍才按它判。
+	// 也不能凭还在投票的准备令牌下判断:撤销了角色就回来了。这时回可重试,待办还在商城,下一轮再判。
+	attempt := 0
+	err = rolledBack(m.Engine.Roles.RunTx(ctx, func() error {
+		attempt++
+		healed := attempt > 1
+		return m.Engine.Repo.Tx(ctx, func(tx *sql.Tx) error {
+			owned, err := m.Engine.Roles.Ownership(ctx, tx, player)
 			if err != nil {
 				return err
 			}
-		}
-		return m.Engine.Repo.Insert(ctx, tx, r)
-	})
+			if !healed && (owned.TradeListingId != 0 || owned.PrepareToken != 0 || owned.OwnerRevision < revision) {
+				return staleRole(player)
+			}
+			if owned.Account != in.BuyerAccount || owned.OwnerRevision != revision || owned.TradeListingId != 0 {
+				// 尚无任何资产op：先持久原意图的退款结局，再回报商城，另一副本不能改发给当前新主。
+				w.Stage = "official_refund"
+				r.Status = 8
+				r.WorkflowProto, err = proto.MarshalOptions{Deterministic: true}.Marshal(w)
+				if err != nil {
+					return err
+				}
+			} else if owned.PrepareToken != 0 {
+				return errRolePreparing
+			}
+			return m.Engine.Repo.Insert(ctx, tx, r)
+		})
+	}))
 	if err != nil {
 		old, read := m.Engine.Repo.ByRequest(ctx, key)
 		if read == nil && bytes.Equal(hash[:], old.RequestDigest) {
@@ -367,13 +382,15 @@ func (m *Mall) accept(ctx context.Context, in mallIntent) (*tradepb.TradeCommerc
 // 领取无需破坏性出队：多个副本会得到同一意图，同库唯一request_key保证只有一条资产seq。
 // 单条意图失败不挡同批其余意图(2026-10-20,与 Engine.Tick 的单行隔离同一条修复):各条错误汇总后一并返回,
 // 本轮预算用完才提前结束。
+//
+// 拉取本身只读,拉不到、页面非法、预算用完都是确定没写,不打排空 Hold,见 OutcomeKnown。
 func (m *Mall) Tick(ctx context.Context) error {
 	var page mallPollPage
 	if err := m.call(ctx, "delivery", "trade", "POST", "/internal/deliveries/poll", map[string]any{"limit": 20, "cursor": m.pollCursor}, &page); err != nil {
-		return err
+		return noWrite(err)
 	}
 	if err := validateMallPage(page, m.pollCursor); err != nil {
-		return err
+		return noWrite(err)
 	}
 	if len(page.Entries) == 0 {
 		m.pollCursor = ""
@@ -382,7 +399,7 @@ func (m *Mall) Tick(ctx context.Context) error {
 	var errs []error
 	for _, entry := range page.Entries {
 		if err := ctx.Err(); err != nil {
-			errs = append(errs, err)
+			errs = append(errs, noWrite(err))
 			break
 		}
 		if err := m.deliverIntent(ctx, *entry.Intent); err != nil {

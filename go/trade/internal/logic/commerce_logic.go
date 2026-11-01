@@ -5,6 +5,7 @@ import (
 	"errors"
 	tradepb "proto/trade"
 	"shared/generated/pb/table"
+	"shared/rolefence"
 	"shared/roleidentity"
 	"strconv"
 	"strings"
@@ -21,6 +22,14 @@ func commerceCode(err error) uint32 {
 	var r commerce.Rejection
 	if errors.As(err, &r) {
 		return uint32(r)
+	}
+	// 自愈读不到目录、目录里没有这名角色:事务都已回滚,没有结局未知。回故障 tip 的话 RootAdmission 会把排空证明打成 Hold(规格 §3.6)。
+	// 读不到和角色冲突回同一个 tip,客户端刷新之后再来。
+	switch {
+	case errors.Is(err, rolefence.ErrRoleNotFound):
+		return uint32(table.TradeError_kTradeCounterpartyUnknown)
+	case errors.Is(err, rolefence.ErrUnavailable):
+		return uint32(commerce.ErrConflict)
 	}
 	return constants.ErrServiceUnavailable
 }

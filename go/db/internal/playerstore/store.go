@@ -18,7 +18,7 @@ const (
 	maxInstanceBytes = 64
 
 	sqlSelectOwner = "SELECT owner_epoch,save_seq,schema_gen,holder_instance FROM player_store WHERE player_id=? AND kind=0 FOR UPDATE"
-	sqlClaimOwner  = "UPDATE player_store SET owner_epoch=?,holder_instance=?,released=0 WHERE player_id=? AND kind=0"
+	sqlClaimOwner  = "UPDATE player_store SET owner_epoch=?,holder_instance=?,released=0,claim_seq=claim_seq+1 WHERE player_id=? AND kind=0"
 	sqlSelectRows  = "SELECT kind,payload FROM player_store WHERE player_id=? AND kind>0"
 	sqlSaveHead    = "INSERT INTO player_store (player_id,kind,owner_epoch,save_seq,schema_gen,holder_instance,released,payload) VALUES "
 	sqlSaveRow     = "(?,?,?,?,?,?,?,?)"
@@ -28,7 +28,7 @@ const (
 )
 
 // requiredColumns 是 player_store 的全部列,要与 proto 的 message player_store 一致。
-var requiredColumns = []string{"player_id", "kind", "owner_epoch", "save_seq", "schema_gen", "holder_instance", "released", "payload"}
+var requiredColumns = []string{"player_id", "kind", "owner_epoch", "save_seq", "schema_gen", "holder_instance", "released", "payload", "claim_seq"}
 
 const (
 	// MaxClaimResponseBytes 是认领响应的上限,与 C++ 的 player_store_path::kMaxClaimResponseBytes 相同。
@@ -174,6 +174,9 @@ func (s *Store) Save(ctx context.Context, req *storepb.SavePlayerRequest) (*stor
 
 // LoadAndClaim 认领写权并读出完整存档,在同一个事务里。认领之后旧持有者的下一笔存盘立刻被拒,
 // 所以新持有者读到的就是最后提交的状态。
+//
+// 每次认领 claim_seq 加 1,同实例同代次也加。data_service 判死时比较并写的是 (owner_epoch, holder_instance, claim_seq):
+// 玩家同节点重登把前两列写回同样的值时,挂住的判死靠第三列知道写权行已经变过,不会踢掉在线玩家。这一列不进 scene 协议。
 func (s *Store) LoadAndClaim(ctx context.Context, req *storepb.LoadAndClaimRequest) (*storepb.LoadAndClaimResponse, error) {
 	if req.GetPlayerId() == 0 || req.GetOwnerEpoch() == 0 ||
 		len(req.GetInstanceId()) == 0 || len(req.GetInstanceId()) > maxInstanceBytes {

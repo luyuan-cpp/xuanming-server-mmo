@@ -24,8 +24,8 @@ func TestEtcTemplateRequiresExplicitGlobalSessions(t *testing.T) {
 	if err := loadEtcWithAuthorityForTest(t, &c); err != nil {
 		t.Fatalf("当前样例显式全局权威配置应可加载: %v", err)
 	}
-	if c.AccountRoleSchema == "" || c.MySQL.Backend != "tidb" || c.MatchAuthoritySchema == "" || !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() {
-		t.Fatal("生产样例必须显式声明同事务域权威库、Match权威库和全局LoginRedis")
+	if c.MySQL.Backend != "tidb" || !c.GlobalLoginSessions || !c.LoginRedis.HasAddr() {
+		t.Fatal("生产样例必须显式声明TiDB和全局LoginRedis")
 	}
 	for _, test := range []struct {
 		name   string
@@ -82,6 +82,9 @@ const minimalGuildYaml = `
 Name: guild.rpc
 ListenOn: 127.0.0.1:50300
 Timeout: 4000
+GlobalLoginSessions: true
+LoginRedis:
+  Addrs: [127.0.0.1:26379]
 RedisClient:
   Host: 127.0.0.1:6379
   Password: ""
@@ -156,20 +159,6 @@ func TestGuildAuthorityDefaultsAndPoolBounds(t *testing.T) {
 		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "MaxOpenConn") {
 			t.Fatalf("非法连接池上限%d必须拒启,得到%v", size, err)
 		}
-	}
-}
-
-func TestTrialMatchAuthoritySchemaMustBeExplicit(t *testing.T) {
-	c := loadMinimal(t)
-	c.AccountRoleSchema = "global_roles"
-	c.GlobalLoginSessions = true
-	c.LoginRedis.Addrs = []string{"127.0.0.1:26379"}
-	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "MatchAuthoritySchema") {
-		t.Fatalf("不能从DSN猜Match权威库: %v", err)
-	}
-	c.MatchAuthoritySchema = "mmorpg_match"
-	if err := c.Validate(); err != nil {
-		t.Fatalf("显式同集群schema配置应可继续装配核表: %v", err)
 	}
 }
 

@@ -89,7 +89,12 @@ func sqlTeamSnapshot(player, teamID, stamp uint64, index IndexEntry, row *sqlTea
 	return snap
 }
 
-func (s *sqlTeamStore) read(ctx context.Context, player, teamID uint64, free bool) (*Snapshot, error) {
+func (s *sqlTeamStore) read(ctx context.Context, player, teamID uint64, free bool) (snapshot *Snapshot, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) { snapshot, e = s.readOnce(ctx, player, teamID, free); return e })
+	return snapshot, err
+}
+
+func (s *sqlTeamStore) readOnce(ctx context.Context, player, teamID uint64, free bool) (*Snapshot, error) {
 	// 不设 ReadOnly:写者资格门要在同一事务里锁 writer_slot,MySQL 的 READ ONLY 事务里 FOR UPDATE / UPDATE 都是 1792。
 	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
@@ -165,7 +170,12 @@ func (s *sqlTeamStore) readMembers(ctx context.Context, teamID uint64) (*Members
 	return out, tx.Commit()
 }
 
-func (s *sqlTeamStore) listInvites(ctx context.Context, player uint64) (uint64, []InviteIndexEntry, error) {
+func (s *sqlTeamStore) listInvites(ctx context.Context, player uint64) (stamp uint64, entries []InviteIndexEntry, err error) {
+	err = s.authority.Fenced(ctx, func() (e error) { stamp, entries, e = s.listInvitesOnce(ctx, player); return e })
+	return stamp, entries, err
+}
+
+func (s *sqlTeamStore) listInvitesOnce(ctx context.Context, player uint64) (uint64, []InviteIndexEntry, error) {
 	tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return 0, nil, err

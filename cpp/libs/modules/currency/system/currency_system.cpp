@@ -367,6 +367,17 @@ uint32_t CurrencySystem::AttachDebt(entt::entity player, CurrencyType type, int6
     }
 
     auto &debt = comp->debts[static_cast<uint32_t>(type)];
+    // 已过期的旧欠款不再收(AddCurrency 跳过它),新的一笔不能把它复活:先作废,再按新欠款算
+    // (docs/design/data-overwrite-rollback-audit-r2-20261019.md 第 6 条)。
+    if (debt.expiresAt > 0 && TimeSystem::NowSecondsUTC() >= debt.expiresAt)
+    {
+        LOG_INFO << "CurrencySystem::AttachDebt: expired debt written off before merge, owed=" << debt.owed
+                 << " paid=" << debt.paid
+                 << " CurrencyType=" << static_cast<uint32_t>(type)
+                 << " entity=" << entt::to_integral(player);
+        debt = CurrencyDebt{};
+    }
+    const bool merging = debt.Remaining() > 0;
     if (debt.owed > std::numeric_limits<uint64_t>::max() - debtToAdd)
     {
         LOG_ERROR << "CurrencySystem::AttachDebt: owed overflow rejected, current=" << debt.owed
@@ -378,7 +389,15 @@ uint32_t CurrencySystem::AttachDebt(entt::entity player, CurrencyType type, int6
     debt.owed += debtToAdd;
     debt.reason = reason;
     debt.gmOperator = gmOperator;
-    debt.expiresAt = expiresAt;
+    // 到期时间取两单较晚的,0 是不过期:小单不能让大单提前失效。旧欠款已还清时按新单算。
+    if (merging)
+    {
+        debt.expiresAt = (debt.expiresAt == 0 || expiresAt == 0) ? 0 : std::max(debt.expiresAt, expiresAt);
+    }
+    else
+    {
+        debt.expiresAt = expiresAt;
+    }
     if (debt.createdAt == 0)
     {
         debt.createdAt = TimeSystem::NowSecondsUTC();

@@ -33,6 +33,7 @@ const itDDL = "CREATE TABLE player_store (" +
 	"holder_instance VARBINARY(64) NOT NULL," +
 	"released INT UNSIGNED NOT NULL," +
 	"payload MEDIUMBLOB NOT NULL," +
+	"claim_seq BIGINT UNSIGNED NOT NULL DEFAULT 0," +
 	"PRIMARY KEY (player_id, kind))"
 
 var itSeq atomic.Int64
@@ -137,6 +138,36 @@ func payloadOf(rows []*storepb.PlayerStoreRow, kind storepb.PlayerStoreKind) str
 		}
 	}
 	return "<missing>"
+}
+
+// 同实例同代次重新认领:前两列写回原值,claim_seq 照样加 1。存盘不动它。判死靠这一列比得出来(horizontal-scale-logical-db.md §6)。
+func TestIT_ReclaimBySameHolderBumpsClaimSeq(t *testing.T) {
+	store, db, ctx := itStore(t)
+	seedOwner(t, ctx, db, 7)
+	readOwnerColumns := func() (epoch uint64, holder []byte, claimSeq uint64) {
+		t.Helper()
+		if err := db.QueryRowContext(ctx, "SELECT owner_epoch,holder_instance,claim_seq FROM player_store WHERE player_id=7 AND kind=0").Scan(&epoch, &holder, &claimSeq); err != nil {
+			t.Fatal(err)
+		}
+		return epoch, holder, claimSeq
+	}
+	if _, _, claimSeq := readOwnerColumns(); claimSeq != 0 {
+		t.Fatalf("a new role starts at 0, got %d", claimSeq)
+	}
+	wantClaim(t, claim(t, ctx, store, 7, 100, instanceA), storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED)
+	epoch, holder, first := readOwnerColumns()
+	wantSave(t, save(t, ctx, store, 7, 100, 1, instanceA, false, hot("h1")), storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED)
+	if _, _, afterSave := readOwnerColumns(); afterSave != first {
+		t.Fatalf("save changed claim_seq: %d -> %d", first, afterSave)
+	}
+	wantClaim(t, claim(t, ctx, store, 7, 100, instanceA), storepb.LoadAndClaimResult_LOAD_AND_CLAIM_CLAIMED)
+	sameEpoch, sameHolder, second := readOwnerColumns()
+	if sameEpoch != epoch || string(sameHolder) != string(holder) {
+		t.Fatalf("reclaim by the same holder must keep (epoch, holder): (%d,%q) -> (%d,%q)", epoch, holder, sameEpoch, sameHolder)
+	}
+	if second != first+1 {
+		t.Fatalf("claim_seq = %d, want %d", second, first+1)
+	}
 }
 
 func TestIT_ClaimSaveAndReadBack(t *testing.T) {

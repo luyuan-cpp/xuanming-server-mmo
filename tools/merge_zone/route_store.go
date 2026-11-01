@@ -1,6 +1,6 @@
 package main
 
-// 全局库上的映射读写。
+// 目录第 0 片上的映射读写。zone_merged_into 只在第 0 片(docs/design/horizontal-scale-logical-db.md §1),DSN 指错片时因为缺表报错。
 //
 // merge_zone 是独立 module,import 不了 go/data_service/internal/store;表结构归 data_service 的迁移。
 // 本工具对路由表的全部写只有 zone_merged_into 一张表,且都在本文件(route_store_test.go 的
@@ -56,7 +56,7 @@ func openRouteStore(ctx context.Context, rawDSN string, backend authoritysql.Bac
 		return nil, errors.New("cannot parse -route-db-dsn (its value is not echoed)")
 	}
 	if cfg.DBName == "" {
-		return nil, errors.New("-route-db-dsn must name the global database that holds zone_merged_into (dev: testdb, K8s: mmorpg_global)")
+		return nil, errors.New("-route-db-dsn must name directory shard 0, the database that holds zone_merged_into (dev: testdb, K8s: mmorpg_global_00)")
 	}
 	db, err := authoritysql.Open(ctx, rawDSN, cfg.DBName, backend, routeMaxOpenConns, permission)
 	if err != nil {

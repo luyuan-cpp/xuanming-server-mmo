@@ -100,7 +100,7 @@ func TestDirectTiDBPreparedOriginalRoleChangeRejectsBeforeFormation(t *testing.T
 	formation, group := nativeDirectGroup(t, f)
 	pending, err := f.store.PrepareDirectAdmission(f.actor, &pb.MatchDirectIntentRecord{Kind: 2, OwnerId: 44, RequestLow: 102}, []byte("original"), formation, group)
 	require.NoError(t, err)
-	_, err = f.store.DB.ExecContext(f.actor, "UPDATE account_role SET owner_revision=8 WHERE player_id=12")
+	_, err = f.store.DB.ExecContext(f.actor, "UPDATE role_fence SET owner_revision=8,version=version+1 WHERE player_id=12")
 	require.NoError(t, err)
 	_, err = f.store.CompletePreparedDirect(context.Background(), pending)
 	require.ErrorIs(t, err, ErrOriginalPlayer)
