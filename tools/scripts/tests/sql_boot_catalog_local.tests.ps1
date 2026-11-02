@@ -31,6 +31,7 @@ function Reset-Fixture {
     $script:GatewayRunning = $false
     $script:MigrateCodes = @{}
     $script:DbMigrateCode = 0
+    $script:PlanFailZone = 0
 }
 
 function Get-FixtureTableRows {
@@ -48,6 +49,8 @@ function Get-FixtureTableRows {
         mmorpg_rank = @('rank_score', 'schema_migrations')
         mmorpg_trade = @('trade_commerce', 'trade_asset_op', 'schema_migrations')
         zone_1_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
+        zone_990017_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
+        zone_990018_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
     }
     # 每个逻辑库自带一份闸门表。
     foreach ($schema in $business.Keys) { foreach ($table in @($business[$schema]) + @(Get-LocalSqlBootAuthorityTables)) { $rows.Add("$schema`t$table") } }
@@ -65,10 +68,45 @@ function Get-FixtureSqlReply {
     return [pscustomobject]@{ Code = 0; Out = $out; Err = '' }
 }
 
+# 多区形状:按 -Zone、-ZonePortOffset、-Counts 写派生配置,和 go_services plan-instances 的输出同形。不碰 SQL 的服务在夹具仓库里没有源配置,给一份最小配置。
+function Invoke-FixtureZonePlan {
+    param([string[]]$Arguments, [string[]]$Services, [string]$Output)
+    $zone = [int]$Arguments[[array]::IndexOf($Arguments, '-Zone') + 1]
+    if ($zone -eq $script:PlanFailZone) { return [pscustomobject]@{ Code = 1; Out = ''; Err = "fixture plan failure for zone $zone" } }
+    $offsetIndex = [array]::IndexOf($Arguments, '-ZonePortOffset')
+    $offset = if ($offsetIndex -ge 0) { [int]$Arguments[$offsetIndex + 1] } else { ($zone - 1) * [int]$Arguments[[array]::IndexOf($Arguments, '-ZonePortShift') + 1] }
+    $counts = @{}
+    $countsIndex = [array]::IndexOf($Arguments, '-Counts')
+    if ($countsIndex -ge 0) { foreach ($item in $Arguments[$countsIndex + 1] -split ',') { $pair = $item -split '='; $counts[$pair[0]] = [int]$pair[1] } }
+    $derived = Join-Path $script:CurrentRepo 'run/etc/go_services'
+    $null = New-Item -ItemType Directory -Path $derived -Force
+    $instances = [Collections.Generic.List[object]]::new()
+    for ($s = 0; $s -lt $Services.Count; $s++) {
+        $service = $Services[$s]
+        $total = if ($counts.ContainsKey($service)) { $counts[$service] } else { 1 }
+        for ($i = 1; $i -le $total; $i++) {
+            $key = if ($total -le 1) { "z${zone}_$service" } else { "z${zone}_${service}_$i" }
+            $port = 40000 + $offset + $s * 10 + $i
+            $metrics = 20000 + $offset + $s * 10 + $i
+            $source = Get-LocalSqlBootSourceConfigPath -RepoRoot $script:CurrentRepo -Service $service
+            $text = if (Test-Path -LiteralPath $source) { [IO.File]::ReadAllText($source) } else { "ListenOn: 127.0.0.1:1`nZoneId: 1`n" }
+            $text = [regex]::Replace($text, '(?m)^ListenOn:[^\r\n]*', "ListenOn: 127.0.0.1:$port")
+            $text = [regex]::Replace($text, '(?m)^([ \t]*)ZoneId:[ \t]*\d+', "`${1}ZoneId: $zone")
+            $text = [regex]::Replace($text, '(?m)^MetricsListenAddr:[^\r\n]*', "MetricsListenAddr: `":$metrics`"")
+            $config = Join-Path $derived "$key.yaml"
+            [IO.File]::WriteAllText($config, $text)
+            $instances.Add([pscustomobject]@{ InstanceKey = $key; Service = $service; Running = $false; Port = $port; ConfigPath = $config })
+        }
+    }
+    [IO.File]::WriteAllText($Output, (ConvertTo-Json -InputObject ([object[]]$instances.ToArray()) -Depth 4))
+    return [pscustomobject]@{ Code = 0; Out = ''; Err = '' }
+}
+
 function Invoke-FixturePlan {
     param([string[]]$Arguments)
     $services = ($Arguments[[array]::IndexOf($Arguments, '-Services') + 1]) -split ','
     $output = $Arguments[[array]::IndexOf($Arguments, '-InstancePlanOutput') + 1]
+    if ($Arguments -ccontains '-Zone') { return Invoke-FixtureZonePlan -Arguments $Arguments -Services $services -Output $output }
     $repo = $script:CurrentRepo
     $instances = @(foreach ($service in $services) {
             $config = Get-LocalSqlBootSourceConfigPath -RepoRoot $repo -Service $service
@@ -608,7 +646,10 @@ try {
             $summary = New-LocalSqlBootCatalog -RepoRoot $repo
         } finally { $env:MMORPG_GLOBAL_AUTHORITY_TIDB_HOST = $null }
         $catalog = Read-MaintenanceJson -Path $summary.catalog
-        Assert-Equal 'SELECT_ONLY' (Read-MaintenanceJson -Path $catalog['db'].grantFile).lockPrimitive 'tidb 档 SELECT_ONLY'
+        # 授权文件是一个 boot 的写资格集合(SQL_WRITER_BOOT_SET_V1),每个逻辑库一份,逐份核。
+        $dbGrants = @((Read-MaintenanceJson -Path $catalog['db'].grantFile).grants)
+        Assert-True ($dbGrants.Count -gt 0) 'go/db 至少一份写资格'
+        foreach ($grant in $dbGrants) { Assert-Equal 'SELECT_ONLY' $grant.lockPrimitive 'tidb 档 SELECT_ONLY' }
         Assert-NotMatch (Get-SqlText) 'lock_touch' '没有列级锁写'
         $plan = @($script:Calls | Where-Object { $_.Leaf -ceq 'pwsh.exe' })[0]
         Assert-True ($plan.Arguments -cnotcontains '-LocalMySQL') '不走本机 MySQL 档'
@@ -661,6 +702,86 @@ try {
         Assert-NotMatch $safe ":pw@|short|$('a' * 64)" '三种形状都抹掉'
     }
 
+    Test-Case '双区一次生成:完整 22 个条目都过正式闸门,只有一次账号清理,存档库都显式给编号' {
+        Reset-Fixture
+        $repo = New-FixtureRepo
+        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_990017_db,zone_990018_db', 'Process')
+        try {
+            $summary = New-LocalSqlBootCatalog -RepoRoot $repo -Zones 990017, 990018 -ZonePortOffsets '990017=0,990018=1000'
+            $catalog = Read-MaintenanceJson -Path $summary.catalog
+            $writers = @(Get-LocalSqlBootWriterServices | Where-Object { $_ -cne 'gateway' })
+            $expected = @(foreach ($zone in @(990017, 990018)) { foreach ($service in $writers) { "z${zone}_$service" } })
+            Assert-Equal 22 $expected.Count '夹具前提'
+            Assert-Equal (($expected | Sort-Object) -join ',') ((@($catalog.Keys) | Sort-Object) -join ',') '恰好 22 个 Go 写者,不含网关和不碰 SQL 的服务'
+            $env:MMORPG_SQL_BOOT_CATALOG = $summary.catalog
+            foreach ($key in @($catalog.Keys)) {
+                $selected = ''
+                $null = Get-SqlWriterBootEnvironment -InstanceKey $key -RepoRoot $repo -ServiceName ($key -replace '^z[0-9]+_', '') -SelectedRuntimeConfigFile ([ref]$selected)
+                Assert-Equal ($key -replace '^z([0-9]+)_.*$', '$1') (Get-InstanceConfigZoneId -ConfigPath $selected) "$key 的配置写本区区号"
+            }
+            $plans = @($script:Calls | Where-Object { $_.Leaf -ceq 'pwsh.exe' })
+            Assert-Equal 2 $plans.Count '每区规划一次'
+            $planFiles = @($plans | ForEach-Object { $_.Arguments[[array]::IndexOf($_.Arguments, '-InstancePlanOutput') + 1] } | Select-Object -Unique)
+            Assert-Equal 2 $planFiles.Count '各区输出文件不同'
+            Assert-Equal 1 @($script:SqlScripts | Where-Object { $_ -match "CREATE USER IF NOT EXISTS 'lw_" }).Count '账号清理和建账号只有一次'
+            Assert-Equal 22 @(Get-RegisterCalls).Count '每实例注册一次'
+            $private = Get-LocalSqlBootRoot -RepoRoot $repo
+            Assert-Equal 1 @(Get-ChildItem -LiteralPath (Join-Path $private 'boots') -Directory).Count '只有一个 boot'
+            Assert-Equal $false (Test-Path -LiteralPath (Join-Path $private 'catalog.candidate.json')) '候选文件转正后不留'
+            $migrations = @($script:Calls | Where-Object { $_.Leaf -ceq 'db_migrate.exe' })
+            Assert-Equal 2 $migrations.Count '每个存档库迁移一次'
+            foreach ($migration in $migrations) { Assert-True ($migration.Arguments -ccontains '-storage-id') '源配置的 ZoneId 不当目标区' }
+            Assert-NotMatch (Get-SqlText) 'zone_1_db' '不带入源配置的 zone_1_db'
+            $grants = @((Read-MaintenanceJson -Path $catalog['z990018_data_service'].grantFile).grants)
+            Assert-Equal 'mmorpg_global,mmorpg_global_ledger,zone_990017_db,zone_990018_db' (@($grants | ForEach-Object { $_.authoritySchema }) -join ',') 'data_service 的写资格覆盖整个白名单'
+        } finally {
+            $env:MMORPG_SQL_BOOT_CATALOG = $null
+            [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $null, 'Process')
+        }
+    }
+    Test-Case '多区白名单缺失或少一个区都拒绝,不起子进程' {
+        Reset-Fixture
+        $repo = New-FixtureRepo
+        Assert-Match (Get-ThrownMessage { New-LocalSqlBootCatalog -RepoRoot $repo -Zones 990017, 990018 }) 'explicit player database allow list' '不带入 zone_1_db,也不按区扩权'
+        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_990017_db', 'Process')
+        try {
+            Assert-Match (Get-ThrownMessage { New-LocalSqlBootCatalog -RepoRoot $repo -Zones 990017, 990018 }) 'zone_990018_db must be in the player database allow list' '每个目标区的库都要在'
+        } finally { [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $null, 'Process') }
+        Assert-Equal 0 $script:Calls.Count '没有任何子进程'
+    }
+    Test-Case '第二区规划失败不发布,账号碰撞和两区端口冲突都在 DDL 前拒绝' {
+        [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', 'zone_990017_db,zone_990018_db', 'Process')
+        try {
+            foreach ($case in @(
+                    @{ Fail = 990018; Offsets = '990017=0,990018=1000'; Counts = ''; Expect = 'plan-instances failed for zone 990018' }
+                    @{ Fail = 0; Offsets = '990017=0,990018=1000'; Counts = 'player_inbox=2'; Expect = 'same SQL account name' }
+                    @{ Fail = 0; Offsets = '990017=0,990018=0'; Counts = ''; Expect = 'both claim port' }
+                )) {
+                Reset-Fixture
+                $repo = New-FixtureRepo
+                $script:PlanFailZone = $case.Fail
+                Assert-Match (Get-ThrownMessage { New-LocalSqlBootCatalog -RepoRoot $repo -Zones 990017, 990018 -ZonePortOffsets $case.Offsets -Counts $case.Counts }) $case.Expect '点名失败原因'
+                $private = Get-LocalSqlBootRoot -RepoRoot $repo
+                Assert-Equal $false (Test-Path -LiteralPath (Join-Path $private 'catalog.json')) '不发布半份目录'
+                Assert-Equal $false (Test-Path -LiteralPath (Join-Path $private 'last-run.json')) '不留摘要'
+                Assert-NotMatch (Get-SqlText) 'CREATE (DATABASE|USER)' '没有 DDL'
+                Assert-Equal 0 @(Get-RegisterCalls).Count '没有注册'
+            }
+        } finally { [Environment]::SetEnvironmentVariable('DB_ALLOWED_DATABASES', $null, 'Process') }
+    }
+    Test-Case '不带 -Zones 时走原单区流程,多区参数不能单独用' {
+        Reset-Fixture
+        $repo = New-FixtureRepo
+        Assert-Match (Get-ThrownMessage { New-LocalSqlBootCatalog -RepoRoot $repo -Counts 'guild=2' }) 'only apply with -Zones' '不静默忽略'
+        Assert-Equal 0 $script:Calls.Count '没有任何子进程'
+        $summary = New-LocalSqlBootCatalog -RepoRoot $repo
+        $plan = @($script:Calls | Where-Object { $_.Leaf -ceq 'pwsh.exe' })
+        Assert-Equal 1 $plan.Count '只规划一次'
+        Assert-True ($plan[0].Arguments -cnotcontains '-Zone') '单区不传区号'
+        Assert-True (-not $summary.Contains('zones')) '摘要没有多区字段'
+        Assert-True ((Read-MaintenanceJson -Path $summary.catalog).Contains('gateway')) '单区仍发网关条目'
+    }
+
     Test-Case 'dev_tools 正式入口转发到生成器' {
         $driverAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../dev_tools.ps1'), [ref]$null, [ref]$null)
         $commandParameter = @($driverAst.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Command' })[0]
@@ -671,6 +792,7 @@ try {
         Assert-Equal 1 $clause.Count '分派一处'
         Assert-Match $clause[0].Item2.Extent.Text 'sql_boot_catalog_local\.ps1' '调的是生成器'
         Assert-Match $clause[0].Item2.Extent.Text '-Services \$GoServices' '透传服务清单'
+        foreach ($forwarded in @('-Zones \$Zones', '-Counts \$GoCounts', '-PortStride \$GoPortStride', '-ZonePortShift \$ZonePortShift', '-ZonePortOffsets \$ZonePortOffsets')) { Assert-Match $clause[0].Item2.Extent.Text $forwarded '透传多区参数' }
     }
     Test-Case 'start_game 每次启动都先生成目录,再设环境,再起第一个写者' {
         $startAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../start_game.ps1'), [ref]$null, [ref]$null)

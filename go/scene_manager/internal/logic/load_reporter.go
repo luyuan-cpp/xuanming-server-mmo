@@ -693,6 +693,16 @@ func StartLoadReporter(ctx context.Context, svcCtx *svc.ServiceContext) {
 	}
 }
 
+// checkNodeView 拦住「etcd 成功返回了空的节点集」。etcd 回档、重建或连错时 Get 照样成功,照单全收的话,fullSync 把全部节点
+// 当成消失,领导者随后按死节点摘除并拆实例场景(拍板清单 B1-1)。正常下线由 watch DELETE 逐个摘除,不会一次全空。
+// 全部节点真的没了时调用方每 3 秒重试,新节点注册之后下一次全量同步就恢复。
+func checkNodeView(next, prev int) error {
+	if next == 0 && prev > 0 {
+		return fmt.Errorf("etcd returned no scene nodes while %d were known, refusing to treat them all as gone", prev)
+	}
+	return nil
+}
+
 // fullSync does a complete etcd Get to build baseline state, updates Redis,
 // and ensures main scenes for all discovered zones. Returns the etcd revision.
 func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
@@ -721,6 +731,10 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 
 	knownNodesMu.Lock()
 	prevKnown := knownNodes
+	if err := checkNodeView(len(next), len(prevKnown)); err != nil {
+		knownNodesMu.Unlock()
+		return 0, err
+	}
 	knownNodes = next
 	knownNodesMu.Unlock()
 

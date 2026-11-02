@@ -25,8 +25,8 @@ $ErrorActionPreference = 'Stop'
 
 $script:RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $script:InfraDir = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra'
-# redis-purpose.yaml 是按用途拆出的 queue 实例模板(G4a 第 1a 批),exporter 版本与三份核心 / 集群清单一起钉住。
-$script:ManifestNames = @('redis.yaml', 'redis-ha.yaml', 'redis-match-cluster.yaml', 'redis-purpose.yaml')
+# redis-purpose.yaml、redis-purpose-ha.yaml 是按用途拆出的 queue 实例模板(G4a 第 1a 批的单实例与高可用形态),exporter 版本与三份核心 / 集群清单一起钉住。
+$script:ManifestNames = @('redis.yaml', 'redis-ha.yaml', 'redis-match-cluster.yaml', 'redis-purpose.yaml', 'redis-purpose-ha.yaml')
 $script:AlertsPath = Join-Path $script:RepoRoot 'deploy/k8s/redis-alerts.yaml'
 
 function Read-RepoText {

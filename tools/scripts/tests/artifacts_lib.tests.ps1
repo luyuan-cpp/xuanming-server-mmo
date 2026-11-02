@@ -121,7 +121,8 @@ try {
             } else {
                 # "不存在时会创建"的语义由 -Override 指向临时目录的用例覆盖,这里只验证推算出的路径
                 $msg = Get-ThrownMessage { Get-ArtifactRoot -MustExist }
-                Assert-Match -Text $msg -Pattern ('制品根不存在:' + [regex]::Escape($expected) + '(') -Because "默认制品根应推算为 $expected,错误文本应原样报出该路径"
+                # 路径后紧跟的 ( 也是字面字符,必须一起转义,否则正则因括号不成对直接报 Invalid pattern
+                Assert-Match -Text $msg -Pattern ('制品根不存在:' + [regex]::Escape($expected + '(')) -Because "默认制品根应推算为 $expected,错误文本应原样报出该路径"
                 Assert-True -Condition (-not [System.IO.Directory]::Exists($expected)) -Because '-MustExist 不得创建默认制品根'
             }
         }

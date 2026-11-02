@@ -134,7 +134,17 @@ func (l *CreateSceneLogic) resolveSceneType(in *scene_manager.CreateSceneRequest
 // that also creates channels on-demand if they somehow don't exist yet.
 func (l *CreateSceneLogic) createMainWorldScene(in *scene_manager.CreateSceneRequest) (*scene_manager.CreateSceneResponse, error) {
 	// Fast path: channels already exist — return the least-loaded one.
-	sceneId, nodeId, _ := GetBestWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
+	// 读频道集合 / 属主出错(2026-10-23)不等于「还没有频道」:不走下面的按需补建 —— 那会在 zone 锁上
+	// 忙等最多 10s 并对整组频道各发一次 CreateScene,把一次 Redis 抖动放大成多秒延迟与一串节点 RPC。
+	// 回 ErrRedis,调用方退避重试。
+	sceneId, nodeId, err := GetBestWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
+	if err != nil {
+		l.Logger.Errorf("[MainWorld] Cannot read world channels for conf %d in zone %d: %v", in.SceneConfId, in.ZoneId, err)
+		return &scene_manager.CreateSceneResponse{
+			ErrorCode:    constants.ErrRedis,
+			ErrorMessage: fmt.Sprintf("world channels of conf %d unreadable, retry: %v", in.SceneConfId, err),
+		}, nil
+	}
 	if sceneId > 0 {
 		l.Logger.Infof("[MainWorld] Best channel: scene=%d conf=%d node=%s", sceneId, in.SceneConfId, nodeId)
 		return &scene_manager.CreateSceneResponse{SceneId: sceneId, NodeId: nodeId}, nil
@@ -146,7 +156,14 @@ func (l *CreateSceneLogic) createMainWorldScene(in *scene_manager.CreateSceneReq
 	l.Logger.Infof("[MainWorld] No channels for conf %d in zone %d, creating on demand", in.SceneConfId, in.ZoneId)
 	initWorldScenesForZone(l.ctx, l.svcCtx, in.ZoneId, []uint64{in.SceneConfId}, true)
 
-	sceneId, nodeId, _ = GetBestWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
+	sceneId, nodeId, err = GetBestWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
+	if err != nil {
+		l.Logger.Errorf("[MainWorld] Cannot read world channels for conf %d in zone %d after on-demand init: %v", in.SceneConfId, in.ZoneId, err)
+		return &scene_manager.CreateSceneResponse{
+			ErrorCode:    constants.ErrRedis,
+			ErrorMessage: fmt.Sprintf("world channels of conf %d unreadable, retry: %v", in.SceneConfId, err),
+		}, nil
+	}
 	if sceneId > 0 {
 		return &scene_manager.CreateSceneResponse{SceneId: sceneId, NodeId: nodeId}, nil
 	}
@@ -200,7 +217,15 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 
 		if l.svcCtx.Config.MirrorDedupBySource {
 			if existingId, ok := l.findExistingMirror(in.SourceSceneId); ok {
-				if nodeId, err := l.svcCtx.Redis.Get(sceneNodeKey(existingId)); err == nil && nodeId != "" {
+				nodeId, err := l.svcCtx.Redis.Get(sceneNodeKey(existingId))
+				switch {
+				case err != nil:
+					// 读不到属主(2026-10-23)不能当成陈旧条目摘掉:那会把一个活镜像从源的子集合里摘掉,
+					// 源销毁 / 缩容 / 迁移时再也级联不到它,channelHasMirrors 也会误报「没有镜像」。
+					// 去重只是优化:本次不复用、不摘,照常新建一个(两个都在索引里,一致性不受影响)。
+					noteReadUnknown(in.ZoneId, readUnknownSiteMirrorDedup,
+						fmt.Sprintf("owner of mirror %d (source %d), allocating a fresh mirror instead", existingId, in.SourceSceneId), err)
+				case nodeId != "":
 					l.Logger.Infof("[Instance] Dedup: reusing mirror %d (source %d) on node %s",
 						existingId, in.SourceSceneId, nodeId)
 					metrics.ObserveMirrorDedup(in.ZoneId, "hit")
@@ -209,12 +234,13 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 						NodeId:     nodeId,
 						CreatorIds: in.CreatorIds,
 					}, nil
+				default:
+					// Stale entry in the mirrors set — the mirror was destroyed
+					// but its membership wasn't cleaned. Drop it and fall through
+					// to a fresh allocation.
+					l.svcCtx.Redis.Srem(sceneMirrorsKey(in.SourceSceneId), strconv.FormatUint(existingId, 10))
+					metrics.ObserveMirrorDedup(in.ZoneId, "stale")
 				}
-				// Stale entry in the mirrors set — the mirror was destroyed
-				// but its membership wasn't cleaned. Drop it and fall through
-				// to a fresh allocation.
-				l.svcCtx.Redis.Srem(sceneMirrorsKey(in.SourceSceneId), strconv.FormatUint(existingId, 10))
-				metrics.ObserveMirrorDedup(in.ZoneId, "stale")
 			} else {
 				metrics.ObserveMirrorDedup(in.ZoneId, "miss")
 			}
@@ -496,9 +522,15 @@ func (l *CreateSceneLogic) resolveMirrorSourceNode(sourceSceneId uint64, zoneId 
 	// which then can't be reconciled by the requesting zone's node-death
 	// loop (different active set), creating an orphan on every restart.
 	// We only enforce when the source has a recorded zone — sources
-	// created before scene:{id}:zone existed return 0 from GetSceneZone
-	// and skip the check (back-compat).
-	if srcZone := GetSceneZone(l.svcCtx, sourceSceneId); srcZone != 0 && srcZone != zoneId {
+	// created before scene:{id}:zone existed return 0 from lookupSceneZone
+	// and skip the check (back-compat). 读不到不等于没记录:不知道是不是跨 zone,
+	// 就不共置,和上面映射读不到走同一条回退。
+	srcZone, err := lookupSceneZone(l.svcCtx, sourceSceneId)
+	if err != nil {
+		l.Logger.Errorf("[Mirror] cannot read zone of source scene %d, falling back to GetBestNode: %v", sourceSceneId, err)
+		return "", "no_mapping"
+	}
+	if srcZone != 0 && srcZone != zoneId {
 		l.Logger.Infof("[Mirror] source scene %d lives in zone %d but request is for zone %d, falling back to GetBestNode",
 			sourceSceneId, srcZone, zoneId)
 		return "", "zone_mismatch"

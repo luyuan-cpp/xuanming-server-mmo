@@ -325,8 +325,10 @@ func TestNodeRedisStateIsScopedByZoneAndNodeID(t *testing.T) {
 	updateNodeLoad(sc, zone1)
 	updateNodeLoad(sc, zone2)
 
-	type1, ok1 := readNodeSceneType(sc, 1, "10")
-	type2, ok2 := readNodeSceneType(sc, 2, "10")
+	type1, ok1, err1 := readNodeSceneType(sc, 1, "10")
+	type2, ok2, err2 := readNodeSceneType(sc, 2, "10")
+	require.NoError(t, err1)
+	require.NoError(t, err2)
 	require.True(t, ok1)
 	require.True(t, ok2)
 	assert.Equal(t, constants.SceneNodeTypeMainWorld, type1)

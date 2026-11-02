@@ -75,7 +75,7 @@ type ServiceContext struct {
 	// PlayerIDMinter 是建角发号的**唯一**入口:号段优先,按 IdSegment 配置决定要不要
 	// 回退到 SnowFlake。handler 不许绕过它直接碰 SnowFlake / PlayerIDSegment。
 	PlayerIDMinter *idsegment.Minter
-	// HomeZone 查 data_service 的 player:zone 映射(合服后的真归属)。Login 用它
+	// HomeZone 查 data_service 的 player_route 映射(合服后的真归属)。Login 用它
 	// 修正角色列表的 zone_id,EnterGame 用它决定 EnterScene.ZoneId。永不为 nil;
 	// 没配 DataServiceRpc 时内部 Client 为 nil,所有查询按「不可用→保留存量」处理。
 	HomeZone *homezone.Resolver
@@ -191,10 +191,14 @@ func NewServiceContext() *ServiceContext {
 	gateWatcher := node.NewNodeWatcher(etcdClient, gatePrefix)
 
 	// Initialize token manager for access/refresh tokens
-	tokenMgr := token.NewManager(loginRedis, token.Config{
-		AccessTokenTTL:  config.AppConfig.TokenConfig.AccessTokenTTL,
-		RefreshTokenTTL: config.AppConfig.TokenConfig.RefreshTokenTTL,
-	})
+	tokenCfg, err := tokenConfigFrom(config.AppConfig.TokenConfig)
+	if err != nil {
+		panic(err)
+	}
+	if zeroGraceRevokes(tokenCfg) {
+		logx.Errorf("[Token] RefreshReuseGrace=0 with RefreshReuseRevoke=true: a duplicated RefreshToken request revokes the whole login family")
+	}
+	tokenMgr := token.NewManager(loginRedis, tokenCfg)
 
 	// Register access_token auth provider (requires TokenManager)
 	RegisterAccessTokenProvider(tokenMgr)

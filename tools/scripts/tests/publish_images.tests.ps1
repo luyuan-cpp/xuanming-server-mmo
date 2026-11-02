@@ -120,6 +120,7 @@ if ($a.Count -eq 3 -and $a[0] -eq 'image' -and $a[1] -eq 'inspect') {
     $img = $images[$ref]
     $labels = [ordered]@{ 'org.opencontainers.image.title' = 'stub' }
     if ($img['revision']) { $labels['org.opencontainers.image.revision'] = $img['revision'] }
+    if ($img['version']) { $labels['org.opencontainers.image.version'] = $img['version'] }
     $doc = [ordered]@{ Id = $img['id']; RepoTags = @($ref); Config = [ordered]@{ Labels = $labels } }
     Write-Output (ConvertTo-Json -InputObject @($doc) -Depth 6)
     exit 0
@@ -240,7 +241,7 @@ function Get-FakeImageId {
 
 <#
 .SYNOPSIS
-    写 docker 桩状态:给定引用全部"已构建",revision = 夹具提交;-Mutate 可改单个镜像。
+    写 docker 桩状态:给定引用全部"已构建",revision = 夹具提交,version 同镜像脚本写的 label;-Mutate 可改单个镜像。
 #>
 function Set-DockerImages {
     param(
@@ -250,7 +251,11 @@ function Set-DockerImages {
     )
     $images = [ordered]@{}
     foreach ($ref in $Refs) {
-        $images[$ref] = [ordered]@{ id = (Get-FakeImageId -Ref $ref); revision = $Fixture.Commit }
+        # 与 publish_images.ps1 的 $expectedImageVersion 同一口径:快照轨 = tag;release 轨 = -Version,它的 tag 是 <版本>-<commit>。
+        $tag = $ref.Substring($ref.LastIndexOf(':') + 1)
+        $releaseSuffix = "-$($Fixture.Commit)"
+        $version = if ($tag.EndsWith($releaseSuffix)) { $tag.Substring(0, $tag.Length - $releaseSuffix.Length) } else { $tag }
+        $images[$ref] = [ordered]@{ id = (Get-FakeImageId -Ref $ref); revision = $Fixture.Commit; version = $version }
     }
     if ($null -ne $Mutate) { & $Mutate $images }
     Write-TestFile -Path $Fixture.DockerState -Text (ConvertTo-Json -InputObject ([ordered]@{ images = $images }) -Depth 6)
@@ -387,6 +392,19 @@ try {
         Assert-Match -Text $run.Output -Pattern 'org\.opencontainers\.image\.revision 与当前提交' -Because "错误要说清是 revision 不符"
         Assert-Match -Text $run.Output -Pattern "mmorpg-gateway:$($fx.Commit)\(revision='ffffffffffff'\)" -Because "要点名镜像并给出实际 revision"
         Assert-Match -Text $run.Output -Pattern '去掉 -SkipBuild' -Because "-SkipBuild 场景要提示重建"
+        Assert-Equal -Expected 0 -Actual @(Get-PublishedEntries -ImagesRoot (Get-ImagesRoot -Fixture $fx -Channel snapshots)).Count -Because "拒绝时不得产生版本目录"
+    }
+
+    Test-Case "负向:镜像 version label 与本次版本不一致必须拒绝" {
+        $fx = New-PublishFixture
+        $refs = @(Get-FixtureRefs -Tag $fx.Commit -Families @('go'))
+        $login = "$TestRegistry/mmorpg-login:$($fx.Commit)"
+        Set-DockerImages -Fixture $fx -Refs $refs -Mutate { param($images) $images[$login]['version'] = 'v9.9.9' }
+
+        $run = Invoke-Publish -Fixture $fx -Params @{ SkipBuild = $true; Families = @('go') }
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "离线包不能名为一个版本、镜像里却是另一个版本"
+        Assert-Match -Text $run.Output -Pattern 'org\.opencontainers\.image\.version 与本次发布版本' -Because "错误要说清是 version 不符"
+        Assert-Match -Text $run.Output -Pattern "mmorpg-login:$($fx.Commit)\(version='v9\.9\.9'\)" -Because "要点名镜像并给出实际 version"
         Assert-Equal -Expected 0 -Actual @(Get-PublishedEntries -ImagesRoot (Get-ImagesRoot -Fixture $fx -Channel snapshots)).Count -Because "拒绝时不得产生版本目录"
     }
 

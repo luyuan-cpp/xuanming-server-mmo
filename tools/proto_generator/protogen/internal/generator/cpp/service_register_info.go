@@ -509,6 +509,11 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 			continue
 		}
 
+		// 方法元数据要写目标节点类型,没有节点类型的内部 service 不进注册表。
+		if !service.HasNodeType() {
+			continue
+		}
+
 		firstMethod := service.Methods[0]
 
 		pbInclude := _config.Global.Naming.IncludeBegin +
@@ -525,6 +530,10 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 		}
 
 		if internal.IsFileBelongToNode(service.Fd, messageoption.NodeType_NODE_DB) {
+			continue
+		}
+
+		if !service.HasNodeType() {
 			continue
 		}
 

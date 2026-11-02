@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneActivityClientPlayer_GetActivityList_FullMethodName = "/SceneActivityClientPlayer/GetActivityList"
+	SceneActivityClientPlayer_GetActivityList_FullMethodName             = "/SceneActivityClientPlayer/GetActivityList"
+	SceneActivityClientPlayer_ClaimActivityVitalityReward_FullMethodName = "/SceneActivityClientPlayer/ClaimActivityVitalityReward"
 )
 
 // SceneActivityClientPlayerClient is the client API for SceneActivityClientPlayer service.
@@ -28,6 +29,8 @@ const (
 type SceneActivityClientPlayerClient interface {
 	// 目录只读取 MissionTable.mission_type=2；无运营时间配置时一律未排期。
 	GetActivityList(ctx context.Context, in *GetActivityListRequest, opts ...grpc.CallOption) (*GetActivityListResponse, error)
+	// 重放同一请求同时承担查询恢复；已领取记录优先于当前周期及配置校验。
+	ClaimActivityVitalityReward(ctx context.Context, in *ClaimActivityVitalityRewardRequest, opts ...grpc.CallOption) (*ClaimActivityVitalityRewardResponse, error)
 }
 
 type sceneActivityClientPlayerClient struct {
@@ -48,12 +51,24 @@ func (c *sceneActivityClientPlayerClient) GetActivityList(ctx context.Context, i
 	return out, nil
 }
 
+func (c *sceneActivityClientPlayerClient) ClaimActivityVitalityReward(ctx context.Context, in *ClaimActivityVitalityRewardRequest, opts ...grpc.CallOption) (*ClaimActivityVitalityRewardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimActivityVitalityRewardResponse)
+	err := c.cc.Invoke(ctx, SceneActivityClientPlayer_ClaimActivityVitalityReward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneActivityClientPlayerServer is the server API for SceneActivityClientPlayer service.
 // All implementations must embed UnimplementedSceneActivityClientPlayerServer
 // for forward compatibility.
 type SceneActivityClientPlayerServer interface {
 	// 目录只读取 MissionTable.mission_type=2；无运营时间配置时一律未排期。
 	GetActivityList(context.Context, *GetActivityListRequest) (*GetActivityListResponse, error)
+	// 重放同一请求同时承担查询恢复；已领取记录优先于当前周期及配置校验。
+	ClaimActivityVitalityReward(context.Context, *ClaimActivityVitalityRewardRequest) (*ClaimActivityVitalityRewardResponse, error)
 	mustEmbedUnimplementedSceneActivityClientPlayerServer()
 }
 
@@ -66,6 +81,9 @@ type UnimplementedSceneActivityClientPlayerServer struct{}
 
 func (UnimplementedSceneActivityClientPlayerServer) GetActivityList(context.Context, *GetActivityListRequest) (*GetActivityListResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetActivityList not implemented")
+}
+func (UnimplementedSceneActivityClientPlayerServer) ClaimActivityVitalityReward(context.Context, *ClaimActivityVitalityRewardRequest) (*ClaimActivityVitalityRewardResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimActivityVitalityReward not implemented")
 }
 func (UnimplementedSceneActivityClientPlayerServer) mustEmbedUnimplementedSceneActivityClientPlayerServer() {
 }
@@ -107,6 +125,24 @@ func _SceneActivityClientPlayer_GetActivityList_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneActivityClientPlayer_ClaimActivityVitalityReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimActivityVitalityRewardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneActivityClientPlayerServer).ClaimActivityVitalityReward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneActivityClientPlayer_ClaimActivityVitalityReward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneActivityClientPlayerServer).ClaimActivityVitalityReward(ctx, req.(*ClaimActivityVitalityRewardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneActivityClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneActivityClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -117,6 +153,10 @@ var SceneActivityClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetActivityList",
 			Handler:    _SceneActivityClientPlayer_GetActivityList_Handler,
+		},
+		{
+			MethodName: "ClaimActivityVitalityReward",
+			Handler:    _SceneActivityClientPlayer_ClaimActivityVitalityReward_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

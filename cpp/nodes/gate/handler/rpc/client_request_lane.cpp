@@ -11,6 +11,7 @@
 #include "muduo/base/Logging.h"
 #include "gate_codec.h"
 #include "login_admission.h"
+#include "session_details_builder.h"
 #include "error_reporter/error_reporter.h"
 #include "node/system/grpc_call_deadline.h"
 #include "proto/common/base/message.pb.h"
@@ -72,13 +73,6 @@ constexpr std::chrono::seconds kSummaryInterval{30};
 CallSeq NextCallSeq()
 {
 	return ++tlsLastCallSeq;
-}
-
-// 会话尚未绑定玩家时 SessionInfo.playerId 是 kInvalidGuid(UINT64_MAX),Go 各服务只认 0 = 无玩家:
-// 原样带出去会被当成玩家 18446744073709551615(client-access-band-routing.md 阶段 0b)。
-uint64_t NormalizePlayerId(uint64_t playerId)
-{
-	return playerId == kInvalidGuid ? 0 : playerId;
 }
 
 } // namespace
@@ -239,7 +233,9 @@ void Admit(SessionId sessionId, SessionInfo &session, const std::shared_ptr<Clie
 	const uint64_t clientRequestId = request->id();
 	const uint32_t messageId = request->message_id();
 
-	details.set_player_id(NormalizePlayerId(details.player_id()));
+	// details 已在 BuildSessionDetails 归一过 player_id(D60 的唯一构造点);这里复用同一规则再归一一次只作纵深防御,
+	// 规则本身是幂等的,不会改写已绑定的角色。
+	details.set_player_id(gate_session_details::NormalizePlayerId(details.player_id()));
 	details.set_session_incarnation(session.incarnation);
 	const CallSeq seq = NextCallSeq();
 	details.set_gate_call_seq(seq);

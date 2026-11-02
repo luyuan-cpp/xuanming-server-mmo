@@ -92,7 +92,13 @@ func (f *fakeClusterView) LiveGateInstances(context.Context) (map[string]struct{
 	if f.liveErr != nil {
 		return nil, f.liveErr
 	}
-	return f.live, nil
+	// 清扫的存活集闸门不接受全空(gate_sweep.go checkLiveView)。留一个没有登记玩家的活 gate,用例才能模拟「登记的 gate 都死了」。
+	live := make(map[string]struct{}, len(f.live)+1)
+	for gate := range f.live {
+		live[gate] = struct{}{}
+	}
+	live["gate-unregistered-alive"] = struct{}{}
+	return live, nil
 }
 
 func (f *fakeClusterView) SessionWriters(context.Context) (map[string]struct{}, map[string]struct{}, error) {

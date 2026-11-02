@@ -22,13 +22,20 @@ const (
 )
 
 type ActivityScheduleTable struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	Id                uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Enabled           bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	BaselineStartAtMs uint64                 `protobuf:"varint,3,opt,name=baseline_start_at_ms,json=baselineStartAtMs,proto3" json:"baseline_start_at_ms,omitempty"`
-	BaselineEndAtMs   uint64                 `protobuf:"varint,4,opt,name=baseline_end_at_ms,json=baselineEndAtMs,proto3" json:"baseline_end_at_ms,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Id                    uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Enabled               bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	BaselineStartAtMs     uint64                 `protobuf:"varint,3,opt,name=baseline_start_at_ms,json=baselineStartAtMs,proto3" json:"baseline_start_at_ms,omitempty"`
+	BaselineEndAtMs       uint64                 `protobuf:"varint,4,opt,name=baseline_end_at_ms,json=baselineEndAtMs,proto3" json:"baseline_end_at_ms,omitempty"`
+	DefinitionKey         string                 `protobuf:"bytes,5,opt,name=definition_key,json=definitionKey,proto3" json:"definition_key,omitempty"`
+	ConfigurationRevision uint64                 `protobuf:"varint,6,opt,name=configuration_revision,json=configurationRevision,proto3" json:"configuration_revision,omitempty"`
+	Category              uint32                 `protobuf:"varint,7,opt,name=category,proto3" json:"category,omitempty"`
+	Name                  string                 `protobuf:"bytes,8,opt,name=name,proto3" json:"name,omitempty"`
+	Description           string                 `protobuf:"bytes,9,opt,name=description,proto3" json:"description,omitempty"`
+	IconKey               string                 `protobuf:"bytes,10,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
+	VitalityPoints        uint32                 `protobuf:"varint,11,opt,name=vitality_points,json=vitalityPoints,proto3" json:"vitality_points,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ActivityScheduleTable) Reset() {
@@ -89,6 +96,55 @@ func (x *ActivityScheduleTable) GetBaselineEndAtMs() uint64 {
 	return 0
 }
 
+func (x *ActivityScheduleTable) GetDefinitionKey() string {
+	if x != nil {
+		return x.DefinitionKey
+	}
+	return ""
+}
+
+func (x *ActivityScheduleTable) GetConfigurationRevision() uint64 {
+	if x != nil {
+		return x.ConfigurationRevision
+	}
+	return 0
+}
+
+func (x *ActivityScheduleTable) GetCategory() uint32 {
+	if x != nil {
+		return x.Category
+	}
+	return 0
+}
+
+func (x *ActivityScheduleTable) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ActivityScheduleTable) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *ActivityScheduleTable) GetIconKey() string {
+	if x != nil {
+		return x.IconKey
+	}
+	return ""
+}
+
+func (x *ActivityScheduleTable) GetVitalityPoints() uint32 {
+	if x != nil {
+		return x.VitalityPoints
+	}
+	return 0
+}
+
 type ActivityScheduleTableData struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Data          []*ActivityScheduleTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -137,12 +193,20 @@ var File_activityschedule_table_proto protoreflect.FileDescriptor
 
 const file_activityschedule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1cactivityschedule_table.proto\"\x9f\x01\n" +
+	"\x1cactivityschedule_table.proto\"\x93\x03\n" +
 	"\x15ActivityScheduleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12/\n" +
 	"\x14baseline_start_at_ms\x18\x03 \x01(\x04R\x11baselineStartAtMs\x12+\n" +
-	"\x12baseline_end_at_ms\x18\x04 \x01(\x04R\x0fbaselineEndAtMs\"G\n" +
+	"\x12baseline_end_at_ms\x18\x04 \x01(\x04R\x0fbaselineEndAtMs\x12%\n" +
+	"\x0edefinition_key\x18\x05 \x01(\tR\rdefinitionKey\x125\n" +
+	"\x16configuration_revision\x18\x06 \x01(\x04R\x15configurationRevision\x12\x1a\n" +
+	"\bcategory\x18\a \x01(\rR\bcategory\x12\x12\n" +
+	"\x04name\x18\b \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\t \x01(\tR\vdescription\x12\x19\n" +
+	"\bicon_key\x18\n" +
+	" \x01(\tR\aiconKey\x12'\n" +
+	"\x0fvitality_points\x18\v \x01(\rR\x0evitalityPoints\"G\n" +
 	"\x19ActivityScheduleTableData\x12*\n" +
 	"\x04data\x18\x01 \x03(\v2\x16.ActivityScheduleTableR\x04dataBG\n" +
 	"\x0ecom.game.tableB\x1fActivityScheduleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

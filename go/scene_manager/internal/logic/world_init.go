@@ -171,10 +171,21 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 		// 期望频道数的权威在 Redis,不是配置 —— 配置只是首次播种的种子。
 		// 直接读 ChannelCountFor 的话,自动缩容刚摘掉的频道会在这里被
 		// 重新补出来,缩容根本不成立。见 world_autoscale.go 顶部注释。
-		channelCount := DesiredWorldChannelCount(svcCtx, zoneId, confId)
+		// 期望数与现有集合任一读不到,就不知道缺几个:期望数读错当种子值会把缩掉的频道补回来,
+		// 集合读错当 0 会把整组频道再建一遍(多铸 scene_id、多占 Agones 名额)。
+		// 本 conf 本轮跳过,下一拍或 RPC 兜底的重查再补。
+		channelCount, err := DesiredWorldChannelCount(svcCtx, zoneId, confId)
+		if err != nil {
+			noteReadUnknown(zoneId, readUnknownSiteWorldInit, fmt.Sprintf("desired channel count of conf %d", confId), err)
+			continue
+		}
 
 		// Get existing channels for this confId.
-		existingMembers, _ := svcCtx.Redis.Smembers(channelSetKey)
+		existingMembers, err := svcCtx.Redis.Smembers(channelSetKey)
+		if err != nil {
+			noteReadUnknown(zoneId, readUnknownSiteWorldInit, fmt.Sprintf("channel set of conf %d", confId), err)
+			continue
+		}
 		existingCount := len(existingMembers)
 
 		// Create missing channels — only assign to live nodes.
@@ -242,11 +253,19 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 
 		// Always send CreateScene RPC for all channels — C++ deduplicates by scene_id.
 		// If a channel's target node is dead, reassign to a live node.
-		allMembers, _ := svcCtx.Redis.Smembers(channelSetKey)
+		allMembers, err := svcCtx.Redis.Smembers(channelSetKey)
+		if err != nil {
+			noteReadUnknown(zoneId, readUnknownSiteWorldInit, fmt.Sprintf("channel set of conf %d", confId), err)
+			continue
+		}
 		for _, sceneIdStr := range allMembers {
 			sceneId, _ := strconv.ParseUint(sceneIdStr, 10, 64)
 			nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
-			targetNode, _ := svcCtx.Redis.Get(nodeKey)
+			targetNode, err := svcCtx.Redis.Get(nodeKey)
+			if err != nil {
+				noteReadUnknown(zoneId, readUnknownSiteWorldInit, fmt.Sprintf("owner of scene %d", sceneId), err)
+				continue
+			}
 			if targetNode == "" {
 				logx.Errorf("[World] Missing node for scene %d, skipping RPC", sceneId)
 				continue
@@ -343,6 +362,9 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 // crashed and a new one just registered), it lazily reassigns stale channels to
 // live nodes instead of returning "no channel". This covers the race window between
 // a new node's etcd PUT event and initWorldScenesForZone completing reassignment.
+//
+// 属主(scene:{id}:node)读不到的频道既不当候选也不当陈旧,本轮跳过;一个频道都没选出来、
+// 且有被跳过的,回可重试的 error(见 worldChannelOwnersUnknownError)。
 func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId uint64, zoneId uint32) (uint64, string, error) {
 	channelSetKey := worldChannelsKey(zoneId, confId)
 	members, err := svcCtx.Redis.Smembers(channelSetKey)
@@ -355,6 +377,9 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 	bestCount := int64(math.MaxInt64)
 
 	var staleSceneIds []uint64
+	// 属主读不到的频道数。它们既不是候选也不算陈旧;本次一个都没选出来时据此回错误(可重试),
+	// 而不是「没有频道」。
+	unknownOwners := 0
 
 	for _, m := range members {
 		sceneId, _ := strconv.ParseUint(m, 10, 64)
@@ -363,7 +388,14 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 		}
 
 		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
-		nid, _ := svcCtx.Redis.Get(nodeKey)
+		nid, getErr := svcCtx.Redis.Get(nodeKey)
+		if getErr != nil {
+			// 读错不等于映射不存在:属主可能活着。当成陈旧会进懒改派,下一次读若成功就会拿着
+			// 活属主做 CAS,把频道从活节点上搬走、在新节点上再建一份同 scene_id 的实体。
+			noteReadUnknown(zoneId, readUnknownSiteWorldPick, fmt.Sprintf("owner of scene %d", sceneId), getErr)
+			unknownOwners++
+			continue
+		}
 		if nid != "" && isKnownNodeIdentityAmbiguous(zoneId, nid) {
 			logx.Errorf("[World] scene %d maps to duplicate identity zone=%d node=%s; refusing stale-channel reassignment",
 				sceneId, zoneId, nid)
@@ -396,7 +428,7 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 	if len(liveNodes) == 0 {
 		logx.Errorf("[World] All %d channels for conf %d (zone %d) are stale and no live nodes available",
 			len(staleSceneIds), confId, zoneId)
-		return 0, "", nil
+		return 0, "", worldChannelOwnersUnknownError(confId, zoneId, unknownOwners)
 	}
 
 	logx.Infof("[World] All %d channels for conf %d (zone %d) are stale, lazy-reassigning to %d live nodes",
@@ -404,29 +436,96 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 
 	for i, sceneId := range staleSceneIds {
 		targetNode := assignNodeByHash(confId*1000+uint64(i), liveNodes)
-		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
-		oldNode, _ := svcCtx.Redis.Get(nodeKey)
-		// 再入屏障:老属主刚判死时仍可能在 SavePlayer,懒改派同样不能抢。
-		// 换下一个陈旧频道试,全都被挡住就返回"没有可用频道",上游退避重试。
-		if oldNode != "" && reentryBarrierBlocks(svcCtx, zoneId, oldNode, barrierSiteWorldChannelLazy) {
+		if !lazyReassignStaleWorldChannel(ctx, svcCtx, zoneId, confId, sceneId, targetNode) {
 			continue
 		}
-		// 走 CAS 收口:这条路径在任意副本的 EnterScene 上跑,与领导者的 rebalance、
-		// initWorldScenesForZone 并发。归属已被别人改走就换下一个陈旧频道。
-		if !reassignSceneNode(svcCtx, zoneId, sceneId, oldNode, targetNode) {
-			continue
-		}
-
-		if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, targetNode, uint32(confId), sceneId); err != nil {
-			logx.Errorf("[World] Lazy-reassign: CreateScene failed for scene %d on node %s: %v", sceneId, targetNode, err)
-			continue
-		}
-
 		logx.Infof("[World] Lazy-reassigned stale channel (scene=%d, conf=%d) to live node %s", sceneId, confId, targetNode)
 		return sceneId, targetNode, nil
 	}
 
-	return 0, "", nil
+	return 0, "", worldChannelOwnersUnknownError(confId, zoneId, unknownOwners)
+}
+
+// lazyReassignStaleWorldChannel 把一个已判陈旧的世界频道懒改派到 targetNode,返回 true 表示频道已经由
+// targetNode 承载(实体已建、归属已改)。两个懒改派调用方(GetBestWorldChannel / ReserveBestWorldChannelForEnter)
+// 共用它,顺序与 rebalance 的 migrateWorldChannel、resolveScene 的死节点自愈一致:先建后改(2026-10-23)。
+//  1. staleWorldChannelOwner:重读属主并复核存活、身份歧义与再入屏障,廉价的判断都在发 RPC 之前做完 ——
+//     刚判死的节点在屏障窗口里会挡住每一个进场请求,不能让每个请求都白建白拆一次。
+//  2. CreateScene(按 scene_id 幂等):归属一旦落地就有实体可进,不会出现「映射指向一个还没建出实体的节点」。
+//  3. reassignWorldChannelNode:属主 CAS 与在役成员资格在同一个脚本里判定。在役核对是正确性前提:调用方读到
+//     频道列表之后,排空收尾或孤儿清理可能已经原子地拆掉了这个频道(删映射并摘出集合,见 atomicTeardownScene)。
+//     此时映射不存在,只比属主的 CAS(期望空串)会把它复活成一个哪个集合都不列的频道 —— 实体、记账与
+//     Agones 名额从此没有任何路径能收回。落空(属主已变或已不在役)就回收第 2 步预建的实体。
+//  4. 转 Agones 名额:reassignSceneNode 的契约把它交给调用方(以前懒改派漏了 —— agones_gs 仍指向老 GameServer,
+//     新节点的 rooms Counter 不记账)。TransferAgonesRoomForScene 要求调用时归属已是 targetNode,第 3 步成功后正好满足。
+//
+// 第 3 步落空后的回收与第 4 步都是 K8s / RPC 写入,不挂请求 ctx:请求取消或超时时写入可能已经生效、本端却拿到错误。
+// 用与 resolveScene 死节点自愈同一个独立时限 deadNodeReassignFollowUpTimeout。
+func lazyReassignStaleWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confId, sceneId uint64, targetNode string) bool {
+	oldNode, ok := staleWorldChannelOwner(svcCtx, zoneId, sceneId)
+	if !ok || oldNode == targetNode {
+		return false
+	}
+	if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, targetNode, uint32(confId), sceneId); err != nil {
+		logx.Errorf("[World] Lazy-reassign: CreateScene failed for scene %d on node %s: %v", sceneId, targetNode, err)
+		return false
+	}
+	followCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), deadNodeReassignFollowUpTimeout)
+	defer cancel()
+	if !reassignWorldChannelNode(svcCtx, zoneId, sceneId, oldNode, targetNode, worldChannelsKey(zoneId, confId)) {
+		destroyUnownedMigrationTarget(followCtx, svcCtx, zoneId, confId, sceneId, targetNode)
+		return false
+	}
+	TransferAgonesRoomForScene(followCtx, svcCtx, sceneId, targetNode, zoneId)
+	return true
+}
+
+// worldChannelOwnersUnknownError:本次一个频道都没选出来时,若有频道是因为属主读不到而被跳过,
+// 回一个可重试的错误,而不是「没有频道」。EnterScene 把它翻成「暂无可用频道」,CreateScene 回 ErrRedis,
+// 都由上游退避重试,不会触发按需补建。
+// 没有读不到的频道时回 nil,保持原来「确实没有可用频道」的语义。
+func worldChannelOwnersUnknownError(confId uint64, zoneId uint32, unknownOwners int) error {
+	if unknownOwners == 0 {
+		return nil
+	}
+	return fmt.Errorf("world channel owners unreadable: conf=%d zone=%d channels=%d", confId, zoneId, unknownOwners)
+}
+
+// staleWorldChannelOwner 在懒改派动手之前重读一个已判陈旧的世界频道的属主,判断它此刻是否仍可被接管。
+// ok=true 时 oldNode 是重读到的属主(空串 = 映射不存在),调用方拿它做 reassignWorldChannelNode 的期望值;
+// ok=false 表示本轮不接管,什么都没写。
+//
+// 判陈旧那次读与这里隔着别的频道的读与 RPC,所以重读,按读到的结果分开处理:
+//   - 读错:不知道当前属主,本轮放弃。以前读错被当成「没有属主」,随后的 CAS(期望值为空串)
+//     恰好挡住了写,但这是巧合,不是契约;
+//   - 有值且属主活着(或身份有歧义):频道已经不陈旧了(判陈旧时映射还不存在、之后被补建,或被
+//     rebalance 改派到活节点)。CAS 只比属主、不看存活,放过去就会把它从活节点上搬走,同一 scene_id
+//     两份实体;
+//   - 有值且属主已死:老属主刚判死时仍可能在 SavePlayer,再入屏障没走完就不抢;
+//   - 不存在(Nil):没有活着的属主在写它,交给 CAS。映射不存在也可能是因为频道刚被排空收尾或孤儿清理
+//     原子拆掉,所以调用方的 CAS 必须同时核对在役成员资格(reassignWorldChannelNode),不能只比属主。
+//
+// 归属的写入在调用方走 reassignWorldChannelNode 的 CAS:这条路径在任意副本的 EnterScene 上跑,与领导者的
+// rebalance、initWorldScenesForZone、排空收尾、孤儿清理并发,归属已被别人改走或频道已不在役就落空。存活判定
+// 没法放进 CAS 脚本 —— 同一脚本也服务 rebalance 从活节点主动迁出 —— 所以「重读 + 存活复核」与 CAS 之间仍有
+// 一条缝(中间隔着一次 CreateScene),比原来的「跨多个频道与 RPC」窄得多。
+func staleWorldChannelOwner(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (string, bool) {
+	oldNode, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+	if err != nil {
+		noteReadUnknown(zoneId, readUnknownSiteWorldLazy, fmt.Sprintf("owner of scene %d before lazy reassign", sceneId), err)
+		return "", false
+	}
+	if oldNode != "" && (isKnownNodeIdentityAmbiguous(zoneId, oldNode) || IsNodeAlive(svcCtx, zoneId, oldNode)) {
+		logx.Infof("[World] scene %d is no longer stale (owner %s alive or ambiguous in zone %d); skipping lazy reassign",
+			sceneId, oldNode, zoneId)
+		return "", false
+	}
+	// 再入屏障:老属主刚判死时仍可能在 SavePlayer,懒改派同样不能抢。
+	// 换下一个陈旧频道试,全都被挡住就返回"没有可用频道",上游退避重试。
+	if oldNode != "" && reentryBarrierBlocks(svcCtx, zoneId, oldNode, barrierSiteWorldChannelLazy) {
+		return "", false
+	}
+	return oldNode, true
 }
 
 // ReserveBestWorldChannelForEnter selects and reserves a world channel for an
@@ -442,6 +541,8 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 
 	var candidates []WorldChannelCandidate
 	var staleSceneIds []uint64
+	// 同 GetBestWorldChannel:属主读不到的频道既不是候选也不算陈旧。
+	unknownOwners := 0
 
 	for _, m := range members {
 		sceneId, _ := strconv.ParseUint(m, 10, 64)
@@ -450,7 +551,13 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 		}
 
 		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
-		nid, _ := svcCtx.Redis.Get(nodeKey)
+		nid, getErr := svcCtx.Redis.Get(nodeKey)
+		if getErr != nil {
+			// 同 GetBestWorldChannel:读错不当陈旧,否则可能把活属主的频道懒改派走。
+			noteReadUnknown(zoneId, readUnknownSiteWorldPick, fmt.Sprintf("owner of scene %d", sceneId), getErr)
+			unknownOwners++
+			continue
+		}
 		if nid != "" && isKnownNodeIdentityAmbiguous(zoneId, nid) {
 			logx.Errorf("[World] scene %d maps to duplicate identity zone=%d node=%s; refusing reservation-time reassignment",
 				sceneId, zoneId, nid)
@@ -469,7 +576,7 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 		if len(liveNodes) == 0 {
 			logx.Errorf("[World] All %d channels for conf %d (zone %d) are stale and no live nodes available",
 				len(staleSceneIds), confId, zoneId)
-			return 0, "", nil
+			return 0, "", worldChannelOwnersUnknownError(confId, zoneId, unknownOwners)
 		}
 
 		logx.Infof("[World] All %d channels for conf %d (zone %d) are stale, lazy-reassigning to %d live nodes",
@@ -477,22 +584,17 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 
 		for i, sceneId := range staleSceneIds {
 			targetNode := assignNodeByHash(confId*1000+uint64(i), liveNodes)
-			nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
-			oldNode, _ := svcCtx.Redis.Get(nodeKey)
-			// 同 GetBestWorldChannel:老属主刚判死时不抢归属,换下一个陈旧频道。
-			if oldNode != "" && reentryBarrierBlocks(svcCtx, zoneId, oldNode, barrierSiteWorldChannelLazy) {
-				continue
-			}
-			// 同 GetBestWorldChannel:走 CAS 收口,归属已被别人改走就换下一个。
-			if !reassignSceneNode(svcCtx, zoneId, sceneId, oldNode, targetNode) {
-				continue
-			}
-
-			if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, targetNode, uint32(confId), sceneId); err != nil {
-				logx.Errorf("[World] Reserve lazy-reassign: CreateScene failed for scene %d on node %s: %v", sceneId, targetNode, err)
+			// 同 GetBestWorldChannel:重读属主并复核、CreateScene、CAS(落空回收预建实体)、转名额。
+			if !lazyReassignStaleWorldChannel(ctx, svcCtx, zoneId, confId, sceneId, targetNode) {
 				continue
 			}
 			candidates = append(candidates, WorldChannelCandidate{SceneID: sceneId, NodeID: targetNode, ZoneID: zoneId})
+		}
+	}
+
+	if len(candidates) == 0 {
+		if unknownErr := worldChannelOwnersUnknownError(confId, zoneId, unknownOwners); unknownErr != nil {
+			return 0, "", unknownErr
 		}
 	}
 
@@ -577,10 +679,14 @@ func reassignSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64
 // reassignWorldChannelNode 与 reassignSceneNode 相同,另在同一个脚本里要求 sceneId 仍是在役频道
 // (channelSetKey = world_channels:zone:{z}:{conf} 的成员),不在就什么都不写、返回 false。
 //
-// 缩容排空(world_autoscale.go)先把频道从在役集合里 SREM,之后才读属主、非原子地删映射与记账。
-// 调用方在改派前单独读一次成员资格的话,读与提交之间排空恰好开始,CAS 仍会落地,随后被排空删掉
-// 映射:新节点上留下孤儿实体与记账,玩家可能被派进一个谁也进不来的频道。成员资格与改归属在同一个
-// 脚本里判定,CAS 落地就说明它落在 SREM 之前,排空随后读到的是新属主,按新属主收尾。
+// 缩容排空(world_autoscale.go)先把频道从在役集合里 SREM,之后才读属主、再由 atomicTeardownScene 按读到的属主
+// 原子删映射;孤儿清理(orphan_cleanup.go)同样用 atomicTeardownScene,在删映射的同一步把频道摘出集合。
+// 调用方在改派前单独读一次成员资格的话,读与提交之间排空 / 拆除恰好发生,CAS 仍会落地:
+//   - 改派落在拆除之前:拆除按读到的属主比对,落空、一个键不动,排空下一拍按新属主收尾(这一侧不依赖本核对);
+//   - 改派落在拆除之后:映射已删,只比属主的 CAS(期望空串)会落地,把频道复活成一个哪个集合都不列的频道,
+//     新节点上的实体、记账与 Agones 名额从此没有路径能收回 —— 这一侧只有本核对挡得住。
+//
+// 成员资格与改归属在同一个脚本里判定,CAS 落地就说明频道此刻仍在役。
 func reassignWorldChannelNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, oldNode, newNode, channelSetKey string) bool {
 	return casReassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode, channelSetKey)
 }

@@ -2,6 +2,8 @@
 
 **Updated:** 2026-04-02
 
+> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+
 ---
 
 ## 目录
@@ -570,6 +572,8 @@ MarchManager.ChangeSpeed(army_id, new_speed):
 
 ### 4.7 行军持久化与崩溃恢复
 
+> 这里的存储写法已被取代,见文首状态说明。
+
 ```
 持久化数据: {army_id, path, start_time, speed, state, purpose}
 存储: Redis Hash + MySQL 备份
@@ -1075,6 +1079,8 @@ Day 90       - 赛季结束
 ---
 
 ## 12. 数据层设计
+
+> 本章的数据分工和写入策略已被取代,见文首状态说明。
 
 ### 12.1 数据分层
 

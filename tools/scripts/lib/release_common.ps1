@@ -158,6 +158,19 @@ function Get-YamlScalar {
     return @{ Found = $true; Value = [string]$flat.Scalars[$KeyPath]; Reason = "" }
 }
 
+# 读实例配置的业务区号。login、guild、player_locator 写在 Node.ZoneId,其余写在顶层 ZoneId。
+# 只接受唯一出现的一处:缺失或两处都有就拒绝,不猜。计划(go_services plan-instances、写者目录生成器)和启动(Start-ServiceInstance)共用这一个读法。
+function Get-InstanceConfigZoneId {
+    param([Parameter(Mandatory = $true)][string]$ConfigPath)
+    $topLevel = Get-YamlScalar -Path $ConfigPath -KeyPath 'ZoneId'
+    $nested = Get-YamlScalar -Path $ConfigPath -KeyPath 'Node.ZoneId'
+    if ($topLevel.Found -and $nested.Found) { throw "Both ZoneId and Node.ZoneId are set in $ConfigPath; refusing to guess." }
+    if (-not $topLevel.Found -and -not $nested.Found) { throw "Neither ZoneId nor Node.ZoneId is set in $ConfigPath; refusing to guess." }
+    $value = [string]$(if ($topLevel.Found) { $topLevel.Value } else { $nested.Value })
+    if ($value -cnotmatch '^[1-9][0-9]{0,9}$') { throw "The zone id in $ConfigPath is not a positive integer." }
+    return [long]$value
+}
+
 <#
 .SYNOPSIS
     从 YAML 文件里取一个块式序列的元素个数(如 Kafka.Brokers)。

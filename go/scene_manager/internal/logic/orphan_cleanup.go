@@ -37,7 +37,8 @@ import (
 // 发现覆盖范围(2026-10-16):生产代码里往频道集合 SADD 的唯一入口是 initWorldScenesForZone,它先经
 // DesiredWorldChannelCount 播种 world_channels:desired:zone:{z} 的字段、后 SADD,而播种前会登记 zone
 // (zone_registry.go)。所以「有频道集合」基本蕴含「有期望数字段、zone 已登记」。覆盖不到的组合:
-//   - DesiredWorldChannelCount 的 HSETNX 出错兜底路径(直接返回种子值、不写字段)建出来的集合;
+//   - 2026-10-23 之前 DesiredWorldChannelCount 的 HSETNX 出错兜底路径(直接返回种子值、不写字段)建出来的
+//     集合;该兜底已改为回 error、本轮不补建,新数据不再产生这种组合;
 //   - 升级前遗留、zone 又从未登记的数据(补登记见 docs/ops/scene-node-role-split.md §6.1)。
 //
 // 这些只会残留成垃圾键,不影响路由。反过来,「集合已空、期望数字段还在」的残留以前 SCAN 找不到,现在能清掉。
@@ -139,7 +140,14 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 	// 正在排空的频道已经从 world_channels 摘掉了,只看 setKey 会把它们整个漏掉:
 	// scene:{id}:node、Agones 名额、排空标记全都留成永久垃圾,而且这个 confId
 	// 已经不在 World 表里,sweepDrainingWorldChannels 也不会再扫到它。
-	if draining, err := svcCtx.Redis.Smembers(worldDrainingSetKey(zone, confId)); err == nil && len(draining) > 0 {
+	// 读不到排空集合就整组留到下一次 fullSync:以前读错被当成「没有排空中的频道」,本函数末尾随后
+	// 删掉排空集合,那些频道从此再也找不到(2026-10-22)。
+	draining, err := svcCtx.Redis.Smembers(worldDrainingSetKey(zone, confId))
+	if err != nil {
+		noteReadUnknown(zone, readUnknownSiteOrphanCleanup, fmt.Sprintf("draining set of conf %d", confId), err)
+		return false
+	}
+	if len(draining) > 0 {
 		logx.Infof("[OrphanCleanup] zone=%d conf=%d: also cleaning %d draining channel(s)",
 			zone, confId, len(draining))
 		members = append(members, draining...)
@@ -147,73 +155,64 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 
 	// 再入屏障:整组一起判、一起跳过。只要还有一个频道的属主节点刚判死
 	// (C++ 那边可能仍在 SavePlayer),就整组留到下一次 fullSync 再清 ——
-	// 这里的清理会 Del 掉 scene:{id}:node 与人数键,属于"销毁"一类,同样受
-	// 屏障约束。整组跳过而不是逐条跳过,是因为 setKey 只能在全部成员都处理完
-	// 之后才删,半清理会留下一个指向已删映射的集合。
+	// 这里的清理会 Del 掉 scene:{id}:node 与成员集合,属于"销毁"一类,同样受
+	// 屏障约束。整组一起判,是为了让「这一组这一轮拆不拆」只有一个结论。
 	//
 	// 推迟摘除态(GO-6:已判死,但 death_at 没落地、节点还留在负载集)也要过屏障:这时
 	// IsNodeAlive 为真,只看它会让整组直接进下面的删除循环(对死节点发 DestroyScene 失败被忽略,
 	// 然后删 scene:{id}:node),在老节点 drain 期间改写归属。
+	//
+	// 两段式(2026-10-23):先把整组每个频道要用的读全部做完(属主、镜像源),同时过屏障;任一读不到
+	// 或被屏障挡住就整组留到下一次 fullSync,此时一个键都没动。以前边读边删,读到一半失败就留下
+	// 「集合里还列着、映射已删」的半清理组:任意副本上的 EnterScene 会把映射已删的频道当陈旧频道懒改派,
+	// 把刚清掉的孤儿复活。
+	plan := make([]orphanSceneTeardown, 0, len(members))
+	planned := make(map[uint64]struct{}, len(members))
 	for _, m := range members {
 		sceneId, err := strconv.ParseUint(m, 10, 64)
 		if err != nil || sceneId == 0 {
 			continue
 		}
-		nodeId, _ := svcCtx.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
+		// 崩溃窗口里同一个频道可能同时在频道集合与排空集合里:只拆一次。
+		if _, dup := planned[sceneId]; dup {
+			continue
+		}
+		planned[sceneId] = struct{}{}
+		// 属主读错当「没有属主」会绕过屏障,而下面会删掉映射。
+		nodeId, err := svcCtx.Redis.Get(sceneNodeKey(sceneId))
+		if err != nil {
+			noteReadUnknown(zone, readUnknownSiteOrphanCleanup, fmt.Sprintf("owner of scene %d (conf %d)", sceneId, confId), err)
+			return false
+		}
 		if nodeId != "" && (!IsNodeAlive(svcCtx, zone, nodeId) || isNodeDetachDeferred(zone, nodeId)) &&
 			reentryBarrierBlocks(svcCtx, zone, nodeId, barrierSiteOrphanCleanup) {
 			logx.Infof("[OrphanCleanup] zone=%d conf=%d: scene %d owner node %s just declared dead; deferring entire group until next fullSync",
 				zone, confId, sceneId, nodeId)
 			return false
 		}
+		// 镜像源读错当「不是镜像」会漏摘源的子集合;下面的原子删除会把 scene:{id}:source 一起删掉,
+		// 之后就再也不知道源是谁。它只在建镜像时写一次,提交前读到的就是要删的那个值。
+		src, err := svcCtx.Redis.Get(sceneSourceKey(sceneId))
+		if err != nil {
+			noteReadUnknown(zone, readUnknownSiteOrphanCleanup, fmt.Sprintf("mirror source of scene %d (conf %d)", sceneId, confId), err)
+			return false
+		}
+		plan = append(plan, orphanSceneTeardown{member: m, sceneId: sceneId, nodeId: nodeId, source: src})
 	}
 
-	for _, m := range members {
-		sceneId, err := strconv.ParseUint(m, 10, 64)
-		if err != nil || sceneId == 0 {
-			continue
+	drainingKey := worldDrainingSetKey(zone, confId)
+	complete := true
+	for _, s := range plan {
+		if !tearDownOrphanScene(ctx, svcCtx, zone, confId, setKey, drainingKey, s) {
+			complete = false
 		}
-		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
-		nodeId, _ := svcCtx.Redis.Get(nodeKey)
-		sceneStr := m
-
-		// Best-effort DestroyScene on the hosting node. If the node is
-		// dead the RPC would hang on the gRPC dial timeout; skip.
-		if nodeId != "" && IsNodeAlive(svcCtx, zone, nodeId) {
-			if err := RequestNodeDestroyScene(ctx, svcCtx, zone, nodeId, sceneId); err != nil {
-				logx.Infof("[OrphanCleanup] DestroyScene(node=%s, scene=%d) failed (ignored): %v",
-					nodeId, sceneId, err)
-			}
-			svcCtx.Redis.Decr(nodeSceneCountKey(zone, nodeId))
-		}
-
-		// Drop everything scene-scoped, including the reverse indexes and
-		// mirror flags introduced for co-location / cascade destroy.
-		if nodeId != "" {
-			svcCtx.Redis.Srem(nodeScenesKey(zone, nodeId), sceneStr)
-		}
-		if src, _ := svcCtx.Redis.Get(sceneSourceKey(sceneId)); src != "" {
-			if srcId, err := strconv.ParseUint(src, 10, 64); err == nil {
-				svcCtx.Redis.Srem(sceneMirrorsKey(srcId), sceneStr)
-			}
-		}
-		svcCtx.Redis.Del(nodeKey)
-		svcCtx.Redis.Del(sceneZoneKey(sceneId))
-		svcCtx.Redis.Del(instanceMembersKey(sceneId))
-		svcCtx.Redis.Del(fmt.Sprintf(SceneMirrorFlagKeyFmt, sceneId))
-		svcCtx.Redis.Del(sceneSourceKey(sceneId))
-		svcCtx.Redis.Del(sceneMirrorsKey(sceneId))
-
-		// Agones 名额必须在删映射之前读出来并归还,否则这份容量在 GameServer 的
-		// rooms Counter 上永久占着 —— 映射一删就再没人知道该向谁还了。
-		if gs, _ := svcCtx.Redis.Get(sceneAgonesGsKey(sceneId)); gs != "" {
-			ReleaseAgonesRoomForScene(ctx, svcCtx, sceneId, gs, "orphan_channel_cleanup")
-		}
-		svcCtx.Redis.Del(sceneAgonesGsKey(sceneId))
-		svcCtx.Redis.Del(sceneDrainingKey(sceneId))
+	}
+	if !complete {
+		// 已拆掉的频道都已从集合里摘掉,剩下的成员映射都还在,下一次 fullSync 接着拆。
+		return false
 	}
 
-	svcCtx.Redis.Del(worldDrainingSetKey(zone, confId))
+	svcCtx.Redis.Del(drainingKey)
 	// 线号表与分线目录(world_channel_directory.go)同样按 (zone, conf) 存。这张图已不在 World 表里,
 	// 目录发布循环不会再碰它们:线号表没有 TTL,不删就是永久垃圾;目录有 TTL,顺手删只是让客户端
 	// 不必再等它过期。两把键刻意不用 world_channels:zone: 前缀(滚动窗口里仍在跑的旧版本 scene_manager
@@ -240,5 +239,60 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 	}
 	logx.Infof("[OrphanCleanup] removed orphan channel set zone=%d conf=%d scenes=%d",
 		zone, confId, len(members))
+	return true
+}
+
+// orphanSceneTeardown 是孤儿频道组里一个频道的拆除计划:第一段读出来的属主与镜像源。
+type orphanSceneTeardown struct {
+	member  string // 集合成员原文,摘集合时用
+	sceneId uint64
+	nodeId  string // 读到的属主;空串 = 映射已经没了
+	source  string // scene:{id}:source;空串 = 不是镜像
+}
+
+// tearDownOrphanScene 拆掉一个孤儿频道,返回它是否已拆完(或本来就没什么可拆)。
+//
+// 场景键由 atomicTeardownScene 按第一段读到的属主一次性认领并删除,同一步里把它从频道集合与排空集合
+// 摘掉:第一段读完属主到这里之间,属主若被改写(有 → 别的,或没有 → 有;任意副本上的懒改派等),
+// 一个键都不动,回 false 留给下一次 fullSync;集合里列着的频道映射始终都还在 —— 整组没拆完时也不会留下
+// 「列着、映射却已删」的成员。Agones 名额取脚本删除前读到的值。
+func tearDownOrphanScene(ctx context.Context, svcCtx *svc.ServiceContext, zone uint32, confId uint64, setKey, drainingKey string, s orphanSceneTeardown) bool {
+	claim, err := atomicTeardownScene(svcCtx, zone, s.sceneId, s.nodeId, setKey, drainingKey)
+	if err != nil {
+		logx.Errorf("[OrphanCleanup] zone=%d conf=%d: atomic teardown of scene %d (expected owner %q) failed, outcome unknown; retrying next fullSync: %v",
+			zone, confId, s.sceneId, s.nodeId, err)
+		return false
+	}
+	if !claim.Claimed {
+		logx.Infof("[OrphanCleanup] zone=%d conf=%d: owner of scene %d changed since it was read (expected %q); retrying next fullSync",
+			zone, confId, s.sceneId, s.nodeId)
+		return false
+	}
+
+	// Best-effort DestroyScene on the hosting node. If the node is
+	// dead the RPC would hang on the gRPC dial timeout; skip.
+	if s.nodeId != "" && IsNodeAlive(svcCtx, zone, s.nodeId) {
+		if err := RequestNodeDestroyScene(ctx, svcCtx, zone, s.nodeId, s.sceneId); err != nil {
+			logx.Infof("[OrphanCleanup] DestroyScene(node=%s, scene=%d) failed (ignored): %v",
+				s.nodeId, s.sceneId, err)
+		}
+		svcCtx.Redis.Decr(nodeSceneCountKey(zone, s.nodeId))
+	}
+
+	// Drop the reverse indexes. 场景自己的映射、成员集合、zone、镜像标志与源、agones_gs 与频道集合成员资格已由脚本处理。
+	if s.nodeId != "" {
+		svcCtx.Redis.Srem(nodeScenesKey(zone, s.nodeId), s.member)
+		removeResidualSceneMembers(svcCtx, s.sceneId, zone, s.nodeId, claim.Members)
+	}
+	if s.source != "" {
+		if srcId, err := strconv.ParseUint(s.source, 10, 64); err == nil {
+			svcCtx.Redis.Srem(sceneMirrorsKey(srcId), s.member)
+		}
+	}
+	svcCtx.Redis.Del(sceneMirrorsKey(s.sceneId))
+	svcCtx.Redis.Del(sceneDrainingKey(s.sceneId))
+	if claim.AgonesGs != "" {
+		ReleaseAgonesRoomForScene(ctx, svcCtx, s.sceneId, claim.AgonesGs, "orphan_channel_cleanup")
+	}
 	return true
 }

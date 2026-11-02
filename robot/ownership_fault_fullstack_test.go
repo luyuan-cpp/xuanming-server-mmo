@@ -67,7 +67,12 @@ func TestFullstackOwnershipFaultRobot(t *testing.T) {
 	loginTestCfg = cfg
 	stats := metrics.NewStats()
 	robotStatsRef = stats
-	ctx, cancel := context.WithTimeout(context.Background(), 390*time.Second)
+	// 截止由 runner 按 scene 回执的真实存盘周期算出,不写死。
+	budgetSeconds, err := strconv.Atoi(os.Getenv("OWNERSHIP_FAULT_ROBOT_BUDGET_SECONDS"))
+	if err != nil || budgetSeconds <= 0 {
+		t.Fatal("缺少 runner 算出的机器人截止")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(budgetSeconds)*time.Second)
 	defer cancel()
 	phase := func(name string, p ownershipRobotPhase) {
 		p.Run = run

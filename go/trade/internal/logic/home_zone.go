@@ -14,7 +14,7 @@ import (
 
 // HomeZoneLookup 返回玩家的归属 zone(聚宝斋市场分区的唯一依据)。
 //
-// 客户端请求里没有也不许有 zone:唯一真源是 data_service 的 player:zone:{id} 映射
+// 客户端请求里没有也不许有 zone:唯一真源是 data_service 的 player_route 映射
 // (契约 §0/§4;data_service 返回的是解析到最终区的归属,合服只写区别名)。
 //
 // 返回 (0, nil) 表示映射里没有这名玩家(数据状态,调用方回 TradeHomeZoneUnknown);

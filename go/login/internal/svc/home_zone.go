@@ -9,7 +9,7 @@ import (
 	dspb "proto/data_service"
 )
 
-// initHomeZoneResolver 给 CreatePlayer / Login / EnterGame 装上 player:zone 映射的客户端。
+// initHomeZoneResolver 给 CreatePlayer / Login / EnterGame 装上 player_route 映射的客户端。
 //
 // 必须在 initPlayerIDMinter 之后调用:号段开着时它已经拨好了 DataServiceClient,
 // 这里直接复用同一条连接;号段关着(IdSegment.Enabled=false)但 DataServiceRpc
@@ -25,7 +25,7 @@ func (s *ServiceContext) initHomeZoneResolver() {
 	hz := config.AppConfig.HomeZone
 	s.HomeZone = homezone.New(s.DataServiceClient, hz.RoleListLookupTimeout, hz.EnterLookupTimeout, hz.RegisterTimeout)
 	if s.DataServiceClient == nil {
-		logx.Errorf("[home-zone] DataServiceRpc not configured: CreatePlayer will be REJECTED (player:zone mapping " +
+		logx.Errorf("[home-zone] DataServiceRpc not configured: CreatePlayer will be REJECTED (player_route mapping " +
 			"is mandatory); role list zone_id and EnterGame zone routing fall back to creation-time / login zone")
 		return
 	}

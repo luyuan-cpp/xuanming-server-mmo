@@ -50,7 +50,13 @@ func getNodesForPurpose(svcCtx *svc.ServiceContext, zoneId uint32, purpose const
 		}
 		allNodes = append(allNodes, p.Key)
 
-		typ, classified := readNodeSceneType(svcCtx, zoneId, p.Key)
+		typ, classified, err := readNodeSceneType(svcCtx, zoneId, p.Key)
+		if err != nil {
+			// 读不到类型就不知道这个节点能不能承载这个用途;当「未分类」会把世界频道派到只跑副本的节点上。
+			// 这一轮当没有可用节点,调用方都是跳过或回可重试错误,和上面读负载集失败一致。
+			noteReadUnknown(zoneId, readUnknownSiteNodeSelection, fmt.Sprintf("scene type of node %s", p.Key), err)
+			return nil
+		}
 		switch {
 		case !classified:
 			// Unclassified node — include in every pool so freshly-registered
@@ -89,16 +95,20 @@ func GetBestNodeForPurpose(ctx context.Context, svcCtx *svc.ServiceContext, zone
 }
 
 // readNodeSceneType reads the mirrored scene_node_type for a node.
-// Returns (type, true) when a value is stored, (0, false) otherwise so
-// callers can distinguish "unclassified" from "classified as 0".
-func readNodeSceneType(svcCtx *svc.ServiceContext, zoneId uint32, nodeId string) (uint32, bool) {
+// Returns (type, true, nil) when a value is stored, (0, false, nil) otherwise so
+// callers can distinguish "unclassified" from "classified as 0". err 只表示读失败:
+// 此时不知道节点是什么类型,不能当成「未分类」。
+func readNodeSceneType(svcCtx *svc.ServiceContext, zoneId uint32, nodeId string) (uint32, bool, error) {
 	s, err := svcCtx.Redis.Get(nodeSceneNodeTypeKey(zoneId, nodeId))
-	if err != nil || s == "" {
-		return 0, false
+	if err != nil {
+		return 0, false, err
+	}
+	if s == "" {
+		return 0, false, nil
 	}
 	v, err := strconv.ParseUint(s, 10, 32)
 	if err != nil {
-		return 0, false
+		return 0, false, nil
 	}
-	return uint32(v), true
+	return uint32(v), true, nil
 }

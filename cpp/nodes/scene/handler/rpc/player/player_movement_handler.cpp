@@ -20,6 +20,7 @@
 #include "player/comp/player_frozen_comp.h"         // PlayerFrozenComp:归属交接冻结期间不收移动上报
 #include "thread_context/ecs_context.h"
 #include "time/system/time.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 
 namespace
 {
@@ -238,6 +239,8 @@ void SceneMovementClientPlayerHandler::TeleportRequest(entt::entity player,const
 	::TeleportRequestC2SResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
+	// 传送还没有规则表。空应答会让客户端以为传送成功了,所以明确回不可用,位置不变。Java 版同口径(MovementSyncTest)。
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }

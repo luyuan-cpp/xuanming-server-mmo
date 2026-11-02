@@ -143,7 +143,7 @@ ErrAlreadyInGuild = uint32(table.GuildError_kGuildAlreadyInGuild)
 
 ### 2.9 故障分类也在表里（2026-09-05）
 
-「这个码算不算服务端内部故障」是码的属性。它决定 `serverbase.UnaryInterceptor` 对一个 in-band 失败是**打 Error 日志 + 计数 + 告警**（故障），还是**只计数**（业务拒绝）。此前它散在两处手写：`serverbase/tipcode.go` 的 `tipFaultCodes`（33 条）与 guild 的本地 `faultCodes`（1 条）——加码的人不知道要去另一个文件登记，与 §1 的「段和发号分家」是同一类病。（match 的 `kMatchInternal` 两张表都没登记；本次复核后**刻意仍不标**，原因见下面的清单。）
+「这个码算不算服务端内部故障」是码的属性。它决定 `serverbase.UnaryInterceptor` 对一个 in-band 失败是**打 Error 日志 + 计数 + 告警**（故障），还是**只计数**（业务拒绝）。此前它散在两处手写：`serverbase/tipcode.go` 的 `tipFaultCodes`（33 条）与 guild 的本地 `faultCodes`（1 条）——加码的人不知道要去另一个文件登记，与 §1 的「段和发号分家」是同一类病。（match 的 `kMatchInternal` 两张表都没登记；本次复核后**刻意仍不标**，原因见下面的清单。2026-10-24 起已标 fault，同见清单。）
 
 现在 `Tip.xlsx` 多一列 **`fault`**：
 
@@ -190,7 +190,7 @@ ServiceUnavailable        服务不可用      1
 - login：`LoginAccountNotFound / LoginAccountPlayerFull / LoginInProgress / LoginEnteringGame / LoginPlaying / TooManyDevices / LoginBeKickByAnOtherAccount / LoginSessionDisconnect`（正常的登录态与业务规则）
 - scene：`EnterSceneSceneFull / EnterSceneMainFull / EnterSceneGsFull / ChangeScenePlayerQueueFull`（容量拒绝）、`EnterSceneYouInCurrentScene / EnterSceneChangingScene`（状态拒绝）、`InvalidEnterSceneParameters / EnterSceneParamError`（参数问题）
 - attribute（25000 段，2026-09-05 由他人新增的 15 个码）：全部按名字是规则拒绝（池未解锁、点数不足、冷却、金币不足……）；`AttributePoolNotFound / DimensionNotFound / SchemeNotFound` 既可能是配置缺失也可能是客户端传错 id，拿不准，不标
-- match：`MatchInternal` **拿不准，不标**。它的注释说是 Redis / snowflake 内部错误，但 match 同时把它当「缺少玩家身份」的参数校验出口（`joinqueuelogic.go` 的 `playerId == 0` 分支，`challengelogic.go` / `watchbattlelogic.go` 同形），一码两用；标了会把参数拒绝刷成故障告警。要标，先拆成两个码。另外两件事接手人必须知道：**match 至今没挂 `serverbase.UnaryInterceptor`**（`match_service.go` 只挂了 session 与 grpcstats 两层），所以 match 的任何 tip 码目前都没有运行时的故障定性消费者，标不标都不会产生一条 `rpc_inband_fault`；而且 `JoinQueueResponse` 同时带 `error_code` 与 `TipInfoMessage`，拦截器对非 0 `error_code` 走 `ErrorCodeClassifier`（见 `bizcode.go`），接拦截器时要把 `ErrorCodeClassifier` 也指到 tip 轴上，否则 fault 列对 JoinQueue 仍不生效
+- match：`MatchInternal` **2026-10-24 起已标 fault**（[global-match-hierarchical-pools.md](./global-match-hierarchical-pools.md) D8：16004 只留给权威库不可用）。下面说的 `playerId == 0` 出口还在，但 `originalRoleInterceptor` 已经挡掉没有玩家身份的客户端请求，客户端走不到，走到就是内部调用的缺陷，算故障没有问题。以下是 2026-09-05 的原判断，留作历史：`MatchInternal` **拿不准，不标**。它的注释说是 Redis / snowflake 内部错误，但 match 同时把它当「缺少玩家身份」的参数校验出口（`joinqueuelogic.go` 的 `playerId == 0` 分支，`challengelogic.go` / `watchbattlelogic.go` 同形），一码两用；标了会把参数拒绝刷成故障告警。要标，先拆成两个码。另外两件事接手人必须知道：**match 至今没挂 `serverbase.UnaryInterceptor`**（`match_service.go` 只挂了 session 与 grpcstats 两层），所以 match 的任何 tip 码目前都没有运行时的故障定性消费者，标不标都不会产生一条 `rpc_inband_fault`；而且 `JoinQueueResponse` 同时带 `error_code` 与 `TipInfoMessage`，拦截器对非 0 `error_code` 走 `ErrorCodeClassifier`（见 `bizcode.go`），接拦截器时要把 `ErrorCodeClassifier` 也指到 tip 轴上，否则 fault 列对 JoinQueue 仍不生效
 
 ### 2.10 Java 网关也按 fault 列定性（2026-10-18）
 
@@ -293,7 +293,7 @@ message 的取法没有变：上游只填 tip 码、没有参数文案时，通�
 
 按「不假装做完」的口径列出来：
 
-1. ~~**故障分类还是散的。**~~ **已收口（2026-09-05，见 §2.9）**：`Tip.xlsx` 加了 `fault` 列，`serverbase.tipFaultCodes`（33 条手写）与 guild 本地 map 删除，改消费生成产物 `tip.Faults`（34 条 = 33 + 1，迁移保真）。`kMatchInternal` 一码两用，刻意不标（§2.9）。只动了 Go 产物，没动三语言 proto。**仍散着的是消费侧**：match 没挂 in-band 拦截器，它的码没有运行时定性消费者（§2.9 末条）。
+1. ~~**故障分类还是散的。**~~ **已收口（2026-09-05，见 §2.9）**：`Tip.xlsx` 加了 `fault` 列，`serverbase.tipFaultCodes`（33 条手写）与 guild 本地 map 删除，改消费生成产物 `tip.Faults`（34 条 = 33 + 1，迁移保真）。`kMatchInternal` 一码两用，刻意不标（§2.9；2026-10-24 起已标 fault）。只动了 Go 产物，没动三语言 proto。**仍散着的是消费侧**：match 没挂 in-band 拦截器，它的码没有运行时定性消费者（§2.9 末条）。
 2. **79 个码没有中文文案**（165 个里有 86 个有）。导表时会告警列出。这是策划的活——直接打开 `Tip.xlsx` 填 B 列的空格即可，代码侧通道已经通了。按组分布：
 
    | 组 | 缺 / 共 | 例 |

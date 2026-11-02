@@ -134,6 +134,9 @@ namespace data_service{void SendDataServiceBeginAccountRoleTradeErased(entt::reg
 namespace data_service{void SendDataServiceConfirmAccountRoleTradeFreezeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCancelAccountRoleTradeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceTransferAccountRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceCheckAccountRoleSlotErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceGetRoleFenceStateErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceVerifyRoleAdmissionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceRegisterRoleAdmissionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCloseRoleAdmissionsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceAckRoleTradeDrainErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -142,8 +145,12 @@ namespace data_service{void SendDataServiceRegisterPlayerZoneErased(entt::regist
 namespace data_service{void SendDataServiceGetPlayerHomeZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBatchGetPlayerHomeZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetMergedZonesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceGetPlayerRouteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceListPlayerSnapshotsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBatchRecallItemsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceGetRecallBatchErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceCancelRecallBatchErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceResolveRecallOpErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceQueryTransactionLogErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceAllocateIdSegmentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReservePlayerNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -225,6 +232,9 @@ namespace match{void SendMatchInternalStartActivityBattleErased(entt::registry& 
 namespace match{void SendMatchInternalCancelActivityBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalCommitBattleOutcomeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalSetSpectateFeaturedErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalAcquireTrialOccupancyErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalReleaseTrialOccupancyErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalGetBattleCompletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetNetworkProbePlanErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceCommitNetworkProbeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceJoinQueueErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -333,7 +343,7 @@ namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::ent
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 359,
+static_assert(kMaxRpcMethodCount == 371,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -513,6 +523,21 @@ void InitMessageInfo()
         std::make_unique<::data_service::TransferAccountRoleRequest>(),
         std::make_unique<::data_service::AccountRoleTransferReceipt>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceTransferAccountRoleErased};
+    gRpcMethodRegistry[DataServiceCheckAccountRoleSlotMessageId] = RpcMethodMeta{
+        "DataService", "CheckAccountRoleSlot",
+        std::make_unique<::data_service::CheckAccountRoleSlotRequest>(),
+        std::make_unique<::data_service::CheckAccountRoleSlotResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceCheckAccountRoleSlotErased};
+    gRpcMethodRegistry[DataServiceGetRoleFenceStateMessageId] = RpcMethodMeta{
+        "DataService", "GetRoleFenceState",
+        std::make_unique<::data_service::GetRoleFenceStateRequest>(),
+        std::make_unique<::data_service::GetRoleFenceStateResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetRoleFenceStateErased};
+    gRpcMethodRegistry[DataServiceVerifyRoleAdmissionMessageId] = RpcMethodMeta{
+        "DataService", "VerifyRoleAdmission",
+        std::make_unique<::data_service::VerifyRoleAdmissionRequest>(),
+        std::make_unique<::data_service::VerifyRoleAdmissionResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceVerifyRoleAdmissionErased};
     gRpcMethodRegistry[DataServiceRegisterRoleAdmissionMessageId] = RpcMethodMeta{
         "DataService", "RegisterRoleAdmission",
         std::make_unique<::data_service::RegisterRoleAdmissionRequest>(),
@@ -553,6 +578,11 @@ void InitMessageInfo()
         std::make_unique<::google::protobuf::Empty>(),
         std::make_unique<::data_service::GetMergedZonesResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetMergedZonesErased};
+    gRpcMethodRegistry[DataServiceGetPlayerRouteMessageId] = RpcMethodMeta{
+        "DataService", "GetPlayerRoute",
+        std::make_unique<::data_service::GetPlayerRouteRequest>(),
+        std::make_unique<::data_service::GetPlayerRouteResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetPlayerRouteErased};
     gRpcMethodRegistry[DataServiceListPlayerSnapshotsMessageId] = RpcMethodMeta{
         "DataService", "ListPlayerSnapshots",
         std::make_unique<::data_service::ListPlayerSnapshotsRequest>(),
@@ -563,6 +593,21 @@ void InitMessageInfo()
         std::make_unique<::data_service::BatchRecallItemsRequest>(),
         std::make_unique<::data_service::BatchRecallItemsResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceBatchRecallItemsErased};
+    gRpcMethodRegistry[DataServiceGetRecallBatchMessageId] = RpcMethodMeta{
+        "DataService", "GetRecallBatch",
+        std::make_unique<::data_service::GetRecallBatchRequest>(),
+        std::make_unique<::data_service::BatchRecallItemsResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetRecallBatchErased};
+    gRpcMethodRegistry[DataServiceCancelRecallBatchMessageId] = RpcMethodMeta{
+        "DataService", "CancelRecallBatch",
+        std::make_unique<::data_service::CancelRecallBatchRequest>(),
+        std::make_unique<::data_service::BatchRecallItemsResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceCancelRecallBatchErased};
+    gRpcMethodRegistry[DataServiceResolveRecallOpMessageId] = RpcMethodMeta{
+        "DataService", "ResolveRecallOp",
+        std::make_unique<::data_service::ResolveRecallOpRequest>(),
+        std::make_unique<::data_service::ResolveRecallOpResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceResolveRecallOpErased};
     gRpcMethodRegistry[DataServiceQueryTransactionLogMessageId] = RpcMethodMeta{
         "DataService", "QueryTransactionLog",
         std::make_unique<::data_service::QueryTransactionLogRequest>(),
@@ -1046,6 +1091,21 @@ void InitMessageInfo()
         std::make_unique<::match::SetSpectateFeaturedRequest>(),
         std::make_unique<::match::SetSpectateFeaturedResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalSetSpectateFeaturedErased};
+    gRpcMethodRegistry[MatchInternalAcquireTrialOccupancyMessageId] = RpcMethodMeta{
+        "MatchInternal", "AcquireTrialOccupancy",
+        std::make_unique<::match::AcquireTrialOccupancyRequest>(),
+        std::make_unique<::match::AcquireTrialOccupancyResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalAcquireTrialOccupancyErased};
+    gRpcMethodRegistry[MatchInternalReleaseTrialOccupancyMessageId] = RpcMethodMeta{
+        "MatchInternal", "ReleaseTrialOccupancy",
+        std::make_unique<::match::ReleaseTrialOccupancyRequest>(),
+        std::make_unique<::match::ReleaseTrialOccupancyResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalReleaseTrialOccupancyErased};
+    gRpcMethodRegistry[MatchInternalGetBattleCompletionMessageId] = RpcMethodMeta{
+        "MatchInternal", "GetBattleCompletion",
+        std::make_unique<::match::GetBattleCompletionRequest>(),
+        std::make_unique<::match::GetBattleCompletionResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalGetBattleCompletionErased};
 
     // --- MatchService ---
     gRpcMethodRegistry[MatchServiceGetNetworkProbePlanMessageId] = RpcMethodMeta{

@@ -1278,3 +1278,64 @@ func TestClientRequestReplayBindsOriginalGuild(t *testing.T) {
 	require.NotNil(t, tip, "重放不得把同一个键改绑新帮会")
 	require.Equal(t, uint32(tablepb.CommonError_kInvalidParameter), tip.GetId())
 }
+
+// TestWithClientRequestLookupFailure:幂等包装第 3 道(once 没写成指令后再查一次)查询失败时,不能把 once 的业务拒绝
+// 回给客户端 —— 客户端会据此判定原请求未执行、作废原键(05 §5.44),首次若其实已提交,玩家就被告知"没扣"。
+// 第 1 道查询失败照样放行到 once(写入路径有事务里的第 2 道兜底)。
+func TestWithClientRequestLookupFailure(t *testing.T) {
+	lookupErr := errors.New("read guild_client_request: i/o timeout")
+	rejection := &pb.DonateToGuildResponse{ErrorMessage: tipErr(constants.ErrNotInGuild, "guild changed")}
+	written := &pb.DonateToGuildResponse{Donation: &pb.GuildDonationView{OpId: 9}}
+	first := &pb.DonateToGuildResponse{Donation: &pb.GuildDonationView{OpId: 7}}
+	wrote := func(resp *pb.DonateToGuildResponse) bool { return resp.GetDonation() != nil }
+
+	type lookup struct {
+		found bool
+		err   error
+	}
+	cases := map[string]struct {
+		lookups  []lookup // 依次是第 1 道、第 3 道
+		once     *pb.DonateToGuildResponse
+		raced    bool
+		want     *pb.DonateToGuildResponse
+		wantCode codes.Code // codes.OK = 不出错
+	}{
+		"第 1 道失败、once 写成:回写成的那笔":        {lookups: []lookup{{err: lookupErr}}, once: written, want: written},
+		"第 1 道失败、once 拒绝、第 3 道确知没有:回拒绝": {lookups: []lookup{{err: lookupErr}, {}}, once: rejection, want: rejection},
+		"once 拒绝、第 3 道查到首次:回首次":         {lookups: []lookup{{}, {found: true}}, once: rejection, want: first},
+		"once 拒绝、第 3 道失败:按故障回,不回拒绝":     {lookups: []lookup{{}, {err: lookupErr}}, once: rejection, wantCode: codes.Unavailable},
+		"raced、第 3 道失败:按故障回":            {lookups: []lookup{{}, {err: lookupErr}}, raced: true, wantCode: codes.Unavailable},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			replay := func() (*pb.DonateToGuildResponse, string, bool, error) {
+				require.Less(t, calls, len(tc.lookups), "replay 多查了一次")
+				l := tc.lookups[calls]
+				calls++
+				if l.found {
+					return first, resultReplayed, true, nil
+				}
+				return nil, "", false, l.err
+			}
+			once := func() (*pb.DonateToGuildResponse, string, error) {
+				if tc.raced {
+					return nil, resultReplayed, errClientRequestRaced
+				}
+				return tc.once, resultOK, nil
+			}
+
+			got, _, err := withClientRequest(1, replay, once, wrote)
+
+			assert.Equal(t, len(tc.lookups), calls)
+			if tc.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tc.wantCode, status.Code(err))
+				assert.Nil(t, got)
+				return
+			}
+			require.NoError(t, err)
+			assert.Same(t, tc.want, got)
+		})
+	}
+}

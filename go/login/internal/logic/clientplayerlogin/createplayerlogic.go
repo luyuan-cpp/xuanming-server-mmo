@@ -191,8 +191,8 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	}
 
 	// 6c. 登记名字(全服唯一,真源是 data_service 的 player_name 表),**fail-closed**:
-	// 登记不成功就不建角。顺序固定为 mint → 探测(6b')→ 名字 → player:zone → SQL 账号目录:
-	// 名字排在 player:zone 之前,是因为撞名是玩家侧的常态失败,而 player:zone 映射是
+	// 登记不成功就不建角。顺序固定为 mint → 探测(6b')→ 名字 → player_route → SQL 账号目录:
+	// 名字排在 player_route 之前,是因为撞名是玩家侧的常态失败,而 player_route 映射是
 	// SET NX 且没有 TTL、也没有删除入口 —— 先登记映射再撞名,每次撞名都会留下一条永久的
 	// 幽灵映射,回档孤儿报告与合服重映射都会扫到它。名字登记失败只烧掉一个号段 id,
 	// 不留任何持久状态。
@@ -223,7 +223,7 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	// 放弃时按「确定已登记」释放一次(补偿走 WithoutCancel,见 releaseName)。
 	// 不只靠 go-redis / grpc-go 在发命令前看 ctx:那是传输层的实现细节,而且 go-redis 那条路会
 	// 先把围栏写当成「未确认」去回读一次;这里显式查,保证与结论都收在本函数里。
-	// 放弃点在 6d 之后时,player:zone 映射会留下一条(SET NX、无 TTL),与第 7 步失败留下的同类,见 6d 注释。
+	// 放弃点在 6d 之后时,player_route 映射会留下一条(SET NX、无 TTL),与第 7 步失败留下的同类,见 6d 注释。
 	// tip 复用「服务端此刻建不了角,稍后重试」那条 kLoginDataSerializeFailed:截止之后这份回包
 	// 已经没有接收方(拦截器早已返回),不为它申请新码。
 	abandonAfterDeadline := func(nextStep string) bool {
@@ -237,11 +237,11 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		resp.ErrorMessage = loginTip(table.LoginError_kLoginDataSerializeFailed)
 		return true
 	}
-	if abandonAfterDeadline("player:zone registration") {
+	if abandonAfterDeadline("player_route registration") {
 		return resp, nil
 	}
 
-	// 6d. 登记 player:zone 归属映射,**fail-closed**:登记失败整体拒绝建角,一个字节都不落盘。
+	// 6d. 登记 player_route 归属映射,**fail-closed**:登记失败整体拒绝建角,一个字节都不落盘。
 	// 这条映射是数据路由 / 合服重映射 / 公会 / 榜的归属权威,而生产侧**只有这一个写入点**
 	// (其余写入者只有 data_service 的 debug_import 与合服重映射)。先落 SQL 账号目录再登记失败,
 	// 造出的是「账号里有、映射里没有」的玩家:tools/merge_zone 的重映射按映射扫,扫不到他,
@@ -626,7 +626,7 @@ func (l *CreatePlayerLogic) persistAccountRole(account string, createLock *locke
 	return loginTip(table.LoginError_kLoginDataSerializeFailed)
 }
 
-// registerHomeZone 把新角色登记进 data_service 的 player:zone 映射(见调用点 6d 的理由)。
+// registerHomeZone 把新角色登记进 data_service 的 player_route 映射(见调用点 6d 的理由)。
 // 与 mintPlayerID 一样单独抽出来只为可测:CreatePlayer 其余每一步都要 Redis。
 // 返回 nil 表示登记成功,可以继续落盘;返回 tip 表示必须拒绝建角。
 //
@@ -640,11 +640,11 @@ func (l *CreatePlayerLogic) registerHomeZone(account string, playerID uint64) *l
 	zone := config.AppConfig.Node.ZoneId
 	storageID := config.AppConfig.Placement.StorageIDForNewPlayer(zone)
 	if err := l.svcCtx.HomeZone.RegisterPlayerZone(l.ctx, playerID, zone, storageID); err != nil {
-		logx.Errorf("Refusing to create player: player:zone registration failed "+
+		logx.Errorf("Refusing to create player: player_route registration failed "+
 			"(account=%s player_id=%d zone=%d storage_id=%d): %v", account, playerID, zone, storageID, err)
 		return &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginDataSerializeFailed)}
 	}
-	logx.Infof("[home-zone] registered player:zone player_id=%d zone=%d storage_id=%d (account=%s)",
+	logx.Infof("[home-zone] registered player_route player_id=%d zone=%d storage_id=%d (account=%s)",
 		playerID, zone, storageID, account)
 	return nil
 }

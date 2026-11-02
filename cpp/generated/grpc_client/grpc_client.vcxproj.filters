@@ -100,4 +100,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="role_fence\role_fence_grpc_client.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="role_fence\role_fence_grpc_client.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

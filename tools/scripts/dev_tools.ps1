@@ -232,6 +232,10 @@
     [int]$Zone = 0,
     # Port offset between zones (forwarded to go_services.ps1).
     [int]$ZonePortShift = 1000,
+    # go-svc-start*:显式给本区端口偏移(转给 go_services.ps1 -ZonePortOffset),-1 = 没给,仍用 (Zone-1)*ZonePortShift。
+    [int]$ZonePortOffset = -1,
+    # sql-boot-catalog-local:每个区的端口偏移,如 990017=0,990018=1000;启动时每区传同一个 -ZonePortOffset。
+    [string[]]$ZonePortOffsets = @(),
     # ── merge-zone / merge-zone-audit / merge-zone-unmerge ──
     # 合服只写一条映射,不动任何数据,不碰 Redis(tools/merge_zone,不停服 SOP 见 docs/ops/merge-zone-runbook.md)。
     # 目录第 0 片的 DSN 是末尾的 -MergeZoneRouteDbDsn,-DryRun 与其它命令共用。
@@ -1276,9 +1280,10 @@ Go micro-service commands (local dev):
     -Command go-svc-list
     -Command go-svc-migrate -LocalMySQL [-GoServices match,guild]
         本机 MySQL 档为 match / guild 建表后退出;两边启动时互相核对对方的表,须先于常驻进程
-    -Command sql-boot-catalog-local [-GoServices db,data_service,...]
+    -Command sql-boot-catalog-local [-GoServices db,data_service,...] [-Zones 990017,990018 [-GoCounts ...] [-GoPortStride N] [-ZonePortShift N] [-ZonePortOffsets 990017=0,990018=1000]]
         Build the local writer boot catalog (loopback database only): schemas, per-instance SQL accounts and
         single-use grants under run/secrets/sql-boot-local. start_game.ps1 runs it on every start. See tools/scripts/README.md.
+        -Zones plans every zone in one run and publishes one catalog; it requires DB_ALLOWED_DATABASES or MMORPG_DB_ALLOWED_DATABASES.
 
 Go micro-service build commands (local binary):
     -Command go-svc-build [-GoServices login,db,...]
@@ -1325,7 +1330,8 @@ Other common commands:
     -Command k8s-redis-split-status | k8s-redis-wipe -ConfirmWipeAllRedis
         Shared Redis split by purpose (G4a batch 1a, -RedisSplit none|queue, forwarded to k8s_deploy.ps1 with
         -ConfirmRedisSplitSwitch / -RedisQueueMaxMemory): split-status prints each zone's login / gateway queue Redis
-        address and rollout state (exit 1 on mismatch or unfinished rollout); wipe flushes every Redis instance of a
+        address and rollout state, then the shape and readiness of the queue instance they point at (exit 1 on mismatch,
+        unfinished rollout, or an instance that is absent or not ready); wipe flushes every Redis instance of a
         stress environment, every primary of the player cluster included, and checks DBSIZE=0
         (-InfraNamespace must match ^mmorpg-stress-). See deploy/k8s/README.md.
     -Command redis-wipe-local -ConfirmWipeAllRedis
@@ -1417,14 +1423,14 @@ switch ($Command) {
     "k8s-release-zone" { Invoke-K8sImage -ImageCommand "release-zone" }
     "k8s-release-all" { Invoke-K8sImage -ImageCommand "release-all" }
     "k8s-route-tool" { Invoke-K8sRouteTool }
-    "go-svc-start"  { & (Join-Path $ScriptDir "go_services.ps1") -Command start  -Services $GoServices -Counts $GoCounts -PortStride $GoPortStride -NoTier:$NoTier -TierReadySeconds $TierReadySeconds -Zone $Zone -ZonePortShift $ZonePortShift -LocalMySQL:$LocalMySQL }
-    "go-svc-start-exe"  { & (Join-Path $ScriptDir "go_services.ps1") -Command start-exe  -Services $GoServices -Counts $GoCounts -PortStride $GoPortStride -NoTier:$NoTier -TierReadySeconds $TierReadySeconds -Zone $Zone -ZonePortShift $ZonePortShift -LocalMySQL:$LocalMySQL }
+    "go-svc-start"  { & (Join-Path $ScriptDir "go_services.ps1") -Command start  -Services $GoServices -Counts $GoCounts -PortStride $GoPortStride -NoTier:$NoTier -TierReadySeconds $TierReadySeconds -Zone $Zone -ZonePortShift $ZonePortShift -ZonePortOffset $ZonePortOffset -LocalMySQL:$LocalMySQL }
+    "go-svc-start-exe"  { & (Join-Path $ScriptDir "go_services.ps1") -Command start-exe  -Services $GoServices -Counts $GoCounts -PortStride $GoPortStride -NoTier:$NoTier -TierReadySeconds $TierReadySeconds -Zone $Zone -ZonePortShift $ZonePortShift -ZonePortOffset $ZonePortOffset -LocalMySQL:$LocalMySQL }
     "go-svc-stop"   { & (Join-Path $ScriptDir "go_services.ps1") -Command stop   -Services $GoServices }
     "go-svc-status" { & (Join-Path $ScriptDir "go_services.ps1") -Command status }
     "go-svc-list"   { & (Join-Path $ScriptDir "go_services.ps1") -Command list   }
     "go-svc-build"        { & (Join-Path $ScriptDir "go_services.ps1") -Command build  -Services $GoServices }
     "go-svc-migrate"      { & (Join-Path $ScriptDir "go_services.ps1") -Command migrate -Services $GoServices -LocalMySQL:$LocalMySQL }
-    "sql-boot-catalog-local" { & (Join-Path $ScriptDir "lib\sql_boot_catalog_local.ps1") -Services $GoServices }
+    "sql-boot-catalog-local" { & (Join-Path $ScriptDir "lib\sql_boot_catalog_local.ps1") -Services $GoServices -Zones $Zones -Counts $GoCounts -PortStride $GoPortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $ZonePortOffsets }
     "go-svc-build-images" { & (Join-Path $ScriptDir "go_svc_image.ps1") -Command build-all -Registry $GoSvcRegistry -Tag $GoSvcTag -DryRun:$DryRun }
     "go-svc-push-images"  { & (Join-Path $ScriptDir "go_svc_image.ps1") -Command push-all  -Registry $GoSvcRegistry -Tag $GoSvcTag -DryRun:$DryRun }
     "java-svc-build-image" { & (Join-Path $ScriptDir "java_svc_image.ps1") -Command build -Registry $JavaSvcRegistry -Tag $JavaSvcTag -DryRun:$DryRun }

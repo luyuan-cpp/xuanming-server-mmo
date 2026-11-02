@@ -44,19 +44,19 @@ function Read-RenderedConfig([string]$Service) {
         if ($line -match '^  [a-z_]+\.yaml: \|$') { $inside = $true; continue }
         if ($inside -and $line -match '^    (.*)$') { $body.Add($Matches[1]) }
     }
-    Assert-Render ($body.Count -gt 0) "没有渲染$Service配置"
+    Assert-Render ($body.Count -gt 0) "没有渲染${Service}配置"
     return (ConvertFrom-YamlToFlatMap -Text ($body -join "`n")).Scalars
 }
 foreach ($service in @('mail','rank')) {
-    Assert-Render ([bool]$GoSvcCatalogue[$service].Global) "$service必须是全局池"
-    Assert-Render (Test-Path -LiteralPath (Join-Path $RepoRoot "deploy/k8s/manifests/go-svc/$service-migrate.yaml")) "$service缺迁移Job"
+    Assert-Render ([bool]$GoSvcCatalogue[$service].Global) "${service}必须是全局池"
+    Assert-Render (Test-Path -LiteralPath (Join-Path $RepoRoot "deploy/k8s/manifests/go-svc/$service-migrate.yaml")) "${service}缺迁移Job"
     $values = Read-RenderedConfig $service
-    Assert-Render ($values['TableDir'] -eq '/generated/tables') "$service配表路径必须匹配Docker镜像"
-    Assert-Render ($values['Backend'] -eq 'tidb') "$service缺省是 tidb 档"
-    Assert-Render ($values['DataServiceRpc.Etcd.Key'] -eq 'dataservice.rpc') "$service不能拨不存在的infra data-service Service"
+    Assert-Render ($values['TableDir'] -eq '/generated/tables') "${service}配表路径必须匹配Docker镜像"
+    Assert-Render ($values['Backend'] -eq 'tidb') "${service}缺省是 tidb 档"
+    Assert-Render ($values['DataServiceRpc.Etcd.Key'] -eq 'dataservice.rpc') "${service}不能拨不存在的infra data-service Service"
     # go-zero 的 discov.EtcdConf.Key 是必填,这两个服务刻意不写发现键(D-13),显式空串;模板抄进 Secret 后才加载得了。
-    Assert-Render ($values.Contains('Etcd.Key') -and $values['Etcd.Key'] -eq '') "$service的Etcd.Key必须显式写空串"
-    Assert-Render ($values['Etcd.Hosts'] -eq '[etcd.fixture-infra:2379]') "$service的Etcd.Hosts要指向infra的etcd"
+    Assert-Render ($values.Contains('Etcd.Key') -and $values['Etcd.Key'] -eq '') "${service}的Etcd.Key必须显式写空串"
+    Assert-Render ($values['Etcd.Hosts'] -eq '[etcd.fixture-infra:2379]') "${service}的Etcd.Hosts要指向infra的etcd"
 }
 $mail = Read-RenderedConfig 'mail'
 Assert-Render ([bool]$GoSvcCatalogue['guild'].Global) '帮会必须进全局池'
@@ -71,7 +71,7 @@ Assert-Render ($mail['DbPlacement.DefaultCluster'] -eq 'main' -and $mail['DbPlac
 Assert-Render ($mail['GuildRpc.Endpoints'] -eq '[guild.fixture-infra:50300]') '邮件读帮会要连 infra 里的 guild Service，不是本机地址'
 foreach ($key in @('Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Activity.TrialResult.Topic','Activity.TrialResult.Partitions','IdSegment.Step','MySQL.MaxOpenConn','RedisClient.PoolSize','PlayerLocatorRedis.PoolSize')) {
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath $key
-    Assert-Render ($source.Found -and $guild[$key] -eq $source.Value) "帮会$key未镜像权威配置"
+    Assert-Render ($source.Found -and $guild[$key] -eq $source.Value) "帮会${key}未镜像权威配置"
 }
 # 登录域与玩家域按 playerredis 的形状渲染:服务 yaml 和 ConfigMap 的 LoginRedis.PoolSizePerNode 同值。
 $guildLoginPool = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath 'LoginRedis.PoolSizePerNode'
@@ -134,12 +134,15 @@ Assert-Render (-not $match.Contains('GlobalMatch.GuildTrialSchema') -and -not $m
 Assert-Render ($match['GlobalMatch.DbPlacement.DefaultCluster'] -eq 'main') '匹配的 DbPlacement 段要在 GlobalMatch 下'
 foreach ($key in @('GlobalMatch.CrossRegionWaitSeconds','GlobalMatch.HardLatencyMs','GlobalMatch.ProbeTTLSeconds','ResultTopic','RatingEnabled','RatingToleranceMaxWaitSeconds')) {
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/match/etc/match_service.yaml') -KeyPath $key
-    Assert-Render ($match[$key] -eq $source.Value) "匹配策略$key未镜像"
+    Assert-Render ($match[$key] -eq $source.Value) "匹配策略${key}未镜像"
 }
 $matchManifest = Add-MatchAuthoritySecretEnv -ManifestContent (Get-Content (Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/match.yaml') -Raw)
-foreach ($envName in @('MATCH_MYSQL_PASSWORD','MATCH_PROBE_SECRET','RANK_PRODUCER_SECRET_MATCH')) {
-    Assert-Render ($matchManifest.Contains("name: $envName")) "匹配缺$envName环境引用"
+foreach ($envName in @('MATCH_PROBE_SECRET','RANK_PRODUCER_SECRET_MATCH')) {
+    Assert-Render ($matchManifest.Contains("name: $envName")) "匹配缺${envName}环境引用"
 }
+# 数据库口令同帮会的 DSN:来自本 boot 选中的环境文件,不经 Secret 进主容器,否则绕过写者闸门。
+Assert-Render ($matchManifest.Contains('MATCH_MYSQL_PASSWORD="$(cat /app/etc/private/env/MATCH_MYSQL_PASSWORD)"'.Replace('"', '\"'))) '匹配的数据库口令必须来自本boot选中的环境文件'
+Assert-Render (-not $matchManifest.Contains('name: MATCH_MYSQL_PASSWORD')) '匹配的数据库口令不能再经Secret直接进主容器'
 foreach ($profileName in @('prod','staging','dev')) {
     $rejected = $false
     try { $null = Get-GlobalMatchDeploymentSettings -Profile $profileName -TiDBHost '' -Region 7 }
@@ -165,7 +168,7 @@ foreach ($plan in @(@{Orchestrator='deployment'; Entry='podip'}, @{Orchestrator=
     $BattleOrchestrator = $plan.Orchestrator; $ClientEntryMode = $plan.Entry
     $battle = (New-BattleWorkloadManifest).Yaml
     foreach ($envName in @('GLOBAL_MATCH_ENABLED','PHYSICAL_REGION','MATCH_PROBE_SECRET')) {
-        Assert-Render ($battle.Contains("name: $envName")) "battle的$BattleOrchestrator/$ClientEntryMode缺$envName"
+        Assert-Render ($battle.Contains("name: $envName")) "battle的$BattleOrchestrator/${ClientEntryMode}缺$envName"
     }
     Assert-Render ($battle.Contains('match-probe') -and $battle.Contains('secretKeyRef:')) 'battle探测密钥必须来自Secret'
 }
@@ -183,12 +186,12 @@ $fleet = New-SceneFleetYaml -FleetName 'fixture-scene' -Replicas 1 -SceneNodeTyp
 $gate = New-NodeDeploymentYaml -NodeName 'gate' -Replicas 1 -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'fixture-gate'
 foreach ($caller in @('guild','trade','mail')) {
     $envName = 'MMORPG_ASSET_OP_SECRET_' + $caller.ToUpperInvariant()
-    Assert-Render ($scene.Contains($envName) -and $fleet.Contains($envName)) "两种scene编排都必须引用$caller资产密钥"
+    Assert-Render ($scene.Contains($envName) -and $fleet.Contains($envName)) "两种scene编排都必须引用${caller}资产密钥"
     Assert-Render (-not $gate.Contains($envName)) 'gate不能获得scene资产签名密钥'
 }
 foreach ($caller in @('scene','trade')) {
     $envName = 'MMORPG_ACCOUNT_DIRECTORY_SECRET_' + $caller.ToUpperInvariant()
-    Assert-Render ($scene.Contains($envName) -and $fleet.Contains($envName)) "两种scene编排都必须引用$caller目录验签密钥"
+    Assert-Render ($scene.Contains($envName) -and $fleet.Contains($envName)) "两种scene编排都必须引用${caller}目录验签密钥"
     Assert-Render ($scene.Contains("key: account-directory-$caller, optional: false") -and $fleet.Contains("key: account-directory-$caller, optional: false")) '目录验签密钥不得作为可缺省Secret'
     Assert-Render (-not $gate.Contains($envName)) 'gate不能获得scene目录验签密钥'
 }

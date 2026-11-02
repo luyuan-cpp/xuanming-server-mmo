@@ -62,9 +62,15 @@ func AccountDeviceSetKey(account string) string {
 	return "login_account_sessions:{" + AccountTag(account) + "}:" + account
 }
 
+// AccountRefreshKeyPrefix 是账号索引的键前缀。重放判定的 Lua 从家族记录读出账号后用它现拼键,前缀带账号 tag,
+// 现拼出来的键与脚本声明的键同槽。
+func AccountRefreshKeyPrefix(tag string) string {
+	return "account_refresh:{" + tag + "}:"
+}
+
 // AccountRefreshKey 是账号的 refresh token 索引。
 func AccountRefreshKey(account string) string {
-	return "account_refresh:{" + AccountTag(account) + "}:" + account
+	return AccountRefreshKeyPrefix(AccountTag(account)) + account
 }
 
 // AccessTokenKey 是一枚 access token 的键。tag 是令牌所属账号的 AccountTag,secret 是令牌的随机部分。
@@ -91,6 +97,11 @@ func RefreshFamilyKeyPrefix(tag string) string {
 // RefreshFamilyKey 是一个令牌家族的键。
 func RefreshFamilyKey(tag, familyID string) string {
 	return RefreshFamilyKeyPrefix(tag) + familyID
+}
+
+// RefreshRotatedKey 是一枚已轮换 refresh token 的轮换记录:宽限窗口内重放靠它拿回同一对。
+func RefreshRotatedKey(tag, secret string) string {
+	return "refresh_rotated:{" + tag + "}:" + secret
 }
 
 // PasswordQuotaKey 是口令失败配额的键。fingerprint 是账号类型加账号摘要,不含账号原文。

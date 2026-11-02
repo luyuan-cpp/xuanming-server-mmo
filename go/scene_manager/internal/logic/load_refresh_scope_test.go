@@ -488,12 +488,12 @@ func TestDesiredWorldChannelCount_SeedRegistersZone(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "")
 	const conf = uint64(1)
 
-	DesiredWorldChannelCount(sc, 97, conf)
+	mustDesiredWorldChannelCount(t, sc, 97, conf)
 	setDesiredWorldChannelCount(sc, 98, conf, 2)
 	assert.True(t, isZoneRegisteredForTest(t, mr, "97"), "播种分支登记 zone")
 	assert.True(t, isZoneRegisteredForTest(t, mr, "98"), "写回分支登记 zone")
 
 	rec := installRedisCommandRecorderForTest(t, mr, nil)
-	assert.Equal(t, 1, DesiredWorldChannelCount(sc, 97, conf))
+	assert.Equal(t, 1, mustDesiredWorldChannelCount(t, sc, 97, conf))
 	assert.Zero(t, rec.count("SADD", ""), "命中已有字段时不登记")
 }

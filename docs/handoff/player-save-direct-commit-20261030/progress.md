@@ -2,7 +2,44 @@
 
 新窗口接手时先读这份,再读 [总体方案](../../design/player-data-tidb-scaling-plan.md) 和 [存盘规格](../../design/player-save-direct-commit.md)。
 
-**全部改动都没有编译。** 前两阶段由用户提交并推送,`main` 到 `2b20d351b`。第三阶段(`docs/design/horizontal-scale-logical-db.md`)只在主工作区,未提交,约 410 条。验证要在工作区做。Codex 上一轮停在协议验收(`docs/PROGRESS.md`),生成器已修好,从 §1 重新开始,第三阶段按 §13。
+用户 11-01 把整批提交并推送了,`main` 到 `2b8184428`,包括第三阶段(`docs/design/horizontal-scale-logical-db.md`)、第二轮修复、GM 回收和摘孤儿。之后修的代码还在工作区,所以验证要在工作区做。
+
+**Codex 第一轮(11-01 03:44 到 04:46)的结果**:Go 除 `client_rpc_router` 外都编过了;C++ 被 protobuf 版本不一致挡住,一行业务代码都没编到;约 640 个真库用例因环境没配齐没碰到业务代码;没有跑过全栈。回执在 `build/player-store-verify-20261101/codex-results-round1.md`。第一轮的失败都按回执改了,改的内容见 `docs/PROGRESS.md`「按 Codex 第一轮回执修复」,**这些修复没有编译过**。下一轮从 §1 重新开始:第三阶段按 §13,GM 回收和摘孤儿按 §14,并回的修复按 §15,其后是 §16~§18。
+
+## Codex 怎么跑、怎么回执(2026-11-01)
+
+这一节是这一轮的口径,和下面总验证清单开头的说法冲突时以这一节为准。
+
+**在哪跑**:只在 `D:\luyuan\xuanming-server-mmo-cpp` 这个目录里跑,不开 worktree,不切分支。整批已提交,但之后修的代码可能还在工作区,从 HEAD 新开的 worktree 看不到它们,验证的就成了旧代码。
+
+**开跑前核对**,对不上就停下,写进回执:分支是 `main`;`git merge-base --is-ancestor 2b8184428 HEAD` 退出码是 0;`go/data_service/internal/logic/recall_plan.go`、`go/scene_manager/internal/logic/read_unknown.go`、`cpp/tests/rpc_controller_test/hiredis_event_batch_windows_test.cpp` 都存在。工作区条数不算门禁,用户随时可能提交。
+
+**只跑不改**:不改代码、断言和配置,不提交,不 stash、reset、checkout。只有生成器、`go mod tidy`、`go mod vendor` 可以改文件。错误都写进回执,由 Claude 改,改完再跑下一轮。
+
+**跑什么**:总验证清单 §1 到 §13,然后 §14、§15。例外:
+
+- §8 etcd、§10 的 K8s 部分:没有环境就记「没跑」。
+- §10 冒烟:§3、§6 全绿才跑,否则记「跳过」,写明依赖哪一步。
+- §11 压测:这一轮不跑,其余全绿之后由用户决定。
+- `gen_docs_index.py --check` 在 `2b20d351b` 就是红的,记下来,不算回归,也不要重新生成:索引里有手写条目,生成器会覆盖。
+
+**失败怎么办**:不重试。协议生成失败就停,后面都依赖它。其余步骤失败不中断:一个 Go 模块编不过,接着跑下一个模块;C++ 编不过,接着跑部署合同测试。
+
+**错误要拿全**,一次改完才省轮次:
+
+- Go:`go build -gcflags=-e ./...`,默认每个包只报 10 条。编过了再跑 vet 和 test。
+- C++:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64 "/flp1:logfile=<日志目录>\msbuild-errors.log;errorsonly"`。
+
+**日志**放 `build/player-store-verify-<日期>/`(已被 `.gitignore` 忽略),按步骤号命名。
+
+**回执**写本目录的 `codex-results.md`,每一轮覆盖重写:
+
+- 开头:基线提交、`git status --short` 条数,go、msbuild、pwsh、MySQL、TiDB、Redis 的版本。
+- 每一步一节,标题是 `## <步骤号> <名字>:通过`(或 `失败`、`跳过`、`没跑`),下面写命令、退出码、完整日志路径。失败写错误摘要:Go 写全部编译错误,C++ 写前 50 行,测试写失败用例名和断言输出。
+- 回执控制在 200KB 以内(11-01 第一轮有 1MB,读不完):同一个错误的用例合并成一条,写错误原文和用例名列表;通过的用例不写;跳过的用例写进日志目录的 `<步骤号>-skipped.txt`,回执只写条数和路径,按没跑算。
+- 最后一行写 `状态:本轮跑完`。这一行写完就不再改这个文件,Claude 靠它判断可以开始改代码了。
+
+不要写性能结论,不要写「基本通过」。
 
 ## 2026-10-30 用户新指令:全部写完再交 Codex
 
@@ -122,7 +159,7 @@ B4、B5 和 B6、B7 各评审过一轮。第一轮没有找到丢档、回档、
 
 工作目录除注明外都是仓库根目录。按顺序跑,一步失败先报告,不要改断言、不要跳测试、不要连续自动重试。C++ MSBuild 必须串行 `/m:1`。失败时保留:命令输出、`go test -v` 的失败用例、C++ 编译错误前 50 行。跳过的用例按没跑报告。
 
-**工作区**:基线是 `main` 的 `2b20d351b`,第三阶段的改动都在主工作区,未提交。不要整理、不要回退。快照:`refs/snapshots/before-stage-c`(第三阶段之前,tree)、`refs/snapshots/before-b8`、`refs/snapshots/phase-a-written`,`git show <ref>:<路径>` 取回。
+**工作区**:基线是 `main` 的 `2b8184428`,之后修的代码可能还在工作区,未提交。不要整理、不要回退。快照:`refs/snapshots/before-stage-c`(第三阶段之前,tree)、`refs/snapshots/before-b8`、`refs/snapshots/phase-a-written`,`git show <ref>:<路径>` 取回。
 
 **前置清理**:项目没上线,所有库清掉重建,不写迁移。主键变了的表:`match_rank_source`、`match_rank_outbox`、`rank_input_receipt`;`rank_score` 多一列。不再建的表:`player_database`、`player_database_1`、`id_segment`、`zone_merge_fence`、`save_barrier_maintenance_receipt`、`account_role_admission_recovery`、`route_reconcile`、`account_role_import_receipt`。按 AGENTS §6.2 第 6 条删掉 redis、mysql、etcd 数据。 第三阶段新增的库:目录片库 `<base>_NN`(K=1 时就是 `<base>`)、流水库 `<base>_ledger`,各服务库新增 `role_fence`、闸门表、`db_move_sentinel`,都由部署脚本建。
 
@@ -138,7 +175,10 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build
 pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml
 ```
 
+生成器现在只用和 C++ 运行库同版本的 protoc:优先 `third_party/protobuf/install_vs2026_dbg/bin/protoc.exe`(35.1),其次 PATH 上的,版本都对不上就报错退出。11-01 第一轮用的是 PATH 上的 35.0,全部 C++ 工程编不过。
+
 通过标准:
+- `cpp/generated/proto/common/base/node.pb.h` 里是 `#if PROTOBUF_VERSION != 7035001`。
 - `generated/data/mysql_database_table_list.json` 和 `go/db/data/` 的同名文件有 `player_store`,没有 `player_database`。两份由生成器同一次写出,字节相同:本机 go/db 读前一份,容器里读后一份(`deploy/k8s/Dockerfile.go-svc` 拷到 `/app/data/`)。
 - `go/proto/player_store/`、`cpp/generated/grpc_client/player_store/` 存在。
 - 旧生成物要没有:`db_task.pb.*`、`battle_settlement_ledger_comp.pb.*`(`cpp/generated/proto/`、`go/proto/`、`robot/vendor/proto/` 三处),以及 `generated/proto/**` 下的 `db_task.proto`、`battle_settlement_ledger_comp.proto` 副本;`cpp/generated/proto/CMakeLists.txt`、`proto.vcxproj`、`proto.vcxproj.filters` 也不再引用它们。**这些由生成器自动清退**(`tools/proto_generator/protogen/internal/prototools/retired_outputs.go`,流水线最后一步,工程清单同步成功后才删):只删源 proto 已不存在、且文件头能证明出自生成流程的产物,删之前打印整张清单(文件的日志是 `Retiring generated outputs`,工程条目的日志是 `Removing retired proto entries`)。不要手工删文件或改工程清单,清不掉就按生成器问题报告。按当前工作区推算,第一次运行删 27 个文件、15 条工程条目,比上面列的多出更早留下的 `player_migration_event` 和 `generated/proto/**`、`generated/robot/proto/` 下的 `centre/*`、`player/player.proto`、`contracts/kafka/centre_command.proto`,都是源已删除的残留,没有代码引用;第二次运行不再删任何东西。
@@ -181,6 +221,30 @@ cd go/chat && go test -race ./internal/authority -run TestActorVerify
 
 自起一次性 MySQL 和 TiDB,别借 `codex-*` 容器。`go test` 报 Access denied 时改用 `go test -c` 再运行。真 Redis 用例 7.2 和 8.x 各跑一轮,结果记版本。
 
+**环境要求**(11-01 第一轮缺这些,约 640 个用例没碰到业务代码就失败了,每条对应一类报错):
+
+- **写者资格夹具**(报「缺少fixture物理authority原件摘要」):跑真库用例之前 dot-source 一次,TiDB、MySQL 各一份,切库之前再跑一遍。它同时设 `MMORPG_SQL_FIXTURE_ADMIN_DSN`、`MMORPG_SQL_BACKEND`,并按要求的 ACL 建好私有目录。
+
+  ```powershell
+  . tools/scripts/sql_fixture_env.ps1 -Backend tidb -Endpoint 127.0.0.1:14000 -ReceiptDir <日志目录的绝对路径>\sql-fixture-receipts-tidb
+  ```
+
+- **TiDB 开 CHECK**(报 `CHECK constraint chk_route_shard is not enforced`):建表之前执行 `SET GLOBAL tidb_enable_check_constraint=ON`。
+- **库名白名单**(用例会 DROP 表,所以有白名单):`GUILD_TEST_MYSQL_DSN` 的库只能是 `guild_test` 或 `guild_it_<pid>_<n>`;`PLAYER_INBOX_TEST_MYSQL_DSN` 的库只能是 `player_inbox_it` 或 `player_inbox_it_<pid>_<n>`。
+- **DSN 要带库名**(报 `Error 1046 No database selected`、`权威SQL配置无效`):`FRIEND_TEST_TIDB_DSN` 指向建好的专用库,比如 `root@tcp(127.0.0.1:14000)/friend_it?parseTime=true`。
+- **榜单邮件整链**(报 `RANK_MAIL_CHAIN_MAIL_EXE 必须指定预编译夹具绝对路径`):先编两个夹具,再把 `RANK_MAIL_CHAIN_RANK_EXE`、`RANK_MAIL_CHAIN_MAIL_EXE` 设成它们的绝对路径。
+
+  ```bash
+  cd go/rank && go test -c -o <日志目录的绝对路径>/bin/rank_chain.test.exe .
+  ```
+
+  ```bash
+  cd go/mail && go test -c -o <日志目录的绝对路径>/bin/mail_chain.test.exe .
+  ```
+
+- **`-race`** 要 cgo 和 gcc(`CGO_ENABLED=1`,gcc 在 PATH)。本机没有 gcc 就记「没跑」,再跑一遍不带 `-race` 的。
+- **TiDB 端口随意**:聊天用例以前写死 `127.0.0.1:24000`,已改成只要求数值 loopback。24000 被别的 `codex-*` 容器占着,不要动它。
+
 | 模块 | 环境变量 | 命令 |
 |---|---|---|
 | go/db | `GODB_MYSQL_ITEST_DSN`、`GODB_IT_REQUIRE=1`(MySQL、TiDB 各一遍) | `go test -tags=integration -race ./internal/playerstore/...` |
@@ -191,7 +255,7 @@ cd go/chat && go test -race ./internal/authority -run TestActorVerify
 | go/match | `RANK_MAIL_CHAIN_IT_TIDB` | `go test ./internal/authority -run TestTiDBRatingRankMailChainRecoversAfterCommittedReplyLoss` |
 | go/rank、go/mail | `MAIL_RANK_TEST_TIDB` | `go test ./... -run TestTiDB` |
 | go/guild | `GUILD_TEST_MYSQL_DSN` | `go test ./internal/data -run 'TestGuildLockOrder\|TestGuildLockingStatement' -count=3`,以及 `./internal/logic` 的 economy flow |
-| go/guild | `GUILD_ROLE_TEST_DSN`、`GUILD_ROLE_REQUIRE_TIDB=1` | `go test ./internal/data -run TestTiDBTrialResultRecordsReadMatchTerminal` |
+| go/guild | `GUILD_ROLE_TEST_DSN`、`GUILD_ROLE_REQUIRE_TIDB=1` | `go test ./internal/data -run TestTiDBTrial` |
 | go/trade | `TRADE_TEST_MYSQL_DSN` | `go test -tags integration ./internal/data -run 'TestLegacyEnsureSeqRow\|TestEnsureSeqRows\|TestFirstTimeCreation\|TestSeqRowProbe'` |
 | go/player_inbox | `PLAYER_INBOX_TEST_MYSQL_DSN` | `go test -tags integration ./internal/inbox/...` |
 
@@ -211,7 +275,7 @@ msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64
 
 重点:`PlayerStoreDirectEcs.*`(含这轮新增的 `CommitSubmittedBeforeTradeFreezeIsNotDrainEvidence`、`SaveDuringBattleDoesNotReplaceTradeFreeze`)、`PlayerStoreClientTest.*`、`PlayerStoreProjectionTest.*`、`RoleAdmissionTest.*`、`GuidSegmentClientTest.*`、`KafkaPartitionerContract.*`。`git show refs/snapshots/before-b8:<路径>` 能取回被删的旧测试,对照用,不要恢复。
 
-Redis 这批在 `rpc_controller_test`:`RedisClusterClientTest.*`(含 `IdleSlotOnHandshakingMasterQueuesInsteadOfRejecting`)、`HiredisCommandLifecycle.*`(含 `NoSideEffectCommandNullReplyKeepsFrontierKnown`)、`redis_cluster_logic_test.cpp`。`Hiredis` 改了 `muduo_windows` 和 `tools/archived/muduo_linux_overlay` 两份实现,Linux 的 C++ 镜像(`deploy/k8s/Dockerfile.cpp`)也要编一次。
+Redis 这批在 `rpc_controller_test`:`RedisClusterClientTest.*`(含 `IdleSlotOnHandshakingMasterQueuesInsteadOfRejecting`)、`HiredisCommandLifecycle.*`(含 `NoSideEffectCommandNullReplyKeepsFrontierKnown`)、`redis_cluster_logic_test.cpp`。`Hiredis` 改了 `muduo_windows` 和 `tools/archived/muduo_linux_overlay` 两份实现,Linux 的 C++ 镜像(`deploy/k8s/Dockerfile.cpp`)也要编一次。`BUILD_JOBS=1` 要跑很久,放后台,不要设短超时:11-01 第一轮退出码 130、`context canceled` 是构建被中断,还没进入编译。
 
 ### 7. 部署合同测试
 
@@ -225,16 +289,22 @@ pwsh -NoProfile -Command "$failed=@(); Get-ChildItem tools/scripts/tests/*.tests
 
 重点:`k8s_deploy_contract`(全局服务顺序、`Find-ReadyDataServiceNamespace`、startupProbe 预算)、`k8s_client_entry_contract`、`k8s_redis_split_contract`、`k8s_migrate_gate`、`k8s_route_tool`、`lobby_authority_render`、`global_authority_deploy`、`chat_authority_deploy`、`go_services_local_mysql`、`go_services_ports`、`go_services_stop`、`maintenance_drain`、`sql_boot_catalog_local`、`id_issuer_deploy_contract`、`etcd_maintenance_contract`、`dev_tools_merge_zone_contract`、`redis_player_cluster_contract`、`stress_snap_redis`、`docker_debug_sql_boot`。再跑 `python tools/scripts/gen_docs_index.py --check`。`go_services_ports` 在基线就缺写者函数桩,chat、trade 启动类用例失败先和基线对比。
 
+两份裸指针合同不能不带参数跑:`no_raw_pointer_check` 要先有 `cpp/plugin/build/Release/no_raw_ptr_check.exe`(`pwsh -File tools/scripts/dev_tools.ps1 -Command no-raw-pointer-setup`,没有 LLVM 环境就记「没跑」);`no_raw_pointer_project` 要传参数:
+
+```bash
+pwsh -NoProfile -File tools/scripts/tests/no_raw_pointer_project.tests.ps1 -MSBuildPath "<MSBuild.exe 的绝对路径>" -EvidenceDir "<日志目录的绝对路径>/07-no-raw-pointer-project"
+```
+
 ### 8. etcd
 
 按 `docs/ops/etcd-maintenance-runbook.md`:M0 取镜像摘要,`etcd.yaml`、`etcd-maintenance.yaml`、compose 三处同批钉(`bitnamilegacy/etcd:latest` 现在没钉);M3;探针 A;P0-D 实跑。没有环境就如实报告没跑。首次部署之前必须跑完。
 
 ### 9. Java 网关(A7c)
 
-`GATEWAY_TEST_MYSQL_URL` 指向库名以 `_it` 或 `_test` 结尾的专用 MySQL,设 `GATEWAY_REQUIRE_MYSQL_TESTS=1`,跳过即失败:
+`GATEWAY_TEST_MYSQL_URL` 指向库名以 `_it` 或 `_test` 结尾的专用 MySQL,设 `GATEWAY_REQUIRE_MYSQL_TESTS=1`,跳过即失败。`gateway_node` 依赖 `authority_jdbc`,要从 `java/` 走 reactor,不要依赖本地 m2;`authority_jdbc` 要显式给 protoc,用 SDK 里 35.1 那个:
 
 ```bash
-cd java/gateway_node && mvn test -Dtest='RowIdsTest,GatewaySchemaContractTest,ZoneWhitelistRepositoryWiringTest,ZoneWhitelistUpsertLockOrderMySqlTest,AdminWhitelistControllerTest'
+cd java && mvn -pl gateway_node -am test "-Dtest=RowIdsTest,GatewaySchemaContractTest,ZoneWhitelistRepositoryWiringTest,ZoneWhitelistUpsertLockOrderMySqlTest,AdminWhitelistControllerTest" -Dsurefire.failIfNoSpecifiedTests=false "-Dprotoc.spec=file:/D:/luyuan/xuanming-server-mmo-cpp/third_party/protobuf/install_vs2026_dbg/bin/protoc.exe"
 ```
 
 `ZoneWhitelistUpsertLockOrderMySqlTest#upsertBehindPendingDeleteOnlyQueues` 失败时不要改断言,按 `ZoneWhitelistRepository` 的类注释判断,主键方案要重新定。
@@ -270,7 +340,7 @@ mysql 档按总体方案 §9.4 的 7 项单独跑一轮。
 **1. 生成器和协议**(先跑,后面都依赖它):
 
 ```bash
-cd tools/proto_generator/protogen && go test ./internal/prototools/... ./internal/generator/go/...
+cd tools/proto_generator/protogen && go test ./internal/prototools/... ./internal/generator/go/... ./internal/utils/...
 ```
 
 ```bash
@@ -290,7 +360,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 | 模块 | 环境变量 |
 |---|---|
 | go/data_service | `ACCOUNT_DIRECTORY_TEST_DSN`、`MMORPG_SQL_FIXTURE_ADMIN_DSN`;`-tags=integration` 加 `DATA_SERVICE_IT_MYSQL_*` |
-| go/shared、go/data_service/cmd/writer_authority | `MMORPG_SQL_FIXTURE_*`,跑 `TestGate\|TestWriterGrant` |
+| go/shared | `MMORPG_SQL_FIXTURE_*`,在 `./authoritysql` 跑 `TestGate\|TestWriterGrant` |
 | go/db | `GODB_MYSQL_ITEST_DSN` |
 | go/match | `MATCH_IT_TIDB`、`MATCH_IT_REQUIRE_TIDB=1` |
 | go/guild | `GUILD_ROLE_TEST_DSN`、`GUILD_ROLE_REQUIRE_TIDB=1` |
@@ -301,7 +371,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 | go/chat | `CHAT_IT_TIDB`、`CHAT_IT_REQUIRE_TIDB=1` |
 | tools/dbmove | `DBMOVE_IT_REQUIRE=1`、`DBMOVE_IT_SOURCE_DSN`、`DBMOVE_IT_TARGET_DSN` |
 
-**4. 部署契约**:`logical_db_deploy_contract`、`id_issuer_deploy_contract`、`k8s_*`、`redis_player_*`、`lobby_*`、`chat_*`、`go_services_*`、`docker_debug_*`、`sql_boot_*`、`maintenance_drain`、`dev_tools_db_move_contract`。另外 `java/authority_jdbc` 跑 `mvn -q test -Dtest=AuthorityConnectionTest`,scene 改了 `player_team.cpp`,C++ MSBuild `/m:1` 再编一次。
+**4. 部署契约**:`logical_db_deploy_contract`、`id_issuer_deploy_contract`、`k8s_*`、`redis_player_*`、`lobby_*`、`chat_*`、`go_services_*`、`docker_debug_*`、`sql_boot_*`、`maintenance_drain`、`dev_tools_db_move_contract`。另外 `java/authority_jdbc` 跑 `mvn -q test -Dtest=AuthorityConnectionTest "-Dprotoc.spec=file:/D:/luyuan/xuanming-server-mmo-cpp/third_party/protobuf/install_vs2026_dbg/bin/protoc.exe"`,scene 改了 `player_team.cpp`,C++ MSBuild `/m:1` 再编一次。
 
 **5. 全链路**:开发档 K=1 起全套;再用 `-DirectoryLogicalShards 4`(或本机配置 `Directory.LogicalShards: 4`)起一遍,跑:
 
@@ -344,6 +414,14 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 - docker 调试栈的写者授权和 player_inbox 10-31 已接(未运行,待 Codex 验证,见 `tools/scripts/README.md`)。
 - 客户端(`../mmorpg-client/`)要跟进:重新生成协议;进匹配前走 `GetNetworkProbePlan` 和 `CommitNetworkProbe`,观战带 `request_id`(这两条是协议 1 本来就有的要求,robot 已改)。
 
+## 2026-11-01 查出的遗留:别的会话写完但没收尾
+
+- **两份停在 worktree 的修复已并回主工作区**(11-01,未提交,未编译,验证见 §15):`.claude/worktrees/sleepy-dhawan-974040`(Hiredis 三份副本一致和 Windows 回归)、`.claude/worktrees/musing-jang-65ade6`(scene_manager 读 Redis 出错不再当成键不存在)。这两个会话可以归档了,用户说了再归档。
+- (2026-11-01 更正)下一条已收尾:模板和主路径没发现拉不起来的问题,补了 `redis-split-status` 查实例、代理连接总账、21 条契约用例和手册,未运行,见 §16。
+- **排队 Redis 高可用断在半路**(会话 `local_84c4ba6b`,额度耗尽):`redis-purpose-ha.yaml` 和 `k8s_deploy.ps1` 的函数都在,没有人复核;`k8s_redis_split_contract.tests.ps1`、`deploy/k8s/README.md` 都没提它。
+- **(2026-11-01 更正)下面 4 个 worktree 已核对,要紧的改动都已并回主工作区**,见 §16;排队 Redis 高可用的复核也在 §16。完整缺口清单在 [server-gap-audit-20261101.md](../server-gap-audit-20261101.md)。
+- **另外 4 个 worktree 有未提交改动,没核对是否进了 `main`**:`relaxed-cerf-d5da4d`(Refresh token)、`compassionate-dirac-4d87e1`(C++ 日志级别)、`laughing-wright-5dc98a`(gate D60)、`peaceful-haibt-6a19a3`(帮会资产恢复)。
+
 ## 已知残余
 
 - 回档 RPC 已删,恢复玩家数据只走 PITR(`docs/ops/mysql-backup-pitr-runbook.md` §4.2)。
@@ -358,6 +436,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 - 榜单:投递途中榜分不保证全局顺序,只保证每人最终落在最新版本。
 - MySQL 档的 guild、trade、mail 路径,死锁从 0 变成偶发,靠重试吸收,回归里要量重试率。
 - 榜单 `StopRankSource`、`FreezeRankGeneration` 没有生产调用方:赛季首发不做(全球匹配设计 D7),要做赛季时再写「停写 → 投完 → 封榜」的编排。
+- (2026-11-01 更正:下一条与代码不符。只有排队拆了,其余控制域全服连一个主节点,见 [server-gap-audit-20261101.md](../server-gap-audit-20261101.md) 第 5 条。)
 - Redis 控制域(选线、场景索引、成员集合、排队)按 zone 组分实例,一个组内是单主,加机器不能扩这一组的写。登录域和玩家域已进 Cluster,加主节点就扩。控制域的实际压力要看压测。
 - 部署脚本只渲染登录域和玩家域共用一个集群,要拆开得再加参数。
 - 玩家域镜像摘要沿用 Java 版的 `redis:8.10.2@sha256:6f81e891…`。Docker Hub 上这个标签 10-22 重建过,要换就两版一起换。
@@ -410,3 +489,243 @@ Codex 验证,都在仓库根下,串行,失败留完整输出,不要重试:
 - 有缺口的道具没有自动折算。不可叠加物品只销毁点名的实例,同一件来回交易时缺口会多报。
 - 摘孤儿分不出「路由行在、落点列为空」,这种行只可能是人改过库。
 - 没配告警规则:`data_service_recall_dispatch_total{result="error"}`、`assetop_pending_oldest_age_seconds{stream="gm_recall"}` 还没进 `deploy/k8s`。离线玩家的行正常就会很老,阈值要等真实数据。
+
+## §15 并回的两份修复(2026-11-01,未编译)
+
+改动说明见 `docs/PROGRESS.md`「并回两份停在 worktree 的修复」。这两份在工作区,未提交,所以只能在主目录验证。日志放 `build/player-store-verify-<日期>/`,下面的 `<日志目录>` 就是它。
+
+### 1. scene_manager:读 Redis 出错
+
+miniredis 在进程内跑,不要外部 Redis、MySQL。都在 `go/scene_manager` 下:
+
+```bash
+go build -gcflags=-e ./...
+```
+
+```bash
+go vet ./internal/...
+```
+
+```bash
+go test -count=1 ./internal/logic/... ./internal/metrics/...
+```
+
+通过标准:build、vet 无输出;test 全部 `ok`,0 FAIL。尤其要过 `read_unknown_fail_closed_test.go` 全部用例,以及既有的 `TestAutoscale_*`、`TestOrphanCleanup_*`、`TestGetBestWorldChannel_*`、`TestInitWorldScenes_*`、`TestPlanRebalance_*`、`TestReconcileDeadNode_*`、`TestDesiredWorldChannelCount_*`、`TestWorldChannel_*`、`TestAtomicDestroyForce_*`、`TestOwnerReadInterleave_*`、`TestResolveScene*`。
+
+失败时保留:编译、vet 的全部错误;失败用例用 `go test -count=1 -v -run '^用例名$' ./internal/logic/` 单跑的完整输出。失败落在这批没改的文件里,写明文件名。
+
+### 2. Hiredis 收尾
+
+MSBuild 一律串行 `/m:1`。测试工程只经 AdditionalDependencies 链接 `muduo.lib`,不会顺带重编它,所以先编 muduo。总验证清单 §6 的整解构建已经覆盖第 1 步时,不用重复。
+
+```bash
+msbuild cpp\libs\engine\muduo_windows\muduo.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64
+```
+
+```bash
+pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter rpc_controller -LogDir <日志目录>/15-hiredis-rpc
+```
+
+```bash
+build\cpp\tests\rpc_controller_test.exe --gtest_filter=HiredisEventBatchWindows.* --gtest_repeat=20
+```
+
+```bash
+pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter muduo_grpc -LogDir <日志目录>/15-hiredis-grpc
+```
+
+`muduo_grpc` 覆盖 `HiredisPeerFin`,必须带 `-Build`,否则跑的是链接旧 `muduo.lib` 的旧 exe。
+
+Linux:按 `docs/design/redis-async-client-retry-fix.md` 文末的 cmake 命令重跑 `redis_lifecycle_test`,`MMORPG_SDK_ROOT` 下的 muduo-linux 用 gitlink 当前记录的 SHA(现在是 `b55b0ac`),回执写明 SHA。再在 `f1fc77e` 上跑一轮,证明端口写法两版都能编。没有 Linux 环境就记「没跑」。
+
+通过标准:
+
+- muduo 构建退出 0。
+- `rpc_controller` 0 失败,`HiredisEventBatchWindows` 两条实际运行、没有跳过,重复 20 轮共 40/40。
+- `muduo_grpc` 0 失败。`rpc_controller_test.exe`、`muduo_grpc_test.exe` 的修改时间晚于第 1 步产出的 `muduo.lib`。
+- Linux `redis_lifecycle_test` 全部通过,ASan、UBSan 无报告。
+- 三份 `Hiredis.cc`(`cpp/libs/engine/muduo_windows/src/contrib/hiredis/`、`tools/archived/muduo_linux_overlay/contrib/hiredis/`、`third_party/muduo/contrib/hiredis/`)两两 `cmp` 无输出,三份 `Hiredis.h` 同样。
+
+失败时保留:msbuild 首个 error 和完整日志;`-LogDir` 下的 stdout、stderr;崩溃时的退出码、最后一个 `[ RUN ]` 和 stderr 断言原文;Linux 所用 muduo-linux 的 SHA。
+
+## Codex 第 4 项双区联验补齐要求（2026-11-01）
+
+负责人已明确：**下列源码/测试接线由原改码窗口补齐，当前 Codex 只验证。** 本节不替代本目录 codex-results.md；该总验证回执仍由“执行玩家存盘总验证清单”聊天维护。
+
+1. **恢复新 SQL 路径故障控制器**：旧 TestFullstackOwnershipFaults 已随 go/db 旧 Kafka 存盘链删除，run_ownership_fault_fullstack.ps1 仍调用它。保留真实进程身份、租约等待、恢复看门狗与机器人正式协议，改按 player_store 原子提交及写权行判断提交受阻/旧主恢复拒写。完整边界和通过标准：[ownership-fault-verification-blockers.json](../../../build/verification/stage4-resume-20261101-r1/ownership-fault-verification-blockers.json)。
+2. **补齐当前双区写者启动接线**：本机工具当前仅单区，需一次合并实例计划再迁移/注册/发布 catalog；校准顶层 ZoneId/Node.ZoneId、语义区号与真实端口、data_service 参与者最终地址，J 的四个角色继续由 J 正规 producer 生成。不得循环生成两份互相覆盖的 catalog 或降低写资格门禁。完整边界：[multi-zone-boot-repair-plan.json](../../../build/verification/stage4-resume-20261101-r1/multi-zone-boot-repair-plan.json)。
+
+已有失败的额外诊断供本轮统一修正：
+
+- C++ 本轮生成器实际取环境中的 protoc 35.0，而 Debug SDK 为35.1，生成宏7035000与runtime7035001不符。不要手改生成头或删除版本检查；需正规生成工具来源对齐再构建。[cpp-protobuf-version-diagnosis.json](../../../build/verification/stage4-resume-20261101-r1/cpp-protobuf-version-diagnosis.json)。
+- data_service 三项失败已区分为错误包装重新暴露地址、GetPlayerRoute 把取消误分为权限错误，以及假驱动行多一个nil；第三项不要改生产SQL/Scan。[data-service-three-failures-diagnosis.json](../../../build/verification/stage4-resume-20261101-r1/data-service-three-failures-diagnosis.json)。均只读定位，尚未修复或重跑。
+
+本聊天的独立实证：Java官方ContractSync和check退出0，地图/内部协议保持；当前playerstore 12项真库TestIT_全部通过、0跳过（未race），原件在同目录playerstore-tidb-r2/。以上均不能代替双区真实节点联验。原自有PD随后因1GiB上限OOM，已按既有内存授权恢复同CID到4GiB/swap8GiB且health=true；后续A9接库前另做当前世代复核，旧资格不直接继承。
+
+## §16 遗留修复与假成功的桩(2026-11-01,未编译)
+
+清单和未做的项见 [server-gap-audit-20261101.md](../server-gap-audit-20261101.md)。Codex 下一轮验证时带上,都在仓库根下,串行,失败留完整输出:
+
+```bash
+cd go/shared && go test ./redisslot/...
+cd go/guild && go build ./... && go test ./internal/logic -run 'TestWithClientRequestLookupFailure|TestClientRequestReplayBindsOriginalGuild' -count=1
+cd go/guild && go test -tags integration ./internal/logic -run 'EconomyFlowClientRequest' -count=1
+cd go/login && go build ./... && go vet ./internal/logic/pkg/token/... && go test ./internal/logic/pkg/token/... ./internal/config/... ./internal/svc/... ./internal/logic/clientplayerlogin/... -count=1
+cd go/player_locator && go build ./... && go test ./internal/logic/... -count=1
+cd go/scene_manager && go build ./... && go test ./internal/logic/... -count=1
+cd robot && go vet ./... && go build ./...
+```
+
+- 真 Redis:`LOGIN_TOKEN_REQUIRE_REAL_REDIS=1 LOGIN_TOKEN_TEST_REDIS_ADDR=<数值地址> LOGIN_TOKEN_TEST_REDIS_DB=9 go test ./internal/logic/pkg/token/ -run TestTokenFamily_RealRedis -count=1 -v`,7.2 与 8.x 各一轮。
+- C++(串行 `/m:1`):编 `gate`、`scene`、`routing_identity_test`、`cross_zone_test`。跑 `routing_identity_test --gtest_filter=SessionDetailsBuilder.*`、`cross_zone_test --gtest_filter=EnterFenceEcs.*`。
+- Java 网关:`HotfixCheckServiceTest` 和网关全量单测。
+- 部署契约:`k8s_deploy_contract`、`k8s_redis_split_contract`、`redis_exporter_contract`、`k8s_client_entry_contract`。`Get-GrpcClientMethodsNotCalledFromCpp` 现在登记了 GM 回收三个方法。`k8s_redis_split_contract` 第 8 节是新写的,最可能因夹具红的是 prod 档和 all-up 两条 DryRun。
+
+player_locator 用例的假存活集多放了一个没登记玩家的活 gate(`fakeClusterView.LiveGateInstances`),因为闸门不接受全空。
+
+11-01 那一轮 Codex 跑在这批改动之前,§14 的结果:`data_service`、`login` 编译和 vet 通过,摘孤儿测试通过;`TestRecallStore_*` 全部卡在夹具「缺少fixture物理authority原件摘要」,不是回收逻辑的断言;C++ 因依赖和生成版本不一致没编起来,`AssetOpRecallTest` 等都没跑。
+
+Codex 同时要做客户端(`../mmorpg-client`):
+- 帮会捐献和兑换恢复记录的两个出口,参考补丁 `docs/handoff/guild-economy-recovery-client-20261023.patch`,说明在同目录的交接文档。
+- RefreshToken 结果未知时,只在宽限窗口内拿原 token 重试;收到拒绝或超预算就丢掉旧 refresh,绝不在窗口外再发它,否则会吊销整次登录。
+
+没编译、没运行。只做过 `gofmt`、PowerShell 语法解析、YAML 解析。
+
+**下一步先做的**:`状态:本轮跑完` 之后删 scene 12 条 GM 桩的 proto(清单第 6 条),然后按清单第 1~5 条往下做。
+
+### 本聊天后续 A9 实际结果（2026-11-01，交原窗口处理）
+
+新PD世代真实Raw及SELECT_ONLY/LOCK_TOUCH资格均已通过；随后A9默认clean install真实退出1：711项=573通过+3失败+1错误+134条件跳过，617输入前后相同。game-discovery三项是观战协调键新增四金样遗漏/测试CRC16未取hash-tag；game-gateway-store的真实fixture在publish初始化SELECT DISTINCT zone_id FROM player超时，回滚通讯失败留下UNKNOWN，尚未进入失败轮业务竞争，根因未定。mall、gateway依赖跳过，运行三包本轮0个。详情：[本轮实际结果](../../../build/verification/stage4-resume-20261101-r1/java-a9-r3/result.json)、[失败诊断](../../../build/verification/stage4-resume-20261101-r1/java-a9-failures-diagnosis.json)。跳过清单、新XML及完整日志同结果目录，未改断言/未重跑。当前source/测试配套修正仍归原窗口；UNKNOWN私有原件与现场保持，不自动清理，不恢复第5旧资源核账。原R网关另有缺本仓authority-jdbc依赖的前置，未进入编译/测试：[R网关前置诊断](../../../build/verification/stage4-resume-20261101-r1/r-java-gateway-failure-diagnosis.json)。
+
+## §18 双区写者启动接线(2026-11-01,未运行)
+
+全部未运行、未提交。需求原文:`build/verification/stage4-resume-20261101-r1/multi-zone-boot-repair-plan.json`。
+
+### 18.1 已改
+
+- `lib/release_common.ps1` 新增 `Get-InstanceConfigZoneId`:只接受唯一出现的 `ZoneId` 或 `Node.ZoneId`,缺失或两处都有就拒绝。`go_services.ps1` 的计划和启动都用它,login、guild 不再因读不到顶层 `ZoneId` 拒启。
+- `go_services.ps1` 新增 `ConvertTo-PlannedRoleFenceConfig`、`Update-PlannedRoleFenceConfigs`:`-Zone` 大于 0 时,`plan-instances` 在全部实例端口定下后,按配置自己的 `Participants` 把直连端口改成同区计划的实际端口。缺参与者、多副本、一个参与者多个地址都拒绝,Etcd 形式保持不动。`-Zone 0` 不绑,行为不变,所以单区端口被 Windows 保留区挪走时,协调者仍连旧端口,这个旧问题没动。
+- `go_services.ps1` 新增 `-ZonePortOffset`(缺省 -1 = 原公式)和 `Get-ZonePortOffset`,`Get-InstancePort`、`Resolve-InstanceConfig` 共用。决定加它的依据:仓库跟踪文件里没有能产出 990017/990018 全部实例配置的 producer;`build/asset-arrival-20261017/fullstack/` 下只有 2026-10-17 的历史产物,只覆盖 db、login,早于写者目录,不能复用。
+- `lib/sql_boot_catalog_local.ps1`:`New-LocalSqlBootCatalog` 新增 `-Zones`、`-Counts`、`-PortStride`、`-ZonePortShift`、`-ZonePortOffsets`。多区时内部逐区调 `plan-instances`(`Get-LocalSqlBootMultiZonePlan`),合并后先过 `Assert-LocalSqlBootMergedPlan`(实例键、配置路径、`ListenOn`、区号、监听和 metrics 端口、账号名碰撞),通过了才建库。白名单必须来自 `DB_ALLOWED_DATABASES` 或 `MMORPG_DB_ALLOWED_DATABASES`,每个目标区的 `zone_<区>_db` 都要在内。存档库迁移每个都带 `-storage-id`。任何服务建表失败都不发布。单区不带 `-Zones` 时流程不变,只多了一个拒绝:没有 `-Zones` 却给了 `-Counts`、`-PortStride` 或 `-ZonePortOffsets`。
+- 目录发布改为先写 `catalog.candidate.json`,`Get-SqlWriterBootEnvironment` 自检通过才改名成 `catalog.json`,单区也走这条。
+- `dev_tools.ps1`:`sql-boot-catalog-local` 透传 `-Zones`、`-GoCounts`、`-GoPortStride`、`-ZonePortShift`、`-ZonePortOffsets`;`go-svc-start`、`go-svc-start-exe` 透传 `-ZonePortOffset`。`dev-start-zones` 没改,仍按原公式。
+- `tools/scripts/README.md` 原地改掉只支持单区的说法,写了多区用法,写明 Java 版的 4 个角色由 Java 仓的 producer 生成。
+
+### 18.2 验证方法(全部由 Codex 执行,本窗口只做过语法解析)
+
+合同测试,工作目录是仓库根:
+
+```powershell
+pwsh -NoProfile -File tools/scripts/tests/sql_boot_catalog_local.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/go_services_ports.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/go_services_local_mysql.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/docker_debug_sql_boot.tests.ps1
+```
+
+通过标准:每个脚本退出码 0,`fail=0`。后两个没有改,跑它们是确认 `Get-ZonePortOffset` 和 `New-LocalSqlBootSettings` 没带坏既有行为。
+
+双区生成和启动,前置是当前源码的 `go-svc-build`(不带 `-GoServices`)和本地独立数据库。下面的命令用 MySQL 档;用 TiDB 时先设 `MMORPG_GLOBAL_AUTHORITY_TIDB_HOST`,并去掉 `-LocalMySQL`。
+
+```powershell
+$env:MMORPG_DB_ALLOWED_DATABASES='zone_990017_db,zone_990018_db'
+& tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local -Zones 990017,990018 -ZonePortOffsets '990017=0,990018=1000'
+$env:MMORPG_SQL_BOOT_CATALOG=(Resolve-Path run/secrets/sql-boot-local/catalog.json).Path
+pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-start-exe -Zone 990017 -ZonePortOffset 0 -LocalMySQL
+pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-start-exe -Zone 990018 -ZonePortOffset 1000 -LocalMySQL
+```
+
+通过标准:
+
+- `catalog.json` 恰好 22 个条目,键是 `z990017_`、`z990018_` 加 data_service、db、login、trade、guild、match、mail、player_inbox、friend、chat、rank。
+- `last-run.json` 的 `registered` 与这 22 个相同,`skipped` 为空,`zones` 是两个区。
+- 每个 `z<区>_data_service` 的 `runtimeConfigFile` 里,`RoleFence` 六个参与者的端口等于同区计划里该服务的实际端口;`z<区>_login`、`z<区>_guild` 的 `Node.ZoneId` 等于目标区。
+- 两次 `go-svc-start-exe` 都没有因 `ListenOn` 或 `ZoneId` 拒启,28 个 Go 进程在 LISTEN。LISTEN 和 ready 只算前置,不能据此宣称 Main36 业务通过;Java 版的 4 个角色要另走 Java 仓的 producer。
+- 负例:不设白名单时拒绝且不起子进程;`-ZonePortOffsets 990017=0,990018=0` 在建库前因端口冲突拒绝。
+
+失败时保留命令、退出码、完整日志和失败实例,不重试,不放宽闸门。
+
+### 18.3 没做和已知风险
+
+- 合同测试已补,未运行。`sql_boot_catalog_local.tests.ps1`:双区 22 个条目、一次账号清理、白名单缺失和少一个区、第二区失败不发布、账号碰撞和两区端口冲突在 DDL 前拒绝、单区兼容、`dev_tools` 透传。`go_services_ports.tests.ps1`:`Node.ZoneId`、两处区号拒绝、启动时区号和端口不一致拒绝、端口偏移、`RoleFence` 跟实际端口、`plan-instances` 缺参与者拒绝。两区端口冲突放在生成器测试里,因为检查在合并校验,不在 `go_services`。
+- 测试没覆盖:合并计划里有 `Running` 实例的路径、`Etcd` 形式走完整 `plan-instances`、真实 `pwsh` 子进程调 `plan-instances`(生成器测试走进程桩)。真实路径只能靠 18.2 的双区生成验证。
+- `go_services_ports.tests.ps1` 的 AST 检查会看到两个 `Get-SqlWriterBootEnvironment`:其中一个是用例内的局部遮蔽,是有意的,不影响顶层加载。
+- `pwsh -File` 下 `-Zones 990017,990018` 能否绑定到 `[int[]]` 没有验证,所以生成命令写成会话内 `&` 调用。`docs/ops` 里有 `pwsh -File ... -Zones 1,2` 的写法,同样未核对。
+- Java 版没有改,这个工具也不生成它的 4 个角色;Java 仓的 producer 是否已补齐没有核对。
+- `-Zone 0` 没有回填 `RoleFence`:单区计划常只点名部分服务,回填会改变单区行为,所以单区端口被 Windows 保留区挪走时,协调者仍连旧端口。
+- 计划按服务清单顺序解析端口,启动按 Tier 顺序。两个服务都被挪出保留区时,两边可能得到不同端口;这时启动会因 `ListenOn` 不符拒绝,不会连错,重跑或调整偏移即可。
+- 计划逐区独立解析,第二区不知道第一区挪动后的端口,冲突由合并校验拒绝,不会自动避让。
+- 多副本账号名可能截断碰撞(如 `player_inbox=2`),目前是拒绝,没有放宽账号命名。
+
+## §17 SQL 路径故障控制器(2026-11-01,未编译)
+
+**状态:没有编译、没有运行。** 只跑过 `gofmt -l`(无差异)和 PowerShell `ParseFile`(0 错误)。由 Codex 编译验证。
+
+### 改了什么
+
+- 新增 `go/data_service/internal/faultdrill/ownership_fault_fullstack_test.go`,包里只有测试文件。入口 `TestFullstackOwnershipFaults`,子测试 `commit_blocked_handoff_waits`、`stale_scene_resume_write_rejected`。不设 `OWNERSHIP_FAULT_REQUIRE=1` 时跳过,普通 `go test` 不受影响。
+- `tools/scripts/tests/run_ownership_fault_fullstack.ps1`:删掉 `-DbTestBinary`、`-RobotTestBinary`,改成自己从当前源码 `go test -c` 编进 RunDir,旧二进制进不来;编完用 `-test.list` 核目标测试在二进制里(零用例也会退出 0);周期读回执不再要求 30 秒;截止按周期算;结束时查 stdout 里的 `=== RUN`、`--- PASS`、两个子测试和 SKIP,再查三份场景证据。进程句柄身份校验、独立恢复看门狗、finally 恢复都没动。编译失败发生在 `try` 之前,没有进程被碰,也不写 `runner-result.json`,看 `*.build.stderr.log`。
+- `robot/ownership_fault_fullstack_test.go`:截止从写死 390 秒改读 `OWNERSHIP_FAULT_ROBOT_BUDGET_SECONDS`,其余不变。
+
+### 构建命令
+
+runner 会自己编。想先单独验证编译:
+
+```powershell
+$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'
+# 工作目录 go/data_service
+go vet ./internal/faultdrill
+go test -c -o <任一 build 下临时路径>/controller.test.exe ./internal/faultdrill
+# 工作目录 robot
+go test -c -o <任一 build 下临时路径>/robot.test.exe .
+```
+
+### 运行命令
+
+```powershell
+pwsh -NoProfile -File tools/scripts/tests/run_ownership_fault_fullstack.ps1 `
+  -RunDir <repo>/build/...(已建好的空目录) -RunId <32位小写hex> `
+  -SourceReceipt <scene 回执> -RunStartedUtc <本轮开始时间> `
+  -RobotConfig <无凭据机器人配置> -DelayAccount robot_assetarrival_fault_<a> -ZombieAccount robot_assetarrival_fault_<b>
+```
+
+### 环境变量
+
+由启动者注入,不写进文件:
+
+| 变量 | 内容 |
+|---|---|
+| `OWNERSHIP_FAULT_PASSWORD` | 机器人账号密码 |
+| `OWNERSHIP_FAULT_PLAYER_DSN` | 库名必须是 `zone_990017_db`、tcp、回环地址。专用本机 dev 观测账号,要有 `player_store` 的 `SELECT`、`SELECT ... FOR UPDATE` 所需权限,以及全局 `PROCESS`。不要改生产账号 |
+| `OWNERSHIP_FAULT_SM_CONFIG` | 本轮 z990017 实际 scene_manager 配置的绝对路径。etcd、Redis 控制域(`Redis` 段)、玩家域(`PlayerRedis`,没写 `Addrs` 时指向控制域实例,单实例和 Cluster 都按配置走)、再入屏障都从这里读。地址全部要求回环 |
+| `OWNERSHIP_FAULT_REENTRY_BARRIER_SECONDS` | 仅当上面配置没写 `SceneReentryBarrierSeconds` 时必填,填实际生效值(当前内部常量 `constants.SceneReentryBarrier` 是 20)。两处都没有就失败,不补缺省 |
+
+由 runner 设置,不用手填:`OWNERSHIP_FAULT_REQUIRE/MODE/DIR/RUN/CONFIG/ROLE/ACCOUNT`、`OWNERSHIP_FAULT_SOURCE_SAVE_INTERVAL_SECONDS`、`OWNERSHIP_FAULT_SOURCE_NODE_UUID`、`OWNERSHIP_FAULT_ROBOT_BUDGET_SECONDS`。
+
+### 真实运行前置
+
+1. 990017、990018 两区真实进程已起,TiDB、Redis、etcd 在本机。依赖另一窗口的多区启动接线(`multi-zone-boot-repair-plan.json`)。
+2. source scene 回执新增必填 **`node_uuid`**(本轮实际值,可从该进程的 etcd 注册取);`source_save_interval_seconds` 必填,1~120 的整数,缺了就拒绝,不假定 60。其余字段不变:`service=scene`、`zone=990017`、`fault_run=RunId`、`pid`、`binary`、`binary_sha256`、`cwd`、`started_utc`、`process_creation_filetime_utc`。scene 二进制要是 build 下的显式副本,日志在 `<cwd>/logs/cpp_nodes`。
+3. 账号全新且两个不同;机器人配置 `TravelSmoke.HomeZone=990017`、`VisitZone=990018`、密码认证、网关回环。
+4. 可用内存不少于 2 GiB。
+
+### 通过标准
+
+`runner-result.json` 的 `actual_pass=true`,且 `scene_still_suspended=false`、`cleanup_errors` 为空。runner 判定它之前已经核过:控制器和 3 个机器人进程退出 0;stdout 实际进入目标测试、两个子测试都 PASS、没有 SKIP;`save-blocked-evidence`、`delay-proof`、`zombie-proof`、`old-write-evidence` 都属于本轮。
+
+- **场景 1 证据**:控制器在本轮玩家 kind=2 行持 `FOR UPDATE`(上限 8 秒,短于 go/db 行锁等待 10 秒),取 `@@tidb_current_ts`。`DATA_LOCK_WAITS` 里 `CURRENT_HOLDING_TRX_ID` 等于这个事务、`KEY_INFO` 是本库 `player_store` 的 `(player_id, 2)`,才开始负向观察。只有 Save 的批量写会锁这一行,所以等待方是一笔带资产行的真实 Save。观察 4 轮,每轮要求:仍在等锁、资产行字节和金额是基线、写权行 epoch、Redis owner、location 不变、handoff 标记不存在。释放后 SQL 金额为基线 +18,背包和资产账本不变。证据写在 `save-blocked-evidence.json`(两个事务号和等待键)。
+- **场景 2 证据**:写权行 `holder_instance`、etcd 注册的 `nodeUuid`、回执 `node_uuid` 三者相同;等真实周期存盘把基线写进 SQL(截止 = 回执周期 + 15 秒);+11 只在内存,暂停后全部行摘要不变;etcd 注册自然消失且 `death_at` 过屏障;目标设备新登录代次更高、位置在 990018、SQL 写权行 epoch 和 holder 已换、金额为基线 +7;恢复后在本轮新增日志里匹配到 `HandlePlayerSaveRejected: owner_epoch CAS rejected save for player <id> key=... epoch=<旧 epoch>`(截止 = 周期 + 15 秒);之后连续 3 秒全部行摘要不变。
+
+没有 `DATA_LOCK_WAITS` 权限、等待键不符、窗口没命中都是失败,不降级。
+
+### 预算
+
+控制器总预算 = 360 + 2×周期 秒(默认周期 60 时 480 秒);runner 循环 +10、`-test.timeout` +20、机器人 -30,runner 与控制器各写一份同公式,注释里标了。暂停上限和看门狗 240 秒没变,暂停时长不依赖存盘周期。
+
+### 没做 / 未核实
+
+- **没有编译和运行**,类型只靠逐行核对。`shared/ownerepoch`、`proto/player_locator` 是 data_service 第一次直接引用,`go.sum` 如缺条目会在 `go test -c` 报出,不要改 `go.sum` 绕过,报回来。
+- `KEY_INFO` 的 `handle_value` 形如 `{id, kind}` 是按 TiDB 实现推断的,没在真库看过。形状不符时控制器立刻失败并打印原文,照原文改 `ownershipFaultKeyMatches`。
+- 假定两区共用同一套 Redis 和 etcd,且 `player:session` 在玩家域(配置来自 z990017)。不成立会明确失败,不会误判通过。
+- 没核 C++ `CallDeadlineMs` 与 8 秒的关系。短于 8 秒只会让 scene 按结果未知用同序号重试,交接照样等,不影响结论,但日志里会多出重试告警。
+- `docs/ops/mysql-backup-pitr-runbook.md` 468~474 行还写着 30 秒周期和第二表锁,没改。
+- Java 版不涉及:这是本仓测试工具,不改客户端契约。

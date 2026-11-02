@@ -7,8 +7,6 @@ import (
 
 	"login/internal/svc"
 	base "proto/common/base"
-	comp "proto/common/component"
-	dbpb "proto/common/database"
 	dspb "proto/data_service"
 
 	"google.golang.org/protobuf/encoding/protowire"
@@ -95,84 +93,6 @@ func TestHealAccountRole_RejectsMissingChangedOrUnprovenSQLOwner(t *testing.T) {
 			logic := NewEnterGameLogic(context.Background(), sc)
 			if got := logic.healAccountRole(context.Background(), state, "注册表有名字也不能回填"); got != nil {
 				t.Fatalf("缺失或变化的 SQL 归属不得恢复角色: %v", got)
-			}
-			assertHealOwnersUnchanged(t, directory, before)
-		})
-	}
-}
-
-func sqlAppearancePlayer() *dbpb.PlayerDatabase {
-	return &dbpb.PlayerDatabase{
-		PlayerId:          sqlHealPlayerID,
-		Uint32PbComponent: &comp.PlayerUint32Comp{Class: 3},
-		ProfileComponent:  &comp.PlayerProfileComp{AppearanceId: "04_mountain_guardian_boy", Gender: 1},
-	}
-}
-
-func TestRepairAccountAppearance_SQLRevisionFillsMissingFieldsAndPreservesOtherIdentity(t *testing.T) {
-	directory := newTestDirectory()
-	state := sqlHealState()
-	role := sqlHealRole()
-	role.ClassId, role.Gender, role.AppearanceId = 0, 0, ""
-	other := &base.AccountSimplePlayer{PlayerId: 7002, Name: "同账号另一角色", AppearanceId: "06_thunder_caster_boy"}
-	directory.seed(state.account, role, other)
-	logic := NewEnterGameLogic(context.Background(), &svc.ServiceContext{AccountDirectory: directory})
-	if err := logic.repairAccountAppearance(context.Background(), state, sqlAppearancePlayer()); err != nil {
-		t.Fatal(err)
-	}
-	owned, err := directory.Lookup(context.Background(), state.playerID)
-	if err != nil || owned.Account != state.account || owned.OwnerRevision != state.ownerRevision || !proto.Equal(owned.Role, sqlHealRole()) {
-		t.Fatalf("只应补空身份且保留归属修订、名字与未知字段: owned=%v err=%v", owned, err)
-	}
-	kept, err := directory.Lookup(context.Background(), other.PlayerId)
-	if err != nil || !proto.Equal(kept.Role, other) {
-		t.Fatalf("修复不得覆盖同账号另一角色: owned=%v err=%v", kept, err)
-	}
-	before := snapshotHealOwners(directory)
-	if err := logic.repairAccountAppearance(context.Background(), state, sqlAppearancePlayer()); err != nil {
-		t.Fatalf("同一身份修复重放应幂等: %v", err)
-	}
-	assertHealOwnersUnchanged(t, directory, before)
-}
-
-func TestRepairAccountAppearance_RejectsOwnershipOrIdentityConflictAndCancellation(t *testing.T) {
-	for _, rejected := range []string{"missing", "other-account", "changed-revision", "unproven", "unready", "appearance", "class", "gender", "canceled"} {
-		t.Run(rejected, func(t *testing.T) {
-			directory := newTestDirectory()
-			state := sqlHealState()
-			directory.seed(state.account, sqlHealRole())
-			sc := &svc.ServiceContext{AccountDirectory: directory}
-			ctx := context.Background()
-			switch rejected {
-			case "missing":
-				delete(directory.owners, state.playerID)
-			case "other-account":
-				directory.owners[state.playerID].Account = "买家新账号"
-			case "changed-revision":
-				directory.owners[state.playerID].OwnerRevision++
-			case "unproven":
-				state.ownerRevision = 0
-			case "unready":
-				sc.AccountDirectory = nil
-			case "appearance":
-				directory.owners[state.playerID].Role.AppearanceId = "06_thunder_caster_boy"
-			case "class":
-				directory.owners[state.playerID].Role.ClassId = 5
-			case "gender":
-				directory.owners[state.playerID].Role.Gender = 2
-			case "canceled":
-				canceled, cancel := context.WithCancel(ctx)
-				cancel()
-				ctx = canceled
-			}
-			before := snapshotHealOwners(directory)
-			logic := NewEnterGameLogic(context.Background(), sc)
-			err := logic.repairAccountAppearance(ctx, state, sqlAppearancePlayer())
-			if err == nil {
-				t.Fatal("缺失证明、归属变化、已存身份冲突或取消都必须拒绝修复")
-			}
-			if rejected == "canceled" && !errors.Is(err, context.Canceled) {
-				t.Fatalf("不得吞掉目录取消错误: %v", err)
 			}
 			assertHealOwnersUnchanged(t, directory, before)
 		})

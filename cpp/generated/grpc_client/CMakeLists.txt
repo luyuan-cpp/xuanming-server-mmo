@@ -70,6 +70,7 @@ set(SOURCE_FILES
     player_locator/player_locator_grpc_client.cpp
     team/team_authority_grpc_client.cpp
     player_store/player_store_grpc_client.cpp
+    role_fence/role_fence_grpc_client.cpp
 )
 
 add_library(grpc_client STATIC ${SOURCE_FILES})

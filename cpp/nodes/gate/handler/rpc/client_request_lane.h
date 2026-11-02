@@ -72,8 +72,9 @@ using RouterSendFn = bool (*)(const ClientRequest &request, const std::string &s
 void SetRouterSender(RouterSendFn fn);
 
 // 准入。前置条件:会话存在且已验证;白名单 / 体积 / 限流 / GM / battle 几道闸都已通过;协议是 PROTOCOL_GRPC;路由模式。
-// details 是调用方按当前会话构造的身份(BuildSessionDetails);本函数把 kInvalidGuid 归一成 0、写入会话代次与
-// 调用序号后,作为入队时刻的快照保存。拒绝(lane 满 / 已重定向)时直接回带请求 id 的信封。
+// details 是调用方按当前会话构造的身份(BuildSessionDetails,player_id 已在那里归一);本函数复用同一规则
+// (session_details_builder.h 的 NormalizePlayerId,幂等)再归一一次作纵深防御,写入会话代次与调用序号后,
+// 作为入队时刻的快照保存。拒绝(lane 满 / 已重定向)时直接回带请求 id 的信封。
 void Admit(SessionId sessionId, SessionInfo &session, const std::shared_ptr<ClientRequest> &request,
 		   SessionDetails details);
 

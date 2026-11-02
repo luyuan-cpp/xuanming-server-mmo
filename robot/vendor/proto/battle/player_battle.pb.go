@@ -31,6 +31,9 @@ const (
 	ESpectateEndReason_SPECTATE_END_BATTLE_FINISHED ESpectateEndReason = 1 // 战斗正常分出胜负
 	ESpectateEndReason_SPECTATE_END_BATTLE_ABORTED  ESpectateEndReason = 2 // 战斗作废(节点停机/deadline 强制收尾)
 	ESpectateEndReason_SPECTATE_END_REMOVED         ESpectateEndReason = 3 // 观众被移除(自己去排队/开战导致互斥清退)
+	// 中继 / 广播档(大厅连接收帧)由 gate 本地收尾:源站 battle 失联或过了战斗期限仍无终局帧。
+	// 旧客户端不认识本值时按 BATTLE_ABORTED 处理(battle-spectate-tiered-fanout.md §15.2)。
+	ESpectateEndReason_SPECTATE_END_SOURCE_LOST ESpectateEndReason = 4
 )
 
 // Enum value maps for ESpectateEndReason.
@@ -40,12 +43,14 @@ var (
 		1: "SPECTATE_END_BATTLE_FINISHED",
 		2: "SPECTATE_END_BATTLE_ABORTED",
 		3: "SPECTATE_END_REMOVED",
+		4: "SPECTATE_END_SOURCE_LOST",
 	}
 	ESpectateEndReason_value = map[string]int32{
 		"SPECTATE_END_NONE":            0,
 		"SPECTATE_END_BATTLE_FINISHED": 1,
 		"SPECTATE_END_BATTLE_ABORTED":  2,
 		"SPECTATE_END_REMOVED":         3,
+		"SPECTATE_END_SOURCE_LOST":     4,
 	}
 )
 
@@ -1393,12 +1398,13 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x122\n" +
 	"\n" +
 	"assignment\x18\x02 \x01(\v2\x12.BattleAssignedS2CR\n" +
-	"assignment*\x88\x01\n" +
+	"assignment*\xa6\x01\n" +
 	"\x12eSpectateEndReason\x12\x15\n" +
 	"\x11SPECTATE_END_NONE\x10\x00\x12 \n" +
 	"\x1cSPECTATE_END_BATTLE_FINISHED\x10\x01\x12\x1f\n" +
 	"\x1bSPECTATE_END_BATTLE_ABORTED\x10\x02\x12\x18\n" +
-	"\x14SPECTATE_END_REMOVED\x10\x03*u\n" +
+	"\x14SPECTATE_END_REMOVED\x10\x03\x12\x1c\n" +
+	"\x18SPECTATE_END_SOURCE_LOST\x10\x04*u\n" +
 	"\x11eBattleTicketRole\x12\x1b\n" +
 	"\x17BATTLE_TICKET_ROLE_NONE\x10\x00\x12\"\n" +
 	"\x1eBATTLE_TICKET_ROLE_PARTICIPANT\x10\x01\x12\x1f\n" +

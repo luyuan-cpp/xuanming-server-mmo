@@ -389,7 +389,7 @@ go-zero 超时拦截器用 `context.WithTimeout` 派生 ctx 交给 handler,超�
 ### 6.3 match(O13)
 
 - JoinQueue 在 createTicket 之前用 `playercontract.LoadSession` 复核:`state == ONLINE`,且 `session_id`、`gate_instance_id` 与 SessionDetails 一致;不一致回既有码 `ErrNotInScene`。SharedRedis 与 MatchRedis 是两个库,这一步**不原子**,只能缩小跨会话窗口,剩下的由票据 TTL 和 GetQueueStatus 权威查询兜底。
-- WatchBattle 本地路径(2026-10-30)做同样的复核:离线或 `session_id`、`gate_instance_id` 不一致回 `ErrSpectateOffline`,在清退旧观战之前判定,旧会话的请求没有任何副作用。全局路径本来就有。同样不原子。
+- WatchBattle 在落观战原件之前做同样的复核(`locateGlobalWatch`):离线或 `session_id`、`gate_instance_id`、gate 节点不一致回 `ErrSpectateOffline`。同样不原子。
 - 不在 CancelQueue 上加墓碑。§6.1 改完之后,晚落地的 createTicket 只会留下「queued 但不在队列」的孤儿票,下一次 Join、整队开战或活动开战时由 healOrphanTicket 删掉【码】`joinqueuelogic.go:259-269`;晚落地的 enqueue 只留下没有票的残留项,matcher 会摘掉【码】`matcher.go:517-526`。压测证明剩余窗口确实存在时再加墓碑。
 - **客户端约定(建议写进客户端规范):** CancelQueue 带上 JoinQueue 回包里的 `queue_ticket`;JoinQueue 结果未知(1003 / 超时)时,先调 GetQueueStatus 拿权威状态和票号,再决定是否取消。这条数据依赖在超时、重连、跨 gate 时都成立,是 lane 之外最便宜的一道防线。
 
@@ -424,13 +424,14 @@ go-zero 超时拦截器用 `context.WithTimeout` 派生 ctx 交给 handler,超�
 3. gate 从不在 LeaveGame 之后清 playerId,同一连接换角色时,新角色 BindSession 到达之前的请求仍以旧角色身份执行【码】`gate_event_handler.cpp:78,211`、`leavegamelogic.go:25-39`。Java 靠 login 应答里的 SessionDirective 同步解绑。
 4. DonateToGuild / BuyGuildShopGoods 没有客户端幂等键,超时重发会扣两次【码】`go/guild/internal/logic/economy_logic.go:742-746`。这是重试问题,不是顺序问题。
 5. RefreshToken 一次性消费,回包丢失后重试必然失败【码】`go/login/internal/logic/pkg/token/token.go:145-159`。
+   > 2026-11-01 已修(未编译、未测试,待 Codex 验证;Java 版 2026-10 已做):轮换加重放宽限窗口(缺省 30s,0–60s),窗口内拿原 token 重试返回同一对(前提是它换出的新 refresh 还没被轮换走);已轮换的旧 token 在窗口外、或窗口内而新 refresh 已被轮换走时再出现,吊销该登录的令牌家族。轮换仍是本节所说的按值比对 Lua,提交前查 ctx 的语义不变;重放判定与重用检测不随请求截止放弃。详见 [dual-token-authentication.md](dual-token-authentication.md)「轮换重试的宽限窗口」「令牌家族、重用检测与家族吊销」。
 6. CQ 轮询遇到 `!ok` 直接 `return`,跳过本轮剩余的完成事件【码】`grpc_init_client.cpp:365-368`。本文的本地截止能兜住,根治属于生成模板的问题。(2026-10-16:随 gRPC 传输第 3 批删除官方 CQ 而失效。)
 7. 镜像 CreateScene 在途时没有登记 PlayerSceneChangeInFlightComp;SortBag 没有判冻结【码】`player_scene.cpp:288-303`、`player_bag_handler.cpp:56-69`。
    **2026-10-15 处理结果**(C++ 源码已改,未编译):
    - **镜像在途:属实,已修。** 用的是独立组件 `PlayerMirrorCreateInFlightComp`,不复用普通换图那个槽:那个槽记的是已发出的 EnterScene,旧版 scene_manager 不回显号时会按 player_id 把它收掉。`RequestEnterMirrorScene` 先登记再发,改用每次调用回调;`IsSceneChangeBusy` 把它与普通换图一起判,TTL 相同。完成回调 `HandleMirrorCreateDone` 按令牌认领,三路结局各回一条 tip;这也补上了「业务失败应答不回显 creator_ids、创建者收不到提示」的缺口。详见 [scene-creation-architecture.md](scene-creation-architecture.md)「C++ caller」。
    - **SortBag 冻结:误报,未改逻辑。** 冻结闸在 `BagService::MergeAndCompact` 开头,所有整理入口共用,2026-08-30 起就有;回归用例是 `PlayerFeatureSnapshotTest.FrozenSortKeepsSourceLayoutUnchanged`。只核对了 handler 才会误报,`PlayerBagSystem::Sort` 已补注释写明闸的位置。
    - **Java 版**:两条都已覆盖,未改。镜像取号复用 RESOLVING 在途槽;SortBag 用 `FreezePolicy.GATED`,由 `BagService.writable` 拒绝。
-8. (批次 B 实施时发现)WatchBattle 的 `addObserver` 如果恰好在请求截止那一刻还在途,battle 侧可能已经挂上观众,match 却回了失败、删了观战标记。之后玩家排队开战时,gather 靠观战标记找不到这场观战,也就不会清退,玩家可能同时是 A 场的观众和新一局的参战者。批次 B 把这个窗口从「最长约 9s」缩到「截止那一刻在途的那一次 RPC」,但没有消除它。根治办法:RPC 失败且结果未知时,用独立 ctx 补发一次 `removeObserver`。它会给本玩家推一次 SpectateEnd,所以要先和 battle 侧确认语义再做。**更新(2026-10-30)**:已落码:结果未知时沿观战原件取消,battle 在原截止前给这个 op 立墓碑、挡住在途的 Add;未获证明就保留标记,下一次 WatchBattle 沿同一个 op 重试,见 `battle-spectate-tiered-fanout.md` §10.1。
+8. (批次 B 实施时发现)WatchBattle 的 `addObserver` 如果恰好在请求截止那一刻还在途,battle 侧可能已经挂上观众,match 却回了失败、删了观战标记。之后玩家排队开战时,gather 靠观战标记找不到这场观战,也就不会清退,玩家可能同时是 A 场的观众和新一局的参战者。批次 B 把这个窗口从「最长约 9s」缩到「截止那一刻在途的那一次 RPC」,但没有消除它。根治办法:RPC 失败且结果未知时,用独立 ctx 补发一次 `removeObserver`。它会给本玩家推一次 SpectateEnd,所以要先和 battle 侧确认语义再做。**更新(2026-10-30)**:Redis 观战标记已随本地路径删除,这条不再成立。现在 AddObserver 结果未知时保留 `match_spectator` 原件,同 request_id 重试或后台恢复沿同一个 op 续推;取消时 battle 在原截止前给这个 op 立墓碑,挡住在途的 Add。
 
 > **2026-10-17 契约勘误**：第 7 项的镜像在途已由独立 `PlayerMirrorCreateInFlightComp` 补齐。普通换图与镜像统一使用当前生效的 SceneManager deadline + 1000ms 作为 TTL，时间回拨按失效处理。镜像完成回调同时核对捕获 token 与槽时效；token 不符不动新槽，匹配 token 但已过期或回拨时仅摘当前 token 并静默丢弃，不推 tip、不自动进场。后来的普通换图登记、交接全部预检通过、退出新挂 `UnregisterPlayer`、权威落点成功这四个提交点还会永久摘掉旧镜像令牌，UTC 回拨后恢复到原 TTL 内也不能使旧完成复活；忙碌检查仍只读，交接预检失败不取消旧镜像。此勘误不代表测试已执行。
 

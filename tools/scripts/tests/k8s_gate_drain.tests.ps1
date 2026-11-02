@@ -375,6 +375,12 @@ Test-Case '部署生成器的真实 login 模板能被解析出同一组定位�
     $template = [regex]::Match($deployText, '(?s)"login"\s*\{\s*@"\r?\n(?<body>.*?)\r?\n"@')
     Assert-True -Condition $template.Success -Because '找不到 New-GoSvcConfigMapYaml 的 login 模板'
     $body = $template.Groups['body'].Value -replace '\$\{InfraNamespace\}', 'audit-infra'
+    # Node.RedisClient.Host 由 -RedisSplit 的唯一来源 Get-RedisPurposeTopologyFor 算出(核心恒为 redis.<infra>:6379),模板里只是变量;
+    # 先核对这条来源,再代入同样的值,否则通用的 "变量 → 1" 替换会把它变成非法地址。
+    Assert-Match -Text $template.Groups['body'].Value -Pattern '(?m)^\s+Host: \$\{loginCoreRedisHost\}\s*$' -Because 'login 的 RedisClient 仍取核心地址变量'
+    Assert-Match -Text $deployText -Pattern '\$loginCoreRedisHost = \$loginRedisPurpose\.Core\.HostPort' -Because '变量来自 Redis 用途拓扑的核心实例'
+    Assert-Match -Text $deployText -Pattern "HostPort = \('redis\.\{0\}:\{1\}' -f \`$InfraNamespace, \`$port\)" -Because '核心实例就是 infra 里的 redis Service'
+    $body = $body -replace '\$\{loginCoreRedisHost\}', 'redis.audit-infra:6379'
     # RequireClientEndpoint 由生成器按 -ClientEntryMode 填 true / false;通用的 "变量 → 1" 替换会把它变成非法值。
     $body = $body -replace '(?m)^(\s*RequireClientEndpoint:\s*)\S.*$', '${1}true'
     $body = $body -replace '\$\{[A-Za-z_][A-Za-z0-9_]*\}', '1' -replace '\$\([^()]*\)', '' -replace '\$[A-Za-z_][A-Za-z0-9_]*', ''

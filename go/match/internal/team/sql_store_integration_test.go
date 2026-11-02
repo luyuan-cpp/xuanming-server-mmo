@@ -326,7 +326,7 @@ func TestTeamTiDBCheckParty(t *testing.T) {
 
 	// 会话读不出来(解析失败):不做失效判定,返回 err 让调用方把这一单本轮搁置。
 	require.NoError(t, mr.Set(playercontract.SessionKey(2), "not-a-session"))
-	_, _, err := service.CheckParty(ctx, 101, []uint64{1, 2, 3})
+	_, _, err = service.CheckParty(ctx, 101, []uint64{1, 2, 3})
 	require.Error(t, err)
 }
 

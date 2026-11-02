@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -269,5 +270,33 @@ func TestTicketPinsZone(t *testing.T) {
 				t.Fatalf("TicketPinsZone(%d, %d) = %v, want %v", tc.ticket, tc.own, got, tc.want)
 			}
 		})
+	}
+}
+
+// roleListFallbackCount 从默认注册表读回落计数。不用 prometheus/testutil:它依赖的 kylelemons/godebug 不在 login 的 go.mod 里。
+func roleListFallbackCount(t *testing.T) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather metrics: %v", err)
+	}
+	for _, family := range families {
+		if family.GetName() == "login_role_list_home_zone_fallback_total" {
+			return family.GetMetric()[0].GetCounter().GetValue()
+		}
+	}
+	t.Fatal("login_role_list_home_zone_fallback_total is not registered")
+	return 0
+}
+
+// 失败放行要看得见:整次 RPC 失败时登录照常返回,并且每个请求恰好计一次,不按角色数计。
+func TestRefreshRoleZones_RPCErrorCountsFallback(t *testing.T) {
+	before := roleListFallbackCount(t)
+	r := newResolver(&fakeDataService{err: errors.New("unavailable")})
+	if got := r.RefreshRoleZones(context.Background(), roles(10, 11)); len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (login must still return the role list)", len(got))
+	}
+	if delta := roleListFallbackCount(t) - before; delta != 1 {
+		t.Fatalf("fallback delta=%v, want 1 per request", delta)
 	}
 }

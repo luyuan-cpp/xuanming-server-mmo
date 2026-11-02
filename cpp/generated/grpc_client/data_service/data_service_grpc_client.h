@@ -79,6 +79,30 @@ void SendDataServiceTransferAccountRole(entt::registry& registry, entt::entity n
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendDataServiceTransferAccountRoleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region DataServiceCheckAccountRoleSlot
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceCheckAccountRoleSlotGrpcPath = "/data_service.DataService/CheckAccountRoleSlot";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceCheckAccountRoleSlot(entt::registry& registry, entt::entity nodeEntity, const ::data_service::CheckAccountRoleSlotRequest& request, GrpcDone<::data_service::CheckAccountRoleSlotResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceCheckAccountRoleSlotErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region DataServiceGetRoleFenceState
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceGetRoleFenceStateGrpcPath = "/data_service.DataService/GetRoleFenceState";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceGetRoleFenceState(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetRoleFenceStateRequest& request, GrpcDone<::data_service::GetRoleFenceStateResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceGetRoleFenceStateErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region DataServiceVerifyRoleAdmission
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceVerifyRoleAdmissionGrpcPath = "/data_service.DataService/VerifyRoleAdmission";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceVerifyRoleAdmission(entt::registry& registry, entt::entity nodeEntity, const ::data_service::VerifyRoleAdmissionRequest& request, GrpcDone<::data_service::VerifyRoleAdmissionResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceVerifyRoleAdmissionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region DataServiceRegisterRoleAdmission
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kDataServiceRegisterRoleAdmissionGrpcPath = "/data_service.DataService/RegisterRoleAdmission";
@@ -143,6 +167,14 @@ void SendDataServiceGetMergedZones(entt::registry& registry, entt::entity nodeEn
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendDataServiceGetMergedZonesErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region DataServiceGetPlayerRoute
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceGetPlayerRouteGrpcPath = "/data_service.DataService/GetPlayerRoute";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceGetPlayerRoute(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerRouteRequest& request, GrpcDone<::data_service::GetPlayerRouteResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceGetPlayerRouteErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region DataServiceListPlayerSnapshots
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kDataServiceListPlayerSnapshotsGrpcPath = "/data_service.DataService/ListPlayerSnapshots";
@@ -158,6 +190,30 @@ inline constexpr std::string_view kDataServiceBatchRecallItemsGrpcPath = "/data_
 void SendDataServiceBatchRecallItems(entt::registry& registry, entt::entity nodeEntity, const ::data_service::BatchRecallItemsRequest& request, GrpcDone<::data_service::BatchRecallItemsResponse> done, const GrpcCallOptions& options = {});
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendDataServiceBatchRecallItemsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region DataServiceGetRecallBatch
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceGetRecallBatchGrpcPath = "/data_service.DataService/GetRecallBatch";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceGetRecallBatch(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetRecallBatchRequest& request, GrpcDone<::data_service::BatchRecallItemsResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceGetRecallBatchErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region DataServiceCancelRecallBatch
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceCancelRecallBatchGrpcPath = "/data_service.DataService/CancelRecallBatch";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceCancelRecallBatch(entt::registry& registry, entt::entity nodeEntity, const ::data_service::CancelRecallBatchRequest& request, GrpcDone<::data_service::BatchRecallItemsResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceCancelRecallBatchErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region DataServiceResolveRecallOp
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceResolveRecallOpGrpcPath = "/data_service.DataService/ResolveRecallOp";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceResolveRecallOp(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ResolveRecallOpRequest& request, GrpcDone<::data_service::ResolveRecallOpResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceResolveRecallOpErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
 #pragma region DataServiceQueryTransactionLog
 // gRPC :path(线上契约,与 Go 侧一致)。

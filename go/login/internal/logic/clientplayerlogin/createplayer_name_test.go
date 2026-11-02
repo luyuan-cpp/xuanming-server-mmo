@@ -256,7 +256,7 @@ func TestCreatePlayerName_RequestedNameIsNormalizedAndPersisted(t *testing.T) {
 }
 
 // 用例 3:名字被别的账号占用 → kRoleNameTaken。确定没写,所以不释放;
-// 而且发生在 player:zone 登记之前,不留幽灵映射。
+// 而且发生在 player_route 登记之前,不留幽灵映射。
 func TestCreatePlayerName_TakenByStranger(t *testing.T) {
 	n := newNameHarness(t)
 	n.fake.reserve = func(int, *dspb.ReservePlayerNameRequest) (*dspb.ReservePlayerNameResponse, error) {
@@ -468,7 +468,7 @@ func TestCreatePlayerName_UnknownOutcomeThenTaken(t *testing.T) {
 }
 
 // 用例 8:两次都超时 → 放弃建角,立即释放一次 + 延迟再释放一次(同 id 同名),
-// 覆盖「第一次释放跑在在途 INSERT 提交之前」的竞态。不登记 player:zone。
+// 覆盖「第一次释放跑在在途 INSERT 提交之前」的竞态。不登记 player_route。
 func TestCreatePlayerName_StillUnknownReleasesTwice(t *testing.T) {
 	n := newNameHarness(t)
 	n.fake.reserve = func(int, *dspb.ReservePlayerNameRequest) (*dspb.ReservePlayerNameResponse, error) {
@@ -644,7 +644,7 @@ func TestCreatePlayerName_RejectedByDataService(t *testing.T) {
 }
 
 // data_service 回了一个 login 不认识的结果码(对端比 login 新):不能当成功继续建角 ——
-// 那等于拿一个不知道登没登记上的名字去落盘。按故障拒绝,不登记 player:zone、不落盘。
+// 那等于拿一个不知道登没登记上的名字去落盘。按故障拒绝,不登记 player_route、不落盘。
 func TestCreatePlayerName_UnknownReserveResultFailsClosed(t *testing.T) {
 	n := newNameHarness(t)
 	n.fake.reserve = func(int, *dspb.ReservePlayerNameRequest) (*dspb.ReservePlayerNameResponse, error) {
@@ -677,7 +677,7 @@ func TestCreatePlayerName_UnknownReserveResultFailsClosed(t *testing.T) {
 	}
 }
 
-// 用例 11:名字已登记、player:zone 登记失败 → 立即释放一次。名字是**确定**登记上的,
+// 用例 11:名字已登记、player_route 登记失败 → 立即释放一次。名字是**确定**登记上的,
 // 不存在「释放跑在 INSERT 之前」的竞态,所以没有延迟的第二次。
 func TestCreatePlayerName_RegisterFailureReleasesOnce(t *testing.T) {
 	n := newNameHarness(t)

@@ -600,7 +600,7 @@ $script:PeakShavingLaunchTier = [ordered]@{
 	IpRps                  = 5
 	IpBurst                = 20
 	AccountCooldownMs      = 5000
-	LoginQueueZoneCapacity = 5000
+	LoginQueueZoneCapacity = 45000
 }
 $script:PeakShavingHashAnnotation = 'mmorpg.io/peak-shaving-hash'
 # 由 Initialize-InjectedSecrets 解析(只在本次部署 login 且排队开时)。
@@ -3117,6 +3117,7 @@ function Write-RedisPlayerConnectionLedger {
 	滚动余量不计 C++ 工作负载(-CppSurgeWorkloads 0)。本次部署那一份 = 属于该组的 zone 数;规划档按 Get-RedisConnectionPlan 的 zone 数
 	全部落在同一组算(最坏情况,组怎么分由 zones 配置定)。没有任何 zone 拆出 queue 时什么都不打,缺省输出与拆分前逐字相同。
 	行首是「Redis queue connection ledger:」,与核心那行(「Redis connection ledger: zones=」)不同前缀,按前缀找核心那行的契约测试不受影响。
+	高可用形态每组再打一行「Redis queue proxy ledger:」(单个代理承载全部客户端的水位),同样不阻断。
 #>
 function Write-RedisQueueConnectionLedger {
 	param(
@@ -3155,8 +3156,38 @@ function Write-RedisQueueConnectionLedger {
 	if ($planLedger.Peak -gt $planLedger.WarnAt) { $overWarn.Add(("plan zones={0} in one group peak {1}" -f $LedgerPlan.ZoneCount, $planLedger.Peak)) }
 	if ($overWarn.Count -gt 0) {
 		# 开头不留空格,理由同核心那条告警(ConsoleHost 可能在空格处折行)。
-		Write-Warning ("[RedisQueueConnectionLedger]OverWarnRatio:{0}; maxclients={1} warn_at={2} (deploy/k8s/manifests/infra/redis-purpose.yaml). Deployment continues: warning only, not blocking. Raise MAXCLIENTS in redis-purpose.yaml (restarts the queue instances) or split zones into more redisQueueGroup values." -f
+		Write-Warning ("[RedisQueueConnectionLedger]OverWarnRatio:{0}; maxclients={1} warn_at={2} (deploy/k8s/manifests/infra/redis-purpose.yaml). Deployment continues: warning only, not blocking. Raise MAXCLIENTS in redis-purpose.yaml and redis-purpose-ha.yaml to the same value (restarts the queue instances) or split zones into more redisQueueGroup values." -f
 			($overWarn -join '; '), $planLedger.MaxClients, $planLedger.WarnAt)
+	}
+
+	# 高可用形态(Get-RedisQueueShapeFor,与核心同一个 Get-RedisTopology):客户端经代理连 queue 实例,一个代理不在时它的客户端全部重连到另一个,
+	# 所以再按「单个代理的 PROXY_MAXCONN」算一次告警水位(同一个 WarnRatio,口径同 Write-RedisConnectionLedger 的 Redis proxy ledger)。单实例不打。
+	# 上限读 redis-purpose-ha.yaml;Get-RedisQueueHaLimitsFor 顺带核对 MAXCLIENTS 与 redis-purpose.yaml 同值、代理不等式成立,不成立 throw(早于任何写操作)。
+	$queueShape = Get-RedisQueueShapeFor -Topology (Get-RedisTopology)
+	if (-not $queueShape.HighAvailability) { return }
+	$haTemplateRelative = 'deploy/k8s/manifests/infra/' + $queueShape.Template
+	$haTemplateFull = Join-Path $RepoRoot ($haTemplateRelative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+	if (-not (Test-Path -LiteralPath $haTemplateFull)) {
+		throw "Redis 连接总账(queue 实例):选的是高可用形态(replicas=$($queueShape.Replicas)),但找不到 $haTemplateRelative(fail-closed)"
+	}
+	$haTemplate = [string](Get-Content -LiteralPath $haTemplateFull -Raw)
+	$overProxy = New-Object System.Collections.Generic.List[string]
+	$proxyLimits = $null
+	$proxyWarnAt = 0
+	foreach ($instance in @($zonesByInstance.Keys | Sort-Object)) {
+		$zoneCount = [int]$zonesByInstance[$instance]
+		$ledger = Get-RedisConnectionLedger @ledgerArgs -ZoneCount $zoneCount
+		$proxyLimits = Get-RedisQueueHaLimitsFor -ManifestContent ($haTemplate.Replace('__REDIS_NAME__', $instance)) -InstanceName $instance -SingleInstanceMaxClients $ledger.MaxClients
+		$proxyWarnAt = [int][Math]::Floor($proxyLimits.ProxyMaxConn * [double]$LedgerPlan.WarnRatio)
+		Write-Host ("Redis queue proxy ledger: instance={0} proxy_maxconn={1} proxies={2}+{3} warn_at={4} (one proxy carries every client while the other is down); deploy peak={5} plan peak={6}" -f
+			$instance, $proxyLimits.ProxyMaxConn, $proxyLimits.ProxyReplicas, $proxyLimits.ProxyMaxSurge, $proxyWarnAt, $ledger.Peak, $planLedger.Peak)
+		if ($ledger.Peak -gt $proxyWarnAt) { $overProxy.Add(("{0} zones={1} peak {2}" -f $instance, $zoneCount, $ledger.Peak)) }
+	}
+	if ($planLedger.Peak -gt $proxyWarnAt) { $overProxy.Add(("plan zones={0} in one group peak {1}" -f $LedgerPlan.ZoneCount, $planLedger.Peak)) }
+	if ($overProxy.Count -gt 0) {
+		# 开头不留空格,理由同上一条告警。
+		Write-Warning ("[RedisQueueConnectionLedger]OverProxyWarnRatio:{0}; proxy_maxconn={1} warn_at={2} (deploy/k8s/manifests/infra/redis-purpose-ha.yaml). Deployment continues: warning only, not blocking. Raise PROXY_MAXCONN in redis-purpose-ha.yaml (proxies roll automatically) while keeping PROXY_MAXCONN x (proxies + maxSurge) + 1000 <= MAXCLIENTS, or split zones into more redisQueueGroup values." -f
+			($overProxy -join '; '), $proxyLimits.ProxyMaxConn, $proxyWarnAt)
 	}
 }
 
@@ -4303,7 +4334,7 @@ function Assert-RedisQueueTopologyChangeIsSafe {
 	$live = Get-LiveStatefulSetReplicas -Namespace $InfraNamespace -Name $InstanceName
 	$verdict = Get-RedisTopologyChangeVerdict -LiveReplicas $live -DesiredReplicas $DesiredReplicas
 	if ($verdict -eq 'upgrade') {
-		Write-Warning "[RedisQueueTopology]Upgrade:queue instance $InstanceName 1 -> 3 (single instance -> primary + 2 replicas + sentinels + 2 proxies). $InstanceName-0 restarts with its data and the other two full-sync from it; Service $InstanceName switches to the proxies (same address: login / gateway need no redeploy). While $InstanceName-0 restarts, new logins in this group's zones fail if the login queue is on. To keep the single instance this time, re-run with -RedisReplicas 1."
+		Write-Warning "[RedisQueueTopology]Upgrade:queue instance $InstanceName 1 -> 3 (single instance -> primary + 2 replicas + sentinels + 2 proxies). $InstanceName-0 restarts with its data and the other two full-sync from it; Service $InstanceName switches to the proxies (same address: login / gateway need no redeploy). While $InstanceName-0 restarts, new logins in this group's zones fail if the login queue is on. No confirmation is required: queue data carries TTLs. Queue instances follow the core Redis shape (-RedisReplicas); infra-up leaves them alone without -RedisSplit queue."
 	}
 	if ($verdict -ne 'refuse') { return $verdict }
 	$names = Get-RedisQueueHaObjectNames -InstanceName $InstanceName
@@ -4358,6 +4389,12 @@ function New-RedisQueueInstanceManifests {
 		$topology = Get-RedisPurposeTopologyFor -Split 'queue' -InfraNamespace $InfraNamespace -QueueGroup $group
 		$manifest = ConvertTo-RedisQueueInstanceManifest -Template $template -Shape $shape -InstanceName $topology.Queue.Service -InfraNamespace $InfraNamespace `
 			-Memory $memory -Storage $script:RedisQueueStorage -SingleInstanceMaxClients $singleInstanceMaxClients
+		if ($manifest.HighAvailability) {
+			# 与核心的「Redis HA limits」同一口径:把核对过的上限打出来,部署日志里能直接对账。
+			Write-Host ("Redis queue HA limits: instance={0} maxclients={1} proxy_maxconn={2} proxies={3}+{4} reserved={5} (proxy total {6} + reserved <= maxclients)" -f
+				$manifest.Name, $manifest.HaLimits.MaxClients, $manifest.HaLimits.ProxyMaxConn, $manifest.HaLimits.ProxyReplicas, $manifest.HaLimits.ProxyMaxSurge,
+				$manifest.HaLimits.Reserved, $manifest.HaLimits.ProxyTotal)
+		}
 		$verdict = Assert-RedisQueueTopologyChangeIsSafe -InstanceName $manifest.Name -DesiredReplicas $manifest.Replicas
 		$manifests += ($manifest | Add-Member -NotePropertyName Verdict -NotePropertyValue $verdict -PassThru)
 	}
@@ -4397,6 +4434,111 @@ function Wait-RedisQueueInstancesReady {
 	}
 }
 
+# login / gateway 写的排队地址 → 它指向的 queue 实例(纯函数)。login 写 host:port,gateway 只写 host。返回 { Name; Namespace };
+# 不是本脚本渲染的 redis-queue-g<N>.<namespace>[:port] 形状(不拆时的核心 redis、空串、人工改过的地址)返回 $null,后面没有 queue 实例可查。
+function ConvertFrom-RedisQueueInstanceAddress {
+	param([AllowEmptyString()][AllowNull()][string]$Address)
+
+	$m = [regex]::Match(([string]$Address).Trim(), '^(?<name>redis-queue-g[0-9]+)\.(?<ns>[a-z0-9-]+)(?::[0-9]+)?$')
+	if (-not $m.Success) { return $null }
+	return [pscustomobject]@{ Name = $m.Groups['name'].Value; Namespace = $m.Groups['ns'].Value }
+}
+
+<#
+.SYNOPSIS
+	线上 queue 实例的形态与就绪状态(纯函数)。-StatefulSet / -Proxy / -Service 是 kubectl get -o json 解析出的对象,$null = 不存在(Read-RedisQueueInstanceLive 读好传入)。
+
+.DESCRIPTION
+	返回 { Name; Shape; Replicas; ReadyReplicas; ProxyReplicas; ProxyReadyReplicas; ServiceSelector; Problems }。
+	Shape:absent(没有 StatefulSet)/ single(1 副本)/ ha(3 副本)/ unknown(0、2 这类本脚本从不产生的副本数)。
+	Problems:客户端连不上或连错的原因,空 = 这个实例可用。查的是客户端那条路上的每一段:
+	  - StatefulSet 与 Service 都要在;副本数是 1 或 3;redis Pod 全部就绪(高可用时从要同步完才算,见 redis-ready.sh);
+	  - Service 的 selector 与形态一致:单实例选 app=<实例名>,高可用选 app=<实例名>-proxy(1 → 3 中断、手工回退做了一半时对不上,客户端没有 endpoint);
+	  - 高可用时代理 Deployment 要在且全部就绪(客户端连的是代理,redis 节点就绪而代理没起来照样连不上)。
+#>
+function ConvertFrom-RedisQueueInstanceLive {
+	param(
+		[Parameter(Mandatory = $true)][string]$InstanceName,
+		[AllowNull()]$StatefulSet,
+		[AllowNull()]$Proxy,
+		[AllowNull()]$Service
+	)
+
+	$proxyName = (Get-RedisQueueHaObjectNames -InstanceName $InstanceName).Proxy
+	$problems = New-Object System.Collections.Generic.List[string]
+	$shape = 'absent'
+	$replicas = $null
+	$ready = 0
+	if ($null -eq $StatefulSet) {
+		$problems.Add("没有 statefulset/${InstanceName}:login / gateway 指向的实例没部署(先跑 infra-up -RedisSplit queue)")
+	}
+	else {
+		$replicas = [int]$StatefulSet.spec.replicas
+		$ready = [int]$StatefulSet.status.readyReplicas
+		$shape = switch ($replicas) { 1 { 'single' } 3 { 'ha' } default { 'unknown' } }
+		if ($shape -eq 'unknown') { $problems.Add("statefulset/$InstanceName 有 $replicas 个副本,本脚本只产生 1 或 3") }
+		if ($ready -lt $replicas) { $problems.Add("statefulset/$InstanceName 就绪 $ready/$replicas") }
+	}
+	$serviceSelector = ''
+	if ($null -eq $Service) {
+		$problems.Add("没有 service/${InstanceName}:客户端的入口不在")
+	}
+	else {
+		$serviceSelector = [string]$Service.spec.selector.app
+		$expectedSelector = switch ($shape) { 'single' { $InstanceName } 'ha' { $proxyName } default { $null } }
+		if ($null -ne $expectedSelector -and $serviceSelector -cne $expectedSelector) {
+			$problems.Add("service/$InstanceName 选的是 app=$serviceSelector,形态 $shape 应当选 app=$expectedSelector(上次切换或回退没做完)")
+		}
+	}
+	$proxyReplicas = $null
+	$proxyReady = 0
+	if ($null -ne $Proxy) {
+		$proxyReplicas = [int]$Proxy.spec.replicas
+		$proxyReady = [int]$Proxy.status.readyReplicas
+	}
+	if ($shape -eq 'ha') {
+		if ($null -eq $Proxy) { $problems.Add("没有 deployment/${proxyName}:高可用形态下客户端连的是代理") }
+		elseif ($proxyReady -lt $proxyReplicas) { $problems.Add("deployment/$proxyName 就绪 $proxyReady/$proxyReplicas") }
+	}
+	return [pscustomobject]@{
+		Name               = $InstanceName
+		Shape              = $shape
+		Replicas           = $replicas
+		ReadyReplicas      = $ready
+		ProxyReplicas      = $proxyReplicas
+		ProxyReadyReplicas = $proxyReady
+		ServiceSelector    = $serviceSelector
+		Problems           = [string[]]$problems.ToArray()
+	}
+}
+
+# 读一个 queue 实例线上的 StatefulSet、代理 Deployment 与 Service(只读 kubectl),交给 ConvertFrom-RedisQueueInstanceLive。对象不存在 = $null;
+# kubectl 失败、输出不是 JSON 一律 throw(读不到不等于不存在,fail-closed)。Invoke-ClientEntryKubectl 不看 $DryRun,DryRun 判断由调用方负责。
+function Read-RedisQueueInstanceLive {
+	param(
+		[Parameter(Mandatory = $true)][string]$InstanceName,
+		[Parameter(Mandatory = $true)][string]$Namespace
+	)
+
+	$readObject = {
+		param([string]$Kind, [string]$Name)
+		$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', $Kind, $Name, '-n', $Namespace, '--ignore-not-found', '-o', 'json') `
+			-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
+		if ($result.ExitCode -ne 0) {
+			throw "读取 namespace $Namespace 的 $Kind/$Name 失败(kubectl 退出码 $($result.ExitCode)):$($result.Stderr)"
+		}
+		$text = ([string]$result.Stdout).Trim()
+		if ($text -eq '') { return $null }
+		try { return ($text | ConvertFrom-Json -ErrorAction Stop) }
+		catch { throw "namespace $Namespace 的 $Kind/$Name 的 kubectl 输出不是合法 JSON:$($_.Exception.Message)" }
+	}
+	$proxyName = (Get-RedisQueueHaObjectNames -InstanceName $InstanceName).Proxy
+	$statefulSet = & $readObject 'statefulset' $InstanceName
+	$proxy = & $readObject 'deployment' $proxyName
+	$service = & $readObject 'service' $InstanceName
+	return ConvertFrom-RedisQueueInstanceLive -InstanceName $InstanceName -StatefulSet $statefulSet -Proxy $proxy -Service $service
+}
+
 # Deployment 的 rollout 是否完成(只读,短超时):'absent'(没有这个 Deployment)/ 'complete' / 'incomplete'(超时或失败:还有旧 ReplicaSet 的 Pod,
 # 或新 Pod 没就绪)/ 'error'(查询本身失败)。只看 ConfigMap 不够:ConfigMap 改了不等于旧 Pod 都退场了,旧 Pod 还在往旧实例写(§4.4)。
 function Get-RedisSplitRolloutState {
@@ -4418,12 +4560,14 @@ function Get-RedisSplitRolloutState {
 <#
 .SYNOPSIS
 	-Command redis-split-status:对 zones 配置里每个 zone 打印 login 的 RedisClient / QueueRedis Host、gateway 的 spring.data.redis.host,
-	以及 login、gateway 的 rollout 是否完成;同一 zone 的 login 与 gateway 指向不同的排队实例,或任一 rollout 没完成 / 读不到,以退出码 1 结束。
+	以及 login、gateway 的 rollout 是否完成,再对它们指向的每个 queue 实例打印形态与就绪状态;同一 zone 的 login 与 gateway 指向不同的排队实例,
+	任一 rollout 没完成 / 读不到,或指向的 queue 实例不存在、没就绪、Service 与形态对不上,以退出码 1 结束。
 
 .DESCRIPTION
 	zone 列表用 Resolve-ZonesConfigPath(支持 -ZonesConfigPath、json 与 yaml),不写死 zones.json。切换 -RedisSplit 之后、
 	执行 k8s_gate_drain.ps1 或滚动 gate 之前,以它为闸(§3.2.1 约束 3)。group= 是 zones 配置里的 redisQueueGroup(拆分时该连的组)。
 	ConfigMap / Deployment 不存在(zone 没部署 login 或 gateway)只打印 <absent>,不算失败。DryRun 只打印将要读什么。
+	queue 实例按线上地址取(ConvertFrom-RedisQueueInstanceAddress):查的是 zone 实际连的那个,namespace 也取自地址,不取本次参数;多个 zone 同组只查一次。
 #>
 function Show-RedisSplitStatus {
 	$zonesPath = Resolve-ZonesConfigPath
@@ -4433,9 +4577,11 @@ function Show-RedisSplitStatus {
 		foreach ($zone in $zones) {
 			Write-Host "[dry-run] would read ConfigMaps $($GoSvcCatalogue['login'].ConfigMap) / $($JavaSvcCatalogue['gateway'].ConfigMap) and rollout status of deployment/login / deployment/gateway in namespace $(Get-ZoneNamespace -Name ([string]$zone.name))"
 		}
+		Write-Host "[dry-run] would also read statefulset, proxy deployment and service of every redis-queue-g<N> those ConfigMaps point at, and fail if it is absent, not ready, or its Service does not match its shape."
 		return
 	}
 	$failures = New-Object System.Collections.Generic.List[string]
+	$instancesChecked = @{}
 	foreach ($zone in $zones) {
 		$zoneName = [string]$zone.name
 		$namespace = Get-ZoneNamespace -Name $zoneName
@@ -4464,6 +4610,25 @@ function Show-RedisSplitStatus {
 			if ($pair.State -eq 'incomplete' -or $pair.State -eq 'error') {
 				$failures.Add("zone ${zoneName}:deployment/$($pair.Name) 的 rollout 状态是 $($pair.State)(还有旧 Pod 连着旧实例,或查询失败)")
 			}
+		}
+		# 地址对、滚完了还不够:指向的实例要在、要就绪。login 与 gateway 分开取,切换没做完时两者可能指向不同实例,都要查。
+		foreach ($address in @($live.LoginQueueHostPort, $live.GatewayHost)) {
+			$target = ConvertFrom-RedisQueueInstanceAddress -Address $address
+			if ($null -eq $target) { continue }
+			$instanceKey = "$($target.Namespace)/$($target.Name)"
+			if ($instancesChecked.ContainsKey($instanceKey)) { continue }
+			$instancesChecked[$instanceKey] = $true
+			try {
+				$instance = Read-RedisQueueInstanceLive -InstanceName $target.Name -Namespace $target.Namespace
+			}
+			catch {
+				$failures.Add("queue 实例 ${instanceKey}:$($_.Exception.Message)")
+				Write-Host "  instance=$($target.Name) namespace=$($target.Namespace) ERROR reading"
+				continue
+			}
+			$proxyText = if ($null -eq $instance.ProxyReplicas) { '<none>' } else { "$($instance.ProxyReadyReplicas)/$($instance.ProxyReplicas)" }
+			Write-Host "  instance=$($target.Name) namespace=$($target.Namespace) shape=$($instance.Shape) ready=$($instance.ReadyReplicas)/$($instance.Replicas) proxy=$proxyText service_selector=$($instance.ServiceSelector)"
+			foreach ($problem in $instance.Problems) { $failures.Add("queue 实例 ${instanceKey}:$problem") }
 		}
 	}
 	if ($failures.Count -gt 0) {
@@ -4521,7 +4686,7 @@ function ConvertFrom-RedisWipeProbe {
 .DESCRIPTION
 	实例按 infra namespace 里**实际存在**的 StatefulSet 列,不按本次参数(参数漏写一个用途就会漏清那个实例):
 	  redis                核心:单实例 1 个 Pod,高可用 3 个 Pod(清其中的主,从跟着复制)
-	  redis-queue-g<N>     按用途拆出的排队实例(本批单实例)
+	  redis-queue-g<N>     按用途拆出的排队实例:单实例 1 个 Pod,高可用 3 个 Pod(同核心,清其中的主;代理是 Deployment,不在列表里)
 	  redis-match-cluster  match 的 Redis Cluster:逐主节点 FLUSHALL(Cluster 里 FLUSHALL 只清本节点)
 	  redis-player         玩家域 Redis Cluster(-PlayerRedisMasters):同上,逐主节点。口令在 Pod 自己的 REDIS_PASSWORD 里(Secret redis-player-auth)
 	每个 Pod:kubectl exec -c redis 进去,先问 ROLE,是主就 FLUSHALL SYNC,再读 DBSIZE。口令用 Pod 自己的 REDIS_PASSWORD 经 REDISCLI_AUTH

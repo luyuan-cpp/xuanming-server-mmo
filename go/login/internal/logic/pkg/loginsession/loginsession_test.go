@@ -118,13 +118,24 @@ func TestRegisterDeviceAddsMemberAndKeepsTheSetAlive(t *testing.T) {
 	require.Equal(t, 30*time.Minute, mr.TTL(deviceSet))
 }
 
+// 服务端拒绝 MULTI 时连接上留着没读的回复。go-redis v9.16.0 的 ConnPool.Put 移除这条连接之后又多释放一次名额,
+// 没有其它在途请求就卡死在 freeTurn,ctx 也管不住(v9.17 修复)。所以放到 goroutine 里等:回归时这里几秒内失败,
+// 不是挂到测试总超时。
 func TestRegisterDeviceReportsRedisFailure(t *testing.T) {
 	ctx := context.Background()
 	rdb, mr := newTestRedis(t)
+	ref, ttl := mustRef(t, oldGateDetails()), TTL()
 	mr.SetError("ERR injected redis failure")
 	t.Cleanup(func() { mr.SetError("") })
-	require.Error(t, RegisterDevice(ctx, rdb, victimAccount, mustRef(t, oldGateDetails()), TTL()),
-		"第 2 步失败必须报给调用方,这次登录按 Redis 故障回失败")
+
+	result := make(chan error, 1)
+	go func() { result <- RegisterDevice(ctx, rdb, victimAccount, ref, ttl) }()
+	select {
+	case err := <-result:
+		require.Error(t, err, "第 2 步失败必须报给调用方,这次登录按 Redis 故障回失败")
+	case <-time.After(10 * time.Second):
+		t.Fatal("RegisterDevice 在 Redis 回错时不得无限等待")
+	}
 }
 
 func TestCleanupRemovesSessionAndDeviceMember(t *testing.T) {

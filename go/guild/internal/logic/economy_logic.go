@@ -691,20 +691,25 @@ func (l *GuildLogic) OnAssetFinalized(ctx context.Context, op data.FinalizedOp) 
 //     后到者在锁内读到先到者已提交的记录,整体回滚(白烧一个 op_id,号段只进不退,可以接受)。
 //  3. 本次没写成指令(回了业务拒绝,或第 2 道撞上了首次)就再查一次:首次恰在第 1 道之后提交时,重发会被预判
 //     (帮贡不足、次数已满……)挡在事务之外,以首次结果为准,而不是回一个误导的拒绝。
+//     这一查失败了就不能回那个业务拒绝:客户端把"没有订单视图的业务拒绝"当作原请求未执行、作废原键(05 §5.44),
+//     首次若其实已提交,玩家就被告知"没扣"。按故障回,客户端带同一个键重发。
 
 // errClientRequestRaced:预留事务在锁内撞上了首次请求(第 2 道)。只在本文件内流转,由 withClientRequest 换成首次结果。
 var errClientRequestRaced = errors.New("guild client request applied by a concurrent attempt")
 
 // withClientRequest 是捐献与兑换共用的幂等包装。key 为 0 时原样执行 once。
-//   - replay:按 (会话玩家, key) 找首次结果;ok=false = 没有可用的去重记录(含拿不到会话身份、查询失败 —— 交给 once,
-//     事务里的第 2 道兜底,不会因此重复执行)。
+//   - replay:按 (会话玩家, key) 找首次结果。found=true:按它答复。found=false 且 err=nil:确知没有去重记录
+//     (含拿不到会话身份,交给 once 按无会话拒绝)。err≠nil:查询失败,不知道首次是否已提交。
 //   - once:不带去重的原流程;撞上首次请求时回 errClientRequestRaced。
 //   - wrote:once 的回包是否写成了指令(带订单视图)。故障(gRPC 错误)不再查:客户端会带同一个键重发,第 1 道接住。
-func withClientRequest[R any](key uint64, replay func() (R, string, bool), once func() (R, string, error), wrote func(R) bool) (R, string, error) {
+//
+// 第 1 道查询失败照样放行到 once:写入路径有事务里的第 2 道兜底,不会重复执行。第 3 道查询失败时 once 的业务拒绝不能回
+// (见上方第 3 条),与 raced 一样按故障回。
+func withClientRequest[R any](key uint64, replay func() (R, string, bool, error), once func() (R, string, error), wrote func(R) bool) (R, string, error) {
 	if key == 0 {
 		return once()
 	}
-	if resp, result, ok := replay(); ok {
+	if resp, result, found, _ := replay(); found {
 		return resp, result, nil
 	}
 	resp, result, err := once()
@@ -712,31 +717,31 @@ func withClientRequest[R any](key uint64, replay func() (R, string, bool), once 
 	if !raced && (err != nil || wrote(resp)) {
 		return resp, result, err
 	}
-	if replayed, replayedResult, ok := replay(); ok {
+	replayed, replayedResult, found, lookupErr := replay()
+	if found {
 		return replayed, replayedResult, nil
 	}
-	if raced {
+	if raced || lookupErr != nil {
 		// 锁内读到了去重记录,事后却查不到(查询失败):既给不出首次结果,也绝不能重新执行。按故障回,客户端带同一个键重发即可。
 		var zero R
-		return zero, resultError, status.Error(codes.Unavailable, "guild client request applied, replay unavailable")
+		return zero, resultError, status.Error(codes.Unavailable, "guild client request outcome unavailable, retry with the same key")
 	}
 	return resp, result, err
 }
 
-// clientRequestHit 查 (会话玩家, key) 的去重记录。ok=false:没有记录,或拿不到会话身份(交给原流程按无会话拒绝),或查询失败。
-// 查询失败只记日志、不当故障:预留事务在成员行锁之下还会复核(第 2 道),放行不会重复执行。
-func (l *GuildLogic) clientRequestHit(ctx context.Context, eco *EconomyDeps, key uint64) (uint64, data.ClientRequestHit, bool) {
+// clientRequestHit 查 (会话玩家, key) 的去重记录。found=false 且 err=nil:没有记录,或拿不到会话身份(交给原流程按无会话拒绝)。
+// err≠nil:查询失败(已记日志)。能不能就此放行由 withClientRequest 按所在的那一道决定。
+func (l *GuildLogic) clientRequestHit(ctx context.Context, eco *EconomyDeps, key uint64) (uint64, data.ClientRequestHit, bool, error) {
 	who := callerOf(ctx, 0)
 	if !who.fromClient || who.playerID == 0 {
-		return 0, data.ClientRequestHit{}, false
+		return 0, data.ClientRequestHit{}, false, nil
 	}
 	hit, found, err := eco.Repo.ClientRequest(ctx, who.playerID, key)
 	if err != nil {
-		logx.Errorf("[GuildEconomy] read client request failed, leaving it to the transaction recheck (player=%d client_request_id=%d): %v",
-			who.playerID, key, err)
-		return who.playerID, data.ClientRequestHit{}, false
+		logx.Errorf("[GuildEconomy] read client request failed (player=%d client_request_id=%d): %v", who.playerID, key, err)
+		return who.playerID, data.ClientRequestHit{}, false, err
 	}
-	return who.playerID, hit, found
+	return who.playerID, hit, found, nil
 }
 
 // clientRequestMismatch:同一个键却换了请求(另一个方法、另一个选项 / 商品 / 份数),或去重记录指向的指令行已不在。
@@ -774,20 +779,20 @@ func (l *GuildLogic) donateToGuild(ctx context.Context, req *pb.DonateToGuildReq
 		return nil, resultUnavailable, errEconomyNotEnabled()
 	}
 	return withClientRequest(req.GetClientRequestId(),
-		func() (*pb.DonateToGuildResponse, string, bool) { return l.replayDonation(ctx, eco, req) },
+		func() (*pb.DonateToGuildResponse, string, bool, error) { return l.replayDonation(ctx, eco, req) },
 		func() (*pb.DonateToGuildResponse, string, error) { return l.donateOnce(ctx, eco, req) },
 		func(resp *pb.DonateToGuildResponse) bool { return resp.GetDonation() != nil })
 }
 
 // replayDonation:按去重记录找回首次那笔捐献,装配成与首次同形的回包。视图取指令行的**当前**状态
 // (首次回包是 PENDING、此后已 APPLIED,重发看到的就是 APPLIED);数额取行上的值(与首次回包同源:预留时按同一配表行写入)。
-func (l *GuildLogic) replayDonation(ctx context.Context, eco *EconomyDeps, req *pb.DonateToGuildRequest) (*pb.DonateToGuildResponse, string, bool) {
-	playerID, hit, ok := l.clientRequestHit(ctx, eco, req.GetClientRequestId())
-	if !ok {
-		return nil, "", false
+func (l *GuildLogic) replayDonation(ctx context.Context, eco *EconomyDeps, req *pb.DonateToGuildRequest) (*pb.DonateToGuildResponse, string, bool, error) {
+	playerID, hit, found, err := l.clientRequestHit(ctx, eco, req.GetClientRequestId())
+	if !found {
+		return nil, "", false, err
 	}
 	if tip := clientRequestMismatch(hit, pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_DONATE, req.GetDonateId(), 1, req.GetExpectedGuildId()); tip != nil {
-		return &pb.DonateToGuildResponse{ErrorMessage: tip}, resultRequestConflict, true
+		return &pb.DonateToGuildResponse{ErrorMessage: tip}, resultRequestConflict, true, nil
 	}
 	view := donationViewOf(hit.Op)
 	return &pb.DonateToGuildResponse{
@@ -795,7 +800,7 @@ func (l *GuildLogic) replayDonation(ctx context.Context, eco *EconomyDeps, req *
 		Donation:     view,
 		// 帮会取指令绑定的那一个;本人已不在该帮时不填(与首次回包"请求者仍在帮时必填"同一口径)。
 		Guild: l.freshGuildInfo(ctx, hit.Op.GuildID, playerID),
-	}, resultReplayed, true
+	}, resultReplayed, true, nil
 }
 
 // donateOnce 是不带去重的捐献流程(加幂等键之前的 donateToGuild 本体)。
@@ -988,7 +993,7 @@ func (l *GuildLogic) buyGuildShopGoods(ctx context.Context, req *pb.BuyGuildShop
 		return nil, resultUnavailable, errEconomyNotEnabled()
 	}
 	return withClientRequest(req.GetClientRequestId(),
-		func() (*pb.BuyGuildShopGoodsResponse, string, bool) { return l.replayShopOrder(ctx, eco, req) },
+		func() (*pb.BuyGuildShopGoodsResponse, string, bool, error) { return l.replayShopOrder(ctx, eco, req) },
 		func() (*pb.BuyGuildShopGoodsResponse, string, error) { return l.buyOnce(ctx, eco, req) },
 		func(resp *pb.BuyGuildShopGoodsResponse) bool { return resp.GetOrder() != nil })
 }
@@ -1004,13 +1009,13 @@ func shopBuyCount(req *pb.BuyGuildShopGoodsRequest) uint32 {
 // replayShopOrder:按去重记录找回首次那笔兑换(视图取指令行的当前状态,同 replayDonation)。
 // 余额一律直读 MySQL(首次回包里的"预留后余额"此刻可能已因别的兑换、退款而变):找不到成员行(已离帮)回 0,
 // 读失败也回 0 并记 ERROR —— 纯展示,客户端收到订单视图后会自己重拉商店页;不能因为一个展示字段把已发生的订单报成失败。
-func (l *GuildLogic) replayShopOrder(ctx context.Context, eco *EconomyDeps, req *pb.BuyGuildShopGoodsRequest) (*pb.BuyGuildShopGoodsResponse, string, bool) {
-	playerID, hit, ok := l.clientRequestHit(ctx, eco, req.GetClientRequestId())
-	if !ok {
-		return nil, "", false
+func (l *GuildLogic) replayShopOrder(ctx context.Context, eco *EconomyDeps, req *pb.BuyGuildShopGoodsRequest) (*pb.BuyGuildShopGoodsResponse, string, bool, error) {
+	playerID, hit, found, err := l.clientRequestHit(ctx, eco, req.GetClientRequestId())
+	if !found {
+		return nil, "", false, err
 	}
 	if tip := clientRequestMismatch(hit, pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_SHOP, req.GetGoodsId(), shopBuyCount(req), req.GetExpectedGuildId()); tip != nil {
-		return &pb.BuyGuildShopGoodsResponse{ErrorMessage: tip}, resultRequestConflict, true
+		return &pb.BuyGuildShopGoodsResponse{ErrorMessage: tip}, resultRequestConflict, true, nil
 	}
 	order := shopOrderViewOf(hit.Op)
 	resp := &pb.BuyGuildShopGoodsResponse{
@@ -1021,7 +1026,7 @@ func (l *GuildLogic) replayShopOrder(ctx context.Context, eco *EconomyDeps, req 
 		// 同首次回包:兑换被拒一律"已撤销"。
 		resp.ErrorMessage = tipErr(constants.ErrAssetRejected, "asset op rejected")
 	}
-	return resp, resultReplayed, true
+	return resp, resultReplayed, true, nil
 }
 
 // buyOnce 是不带去重的兑换流程(加幂等键之前的 buyGuildShopGoods 本体)。

@@ -30,10 +30,8 @@ func TestTipVerdict(t *testing.T) {
 		// 这条以前不在 serverbase 的手写表里,靠 guild 的本地 map 补。
 		// 分类进 Tip.xlsx 的 fault 列之后,全局判定就能直接认出它。
 		{"公会发号器被 fence", uint32(table.GuildError_kGuildIdGenUnavailable), VerdictFault},
-		// kMatchInternal 刻意**不标**:match 把它同时用作「缺少玩家身份」的参数出口
-		// (一码两用),标了会把参数拒绝刷成故障告警。拆码之前维持业务拒绝,
-		// 见 docs/design/tip-code-axis.md「故障分类」一节。
-		{"匹配内部错误一码两用,拿不准不标", uint32(table.MatchError_kMatchInternal), VerdictBizReject},
+		// 16004 只留给权威库不可用并标为 fault(docs/design/global-match-hierarchical-pools.md D8)。
+		{"匹配内部错误", uint32(table.MatchError_kMatchInternal), VerdictFault},
 
 		// —— 正常业务拒绝:这些绝不能被判成故障 ——
 		{"背包满不是故障", uint32(table.BagError_kBagAddItemBagFull), VerdictBizReject},

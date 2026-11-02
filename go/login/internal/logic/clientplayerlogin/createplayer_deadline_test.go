@@ -113,7 +113,7 @@ func (p *commandProbe) ProcessPipelineHook(next redis.ProcessPipelineHook) redis
 
 // 回归:请求 ctx 在SQL提交前结束(截止 / 取消)→ 不提交。无论落在哪两步之间:
 //   - 账号 blob 一个字节都不变,围栏写连尝试都没有(也就不必回读);反查映射不写;
-//   - 之后的 data_service 写(名字登记 / player:zone 登记)不再发出;
+//   - 之后的 data_service 写(名字登记 / player_route 登记)不再发出;
 //   - 已确定登记的名字按「确定已登记」释放一次(没有延迟的第二次);发号之后就结束的,名字登记一个 RPC
 //     都没发,也就不释放;
 //   - 建角锁照常释放(走 WithoutCancel);
@@ -146,7 +146,7 @@ func TestCreatePlayer_RequestDoneMidCreateCommitsNothing(t *testing.T) {
 			wantEvents: "",
 		},
 		{
-			name: "名字登记之后:不登记 player:zone,名字释放一次",
+			name: "名字登记之后:不登记 player_route,名字释放一次",
 			arm: func(n *nameHarness, cancel context.CancelFunc, _ *commandProbe) {
 				n.fake.reserve = func(int, *dspb.ReservePlayerNameRequest) (*dspb.ReservePlayerNameResponse, error) {
 					cancel()
@@ -156,7 +156,7 @@ func TestCreatePlayer_RequestDoneMidCreateCommitsNothing(t *testing.T) {
 			wantEvents: "reserve,release",
 		},
 		{
-			name:       "player:zone 登记之后:不发围栏写",
+			name:       "player_route 登记之后:不发围栏写",
 			arm:        cancelOnRegister,
 			wantEvents: "reserve,register,release",
 		},

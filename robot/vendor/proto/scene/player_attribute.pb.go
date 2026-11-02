@@ -31,7 +31,7 @@ type AttributeDimensionInfo struct {
 	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	Desc          string                 `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc,omitempty"`            // 悬浮说明,如"体质:提高气血上限和防御。"
 	Allocated     uint32                 `protobuf:"varint,5,opt,name=allocated,proto3" json:"allocated,omitempty"` // 当前方案已分配点
-	Value         uint64                 `protobuf:"varint,6,opt,name=value,proto3" json:"value,omitempty"`         // 面板显示值 = 自然成长 + 已分配 + 外部加成。只是**点数**,不能反推收益:
+	Value         uint64                 `protobuf:"varint,6,opt,name=value,proto3" json:"value,omitempty"`         // 面板显示值 = 自然成长 + 生效的已分配 + 外部加成。只是**点数**,不能反推收益:
 	Cap           uint32                 `protobuf:"varint,7,opt,name=cap,proto3" json:"cap,omitempty"`             // 可分配上限(0 = 不限)
 	Sort          uint32                 `protobuf:"varint,8,opt,name=sort,proto3" json:"sort,omitempty"`
 	Bonus         uint32                 `protobuf:"varint,9,opt,name=bonus,proto3" json:"bonus,omitempty"` // 外部加成点数(装备等),**已含在 value 内**;客户端显示成「170(+15)」
@@ -138,7 +138,7 @@ type AttributePoolInfo struct {
 	PoolId        uint32                 `protobuf:"varint,1,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Total         uint32                 `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`         // 总点数(等级换算 + 额外点)
-	Remaining     uint32                 `protobuf:"varint,4,opt,name=remaining,proto3" json:"remaining,omitempty"` // 剩余可分配
+	Remaining     uint32                 `protobuf:"varint,4,opt,name=remaining,proto3" json:"remaining,omitempty"` // 剩余可分配 = 池生效 ? max(0, total − 本池已分配 − 本版本解释不了的维度上的点) : 0(设计文档 §3.3)
 	DimensionCap  uint32                 `protobuf:"varint,5,opt,name=dimension_cap,json=dimensionCap,proto3" json:"dimension_cap,omitempty"`
 	Unlocked      bool                   `protobuf:"varint,6,opt,name=unlocked,proto3" json:"unlocked,omitempty"`
 	UnlockLevel   uint32                 `protobuf:"varint,7,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`

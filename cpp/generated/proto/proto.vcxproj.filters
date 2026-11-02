@@ -156,9 +156,6 @@
     <ClCompile Include="common\event\player_inbox_event.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="common\event\player_migration_event.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="common\event\team_event.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -166,9 +163,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="db\db.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="db\db_task.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="db\proto_option.pb.cc">
@@ -440,9 +434,6 @@
     <ClInclude Include="common\event\player_inbox_event.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="common\event\player_migration_event.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="common\event\team_event.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -450,9 +441,6 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="db\db.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="db\db_task.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="db\proto_option.pb.h">
@@ -638,9 +626,6 @@
     <ClCompile Include="common\component\battle_comp.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="common\component\battle_settlement_ledger_comp.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="common\component\player_attribute_comp.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -687,9 +672,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClInclude Include="common\base\service_call_auth.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="common\component\battle_settlement_ledger_comp.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="common\component\player_attribute_comp.pb.h">
@@ -775,6 +757,14 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClInclude Include="player_store\player_store.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="role_fence\role_fence.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClInclude Include="role_fence\role_fence.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

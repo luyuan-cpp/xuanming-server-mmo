@@ -202,8 +202,10 @@ type MissionListComp struct {
 	CompleteMissions []byte                  `protobuf:"bytes,2,opt,name=complete_missions,json=completeMissions,proto3" json:"complete_missions,omitempty"`
 	MissionBeginTime map[uint32]uint64       `protobuf:"bytes,3,rep,name=mission_begin_time,json=missionBeginTime,proto3" json:"mission_begin_time,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	Type             uint32                  `protobuf:"varint,4,opt,name=type,proto3" json:"type,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 活动完成事实与任务、背包同属玩家快照；追踪偏好不进入这里。
+	ActivityLedger *PlayerActivityLedger `protobuf:"bytes,5,opt,name=activity_ledger,json=activityLedger,proto3" json:"activity_ledger,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *MissionListComp) Reset() {
@@ -264,6 +266,241 @@ func (x *MissionListComp) GetType() uint32 {
 	return 0
 }
 
+func (x *MissionListComp) GetActivityLedger() *PlayerActivityLedger {
+	if x != nil {
+		return x.ActivityLedger
+	}
+	return nil
+}
+
+type PlayerActivityPointSource struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	MissionScope          uint32                 `protobuf:"varint,1,opt,name=mission_scope,json=missionScope,proto3" json:"mission_scope,omitempty"`
+	MissionId             uint32                 `protobuf:"varint,2,opt,name=mission_id,json=missionId,proto3" json:"mission_id,omitempty"`
+	RuleId                uint32                 `protobuf:"varint,3,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	ConfigurationRevision uint64                 `protobuf:"varint,4,opt,name=configuration_revision,json=configurationRevision,proto3" json:"configuration_revision,omitempty"`
+	PeriodId              uint64                 `protobuf:"varint,5,opt,name=period_id,json=periodId,proto3" json:"period_id,omitempty"`
+	Points                uint32                 `protobuf:"varint,6,opt,name=points,proto3" json:"points,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *PlayerActivityPointSource) Reset() {
+	*x = PlayerActivityPointSource{}
+	mi := &file_proto_common_component_mission_comp_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerActivityPointSource) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerActivityPointSource) ProtoMessage() {}
+
+func (x *PlayerActivityPointSource) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_mission_comp_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerActivityPointSource.ProtoReflect.Descriptor instead.
+func (*PlayerActivityPointSource) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_mission_comp_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PlayerActivityPointSource) GetMissionScope() uint32 {
+	if x != nil {
+		return x.MissionScope
+	}
+	return 0
+}
+
+func (x *PlayerActivityPointSource) GetMissionId() uint32 {
+	if x != nil {
+		return x.MissionId
+	}
+	return 0
+}
+
+func (x *PlayerActivityPointSource) GetRuleId() uint32 {
+	if x != nil {
+		return x.RuleId
+	}
+	return 0
+}
+
+func (x *PlayerActivityPointSource) GetConfigurationRevision() uint64 {
+	if x != nil {
+		return x.ConfigurationRevision
+	}
+	return 0
+}
+
+func (x *PlayerActivityPointSource) GetPeriodId() uint64 {
+	if x != nil {
+		return x.PeriodId
+	}
+	return 0
+}
+
+func (x *PlayerActivityPointSource) GetPoints() uint32 {
+	if x != nil {
+		return x.Points
+	}
+	return 0
+}
+
+type PlayerActivityClaimRecord struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	RuleId                uint32                 `protobuf:"varint,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	ConfigurationRevision uint64                 `protobuf:"varint,2,opt,name=configuration_revision,json=configurationRevision,proto3" json:"configuration_revision,omitempty"`
+	PeriodId              uint64                 `protobuf:"varint,3,opt,name=period_id,json=periodId,proto3" json:"period_id,omitempty"`
+	ThresholdId           uint32                 `protobuf:"varint,4,opt,name=threshold_id,json=thresholdId,proto3" json:"threshold_id,omitempty"`
+	RequestId             string                 `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	RewardId              uint32                 `protobuf:"varint,6,opt,name=reward_id,json=rewardId,proto3" json:"reward_id,omitempty"`
+	ClaimedAtMs           uint64                 `protobuf:"varint,7,opt,name=claimed_at_ms,json=claimedAtMs,proto3" json:"claimed_at_ms,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *PlayerActivityClaimRecord) Reset() {
+	*x = PlayerActivityClaimRecord{}
+	mi := &file_proto_common_component_mission_comp_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerActivityClaimRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerActivityClaimRecord) ProtoMessage() {}
+
+func (x *PlayerActivityClaimRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_mission_comp_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerActivityClaimRecord.ProtoReflect.Descriptor instead.
+func (*PlayerActivityClaimRecord) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_mission_comp_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PlayerActivityClaimRecord) GetRuleId() uint32 {
+	if x != nil {
+		return x.RuleId
+	}
+	return 0
+}
+
+func (x *PlayerActivityClaimRecord) GetConfigurationRevision() uint64 {
+	if x != nil {
+		return x.ConfigurationRevision
+	}
+	return 0
+}
+
+func (x *PlayerActivityClaimRecord) GetPeriodId() uint64 {
+	if x != nil {
+		return x.PeriodId
+	}
+	return 0
+}
+
+func (x *PlayerActivityClaimRecord) GetThresholdId() uint32 {
+	if x != nil {
+		return x.ThresholdId
+	}
+	return 0
+}
+
+func (x *PlayerActivityClaimRecord) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *PlayerActivityClaimRecord) GetRewardId() uint32 {
+	if x != nil {
+		return x.RewardId
+	}
+	return 0
+}
+
+func (x *PlayerActivityClaimRecord) GetClaimedAtMs() uint64 {
+	if x != nil {
+		return x.ClaimedAtMs
+	}
+	return 0
+}
+
+type PlayerActivityLedger struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	Sources       []*PlayerActivityPointSource `protobuf:"bytes,1,rep,name=sources,proto3" json:"sources,omitempty"`
+	Claims        []*PlayerActivityClaimRecord `protobuf:"bytes,2,rep,name=claims,proto3" json:"claims,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerActivityLedger) Reset() {
+	*x = PlayerActivityLedger{}
+	mi := &file_proto_common_component_mission_comp_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerActivityLedger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerActivityLedger) ProtoMessage() {}
+
+func (x *PlayerActivityLedger) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_mission_comp_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerActivityLedger.ProtoReflect.Descriptor instead.
+func (*PlayerActivityLedger) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_mission_comp_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PlayerActivityLedger) GetSources() []*PlayerActivityPointSource {
+	if x != nil {
+		return x.Sources
+	}
+	return nil
+}
+
+func (x *PlayerActivityLedger) GetClaims() []*PlayerActivityClaimRecord {
+	if x != nil {
+		return x.Claims
+	}
+	return nil
+}
+
 type RewardListComp struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	CanRewardMissionId map[uint32]bool        `protobuf:"bytes,1,rep,name=can_reward_mission_id,json=canRewardMissionId,proto3" json:"can_reward_mission_id,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
@@ -273,7 +510,7 @@ type RewardListComp struct {
 
 func (x *RewardListComp) Reset() {
 	*x = RewardListComp{}
-	mi := &file_proto_common_component_mission_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_mission_comp_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -285,7 +522,7 @@ func (x *RewardListComp) String() string {
 func (*RewardListComp) ProtoMessage() {}
 
 func (x *RewardListComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_mission_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_mission_comp_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -298,7 +535,7 @@ func (x *RewardListComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewardListComp.ProtoReflect.Descriptor instead.
 func (*RewardListComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_mission_comp_proto_rawDescGZIP(), []int{2}
+	return file_proto_common_component_mission_comp_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RewardListComp) GetCanRewardMissionId() map[uint32]bool {
@@ -323,12 +560,13 @@ const file_proto_common_component_mission_comp_proto_rawDesc = "" +
 	"\x15E_MISSION_ACHIEVEMENT\x10\x01\x12\x16\n" +
 	"\x12E_MISSION_COMPLETE\x10\x02\x12\x16\n" +
 	"\x12E_MISSION_TIME_OUT\x10\x03\x12\x13\n" +
-	"\x0fE_MISSION_FAILD\x10\x04\"\xe2\x03\n" +
+	"\x0fE_MISSION_FAILD\x10\x04\"\xa2\x04\n" +
 	"\x0fMissionListComp\x12:\n" +
 	"\bmissions\x18\x01 \x03(\v2\x1e.MissionListComp.MissionsEntryR\bmissions\x12+\n" +
 	"\x11complete_missions\x18\x02 \x01(\fR\x10completeMissions\x12T\n" +
 	"\x12mission_begin_time\x18\x03 \x03(\v2&.MissionListComp.MissionBeginTimeEntryR\x10missionBeginTime\x12\x12\n" +
-	"\x04type\x18\x04 \x01(\rR\x04type\x1aI\n" +
+	"\x04type\x18\x04 \x01(\rR\x04type\x12>\n" +
+	"\x0factivity_ledger\x18\x05 \x01(\v2\x15.PlayerActivityLedgerR\x0eactivityLedger\x1aI\n" +
 	"\rMissionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\"\n" +
 	"\x05value\x18\x02 \x01(\v2\f.MissionCompR\x05value:\x028\x01\x1aC\n" +
@@ -339,7 +577,27 @@ const file_proto_common_component_mission_comp_proto_rawDesc = "" +
 	"\x0ekPlayerMission\x10\x00\x12\x15\n" +
 	"\x11kPlayerAchievment\x10\x01\x12\x18\n" +
 	"\x14kPlayerDailyActivity\x10\x02\x12\x16\n" +
-	"\x12kPlayerMissionSize\x10\x03\"\xb3\x01\n" +
+	"\x12kPlayerMissionSize\x10\x03\"\xe4\x01\n" +
+	"\x19PlayerActivityPointSource\x12#\n" +
+	"\rmission_scope\x18\x01 \x01(\rR\fmissionScope\x12\x1d\n" +
+	"\n" +
+	"mission_id\x18\x02 \x01(\rR\tmissionId\x12\x17\n" +
+	"\arule_id\x18\x03 \x01(\rR\x06ruleId\x125\n" +
+	"\x16configuration_revision\x18\x04 \x01(\x04R\x15configurationRevision\x12\x1b\n" +
+	"\tperiod_id\x18\x05 \x01(\x04R\bperiodId\x12\x16\n" +
+	"\x06points\x18\x06 \x01(\rR\x06points\"\x8b\x02\n" +
+	"\x19PlayerActivityClaimRecord\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\rR\x06ruleId\x125\n" +
+	"\x16configuration_revision\x18\x02 \x01(\x04R\x15configurationRevision\x12\x1b\n" +
+	"\tperiod_id\x18\x03 \x01(\x04R\bperiodId\x12!\n" +
+	"\fthreshold_id\x18\x04 \x01(\rR\vthresholdId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x05 \x01(\tR\trequestId\x12\x1b\n" +
+	"\treward_id\x18\x06 \x01(\rR\brewardId\x12\"\n" +
+	"\rclaimed_at_ms\x18\a \x01(\x04R\vclaimedAtMs\"\x80\x01\n" +
+	"\x14PlayerActivityLedger\x124\n" +
+	"\asources\x18\x01 \x03(\v2\x1a.PlayerActivityPointSourceR\asources\x122\n" +
+	"\x06claims\x18\x02 \x03(\v2\x1a.PlayerActivityClaimRecordR\x06claims\"\xb3\x01\n" +
 	"\x0eRewardListComp\x12Z\n" +
 	"\x15can_reward_mission_id\x18\x01 \x03(\v2'.RewardListComp.CanRewardMissionIdEntryR\x12canRewardMissionId\x1aE\n" +
 	"\x17CanRewardMissionIdEntry\x12\x10\n" +
@@ -359,27 +617,33 @@ func file_proto_common_component_mission_comp_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_common_component_mission_comp_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_common_component_mission_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_common_component_mission_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_common_component_mission_comp_proto_goTypes = []any{
 	(MissionCompEMissionStatus)(0),    // 0: MissionComp.eMissionStatus
 	(MissionListCompEMissionScope)(0), // 1: MissionListComp.eMissionScope
 	(*MissionComp)(nil),               // 2: MissionComp
 	(*MissionListComp)(nil),           // 3: MissionListComp
-	(*RewardListComp)(nil),            // 4: RewardListComp
-	nil,                               // 5: MissionListComp.MissionsEntry
-	nil,                               // 6: MissionListComp.MissionBeginTimeEntry
-	nil,                               // 7: RewardListComp.CanRewardMissionIdEntry
+	(*PlayerActivityPointSource)(nil), // 4: PlayerActivityPointSource
+	(*PlayerActivityClaimRecord)(nil), // 5: PlayerActivityClaimRecord
+	(*PlayerActivityLedger)(nil),      // 6: PlayerActivityLedger
+	(*RewardListComp)(nil),            // 7: RewardListComp
+	nil,                               // 8: MissionListComp.MissionsEntry
+	nil,                               // 9: MissionListComp.MissionBeginTimeEntry
+	nil,                               // 10: RewardListComp.CanRewardMissionIdEntry
 }
 var file_proto_common_component_mission_comp_proto_depIdxs = []int32{
-	5, // 0: MissionListComp.missions:type_name -> MissionListComp.MissionsEntry
-	6, // 1: MissionListComp.mission_begin_time:type_name -> MissionListComp.MissionBeginTimeEntry
-	7, // 2: RewardListComp.can_reward_mission_id:type_name -> RewardListComp.CanRewardMissionIdEntry
-	2, // 3: MissionListComp.MissionsEntry.value:type_name -> MissionComp
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	8,  // 0: MissionListComp.missions:type_name -> MissionListComp.MissionsEntry
+	9,  // 1: MissionListComp.mission_begin_time:type_name -> MissionListComp.MissionBeginTimeEntry
+	6,  // 2: MissionListComp.activity_ledger:type_name -> PlayerActivityLedger
+	4,  // 3: PlayerActivityLedger.sources:type_name -> PlayerActivityPointSource
+	5,  // 4: PlayerActivityLedger.claims:type_name -> PlayerActivityClaimRecord
+	10, // 5: RewardListComp.can_reward_mission_id:type_name -> RewardListComp.CanRewardMissionIdEntry
+	2,  // 6: MissionListComp.MissionsEntry.value:type_name -> MissionComp
+	7,  // [7:7] is the sub-list for method output_type
+	7,  // [7:7] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_mission_comp_proto_init() }
@@ -393,7 +657,7 @@ func file_proto_common_component_mission_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_mission_comp_proto_rawDesc), len(file_proto_common_component_mission_comp_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

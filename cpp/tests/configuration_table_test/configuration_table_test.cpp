@@ -596,12 +596,13 @@ namespace
     }
 } // namespace
 
-TEST(GameConfigPlayerInbox, ShippedYamlKeepsConsumerDisabled)
+TEST(GameConfigPlayerInbox, ShippedYamlEnablesConsumer)
 {
     GameConfig cfg;
     ASSERT_TRUE(readGameConfig("etc/game_config.yaml", cfg));
-    // 随仓库发布的配置必须是回滚下限:消费关闭,只往返账本字段(§11.7 第 4 步)。
-    EXPECT_FALSE(cfg.player_inbox().consumer_enabled());
+    // 全球成局的结算只经收件箱到玩家,go/player_inbox/etc/player_inbox.yaml 的 EnqueueTypes 默认列了 Battle:
+    // 消费关着结算到不了玩家,k8s_deploy.ps1 的写前门禁也拒绝部署。
+    EXPECT_TRUE(cfg.player_inbox().consumer_enabled());
     EXPECT_EQ(cfg.player_inbox().periodic_fetch_minutes(), 30u);
 }
 

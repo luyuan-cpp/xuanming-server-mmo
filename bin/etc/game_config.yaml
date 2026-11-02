@@ -39,8 +39,9 @@ zoneredis:
 #   password: ""
 
 # 玩家持久收件箱的 scene 消费端(docs/design/player-inbox-service.md §3.3、§7.3、§11.7)。
-#   consumer_enabled        false = 不发 Fetch,账本字段照常随存档往返(回滚下限);上线顺序第 5 步才统一打开。
+#   consumer_enabled        false = 不发 Fetch,账本字段照常随存档往返(回滚下限)。仓库默认开:全球成局的结算只经收件箱到玩家,
+#                           go/player_inbox/etc/player_inbox.yaml 的 EnqueueTypes 默认列了 Battle 结算,这里关着 k8s_deploy.ps1 的写前门禁拒绝部署。
 #   periodic_fetch_minutes  在线有界兜底周期(分钟,±20% 抖动),0 = 关闭。整段或此键缺失时加载器取 30。
 player_inbox:
-  consumer_enabled: false
+  consumer_enabled: true
   periodic_fetch_minutes: 30

@@ -6,7 +6,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.21.1
-	github.com/redis/go-redis/v9 v9.16.0
+	github.com/redis/go-redis/v9 v9.17.3
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.9.2

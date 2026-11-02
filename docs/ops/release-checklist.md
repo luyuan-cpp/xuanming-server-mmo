@@ -300,7 +300,8 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
 - [ ] `go/login/etc/login.yaml`
   - `GateTokenSecret` 与上同步
   - `AuthProviders.WeChat` / `QQ` 真实 AppId/AppSecret 通过环境变量注入
-  - `TokenConfig.AccessTokenTTL=2h` / `RefreshTokenTTL=720h`
+  - `TokenConfig.AccessTokenTTL=2h` / `RefreshTokenTTL=720h` / `RefreshReuseGrace=30s`(0–60s、整毫秒,0 = 严格一次性)/ `RefreshReuseRevoke=true`(重用即吊销该登录的令牌家族;不要与 `RefreshReuseGrace=0` 同时用,见 `docs/design/dual-token-authentication.md`)。整块不写时按这些默认值启动(K8s ConfigMap 就不写)
+  - 部署前清掉令牌族的键:`access_token:*`、`refresh_token:*`、`refresh_family:*`、`refresh_rotated:*`、`account_refresh:*`(未上线,不保留旧令牌;不清也不出错,旧键到 TTL 自然过期)
 - [ ] `go/player_locator/etc/player_locator.yaml`
   - `LeaseTTL` ≥ 30s(否则 30s 重连窗口失效)
 - [ ] `bin/etc/base_deploy_config.yaml`
@@ -345,6 +346,8 @@ net.ipv4.tcp_keepalive_probes = 3
 | 登录 latency p99 | gateway access log | > 500 ms 持续 1 分钟 → 告警 |
 | Login.Login QPS / decision 分布 | go-zero login stat + decision counter | decision=2 (REPLACE) 占比 > 5% → 告警 |
 | Refresh-token rotation QPS | gateway `/api/refresh-token` | 突涨 10x → 怀疑攻击 |
+| Refresh 结果分布 | login `login_refresh_token_total{result}` | `error` 持续 > 0 → **告警**(重放判定发不出去时这次重用检测就漏了,按日志里的 `refresh replay check` 行处理);`reuse_revoked` / `reuse_observed` 突增 → 令牌泄漏或客户端重复发送;`rejected_successor_gone` 不为 0 → 新 refresh 被外部删除或过期,要查 |
+| 窗口外重用的延迟 | login `login_refresh_reuse_delay_seconds{replayed}` | `predecessor` 集中在略大于宽限窗口处 → 窗口偏短,考虑调大 `RefreshReuseGrace` |
 | Bucket4j 限流命中率 | Java JMX | rate limited count |
 | **legacy_login_count vs new_login_count** | go-zero login deprecation 计数器 | T+0 灰度期 legacy 单调下降 |
 | gate ephemeral port | `node_exporter` `node_sockstat_TCP_*` | TIME_WAIT > 50% port range → 告警 |

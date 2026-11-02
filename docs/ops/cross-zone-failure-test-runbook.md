@@ -435,6 +435,9 @@ gate 收到 RoutePlayerEvent 后,先判断"这条 scene 链路是否已连上**�
      - **存盘已发、topic 是 home_zone 的**:存盘前后各读一次两个 zone 的 `db_task_zone_<N>` 的 broker end offset(`kafka-get-offsets.sh --time -1`,做法同 [分区契约文档](../design/db-task-kafka-partition-contract.md)冷读冒烟第 2 步),只有 home_zone 那个增长;Kafka 被 pause 的场景等 unpause 之后再读。发送失败看上面两种 ERROR,以及 30s 一次、有变化才打的 `[DbTaskDispatch] produce_rejected=…` 是否增长。落库以 db 侧日志为准(如 B3a 第 6 条的 `owner-epoch advance … taskEpoch=<E+2>`)。
      - **存盘落地**:交接链上 `[ZoneTravel] requested EnterScene` 只在存盘落地回调之后才发,可代替它前面的 `Saving complete`;退出链上 `Player marked for unregistration`(同样在落地回调里打)同理。「之后还会被周期存盘」这类期望改看 30s 一次的 `[DirtySave] total=… skipped=…`:两次之间 `total − skipped` 的增量就是真写盘次数(进程级,不分玩家)。
    - **(2026-10-22 更正)**:`bin/etc/base_deploy_config.yaml` 的 `LogLevel` 注释已按上面的 muduo 枚举改正,「同文件注释里…的对照是错的」只对此前的文件成立。K8s(§3.5)的 `node-config` / `battle-node-config` 原先由 `k8s_deploy.ps1` 写死 `LogLevel: 1`(DEBUG),所以这两行在 K8s 上一直看得见;现在改为从这份文件镜像,K8s 默认同样是 INFO(2),要看这两行同样得调级:改仓库这一份再重新生成 ConfigMap,或 `kubectl edit configmap` 临时改(下次部署会被覆盖)。C++ 只在启动时读一次,而 `node-config` 没有配置指纹注解,只改 ConfigMap 不会自动滚动,改完要手动重启对应 Pod。staging / prod 部署入口的发布预检(`debug.cpp.loglevel`,下界 2)会拒绝 1。已落码,未执行,待 Codex 验证。
+   - **(2026-10-30 更正上一条)**:
+     - **会拒绝 1 的不只 staging / prod**:`debug.cpp.loglevel` 在所有档位都判 FAIL(不像密钥类在 dev 降成 WARN)。dev 档的 `dev_tools.ps1 -Command k8s-release-zone` / `k8s-release-all` 走 `k8s_image.ps1` 的 `Invoke-ReleaseGate`,不分档位跑预检,同样会拦。dev 演练要用 1:走 `k8s-zone-up` / `k8s-all-up`(`k8s_deploy.ps1` 在 dev 档跳过预检),或 `kubectl edit configmap`;发布路径只能显式加 `-SkipPreflight`。
+     - **什么时候要手动重启**:「只改 ConfigMap」时才需要,即 Pod 模板没变:`kubectl edit`、显式传同一个 `-NodeImage`、同一提交重跑。默认镜像 tag 取 git 短 sha,从新提交部署时 Pod 模板随镜像变化,Deployment 会自动滚动,新级别随之生效。Agones 编排的 scene / battle 例外:已分配的 GameServer 在释放前仍是旧级别,`rollout restart` 对它们无效。
 
 ### 3.2 注入工具箱
 

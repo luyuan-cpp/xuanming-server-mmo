@@ -10,9 +10,9 @@ ListenOn: 127.0.0.1:53000
 # 10000 在路由模式下本来就不生效,handler 实际只有约 5s。预算链要求「目标 Timeout + 1000 ≤ ForwardTimeoutMs」,
 # 这样路由服回超时的时候 login handler 的 ctx 已经取消、不会再发出新的写;否则 gate 放行同一会话的下一条请求后,
 # 这一条仍可能晚落地,顺序就乱了。由 tools/scripts/k8s_deploy.ps1 的 Assert-RouterForwardBudget 在部署前核对。
-# 代价:CreatePlayer 持锁后串行三次跨进程 gRPC(发号 / 名字登记 / player:zone 登记,各自子预算 3s,见下方 Locker
+# 代价:CreatePlayer 持锁后串行三次跨进程 gRPC(发号 / 名字登记 / player_route 登记,各自子预算 3s,见下方 Locker
 # 注释)合计必须在 4s 内完成;常态各是毫秒级,任何一步拖慢时整体在 4s 处失败,建角失败可重试(名字注册表幂等)。
-# 子预算没有按 4s 重分(2026-10-15 核对):名义之和 = 发号 3s + 名字 3s + player:zone 3s(开种子再 +1s)= 9~10s > 4s,
+# 子预算没有按 4s 重分(2026-10-15 核对):名义之和 = 发号 3s + 名字 3s + player_route 3s(开种子再 +1s)= 9~10s > 4s,
 # 但每一步的 ctx 都派生自 handler ctx,实际一律截在 4s;截止之后建角不再发出任何写、只做补偿(createplayerlogic.go
 # 6c''),所以超出的名义预算只影响「慢在哪一步、以哪一步失败」,不影响提交语义。要不要按 4s 重分、怎么分(名字那步
 # 还牵连同名重试的 1s 门槛),由 login 负责人定(client-request-ordering.md §5.3)。
@@ -97,7 +97,7 @@ Locker:
   # AccountLockTTL 要盖住 CreatePlayer 持锁后的耗时,否则锁在建角中途过期、同账号的第二个
   # 建角请求就能并发读到同一份账号 blob。持锁后串行跑的几步:
   #   - 三次跨进程 gRPC,各有 ctx 截止时间管得住的硬预算:发号 3s(idsegment FetchTimeout)
-  #     + 名字登记 3s(建角侧总预算)+ player:zone 登记 3s(HomeZone.RegisterTimeout)= 9s;
+  #     + 名字登记 3s(建角侧总预算)+ player_route 登记 3s(HomeZone.RegisterTimeout)= 9s;
   #   - 三次 Redis:读 blob、围栏写 blob、写未确认时的回读。常态是毫秒级;Redis 变慢但每次
   #     回包都还在 3s 以内时,三步合计 < 9s。
   #     各步预算直接相加是 gRPC 9s + Redis 4×3s = 21s,但在现行 zrpc Timeout(本文件顶部,4s)下到不了:
@@ -106,7 +106,7 @@ Locker:
   #     围栏写最晚在 handler 起算 4s 内发出,Redis 还在 3s 内回包时约 7s 前执行;围栏写确认之后的 7b 走独立 ctx,
   #     单次最多再等约 3s 读超时,锁在它之后才释放,合计约 10s,下面的 20 仍盖得住。
   #     种子在慢 Redis 下的真实代价:多吃最多 3s 的 handler 预算,围栏写可能来不及发出,本次建角失败
-  #     (名字释放,player:zone 映射与孤儿种子留下)。把 Timeout 调到约 17s 以上时 21s 才可达,届时重算
+  #     (名字释放,player_route 映射与孤儿种子留下)。把 Timeout 调到约 17s 以上时 21s 才可达,届时重算
   #     (docs/design/new-player-first-enter-no-cold-read.md §10 P6)。
   #   - 2026-10-15 起名字登记之前多一次只读探测(6b':新铸 id 的父键 / owner_epoch,两条 EXISTS 走一个 pipeline、
   #     一次往返;1s ctx 预算同样只掐重发,单次最坏仍是 3s 读超时),不看种子开关。Redis 因此是 4 次(开种子 5 次),
@@ -233,7 +233,7 @@ IdSegment:
   MaxStep: 1000
 
 # 合服后的 zone 归属修正(internal/logic/pkg/homezone)。走 DataServiceRpc 查
-# player:zone 映射。
+# player_route 映射。
 #
 # RefreshRoleListDisabled(反向命名,整块不写 = 开):Login 用映射覆盖角色列表的
 #   zone_id。这是合服后的**主修正机制**——客户端按它选区就直接连到归属 zone 的 gate。
@@ -249,7 +249,7 @@ IdSegment:
 #   角色列表缺名回源 BatchGetPlayerName 也用这个值:两次查询串行、各自计时,
 #   缺名账号(B3a 之前建的老角色)最坏 2×,全部有名的账号仍只有一跳。
 # EnterLookupTimeout:EnterGame 那一次单查的预算(异步链路,可宽)。
-# RegisterTimeout:CreatePlayer 登记 player:zone 的预算(写失败建角整体失败,给宽)。
+# RegisterTimeout:CreatePlayer 登记 player_route 的预算(写失败建角整体失败,给宽)。
 HomeZone:
   RefreshRoleListDisabled: false
   RedirectOnEnterEnabled: false
@@ -339,6 +339,15 @@ InternalAuth:
 TokenConfig:
   AccessTokenTTL: 2h
   RefreshTokenTTL: 720h  # 30 days
+  # 旧 refresh token 被轮换后仍可重放的宽限窗口:窗口内同一旧 token 再来,返回同一对新令牌
+  # (回包丢失后的重试不必重新登录)。0 = 严格一次性;上限 60s、整毫秒,越界拒绝启动。
+  # 见 docs/design/dual-token-authentication.md「轮换重试的宽限窗口」。
+  RefreshReuseGrace: 30s
+  # 已轮换的旧 refresh token 再次出现(窗口外,或窗口内而它换出的新 refresh 已被轮换走)→ 吊销那次登录的
+  # 整条令牌线(含 access);同账号其他设备不受影响。false = 只观测(照常检测、记指标与日志,不吊销)。
+  # 不要与 RefreshReuseGrace: 0 同时开:那样同一请求并发两次就会触发吊销。见同文「令牌家族、重用检测与家族吊销」。
+  # 整个 TokenConfig 块可以不写(K8s ConfigMap 就不写):每个字段都按与这里相同的默认值取。
+  RefreshReuseRevoke: true
 
 # 旧路径「客户端 → cpp gate(TCP)→ ClientPlayerLogin.Login,用口令 / 第三方凭据首认证」
 # 的 kill switch(ARCH §12)。默认 true 保持现状;login_auth_path_total{path="legacy"}

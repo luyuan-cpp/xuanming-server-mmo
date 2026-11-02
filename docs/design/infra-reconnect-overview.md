@@ -6,7 +6,7 @@ Updated: 2026-04-05
 
 | Middleware | Library | Auto-Reconnect | Notes |
 |-----------|---------|---------------|-------|
-| Redis | hiredis (muduo wrapper) | Yes (custom) | `RedisManager::SetupReconnect()` registers disconnect callback, 3s periodic retry creates new Hiredis instance. `MessageAsyncClient` holds `unique_ptr<Hiredis>&` so it sees the new instance. |
+| Redis | hiredis (muduo wrapper) | Yes (custom) | `RedisManager::Connect()` 先装好断线回调再建连;断线或握手失败后按重连间隔(默认 3s)重建握手连接,重建任务排到本轮 pending 阶段执行,并带代次复核(`SetupReconnect` 已退役)。连接一律经 `hiredis::Hiredis::Create` 创建、由 `shared_ptr` 持有;`MessageAsyncClient` 持有的是 `shared_ptr<Hiredis>&`,即 `GetZoneRedis()` 那个槽位的引用,所以能看到重连后的新实例。生命周期细节见 `redis-async-client-retry-fix.md`。 |
 | Kafka | librdkafka | Yes (library) | Consumer poll auto-recovers. Producer send failures only logged, no retry/dead-letter. |
 | MySQL | N/A | N/A | C++ nodes don't connect to MySQL; handled by Go `db` service. |
 | etcd | gRPC stubs | Partial | gRPC channel auto-reconnects. Lease keepalive failure = `LOG_FATAL`. Watch stream cancel now triggers `ScheduleWatchReconnect()` (2s delay, re-establishes all watches with tracked revision). |

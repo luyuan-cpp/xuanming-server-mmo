@@ -191,6 +191,8 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 
 ### 9.1 优先修复：新会话复用同场景实体，漏掉入场基线
 
+> 2026-11-01 已修(未编译、未测试,待 Codex 验证):`EnterScene` 发现会话变了且实体还在目标场景时,先离场再走完整入场;同一会话的重复路由仍然幂等。Java 版未核对,`PARITY.md` 已记待做。
+
 **条件**：旧实体尚在目标场景，例如旧 Gate→Scene 的 ExitGame 尚未到达/丢失，或在线顶号先于旧会话退出。`HandleEnterGameNode` 复用实体，`EnterScene` 将 snapshot 绑定到新 session；`HandleEnterScene` 却因 `oldScene==scene` 直接返回 true。入场通知与自身创建在这个 return 后面，因而都没有发出。后续 team/battle/landing 钩子也不补场景基线。[复用](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2631)、[新绑定](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2781)、[幂等早退](../../cpp/libs/services/scene/player/system/player_scene.cpp#L231)、[后续钩子](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp#L2878)
 
 **影响**：新客户端已清旧 actor 世界，仍在等待 NotifyEnterScene；可能直至入场预算到期才失败。即使其他入口让等待结束，Hex/AoiList 仍沿用旧连接的观察状态，同格 AOI 不会重建当前邻居，依然缺实体。普通属性脏推送不能代替 actor 创建。[AOI 同格早退](../../cpp/libs/services/scene/spatial/system/aoi.cpp#L62)、[客户端等待](../../../mmorpg-client/Assets/Scripts/Game/GameClient.cs#L815)

@@ -82,6 +82,8 @@
 
 无论哪种，都要补一个用例：到期删锁先于 SET pending 时，结算最终仍被应用。
 
+**2026-11-01 状态：已消除（未编译，待 Codex 验证）。** 结算改为只走 match SQL + player_inbox（`player-data-tidb-scaling-plan.md` §5.4），Redis 里没有 pending 可删：`ApplyInboxSettlement` 不读锁、不看冻结，reaper 判作废之后结算照常入账。reaper 也加了宽限（`FreezeExpiresAtMs`）。曾经的修复分支 `claude/recover-battle-settlement-f39089db` 不再合回，去向见 `turn-battle-gap-closure.md` §10。
+
 ### 2.2 low · Redis 回退一族（同一根因，建议合并处置）
 
 **共同前提：** zone Redis 实例崩溃（AOF everysec 约丢 1s）、主从切换（异步复制丢毫秒级），或从备份恢复。
@@ -143,7 +145,7 @@
 
 | 类别 | 内容 |
 |---|---|
-| medium，待修 | 本文 cross-service-assets#1（缺省可达）；r2-battle#1（全球匹配门控）；r2-mz#1（copy 合服门控）；r2-ps#1（仅混版，严重度待第二轮第四波裁决）；第一轮 §2.5 三条（全球匹配、交易资产通道门控） |
+| medium，待修 | ~~本文 cross-service-assets#1（缺省可达）~~（2026-11-01 已消除，见 §2.1）；r2-battle#1（全球匹配门控）；r2-mz#1（copy 合服门控）；r2-ps#1（仅混版，严重度待第二轮第四波裁决）；第一轮 §2.5 三条（全球匹配、交易资产通道门控） |
 | 已落码、未验证 | 第一轮 §2.1–§2.4，r2-gate#1、r2-sm#1/2/3、r2-db#1/3，混版字段保护第 2、3a 批。都在等 Codex 编译、测试与故障演练，见第一轮 §7 与第二轮交接 §8.1 |
 | 本轮新 low | §2.2 的 6 条（建议合并成一份设计），§2.3 的 9 条 |
 | 未覆盖 | 第二轮第三、四波（另一会话在做）；Java 版同类审计；运行期一致性压测（[data-consistency-stress-testing.md](data-consistency-stress-testing.md) L2–L4）。静态审计不能代替这些运行证据 |

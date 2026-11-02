@@ -46,28 +46,52 @@ func (p semanticsProvider) Validate(context.Context, string) (*auth.AuthResult, 
 }
 
 type semanticsEnv struct {
-	mr       *miniredis.Miniredis
-	svcCtx   *svc.ServiceContext
-	authType string
+	mr                *miniredis.Miniredis
+	svcCtx            *svc.ServiceContext
+	authType          string
+	tokenStoreFailure *semanticsTokenStoreFailure // tokenRedisFails=false 时为 nil
 }
 
-// 只在令牌存储管线处注入故障,避免破坏 Redis 握手与事务协议而让用例卡在断言之前。
-type semanticsTokenStoreFailure struct{}
-
-func (semanticsTokenStoreFailure) DialHook(next redis.DialHook) redis.DialHook { return next }
-
-func (semanticsTokenStoreFailure) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
-	return next
+// semanticsTokenStoreFailure 让令牌存储的每条业务命令都失败:签发是一段脚本,走单条命令,不走管线。连接握手放行
+// (go-redis 的握手命令也经过钩子,CLIENT SETINFO 还走管线),失败的才是令牌命令本身,不是连不上。blocked 数被拦下的命令。
+type semanticsTokenStoreFailure struct {
+	blocked atomic.Int64
 }
 
-func (semanticsTokenStoreFailure) ProcessPipelineHook(redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return func(context.Context, []redis.Cmder) error {
+func isSemanticsHandshake(cmd redis.Cmder) bool {
+	switch cmd.Name() {
+	case "hello", "auth", "select", "client", "readonly":
+		return true
+	}
+	return false
+}
+
+func (f *semanticsTokenStoreFailure) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (f *semanticsTokenStoreFailure) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if isSemanticsHandshake(cmd) {
+			return next(ctx, cmd)
+		}
+		f.blocked.Add(1)
 		return errors.New("injected token store failure")
 	}
 }
 
+func (f *semanticsTokenStoreFailure) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		for _, cmd := range cmds {
+			if !isSemanticsHandshake(cmd) {
+				f.blocked.Add(1)
+				return errors.New("injected token store failure")
+			}
+		}
+		return next(ctx, cmds)
+	}
+}
+
 // newSemanticsEnv 起一个只有 HTTP 新路径会用到的 ServiceContext。tokenRedisFails=true 时 token 管理器
-// 用独立 Redis 客户端在存储管线入口注入错误,模拟「账号目录可读、token 写不进去」。
+// 用独立 Redis 客户端在命令入口注入错误,模拟「账号目录可读、token 写不进去」。
 func newSemanticsEnv(t *testing.T, provider semanticsProvider, tokenRedisFails bool) *semanticsEnv {
 	t.Helper()
 	mr := miniredis.RunT(t)
@@ -80,9 +104,11 @@ func newSemanticsEnv(t *testing.T, provider semanticsProvider, tokenRedisFails b
 	config.AppConfig.HomeZone.RefreshRoleListDisabled = true
 
 	tokenRdb := rdb
+	var storeFailure *semanticsTokenStoreFailure
 	if tokenRedisFails {
+		storeFailure = &semanticsTokenStoreFailure{}
 		tokenRdb = redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
-		tokenRdb.AddHook(semanticsTokenStoreFailure{})
+		tokenRdb.AddHook(storeFailure)
 		t.Cleanup(func() { _ = tokenRdb.Close() })
 	}
 	tokens := token.NewManager(tokenRdb, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 24 * time.Hour})
@@ -90,9 +116,10 @@ func newSemanticsEnv(t *testing.T, provider semanticsProvider, tokenRedisFails b
 	authType := fmt.Sprintf("semantics-provider-%d", semanticsAuthSequence.Add(1))
 	auth.Register(authType, provider)
 	return &semanticsEnv{
-		mr:       mr,
-		svcCtx:   &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), TokenManager: tokens},
-		authType: authType,
+		mr:                mr,
+		svcCtx:            &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb), TokenManager: tokens},
+		authType:          authType,
+		tokenStoreFailure: storeFailure,
 	}
 }
 
@@ -146,6 +173,8 @@ func TestLoginHTTPTokenIssueFailureReturnsFaultTip(t *testing.T) {
 	resp := env.login(t)
 	requireLoginFailureTip(t, resp, table.LoginError_kLoginTokenIssueFailed)
 	require.Empty(t, resp.Players, "签发失败不得返回角色列表冒充成功")
+	require.Positive(t, env.tokenStoreFailure.blocked.Load(), "故障必须落在令牌命令上")
+	require.Empty(t, env.mr.Keys(), "签发失败不得留下令牌键,账号锁也已释放")
 }
 
 func TestLoginHTTPSuccessStillIssuesTokens(t *testing.T) {

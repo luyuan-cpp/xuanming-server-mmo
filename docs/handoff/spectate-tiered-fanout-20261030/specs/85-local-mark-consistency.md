@@ -1,6 +1,8 @@
 # 任务 LOCAL-MARK：本地模式观战标记的一致性修复（Go match）
 
-状态（2026-10-30）：已基于 P1-MATCH 落完的版本全部落码，**未编译、未跑测试，待 Codex 按第 6 节验证**。定稿函数签名见第 3 节末尾。
+**已作废（2026-11-01 确认）：不要照本文做，也不要按第 6 节验证。** Go 的本地 Redis 模式已于 2026-10-30 整段删除（`docs/PROGRESS.md`「go/match 只剩 SQL 权威路径」），本文描述的函数和用例都已不存在。现行结论见 [battle-spectate-tiered-fanout.md](../../../design/battle-spectate-tiered-fanout.md) §10.1，验证见 [CODEX.md](../CODEX.md)。下面只留作历史记录。
+
+状态（2026-10-30）：已基于 P1-MATCH 落完的版本全部落码，未编译、未跑测试。
 
 只影响本地模式（`GlobalMatch.Enabled=false`，dev / test）。生产强制走全局路径，全局路径已满足本文的规则。先读 `00-common-rules.md`。
 

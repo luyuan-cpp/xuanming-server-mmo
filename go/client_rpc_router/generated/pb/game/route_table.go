@@ -17,7 +17,7 @@ type RouteEntry struct {
 	Method         string
 }
 
-// RouteTable 覆盖全部 gRPC 形态的服务方法(Scene 等 muduo TCP RPC 不在此表)。
+// RouteTable 覆盖有节点类型的 gRPC 形态服务方法(Scene 等 muduo TCP RPC、没有节点类型的内部 service 不在此表)。
 var RouteTable = map[uint32]RouteEntry{
 	BattleClientPlayerGetBattleStateMessageId:           {FullMethod: "/BattleClientPlayer/GetBattleState", NodeType: base.ENodeType_BattleNodeService, ClientProtocol: true, Service: "BattleClientPlayer", Method: "GetBattleState"},
 	BattleClientPlayerNotifyBattleAssignedMessageId:     {FullMethod: "/BattleClientPlayer/NotifyBattleAssigned", NodeType: base.ENodeType_BattleNodeService, ClientProtocol: true, Service: "BattleClientPlayer", Method: "NotifyBattleAssigned"},
@@ -126,6 +126,8 @@ var RouteTable = map[uint32]RouteEntry{
 	DataServiceBatchRecallItemsMessageId:                {FullMethod: "/data_service.DataService/BatchRecallItems", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "BatchRecallItems"},
 	DataServiceBeginAccountRoleTradeMessageId:           {FullMethod: "/data_service.DataService/BeginAccountRoleTrade", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "BeginAccountRoleTrade"},
 	DataServiceCancelAccountRoleTradeMessageId:          {FullMethod: "/data_service.DataService/CancelAccountRoleTrade", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "CancelAccountRoleTrade"},
+	DataServiceCancelRecallBatchMessageId:               {FullMethod: "/data_service.DataService/CancelRecallBatch", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "CancelRecallBatch"},
+	DataServiceCheckAccountRoleSlotMessageId:            {FullMethod: "/data_service.DataService/CheckAccountRoleSlot", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "CheckAccountRoleSlot"},
 	DataServiceCloseRoleAdmissionsMessageId:             {FullMethod: "/data_service.DataService/CloseRoleAdmissions", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "CloseRoleAdmissions"},
 	DataServiceConfirmAccountRoleTradeFreezeMessageId:   {FullMethod: "/data_service.DataService/ConfirmAccountRoleTradeFreeze", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "ConfirmAccountRoleTradeFreeze"},
 	DataServiceCreateAccountRoleMessageId:               {FullMethod: "/data_service.DataService/CreateAccountRole", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "CreateAccountRole"},
@@ -133,6 +135,9 @@ var RouteTable = map[uint32]RouteEntry{
 	DataServiceGetPlayerAssetOpLedgerMessageId:          {FullMethod: "/data_service.DataService/GetPlayerAssetOpLedger", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "GetPlayerAssetOpLedger"},
 	DataServiceGetPlayerHomeZoneMessageId:               {FullMethod: "/data_service.DataService/GetPlayerHomeZone", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "GetPlayerHomeZone"},
 	DataServiceGetPlayerInboxLedgerMessageId:            {FullMethod: "/data_service.DataService/GetPlayerInboxLedger", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "GetPlayerInboxLedger"},
+	DataServiceGetPlayerRouteMessageId:                  {FullMethod: "/data_service.DataService/GetPlayerRoute", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "GetPlayerRoute"},
+	DataServiceGetRecallBatchMessageId:                  {FullMethod: "/data_service.DataService/GetRecallBatch", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "GetRecallBatch"},
+	DataServiceGetRoleFenceStateMessageId:               {FullMethod: "/data_service.DataService/GetRoleFenceState", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "GetRoleFenceState"},
 	DataServiceListPlayerSnapshotsMessageId:             {FullMethod: "/data_service.DataService/ListPlayerSnapshots", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "ListPlayerSnapshots"},
 	DataServiceLookupAccountRoleMessageId:               {FullMethod: "/data_service.DataService/LookupAccountRole", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "LookupAccountRole"},
 	DataServiceQueryTransactionLogMessageId:             {FullMethod: "/data_service.DataService/QueryTransactionLog", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "QueryTransactionLog"},
@@ -144,7 +149,9 @@ var RouteTable = map[uint32]RouteEntry{
 	DataServiceRemoveAccountRolesMessageId:              {FullMethod: "/data_service.DataService/RemoveAccountRoles", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "RemoveAccountRoles"},
 	DataServiceRepairAccountRoleMessageId:               {FullMethod: "/data_service.DataService/RepairAccountRole", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "RepairAccountRole"},
 	DataServiceReservePlayerNameMessageId:               {FullMethod: "/data_service.DataService/ReservePlayerName", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "ReservePlayerName"},
+	DataServiceResolveRecallOpMessageId:                 {FullMethod: "/data_service.DataService/ResolveRecallOp", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "ResolveRecallOp"},
 	DataServiceTransferAccountRoleMessageId:             {FullMethod: "/data_service.DataService/TransferAccountRole", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "TransferAccountRole"},
+	DataServiceVerifyRoleAdmissionMessageId:             {FullMethod: "/data_service.DataService/VerifyRoleAdmission", NodeType: base.ENodeType_DataServiceNodeService, ClientProtocol: false, Service: "DataService", Method: "VerifyRoleAdmission"},
 	GuildInternalListAppliedAssetOpsSinceMessageId:      {FullMethod: "/guildpb.GuildInternal/ListAppliedAssetOpsSince", NodeType: base.ENodeType_GuildNodeService, ClientProtocol: false, Service: "GuildInternal", Method: "ListAppliedAssetOpsSince"},
 	GuildServiceApplyJoinGuildMessageId:                 {FullMethod: "/guildpb.GuildService/ApplyJoinGuild", NodeType: base.ENodeType_GuildNodeService, ClientProtocol: true, Service: "GuildService", Method: "ApplyJoinGuild"},
 	GuildServiceBuyGuildShopGoodsMessageId:              {FullMethod: "/guildpb.GuildService/BuyGuildShopGoods", NodeType: base.ENodeType_GuildNodeService, ClientProtocol: true, Service: "GuildService", Method: "BuyGuildShopGoods"},
@@ -192,8 +199,11 @@ var RouteTable = map[uint32]RouteEntry{
 	MailAdminSendGuildMailMessageId:                     {FullMethod: "/mailpb.MailAdmin/SendGuildMail", NodeType: base.ENodeType_MailNodeService, ClientProtocol: false, Service: "MailAdmin", Method: "SendGuildMail"},
 	MailAdminSendPersonalMailMessageId:                  {FullMethod: "/mailpb.MailAdmin/SendPersonalMail", NodeType: base.ENodeType_MailNodeService, ClientProtocol: false, Service: "MailAdmin", Method: "SendPersonalMail"},
 	MailAdminSendSystemMailMessageId:                    {FullMethod: "/mailpb.MailAdmin/SendSystemMail", NodeType: base.ENodeType_MailNodeService, ClientProtocol: false, Service: "MailAdmin", Method: "SendSystemMail"},
+	MatchInternalAcquireTrialOccupancyMessageId:         {FullMethod: "/match.MatchInternal/AcquireTrialOccupancy", NodeType: base.ENodeType_MatchNodeService, ClientProtocol: false, Service: "MatchInternal", Method: "AcquireTrialOccupancy"},
 	MatchInternalCancelActivityBattleMessageId:          {FullMethod: "/match.MatchInternal/CancelActivityBattle", NodeType: base.ENodeType_MatchNodeService, ClientProtocol: false, Service: "MatchInternal", Method: "CancelActivityBattle"},
 	MatchInternalCommitBattleOutcomeMessageId:           {FullMethod: "/match.MatchInternal/CommitBattleOutcome", NodeType: base.ENodeType_MatchNodeService, ClientProtocol: false, Service: "MatchInternal", Method: "CommitBattleOutcome"},
+	MatchInternalGetBattleCompletionMessageId:           {FullMethod: "/match.MatchInternal/GetBattleCompletion", NodeType: base.ENodeType_MatchNodeService, ClientProtocol: false, Service: "MatchInternal", Method: "GetBattleCompletion"},
+	MatchInternalReleaseTrialOccupancyMessageId:         {FullMethod: "/match.MatchInternal/ReleaseTrialOccupancy", NodeType: base.ENodeType_MatchNodeService, ClientProtocol: false, Service: "MatchInternal", Method: "ReleaseTrialOccupancy"},
 	MatchInternalSetSpectateFeaturedMessageId:           {FullMethod: "/match.MatchInternal/SetSpectateFeatured", NodeType: base.ENodeType_MatchNodeService, ClientProtocol: false, Service: "MatchInternal", Method: "SetSpectateFeatured"},
 	MatchInternalStartActivityBattleMessageId:           {FullMethod: "/match.MatchInternal/StartActivityBattle", NodeType: base.ENodeType_MatchNodeService, ClientProtocol: false, Service: "MatchInternal", Method: "StartActivityBattle"},
 	MatchServiceCancelQueueMessageId:                    {FullMethod: "/match.MatchService/CancelQueue", NodeType: base.ENodeType_MatchNodeService, ClientProtocol: true, Service: "MatchService", Method: "CancelQueue"},

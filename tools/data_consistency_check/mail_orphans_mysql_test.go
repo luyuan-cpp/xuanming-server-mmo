@@ -35,21 +35,21 @@ func TestMailSystemStateOrphansMySQL(t *testing.T) {
 
 	t.Run("正常多条state按不同系统邮件计数", func(t *testing.T) {
 		ctx := prepareMailOrphanFixture(t, db)
-		execMailFixture(t, ctx, db, `INSERT INTO mail_system (sys_mail_id) VALUES (101), (102), (103)`)
-		execMailFixture(t, ctx, db, `INSERT INTO mail_system_state (player_id, sys_mail_id) VALUES
+		execMailFixture(t, ctx, db, `INSERT INTO mail_message (mail_id) VALUES (101), (102), (103)`)
+		execMailFixture(t, ctx, db, `INSERT INTO mail_state (player_id, mail_id) VALUES
 			(1,101), (2,101), (3,101), (1,102), (2,102)`)
 
 		r := checkMailSystemStateOrphans(ctx, runConfig{mailDB: db})
 		assertMailOrphanResult(t, r, "info", 0, 2)
-		if r.SampleNotes != "0 orphan sys_mail_id among 2 distinct ids referenced by state rows" {
+		if r.SampleNotes != "0 orphan mail_id among 2 distinct ids referenced by state rows" {
 			t.Fatalf("应检查到2个被引用的系统邮件,不能按5条state或3封系统邮件计数: %q", r.SampleNotes)
 		}
 	})
 
 	t.Run("真实孤儿去重计数并给出有序样例", func(t *testing.T) {
 		ctx := prepareMailOrphanFixture(t, db)
-		execMailFixture(t, ctx, db, `INSERT INTO mail_system (sys_mail_id) VALUES (101)`)
-		execMailFixture(t, ctx, db, `INSERT INTO mail_system_state (player_id, sys_mail_id) VALUES
+		execMailFixture(t, ctx, db, `INSERT INTO mail_message (mail_id) VALUES (101)`)
+		execMailFixture(t, ctx, db, `INSERT INTO mail_state (player_id, mail_id) VALUES
 			(1,101), (2,101), (1,202), (1,201), (2,201), (3,201)`)
 
 		r := checkMailSystemStateOrphans(ctx, runConfig{mailDB: db})
@@ -61,7 +61,7 @@ func TestMailSystemStateOrphansMySQL(t *testing.T) {
 
 	t.Run("孤儿样例最多五个且不掩盖完整计数", func(t *testing.T) {
 		ctx := prepareMailOrphanFixture(t, db)
-		execMailFixture(t, ctx, db, `INSERT INTO mail_system_state (player_id, sys_mail_id) VALUES
+		execMailFixture(t, ctx, db, `INSERT INTO mail_state (player_id, mail_id) VALUES
 			(1,207), (1,203), (1,205), (1,201), (1,206), (1,202), (1,204), (2,201)`)
 
 		r := checkMailSystemStateOrphans(ctx, runConfig{mailDB: db})
@@ -73,19 +73,19 @@ func TestMailSystemStateOrphansMySQL(t *testing.T) {
 
 	t.Run("缺state表不能报干净", func(t *testing.T) {
 		ctx := prepareMailOrphanFixture(t, db)
-		execMailFixture(t, ctx, db, `DROP TEMPORARY TABLE mail_system_state`)
+		execMailFixture(t, ctx, db, `DROP TEMPORARY TABLE mail_state`)
 
 		r := checkMailSystemStateOrphans(ctx, runConfig{mailDB: db})
 		assertMailOrphanResult(t, r, "warn", 0, 0)
-		if !strings.HasPrefix(r.SampleNotes, "NOT CHECKED: mail_system_state unreadable") || !strings.Contains(r.SampleNotes, "1146") {
+		if !strings.HasPrefix(r.SampleNotes, "NOT CHECKED: mail_state unreadable") || !strings.Contains(r.SampleNotes, "1146") {
 			t.Fatalf("state缺表应返回真实MySQL缺表错误而不是0孤儿: %q", r.SampleNotes)
 		}
 	})
 
 	t.Run("系统表缺失使反连接失败不能报干净", func(t *testing.T) {
 		ctx := prepareMailOrphanFixture(t, db)
-		execMailFixture(t, ctx, db, `INSERT INTO mail_system_state (player_id, sys_mail_id) VALUES (1,101), (2,101), (1,102)`)
-		execMailFixture(t, ctx, db, `DROP TEMPORARY TABLE mail_system`)
+		execMailFixture(t, ctx, db, `INSERT INTO mail_state (player_id, mail_id) VALUES (1,101), (2,101), (1,102)`)
+		execMailFixture(t, ctx, db, `DROP TEMPORARY TABLE mail_message`)
 
 		r := checkMailSystemStateOrphans(ctx, runConfig{mailDB: db})
 		assertMailOrphanResult(t, r, "warn", 0, 2)
@@ -121,7 +121,7 @@ func TestMailSystemStateOrphansMySQL(t *testing.T) {
 
 func assertMailOrphanResult(t *testing.T, r CheckResult, severity string, bad, total int64) {
 	t.Helper()
-	if r.Name != "mail_system_state.sys_mail_id" || r.Severity != severity || r.BadCount != bad || r.TotalCount != total {
+	if r.Name != "mail_state.mail_id" || r.Severity != severity || r.BadCount != bad || r.TotalCount != total {
 		t.Fatalf("邮件孤儿报告错误: 得到 %+v; 期望 severity=%s bad=%d total=%d", r, severity, bad, total)
 	}
 }
@@ -188,18 +188,18 @@ func prepareMailOrphanFixture(t *testing.T, db *sql.DB) context.Context {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 		// TEMPORARY 关键字保证错误路径也不可能删除同名持久表。
-		if _, err := db.ExecContext(cleanupCtx, `DROP TEMPORARY TABLE IF EXISTS mail_system_state, mail_system`); err != nil {
+		if _, err := db.ExecContext(cleanupCtx, `DROP TEMPORARY TABLE IF EXISTS mail_state, mail_message`); err != nil {
 			t.Errorf("清理本用例临时表失败: %v", err)
 		}
 	})
-	execMailFixture(t, ctx, db, `CREATE TEMPORARY TABLE mail_system (
-		sys_mail_id BIGINT UNSIGNED NOT NULL PRIMARY KEY
+	execMailFixture(t, ctx, db, `CREATE TEMPORARY TABLE mail_message (
+		mail_id BIGINT UNSIGNED NOT NULL PRIMARY KEY
 	) ENGINE=InnoDB`)
-	execMailFixture(t, ctx, db, `CREATE TEMPORARY TABLE mail_system_state (
+	execMailFixture(t, ctx, db, `CREATE TEMPORARY TABLE mail_state (
 		player_id BIGINT UNSIGNED NOT NULL,
-		sys_mail_id BIGINT UNSIGNED NOT NULL,
-		PRIMARY KEY (player_id, sys_mail_id),
-		KEY idx_sys_mail_id (sys_mail_id)
+		mail_id BIGINT UNSIGNED NOT NULL,
+		PRIMARY KEY (player_id, mail_id),
+		KEY idx_mail_id (mail_id)
 	) ENGINE=InnoDB`)
 	return ctx
 }

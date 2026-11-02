@@ -11,6 +11,7 @@ import "proto/common/component/player_inbox_ledger_comp.proto";
 import "proto/common/base/user_accounts.proto";
 import "proto/common/base/service_call_auth.proto";
 import "proto/common/base/role_admission.proto";
+import "proto/role_fence/role_fence.proto";
 
 option go_package = "proto/data_service";
 
@@ -29,6 +30,15 @@ service DataService {
   rpc ConfirmAccountRoleTradeFreeze(ConfirmAccountRoleTradeFreezeRequest) returns (AccountRoleTradeReceipt) {}
   rpc CancelAccountRoleTrade(CancelAccountRoleTradeRequest) returns (AccountRoleTradeReceipt) {}
   rpc TransferAccountRole(TransferAccountRoleRequest) returns (AccountRoleTransferReceipt) {}
+  // 买家账号的角色名额满了没有(docs/design/horizontal-scale-logical-db.md §5.4),强读。trade 在买家付款前和进交付前挡一下,不算数:
+  // 名额的判定在过户第 1 步。读不到回 retry=true,不走 gRPC 错误:只读,没有结局未知。
+  rpc CheckAccountRoleSlot(CheckAccountRoleSlotRequest) returns (CheckAccountRoleSlotResponse) {}
+  // 角色护栏的权威状态(docs/design/horizontal-scale-logical-db.md §3.6),强读。参与者自愈、chat 校验用。
+  // 已删除的角色回 account 为空的状态;目录里没有这个角色回 found=false。读不到回 retry=true,不走 gRPC 错误:只读,没有结局未知。
+  rpc GetRoleFenceState(GetRoleFenceStateRequest) returns (GetRoleFenceStateResponse) {}
+  // 入场登记是否仍然有效(docs/design/horizontal-scale-logical-db.md §3.7),强读。目录只有 data_service 连,
+  // match、player_inbox 不再跨库读 account_role_admission。调用方与 GetRoleFenceState 相同,事务外调用。
+  rpc VerifyRoleAdmission(VerifyRoleAdmissionRequest) returns (VerifyRoleAdmissionResponse) {}
   // scene 专用强鉴权；SQL 未登记前禁止实体复用、异步加载完成和激活。
   rpc RegisterRoleAdmission(RegisterRoleAdmissionRequest) returns (RegisterRoleAdmissionResponse) {}
   // 只在本实例 <= through 的全部实体与迟到回调都已结束后关闭；无 TTL 自动关闭。
@@ -46,12 +56,19 @@ service DataService {
   // 全部合服映射。没有全局库连接的服务(guild、trade)用它重建 placement.MergedZones,定时重读
   // (docs/design/player-data-tidb-scaling-plan.md §7.1)。映射还没读到时回 Unavailable。
   rpc GetMergedZones(google.protobuf.Empty) returns (GetMergedZonesResponse) {}
+  // 玩家的落点(docs/design/horizontal-scale-logical-db.md §7),强读玩家所在分片。go/db 选库用,它不再连目录。
+  // 没有路由行或没有落点回 found=false;目录读不到回 retry=true,都不走 gRPC 错误:只读,没有结局未知。只有 go/db 能调,密钥 MMORPG_ROLE_FENCE_SECRET_DB。
+  rpc GetPlayerRoute(GetPlayerRouteRequest) returns (GetPlayerRouteResponse) {}
 
   // ── Snapshot ──────────────────────────────────────
   rpc ListPlayerSnapshots(ListPlayerSnapshotsRequest) returns (ListPlayerSnapshotsResponse) {}
 
   // ── Batch Recall / Anomaly ──────────────────
+  // 以下四个全部要 x-admin-token,没配 AdminToken 就停用。方案见 docs/design/exploit_loss_prevention_zh.md。
   rpc BatchRecallItems(BatchRecallItemsRequest) returns (BatchRecallItemsResponse) {}
+  rpc GetRecallBatch(GetRecallBatchRequest) returns (BatchRecallItemsResponse) {}
+  rpc CancelRecallBatch(CancelRecallBatchRequest) returns (BatchRecallItemsResponse) {}
+  rpc ResolveRecallOp(ResolveRecallOpRequest) returns (ResolveRecallOpResponse) {}
   rpc QueryTransactionLog(QueryTransactionLogRequest) returns (QueryTransactionLogResponse) {}
 
   // ── ID segment allocation (Leaf-segment) ────────────────────
@@ -91,7 +108,8 @@ message AccountRoleOwnership {
   string account = 1;
   AccountSimplePlayer role = 2;
   uint64 owner_revision = 3;
-  uint64 trade_listing_id = 4;
+  uint64 trade_listing_id = 4; // 最终冻结令牌。入场和归属判定只看它
+  uint64 prepare_token = 5;    // 还在投票的准备令牌。只给目录内部和护栏判定用,LookupAccountRole 恒回 0
 }
 message AccountRoleVersion { uint64 player_id = 1; uint64 owner_revision = 2; }
 message ReadAccountDirectoryRequest {
@@ -132,6 +150,8 @@ enum AccountRoleTradeState {
   ACCOUNT_ROLE_TRADE_STATE_CANCELLED = 3;
   ACCOUNT_ROLE_TRADE_STATE_TRANSFERRED = 4;
   ACCOUNT_ROLE_TRADE_STATE_CANCEL_PENDING = 5;
+  // 目录已写冻结令牌,还在等全部参与者冻结。Begin 只在离开这个状态后才回收据。
+  ACCOUNT_ROLE_TRADE_STATE_PREPARING = 6;
 }
 enum AccountRoleFreezeEvidenceKind {
   ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPECIFIED = 0;
@@ -204,6 +224,32 @@ message TransferAccountRoleRequest {
   uint64 expected_owner_revision = 6;
   common.base.ServiceCallAuth auth = 7;
 }
+message CheckAccountRoleSlotRequest {
+  string account = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+message CheckAccountRoleSlotResponse {
+  bool full = 1;  // 这个账号的存活角色数已到上限
+  bool retry = 2; // 这一次没读成,不能当成有名额
+}
+message GetRoleFenceStateRequest {
+  uint64 player_id = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+message GetRoleFenceStateResponse {
+  bool found = 1;                     // false = 目录确定没有这名角色。已删除的角色是 true,account 为空
+  rolefence.RoleFenceState state = 2;
+  bool retry = 3;                     // 这一次没读成,不能当成没有
+}
+message VerifyRoleAdmissionRequest {
+  common.base.RoleAdmissionIdentity admission = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+message VerifyRoleAdmissionResponse {
+  // 这份原件就是该实例当前最高世代的登记,而且没有关闭。缺行、世代落后、已关闭、原件不等都是 false。
+  bool valid = 1;
+  bool retry = 2; // 这一次没读成,不能当成登记失效
+}
 
 message RegisterRoleAdmissionRequest {
   common.base.RoleAdmissionIdentity identity = 1;
@@ -265,6 +311,18 @@ message GetMergedZonesResponse {
   map<uint32, uint32> merged_into = 1; // 源区 → 目标区(zone_merged_into 的原始映射,没有沿链解析)
 }
 
+message GetPlayerRouteRequest {
+  uint64 player_id = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+
+message GetPlayerRouteResponse {
+  uint32 storage_id = 1;               // 建角后不变
+  uint32 home_zone = 2;                // 原始值,没有解析合服映射
+  bool found = 3;                      // false = 目录确定没有路由行或没有落点,go/db 据此拒绝认领
+  bool retry = 4;                      // 这一次没读成,不能当成没有落点
+}
+
 // ── Snapshot ────────────────────────────────────────
 
 enum SnapshotType {
@@ -301,34 +359,86 @@ message ListPlayerSnapshotsResponse {
 }
 
 // ── Batch Recall ───────────────────────────────────────────────
+//
+// 方案见 docs/design/exploit_loss_prevention_zh.md「BatchRecallItems 执行方案」。
+// 先 dry_run 拿 plan_digest,人审过再带着它执行。执行是异步的:响应只说明计划已冻结,进度用 GetRecallBatch 查。
+
+enum RecallKind {
+  RECALL_KIND_UNSPECIFIED = 0;
+  RECALL_KIND_CURRENCY = 1;
+  RECALL_KIND_ITEM = 2;
+}
 
 message BatchRecallItemsRequest {
-  repeated uint64 player_ids = 1;      // target players (empty = use query filter)
-  uint32 item_config_id = 2;           // 0 = currency recall, >0 = item recall
-  uint32 currency_type = 3;            // only when item_config_id == 0
+  repeated uint64 player_ids = 1;      // 只回收这些玩家收到的资产;空 = 不限玩家。上限 1000
+  uint32 item_config_id = 2;           // recall_kind=ITEM 时必填
+  uint32 currency_type = 3;            // recall_kind=CURRENCY 时的币种。0 是银两,所以种类由 recall_kind 决定
   uint64 time_start = 4;               // transaction time range start (unix sec)
   uint64 time_end = 5;                 // transaction time range end (unix sec)
   repeated uint32 tx_types = 6;        // filter by TransactionType (e.g. TX_SYSTEM_GRANT)
-  string reason = 7;
-  string operator = 8;
-  bool dry_run = 9;                    // true = report only, don't modify
+  string reason = 7;                   // dry_run=false 必填,≤ 191 字
+  string operator = 8;                 // dry_run=false 必填,≤ 64 字
+  bool dry_run = 9;                    // true = 只算计划,不写库
+  RecallKind recall_kind = 10;         // 必填
+  uint64 request_id = 11;              // dry_run=false 必填。运维工具按工单生成一次,重试原样带回
+  string expected_plan_digest = 12;    // dry_run=false 必填。预览回的 plan_digest,重算不相等就拒绝
 }
 
+// 一行回收指令的现状。预览时只有 player_id、资产、amount。
 message RecallResult {
   uint64 player_id = 1;
-  uint64 item_uuid = 2;                // 0 for currency recalls
+  reserved 2;                          // 曾是 item_uuid:现在按 (玩家, 资产) 汇总,实例号见 transaction_log
   uint32 item_config_id = 3;
-  uint64 amount = 4;                   // quantity or currency amount recalled
-  bool   success = 5;
+  uint64 amount = 4;                   // 要回收的数量(requested)
+  bool   success = 5;                  // 只有 scene 已提交且全额兜底才为 true
   string error_detail = 6;
+  uint64 op_id = 7;                    // 同时是 scene 流水的 correlation_id
+  uint32 currency_type = 8;
+  uint32 status = 9;                   // GmRecallOpStatus;预览为 0
+  uint64 taken = 10;                   // 实际扣走
+  uint64 debt = 11;                    // 转成补缴欠款
+  uint64 shortfall = 12;               // 没扣到、也没有欠款兜底
 }
 
 message BatchRecallItemsResponse {
   uint32 error_code = 1;
-  uint32 total_matched = 2;            // transactions matching the filter
-  uint32 total_recalled = 3;           // actually recalled (0 if dry_run)
-  uint32 total_failed = 4;
+  uint32 total_matched = 2;            // 预览:流水候选条数;批次:冻结时消费的流水条数
+  uint32 total_recalled = 3;           // 全额兜底的行数(预览为 0)
+  uint32 total_failed = 4;             // 有缺口或没有回收结果的行数
   repeated RecallResult results = 5;
+  string plan_digest = 6;              // 十六进制 sha256
+  uint32 total_pending = 7;            // 还没有结局的行数。不为 0 时别当事故已处置
+  uint64 request_id = 8;
+  uint32 batch_state = 9;              // GmRecallBatchState;预览为 0
+  uint64 amount_requested = 10;
+  uint64 amount_taken = 11;
+  uint64 amount_debt = 12;
+  uint64 amount_shortfall = 13;
+  uint64 cancelled_ms = 14;
+}
+
+message GetRecallBatchRequest {
+  uint64 request_id = 1;
+}
+
+// 取消只拦还没生效的行:scene 见过的 seq 照实记成已应用。
+message CancelRecallBatchRequest {
+  uint64 request_id = 1;
+  string operator = 2;                 // 必填,≤ 64 字
+  string reason = 3;                   // 必填,≤ 191 字
+}
+
+// 人工终结一行卡死的指令(scene 反复回 UNKNOWN)。判定依据是 scene 流水的 correlation_id = op_id。
+message ResolveRecallOpRequest {
+  uint64 op_id = 1;
+  uint32 final_status = 2;             // GmRecallOpStatus:只收 REJECTED、ABORTED(确认没应用)、PARTIAL(可能应用了)
+  string operator = 3;                 // 必填,≤ 64 字
+  string reason = 4;                   // 必填,≤ 191 字
+}
+
+message ResolveRecallOpResponse {
+  uint32 error_code = 1;
+  bool resolved = 2;                   // false = 这一行已不是 PENDING,什么都没改
 }
 
 // ── Transaction Log Query ──────────────────────────────────────

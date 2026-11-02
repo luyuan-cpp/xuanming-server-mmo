@@ -20,8 +20,7 @@ import (
 //	message_id → {gRPC 全限定方法, 目标节点类型, 是否客户端协议, 服务名, 方法名}
 //
 // 与路由服自己的 message_id.go 同包(generated/pb/game),键直接用生成常量,
-// 消息号写错编译期就炸,不存在手抄表漂移。只收 gRPC 形态的方法(cc_generic_services
-// 的 Scene 消息走 gate→scene 的 muduo TCP,永远到不了路由服);DB 域整个跳过。
+// 消息号写错编译期就炸,不存在手抄表漂移。收录范围见 collectRouteEntries。
 //
 // 路由服按表转发原始字节:FullMethod 是 protoc 生成的 "/<package>.<Service>/<Method>"
 // (proto 无 package 时为 "/<Service>/<Method>"),NodeType 是发现前缀与 zone 过滤的依据。
@@ -36,45 +35,9 @@ func WriteGoRouteTable(wg *sync.WaitGroup) {
 			return
 		}
 
-		type routeEntry struct {
-			constName      string
-			fullMethod     string
-			nodeEnum       string
-			clientProtocol bool
-			service        string
-			method         string
-		}
-
-		var entries []routeEntry
-		for _, service := range GlobalRPCServiceList {
-			if len(service.Methods) == 0 {
-				continue
-			}
-			if IsFileBelongToNode(service.Fd, messageoption.NodeType_NODE_DB) {
-				continue
-			}
-			// Scene 等 cc_generic_services 服务是 muduo TCP RPC,不经路由服
-			if service.CcGenericServices() {
-				continue
-			}
-
-			serviceFullName := service.Service()
-			if pkg := service.Package(); pkg != "" {
-				serviceFullName = pkg + "." + service.Service()
-			}
-			nodeEnum := "base.ENodeType_" + service.NodeServiceForCpp() + "NodeService"
-			clientProtocol := IsClientProtocolService(service.ServiceDescriptorProto)
-
-			for _, method := range service.Methods {
-				entries = append(entries, routeEntry{
-					constName:      method.KeyName() + _config.Global.Naming.MessageId,
-					fullMethod:     "/" + serviceFullName + "/" + method.Method(),
-					nodeEnum:       nodeEnum,
-					clientProtocol: clientProtocol,
-					service:        service.Service(),
-					method:         method.Method(),
-				})
-			}
+		entries, err := collectRouteEntries(GlobalRPCServiceList)
+		if err != nil {
+			logger.Global.Fatal("Failed to collect route table entries", zap.Error(err))
 		}
 
 		// 稳定输出:按常量名排序,重生成不产生无意义 diff
@@ -96,7 +59,7 @@ func WriteGoRouteTable(wg *sync.WaitGroup) {
 		sb.WriteString("\tService        string\n")
 		sb.WriteString("\tMethod         string\n")
 		sb.WriteString("}\n\n")
-		sb.WriteString("// RouteTable 覆盖全部 gRPC 形态的服务方法(Scene 等 muduo TCP RPC 不在此表)。\n")
+		sb.WriteString("// RouteTable 覆盖有节点类型的 gRPC 形态服务方法(Scene 等 muduo TCP RPC、没有节点类型的内部 service 不在此表)。\n")
 		sb.WriteString("var RouteTable = map[uint32]RouteEntry{\n")
 		for _, e := range entries {
 			sb.WriteString(fmt.Sprintf("\t%s: {FullMethod: %q, NodeType: %s, ClientProtocol: %t, Service: %q, Method: %q},\n",
@@ -125,4 +88,62 @@ func WriteGoRouteTable(wg *sync.WaitGroup) {
 			zap.String("file_path", outputPath),
 			zap.Int("entries", len(entries)))
 	}()
+}
+
+// routeEntry 是路由表的一行。
+type routeEntry struct {
+	constName      string
+	fullMethod     string
+	nodeEnum       string
+	clientProtocol bool
+	service        string
+	method         string
+}
+
+// collectRouteEntries 收集路由表的条目。只收 gRPC 形态的方法(cc_generic_services 的 Scene 消息走 gate→scene 的
+// muduo TCP,永远到不了路由服);DB 域整个跳过。
+//
+// 路由服按节点类型发现目标,对不上节点类型枚举的 service 转发不出去,所以不进表:
+//   - 内部 service(RoleFenceParticipant,六个业务服各自注册)本来就不对客户端路由,路由服对表外的消息号一样拒绝。
+//   - 客户端协议 service 对不上是配置错误,玩家请求会全部失败,让这次生成失败。
+func collectRouteEntries(services RPCServiceInfoList) ([]routeEntry, error) {
+	var entries []routeEntry
+	for _, service := range services {
+		if len(service.Methods) == 0 {
+			continue
+		}
+		if IsFileBelongToNode(service.Fd, messageoption.NodeType_NODE_DB) {
+			continue
+		}
+		if service.CcGenericServices() {
+			continue
+		}
+
+		clientProtocol := IsClientProtocolService(service.ServiceDescriptorProto)
+		if !service.HasNodeType() {
+			if clientProtocol {
+				return nil, fmt.Errorf("client protocol service %s in %s has no node type %sNodeService",
+					service.Service(), service.FileName(), service.NodeServiceForCpp())
+			}
+			continue
+		}
+
+		serviceFullName := service.Service()
+		if pkg := service.Package(); pkg != "" {
+			serviceFullName = pkg + "." + service.Service()
+		}
+		nodeEnum := "base.ENodeType_" + service.NodeServiceForCpp() + "NodeService"
+
+		for _, method := range service.Methods {
+			entries = append(entries, routeEntry{
+				constName:      method.KeyName() + _config.Global.Naming.MessageId,
+				fullMethod:     "/" + serviceFullName + "/" + method.Method(),
+				nodeEnum:       nodeEnum,
+				clientProtocol: clientProtocol,
+				service:        service.Service(),
+				method:         method.Method(),
+			})
+		}
+	}
+	return entries, nil
 }

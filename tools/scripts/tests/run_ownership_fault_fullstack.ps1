@@ -3,8 +3,6 @@ param(
     [Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{32}$')][string]$RunId,
     [Parameter(Mandatory=$true)][string]$SourceReceipt,
     [Parameter(Mandatory=$true)][datetimeoffset]$RunStartedUtc,
-    [string]$DbTestBinary,
-    [string]$RobotTestBinary,
     [string]$RobotConfig,
     [string]$DelayAccount,
     [string]$ZombieAccount,
@@ -13,8 +11,9 @@ param(
     [int]$ParentPid=0,
     [datetimeoffset]$ParentStartedUtc=[datetimeoffset]::MinValue
 )
-# 仅本机独立功能演练，不做压测、不启动/停止基础设施，不编译或改变系统配置。
-# 启动前由负责人提供已完成正式构建/输入封存的 test EXE 与本轮新建 scene 回执。
+# 仅本机独立功能演练，不做压测、不启动/停止基础设施，不改变系统配置。
+# 控制器(go/data_service/internal/faultdrill)和机器人测试由本脚本从当前源码编进 RunDir，不接受外部旧二进制。
+# 启动前由负责人提供本轮新建 scene 回执与真实 scene_manager 配置。
 # 所有进程/锁都有截止；失败保留日志与资产，停止本脚本自己的 robot/控制器。
 $ErrorActionPreference='Stop'
 $taskRepo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
@@ -31,7 +30,14 @@ if($Watchdog -and -not $ExpectedSourceReceiptSha256){throw '看门狗必须绑�
 if($ExpectedSourceReceiptSha256 -and $taskReceiptSHA256 -ne $ExpectedSourceReceiptSha256){throw 'scene收据字节已变，不操作任何进程'}
 $taskReceipt=[Text.Encoding]::UTF8.GetString($taskReceiptBytes).TrimStart([char]0xFEFF)|ConvertFrom-Json
 if($taskReceipt.service -ne 'scene' -or $taskReceipt.zone -ne 990017 -or $taskReceipt.fault_run -ne $RunId -or ([datetimeoffset]$taskReceipt.started_utc) -lt $RunStartedUtc){throw '拒绝暂停非本轮新建自有 scene'}
-if($taskReceipt.source_save_interval_seconds -ne 30){throw '本轮source必须使用正式30秒周期；控制器等待真实双ACK后才制造脏内存'}
+# 周期只读回执，不写死、不补缺省；控制器要等一次真实周期存盘，上限与控制器 ownershipFaultMaxIntervalSeconds 相同。
+$taskIntervalValue=$taskReceipt.PSObject.Properties['source_save_interval_seconds']
+if(-not $taskIntervalValue -or -not($taskIntervalValue.Value -is [int] -or $taskIntervalValue.Value -is [long]) -or $taskIntervalValue.Value -lt 1 -or $taskIntervalValue.Value -gt 120){throw 'scene回执必须记录1到120之间的真实source_save_interval_seconds'}
+$taskIntervalSeconds=[int]$taskIntervalValue.Value
+# 与控制器 ownershipFaultBaseBudgetSeconds+2*周期 同公式，改动两边一起改。
+$taskBudgetSeconds=360+2*$taskIntervalSeconds
+$taskNodeUuidValue=$taskReceipt.PSObject.Properties['node_uuid']
+if(-not $taskNodeUuidValue -or $taskNodeUuidValue.Value -isnot [string] -or -not $taskNodeUuidValue.Value){throw 'scene回执必须记录本轮实际node_uuid，不补假值'}
 $taskCreationValue=$taskReceipt.PSObject.Properties['process_creation_filetime_utc']
 if(-not $taskCreationValue -or $taskCreationValue.Value -isnot [string] -or $taskCreationValue.Value -notmatch '^[1-9][0-9]{0,18}$'){throw 'scene回执必须记录实际进程创建FILETIME的十进制字符串，不接受缺省或近似时间'}
 [uint64]$taskCreationFileTime=0
@@ -150,9 +156,10 @@ if($Watchdog){
     return
 }
 if((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 2MB){throw '不足2GiB可用内存；不启动演练进程'}
-foreach($taskPath in @($DbTestBinary,$RobotTestBinary,$RobotConfig)) {if(-not $taskPath -or -not (Test-Path -LiteralPath $taskPath -PathType Leaf)){throw '缺少正式测试产物或无凭据机器人配置'}}
+if(-not $RobotConfig -or -not (Test-Path -LiteralPath $RobotConfig -PathType Leaf)){throw '缺少无凭据机器人配置'}
 if($DelayAccount -eq $ZombieAccount -or $DelayAccount -notmatch '^robot_assetarrival_fault_[a-z0-9_]+$' -or $ZombieAccount -notmatch '^robot_assetarrival_fault_[a-z0-9_]+$'){throw '须提供两个本轮独立白名单账号'}
-if(-not $env:OWNERSHIP_FAULT_PASSWORD -or -not $env:OWNERSHIP_FAULT_PLAYER_DSN -or -not $env:OWNERSHIP_FAULT_REDIS -or -not $env:OWNERSHIP_FAULT_ETCD){throw '凭据及专用端点须从受控环境注入，不打印或写计划'}
+if(-not $env:OWNERSHIP_FAULT_PASSWORD -or -not $env:OWNERSHIP_FAULT_PLAYER_DSN){throw '凭据及专用端点须从受控环境注入，不打印或写计划'}
+if(-not $env:OWNERSHIP_FAULT_SM_CONFIG -or -not [IO.Path]::IsPathRooted($env:OWNERSHIP_FAULT_SM_CONFIG) -or -not (Test-Path -LiteralPath $env:OWNERSHIP_FAULT_SM_CONFIG -PathType Leaf)){throw 'OWNERSHIP_FAULT_SM_CONFIG 必须是本轮真实 scene_manager 配置的绝对路径'}
 if(Test-Path -LiteralPath (Join-Path $taskRoot 'runner-result.json')){throw '已有运行证据，换新目录，不自动重试'}
 if(-not (Get-OwnedSource)){throw '自有source当前不存活，拒绝演练'}
 $taskLogRoot=[IO.Path]::GetFullPath((Join-Path $taskReceipt.cwd 'logs/cpp_nodes'))
@@ -160,6 +167,23 @@ if(-not $taskLogRoot.StartsWith($taskBuild,[StringComparison]::OrdinalIgnoreCase
 $taskOffsets=@{}
 $taskLogTails=@{}
 foreach($taskFile in @(Get-ChildItem -LiteralPath $taskLogRoot -File -Recurse -ErrorAction SilentlyContinue)){$taskOffsets[$taskFile.FullName]=$taskFile.Length}
+# 从当前源码编译进本轮目录。旧二进制不能代替当前源码；目标测试不在二进制里时 go test 会零用例退出0，先用 -test.list 拦住。
+function Build-OwnedTest([string]$Name,[string]$ModuleDir,[string]$Package,[string]$Test){
+    $taskImagePath=Join-Path $taskRoot ($Name+'.test.exe')
+    if(Test-Path -LiteralPath $taskImagePath){throw '保留原始产物，禁止重用目录'}
+    $taskCompiler=Start-Process -FilePath 'go' -ArgumentList @('test','-c','-o',$taskImagePath,$Package) -WorkingDirectory $ModuleDir -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $taskRoot ($Name+'.build.stdout.log')) -RedirectStandardError (Join-Path $taskRoot ($Name+'.build.stderr.log'))
+    if($taskCompiler.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $taskImagePath -PathType Leaf)){throw ($Name+' 测试编译失败，见 build 日志')}
+    $taskListed=@(& $taskImagePath ('-test.list=^'+$Test+'$'))
+    if($taskListed -notcontains $Test){throw ($Name+' 二进制里没有目标测试 '+$Test)}
+    return $taskImagePath
+}
+$env:GOTOOLCHAIN='local'
+$env:GOPROXY='off'
+$ControllerTestBinary=Build-OwnedTest 'controller' (Join-Path $taskRepo 'go/data_service') './internal/faultdrill' 'TestFullstackOwnershipFaults'
+$RobotTestBinary=Build-OwnedTest 'robot' (Join-Path $taskRepo 'robot') '.' 'TestFullstackOwnershipFaultRobot'
+$env:OWNERSHIP_FAULT_SOURCE_SAVE_INTERVAL_SECONDS="$taskIntervalSeconds"
+$env:OWNERSHIP_FAULT_SOURCE_NODE_UUID=$taskNodeUuidValue.Value
+$env:OWNERSHIP_FAULT_ROBOT_BUDGET_SECONDS="$($taskBudgetSeconds-30)"
 $env:OWNERSHIP_FAULT_REQUIRE='1'
 $env:OWNERSHIP_FAULT_MODE='dev'
 $env:OWNERSHIP_FAULT_DIR=$taskRoot
@@ -181,7 +205,7 @@ function Start-OwnedTest([string]$Name,[string]$Image,[string]$Test,[string]$Cwd
     if((Test-Path -LiteralPath $taskOut)-or(Test-Path -LiteralPath $taskErr)){throw '保留原始日志，禁止重用角色'}
     $taskExpectedImage=[IO.Path]::GetFullPath($Image)
     $taskExpectedSHA=(Get-FileHash -LiteralPath $Image -Algorithm SHA256).Hash
-    $taskChild=Start-Process -FilePath $Image -ArgumentList @('-test.v=true','-test.count=1',('-test.run=^'+$Test+'$'),'-test.timeout=440s') -WorkingDirectory $Cwd -WindowStyle Hidden -PassThru -RedirectStandardOutput $taskOut -RedirectStandardError $taskErr
+    $taskChild=Start-Process -FilePath $Image -ArgumentList @('-test.v=true','-test.count=1',('-test.run=^'+$Test+'$'),('-test.timeout='+($taskBudgetSeconds+20)+'s')) -WorkingDirectory $Cwd -WindowStyle Hidden -PassThru -RedirectStandardOutput $taskOut -RedirectStandardError $taskErr
     # 创建器的句柄一直保留；清理时不再重新按PID解析对象。
     $taskEntry=@{name=$Name;process=$taskChild;pid=$taskChild.Id;image=$taskExpectedImage;sha256=$taskExpectedSHA;handle=$null;creation_filetime=[uint64]0}
     $taskChildren.Add($taskEntry)
@@ -197,14 +221,22 @@ function Resume-OwnedSource {
     if($taskOwned){[OwnershipFaultNative]::Change([int]$taskReceipt.pid,$taskImage,$taskCreationFileTime,$taskReceipt.binary_sha256,$false)}
     return ($null-ne $taskOwned)
 }
+# 目标测试必须实际进入并通过；退出码0不够（零用例也是0），SKIP 算失败。
+function Assert-TestPassed([string]$Name,[string]$Test,[string[]]$Subtests){
+    $taskOutput=[IO.File]::ReadAllText((Join-Path $taskRoot ($Name+'.stdout.log')))
+    if($taskOutput -match '(?m)^\s*--- SKIP:'){throw ($Name+' 出现 SKIP，算失败')}
+    if($taskOutput -notmatch ('(?m)^=== RUN\s+'+[regex]::Escape($Test)+'\s*$')){throw ($Name+' 未实际进入目标测试')}
+    if($taskOutput -notmatch ('(?m)^--- PASS: '+[regex]::Escape($Test)+' ')){throw ($Name+' 目标测试未通过')}
+    foreach($taskSubtest in $Subtests){if($taskOutput -notmatch ('(?m)^\s+--- PASS: '+[regex]::Escape($Test+'/'+$taskSubtest)+' ')){throw ($Name+' 场景未完成: '+$taskSubtest)}}
+}
 try{
-    Write-Phase 'runner-inputs' @{source_receipt_sha256=$taskReceiptSHA256;source_process_creation_filetime_utc=$taskCreationValue.Value;db_test_sha256=(Get-FileHash -LiteralPath $DbTestBinary -Algorithm SHA256).Hash;robot_test_sha256=(Get-FileHash -LiteralPath $RobotTestBinary -Algorithm SHA256).Hash;robot_config_sha256=(Get-FileHash -LiteralPath $RobotConfig -Algorithm SHA256).Hash;source_scene_sha256=$taskReceipt.binary_sha256;secret_values_recorded=$false}
-    $taskController=Start-OwnedTest 'controller' $DbTestBinary 'TestFullstackOwnershipFaults' (Join-Path $taskRepo 'go/db')
+    Write-Phase 'runner-inputs' @{source_receipt_sha256=$taskReceiptSHA256;source_process_creation_filetime_utc=$taskCreationValue.Value;controller_test_sha256=(Get-FileHash -LiteralPath $ControllerTestBinary -Algorithm SHA256).Hash;source_save_interval_seconds=$taskIntervalSeconds;budget_seconds=$taskBudgetSeconds;robot_test_sha256=(Get-FileHash -LiteralPath $RobotTestBinary -Algorithm SHA256).Hash;robot_config_sha256=(Get-FileHash -LiteralPath $RobotConfig -Algorithm SHA256).Hash;source_scene_sha256=$taskReceipt.binary_sha256;secret_values_recorded=$false}
+    $taskController=Start-OwnedTest 'controller' $ControllerTestBinary 'TestFullstackOwnershipFaults' (Join-Path $taskRepo 'go/data_service')
     $taskDeadline=[Diagnostics.Stopwatch]::StartNew()
     $taskSeen=''
     $taskCommands=@('start-delay','start-source','suspend','start-target','resume','done')
     $taskNextCommand=0
-    while($taskDeadline.Elapsed.TotalSeconds -lt 430){
+    while($taskDeadline.Elapsed.TotalSeconds -lt ($taskBudgetSeconds+10)){
         $taskController.Refresh()
         if(Test-Path -LiteralPath (Join-Path $taskRoot 'command-abort.json')){throw '控制器失败，执行恢复和本轮子进程清理'}
         if($taskController.HasExited){break}
@@ -265,6 +297,13 @@ try{
     $taskDrain=[Diagnostics.Stopwatch]::StartNew()
     do{$taskAlive=@();foreach($taskEntry in $taskChildren){$taskEntry.process.Refresh();if(-not $taskEntry.process.HasExited){$taskAlive+=$taskEntry}};if($taskAlive.Count -eq 0){break};Start-Sleep -Milliseconds 100}while($taskDrain.Elapsed.TotalSeconds -lt 10)
     foreach($taskEntry in $taskChildren){$taskEntry.process.Refresh();if(-not $taskEntry.process.HasExited -or $taskEntry.process.ExitCode -ne 0){throw '真实机器人未在截止前正常完成，不能只根据控制器宣称通过'}}
+    Assert-TestPassed 'controller' 'TestFullstackOwnershipFaults' @('commit_blocked_handoff_waits','stale_scene_resume_write_rejected')
+    foreach($taskRole in @('delay','zombie-source','zombie-target')){Assert-TestPassed $taskRole 'TestFullstackOwnershipFaultRobot' @()}
+    foreach($taskProofName in @('save-blocked-evidence','delay-proof','zombie-proof')){
+        $taskProofPath=Join-Path $taskRoot ($taskProofName+'.json')
+        if(-not(Test-Path -LiteralPath $taskProofPath)){throw ('缺少场景证据 '+$taskProofName)}
+        if((Get-Content -LiteralPath $taskProofPath -Raw|ConvertFrom-Json).run -ne $RunId){throw ('场景证据不属于本轮 '+$taskProofName)}
+    }
     $taskSucceeded=$true
 }catch{
     $taskPrimaryError=$_

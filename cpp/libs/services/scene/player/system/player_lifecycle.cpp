@@ -2956,12 +2956,14 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	// 1. Bind session: map session_id -> player_id on this Scene node
 	//    so session-addressed client messages (ProcessClientPlayerMessage) can find the player, and
 	//    SendMessageToClientViaGate can find the gate node.
+	bool sessionChanged = false;
 	if (enterInfo.session_id() != 0)
 	{
 		// Clean up old session mapping if player already had a different session
 		// (e.g. reconnect with new Gate connection). Prevents orphaned entries.
 		auto &snapshot = tlsEcs.actorRegistry.get_or_emplace<PlayerSessionSnapshotComp>(player);
 		const auto oldSessionId = snapshot.gate_session_id();
+		sessionChanged = oldSessionId != enterInfo.session_id();
 		// 旧号只在仍映射到本玩家时才擦(scene-enter-session-fence.md §5.6)。
 		if (oldSessionId != 0 && oldSessionId != enterInfo.session_id() &&
 			EraseSessionMappingIfOwned(oldSessionId, playerId))
@@ -3002,6 +3004,17 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	//    已先写了 location,这里拒绝只会让两边对不上。换图在途时新的备战由 PrepareBattle 挡掉
 	//    (IsSceneChangeBusy);剩下的窗口(在途期间迟到的确认按锁重建 FIGHTING、在途槽过期之后才到的路由)
 	//    与 Java 版同口径放行。
+	// 新会话复用还在目标场景的实体(断线宽限内重连、顶号先于旧会话退出):HandleEnterScene 对「已在目标场景」幂等早退,
+	// 新客户端就收不到 NotifyEnterScene 和自身 ActorCreate,旧连接的 AOI 观察状态也不会重建,只能等到入场超时。
+	// 先离场再走完整入场。同一会话的重复路由不走这里,仍然幂等(disconnect-reconnect-audit-20261020.md §9.1)。
+	if (sessionChanged)
+	{
+		const auto* resident = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+		if (resident != nullptr && resident->sceneEntity == targetScene)
+		{
+			PlayerSceneSystem::LeaveCurrentScene(player);
+		}
+	}
 	if (!PlayerSceneSystem::HandleEnterScene(player, targetScene))
 	{
 		LOG_ERROR << "EnterScene: scene transition interrupted, player_id=" << playerId;

@@ -100,6 +100,11 @@ Container runtime handles log rotation automatically:
   sidecar OOM 后永不重启,而 Agones 的健康检查只看游戏容器、不会把 GameServer 置 Unhealthy,日志会静默断流;
   ② Pod 终止时 kubelet 会等业务容器完全退出后再停原生 sidecar,scene 那 60 秒 drain 期写的日志才追得完
   (普通容器是与业务容器同时收 SIGTERM)。细节见 [grafana-loki-local-logs.md](grafana-loki-local-logs.md) §6。
+- **C++ 节点的日志级别(2026-10-30 补)**:`bin/etc/base_deploy_config.yaml` 的 `LogLevel` 直接按 muduo 枚举解释
+  (0=TRACE 1=DEBUG 2=INFO 3=WARN 4=ERROR 5=FATAL),必填,缺键或越界拒启。K8s 的 `node-config` / `battle-node-config`
+  由 `k8s_deploy.ps1` 从这里镜像,默认 2 = INFO(2026-10-22 前写死 1 = DEBUG)。只在启动时读一次:上面 Key Practices 第 4 条说的
+  config reload 与环境变量对 C++ 都不适用(`MUDUO_LOG_DEBUG` 会被配置覆盖)。临时看 DEBUG 的做法、预检拦截与重启条件见
+  [演练手册](cross-zone-failure-test-runbook.md) §3.1 第 7 条。
 - **Go / Java 服务 = 仍是容器 stdout,尚未采集**。集群里**还没有**读 `/var/log/pods` 的 DaemonSet,这条路属于**未做**;
   现在只能 `kubectl logs` 看,Pod 重建即丢。
 - **这套方案采不到的东西**(别以为都进了 Loki):容器 stdout/stderr 上的 gRPC / abseil / librdkafka 输出,

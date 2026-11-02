@@ -9,7 +9,12 @@ function ChatSource([string]$Path) { Get-Content -LiteralPath (Join-Path $chatRe
 Test-Case 'Chat部署先显式迁移，两类DSN只通过独立Secret key交给对应进程' {
     $runtime=ChatSource 'deploy/k8s/manifests/go-svc/chat.yaml'
     $migration=ChatSource 'deploy/k8s/manifests/go-svc/chat-migrate.yaml'
-    Assert-Match $runtime 'name: CHAT_AUTHORITY_DSN\s+valueFrom:\s+secretKeyRef: \{name: chat-authority-secrets, key: runtime-dsn, optional: false\}' '常驻账号只取runtime key'
+    # 常驻账号的DSN不再由Secret直接注入主容器：只有init里的registrar读运行输入Secret，把本次boot选中的DSN写进Pod私有目录，
+    # 主容器启动时才从私有目录读出。主容器环境里不能再出现这把DSN的Secret引用，否则绕过写者闸门。
+    Assert-Match $runtime '"-runtime-env-output","/run/sql-writer/runtime/private/env"' 'registrar把常驻DSN写进私有目录'
+    Assert-Match $runtime 'CHAT_AUTHORITY_DSN=\\"\$\(cat /app/etc/private/env/CHAT_AUTHORITY_DSN\)\\"; export CHAT_AUTHORITY_DSN;' '常驻账号只取registrar写出的私有DSN'
+    Assert-NotMatch $runtime 'name: CHAT_AUTHORITY_DSN' '主容器不再经环境变量直接拿到DSN'
+    Assert-NotMatch $runtime 'chat-authority-secrets' '常驻Deployment不引用迁移账号所在的Secret'
     Assert-Match $migration 'name: CHAT_AUTHORITY_DSN\s+valueFrom:\s+secretKeyRef: \{name: chat-authority-secrets, key: migration-dsn, optional: false\}' '迁移账号只取migration key'
     Assert-NotMatch $runtime 'key: migration-dsn' '运行进程不取得DDL能力'
     Assert-NotMatch $migration 'name: LOGIN_REDIS_PASSWORD' '显式-migrate不读取登录Redis'

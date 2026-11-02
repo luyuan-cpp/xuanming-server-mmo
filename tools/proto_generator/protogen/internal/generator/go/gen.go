@@ -116,7 +116,7 @@ func GenerateGoGrpc(protoFiles []string, outputDir string, protoRootPath string)
 		)
 	}
 
-	protocPath, err := resolveProtocPath()
+	protocPath, err := utils2.ProtocPath()
 	if err != nil {
 		logger.Global.Fatal("Go gRPC generation: failed to resolve protoc path",
 			zap.Error(err),
@@ -141,11 +141,6 @@ func GenerateGoGrpc(protoFiles []string, outputDir string, protoRootPath string)
 	)
 
 	return utils2.RunProtocWithPath(protocPath, args, "generating Go gRPC code")
-}
-
-// resolveProtocPath resolves the protoc executable path.
-func resolveProtocPath() (string, error) {
-	return "protoc", nil
 }
 
 // AddGoPackageToProtoDir adds go_package declarations to proto files.

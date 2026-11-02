@@ -17,8 +17,8 @@
 #   REDIS_HA_SCRIPTS_DIGEST 脚本 ConfigMap 的摘要(Get-RedisHaScriptsDigest),写进代理的 Pod 模板注解:脚本一改代理就滚动
 # 有占位没替换就拒绝 apply(Assert-InfraManifestPlaceholdersReplaced)。
 #
-# 与 redis-ha.yaml 的差别(其余照抄。脚本 ConfigMap 的代码行由 tools/scripts/tests/k8s_redis_split_contract.tests.ps1 与 redis-ha.yaml
-# 逐行比对,只允许下面列出的差别 —— 改 redis-ha.yaml 的脚本要同步改这里,否则契约测试变红):
+# 与 redis-ha.yaml 的差别(其余照抄。全部生效行,不止脚本 ConfigMap,由 tools/scripts/tests/k8s_redis_split_contract.tests.ps1 与 redis-ha.yaml
+# 逐行比对,只允许下面列出的差别 —— 改 redis-ha.yaml 要同步改这里,否则契约测试变红):
 #   - 名字:见上。标签一律 app: <名>(redis Pod)/ app: <名>-proxy(代理),**绝不能是 app: redis / app: redis-proxy**:
 #     核心 Service redis 的 selector 是二者之一,带上就被挂到核心入口后面。
 #   - redis-server 多三个参数 --appendfsync everysec、--maxmemory "$MAXMEMORY"、--maxmemory-policy noeviction(同 redis-purpose.yaml,§6.3:

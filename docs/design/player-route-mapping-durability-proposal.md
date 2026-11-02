@@ -1,6 +1,6 @@
 # 玩家归属与落点映射持久化:库为真源 + Redis 完整副本 + 就绪标记(已拍板;第 0 ~ 3 批已落码,未验证;2026-10-19 起读方按身份绑定的就绪标记判可信,见 §13)
 
-> **2026-10-23 方向变更**：负责人拍板映射改为直读 TiDB、撤掉 Redis 副本与就绪标记，见文末 §15（设计已定，未落码）。本文 §2 / §5.1 / §5.4 / §13 的副本与就绪标记设计、§14 里依赖 ready 的首次启动步骤随之作废，落码以 §15 为准。
+> **2026-10-23 方向变更**：负责人拍板映射改为直读 TiDB、撤掉 Redis 副本与就绪标记，见文末 §15（2026-10-30 已按 §15.9 落码，未编译）。本文 §2 / §5.1 / §5.4 / §13 的副本与就绪标记设计、§14 里依赖 ready 的首次启动步骤随之作废，落码以 §15 为准。
 
 > **状态**:**已拍板(2026-10-12,负责人),分批落码中**。2026-10-12 起草;拍板结果与落码进度见文末「§11 拍板与落码记录」。
 > **起因**:用户提出「逻辑服 id(home_zone)和 storage_id 应该存到 TiDB,Redis 只做缓存,不然 Redis 丢了映射无法恢复」。这正是 [TiDB 决策](./global-data-layer-tidb-decision.md) D1「映射持久化兜底」与 [player-storage-placement.md](./player-storage-placement.md) §4.4 / §11.4 的遗留项。
@@ -1537,6 +1537,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 ## 15. 2026-10-23 负责人拍板：映射改为直读 TiDB，撤掉 Redis 副本（2026-10-30 已落码，未编译，待 Codex 验证）
 
 > **状态（2026-10-30 更新）**：已按 §15.9「落码口径」写完，未编译。下面是当时的方向说明，**落码以 §15.9 为准**。取代 §2「Redis 完整副本 + 就绪标记」、§5.1 / §5.4、§13 的 M1–M5、第 1b-2 批对账 leader 与第 3 批读方。保留：库为真源、四张（含 proto 守卫共五张）路由表、合服围栏落库、提交点在 TiDB 事务。
+> **2026-11-01 核对**：落码会话静态核过残留：非测试代码里已没有映射键、就绪标记、水位键、对账表和部署开关。第三阶段后 go/db 不连全局库，选库经 data_service `GetPlayerRoute`（AGENTS §7 逻辑库自治），读失败回暂不可用，只有目录确定没有才算没有落点；§15.9 落码口径 (d) 的「强读 `player_route`」和 T6 按这个理解。全部未编译，运行证据以 Codex 回执 `docs/handoff/player-save-direct-commit-20261030/codex-results.md` 为准。
 > **来源**：负责人在会话「账号登录逻辑/物理服瓶颈」里，面对三个选项（直读 TiDB / Redis 分片副本 / 这次不动）选了「直读 TiDB（推荐）」。选项原文：去掉 Redis 映射副本，`player_route` 只在 TiDB 一份，登录、进场、go/db 直接 SQL 点查，go/db 在同一 TiDB 事务里核落点；删掉就绪标记、对账 leader、预热、发布等待。负责人同日说明：项目未上线，玩家数据可完全清空。
 > **与 §14 的关系**：§14（2026-10-21 全球正式默认与首次启动）里依赖副本的部分随本节作废：对账 leader 自然挂 ready、go/db 消费 / 重试就绪闸放行、「Mapping Redis 无历史 zone/placement/maprev/merged_into」这一条空环境判据、存量环境的 `route-tool import-from-redis` 与 `audit -require-maprev`。首次启动改为：预建并迁移全局库与白名单落点库 → 起 data_service（§14 的 SQL 空环境判据保留）→ 直接起 go/db 与 login，不再等待 ready。§14 其余内容（RequireTiDB、Placement.Required、PinOnCreate、storage_id 白名单反解、强读会话）保留。
 > **依据**：§12.3 与 2026-10-22~23 的两轮多代理静态核对（基线 HEAD `940ef9746` / `2c07f2c28`）；D1 移交 [d1-review-fix-handoff-20261023.md](../handoff/d1-review-fix-handoff-20261023.md)；数据服务路由审计会话给出的写门禁契约（[data_service_role_and_scope.md](./data_service_role_and_scope.md)「写门禁契约」「已澄清」）。本节的删除清单是汇总结果，**不是穷举**；落码第一步先按 §15.7 B0 做全仓穷举盘点。

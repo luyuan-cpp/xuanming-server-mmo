@@ -341,7 +341,7 @@ def main() -> None:
     write_yaml(config_dir / "base_deploy_config.yaml", base)
     game = load_yaml("bin/etc/game_config.yaml")
     game["zoneredis"]["host"] = "redis"
-    # 这个栈常驻 player_inbox，scene 要真的拉取：入箱的结算只有消费之后才落到玩家身上。源配置的 false 是线上分步打开用的。
+    # 这个栈常驻 player_inbox，scene 要真的拉取：入箱的结算只有消费之后才落到玩家身上。这里显式写，不跟着源配置变（线上分步回退时源配置可能是 false）。
     game["player_inbox"]["consumer_enabled"] = True
     write_yaml(config_dir / "game_config.yaml", game)
     # 奖励不派生第二份默认值，原样复制权威配置并纳入同批来源摘要。

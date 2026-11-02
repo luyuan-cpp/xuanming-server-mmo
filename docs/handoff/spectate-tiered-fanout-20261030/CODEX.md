@@ -55,7 +55,7 @@ C++ MSBuild 一律串行 `/m:1`。项目未上线：dev 库可以直接清空重
 
 ## 6. 冒烟（要先改 robot，这部分归 Codex）
 
-- 现有 `robot/etc/battle_smoke.yaml`（B 随机观战 A 的 PVE_SOLO，走 L0 直连）应继续 `BATTLE_SMOKE_OK`。先清空 Redis，确认 match 模式（见 `specs/85-local-mark-consistency.md` 第 6 节）。
+- 现有 `robot/etc/battle_smoke.yaml`（B 随机观战 A 的 PVE_SOLO，走 L0 直连）应继续 `BATTLE_SMOKE_OK`。match 只有 SQL 路径，robot 的 WatchBattle 已带 `request_id`。先按 AGENTS §6.2 清空 Redis，让 `spectate:battles:active` 里只剩这一场；SQL 的时钟不能比 battle 快 5s 以上。
 - 要覆盖 LOBBY 档，robot 需要新增：收到 `WatchBattleResponse.delivery == LOBBY` 时发 `GateClientSpectate.SubscribeSpectate`（带 `spectate_ticket`），在大厅连接上断言依次收到 161、每回合 158、终局 166；把房间直连席注入小值或用 21 名观众触发满员转中继。客户端按同一流程接入（见设计文档 §6.1：去重时 158 只与 158 比较，161 不推进水位）。
 - 客户端代码（Unity 仓）：按 `delivery` 分支、大厅连接挂 158 / 161 / 166、`SubscribeSpectate` / `UnsubscribeSpectate`、`SPECTATE_END_SOURCE_LOST`、新 tip 16021 / 16024、大厅重连后用原 request_id 重发 WatchBattle。未授权本次改客户端，归 Codex / 客户端任务。
 

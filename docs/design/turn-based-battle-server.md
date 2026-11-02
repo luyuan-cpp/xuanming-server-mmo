@@ -312,11 +312,11 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
 
 ```
 客户端 WatchBattle(battle_id|0) ──gate(gRPC,无状态路由)──► match
-  match: 互斥检查(ticket / battle:lock;重复 WatchBattle 不拒绝,懒清退旧场后放行,战斗已收尾则仅删标记)
+  match: 占定请求头 SpectatorIntent(同 request_id 重放回原结论)
+       → 已有旧观战:沿 match_spectator 原件 RemoveObserver,拿到取消证明才关闭旧占用,否则回 16004、不登记新操作
        → battle_id=0 时从 spectate:battles:active 随机挑一场
-       → 读 spectate:battle:{id} 得 SpectateBattleRecord(含 battle_node_id)
-       → 读 player:session:{player_id} 组观众 BattleRouting(session/gate/zone,scene 字段留 0)
-       → SETNX+EX spectate:watching:{player_id} = AddObserver 原件(TTL 同索引;并发 WatchBattle 抢占失败即拒绝)
+       → 读成局 match_formation 得落点与实例并核可见性;读 player:session:{player_id} 组观众 BattleRouting(session/gate/zone,scene 字段留 0),核请求所在会话仍是当前会话
+       → 本场还是 DIRECT 档:BeginSpectator 在同一事务里核匹配占用互斥,落 match_spectator 原件(op = request_id / 准入截止 / 实例)
        → gRPC battle.AddObserver(battle_id, observer, routing, op, admit_before_ms, target_instance_id)
   battle: 房间校验(存在/观众未满 kMaxObserversPerRoom/非参战者)→ 加入 room.observers
        → Kafka gate-{gid}: BindBattleEvent(观众 session → 本节点)
@@ -341,9 +341,9 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
 
 | key | 类型 | 语义 |
 |-----|------|------|
-| `spectate:battle:{battle_id}` | string = SpectateBattleRecord pb,TTL = BattleMaxDurationSeconds + 60s | 活跃战斗登记(gather 成功后写) |
-| `spectate:battles:active` | ZSET member=battle_id score=created_at_ms | 随机/列表索引;懒剔除 + 定期按 score 清过期 |
-| `spectate:watching:{player_id}` | string = 本次观战固定的 AddObserverRequest 原件 pb(battle_id / op / 准入截止 / 实例;2026-10-24 前为十进制 battle_id),TTL 同上 | 观战互斥标记,也是 battle 上观众的恢复入口(gather 清退时反查用,RemoveObserver 带原件的同一 op);重复 WatchBattle(含重看同一场)沿原件取消旧观战,拿到取消证明才按值删标记,否则回 16004 并保留(标记解析不出原件时只删标记);见 [battle-spectate-tiered-fanout.md](battle-spectate-tiered-fanout.md) §10.1 |
+| `spectate:battles:active` | ZSET member=battle_id score=created_at_ms,只收公开局 | 随机/列表索引;战斗终局时摘除,懒剔除 + 定期按 score 清过期 |
+
+2026-10-30 起 `spectate:battle:*`、`spectate:watching:*` 已删:观战记录由 SQL 成局现算(`loadSpectateBattle`),观战占用与原操作在 `match_spectator` / `match_spectator_intent`。档位与 L1 / L2 的键见 [battle-spectate-tiered-fanout.md](battle-spectate-tiered-fanout.md) §15.6。
 
 ### 10.5 房间侧规格(battle 节点)
 

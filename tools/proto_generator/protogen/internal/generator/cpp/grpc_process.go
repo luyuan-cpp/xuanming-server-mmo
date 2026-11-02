@@ -52,6 +52,11 @@ func buildGrpcInitFileInfo(services []*internal.RPCServiceInfo) []*grpcInitFileI
 			continue
 		}
 
+		// 模板按节点类型分发 deadline,没有节点类型的内部 service 没有分支可落。
+		if !service.HasNodeType() {
+			continue
+		}
+
 		protoPath := service.FileName()
 		file, ok := filesByProtoPath[protoPath]
 		if !ok {

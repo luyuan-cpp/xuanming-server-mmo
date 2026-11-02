@@ -10,7 +10,9 @@
 #include <hiredis/hiredis.h>
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <map>
 #include <set>
@@ -102,10 +104,13 @@ namespace
 	//   battle:ctx:{player_id}  = InBattleComp 序列化 —— 锁的伴生上下文(scene 私有):
 	//       battle_node_id(仅日志/排障)/ deadline_ms / state / prepare_deadline_ms,供"实体没了但锁还在"
 	//       的路径重建冻结(完整下线再登录、备战到期后迟到的确认)。生命周期与锁完全同步:
-	//       同时 SET / 同 TTL / 同一条 Lua 里 EXPIRE / DEL,只在锁存在且值匹配时才被信任。
+	//       同一条 Lua 里写入 / 续期 / 删除,同 TTL,只在锁存在且值匹配时才被信任。
 	// 结算原件不进 Redis:结算只走 match SQL + player_inbox(player-data-tidb-scaling-plan.md §5.4)。
 	constexpr const char *kBattleLockKeyFmt = battle_lock::kBattleLockKeyFmt;
 	constexpr const char *kBattleCtxKeyFmt = battle_lock::kBattleCtxKeyFmt;
+	// 写锁 + ctx(PrepareBattle 首发与重试共用)与只延长的条件续期,脚本与理由见 battle_lock_rules.h。
+	constexpr const char *kWriteBattleLockScript = battle_lock::kWriteBattleLockScript;
+	constexpr const char *kRenewBattleLockIfMatchScript = battle_lock::kRenewBattleLockIfMatchScript;
 
 	// speed 缺配兜底:BaseAttributesComp.speed 为 0(存量数据未配置)时的默认出手速度。
 	// 高于引擎的怪物默认速度(kMonsterDefaultSpeed=60),保证缺配玩家不至于永远后手。
@@ -121,6 +126,11 @@ namespace
 	PlayerBattleSystem::BattleLockReleaseSender gBattleLockReleaseSender = nullptr;
 	// 组队跟随唤醒(见 PlayerBattleSystem::SetFollowWakeFnForTest)。本文件里所有「补一次跟随检查」都经它。
 	PlayerBattleSystem::FollowWakeFn gFollowWakeFn = &PlayerTeamSystem::OnBattleFreezeCleared;
+	// 锁脚本观察点(见 PlayerBattleSystem::SetLockScriptObserverForTest)。生产为 nullptr。
+	PlayerBattleSystem::LockScriptObserver gLockScriptObserver = nullptr;
+	// 锁写入 / 续期重试的调度器注入点(见 PlayerBattleSystem::SetLockRetrySchedulerForTest)。
+	// 生产为 nullptr = 当前线程的 EventLoop::runAfter(ScheduleLockWriteRetry)。
+	PlayerBattleSystem::LockRetrySchedulerFn gLockRetryScheduler = nullptr;
 
 
 	// 战斗锁与上下文都是玩家域键,走 tlsPlayerRedis。这里为真只说明至少一个节点连着,这名玩家所在的 slot 不一定可用,
@@ -128,6 +138,124 @@ namespace
 	bool RedisReady()
 	{
 		return tlsPlayerRedis.connected();
+	}
+
+	// 战斗锁写入 / 续期的三种操作名:进日志(op=)、传给锁脚本观察点。
+	constexpr char kLockOpWrite[] = "write_lock";
+	constexpr char kLockOpRenew[] = "renew_lock";
+	constexpr char kLockOpRebuildRecheck[] = "rebuild_recheck";
+
+	// 每次准备发送锁脚本时调一次观察点(算出 TTL 与 ctx 之后、判断 Redis 是否就绪之前)。
+	void NotifyLockScriptObserver(const char* op, const uint64_t playerId, const uint64_t battleId, const uint64_t ttlSec,
+								  const std::string& ctxPayload)
+	{
+		if (gLockScriptObserver != nullptr)
+		{
+			gLockScriptObserver(op, playerId, battleId, ttlSec, ctxPayload);
+		}
+	}
+
+	// 战斗锁写入 / 续期的一次尝试(预算与退避见 battle_lock_rules.h 的 NextLockWriteRetryDelayMs)。
+	struct LockWriteAttempt
+	{
+		uint32_t number = 1;      // 第几次发,从 1 起
+		uint64_t firstSentMs = 0; // 首发时的单调时钟毫秒;0 = 还没发过,由发送函数填上
+	};
+
+	// 续期链的在途登记,键 = (player_id, battle_id)。
+	//
+	// 为什么只给续期(renew_lock)去重:放大源只有它 —— battle 侧对同一局的确认每 10 秒周期补发一次,ConfirmBattle 对
+	// 已 FIGHTING 的同局确认都会顺带续期;Redis 中断时每名玩家每 10 秒就为同一件事叠一条重试链,日志与
+	// metric=battle_lock_write_gave_up 计数随之虚高。在途链每次重发都按实体现状重算期限与 ctx(ConfirmBattleLockIfMatch
+	// 的门禁),所以同键的首发直接让给它,不会因此用到旧值;链的最后一发若恰好已带着让路之前的值发出,下一条周期确认
+	// 会再起一条链。
+	// 其余两种不去重、不登记:
+	//  - write_lock:每局只有 PrepareBattle 一次首发,没有放大源;
+	//  - rebuild_recheck:每一次重建都必须有自己的首发 —— 只有首发回 0 才撤销重建,让给旧链会让新一次重建失去这层保护。
+	//
+	// 登记:续期**首发发出之前**(TryBeginRenewChain);同键已登记就让路,这一次什么都不发。
+	// 摘除:链的每个终态恰好一次(EndRenewChain)——
+	//  ① 拿到整数应答(1 或 0 都是结论);
+	//  ② 重发前门禁放弃(实体在本节点,但这一局在它身上已不是 FIGHTING);
+	//  ③ 放弃重试:次数 / 预算用尽,或当前线程没有 loop(ScheduleLockWriteRetry 返回 false);
+	//  ④ 命令没发出去(或 Redis 未就绪)且排不上重试 —— 与 ③ 同一个出口(RetryRenewOrEndChain)。
+	// 排上重试不是终态,登记留给下一次发送。登记在首发之前、全程单线程,同一时刻同键至多一条链,按键摘不会摘掉别的链。
+	// 所有权与线程模型:thread_local,scene loop 线程独占(发送函数、hiredis 回调、定时器都在 loop 线程上),
+	// 不持久化、不跨线程。节点停机时没开火的定时器随 loop 一起丢弃,残留登记随线程结束销毁;
+	// 停机路径先 tlsPlayerRedis.Shutdown()(空应答回调在 loop 线程上跑完),再退线程,回调碰不到已销毁的集合。
+	// 只用于去重,不参与任何正确性判定;但漏摘会让同键之后的续期首发一直让路、续期再也发不出去,所以上面四个终态缺一不可。
+	using RenewChainKey = std::pair<uint64_t, uint64_t>; // (player_id, battle_id)
+	thread_local std::set<RenewChainKey> gRenewChainsInFlight;
+
+	// 续期首发入口调用:同键已有在途续期链时让给它(返回 false,调用方什么都不发);否则登记并返回 true。
+	bool TryBeginRenewChain(const uint64_t playerId, const uint64_t battleId)
+	{
+		if (!gRenewChainsInFlight.emplace(playerId, battleId).second)
+		{
+			LOG_DEBUG << "[PlayerBattle] Conditional renewal skipped: a renewal chain for the same battle is in flight, player_id="
+					  << playerId << " battle_id=" << battleId
+					  << "(the chain recomputes TTL and ctx from the entity on every resend)";
+			return false;
+		}
+		return true;
+	}
+
+	// 续期链的终态(gRenewChainsInFlight 的 ①–④):每条链恰好调一次。
+	void EndRenewChain(const uint64_t playerId, const uint64_t battleId)
+	{
+		gRenewChainsInFlight.erase(RenewChainKey(playerId, battleId));
+	}
+
+	uint64_t SteadyNowMs()
+	{
+		return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+										 std::chrono::steady_clock::now().time_since_epoch())
+										 .count());
+	}
+
+	LockWriteAttempt StartLockWriteAttempt(LockWriteAttempt attempt)
+	{
+		if (attempt.firstSentMs == 0)
+		{
+			attempt.firstSentMs = SteadyNowMs();
+		}
+		return attempt;
+	}
+
+	// 没问到(空应答 / ERROR / Redis 未就绪 / 命令没发出去)之后按退避排下一次。
+	// 返回 true = 已排上;false = 放弃重试(次数 / 预算用尽,或既没有注入调度器、当前线程也没有 loop),已打 ERROR,
+	// 这条链到此为止 —— 登记了在途链的调用方(只有续期,gRenewChainsInFlight)据此摘登记,其余调用方忽略返回值即可。
+	// resend 重跑整个「门禁 + 发送」:门禁在重发那一刻按 player_id 现取实体、按实体现状判。三个发送函数的闭包
+	// 都只捕获 id 与字节,不捕获实体句柄或 this(实体可能已销毁、句柄可能被复用)。不保存 TimerId:节点停机时 loop 退出,
+	// 没开火的重试随之丢弃 —— 锁带 TTL,不会留下永久状态;放弃时锁可能缺失或提前过期,结算不受影响(它只走收件箱)。
+	// 定时器:生产为当前线程的 EventLoop::runAfter;单测经 PlayerBattleSystem::SetLockRetrySchedulerForTest 注入,
+	// 注入时改调注入的函数,当前线程没有 loop 也照常排(单测线程没有 loop)。
+	bool ScheduleLockWriteRetry(const char* op, const uint64_t playerId, const uint64_t battleId,
+								const LockWriteAttempt attempt, std::function<void(LockWriteAttempt)> resend)
+	{
+		const uint64_t delayMs = battle_lock::NextLockWriteRetryDelayMs(
+			attempt.number, SteadyNowMs() - attempt.firstSentMs, playerId ^ battleId);
+		auto* loop = gLockRetryScheduler == nullptr ? muduo::net::EventLoop::getEventLoopOfCurrentThread() : nullptr;
+		if (delayMs == 0 || (gLockRetryScheduler == nullptr && loop == nullptr))
+		{
+			LOG_ERROR << "[PlayerBattle] metric=battle_lock_write_gave_up op=" << op << " player_id=" << playerId
+					  << " battle_id=" << battleId << " attempts=" << attempt.number
+					  << ",battle lock write/renewal still unanswered;lock may be missing or expire early(match queue check and freeze restore are blind until it is rewritten;settlement via inbox is unaffected)";
+			return false;
+		}
+		LOG_WARN << "[PlayerBattle] metric=battle_lock_write_retry op=" << op << " player_id=" << playerId
+				 << " battle_id=" << battleId << " next_attempt=" << attempt.number + 1 << " delay_ms=" << delayMs;
+		const LockWriteAttempt next{attempt.number + 1, attempt.firstSentMs};
+		std::function<void()> fire = [resend = std::move(resend), next]() { resend(next); };
+		if (gLockRetryScheduler != nullptr)
+		{
+			gLockRetryScheduler(delayMs, std::move(fire));
+		}
+		else
+		{
+			loop->runAfter(static_cast<double>(delayMs) / 1000.0, std::move(fire));
+		}
+		return true;
 	}
 
 	// 备战时写进快照 routing 的大厅会话号(turn-based §22.5 第 3 条)。
@@ -256,12 +384,6 @@ namespace
 	constexpr char kDeleteLockIfMatchScript[] =
 		"if redis.call('GET', KEYS[1]) == ARGV[1] then "
 		"redis.call('DEL', KEYS[2]); return redis.call('DEL', KEYS[1]) else return 0 end";
-	// 条件续期 + 覆写 ctx(ARGV[2]=ttl 秒,ARGV[3]=ctx 序列化):ConfirmBattle 一次原子完成
-	// "锁切正式期限 + ctx 记录 FIGHTING/deadline",登录重建读到的 ctx 与锁永远一致。
-	constexpr char kConfirmLockIfMatchScript[] =
-		"if redis.call('GET', KEYS[1]) == ARGV[1] then "
-		"redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[2]); "
-		"return redis.call('EXPIRE', KEYS[1], ARGV[2]) else return 0 end";
 	// 条件读 ctx:锁值 == battle_id 才返回 {ctx 或 nil, 锁剩余 TTL 秒};否则返回 nil。
 	// 调用方据此区分"锁不在/已易主"(无重建资格)与"锁在但 ctx 缺失"(降级重建)。
 	constexpr char kGetCtxIfLockMatchScript[] =
@@ -380,84 +502,271 @@ namespace
 		return inBattle.SerializeAsString();
 	}
 
-	// 条件续期 + 覆写 ctx:锁值 == battleId 才 EXPIRE 到 ttlSec 并 SET ctx(同 TTL)。
-	// ConfirmBattle 把备战短期限切成正式期限、并把 FIGHTING 状态落进 ctx 供登录重建。
-	void ConfirmBattleLockIfMatch(const uint64_t playerId, const uint64_t battleId, const uint64_t ttlSec,
-								  const std::string& ctxPayload)
+	// 这一局冻结当前该有的锁 TTL:按冻结到期时刻(FreezeExpiresAtMs,与 reaper 同一个判据)算。写锁、重试与重建复核共用。
+	uint64_t LockTtlSecOf(const InBattleComp& inBattle, const uint64_t nowMs)
 	{
+		return LockTtlSecFor(PlayerBattleSystem::FreezeExpiresAtMs(inBattle.state() == IN_BATTLE_STATE_PREPARING,
+																   inBattle.deadline_ms(), inBattle.prepare_deadline_ms()),
+							 nowMs);
+	}
+
+	// 锁写入 / 续期重试的门禁:按 player_id 现取实体。entityPresent = 实体仍在本节点且身份仍是这名玩家;
+	// 返回它身上属于这一局的 InBattleComp,没有(已摘 / 已是别的局)返回 nullptr。只读。
+	const InBattleComp* CurrentFreezeOf(const uint64_t playerId, const uint64_t battleId, bool& entityPresent)
+	{
+		const auto player = tlsEcs.GetPlayer(playerId);
+		entityPresent = tlsEcs.actorRegistry.valid(player) && tlsEcs.GetPlayerId(player) == playerId;
+		if (!entityPresent)
+		{
+			return nullptr;
+		}
+		const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+		return (inBattle != nullptr && inBattle->battle_id() == battleId) ? inBattle : nullptr;
+	}
+
+	// 写战斗锁 + 伴生 ctx(PrepareBattle 首发与重试共用,一条 Lua:kWriteBattleLockScript)。
+	// 每次发之前按实体现状取值:实体仍在本节点、InBattleComp 仍是这一局才写 —— 重试时备战可能已被取消、结算或判废,
+	// 那时再写会复活一把已删的锁。TTL 与 ctx 都按此刻的组件算:确认若已到达,重试写的就是 FIGHTING 与正式期限。
+	// 没问到(空应答 / ERROR / Redis 未就绪 / 命令没发出去)时有界重试。
+	// 不去重(只有续期去重,gRenewChainsInFlight 的说明):每局只有 PrepareBattle 一次首发。
+	// 返回这一次算出的 TTL 秒(只给调用方打日志);门禁不过时返回 0。
+	uint64_t WriteBattleLock(const uint64_t playerId, const uint64_t battleId, LockWriteAttempt attempt = {})
+	{
+		bool entityPresent = false;
+		const auto* inBattle = CurrentFreezeOf(playerId, battleId, entityPresent);
+		if (inBattle == nullptr)
+		{
+			if (attempt.number > 1)
+			{
+				LOG_INFO << "[PlayerBattle] Battle lock write retry abandoned: freeze no longer belongs to this battle, player_id="
+						 << playerId << " battle_id=" << battleId;
+			}
+			return 0;
+		}
+		attempt = StartLockWriteAttempt(attempt);
+		const uint64_t ttlSec = LockTtlSecOf(*inBattle, TimeSystem::NowMillisecondsUTC());
+		// 伴生 ctx(同 TTL):玩家完整下线再登录 / 备战到期后迟到的确认,靠它重建 InBattleComp
+		// (battle_node_id 只有这里知道,BattleConfirmedEvent 不带)
+		const std::string ctxPayload = SerializeBattleCtx(*inBattle);
+		NotifyLockScriptObserver(kLockOpWrite, playerId, battleId, ttlSec, ctxPayload);
+		const auto resend = [playerId, battleId](const LockWriteAttempt next) { WriteBattleLock(playerId, battleId, next); };
 		if (!RedisReady())
 		{
-			LOG_WARN << "[PlayerBattle] Conditional renewal skipped(Redis disconnected), player_id=" << playerId
-					 << " battle_id=" << battleId << "(lock may expire before battle ends;match advisory checks are temporarily blind)";
-			return;
+			LOG_WARN << "[PlayerBattle] Battle lock write deferred(Redis disconnected), player_id=" << playerId
+					 << " battle_id=" << battleId << "(match queue check and freeze restore are blind until it lands;InBattleComp remains authoritative on this entity)";
+			ScheduleLockWriteRetry(kLockOpWrite, playerId, battleId, attempt, resend);
+			return ttlSec;
 		}
-		const int ret = tlsPlayerRedis.command(
-			[playerId, battleId, ttlSec](hiredis::Hiredis*, redisReply* reply) {
-				if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+		const int rc = tlsPlayerRedis.command(
+			[playerId, battleId, attempt, resend](hiredis::Hiredis*, redisReply* reply) {
+				const auto shape = battle_lock::ReplyShapeOf(reply);
+				if (battle_lock::IsLockWriteAnswered(shape))
 				{
-					LOG_ERROR << "[PlayerBattle] Conditional renewal EVAL failed, player_id=" << playerId
-							  << " battle_id=" << battleId;
 					return;
 				}
-				if (reply->type == REDIS_REPLY_INTEGER && reply->integer == 0)
+				LOG_WARN << "[PlayerBattle] Battle lock write unanswered, player_id=" << playerId << " battle_id=" << battleId
+						 << " reply=" << battle_lock::ReplyShapeName(shape)
+						 << " err=" << std::string(battle_lock::ReplyText(reply));
+				ScheduleLockWriteRetry(kLockOpWrite, playerId, battleId, attempt, resend);
+			},
+			(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu %llu %b").c_str(),
+			kWriteBattleLockScript, playerId, playerId, battleId, ttlSec, ctxPayload.data(), ctxPayload.size());
+		if (rc != REDIS_OK)
+		{
+			// 命令没发出去时回调永远不会来。
+			ScheduleLockWriteRetry(kLockOpWrite, playerId, battleId, attempt, resend);
+		}
+		return ttlSec;
+	}
+
+	// 续期没问到(Redis 未就绪 / 命令没发出去 / 空应答 / ERROR):排下一次;排不上(放弃重试)就是这条续期链的终态,
+	// 摘在途登记(gRenewChainsInFlight 的 ③④)。只给 ConfirmBattleLockIfMatch 用。
+	void RetryRenewOrEndChain(const uint64_t playerId, const uint64_t battleId, const LockWriteAttempt attempt,
+							  std::function<void(LockWriteAttempt)> resend)
+	{
+		if (!ScheduleLockWriteRetry(kLockOpRenew, playerId, battleId, attempt, std::move(resend)))
+		{
+			EndRenewChain(playerId, battleId);
+		}
+	}
+
+	// 条件续期 + 覆写 ctx(kRenewBattleLockIfMatchScript:锁值 == battleId 才动,只延长不缩短)。
+	// 确认升级、重复确认、离线确认共用:把备战短期限切成冻结到期时刻,并把 FIGHTING 状态落进 ctx 供登录重建。
+	// deadlineMs 是 FIGHTING 的正式期限,TTL 由它按 FightingLockTtlSecFor 算。
+	// 去重(只有续期去重):首发发出之前登记 (player_id, battle_id),同键已有在途续期链就让给它、这一次什么都不发
+	// (DEBUG 留痕,锁脚本观察点也不回调);链的每个终态恰好摘一次登记(gRenewChainsInFlight 的说明)。
+	// 没问到时有界重试;重发前的门禁:
+	//  - 实体在本节点:InBattleComp 必须仍是这一局的 FIGHTING,期限与 ctx 按此刻的组件重算;否则这一局在本节点已收尾,放弃;
+	//  - 实体不在(离线确认,或首发后玩家下线):沿用首发时的期限与 ctx —— 脚本按锁值条件执行且只延长,重发改不坏别的局。
+	// 脚本回 0(锁不在 / 已易主)是结论,不重试,也不补写(kRenewBattleLockIfMatchScript 的说明)。
+	void ConfirmBattleLockIfMatch(const uint64_t playerId, const uint64_t battleId, uint64_t deadlineMs,
+								  std::string ctxPayload, LockWriteAttempt attempt = {})
+	{
+		if (attempt.number == 1 && !TryBeginRenewChain(playerId, battleId))
+		{
+			return;
+		}
+		if (attempt.number > 1)
+		{
+			bool entityPresent = false;
+			const auto* inBattle = CurrentFreezeOf(playerId, battleId, entityPresent);
+			if (entityPresent)
+			{
+				if (inBattle == nullptr || inBattle->state() != IN_BATTLE_STATE_FIGHTING)
+				{
+					LOG_INFO << "[PlayerBattle] Conditional renewal retry abandoned: battle no longer fighting on this entity, player_id="
+							 << playerId << " battle_id=" << battleId;
+					EndRenewChain(playerId, battleId); // 终态 ②:门禁放弃
+					return;
+				}
+				deadlineMs = inBattle->deadline_ms();
+				ctxPayload = SerializeBattleCtx(*inBattle);
+			}
+		}
+		attempt = StartLockWriteAttempt(attempt);
+		const uint64_t ttlSec = FightingLockTtlSecFor(deadlineMs, TimeSystem::NowMillisecondsUTC());
+		NotifyLockScriptObserver(kLockOpRenew, playerId, battleId, ttlSec, ctxPayload);
+		const auto resend = [playerId, battleId, deadlineMs, ctxPayload](const LockWriteAttempt next) {
+			ConfirmBattleLockIfMatch(playerId, battleId, deadlineMs, ctxPayload, next);
+		};
+		if (!RedisReady())
+		{
+			LOG_WARN << "[PlayerBattle] Conditional renewal deferred(Redis disconnected), player_id=" << playerId
+					 << " battle_id=" << battleId << "(lock may expire before battle ends until it lands;match queue check is temporarily blind)";
+			RetryRenewOrEndChain(playerId, battleId, attempt, resend);
+			return;
+		}
+		const int rc = tlsPlayerRedis.command(
+			[playerId, battleId, ttlSec, attempt, resend](hiredis::Hiredis*, redisReply* reply) {
+				const auto shape = battle_lock::ReplyShapeOf(reply);
+				if (!battle_lock::IsLockWriteAnswered(shape))
+				{
+					LOG_WARN << "[PlayerBattle] Conditional renewal unanswered, player_id=" << playerId << " battle_id=" << battleId
+							 << " reply=" << battle_lock::ReplyShapeName(shape)
+							 << " err=" << std::string(battle_lock::ReplyText(reply));
+					RetryRenewOrEndChain(playerId, battleId, attempt, resend);
+					return;
+				}
+				EndRenewChain(playerId, battleId); // 终态 ①:整数应答
+				if (reply->integer == 0)
 				{
 					LOG_WARN << "[PlayerBattle] Conditional renewal did not match(lock missing or value mismatch), player_id="
 							 << playerId << " battle_id=" << battleId << " ttl_sec=" << ttlSec;
 				}
 			},
 			(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu %llu %b").c_str(),
-			kConfirmLockIfMatchScript, playerId, playerId, battleId, ttlSec,
+			kRenewBattleLockIfMatchScript, playerId, playerId, battleId, ttlSec,
 			ctxPayload.data(), ctxPayload.size());
-		if (ret != REDIS_OK)
+		if (rc != REDIS_OK)
 		{
-			LOG_WARN << "[PlayerBattle] Conditional renewal not sent, player_id=" << playerId
-					 << " battle_id=" << battleId << "(lock may expire before battle ends;match advisory checks are temporarily blind)";
+			// 命令没发出去时回调永远不会来,终态只能在这里判。
+			RetryRenewOrEndChain(playerId, battleId, attempt, resend);
 		}
 	}
 
-	// 重建冻结后的复核:重建依据的是"发 EVAL 那一刻"的锁,回调链上可能已排着一条同 battle_id 的
-	// 条件删锁(结算确认 / 取消)。再发一次条件续期 + 覆写 ctx:命中说明锁仍是本战斗的,重建成立;
-	// 未命中说明锁已在两次往返之间被删,立刻撤掉刚挂的 InBattleComp,不让已结算的战斗把玩家冻到 reaper。
-	void ConfirmRebuiltFreeze(entt::entity player, const uint64_t playerId, const uint64_t battleId,
-							  const uint64_t ttlSec, const std::string& ctxPayload)
+	// 重建复核(ConfirmRebuiltFreeze)应答的「判定 + 撤销」。只有整数应答是结论:
+	//  - 非 0:锁仍是本战斗的,重建成立(脚本已同步 ctx),什么都不做;
+	//  - 0 且是首发(attemptNumber == 1):锁在「读锁」与「这条复核」之间被删或易主,重建所依据的锁已不成立 ——
+	//    撤掉刚挂的 InBattleComp,不让已结算 / 已取消的战斗把玩家冻到 reaper(metric=battle_freeze_rebuild_reverted);
+	//  - 0 且是重试(attemptNumber != 1;0 是调用方缺陷,同样保守按重试处理):重试与读锁之间隔着数秒到数十秒,
+	//    这期间锁也可能只是按 TTL 自然过期,与「被结算 / 取消删掉」分不清;撤销会把仍在打的玩家解冻,所以只记 WARN、
+	//    保留冻结,交给 reaper 按期限解冻(结算只走收件箱,不依赖锁)。
+	// 撤销与 WARN 都先按 player_id 现取实体复核:实体有效、身份仍是这名玩家、InBattleComp 仍是这一局才处置 ——
+	// 回调期间实体可能已销毁 / 句柄被复用,或重建出的组件已被结算 / reaper 摘掉,那时什么都不做。
+	// 非整数形状(没问到)不是结论,这里什么都不做:重试由 ConfirmRebuiltFreeze 的回调排(重发要带首发时刻算预算)。
+	// integer 只在 shape == kInteger 时有意义。PlayerBattleSystem::OnRebuiltFreezeRecheckReply 转调这里,
+	// 生产回调与单测走同一个函数。
+	void ResolveRebuiltFreezeRecheck(const uint64_t playerId, const uint64_t battleId, const uint32_t attemptNumber,
+									 const battle_lock::ReplyShape shape, const int64_t integer)
 	{
-		if (!RedisReady())
+		if (!battle_lock::IsLockWriteAnswered(shape))
 		{
-			LOG_WARN << "[PlayerBattle] Reconstruction recheck skipped(Redis disconnected), player_id=" << playerId
-					 << " battle_id=" << battleId << "(reaper will release the freeze at the deadline)";
+			return; // 没问到:不是结论,重试归调用方
+		}
+		if (integer != 0)
+		{
+			return; // 锁仍匹配:重建成立,ctx 已同步
+		}
+		const auto player = tlsEcs.GetPlayer(playerId);
+		if (!tlsEcs.actorRegistry.valid(player) || tlsEcs.GetPlayerId(player) != playerId)
+		{
 			return;
 		}
-		const int ret = tlsPlayerRedis.command(
-			[player, playerId, battleId, ttlSec](hiredis::Hiredis*, redisReply* reply) {
-				if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+		const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+		if (current == nullptr || current->battle_id() != battleId)
+		{
+			return;
+		}
+		if (attemptNumber != 1)
+		{
+			LOG_WARN << "[PlayerBattle] Reconstruction recheck retry found lock missing;freeze kept, player_id=" << playerId
+					 << " battle_id=" << battleId << " attempt=" << attemptNumber
+					 << "(lock may have expired naturally;reaper releases the freeze at the deadline)";
+			return;
+		}
+		RemoveInBattleComp(player);
+		LOG_WARN << "[PlayerBattle] metric=battle_freeze_rebuild_reverted player_id=" << playerId
+				 << " battle_id=" << battleId << ",lock was deleted during reconstruction(settlement/cancellation completed);reconstruction canceled";
+	}
+
+	// 重建冻结后的复核(RebuildBattleFreezeFromLock / RestoreBattleFreezeOnLogin 挂上 InBattleComp 之后立刻调用)。
+	// 重建依据的是「读锁的那条 EVAL」看到的锁;同一 slot 上排在它之后、这条复核之前的命令里,可能有一条同 battle_id 的
+	// 条件删锁(结算确认 / 取消)。复核 = 再发一次条件续期 + 覆写 ctx;拿到整数应答后的处置(首发回 0 才撤销重建,
+	// 重试回 0 保留冻结)在 ResolveRebuiltFreezeRecheck。
+	// 不去重(只有续期去重,gRenewChainsInFlight 的说明):每一次重建都要有自己的首发,否则新一次重建失去「首发回 0 即撤销」的保护。
+	// 没问到时有界重试。重发前按 player_id 现取实体,重建出的这一局组件还在才再问,
+	// 期限与 ctx 按此刻的组件重算(期间迟到的确认可能已把 PREPARING 升级成 FIGHTING)。
+	// 闭包只捕获 id 与字节,不捕获实体句柄(实体可能已销毁、句柄可能被复用)。
+	// 重试放弃时重建保留,由 reaper 按期限解冻。
+	void ConfirmRebuiltFreeze(const uint64_t playerId, const uint64_t battleId, uint64_t ttlSec, std::string ctxPayload,
+							  LockWriteAttempt attempt = {})
+	{
+		if (attempt.number > 1)
+		{
+			bool entityPresent = false;
+			const auto* current = CurrentFreezeOf(playerId, battleId, entityPresent);
+			if (current == nullptr)
+			{
+				LOG_INFO << "[PlayerBattle] Reconstruction recheck retry abandoned: rebuilt freeze no longer on this node, player_id="
+						 << playerId << " battle_id=" << battleId;
+				return;
+			}
+			ttlSec = LockTtlSecOf(*current, TimeSystem::NowMillisecondsUTC());
+			ctxPayload = SerializeBattleCtx(*current);
+		}
+		attempt = StartLockWriteAttempt(attempt);
+		NotifyLockScriptObserver(kLockOpRebuildRecheck, playerId, battleId, ttlSec, ctxPayload);
+		const auto resend = [playerId, battleId, ttlSec, ctxPayload](const LockWriteAttempt next) {
+			ConfirmRebuiltFreeze(playerId, battleId, ttlSec, ctxPayload, next);
+		};
+		if (!RedisReady())
+		{
+			LOG_WARN << "[PlayerBattle] Reconstruction recheck deferred(Redis disconnected), player_id=" << playerId
+					 << " battle_id=" << battleId << "(retrying;reaper releases the freeze at the deadline if it never lands)";
+			ScheduleLockWriteRetry(kLockOpRebuildRecheck, playerId, battleId, attempt, resend);
+			return;
+		}
+		const int rc = tlsPlayerRedis.command(
+			[playerId, battleId, attempt, resend](hiredis::Hiredis*, redisReply* reply) {
+				const auto shape = battle_lock::ReplyShapeOf(reply);
+				if (!battle_lock::IsLockWriteAnswered(shape))
 				{
-					LOG_ERROR << "[PlayerBattle] Reconstruction recheck EVAL failed, player_id=" << playerId
-							  << " battle_id=" << battleId;
+					LOG_WARN << "[PlayerBattle] Reconstruction recheck unanswered, player_id=" << playerId
+							 << " battle_id=" << battleId << " reply=" << battle_lock::ReplyShapeName(shape)
+							 << " err=" << std::string(battle_lock::ReplyText(reply));
+					ScheduleLockWriteRetry(kLockOpRebuildRecheck, playerId, battleId, attempt, resend);
 					return;
 				}
-				if (reply->type == REDIS_REPLY_INTEGER && reply->integer != 0)
-				{
-					return; // 锁仍匹配:重建成立,ctx 已同步
-				}
-				if (!tlsEcs.actorRegistry.valid(player) || tlsEcs.GetPlayerId(player) != playerId)
-				{
-					return;
-				}
-				if (const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
-					current != nullptr && current->battle_id() == battleId)
-				{
-					RemoveInBattleComp(player);
-					LOG_WARN << "[PlayerBattle] metric=battle_freeze_rebuild_reverted player_id=" << playerId
-							 << " battle_id=" << battleId << ",lock was deleted during reconstruction(settlement/cancellation completed);reconstruction canceled";
-				}
+				ResolveRebuiltFreezeRecheck(playerId, battleId, attempt.number, shape,
+											static_cast<int64_t>(reply->integer));
 			},
 			(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu %llu %b").c_str(),
-			kConfirmLockIfMatchScript, playerId, playerId, battleId, ttlSec,
+			kRenewBattleLockIfMatchScript, playerId, playerId, battleId, ttlSec,
 			ctxPayload.data(), ctxPayload.size());
-		if (ret != REDIS_OK)
+		if (rc != REDIS_OK)
 		{
-			LOG_WARN << "[PlayerBattle] Reconstruction recheck not sent, player_id=" << playerId
-					 << " battle_id=" << battleId << "(reaper will release the freeze at the deadline)";
+			// 命令没发出去时回调永远不会来。
+			ScheduleLockWriteRetry(kLockOpRebuildRecheck, playerId, battleId, attempt, resend);
 		}
 	}
 
@@ -916,47 +1225,11 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	// 指纹与快照同值(match 用响应字段比对,battle 用快照字段比对)
 	response.set_table_fingerprint(turnbattle::BattleTableFingerprint::Current());
 
-	// SET battle:lock:{player_id}=battle_id EX(prepare_deadline+60s)。
-	// 备战期锁只需活到备战作废期限;CreateBattle 确认后 ConfirmBattle 再按正式 deadline 条件续期。
-	// 咨询性锁(match JoinQueue 读),fire-and-forget:失败只影响 match 的提前拒绝,
-	// 权威判定仍是本节点的 InBattleComp,不影响正确性。
-	const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
-	const uint64_t ttlSec = LockTtlSecFor(prepareDeadlineMs, nowMs);
-	if (RedisReady())
-	{
-		const int lockRet = tlsPlayerRedis.command(
-			[playerId](hiredis::Hiredis*, redisReply* reply) {
-				if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
-				{
-					LOG_ERROR << "[PlayerBattle] SET battle:lock failed, player_id=" << playerId;
-				}
-			},
-			(std::string("SET ") + kBattleLockKeyFmt + " %llu EX %llu").c_str(),
-			playerId, battleId, ttlSec);
-		// 伴生 ctx(同 TTL):玩家完整下线再登录 / 备战到期后迟到的确认,靠它重建 InBattleComp
-		// (battle_node_id 只有这里知道,BattleConfirmedEvent 不带)
-		const std::string ctxPayload = SerializeBattleCtx(inBattle);
-		const int ctxRet = tlsPlayerRedis.command(
-			[playerId](hiredis::Hiredis*, redisReply* reply) {
-				if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
-				{
-					LOG_ERROR << "[PlayerBattle] SET battle:ctx failed, player_id=" << playerId
-							  << "(login reconstruction will fall back to a conservative freeze without battle_node_id)";
-				}
-			},
-			(std::string("SET ") + kBattleCtxKeyFmt + " %b EX %llu").c_str(),
-			playerId, ctxPayload.data(), ctxPayload.size(), ttlSec);
-		if (lockRet != REDIS_OK || ctxRet != REDIS_OK)
-		{
-			LOG_WARN << "[PlayerBattle] SET battle:lock/ctx not sent, player_id=" << playerId
-					 << " battle_id=" << battleId << "(match advisory checks are temporarily blind;InBattleComp remains authoritative)";
-		}
-	}
-	else
-	{
-		LOG_WARN << "[PlayerBattle] SET battle:lock skipped(Redis disconnected), player_id=" << playerId
-				 << " battle_id=" << battleId << "(match advisory checks are temporarily blind;InBattleComp remains authoritative)";
-	}
+	// 写 battle:lock:{player_id}=battle_id 与伴生 ctx(一条 Lua,EX = 备战期限 + 60s)。
+	// 备战期锁只需活到备战作废期限;CreateBattle 确认后 ConfirmBattle 再按冻结到期时刻条件续期。
+	// 权威判定仍是本实体的 InBattleComp,但锁不是可有可无:match 排队读它拦第二场,玩家完整下线再登录时新实体靠它重建冻结
+	// (重建不出来,战斗闸就看不到这场战斗)。所以没问到时有界重试,重发前确认 InBattleComp 仍是这一局。
+	const uint64_t ttlSec = WriteBattleLockOnPrepare(playerId, battleId);
 
 	LOG_INFO << "[PlayerBattle] Battle preparation freeze completed: player_id=" << playerId
 			 << " battle_id=" << battleId
@@ -1070,6 +1343,11 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 		// 按锁值条件续期并把 FIGHTING/正式 deadline 落进 ctx —— 玩家重新登录时据此重建冻结,
 		// 战斗闸才看得到这场战斗(否则新实体没有 InBattleComp,资产通道放行)。
 		// event.deadline_ms 为 0 时无从计算 TTL,保持备战期 TTL 不动(最迟随 TTL 过期)
+		//
+		// 这一步本身**不重试**:Redis 未就绪、读 ctx 的 EVAL 没问到(空应答 / ERROR)、命令没发出去,都只打日志返回。
+		// 兜底是 battle 侧的确认周期补发(开局后 180 秒内每 10 秒一次):下一条确认到达时整条路径重跑一遍。
+		// 读到 ctx 之后的条件续期(ConfirmBattleLockIfMatch)才有有界重试。代价:Redis 中断超过补发窗口时
+		// 锁停在备战期 TTL,离线玩家重登时可能读不到锁、不重建冻结(结算只走收件箱,不丢奖)。
 		if (event.deadline_ms() == 0)
 		{
 			LOG_WARN << "[PlayerBattle] ConfirmBattle: player offline and deadline_ms=0;renewal skipped, player_id="
@@ -1079,7 +1357,7 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 		if (!RedisReady())
 		{
 			LOG_WARN << "[PlayerBattle] ConfirmBattle: player offline and Redis disconnected;renewal skipped, player_id="
-					 << playerId << " battle_id=" << battleId;
+					 << playerId << " battle_id=" << battleId << "(next periodic confirmation from battle retries it)";
 			return;
 		}
 		const uint64_t deadlineMs = event.deadline_ms();
@@ -1088,7 +1366,7 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 				if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
 				{
 					LOG_ERROR << "[PlayerBattle] ConfirmBattle lock/ctx read EVAL failed, player_id=" << playerId
-							  << " battle_id=" << battleId;
+							  << " battle_id=" << battleId << "(next periodic confirmation from battle retries it)";
 					return;
 				}
 				if (reply->type != REDIS_REPLY_ARRAY)
@@ -1106,7 +1384,7 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 				ctx.set_state(IN_BATTLE_STATE_FIGHTING);
 				ctx.set_deadline_ms(deadlineMs);
 				const uint64_t ttlSec = FightingLockTtlSecFor(deadlineMs, callbackNowMs);
-				ConfirmBattleLockIfMatch(playerId, battleId, ttlSec, SerializeBattleCtx(ctx));
+				ConfirmBattleLockIfMatch(playerId, battleId, deadlineMs, SerializeBattleCtx(ctx));
 				LOG_INFO << "[PlayerBattle] ConfirmBattle: player offline;renew conditionally by lock value and persist ctx, player_id="
 						 << playerId << " battle_id=" << battleId << " deadline_ms=" << deadlineMs
 						 << " battle_node_id=" << ctx.battle_node_id() << " lock_ttl_sec=" << ttlSec;
@@ -1116,7 +1394,7 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 		if (ret != REDIS_OK)
 		{
 			LOG_WARN << "[PlayerBattle] ConfirmBattle: player offline and lock/ctx read not sent;renewal skipped, player_id="
-					 << playerId << " battle_id=" << battleId;
+					 << playerId << " battle_id=" << battleId << "(next periodic confirmation from battle retries it)";
 		}
 		return;
 	}
@@ -1138,9 +1416,20 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 				 << " event_battle_id=" << battleId << " in_battle_id=" << inBattle->battle_id();
 		return;
 	}
+	if (inBattle->state() == IN_BATTLE_STATE_FIGHTING)
+	{
+		// Kafka at-least-once 重投 / battle 侧周期补发(开局后 180 秒内每 10 秒一次):已 FIGHTING,不再升级,
+		// 但顺带再做一次条件续期。首次确认的续期若没落地,锁会在「备战期限 + 60 秒」就自然过期,而战斗时限默认 300 秒;
+		// 续期只延长、锁值匹配才动,重复执行无副作用,周期补发因此顺带修好它。
+		// 期限与 ctx 取组件上的(首次确认已写定),不信事件 —— 与「已 FIGHTING 不改期限」一致。
+		// 上一条确认的续期还在重试时这次让给它(只有续期去重):那条链每次重发都按组件现状重算,发的是同一份。
+		ConfirmBattleLockIfMatch(playerId, battleId, inBattle->deadline_ms(), SerializeBattleCtx(*inBattle));
+		LOG_DEBUG << "[PlayerBattle] ConfirmBattle: already FIGHTING;state unchanged,lock renewed conditionally, player_id="
+				  << playerId << " battle_id=" << battleId;
+		return;
+	}
 	if (inBattle->state() != IN_BATTLE_STATE_PREPARING)
 	{
-		// Kafka at-least-once 重投 / battle 侧周期补发:已 FIGHTING,幂等忽略
 		LOG_INFO << "[PlayerBattle] ConfirmBattle: already in " << eInBattleState_Name(inBattle->state())
 				 << ",idempotently ignored, player_id=" << playerId << " battle_id=" << battleId;
 		return;
@@ -1152,7 +1441,7 @@ void PlayerBattleSystem::ConfirmBattle(const ::BattleConfirmedEvent& event)
 	inBattle->set_deadline_ms(deadlineMs);
 
 	const uint64_t ttlSec = FightingLockTtlSecFor(deadlineMs, nowMs);
-	ConfirmBattleLockIfMatch(playerId, battleId, ttlSec, SerializeBattleCtx(*inBattle));
+	ConfirmBattleLockIfMatch(playerId, battleId, deadlineMs, SerializeBattleCtx(*inBattle));
 
 	LOG_INFO << "[PlayerBattle] Battle confirmed PREPARING->FIGHTING: player_id=" << playerId
 			 << " battle_id=" << battleId
@@ -1249,7 +1538,7 @@ void PlayerBattleSystem::RebuildBattleFreezeFromLock(entt::entity player, const 
 
 			// 续期到冻结到期时刻(正式 deadline + 宽限 + 余量)+ 覆写 ctx,同时复核锁仍是本战斗的(否则撤销重建)
 			const uint64_t ttlSec = FightingLockTtlSecFor(rebuilt.deadline_ms(), nowMs);
-			ConfirmRebuiltFreeze(player, playerId, battleId, ttlSec, SerializeBattleCtx(rebuilt));
+			ConfirmRebuiltFreeze(playerId, battleId, ttlSec, SerializeBattleCtx(rebuilt));
 
 			LOG_WARN << "[PlayerBattle] metric=battle_freeze_rebuilt player_id=" << playerId
 					 << " battle_id=" << battleId << " reason=" << reasonCopy
@@ -1350,10 +1639,7 @@ void PlayerBattleSystem::RestoreBattleFreezeOnLogin(entt::entity player, const u
 			// 复核锁仍是本战斗的(登录窗口内恰好确认的结算已删锁 -> 撤销重建);
 			// TTL 按重建后冻结的到期时刻算(与 reaper 同一个判据):PREPARING 看 prepare_deadline,
 			// FIGHTING 看 deadline + 终局提交宽限 + 收件箱投递余量(FreezeExpiresAtMs)
-			const uint64_t expiresAtMs = FreezeExpiresAtMs(rebuilt.state() == IN_BATTLE_STATE_PREPARING,
-														   rebuilt.deadline_ms(), rebuilt.prepare_deadline_ms());
-			ConfirmRebuiltFreeze(player, playerId, battleId, LockTtlSecFor(expiresAtMs, nowMs),
-								 SerializeBattleCtx(rebuilt));
+			ConfirmRebuiltFreeze(playerId, battleId, LockTtlSecOf(rebuilt, nowMs), SerializeBattleCtx(rebuilt));
 
 			LOG_WARN << "[PlayerBattle] metric=battle_freeze_rebuilt player_id=" << playerId
 					 << " battle_id=" << battleId << " reason=login"
@@ -2031,6 +2317,29 @@ void PlayerBattleSystem::SetFollowWakeFnForTest(FollowWakeFn fn)
 	gFollowWakeFn = (fn == nullptr) ? &PlayerTeamSystem::OnBattleFreezeCleared : fn;
 }
 
+void PlayerBattleSystem::SetLockScriptObserverForTest(LockScriptObserver observer)
+{
+	gLockScriptObserver = observer; // nullptr = 生产(不观察)
+}
+
+void PlayerBattleSystem::SetLockRetrySchedulerForTest(LockRetrySchedulerFn fn)
+{
+	gLockRetryScheduler = fn; // nullptr = 生产实现(当前线程的 EventLoop::runAfter)
+}
+
+uint64_t PlayerBattleSystem::WriteBattleLockOnPrepare(const uint64_t playerId, const uint64_t battleId)
+{
+	// 匿名命名空间里的重发闭包调不到私有成员,逻辑放在那边;PrepareBattle 与单测都走这一个入口。
+	return WriteBattleLock(playerId, battleId);
+}
+
+void PlayerBattleSystem::OnRebuiltFreezeRecheckReply(const uint64_t playerId, const uint64_t battleId,
+													 const uint32_t attemptNumber,
+													 const battle_lock::ReplyShape shape, const int64_t integer)
+{
+	// 与 ConfirmRebuiltFreeze 的 hiredis 回调走同一个函数(匿名命名空间里的回调调不到私有成员,逻辑放在那边)。
+	ResolveRebuiltFreezeRecheck(playerId, battleId, attemptNumber, shape, integer);
+}
 
 void PlayerBattleSystem::StopReaper()
 {

@@ -227,6 +227,13 @@ state=bootstrap
 1=PlayerActivityPointSource#4 optional uint64 configuration_revision
 1=PlayerActivityPointSource#5 optional uint64 period_id
 1=PlayerActivityPointSource#6 optional uint32 points
+1=AssetRecallLine#1 optional uint32 currency_type
+1=AssetRecallLine#2 optional uint32 config_id
+1=AssetRecallLine#3 optional uint64 requested
+1=AssetRecallLine#4 optional uint64 taken
+1=AssetRecallLine#5 optional uint64 debt
+1=AssetRecallLine#6 optional uint64 shortfall
+1=AssetSnapshot#4 repeated AssetRecallLine recall_lines
 
 retired=player_database#10
 retired=player_database#17

@@ -11,6 +11,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	base "proto/common/base"
 	_ "proto/db"
+	match "proto/match"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -825,14 +826,17 @@ func (x *DisbandTeamRequest) GetRequestId() string {
 
 type StartTeamMatchRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	BattleConfigId uint32                 `protobuf:"varint,1,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id;模式固定 PVE_TEAM
+	BattleConfigId uint32                 `protobuf:"varint,1,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id；匹配模式由match_mode指定。
 	ExpectedTeamId uint64                 `protobuf:"varint,2,opt,name=expected_team_id,json=expectedTeamId,proto3" json:"expected_team_id,omitempty"`
 	RequestId      string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 全球权威模式必填 UUID；重试原意图复用，旧空值明确拒绝。
 	// 目标人数(team-backfill-matching.md):0 或等于当前队伍人数 = 有几个人就几个人直接开战(加字段前的行为);
 	// 大于当前人数 = 整队进该人数档的队列等补位,凑满后同场开战;小于当前人数或超过副本上限 → kTeamSizeExceeded。
 	TargetTeamSize uint32 `protobuf:"varint,4,opt,name=target_team_size,json=targetTeamSize,proto3" json:"target_team_size,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 0或PVE_TEAM：当前人数直接PVE，显式更大目标仍可补位；PVP_TEAM：每侧目标人数，0取当前人数。
+	// PVP始终等待真人对手，队伍作为不可拆单位；其余模式明确拒绝。
+	MatchMode     match.MatchMode `protobuf:"varint,5,opt,name=match_mode,json=matchMode,proto3,enum=match.MatchMode" json:"match_mode,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StartTeamMatchRequest) Reset() {
@@ -891,6 +895,13 @@ func (x *StartTeamMatchRequest) GetTargetTeamSize() uint32 {
 		return x.TargetTeamSize
 	}
 	return 0
+}
+
+func (x *StartTeamMatchRequest) GetMatchMode() match.MatchMode {
+	if x != nil {
+		return x.MatchMode
+	}
+	return match.MatchMode(0)
 }
 
 type TeamResponse struct {
@@ -1418,9 +1429,12 @@ type TeamView struct {
 	// 这台服务端支持队伍补位匹配且开关没关(team-backfill-matching.md §4.6)。客户端只在它为 true 时给出
 	// 「目标人数」选项:不认识 target_team_size 的服务端(旧版本 / 另一版服务端)会把它静默当成直接开战,
 	// 那些服务端的视图里这一位天然是 false。无队伍的空视图不填。
-	MatchFillSupported bool `protobuf:"varint,16,opt,name=match_fill_supported,json=matchFillSupported,proto3" json:"match_fill_supported,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	MatchFillSupported bool            `protobuf:"varint,16,opt,name=match_fill_supported,json=matchFillSupported,proto3" json:"match_fill_supported,omitempty"`
+	MatchMode          match.MatchMode `protobuf:"varint,17,opt,name=match_mode,json=matchMode,proto3,enum=match.MatchMode" json:"match_mode,omitempty"` // 本次排队模式；空闲时为0。
+	// 不支持新字段的服务端会忽略PVP意图，客户端必须见到此能力才允许整队PVP。
+	PvpMatchSupported bool `protobuf:"varint,18,opt,name=pvp_match_supported,json=pvpMatchSupported,proto3" json:"pvp_match_supported,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *TeamView) Reset() {
@@ -1561,6 +1575,20 @@ func (x *TeamView) GetMatchBattleConfigId() uint32 {
 func (x *TeamView) GetMatchFillSupported() bool {
 	if x != nil {
 		return x.MatchFillSupported
+	}
+	return false
+}
+
+func (x *TeamView) GetMatchMode() match.MatchMode {
+	if x != nil {
+		return x.MatchMode
+	}
+	return match.MatchMode(0)
+}
+
+func (x *TeamView) GetPvpMatchSupported() bool {
+	if x != nil {
+		return x.PvpMatchSupported
 	}
 	return false
 }
@@ -2086,7 +2114,7 @@ var File_proto_team_team_proto protoreflect.FileDescriptor
 
 const file_proto_team_team_proto_rawDesc = "" +
 	"\n" +
-	"\x15proto/team/team.proto\x12\x06teampb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\"2\n" +
+	"\x15proto/team/team.proto\x12\x06teampb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1fproto/match/match_service.proto\"2\n" +
 	"\x11CreateTeamRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\"{\n" +
@@ -2132,13 +2160,15 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x12DisbandTeamRequest\x12(\n" +
 	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\"\xb4\x01\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\xe5\x01\n" +
 	"\x15StartTeamMatchRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12(\n" +
 	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x03 \x01(\tR\trequestId\x12(\n" +
-	"\x10target_team_size\x18\x04 \x01(\rR\x0etargetTeamSize\"\xa6\x01\n" +
+	"\x10target_team_size\x18\x04 \x01(\rR\x0etargetTeamSize\x12/\n" +
+	"\n" +
+	"match_mode\x18\x05 \x01(\x0e2\x10.match.MatchModeR\tmatchMode\"\xa6\x01\n" +
 	"\fTeamResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12$\n" +
 	"\x04team\x18\x02 \x01(\v2\x10.teampb.TeamViewR\x04team\x12:\n" +
@@ -2181,7 +2211,7 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\fmember_count\x18\x04 \x01(\rR\vmemberCount\x12\x17\n" +
 	"\azone_id\x18\x05 \x01(\rR\x06zoneId\x12 \n" +
 	"\fexpire_at_ms\x18\x06 \x01(\x04R\n" +
-	"expireAtMs\"\xc2\x05\n" +
+	"expireAtMs\"\xa3\x06\n" +
 	"\bTeamView\x12\x17\n" +
 	"\ateam_id\x18\x01 \x01(\x04R\x06teamId\x12\x1b\n" +
 	"\tleader_id\x18\x02 \x01(\x04R\bleaderId\x12\x1a\n" +
@@ -2200,7 +2230,10 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x11match_target_size\x18\r \x01(\rR\x0fmatchTargetSize\x12+\n" +
 	"\x12match_queued_at_ms\x18\x0e \x01(\x04R\x0fmatchQueuedAtMs\x123\n" +
 	"\x16match_battle_config_id\x18\x0f \x01(\rR\x13matchBattleConfigId\x120\n" +
-	"\x14match_fill_supported\x18\x10 \x01(\bR\x12matchFillSupported\"\xa7\x01\n" +
+	"\x14match_fill_supported\x18\x10 \x01(\bR\x12matchFillSupported\x12/\n" +
+	"\n" +
+	"match_mode\x18\x11 \x01(\x0e2\x10.match.MatchModeR\tmatchMode\x12.\n" +
+	"\x13pvp_match_supported\x18\x12 \x01(\bR\x11pvpMatchSupported\"\xa7\x01\n" +
 	"\x0fTeamSnapshotS2C\x12$\n" +
 	"\x04team\x18\x01 \x01(\v2\x10.teampb.TeamViewR\x04team\x120\n" +
 	"\x06reason\x18\x02 \x01(\x0e2\x18.teampb.TeamChangeReasonR\x06reason\x12\x19\n" +
@@ -2340,65 +2373,68 @@ var file_proto_team_team_proto_goTypes = []any{
 	(*TeamMemberRecord)(nil),         // 27: teampb.TeamMemberRecord
 	(*TeamApplicationRecord)(nil),    // 28: teampb.TeamApplicationRecord
 	(*TeamInviteRecord)(nil),         // 29: teampb.TeamInviteRecord
-	(*base.TipInfoMessage)(nil),      // 30: TipInfoMessage
-	(*base.Empty)(nil),               // 31: Empty
+	(match.MatchMode)(0),             // 30: match.MatchMode
+	(*base.TipInfoMessage)(nil),      // 31: TipInfoMessage
+	(*base.Empty)(nil),               // 32: Empty
 }
 var file_proto_team_team_proto_depIdxs = []int32{
-	30, // 0: teampb.TeamResponse.error_message:type_name -> TipInfoMessage
-	22, // 1: teampb.TeamResponse.team:type_name -> teampb.TeamView
-	16, // 2: teampb.TeamResponse.match_intent:type_name -> teampb.TeamMatchIntent
-	30, // 3: teampb.ListMyInvitesResponse.error_message:type_name -> TipInfoMessage
-	21, // 4: teampb.ListMyInvitesResponse.invites:type_name -> teampb.TeamIncomingInviteView
-	18, // 5: teampb.TeamApplicationView.player:type_name -> teampb.TeamMemberView
-	18, // 6: teampb.TeamOutgoingInviteView.invitee:type_name -> teampb.TeamMemberView
-	18, // 7: teampb.TeamIncomingInviteView.inviter:type_name -> teampb.TeamMemberView
-	0,  // 8: teampb.TeamView.match_state:type_name -> teampb.TeamMatchState
-	18, // 9: teampb.TeamView.members:type_name -> teampb.TeamMemberView
-	19, // 10: teampb.TeamView.applications:type_name -> teampb.TeamApplicationView
-	20, // 11: teampb.TeamView.pending_invites:type_name -> teampb.TeamOutgoingInviteView
-	22, // 12: teampb.TeamSnapshotS2C.team:type_name -> teampb.TeamView
-	1,  // 13: teampb.TeamSnapshotS2C.reason:type_name -> teampb.TeamChangeReason
-	30, // 14: teampb.TeamSnapshotS2C.tip:type_name -> TipInfoMessage
-	21, // 15: teampb.TeamInviteS2C.invite:type_name -> teampb.TeamIncomingInviteView
-	2,  // 16: teampb.TeamEventS2C.type:type_name -> teampb.TeamEventType
-	27, // 17: teampb.TeamRecord.members:type_name -> teampb.TeamMemberRecord
-	28, // 18: teampb.TeamRecord.applications:type_name -> teampb.TeamApplicationRecord
-	29, // 19: teampb.TeamRecord.invites:type_name -> teampb.TeamInviteRecord
-	3,  // 20: teampb.ClientPlayerTeam.CreateTeam:input_type -> teampb.CreateTeamRequest
-	4,  // 21: teampb.ClientPlayerTeam.GetMyTeam:input_type -> teampb.GetMyTeamRequest
-	5,  // 22: teampb.ClientPlayerTeam.ApplyJoinTeam:input_type -> teampb.ApplyJoinTeamRequest
-	6,  // 23: teampb.ClientPlayerTeam.HandleApplication:input_type -> teampb.HandleApplicationRequest
-	7,  // 24: teampb.ClientPlayerTeam.InviteToTeam:input_type -> teampb.InviteToTeamRequest
-	8,  // 25: teampb.ClientPlayerTeam.RespondInvite:input_type -> teampb.RespondInviteRequest
-	9,  // 26: teampb.ClientPlayerTeam.ListMyInvites:input_type -> teampb.ListMyInvitesRequest
-	10, // 27: teampb.ClientPlayerTeam.LeaveTeam:input_type -> teampb.LeaveTeamRequest
-	11, // 28: teampb.ClientPlayerTeam.KickMember:input_type -> teampb.KickMemberRequest
-	12, // 29: teampb.ClientPlayerTeam.TransferLeader:input_type -> teampb.TransferLeaderRequest
-	13, // 30: teampb.ClientPlayerTeam.DisbandTeam:input_type -> teampb.DisbandTeamRequest
-	14, // 31: teampb.ClientPlayerTeam.StartTeamMatch:input_type -> teampb.StartTeamMatchRequest
-	23, // 32: teampb.ClientPlayerTeam.NotifyTeamSnapshot:input_type -> teampb.TeamSnapshotS2C
-	24, // 33: teampb.ClientPlayerTeam.NotifyTeamInvite:input_type -> teampb.TeamInviteS2C
-	25, // 34: teampb.ClientPlayerTeam.NotifyTeamEvent:input_type -> teampb.TeamEventS2C
-	15, // 35: teampb.ClientPlayerTeam.CreateTeam:output_type -> teampb.TeamResponse
-	15, // 36: teampb.ClientPlayerTeam.GetMyTeam:output_type -> teampb.TeamResponse
-	15, // 37: teampb.ClientPlayerTeam.ApplyJoinTeam:output_type -> teampb.TeamResponse
-	15, // 38: teampb.ClientPlayerTeam.HandleApplication:output_type -> teampb.TeamResponse
-	15, // 39: teampb.ClientPlayerTeam.InviteToTeam:output_type -> teampb.TeamResponse
-	15, // 40: teampb.ClientPlayerTeam.RespondInvite:output_type -> teampb.TeamResponse
-	17, // 41: teampb.ClientPlayerTeam.ListMyInvites:output_type -> teampb.ListMyInvitesResponse
-	15, // 42: teampb.ClientPlayerTeam.LeaveTeam:output_type -> teampb.TeamResponse
-	15, // 43: teampb.ClientPlayerTeam.KickMember:output_type -> teampb.TeamResponse
-	15, // 44: teampb.ClientPlayerTeam.TransferLeader:output_type -> teampb.TeamResponse
-	15, // 45: teampb.ClientPlayerTeam.DisbandTeam:output_type -> teampb.TeamResponse
-	15, // 46: teampb.ClientPlayerTeam.StartTeamMatch:output_type -> teampb.TeamResponse
-	31, // 47: teampb.ClientPlayerTeam.NotifyTeamSnapshot:output_type -> Empty
-	31, // 48: teampb.ClientPlayerTeam.NotifyTeamInvite:output_type -> Empty
-	31, // 49: teampb.ClientPlayerTeam.NotifyTeamEvent:output_type -> Empty
-	35, // [35:50] is the sub-list for method output_type
-	20, // [20:35] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	30, // 0: teampb.StartTeamMatchRequest.match_mode:type_name -> match.MatchMode
+	31, // 1: teampb.TeamResponse.error_message:type_name -> TipInfoMessage
+	22, // 2: teampb.TeamResponse.team:type_name -> teampb.TeamView
+	16, // 3: teampb.TeamResponse.match_intent:type_name -> teampb.TeamMatchIntent
+	31, // 4: teampb.ListMyInvitesResponse.error_message:type_name -> TipInfoMessage
+	21, // 5: teampb.ListMyInvitesResponse.invites:type_name -> teampb.TeamIncomingInviteView
+	18, // 6: teampb.TeamApplicationView.player:type_name -> teampb.TeamMemberView
+	18, // 7: teampb.TeamOutgoingInviteView.invitee:type_name -> teampb.TeamMemberView
+	18, // 8: teampb.TeamIncomingInviteView.inviter:type_name -> teampb.TeamMemberView
+	0,  // 9: teampb.TeamView.match_state:type_name -> teampb.TeamMatchState
+	18, // 10: teampb.TeamView.members:type_name -> teampb.TeamMemberView
+	19, // 11: teampb.TeamView.applications:type_name -> teampb.TeamApplicationView
+	20, // 12: teampb.TeamView.pending_invites:type_name -> teampb.TeamOutgoingInviteView
+	30, // 13: teampb.TeamView.match_mode:type_name -> match.MatchMode
+	22, // 14: teampb.TeamSnapshotS2C.team:type_name -> teampb.TeamView
+	1,  // 15: teampb.TeamSnapshotS2C.reason:type_name -> teampb.TeamChangeReason
+	31, // 16: teampb.TeamSnapshotS2C.tip:type_name -> TipInfoMessage
+	21, // 17: teampb.TeamInviteS2C.invite:type_name -> teampb.TeamIncomingInviteView
+	2,  // 18: teampb.TeamEventS2C.type:type_name -> teampb.TeamEventType
+	27, // 19: teampb.TeamRecord.members:type_name -> teampb.TeamMemberRecord
+	28, // 20: teampb.TeamRecord.applications:type_name -> teampb.TeamApplicationRecord
+	29, // 21: teampb.TeamRecord.invites:type_name -> teampb.TeamInviteRecord
+	3,  // 22: teampb.ClientPlayerTeam.CreateTeam:input_type -> teampb.CreateTeamRequest
+	4,  // 23: teampb.ClientPlayerTeam.GetMyTeam:input_type -> teampb.GetMyTeamRequest
+	5,  // 24: teampb.ClientPlayerTeam.ApplyJoinTeam:input_type -> teampb.ApplyJoinTeamRequest
+	6,  // 25: teampb.ClientPlayerTeam.HandleApplication:input_type -> teampb.HandleApplicationRequest
+	7,  // 26: teampb.ClientPlayerTeam.InviteToTeam:input_type -> teampb.InviteToTeamRequest
+	8,  // 27: teampb.ClientPlayerTeam.RespondInvite:input_type -> teampb.RespondInviteRequest
+	9,  // 28: teampb.ClientPlayerTeam.ListMyInvites:input_type -> teampb.ListMyInvitesRequest
+	10, // 29: teampb.ClientPlayerTeam.LeaveTeam:input_type -> teampb.LeaveTeamRequest
+	11, // 30: teampb.ClientPlayerTeam.KickMember:input_type -> teampb.KickMemberRequest
+	12, // 31: teampb.ClientPlayerTeam.TransferLeader:input_type -> teampb.TransferLeaderRequest
+	13, // 32: teampb.ClientPlayerTeam.DisbandTeam:input_type -> teampb.DisbandTeamRequest
+	14, // 33: teampb.ClientPlayerTeam.StartTeamMatch:input_type -> teampb.StartTeamMatchRequest
+	23, // 34: teampb.ClientPlayerTeam.NotifyTeamSnapshot:input_type -> teampb.TeamSnapshotS2C
+	24, // 35: teampb.ClientPlayerTeam.NotifyTeamInvite:input_type -> teampb.TeamInviteS2C
+	25, // 36: teampb.ClientPlayerTeam.NotifyTeamEvent:input_type -> teampb.TeamEventS2C
+	15, // 37: teampb.ClientPlayerTeam.CreateTeam:output_type -> teampb.TeamResponse
+	15, // 38: teampb.ClientPlayerTeam.GetMyTeam:output_type -> teampb.TeamResponse
+	15, // 39: teampb.ClientPlayerTeam.ApplyJoinTeam:output_type -> teampb.TeamResponse
+	15, // 40: teampb.ClientPlayerTeam.HandleApplication:output_type -> teampb.TeamResponse
+	15, // 41: teampb.ClientPlayerTeam.InviteToTeam:output_type -> teampb.TeamResponse
+	15, // 42: teampb.ClientPlayerTeam.RespondInvite:output_type -> teampb.TeamResponse
+	17, // 43: teampb.ClientPlayerTeam.ListMyInvites:output_type -> teampb.ListMyInvitesResponse
+	15, // 44: teampb.ClientPlayerTeam.LeaveTeam:output_type -> teampb.TeamResponse
+	15, // 45: teampb.ClientPlayerTeam.KickMember:output_type -> teampb.TeamResponse
+	15, // 46: teampb.ClientPlayerTeam.TransferLeader:output_type -> teampb.TeamResponse
+	15, // 47: teampb.ClientPlayerTeam.DisbandTeam:output_type -> teampb.TeamResponse
+	15, // 48: teampb.ClientPlayerTeam.StartTeamMatch:output_type -> teampb.TeamResponse
+	32, // 49: teampb.ClientPlayerTeam.NotifyTeamSnapshot:output_type -> Empty
+	32, // 50: teampb.ClientPlayerTeam.NotifyTeamInvite:output_type -> Empty
+	32, // 51: teampb.ClientPlayerTeam.NotifyTeamEvent:output_type -> Empty
+	37, // [37:52] is the sub-list for method output_type
+	22, // [22:37] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_proto_team_team_proto_init() }

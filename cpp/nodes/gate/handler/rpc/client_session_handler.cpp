@@ -3,6 +3,7 @@
 #include "login_admission.h"
 #include "rpc_reply_bridge.h"
 #include "scene_client_call_reply.h"
+#include "session_details_builder.h"
 
 #include <algorithm>
 #include <cassert>
@@ -189,30 +190,18 @@ static std::optional<entt::entity> PickRandomNode(uint32_t nodeType)
 
 // SessionDetails 是 gate 递给 Go 服务的会话身份(gRPC metadata x-session-detail-bin,
 // Go 侧 SessionInterceptor 据此识别玩家,并在响应头回写供 gate 找回会话)。
-// 直连模式、路由模式的请求转发与断线通知都用这一份;playerId 传 0 表示"尚未绑定玩家"
-// (proto3 隐式存在:0 与不设置在线上是同一形状)。
-// session 非空时带上重定向票据的绑定信息(CZ-8)与会话代次。两种转发模式**必须**走同一个构造点:
-// 曾经直连模式是内联手写的一份,只改其中一个 = 一种模式下 login 永远读到 0、访客被弹回家,
-// 而生产恰恰是路由模式。断线通知不需要票据字段,传 nullptr,会话代次由调用方显式写入。
+// 直连模式、路由模式的请求转发与断线通知都用这一份,规则在纯函数 gate_session_details::Build
+// (session_details_builder.h),这里只补上 gNode 的节点号与实例 uuid。playerId 直接传 SessionInfo.playerId:
+// 未绑定角色的 kInvalidGuid 在构造点归一成 0(client-access-band-routing.md D60)。
+// session 非空时带上重定向票据的绑定信息(CZ-8)、会话代次与原归属修订。两种转发模式**必须**走同一个构造点:
+// 曾经直连模式是内联手写的一份,只改其中一个 = 一种模式下 login 永远读到 0、访客被弹回家;
+// 会话代次原先也只有路由 lane 写,直连模式的 Login / CreatePlayer / EnterGame 带 0,落进 login 的旧版兼容路径(审计 §2.3);
+// player_id 原先也只有路由 lane 归一,直连模式原样带出 UINT64_MAX。
 static SessionDetails BuildSessionDetails(const SessionId sessionId, const Guid playerId,
 										  const SessionInfo *session = nullptr)
 {
-	SessionDetails sessionDetails;
-	sessionDetails.set_session_id(sessionId);
-	sessionDetails.set_player_id(playerId);
-	sessionDetails.set_gate_node_id(gNode->GetNodeId());
-	sessionDetails.set_gate_instance_id(gNode->GetNodeInfo().node_uuid());
-	if (session != nullptr)
-	{
-		sessionDetails.set_ticket_player_id(session->ticketPlayerId);
-		sessionDetails.set_ticket_target_zone_id(session->ticketTargetZoneId);
-		// 会话代次(client-request-ordering.md §4.8):login 按 (gate_instance_id, 会话代次) 认登录态与会话栅栏。
-		// 原先只有路由 lane 在 Admit 里写(同一个值),直连模式发出的 Login / CreatePlayer / EnterGame 带 0,
-		// 落进 login 的旧版兼容路径、仍按 session_id 认登录态,gate 重启撞号即可继承别人的登录态(审计 §2.3)。
-		sessionDetails.set_session_incarnation(session->incarnation);
-		sessionDetails.set_owner_revision(session->ownerRevision);
-	}
-	return sessionDetails;
+	return gate_session_details::Build(sessionId, playerId, gNode->GetNodeId(), gNode->GetNodeInfo().node_uuid(),
+									   session);
 }
 
 // 路由模式专用:把一条 ClientRequest **原包**交给路由服(client-rpc-router.md D30
@@ -565,8 +554,8 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 	{
 		loginpb::LoginNodeDisconnectRequest request;
 		request.set_session_id(sessionId);
-		// 未绑定玩家时 player_id 保持 0(见上面的注释:Login 会在 playerID==0 门禁早退)。
-		SessionDetails sessionDetails = BuildSessionDetails(sessionId, hasBoundPlayer ? playerId : 0, &sessionIt->second);
+		// 未绑定玩家时 player_id 为 0(kInvalidGuid 由 BuildSessionDetails 归一;见上面的注释:Login 会在 playerID==0 门禁早退)。
+		SessionDetails sessionDetails = BuildSessionDetails(sessionId, playerId, &sessionIt->second);
 		// 必须带会话代次:login 会话栅栏按 (gate_instance_id, session_incarnation) 记闭合标记,
 		// 代次为 0 时 Close 整段跳过,经 lane 发出的 Login / EnterGame 建起的栅栏就永远关不上
 		// (client-request-ordering.md §6.2)。shouldNotifyLogin 蕴含 sessionFound,且此处在
@@ -949,8 +938,9 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 	// at the SessionDetails build site to confirm whether (a) the cast
 	// drops the high bits, (b) gNode->GetNodeId() is genuinely 0 here, or
 	// (c) login overwrites the field somewhere downstream.
+	// player_id 打实际发出的值(未绑定角色为 0),不打会话里的 kInvalidGuid 哨兵。
 	LOG_INFO << "[diag] SessionDetails to login: session_id=" << sessionId
-			 << " player_id=" << sessionIt->second.playerId
+			 << " player_id=" << sessionDetails.player_id()
 			 << " gate_node_id=" << gNode->GetNodeId()
 			 << " message_id=" << request->message_id();
 

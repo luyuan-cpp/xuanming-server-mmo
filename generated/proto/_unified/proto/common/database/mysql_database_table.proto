@@ -172,6 +172,7 @@ message player_store
   bytes holder_instance = 6;   // 只写权行用:持有者的 scene_instance_id
   uint32 released = 7;         // 只写权行用:1 = 持有者已最终存盘并释放
   bytes payload = 8;
+  uint64 claim_seq = 9;        // 只写权行用:每次认领加 1。同实例同代次重新认领时 (owner_epoch, holder_instance) 不变,判死靠它比得出来
 }
 
 // 同 player_database:只是内存形状,不建表。

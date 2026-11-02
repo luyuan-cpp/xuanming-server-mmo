@@ -127,6 +127,10 @@ func (s *DataServiceServer) GetPlayerRoute(ctx context.Context, req *data_servic
 		return nil, status.Error(codes.Unavailable, "玩家落点读取未就绪")
 	}
 	if _, err := s.svcCtx.PlayerRouteAuth.Verify(ctx, accountdirectory.MethodPrefix+"GetPlayerRoute", req); err != nil {
+		// Verify 先看 ctx。调用方已放弃不等于证明无效,和读失败一样带内回 retry。
+		if ctx.Err() != nil {
+			return &data_service.GetPlayerRouteResponse{Retry: true}, nil
+		}
 		return nil, status.Error(codes.PermissionDenied, "玩家落点调用证明无效")
 	}
 	row, err := s.svcCtx.Router.GetPlayerRoute(ctx, req.GetPlayerId())

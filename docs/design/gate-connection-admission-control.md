@@ -281,6 +281,8 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 > - 新发现并修掉：`k8s_deploy.ps1` 生成的 `node-config` / `battle-node-config` 原先写死 `LogLevel: 1`，K8s 上实际一直是 **DEBUG**；
 >   现改为从 `bin/etc` 镜像，生成期校验是 0..5 的整数。`release_preflight.ps1` 的 `debug.cpp.loglevel` 原先按「0=DEBUG」把下界设成 1（放过 DEBUG），现改为 2。
 > - **未做**：`Node::InitLogSystem` 的越界 / 缺键校验（缺键仍得 0 = TRACE）。K8s 生成期总会写出这一键，本机靠注释提醒。
+> - **（2026-10-30 更正）** 上面「per-connection 两行 INFO 仍在打」只对 Linux 构建成立：`third_party/muduo-linux` 的 `TcpServer.cc:80` / `:109` 是 `LOG_INFO`（gitlink 在 `b55b0ac` 与 `f1fc77e` 之间翻转过，两版相同），`tools/archived/muduo_linux_overlay` 不覆盖 `TcpServer.cc`，所以 K8s 上照打，本节结论不变。
+>   Windows 构建用的 `muduo_windows` 与 `third_party/muduo` 里这两行自 `52ebf9e5d`（2026-04-13）起已是 `LOG_TRACE`，本机 `LogLevel: 2` 看不到，不要据此判断 G5 不成立。
 
 > **（2026-10-22 后半落地：缺键 / 越界校验，未编译，待 Codex 验证）** 即上一条「未做」那一项。
 > - **语义：fail-closed，启动失败，不回落 INFO。** 缺键、YAML 空值（`LogLevel:` / `~`）、序列或映射、非十进制整数（`INFO`、`-1`、`+2`、`2.5`、`0x2`、带空白）、越界（> 5）一律拒启：

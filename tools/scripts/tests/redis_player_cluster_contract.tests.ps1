@@ -74,6 +74,7 @@ function Get-ThrownMessage([scriptblock]$Action) {
 # 服务 → ConfigMap 里配置文件的键前缀。
 $ServiceConfigs = [ordered]@{
     login            = 'data.login.yaml.'
+    'data-service'   = 'data.data_service.yaml.'
     'player-locator' = 'data.player_locator.yaml.'
     'scene-manager'  = 'data.scene_manager_service.yaml.'
     match            = 'data.match_service.yaml.'
@@ -84,7 +85,7 @@ $ServiceConfigs = [ordered]@{
     'player-inbox'   = 'data.player_inbox.yaml.'
     mail             = 'data.mail.yaml.'
 }
-$ZoneServices = @('login', 'player-locator', 'scene-manager')
+$ZoneServices = @('login', 'data-service', 'player-locator', 'scene-manager')
 $GlobalServices = @('match', 'chat', 'friend', 'guild', 'trade', 'player-inbox', 'mail')
 # 读登录态的全局服务 → 配置段。trade 的在 Rmb 下。
 $LoginReaderSections = [ordered]@{ match = 'LoginRedis'; chat = 'LoginRedis'; friend = 'LoginRedis'; guild = 'LoginRedis'; mail = 'LoginRedis'; trade = 'Rmb.LoginRedis' }
@@ -312,6 +313,8 @@ Test-Case '玩家域总账输入:每个服务的每节点连接 = PlayerRedis �
     Assert-True -Condition ($mintPool -gt 0 -and $syncPool -gt 0 -and $mailPool -gt 0) -Because "写死的池上限要从源码读到(实际 $mintPool / $syncPool / $mailPool),写法变了同步本用例"
     $expected = [ordered]@{
         login            = (& $player 'go/login/etc/login.yaml') + [int](Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'LoginRedis.PoolSizePerNode')
+        # GM 回收读玩家位置键(go/data_service/internal/config/config.go 的 PlayerRedis),连接按打开计。
+        'data-service'   = (& $player 'go/data_service/etc/data_service.yaml')
         'player-locator' = (& $player 'go/player_locator/etc/player_locator.yaml')
         'scene-manager'  = (& $player 'go/scene_manager/etc/scene_manager_service.yaml') + $mintPool
         match            = (& $player 'go/match/etc/match_service.yaml') + (& $loginReader 'go/match/etc/match_service.yaml')

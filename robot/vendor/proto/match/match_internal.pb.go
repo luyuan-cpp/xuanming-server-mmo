@@ -84,6 +84,172 @@ func (ActivityBattleReject) EnumDescriptor() ([]byte, []int) {
 	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{0}
 }
 
+type BattleOutcomeDecision int32
+
+const (
+	BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN  BattleOutcomeDecision = 0
+	BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE BattleOutcomeDecision = 1
+	BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT    BattleOutcomeDecision = 2
+)
+
+// Enum value maps for BattleOutcomeDecision.
+var (
+	BattleOutcomeDecision_name = map[int32]string{
+		0: "BATTLE_OUTCOME_DECISION_UNKNOWN",
+		1: "BATTLE_OUTCOME_DECISION_COMPLETE",
+		2: "BATTLE_OUTCOME_DECISION_ABORT",
+	}
+	BattleOutcomeDecision_value = map[string]int32{
+		"BATTLE_OUTCOME_DECISION_UNKNOWN":  0,
+		"BATTLE_OUTCOME_DECISION_COMPLETE": 1,
+		"BATTLE_OUTCOME_DECISION_ABORT":    2,
+	}
+)
+
+func (x BattleOutcomeDecision) Enum() *BattleOutcomeDecision {
+	p := new(BattleOutcomeDecision)
+	*p = x
+	return p
+}
+
+func (x BattleOutcomeDecision) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (BattleOutcomeDecision) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_internal_proto_enumTypes[1].Descriptor()
+}
+
+func (BattleOutcomeDecision) Type() protoreflect.EnumType {
+	return &file_proto_match_match_internal_proto_enumTypes[1]
+}
+
+func (x BattleOutcomeDecision) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use BattleOutcomeDecision.Descriptor instead.
+func (BattleOutcomeDecision) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{1}
+}
+
+// 运营把一场公开局标成 / 取消标成赛事局(docs/design/battle-spectate-tiered-fanout.md §15.6,Q3)。
+// 调用方为运维工具(serviceauth 调用方 "ops",只放行本方法);标记即立刻尝试升全服广播(受全服配额约束)。
+// 私密局、不存在或已结束的局一律拒绝;重复设置同值幂等成功。
+type SpectateFeaturedReject int32
+
+const (
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NONE      SpectateFeaturedReject = 0
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NOT_FOUND SpectateFeaturedReject = 1 // 观战记录不存在(局不存在或已结束)
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_PRIVATE   SpectateFeaturedReject = 2 // 非公开局不能标成赛事局
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_INTERNAL  SpectateFeaturedReject = 3 // Redis 读写失败(可重试)
+	// 入口未开启或调用方验签失败。走业务拒绝而不是 gRPC PermissionDenied:拒绝发生在任何副作用之前,
+	// 结局是确定的,不能让发布准入把它记成未知结局而拖住本实例的排空证明(go/shared/drainproof)。
+	SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_DENIED SpectateFeaturedReject = 4
+)
+
+// Enum value maps for SpectateFeaturedReject.
+var (
+	SpectateFeaturedReject_name = map[int32]string{
+		0: "SPECTATE_FEATURED_REJECT_NONE",
+		1: "SPECTATE_FEATURED_REJECT_NOT_FOUND",
+		2: "SPECTATE_FEATURED_REJECT_PRIVATE",
+		3: "SPECTATE_FEATURED_REJECT_INTERNAL",
+		4: "SPECTATE_FEATURED_REJECT_DENIED",
+	}
+	SpectateFeaturedReject_value = map[string]int32{
+		"SPECTATE_FEATURED_REJECT_NONE":      0,
+		"SPECTATE_FEATURED_REJECT_NOT_FOUND": 1,
+		"SPECTATE_FEATURED_REJECT_PRIVATE":   2,
+		"SPECTATE_FEATURED_REJECT_INTERNAL":  3,
+		"SPECTATE_FEATURED_REJECT_DENIED":    4,
+	}
+)
+
+func (x SpectateFeaturedReject) Enum() *SpectateFeaturedReject {
+	p := new(SpectateFeaturedReject)
+	*p = x
+	return p
+}
+
+func (x SpectateFeaturedReject) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SpectateFeaturedReject) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_internal_proto_enumTypes[2].Descriptor()
+}
+
+func (SpectateFeaturedReject) Type() protoreflect.EnumType {
+	return &file_proto_match_match_internal_proto_enumTypes[2]
+}
+
+func (x SpectateFeaturedReject) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SpectateFeaturedReject.Descriptor instead.
+func (SpectateFeaturedReject) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{2}
+}
+
+// 帮会历练的战斗入口占用(docs/design/horizontal-scale-logical-db.md §4)。match 是战斗入口占用的唯一权威。
+// 结论一律走响应里的 reject，不回 gRPC 错误：发布准入把 gRPC 错误记成未知结局，会拖住排空证明。
+type TrialOccupancyReject int32
+
+const (
+	TrialOccupancyReject_TRIAL_OCCUPANCY_REJECT_NONE     TrialOccupancyReject = 0
+	TrialOccupancyReject_TRIAL_OCCUPANCY_REJECT_OCCUPIED TrialOccupancyReject = 1 // 有票、有未终结的整队开战，或别的大厅占着
+	TrialOccupancyReject_TRIAL_OCCUPANCY_REJECT_ROLE     TrialOccupancyReject = 2 // 角色冻结、已删除，或原身份已换主
+	TrialOccupancyReject_TRIAL_OCCUPANCY_REJECT_DENIED   TrialOccupancyReject = 3 // 调用方验签失败、入口未就绪或参数不合法
+	TrialOccupancyReject_TRIAL_OCCUPANCY_REJECT_RETRY    TrialOccupancyReject = 4 // 这一次没有结论(目录或 SQL 暂不可用)。占用有租约，重放幂等
+)
+
+// Enum value maps for TrialOccupancyReject.
+var (
+	TrialOccupancyReject_name = map[int32]string{
+		0: "TRIAL_OCCUPANCY_REJECT_NONE",
+		1: "TRIAL_OCCUPANCY_REJECT_OCCUPIED",
+		2: "TRIAL_OCCUPANCY_REJECT_ROLE",
+		3: "TRIAL_OCCUPANCY_REJECT_DENIED",
+		4: "TRIAL_OCCUPANCY_REJECT_RETRY",
+	}
+	TrialOccupancyReject_value = map[string]int32{
+		"TRIAL_OCCUPANCY_REJECT_NONE":     0,
+		"TRIAL_OCCUPANCY_REJECT_OCCUPIED": 1,
+		"TRIAL_OCCUPANCY_REJECT_ROLE":     2,
+		"TRIAL_OCCUPANCY_REJECT_DENIED":   3,
+		"TRIAL_OCCUPANCY_REJECT_RETRY":    4,
+	}
+)
+
+func (x TrialOccupancyReject) Enum() *TrialOccupancyReject {
+	p := new(TrialOccupancyReject)
+	*p = x
+	return p
+}
+
+func (x TrialOccupancyReject) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TrialOccupancyReject) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_internal_proto_enumTypes[3].Descriptor()
+}
+
+func (TrialOccupancyReject) Type() protoreflect.EnumType {
+	return &file_proto_match_match_internal_proto_enumTypes[3]
+}
+
+func (x TrialOccupancyReject) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TrialOccupancyReject.Descriptor instead.
+func (TrialOccupancyReject) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{3}
+}
+
 type StartActivityBattleRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	BattleConfigId uint32                 `protobuf:"varint,1,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id(= GuildActivity.dungeon_id);非 0
@@ -94,8 +260,11 @@ type StartActivityBattleRequest struct {
 	// initiator_player_id == member_player_ids[0]。match 深拷贝后原样放进 CreateBattleRequest.activity_context。
 	ActivityContext *battle.BattleActivityContext `protobuf:"bytes,3,opt,name=activity_context,json=activityContext,proto3" json:"activity_context,omitempty"`
 	RequestId       uint64                        `protobuf:"varint,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 调用方持久的邀请房间/业务操作号；全球模式为0拒绝，重试必须复用。
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// guild 的签名。match 读不到 guild 的库，原件由这个签名担保(docs/design/horizontal-scale-logical-db.md §4)。
+	// 持久化的意图正文不含它：每次重试的时间戳不同，正文要逐字节相等。
+	Auth          *base.ServiceCallAuth `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StartActivityBattleRequest) Reset() {
@@ -154,6 +323,13 @@ func (x *StartActivityBattleRequest) GetRequestId() uint64 {
 		return x.RequestId
 	}
 	return 0
+}
+
+func (x *StartActivityBattleRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
 }
 
 type StartActivityBattleResponse struct {
@@ -287,6 +463,7 @@ type CancelActivityBattleResponse struct {
 	FormationState   uint32                 `protobuf:"varint,3,opt,name=formation_state,json=formationState,proto3" json:"formation_state,omitempty"`
 	Auth             *base.ServiceCallAuth  `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
 	RequestDigest    string                 `protobuf:"bytes,5,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"` // 清空原Cancel.auth后请求摘要；签名回复必须与本请求原件匹配。
+	TerminalDecision BattleOutcomeDecision  `protobuf:"varint,6,opt,name=terminal_decision,json=terminalDecision,proto3,enum=match.BattleOutcomeDecision" json:"terminal_decision,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -356,17 +533,675 @@ func (x *CancelActivityBattleResponse) GetRequestDigest() string {
 	return ""
 }
 
+func (x *CancelActivityBattleResponse) GetTerminalDecision() BattleOutcomeDecision {
+	if x != nil {
+		return x.TerminalDecision
+	}
+	return BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN
+}
+
+// 完整原事件在个人副作用前提交；相同局只接受相同字节，未知提交重放原件。
+type CommitBattleOutcomeRequest struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	BattleId             uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	PlacementOperationId string                 `protobuf:"bytes,2,opt,name=placement_operation_id,json=placementOperationId,proto3" json:"placement_operation_id,omitempty"`
+	TargetInstanceId     string                 `protobuf:"bytes,3,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	RawResultPayload     []byte                 `protobuf:"bytes,4,opt,name=raw_result_payload,json=rawResultPayload,proto3" json:"raw_result_payload,omitempty"`
+	Auth                 *base.ServiceCallAuth  `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *CommitBattleOutcomeRequest) Reset() {
+	*x = CommitBattleOutcomeRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommitBattleOutcomeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommitBattleOutcomeRequest) ProtoMessage() {}
+
+func (x *CommitBattleOutcomeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommitBattleOutcomeRequest.ProtoReflect.Descriptor instead.
+func (*CommitBattleOutcomeRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CommitBattleOutcomeRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *CommitBattleOutcomeRequest) GetPlacementOperationId() string {
+	if x != nil {
+		return x.PlacementOperationId
+	}
+	return ""
+}
+
+func (x *CommitBattleOutcomeRequest) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
+func (x *CommitBattleOutcomeRequest) GetRawResultPayload() []byte {
+	if x != nil {
+		return x.RawResultPayload
+	}
+	return nil
+}
+
+func (x *CommitBattleOutcomeRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type CommitBattleOutcomeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Decision      BattleOutcomeDecision  `protobuf:"varint,1,opt,name=decision,proto3,enum=match.BattleOutcomeDecision" json:"decision,omitempty"`
+	RequestDigest string                 `protobuf:"bytes,2,opt,name=request_digest,json=requestDigest,proto3" json:"request_digest,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommitBattleOutcomeResponse) Reset() {
+	*x = CommitBattleOutcomeResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommitBattleOutcomeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommitBattleOutcomeResponse) ProtoMessage() {}
+
+func (x *CommitBattleOutcomeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommitBattleOutcomeResponse.ProtoReflect.Descriptor instead.
+func (*CommitBattleOutcomeResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CommitBattleOutcomeResponse) GetDecision() BattleOutcomeDecision {
+	if x != nil {
+		return x.Decision
+	}
+	return BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN
+}
+
+func (x *CommitBattleOutcomeResponse) GetRequestDigest() string {
+	if x != nil {
+		return x.RequestDigest
+	}
+	return ""
+}
+
+func (x *CommitBattleOutcomeResponse) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type SetSpectateFeaturedRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	Featured      bool                   `protobuf:"varint,2,opt,name=featured,proto3" json:"featured,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSpectateFeaturedRequest) Reset() {
+	*x = SetSpectateFeaturedRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSpectateFeaturedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSpectateFeaturedRequest) ProtoMessage() {}
+
+func (x *SetSpectateFeaturedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSpectateFeaturedRequest.ProtoReflect.Descriptor instead.
+func (*SetSpectateFeaturedRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SetSpectateFeaturedRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *SetSpectateFeaturedRequest) GetFeatured() bool {
+	if x != nil {
+		return x.Featured
+	}
+	return false
+}
+
+func (x *SetSpectateFeaturedRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type SetSpectateFeaturedResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reject        SpectateFeaturedReject `protobuf:"varint,1,opt,name=reject,proto3,enum=match.SpectateFeaturedReject" json:"reject,omitempty"`
+	Tier          battle.ESpectateTier   `protobuf:"varint,2,opt,name=tier,proto3,enum=ESpectateTier" json:"tier,omitempty"` // 处理后的档位(标记后升 L2 成功即为 BROADCAST;配额满时保持原档)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSpectateFeaturedResponse) Reset() {
+	*x = SetSpectateFeaturedResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSpectateFeaturedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSpectateFeaturedResponse) ProtoMessage() {}
+
+func (x *SetSpectateFeaturedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSpectateFeaturedResponse.ProtoReflect.Descriptor instead.
+func (*SetSpectateFeaturedResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SetSpectateFeaturedResponse) GetReject() SpectateFeaturedReject {
+	if x != nil {
+		return x.Reject
+	}
+	return SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NONE
+}
+
+func (x *SetSpectateFeaturedResponse) GetTier() battle.ESpectateTier {
+	if x != nil {
+		return x.Tier
+	}
+	return battle.ESpectateTier(0)
+}
+
+type TrialOccupancyRole struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// 原身份。首次占用时对端的身份还没捕获，留空(revision 0)，由 match 从本库护栏副本写入；之后每次重放都带上。
+	Account       string `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
+	OwnerRevision uint64 `protobuf:"varint,3,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrialOccupancyRole) Reset() {
+	*x = TrialOccupancyRole{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrialOccupancyRole) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrialOccupancyRole) ProtoMessage() {}
+
+func (x *TrialOccupancyRole) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrialOccupancyRole.ProtoReflect.Descriptor instead.
+func (*TrialOccupancyRole) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TrialOccupancyRole) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *TrialOccupancyRole) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *TrialOccupancyRole) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+// 全成或全不成，同 owner 重放幂等。过期的占用视为空闲。
+type AcquireTrialOccupancyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerId       uint64                 `protobuf:"varint,1,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"` // 大厅号，等于 StartActivityBattleRequest.request_id
+	Roster        []*TrialOccupancyRole  `protobuf:"bytes,2,rep,name=roster,proto3" json:"roster,omitempty"`
+	TtlMs         uint64                 `protobuf:"varint,3,opt,name=ttl_ms,json=ttlMs,proto3" json:"ttl_ms,omitempty"` // 只延长不缩短
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,4,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcquireTrialOccupancyRequest) Reset() {
+	*x = AcquireTrialOccupancyRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcquireTrialOccupancyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcquireTrialOccupancyRequest) ProtoMessage() {}
+
+func (x *AcquireTrialOccupancyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcquireTrialOccupancyRequest.ProtoReflect.Descriptor instead.
+func (*AcquireTrialOccupancyRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *AcquireTrialOccupancyRequest) GetOwnerId() uint64 {
+	if x != nil {
+		return x.OwnerId
+	}
+	return 0
+}
+
+func (x *AcquireTrialOccupancyRequest) GetRoster() []*TrialOccupancyRole {
+	if x != nil {
+		return x.Roster
+	}
+	return nil
+}
+
+func (x *AcquireTrialOccupancyRequest) GetTtlMs() uint64 {
+	if x != nil {
+		return x.TtlMs
+	}
+	return 0
+}
+
+func (x *AcquireTrialOccupancyRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type AcquireTrialOccupancyResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Reject           TrialOccupancyReject   `protobuf:"varint,1,opt,name=reject,proto3,enum=match.TrialOccupancyReject" json:"reject,omitempty"`
+	OffenderPlayerId uint64                 `protobuf:"varint,2,opt,name=offender_player_id,json=offenderPlayerId,proto3" json:"offender_player_id,omitempty"` // reject 为 OCCUPIED 时是第一个不空闲的角色
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AcquireTrialOccupancyResponse) Reset() {
+	*x = AcquireTrialOccupancyResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcquireTrialOccupancyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcquireTrialOccupancyResponse) ProtoMessage() {}
+
+func (x *AcquireTrialOccupancyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcquireTrialOccupancyResponse.ProtoReflect.Descriptor instead.
+func (*AcquireTrialOccupancyResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AcquireTrialOccupancyResponse) GetReject() TrialOccupancyReject {
+	if x != nil {
+		return x.Reject
+	}
+	return TrialOccupancyReject_TRIAL_OCCUPANCY_REJECT_NONE
+}
+
+func (x *AcquireTrialOccupancyResponse) GetOffenderPlayerId() uint64 {
+	if x != nil {
+		return x.OffenderPlayerId
+	}
+	return 0
+}
+
+// 只删 owner 相同的行，幂等。
+type ReleaseTrialOccupancyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerId       uint64                 `protobuf:"varint,1,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
+	PlayerIds     []uint64               `protobuf:"varint,2,rep,packed,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseTrialOccupancyRequest) Reset() {
+	*x = ReleaseTrialOccupancyRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseTrialOccupancyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseTrialOccupancyRequest) ProtoMessage() {}
+
+func (x *ReleaseTrialOccupancyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseTrialOccupancyRequest.ProtoReflect.Descriptor instead.
+func (*ReleaseTrialOccupancyRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ReleaseTrialOccupancyRequest) GetOwnerId() uint64 {
+	if x != nil {
+		return x.OwnerId
+	}
+	return 0
+}
+
+func (x *ReleaseTrialOccupancyRequest) GetPlayerIds() []uint64 {
+	if x != nil {
+		return x.PlayerIds
+	}
+	return nil
+}
+
+func (x *ReleaseTrialOccupancyRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type ReleaseTrialOccupancyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reject        TrialOccupancyReject   `protobuf:"varint,1,opt,name=reject,proto3,enum=match.TrialOccupancyReject" json:"reject,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleaseTrialOccupancyResponse) Reset() {
+	*x = ReleaseTrialOccupancyResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseTrialOccupancyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseTrialOccupancyResponse) ProtoMessage() {}
+
+func (x *ReleaseTrialOccupancyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseTrialOccupancyResponse.ProtoReflect.Descriptor instead.
+func (*ReleaseTrialOccupancyResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ReleaseTrialOccupancyResponse) GetReject() TrialOccupancyReject {
+	if x != nil {
+		return x.Reject
+	}
+	return TrialOccupancyReject_TRIAL_OCCUPANCY_REJECT_NONE
+}
+
+// 取代 guild 对 match_battle_completion 的跨库读。
+type GetBattleCompletionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBattleCompletionRequest) Reset() {
+	*x = GetBattleCompletionRequest{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBattleCompletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBattleCompletionRequest) ProtoMessage() {}
+
+func (x *GetBattleCompletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBattleCompletionRequest.ProtoReflect.Descriptor instead.
+func (*GetBattleCompletionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetBattleCompletionRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GetBattleCompletionRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type GetBattleCompletionResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Reject TrialOccupancyReject   `protobuf:"varint,1,opt,name=reject,proto3,enum=match.TrialOccupancyReject" json:"reject,omitempty"`
+	// UNKNOWN 表示这局还没有终局。ABORT 没有 battle 原字节。
+	Decision      BattleOutcomeDecision `protobuf:"varint,2,opt,name=decision,proto3,enum=match.BattleOutcomeDecision" json:"decision,omitempty"`
+	RawPayload    []byte                `protobuf:"bytes,3,opt,name=raw_payload,json=rawPayload,proto3" json:"raw_payload,omitempty"` // 只有 COMPLETE 才有
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBattleCompletionResponse) Reset() {
+	*x = GetBattleCompletionResponse{}
+	mi := &file_proto_match_match_internal_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBattleCompletionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBattleCompletionResponse) ProtoMessage() {}
+
+func (x *GetBattleCompletionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_internal_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBattleCompletionResponse.ProtoReflect.Descriptor instead.
+func (*GetBattleCompletionResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_internal_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetBattleCompletionResponse) GetReject() TrialOccupancyReject {
+	if x != nil {
+		return x.Reject
+	}
+	return TrialOccupancyReject_TRIAL_OCCUPANCY_REJECT_NONE
+}
+
+func (x *GetBattleCompletionResponse) GetDecision() BattleOutcomeDecision {
+	if x != nil {
+		return x.Decision
+	}
+	return BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN
+}
+
+func (x *GetBattleCompletionResponse) GetRawPayload() []byte {
+	if x != nil {
+		return x.RawPayload
+	}
+	return nil
+}
+
 var File_proto_match_match_internal_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\n" +
-	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a)proto/common/base/service_call_auth.proto\"\xd4\x01\n" +
+	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a)proto/common/base/service_call_auth.proto\"\x86\x02\n" +
 	"\x1aStartActivityBattleRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12*\n" +
 	"\x11member_player_ids\x18\x02 \x03(\x04R\x0fmemberPlayerIds\x12A\n" +
 	"\x10activity_context\x18\x03 \x01(\v2\x16.BattleActivityContextR\x0factivityContext\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x04 \x01(\x04R\trequestId\"\xc6\x01\n" +
+	"request_id\x18\x04 \x01(\x04R\trequestId\x120\n" +
+	"\x04auth\x18\x05 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xc6\x01\n" +
 	"\x1bStartActivityBattleResponse\x123\n" +
 	"\x06reject\x18\x01 \x01(\x0e2\x1b.match.ActivityBattleRejectR\x06reject\x12,\n" +
 	"\x12offender_player_id\x18\x02 \x01(\x04R\x10offenderPlayerId\x12\x1b\n" +
@@ -374,23 +1209,89 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x0fformation_state\x18\x04 \x01(\rR\x0eformationState\"\x8e\x01\n" +
 	"\x1bCancelActivityBattleRequest\x12=\n" +
 	"\boriginal\x18\x01 \x01(\v2!.match.StartActivityBattleRequestR\boriginal\x120\n" +
-	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xea\x01\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xb5\x02\n" +
 	"\x1cCancelActivityBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12+\n" +
 	"\x11request_cancelled\x18\x02 \x01(\bR\x10requestCancelled\x12'\n" +
 	"\x0fformation_state\x18\x03 \x01(\rR\x0eformationState\x120\n" +
 	"\x04auth\x18\x04 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12%\n" +
-	"\x0erequest_digest\x18\x05 \x01(\tR\rrequestDigest*\x8e\x02\n" +
+	"\x0erequest_digest\x18\x05 \x01(\tR\rrequestDigest\x12I\n" +
+	"\x11terminal_decision\x18\x06 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\x10terminalDecision\"\xfd\x01\n" +
+	"\x1aCommitBattleOutcomeRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
+	"\x16placement_operation_id\x18\x02 \x01(\tR\x14placementOperationId\x12,\n" +
+	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\x12,\n" +
+	"\x12raw_result_payload\x18\x04 \x01(\fR\x10rawResultPayload\x120\n" +
+	"\x04auth\x18\x05 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xb0\x01\n" +
+	"\x1bCommitBattleOutcomeResponse\x128\n" +
+	"\bdecision\x18\x01 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\bdecision\x12%\n" +
+	"\x0erequest_digest\x18\x02 \x01(\tR\rrequestDigest\x120\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\x87\x01\n" +
+	"\x1aSetSpectateFeaturedRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1a\n" +
+	"\bfeatured\x18\x02 \x01(\bR\bfeatured\x120\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"x\n" +
+	"\x1bSetSpectateFeaturedResponse\x125\n" +
+	"\x06reject\x18\x01 \x01(\x0e2\x1d.match.SpectateFeaturedRejectR\x06reject\x12\"\n" +
+	"\x04tier\x18\x02 \x01(\x0e2\x0e.eSpectateTierR\x04tier\"r\n" +
+	"\x12TrialOccupancyRole\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
+	"\aaccount\x18\x02 \x01(\tR\aaccount\x12%\n" +
+	"\x0eowner_revision\x18\x03 \x01(\x04R\rownerRevision\"\xb5\x01\n" +
+	"\x1cAcquireTrialOccupancyRequest\x12\x19\n" +
+	"\bowner_id\x18\x01 \x01(\x04R\aownerId\x121\n" +
+	"\x06roster\x18\x02 \x03(\v2\x19.match.TrialOccupancyRoleR\x06roster\x12\x15\n" +
+	"\x06ttl_ms\x18\x03 \x01(\x04R\x05ttlMs\x120\n" +
+	"\x04auth\x18\x04 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\x82\x01\n" +
+	"\x1dAcquireTrialOccupancyResponse\x123\n" +
+	"\x06reject\x18\x01 \x01(\x0e2\x1b.match.TrialOccupancyRejectR\x06reject\x12,\n" +
+	"\x12offender_player_id\x18\x02 \x01(\x04R\x10offenderPlayerId\"\x8a\x01\n" +
+	"\x1cReleaseTrialOccupancyRequest\x12\x19\n" +
+	"\bowner_id\x18\x01 \x01(\x04R\aownerId\x12\x1d\n" +
+	"\n" +
+	"player_ids\x18\x02 \x03(\x04R\tplayerIds\x120\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"T\n" +
+	"\x1dReleaseTrialOccupancyResponse\x123\n" +
+	"\x06reject\x18\x01 \x01(\x0e2\x1b.match.TrialOccupancyRejectR\x06reject\"k\n" +
+	"\x1aGetBattleCompletionRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xad\x01\n" +
+	"\x1bGetBattleCompletionResponse\x123\n" +
+	"\x06reject\x18\x01 \x01(\x0e2\x1b.match.TrialOccupancyRejectR\x06reject\x128\n" +
+	"\bdecision\x18\x02 \x01(\x0e2\x1c.match.BattleOutcomeDecisionR\bdecision\x12\x1f\n" +
+	"\vraw_payload\x18\x03 \x01(\fR\n" +
+	"rawPayload*\x8e\x02\n" +
 	"\x14ActivityBattleReject\x12\x1f\n" +
 	"\x1bACTIVITY_BATTLE_REJECT_NONE\x10\x00\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT\x10\x01\x12)\n" +
 	"%ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE\x10\x02\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE\x10\x03\x12+\n" +
 	"'ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY\x10\x04\x12#\n" +
-	"\x1fACTIVITY_BATTLE_REJECT_INTERNAL\x10\x052\xce\x01\n" +
+	"\x1fACTIVITY_BATTLE_REJECT_INTERNAL\x10\x05*\x85\x01\n" +
+	"\x15BattleOutcomeDecision\x12#\n" +
+	"\x1fBATTLE_OUTCOME_DECISION_UNKNOWN\x10\x00\x12$\n" +
+	" BATTLE_OUTCOME_DECISION_COMPLETE\x10\x01\x12!\n" +
+	"\x1dBATTLE_OUTCOME_DECISION_ABORT\x10\x02*\xd5\x01\n" +
+	"\x16SpectateFeaturedReject\x12!\n" +
+	"\x1dSPECTATE_FEATURED_REJECT_NONE\x10\x00\x12&\n" +
+	"\"SPECTATE_FEATURED_REJECT_NOT_FOUND\x10\x01\x12$\n" +
+	" SPECTATE_FEATURED_REJECT_PRIVATE\x10\x02\x12%\n" +
+	"!SPECTATE_FEATURED_REJECT_INTERNAL\x10\x03\x12#\n" +
+	"\x1fSPECTATE_FEATURED_REJECT_DENIED\x10\x04*\xc2\x01\n" +
+	"\x14TrialOccupancyReject\x12\x1f\n" +
+	"\x1bTRIAL_OCCUPANCY_REJECT_NONE\x10\x00\x12#\n" +
+	"\x1fTRIAL_OCCUPANCY_REJECT_OCCUPIED\x10\x01\x12\x1f\n" +
+	"\x1bTRIAL_OCCUPANCY_REJECT_ROLE\x10\x02\x12!\n" +
+	"\x1dTRIAL_OCCUPANCY_REJECT_DENIED\x10\x03\x12 \n" +
+	"\x1cTRIAL_OCCUPANCY_REJECT_RETRY\x10\x042\xb0\x05\n" +
 	"\rMatchInternal\x12\\\n" +
 	"\x13StartActivityBattle\x12!.match.StartActivityBattleRequest\x1a\".match.StartActivityBattleResponse\x12_\n" +
-	"\x14CancelActivityBattle\x12\".match.CancelActivityBattleRequest\x1a#.match.CancelActivityBattleResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
+	"\x14CancelActivityBattle\x12\".match.CancelActivityBattleRequest\x1a#.match.CancelActivityBattleResponse\x12\\\n" +
+	"\x13CommitBattleOutcome\x12!.match.CommitBattleOutcomeRequest\x1a\".match.CommitBattleOutcomeResponse\x12\\\n" +
+	"\x13SetSpectateFeatured\x12!.match.SetSpectateFeaturedRequest\x1a\".match.SetSpectateFeaturedResponse\x12b\n" +
+	"\x15AcquireTrialOccupancy\x12#.match.AcquireTrialOccupancyRequest\x1a$.match.AcquireTrialOccupancyResponse\x12b\n" +
+	"\x15ReleaseTrialOccupancy\x12#.match.ReleaseTrialOccupancyRequest\x1a$.match.ReleaseTrialOccupancyResponse\x12\\\n" +
+	"\x13GetBattleCompletion\x12!.match.GetBattleCompletionRequest\x1a\".match.GetBattleCompletionResponseB\x14\x98\xd4a\x15Z\vproto/match\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_match_match_internal_proto_rawDescOnce sync.Once
@@ -404,32 +1305,73 @@ func file_proto_match_match_internal_proto_rawDescGZIP() []byte {
 	return file_proto_match_match_internal_proto_rawDescData
 }
 
-var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_match_match_internal_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_proto_match_match_internal_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_proto_match_match_internal_proto_goTypes = []any{
-	(ActivityBattleReject)(0),            // 0: match.ActivityBattleReject
-	(*StartActivityBattleRequest)(nil),   // 1: match.StartActivityBattleRequest
-	(*StartActivityBattleResponse)(nil),  // 2: match.StartActivityBattleResponse
-	(*CancelActivityBattleRequest)(nil),  // 3: match.CancelActivityBattleRequest
-	(*CancelActivityBattleResponse)(nil), // 4: match.CancelActivityBattleResponse
-	(*battle.BattleActivityContext)(nil), // 5: BattleActivityContext
-	(*base.ServiceCallAuth)(nil),         // 6: common.base.ServiceCallAuth
+	(ActivityBattleReject)(0),             // 0: match.ActivityBattleReject
+	(BattleOutcomeDecision)(0),            // 1: match.BattleOutcomeDecision
+	(SpectateFeaturedReject)(0),           // 2: match.SpectateFeaturedReject
+	(TrialOccupancyReject)(0),             // 3: match.TrialOccupancyReject
+	(*StartActivityBattleRequest)(nil),    // 4: match.StartActivityBattleRequest
+	(*StartActivityBattleResponse)(nil),   // 5: match.StartActivityBattleResponse
+	(*CancelActivityBattleRequest)(nil),   // 6: match.CancelActivityBattleRequest
+	(*CancelActivityBattleResponse)(nil),  // 7: match.CancelActivityBattleResponse
+	(*CommitBattleOutcomeRequest)(nil),    // 8: match.CommitBattleOutcomeRequest
+	(*CommitBattleOutcomeResponse)(nil),   // 9: match.CommitBattleOutcomeResponse
+	(*SetSpectateFeaturedRequest)(nil),    // 10: match.SetSpectateFeaturedRequest
+	(*SetSpectateFeaturedResponse)(nil),   // 11: match.SetSpectateFeaturedResponse
+	(*TrialOccupancyRole)(nil),            // 12: match.TrialOccupancyRole
+	(*AcquireTrialOccupancyRequest)(nil),  // 13: match.AcquireTrialOccupancyRequest
+	(*AcquireTrialOccupancyResponse)(nil), // 14: match.AcquireTrialOccupancyResponse
+	(*ReleaseTrialOccupancyRequest)(nil),  // 15: match.ReleaseTrialOccupancyRequest
+	(*ReleaseTrialOccupancyResponse)(nil), // 16: match.ReleaseTrialOccupancyResponse
+	(*GetBattleCompletionRequest)(nil),    // 17: match.GetBattleCompletionRequest
+	(*GetBattleCompletionResponse)(nil),   // 18: match.GetBattleCompletionResponse
+	(*battle.BattleActivityContext)(nil),  // 19: BattleActivityContext
+	(*base.ServiceCallAuth)(nil),          // 20: common.base.ServiceCallAuth
+	(battle.ESpectateTier)(0),             // 21: eSpectateTier
 }
 var file_proto_match_match_internal_proto_depIdxs = []int32{
-	5, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
-	0, // 1: match.StartActivityBattleResponse.reject:type_name -> match.ActivityBattleReject
-	1, // 2: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
-	6, // 3: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
-	6, // 4: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
-	1, // 5: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
-	3, // 6: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
-	2, // 7: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
-	4, // 8: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
-	7, // [7:9] is the sub-list for method output_type
-	5, // [5:7] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	19, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
+	20, // 1: match.StartActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	0,  // 2: match.StartActivityBattleResponse.reject:type_name -> match.ActivityBattleReject
+	4,  // 3: match.CancelActivityBattleRequest.original:type_name -> match.StartActivityBattleRequest
+	20, // 4: match.CancelActivityBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	20, // 5: match.CancelActivityBattleResponse.auth:type_name -> common.base.ServiceCallAuth
+	1,  // 6: match.CancelActivityBattleResponse.terminal_decision:type_name -> match.BattleOutcomeDecision
+	20, // 7: match.CommitBattleOutcomeRequest.auth:type_name -> common.base.ServiceCallAuth
+	1,  // 8: match.CommitBattleOutcomeResponse.decision:type_name -> match.BattleOutcomeDecision
+	20, // 9: match.CommitBattleOutcomeResponse.auth:type_name -> common.base.ServiceCallAuth
+	20, // 10: match.SetSpectateFeaturedRequest.auth:type_name -> common.base.ServiceCallAuth
+	2,  // 11: match.SetSpectateFeaturedResponse.reject:type_name -> match.SpectateFeaturedReject
+	21, // 12: match.SetSpectateFeaturedResponse.tier:type_name -> eSpectateTier
+	12, // 13: match.AcquireTrialOccupancyRequest.roster:type_name -> match.TrialOccupancyRole
+	20, // 14: match.AcquireTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
+	3,  // 15: match.AcquireTrialOccupancyResponse.reject:type_name -> match.TrialOccupancyReject
+	20, // 16: match.ReleaseTrialOccupancyRequest.auth:type_name -> common.base.ServiceCallAuth
+	3,  // 17: match.ReleaseTrialOccupancyResponse.reject:type_name -> match.TrialOccupancyReject
+	20, // 18: match.GetBattleCompletionRequest.auth:type_name -> common.base.ServiceCallAuth
+	3,  // 19: match.GetBattleCompletionResponse.reject:type_name -> match.TrialOccupancyReject
+	1,  // 20: match.GetBattleCompletionResponse.decision:type_name -> match.BattleOutcomeDecision
+	4,  // 21: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
+	6,  // 22: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
+	8,  // 23: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
+	10, // 24: match.MatchInternal.SetSpectateFeatured:input_type -> match.SetSpectateFeaturedRequest
+	13, // 25: match.MatchInternal.AcquireTrialOccupancy:input_type -> match.AcquireTrialOccupancyRequest
+	15, // 26: match.MatchInternal.ReleaseTrialOccupancy:input_type -> match.ReleaseTrialOccupancyRequest
+	17, // 27: match.MatchInternal.GetBattleCompletion:input_type -> match.GetBattleCompletionRequest
+	5,  // 28: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
+	7,  // 29: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
+	9,  // 30: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
+	11, // 31: match.MatchInternal.SetSpectateFeatured:output_type -> match.SetSpectateFeaturedResponse
+	14, // 32: match.MatchInternal.AcquireTrialOccupancy:output_type -> match.AcquireTrialOccupancyResponse
+	16, // 33: match.MatchInternal.ReleaseTrialOccupancy:output_type -> match.ReleaseTrialOccupancyResponse
+	18, // 34: match.MatchInternal.GetBattleCompletion:output_type -> match.GetBattleCompletionResponse
+	28, // [28:35] is the sub-list for method output_type
+	21, // [21:28] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_internal_proto_init() }
@@ -442,8 +1384,8 @@ func file_proto_match_match_internal_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_internal_proto_rawDesc), len(file_proto_match_match_internal_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   4,
+			NumEnums:      4,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

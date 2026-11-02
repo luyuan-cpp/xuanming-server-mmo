@@ -195,6 +195,7 @@ message ApplyRoleFenceResponse    { bool retry = 1; }
 ```
 
 - 鉴权:`ServiceCallAuth`,协调者密钥 `MMORPG_ROLE_FENCE_SECRET_COORDINATOR`,caller 是 `coordinator`。方法名由 `rolefence.Methods()` 给出。trade、mail、friend、player_inbox 的方法清单都是客户端白名单,不加这两个方法:协调者的调用不带会话,按内部调用放行,带会话的调用被白名单挡住。proto 包名是 `rolefence`,方法路径 `/rolefence.RoleFenceParticipant/...`。
+- 这个 service 没有自己的节点类型(`ENodeType` 里没有对应值):六个参与者各自注册,协调者按 `RoleFence.Participants` 拨号。所以 protogen 不把它收进客户端路由表,也不收进 C++ 按节点类型的方法注册和 deadline 分发(`RPCServiceInfo.HasNodeType`)。客户端协议对不上节点类型时生成直接失败。
 - `shared/rolefence.NewParticipantServer(db, pending, secret)` 提供实现,服务只注入 `pending func(ctx, tx, state) (blocker string, err error)` 和协调者密钥。friend 注入 `rolefence.NoPending`,没注入算装配失败,不算没有挂起。
 - `PrepareRoleFreeze` 在一个事务里:`Apply`;副本版本更大回 `stale=true`;再 `FOR UPDATE` 读本库的挂起全集。有挂起就**回滚**(本库不冻结)回 `clean=false`。没有就提交。这和今天 `verify` 的判据逐条相同,只是拆到各服务。
 - `dry_run=true` 不 `Apply`,不锁副本,只跑 `pending`,事务回滚。结论只用来挡住注定被拒的 Begin,提交点仍是真正的 Prepare。带最终令牌的状态不接受:最终令牌是全通过之后才写的。

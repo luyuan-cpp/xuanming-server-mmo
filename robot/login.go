@@ -208,14 +208,18 @@ func sendAndRecvTimeout(gc *pkg.GameClient, stats *metrics.Stats, msgId uint32, 
 //     fallback for the duration of the deprecation window (see ARCH §12).
 //
 // Semantics of the counters it touches:
-//   - TokenRefreshOK   : refresh round-tripped successfully (new tokens stored).
-//   - TokenRefreshFail : transport error or server returned non-zero code.
+//   - TokenRefreshOK   : HTTP: new tokens stored; legacy: request sent.
+//   - TokenRefreshFail : rejected, outcome unknown after the retry budget, or send failed.
 //
-// HTTP mode is synchronous and atomic — we know on return whether the
-// rotation happened. The legacy mode is fire-and-forget at this layer; the
-// asynchronous rejection path was previously surfaced via
-// AccessReconnectFallback on the next reconnect, and that still works
-// because we keep the existing branch unchanged when gatewayAddr is empty.
+// 服务端的 refresh token 是一次性的,轮换后只在宽限窗口(缺省 30s)内允许重放同一枚拿回同一对;窗口外再拿已轮换的
+// 旧 token 来刷新会被当成重用、吊销整个家族(docs/design/dual-token-authentication.md)。所以本函数守两条:
+//   - 结果未知(超时、断连、非 200)只在 refreshRetryBudget 内用同一枚重试,预算远小于窗口;
+//   - 被明确拒绝、或预算用完仍不知道结果,就丢掉这枚 token(DropRefreshToken),之后绝不再发它;
+//     access 过期后的重连走完整登录(AccessReconnectFallback)。
+//
+// HTTP mode is synchronous — we know on return whether the rotation happened. The legacy mode is fire-and-forget at
+// this layer: ClientPlayerLoginRefreshTokenHandler stores the rotated pair when the reply arrives, and a token that is
+// still unrotated one checkInterval after it was sent (reply lost or rejected) is dropped instead of being resent.
 func runTokenRefresher(gc *pkg.GameClient, gatewayAddr string, stats *metrics.Stats, stop, done <-chan struct{}) {
 	const (
 		checkInterval = 30 * time.Second
@@ -225,6 +229,7 @@ func runTokenRefresher(gc *pkg.GameClient, gatewayAddr string, stats *metrics.St
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
 	var lastSent time.Time
+	var legacyInflight string // 旧 TCP 路径已发出、还没看到轮换结果的那一枚 refresh token
 	for {
 		select {
 		case <-stop:
@@ -234,6 +239,14 @@ func runTokenRefresher(gc *pkg.GameClient, gatewayAddr string, stats *metrics.St
 		case <-ticker.C:
 			_, refresh, accessExp, _ := gc.SnapshotTokens()
 			if refresh == "" || accessExp == 0 {
+				continue
+			}
+			if refresh == legacyInflight {
+				gc.DropRefreshToken(refresh)
+				legacyInflight = ""
+				stats.TokenRefreshFail()
+				zap.L().Warn("refresh reply lost or rejected, dropping the refresh token",
+					zap.String("account", gc.Account))
 				continue
 			}
 			remaining := time.Until(time.Unix(accessExp, 0))
@@ -250,15 +263,17 @@ func runTokenRefresher(gc *pkg.GameClient, gatewayAddr string, stats *metrics.St
 			)
 			lastSent = time.Now()
 			if gatewayAddr != "" {
-				rsp, err := httpRefreshToken(gatewayAddr, refresh, 5*time.Second)
+				rsp, err := httpRefreshWithinGrace(gatewayAddr, refresh, stop, done)
 				if err != nil {
+					gc.DropRefreshToken(refresh)
 					stats.TokenRefreshFail()
-					zap.L().Warn("http refresh failed", zap.Error(err))
+					zap.L().Warn("http refresh outcome unknown, dropping the refresh token", zap.Error(err))
 					continue
 				}
 				if rsp.Code != 0 {
+					gc.DropRefreshToken(refresh)
 					stats.TokenRefreshFail()
-					zap.L().Warn("http refresh rejected",
+					zap.L().Warn("http refresh rejected, dropping the refresh token",
 						zap.Int("code", rsp.Code),
 						zap.String("msg", rsp.Message))
 					continue
@@ -273,13 +288,56 @@ func runTokenRefresher(gc *pkg.GameClient, gatewayAddr string, stats *metrics.St
 				game.ClientPlayerLoginRefreshTokenMessageId,
 				&login.RefreshTokenRequest{RefreshToken: refresh},
 			); err != nil {
+				// 没写出去,服务端没收到,同一枚下次仍可用。
 				stats.TokenRefreshFail()
 				zap.L().Warn("refresh send failed", zap.Error(err))
 				continue
 			}
+			legacyInflight = refresh
 			stats.TokenRefreshOK()
 		}
 	}
+}
+
+// refreshRetryBudget 是刷新结果未知时用同一枚 refresh token 重试的总预算(单调时钟)。它必须明显短于服务端的宽限窗口
+// (缺省 30s):窗口内的重放拿回同一对,窗口外的重放会吊销整个家族。
+const refreshRetryBudget = 15 * time.Second
+
+// httpRefreshWithinGrace 发一次刷新;结果未知(传输错误、非 200、回包解不开)时在 refreshRetryBudget 内用同一枚
+// token 重试,最多 3 次,退避 1s、2s。返回 rsp 表示服务端给了明确答复(成功或拒绝,看 rsp.Code);
+// 返回 error 表示预算用完或会话结束时仍不知道结果。
+func httpRefreshWithinGrace(gatewayAddr, refresh string, stop, done <-chan struct{}) (*httpLoginResponse, error) {
+	const (
+		attemptTimeout = 5 * time.Second
+		maxAttempts    = 3
+	)
+	deadline := time.Now().Add(refreshRetryBudget)
+	backoff := time.Second
+	var lastErr error
+	attempts := 0
+	for attempts < maxAttempts {
+		attempts++
+		rsp, err := httpRefreshToken(gatewayAddr, refresh, min(attemptTimeout, time.Until(deadline)))
+		if err == nil {
+			return rsp, nil
+		}
+		lastErr = err
+		if attempts == maxAttempts || time.Until(deadline) <= backoff {
+			break
+		}
+		timer := time.NewTimer(backoff)
+		select {
+		case <-stop:
+			timer.Stop()
+			return nil, fmt.Errorf("refresh retry stopped: %w", lastErr)
+		case <-done:
+			timer.Stop()
+			return nil, fmt.Errorf("refresh retry stopped, session ended: %w", lastErr)
+		case <-timer.C:
+		}
+		backoff *= 2
+	}
+	return nil, fmt.Errorf("refresh outcome unknown after %d attempt(s) within %s: %w", attempts, refreshRetryBudget, lastErr)
 }
 
 // sendDisconnectBestEffort tells login that this client is going away
@@ -369,8 +427,8 @@ func loginAndEnterSaToken(gc *pkg.GameClient, saTokenAddr string, stats *metrics
 	if err := sendAndRecv(gc, stats,
 		game.ClientPlayerLoginLoginMessageId,
 		&login.LoginRequest{
-			Account:  gc.Account,
-			AuthType: "satoken",
+			Account:   gc.Account,
+			AuthType:  "satoken",
 			AuthToken: token,
 		},
 		&lr,

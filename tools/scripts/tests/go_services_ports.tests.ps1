@@ -70,7 +70,8 @@ function Start-Process {
     [CmdletBinding()] param($FilePath, $ArgumentList, $WorkingDirectory, $RedirectStandardOutput, $RedirectStandardError, [switch]$PassThru, $WindowStyle)
     # MailToken:启动那一刻父进程环境里的 MailAdmin 令牌 = 子进程会继承到的值(只给 mail 注入的用例看它)。
     $script:Starts += [pscustomobject]@{ FilePath = $FilePath; Arguments = $ArgumentList; MailToken = [Environment]::GetEnvironmentVariable('MAIL_PRODUCER_SECRET_ADMIN'); ChatDsnPresent = -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable('CHAT_AUTHORITY_DSN', 'Process')); MatchMigrationUserPresent = -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable('MATCH_MIGRATION_USER', 'Process')); MatchMigrationPasswordPresent = -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', 'Process')) }
-    return [pscustomobject]@{ Id = 1000 + $script:Starts.Count }
+    # Start-ServiceInstance 用真实 Process 的 StartTime 和 Path 写 PID 记录(核对实例身份),桩也要有这两个属性。
+    return [pscustomobject]@{ Id = 1000 + $script:Starts.Count; StartTime = [datetime]::Now; Path = [string]$FilePath }
 }
 function Stop-Process { throw '测试禁止终止进程' }
 function netsh { return @('开始端口 结束端口', ' 50700 50848 ') }
@@ -340,6 +341,85 @@ try {
         Reset-TestState
         $script:Listeners = @([pscustomobject]@{ LocalPort = 50850; OwningProcess = 77 })
         Assert-Equal $false (Wait-TcpListenReady -Port 50850 -ProcessId 77 -TimeoutSeconds 0) '先核对目标存活'
+    }
+    Test-Case '配置区号只认唯一一处:login、guild 的 Node.ZoneId 认得出,两处都有或都没有就拒绝' {
+        $path = Join-Path $testRoot 'zone-id.yaml'
+        Set-Content -LiteralPath $path -Value "Node:`n  ZoneId: 990017`n"
+        Assert-Equal 990017 (Get-InstanceConfigZoneId -ConfigPath $path) 'login、guild 的形状'
+        Set-Content -LiteralPath $path -Value "ZoneId: 7`n"
+        Assert-Equal 7 (Get-InstanceConfigZoneId -ConfigPath $path) '顶层形状'
+        Set-Content -LiteralPath $path -Value "ZoneId: 7`nNode:`n  ZoneId: 7`n"
+        Assert-Match (Get-ThrownMessage { Get-InstanceConfigZoneId -ConfigPath $path }) 'Both ZoneId and Node\.ZoneId' '两处都有不猜'
+        Set-Content -LiteralPath $path -Value "ListenOn: 0.0.0.0:1`n"
+        Assert-Match (Get-ThrownMessage { Get-InstanceConfigZoneId -ConfigPath $path }) 'Neither ZoneId nor Node\.ZoneId' '都没有不猜'
+    }
+    Test-Case '启动时配置的区号或端口和本次实例对不上就拒绝,Node.ZoneId 的配置能过' {
+        Reset-TestState
+        $Zone = 2
+        $selected = Join-Path $testRoot 'selected-trade.yaml'
+        function Get-SqlWriterBootEnvironment {
+            param($InstanceKey, $RepoRoot, $ServiceName, [ref]$SelectedRuntimeConfigFile, [ref]$PreparedRuntimeArguments, [switch]$PrepareOnlySupported)
+            Set-Content -LiteralPath $selected -Value $script:SelectedTemplate.Replace('PORT', [string]$cfg.Port)
+            $SelectedRuntimeConfigFile.Value = $selected
+            return [ordered]@{}
+        }
+        $start = { Start-ServiceInstance -Name trade -Info $ServiceCatalogue.trade -Index 1 -Total 1 -Pids ([pscustomobject]@{}) -UseExe }
+        $script:SelectedTemplate = "ListenOn: 0.0.0.0:PORT`nZoneId: 1`n"
+        Assert-Match (Get-ThrownMessage $start) 'ZoneId与本次实例不符' '目录里是别的区的配置'
+        $script:SelectedTemplate = "ListenOn: 0.0.0.0:1`nZoneId: 2`n"
+        Assert-Match (Get-ThrownMessage $start) 'ListenOn与本次实例固定端口不符' '端口和计划不一致'
+        Assert-Equal 0 $script:Starts.Count '都没有起进程'
+        $script:SelectedTemplate = "ListenOn: 0.0.0.0:PORT`nNode:`n  ZoneId: 2`n"
+        $null = & $start
+        Assert-Equal 1 $script:Starts.Count 'Node.ZoneId 的配置过得了'
+    }
+    Test-Case '端口偏移:缺省原公式,语义区号代入原公式越界,显式偏移只动端口不动区号' {
+        Reset-TestState
+        $Zone = 2
+        Assert-Equal 51800 (Get-InstancePort -Info $ServiceCatalogue.trade -Index 1) '缺省原公式'
+        $Zone = 990017
+        Assert-Match (Get-ThrownMessage { Resolve-BindablePort (Get-InstancePort -Info $ServiceCatalogue.trade -Index 1) 'z990017_trade' }) '无效端口' '原公式越界'
+        $ZonePortOffset = 0
+        Assert-Equal 50800 (Get-InstancePort -Info $ServiceCatalogue.trade -Index 1) '显式偏移 0'
+        $ZonePortOffset = 1000
+        Assert-Equal 'z990017_' (Get-ZonePrefix) '实例键仍是语义区号'
+        $cfg = Resolve-InstanceConfig -Name trade -Info $ServiceCatalogue.trade -Index 1 -Total 1
+        Assert-Equal 51800 $cfg.Port '显式偏移 1000'
+        Assert-Equal 990017 (Get-InstanceConfigZoneId -ConfigPath $cfg.FullPath) '配置写语义区号,偏移不当区号'
+    }
+    Test-Case 'RoleFence 回填:跟实际端口,Etcd 形式不动,缺参与者和多副本拒绝' {
+        $source = "RoleFence:`n  Participants:`n    - Name: guild`n      Endpoints: [127.0.0.1:51300]`n    - Name: trade`n      Endpoints: [127.0.0.1:51800]`n    - Name: friend`n      Etcd:`n        Hosts: [127.0.0.1:2379]`n        Key: friend.rpc.z2`n`nMetricsListenAddr: `":10260`"`n"
+        Assert-Equal $source.Replace('127.0.0.1:51800', '127.0.0.1:51801') (ConvertTo-PlannedRoleFenceConfig -Content $source -PortsByService @{ guild = @(51300); trade = @(51801) }) '只改实际端口变了的参与者,其余字节不动'
+        Assert-Match (Get-ThrownMessage { ConvertTo-PlannedRoleFenceConfig -Content $source -PortsByService @{ guild = @(51300) } }) 'trade is not in this zone' '缺参与者不猜'
+        Assert-Match (Get-ThrownMessage { ConvertTo-PlannedRoleFenceConfig -Content $source -PortsByService @{ guild = @(51300); trade = @(51800, 51801) } }) 'cannot address them uniquely' '多副本不猜'
+        Assert-Match (Get-ThrownMessage { ConvertTo-PlannedRoleFenceConfig -Content $source.Replace('[127.0.0.1:51300]', '[127.0.0.1:51300, 127.0.0.1:51301]') -PortsByService @{ guild = @(51300); trade = @(51800) } }) 'exactly one direct endpoint' '多个直连地址不猜'
+        Assert-Equal "ListenOn: 0.0.0.0:9000`n" (ConvertTo-PlannedRoleFenceConfig -Content "ListenOn: 0.0.0.0:9000`n" -PortsByService @{}) '没有这一段就没什么可填'
+    }
+    Test-Case 'plan-instances:RoleFence 随 trade 的实际避让端口,缺参与者就拒绝' {
+        Reset-TestState
+        $script:ExcludedPortRanges = @(,@(51800, 51800))
+        $Zone = 2
+        $ServiceCatalogue['data_service'] = @{ Dir = 'data_service'; Entry = 'data_service.go'; Port = 9000; Desc = '夹具'; ConfigFlag = '-f'; ConfigFile = 'etc/data_service.yaml'; AllowMultiInstance = $true; Tier = 0 }
+        $dataServiceConfig = Join-Path $GoRoot 'data_service/etc/data_service.yaml'
+        $originalConfig = Get-Content -LiteralPath $dataServiceConfig -Raw
+        $savedTiDbHost = [Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST', 'Process')
+        try {
+            [Environment]::SetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST', $null, 'Process')
+            Set-Content -LiteralPath $dataServiceConfig -Value "ListenOn: 0.0.0.0:9000`nZoneId: 1`nRoleFence:`n  Participants:`n    - Name: trade`n      Endpoints: [127.0.0.1:50800]`n`nSnapshotMySQL:`n  DBName: testdb`n"
+            $Services = @('data_service', 'trade')
+            $InstancePlanOutput = Join-Path $testRoot 'plan-z2.json'
+            Invoke-PlanInstances
+            $plan = @(Get-Content -LiteralPath $InstancePlanOutput -Raw | ConvertFrom-Json)
+            Assert-Equal 51801 @($plan | Where-Object { $_.Service -eq 'trade' })[0].Port 'trade 挪出保留区'
+            $planned = @($plan | Where-Object { $_.Service -eq 'data_service' })[0]
+            Assert-Match (Get-Content -LiteralPath $planned.ConfigPath -Raw) 'Endpoints: \[127\.0\.0\.1:51801\]' '协调者连实际端口,不是算术位移的 51800'
+            $Services = @('data_service')
+            Assert-Match (Get-ThrownMessage { Invoke-PlanInstances }) 'trade is not in this zone' '计划里没有参与者就拒绝'
+        } finally {
+            $ServiceCatalogue.Remove('data_service')
+            [Environment]::SetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST', $savedTiDbHost, 'Process')
+            Set-Content -LiteralPath $dataServiceConfig -Value $originalConfig -NoNewline
+        }
     }
 }
 finally {

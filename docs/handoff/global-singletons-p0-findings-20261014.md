@@ -1712,6 +1712,7 @@ d) 改 tools/scripts/run_cpp_tests.ps1
 
 13. 顺带发现(另案,不在本项修):日志级别口径三处不一致。K8s 模板 `LogLevel: 1`(HEAD:1790);bin/etc/base_deploy_config.yaml:25 注释写「0=DEBUG,1=INFO」;tools/scripts/release_preflight.ps1:445-446 按「0=DEBUG」把下限设成 1。而 node.cpp:1232-1234 直接 static_cast 成 muduo 枚举,Windows 分支里 1 是 DEBUG。Linux 枚举未核实。
     - (2026-10-22 已处理,未执行,待 Codex 验证)三处已统一到 muduo 枚举:K8s 模板改为从 bin/etc 镜像(默认 2 = INFO,不再写死 1),预检下限改为 2,bin/etc 注释改正。Linux 构建用的 third_party/muduo-linux 是上游 chenshuo/muduo 子模块(tools/archived/muduo_linux_overlay 不覆盖 Logging.h),上游枚举顺序同为 TRACE / DEBUG / INFO / WARN / ERROR / FATAL(本机子模块未检出,按上游源码,未在本机核对)。见 PROGRESS 同日条目。
+    - (2026-10-30 更正)Linux 枚举已在本机核对:`git -C third_party/muduo-linux show <gitlink>:muduo/base/Logging.h` 的 :20-29 是 TRACE / DEBUG / INFO / WARN / ERROR / FATAL;:124-128 的 LOG_TRACE / LOG_DEBUG / LOG_INFO 带 `logLevel()` 守卫,:130-132 的 LOG_WARN / LOG_ERROR / LOG_FATAL 不过滤,与 Windows 相同(Windows 的错误级叫 ERROR_)。gitlink 在 b55b0ac(v2.0.2)与 f1fc77e(v2.0.3-1)之间翻转过多次(2026-10-30 核对时 HEAD 为 b55b0ac),两版这几处相同。上一条说「未检出」只是当时那个 worktree 的子模块目录是空的。核对前先 `git ls-tree HEAD third_party/muduo-linux` 取 gitlink,再按它 `git show`,不要直接读工作区文件。
 
 ### 原报告:同类入口盘点
 

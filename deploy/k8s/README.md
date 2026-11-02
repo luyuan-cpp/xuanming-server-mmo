@@ -929,7 +929,8 @@ player-inbox 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue['player-
 - **账本不在这个库**:消费端账本是玩家存档里的 `inbox_ledger`(`mysql_database_table.proto` 字段 20,分组 2 = `PLAYER_STORE_KIND_ASSET`),
   随存盘写进玩家落点库的 `player_store` 行,不需要为它加列。
 - **入箱开关**:`PlayerInbox.EnqueueTypes` 镜像服务 yaml(各档位一致,白名单进 git、可审),每项必须是 `PlayerInboxMessageType` 的枚举名,否则生成期 throw。
-  第一次部署时必须为空(`[]`);**全部 scene 打开 `consumer_enabled` 之后**才在服务 yaml 里填上并重跑 `infra-up`(上线顺序第 6 步)。
+  仓库默认列了 Battle 结算(`PLAYER_INBOX_MSG_BATTLE_SETTLEMENT`),`bin/etc/game_config.yaml` 默认 `consumer_enabled: true`,未上线阶段整批起步(2026-11-01,runbook §2)。
+  上线之后再加类型:**全部 scene 打开 `consumer_enabled` 之后**才在服务 yaml 里填上并重跑 `infra-up`(上线顺序第 6 步)。
 - **消费开关**(2026-10-17 起,交接 `docs/handoff/player-inbox-handoff-20261015.md` §6 H1):权威值只有 git 跟踪的 `bin/etc/game_config.yaml`
   的 `player_inbox.consumer_enabled`,与入箱白名单同口径。`node-config` 的 `game_config.yaml` 把 `player_inbox` 段从那里整段复制
   (`Get-AuthoritativeYamlBlock`,`periodic_fetch_minutes` 跟着走);渲染值不从集群取(`zone-down` 会删 zone namespace),
@@ -1622,12 +1623,13 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 - 组 `<N>` = zones 配置里该 zone 的 `redisQueueGroup`(可选整数,≥ 0,不写 = 0;负数、非整数在任何写操作之前拒绝)。首发 1 组,所有 zone 都是 g0。
   `zone-up` 按 `-ZoneId` 在 zones 配置里找组,找不到 = 0。
 - gate 排空标记**留在核心**:`k8s_gate_drain.ps1` 与 scene_manager 的跨 zone 重定向都不用改,也不需要跨组寻址(§25.3 的 2026-10-23 订正)。
-- `redis-queue-g<N>` 本批**所有档位都是单实例**(`manifests/infra/redis-purpose.yaml`;高可用变体是后续项:`redis-ha.yaml` 的对象名写死,要先参数化)。
+- `redis-queue-g<N>` 的形态与核心同一套 `-RedisReplicas` 档位规则(§25.3 第 18 条子项 1):dev 档(`-ReleaseProfile dev` 且 `-OpsProfile custom`)缺省单实例(`manifests/infra/redis-purpose.yaml`),
+  其余缺省高可用(`manifests/infra/redis-purpose-ha.yaml`,见下面「queue 实例的高可用形态」)。客户端入口都是同名 Service,地址只由组决定、不随形态变。
   排队数据都带 TTL、可丢:实例重启期间只影响本组 zone 的新登录(排队打开时新登录失败;排队关着时 login 不碰它,gateway 限流 fail-open),
   已在游戏里的玩家、断线重连与存盘不受影响。
 - queue 实例显式 `--maxmemory <值> --maxmemory-policy noeviction --appendonly yes --appendfsync everysec --maxclients 10000 --enable-debug-command no`,
   容器内存 requests = limits = 2 × maxmemory,PVC 8Gi(常量:volumeClaimTemplates 不可变),带 redis-exporter sidecar(与 `redis.yaml` 同形),
-  标签一律 `app: redis-queue-g<N>`(带 `app: redis` 会被挂到核心 Service 后面)。
+  标签一律 `app: redis-queue-g<N>`,高可用时代理是 `app: redis-queue-g<N>-proxy`(带 `app: redis` 或 `app: redis-proxy` 会被挂到核心 Service 后面)。
 
 ### 参数(`k8s_deploy.ps1`;`dev_tools.ps1` / `k8s_image.ps1` 同名透传,非缺省才透传)
 
@@ -1645,6 +1647,7 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 DryRun 不查集群,只打出每个 zone 将要写的地址(`Redis split: zone=… resolved=… queue_redis=…`)。zone 写路径同时打印 queue 实例的连接总账
 (`Redis queue connection ledger: instance=redis-queue-g<N> …`,MAXCLIENTS 从 `redis-purpose.yaml` 读;全部 zone 都拆时核心总账去掉 gateway 那一行)。
+高可用形态再按单个代理算一次水位(`Redis queue proxy ledger: instance=redis-queue-g<N> proxy_maxconn=3000 proxies=2+1 warn_at=2400 …`),超过只告警,以 `[RedisQueueConnectionLedger]OverProxyWarnRatio:` 开头。
 
 ### 首次上线的部署命令
 
@@ -1667,12 +1670,42 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-redis-split-status -ZonesCon
 `-RedisSplit queue -ConfirmRedisSplitSwitch` → `k8s-redis-split-status` 退出码 0 之前,不执行 `k8s_gate_drain.ps1`、不滚动 gate(§3.2.1 约束 3)。
 排队与限流数据不迁移(都带 TTL);核心上的旧排队键随 TTL 自然过期。
 
+### queue 实例的高可用形态(2026-11-01 复核;未运行,待 Codex 验证)
+
+`-RedisReplicas 3`(非 dev 档缺省)时每组 apply 一份 `redis-purpose-ha.yaml`:1 主 2 从 + 每个 redis Pod 一个哨兵 + 2 个 haproxy 代理。结构、代理的路由规则、数据安全的边界、
+停机交接与崩溃后的启动顺序全部同上面「共享 Redis:高可用形态」,生效行与 `redis-ha.yaml` 逐行同源,只允许模板文件头列出的差别(契约测试比对)。
+
+| 对象(`<名>` = `redis-queue-g<N>`) | 用途 |
+|---|---|
+| Service `<名>` | 客户端入口。单实例选 `app=<名>`,高可用选 `app=<名>-proxy`,名字与 ClusterIP 不变 |
+| Service `<名>-headless` | 节点之间互相寻址(复制、哨兵、代理的健康检查);与单实例同名,StatefulSet 的 `serviceName` 不变 |
+| PDB `<名>-pdb`、`<名>-proxy-pdb` | 一次自愿驱逐最多带走一个 redis Pod;至少留一个代理 |
+| ConfigMap `<名>-ha-scripts` | 启动 / 探针 / 停机脚本。对象名、Pod 名前缀、headless 域名与哨兵 master 名(`<名>`,核心是 `mymaster`)都在渲染时写入 |
+| StatefulSet `<名>` | 3 个 Pod,容器 `redis` / `sentinel` / `redis-exporter`,`podManagementPolicy: Parallel`;卷模板与单实例相同,`redis-data-<名>-0` 接着用 |
+| Deployment `<名>-proxy` | 2 个 haproxy,模板带脚本摘要注解,脚本一改就滚动 |
+
+- **连接上限**:`MAXCLIENTS=10000` 与 `redis-purpose.yaml` 同值(连接总账只读那一份),`PROXY_MAXCONN=3000`,3000 × (2 + 1) + 预留 1000 = 10000。
+  `Get-RedisQueueHaLimitsFor` 在渲染与总账两处核对,不成立即在写操作之前拒绝;infra 写路径打 `Redis queue HA limits: instance=… maxclients=10000 proxy_maxconn=3000 proxies=2+1 reserved=1000 …`。
+- **形态跟核心走**:`-RedisReplicas` 同时决定核心与 queue,不能单独设。不带 `-RedisSplit queue` 的 infra-up 不碰 queue 实例,所以核心切到高可用之后,queue 实例要到下一次带 `-RedisSplit queue` 的 infra-up 才跟上。
+- **1 → 3**:`infra-up -RedisSplit queue -RedisReplicas 3 -WaitReady`(非 dev 档不用给 `-RedisReplicas`)。形态变更闸判 upgrade,打 `[RedisQueueTopology]Upgrade:` 告警后继续,**不要确认开关**(排队数据带 TTL,重启只影响本组新登录)。
+  脚本先 `kubectl delete statefulset <名> --cascade=orphan`(`podManagementPolicy` 创建后不可改),再 apply:新 StatefulSet 接管 `<名>-0`,另两个从它全量同步,Service 改指向代理。login / gateway 地址不变,不用重新部署。
+  中途失败原样重跑同一条命令:StatefulSet 不在时判全新,apply 出的 StatefulSet 照样按同名同标签接管孤儿 `<名>-0`。排队开着时 `<名>-0` 重启期间本组新登录失败,想避开就先以 `-LoginQueue off` 部署本组各 zone。
+- **3 → 1**:脚本拒绝,在任何写操作之前(`podManagementPolicy` 不可改,代理、哨兵与脚本对象也不会被 apply 删掉)。线上副本数是 0 / 2 这类脚本从不产生的值同样拒绝。确实要回单实例,按「删掉重建」做,数据不保留(都带 TTL):
+  1. 以 `-LoginQueue off` 部署本组各 zone,关掉排队;
+  2. `kubectl -n <infra> delete statefulset/<名> deployment/<名>-proxy pdb/<名>-proxy-pdb configmap/<名>-ha-scripts`,等 Pod 退完后删 PVC `redis-data-<名>-0`、`-1`、`-2`;
+  3. `infra-up -RedisSplit queue -RedisReplicas 1`,apply 把 Service 改回指向单实例,名字与 ClusterIP 不变。这条参数同时作用于核心:核心还是高可用时,先被核心的拓扑闸拒绝。
+- **没有重启闸**:StatefulSet 上不写模板摘要注解。改模板或换 `-RedisQueueMaxMemory` = 逐个滚动 redis Pod,每个先交接主,基本无损。
+- **部署后核对**:`-WaitReady` 逐个等 `statefulset/<名>`、`deployment/<名>-proxy`,再逐个节点读 `CONFIG GET maxclients`,不等只告警。
+- **运维**:命令同核心的「运维」一节,把 `redis-<n>` 换成 `<名>-<n>`、`mymaster` 换成 `<名>`、`deploy/redis-proxy` 换成 `deploy/<名>-proxy`。需要 `redis-cli` 时不要 `exec svc/<名>`:高可用时它指向代理,代理镜像里没有 `redis-cli`。
+  压测快照写 `-RedisTargets @{ queue = 'k8s:<infra>/<名>' }`:exec 进 StatefulSet 的 redis 容器,host 缺省是同名 Service,两种形态都落到当前的主。
+
 ### `redis-split-status` 与 `redis-wipe`
 
 - `-Command redis-split-status`(`dev_tools.ps1 -Command k8s-redis-split-status`):只读。zone 列表取 zones 配置(`-ZonesConfigPath`,json / yaml),
   对每个 zone 打印 login 的 `RedisClient` / `QueueRedis` Host、gateway 的 `spring.data.redis.host`、组号,以及 `deployment/login`、`deployment/gateway`
-  的 rollout 是否完成(`kubectl rollout status --timeout 10s`)。同一 zone 的 login 与 gateway 指向不同实例、或任一 rollout 没完成 / 读不到,退出码 1。
-  ConfigMap 或 Deployment 不存在只打印 `<absent>`,不算失败。
+  的 rollout 是否完成(`kubectl rollout status --timeout 10s`);再对它们线上指向的每个 queue 实例打印一行 `instance=<名> namespace=<ns> shape=single|ha ready=<就绪>/<副本> proxy=<就绪>/<副本> service_selector=<app 值>`(多个 zone 同组只查一次)。
+  同一 zone 的 login 与 gateway 指向不同实例、任一 rollout 没完成 / 读不到,或指向的实例不存在、没全部就绪、高可用时代理没就绪、Service 的 selector 与形态对不上,退出码 1。
+  zone 的 ConfigMap 或 Deployment 不存在只打印 `<absent>`,不算失败。
 - `-Command redis-wipe -ConfirmWipeAllRedis`(`dev_tools.ps1 -Command k8s-redis-wipe -ConfirmWipeAllRedis -InfraNamespace mmorpg-stress-…`):
   AGENTS.md §6.2 压测前清库的 K8s 做法。要求 infra namespace 匹配脚本里写死的 `^mmorpg-stress-`,且显式给 `-ConfirmWipeAllRedis`,缺一即拒绝(DryRun 同样先判)。
   实例按 infra namespace 里**实际存在**的 StatefulSet 列(不按本次参数,漏写一个用途也不会漏清):核心 `redis`(单实例或高可用,清其中的主)、
@@ -1682,9 +1715,10 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-redis-split-status -ZonesCon
 
 ### 已知限制
 
-- queue 实例单实例,没有重启闸(改 `redis-purpose.yaml` 的模板或换 `-RedisQueueMaxMemory` 会直接重启该组实例);高可用变体后续再做。
+- queue 实例没有重启闸:单实例下改 `redis-purpose.yaml` 的模板或换 `-RedisQueueMaxMemory` 会直接重启该组实例;高可用下逐个滚动、每个先交接主(见「queue 实例的高可用形态」)。
+- 高可用形态的故障转移、滚动、冷启动与 1 → 3 没有单独实测,结论来自与 `redis-ha.yaml` 逐行同源(核心 2026-10-08 在 kind 上实测过)。
 - 部署闸只核对 login / gateway 的 ConfigMap 地址,不核对目标 `redis-queue-g<N>` Service 是否存在:zone-up 先于 infra-up 带 queue 时,
-  新 login Pod 连不上即拒启(CrashLoop),旧 Pod 照常服务;顺序按上面的首次上线命令走。
+  新 login Pod 连不上即拒启(CrashLoop),旧 Pod 照常服务;顺序按上面的首次上线命令走。这种状态 `redis-split-status` 报失败。
 - 改 zones 配置里的组号 = 换实例,同样要 `-ConfirmRedisSplitSwitch`;旧组实例不会被删除,确认不再使用后人工删(连同 PVC)。
 - Java 版(`D:\luyuan\xuanming-server-mmo`)没有 K8s 生产形态,按用途拆实例待做(设计稿 §26)。
 
@@ -1692,6 +1726,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-redis-split-status -ZonesCon
 
 ```powershell
 pwsh -NoProfile -File tools/scripts/tests/k8s_redis_split_contract.tests.ps1
+pwsh -NoProfile -File tools/scripts/tests/redis_exporter_contract.tests.ps1
 pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
 ```

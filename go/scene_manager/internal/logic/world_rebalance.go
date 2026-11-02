@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"scene_manager/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // rebalanceReason describes why a channel is being moved. Used only for logs
@@ -156,7 +158,15 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 			if sceneId == 0 {
 				continue
 			}
-			curNode, _ := svcCtx.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
+			// 规划所需的每一次读(属主、人数、老节点是否还在负载集)读不到就不把这个频道排进计划
+			// (2026-10-23)。读错当「没有属主」会排出一次注定被 CAS 驳回、却先在新节点上建了实体的
+			// 迁移;人数读错当 0 会把有人的频道从活属主身上搬走 —— reassignSceneNode 的 CAS 只比属主、
+			// 不看人数,同一 scene_id 两个节点上都有玩家。
+			curNode, err := svcCtx.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId))
+			if err != nil {
+				noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("owner of scene %d (conf %d)", sceneId, confId), err)
+				continue
+			}
 			target := assignNodeByHash(sceneId, nodes)
 			if curNode == target {
 				continue
@@ -170,10 +180,22 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 				// "不在 world pool" 同时包含两种情况：进程真死了，以及进程
 				// 仍活着但 role 刚被改成非 world。后者若还有玩家，直接换
 				// scene:{id}:node 就是未实现的跨节点热迁移，必须 fail-closed。
-				if count := readScenePlayerCount(svcCtx, sceneId); count > 0 {
-					if _, err := svcCtx.Redis.Zscore(nodeLoadKey(zoneId), curNode); err == nil {
+				count, err := readScenePlayerCountChecked(svcCtx, sceneId)
+				if err != nil {
+					noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("player count of scene %d (conf %d)", sceneId, confId), err)
+					continue
+				}
+				if count > 0 {
+					_, zerr := svcCtx.Redis.Zscore(nodeLoadKey(zoneId), curNode)
+					if zerr == nil {
 						logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d old node %s is still registered with %d players; refusing cross-node hot migration",
 							zoneId, confId, sceneId, curNode, count)
+						continue
+					}
+					// 只有 redis.Nil 才说明老节点确实不在负载集;读错时它可能还活着、还托着这些玩家。
+					if !errors.Is(zerr, redis.Nil) {
+						noteReadUnknown(zoneId, readUnknownSiteRebalancePlan,
+							fmt.Sprintf("load-set membership of node %s (scene %d has %d players)", curNode, sceneId, count), zerr)
 						continue
 					}
 				}
@@ -193,7 +215,12 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 				})
 				continue
 			}
-			if count := readScenePlayerCount(svcCtx, sceneId); count > 0 {
+			count, err := readScenePlayerCountChecked(svcCtx, sceneId)
+			if err != nil {
+				noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("player count of scene %d (conf %d)", sceneId, confId), err)
+				continue
+			}
+			if count > 0 {
 				continue
 			}
 			opportunistic = append(opportunistic, channelMigration{
@@ -245,7 +272,13 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	// reassignSceneNode runs the source points at newNode, and any new
 	// mirror for this source would correctly land on newNode — but the
 	// already-existing mirrors on oldNode are now stranded.
-	dependentMirrors, _ := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
+	// 读不到就不知道迁走之后要级联哪些镜像:这次迁移作废,归属不动,回收刚建的实体,下一拍重新规划。
+	dependentMirrors, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
+	if err != nil {
+		noteReadUnknown(zoneId, readUnknownSiteRebalancePlan, fmt.Sprintf("mirror set of scene %d before migrating it to %s", sceneId, newNode), err)
+		destroyUnownedMigrationTarget(ctx, svcCtx, zoneId, confId, sceneId, newNode)
+		return false
+	}
 
 	// 归属改写走 reassignSceneNode 的 CAS:scene:{id}:node、两侧反向索引
 	// (node-death reconciliation 靠它找到迁走的频道)与两侧 scene_count 在
@@ -336,20 +369,39 @@ func cascadeMirrorsOnSourceMigration(ctx context.Context, svcCtx *svc.ServiceCon
 	if len(mirrorIds) == 0 {
 		return
 	}
+	// 只从源的子集合里摘掉本轮确实处理完的镜像(2026-10-23),不再整键删除:
+	//   - 级联范围是迁移之前的快照,快照之后挂上来的镜像不在其中,整键删除会让它们从索引里消失,
+	//     channelHasMirrors 看不到它们,源频道可能被缩容排空,镜像成孤儿;
+	//   - 销毁回 error = 读不到它的状态,本轮没销毁(destroyInstanceInternal 提交前读不到镜像源 /
+	//     子集合、或这里读不到它的 zone 时都 fail-closed),它还活着,必须留在索引里。
+	// 集合被摘空后 Redis 自动回收键。
+	handled := make([]any, 0, len(mirrorIds))
 	for _, m := range mirrorIds {
 		mid, err := strconv.ParseUint(m, 10, 64)
 		if err != nil || mid == sourceSceneId {
 			continue
 		}
+		// 读不到镜像的 zone 就不猜:按错的 zone 销毁会从别的 zone 的索引与计数里扣。
+		zoneStr, zoneErr := svcCtx.Redis.Get(sceneZoneKey(mid))
+		if zoneErr != nil {
+			noteReadUnknown(zoneId, readUnknownSiteMirrorCascade,
+				fmt.Sprintf("zone of mirror %d (source %d migrated), keeping it and its index entry", mid, sourceSceneId), zoneErr)
+			continue
+		}
 		mirrorZone := zoneId
-		if z := GetSceneZone(svcCtx, mid); z != 0 {
-			mirrorZone = z
+		if z, parseErr := strconv.ParseUint(zoneStr, 10, 32); parseErr == nil && z != 0 {
+			mirrorZone = uint32(z)
 		}
 		logx.Infof("[Rebalance] cascading mirror %d (source %d migrated %s -> %s) in zone %d",
 			mid, sourceSceneId, oldNode, newNode, mirrorZone)
-		destroyInstanceForce(ctx, svcCtx, mirrorZone, mid, "source_migrated")
+		if _, destroyErr := destroyInstanceForce(ctx, svcCtx, mirrorZone, mid, "source_migrated"); destroyErr != nil {
+			logx.Errorf("[Rebalance] mirror %d of source %d was not destroyed this round; keeping its index entry: %v",
+				mid, sourceSceneId, destroyErr)
+			continue
+		}
+		handled = append(handled, m)
 	}
-	// Drop the now-empty mirrors index so the next mirror created against
-	// this source starts with a clean set.
-	svcCtx.Redis.Del(sceneMirrorsKey(sourceSceneId))
+	if len(handled) > 0 {
+		svcCtx.Redis.Srem(sceneMirrorsKey(sourceSceneId), handled...)
+	}
 }

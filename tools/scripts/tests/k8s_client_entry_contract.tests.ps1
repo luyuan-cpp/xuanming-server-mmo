@@ -50,6 +50,9 @@ $BattleTestEnv = @{
 $ZoneUpArgs = @('-Command', 'zone-up', '-ZoneName', $TestZone, '-ZoneId', '101', '-NodeImage', $NodeImageRef)
 $InfraUpArgs = @('-Command', 'infra-up', '-SkipGoSvc', '-SkipJavaSvc', '-InfraNamespace', $TestInfraNs, '-NodeImage', $NodeImageRef)
 $GoJavaArgs = @('-GoSvcRegistry', 'registry.invalid/test', '-JavaSvcRegistry', 'registry.invalid/test')
+# 部署 Go / Java 服务的 DryRun 要写者计划(与 k8s_redis_split_contract.tests.ps1 同一个夹具),只供渲染;文件在临时目录,脚本结尾清理。
+$EntryFixtureDir = Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-client-entry-fixture-' + [guid]::NewGuid().ToString('N'))
+$SqlWriterCatalogPath = New-SqlWriterCatalogFixture -Root $EntryFixtureDir -Namespaces @($TestZoneNs, 'mmorpg-infra', $TestInfraNs)
 # D92:整词匹配。GATE_NODE_PORT_BASE 是合法的生成器内部 env,子串匹配会误伤。
 $D92Pattern = '(?<![A-Za-z0-9_])NODE_(?:IP|PORT)(?![A-Za-z0-9_])'
 # 资源名必须完整匹配；gateway 是独立 Deployment，不能被 gate 的禁令误伤。
@@ -250,7 +253,11 @@ function Invoke-EntryDryRun {
         [switch]$RefusedAtEntry
     )
     $allArgs = @($Arguments) + @('-DryRun')
-    $reachesPodipGate = (($allArgs -contains 'zone-up') -or ($allArgs -contains 'all-up')) -and -not ($allArgs -contains 'external')
+    # 全局 SQL 入口、存档库白名单、写者计划是部署 Go 服务的必填输入,本套测的不是它们。虚构值只用于 DryRun,不解析也不连接;用例显式给了就用它的。
+    if ($allArgs -notcontains '-GlobalAuthorityTiDBHost') { $allArgs += @('-GlobalAuthorityTiDBHost', 'tidb.invalid:4000') }
+    $fixtureEnv = @{ MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db,zone_101_db,zone_102_db'; MMORPG_SQL_K8S_BOOT_CATALOG = $SqlWriterCatalogPath }
+    foreach ($key in $Env.Keys) { $fixtureEnv[$key] = $Env[$key] }
+    $reachesPodipGate =(($allArgs -contains 'zone-up') -or ($allArgs -contains 'all-up')) -and -not ($allArgs -contains 'external')
     if ($reachesPodipGate -and -not $RefusedAtEntry -and $LibCallDefects.Count -gt 0) {
         return @{ ExitCode = -1; Output = "未启动子进程(会挂在缺必填参数的交互提示上):$($LibCallDefects -join '; ')" }
     }
@@ -276,7 +283,7 @@ exit 0
     $driverBody = $driverBody.Replace('__DEPLOY_SCRIPT__', "'" + $deployScript.Replace("'", "''") + "'")
     try {
         Set-Content -LiteralPath $driver -Encoding utf8 -Value ($deployAst.ParamBlock.Extent.Text + "`n" + $driverBody)
-        return Invoke-CapturedPwsh -ScriptPath $driver -Arguments $allArgs -Env $Env
+        return Invoke-CapturedPwsh -ScriptPath $driver -Arguments $allArgs -Env $fixtureEnv
     }
     finally { Remove-Item -LiteralPath $driver -Force -ErrorAction SilentlyContinue }
 }
@@ -1304,7 +1311,8 @@ Test-Case '端到端 -LoginDevPasswordAuth(dev):login.yaml 写 DevPasswordAuth,�
     Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Mode') -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Mode') -Because 'DevPasswordAuth 只在 go-zero Mode 为 dev / test 时生效,否则 login 启动即 panic'
     $login = Select-ManifestDoc -Output $out -Kind 'Deployment' -Name 'login'
     Assert-Match -Text $login -Pattern '- name: LOGIN_DEV_PASSWORD_SHARED_SECRET\s+valueFrom:\s+secretKeyRef:\s+name: login-dev-password\s+key: shared-secret\s' -Because '口令只经 Secret 进容器'
-    Assert-NotMatch -Text $login -Pattern 'optional:\s*true' -Because 'Secret 缺失时要卡在 CreateContainerConfigError,不能带着空口令起来'
+    # 只看这把口令:同一容器的 LoginAdmin 运维令牌是另一回事,没有它时运维面停用,manifest 里写的就是 optional: true。
+    Assert-NotMatch -Text $login -Pattern 'name: login-dev-password\s+key: shared-secret\s+optional:\s*true' -Because 'Secret 缺失时要卡在 CreateContainerConfigError,不能带着空口令起来'
     $secretLine = "[dry-run] kubectl apply -n $TestZoneNs -f -   # Secret login-dev-password (key shared-secret; value hidden)"
     $secretAt = $out.IndexOf($secretLine)
     Assert-True -Condition ($secretAt -ge 0) -Because "DryRun 只打一行隐去值的 Secret 意图。输出: $out"
@@ -1800,5 +1808,6 @@ Test-Case 'k8s_deploy.ps1 的集群外入口参数名与类型(包装层与文�
 }
 
 Remove-Item -LiteralPath $FakeKubectlDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $EntryFixtureDir -Recurse -Force -ErrorAction SilentlyContinue
 
 exit (Complete-TestRun -SuiteName "k8s client entry contract")

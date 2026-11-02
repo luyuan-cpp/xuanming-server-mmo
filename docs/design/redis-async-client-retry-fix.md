@@ -235,3 +235,47 @@ cmake --build build/redis-lifecycle --parallel 1 --target redis_lifecycle_test
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 UBSAN_OPTIONS=halt_on_error=1 \
   timeout 60s build/redis-lifecycle/redis_lifecycle_test
 ```
+
+## 2026-10-30：三份 Hiredis 适配器恢复逐字节一致，补 Windows 同批与半关闭回归（Claude，未编译、未测试）
+
+### 三份适配器
+
+Hiredis 适配器有三份副本：`cpp/libs/engine/muduo_windows/src/contrib/hiredis/`（Windows 编译）、
+`tools/archived/muduo_linux_overlay/contrib/hiredis/`（Linux 镜像构建时覆盖进 muduo-linux）、
+`third_party/muduo/contrib/hiredis/`（使用方 include 的头文件镜像，`.cc` 不参与编译）。
+主干 `72017963` 上三份 `Hiredis.h` 一致，`Hiredis.cc` 有三处分叉：
+
+- `redisAsyncConnect` 的端口参数：Windows 用 `port()`，overlay 用 `toPort()`。上游 muduo 的端口访问器随版本改名：
+  v2.0.2（`b55b0ac`）叫 `toPort()`，v2.0.3 起叫 `port()`（如 `f1fc77e`，v2.0.3-1）。muduo-linux 的 gitlink 在两者之间翻转过不止一次，
+  例如 `a310a18b9` 时 gitlink 是 `f1fc77e`、overlay 却是 `toPort()`，按锁定版本编不过。`72017963` 上 gitlink 是 `b55b0ac`，与 overlay 一致。
+- `CallbackPhase` 的构造参数：Windows 叫 `active`，与成员同名；overlay 改名为 `activeState`，以通过 muduo 的 `-Wshadow -Werror`。
+- `third_party/muduo` 的 `.cc` 停在加命令账（`MaintenanceState`）之前的旧版。
+
+现在三份统一为：端口参数直接写两版共有的 `sockets::networkToHost16(serverAddr_.portNetEndian())`（补 `muduo/net/Endian.h`），
+参数一律叫 `activeState`，镜像 `.cc` 跟上当前实现。语义不变；子模块检出哪一版都能编，三份 `.cc` 与三份 `.h` 逐字节一致，
+任意两份 `cmp` 应无输出。命令账与生命周期逻辑没有改动。
+
+### Windows 回归
+
+`cpp/tests/redis_lifecycle_test/hiredis_event_batch_test.cpp` 依赖 eventfd 与 `/proc/self/fd`，只在 Linux 编。新增
+`cpp/tests/rpc_controller_test/hiredis_event_batch_windows_test.cpp`，整文件包在 `#ifdef _WIN32` 里，只登记进
+`rpc_controller_test.vcxproj`。Windows 的 PollPoller 按注册顺序收集 activeChannels_，因此可以确定地构造「前置通道先于受害连接派发」。
+
+- `HiredisEventBatchWindows.EarlierChannelReleasesLastOwnerOfReadyConnectionInSameBatch`：回环 UDP 前置通道先于受害 Hiredis 注册，
+  受害连接上有 `+PONG` 可读、挂起的 PING 可写。前置通道的回调撤掉受害连接唯一的 owner，并当场新建替代连接。断言：
+  受害连接已就绪的应答不再分发；挂起命令恰好空应答一次，而且发生在同一 iteration 的 pending 阶段（`eventHandling()` 为假）；
+  替代连接能完成 PING。
+- `HiredisEventBatchWindows.PeerHalfCloseDisconnectsAndOwnerMayReleaseInDisconnectCallback`：对端只 `shutdown(SD_SEND)`，即纯 FIN，
+  WSAPoll 可能只报 POLLHUP。断言：断线回调恰好一次且为 `REDIS_ERR`；挂起命令恰好空应答一次；所有者在断线回调里放掉最后一个引用后，
+  对象活到本次事件返回，排空后对象与保存的回调都已释放。
+
+每条用例给自己的连接传独立的 `MaintenanceState`（同 `hiredis_command_lifecycle_test.cpp`），不碰进程级账本。
+末尾 `Close()` 后断言 `Joined()`：所有连接对象、`removeChannel` 排队保活的 Channel 引用都已释放，命令都已结束。
+
+回调里放掉 owner 后对象仍存活，主要靠 Channel 回调里 `weakSelf.lock()` 拿到的局部强引用。`Channel::tie` 是纵深防御，
+去掉它这两条用例照样是绿的，目前没有单独锁住它的回归用例。
+用例的回调以引用捕获测试栈上的计数，所以每条用例都在全部被捕获的变量之后声明收尾守卫（`ScopeExit`）：
+停前置通道、清回调、释放连接、排空 pending。ASSERT 中途失败提前返回时，连接析构触发的回调也只会写到还活着的变量。
+loop 跑在测试线程上，等待都由 2 秒看门狗或 WSAPoll 1.5 秒超时兜底。排空时加零延时定时器：在 loop 线程上
+`queueInLoop` 不会唤醒 poll，Windows 没有定时器时一次 poll 要等满 `kPollTimeMs`（100ms，10 秒是 Linux 分支的值）。
+这两条用例依赖 `Hiredis::Create`，修复前的代码编不过，红态以 10-21 Linux 专项为准（退出 134）。

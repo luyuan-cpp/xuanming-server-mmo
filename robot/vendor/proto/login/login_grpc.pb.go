@@ -472,9 +472,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LoginAdminClient interface {
-	// Remove orphan characters from their accounts' SimplePlayers lists.
-	// Called by admin tools after zone rollback to clean up orphan characters.
-	// Uses player_to_account:{player_id} reverse mapping to find the owning account.
+	// 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
+	// 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字不释放:按日志带 token 调 ReleasePlayerName。
 	RemovePlayersFromAccounts(ctx context.Context, in *RemovePlayersFromAccountsRequest, opts ...grpc.CallOption) (*RemovePlayersFromAccountsResponse, error)
 }
 
@@ -500,9 +499,8 @@ func (c *loginAdminClient) RemovePlayersFromAccounts(ctx context.Context, in *Re
 // All implementations must embed UnimplementedLoginAdminServer
 // for forward compatibility.
 type LoginAdminServer interface {
-	// Remove orphan characters from their accounts' SimplePlayers lists.
-	// Called by admin tools after zone rollback to clean up orphan characters.
-	// Uses player_to_account:{player_id} reverse mapping to find the owning account.
+	// 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
+	// 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字不释放:按日志带 token 调 ReleasePlayerName。
 	RemovePlayersFromAccounts(context.Context, *RemovePlayersFromAccountsRequest) (*RemovePlayersFromAccountsResponse, error)
 	mustEmbedUnimplementedLoginAdminServer()
 }

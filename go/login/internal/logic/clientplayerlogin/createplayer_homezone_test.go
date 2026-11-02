@@ -164,7 +164,7 @@ func storedPlayers(t *testing.T, ctx context.Context, rdb *redis.Client) []*pbba
 
 // 成功路径:登记发出去了(参数 = 新 player_id + 本 zone),而且是在落盘之前发的;
 // 落盘结果照旧(账号 blob 里有新角色 + 反查映射)。
-// 名字登记排在 player:zone 登记**之前**(撞名不该留下永久的幽灵映射),落盘的角色带着名字。
+// 名字登记排在 player_route 登记**之前**(撞名不该留下永久的幽灵映射),落盘的角色带着名字。
 func TestCreatePlayer_RegistersHomeZoneThenPersists(t *testing.T) {
 	fake := &fakeRegisterClient{}
 	h := newCreatePlayerHarnessWithNames(t, homezone.New(fake, 0, 0, 0), fake)
@@ -198,7 +198,7 @@ func TestCreatePlayer_RegistersHomeZoneThenPersists(t *testing.T) {
 	}
 
 	if got := strings.Join(fake.events, ","); got != "reserve,register" {
-		t.Fatalf("data_service call order = %q, want reserve,register (name before player:zone, nothing released)", got)
+		t.Fatalf("data_service call order = %q, want reserve,register (name before player_route, nothing released)", got)
 	}
 	if fake.reserveReqs[0].GetPlayerId() != hzPlayerID {
 		t.Fatalf("name reserved for player %d, want %d", fake.reserveReqs[0].GetPlayerId(), hzPlayerID)
@@ -233,7 +233,7 @@ func TestCreatePlayer_HomeZoneRegistrationFailsClosed(t *testing.T) {
 				t.Fatalf("CreatePlayer must fail via tip, not transport error: %v", err)
 			}
 			if resp.ErrorMessage == nil {
-				t.Fatal("create succeeded without a player:zone mapping")
+				t.Fatal("create succeeded without a player_route mapping")
 			}
 			if got := resp.ErrorMessage.Id; got != uint32(table.LoginError_kLoginDataSerializeFailed) {
 				t.Fatalf("tip = %d, want the existing id-gen/serialize tip %d",

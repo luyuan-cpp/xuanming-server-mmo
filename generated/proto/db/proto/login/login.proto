@@ -198,19 +198,39 @@ service LoginPreGate {
 
 // ── Admin-only RPCs (internal, not client-facing) ──────────────
 
+// 孤儿 = 目录里有归属、路由还在、player_store 里没有写权行的角色:进不了场,白占账号的角色名额。
+// 墓碑不可逆,所以证明不了是孤儿的回 NOT_ORPHAN,什么都不改。
+enum RemovePlayerOutcome {
+  REMOVE_PLAYER_UNSPECIFIED = 0;
+  REMOVE_PLAYER_REMOVED = 1;     // 已写墓碑,或 dry_run 时确认可以摘
+  REMOVE_PLAYER_NOT_FOUND = 2;   // 目录里没有,或已经删过了
+  REMOVE_PLAYER_NOT_ORPHAN = 3;  // 有存档,或者路由缺失证明不了
+  REMOVE_PLAYER_CONFLICT = 4;    // 有未结束的业务(资产指令、帮会、组队),或归属变了,或还在线。令牌已清,处理掉再重跑
+  REMOVE_PLAYER_RETRY = 5;       // 这次没做完(读失败、参与者不可达、本次预算用完),同参数重跑。重跑幂等
+}
+
+message RemovePlayerResult {
+  uint64 player_id = 1;
+  RemovePlayerOutcome outcome = 2;
+}
+
 message RemovePlayersFromAccountsRequest {
-  repeated uint64 player_ids = 1; // orphan player IDs to remove from their accounts
+  repeated uint64 player_ids = 1; // 候选孤儿,一次最多 100 个
+  string operator = 2;            // 必填,≤ 64 字节
+  string reason = 3;              // 必填,≤ 256 字节
+  bool dry_run = 4;               // true = 只核对,不写墓碑
 }
 
 message RemovePlayersFromAccountsResponse {
-  uint32 removed_count = 1;    // players successfully removed from accounts
-  uint32 not_found_count = 2;  // players whose reverse mapping was missing
-  uint32 failed_count = 3;     // players that failed to remove
+  uint32 removed_count = 1;    // 已写墓碑(dry_run 时是可以摘的个数)
+  uint32 not_found_count = 2;  // 目录里没有,或已经删过了
+  uint32 failed_count = 3;     // CONFLICT + RETRY,看 results
+  uint32 not_orphan_count = 4;
+  repeated RemovePlayerResult results = 5; // 按请求去重后的顺序
 }
 
 service LoginAdmin {
-  // Remove orphan characters from their accounts' SimplePlayers lists.
-  // Called by admin tools after zone rollback to clean up orphan characters.
-  // Uses player_to_account:{player_id} reverse mapping to find the owning account.
+  // 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
+  // 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字不释放:按日志带 token 调 ReleasePlayerName。
   rpc RemovePlayersFromAccounts (RemovePlayersFromAccountsRequest) returns (RemovePlayersFromAccountsResponse);
 }

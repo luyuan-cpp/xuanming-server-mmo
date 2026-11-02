@@ -398,11 +398,15 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 
 ### 2026-10-17 父快照屏障的追加恢复要求
 
+> **已退役(2026-11-01 标注)**:玩家存档已移出 Redis,父快照屏障和 `save_barrier_restore` 工具都已删除,映射副本、就绪标记和水位键也已删除(映射提案 §15)。本节只作历史,不要照做;恢复按 §4.0。
+
 上述 7c 必须同时删除受影响玩家的 `player:{id}:save_barrier`，并清理父/子缓存；旧的两表 ACK 不能证明回档后的 SQL。保持停写维护闸，停止旧 scene 并排空旧 Kafka/retry；核对归属计数器不倒退、同一权威 TiDB 的两张玩家行版本一致之后，按 `db-write-fencing-mysql.md` 的登录冷恢复门禁恢复屏障，再放流。未迁移历史数据会被新登录明确拒绝；不能依赖“下一次存盘自动修好”而先放流。此处仅为手册修订，尚未演练自动恢复。
 
 父快照现在还可能持有尚未投递 Kafka 的完整存盘意图。删除屏障前须保存并裁决其 `outbox_*` 原始内容，核对 `player:save_pending:<home_zone>:<player_id % 64>`；不得因 Kafka lag=0 而假定已排空。正常合服/撤销由 `merge_zone` P4 拒绝任何非空桶，须先让原 DB 补投器凭双 SQL ACK 回收。回档中确需清除时，只处理本次受影响玩家的 member，禁止删整桶或静默丢弃未提交意图。屏障人工恢复与灾备流程仍未演练，恢复完成前不可放流。
 
 ### 2026-10-18 历史屏障计划与维护恢复工具
+
+> **已退役(2026-11-01 标注)**:玩家存档已移出 Redis,父快照屏障和 `save_barrier_restore` 工具都已删除,映射副本、就绪标记和水位键也已删除(映射提案 §15)。本节只作历史,不要照做;恢复按 §4.0。
 
 `go/db/cmd/save_barrier_restore` 补充上述「从真实 SQL 建立屏障」步骤。首版只支持 Redis 权威路由、映射/父缓存同实例 DB0、显式稳定 placement 指向 home zone 自己的 `zone_<id>_db`。`db_first`、独立 MappingRedis、非零 Redis DB、异区/全局落点和 Redis Cluster 仍须专门的路由冻结证明，工具会拒绝不支持的形态，不得伪造本区映射绕过。
 
@@ -431,6 +435,8 @@ go run ./cmd/save_barrier_restore -mode apply -schema zone_17_db -zone 17 `
 **2026-10-20 补充（r2-mz#1，未编译、未测试，待 Codex 验证）**：上面「显式稳定 placement」的限制新增一个显式例外。plan 加 `-allow-home-fallback` 后，**没有落点记录**、home 恰为 `-zone`、`-schema` 就是该区 zone 库的玩家，按 go/db 的有效落点（记录 ?? home）恢复。copy 合服撤销后的玩家天然是这种形态，流程见 [merge-zone-runbook.md](merge-zone-runbook.md) §10.1「屏障重建」。开关写进计划、计入 SHA-256，apply 与 guard 拒收它；落点记录仍不存在在写屏障的同一段 Lua 里原子复核；落点键存在（含空串）、home≠zone 等其余拒绝条件不变。
 
 ### 2026-10-18 第二批：db_first、独立映射和全局落点（实现后须核本批验证收据）
+
+> **已退役(2026-11-01 标注)**:玩家存档已移出 Redis,父快照屏障和 `save_barrier_restore` 工具都已删除,映射副本、就绪标记和水位键也已删除(映射提案 §15)。本节只作历史,不要照做;恢复按 §4.0。
 
 第二批计划为 v2，v1 计划仍按上一节同实例本区边界执行。支持 `db_first`、`redis-split`、非零父缓存 DB、稳定异区 zone 库和 `player_store_*_db`；映射始终 DB0，SQL 路由库与玩家库必须同一 TiDB 实例。Redis Cluster 仍不是现行全链协议支持的部署方式。连接地址、DB、schema、强读模式及路由证明全部绑定计划，不得用改参数替换重审。
 

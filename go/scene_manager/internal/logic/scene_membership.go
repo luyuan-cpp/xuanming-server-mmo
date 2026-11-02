@@ -7,6 +7,8 @@ import (
 
 	"proto/scene_manager"
 	"scene_manager/internal/svc"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // 场景与节点的成员集合(docs/design/redis-player-store-cluster.md §5.10)。
@@ -146,7 +148,56 @@ func removeScenePlayer(svcCtx *svc.ServiceContext, playerID, sceneID uint64, zon
 	return removeSceneMember(svcCtx, playerID, sceneID, zoneID, lookupSceneNode(svcCtx, sceneID))
 }
 
+// removeResidualSceneMembers 把被销毁场景 sceneID 剩下的成员从节点集合里摘掉,members 来自销毁脚本的返回值。
+// location 还指向这个场景的要摘:场景已经没了,留着就是多算人数。location 指向同节点别的场景的不能摘。
+// 不是合法 player_id 的成员没有 location 可核,直接摘。单个成员失败只打日志,由对账收掉(scene_member_reconcile.go)。
+func removeResidualSceneMembers(svcCtx *svc.ServiceContext, sceneID uint64, zoneID uint32, nodeID string, members []string) {
+	keys := sceneMemberKeys(0, zoneID, nodeID)
+	if len(keys) == 0 {
+		return
+	}
+	for _, member := range members {
+		playerID, err := strconv.ParseUint(member, 10, 64)
+		if err != nil {
+			if _, err := svcCtx.Redis.Srem(keys[0], member); err != nil {
+				logx.Errorf("[SceneMembership] remove malformed member %q from node %s members failed: %v", member, nodeID, err)
+			}
+			continue
+		}
+		if err := removeResidualNodeMember(svcCtx, keys, playerID, sceneID, zoneID, nodeID); err != nil {
+			logx.Errorf("[SceneMembership] remove player %d from node %s members failed: %v", playerID, nodeID, err)
+		}
+	}
+}
+
+// removeResidualNodeMember 是 removeSceneMember 在场景已销毁时的版本:只动节点集合(keys),同样 SREM 之后再读一次
+// location,这时落到了同节点别的场景就加回去(文件头第 3 条)。
+func removeResidualNodeMember(svcCtx *svc.ServiceContext, keys []string, playerID, sceneID uint64, zoneID uint32, nodeID string) error {
+	onOtherScene := func() (bool, error) {
+		loc, err := GetPlayerLocation(context.Background(), svcCtx, playerID)
+		if err != nil {
+			return false, err
+		}
+		_, node := locationOverlap(loc, 0, zoneID, nodeID)
+		return node != "" && loc.GetSceneId() != sceneID, nil
+	}
+	keep, err := onOtherScene()
+	if err != nil || keep {
+		return err
+	}
+	if _, err := svcCtx.Redis.Eval(luaRemoveSceneMember, keys, strconv.FormatUint(playerID, 10)); err != nil {
+		return err
+	}
+	back, err := onOtherScene()
+	if err != nil || !back {
+		return err
+	}
+	return addSceneMember(svcCtx, playerID, 0, zoneID, nodeID)
+}
+
 // readScenePlayerCount 读一个场景的在线人数。读不到当 0。
+// 只给读错无害的地方用:分线目录的展示、选线(预占由 Lua 原子完成)、空闲扫描(销毁脚本里再判一次)。
+// 伸缩决策、排空推进和迁移规划用 readScenePlayerCountChecked:读错不能当 0。
 func readScenePlayerCount(svcCtx *svc.ServiceContext, sceneID uint64) int64 {
 	n, err := svcCtx.Redis.Scard(instanceMembersKey(sceneID))
 	if err != nil {

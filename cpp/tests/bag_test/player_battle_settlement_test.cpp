@@ -97,6 +97,15 @@ public:
     static battle_lock::LockRebuildDecision DecideLockRebuild(entt::entity player, uint64_t lockBattleId) {
         return PlayerBattleSystem::DecideLockRebuildFor(player, lockBattleId);
     }
+    // PrepareBattle 写锁的同一个入口(本文件的夹具没有组快照所需的加载组件,走不到 PrepareBattle 的写锁那一步)。
+    static uint64_t WriteBattleLock(uint64_t playerId, uint64_t battleId) {
+        return PlayerBattleSystem::WriteBattleLockOnPrepare(playerId, battleId);
+    }
+    // 重建复核应答的判定与撤销,生产回调走同一个函数。
+    static void RebuiltFreezeRecheckReply(uint64_t playerId, uint64_t battleId, uint32_t attemptNumber,
+                                          battle_lock::ReplyShape shape, int64_t integer) {
+        PlayerBattleSystem::OnRebuiltFreezeRecheckReply(playerId, battleId, attemptNumber, shape, integer);
+    }
 };
 
 namespace {
@@ -139,6 +148,79 @@ redisReply IntegerReply(long long value) {
     reply.integer = value;
     return reply;
 }
+
+// 锁脚本观察点(PlayerBattleSystem::SetLockScriptObserverForTest)的记录:不连 Redis 也能盯住「这一次会发什么」。
+// 记录只能放在文件级;单测线程独占,ScopedLockScriptRecorder 进出各清一次,不跨用例残留。
+// 单测线程没有 EventLoop、也没有 Redis:不注入重试调度器时,没问到之后的重试链当场放弃(battle_lock_write_gave_up),
+// 续期在首发前登记的在途链随之摘除,所以每一次首发都会回调一次,不会被去重挡掉。
+// 要驱动重试链(去重、门禁放弃)的用例再叠一层 ScopedLockRetryCapture(见下)。
+struct LockScriptCall {
+    std::string op;
+    uint64_t playerId = 0;
+    uint64_t battleId = 0;
+    uint64_t ttlSec = 0;
+    std::string ctxPayload;
+};
+std::vector<LockScriptCall> gLockScriptCalls;
+
+void RecordLockScriptCall(const char* op, uint64_t playerId, uint64_t battleId, uint64_t ttlSec,
+                          const std::string& ctxPayload) {
+    gLockScriptCalls.push_back(LockScriptCall{op, playerId, battleId, ttlSec, ctxPayload});
+}
+
+class ScopedLockScriptRecorder {
+public:
+    ScopedLockScriptRecorder() {
+        gLockScriptCalls.clear();
+        PlayerBattleSystem::SetLockScriptObserverForTest(&RecordLockScriptCall);
+    }
+    ~ScopedLockScriptRecorder() {
+        PlayerBattleSystem::SetLockScriptObserverForTest(nullptr);
+        gLockScriptCalls.clear();
+    }
+    ScopedLockScriptRecorder(const ScopedLockScriptRecorder&) = delete;
+    ScopedLockScriptRecorder& operator=(const ScopedLockScriptRecorder&) = delete;
+};
+
+// 某一种锁脚本被发送(回调观察点)的次数。
+size_t LockScriptCount(const std::string& op) {
+    return static_cast<size_t>(std::count_if(gLockScriptCalls.begin(), gLockScriptCalls.end(),
+        [&op](const LockScriptCall& call) { return call.op == op; }));
+}
+
+// 锁写入 / 续期重试的调度器注入(PlayerBattleSystem::SetLockRetrySchedulerForTest):收下每一次「排下一次重试」,
+// 由用例手动触发,代替单测线程上不存在的 EventLoop::runAfter。同样是不带捕获的函数指针,队列只能放在文件级。
+std::vector<std::function<void()>> gCapturedLockRetries;
+
+void CaptureLockRetry(uint64_t /*delayMs*/, std::function<void()> fire) {
+    gCapturedLockRetries.push_back(std::move(fire));
+}
+
+// 触发最早排上的一次重试。没有可触发的返回 false。
+bool FireNextLockRetry() {
+    if (gCapturedLockRetries.empty()) return false;
+    auto fire = std::move(gCapturedLockRetries.front());
+    gCapturedLockRetries.erase(gCapturedLockRetries.begin());
+    fire();
+    return true;
+}
+
+// 用例结束时把收下的重试链全部跑到终态:续期的在途登记是 thread_local,链不走到终态就会残留到后面的用例。
+class ScopedLockRetryCapture {
+public:
+    ScopedLockRetryCapture() {
+        gCapturedLockRetries.clear();
+        PlayerBattleSystem::SetLockRetrySchedulerForTest(&CaptureLockRetry);
+    }
+    ~ScopedLockRetryCapture() {
+        for (int guard = 0; guard < 256 && FireNextLockRetry(); ++guard) {
+        }
+        PlayerBattleSystem::SetLockRetrySchedulerForTest(nullptr);
+        gCapturedLockRetries.clear();
+    }
+    ScopedLockRetryCapture(const ScopedLockRetryCapture&) = delete;
+    ScopedLockRetryCapture& operator=(const ScopedLockRetryCapture&) = delete;
+};
 
 bool ArmSettlementMissionItemSegment(uint64_t lo = 100000, uint64_t hi = 200000) {
     auto& client = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
@@ -1886,6 +1968,462 @@ TEST_F(PlayerBattleSettlementTest, PrepareNotBlockedByExpiredSceneChangeSlot) {
         PlayerBattleSystem::PrepareBattle(MakePrepareRequest(playerId, 804), response);
         EXPECT_EQ(response.error_message().id(), kRefusedAtSnapshot) << "sent_at_ms=" << sentAtMs;
         EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player)) << "sent_at_ms=" << sentAtMs;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 战斗锁写入可靠性(turn-battle-gap-closure.md §10):写锁与 ctx 一条 Lua、续期只延长、没问到有界重试、
+// 已 FIGHTING 的重复确认顺带续期、重建复核只有首发回 0 才撤销。
+// 单测没有 Redis:每一次发送都「没问到」。经 ScopedLockRetryCapture 收下重试、手动触发才能驱动重试链;
+// 观察点(ScopedLockScriptRecorder)记录每一次真正准备发出的锁脚本。脚本本身的语义由 BattleLockContract.* 盯。
+// 固定的未来时刻(2100-01-01 UTC):TTL 按发送时刻的墙钟算,用发送前后两次取时夹住,不依赖真实时间的取值。
+// ---------------------------------------------------------------------------
+
+constexpr uint64_t kFarFutureMs = 4102444800000ull;
+
+// 写锁的每一次发送都按组件现状取值;重发前门禁:实体上的冻结已不是这一局(取消 / 结算 / 判废之后)就不再写,
+// 否则会复活一把已删的锁,或者覆盖下一局的锁。
+// 修复前:PrepareBattle 发两条 SET,没问到只打日志,锁缺失到战斗结束;玩家这时完整重登就重建不出冻结。
+TEST_F(PlayerBattleSettlementTest, BattleLockWriteFollowsComponentAndStopsOnceFreezeIsNoLongerThisBattle) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    const uint64_t battleId = settlement.battle_id();
+    const uint64_t prepareDeadlineMs = kFarFutureMs;
+    const uint64_t deadlineMs = kFarFutureMs + 300000;
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(battleId);
+    inBattle.set_battle_node_id(3);
+    inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+    inBattle.set_deadline_ms(deadlineMs);
+    inBattle.set_prepare_deadline_ms(prepareDeadlineMs);
+
+    // 首发:一次 write_lock,TTL 按备战期限算,ctx 是组件此刻的序列化(含只有备战时知道的 battle_node_id);没问到排一次重试。
+    const uint64_t sentNotBeforeMs = TimeSystem::NowMillisecondsUTC();
+    const uint64_t ttlSec = PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, battleId);
+    const uint64_t sentNotAfterMs = TimeSystem::NowMillisecondsUTC();
+    ASSERT_EQ(gLockScriptCalls.size(), 1u);
+    const LockScriptCall first = gLockScriptCalls.front();
+    EXPECT_EQ(first.op, "write_lock");
+    EXPECT_EQ(first.playerId, playerId);
+    EXPECT_EQ(first.battleId, battleId);
+    EXPECT_EQ(first.ttlSec, ttlSec);
+    EXPECT_GE(ttlSec, (prepareDeadlineMs - sentNotAfterMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    EXPECT_LE(ttlSec, (prepareDeadlineMs - sentNotBeforeMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    EXPECT_EQ(first.ctxPayload, inBattle.SerializeAsString());
+    ASSERT_EQ(gCapturedLockRetries.size(), 1u);
+
+    // 重发之前确认已到达:写的就是 FIGHTING 与按冻结到期时刻算的 TTL,不会把锁写回备战短期限。
+    inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    ASSERT_TRUE(FireNextLockRetry());
+    ASSERT_EQ(gLockScriptCalls.size(), 2u);
+    EXPECT_EQ(gLockScriptCalls.back().op, "write_lock");
+    EXPECT_EQ(gLockScriptCalls.back().ctxPayload, inBattle.SerializeAsString());
+    EXPECT_GT(gLockScriptCalls.back().ttlSec, first.ttlSec);
+    ASSERT_EQ(gCapturedLockRetries.size(), 1u);
+
+    // 实体上已是别的局的冻结:不写,链到此为止。
+    inBattle.set_battle_id(battleId + 1);
+    ASSERT_TRUE(FireNextLockRetry());
+    EXPECT_EQ(gLockScriptCalls.size(), 2u);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+
+    // 没有冻结:什么都不发,返回 0。
+    tlsEcs.actorRegistry.remove<InBattleComp>(player);
+    EXPECT_EQ(PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, battleId), 0u);
+    EXPECT_EQ(gLockScriptCalls.size(), 2u);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+}
+
+// 实体已不在本节点(玩家下线):写锁重试放弃,不替一个已经不在的冻结写锁。
+TEST_F(PlayerBattleSettlementTest, BattleLockWriteRetryStopsWhenPlayerLeftThisNode) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+    inBattle.set_deadline_ms(kFarFutureMs);
+    PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id());
+    ASSERT_EQ(LockScriptCount("write_lock"), 1u);
+
+    tlsEcs.playerList.erase(playerId);
+    ASSERT_TRUE(FireNextLockRetry());
+    EXPECT_EQ(LockScriptCount("write_lock"), 1u);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+    RegisterPlayer();
+}
+
+// 重试链有界:次数用尽就放弃(metric=battle_lock_write_gave_up),不再排。
+TEST_F(PlayerBattleSettlementTest, BattleLockWriteRetryChainStopsAtMaxAttempts) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+    inBattle.set_deadline_ms(kFarFutureMs);
+
+    PlayerBattleSettlementTestAccess::WriteBattleLock(playerId, settlement.battle_id());
+    while (FireNextLockRetry()) {
+    }
+    EXPECT_EQ(LockScriptCount("write_lock"), size_t{battle_lock::kLockWriteMaxAttempts});
+}
+
+// 首次确认:PREPARING -> FIGHTING,续期按事件期限的冻结到期时刻算 TTL,ctx 落 FIGHTING 供登录重建。
+TEST_F(PlayerBattleSettlementTest, FirstConfirmUpgradesToFightingAndRenewsFromFreezeExpiry) {
+    ScopedLockScriptRecorder recorder;
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_PREPARING);
+    inBattle.set_deadline_ms(kFarFutureMs);
+    inBattle.set_prepare_deadline_ms(kFarFutureMs - 200000);
+    BattleConfirmedEvent event;
+    event.set_player_id(playerId);
+    event.set_battle_id(settlement.battle_id());
+    event.set_deadline_ms(kFarFutureMs + 50000);
+
+    const uint64_t sentNotBeforeMs = TimeSystem::NowMillisecondsUTC();
+    PlayerBattleSystem::ConfirmBattle(event);
+    const uint64_t sentNotAfterMs = TimeSystem::NowMillisecondsUTC();
+
+    const auto& current = tlsEcs.actorRegistry.get<InBattleComp>(player);
+    EXPECT_EQ(current.state(), IN_BATTLE_STATE_FIGHTING);
+    EXPECT_EQ(current.deadline_ms(), event.deadline_ms());
+    ASSERT_EQ(gLockScriptCalls.size(), 1u);
+    const LockScriptCall renewal = gLockScriptCalls.front();
+    EXPECT_EQ(renewal.op, "renew_lock");
+    EXPECT_EQ(renewal.ctxPayload, current.SerializeAsString());
+    const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, event.deadline_ms(), 0);
+    EXPECT_GE(renewal.ttlSec, (expiresAtMs - sentNotAfterMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    EXPECT_LE(renewal.ttlSec, (expiresAtMs - sentNotBeforeMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+}
+
+// 已 FIGHTING 的重复确认(Kafka 重投 / battle 开局后 180 秒内每 10 秒的周期补发):不再升级、不改期限
+// (期限以首次确认写进组件的为准,不信重投事件),但顺带发一次条件续期,补上首次续期的丢失。
+// 修复前:已 FIGHTING 直接返回,一条续期都不发 —— 首次续期没落地时锁在「备战期限 + 60 秒」就过期,而战斗时限默认 300 秒。
+// 脚本「锁值匹配才动、只延长」本身由 BattleLockContract.RenewalOnlyExtendsKeepsCtxInStepAndNeverCreates 在真实 Redis 上盯住。
+TEST_F(PlayerBattleSettlementTest, RepeatedConfirmRenewsLockOnceFromComponentStateWithoutChangingIt) {
+    ScopedLockScriptRecorder recorder;
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    const uint64_t deadlineMs = kFarFutureMs;
+    inBattle.set_deadline_ms(deadlineMs);
+    BattleConfirmedEvent event;
+    event.set_player_id(playerId);
+    event.set_battle_id(settlement.battle_id());
+    event.set_deadline_ms(deadlineMs + 50000);  // 重投事件带的期限不同:按它算 TTL 会多出 50 秒
+
+    const uint64_t sentNotBeforeMs = TimeSystem::NowMillisecondsUTC();
+    PlayerBattleSystem::ConfirmBattle(event);
+    const uint64_t sentNotAfterMs = TimeSystem::NowMillisecondsUTC();
+
+    const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+    ASSERT_NE(current, nullptr);
+    EXPECT_EQ(current->state(), IN_BATTLE_STATE_FIGHTING);
+    EXPECT_EQ(current->deadline_ms(), deadlineMs);
+
+    ASSERT_EQ(gLockScriptCalls.size(), 1u);
+    const LockScriptCall renewal = gLockScriptCalls.front();
+    EXPECT_EQ(renewal.op, "renew_lock");
+    EXPECT_EQ(renewal.playerId, playerId);
+    EXPECT_EQ(renewal.battleId, settlement.battle_id());
+    // TTL = (组件期限的冻结到期时刻 - 发送时刻) / 1000 + kLockExtraTtlSec。
+    const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, deadlineMs, 0);
+    EXPECT_GE(renewal.ttlSec, (expiresAtMs - sentNotAfterMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    EXPECT_LE(renewal.ttlSec, (expiresAtMs - sentNotBeforeMs) / 1000 + PlayerBattleSystem::kLockExtraTtlSec);
+    // ctx 就是组件此刻的序列化:解回来是这一局的 FIGHTING 与组件期限。
+    EXPECT_EQ(renewal.ctxPayload, current->SerializeAsString());
+
+    // 下一条周期补发:再发一次(单测线程没有在途的重试链,去重不挡首发)。
+    PlayerBattleSystem::ConfirmBattle(event);
+    EXPECT_EQ(LockScriptCount("renew_lock"), 2u);
+
+    // 别的局的迟到确认:玩家已在这一局里,不动组件,也不发任何锁脚本。
+    BattleConfirmedEvent stale = event;
+    stale.set_battle_id(settlement.battle_id() + 1);
+    gLockScriptCalls.clear();
+    PlayerBattleSystem::ConfirmBattle(stale);
+    EXPECT_TRUE(gLockScriptCalls.empty());
+    EXPECT_EQ(tlsEcs.actorRegistry.get<InBattleComp>(player).battle_id(), settlement.battle_id());
+}
+
+// 同一局的续期,在途链还没走到终态时,周期补发的首发让给它(什么都不发);在途链每次重发都按组件现状重算
+// TTL 与 ctx;门禁放弃(这一局在实体上已不是 FIGHTING)是终态,摘掉登记之后下一次首发照常发出。
+// 摘漏了的话,最后一段的首发会被永远挡住,续期再也发不出去。
+TEST_F(PlayerBattleSettlementTest, RenewChainYieldsToInFlightChainAndReleasesOnGateAbandon) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    const uint64_t deadlineMs = kFarFutureMs;
+    inBattle.set_deadline_ms(deadlineMs);
+    BattleConfirmedEvent event;
+    event.set_player_id(playerId);
+    event.set_battle_id(settlement.battle_id());
+    event.set_deadline_ms(deadlineMs);
+
+    // 首发:发一次续期,没问到 → 排上一次重试,登记在途。
+    PlayerBattleSystem::ConfirmBattle(event);
+    ASSERT_EQ(LockScriptCount("renew_lock"), 1u);
+    ASSERT_EQ(gCapturedLockRetries.size(), 1u);
+
+    // 下一条周期补发:同键已有在途链 → 让路,不发、不再排重试。
+    PlayerBattleSystem::ConfirmBattle(event);
+    EXPECT_EQ(LockScriptCount("renew_lock"), 1u);
+    EXPECT_EQ(gCapturedLockRetries.size(), 1u);
+
+    // 在途链的重发按组件现状重算:把组件期限提前 100 秒,重发的 TTL 随之变短,ctx 是组件此刻的序列化。
+    const uint64_t earlierDeadlineMs = deadlineMs - 100000;
+    tlsEcs.actorRegistry.get<InBattleComp>(player).set_deadline_ms(earlierDeadlineMs);
+    ASSERT_TRUE(FireNextLockRetry());
+    ASSERT_EQ(LockScriptCount("renew_lock"), 2u);
+    const LockScriptCall resend = gLockScriptCalls.back();
+    EXPECT_EQ(resend.op, "renew_lock");
+    EXPECT_LT(resend.ttlSec, gLockScriptCalls.front().ttlSec);
+    EXPECT_EQ(resend.ctxPayload, tlsEcs.actorRegistry.get<InBattleComp>(player).SerializeAsString());
+    ASSERT_EQ(gCapturedLockRetries.size(), 1u);  // 又没问到,排下一次
+
+    // 门禁放弃:组件被摘(结算 / 判废已在本节点收尾),下一次重发什么都不发,链到此为止。
+    tlsEcs.actorRegistry.remove<InBattleComp>(player);
+    ASSERT_TRUE(FireNextLockRetry());
+    EXPECT_EQ(LockScriptCount("renew_lock"), 2u);
+    EXPECT_TRUE(gCapturedLockRetries.empty());
+
+    // 登记已摘:这一局重新处于 FIGHTING 时,下一条周期补发的首发照常发出。
+    auto& again = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    again.set_battle_id(settlement.battle_id());
+    again.set_state(IN_BATTLE_STATE_FIGHTING);
+    again.set_deadline_ms(deadlineMs);
+    PlayerBattleSystem::ConfirmBattle(event);
+    EXPECT_EQ(LockScriptCount("renew_lock"), 3u);
+    // 剩下的这条链由 ScopedLockRetryCapture 析构时跑到次数用尽,不残留登记。
+}
+
+// 次数用尽也是终态:摘掉登记,下一条周期补发重新起链。摘漏了,Redis 恢复之后这一局的续期再也发不出去。
+TEST_F(PlayerBattleSettlementTest, RenewChainReleasesAfterRetriesAreExhausted) {
+    ScopedLockScriptRecorder recorder;
+    ScopedLockRetryCapture retries;
+    auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    inBattle.set_battle_id(settlement.battle_id());
+    inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    inBattle.set_deadline_ms(kFarFutureMs);
+    BattleConfirmedEvent event;
+    event.set_player_id(playerId);
+    event.set_battle_id(settlement.battle_id());
+    event.set_deadline_ms(kFarFutureMs);
+
+    PlayerBattleSystem::ConfirmBattle(event);
+    while (FireNextLockRetry()) {
+    }
+    EXPECT_EQ(LockScriptCount("renew_lock"), size_t{battle_lock::kLockWriteMaxAttempts});
+
+    PlayerBattleSystem::ConfirmBattle(event);
+    EXPECT_EQ(LockScriptCount("renew_lock"), size_t{battle_lock::kLockWriteMaxAttempts} + 1);
+}
+
+// 重建复核只有「首发拿到 0」才撤销重建 —— 那说明锁在「读锁」与「复核」之间被结算 / 取消删掉。
+// 重试拿到的 0 可能只是锁按 TTL 自然过期(重试与读锁隔着数秒到数十秒),撤销会把仍在打的玩家解冻,所以保留冻结。
+TEST_F(PlayerBattleSettlementTest, RebuildRecheckRevertsOnlyOnFirstAttemptZero) {
+    using battle_lock::ReplyShape;
+    const uint64_t battleId = settlement.battle_id();
+    const auto freeze = [this](uint64_t id) {
+        auto& inBattle = tlsEcs.actorRegistry.emplace_or_replace<InBattleComp>(player);
+        inBattle.set_battle_id(id);
+        inBattle.set_state(IN_BATTLE_STATE_FIGHTING);
+    };
+
+    // 重试拿到 0:保留。
+    freeze(battleId);
+    PlayerBattleSettlementTestAccess::RebuiltFreezeRecheckReply(playerId, battleId, 2, ReplyShape::kInteger, 0);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+
+    // 首发拿到 1(锁仍是这一局):重建成立,保留。
+    PlayerBattleSettlementTestAccess::RebuiltFreezeRecheckReply(playerId, battleId, 1, ReplyShape::kInteger, 1);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+
+    // 没问到不是结论:保留(重试由发送方排)。
+    PlayerBattleSettlementTestAccess::RebuiltFreezeRecheckReply(playerId, battleId, 1, ReplyShape::kNoReply, 0);
+    PlayerBattleSettlementTestAccess::RebuiltFreezeRecheckReply(playerId, battleId, 1, ReplyShape::kError, 0);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+
+    // 实体上已是别的局的冻结:首发拿到 0 也不碰它。
+    freeze(battleId + 1);
+    PlayerBattleSettlementTestAccess::RebuiltFreezeRecheckReply(playerId, battleId, 1, ReplyShape::kInteger, 0);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+    EXPECT_EQ(tlsEcs.actorRegistry.get<InBattleComp>(player).battle_id(), battleId + 1);
+
+    // 首发拿到 0 且组件仍是这一局:撤销。
+    freeze(battleId);
+    PlayerBattleSettlementTestAccess::RebuiltFreezeRecheckReply(playerId, battleId, 1, ReplyShape::kInteger, 0);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+
+    // 实体不在本节点(登记表里没有):什么都不做,也不崩。
+    tlsEcs.playerList.erase(playerId);
+    PlayerBattleSettlementTestAccess::RebuiltFreezeRecheckReply(playerId, battleId, 1, ReplyShape::kInteger, 0);
+    RegisterPlayer();
+}
+
+// ---------------------------------------------------------------------------
+// 战斗锁脚本契约(battle_lock_rules.h)。脚本文本契约不需要 Redis;真实 Redis 用例由 MMORPG_TEST_REDIS_ADDR 门控,
+// 直接执行生产脚本,KEYS / ARGV 顺序与 player_battle.cpp 的 EVAL 一一对应,改脚本键位时这里先红。
+// ---------------------------------------------------------------------------
+
+struct RedisReplyDeleter {
+    void operator()(redisReply* reply) const { freeReplyObject(reply); }
+};
+
+// 键按生产格式拼,所以在 Redis Cluster 上也同 slot。player_id 取 ≥ 2^63 的合成值:真实 player_id 在 63 位以内,
+// 碰不到开发 Redis 里的真实键;每个夹具一个 nonce,重复运行互不干扰。析构时删掉本夹具碰过的两把键。
+struct BattleLockRedisFixture {
+    using Reply = std::unique_ptr<redisReply, RedisReplyDeleter>;
+    std::unique_ptr<redisContext, decltype(&redisFree)> context{nullptr, &redisFree};
+    uint64_t playerId = 0;
+    std::string lockKey;
+    std::string ctxKey;
+
+    BattleLockRedisFixture() {
+        const auto nonce = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+        playerId = (uint64_t{1} << 63) + nonce % (uint64_t{1} << 62);
+        lockKey = KeyOf(battle_lock::kBattleLockKeyFmt);
+        ctxKey = KeyOf(battle_lock::kBattleCtxKeyFmt);
+    }
+    ~BattleLockRedisFixture() {
+        if (context == nullptr || context->err != 0) return;
+        (void)Run({"DEL", lockKey, ctxKey});
+    }
+    std::string KeyOf(const char* perPlayerFmt) const {
+        char key[128];
+        std::snprintf(key, sizeof(key), perPlayerFmt, static_cast<unsigned long long>(playerId));
+        return key;
+    }
+    // endpoint = "host:port"(MMORPG_TEST_REDIS_ADDR)。
+    void Connect(const std::string& endpoint) {
+        const auto colon = endpoint.rfind(':');
+        ASSERT_NE(std::string::npos, colon);
+        ASSERT_GT(colon, 0u);
+        char* tail = nullptr;
+        const long port = std::strtol(endpoint.c_str() + colon + 1, &tail, 10);
+        ASSERT_NE(nullptr, tail);
+        ASSERT_EQ('\0', *tail);
+        ASSERT_GT(port, 0);
+        ASSERT_LE(port, 65535);
+        const timeval timeout{1, 0};
+        context.reset(redisConnectWithTimeout(endpoint.substr(0, colon).c_str(), static_cast<int>(port), timeout));
+        ASSERT_NE(nullptr, context);
+        ASSERT_EQ(0, context->err);
+        ASSERT_EQ(REDIS_OK, redisSetTimeout(context.get(), timeout));
+    }
+    Reply Run(const std::vector<std::string>& command) {
+        std::vector<const char*> arguments;
+        std::vector<std::size_t> lengths;
+        for (const auto& argument : command) {
+            arguments.push_back(argument.data());
+            lengths.push_back(argument.size());
+        }
+        return Reply(static_cast<redisReply*>(redisCommandArgv(context.get(),
+            static_cast<int>(arguments.size()), arguments.data(), lengths.data())));
+    }
+    // EVAL 参数顺序与 player_battle.cpp 一致:KEYS = 锁、ctx;ARGV = battle_id、TTL 秒、ctx 序列化。
+    Reply RunLockScript(const char* script, const std::string& battle, const std::string& ttlSec, const std::string& ctx) {
+        return Run({"EVAL", script, "2", lockKey, ctxKey, battle, ttlSec, ctx});
+    }
+    long long TtlOf(const std::string& key) {
+        const auto reply = Run({"TTL", key});
+        return (reply != nullptr && reply->type == REDIS_REPLY_INTEGER) ? reply->integer : -3;
+    }
+};
+
+void ExpectInteger(const BattleLockRedisFixture::Reply& reply, long long expected) {
+    ASSERT_NE(nullptr, reply);
+    ASSERT_EQ(REDIS_REPLY_INTEGER, reply->type);
+    EXPECT_EQ(expected, reply->integer);
+}
+
+void ExpectString(const BattleLockRedisFixture::Reply& reply, const std::string& expected) {
+    ASSERT_NE(nullptr, reply);
+    ASSERT_EQ(REDIS_REPLY_STRING, reply->type);
+    EXPECT_EQ(expected, std::string(reply->str, reply->len));
+}
+
+void ExpectStatusOk(const BattleLockRedisFixture::Reply& reply) {
+    ASSERT_NE(nullptr, reply);
+    ASSERT_EQ(REDIS_REPLY_STATUS, reply->type);
+}
+
+// 续期脚本绝不写锁的值:锁值不符先返回 0,之后才动 ctx 与 TTL。补写锁会让一条迟到的确认复活被取消 / 结算 / 判废删掉的锁。
+TEST(BattleLockContract, RenewalNeverWritesTheLockValue) {
+    const std::string script = battle_lock::kRenewBattleLockIfMatchScript;
+    EXPECT_EQ(script.find("redis.call('SET', KEYS[1]"), std::string::npos);
+    const auto guard = script.find("if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end");
+    ASSERT_NE(guard, std::string::npos);
+    const auto ctxWrite = script.find("redis.call('SET', KEYS[2], ARGV[3], 'EX', ttl)");
+    const auto lockExpire = script.find("redis.call('EXPIRE', KEYS[1], ttl)");
+    ASSERT_NE(ctxWrite, std::string::npos);
+    ASSERT_NE(lockExpire, std::string::npos);
+    EXPECT_LT(guard, ctxWrite);
+    EXPECT_LT(guard, lockExpire);
+}
+
+// 写锁脚本:锁与 ctx 在同一条脚本里、用同一个 TTL 参数,两键要么都写、要么都没写。
+TEST(BattleLockContract, WriteSetsLockAndCtxWithTheSameTtl) {
+    const std::string script = battle_lock::kWriteBattleLockScript;
+    EXPECT_NE(script.find("redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])"), std::string::npos);
+    EXPECT_NE(script.find("redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[2])"), std::string::npos);
+}
+
+// 只延长、不缩短;ctx 与锁同 TTL;锁属于别的局两键都不动;锁不在回 0 且不补写。
+TEST(BattleLockContract, RenewalOnlyExtendsKeepsCtxInStepAndNeverCreates) {
+    const char* address = std::getenv("MMORPG_TEST_REDIS_ADDR");
+    if (address == nullptr || *address == '\0')
+        GTEST_SKIP() << "未设置 MMORPG_TEST_REDIS_ADDR，跳过真实 Redis 战斗锁续期契约";
+    BattleLockRedisFixture redis;
+    ASSERT_NO_FATAL_FAILURE(redis.Connect(address));
+    const char* renew = battle_lock::kRenewBattleLockIfMatchScript;
+
+    // 锁 870 还剩 500 秒;一条重复确认只要 100 秒:不缩短。
+    ASSERT_NO_FATAL_FAILURE(ExpectStatusOk(redis.Run({"SET", redis.lockKey, "870", "EX", "500"})));
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.RunLockScript(renew, "870", "100", "ctx-a"), 1));
+    const long long keptTtl = redis.TtlOf(redis.lockKey);
+    EXPECT_GT(keptTtl, 400);
+    EXPECT_LE(keptTtl, 500);
+    EXPECT_LE(std::llabs(keptTtl - redis.TtlOf(redis.ctxKey)), 1);
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.ctxKey}), "ctx-a"));
+
+    // 要 900 秒:延长,ctx 跟着改写与延长。
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.RunLockScript(renew, "870", "900", "ctx-b"), 1));
+    EXPECT_GT(redis.TtlOf(redis.lockKey), 800);
+    EXPECT_GT(redis.TtlOf(redis.ctxKey), 800);
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.ctxKey}), "ctx-b"));
+
+    // 锁属于别的局:回 0,锁与 ctx 原样。
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.RunLockScript(renew, "871", "900", "ctx-c"), 0));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.lockKey}), "870"));
+    ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.ctxKey}), "ctx-b"));
+
+    // 锁不在(已被取消 / 结算 / 判废删掉):回 0,不补写。
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Run({"DEL", redis.lockKey, redis.ctxKey}), 2));
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.RunLockScript(renew, "870", "900", "ctx-d"), 0));
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Run({"EXISTS", redis.lockKey}), 0));
+    ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.Run({"EXISTS", redis.ctxKey}), 0));
+}
+
+// 写锁:两键同值同 TTL;没问到之后的重发(同值)幂等。
+TEST(BattleLockContract, WriteLandsLockAndCtxTogetherAndResendIsIdempotent) {
+    const char* address = std::getenv("MMORPG_TEST_REDIS_ADDR");
+    if (address == nullptr || *address == '\0')
+        GTEST_SKIP() << "未设置 MMORPG_TEST_REDIS_ADDR，跳过真实 Redis 战斗锁写入契约";
+    BattleLockRedisFixture redis;
+    ASSERT_NO_FATAL_FAILURE(redis.Connect(address));
+    const char* write = battle_lock::kWriteBattleLockScript;
+
+    for (int send = 0; send < 2; ++send) {
+        ASSERT_NO_FATAL_FAILURE(ExpectInteger(redis.RunLockScript(write, "880", "120", "ctx-880"), 1)) << "send " << send;
+        ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.lockKey}), "880")) << "send " << send;
+        ASSERT_NO_FATAL_FAILURE(ExpectString(redis.Run({"GET", redis.ctxKey}), "ctx-880")) << "send " << send;
+        const long long lockTtl = redis.TtlOf(redis.lockKey);
+        EXPECT_GT(lockTtl, 0) << "send " << send;
+        EXPECT_LE(lockTtl, 120) << "send " << send;
+        EXPECT_LE(std::llabs(lockTtl - redis.TtlOf(redis.ctxKey)), 1) << "send " << send;
     }
 }
 

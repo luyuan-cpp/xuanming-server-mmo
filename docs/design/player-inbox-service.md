@@ -350,7 +350,7 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
   - 各实例的开关短时间不一致时，只会让 GM 偶尔收到 Disabled、重试后成功，不会出错。上线时仍按 §11.7 一次性全开。
   - **v1 只放封锁 / 解封**（§2.2）。`config.ParseEnqueueTypes` 遇到 `GM_ATTACH_CURRENCY_DEBT` 直接报错，`Validate` 与装配层都走它，所以任何启动路径都拒启（`v1DisabledEnqueueTypes`）。解禁只删这张表里的一项。
   - 权威值在 git 跟踪的 `go/player_inbox/etc/player_inbox.yaml`，`k8s_deploy.ps1` 从这份 yaml 读出、校验后渲染进 ConfigMap（`Get-PlayerInboxEnqueueTypes`）。部署脚本不在渲染期另拒挂欠款，靠服务端 Validate 拒启：migrate Job 先失败；staging / prod，或 dev 带 `-WaitReady` 时 Deployment 不会滚动，dev 不带 `-WaitReady` 时脚本不等 Job，Deployment 照常滚动、新 Pod CrashLoop（`Apply-GoSvcMigrateJob` 的 `$gateOnJob`）。
-- **消费**：scene 配置里的 `GameConfig.player_inbox.consumer_enabled`，默认 false。
+- **消费**：scene 配置里的 `GameConfig.player_inbox.consumer_enabled`，加载器缺键取 false。仓库的 `bin/etc/game_config.yaml` 2026-11-01 起写 true：全球成局的结算只经收件箱，服务 yaml 默认列了 Battle 结算（首次上线整批起步，见运维手册 §2）。
   - 关闭时不发 Fetch，但已经应用、等待确认的条目照常 Ack，因为 Ack 只报告事实（§7.7）。
   - **权威值在 git 跟踪的 `bin/etc/game_config.yaml` 的 `player_inbox` 段**（评审 H1）。K8s 的 node-config 由 `k8s_deploy.ps1` 用 `Get-AuthoritativeYamlBlock` 整段复制；渲染值不从集群取（zone-rollback 会删 zone namespace），集群现状只用于写前门禁的交叉核对。本机 scene 读的也是这份文件。脚本读的是工作区文件，staging / prod 的真部署要求它相对 HEAD 没有未提交改动。
   - 以前这个值由部署参数 `-PlayerInboxConsumer` 渲染，默认 off、包装入口不透传，例行发布会把已打开的消费静默写回 false。现在这个参数只用来核对：与 yaml 不一致就拒绝部署，渲染值始终取 yaml。开 / 关消费就是改 yaml 并提交，再逐 zone 执行 zone-up 滚动 scene。

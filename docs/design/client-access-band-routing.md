@@ -113,7 +113,7 @@
 | K6 | guild/friend/trade 把"没带会话头"当内部调用放行；安全性完全依赖 Go 端口不对外 | 【码】`go/guild/internal/session/session.go:94-96` | 已核 |
 | K7 | K8s 默认直连模式，chat/guild/friend/team/trade 玩家不可达 | 【码】`k8s_deploy.ps1:153`、`main.cpp:207-209` | 已核 |
 | K8 | 下行专用号（29 个 Notify* 及 23/34/124）在上行白名单里，客户端可上发 | 调研【码】`cpp/generated/rpc/service_metadata/rpc_event_registry.cpp:1536-1679` | 调研已核，本文作者未逐条复核 |
-| K9 | 未登录会话的 `player_id = kInvalidGuid (UINT64_MAX)` 被原样放进 SessionDetails，Go 侧只判 `==0` | 调研【码】`session_info_comp.h:54`、`client_message_processor.cpp:119-133` | 调研已核 |
+| K9 | 未登录会话的 `player_id = kInvalidGuid (UINT64_MAX)` 被原样放进 SessionDetails，Go 侧只判 `==0` | 调研【码】`session_info_comp.h:54`、`client_message_processor.cpp:119-133` | 调研已核；2026-10-22 已修（未编译、未测试），见 D60 行的落实状态 |
 
 K1–K2 已另开后台任务"gate 补 x-caller 签名与断线通知可靠性"，K3 已另开"发号器改为 message_id 只追加"。
 
@@ -150,7 +150,7 @@ K1–K2 已另开后台任务"gate 补 x-caller 签名与断线通知可靠性"�
 | F5 | 限流器每会话一份 `unordered_map<messageId, circular_buffer>`：先建桶再判断，桶从不回收；表值 uint32 被截成 uint8；秒级时钟；默认 3 次/秒 | 【码】`cpp/libs/engine/core/message_limiter/message_limiter.h:10,15-17`、`message_limiter.cpp:8,13-26,45-47` | 今天桶数有界，只因为白名单排在前面。ROUTER 段号**绝不能**进 `CanSend(id)` |
 | F6 | 路由服拒绝时以 MessageContent 信封返回（未知号、非客户端协议号都是 `kInvalidParameter`），gate 原样下发，不计非法包 | 【码】`forwardlogic.go:119-132`、`cpp/nodes/gate/main.cpp:297-301` | — |
 | F7 | 首次验票成功时非法包计数清零（1092）；验票没有一次性消费或 nonce（971-1102）。gate 票据由 Go 签发，TTL 10 分钟；Java 侧的 `token-ttl-seconds: 300` / 代码默认 60 是否仍然生效，待核实 | 【码】`client_message_processor.cpp:1004-1008,1092`、`go/login/internal/logic/loginpregate/assigngatelogic.go:27`、`java/gateway_node/src/main/resources/application.yaml:34` | 换一条新 TCP 重放同一张票，就能拿到全新的计数器。踢线只能当辅助手段 |
-| F8 | 登录绑定前 `SessionInfo.playerId = kInvalidGuid (UINT64_MAX)`，路由和直连两条路径都原样放进 SessionDetails；Go 各服务只判 `==0` | 【码】`cpp/libs/services/gate/session/comp/session_info_comp.h:54`、`client_message_processor.cpp:119-133,743-744,831`；`go/chat/internal/session/session.go:47`、`go/friend/internal/session/session.go:78,121`、`go/guild/internal/session/session.go:89` 等 | 未登录会话会以玩家 18446744073709551615 的身份进入 Go 服务（K9） |
+| F8 | 登录绑定前 `SessionInfo.playerId = kInvalidGuid (UINT64_MAX)`，路由和直连两条路径都原样放进 SessionDetails；Go 各服务只判 `==0` | 【码】`cpp/libs/services/gate/session/comp/session_info_comp.h:54`、`client_message_processor.cpp:119-133,743-744,831`；`go/chat/internal/session/session.go:47`、`go/friend/internal/session/session.go:78,121`、`go/guild/internal/session/session.go:89` 等 | 未登录会话会以玩家 18446744073709551615 的身份进入 Go 服务（K9）。（落实：2026-10-15 起路由模式由 lane 归一；直连模式 2026-10-22 补齐，见 D60 行） |
 | F9 | scene 按号分发只查越界、服务是否存在、方法是否存在，不看客户端可见性 | 【码】`scene_handler.cpp:379-399` | scene 号不能撤掉 gate 的逐号白名单 |
 | F10 | `RpcMethodMeta::serviceName` 默认 nullptr。**今天已有空槽 id=3**（`dbTest`，DB 域不进注册表），以下位置遇到空槽都会构造 `std::string(nullptr)`，属于 UB：`game_channel.cpp:356-358`、`455-456`、`511-513`（SendErrorResponse，即回 NO_SERVICE 的那条路径），以及 `scene_handler.cpp:76,314,386,623` | 【码】`rpc_event_registry.h:12`、`cpp/generated/rpc/service_metadata/db_service_metadata.h:6`、`cpp/libs/engine/core/network/game_channel.cpp`。另外 `game_channel.cpp:391-392` 与 `player_message_utils.cpp:285,298` 已判空，是安全的 | 空槽安全是**修现存缺陷**；只增不复用之后空槽会更多 |
 | F11 | 三个 handler 都是先 assert 再取 `registry[id]`（675-676、728-729、809-810），951 行在分流前就取了 `registry[id]` | 【码】`client_message_processor.cpp` | Release 下越界就是 UB。分类必须在所有注册表访问之前 |
@@ -189,7 +189,7 @@ K1–K2 已另开后台任务"gate 补 x-caller 签名与断线通知可靠性"�
 | D57 | gate 限流：ROUTER 大区每会话 1 个聚合令牌桶，软限回 tip 不计非法包，硬限才计；每会话和进程各有在途上限，超限只回 tip、不计；在途**按单次调用记账** | G3、G4；在途超限多半是后端变慢，不该惩罚客户端 |
 | D58 | 路由服是 Go 客户端方法唯一的权威：只生成 `ClientRouteTable`（C2S、C2S_PRELOGIN）；表外号回 1013、未登录调 C2S 回 1005，都用信封返回、都不计非法包 | G2、G4 |
 | D59 | 断线通知改走专用 RPC `ClientRpcRouter.NotifySessionClosed`：空请求体加会话 metadata 加 zone_id，路由服按生成的 `GateHookTable` 转给 login.Disconnect；login 用 metadata 的 session_id；gate 的 `loginStarted` 改为 `routerTouched`。**gate 不再认识任何 Go 号** | F15；Forward 永远只代表客户端来源，不需要 origin 字段和并存窗口 |
-| D60 | SessionDetails 新增 `uint64 session_incarnation = 7`，作为回包身份栅栏；`player_id` 在 `BuildSessionDetails` 这个唯一构造点把 kInvalidGuid 归一成 0 | F8、F24 |
+| D60 | SessionDetails 新增 `uint64 session_incarnation = 7`，作为回包身份栅栏；`player_id` 在 `BuildSessionDetails` 这个唯一构造点把 kInvalidGuid 归一成 0 | F8、F24。**落实状态（2026-10-22，未编译、未测试，待 Codex 验证）**：7 号字段已随 lane 批次启用（§12.4 修订注）。player_id 归一原先只在路由 lane 的 `Admit` 里做，直连模式原样带出 UINT64_MAX；现在规则收进纯函数 `gate_session_details::Build` / `NormalizePlayerId`（`cpp/nodes/gate/handler/rpc/session_details_builder.h`），`BuildSessionDetails` 只是补 gNode 节点号与实例 uuid 的薄包装。三个调用点（直连转发、路由转发、断线通知）都直接传 `SessionInfo.playerId`；lane 复用同一函数再归一一次，作纵深防御（幂等）。下游核对：没有任何服务依赖 UINT64_MAX 表示未绑角色。直连可达的 login 只在 LeaveGame / Disconnect 的 `sessionPlayersToSettle` 读会话头 player_id，而且只过滤 0。改成 0 之后，LeaveGame 少发一次对不存在玩家的 player_locator 查询；Disconnect 在调用点早已传 0，不变。scene_manager 不读会话头，也没有客户端方法。match 不再把未绑角色的会话当成玩家。回归测试 `cpp/tests/routing_identity_test/session_details_builder_test.cpp` |
 | D61 | 删除直连模式是切换的硬前置：K8s 先翻到路由模式并跑通 battle-smoke，再删直连路径和模式开关本身。同时修订 D-12「C++ 默认值和单测一字不改」 | Login 搬进 ROUTER 段后，直连模式连登录都做不了 |
 | D62 | 安全前置顺序定死：NetworkPolicy → gate 到路由服的认证 → 路由服剥离并代签 `x-caller-*` → metadata 透传收窄为显式清单 | 否则路由服会变成签名预言机；也解决 K1 |
 | D63 | 版本信号：gate 的 `NodeInfo.message_axis_version` 加上路由服的 `client_rpc_router_route_table_info{axis_version, table_hash}`，发布门禁机械核对 | 切换后能识别混进来的旧镜像 |
@@ -372,7 +372,7 @@ NODE 大区也在同一批里按 extent 重新发号（D52）。这样"legacy"�
 > **2026-10-15 修订**:按会话的在途记账已由 [client-request-ordering.md](./client-request-ordering.md) 的 gate 路由 lane 落码(未编译、未验证),本节以下几处按它修订:
 > - 每会话从「在途 ≤ 32」改为「**排队 + 在途 ≤ 32**」:lane 同一时刻只放 1 条在途,其余排队(`kMaxLaneDepth`,超限回带 id 的 1008、不计非法包,语义不变);
 > - 按次记账的键从 `(ClientContext*, seq)` 改为 gate 自己发的 `gate_call_seq`(SessionDetails 8 号字段,路由服原值回写)。生成的 Send* 返回 void,gate 拿不到 ctx 指针,原方案要改生成模板;
-> - D60 的 7 号字段 `session_incarnation` 已按本文预订启用;阶段 0b(player_id 归一)、0d(失败回执带请求 id)由 lane 批次承担;
+> - D60 的 7 号字段 `session_incarnation` 已按本文预订启用;阶段 0b(player_id 归一)、0d(失败回执带请求 id)由 lane 批次承担;(2026-10-22 订正:lane 批次的 0b 只覆盖路由模式,直连模式到 2026-10-22 才在 `BuildSessionDetails` 构造点补齐,见 D60 行的落实状态)
 > - 过期从「惰性清理、不挂定时器」改为「**主动扫描 + 惰性清理**」(GateRuntimeContext 上的 TimerTaskComp,回调不捕获对象,符合 §11.7)。理由:队头卡住时客户端在等回包,不会再发新请求,纯惰性清理永远触发不到;
 > - 进程上限暂未做,在途数 ≤ 会话数。
 
@@ -488,7 +488,7 @@ NODE 大区也在同一批里按 extent 重新发号（D52）。这样"legacy"�
 
 | 阶段 | 内容 | 依赖 |
 |---|---|---|
-| 0 | 与号段无关的现存缺陷，可以立即各自上线：<br>a 注册表空槽安全：生成 `const RpcMethodMeta* LookupMeta(id)`，改 `game_channel.cpp:356-358,455-456,511-513` 与 `scene_handler.cpp:76,314,386,623`（修今天 id=3 的 UB）<br>b `BuildSessionDetails` 把 player_id 归一<br>c MessageLimiter 的 uint8 截断（`message_limiter.cpp:8,17`、`.h:10,15`），CheckMessageLimit 的日志与 error_reporter 改采样<br>d 失败回执带请求 id：`main.cpp:323-348`、`client_message_processor.cpp:820,831-834`，连接仍按会话查找后 `lock()`，不在 call 对象里存 `TcpConnectionPtr`（§11.7）<br>e robot 删除 `sendDisconnectBestEffort`（§14）<br>f 路由服启停顺序（§13.8）<br>g 节点摘除：先移除 NodeInfo 使其不再被选中，保留 CQ、stub、Channel，等在途归零或超过实际 deadline 加余量后再销毁实体（F29）(2026-10-16:不再需要,F29 已随 gRPC 传输第 3 批失效,见上表 F29 行)<br>h guild、friend、trade 的拒绝日志改采样 | 无 |
+| 0 | 与号段无关的现存缺陷，可以立即各自上线：<br>a 注册表空槽安全：生成 `const RpcMethodMeta* LookupMeta(id)`，改 `game_channel.cpp:356-358,455-456,511-513` 与 `scene_handler.cpp:76,314,386,623`（修今天 id=3 的 UB）<br>b `BuildSessionDetails` 把 player_id 归一(2026-10-22 已改,直连 / 路由 / 断线通知三条路径都覆盖,未编译,见 D60 行)<br>c MessageLimiter 的 uint8 截断（`message_limiter.cpp:8,17`、`.h:10,15`），CheckMessageLimit 的日志与 error_reporter 改采样<br>d 失败回执带请求 id：`main.cpp:323-348`、`client_message_processor.cpp:820,831-834`，连接仍按会话查找后 `lock()`，不在 call 对象里存 `TcpConnectionPtr`（§11.7）<br>e robot 删除 `sendDisconnectBestEffort`（§14）<br>f 路由服启停顺序（§13.8）<br>g 节点摘除：先移除 NodeInfo 使其不再被选中，保留 CQ、stub、Channel，等在途归零或超过实际 deadline 加余量后再销毁实体（F29）(2026-10-16:不再需要,F29 已随 gRPC 传输第 3 批失效,见上表 F29 行)<br>h guild、friend、trade 的拒绝日志改采样 | 无 |
 | 1 | K8s 翻到路由模式，路由服 ≥2 副本，在路由模式下跑通 battle-smoke → **删除直连路径**：`HandleGrpcNodeMessage`、直连白名单、回包反查表、battle 绑定与 match_event 处理、路由模式开关本身、`main.cpp:26` 的死 include、`SendMessageToPlayerOnGrpcNode`。修订 D-12，以及 `gate_security_test.cpp:160-168`「默认必须落在旧模式」的断言 | 0 |
 | 2 | **一次停服切换**（清单见 §16.1） | 1 |
 | 3 | 安全前置（§15） | 可与 1、2 并行，但内部顺序定死；任何非 dev 部署前必须完成 |

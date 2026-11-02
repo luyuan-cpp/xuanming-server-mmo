@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/panjf2000/ants/v2 v2.12.0
 	github.com/prometheus/client_golang v1.21.1
-	github.com/redis/go-redis/v9 v9.16.0
+	github.com/redis/go-redis/v9 v9.17.3
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.9.2
 	go.etcd.io/etcd/api/v3 v3.6.5
@@ -61,7 +61,6 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

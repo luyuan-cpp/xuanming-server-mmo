@@ -81,7 +81,7 @@ type KafkaConfig struct {
 	GroupId          string                 `protobuf:"bytes,3,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`                               // Consumer group ID
 	EnableAutoCommit bool                   `protobuf:"varint,4,opt,name=enable_auto_commit,json=enableAutoCommit,proto3" json:"enable_auto_commit,omitempty"` // Enable auto-commit
 	AutoOffsetReset  string                 `protobuf:"bytes,5,opt,name=auto_offset_reset,json=autoOffsetReset,proto3" json:"auto_offset_reset,omitempty"`     // earliest / latest
-	// P:分区数。**不可变契约**,与 db_task / 审计 topic 同一套纪律
+	// P:分区数。**不可变契约**,与审计 topic 同一套纪律
 	// (docs/design/db-task-kafka-partition-contract.md):要改就 +1 代号换一批
 	// 新 topic,绝不原地扩分区 —— 扩分区会把 node_id % P 重映射,
 	// 命令就发到没人 assign 的分区上,静默全丢。0 = 256。
@@ -89,14 +89,8 @@ type KafkaConfig struct {
 	// 代号,进 topic 名:`<类型>-cmd_g<N>`(与 data_service 的
 	// transaction_log_topic_g1 同形)。0 = 1。
 	CommandTopicGeneration uint32 `protobuf:"varint,7,opt,name=command_topic_generation,json=commandTopicGeneration,proto3" json:"command_topic_generation,omitempty"`
-	// 迁移窗口开关:true = **不再**消费旧的 `<类型>-<node_id>` per-node topic。
-	// 默认 false(仍消费),因为生产者是分批切的(Go login 由另一路发布切换),
-	// producer 还在写老 topic 时把消费端关掉 = 命令全丢。
-	// 全部生产者切完后置 true,P1(僵尸进程与继任者共用 consumer group、
-	// 分区被判给僵尸导致继任者饿死)才算彻底关闭 —— 老路径仍是 group 订阅。
-	DisableLegacyPerNodeTopic bool `protobuf:"varint,8,opt,name=disable_legacy_per_node_topic,json=disableLegacyPerNodeTopic,proto3" json:"disable_legacy_per_node_topic,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *KafkaConfig) Reset() {
@@ -178,17 +172,9 @@ func (x *KafkaConfig) GetCommandTopicGeneration() uint32 {
 	return 0
 }
 
-func (x *KafkaConfig) GetDisableLegacyPerNodeTopic() bool {
-	if x != nil {
-		return x.DisableLegacyPerNodeTopic
-	}
-	return false
-}
-
 // 一种永久 guid 的号段配置(docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5)。
-// 号段 = scene 经 DataService.AllocateIdSegment 从全局库 id_segment 表领 [lo, hi),
-// 值域 [1, 2^55) 与存量 snowflake 号(≥ 6.7e16)不相交,新旧号在同一张表 / 玩家 blob 里共存、不迁数据。
-// 一种 GUID 一个客户端实例(C++ GuidSegmentRegistry),kind 名 = 注册表种类名 = id_segment.biz_tag。
+// 号段 = scene 经 DataService.AllocateIdSegment 领 [lo, hi)。
+// 一种 GUID 一个客户端实例(C++ GuidSegmentRegistry),kind 名 = 注册表种类名 = 发号器的 biz_tag。
 type IdSegmentKindConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 种类名:item / txlog / snapshot(以后 pet / guild …)。不认识的名字被忽略并记 ERROR。
@@ -316,7 +302,7 @@ func (x *IdSegmentConfig) GetKinds() []*IdSegmentKindConfig {
 	return nil
 }
 
-// C++ 节点发出的 unary gRPC 调用的 deadline(docs/design/grpc-client-deadline-failure-callback.md §4)。
+// C++ 节点发出的 unary gRPC 调用的 deadline(docs/design/grpc-muduo-transport.md §16.3)。
 // 按**目标**节点类型配;没配到的类型用客户端调用公共头中的 kDefaultGrpcCallDeadlineMs(core/network/grpc_client_call.h)。
 // 取值遵守「上游比下游宽」:大于目标服务的服务端超时,小于依赖这次调用结果的 C++ 看门狗。
 type GrpcClientConfig struct {
@@ -414,6 +400,10 @@ type BaseDeployConfig struct {
 	// battle 节点客户端面并发直连上限。0 = 关闭运维阈值(仅 dev/test);
 	// 语义与 gate_max_connections 相同:超限连接在握手前即被拒。
 	BattleMaxConnections uint32 `protobuf:"varint,17,opt,name=battle_max_connections,json=battleMaxConnections,proto3" json:"battle_max_connections,omitempty"`
+	// 观战订阅凭证的 HMAC 共享密钥(battle-spectate-tiered-fanout.md §15.2 / D98):match 签发、gate 本地验签。
+	// 与 gate_token_secret、battle_token_secret 分域,三者必须互不相同。空值处置同 battle_token_secret:
+	// dev/test 放行并 WARN(gate 拒绝一切 SubscribeSpectate,只能走直连观战),prod 拒绝启动。
+	SpectateTokenSecret string `protobuf:"bytes,24,opt,name=spectate_token_secret,json=spectateTokenSecret,proto3" json:"spectate_token_secret,omitempty"`
 	// 集群号:部署级常量,由运维一次性设定(ConfigMap / yaml),策划不碰,默认 0。
 	// 只有 Go 的 snowflake 槽位协议(login-player / guild / scene-manager / match)消费它,
 	// 作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
@@ -433,27 +423,9 @@ type BaseDeployConfig struct {
 	// 现在收敛成这一个部署键(k8s 侧由 k8s_deploy.ps1 从 data_service.yaml 镜像进 node ConfigMap)。
 	AuditTopicGeneration uint32 `protobuf:"varint,20,opt,name=audit_topic_generation,json=auditTopicGeneration,proto3" json:"audit_topic_generation,omitempty"`
 	// C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
-	GrpcClient *GrpcClientConfig `protobuf:"bytes,21,opt,name=grpc_client,json=grpcClient,proto3" json:"grpc_client,omitempty"`
-	// 玩家存盘 DBTask topic(db_task_zone_{zone})的**世代号**。有效名:
-	// `<= 1` → `db_task_zone_{zone}`(不带后缀),`>= 2` → `db_task_zone_{zone}_g{N}`。
-	// 注意与 audit_topic_generation **第一代就带 _g1** 的规则不同:db_task 第一代的名字早已上线,
-	// 换规则等于换 topic,只能沿用 go/db、go/login 的 DbTaskTopicForGeneration 口径。
-	// 0 当 1 处理(proto3 没有 presence,存量 yaml 不写这一键也能起,名字不变)。
-	//
-	// **必须等于 go/db 的 ServerConfig.Kafka.TopicGeneration 与 go/login 的 Kafka.TopicGeneration**:
-	// C++ scene 按 home_zone 往这个 topic 写玩家存盘,go/db 是唯一的消费者。分家不报任何错 ——
-	// 换代后 scene 仍写旧代 topic,存盘静默积压在一个已排空、没人消费的 topic 里。
-	// 换代流程见 docs/design/db-task-kafka-partition-contract.md;设计见 player-storage-placement.md §7。
-	DbTaskTopicGeneration uint32 `protobuf:"varint,22,opt,name=db_task_topic_generation,json=dbTaskTopicGeneration,proto3" json:"db_task_topic_generation,omitempty"`
-	// 混版本持久字段保护:严格提交屏障 C3 的模式(docs/design/mixed-version-persist-field-protection.md §5.2)。
-	// 只认 "warn" / "enforce":warn 照写并计数,enforce 拒写、本次在线进度不落盘。
-	// readBaseDeployConfig 读入时归一化(cpp/libs/engine/config/persist_schema_regression_mode.h):
-	// 缺键 / 空串 = "warn"(proto3 无 presence,存量 yaml 不写也能起);其余非法值拒绝启动。
-	// 运行期这里只会是两个字面量之一,原样作为严格屏障 Lua 的 ARGV[10]。
-	// 切 enforce 的放行条件见设计 §8.1 第 5 步;k8s 侧由 k8s_deploy.ps1 从 bin/etc/base_deploy_config.yaml 镜像。
-	PersistSchemaRegressionMode string `protobuf:"bytes,23,opt,name=persist_schema_regression_mode,json=persistSchemaRegressionMode,proto3" json:"persist_schema_regression_mode,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	GrpcClient    *GrpcClientConfig `protobuf:"bytes,21,opt,name=grpc_client,json=grpcClient,proto3" json:"grpc_client,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
@@ -605,6 +577,13 @@ func (x *BaseDeployConfig) GetBattleMaxConnections() uint32 {
 	return 0
 }
 
+func (x *BaseDeployConfig) GetSpectateTokenSecret() string {
+	if x != nil {
+		return x.SpectateTokenSecret
+	}
+	return ""
+}
+
 func (x *BaseDeployConfig) GetClusterId() uint32 {
 	if x != nil {
 		return x.ClusterId
@@ -633,20 +612,6 @@ func (x *BaseDeployConfig) GetGrpcClient() *GrpcClientConfig {
 	return nil
 }
 
-func (x *BaseDeployConfig) GetDbTaskTopicGeneration() uint32 {
-	if x != nil {
-		return x.DbTaskTopicGeneration
-	}
-	return 0
-}
-
-func (x *BaseDeployConfig) GetPersistSchemaRegressionMode() string {
-	if x != nil {
-		return x.PersistSchemaRegressionMode
-	}
-	return ""
-}
-
 // Game config
 type GameConfig struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
@@ -654,6 +619,7 @@ type GameConfig struct {
 	ZoneId        uint32                        `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                        // Zone ID
 	ZoneRedis     *GameConfig_ZoneRedisConfig   `protobuf:"bytes,7,opt,name=zone_redis,json=zoneRedis,proto3" json:"zone_redis,omitempty"`                // Zone Redis config
 	PlayerInbox   *GameConfig_PlayerInboxConfig `protobuf:"bytes,8,opt,name=player_inbox,json=playerInbox,proto3" json:"player_inbox,omitempty"`
+	PlayerRedis   *GameConfig_PlayerRedisConfig `protobuf:"bytes,9,opt,name=player_redis,json=playerRedis,proto3" json:"player_redis,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -712,6 +678,13 @@ func (x *GameConfig) GetZoneRedis() *GameConfig_ZoneRedisConfig {
 func (x *GameConfig) GetPlayerInbox() *GameConfig_PlayerInboxConfig {
 	if x != nil {
 		return x.PlayerInbox
+	}
+	return nil
+}
+
+func (x *GameConfig) GetPlayerRedis() *GameConfig_PlayerRedisConfig {
+	if x != nil {
+		return x.PlayerRedis
 	}
 	return nil
 }
@@ -843,6 +816,69 @@ func (x *GameConfig_PlayerInboxConfig) GetPeriodicFetchMinutes() uint32 {
 	return 0
 }
 
+// 玩家域 Redis(docs/design/redis-player-store-cluster.md §5.1、§5.6),只有 scene 连它;控制域仍是 zone_redis。
+// 由 readGameConfig 手工逐键解析,yaml 键名 player_redis。**整段缺失时加载器显式取默认**:standalone,
+// 地址与口令沿用 zone_redis,开发环境不用改配置。
+type GameConfig_PlayerRedisConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mode          string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`         // standalone | cluster;取值由 scene 启动时校验,配错拒绝启动
+	Seeds         []string               `protobuf:"bytes,2,rep,name=seeds,proto3" json:"seeds,omitempty"`       // host:port。主机名只在启动时解析一次。standalone 恰好一个;cluster 至少一个,只用来拿拓扑
+	Password      string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"` // 空 = 不认证;可被环境变量 PLAYER_REDIS_PASSWORD 覆盖,值不进日志
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GameConfig_PlayerRedisConfig) Reset() {
+	*x = GameConfig_PlayerRedisConfig{}
+	mi := &file_proto_common_base_config_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GameConfig_PlayerRedisConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GameConfig_PlayerRedisConfig) ProtoMessage() {}
+
+func (x *GameConfig_PlayerRedisConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_config_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GameConfig_PlayerRedisConfig.ProtoReflect.Descriptor instead.
+func (*GameConfig_PlayerRedisConfig) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{6, 2}
+}
+
+func (x *GameConfig_PlayerRedisConfig) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *GameConfig_PlayerRedisConfig) GetSeeds() []string {
+	if x != nil {
+		return x.Seeds
+	}
+	return nil
+}
+
+func (x *GameConfig_PlayerRedisConfig) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
 var File_proto_common_base_config_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_config_proto_rawDesc = "" +
@@ -850,7 +886,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x1eproto/common/base/config.proto\"5\n" +
 	"\rServiceConfig\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"\xea\x02\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\xa8\x02\n" +
 	"\vKafkaConfig\x12\x18\n" +
 	"\abrokers\x18\x01 \x03(\tR\abrokers\x12\x16\n" +
 	"\x06topics\x18\x02 \x03(\tR\x06topics\x12\x19\n" +
@@ -858,8 +894,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x12enable_auto_commit\x18\x04 \x01(\bR\x10enableAutoCommit\x12*\n" +
 	"\x11auto_offset_reset\x18\x05 \x01(\tR\x0fautoOffsetReset\x128\n" +
 	"\x18command_topic_partitions\x18\x06 \x01(\rR\x16commandTopicPartitions\x128\n" +
-	"\x18command_topic_generation\x18\a \x01(\rR\x16commandTopicGeneration\x12@\n" +
-	"\x1ddisable_legacy_per_node_topic\x18\b \x01(\bR\x19disableLegacyPerNodeTopic\"\x9c\x01\n" +
+	"\x18command_topic_generation\x18\a \x01(\rR\x16commandTopicGeneration\"\x9c\x01\n" +
 	"\x13IdSegmentKindConfig\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12!\n" +
@@ -872,7 +907,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x10call_deadline_ms\x18\x01 \x03(\v2%.GrpcClientConfig.CallDeadlineMsEntryR\x0ecallDeadlineMs\x1aA\n" +
 	"\x13CallDeadlineMsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe4\b\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x9a\b\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -892,23 +927,23 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x13data_root_directory\x18\x0e \x01(\tR\x11dataRootDirectory\x120\n" +
 	"\x14gate_max_connections\x18\x0f \x01(\rR\x12gateMaxConnections\x12.\n" +
 	"\x13battle_token_secret\x18\x10 \x01(\tR\x11battleTokenSecret\x124\n" +
-	"\x16battle_max_connections\x18\x11 \x01(\rR\x14battleMaxConnections\x12\x1d\n" +
+	"\x16battle_max_connections\x18\x11 \x01(\rR\x14battleMaxConnections\x122\n" +
+	"\x15spectate_token_secret\x18\x18 \x01(\tR\x13spectateTokenSecret\x12\x1d\n" +
 	"\n" +
 	"cluster_id\x18\x12 \x01(\rR\tclusterId\x12/\n" +
 	"\n" +
 	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x124\n" +
 	"\x16audit_topic_generation\x18\x14 \x01(\rR\x14auditTopicGeneration\x122\n" +
 	"\vgrpc_client\x18\x15 \x01(\v2\x11.GrpcClientConfigR\n" +
-	"grpcClient\x127\n" +
-	"\x18db_task_topic_generation\x18\x16 \x01(\rR\x15dbTaskTopicGeneration\x12C\n" +
-	"\x1epersist_schema_regression_mode\x18\x17 \x01(\tR\x1bpersistSchemaRegressionMode\"\xa8\x03\n" +
+	"grpcClient\"\xc5\x04\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +
 	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12:\n" +
 	"\n" +
 	"zone_redis\x18\a \x01(\v2\x1b.GameConfig.ZoneRedisConfigR\tzoneRedis\x12@\n" +
-	"\fplayer_inbox\x18\b \x01(\v2\x1d.GameConfig.PlayerInboxConfigR\vplayerInbox\x1ae\n" +
+	"\fplayer_inbox\x18\b \x01(\v2\x1d.GameConfig.PlayerInboxConfigR\vplayerInbox\x12@\n" +
+	"\fplayer_redis\x18\t \x01(\v2\x1d.GameConfig.PlayerRedisConfigR\vplayerRedis\x1ae\n" +
 	"\x0fZoneRedisConfig\x12\x12\n" +
 	"\x04host\x18\x03 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x04 \x01(\rR\x04port\x12\x1a\n" +
@@ -916,7 +951,11 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x02db\x18\x06 \x01(\rR\x02db\x1at\n" +
 	"\x11PlayerInboxConfig\x12)\n" +
 	"\x10consumer_enabled\x18\x01 \x01(\bR\x0fconsumerEnabled\x124\n" +
-	"\x16periodic_fetch_minutes\x18\x02 \x01(\rR\x14periodicFetchMinutesB\x13Z\x11proto/common/baseb\x06proto3"
+	"\x16periodic_fetch_minutes\x18\x02 \x01(\rR\x14periodicFetchMinutes\x1aY\n" +
+	"\x11PlayerRedisConfig\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\x12\x14\n" +
+	"\x05seeds\x18\x02 \x03(\tR\x05seeds\x12\x1a\n" +
+	"\bpassword\x18\x03 \x01(\tR\bpasswordB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_config_proto_rawDescOnce sync.Once
@@ -930,7 +969,7 @@ func file_proto_common_base_config_proto_rawDescGZIP() []byte {
 	return file_proto_common_base_config_proto_rawDescData
 }
 
-var file_proto_common_base_config_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_common_base_config_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_common_base_config_proto_goTypes = []any{
 	(*ServiceConfig)(nil),                // 0: ServiceConfig
 	(*KafkaConfig)(nil),                  // 1: KafkaConfig
@@ -942,21 +981,23 @@ var file_proto_common_base_config_proto_goTypes = []any{
 	nil,                                  // 7: GrpcClientConfig.CallDeadlineMsEntry
 	(*GameConfig_ZoneRedisConfig)(nil),   // 8: GameConfig.ZoneRedisConfig
 	(*GameConfig_PlayerInboxConfig)(nil), // 9: GameConfig.PlayerInboxConfig
+	(*GameConfig_PlayerRedisConfig)(nil), // 10: GameConfig.PlayerRedisConfig
 }
 var file_proto_common_base_config_proto_depIdxs = []int32{
-	2, // 0: IdSegmentConfig.kinds:type_name -> IdSegmentKindConfig
-	7, // 1: GrpcClientConfig.call_deadline_ms:type_name -> GrpcClientConfig.CallDeadlineMsEntry
-	0, // 2: BaseDeployConfig.services:type_name -> ServiceConfig
-	1, // 3: BaseDeployConfig.kafka:type_name -> KafkaConfig
-	3, // 4: BaseDeployConfig.id_segment:type_name -> IdSegmentConfig
-	4, // 5: BaseDeployConfig.grpc_client:type_name -> GrpcClientConfig
-	8, // 6: GameConfig.zone_redis:type_name -> GameConfig.ZoneRedisConfig
-	9, // 7: GameConfig.player_inbox:type_name -> GameConfig.PlayerInboxConfig
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	2,  // 0: IdSegmentConfig.kinds:type_name -> IdSegmentKindConfig
+	7,  // 1: GrpcClientConfig.call_deadline_ms:type_name -> GrpcClientConfig.CallDeadlineMsEntry
+	0,  // 2: BaseDeployConfig.services:type_name -> ServiceConfig
+	1,  // 3: BaseDeployConfig.kafka:type_name -> KafkaConfig
+	3,  // 4: BaseDeployConfig.id_segment:type_name -> IdSegmentConfig
+	4,  // 5: BaseDeployConfig.grpc_client:type_name -> GrpcClientConfig
+	8,  // 6: GameConfig.zone_redis:type_name -> GameConfig.ZoneRedisConfig
+	9,  // 7: GameConfig.player_inbox:type_name -> GameConfig.PlayerInboxConfig
+	10, // 8: GameConfig.player_redis:type_name -> GameConfig.PlayerRedisConfig
+	9,  // [9:9] is the sub-list for method output_type
+	9,  // [9:9] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_base_config_proto_init() }
@@ -970,7 +1011,7 @@ func file_proto_common_base_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_base_config_proto_rawDesc), len(file_proto_common_base_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

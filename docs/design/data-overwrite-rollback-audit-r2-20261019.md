@@ -358,9 +358,9 @@
   - 批 7，台账门禁：r2-ps#10（仅上线后有意义）。
   - 批 8，Java 管理面：第 18、19 条。
   - 批 9，合服与运维工具：ops-tools-java#0、r2-low#2 与第 13 条、r2-dcc#1、第 14、15、17 条。要等映射直读的 B3 收尾，它会改同目录。
-  - 批 10，C++ 战斗结算：r2-battle#3。要等 `player_battle.cpp` 的在途会话（全球经济审核、cross-service-assets#1 恢复分支）收尾。
+  - 批 10，C++ 战斗结算：r2-battle#3。要等 `player_battle.cpp` 的在途会话（全球经济审核）收尾；cross-service-assets#1 恢复分支已作废，不再等它。
   - 新增：r2-kc#1（排空框架消费者永久停止），本会话认领；r2-inbox#1、r2-equip#1 并入批 6、批 5 一侧处理。
-- **cross-service-assets#1**：修复已从一个已归档会话的记录里恢复到分支 `claude/recover-battle-settlement-f39089db`（worktree `D:\luyuan\wt-recover-battle-settlement`，基点 `940ef974`，未编译、未提交），还没合回 main。它和全球经济审核会话在 `player_battle.cpp`、`battle_room_manager`、`result_commit.h` 上会冲突，何时、怎样合回 main 要负责人定。截止竞态的 match 一侧已有 60s 宽限（`completion.go` 的 `terminalOutcomeGraceMs`），scene 一侧并入 r2-v1#1。
+- **cross-service-assets#1**（2026-11-01 更正）：main 已把结算改成只走 match SQL + player_inbox（`65c69f4a9`），Redis 里没有 pending 可删，这条已消除。恢复分支 `claude/recover-battle-settlement-f39089db` 与整合分支 `codex/battle-settlement-integration` 不再合回；其中锁可靠性那部分按当前 main 重写，见 `turn-battle-gap-closure.md` §10（未编译，待 Codex 验证）。截止竞态的 match 一侧已有 60s 宽限（`completion.go` 的 `terminalOutcomeGraceMs`），scene 一侧并入 r2-v1#1。
 - **需要负责人拍板的**：
   1. TiDB 决策 §9.4 第 1 条存盘路径二选一（它决定上面"作废或重评"各条何时真正关闭），以及映射直读 TiDB 开工前的三项。
   2. data_service 字段 KV 族（GM 快照、回档）删除还是重建到 TiDB：决定 cross-service-assets#3、data-service#0。
@@ -369,7 +369,7 @@
   5. r2-battle#2 遗留：停止闸移位与 v1 验收探针口径冲突，改探针口径还是把闸移回。
   6. r2-v1#2 的封禁口径（建议与本地路径统一为"跳过被封币种、整笔照常应用"）。
   7. handover-single-writer-v#1：接受"失租只丢不盖"、只更正注释，还是让 C++ 失租时冻结并疏散。
-  8. cross-service-assets#1 恢复分支的合回时机。
+  8. ~~cross-service-assets#1 恢复分支的合回时机~~（2026-11-01：不再合回，见上）。
   9. `global-id-prelaunch-claude-20261028.md` 由谁认领。
 
 **2026-10-24 进度**：medium 的复核改由各修复会话按"先复核成立才修、修后独立评审"完成：r2-lc#1/#2、r2-rr#5 本会话修复与评审都判成立；r2-login#1 由 zone Redis 回退会话修；r2-guild#1、social-match-battle#0、r2-battle#2 由「数据覆盖审计交接文档」会话修；r2-match#1 已由负责人拍板；r2-ps#1 由主会话裁决为 medium（§5）。所以下面"对抗复核"一项只剩换视角查找新出的 high / medium。**剩下的只有换视角查找**：周额度 81% 时停下（会话组约定超过 80% 只做风险最高的事，这一轮给了改到一半的 r2-lc 续做），等 2026-10-29 20:00 UTC 重置后用下面的脚本跑，`args` 为 `{"dRound": 0, "seenTitles": [...]}`，已知问题清单在 PROGRESS 2026-10-24 条目所指的 §3、§5 里，跑完一轮看新发现再决定下一轮。

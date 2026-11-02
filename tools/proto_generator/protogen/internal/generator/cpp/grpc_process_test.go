@@ -130,6 +130,21 @@ func TestGrpcInitTemplateSupportsMultipleServicesForSameNodeType(t *testing.T) {
 	}
 }
 
+// 没有节点类型的内部 service(RoleFenceParticipant,六个业务服各自注册)不进按节点类型的分发,否则生成的 C++ 引用枚举里不存在的值。
+func TestBuildGrpcInitFileInfoSkipsServiceWithoutNodeType(t *testing.T) {
+	originalNodeEnumValues := internal.NodeEnumValueSet
+	t.Cleanup(func() { internal.NodeEnumValueSet = originalNodeEnumValues })
+	internal.NodeEnumValueSet = map[string]bool{"BattleNodeService": true}
+
+	grpcFiles := buildGrpcInitFileInfo([]*internal.RPCServiceInfo{
+		makeGrpcInitService("proto/role_fence/role_fence.proto", "RoleFenceParticipant", "ApplyRoleFence", 360),
+		makeGrpcInitService("proto/battle/battle_node.proto", "BattleNode", "JoinBattle", 159),
+	})
+	if len(grpcFiles) != 1 || grpcFiles[0].FileName() != "proto/battle/battle_node.proto" {
+		t.Fatalf("只有对得上节点类型的 service 进分发,got %d files", len(grpcFiles))
+	}
+}
+
 func TestGrpcAsyncClientTemplatesUseMuduoChannelAndRejectStreaming(t *testing.T) {
 	originalConfig := _config.Global
 	t.Cleanup(func() { _config.Global = originalConfig })

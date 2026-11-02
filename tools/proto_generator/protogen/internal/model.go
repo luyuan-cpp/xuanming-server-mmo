@@ -175,6 +175,14 @@ func (info *RPCServiceInfo) NodeServiceForCpp() string {
 	return strcase.ToCamel(path.Base(info.Path()))
 }
 
+// HasNodeType 报告这个 service 能否对上节点类型枚举里的一个值。
+// 对不上的是几个节点共同提供的内部 service(RoleFenceParticipant:六个业务服各自注册,没有自己的节点):
+// 它没有发现前缀,路由表和 C++ 按节点类型的分发都不收它,否则生成物会引用枚举里不存在的值。
+// 依赖 GenNodeUtil 填好的 NodeEnumValueSet,只能在它之后调用。
+func (info *RPCServiceInfo) HasNodeType() bool {
+	return NodeEnumValueSet[info.NodeServiceForCpp()+"NodeService"]
+}
+
 func (info *RPCServiceInfo) ProtoPathWithFileBaseName() string {
 	return info.Path() + info.FileBaseNameNoEx()
 }

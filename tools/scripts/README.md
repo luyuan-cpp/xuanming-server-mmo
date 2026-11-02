@@ -40,7 +40,7 @@ python tools/scripts/rebuild_docker_debug.py go --services player-inbox
 - `db`、`data-service`、`login`、`match`、`player-inbox`、`gateway` 前各有一个一次性的 `<服务>-sql-boot`（`service_completed_successfully`）：用 `lib/sql_boot_catalog_local.ps1` 的授权清单和 `deploy/sql` 的角色模板建这一 boot 的账号 `lw_<boot>_<服务>`，调 `writer_authority -command register`，把单次授权、运行配置和 SQL 变量写进命名卷 `<服务>-sql-writer`。常驻容器只读挂载它，由 `sql-writer-entry.sh` 取出摘要和变量再启动业务进程；消费标记写在 `<服务>-sql-consume`。
 - 上一轮的账号没有连接就删，还有连接（服务还在跑）就留到下一轮。`writer_registry` 里的旧行不删，只是停用账号的历史记录。
 - login 进程不连 SQL、不消费授权，这一步只为和 `go_services.ps1`、K8s 的写者清单同形状。chat、friend、guild、mail、rank、trade 不在这个栈里，其中 guild、trade、mail、friend 是角色护栏的参与者，协调者连不上它们，这个栈里过户和删角一律拒绝；要加时照 `match-sql-boot` 写一段，并在 `prepare_docker_debug.py` 的 `GO_CONFIGS` 加配置。
-- `player-inbox` 收全球匹配成局的个人结算：match 用 `MMORPG_PLAYER_INBOX_SECRET_MATCH` 签名入箱，scene 用 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE` 签名拉取。这个栈的 `game_config.yaml` 由 `prepare_docker_debug.py` 打开 `player_inbox.consumer_enabled`（源配置默认关），否则结算只进箱、到不了玩家。调试端口 `127.0.0.1:2352`。
+- `player-inbox` 收全球匹配成局的个人结算：match 用 `MMORPG_PLAYER_INBOX_SECRET_MATCH` 签名入箱，scene 用 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE` 签名拉取。这个栈的 `game_config.yaml` 由 `prepare_docker_debug.py` 打开 `player_inbox.consumer_enabled`（显式写，不跟着源配置变），否则结算只进箱、到不了玩家。调试端口 `127.0.0.1:2352`。
 
 单次授权启动即消费，**`docker compose restart <写者>` 会被拒启**（`SQL writer启动grant缺失、漂移或已消费`）。要重启就连注册步骤一起重建，`rebuild_docker_debug.py` 更新写者时也是这样做：
 
@@ -166,9 +166,28 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local -GoServic
 - mail、rank 的生产者签名密钥由 `go_services.ps1` 注入本机开发值（`run/secrets/producer-dev.env`、`mail-admin-producer-dev.env`、`assetop-dev.env`），调用方已设置的值优先。
 - 角色护栏的九把密钥（`MMORPG_ROLE_FENCE_SECRET_*`）同样由 `go_services.ps1` 注入本机开发值（`run/secrets/role-fence-dev.env`，`lib/role_fence_dev_secret.ps1`），data_service 拿全部，参与者拿自己和协调者那把，chat、go/db 只拿自己那把。
 - 本机目录 K=1（`go/data_service/etc/data_service.yaml` 的 `Directory.LogicalShards`），`MMORPG_DB_ALLOWED_DATABASES` 里的每个存档库都用 `db_migrate` 迁移，data_service 的写资格覆盖全部存档库。
-- 只管单区、每服务一个实例（`start_game.ps1` 的形态）。多区要另外给 `MMORPG_DB_ALLOWED_DATABASES`，实例键也不同，目前不支持。
+- 不带 `-Zones` 时只管单区、每服务一个实例（`start_game.ps1` 的形态）。多区用法见下面。
+- 目录只发 Go 写者和单区网关。Java 版（`D:\luyuan\xuanming-server-mmo`）的 4 个写者角色由 Java 仓自己的 producer 生成，这个工具不生成，多区模式也不发网关条目。
 - Windows 保留端口让服务挪了端口时，生成目录和启动之间端口变了会明确拒启（`ListenOn` 对不上），重跑即可。
 - 这条命令只管本机进程。Docker 调试栈在容器里注册，见 prepare_docker_debug.py 一节。
+
+多区一次生成（只能一次给全部区：循环调用会替换目录，只剩最后一区）：
+
+```powershell
+# 白名单必须显式给，生成和启动用同一个值，不带入 go/db/etc/db.yaml 的 zone_1_db
+$env:MMORPG_DB_ALLOWED_DATABASES='zone_990017_db,zone_990018_db'
+# 在 pwsh 会话里用 & 调用：-Zones 是整数数组
+& tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local -Zones 990017,990018 -ZonePortOffsets '990017=0,990018=1000'
+# 按最后一行输出设 MMORPG_SQL_BOOT_CATALOG，再每区启动一次，Zone、偏移、GoCounts、GoPortStride 都和生成时相同
+pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-start-exe -Zone 990017 -ZonePortOffset 0 -LocalMySQL
+pwsh -File tools/scripts/dev_tools.ps1 -Command go-svc-start-exe -Zone 990018 -ZonePortOffset 1000 -LocalMySQL
+```
+
+- 区号小（如 1、2）时不用 `-ZonePortOffsets`，端口仍按 `(Zone-1)*ZonePortShift` 算。990017 这类语义区号代入公式会越界，必须显式给每个区的偏移，区号本身不变。
+- 建库前先校验：实例键唯一、配置在 `run/etc/go_services` 下、`ListenOn` 等于计划端口、配置区号等于目标区、全部监听和 metrics 端口不冲突、账号名不碰撞。任何一项不符就拒绝，不建库。
+- 不像单区那样跳过可选服务：任何一区规划失败、任何服务建表失败或注册失败，都不发布目录。旧目录在开始时已删除，需要修好后重跑。
+- 协调者 data_service 的 `RoleFence` 直连端口按同区计划的实际端口回填。缺参与者或参与者多副本时拒绝，多副本要改用 Etcd 形式。
+- 启动时区号或端口和目录对不上会拒启，不改已签配置。login、guild 的区号写在 `Node.ZoneId`，计划和启动用同一个读法。
 
 ### dev_tools.ps1
 

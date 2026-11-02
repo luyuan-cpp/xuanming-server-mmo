@@ -66,7 +66,7 @@ type Config struct {
 	DevSkipAuth     bool                `json:"DevSkipAuth,optional"`
 	PasswordAuth    PasswordAuthConf    `json:"PasswordAuth,optional"`
 	DevPasswordAuth DevPasswordAuthConf `json:"DevPasswordAuth,optional"`
-	TokenConfig     TokenConf           `json:"TokenConfig,optional"` // Access/refresh token TTL settings
+	TokenConfig     TokenConf           `json:"TokenConfig"`          // Access/refresh token settings; see TokenConf (whole block may be omitted)
 	PreloadPool     PreloadPoolConf     `json:"PreloadPool,optional"` // Background goroutine pool for player data preload
 
 	// LegacyGateLoginEnabled controls whether the deprecated path
@@ -104,7 +104,7 @@ type Config struct {
 	// docs/design/login-queue-2026-05.md (added with this feature).
 	Queue QueueConf `json:"Queue,optional"`
 
-	// HomeZone 控制「按 data_service 的 player:zone 映射修正 zone」的两条链
+	// HomeZone 控制「按 data_service 的 player_route 映射修正 zone」的两条链
 	// (internal/logic/pkg/homezone 包注释)。整块可缺省,缺省 = 角色列表刷新开、
 	// 进游戏重定向关(见 HomeZoneConf 各字段)。
 	HomeZone HomeZoneConf `json:"HomeZone,optional"`
@@ -291,7 +291,7 @@ type HomeZoneConf struct {
 	// 0 = homezone.DefaultEnterLookupTimeout(1.5s)。EnterGame 链路本身是异步的
 	// (5 分钟预算),可以比角色列表宽松。
 	EnterLookupTimeout time.Duration `json:"EnterLookupTimeout,optional"`
-	// RegisterTimeout 是 CreatePlayer 写 player:zone 映射(RegisterPlayerZone)的预算;
+	// RegisterTimeout 是 CreatePlayer 写 player_route 映射(RegisterPlayerZone)的预算;
 	// 0 = homezone.DefaultRegisterTimeout(3s)。这条写失败建角**整体失败**
 	// (createplayerlogic.go),所以给得比查询宽。
 	RegisterTimeout time.Duration `json:"RegisterTimeout,optional"`
@@ -514,10 +514,23 @@ type NeteaseAuthConf struct {
 	AppSecret string `json:"AppSecret"`
 }
 
-// TokenConf holds access/refresh token TTL settings.
+// TokenConf holds access/refresh token settings.
+//
+// **每个字段都必须带 default,整块也不标 optional**:go-zero 对 optional 的结构体整块缺失时不填内层 default,
+// 得到全零配置;而 k8s 生成的 login ConfigMap 不写 TokenConfig 块,全零的 TTL 会让启动校验拒绝启动,
+// 全零的 RefreshReuseRevoke 会让重用检测静默退成只观测。不标 optional 时整块缺失按 default 填值。
 type TokenConf struct {
 	AccessTokenTTL  time.Duration `json:"AccessTokenTTL,default=2h"`    // Access token lifetime (default 2 hours)
 	RefreshTokenTTL time.Duration `json:"RefreshTokenTTL,default=720h"` // Refresh token lifetime (default 30 days)
+	// RefreshReuseGrace:旧 refresh token 被轮换后仍可重放的宽限窗口。窗口内同一旧 token 再来,
+	// 返回同一对新令牌(回包丢失后的重试不再被打成重新登录);0 = 严格一次性;上限 60s、整毫秒,越界拒绝启动。
+	// 写成带单位的字符串(30s):漏写单位的数字会被解析成纳秒,同样被拒绝启动。
+	// 取舍见 docs/design/dual-token-authentication.md「轮换重试的宽限窗口」。
+	RefreshReuseGrace time.Duration `json:"RefreshReuseGrace,default=30s"`
+	// RefreshReuseRevoke:已轮换的旧 refresh token 再次出现(窗口外,或窗口内而它的后继已被轮换走)时吊销它所在的家族
+	// (那次登录的整条令牌线,含其 access)。false = 只观测:照常检测、记指标与日志,不吊销。
+	// 窗口为 0 时同一请求并发两次也会触发吊销。见 docs/design/dual-token-authentication.md「令牌家族、重用检测与家族吊销」。
+	RefreshReuseRevoke bool `json:"RefreshReuseRevoke,default=true"`
 }
 
 // NodeConfig holds node-level settings including login duration limits.

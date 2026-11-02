@@ -56,7 +56,7 @@ for n in "${TIERS[@]}"; do
   # 否则留下脏成员与幽灵 gate(对账能自愈,但会拖慢下一阶梯的首轮)。player:leases:*、player:locator_shard:* 同理。
   # REDIS_PLAYER_NODES:玩家域在 Redis Cluster 上时,写集群全部节点的 host:port(空格分隔)。SCAN 只看本节点,所以逐个主节点扫,副本跳过。
   for p in 'player:session:*' 'player:gate_index:*' 'player:leases:*' 'player:locator_shard:*' 'player:*:location' 'player_to_account:*' \
-           'access_token:*' 'refresh_token:*' 'refresh_family:*' 'account_refresh:*' \
+           'access_token:*' 'refresh_token:*' 'refresh_family:*' 'refresh_rotated:*' 'account_refresh:*' \
            'login_session:*' 'login:sessfence:*' 'login_account_sessions:*' \
            'login_step:*' 'account_data:*' 'account_lock:*' \
            'player_locker:*'; do

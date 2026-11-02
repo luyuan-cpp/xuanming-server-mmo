@@ -21,7 +21,7 @@ public class ZoneConfig {
     private int manualStatus;
 
     @Column(name = "capacity")
-    private int capacity = 5000;
+    private int capacity = 45000;
 
     @Column(name = "maintenance_msg", length = 256)
     private String maintenanceMsg = "";

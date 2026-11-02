@@ -25,16 +25,17 @@ const (
 
 // 宝宝的一级属性维度(与角色面板同结构,取表 AttributeDimension 中 owner_type=1 的行)
 type PetDimensionInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DimensionId   uint32                 `protobuf:"varint,1,opt,name=dimension_id,json=dimensionId,proto3" json:"dimension_id,omitempty"`
-	PoolId        uint32                 `protobuf:"varint,2,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"` // 体质 / 灵力 / 力量 / 敏捷
-	Desc          string                 `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc,omitempty"`
-	Allocated     uint32                 `protobuf:"varint,5,opt,name=allocated,proto3" json:"allocated,omitempty"` // 已分配点
-	Value         uint64                 `protobuf:"varint,6,opt,name=value,proto3" json:"value,omitempty"`         // 面板显示值 = 自然成长 + 已分配
-	Cap           uint32                 `protobuf:"varint,7,opt,name=cap,proto3" json:"cap,omitempty"`             // 单项上限(0 = 不限)
-	Sort          uint32                 `protobuf:"varint,8,opt,name=sort,proto3" json:"sort,omitempty"`
-	Aptitude      uint32                 `protobuf:"varint,9,opt,name=aptitude,proto3" json:"aptitude,omitempty"` // 该维度资质(万分比,10000 = 100%)
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	DimensionId uint32                 `protobuf:"varint,1,opt,name=dimension_id,json=dimensionId,proto3" json:"dimension_id,omitempty"`
+	PoolId      uint32                 `protobuf:"varint,2,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"`
+	Name        string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"` // 体质 / 灵力 / 力量 / 敏捷
+	Desc        string                 `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc,omitempty"`
+	Allocated   uint32                 `protobuf:"varint,5,opt,name=allocated,proto3" json:"allocated,omitempty"` // 已分配点
+	Value       uint64                 `protobuf:"varint,6,opt,name=value,proto3" json:"value,omitempty"`         // 面板显示值 = 自然成长 + 生效的已分配。加点不生效(已分配超过本版本总量或单项上限)时
+	// 已分配部分按 0 计,allocated 仍是存储值(docs/design/player-pet.md §3.3)
+	Cap           uint32 `protobuf:"varint,7,opt,name=cap,proto3" json:"cap,omitempty"` // 单项上限(0 = 不限)
+	Sort          uint32 `protobuf:"varint,8,opt,name=sort,proto3" json:"sort,omitempty"`
+	Aptitude      uint32 `protobuf:"varint,9,opt,name=aptitude,proto3" json:"aptitude,omitempty"` // 该维度资质(万分比,10000 = 100%)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -243,7 +244,7 @@ type PetInfo struct {
 	ModelId         uint32                 `protobuf:"varint,6,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`                         // 客户端模型
 	IsActive        bool                   `protobuf:"varint,7,opt,name=is_active,json=isActive,proto3" json:"is_active,omitempty"`                      // 是否出战中
 	TotalPoints     uint32                 `protobuf:"varint,8,opt,name=total_points,json=totalPoints,proto3" json:"total_points,omitempty"`             // 宝宝属性点总量(按宝宝等级换算)
-	RemainingPoints uint32                 `protobuf:"varint,9,opt,name=remaining_points,json=remainingPoints,proto3" json:"remaining_points,omitempty"` // 剩余可分配
+	RemainingPoints uint32                 `protobuf:"varint,9,opt,name=remaining_points,json=remainingPoints,proto3" json:"remaining_points,omitempty"` // 剩余可分配 = 加点生效 ? max(0, 总量 − 宝宝池已分配 − 本版本解释不了的维度上的点) : 0
 	PoolId          uint32                 `protobuf:"varint,10,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"`                           // 宝宝属性点池 id(加点/洗点请求要带)
 	ResetCostGold   uint64                 `protobuf:"varint,11,opt,name=reset_cost_gold,json=resetCostGold,proto3" json:"reset_cost_gold,omitempty"`    // 当前等级下洗点金币(0 = 免费)
 	Growth          uint32                 `protobuf:"varint,12,opt,name=growth,proto3" json:"growth,omitempty"`                                         // 成长率(万分比):四维资质均值,服务器算好给,纯展示

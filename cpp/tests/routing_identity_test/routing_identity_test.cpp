@@ -682,6 +682,82 @@ TEST(BattleLockLoginHook, RecheckEntryDecisionCoversEveryState)
 	EXPECT_EQ(classify(false, false, true), LoginRecheckStep::kRun);
 }
 
+// 文本只来自文本类应答(只进日志);空应答与整数不解引用 str。
+TEST(BattleLockReplyShape, ReplyTextComesOnlyFromTextReplies)
+{
+	EXPECT_TRUE(battle_lock::ReplyText(nullptr).empty());
+	auto error = MakeReply(REDIS_REPLY_ERROR, "ERR boom");
+	EXPECT_EQ(battle_lock::ReplyText(&error), "ERR boom");
+	auto integer = MakeReply(REDIS_REPLY_INTEGER);
+	EXPECT_TRUE(battle_lock::ReplyText(&integer).empty());
+}
+
+// 只有脚本的整数应答算问到了:0 / 1 都是结论(0 = 锁不在或已易主),其余一律重试。
+TEST(BattleLockWriteRetry, OnlyIntegerReplyCountsAsAnswered)
+{
+	EXPECT_TRUE(battle_lock::IsLockWriteAnswered(ReplyShape::kInteger));
+	for (const auto shape : {ReplyShape::kNoReply, ReplyShape::kNil, ReplyShape::kString, ReplyShape::kStatus,
+							 ReplyShape::kArray, ReplyShape::kError, ReplyShape::kOther})
+	{
+		EXPECT_FALSE(battle_lock::IsLockWriteAnswered(shape)) << battle_lock::ReplyShapeName(shape);
+	}
+}
+
+// 退避:第 n 次没问到之后的等待落在 [base × 2^(n-1), 1.5 ×) 里,封顶 max;次数到上限就放弃。
+TEST(BattleLockWriteRetry, BackoffGrowsCapsAndStopsAtMaxAttempts)
+{
+	using namespace battle_lock;
+	uint64_t uncapped = kLockWriteRetryBaseDelayMs;
+	for (uint32_t attempt = 1; attempt < kLockWriteMaxAttempts; ++attempt)
+	{
+		const uint64_t capped = uncapped < kLockWriteRetryMaxDelayMs ? uncapped : kLockWriteRetryMaxDelayMs;
+		const uint64_t delay = NextLockWriteRetryDelayMs(attempt, 0, 701);
+		EXPECT_GE(delay, capped) << "attempt=" << attempt;
+		EXPECT_LT(delay, capped + capped / 2) << "attempt=" << attempt;
+		uncapped *= 2;
+	}
+	EXPECT_EQ(NextLockWriteRetryDelayMs(kLockWriteMaxAttempts, 0, 701), 0u);
+	EXPECT_EQ(NextLockWriteRetryDelayMs(kLockWriteMaxAttempts + 1, 0, 701), 0u);
+	// attempt 0 是调用方缺陷:立即放弃,保证有界。
+	EXPECT_EQ(NextLockWriteRetryDelayMs(0, 0, 701), 0u);
+}
+
+// 预算按单调时钟从首发起算:下一次若会落在预算之外就放弃,不再排。
+TEST(BattleLockWriteRetry, BudgetIsMeasuredFromFirstSendAndCoversTheNextDelay)
+{
+	using namespace battle_lock;
+	EXPECT_EQ(NextLockWriteRetryDelayMs(1, kLockWriteRetryBudgetMs, 701), 0u);
+	EXPECT_EQ(NextLockWriteRetryDelayMs(1, kLockWriteRetryBudgetMs + 1, 701), 0u);
+	// 预算只剩 1 毫秒,哪一次的等待都放不进去。
+	EXPECT_EQ(NextLockWriteRetryDelayMs(1, kLockWriteRetryBudgetMs - 1, 701), 0u);
+	// 刚发出去:第一次重试必然在预算内。
+	EXPECT_NE(NextLockWriteRetryDelayMs(1, 0, 701), 0u);
+	// 次数上限与预算是两道独立的闸:往返正常时应当是次数先到 —— 全部重试每次都取上界,也排得进预算。
+	// 预算若比这还小,后几次重试永远排不上,次数上限就形同虚设。
+	uint64_t worstTotal = 0;
+	uint64_t uncapped = kLockWriteRetryBaseDelayMs;
+	for (uint32_t attempt = 1; attempt < kLockWriteMaxAttempts; ++attempt)
+	{
+		const uint64_t capped = uncapped < kLockWriteRetryMaxDelayMs ? uncapped : kLockWriteRetryMaxDelayMs;
+		worstTotal += capped + capped / 2;
+		uncapped *= 2;
+	}
+	EXPECT_LE(worstTotal, kLockWriteRetryBudgetMs);
+}
+
+// 抖动由种子确定:同一输入结果固定(可复现、不引入随机数源),不同玩家在同一轮上错开。
+TEST(BattleLockWriteRetry, JitterIsDeterministicPerSeedAndSpreadsAcrossSeeds)
+{
+	using namespace battle_lock;
+	EXPECT_EQ(NextLockWriteRetryDelayMs(2, 0, 9876501), NextLockWriteRetryDelayMs(2, 0, 9876501));
+	std::set<uint64_t> distinct;
+	for (uint64_t seed = 1; seed <= 64; ++seed)
+	{
+		distinct.insert(NextLockWriteRetryDelayMs(2, 0, seed));
+	}
+	EXPECT_GT(distinct.size(), 8u);
+}
+
 // 覆盖真实入场所需的会话状态和转发副作用,不依赖网络或全局节点注册。
 using gate_scene_route::SceneNodeChange;
 

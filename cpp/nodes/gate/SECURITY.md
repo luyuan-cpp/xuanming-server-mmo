@@ -173,6 +173,14 @@ scene 的节点号即可。
 | 不设置(默认)/ `prod` / 拼错的值 | **拒绝**:回 `kFeatureUnavailable` tip,计一次非法包(阈值 `GATE_ILLEGAL_PACKET_THRESHOLD` 默认 50 才踢线),gate 打一条 `GM client message refused` WARN |
 | `dev` / `test` | 放行(本地联调与 robot 冒烟) |
 
+> **(2026-10-30 更正)** 上表「gate 打一条 `GM client message refused` WARN」不对:逐条明细 `GM client message refused: GATE_RUN_MODE=… message_id=… session_id=…` 是 **`LOG_DEBUG`**(`client_session_handler.cpp` 的 GM 拒绝分支),默认 `LogLevel: 2`(INFO)下看不到。本机与 K8s 现在都是 2;K8s 的 node-config 2026-10-22 前写死 1(DEBUG),那时才搜得到。
+> 默认级别下可用的证据:
+> - 采样 WARN `Unauthenticated client traffic rejected (sampled), reason=gm_client_message_refused_in_prod`。它与另外几种未认证拒绝共用一个计数,每 1024 次只打 1 条,单次 GM 拒绝不一定留痕;
+> - 客户端收到的 `kFeatureUnavailable` 回执;
+> - 达到非法包阈值踢线时的 WARN `Session illegal-packet threshold exceeded (GM message in prod) — forceClose.`。
+>
+> 要逐条明细就临时把 `LogLevel` 调到 1,方法见 [演练手册](../../../docs/ops/cross-zone-failure-test-runbook.md) §3.1 第 7 条。逐条 DEBUG 加采样 WARN 是有意的防日志放大设计,不要改成逐条 WARN。
+
 scene 侧有**第二道锁**,判据是它自己的 `SCENE_RUN_MODE`(同样默认 prod = 拒绝),
 拦的是绕开 gate 直连 scene RPC 端口的调用 —— 集群网络里 scene 的端口对其它 Pod
 是通的,gate 的闸对那条路不存在。被拒时 scene 打一条
@@ -267,4 +275,6 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 > 建立与移除各有一行无条件 `LOG_INFO`——本节称道的采样纪律被上游抵消；
 > （2026-10-22：注释已按 muduo 枚举改正，值仍为 2；K8s 的 node-config 原先写死 1 = DEBUG，现改为从 `bin/etc` 镜像。
 > 这两行 INFO 仍在打，结论不变。见设计文档 P0-3 的同日说明。）
+> （2026-10-30 更正：上一句只对 Linux 构建成立。`third_party/muduo-linux`（即 K8s）这两行是 `LOG_INFO`，照打；
+> Windows 构建用的 `muduo_windows` 与 `third_party/muduo` 自 `52ebf9e5d` 起已是 `LOG_TRACE`，本机看不到。）
 > ③ 补上「未认证连接独立预算 + 死线」约 20 行、不需要改 muduo，是投入产出比最高的一条。

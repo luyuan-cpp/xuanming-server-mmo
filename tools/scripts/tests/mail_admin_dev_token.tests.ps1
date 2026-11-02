@@ -3,7 +3,7 @@
 .SYNOPSIS
     邮件 MailAdmin 本机开发令牌(tools/scripts/lib/mail_admin_dev_token.ps1)的回归。
 .DESCRIPTION
-    只在临时目录里读写令牌文件,不碰仓库的 run/secrets;每个用例前后备份 / 还原 MMORPG_MAIL_ADMIN_TOKEN,
+    只在临时目录里读写令牌文件,不碰仓库的 run/secrets;每个用例前后备份 / 还原 MAIL_PRODUCER_SECRET_ADMIN,
     不污染跑测试的 shell。CI(deploy-config-tests.yml)在 Linux pwsh 上跑,路径一律 Join-Path。
 .EXAMPLE
     pwsh -File tools/scripts/tests/mail_admin_dev_token.tests.ps1
@@ -12,7 +12,8 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/lib/test_harness.ps1"
 . (Join-Path $PSScriptRoot '../lib/mail_admin_dev_token.ps1')
 
-$envName = 'MMORPG_MAIL_ADMIN_TOKEN'
+# 与 go/mail/etc/mail.yaml 的 Producers.admin 同名(生产者分用途签名替代了旧的单一 M1 令牌)。
+$envName = 'MAIL_PRODUCER_SECRET_ADMIN'
 $outerSaved = [Environment]::GetEnvironmentVariable($envName)
 
 function New-TempRepoRoot {
@@ -47,14 +48,14 @@ try {
         Assert-True -Condition (-not (Test-Path -LiteralPath (Get-MailAdminDevTokenStorePath -RepoRoot $root))) -Because '不把调用方自带的令牌悄悄落盘'
     }
 
-    Test-Case '首次运行:生成 64 个十六进制字符(无空白),写进临时 RepoRoot 下的 run/secrets/mail-admin-dev.env,注入环境' {
+    Test-Case '首次运行:生成 64 个十六进制字符(无空白),写进临时 RepoRoot 下的 run/secrets/mail-admin-producer-dev.env,注入环境' {
         Reset-TokenEnv
         $root = New-TempRepoRoot; $tempRoots.Add($root)
         $injected = Initialize-MailAdminDevToken -RepoRoot $root 6>$null
         Assert-Equal -Expected 1 -Actual $injected -Because '没有任何来源时注入一把'
         $value = [Environment]::GetEnvironmentVariable($envName)
         Assert-Match -Text $value -Pattern '^[0-9a-f]{64}$' -Because '32 字节随机数 → 64 个小写十六进制字符,不含空白'
-        $path = Join-Path (Join-Path (Join-Path $root 'run') 'secrets') 'mail-admin-dev.env'
+        $path = Join-Path (Join-Path (Join-Path $root 'run') 'secrets') 'mail-admin-producer-dev.env'
         Assert-True -Condition (Test-Path -LiteralPath $path) -Because '令牌文件在 run/secrets 下(run/* 已被 .gitignore 覆盖)'
         Assert-Equal -Expected $value -Actual (Read-MailAdminDevTokenStore -Path $path) -Because '文件里的值就是注入的值'
     }
@@ -130,7 +131,7 @@ try {
         $root = New-TempRepoRoot; $tempRoots.Add($root)
         $output = (Initialize-MailAdminDevToken -RepoRoot $root 6>&1 | Out-String)
         $value = [Environment]::GetEnvironmentVariable($envName)
-        Assert-Match -Text $output -Pattern 'Injected local MailAdmin development token \(value hidden' -Because '要有一行播报'
+        Assert-Match -Text $output -Pattern 'Injected local MailAdmin admin producer development secret \(value hidden' -Because '要有一行播报'
         Assert-True -Condition (-not $output.Contains($value)) -Because '播报里不得出现令牌值'
     }
 }

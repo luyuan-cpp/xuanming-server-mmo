@@ -12,7 +12,9 @@
 
 // 拒绝直接写本次应答;错误码规则见 services/player/rpc/player_service_interface.h。
 // GM 工具沿用 kInvalidParameter 表示冻结或战斗在途拒绝,诊断详情保留在 LOG_WARN。
-// 当前业务体仍是 TODO,闸放在入口,后续填充业务时也必须保留这层保护。
+// 这十二条没有实现,也不打算在这里实现:欠款走 GmSanctionInboxExecutor,回收走 data_service.BatchRecallItems,
+// 流水查询走 data_service.QueryTransactionLog,回档已退役(single_player_rollback.md)。放行之后也回 kFeatureUnavailable,
+// 不能回空应答让调用方以为做成了。proto 里的这个服务等下一轮协议生成时删掉(docs/handoff/player-save-direct-commit-20261030/progress.md §16)。
 namespace
 {
     // ── GM 闸:本文件**全部十二条**的第一句都是它,读写不分 ──────────────
@@ -60,7 +62,6 @@ namespace
         // 回合制战斗在途同样拒绝:GM 回档 / 回收会改背包与属性,而战斗快照已经发出去了。
         // 此刻扣掉玩家的药,结算按账本扣除时就会"不足按 0",那几瓶药等于白喝;
         // 回档改属性则会被结算的 HP/MP 终值整体覆盖。
-        // 这些入口今天还是 TODO 桩,闸先立在这里,免得实现 P1-B 时漏掉。
         if (tlsEcs.actorRegistry.any_of<InBattleComp>(player))
         {
             LOG_WARN << gmRpcName << " rejected: player is in a turn battle. "
@@ -82,7 +83,7 @@ void SceneRollbackClientPlayerHandler::GmAttachDebt(entt::entity player,const ::
 	// migration; ops can re-attach after migration completes.
 	if (RejectGmRollbackRpc("GmAttachDebt", *response)) return;
 	if (RejectIfFrozen(player, "GmAttachDebt", *response)) return;
-	// TODO(P1-B): implement debt-attach logic.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -94,7 +95,7 @@ void SceneRollbackClientPlayerHandler::GmWaiveDebt(entt::entity player,const ::G
 	// Write-class GM op: removes a debt entry; same Frozen rationale as Attach.
 	if (RejectGmRollbackRpc("GmWaiveDebt", *response)) return;
 	if (RejectIfFrozen(player, "GmWaiveDebt", *response)) return;
-	// TODO(P1-B): implement debt-waive logic.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -106,7 +107,7 @@ void SceneRollbackClientPlayerHandler::GmAdjustDebt(entt::entity player,const ::
 	// Write-class GM op: edits an existing debt entry's amount; same Frozen rationale.
 	if (RejectGmRollbackRpc("GmAdjustDebt", *response)) return;
 	if (RejectIfFrozen(player, "GmAdjustDebt", *response)) return;
-	// TODO(P1-B): implement debt-adjust logic.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -119,7 +120,7 @@ void SceneRollbackClientPlayerHandler::GmFreezeDebt(entt::entity player,const ::
 	// debt; same Frozen rationale as Attach.
 	if (RejectGmRollbackRpc("GmFreezeDebt", *response)) return;
 	if (RejectIfFrozen(player, "GmFreezeDebt", *response)) return;
-	// TODO(P1-B): implement debt-freeze logic.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -132,7 +133,7 @@ void SceneRollbackClientPlayerHandler::GmQueryDebt(entt::entity player,const ::G
 	// source-side snapshot which is by definition the same state the
 	// destination will load (we marshalled before freezing) — safe.
 	if (RejectGmRollbackRpc("GmQueryDebt", *response)) return;
-	// TODO(P1-B): implement debt-query.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -146,7 +147,7 @@ void SceneRollbackClientPlayerHandler::GmCreateSnapshot(entt::entity player,cons
 	// the source side at Frozen time is semantically fine — and arguably
 	// useful for forensics. No Frozen guard.
 	if (RejectGmRollbackRpc("GmCreateSnapshot", *response)) return;
-	// TODO(P1-B): implement snapshot creation.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -157,7 +158,7 @@ void SceneRollbackClientPlayerHandler::GmListSnapshots(entt::entity player,const
 ///<<< BEGIN WRITING YOUR CODE
 	// Read-only: no Frozen guard.
 	if (RejectGmRollbackRpc("GmListSnapshots", *response)) return;
-	// TODO(P1-B): implement snapshot listing.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -168,7 +169,7 @@ void SceneRollbackClientPlayerHandler::GmPreviewRollback(entt::entity player,con
 ///<<< BEGIN WRITING YOUR CODE
 	// Read-only "what would happen if we rolled back" simulation. No Frozen guard.
 	if (RejectGmRollbackRpc("GmPreviewRollback", *response)) return;
-	// TODO(P1-B): implement preview.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -184,7 +185,7 @@ void SceneRollbackClientPlayerHandler::GmExecuteRollback(entt::entity player,con
 	// to settle (or fail) and rollback on the post-migration zone.
 	if (RejectGmRollbackRpc("GmExecuteRollback", *response)) return;
 	if (RejectIfFrozen(player, "GmExecuteRollback", *response)) return;
-	// TODO(P1-B): implement actual rollback execution.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -195,7 +196,7 @@ void SceneRollbackClientPlayerHandler::GmQueryTransactionLog(entt::entity player
 ///<<< BEGIN WRITING YOUR CODE
 	// Read-only: forwards to data_service::QueryTransactionLog. No Frozen guard.
 	if (RejectGmRollbackRpc("GmQueryTransactionLog", *response)) return;
-	// TODO(P1-B): implement RPC forward.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -206,7 +207,7 @@ void SceneRollbackClientPlayerHandler::GmTraceItem(entt::entity player,const ::G
 ///<<< BEGIN WRITING YOUR CODE
 	// Read-only: walks the transaction-log graph for one item_uuid. No Frozen guard.
 	if (RejectGmRollbackRpc("GmTraceItem", *response)) return;
-	// TODO(P1-B): implement item trace.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -220,7 +221,7 @@ void SceneRollbackClientPlayerHandler::GmClawbackItem(entt::entity player,const 
 	// migration; same rationale as GmExecuteRollback.
 	if (RejectGmRollbackRpc("GmClawbackItem", *response)) return;
 	if (RejectIfFrozen(player, "GmClawbackItem", *response)) return;
-	// TODO(P1-B): implement clawback execution.
+	response->mutable_error_message()->set_id(kFeatureUnavailable);
 ///<<< END WRITING YOUR CODE
 
 }

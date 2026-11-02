@@ -46,7 +46,6 @@ set(SOURCE_FILES
     client_rpc_router/client_rpc_router.pb.cc
     common/asset/asset_op.pb.cc
     common/component/asset_op_ledger_comp.pb.cc
-    common/component/battle_settlement_ledger_comp.pb.cc
     common/component/player_mystery_merchant_comp.pb.cc
     common/component/battle_comp.pb.cc
     common/event/battle_event.pb.cc
@@ -97,7 +96,6 @@ set(SOURCE_FILES
     common/database/rollback_database_table.pb.cc
     common/database/bag_quest_mail_data.pb.cc
     common/event/player_inbox_event.pb.cc
-    common/event/player_migration_event.pb.cc
     common/options/attribute_sync_option.pb.cc
     common/options/event_ingress_option.pb.cc
     common/rollback/player_snapshot.pb.cc
@@ -109,7 +107,6 @@ set(SOURCE_FILES
     contracts/kafka/scene_command.pb.cc
     data_service/data_service.pb.cc
     db/db.pb.cc
-    db/db_task.pb.cc
     db/proto_option.pb.cc
     etcd/etcd.pb.cc
     etcd/kv.pb.cc
@@ -165,6 +162,7 @@ set(SOURCE_FILES
     gate/gate_client_spectate.pb.cc
     gate/gate_spectate_ticket.pb.cc
     player_store/player_store.pb.cc
+    role_fence/role_fence.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

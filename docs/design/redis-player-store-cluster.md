@@ -590,7 +590,7 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 - **口令**:集群模式下 `PlayerRedis`、`LoginRedis` 的 `PasswordEnv` 都指向容器环境变量 `PLAYER_REDIS_PASSWORD`,来自 Secret `redis-player-auth`。scene 的 Pod 模板带种子加口令的指纹,变了自动滚动;Go 服务没有指纹,口令轮换要手工重启,写在手册里。
 - **trade 的 `Rmb.LoginRedis`**:ConfigMap 各档位都写。这一段以前完全没有渲染,`AssetOp.Enabled=true` 时 `config.Validate` 直接拒启,与集群无关。资产通道关着时不读也不连,总账按打开计。
 - **`deploy/k8s/manifests/go-svc/player-inbox.yaml` 补 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE`**:`NewConsumerVerifier` 缺它拒启,K8s 上 player-inbox 原本起不来。与集群无关,验证部署时会卡在这里,所以一起补。
-- **docker 调试栈**:加 `player-inbox` 常驻容器、`player-inbox-sql-boot`、`player-inbox-migrate`。`prepare_docker_debug.py` 把调试栈的 `player_inbox.consumer_enabled` 打开:只入箱不消费,结算到不了玩家。源配置的 `false` 是线上分步打开用的,不变。
+- **docker 调试栈**:加 `player-inbox` 常驻容器、`player-inbox-sql-boot`、`player-inbox-migrate`。`prepare_docker_debug.py` 把调试栈的 `player_inbox.consumer_enabled` 打开:只入箱不消费,结算到不了玩家。(2026-11-01 更新:源配置也改成了 `true`。服务 yaml 默认列了 Battle 结算,源配置留 `false` 时写前门禁拒绝任何部署,本机结算也到不了玩家;项目未上线,不走分步打开。)
 
 **第 9 批实现补充(2026-10-31,未运行)。**
 

@@ -29,7 +29,15 @@ param(
     # host:port,只接受回环。空 = MMORPG_GLOBAL_AUTHORITY_TIDB_HOST,再空 = go/db/etc/db.yaml 的 Database.Hosts。
     [string]$Endpoint = '',
     # auto = 问服务器自己是什么。mysql 用 LOCK_TOUCH,tidb 用 SELECT_ONLY(player-data-tidb-scaling-plan.md §9.3)。
-    [ValidateSet('auto', 'mysql', 'tidb')][string]$Backend = 'auto'
+    [ValidateSet('auto', 'mysql', 'tidb')][string]$Backend = 'auto',
+    # 多区一次生成。空 = 单区,行为不变。多区要求 DB_ALLOWED_DATABASES 或 MMORPG_DB_ALLOWED_DATABASES 显式给玩家库白名单。
+    [int[]]$Zones = @(),
+    # 'name=N,name=N' 或 hashtable,同 go_services.ps1 -Counts。
+    [object]$Counts = @{},
+    [int]$PortStride = 1,
+    [int]$ZonePortShift = 1000,
+    # '990017=0,990018=1000':语义区号代入 (Zone-1)*ZonePortShift 会越界时,显式给每个区的端口偏移。启动时 go_services.ps1 -ZonePortOffset 传同一个值。
+    [string[]]$ZonePortOffsets = @()
 )
 
 . (Join-Path $PSScriptRoot 'release_common.ps1')
@@ -183,7 +191,7 @@ function ConvertTo-LocalSqlBootOrdinalSet {
 # 本机账号、库名与登录 Redis 全部取已有配置的原件,缺了不猜。root 与 go_services.ps1 的本机建表同一来源:
 # go/db 的账号(与 compose 的 MYSQL_ROOT_PASSWORD 同值),值只进子进程环境;容器外连入 CURRENT_USER() 是 root@%。
 function Resolve-LocalSqlBootSettings {
-    param([Parameter(Mandatory)][string]$RepoRoot, [string]$Endpoint = '')
+    param([Parameter(Mandatory)][string]$RepoRoot, [string]$Endpoint = '', [int[]]$Zones = @())
     $dbConfig = Join-Path $RepoRoot 'go/db/etc/db.yaml'
     $resolved = $Endpoint
     if ([string]::IsNullOrWhiteSpace($resolved)) { $resolved = [string][Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST', 'Process') }
@@ -199,7 +207,7 @@ function Resolve-LocalSqlBootSettings {
     if ([string]::IsNullOrWhiteSpace($rootPrincipal)) { $rootPrincipal = "${rootUser}@%" }
 
     return New-LocalSqlBootSettings -Endpoint $resolved -EndpointName $parsed.Name -Port $parsed.Port -RootUser $rootUser -RootPassword $rootPassword -RootPrincipal $rootPrincipal `
-        -DbConfigPath $dbConfig -DataServiceConfigPath (Join-Path $RepoRoot 'go/data_service/etc/data_service.yaml') -LoginConfigPath (Join-Path $RepoRoot 'go/login/etc/login.yaml')
+        -DbConfigPath $dbConfig -DataServiceConfigPath (Join-Path $RepoRoot 'go/data_service/etc/data_service.yaml') -LoginConfigPath (Join-Path $RepoRoot 'go/login/etc/login.yaml') -Zones $Zones
 }
 
 # 库名清单、保护集合与登录 Redis 只有这一份。端点和 root 身份由调用方定:本机入口先过回环校验,docker 调试栈固定 compose 的 mysql。
@@ -213,7 +221,9 @@ function New-LocalSqlBootSettings {
         [Parameter(Mandatory)][string]$RootPrincipal,
         [Parameter(Mandatory)][string]$DbConfigPath,
         [Parameter(Mandatory)][string]$DataServiceConfigPath,
-        [Parameter(Mandatory)][string]$LoginConfigPath
+        [Parameter(Mandatory)][string]$LoginConfigPath,
+        # 非空 = 多区:白名单必须显式给,源 db.yaml 的 ZoneId 不当目标区。
+        [int[]]$Zones = @()
     )
     $globalSchema = Get-LocalSqlBootYamlRequired -Path $DataServiceConfigPath -KeyPath 'SnapshotMySQL.DBName'
     # 片数和 data_service 同一来源;没写按 1,和 Directory.Shards() 一样。
@@ -226,9 +236,13 @@ function New-LocalSqlBootSettings {
     $zoneDatabase = "zone_${zoneId}_db"
     $allowList = [string][Environment]::GetEnvironmentVariable('DB_ALLOWED_DATABASES', 'Process')
     if ([string]::IsNullOrWhiteSpace($allowList)) { $allowList = [string][Environment]::GetEnvironmentVariable('MMORPG_DB_ALLOWED_DATABASES', 'Process') }
+    if ($Zones.Count -gt 0 -and [string]::IsNullOrWhiteSpace($allowList)) { throw 'Multi-zone mode requires an explicit player database allow list: set DB_ALLOWED_DATABASES or MMORPG_DB_ALLOWED_DATABASES. The zone_1_db of the source go/db config is not carried over.' }
     if ([string]::IsNullOrWhiteSpace($allowList)) { $allowList = $zoneDatabase }
     $playerDatabases = [string[]]@($allowList -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
-    if ($zoneDatabase -cnotin $playerDatabases) { throw "$zoneDatabase must be in the player database allow list." }
+    $requiredDatabases = if ($Zones.Count -gt 0) { @($Zones | ForEach-Object { "zone_${_}_db" }) } else { @($zoneDatabase) }
+    foreach ($database in $requiredDatabases) { if ($database -cnotin $playerDatabases) { throw "$database must be in the player database allow list." } }
+    # 多区没有「本 zone」:留空后存档库迁移每个都显式传 -storage-id。
+    if ($Zones.Count -gt 0) { $zoneDatabase = '' }
 
     $loginRedisHost = Get-LocalSqlBootYamlRequired -Path $LoginConfigPath -KeyPath 'Node.RedisClient.Host'
     $loginRedisDb = Get-LocalSqlBootYamlRequired -Path $LoginConfigPath -KeyPath 'Node.RedisClient.DB'
@@ -676,7 +690,9 @@ function Get-LocalSqlBootWriterDatabases {
         'login' { return @('mmorpg') }
         'db' {
             $ready = @($Settings.PlayerDatabases | Where-Object { @($TablesBySchema[$_]) -ccontains 'route_meta' })
-            if ($Settings.ZoneDatabase -cnotin $ready) { throw "$($Settings.ZoneDatabase) has no writer gate tables; go/db cmd/migrate has not completed." }
+            # 多区没有单一的本 zone 库:白名单里每个都必须迁完。
+            $required = if ($Settings.ZoneDatabase) { @($Settings.ZoneDatabase) } else { @($Settings.PlayerDatabases) }
+            foreach ($database in $required) { if ($database -cnotin $ready) { throw "$database has no writer gate tables; go/db cmd/migrate has not completed." } }
             return $ready
         }
     }
@@ -1074,19 +1090,132 @@ function Get-LocalSqlBootStaleAccounts {
     return [pscustomobject]@{ Drop = $drop; Keep = $keep }
 }
 
+# -Counts 的两种形状(会话内 hashtable、pwsh -File 的字符串)统一成 plan-instances 认的 'name=N,name=N'。
+function ConvertTo-LocalSqlBootCountsArgument {
+    param($Counts)
+    if ($null -eq $Counts) { return '' }
+    if ($Counts -is [Collections.IDictionary]) { return (@($Counts.Keys | Sort-Object | ForEach-Object { "$_=$([int]$Counts[$_])" }) -join ',') }
+    return (@($Counts | ForEach-Object { ([string]$_) -split '[,;]' } | Where-Object { $_ -ne '' }) -join ',')
+}
+
+# '990017=0,990018=1000' 解析成区号到偏移。要么都不给,要么每个区都给,不留一半按公式、一半按显式。
+function ConvertTo-LocalSqlBootZoneOffsets {
+    param([string[]]$Raw = @(), [int[]]$Zones = @())
+    $offsets = @{}
+    foreach ($item in @($Raw | ForEach-Object { ([string]$_) -split '[,;]' } | Where-Object { $_ -ne '' })) {
+        $match = [regex]::Match($item.Trim(), '\A(?<zone>[1-9][0-9]*)=(?<offset>[0-9]+)\z')
+        if (-not $match.Success) { throw "Invalid -ZonePortOffsets entry '$item'. Expected 'zone=offset'." }
+        $zone = [int]$match.Groups['zone'].Value
+        if ($zone -notin $Zones) { throw "-ZonePortOffsets names zone $zone, which is not in -Zones." }
+        if ($offsets.ContainsKey($zone)) { throw "-ZonePortOffsets names zone $zone twice." }
+        $offsets[$zone] = [int]$match.Groups['offset'].Value
+    }
+    if ($offsets.Count -gt 0 -and $offsets.Count -ne $Zones.Count) { throw '-ZonePortOffsets must cover every zone in -Zones or none of them.' }
+    return $offsets
+}
+
+# 多区实例清单:每区问一次 go_services plan-instances,各写各的文件。这里只合并,任何一区失败都整批失败。
+function Get-LocalSqlBootMultiZonePlan {
+    param(
+        [Parameter(Mandatory)]$Settings,
+        [Parameter(Mandatory)][string]$RepoRoot,
+        [Parameter(Mandatory)][string[]]$Services,
+        [Parameter(Mandatory)][int[]]$Zones,
+        [string]$Counts = '',
+        [int]$PortStride = 1,
+        [int]$ZonePortShift = 1000,
+        [hashtable]$ZonePortOffsets = @{},
+        [Parameter(Mandatory)][string]$WorkDirectory
+    )
+    $instances = [Collections.Generic.List[object]]::new()
+    $launcher = [IO.Path]::GetFullPath((Join-Path $RepoRoot 'tools/scripts/go_services.ps1'))
+    foreach ($zone in $Zones) {
+        $planFile = Join-Path $WorkDirectory "instance-plan.z$zone.json"
+        $arguments = @('-NoProfile', '-NonInteractive', '-File', $launcher, '-Command', 'plan-instances', '-Services', ($Services -join ','), '-InstancePlanOutput', $planFile, '-Zone', [string]$zone, '-ZonePortShift', [string]$ZonePortShift, '-PortStride', [string]$PortStride)
+        if ($Counts) { $arguments += @('-Counts', $Counts) }
+        if ($ZonePortOffsets.ContainsKey($zone)) { $arguments += @('-ZonePortOffset', [string]$ZonePortOffsets[$zone]) }
+        if ($Settings.Backend -ceq 'mysql') { $arguments += '-LocalMySQL' }
+        $result = Invoke-LocalSqlBootProcess -FilePath (Join-Path $PSHOME 'pwsh.exe') -Arguments $arguments -TimeoutSeconds 120
+        if ($result.Code -ne 0) { throw "go_services plan-instances failed for zone $zone (exit code $($result.Code)): $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Err + [string]$result.Out))" }
+        foreach ($item in @(Get-Content -LiteralPath $planFile -Raw | ConvertFrom-Json)) {
+            $item | Add-Member -NotePropertyName Zone -NotePropertyValue $zone
+            $instances.Add($item)
+        }
+    }
+    return $instances.ToArray()
+}
+
+# 合并后的计划先过这一关才碰数据库。运行中的实例身份已由 go_services 按 PID、可执行文件和配置核过,这里只核键和端口。
+# 新账号名由 boot 号和实例键截断而来,多副本可能截成同一个:同样在建库前拒绝。
+function Assert-LocalSqlBootMergedPlan {
+    param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][object[]]$Instances, [Parameter(Mandatory)][string]$BootId)
+    $writers = @(Get-LocalSqlBootWriterServices | Where-Object { $_ -cne 'gateway' })
+    $known = $writers + @(Get-LocalSqlBootNonWriterServices)
+    $derivedRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot 'run/etc/go_services')) + [IO.Path]::DirectorySeparatorChar
+    $keys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $ports = @{}
+    $accounts = @{}
+    foreach ($instance in $Instances) {
+        $key = [string]$instance.InstanceKey
+        if (-not $keys.Add($key)) { throw "Instance $key appears twice in the merged plan." }
+        if ([string]$instance.Service -cnotin $known) { throw "Instance $key has an unknown service." }
+        $claimed = [Collections.Generic.List[int]]::new()
+        $claimed.Add([int]$instance.Port)
+        if (-not $instance.Running) {
+            $config = [string]$instance.ConfigPath
+            if (-not [IO.Path]::IsPathRooted($config) -or -not ([IO.Path]::GetFullPath($config)).StartsWith($derivedRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "Instance $key has a config outside run/etc/go_services." }
+            $listen = [string](Get-YamlScalar -Path $config -KeyPath 'ListenOn').Value
+            if ($listen -notmatch ':(?<port>[0-9]+)\z' -or [int]$Matches.port -ne [int]$instance.Port) { throw "Instance ${key}: ListenOn in its config does not match the planned port $($instance.Port)." }
+            if ((Get-InstanceConfigZoneId -ConfigPath $config) -ne [long]$instance.Zone) { throw "Instance ${key}: its config does not carry zone $($instance.Zone)." }
+            $metrics = [string](Get-YamlScalar -Path $config -KeyPath 'MetricsListenAddr').Value
+            if ($metrics -match ':(?<port>[0-9]+)\z') { $claimed.Add([int]$Matches.port) }
+            if ([string]$instance.Service -cin $writers) {
+                $account = New-LocalSqlBootAccountName -BootId $BootId -InstanceKey $key
+                if ($accounts.ContainsKey($account)) { throw "Instances $($accounts[$account]) and $key map to the same SQL account name; reduce the instance count or shorten the key." }
+                $accounts[$account] = $key
+            }
+        }
+        foreach ($port in $claimed) {
+            if ($ports.ContainsKey($port)) { throw "Instances $($ports[$port]) and $key both claim port $port." }
+            $ports[$port] = $key
+        }
+    }
+}
+
 function New-LocalSqlBootCatalog {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$RepoRoot,
         [string[]]$Services = @(),
         [string]$Endpoint = '',
-        [ValidateSet('auto', 'mysql', 'tidb')][string]$Backend = 'auto'
+        [ValidateSet('auto', 'mysql', 'tidb')][string]$Backend = 'auto',
+        # 多区一次生成:一次给全部目标区,内部按区规划、合并校验,只发布一份目录。不能循环调用本函数,每次调用都会替换目录。
+        [int[]]$Zones = @(),
+        $Counts = @{},
+        [int]$PortStride = 1,
+        [int]$ZonePortShift = 1000,
+        [string[]]$ZonePortOffsets = @()
     )
     if (-not $IsWindows) { throw 'sql-boot-catalog-local only supports Windows hosts.' }
     $repo = [IO.Path]::GetFullPath($RepoRoot)
     $requested = @(Resolve-LocalSqlBootRequestedServices -Services $Services)
+    $countsArgument = ConvertTo-LocalSqlBootCountsArgument -Counts $Counts
+    $multiZone = $Zones.Count -gt 0
+    $planServices = @()
+    $zoneOffsets = @{}
+    if ($multiZone) {
+        if (@($Zones | Where-Object { $_ -lt 1 }).Count -gt 0 -or @($Zones | Select-Object -Unique).Count -ne $Zones.Count) { throw '-Zones must be distinct positive zone ids.' }
+        # 网关不按区,Java 版的角色由 Java 仓的 producer 生成,这里只发 Go 写者。
+        if (@($Services | ForEach-Object { ([string]$_) -split '[,;]' }) -ccontains 'gateway') { throw 'Multi-zone mode only covers Go writers; the gateway is not zone-scoped.' }
+        $requested = @($requested | Where-Object { $_ -cne 'gateway' })
+        $zoneOffsets = ConvertTo-LocalSqlBootZoneOffsets -Raw $ZonePortOffsets -Zones $Zones
+        # 没点名时把不碰 SQL 的 Go 服务也算进计划:它们和写者抢同一批端口。目录只发写者。
+        $planServices = if (@($Services).Count -eq 0) { @($requested) + @(Get-LocalSqlBootNonWriterServices) } else { @($requested) }
+    } elseif ($countsArgument -or $PortStride -ne 1 -or @($ZonePortOffsets).Count -gt 0) {
+        throw '-Counts, -PortStride and -ZonePortOffsets only apply with -Zones.'
+    }
     # 回环校验先于任何子进程和落盘。
-    $settings = Resolve-LocalSqlBootSettings -RepoRoot $repo -Endpoint $Endpoint
+    $settings = Resolve-LocalSqlBootSettings -RepoRoot $repo -Endpoint $Endpoint -Zones $Zones
 
     $root = Get-LocalSqlBootRoot -RepoRoot $repo
     Initialize-LocalSqlBootPrivateDirectory -Path $root
@@ -1106,11 +1235,20 @@ function New-LocalSqlBootCatalog {
         $settings.LockPrimitive = if ($settings.Backend -ceq 'mysql') { 'LOCK_TOUCH' } else { 'SELECT_ONLY' }
         Write-LocalSqlBootLog "endpoint=$($settings.Endpoint) backend=$($settings.Backend) lock=$($settings.LockPrimitive) sql-client=$($settings.Executor.Kind) boot=$bootId"
 
+        # 多区:计划和校验先于任何 DDL。
+        $mergedPlan = @()
+        if ($multiZone) {
+            $mergedPlan = @(Get-LocalSqlBootMultiZonePlan -Settings $settings -RepoRoot $repo -Services $planServices -Zones $Zones -Counts $countsArgument -PortStride $PortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $zoneOffsets -WorkDirectory $bootRoot)
+            Assert-LocalSqlBootMergedPlan -RepoRoot $repo -Instances $mergedPlan -BootId $bootId
+        }
+
         Initialize-LocalSqlBootDatabases -Settings $settings -RepoRoot $repo -Requested $requested
         $skipped = @(Invoke-LocalSqlBootMigrations -Settings $settings -RepoRoot $repo -Requested $requested -WorkDirectory $schemaWork)
+        # 多区不发半份:哪个服务建表失败都整批失败,不像单区那样跳过可选服务。
+        if ($multiZone -and $skipped.Count -gt 0) { throw "Schema step failed for $($skipped -join ', '); multi-zone mode publishes nothing." }
         $tablesBySchema = Get-LocalSqlBootTablesBySchema -Settings $settings
 
-        $instances = @(Get-LocalSqlBootInstancePlan -Settings $settings -RepoRoot $repo -Requested @($requested | Where-Object { $_ -cnotin $skipped }) -WorkDirectory $bootRoot)
+        $instances = @(if ($multiZone) { $mergedPlan | Where-Object { $_.Service -cin $requested } } else { Get-LocalSqlBootInstancePlan -Settings $settings -RepoRoot $repo -Requested @($requested | Where-Object { $_ -cnotin $skipped }) -WorkDirectory $bootRoot })
         $pending = @($instances | Where-Object { -not $_.Running })
 
         $accountsPath = Join-Path $root 'runtime-accounts.json'
@@ -1143,8 +1281,15 @@ function New-LocalSqlBootCatalog {
                 $catalog[$item.InstanceKey] = Register-LocalSqlBootInstance -Item $item -Tool $tool -ControlEnvironment $control -PhysicalSha256 $physical
                 Write-LocalSqlBootLog "registered $($item.InstanceKey) as $($item.Principal)"
             }
-            Write-LocalSqlBootText -Path $catalogPath -Text (ConvertTo-Json -InputObject $catalog -Depth 8)
-            Assert-LocalSqlBootCatalog -CatalogPath $catalogPath -RepoRoot $repo -Prepared $prepared
+            # 自检通过才发布,校验失败不能留下一份看起来可用的目录。
+            $candidatePath = Join-Path $root 'catalog.candidate.json'
+            try {
+                Write-LocalSqlBootText -Path $candidatePath -Text (ConvertTo-Json -InputObject $catalog -Depth 8)
+                Assert-LocalSqlBootCatalog -CatalogPath $candidatePath -RepoRoot $repo -Prepared $prepared
+                [IO.File]::Move($candidatePath, $catalogPath, $true)
+            } finally {
+                if (Test-Path -LiteralPath $candidatePath) { Remove-Item -LiteralPath $candidatePath -Force }
+            }
         } else {
             Write-LocalSqlBootText -Path $catalogPath -Text '{}'
         }
@@ -1158,6 +1303,7 @@ function New-LocalSqlBootCatalog {
             skipped = [object[]]$skipped
             privateFileHelper = $helper
         }
+        if ($multiZone) { $summary['zones'] = [object[]]$Zones }
         Write-LocalSqlBootText -Path $summaryPath -Text (ConvertTo-Json -InputObject $summary -Depth 4)
 
         # 只留本轮:运行中的实例启动后不再读这些文件,旧授权已没有用处。
@@ -1188,5 +1334,5 @@ function Resolve-LocalSqlBootRequestedServices {
 
 if ($MyInvocation.InvocationName -ne '.') {
     $ErrorActionPreference = 'Stop'
-    $null = New-LocalSqlBootCatalog -RepoRoot (Join-Path $PSScriptRoot '../..') -Services $Services -Endpoint $Endpoint -Backend $Backend
+    $null = New-LocalSqlBootCatalog -RepoRoot (Join-Path $PSScriptRoot '../..') -Services $Services -Endpoint $Endpoint -Backend $Backend -Zones $Zones -Counts $Counts -PortStride $PortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $ZonePortOffsets
 }

@@ -176,7 +176,10 @@ func buildDescriptorArgs(protoFiles []string) ([]string, error) {
 
 // executeDescriptorCommand runs protoc to generate the descriptor file.
 func executeDescriptorCommand(args []string) error {
-	protocPath := "protoc" // use system protoc by default
+	protocPath, err := utils2.ProtocPath()
+	if err != nil {
+		return err
+	}
 	cmd := exec.Command(protocPath, args...)
 
 	var stdout, stderr bytes.Buffer

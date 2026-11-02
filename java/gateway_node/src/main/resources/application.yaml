@@ -127,6 +127,16 @@ cdn:
   base-url: "https://cdn.example.com"
   sign-ttl-seconds: 3600
 
+# 客户端热更检查(POST /api/hotfix-check)。按客户端上报的 platform 配发布线,没配的平台回「不用更新」。
+# 配错(版本号不是数字段、min-version 高于 latest-version、缺 patch-url)拒绝启动。低于 min-version 的客户端强制更新。
+# hotfix:
+#   platforms:
+#     android:
+#       latest-version: "1.2.3"
+#       min-version: "1.2.0"
+#       patch-url: "https://cdn.example.com/patch/android/1.2.3.zip"
+#       changelog: "修复若干问题"
+
 # Admin API security
 admin:
   api-key: "change-me-in-production"

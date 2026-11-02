@@ -59,7 +59,7 @@ func TestRedisDomainsKeepTheirOwnKeys(t *testing.T) {
 	directory.seed(account, &pbbase.AccountSimplePlayer{PlayerId: identityPlayerID, ClassId: 3, Name: "云中君"})
 	svcCtx := &svc.ServiceContext{
 		RedisClient: control, PlayerRedis: player, LoginRedis: login, AccountDirectory: directory,
-		TokenManager:        token.NewManager(login, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 24 * time.Hour}),
+		TokenManager:        token.NewManager(login, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 24 * time.Hour, RefreshReuseGrace: 30 * time.Second}),
 		PlayerLocatorClient: locator,
 		PreloadPool:         pool,
 	}
@@ -70,6 +70,12 @@ func TestRedisDomainsKeepTheirOwnKeys(t *testing.T) {
 	httpResp, err := NewLoginLogic(context.Background(), svcCtx).Login(&login_proto.LoginRequest{AuthType: authType, AuthToken: "code"})
 	require.NoError(t, err)
 	require.Zero(t, httpResp.GetErrorMessage().GetId())
+
+	// 轮换一次,留下轮换记录:只有真的走过轮换,下面才核得到这族键落在登录域、账号的槽里。
+	refreshResp, err := NewRefreshTokenLogic(context.Background(), svcCtx).RefreshToken(&login_proto.RefreshTokenRequest{RefreshToken: httpResp.GetRefreshToken()})
+	require.NoError(t, err)
+	require.Zero(t, refreshResp.GetErrorMessage().GetId())
+	require.NotEmpty(t, refreshResp.GetRefreshToken())
 
 	details := &pbbase.SessionDetails{SessionId: 7400, GateInstanceId: "gate-domain-wiring", SessionIncarnation: 1}
 	gateCtx := ctxkeys.WithSessionDetails(context.Background(), details)
@@ -100,13 +106,13 @@ func TestRedisDomainsKeepTheirOwnKeys(t *testing.T) {
 		switch family {
 		case "login_session:", "login:sessfence:":
 			require.Equal(t, redisslot.CRC16(connection)&(redisslot.SlotCount-1), redisslot.HashSlot(key), key)
-		case "login_account_sessions:", "account_refresh:", "access_token:", "refresh_token:", "refresh_family:":
+		case "login_account_sessions:", "account_refresh:", "access_token:", "refresh_token:", "refresh_family:", "refresh_rotated:":
 			require.Equal(t, accountSlot, redisslot.HashSlot(key), key)
 		default:
 			t.Fatalf("登录域出现预期之外的键: %s", key)
 		}
 	}
-	for _, family := range []string{"login_session:", "login:sessfence:", "login_account_sessions:", "account_refresh:", "access_token:", "refresh_token:", "refresh_family:"} {
+	for _, family := range []string{"login_session:", "login:sessfence:", "login_account_sessions:", "account_refresh:", "access_token:", "refresh_token:", "refresh_family:", "refresh_rotated:"} {
 		require.True(t, seen[family], "登录域缺 %s 这族键: %v", family, loginRedis.Keys())
 	}
 }

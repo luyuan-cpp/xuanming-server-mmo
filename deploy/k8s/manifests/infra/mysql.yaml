@@ -74,7 +74,7 @@ data:
     # 共用这台 MySQL 的是全部 zone 的 go/db、data_service、Java gateway,外加全局的 friend、trade、player-inbox、guild、mail。
     # 总账公式与规划参数在 tools/scripts/k8s_deploy.ps1(Get-MysqlConnectionPlan / Get-MysqlConnectionLedger),
     # 部署写路径打印 "MySQL connection ledger" 一行;契约测试钉住「规划峰值 ≤ 本值」。
-    # 规划档:4 个 zone、每个 go/db 实例打开其余 3 个 zone 的库(最坏)、Phase 2 未开、route store 按 db_first 计入,
+    # 规划档:4 个 zone、每个 go/db 实例打开其余 3 个 zone 的库(最坏)、Phase 2 未开、route store 恒计入,
     # 峰值 1620(含一个 zone 滚动发布 —— 每个 Deployment 多 1 个新 Pod + 1 个仍在优雅退出的旧 Pod —— 与运维余量 20),
     # 本值留约 10% 余量。
     # 2026-10-15 加入玩家收件箱 player-inbox(2 副本 × 池 20,全局)后,按公式手算峰值 1700、余量约 6%(未运行,

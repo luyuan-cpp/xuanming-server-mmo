@@ -28,6 +28,21 @@ import (
 // 副本看不清 etcd 或 Redis(连续 3 拍失败,或 3 拍内没有一次成功)就让出它的段(eligible=false,分片随后释放段、撤销成员
 // 登记),其余副本接手。让出之后每拍照常试一次,成功了再回来。全部副本都看不清时没人清扫,与「fail-closed:宁可不清理」一致。
 
+// 存活集合理性闸门(拍板清单 B1-1)。etcd 回档、重建或连错时 Range 照样成功,只是回空或残缺。
+// 照单全收的话,约两拍之后全部在线会话转 DISCONNECTING,30 秒后全员被踢。
+const (
+	// liveViewDropMinGates:登记的 gate 少于这个数时不判骤降,小集群挂一台就可能超过一半。
+	liveViewDropMinGates = 4
+	// liveViewDropHoldRounds:超过一半的 gate 同时消失时,最多压住这么多拍。真有这么多 gate 死了,压住之后照常收尾;
+	// 是 etcd 的问题的话,这段时间够人看到 PlayerLocatorReconcileRoundsFailing 告警。
+	liveViewDropHoldRounds = 30
+)
+
+var (
+	errLiveViewEmpty = errors.New("etcd returned an empty live gate set while gates are registered")
+	errLiveViewDrop  = errors.New("more than half of the registered gates vanished at once")
+)
+
 // gateSweeper 是一个副本上的清扫状态。suspects / cursors 只由 run 所在的 goroutine 访问。
 type gateSweeper struct {
 	svcCtx   *svc.ServiceContext
@@ -41,8 +56,10 @@ type gateSweeper struct {
 	transitionPacer pacer
 	memberBudget    int
 
-	suspects map[string]int      // gate uuid → 连续缺席拍数(封顶 2)
-	cursors  map[gateSlot]uint64 // 已确认死亡、被预算截断的索引键 → 下一拍续扫的 SSCAN 游标
+	suspects map[string]int // gate uuid → 连续缺席拍数(封顶 2)
+	// liveViewHeldRounds 是存活集骤降已经连续压住的拍数(checkLiveView)。
+	liveViewHeldRounds int
+	cursors            map[gateSlot]uint64 // 已确认死亡、被预算截断的索引键 → 下一拍续扫的 SSCAN 游标
 
 	// eligible 为 false 时本副本退出清扫分片(slot_shard 的 healthy)。
 	eligible atomic.Bool
@@ -142,6 +159,9 @@ func (s *gateSweeper) indexRound(ctx context.Context) roundOutcome {
 	if err != nil {
 		return roundOutcome{stage: stageEtcd, err: fmt.Errorf("list live gates: %w", err), report: rep}
 	}
+	if err := s.checkLiveView(pairs, live); err != nil {
+		return roundOutcome{stage: stageEtcd, err: err, report: rep}
+	}
 
 	// c)
 	dead, deadPairs, livePairs := s.advanceSuspects(pairs, live)
@@ -159,6 +179,34 @@ func (s *gateSweeper) indexRound(ctx context.Context) roundOutcome {
 			len(dead), len(rep.released), rep.deadIndexKeys, rep.liveIndexKeys, rep.keyErrors.count, rep.actions)
 	}
 	return roundOutcome{report: rep}
+}
+
+// checkLiveView 判断这一拍的存活集能不能用。不能用时回错误,这一拍不推进去抖、不转换,和读失败同一口径。
+// 全空一直压住:新 gate 一注册就不再是空集。骤降有上限,见 liveViewDropHoldRounds。
+func (s *gateSweeper) checkLiveView(pairs []gateSlot, live map[string]struct{}) error {
+	registered := make(map[string]struct{}, len(pairs))
+	missing := 0
+	for _, p := range pairs {
+		if _, seen := registered[p.gate]; seen {
+			continue
+		}
+		registered[p.gate] = struct{}{}
+		if _, ok := live[p.gate]; !ok {
+			missing++
+		}
+	}
+	if len(registered) > 0 && len(live) == 0 {
+		return errLiveViewEmpty
+	}
+	if len(registered) < liveViewDropMinGates || missing*2 <= len(registered) {
+		s.liveViewHeldRounds = 0
+		return nil
+	}
+	if s.liveViewHeldRounds >= liveViewDropHoldRounds {
+		return nil
+	}
+	s.liveViewHeldRounds++
+	return errLiveViewDrop
 }
 
 // advanceSuspects 推进 gate 级去抖。返回已确认死亡(连续两拍缺席)的 gate(排过序)、这些 gate 的索引键(按 gate、slot 排序),

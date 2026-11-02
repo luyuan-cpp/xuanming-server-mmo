@@ -78,13 +78,14 @@ func TestBattleOutcomeRPCRejectsWrongMethodCallerAndChangedOriginal(t *testing.T
 	require.Equal(t, codes.FailedPrecondition, status.Code(err), "有效签名下的原PB语义错误在SQL前永久拒绝")
 }
 
+// globalCandidate 造一张排队票。票必须带 home zone:范围树见到没有 zone 的成员一律不成组(scope.ErrInvalidNode)。
 func globalCandidate(pid, queued, now uint64, first, second uint32) *pb.MatchAuthorityTicketRecord {
 	p := &pb.MatchNetworkProfile{PlanId: "p", SessionBinding: "s"}
 	for region, rtt := range map[uint32]uint32{1: first, 2: second} {
 		p.Receipts = append(p.Receipts, &pb.NetworkProbeReceipt{Grant: &pb.NetworkProbeGrant{PlayerId: pid, PhysicalRegion: region, ExpiresAtMs: now + 1000}, RttMs: rtt, SampleCount: 3, MeasuredAtMs: now, ExpiresAtMs: now + 1000})
 	}
 	b, _ := proto.Marshal(p)
-	return &pb.MatchAuthorityTicketRecord{PlayerId: pid, Mode: 3, ConfigId: 1, TeamSize: 2, State: 1, EnqueuedMs: queued, NetworkProfile: b, RatingCenti: 150000, ExpiresMs: now + 1000, PreferredRegion: authority.PreferredRegion(p, now)}
+	return &pb.MatchAuthorityTicketRecord{PlayerId: pid, ZoneId: 1, Mode: 3, ConfigId: 1, TeamSize: 2, State: 1, EnqueuedMs: queued, NetworkProfile: b, RatingCenti: 150000, ExpiresMs: now + 1000, PreferredRegion: authority.PreferredRegion(p, now)}
 }
 
 // 按池撮合的单位输入与成组(global_pool_matcher.go):生产代码 poolUnitInput / poolPolicy 原样参与,

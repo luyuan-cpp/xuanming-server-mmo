@@ -374,6 +374,267 @@ void SendMatchInternalSetSpectateFeaturedErased(entt::registry& registry, entt::
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::SetSpectateFeaturedResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region MatchInternalAcquireTrialOccupancy
+namespace {
+void QueueLocalMatchInternalAcquireTrialOccupancyFailure(GrpcDone<::match::AcquireTrialOccupancyResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchInternalAcquireTrialOccupancyCall(entt::registry& registry, entt::entity nodeEntity, const ::match::AcquireTrialOccupancyRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::AcquireTrialOccupancyResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchInternal.AcquireTrialOccupancy requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchInternalAcquireTrialOccupancyGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchInternalAcquireTrialOccupancyFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchInternalAcquireTrialOccupancyFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::AcquireTrialOccupancyResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchInternal.AcquireTrialOccupancy response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchInternalAcquireTrialOccupancy(entt::registry& registry, entt::entity nodeEntity, const ::match::AcquireTrialOccupancyRequest& request,
+                                            GrpcDone<::match::AcquireTrialOccupancyResponse> done, const GrpcCallOptions& options) {
+    StartMatchInternalAcquireTrialOccupancyCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchInternalAcquireTrialOccupancyErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchInternal.AcquireTrialOccupancy requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::AcquireTrialOccupancyRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchInternal.AcquireTrialOccupancy: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::AcquireTrialOccupancyRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchInternal.AcquireTrialOccupancy: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchInternalAcquireTrialOccupancyCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::AcquireTrialOccupancyResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchInternalReleaseTrialOccupancy
+namespace {
+void QueueLocalMatchInternalReleaseTrialOccupancyFailure(GrpcDone<::match::ReleaseTrialOccupancyResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchInternalReleaseTrialOccupancyCall(entt::registry& registry, entt::entity nodeEntity, const ::match::ReleaseTrialOccupancyRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::ReleaseTrialOccupancyResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchInternal.ReleaseTrialOccupancy requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchInternalReleaseTrialOccupancyGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchInternalReleaseTrialOccupancyFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchInternalReleaseTrialOccupancyFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::ReleaseTrialOccupancyResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchInternal.ReleaseTrialOccupancy response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchInternalReleaseTrialOccupancy(entt::registry& registry, entt::entity nodeEntity, const ::match::ReleaseTrialOccupancyRequest& request,
+                                            GrpcDone<::match::ReleaseTrialOccupancyResponse> done, const GrpcCallOptions& options) {
+    StartMatchInternalReleaseTrialOccupancyCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchInternalReleaseTrialOccupancyErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchInternal.ReleaseTrialOccupancy requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::ReleaseTrialOccupancyRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchInternal.ReleaseTrialOccupancy: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::ReleaseTrialOccupancyRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchInternal.ReleaseTrialOccupancy: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchInternalReleaseTrialOccupancyCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::ReleaseTrialOccupancyResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchInternalGetBattleCompletion
+namespace {
+void QueueLocalMatchInternalGetBattleCompletionFailure(GrpcDone<::match::GetBattleCompletionResponse> done, uint32_t code, std::string message) {
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchInternalGetBattleCompletionCall(entt::registry& registry, entt::entity nodeEntity, const ::match::GetBattleCompletionRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::GetBattleCompletionResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchInternal.GetBattleCompletion requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchInternalGetBattleCompletionGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchInternalGetBattleCompletionFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchInternalGetBattleCompletionFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::GetBattleCompletionResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchInternal.GetBattleCompletion response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchInternalGetBattleCompletion(entt::registry& registry, entt::entity nodeEntity, const ::match::GetBattleCompletionRequest& request,
+                                            GrpcDone<::match::GetBattleCompletionResponse> done, const GrpcCallOptions& options) {
+    StartMatchInternalGetBattleCompletionCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchInternalGetBattleCompletionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchInternal.GetBattleCompletion requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::GetBattleCompletionRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchInternal.GetBattleCompletion: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::GetBattleCompletionRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchInternal.GetBattleCompletion: request C++ type does not match; not sent";
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchInternalGetBattleCompletionCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::GetBattleCompletionResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 
 void SetMatchInternalCallDeadline(std::chrono::milliseconds deadline) {
     callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);

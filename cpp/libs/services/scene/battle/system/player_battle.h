@@ -18,9 +18,10 @@
 //
 // battle:lock 语义:值 = battle_id,所有删除/续期一律"值匹配才操作"(Lua 原子 GET+DEL /
 // GET+EXPIRE),迟到的取消/结算/作废绝不会误伤玩家后续的新战斗锁。
-// 伴生 battle:ctx:{player_id} = InBattleComp 序列化(scene 私有,与锁同 SET / 同 TTL / 同 DEL):
+// 伴生 battle:ctx:{player_id} = InBattleComp 序列化(scene 私有,与锁同一条 Lua 写入 / 续期 / 删除,同 TTL):
 // 实体没了但锁还在的两条路径靠它重建冻结 —— ①玩家战斗中完整下线再登录(组件不落库);
 // ②备战到期 reaper 只摘组件不删锁,迟到的 BattleConfirmedEvent 按锁值重建 FIGHTING。
+// 写锁与续期没问到时有界重试,续期只延长不缩短(turn-battle-gap-closure.md §10);
 // 谁在什么时机放锁见 battle_lock_rules.h 文件头。
 //
 // 线程模型:所有方法都必须在 scene 节点 loop 线程调用(gRPC 入口:muduo_grpc 服务端在 loop 线程上派发)。
@@ -43,10 +44,11 @@ namespace muduo
 // hiredis 的应答结构(hiredis.h 里是 typedef struct redisReply {...} redisReply),测试注入点的签名只用到指针。
 struct redisReply;
 
-// 定义在 battle_lock_rules.h(按锁重建的裁决);底层类型必须与定义一致。
+// 定义在 battle_lock_rules.h(按锁重建的裁决、应答形状);底层类型必须与定义一致。
 namespace battle_lock
 {
 	enum class LockRebuildDecision : uint8_t;
+	enum class ReplyShape : uint8_t;
 }
 
 // 消息定义在 proto/scene/scene.proto(无 package → 全局命名空间),
@@ -73,8 +75,8 @@ public:
 	// 校验:在线(实体在本节点且有 gate 会话)/ 无 InBattleComp / 无换图在途
 	// (PlayerLifecycleSystem::IsSceneChangeBusy:交接冻结、普通 EnterScene / 镜像建场景应答未回等,回 kFeatureUnavailable)。
 	// 成功:挂 InBattleComp{state=PREPARING, deadline_ms, prepare_deadline_ms(0 时取 deadline_ms)}
-	// + SET battle:lock:{player_id}=battle_id(EX 按 prepare_deadline_ms+60s,咨询性锁,
-	// 权威判定仍是 InBattleComp)+ 返回 BattlePlayerSnapshot(含 table_fingerprint)
+	// + 一条 Lua 写 battle:lock:{player_id}=battle_id 与 ctx(EX 按 prepare_deadline_ms+60s,没问到有界重试;
+	// 本实体上的权威判定仍是 InBattleComp)+ 返回 BattlePlayerSnapshot(含 table_fingerprint)
 	// + response.table_fingerprint。
 	// 失败:response.error_message 填拒绝原因,不留任何冻结痕迹。
 	static void PrepareBattle(const ::PrepareBattleRequest& request, ::PrepareBattleResponse& response);
@@ -87,8 +89,10 @@ public:
 
 	// battle --Kafka--> scene:CreateBattle 成功确认(battle 侧开局后一段时间内周期补发,幂等)。
 	// 在线且 InBattleComp.battle_id 匹配且 state==PREPARING -> state=FIGHTING、
-	// deadline_ms=event.deadline_ms、battle:lock 条件续期 + ctx 覆写(值==battle_id 才 EXPIRE 到
-	// 冻结到期时刻 - now + 60s,冻结到期见 FreezeExpiresAtMs);已 FIGHTING / battle_id 不匹配 -> 幂等忽略;
+	// deadline_ms=event.deadline_ms、battle:lock 条件续期 + ctx 覆写(值==battle_id 才延长到
+	// 冻结到期时刻 - now + 60s,只延长不缩短,冻结到期见 FreezeExpiresAtMs);
+	// 已 FIGHTING -> 状态与期限不动,按组件上的期限再做一次条件续期(补上首次续期的丢失);
+	// battle_id 不匹配 -> 幂等忽略;
 	// 在线但无 InBattleComp(备战到期被摘 / 登录重建未命中)-> 锁值==battle_id 则重建 FIGHTING 冻结;
 	// 玩家不在本节点 -> 锁值匹配才续期,并把 FIGHTING/deadline 落进 ctx 供登录重建。
 	static void ConfirmBattle(const ::BattleConfirmedEvent& event);
@@ -155,6 +159,22 @@ public:
 	// 单测用它观察「锁真正放掉之后补一次跟随」有没有发生、落在哪个实体上。传 nullptr 恢复生产实现。
 	using FollowWakeFn = void (*)(entt::entity);
 	static void SetFollowWakeFnForTest(FollowWakeFn fn);
+	// 锁脚本观察点(单测用)。写锁 / 续期 / 重建复核每次准备发送时(算出 TTL 与 ctx 之后、判断 Redis 是否就绪之前)各回调一次,
+	// 单测不连 Redis 也能盯住「这一次会发什么」:op 为 "write_lock" / "renew_lock" / "rebuild_recheck"。
+	// 只有 renew_lock 去重:首发让给同 (player_id, battle_id) 的在途续期链时不回调 —— 那一次什么都不发;
+	// 其余两种不去重,每一次发送(首发与重试)都回调。生产不注入(nullptr);传 nullptr 恢复。
+	using LockScriptObserver = void (*)(const char* op, uint64_t playerId, uint64_t battleId, uint64_t ttlSec,
+										const std::string& ctxPayload);
+	static void SetLockScriptObserverForTest(LockScriptObserver observer);
+	// 锁写入 / 续期重试的调度器注入点(单测用)。生产不注入(nullptr):没问到之后的重试经当前线程的 EventLoop::runAfter 排,
+	// 当前线程没有 loop 就放弃重试(metric=battle_lock_write_gave_up)。
+	// 注入时改调 fn(delayMs, fire),即使当前线程没有 loop 也照常排;单测可以记下 delayMs、按需调用 fire 推进重试链。
+	// fire 只捕获 id 与字节,被调用时按 player_id 现取实体重跑门禁与发送,可以在任何时刻(含实体已销毁之后)调用,
+	// 但必须在排它的同一线程上调用(实体注册表、续期在途登记都是 thread_local)。
+	// 注意:续期(renew_lock)链从首发起就登记为在途,直到链走到终态才摘 —— 注入实现若丢弃 fire 不调用,
+	// 同 (player_id, battle_id) 之后的续期首发会一直让路。传 nullptr 恢复为 EventLoop::runAfter。
+	using LockRetrySchedulerFn = void (*)(uint64_t delayMs, std::function<void()> fire);
+	static void SetLockRetrySchedulerForTest(LockRetrySchedulerFn fn);
 	// battle:lock 的 EX 在冻结到期时刻(FreezeExpiresAtMs:PREPARING 是备战期限,FIGHTING 是 deadline + 宽限 + 余量)
 	// 之上的余量(秒):锁必须活得比 InBattleComp 久,避免"组件还在、锁先没了"让 match 放进第二场,
 	// 也保证宽限期内重登仍能按锁重建冻结。
@@ -208,4 +228,18 @@ private:
 	static uint64_t ExpiredFightingBattleId(entt::entity player);
 	// 两个按锁重建入口共用的裁决接线(本实体的作废槽位 → ClassifyLockRebuild),给单测走同一个函数。只读。
 	static battle_lock::LockRebuildDecision DecideLockRebuildFor(entt::entity player, uint64_t lockBattleId);
+
+	// 备战写锁(PrepareBattle 唯一调用点,单测走同一个入口):实体上 InBattleComp 仍是这一局才写,TTL 与 ctx 按组件现状算;
+	// 没问到时有界重试,重发前重跑这道门禁。返回这一次算出的 TTL 秒(只给调用方打日志),门禁不过时返回 0。
+	static uint64_t WriteBattleLockOnPrepare(uint64_t playerId, uint64_t battleId);
+
+	// 重建复核应答的判定与撤销,生产的 hiredis 回调与单测走同一个函数。
+	// integer 只在 shape == kInteger 时有意义;attemptNumber 是这次应答对应第几次发送(从 1 起):
+	//  - 非整数形状(没问到):不是结论,什么都不做 —— 重试由发送方排(重发要带首发时刻算预算);
+	//  - 整数非 0:锁仍是这一局的,重建成立,什么都不做;
+	//  - 整数 0 且 attemptNumber == 1(首发):锁在读锁与复核之间被删或易主 —— 按 player_id 现取实体,有效、身份仍是
+	//    playerId、InBattleComp 仍是 battleId 才 RemoveInBattleComp(metric=battle_freeze_rebuild_reverted);
+	//  - 整数 0 且 attemptNumber != 1(重试):可能只是锁按 TTL 自然过期,同样复核之后只记 WARN、保留冻结交给 reaper。
+	static void OnRebuiltFreezeRecheckReply(uint64_t playerId, uint64_t battleId, uint32_t attemptNumber,
+											battle_lock::ReplyShape shape, int64_t integer);
 };

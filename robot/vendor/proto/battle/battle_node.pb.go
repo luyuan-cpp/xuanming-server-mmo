@@ -253,16 +253,21 @@ type CreateBattleRequest struct {
 	TableFingerprint string                  `protobuf:"bytes,8,opt,name=table_fingerprint,json=tableFingerprint,proto3" json:"table_fingerprint,omitempty"` // match 确认的全员一致指纹;battle 与自身指纹不一致按配置拒开局/告警
 	// 活动对局上下文(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.17/§6.19)。
 	// 可空:普通对局不填(等价 kind == NONE)。match 的 RunActivityGather 原样填入;battle 存进房间,
-	// 结算时回显进 BattleResultEvent.activity_context,并且 kind != NONE 时先落 SharedRedis
-	// battle:activity_result:{battle_id} 再发 Kafka(未被 guild 销账就重发)。battle 不解释其余字段。
+	// 结算时回显进 BattleResultEvent.activity_context,随终局原件提交 match SQL,结果由 match 发件箱投 Kafka。
+	// battle 不解释其余字段。
 	ActivityContext        *BattleActivityContext `protobuf:"bytes,9,opt,name=activity_context,json=activityContext,proto3" json:"activity_context,omitempty"`
 	RequiredPhysicalRegion uint32                 `protobuf:"varint,10,opt,name=required_physical_region,json=requiredPhysicalRegion,proto3" json:"required_physical_region,omitempty"`
 	PlacementOperationId   string                 `protobuf:"bytes,11,opt,name=placement_operation_id,json=placementOperationId,proto3" json:"placement_operation_id,omitempty"`
 	TargetInstanceId       string                 `protobuf:"bytes,12,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
 	// 首次创建必须早于备战截止；重复同操作只查询/重放既有结果，不能在备战自愈后重新建房。
 	AdmitBeforeMs uint64 `protobuf:"varint,13,opt,name=admit_before_ms,json=admitBeforeMs,proto3" json:"admit_before_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 只接受 1：个人副作用之前必须先取得 Match SQL 的 COMPLETE；其它值 battle 一律拒绝建房。
+	OutcomeProtocolVersion uint32 `protobuf:"varint,14,opt,name=outcome_protocol_version,json=outcomeProtocolVersion,proto3" json:"outcome_protocol_version,omitempty"`
+	// 观战可见性,由 match 按 spectateVisibilityFor 决定后冻结进本原件(全局模式随 formation 的
+	// create_request 持久)。battle 存进房间,AddObserver 对非 PUBLIC 一律拒绝(第二道闸)。
+	SpectateVisibility ESpectateVisibility `protobuf:"varint,15,opt,name=spectate_visibility,json=spectateVisibility,proto3,enum=ESpectateVisibility" json:"spectate_visibility,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *CreateBattleRequest) Reset() {
@@ -386,14 +391,30 @@ func (x *CreateBattleRequest) GetAdmitBeforeMs() uint64 {
 	return 0
 }
 
+func (x *CreateBattleRequest) GetOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.OutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *CreateBattleRequest) GetSpectateVisibility() ESpectateVisibility {
+	if x != nil {
+		return x.SpectateVisibility
+	}
+	return ESpectateVisibility_SPECTATE_VISIBILITY_UNSPECIFIED
+}
+
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):
 // battle 保证没有建房、没有推送、没有发确认事件,match 按通用补偿回滚(DestroyBattle 幂等 → CancelBattlePrepare)。
 type CreateBattleResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId                      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	ErrorMessage                  *base.TipInfoMessage   `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	AdoptedOutcomeProtocolVersion uint32                 `protobuf:"varint,3,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
+	TargetInstanceId              string                 `protobuf:"bytes,4,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *CreateBattleResponse) Reset() {
@@ -438,6 +459,20 @@ func (x *CreateBattleResponse) GetErrorMessage() *base.TipInfoMessage {
 		return x.ErrorMessage
 	}
 	return nil
+}
+
+func (x *CreateBattleResponse) GetAdoptedOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.AdoptedOutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *CreateBattleResponse) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
 }
 
 type DestroyBattleRequest struct {
@@ -570,10 +605,14 @@ func (x *QueryBattleCreationRequest) GetTargetInstanceId() string {
 }
 
 type QueryBattleCreationResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	State         BattleCreationState    `protobuf:"varint,1,opt,name=state,proto3,enum=BattleCreationState" json:"state,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	State            BattleCreationState    `protobuf:"varint,1,opt,name=state,proto3,enum=BattleCreationState" json:"state,omitempty"`
+	TargetInstanceId string                 `protobuf:"bytes,2,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	// ABSENT 也回显节点能力；PRESENT 的 adopted 只取原创建原件，不按现能力追认。
+	SupportedOutcomeProtocolVersion uint32 `protobuf:"varint,3,opt,name=supported_outcome_protocol_version,json=supportedOutcomeProtocolVersion,proto3" json:"supported_outcome_protocol_version,omitempty"`
+	AdoptedOutcomeProtocolVersion   uint32 `protobuf:"varint,4,opt,name=adopted_outcome_protocol_version,json=adoptedOutcomeProtocolVersion,proto3" json:"adopted_outcome_protocol_version,omitempty"`
+	unknownFields                   protoimpl.UnknownFields
+	sizeCache                       protoimpl.SizeCache
 }
 
 func (x *QueryBattleCreationResponse) Reset() {
@@ -611,6 +650,27 @@ func (x *QueryBattleCreationResponse) GetState() BattleCreationState {
 		return x.State
 	}
 	return BattleCreationState_BATTLE_CREATION_UNKNOWN
+}
+
+func (x *QueryBattleCreationResponse) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
+func (x *QueryBattleCreationResponse) GetSupportedOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.SupportedOutcomeProtocolVersion
+	}
+	return 0
+}
+
+func (x *QueryBattleCreationResponse) GetAdoptedOutcomeProtocolVersion() uint32 {
+	if x != nil {
+		return x.AdoptedOutcomeProtocolVersion
+	}
+	return 0
 }
 
 // ---- 二期:观战(match → battle,设计文档 §10) ----
@@ -1151,6 +1211,260 @@ func (x *IssueBattleTicketResponse) GetAssignment() *BattleAssignedS2C {
 	return nil
 }
 
+// ---- 观战 L1 / L2(battle-spectate-tiered-fanout.md §15.4)----
+// 把一台 gate 挂进本场的中继扇出集合。幂等;同 gate_node_id 新实例覆盖旧实例。新挂的 gate 立即收到一帧
+// STATE 关键帧。target_instance_id 不是本实例回 kInvalidParameter;房间不存在回 kEntityIsNull;
+// 非公开局回 kInvalidParameter。已是广播档时不挂 gate,回 broadcast = true(match 据此把档位同步成 L2)。
+type AttachRelayGateRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	BattleId         uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	GateNodeId       uint32                 `protobuf:"varint,2,opt,name=gate_node_id,json=gateNodeId,proto3" json:"gate_node_id,omitempty"`
+	GateInstanceId   string                 `protobuf:"bytes,3,opt,name=gate_instance_id,json=gateInstanceId,proto3" json:"gate_instance_id,omitempty"`       // 中继帧信封的 target_instance_id(AGENTS §7.2 防僵尸)
+	TargetInstanceId string                 `protobuf:"bytes,4,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"` // 本 battle 实例 UUID;不符即拒(进程重启后不能继承旧挂接)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AttachRelayGateRequest) Reset() {
+	*x = AttachRelayGateRequest{}
+	mi := &file_proto_battle_battle_node_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttachRelayGateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttachRelayGateRequest) ProtoMessage() {}
+
+func (x *AttachRelayGateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_node_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttachRelayGateRequest.ProtoReflect.Descriptor instead.
+func (*AttachRelayGateRequest) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_node_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *AttachRelayGateRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *AttachRelayGateRequest) GetGateNodeId() uint32 {
+	if x != nil {
+		return x.GateNodeId
+	}
+	return 0
+}
+
+func (x *AttachRelayGateRequest) GetGateInstanceId() string {
+	if x != nil {
+		return x.GateInstanceId
+	}
+	return ""
+}
+
+func (x *AttachRelayGateRequest) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
+type AttachRelayGateResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	BattleInstanceId string                 `protobuf:"bytes,2,opt,name=battle_instance_id,json=battleInstanceId,proto3" json:"battle_instance_id,omitempty"` // 本实例 UUID,写进观战凭证,gate 据此丢弃僵尸帧
+	DeadlineMs       uint64                 `protobuf:"varint,3,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                    // 战斗最长期限(Unix 毫秒),写进观战凭证,gate 据此兜底收尾
+	Broadcast        bool                   `protobuf:"varint,4,opt,name=broadcast,proto3" json:"broadcast,omitempty"`                                        // 本场已是广播档:没有挂 gate
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AttachRelayGateResponse) Reset() {
+	*x = AttachRelayGateResponse{}
+	mi := &file_proto_battle_battle_node_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttachRelayGateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttachRelayGateResponse) ProtoMessage() {}
+
+func (x *AttachRelayGateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_node_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttachRelayGateResponse.ProtoReflect.Descriptor instead.
+func (*AttachRelayGateResponse) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_node_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *AttachRelayGateResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *AttachRelayGateResponse) GetBattleInstanceId() string {
+	if x != nil {
+		return x.BattleInstanceId
+	}
+	return ""
+}
+
+func (x *AttachRelayGateResponse) GetDeadlineMs() uint64 {
+	if x != nil {
+		return x.DeadlineMs
+	}
+	return 0
+}
+
+func (x *AttachRelayGateResponse) GetBroadcast() bool {
+	if x != nil {
+		return x.Broadcast
+	}
+	return false
+}
+
+// 本场升为全服广播(单向、幂等):此后每回合只发广播 topic,不再逐 gate 中继;升档时先发一帧 STATE。
+// 错误口径同 AttachRelayGate。
+type PromoteSpectateBroadcastRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	BattleId         uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	TargetInstanceId string                 `protobuf:"bytes,2,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *PromoteSpectateBroadcastRequest) Reset() {
+	*x = PromoteSpectateBroadcastRequest{}
+	mi := &file_proto_battle_battle_node_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PromoteSpectateBroadcastRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PromoteSpectateBroadcastRequest) ProtoMessage() {}
+
+func (x *PromoteSpectateBroadcastRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_node_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PromoteSpectateBroadcastRequest.ProtoReflect.Descriptor instead.
+func (*PromoteSpectateBroadcastRequest) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_node_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *PromoteSpectateBroadcastRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *PromoteSpectateBroadcastRequest) GetTargetInstanceId() string {
+	if x != nil {
+		return x.TargetInstanceId
+	}
+	return ""
+}
+
+type PromoteSpectateBroadcastResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	BattleInstanceId string                 `protobuf:"bytes,2,opt,name=battle_instance_id,json=battleInstanceId,proto3" json:"battle_instance_id,omitempty"`
+	DeadlineMs       uint64                 `protobuf:"varint,3,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *PromoteSpectateBroadcastResponse) Reset() {
+	*x = PromoteSpectateBroadcastResponse{}
+	mi := &file_proto_battle_battle_node_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PromoteSpectateBroadcastResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PromoteSpectateBroadcastResponse) ProtoMessage() {}
+
+func (x *PromoteSpectateBroadcastResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_node_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PromoteSpectateBroadcastResponse.ProtoReflect.Descriptor instead.
+func (*PromoteSpectateBroadcastResponse) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_node_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *PromoteSpectateBroadcastResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *PromoteSpectateBroadcastResponse) GetBattleInstanceId() string {
+	if x != nil {
+		return x.BattleInstanceId
+	}
+	return ""
+}
+
+func (x *PromoteSpectateBroadcastResponse) GetDeadlineMs() uint64 {
+	if x != nil {
+		return x.DeadlineMs
+	}
+	return 0
+}
+
 var File_proto_battle_battle_node_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_node_proto_rawDesc = "" +
@@ -1168,7 +1482,7 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\anode_id\x18\t \x01(\rR\x06nodeId\x12\x1f\n" +
 	"\vinstance_id\x18\n" +
 	" \x01(\tR\n" +
-	"instanceId\"\xbb\x04\n" +
+	"instanceId\"\xbc\x05\n" +
 	"\x13CreateBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10battle_config_id\x18\x02 \x01(\rR\x0ebattleConfigId\x12/\n" +
@@ -1185,10 +1499,14 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	" \x01(\rR\x16requiredPhysicalRegion\x124\n" +
 	"\x16placement_operation_id\x18\v \x01(\tR\x14placementOperationId\x12,\n" +
 	"\x12target_instance_id\x18\f \x01(\tR\x10targetInstanceId\x12&\n" +
-	"\x0fadmit_before_ms\x18\r \x01(\x04R\radmitBeforeMs\"i\n" +
+	"\x0fadmit_before_ms\x18\r \x01(\x04R\radmitBeforeMs\x128\n" +
+	"\x18outcome_protocol_version\x18\x0e \x01(\rR\x16outcomeProtocolVersion\x12E\n" +
+	"\x13spectate_visibility\x18\x0f \x01(\x0e2\x14.eSpectateVisibilityR\x12spectateVisibility\"\xe0\x01\n" +
 	"\x14CreateBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
-	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"\xaf\x01\n" +
+	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12G\n" +
+	" adopted_outcome_protocol_version\x18\x03 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x12,\n" +
+	"\x12target_instance_id\x18\x04 \x01(\tR\x10targetInstanceId\"\xaf\x01\n" +
 	"\x14DestroyBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x124\n" +
@@ -1197,9 +1515,12 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x1aQueryBattleCreationRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\x16placement_operation_id\x18\x02 \x01(\tR\x14placementOperationId\x12,\n" +
-	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\"I\n" +
+	"\x12target_instance_id\x18\x03 \x01(\tR\x10targetInstanceId\"\x8d\x02\n" +
 	"\x1bQueryBattleCreationResponse\x12*\n" +
-	"\x05state\x18\x01 \x01(\x0e2\x14.BattleCreationStateR\x05state\"\xba\x02\n" +
+	"\x05state\x18\x01 \x01(\x0e2\x14.BattleCreationStateR\x05state\x12,\n" +
+	"\x12target_instance_id\x18\x02 \x01(\tR\x10targetInstanceId\x12K\n" +
+	"\"supported_outcome_protocol_version\x18\x03 \x01(\rR\x1fsupportedOutcomeProtocolVersion\x12G\n" +
+	" adopted_outcome_protocol_version\x18\x04 \x01(\rR\x1dadoptedOutcomeProtocolVersion\"\xba\x02\n" +
 	"\x12AddObserverRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12,\n" +
 	"\x12observer_player_id\x18\x02 \x01(\x04R\x10observerPlayerId\x12(\n" +
@@ -1239,7 +1560,27 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x122\n" +
 	"\n" +
 	"assignment\x18\x02 \x01(\v2\x12.BattleAssignedS2CR\n" +
-	"assignment*\x88\x01\n" +
+	"assignment\"\xaf\x01\n" +
+	"\x16AttachRelayGateRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12 \n" +
+	"\fgate_node_id\x18\x02 \x01(\rR\n" +
+	"gateNodeId\x12(\n" +
+	"\x10gate_instance_id\x18\x03 \x01(\tR\x0egateInstanceId\x12,\n" +
+	"\x12target_instance_id\x18\x04 \x01(\tR\x10targetInstanceId\"\xbc\x01\n" +
+	"\x17AttachRelayGateResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12,\n" +
+	"\x12battle_instance_id\x18\x02 \x01(\tR\x10battleInstanceId\x12\x1f\n" +
+	"\vdeadline_ms\x18\x03 \x01(\x04R\n" +
+	"deadlineMs\x12\x1c\n" +
+	"\tbroadcast\x18\x04 \x01(\bR\tbroadcast\"l\n" +
+	"\x1fPromoteSpectateBroadcastRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12,\n" +
+	"\x12target_instance_id\x18\x02 \x01(\tR\x10targetInstanceId\"\xa7\x01\n" +
+	" PromoteSpectateBroadcastResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12,\n" +
+	"\x12battle_instance_id\x18\x02 \x01(\tR\x10battleInstanceId\x12\x1f\n" +
+	"\vdeadline_ms\x18\x03 \x01(\x04R\n" +
+	"deadlineMs*\x88\x01\n" +
 	"\x13BattleCreationState\x12\x1b\n" +
 	"\x17BATTLE_CREATION_UNKNOWN\x10\x00\x12\x1b\n" +
 	"\x17BATTLE_CREATION_PRESENT\x10\x01\x12\x1a\n" +
@@ -1248,7 +1589,7 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x16ObserverAdmissionState\x12\x1e\n" +
 	"\x1aOBSERVER_ADMISSION_UNKNOWN\x10\x00\x12\x1d\n" +
 	"\x19OBSERVER_ADMISSION_ACTIVE\x10\x01\x12\x1d\n" +
-	"\x19OBSERVER_ADMISSION_ABSENT\x10\x022\xd4\x03\n" +
+	"\x19OBSERVER_ADMISSION_ABSENT\x10\x022\xfb\x04\n" +
 	"\n" +
 	"BattleNode\x12>\n" +
 	"\rQueryObserver\x12\x15.QueryObserverRequest\x1a\x16.QueryObserverResponse\x12P\n" +
@@ -1257,7 +1598,9 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\rDestroyBattle\x12\x15.DestroyBattleRequest\x1a\x06.Empty\x128\n" +
 	"\vAddObserver\x12\x13.AddObserverRequest\x1a\x14.AddObserverResponse\x12A\n" +
 	"\x0eRemoveObserver\x12\x16.RemoveObserverRequest\x1a\x17.RemoveObserverResponse\x12J\n" +
-	"\x11IssueBattleTicket\x12\x19.IssueBattleTicketRequest\x1a\x1a.IssueBattleTicketResponseB\x12\x98\xd4a\x1eZ\fproto/battleb\x06proto3"
+	"\x11IssueBattleTicket\x12\x19.IssueBattleTicketRequest\x1a\x1a.IssueBattleTicketResponse\x12D\n" +
+	"\x0fAttachRelayGate\x12\x17.AttachRelayGateRequest\x1a\x18.AttachRelayGateResponse\x12_\n" +
+	"\x18PromoteSpectateBroadcast\x12 .PromoteSpectateBroadcastRequest\x1a!.PromoteSpectateBroadcastResponseB\x12\x98\xd4a\x1eZ\fproto/battleb\x06proto3"
 
 var (
 	file_proto_battle_battle_node_proto_rawDescOnce sync.Once
@@ -1272,61 +1615,73 @@ func file_proto_battle_battle_node_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_battle_battle_node_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_battle_battle_node_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_battle_battle_node_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_proto_battle_battle_node_proto_goTypes = []any{
-	(BattleCreationState)(0),            // 0: BattleCreationState
-	(ObserverAdmissionState)(0),         // 1: ObserverAdmissionState
-	(*ObserverExitOriginal)(nil),        // 2: ObserverExitOriginal
-	(*CreateBattleRequest)(nil),         // 3: CreateBattleRequest
-	(*CreateBattleResponse)(nil),        // 4: CreateBattleResponse
-	(*DestroyBattleRequest)(nil),        // 5: DestroyBattleRequest
-	(*QueryBattleCreationRequest)(nil),  // 6: QueryBattleCreationRequest
-	(*QueryBattleCreationResponse)(nil), // 7: QueryBattleCreationResponse
-	(*AddObserverRequest)(nil),          // 8: AddObserverRequest
-	(*AddObserverResponse)(nil),         // 9: AddObserverResponse
-	(*RemoveObserverRequest)(nil),       // 10: RemoveObserverRequest
-	(*RemoveObserverResponse)(nil),      // 11: RemoveObserverResponse
-	(*QueryObserverRequest)(nil),        // 12: QueryObserverRequest
-	(*QueryObserverResponse)(nil),       // 13: QueryObserverResponse
-	(*IssueBattleTicketRequest)(nil),    // 14: IssueBattleTicketRequest
-	(*IssueBattleTicketResponse)(nil),   // 15: IssueBattleTicketResponse
-	(*BattlePlayerSnapshot)(nil),        // 16: BattlePlayerSnapshot
-	(*BattleActivityContext)(nil),       // 17: BattleActivityContext
-	(*base.TipInfoMessage)(nil),         // 18: TipInfoMessage
-	(*BattleRouting)(nil),               // 19: BattleRouting
-	(*BattleAssignedS2C)(nil),           // 20: BattleAssignedS2C
-	(*base.Empty)(nil),                  // 21: Empty
+	(BattleCreationState)(0),                 // 0: BattleCreationState
+	(ObserverAdmissionState)(0),              // 1: ObserverAdmissionState
+	(*ObserverExitOriginal)(nil),             // 2: ObserverExitOriginal
+	(*CreateBattleRequest)(nil),              // 3: CreateBattleRequest
+	(*CreateBattleResponse)(nil),             // 4: CreateBattleResponse
+	(*DestroyBattleRequest)(nil),             // 5: DestroyBattleRequest
+	(*QueryBattleCreationRequest)(nil),       // 6: QueryBattleCreationRequest
+	(*QueryBattleCreationResponse)(nil),      // 7: QueryBattleCreationResponse
+	(*AddObserverRequest)(nil),               // 8: AddObserverRequest
+	(*AddObserverResponse)(nil),              // 9: AddObserverResponse
+	(*RemoveObserverRequest)(nil),            // 10: RemoveObserverRequest
+	(*RemoveObserverResponse)(nil),           // 11: RemoveObserverResponse
+	(*QueryObserverRequest)(nil),             // 12: QueryObserverRequest
+	(*QueryObserverResponse)(nil),            // 13: QueryObserverResponse
+	(*IssueBattleTicketRequest)(nil),         // 14: IssueBattleTicketRequest
+	(*IssueBattleTicketResponse)(nil),        // 15: IssueBattleTicketResponse
+	(*AttachRelayGateRequest)(nil),           // 16: AttachRelayGateRequest
+	(*AttachRelayGateResponse)(nil),          // 17: AttachRelayGateResponse
+	(*PromoteSpectateBroadcastRequest)(nil),  // 18: PromoteSpectateBroadcastRequest
+	(*PromoteSpectateBroadcastResponse)(nil), // 19: PromoteSpectateBroadcastResponse
+	(*BattlePlayerSnapshot)(nil),             // 20: BattlePlayerSnapshot
+	(*BattleActivityContext)(nil),            // 21: BattleActivityContext
+	(ESpectateVisibility)(0),                 // 22: eSpectateVisibility
+	(*base.TipInfoMessage)(nil),              // 23: TipInfoMessage
+	(*BattleRouting)(nil),                    // 24: BattleRouting
+	(*BattleAssignedS2C)(nil),                // 25: BattleAssignedS2C
+	(*base.Empty)(nil),                       // 26: Empty
 }
 var file_proto_battle_battle_node_proto_depIdxs = []int32{
 	8,  // 0: ObserverExitOriginal.add:type_name -> AddObserverRequest
-	16, // 1: CreateBattleRequest.players:type_name -> BattlePlayerSnapshot
-	17, // 2: CreateBattleRequest.activity_context:type_name -> BattleActivityContext
-	18, // 3: CreateBattleResponse.error_message:type_name -> TipInfoMessage
-	0,  // 4: QueryBattleCreationResponse.state:type_name -> BattleCreationState
-	19, // 5: AddObserverRequest.routing:type_name -> BattleRouting
-	18, // 6: AddObserverResponse.error_message:type_name -> TipInfoMessage
-	1,  // 7: QueryObserverResponse.state:type_name -> ObserverAdmissionState
-	18, // 8: IssueBattleTicketResponse.error_message:type_name -> TipInfoMessage
-	20, // 9: IssueBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
-	12, // 10: BattleNode.QueryObserver:input_type -> QueryObserverRequest
-	6,  // 11: BattleNode.QueryBattleCreation:input_type -> QueryBattleCreationRequest
-	3,  // 12: BattleNode.CreateBattle:input_type -> CreateBattleRequest
-	5,  // 13: BattleNode.DestroyBattle:input_type -> DestroyBattleRequest
-	8,  // 14: BattleNode.AddObserver:input_type -> AddObserverRequest
-	10, // 15: BattleNode.RemoveObserver:input_type -> RemoveObserverRequest
-	14, // 16: BattleNode.IssueBattleTicket:input_type -> IssueBattleTicketRequest
-	13, // 17: BattleNode.QueryObserver:output_type -> QueryObserverResponse
-	7,  // 18: BattleNode.QueryBattleCreation:output_type -> QueryBattleCreationResponse
-	4,  // 19: BattleNode.CreateBattle:output_type -> CreateBattleResponse
-	21, // 20: BattleNode.DestroyBattle:output_type -> Empty
-	9,  // 21: BattleNode.AddObserver:output_type -> AddObserverResponse
-	11, // 22: BattleNode.RemoveObserver:output_type -> RemoveObserverResponse
-	15, // 23: BattleNode.IssueBattleTicket:output_type -> IssueBattleTicketResponse
-	17, // [17:24] is the sub-list for method output_type
-	10, // [10:17] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	20, // 1: CreateBattleRequest.players:type_name -> BattlePlayerSnapshot
+	21, // 2: CreateBattleRequest.activity_context:type_name -> BattleActivityContext
+	22, // 3: CreateBattleRequest.spectate_visibility:type_name -> eSpectateVisibility
+	23, // 4: CreateBattleResponse.error_message:type_name -> TipInfoMessage
+	0,  // 5: QueryBattleCreationResponse.state:type_name -> BattleCreationState
+	24, // 6: AddObserverRequest.routing:type_name -> BattleRouting
+	23, // 7: AddObserverResponse.error_message:type_name -> TipInfoMessage
+	1,  // 8: QueryObserverResponse.state:type_name -> ObserverAdmissionState
+	23, // 9: IssueBattleTicketResponse.error_message:type_name -> TipInfoMessage
+	25, // 10: IssueBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
+	23, // 11: AttachRelayGateResponse.error_message:type_name -> TipInfoMessage
+	23, // 12: PromoteSpectateBroadcastResponse.error_message:type_name -> TipInfoMessage
+	12, // 13: BattleNode.QueryObserver:input_type -> QueryObserverRequest
+	6,  // 14: BattleNode.QueryBattleCreation:input_type -> QueryBattleCreationRequest
+	3,  // 15: BattleNode.CreateBattle:input_type -> CreateBattleRequest
+	5,  // 16: BattleNode.DestroyBattle:input_type -> DestroyBattleRequest
+	8,  // 17: BattleNode.AddObserver:input_type -> AddObserverRequest
+	10, // 18: BattleNode.RemoveObserver:input_type -> RemoveObserverRequest
+	14, // 19: BattleNode.IssueBattleTicket:input_type -> IssueBattleTicketRequest
+	16, // 20: BattleNode.AttachRelayGate:input_type -> AttachRelayGateRequest
+	18, // 21: BattleNode.PromoteSpectateBroadcast:input_type -> PromoteSpectateBroadcastRequest
+	13, // 22: BattleNode.QueryObserver:output_type -> QueryObserverResponse
+	7,  // 23: BattleNode.QueryBattleCreation:output_type -> QueryBattleCreationResponse
+	4,  // 24: BattleNode.CreateBattle:output_type -> CreateBattleResponse
+	26, // 25: BattleNode.DestroyBattle:output_type -> Empty
+	9,  // 26: BattleNode.AddObserver:output_type -> AddObserverResponse
+	11, // 27: BattleNode.RemoveObserver:output_type -> RemoveObserverResponse
+	15, // 28: BattleNode.IssueBattleTicket:output_type -> IssueBattleTicketResponse
+	17, // 29: BattleNode.AttachRelayGate:output_type -> AttachRelayGateResponse
+	19, // 30: BattleNode.PromoteSpectateBroadcast:output_type -> PromoteSpectateBroadcastResponse
+	22, // [22:31] is the sub-list for method output_type
+	13, // [13:22] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_node_proto_init() }
@@ -1342,7 +1697,7 @@ func file_proto_battle_battle_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_node_proto_rawDesc), len(file_proto_battle_battle_node_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   14,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

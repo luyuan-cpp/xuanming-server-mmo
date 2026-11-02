@@ -27,7 +27,6 @@
     <ClCompile Include="client_rpc_router\client_rpc_router.pb.cc" />
     <ClCompile Include="common\asset\asset_op.pb.cc" />
     <ClCompile Include="common\component\asset_op_ledger_comp.pb.cc" />
-    <ClCompile Include="common\component\battle_settlement_ledger_comp.pb.cc" />
     <ClCompile Include="common\component\player_mystery_merchant_comp.pb.cc" />
     <ClCompile Include="common\component\battle_comp.pb.cc" />
     <ClCompile Include="common\event\battle_event.pb.cc" />
@@ -78,7 +77,6 @@
     <ClCompile Include="common\database\rollback_database_table.pb.cc" />
     <ClCompile Include="common\database\bag_quest_mail_data.pb.cc" />
     <ClCompile Include="common\event\player_inbox_event.pb.cc" />
-    <ClCompile Include="common\event\player_migration_event.pb.cc" />
     <ClCompile Include="common\options\attribute_sync_option.pb.cc" />
     <ClCompile Include="common\options\event_ingress_option.pb.cc" />
     <ClCompile Include="common\rollback\player_snapshot.pb.cc" />
@@ -90,7 +88,6 @@
     <ClCompile Include="contracts\kafka\scene_command.pb.cc" />
     <ClCompile Include="data_service\data_service.pb.cc" />
     <ClCompile Include="db\db.pb.cc" />
-    <ClCompile Include="db\db_task.pb.cc" />
     <ClCompile Include="db\proto_option.pb.cc" />
     <ClCompile Include="etcd\etcd.pb.cc" />
     <ClCompile Include="etcd\kv.pb.cc" />
@@ -147,7 +144,6 @@
     <ClInclude Include="common\asset\asset_op.pb.h" />
     <ClInclude Include="common\component\actor_comp.pb.h" />
     <ClInclude Include="common\component\asset_op_ledger_comp.pb.h" />
-    <ClInclude Include="common\component\battle_settlement_ledger_comp.pb.h" />
     <ClInclude Include="common\component\player_mystery_merchant_comp.pb.h" />
     <ClInclude Include="common\component\buff_comp.pb.h" />
     <ClInclude Include="common\component\base_comp.pb.h" />
@@ -178,7 +174,6 @@
     <ClInclude Include="common\database\player_cache.pb.h" />
     <ClInclude Include="common\database\rollback_database_table.pb.h" />
     <ClInclude Include="common\event\player_inbox_event.pb.h" />
-    <ClInclude Include="common\event\player_migration_event.pb.h" />
     <ClInclude Include="common\event\team_event.pb.h" />
     <ClInclude Include="common\options\attribute_sync_option.pb.h" />
     <ClInclude Include="common\options\event_ingress_option.pb.h" />
@@ -190,7 +185,6 @@
     <ClInclude Include="contracts\kafka\scene_command.pb.h" />
     <ClInclude Include="data_service\data_service.pb.h" />
     <ClInclude Include="db\db.pb.h" />
-    <ClInclude Include="db\db_task.pb.h" />
     <ClInclude Include="db\proto_option.pb.h" />
     <ClInclude Include="etcd\etcd.pb.h" />
     <ClInclude Include="etcd\kv.pb.h" />
@@ -435,5 +429,9 @@
   <ItemGroup Label="ProtoGeneratorSources">
     <ClCompile Include="player_store\player_store.pb.cc" />
     <ClInclude Include="player_store\player_store.pb.h" />
+  </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="role_fence\role_fence.pb.cc" />
+    <ClInclude Include="role_fence\role_fence.pb.h" />
   </ItemGroup>
 </Project>

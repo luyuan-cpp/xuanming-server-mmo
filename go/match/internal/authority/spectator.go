@@ -38,6 +38,12 @@ const spectatorIntentColumns = "player_id,request_high,request_low,original,requ
 // 意图以 state=5、close_tip=0、delivery=LOBBY 结案,重放时重新做准入并签新凭证(battle-spectate-tiered-fanout.md §15.6)。
 const spectatorDeliveryLobby = uint32(pb.ESpectateDelivery_SPECTATE_DELIVERY_LOBBY)
 
+// spectatorAdmitWindowMs 是观战原件的准入窗口:admit_before_ms = SQL 时钟 now + 本值。battle 观战账本按自己的墙钟只接受
+// 至多未来 30s(battle_room_manager.cpp HandleAddObserver / HandleRemoveObserver),SQL 时钟与 battle 不同源。窗口取满 30s 时,
+// SQL 时钟只要比 battle 快过「落原件到 battle 收到 Add」这段耗时(几十毫秒),Add 和 Remove 就都会被拒:观战回 16018,取消也拿不到证明。
+// 留 5s 给两边的时钟偏差;Add 的 RPC 预算是秒级,25s 足够送达与重试。
+const spectatorAdmitWindowMs = 25000
+
 func scanSpectator(row scanner) (*pb.MatchSpectatorRecord, error) {
 	out := &pb.MatchSpectatorRecord{}
 	err := row.Scan(&out.PlayerId, &out.OperationId, &out.BattleId, &out.TargetEndpoint, &out.TargetInstanceId, &out.State, &out.RequestPayload, &out.OwnerAccount, &out.OwnerRevision, &out.AddRequest, &out.UpdatedMs, &out.RequestHigh, &out.RequestLow)
@@ -505,7 +511,7 @@ func (s *Store) beginSpectatorOnce(ctx context.Context, player uint64, request *
 		return nil, err
 	}
 	add = proto.Clone(add).(*battlepb.AddObserverRequest)
-	add.BattleId, add.ObserverPlayerId, add.SpectatorOperationId, add.TargetInstanceId, add.AdmitBeforeMs = formation.BattleId, player, request.RequestId, instance, stamp+30000
+	add.BattleId, add.ObserverPlayerId, add.SpectatorOperationId, add.TargetInstanceId, add.AdmitBeforeMs = formation.BattleId, player, request.RequestId, instance, stamp+spectatorAdmitWindowMs
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(add)
 	if err != nil {
 		return nil, err

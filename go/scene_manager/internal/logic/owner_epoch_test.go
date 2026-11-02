@@ -2077,7 +2077,7 @@ func TestEnterScene_HomeZoneUnmappedSameZoneSceneSwitchStillFallsBackToGateZone(
 	assert.Equal(t, testZoneId, decodeRoutePlayerEvent(t, (*captured)[0]).HomeZoneId)
 }
 
-// 跨 zone 传送第一条腿(GO-1 主修复):玩家要离开现在所在的 zone,却没有 player:zone 映射(或
+// 跨 zone 传送第一条腿(GO-1 主修复):玩家要离开现在所在的 zone,却没有 player_route 映射(或
 // 映射为 0 / 查询失败)→ 在过换手门、铸 epoch、写等待落点之前拒绝,一个字节都不改。放行的话
 // 第二条腿会按目标 zone 的 gate zone 当归属,访客存盘静默写进目标 zone 的库。
 // 标记已就绪、gate 也签得出票据:能挡住这次放行的只有归属前置检查。

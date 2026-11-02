@@ -1,4 +1,4 @@
-// Package homezone 是 login 对 data_service `player:zone:{player_id}` 映射
+// Package homezone 是 login 对 data_service `player_route` 映射
 // (玩家当前归属哪个 zone)的唯一客户端,供三条链复用:
 //
 //   - CreatePlayer 铸出 PlayerId 后、落账号 blob 之前,用它登记映射
@@ -35,6 +35,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -173,10 +175,9 @@ func (r *Resolver) BatchHomeZones(ctx context.Context, playerIDs []uint64) (map[
 // 归属权威,没有映射的玩家是一颗迟早引爆的路由炸弹,不能「先建了再说」。
 // zone 为 0 视为调用方 bug,直接拒绝而不是写一条无意义的映射。
 //
-// storageID 非 0 时,data_service 在写 player:zone 的同一段 Lua 里原子钉
-// player:placement = "{storageID}:1"(docs/design/player-storage-placement.md §8.1);
-// 0 = 不钉,与落点设计之前的请求逐字节相同。两键同一次写,避免「有归属、无落点」的半态
-// 在 go/db Required=true 下把新号的存盘打进死信。
+// storageID 必填:data_service 把它和 zone 写进 player_route 的同一行,原子成立
+// (docs/design/player-storage-placement.md §8.1)。go/db 对没有落点的角色一律拒绝认领,
+// 所以传 0 会被 data_service 拒绝,不会留下「有归属、无落点」的半态。
 func (r *Resolver) RegisterPlayerZone(ctx context.Context, playerID uint64, zone, storageID uint32) error {
 	if r == nil || r.Client == nil {
 		return ErrUnavailable
@@ -190,9 +191,18 @@ func (r *Resolver) RegisterPlayerZone(ctx context.Context, playerID uint64, zone
 	return err
 }
 
+// roleListFallbackTotal 数角色列表整次回落到建角 zone 的请求。这条路径为了不挡登录而失败放行
+// (映射提案 §15.5 第 3 条),data_service 整个连不上时它自己的指标也看不到,只有这里数得到。
+// 非零说明玩家此刻可能看到合服前的旧区。
+var roleListFallbackTotal = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "login_role_list_home_zone_fallback_total",
+	Help: "Login role list requests that kept the creation-time zone_id because BatchGetPlayerHomeZone failed.",
+})
+
 // RefreshRoleZones 返回 players 的**副本**,其中每个角色的 zone_id 被映射里的
 // 当前归属 zone 覆盖(映射有且非 0 才覆盖)。映射里没有的 id、或整次 RPC 失败,
-// 一律保留账号 blob 里的建角 zone,并只打一条日志 —— 绝不让登录因此失败。
+// 一律保留账号 blob 里的建角 zone,并只打一条日志(整次失败另计 roleListFallbackTotal)
+// —— 绝不让登录因此失败。
 //
 // 返回副本而不是原地改,是把「不回写账号 blob」这条决定落实在类型上:调用方
 // 拿到的切片与 userAccount 不共享指针,之后无论谁 Marshal userAccount 都不会
@@ -214,6 +224,7 @@ func (r *Resolver) RefreshRoleZones(ctx context.Context, players []*pbbase.Accou
 	zones, err := r.BatchHomeZones(ctx, ids)
 	if err != nil {
 		// 每个请求最多一条:这里不会循环打日志。
+		roleListFallbackTotal.Inc()
 		logx.WithContext(ctx).Errorf("[home-zone] role list keeps creation-time zone_id for %d role(s): "+
 			"BatchGetPlayerHomeZone failed: %v", len(ids), err)
 		return out
@@ -229,7 +240,7 @@ func (r *Resolver) RefreshRoleZones(ctx context.Context, players []*pbbase.Accou
 		p.ZoneId = zone
 	}
 	if missing > 0 {
-		logx.WithContext(ctx).Infof("[home-zone] %d/%d role(s) absent from player:zone mapping, keeping stored zone_id",
+		logx.WithContext(ctx).Infof("[home-zone] %d/%d role(s) absent from player_route mapping, keeping stored zone_id",
 			missing, len(out))
 	}
 	return out
@@ -262,7 +273,7 @@ func ResolveEnterZone(ctx context.Context, lookup Lookup, playerID uint64, ownZo
 		return ownZone, false
 	}
 	if home == 0 {
-		logx.WithContext(ctx).Infof("[home-zone] EnterGame keeps zone=%d for player=%d: no player:zone mapping",
+		logx.WithContext(ctx).Infof("[home-zone] EnterGame keeps zone=%d for player=%d: no player_route mapping",
 			ownZone, playerID)
 		return ownZone, false
 	}

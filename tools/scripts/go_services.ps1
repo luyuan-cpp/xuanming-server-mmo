@@ -95,6 +95,10 @@ param(
     # Default 1000 keeps zones cleanly separated even with PortStride=1.
     [int]$ZonePortShift = 1000,
 
+    # 显式给本区的端口偏移,替代 (Zone-1)*ZonePortShift;-1 = 没给,仍用原公式。区号本身不变。
+    # 语义区号(如 990017)代入原公式会越界,又没有现成的固定配置 producer 时用它;生成目录和启动必须传同一个值。
+    [int]$ZonePortOffset = -1,
+
     # stop:跳过 Ctrl+C 直接强杀进程树(旧行为)。见 Invoke-Stop 头注释。
     [switch]$ForceStop,
 
@@ -114,6 +118,8 @@ $ErrorActionPreference = "Stop"
 if ($LocalMySQL -and $Command -notin @('start', 'start-exe', 'migrate', 'plan-instances')) {
     throw '-LocalMySQL 只用于本地 start/start-exe/migrate/plan-instances，不用于构建或部署。'
 }
+if ($ZonePortOffset -lt -1) { throw '-ZonePortOffset must be 0 or greater; omit it to use (Zone-1)*ZonePortShift.' }
+if ($ZonePortOffset -ge 0 -and $Zone -le 0) { throw '-ZonePortOffset requires -Zone.' }
 
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot   = Resolve-Path (Join-Path $ScriptDir "..\..")
@@ -392,9 +398,15 @@ function Get-TcpListenerProcessIds([int]$Port) {
         Where-Object LocalPort -eq $Port | Select-Object -ExpandProperty OwningProcess -Unique)
 }
 
+# 区的端口偏移只有这一个算法,监听端口、metrics 端口和 RoleFence 都用它。没显式给 -ZonePortOffset 时是原公式。
+function Get-ZonePortOffset {
+    if ($Zone -le 0) { return 0 }
+    if ($null -ne $ZonePortOffset -and [int]$ZonePortOffset -ge 0) { return [int]$ZonePortOffset }
+    return ($Zone - 1) * $ZonePortShift
+}
+
 function Get-InstancePort([hashtable]$Info, [int]$Index) {
-    $zoneShift = if ($Zone -gt 0) { ($Zone - 1) * $ZonePortShift } else { 0 }
-    return [int]$Info.Port + $zoneShift + ($Index - 1) * $PortStride
+    return [int]$Info.Port + (Get-ZonePortOffset) + ($Index - 1) * $PortStride
 }
 
 function Resolve-BindablePort {
@@ -638,6 +650,55 @@ function ConvertTo-ZoneShiftedRoleFenceConfig {
     return $Content.Substring(0, $blocks[0].Index) + $text + $Content.Substring($blocks[0].Index + $blocks[0].Length)
 }
 
+# 最终计划阶段用:把 RoleFence 的直连地址改成同区计划里各参与者的实际端口。
+# ConvertTo-ZoneShiftedRoleFenceConfig 只做算术位移,跟不上 Resolve-BindablePort 的避让(第二区 trade 的 51800 可能被挪走,协调者还连旧端口)。
+# 参与者名单取配置自己的 Participants,这里不存第二份。用 Etcd 的参与者保持原样。
+# 计划里没有这个参与者、它有多个副本、或一个参与者写了多个直连地址都拒绝:直连地址没法唯一寻址,不猜。只改端口数字,其余字节原样保留。
+function ConvertTo-PlannedRoleFenceConfig {
+    param([Parameter(Mandatory = $true)][string]$Content, [Parameter(Mandatory = $true)][hashtable]$PortsByService)
+    $blocks = [regex]::Matches($Content, '(?m)^RoleFence:[ \t]*\r?\n(?:[ \t]+[^\r\n]*\r?\n|[ \t]*\r?\n)*')
+    if ($blocks.Count -eq 0) { return $Content }
+    if ($blocks.Count -gt 1) { throw 'RoleFence is duplicated in the data_service config; refusing to derive.' }
+    $entries = [regex]::Matches($blocks[0].Value, '(?m)^[ \t]+-[ \t]+Name:[ \t]*(?<name>[A-Za-z0-9_-]+)[ \t]*\r?\n(?<body>(?:(?![ \t]*-[ \t])[ \t]+[^\r\n]*\r?\n|[ \t]*\r?\n)*)')
+    $text = $blocks[0].Value
+    $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    # 从后往前改,前面条目的下标不动。
+    for ($i = $entries.Count - 1; $i -ge 0; $i--) {
+        $name = $entries[$i].Groups['name'].Value
+        if (-not $seen.Add($name)) { throw "RoleFence participant $name is duplicated; refusing to guess." }
+        $body = $entries[$i].Groups['body']
+        $declared = [regex]::Matches($body.Value, '(?m)^[ \t]+Endpoints:')
+        if ($declared.Count -eq 0) {
+            if ($body.Value -notmatch '(?m)^[ \t]+Etcd:') { throw "RoleFence participant $name has neither Endpoints nor Etcd." }
+            continue
+        }
+        $endpoint = [regex]::Match($body.Value, '(?m)^[ \t]+Endpoints:[ \t]*\[[ \t]*[^:,\]\s]+:(?<port>[0-9]+)[ \t]*\][ \t]*\r?$')
+        if ($declared.Count -ne 1 -or -not $endpoint.Success) { throw "RoleFence participant $name must declare exactly one direct endpoint; use Etcd to address several." }
+        if (-not $PortsByService.ContainsKey($name)) { throw "RoleFence participant $name is not in this zone's instance plan; include it in -Services." }
+        $ports = @($PortsByService[$name])
+        if ($ports.Count -ne 1) { throw "RoleFence participant $name has $($ports.Count) instances and a direct endpoint cannot address them uniquely; use Etcd or run one instance." }
+        $port = $endpoint.Groups['port']
+        $offset = $body.Index + $port.Index
+        $text = $text.Remove($offset, $port.Length).Insert($offset, [string]$ports[0])
+    }
+    return $Content.Substring(0, $blocks[0].Index) + $text + $Content.Substring($blocks[0].Index + $blocks[0].Length)
+}
+
+# 全部实例的实际端口都定了才能绑。运行中的参与者用它的记录端口(计划里已核过身份);运行中的 data_service 配置已固定,不改。
+function Update-PlannedRoleFenceConfigs {
+    param([object[]]$Instances = @())
+    $portsByService = @{}
+    foreach ($instance in $Instances) {
+        if (-not $portsByService.ContainsKey($instance.Service)) { $portsByService[$instance.Service] = @() }
+        $portsByService[$instance.Service] += [int]$instance.Port
+    }
+    foreach ($instance in @($Instances | Where-Object { $_.Service -ceq 'data_service' -and -not $_.Running })) {
+        $content = Get-Content -LiteralPath $instance.ConfigPath -Raw
+        $bound = ConvertTo-PlannedRoleFenceConfig -Content $content -PortsByService $portsByService
+        if ($bound -cne $content) { Set-Content -LiteralPath $instance.ConfigPath -Value $bound -Encoding UTF8 -NoNewline }
+    }
+}
+
 function Resolve-InstanceConfig {
     param(
         [string]$Name,
@@ -649,7 +710,7 @@ function Resolve-InstanceConfig {
     $svcDir    = Join-Path $GoRoot $Info.Dir
     $baseYaml  = Join-Path $svcDir $Info.ConfigFile
     $useLocalMySQL = $LocalMySQL -and $Name -in @('db', 'match')
-    $zoneShift = if ($Zone -gt 0) { ($Zone - 1) * $ZonePortShift } else { 0 }
+    $zoneShift = Get-ZonePortOffset
     $port      = Get-InstancePort -Info $Info -Index $Index
     $port      = Resolve-BindablePort $port (Get-InstanceKey -Name $Name -Index $Index -Total $Total) $ReservedPorts
 	$globalTiDBOverride = [string][Environment]::GetEnvironmentVariable('MMORPG_GLOBAL_AUTHORITY_TIDB_HOST','Process')
@@ -1013,7 +1074,7 @@ function Start-ServiceInstance {
         $writerEnvironment=Get-SqlWriterBootEnvironment -InstanceKey $instanceKey -RepoRoot $RepoRoot -ServiceName $Name -SelectedRuntimeConfigFile ([ref]$selectedConfig) -PreparedRuntimeArguments ([ref]$bootMaintenanceArgs) -PrepareOnlySupported:($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','match','trade','player_inbox'))
         $listen=(Get-YamlScalar -Path $selectedConfig -KeyPath 'ListenOn').Value
         if($listen -cnotmatch '^(?:\[[0-9A-Fa-f:]+\]|[A-Za-z0-9_.-]+):(?<port>[1-9][0-9]{0,4})$' -or [int]$Matches.port -ne $cfg.Port){throw '每boot完整配置的ListenOn与本次实例固定端口不符，不能写回或挪用别人的配置'}
-        if($Zone -gt 0 -and [int](Get-YamlScalar -Path $selectedConfig -KeyPath 'ZoneId').Value -ne $Zone){throw '每boot完整配置ZoneId与本次实例不符'}
+        if($Zone -gt 0 -and (Get-InstanceConfigZoneId -ConfigPath $selectedConfig) -ne $Zone){throw '每boot完整配置ZoneId与本次实例不符'}
         $cfg.Path=$selectedConfig;$cfg.FullPath=$selectedConfig;$cfg.Derived=$false
     }else{Assert-PublicationStartAllowed -RepoRoot $RepoRoot}
     $logOut  = Join-Path $LogDir "$instanceKey.stdout.log"
@@ -1238,8 +1299,12 @@ function Invoke-PlanInstances {
             continue
         }
         $cfg = Resolve-InstanceConfig -Name $p.Name -Info $p.Info -Index $p.Index -Total $p.Total -ReservedPorts $reservedPorts
+        # 和启动同一个读法、同一个判据:配置写不进目标区号就在计划阶段拒绝。
+        if ($Zone -gt 0 -and (Get-InstanceConfigZoneId -ConfigPath $cfg.FullPath) -ne $Zone) { throw "[plan] $instanceKey : the derived config does not carry zone $Zone." }
         $instances += [pscustomobject]@{ InstanceKey = $instanceKey; Service = $p.Name; Running = $false; Port = $cfg.Port; ConfigPath = $cfg.FullPath }
     }
+    # 单区(Zone=0)的计划常常只点名部分服务,这里不绑,行为不变。
+    if ($Zone -gt 0) { Update-PlannedRoleFenceConfigs -Instances $instances }
     # 空列表和单元素都要保持 JSON 数组形状。
     [IO.File]::WriteAllText($InstancePlanOutput, (ConvertTo-Json -InputObject ([object[]]$instances) -Depth 4), [Text.UTF8Encoding]::new($false))
 }

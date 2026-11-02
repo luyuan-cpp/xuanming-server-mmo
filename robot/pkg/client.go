@@ -136,6 +136,18 @@ func (gc *GameClient) SetTokens(access, refresh string, accessExpire, refreshExp
 	}
 }
 
+// DropRefreshToken 丢弃一枚不能再用的 refresh token(被服务端拒绝,或刷新结果未知且已超出重试预算)。
+// 只在它仍是 stale 那一枚时清空,不覆盖并发换上的新令牌。清空之后不再主动刷新,access 过期后的重连走完整登录;
+// 再拿它去刷新会落在服务端宽限窗口之外、被当成重用而吊销整个家族。
+func (gc *GameClient) DropRefreshToken(stale string) {
+	gc.tokenMu.Lock()
+	defer gc.tokenMu.Unlock()
+	if stale != "" && gc.RefreshToken == stale {
+		gc.RefreshToken = ""
+		gc.RefreshTokenExpire = 0
+	}
+}
+
 // SnapshotTokens returns a consistent snapshot of the current token state.
 func (gc *GameClient) SnapshotTokens() (access, refresh string, accessExpire, refreshExpire int64) {
 	gc.tokenMu.RLock()

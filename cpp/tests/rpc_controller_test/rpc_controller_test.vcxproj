@@ -171,6 +171,7 @@
     <ClCompile Include="grpc_client_local_reject_test.cpp" />
     <ClCompile Include="grpc_client_loopback_test.cpp" />
     <ClCompile Include="hiredis_command_lifecycle_test.cpp" />
+    <ClCompile Include="hiredis_event_batch_windows_test.cpp" />
     <ClCompile Include="redis_manager_auth_test.cpp" />
     <ClCompile Include="redis_slot_test.cpp" />
     <ClCompile Include="redis_cluster_logic_test.cpp" />

@@ -225,7 +225,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 }
 
 // roleListWithCurrentHomeZone 把 SQL 目录角色列表转成响应,并用 data_service
-// 的 player:zone 映射覆盖每个角色的 zone_id。
+// 的 player_route 映射覆盖每个角色的 zone_id。
 //
 // 目录角色里的 zone_id 只是建角时盖的章(createplayerlogic.go),合服只改映射
 // 不改目录副本,所以直接返回它会把玩家引向已下线的源 zone。这里刻意**不把刷新后的

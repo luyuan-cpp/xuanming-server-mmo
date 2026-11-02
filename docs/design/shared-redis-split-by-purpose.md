@@ -1978,6 +1978,12 @@ Java 版账号与角色已在 MySQL(§26),本项在 Java 是「已做,实现不�
   - **`-RedisSplit` 在所有档位缺省都解析为不拆**,第 19 条原 §13 第 16 条「非 dev 缺省拆 queue」改为:首次上线显式 `-RedisSplit queue` 部署;不带参数时渲染逐字节不变;zone 写路径跟随线上,与线上不同须 `-ConfirmRedisSplitSwitch`。
   - **(2026-10-24)第 1a 批已落码,未编译、未测试**:login 的 `Node.QueueRedis`、`k8s_deploy.ps1 -RedisSplit queue`、模板 `redis-purpose.yaml`、`redis-split-status` / `redis-wipe`,以及 dev_tools / k8s_image / 回档脚本的转发;文件清单与 Codex 验证命令见 PROGRESS「2026-10-24 G4a 第 1a 批落码」。
   - **queue 实例本批在所有档位都是单实例**(第 18 条子项 1 的「非 dev 高可用」推迟)。理由:`redis-ha.yaml` 的对象名(redis、redis-proxy、mymaster、redis-ha-scripts)写死,要先参数化才能复用;排队数据都带 TTL、可丢,单实例重启期间只影响该组 zone 的新登录。高可用变体列为后续项。
+  - **(2026-11-01 落地说明,上一条的「单实例」作废,原文保留;未编译、未跑测试、未上集群,待 Codex 验证)queue 实例的高可用形态已落码,第 18 条子项 1 恢复原结论**:dev 档单实例,非 dev 档高可用,与核心同一个 `-RedisReplicas`。
+    - **做法**:`redis-ha.yaml` 没有参数化,新增 `manifests/infra/redis-purpose-ha.yaml`,对象名、Pod 名前缀、headless 域名与哨兵 master 名都由实例名渲染。全部生效行与 `redis-ha.yaml` 逐行同源,差别只有模板文件头列的几条,由 `k8s_redis_split_contract.tests.ps1` 比对。客户端入口仍是同名 Service `redis-queue-g<N>`,高可用时它指向代理,所以地址不随形态变,换形态不触发 `-ConfirmRedisSplitSwitch`。
+    - **取舍**:形态不单独设参数(同一次部署里 queue 与核心一致)。1 → 3 只告警、不要确认开关,3 → 1 与线上 0 / 2 副本拒绝并写明手工步骤;queue 实例不走核心的重启闸。理由都是排队数据带 TTL、可以丢,重启只影响本组新登录。代价:不带 `-RedisSplit queue` 的 infra-up 不碰 queue 实例,核心切到高可用之后 queue 要到下一次带这个参数才跟上,这期间两者形态不同。
+    - **连接账**:`MAXCLIENTS` 与单实例同值 10000,总账只读 `redis-purpose.yaml`;`PROXY_MAXCONN=3000`,3000 × (2 + 1) + 预留 1000 = 10000,渲染与总账两处核对。容量初值(每组 1gb)不变,仍待 L-14 压测复核。
+    - **11-01 复核补上的缺口**:`Redis queue proxy ledger` 一行(模板头写了,函数没写);`redis-split-status` 读 zone 实际指向的实例的形态与就绪状态(`Read-RedisQueueInstanceLive`,函数头列了名字,函数没写),实例不存在、没就绪、代理没起来或 Service 与形态对不上都算失败,否则它当闸时会放过连不上的实例;高可用形态的契约用例。部署与切换步骤见 [deploy/k8s/README.md](../../deploy/k8s/README.md)「queue 实例的高可用形态」。
+    - **没验证**:故障转移、滚动、冷启动、1 → 3 与 3 → 1 都没有对 queue 实例实测,结论来自与核心逐行同源(核心 2026-10-08 在 kind 上实测过)。Java 版没有 K8s 生产形态,仍按 §26 待做。
 
 ## 26. Java 版(AGENTS.md §12)(2026-10-18 新增)
 

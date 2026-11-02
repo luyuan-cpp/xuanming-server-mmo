@@ -539,7 +539,7 @@ SLG 补充:
 
 - **也默认用 TiDB。** 世界号是天然的分区键,世界之间几乎没有跨世界事务,多集群比 MMO 好分;合服在同一集群内只改世界标签,跨集群就把整个世界作为一个单元搬。攻城热点在地图服内存里串行处理,数据库只收到定时批量落盘的脏地块。
 - **单张大图要扩就拆图**,用空间分片而不是分布式事务:按州或固定区块切分,每个地块只有所在分片能写;行军越界时交接(沿用写权代次加交接);相邻分片互相同步边界一圈的只读影子,拦截与碰撞在本分片判定;客户端按视口订阅多个分片;同盟领土连通等全图规则由同盟服汇总、关键判定在提交时复核;战斗交给无状态 worker,结果回到地块所在分片后先核对状态再生效。这会推翻[会话制抽离判据](./session-extractability-mmo-slg.md) §3.2「一张图在一个赛季内不拆」,立项时先定单张图要容纳多少人,一个进程扛得住就不拆。
-- **本仓 SLG 笔记里「行军与地块以 Redis 为准」**要改成「地图服内存为准,落 TiDB 或 MySQL」,Redis 只做协调。SLG 目前只有设计稿、零实现。
+- **本仓 SLG 笔记里把玩家数据、行军、地块放 Redis 的写法**要改成「地图服内存为准,落 TiDB 或 MySQL」,Redis 只做协调。2026-11-01 已在 `docs/notes/slg/` 的 8 篇笔记开头和相关章节标注以本节为准,[会话制抽离判据](./session-extractability-mmo-slg.md) §3 也加了状态说明;笔记正文没有逐处重写。SLG 目前只有设计稿、零实现。行军是发起时先落库还是批量落、地块多久落一次,立项时定。
 
 ## 11. 跨 zone 对战
 
@@ -655,7 +655,7 @@ SLG 补充:
 - **放 Redis 的问题**:会丢、会回退(同 A.5);查不了(同盟全部领地、州城归属、战报历史、客服流水都要按条件查);跨对象改动没有跨 slot 原子(攻城易主、同盟仓库、交易);备份只有整实例快照,不能按时间点恢复,赛季归档不顺手。
 - **成本对 SLG 不是主要理由**:单服几千到一万人,整服数据几 GB 量级 [I]。「Redis 太贵」在 MMO(全量常驻 TB 级)成立,在 SLG 不成立。
 - **想要 KV 形态时**:落盘的 Redis 兼容存储(Apache Kvrocks、Pika、Tendis)数据在磁盘上,成本和持久性好很多,但查询和跨分片事务的问题仍在。
-- 本仓 SLG 笔记的分工本来就是「MySQL 持久化,Redis 放在线状态、排行榜、热缓存」(`docs/notes/slg/slg-interview-qa.md` [D]),只有行军与地块的检查点放了 Redis,按本文改为落 TiDB 或 MySQL。
+- 本仓 SLG 笔记的口径不统一(2026-11-01 更正,原来写的「只有行军与地块的检查点放了 Redis」不对)。`slg-interview-qa.md` 是「MySQL 持久化,Redis 放在线状态、排行榜、热缓存」[D];`slg-server-complete-framework.md` §12.3 把玩家资料、资源、武将、部队、建筑、邮件都写成 Redis 结构,`slg-server-framework-complete.md` §14.1 写「玩家数据(热)放 Redis」,`slg-server-mainprog-interview-qa.md` Q10 写资源变化先写 Redis 再经 Kafka 落 MySQL、恢复后以 Redis 为准 [D]。这几篇下面都还有 MySQL 持久化一层,没有一篇是「全在 Redis」。一律按本文改为落 TiDB 或 MySQL。
 
 ### A.7 TiDB 与业界实践的外部资料([W],子代理检索,主会话未逐条复核)
 
@@ -664,6 +664,7 @@ SLG 补充:
 - 大于 32 KiB 的值进 Titan(v7.6 起新集群默认开),写放大更低、约 2 倍空间(https://docs.pingcap.com/tidb/stable/titan-overview/)。
 - 缓存表、Stale Read、Follower Read 都不适合「每名玩家一行、在线时频繁覆盖写」的存档(https://docs.pingcap.com/tidb/stable/cached-tables/、https://docs.pingcap.com/tidb/stable/stale-read/、https://docs.pingcap.com/tidb/stable/follower-read/)。官方文档没有要求、也没有禁止在 TiDB 前加 Redis。
 - 业界实践:Roblox 官方建议会话期间以服务器内存为准、定期与离开时写回,并用会话锁防旧写(https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing);Halo 4/5 的 Orleans 以内存对象为准、由对象方法持久化(https://www.odbms.org/blog/2016/02/orleans-the-technology-behind-xbox-halo4-and-halo5-interview-with-phil-bernstein/);腾讯 TcaplusDB 把缓存与持久化合一(https://www.tencentcloud.com/document/product/1016/30267);Pokémon GO 以 Spanner 作主事务库(https://cloud.google.com/blog/topics/developers-practitioners/how-pok%C3%A9mon-go-scales-millions-requests)。没有查到以 TiDB 作大型 MMO 唯一存档库的具名公开案例。
+- 率土之滨本身(2026-11-01 主会话检索,中英文关键词):没查到官方公开的服务端存储方案,不能断言它用 Redis 还是别的;本仓 `docs/notes/slg/` 是「率土风格」的设计和面试笔记,不代表它的真实架构。公开文章里有先写 Redis 再回写 MySQL 的做法(https://topic.alibabacloud.com/a/high-speed-game-data-server-design-architecture-based-on-memory-and-redismysql_1_47_30082932.html),也有团队把 Redis 当玩家第一数据库(https://blog.csdn.net/chengwuqing9207/article/details/100992529、https://blog.csdn.net/chinabhlt/article/details/102563320,两篇原文都打不开,无法确认是哪一篇)。这几条都只看到搜索摘要,只说明有人这么做,不改变 A.6 的判断。
 
 ### A.8 讨论中更正或推翻过的说法
 
@@ -683,3 +684,4 @@ SLG 补充:
 | 防 etcd 回档靠领块水位备份,回档后丢整块(v1) | 否决 |
 | 每次发段带时间下限,水位只做探测(v1.3) | 评审否决:时钟跑快过加 etcd 回退会重号,时钟门禁会停全服发号。改为两份预留记录(§6.3) |
 | 地域之间靠全局下发不重叠的大块 | 改为计数器最高 6 位地域码,由发号器配置并与存储核对,客户端不配(§6.1) |
+| 本仓 SLG 笔记只有行军与地块的检查点放了 Redis | 多篇笔记把玩家资料、资源、武将等也放了 Redis,下面仍有 MySQL 持久化,口径不统一;一律以 §10 为准(A.6) |

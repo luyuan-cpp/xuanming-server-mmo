@@ -133,7 +133,10 @@ function Get-BootUser {
 # 取 compose 里一个服务的整段文本:到下一个同级键或顶层键为止。
 function Get-ComposeBlock {
     param([string]$Text, [string]$Name)
-    $match = [regex]::Match($Text, "(?ms)^  $([regex]::Escape($Name)):[ ]*\r?\n.*?(?=^  [^ #\r\n]|^[^ #\r\n]|\z)")
+    # 只在 services 段里找:x-sql-boot-deps 这类顶层锚点的依赖表也用服务名作键,同样两格缩进,否则先匹配到那里。
+    $services = [regex]::Match($Text, '(?ms)^services:[ ]*\r?\n.*?(?=^[^ #\r\n]|\z)')
+    if (-not $services.Success) { throw 'compose 没有 services 段' }
+    $match = [regex]::Match($services.Value, "(?ms)^  $([regex]::Escape($Name)):[ ]*\r?\n.*?(?=^  [^ #\r\n]|^[^ #\r\n]|\z)")
     if (-not $match.Success) { throw "compose 没有服务 $Name" }
     return $match.Value
 }

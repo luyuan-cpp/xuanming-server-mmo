@@ -2,6 +2,7 @@
 
 #include "muduo/base/Logging.h"
 #include "muduo/net/Channel.h"
+#include "muduo/net/Endian.h"
 #include "muduo/net/EventLoop.h"
 #include "muduo/net/SocketsOps.h"
 
@@ -113,6 +114,7 @@ class Hiredis::LocalReference
 namespace {
 // native 在用户回调返回后仍要完成旧 context 的 cleanup，不能在同一 wrapper 上递归重连。
 struct CallbackPhase {
+  // 参数不与成员同名:Linux overlay 按 muduo 的 -Wshadow -Werror 编译。
   explicit CallbackPhase(std::shared_ptr<bool> activeState) : active(std::move(activeState)), previous(*this->active)
   { *this->active = true; }
   ~CallbackPhase() { *active = previous; }
@@ -197,7 +199,11 @@ void Hiredis::connect()
   if (!self || *callbackActive_ || !maintenance_ || !lifetime_->held() || !maintenance_->AllowConnect()) return;
   assert(!context_);
 
-  context_ = ::redisAsyncConnect(serverAddr_.toIp().c_str(), serverAddr_.toPort());
+  // muduo 各版本端口访问器名不同(上游 v2.0.2 是 toPort(),v2.0.3 起与 Windows muduo 一样是 port()),
+  // 实现都是 networkToHost16(portNetEndian())。这里直接用各版本共有的接口:子模块检出哪一版都能编,
+  // 几份覆盖件也才能逐字节一致。
+  context_ = ::redisAsyncConnect(serverAddr_.toIp().c_str(),
+                                 sockets::networkToHost16(serverAddr_.portNetEndian()));
   if (!context_ || context_->err)
   {
     lastError_ = context_ && context_->errstr ? context_->errstr : "hiredis context allocation failed";
@@ -439,7 +445,9 @@ int Hiredis::command(const CommandCallback& cb, muduo::StringArg cmd, ...)
     // 回调挂起命令、后注销 Channel,那段时间 connected() 仍为真,回调里再发的命令会撞 FREEING。
     // 唯一例外是多频道 (P)SUBSCRIBE 中途 OOM(已写进订阅字典的频道仍持有 p),但本封装不支持订阅
     // (commandCallback 每次回调后都 delete)。升级 hiredis 时必须重核这条前提。
-    // Windows 与 Linux 覆盖件必须保持同样的释放语义；端口访问器按各平台的 muduo 接口适配。
+    // cpp/libs/engine/muduo_windows/src/contrib/hiredis/Hiredis.{h,cc}(Windows 编)、
+    // tools/archived/muduo_linux_overlay/contrib/hiredis/Hiredis.{h,cc}(Linux 镜像编)与
+    // third_party/muduo/contrib/hiredis/Hiredis.{h,cc}(头文件镜像)必须逐字节一致;只用各版本 muduo 都有的接口。
     p->known = true; // 同步拒绝发生在 hiredis 接受之前，确定零副作用。
   }
   else

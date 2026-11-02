@@ -5,7 +5,7 @@
 本目录 `specs/` 是派给落码代理的任务说明（`00-common-rules.md` 是共用硬约束），`reports/` 是各代理的交付说明（含给 Codex 的命令）。
 specs 里引用的 `..\wf\scout_*.md` 勘查报告已随临时目录丢失，代理都是直接按代码落码的，不影响使用。
 
-**给 Codex 的执行清单见 [CODEX.md](CODEX.md)**（取代下面第 3 节）。本地模式观战标记的规则见 `specs/85-local-mark-consistency.md`。
+**给 Codex 的执行清单见 [CODEX.md](CODEX.md)**（取代下面第 3 节）。`specs/85-local-mark-consistency.md` 已作废：本地模式已删除，只剩 SQL 路径，不用按它验证。
 
 ## 1. 已落码（都没编译、没跑测试）
 
@@ -45,7 +45,7 @@ specs 里引用的 `..\wf\scout_*.md` 勘查报告已随临时目录丢失，代
 
 ## 5. 进度更新（2026-10-30 第二波，主会话随时可能压缩上下文，以本节为准）
 
-**已落码（未编译）**：C++ / Go 的 B、C、P0 剩余、P1 / P2（`reports/p1-battle.md`、`p1-gate.md`、`p1-match.md`、`p1-deploy.md`）；Java 的 B、P1 / P2（`reports/java.md`、`java-p1.md`）；本地模式标记一致性（`specs/85-local-mark-consistency.md`，子会话已收尾）。Codex 10-30 03:18 跑过一次导表与 proto-gen，之后 proto 又改过（`SPECTATE_FEATURED_REJECT_DENIED`、注释），要再跑一次。
+**已落码（未编译）**：C++ / Go 的 B、C、P0 剩余、P1 / P2（`reports/p1-battle.md`、`p1-gate.md`、`p1-match.md`、`p1-deploy.md`）；Java 的 B、P1 / P2（`reports/java.md`、`java-p1.md`）；本地模式标记一致性（`specs/85-local-mark-consistency.md`，已随本地模式删除）。Codex 10-30 03:18 跑过一次导表与 proto-gen，之后 proto 又改过（`SPECTATE_FEATURED_REJECT_DENIED`、注释），要再跑一次。
 主会话已直接改：`config.cpp` 读 `SpectateTokenSecret`；`k8s_client_entry_contract.tests.ps1` 补新密钥；`gate-spectate` 保留期降到 10 分钟（compose、K8s、脚本、契约测试）；gate hub 拆两条水位（`lastTurnRound` / `cachedStateRound`）并补 3 条用例；`match_service.yaml` 日志忽略表加 `SetSpectateFeatured`；runbook 与 topic 保留策略文档；§6.1 / §9 / §15.4 / §15.5 / §15.7。
 
 **评审**：`reports/review-cpp-relay.md`、`review-c-batch.md`、`review-match.md` 已回；修正任务见 `specs/96-fix-cpp.md`、`97-fix-go.md`。
@@ -57,3 +57,7 @@ specs 里引用的 `..\wf\scout_*.md` 勘查报告已随临时目录丢失，代
 2. 凭证跨语言固定向量：Java 在 `SpectateTicketsTest` 有一组，Go（FIX-GO，见 `reports/fix-go.md`）与 C++ `gate_spectate_ticket_test.cpp` 用同一组 secret + payload + 期望 hex（三边统一）。
 3. Java 修正：按 `review-java.md` 派修正代理；并入：`GAME_MATCH_SPECTATE_RELAY_ENABLED` 默认打开、battle 同 op 重放回首次拒绝码、凭证向量。
 4. 收尾：`reports/cpp-gate.md` 顶部注明 §22 / §29 / §33 已被 `p1-gate.md` 取代（生成器 9 个事件都拒空 payload）；设计文档 §15.8 状态、S4 放宽与 G7 保留期的决策写进 §15；`docs/PROGRESS.md` 追加收尾条目；更新本文件第 3 节 Codex 总顺序（再跑 proto-gen-build + proto-gen-run，因为生成器与 proto 都改了；另加 FIX 批的测试）；告诉用户可以关窗口。
+
+## 6. 收尾（2026-11-01）
+
+服务端代码全部落完，第 5 节的待办都已完成，只剩 [CODEX.md](CODEX.md) 的生成、编译、测试与冒烟，以及 robot / 客户端接入。修正批没有过第二轮评审，详见 `docs/PROGRESS.md` 同日条目。

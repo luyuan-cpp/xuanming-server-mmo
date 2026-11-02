@@ -52,7 +52,7 @@ type ServiceContext struct {
 	PlayerRedis goredis.UniversalClient
 	Kafka       KafkaWriter
 	Etcd        *clientv3.Client
-	// HomeZone 查 data_service 的 player:zone 映射,EnterScene 用它填
+	// HomeZone 查 data_service 的 player_route 映射,EnterScene 用它填
 	// RoutePlayerEvent.home_zone_id。yaml 没配 DataServiceRpc 时为 nil,
 	// 调用方按「本地单区联调」处理(归属 = gate zone,WARN 计数)。
 	HomeZone      HomeZoneClient

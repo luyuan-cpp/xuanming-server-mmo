@@ -24,6 +24,9 @@ message ReadTeamMembershipResponse {
   TeamRecord record = 4;
   string request_digest = 5;
   common.base.ServiceCallAuth auth = 6;
+  // 这一次读不成:登记失效、角色冻结或目录读不到,队伍字段都是空的,不能当成没有队伍。
+  // 只读,没有结局未知,所以带内回,不走 gRPC 错误。scene 这一轮不更新队伍。
+  bool retry = 7;
 }
 service TeamAuthority {
   rpc ReadMembership(ReadTeamMembershipRequest) returns (ReadTeamMembershipResponse);

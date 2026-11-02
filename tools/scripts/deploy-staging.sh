@@ -127,7 +127,7 @@ cmd_start() {
   # REDIS_PLAYER_NODES:玩家域在 Redis Cluster 上时,写集群全部节点的 host:port(空格分隔)。SCAN 只看本节点,所以逐个主节点扫;
   # 副本跳过(它的 SCAN 列出的键,DEL 回 MOVED)。
   for p in 'player:session:*' 'player:gate_index:*' 'player:leases:*' 'player:locator_shard:*' 'player:*:location' 'player_to_account:*' \
-           'access_token:*' 'refresh_token:*' 'refresh_family:*' 'account_refresh:*' \
+           'access_token:*' 'refresh_token:*' 'refresh_family:*' 'refresh_rotated:*' 'account_refresh:*' \
            'login_session:*' 'login:sessfence:*' 'login_account_sessions:*' \
            'login_step:*' 'account_lock:*' 'player_locker:*'; do
     redis-cli --scan --pattern "$p" 2>/dev/null \

@@ -32,8 +32,8 @@ func TestAccountKeysShareTheAccountSlot(t *testing.T) {
 		want := HashSlot("{" + tag + "}")
 		for _, key := range []string{
 			AccountDeviceSetKey(account), AccountRefreshKey(account),
-			AccessTokenKey(tag, "s"), RefreshTokenKey(tag, "s"), RefreshFamilyKey(tag, "f"),
-			RefreshTokenKeyPrefix(tag) + "现拼的", RefreshFamilyKeyPrefix(tag) + "现拼的",
+			AccessTokenKey(tag, "s"), RefreshTokenKey(tag, "s"), RefreshFamilyKey(tag, "f"), RefreshRotatedKey(tag, "s"),
+			RefreshTokenKeyPrefix(tag) + "现拼的", RefreshFamilyKeyPrefix(tag) + "现拼的", AccountRefreshKeyPrefix(tag) + account,
 		} {
 			if !HasHashTag(key) {
 				t.Errorf("account %q: %q 没带 hash tag", account, key)
@@ -75,6 +75,8 @@ func TestLoginKeyGoldenVectors(t *testing.T) {
 		{RefreshTokenKeyPrefix("arun"), "refresh_token:{arun}:"},
 		{RefreshFamilyKey("arun", "family"), "refresh_family:{arun}:family"},
 		{RefreshFamilyKeyPrefix("arun"), "refresh_family:{arun}:"},
+		{RefreshRotatedKey("arun", "secret"), "refresh_rotated:{arun}:secret"},
+		{AccountRefreshKeyPrefix("arun"), "account_refresh:{arun}:"},
 		{PasswordQuotaKey("known:abcd"), "login:password:quota:v1:{known:abcd}"},
 	}
 	for _, c := range cases {

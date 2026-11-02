@@ -18,3 +18,15 @@ constexpr uint32_t MatchInternalCommitBattleOutcomeIndex = 2;
 constexpr uint32_t MatchInternalSetSpectateFeaturedMessageId = 353;
 constexpr uint32_t MatchInternalSetSpectateFeaturedIndex = 3;
 #define MatchInternalSetSpectateFeaturedMethod  ::MatchInternal_Stub::descriptor()->method(3)
+
+constexpr uint32_t MatchInternalAcquireTrialOccupancyMessageId = 368;
+constexpr uint32_t MatchInternalAcquireTrialOccupancyIndex = 4;
+#define MatchInternalAcquireTrialOccupancyMethod  ::MatchInternal_Stub::descriptor()->method(4)
+
+constexpr uint32_t MatchInternalReleaseTrialOccupancyMessageId = 369;
+constexpr uint32_t MatchInternalReleaseTrialOccupancyIndex = 5;
+#define MatchInternalReleaseTrialOccupancyMethod  ::MatchInternal_Stub::descriptor()->method(5)
+
+constexpr uint32_t MatchInternalGetBattleCompletionMessageId = 370;
+constexpr uint32_t MatchInternalGetBattleCompletionIndex = 6;
+#define MatchInternalGetBattleCompletionMethod  ::MatchInternal_Stub::descriptor()->method(6)

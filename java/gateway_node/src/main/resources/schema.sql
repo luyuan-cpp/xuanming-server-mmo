@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS zone_config (
     zone_id        BIGINT PRIMARY KEY,
     name           VARCHAR(64) NOT NULL,
     manual_status  INT NOT NULL DEFAULT 0 COMMENT '0=OPEN, 1=MAINTENANCE, 2=CLOSED, 3=PREVIEW',
-    capacity       INT DEFAULT 5000,
+    capacity       INT DEFAULT 45000,
     maintenance_msg VARCHAR(256) DEFAULT '',
     open_time      DATETIME DEFAULT NULL,
     recommended    BIT(1) DEFAULT 0,
@@ -34,4 +34,4 @@ CREATE TABLE IF NOT EXISTS announcement (
 
 -- Seed default zone
 INSERT IGNORE INTO zone_config (zone_id, name, manual_status, capacity, recommended, sort_order)
-VALUES (1, 'zone-1', 0, 5000, 1, 1);
+VALUES (1, 'zone-1', 0, 45000, 1, 1);

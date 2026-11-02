@@ -69,10 +69,16 @@ func CollectProtoFiles(dirPath string) ([]string, error) {
 	return protoFiles, nil
 }
 
-// RunProtoc runs protoc using the system PATH.
+// RunProtoc runs the protoc chosen by ProtocPath.
 func RunProtoc(args []string, actionDesc string) error {
-	cmd := exec.Command("protoc", args...)
-	return ExecuteProtocCmd(cmd, actionDesc)
+	path, err := ProtocPath()
+	if err != nil {
+		logger.Global.Fatal("protoc unavailable",
+			zap.String("action", actionDesc),
+			zap.Error(err),
+		)
+	}
+	return RunProtocWithPath(path, args, actionDesc)
 }
 
 // RunProtocWithPath runs protoc with a specified path.

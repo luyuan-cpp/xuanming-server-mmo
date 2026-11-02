@@ -19,8 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchInternal_StartActivityBattle_FullMethodName  = "/match.MatchInternal/StartActivityBattle"
-	MatchInternal_CancelActivityBattle_FullMethodName = "/match.MatchInternal/CancelActivityBattle"
+	MatchInternal_StartActivityBattle_FullMethodName   = "/match.MatchInternal/StartActivityBattle"
+	MatchInternal_CancelActivityBattle_FullMethodName  = "/match.MatchInternal/CancelActivityBattle"
+	MatchInternal_CommitBattleOutcome_FullMethodName   = "/match.MatchInternal/CommitBattleOutcome"
+	MatchInternal_SetSpectateFeatured_FullMethodName   = "/match.MatchInternal/SetSpectateFeatured"
+	MatchInternal_AcquireTrialOccupancy_FullMethodName = "/match.MatchInternal/AcquireTrialOccupancy"
+	MatchInternal_ReleaseTrialOccupancy_FullMethodName = "/match.MatchInternal/ReleaseTrialOccupancy"
+	MatchInternal_GetBattleCompletion_FullMethodName   = "/match.MatchInternal/GetBattleCompletion"
 )
 
 // MatchInternalClient is the client API for MatchInternal service.
@@ -29,6 +34,11 @@ const (
 type MatchInternalClient interface {
 	StartActivityBattle(ctx context.Context, in *StartActivityBattleRequest, opts ...grpc.CallOption) (*StartActivityBattleResponse, error)
 	CancelActivityBattle(ctx context.Context, in *CancelActivityBattleRequest, opts ...grpc.CallOption) (*CancelActivityBattleResponse, error)
+	CommitBattleOutcome(ctx context.Context, in *CommitBattleOutcomeRequest, opts ...grpc.CallOption) (*CommitBattleOutcomeResponse, error)
+	SetSpectateFeatured(ctx context.Context, in *SetSpectateFeaturedRequest, opts ...grpc.CallOption) (*SetSpectateFeaturedResponse, error)
+	AcquireTrialOccupancy(ctx context.Context, in *AcquireTrialOccupancyRequest, opts ...grpc.CallOption) (*AcquireTrialOccupancyResponse, error)
+	ReleaseTrialOccupancy(ctx context.Context, in *ReleaseTrialOccupancyRequest, opts ...grpc.CallOption) (*ReleaseTrialOccupancyResponse, error)
+	GetBattleCompletion(ctx context.Context, in *GetBattleCompletionRequest, opts ...grpc.CallOption) (*GetBattleCompletionResponse, error)
 }
 
 type matchInternalClient struct {
@@ -59,12 +69,67 @@ func (c *matchInternalClient) CancelActivityBattle(ctx context.Context, in *Canc
 	return out, nil
 }
 
+func (c *matchInternalClient) CommitBattleOutcome(ctx context.Context, in *CommitBattleOutcomeRequest, opts ...grpc.CallOption) (*CommitBattleOutcomeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommitBattleOutcomeResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_CommitBattleOutcome_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchInternalClient) SetSpectateFeatured(ctx context.Context, in *SetSpectateFeaturedRequest, opts ...grpc.CallOption) (*SetSpectateFeaturedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSpectateFeaturedResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_SetSpectateFeatured_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchInternalClient) AcquireTrialOccupancy(ctx context.Context, in *AcquireTrialOccupancyRequest, opts ...grpc.CallOption) (*AcquireTrialOccupancyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcquireTrialOccupancyResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_AcquireTrialOccupancy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchInternalClient) ReleaseTrialOccupancy(ctx context.Context, in *ReleaseTrialOccupancyRequest, opts ...grpc.CallOption) (*ReleaseTrialOccupancyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseTrialOccupancyResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_ReleaseTrialOccupancy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchInternalClient) GetBattleCompletion(ctx context.Context, in *GetBattleCompletionRequest, opts ...grpc.CallOption) (*GetBattleCompletionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBattleCompletionResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_GetBattleCompletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchInternalServer is the server API for MatchInternal service.
 // All implementations must embed UnimplementedMatchInternalServer
 // for forward compatibility.
 type MatchInternalServer interface {
 	StartActivityBattle(context.Context, *StartActivityBattleRequest) (*StartActivityBattleResponse, error)
 	CancelActivityBattle(context.Context, *CancelActivityBattleRequest) (*CancelActivityBattleResponse, error)
+	CommitBattleOutcome(context.Context, *CommitBattleOutcomeRequest) (*CommitBattleOutcomeResponse, error)
+	SetSpectateFeatured(context.Context, *SetSpectateFeaturedRequest) (*SetSpectateFeaturedResponse, error)
+	AcquireTrialOccupancy(context.Context, *AcquireTrialOccupancyRequest) (*AcquireTrialOccupancyResponse, error)
+	ReleaseTrialOccupancy(context.Context, *ReleaseTrialOccupancyRequest) (*ReleaseTrialOccupancyResponse, error)
+	GetBattleCompletion(context.Context, *GetBattleCompletionRequest) (*GetBattleCompletionResponse, error)
 	mustEmbedUnimplementedMatchInternalServer()
 }
 
@@ -80,6 +145,21 @@ func (UnimplementedMatchInternalServer) StartActivityBattle(context.Context, *St
 }
 func (UnimplementedMatchInternalServer) CancelActivityBattle(context.Context, *CancelActivityBattleRequest) (*CancelActivityBattleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelActivityBattle not implemented")
+}
+func (UnimplementedMatchInternalServer) CommitBattleOutcome(context.Context, *CommitBattleOutcomeRequest) (*CommitBattleOutcomeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CommitBattleOutcome not implemented")
+}
+func (UnimplementedMatchInternalServer) SetSpectateFeatured(context.Context, *SetSpectateFeaturedRequest) (*SetSpectateFeaturedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSpectateFeatured not implemented")
+}
+func (UnimplementedMatchInternalServer) AcquireTrialOccupancy(context.Context, *AcquireTrialOccupancyRequest) (*AcquireTrialOccupancyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcquireTrialOccupancy not implemented")
+}
+func (UnimplementedMatchInternalServer) ReleaseTrialOccupancy(context.Context, *ReleaseTrialOccupancyRequest) (*ReleaseTrialOccupancyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleaseTrialOccupancy not implemented")
+}
+func (UnimplementedMatchInternalServer) GetBattleCompletion(context.Context, *GetBattleCompletionRequest) (*GetBattleCompletionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBattleCompletion not implemented")
 }
 func (UnimplementedMatchInternalServer) mustEmbedUnimplementedMatchInternalServer() {}
 func (UnimplementedMatchInternalServer) testEmbeddedByValue()                       {}
@@ -138,6 +218,96 @@ func _MatchInternal_CancelActivityBattle_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchInternal_CommitBattleOutcome_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitBattleOutcomeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).CommitBattleOutcome(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_CommitBattleOutcome_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).CommitBattleOutcome(ctx, req.(*CommitBattleOutcomeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchInternal_SetSpectateFeatured_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSpectateFeaturedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).SetSpectateFeatured(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_SetSpectateFeatured_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).SetSpectateFeatured(ctx, req.(*SetSpectateFeaturedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchInternal_AcquireTrialOccupancy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcquireTrialOccupancyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).AcquireTrialOccupancy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_AcquireTrialOccupancy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).AcquireTrialOccupancy(ctx, req.(*AcquireTrialOccupancyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchInternal_ReleaseTrialOccupancy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseTrialOccupancyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).ReleaseTrialOccupancy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_ReleaseTrialOccupancy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).ReleaseTrialOccupancy(ctx, req.(*ReleaseTrialOccupancyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchInternal_GetBattleCompletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBattleCompletionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).GetBattleCompletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_GetBattleCompletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).GetBattleCompletion(ctx, req.(*GetBattleCompletionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchInternal_ServiceDesc is the grpc.ServiceDesc for MatchInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +322,26 @@ var MatchInternal_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelActivityBattle",
 			Handler:    _MatchInternal_CancelActivityBattle_Handler,
+		},
+		{
+			MethodName: "CommitBattleOutcome",
+			Handler:    _MatchInternal_CommitBattleOutcome_Handler,
+		},
+		{
+			MethodName: "SetSpectateFeatured",
+			Handler:    _MatchInternal_SetSpectateFeatured_Handler,
+		},
+		{
+			MethodName: "AcquireTrialOccupancy",
+			Handler:    _MatchInternal_AcquireTrialOccupancy_Handler,
+		},
+		{
+			MethodName: "ReleaseTrialOccupancy",
+			Handler:    _MatchInternal_ReleaseTrialOccupancy_Handler,
+		},
+		{
+			MethodName: "GetBattleCompletion",
+			Handler:    _MatchInternal_GetBattleCompletion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

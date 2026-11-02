@@ -188,12 +188,6 @@ local function prior()
     if not parsed then return nil,nil end
     return raw,parsed
 end
-local function version(s)
-    return type(s)=='string' and #s==41 and string.sub(s,21,21)==':'
-        and string.match(s,'^%d+:%d+$')~=nil
-        and bytecmp(string.sub(s,1,20),'18446744073709551615')<=0
-        and bytecmp(string.sub(s,22),'18446744073709551615')<=0 and string.sub(s,22)~=string.rep('0',20)
-end
 local function marker(s,e)
     local owner,time=string.match(s or '','^(%d+):(%d+)$')
     return owner==e and uint(time)

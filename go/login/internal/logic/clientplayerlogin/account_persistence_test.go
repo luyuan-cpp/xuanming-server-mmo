@@ -3,7 +3,6 @@ package clientplayerloginlogic
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -94,8 +93,9 @@ func TestLoginPersistsLegacyAccountAndKeepsAppearanceAcrossOldExpiry(t *testing.
 			// 独立名称避免改动生产认证器或其他测试的默认认证状态。
 			authType := fmt.Sprintf("account-persistence-%d", accountPersistenceAuthSequence.Add(1))
 			auth.Register(authType, accountPersistenceAuth{account: accountName})
+			tokens := token.NewManager(rdb, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 30 * 24 * time.Hour})
 			logic := NewLoginLogic(ctx, &svc.ServiceContext{RedisClient: rdb, LoginRedis: rdb, AccountDirectory: fixtureDirectory(t, rdb),
-				TokenManager: token.NewManager(rdb, token.Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 30 * 24 * time.Hour})})
+				TokenManager: tokens})
 			loginSessionKey := redisslot.LoginSessionKey(redisslot.LoginConnectionID("gate-persistence", 1))
 			for attempt := 0; attempt < 2; attempt++ {
 				resp, err := logic.Login(&loginpb.LoginRequest{AuthType: authType})
@@ -104,14 +104,19 @@ func TestLoginPersistsLegacyAccountAndKeepsAppearanceAcrossOldExpiry(t *testing.
 				}
 
 				if attempt == 0 {
-					if resp.AccessToken == "" {
-						t.Fatal("首次登录必须签发 access token")
+					// 正向对照:过期前令牌可用、会话键在,否则下面「过期后没了」的断言什么都没证明。
+					if _, err := tokens.ValidateAccess(context.Background(), resp.AccessToken); err != nil {
+						t.Fatalf("首次登录签出的 access token 过期前必须可用: %v", err)
+					}
+					if legacy && !mr.Exists(loginSessionKey) {
+						t.Fatalf("网关登录必须写下会话键: %v", mr.Keys())
 					}
 					mr.FastForward(48 * time.Hour)
-					for _, key := range mr.Keys() {
-						if strings.HasPrefix(key, "access_token:") || key == loginSessionKey {
-							t.Fatalf("临时 token/会话仍必须正常过期: %s", key)
-						}
+					if _, err := tokens.ValidateAccess(context.Background(), resp.AccessToken); err == nil {
+						t.Fatal("临时 token 仍必须正常过期")
+					}
+					if mr.Exists(loginSessionKey) {
+						t.Fatal("临时会话仍必须正常过期")
 					}
 				}
 			}

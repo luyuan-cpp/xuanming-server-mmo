@@ -2,9 +2,11 @@
 
 // 战斗串行化锁 battle:lock 的 scene 侧判定(纯函数,零项目依赖,单测直接盯:cpp/tests/routing_identity_test)。
 //
-// 键:battle:lock:{player_id} = 十进制 battle_id,带 TTL;伴生 battle:ctx:{player_id} 与它同生共死,脚本在 player_battle.cpp。
+// 键:battle:lock:{player_id} = 十进制 battle_id,带 TTL;伴生 battle:ctx:{player_id} 与它同生共死。
+// 写入与续期的脚本在本头(单测对真实 Redis 直接执行同一份),读与条件删的脚本在 player_battle.cpp。
 // 锁是协调键(TiDB 决策 §9.3 表 C):match 读它拦排队,scene 在「实体没了但锁还在」时靠它重建冻结。
 // 结算原件不在 Redis:结算只走 match SQL + player_inbox(player-data-tidb-scaling-plan.md §5.4)。
+// 所以锁丢了不丢奖,但排队闸与冻结重建会失明,写与续都带有界重试(turn-battle-gap-closure.md §10)。
 //
 // 谁放锁(所有删除都按 battle_id 条件删,迟到的一方不会误伤下一局):
 //   - 结算随存档提交之后:PlayerBattleSystem::CompleteInboxSettlement(收件箱状态机在同 E/q 的双 SQL 确认之后才调);
@@ -20,6 +22,30 @@ namespace battle_lock
 	// 两把键同 slot 才能进同一段 Lua。与 go/shared/redisslot 的 BattleLockKey / BattleCtxKey 逐字一致(该包测试解析本头文件比对)。
 	inline constexpr char kBattleLockKeyFmt[] = "battle:lock:{%llu}";
 	inline constexpr char kBattleCtxKeyFmt[] = "battle:ctx:{%llu}";
+
+	// 写锁 + ctx(PrepareBattle 首发与重试共用),一条 Lua 原子完成:两键要么都写、要么都没写,同值同 TTL。
+	// KEYS[1]=锁,KEYS[2]=ctx;ARGV[1]=battle_id,ARGV[2]=TTL 秒,ARGV[3]=ctx 序列化。返回 1。
+	// 无条件写:备战成功那一刻本节点的 InBattleComp 是权威。
+	// 重试由调用方在重发前确认实体上的 InBattleComp 仍是这一局 —— 备战被取消 / 结算 / 判废之后再写,会复活一把已删的锁。
+	inline constexpr char kWriteBattleLockScript[] =
+		"redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2]) "
+		"redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[2]) "
+		"return 1";
+
+	// 条件续期 + 覆写 ctx,**只延长、不缩短**(确认升级、重复确认、离线确认、按锁重建后的复核共用)。
+	// KEYS[1]=锁,KEYS[2]=ctx;ARGV[1]=battle_id,ARGV[2]=TTL 秒,ARGV[3]=ctx 序列化。
+	// 锁值 == battle_id 才动:新 TTL = max(锁剩余 TTL, ARGV[2]),ctx 用同一个 TTL。返回 1 = 命中,0 = 锁不在或已易主。
+	// 为什么只延长:重复确认每 10 秒一次、离线确认按事件到达时刻重算 TTL,都可能比锁现有的剩余时间短;
+	// 锁必须活得比冻结久,一条迟到的确认不能把它缩回去。
+	// 锁不在时**不补写**:续期只负责延长;在这里补写,一条迟到的确认就能复活被取消 / 结算 / 判废删掉的锁。
+	inline constexpr char kRenewBattleLockIfMatchScript[] =
+		"if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end "
+		"local ttl = tonumber(ARGV[2]) "
+		"local remaining = redis.call('TTL', KEYS[1]) "
+		"if remaining > ttl then ttl = remaining end "
+		"redis.call('SET', KEYS[2], ARGV[3], 'EX', ttl) "
+		"redis.call('EXPIRE', KEYS[1], ttl) "
+		"return 1";
 
 	// ---- zone Redis 应答的形状:空应答 / ERROR 不是业务结论(2026-10-16) ----
 	//
@@ -38,6 +64,79 @@ namespace battle_lock
 		kError,
 		kOther, // RESP3 的 double / bool / map 等,本仓的调用点都不该收到
 	};
+
+	// 只进日志。
+	inline const char *ReplyShapeName(const ReplyShape shape)
+	{
+		switch (shape)
+		{
+		case ReplyShape::kNoReply:
+			return "no_reply";
+		case ReplyShape::kNil:
+			return "nil";
+		case ReplyShape::kString:
+			return "string";
+		case ReplyShape::kStatus:
+			return "status";
+		case ReplyShape::kInteger:
+			return "integer";
+		case ReplyShape::kArray:
+			return "array";
+		case ReplyShape::kError:
+			return "error";
+		case ReplyShape::kOther:
+			return "other";
+		}
+		return "other";
+	}
+
+	// ---- 战斗锁写入 / 续期的有界重试(2026-10-22 负责人拍板 (c),turn-battle-gap-closure.md §10) ----
+	//
+	// 适用的写都幂等:「锁 + ctx」无条件写(重发同值,kWriteBattleLockScript)、按锁值条件只延长的续期
+	// (kRenewBattleLockIfMatchScript)。空应答 / ERROR 只说明这次没问到:命令可能执行了也可能没执行,
+	// 再发一次不会改变已经执行的结果。脚本的整数应答(0 / 1)是结论,不重试:0 = 锁不在或已易主,那是事实而不是失败。
+	// 预算用单调时钟:从首发起算,最后一次也必须落在预算内;次数另有上限,两者先到先停。
+	inline constexpr uint32_t kLockWriteMaxAttempts = 6;       // 含首发
+	inline constexpr uint64_t kLockWriteRetryBudgetMs = 30000; // 一个 reaper 节拍:再晚,登录复查与确认周期补发已经接手
+	inline constexpr uint64_t kLockWriteRetryBaseDelayMs = 500;
+	inline constexpr uint64_t kLockWriteRetryMaxDelayMs = 8000;
+
+	inline bool IsLockWriteAnswered(const ReplyShape shape)
+	{
+		return shape == ReplyShape::kInteger;
+	}
+
+	// 第 attempt 次(从 1 起)没问到之后,下一次在多少毫秒后发;返回 0 = 放弃(次数或预算用尽)。
+	// elapsedMs = 此刻距首发的单调时钟毫秒。退避 base × 2^(attempt-1),封顶 max;抖动在 [0, delay/2) 里,
+	// 由 jitterSeed 确定(调用方传 player_id ^ battle_id):不同玩家错开,同一输入结果固定,不引入随机数源,单测可复现。
+	// attempt 为 0 是调用方缺陷:直接放弃,保证有界。
+	inline uint64_t NextLockWriteRetryDelayMs(const uint32_t attempt, const uint64_t elapsedMs, const uint64_t jitterSeed)
+	{
+		if (attempt == 0 || attempt >= kLockWriteMaxAttempts)
+		{
+			return 0;
+		}
+		uint64_t delay = kLockWriteRetryBaseDelayMs;
+		for (uint32_t step = 1; step < attempt && delay < kLockWriteRetryMaxDelayMs; ++step)
+		{
+			delay *= 2;
+		}
+		if (delay > kLockWriteRetryMaxDelayMs)
+		{
+			delay = kLockWriteRetryMaxDelayMs;
+		}
+		// splitmix64 的末段混合:把相邻的 seed / attempt 打散到整个区间。
+		uint64_t mixed = jitterSeed + 0x9E3779B97F4A7C15ULL * attempt;
+		mixed = (mixed ^ (mixed >> 30)) * 0xBF58476D1CE4E5B9ULL;
+		mixed = (mixed ^ (mixed >> 27)) * 0x94D049BB133111EBULL;
+		mixed ^= mixed >> 31;
+		delay += mixed % (delay / 2);
+		if (elapsedMs >= kLockWriteRetryBudgetMs || delay > kLockWriteRetryBudgetMs - elapsedMs)
+		{
+			return 0;
+		}
+		return delay;
+	}
 
 	// ---- scene 登录钩子对战斗锁的读数判定 ----
 	//

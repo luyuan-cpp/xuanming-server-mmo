@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // 大世界频道按人数自动扩缩容。
@@ -70,14 +72,20 @@ func worldAutoscaleCooldownKey(zoneID uint32, confID uint64) string {
 // 第一次访问时用配置里的 ChannelCountFor 播种。之后以 Redis 为准 ——
 // 改配置不会覆盖已经自动伸缩过的值(否则一次重启就把伸缩结果抹掉了)。
 // 运维想强制回到配置值,删掉这个 hash field 即可。
-func DesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) int {
+//
+// 读或播种失败(超时、断连、熔断)时回 error,不回种子值(2026-10-23)。调用方都拿它做决策:补建按它算
+// 「缺几个」,扩缩容把它 ±1 写回成权威值。以前读错当「还没播种」回种子值,于是缩掉的频道被补建回来,
+// 或者权威值被改写成种子 ±1。字段值非法时仍按「没播种」处理(回种子值),与以前一致。
+func DesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) (int, error) {
 	key := worldDesiredChannelsKey(zoneID)
 	field := strconv.FormatUint(confID, 10)
 
-	if raw, err := svcCtx.Redis.Hget(key, field); err == nil && raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n >= 1 {
-			return n
-		}
+	n, found, err := readDesiredWorldChannelField(svcCtx, key, field)
+	if err != nil {
+		return 0, err
+	}
+	if found {
+		return n, nil
 	}
 
 	seed := svcCtx.Config.ChannelCountFor(confID)
@@ -92,16 +100,39 @@ func DesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID 
 	}
 	// Hsetnx:并发的多个 SceneManager 实例同时播种时,只有一个赢,
 	// 其余读到已有值。不能用 Hset —— 那会把别人已经伸缩过的值冲掉。
-	if _, err := svcCtx.Redis.Hsetnx(key, field, strconv.Itoa(seed)); err != nil {
-		logx.Errorf("[WorldAutoscale] seed desired channels zone=%d conf=%d failed: %v", zoneID, confID, err)
-		return seed
+	seeded, err := svcCtx.Redis.Hsetnx(key, field, strconv.Itoa(seed))
+	if err != nil {
+		return 0, fmt.Errorf("seed desired channels zone=%d conf=%d: %w", zoneID, confID, err)
 	}
-	if raw, err := svcCtx.Redis.Hget(key, field); err == nil && raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n >= 1 {
-			return n
-		}
+	if seeded {
+		return seed, nil
 	}
-	return seed
+	// 别的实例抢先播种了(或字段值非法):以 Redis 里的为准。
+	n, found, err = readDesiredWorldChannelField(svcCtx, key, field)
+	if err != nil {
+		return 0, err
+	}
+	if found {
+		return n, nil
+	}
+	return seed, nil
+}
+
+// readDesiredWorldChannelField 读期望频道数字段。found=false 表示字段不存在,或值不是正整数(按「没播种」
+// 处理);err 只表示读失败。go-zero 的 Hget 不吞 redis.Nil(与 Get 不同),字段不存在就是 redis.Nil。
+func readDesiredWorldChannelField(svcCtx *svc.ServiceContext, key, field string) (int, bool, error) {
+	raw, err := svcCtx.Redis.Hget(key, field)
+	if errors.Is(err, redis.Nil) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("read desired channels %s[%s]: %w", key, field, err)
+	}
+	n, convErr := strconv.Atoi(raw)
+	if convErr != nil || n < 1 {
+		return 0, false, nil
+	}
+	return n, true, nil
 }
 
 // setDesiredWorldChannelCount 写回期望频道数,并钳到 [min, max]。
@@ -196,13 +227,25 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	for _, sceneID := range channels {
 		// 正在排空的频道不参与决策:它已经从路由集合里摘掉了,
 		// 它身上剩的人正在被改派走。
-		if exists, _ := svcCtx.Redis.Exists(sceneDrainingKey(sceneID)); exists {
+		// 排空标记或人数任何一项读不到,这张图本轮不做决策:人数读错当 0 会把一个满员频道
+		// 挑成缩容对象,排空标记读错当「不在排空」会让它重复参与决策。伸缩是可选动作,下一拍再来。
+		draining, err := svcCtx.Redis.Exists(sceneDrainingKey(sceneID))
+		if err != nil {
+			noteReadUnknown(zoneID, readUnknownSiteAutoscaleDecide, fmt.Sprintf("draining flag of scene %d", sceneID), err)
+			return 0, 0
+		}
+		if draining {
 			continue
+		}
+		players, err := readScenePlayerCountChecked(svcCtx, sceneID)
+		if err != nil {
+			noteReadUnknown(zoneID, readUnknownSiteAutoscaleDecide, fmt.Sprintf("player count of scene %d", sceneID), err)
+			return 0, 0
 		}
 		loads = append(loads, channelLoad{
 			sceneID:   strconv.FormatUint(sceneID, 10),
 			sceneID64: sceneID,
-			players:   readScenePlayerCount(svcCtx, sceneID),
+			players:   players,
 		})
 	}
 	if len(loads) == 0 {
@@ -241,7 +284,12 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	// ── 扩容 ──────────────────────────────────────────────────────────
 	// 要求**所有**频道都到线。loads 已按人数升序,查最闲的那个就够。
 	if lightest.players >= cfg.ScaleOutPlayerThreshold {
-		desired := DesiredWorldChannelCount(svcCtx, zoneID, confID)
+		desired, err := DesiredWorldChannelCount(svcCtx, zoneID, confID)
+		if err != nil {
+			// 读不到权威值就不写:拿种子值 +1 写回会把已经伸缩过的值冲掉。
+			noteReadUnknown(zoneID, readUnknownSiteAutoscaleDecide, fmt.Sprintf("desired channel count of conf %d", confID), err)
+			return 0, 0
+		}
 		if cfg.MaxChannelsPerMap > 0 && desired >= cfg.MaxChannelsPerMap {
 			logx.Errorf("[WorldAutoscale] zone=%d conf=%d: every channel is at/over %d players but "+
 				"MaxChannelsPerMap=%d is reached; the map is over capacity",
@@ -334,6 +382,14 @@ func pickScaleInVictim(svcCtx *svc.ServiceContext, loads []channelLoad, cfg conf
 func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, victim channelLoad) bool {
 	channelSetKey := worldChannelsKey(zoneID, confID)
 
+	// 期望频道数在摘路由之前读:读不到就什么都不写。摘掉之后再放弃的话,频道已经不在路由集合、
+	// 又没进排空集合,再也没有路径能找到它。
+	desired, err := DesiredWorldChannelCount(svcCtx, zoneID, confID)
+	if err != nil {
+		noteReadUnknown(zoneID, readUnknownSiteAutoscaleDecide, fmt.Sprintf("desired channel count of conf %d", confID), err)
+		return false
+	}
+
 	removed, err := svcCtx.Redis.Srem(channelSetKey, victim.sceneID)
 	if err != nil {
 		logx.Errorf("[WorldAutoscale] zone=%d conf=%d: SREM channel %s failed: %v",
@@ -347,7 +403,6 @@ func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zon
 	}
 
 	// 期望频道数同步减 1,否则 initWorldScenesForZone 会立刻把它补回来。
-	desired := DesiredWorldChannelCount(svcCtx, zoneID, confID)
 	setDesiredWorldChannelCount(svcCtx, zoneID, confID, desired-1)
 
 	// 排空标记带 TTL:进程在排空中途挂掉时,标记会自己过期,
@@ -397,8 +452,15 @@ func sweepDrainingWorldChannels(ctx context.Context, svcCtx *svc.ServiceContext,
 }
 
 // drainOrDestroyChannel 对一个正在排空的频道推进一步。
+//
+// 属主或人数读不到时本拍什么都不做:频道还在排空集合里,下一拍 sweep 重来。读错当「映射已没」
+// 会跳过 C++ DestroyScene 直接收尾,实体留在节点上;读错当「0 人」会在还有人时收尾。
 func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, sceneID uint64) {
-	nodeID, _ := svcCtx.Redis.Get(sceneNodeKey(sceneID))
+	nodeID, err := svcCtx.Redis.Get(sceneNodeKey(sceneID))
+	if err != nil {
+		noteReadUnknown(zoneID, readUnknownSiteAutoscaleDrain, fmt.Sprintf("owner of draining scene %d", sceneID), err)
+		return
+	}
 	if nodeID == "" {
 		// 映射已经没了 —— 频道已经销毁完,或者节点死亡时被清理过。
 		finishDrainedChannel(ctx, svcCtx, zoneID, confID, sceneID, "")
@@ -419,7 +481,11 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 		return
 	}
 
-	players := readScenePlayerCount(svcCtx, sceneID)
+	players, err := readScenePlayerCountChecked(svcCtx, sceneID)
+	if err != nil {
+		noteReadUnknown(zoneID, readUnknownSiteAutoscaleDrain, fmt.Sprintf("player count of draining scene %d", sceneID), err)
+		return
+	}
 
 	// 无论有没有人都调:有人时 C++ 会把他们改派到大世界并保留实体,
 	// 没人时才真正销毁。幂等,可以每拍调。
@@ -437,47 +503,51 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 	finishDrainedChannel(ctx, svcCtx, zoneID, confID, sceneID, nodeID)
 }
 
-// finishDrainedChannel 清掉一个排空完成的频道的全部 Redis 状态。
+// finishDrainedChannel 清掉一个排空完成的频道的全部 Redis 状态。nodeID 是本拍读到的属主,空串表示
+// 映射已经没了。
+//
+// 场景键(属主映射、成员集合、zone、agones_gs)由 atomicTeardownScene 按本拍读到的属主 nodeID 一次性认领并删除,
+// 同一步把它从排空集合摘掉(2026-10-23)。以前是逐条 DEL:读到属主 X 之后、删映射之前,若有写者把频道改派到
+// 活节点 Y 并 CreateScene,逐条 DEL 会把 Y 上那份带着玩家的实体变成没有映射的孤儿,还会扣错节点的计数。
+// 现在属主已不是 nodeID(nodeID 为空时:期间被写入了属主)就一个键都不动,下一拍按新属主重来(还有人就继续排空)。
+// Agones 名额也取脚本删除前读到的值,不再单独读。
+//
+// 级联兜底:排空窗口里可能又有镜像以这个频道为源建起来了(pickScaleInVictim 只保证**开始排空那一刻**
+// 没有镜像)。源频道马上要没了,留着镜像就是谁也进不去的孤儿,而且 scene:{id}:mirrors 会永久泄漏。
+// 镜像子集合在认领之前预读一次:读不到本拍什么都不做,频道留在排空集合等下一拍。
 func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, sceneID uint64, nodeID string) {
 	sceneIDStr := strconv.FormatUint(sceneID, 10)
 
-	// Agones 名额要在删映射之前读出来,否则就找不到该向谁归还了。
-	agonesGs, _ := svcCtx.Redis.Get(sceneAgonesGsKey(sceneID))
-
-	// 级联兜底:排空窗口里可能又有镜像以这个频道为源建起来了
-	// (pickScaleInVictim 只保证**开始排空那一刻**没有镜像)。
-	// 源频道马上要没了,留着镜像就是谁也进不去的孤儿,而且 scene:{id}:mirrors
-	// 这个键会永久泄漏。既有的两条销毁路径都级联了
-	// (destroyInstanceInternal 的 cascade、migrateWorldChannel 的
-	// cascadeMirrorsOnSourceMigration),这里必须对齐。
-	mirrorChildren, _ := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneID))
-	for _, mid := range mirrorChildren {
-		childID, err := strconv.ParseUint(mid, 10, 64)
-		if err != nil || childID == sceneID {
-			continue
-		}
-		childZone := GetSceneZone(svcCtx, childID)
-		if childZone == 0 {
-			childZone = zoneID
-		}
-		logx.Infof("[WorldAutoscale] cascade-destroying mirror %d whose source channel %d is being scaled in",
-			childID, sceneID)
-		destroyInstanceForce(ctx, svcCtx, childZone, childID, "source_scaled_in")
+	preMirrorChildren, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneID))
+	if err != nil {
+		noteReadUnknown(zoneID, readUnknownSiteAutoscaleFinish, fmt.Sprintf("mirror set of draining scene %d", sceneID), err)
+		return
 	}
-	svcCtx.Redis.Del(sceneMirrorsKey(sceneID))
 
-	svcCtx.Redis.Del(sceneNodeKey(sceneID))
-	svcCtx.Redis.Del(sceneZoneKey(sceneID))
-	svcCtx.Redis.Del(instanceMembersKey(sceneID))
-	svcCtx.Redis.Del(sceneAgonesGsKey(sceneID))
+	claim, err := atomicTeardownScene(svcCtx, zoneID, sceneID, nodeID, worldDrainingSetKey(zoneID, confID))
+	if err != nil {
+		// 脚本可能已执行也可能没有,结论未知:本拍不再往下做,频道若还在排空集合里,下一拍重读属主再来。
+		logx.Errorf("[WorldAutoscale] draining channel %d: atomic teardown (expected owner %q) failed, outcome unknown: %v",
+			sceneID, nodeID, err)
+		metrics.ObserveWorldAutoscale(zoneID, "scale_in", "error")
+		return
+	}
+	if !claim.Claimed {
+		logx.Infof("[WorldAutoscale] owner of draining channel %d changed since it was read (expected %q); retrying next sweep",
+			sceneID, nodeID)
+		return
+	}
+
+	cascadeDestroyMirrors(ctx, svcCtx, zoneID, sceneID, preMirrorChildren, "source_scaled_in")
+
 	svcCtx.Redis.Del(sceneDrainingKey(sceneID))
-	svcCtx.Redis.Srem(worldDrainingSetKey(zoneID, confID), sceneIDStr)
 	if nodeID != "" {
 		svcCtx.Redis.Srem(nodeScenesKey(zoneID, nodeID), sceneIDStr)
 		svcCtx.Redis.Incrby(nodeSceneCountKey(zoneID, nodeID), -1)
+		removeResidualSceneMembers(svcCtx, sceneID, zoneID, nodeID, claim.Members)
 	}
-	if agonesGs != "" {
-		ReleaseAgonesRoomForScene(ctx, svcCtx, sceneID, agonesGs, "world_channel_scale_in")
+	if claim.AgonesGs != "" {
+		ReleaseAgonesRoomForScene(ctx, svcCtx, sceneID, claim.AgonesGs, "world_channel_scale_in")
 	}
 
 	logx.Infof("[WorldAutoscale] channel %d fully drained and removed (zone=%d node=%s)",
@@ -485,9 +555,15 @@ func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	metrics.ObserveWorldAutoscale(zoneID, "scale_in", "drained")
 }
 
+// inCooldown 报告这张图是否还在伸缩冷却期。读不到冷却标记按「仍在冷却」处理:本轮不伸缩,
+// 下一拍再看。按「不在冷却」处理会在 Redis 抖动时连续扩缩,正是冷却要防的来回抖。
 func inCooldown(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) bool {
 	exists, err := svcCtx.Redis.Exists(worldAutoscaleCooldownKey(zoneID, confID))
-	return err == nil && exists
+	if err != nil {
+		noteReadUnknown(zoneID, readUnknownSiteAutoscaleDecide, fmt.Sprintf("cooldown flag of conf %d", confID), err)
+		return true
+	}
+	return exists
 }
 
 func markCooldown(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64) {

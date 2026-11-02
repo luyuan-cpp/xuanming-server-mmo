@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -704,8 +705,10 @@ func TestCutoverIsIdempotentAfterFlip(t *testing.T) {
 	if err := h.m.cutover(context.Background()); err != nil {
 		t.Fatalf("重跑: %v", err)
 	}
-	if h.placement().Version != version || len(h.log.events) != events {
-		t.Fatalf("翻转之后重跑不做任何事: %v", h.log.events[events:])
+	// 重跑只把账号再解锁一次(幂等):并发的 rollback、prepare 可能在翻转之后把账号锁回去,不解锁新连接全部失败,
+	// 见 TestCutoverAlreadyDoneUnlocksAccounts。不再冻结、不再翻转,标记已经写过也不再写。
+	if rerun := h.log.events[events:]; h.placement().Version != version || !slices.Equal(rerun, []string{"admin.unlock"}) {
+		t.Fatalf("翻转之后重跑只解锁账号: version=%d %v", h.placement().Version, rerun)
 	}
 }
 

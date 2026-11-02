@@ -15,6 +15,12 @@ func LoadTables(configDir string, useBinary bool) {
     if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load ActivitySchedule table: %v", err)
     }
+    if err := ActivityVitalityRewardTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load ActivityVitalityReward table: %v", err)
+    }
+    if err := ActivityVitalityRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load ActivityVitalityRule table: %v", err)
+    }
     if err := ActorActionCombatStateTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load ActorActionCombatState table: %v", err)
     }
@@ -126,6 +132,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := PetRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load PetRule table: %v", err)
     }
+    if err := PlayModeTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load PlayMode table: %v", err)
+    }
     if err := RewardTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load Reward table: %v", err)
     }
@@ -147,6 +156,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := WorldTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load World table: %v", err)
     }
+    if err := ZoneGroupTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load ZoneGroup table: %v", err)
+    }
 
     if loadSuccessCallback != nil {
         loadSuccessCallback()
@@ -157,11 +169,23 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(45)
+    wg.Add(49)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load ActivitySchedule table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := ActivityVitalityRewardTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load ActivityVitalityReward table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := ActivityVitalityRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load ActivityVitalityRule table: %v", err)
         }
     }()
     go func() {
@@ -388,6 +412,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
     }()
     go func() {
         defer wg.Done()
+        if err := PlayModeTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load PlayMode table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
         if err := RewardTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load Reward table: %v", err)
         }
@@ -428,6 +458,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
             log.Fatalf("failed to load World table: %v", err)
         }
     }()
+    go func() {
+        defer wg.Done()
+        if err := ZoneGroupTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load ZoneGroup table: %v", err)
+        }
+    }()
 
     wg.Wait()
 
@@ -447,6 +483,14 @@ func ReloadTables(configDir string, useBinary bool) error {
     newActivitySchedule := NewActivityScheduleTableManager()
     if err := newActivitySchedule.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload ActivitySchedule failed: %w", err)
+    }
+    newActivityVitalityReward := NewActivityVitalityRewardTableManager()
+    if err := newActivityVitalityReward.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload ActivityVitalityReward failed: %w", err)
+    }
+    newActivityVitalityRule := NewActivityVitalityRuleTableManager()
+    if err := newActivityVitalityRule.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload ActivityVitalityRule failed: %w", err)
     }
     newActorActionCombatState := NewActorActionCombatStateTableManager()
     if err := newActorActionCombatState.Load(configDir, useBinary); err != nil {
@@ -596,6 +640,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newPetRule.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload PetRule failed: %w", err)
     }
+    newPlayMode := NewPlayModeTableManager()
+    if err := newPlayMode.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload PlayMode failed: %w", err)
+    }
     newReward := NewRewardTableManager()
     if err := newReward.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload Reward failed: %w", err)
@@ -624,9 +672,15 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newWorld.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload World failed: %w", err)
     }
+    newZoneGroup := NewZoneGroupTableManager()
+    if err := newZoneGroup.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload ZoneGroup failed: %w", err)
+    }
 
     // Swap all instances at once after all loads succeed.
     ActivityScheduleTableManagerInstance = newActivitySchedule
+    ActivityVitalityRewardTableManagerInstance = newActivityVitalityReward
+    ActivityVitalityRuleTableManagerInstance = newActivityVitalityRule
     ActorActionCombatStateTableManagerInstance = newActorActionCombatState
     ActorActionStateTableManagerInstance = newActorActionState
     AttributeAllocRatioTableManagerInstance = newAttributeAllocRatio
@@ -664,6 +718,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     MysteryMerchantSpotTableManagerInstance = newMysteryMerchantSpot
     PetTableManagerInstance = newPet
     PetRuleTableManagerInstance = newPetRule
+    PlayModeTableManagerInstance = newPlayMode
     RewardTableManagerInstance = newReward
     RoleNameRuleTableManagerInstance = newRoleNameRule
     SkillTableManagerInstance = newSkill
@@ -671,6 +726,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     TestTableManagerInstance = newTest
     TestMultiKeyTableManagerInstance = newTestMultiKey
     WorldTableManagerInstance = newWorld
+    ZoneGroupTableManagerInstance = newZoneGroup
 
     if loadSuccessCallback != nil {
         loadSuccessCallback()

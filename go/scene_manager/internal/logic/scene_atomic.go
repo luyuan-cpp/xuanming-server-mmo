@@ -1,12 +1,14 @@
 package logic
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
 	"scene_manager/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // This file holds the server-side Lua scripts that make scene-manager's
@@ -159,13 +161,13 @@ return {nodeId, agonesGs}
 
 // luaAtomicDestroyInstanceForce 是 luaAtomicDestroyInstance 的 force 版:
 // 不做人数守卫;ARGV[2] 为空时无条件抹掉场景键,非空时只在属主等于它时抹;
-// 返回抹除前的 {nodeId, agonesGs, 成员 1, 成员 2, ...}。读与 DEL 在同一脚本里原子执行,
+// 返回抹除前的 {nodeId, agonesGs, '1', 成员 1, 成员 2, ...}。读与 DEL 在同一脚本里原子执行,
 // 并发的销毁(空闲回收的非 force 脚本、explicit / 级联 / 收尾的 force 脚本,或领导者降级
 // 窗口里的新旧领导者)只有第一个能拿到非空返回 —— 计数减法 / Agones 名额归还 / 镜像级联
 // 这些副作用因此恰好执行一次,不双减计数、不双还名额。
 // 成员交回给调用方,由它从节点集合里摘掉(节点键要等读到属主才知道,不在脚本里现拼)。
 //
-// KEYS 与 luaAtomicDestroyInstance 相同。
+// KEYS[1..7] 与 luaAtomicDestroyInstance 相同。
 // ARGV[1] = sceneId(ZREM 用)
 // ARGV[2] = 期望属主;空串表示不比对(explicit / source_migrated / source_scaled_in 经
 // destroyInstanceForce,以及镜像级联,语义同前)。空闲回收走的是 luaAtomicDestroyInstance,不经这里。
@@ -178,24 +180,38 @@ return {nodeId, agonesGs}
 // 或 rollbackInstanceAllocation)负责其余清理,这里再抹会和它双还 Agones 名额。ARGV[2] 为空时不做这个
 // 判断,映射缺失仍会抹掉余下的键并返回 agonesGs,与 rollbackInstanceAllocation 交错时可能双还名额 ——
 // 这是既有残余(docs/PROGRESS.md 2026-10-23「死节点收尾与显式 DestroyScene…」条目 R3)。
+//
+// 另有两个可选参数,只由 atomicTeardownScene(排空收尾、孤儿清理,都是世界频道)使用,AtomicDestroyForce 不传:
+//   - ARGV[3] = 'absent':调用方先前读到映射不存在,要求此刻仍不存在;期间被写入了属主就一个键都不动。
+//   - KEYS[8..]:在删映射的同一步把成员 ARGV[1] 从这些集合里摘掉(频道集合 / 排空集合)。
+//
+// 认领成功时第 3 个元素固定是 '1',其后才是成员;比对落空只回两个空串,调用方据此区分「落空」与「认领了但各键本来就空」。
 const luaAtomicDestroyInstanceForce = `
 local nodeId = redis.call('GET', KEYS[1])
 if ARGV[2] ~= nil and ARGV[2] ~= '' and nodeId ~= ARGV[2] then
+    return {'', ''}
+end
+-- ARGV[3] = 'absent'(可选,见 atomicTeardownScene):调用方先前读到映射不存在;期间若被写入了属主,一个键都不动。
+if ARGV[3] == 'absent' and nodeId then
     return {'', ''}
 end
 local agonesGs = redis.call('GET', KEYS[7])
 local members = redis.call('SMEMBERS', KEYS[2])
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 redis.call('ZREM', KEYS[3], ARGV[1])
+-- KEYS[8] 起(可选,见 atomicTeardownScene):在删映射的同一步里把场景从这些集合摘掉。
+for i = 8, #KEYS do
+    redis.call('SREM', KEYS[i], ARGV[1])
+end
 if not nodeId then
     nodeId = ''
 end
 if not agonesGs then
     agonesGs = ''
 end
-local out = {nodeId, agonesGs}
+local out = {nodeId, agonesGs, '1'}
 for i = 1, #members do
-    out[i + 2] = members[i]
+    out[i + 3] = members[i]
 end
 return out
 `
@@ -208,7 +224,18 @@ return out
 // 返回值同样全空。认领成功时返回的 nodeId 必然等于 expectedOwner,所以调用方仍按「全空即未认领」判断。
 // 空串表示不比对。
 func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string) (string, string, []string, error) {
-	keys := []string{
+	raw, err := svcCtx.Redis.Eval(luaAtomicDestroyInstanceForce, sceneDestroyKeys(zoneId, sceneId), fmt.Sprintf("%d", sceneId), expectedOwner)
+	if err != nil {
+		return "", "", nil, err
+	}
+	claim := parseForceDestroyReply(raw)
+	return claim.NodeID, claim.AgonesGs, claim.Members, nil
+}
+
+// sceneDestroyKeys 是 luaAtomicDestroyInstanceForce 的 KEYS[1..7]:一个场景在 Redis 里的全部状态键,
+// 外加 zone 的 active instances 集合(ZREM 用)。顺序是脚本的契约。
+func sceneDestroyKeys(zoneId uint32, sceneId uint64) []string {
+	return []string{
 		sceneNodeKey(sceneId),
 		instanceMembersKey(sceneId),
 		activeInstancesKey(zoneId),
@@ -217,19 +244,52 @@ func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint6
 		sceneZoneKey(sceneId),
 		sceneAgonesGsKey(sceneId),
 	}
-	raw, err := svcCtx.Redis.Eval(luaAtomicDestroyInstanceForce, keys, fmt.Sprintf("%d", sceneId), expectedOwner)
-	if err != nil {
-		return "", "", nil, err
-	}
+}
+
+// teardownClaim 是 luaAtomicDestroyInstanceForce 的应答。Claimed=false 表示比对落空、一个键都没动;
+// Claimed=true 时其余字段是脚本删除前读到的值(属主为空串 = 映射本来就不在)。
+// Members 是场景里剩的成员,要由调用方从节点集合里摘掉(removeResidualSceneMembers)。
+type teardownClaim struct {
+	Claimed  bool
+	NodeID   string
+	AgonesGs string
+	Members  []string
+}
+
+// parseForceDestroyReply 解 luaAtomicDestroyInstanceForce 的应答,格式见脚本注释。
+func parseForceDestroyReply(raw any) teardownClaim {
 	parts := toSlice(raw)
-	if len(parts) < 2 {
-		return "", "", nil, nil
+	if len(parts) < 3 || toString(parts[2]) != "1" {
+		return teardownClaim{}
 	}
-	members := make([]string, 0, len(parts)-2)
-	for _, member := range parts[2:] {
+	members := make([]string, 0, len(parts)-3)
+	for _, member := range parts[3:] {
 		members = append(members, toString(member))
 	}
-	return toString(parts[0]), toString(parts[1]), members, nil
+	return teardownClaim{Claimed: true, NodeID: toString(parts[0]), AgonesGs: toString(parts[1]), Members: members}
+}
+
+// atomicTeardownScene 原子认领并抹掉一个世界频道的场景键,并在同一步里把它从 unlistKeys 这些集合里摘掉
+// (成员为十进制 sceneId,用于频道集合 / 排空集合)。给按「先读后拆」两步走的收尾路径用:排空收尾、孤儿清理。
+//
+// 与 AtomicDestroyForce 的区别(2026-10-23):
+//   - expectedOwner 为空串表示「先前读到映射不存在,现在必须仍不存在」,而不是「不比对」:两步之间若有
+//     写者(懒改派等)给它写了属主,一个键都不动。否则会把新属主的映射抹掉,而调用方按空属主做副作用,
+//     新节点上的实体与计数都没人收。
+//   - 集合摘除与删映射同一步:不会出现「集合里还列着、映射已删」的中间态 —— 那个状态会被任意副本上的
+//     懒改派当成陈旧频道复活。
+//   - 返回 Claimed,区分「比对落空」与「认领成功但各键本来就空」。
+func atomicTeardownScene(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, expectedOwner string, unlistKeys ...string) (teardownClaim, error) {
+	keys := append(sceneDestroyKeys(zoneId, sceneId), unlistKeys...)
+	ownerMode := ""
+	if expectedOwner == "" {
+		ownerMode = "absent"
+	}
+	raw, err := svcCtx.Redis.Eval(luaAtomicDestroyInstanceForce, keys, strconv.FormatUint(sceneId, 10), expectedOwner, ownerMode)
+	if err != nil {
+		return teardownClaim{}, err
+	}
+	return parseForceDestroyReply(raw), nil
 }
 
 // AtomicAddSceneMemberIfSceneExists 是 EnterScene 指定场景时的预占:只有 scene:{id}:node 还在才把玩家加进成员集合,
@@ -294,6 +354,10 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 	args = append(args, strconv.FormatUint(playerId, 10))
 
 	raw, err := svcCtx.Redis.Eval(luaReserveBestWorldChannel, keys, args...)
+	// 脚本回 nil 表示候选全部陈旧,go-redis 把它翻成 redis.Nil:这是「没选到」,不是读错。
+	if errors.Is(err, redis.Nil) {
+		return 0, "", 0, nil
+	}
 	if err != nil {
 		return 0, "", 0, err
 	}

@@ -10,7 +10,7 @@
 |----------|-----------|
 | Player-facing | `GET /api/server-list`, `POST /api/assign-gate` |
 | Announcements | announcement CRUD + display |
-| Hotfix | hotfix check |
+| Hotfix | `POST /api/hotfix-check`:按 `hotfix.platforms.<platform>` 的发布线比较版本(`latest-version`、`min-version`、`patch-url`、`changelog`),配错拒绝启动,没配的平台回不用更新 |
 | CDN | CDN URL signing |
 | Admin | zone config, whitelist, announcement management |
 | Health | zone health probe (periodic gate liveness check) |

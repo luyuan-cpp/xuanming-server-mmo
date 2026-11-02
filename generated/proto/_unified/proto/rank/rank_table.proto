@@ -102,3 +102,12 @@ message RankMutationRecord {
   uint64 request_id = 4;
   uint64 created_ms = 5;
 }
+// 本代被移除的实体。只删 rank_score 的行会连版本一起丢,迟到的旧批次能把人带回榜上,所以留这条墓碑,本代内一直有效。
+message RankRemovedEntryRecord {
+  option (OptionTableName) = "rank_removed_entry";
+  option (OptionPrimaryKey) = "board_id,generation,entity_id";
+  uint64 board_id = 1;
+  uint64 generation = 2;
+  uint64 entity_id = 3;
+  uint64 removed_ms = 4;
+}

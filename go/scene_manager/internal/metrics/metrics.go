@@ -394,6 +394,20 @@ var (
 		Help:      "Ownership changes refused because the dead node's re-entry barrier had not elapsed, by site.",
 	}, []string{"zone_id", "site"})
 
+	// ownershipReadUnknownTotal:改派 / 销毁 / 清理 / 伸缩决策要用的 Redis 读出错(超时、断连、熔断),
+	// 拿不到「有值」还是「确实不存在」,该路径不按读错的结果行事(2026-10-22)。绝大多数 site 是本轮放弃、
+	// 什么都不写,等下一拍或上游重试;mirror_cascade 是例外:销毁已提交,退回提交前快照级联并保留索引。
+	// 每个 site 的具体做法见 internal/logic/read_unknown.go 的 readUnknownSite* 常量注释。
+	// go-zero 的 Get 把 redis.Nil 吞成 ("", nil),以前 `x, _ :=` 的写法会把这种「不知道」当成「不存在」,
+	// 进而改写归属、删映射、不还 Agones 名额。
+	// site 只取那些常量,绝不拼进 scene_id / node_id。
+	// 稳态应接近 0;持续非 0 说明 Redis 在抖动,对应路径的自愈 / 回收会因此停住(方向安全,但要人看)。
+	ownershipReadUnknownTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "ownership_read_unknown_total",
+		Help:      "Redis reads needed for an ownership/destroy/cleanup/autoscale decision that failed (state unknown); the path did not act on the unknown value (mostly: round abandoned, nothing written; mirror_cascade: fell back to the pre-commit snapshot and kept the index), by site.",
+	}, []string{"zone_id", "site"})
+
 	// enterSceneOwnerDeadTakeoverTotal:玩家位置记录指向的节点已确认死亡且再入屏障已过,
 	// EnterScene 把它当作无持有者直接落点(enterscenelogic.go playerLocationOwnerDead)。
 	// 只按 zone 分;稳态恒 0,节点崩溃后约等于「当时挂在那个节点上、随后回来的玩家数」。
@@ -601,6 +615,7 @@ func register() {
 			kafkaDeliveryTotal, enterSceneRollbackTotal, enterSceneMintReplayRecognizedTotal,
 			ownerEpochMintClockBehindTotal, ownerEpochMintDurableTotal, ownerEpochMintDurableSeconds,
 			reentryBarrierBlockedTotal, deadNodeReconcilePending, deadNodeReconcileTotal,
+			ownershipReadUnknownTotal,
 			enterSceneOwnerDeadTakeoverTotal, enterSceneOwnerReplacedTakeoverTotal, enterSceneHandoffAdmittedTotal,
 			ownerReplacedRecheckTotal,
 			homeZoneLookupTotal,
@@ -884,6 +899,14 @@ func ObserveOwnerReplacedRecheck(zoneID uint32, result string) {
 func ObserveReentryBarrierBlocked(zoneID uint32, site string) {
 	register()
 	reentryBarrierBlockedTotal.WithLabelValues(
+		strconv.FormatUint(uint64(zoneID), 10), site).Inc()
+}
+
+// ObserveOwnershipReadUnknown 记一次因 Redis 读失败而放弃的改派 / 销毁 / 清理 / 伸缩决策。
+// site 必须取常量点位名,见 ownershipReadUnknownTotal 的注释。
+func ObserveOwnershipReadUnknown(zoneID uint32, site string) {
+	register()
+	ownershipReadUnknownTotal.WithLabelValues(
 		strconv.FormatUint(uint64(zoneID), 10), site).Inc()
 }
 

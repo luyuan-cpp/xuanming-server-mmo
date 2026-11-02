@@ -26,8 +26,10 @@ type PlayerSkillComp struct {
 	Id           uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	SkillTableId uint32                 `protobuf:"varint,2,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
 	// 技能等级(2026-10-19 四职业技能,docs/design/class-skills.md §3)。
-	// 职业技能(Skill.class_id != 0):已学为 1..Skill.max_rank;0 不是"未学",是坏记录,加载时剔除 ——
-	// 未学的职业技能根本不出现在本列表里。旧通用技能(Skill.class_id == 0)不分等级,本字段恒为 0、读写都忽略。
+	// 职业技能(Skill.class_id != 0):已学为 >= 1;0 与条目不存在同义,都是未学(修习复用这一条,不另加条目)。
+	// 存储值可能高于本版本 Skill.max_rank(新版本调大上限后写入,或上限下调):加载不改写,原样携带,
+	// 按 min(存储值, 当前角色等级的上限) 生效(docs/design/mixed-version-persist-field-protection.md §12.1 D5)。
+	// 旧通用技能(Skill.class_id == 0)不分等级,读写都忽略本字段:存档里写着什么原样携带,下发技能书时不带。
 	Rank          uint32 `protobuf:"varint,3,opt,name=rank,proto3" json:"rank,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

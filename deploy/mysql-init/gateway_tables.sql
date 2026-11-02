@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS zone_config (
     zone_id        BIGINT PRIMARY KEY,
     name           VARCHAR(64) NOT NULL,
     manual_status  INT NOT NULL DEFAULT 0 COMMENT '0=OPEN, 1=MAINTENANCE, 2=CLOSED, 3=PREVIEW',
-    capacity       INT DEFAULT 5000,
+    capacity       INT DEFAULT 45000,
     maintenance_msg VARCHAR(256) DEFAULT '',
     open_time      DATETIME DEFAULT NULL,
     recommended    BIT(1) DEFAULT 0,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS announcement (
 
 -- Seed default zone
 INSERT IGNORE INTO zone_config (zone_id, name, manual_status, capacity, recommended, sort_order)
-VALUES (1, 'zone-1', 0, 5000, 1, 1);
+VALUES (1, 'zone-1', 0, 45000, 1, 1);
 
 -- 写者闸门:每个逻辑库自带一份,闸门跟着库走(docs/design/horizontal-scale-logical-db.md §2)。
 -- mmorpg 没有 Go 服务的 -migrate,所以写在这里。DDL 与 go/shared/authoritysql/catalog.go 逐字相同,TestGatewayTablesCarryWriterGate 钉住。

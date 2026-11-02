@@ -27,6 +27,7 @@ import (
 	"friend/internal/data"
 
 	pb "proto/friend"
+	"shared/rolefence"
 )
 
 var errDeadlineConnect = errors.New("截止栅栏:截止之后不该有人取 MySQL 连接")
@@ -88,7 +89,7 @@ func TestFriendWritesAfterRequestDeadlineReachNothing(t *testing.T) {
 			db := sql.OpenDB(conns)
 			t.Cleanup(func() { _ = db.Close() })
 			var allocated atomic.Int32
-			f.deps.Repo = data.NewFriendRepo(f.svcCtx.FriendRedis, db, data.FriendRepoOptions{
+			repo := data.NewFriendRepo(f.svcCtx.FriendRedis, db, data.FriendRepoOptions{
 				NextRequestID: func(context.Context) (uint64, error) {
 					allocated.Add(1)
 					return 1, nil
@@ -96,6 +97,10 @@ func TestFriendWritesAfterRequestDeadlineReachNothing(t *testing.T) {
 				DefaultTTL:        time.Minute,
 				ListReadHardLimit: f.svcCtx.Config.Friend.ListReadHardLimit,
 			})
+			// 和生产一样装上角色护栏。没有护栏时带原会话的请求在 requireRoleActor 就回 ErrOriginalRole,走不到截止判定。
+			// 读权威状态的 reader 留空:事务开不出来就走不到自愈。
+			repo.ConfigureRoleFence(rolefence.NewGuard(db, nil))
+			f.deps.Repo = repo
 			ctx, cancel := context.WithCancel(playerCtx(me))
 			cancel()
 
@@ -110,4 +115,25 @@ func TestFriendWritesAfterRequestDeadlineReachNothing(t *testing.T) {
 			assert.Empty(t, digest.calls, "截止之后不得 bump 落地摘要")
 		})
 	}
+}
+
+// 校验角色时读不了本库是状态未知,要如实报故障,不能回成「角色归属已失效」。
+func TestFriendRoleCheckReadFailureIsStorageFault(t *testing.T) {
+	const me, target uint64 = 7101, 7102
+	f := newFixture(t, nil)
+	conns := &connectCountingConnector{}
+	db := sql.OpenDB(conns)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := data.NewFriendRepo(f.svcCtx.FriendRedis, db, data.FriendRepoOptions{
+		DefaultTTL:        time.Minute,
+		ListReadHardLimit: f.svcCtx.Config.Friend.ListReadHardLimit,
+	})
+	repo.ConfigureRoleFence(rolefence.NewGuard(db, nil))
+	f.deps.Repo = repo
+
+	resp, err := f.logic().RemoveFriend(playerCtx(me), &pb.RemoveFriendRequest{TargetPlayerId: target})
+
+	require.NoError(t, err, "读失败也必须 in-band")
+	assert.Equal(t, constants.ErrStorage, resp.GetErrorMessage().GetId())
+	assert.NotZero(t, conns.attempts.Load(), "夹具要真的走到取连接")
 }

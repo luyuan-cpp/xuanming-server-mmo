@@ -185,6 +185,29 @@ func TestVerifyRoleAdmissionAnswersKnownCallersAndRejectsBadProof(t *testing.T) 
 	require.Equal(t, codes.Unavailable, status.Code(err))
 }
 
+// 调用方已放弃不等于证明无效:和读失败一样带内回 retry,不报成鉴权失败。这时什么都没读。
+func TestRoleFenceReadsCanceledAnswerRetry(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	states := &roleFenceStatesFake{state: &rfpb.RoleFenceState{PlayerId: 11}}
+	state, err := roleFenceTestServer(t, states).GetRoleFenceState(ctx, signedRoleFenceRequest(t, "guild", 11))
+	require.NoError(t, err)
+	require.True(t, state.Retry)
+	require.False(t, state.Found)
+	require.Zero(t, states.calls)
+
+	auth, err := serviceauth.New(map[string]string{"match": directoryTestSecret})
+	require.NoError(t, err)
+	checks := &roleAdmissionChecksFake{valid: true}
+	s := NewDataServiceServer(&svc.ServiceContext{RoleAdmissionChecks: checks, RoleFenceAuth: auth})
+	admission, err := s.VerifyRoleAdmission(ctx, signedAdmissionCheck(t, "match", &base.RoleAdmissionIdentity{PlayerId: 11, Generation: 3}))
+	require.NoError(t, err)
+	require.True(t, admission.Retry)
+	require.False(t, admission.Valid)
+	require.Nil(t, checks.seen)
+}
+
 func TestGetRoleFenceStateUnavailableUntilAssembled(t *testing.T) {
 	s := NewDataServiceServer(&svc.ServiceContext{})
 	_, err := s.GetRoleFenceState(context.Background(), signedRoleFenceRequest(t, "guild", 11))

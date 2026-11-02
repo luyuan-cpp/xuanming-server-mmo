@@ -265,31 +265,16 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 - 墓碑表满时整个节点拒绝观战。
 - Go 全局路径的 16018 一律记 `not_found`，不细分；要细分得给意图再加一个关闭类别字段。
 - C++ 断线重连宽限的用例用回环连接加直接调用 Detach 模拟，没有经过 `BattleClientEdge` 的真实断开回调。
-- 本地（dev / test）模式两版都发不出合规的 AddObserver：不带 `spectator_operation_id`、`admit_before_ms`、`target_instance_id`，被 battle 一律拒绝（C++：`spectate.go` 本地 addObserver 对 `battle_room_manager.cpp` 的三字段校验；Java：`WatchBattleService.java:373-374` 对 `ObserverOperationLedger.validate`，均已在 A 批评审中核实）。生产强制走全局模式，不受影响，但本地观战冒烟走不通。
-  - **Go 已修（2026-10-24，未编译，待 Codex 验证）**，口径对齐全局 `BeginSpectator` / `cancelGlobalSpectator`：
-    - 每次 WatchBattle 每选中一场生成一份 AddObserver 原件（`newLocalObserverAdd`）：op 是新生成的小写规范 UUID；`admit_before_ms` = match 墙钟 now + 25s。battle 上限是 30s，全局路径用 TiDB now() + 30s；本地没有统一时钟源，留 5s 给 match 与 battle 的墙钟偏差。`target_instance_id` 取 battle 节点在注册表里的 `NodeUuid`（新增 `NodeWatcher.EntryOfNode`），实例为空时不写标记、不发 Add，回 16018。观战记录 `SpectateBattleRecord` 只有 node_id、没有实例字段，所以从注册表取；给记录加字段要按 AGENTS §4 重生，与 `requestbattleticketlogic.go` 判 BattleGone 的同一缺口合并另做。
-    - 观战标记 `spectate:watching:{player_id}` 的值从十进制 battle_id 改成原件 pb，在发 Add 之前用 SETNX 写入。换场、gather 入口清退、复查自我清退、结果未知补偿这四种 RemoveObserver 都从原件里取同一个 op、截止和实例。只有回包带回原 op 和原实例、并且 `cancelled=true`，才算拿到取消证明。解析不出原件的标记拿不到原 op，只删标记。
-    - **行为变化：重看同一场也要先按旧原件 Remove，再用新 op 去 Add。** 原来的做法是只删标记、靠 battle 的幂等分支重推，但名单里挂着旧 op 时，账本会拒绝新 op，而旧原件的准入截止多半已经过了，也不能原样重放。代价是旧会话会先收到一次 `SpectateEnd(rewatch)`，再凭新分配重连。全局路径本来就是这样（`prepareGlobalWatch` 先 cancel）。
-    - 成功回包带回 `spectator_operation_id`，与全局路径一致。
-    - 回归测试：`spectate_test.go` 新增按账本校验的桩 battle（`observerLedgerBattle`），覆盖 Add 带齐三个字段、Remove 带同一个 op、取消后同 op 迟到的 Add 被拒、重看同场成功；另有一个用例覆盖实例为空时 fail-closed。原有用例改成断言 Remove 带原件的 op；`request_deadline_fence_test.go` 的结果未知补偿用例同样加了这条断言。
-  - **Java 已修**：`add334cb`（`LocalObserverOperation`，回环用例 `LocalObserverRpcLoopbackTest`）。Java 只剩 robot 走 dev 口的待做项，登记在 Java 仓 `PARITY.md`「观战 P0 缺陷」行。
-  - **本地 robot 观战冒烟**（`robot/battle_smoke_scenario.go`：B 随机观战 A）的阻塞点：
-    1. Go 改动尚未编译和测试，要等 Codex 跑完 [specs/85](../handoff/spectate-tiered-fanout-20261030/specs/85-local-mark-consistency.md) 第 6 节的命令。
-    2. ~~必须走本地模式（`GlobalMatch.Enabled=false`，`match_service.yaml` 默认值）。~~ **2026-10-30 更正**：本地模式已删除，只剩 SQL 权威路径。robot 的 WatchBattle 不带 `request_id`，会在入口回 16004「观战请求参数无效」，robot 要先补上这个字段才能跑这条冒烟（未改）。本节其余提到本地模式、标记的内容按历史记录读。
-    3. battle 节点在 etcd 的注册里要有 `nodeUuid` 和 `grpcEndpoint`（C++ NodeInfo 默认会带），并且与 battle 进程内 `gNode->GetNodeInfo().node_uuid()` 是同一个值；否则 match 回 16018，或者 battle 回 kInvalidParameter。
-    4. match 的墙钟不能比 battle 快 5s 以上（battle 跑在 WSL / Docker 而 match 跑在宿主机时要留意），否则 Add 会因截止过远被拒。
-    5. 跑之前要清 Redis（AGENTS §6.2），让 `spectate:battles:active` 里只剩 A 这一场；随机选场挑到残留的场会在 `b-watch-battle-id` 失败。
-    6. 冒烟走 Java 服务端时，Java robot 的 `BattleScenario` 第 16 步仍走不通（dev 口缺这三个字段，见上一条）。
-  - **Go 标记一致性（2026-10-30 复核后修复，未编译，待 Codex 验证）**：10-24 那版的标记语义还是尽力而为，比全局路径和 Java 都弱，现在与它们同一规则：**标记是 battle 上可能挂着的观众唯一的恢复入口，只有拿到取消证明，或 Add 被明确拒绝、请求确定没发出，才按值删除；其余一律保留，下一次 WatchBattle 沿同一个 op 重试。**
-    - Remove 失败不再删标记。换场和重看同一场时，旧观战取消未获证明就回 16004、不登记新操作（否则同场重看会被账本一直拒绝，恢复入口却已丢失）。gather 入口清退、复查自我清退、结果未知补偿只记日志，结论不变。
-    - 删标记改为按值比对（Lua），不会误删并发 WatchBattle 刚抢到的新标记。
-    - 取消按原件固定的实例定位（`NodeWatcher.EntryOfInstance`），不再读会被 D82 改写的观战记录；观战记录不在或损坏都不影响取消。
-    - AddObserver 的任何 RPC 错误都算结果未知（不再按状态码细分），要沿原件取消。Add 被明确拒绝后回滚标记失败按依赖故障回 16004，不转 L1、不换场，残留标记由下一次 WatchBattle 清掉。
-    - `observer_name` 改为角色公开名（`challengePublicName`），不再用登录账号；查不到时为空串。
-    - 补跨会话栅栏（`client-request-ordering.md` §6.3）：读会话、判在线、比对会话号与 gate 实例都提到清退旧观战之前，离线或旧会话的请求回 16019，没有任何副作用。
-    - **残余（都只在本地模式）**：① battle 实例崩溃且不再回来时，挂在上面的玩家，以及崩溃后、租约到期前试图观战的玩家，WatchBattle 回 16004 直到标记 TTL（战斗最长期限 + 60s）到期；② 切磋没有票据，gather 读完标记之后、Prepare 写战斗锁之前到达的 WatchBattle 复查全过，玩家会短暂既是观众又是参战者，标记还在，可恢复。本地路径的 TTL 和尽力清退不等于全局路径的事务互斥。
-    - 与 Java 的非契约差异：Go 固定实例、按实例查端点，Java 固定端点；解析不出原件的标记 Go 按值清掉，Java 对带版本前缀的损坏标记选择保留；Add 连接失败 Java 能判「确定未送达」并回滚，Go 的 gRPC 分不清，按结果未知保留标记。
-    - 方案、定稿签名和测试清单见 [specs/85-local-mark-consistency.md](../handoff/spectate-tiered-fanout-20261030/specs/85-local-mark-consistency.md)。
+- 本地（dev / test）模式观战（已结案）：Go 的本地 Redis 模式已于 2026-10-30 整段删除，开发与生产走同一条 SQL 路径（`docs/PROGRESS.md`「go/match 只剩 SQL 权威路径」），`spectate:watching:*` 也一起没了。10-24、10-30 为本地路径做的修复随代码删除，过程见 `docs/PROGRESS.md` 同日条目。留下的结论：
+  - **规则（SQL 路径）**：Add 与 Remove 都沿 `match_spectator` 原件带同一个 op、截止和实例；只有带回原 op 与实例的 `cancelled` 才算取消证明（`observerCancelProven`），未获证明不关闭占用；换场和进匹配都要先拿到证明；跨会话复核在 `locateGlobalWatch`；观众名只取角色公开名（`challengePublicName`）。
+  - **准入窗口（2026-11-01 修，未编译，待 Codex 验证）**：`admit_before_ms` 从 SQL 时钟 now + 30s 改成 + 25s（`spectatorAdmitWindowMs`）。battle 按自己的墙钟只接受至多未来 30s，SQL 时钟与它不同源；窗口取满时，SQL 时钟只要比 battle 快过落原件到 Add 送达这段耗时，Add 和 Remove 就都被拒，观战回 16018，取消也拿不到证明。Java 没有这个问题：全局路径取 min(30s, 请求剩余预算)，本地路径固定 25s。
+  - **Java**：本地路径还在，原操作已由 `add334cb` 落码（回环用例 `LocalObserverRpcLoopbackTest`）。待做项（robot 走 dev 口、本地 163 跨会话栅栏）登记在 Java 仓 `PARITY.md`「观战 P0 缺陷」行。
+  - **robot 观战冒烟**（`robot/battle_smoke_scenario.go`：B 随机观战 A）的前提：
+    1. Codex 按 [CODEX.md](../handoff/spectate-tiered-fanout-20261030/CODEX.md) 编译和测试通过。robot 的 WatchBattle 已带 `request_id`。
+    2. battle 节点在 etcd 的注册里要有 `nodeUuid`、`grpcEndpoint` 和机房号（`physicalRegion`），成局落点从注册表选。
+    3. SQL 的时钟不能比 battle 快 5s 以上（MySQL 跑在 Docker / WSL、battle 跑在宿主机时要留意），否则 Add 会因截止过远被拒。
+    4. 跑之前按 AGENTS §6.2 清 Redis，让 `spectate:battles:active` 里只剩 A 这一场；随机选场挑到残留的场会在 `b-watch-battle-id` 失败。
+    5. 冒烟走 Java 服务端时，Java robot 的 `BattleScenario` 第 16 步仍走不通（见 `PARITY.md`）。
 
 ## 11. 分阶段落地
 
@@ -502,18 +487,19 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 - 带 `MMORPG_MAINTENANCE_CONTROL_DIR` 启动的 gate（本地受控维护流程，K8s 不用）不注册广播 topic 消费者：这台 gate 上的观众在场次升档后收不到帧，30 s 后收到 `SOURCE_LOST`，不碰资产。走这个流程的部署把 `Spectate.BroadcastMaxConcurrent` 置 0。
 - `Spectate.RelayEnabled` 在 K8s 配置里写死 true（单 Kafka 集群）；多 Kafka 集群部署前必须改 false，否则跨集群的 gate 收不到中继帧（Q6）。
 - 建 topic：见 15.3。
+- **Java 的丢帧口径**：Redis pub/sub 至多一次。battle 按场串行发布，保证 TURN 不被 END 越过；gate 收尾前先读最新帧键，读到同实例的 END 就按真实终局收尾；丢掉的最后一回合 158 不补（下一帧不存在），属于接受的残余。
 - **Java**：内部通道按 Java 惯例走 Redis pub/sub。中继发到目标 gate 的推送频道；广播用分片 pub/sub，按场开频道，gate 有本机订阅者时订阅。客户端契约同 15.2。
 
 ### 15.8 落码分批
 
 | 批 | 内容 | 状态 |
 |---|---|---|
-| B | 可见性闸（§10 第 6 条） | 落码中 |
-| C | gate 推送身份栅栏、Scene / All 两个广播 handler、编码一次、空 payload 拒绝 | 落码中 |
-| P0 剩余 | 观众帧编码一次、观众席节点配额 | 落码中（与 B 同批） |
-| P1 | 15.2 的协议、15.4 battle 中继、15.5 SpectateHub、15.6 L1、15.7 部署 | 待 B / C 落稳后开工 |
-| P2 | 15.6 升 L2 与配额、featured、广播 topic 消费 | 与 P1 同批的 battle / gate 部分一起落，match 侧同批 |
-| Java | B + 本地模式原操作 + P0 剩余 → P1 / P2 | 前三项落码中；P1 / P2 在 C++ / Go 落稳后对齐 |
+| B | 可见性闸（§10 第 6 条） | 已落码，未编译 |
+| C | gate 推送身份栅栏、Scene / All 两个广播 handler、编码一次、空 payload 拒绝 | 已落码，未编译 |
+| P0 剩余 | 观众帧编码一次、观众席节点配额 | 已落码，未编译 |
+| P1 | 15.2 的协议、15.4 battle 中继、15.5 SpectateHub、15.6 L1、15.7 部署 | 已落码并过一轮评审修正，未编译 |
+| P2 | 15.6 升 L2 与配额、featured、广播 topic 消费 | 已落码并过一轮评审修正，未编译 |
+| Java | B + 本地模式原操作 + P0 剩余 → P1 / P2 | 全部已落码并过一轮评审修正，未编译 |
 
 ### 15.9 评审后的定稿决策（2026-10-30，负责人授权按标准做法定）
 

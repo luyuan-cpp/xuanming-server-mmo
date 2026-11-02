@@ -122,11 +122,12 @@ Test-Case 'Redis Cluster spec:只抓持有 slot 的主节点,逐节点落盘,元
             -MessagePattern 'spec|端口' -Because "spec '$spec' 必须拒绝"
     }
     $dir = New-RunDir
+    # 每行整体加括号:逗号优先级高于 +,不加的话四行会拼成一行,解析只见到第一个主节点。
     $nodes = @(
-        ('a' * 40) + ' 10.0.0.1:6379@16379 myself,master - 0 0 1 connected 0-8000',
-        ('b' * 40) + ' 10.0.0.2:6379@16379 master - 0 0 2 connected 8001-16383',
-        ('c' * 40) + ' 10.0.0.3:6379@16379 slave ' + ('a' * 40) + ' 0 0 1 connected',
-        ('d' * 40) + ' 10.0.0.4:6379@16379 master - 0 0 3 connected'
+        (('a' * 40) + ' 10.0.0.1:6379@16379 myself,master - 0 0 1 connected 0-8000'),
+        (('b' * 40) + ' 10.0.0.2:6379@16379 master - 0 0 2 connected 8001-16383'),
+        (('c' * 40) + ' 10.0.0.3:6379@16379 slave ' + ('a' * 40) + ' 0 0 1 connected'),
+        (('d' * 40) + ' 10.0.0.4:6379@16379 master - 0 0 3 connected')
     ) -join "`n"
     $nodesProvider = [scriptblock]::Create("param(`$name, `$spec) @'`n$nodes`n'@")
     & $snapScript -RunDir $dir -StartTime $pastStart -Stages '0' -Endpoints @{} -RedisTargets @{ player = 'k8s-cluster:mmorpg-infra/redis-player' } `

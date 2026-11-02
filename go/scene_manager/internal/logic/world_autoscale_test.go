@@ -41,6 +41,14 @@ func newAutoscaleCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	return sc, mr
 }
 
+// mustDesiredWorldChannelCount 读期望频道数;miniredis 正常时不该读失败,失败即用例前提不成立。
+func mustDesiredWorldChannelCount(t *testing.T, sc *svc.ServiceContext, zoneID uint32, confID uint64) int {
+	t.Helper()
+	n, err := DesiredWorldChannelCount(sc, zoneID, confID)
+	require.NoError(t, err)
+	return n
+}
+
 // seedChannels 手工铺一组频道及其人数,绕开 initWorldScenesForZone。
 func seedChannels(t *testing.T, sc *svc.ServiceContext, zoneID uint32, confID uint64, playersByScene map[uint64]int64) {
 	t.Helper()
@@ -69,7 +77,7 @@ func TestAutoscale_ScalesOutWhenEveryChannelIsFull(t *testing.T) {
 	out, in := AutoscaleWorldChannelsForZone(context.Background(), sc, testZoneId)
 	assert.Equal(t, 1, out)
 	assert.Equal(t, 0, in)
-	assert.Equal(t, 3, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID))
+	assert.Equal(t, 3, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 }
 
 // 只要有一个频道没到线就不扩 —— 否则负载不均时会扩出一堆空频道。
@@ -84,7 +92,7 @@ func TestAutoscale_DoesNotScaleOutWhenOneChannelHasRoom(t *testing.T) {
 	out, in := AutoscaleWorldChannelsForZone(context.Background(), sc, testZoneId)
 	assert.Equal(t, 0, out)
 	assert.Equal(t, 0, in)
-	assert.Equal(t, 2, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID))
+	assert.Equal(t, 2, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 }
 
 // 到达 MaxChannelsPerMap 之后不再扩,只告警。
@@ -99,7 +107,7 @@ func TestAutoscale_RespectsMaxChannels(t *testing.T) {
 
 	out, _ := AutoscaleWorldChannelsForZone(context.Background(), sc, testZoneId)
 	assert.Equal(t, 0, out)
-	assert.Equal(t, 2, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID))
+	assert.Equal(t, 2, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 }
 
 // ── 缩容 ────────────────────────────────────────────────────────────────
@@ -123,7 +131,7 @@ func TestAutoscale_DrainsUnderpopulatedChannel(t *testing.T) {
 	assert.Contains(t, members, "101")
 
 	// 期望频道数同步减 1,否则 initWorldScenesForZone 会立刻补回来。
-	assert.Equal(t, 1, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID))
+	assert.Equal(t, 1, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 
 	// 排空索引里有它,后续 tick 才找得回来继续收敛。
 	draining, _ := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
@@ -145,7 +153,7 @@ func TestAutoscale_NeverDrainsTheLastChannel(t *testing.T) {
 
 	members, _ := sc.Redis.Smembers(worldChannelsKey(testZoneId, autoscaleTestConfID))
 	assert.Contains(t, members, "101", "the last channel of a world map must never be drained")
-	assert.Equal(t, 1, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID))
+	assert.Equal(t, 1, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 }
 
 // MinChannelsPerMap 配成 0 也要被钳回 1。
@@ -157,7 +165,7 @@ func TestAutoscale_MinChannelsIsClampedToOne(t *testing.T) {
 
 	_, in := AutoscaleWorldChannelsForZone(context.Background(), sc, testZoneId)
 	assert.Equal(t, 0, in)
-	assert.GreaterOrEqual(t, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID), 1)
+	assert.GreaterOrEqual(t, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID), 1)
 }
 
 // 其余频道装不下就不缩 —— 否则把人挤过去立刻触发扩容,来回抖。
@@ -242,14 +250,14 @@ func TestDesiredWorldChannelCount_RedisWinsOverConfig(t *testing.T) {
 	sc, _ := newAutoscaleCtx(t)
 	sc.Config.WorldChannelCount = 4
 
-	assert.Equal(t, 4, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID), "首次访问用配置播种")
+	assert.Equal(t, 4, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID), "首次访问用配置播种")
 
 	setDesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID, 7)
-	assert.Equal(t, 7, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID))
+	assert.Equal(t, 7, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 
 	// 配置改了也不该覆盖 Redis 里的值。
 	sc.Config.WorldChannelCount = 2
-	assert.Equal(t, 7, DesiredWorldChannelCount(sc, testZoneId, autoscaleTestConfID))
+	assert.Equal(t, 7, mustDesiredWorldChannelCount(t, sc, testZoneId, autoscaleTestConfID))
 }
 
 // 冷却窗口内不做任何伸缩决策。

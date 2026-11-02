@@ -229,7 +229,7 @@ var createPlayerStageBuckets = []float64{
 const (
 	createStageMint         = "mint"          // 发号(号段 / snowflake)
 	createStageName         = "name"          // 名字登记(含同名重试、生成名换名重试)
-	createStageRegister     = "register"      // player:zone 归属登记
+	createStageRegister     = "register"      // player_route 归属登记
 	createStageAccountWrite = "account_write" // 围栏写账号 blob(含写未确认后的回读)
 )
 

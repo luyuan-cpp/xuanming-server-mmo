@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"net"
 	"os"
 	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
@@ -86,6 +87,19 @@ func nativeStore(t *testing.T, configured ...Rules) *Store {
 	return store
 }
 
+// requireLoopbackTiDBAddress:测试端点必须显式为数值 loopback,不跟随 DNS,不探测其它服务。端口由 runner 决定。
+func requireLoopbackTiDBAddress(t *testing.T, address string) {
+	t.Helper()
+	host, portText, err := net.SplitHostPort(address)
+	require.NoError(t, err)
+	ip := net.ParseIP(host)
+	require.NotNil(t, ip, "测试端点必须是数值loopback")
+	require.True(t, ip.IsLoopback(), "测试端点必须是数值loopback")
+	port, err := strconv.ParseUint(portText, 10, 16)
+	require.NoError(t, err)
+	require.NotZero(t, port)
+}
+
 // 同例副本显式共享immutable boot配置，不通过进程级池映射查找资格。
 func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*Store, *sqltest.Fixture) {
 	t.Helper()
@@ -96,7 +110,7 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 		}
 		t.Skip("未启用独立真实TiDB聊天验收")
 	}
-	require.Equal(t, "127.0.0.1:24000", address, "只消费root已核本任务TiDB，不探测其它服务")
+	requireLoopbackTiDBAddress(t, address)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	controlConfig := mysql.NewConfig()

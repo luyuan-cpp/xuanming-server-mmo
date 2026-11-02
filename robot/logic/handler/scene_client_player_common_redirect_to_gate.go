@@ -14,7 +14,7 @@ import (
 //
 // ── 完整流程 ────────────────────────────────────────────────────────────────
 //
-//	① 玩家在 zone A 的 gate 上登录 → login.EnterGame 发现他的 player:zone 归属是
+//	① 玩家在 zone A 的 gate 上登录 → login.EnterGame 发现他的 player_route 归属是
 //	   zone B(合服后的真归属),于是让 scene_manager 走跨区重定向,并**照常回成功**、
 //	   清掉登录会话 —— A 这边从此不会再有任何东西推进这个玩家;
 //	② A 的 gate 收到 RedirectToGateEvent,把 target_ip / target_port /

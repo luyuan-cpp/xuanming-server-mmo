@@ -136,7 +136,8 @@ function Reset-MigrateFixture {
     # 本套只核迁移门禁，常驻三把密钥的注入由部署合同测试覆盖。
     Set-Item Function:script:Add-MatchAuthoritySecretEnv { param($ManifestContent) return $ManifestContent }
     # 写者启动授权和逻辑库同样不归本套：注入、名册核对在 k8s_deploy_contract、logical_db_deploy_contract。
-    Set-Item Function:script:Add-SqlWriterBootManifest { param($ManifestContent, $Namespace, $SvcName, $RuntimeKind) $script:Events.Add("render:boot:$SvcName"); return $ManifestContent }
+    # 桩只替真函数做占位替换这一步(换成目录里的 Secret 名和摘要),清单才和真部署同形状,「占位必须全部替换」的断言继续管得住其余占位。
+    Set-Item Function:script:Add-SqlWriterBootManifest { param($ManifestContent, $Namespace, $SvcName, $RuntimeKind) $script:Events.Add("render:boot:$SvcName"); return ($ManifestContent -creplace 'PLACEHOLDER_SQL_WRITER_[A-Z0-9_]+', 'fixture-sql-writer') }
     Set-Item Function:script:Add-SqlWriterPlacementEnv { param($ManifestContent) return $ManifestContent }
     Set-Item Function:script:Assert-DataServiceRosterSchemas { param($Namespace) $script:Events.Add('check:roster') }
     Set-Item Function:script:Add-IdIssuerExpectedRegionEnv { param($ManifestContent) return $ManifestContent }
@@ -629,7 +630,9 @@ Test-Case '契约读取失败时不做任何集群写操作' {
     $script:CommandTopicContractError = 'contract unavailable'
     $failure = Get-ThrownMessage { Apply-OneGoSvc -SvcName trade -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0 }
     Assert-Match -Text $failure -Pattern 'contract unavailable' -Because '必须是契约错误本身,不是别的模拟故障'
-    Assert-Equal -Expected 0 -Actual $script:Events.Count -Because '主 manifest 渲染在 ConfigMap / 迁移 Job 之前,渲染失败不能留下半截部署'
+    # 写者清单在契约之前渲染,桩记下的 render:boot 是本地动作,不算集群写操作。
+    $clusterWrites = @($script:Events | Where-Object { $_ -notlike 'render:*' })
+    Assert-Equal -Expected 0 -Actual $clusterWrites.Count -Because '主 manifest 渲染在 ConfigMap / 迁移 Job 之前,渲染失败不能留下半截部署'
 }
 
 Test-Case 'Add-GoSvcCommandTopicEnv:沿用已有条目的缩进,插在 env 列表最前' {

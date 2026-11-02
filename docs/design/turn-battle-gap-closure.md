@@ -1,5 +1,9 @@
 # 回合制战斗缺口收口 G1–G9(2026-09-17)
 
+> **2026-11-01 更正**:结算已改为只走 match SQL + player_inbox([总体方案 §5.4](./player-data-tidb-scaling-plan.md))。
+> §3、§5–§9 里的 `battle:settlement:pending`、发件箱、结算账本、「锁留到落盘」都是历史记录,代码里已经没有了。
+> 战斗锁本身的可靠性与恢复分支的去向见 [§10](#10-2026-11-01-战斗锁写入可靠性恢复分支的去向已落码未编译待-codex-验证)。
+>
 > 状态:**已落码;导表与 proto 重生成已执行(2026-09-18);未编译、未跑测试、未跑冒烟**。
 > 用户 2026-09-18 明确指示"不用等 Codex,你帮他做完,不用编译,直接合并到 main",
 > 因此 §7 的第 1、2 步已由本会话执行完毕并入库(结果见 §8),第 3–6 步(编译 / 单测 / 冒烟 / 客户端)
@@ -400,3 +404,76 @@ blob、同一次落盘**,于是两者同生共死:崩溃 → 一起没 → pendi
 
 **仍未验证的**:§9.3 的"锁留到落盘"及之后两轮修订(09-28 04:40 以后的代码)还没被编译过;
 `battle_smoke` 通过的那次也是旧版结算逻辑。按 §9.3 验证清单重跑。
+
+## 10. 2026-11-01 战斗锁写入可靠性;恢复分支的去向(已落码,未编译,待 Codex 验证)
+
+### 10.1 来龙去脉
+
+2026-10-22 到 10-30,会话 `local_f39089db` 在 worktree 里做了一批结算改动(锁不当销账证据、待结算记录每局一条 + 墓碑 +
+`{player_id}` 键),当时写在本文件 §10、§11,没有提交,归档时随 worktree 删除。10-30 按会话记录恢复到
+`claude/recover-battle-settlement-f39089db`(`b5131475`,基点 `940ef974`),Codex 接到 `codex/battle-settlement-integration`
+(基点 `72017963`,工作区未提交),编译和结算、锁契约用例都跑过。
+
+同期 main 走了另一条路:结算改成只走 match SQL + player_inbox,`settlement_outbox.h`、结算账本、`battle:settlement:pending`、
+两个发件箱全部删除(`65c69f4a9`)。
+
+**结论:这两条分支不再合回 main。** 合回去会把已删除的整套设计带回来;其中「按 battle_id 升序逐局应用」也已经是错的,
+发号器的 battle_id 不单调(AGENTS §7 第 1 条)。锁可靠性那部分按当前 main 重写,落在本节。
+
+### 10.2 原决策的去向
+
+| 恢复分支的决策 | main 现状 |
+|---|---|
+| 锁不是销账证据;判作废的局迟到照发;在线无组件补读补发(cross-service-assets#1) | **已消除**:Redis 里没有结算原件。`ApplyInboxSettlement` 不读锁、不看冻结,`CompleteInboxSettlement` 组件不在也能收尾 |
+| 每局一条 HASH、墓碑、发件箱补落库、积压索引、离线不写、登录 HGETALL(K2–K8) | **已取代**:收件箱每局一条,幂等靠永久域水位,提交点是存档 SQL |
+| 键带 `{player_id}`,Go 同批(K1、K11) | **已有等价**:`battle:lock:{pid}`、`battle:ctx:{pid}`,`go/shared/redisslot` 的金样测试解析 C++ 头文件逐字比对 |
+| reaper 判 FIGHTING 的宽限 | **已有**:`FreezeExpiresAtMs`;match 侧 `terminalOutcomeGraceMs` |
+| 回档 / 合区对待结算记录与墓碑的处置(当时待拍板) | **问题不存在了**:这一族状态已删除 |
+| 写锁与 ctx 原子、续期只延长、写锁 / 续锁有界重试、重复确认续期(负责人 10-22 拍板 (b)(c))、续期去重(K9)、重建复核首发才撤销(K10) | **main 没有,本节落码** |
+
+### 10.3 结算走收件箱之后为什么还要修
+
+锁不再影响发奖,但还有两个用途:match 读它拦排队;实体没了时 scene 靠它重建冻结。改动前的 main:
+
+- `PrepareBattle` 发两条 SET,没问到只打日志,注释还写着「不影响正确性」;
+- 确认续期只有一次机会,已 FIGHTING 的重复确认直接忽略。没续上时锁停在「备战期限 + 60 秒」,而战斗时限默认 300 秒。
+
+叠加「玩家战斗中完整下线再登录」:读不到锁,新实体不冻结,资产通道的战斗闸放开 —— 正是 `player_battle.h`
+`FreezeExpiresAtMs` 说明的「可逐局刷的有界资产复制」窗口;match 也可能放进第二场。
+
+### 10.4 修法
+
+| 文件 | 改动 |
+|---|---|
+| `cpp/libs/services/scene/battle/system/battle_lock_rules.h` | `kWriteBattleLockScript`(一条 Lua 写两键)、`kRenewBattleLockIfMatchScript`(锁值匹配才动、只延长、不补写);`IsLockWriteAnswered`、`NextLockWriteRetryDelayMs`(最多 6 次含首发,单调时钟 30 秒预算,退避 500 ms 起封顶 8 秒,按 player_id ^ battle_id 确定抖动);`ReplyShapeName` |
+| `battle_lock_reply_shape.h` | `ReplyText`(只进日志) |
+| `player_battle.cpp` | `WriteBattleLock`(重发前确认 InBattleComp 仍是这一局);`ConfirmBattleLockIfMatch` 与 `ConfirmRebuiltFreeze` 带有界重试;`ConfirmBattle` 已 FIGHTING 时顺带续期;续期链按 (player_id, battle_id) 去重;`ResolveRebuiltFreezeRecheck`(只有首发回 0 才撤销重建) |
+| `player_battle.h` | 契约注释更正;测试注入点 `SetLockScriptObserverForTest`、`SetLockRetrySchedulerForTest` |
+| `cpp/tests/bag_test/player_battle_settlement_test.cpp` | 接线用例 8 条,`BattleLockContract.*` 4 条(2 条脚本文本 + 2 条 `MMORPG_TEST_REDIS_ADDR` 门控的真实 Redis) |
+| `cpp/tests/routing_identity_test/routing_identity_test.cpp` | `BattleLockWriteRetry.*` 4 条、`BattleLockReplyShape.ReplyTextComesOnlyFromTextReplies` |
+
+### 10.5 不变量
+
+1. 锁与 ctx 同生共死:同一条 Lua 写入、续期、删除,同 TTL。
+2. 续期只延长,锁值匹配才动,锁不在不补写:一条迟到的确认不能复活被取消 / 结算 / 判废删掉的锁。
+3. 写锁重发前必须确认实体上的 InBattleComp 仍是这一局;摘组件与条件删锁在同一个 loop 回合里,所以门禁过了就不会复活已删的锁。
+4. 只有脚本的整数应答是结论(0 = 锁不在或已易主,不重试);空应答、ERROR、命令没发出去都是「没问到」。
+5. 重试有界,闭包只捕获 id 与字节,不捕获实体句柄或 this(AGENTS §11.7)。
+
+### 10.6 残留与代价
+
+- **重试放弃**(Redis 中断超过 30 秒,`metric=battle_lock_write_gave_up`):续期放弃后,180 秒确认补发窗口内的下一条确认会重新起链。
+  写锁放弃后锁一直缺到战斗结束,因为续期不补写;本实体的 InBattleComp 仍挡第二场,完整重登重建不出冻结。结算不受影响。
+- **与 Java 不同**:Java 写锁失败即备战失败。C++ 的 `PrepareBattle` 同步应答、不等 Redis,所以照常放行、靠重试兜底。
+- **重复确认的 Redis 开销**:在线的 FIGHTING 玩家每条周期补发都发一条续期 EVAL,每局每人最多 18 条(180 秒窗口、每 10 秒一次),
+  键带 `{player_id}`,随玩家域分片水平扩展。Java 用 `lockExtended` 标记,续期成功后就不再发。C++ 没有预先加这个标记:
+  续期幂等、状态更少,而且还没有压测数据说明它值得多一份状态。压测若显示它占比高,再加同样的标记。
+- **离线确认读 ctx 不重试**:靠 battle 的确认周期补发;Redis 中断超过补发窗口时,离线玩家的锁停在备战期 TTL。
+- **删锁仍是 fire-and-forget**(既有):结算确认后锁没删掉时,排队闸多挡到 TTL,重登会按锁短暂重建冻结,由收件箱重放或 reaper 收尾。
+  只影响活性,不影响数据。
+
+### 10.7 验证(全部未执行,待 Codex)
+
+本批没有动 proto,不需要协议生成。命令见 `docs/PROGRESS.md` 2026-11-01 同名条目。
+
+Java 版:`PARITY.md`「战斗锁不再是销账证据」一行已更正(Java 待做);Java 备战写锁失败即失败、重复确认续期(D9)已有等价。

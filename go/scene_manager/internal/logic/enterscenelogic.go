@@ -468,7 +468,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				return resp, nil
 			}
 		}
-		// 同样在不可回头点之前:要动归属的放行先确认玩家**有** player:zone 映射。第二条腿的 gate zone
+		// 同样在不可回头点之前:要动归属的放行先确认玩家**有** player_route 映射。第二条腿的 gate zone
 		// 是目标 zone,「未映射 = 首登,按 gate zone」在那里等于把访客的存盘写进目标 zone 的库(§6
 		// 不变量 2),而且零报错;到第二条腿才拒,玩家已被源 scene 销毁、落不了地。在这里拒,源 scene
 		// 收到错误应答后 epoch 未变 → 解冻并回 tip(player_lifecycle.cpp ResolveTravelOutcome),玩家

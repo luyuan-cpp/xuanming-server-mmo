@@ -6,6 +6,8 @@
 // 这里是唯一碰 hiredis 类型的地方,空应答 → kNoReply 这一条映射也由单测直接盯住
 // (cpp/tests/routing_identity_test,BattleLockReplyShape.*)。
 
+#include <string_view>
+
 #include <hiredis/hiredis.h>
 
 #include "battle_lock_rules.h"
@@ -34,6 +36,24 @@ namespace battle_lock
 			return ReplyShape::kError;
 		default:
 			return ReplyShape::kOther;
+		}
+	}
+
+	// 应答里的文本(ERROR 的错误信息等),只进日志。空应答与非文本类型返回空。
+	inline std::string_view ReplyText(const redisReply *reply)
+	{
+		if (reply == nullptr || reply->str == nullptr)
+		{
+			return {};
+		}
+		switch (reply->type)
+		{
+		case REDIS_REPLY_STRING:
+		case REDIS_REPLY_STATUS:
+		case REDIS_REPLY_ERROR:
+			return std::string_view(reply->str, reply->len);
+		default:
+			return {};
 		}
 	}
 } // namespace battle_lock

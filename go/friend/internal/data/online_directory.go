@@ -30,7 +30,7 @@ const (
 
 // OnlineDirectory 只读 player_locator 的会话，展示资料经 data_service 读 player_store；不维护第二份在线真值。
 // Redis 是玩家域句柄（与 SessionReader 相同约束），可以是 Cluster：逐主节点翻页（playerredis.ScanPage）。
-// home zone 经 data_service 查询，不能假定 player:zone:* 和会话同库。每页最多四次 SCAN，空页仍可有续页。
+// home zone 经 data_service 查询，归属只在全局库 player_route,不和会话同库。每页最多四次 SCAN，空页仍可有续页。
 type OnlineDirectory struct {
 	Redis       redis.UniversalClient
 	DataService dspb.DataServiceClient

@@ -6731,6 +6731,26 @@ TEST(EnterFenceEcs, NewerSessionTakesOver)
     ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
 }
 
+TEST(EnterFenceEcs, NewSessionInSameSceneRebuildsBaseline)
+{
+    // 断线宽限内重连、顶号先于旧会话退出:实体还在目标场景,新客户端要完整的入场基线,旧连接的 AOI 观察状态要重建。
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+    const auto player = MakeFencedPlayer(kFenceSessionA, kGenA);
+    const auto scene = PlaceInScene(player, kFenceScene);
+    tlsEcs.actorRegistry.emplace_or_replace<Hex>(player);
+
+    EXPECT_EQ(EnterGameNode(FenceEnter(kFenceSessionB, kGenB, LOGIN_REPLACE, kFenceScene)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting);
+
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kFenceSessionB, kGenB));
+    const auto *sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+    ASSERT_NE(sceneComp, nullptr);
+    EXPECT_EQ(sceneComp->sceneEntity, scene);
+    EXPECT_FALSE(tlsEcs.actorRegistry.all_of<Hex>(player)) << "离场时清掉旧的 AOI 状态,下一拍按新连接重建";
+
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+}
+
 TEST(EnterFenceEcs, DuplicateEnterIsIdempotent)
 {
     // gate 补发同一条路由(同一会话、同一代次):两次都放行,登录态与绑定不变。

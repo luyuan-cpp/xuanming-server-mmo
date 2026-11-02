@@ -381,7 +381,7 @@ func chatPrivilegeServerProbe(t *testing.T, ctx context.Context, user, password,
 	config := mysql.NewConfig()
 	config.Net = "tcp"
 	config.Addr = os.Getenv("CHAT_IT_TIDB")
-	require.Equal(t, "127.0.0.1:24000", config.Addr)
+	requireLoopbackTiDBAddress(t, config.Addr)
 	config.User, config.Passwd, config.DBName = user, password, schema
 	config.Timeout, config.ReadTimeout, config.WriteTimeout = time.Second, 5*time.Second, 5*time.Second
 	connector, err := mysql.NewConnector(config)

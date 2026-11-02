@@ -22,6 +22,10 @@ func (s *DataServiceServer) GetRoleFenceState(ctx context.Context, in *dspb.GetR
 		return nil, status.Error(codes.Unavailable, "角色护栏目录未就绪")
 	}
 	if _, err := s.svcCtx.RoleFenceAuth.Verify(ctx, accountdirectory.MethodPrefix+"GetRoleFenceState", in); err != nil {
+		// Verify 先看 ctx。调用方已放弃不等于证明无效,和读失败一样带内回 retry。
+		if ctx.Err() != nil {
+			return &dspb.GetRoleFenceStateResponse{Retry: true}, nil
+		}
 		return nil, status.Error(codes.PermissionDenied, "角色护栏调用证明无效")
 	}
 	state, err := s.svcCtx.RoleFenceStates.RoleFenceState(ctx, in.GetPlayerId())
@@ -45,6 +49,9 @@ func (s *DataServiceServer) VerifyRoleAdmission(ctx context.Context, in *dspb.Ve
 		return nil, status.Error(codes.Unavailable, "角色入场校验未就绪")
 	}
 	if _, err := s.svcCtx.RoleFenceAuth.Verify(ctx, accountdirectory.MethodPrefix+"VerifyRoleAdmission", in); err != nil {
+		if ctx.Err() != nil {
+			return &dspb.VerifyRoleAdmissionResponse{Retry: true}, nil
+		}
 		return nil, status.Error(codes.PermissionDenied, "角色护栏调用证明无效")
 	}
 	valid, err := s.svcCtx.RoleAdmissionChecks.VerifyRoleAdmission(ctx, in.GetAdmission())

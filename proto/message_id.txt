@@ -357,3 +357,15 @@
 356=DataServiceBatchGetPlayerDisplay
 357=PlayerStoreLoadAndClaim
 358=PlayerStoreSavePlayer
+359=RoleFenceParticipantPrepareRoleFreeze
+360=RoleFenceParticipantApplyRoleFence
+361=DataServiceCheckAccountRoleSlot
+362=DataServiceGetRoleFenceState
+363=DataServiceVerifyRoleAdmission
+364=DataServiceGetPlayerRoute
+365=DataServiceGetRecallBatch
+366=DataServiceCancelRecallBatch
+367=DataServiceResolveRecallOp
+368=MatchInternalAcquireTrialOccupancy
+369=MatchInternalReleaseTrialOccupancy
+370=MatchInternalGetBattleCompletion

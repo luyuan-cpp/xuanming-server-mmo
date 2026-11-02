@@ -10,7 +10,7 @@ option cc_generic_services = false;
 option (OptionFileDefaultNode) = NODE_MATCH;
 
 // match 内部服务(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.16–§6.18)。
-// Start/Cancel 的调用方为 Guild；Commit 的调用方为 Battle。
+// Start/Cancel/占用的调用方为 Guild；Commit 的调用方为 Battle。
 // 按完整方法分别核固定签名白名单，缺密钥拒绝；客户端与组队服务不得直接调用。
 // 照 proto/trade/trade_admin.proto 的隔离做法:
 //   - 刻意不标 OptionIsClientProtocolService,且与客户端协议 match_service.proto 分文件:
@@ -40,6 +40,9 @@ message StartActivityBattleRequest {
   // initiator_player_id == member_player_ids[0]。match 深拷贝后原样放进 CreateBattleRequest.activity_context。
   BattleActivityContext activity_context = 3;
   uint64 request_id = 4; // 调用方持久的邀请房间/业务操作号；全球模式为0拒绝，重试必须复用。
+  // guild 的签名。match 读不到 guild 的库，原件由这个签名担保(docs/design/horizontal-scale-logical-db.md §4)。
+  // 持久化的意图正文不含它：每次重试的时间戳不同，正文要逐字节相等。
+  common.base.ServiceCallAuth auth = 5;
 }
 
 message StartActivityBattleResponse {
@@ -108,9 +111,63 @@ message SetSpectateFeaturedResponse {
   eSpectateTier tier = 2;                   // 处理后的档位(标记后升 L2 成功即为 BROADCAST;配额满时保持原档)
 }
 
+// 帮会历练的战斗入口占用(docs/design/horizontal-scale-logical-db.md §4)。match 是战斗入口占用的唯一权威。
+// 结论一律走响应里的 reject，不回 gRPC 错误：发布准入把 gRPC 错误记成未知结局，会拖住排空证明。
+enum TrialOccupancyReject {
+  TRIAL_OCCUPANCY_REJECT_NONE = 0;
+  TRIAL_OCCUPANCY_REJECT_OCCUPIED = 1;  // 有票、有未终结的整队开战，或别的大厅占着
+  TRIAL_OCCUPANCY_REJECT_ROLE = 2;      // 角色冻结、已删除，或原身份已换主
+  TRIAL_OCCUPANCY_REJECT_DENIED = 3;    // 调用方验签失败、入口未就绪或参数不合法
+  TRIAL_OCCUPANCY_REJECT_RETRY = 4;     // 这一次没有结论(目录或 SQL 暂不可用)。占用有租约，重放幂等
+}
+
+message TrialOccupancyRole {
+  uint64 player_id = 1;
+  // 原身份。首次占用时对端的身份还没捕获，留空(revision 0)，由 match 从本库护栏副本写入；之后每次重放都带上。
+  string account = 2;
+  uint64 owner_revision = 3;
+}
+
+// 全成或全不成，同 owner 重放幂等。过期的占用视为空闲。
+message AcquireTrialOccupancyRequest {
+  uint64 owner_id = 1;   // 大厅号，等于 StartActivityBattleRequest.request_id
+  repeated TrialOccupancyRole roster = 2;
+  uint64 ttl_ms = 3;     // 只延长不缩短
+  common.base.ServiceCallAuth auth = 4;
+}
+message AcquireTrialOccupancyResponse {
+  TrialOccupancyReject reject = 1;
+  uint64 offender_player_id = 2;  // reject 为 OCCUPIED 时是第一个不空闲的角色
+}
+
+// 只删 owner 相同的行，幂等。
+message ReleaseTrialOccupancyRequest {
+  uint64 owner_id = 1;
+  repeated uint64 player_ids = 2;
+  common.base.ServiceCallAuth auth = 3;
+}
+message ReleaseTrialOccupancyResponse {
+  TrialOccupancyReject reject = 1;
+}
+
+// 取代 guild 对 match_battle_completion 的跨库读。
+message GetBattleCompletionRequest {
+  uint64 battle_id = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+message GetBattleCompletionResponse {
+  TrialOccupancyReject reject = 1;
+  // UNKNOWN 表示这局还没有终局。ABORT 没有 battle 原字节。
+  BattleOutcomeDecision decision = 2;
+  bytes raw_payload = 3;  // 只有 COMPLETE 才有
+}
+
 service MatchInternal {
   rpc StartActivityBattle(StartActivityBattleRequest) returns (StartActivityBattleResponse);
   rpc CancelActivityBattle(CancelActivityBattleRequest) returns (CancelActivityBattleResponse);
   rpc CommitBattleOutcome(CommitBattleOutcomeRequest) returns (CommitBattleOutcomeResponse);
   rpc SetSpectateFeatured(SetSpectateFeaturedRequest) returns (SetSpectateFeaturedResponse);
+  rpc AcquireTrialOccupancy(AcquireTrialOccupancyRequest) returns (AcquireTrialOccupancyResponse);
+  rpc ReleaseTrialOccupancy(ReleaseTrialOccupancyRequest) returns (ReleaseTrialOccupancyResponse);
+  rpc GetBattleCompletion(GetBattleCompletionRequest) returns (GetBattleCompletionResponse);
 }

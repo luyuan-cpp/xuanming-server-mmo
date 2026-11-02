@@ -303,11 +303,13 @@ public class LoginRpcClient {
 
     /** Calls {@code ClientPlayerLogin.RefreshToken}. Throws on terminal failure. */
     public RefreshTokenResponseProto refreshToken(RefreshTokenRequestProto req) {
-        // RefreshToken 是**非幂等**的一次性轮换:服务端每次成功调用都会签发新
-        // access/refresh 对并原子删除旧 refresh token。响应在回程丢失(典型:
-        // DEADLINE_EXCEEDED)时服务端可能已经消费掉旧 token —— 自动重试会拿着
-        // 已作废的 token 再打一次,得到鉴权失败,把玩家会话彻底烧掉。
-        // 所以这条方法禁用自动重试,失败直接上抛,由客户端走完整登录兜底。
+        // RefreshToken 是一次性轮换:服务端每次成功调用都会签发新 access/refresh 对
+        // 并原子删除旧 refresh token。login 有重放宽限窗口(TokenConfig.RefreshReuseGrace,
+        // 缺省 30s):窗口内拿同一旧 token 重放,只要新 refresh 还没用过,就原样返回同一对;
+        // 窗口外重放已轮换的旧 token 被当作泄漏信号,吊销那次登录的整条令牌线
+        // (docs/design/dual-token-authentication.md)。
+        // 网关仍不自动重试:窗口可能被配成 0,那时重试就是一次窗口外重用,会把刚签出的
+        // 那一对连同整条线一起吊销。失败直接上抛,重试留给客户端(在窗口内拿原 token 重发)。
         return unaryCall(refreshTokenMethod, req, 0, false, false);
     }
 

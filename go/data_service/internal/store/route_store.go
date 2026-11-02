@@ -314,7 +314,8 @@ func NewRouteStore(cfg MySQLConfig, opts RouteStoreOptions) (*RouteStore, error)
 		return db, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("route store on %s/%s: %w", cfg.Host, cfg.DBName, err)
+		// 不写 cfg.Host:这条错误会打到 route_tool 的 stderr 和启动日志,物理地址不出错误文案(AGENTS.md §11.3)。
+		return nil, fmt.Errorf("route store on %s: %w", cfg.DBName, err)
 	}
 	logx.Infof("[RouteStore] connected to %s/%s logical_shards=%d max_open_conn=%d max_idle_conn=%d writer=%s "+
 		"(session READ-COMMITTED, innodb_lock_wait_timeout=%ds)",

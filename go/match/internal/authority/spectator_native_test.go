@@ -54,6 +54,20 @@ func (f *nativeSpectatorFixture) begin(t *testing.T, request *pb.WatchBattleRequ
 	return original
 }
 
+// 准入窗口要给 SQL 与 battle 的时钟偏差留余量:battle 按自己的墙钟只接受至多未来 30s(battle_room_manager.cpp),
+// 窗口取满时 SQL 时钟稍快一点,Add 和 Remove 就都会被拒。
+func TestSpectatorTiDBAdmitWindowLeavesClockSkewMargin(t *testing.T) {
+	const battleAdmitCapMs, clockSkewMarginMs = uint64(30000), uint64(5000)
+	f := nativeSpectator(t)
+
+	original := f.begin(t, f.request())
+
+	add := &battlepb.AddObserverRequest{}
+	require.NoError(t, proto.Unmarshal(original.AddRequest, add))
+	require.Equal(t, original.UpdatedMs+spectatorAdmitWindowMs, add.AdmitBeforeMs)
+	require.LessOrEqual(t, add.AdmitBeforeMs-original.UpdatedMs, battleAdmitCapMs-clockSkewMarginMs)
+}
+
 func TestSpectatorTiDBHeadPrecedesSelectionAndOldUUIDNeverRetakesHead(t *testing.T) {
 	f := nativeSpectator(t)
 	a, b := f.request(), f.request()

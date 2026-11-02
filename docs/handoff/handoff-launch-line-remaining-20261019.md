@@ -201,6 +201,7 @@
 - **验证**:命令见 PROGRESS「2026-10-22 match 旧格式队列兼容删除与存盘日志降级」。
 - **新发现,未处理**:`LogLevel` 按 muduo 枚举解释(0=TRACE、1=DEBUG、2=INFO),`node.cpp` 的 `InitLogSystem` 直接强转。`k8s_deploy.ps1` 生成的 node ConfigMap 写的是 `LogLevel: 1`,所以 K8s 上所有 C++ 节点实际跑在 DEBUG:这次降级在 K8s 上不减日志,热路径的 DEBUG 日志也一直开着。`release_preflight.ps1` 的 `debug.cpp.loglevel` 按「0=DEBUG、下限 1」检查,把它放过了;`bin/etc/base_deploy_config.yaml` 的注释对照也是错的。另开任务。
   - **(2026-10-22 已处理,未执行,待 Codex 验证)**:node ConfigMap 改为从 `bin/etc` 镜像 `LogLevel`(默认 2 = INFO,生成期校验 0..5),预检下界改为 2,注释改为 muduo 枚举,契约测试补了三条。K8s 上已在跑的 C++ Pod 要重启才生效(node-config 无配置指纹)。见 PROGRESS「2026-10-22 C++ 节点 LogLevel 口径统一」。
+    - **(2026-10-30 更正)**「要重启才生效」说过头了:默认镜像 tag 取 git 短 sha,从新提交部署时 Pod 模板随镜像变化,会自动滚动并生效;只有 Pod 模板不变(只改 ConfigMap、显式传同一个 `-NodeImage`、同一提交重跑)时才要手动重启。Agones 已分配的 GameServer 在释放前仍是旧级别。两份补丁(口径统一、启动期缺键 / 越界拒启)10-23 已由 Codex 依序打入并随后入库;K8s 契约测试、预检、渲染核对仍未运行。
 
 ## 4. 硬约束
 

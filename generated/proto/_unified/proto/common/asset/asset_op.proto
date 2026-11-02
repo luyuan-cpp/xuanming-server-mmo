@@ -31,6 +31,7 @@ enum AssetOpStream {
   ASSET_OP_STREAM_TRADE_DEBIT = 3;    // trade 独占(聚宝斋 P2)
   ASSET_OP_STREAM_TRADE_CREDIT = 4;   // trade 独占(聚宝斋 P2)
   ASSET_OP_STREAM_SYSTEM_CREDIT = 5;  // mail独占；榜奖等生产者通过可信邮件意图发放
+  ASSET_OP_STREAM_GM_RECALL = 6;      // data_service 独占:GM 批量回收,见 docs/design/exploit_loss_prevention_zh.md
 }
 
 enum AssetOpOutcome {
@@ -117,6 +118,17 @@ message AssetPetInstance {
   bytes instance_proto = 5; // 完整 PetInstance；身份字段必须与内部值一致
 }
 
+// GM 回收一种资产的实际结果,scene 算出来,随收据和资产同一次提交。Go 只认这份明细,不按请求金额记账。
+// requested = taken + debt + shortfall。config_id 为 0 表示货币回收(币种 0 是银两,所以不能用 currency_type 判)。
+message AssetRecallLine {
+  uint32 currency_type = 1;  // 货币回收时的币种
+  uint32 config_id = 2;      // 道具回收时的配置号
+  uint64 requested = 3;      // 这次要回收的数量
+  uint64 taken = 4;          // 实际从玩家身上扣走的数量
+  uint64 debt = 5;           // 没扣到、转成补缴欠款的数量。只有货币有
+  uint64 shortfall = 6;      // 没扣到、也没有欠款兜底的数量。只有道具有
+}
+
 // 本次已有实例的托管原件；与原始不可变bundle共同描述完整交易条款。
 // 帮会的 Debit/Credit 不填此字段，不能把空快照解释为资产已到账。
 message AssetSnapshot {
@@ -126,6 +138,8 @@ message AssetSnapshot {
   AssetPetInstance pet = 2;
   // 本次扣出/入账的货币合计(单币种;多币种时取 AssetBundle.currencies 原样)。
   CurrencyAmount currency = 3;
+  // GM 回收的实际结果(ASSET_OP_STREAM_GM_RECALL),恰好一条。回收不留实例原件:items、pet 恒为空。
+  repeated AssetRecallLine recall_lines = 4;
 }
 
 message AssetOpResponse {

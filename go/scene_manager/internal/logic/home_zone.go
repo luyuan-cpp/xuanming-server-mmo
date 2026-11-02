@@ -49,7 +49,7 @@ const (
 	// 返回 codes.NotFound 且消息仍含这段文案;两者都要认,滚动升级期间两种并存。
 	homeZoneUnmappedErrText = "no home zone mapping"
 
-	// enter_scene_rejected_total 的 reason:跨 zone 传送遇到没有 player:zone 映射的玩家。
+	// enter_scene_rejected_total 的 reason:跨 zone 传送遇到没有 player_route 映射的玩家。
 	// 两条腿共用这一个取值,zone_id 与 home_zone_unavailable 一样是 gate zone —— 第一条腿上
 	// 它是源 zone(玩家留在原地收到 tip),第二条腿上是目标 zone(玩家已被源 scene 销毁,
 	// 落不了地,要等映射补上)。后者只在两条腿之间映射丢失、或第一条腿的前置检查上线之前
@@ -142,7 +142,7 @@ func (l *EnterSceneLogic) resolveHomeZone(in *scene_manager.EnterSceneRequest, u
 			if unmapped == homeZoneUnmappedRejectsTravel {
 				return 0, l.rejectUnmappedTravel(in)
 			}
-			l.Logger.Infof("[home-zone] player=%d has no player:zone mapping yet (first login / legacy account not backfilled); using gate zone=%d as home zone",
+			l.Logger.Infof("[home-zone] player=%d has no player_route mapping yet (first login / legacy account not backfilled); using gate zone=%d as home zone",
 				in.PlayerId, in.GateZoneId)
 			return in.GateZoneId, nil
 		}
@@ -175,7 +175,7 @@ func (l *EnterSceneLogic) resolveHomeZone(in *scene_manager.EnterSceneRequest, u
 // 量上来了看指标而不是日志:告警 SceneManagerHomeZoneUnmappedTravel(deploy/k8s/scene-manager-alerts.yaml)。
 func (l *EnterSceneLogic) rejectUnmappedTravel(in *scene_manager.EnterSceneRequest) *scene_manager.EnterSceneResponse {
 	metrics.ObserveEnterSceneRejected(in.GateZoneId, rejectReasonHomeZoneUnmappedTravel)
-	l.Logger.Errorf("[home-zone] Cross-zone travel rejected: player has no player:zone mapping; gate zone cannot represent ownership. "+
+	l.Logger.Errorf("[home-zone] Cross-zone travel rejected: player has no player_route mapping; gate zone cannot represent ownership. "+
 		"Check the player_route row of this player: player=%d gate_zone=%d req_zone=%d",
 		in.PlayerId, in.GateZoneId, in.ZoneId)
 	return errResp(constants.ErrHomeZoneUnavailable,

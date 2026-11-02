@@ -271,7 +271,7 @@ func main() {
 	// "info: not present" and operators read the run as clean. Removed.
 	// The five checks below all exercise schema that actually exists
 	// (`guild`, `guild_rank:zone:*` Redis keys, 全局 `account_role`, `friend`,
-	// and since 2026-10-16 go/mail's `mail_system_state` / `mail_system`).
+	// and go/mail's `mail_state` / `mail_message`).
 	checks := []func(context.Context, runConfig) CheckResult{
 		checkGuildZoneFK,
 		checkGuildRankZoneOrphans,

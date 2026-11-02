@@ -1426,6 +1426,48 @@ func TestEconomyFlowClientRequestReplayAfterLeavingGuild(t *testing.T) {
 	assert.Equal(t, 1, env.opCountOf(t, member))
 }
 
+// TestEconomyFlowClientRequestOriginalBytesAfterLeavingGuild:客户端恢复原请求时不再在本地拦"已离开原帮会"(05 §5.44),
+// 靠的就是这里两条:离帮并加入别的帮之后,照原字节(带 expected_guild_id)重发 —— 首发已提交的回放原视图、不再扣;
+// 首发没到过服务端的回 kGuildNotInGuild、不写入,也不会落到新帮会。两种回包都让客户端作废原键。
+func TestEconomyFlowClientRequestOriginalBytesAfterLeavingGuild(t *testing.T) {
+	const (
+		member       uint64 = 6002
+		otherLeader  uint64 = 6100
+		otherGuild   uint64 = flowGuildID + 1
+		committedKey uint64 = 0x1E_0002
+		unsentKey    uint64 = 0x1E_0003
+	)
+	env := newEconomyFlowEnv(t, 8)
+	env.seedGuild(t, flowGuildID, flowLeader, member)
+	env.scene.answer(always(flowApplied))
+	committed := &pb.DonateToGuildRequest{DonateId: 1, ClientRequestId: committedKey, ExpectedGuildId: flowGuildID}
+	unsent := &pb.DonateToGuildRequest{DonateId: 1, ClientRequestId: unsentKey, ExpectedGuildId: flowGuildID}
+
+	first, err := env.logic.DonateToGuild(clientCtx(member), committed)
+	require.NoError(t, err)
+	require.Equal(t, pb.GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_APPLIED, first.GetDonation().GetStatus())
+
+	left, err := env.logic.LeaveGuild(clientCtx(member), &pb.LeaveGuildRequest{})
+	require.NoError(t, err)
+	require.Nil(t, left.GetErrorMessage())
+	env.seedGuild(t, otherGuild, otherLeader, member)
+
+	retry, err := env.logic.DonateToGuild(clientCtx(member), committed)
+	require.NoError(t, err)
+	assert.Nil(t, retry.GetErrorMessage(), "首发已提交:回放原视图,不能回未入帮")
+	assert.Equal(t, first.GetDonation().GetOpId(), retry.GetDonation().GetOpId())
+	assert.Nil(t, retry.GetGuild(), "本人已不在原帮:GuildInfo 不填,更不能填新帮会")
+
+	resent, err := env.logic.DonateToGuild(clientCtx(member), unsent)
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrNotInGuild, resent.GetErrorMessage().GetId(), "首发没到过服务端:已不在原帮,拒绝")
+	assert.Nil(t, resent.GetDonation())
+
+	assert.Equal(t, 1, env.opCountOf(t, member), "两次重发都没有多出指令")
+	assert.Equal(t, 1, env.clientRequestCount(t), "被拒的那一发不留去重记录")
+	assert.Zero(t, env.funds(t, otherGuild), "原请求不会记到新帮会")
+}
+
 // TestEconomyFlowClientRequestRejectionIsNotRecorded:帮贡不足被拒的兑换不留去重记录(被拒的请求没有副作用);
 // 补足帮贡之后带同一个键重发会真正执行一次。
 func TestEconomyFlowClientRequestRejectionIsNotRecorded(t *testing.T) {

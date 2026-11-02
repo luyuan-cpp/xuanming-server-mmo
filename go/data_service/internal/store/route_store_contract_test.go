@@ -894,7 +894,7 @@ func TestRouteReadQueriesShapes(t *testing.T) {
 	st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 		"R13": {
 			{rows: [][]driver.Value{routeRowValues(9, 7, 0, 0, 1)}},
-			{rows: [][]driver.Value{{int64(6), int64(6), nil, int64(7), bigVersion, nil, int64(3), "w", int64(1), int64(2)}}},
+			{rows: [][]driver.Value{{int64(6), int64(6), nil, int64(7), bigVersion, int64(3), "w", int64(1), int64(2)}}},
 		},
 		"R14": {{rows: [][]driver.Value{{int64(101), int64(102), "101-102-a", int64(5)}}}},
 	}})
