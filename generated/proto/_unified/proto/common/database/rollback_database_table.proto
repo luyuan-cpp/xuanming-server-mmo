@@ -305,7 +305,7 @@ message rollback_audit
   uint32 items_skipped = 10;    // Skipped due to transfer records
   uint32 currencies_restored = 11;
   uint32 currencies_skipped = 12;
-  string diff_json = 13;        // Serialized SnapshotDiff for human review
+  string diff_json = 13;        // 差异摘要 JSON,供人审阅
 }
 
 // ============================================================================

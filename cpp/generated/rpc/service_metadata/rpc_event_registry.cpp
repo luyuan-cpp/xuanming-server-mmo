@@ -34,7 +34,6 @@
 #include "proto/scene/player_movement.pb.h"
 #include "proto/scene/player_mystery_merchant.pb.h"
 #include "proto/scene/player_pet.pb.h"
-#include "proto/scene/player_rollback.pb.h"
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/player_skill.pb.h"
 #include "proto/scene/player_state_attribute_sync.pb.h"
@@ -80,7 +79,6 @@
 #include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "rpc/service_metadata/player_mystery_merchant_service_metadata.h"
 #include "rpc/service_metadata/player_pet_service_metadata.h"
-#include "rpc/service_metadata/player_rollback_service_metadata.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
@@ -1589,68 +1587,6 @@ void InitMessageInfo()
         "ScenePetClientPlayer", "GmGrantPet",
         std::make_unique<::GmGrantPetRequest>(),
         std::make_unique<::GmGrantPetResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-
-    // --- SceneRollbackClientPlayer ---
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmAttachDebtMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmAttachDebt",
-        std::make_unique<::GmAttachDebtRequest>(),
-        std::make_unique<::GmAttachDebtResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmWaiveDebtMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmWaiveDebt",
-        std::make_unique<::GmWaiveDebtRequest>(),
-        std::make_unique<::GmWaiveDebtResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmAdjustDebtMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmAdjustDebt",
-        std::make_unique<::GmAdjustDebtRequest>(),
-        std::make_unique<::GmAdjustDebtResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmFreezeDebtMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmFreezeDebt",
-        std::make_unique<::GmFreezeDebtRequest>(),
-        std::make_unique<::GmFreezeDebtResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmQueryDebtMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmQueryDebt",
-        std::make_unique<::GmQueryDebtRequest>(),
-        std::make_unique<::GmQueryDebtResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmCreateSnapshotMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmCreateSnapshot",
-        std::make_unique<::GmCreateSnapshotRequest>(),
-        std::make_unique<::GmCreateSnapshotResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmListSnapshotsMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmListSnapshots",
-        std::make_unique<::GmListSnapshotsRequest>(),
-        std::make_unique<::GmListSnapshotsResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmPreviewRollbackMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmPreviewRollback",
-        std::make_unique<::GmPreviewRollbackRequest>(),
-        std::make_unique<::GmPreviewRollbackResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmExecuteRollbackMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmExecuteRollback",
-        std::make_unique<::GmExecuteRollbackRequest>(),
-        std::make_unique<::GmExecuteRollbackResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmQueryTransactionLogMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmQueryTransactionLog",
-        std::make_unique<::GmQueryTransactionLogRequest>(),
-        std::make_unique<::GmQueryTransactionLogResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmTraceItemMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmTraceItem",
-        std::make_unique<::GmTraceItemRequest>(),
-        std::make_unique<::GmTraceItemResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneRollbackClientPlayerGmClawbackItemMessageId] = RpcMethodMeta{
-        "SceneRollbackClientPlayer", "GmClawbackItem",
-        std::make_unique<::GmClawbackItemRequest>(),
-        std::make_unique<::GmClawbackItemResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSceneClientPlayer ---

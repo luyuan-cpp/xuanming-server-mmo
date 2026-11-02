@@ -1836,7 +1836,7 @@ type RollbackAudit struct {
 	ItemsSkipped       uint32                 `protobuf:"varint,10,opt,name=items_skipped,json=itemsSkipped,proto3" json:"items_skipped,omitempty"` // Skipped due to transfer records
 	CurrenciesRestored uint32                 `protobuf:"varint,11,opt,name=currencies_restored,json=currenciesRestored,proto3" json:"currencies_restored,omitempty"`
 	CurrenciesSkipped  uint32                 `protobuf:"varint,12,opt,name=currencies_skipped,json=currenciesSkipped,proto3" json:"currencies_skipped,omitempty"`
-	DiffJson           string                 `protobuf:"bytes,13,opt,name=diff_json,json=diffJson,proto3" json:"diff_json,omitempty"` // Serialized SnapshotDiff for human review
+	DiffJson           string                 `protobuf:"bytes,13,opt,name=diff_json,json=diffJson,proto3" json:"diff_json,omitempty"` // 差异摘要 JSON,供人审阅
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }

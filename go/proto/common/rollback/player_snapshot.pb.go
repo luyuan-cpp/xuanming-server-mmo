@@ -313,219 +313,6 @@ func (x *ListSnapshotsResponse) GetSnapshots() []*PlayerSnapshotEntry {
 	return nil
 }
 
-// Diff between snapshot and current live state (computed server-side).
-type SnapshotDiffItem struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	ItemUuid          uint64                 `protobuf:"varint,1,opt,name=item_uuid,json=itemUuid,proto3" json:"item_uuid,omitempty"`
-	ItemConfigId      uint32                 `protobuf:"varint,2,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
-	QuantityDiff      int32                  `protobuf:"varint,3,opt,name=quantity_diff,json=quantityDiff,proto3" json:"quantity_diff,omitempty"`                  // Positive = missing vs snapshot; negative = gained since snapshot
-	HasTransferRecord bool                   `protobuf:"varint,4,opt,name=has_transfer_record,json=hasTransferRecord,proto3" json:"has_transfer_record,omitempty"` // True if transaction_log shows a normal transfer for this item
-	Restorable        bool                   `protobuf:"varint,5,opt,name=restorable,proto3" json:"restorable,omitempty"`                                          // True if safe to restore (no transfer record)
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
-}
-
-func (x *SnapshotDiffItem) Reset() {
-	*x = SnapshotDiffItem{}
-	mi := &file_proto_common_rollback_player_snapshot_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SnapshotDiffItem) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SnapshotDiffItem) ProtoMessage() {}
-
-func (x *SnapshotDiffItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_rollback_player_snapshot_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SnapshotDiffItem.ProtoReflect.Descriptor instead.
-func (*SnapshotDiffItem) Descriptor() ([]byte, []int) {
-	return file_proto_common_rollback_player_snapshot_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *SnapshotDiffItem) GetItemUuid() uint64 {
-	if x != nil {
-		return x.ItemUuid
-	}
-	return 0
-}
-
-func (x *SnapshotDiffItem) GetItemConfigId() uint32 {
-	if x != nil {
-		return x.ItemConfigId
-	}
-	return 0
-}
-
-func (x *SnapshotDiffItem) GetQuantityDiff() int32 {
-	if x != nil {
-		return x.QuantityDiff
-	}
-	return 0
-}
-
-func (x *SnapshotDiffItem) GetHasTransferRecord() bool {
-	if x != nil {
-		return x.HasTransferRecord
-	}
-	return false
-}
-
-func (x *SnapshotDiffItem) GetRestorable() bool {
-	if x != nil {
-		return x.Restorable
-	}
-	return false
-}
-
-type SnapshotDiffCurrency struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	CurrencyType      uint32                 `protobuf:"varint,1,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
-	Delta             int64                  `protobuf:"varint,2,opt,name=delta,proto3" json:"delta,omitempty"` // snapshot_balance - current_balance
-	HasTransferRecord bool                   `protobuf:"varint,3,opt,name=has_transfer_record,json=hasTransferRecord,proto3" json:"has_transfer_record,omitempty"`
-	Restorable        bool                   `protobuf:"varint,4,opt,name=restorable,proto3" json:"restorable,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
-}
-
-func (x *SnapshotDiffCurrency) Reset() {
-	*x = SnapshotDiffCurrency{}
-	mi := &file_proto_common_rollback_player_snapshot_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SnapshotDiffCurrency) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SnapshotDiffCurrency) ProtoMessage() {}
-
-func (x *SnapshotDiffCurrency) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_rollback_player_snapshot_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SnapshotDiffCurrency.ProtoReflect.Descriptor instead.
-func (*SnapshotDiffCurrency) Descriptor() ([]byte, []int) {
-	return file_proto_common_rollback_player_snapshot_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *SnapshotDiffCurrency) GetCurrencyType() uint32 {
-	if x != nil {
-		return x.CurrencyType
-	}
-	return 0
-}
-
-func (x *SnapshotDiffCurrency) GetDelta() int64 {
-	if x != nil {
-		return x.Delta
-	}
-	return 0
-}
-
-func (x *SnapshotDiffCurrency) GetHasTransferRecord() bool {
-	if x != nil {
-		return x.HasTransferRecord
-	}
-	return false
-}
-
-func (x *SnapshotDiffCurrency) GetRestorable() bool {
-	if x != nil {
-		return x.Restorable
-	}
-	return false
-}
-
-type SnapshotDiff struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	SnapshotId    uint64                  `protobuf:"varint,1,opt,name=snapshot_id,json=snapshotId,proto3" json:"snapshot_id,omitempty"`
-	PlayerId      uint64                  `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Items         []*SnapshotDiffItem     `protobuf:"bytes,3,rep,name=items,proto3" json:"items,omitempty"`
-	Currencies    []*SnapshotDiffCurrency `protobuf:"bytes,4,rep,name=currencies,proto3" json:"currencies,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SnapshotDiff) Reset() {
-	*x = SnapshotDiff{}
-	mi := &file_proto_common_rollback_player_snapshot_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SnapshotDiff) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SnapshotDiff) ProtoMessage() {}
-
-func (x *SnapshotDiff) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_rollback_player_snapshot_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SnapshotDiff.ProtoReflect.Descriptor instead.
-func (*SnapshotDiff) Descriptor() ([]byte, []int) {
-	return file_proto_common_rollback_player_snapshot_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *SnapshotDiff) GetSnapshotId() uint64 {
-	if x != nil {
-		return x.SnapshotId
-	}
-	return 0
-}
-
-func (x *SnapshotDiff) GetPlayerId() uint64 {
-	if x != nil {
-		return x.PlayerId
-	}
-	return 0
-}
-
-func (x *SnapshotDiff) GetItems() []*SnapshotDiffItem {
-	if x != nil {
-		return x.Items
-	}
-	return nil
-}
-
-func (x *SnapshotDiff) GetCurrencies() []*SnapshotDiffCurrency {
-	if x != nil {
-		return x.Currencies
-	}
-	return nil
-}
-
 var File_proto_common_rollback_player_snapshot_proto protoreflect.FileDescriptor
 
 const file_proto_common_rollback_player_snapshot_proto_rawDesc = "" +
@@ -550,30 +337,7 @@ const file_proto_common_rollback_player_snapshot_proto_rawDesc = "" +
 	"\btime_end\x18\x03 \x01(\x04R\atimeEnd\x12\x14\n" +
 	"\x05limit\x18\x04 \x01(\rR\x05limit\"K\n" +
 	"\x15ListSnapshotsResponse\x122\n" +
-	"\tsnapshots\x18\x01 \x03(\v2\x14.PlayerSnapshotEntryR\tsnapshots\"\xca\x01\n" +
-	"\x10SnapshotDiffItem\x12\x1b\n" +
-	"\titem_uuid\x18\x01 \x01(\x04R\bitemUuid\x12$\n" +
-	"\x0eitem_config_id\x18\x02 \x01(\rR\fitemConfigId\x12#\n" +
-	"\rquantity_diff\x18\x03 \x01(\x05R\fquantityDiff\x12.\n" +
-	"\x13has_transfer_record\x18\x04 \x01(\bR\x11hasTransferRecord\x12\x1e\n" +
-	"\n" +
-	"restorable\x18\x05 \x01(\bR\n" +
-	"restorable\"\xa1\x01\n" +
-	"\x14SnapshotDiffCurrency\x12#\n" +
-	"\rcurrency_type\x18\x01 \x01(\rR\fcurrencyType\x12\x14\n" +
-	"\x05delta\x18\x02 \x01(\x03R\x05delta\x12.\n" +
-	"\x13has_transfer_record\x18\x03 \x01(\bR\x11hasTransferRecord\x12\x1e\n" +
-	"\n" +
-	"restorable\x18\x04 \x01(\bR\n" +
-	"restorable\"\xac\x01\n" +
-	"\fSnapshotDiff\x12\x1f\n" +
-	"\vsnapshot_id\x18\x01 \x01(\x04R\n" +
-	"snapshotId\x12\x1b\n" +
-	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12'\n" +
-	"\x05items\x18\x03 \x03(\v2\x11.SnapshotDiffItemR\x05items\x125\n" +
-	"\n" +
-	"currencies\x18\x04 \x03(\v2\x15.SnapshotDiffCurrencyR\n" +
-	"currencies*\xb5\x01\n" +
+	"\tsnapshots\x18\x01 \x03(\v2\x14.PlayerSnapshotEntryR\tsnapshots*\xb5\x01\n" +
 	"\x0fSnapshotTrigger\x12\x14\n" +
 	"\x10SNAPSHOT_UNKNOWN\x10\x00\x12\x12\n" +
 	"\x0eSNAPSHOT_LOGIN\x10\x01\x12\x13\n" +
@@ -596,26 +360,21 @@ func file_proto_common_rollback_player_snapshot_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_common_rollback_player_snapshot_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_common_rollback_player_snapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_common_rollback_player_snapshot_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_common_rollback_player_snapshot_proto_goTypes = []any{
 	(SnapshotTrigger)(0),          // 0: SnapshotTrigger
 	(*PlayerSnapshotEntry)(nil),   // 1: PlayerSnapshotEntry
 	(*ListSnapshotsRequest)(nil),  // 2: ListSnapshotsRequest
 	(*ListSnapshotsResponse)(nil), // 3: ListSnapshotsResponse
-	(*SnapshotDiffItem)(nil),      // 4: SnapshotDiffItem
-	(*SnapshotDiffCurrency)(nil),  // 5: SnapshotDiffCurrency
-	(*SnapshotDiff)(nil),          // 6: SnapshotDiff
 }
 var file_proto_common_rollback_player_snapshot_proto_depIdxs = []int32{
 	0, // 0: PlayerSnapshotEntry.trigger:type_name -> SnapshotTrigger
 	1, // 1: ListSnapshotsResponse.snapshots:type_name -> PlayerSnapshotEntry
-	4, // 2: SnapshotDiff.items:type_name -> SnapshotDiffItem
-	5, // 3: SnapshotDiff.currencies:type_name -> SnapshotDiffCurrency
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_rollback_player_snapshot_proto_init() }
@@ -629,7 +388,7 @@ func file_proto_common_rollback_player_snapshot_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_rollback_player_snapshot_proto_rawDesc), len(file_proto_common_rollback_player_snapshot_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

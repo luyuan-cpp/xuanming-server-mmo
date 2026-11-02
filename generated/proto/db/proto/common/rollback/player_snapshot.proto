@@ -54,29 +54,3 @@ message ListSnapshotsResponse
 {
   repeated PlayerSnapshotEntry snapshots = 1;
 }
-
-// Diff between snapshot and current live state (computed server-side).
-message SnapshotDiffItem
-{
-  uint64 item_uuid = 1;
-  uint32 item_config_id = 2;
-  int32 quantity_diff = 3;         // Positive = missing vs snapshot; negative = gained since snapshot
-  bool has_transfer_record = 4;    // True if transaction_log shows a normal transfer for this item
-  bool restorable = 5;             // True if safe to restore (no transfer record)
-}
-
-message SnapshotDiffCurrency
-{
-  uint32 currency_type = 1;
-  int64 delta = 2;                 // snapshot_balance - current_balance
-  bool has_transfer_record = 3;
-  bool restorable = 4;
-}
-
-message SnapshotDiff
-{
-  uint64 snapshot_id = 1;
-  uint64 player_id = 2;
-  repeated SnapshotDiffItem items = 3;
-  repeated SnapshotDiffCurrency currencies = 4;
-}

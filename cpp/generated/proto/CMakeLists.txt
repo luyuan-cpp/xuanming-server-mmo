@@ -134,7 +134,6 @@ set(SOURCE_FILES
     scene/player_attribute.pb.cc
     scene/player_pet.pb.cc
     scene/player_currency.pb.cc
-    scene/player_rollback.pb.cc
     scene/player_scene.pb.cc
     scene/player_skill.pb.cc
     scene/player_state_attribute_sync.pb.cc

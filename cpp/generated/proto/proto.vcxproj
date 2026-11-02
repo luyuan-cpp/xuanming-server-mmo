@@ -115,7 +115,6 @@
     <ClCompile Include="scene\player_attribute.pb.cc" />
     <ClCompile Include="scene\player_pet.pb.cc" />
     <ClCompile Include="scene\player_currency.pb.cc" />
-    <ClCompile Include="scene\player_rollback.pb.cc" />
     <ClCompile Include="scene\player_scene.pb.cc" />
     <ClCompile Include="scene\player_skill.pb.cc" />
     <ClCompile Include="scene\player_state_attribute_sync.pb.cc" />
@@ -212,7 +211,6 @@
     <ClInclude Include="scene\player_attribute.pb.h" />
     <ClInclude Include="scene\player_pet.pb.h" />
     <ClInclude Include="scene\player_currency.pb.h" />
-    <ClInclude Include="scene\player_rollback.pb.h" />
     <ClInclude Include="scene\player_scene.pb.h" />
     <ClInclude Include="scene\player_skill.pb.h" />
     <ClInclude Include="scene\player_state_attribute_sync.pb.h" />
