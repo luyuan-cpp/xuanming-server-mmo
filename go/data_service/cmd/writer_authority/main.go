@@ -38,9 +38,59 @@ func main() {
 	}
 }
 
+// Java商城没有Go业务迁移入口。部署者在分发NORMAL资格前，用独立Schema身份
+// 复用共享闸门迁移；常驻进程不获得这份能力，已有generation和写者记录不改。
+func prepareSchema(ctx context.Context, schema string, getenv func(string) string) error {
+	if getenv == nil || schema == "" || strings.TrimSpace(schema) != schema {
+		return errors.New("prepare-schema缺少显式目标逻辑库或Schema装配")
+	}
+	for _, key := range []string{"MMORPG_SQL_WRITER_GRANT_FILE", "MMORPG_SQL_REGISTRAR_DSN", "MMORPG_SQL_MAINTENANCE_DSN"} {
+		if getenv(key) != "" {
+			return errors.New("prepare-schema拒绝继承NORMAL或其他控制身份")
+		}
+	}
+	dsn := getenv("MMORPG_SQL_SCHEMA_DSN")
+	permission, err := authoritysql.LoadSchemaPermission(getenv)
+	if err != nil || dsn == "" {
+		return errors.New("prepare-schema必须显式提供独立Schema连接和主体")
+	}
+	parsed, err := mysqldriver.ParseDSN(dsn)
+	if err != nil || parsed.DBName != schema {
+		return errors.New("prepare-schema的连接必须明确指向同一目标逻辑库")
+	}
+	// 同时复用共享标识符校验，不把任意字符串拼进SQL。
+	if _, err := authoritysql.DSNForSchema(dsn, schema); err != nil {
+		return err
+	}
+	backend, err := authoritysql.LoadBackend(getenv)
+	if err != nil {
+		return err
+	}
+	placementConfig, err := dbplacement.ConfigFromEnv(getenv)
+	if err != nil {
+		return err
+	}
+	// 和其他-migrate入口相同：要求映射而缺配置时拒绝；MOVING期间禁止DDL，
+	// 已搬走的库按当前映射连接，不能向旧DSN地址补建一份闸门。
+	if err := dbplacement.RequireForMigration(placementConfig, getenv); err != nil {
+		return err
+	}
+	placementOptions, err := dbplacement.ForMigration(ctx, placementConfig, schema)
+	if err != nil {
+		return err
+	}
+	db, err := authoritysql.OpenForMigration(ctx, dsn, schema, backend, permission, placementOptions...)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return authoritysql.EnsureCatalogSchema(ctx, db, schema)
+}
+
 func run(parent context.Context, args []string, getenv func(string) string, out io.Writer) error {
 	flags := flag.NewFlagSet("writer_authority", flag.ContinueOnError)
-	command := flags.String("command", "", "register、retire、status或publication只读资格")
+	command := flags.String("command", "", "register、retire、status、prepare-schema或publication只读资格")
+	schemaName := flags.String("schema", "", "prepare-schema的显式目标逻辑库")
 	requestPath := flags.String("request", "", "单个正式Request/维护Receipt protojson绝对路径")
 	requestSHA := flags.String("request-sha256", "", "publication原件的固定原字节SHA")
 	preparedPath := flags.String("prepared", "", "实际prepared.source.json绝对路径")
@@ -58,6 +108,23 @@ func run(parent context.Context, args []string, getenv func(string) string, out 
 	timeout := flags.Duration("timeout", 30*time.Second, "单次尝试截止，不自动重试")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if *command == "prepare-schema" {
+		mixed := false
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name != "command" && f.Name != "schema" && f.Name != "timeout" {
+				mixed = true
+			}
+		})
+		if mixed || flags.NArg() != 0 || *timeout <= 0 || *timeout > 60*time.Second {
+			return errors.New("prepare-schema只接受显式schema和不超过60秒的正截止，不混生命周期参数")
+		}
+		ctx, cancel := context.WithTimeout(parent, *timeout)
+		defer cancel()
+		return prepareSchema(ctx, *schemaName, getenv)
+	}
+	if *schemaName != "" {
+		return errors.New("schema参数只用于prepare-schema")
 	}
 	if *command == "verify-publication-prestart" || *command == "verify-publication-runtime" {
 		if flags.NArg() != 0 || *timeout <= 0 || *timeout > 60*time.Second || *rosterPath != "" || *rosterSHA != "" || *runtimeConfig != "" || *runtimeOutput != "" || *runtimeEnvironmentOutput != "" || *qualificationPath != "" || *bootOutput != "" || *receiptOutput != "" || *deploymentID != "" {

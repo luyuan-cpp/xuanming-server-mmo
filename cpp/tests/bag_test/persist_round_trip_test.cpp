@@ -513,6 +513,19 @@ protected:
         receipt->mutable_snapshot()->mutable_currency()->set_currency_type(1);
         receipt->mutable_snapshot()->mutable_currency()->set_amount(50);
 
+        // GM 回收的回执只带一条回收明细 AssetRecallLine,不带物品和宠物(asset_op_system.cpp 的 FinishRecall)。
+        auto &recallLedger = MutableAssetOpStream(*db.mutable_asset_op_ledger(), ASSET_OP_STREAM_GM_RECALL);
+        EXPECT_TRUE(RecordAssetOpOutcome(recallLedger, 3, 1, AssetOpRecordKind::kApplied, 0));
+        auto *recallReceipt = recallLedger.add_receipts();
+        recallReceipt->set_seq(1);
+        recallReceipt->set_request_digest(std::string(32, '\x6b'));
+        recallReceipt->set_correlation_id(78);
+        auto *recallLine = recallReceipt->mutable_snapshot()->add_recall_lines();
+        recallLine->set_currency_type(1);
+        recallLine->set_requested(30);
+        recallLine->set_taken(20);
+        recallLine->set_debt(10);
+
         auto *cursor = db.mutable_inbox_ledger()->add_cursors();
         cursor->set_domain(1);
         cursor->set_decided_through_seq(5);

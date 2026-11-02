@@ -27,6 +27,16 @@
 | `mmorpg_global_ledger` | data_service | 不分片 | `transaction_log`、`player_snapshot`、`rollback_audit_log`。写入量大,不和目录抢闸门和连接。GM 回收的 `gm_recall_*` 和护栏副本 `role_fence` 也在这里 |
 | `player_store_<id>_db`、`zone_<n>_db` | go/db(写)、data_service(建角初始行、证明与判死,各自连接池) | `storage_id` | `player_store` |
 | `mmorpg_guild`、`mmorpg_match`、`mmorpg_trade`、`mmorpg_mail`、`mmorpg_friend`、`mmorpg_player_inbox`、`mmorpg_chat`、`mmorpg_rank` | 同名服务 | 不分片,以后按业务键拆 | 业务表、`role_fence`、闸门表 |
+| R的Mall逻辑库（本机计划显式命名） | `java/mall_game` | 全区共用，不按zone拆 | 商城订单、支付/退款/寄售原件与本库写者闸门；只经RPC/HTTP访问其他服务 |
+| R的Gateway逻辑库（缺省`mmorpg`，隔离联验可显式命名） | `java/gateway_node` | 全区共用，不按zone拆 | 区目录、公告、白名单与本库写者闸门 |
+
+### R双区的四个Java进程（2026-11-02补齐，待Codex实测）
+
+四角色为`mall`、`mall-replica`、`gateway`、`gateway-replica`：两个Mall写同一个商城逻辑库，两个Gateway写同一个网关逻辑库。每个进程各有独立NORMAL账号、writer/instance/deployment身份、单次grant与消费目录；不是每个zone新建一套商城。Gateway的HTTP入口仍通过gRPC调用R的Go login，公开实例计划必须按两个zone分别固定本轮login地址。独立Java仓的Dubbo网关不参与此运行栈。
+
+本地`sql_boot_catalog_local.ps1`在一次调用中合并两区Go计划和上述四角色，先检查键、账号名及全部端口，再迁移和注册，最后只发布一份目录。每个Java服务的两个副本必须指定同一个逻辑库，Mall与Gateway两库不同；不允许接管Go或玩家库。Mall无Go业务迁移入口，其闸门由独立Schema进程执行`writer_authority -command prepare-schema -schema <库>`，仅调用共享`authoritysql.EnsureCatalogSchema`，不复制第三份闸门DDL，不给NORMAL主体DDL能力。
+
+四Java联验要求显式绑定独立物理authority与真实I3原件及SHA，不把普通local声明当成I3证明。公开计划固定R的运行包和Java程序SHA、本机监听端口及Go login/协调地址，不含凭据；每boot完整私有配置由正规producer写出，启动仍经`Get-SqlWriterBootEnvironment`。已存在的账号、旧boot与UNKNOWN原件在此模式保留，不按进程消失删除。启动端口就绪只是启动观察，不是双区业务或故障恢复通过。
 
 `zone_merged_into` 留在目录第 0 片,只有 data_service 和 `tools/merge_zone` 读写,其余服务经 `GetMergedZones`。
 

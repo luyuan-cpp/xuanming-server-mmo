@@ -1807,6 +1807,50 @@ Test-Case 'k8s_deploy.ps1 的集群外入口参数名与类型(包装层与文�
     }
 }
 
+function Import-SqlRuntimeRangeForTest {
+    $errors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$errors)
+    if ($errors.Count) { throw '部署源解析失败' }
+    $definition = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Get-SqlRuntimeManifestRange' }, $true)
+    if ($null -eq $definition) { throw '缺少正式 runtime 容器选择函数' }
+    Set-Item -Path Function:script:Get-SqlRuntimeManifestRange -Value $definition.Body.GetScriptBlock()
+}
+
+Test-Case 'SQL runtime 容器范围:Deployment与Agones都只选普通具名容器,排除init与sidecar' {
+    Import-SqlRuntimeRangeForTest
+    foreach ($width in @(6, 10)) {
+        $indent = ' ' * $width
+        $manifest = @(
+            "${indent}initContainers:", "${indent}  - name: battle", "${indent}    marker: INIT_ONLY",
+            "${indent}containers:", "${indent}  - name: battle", "${indent}    marker: TARGET_MAIN",
+            "${indent}  - name: metrics", "${indent}    marker: SIDECAR_ONLY",
+            "${indent}volumes:", "${indent}  - name: POD_VOLUMES"
+        ) -join "`n"
+        $range = Get-SqlRuntimeManifestRange -ManifestContent $manifest -SvcName battle
+        $selected = $manifest.Substring($range.Start, $range.End - $range.Start)
+        Assert-Match -Text $selected -Pattern 'TARGET_MAIN' -Because "${width}空格:选中普通battle"
+        Assert-NotMatch -Text $selected -Pattern 'INIT_ONLY|SIDECAR_ONLY|POD_VOLUMES' -Because "${width}空格:密钥注入范围不能越界"
+    }
+}
+
+Test-Case 'SQL runtime 容器范围:只在后置init命中或普通容器重复时拒绝' {
+    Import-SqlRuntimeRangeForTest
+    foreach ($width in @(6, 10)) {
+        $indent = ' ' * $width
+        $cases = @(
+            (@("${indent}containers:", "${indent}  - name: metrics", "${indent}    marker: NORMAL",
+                "${indent}initContainers:", "${indent}  - name: battle", "${indent}    marker: INIT_ONLY") -join "`n"),
+            (@("${indent}containers:", "${indent}  - name: battle", "${indent}    marker: FIRST",
+                "${indent}  - name: battle-migrate", "${indent}    marker: SECOND") -join "`n")
+        )
+        foreach ($manifest in $cases) {
+            $message = ''
+            try { Get-SqlRuntimeManifestRange -ManifestContent $manifest -SvcName battle | Out-Null } catch { $message = $_.Exception.Message }
+            Assert-Match -Text $message -Pattern 'runtime具名容器缺失/重复' -Because "${width}空格:不能误选init或含糊目标"
+        }
+    }
+}
+
 Remove-Item -LiteralPath $FakeKubectlDir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $EntryFixtureDir -Recurse -Force -ErrorAction SilentlyContinue
 

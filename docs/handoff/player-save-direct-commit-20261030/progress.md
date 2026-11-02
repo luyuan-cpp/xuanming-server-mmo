@@ -791,3 +791,61 @@ pwsh -NoProfile -File tools/scripts/tests/run_ownership_fault_fullstack.ps1 `
 - 没核 C++ `CallDeadlineMs` 与 8 秒的关系。短于 8 秒只会让 scene 按结果未知用同序号重试,交接照样等,不影响结论,但日志里会多出重试告警。
 - `docs/ops/mysql-backup-pitr-runbook.md` 468~474 行还写着 30 秒周期和第二表锁,没改。
 - Java 版不涉及:这是本仓测试工具,不改客户端契约。
+
+## Codex 第二轮回执分诊(2026-11-02,Claude)
+
+回执:本目录 `codex-results.md`。Go 19 个模块都编过,单测 9346 个子测试 0 失败(727 个跳过按没跑);C++ 构建只剩 1 个错误;真库、部署合同、真实启动有失败,大部分是环境。
+
+**已改,未编译,下一轮验证**:
+
+1. C++ 裸指针门禁:`asset_op_system.cpp` 的 `RecallPick` 存 `Bag*`,改成存包顺序里的下标。
+2. `go/shared/placement` 的 `TestMergedZoneCacheRefreshReplacesAndKeepsOldOnFailure`:测试自身的竞态。`step` 只等 `served`,它在读返回时就发了,刷新回调可能还没执行。改成等 `OnRefresh` 发的信号。产品代码不变。
+
+**Codex 已修的构建问题**:`Directory.Build.targets` 两处正则加 `MSBuild.Unescape`(链接时整串分号库名被当成一个文件);`client_rpc_router` 测试的退役符号;`authority_jdbc` POM 的 proto 输入。
+
+**排队 Redis 窗口已改,未运行**:`k8s_deploy.ps1` 往清单里插 Windows 换行,带 gateway 的 `zone-up` 全部失败,部署合同里「无法注入 ADMIN_APIKEY」就是它。已统一成 LF 并加回归用例。
+
+**待查的代码问题**:
+
+3. §16 `TestTokenFamily_RealRedis/persistent-head-refresh` 在 Redis 7.2、8.x 都失败,是 Refresh token 的新代码。11-02 读代码没找到哪一步写了数据:几段脚本在拒绝前都不写。断言改成报出是哪个键变了(只报角色,不打令牌),下一轮据此定位。
+4. §18 双区启动:负例读配置读成了 `tools/go/data_service/etc/data_service.yaml`,白名单负例没有验到。11-02 已修:`tools/scripts/lib/sql_boot_catalog_local.ps1` 被直接调用时仓库根只往上退两级,改成三级。
+5. §13「全部失败断言分组」:先按时间分出 TiKV 失效之后的失败,其余逐组看。
+6. §7 部署合同另外 7 份失败;docs-index 那条是已知基线红,不用修。
+
+**环境问题,下一轮先解决,否则还是红**:
+
+- TiKV 在 02:53 内存溢出退出,之后的真库结果不算数:加内存或减并行。merge_zone 的 TiDB 7 例夹具超时是同一原因。
+- 回收真库 11 例 `Access denied for user 'root'@'192.168.80.1'`:测试账号要允许容器网段的主机。
+- Kafka JVM 堆溢出(§18):调大堆。
+- 没跑的:`-race` 缺 gcc;§8 etcd、§10 冒烟、§12 Redis 集群业务链缺 kind 和业务栈。
+
+**下一轮顺序**:先修 3~6,再让 Codex 跑第三轮,环境按上面准备;§10 冒烟要等 §3、§6 全绿。
+
+**11-02 这批改动的验证**(都在仓库根执行,失败不重试,留完整输出):
+
+- C++:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`,裸指针门禁要过;再跑 `currency_test --gtest_filter=AssetOpRecallTest.*`。
+- `cd go/shared && go test -count=1 ./placement/...`
+- Refresh token,Redis 7.2 和 8.x 各一轮:设 `LOGIN_TOKEN_REQUIRE_REAL_REDIS=1`、`LOGIN_TOKEN_TEST_REDIS_ADDR`(按需 `LOGIN_TOKEN_TEST_REDIS_DB`、`LOGIN_TOKEN_TEST_REDIS_PASSWORD`),`cd go/login && go test -count=1 -v -run TestTokenFamily_RealRedis ./internal/logic/pkg/token/`。失败时把那一行(哪个键、长度)贴回来。
+- §18 负例:照第二轮的 `18-negative-no-allowlist` 命令重跑,期望是白名单拒绝,不再是找不到配置文件。
+
+## Codex 第4项 Java 角色归属纠正与剩余配套（2026-11-02）
+
+用户已恢复第1–5项，继续「原窗口改代码、Codex验证」。此前本聊天 `multi-zone-boot-repair-plan.json` 把Main36的四Java角色归到独立Java仓J，这条归属不准确，以本条原入口证据纠正。不要回写旧已钉SHA的静态候选或历史结果。
+
+**Main36是R的同一Go业务链**：四角色为 `mall`、`mall-replica`、`gateway`、`gateway-replica`。旧runner给gateway注入两个Go login的gRPC地址，robot访问本机HTTP18121。应使用R的 `java/mall_game`、`java/gateway_node`；后者由 `LoginRpcClient` 通过gRPC读Go的 `LoginNodeService.rpc/`。独立J的 `game-gateway` 依赖J `game-login` 的Dubbo服务，按两仓AGENTS保持分离。J的A9/SQL428归第2项，不能用来顶R第4项的运行包或四角色。
+
+证据与行号、原文、SHA见 `build/verification/java-resume-audit-20261102-r1/main36-java-role-boundary.json`（008B644A637C4002A73C82816F2E3B4ABE526C2F3E5849E7F09D43C9C5188DE5）。原producer是 `C:/Users/luyua/.codex/tmp/global-newroot-Main36-current-preparation-20261027-r1/CurrentMain36NormalProducer.r4.candidate.ps1`（C834AF356D13CAA0DFC5FDEE327742F2F78676C9D2F8EDDD6F2D4ECA70896271）；原runner同目录 `run-owned-commerce-main.current-Normal36.r9.after-renderer-CAS.HOLD.ps1`（1E5AB4FBAE93B2B7760A17208F6C9EF5C7BA7342E75237F319E6745BA70EBE5B）。它们把根写成J、再读J根下不存在的R式 `java/...`，本来就是HOLD矛盾模板，不能直接运行。
+
+### 交原窗口补齐，仍算第4启动接线一项
+
+1. 在现行R正规启动/SQL boot producer接上四Java副本：当前单区路径只支持一份gateway，`start_game.ps1:562`消费它；多区分支仅发布22个Go writer，未包括Mall/Gateway四副本。须同一次明确的双区实例计划生成每boot配置、账号、grant/消费目录与监听端口，保持26写者/36进程的原合同，不循环覆盖目录，不借J包或grant冒充。
+2. 保持R网关对Go login的真实gRPC地址及机器人HTTP入口，使用当前SQL `player_store`和每逻辑库写者闸门；没有真实I3/物理资格时，不把local目录自报lock摘要当成原Main36资格链已闭合。
+3. R Maven reactor为 `authority_jdbc`、`gateway_node`、`mall_game`。R gateway坐标 `gateway-node:0.0.1-SNAPSHOT`，R Mall `mall-game:0.1.0-SNAPSHOT`；显式protoc35.1，JDK23可覆盖reactor，保留默认测试。当前Mall `DatabaseConfiguration.java:37`引用 `AuthorityDataSource`，但pom只在dependencyManagement列authority-jdbc、实际dependencies缺项；这是静态缺口，尚未运行新构建，不能写成已实测编译失败。请原窗口核对补齐依赖和正常producer。
+4. R控制器已通过第二轮编译/vet，真实故障仍须§3/§6与双区启动前置满足；R故障robot必须接上述R网关。本聊天不擅改源码/断言，不把单元/静态核对当双区PASS。
+
+### 本聊天本轮执行边界
+
+- 用户已允许停止7个编辑器后台；实际停4个Gradle daemon，另3个已先退出，未停编辑器/游戏。
+- 第一次Java同步尝试被72D启动准入拦截（native0）；后台退出、首轮C++结束后再次准入，随后另一窗口新MSBuild启动，同期运行期门禁中断本聊天pwsh/IO（2个native记录，0个命令完成）。后一次原件 `native-stage-20261102T094438239Z-104c9c53/proof.json`。未取得Sync/check通过结果，正式J仍git clean；部分备份保留，旧输出/计划不能原样重用。未运行Maven或SQL。
+- 本轮C++第一次实际整库exit1：cross_zone_test.cpp:6740未给Hex三个构造参数，检查器随之exit2；另一窗口已改该构建调用并在重编，本聊天没有改它。以其新实际结果为准。
+- 后续不再抢两次构建之间的短空档，等另一验证聊天本轮所有重型命令结束后，按当前计划重新准入。

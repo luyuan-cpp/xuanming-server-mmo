@@ -11595,15 +11595,25 @@ function Apply-LoginOAuthSecret {
 # 单个 Go 服务的 ConfigMap + 主 manifest apply。zone 循环与全局循环共用同一段逻辑。
 function Get-SqlRuntimeManifestRange {
     param([string]$ManifestContent,[string]$SvcName)
-    $main=[regex]::Matches($ManifestContent,'(?m)^      containers:\s*\r?$')
-    if($main.Count -ne 1){throw '工作负载必须有唯一普通containers段；init不参与runtime密钥注入'}
-    $namePattern='(?m)^        - name:\s*"?'+[regex]::Escape($SvcName)+'(?:-migrate)?"?\s*\r?$'
-    $candidates=@([regex]::Matches($ManifestContent,$namePattern) | Where-Object { $_.Index -gt $main[0].Index })
+    # Deployment/Job的Pod在6空格，Agones Fleet的Pod在10空格；先封住普通列表边界，
+    # 再选具名容器，不能把后置initContainers里的同名容器当成常驻进程。
+    $main=[regex]::Matches($ManifestContent,'(?m)^(?<indent>[ ]+)containers:[ \t]*\r?$')
+    if($main.Count -ne 1 -or $main[0].Groups['indent'].Length -notin @(6,10)){throw '工作负载必须有唯一普通containers段；init不参与runtime密钥注入'}
+    $indent=$main[0].Groups['indent'].Value
+    $itemIndent=$indent+'  '
+    $sectionStart=$main[0].Index+$main[0].Length
+    $afterHeader=$ManifestContent.Substring($sectionStart)
+    $sectionBoundary=[regex]::Match($afterHeader,'(?m)^[ ]{0,'+$indent.Length+'}[^ #\t\r\n]')
+    $sectionEnd=if($sectionBoundary.Success){$sectionStart+$sectionBoundary.Index}else{$ManifestContent.Length}
+    $section=$ManifestContent.Substring($sectionStart,$sectionEnd-$sectionStart)
+    $name=[regex]::Escape($SvcName)+'(?:-migrate)?'
+    $namePattern='(?m)^'+$itemIndent+'- name:[ \t]*(?:"'+$name+'"|'+$name+')[ \t]*\r?$'
+    $candidates=@([regex]::Matches($section,$namePattern))
     if($candidates.Count -ne 1){throw 'runtime具名容器缺失/重复，拒绝注入而不猜第一个env'}
-    $start=$candidates[0].Index
+    $start=$sectionStart+$candidates[0].Index
     $tail=$ManifestContent.Substring($start+$candidates[0].Length)
-    $next=[regex]::Match($tail,'(?m)^(?:        - name:|      [A-Za-z]|---)')
-    $end=if($next.Success){$start+$candidates[0].Length+$next.Index}else{$ManifestContent.Length}
+    $next=[regex]::Match($tail,'(?m)^'+$itemIndent+'-[ \t]')
+    $end=if($next.Success){[Math]::Min($sectionEnd,$start+$candidates[0].Length+$next.Index)}else{$sectionEnd}
     return @{Start=$start;End=$end}
 }
 

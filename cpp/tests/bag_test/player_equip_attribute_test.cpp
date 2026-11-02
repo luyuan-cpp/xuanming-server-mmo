@@ -71,6 +71,7 @@
 #include "services/scene/player/system/player_equip.h"
 #include "services/scene/player/system/player_mission.h"
 #include "table/code/attributeallocratio_table.h"
+#include "table/code/attributeautoplan_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
 #include "table/code/attributerule_table.h"
@@ -487,10 +488,11 @@ struct CombatValues
 	uint32_t physicalResist{0};
 };
 
-// 15 项两两不同(写错格 / 读错格都看得出来),且都在各自 80 级档的上限之内。
+// 五种必杀/连击/反击/反震率互不相同，且每项都在当前 80 级档的上限之内。
+// 技能上升的上限为 2，不能为凑不同数值而构造超限词条。
 constexpr CombatValues kCombatSet{
-	/*physicalCritRate=*/10, /*magicCritRate=*/4,     /*comboRate=*/6,         /*counterRate=*/7,
-	/*reflectRate=*/8,       /*skillLevelBonus=*/3,   /*ignoreAilmentResist=*/16, /*resistPoison=*/11,
+	/*physicalCritRate=*/5,  /*magicCritRate=*/3,     /*comboRate=*/4,         /*counterRate=*/2,
+	/*reflectRate=*/1,       /*skillLevelBonus=*/2,   /*ignoreAilmentResist=*/16, /*resistPoison=*/11,
 	/*resistFreeze=*/12,     /*resistSleep=*/13,      /*resistForget=*/14,     /*resistConfusion=*/15,
 	/*resistAllAilment=*/9,  /*magicResist=*/2,       /*physicalResist=*/5};
 
@@ -735,6 +737,7 @@ protected:
 		AttributeDimensionTableManager::Instance().Load();
 		AttributeRuleTableManager::Instance().Load();
 		AttributeAllocRatioTableManager::Instance().Load();
+		AttributeAutoPlanTableManager::Instance().Load();
 		ItemTableManager::Instance().Load();
 		EquipSlotTableManager::Instance().Load();
 		EquipAttributeTableManager::Instance().Load();
@@ -1326,7 +1329,7 @@ TEST_F(PlayerEquipAttributeTest, WeaponBaseDamageAddsToPhysicalAndMagicAttack)
 // 准确只加物伤(设计文档 D2);随机属性里的「伤害」与基础属性同样物伤法伤各加一份。
 TEST_F(PlayerEquipAttributeTest, AccuracyAddsPhysicalAttackOnlyWhileDamageAffixAddsBoth)
 {
-	constexpr uint32_t kAccuracy = 500;
+	constexpr uint32_t kAccuracy = 300;
 	constexpr uint32_t kDamageAffix = 400;
 	const Six before = ReadSix(Derived(player));
 	const uint64_t baseDamage = BaseAttrValue(kWeapon, kAttrDamage);
@@ -1345,10 +1348,10 @@ TEST_F(PlayerEquipAttributeTest, AccuracyAddsPhysicalAttackOnlyWhileDamageAffixA
 // 力量 / 体质 / 灵力 / 敏捷 +k:各自维度 +k 点,按该维度的每点固定系数换算(不走加点公式)。
 TEST_F(PlayerEquipAttributeTest, PrimaryPointAffixesUseThePerPointCoefficientOfTheirOwnDimension)
 {
-	constexpr uint32_t kConstitution = 7;
-	constexpr uint32_t kSpirit = 9;
-	constexpr uint32_t kStrength = 10;
-	constexpr uint32_t kAgility = 11;
+	constexpr uint32_t kConstitution = 3;
+	constexpr uint32_t kSpirit = 4;
+	constexpr uint32_t kStrength = 5;
+	constexpr uint32_t kAgility = 6;
 	const Six before = ReadSix(Derived(player));
 
 	ItemComp hat = MakeEquip(kGuidHat, kHat);
@@ -1377,8 +1380,8 @@ TEST_F(PlayerEquipAttributeTest, PrimaryPointAffixesUseThePerPointCoefficientOfT
 // 所有属性 +k:四个角色维度各 +k 点;与同一维度的单项属性叠加。
 TEST_F(PlayerEquipAttributeTest, AllPrimaryPointsAddsToEachPlayerDimensionAndStacksWithSinglePoints)
 {
-	constexpr uint32_t kAll = 8;
-	constexpr uint32_t kStrength = 10;
+	constexpr uint32_t kAll = 2;
+	constexpr uint32_t kStrength = 5;
 	const Six before = ReadSix(Derived(player));
 
 	ItemComp clothes = MakeEquip(kGuidClothes, kClothes);
@@ -1978,8 +1981,8 @@ TEST_F(PlayerEquipAttributeTest, StoredLevelAboveCapUsesCappedLevelForTotals)
 TEST_F(PlayerEquipAttributeTest, PanelValueIncludesEquipmentPointsAndBonusReportsTheExternalPart)
 {
 	constexpr uint32_t kStoredBonus = 5; // 落库的外部加成(bonus_values,留给丹药的那个位)
-	constexpr uint32_t kStrengthAffix = 10;
-	constexpr uint32_t kAllAffix = 8;
+	constexpr uint32_t kStrengthAffix = 5;
+	constexpr uint32_t kAllAffix = 2;
 	constexpr uint32_t kAllocated = 20;
 	const uint32_t poolId = PlayerPoolId();
 
@@ -2108,7 +2111,7 @@ TEST_F(PlayerEquipAttributeTest, PanelListsAllFifteenCombatStatsSortedWithFinalV
 // 百分比项的终值夹到 100;夹的只是面板显示,DerivedAttributesComp.combat 里仍是加成原值。
 TEST_F(PlayerEquipAttributeTest, PanelClampsPercentStatsToOneHundred)
 {
-	constexpr uint64_t kHighCritChance = 95;
+	constexpr uint64_t kHighCritChance = 96;
 	constexpr uint64_t kHighResistance = 98;
 	Base(player).set_critchance(kHighCritChance);
 	Base(player).set_resistance(kHighResistance);
@@ -2147,13 +2150,13 @@ TEST_F(PlayerEquipAttributeTest, EquipmentBonusIsNeverWrittenToPersistedComponen
 	// 全套战斗类属性 + 基础属性的平加,再把帽子换成一件带一级属性点的:三类加成都参与了重算。
 	ASSERT_NO_FATAL_FAILURE(WearCombatSet(player));
 	ItemComp extraPoints = MakeEquip(kGuidHat + kSecondSetOffset, kHat);
-	AddAffix(extraPoints, kAttrStrength, kBlue, 10, 0);
-	AddAffix(extraPoints, kAttrAllPrimary, kBlue, 8, 1);
+	AddAffix(extraPoints, kAttrStrength, kBlue, 5, 0);
+	AddAffix(extraPoints, kAttrAllPrimary, kBlue, 2, 1);
 	ASSERT_NO_FATAL_FAILURE(TakeOff(player, kGuidHat));
 	ASSERT_NO_FATAL_FAILURE(Wear(player, extraPoints));
 	AttributePanelInfo panel;
 	PlayerAttributeSystem::BuildPanel(player, panel);
-	ASSERT_NO_FATAL_FAILURE(ExpectDimension(panel, kDimStrength, kAllocated, kStoredBonus + 10 + 8));
+	ASSERT_NO_FATAL_FAILURE(ExpectDimension(panel, kDimStrength, kAllocated, kStoredBonus + 5 + 2));
 
 	EXPECT_EQ(attributeBefore, AttributeComp(player).SerializeAsString())
 		<< "equipment must not leak into PlayerAttributeComp (bonus_values is persisted)";
@@ -2187,11 +2190,11 @@ TEST_F(PlayerEquipAttributeTest, AllocationGainDoesNotDependOnEquipment)
 
 	const auto geared = NewPlayer();
 	ItemComp weapon = MakeEquip(kGuidWeapon + kSecondSetOffset, kWeapon);
-	AddAffix(weapon, kAttrStrength, kBlue, 10, 0);
-	AddAffix(weapon, kAttrAccuracy, kBlue, 500, 1);
+	AddAffix(weapon, kAttrStrength, kBlue, 5, 0);
+	AddAffix(weapon, kAttrAccuracy, kBlue, 300, 1);
 	ItemComp hat = MakeEquip(kGuidHat + kSecondSetOffset, kHat);
-	AddAffix(hat, kAttrAllPrimary, kBlue, 8, 0);
-	AddAffix(hat, kAttrConstitution, kBlue, 7, 1);
+	AddAffix(hat, kAttrAllPrimary, kBlue, 2, 0);
+	AddAffix(hat, kAttrConstitution, kBlue, 3, 1);
 	ASSERT_NO_FATAL_FAILURE(Wear(geared, weapon));
 	ASSERT_NO_FATAL_FAILURE(Wear(geared, hat));
 	ASSERT_NO_FATAL_FAILURE(Wear(geared, MakeVitalityClothes(kGuidClothes + kSecondSetOffset)));
@@ -2218,7 +2221,7 @@ TEST_F(PlayerEquipAttributeTest, ReloadFromTheDatabaseRecordRecomputesTheEquipme
 	ASSERT_NO_FATAL_FAILURE(WearCombatSet(player));
 	ASSERT_NO_FATAL_FAILURE(TakeOff(player, kGuidClothes));
 	ItemComp clothes = MakeVitalityClothes(kGuidClothes);
-	AddAffix(clothes, kAttrAllPrimary, kBlue, 8, 2);
+	AddAffix(clothes, kAttrAllPrimary, kBlue, 2, 2);
 	ASSERT_NO_FATAL_FAILURE(Wear(player, clothes));
 	ASSERT_EQ(Derived(player).max_health(), Base(player).health());
 	ASSERT_GT(Derived(player).max_health(), NoGearBaseline().maxHealth);
@@ -2262,7 +2265,7 @@ TEST_F(PlayerEquipAttributeTest, LegacyTopLevelBagReloadRecomputesTheEquipmentBo
 	ASSERT_NO_FATAL_FAILURE(WearCombatSet(player));
 	ASSERT_NO_FATAL_FAILURE(TakeOff(player, kGuidClothes));
 	ItemComp clothes = MakeVitalityClothes(kGuidClothes);
-	AddAffix(clothes, kAttrAllPrimary, kBlue, 8, 2);
+	AddAffix(clothes, kAttrAllPrimary, kBlue, 2, 2);
 	ASSERT_NO_FATAL_FAILURE(Wear(player, clothes));
 	ASSERT_EQ(Derived(player).max_health(), Base(player).health());
 	ASSERT_GT(Derived(player).max_health(), NoGearBaseline().maxHealth);
@@ -2448,7 +2451,7 @@ TEST_F(PlayerEquipAttributeTest, EnhanceLevelBeyondTheTableCountsAsTheTopLevelWi
 // 强化只放大基础属性(设计 §1.4 E1):同一件上的随机属性与宝石按原值计。
 TEST_F(PlayerEquipAttributeTest, EnhancementScalesBaseAttributesOnlyNotAffixesOrGems)
 {
-	constexpr uint32_t kAccuracy = 500;
+	constexpr uint32_t kAccuracy = 300;
 	constexpr uint32_t kDamageAffix = 400;
 	ASSERT_NO_FATAL_FAILURE(RequireForgeRows());
 	const Six before = ReadSix(Derived(player));
@@ -3051,8 +3054,8 @@ TEST_F(PlayerEquipAttributeTest, ReloadFromTheDatabaseRecordRecomputesEnhanceAnd
 // 在强化 / 镶嵌前后逐项相同;变的只有六项里强化的增量与宝石值,面板的二级属性仍是同一次重算的产出。
 TEST_F(PlayerEquipAttributeTest, PanelBonusAndCombatLinesStayTheSameAfterEnhanceAndInlay)
 {
-	constexpr uint32_t kStrengthAffix = 10;
-	constexpr uint32_t kAllAffix = 8;
+	constexpr uint32_t kStrengthAffix = 5;
+	constexpr uint32_t kAllAffix = 2;
 	ASSERT_NO_FATAL_FAILURE(RequireForgeRows());
 	const uint32_t poolId = PlayerPoolId();
 	const uint64_t enhanceGain = EnhancedBaseAttr(kWeapon, kAttrDamage, 1) - BaseAttrValue(kWeapon, kAttrDamage);

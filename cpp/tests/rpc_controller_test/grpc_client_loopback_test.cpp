@@ -1,9 +1,9 @@
 // grpc_client_loopback_test — 生成的 gRPC 客户端经真实 muduo_grpc 通道打到同进程 muduo_grpc::Server 的回环用例
 // (docs/design/grpc-muduo-transport.md §14、§15)。
 //
-// 服务端:muduo_grpc::Server 在 127.0.0.1 上提供 /data_service.DataService/LoadPlayerData,方法体走
+// 服务端:muduo_grpc::Server 在 127.0.0.1 上提供 /data_service.DataService/GetPlayerHomeZone,方法体走
 // core 的 GrpcUnaryCall 胶水(与生成的 scene / battle 骨架同一条路径:Create → ParseRequest → Proceed)。
-// 客户端:节点实体上挂真实的 MuduoGrpcChannelPtr,经生成的 SendDataServiceLoadPlayerData(带每次调用 done)发出。
+// 客户端:节点实体上挂真实的 MuduoGrpcChannelPtr,经生成的 SendDataServiceGetPlayerHomeZone(带每次调用 done)发出。
 // 锁定的契约:
 //   * 成功:done 恰好一次、不在 Send 栈内同步执行,应答字段正确;
 //   * 服务端把调用留着不进业务(守护段式延后)而客户端 deadline 到期:DEADLINE_EXCEEDED 恰好一次;服务端随后
@@ -56,9 +56,9 @@ using namespace std::chrono_literals;
 namespace
 {
 
-using data_service::LoadPlayerDataRequest;
-using data_service::LoadPlayerDataResponse;
-using LoadPlayerDataCall = GrpcUnaryCall<LoadPlayerDataRequest, LoadPlayerDataResponse>;
+using data_service::GetPlayerHomeZoneRequest;
+using data_service::GetPlayerHomeZoneResponse;
+using GetPlayerHomeZoneCall = GrpcUnaryCall<GetPlayerHomeZoneRequest, GetPlayerHomeZoneResponse>;
 
 constexpr auto kLiveness = 5s;   // 只作活性上限,不作判据
 
@@ -112,7 +112,7 @@ public:
 
     void RegisterMethods(muduo_grpc::MethodTable &table) override
     {
-        table.AddUnary(std::string(data_service::kDataServiceLoadPlayerDataGrpcPath),
+        table.AddUnary(std::string(data_service::kDataServiceGetPlayerHomeZoneGrpcPath),
                        [this](muduo_grpc::ServerCall serverCall, std::string_view requestBytes)
                        { Dispatch(std::move(serverCall), requestBytes); });
     }
@@ -120,19 +120,19 @@ public:
     Mode mode{Mode::kReply};
     int dispatched{0};
     int businessRuns{0};
-    std::vector<std::shared_ptr<LoadPlayerDataCall>> heldBeforeBusiness;
+    std::vector<std::shared_ptr<GetPlayerHomeZoneCall>> heldBeforeBusiness;
     std::vector<muduo_grpc::ServerCall> heldAfterBusinessStarted;
 
 private:
     void Dispatch(muduo_grpc::ServerCall serverCall, std::string_view requestBytes)
     {
         ++dispatched;
-        const auto call = LoadPlayerDataCall::Create(
+        const auto call = GetPlayerHomeZoneCall::Create(
             std::move(serverCall),
-            [this](const LoadPlayerDataRequest *request, LoadPlayerDataResponse *response)
+            [this](const GetPlayerHomeZoneRequest *request, GetPlayerHomeZoneResponse *response)
             {
                 ++businessRuns;
-                response->set_version(request->player_id() + 1);
+                response->set_home_zone_id(static_cast<uint32_t>(request->player_id() + 1));
             });
         if (!call->ParseRequest(requestBytes))
         {
@@ -165,7 +165,7 @@ struct Observed
     uint32_t code{kGrpcStatusOk};
     std::string message;
     bool hadReply{false};
-    uint64_t version{0};
+    uint32_t homeZoneId{0};
     bool sendHadReturnedAtDone{false};
 };
 
@@ -234,19 +234,19 @@ protected:
     {
         loop_.queueInLoop([this, observed, playerId, deadline]
         {
-            LoadPlayerDataRequest request;
+            GetPlayerHomeZoneRequest request;
             request.set_player_id(playerId);
             GrpcCallOptions options;
             options.deadline = deadline;
-            data_service::SendDataServiceLoadPlayerData(
+            data_service::SendDataServiceGetPlayerHomeZone(
                 registry_, nodeEntity_, request,
-                [observed](const GrpcCallOutcome &outcome, const LoadPlayerDataResponse *reply)
+                [observed](const GrpcCallOutcome &outcome, const GetPlayerHomeZoneResponse *reply)
                 {
                     ++observed->calls;
                     observed->code = outcome.code;
                     observed->message = outcome.message;
                     observed->hadReply = reply != nullptr;
-                    observed->version = reply != nullptr ? reply->version() : 0;
+                    observed->homeZoneId = reply != nullptr ? reply->home_zone_id() : 0;
                     observed->sendHadReturnedAtDone = observed->sendReturned;
                 },
                 options);
@@ -277,7 +277,7 @@ TEST_F(GrpcClientLoopbackTest, PerCallDoneSucceedsExactlyOnce)
     EXPECT_EQ(observed->calls, 1) << "恰好一次";
     EXPECT_EQ(observed->code, kGrpcStatusOk) << observed->message;
     EXPECT_TRUE(observed->hadReply);
-    EXPECT_EQ(observed->version, 43u) << "应答来自服务端业务";
+    EXPECT_EQ(observed->homeZoneId, 43u) << "应答来自服务端业务";
     EXPECT_TRUE(observed->sendHadReturnedAtDone);
     EXPECT_EQ(service_.dispatched, 1);
     EXPECT_EQ(service_.businessRuns, 1);
@@ -353,7 +353,7 @@ TEST_F(GrpcClientLoopbackTest, ChannelRemovalFailsOutstandingCallAndRejectsLater
     const auto failedCalls = std::make_shared<int>(0);
     const auto onDone = [failedPlayers, weakChannel, successfulCalls, failedCalls](
                             uint64_t playerId, const GrpcCallOutcome &outcome,
-                            const LoadPlayerDataResponse *reply)
+                            const GetPlayerHomeZoneResponse *reply)
     {
         if (outcome.ok())
         {
@@ -368,12 +368,12 @@ TEST_F(GrpcClientLoopbackTest, ChannelRemovalFailsOutstandingCallAndRejectsLater
         EXPECT_EQ(reply, nullptr);
         EXPECT_TRUE(weakChannel.expired()) << "失败回调在通道析构之后才执行,不得借用通道";
     };
-    LoadPlayerDataRequest request;
+    GetPlayerHomeZoneRequest request;
     request.set_player_id(43);
-    data_service::SendDataServiceLoadPlayerData(
+    data_service::SendDataServiceGetPlayerHomeZone(
         registry_, nodeEntity_, request,
         [onDone, playerId = request.player_id()](const GrpcCallOutcome &outcome,
-                                               const LoadPlayerDataResponse *reply)
+                                               const GetPlayerHomeZoneResponse *reply)
         {
             onDone(playerId, outcome, reply);
         });
@@ -383,10 +383,10 @@ TEST_F(GrpcClientLoopbackTest, ChannelRemovalFailsOutstandingCallAndRejectsLater
     EXPECT_TRUE(weakChannel.expired()) << "生成层与调用状态都不得持有通道的强引用";
     EXPECT_FALSE(HasUsableGrpcClient(registry_, nodeEntity_));
     request.set_player_id(44);
-    data_service::SendDataServiceLoadPlayerData(
+    data_service::SendDataServiceGetPlayerHomeZone(
         registry_, nodeEntity_, request,
         [onDone, playerId = request.player_id()](const GrpcCallOutcome &outcome,
-                                               const LoadPlayerDataResponse *reply)
+                                               const GetPlayerHomeZoneResponse *reply)
         {
             onDone(playerId, outcome, reply);
         });
@@ -413,12 +413,12 @@ TEST_F(GrpcClientLoopbackTest, PerCallDoneCompletesUnavailableAfterChannelIsRemo
     const auto rejected = std::make_shared<Observed>();
     const auto successfulCalls = std::make_shared<int>(0);
     const auto failedCalls = std::make_shared<int>(0);
-    LoadPlayerDataRequest request;
+    GetPlayerHomeZoneRequest request;
     request.set_player_id(45);
-    data_service::SendDataServiceLoadPlayerData(
+    data_service::SendDataServiceGetPlayerHomeZone(
         registry_, nodeEntity_, request,
         [outstanding, weakChannel, successfulCalls, failedCalls](const GrpcCallOutcome &outcome,
-                                                              const LoadPlayerDataResponse *reply)
+                                                              const GetPlayerHomeZoneResponse *reply)
         {
             if (outcome.ok())
             {
@@ -437,10 +437,10 @@ TEST_F(GrpcClientLoopbackTest, PerCallDoneCompletesUnavailableAfterChannelIsRemo
     EXPECT_EQ(weakChannel.lock()->outstandingCalls(), 1u);
     registry_.remove<MuduoGrpcChannelPtr>(nodeEntity_);
     EXPECT_TRUE(weakChannel.expired());
-    data_service::SendDataServiceLoadPlayerData(
+    data_service::SendDataServiceGetPlayerHomeZone(
         registry_, nodeEntity_, request,
         [rejected, successfulCalls, failedCalls](const GrpcCallOutcome &outcome,
-                                                const LoadPlayerDataResponse *reply)
+                                                const GetPlayerHomeZoneResponse *reply)
         {
             if (outcome.ok())
             {

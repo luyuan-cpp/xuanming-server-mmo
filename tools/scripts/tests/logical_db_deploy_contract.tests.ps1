@@ -112,7 +112,8 @@ $ParticipantServices = [ordered]@{
 
 $ZoneArgs = @('-Command', 'zone-up', '-ZoneName', $Zone, '-ZoneId', '101', '-DryRun', '-InfraNamespace', $Infra,
     '-GlobalAuthorityTiDBHost', $AuthorityHost, '-GoSvcRegistry', 'registry.invalid/test', '-JavaSvcRegistry', 'registry.invalid/test')
-$InfraArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-InfraNamespace', $Infra,
+# 全局服务正式准入要求 RF=3、minISR=2；仅夹具显式使用虚构 3 broker 拓扑。
+$InfraArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-KafkaBrokers', '3', '-InfraNamespace', $Infra,
     '-GlobalAuthorityTiDBHost', $AuthorityHost, '-GoSvcRegistry', 'registry.invalid/test', '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab')
 $InfraEnv = @{ MMORPG_BATTLE_TOKEN_SECRET = 'contract-battle-ticket-0123456789abcdef012345'; MMORPG_GATE_TOKEN_SECRET = 'contract-gate-ticket-0123456789abcdef012345' }
 # 同 k8s_deploy_contract.tests.ps1 的 $ProdEnv:走到逻辑库那一步之前要的密钥。玩家域集群的参数和口令由 deploy_capture 的夹具补。
@@ -389,14 +390,14 @@ Test-Case 'MMORPG_DB_PLACEMENT 进写者的 registrar init,只进 init;login 和
         $block = Get-DeploymentBlock -Output $devZoneRun.Output -Name $service
         $at = $block.IndexOf('- name: MMORPG_DB_PLACEMENT')
         Assert-True -Condition ($at -ge 0) -Because "$service 的 writer_authority 要按映射拨号"
-        Assert-True -Condition ($at -lt $block.IndexOf('- name: MMORPG_SQL_REGISTRAR_DSN')) -Because "$service:紧贴 registrar 的控制 DSN"
-        Assert-True -Condition ($at -lt $block.IndexOf("`n      containers:")) -Because "$service:常驻容器读 yaml 的 DbPlacement,不要这个变量"
-        Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: MMORPG_DB_PLACEMENT').Count) -Because "$service:只注入一次"
+        Assert-True -Condition ($at -lt $block.IndexOf('- name: MMORPG_SQL_REGISTRAR_DSN')) -Because "${service}:紧贴 registrar 的控制 DSN"
+        Assert-True -Condition ($at -lt $block.IndexOf("`n      containers:")) -Because "${service}:常驻容器读 yaml 的 DbPlacement,不要这个变量"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, 'name: MMORPG_DB_PLACEMENT').Count) -Because "${service}:只注入一次"
         $value = [regex]::Match($block, "name: MMORPG_DB_PLACEMENT\s+value: '(?<json>[^'\r\n]+)'").Groups['json'].Value
         $json = $value | ConvertFrom-Json
-        Assert-Equal -Expected 'main' -Actual $json.DefaultCluster -Because "$service:值是 ConfigFromEnv 认的形状"
-        Assert-Equal -Expected $AuthorityHost -Actual $json.SqlClusters.main.Hosts -Because "$service:默认集群是权威入口"
-        Assert-NotMatch -Text $value -Pattern '@tcp|password' -Because "$service:只有地址,没有凭据"
+        Assert-Equal -Expected 'main' -Actual $json.DefaultCluster -Because "${service}:值是 ConfigFromEnv 认的形状"
+        Assert-Equal -Expected $AuthorityHost -Actual $json.SqlClusters.main.Hosts -Because "${service}:默认集群是权威入口"
+        Assert-NotMatch -Text $value -Pattern '@tcp|password' -Because "${service}:只有地址,没有凭据"
     }
     foreach ($service in @('login', 'gateway')) {
         $block = Get-DeploymentBlock -Output $devZoneRun.Output -Name $service
@@ -476,7 +477,7 @@ Test-Case 'manifest 的密钥名和 Go 一致,都引用 domain-service-secrets �
         }
     }
     foreach ($service in @('guild', 'match')) {
-        Assert-Match -Text (Read-RepoText "deploy/k8s/manifests/go-svc/$service.yaml") -Pattern 'name: MMORPG_MATCH_INTERNAL_SECRET_GUILD\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: match-internal-guild, optional: false\}' -Because "$service:开局、占用、读终局都验这一把"
+        Assert-Match -Text (Read-RepoText "deploy/k8s/manifests/go-svc/$service.yaml") -Pattern 'name: MMORPG_MATCH_INTERNAL_SECRET_GUILD\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: match-internal-guild, optional: false\}' -Because "${service}:开局、占用、读终局都验这一把"
     }
 }
 

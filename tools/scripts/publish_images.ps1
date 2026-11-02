@@ -634,7 +634,7 @@ try {
     }
 
     Write-Utf8NoBomFile -Path (Join-Path $staging 'images-manifest.json') `
-        -Text ((ConvertTo-Json -InputObject @($manifestEntries) -Depth 5) + "`n")
+        -Text ((ConvertTo-Json -InputObject $manifestEntries.ToArray() -Depth 5) + "`n")
 
     $buildInfo = [ordered]@{
         version           = $versionDirName

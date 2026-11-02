@@ -2,6 +2,38 @@
 
 PowerShell and shell scripts for common development tasks.
 
+### R双区Mall/Gateway四副本（2026-11-02，待实际验收）
+
+本节属于本仓R的Go/C++业务栈。四个全局Java角色为`mall`、`mall-replica`、`gateway`、`gateway-replica`，分别使用R的`java/mall_game`和`java/gateway_node`。两个Mall副本共用同一个商城逻辑库，两个Gateway副本共用同一个网关逻辑库；每个进程独立NORMAL主体、boot身份、grant和消费目录。Gateway按zone固定本轮两区Go login的gRPC地址，不借独立Java仓的Dubbo网关。
+
+在已有受控目录写公开JSON计划，格式`LOCAL_R_JAVA_FOUR_INSTANCES_V1`，顶层字段仅`format`、`javaExecutable`、`javaSha256`、`instances`。`javaExecutable`固定本机JDK23的绝对路径和SHA，不能拿旧进程代替。`instances`恰好四项，每项字段为：
+
+- `instanceKey`：上面的四个固定角色名；`service`为`mall`或`gateway`。
+- `port`：互不重复的显式本机HTTP端口；`database`为该服务的全局逻辑库名，两副本必须相同，Mall与Gateway两库不同。
+- `jarSha256`：本轮R构建的运行包SHA。固定路径为`java/mall_game/target/mall-game-0.1.0-SNAPSHOT.jar`及`java/gateway_node/target/gateway-node-0.0.1-SNAPSHOT.jar`。
+- Gateway额外必填`loginGrpcEndpoints`（如`990017=127.0.0.1:53000,990018=127.0.0.1:54000`，必须取本轮真实Go计划）、`redisEndpoint`、`etcdEndpoint`和`mallAdminUrl`；后两者仅显式`http://127.0.0.1:<端口>`根地址，商城端口必须属于同计划Mall。计划不写口令、DSN或签名密钥。
+
+先由Codex在资源槽中构建`go/data_service/cmd/writer_authority`，并在合法Authority测试夹具准备齐备后执行R reactor `mvn -f java/pom.xml -pl gateway_node,mall_game -am clean package`；Gateway需要JDK23及显式已核protoc。保留默认测试，不用`skipTests`。`AuthorityHikariTiDbTest`缺真实NORMAL夹具即失败；Mall真TiDB随机库用例还须逐库NORMAL授权，不能用一份外部grant或root写连接冒充。
+
+一次生成全部Go及四Java的目录，不能对每个zone/Java角色循环调用producer：
+
+```powershell
+# 这些变量是本轮已核原件/计划的路径和公开SHA；不在命令或跟踪文件里填写凭据。
+pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command sql-boot-catalog-local -Zones 990017,990018 -ZonePortOffsets 990017=0,990018=1000 -JavaInstancePlanPath $javaPlan -JavaInstancePlanSha256 $javaPlanSha -PhysicalAuthorityFile $physical -PhysicalAuthoritySha256 $physicalSha -LockQualificationFile $i3 -LockQualificationSha256 $i3Sha
+```
+
+调用前照常显式提供两区玩家库白名单、loopback SQL端点及原本机Schema身份。公开物理authority与真实I3原件须由执行者先实核同一物理epoch；这两个参数是原件绑定，不能替代本轮独立物理检查。四Java模式拒绝退回local自报锁声明。Mall先由独立Schema子进程调用`writer_authority -command prepare-schema -schema <商城库>`，复用共享闸门DDL；NORMAL没有DDL或目录控制权限。每boot数据源凭据只在受控私有配置落盘；公开计划不带凭据。此模式保留既有账号、旧boot和UNKNOWN原件，不自动删除。
+
+Go/C++由同一轮各自正规入口启动后，用producer本轮`last-run.json`摘要启动四Java，JavaOnly分流不启动Docker或Go/C++，不重做目录：
+
+```powershell
+pwsh -NoProfile -File tools/scripts/start_game.ps1 -JavaOnly -JavaInstancePlanPath $javaPlan -JavaInstancePlanSha256 $javaPlanSha -JavaZones 990017,990018 -SqlBootSummaryPath $bootSummary
+```
+
+每实例先经`Get-SqlWriterBootEnvironment`，只给自身资格和固定私密文件helper，剥离Schema/registrar/maintenance控制环境，再以完整私有配置启动。每boot记录实际PID、创建FILETIME、JAR/Java SHA与端口；启动失败仅结束本批原句柄并保留尝试，不自动重试。监听就绪不是业务通过，之后仍须同轮双区业务与真实SQL故障恢复断言。玩家持久化实现没有因此修改，仍走SQL `player_store`，Redis只保留既有协调用途。
+
+受影响验证命令由Codex在源码稳定后执行：`tools/scripts/tests/sql_boot_catalog_local.tests.ps1`、`sql_boot_catalog_java.tests.ps1`、`start_game_java.tests.ps1`；Go在`go/data_service`执行`go test -count=1 ./cmd/writer_authority`。新增脚本以无功能假产物和启动替身检查合同，不执行JVM、SQL或容器。本文是接线与待执行口径，不宣称这些命令已经通过。
+
 ## Directory Rules
 
 - 仓库根保留 `dev.bat` 开发菜单，以及转调本目录的 `start-server.cmd` / `start-game.cmd` 薄启动器；维护中的独立工程脚本放在本目录，不把菜单本身误称为无逻辑的薄包装。

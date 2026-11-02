@@ -6,17 +6,133 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"net"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"go.etcd.io/etcd/api/v3/etcdserverpb"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	dbpb "proto/common/database"
 	"shared/authoritysql"
+	"shared/dbplacement"
 )
 
 // lifecycleEpochForTest 是夹具里闸门当前的 epoch。RETIRE 的请求绑定它,REGISTER 的请求不带,收据记实际值。
 const lifecycleEpochForTest = 7
+
+func schemaPrepareEnvironment(extra map[string]string) func(string) string {
+	values := map[string]string{"MMORPG_SQL_SCHEMA_DSN": "schema_test:test-only@tcp(127.0.0.1:1)/mall_test", "MMORPG_SQL_SCHEMA_PRINCIPAL": "schema_test@localhost"}
+	for name, value := range extra {
+		values[name] = value
+	}
+	return func(name string) string { return values[name] }
+}
+
+func TestPrepareSchemaRequiresDeploymentPlacementBeforeSQL(t *testing.T) {
+	getenv := schemaPrepareEnvironment(map[string]string{dbplacement.EnvRequired: "1"})
+	if err := prepareSchema(context.Background(), "mall_test", getenv); !errors.Is(err, dbplacement.ErrPlacementRequired) {
+		t.Fatalf("缺少部署要求的映射必须先拒绝，不能拨SQL：%v", err)
+	}
+	getenv = schemaPrepareEnvironment(map[string]string{dbplacement.EnvConfig: "{"})
+	if err := prepareSchema(context.Background(), "mall_test", getenv); err == nil {
+		t.Fatal("坏映射配置不能回退旧DSN")
+	}
+}
+
+// 真实etcd客户端只连本例有限gRPC替身；SQL端点是不可用端口，正确路径
+// 必须在任何SQL连接前因MOVING拒绝。误用ForOneShot会变成拨SQL错误，本例判红。
+type movingSchemaPlacement struct {
+	etcdserverpb.UnimplementedKVServer
+}
+
+func (movingSchemaPlacement) Txn(context.Context, *etcdserverpb.TxnRequest) (*etcdserverpb.TxnResponse, error) {
+	return &etcdserverpb.TxnResponse{Header: &etcdserverpb.ResponseHeader{Revision: 1}, Succeeded: true}, nil
+}
+
+func (movingSchemaPlacement) Range(_ context.Context, request *etcdserverpb.RangeRequest) (*etcdserverpb.RangeResponse, error) {
+	if string(request.Key) != dbplacement.Key("mall_test") {
+		return nil, errors.New("本例只接受Mall目标库映射")
+	}
+	return &etcdserverpb.RangeResponse{Header: &etcdserverpb.ResponseHeader{Revision: 2}, Count: 1, Kvs: []*mvccpb.KeyValue{{Key: request.Key, Value: []byte(`{"cluster":"moved","version":2,"state":"MOVING"}`), ModRevision: 2}}}, nil
+}
+
+func TestPrepareSchemaRefusesMovingBeforeOpeningOldSQLAddress(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := grpc.NewServer()
+	etcdserverpb.RegisterKVServer(server, &movingSchemaPlacement{})
+	done := make(chan struct{})
+	go func() { defer close(done); _ = server.Serve(listener) }()
+	t.Cleanup(func() { server.Stop(); _ = listener.Close(); <-done })
+	config := dbplacement.Config{DefaultCluster: "main", SqlClusters: map[string]dbplacement.SqlCluster{"main": {Hosts: "127.0.0.1:1"}, "moved": {Hosts: "127.0.0.1:2"}}, EtcdHosts: []string{listener.Addr().String()}}
+	raw, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	getenv := schemaPrepareEnvironment(map[string]string{dbplacement.EnvRequired: "1", dbplacement.EnvConfig: string(raw)})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := prepareSchema(ctx, "mall_test", getenv); !errors.Is(err, dbplacement.ErrMoving) {
+		t.Fatalf("MOVING应拒绝DDL，不能回退或先连SQL：%v", err)
+	}
+}
+
+func TestPrepareSchemaRejectsMixedCapabilitiesBeforeSQL(t *testing.T) {
+	for _, args := range [][]string{
+		{"-command", "prepare-schema", "-schema", "mall_test", "-request", ""},
+		{"-command", "prepare-schema", "-schema", "mall_test", "-timeout", "0s"},
+		{"-command", "prepare-schema", "-schema", "mall_test", "-timeout", "61s"},
+		{"-command", "prepare-schema", "-schema", "mall_test", "extra"},
+		{"-command", "register", "-schema", "mall_test"},
+	} {
+		reads := 0
+		getenv := func(string) string { reads++; return "" }
+		if err := run(context.Background(), args, getenv, &bytes.Buffer{}); err == nil || reads != 0 {
+			t.Fatalf("混合命令应在读取能力前拒绝：args=%v,env_reads=%d,err=%v", args, reads, err)
+		}
+	}
+	for _, key := range []string{"MMORPG_SQL_WRITER_GRANT_FILE", "MMORPG_SQL_REGISTRAR_DSN", "MMORPG_SQL_MAINTENANCE_DSN"} {
+		getenv := func(name string) string {
+			if name == key {
+				return "test-only-present"
+			}
+			return ""
+		}
+		if err := prepareSchema(context.Background(), "mall_test", getenv); err == nil {
+			t.Fatalf("不应接受混入的能力：%s", key)
+		}
+	}
+}
+
+func TestPrepareSchemaRejectsMissingOrWrongDatabaseBeforeSQL(t *testing.T) {
+	for _, tc := range []struct{ schema, dsn, principal string }{
+		{"", "", ""},
+		{"mall_test", "", "schema_test@localhost"},
+		{"mall_test", "schema_test:test-only@tcp(127.0.0.1:1)/another_test", "schema_test@localhost"},
+		{"mall_test;DROP", "schema_test:test-only@tcp(127.0.0.1:1)/mall_test;DROP", "schema_test@localhost"},
+		{"mall_test", "schema_test:test-only@tcp(127.0.0.1:1)/mall_test", ""},
+	} {
+		getenv := func(key string) string {
+			switch key {
+			case "MMORPG_SQL_SCHEMA_DSN":
+				return tc.dsn
+			case "MMORPG_SQL_SCHEMA_PRINCIPAL":
+				return tc.principal
+			}
+			return ""
+		}
+		if err := prepareSchema(context.Background(), tc.schema, getenv); err == nil {
+			t.Fatal("缺失Schema身份或目标库不符不应进入SQL")
+		}
+	}
+}
 
 func lifecycleRequestForTest(kind dbpb.SqlWriterLifecycleReceipt_Kind) *dbpb.SqlWriterLifecycleReceipt_Request {
 	request := &dbpb.SqlWriterLifecycleReceipt_Request{

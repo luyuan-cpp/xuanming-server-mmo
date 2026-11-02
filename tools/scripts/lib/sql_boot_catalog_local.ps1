@@ -37,7 +37,14 @@ param(
     [int]$PortStride = 1,
     [int]$ZonePortShift = 1000,
     # '990017=0,990018=1000':语义区号代入 (Zone-1)*ZonePortShift 会越界时,显式给每个区的端口偏移。启动时 go_services.ps1 -ZonePortOffset 传同一个值。
-    [string[]]$ZonePortOffsets = @()
+    [string[]]$ZonePortOffsets = @(),
+    # R商城/网关各两副本的公开实例计划；不含口令，所有角色一次合并发布。
+    [string]$JavaInstancePlanPath = '',
+    [string]$JavaInstancePlanSha256 = '',
+    [string]$PhysicalAuthorityFile = '',
+    [string]$PhysicalAuthoritySha256 = '',
+    [string]$LockQualificationFile = '',
+    [string]$LockQualificationSha256 = ''
 )
 
 . (Join-Path $PSScriptRoot 'release_common.ps1')
@@ -532,6 +539,204 @@ function New-LocalSqlBootGatewayConfig {
     ) -join "`n"
 }
 
+# 这是R同一业务栈的四个全局副本，不是两个zone各自拥有商城库。
+# 计划只承载公开寻址与产物身份；凭据由本次producer生成，写进每boot私有配置。
+function Read-LocalSqlBootJavaPlan {
+    param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Sha256, [int[]]$Zones = @())
+    if ($Sha256 -cnotmatch '^[A-Fa-f0-9]{64}$' -or (Get-MaintenanceSha256 -Path $Path) -ine $Sha256) { throw 'Java实例计划缺固定SHA或已经改变。' }
+    $plan = Read-MaintenanceJson -Path $Path -ExpectedSha256 $Sha256.ToLowerInvariant()
+    Assert-MaintenanceProperties -Value $plan -Required @('format','javaExecutable','javaSha256','instances')
+    if ($plan.format -cne 'LOCAL_R_JAVA_FOUR_INSTANCES_V1' -or @($plan.instances).Count -ne 4) { throw 'Java计划必须是R的Mall/Gateway各两个全局副本。' }
+    if (-not [IO.Path]::IsPathFullyQualified($plan.javaExecutable) -or [IO.Path]::GetFileName($plan.javaExecutable) -ine 'java.exe' -or $plan.javaSha256 -cnotmatch '^[a-f0-9]{64}$' -or (Get-MaintenanceSha256 $plan.javaExecutable) -cne $plan.javaSha256) { throw 'Java运行程序缺固定绝对路径或SHA。' }
+    $keys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $ports = [Collections.Generic.HashSet[int]]::new()
+    $databases = @{}
+    $instances = @(foreach ($item in $plan.instances) {
+        Assert-MaintenanceProperties -Value $item -Required @('instanceKey','service','port','database','jarSha256') -Optional @('loginGrpcEndpoints','redisEndpoint','etcdEndpoint','mallAdminUrl')
+        $service = [string]$item.service; $key = [string]$item.instanceKey
+        if ($key -cnotin @('mall','mall-replica','gateway','gateway-replica') -or $service -cnotin @('mall','gateway') -or ($key -replace '-replica$','') -cne $service -or -not $keys.Add($key)) { throw 'Java计划角色或实例键重复/不符。' }
+        if ($item.port -isnot [long] -and $item.port -isnot [int]) { throw 'Java监听端口必须是整数。' }
+        $port = [int]$item.port
+        if ($port -lt 1 -or $port -gt 65535 -or -not $ports.Add($port)) { throw 'Java监听端口越界或冲突。' }
+        $database = [string]$item.database; $null = ConvertTo-AuthoritySqlIdentifier $database
+        if ($databases.ContainsKey($service) -and $databases[$service] -cne $database) { throw '同一Java服务的两个副本必须连接同一个全局逻辑库。' }
+        $databases[$service] = $database
+        $module = if ($service -ceq 'mall') { 'mall_game' } else { 'gateway_node' }
+        $jarName = if ($service -ceq 'mall') { 'mall-game-0.1.0-SNAPSHOT.jar' } else { 'gateway-node-0.0.1-SNAPSHOT.jar' }
+        $jar = [IO.Path]::GetFullPath((Join-Path $RepoRoot "java/$module/target/$jarName"))
+        if ($item.jarSha256 -cnotmatch '^[a-f0-9]{64}$' -or (Get-MaintenanceSha256 $jar) -cne $item.jarSha256) { throw 'Java运行包不是当前计划固定的R产物。' }
+        if ($service -ceq 'gateway') {
+            foreach ($required in @('loginGrpcEndpoints','redisEndpoint','etcdEndpoint','mallAdminUrl')) { if (-not $item.Contains($required)) { throw '网关计划缺两区Go login或本轮协调/商城地址。' } }
+            $mapped = [Collections.Generic.HashSet[int]]::new()
+            foreach ($endpoint in ([string]$item.loginGrpcEndpoints -split ',')) {
+                if ($endpoint -cnotmatch '^(?<zone>[1-9][0-9]*)=(?<endpoint>127\.0\.0\.1:[0-9]+)$' -or -not $mapped.Add([int]$Matches.zone)) { throw '网关只能显式按区绑定本机Go login，不能轮询到别区。' }
+                $null = Assert-LocalSqlBootEndpoint $Matches.endpoint
+            }
+            if ((@($mapped | Sort-Object) -join ',') -cne (@($Zones | Sort-Object) -join ',') -or $Zones.Count -ne 2) { throw '网关Go login映射必须恰好覆盖本次两个zone。' }
+            $null = Assert-LocalSqlBootEndpoint ([string]$item.redisEndpoint)
+            foreach ($name in @('etcdEndpoint','mallAdminUrl')) {
+                $uri = $null
+                if (-not [uri]::TryCreate([string]$item[$name], [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -cne 'http' -or $uri.Host -cne '127.0.0.1' -or $uri.Port -lt 1 -or $uri.UserInfo -or $uri.Query -or $uri.Fragment -or $uri.AbsolutePath -cne '/') { throw 'Java协调与商城地址必须为显式本机HTTP根地址。' }
+            }
+        } elseif (@('loginGrpcEndpoints','redisEndpoint','etcdEndpoint','mallAdminUrl') | Where-Object { $item.Contains($_) }) { throw 'Mall计划不得夹带Gateway寻址字段。' }
+        [pscustomobject]@{ InstanceKey = $key; Service = $service; Port = $port; Database = $database; Java = $true; Running = $false; ConfigPath = (Join-Path $RepoRoot "java/$module/src/main/resources/application.yaml"); Jar = $jar; JarSha256 = $item.jarSha256; Settings = $item; JavaExecutable = $plan.javaExecutable; JavaSha256 = $plan.javaSha256 }
+    })
+    if ($keys.Count -ne 4 -or $databases.mall -ceq $databases.gateway) { throw 'Mall和Gateway必须分别拥有独立的全局逻辑库。' }
+    foreach ($gateway in @($instances | Where-Object Service -CEQ 'gateway')) {
+        $target = ([uri]$gateway.Settings.mallAdminUrl).Port
+        if ($target -notin @($instances | Where-Object Service -CEQ 'mall' | ForEach-Object Port)) { throw '网关商城地址没有绑定本计划的Mall端口。' }
+    }
+    return $instances
+}
+
+function New-LocalSqlBootJavaConfig {
+    param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)]$Instance, [Parameter(Mandatory)][string]$User, [Parameter(Mandatory)][string]$Password)
+    $text = [IO.File]::ReadAllText($Instance.ConfigPath)
+    $url = "jdbc:mysql://$($Settings.Endpoint)/$($Instance.Database)?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&connectTimeout=3000&socketTimeout=10000"
+    $values = [ordered]@{ 'server.address' = '"127.0.0.1"'; 'server.port' = [string]$Instance.Port; 'spring.datasource.url' = (ConvertTo-LocalSqlBootYamlString $url); 'spring.datasource.username' = (ConvertTo-LocalSqlBootYamlString $User); 'spring.datasource.password' = (ConvertTo-LocalSqlBootYamlString $Password); 'mmorpg.run-mode' = 'dev'; 'mmorpg.sql.require-tidb' = $(if ($Settings.Backend -ceq 'tidb') { 'true' } else { 'false' }) }
+    if ($Instance.Service -ceq 'mall') {
+        $values['commerce.run-mode'] = 'dev'; $values['commerce.require-tidb'] = $values['mmorpg.sql.require-tidb']
+    } else {
+        $redis = Assert-LocalSqlBootEndpoint $Instance.Settings.redisEndpoint
+        $values['spring.data.redis.host'] = (ConvertTo-LocalSqlBootYamlString $redis.Name); $values['spring.data.redis.port'] = [string]$redis.Port
+        $values['login.grpc.endpoints'] = (ConvertTo-LocalSqlBootYamlString $Instance.Settings.loginGrpcEndpoints)
+        # 本轮仅用固定Go login映射；不让共享etcd中的别区或他人进程改写它。
+        $values['login.grpc.discovery-enabled'] = 'false'
+        $etcdList = [regex]::new('(?m)(^etcd:\r?\n)  endpoints:\r?\n(?:    - [^\r\n]*\r?\n)+')
+        if ($etcdList.Matches($text).Count -ne 1) { throw '网关etcd源配置形状改变，拒绝猜测列表替换。' }
+        $literal = ConvertTo-LocalSqlBootYamlString $Instance.Settings.etcdEndpoint
+        $text = $etcdList.Replace($text, [Text.RegularExpressions.MatchEvaluator]{ param($m) $m.Groups[1].Value + "  endpoints: [$literal]`n" })
+        $values['mall-admin.base-url'] = (ConvertTo-LocalSqlBootYamlString $Instance.Settings.mallAdminUrl)
+    }
+    foreach ($key in $values.Keys) { $text = Set-LocalSqlBootYamlScalar -Content $text -KeyPath $key -Literal $values[$key] }
+    return $text
+}
+
+function Initialize-LocalSqlBootMall {
+    param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$Database)
+    # 闸门DDL只有authoritysql一份；Schema进程和NORMAL业务进程分离。
+    $tool = Resolve-LocalSqlBootTool -RepoRoot $RepoRoot -Name 'writer_authority'
+    $environment = @{ MMORPG_SQL_SCHEMA_DSN = (New-LocalSqlBootDsn -User $Settings.RootUser -Password $Settings.RootPassword -Endpoint $Settings.Endpoint -Database $Database); MMORPG_SQL_SCHEMA_PRINCIPAL = $Settings.RootPrincipal; MMORPG_SQL_BACKEND = $Settings.Backend; MMORPG_SQL_WRITER_GRANT_FILE = ''; MMORPG_SQL_REGISTRAR_DSN = ''; MMORPG_SQL_MAINTENANCE_DSN = '' }
+    $result = Invoke-LocalSqlBootProcess -FilePath $tool -Arguments @('-command','prepare-schema','-schema',$Database,'-timeout','60s') -Environment $environment -TimeoutSeconds 70
+    if ($result.Code -ne 0) { throw 'Mall本库写者闸门迁移失败；保留现场，不注册NORMAL。' }
+    $source = [IO.File]::ReadAllText((Join-Path $RepoRoot 'java/mall_game/src/main/resources/db/schema.sql'))
+    $expected = @([regex]::Matches($source, '(?im)^CREATE TABLE IF NOT EXISTS ([a-z0-9_]+)\s*\(') | ForEach-Object { $_.Groups[1].Value })
+    $identifier = ConvertTo-AuthoritySqlIdentifier $Database
+    $present = @(Invoke-LocalSqlBootSql -Settings $Settings -Sql "SELECT table_name FROM information_schema.tables WHERE table_schema='$Database';" -Label 'inspect Mall business schema')
+    $business = @($present | Where-Object { $_ -cnotin @(Get-LocalSqlBootAuthorityTables) })
+    if ($business.Count -eq 0) {
+        $null = Invoke-LocalSqlBootSql -Settings $Settings -Sql ("USE $identifier;`n" + $source) -Label 'create Mall business tables'
+    } elseif (@($expected | Where-Object { $_ -cnotin $business }).Count -gt 0) { throw 'Mall库是半成品；不自动补写旧布局，不发布目录。' }
+}
+
+# 单调时钟是启动预算的唯一来源；测试只替换这个接缝，不让回归等待真实120秒。
+function New-LocalSqlBootJavaStartupClock { return [Diagnostics.Stopwatch]::StartNew() }
+
+function Start-LocalSqlBootJavaInstances {
+    param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$PlanPath, [Parameter(Mandatory)][string]$PlanSha256, [Parameter(Mandatory)][int[]]$Zones, [Parameter(Mandatory)][string]$SummaryPath)
+    $instances = @(Read-LocalSqlBootJavaPlan -RepoRoot $RepoRoot -Path $PlanPath -Sha256 $PlanSha256 -Zones $Zones)
+    $summary = Read-MaintenanceJson -Path $SummaryPath
+    if (-not $summary.Contains('javaInstancePlan') -or $summary.javaInstancePlan.sha256 -cne $PlanSha256.ToLowerInvariant() -or [IO.Path]::GetFullPath($summary.javaInstancePlan.path) -ine [IO.Path]::GetFullPath($PlanPath) -or $summary.bootId -cnotmatch '^[a-f0-9]{8}$') { throw 'Java启动必须对应本次一次发布的同一计划/目录。' }
+    if ((@($summary.javaInstances | Sort-Object) -join ',') -cne (@($instances | ForEach-Object InstanceKey | Sort-Object) -join ',')) { throw '启动摘要没有完整四Java角色。' }
+    $helper = $summary.privateFileHelper
+    if ($helper.sha256 -cnotmatch '^[a-f0-9]{64}$' -or (Get-MaintenanceSha256 $helper.path) -cne $helper.sha256) { throw 'Java私密文件helper缺固定原件。' }
+    $root = [IO.Path]::GetFullPath($RepoRoot)
+    $run = Join-Path $root ("run/logs/java-boot/" + $summary.bootId)
+    if (Test-Path -LiteralPath $run) { throw '此Java boot已有启动尝试；保留原件，不自动重试。' }
+    $previousCatalog = $env:MMORPG_SQL_BOOT_CATALOG
+    $prepared = @(); $processes = [Collections.Generic.List[object]]::new(); $originalFailure = $null
+    try {
+        $env:MMORPG_SQL_BOOT_CATALOG = $summary.catalog
+        foreach ($item in $instances) {
+            if (@(Get-NetTCPConnection -State Listen -LocalPort $item.Port -ErrorAction SilentlyContinue).Count -gt 0) { throw 'Java计划端口已被占用；不接管已有进程。' }
+            $selected = ''
+            $environment = Get-SqlWriterBootEnvironment -InstanceKey $item.InstanceKey -RepoRoot $root -ServiceName $item.Service -SelectedRuntimeConfigFile ([ref]$selected)
+            if ([string](Get-YamlScalar -Path $selected -KeyPath 'server.port').Value -cne [string]$item.Port) { throw 'Java选中配置与本轮端口计划不符。' }
+            $jdbc = [string](Get-YamlScalar -Path $selected -KeyPath 'spring.datasource.url').Value
+            if ($jdbc -notmatch ('^jdbc:mysql://(?:127[.]0[.]0[.]1|localhost|\[::1\]):[0-9]+/' + [regex]::Escape($item.Database) + '[?]')) { throw 'Java选中配置没有连接本角色的全局逻辑库。' }
+            if ($item.Service -ceq 'gateway' -and [string](Get-YamlScalar -Path $selected -KeyPath 'login.grpc.endpoints').Value -cne [string]$item.Settings.loginGrpcEndpoints) { throw 'Java选中配置不是本轮两区Go login映射。' }
+            $environment.MMORPG_SQL_PRIVATE_FILE_HELPER = $helper.path
+            $environment.MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256 = $helper.sha256
+            $prepared += [pscustomobject]@{ Instance = $item; Config = $selected; Environment = $environment }
+        }
+        $null = [IO.Directory]::CreateDirectory($run)
+        $null = Write-MaintenanceImmutableJson -Path (Join-Path $run 'started.json') -Value @{ format = 'LOCAL_R_JAVA_START_ATTEMPT_V1'; bootId = $summary.bootId; planSha256 = $PlanSha256.ToLowerInvariant(); instances = @($summary.javaInstances) }
+        foreach ($row in $prepared | Sort-Object -Stable { if ($_.Instance.Service -ceq 'mall') { 0 } else { 1 } }) {
+            $item = $row.Instance
+            if ((Get-MaintenanceSha256 $item.Jar) -cne $item.JarSha256 -or (Get-MaintenanceSha256 $item.JavaExecutable) -cne $item.JavaSha256) { throw 'Java实际启动前的运行程序或包发生漂移。' }
+            # 每次只把同一个boot的资格注入当前子进程；finally立刻恢复父环境。
+            $saved = Enter-SqlWriterBootEnvironment -Environment $row.Environment
+            try {
+                $arguments = @('-Xmx512m','-XX:ActiveProcessorCount=2','-jar',('"' + $item.Jar + '"'),('"--spring.config.location=file:' + $row.Config.Replace('\','/') + '"'))
+                $process = Start-Process -FilePath $item.JavaExecutable -ArgumentList $arguments -WorkingDirectory ([IO.Path]::GetDirectoryName($item.ConfigPath) + '/../../..') -WindowStyle Hidden -RedirectStandardOutput (Join-Path $run ($item.InstanceKey + '.stdout.log')) -RedirectStandardError (Join-Path $run ($item.InstanceKey + '.stderr.log')) -PassThru
+                # 保持原Process句柄直到全批结束；失败清理不重新按PID找进程。
+                $null = $process.Handle
+                $clock = New-LocalSqlBootJavaStartupClock
+                $birthPath = Join-Path $run ($item.InstanceKey + '.process.birth.actual.json')
+                $owned = [pscustomobject]@{ Process = $process; InstanceKey = $item.InstanceKey; BirthPath = $birthPath; Birth = $null; BirthPersisted = $false }
+                $processes.Add($owned)
+                $birth = [ordered]@{ format = 'LOCAL_R_JAVA_PROCESS_BIRTH_V1'; bootId = $summary.bootId; instanceKey = $item.InstanceKey; service = $item.Service; pid = $process.Id; creationFiletimeUtc = [string]$process.StartTime.ToUniversalTime().ToFileTimeUtc(); javaExecutable = $item.JavaExecutable; javaSha256 = $item.JavaSha256; jar = $item.Jar; jarSha256 = $item.JarSha256; port = $item.Port; runtimeConfigSha256 = (Get-MaintenanceSha256 $row.Config); planSha256 = $PlanSha256.ToLowerInvariant(); listening_confirmed = $false; businessAccepted = $false }
+                $owned.Birth = $birth
+                # 启动尝试目录是本boot新建的。身份先于任何监听等待CreateNew落盘；
+                # 时钟已开始，写身份耗时同样计入原120秒预算。
+                $null = Write-MaintenanceImmutableJson -Path $birthPath -Value $birth
+                $owned.BirthPersisted = $true
+            } finally { Restore-SqlWriterBootEnvironment -Saved $saved }
+            $listening = $false
+            while ($clock.Elapsed.TotalSeconds -lt 120) {
+                if ($process.HasExited) { throw 'Java新boot启动期退出；保留日志和消费原件。' }
+                if (@(Get-NetTCPConnection -State Listen -LocalPort $item.Port -ErrorAction SilentlyContinue | Where-Object OwningProcess -EQ $process.Id).Count -gt 0) { $listening = $true; break }
+                Start-Sleep -Milliseconds 200
+            }
+            if (-not $listening) { throw 'Java新boot未在120秒内拥有计划监听端口。' }
+            $null = Write-MaintenanceImmutableJson -Path (Join-Path $run ($item.InstanceKey + '.process.actual.json')) -Value @{ instanceKey = $item.InstanceKey; service = $item.Service; pid = $process.Id; creationFiletimeUtc = $birth.creationFiletimeUtc; javaSha256 = $item.JavaSha256; jarSha256 = $item.JarSha256; port = $item.Port; runtimeConfigSha256 = $birth.runtimeConfigSha256; birthRecord = @{ path = $birthPath; sha256 = (Get-MaintenanceSha256 $birthPath) }; listening_is_not_business_acceptance = $true }
+        }
+        return [pscustomobject]@{ bootId = $summary.bootId; logDirectory = $run; started = @($summary.javaInstances); businessAccepted = $false }
+    } catch {
+        $originalFailure = $_
+        $cleanupRows = @(); $cleanupPending = $false
+        foreach ($owned in $processes) {
+            $process = $owned.Process
+            $closed = $false; $killAttempted = $false; $waitConfirmed = $false; $cleanupErrorType = $null
+            try {
+                $closed = $process.HasExited
+                if (-not $closed) {
+                    $killAttempted = $true; $process.Kill()
+                    $waitConfirmed = [bool]$process.WaitForExit(10000)
+                    $closed = $waitConfirmed -and $process.HasExited
+                }
+            } catch { $cleanupErrorType = $_.Exception.GetType().FullName; $closed = $false }
+            if (-not $closed) { $cleanupPending = $true }
+            $cleanupRows += [ordered]@{ instanceKey = $owned.InstanceKey; pid = $process.Id; birthRecordPath = $owned.BirthPath; birthRecordPersisted = $owned.BirthPersisted; creationFiletimeUtc = $(if ($null -ne $owned.Birth) { $owned.Birth.creationFiletimeUtc } else { $null }); killAttempted = $killAttempted; waitBudgetMilliseconds = 10000; waitConfirmed = $waitConfirmed; exitConfirmed = $closed; cleanup_pending = (-not $closed); cleanupErrorType = $cleanupErrorType }
+        }
+        # 原异常继续向外抛；清理或写证据失败不能把它盖掉。只有布尔与公开路径
+        # 进入Exception.Data，不序列化Process/环境/凭据。
+        $originalFailure.Exception.Data['java_cleanup_pending'] = $cleanupPending
+        if ($processes.Count -gt 0) {
+            $cleanupPath = Join-Path $run 'cleanup.actual.json'
+            $originalFailure.Exception.Data['java_cleanup_evidence'] = $cleanupPath
+            try {
+                $null = Write-MaintenanceImmutableJson -Path $cleanupPath -Value @{ format = 'LOCAL_R_JAVA_FAILED_START_CLEANUP_V1'; bootId = $summary.bootId; originalErrorType = $originalFailure.Exception.GetType().FullName; cleanup_pending = $cleanupPending; processes = $cleanupRows; birth_and_started_records_preserved = $true; releasing_Process_handle_is_not_exit_proof = $true; automatic_retry = $false }
+            } catch { Write-Warning 'Java失败清理证据写出未确认；原启动错误与身份记录保留，不能认定清理完成。' }
+        }
+        if ($cleanupPending) { Write-Warning '本批Java子进程仍有cleanup_pending；保留出生身份与原错误，不自动重试。' }
+        throw $originalFailure
+    } finally {
+        $env:MMORPG_SQL_BOOT_CATALOG = $previousCatalog
+        # Dispose只释放本地监督句柄。未确认退出的状态已明确记录为pending，
+        # 后续只能按保留的PID/精确birth身份继续核实，不能把Dispose当成退出。
+        $disposeFailed = $false
+        foreach ($owned in $processes) {
+            try { $owned.Process.Dispose() }
+            catch { $disposeFailed = $true; Write-Warning 'Java监督句柄释放未确认；不覆盖原启动错误或把它当作进程退出。' }
+        }
+        if ($disposeFailed) {
+            if ($null -ne $originalFailure) { $originalFailure.Exception.Data['java_process_handle_cleanup_pending'] = $true }
+            else { throw 'Java已启动，但监督句柄释放未确认；保留出生身份待核实。' }
+        }
+    }
+}
+
 function Get-LocalSqlBootSourceConfigPath {
     param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][string]$Service)
     $file = if ($Service -ceq 'match') { 'match_service.yaml' } else { "$Service.yaml" }
@@ -567,6 +772,12 @@ function Initialize-LocalSqlBootDatabases {
     if ('gateway' -cin $Requested -or 'login' -cin $Requested) {
         $gatewayTables = [IO.File]::ReadAllText((Join-Path $RepoRoot 'deploy/mysql-init/gateway_tables.sql'))
         $null = Invoke-LocalSqlBootSql -Settings $Settings -Sql $gatewayTables -Label 'create gateway tables'
+        if ('gateway' -cin $Requested -and $Settings.PSObject.Properties['JavaDatabases'] -and $Settings.JavaDatabases.gateway -cne 'mmorpg') {
+            if ([regex]::Matches($gatewayTables, '(?m)^USE mmorpg;\r?$').Count -ne 1) { throw 'gateway正式DDL的数据库选择形状改变。' }
+            $identifier = ConvertTo-AuthoritySqlIdentifier $Settings.JavaDatabases.gateway
+            $selected = [regex]::Replace($gatewayTables, '(?m)^USE mmorpg;\r?$', "USE $identifier;")
+            $null = Invoke-LocalSqlBootSql -Settings $Settings -Sql $selected -Label 'create planned gateway tables'
+        }
     }
 }
 
@@ -686,7 +897,8 @@ function Get-LocalSqlBootWriterDatabases {
             }
             return @($Settings.DirectoryShards) + @($Settings.LedgerSchema) + @($Settings.PlayerDatabases)
         }
-        'gateway' { return @('mmorpg') }
+        'gateway' { return @($(if ($Settings.PSObject.Properties['JavaDatabases']) { $Settings.JavaDatabases.gateway } else { 'mmorpg' })) }
+        'mall' { return @($Settings.JavaDatabases.mall) }
         'login' { return @('mmorpg') }
         'db' {
             $ready = @($Settings.PlayerDatabases | Where-Object { @($TablesBySchema[$_]) -ccontains 'route_meta' })
@@ -750,7 +962,8 @@ function Get-LocalSqlBootGrantManifest {
         data_service = @{ Own = @(@($Settings.DirectoryShards) + @($Settings.LedgerSchema)); Cross = $dataServiceCross.ToArray() }
         db = @{ Own = @($Settings.PlayerDatabases); Cross = @() }
         login = @{ Own = @(); Cross = @() }
-        gateway = @{ Own = @('mmorpg'); Cross = @() }
+        gateway = @{ Own = @($(if ($Settings.PSObject.Properties['JavaDatabases']) { $Settings.JavaDatabases.gateway } else { 'mmorpg' })); Cross = @() }
+        mall = @{ Own = @($(if ($Settings.PSObject.Properties['JavaDatabases']) { $Settings.JavaDatabases.mall } else { 'mmorpg_mall' })); Cross = @() }
         chat = @{ Own = @('mmorpg_chat'); Cross = @() }
         friend = @{ Own = @('mmorpg_friend'); Cross = @() }
         guild = @{ Own = @('mmorpg_guild'); Cross = @() }
@@ -790,6 +1003,7 @@ function Get-LocalSqlBootInstanceTables {
 # 物理 authority 在 K8s 上是独立 PD 身份原件的摘要;本机只有一个回环实例,用一份本机原件固定下来,反复启动不变。
 function Get-LocalSqlBootPhysicalAuthority {
     param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$PrivateRoot)
+    if ($Settings.PSObject.Properties['QualifiedPhysicalSha256']) { return $Settings.QualifiedPhysicalSha256 }
     $path = Join-Path $PrivateRoot 'physical-authority.original'
     if (-not (Test-Path -LiteralPath $path)) {
         Write-LocalSqlBootText -Path $path -Text "LOCAL_SQL_AUTHORITY_V1`nendpoint=$($Settings.Endpoint)`nnonce=$(New-LocalSqlBootSecret)`n"
@@ -800,6 +1014,7 @@ function Get-LocalSqlBootPhysicalAuthority {
 # 本机声明,不是真实 I3 报告:writer_authority 只核它的 SHA 与 Request 一致。锁原语按档位定,生产的资格仍由操作者提供。
 function Get-LocalSqlBootLockQualification {
     param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$PrivateRoot)
+    if ($Settings.PSObject.Properties['QualifiedLockFile']) { return $Settings.QualifiedLockFile }
     $path = Join-Path $PrivateRoot "lock-qualification.$($Settings.Backend).$($Settings.LockPrimitive).json"
     if (-not (Test-Path -LiteralPath $path)) {
         $declaration = [ordered]@{ format = 'LOCAL_DEV_LOCK_QUALIFICATION_V1'; backend = $Settings.Backend; lockPrimitive = $Settings.LockPrimitive; scope = 'Loopback development database only. This is not a production I3 qualification report.' }
@@ -856,7 +1071,9 @@ function New-LocalSqlBootInstanceFiles {
     $consumeDirectory = Join-Path $instanceRoot 'consume'
     foreach ($directory in @($inputRoot, $grantDirectory, $runtimeDirectory, $environmentDirectory, $consumeDirectory)) { $null = [IO.Directory]::CreateDirectory($directory) }
 
-    $configText = if ($service -ceq 'gateway') {
+    $configText = if ($Instance.PSObject.Properties['Java'] -and $Instance.Java) {
+        New-LocalSqlBootJavaConfig -Settings $Settings -Instance $Instance -User $user -Password $password
+    } elseif ($service -ceq 'gateway') {
         New-LocalSqlBootGatewayConfig -Settings $Settings -RepoRoot $RepoRoot -User $user -Password $password
     } else {
         ConvertTo-LocalSqlBootConfig -Settings $Settings -Service $service -Content ([IO.File]::ReadAllText($Instance.ConfigPath)) -User $user -Password $password
@@ -866,7 +1083,7 @@ function New-LocalSqlBootInstanceFiles {
 
     $environmentEntries = [Collections.Generic.List[object]]::new()
     $environmentNames = [Collections.Generic.List[string]]::new()
-    if ($service -cne 'gateway') {
+    if ($service -cnotin @('gateway','mall')) {
         $runtimeEnvironment = Get-LocalSqlBootRuntimeEnvironment -Settings $Settings -Service $service -User $user -Password $password
         foreach ($name in @($runtimeEnvironment.Keys)) {
             $valueFile = Join-Path $inputRoot "env-$name"
@@ -1150,7 +1367,7 @@ function Get-LocalSqlBootMultiZonePlan {
 function Assert-LocalSqlBootMergedPlan {
     param([Parameter(Mandatory)][string]$RepoRoot, [Parameter(Mandatory)][object[]]$Instances, [Parameter(Mandatory)][string]$BootId)
     $writers = @(Get-LocalSqlBootWriterServices | Where-Object { $_ -cne 'gateway' })
-    $known = $writers + @(Get-LocalSqlBootNonWriterServices)
+    $known = $writers + @(Get-LocalSqlBootNonWriterServices) + @('gateway','mall')
     $derivedRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot 'run/etc/go_services')) + [IO.Path]::DirectorySeparatorChar
     $keys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $ports = @{}
@@ -1161,7 +1378,14 @@ function Assert-LocalSqlBootMergedPlan {
         if ([string]$instance.Service -cnotin $known) { throw "Instance $key has an unknown service." }
         $claimed = [Collections.Generic.List[int]]::new()
         $claimed.Add([int]$instance.Port)
-        if (-not $instance.Running) {
+        if ($instance.PSObject.Properties['Java'] -and $instance.Java) {
+            # Java源配置尚未含本boot端口；私有派生由New-LocalSqlBootJavaConfig一次生成。
+            # 四角色的来源、产物SHA和本机地址已由Java计划纯校验固定。
+            if ($instance.Service -cnotin @('gateway','mall') -or $instance.Running) { throw 'Java计划必须是尚未启动的独立boot。' }
+            $account = New-LocalSqlBootAccountName -BootId $BootId -InstanceKey $key
+            if ($accounts.ContainsKey($account)) { throw "Instances $($accounts[$account]) and $key map to the same SQL account name." }
+            $accounts[$account] = $key
+        } elseif (-not $instance.Running) {
             $config = [string]$instance.ConfigPath
             if (-not [IO.Path]::IsPathRooted($config) -or -not ([IO.Path]::GetFullPath($config)).StartsWith($derivedRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "Instance $key has a config outside run/etc/go_services." }
             $listen = [string](Get-YamlScalar -Path $config -KeyPath 'ListenOn').Value
@@ -1180,6 +1404,17 @@ function Assert-LocalSqlBootMergedPlan {
             $ports[$port] = $key
         }
     }
+    # zone标签和loopback仅说明语法合法。必须再绑定同一合并计划里真实Go login
+    # 的zone/端口，否则自定义offset或把两区本机端口互换仍会误连。
+    $loginInstances = @($Instances | Where-Object { $_.Service -ceq 'login' })
+    foreach ($gateway in @($Instances | Where-Object { $_.PSObject.Properties['Java'] -and $_.Java -and $_.Service -ceq 'gateway' })) {
+        foreach ($mapping in ([string]$gateway.Settings.loginGrpcEndpoints -split ',')) {
+            if ($mapping -cnotmatch '^(?<zone>[1-9][0-9]*)=(?<endpoint>127\.0\.0\.1:[0-9]+)$') { throw '网关Go login映射形状改变。' }
+            $zone = [long]$Matches.zone; $endpoint = [string]$Matches.endpoint
+            $expected = @($loginInstances | Where-Object { $_.PSObject.Properties['Zone'] -and [long]$_.Zone -eq $zone } | ForEach-Object { '127.0.0.1:' + [string]$_.Port })
+            if ($expected.Count -eq 0 -or $endpoint -cnotin $expected) { throw '网关Go login地址不属于同zone的本轮合并实例计划；不执行DDL或注册。' }
+        }
+    }
 }
 
 function New-LocalSqlBootCatalog {
@@ -1194,28 +1429,55 @@ function New-LocalSqlBootCatalog {
         $Counts = @{},
         [int]$PortStride = 1,
         [int]$ZonePortShift = 1000,
-        [string[]]$ZonePortOffsets = @()
+        [string[]]$ZonePortOffsets = @(),
+        [string]$JavaInstancePlanPath = '',
+        [string]$JavaInstancePlanSha256 = '',
+        [string]$PhysicalAuthorityFile = '',
+        [string]$PhysicalAuthoritySha256 = '',
+        [string]$LockQualificationFile = '',
+        [string]$LockQualificationSha256 = ''
     )
     if (-not $IsWindows) { throw 'sql-boot-catalog-local only supports Windows hosts.' }
     $repo = [IO.Path]::GetFullPath($RepoRoot)
+    $javaInstances = @()
+    if ($JavaInstancePlanPath -or $JavaInstancePlanSha256) {
+        if (-not $JavaInstancePlanPath -or -not $JavaInstancePlanSha256 -or $Zones.Count -ne 2) { throw '四Java计划必须同时给路径/SHA及两个明确zone。' }
+        $javaInstances = @(Read-LocalSqlBootJavaPlan -RepoRoot $repo -Path $JavaInstancePlanPath -Sha256 $JavaInstancePlanSha256 -Zones $Zones)
+    }
     $requested = @(Resolve-LocalSqlBootRequestedServices -Services $Services)
+    if ($javaInstances.Count -gt 0) { $requested = @($requested | Where-Object { $_ -cne 'gateway' }) + @('gateway','mall') }
     $countsArgument = ConvertTo-LocalSqlBootCountsArgument -Counts $Counts
     $multiZone = $Zones.Count -gt 0
     $planServices = @()
     $zoneOffsets = @{}
     if ($multiZone) {
         if (@($Zones | Where-Object { $_ -lt 1 }).Count -gt 0 -or @($Zones | Select-Object -Unique).Count -ne $Zones.Count) { throw '-Zones must be distinct positive zone ids.' }
-        # 网关不按区,Java 版的角色由 Java 仓的 producer 生成,这里只发 Go 写者。
-        if (@($Services | ForEach-Object { ([string]$_) -split '[,;]' }) -ccontains 'gateway') { throw 'Multi-zone mode only covers Go writers; the gateway is not zone-scoped.' }
-        $requested = @($requested | Where-Object { $_ -cne 'gateway' })
+        # 没有显式R Java计划时保持原Go目录形状；有计划时同一批追加四个全局副本。
+        if ($javaInstances.Count -eq 0 -and @($Services | ForEach-Object { ([string]$_) -split '[,;]' }) -ccontains 'gateway') { throw 'Multi-zone gateway requires an explicit R Java instance plan.' }
+        if ($javaInstances.Count -eq 0) { $requested = @($requested | Where-Object { $_ -cne 'gateway' }) }
         $zoneOffsets = ConvertTo-LocalSqlBootZoneOffsets -Raw $ZonePortOffsets -Zones $Zones
         # 没点名时把不碰 SQL 的 Go 服务也算进计划:它们和写者抢同一批端口。目录只发写者。
-        $planServices = if (@($Services).Count -eq 0) { @($requested) + @(Get-LocalSqlBootNonWriterServices) } else { @($requested) }
+        $goRequested = @($requested | Where-Object { $_ -cnotin @('gateway','mall') })
+        $planServices = if (@($Services).Count -eq 0) { $goRequested + @(Get-LocalSqlBootNonWriterServices) } else { $goRequested }
     } elseif ($countsArgument -or $PortStride -ne 1 -or @($ZonePortOffsets).Count -gt 0) {
         throw '-Counts, -PortStride and -ZonePortOffsets only apply with -Zones.'
     }
     # 回环校验先于任何子进程和落盘。
     $settings = Resolve-LocalSqlBootSettings -RepoRoot $repo -Endpoint $Endpoint -Zones $Zones
+    if ($javaInstances.Count -gt 0) {
+        $javaDatabases = @{}; foreach ($item in $javaInstances) { $javaDatabases[$item.Service] = $item.Database }
+        foreach ($database in $javaDatabases.Values) { if ($database -cne 'mmorpg' -and $database -cin $settings.LogicalDatabases) { throw 'Java逻辑库不得接管Go服务或玩家存档库。' } }
+        if ($javaDatabases.mall -ceq 'mmorpg') { throw 'Mall不得与Gateway默认库共库。' }
+        $settings | Add-Member -NotePropertyName JavaDatabases -NotePropertyValue $javaDatabases
+        $settings.LogicalDatabases = ConvertTo-LocalSqlBootOrdinalSet -Values (@($settings.LogicalDatabases) + @($javaDatabases.Values))
+    }
+    if ($PhysicalAuthorityFile -or $PhysicalAuthoritySha256 -or $LockQualificationFile -or $LockQualificationSha256) {
+        foreach ($pair in @(@($PhysicalAuthorityFile,$PhysicalAuthoritySha256), @($LockQualificationFile,$LockQualificationSha256))) {
+            if (-not $pair[0] -or $pair[1] -cnotmatch '^[a-fA-F0-9]{64}$' -or (Get-MaintenanceSha256 $pair[0]) -ine $pair[1]) { throw '独立物理authority与真实I3必须成套给固定原件/SHA。' }
+        }
+        $settings | Add-Member -NotePropertyName QualifiedPhysicalSha256 -NotePropertyValue $PhysicalAuthoritySha256.ToLowerInvariant()
+        $settings | Add-Member -NotePropertyName QualifiedLockFile -NotePropertyValue ([IO.Path]::GetFullPath($LockQualificationFile))
+    } elseif ($javaInstances.Count -gt 0) { throw '四Java联合验证必须显式绑定独立物理原件与真实I3；不用local声明冒充。' }
 
     $root = Get-LocalSqlBootRoot -RepoRoot $repo
     Initialize-LocalSqlBootPrivateDirectory -Path $root
@@ -1238,11 +1500,12 @@ function New-LocalSqlBootCatalog {
         # 多区:计划和校验先于任何 DDL。
         $mergedPlan = @()
         if ($multiZone) {
-            $mergedPlan = @(Get-LocalSqlBootMultiZonePlan -Settings $settings -RepoRoot $repo -Services $planServices -Zones $Zones -Counts $countsArgument -PortStride $PortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $zoneOffsets -WorkDirectory $bootRoot)
+            $mergedPlan = @(Get-LocalSqlBootMultiZonePlan -Settings $settings -RepoRoot $repo -Services $planServices -Zones $Zones -Counts $countsArgument -PortStride $PortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $zoneOffsets -WorkDirectory $bootRoot) + $javaInstances
             Assert-LocalSqlBootMergedPlan -RepoRoot $repo -Instances $mergedPlan -BootId $bootId
         }
 
         Initialize-LocalSqlBootDatabases -Settings $settings -RepoRoot $repo -Requested $requested
+        if ($javaInstances.Count -gt 0) { Initialize-LocalSqlBootMall -Settings $settings -RepoRoot $repo -Database $settings.JavaDatabases.mall }
         $skipped = @(Invoke-LocalSqlBootMigrations -Settings $settings -RepoRoot $repo -Requested $requested -WorkDirectory $schemaWork)
         # 多区不发半份:哪个服务建表失败都整批失败,不像单区那样跳过可选服务。
         if ($multiZone -and $skipped.Count -gt 0) { throw "Schema step failed for $($skipped -join ', '); multi-zone mode publishes nothing." }
@@ -1254,6 +1517,7 @@ function New-LocalSqlBootCatalog {
         $accountsPath = Join-Path $root 'runtime-accounts.json'
         $knownAccounts = @(if (Test-Path -LiteralPath $accountsPath) { Get-Content -LiteralPath $accountsPath -Raw | ConvertFrom-Json })
         $accountPlan = Get-LocalSqlBootStaleAccounts -Accounts $knownAccounts -Instances $instances
+        if ($javaInstances.Count -gt 0) { $accountPlan = [pscustomobject]@{ Keep = $knownAccounts; Drop = @() } }
 
         $helper = if ('gateway' -cin $requested) { Install-LocalSqlBootPrivateFileHelper -RepoRoot $repo } else { $null }
         $catalog = [ordered]@{}
@@ -1304,10 +1568,11 @@ function New-LocalSqlBootCatalog {
             privateFileHelper = $helper
         }
         if ($multiZone) { $summary['zones'] = [object[]]$Zones }
+        if ($javaInstances.Count -gt 0) { $summary['javaInstancePlan'] = @{ path = [IO.Path]::GetFullPath($JavaInstancePlanPath); sha256 = $JavaInstancePlanSha256.ToLowerInvariant() }; $summary['javaInstances'] = [object[]]@($javaInstances | ForEach-Object InstanceKey) }
         Write-LocalSqlBootText -Path $summaryPath -Text (ConvertTo-Json -InputObject $summary -Depth 4)
 
         # 只留本轮:运行中的实例启动后不再读这些文件,旧授权已没有用处。
-        foreach ($old in @(Get-ChildItem -LiteralPath $bootsRoot -Directory | Where-Object { $_.Name -cne $bootId })) {
+        foreach ($old in @(Get-ChildItem -LiteralPath $bootsRoot -Directory | Where-Object { $_.Name -cne $bootId -and $javaInstances.Count -eq 0 })) {
             try { Remove-Item -LiteralPath $old.FullName -Recurse -Force } catch { Write-Warning "Could not remove the old boot directory $($old.Name): $($_.Exception.Message)" }
         }
         Write-LocalSqlBootLog "catalog: $catalogPath ($($pending.Count) instance(s) registered, $(@($instances | Where-Object { $_.Running }).Count) already running, $($skipped.Count) skipped)"
@@ -1334,5 +1599,6 @@ function Resolve-LocalSqlBootRequestedServices {
 
 if ($MyInvocation.InvocationName -ne '.') {
     $ErrorActionPreference = 'Stop'
-    $null = New-LocalSqlBootCatalog -RepoRoot (Join-Path $PSScriptRoot '../..') -Services $Services -Endpoint $Endpoint -Backend $Backend -Zones $Zones -Counts $Counts -PortStride $PortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $ZonePortOffsets
+    # 本文件在 tools/scripts/lib,仓库根往上三级,和 sql_boot_catalog_docker.ps1 同一写法。原来只退两级,直接调用时把 tools 当成了仓库根。
+    $null = New-LocalSqlBootCatalog -RepoRoot ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))) -Services $Services -Endpoint $Endpoint -Backend $Backend -Zones $Zones -Counts $Counts -PortStride $PortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $ZonePortOffsets -JavaInstancePlanPath $JavaInstancePlanPath -JavaInstancePlanSha256 $JavaInstancePlanSha256 -PhysicalAuthorityFile $PhysicalAuthorityFile -PhysicalAuthoritySha256 $PhysicalAuthoritySha256 -LockQualificationFile $LockQualificationFile -LockQualificationSha256 $LockQualificationSha256
 }

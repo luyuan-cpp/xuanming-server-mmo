@@ -92,7 +92,8 @@ $LoginReaderSections = [ordered]@{ match = 'LoginRedis'; chat = 'LoginRedis'; fr
 
 $ZoneArgs = @('-Command', 'zone-up', '-ZoneName', 'cluster-test', '-ZoneId', '101', '-DryRun', '-InfraNamespace', $Infra,
     '-GlobalAuthorityTiDBHost', 'tidb.invalid:4000', '-GoSvcRegistry', 'registry.invalid/test', '-JavaSvcRegistry', 'registry.invalid/test')
-$InfraArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-InfraNamespace', $Infra,
+# 保持玩家域形态为本套变量；全局服务另显式满足正式 Kafka RF=3、minISR=2 准入。
+$InfraArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-KafkaBrokers', '3', '-InfraNamespace', $Infra,
     '-GlobalAuthorityTiDBHost', 'tidb.invalid:4000', '-GoSvcRegistry', 'registry.invalid/test', '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab')
 $InfraEnv = @{ MMORPG_BATTLE_TOKEN_SECRET = 'contract-battle-ticket-0123456789abcdef012345'; MMORPG_GATE_TOKEN_SECRET = 'contract-gate-ticket-0123456789abcdef012345' }
 $ClusterEnv = @{ MMORPG_PLAYER_REDIS_PASSWORD = $ClusterPassword }

@@ -1571,6 +1571,34 @@ struct PlayerStoreDirectFixture
     }
 };
 
+// 模拟LoadAndClaim已成功：SQL中的完整投影与当前实体一致，写权和已提交序号均明确。
+// 旧PlayerLastPersistedSnapshotComp只证明业务快照，不能代替PlayerStore的认领状态。
+bool SeedCurrentPlayerStore(entt::entity player)
+{
+    const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
+    if (owner == nullptr || owner->epoch == 0) return false;
+    PlayerAllData data;
+    if (!MarshalAsSaved(player, data)) return false;
+    player_store_rows::KindBytes rows;
+    std::string error;
+    if (!player_store_rows::ProjectPlayer(*data.mutable_player_database_data(),
+            data.player_database_1_data(), rows, error)) return false;
+    return PlayerLifecycleSystem::PlayerStore().Seed(kExitPlayerId, 1, owner->epoch, 1, std::move(rows));
+}
+
+// 退出没有脏行也必须提交release；明确回COMMITTED之后才允许销毁实体、核实改派或写退出标记。
+void CommitPendingExit(PlayerStoreDirectFixture& store, entt::entity player)
+{
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "SQL回包前实体必须保留";
+    ASSERT_TRUE(PlayerLifecycleSystem::PlayerStore().HasUnsettled(kExitPlayerId));
+    ASSERT_EQ(store.sent.size(), 1u);
+    const auto request = store.sent.front().request;
+    ASSERT_TRUE(request.release());
+    ASSERT_NE(request.owner_epoch(), 0u);
+    ASSERT_NE(request.save_seq(), 0u);
+    store.Reply(playerstore::SAVE_PLAYER_COMMITTED, request.owner_epoch(), request.save_seq());
+}
+
 // 加载完成时的状态:库里的行就是当前内存,写权代次是 kDirectEpoch。
 entt::entity MakeClaimedPlayer()
 {
@@ -5101,7 +5129,7 @@ SceneEntity PlaceInScene(entt::entity player, uint64_t sceneId)
 }
 
 // 登记一条「没发出去」的改派:在线玩家(会话 kSessionAtExit、缓存 owner_epoch 5)站在 kRelocateSourceScene 里,盘上已是
-// 当前内存(退出走快路径、同步收敛),对他所在的场景做单场景排空。返回后实体已销毁、会话映射已摘,待确认表里有他的
+// 当前内存。排空仍提交SQL release，明确回COMMITTED后才收尾。返回后实体已销毁、会话映射已摘,待确认表里有他的
 // 一条 kVerifying / kNotSent 条目:没有 scene_manager → 没发出去 → 立即核实;没有 Redis → 核实推迟。
 // 计数只动三项:dispatch、not_sent、verify_deferred 各 +1。
 // 以上是「表里没有他的旧条目」时的结果。表里已有他的一条旧条目时再调:旧条目被顶掉,多计一项 superseded;
@@ -5109,12 +5137,15 @@ SceneEntity PlaceInScene(entt::entity player, uint64_t sceneId)
 // (settle_waits +1 而不是 verify_deferred +1)。
 void RegisterNotSentRelocate()
 {
+    PlayerStoreDirectFixture store;
     const auto player = MakeOnlinePlayer(kSessionAtExit);
     tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
     const auto scene = PlaceInScene(player, kRelocateSourceScene);
     ASSERT_TRUE(MarkPersisted(player)); // 最后做:快照要与退出时再 marshal 出来的那一份逐字节相同
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
     ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
-    ASSERT_FALSE(tlsEcs.actorRegistry.valid(player)) << "退出同步收敛,实体已销毁";
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
+    ASSERT_FALSE(tlsEcs.actorRegistry.valid(player)) << "SQL释放已提交，退出实体已销毁";
     ASSERT_EQ(PlayerLifecycleSystem::RelocateConfirmsPending(), 1u);
 }
 
@@ -5636,14 +5667,17 @@ TEST(RelocateConfirmEcs, InFlightSceneChangeIsRecordedAsAnEarlierRequest)
 
     // ① 刚发出的换图(AttachSceneChange 把发出时刻记成现在):在窗口内 → 记为「更早请求可能被放行」,首次核实排到 settle。
     {
+        PlayerStoreDirectFixture store;
         const auto player = MakeOnlinePlayer(kSessionAtExit);
         tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
         AttachSceneChange(player, 777, /*playerRequested=*/true, 9);
         const auto scene = PlaceInScene(player, kRelocateSourceScene);
         ASSERT_TRUE(MarkPersisted(player));
+        ASSERT_TRUE(SeedCurrentPlayerStore(player));
         const auto before = RelocateStats();
 
         ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
+        ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
         ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
         const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
         ASSERT_TRUE(entry.has_value());
@@ -5659,15 +5693,18 @@ TEST(RelocateConfirmEcs, InFlightSceneChangeIsRecordedAsAnEarlierRequest)
 
     // ② 对照:同一条换图发出已有 16s(超过 15s 的 settle 窗口)→ 不算,核实立即发(宿主没有 Redis,记推迟)。
     {
+        PlayerStoreDirectFixture store;
         const auto player = MakeOnlinePlayer(kSessionAtExit);
         tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
         AttachSceneChange(player, 777, /*playerRequested=*/true, 9);
         tlsEcs.actorRegistry.get<PlayerSceneChangeInFlightComp>(player).sentAtMs = TimeSystem::NowMillisecondsUTC() - 16000;
         const auto scene = PlaceInScene(player, kRelocateSourceScene);
         ASSERT_TRUE(MarkPersisted(player));
+        ASSERT_TRUE(SeedCurrentPlayerStore(player));
         const auto before = RelocateStats();
 
         ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
+        ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
         ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
         const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
         ASSERT_TRUE(entry.has_value());
@@ -5683,15 +5720,18 @@ TEST(RelocateConfirmEcs, InFlightSceneChangeIsRecordedAsAnEarlierRequest)
 
     // ③ 发出已有 5s:仍在 15s 的窗口内 → 算。窗口若被按秒传进去(15 而不是 15000),5000ms 就会被判成「已过窗口」。
     {
+        PlayerStoreDirectFixture store;
         const auto player = MakeOnlinePlayer(kSessionAtExit);
         tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
         AttachSceneChange(player, 777, /*playerRequested=*/true, 9);
         tlsEcs.actorRegistry.get<PlayerSceneChangeInFlightComp>(player).sentAtMs = TimeSystem::NowMillisecondsUTC() - 5000;
         const auto scene = PlaceInScene(player, kRelocateSourceScene);
         ASSERT_TRUE(MarkPersisted(player));
+        ASSERT_TRUE(SeedCurrentPlayerStore(player));
         const auto before = RelocateStats();
 
         ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
+        ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
         ASSERT_FALSE(tlsEcs.actorRegistry.valid(player));
         const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
         ASSERT_TRUE(entry.has_value());
@@ -6737,7 +6777,8 @@ TEST(EnterFenceEcs, NewSessionInSameSceneRebuildsBaseline)
     ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
     const auto player = MakeFencedPlayer(kFenceSessionA, kGenA);
     const auto scene = PlaceInScene(player, kFenceScene);
-    tlsEcs.actorRegistry.emplace_or_replace<Hex>(player);
+    tlsEcs.actorRegistry.remove<Hex>(player);
+    tlsEcs.actorRegistry.emplace<Hex>(player, 0, 0, 0);
 
     EXPECT_EQ(EnterGameNode(FenceEnter(kFenceSessionB, kGenB, LOGIN_REPLACE, kFenceScene)),
               PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting);
@@ -7013,6 +7054,7 @@ TEST(EnterFenceEcs, StaleEnterDoesNotSupersedeRelocateEntry)
     // §5.1 第 3 处:排空把他改派出去、实体已销毁,本节点上只剩改派待确认条目记着他。陈旧的异会话入场不得把条目
     // 误结成 superseded(那会让本该核实后踢线的玩家不被踢);更新的入场照常接管并结清条目。
     ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+    PlayerStoreDirectFixture store;
     const auto player = MakeOnlinePlayer(kSessionAtExit);
     tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = kFenceOwnerEpoch;
     auto &identity = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
@@ -7020,8 +7062,10 @@ TEST(EnterFenceEcs, StaleEnterDoesNotSupersedeRelocateEntry)
     identity.loginGeneration = kGenA;
     const auto scene = PlaceInScene(player, kRelocateSourceScene);
     ASSERT_TRUE(MarkPersisted(player)); // 最后做:快照要与退出时再 marshal 出来的那一份逐字节相同
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
     ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
-    ASSERT_FALSE(tlsEcs.actorRegistry.valid(player)) << "退出同步收敛,实体已销毁";
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
+    ASSERT_FALSE(tlsEcs.actorRegistry.valid(player)) << "SQL释放已提交，退出实体已销毁";
     const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
     ASSERT_TRUE(entry.has_value());
     EXPECT_EQ(entry->sessionId, kSessionAtExit);
@@ -7746,12 +7790,15 @@ TEST(ReleaseFenceEcs, LateReleaseOnReturnedEntityIgnored)
 TEST(ReleaseFenceEcs, EqualEpochReleases)
 {
     ScopedPersistedPlayerCleanup cleanup;
+    PlayerStoreDirectFixture store;
     entt::entity player{entt::null};
     ASSERT_TRUE(MakeReleaseTarget(kReleaseExpectedEpoch, player));
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
     const auto exitBefore = exit_release_stats::Read();
     const auto before = release_fence_stats::Read();
 
     ReleaseFromSceneManager(kReleaseExpectedEpoch);
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
 
     ExpectReleasedByTransfer(player, kSessionAtExit, exitBefore);
     EXPECT_EQ(ReleaseVerdictCount(release_fence_stats::Read(), rf::Verdict::kRelease),
@@ -7762,22 +7809,27 @@ TEST(ReleaseFenceEcs, UnversionedReleaseKeepsLegacy)
 {
     // 旧版 scene_manager 不带期望值(0):按旧行为释放并计数。
     ScopedPersistedPlayerCleanup cleanup;
+    PlayerStoreDirectFixture store;
     entt::entity player{entt::null};
     ASSERT_TRUE(MakeReleaseTarget(kReleaseExpectedEpoch, player));
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
     const auto exitBefore = exit_release_stats::Read();
     const auto before = release_fence_stats::Read();
 
     ReleaseFromSceneManager(/*expectedOwnerEpoch=*/0);
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
 
     ExpectReleasedByTransfer(player, kSessionAtExit, exitBefore);
     EXPECT_EQ(ReleaseVerdictCount(release_fence_stats::Read(), rf::Verdict::kReleaseUnversioned),
               ReleaseVerdictCount(before, rf::Verdict::kReleaseUnversioned) + 1);
 }
 
-TEST(ReleaseFenceEcs, CacheUnknownReleasesAndCounts)
+TEST(ReleaseFenceEcs, CacheUnknownDiscardsWithoutSavingOrWritingExitMark)
 {
-    // 实体没有 PlayerOwnerEpochComp(缓存按 0):不 fail-closed,按旧行为释放并计数。
+    // 新存盘规格player-save-direct-commit.md §4：E为空是INVALID，不碰库，退出放弃本笔。
+    // 释放栅栏仍记录cache_unknown，但不能据旧快照伪造SQL写权或已提交退出证据。
     ScopedPersistedPlayerCleanup cleanup;
+    PlayerStoreDirectFixture store;
     entt::entity player{entt::null};
     ASSERT_TRUE(MakeReleaseTarget(/*cachedOwnerEpoch=*/0, player));
     ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerOwnerEpochComp>(player));
@@ -7786,7 +7838,13 @@ TEST(ReleaseFenceEcs, CacheUnknownReleasesAndCounts)
 
     ReleaseFromSceneManager(kReleaseExpectedEpoch);
 
-    ExpectReleasedByTransfer(player, kSessionAtExit, exitBefore);
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_EQ(tlsEcs.playerList.count(kExitPlayerId), 0u);
+    EXPECT_EQ(SessionMap().count(kSessionAtExit), 0u);
+    EXPECT_TRUE(store.sent.empty()) << "未知epoch不能发出SQL存盘或release";
+    EXPECT_FALSE(PlayerLifecycleSystem::PlayerStore().HasUnsettled(kExitPlayerId));
+    EXPECT_EQ(exit_release_stats::Read().decisions, exitBefore.decisions)
+        << "废黜丢弃不是已提交退出，不写A1′标记";
     EXPECT_EQ(ReleaseVerdictCount(release_fence_stats::Read(), rf::Verdict::kReleaseCacheUnknown),
               ReleaseVerdictCount(before, rf::Verdict::kReleaseCacheUnknown) + 1);
 }
@@ -8023,7 +8081,7 @@ void BindLoginIdentity(entt::entity player, SessionId session, uint64_t generati
     identity.loginGeneration = generation;
 }
 
-// 会话结束释放的退出走了 kClientDisconnect:宿主里快路径同步收尾、实体销毁;A1′ 判定为"写"(原因在可写集合里)。
+// 会话结束释放的退出走了 kClientDisconnect:SQL释放提交后收尾、实体销毁;A1′ 判定为"写"(原因在可写集合里)。
 void ExpectExitedAsClientDisconnect(entt::entity player, SessionId session, const exit_release_stats::Snapshot &before)
 {
     EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
@@ -8162,17 +8220,20 @@ TEST(ReleaseFence, SummaryEscalatesOnCredentialWithoutQualification)
 
 TEST(ReleaseFenceEcs, SessionEndedReleaseExitsHolderAsClientDisconnect)
 {
-    // 持有者缓存恰好是那一代:按客户端断线退出。宿主里快路径同步收尾、实体销毁;A1′ 判定为"写"(原因在可写集合里),
+    // 持有者缓存恰好是那一代:按客户端断线退出。SQL释放提交后收尾、实体销毁;A1′ 判定为"写"(原因在可写集合里),
     // 而不是交接释放那样按原因跳过 —— 这正是 scene_manager 下一次重试要看的那枚标记。
     ScopedPersistedPlayerCleanup cleanup;
+    PlayerStoreDirectFixture store;
     ScopedConfirmedNodeIdentity identity;
     DrainRelocateConfirms();
     entt::entity player{entt::null};
     ASSERT_TRUE(MakeReleaseTarget(kReleaseExpectedEpoch, player));
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
     const auto exitBefore = exit_release_stats::Read();
     const auto before = release_fence_stats::Read();
 
     ReleaseEndedSession(kReleaseExpectedEpoch);
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
 
     EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
     EXPECT_EQ(tlsEcs.playerList.count(kExitPlayerId), 0u);
@@ -8435,15 +8496,18 @@ TEST(ReleaseFenceEcs, SessionEndedReleaseExitsCoveredLogin)
 {
     // 实体绑着的就是被覆盖的那次登录(登出 / 断线后 LeaveScene 的正常时序):照常按客户端断线退出。
     ScopedPersistedPlayerCleanup cleanup;
+    PlayerStoreDirectFixture store;
     ScopedConfirmedNodeIdentity identity;
     DrainRelocateConfirms();
     entt::entity player{entt::null};
     ASSERT_TRUE(MakeReleaseTarget(kReleaseExpectedEpoch, player));
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
     BindLoginIdentity(player, kSessionAtExit, kCoveredGeneration);
     const auto exitBefore = exit_release_stats::Read();
     const auto before = release_fence_stats::Read();
 
     ReleaseEndedSession(kReleaseExpectedEpoch);
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
 
     ExpectExitedAsClientDisconnect(player, kSessionAtExit, exitBefore);
     EXPECT_EQ(BindingCount(release_fence_stats::Read(), rf::SessionEndedBinding::kCovered),
@@ -8456,15 +8520,18 @@ TEST(ReleaseFenceEcs, SessionEndedReleaseExitsOlderLoginOnLoginCollision)
     // 登录撞上未释放的持有者(§12):请求覆盖到发起这次登录的会话 (kNewerSession, g),实体还绑着 location 上更早的那次
     // 登录 (kSessionAtExit, g-1)。它已被这次登录取代,照常按客户端断线退出。
     ScopedPersistedPlayerCleanup cleanup;
+    PlayerStoreDirectFixture store;
     ScopedConfirmedNodeIdentity identity;
     DrainRelocateConfirms();
     entt::entity player{entt::null};
     ASSERT_TRUE(MakeReleaseTarget(kReleaseExpectedEpoch, player));
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
     BindLoginIdentity(player, kSessionAtExit, kCoveredGeneration - 1);
     const auto exitBefore = exit_release_stats::Read();
     const auto before = release_fence_stats::Read();
 
     ReleaseEndedSession(kReleaseExpectedEpoch, kNewerSession, kCoveredGeneration);
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
 
     ExpectExitedAsClientDisconnect(player, kSessionAtExit, exitBefore);
     EXPECT_EQ(BindingCount(release_fence_stats::Read(), rf::SessionEndedBinding::kCovered),
@@ -8496,15 +8563,18 @@ TEST(ReleaseFenceEcs, SessionEndedReleaseWithoutCoveredIdentityKeepsLegacyBehavi
     // 旧版 scene_manager 不带覆盖身份(0 / 0):只比 owner_epoch,与本节之前一致 —— 实体绑着更新的登录也照常退出。
     // 这是滚动窗口里的已知行为(scene 先于 scene_manager 发布,§13.6),全量升级后 binding_unversioned_request 应恒为 0。
     ScopedPersistedPlayerCleanup cleanup;
+    PlayerStoreDirectFixture store;
     ScopedConfirmedNodeIdentity identity;
     DrainRelocateConfirms();
     entt::entity player{entt::null};
     ASSERT_TRUE(MakeReleaseTarget(kReleaseExpectedEpoch, player, kNewerSession));
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
     BindLoginIdentity(player, kNewerSession, kCoveredGeneration + 1);
     const auto exitBefore = exit_release_stats::Read();
     const auto before = release_fence_stats::Read();
 
     ReleaseEndedSession(kReleaseExpectedEpoch, /*coveredSession=*/0, /*coveredGeneration=*/0);
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
 
     ExpectExitedAsClientDisconnect(player, kNewerSession, exitBefore);
     EXPECT_EQ(BindingCount(release_fence_stats::Read(), rf::SessionEndedBinding::kUnversionedRequest),

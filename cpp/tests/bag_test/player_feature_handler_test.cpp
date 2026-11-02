@@ -26,6 +26,7 @@
 #include "services/scene/actor/attribute/system/actor_attribute_calculator.h"
 #include "services/scene/player/system/player_pet.h"
 #include "table/code/actoractionstate_table.h"
+#include "table/code/attributeautoplan_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
 #include "table/code/pet_table.h"
@@ -678,6 +679,7 @@ protected:
     void SetUp() override {
         PetOwnerLevelTest::SetUp();
         if (HasFatalFailure()) return;
+        AttributeAutoPlanTableManager::Instance().Load();
         tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(kSavedLevel);
         auto& currency = tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
         for (uint32_t index = 0; index < kCurrencyMax; ++index) currency.add_values(index == kCurrencyGold ? kGold : 0);

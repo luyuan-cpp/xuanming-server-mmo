@@ -19,9 +19,19 @@
     K8s 默认也是 '1'（turn-based §22 D75）。
 #>
 [CmdletBinding()]
-param([switch]$OpenClient, [string]$ClientPath = '', [switch]$CheckOnly, [ValidateSet('1','0')][string]$GateRouterMode = '1')
+param([switch]$OpenClient, [string]$ClientPath = '', [switch]$CheckOnly, [ValidateSet('1','0')][string]$GateRouterMode = '1',
+    [switch]$JavaOnly, [string]$JavaInstancePlanPath = '', [string]$JavaInstancePlanSha256 = '', [int[]]$JavaZones = @(), [string]$SqlBootSummaryPath = '')
 $ErrorActionPreference = 'Stop'
 $serverRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+if ($JavaOnly) {
+    if ($OpenClient -or $ClientPath -or $CheckOnly -or -not $JavaInstancePlanPath -or -not $JavaInstancePlanSha256 -or -not $SqlBootSummaryPath -or $JavaZones.Count -ne 2) { throw 'JavaOnly只启动已有正式目录中的四个R Java副本，须显式计划/SHA、两个zone和本轮摘要。' }
+    # dot-source的库有同名参数，先固定调用值，避免导入默认值覆盖已指定计划。
+    $javaStartRequest = @{ RepoRoot = $serverRoot; PlanPath = $JavaInstancePlanPath; PlanSha256 = $JavaInstancePlanSha256; Zones = $JavaZones; SummaryPath = $SqlBootSummaryPath }
+    . (Join-Path $PSScriptRoot 'lib/sql_boot_catalog_local.ps1')
+    Start-LocalSqlBootJavaInstances @javaStartRequest
+    return
+}
+if ($JavaInstancePlanPath -or $JavaInstancePlanSha256 -or $SqlBootSummaryPath -or $JavaZones.Count -gt 0) { throw '四Java实例参数必须与JavaOnly一起使用，不改默认一区启动。' }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $logDir = Join-Path $serverRoot "run/logs/game-launcher/$stamp"
 # chat / guild 只承诺路由服模式可达（见 -GateRouterMode），与 client_rpc_router 一起列入；缺 exe 时的处理见下方 $optionalServices。

@@ -236,6 +236,13 @@
     [int]$ZonePortOffset = -1,
     # sql-boot-catalog-local:每个区的端口偏移,如 990017=0,990018=1000;启动时每区传同一个 -ZonePortOffset。
     [string[]]$ZonePortOffsets = @(),
+    # R双区的Mall/Gateway各两副本，与Go计划一次生成；公开计划不含凭据。
+    [string]$JavaInstancePlanPath = '',
+    [string]$JavaInstancePlanSha256 = '',
+    [string]$PhysicalAuthorityFile = '',
+    [string]$PhysicalAuthoritySha256 = '',
+    [string]$LockQualificationFile = '',
+    [string]$LockQualificationSha256 = '',
     # ── merge-zone / merge-zone-audit / merge-zone-unmerge ──
     # 合服只写一条映射,不动任何数据,不碰 Redis(tools/merge_zone,不停服 SOP 见 docs/ops/merge-zone-runbook.md)。
     # 目录第 0 片的 DSN 是末尾的 -MergeZoneRouteDbDsn,-DryRun 与其它命令共用。
@@ -1430,7 +1437,7 @@ switch ($Command) {
     "go-svc-list"   { & (Join-Path $ScriptDir "go_services.ps1") -Command list   }
     "go-svc-build"        { & (Join-Path $ScriptDir "go_services.ps1") -Command build  -Services $GoServices }
     "go-svc-migrate"      { & (Join-Path $ScriptDir "go_services.ps1") -Command migrate -Services $GoServices -LocalMySQL:$LocalMySQL }
-    "sql-boot-catalog-local" { & (Join-Path $ScriptDir "lib\sql_boot_catalog_local.ps1") -Services $GoServices -Zones $Zones -Counts $GoCounts -PortStride $GoPortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $ZonePortOffsets }
+    "sql-boot-catalog-local" { & (Join-Path $ScriptDir "lib\sql_boot_catalog_local.ps1") -Services $GoServices -Zones $Zones -Counts $GoCounts -PortStride $GoPortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $ZonePortOffsets -JavaInstancePlanPath $JavaInstancePlanPath -JavaInstancePlanSha256 $JavaInstancePlanSha256 -PhysicalAuthorityFile $PhysicalAuthorityFile -PhysicalAuthoritySha256 $PhysicalAuthoritySha256 -LockQualificationFile $LockQualificationFile -LockQualificationSha256 $LockQualificationSha256 }
     "go-svc-build-images" { & (Join-Path $ScriptDir "go_svc_image.ps1") -Command build-all -Registry $GoSvcRegistry -Tag $GoSvcTag -DryRun:$DryRun }
     "go-svc-push-images"  { & (Join-Path $ScriptDir "go_svc_image.ps1") -Command push-all  -Registry $GoSvcRegistry -Tag $GoSvcTag -DryRun:$DryRun }
     "java-svc-build-image" { & (Join-Path $ScriptDir "java_svc_image.ps1") -Command build -Registry $JavaSvcRegistry -Tag $JavaSvcTag -DryRun:$DryRun }

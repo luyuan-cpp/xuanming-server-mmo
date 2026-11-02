@@ -42,7 +42,11 @@ final class CommerceFixture implements AutoCloseable {
             DataSourceProperties properties = new DataSourceProperties(); properties.setUrl(jdbcUrl);
             properties.setUsername(System.getenv().getOrDefault("COMMERCE_IT_TIDB_USER", "root")); properties.setPassword(System.getenv().getOrDefault("COMMERCE_IT_TIDB_PASSWORD", ""));
             try { source = new DatabaseConfiguration().dataSource(properties, props); }
-            catch (RuntimeException failure) { dropDatabase(); throw failure; }
+            catch (java.io.IOException | SQLException | RuntimeException failure) {
+                try { dropDatabase(); }
+                catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+                throw new IllegalStateException("商城真实夹具数据源初始化失败", failure);
+            }
         }
         jdbc = new JdbcTemplate(source);
         manager = new DataSourceTransactionManager(source);

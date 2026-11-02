@@ -19597,3 +19597,46 @@ Java 版(AGENTS §12):对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。
 - **小项**:`SceneManagerDeadNodeReconcileAbandoned` 告警;login 删 `TaskWaitTimeout`、`LoginTotalTimeout`。
 - **验证**:只跑过 `gofmt`。
 - **Java 版(AGENTS §12)**:对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。
+
+### 2026-11-02 Codex：恢复第1–5项，按SQL玩家存档继续验证
+
+- 用户本轮明确「1 2 3 4 5 项都可以做了」；第3、5项的暂停已解除。继续沿用「原改码窗口修代码，本窗口只验证」，不改业务源码、断言或配置，不提交/推送。玩家持久化按 SQL `player_store`，Redis 仍是会话、位置、交接、锁/租约等协调态。
+- 当前 R `ff8d37d9f73eab7762e6195da93bc9420848294e`；Java正式仓 `99e1b6edffc8b98028dca873e85164f64e16f7d0`、版本0.1.0-SNAPSHOT。只读审计后旧三个discovery失败已有修复，待限定18条复验；Gateway-store UNKNOWN相关源码未改，现场保留。
+
+| 项 | 当前状态 | 下一步 |
+|---|---|---|
+| 1 公会并发修复与复验 | 历史27/27及原30轮已完成；本轮未重跑 | 保留专项通过证据，当前全量Java状态另计 |
+| 2 Java完整统一验收及原SQL428 | 已恢复，尚未完成 | 先更新官方契约、复验已修3类；完整验收仍按第4项之后衔接 |
+| 3 C++/Go整套重验 | 已恢复、与另一验证聊天协调进行 | 使用「重跑玩家存盘第二轮验证」的本轮构建、C++/Go/脚本合同实证，避免重复重型作业 |
+| 4 双区业务与故障恢复 | 进行中；SQL控制器与多区接线已补 | 根路径刚修，待正式入口负例及双区启动；§3/§6全绿后才跑全栈与真实故障 |
+| 5 旧资源核账 | 已恢复；历史27/221，余194个对象 | 公开清单/摘要只读核对完成；第6批起需绑定当前物理资格后只读观察，尚未增加实测对象 |
+
+- 第5本轮公开审计：`build/verification/item5-readonly-resume-20261102-r1/audit.json`，不读/hash私密DSN、owner或receipt正文，不执行SQL/删除。历史27对象是13个缺完整启动证据、13个当时未见库和账号、1个当时仍见库和正常账号；不是194个缺陷。
+- 官方Java同步已准备为当前R基线并保留bd2地图，但首次72D资源准入拒绝：native=0，提交余量12559228928字节，低于12GiB，同时发现7项VS Code Java/Gradle后台。未运行Sync、Maven或SQL，未修改正式Java契约。已向用户询问是否停止这7个后台，等待明确回复，不擅停编辑器后台或绕过原门禁。
+- 本轮根检查点与准入证据索引：`build/verification/all-five-resume-20261102-r1/checkpoint.json`；准备与只读审计不等于构建/测试/真库/双区通过。第二轮 `codex-results.md` 已完成封存，本聊天不覆盖；另一窗口本轮回执为 `codex-results-r3-prep.md`。
+### 2026-11-02 Codex：用户允许停止7个编辑器后台，资源接续状态补记
+
+- 前一恢复条目的「等待用户回复」已解除：用户允许停止已核实的7个VS Code Java/Gradle后台。按原PID、程序路径和创建时间核对后，实际停止4个Gradle守护进程；另3个已先退出，7个旧PID均不在。未停止编辑器、游戏或另一聊天的构建进程。原件：`build/verification/all-five-resume-20261102-r1/editor-background-processes.stopped.json`。
+- 另一聊天已启动本轮 `game.sln /m:1`，本窗口等待该构建结束后再做Java同步/18条回归及第5只读核账；当前未新增Sync、Maven或SQL执行。
+- 第5第6批有限身份续接HOLD和Root独立静态复核已备，位于 `build/verification/item5-readonly-resume-20261102-r1/exact-recovery-batch06-HOLD/`。原SQL与owner执行函数保持字节不变；实际当前guard、排他窗口和精确计划仍待，未激活、未观察新对象、未解决UNKNOWN、未批准清理。
+
+### 2026-11-02 Codex：第5只读核账真实恢复，原改码窗口额度受限
+
+- 第6批已真实完成，原89EF监督器实际通过，新增4个对象，累计31/221、余190；原件 `build/verification/old-jr8-stage-r1/native-stage-20261102T105759306Z-5ee57d24/proof.json`，SHA `209B2B18D26A9BB76DB21E80E8016B712285CBB093E7D5F8614903C98746BEBF`。四项均未见对应库和具名账号；只表示该时点观察，不批准删除或关闭旧UNKNOWN。
+- Root已审有限后继驱动 `1C29FF2D2656C24D1A2F46A827B264715FB560CA350241BF98077794302F594E`，批准UTC 11:24:50至13:24:50的31..221只读窗口，串行第7–54批、每批最多4个。每批均先以原72D执行双Docker及两次IO，精确核同一三容器32字段，再按原DE内存caller和89EF监督器观察；所有原预算保留，首错停止，不自动重试、不读私密正文、不清理。
+- 已向用户授权的原Claude会话「玩家数据存储方案」送达R/J角色纠正和剩余配套；其界面随后实际报告 `Weekly limit reached`。已询问用户是否允许Root接手余下修复，尚待答复；当前仍只验证并准备具体文件范围。
+- 另一验证聊天r3本轮已结束：C++实际2713通过、35失败、5跳过，另RPC测试未编译、未执行旧EXE；Linux镜像本地构建通过。脚本是6份合同共48个FAIL案例，另docs-index已知基线失败，不能写成48份脚本。现有bag、cross_zone、白名单、Mall依赖等脏修改保持原样，待当前源码复验。
+
+### 2026-11-02 Codex：获准接手剩余修复，核账63与首组脚本红绿证据
+
+- 用户明确回复「允许接手剩余修复并验证」，并要求五项并行推进；Root已接手，仍不提交/推送。玩家持久化保持TiDB/SQL `player_store`，本轮没有修改go/db PlayerStore、scene保存/加载或玩家存储协议；Java配套只补副本启动与本库写者授权，不回退Redis。
+- 第5实际接受至第14批，累计63/221、余158。第15批于UTC11:31:52因外部新MSBuild触发单heavy门禁停止；提交余量充足，主进程未取得自身退出码，没有对应公开summary或accepted，不能推断SQL业务失败或完成数。诊断8824FCCF…，聚合D59A9B84…；原partial与UNKNOWN保留，无重试。第15–54批的新有限手动恢复候选只准备，尚未执行。
+- 发布脚本离线合同先实际6红，再将List<object>显式ToArray序列化，完整复验15/15通过，原件native-stage-20261102T114142980Z-e35bd3c6。新容器范围纯回归2红复现了Agones缩进及后置init误选；修复普通containers边界后2/2通过，原件native-stage-20261102T114718860Z-12199030。没有执行docker push、真实Kubernetes或SQL。
+- C++七个测试源配套已固定，涵盖SQL Claim/Seed/COMMITTED夹具、当前配表上限、自动方案加载及GetPlayerHomeZone回环。未知epoch旧用例按存盘规格§4改为明确拒存/无退出提交标记，未降低生产门禁；四工程构建与复验尚未运行。双区四Java与余下四份脚本合同修复继续并行。
+
+### 2026-11-02 Codex：用户关闭Unity后恢复原生验证，写者工具22项实绿
+
+- 用户先允许临时暂停已核实编译后台，后明确自行关闭Unity并要求继续。原VS和Unity的VBCSCompiler均已退出；Root未暂停或强杀编辑器/游戏，亦无待恢复的挂起进程。Unity Hub仍在，不属于重型进程。
+- C++新入口实际发现两类验证准备问题：2140份真实源码前后相同；安全检查的41份`.no_raw_ptr_check_ok`缓存原先误入源图，已仅从源图排除，原安全检查保持执行。后续MSBuild到CL时FileTracker环境路径初始化失败，wrapper又发生返回值污染，正在保留原件后修复执行环境与采集入口；没有把它记成C++测试通过。
+- `go/data_service/cmd/writer_authority`当前源已gofmt并真实复验：22/22、零跳过，原72D主进程与IO均exit0，源pin前后一致，原件native-stage-20261102T122756474Z-719bd857。只代表该工具单元与搬迁状态替身回归，不代表真实SQL或双区验收。
+- 原29文件范围继续验证。Java真库及默认H2夹具的14目标清单已具体化，额外触及11个唯一文件，预计总40；按AGENTS§10.2已请求用户范围授权，尚未实施新增范围。清单：build/verification/r-java-reactor-testcompile-prep-20261102-r2/Root-concrete-14-file-extension.scope.json。玩家TiDB/SQL player_store实现仍不在修改范围内。

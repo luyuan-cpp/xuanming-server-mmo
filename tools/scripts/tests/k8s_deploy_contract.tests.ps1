@@ -25,6 +25,17 @@ $ErrorActionPreference = "Stop"
 . "$PSScriptRoot/lib/test_harness.ps1"
 . "$PSScriptRoot/lib/deploy_capture.ps1"
 
+# 拍平后的 manifest 里某个路径本身及其全部子键(序数比较;'Queue' 不会误中 'QueueXxx')。
+function Get-FlatSubtreeKeys {
+    param(
+        [Parameter(Mandatory = $true)]$Flat,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+    return @($Flat.Scalars.Keys | ForEach-Object { [string]$_ } | Where-Object {
+        $_ -ceq $Path -or $_.StartsWith("$Path.", [System.StringComparison]::Ordinal) -or $_.StartsWith("$Path[", [System.StringComparison]::Ordinal)
+    })
+}
+
 Write-Host ""
 Write-Host "=== k8s_deploy.ps1 deployment generator contract tests ==="
 
@@ -903,8 +914,17 @@ Test-Case "负向:给 C++ 会调用的 AllocateIdSegment 配一条超预算的 M
         [System.IO.File]::WriteAllText($deployCopy, [regex]::Replace($deployText, '(?m)^(\s+DataServiceNodeService:\s*)\d+', '${1}4000'), [System.Text.UTF8Encoding]::new($false))
 
         $serviceCopy = Join-Path $tempRoot 'go/data_service/etc/data_service.yaml'
-        $original = (Get-Content -LiteralPath $serviceCopy -Raw).TrimEnd()
-        Assert-NotMatch -Text $original -Pattern '(?mi)^MethodTimeouts[ \t]*:' -Because '夹具前提:data_service.yaml 现在没有 MethodTimeouts(回档 RPC 已删),下面几条都在文件末尾追加'
+        # 正式配置已有 GM 回收的 MethodTimeouts。仅在副本中移走完整顶层段，下面每个场景再写一份独立的表。
+        $fixtureLines = [System.Collections.Generic.List[string]]::new()
+        $skipMethodTimeouts = $false
+        foreach ($line in ((Get-Content -LiteralPath $serviceCopy -Raw) -split "`r?`n")) {
+            if ($line -match '^MethodTimeouts[ \t]*:') { $skipMethodTimeouts = $true; continue }
+            if ($skipMethodTimeouts -and $line -match '^[^ \t#]') { $skipMethodTimeouts = $false }
+            if (-not $skipMethodTimeouts) { $fixtureLines.Add($line) }
+        }
+        $original = ($fixtureLines -join "`n").TrimEnd()
+        Assert-NotMatch -Text $original -Pattern '(?mi)^MethodTimeouts[ \t]*:' -Because '夹具必须先移除原表，避免与各场景追加的表重复'
+        [System.IO.File]::WriteAllText($serviceCopy, $original, [System.Text.UTF8Encoding]::new($false))
         $RepoRoot = $tempRoot
 
         # 前提:副本不改就该放行。否则下面几条负向断言分不清是谁造成的失败。
@@ -1487,17 +1507,6 @@ $peakGwRedisRotRun = Invoke-DeployDryRun -Arguments ($ProdArgs + @('-SkipGoSvc')
 $PeakTrustedProxies = '10.0.0.0/8'
 $peakGwProxyRun = Invoke-DeployDryRun -Arguments ($ProdArgs + @('-SkipGoSvc', '-GatewayTrustedProxies', $PeakTrustedProxies)) -Env $ProdEnv
 
-# 拍平后的 manifest 里某个路径本身及其全部子键(序数比较;'Queue' 不会误中 'QueueXxx')。
-function Get-FlatSubtreeKeys {
-    param(
-        [Parameter(Mandatory = $true)]$Flat,
-        [Parameter(Mandatory = $true)][string]$Path
-    )
-    return @($Flat.Scalars.Keys | ForEach-Object { [string]$_ } | Where-Object {
-        $_ -ceq $Path -or $_.StartsWith("$Path.", [System.StringComparison]::Ordinal) -or $_.StartsWith("$Path[", [System.StringComparison]::Ordinal)
-    })
-}
-
 # Pod 模板上的削峰指纹注解(mmorpg.io/peak-shaving-hash)。gateway:紧跟在口令指纹那一行之后(Add-PodTemplateAnnotation 把 -Key
 # 恒排在 annotations: 的下一行,下文 Get-GatewayAdminApiKeyHash 依赖这个位置),顺带取出口令指纹;login:annotations: 的下一行。
 # Select-ManifestByName 已把块内换行统一成 LF,所以按 \n 锚定(整段原始输出在 Windows 上是 CRLF)。
@@ -1600,7 +1609,7 @@ Test-Case '削峰 staging / prod 档开:gateway 阈值 == 开服档起步值,rat
             Assert-True -Condition ($rps -ge 1 -and $burst -ge $rps) -Because "$($case.Label) 档 $($pair[0])=$rps / $($pair[1])=$burst 必须满足 rps ≥ 1 且 burst ≥ rps"
         }
         $planPattern = 'PeakShaving: gateway_rate_limit=on\(-GatewayRateLimit auto\) login_queue=on\(-LoginQueue auto\) profile=' + $case.Label +
-            ' initial values \(pending stress-test validation\) zone=2000/s burst=5000 ip=5/s burst=20 cooldown=5000ms queue_capacity=5000/zone'
+            ' initial values \(pending stress-test validation\) zone=2000/s burst=5000 ip=5/s burst=20 cooldown=5000ms queue_capacity=45000/zone'
         Assert-Match -Text $case.Run.Output -Pattern $planPattern -Because "$($case.Label) 档 auto = 开,写路径入口要打出开关解析结果与起步值"
     }
 }
@@ -1621,7 +1630,8 @@ Test-Case '削峰 staging / prod 档开:login Queue 段除三项外 == go/login/
         Assert-True -Condition ($lockKey -ceq "${lockKeyBase}:zone:101") -Because "$($case.Label) 档锁键必须是 <login.yaml 基名>:zone:<本 zone>(期望 '${lockKeyBase}:zone:101',实际 '$lockKey')"
         $capacityKeys = @(Get-FlatSubtreeKeys -Flat $flat -Path 'data.login.yaml.Queue.ZoneCapacityOverride' | Where-Object { $_ -cne 'data.login.yaml.Queue.ZoneCapacityOverride' })
         Assert-Equal -Expected 'data.login.yaml.Queue.ZoneCapacityOverride.101' -Actual ($capacityKeys -join ',') -Because "$($case.Label) 档 ZoneCapacityOverride 只写本 zone(每个 zone 的 login 只出队本 zone)"
-        Assert-Equal -Expected '5000' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Queue.ZoneCapacityOverride.101') -Because "$($case.Label) 档本 zone 的排队容量是开服档起步值 5000(同时在线上限,不是速率)"
+        # U-2 已将唯一权威 PeakShavingLaunchTier 的开服档改为 45000，见 docs/handoff/server-gap-audit-20261101.md。
+        Assert-Equal -Expected '45000' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Queue.ZoneCapacityOverride.101') -Because "$($case.Label) 档本 zone 的排队容量是 U-2 开服档 45000(同时在线上限,不是速率)"
         # ConfigMap 把 login.yaml 整体缩进 4 格嵌在 login.yaml: | 下;Queue 与 Secrets 都只能各有一个顶层键
         # (QueueToken 另起一个 Secrets: 就是重复键,后者覆盖前者,InternalAuth 会丢)。
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, '(?m)^ {4}Queue:[ ]*\r?$').Count) -Because "$($case.Label) 档 login.yaml 里顶层 Queue: 只能有一个"
@@ -3237,7 +3247,7 @@ Test-Case '连 MySQL 的 ConfigMap 只有总账认识的那些(zone-up 三个、
     # 全局服务(friend / trade)只在 infra-up / all-up 的基础设施阶段生成(Apply-GlobalGoSvcManifests),zone-up 的产物里没有:
     # 只扫 zone-up 的话,新增一个连 MySQL 的全局服务能绕过总账而无人察觉。本文件其余 infra-up DryRun 都带 -SkipGoSvc,所以单独起一次:
     # 去掉 -SkipGoSvc、补上 -GoSvcRegistry;同时去掉 -WaitReady,免得 dev 档在 DryRun 里去走「等 trade-migrate / friend-migrate」那一段。
-    $infraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test')
+    $infraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test', '-KafkaBrokers', '3')
     Assert-True -Condition (($infraArgs -contains '-DryRun') -and -not ($infraArgs -contains '-SkipGoSvc')) -Because '夹具前提:这次 infra-up 必须仍是 DryRun(不碰任何集群),且不再跳过 Go 服务'
     $infraRun = Invoke-DeployDryRun -Arguments $infraArgs -Env $BattleTestEnv
     Assert-Equal -Expected 0 -Actual $infraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($infraRun.Output)"
@@ -3672,6 +3682,8 @@ Test-Case 'Redis 总账输入:客户端表的副本数就是各 manifest 的 rep
     # 且是正整数;这几个服务剩下的缺省大小池(go-zero 封装)按表里的 DefaultPools 核。换键名、拆成多个池、或删掉显式值时这里先变红。
     # 没建玩家域集群时(本用例的缺省输入),PlayerRedis 与 LoginRedis 也连这台 Redis,一起算。ConstPool 是代码里写死的池:mail 的 LoginRedis 在 go/mail/mail.go 写死 8。
     $explicitPools = @(
+        # GM 回收只借 Redis 做落地唤醒和位置读取；资产及回收账本仍由 SQL 持久化。
+        @{ Name = 'data-service'; Source = 'go/data_service/etc/data_service.yaml'; KeyPath = @('SharedRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 1 }
         @{ Name = 'login'; Source = 'go/login/etc/login.yaml'; KeyPath = @('Node.RedisClient.PoolSize', 'PlayerRedis.PoolSizePerNode', 'LoginRedis.PoolSizePerNode'); DefaultPools = 0 }
         @{ Name = 'player-locator'; Source = 'go/player_locator/etc/player_locator.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
         @{ Name = 'scene-manager'; Source = 'go/scene_manager/etc/scene_manager_service.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
@@ -3818,7 +3830,7 @@ Test-Case 'ConfigMap 镜像 go-redis 池上限 PoolSize == 服务 yaml(zone-up:l
 
     # trade 是全局服务,只在 infra-up / all-up 的基础设施阶段生成:做法同上面「连 MySQL 的 ConfigMap 只有总账认识的那些」那次 infra-up
     # (去掉 -SkipGoSvc / -WaitReady、补 -GoSvcRegistry,仍是 DryRun)。
-    $infraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test')
+    $infraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test', '-KafkaBrokers', '3')
     Assert-True -Condition (($infraArgs -contains '-DryRun') -and -not ($infraArgs -contains '-SkipGoSvc')) -Because '夹具前提:这次 infra-up 必须仍是 DryRun(不碰任何集群),且不再跳过 Go 服务'
     $infraRun = Invoke-DeployDryRun -Arguments $infraArgs -Env $BattleTestEnv
     Assert-Equal -Expected 0 -Actual $infraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($infraRun.Output)"
@@ -4684,8 +4696,20 @@ Test-Case 'dev_tools / k8s_image 的 -RedisReplicas:0 不透传(下游按档位 
 # ─────────────────────────────────────────────────────────────────
 # guild 是全局池(infra namespace 一份),ConfigMap 按 go/guild/etc/guild.yaml 生成,AssetOp / Activity 两大块原样搬运。
 # 带全局 Go 服务的 infra-up DryRun 单独起一次(本文件其余 infra-up 都带 -SkipGoSvc)。
-$guildInfraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test')
+# 全局服务要求耐久 Kafka 提交：显式虚构 3 broker 拓扑，正式脚本据此生成 RF=3、minISR=2。
+$guildInfraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test', '-KafkaBrokers', '3')
 $guildInfraRun = Invoke-DeployDryRun -Arguments $guildInfraArgs -Env $BattleTestEnv
+
+Test-Case '全局服务负向:单 broker 不能声明耐久提交,dev DryRun 同样拒绝' {
+    $singleBrokerArgs = @($guildInfraArgs)
+    $brokerArgument = [Array]::IndexOf($singleBrokerArgs, '-KafkaBrokers')
+    Assert-True -Condition ($brokerArgument -ge 0) -Because '正向夹具必须显式指定 Kafka 拓扑，负例只改该项'
+    $singleBrokerArgs[$brokerArgument + 1] = '1'
+    $singleBrokerRun = Invoke-DeployDryRun -Arguments $singleBrokerArgs -Env $BattleTestEnv
+    Assert-True -Condition ($singleBrokerRun.ExitCode -ne 0) -Because '启用全局服务时单 broker 必须拒绝'
+    Assert-Match -Text $singleBrokerRun.Output -Pattern 'Kafka至少3副本、min.insync.replicas至少2' -Because '拒绝原因必须是全局服务的耐久拓扑要求，不能靠无关失败变绿'
+}
+
 $guildYamlText = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/guild/etc/guild.yaml')) -replace "`r`n", "`n"
 
 # 文本里某个顶层键的整块(键行 + 其后所有缩进行,去掉块尾空行)。找不到即 throw。
@@ -4931,7 +4955,7 @@ $spectateEnv['MMORPG_SPECTATE_TOKEN_SECRET'] = $SpectateTestSecret
 $spectateEnv['MMORPG_MATCH_OPS_CALLER_SECRET'] = $SpectateOpsTestSecret
 $spectateZoneRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc')) -Env $spectateEnv
 # match ConfigMap 的机房号与 Kafka 副本数按生产形态给:staging/prod 缺了在生成期拒绝(Get-GlobalMatchDeploymentSettings / Assert-GlobalMatchKafkaTopology)。
-$spectateInfraRun = Invoke-DeployDryRun -Arguments ($guildInfraArgs + @('-PhysicalRegion', '7', '-KafkaBrokers', '3')) -Env $spectateEnv
+$spectateInfraRun = Invoke-DeployDryRun -Arguments ($guildInfraArgs + @('-PhysicalRegion', '7')) -Env $spectateEnv
 
 Test-Case '观战 topic 的基名与广播分区数以 C++ 常量为准(node_command_topic.h,gate 与 battle 按它寻址)' {
     Assert-Match -Text $SpectateTopicHeader -Pattern 'kSpectateRelayTopicBase\s*=\s*"gate-spectate"' -Because '部署侧预建的是 gate-spectate_g<N>,基名改了要同步全部预建清单'
@@ -5345,7 +5369,7 @@ Test-Case 'rank SQL指标与告警同源:确认提交与回放分开，奖励真
     Assert-NotMatch -Text $failing.Expr -Pattern 'replay|rejected|outcome=~' -Because '幂等回放和业务拒绝不能进入SQL故障告警'
     foreach ($name in @('RankRewardScanFailing', 'RankRewardDispatchFailing')) {
         $item = & $rule $name
-        Assert-Equal -Expected '10m' -Actual $item.For -Because "$name必须持续失败才报"
+        Assert-Equal -Expected '10m' -Actual $item.For -Because "${name}必须持续失败才报"
     }
     $scan = & $rule 'RankRewardScanFailing'
     Assert-Match -Text $scan.Expr -Pattern 'rank_reward_scan_total\{outcome="error"\}' -Because '查询错误独立告警，不能依赖旧Gauge判断可用'
@@ -6756,7 +6780,7 @@ Test-Case 'zone-up DryRun:db ConfigMap 只写 go/db/internal/config 认的段(Pl
     Assert-Equal -Expected $expected -Actual $actual -Because '存盘接口的服务端超时必须与服务 yaml 一致,否则被 go-zero 默认 2000ms 截断、结果未知'
 }
 
-Test-Case 'Redis 连接总账:没有 db 行,login 行没有 Pub/Sub,data-service 行只有 NameCacheRedis 的缺省池' {
+Test-Case 'Redis 连接总账:没有 db 行,login 行没有 Pub/Sub,data-service 计 NameCacheRedis 及 GM 回收协调连接' {
     $RepoRoot = Get-RepoRoot
     $inputs = Get-RedisConnectionLedgerInputs
     Assert-Equal -Expected 0 -Actual @($inputs.Clients | Where-Object { $_.Name -eq 'db' }).Count -Because 'go/db 不连 Redis'
@@ -6764,7 +6788,10 @@ Test-Case 'Redis 连接总账:没有 db 行,login 行没有 Pub/Sub,data-service
     Assert-Equal -Expected 0 -Actual $loginRow[0].PubSub -Because 'task:result 频道已删,login 不再订阅'
     $dsRow = @($inputs.Clients | Where-Object { $_.Name -eq 'data-service' })
     Assert-Equal -Expected 1 -Actual $dsRow.Count -Because '客户端表里 data-service 只能有一行'
-    Assert-Equal -Expected '0/1/0' -Actual ('{0}/{1}/{2}' -f $dsRow[0].ConfiguredPoolConns, $dsRow[0].DefaultPools, $dsRow[0].Fixed) -Because 'data-service 只剩 go-zero 的 NameCacheRedis 一个缺省池,路由发布与对账的专用池已删'
+    $recallPools = [int](Get-EtcValue -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath 'SharedRedis.PoolSize') +
+        [int](Get-EtcValue -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath 'PlayerRedis.PoolSizePerNode')
+    Assert-Equal -Expected $recallPools -Actual $dsRow[0].ConfiguredPoolConns -Because 'GM 回收的唤醒池与位置读取池取自服务 yaml；不是玩家持久化池'
+    Assert-Equal -Expected '1/1/0' -Actual ('{0}/{1}/{2}' -f $dsRow[0].DefaultPools, $dsRow[0].PubSub, $dsRow[0].Fixed) -Because 'NameCacheRedis 一个缺省池，assetop:wake 一个订阅，已删的路由发布与对账池不恢复'
 }
 
 Test-Case 'G3b Redis 连接总账:scene-manager 行 Fixed == go/scene_manager/internal/svc/owner_epoch_mint.go 的 ownerEpochMintPoolSize(铸造专用客户端,不占 go-zero 缺省池)' {
@@ -6828,7 +6855,7 @@ Test-Case '共享 Redis 拓扑:Apply-Infra 选清单与 scene-manager 的 WAITAO
 }
 
 Test-Case 'guild:go/guild 已删合服标记段,ConfigMap 不再写 MergeMarkerRedis / RequireRouteReady' {
-    $infraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test')
+    $infraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test', '-KafkaBrokers', '3')
     Assert-True -Condition (($infraArgs -contains '-DryRun') -and -not ($infraArgs -contains '-SkipGoSvc')) -Because '夹具前提:infra-up 仍是 DryRun,且部署全局 Go 服务'
     $run = Invoke-DeployDryRun -Arguments $infraArgs -Env $BattleTestEnv
     Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "infra-up DryRun 应当成功。输出: $($run.Output)"
@@ -6852,7 +6879,7 @@ function Get-OutputIndex {
 }
 
 $GlobalSvcAfterDataService = @('chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade')
-$GlobalOrderArgs = @('-Command', 'all-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-WaitReady', '-InfraNamespace', 'contract-order-infra', '-BattleReplicas', '0',
+$GlobalOrderArgs = @('-Command', 'all-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-WaitReady', '-KafkaBrokers', '3', '-InfraNamespace', 'contract-order-infra', '-BattleReplicas', '0',
     '-ZonesConfigPath', (Join-Path (Get-RepoRoot) 'deploy/k8s/zones.sample.json'), '-GoSvcRegistry', 'registry.invalid/test', '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab')
 $globalOrderAllUp = Invoke-DeployDryRun -Arguments $GlobalOrderArgs -Env $BattleTestEnv
 
@@ -6902,7 +6929,7 @@ Test-Case 'all-up -SqlSchemaOnly:infra 和全局服务的 Job 照跑,zone 只跑
 }
 
 Test-Case 'infra-up:DryRun 按「已有 zone」渲染升级路径,全局服务的进程排在 data-service 就绪之后;zone-up 不碰全局服务' {
-    $infraOrderArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-InfraNamespace', 'contract-order-infra', '-BattleReplicas', '0', '-ZoneName', 'contract-test',
+    $infraOrderArgs = @('-Command', 'infra-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-KafkaBrokers', '3', '-InfraNamespace', 'contract-order-infra', '-BattleReplicas', '0', '-ZoneName', 'contract-test',
         '-GoSvcRegistry', 'registry.invalid/test', '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab')
     $waited = Invoke-DeployDryRun -Arguments ($infraOrderArgs + @('-WaitReady')) -Env $BattleTestEnv
     Assert-Equal -Expected 0 -Actual $waited.ExitCode -Because "infra-up DryRun 应当成功。输出: $($waited.Output)"

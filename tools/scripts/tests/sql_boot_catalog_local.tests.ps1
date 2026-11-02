@@ -650,7 +650,9 @@ try {
         $dbGrants = @((Read-MaintenanceJson -Path $catalog['db'].grantFile).grants)
         Assert-True ($dbGrants.Count -gt 0) 'go/db 至少一份写资格'
         foreach ($grant in $dbGrants) { Assert-Equal 'SELECT_ONLY' $grant.lockPrimitive 'tidb 档 SELECT_ONLY' }
-        Assert-NotMatch (Get-SqlText) 'lock_touch' '没有列级锁写'
+        $tidbSql = Get-SqlText
+        Assert-NotMatch $tidbSql '(?i)\bGRANT\s+UPDATE\s*\(\s*`?lock_touch`?\s*\)' 'SELECT_ONLY 不发 UPDATE(lock_touch) 列级授权，建表保留该列不算写授权'
+        Assert-NotMatch $tidbSql '(?is)\bUPDATE\b[^;]*\bSET\b[^;]*\b`?lock_touch`?\s*=' 'SELECT_ONLY 不执行 lock_touch 触摸写，不能仅凭没有授权就放过写语句'
         $plan = @($script:Calls | Where-Object { $_.Leaf -ceq 'pwsh.exe' })[0]
         Assert-True ($plan.Arguments -cnotcontains '-LocalMySQL') '不走本机 MySQL 档'
         Assert-Equal '127.0.0.1:4000' (Get-ConfigValue -Summary $summary -Key 'player_inbox' -KeyPath 'MySQL.Host').Value '端点来自环境变量'

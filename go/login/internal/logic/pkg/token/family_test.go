@@ -1454,7 +1454,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 		owned := []string{record, familyKeyOfToken(t, p1.RefreshToken), refreshKeyOf(t, p1.RefreshToken)}
 		before := map[string]string{}
 		for _, key := range owned {
-			value, err := rdb.Dump(ctx, key).Result()
+			value, err := keyContent(ctx, rdb, key)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1464,7 +1464,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 			t.Fatal("永久轮换记录必须按损坏报错", err)
 		}
 		for _, key := range owned {
-			value, err := rdb.Dump(ctx, key).Result()
+			value, err := keyContent(ctx, rdb, key)
 			if err != nil || value != before[key] {
 				t.Fatal("真实拒绝不得改写本例任意原件", err)
 			}
@@ -1503,7 +1503,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 		snapshot := func() map[string]string {
 			values := map[string]string{}
 			for _, key := range localKeys {
-				value, err := rdb.Dump(ctx, key).Result()
+				value, err := keyContent(ctx, rdb, key)
 				if err != nil {
 					t.Fatal("读取本例精确状态失败", err)
 				}
@@ -1541,7 +1541,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 			}
 			before := map[string]string{}
 			for _, key := range owned {
-				value, err := rdb.Dump(ctx, key).Result()
+				value, err := keyContent(ctx, rdb, key)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1558,12 +1558,54 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 					t.Fatal("永久撤销候选必须先拒绝且不写")
 				}
 			}
-			for _, key := range owned {
-				value, err := rdb.Dump(ctx, key).Result()
+			// 键名带令牌 secret,不打出来,只打角色。
+			roles := []string{"access", "refresh", "family", "account index"}
+			for i, key := range owned {
+				value, err := keyContent(ctx, rdb, key)
 				if err != nil || value != before[key] {
-					t.Fatal("真实拒绝不得改写本例任意原件", err)
+					t.Fatalf("真实拒绝不得改写本例任意原件: %s err=%v 长度 %d -> %d", roles[i], err, len(before[key]), len(value))
 				}
 			}
 		})
 	}
+}
+
+// keyContent 按类型读出键的内容,判断「有没有被改写」用它,不用 DUMP。哈希是 hashtable 编码时,只读的 HGET 也会推进
+// 渐进式 rehash,字段顺序一变 DUMP 字节就不同,内容其实没变:11-02 第三轮在 Redis 7.2、8.x 上都是 family 键
+// 长度相同而字节不同。键不在或类型不认识都回错误,删除同样算改写。
+func keyContent(ctx context.Context, rdb redis.Cmdable, key string) (string, error) {
+	kind, err := rdb.Type(ctx, key).Result()
+	if err != nil {
+		return "", err
+	}
+	var parts []string
+	switch kind {
+	case "string":
+		value, err := rdb.Get(ctx, key).Result()
+		if err != nil {
+			return "", err
+		}
+		parts = []string{value}
+	case "hash":
+		fields, err := rdb.HGetAll(ctx, key).Result()
+		if err != nil {
+			return "", err
+		}
+		for field, value := range fields {
+			parts = append(parts, field+"="+value)
+		}
+		slices.Sort(parts)
+	case "zset":
+		members, err := rdb.ZRangeWithScores(ctx, key, 0, -1).Result()
+		if err != nil {
+			return "", err
+		}
+		for _, member := range members {
+			name, _ := member.Member.(string)
+			parts = append(parts, name+"="+strconv.FormatFloat(member.Score, 'g', -1, 64))
+		}
+	default:
+		return "", errors.New("unexpected key type " + kind)
+	}
+	return kind + "\x00" + strings.Join(parts, "\x00"), nil
 }

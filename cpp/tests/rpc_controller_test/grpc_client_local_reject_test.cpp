@@ -32,8 +32,8 @@
 namespace
 {
 
-using data_service::LoadPlayerDataRequest;
-using data_service::LoadPlayerDataResponse;
+using data_service::GetPlayerHomeZoneRequest;
+using data_service::GetPlayerHomeZoneResponse;
 
 class GrpcClientLocalRejectTest : public ::testing::Test
 {
@@ -78,11 +78,11 @@ TEST_F(GrpcClientLocalRejectTest, PerCallDoneOnEntityWithoutChannelIsDeferredOnc
 
     loop_.queueInLoop([&registry = registry_, nodeWithoutChannel, observed]
     {
-        LoadPlayerDataRequest request;
+        GetPlayerHomeZoneRequest request;
         request.set_player_id(42);
-        data_service::SendDataServiceLoadPlayerData(
+        data_service::SendDataServiceGetPlayerHomeZone(
             registry, nodeWithoutChannel, request,
-            [observed](const GrpcCallOutcome &outcome, const LoadPlayerDataResponse *reply)
+            [observed](const GrpcCallOutcome &outcome, const GetPlayerHomeZoneResponse *reply)
             {
                 ++observed->calls;
                 observed->code = outcome.code;
@@ -136,10 +136,10 @@ TEST_F(GrpcClientLocalRejectTest, PerCallDoneRejectsAllThreeMissingChannelForms)
     {
         for (std::size_t index = 0; index < targets.size(); ++index)
         {
-            LoadPlayerDataRequest request;
+            GetPlayerHomeZoneRequest request;
             request.set_player_id(42);
-            data_service::SendDataServiceLoadPlayerData(registry, targets[index], request,
-                [observed, index](const GrpcCallOutcome &outcome, const LoadPlayerDataResponse *reply)
+            data_service::SendDataServiceGetPlayerHomeZone(registry, targets[index], request,
+                [observed, index](const GrpcCallOutcome &outcome, const GetPlayerHomeZoneResponse *reply)
                 {
                     ++observed->calls[index];
                     EXPECT_TRUE(observed->allSendsReturned) << "缺通道也不得同步完成";
@@ -181,8 +181,8 @@ TEST_F(GrpcClientLocalRejectTest, ErasedWrongRequestTypeIsDeferredOnceWithIntern
 
     loop_.queueInLoop([&registry = registry_, nodeWithoutChannel, observed]
     {
-        const LoadPlayerDataResponse wrongRequest;
-        data_service::SendDataServiceLoadPlayerDataErased(registry, nodeWithoutChannel, wrongRequest,
+        const GetPlayerHomeZoneResponse wrongRequest;
+        data_service::SendDataServiceGetPlayerHomeZoneErased(registry, nodeWithoutChannel, wrongRequest,
             [observed](const GrpcCallOutcome &outcome, const google::protobuf::Message *reply)
             {
                 ++observed->calls;
@@ -233,14 +233,14 @@ TEST_F(GrpcClientLocalRejectTest, ErasedDynamicMessageWithMatchingDescriptorIsDe
     {
         // 默认不委托 generated factory,New() 返回 DynamicMessage,descriptor 仍是生成请求的同一个对象。
         google::protobuf::DynamicMessageFactory factory;
-        const auto *prototype = factory.GetPrototype(LoadPlayerDataRequest::descriptor());
+        const auto *prototype = factory.GetPrototype(GetPlayerHomeZoneRequest::descriptor());
         ASSERT_NE(prototype, nullptr);
         const std::unique_ptr<google::protobuf::Message> dynamicRequest(prototype->New());
         ASSERT_NE(dynamicRequest, nullptr);
-        ASSERT_EQ(dynamicRequest->GetDescriptor(), LoadPlayerDataRequest::descriptor());
-        ASSERT_EQ(dynamic_cast<const LoadPlayerDataRequest *>(dynamicRequest.get()), nullptr);
+        ASSERT_EQ(dynamicRequest->GetDescriptor(), GetPlayerHomeZoneRequest::descriptor());
+        ASSERT_EQ(dynamic_cast<const GetPlayerHomeZoneRequest *>(dynamicRequest.get()), nullptr);
 
-        data_service::SendDataServiceLoadPlayerDataErased(registry, nodeWithoutChannel, *dynamicRequest,
+        data_service::SendDataServiceGetPlayerHomeZoneErased(registry, nodeWithoutChannel, *dynamicRequest,
             [observed](const GrpcCallOutcome &outcome, const google::protobuf::Message *reply)
             {
                 ++observed->calls;
@@ -285,10 +285,10 @@ TEST_F(GrpcClientLocalRejectTest, SendFromLocalCompletionKeepsDrainGateClosedUnt
 
     loop_.queueInLoop([this, nodeWithoutChannel = nodeWithoutChannel, observed]
     {
-        const LoadPlayerDataRequest request;
-        data_service::SendDataServiceLoadPlayerData(
+        const GetPlayerHomeZoneRequest request;
+        data_service::SendDataServiceGetPlayerHomeZone(
             registry_, nodeWithoutChannel, request,
-            [this, observed](const GrpcCallOutcome &, const LoadPlayerDataResponse *)
+            [this, observed](const GrpcCallOutcome &, const GetPlayerHomeZoneResponse *)
             {
                 ++observed->outerCalls;
                 // 先于重发排队:执行时外层回调已退栈,重发的本地完成排在它后面。
@@ -297,10 +297,10 @@ TEST_F(GrpcClientLocalRejectTest, SendFromLocalCompletionKeepsDrainGateClosedUnt
                     observed->probeRanBeforeInner = observed->innerCalls == 0;
                     observed->drainedAtProbe = GrpcClientLocalCompletionsDrained();
                 });
-                const LoadPlayerDataRequest retry;
-                data_service::SendDataServiceLoadPlayerData(
+                const GetPlayerHomeZoneRequest retry;
+                data_service::SendDataServiceGetPlayerHomeZone(
                     registry_, entt::entity{entt::null}, retry,
-                    [observed](const GrpcCallOutcome &outcome, const LoadPlayerDataResponse *)
+                    [observed](const GrpcCallOutcome &outcome, const GetPlayerHomeZoneResponse *)
                     {
                         ++observed->innerCalls;
                         observed->innerCode = outcome.code;
