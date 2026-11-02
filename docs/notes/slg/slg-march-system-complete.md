@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-07
 
-> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+> **说明**：本文是「率土风格」的设计或面试笔记，不代表率土之滨的真实架构。数据层 2026-11-01 按[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)改写：玩家数据和地图数据都不放 Redis，地块和行军以地图服内存为准，持久数据只落 TiDB（预算不够用 MySQL 档），Redis 只做协调。库表、写入路径和为什么不用 Redis，见[框架设计 §12](./slg-server-complete-framework.md)。
 
 ---
 
@@ -312,7 +312,7 @@ PathResult request_march(Player* player, uint32_t from_tile, uint32_t to_tile) {
 [7] 注册行军
   |- 在每个途经格子注册 occupant 时间窗口
   |- 设置到达定时器
-  |- 写入 DB/Redis: {march_id, player_id, path, start_time, speed, state}
+  |- 进提交队列写 TiDB: {march_id, player_id, path, start_time, speed, state}，提交成功才广播
   |
   v
 [8] 广播
@@ -846,18 +846,18 @@ speed = 1.5 格/秒
 
 ## 十二、持久化与崩溃恢复
 
-> 本章把行军放 Redis 的写法已被取代,见文首状态说明。
-
 ### 12.1 需要持久化的数据
 
 ```
-Redis (热数据, 行军生命周期内):
-  march:{march_id} -> {player_id, start_tile, dirs, start_time, speed, state, purpose, target_tile, army_id, hero_ids, troop_count}
+TiDB marches 表 (活跃行军, 状态变化时提交, 途中不写):
+  march_id -> {player_id, start_tile, dirs, start_time, speed, state, purpose, target_tile, army_id, hero_ids, troop_count}
 
-MySQL (冷数据, 定期归档):
+TiDB march_logs、battle_reports 表 (行军结束后):
   - 行军日志（出征/到达/战斗/召回记录）
   - 战报
 ```
+
+行军不放 Redis，写入路径和原因见[框架设计 §12](./slg-server-complete-framework.md)。
 
 ### 12.2 崩溃恢复流程
 
@@ -865,7 +865,7 @@ MySQL (冷数据, 定期归档):
 MapService 重启
   |
   v
-1. 从 Redis 加载所有 state != ARRIVED 的行军
+1. 从 TiDB 加载所有 state != ARRIVED 的行军
   |
   v
 2. 对每个行军:
@@ -884,7 +884,7 @@ MapService 重启
 4. 开放接收新请求
 ```
 
-**关键优势：** 懒计算公式只依赖 `{path, start_time, speed}`，不需要任何中间状态。崩溃后这三个值从 Redis 读出即可完美恢复。
+**关键优势：** 懒计算公式只依赖 `{path, start_time, speed}`，不需要任何中间状态。崩溃后这三个值从 TiDB 读出即可完美恢复。行军只在状态变化时写库，途中不写，5 万条活跃行军按平均 5 分钟一条推算，也只有约 350 次写/秒。
 
 ---
 
@@ -941,7 +941,7 @@ MapService 重启
 [注册占用] 每格写入 occupant, 创建到达定时器
     |
     v
-[持久化]  写入 Redis
+[持久化]  进提交队列写 TiDB，提交成功再广播
     |
     v
 [广播]    通知沿途视野内玩家 + 下发客户端 {path, start_time, speed}
@@ -960,5 +960,5 @@ MapService 重启
 [清理]    移除所有 occupant, 更新状态
     |
     v
-[归档]    行军日志写入 MySQL
+[归档]    行军日志写入 TiDB
 ```

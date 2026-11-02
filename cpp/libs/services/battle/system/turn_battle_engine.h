@@ -1,6 +1,7 @@
 #pragma once
 #include <map>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <vector>
@@ -47,8 +48,8 @@ public:
     // 自动战斗开关(设计文档 §11 D12):仅存活未逃的玩家单位可设,
     // 写 BattleActorState.is_auto。返回 0 成功,非 0 为 tip 错误码
     // (与节点 error_message.id 同域,节点侧直接透传)。
-    // 零随机/零时钟:auto 单位出手复用默认行动路径(FillDefaultActions),
-    // 确定性不受影响
+    // 零随机/零时钟:auto 单位出手复用默认行动路径(FillDefaultActions,
+    // 挂机玩家选职业主动技能见 SelectAutoClassSkill),确定性不受影响
     uint32_t SetActorAuto(uint64_t actorId, bool enabled);
 
     // 全体存活玩家是否已就绪(挂机单位视为已就绪,D12)。
@@ -142,13 +143,21 @@ private:
     // 单目标落地:敌方技能 命中 → 伤害(× 等级系数)→ 死亡;之后(目标仍活着)治疗 → 回蓝 → 驱散 → 增减益
     void ApplyClassSkillToTarget(BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
                                  double baseDamage, BattleActorState& target, TurnResultS2C& result);
+    // 伤害基数:表达式求值(职业技能表里是常数 10),等级参数吃"所有技能上升"。出手与挂机估算共用
+    double ClassSkillBaseDamage(const BattleActorState& actor, const SkillTable& skillRow) const;
+    // 治疗量(未按缺口封顶):(法伤 × 倍率 + 施法者等级 × 每级加值) × 等级系数 × (1 + 治疗加成被动),
+    // 目标气血比例低于残血阈值再乘 1 + execute_heal_bonus。出手与挂机估算共用
+    double ClassSkillHealAmount(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                                const BattleActorState& target) const;
     // 本回合行动的先手优先级:只有通过校验的职业技能行动才带 Skill.initiative,其余为 0
     int32_t ActionInitiative(const BattleActorState& actor) const;
     // 战斗专用被动"治疗加成"之和(按 skill_table_id 升序累加,浮点求和顺序固定)
     double OutgoingHealBonus(const BattleActorState& actor) const;
     // 职业技能增减益对某项属性的倍率:1 + 同向最强增益 + 同向最强减益,下限 kMinClassBuffStatMultiplier。
-    // 身上没有这类 buff 时恰好返回 1.0
-    double ClassBuffStatMultiplier(const BattleActorState& actor, ClassBuffStat stat) const;
+    // 身上没有这类 buff 时恰好返回 1.0。extraPercent != 0 时按"再挂一个这么大幅度的"算,不改状态
+    // (挂机选技比较挂上前后的差;已有同向等强或更强的效果时倍率不变)
+    double ClassBuffStatMultiplier(const BattleActorState& actor, ClassBuffStat stat,
+                                   double extraPercent = 0.0) const;
     // 吃增减益之后的物伤 / 防御 / 速度。没有这类 buff 时原样返回快照值(不经浮点),老对局逐位不变
     uint64_t EffectivePhysicalAttack(const BattleActorState& actor) const;
     uint64_t EffectiveDefense(const BattleActorState& actor) const;
@@ -157,6 +166,38 @@ private:
     bool IsDebuffEntry(const BattleBuffEntry& entry) const;
     // 按身上顺序移除至多 count 个减益,返回实际移除个数
     uint32_t DispelDebuffs(BattleActorState& target, uint32_t count, TurnResultS2C& result);
+
+    // ---- 职业玩家挂机选技(docs/design/class-skills.md §6.5) ----
+
+    // 给挂机玩家选这一回合的职业主动技能;没有值得放的返回空,调用方回落普攻。
+    // 只读当前战斗状态:不扣蓝、不进冷却、不发事件、不消耗随机数,也不读同轮他人已提交的指令。
+    // 候选按 用途优先级 → 有效收益 → 耗蓝 → 冷却 → 技能号 → 目标号 排成全序,结果不依赖技能列表的遍历顺序
+    std::optional<BattleAction> SelectAutoClassSkill(const BattleActorState& actor) const;
+    // 可作主目标的单位:自身技能只有自己;否则是存活未逃的对应阵营单位
+    std::vector<uint64_t> CollectClassSkillPrimaryTargets(const BattleActorState& actor,
+                                                          const SkillTable& skillRow) const;
+    // 下面五个是各用途在实际目标集上的预计收益,targetIds 来自 SelectClassSkillTargets,0 = 没有收益。
+    // 按各目标缺口封顶的治疗量
+    uint64_t AutoHealGain(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                          const std::vector<uint64_t>& targetIds) const;
+    // 能移除的减益个数;主目标(首位)自己没有减益时为 0,显式目标必须真带减益
+    uint64_t AutoDispelGain(const SkillTable& skillRow, const std::vector<uint64_t>& targetIds) const;
+    // 净回蓝 = 实际回蓝 − 本次耗蓝;目标法力都高于 kAutoRestoreManaRatio 时为 0
+    uint64_t AutoRestoreManaGain(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                                 const std::vector<uint64_t>& targetIds) const;
+    // 增减益实际改变的属性点数(敌方技能只算减益,友方 / 自身技能只算增益)
+    uint64_t AutoStatBuffGain(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                              const std::vector<uint64_t>& targetIds) const;
+    // 按剩余气血封顶的预计伤害,暴击取期望
+    uint64_t AutoDamageGain(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                            double baseDamage, const std::vector<uint64_t>& targetIds) const;
+    // 单个目标单项属性挂上 statPercent 后改变的点数。属性本身为 0、已有同向等强或更强的效果都是 0;
+    // 防御增益只给气血不高于 kAutoDefenseBuffHealthRatio 的目标,速度增减益要能翻转出手先后
+    uint64_t ClassBuffStatGain(const BattleActorState& target, ClassBuffStat stat, double statPercent) const;
+    // 速度从 speedBefore 变成 speedAfter,是否翻转 target 与对面任一存活单位的先后(同速按 actor_id,同 BuildTurnOrder)
+    bool SpeedChangeFlipsOrder(const BattleActorState& target, uint64_t speedBefore, uint64_t speedAfter) const;
+    // 普攻的比较基线:暴击与连击取期望、按剩余气血封顶,默认普攻目标随机,所以取各存活敌人的平均
+    double AutoBasicAttackDamage(const BattleActorState& actor) const;
 
     // ---- 回合结算 ----
 
@@ -220,6 +261,15 @@ private:
     double CalculateFinalDamage(const BattleActorState& caster, const BattleActorState& target,
                                 double baseDamage, uint64_t attack, double attackMultiplier,
                                 uint32_t damageType, bool& isCritical);
+    // CalculateFinalDamage 掷暴击之前的部分(公式伤害 × PVP 系数)与合计暴击率,结算与挂机估算共用一份公式
+    double DamageBeforeCriticalRoll(const BattleActorState& caster, const BattleActorState& target,
+                                    double baseDamage, uint64_t attack, double attackMultiplier,
+                                    uint32_t damageType) const;
+    double CriticalChance(const BattleActorState& caster, uint32_t damageType) const;
+    // 暴击按概率取期望的伤害:不掷骰、不消耗随机数(挂机选技用,真实结算走 CalculateFinalDamage)
+    double ExpectedDamage(const BattleActorState& caster, const BattleActorState& target,
+                          double baseDamage, uint64_t attack, double attackMultiplier,
+                          uint32_t damageType) const;
     // 当前对局是否 PVE(单人 / 组队):决定能否逃跑、是否乘 PVP 伤害系数
     bool IsPveMatch() const;
     // 命中判定骨架(表现规格 D1):命中率 = kBaseHitRate(一期表无命中/闪避列)。
@@ -238,6 +288,9 @@ private:
     // 落伤害:DEFEND 减半,ceil 取整,饱和到 0 HP;返回实际扣血
     uint64_t ApplyDamage(BattleActorState& target, double rawDamage);
     uint64_t ApplyHeal(BattleActorState& target, double rawHeal);
+    // 这一下实际会扣 / 回多少气血,不改状态(落地与挂机估算共用)
+    uint64_t LandedDamage(const BattleActorState& target, double rawDamage) const;
+    uint64_t LandedHeal(const BattleActorState& target, double rawHeal) const;
     void HandleDeath(BattleActorState& target, uint64_t sourceActorId, TurnResultS2C& result);
 
     // effect[] → buff:镜像 BuffSystem::AddOrUpdateBuff 的

@@ -462,6 +462,7 @@ $flat = ConvertTo-FlatManifest -Block $cm
 ```
 - 期望(缺陷成立):`infra-up exit=0`;`Kafka.GroupID=[game-consumer-group]`;`LogLevel=[1]`;最后一行 `False`(只记录)。
   - (2026-10-22 注)这是 10-14 的修前期望。现在 battle-node-config 的 `LogLevel` 从 bin/etc 镜像,重跑应为 `[2]`;GroupID 也早已改为镜像(契约测试有对应用例)。
+  - (2026-11-01 补)最后一行不用再看:`DisableLegacyPerNodeTopic` 已随旧单节点路径一起删除(总体方案 A7b),重跑打印 `False`。
 - 出处:
   - 参数同契约测试 k8s_deploy_contract.tests.ps1:1149;HEAD 上用同样参数跑的 battle DryRun 在 :1151。
   - 四个取值函数在 tests/lib/deploy_capture.ps1:95-102、:147、:166、:180;键路径写法同契约测试 :1146、:1282。

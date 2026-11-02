@@ -2610,9 +2610,10 @@ func TestAtomicDestroyIfIdle_AbortsOnPlayers(t *testing.T) {
 	seedSceneMembersVia(sc, sceneId, 1)
 	sc.Redis.Zadd(activeInstancesKey(testZoneId), nowUnix(), fmt.Sprintf("%d", sceneId))
 
-	nodeId, _, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	claim, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
 	require.NoError(t, err)
-	assert.Equal(t, "", nodeId, "must abort when the scene has members")
+	assert.True(t, claim.Busy, "must abort when the scene has members")
+	assert.Equal(t, "", claim.NodeID)
 
 	// Scene state must be intact.
 	nid, _ := sc.Redis.Get(fmt.Sprintf(SceneNodeKeyFmt, sceneId))
@@ -2634,9 +2635,9 @@ func TestAtomicDestroyIfIdle_DestroysWhenIdle(t *testing.T) {
 	sc.Redis.Set(sceneZoneKey(sceneId), "1")
 	sc.Redis.Zadd(activeInstancesKey(testZoneId), nowUnix(), fmt.Sprintf("%d", sceneId))
 
-	nodeId, _, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	claim, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
 	require.NoError(t, err)
-	assert.Equal(t, "10", nodeId)
+	assert.Equal(t, "10", claim.NodeID)
 
 	for _, key := range []string{
 		fmt.Sprintf(SceneNodeKeyFmt, sceneId),
@@ -3250,7 +3251,7 @@ func TestStress_EnterDestroyRace_NoOrphanMembers(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			_, _, _ = AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+			_, _ = AtomicDestroyIfIdle(sc, testZoneId, sceneId)
 		}()
 	}
 	wg.Wait()

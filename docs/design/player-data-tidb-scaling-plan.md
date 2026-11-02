@@ -40,6 +40,7 @@
 | 10-30 | 「就要 64 位,不考虑 lua java script json 先……不能用发号器申请吗……一定要不重复,全局唯一,不管崩溃不崩溃」 | §6 |
 | 10-30 | 问合服围栏排队的问题「这个怎么做最好呢」 | §7.1 |
 | 10-30 | 「etcd 整体丢数据,或被人从旧备份恢复,这个你也应该有解决办法吧……一起写进文档一起做,像 lua 这种 uint64 直接用 string 存储就行,存盘不能再按归属区选 Kafka topic 和数据库可以的,能水平扩展就行,那最后的 kafka 还只用在哪些地方呢」 | §6.1、§6.3、§7.1、§3.5 |
+| 11-01 | 「按你的说不是玩家和slg地图不用redis 了吗,我在文档要你把redis 去掉,然后用tidb 补充的细节加上,为什么不用redis」 | §10、A.6;SLG 笔记按此改写 |
 
 存盘路径:会话里对比过「直接提交 TiDB」与「保留 Kafka → go/db」(§3.6),用户随后说「开始做」并确认跨服不用 Kafka,本文按直接提交 TiDB 推进。若要保留 Kafka 存盘,§3 需要重写。
 
@@ -191,6 +192,45 @@
 ### 4.5 待定
 
 热行字段清单与大小;各组的表或行划分与命名(同一张表按 `(player_id, 组)` 分行,还是按职责分表);立即存盘事件清单与节流;短间隔初值;`player_database_1`(现在只有 `player_id` 与压测探针,TiDB 决策 §8.2)的去留;背包变化很频繁时,是否进一步把道具拆成多行(TiDB 决策 §8.4)。
+
+### 4.6 判脏的开销、常驻内存和后续优化(2026-11-01 讨论,未实测)
+
+**现在的做法**:每次存盘拼出整份 `PlayerAllData`,按行(kind)投影并确定性序列化(`player_store_projection.cpp`),和上一次确认提交的字节 `confirmed[kind]` 比较(`player_store_client.cpp`),只写不同的行。玩家数据在一张表 `player_store` 里分四行业务数据:`HOT`(位置、等级和频繁变化的数值)、`ASSET`(货币、背包、账本)、`GROWTH`(技能、加点、宠物、任务)、`PROFILE`(身份等低频字段)。
+
+**为什么不用旧做法**:旧路径用 `MessageDifferencer` 比整份。
+- 反射逐字段比较,比直接比字节慢得多,设计时写的「远低于 100µs」是估算。
+- 位置一变整份都算变了,活跃玩家基本跳不过,只有挂机玩家省得到。
+- 当年不比字节,是怕 protobuf 升级后字节变化造成误判。误判只会多写一笔,方向安全,这个理由不成立。
+
+**为什么不用手写脏标记**:快,但漏标一处就静默丢数据,而且很难查出来。
+
+**开销排序**(经验判断,未实测):写库远大于序列化,序列化大于比字节。所以:
+- **不做「常变的行不比较」**:热行约 0.5 KB,比较几乎不花钱。去掉之后,站着不动的玩家每次都要写一笔,事务数反而上升,而事务数正是 TiDB 最敏感的指标(§4.4)。
+- **要省 CPU,该省的是序列化**:现在每次存盘都要把所有行序列化一遍才能比较,大行没变也一样。
+
+**常驻内存**:每个玩家三份,ECS 实时数据、`confirmed`、`PlayerLastPersistedSnapshotComp`。快照不只用于比较,资产、结算、收件箱拿它当「已提交」的证据,所以不能简单去掉。
+
+**tick 尖刺**:周期存盘的定时器每秒跑一次,在游戏线程上一口气做完这一秒的玩家(`cpp/libs/services/scene/core/system/redis.cpp`)。周期从 300 秒缩到 60 秒之后,工作量是原来的 5 倍。
+
+**压测之后再定,现在都不做**:
+
+| 压测看到 | 做法 | 代价 |
+|---|---|---|
+| 热行事务数压不住 | 位置不单独触发写入:比脏时排除 `transform`(写法同 `stress_test_probe`),其他脏行要写时顺带写,下线、切场景一定写,再加一个较长的兜底间隔(比如 5 分钟) | 崩溃时位置回到几分钟前。位置不是资产,可以接受 |
+| 周期存盘回调造成 tick 尖刺 | 把这一秒的玩家摊到多个 tick | 改动小 |
+| 序列化占 CPU 明显 | 给模块加变化提示,没变的大行不序列化,定期全量比较一次兜底 | 多一套提示。不能只靠提示,否则回到漏标丢数据 |
+| 内存吃紧 | `confirmed` 换成每行 128 位哈希。先核对没有别的代码读这份字节 | 碰撞时漏写一次,128 位下可以忽略 |
+| `ASSET` 写入量大 | 把货币、账本从背包里拆出来。同一次存盘的脏行本来就在一个事务里提交,不影响一致性 | 每笔多一行。上线后再改要迁移存档,所以**首次上线前定** |
+
+要看的数据:每行的大小(`player_store_row_bytes`)和写入频率、热行事务数、scene 的 tick 耗时和内存占比。不要拆到每个道具一行,除非这些数据支持。
+
+**下一步**(负责人 2026-11-01 定:不丢数据、强一致、性能高、可水平扩展、代码易懂,性能靠实测):Codex 第二轮跑完后,加基准测试和存盘分段耗时指标。
+- 基准测试用三档玩家数据(新号、普通、满背包),测拼整份数据、按行序列化、比字节、`MessageDifferencer`,Release 构建,取 p50 和 p99。
+- 指标记拼数据、序列化、比较的耗时,以及周期存盘回调单次的总耗时,不带 `player_id`。
+- 判据初值:周期回调单次超过 10 毫秒就摊到多个 tick;摊开之后序列化仍占大头,再加变化提示。
+- 优化不能动存档的提交语义:同一次存盘的脏行同一事务提交,脏判断以确认提交为基准(§4.3)。
+- 实测数字写回本节,替换上面的估算。
+- 同批改掉过时注释:`dirty_save_stats.h`、`last_persisted_snapshot_comp.h`、`player_lifecycle.h` 还写着快路径用 `dirty_save::IsEqual`,现在已经是比字节。
 
 ## 5. 什么情况下会丢,什么情况下保证不丢
 
@@ -532,14 +572,14 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 | | 在线状态放在哪 | 什么时候存盘 | 怎么扩 |
 |---|---|---|---|
 | MMO | 场景服内存 | 关键变化立即存 + 短间隔只存脏行(§4) | 加分线、加场景实例 |
-| SLG | 地图服内存 | 资产操作随资产原子落库;脏地块定时批量落库,接受有界回档 | 加世界;单张大图按州拆分片 |
+| SLG | 地图服内存 | 资产、地块易主、行军状态变化走有序提交队列,提交成功才回客户端;耐久、驻军这类高频字段定时批量落库,接受有界回档 | 加世界;单张大图按州拆分片 |
 | MOBA | 战斗节点内存,一局一份,崩了可以丢 | 主要在对局结算与商城购买时,幂等落库 | 战斗节点按对局装箱 |
 
 SLG 补充:
 
-- **也默认用 TiDB。** 世界号是天然的分区键,世界之间几乎没有跨世界事务,多集群比 MMO 好分;合服在同一集群内只改世界标签,跨集群就把整个世界作为一个单元搬。攻城热点在地图服内存里串行处理,数据库只收到定时批量落盘的脏地块。
+- **也默认用 TiDB,玩家数据和地图数据都不放 Redis。** 每个世界一个逻辑库,世界之间几乎没有跨世界事务,多集群比 MMO 好分。合服把旧世界的玩家行导入目标世界的库(player_id 全局唯一,不冲突),地图不合并;跨集群就把整个逻辑库作为一个单元搬。攻城热点在地图服内存里串行处理,主循环不等数据库,变更走有序提交队列批量进 TiDB。
 - **单张大图要扩就拆图**,用空间分片而不是分布式事务:按州或固定区块切分,每个地块只有所在分片能写;行军越界时交接(沿用写权代次加交接);相邻分片互相同步边界一圈的只读影子,拦截与碰撞在本分片判定;客户端按视口订阅多个分片;同盟领土连通等全图规则由同盟服汇总、关键判定在提交时复核;战斗交给无状态 worker,结果回到地块所在分片后先核对状态再生效。这会推翻[会话制抽离判据](./session-extractability-mmo-slg.md) §3.2「一张图在一个赛季内不拆」,立项时先定单张图要容纳多少人,一个进程扛得住就不拆。
-- **本仓 SLG 笔记里把玩家数据、行军、地块放 Redis 的写法**要改成「地图服内存为准,落 TiDB 或 MySQL」,Redis 只做协调。2026-11-01 已在 `docs/notes/slg/` 的 8 篇笔记开头和相关章节标注以本节为准,[会话制抽离判据](./session-extractability-mmo-slg.md) §3 也加了状态说明;笔记正文没有逐处重写。SLG 目前只有设计稿、零实现。行军是发起时先落库还是批量落、地块多久落一次,立项时定。
+- **写法细节**(库表、提交队列、恢复、为什么不用 Redis)见 [SLG 框架笔记 §12](../notes/slg/slg-server-complete-framework.md)。提交窗口 50ms 或 500 行、高频字段落库间隔 10 秒都是初值,立项后压测定。`docs/notes/slg/` 的笔记和[会话制抽离判据](./session-extractability-mmo-slg.md) §3 已于 2026-11-01 按本节改写。SLG 目前只有设计稿、零实现。
 
 ## 11. 跨 zone 对战
 
@@ -655,7 +695,7 @@ SLG 补充:
 - **放 Redis 的问题**:会丢、会回退(同 A.5);查不了(同盟全部领地、州城归属、战报历史、客服流水都要按条件查);跨对象改动没有跨 slot 原子(攻城易主、同盟仓库、交易);备份只有整实例快照,不能按时间点恢复,赛季归档不顺手。
 - **成本对 SLG 不是主要理由**:单服几千到一万人,整服数据几 GB 量级 [I]。「Redis 太贵」在 MMO(全量常驻 TB 级)成立,在 SLG 不成立。
 - **想要 KV 形态时**:落盘的 Redis 兼容存储(Apache Kvrocks、Pika、Tendis)数据在磁盘上,成本和持久性好很多,但查询和跨分片事务的问题仍在。
-- 本仓 SLG 笔记的口径不统一(2026-11-01 更正,原来写的「只有行军与地块的检查点放了 Redis」不对)。`slg-interview-qa.md` 是「MySQL 持久化,Redis 放在线状态、排行榜、热缓存」[D];`slg-server-complete-framework.md` §12.3 把玩家资料、资源、武将、部队、建筑、邮件都写成 Redis 结构,`slg-server-framework-complete.md` §14.1 写「玩家数据(热)放 Redis」,`slg-server-mainprog-interview-qa.md` Q10 写资源变化先写 Redis 再经 Kafka 落 MySQL、恢复后以 Redis 为准 [D]。这几篇下面都还有 MySQL 持久化一层,没有一篇是「全在 Redis」。一律按本文改为落 TiDB 或 MySQL。
+- 本仓 SLG 笔记原来的口径不统一(2026-11-01 更正,这里原来写的「只有行军与地块的检查点放了 Redis」不对):`slg-interview-qa.md` 是「MySQL 持久化,Redis 放在线状态、排行榜、热缓存」;`slg-server-complete-framework.md` §12.3 把玩家资料、资源、武将、部队、建筑、邮件都写成 Redis 结构,`slg-server-framework-complete.md` §14.1 写「玩家数据(热)放 Redis」,`slg-server-mainprog-interview-qa.md` Q10 写资源变化先写 Redis 再经 Kafka 落 MySQL、恢复后以 Redis 为准。这几篇下面都还有 MySQL 持久化一层,没有一篇是「全在 Redis」。2026-11-01 已全部按本文改写,写法见框架笔记 §12。
 
 ### A.7 TiDB 与业界实践的外部资料([W],子代理检索,主会话未逐条复核)
 
@@ -665,6 +705,7 @@ SLG 补充:
 - 缓存表、Stale Read、Follower Read 都不适合「每名玩家一行、在线时频繁覆盖写」的存档(https://docs.pingcap.com/tidb/stable/cached-tables/、https://docs.pingcap.com/tidb/stable/stale-read/、https://docs.pingcap.com/tidb/stable/follower-read/)。官方文档没有要求、也没有禁止在 TiDB 前加 Redis。
 - 业界实践:Roblox 官方建议会话期间以服务器内存为准、定期与离开时写回,并用会话锁防旧写(https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing);Halo 4/5 的 Orleans 以内存对象为准、由对象方法持久化(https://www.odbms.org/blog/2016/02/orleans-the-technology-behind-xbox-halo4-and-halo5-interview-with-phil-bernstein/);腾讯 TcaplusDB 把缓存与持久化合一(https://www.tencentcloud.com/document/product/1016/30267);Pokémon GO 以 Spanner 作主事务库(https://cloud.google.com/blog/topics/developers-practitioners/how-pok%C3%A9mon-go-scales-millions-requests)。没有查到以 TiDB 作大型 MMO 唯一存档库的具名公开案例。
 - 率土之滨本身(2026-11-01 主会话检索,中英文关键词):没查到官方公开的服务端存储方案,不能断言它用 Redis 还是别的;本仓 `docs/notes/slg/` 是「率土风格」的设计和面试笔记,不代表它的真实架构。公开文章里有先写 Redis 再回写 MySQL 的做法(https://topic.alibabacloud.com/a/high-speed-game-data-server-design-architecture-based-on-memory-and-redismysql_1_47_30082932.html),也有团队把 Redis 当玩家第一数据库(https://blog.csdn.net/chengwuqing9207/article/details/100992529、https://blog.csdn.net/chinabhlt/article/details/102563320,两篇原文都打不开,无法确认是哪一篇)。这几条都只看到搜索摘要,只说明有人这么做,不改变 A.6 的判断。
+- 官方口径(2026-11-01 主会话抓取官方页面核对):Redis Cluster 是异步复制,切主时可能丢掉已确认的写,多键操作要求所有键在同一个 hash slot(https://redis.io/docs/latest/operate/oss_and_stack/management/scaling/)。TiDB 顺序主键的写入集中在一个 Region,是典型写热点(https://docs.pingcap.com/tidb/stable/troubleshoot-hot-spot-issues/);单行默认上限 6 MiB(https://docs.pingcap.com/tidb/stable/tidb-limitations/);`SPLIT TABLE` 可手工预切(https://docs.pingcap.com/tidb/stable/sql-statement-split-region/);PITR 由全量快照加日志备份组成,恢复期间目标表不能读写(https://docs.pingcap.com/tidb/stable/br-pitr-guide/);TTL 是后台清理,不保证到期立刻删除(https://docs.pingcap.com/tidb/stable/time-to-live/)。
 
 ### A.8 讨论中更正或推翻过的说法
 
@@ -684,4 +725,6 @@ SLG 补充:
 | 防 etcd 回档靠领块水位备份,回档后丢整块(v1) | 否决 |
 | 每次发段带时间下限,水位只做探测(v1.3) | 评审否决:时钟跑快过加 etcd 回退会重号,时钟门禁会停全服发号。改为两份预留记录(§6.3) |
 | 地域之间靠全局下发不重叠的大块 | 改为计数器最高 6 位地域码,由发号器配置并与存储核对,客户端不配(§6.1) |
-| 本仓 SLG 笔记只有行军与地块的检查点放了 Redis | 多篇笔记把玩家资料、资源、武将等也放了 Redis,下面仍有 MySQL 持久化,口径不统一;一律以 §10 为准(A.6) |
+| 本仓 SLG 笔记只有行军与地块的检查点放了 Redis | 多篇笔记把玩家资料、资源、武将等也放了 Redis,下面仍有 MySQL 持久化,口径不统一;2026-11-01 已按 §10 改写(A.6) |
+| SLG 合服在同一集群内只改世界标签 | 每个世界一个逻辑库(AGENTS §7),合服改为把玩家行导入目标世界的库,地图不合并(§10) |
+| 攻城时数据库只收到定时批量落盘的脏地块 | 易主是关键变化,当场进提交队列;只有耐久、驻军这类高频字段定时批量(§10) |

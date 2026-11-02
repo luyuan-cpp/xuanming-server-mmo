@@ -12,7 +12,6 @@
 #include "player_movement_handler.h"
 #include "player_mystery_merchant_handler.h"
 #include "player_pet_handler.h"
-#include "player_rollback_handler.h"
 #include "player_scene_handler.h"
 #include "player_skill_handler.h"
 #include "player_state_attribute_sync_handler.h"
@@ -27,7 +26,6 @@ class SceneMissionClientPlayerImpl : public SceneMissionClientPlayer {};
 class SceneMovementClientPlayerImpl : public SceneMovementClientPlayer {};
 class SceneMysteryMerchantClientPlayerImpl : public SceneMysteryMerchantClientPlayer {};
 class ScenePetClientPlayerImpl : public ScenePetClientPlayer {};
-class SceneRollbackClientPlayerImpl : public SceneRollbackClientPlayer {};
 class SceneSceneClientPlayerImpl : public SceneSceneClientPlayer {};
 class SceneSkillClientPlayerImpl : public SceneSkillClientPlayer {};
 class ScenePlayerSyncImpl : public ScenePlayerSync {};
@@ -47,7 +45,6 @@ void InitPlayerService()
     gPlayerService.emplace("SceneMovementClientPlayer", std::make_unique<SceneMovementClientPlayerHandler>(std::make_unique<SceneMovementClientPlayerImpl>()));
     gPlayerService.emplace("SceneMysteryMerchantClientPlayer", std::make_unique<SceneMysteryMerchantClientPlayerHandler>(std::make_unique<SceneMysteryMerchantClientPlayerImpl>()));
     gPlayerService.emplace("ScenePetClientPlayer", std::make_unique<ScenePetClientPlayerHandler>(std::make_unique<ScenePetClientPlayerImpl>()));
-    gPlayerService.emplace("SceneRollbackClientPlayer", std::make_unique<SceneRollbackClientPlayerHandler>(std::make_unique<SceneRollbackClientPlayerImpl>()));
     gPlayerService.emplace("SceneSceneClientPlayer", std::make_unique<SceneSceneClientPlayerHandler>(std::make_unique<SceneSceneClientPlayerImpl>()));
     gPlayerService.emplace("SceneSkillClientPlayer", std::make_unique<SceneSkillClientPlayerHandler>(std::make_unique<SceneSkillClientPlayerImpl>()));
     gPlayerService.emplace("ScenePlayerSync", std::make_unique<ScenePlayerSyncHandler>(std::make_unique<ScenePlayerSyncImpl>()));

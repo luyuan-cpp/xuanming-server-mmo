@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-07
 
-> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+> **说明**：本文是「率土风格」的设计或面试笔记，不代表率土之滨的真实架构。数据层 2026-11-01 按[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)改写：玩家数据和地图数据都不放 Redis，地块和行军以地图服内存为准，持久数据只落 TiDB（预算不够用 MySQL 档），Redis 只做协调。库表、写入路径和为什么不用 Redis，见[框架设计 §12](./slg-server-complete-framework.md)。
 
 ---
 
@@ -23,8 +23,8 @@ Gate Node ←Kafka→ MapService (C++, 有状态大单体)
                     ├─ 碰撞检测
                     └─ 触发战斗 ──gRPC──→ BattleService (无状态, 可扩)
 
-MapService ←Kafka→ DB Service (Go) → MySQL
-MapService ←→ Redis (玩家热数据)
+MapService ──gRPC→ DB Service (Go) → TiDB (存档不走 Kafka)
+MapService ←→ Redis (session、锁、限流，不存玩家数据)
 ```
 
 ### 各服务职责
@@ -37,7 +37,7 @@ MapService ←→ Redis (玩家热数据)
 | BattleService | C++ | 无 | 纯函数战斗计算 |
 | Scene Manager | Go | 无 | 场景分配、负载均衡 |
 | Player Locator | Go | 无 | 玩家位置查询（在哪个服务器） |
-| DB Service | Go | 无 | Kafka 消费 → MySQL 批量写入 |
+| DB Service | Go | 无 | 接 MapService 的批量提交，写 TiDB 事务并核对写权 |
 | Data Service | Go | 无 | 数据层 RPC |
 | Auth Service | Java | 无 | Token 认证 (sa-token) |
 
@@ -67,7 +67,7 @@ MapService ←→ Redis (玩家热数据)
 - Gate 维护万级长连接，C++ + epoll/IOCP 性能上限高
 
 ### Go 的优势场景
-- Login/DB 是 I/O 密集型（Redis/MySQL/Kafka），Go 的 goroutine + channel 简洁高效
+- Login/DB 是 I/O 密集型（TiDB/Redis/Kafka），Go 的 goroutine + channel 简洁高效
 - 微服务开发速度快，部署简单（单 binary）
 - go-zero 框架提供 etcd 注册/发现、限流、监控
 
@@ -181,7 +181,7 @@ class TcpDecoder {
 
 ### 完整登录流程
 ```
-客户端                  Gate            Login           Auth(Java)      Redis/MySQL
+客户端                  Gate            Login           Auth(Java)      TiDB
   |                      |               |                |               |
   |--[1. 连接TCP]------->|               |                |               |
   |                      |               |                |               |
@@ -351,7 +351,7 @@ Region Worker Pool (8): 处理 Region 消息
 Pathfinding Pool (2-4): 异步寻路计算
 Timer Thread (1): Timing Wheel tick
 Kafka Producer Thread (1): 异步发送消息
-DB Flush Thread (1): 定时刷脏数据到 Kafka
+DB Commit Thread (1): 按顺序把变更批量提交到 TiDB
 ```
 
 ### 线程间通信
@@ -447,7 +447,6 @@ defer cancel()
 | 场景 | Topic 模式 | 生产者 | 消费者 |
 |------|-----------|--------|--------|
 | Gate 控制消息 | `gate-{gate_id}` | MapService | Gate Node |
-| DB 异步写入 | `db-write` | MapService | DB Service |
 | 行军事件日志 | `march-events` | MapService | 数据分析 |
 | 聊天消息 | `chat-{channel}` | Gate | Gate (广播) |
 
@@ -471,11 +470,10 @@ Gate 重启后 instance_id 变化:
   → 丢弃旧消息，不处理
 ```
 
-### DB 写入
-```go
-// MapService 产生脏数据 → Kafka → DB Service → MySQL
-// Kafka 保证: 即使 DB Service 暂时挂了, 消息不丢
-// 顺序性: 同一玩家的写入 → 同一 partition (by player_id hash)
+### 存档不走 Kafka
+```
+MapService → gRPC 批量提交 → DB Service → TiDB 事务 (见 Q10)
+Kafka 只做发出去不用等结果的通知和事件流
 ```
 
 ### 配置
@@ -490,79 +488,102 @@ Kafka:
 
 ---
 
-## Q10: 数据层架构（Redis + MySQL + Kafka）如何设计？
-
-> 本题的数据分工和写入路径已被取代,见文首状态说明。
+## Q10: 数据层架构（TiDB + Redis + Kafka）如何设计？
 
 **A:**
 
 ### 分层职责
 ```
          热数据 (内存)
-MapService Memory ──→ 格子、行军、视野（纯内存，不持久化到 Redis）
-              ↓ 
-         温数据 (Redis)
-Redis ──→ 玩家在线数据、session、排行榜、实时查询
+MapService Memory ──→ 格子、行军、视野、在线玩家
               ↓
-         冷数据 (MySQL)
-MySQL ──→ 玩家存档、战报历史、配置、审计日志
+         持久数据 (TiDB)
+TiDB ──→ 玩家存档、地块、行军、联盟、战报、审计日志（唯一真源）
               ↓
          归档 (S3/OSS)
 S3 ──→ 赛季归档、历史战报、日志分析
+
+Redis 不在这条线上 ──→ session、锁、限流、通知、排行榜（可重算）
 ```
 
-### Redis 使用
+### Redis 使用（只做协调）
 ```
 Key 设计:
-  player:{id}:info     → Hash (基本信息)
-  player:{id}:army     → Hash (军队数据)
   player:{id}:session  → String (session token, TTL 30min)
-  march:{id}           → Hash (行军数据, TTL = 行军时长 + buffer)
-  rank:power            → SortedSet (战力排行)
   online:gate:{id}     → Set (Gate 上的在线玩家)
+  rank:power           → SortedSet (战力排行, 分数来自 TiDB, 清空后可重算)
 ```
 
-### MySQL 表设计
+玩家信息、军队、行军都不放 Redis。
+
+### TiDB 表设计
 ```sql
--- 玩家主表 (分库分表 by player_id % 16)
-CREATE TABLE player_{0..15} (
-    player_id BIGINT PRIMARY KEY,
+-- 每个世界一个逻辑库, 不手工分表, TiDB 自动按 Region 切分
+CREATE TABLE players (
+    player_id BIGINT PRIMARY KEY,   -- 发号器发, 已打散, 不用自增(顺序主键是写热点)
     name VARCHAR(32),
     level INT,
-    resources JSON,      -- {gold, wood, iron, food}
-    city_data JSON,      -- 主城数据
-    army_data JSON,      -- 军队数据
+    alliance_id BIGINT,
     updated_at TIMESTAMP,
     INDEX idx_alliance (alliance_id)
 );
 
--- 战报表 (按时间分区)
+-- 活跃行军, 状态变化时提交, 途中不写
+CREATE TABLE marches (
+    march_id BIGINT PRIMARY KEY,
+    player_id BIGINT NOT NULL,
+    path_blob BLOB,                 -- 路径方向序列
+    start_time BIGINT,
+    speed INT,
+    state TINYINT,
+    INDEX idx_player (player_id)
+);
+
+-- 只存和配置初始状态不同的格子
+CREATE TABLE map_tiles (
+    tile_id INT PRIMARY KEY,        -- 连续, 建库时 SPLIT TABLE 预切
+    owner_player_id BIGINT,
+    owner_alliance_id BIGINT,
+    durability INT,
+    garrison_troops INT,
+    updated_at TIMESTAMP,
+    INDEX idx_owner_player (owner_player_id),
+    INDEX idx_owner_alliance (owner_alliance_id)
+);
+
+-- 战报表, 赛季结束整库归档
 CREATE TABLE battle_reports (
     report_id BIGINT PRIMARY KEY,
     attacker_id BIGINT,
     defender_id BIGINT,
     result TINYINT,
     report_blob MEDIUMBLOB,  -- zstd compressed protobuf
-    created_at TIMESTAMP,
-    PARTITION BY RANGE (UNIX_TIMESTAMP(created_at)) (
-        PARTITION p202601 VALUES LESS THAN (UNIX_TIMESTAMP('2026-02-01')),
-        PARTITION p202602 VALUES LESS THAN (UNIX_TIMESTAMP('2026-03-01')),
-        ...
-    )
+    created_at TIMESTAMP
 );
 ```
 
 ### 写入路径选择
 ```
-关键操作 (不能丢):
-  充值/消费 → 直写 MySQL + Redis
-  交易 → 直写 MySQL (有事务)
+全部走一条有序提交队列, 主循环不等数据库。
+每 50ms 或攒够 500 行一批, 一个事务里核对写权 (owner_epoch + save_seq) 再写。
 
-普通操作 (可容忍几秒延迟):
-  资源变化 → 写 Redis → Kafka → DB Service → MySQL
-  行军创建 → 写 Redis → Kafka
-  建筑升级 → 写 Redis → Kafka
+关键操作 (不能丢, 提交成功才回客户端):
+  充值/消费/交易/资源变化 → 和流水同一个事务
+  行军创建、召回、到达 → 提交成功才下发和广播
+  建筑开工、完工
+  地块易主 + 奖励、战果 + 战报 → 同一批提交
+
+高频字段 (接受最多丢约 10 秒):
+  地块耐久、驻军数量 → dirty 标记 → 每 10 秒批量 upsert
 ```
+
+### 为什么玩家和地图不放 Redis
+- 快靠 MapService 内存，Redis 在另一台机器上，帮不上热路径
+- 主从异步复制，切主时可能丢已确认的写；TiDB 三副本多数派提交
+- 攻城易主、同盟仓库、交易要跨对象改动，Redis Cluster 跨 hash slot 做不到原子
+- 同盟领地、战报历史要按条件查；Redis 也不能按时间点恢复
+
+详见[框架设计 §12.7](./slg-server-complete-framework.md)。
 
 ---
 
@@ -576,14 +597,14 @@ CREATE TABLE battle_reports (
    恢复时间目标: < 30s
 
 2. 状态加载:
-   a. 从 Redis 加载:
+   a. 抢写权: world_writer.owner_epoch + 1 (旧进程的下一次提交会被拒绝)
+
+   b. 从 TiDB 加载 (按主键范围分段并行读):
       - 所有活跃行军 {march_id, path, start_time, speed, state}
       - 所有建筑状态 {tile, building_type, level, build_start, build_end}
-      - 在线玩家列表
-   
-   b. 从 MySQL 补充 (Redis 中没有的):
-      - 玩家完整存档
-      - 联盟数据
+      - 地块 map_tiles、联盟数据
+
+   c. 玩家完整存档按需加载; 在线玩家列表来自 Redis session
 
 3. 状态重建:
    a. 行军:
@@ -611,13 +632,14 @@ CREATE TABLE battle_reports (
 
 ### 数据一致性保证
 ```
-潜在问题: 崩溃前的 Kafka 消息可能还没被 DB Service 消费
+潜在问题: 崩溃时提交队列里还有没提交的变更
 
 解决:
-  - Kafka 的 at-least-once 保证 → 消息不丢
-  - DB Service 用 idempotent upsert → 重复消费无副作用
-  - 恢复后 Redis 和 MySQL 可能有短暂不一致
-  → 以 Redis 为准 (更新), MySQL 最终一致
+  - 队列按顺序提交 → 落库的永远是历史的一个前缀, 不会错乱
+  - 关键操作提交成功才回客户端 → 客户端看到成功的都在 TiDB 里
+  - 没回客户端的操作算没发生, 客户端重连后重新拉状态
+  - 高频字段 (耐久、驻军) 回到上次落库, 最多丢约 10 秒
+  - TiDB 是唯一真源, 没有第二份数据要对账
 ```
 
 ---
@@ -881,9 +903,9 @@ LOG_INFO({
   1. 新镜像部署
   2. 先停 MapService (公告维护)
   3. 等待所有行军到达 / 暂停
-  4. 保存状态到 Redis
+  4. 排空提交队列, 脏字段全部落 TiDB
   5. 滚动更新所有 pod
-  6. 新版本启动 → 从 Redis 恢复
+  6. 新版本启动 → 抢写权 → 从 TiDB 恢复
   7. 开服
 
 维护时间: 通常凌晨 4:00, 时长 10-30 分钟
@@ -920,7 +942,7 @@ TCP 自身保证: 有序、可靠、不重复
 ```
 at-least-once: acks=all, 消息不丢
 幂等消费:
-  - DB Service 用 upsert (INSERT ON DUPLICATE KEY UPDATE)
+  - 落库的消费者 (审计流水等) 用 upsert (INSERT ON DUPLICATE KEY UPDATE)
   - 消息携带唯一 ID，消费者去重
 ```
 
@@ -1099,10 +1121,10 @@ ECS 优势:
     c. 确定性战斗: 纯函数, 整数, 单 PRNG, event-log 战报"
 
 4. 数据层 (60s)
-   "三层: 
-    - 内存 (地图/行军) 
-    - Redis (玩家热数据) 
-    - MySQL (持久化, write-behind via Kafka)"
+   "内存 + TiDB, Redis 只做协调:
+    - 内存 (地图/行军, 运行时为准)
+    - TiDB (唯一真源, 有序提交队列, 主循环不等数据库)
+    - Redis (session、锁、限流, 不存玩家和地图)"
 
 5. 关键数字 (30s)
    "内存 < 100MB, 单战斗 < 1ms, P99 < 100ms, 
@@ -1112,7 +1134,7 @@ ECS 优势:
 ### 延伸问题准备
 ```
 Q: "MapService 挂了怎么办?"
-A: "快速重启 <30s, 从 Redis 恢复状态, 懒计算保证行军位置正确"
+A: "快速重启 <30s, 抢写权后从 TiDB 恢复状态, 懒计算保证行军位置正确"
 
 Q: "10 万人怎么办?"
 A: "分服. 每服 1 万人, 10 个服. SLG 天然按赛季分服"
@@ -1131,7 +1153,7 @@ A: "事件驱动 vs 帧驱动, 懒计算 vs tick, 战报回放 vs 实时同步"
    → SLG 地图数据紧耦合（格子+行军+视野+碰撞），拆成微服务会引入大量 RPC 延迟和一致性问题。紧耦合数据适合单体，松耦合才拆微服务。微服务不是银弹。
 
 2. **"为什么不用 Redis 存地图？"**
-   → 大量复合读写（碰撞检测要遍历格子+读时间窗口+比较）在 Redis 上需要多次 RTT 或 Lua 脚本。内存直接操作快 100 倍。
+   → 大量复合读写（碰撞检测要遍历格子+读时间窗口+比较）在 Redis 上需要多次 RTT 或 Lua 脚本。内存直接操作快 100 倍。持久化也不放 Redis：切主可能丢已确认的写，攻城易主、同盟仓库这类跨对象改动没有原子性，也查不了同盟领地和战报历史。持久数据落 TiDB，详见框架设计 §12.7。
 
 3. **"Go 也能做 MapService 吧？"**
    → 可以，但 16B/格子在 Go 里可能变成 80B+（GC 指针膨胀），50 万条 Timer 会产生 GC 压力。C++ 在内存密集+计算密集场景有明显优势。

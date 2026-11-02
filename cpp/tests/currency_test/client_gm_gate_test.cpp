@@ -10,7 +10,7 @@
 // 而且能在不起 ECS / 不连网络的情况下确定性地验。
 //
 // **最有价值的是 DescriptorScan 那条**:前缀判据的已知缝隙是"名字不叫 Gm* 的后门"。
-// 它遍历五个服务的描述符,凡是不区分大小写以 `gm` 开头的方法都必须被判据认出来 ——
+// 它遍历四个服务的描述符,凡是不区分大小写以 `gm` 开头的方法都必须被判据认出来 ——
 // 于是将来有人写出 `GMGrant` / `gmAdd`,是这条用例红,而不是线上多一条免鉴权印钞机。
 
 #include <gtest/gtest.h>
@@ -23,15 +23,14 @@
 #include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_currency.pb.h"
 #include "proto/scene/player_pet.pb.h"
-#include "proto/scene/player_rollback.pb.h"
 
 #include "../../nodes/scene/handler/rpc/player/player_gm_guard.h"
 
 namespace
 {
 
-// 2026-09-18 实得的、挂在 player service 上的全部 GM 方法:货币 4、宠物 1、属性 1、
-// 回档/欠款 12;2026-10-07 加背包 1(GmGrantItem,发任意物品 / 装备)。
+// 挂在 player service 上的全部 GM 方法:货币 4、宠物 1、属性 1;2026-10-07 加背包 1
+// (GmGrantItem,发任意物品 / 装备);回档/欠款 12 条桩 2026-11 已从 proto 删除。
 // 清单写在这里**不是**为了让运行时去查它(运行时用前缀判据,不查表),
 // 而是为了让"新增一条 Gm* 却没被判据认出来"这件事在测试里就炸掉。
 constexpr std::string_view kKnownClientGmMethods[] = {
@@ -39,9 +38,6 @@ constexpr std::string_view kKnownClientGmMethods[] = {
 	"GmGrantPet",
 	"GmGrantItem",
 	"GmSetPlayerLevel",
-	"GmAttachDebt", "GmWaiveDebt", "GmAdjustDebt", "GmFreezeDebt", "GmQueryDebt",
-	"GmCreateSnapshot", "GmListSnapshots", "GmPreviewRollback", "GmExecuteRollback",
-	"GmQueryTransactionLog", "GmTraceItem", "GmClawbackItem",
 };
 
 bool StartsWithGmIgnoringCase(std::string_view name)
@@ -105,7 +101,6 @@ TEST(ClientGmGateTest, DescriptorScan)
 	ExpectEveryGmMethodIsGated(SceneCurrencyClientPlayer::descriptor());
 	ExpectEveryGmMethodIsGated(ScenePetClientPlayer::descriptor());
 	ExpectEveryGmMethodIsGated(SceneAttributeClientPlayer::descriptor());
-	ExpectEveryGmMethodIsGated(SceneRollbackClientPlayer::descriptor());
 	ExpectEveryGmMethodIsGated(SceneBagClientPlayer::descriptor());
 }
 

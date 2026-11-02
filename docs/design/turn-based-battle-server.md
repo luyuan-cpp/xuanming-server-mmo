@@ -370,7 +370,7 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
 
 | # | 决策 | 理由 |
 |---|------|------|
-| D12 | **自动战斗是服务端状态**:`SetAutoBattle` 落在引擎 `BattleActorState.is_auto`;auto 单位在 `AllPlayersReady()` 中视为已就绪,`ResolveCurrentRound()` 的默认行动路径(普攻随机存活敌人)替他出手 | 挂机玩家掉线/切后台照打;引擎确定性不受影响(默认行动本来就走引擎 RNG);状态进快照,重连/观战免费可见 |
+| D12 | **自动战斗是服务端状态**:`SetAutoBattle` 落在引擎 `BattleActorState.is_auto`;auto 单位在 `AllPlayersReady()` 中视为已就绪,`ResolveCurrentRound()` 的默认行动路径替他出手(2026-11-01 起先选职业主动技能,选不出才普攻随机存活敌人,class-skills.md §6.5) | 挂机玩家掉线/切后台照打;引擎确定性不受影响(选招不消费随机数,普攻本来就走引擎 RNG);状态进快照,重连/观战免费可见 |
 | D13 | **全自动房间按固定节奏推进**:装填回合时若 `AllPlayersReady()` 立即为真(全员挂机),回合 timer 改用 `kAutoRoundIntervalMs = 2000` 而非整个行动窗口(2026-10-10 更正:2000ms 是下限,出手单位超过 8 个时按每单位 250ms 放宽,`AutoRoundIntervalMsFor`,见 pve-team-size-matching.md §2.2) | 既不空转刷回合(观众/客户端跟得上),也不傻等手动的 25s 行动窗口(2026-10-29) |
 | D14 | **队伍上限 5 双侧强制**:引擎 `Initialize` 校验每队玩家 ≤ `kMaxBattleTeamSize = 5`(超限拒绝建房);match 侧 PVE_TEAM 人数上限按 `min(配置值, 5)` 收口(2026-10-09 起配置值是人数**上限**,凑满人数 = 请求的 `team_size`,见 pve-team-size-matching.md §3) | 产品口径"队伍上限五个人";Dungeon 表存在 max_team_size=10 的历史行,代码收口比改表重导安全 |
 | D15 | **5v5 PVP 启用既有枚举**:`MATCH_MODE_5V5` 走 FIFO 凑 10 人,弹出序前 5 人 team 0、后 5 人 team 1 | 复用 matcher/gather 全部管线,只改 requiredPlayers/teamIndexFor 两个开关点 |
@@ -383,7 +383,7 @@ robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDuration
   battle: 校验参战者/未死/未逃 → engine.SetActorAuto(player_id, enabled)
         → enabled 且 AllPlayersReady() → 立即 ResolveRound(同 SubmitAction 就绪路径)
   引擎: is_auto 单位不进 pending_actor_ids;ResolveCurrentRound 对未提交者
-        (含 auto)FillDefaultActions 普攻
+        (含 auto)FillDefaultActions:挂机玩家先选职业主动技能,其余普攻
   客户端: BattleStateS2C.actors[].is_auto 渲染开关状态;本地记忆开关,
         下一场 BattleStart 后自动重发 SetAutoBattle(连续挂机体验)
 「连续战斗」为纯客户端开关:BattleEnd 结算面板收起后自动按上一次的

@@ -22,14 +22,11 @@ import (
 // 都不需要成对释放任何东西。
 //
 // 它是放行权威的一部分,但不是原子的:人数上限是软上限(预检与预占不在同一原子步骤里,并发下
-// 可能超出几个人),「回收中」的判定与 autoscaler 摘线之间也有毫秒级窗口(beginDrainWorldChannel
-// 先 SREM 在役集合、隔几次 Redis 往返才 SADD 回收中集合;locateWorldChannel 的两次 SISMEMBER 都落在
-// 这两步之间时两个集合都查不到,请求会被当成「不是分线」走原逻辑 —— 上限、冷却、conf 校验都不做)。
-// 两者漏过去的后果都只是既有行为(多进几个人 / 进了回收中的线随后被改派),不涉及归属安全。
+// 可能超出几个人),预检之后线也可能开始回收。两者漏过去的后果都只是既有行为(多进几个人 /
+// 进了回收中的线随后被改派),不涉及归属安全。
 //
-// 这个窗口来自摘线那两步不是原子的,根治在 world_autoscale.go(合成一次 SMOVE)。本文件能保证的是
-// 读的顺序不把窗口放大,并且摘线一旦改成原子就不再有窗口(理由见 locateWorldChannel)。
-// 同一窗口对线号的影响见 world_channel_directory.go 的 luaAllocWorldChannelLineNumbers。
+// 摘线是一段脚本(world_autoscale.go 的 luaBeginDrainWorldChannel),一条线任何时刻至少在一个集合里;
+// locateWorldChannel 的读顺序保证不会两头落空(理由见该函数)。
 
 // enter_scene_rejected_total 的 reason 取值(玩家主动选线的预检发出的五种,zone_id 是目标 zone)。
 // 全部是固定字符串,低基数。它们是玩家操作触发的业务拒绝,有稳定的低速率属正常。

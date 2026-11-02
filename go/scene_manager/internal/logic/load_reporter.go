@@ -417,9 +417,8 @@ type deadNodeReconcileResult struct {
 //
 // 结果分四类:
 //   - destroyed:认领并销毁;
-//   - stale:属主已指向别的节点,或映射在 Zscore 之后、脚本之前消失(并发销毁,或
-//     createscenelogic.go rollbackInstanceAllocation 先 DEL 映射、后 ZREM 的那几个往返里)。映射消失时
-//     不当作可认领:删映射的那条路径负责其余清理,这里再抹会与它双还 Agones 名额;
+//   - stale:属主已指向别的节点,或映射在 Zscore 之后、脚本之前消失(并发销毁,或创建失败的回滚)。
+//     映射消失时不当作可认领:删映射的那条路径负责其余清理,这里再抹会与它双还 Agones 名额;
 //   - world_skipped:不在 active 集合里。除世界频道外,还包括在本次 GET 之前就已被销毁的实例,例如同一轮
 //     里先被源场景级联抹掉的共置镜像 —— 所有销毁脚本都在同一次 EVAL 里 DEL 映射并 ZREM;
 //   - failed:Redis 出错,结论未知。failed 的成员留在反向索引里不摘:它的 scene:{id}:node 多半仍指向

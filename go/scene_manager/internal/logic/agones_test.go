@@ -619,10 +619,11 @@ func TestAtomicDestroyIfIdle_ReturnsAndWipesAgonesMapping(t *testing.T) {
 	seedSceneMembersVia(sc, sceneId, 0)
 	sc.Redis.Set(sceneAgonesGsKey(sceneId), "gs-77")
 
-	nodeId, gsName, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	claim, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
 	require.NoError(t, err)
-	assert.Equal(t, "10", nodeId)
-	assert.Equal(t, "gs-77", gsName)
+	assert.True(t, claim.Claimed)
+	assert.Equal(t, "10", claim.NodeID)
+	assert.Equal(t, "gs-77", claim.AgonesGs)
 
 	left, _ := sc.Redis.Get(sceneAgonesGsKey(sceneId))
 	assert.Equal(t, "", left, "agones mapping must be wiped with the rest of the scene state")
@@ -637,10 +638,12 @@ func TestAtomicDestroyIfIdle_AbortKeepsAgonesMapping(t *testing.T) {
 	seedSceneMembersVia(sc, sceneId, 3)
 	sc.Redis.Set(sceneAgonesGsKey(sceneId), "gs-77")
 
-	nodeId, gsName, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	claim, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
 	require.NoError(t, err)
-	assert.Equal(t, "", nodeId)
-	assert.Equal(t, "", gsName)
+	assert.True(t, claim.Busy)
+	assert.False(t, claim.Claimed)
+	assert.Equal(t, "", claim.NodeID)
+	assert.Equal(t, "", claim.AgonesGs)
 
 	left, _ := sc.Redis.Get(sceneAgonesGsKey(sceneId))
 	assert.Equal(t, "gs-77", left, "aborted destroy must not touch the mapping")

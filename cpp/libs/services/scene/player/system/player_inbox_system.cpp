@@ -490,7 +490,7 @@ namespace
 		{
 			return PlayerInboxDeferReason::kLedgerInvalid;
 		}
-		// 照 player_rollback_handler 对 GM 写操作的战斗闸:战斗快照已经发出去,此刻改货币状态会与结算打架。
+		// 战斗闸:战斗快照已经发出去,此刻改货币状态会与结算打架。
 		if (player_inbox_registry::DomainRule(domain).requiresOutOfBattle && PlayerBattleSystem::IsInBattle(player))
 		{
 			return PlayerInboxDeferReason::kInBattle;

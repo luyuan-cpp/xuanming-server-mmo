@@ -375,6 +375,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [handoff-orcontinue-closure-20260914.md](handoff/handoff-orcontinue-closure-20260914.md) — 交接：`Lookup*OrContinue` 修复收尾 + exporter-tests CI 复活
 - [handoff-tip-axis-and-port-20260903.md](handoff/handoff-tip-axis-and-port-20260903.md) — 交接清单：tip 码轴收尾 + 玄冥移植未开工项
 - [handoff-tip-fault-gateway-500-20261018.md](handoff/handoff-tip-fault-gateway-500-20261018.md) — 交接：Java 网关按 fault 列把登录故障回 500
+- [main-only-cleanup-20261101.md](handoff/main-only-cleanup-20261101.md) — 只保留 main：分支和 worktree 清理方案（2026-11-01）
 - [mixed-version-persist-handoff-20261019.md](handoff/mixed-version-persist-handoff-20261019.md) — 混版本持久字段保护：交接（2026-10-19）
 - [placement-line-handoff-20261019.md](handoff/placement-line-handoff-20261019.md) — 交接:玩家存储落点这条线——完成度核查与剩余工作(落点 + D1 映射持久化,2026-10-19)
 - [placement-reverify-checklist-20261012.md](handoff/placement-reverify-checklist-20261012.md) — 玩家存储落点:当前 HEAD 复验清单(交 Codex)

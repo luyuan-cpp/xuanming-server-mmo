@@ -223,7 +223,7 @@ func (e *ClientRpcValidationError) Error() string {
 // 调用时机:方法号已分配之后(流水线里 cppGen.InitMessageId 之后),通常传 GlobalRPCServiceList。
 // 输入:isSceneTCP 判定 gate 的转发路径,生产传 IsSceneTCPMethod,单测注入;不得为 nil。
 // 输出:按 services 顺序的客户端协议服务,方法按 proto 声明顺序。客户端协议服务只看 OptionIsClientProtocolService,
-// 不看服务名(GuildService / MatchService 名字不含 ClientPlayer 也算;SceneRollbackClientPlayer 没标就不算)。
+// 不看服务名(GuildService / MatchService 名字不含 ClientPlayer 也算;名字含 ClientPlayer 但没标的不算)。
 // 校验:
 //  1. 名字以 Notify 开头 ⇔ CLIENT_RPC_PUSH,例外只有 SceneClientPlayerCommon 的三个推送;
 //  2. CLIENT_RPC_ONE_WAY 的响应必须恰好是 .Empty 且走 scene TCP;反之 scene TCP 上响应恰好是 .Empty 的

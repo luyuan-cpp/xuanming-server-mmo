@@ -212,6 +212,7 @@ func destroyOrphanOfDeadNode(ctx context.Context, svcCtx *svc.ServiceContext, zo
 
 // destroyInstanceInternal 返回本次是否真的执行了销毁(认领成功并跑完副作用)。false 且 err 为 nil 时
 // 什么都没做:非 force 时场景里来了人;force 时场景已被别的进程抹掉,或属主已不是 expectedOwner。
+// 非 force 认领到一个映射已不在的残留时也回 true:active 集合里的条目摘掉了,agones_gs 还在就归还。
 //
 // force=false:luaAtomicDestroyInstance 按人数 CAS 认领,有人就放弃(空闲回收,经 destroyInstance)。
 // force=true:luaAtomicDestroyInstanceForce 不看人数。expectedOwner 为空时不比对属主(explicit /
@@ -274,26 +275,19 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 
 	// Core atomic destroy — unless force=true, aborts if the scene picked
 	// up a player in the meantime.
-	destroyed := true
 	if !force {
-		atomicNode, atomicGs, err := AtomicDestroyIfIdle(svcCtx, zoneId, sceneId)
+		claim, err := AtomicDestroyIfIdle(svcCtx, zoneId, sceneId)
 		if err != nil {
 			logx.Errorf("[InstanceLifecycle] AtomicDestroy failed for scene %d: %v", sceneId, err)
 			return false, err
 		}
-		if atomicNode == "" {
-			// Scene picked up a player between our check and the script;
-			// reseed its idle clock so next tick re-evaluates fairly.
-			svcCtx.Redis.Zadd(activeInstancesKey(zoneId), time.Now().Unix(), sceneIdStr)
-			destroyed = false
-		} else {
-			nodeId = atomicNode
-			// 脚本读到的值才是权威:上面那次快照读和脚本之间可能被别的
-			// 路径改过。
-			if atomicGs != "" {
-				agonesGs = atomicGs
-			}
+		if !claim.Claimed {
+			// 场景里来了人。脚本已经重置了空闲时钟,下一拍公平地重判。
+			return false, nil
 		}
+		// 脚本读到的值才是权威:上面那次快照读和脚本之间可能被别的路径改过。
+		nodeId = claim.NodeID
+		agonesGs = claim.AgonesGs
 	} else {
 		// Force path:原来是"快照读 + 七连 DEL",快照与删除之间没有原子性,
 		// 并发的销毁(空闲回收的非 force 脚本、explicit / 级联 / 死节点收尾的
@@ -305,7 +299,7 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 			logx.Errorf("[InstanceLifecycle] AtomicDestroyForce failed for scene %d: %v", sceneId, err)
 			return false, err
 		}
-		if atomicNode == "" && atomicGs == "" {
+		if atomicNode == "" {
 			// 别的进程已抢先抹掉并负责了级联/计数/归还 —— 本次是重复销毁;
 			// 或者带了期望属主而属主已不是它 —— 场景归别人了,一个键都没动。
 			return false, nil
@@ -313,10 +307,6 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 		nodeId = atomicNode
 		agonesGs = atomicGs
 		residualMembers = atomicMembers
-	}
-
-	if !destroyed {
-		return false, nil
 	}
 
 	// Cascade destroy: any mirror whose source is this scene has to die with
@@ -362,9 +352,8 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 
 	// 归还 Agones 房间名额。
 	//
-	// 走到这里说明这次 destroy 真的执行了(destroyed==true),所以名额只会
-	// 被还一次:重复 Destroy 的第二次调用在脚本里读不到 scene:{id}:node,
-	// 拿不到 agonesGs,也就不会重复减。
+	// 走到这里说明认领成功了,所以名额只会被还一次:agones_gs 和映射在认领脚本里
+	// 一起删掉,之后的销毁拿不到它,回包丢失重发的只是同一份快照。
 	//
 	// 节点已经死了的情况同样要还:GameServer 对象可能还在(Agones 还没判
 	// Unhealthy),它身上的 rooms 计数不减就会一直占着容量。ReleaseRoom 对

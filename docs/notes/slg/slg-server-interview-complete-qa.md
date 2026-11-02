@@ -2,7 +2,7 @@
 
 **Updated:** 2026-04-02
 
-> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+> **说明**：本文是「率土风格」的设计或面试笔记，不代表率土之滨的真实架构。数据层 2026-11-01 按[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)改写：玩家数据和地图数据都不放 Redis，地块和行军以地图服内存为准，持久数据只落 TiDB（预算不够用 MySQL 档），Redis 只做协调。库表、写入路径和为什么不用 Redis，见[框架设计 §12](./slg-server-complete-framework.md)。
 
 > 每题格式: **简答** → **详细解释** → **深挖追问**
 
@@ -52,7 +52,7 @@
 
 ### Q2: MapService 为什么是有状态的?不能做成无状态微服务吗?
 
-**简答**: 地图是全局共享可变状态 (1.44M 格子 + 万级行军)，每次操作都需要读写地图数据。做成无状态需要所有状态外置到 Redis，但延迟和一致性代价过高。
+**简答**: 地图是全局共享可变状态 (1.44M 格子 + 万级行军)，每次操作都需要读写地图数据。做成无状态需要所有状态外置到远端存储 (Redis 或 TiDB)，但延迟和一致性代价过高。
 
 **详细解释**:
 
@@ -63,12 +63,12 @@ MapService 持有的状态:
 - 建筑队列、采集状态
 
 如果无状态化:
-- 每次行军推进/碰撞检测都要跨网络读写 Redis → 延迟从 ns 级变成 ms 级
+- 每次行军推进/碰撞检测都要跨网络读写远端存储 → 延迟从 ns 级变成 ms 级
 - 碰撞检测需要原子读写多个格子的 occupant 数据 → 分布式锁/事务
-- 视野推送需要遍历所有 observer → 在 Redis 上做这种遍历极其低效
+- 视野推送需要遍历所有 observer → 在远端存储上做这种遍历极其低效
 - 结论: 破坏了性能模型，不值得
 
-正确做法: **单进程有状态 + Region 内并发** + 数据异步持久化到 Redis/MySQL。
+正确做法: **单进程有状态 + Region 内并发** + 变更经有序提交队列落 TiDB (主循环不等数据库，见 Q46)。
 
 **深挖追问**:
 - "那 MapService 宕机怎么办？" → 见 Q77 (崩溃恢复)
@@ -223,17 +223,17 @@ MapService 中:
   - 离线玩家的城池可以被任何人侦察、攻击
   - 被攻击 → 正常战斗流程 → 结算 → 战报存 DB → 下次登录推送
 
-  // 不是 "离线玩家数据在 Redis, 在线加载到内存"
+  // 不是 "离线玩家数据在数据库, 在线才加载到内存"
   // 而是 "所有地图相关数据始终在 MapService 内存中"
 
 需要区分:
   地图数据 (格子/城池/行军) → 始终在 MapService 内存
-  玩家个人数据 (背包/武将详情) → Redis，按需加载
+  玩家个人数据 (背包/武将详情) → TiDB，按需加载
 ```
 
 **深挖追问**:
 - "10 万注册玩家的城池全常驻内存?" → 是的，每个城池占用很少 (几百字节)，10 万个也就几十 MB。
-- "5 万离线玩家的武将数据也在内存?" → 不需要。武将详情在 Redis，只有战斗时才加载快照。地图上只存城池位置/等级/归属。
+- "5 万离线玩家的武将数据也在内存?" → 不需要。武将详情在 TiDB，只有战斗时才加载快照。地图上只存城池位置/等级/归属。
 
 ---
 
@@ -276,7 +276,7 @@ Gate 职责:
 Phase 1 — 核心 (MVP):
   [Gate] ←TCP→ [Client]
   [Gate] ←gRPC→ [GameService]  // Map + Build + Army + Vision 全在一个进程
-  [GameService] → [Redis] + [MySQL]
+  [GameService] → [TiDB]，Redis 只做协调
 
 Phase 2 — 拆分战斗:
   [GameService] ←Kafka→ [BattleService (×N)]
@@ -1079,71 +1079,74 @@ HandleViewportRequest(player_id, viewport):
 
 ## 五、数据层与持久化
 
-> 本章的数据分工和写入路径已被取代,见文首状态说明。
+### Q45: TiDB 和 Redis 各存什么？为什么玩家数据和地图不放 Redis？
 
-### Q45: Redis 和 MySQL 各存什么?
+**简答**: TiDB 存全部持久数据 (玩家存档、地块、行军、联盟、战报、交易日志)，是唯一真源；Redis 只做协调 (session、锁、限流、通知、可重算的排行榜)。
 
-**简答**: Redis 存热数据 (玩家在线数据, session, 排行榜)；MySQL 存持久化数据 (全量备份, 交易日志, 战报)。
+**详细解释**: 见框架文档 §12。判断标准：丢了能按协议重建或按 TTL 失效，才放 Redis；丢了只能从 TiDB 找回的，放 TiDB。
 
-**详细解释**: 见框架文档 §12。
+**深挖追问**:
+- "Redis 不是更快吗?" → 快靠的是 MapService 内存。Redis 在另一台机器上，每次读写还多一次网络往返，帮不上热路径。
+- "Redis 开 AOF 不就不丢了?" → 通常每秒刷一次盘，崩溃丢约 1 秒；主从异步复制，切主时可能丢已确认的写。TiDB 三副本多数派提交，单台机器坏了不丢已提交的数据。
+- "Redis 也能做事务?" → Redis Cluster 的多键操作要求所有键在同一个 hash slot。攻城易主、同盟仓库、交易要同时改多个玩家的数据，做不到原子。
+- "留一层 Redis 缓存呢?" → 两份数据就要对账：谁为准、回退、乱序、补投。在线数据已经在进程内存里，再加一层帮助不大。
 
 ---
 
 ### Q46: 数据持久化策略? write-through 还是 write-behind?
 
-**简答**: Write-behind (Kafka → DB Service → MySQL)。关键操作立即写 WAL。
+**简答**: 有序提交队列。主循环不等数据库 (对主循环是 write-behind)，关键操作提交成功才回客户端 (对玩家是 write-through)。
 
-**详细解释**: 
+**详细解释**:
 
 ```
-正常流程 (write-behind):
-  GameLogic 修改数据 → 更新内存 → 发 Kafka msg → DB Service 异步写 MySQL
-  延迟: 100ms~1s
+所有变更:
+  GameLogic 修改内存 → 追加到提交队列 → 提交线程每 50ms 或 500 行取一批 → DB Service → 一个 TiDB 事务
+  延迟: 操作回客户端约 50~100ms (推算，要实测)
 
-关键操作 (write-through):
-  战斗结算、充值、交易 → 同步写 MySQL (或至少写 Redis + Kafka)
-  延迟: 1~10ms
+关键操作 (资产、易主、行军状态、战斗结算):
+  提交成功才回客户端和推送
 
-折中: 先写 Redis (ms 级持久化) + Kafka (异步落 MySQL)
-  Redis AOF 保证秒级数据安全
-  MySQL 保证最终一致性
+高频字段 (地块耐久、驻军数量):
+  dirty 标记，每 10 秒进队列批量 upsert，接受最多丢约 10 秒
 
-脏标记方案的竞态问题: 见框架文档引用的 db-write-behind 分析。
-推荐方案: Kafka partition worker 内 batch flush (同 goroutine 串行)。
+脏标记的竞态问题: 只有一个写者、一个提交线程，后入队的覆盖先入队的，不会乱序。
 ```
 
 **深挖追问**:
-- "Kafka 还没消费完 DB Service 就挂了?" → Kafka 有持久化 + consumer commit。DB Service 重启后从上次 commit offset 继续消费。
-- "Redis 挂了呢?" → AOF + Sentinel 自动故障转移。最坏情况丢 1~2 秒数据，可从 MySQL 最近快照 + Kafka binlog 恢复。
+- "DB Service 挂了?" → 提交线程拿不到结果就用同一序号、同样内容重试，已经提交过的序号相等，直接算成功。
+- "TiDB 挂了呢?" → 地图读取和行军懒计算不受影响；队列超过上限就拒绝新的玩家写操作并告警。
+- "老进程没死透还在写呢?" → 每次提交都在事务里核对 owner_epoch。新进程启动时已把它加 1，老进程的提交会被拒绝，然后退出。
 
 ---
 
 ### Q47: 地图数据怎么持久化?
 
-**简答**: dirty Region 标记 + 定期批量写。
+**简答**: 按格子存行。易主当场进提交队列，耐久、驻军这类高频字段 dirty 标记后定期批量 upsert。
 
 ```
 TileManager.UpdateTile(tile_id, ...):
   tiles[tile_id] = ...
-  dirty_regions.add(tile_id_to_region(tile_id))
+  if owner_changed:
+    commit_queue.append(tile_row(tile_id))  // 和占领奖励同一批提交
+  else:
+    dirty_tiles.add(tile_id)
 
-PersistenceTick (every 30s):
-  for region_id in dirty_regions:
-    region_data = serialize_region(region_id)  // 1024 tiles protobuf
-    write_to_redis("map_region:{region_id}", region_data)
-    send_kafka("db_task", region_data)  // 异步落 MySQL
-  dirty_regions.clear()
+PersistenceTick (every 10s):
+  for tile_id in dirty_tiles:
+    commit_queue.append(tile_row(tile_id))  // INSERT ... ON DUPLICATE KEY UPDATE
+  dirty_tiles.clear()
 
-// Region 粒度写入: 1024 tiles × 128B ≈ 128KB/Region
-// 全图 1444 Regions, 但通常每 30s 只有 ~100 个 dirty
-// → 每 30s 写入量 ~12.8 MB, 完全可接受
+// 只存和配置初始状态不同的格子，最多 144 万行，每行约 128B
+// 平时每 10 秒几千行，大战时几万行，按每批 500 行拆开提交
+// 比整个 Region 写大块 (1024 tiles ≈ 128KB) 省得多，还能按 owner 查领地
 ```
 
 ---
 
 ### Q48: 排行榜怎么实现?
 
-**简答**: Redis Sorted Set，score 为排名指标 (战力/击杀/领地面积)。
+**简答**: Redis Sorted Set，score 为排名指标 (战力/击杀/领地面积)。它只是加速，分数来自 TiDB，清空后可重算。
 
 ```
 // 实时排行榜 (Redis ZINCRBY)
@@ -1169,20 +1172,21 @@ ZADD rank:alliance_power {total_power} {alliance_id}
 
 ### Q49: 玩家数据的读写路径?
 
-**简答**: 
-- 读: 先查 MapService 内存 (地图数据) → 再查 Redis (个人数据) → 最后查 MySQL (冷数据)
-- 写: 修改内存/Redis → Kafka → MySQL
+**简答**:
+- 读: 先查 MapService 内存 → 没有就查 TiDB
+- 写: 修改内存 → 提交队列 → TiDB
 
 ```
 读路径:
   地图数据 (格子/行军) → MapService 内存 (最快, ns级)
-  个人数据 (武将/背包) → Redis (快, <1ms)
-  历史数据 (旧战报)   → MySQL (慢, 1-10ms)
-  
+  在线玩家数据 (武将/背包) → 进程内存
+  离线玩家数据 → TiDB 点查 (约 2~3ms)，进程内 LRU
+  历史数据 (旧战报) → TiDB 按索引查
+
 写路径:
-  地图数据修改 → 内存更新 + dirty flag → 定期 flush Redis → Kafka → MySQL
-  个人数据修改 → Redis 更新 → Kafka → MySQL
-  战斗结算    → Redis + MySQL 双写 (关键操作)
+  地图数据修改 → 内存更新 → 易主进队列，其他字段 dirty 后定期进队列 → TiDB
+  个人数据修改 → 内存更新 → 进队列 → TiDB，提交成功才回客户端
+  战斗结算    → 战果 + 战报同一批提交 → 提交成功才推送
 ```
 
 ---
@@ -1196,7 +1200,7 @@ ZADD rank:alliance_power {total_power} {alliance_id}
 三层防护:
 1. **正常路径**: Scene Manager 串行 handoff (释放 → 确认 → 加载)
 2. **异常路径**: 分布式锁 (Redis SETNX, TTL 3s)
-3. **兜底**: 乐观锁 (version 字段)
+3. **兜底**: TiDB 写权行 (owner_epoch + 整笔序号)，在提交事务里核对，旧写者直接被拒
 
 ---
 
@@ -1205,60 +1209,64 @@ ZADD rank:alliance_power {total_power} {alliance_id}
 **简答**: 同一 player_id 作为 partition key → 保证同 player 消息落到同一 partition → 同 partition 内 FIFO。
 
 **深挖追问**:
-- "partition 数量怎么定?" → 通常 = 最大消费者数量。比如 DB Service 有 8 个 worker → 8 个 partition。
-- "如果某个 player 消息量特别大 (热点)?" → 单 partition 内仍然串行处理。如果是 KOL 级玩家导致一个 partition 过热，可以在 DB Service 层面做优先级调度。
+- "partition 数量怎么定?" → 通常 = 最大消费者数量。比如审计流水消费者有 8 个 worker → 8 个 partition。
+- "如果某个 player 消息量特别大 (热点)?" → 单 partition 内仍然串行处理。如果是 KOL 级玩家导致一个 partition 过热，可以在消费者层面做优先级调度。
 
 ---
 
-### Q52: Redis 的内存容量估算?
+### Q52: TiDB 和 Redis 的容量怎么估算?
 
-**简答**: 单赛季 ~2~5 GB。
+**简答**: 单赛季 TiDB 约 20GB，交易流水另算；Redis 只放协调数据，1GB 以内。
 
 ```
-估算:
-  10K 在线玩家:
-    profile: 10K × 1KB = 10MB
-    resources: 10K × 100B = 1MB
-    generals: 10K × 5KB = 50MB (平均 10 个武将)
-    buildings: 10K × 2KB = 20MB
-    armies: 10K × 1KB = 10MB
-    mails: 10K × 500B = 5MB
-  Subtotal: ~100MB
-
-  100K 注册玩家 (含离线):
+TiDB (单副本，三副本乘 3，压缩前):
+  100K 注册玩家:
+    profile + resources + generals + buildings + armies + mails
     100K × 10KB = 1GB
+  地图: map_tiles 最多 144 万行 × 128B = ~180MB
+  活跃行军: 50K × 约 1KB = ~50MB
+  战报: 100K/天 × 2KB × 90 天 = ~18GB
+  总计: ~20GB
 
-  排行榜: ~50MB
+  交易流水量最大 (峰值 600 万行/小时，见 Q54)，单独定期归档
+
+Redis:
   Session: ~10MB
-  地图 Region 缓存: 1444 × 128KB = ~180MB
-
-  总计: ~1.5GB, 留余量 → 分配 4GB
+  排行榜: ~50MB
+  锁、限流: 很少
+  总计: < 100MB，分配 1GB
 ```
 
 ---
 
-### Q53: MySQL 表怎么分库分表?
+### Q53: TiDB 表怎么设计?
 
-**简答**: 按赛季分库 (每赛季独立 DB)，大表按 player_id Hash 分表。
+**简答**: 每个世界 (赛季) 一个逻辑库，不手工分表，TiDB 自动按 Region 切分。主键用发号器的打散 ID，不用自增。
 
 ```
 数据库划分:
-  db_season_101: 赛季101的所有数据
-  db_season_102: 赛季102的所有数据
-  → 赛季结束 → 整库归档
+  slg_world_101: 世界 101 的所有数据
+  slg_world_102: 世界 102 的所有数据
+  → 赛季结束 → 整库导出归档，再 DROP DATABASE
+  → 扩容 → 把整个逻辑库搬到另一个集群
 
-分表 (player_id hash):
-  players_00 ~ players_15  (16 份)
-  generals_00 ~ generals_15
-  
-地图表不分表 (单地图): map_tiles 按 region_id partition
+主键:
+  players(player_id)、generals(player_id, general_id)
+  发号器发的 ID 已打散，写入不会集中在表尾
 
-战报表: battle_reports 按时间 range partition (月级)
+map_tiles(tile_id):
+  tile_id 连续、表又小，建库时预切:
+  SPLIT TABLE map_tiles BETWEEN (0) AND (1440000) REGIONS 16;
+
+战报列表:
+  player_battle_reports(player_id, created_at, report_id)
+  发号器 ID 不能排序，翻页按 created_at
 ```
 
 **深挖追问**:
-- "为什么不用 NewSQL (TiDB)?" → 可以，分布式 SQL 简化分表逻辑。但运维复杂度和成本增加。SLG 单赛季数据量不大 (< 50GB)，MySQL 完全够。
-- "ORM 怎么用?" → 不推荐重度 ORM。proto → MySQL mapping，用 `REPLACE INTO` 做幂等写入。
+- "为什么不用 MySQL 分库分表?" → 手工分表定了分片数就很难改，跨片事务还要自己做。预算不够时可以用 MySQL 档，业务写法不变，预切、TTL 这些 TiDB 专属的部分不用。
+- "TiDB 写入比 MySQL 慢怎么办?" → 主循环不等数据库，批量提交。单行写 P95 约 10~13ms (官方 Sysbench 小行数据)，真实负载要自测。
+- "ORM 怎么用?" → 不推荐重度 ORM。proto → SQL mapping，用 `INSERT ... ON DUPLICATE KEY UPDATE` 做幂等写入。
 
 ---
 
@@ -1268,7 +1276,7 @@ ZADD rank:alliance_power {total_power} {alliance_id}
 
 ```sql
 CREATE TABLE transaction_log (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT PRIMARY KEY,            -- 发号器发，不用自增 (顺序主键是 TiDB 写热点)
     player_id BIGINT NOT NULL,
     tx_type TINYINT NOT NULL,        -- 1=currency, 2=item
     item_config_id INT,
@@ -1283,21 +1291,23 @@ CREATE TABLE transaction_log (
 ```
 
 **深挖追问**:
-- "日志量会不会很大?" → 10K 在线 × 平均 10 笔/分 = 100K/分 = 6M/小时。按月分区，定期归档旧月份。
+- "日志量会不会很大?" → 10K 在线 × 平均 10 笔/分 = 100K/分 = 6M/小时。定期归档旧数据，或用 TiDB TTL 自动清理 (后台清理，不保证到期立刻删)。
+- "流水和资产怎么保证一致?" → 同一个事务提交，不会资产变了流水没写。
 
 ---
 
 ### Q55: 崩溃恢复时数据从哪里恢复?
 
-**简答**: 地图数据从 Redis 最近快照 + dirty Region flush 恢复；行军从 Redis 中的行军记录恢复（懒计算公式重算位置）；玩家数据从 Redis 恢复。
+**简答**: 全部从 TiDB 恢复。地图按配置建满后用 `map_tiles` 覆盖；行军从 `marches` 读出后用懒计算公式重算位置；玩家数据按需加载。
 
-**详细解释**: 见框架文档 §4.6 和 §16。
+**详细解释**: 见框架文档 §4.7、§12.6 和 §16。
 
 恢复顺序:
-1. 加载地图 Region 数据 (Redis → Memory)
-2. 加载行军记录 → 重算位置 → 重建 occupant → 重注册定时器
-3. 重跑碰撞检测 (补漏恢复期间错过的)
-4. 恢复在线玩家 session → 推送重连消息
+1. 抢写权 (owner_epoch + 1)
+2. 加载地图数据 (配置 + map_tiles → Memory)
+3. 加载行军记录 → 重算位置 → 重建 occupant → 重注册定时器
+4. 重跑碰撞检测 (补漏恢复期间错过的)
+5. 恢复在线玩家 session → 推送重连消息
 
 ---
 
@@ -1355,7 +1365,7 @@ RateLimiter per player:
 1. Client → Gate: LoginRequest{account, token, platform}
 2. Gate → LoginService: VerifyToken{account, token}
 3. LoginService → AuthService (Java): 验证 token 合法性
-4. LoginService: 查 Redis 获取玩家数据 / 创建新角色
+4. LoginService: 查 TiDB 获取玩家数据 / 创建新角色
 5. LoginService → Gate: LoginResponse{player_id, session_token, game_server_addr}
 6. Client → Gate: EnterGame{session_token}
 7. Gate → MapService: PlayerLogin{player_id}
@@ -1585,9 +1595,9 @@ SLG 的网络 IO 不是瓶颈 (消息频率低)。瓶颈在逻辑计算。
 
 ### Q77: MapService 宕机了怎么恢复?
 
-**简答**: 快速重启 → 从 Redis 加载地图/行军数据 → 重算行军位置 → 重建定时器/碰撞。目标 < 2 分钟。
+**简答**: 快速重启 → 抢写权 → 从 TiDB 加载地图/行军数据 → 重算行军位置 → 重建定时器/碰撞。目标 < 2 分钟。
 
-**详细解释**: 见框架文档 §4.6。
+**详细解释**: 见框架文档 §4.7、§12.6。
 
 核心优势: 懒计算模型意味着不需要恢复中间状态 — 公式给出任意时刻的正确位置。
 
@@ -1633,7 +1643,7 @@ SLG 的网络 IO 不是瓶颈 (消息频率低)。瓶颈在逻辑计算。
 - BattleService queue_depth > 1000 → P2
 - Kafka consumer lag > 10000 → P1
 - Redis memory > 80% → P2
-- MySQL replication lag > 10s → P1
+- 提交队列积压 > 30s → P1
 
 ---
 
@@ -1786,7 +1796,7 @@ ChatMessage → ChatService:
 
 ### Q95: 外交关系 (同盟/敌对) 存在哪?
 
-**简答**: Redis Hash — `alliance:{id}:diplomacy` → `{target_alliance_id: relation_type}`
+**简答**: TiDB 表 `alliance_diplomacy(alliance_id, target_alliance_id, relation_type)`。
 
 变化不频繁 (几天一次)，可缓存在 MapService 内存中。
 
@@ -2133,4 +2143,4 @@ QA (2-3): 测试, 压测
 - [ ] 能解释 Hashed Timing Wheel vs 最小堆
 - [ ] 能描述一个完整的 debug 案例 (如确定性失效排查)
 - [ ] 能回答跨服/合服的技术方案
-- [ ] 能估算 Redis/MySQL/Kafka 的容量需求
+- [ ] 能估算 TiDB/Redis/Kafka 的容量需求

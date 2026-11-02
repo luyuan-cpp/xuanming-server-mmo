@@ -34,7 +34,7 @@
 ### 1.1 战斗
 
 - [C] 回合战斗跑在 battle 节点的纯逻辑确定性引擎 `TurnBattleEngine`：输入快照 + 指令 + 种子，输出事件流；随机只走种子 RNG（`mt19937_64`），**消费顺序就是语义**（`turn_battle_constants.h` 的 `RollPercent` 注释段）。Java 版 `game-battle-engine` 逐位照搬。
-- [C] 非玩家单位的出手决策全部在 `TurnBattleEngine::FillDefaultActions`：怪物、超时 / 挂机玩家一律"普攻 + target 0"，结算时由引擎 RNG 随机挑存活敌人；只有宝宝（`BATTLE_ACTOR_TYPE_PET`）按快照顺序取第一个能放的技能，目标写死 `enemies.front()`。
+- [C] 非玩家单位的出手决策全部在 `TurnBattleEngine::FillDefaultActions`：怪物、非挂机玩家超时一律"普攻 + target 0"，结算时由引擎 RNG 随机挑存活敌人；宝宝（`BATTLE_ACTOR_TYPE_PET`）按快照顺序取第一个能放的技能，目标写死 `enemies.front()`；挂机玩家按内置规则挑职业主动技能，挑不出才普攻（`class-skills.md` §6.5，2026-11-01 落码，未编译）。
 - [C] 怪物不带技能（`AppendMonsterActor` 不设 `skill_table_ids`），`MonsterTable` 只有属性、经验 / 金币奖励和掉落列（没有技能或 AI 列）。设计文档自述"怪物 AI 用技能未做（只普攻）"（turn-based-battle-server.md §15.4）。
 - [C] 没有目标策略、技能优先级、阶段转换、Boss 机制。
 - [C] 技能 = 固定列 + `damage` 表达式 + `effect[]` 挂 buff id；buff 按 `buff_type` 走手写 switch（`TurnBattleEngine` 的 buff 周期效果段、`buff.cpp`），回合侧只有 8 种类型生效。buff 类型编号至少有 4 份手抄副本（`buff_table.proto` 注释、`buff.h`、`turn_battle_constants.h`、Java `BattleConstants.java`）。
@@ -897,7 +897,7 @@ message PlayerTemplateAuditRecord {          // 运维操作审计，与状态�
 3. **不让模板服务成为所有开局的同步依赖**：只对设置了 loadout 的玩家调用（match 侧缓存"谁有 loadout"，由模板服务在 loadout 变更时失效）；加熔断（连续失败后一段时间内跳过这一步）；失败或超时不带策略继续开局并计 `outcome=error`（fail-open）。
 4. 结果写 `BattlePlayerSnapshot.auto_strategy = 21` 与 `BattlePetSnapshot.auto_strategy = 13`（两条消息现有最大字段号 20 和 12）。唯一写方是 match（`gather.go` 的快照写点），对每份快照都覆盖或清空。规则集或覆盖层禁用策略时整份清空。
 5. battle 在 `Initialize` 时编译成 `CompiledBattleStrategy`（与怪物策略共用编译器和求值器），引擎**自己**再执行一遍原子 player_selectable、组合矩阵、禁用开关检查。编译结果放私有 `std::map<actor_id, …>`，**不进 `BattleActorState`**（H5）。
-6. `FillDefaultActions`（唯一接缝）：PET 有策略时替换现行"取第一个能放的技能"（宝宝恒为自动行动，`InitPets` 里固定 `set_is_auto(true)`，所以宝宝策略一上线就生效）；PLAYER 没有 pendingAction 且有策略时按 priority 求值，候选过 `CheckActionPrerequisites`，全部落空回到现行"普攻 + target 0"。超时玩家与挂机玩家都按策略出手（推荐），这样 `is_auto` 不进事件语义，回放不必逐回合记录它。
+6. `FillDefaultActions`（唯一接缝）：PET 有策略时替换现行"取第一个能放的技能"（宝宝恒为自动行动，`InitPets` 里固定 `set_is_auto(true)`，所以宝宝策略一上线就生效）；PLAYER 没有 pendingAction 且有策略时按 priority 求值，候选过 `CheckActionPrerequisites`，全部落空回到现行默认行动（挂机玩家先试内置的职业选技，见 `class-skills.md` §6.5；其余"普攻 + target 0"）。超时玩家与挂机玩家都按策略出手（推荐）。`is_auto` 已经因内置选技进了事件语义（只有挂机玩家才自动选职业技能），策略这一步摘不掉它，按指令流重算的回放要逐回合记录挂机开关。
 7. **可解释性**：玩家不知道本回合按哪条规则出手，"策略没生效"会成为常见客诉。参照 `RedactStateForViewer`，只给本人下发"命中第 N 条 / 落空回退普攻"；C++ 指标加 `outcome=fell_back_default`。
 8. v1 战斗中不能切换策略；挂机开关保持现状（不持久化）。
 
@@ -1003,7 +1003,7 @@ Java 侧要做的事：① 模板服务模块（独占存储）+ 共享校验模
 1. **H10 例外**（需拍板）：`CreateBattleRequest` 加字段 14。fail-closed 由 battle 在副作用之前的模式与参数白名单保证；上线后混跑再加节点能力位。
 2. **CUSTOM 局"无损"**（推荐，评审一致），还是沿用现行通用结算（真实扣药、回写 HP、阵亡即满血满蓝复活）。
 3. **评分 PVP 里是否允许玩家策略**：建议默认禁用，由 `BattleRuleSet.player_strategy_forbidden` 控制。
-4. **策略对超时玩家也生效**（推荐）。若只对挂机玩家生效，`is_auto` 就成了事件语义的输入，回放必须逐回合记录。
+4. **策略对超时玩家也生效**（推荐）：手动玩家掉线或超时也能按自己的策略出手。原先的另一条理由（`is_auto` 不进事件语义）已不成立：`class-skills.md` §6.5 的内置选技只对挂机玩家生效，回放无论如何都要逐回合记录挂机开关。
 5. loadout 只能选自己的模板（推荐），别人的先复制。
 6. 宝宝策略按"出战宝宝槽位"绑定（v1），还是按 pet_id 绑定（以后另建表）。
 7. 房间放 MatchRedis 的 `{mr}`（推荐，与 challenge 同库，代价见 §8.6.4），还是照 team 的 DV-2 放 SharedRedis。

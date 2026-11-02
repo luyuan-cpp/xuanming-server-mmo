@@ -591,7 +591,38 @@ Codex 同时要做客户端(`../mmorpg-client`):
 
 没编译、没运行。只做过 `gofmt`、PowerShell 语法解析、YAML 解析。
 
-**下一步先做的**:`状态:本轮跑完` 之后删 scene 12 条 GM 桩的 proto(清单第 6 条),然后按清单第 1~5 条往下做。
+**下一步先做的**:清单第 6、1 条和第 2 条的终结工具已落码(未编译),见下面「清单第 1、2、6 条」。接着做第 2 条的 Manual 合同恢复入口,然后第 3~5 条。
+
+### 清单第 1、2、6 条(2026-11-01,未编译)
+
+都在仓库根下,串行。第 6 条要先重新生成协议:proto 删了 `player_rollback.proto`,`message_id.txt` 的 12 个号已手写墓碑,所以不用设 `PROTOGEN_ALLOW_MASS_MESSAGE_TOMBSTONE`。
+
+```bash
+pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml
+```
+
+```bash
+cd tools/proto_generator/protogen && go test ./internal/... -run TestClientRpcKinds -count=1
+```
+
+```bash
+cd go/scene_manager && go build -gcflags=-e ./... && go vet ./internal/... && go test -count=1 ./internal/logic/... ./internal/svc/...
+```
+
+```bash
+cd go/trade && go build -gcflags=-e ./... && go vet ./cmd/... ./internal/data/... && go test -count=1 ./cmd/assetopfix/...
+```
+
+C++(串行 `/m:1`):编 `scene`、`gate`、`currency_test`,跑 `currency_test --gtest_filter=ClientGmGateTest.*`。
+
+通过标准:
+
+- 生成后 `go/proto/scene/player_rollback*.pb.go`、`cpp/generated/proto/scene/player_rollback.pb.*`、`robot/vendor/proto/scene/player_rollback*.pb.go` 都不在,`proto/message_id.txt` 没有新增活行。
+- `cpp/generated/rpc/service_metadata/player_rollback_service_metadata.h` 会留着,是已知残留,不用手删,回执写一句;Claude 下一轮删。
+- `scene_claim_atomic_test.go` 全部 PASS,重点看 `cjson` 在 miniredis 下的往返。既有的 `TestAutoscale_*`、`TestOrphanCleanup_*`、`TestReconcileDeadNode_*`、`TestAtomicDestroy*`、`TestLocateWorldChannel_*`、`scene_keys_contract_test.go` 不能变红。
+- `go/trade/cmd/assetopfix` 全部 PASS。`GetOp`、`ListStuck` 只有单测的假实现覆盖,真库演练见 `docs/ops/trade-commerce-quarantine-runbook.md` §4.2。
+
+失败时保留:编译全部错误;失败用例 `go test -count=1 -v -run '^用例名$' <包>` 的完整输出。不改断言。
 
 ### 本聊天后续 A9 实际结果（2026-11-01，交原窗口处理）
 

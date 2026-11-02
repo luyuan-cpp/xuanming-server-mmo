@@ -72,7 +72,6 @@ set(SOURCE_FILES
     handler/rpc/player/player_movement_handler.cpp
     handler/rpc/scene_admin_handler.cpp
     handler/rpc/player/player_currency_handler.cpp
-    handler/rpc/player/player_rollback_handler.cpp
     handler/rpc/scene_handler.cpp
     handler/rpc/player/client_player_common_handler.cpp
     handler/rpc/player/player_lifecycle_handler.cpp

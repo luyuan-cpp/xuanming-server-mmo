@@ -50,9 +50,9 @@ inline token_security::RunMode CurrentSceneRunMode()
 // 像 gate 那样按 message_id 清单:
 //   * scene 这一侧拦的是 `ProcessClientPlayerMessage`,那里手上现成就有
 //     `MethodDescriptor::name()`,不需要再维护一份会漂移的号表;
-//   * 清单要人记得往里加 —— P0-a 的六条清单就漏掉了 SceneRollbackClientPlayer 的
-//     十二条(它们的 service 没标 OptionIsClientProtocolService,gate 挡得住,但
-//     scene 的 ProcessClientPlayerMessage 不看这个 option,直连 scene 端口照样打得进来)。
+//   * 清单要人记得往里加 —— P0-a 的六条清单就漏掉过十二条 GM 回档桩(service 没标
+//     OptionIsClientProtocolService,gate 挡得住,但 scene 的 ProcessClientPlayerMessage
+//     不看这个 option,直连 scene 端口照样打得进来;那十二条 2026-11 已从 proto 删除)。
 //     前缀判据不需要任何人记得。
 //
 // 代价是它拦不住不叫 `Gm*` 的后门(`DebugGrant`、`GMGrant`)。这条缝由

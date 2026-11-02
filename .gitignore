@@ -156,8 +156,9 @@ tools/contracts/
 tools/data_service/
 tools/scene_manager/
 
-# Java build output
-java/config_node/target/
+# Java 编译产物
+*.class
+/java/**/target/
 
 # Dead Go stub directories (no service code, only generated pb.go)
 # 聊天服务已落地，源码纳入版本控制；仅忽略本地生成的重复协议编号。

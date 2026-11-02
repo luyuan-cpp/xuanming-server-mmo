@@ -114,6 +114,14 @@ constexpr ClassBuffStat ClassSkillStatOfBuffType(uint32_t buffType) {
 // 同一属性增减叠加后的倍率下限:减益再多,属性也只降到原值的 10%,不归零(归零会让伤害公式与出手序退化)
 inline constexpr double kMinClassBuffStatMultiplier = 0.1;
 
+// ---- 职业玩家挂机选技的基础阈值(docs/design/class-skills.md §6.5) ----
+// 都是单位当前值 / 上限的比例。危急治疗不含端点(正好 30% 不算危急),其余三项含端点。
+// 这是当前基础 AI 的取值,不是战斗规则:只影响挂机玩家选哪一手,出手校验不读它们
+inline constexpr double kAutoCriticalHealRatio = 0.30;       // 友方气血低于它:危急治疗
+inline constexpr double kAutoHealRatio = 0.70;               // 友方气血不高于它:常规治疗
+inline constexpr double kAutoRestoreManaRatio = 0.30;        // 目标法力不高于它:回蓝
+inline constexpr double kAutoDefenseBuffHealthRatio = 0.60;  // 目标气血不高于它:防御增益
+
 // ---- 战斗状态(镜像 cpp/libs/services/scene/combat_state/constants/combat_state.h,
 //      作为 SkillPermission 表行 id 使用) ----
 

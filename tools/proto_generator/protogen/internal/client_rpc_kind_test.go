@@ -255,11 +255,11 @@ func TestClientRpcKindsPushPrefixExemptionIsScopedToSceneClientPlayerCommon(t *t
 func TestClientRpcKindsSkipUnmarkedServicesWithoutValidatingThem(t *testing.T) {
 	marked, _ := clientRpcRegressionService()
 	unmarked, method := clientRpcRegressionService()
-	unmarked.ServiceDescriptorProto.Name = proto.String("SceneRollbackClientPlayer")
+	unmarked.ServiceDescriptorProto.Name = proto.String("SceneInternalClientPlayer")
 	unmarked.ServiceDescriptorProto.Options = nil
 	// 若按客户端协议校验,这个方法会同时违反 Notify 前缀、scene Empty 与消息号三条;
 	// 服务没标 OptionIsClientProtocolService、方法也没标 OptionClientRpcKind,应整个被排除且不报错。
-	method.MethodDescriptorProto.Name = proto.String("NotifyRollback")
+	method.MethodDescriptorProto.Name = proto.String("NotifyInternal")
 	method.MethodDescriptorProto.OutputType = proto.String(".Empty")
 	method.Id = math.MaxUint64
 	classified, err := ClassifyClientRpcServices(RPCServiceInfoList{nil, unmarked, marked}, func(*MethodInfo) bool { return true })

@@ -97,6 +97,77 @@ double HealthRatio(const BattleActorState& actor) {
     return static_cast<double>(actor.attributes().health()) / static_cast<double>(actor.max_health());
 }
 
+// 法力比例(0 上限按满蓝算:没有蓝条的单位不需要回蓝)
+double ManaRatio(const BattleActorState& actor) {
+    if (actor.max_mana() == 0) {
+        return 1.0;
+    }
+    return static_cast<double>(actor.attributes().mana()) / static_cast<double>(actor.max_mana());
+}
+
+// 职业技能回蓝量:按目标最大法力的比例(× 辅助等级系数),按回蓝时刻 manaBefore 的缺口封顶
+uint64_t ClassSkillManaRestored(const SkillTable& skillRow, uint32_t rank, const BattleActorState& target,
+                                uint64_t manaBefore) {
+    const uint64_t missing = target.max_mana() > manaBefore ? target.max_mana() - manaBefore : 0;
+    return std::min(missing, classskill::CeilRatio(target.max_mana(), skillRow.restore_mana_percent() *
+                                                                          classskill::SupportRankFactor(rank)));
+}
+
+// 增减益按比例作用的那项属性的快照值(未吃增减益)
+uint64_t BaseClassBuffStat(const BattleActorState& actor, ClassBuffStat stat) {
+    switch (stat) {
+    case ClassBuffStat::kPhysicalAttack:
+        return actor.physical_attack();
+    case ClassBuffStat::kDefense:
+        return actor.defense();
+    case ClassBuffStat::kSpeed:
+        return actor.attributes().speed();
+    default:
+        return 0;
+    }
+}
+
+// 挂机选技的用途,按优先级从高到低排(class-skills.md §6.5)
+enum class AutoSkillPurpose : uint8_t {
+    kCriticalHeal = 0,
+    kDispel,
+    kHeal,
+    kRestoreMana,
+    kStatBuff,
+    kDamage,
+    kCount,
+};
+
+// 一手候选。gain 的单位随用途不同(治疗量 / 减益个数 / 净回蓝 / 属性点数 / 伤害),只在同一用途内比较
+struct AutoSkillCandidate {
+    AutoSkillPurpose purpose;
+    uint64_t gain;
+    uint64_t manaCost;
+    uint32_t cooldownRounds;
+    uint32_t skillId;
+    uint64_t targetId;
+};
+
+// 全序:最后两键是技能号与目标号,所以选择结果与技能列表、protobuf map 的遍历顺序无关
+bool IsBetterAutoSkill(const AutoSkillCandidate& lhs, const AutoSkillCandidate& rhs) {
+    if (lhs.purpose != rhs.purpose) {
+        return lhs.purpose < rhs.purpose;
+    }
+    if (lhs.gain != rhs.gain) {
+        return lhs.gain > rhs.gain;
+    }
+    if (lhs.manaCost != rhs.manaCost) {
+        return lhs.manaCost < rhs.manaCost;
+    }
+    if (lhs.cooldownRounds != rhs.cooldownRounds) {
+        return lhs.cooldownRounds < rhs.cooldownRounds;
+    }
+    if (lhs.skillId != rhs.skillId) {
+        return lhs.skillId < rhs.skillId;
+    }
+    return lhs.targetId < rhs.targetId;
+}
+
 // 固定的 SplitMix64 混合，不依赖 std::hash 或平台实现；同种子同玩家不受队伍、回合或击杀数影响。
 uint64_t MixRewardSeed(uint64_t value) {
     value += UINT64_C(0x9e3779b97f4a7c15);
@@ -802,7 +873,7 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
         return result;
     }
 
-    // 1. 未提交者填默认行动(宝宝可选技能,玩家与怪物仍普攻)
+    // 1. 未提交者填默认行动(宝宝与挂机玩家可选技能,其余玩家与怪物仍普攻)
     FillDefaultActions();
 
     // 事件组编号每回合从 1 起(表现规格 D2);出手序在回合开始时一次排定并保留下来
@@ -864,8 +935,8 @@ void TurnBattleEngine::FillDefaultActions() {
         BattleAction defaultAction;
         defaultAction.set_action_type(BATTLE_ACTION_ATTACK);
         defaultAction.set_target_id(0);
-        // 只有宝宝自动选技能;玩家超时/挂机及怪物仍沿用原普攻路径。
-        // 技能按快照顺序、目标按单位插入序选择,选招不消费 RNG。
+        // 宝宝与挂机玩家自动选技能;非挂机玩家超时及怪物仍沿用原普攻路径。
+        // 宝宝的技能按快照顺序、目标按单位插入序选择,挂机玩家见 SelectAutoClassSkill,选招都不消费 RNG。
         // 共用完整校验链,冷却/法力/沉默不满足时回落普攻,出手时还会再校验。
         if (actor.actor_type() == BATTLE_ACTOR_TYPE_PET && !actor.skill_table_ids().empty()) {
             const auto enemies = CollectAliveEnemyIds(actor);
@@ -880,6 +951,10 @@ void TurnBattleEngine::FillDefaultActions() {
                         break;
                     }
                 }
+            }
+        } else if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && actor.is_auto()) {
+            if (auto autoAction = SelectAutoClassSkill(actor); autoAction.has_value()) {
+                defaultAction = std::move(*autoAction);
             }
         }
         pendingActions[actor.actor_id()] = defaultAction;
@@ -1396,8 +1471,7 @@ void TurnBattleEngine::ExecuteClassSkill(BattleActorState& actor, const BattleAc
     // 伤害基数沿用老技能的表达式求值(职业技能表里是常数 10),多目标共用
     double baseDamage = 0.0;
     if (skillRow.target_team() == static_cast<uint32_t>(classskill::TargetTeam::kEnemy)) {
-        baseDamage = dataProvider->GetSkillDamage(
-            skillRow.id(), static_cast<double>(SaturatingAdd(actor.level(), actor.combat().skill_level_bonus())));
+        baseDamage = ClassSkillBaseDamage(actor, skillRow);
     }
 
     for (size_t hitIndex = 0; hitIndex < targetIds.size(); ++hitIndex) {
@@ -1409,6 +1483,22 @@ void TurnBattleEngine::ExecuteClassSkill(BattleActorState& actor, const BattleAc
         ApplyClassSkillToTarget(actor, skillRow, rank, baseDamage, *target, result);
     }
     currentHitIndex = 0;
+}
+
+double TurnBattleEngine::ClassSkillBaseDamage(const BattleActorState& actor, const SkillTable& skillRow) const {
+    return dataProvider->GetSkillDamage(
+        skillRow.id(), static_cast<double>(SaturatingAdd(actor.level(), actor.combat().skill_level_bonus())));
+}
+
+double TurnBattleEngine::ClassSkillHealAmount(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                                              const BattleActorState& target) const {
+    double amount = (static_cast<double>(actor.magic_attack()) * skillRow.heal_multiplier() +
+                     static_cast<double>(actor.level()) * skillRow.heal_per_level()) *
+                    classskill::DamageRankFactor(rank) * (1.0 + OutgoingHealBonus(actor));
+    if (skillRow.execute_heal_threshold() > 0 && HealthRatio(target) < skillRow.execute_heal_threshold()) {
+        amount *= 1.0 + skillRow.execute_heal_bonus();
+    }
+    return amount;
 }
 
 void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
@@ -1453,13 +1543,7 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
 
     // 治疗 = (法伤 × 倍率 + 施法者等级 × 每级加值) × 等级系数 × (1 + 治疗加成被动),目标残血时再加成
     if (skillRow.heal_multiplier() > 0 || skillRow.heal_per_level() > 0) {
-        double amount = (static_cast<double>(actor.magic_attack()) * skillRow.heal_multiplier() +
-                         static_cast<double>(actor.level()) * skillRow.heal_per_level()) *
-                        classskill::DamageRankFactor(rank) * (1.0 + OutgoingHealBonus(actor));
-        if (skillRow.execute_heal_threshold() > 0 && HealthRatio(target) < skillRow.execute_heal_threshold()) {
-            amount *= 1.0 + skillRow.execute_heal_bonus();
-        }
-        const uint64_t healed = ApplyHeal(target, amount);
+        const uint64_t healed = ApplyHeal(target, ClassSkillHealAmount(actor, skillRow, rank, target));
         // 满血也发一条(value = 0):演出要知道这一下奶给了谁
         auto* healEvent = AppendEvent(result, BATTLE_EVENT_HEAL, actor.actor_id(), target.actor_id());
         healEvent->set_skill_table_id(skillRow.id());
@@ -1471,10 +1555,7 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
     // 回蓝:按目标最大法力的比例(× 辅助等级系数),按缺口封顶,事件只报实际回复量
     if (skillRow.restore_mana_percent() > 0) {
         const uint64_t manaBefore = target.attributes().mana();
-        const uint64_t missing = target.max_mana() > manaBefore ? target.max_mana() - manaBefore : 0;
-        const uint64_t restored = std::min(
-            missing, classskill::CeilRatio(target.max_mana(),
-                                           skillRow.restore_mana_percent() * classskill::SupportRankFactor(rank)));
+        const uint64_t restored = ClassSkillManaRestored(skillRow, rank, target, manaBefore);
         target.mutable_attributes()->set_mana(manaBefore + restored);
         auto* manaEvent = AppendEvent(result, BATTLE_EVENT_MANA, actor.actor_id(), target.actor_id());
         manaEvent->set_skill_table_id(skillRow.id());
@@ -1523,10 +1604,11 @@ double TurnBattleEngine::OutgoingHealBonus(const BattleActorState& actor) const 
     return bonus;
 }
 
-double TurnBattleEngine::ClassBuffStatMultiplier(const BattleActorState& actor, ClassBuffStat stat) const {
-    double strongestGain = 0.0;
-    double strongestLoss = 0.0;
-    bool found = false;
+double TurnBattleEngine::ClassBuffStatMultiplier(const BattleActorState& actor, ClassBuffStat stat,
+                                                 double extraPercent) const {
+    double strongestGain = std::max(0.0, extraPercent);
+    double strongestLoss = std::min(0.0, extraPercent);
+    bool found = extraPercent != 0.0;
     for (const auto& entry : actor.buffs()) {
         if (entry.stat_percent() == 0.0) {
             continue;
@@ -1596,6 +1678,252 @@ uint32_t TurnBattleEngine::DispelDebuffs(BattleActorState& target, uint32_t coun
         }
     }
     return removed;
+}
+
+// ---------------------------------------------------------------------------
+// 职业玩家挂机选技(docs/design/class-skills.md §6.5)
+// ---------------------------------------------------------------------------
+
+std::optional<BattleAction> TurnBattleEngine::SelectAutoClassSkill(const BattleActorState& actor) const {
+    const double basicAttackDamage = AutoBasicAttackDamage(actor);
+    std::optional<AutoSkillCandidate> best;
+    for (const auto skillId : actor.skill_table_ids()) {
+        const auto* skillRow = dataProvider->FindSkill(skillId);
+        // 只挑职业技能:旧通用技能不进挂机候选,默认行动不变
+        if (skillRow == nullptr || !IsClassSkill(*skillRow)) {
+            continue;
+        }
+        // 目标 0 = 出手时由引擎选,这一步验的是等级、阵营配置、冷却、沉默与法力;
+        // 下面枚举的都是对应阵营的存活单位,不会再被目标校验拒绝
+        BattleAction probe;
+        probe.set_action_type(BATTLE_ACTION_SKILL);
+        probe.set_skill_table_id(skillId);
+        if (CheckActionPrerequisites(actor, probe) != kSuccess) {
+            continue;
+        }
+
+        const auto consider = [&](AutoSkillPurpose purpose, uint64_t gain, uint64_t targetId) {
+            if (gain == 0) {
+                return;  // 没有实际收益的不算候选
+            }
+            const AutoSkillCandidate candidate{purpose, gain, SkillManaCost(actor, *skillRow),
+                                               skillRow->cooldown_rounds(), skillId, targetId};
+            if (!best.has_value() || IsBetterAutoSkill(candidate, *best)) {
+                best = candidate;
+            }
+        };
+
+        const uint32_t rank = ClassSkillRank(actor, *skillRow);
+        const bool hostile = skillRow->target_team() == static_cast<uint32_t>(classskill::TargetTeam::kEnemy);
+        if (!hostile) {
+            // 治疗用目标 0:出手时按最新气血重排,不提前锁死可能已被别人奶满的目标。
+            // 治疗的目标集按气血比例升序,首位就是最缺血的
+            const auto healTargets = SelectClassSkillTargets(actor, *skillRow, 0);
+            const auto* neediest = healTargets.empty() ? nullptr : FindActor(healTargets.front());
+            if (neediest != nullptr) {
+                const uint64_t healed = AutoHealGain(actor, *skillRow, rank, healTargets);
+                const double neediestRatio = HealthRatio(*neediest);
+                if (neediestRatio < kAutoCriticalHealRatio) {
+                    consider(AutoSkillPurpose::kCriticalHeal, healed, 0);
+                } else if (neediestRatio <= kAutoHealRatio) {
+                    consider(AutoSkillPurpose::kHeal, healed, 0);
+                }
+            }
+        }
+
+        const double baseDamage = hostile ? ClassSkillBaseDamage(actor, *skillRow) : 0.0;
+        for (const auto primaryId : CollectClassSkillPrimaryTargets(actor, *skillRow)) {
+            const auto targetIds = SelectClassSkillTargets(actor, *skillRow, primaryId);
+            if (hostile) {
+                const uint64_t damage = AutoDamageGain(actor, *skillRow, rank, baseDamage, targetIds);
+                // 必须严格强于普攻,否则白花蓝、白进冷却
+                if (static_cast<double>(damage) > basicAttackDamage) {
+                    consider(AutoSkillPurpose::kDamage, damage, primaryId);
+                }
+            } else {
+                consider(AutoSkillPurpose::kDispel, AutoDispelGain(*skillRow, targetIds), primaryId);
+                consider(AutoSkillPurpose::kRestoreMana, AutoRestoreManaGain(actor, *skillRow, rank, targetIds),
+                         primaryId);
+            }
+            consider(AutoSkillPurpose::kStatBuff, AutoStatBuffGain(actor, *skillRow, rank, targetIds), primaryId);
+        }
+    }
+    if (!best.has_value()) {
+        return std::nullopt;
+    }
+
+    BattleAction action;
+    action.set_action_type(BATTLE_ACTION_SKILL);
+    action.set_skill_table_id(best->skillId);
+    action.set_target_id(best->targetId);
+    return action;
+}
+
+std::vector<uint64_t> TurnBattleEngine::CollectClassSkillPrimaryTargets(const BattleActorState& actor,
+                                                                        const SkillTable& skillRow) const {
+    const auto team = static_cast<classskill::TargetTeam>(skillRow.target_team());
+    if (team == classskill::TargetTeam::kSelf) {
+        return {actor.actor_id()};
+    }
+    const bool wantAlly = team == classskill::TargetTeam::kAlly;
+    std::vector<uint64_t> targetIds;
+    for (const auto& other : actors) {
+        if (IsActorActive(other) && (other.team_index() == actor.team_index()) == wantAlly) {
+            targetIds.push_back(other.actor_id());
+        }
+    }
+    return targetIds;
+}
+
+uint64_t TurnBattleEngine::AutoHealGain(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                                        const std::vector<uint64_t>& targetIds) const {
+    uint64_t healed = 0;
+    for (const auto targetId : targetIds) {
+        if (const auto* target = FindActor(targetId); target != nullptr) {
+            healed = SaturatingAdd(healed, LandedHeal(*target, ClassSkillHealAmount(actor, skillRow, rank, *target)));
+        }
+    }
+    return healed;
+}
+
+uint64_t TurnBattleEngine::AutoDispelGain(const SkillTable& skillRow, const std::vector<uint64_t>& targetIds) const {
+    uint64_t removable = 0;
+    for (const auto targetId : targetIds) {
+        const auto* target = FindActor(targetId);
+        if (target == nullptr) {
+            continue;
+        }
+        const auto debuffCount = std::count_if(target->buffs().begin(), target->buffs().end(),
+                                               [this](const BattleBuffEntry& entry) { return IsDebuffEntry(entry); });
+        const uint64_t targetRemovable =
+            std::min(static_cast<uint64_t>(skillRow.dispel_count()), static_cast<uint64_t>(debuffCount));
+        if (targetRemovable == 0 && targetId == targetIds.front()) {
+            return 0;
+        }
+        removable += targetRemovable;
+    }
+    return removable;
+}
+
+uint64_t TurnBattleEngine::AutoRestoreManaGain(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                                               const std::vector<uint64_t>& targetIds) const {
+    const uint64_t manaCost = SkillManaCost(actor, skillRow);
+    uint64_t restored = 0;
+    bool anyLowMana = false;
+    for (const auto targetId : targetIds) {
+        const auto* target = FindActor(targetId);
+        if (target == nullptr) {
+            continue;
+        }
+        anyLowMana |= ManaRatio(*target) <= kAutoRestoreManaRatio;
+        // 出手先扣蓝再回蓝:施法者自己的缺口要把这一手的耗蓝算进去
+        const uint64_t mana = target->attributes().mana();
+        const uint64_t manaBefore = targetId != actor.actor_id() ? mana : (mana > manaCost ? mana - manaCost : 0);
+        restored = SaturatingAdd(restored, ClassSkillManaRestored(skillRow, rank, *target, manaBefore));
+    }
+    return anyLowMana && restored > manaCost ? restored - manaCost : 0;
+}
+
+uint64_t TurnBattleEngine::AutoStatBuffGain(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                                            const std::vector<uint64_t>& targetIds) const {
+    const double statPercent = skillRow.buff_percent() * classskill::SupportRankFactor(rank);
+    const bool hostile = skillRow.target_team() == static_cast<uint32_t>(classskill::TargetTeam::kEnemy);
+    if (hostile ? statPercent >= 0.0 : statPercent <= 0.0) {
+        return 0;
+    }
+    uint64_t gain = 0;
+    for (const auto targetId : targetIds) {
+        const auto* target = FindActor(targetId);
+        if (target == nullptr) {
+            continue;
+        }
+        for (const auto effectBuffId : skillRow.effect()) {
+            const auto* buffRow = dataProvider->FindBuff(effectBuffId);
+            if (buffRow == nullptr || IsImmuneToBuff(*target, *buffRow)) {
+                continue;
+            }
+            gain = SaturatingAdd(gain,
+                                 ClassBuffStatGain(*target, ClassSkillStatOfBuffType(buffRow->buff_type()), statPercent));
+        }
+    }
+    return gain;
+}
+
+uint64_t TurnBattleEngine::AutoDamageGain(const BattleActorState& actor, const SkillTable& skillRow, uint32_t rank,
+                                          double baseDamage, const std::vector<uint64_t>& targetIds) const {
+    const uint64_t attack =
+        combatdamage::SelectAttack(skillRow.damage_type(), EffectivePhysicalAttack(actor), actor.magic_attack());
+    uint64_t damage = 0;
+    for (const auto targetId : targetIds) {
+        const auto* target = FindActor(targetId);
+        if (target == nullptr) {
+            continue;
+        }
+        const double expected = ExpectedDamage(actor, *target, baseDamage, attack, skillRow.attack_multiplier(),
+                                               skillRow.damage_type()) *
+                                classskill::DamageRankFactor(rank);
+        damage = SaturatingAdd(damage, LandedDamage(*target, expected));
+    }
+    return damage;
+}
+
+uint64_t TurnBattleEngine::ClassBuffStatGain(const BattleActorState& target, ClassBuffStat stat,
+                                             double statPercent) const {
+    // 比较的是挂上前后的倍率,不是净倍率与新幅度:身上 +30% −20% 时再挂 +20% 不改变任何东西
+    const uint64_t baseValue = BaseClassBuffStat(target, stat);
+    const uint64_t before = classskill::FloorRatio(baseValue, ClassBuffStatMultiplier(target, stat));
+    const uint64_t after = classskill::FloorRatio(baseValue, ClassBuffStatMultiplier(target, stat, statPercent));
+    if (stat == ClassBuffStat::kDefense && statPercent > 0.0 && HealthRatio(target) > kAutoDefenseBuffHealthRatio) {
+        return 0;
+    }
+    if (stat == ClassBuffStat::kSpeed && !SpeedChangeFlipsOrder(target, before, after)) {
+        return 0;
+    }
+    return before > after ? before - after : after - before;
+}
+
+bool TurnBattleEngine::SpeedChangeFlipsOrder(const BattleActorState& target, uint64_t speedBefore,
+                                             uint64_t speedAfter) const {
+    const auto actsFirst = [&target](uint64_t speed, const BattleActorState& other, uint64_t otherSpeed) {
+        return speed != otherSpeed ? speed > otherSpeed : target.actor_id() < other.actor_id();
+    };
+    for (const auto& other : actors) {
+        if (other.team_index() == target.team_index() || !IsActorActive(other)) {
+            continue;
+        }
+        const uint64_t otherSpeed = EffectiveSpeed(other);
+        if (actsFirst(speedBefore, other, otherSpeed) != actsFirst(speedAfter, other, otherSpeed)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+double TurnBattleEngine::AutoBasicAttackDamage(const BattleActorState& actor) const {
+    const auto enemyIds = CollectAliveEnemyIds(actor);
+    if (enemyIds.empty()) {
+        return 0.0;
+    }
+    // 连击期望:每段成立才续下一段,追加段打 kComboDamagePercent 折(同 ExecuteAttack)
+    const double comboChance = std::min(static_cast<double>(actor.combat().combo_rate()) / 100.0, 1.0);
+    double comboFactor = 1.0;
+    double chainChance = 1.0;
+    for (uint32_t extraHit = 1; extraHit <= kMaxComboExtraHits; ++extraHit) {
+        chainChance *= comboChance;
+        comboFactor += chainChance * static_cast<double>(kComboDamagePercent) / 100.0;
+    }
+
+    const uint64_t attack = EffectivePhysicalAttack(actor);
+    uint64_t total = 0;
+    for (const auto enemyId : enemyIds) {
+        if (const auto* enemy = FindActor(enemyId); enemy != nullptr) {
+            const double expected = ExpectedDamage(actor, *enemy, kBasicAttackBaseDamage, attack, 1.0,
+                                                   combatdamage::kPhysicalDamage) *
+                                    comboFactor;
+            total = SaturatingAdd(total, LandedDamage(*enemy, expected));
+        }
+    }
+    return static_cast<double>(total) / static_cast<double>(enemyIds.size());
 }
 
 void TurnBattleEngine::ExecuteDefend(BattleActorState& actor, TurnResultS2C& result) {
@@ -1994,34 +2322,8 @@ double TurnBattleEngine::CalculateFinalDamage(const BattleActorState& caster,
                                               uint32_t damageType, bool& isCritical) {
     isCritical = false;
 
-    // 战斗类属性按伤害类型分流(equipment-attributes.md §4.5,D6 / D7):
-    // 物理吃出手者的物理必杀率 + 目标的抗物理,法术吃法术必杀率 + 抗法术。
-    // 未知类型两边都不吃,与 combatdamage::SelectAttack 对未知类型不给攻击同口径。
-    // 加成全 0(怪物 / 宝宝 / 无装备玩家)时下面两个和就是原来的 critchance / resistance,
-    // 公式与随机数消耗和加这组属性之前逐位一致
-    uint64_t critRateBonus = 0;
-    uint64_t resistBonus = 0;
-    if (damageType == combatdamage::kPhysicalDamage) {
-        critRateBonus = caster.combat().physical_crit_rate();
-        resistBonus = target.combat().physical_resist();
-    } else if (damageType == combatdamage::kMagicDamage) {
-        critRateBonus = caster.combat().magic_crit_rate();
-        resistBonus = target.combat().magic_resist();
-    }
-
-    // 暴击率为整数百分比口径,基础 + 加成之后换算并夹到 [0,1](与实时 CalculateFinalDamage 一致)
-    const double critChance = std::clamp(
-        static_cast<double>(SaturatingAdd(caster.attributes().critchance(), critRateBonus)) / 100.0,
-        0.0, 1.0);
-    // 目标等级:玩家 / 宝宝取快照等级,怪物取参战玩家最高等级(InitMonsters)。
-    // 抗性之和交给规则头夹取:它与护甲 / 防御共用 60% 常驻减伤封顶(规则头与实时技能共用,不在这里另夹)
-    double finalDamage = combatdamage::DamageBeforeCritical(
-        baseDamage, caster.attributes().strength(), attack, attackMultiplier,
-        target.attributes().armor(), EffectiveDefense(target),
-        SaturatingAdd(target.attributes().resistance(), resistBonus), target.level());
-    if (!IsPveMatch()) {
-        finalDamage *= kPvpDamageScale;
-    }
+    double finalDamage = DamageBeforeCriticalRoll(caster, target, baseDamage, attack, attackMultiplier, damageType);
+    const double critChance = CriticalChance(caster, damageType);
 
     // 暴击只走引擎 RNG;critChance 为 0 时不消耗随机数(与实时短路口径一致)。
     // 掷骰位置与改公式前相同,同种子回放的随机数消费序列不变。
@@ -2035,7 +2337,54 @@ double TurnBattleEngine::CalculateFinalDamage(const BattleActorState& caster,
     return std::max(finalDamage, 0.0);
 }
 
-uint64_t TurnBattleEngine::ApplyDamage(BattleActorState& target, double rawDamage) {
+double TurnBattleEngine::DamageBeforeCriticalRoll(const BattleActorState& caster, const BattleActorState& target,
+                                                  double baseDamage, uint64_t attack, double attackMultiplier,
+                                                  uint32_t damageType) const {
+    // 战斗类属性按伤害类型分流(equipment-attributes.md §4.5,D6 / D7):
+    // 物理吃目标的抗物理,法术吃抗法术,必杀率同样分流(CriticalChance)。
+    // 未知类型两边都不吃,与 combatdamage::SelectAttack 对未知类型不给攻击同口径。
+    // 加成全 0(怪物 / 宝宝 / 无装备玩家)时这里的和就是原来的 resistance,
+    // 公式与随机数消耗和加这组属性之前逐位一致
+    uint64_t resistBonus = 0;
+    if (damageType == combatdamage::kPhysicalDamage) {
+        resistBonus = target.combat().physical_resist();
+    } else if (damageType == combatdamage::kMagicDamage) {
+        resistBonus = target.combat().magic_resist();
+    }
+
+    // 目标等级:玩家 / 宝宝取快照等级,怪物取参战玩家最高等级(InitMonsters)。
+    // 抗性之和交给规则头夹取:它与护甲 / 防御共用 60% 常驻减伤封顶(规则头与实时技能共用,不在这里另夹)
+    double damage = combatdamage::DamageBeforeCritical(
+        baseDamage, caster.attributes().strength(), attack, attackMultiplier,
+        target.attributes().armor(), EffectiveDefense(target),
+        SaturatingAdd(target.attributes().resistance(), resistBonus), target.level());
+    if (!IsPveMatch()) {
+        damage *= kPvpDamageScale;
+    }
+    return damage;
+}
+
+double TurnBattleEngine::CriticalChance(const BattleActorState& caster, uint32_t damageType) const {
+    // 物理吃物理必杀率,法术吃法术必杀率,未知类型不吃(同 DamageBeforeCriticalRoll)
+    uint64_t critRateBonus = 0;
+    if (damageType == combatdamage::kPhysicalDamage) {
+        critRateBonus = caster.combat().physical_crit_rate();
+    } else if (damageType == combatdamage::kMagicDamage) {
+        critRateBonus = caster.combat().magic_crit_rate();
+    }
+    // 暴击率为整数百分比口径,基础 + 加成之后换算并夹到 [0,1](与实时 CalculateFinalDamage 一致)
+    return std::clamp(static_cast<double>(SaturatingAdd(caster.attributes().critchance(), critRateBonus)) / 100.0,
+                      0.0, 1.0);
+}
+
+double TurnBattleEngine::ExpectedDamage(const BattleActorState& caster, const BattleActorState& target,
+                                        double baseDamage, uint64_t attack, double attackMultiplier,
+                                        uint32_t damageType) const {
+    const double damage = DamageBeforeCriticalRoll(caster, target, baseDamage, attack, attackMultiplier, damageType);
+    return damage * (1.0 + CriticalChance(caster, damageType) * (kCriticalDamageMultiplier - 1.0));
+}
+
+uint64_t TurnBattleEngine::LandedDamage(const BattleActorState& target, double rawDamage) const {
     if (rawDamage <= 0) {
         return 0;
     }
@@ -2045,13 +2394,18 @@ uint64_t TurnBattleEngine::ApplyDamage(BattleActorState& target, double rawDamag
     }
 
     // 与实时 ApplyDamage 共用落血规则:向上取整、不超过当前气血、非有限数不落血
-    const uint64_t healthBefore = target.attributes().health();
-    const uint64_t damage = combatdamage::DamageToHealth(rawDamage, healthBefore);
-    target.mutable_attributes()->set_health(healthBefore - damage);
+    return combatdamage::DamageToHealth(rawDamage, target.attributes().health());
+}
+
+uint64_t TurnBattleEngine::ApplyDamage(BattleActorState& target, double rawDamage) {
+    const uint64_t damage = LandedDamage(target, rawDamage);
+    if (damage > 0) {
+        target.mutable_attributes()->set_health(target.attributes().health() - damage);
+    }
     return damage;
 }
 
-uint64_t TurnBattleEngine::ApplyHeal(BattleActorState& target, double rawHeal) {
+uint64_t TurnBattleEngine::LandedHeal(const BattleActorState& target, double rawHeal) const {
     // !(> 0) 同时挡住 NaN;治疗量按缺口封顶后再转整数,高血量 + 大倍率也不会越界
     if (!(rawHeal > 0) || !std::isfinite(rawHeal) || target.is_dead()) {
         return 0;
@@ -2060,9 +2414,15 @@ uint64_t TurnBattleEngine::ApplyHeal(BattleActorState& target, double rawHeal) {
     const uint64_t missing = target.max_health() > healthBefore ? target.max_health() - healthBefore : 0;
     const long double cappedHeal = std::min<long double>(static_cast<long double>(rawHeal),
                                                          static_cast<long double>(missing));
-    const auto healthAfter = healthBefore + static_cast<uint64_t>(cappedHeal);
-    target.mutable_attributes()->set_health(healthAfter);
-    return healthAfter - healthBefore;
+    return static_cast<uint64_t>(cappedHeal);
+}
+
+uint64_t TurnBattleEngine::ApplyHeal(BattleActorState& target, double rawHeal) {
+    const uint64_t healed = LandedHeal(target, rawHeal);
+    if (healed > 0) {
+        target.mutable_attributes()->set_health(target.attributes().health() + healed);
+    }
+    return healed;
 }
 
 void TurnBattleEngine::HandleDeath(BattleActorState& target, uint64_t sourceActorId,

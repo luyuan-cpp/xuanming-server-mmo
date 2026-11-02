@@ -63,7 +63,9 @@ type ServiceContext struct {
 	// 生产恒非 nil;logic 遇到 nil 一律拒绝铸造(fail-closed),不退回 Redis 字段上的无确认路径。
 	OwnerEpochMint OwnerEpochMinter
 	SceneIDGen     *snowflake.Node
-	snowflakeHd    *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
+	// SceneClaimTokens 记结局未知的场景认领(scene_id -> token),零值可用,见 logic.evalSceneClaim。
+	SceneClaimTokens sync.Map
+	snowflakeHd      *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
 	// ownerEpochMintRedis 是 OwnerEpochMint 的生产实现本体,只为 Stop 时关闭它的专用连接池。
 	ownerEpochMintRedis *RedisOwnerEpochMinter
 	stopOnce            sync.Once

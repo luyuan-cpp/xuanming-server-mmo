@@ -3,7 +3,7 @@
 **Created:** 2026-04-02  
 **Purpose:** 全面描述如何从零搭建一个率土之滨风格的 SLG 游戏服务器，涵盖架构、每个子系统的设计与实现细节。
 
-> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+> **说明**：本文是「率土风格」的设计或面试笔记，不代表率土之滨的真实架构。数据层 2026-11-01 按[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)改写：玩家数据和地图数据都不放 Redis，地块和行军以地图服内存为准，持久数据只落 TiDB（预算不够用 MySQL 档），Redis 只做协调。库表、写入路径和为什么不用 Redis，见[框架设计 §12](./slg-server-complete-framework.md)。
 
 ---
 
@@ -89,7 +89,7 @@
       │                                    │
       │          ┌─────────────┐           │
       └──────────▶ Data Layer  ◀───────────┘
-                 │ Redis + MySQL│
+                 │ TiDB + Redis │
                  │ + Kafka      │
                  └─────────────┘
 ```
@@ -106,7 +106,7 @@
 | **AllianceService** | 有状态 | 联盟 CRUD、联盟战争、外交 | 可按联盟 ID 分片 |
 | **ChatService** | 有状态 | 世界/联盟/私聊频道 | 按频道分片 |
 | **LoginService** | 无状态 | 账号验证、Gate 分配、Token 签发 | 水平扩展 |
-| **DataService** | 有状态 | 跨服数据路由、Redis 连接池、持久化 | 按 Realm 分片 |
+| **DataService** | 有状态 | 跨服数据路由、TiDB 连接池、持久化 | 按 Realm 分片 |
 | **RankService** | 有状态 | 排行榜计算与查询 | Redis sorted set |
 | **MailService** | 有状态 | 邮件收发、系统邮件群发 | 按玩家分片 |
 
@@ -940,7 +940,7 @@ void OccupyTile(uint32_t allianceId, uint32_t tileId) {
 ### 11.2 排行榜
 
 ```
-使用 Redis Sorted Set:
+使用 Redis Sorted Set（只是加速，分数来自 TiDB，清空后可重算）:
 
 ZADD rank:power {score} {player_id}
 ZADD rank:kills {score} {player_id}
@@ -967,7 +967,7 @@ def season_end():
     
     # 4. 归档数据
     archive_battle_reports()  # 战报 → S3 冷存储
-    archive_rankings()        # 排行榜 → MySQL
+    archive_rankings()        # 排行榜 → TiDB
     
     # 5. 玩家核心数据迁移到新赛季
     migrate_player_data()  # 武将、技能保留；资源/领地重置
@@ -1047,30 +1047,31 @@ def season_end():
 
 ## 14. 数据存储与持久化
 
-> 本章的数据分工和写入策略已被取代,见文首状态说明。
+玩家数据和地图数据都不放 Redis。库表、写入路径、恢复流程和为什么不用 Redis，详见[框架设计 §12](./slg-server-complete-framework.md)。
 
 ### 14.1 存储选型
 
 | 数据类型 | 存储 | 原因 |
 |---------|------|------|
-| 玩家数据（热） | Redis | 低延迟读写 |
-| 地图格子状态 | 内存（MapService） | 超高频访问 |
-| 行军数据 | 内存 + Redis WAL | 需要故障恢复 |
-| 战报 | MySQL (blob) | 长期存储，按 battle_id 查询 |
-| 邮件 | MySQL | 持久化 |
-| 排行榜 | Redis Sorted Set | O(log N) 更新 |
-| 联盟数据 | Redis + MySQL | 热数据 Redis，冷数据 MySQL |
+| 玩家数据 | TiDB（在线时在进程内存） | 资产要事务，丢了就是事故 |
+| 地图格子状态 | 内存（MapService）+ TiDB | 超高频访问在内存，持久化落 TiDB |
+| 行军数据 | 内存 + TiDB | 状态变化提交后才生效，崩溃后按公式恢复位置 |
+| 战报 | TiDB (blob) | 长期存储，按 battle_id 查询 |
+| 邮件 | TiDB | 持久化 |
+| 排行榜 | Redis Sorted Set（可选） | O(log N) 更新，分数来自 TiDB，清空后可重算 |
+| 联盟数据 | TiDB | 要按条件查，要事务 |
+| 会话、锁、限流 | Redis | 丢了能重建或按 TTL 失效 |
 | 配置表 | 内存（启动加载） | 只读 |
+
+预算不够时把 TiDB 换成 MySQL 档，业务写法不变。
 
 ### 14.2 持久化策略
 
 ```
-Write-Behind (异步写入):
-┌──────────────────────────────────────────────────┐
-│ 内存修改 → dirty flag → 定时批量 flush → Redis/MySQL │
-│                                                      │
-│ 关键操作（战斗结算）→ 立即写 WAL → 异步写 MySQL       │
-└──────────────────────────────────────────────────┘
+有序提交队列（主循环不等数据库）:
+  内存修改 → 追加到提交队列 → 每 50ms 或攒够 500 行，一个事务提交 TiDB
+  关键操作（资产、易主、行军状态、战斗结算）→ 提交成功才回客户端
+  高频字段（耐久、驻军）→ dirty flag → 每 10 秒批量进队列
 ```
 
 ### 14.3 行军崩溃恢复
@@ -1078,7 +1079,7 @@ Write-Behind (异步写入):
 ```cpp
 // 启动时恢复所有行军中的部队
 void RecoverMarches() {
-    auto marches = LoadMarchesFromRedis(); // {army_id, path, start_time, speed, state}
+    auto marches = LoadMarchesFromTiDB(); // {army_id, path, start_time, speed, state}
     uint32_t now = CurrentTime();
     
     for (auto& march : marches) {
@@ -1133,10 +1134,10 @@ services:
   
   redis:
     image: redis:7
-    mem_limit: 4G
+    mem_limit: 1G      # 只放会话、锁、限流
   
-  mysql:
-    image: mysql:8
+  tidb:
+    image: pingcap/tidb:v8.5.0   # 单机只用于开发；压测和生产用真集群 (PD + TiKV + TiDB)
   
   kafka:
     image: kafka:3
@@ -1149,11 +1150,11 @@ services:
 | Gate | 2核 | 1GB | 2 |
 | MapService | 4核 | 4GB | 1 |
 | BattleService | 2核 | 512MB | 2-4 |
-| Redis | 2核 | 4GB | 1 主 + 1 从 |
-| MySQL | 4核 | 8GB | 1 主 + 1 从 |
+| Redis | 1核 | 1GB | 1 主 + 1 从（只放协调数据） |
+| TiDB | 见官方要求 | 见官方要求 | 3 PD + 3 TiKV + 2 TiDB，多个世界共用 |
 | Kafka | 2核 | 2GB | 3 broker |
 
-单服总需求：~20 核 20GB → 一台 32C64G 服务器可跑 **2-3 个服**。
+单服总需求（不含 TiDB 集群）：~20 核 16GB → 一台 32C64G 服务器可跑 **2-3 个服**。TiDB 集群单独部署，多个世界共用；预算不够时换 MySQL 档（1 主 + 1 从）。
 
 ### 15.3 滚动更新
 
@@ -1161,9 +1162,9 @@ services:
 SLG 特殊性：MapService 是有状态单实例，不能滚动更新
 方案：
 1. 公告维护时间
-2. 保存 MapService 完整状态到持久化（Redis/文件）
+2. 停止接新操作，排空提交队列，脏字段全部落 TiDB
 3. 停止旧 MapService
-4. 启动新 MapService，从持久化恢复
+4. 启动新 MapService，抢写权后从 TiDB 恢复
 5. 恢复时间 < 1 分钟（加载 200-300MB 数据）
 ```
 
@@ -1286,9 +1287,9 @@ AnomalyDetector: 滑动窗口速率监控
 - 资源点占领信息
 
 但离线玩家的**详细数据**可以不常驻：
-- 武将详情 → Redis (按需加载)
-- 背包 → Redis (按需加载)
-- 邮件 → MySQL (查询时拉取)
+- 武将详情 → TiDB (按需加载)
+- 背包 → TiDB (按需加载)
+- 邮件 → TiDB (查询时拉取)
 
 即：地图层面的"壳"常驻，业务层面的"内容"按需加载。
 ```
@@ -1348,8 +1349,8 @@ func BotRoutine(playerId int) {
 | 网络框架 | muduo (C++ TCP), go-zero (Go gRPC) |
 | 序列化 | Protobuf |
 | 消息队列 | Kafka |
-| 缓存 | Redis |
-| 数据库 | MySQL |
+| 协调 | Redis（会话、锁、限流，不存玩家数据和地图） |
+| 数据库 | TiDB（预算不够用 MySQL 档） |
 | 服务发现 | etcd |
 | 部署 | Docker + Kubernetes |
 | 监控 | Prometheus + Grafana |

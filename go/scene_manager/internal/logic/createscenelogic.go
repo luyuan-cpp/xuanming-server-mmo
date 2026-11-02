@@ -63,6 +63,11 @@ func activeInstancesKey(zoneID uint32) string {
 	return fmt.Sprintf(ActiveInstancesKeyFmt, zoneID)
 }
 
+// sceneClaimRecordKey 是认领脚本的重发幂等记录,见 luaSceneClaimPrelude。
+func sceneClaimRecordKey(sceneID uint64) string {
+	return fmt.Sprintf("scene:%d:claim", sceneID)
+}
+
 func sceneNodeKey(sceneID uint64) string {
 	return fmt.Sprintf(SceneNodeKeyFmt, sceneID)
 }
@@ -422,32 +427,22 @@ func (l *CreateSceneLogic) acquireRoomOnSpecificNode(nodeID string, zoneID uint3
 // 只撤销"本次未交付"的写:Redis 里这个 scene 的全部状态 + 节点计数 +
 // 反向索引 + Agones 房间名额。不碰任何已经交付给玩家的东西。
 //
-// 顺序:先删 scene:{id}:node(其它路径判断"这个 scene 还在不在"看的就是它),
-// 再清剩下的,最后还 Agones 名额。
+// Redis 状态由一段脚本原子撤销,认领到了才还名额。回错或认领落空都不还:
+// 场景的 agones_gs 还在 Redis 里时由接手的销毁路径归还,这里再还就是双还。
 func (l *CreateSceneLogic) rollbackInstanceAllocation(
 	sceneId uint64,
 	targetNode string,
 	in *scene_manager.CreateSceneRequest,
 	placement *agonesPlacement,
 ) {
-	sceneIdStr := fmt.Sprintf("%d", sceneId)
-
-	l.svcCtx.Redis.Del(sceneNodeKey(sceneId))
-	l.svcCtx.Redis.Del(sceneZoneKey(sceneId))
-	l.svcCtx.Redis.Del(instanceMembersKey(sceneId))
-	l.svcCtx.Redis.Del(sceneMirrorFlagKey(sceneId))
-	l.svcCtx.Redis.Del(sceneSourceKey(sceneId))
-	l.svcCtx.Redis.Del(sceneAgonesGsKey(sceneId))
-	l.svcCtx.Redis.Zrem(activeInstancesKey(in.ZoneId), sceneIdStr)
-	l.svcCtx.Redis.Srem(nodeScenesKey(in.ZoneId, targetNode), sceneIdStr)
-
-	if in.SourceSceneId > 0 {
-		l.svcCtx.Redis.Srem(sceneMirrorsKey(in.SourceSceneId), sceneIdStr)
+	claim, err := atomicRollbackInstanceAllocation(l.svcCtx, in.ZoneId, sceneId, targetNode, in.SourceSceneId)
+	if err != nil {
+		l.Logger.Errorf("[Instance] rollback of scene %d on node %s failed, outcome unknown (left to the idle reclaim): %v", sceneId, targetNode, err)
+		return
 	}
-
-	// 节点 scene_count 是 allocateScene 加上去的,必须原样减回。
-	if _, err := l.svcCtx.Redis.Decr(nodeSceneCountKey(in.ZoneId, targetNode)); err != nil {
-		l.Logger.Errorf("[Instance] rollback: failed to decrement scene count for node %s: %v", targetNode, err)
+	if !claim.Claimed {
+		l.Logger.Infof("[Instance] rollback of scene %d skipped: it no longer belongs to this allocation on node %s", sceneId, targetNode)
+		return
 	}
 
 	if placement != nil {

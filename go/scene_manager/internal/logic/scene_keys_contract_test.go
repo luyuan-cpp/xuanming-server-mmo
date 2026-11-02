@@ -83,6 +83,7 @@ func TestControlDomainKeysCarryNoHashTag(t *testing.T) {
 		sceneSourceKey(sceneID),
 		sceneMirrorsKey(sceneID),
 		sceneAgonesGsKey(sceneID),
+		sceneClaimRecordKey(sceneID),
 		sceneDrainingKey(sceneID),
 		instanceMembersKey(sceneID),
 		nodeMembersKey(zoneID, nodeID),

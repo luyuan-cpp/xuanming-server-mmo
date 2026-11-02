@@ -37,8 +37,6 @@ namespace gate_gm_client_messages
 // 口径 = proto 里 `rpc Gm*` 且所属 service 标了 `OptionIsClientProtocolService`。
 //
 // 不在本表里的 GM RPC,是因为它们本来就到不了客户端,别往里加:
-//   * SceneRollbackClientPlayer.Gm*(102-117):service 没标
-//     OptionIsClientProtocolService,不进 IsClientMessageId;
 //   * Gate/Scene.GmGracefulShutdown(125/126)、TradeAdmin.SeedListing(199)、
 //     LoginAdmin.*(111)、dbTest(3)、SceneSceneTest(18):同上,且前两条另有
 //     HMAC 签名鉴权(gate_security.h VerifyGmRequestFromEnv)。

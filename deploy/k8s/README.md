@@ -375,6 +375,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 
 - Namespace naming: `<NamespacePrefix>-<ZoneName>` (default prefix is `mmorpg-zone`).
 - Node config (`base_deploy_config.yaml`, `game_config.yaml`) is generated into a `ConfigMap` per zone.
+- **C++ 节点日志级别**:node-config / battle-node-config 的 `LogLevel` 从 `bin/etc/base_deploy_config.yaml` 镜像(2026-10-22 起;默认 2 = INFO,此前写死 1 = DEBUG),只在进程启动时读。Pod 模板不带整份 node-config 的哈希,只改 ConfigMap 不会滚动,要手动重启;Agones 编排的 scene / battle 要让 Fleet 换一批 GameServer。调级方法和发布预检为什么拒绝 1,见[演练手册](../../docs/ops/cross-zone-failure-test-runbook.md) §3.1 第 7 条。
 - `ClusterId` (from `-ClusterId`, default `0`) is written into that ConfigMap's `base_deploy_config.yaml` and into the `login` / `scene-manager` Go ConfigMaps. It is the high 5 bits of the snowflake worker field (`docs/design/node-id-overhaul-plan-20260908.md` §5): one value per Kubernetes cluster, set once by ops, never per zone.
 - Node pods use:
   - `POD_IP` from Kubernetes Downward API.

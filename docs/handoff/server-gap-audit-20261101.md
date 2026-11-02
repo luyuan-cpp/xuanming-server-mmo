@@ -2,6 +2,8 @@
 
 负责人问「服务器代码做完了吗」时做的盘点。按当天工作区逐条对代码核对,只读,没有编译或运行。接手前先核对 `git log` 和本文状态:工作区有多个会话并行。
 
+**接手先看这段(2026-11-01 第二轮)**:第 6、1 条和第 2 条的终结工具已落码,都没有编译,验证见 [progress.md](player-save-direct-commit-20261030/progress.md) §16「清单第 1、2、6 条」。周额度到 98% 停下。下一步:第 2 条的 Manual 合同恢复入口,然后第 3~5 条(第 4、5 条先写设计),再第 7~13 条和「待确认」。生成器不清的残留头文件 `player_rollback_service_metadata.h` 要在重新生成之后删。
+
 结论:**没有全部做完。** 下面「未做」的项还在。负责人要求按最标准的方式做完;2026-11-01 暂停在这里是因为每周额度已用 94%(5 个会话共用,4 天后重置),不是判断它们不用做。
 
 ## 这一轮已补(未编译,待 Codex 验证,命令见 [progress.md](player-save-direct-commit-20261030/progress.md) §16)
@@ -26,17 +28,18 @@
 
 ### 会造成错误行为
 
-1. **scene_manager 写路径的非原子残余(R3、R5、排空),5~6 个文件。**
-   - `go/scene_manager/internal/logic/createscenelogic.go:435-442` 逐条 DEL,不查错。
-   - `instance_lifecycle.go:284-288` 把映射缺失当成有人进场,重新 ZADD 并丢掉返回的 agones_gs。
-   - `scene_atomic.go:143-215` 认领脚本没有重发幂等记录,回包丢失时级联、计数、归还这些副作用全丢。
-   - `world_autoscale.go:393`、`:418` 先 SREM 后 SADD,进程在两步之间崩溃时频道既不可路由也不再收敛。
-   - 来源:`docs/PROGRESS.md:16217-16222`、`:19310`。
+1. **(11-01 已落码,未编译,验证见 progress.md §16「清单第 1、6 条」)scene_manager 写路径的非原子残余(R3、R5、排空)。**
+   - 回滚收进脚本 `luaRollbackInstanceAllocation`:映射仍指向这次分配才认领,认领到才还名额。
+   - 空闲回收脚本回显式状态,有人时在脚本里 `ZADD XX` 重置时钟;映射缺失时摘掉条目、交回 agones_gs,不再加回。
+   - 三段认领脚本带 token 和 `scene:{id}:claim` 记录(TTL 600s),重发返回原快照;Eval 回错时 token 记在 `SceneClaimTokens`,同进程下一次认领接手。
+   - force 认领以映射存在为前提(`absent` 模式除外)。
+   - 排空的移动、期望数、标记合成一段脚本 `luaBeginDrainWorldChannel`。
+   - 回归:`scene_claim_atomic_test.go`。
+   - **残余**:`allocateScene` 和建实例的其余写入仍是多步,进程在中途崩溃可能留下映射而不在 active 集合里;进程在认领之后、副作用之前崩溃,副作用仍然丢(R1,靠对账和告警)。
 
-2. **交易 Manual 合同和卡死资产指令没有管理入口,3~12 个文件。**
-   - `proto/trade/trade_admin.proto:44` 只有 SeedListing,`go/trade/internal/reconcile/pipeline.go:463` 的 `ResolveManually` 没有生产调用方,`go/trade` 没有 `cmd/`。guild 有 `go/guild/cmd/assetopfix` 可以参照。
-   - 后果:合同隔离后托管的物品和货币出不来;UNKNOWN 的指令只能手改 SQL。
-   - 只做指令终结 CLI 3~4 个文件;加上合同恢复、补发、退回 8~12 个。手册 `docs/ops/trade-commerce-quarantine-runbook.md` §4.2、§6。
+2. **交易卡死资产指令的终结工具 11-01 已落码(未编译);Manual 合同的恢复入口未做,8~12 个文件。**
+   - 已做:`go/trade/cmd/assetopfix`(list、resolve,前置和退出码与 guild 版相同)、`AssetOpRepo.GetOp`、`ListStuck`。`Pipeline.ResolveManually` 仍没有生产调用方,工具走包级 `assetop.ResolveManually`。
+   - 未做:合同隔离后托管的物品和货币还是出不来。`proto/trade/trade_admin.proto:44` 只有 SeedListing。要另立设计,覆盖鉴权、操作留痕、沿用原腿和原 seq 的幂等。手册 `docs/ops/trade-commerce-quarantine-runbook.md` §4.2、§6。
 
 3. **审计快照管道(X-4、L-07),8~12 个文件。**
    - `cpp/libs/modules/snapshot/snapshot_system.cpp:110-115` 发送失败只打日志;`kafka_producer.cpp:93-118` 没设消息上限和压缩;`go/data_service/internal/kafka/start.go:145-146` 没有 retention.bytes。
@@ -59,7 +62,7 @@
 
 ### 删除和小项
 
-6. **scene 12 条 GM 回档桩的 proto 删除。** 已明确拒绝。11-01 那一轮 Codex 已结束,可以删了,删完要重新生成。要动:`proto/scene/player_rollback.proto`、`proto/message_id.txt`(102、103、104、106、107、109、110、112、113、115、116、117 改 `reserved:`)、`cpp/nodes/scene/handler/rpc/player/player_rollback_handler.{h,cpp}`、`scene.vcxproj`、`.filters`、`CMakeLists.txt`、`player_service_interface.cpp`、`scene_handler.cpp`、`player_gm_guard.h`、`gate_gm_client_messages.h`、`player_inbox_system.cpp`、`cpp/tests/currency_test/client_gm_gate_test.cpp`、`tools/proto_generator/protogen/internal/client_rpc_kind{,_test}.go`。然后重新生成。
+6. **(11-01 已删,待 Codex 重新生成并编译)scene 12 条 GM 回档桩的 proto 删除。** 同时删了只被它们引用的 `SnapshotDiff*`。生成器不清退 `cpp/generated/rpc/service_metadata/player_rollback_service_metadata.h`(`rpc.vcxproj` 的条目也不管),没有编译单元包含它,无害;重新生成之后由 Claude 删掉它和两条工程条目。当时列的文件:`proto/scene/player_rollback.proto`、`proto/message_id.txt`(102、103、104、106、107、109、110、112、113、115、116、117 改 `reserved:`)、`cpp/nodes/scene/handler/rpc/player/player_rollback_handler.{h,cpp}`、`scene.vcxproj`、`.filters`、`CMakeLists.txt`、`player_service_interface.cpp`、`scene_handler.cpp`、`player_gm_guard.h`、`gate_gm_client_messages.h`、`player_inbox_system.cpp`、`cpp/tests/currency_test/client_gm_gate_test.cpp`、`tools/proto_generator/protogen/internal/client_rpc_kind{,_test}.go`。然后重新生成。
 7. **gate 上限和新鲜度(L-2),4~6 个文件。** `gatetoken.go:45-51` 的候选没有上限和存活时间,卡死的 gate 会持续吸人,直到租约到期。
 8. **连接池指标(L-08),8~12 个文件。** 只有 data_service、db、player_inbox 导出;chat、friend、guild、mail、match、rank、trade、login 和 Java 网关没有。
 9. **scene_manager 存活集残缺。** 这一轮只拦了全空,部分缺失还会按消失处理。

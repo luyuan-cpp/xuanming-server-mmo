@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-07
 
-> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+> **说明**：本文是「率土风格」的设计或面试笔记，不代表率土之滨的真实架构。数据层 2026-11-01 按[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)改写：玩家数据和地图数据都不放 Redis，地块和行军以地图服内存为准，持久数据只落 TiDB（预算不够用 MySQL 档），Redis 只做协调。库表、写入路径和为什么不用 Redis，见[框架设计 §12](./slg-server-complete-framework.md)。
 
 ---
 
@@ -429,79 +429,91 @@ Layer 2: 256 slots × 109min = 19.4day  (远期)
 
 **A:**
 
-### Write-Behind 模式
+### 有序提交队列
 ```
-玩家操作 → 内存更新 → Kafka 消息 → DB Service 批量写 MySQL
+玩家操作 → 内存更新 → 追加到提交队列 → 提交线程批量提交 TiDB
 
 优势:
-1. 玩家操作响应不等 DB
-2. DB Service 可合并写入 (batch insert/update)
-3. Kafka 提供可靠传输 + 缓冲
+1. 主循环不等 DB
+2. 可合并写入 (一个事务写一批)
+3. 队列有序, 落库的永远是历史的一个前缀
 ```
 
 ### 批量写入
 ```go
-// DB Service 消费 Kafka, 攒批写入
-batch := make([]WriteOp, 0, 100)
-ticker := time.NewTicker(200 * time.Millisecond)
+// 提交线程: 攒批, 一个事务提交
+batch := make([]WriteOp, 0, 500)
+ticker := time.NewTicker(50 * time.Millisecond)
 
 for {
     select {
-    case msg := <-kafka_consumer:
-        batch = append(batch, parse(msg))
-        if len(batch) >= 100 {
-            flush(batch)
+    case op := <-commitQueue:
+        batch = append(batch, op)
+        if len(batch) >= 500 {
+            commit(batch)
             batch = batch[:0]
         }
     case <-ticker.C:
         if len(batch) > 0 {
-            flush(batch)
+            commit(batch)
             batch = batch[:0]
         }
     }
 }
 
-func flush(batch []WriteOp) {
-    // 分组 by 表名
-    grouped := group_by_table(batch)
-    for table, ops := range grouped {
-        // batch upsert
-        exec_batch_upsert(table, ops)
+func commit(batch []WriteOp) {
+    seq := nextSaveSeq()
+    // 结果未知时用同一序号、同样内容重试; 有退避和时间预算
+    err := retryWithDeadline(func() error {
+        return withTx(func(tx *sql.Tx) error {
+            // 核对写权和序号 (SELECT ... FOR UPDATE)
+            // 旧写者被拒; 已提交过的返回 errAlreadyCommitted
+            if err := checkWriter(tx, ownerEpoch, seq); err != nil {
+                return err
+            }
+            // 分组 by 表名, batch upsert
+            for table, ops := range group_by_table(batch) {
+                if err := exec_batch_upsert(tx, table, ops); err != nil {
+                    return err
+                }
+            }
+            return bumpSaveSeq(tx, seq)
+        })
+    })
+    if err != nil && !errors.Is(err, errAlreadyCommitted) {
+        log.Fatal(err) // 写权已丢或超过预算: 退出, 新进程从 TiDB 恢复
     }
+    notifyMainLoop(batch) // 这批操作才回客户端
 }
 ```
 
 ### 脏标记优化
 ```cpp
-// 不是每次修改都发 Kafka
-// 标记脏，定时刷新
-struct PlayerData {
+// 只有高频字段走脏标记: 地块耐久、驻军数量
+// 资产、易主、行军状态不走这里, 当场进提交队列
+struct TileRuntime {
     bool dirty = false;
-    int64_t last_flush_time;
-    
-    void modify() {
+
+    void on_durability_changed() {
         // ... 修改数据 ...
         dirty = true;
     }
 };
 
-// 每 5 秒检查脏数据
-void flush_dirty_players() {
-    for (auto& [id, data] : players) {
-        if (data.dirty) {
-            kafka_produce("db-write", serialize(data));
-            data.dirty = false;
-            data.last_flush_time = now();
-        }
+// 每 10 秒把脏格子放进提交队列
+void flush_dirty_tiles() {
+    for (auto& [id, tile] : dirty_tiles) {
+        commit_queue.push(tile_row(id, tile));
+        tile.dirty = false;
     }
+    dirty_tiles.clear();
 }
 ```
 
-### 关键操作直写
-少数操作不能走 write-behind:
-- 充值/消费 → 直写 MySQL + Redis（防丢）
-- 交易记录 → 直写（审计需求）
-- 其他操作可容忍几秒延迟
+### 关键操作提交成功才回客户端
+- 充值/消费、交易、资源变化 → 和流水同一个事务
+- 行军状态变化、地块易主、战斗结算 → 提交成功才下发和推送
+- 只有耐久、驻军这类高频字段可容忍最多丢约 10 秒
 
 ---
 
@@ -568,7 +580,7 @@ struct RateLimiter {
 5. 内存使用: RSS, 各模块分配量
 6. GC (Go service): GC 暂停时间, 频率
 7. Kafka lag: 消费者落后量
-8. MySQL QPS: 写入/查询速率
+8. TiDB QPS: 写入/查询速率、提交队列积压
 ```
 
 ### C++ profiling
@@ -627,7 +639,7 @@ MapService 是有状态大单体，不可水平扩，挂了就是全服挂。
 
 #### 1. 快速重启 + 数据恢复
 ```
-崩溃 → 自动重启 (K8s restart) → 从 Redis/DB 加载状态 → 恢复
+崩溃 → 自动重启 (K8s restart) → 抢写权 → 从 TiDB 加载状态 → 恢复
 目标恢复时间: < 30 秒
 
 恢复内容:
@@ -637,19 +649,16 @@ MapService 是有状态大单体，不可水平扩，挂了就是全服挂。
 - Timer: 重建 (到达/建造/训练)
 ```
 
-#### 2. Redis Checkpoint
-
-> Redis 检查点的写法已被取代,见文首状态说明。
-
+#### 2. TiDB 增量落盘（不用 Redis 检查点）
 ```
-每 10 秒将关键内存状态快照到 Redis:
-- 所有活跃行军 snapshot
-- 建筑队列 snapshot
-- 格子变更 delta log
+不再定时把内存快照到 Redis:
+- 行军、建筑队列: 状态变化当场提交, 本来就在 TiDB 里
+- 地块易主: 当场提交
+- 地块耐久、驻军: 每 10 秒批量 upsert
 
 崩溃恢复时:
-Redis 有最近 10s 的数据 → 丢失最多 10s 的操作
-比全量从 MySQL 恢复快 10x
+关键变化都在 TiDB 里, 高频字段最多丢约 10 秒
+TiDB 是唯一一份, 不用比较快照和数据库谁更新
 ```
 
 #### 3. 主备切换（高级）
@@ -939,7 +948,7 @@ class ConfigManager {
    → 有状态大单体不意味着性能差。Region Actor 可利用多核。144 万格子 <100MB 内存。单机轻松承载 10K 在线。SLG 不是 MMO，不需要百万同时在线。
 
 3. **"为什么不用 Redis 做 MapService？"**
-   → 格子状态 + 行军 + 视野是紧耦合的复合读写，Redis 的 Key-Value 模型做不到高效的空间查询和时空碰撞检测。内存比 Redis 强 100 倍。
+   → 格子状态 + 行军 + 视野是紧耦合的复合读写，Redis 的 Key-Value 模型做不到高效的空间查询和时空碰撞检测。内存比 Redis 强 100 倍。持久化也不放 Redis，落 TiDB，原因见框架设计 §12.7。
 
 4. **"内存 1GB 够吗？"**
    → 上面算过，格子 23MB + 行军 5MB + 路径 5MB + 视野 20MB + 其他 13MB ≈ 66MB。加上运行时开销、缓冲区，512MB 绰绰有余。

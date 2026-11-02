@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-07
 
-> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+> **说明**：本文是「率土风格」的设计或面试笔记，不代表率土之滨的真实架构。数据层 2026-11-01 按[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)改写：玩家数据和地图数据都不放 Redis，地块和行军以地图服内存为准，持久数据只落 TiDB（预算不够用 MySQL 档），Redis 只做协调。库表、写入路径和为什么不用 Redis，见[框架设计 §12](./slg-server-complete-framework.md)。
 
 ---
 
@@ -520,7 +520,7 @@ MapService (有状态)           BattleService (无状态)
 1. 行军到达目标格（MapService timer 触发）
 2. MapService 准备 BattleInput:
    - 从内存取攻击方 ArmySnapshot
-   - 从内存/Redis 取防守方 ArmySnapshot
+   - 从内存取防守方 ArmySnapshot（离线玩家不在内存时从 TiDB 按需加载）
    - 生成 seed, 读取地形
 3. gRPC 调用 BattleService.SimulateBattle(BattleInput) → BattleReport
 4. MapService 处理结果:
@@ -733,49 +733,48 @@ BattleService 返回 BattleReport
         ↓
 MapService 处理战斗结果（扣兵/易主/行军状态）
         ↓
-   ┌────┴────────────────────────────┐
-   ↓                                 ↓
-推送给双方玩家（实时）           持久化（异步）
-   ↓                                 ↓
-MapService → Kafka              MapService → Kafka
-topic: gate-{gate_id}           topic: db-write
-msg: PushBattleReport           msg: SaveBattleReport
-   ↓                                 ↓
-Gate Node → TCP → 客户端        DB Service 消费
-客户端加入本地战报列表               ↓
-                              1. protobuf 序列化 → zstd 压缩
-                              2. INSERT battle_reports 表
-                              3. Redis LPUSH player:{id}:reports (最近N条ID)
-                              4. Redis SET report:{id} (带 TTL 缓存)
+战果和战报一起进提交队列（主循环不等）
+        ↓
+提交线程 → DB Service → 一个 TiDB 事务
+  1. protobuf 序列化 → zstd 压缩
+  2. 写地块、部队、行军的变更
+  3. INSERT battle_reports 表
+  4. INSERT player_battle_reports、alliance_battle_reports（列表）
+        ↓ 提交成功
+MapService → Kafka (topic: gate-{gate_id}, msg: PushBattleReport)
+        ↓
+Gate Node → TCP → 客户端
+客户端加入本地战报列表
 ```
 
-**关键：实时推送和持久化是两条独立的 Kafka 路径，互不阻塞。**
+**关键：战报和战果同一个事务提交，提交成功才推送。客户端不会看到之后又回退的战报，也不会出现战果落了战报丢了。推送仍走 Kafka，发出去不用等结果。**
 
-### DB Service 消费代码
+### DB Service 写入代码
 ```go
-func handleSaveBattleReport(msg kafka.Message) {
-    var report pb.BattleReportStorage
-    proto.Unmarshal(msg.Value, &report)
-    
+// 在提交队列拼好的事务里调用, 同一事务还有地块、部队的变更。
+// 重试由批次序号挡住, 这里不用 IGNORE, 重复写会报错。
+func saveBattleReport(ctx context.Context, tx *sql.Tx, report *pb.BattleReportStorage) error {
     // 1. 压缩
     blob := zstdCompress(report.ReportData)
-    
-    // 2. MySQL 写入
-    db.Exec(`INSERT INTO battle_reports 
-        (report_id, attacker_id, defender_id, result, report_blob, created_at) 
+
+    // 2. 战报本体。时间用战斗结算时间, 重试时内容不变
+    if _, err := tx.ExecContext(ctx, `INSERT INTO battle_reports
+        (report_id, attacker_id, defender_id, result, report_blob, created_at)
         VALUES (?, ?, ?, ?, ?, ?)`,
         report.ReportId, report.AttackerId, report.DefenderId,
-        report.Result, blob, time.Now())
-    
-    // 3. Redis 缓存战报内容 (7天TTL)
-    rdb.Set(ctx, fmt.Sprintf("report:%d", report.ReportId), blob, 7*24*time.Hour)
-    
-    // 4. 双方战报列表各加一条
-    for _, pid := range []int64{report.AttackerId, report.DefenderId} {
-        key := fmt.Sprintf("player:%d:reports", pid)
-        rdb.LPush(ctx, key, report.ReportId)
-        rdb.LTrim(ctx, key, 0, 99)  // 只保留最近100条
+        report.Result, blob, report.CreatedAt); err != nil {
+        return err
     }
+
+    // 3. 双方战报列表各加一条
+    for _, pid := range []int64{report.AttackerId, report.DefenderId} {
+        if _, err := tx.ExecContext(ctx, `INSERT INTO player_battle_reports
+            (player_id, created_at, report_id) VALUES (?, ?, ?)`,
+            pid, report.CreatedAt, report.ReportId); err != nil {
+            return err
+        }
+    }
+    return nil
 }
 ```
 
@@ -783,18 +782,20 @@ func handleSaveBattleReport(msg kafka.Message) {
 ```
 客户端请求"我的战报列表"
   → Gate → DataService
-  → Redis LRANGE player:{id}:reports 0 49  (取最近50条ID)
-  → 批量 Redis MGET report:{id1}, report:{id2}, ...
-  → cache miss 的去 MySQL 查 → 回填 Redis
+  → SELECT report_id FROM player_battle_reports
+      WHERE player_id = ? ORDER BY created_at DESC LIMIT 50
+  → SELECT ... FROM battle_reports WHERE report_id IN (...)
   → 返回给客户端
 ```
 
+翻页按 `created_at`。`report_id` 是发号器发的，不能用来排序。
+
 ### 存储方案
 
-#### MySQL 表结构
+#### TiDB 表结构
 ```sql
 CREATE TABLE battle_reports (
-    report_id    BIGINT PRIMARY KEY,
+    report_id    BIGINT PRIMARY KEY,  -- 发号器发, 已打散, 不用自增
     attacker_id  BIGINT,
     defender_id  BIGINT,
     battle_type  TINYINT,         -- PvP/PvE/Rally
@@ -802,36 +803,44 @@ CREATE TABLE battle_reports (
     tile_x       INT,
     tile_y       INT,
     created_at   TIMESTAMP,
-    report_blob  MEDIUMBLOB,      -- zstd compressed protobuf
-    INDEX idx_attacker (attacker_id, created_at),
-    INDEX idx_defender (defender_id, created_at)
+    report_blob  MEDIUMBLOB       -- zstd compressed protobuf
+);
+
+-- 我的战报列表: 主键自带顺序, 不用 OR 查攻防两列
+CREATE TABLE player_battle_reports (
+    player_id    BIGINT,
+    created_at   TIMESTAMP,
+    report_id    BIGINT,
+    PRIMARY KEY (player_id, created_at, report_id)
+);
+
+-- 联盟战报列表
+CREATE TABLE alliance_battle_reports (
+    alliance_id  BIGINT,
+    created_at   TIMESTAMP,
+    report_id    BIGINT,
+    PRIMARY KEY (alliance_id, created_at, report_id)
 );
 ```
 
-#### Redis 数据结构
-```
-player:{id}:reports   → List (最近100条 report_id, LPUSH+LTRIM)
-report:{id}           → String (zstd blob, TTL 7天)
-alliance:{id}:reports → List (联盟战报, 最近200条)
-```
+#### 为什么不放 Redis
+查看战报是低频操作，TiDB 按主键点查约 2~3ms 就够。战报丢了就是事故（GM 仲裁还要用），放 Redis 还要多维护一份列表和缓存，要处理回填和不一致。
 
 ### 查询场景
-- 玩家查看"我的战报"：Redis LRANGE → 批量 MGET → cache miss 回源 MySQL
-- 联盟战报：Redis LRANGE alliance:{id}:reports
-- 历史回放：按 `report_id` 精确查询 → Redis GET → miss → MySQL SELECT
-- GM 仲裁：MySQL 精确查 + 反序列化 BattleInput → 重跑验证
+- 玩家查看"我的战报"：`player_battle_reports` 按主键范围取最近 50 条 → `battle_reports` 批量点查
+- 联盟战报：`alliance_battle_reports` 同样取
+- 历史回放：按 `report_id` 精确查询
+- GM 仲裁：TiDB 精确查 + 反序列化 BattleInput → 重跑验证
 
 ### 容量估算
 ```
 10K 玩家，每人每天 10 场战斗
 = 100K 战报/天 × 2KB = 200MB/天
 30 天 = 6GB
-保留 90 天热数据 = ~18GB → MySQL 轻松承受
-90 天后归档到 S3 冷存储
+保留 90 天热数据 = ~18GB（三副本约 54GB，压缩前）→ TiDB 轻松承受
+90 天后或赛季结束归档到 S3 冷存储
 
-Redis 内存:
-  100K 战报列表 × 100 ID × 8B = ~80MB (列表)
-  热战报缓存 (7天) = 700K × 2KB = ~1.4GB (可调 TTL 控制)
+Redis: 不放战报，不占内存
 ```
 
 ---

@@ -2,7 +2,7 @@
 
 **Created:** 2026-04-07
 
-> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+> **说明**：本文是「率土风格」的设计或面试笔记，不代表率土之滨的真实架构。数据层 2026-11-01 按[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)改写：玩家数据和地图数据都不放 Redis，地块和行军以地图服内存为准，持久数据只落 TiDB（预算不够用 MySQL 档），Redis 只做协调。库表、写入路径和为什么不用 Redis，见[框架设计 §12](./slg-server-complete-framework.md)。
 
 ---
 
@@ -576,7 +576,7 @@ TEST(PathEncoding, RoundTrip) {
 
 **恢复流程：**
 1. MapService 崩溃重启
-2. 从 Redis/DB 加载所有活跃行军 `{march_id, path, start_time, speed, state}`
+2. 从 TiDB 加载所有活跃行军 `{march_id, path, start_time, speed, state}`
 3. 对每个行军：
    - 懒计算当前位置：`current = path[floor((now - start_time) * speed)]`
    - 如果 `current >= path.length - 1` → 行军已到达，触发到达事件

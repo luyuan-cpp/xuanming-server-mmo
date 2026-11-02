@@ -2,7 +2,7 @@
 
 **Updated:** 2026-04-02
 
-> **状态说明(2026-11-01)**:本文是「率土风格」的设计或面试笔记,不代表率土之滨的真实架构。文中把玩家数据、行军、地块放 Redis,以及先写 Redis 再落库的写法,已被[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,玩家存档和检查点落 TiDB 或 MySQL,Redis 只做协调和能从 SQL 重建的缓存。正文没有逐处修改,SLG 立项时以总体方案为准。
+> **说明**：本文是「率土风格」的设计笔记，不代表率土之滨的真实架构。数据层 2026-11-01 按[总体方案 §10](../../design/player-data-tidb-scaling-plan.md)改写：玩家数据和地图数据都不放 Redis，地块和行军以地图服内存为准，持久数据只落 TiDB（预算不够用 MySQL 档），Redis 只做协调。库表、写入路径和为什么不用 Redis，见本文 §12。
 
 ---
 
@@ -97,7 +97,7 @@
               │
        ┌──────▼──────┐
        │ Data Layer   │
-       │ Redis + MySQL │
+       │ TiDB + Redis  │
        │ + Kafka       │
        └──────────────┘
 ```
@@ -114,7 +114,7 @@
 | **AllianceService** | 有状态 | 单实例 | 联盟管理、外交、集结召集 |
 | **ChatService** | 轻状态 | 可扩 | 聊天频道、消息分发 |
 | **RankService** | 计算型 | 单实例 | 排行榜计算与缓存 |
-| **DataService** | 无状态代理 | 可扩 | Redis/MySQL 路由，数据持久化 |
+| **DataService** | 无状态代理 | 可扩 | TiDB 路由，数据持久化 |
 | **SchedulerService** | 调度型 | 单实例 | 赛季进度、全服事件、定时重算 |
 
 ### 2.3 MapService — 核心中的核心
@@ -144,7 +144,7 @@ MapService 内部结构:
 - **核心状态服务（Map + Build + Army）合并为一个进程**：减少网络开销，简化事务一致性
 - **计算密集型（Battle）独立为无状态服务**：可水平扩展
 - **辅助服务（Chat、Rank、Alliance）可选独立**：降低核心进程复杂度
-- **数据层（Redis / MySQL / Kafka）独立部署**
+- **数据层（TiDB / Redis / Kafka）独立部署**
 
 实际上很多 SLG 项目采用 "**大单体 + 少量微服务**" 架构，而不是纯微服务。
 
@@ -194,7 +194,7 @@ Region 用途:
     → VisionManager.NotifyTileChanged(tile_id, changes)
       → 遍历该 tile 的 observer 列表
       → 对每个在线观察者 push TileUpdate 消息
-    → 持久化（dirty flag + 批量写入）
+    → 持久化（易主当场进提交队列，其他字段 dirty flag + 批量写入，见 §12.5）
 ```
 
 ### 3.4 地图坐标系
@@ -572,14 +572,12 @@ MarchManager.ChangeSpeed(army_id, new_speed):
 
 ### 4.7 行军持久化与崩溃恢复
 
-> 这里的存储写法已被取代,见文首状态说明。
-
 ```
 持久化数据: {army_id, path, start_time, speed, state, purpose}
-存储: Redis Hash + MySQL 备份
+存储: TiDB marches 表，发起、召回、加速、进入战斗、到达时提交（见 §12.5），行军途中不写
 
 崩溃恢复:
-  1. 加载所有 state=MARCHING 的记录
+  1. 从 TiDB 加载所有 state=MARCHING 的记录
   2. 对每条记录用公式算当前位置
   3. 如果已过到达时间 → 立即执行到达逻辑
   4. 否则 → 重建剩余路径的 occupant 记录 + 重注册定时器
@@ -1064,9 +1062,11 @@ Day 90       - 赛季结束
   - 赛季末尾合并到更大的服务器
 
 合服方案 (推荐):
-  - player_id 不变（Snowflake 生成，不含 zone 信息）
-  - 合并 DB 数据（Zone A 的 Redis → 导入 Zone B 的 Redis）
-  - 更新路由映射表: player_id → new_zone_id
+  - player_id 不变（发号器生成，不含 zone 信息）
+  - 把世界 A 逻辑库的玩家行导入世界 B 的逻辑库（player_id 全局唯一，不冲突）
+  - 地图不合并: 世界 A 的地块和行军不导入，玩家在世界 B 重新落城
+  - 跨集群时先把世界 A 的逻辑库整库搬到目标集群，再导入
+  - 更新路由映射表: world_id → 集群 + 库，player_id → new_world_id
   - 业务代码零修改
 
 合服注意事项:
@@ -1080,18 +1080,33 @@ Day 90       - 赛季结束
 
 ## 12. 数据层设计
 
-> 本章的数据分工和写入策略已被取代,见文首状态说明。
+玩家数据和地图数据都不放 Redis。运行时以 MapService 内存为准，TiDB 是持久数据的唯一真源，Redis 只做协调。预算不够时换 MySQL 档，业务写法不变，只是不用 TiDB 专属的预切和 TTL。决定和取舍见[总体方案 §10、附录 A.6](../../design/player-data-tidb-scaling-plan.md)。本章的批次、间隔、吞吐都是初值或推算，立项后压测定。
 
 ### 12.1 数据分层
 
 ```
                 热         ←——————→         冷
-┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
-│  Memory  │  │  Redis   │  │  MySQL   │  │ S3/OSS   │
-│ (地图/行军)│  │ (玩家数据)│  │ (持久化) │  │ (历史战报)│
-└──────────┘  └──────────┘  └──────────┘  └──────────┘
-  延迟: 0       延迟: <1ms    延迟: 1-10ms   延迟: 100ms+
+┌──────────┐  ┌───────────────┐  ┌──────────┐
+│  Memory  │  │     TiDB      │  │ S3/OSS   │
+│ (地图/行军)│  │ (全部持久数据) │  │ (历史战报)│
+└──────────┘  └───────────────┘  └──────────┘
+  延迟: 0      点查 P95 约 2~3ms   延迟: 100ms+
+               写入 P95 约 10~13ms
+
+Redis 不在这条线上，只放会话、锁、限流、通知（§12.3）。
 ```
+
+TiDB 的延迟是官方 Sysbench 小行数据，真实负载要自测。主循环不等数据库（§12.5），这个延迟只影响操作回客户端的时间。
+
+| 数据 | 运行时以哪里为准 | 持久化 |
+|------|----------------|--------|
+| 地块、城池、驻军 | MapService 内存 | TiDB `map_tiles` 等表 |
+| 活跃行军 | MapService 内存 | TiDB `marches`，位置不存，按公式算 |
+| 资源、武将、部队、建筑、邮件 | 进程内存，离线玩家按需加载 | TiDB，这是唯一一份 |
+| 战报、交易流水 | TiDB | TiDB，赛季结束归档到 S3 |
+| 联盟、外交 | AllianceService 或进程内缓存 | TiDB |
+| 视野、occupant、定时器 | 内存 | 不存，重启时重建 |
+| 会话、锁、限流、通知 | Redis | 不存，丢了重建或按 TTL 失效 |
 
 ### 12.2 内存数据（MapService 进程内）
 
@@ -1101,69 +1116,158 @@ Day 90       - 赛季结束
   - 所有活跃行军 (~50K 条, 几十 MB)
   - 视野观察者表 (按需分配)
   - 建筑队列 (所有玩家)
-  
+
 非常驻:
-  - 离线玩家详细数据 → Redis (按需加载)
-  - 武将详情 → Redis
-  - 战报 → DB
+  - 离线玩家详细数据 → TiDB (按需加载)
+  - 武将详情 → TiDB (按需加载，进程内 LRU)
+  - 战报 → TiDB
 ```
 
-### 12.3 Redis 使用
+进程内 LRU 不会和 TiDB 分叉：这个世界只有 MapService 一个写者（§12.5）。
+
+### 12.3 Redis 只做协调
 
 ```
-Redis 数据模型:
+// Session
+session:{player_id}            → String (gate_node_id, 带TTL)
 
-// 玩家数据
-player:{player_id}:profile     → Hash (名字/等级/经验)
-player:{player_id}:resources   → Hash (木/铁/粮/石/金)
-player:{player_id}:generals    → Hash (field=general_id, value=protobuf)
-player:{player_id}:army        → List of Army protobuf
-player:{player_id}:buildings   → Hash (field=building_id, value=protobuf)
-player:{player_id}:mails       → Sorted Set (score=timestamp)
+// 锁与选主
+lock:{name}                    → String (带TTL)
 
-// 联盟数据
-alliance:{alliance_id}:info    → Hash (名字/等级/成员数)
-alliance:{alliance_id}:members → Set of player_ids
+// 限流
+ratelimit:{player_id}:{msg_id} → Counter (带TTL)
 
-// 排行榜
+// 排行榜（可选，只是加速）
 rank:power       → Sorted Set (score=power, member=player_id)
 rank:kills       → Sorted Set
 rank:alliance    → Sorted Set
 
-// Session
-session:{player_id}            → String (gate_node_id, 带TTL)
+// 跨进程通知
+Pub/Sub: 只是唤醒信号，丢了靠轮询补
 ```
 
-### 12.4 MySQL 持久化
+判断标准：丢了能按协议重建或按 TTL 失效，才放 Redis；丢了只能从 TiDB 找回的，放 TiDB。排行榜的分数来自 TiDB，Redis 清空后重算一遍即可。
+
+### 12.4 TiDB 库表
+
+**每个世界（赛季）一个逻辑库**（`slg_world_{id}`），路由目录记「世界 → 集群 + 库」。归档、搬迁、删除都按整库做。Map + Build + Army 合并成一个进程时，这个库只有它一个写者；AllianceService 独立部署时用自己的逻辑库，跨服务走 RPC，不跨库写 SQL（AGENTS §7）。
+
+| 表 | 主键 | 二级索引 | 说明 |
+|----|------|---------|------|
+| `world_writer` | `world_id` | | 只有一行：写权代次 `owner_epoch`、整笔序号 `save_seq` |
+| `players` | `player_id` | `alliance_id` | 名字、等级、归属 |
+| `player_resources` | `player_id` | | 木铁粮石金；产出懒计算，只存上次结算值和速率 |
+| `generals` | `(player_id, general_id)` | | 武将 |
+| `armies` | `(player_id, army_id)` | | 部队 |
+| `buildings` | `(player_id, building_id)` | | 建筑；进度按 `build_end` 算，不逐秒写 |
+| `mails` | `(player_id, mail_id)` | `(player_id, created_at)` | 邮件 |
+| `alliances` | `alliance_id` | | 联盟 |
+| `alliance_members` | `(alliance_id, player_id)` | `player_id` | 成员 |
+| `alliance_diplomacy` | `(alliance_id, target_alliance_id)` | | 外交关系 |
+| `map_tiles` | `tile_id` | `owner_alliance_id`、`owner_player_id` | 只存和配置初始状态不同的格子 |
+| `marches` | `march_id` | `player_id` | 活跃行军；结束后删除，写一条 `march_logs` |
+| `march_logs` | `march_id` | `(player_id, created_at)` | 行军日志 |
+| `battle_reports` | `report_id` | | 战报，zstd 压缩的 protobuf |
+| `player_battle_reports` | `(player_id, created_at, report_id)` | | 我的战报列表 |
+| `alliance_battle_reports` | `(alliance_id, created_at, report_id)` | | 联盟战报列表 |
+| `transaction_log` | `id` | `(player_id, created_at)` | 资产流水，和资产变更同一个事务 |
+
+TiDB 上要注意的点：
+
+- **主键不用自增**：顺序主键的写入都落在表尾一个 Region，是 TiDB 的典型写热点。`player_id`、`march_id`、`report_id`、流水号都由发号器发，值已经打散。发号器的 ID 不能用来排序，列表按 `created_at` 翻页。
+- **`map_tiles` 要预切**：`tile_id` 连续、表又小（最多 144 万行，约 200MB），写入可能集中在少数几个 Region。建库时执行 `SPLIT TABLE map_tiles BETWEEN (0) AND (1440000) REGIONS 16;`。
+- **只存有变化的格子**：地形、资源田的初始状态来自配置表。启动时先按配置建满内存，再用 `map_tiles` 覆盖。
+- **按格子存行，不存 Region 大块**：改 3 个格子不用重写整个 Region（约 128KB），同盟领地、州城归属也能直接走索引查。
+- **单行上限**：默认 6 MiB（`txn-entry-size-limit`）。行军路径和战报都远小于这个值。
+- **日志类表可以用 TTL**：`TTL = created_at + INTERVAL 90 DAY`。TTL 是后台清理，不保证到期立刻删除，查询还要自己按时间过滤。
+- **不手工分表**：TiDB 自动按 Region 切分，不需要 `player_id % 16` 这种分表。
+
+### 12.5 写入路径：一条有序的提交队列
+
+MapService 是这个世界唯一的写者。要落库的变更都进一条有序的提交队列，主循环只管往队列里放，不等数据库。
 
 ```
-核心表设计:
-  players          — 玩家基础信息
-  player_resources — 资源数据 (定期快照)
-  generals         — 武将数据
-  armies           — 部队数据
-  buildings        — 建筑数据
-  alliances        — 联盟数据
-  alliance_members — 成员关系
-  marches          — 行军记录 (活跃 + 历史)
-  battle_reports   — 战报 (protobuf blob)
-  transaction_log  — 交易日志 (审计)
-  map_tiles        — 地图格子持久化 (按 Region 批量)
+主循环（不等数据库）
+  → 改内存
+  → 把变更追加到提交队列（保持产生顺序）
 
-写入策略:
-  - 方案A (默认): 每次变更通过 Kafka → DB Service → MySQL
-  - 方案B (高吞吐): DB Worker 内 batch flush (同 worker 保证串行)
-  - 关键操作 (战斗结算): WAL 立即写
-  - 地图数据: dirty Region 标记 + 定期批量 flush
+提交线程
+  → 每 50ms 或攒够 500 行取一批
+  → gRPC 发给 DB Service
+  → 一个 TiDB 事务:
+       SELECT owner_epoch, save_seq FROM world_writer WHERE world_id = ? FOR UPDATE
+       核对 owner_epoch 和 save_seq
+       写这一批的所有行 (INSERT ... ON DUPLICATE KEY UPDATE)
+       UPDATE world_writer SET save_seq = ?
+       COMMIT
+  → 成功: 回调主循环，这批操作才回客户端、才推送战报和广播
+  → 结果未知 (超时、断连): 用同一序号、同样内容重试；已经提交过的序号相等，直接算成功
+  → owner_epoch 对不上: 已有新进程接管，当前进程立刻退出
 ```
 
-### 12.5 Kafka 使用
+Region 并行时用多生产者单消费者队列：先入队，再发跨 Region 消息，有因果关系的变更顺序就不会乱。重试有退避和时间预算，超过预算就退出进程，重启后从 TiDB 恢复。
+
+| 变更 | 怎么落 | 崩溃后 |
+|------|-------|--------|
+| 资产（资源、物品、充值、交易） | 进队列，流水同一批，提交成功才回客户端 | 不丢 |
+| 地块易主 + 占领奖励 | 进队列，同一批提交，提交成功才推送 | 不丢、不重复 |
+| 行军发起、召回、加速、进入战斗、到达 | 进队列，提交成功才下发和广播 | 不丢，位置按公式重算 |
+| 建筑开工和完工、招募 | 进队列，提交成功才回客户端 | 不丢 |
+| 战果 + 战报 | 进队列，同一批提交，提交成功才推送 | 不丢 |
+| 地块耐久、驻军数量这类高频字段 | 标记 dirty，每 10 秒进队列批量 upsert | 回到上次落库，最多丢约 10 秒 |
+| 位置、视野、occupant、定时器 | 不落库 | 重启时重算 |
+
+这样做的好处：
+
+- **崩溃后状态一致**：队列按顺序提交，落库的永远是历史的一个前缀，不会出现后面的变更落了、前面的没落。
+- **内存不需要回滚**：提交的结局只有两种，重试到成功，或者进程退出后从 TiDB 重新加载。
+- **攻城不拖慢主循环**：提交线程把同一段时间的变更并成一个事务。
+
+吞吐推算：活跃行军 5 万条、平均 5 分钟一条，发起和结束约 350 次/秒；1 万在线、每人每分钟 10 笔资产操作，约 1700 笔/秒，加流水约 3400 行/秒；大战时脏格子 5 万个/10 秒，约 5000 行/秒。合计峰值约 1 万行/秒。每批 500 行、一次提交按 20~50ms 算，一条队列能过 1~2.5 万行/秒。余量不大，压测不够就把批次放大到 1000 行。
+
+TiDB 变慢或不可用时，地图读取和行军懒计算不受影响。队列超过上限（初值 30 秒的量）就拒绝新的玩家写操作并告警，定时器产生的内部变更继续排队。
+
+### 12.6 恢复、更新与归档
+
+```
+MapService 启动:
+  1. 抢写权: world_writer.owner_epoch + 1 (旧进程的下一次提交会被拒绝)
+  2. 按配置建满地图，再按主键范围分段并行读 map_tiles 覆盖
+  3. 读 marches、buildings、玩家地图实体
+  4. 重算行军位置，重建 occupant、定时器、视野 (§4.7)
+  5. 开放服务
+
+恢复时间目标 < 2 分钟。读 144 万行以内的数据推算在几十秒内，要实测。
+
+滚动更新:
+  停止接新操作 → 排空提交队列、脏字段全部落库 → 停旧进程 → 新进程走上面的启动流程
+
+赛季归档:
+  冻结 → 整库导出到 S3/OSS → DROP DATABASE
+
+备份:
+  BR 全量快照 + 日志备份 (PITR)，可恢复到任意时间点；恢复期间目标表不能读写
+```
+
+### 12.7 为什么玩家数据和地图不放 Redis
+
+1. **快靠内存，不靠 Redis**：碰撞、视野、行军都在 MapService 内存里算。Redis 在另一台机器上，每次读写多一次网络往返，帮不上热路径。它原来唯一的作用是崩溃后从哪里恢复，这件事 TiDB 也能做。
+2. **Redis 会丢已确认的写**：主从是异步复制，切主时可能丢掉已经回过客户端的写（[Redis 官方文档](https://redis.io/docs/latest/operate/oss_and_stack/management/scaling/)明确写了）；AOF 通常每秒刷一次盘，崩溃丢约 1 秒。TiDB 三副本多数派提交，单台机器坏了不丢已提交的数据。
+3. **跨对象改动没有原子性**：攻城易主、同盟仓库、交易都要同时改多个对象。Redis Cluster 的多键操作要求所有键在同一个 hash slot，不同玩家的键一般不在一起。在 TiDB 上，同一个逻辑库里一个事务就够了；AllianceService 独立部署时，跨库的部分走 RPC 加幂等键。
+4. **查不了**：同盟全部领地、州城归属、战报历史、客服流水都要按条件查，放 Redis 就要自己维护一堆索引键。TiDB 建二级索引就行。
+5. **恢复和归档不方便**：Redis 备份只有整实例快照，不能按时间点恢复。TiDB 有 PITR，一个世界的数据还能整库导出、搬迁、删除。
+6. **两份数据要对账**：先写 Redis 再经 Kafka 落库，就有两份数据，要处理谁为准、回退、乱序、补投。本仓 MMO 的旧存盘链就是这样，每条写任务约 11 次 Redis 往返，最后整条退役（[总体方案附录 A.2](../../design/player-data-tidb-scaling-plan.md)）。
+
+成本不是主要理由：一个世界的数据只有几 GB 量级（推算），Redis 放得下，问题在上面几条。
+
+**代价**：TiDB 写入比 Redis 慢一个量级（约 10ms 对约 1ms），所以才要提交队列和批量；TiDB 运维也比 Redis 重，预算不够用 MySQL 档。
+
+### 12.8 Kafka 使用
 
 ```
 Kafka Topics:
   battle_request    — MapService → BattleService (战斗请求)
   battle_result     — BattleService → MapService (战斗结果)
-  db_task           — 各服务 → DBService (数据持久化)
   gate_command      — 各服务 → GateService (推送消息给客户端)
   anomaly_alert     — 异常检测告警
   alliance_event    — 联盟事件广播
@@ -1171,6 +1275,8 @@ Kafka Topics:
 
 同一玩家的消息用 player_id 作 key → 保证同 partition 内顺序
 ```
+
+存档不走 Kafka。Kafka 只做发出去不用等结果的通知和事件流。
 
 ---
 
@@ -1320,7 +1426,7 @@ Kubernetes 集群:
 ├── mmorpg-infra (基础设施命名空间)
 │   ├── etcd
 │   ├── redis
-│   ├── mysql
+│   ├── tidb (PD / TiKV / TiDB)
 │   └── kafka
 ├── mmorpg-zone-{season_name} (每个赛季一个命名空间)
 │   ├── gate (Deployment, 可扩)
@@ -1339,15 +1445,15 @@ MapService (有状态, 最关键):
   - 主备模式 (Active-Standby)
   - 备机持续从 Kafka 消费事件日志，保持近实时副本
   - 主故障 → 备机提升 (< 30s 切换)
-  - 或: 快速重启 → 从 Redis/DB 恢复状态 (< 2min)
+  - 或: 快速重启 → 从 TiDB 恢复状态 (< 2min，见 §12.6)
 
 无状态服务 (Gate, Battle):
   - 多副本 + 自动扩缩容 (HPA)
   - 任一副本故障 → K8s 自动替换
 
 数据层:
-  - Redis: Sentinel / Cluster (自动故障转移)
-  - MySQL: 主从复制 + 半同步
+  - TiDB: 三副本多数派提交，单台机器故障自动切 leader
+  - Redis: Sentinel / Cluster (只放协调数据，丢了能重建)
   - Kafka: 3 副本，min.insync.replicas=2
 ```
 
@@ -1355,14 +1461,15 @@ MapService (有状态, 最关键):
 
 ```
 备份策略:
-  - Redis: RDB 每 4h + AOF (秒级持久化)
-  - MySQL: 每 6h 全量快照 + binlog 增量
+  - TiDB: BR 全量快照 + 日志备份 (PITR，可恢复到任意时间点)
+  - Redis: 不做恢复依据 (只放协调数据)
   - 关键事件 (大规模战斗/赛季结算): 触发即时快照
 
 回滚能力:
   - 单玩家回滚: 从快照恢复，重放交易日志
-  - 区域回滚: 按 Region 恢复地图数据
-  - 全服回滚: 最后手段，从 MySQL 备份恢复
+  - 区域回滚: PITR 恢复到临时集群，按 tile_id 范围恢复地图数据
+  - 单世界回滚: PITR 恢复到临时集群，再把这个世界的库导回
+  - 全服回滚: 最后手段，整集群 PITR (恢复期间目标表不能读写)
 ```
 
 ### 16.4 监控指标
@@ -1384,8 +1491,8 @@ MapService (有状态, 最关键):
 │   ├── message_rate
 │   └── connection_errors
 ├── Data Layer
-│   ├── redis_hit_rate
-│   ├── mysql_write_latency
+│   ├── persist_queue_depth
+│   ├── tidb_commit_latency_p99
 │   ├── kafka_consumer_lag
 │   └── kafka_partition_throughput
 ```
@@ -1415,7 +1522,7 @@ MapService (有状态, 最关键):
 技术栈推荐:
 ├── 语言: C++ (核心/MapService) + Go (微服务) + Python (工具)
 ├── 协议: Protobuf (Wire) + gRPC (内部 RPC) + Kafka (异步)
-├── 数据: Redis (Cache) + MySQL (Persist) + S3 (Cold)
+├── 数据: TiDB (Persist) + Redis (协调) + S3 (Cold)
 ├── 部署: Docker + Kubernetes
 ├── 监控: Prometheus + Grafana
 ├── 日志: ELK (Elasticsearch + Logstash + Kibana)

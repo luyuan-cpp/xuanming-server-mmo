@@ -98,9 +98,21 @@ WHERE player_id IN (?, ?);
 
 - **不要手改** `trade_commerce.status` 或 `workflow_proto` 把合同拉回推进。版本条件、锁序和「补偿腿按角色名只建一次」的保证，都建立在引擎自己的写路径上。
 - **不要手改** `trade_asset_op` 行。seq、纪元和终局的不变量由资产通道维护。
-- **不要人工终结**隔离后仍 PENDING 的托管扣款，要等 Abort 定论。人工终结只用于资产通道 §4.38 列出的情形（UNKNOWN 等），而且必须凭 scene 流水的 correlation_id（等于 `op_id`）。
+- **不要人工终结**隔离后仍 PENDING 的托管扣款，要等 Abort 定论。人工终结只用于资产通道 §4.38 列出的情形（UNKNOWN 等），而且必须凭 scene 流水的 correlation_id（等于 `op_id`），用下面 §4.2 的工具做。
 
 ### 4.2 Manual 合同
+
+卡死的资产指令用 `go/trade/cmd/assetopfix` 终结（2026-11-01 写，未编译，未演练）：
+
+```bash
+cd go/trade && go run ./cmd/assetopfix -f etc/trade.yaml list
+```
+
+```bash
+cd go/trade && go run ./cmd/assetopfix -f etc/trade.yaml resolve -op <op_id> -as applied -operator <名字> -reason <工单号和流水结论> -confirm <op_id> -txlog-checked
+```
+
+只处理 PENDING、创建超过 30 分钟、反复 UNKNOWN（`attempts >= 10`）的行，`-force` 只跳过最后一条。结局只有 `applied`、`aborted`。不带 `-txlog-checked` 时只打印核对清单。写库要带写者身份（`authoritysql.LoadWriterConfig` 读的环境变量），和服务进程同一套；维护排空期间不要运行。终结之后合同下一轮推进按结局继续：`aborted` 走与 scene 判拒相同的补偿，实例扣款判 `applied` 时没有托管原件，合同隔离为 Manual。
 
 **目前没有补发、退回或恢复推进的管理入口。** 入口落地前按这个顺序处理：
 
@@ -135,6 +147,6 @@ WHERE player_id IN (?, ?);
 
 ## 6. 待补
 
-- 管理入口：Manual 合同的列表、恢复推进、补发和退回。需要另立设计，覆盖鉴权、操作留痕，以及沿用原腿和原 seq 的幂等。
+- 管理入口：Manual 合同的列表、恢复推进、补发和退回。需要另立设计，覆盖鉴权、操作留痕，以及沿用原腿和原 seq 的幂等。卡死指令的终结已有工具（§4.2）。
 - 把原 stage 和隔离原因持久化进合同。目前只在日志里，要改 `TradeCommerceWorkflow`。
 - Java 版对齐，见设计 §15.3「2026-10-22 修复」的残余项。

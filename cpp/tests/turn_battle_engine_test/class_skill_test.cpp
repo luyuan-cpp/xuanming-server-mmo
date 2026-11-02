@@ -849,6 +849,7 @@ TEST(ClassSkillEngineTest, SameSeedClassSkillBattleIsDeterministic) {
 
 // ---------------------------------------------------------------------------
 // 玩家挂机选技:只验证正式行动与事件,不读取候选评分或私有选择过程。
+// SetActorAuto 的公开约定是 0 = 成功(turn_battle_engine.h),不是 tip 的 kSuccess(1000)。
 // ---------------------------------------------------------------------------
 
 class AutoClassSkillEngineTest : public ::testing::Test {
@@ -918,7 +919,7 @@ TEST_F(AutoClassSkillEngineTest, ChoosesSingleTargetOrGroupDamageFromActualEnemy
         }
         TurnBattleEngine engine(provider);
         ASSERT_TRUE(engine.Initialize(request));
-        ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+        ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
         const auto result = Round(engine);
         ExpectSkill(result, multipleEnemies ? kSweep : kStrike);
         EXPECT_EQ(EventsOf(result, BATTLE_EVENT_DAMAGE, kCaster).size(), multipleEnemies ? 2u : 1u);
@@ -937,7 +938,7 @@ TEST_F(AutoClassSkillEngineTest, NonAutoTimeoutKeepsBasicAttackAndPendingManualA
             const auto manual = Plain(BATTLE_ACTION_DEFEND);
             ASSERT_EQ(engine.ValidateAction(kCaster, manual), kSuccess);
             engine.SubmitAction(kCaster, manual);
-            ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+            ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
         }
         const auto result = Round(engine);
         if (automatic) {
@@ -969,7 +970,7 @@ TEST_F(AutoClassSkillEngineTest, FiltersInvalidPassiveUnlearnedAndForeignSkillsW
     pet->add_skill_table_ids(kStrike);
     TurnBattleEngine engine(provider);
     ASSERT_TRUE(engine.Initialize(request));
-    ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
     const auto result = Round(engine);
     ExpectBasicAttack(result);
     int pets = 0;
@@ -990,13 +991,20 @@ TEST_F(AutoClassSkillEngineTest, InsufficientManaOrSilenceFallsBackWithoutSpendi
         auto* caster = request.mutable_players(0);
         Learn(caster, kStrike, 1);
         if (silenced) {
-            CarryBuff(caster, kBuffSilence);
+            // 快照带入的沉默会被 SanitizeSnapshotBuffs 剔除(控制类不进局),必须在局内挂上才是真沉默
+            request.mutable_players(1)->add_skill_table_ids(kLegacySilence);
         } else {
             caster->mutable_base_attributes()->set_mana(0);
         }
         TurnBattleEngine engine(provider);
         ASSERT_TRUE(engine.Initialize(request));
-        ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+        if (silenced) {
+            engine.SubmitAction(kCaster, Plain(BATTLE_ACTION_DEFEND));
+            engine.SubmitAction(kFoe, Skill(kLegacySilence, kCaster));
+            engine.ResolveCurrentRound();
+            ASSERT_EQ(engine.ValidateAction(kCaster, Skill(kStrike, kFoe)), kSkillCannotBeCastSilenceRestriction);
+        }
+        ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
         const auto result = Round(engine);
         ExpectBasicAttack(result);
         EXPECT_TRUE(EventsOf(result, BATTLE_EVENT_MANA, kCaster).empty());
@@ -1008,7 +1016,7 @@ TEST_F(AutoClassSkillEngineTest, CoolingDownSkillIsNotSelectedAgain) {
     Learn(request.mutable_players(0), kStrike, 1);
     TurnBattleEngine engine(provider);
     ASSERT_TRUE(engine.Initialize(request));
-    ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
     ExpectSkill(Round(engine), kStrike);
     ASSERT_EQ(engine.ValidateAction(kCaster, Skill(kStrike, kFoe)), kSkillCooldownNotReady);
     const auto second = Round(engine);
@@ -1022,7 +1030,7 @@ TEST_F(AutoClassSkillEngineTest, DamageNotBetterThanBasicAttackDoesNotSpendMana)
     Learn(request.mutable_players(0), kStrike, 1);
     TurnBattleEngine engine(provider);
     ASSERT_TRUE(engine.Initialize(request));
-    ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
     const auto result = Round(engine);
     ExpectBasicAttack(result);
     EXPECT_TRUE(EventsOf(result, BATTLE_EVENT_MANA, kCaster).empty());
@@ -1040,7 +1048,7 @@ TEST_F(AutoClassSkillEngineTest, CriticalAllyHealingTakesPriorityOverCleanseAndD
     CarryBuff(poisoned, kBuffPoison);
     TurnBattleEngine engine(provider);
     ASSERT_TRUE(engine.Initialize(request));
-    ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
     const auto result = Round(engine);
     ExpectSkill(result, kMend, kAlly);
     const auto heals = EventsOf(result, BATTLE_EVENT_HEAL, kCaster);
@@ -1059,7 +1067,7 @@ TEST_F(AutoClassSkillEngineTest, GroupHealingWinsWhenItRepairsMoreActualMissingH
     AddClassPlayer(request, kExtraAlly, 0, 100)->mutable_base_attributes()->set_health(600);
     TurnBattleEngine engine(provider);
     ASSERT_TRUE(engine.Initialize(request));
-    ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
     const auto result = Round(engine);
     ExpectSkill(result, kMendAll);
     const auto heals = EventsOf(result, BATTLE_EVENT_HEAL, kCaster);
@@ -1081,7 +1089,7 @@ TEST_F(AutoClassSkillEngineTest, FullHealthPartyUsesDamageInsteadOfHealing) {
     AddClassPlayer(request, kAlly, 0, 100);
     TurnBattleEngine engine(provider);
     ASSERT_TRUE(engine.Initialize(request));
-    ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
     const auto result = Round(engine);
     ExpectSkill(result, kStrike, kFoe);
     EXPECT_TRUE(EventsOf(result, BATTLE_EVENT_HEAL, kCaster).empty());
@@ -1096,7 +1104,7 @@ TEST_F(AutoClassSkillEngineTest, CleanseExplicitlyTargetsDebuffedAllyRatherThanL
     AddClassPlayer(request, kExtraAlly, 0, 100)->mutable_base_attributes()->set_health(600);
     TurnBattleEngine engine(provider);
     ASSERT_TRUE(engine.Initialize(request));
-    ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
     const auto result = Round(engine);
     ExpectSkill(result, kCleanse, kAlly);
     const auto* ally = FindActorIn(result.state(), kAlly);
@@ -1129,7 +1137,7 @@ TEST_F(AutoClassSkillEngineTest, ManaRecoveryRequiresLowManaAndPositiveGainAfter
         Learn(caster, kFocus, 1);
         TurnBattleEngine engine(provider);
         ASSERT_TRUE(engine.Initialize(request));
-        ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+        ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
         const auto result = Round(engine);
         if (scenario.shouldRecover) {
             ExpectSkill(result, kFocus, kCaster);
@@ -1154,7 +1162,7 @@ TEST_F(AutoClassSkillEngineTest, DefenseSupportRequiresSixtyPercentHealthAndDoes
         Learn(caster, kGuard, 1);
         TurnBattleEngine engine(provider);
         ASSERT_TRUE(engine.Initialize(request));
-        ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+        ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
         const auto first = Round(engine);
         if (health == 600) {
             ExpectSkill(first, kGuard, kCaster);
@@ -1187,7 +1195,7 @@ TEST_F(AutoClassSkillEngineTest, StrongerExistingDefenseBuffPreventsWeakerDiffer
     ASSERT_EQ(engine.ValidateAction(kCaster, strongGuard), kSuccess);
     engine.SubmitAction(kCaster, strongGuard);
     ExpectSkill(Round(engine), kStrongGuard);
-    ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
     ExpectBasicAttack(Round(engine));
 }
 
@@ -1202,7 +1210,7 @@ TEST_F(AutoClassSkillEngineTest, SpeedDebuffRequiresAnOrderImprovementAndIsNotRe
         request.mutable_players(1)->mutable_base_attributes()->set_speed(foeSpeed);
         TurnBattleEngine engine(provider);
         ASSERT_TRUE(engine.Initialize(request));
-        ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+        ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
         const auto first = Round(engine);
         if (foeSpeed == 220) {
             ExpectSkill(first, kSlow, kFoe);
@@ -1231,7 +1239,7 @@ TEST_F(AutoClassSkillEngineTest, SpeedBuffTargetsAllyWhoCanOvertakeAndAvoidsUsel
         AddClassPlayer(request, kAlly, 0, allySpeed);
         TurnBattleEngine engine(provider);
         ASSERT_TRUE(engine.Initialize(request));
-        ASSERT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+        ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
         const auto first = Round(engine);
         if (allySpeed == 200) {
             ExpectSkill(first, kHaste, kAlly);
@@ -1277,7 +1285,7 @@ TEST_F(AutoClassSkillEngineTest, TieBreaksAreStableAcrossSkillOrderAndSelectionD
         TurnBattleEngine engine(provider);
         EXPECT_TRUE(engine.Initialize(request));
         if (automatic) {
-            EXPECT_EQ(engine.SetActorAuto(kCaster, true), kSuccess);
+            EXPECT_EQ(engine.SetActorAuto(kCaster, true), 0u);
         }
         std::string events;
         for (int round = 0; round < 10; ++round) {
@@ -1298,6 +1306,128 @@ TEST_F(AutoClassSkillEngineTest, TieBreaksAreStableAcrossSkillOrderAndSelectionD
     const auto manual = run(false, false);
     EXPECT_EQ(run(true, false), manual);
     EXPECT_EQ(run(true, true), manual);
+}
+
+TEST_F(AutoClassSkillEngineTest, RemainingHealthCapsEstimatedDamage) {
+    auto request = Duel(9817);
+    auto* caster = request.mutable_players(0);
+    Learn(caster, kSweep, 1);
+    Learn(caster, kStrike, 1);
+    request.mutable_players(1)->mutable_base_attributes()->set_health(10);
+    AddClassPlayer(request, kFoe2, 1, 100);
+    TurnBattleEngine engine(provider);
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
+    // 不封顶时群攻 29 × 2 高于单体 51;kFoe 只剩 10 血,群攻实际只有 10 + 29,单体打满血目标更值
+    ExpectSkill(Round(engine), kStrike, kFoe2);
+}
+
+TEST_F(AutoClassSkillEngineTest, DamageEstimateUsesResistanceOfTheSkillDamageType) {
+    auto request = Duel(9818);
+    auto* caster = request.mutable_players(0);
+    Learn(caster, kSweep, 1);
+    Learn(caster, kStrike, 1);
+    // 抗物理 50%:物理单体降到 26,低于法术单体的 29;未抗时物理单体 51 更高(ChoosesSingleTarget 用例)
+    request.mutable_players(1)->mutable_combat()->set_physical_resist(50);
+    TurnBattleEngine engine(provider);
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
+    ExpectSkill(Round(engine), kSweep, kFoe);
+}
+
+TEST_F(AutoClassSkillEngineTest, ComboExpectationRaisesBasicAttackBaseline) {
+    // 1.4 倍单体预计 45;普攻 33,满连击时期望 33 × 1.5 = 49.5,比单体还高
+    provider->AddSkill(kStrike).set_attack_multiplier(1.4);
+    for (const uint64_t comboRate : {0ull, 100ull}) {
+        SCOPED_TRACE(comboRate);
+        auto request = Duel(9819);
+        auto* caster = request.mutable_players(0);
+        Learn(caster, kStrike, 1);
+        caster->mutable_combat()->set_combo_rate(comboRate);
+        TurnBattleEngine engine(provider);
+        ASSERT_TRUE(engine.Initialize(request));
+        ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
+        const auto result = Round(engine);
+        if (comboRate == 0) {
+            ExpectSkill(result, kStrike, kFoe);
+        } else {
+            ExpectBasicAttack(result);
+            EXPECT_EQ(EventsOf(result, BATTLE_EVENT_DAMAGE, kCaster).size(), 2u);  // 首段 + 连击追加段
+            EXPECT_TRUE(EventsOf(result, BATTLE_EVENT_MANA, kCaster).empty());
+        }
+    }
+}
+
+TEST_F(AutoClassSkillEngineTest, AttackDebuffRequiresTargetWithPhysicalAttack) {
+    constexpr uint32_t kWeaken = 9134;
+    constexpr uint32_t kWeakenBuff = 9934;
+    auto& weaken = AddClassSkill(*provider, kWeaken, TargetTeam::kEnemy, 1);
+    weaken.set_buff_percent(-0.15);
+    weaken.add_effect(kWeakenBuff);
+    auto& buff = provider->AddBuff(kWeakenBuff);
+    buff.CopyFrom(*provider->FindBuff(kBuffSlow));
+    buff.set_id(kWeakenBuff);
+    buff.set_buff_type(turnbattle::kBuffTypeIncreaseAttack);
+    for (const uint64_t foeAttack : {100ull, 0ull}) {
+        SCOPED_TRACE(foeAttack);
+        auto request = Duel(9820);
+        Learn(request.mutable_players(0), kWeaken, 1);
+        request.mutable_players(1)->set_physical_attack(foeAttack);
+        TurnBattleEngine engine(provider);
+        ASSERT_TRUE(engine.Initialize(request));
+        ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
+        const auto first = Round(engine);
+        if (foeAttack > 0) {
+            ExpectSkill(first, kWeaken, kFoe);
+            ExpectBasicAttack(Round(engine));  // 同强度减益还在身上,不重复放
+        } else {
+            ExpectBasicAttack(first);  // 物攻 0(怪物的伤害只来自力量):减物攻削弱不了它
+        }
+    }
+}
+
+TEST_F(AutoClassSkillEngineTest, CleanseIsNotWastedWithoutRemovableDebuff) {
+    auto request = Duel(9821);
+    Learn(request.mutable_players(0), kCleanse, 1);
+    // 增益行没有 Debuff 标签,身上有 buff 也不算可驱散
+    CarryBuff(AddClassPlayer(request, kAlly, 0, 100), kBuffGuard);
+    TurnBattleEngine engine(provider);
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
+    ExpectBasicAttack(Round(engine));
+}
+
+TEST_F(AutoClassSkillEngineTest, HealingCleanseExplicitlyTargetsDebuffedAlly) {
+    constexpr uint32_t kPurify = 9135;
+    auto& purify = AddClassSkill(*provider, kPurify, TargetTeam::kAlly, 1);
+    purify.set_heal_multiplier(0.2);
+    purify.set_heal_per_level(1.0);
+    purify.set_dispel_count(1);
+    auto request = Duel(9822);
+    Learn(request.mutable_players(0), kPurify, 1);
+    CarryBuff(AddClassPlayer(request, kAlly, 0, 100), kBuffPoison);
+    AddClassPlayer(request, kExtraAlly, 0, 100)->mutable_base_attributes()->set_health(900);
+    TurnBattleEngine engine(provider);
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
+    const auto result = Round(engine);
+    // 目标 0 会按气血比例落到 90% 的 kExtraAlly 身上,驱散就落空了
+    ExpectSkill(result, kPurify, kAlly);
+    const auto* ally = FindActorIn(result.state(), kAlly);
+    ASSERT_NE(ally, nullptr);
+    EXPECT_EQ(FindBuffOn(*ally, kBuffPoison), nullptr);
+}
+
+TEST_F(AutoClassSkillEngineTest, PveAutoPlayerCastsOnMonsterWhileMonsterKeepsBasicAttack) {
+    auto request = MakeRequest(9823, turnbattle::kMatchModePveSolo);
+    Learn(AddClassPlayer(request, kCaster, 0, 300), kStrike, 1);
+    TurnBattleEngine engine(provider);
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_EQ(engine.SetActorAuto(kCaster, true), 0u);
+    const auto result = engine.ResolveCurrentRound();
+    ExpectSkill(result, kStrike, turnbattle::kMonsterActorIdBase);
+    EXPECT_TRUE(EventsOf(result, BATTLE_EVENT_SKILL, turnbattle::kMonsterActorIdBase).empty());
+    EXPECT_EQ(EventsOf(result, BATTLE_EVENT_ATTACK, turnbattle::kMonsterActorIdBase).size(), 1u);
 }
 
 }  // namespace

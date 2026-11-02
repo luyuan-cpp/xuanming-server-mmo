@@ -19433,3 +19433,115 @@ Java 版:0.1.0-SNAPSHOT,`PARITY.md` 已记待做:热更检查接口、单 zone �
 - **文件**:`docs/notes/slg/slg-server-complete-framework.md`、`slg-server-framework-complete.md`、`slg-server-mainprog-interview-qa.md`、`slg-server-interview-complete-qa.md`、`slg-performance-interview-qa.md`、`slg-march-system-complete.md`、`slg-pathfinding-interview-qa.md`、`slg-battle-interview-qa.md`;`docs/design/player-data-tidb-scaling-plan.md`、`docs/design/session-extractability-mmo-slg.md`。
 - **验证**:只改文档,不涉及编译和测试。
 - **Java 版(AGENTS §12)**:不适用,没有功能变化;不往 `PARITY.md` 加行。
+
+### 2026-11-01 Claude:SLG 笔记数据层改写成 TiDB,去掉 Redis 存玩家和地图(仅文档)
+
+上一条只加了标注。用户随后明确:「我在文档要你把 redis 去掉,然后用 tidb 补充的细节加上,为什么不用 redis」。这条把正文改了,上一条说的「正文没有逐处重写」不再成立。
+
+- **框架笔记 §12 重写**(`docs/notes/slg/slg-server-complete-framework.md`,其他笔记指向这里):每个世界一个逻辑库、17 张表的主键和索引、有序提交队列(每 50ms 或 500 行一个事务,事务里核对 `owner_epoch` 和 `save_seq`)、哪些变更当场提交、恢复与归档、为什么不放 Redis(§12.7)。
+- **其余笔记**:玩家数据、行军、地块、联盟、战报都改成 TiDB;`db_task`、`db-write` 这条存盘路径去掉,存档不走 Kafka。Redis 只留会话、锁、限流、通知、可重算的排行榜;聊天最近消息列表不是玩家存档和地图,没动。
+- **总体方案**:§1 记用户原话;§10 改写;A.6、A.7、A.8 更正并记下官方口径。**会话制抽离判据** §3.1、§3.2 同步。
+- **这次定的三件事**(原来没定或写法不同,都记在 §10、A.8):地块易主当场提交,不等批量;行军状态变化先提交再下发;每个世界一个逻辑库,所以合服改成把玩家行导入目标库,不再是「改世界标签」。
+- **都是推算**:提交窗口、10 秒落库间隔、1 万行/秒、恢复时间都没有实测,SLG 零实现,立项后压测定。
+- **文件**:`docs/notes/slg/` 下 `slg-server-complete-framework.md`、`slg-server-framework-complete.md`、`slg-server-mainprog-interview-qa.md`、`slg-server-interview-complete-qa.md`、`slg-performance-interview-qa.md`、`slg-march-system-complete.md`、`slg-pathfinding-interview-qa.md`、`slg-battle-interview-qa.md`、`slg-interview-qa.md`;`docs/design/player-data-tidb-scaling-plan.md`、`docs/design/session-extractability-mmo-slg.md`。
+- **验证**:只改文档,不涉及编译和测试。逐文件核对过代码块围栏成对;残留的 Redis 逐条核对过,都是协调用途或「为什么不用」的说明。
+- **Java 版(AGENTS §12)**:不适用,只改本仓文档,没有功能变化;不往 `PARITY.md` 加行。
+
+### 2026-11-01 Claude:删 GM 回档桩,scene_manager 写路径改原子(未编译,待 Codex 验证)
+
+按 `docs/handoff/server-gap-audit-20261101.md` 第 6、1 条做。验证命令见 `docs/handoff/player-save-direct-commit-20261030/progress.md` §16「清单第 1、6 条」。
+
+- **GM 回档桩**:`proto/scene/player_rollback.proto`、handler 和工程条目删除,12 个号在 `proto/message_id.txt` 手写墓碑(生成器单轮最多新转 4 条,手写不用放行开关)。只被它们引用的 `SnapshotDiff*` 一起删。要重新生成协议。这个 service 没标 `OptionIsClientProtocolService`,客户端不可见。
+- **认领脚本重发幂等(R5)**:go-redis 重发 EVAL 时认领落空,级联、计数、归还全丢。三段认领脚本带 token,写 `scene:{id}:claim`(TTL 600s),同 token 重发回原快照。Eval 回错时 token 留在 `ServiceContext.SceneClaimTokens`,同进程下一次认领接手。
+- **半截删除(R3)**:回滚改成一段脚本;空闲回收回显式状态,不再把映射缺失当成有人进场;force 认领以映射存在为前提。
+- **排空(两步移动)**:SREM、SADD、排空标记、期望频道数合成一段脚本。`channel_pick.go`、`world_channel_directory.go` 登记的窗口随之消失,注释已改。
+- **没做**:`allocateScene` 仍是多步,见清单第 1 条残余。
+- **测试**:新增 `go/scene_manager/internal/logic/scene_claim_atomic_test.go`;`AtomicDestroyIfIdle` 返回值改了,跟着改了 `agones_test.go`、`logic_test.go` 的调用处。
+- **验证**:只跑过 `gofmt`。
+- **Java 版(AGENTS §12)**:对应 0.1.0-SNAPSHOT。GM 回档桩、认领重发见 `PARITY.md`。
+
+### 2026-11-01 Claude:交易卡死资产指令的终结工具(未编译,待 Codex 验证)
+
+清单第 2 条的前半。新增 `go/trade/cmd/assetopfix`(list、resolve),前置条件、退出码、审计行与 `go/guild/cmd/assetopfix` 相同;`AssetOpRepo` 加 `GetOp`、`ListStuck`。工具不连 Redis,终结只改一行,合同下一轮按 status 推进。不参加维护排空的写者闭合,手册写明排空期间不要运行。测试 `main_test.go` 用假实现,真库没覆盖。
+
+Manual 合同的恢复入口没做,要另立设计,见清单第 2 条。验证命令在 `progress.md` §16「清单第 1、2、6 条」。只跑过 `gofmt`。
+
+Java 版(AGENTS §12):对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。
+
+### 2026-11-01 Claude:职业玩家挂机自动选技落码(未编译,待 Codex 验证)
+
+回合引擎的挂机玩家原来只会普攻。按 `docs/design/class-skills.md` §6.5 补上,10-29 入库的 `AutoClassSkillEngineTest.*` 是验收标准。
+
+- **行为**:只有 `actor_type == PLAYER && is_auto()` 且本轮没提交行动的玩家才选职业主动技能。手动动作不被覆盖;非挂机玩家超时、宝宝、怪物、旧通用技能都不变;选不出回落普攻。优先级是危急治疗 > 驱散 > 常规治疗 > 回蓝 > 增减益 > 伤害。选招只读状态,不消耗战斗随机数。入口 `TurnBattleEngine::SelectAutoClassSkill`。
+- **公式只留一份**:从 `CalculateFinalDamage`、`ApplyDamage`、`ApplyHeal` 和职业技能落地里拆出只读部分(`DamageBeforeCriticalRoll`、`CriticalChance`、`LandedDamage`、`LandedHeal`、`ClassSkillBaseDamage`、`ClassSkillHealAmount`、`ClassSkillManaRestored`),结算和估算共用。逐行核对过掷骰位置和浮点运算顺序没变,但还没有运行证据。
+- **用例改了两处,都是用例自己的错,引擎约定没动**:
+  1. `SetActorAuto` 的成功值写成了 `kSuccess`(1000),公开约定是 0(`turn_battle_engine.h`,`battle_room_manager.cpp` 也这样判)。16 处改成 `0u`。Codex 在整合分支暂存区改过同样这 16 行,那条分支不合回,这里重新改了。
+  2. `InsufficientManaOrSilenceFallsBackWithoutSpendingMana` 的沉默分支从快照带入沉默,但 `SanitizeSnapshotBuffs` 开局就剔掉控制类 buff,施法者其实没被沉默。没实现选技时它碰巧是绿的(Codex 10-30 那 5 条绿里有它),实现落地必红。改成第一回合由对手局内挂沉默,并断言 `ValidateAction` 返回沉默拒绝码,防止再次空过。
+- **新增 7 条用例**,覆盖 §6.5 里原来没人验的条款:剩余气血封顶、抗物理 / 抗法术分流、连击期望抬高普攻基线、物攻 0 不放减物攻、没有减益不放驱散、带治疗的驱散显式指定目标、PVE 打怪且怪物照旧普攻。这组合计 23 条。
+- **`is_auto` 进了事件语义**:同样的快照和指令,挂机与否出手不同。battle 节点和引擎现在没有按指令流重算对局的回放,不受影响;`configurable-templates.md` 原来按「`is_auto` 不进事件语义」写的两处理由已改。
+- **其他文档同步**:`player-pet.md`、`turn-based-battle-server.md`(D12、§11.2)、`player-attribute-allocation.md` 里「挂机只普攻」的说法。残留清单在 `class-skills.md` §6.5 末尾。
+- **文件**:`cpp/libs/services/battle/constants/turn_battle_constants.h`、`cpp/libs/services/battle/system/turn_battle_engine.h`、`cpp/libs/services/battle/system/turn_battle_engine.cpp`、`cpp/tests/turn_battle_engine_test/class_skill_test.cpp`;`docs/design/class-skills.md`、`docs/design/configurable-templates.md`、`docs/design/player-pet.md`、`docs/design/turn-based-battle-server.md`、`docs/design/player-attribute-allocation.md`、`docs/PROGRESS.md`;Java 仓 `PARITY.md` 一行。未提交。
+- **给 Codex**(工作目录仓库根,PowerShell,按序,C++ MSBuild 必须串行 `/m:1`):
+  1. `msbuild cpp/libs/services/battle/battle.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`
+  2. `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine_test -LogDir build/verification/cpp-tests`
+  3. `msbuild cpp/nodes/battle/battle.vcxproj /p:Configuration=Debug /p:Platform=x64 /m:1`
+
+  **第 1 步不能省**:测试工程没有 `ProjectReference`,链接的是预编好的 `lib/battle.lib`,脚本的 `-Build` 只重编测试工程。不先编库,跑的还是旧引擎,这组用例会全红且看不出原因。工作区里别的会话动了 proto(如 `player_rollback.proto` 已删)时,先按 AGENTS §4 重新生成。
+
+  通过标准:第 1、3 步零错误;第 2 步 `turn_battle_engine_test` 零失败、零跳过。重点看 `AutoClassSkillEngineTest.*` 23 条、`ClassSkillEngineTest.*` 17 条和 `TurnBattleEngineTest.AutoModeMatchesManualDefaultAttackEventStream`:后两者证明公式拆分没有改既有事件流。失败时保留 MSBuild 首个 error 和失败用例的 gtest 输出,不要改断言,报回来。
+- **验证**:未编译、未运行。Claude 只按用例手算过数值和分支。没跑联机和真表对局。
+- **Java 版(AGENTS §12)**:待做,没有对应 Java 版本号。`game-battle-engine` 的 `fillDefaultActions` 玩家仍一律普攻,已在 Java 仓 `PARITY.md` 登记。
+
+
+## 2026-10-30 补记:「C++ 节点 LogLevel 口径统一」对抗复核后的文档更正(Claude,只改文档,代码未动;两份补丁的验证仍待 Codex)
+
+(2026-11-01 从 worktree `compassionate-dirac-4d87e1` 并回,下面是 10-30 的原文。第 6 条已过时:`DisableLegacyPerNodeTopic` 后来删了,那一行现在打印 `False`。文中「未提交」指当时的状态。)
+
+- **背景**:10-22 的「LogLevel 口径统一」与同日「LogLevel 启动期校验」两份补丁,10-23 已由 Codex 依序打入主工作区(见「2026-10-23 Codex:LogLevel 两补丁已依序应用」),随后入库。本次对「口径统一」做了一轮对抗复核,共 14 个只读代理:
+  - 4 个视角各一名复核员:PowerShell 运行期正确性、同类入口完整性、文档事实、运行期日志依赖;
+  - 每条发现再由一名独立反驳者核实。
+- **结论**:
+  - 代码与测试没有缺陷。ConfigMap 镜像、0..5 校验、预检下界 2、三条契约用例,按测试工具库逐项核对都成立。
+  - 没有脚本、告警、探针或业务代码依赖 DEBUG / TRACE 行。约 140 处 `LOG_DEBUG` / `LOG_TRACE` 的文本与 deploy、tools/scripts、robot、docs/ops 逐条交叉比对过;Loki 值班查询引用的行都在 INFO 及以上。
+  - 确认 7 条文档问题,都是低严重度,下面逐条更正。
+  - 另有 3 条被反驳:
+    - 契约用例的期望值没走同一归一化。只在 bin/etc 写成 `02` / `+2` 这类非规范值时偏严,而且是响亮失败,不改。
+    - deploy/k8s/README.md 没记这次变化、log-management.md 没提 C++ 日志级别。都不构成误导,但成本很低,各补了一行索引。
+- **更正**(原文保留,追加带日期的注):
+  1. **演练手册 §3.1 第 7 条**:发布预检拒绝 1 的不只 staging / prod。`debug.cpp.loglevel` 在所有档位都判 FAIL;dev 档的 `k8s-release-zone` / `k8s-release-all` 走 `k8s_image.ps1` 的 `Invoke-ReleaseGate`,不分档位跑预检,同样会拦。dev 演练要用 1,走 `k8s-zone-up` / `k8s-all-up`(`k8s_deploy.ps1` 在 dev 档跳过预检)或 `kubectl edit configmap`;发布路径只能显式加 `-SkipPreflight`。
+  2. **重启条件**:10-22 条目「生效与风险」和开服线交接注说「部署后已在跑的 Pod 仍是 DEBUG,要重启才生效」,说过头了。
+     - 默认镜像 tag 取 git 短 sha,从新提交部署时 Pod 模板随镜像变化,Deployment 自动滚动,新级别随之生效。
+     - 只有 Pod 模板不变时才要手动重启:只改 ConfigMap、显式传同一个 `-NodeImage`、同一提交重跑。
+     - Agones 编排的 scene / battle:已分配的 GameServer 在释放前仍是旧级别。
+     - 开服线交接注已追加更正。10-22 条目按「只追加」不回改,以本条为准。
+  3. **gate 准入设计 G5 行**:就地加注,写明注释已改、键现在 `:31`、缺键 / 越界已拒启。同时给 P0-3 注与 `cpp/nodes/gate/SECURITY.md` 第 ② 点补平台限定:per-connection 两行在 Linux 构建(`third_party/muduo-linux`,即 K8s)是 `LOG_INFO`、照打;Windows 构建用的 `muduo_windows` 与 `third_party/muduo` 自 `52ebf9e5d`(2026-04-13)起已是 `LOG_TRACE`,本机看不到。
+  4. **gate SECURITY.md 的 GM 闸表格**:「gate 打一条 `GM client message refused` WARN」不对。逐条明细是 `LOG_DEBUG`(`client_session_handler.cpp`),K8s 原先写死 DEBUG 时搜得到,现在默认 INFO 搜不到。默认级别下的证据是三样:每 1024 次一条的采样 WARN(`reason=gm_client_message_refused_in_prod`,与另外几种未认证拒绝共用计数)、`kFeatureUnavailable` 回执、踢线 WARN。这是本次级别变化直接影响到的取证说明。
+  5. **全局单例 findings 第 13 项**:Linux 枚举已按 gitlink 核对,10-22 写的「未在本机核对」作废。另外,`third_party/muduo-linux` 的 gitlink 在 `b55b0ac`(v2.0.2)与 `f1fc77e`(v2.0.3-1)之间翻转过多次,10-30 核对时 HEAD 为 `b55b0ac`;两版的 `Logging.h` 枚举、日志宏守卫和 `TcpServer.cc:80` / `:109` 都相同,结论不受翻转影响。
+  6. **全局单例 measure-steps 的修前期望**:最后一行(`DisableLegacyPerNodeTopic`)现在也是 `True`。
+  7. **Java 仓 `docs/porting/ops-release-spec.md`**:`:7`、`:409`、`:472` 照抄了本仓旧口径(2=WARN、下界 ≥1),已就地加 2026-10-30 更正注,未提交。只是参考文档更正,不是功能,Java 没有待做项,不登记 PARITY.md。
+- **另补**:
+  - `deploy/k8s/README.md`:在「改 ConfigMap 不会自动滚 Pod」一条下加一行,说明 LogLevel 同受约束,并指向演练手册。
+  - `docs/ops/log-management.md` 的 This Project:补 C++ 日志级别。内容是:必填,缺键 / 越界拒启;K8s 默认 INFO;只在启动时读一次;通用条目说的热加载与 `MUDUO_LOG_DEBUG` 对 C++ 不适用,`InitLogSystem` 会用配置覆盖 muduo 静态初始化时读的环境变量。
+- **10-22 条目里的「未做」**:`InitLogSystem` 越界 / 缺键校验已由同日「LogLevel 启动期校验」条目完成,已入库。生产值是否改 3(WARN)仍未决。
+- **顺带发现,不在本次范围**:`docs/ops/merge-zone-runbook.md:736` 用 `kubectl logs … deploy/scene-0 | grep -E "ERROR|FATAL"` 做合区烟测。Linux 下 muduo 业务日志不进 stdout(见 log-management.md 的 This Project),这条命令不论什么级别都查不到东西,应改查 Loki 或 Pod 共享卷里的 `/app/bin/logs/cpp_nodes/*.log`。
+- **Codex 验证**(都还没跑;本次只改文档,不需要额外构建):
+  1. 仓库根 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`。
+     - 通过标准:三条 LogLevel 用例 PASS,标题含「LogLevel 从 bin/etc 镜像」「自检:ConvertTo-CppNodeLogLevel」「debug.cpp.loglevel 查 bin/etc」;其余用例与改动前基线一致。
+  2. 仓库根 `pwsh -NoProfile -File tools/scripts/tests/release_common_version.tests.ps1`,期望退出 0。
+  3. 仓库根 `pwsh -NoProfile -File tools/scripts/release_preflight.ps1 -ReleaseProfile dev -NoFailExit`,期望 `[PASS] debug.cpp.loglevel`。
+  4. 渲染核对,只 DryRun:
+     - 先设 `$env:MMORPG_DB_ALLOWED_DATABASES='zone_1_db,zone_2_db,zone_101_db,zone_102_db'`;
+     - 再跑 `pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command zone-up -ZoneName lvl-check -ZoneId 101 -DryRun -GlobalAuthorityTiDBHost tidb.invalid:4000 -GoSvcRegistry registry.invalid/test -JavaSvcRegistry registry.invalid/test`;
+     - 期望 node-config 里是 `LogLevel: 2`。
+  5. 同日「LogLevel 启动期校验」条目列的 C++ 构建与测试:`client_endpoint_test`(含 `node_log_level_test`)和读 `bin/etc` 的测试工程。battle 工程 10-23 因与别的会话并行构建撞 C1041 没过,要串行 `/m:1` 重跑。
+- **Java 版(AGENTS §12)**:只更正 Java 仓的移植规格文档,见上面第 7 条。Java 代码不读 `log_level`,Spring Boot 日志默认 INFO,没有待做项,不登记 PARITY.md。
+- **文件**:
+  - 本仓:`docs/ops/cross-zone-failure-test-runbook.md`、`docs/design/gate-connection-admission-control.md`、`cpp/nodes/gate/SECURITY.md`、`docs/handoff/handoff-launch-line-remaining-20261019.md`、`docs/handoff/global-singletons-p0-findings-20261014.md`、`docs/handoff/global-singletons-p0-measure-steps-20261014.md`、`deploy/k8s/README.md`、`docs/ops/log-management.md`、本条。
+  - Java 仓:`docs/porting/ops-release-spec.md`。
+
+
+### 2026-11-01 Codex：补齐 Java 编译产物忽略规则
+
+- 根 `.gitignore` 补充 `*.class`，把单独的 `java/config_node/target/` 规则扩为 `/java/**/target/`，覆盖 `authority_jdbc` 及后续 Java 模块。
+- 验证：`git check-ignore -v` 确认用户给出的内部类文件、Maven 状态文件和嵌套模块 target 均被忽略，Java 源码与 `pom.xml` 未被误忽略；当前没有已跟踪的 `.class` 或 Java target 文件，无需移除索引。`.gitignore` 的 `git diff --check` 通过，仅修改忽略规则，不涉及构建或测试。
+- Java 独立版本：不适用，本次仅调整本仓 Git 忽略规则，无功能变化，不登记 `PARITY.md`。

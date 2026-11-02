@@ -1364,6 +1364,45 @@ func lockAssetOpRow(ctx context.Context, tx *sql.Tx, opID uint64) (bool, error) 
 	}
 }
 
+// GetOp 按主键取一行,给人工终结工具(go/trade/cmd/assetopfix)用;行不存在回 (nil, false, nil)。
+func (r *AssetOpRepo) GetOp(ctx context.Context, opID uint64) (*tradepb.TradeAssetOpRecord, bool, error) {
+	ctx, cancel := r.bounded(ctx)
+	defer cancel()
+	rec, err := scanAssetOp(r.db.QueryRowContext(ctx, "SELECT "+assetOpColumns+" FROM "+AssetOpTableName+" WHERE `op_id` = ?", opID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("select %s %d: %w", AssetOpTableName, opID, err)
+	}
+	return rec, true, nil
+}
+
+// ListStuck 列创建早于 createdBeforeMs 的未决行,最老的在前,给人工终结工具用。
+// 按时间列排序:op_id 是打散过的号,不能靠大小判断先后。
+func (r *AssetOpRepo) ListStuck(ctx context.Context, createdBeforeMs uint64, limit int) ([]*tradepb.TradeAssetOpRecord, error) {
+	ctx, cancel := r.bounded(ctx)
+	defer cancel()
+	rows, err := r.db.QueryContext(ctx, "SELECT "+assetOpColumns+" FROM "+AssetOpTableName+
+		" WHERE `status` = ? AND `created_ms` < ? ORDER BY `created_ms`, `op_id` LIMIT ?", PendingStatus(), createdBeforeMs, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list stuck %s: %w", AssetOpTableName, err)
+	}
+	defer rows.Close()
+	var out []*tradepb.TradeAssetOpRecord
+	for rows.Next() {
+		rec, err := scanAssetOp(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list stuck %s: %w", AssetOpTableName, err)
+		}
+		out = append(out, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list stuck %s: %w", AssetOpTableName, err)
+	}
+	return out, nil
+}
+
 // getOp 按主键取全列。
 func (r *AssetOpRepo) getOp(ctx context.Context, opID uint64) (*tradepb.TradeAssetOpRecord, error) {
 	row := r.db.QueryRowContext(ctx, "SELECT "+assetOpColumns+" FROM "+AssetOpTableName+" WHERE `op_id` = ?", opID)

@@ -135,8 +135,8 @@ func readDesiredWorldChannelField(svcCtx *svc.ServiceContext, key, field string)
 	return n, true, nil
 }
 
-// setDesiredWorldChannelCount 写回期望频道数,并钳到 [min, max]。
-func setDesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, n int) {
+// clampDesiredWorldChannelCount 把期望频道数钳到 [min, max]。
+func clampDesiredWorldChannelCount(svcCtx *svc.ServiceContext, n int) int {
 	minCh := svcCtx.Config.WorldAutoscale.MinChannelsPerMap
 	if minCh < 1 {
 		minCh = 1 // 硬下限:每个大世界地图至少 1 个频道,不接受配置成 0
@@ -148,6 +148,12 @@ func setDesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, conf
 	if n < minCh {
 		n = minCh
 	}
+	return n
+}
+
+// setDesiredWorldChannelCount 写回期望频道数,并钳到 [min, max]。
+func setDesiredWorldChannelCount(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, n int) {
+	n = clampDesiredWorldChannelCount(svcCtx, n)
 	// 与 DesiredWorldChannelCount 的播种分支同理:写字段前尽力登记 zone,失败照常写。
 	if err := registerSceneManagerZones(svcCtx, zoneID); err != nil {
 		logx.Errorf("[WorldAutoscale] register zone %d before writing desired channels failed (writing anyway): %v", zoneID, err)
@@ -379,44 +385,61 @@ func pickScaleInVictim(svcCtx *svc.ServiceContext, loads []channelLoad, cfg conf
 	return channelLoad{}, false
 }
 
-func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, victim channelLoad) bool {
-	channelSetKey := worldChannelsKey(zoneID, confID)
+// luaBeginDrainWorldChannel 把频道从路由集合移进排空集合,一步完成。分两步时,进程在两步之间崩溃,频道既不可
+// 路由也不再收敛;读方也可能两头落空(channel_pick.go 的 locateWorldChannel)。
+//
+// 期望频道数同步减 1,否则 initWorldScenesForZone 会立刻把它补回来。
+// 排空标记带 TTL:进程在排空中途挂掉时,标记会自己过期,下一轮 sweep 会重新接手,不会留下永久"半死"频道。
+//
+// 重发安全:回包丢失时第二次 SREM 回 0,调用方按「别的实例抢先」收手,频道已经在排空集合里,sweep 接着推进。
+//
+// KEYS[1] = 频道集合,KEYS[2] = 排空集合,KEYS[3] = 排空标记,KEYS[4] = 期望频道数哈希
+// ARGV[1] = sceneId,ARGV[2] = 排空标记 TTL 秒,ARGV[3] = confID,ARGV[4] = 新的期望频道数
+// Return: 1 = 移动了,0 = 不在频道集合里(别的实例抢先摘掉了)。
+const luaBeginDrainWorldChannel = `
+if redis.call('SREM', KEYS[1], ARGV[1]) == 0 then
+    return 0
+end
+redis.call('SADD', KEYS[2], ARGV[1])
+redis.call('SET', KEYS[3], '1', 'EX', ARGV[2])
+redis.call('HSET', KEYS[4], ARGV[3], ARGV[4])
+return 1
+`
 
-	// 期望频道数在摘路由之前读:读不到就什么都不写。摘掉之后再放弃的话,频道已经不在路由集合、
-	// 又没进排空集合,再也没有路径能找到它。
+func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, victim channelLoad) bool {
+	// 期望频道数在摘路由之前读:读不到就什么都不写。
 	desired, err := DesiredWorldChannelCount(svcCtx, zoneID, confID)
 	if err != nil {
 		noteReadUnknown(zoneID, readUnknownSiteAutoscaleDecide, fmt.Sprintf("desired channel count of conf %d", confID), err)
 		return false
 	}
 
-	removed, err := svcCtx.Redis.Srem(channelSetKey, victim.sceneID)
-	if err != nil {
-		logx.Errorf("[WorldAutoscale] zone=%d conf=%d: SREM channel %s failed: %v",
-			zoneID, confID, victim.sceneID, err)
-		metrics.ObserveWorldAutoscale(zoneID, "scale_in", "error")
-		return false
-	}
-	if removed == 0 {
-		// 别的实例抢先摘掉了。不重复处理。
-		return false
-	}
-
-	// 期望频道数同步减 1,否则 initWorldScenesForZone 会立刻把它补回来。
-	setDesiredWorldChannelCount(svcCtx, zoneID, confID, desired-1)
-
-	// 排空标记带 TTL:进程在排空中途挂掉时,标记会自己过期,
-	// 下一轮 sweep 会重新接手,不会留下永久"半死"频道。
 	ttl := svcCtx.Config.WorldAutoscale.DrainTimeoutSeconds
 	if ttl <= 0 {
 		ttl = 300
 	}
-	if err := svcCtx.Redis.Setex(sceneDrainingKey(victim.sceneID64), "1", int(ttl)); err != nil {
-		logx.Errorf("[WorldAutoscale] mark draining scene %s failed: %v", victim.sceneID, err)
+	// 与 DesiredWorldChannelCount 的播种分支同理:写字段前尽力登记 zone,失败照常写。
+	if err := registerSceneManagerZones(svcCtx, zoneID); err != nil {
+		logx.Errorf("[WorldAutoscale] register zone %d before draining failed (draining anyway): %v", zoneID, err)
 	}
-	// 排空索引:摘掉路由之后,只有这个集合还知道它的存在。
-	if _, err := svcCtx.Redis.Sadd(worldDrainingSetKey(zoneID, confID), victim.sceneID); err != nil {
-		logx.Errorf("[WorldAutoscale] index draining scene %s failed: %v", victim.sceneID, err)
+	moved, err := svcCtx.Redis.Eval(luaBeginDrainWorldChannel,
+		[]string{
+			worldChannelsKey(zoneID, confID),
+			worldDrainingSetKey(zoneID, confID),
+			sceneDrainingKey(victim.sceneID64),
+			worldDesiredChannelsKey(zoneID),
+		},
+		victim.sceneID, ttl, strconv.FormatUint(confID, 10), clampDesiredWorldChannelCount(svcCtx, desired-1))
+	if err != nil {
+		// 结局未知:脚本没执行时频道还在路由集合里,下一拍重新决策;执行了时频道在排空集合里,sweep 接着推进。
+		logx.Errorf("[WorldAutoscale] zone=%d conf=%d: moving channel %s to draining failed: %v",
+			zoneID, confID, victim.sceneID, err)
+		metrics.ObserveWorldAutoscale(zoneID, "scale_in", "error")
+		return false
+	}
+	if toInt64(moved) == 0 {
+		// 别的实例抢先摘掉了。不重复处理。
+		return false
 	}
 
 	logx.Infof("[WorldAutoscale] zone=%d conf=%d: draining channel %s (%d players < %d); "+

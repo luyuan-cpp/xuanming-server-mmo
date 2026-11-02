@@ -281,11 +281,10 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 		//
 		// 这里是客户端消息进 scene 的**唯一**入口:gate 发
 		// SceneProcessClientPlayerMessageMessageId(client_session_handler.cpp:699-711)
-		// 只走到这个函数。逐 handler 加闸必漏 —— P0-a 就漏掉了
-		// SceneRollbackClientPlayer 的十二条(GmExecuteRollback / GmClawbackItem 等):
+		// 只走到这个函数。逐 handler 加闸必漏 —— P0-a 就漏掉过十二条 GM 回档桩:
 		// 它们的 service 没标 OptionIsClientProtocolService,gate 的清单挡得住,
-		// 但本函数不看这个 option,直连 scene RPC 端口照样能把 message_id 102-117
-		// 打进来,而那几条今天还是空桩,一旦实现就是客户端自助回档。
+		// 但本函数不看这个 option,直连 scene RPC 端口照样打得进来(那十二条 2026-11
+		// 已从 proto 删除,号留墓碑)。没标这个 option 的 Gm* 方法同样要过这道闸。
 		//
 		// 判据与 P0-a 同一套(SCENE_RUN_MODE,默认 prod = 拒绝,见
 		// cpp/nodes/gate/SECURITY.md §3),不另起一个环境变量 —— 同一件事两个开关

@@ -113,7 +113,7 @@ battle 仍然是**有状态、房间钉定**的游戏服务器:一局只活在�
 
 > 前置声明:本仓的 `slg-*.md` 是设计/面试稿,没有对应代码。下面判的是**设计形态**,不是现状。
 
-> **状态说明(2026-11-01)**:§3.1、§3.2 里的「Redis 为准 + 异步 db-write」「行军 = Redis 里的物化视图」「Redis checkpoint」是按当时的 SLG 笔记判定的,已被[总体方案 §10](./player-data-tidb-scaling-plan.md)取代:地块和行军以地图服内存为准,检查点落 TiDB 或 MySQL,Redis 只做协调。原文保留为历史。其余判定不变,读的时候把「写 Redis」换成「写检查点」。「≤10s」是 Redis 检查点的口径,改落库后的间隔还没定,见总体方案 §10。
+> **状态说明(2026-11-01)**:§3.1、§3.2 已按[总体方案 §10](./player-data-tidb-scaling-plan.md)改写:地块和行军不放 Redis,以地图服内存为准,持久化落 TiDB;判定结论不变。写法细节见 [SLG 框架笔记 §12](../notes/slg/slg-server-complete-framework.md)。
 
 ### 3.1 BattleService:比本仓 battle 更好抽
 
@@ -126,9 +126,9 @@ SLG 的战斗是**无状态请求/响应 worker**:`BattleReport = SimulateBattle
 **但契约③要按 SLG 形态重写,不能照搬:**
 
 - SLG worker 是带 seed 的确定性纯函数,重投/重算天然等价;战报已按 `battle_report_id`(snowflake)落库,**落地去重已有**;
-- 缺的是 **MapService 消费 `battle_result` 时的显式判重**。正解是**实体状态门**:仅当 march `state == BATTLING` 且 `battle_id` 匹配才应用,应用后翻 `RETURNING`/销毁,并与 Redis 状态写入在同一原子步之后再 ack。
-- **不要**在 MapService 前面再加一个同步 `put_unique` 的外置结算服——那会往 <1ms / 大规模攻城的热路径塞一次同步 DB 往返,与文档既定的「Redis 为准 + 异步 db-write」模型相悖。
-- **另一条更危险且文档完全没覆盖的**:崩溃恢复流程会「补发到达事件」,已打过但结果未落 Redis 的行军会被**再次触发碰撞、再开一场战斗**。恢复前必须查该 march 是否已有 `battle_id` 落地。
+- 缺的是 **MapService 消费 `battle_result` 时的显式判重**。正解是**实体状态门**:仅当 march `state == BATTLING` 且 `battle_id` 匹配才应用,应用后翻 `RETURNING`/销毁,并在 TiDB 状态写入提交之后再 ack。
+- **不要**在 MapService 前面再加一个同步 `put_unique` 的外置结算服——那会往 <1ms / 大规模攻城的热路径塞一次同步 DB 往返,与「地图服内存为准 + 有序提交队列落 TiDB,主循环不等数据库」的模型相悖。
+- **另一条更危险且文档完全没覆盖的**:崩溃恢复流程会「补发到达事件」,已打过但结果未落 TiDB 的行军会被**再次触发碰撞、再开一场战斗**。恢复前必须查该 march 是否已有 `battle_id` 落地。
 - MOBA 契约③ 的「心跳超时 → abandoned 补偿」半段在 SLG 无对应物(worker 无会话),不移植。
 
 MapService 同时扮演 MOBA 模型里的 Allocator(打包快照)与结算服(应用结果)——这在 SLG 里**不是角色混淆**,SLG 本就没有分配语义,世界服在内存应用结果是通行做法。
@@ -139,8 +139,8 @@ MapService 同时扮演 MOBA 模型里的 Allocator(打包快照)与结算服(�
 
 常见误判是把 MapService 说成「可恢复不可丢,与 battle 相反」。按判据表自己的口径,**「重连/重排,可恢复」就是「可丢」**——只有持久层丢才算事故。MapService 的内存态:
 
-- 行军 = Redis 里 `{path, start_time, speed}` 的**物化视图**,先写 Redis 再懒计算位置,崩溃后三个值读出即完美恢复。这是教科书式的 write-ahead + 确定性派生;
-- 格子 = dirty Region 定期 flush 的**写回缓存**,崩溃回滚到上次 flush,设计上接受有界丢失(Redis checkpoint 口径 ≤10s)。
+- 行军 = TiDB 里 `{path, start_time, speed}` 的**物化视图**,状态变化先提交 TiDB(提交成功才回客户端),再懒计算位置,崩溃后三个值读出即完美恢复。这是教科书式的 write-ahead + 确定性派生;
+- 格子 = 易主当场提交,耐久、驻军这类高频字段是定期 flush 的**写回缓存**,崩溃回滚到上次 flush,设计上接受有界丢失(初值 10 秒,立项后压测定)。
 
 **真正的差别是三条,都不是「可丢性」:**
 

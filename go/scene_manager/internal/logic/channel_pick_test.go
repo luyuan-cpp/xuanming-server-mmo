@@ -513,8 +513,7 @@ func TestLocateWorldChannel(t *testing.T) {
 // 钉住的是读的顺序 —— 先读回收中、再读在役的话,这里两头落空,会判成「不是分线」,整段预检
 // (上限 / 冷却 / conf 校验)被跳过。
 //
-// 用例模拟的是原子移动。现状下 beginDrainWorldChannel 是 SREM 与 SADD 两步,两次读都落在两步之间时
-// 仍会两头落空(channel_pick.go 文件头登记的窗口),那要到 world_autoscale.go 里才能根治。
+// beginDrainWorldChannel 的移动是一段脚本(luaBeginDrainWorldChannel),用例模拟的就是它。
 // 本用例用 SetPreHook,不能与 mr.SetError 同时用(两者共用同一个钩子槽位)。
 func TestLocateWorldChannel_MoveToDrainingBetweenTheTwoReadsIsSeenAsDraining(t *testing.T) {
 	sc, mr, _ := newChannelPickCtx(t)

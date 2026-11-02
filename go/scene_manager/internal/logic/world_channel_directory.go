@@ -107,15 +107,8 @@ func worldChannelDirectoryKey(zoneID uint32, confID uint64) string {
 // 只有领导者发布目录,所以实际是单写者;放进 Lua 是防领导权交接窗口里新旧领导者各跑一轮
 // 时读改写交错(两条新线拿到同一个号)。
 //
-// **已知残余**(规则 2 在这一种情形下不成立):脚本只能把「不在 ARGV 里」理解成「线已销毁」,而 autoscaler
-// 开始排空一条线并不是原子的 —— beginDrainWorldChannel(world_autoscale.go)先 SREM 在役集合,中间隔着
-// 读写期望频道数、写排空标记至少 3 次 Redis 往返,才 SADD 回收中集合(SADD 失败还只记日志)。
-// 发布的两次 SMEMBERS 若都落在这两步之间,这条线两个集合都读不到:当轮目录里没有它,它的号在这里被删;
-// 下一轮它按规则 3 重新拿「最小的空闲号」,表里有更小的空号时线号就变了(例:{1,3,4} 里的 4 线变成
-// 2 线),仍在线上的玩家角标跟着跳。窗口是毫秒级、发布周期是秒级,且只在 WorldAutoscale.Enabled 并恰好
-// 开始缩容时可达;后果限于展示,不涉及归属。
-// 根治在 world_autoscale.go:把那两步合成一次原子的 SMOVE,让一条线任何时刻至少在一个集合里 ——
-// 本文件区分不了「正在摘」与「已销毁」。发布侧为此保证的只有读的顺序,见 publishWorldChannelDirectory。
+// 脚本只能把「不在 ARGV 里」理解成「线已销毁」,所以靠 autoscaler 保证一条线任何时刻至少在一个集合里:
+// 开始排空是一段脚本(world_autoscale.go 的 luaBeginDrainWorldChannel)。发布侧的读顺序见 publishWorldChannelDirectory。
 const luaAllocWorldChannelLineNumbers = `
 if #ARGV == 0 then
     return {}
