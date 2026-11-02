@@ -19545,3 +19545,55 @@ Java 版(AGENTS §12):对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。
 - 根 `.gitignore` 补充 `*.class`，把单独的 `java/config_node/target/` 规则扩为 `/java/**/target/`，覆盖 `authority_jdbc` 及后续 Java 模块。
 - 验证：`git check-ignore -v` 确认用户给出的内部类文件、Maven 状态文件和嵌套模块 target 均被忽略，Java 源码与 `pom.xml` 未被误忽略；当前没有已跟踪的 `.class` 或 Java target 文件，无需移除索引。`.gitignore` 的 `git diff --check` 通过，仅修改忽略规则，不涉及构建或测试。
 - Java 独立版本：不适用，本次仅调整本仓 Git 忽略规则，无功能变化，不登记 `PARITY.md`。
+
+### 2026-11-02 Claude:存盘判脏和 proto2mysql-cpp 的结论写进文档(只改文档)
+
+负责人定的做事标准:不丢数据、强一致、性能高、可水平扩展、代码易懂,性能靠实测。
+
+- **判脏**:结论和优化项在 [总体方案](design/player-data-tidb-scaling-plan.md) §4.6。按行比已确认提交的字节,不做「常变的行不比较」。优化都等压测。Codex 第二轮跑完后加基准测试和存盘分段耗时指标。
+- **proto2mysql-cpp**:负责人定存盘路径不用,scene 只序列化,go/db 负责写库。理由在 [存盘规格](design/player-save-direct-commit.md) §1。
+
+没有改代码。Java 版不适用:只有服务端内部设计,客户端契约没有变化,没有对应版本号。
+
+### 2026-11-02 Claude:排队 Redis 高可用复核收尾,修 Windows 上 gateway 渲染失败(未运行,待 Codex 验证)
+
+第 16457 行记的「queue 实例的高可用变体」已经做完:模板、部署函数、契约测试第 8 节、README、设计稿都随 `e33b99351` 入库,当时只在「服务器代码盘点」一条的小项里提了一句。这一轮把这批代码逐段读了一遍,补漏掉的同类入口,再按 Codex 第二轮第 7 步的回执修红。
+
+- **真 bug:Windows 上所有带 gateway 的 zone-up、all-up 都失败。** `Add-SqlWriterBootManifest` 往 LF 清单里插 `[Environment]::NewLine`,Windows 上是 CRLF。Java 写者往同一个 `env:` 段插第二次时,`\s*\r?$` 把第一次留下的 `\r` 算进匹配,插完 `env:` 后面变成 `\r\r\n`,`Add-GoSvcSecretEnv` 的 `\r?$` 匹配不上,报「gateway 的 manifest 应当恰好有 1 个 env: 段(实际 0 个)」。Linux 上换行是 LF,不触发。
+  - 修法:`k8s_deploy.ps1` 里 13 处全部改成 `"`n"`,渲染结果不再随运行平台变。
+  - 影响的合同:`k8s_deploy_contract`(基线 DryRun 抛错,整份没跑)、`k8s_redis_split_contract`、`k8s_client_entry_contract`、`logical_db_deploy_contract`、`redis_player_cluster_contract`。这些用例之前停在这一步,后面的断言这一轮第一次跑到,修完可能出新红。
+- **测试自身的错**:`k8s_redis_split_contract` 数 `--enable-debug-command no` 期望 2 次,模板注释里也写了这个参数,实际 3 次。改成只看两条 `exec redis-server`。
+- **复核结论**:模板和排队相关函数没有写一半的地方,`redis-purpose-ha.yaml`、`redis-purpose.yaml` 都没改。
+  - 地址:login 的 `Node.QueueRedis.Host` 和 gateway 的 `spring.data.redis.host` 都是同名 Service `redis-queue-g<N>`,高可用时它选 `app=<名>-proxy`,地址不随形态变。
+  - 连接总账:规划档每组峰值 270(4 个 zone 每 zone 44 条,滚动余量 44,运维 50),单个代理水位 2400。
+  - `redis-wipe` 逐 Pod 问 ROLE 再清主;`redis-split-status` 读 StatefulSet、代理和 Service,任一段对不上退出码 1。
+  - 静态核对:`redis-ha.yaml` 与 `redis-purpose-ha.yaml` 的生效行差别,和契约测试的差别表逐条一致;渲染后的 YAML 能解析,对象名、标签、selector 都不和核心重名。
+  - 缺省渲染:不带 `-RedisSplit` 时 `New-RedisQueueInstanceManifests` 返回空,总账函数在读形态之前返回,不多任何输出。dev 档带 `-RedisSplit queue` 时生效行不变,只有 `redis-purpose.yaml` 的注释和 `Redis queue instances:` 这行日志多了形态说明。这条是读代码得出的,没有逐字节比对产物。
+- **补漏**:
+  - `k8s_deploy_contract` 加回归:Java 写者渲染后没有 CR,还能再注入管理口令。
+  - `k8s_redis_split_contract` 加「总账告警路径」:之前只断言不告警,告警分支没跑过。
+  - `deploy/k8s/redis-alerts.yaml` 头部注释列上排队实例。规则本来不限 pod,行为不变。
+  - `docs/ops/login-queue-stress-runbook.md`:高可用形态多一种错误 `NOREPLICAS`,`<名>-0` 也不一定是主,写明判读和怎么连。
+  - 设计稿 §25.3 把「本批单实例」和「上一条作废」两条并成一条现行结论。
+- **时机**:这些是 Codex 第二轮还在跑(第 13 步)时改的。任务单原本要等它跑完;负责人 11-02 让直接按标准做完,当时别的会话也在写工作区。核对过第二轮后面的脚本,只有第 14 步会重跑部署合同,跑到时带上这次修复,以日志时间为准。
+- **文件**:`tools/scripts/k8s_deploy.ps1`(只改这 13 处换行,同文件里删 `TaskWaitTimeout` 的改动是别的会话的)、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`tools/scripts/tests/k8s_redis_split_contract.tests.ps1`、`deploy/k8s/redis-alerts.yaml`、`docs/ops/login-queue-stress-runbook.md`、`docs/design/shared-redis-split-by-purpose.md`、`docs/PROGRESS.md`。
+- **给 Codex**(工作目录仓库根,Windows pwsh,不连集群,逐个串行):
+  1. `pwsh -NoProfile -File tools/scripts/tests/k8s_redis_split_contract.tests.ps1`。通过标准:退出码 0,新用例「总账告警路径」在列。第 8 节最可能因夹具红的是 prod 档和 all-up 两条 DryRun。
+  2. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`。通过标准:基线 DryRun 不再报「无法注入 ADMIN_APIKEY」,用例「有限roster模板绑定真实PodUID」PASS。
+  3. `pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1`、`logical_db_deploy_contract.tests.ps1`、`redis_player_cluster_contract.tests.ps1`、`redis_exporter_contract.tests.ps1`、`redis_maxclients_contract.tests.ps1`。通过标准:退出码 0。
+  4. 失败时保留用例名和断言原文,不改断言。
+- **没验证**:上面都没运行。故障转移、滚动、冷启动、1 → 3 与 3 → 1 都没有对排队实例实测,结论来自与核心逐行同源(核心 2026-10-08 在 kind 上实测过)。
+- **没动**:第 7 步里 `publish_images` 红 6 条、`sql_boot_catalog_local` 红 1 条,原因不是这个 bug,等第二轮回执一起看。
+- **Java 版(AGENTS §12)**:没有 K8s 生产形态,按用途拆实例仍按设计稿 §26 待做,`PARITY.md` 已有那一行,不新增。对应 Java 版本 0.1.0-SNAPSHOT。
+
+### 2026-11-02 Claude:审计快照管道上限和清理,两个小项(未编译,待 Codex 验证)
+
+按 `docs/handoff/server-gap-audit-20261101.md` 第 3、11、12 条做。验证命令见 `docs/handoff/player-save-direct-commit-20261030/progress.md` §16「清单第 3、11、12 条」。
+
+- **大快照发不出去**:C++ 生产者 `message.max.bytes` 改 16MiB,与消费端 `MaxBytes` 相同;全部 C++ Kafka 发送开 lz4;快照 topic 的 `max.message.bytes` 设 16MiB。发送失败的日志带大小和 `metric=audit_snapshot_send_failed`。
+- **两张审计表无限增长**:新增 `store.RunAuditRetention`,每小时分批删,快照保留 30 天,流水保留 180 天,都可配(`AuditRetention`)。每个副本都跑,错开起步时间。排空开始后不再发新的 DELETE。`created_at`、`timestamp_sec` 加单列索引,要重新生成协议。这两个保留期是这次定的:快照和 Kafka 的 RetentionMs 对齐,流水查刷物要回溯得更久。
+- **retention.bytes**:`Kafka.TxLogRetentionBytes`、`SnapshotRetentionBytes` 只加了配置项,`k8s_deploy.ps1` 没有渲染,线上仍沿用 broker 缺省。
+- **没做**:进退场发整档的开关和采样。
+- **小项**:`SceneManagerDeadNodeReconcileAbandoned` 告警;login 删 `TaskWaitTimeout`、`LoginTotalTimeout`。
+- **验证**:只跑过 `gofmt`。
+- **Java 版(AGENTS §12)**:对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。

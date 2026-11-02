@@ -1,4 +1,4 @@
-# Prometheus alert rules for the control-domain Redis instances(控制域 Redis:核心 redis / redis-ha、redis-match-cluster)。
+# Prometheus alert rules for the control-domain Redis instances(控制域 Redis:核心 redis / redis-ha、排队实例 redis-queue-g<N>、redis-match-cluster)。
 #
 # 来源:shared-redis-split-by-purpose.md §25.3(2026-10-23 拍板记录,原 §13 第 6 条「Redis 监控直接上 redis_exporter」)。
 #       玩家域 Redis Cluster 的告警在 deploy/k8s/redis-player-alerts.yaml,不在本文件。这里的规则不限定 pod,exporter 指标同样会落到 redis-player 的 Pod 上:
@@ -8,7 +8,7 @@
 #   kubectl apply -n observability -f deploy/k8s/redis-alerts.yaml
 #
 # Scrape prerequisites:
-#   - 每个 Redis Pod 带 redis-exporter sidecar(deploy/k8s/manifests/infra/redis.yaml、redis-ha.yaml、redis-match-cluster.yaml),
+#   - 每个 Redis Pod 带 redis-exporter sidecar(deploy/k8s/manifests/infra/redis.yaml、redis-ha.yaml、redis-purpose.yaml、redis-purpose-ha.yaml、redis-match-cluster.yaml),
 #     指标端口 9121,Pod 模板带 prometheus.io/scrape|port|path 注解。还需要一个指向该端口的 PodMonitor(或按注解抓取的配置),
 #     否则下面全部规则没有数据:空表达式不报错,和「一切正常」长得一样。
 #   - namespace、pod 两个 label 由抓取配置附加。告警只用这两个 label,不用任何玩家维度(低基数)。
@@ -20,7 +20,7 @@
 #
 # 阈值与 for 时长是占位值,**待压测确认**(AGENTS.md §6:没有压测对比不下容量结论)。
 # 核心 redis 今天不设 maxmemory(redis.yaml「只写 requests」一段),redis_memory_max_bytes 为 0,RedisMemoryNearMax 对核心恒不触发;
-# 核心显式写 maxmemory 之后(§25.3 第 9 条)自动生效。
+# 核心显式写 maxmemory 之后(§25.3 第 9 条)自动生效。排队实例一直写 maxmemory,这条对它生效。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up

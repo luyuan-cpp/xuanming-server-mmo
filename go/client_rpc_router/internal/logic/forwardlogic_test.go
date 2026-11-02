@@ -228,15 +228,15 @@ func TestForwardNilRequestIsInvalidParameter(t *testing.T) {
 
 // 路由表里有、但所属 service 不是客户端协议(内部 RPC):拒绝,不能让客户端借道打内部接口。
 func TestForwardNonClientProtocolIsInvalidParameter(t *testing.T) {
-	route, ok := game.LookupRoute(game.DataServiceLoadPlayerDataMessageId)
+	route, ok := game.LookupRoute(game.DataServiceGetPlayerHomeZoneMessageId)
 	require.True(t, ok)
 	require.False(t, route.ClientProtocol, "测试前提:DataService 不是客户端协议")
 
 	sc := newSvcCtx(t, newBufDialer(t), 1000)
 	resp, err := logic.NewForwardLogic(ctxWithSession(), sc).
-		Forward(forwardReq(game.DataServiceLoadPlayerDataMessageId, 8, 1, []byte("x")))
+		Forward(forwardReq(game.DataServiceGetPlayerHomeZoneMessageId, 8, 1, []byte("x")))
 	require.NoError(t, err)
-	requireEnvelopeError(t, resp, 8, game.DataServiceLoadPlayerDataMessageId, constants.ErrInvalidParameter)
+	requireEnvelopeError(t, resp, 8, game.DataServiceGetPlayerHomeZoneMessageId, constants.ErrInvalidParameter)
 }
 
 // D33:战斗只走直连,目标为 Battle 的客户端协议消息回 kServiceUnavailable。

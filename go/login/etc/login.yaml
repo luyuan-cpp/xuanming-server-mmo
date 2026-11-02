@@ -168,8 +168,6 @@ Registry:
 Timeouts:
   EtcdDialTimeout: 30s
   ServiceDiscoveryTimeout: 30s
-  TaskWaitTimeout: 30s
-  LoginTotalTimeout: 10s # Total login timeout (including Redis load, DB ops, etc.)
   RoleCacheExpire: 24h
   TaskManagerCleanInterval: 5s # Task manager cleanup interval
   TaskBatchExpireTime: 10s # Task batch expiration time

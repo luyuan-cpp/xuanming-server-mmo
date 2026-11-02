@@ -73,6 +73,12 @@ Queue:
 
 ## 异常模式速查
 
+> **本页的 `redis-cli` 连哪个实例(2026-11-01 补)**:排队键在 login 的 `Node.QueueRedis` 指向的实例上:拆出 queue 时是 `redis-queue-g<N>`(`dev_tools.ps1 -Command k8s-redis-split-status` 的 `login.QueueRedis` 一列),没拆时是核心 `redis`。单实例形态 exec 进 `<名>-0` 就在主上。高可用形态 `<名>-0` 不一定是主,从上的读可能滞后、写回 `READONLY`,要写 `-h <名>` 经代理落到当前的主,`xargs` 后面那个 `redis-cli` 也要带:
+>
+> ```
+> kubectl -n <infra> exec statefulset/<名> -c redis -- sh -c 'if [ -n "$REDIS_PASSWORD" ]; then export REDISCLI_AUTH="$REDIS_PASSWORD"; fi; redis-cli -h <名> ZCARD queue:zone:1'
+> ```
+
 ### 模式 1:dispatcher 卡死
 ```
 [stats 30s] ... q_entered=4080 q_admitted=20 q_avg_wait=22s q_max_rank=4078
@@ -103,6 +109,7 @@ Queue:
 >   - **ERROR 行**:`[loginqueue] PopAdmit zone=<id> err=…`。dispatcher 每拍至多一行,停服、丢租约时不打。err 里是以下之一:`admit script queueId=… admitted=… skipped=… untried=…: <原因>`、`zrange: …`、`skipped <n> entries without an admit slot, first queueId=…: …`。本拍已放行的人照样计入 `login_queue_admit_total`。按原因判读:
 >     - 含 `OOM`:`redis-queue` 写满(noeviction)。放行停止(fail-closed),**条目留在队列、名次不变、不丢**;排队中的查询与续期照常;新入队回 `StatusError`。先扩内存或清堆积(见「故障应急」),再排查谁占了内存。
 >     - 含 `WRONGTYPE`:占位键或队列键被写成了别的类型(人工误操作)。之后各拍通常改由 `freeSlots …` 或 `queueLen …` 的 ERROR 报出;修好键之后自动恢复。若是占位键,出错那一条已写了放行槽却没有占位,至多多放 1 人。
+>     - 含 `NOREPLICAS`(2026-11-01 补,只在排队实例是高可用形态时出现):主上没有一个从在线且复制延迟不超过 10 秒(`min-replicas-to-write 1`),所有写命令被拒。放行停止(fail-closed),条目留在队列、名次不变;新入队和排队中的查询也报错(查询先 `GETDEL` 放行槽),客户端按 queue-status 失败的路径退避。查两个从(`kubectl -n <infra> get pod -l app=redis-queue-g<N>`,告警 `RedisReplicaLinkDown`),从接上后自动恢复。不要为此关掉 `min-replicas-to-write`:那会让切主时丢掉已答复成功的写入。
 >     - 其它错误:按 Redis 连接 / 延迟排查。
 >   - **INFO 行**:`[loginqueue] PopAdmit entries not admitted zone=<id> metaGone=<n> alreadyAdmitted=<n> gone=<n>`。每批至多一行。
 >     - `metaGone`:队首条目的 meta 已过期或类型损坏,已就地清掉。meta 现在是空闲 TTL,所以持续出现说明有客户端停止轮询超过 `QueueEntryTTL`(关了客户端,或断网后不带 token 重新入队留下的孤儿),不再表示「排队等待超过 1h」。
@@ -324,7 +331,7 @@ rate(login_queue_expired_total{reason="bad_signature"}[5m]) > 10
 
 **清空堆积**(与设计稿 §15 一致):
 
-> 不要用 `KEYS`:它会阻塞全服共用的那个 Redis 主。多 zone 共用 Redis 时,下面后三行(`admit:*` / `queue:meta:*` / `queue:token:*`)不分 zone,会清掉**全部 zone** 的放行槽和排队条目;只想清一个 zone 时只执行第一行,其余键按 TTL(60s / 1h)自然过期。
+> 不要用 `KEYS`:它会阻塞全服共用的那个 Redis 主。多 zone 共用 Redis 时,下面后三行(`admit:*` / `queue:meta:*` / `queue:token:*`)不分 zone,会清掉**全部 zone** 的放行槽和排队条目;只想清一个 zone 时只执行第一行,其余键按 TTL(60s / 1h)自然过期。连哪个实例见「异常模式速查」开头。
 
 ```
 redis-cli DEL queue:zone:1 admitted:zset:zone:1

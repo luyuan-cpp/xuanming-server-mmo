@@ -207,8 +207,13 @@ Test-Case 'infra-up -RedisSplit queue:渲染 redis-queue-g0(不带 app: redis、
     Assert-Match -Text $sts -Pattern '(?m)^\s+app: redis-queue-g0\s*$' -Because '标签与 selector 用实例名'
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($sts, '(?m)^[ \t]*MAXCLIENTS=10000[ \t]*$').Count) -Because 'MAXCLIENTS 只定义一次'
     Assert-Match -Text $sts -Pattern 'redis fd limit:' -Because '启动前打印 fd 限值(同 redis.yaml)'
+    # 只看 exec 那两行:模板的注释里也写了这些参数。
+    $redisExecLines = @($sts -split "`n" | Where-Object { $_ -match '^\s*exec redis-server ' })
+    Assert-Equal -Expected 2 -Actual $redisExecLines.Count -Because '有口令 / 无口令各一条 exec'
     foreach ($flag in @('--appendonly yes', '--appendfsync everysec', '--maxclients "$MAXCLIENTS"', '--enable-debug-command no', '--maxmemory 128mb', '--maxmemory-policy noeviction')) {
-        Assert-Equal -Expected 2 -Actual ([regex]::Matches($sts, [regex]::Escape($flag)).Count) -Because "有口令 / 无口令两条 exec 都要带 $flag"
+        foreach ($line in $redisExecLines) {
+            Assert-True -Condition ($line.Contains($flag)) -Because "有口令 / 无口令两条 exec 都要带 $flag"
+        }
     }
     Assert-Match -Text $sts -Pattern '--requirepass "\$REDIS_PASSWORD"' -Because '有口令分支 --requirepass'
     Assert-Match -Text $sts -Pattern '(?m)^\s+- name: REDIS_PASSWORD\s*$' -Because '口令环境变量名必须叫 REDIS_PASSWORD(运维脚本 exec 进来读它)'
@@ -260,7 +265,9 @@ $splitFunctionNames = @(
     'Assert-RedisPasswordSentinelSafe', 'Assert-InfraManifestPlaceholdersReplaced', 'Get-MysqlConnectionPlan', 'Get-RedisConnectionPlan',
     'Get-RedisQueueShapeFor', 'Get-RedisQueueHaObjectNames', 'Get-RedisQueueHaLimitsFor', 'ConvertTo-RedisQueueInstanceManifest', 'Get-RedisQueueGroupsToApply',
     'Assert-RedisQueueTopologyChangeIsSafe', 'New-RedisQueueInstanceManifests', 'Apply-RedisQueueInstances',
-    'ConvertFrom-RedisQueueInstanceAddress', 'ConvertFrom-RedisQueueInstanceLive', 'Read-RedisQueueInstanceLive', 'Get-RedisSplitRolloutState', 'Show-RedisSplitStatus', 'Invoke-RedisWipe'
+    'ConvertFrom-RedisQueueInstanceAddress', 'ConvertFrom-RedisQueueInstanceLive', 'Read-RedisQueueInstanceLive', 'Get-RedisSplitRolloutState', 'Show-RedisSplitStatus', 'Invoke-RedisWipe',
+    # 总账的告警路径(第 8 节):客户端输入 Get-RedisQueueConnectionLedgerInputs 换成替身,算式与判定是同一份函数体。
+    'Get-RedisConnectionLedger', 'Write-RedisQueueConnectionLedger'
 )
 foreach ($fnAst in $deployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($splitFunctionNames -contains $fnAst.Name) {
@@ -890,6 +897,35 @@ Test-Case '总账:高可用形态每组多打一行 Redis queue proxy ledger(单
     foreach ($run in @($queueZoneRun, $defaultZoneRun)) {
         Assert-NotMatch -Text $run.Output -Pattern 'Redis queue proxy ledger:' -Because '单实例或不拆时没有 queue 的代理'
     }
+}
+
+# 总账的告警路径:客户端输入换成替身,把池上限调到单个代理扛不下、MAXCLIENTS 的水位还没到。算式与判定是 k8s_deploy.ps1 的同一份函数体。
+function Get-RedisQueueConnectionLedgerInputs {
+    return [ordered]@{
+        MaxClients               = Get-RedisMaxClientsFromManifest -ManifestContent $queueSingleTemplate
+        GoPoolSizePerProc        = 10
+        CppConnectionsPerProcess = 1
+        Clients                  = @([ordered]@{ Name = 'login'; Scope = 'zone'; Replicas = 2; ConfiguredPoolConns = 1500; DefaultPools = 0; GoMaxProcs = 0; PubSub = 0; Fixed = 0 })
+    }
+}
+
+Test-Case '总账告警路径:单个代理扛不下时告警、不阻断,本次与规划档分开点名;MAXCLIENTS 水位没到不打那一条;单实例不看代理水位' {
+    $RepoRoot = Get-RepoRoot
+    $plan = [ordered]@{ ZoneCount = 1; RolloutExtraPodsPerDeployment = 2; OpsReserve = 50; WarnRatio = 0.8 }
+    $topologyByZone = @{ 101 = (Get-RedisPurposeTopologyFor -Split 'queue' -InfraNamespace 'ns' -QueueGroup 0) }
+    $runLedger = {
+        param([int]$Replicas)
+        $RedisReplicas = $Replicas
+        return ((@(Write-RedisQueueConnectionLedger -TopologyByZone $topologyByZone -LedgerPlan $plan 3>&1 6>&1) | ForEach-Object { $_.ToString() }) -join "`n")
+    }
+    # 1 个 zone:稳态 2 × 1500 = 3000,滚动余量 2 × 1500 = 3000,运维 50,峰值 6050。单个代理水位 3000 × 0.8 = 2400,MAXCLIENTS 水位 8000。
+    $ha = & $runLedger 3
+    Assert-Match -Text $ha -Pattern 'Redis queue proxy ledger: instance=redis-queue-g0 proxy_maxconn=3000 proxies=2\+1 warn_at=2400 [^\r\n]*deploy peak=6050 plan peak=6050' -Because '高可用每组打代理水位'
+    Assert-Match -Text $ha -Pattern '\[RedisQueueConnectionLedger\]OverProxyWarnRatio:redis-queue-g0 zones=1 peak 6050; plan zones=1 in one group peak 6050; proxy_maxconn=3000 warn_at=2400 ' -Because '超过单个代理的水位要告警,本次与规划档都点名'
+    Assert-NotMatch -Text $ha -Pattern '\[RedisQueueConnectionLedger\]OverWarnRatio:' -Because '峰值没到 MAXCLIENTS 的水位,不打那一条'
+    $single = & $runLedger 1
+    Assert-Match -Text $single -Pattern 'Redis queue connection ledger: instance=redis-queue-g0 zones=1 steady=3000 peak=6050 maxclients=10000 warn_at=8000 headroom=3950' -Because '两种形态共用同一份账'
+    Assert-NotMatch -Text $single -Pattern 'Redis queue proxy ledger|OverProxyWarnRatio' -Because '单实例没有代理'
 }
 
 Test-Case 'ConvertTo-RedisQueueInstanceManifest:替换全部占位;脚本一改摘要就变;多出没人替换的占位拒绝;高可用缺 redis-purpose.yaml 的上限拒绝' {

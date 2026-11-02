@@ -14,6 +14,9 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+// snapshotTopicMaxMessageBytes 与 C++ 生产端的 message.max.bytes(kafka_producer.cpp)、消费端的 MaxBytes(consumer.go)相同。
+const snapshotTopicMaxMessageBytes = 16 << 20
+
 // StartConfig 由 main 从 config.KafkaConfig 装配。
 type StartConfig struct {
 	// Owner 来自同一 boot；Start 重试及 supervisor 世代共用，不得替换来清除 UNKNOWN。
@@ -30,6 +33,9 @@ type StartConfig struct {
 
 	// RetentionMs 两个 topic 的保留期(<=0 用 broker 默认)。
 	RetentionMs int64
+	// TxLogRetentionBytes、SnapshotRetentionBytes 是每分区 retention.bytes(0 = 沿用 broker 缺省)。
+	TxLogRetentionBytes    int64
+	SnapshotRetentionBytes int64
 
 	// ResumeAfter:消费者因 DB 故障停下(offset 未提交)之后,多久重建 reader 再试。
 	// 停下本身是为了"宁可积压不许丢";但 data_service 同时承载 Load/Save 热路径,
@@ -142,8 +148,9 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 	}
 
 	if err := kafkautil.EnsureTopics(cfg.Brokers, []kafkautil.TopicSpec{
-		{Name: cfg.TxLogTopic, Partitions: cfg.TxLogPartitions, RetentionMs: cfg.RetentionMs},
-		{Name: cfg.SnapshotTopic, Partitions: cfg.SnapshotPartitions, RetentionMs: cfg.RetentionMs},
+		{Name: cfg.TxLogTopic, Partitions: cfg.TxLogPartitions, RetentionMs: cfg.RetentionMs, RetentionBytes: cfg.TxLogRetentionBytes},
+		{Name: cfg.SnapshotTopic, Partitions: cfg.SnapshotPartitions, RetentionMs: cfg.RetentionMs, RetentionBytes: cfg.SnapshotRetentionBytes,
+			MaxMessageBytes: snapshotTopicMaxMessageBytes},
 	}); err != nil {
 		return nil, fmt.Errorf("ensure kafka topics: %w", err)
 	}

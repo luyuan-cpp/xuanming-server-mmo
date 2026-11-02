@@ -19,6 +19,14 @@
 
 proto2mysql 一张表只能对应一个 message,不支持同表多 message 或 oneof [C],所以用通用的 `payload` 列,不按职责分表。这样还有两个好处:一条语句读全部行(读已提交下不需要跨语句快照);同一玩家的行相邻,打散之后的 ID 不会形成热点,可以用聚簇主键,点查不用回表。
 
+**存盘路径不用 `proto2mysql-cpp`(负责人 2026-11-02 定)**:scene 只序列化,go/db 负责写库。这个 C++ 库的事务、`FOR UPDATE`、版本栅栏都有,不用是因为它放不进这条路径(读代码的判断,没有实测对比):
+
+- **换了也还是存字节**:`payload` 本来就是 protobuf 序列化的结果。这个库只有标量字段是独立的数值列,嵌套消息和 repeated 字段都存 `MEDIUMBLOB`,而玩家数据基本都是消息。
+- **写库的是 go/db,scene 不连数据库**:写者闸门、按映射拨号、连接总账都在 Go 这一侧(`shared/authoritysql`、`shared/dbplacement`)。scene 直连的话,闸门要在 C++ 再做一份,两边可能不一致;数据库连接数会随 scene 节点数增长;搬库时每个 scene 都要会切换连接。
+- **表的形状不合适**:这个库是一个 message 对应一张表。一张表多列时,只改一列也要重写整行,位置一变背包也跟着写;每组一张表时,读一个玩家要多条语句,同一玩家的数据也不再相邻。
+
+它可以用在 C++ 工具这类单进程、直连数据库的场景。Go 版 `proto2mysql` 在这条路径上继续只负责建表。
+
 ```sql
 CREATE TABLE IF NOT EXISTS `player_store` (
   `player_id`       BIGINT UNSIGNED NOT NULL,

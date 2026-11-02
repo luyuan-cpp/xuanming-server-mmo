@@ -2,7 +2,9 @@
 
 负责人问「服务器代码做完了吗」时做的盘点。按当天工作区逐条对代码核对,只读,没有编译或运行。接手前先核对 `git log` 和本文状态:工作区有多个会话并行。
 
-**接手先看这段(2026-11-01 第二轮)**:第 6、1 条和第 2 条的终结工具已落码,都没有编译,验证见 [progress.md](player-save-direct-commit-20261030/progress.md) §16「清单第 1、2、6 条」。周额度到 98% 停下。下一步:第 2 条的 Manual 合同恢复入口,然后第 3~5 条(第 4、5 条先写设计),再第 7~13 条和「待确认」。生成器不清的残留头文件 `player_rollback_service_metadata.h` 要在重新生成之后删。
+**负责人目标(2026-11-02)**:「我要达到全链路都能水平扩展」。下面第 4、5 条是已核实的阻塞,但本清单只列了这两条,不等于全链路只差这两条。额度重置后先按 [消除单节点总纲](../design/no-single-node-horizontal-scaling-20261001.md) 的口径逐环节重新盘点全链路:gate、login、client-rpc-router、data_service、scene_manager、scene、go/db、player_locator、各全局服务、Redis、Kafka、etcd、TiDB,看加机器能不能真正扩吞吐,把新发现补进本文,再按依赖顺序落码。现有的全服或多实例选主要逐个核:scene_manager 编排、player_locator 会话对账、guild / trade / player_inbox 资产通道。
+
+**接手先看这段(2026-11-01 第二轮)**:第 6、1 条和第 2 条的终结工具已落码,都没有编译,验证见 [progress.md](player-save-direct-commit-20261030/progress.md) §16「清单第 1、2、6 条」。11-02 又落了第 3 条的大部分和第 11、12 条,同样没有编译。周额度到 99% 停下。下一步:第 2 条的 Manual 合同恢复入口,第 3 条剩下的采样开关和 K8s 渲染,第 4、5 条(先写设计),第 7~10、13 条和「待确认」。生成器不清的残留头文件 `player_rollback_service_metadata.h` 要在重新生成之后删。
 
 结论:**没有全部做完。** 下面「未做」的项还在。负责人要求按最标准的方式做完;2026-11-01 暂停在这里是因为每周额度已用 94%(5 个会话共用,4 天后重置),不是判断它们不用做。
 
@@ -41,11 +43,9 @@
    - 已做:`go/trade/cmd/assetopfix`(list、resolve,前置和退出码与 guild 版相同)、`AssetOpRepo.GetOp`、`ListStuck`。`Pipeline.ResolveManually` 仍没有生产调用方,工具走包级 `assetop.ResolveManually`。
    - 未做:合同隔离后托管的物品和货币还是出不来。`proto/trade/trade_admin.proto:44` 只有 SeedListing。要另立设计,覆盖鉴权、操作留痕、沿用原腿和原 seq 的幂等。手册 `docs/ops/trade-commerce-quarantine-runbook.md` §4.2、§6。
 
-3. **审计快照管道(X-4、L-07),8~12 个文件。**
-   - `cpp/libs/modules/snapshot/snapshot_system.cpp:110-115` 发送失败只打日志;`kafka_producer.cpp:93-118` 没设消息上限和压缩;`go/data_service/internal/kafka/start.go:145-146` 没有 retention.bytes。
-   - `snapshot_store.go:992` 的 `DeleteOldSnapshots` 没有调用方,`transaction_log` 也没有清理路径。
-   - `player_lifecycle.cpp:3364`、`:4284` 进退场无条件发整档,没有开关和采样。
-   - 后果:超过约 1MB 的快照静默缺失;积压时未消费的快照被 Kafka 删掉;两张表无限增长。
+3. **审计快照管道(X-4、L-07):11-02 落了大部分(未编译),还差采样开关和 K8s 渲染。**
+   - 已做:C++ 生产者 `message.max.bytes` 16MiB、lz4;快照 topic 的 `max.message.bytes` 16MiB(`TopicSpec.MaxMessageBytes`);发送失败带 `metric=audit_snapshot_send_failed`;`store.RunAuditRetention` 分批删过期行(快照 30 天、流水 180 天,`AuditRetention` 可配),`created_at`、`timestamp_sec` 加索引,指标和告警 `DataServiceAuditRetentionFailing`;`Kafka.TxLogRetentionBytes`、`SnapshotRetentionBytes` 配置项。
+   - 未做:`player_lifecycle.cpp` 进退场无条件发整档,没有开关和采样;`k8s_deploy.ps1` 没有渲染这两个 retention.bytes,也没有把它们算进 Kafka 盘预算,所以线上仍沿用 broker 缺省,积压时未消费的快照会被删。
 
 ### 挡水平扩展
 
@@ -67,8 +67,8 @@
 8. **连接池指标(L-08),8~12 个文件。** 只有 data_service、db、player_inbox 导出;chat、friend、guild、mail、match、rank、trade、login 和 Java 网关没有。
 9. **scene_manager 存活集残缺。** 这一轮只拦了全空,部分缺失还会按消失处理。
 10. **压测工具前置,约 4 个文件。** `stress_snap.ps1:76-79` 不抓 9170、9190;summarize 没有匹配段;robot 压测动作没加 JoinQueue;登录回落计数 `login_role_list_home_zone_fallback_total` 还没进 summarize。
-11. **`dead_node_reconcile_total{outcome="abandoned"}` 没有告警规则,1 个文件。**
-12. **login 死配置,2~3 个文件。** `TaskWaitTimeout`、`LoginTotalTimeout`(`config.go:624-625`)没有读者。
+11. **(11-02 已加 `SceneManagerDeadNodeReconcileAbandoned`,未部署验证)`dead_node_reconcile_total{outcome="abandoned"}` 没有告警规则。**
+12. **(11-02 已删,未编译)login 死配置。** `TaskWaitTimeout`、`LoginTotalTimeout` 从 `config.go` 和 3 份配置里删掉。
 13. **只在混版本时触发,上线前不阻塞。** 字段台账没有机器门禁;结算遇到不认识的币种回 kDefer。
 
 ### 待确认

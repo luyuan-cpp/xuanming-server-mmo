@@ -718,3 +718,13 @@ spec:
           annotations:
             summary: "scene_manager 成员集合对账 12 小时没有走完一遍"
             description: "看领导者是否在换,再看 SceneMemberReconcile.MembersPerRound / ScansPerRound 的预算是否跟不上成员总数。残留成员的摘除因此变慢,不影响进场主路径。"
+
+        # 死节点收尾放弃:满 10 分钟仍做不完,计数与任务已经删掉,没结论的场景留在原地。健康时恒 0。
+        - alert: SceneManagerDeadNodeReconcileAbandoned
+          expr: |
+            sum by (zone_id) (increase(scene_manager_dead_node_reconcile_total{outcome="abandoned"}[15m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "zone {{ $labels.zone_id }} 的死节点收尾放弃了"
+            description: "按日志 [DeadNodeReconcile] 找到没结论的场景,核对它们的属主映射和节点计数。多半是 Redis 或节点探活持续失败。"

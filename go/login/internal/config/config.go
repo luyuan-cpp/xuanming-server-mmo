@@ -621,8 +621,6 @@ type EtcdRegistryConf struct {
 type TimeoutConf struct {
 	EtcdDialTimeout         time.Duration `json:"EtcdDialTimeout"`
 	ServiceDiscoveryTimeout time.Duration `json:"ServiceDiscoveryTimeout"`
-	TaskWaitTimeout         time.Duration `json:"TaskWaitTimeout"`
-	LoginTotalTimeout       time.Duration `json:"LoginTotalTimeout"` // Total login timeout including Redis/DB
 	RoleCacheExpire         time.Duration `json:"RoleCacheExpire"`
 }
 

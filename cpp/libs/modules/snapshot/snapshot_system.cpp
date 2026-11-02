@@ -111,7 +111,8 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
     if (err != RdKafka::ERR_NO_ERROR)
     {
         LOG_ERROR << "[SnapshotSystem] Kafka send failed for player " << playerId
-                  << " snapshot_id=" << snapshotId << " err=" << static_cast<int>(err);
+                  << " snapshot_id=" << snapshotId << " bytes=" << bytes.size() << " err=" << static_cast<int>(err)
+                  << " metric=audit_snapshot_send_failed";
         return 0;
     }
 

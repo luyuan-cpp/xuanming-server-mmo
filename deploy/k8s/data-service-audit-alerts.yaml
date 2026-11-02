@@ -210,3 +210,14 @@ spec:
               过去 1 小时批量语句失败、逐条重试全部成功(数据没丢,只是变慢)。看日志 `retrying row by row to isolate` 那行的错误:
               包过大(1153)/ 事务过大(TiDB 8004)时调小 Kafka.SnapshotBatchMaxBytes 或 SnapshotBatchMaxRows。
               兜底也失败时消费者会停机,走 DataServiceAuditConsumerStopped。
+
+        # 审计表清理持续失败:player_snapshot、transaction_log 会一直涨。
+        - alert: DataServiceAuditRetentionFailing
+          expr: |
+            sum by (table) (increase(data_service_audit_retention_failures_total[1h])) > 0
+          for: 2h
+          labels:
+            severity: warning
+          annotations:
+            summary: "审计表 {{ $labels.table }} 的清理持续失败"
+            description: "看日志 [AuditRetention]。过期行下一轮还在,数据不会错,只是表和磁盘在涨。"

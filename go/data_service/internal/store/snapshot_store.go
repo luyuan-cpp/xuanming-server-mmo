@@ -987,11 +987,11 @@ func (s *SnapshotStore) InsertAuditLog(ctx context.Context, row *AuditLogRow) er
 	return err
 }
 
-// DeleteOldSnapshots removes snapshots (both sources) older than the given timestamp.
-// Used for retention policies.
-func (s *SnapshotStore) DeleteOldSnapshots(ctx context.Context, olderThan uint64) (int64, error) {
+// DeleteOldSnapshots 删一批早于 olderThan(Unix 秒)的快照,回实际删除行数。由 RunAuditRetention 循环调用,
+// 走 created_at 索引;分批是因为一次删太多会撞事务大小上限,也会长时间占着写入。
+func (s *SnapshotStore) DeleteOldSnapshots(ctx context.Context, olderThan uint64, limit int) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM player_snapshot WHERE created_at < ?`, olderThan)
+		`DELETE FROM player_snapshot WHERE created_at < ? LIMIT ?`, olderThan, limit)
 	if err != nil {
 		return 0, err
 	}

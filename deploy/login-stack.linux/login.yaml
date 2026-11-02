@@ -92,8 +92,6 @@ Registry:
 Timeouts:
   EtcdDialTimeout: 5s
   ServiceDiscoveryTimeout: 10s
-  TaskWaitTimeout: 30s
-  LoginTotalTimeout: 30s
   RoleCacheExpire: 10m
 
 PlayerLocatorRpc:

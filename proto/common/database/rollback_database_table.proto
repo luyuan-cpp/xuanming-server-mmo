@@ -17,7 +17,7 @@ message transaction_log
   // proto2mysql 语义:分号分隔多索引、逗号 = 联合索引;原来的单串
   // "from_player,to_player,item_uuid,timestamp" 会被解释成一条 4 列联合索引,
   // 对按 to_player / tx_type 单独过滤的查询没用。
-  option(OptionIndex) = "from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,timestamp_sec;tx_type,timestamp_sec";
+  option(OptionIndex) = "from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,timestamp_sec;tx_type,timestamp_sec;timestamp_sec";
   // 雪花主键 + 全服最高频追加写,按 §D3 处方 NONCLUSTERED + 打散(global-data-layer-tidb-decision.md)
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
@@ -65,7 +65,7 @@ message player_snapshot
   // WHERE zone_id=? AND created_at<=?)。此前只存在于手写 DDL,proto 里漏了,
   // 于是 store 侧靠 extraIndexes 兜底建它 —— 补进来之后那段兜底会自行失效
   // (它按"想要的索引已被覆盖"判断)。
-  option(OptionIndex) = "player_id;snapshot_guid;zone_id,created_at";
+  option(OptionIndex) = "player_id;snapshot_guid;zone_id,created_at;created_at";
   // 主键是应用向发号器申请的打散行号(player-data-tidb-scaling-plan.md §6.4),不依赖库的自增。
   // 行数据按 _tidb_rowid 存,所以 §D3 的 NONCLUSTERED + 打散照旧保留。
   option(OptionTiDBNonclusteredPK) = true;

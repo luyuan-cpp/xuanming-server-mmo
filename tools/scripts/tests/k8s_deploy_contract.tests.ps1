@@ -7559,7 +7559,7 @@ Test-Case '有限roster模板绑定真实PodUID且normal不持registrar或其他
     $source=Join-Path $PSScriptRoot '../k8s_deploy.ps1'
     $tk=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tk,[ref]$errors)
     if($errors.Count){throw '部署源解析失败，不能用其它断言掩盖'}
-    foreach($name in @('Get-SqlRuntimeManifestRange','Get-SqlWriterCatalogEntry','Get-SqlWriterRosterMinimumEntries','Get-SqlWriterDeploymentEntry','Add-SqlWriterBootManifest')){
+    foreach($name in @('Get-SqlRuntimeManifestRange','Get-SqlWriterCatalogEntry','Get-SqlWriterRosterMinimumEntries','Get-SqlWriterDeploymentEntry','Add-SqlWriterBootManifest','Add-GoSvcSecretEnv')){
         $definition=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
         Set-Item -Path "Function:script:$name" -Value $definition.Body.GetScriptBlock()
     }
@@ -7595,6 +7595,14 @@ Test-Case '有限roster模板绑定真实PodUID且normal不持registrar或其他
         [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$multiCatalog,'Process')
         $renderedMulti=Add-SqlWriterBootManifest -ManifestContent $multi -Namespace fixture -SvcName data-service
         Assert-Match -Text $renderedMulti -Pattern '(?m)^  replicas: 2\s*$' -Because '名册条数够余量时允许两个Pod，不得退化为强制单副本'
+        # Java 写者往同一个 env: 段插两次。换行曾写成平台换行,Windows 上 env: 后面变成 \r\r\n,下一步注入管理口令就找不到这个段,所有带 gateway 的 zone-up 都失败。
+        $gatewayTemplate=Get-Content -LiteralPath (Join-Path $RepoRoot 'deploy/k8s/manifests/java-svc/gateway.yaml') -Raw
+        $gatewayCatalog=Join-Path $taskRoot 'gateway-catalog.json';$null=Write-MaintenanceImmutableJson -Path $gatewayCatalog -Value @{'fixture/gateway'=$entry}
+        [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$gatewayCatalog,'Process')
+        $renderedGateway=Add-SqlWriterBootManifest -ManifestContent $gatewayTemplate -Namespace fixture -SvcName gateway -RuntimeKind java
+        Assert-True -Condition (-not $renderedGateway.Contains("`r")) -Because '清单是 LF,渲染不能随运行平台混进 CR,否则同一份清单在 Windows 和 Linux 上产物不同'
+        $gatewayWithSecret=Add-GoSvcSecretEnv -SvcName gateway -ManifestContent $renderedGateway -EnvName ADMIN_APIKEY -SecretName fixture-admin -SecretKey key
+        Assert-Match -Text $gatewayWithSecret -Pattern '(?m)^            - name: ADMIN_APIKEY\s*$' -Because 'Java 写者的 env: 段注入之后还要能再注入管理口令'
         $entry.replicas=3
         $tooManyCatalog=Join-Path $taskRoot 'too-many-catalog.json';$null=Write-MaintenanceImmutableJson -Path $tooManyCatalog -Value @{'fixture/data-service'=$entry}
         [Environment]::SetEnvironmentVariable('MMORPG_SQL_K8S_BOOT_CATALOG',$tooManyCatalog,'Process')

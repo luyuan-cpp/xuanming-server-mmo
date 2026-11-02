@@ -624,6 +624,37 @@ C++(串行 `/m:1`):编 `scene`、`gate`、`currency_test`,跑 `currency_test --g
 
 失败时保留:编译全部错误;失败用例 `go test -count=1 -v -run '^用例名$' <包>` 的完整输出。不改断言。
 
+### 清单第 3、11、12 条(2026-11-02,未编译)
+
+`proto/common/database/rollback_database_table.proto` 加了两个索引,要再生成一次协议,命令同上。然后:
+
+```bash
+cd go/shared && go build ./... && go test ./kafkautil/... -count=1
+```
+
+```bash
+cd go/data_service && go build -gcflags=-e ./... && go vet ./internal/store/... ./internal/kafka/... ./internal/metrics/... ./internal/config/... && go test -count=1 ./internal/store/... ./internal/config/... ./internal/kafka/...
+```
+
+```bash
+cd go/login && go build -gcflags=-e ./... && go test -count=1 ./internal/config/...
+```
+
+```bash
+pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+```
+
+C++(串行 `/m:1`):先编 `kafka_producer.cpp` 所在的库,再编 `scene`。
+
+通过标准:
+
+- `audit_retention_test.go` 全部 PASS。
+- 重新生成后 `player_snapshot` 有单列 `created_at` 索引,`transaction_log` 有单列 `timestamp_sec` 索引。
+- 真库(`-tags=integration`,按 §4 的环境):往两张表各写过期和未过期的行,跑一轮 `RunAuditRetention`,只有过期行被删。没有现成用例,跑全链路时核对 `data_service_audit_retention_deleted_rows_total`。
+- 全链路:一条压缩前大于 1MB 的快照能发出去、落进 `player_snapshot`。topic 的 `max.message.bytes` 是 16777216。
+- 维护排空(§13 第 5 步):排空开始后不再有 `DELETE FROM player_snapshot`,不打成 HOLD。这条只读过代码,最可能出问题。
+- `go/login` 启动不再要求 `TaskWaitTimeout`、`LoginTotalTimeout`。
+
 ### 本聊天后续 A9 实际结果（2026-11-01，交原窗口处理）
 
 新PD世代真实Raw及SELECT_ONLY/LOCK_TOUCH资格均已通过；随后A9默认clean install真实退出1：711项=573通过+3失败+1错误+134条件跳过，617输入前后相同。game-discovery三项是观战协调键新增四金样遗漏/测试CRC16未取hash-tag；game-gateway-store的真实fixture在publish初始化SELECT DISTINCT zone_id FROM player超时，回滚通讯失败留下UNKNOWN，尚未进入失败轮业务竞争，根因未定。mall、gateway依赖跳过，运行三包本轮0个。详情：[本轮实际结果](../../../build/verification/stage4-resume-20261101-r1/java-a9-r3/result.json)、[失败诊断](../../../build/verification/stage4-resume-20261101-r1/java-a9-failures-diagnosis.json)。跳过清单、新XML及完整日志同结果目录，未改断言/未重跑。当前source/测试配套修正仍归原窗口；UNKNOWN私有原件与现场保持，不自动清理，不恢复第5旧资源核账。原R网关另有缺本仓authority-jdbc依赖的前置，未进入编译/测试：[R网关前置诊断](../../../build/verification/stage4-resume-20261101-r1/r-java-gateway-failure-diagnosis.json)。

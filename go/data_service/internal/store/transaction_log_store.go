@@ -87,6 +87,16 @@ func NewTransactionLogStore(cfg MySQLConfig) (*TransactionLogStore, error) {
 	return &TransactionLogStore{db: db}, nil
 }
 
+// DeleteOldLogs 删一批早于 olderThan(Unix 秒)的流水,回实际删除行数。由 RunAuditRetention 循环调用,走 timestamp_sec 索引。
+func (s *TransactionLogStore) DeleteOldLogs(ctx context.Context, olderThan uint64, limit int) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM transaction_log WHERE timestamp_sec < ? LIMIT ?`, olderThan, limit)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // Close releases the database connection.
 func (s *TransactionLogStore) Close() error {
 	return s.db.Close()

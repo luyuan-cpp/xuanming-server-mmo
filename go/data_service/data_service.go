@@ -227,6 +227,7 @@ func runDataService(c config.Config) (runErr error) {
 		return errors.Join(err, cleanupUnstarted())
 	}
 	kafkaStart := startKafkaConsumers(context.Background(), c.Kafka, svcCtx, kafkaOwner)
+	startAuditRetention(c.AuditRetention, svcCtx, kafkaOwner)
 	// SOURCE 闭合:本服务的 SOURCE 只有 gRPC 入口这一个来源,没有后台发行者。关闭接纳、等在途 RPC 结束就闭合,
 	// 闭合摘要由 root 自己的计数算出(Session.SettledDigest)。上游都走 RELAY,见 dataServiceRelayMethods。
 	// 两步都幂等:排空控制线与 closeRelay 都会调到这里。
@@ -596,6 +597,34 @@ type kafkaStartup struct {
 	done       chan struct{}
 }
 
+// startAuditRetention 起审计表清理循环,随进程退出。维护排空开始后不再发新的 DELETE。
+// 清理只删过期行,不发消息,所以不算 SOURCE 闭合里的后台发行者;排空冻结之后的写入由写者闸门拒绝。
+func startAuditRetention(rc config.AuditRetentionConfig, svcCtx *svc.ServiceContext, owner *dskafka.ConsumerOwner) {
+	snapshots, snapshotsOK := svcCtx.SnapshotStore.(*store.SnapshotStore)
+	txLogs, txLogsOK := svcCtx.TxLogStore.(*store.TransactionLogStore)
+	if rc.Disabled || !snapshotsOK || !txLogsOK {
+		logx.Infof("[AuditRetention] not started: disabled=%v snapshot_store=%v transaction_log_store=%v", rc.Disabled, snapshotsOK, txLogsOK)
+		return
+	}
+	rc = rc.Normalized()
+	opts := store.AuditRetentionOptions{
+		SnapshotMaxAge:       time.Duration(rc.SnapshotDays) * 24 * time.Hour,
+		TransactionLogMaxAge: time.Duration(rc.TransactionLogDays) * 24 * time.Hour,
+		BatchSize:            rc.BatchSize,
+		Interval:             time.Duration(rc.IntervalSeconds) * time.Second,
+		Paused:               owner.Draining,
+		Observe: func(table string, deleted int64, err error) {
+			metrics.ObserveAuditRetention(table, deleted, err != nil)
+			if err != nil {
+				logx.Errorf("[AuditRetention] delete from %s failed: %v", table, err)
+			}
+		},
+	}
+	safego.Go("data_service.audit_retention", func() {
+		store.RunAuditRetention(context.Background(), opts, snapshots, txLogs)
+	})
+}
+
 func startKafkaConsumers(ctx context.Context, kc config.KafkaConfig, svcCtx *svc.ServiceContext, owner *dskafka.ConsumerOwner) *kafkaStartup {
 	retryCtx, cancel := context.WithCancel(ctx)
 	out := &kafkaStartup{owner: owner, configured: len(kc.Brokers) > 0, cancel: cancel, done: make(chan struct{})}
@@ -615,15 +644,17 @@ func startKafkaConsumers(ctx context.Context, kc config.KafkaConfig, svcCtx *svc
 	txTopic, snapshotTopic := kc.EffectiveTransactionLogTopic(), kc.EffectiveSnapshotTopic()
 	start := func() error {
 		cs, err := dskafka.Start(ctx, dskafka.StartConfig{
-			Owner:              owner,
-			Brokers:            kc.Brokers,
-			TxLogTopic:         txTopic,
-			TxLogPartitions:    kc.TransactionLogPartitions,
-			TxLogGroup:         kc.TransactionLogConsumerGroup,
-			SnapshotTopic:      snapshotTopic,
-			SnapshotPartitions: kc.SnapshotPartitions,
-			SnapshotGroup:      kc.SnapshotConsumerGroup,
-			RetentionMs:        kc.RetentionMs,
+			Owner:                  owner,
+			Brokers:                kc.Brokers,
+			TxLogTopic:             txTopic,
+			TxLogPartitions:        kc.TransactionLogPartitions,
+			TxLogGroup:             kc.TransactionLogConsumerGroup,
+			SnapshotTopic:          snapshotTopic,
+			SnapshotPartitions:     kc.SnapshotPartitions,
+			SnapshotGroup:          kc.SnapshotConsumerGroup,
+			RetentionMs:            kc.RetentionMs,
+			TxLogRetentionBytes:    kc.TxLogRetentionBytes,
+			SnapshotRetentionBytes: kc.SnapshotRetentionBytes,
 			// kc 已在 main 里 Normalize + ValidateConsumers 过(越界拒启),这里只做单位换算。
 			Snapshot: dskafka.SnapshotConsumerConfig{
 				BatchMaxRows:       kc.SnapshotBatchMaxRows,

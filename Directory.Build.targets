@@ -72,8 +72,9 @@
     <Link>
       <!-- 不让 bin 里的历史 zlib DLL 或公共 lib 中的旧归档替代本轮 SDK。 -->
       <AdditionalLibraryDirectories>$(IndependentSdkZlibRoot)lib/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(^|;)\s*zlib(?:static)?d?\.lib(?=;|$)', '$1zlibstatic$(IndependentSdkLibraryPostfix).lib'))</AdditionalDependencies>
-      <AdditionalDependencies>$([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(^|;)\s*libupbd?\.lib(?=;|$)', '$1libupb$(IndependentSdkLibraryPostfix).lib'))</AdditionalDependencies>
+      <!-- 属性函数会转义分号；还原列表分隔符，避免链接器把整串库名当成一个文件。 -->
+      <AdditionalDependencies>$([MSBuild]::Unescape($([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(^|;)\s*zlib(?:static)?d?\.lib(?=;|$)', '$1zlibstatic$(IndependentSdkLibraryPostfix).lib'))))</AdditionalDependencies>
+      <AdditionalDependencies>$([MSBuild]::Unescape($([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(^|;)\s*libupbd?\.lib(?=;|$)', '$1libupb$(IndependentSdkLibraryPostfix).lib'))))</AdditionalDependencies>
       <AdditionalDependencies Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*libprotocd?\.lib(?=;|$)')) and !$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*libupbd?\.lib(?=;|$)'))">libupb$(IndependentSdkLibraryPostfix).lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

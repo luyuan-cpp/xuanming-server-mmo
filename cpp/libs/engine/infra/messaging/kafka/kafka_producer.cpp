@@ -109,6 +109,16 @@ bool KafkaProducer::createProducer(const std::string& brokers) {
 		LOG_ERROR << "Kafka producer: required idempotent all-ack policy unavailable: " << errstr;
 		return false;
 	}
+	// 审计快照是整档 protobuf,可能超过 librdkafka 缺省的 1MB,produce 当场回 MSG_SIZE_TOO_LARGE,快照就没了。
+	// message.max.bytes 按压缩前判断,放到和消费端 MaxBytes(go/data_service/internal/kafka/consumer.go,16MiB)相同;
+	// lz4 在批上压缩,broker 收到的压缩后批受 topic 的 max.message.bytes 约束(EnsureTopics 设置)。
+	// 设置失败不阻止建实例,理由同下面的分区器,只是大快照会发不出去。
+	if (conf->set("message.max.bytes", "16777216", errstr) != RdKafka::Conf::CONF_OK) {
+		LOG_ERROR << "Kafka producer: failed to set message.max.bytes: " << errstr;
+	}
+	if (conf->set("compression.codec", "lz4", errstr) != RdKafka::Conf::CONF_OK) {
+		LOG_ERROR << "Kafka producer: failed to set compression.codec=lz4: " << errstr;
+	}
 	// 显式钉住分区器:partition = CRC-32/IEEE(key) mod N(按 uint32 取模)。同一业务实体的 key 落同一分区,
 	// 换分区器就破坏了 AGENTS §7.3 的有序性,所以不随 librdkafka 升级漂移。值与 vendored librdkafka 2.14.0 的默认值相同。
 	//

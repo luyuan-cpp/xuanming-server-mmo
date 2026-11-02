@@ -92,6 +92,18 @@ var (
 		Help:      "Messages deleted by topic retention before this consumer group consumed them (sum over partitions of log-start minus committed). > 0 means audit data is lost.",
 	}, []string{"consumer"})
 
+	// auditRetentionDeletedRowsTotal、auditRetentionFailuresTotal:审计表清理(store.RunAuditRetention)。table 只有两个值。
+	auditRetentionDeletedRowsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "audit_retention_deleted_rows_total",
+		Help:      "Rows deleted by the audit table retention loop.",
+	}, []string{"table"})
+	auditRetentionFailuresTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "audit_retention_failures_total",
+		Help:      "Failed DELETE statements of the audit table retention loop.",
+	}, []string{"table"})
+
 	kafkaConsumerLagProbeTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "kafka_consumer_lag_probe_total",
@@ -253,6 +265,7 @@ func register() {
 			kafkaConsumerUp, kafkaConsumerMessagesTotal,
 			kafkaConsumerFlushSeconds, kafkaConsumerBatchRows, kafkaConsumerMessageBytes,
 			kafkaConsumerLagMessages, kafkaConsumerLagMaxPartitionMessages, kafkaConsumerRetentionGapMessages,
+			auditRetentionDeletedRowsTotal, auditRetentionFailuresTotal,
 			kafkaConsumerLagProbeTotal, kafkaConsumerIsolationTotal,
 			idSegmentAllocateTotal,
 			idIssuerReserveTotal,
@@ -646,4 +659,13 @@ func ObserveHomeZoneBatchIDs(n int) {
 func ObserveAccountDirectoryRPC(rpc, result string, d time.Duration) {
 	registerLoginReads()
 	accountDirectoryRPCSeconds.WithLabelValues(rpc, result).Observe(d.Seconds())
+}
+
+// ObserveAuditRetention 记一条审计表清理 DELETE 的结果。
+func ObserveAuditRetention(table string, deleted int64, failed bool) {
+	if failed {
+		auditRetentionFailuresTotal.WithLabelValues(table).Inc()
+		return
+	}
+	auditRetentionDeletedRowsTotal.WithLabelValues(table).Add(float64(deleted))
 }

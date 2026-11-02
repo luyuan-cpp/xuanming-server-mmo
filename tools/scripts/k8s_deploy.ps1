@@ -10200,8 +10200,6 @@ Registry:
 Timeouts:
   EtcdDialTimeout: 5s
   ServiceDiscoveryTimeout: 10s
-  TaskWaitTimeout: 5s
-  LoginTotalTimeout: 10s
   RoleCacheExpire: 24h
 PlayerLocatorRpc:
   Etcd:
@@ -11671,10 +11669,10 @@ function Add-SqlWriterBootManifest {
         $runtime=$ManifestContent.Substring($range.Start,$range.End-$range.Start)
         if(-not $init -or -not $env -or -not $volumes -or [regex]::Matches($runtime,'(?m)^          env:\s*$').Count -ne 1 -or [regex]::Matches($runtime,'(?m)^          volumeMounts:\s*$').Count -ne 1 -or [regex]::Matches($ManifestContent,'(?m)^      volumes:\s*$').Count -ne 1 -or $ManifestContent -match '(?m)^      (?:securityContext|initContainers):'){throw 'SQL boot注入形状变化，拒绝猜测或覆盖现有init/securityContext'}
         $envAt=[regex]::Match($runtime,'(?m)^          env:\s*\r?$')
-        $runtime=$runtime.Insert($envAt.Index+$envAt.Length,[Environment]::NewLine+$env.TrimEnd())
+        $runtime=$runtime.Insert($envAt.Index+$envAt.Length,"`n"+$env.TrimEnd())
         $mountAt=[regex]::Match($runtime,'(?m)^          volumeMounts:\s*\r?$')
-        $mounts='            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant, readOnly: true}'+[Environment]::NewLine+'            - {name: sql-writer-consume, mountPath: /run/sql-writer/consume}'
-        $runtime=$runtime.Insert($mountAt.Index+$mountAt.Length,[Environment]::NewLine+$mounts)
+        $mounts='            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant, readOnly: true}'+"`n"+'            - {name: sql-writer-consume, mountPath: /run/sql-writer/consume}'
+        $runtime=$runtime.Insert($mountAt.Index+$mountAt.Length,"`n"+$mounts)
         if($RuntimeKind -ceq 'go'){
             $match=[regex]::Match($runtime,'(?m)^          args: (\[[^\r\n]+\])\s*$')
             if(-not $match.Success){throw 'Go runtime参数形状不符，不能遗漏grant SHA导入'}
@@ -11685,29 +11683,29 @@ function Add-SqlWriterBootManifest {
             $command='(umask 077; mkdir -p /run/sql-writer/consume/private); if ls /run/sql-writer/consume/private/*.consumed >/dev/null 2>&1; then echo sql writer grant already consumed, the reaper replaces this pod >&2; exit 78; fi; MMORPG_SQL_WRITER_GRANT_SHA256="$(cat /run/sql-writer/grant/private/boot-grant.json.sha256)"; export MMORPG_SQL_WRITER_GRANT_SHA256; exec /app/service "$@"'
             $originalArgs[1]='/app/etc/private/'+$configName
             $args=@($command,'--')+$originalArgs
-            $replacement='          command: ["/bin/sh", "-ec"]'+[Environment]::NewLine+'          args: '+(ConvertTo-Json -InputObject $args -Compress)
+            $replacement='          command: ["/bin/sh", "-ec"]'+"`n"+'          args: '+(ConvertTo-Json -InputObject $args -Compress)
             $runtime=$runtime.Substring(0,$match.Index)+$replacement+$runtime.Substring($match.Index+$match.Length)
         }else{
             $configName='application-k8s.yaml'
             # 选中配置在 /app/config/private,显式告诉 Spring,不依赖默认搜索路径。消费目录由镜像入口建(Dockerfile.java-svc),grant 摘要也是它读。
             $springEnvAt=[regex]::Match($runtime,'(?m)^          env:\s*\r?$')
-            $runtime=$runtime.Insert($springEnvAt.Index+$springEnvAt.Length,[Environment]::NewLine+'            - name: SPRING_CONFIG_ADDITIONAL_LOCATION'+[Environment]::NewLine+'              value: file:/app/config/private/')
+            $runtime=$runtime.Insert($springEnvAt.Index+$springEnvAt.Length,"`n"+'            - name: SPRING_CONFIG_ADDITIONAL_LOCATION'+"`n"+'              value: file:/app/config/private/')
         }
         $init=$init.Replace('/run/sql-writer/runtime/private/data_service.yaml','/run/sql-writer/runtime/private/'+$configName)
         $ManifestContent=$ManifestContent.Substring(0,$range.Start)+$runtime+$ManifestContent.Substring($range.End)
         $containers=[regex]::Match($ManifestContent,'(?m)^      containers:\s*\r?$')
         $ManifestContent=$ManifestContent.Insert($containers.Index,$init)
         $volumeAt=[regex]::Match($ManifestContent,'(?m)^      volumes:\s*\r?$')
-        $ManifestContent=$ManifestContent.Insert($volumeAt.Index+$volumeAt.Length,[Environment]::NewLine+$volumes.TrimEnd())
+        $ManifestContent=$ManifestContent.Insert($volumeAt.Index+$volumeAt.Length,"`n"+$volumes.TrimEnd())
         $configPattern='(?m)^        - name: svc-config\r?\n(?:          configMap:\s*\r?\n            name: [^\r\n]+|          configMap: \{name: [^\r\n]+\})'
         $configMatch=[regex]::Match($ManifestContent,$configPattern)
         if(-not $configMatch.Success -or [regex]::Matches($ManifestContent,$configPattern).Count -ne 1){throw 'runtime必须唯一完整配置卷，不能复用旧共享凭据ConfigMap'}
-        $replacement='        - name: svc-config'+[Environment]::NewLine+'          emptyDir: {medium: Memory, sizeLimit: 20Mi}'
+        $replacement='        - name: svc-config'+"`n"+'          emptyDir: {medium: Memory, sizeLimit: 20Mi}'
         $ManifestContent=$ManifestContent.Substring(0,$configMatch.Index)+$replacement+$ManifestContent.Substring($configMatch.Index+$configMatch.Length)
         # 回收 CronJob 只处理带这个 label 的 Pod(sql-writer-pod-reaper.yaml)。别的写者写在各自的清单里。
         $podLabels=[regex]::Matches($ManifestContent,'(?m)^  template:[ \t]*\r?\n    metadata:[ \t]*\r?\n      labels:[ \t]*\r?$')
         if($podLabels.Count -ne 1){throw "The Pod template of $SvcName must have one block style labels section; cannot add the mmorpg.io/sql-writer label."}
-        $ManifestContent=$ManifestContent.Insert($podLabels[0].Index+$podLabels[0].Length,[Environment]::NewLine+'        mmorpg.io/sql-writer: "true"')
+        $ManifestContent=$ManifestContent.Insert($podLabels[0].Index+$podLabels[0].Length,"`n"+'        mmorpg.io/sql-writer: "true"')
     }
     if(-not $ManifestContent.Contains('mmorpg.io/sql-writer: "true"')){throw "The Pod template of $SvcName has no mmorpg.io/sql-writer label: the reaper would never replace a crashed writer Pod."}
     # writer_authority 按 MMORPG_SQL_BACKEND 核真实引擎,不设就是 tidb(go/shared/authoritysql/backend.go),连 MySQL 的注册必败。
@@ -11716,7 +11714,7 @@ function Add-SqlWriterBootManifest {
     if($registrarAnchors.Count -ne 1){throw "A SQL writer manifest must have exactly one registrar init container with MMORPG_SQL_REGISTRAR_DSN (got $($registrarAnchors.Count)); cannot add MMORPG_SQL_BACKEND."}
     $registrarBackend=if($SvcName -cin @('login','gateway')){'mysql'}else{$DatabaseBackend}
     $registrarIndent=$registrarAnchors[0].Groups['indent'].Value
-    $ManifestContent=$ManifestContent.Insert($registrarAnchors[0].Index,$registrarIndent+'- name: MMORPG_SQL_BACKEND'+[Environment]::NewLine+$registrarIndent+'  value: "'+$registrarBackend+'"'+[Environment]::NewLine)
+    $ManifestContent=$ManifestContent.Insert($registrarAnchors[0].Index,$registrarIndent+'- name: MMORPG_SQL_BACKEND'+"`n"+$registrarIndent+'  value: "'+$registrarBackend+'"'+"`n")
     if(-not $ManifestContent.Contains('"-roster"') -or -not $ManifestContent.Contains('"-runtime-config-output"') -or -not $ManifestContent.Contains('sql-writer-runtime-input')){throw '现有boot模板没有真正有限roster与选中配置隔离'}
     $replace=@{PLACEHOLDER_SQL_WRITER_REQUEST_SECRET=$entry.requestSecret;PLACEHOLDER_SQL_WRITER_RUNTIME_SECRET=$entry.runtimeConfigSecret;PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET=$entry.registrarSecret;PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE=$entry.registrarImage;PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256=$entry.physicalAuthoritySha256;PLACEHOLDER_SQL_WRITER_ROSTER_SHA256=$entry.rosterSha256}
     foreach($key in $replace.Keys){$ManifestContent=$ManifestContent.Replace($key,[string]$replace[$key])}
@@ -11737,17 +11735,17 @@ function Add-SchemaPermissionManifest {
     # 两种写法都认:块式(trade、friend、player-inbox、data-service、db)和流式(guild、mail、rank、match、chat)。
     $pattern='(?m)^(        - name: svc-config\r?\n)(?:          configMap:\r?\n            name: [^\r\n]+|          configMap: \{name: [^\r\n]+\})'
     if([regex]::Matches($Content,$pattern).Count -ne 1){throw 'schema Job必须唯一独立配置挂载'}
-    $Content=[regex]::Replace($Content,$pattern,('$1          secret:'+[Environment]::NewLine+'            secretName: '+$entry.schemaConfigSecret))
+    $Content=[regex]::Replace($Content,$pattern,('$1          secret:'+"`n"+'            secretName: '+$entry.schemaConfigSecret))
     # guild、mail、rank 的 DSN 走环境变量。它和下面的 MMORPG_SQL_SCHEMA_PRINCIPAL 出自同一个 Secret,账号和主体才绑得住,对不上时 Job 报「权威SQL受限主体不匹配」(go/shared/authoritysql/pool.go)。
     $Content=$Content.Replace('PLACEHOLDER_SCHEMA_PERMISSION_SECRET',$entry.schemaPermissionSecret)
     $range=Get-SqlRuntimeManifestRange -ManifestContent $Content -SvcName $SvcName
     $envMatches=@([regex]::Matches($Content,'(?m)^          env:\s*\r?$') | Where-Object { $_.Index -gt $range.Start -and $_.Index -lt $range.End })
     if($envMatches.Count -ne 1){throw 'schema Job权限env形状不符'}
-    $env='            - name: MMORPG_SQL_SCHEMA_PRINCIPAL'+[Environment]::NewLine+'              valueFrom: {secretKeyRef: {name: '+$entry.schemaPermissionSecret+', key: principal, optional: false}}'
+    $env='            - name: MMORPG_SQL_SCHEMA_PRINCIPAL'+"`n"+'              valueFrom: {secretKeyRef: {name: '+$entry.schemaPermissionSecret+', key: principal, optional: false}}'
     # schema 配置来自运维预置的 Secret,漏了 DbPlacement 段就查不到 MOVING,-migrate 会在搬库期间跑 DDL。staging、prod 要求必须有。
-    if($ReleaseProfile -cne 'dev'){$env+=[Environment]::NewLine+'            - name: MMORPG_DB_PLACEMENT_REQUIRED'+[Environment]::NewLine+'              value: "1"'}
+    if($ReleaseProfile -cne 'dev'){$env+="`n"+'            - name: MMORPG_DB_PLACEMENT_REQUIRED'+"`n"+'              value: "1"'}
     $at=$envMatches[0].Index+$envMatches[0].Length
-    return $Content.Substring(0,$at)+[Environment]::NewLine+$env+$Content.Substring($at)
+    return $Content.Substring(0,$at)+"`n"+$env+$Content.Substring($at)
 }
 
 function Apply-OneGoSvc {

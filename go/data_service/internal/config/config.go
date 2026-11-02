@@ -71,6 +71,9 @@ type Config struct {
 	// data_service(Load/Save 是热路径),只记日志并每 30s 后台重试。
 	Kafka KafkaConfig `json:",optional"`
 
+	// AuditRetention 是 player_snapshot、transaction_log 的保留期。不配就用默认值。
+	AuditRetention AuditRetentionConfig `json:",optional"`
+
 	// IdSegment 是发号器(AllocateIdSegment)的配置,见 internal/idissuer 与
 	// docs/design/player-data-tidb-scaling-plan.md §6。整段可缺失,缺失 = 生产安全值。
 	IdSegment IdSegmentConfig `json:",optional"`
@@ -484,6 +487,10 @@ type KafkaConfig struct {
 	// 注意它不是先到的上限:broker 的每分区 log.retention.bytes(prod 512MiB)在开服速率下几十秒到几分钟就能到,
 	// 积压超过它的未消费快照会被删(本服务只检测,见 data_service_kafka_consumer_retention_gap_messages)。
 	RetentionMs int64 `json:",default=2592000000"`
+	// TxLogRetentionBytes、SnapshotRetentionBytes 是两个 topic 的每分区 retention.bytes,0 = 沿用 broker 的
+	// log.retention.bytes。上面说的「积压超过它就被删」靠这里放宽,生产按 Kafka 盘预算显式配。
+	TxLogRetentionBytes    int64 `json:",optional"`
+	SnapshotRetentionBytes int64 `json:",optional"`
 
 	// SnapshotBatchMaxRows:player_snapshot 每个分区一批最多多少条消息(含被跳过的坏消息),[1, MaxSnapshotBatchMaxRows]。
 	// 0 = 没配 = 1(逐条,现状)。>1 时预读剔除已存在的 guid、按 guid 升序一条普通多行 INSERT 落库
@@ -719,4 +726,39 @@ func (p PlayerNameConfig) Validate() error {
 		return fmt.Errorf("PlayerName.NegativeCacheTTL must be positive, got %v", p.NegativeCacheTTL)
 	}
 	return nil
+}
+
+// 审计表清理的默认值:快照是整档,保留期和 Kafka 的 RetentionMs 对齐;流水查刷物和追责要回溯得更久。
+const (
+	defaultAuditSnapshotDays       = 30
+	defaultAuditTransactionLogDays = 180
+	defaultAuditBatchSize          = 2000
+	defaultAuditIntervalSeconds    = 3600
+)
+
+// AuditRetentionConfig 控制审计表清理循环(store.RunAuditRetention)。字段不大于 0 时用默认值。
+type AuditRetentionConfig struct {
+	// Disabled 关掉清理。
+	Disabled           bool `json:",optional"`
+	SnapshotDays       int  `json:",optional"`
+	TransactionLogDays int  `json:",optional"`
+	BatchSize          int  `json:",optional"`
+	IntervalSeconds    int  `json:",optional"`
+}
+
+// Normalized 把不大于 0 的字段换成默认值。
+func (c AuditRetentionConfig) Normalized() AuditRetentionConfig {
+	if c.SnapshotDays <= 0 {
+		c.SnapshotDays = defaultAuditSnapshotDays
+	}
+	if c.TransactionLogDays <= 0 {
+		c.TransactionLogDays = defaultAuditTransactionLogDays
+	}
+	if c.BatchSize <= 0 {
+		c.BatchSize = defaultAuditBatchSize
+	}
+	if c.IntervalSeconds <= 0 {
+		c.IntervalSeconds = defaultAuditIntervalSeconds
+	}
+	return c
 }

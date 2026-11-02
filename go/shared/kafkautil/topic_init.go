@@ -24,7 +24,9 @@ type TopicSpec struct {
 	// >0 = 建 topic 时带上,并在每次启动时增量 SET;<0 拒绝 —— Kafka 里 -1 表示不限,会让磁盘无界。
 	// K8s 上由 k8s_deploy.ps1 按 Kafka 盘预算渲染(docs/design/db-task-delivery-and-retention.md §B)。
 	RetentionBytes int64
-	ReplicaFactor  int16 // 0 = use the deployment contract (DefaultReplicationFactor)
+	// MaxMessageBytes 是 topic 级 max.message.bytes(压缩后的批):0 = 不管理,沿用 broker 缺省(约 1MiB)。
+	MaxMessageBytes int64
+	ReplicaFactor   int16 // 0 = use the deployment contract (DefaultReplicationFactor)
 	// 严格耐久消息必须显式指定至少三副本，并强制 minISR>=2、禁用非同步副本选主。
 	// 启动只配置并核验，不自动重分配已有副本；旧服务默认不启用。
 	RequireDurability bool
@@ -128,6 +130,7 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now
 
 		retentionStr := fmt.Sprintf("%d", spec.RetentionMs)
 		retentionBytesStr := fmt.Sprintf("%d", spec.RetentionBytes)
+		maxMessageBytesStr := fmt.Sprintf("%d", spec.MaxMessageBytes)
 		minimumISR, uncleanElection := "2", "false"
 
 		if _, exists := existing[spec.Name]; !exists {
@@ -141,6 +144,9 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now
 			}
 			if spec.RetentionBytes > 0 {
 				createEntries["retention.bytes"] = &retentionBytesStr
+			}
+			if spec.MaxMessageBytes > 0 {
+				createEntries["max.message.bytes"] = &maxMessageBytesStr
 			}
 			if spec.RequireDurability {
 				createEntries["min.insync.replicas"] = &minimumISR
@@ -237,6 +243,12 @@ func ensureTopics(admin topicAdmin, specs []TopicSpec, defaultReplica int16, now
 			entries["retention.bytes"] = sarama.IncrementalAlterConfigsEntry{
 				Operation: sarama.IncrementalAlterConfigsOperationSet,
 				Value:     &retentionBytesStr,
+			}
+		}
+		if spec.MaxMessageBytes > 0 {
+			entries["max.message.bytes"] = sarama.IncrementalAlterConfigsEntry{
+				Operation: sarama.IncrementalAlterConfigsOperationSet,
+				Value:     &maxMessageBytesStr,
 			}
 		}
 		if spec.RequireDurability {
