@@ -279,12 +279,15 @@ func TestMergedZoneCacheRefreshReplacesAndKeepsOldOnFailure(t *testing.T) {
 		defer mu.Unlock()
 		return slices.Clone(results), slices.Clone(changes)
 	}
+	// 每次定时重读的回调执行完就发一个信号。OnChange 在 refresh 里调用,早于 OnRefresh,收到信号时两个回调都已执行完。
+	refreshed := make(chan struct{}, 8)
 	cache, err := NewMergedZoneCache(context.Background(), source.read, MergedZoneCacheOptions{
 		Interval: time.Hour,
 		OnRefresh: func(err error) {
 			mu.Lock()
-			defer mu.Unlock()
 			results = append(results, err)
+			mu.Unlock()
+			refreshed <- struct{}{}
 		},
 		OnChange: func(zones *MergedZones) {
 			mu.Lock()
@@ -309,12 +312,15 @@ func TestMergedZoneCacheRefreshReplacesAndKeepsOldOnFailure(t *testing.T) {
 		defer close(done)
 		cache.run(ctx, tick)
 	}()
+	// 每步重读两次,两次读到相同的内容。只等 served 不够:它在读返回时就发了,回调可能还没执行,
+	// 下一步取到的 before 会少一条,断言就看错了位置(11-02 Codex 第二轮复现过)。
 	step := func() {
 		t.Helper()
-		tick <- time.Time{}
-		<-source.served
-		tick <- time.Time{} // run 取走第二拍,说明上一拍的 refresh 和回调已经全部做完
-		<-source.served
+		for range 2 {
+			tick <- time.Time{}
+			<-source.served
+			<-refreshed
+		}
 	}
 
 	source.set(map[uint32]uint32{5: 6, 6: 7}, nil)

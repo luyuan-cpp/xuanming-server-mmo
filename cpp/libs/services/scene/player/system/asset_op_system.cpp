@@ -879,7 +879,7 @@ bool IsRecallableInstance(const ItemComp& item, uint32_t configId)
 
 struct RecallPick
 {
-	Bag* bag;
+	std::size_t orderIndex; // RecallBagOrder 给出的包顺序里的下标。存下标不存指针:成员不许是裸指针
 	std::vector<Guid> guids;
 };
 
@@ -889,7 +889,7 @@ std::vector<RecallPick> PickRecallInstances(const std::vector<Bag*>& order, cons
 {
 	std::vector<RecallPick> picks;
 	picks.reserve(order.size());
-	for (auto* bag : order) picks.push_back(RecallPick{bag, {}});
+	for (std::size_t index = 0; index < order.size(); ++index) picks.push_back(RecallPick{index, {}});
 
 	uint64_t chosen = 0;
 	for (const auto hint : request.bundle().item_uuids())
@@ -897,7 +897,8 @@ std::vector<RecallPick> PickRecallInstances(const std::vector<Bag*>& order, cons
 		if (chosen >= requested) break;
 		for (auto& pick : picks)
 		{
-			const auto* item = pick.bag->ContainsGuid(hint) ? pick.bag->GetItemCompByGuid(hint) : nullptr;
+			Bag& bag = *order[pick.orderIndex];
+			const auto* item = bag.ContainsGuid(hint) ? bag.GetItemCompByGuid(hint) : nullptr;
 			if (item != nullptr && IsRecallableInstance(*item, configId))
 			{
 				pick.guids.push_back(hint);
@@ -969,10 +970,11 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 		for (const auto& pick : PickRecallInstances(order, request, configId, requested))
 		{
 			if (pick.guids.empty()) continue;
+			Bag& bag = *order[pick.orderIndex];
 			bool removed = false;
-			error = BagService::RemoveItemsByGuid(player, *pick.bag, pick.guids, txType, request.correlation_id(), nullptr, &removed);
+			error = BagService::RemoveItemsByGuid(player, bag, pick.guids, txType, request.correlation_id(), nullptr, &removed);
 			mutated = mutated || removed;
-			wornRemoved = wornRemoved || (removed && pick.bag == &bags.bags[kEquipment]);
+			wornRemoved = wornRemoved || (removed && &bag == &bags.bags[kEquipment]);
 			if (error != kSuccess) break;
 			taken += pick.guids.size();
 		}
