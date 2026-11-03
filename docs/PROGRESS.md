@@ -19754,3 +19754,94 @@ Java 版(AGENTS §12):对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。
 - Prelude outer010600055-277f9b62完整通过，实际公开AC38B8CA…：新迁移前明确拒绝、共享运行域密钥CF3 CreateNew逐键回读、独立match Schema身份4exec/4query和最小授权全验。固定原件已存在，后续只读不重生；应用0、NORMAL登记0、runtimeReady=false。该结果不代表迁移或双区业务完成。
 - 原428按同2803输入拆三个完整组互斥集合155/167/106；联合与原BF6CD锚428身份精确相等，仅首批guild167在original72D 011403376-6e42e826真实运行，其余未运行。01:24已出EconomyLockOrder7FAIL，XML精确断言为TiDB内部吸收死锁的采集未启用，失败在并发对撞前置而不是业务结局；不删除断言、不盲重跑，保留本轮完结结果后核定本地实例配置。
 - 持续Host资源Prime接线仅纯源物化SHA3999A974…，保持原资源提交余量12/8GiB、CPU2、采样1秒/最大2秒及所有实际身份/监听要求，未AddType/开Job/启动应用。玩家仍TiDB/SQL player_store，无提交推送、无旧UNKNOWN清理；客户端许可/锁屏外部阻塞仍在。
+- 用户本地2026-11-02 21点后要求后续仅汇报剩余两项：新1=Java修复与真库验收（原2），新2=双区业务/故障恢复联验及服务器启动（原4）。原1/3/5完成结果保留，不再周期重复；checkpoint保留历史键，新增reporting显式映射，自动化20改为只报这两项、仍20分钟。最新客户端构建授权继续保留。
+
+### 2026-11-02 夜间 Codex：新编号两项交接、WSL容量恢复实证
+
+- 用户只保留新1 Java修复与真库验收（旧2）、新2双区业务/故障恢复联验和服务器启动（旧4）；原已完1/3/5不再周期重复。最新又明确暂停客户端，先做完这两项，并要求换新聊天继续；交接记录见 docs/handoff/remaining-two-handoff-20261102-r1.md。
+- 原428 Guild r7终局48PASS/119未通过，XML48P0F21ERROR0SKIP，2803源码稳定，outer b1109550失败保留。GuildActivity29及AssetStore锁顺序2真实通过；AssetProof新NORMAL夹具缺player表ERROR另已备正式player schema候选744E0B…但未应用/运行，后续数据库通信超时与未运行不能算通过。另155/106从未运行。
+- 实测WSL16GiB下只余约300MiB、4GiB交换耗尽，memory full pressure avg60=55.27；Docker/SQL失去响应。按用户最大内存/所有必要本地工作授权，CreateNew用户.wslconfig内存24GiB/交换16GiB，交换VHDX放本项目ignored D盘记录目录，因C盘仅12GiB空闲。原12/8GiB提交余量、CPU2及完整门禁未降低。
+- Docker官方restart120秒失败并卡stopping，精确终止仅docker-desktop VM后，对官方失败列表8个原PID/出生/映像逐个持句柄Kill(false)且退出已观察，不杀树、不碰其他应用、不删卷；官方start后现running。新内核实际MemTotal24608628KiB、Available23132028KiB，16GiB交换全空、pressure0；公开36CD6A6A…。
+- 同7原CID/映像/挂载/限制/端口核定后恢复原PD/TiKV/TiDB/Kafka；Redis和etcd自动恢复不重启，旧topic-init exit0不重跑。原72D native-stage-20261103T021331915Z-83482849完整PASS，known-seven-resumed公开SHA00F6554F…。SQL0、业务应用0、卷删除0。新startedAt已换：TiDB UTC02:13:38.04824625Z/PID2178，PD02:13:35.501677303Z，TiKV02:13:37.25484758Z。旧C75物理/D192 I3只历史，尚未新S1/I3资格，不能以容器running当业务恢复完成。
+- 交接时发现他窗保存新提交：R78d54128…、Jff315325…；本聊天未commit/push，关键833/5B/D190源SHA保持，但新聊天必须核当前完整输入/提交而非回退。交接时无build/test/SQL在跑，协调聊天仅准备新epoch源；下一执行者按交接继续，不重新索取已授权的例行许可。
+- 用户要求的续做聊天已建立：01a19f38-1194-78c3-846e-66797a080035（继续完成1和2：Java验收与双区启动）；自动化20已转移到该聊天，仍每20分钟报告新1/2，客户端暂停。旧聊天不再执行构建、测试或SQL；交接正文见 docs/handoff/remaining-two-handoff-20261102-r1.md。
+
+### 2026-11-02 夜间 Codex：新聊天接续当前WSL24G资格与Java夹具修正
+
+- 新1仍为Java真库验收，新2仍为双区业务/故障恢复及启动；客户端暂停，未提交推送。当前两仓HEAD与交接一致，已有文档/子模块改动保持。
+- 新epoch两独立inspect原72D完整通过1ec43822；全三台32字段与独立full一致，同CID/映像/卷/限额/端口不变，仅各自pid/started/finished及网络EndpointID/MacAddress改变。新Fresh017EC906…与新物理59CD4744…由真实原件产生，不改旧C75/D192或owner。
+- 新Go资格工具仅Raw launcher两常量更新，原72D离线build8bb1a1d5通过，PE512B599A…。真实Raw四held/强会话/固定SELECT/rollback/close及首尾inspect完整6b02065b通过；CF3公开投影4c96ed86通过。Reader首次缺公开C42源码副本82d2b1c7失败保留，补同字节后735ea2d4完整回读及12引用/5负例通过。
+- 新I3 SELECT_ONLY/LOCK_TOUCH两原语实际e163a317完整通过。后续只读投影5c82189f因额外public物化源码位于D盘触原ACL拒绝，尚未发行最终CF3投影；正用唯一精确path/SHA的public来源后继保留共享读锁/长度/祖先reparse拒绝验证，不重跑SQL或改实际plan。旧失败原件保留。
+- 正式player schema资产证明夹具候选744E0B…已核源后应用，仅prepareWithPlayerSchema与INSERT两必填列；全部业务断言不变。新真库定向尚未运行，155/106尚未运行；旧Guild48PASS仅保留历史，不冒充本轮整428全通过。应用36未启动，三迁移/26登记/双区业务及故障仍待实际验收。
+- 并行源准备曾在Root调用后覆盖Fresh helper原路径；已由作者实际3hunk diff精确逆构另文件保全6A590…并核同，实际017E未改/未重跑。新C53仅未运行候选，不能混记来源。
+
+- 接续实证：新Reader r3只增加I3真实plan额外10365公共源的精确path/SHA例外，保留同句柄共享读锁、长度和祖先reparse拒绝；原拒绝重现、正例、错SHA、private路径4例及原17例全部通过，outer0844309e。随后I3原件/两个原语/自有SQL清理CF3投影a11fdfe8完整通过，公开B9D2DD36…、当前SELECT_ONLY9C26CB59…，并未重跑I3。
+- 新epoch AssetProof原案例实际1PASS/0FAIL/ERROR/SKIP、2803输入首尾稳定，outer acf9d1d2完整通过，11reactor clean test成功。当前原155（Player145+pbmysql10）已在新首方仓/新CF3夹具和原72D单槽真实运行，pbmysql10已出10PASS，整批尚未结束；原106未运行。原Guild48PASS保留历史，仍待119精确集合后继（含本次已定向通过1项）完整复验，不声明新epoch整428通过。
+
+- 155批继续：pbmysql10、PersistedAssetLedgerReader8、PlayerRouteAuthority7、PlayerStoreSql104已真实PASS且各0F/E/S；整批仍在后续PlayerTradeDrain，尚无终局。单槽期间其余工作仅公开源码准备，未并发SQL。
+- 新当前Context r12由原r10仅三公开ref块续接，保留最新Go28 B7EC与运行产物/Core7A/两索引事实，SHA01FA86D7…；r11只作Java fixture接线。当前35个public sourcePins重新核定0漂移，未给r12启动资格。
+- 静态完整参数计划新CFD7B6B7…仅给Cpp4各自加GATE_RUN_MODE=dev/SCENE_RUN_MODE=dev，四env块严格逆构回B967，其余端口/参数/36进程68监听不变、启动0。正式robot调用GmAddCurrency，原清空环境后默认prod会被正式gate/scene双闸拒绝；本修正复用既有本地dev语义，不改业务断言/生产闸。
+- 持续控制源码发现D盘祖先实际有非可信Modify，不能原地改ACL凑过。Root仅读公共目录权限：C受控Q至用户链均无非可信写；C卷根唯一CreateDirectories，与替换既有Users入口权限分开。控制目录转Q新父根，固定C卷根单一CreateDirectories位的收窄后继仍在审，其他全mask/reparse/已有ACL保持，未编译或运行控制Host。
+
+- 2026-11-03 03:50 UTC，剩余新1/新2接续：原155精确身份全部PASS，另当前源码额外2例为1PASS/1ERROR，整批exit1保留（outer e8108234）。错误发生在新增跨zone排空案例建表前，role-pending-fence-fixture第11句经旧SchemaBuilder裸5秒连接在5009ms读超时，尚未进入业务断言。已最小修PlayerTradeStoreTest真库分支复用既有beginUnpublished/withSchema/publish，H2/业务5秒/断言不变；新CD54E1A9…，2803输入E8643EF0…仅Asset744E和该夹具两项delta。待49影响集及119/106真库验证，不把未重跑104冒作修改后新证据。
+- 新epoch当前结构四query真实通过：C7C80CDA…/outer a245b31d，14库199表，本轮28普通主体均不存在；仅match36/trade16/player_inbox13表缺失，未发迁移或启动资格。TiDB诊断开关按原门禁false→true单键实际恢复并SQL回读，28DDC2B2…/outer abab0340，其它配置内存相等、无业务写、未重启。
+- Owner入口原9694在公共函数导入失败，最小公开fixture实际重现外置参数ScriptBlock会合成param，而AST Body不含外置参数；red38d9a8f0与完整声明/参数名/type修正green098bf365均有原72D证据，原件未覆盖。新AF4F随后到CF3目录校验拒绝（0cc358bc），未读Owner正文。
+- 用户本聊天明确批准仅本轮publication-fences目录及main36-owner.public.json两对象既有ACL例外。Root原72D先以新受控probe真实验证C#、MAXIMUM_ALLOWED DACL写与既有child不传播（01ccaf3f），再仅对两对象DACL修正（2b9be235）：原ACL先CF3新私密备份并回读；持全部祖先/目标noShareDelete/nonReparse句柄，DACL-only 0x80000004且保Owner身份，不修改父级或其它child。DC15836E…确认CF3目录与原73ED Owner字节不变，未普通读/哈希Owner。
+- 同存储Owner续接新实际94DF97F6…与outer c008a9fa完整PASS；新Owner函数源24D2A806…、实际函数body627689F9…，仍保留原73ED/4974，不重发Owner、不改旧密钥、不SQL，runtimeReady=false。下一接真实match三权限观察、Catalog仅剩三迁移/26登记、36应用及双区SQL故障恢复；完成前不宣称服务器已健康运行。
+- 2026-11-03 05:10 UTC，剩余两项续做：Owner-CF3分派59边界实际全PASS（9446818a，58F1332F…），新结构/negative投影与startup源实际物化通过；无业务通过声明。Java新49影响集在首类被原起始采样间隔>=2秒门禁中断（7aae03ac），未取得可计入结果；保存90样本最大间隔1308.7828ms/commit最低24.793GiB，13家族全退出，失败与UNKNOWN保留。原72D独立idle120基线bffbe553完整PASS，不证明49原因已修，原CPU2/12-8GiB/1秒目标/2秒拒绝及IO门禁不变。
+- Catalog AD13已完成公开/CF3旧b511与49fa及retained检查，原04F6因字符串导入丢PSScriptRoot停于首BeforeProducer前；真实file-provenance回归14f6b717证明ParseFile/Body/SetItem保来源与原body43905F，Host相同既有路径无需重造。最小file-backed C1BB后继b81d3da6仍在首BeforeProducer前被内层断言拒绝，0剩余迁移/0登记/0应用；safe诊断不回显私密原异常。纯nested-scope回归eecf86af全过，进一步原第37–70行AfterImports真实只读隔离bcda7710完整PASS，尚未确定后续断言码，不盲重跑或降低时效。
+- 首次独立Guild119分组已由Root原72D单槽启动，采用E8643完整2803冻结与两夹具修正、全新CF3 root；最多新增原身份118（其中Asset1此前已过），106与49仍待完成。Main36其余工作source-only并行；正式故障控制器唯一SM私密配置读已改为authoritysql.ReadPrivateControlFile(path,1<<20)，SHA7C96A0B2…，保其它公开phase读/业务断言/预算，尚待受影响检查。
+- 2026-11-03 05:21 UTC：Guild119独立分组outer70e4f4d1在489份采样后被原during IO含inflight队列>8项或32768B门禁中断，未出整批result；27family均真实exit FILETIME齐且alive=false。13例已落XML为11P/2FAIL，两个FAIL皆解散RPC应0却回1003；底层1146未作为runtime证据读取。源码链显示两手动装配夹具缺活动进度表，而解散hook必查；按既有GuildMysqlFixture注册方式仅两处同registry在initializeFresh前register(ActivityProgressRow)。原件全保，Root核2803无漂移后应用AC9317/252D，新完整冻结0922EE06…为4delta/2799不变，尚未新测试，4例影响回归待跑。
+- Main36只读r2诊断82593853自身catch对null MyCommand取Name失败，保原件；r3仅该空值检查修正后f0e13cec外层完整闭合，actual明确红：BeforeAfterNormalInstanceFilesHook/pre-reviewed-current-complete-instance-text。真实正文4C6D与批准吻合，AST.Parentless导致fallback额外加两LF，全文26FF不符4AA。已确定最小修复接缝，尚待真实green；没有因此修改正文校验、运行SQL或给RuntimeReady。
+- 2026-11-03 05:39 UTC，双区路径继续：新4B7EC仅修Parentless getter两LF，b99a3bc6实际全部3hook绿（正文4C6D/完整4AA门禁保留）；60C2 Catalog c652b009已越过原失败，仍在首BeforeProducer之前由Bootstrap197完整MergedPlan拒绝。明确Normal C84:249仍绑定launcher-runtime，而正式B7EC全部28配置在launcher-runtime-current-prometheus-r2；保持目录围栏，准备Normal/manifest/Bootstrap公开后继，不改冻结原件、不跳校验、不SQL。当前应用仍0、剩三迁移/26登记仍0。
+- Control5032实际C#编译7项通过（d16c3218第一command），实际getter SHA2405ADF0…与既有口径相同；该outer后续Pure在25项后CONTROL_REQUEST_INVALID退出，整体非PASS。typed fake新8B Pure73cd1a9c仅前2项out ABI通过后在请求形状前置阶段拒绝，尚未确定原因，不先改控制器生产source，不执行Worker或Host。
+- 公会4例首回归e0291695在Redis DB10非空门禁拒绝，未Maven/CF3/SQL，6family全退出。旧119的13条case元数据已在新clean前只读保存9C6F7E0D…（不含原XML/system-out/Env）；因原outer被IO门禁中断，不计作合格428通过证据。没有清旧DB10或UNKNOWN。
+- 为4例回归另建独立新Redis：已有同一2c2d image、不pull，固定Main36 runId仍01d9656d…，新fixture java-disband4-0922-r1，127.0.0.1:36479/CPU2/256MiB/readonly+tmpfs；先公开intent再create/start精确新CID dd905ea…，白名单inspect/归属/资源/PING/DB10初始0全部实际通过，原72D6b5bcef7完整PASS，A1544042…/outer5461C771…。未读Config.Env/旧keys，未删旧记录/实例/卷，未执行SQL或业务应用。
+- 2026-11-03 05:55 UTC：两夹具4例在独立Redis36479+当前0922完整2803输入下实际4PASS/0FAIL/ERROR/SKIP、额外0、输入首尾稳定，原72D544a894c完整PASS（A6AA02D3…），result734B8224…；原两个解散信封1003失败均消除，生产/业务断言/预算未改。按原428身份并集累计208通过、220待验（本轮106+另公会114），另49影响回归与原集合重叠，不能简单相加。原失败/UNKNOWN不清理。
+- 完整MergedPlan原红/新绿在两个独立pwsh实际通过，原72D474e8383完整PASS：旧根精确拒绝首mail/line24（40907C52…），新056 Normal让原正式28Go+4Java合并校验完整返回（F5A217BC…），配置未复制/改写、Running未改、SQL/CF3/应用均0。对应新3CF manifest/C1B Bootstrap/1497 Carrier及C121/B61模板候选已独审，后续需新鲜match/infra/1497 guard，不沿过期05:26观察。
+- QPC8纯源码与合成数值槽回归已实际7eb8a90a完整PASS：三函数与接入全文逆构、原1999/2000ms边界、8槽覆盖、首错不变、重复拒绝/成功无trace均通过，最宽数值trace2773B；明确source_only_synthetic，不签发原72D替代资格、不算业务通过。instrumented runner未执行。
+- Root现以原72D唯一槽首次运行完整106当前0922后继，四个完整组精确身份与选择器沿原锚、无QPC注入；源与旧Redis归属门禁保持，本106不触发只适用公会的DB10零检查。客户端继续暂停，未提交/推送。
+- 2026-11-03 06:34 UTC：106终局cd6dfd21为97原身份PASS/0FAIL/ERROR/SKIP、Data9未运行，唯一Maven失败为game-data/PlayerRedisKeys引用已删除BattleSettlementEvent；2803首尾稳定，679采样、IO EOF/worker exit0/pending0、43family全部真实退出、cleanup/output/evidence均0。原97部分身份结果保留，整106不宣称PASS。当前原428累计305身份已有PASS证据、123待（公会114+Data9），49影响回归另有重叠，不能直接相加。
+- Data只读工具最小修复E8BF已应用：删消失import，旧结算Redis键不猜新proto、不恢复旧wrapper，仅沿既有UTF-8/base64保原bytes并标明退休/非资产权威；proto/generated/pom未改。新完整2803冻结2D118043…，5delta/2798不变。默认J32模块仍含scene/battle另外3处旧契约引用，未编译修复，不借本Data回归冒称全32模块绿。当前Data正规r4固定已核N入口正在运行原整类30（原9+新增21分别核账）；早期准备稿误把authority N改描述路径/随机引用已废弃，未执行或创建，最终恢复2d774原N，不重生身份。
+- 启动控制器PS键集合单元素被if管道解包导致Latest Count异常：98D仅给keys外包数组，50b6a49d真实10项红绿（旧PropertyNotFoundStrict、新同输入通过、负例不放宽）；完整Pure42项4e878305全过。父目录c3997a5c原子新建仅Q/runtime-control、祖先句柄与原ACL判定全过，旧ACL写0；actual6886795C…/outer6F531696…。真实有限Worker f848ca72共16项全PASS，含当前原Process/birth、Ready、单请求ACK/不重放、Cancel/锁释放、同leaf拒复用；无Host/应用启动，C#2405不变、runtimeReady=false。
+- Catalog1497 b27aaa06已越过完整Merged，真实到BeforeProducer后BAF348因fixed-producer-control-flow名称门禁拒绝；public phaseIntent/HOLD现已存在，保留不覆盖。独核348先于fresh/infra/owner/结构/计数stage查询，只有公开pins/可能Owner CF3复读及内存journal装配，零stage SQL/迁移/REGISTER。准备bare/scoped GetPSCallStack最小synthetic定位，不跳控制流门禁；下一Root已批准仅新公开attempt2三个basename，同runId/boot/privateRoot不变，需实际pure信号后再修复执行。
+- 2026-11-03 06:45 UTC：Data全类选择器实际Maven exit0、2803源首尾稳定，原Data9全部PASS、新增仅3PASS/18missing；整组结果passed=false且原72D2d24401a如实exit1，627采样/IO EOF/worker0/pending0、cleanup/output/evidence均0。未把缺失18当SKIP或PASS；保存原件，source-only诊断当前类成员锚与实际Maven执行范围，不盲重试。
+- Scope synthetic真实72bd25ec完整PASS，四case证明带script:作用域的FunctionName无法匹配裸名，但InvocationInfo.MyCommand仍真实FunctionInfo、Name无scope且ScriptBlock精确对应原producer正文；captured adapter帧为ScriptInfo不得纳入。只导出公开类型/名称/摘要，零真实SUT/CF3/SQL/应用，不签资格。协调source-only准备BAF与DA04同步窄修及新attempt2三个公开basename，旧b27意图/HOLD全留。
+
+- 2026-11-03 06:49 UTC，更正Data验收清单：源文件19–179为ZoneMergeSqlAuthorityTiDbTest，仅12个@Test；182–320另有MaintenancePublicationContractTest的18个@Test。错误current30按整文件抽取并冠错类，Maven实际第一类12PASS与正式selector一致（原9+extra3）；不是业务遗漏18。本轮准备元数据/独审失误已确认，J/源2803/原selector不改，旧FAIL原件保留，准备纯纠正核账不重跑Maven。Data原9均有真实PASS且24family全部exit/FILETIME齐、资源IO闭合，原428运行证据并集为314PASS/114待验；另49重叠回归仍待。
+- Secrets旧envelope兼容源纯物化916c6646原72D完整PASS（outer0CF95F8D…）：FF5/3D1/7E21精确公开源只两literal变更、全text逆构通过，新Q公开源7983C549…/summary落盘。没有读取或重生b511/49fa，不import旧7E21、无CF3/SQL/应用、runtimeReady=false；后续Host可用实际sourceRef，不提前填运行资格。
+
+- 2026-11-03 06:59 UTC，Data12公开证据纠正核账95f735a6原72D完整PASS（outer31FF61E7…/actual87EE3A46…）：明确两顶层类边界，保存XML第一类12身份各一次PASS=原9+extra3；15source前后/24family终局/627IO闭包全核，旧18假缺失由冠错类逐项解释。没有重跑Maven/新增测试/CF3/SQL/私密IO，旧2d24401a outer/resultFAIL保留。原428身份并集正式核为314PASS/114待验，另49影响回归未完。
+- 原114余组精确身份切为9组16/12/10/13/13/12/12/12/14，8个真实类，严格逐方法selector，尚未执行。新独立36579 Redis归属原runId/专用java-guild114-2d118-r1、同image/CPU2/256MiB/readonly/tmpfs/PING/DB10初始0在63ba0220实际全过（FF80E01E…/outerB8B49167…），不读改旧keys、不pull/flush。每后组仍须实时初始0，不能把新容器资格当业务PASS。
+- Host安全公开输入纯物化13e23170完整PASS（outer4221CF8F…/summaryA422F391…），新I3 refs-only7A0F55FD…与Owner refs-only5E1ADFDB…白名单只含refs/bodySHA/原只读审批，Host以后再内存重建，未序列化原Binding/Context/Owner/Profile/PSI/journal，未读9C26/73ED正文，CF3/SQL/应用0。同轮match三权限r6实际D20877EB…/outer15E0157E…及infra r9实际862BB846…/outerB1F5D500…均已06:52–53真实刷新；900秒内后续消费仍须重新判有效，不预填续期。
+
+- 2026-11-03 07:19 UTC，公会114首精确16在8635de6c实际全部PASS，Maven0/2803稳定，另多一项JdbcGuildAssetStoreMysqlTest#捐献被拒或中止退次数也PASS，extra0验收门禁如实使entry/outer FAIL；原件保留不重跑。559IO/EOF/worker0/pending0、24family全部exit且FILETIME齐，cleanup/output/evidence均0。原428通过身份并集330/待验98，额外项不加算；正在只读核selector传输/报表多1来源，后8组暂不执行。
+- Main36 frame gate首实际80656ba5是16/20，四红均为负例fixture前提（捕获块不一定ScriptInfo；global重绑会改变观察到的活动FunctionInfo），不能归生产gate失败或松门禁。r2只修真实捕获执行marker/精确body+无producer FunctionInfo、Guard局部alias-shadow双前提，CCA1/1D5摘录不变。5383c9ac原72D实际20/20全PASS（outerFCC9CD1E…/actual18B888DD…）；明确global替换保原frame场景未覆盖，无真实producer/CF3/SQL/资格。
+- Adapter公开源码三pin后继在0eec0fb3原72D完整PASS，Q新source35367170…、新StartupSources summary E7179D9C…实际落盘，materializer78FE0EF2…，旧7836/ABEA仅ancestry。全text逆构/9函数AST/bodymap实际核过，不执行目标函数/CF3/SQL，runtimeReady=false。attempt2四源72A/0BC5/445/4DD6保持三新basename，同runId/boot/privateRoot，旧b27 intent/HOLD全保；Root orc/wrapper继续承接，旧06:52–53观察过期，后续须真实刷新不重贴时间。
+
+- 2026-11-03 07:39–08:07 UTC，Main36正式attempt2 da3de21b在FormalProducer失败，131IO/EOF/worker0/pending0及39family终局闭合，非资源失败；三迁移PE均真实出生（match/trade/player_inbox），public family无exitCode，primary stdout/stderr记录均空SHA；AFB仅内存journal，原具体错误/返回码今次不可恢复，不伪造成功receipt。新4query只读4f730a2a完整PASS（actualCBA23EE6…/outer939842E0…）：14库base tables199→254；match/trade结构齐，inbox只schema_migrations+stream+item，余audit+8Catalog+role_fence共10缺；28精确normal主体全部0，REGISTER/应用0。只结构观察不冒迁移成功，已保全部partial/intent/HOLD，未清dirty或重放。
+- 首16纯纠正07e473e3实际PASS（outer60A4EA56…/actualBB9EC937…），源26/家族24/559IO闭包齐，17PASS=原16+BF/r7历史PASS1。三XML白名单test属性直接证实Windows CP1252把汉字argv退化问号，恰10字方法碰撞多选；旧extra0拒绝/overallFAIL保留、不重跑、不加额外credit。余组改UTF8无BOMincludesFile、ASCII路径、Maven父VM明确UTF8，原身份/2D118/堆CPU/预算/extra0均不变。首12在51b6aa97原72D完整PASS（result3C685ED1…/outer1537735F…），12P0F/E/S/extra0/2803stable/233IO；原428累计342PASS/86待，另49重叠回归未完成。group3精确10继续单槽执行。
+- inbox最小根因候选已由真实回归确定：现行proto Audit Nonclustered=true/Shard4/PreSplit0，生成单独T! SHARD_ROW_ID_BITS=4，而authoritysql此前仅收带PRE_SPLIT组合。新增statement_inbox_audit_test.go（5847116D…）实际目标red d5c19ef9/C731F613…只有合法Schema表达被拒，3非Schema及9未知注释负例PASS。statement.go仅新增一个精确单Shard4白名单（4D1CCABB…），原Schema/CREATE-ALTER/封闭注释/单语句限制及非Schema权限不动，proto/generated/mod未改。00815fee原72D目标green+authoritysql全包2/2通过（outer8F906C0D…）；不能冒真实TiDB迁移成功或旧Go16PE/D43更新，19Go/dbmove/16PE后继验证与来源接线仍待。
+- InfoSkip纯synthetic6b19ecba完整PASS（actualDA23D865…/outer103C0E6B…），6模式观测中Code0的skipped均0、optional fail均1个真实string，Information/Warning未进入skipped；仅关闭此布局synthetic疑点，不恢复三PE返回码或假定迁移成功。三库台账只读observer09763AE4…/Root审批DD1E…/接线67DE…已准备，需新purpose/sealed120后实际观察dirty/version1/checksum；schemamigrate无现成Resume/Force/Repair接口，不调用Plan绕过dirty，不手工清台账。
+
+- 2026-11-03 08:17–08:24 UTC，Java includesFile第三组精确10在f5b72d50完整PASS（result2F828A94…/outerD06D30C0…），10P0F/E/S/extra0/2803stable/175IO，原428并集352PASS/76待验；49及extra1另待。Go19/dbmove/16PE新source计划r3已准备，原多包build ./...范围保留，未来actual空，尚未执行或覆盖安装；固定CF3A/R14资格不因此替换。
+- Ledger097/r3观察0f99e7e5在PublicInputs失败（outer7184AA2E…），原guard64507e76已通过，actual只有1sample且4family全终局、CF3/R14出生均0，未读private/发SQL。已纯公开同runtime精确重现：UTC Z审批CD388经未指定DateKind的ConvertFrom-Json变System.DateTime，[string]变11/03/2026 08:20:05失offset，再DateTimeOffset.Parse按本地-05解释为13:20Z未来。错误在新观察器legacy JSON日期读取；不修改真实时间/放宽900、不复用旧sealed或覆盖失败原件。正在只加DateKind String及对应新source/审批/purpose/output后继，先短纯日期回归再正式3query。当前dirty仍未知，未清台账/补DDL/重放成功前缀。
+
+### 2026-11-03 08:35 UTC：Java 原集365/428，Main36只读台账确认收件箱部分基线
+
+- Java 原428新增group4的13例实PASS（4511E370，外层ab9b93b8/7139BCD6，完整源码2803稳定、失败/错误/跳过/多跑均0），累计365PASS、63待；group5续跑。另49影响回归与1个追加回归未完成。
+- Ledger observer公开JSON读取仅补DateKind String，9项公开日期回归实PASS（9be2124e/85E1C923，SQL/CF3/R14均0）；新r2原72D只读三库聚合实PASS（eee782ba/2219B1A0，结果AA7E375A），SQL写0、DDL0、登记0、应用0。
+- match/trade均唯一v1基线clean且finished；player_inbox唯一v1基线dirty=1且未完成，checksum F4BC24FA。此checksum仅表名集合，不能证明已建表的列/索引/选项完整。已知结构仍为ledger+stream+item，缺audit及后续闸门/role_fence，不盲重放、不手工清dirty、不反签原三次未知退出码。恢复方案需同连接迁移锁、原台账身份、完整前缀结构、仅补audit、强后验、精确CAS且RowsAffected=1；当前仍未执行恢复。
+- Go19/dbmove改后r3源码独审通过，3359/1833/1845输入当前精确一致；尚未运行。16PE原角色/flags/预算均保持，正在补一次性输出claim后才执行。旧D43产物不能称为本次权限修复后的产物。
+### 2026-11-03 08:50 UTC：只读检索边界记录
+
+- Java依赖子审一次rg把`--`置于`-g`前，排除参数被当路径，检索扩大到明确的公开目录`build/verification/r-java-normal-fixture-entry-prep-20261102-r1`。可见输出包含公开dispatch/result/plan/fresh-guard/source-manifest，未见私密正文或secret；输出截断，不能声称完整返回清单或完全没有扫描原始日志。未检索固定私密N根，未作Native/SQL/CF3或数据写动作。
+- 已停止该广搜及子审依赖检索，后续只定点读取明确公开源；不再搜索或读取raw来证明无IO。不能把此次检索说成完整的“无raw扫描”证据。已有正式执行证据仍分别按其外层回执与边界核验，不用本检索作资格证明。
+### 2026-11-03 09:01 UTC：修复后Go普通验证、16PE构建及备份安装实际通过
+
+- Go19 r3 原72D `6c0c7f75` 实PASS（CFA601A7），19模块build/vet/test命令均成功；9412项PASS、727项条件SKIP单列，不称所有条件测试均执行；3359输入首尾不变，result64E8301D。额外dbmove r3 `64126e97` 实PASS（65B69952），167PASS/5条件SKIP，1845输入稳定，resultB72B45AB。
+- Go16原72D `f44e6754` 实PASS（204C5CB3），16命令/32native记录全闭合、1833正式Go源稳定；新增单次CreateNew claim前检，16新PE均核MZ及SHA。本轮manifest F96ABBB6；原909A安装器在`3790f3dc`原72D下先完整备份旧bin再逐项复制/回读16/16实PASS（C1BD93AD，install A8F8B6DE），未启动应用或执行SQL。
+- 新应用产物计划 `Main36.current-application-artifacts.after-SingleShard4.ROOT.READY.public.json`（391352AC）仅14个常驻Go PE，另2工具仍在16份安装manifest；Cpp2/Java4沿原refs，runtimeApproved=false。R自有Java网关/商城闭包与独立J仓PlayerRedisKeys E8BF无依赖关系；旧306公有源中305生产项当前相同，唯一R测试源E64已有定向Maven exit0/22项PASS元数据，不冒称旧完整306当前package全同。
+- Java原428累计378PASS、50待（groups6..9），另49影响+1回归待；group6当前唯一槽运行。Main36仍正常主体0/应用0，inbox基线dirty1；恢复首套r4独审发现释放未知仍成功、ledger完整结构未核、包络上限及纯前检顺序等阻塞，旧候选保HOLD，正新后继+回归，尚未恢复写/补audit/CAS或登记。
+
+- 2026-11-03 09:01 UTC 更正上条措辞：305指306清单中除E64测试源外的其余公有输入总数，不能称305个生产文件；结论是其余输入均同、生产源码/POM/proto闭包未变。

@@ -201,7 +201,8 @@ var schemaSplitStatement = regexp.MustCompile("(?i)^SPLIT\\s+TABLE\\s+`[a-z0-9_]
 func schemaTiDBAnnotation(body string) bool {
 	normalized := strings.Join(strings.Fields(strings.ToUpper(body)), " ")
 	switch normalized {
-	case "T![CLUSTERED_INDEX] CLUSTERED", "T![CLUSTERED_INDEX] NONCLUSTERED", "T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4":
+	case "T![CLUSTERED_INDEX] CLUSTERED", "T![CLUSTERED_INDEX] NONCLUSTERED",
+		"T! SHARD_ROW_ID_BITS=4", "T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4":
 		return true
 	default:
 		return false

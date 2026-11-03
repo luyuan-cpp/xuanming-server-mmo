@@ -381,6 +381,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [placement-reverify-checklist-20261012.md](handoff/placement-reverify-checklist-20261012.md) — 玩家存储落点:当前 HEAD 复验清单(交 Codex)
 - [guild-economy-recovery-exits-handoff-20261023.md](handoff/guild-economy-recovery-exits-handoff-20261023.md) — 交接：帮会捐献 / 兑换恢复记录的两个出口（离帮后照原字节重发、超窗确认作废）与第 3 道查重失败按故障回——两版服务端待 Codex 验证，客户端规格与参考补丁交 Codex（2026-10-23）
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单:对代码逐条核实,列出已补、未做(按影响排序)、待确认和已作废的项。
+- [remaining-two-handoff-20261102-r1.md](handoff/remaining-two-handoff-20261102-r1.md) — 新窗口接续：新1 Java验收、新2双区联验与启动；WSL容量恢复实际、新物理/I3待重核、客户端暂停。
 - [player-inbox-handoff-20261015.md](handoff/player-inbox-handoff-20261015.md) — 玩家持久收件箱：实现交接（2026-10-15）
 - [redis-ha-deploy-path-handoff-20261019.md](handoff/redis-ha-deploy-path-handoff-20261019.md) — 交接：共享 Redis 高可用形态接进部署路径（2026-10-19）
 - [redis-horizontal-scaling-requirements-20261022.md](handoff/redis-horizontal-scaling-requirements-20261022.md) — 交接：Redis 物理水平扩展需求与当前存盘链问题（2026-10-22）

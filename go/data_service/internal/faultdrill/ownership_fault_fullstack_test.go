@@ -360,7 +360,7 @@ func ownershipFaultLoadManagerConfig(t *testing.T) ownershipFaultManagerConfig {
 	if !filepath.IsAbs(path) {
 		t.Fatal("OWNERSHIP_FAULT_SM_CONFIG must be the absolute path of this run's scene_manager config")
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := authoritysql.ReadPrivateControlFile(path, 1<<20)
 	if err != nil {
 		t.Fatalf("scene_manager config unreadable: %v", err)
 	}
