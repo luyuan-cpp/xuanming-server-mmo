@@ -19845,3 +19845,36 @@ Java 版(AGENTS §12):对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。
 - Java原428累计378PASS、50待（groups6..9），另49影响+1回归待；group6当前唯一槽运行。Main36仍正常主体0/应用0，inbox基线dirty1；恢复首套r4独审发现释放未知仍成功、ledger完整结构未核、包络上限及纯前检顺序等阻塞，旧候选保HOLD，正新后继+回归，尚未恢复写/补audit/CAS或登记。
 
 - 2026-11-03 09:01 UTC 更正上条措辞：305指306清单中除E64测试源外的其余公有输入总数，不能称305个生产文件；结论是其余输入均同、生产源码/POM/proto闭包未变。
+
+### 2026-11-03 10:04 UTC：原集402/428，恢复工具及真实只读前像核验通过
+
+- 原集group6新增12实际PASS（E8020A17/59b07dd3外层20AA97CB）；group7原Maven0/12PASS但8376外层native_exit属性汇总失败，保原FAIL。限定公有纠正r2独立核165采样stored链、27源、2CPU原句柄1316次、12family终止、IO EOF/退出0/零pending及原严格2秒/12与8GiB/8项32768B，7b34ca45原72D实际PASS（287D6646；纠正9F1D2AE3），不重跑Maven、不伪定原返回类型，不造缺失的leaf CPU证据。累计402/428，26待。
+- group8初始化CF3 helper的ProcessBuilder.start出现Windows error5，12方法未执行，保0633外层FAIL及4C9EE9B0结果。源码/路径/SHA/防替换已过，公有family证明同Java父早先两个CF3A子进程均终止；失败未到CREATE USER。窄时间窗CodeIntegrity/AppLocker/Defender/Application仅元数据查询无匹配事件，当前固定helper SHA不变、当前用户ACL允许执行；不能据此归因或断言失败时无拒绝。不改J/ACL/安全设置，不重跑。
+- group9真实14PASS/Maven0（1C9CAC26），但af2dd251外层duringIO最后采样2秒收尾失败（206179E0），14不计验收，保HOLD；待验26的四小批6/6/7/7候选在准备，等待失败后决策，不声称采样或error5已修复。额外extra1 UTF8 includesFile 0040094c完整实际PASS（97308E38；C9272D96；2803稳定），影响49仍待。
+- 固定事故工具r8/cmdr4首次c753四命令前三通过、第四vet因virtual package真实目录缺失而未运行测试，原FAIL保留。只创建精确空目录go/player_inbox/cmd/main36_inbox_recovery_20261103、输出改全新artifacts-directoryfix-r1，不关vet不改正式1833文件；b16dec44四命令完整实PASS（266E0487，1854源首尾同），实际PE A0F790E4。
+- 5527567B私密内存caller与1B8631D5仅Observe承载经Root/协调独审及Parser0，固定N/原CF3A/R14/I3/Owner不变。实际85928793只读Observe通过（9D9759DE，公有actual1CB41EF4）：两张proto表+ledger完整结构、唯一dirty v1、同conn双读稳定、I3Owner、normal28=0/app0、源前后均真；stdout/前像已仅通过CF3 CreateNew并精确回读，私密原件不普通读/hash或公开正文。completed5A7BB300；尚未Apply、补audit、CAS、正式inbox续迁移、REGISTER或启动。
+- 后续仅一次only-audit+精确CAS的Apply承载正在源准备；必须新Root外审/新Apply purpose及guard、前次CF3前像exact pin，任何UNKNOWN不重试。匹配/交易成功前缀不重跑；旧三PE退出码仍UNKNOWN，不能反签成功。
+
+### 2026-11-03 10:43 UTC：收件箱基线一次恢复成功，Java影响回归暴露夹具发布顺序问题
+
+- 原72D `74a9aefd` 下固定前像的一次Apply实际成功（外层C0F9A473，actual E259EC40，completed CADAF5F6）；独立CF3只读前像复核与新guard先完成。仅补audit，完整三张proto表及ledger强后验通过，精确CAS影响1行，台账clean且finished，同连接释放锁得到确定成功。一次性intent D9D005F0保留，不删除或复用；旧三次迁移PE退出码仍UNKNOWN，不反签。正常主体28个均未创建、应用0、1854源首尾稳定；正式inbox迁移的8张catalog表及role_fence仍待，尚不具备runtime资格。
+- J仓影响49首次完整业务结果为48PASS/1FAIL、ERROR/SKIP/extra均0、2803输入稳定（result6F0B4CEC，外层7817afc1/F6D92F07）；资源、家族、IO及收尾闭合，失败仅业务测试。唯一失败是Eligibility测试在Fixture发布NORMAL权限之后才建guild_player_state与guild_member，导致SELECT权限拒绝；现成Fixture(additionalSchema)接口已可在发布前建表。
+- Root保留原源备份后，仅将Eligibility测试的两条原DDL移入现成发布前回调，断言、生产代码、权限与等待预算不变；文件63309AE1→4A238C19。当前2803输入冻结A1DFDF2E，六项delta、其余2797项相同；仅Eligibility2定点重验尚未执行。最终影响49须按旧结果中非Eligibility的47项实际PASS与新2项实际结果精确核账，旧FAIL不覆盖，不重复计算旧Eligibility PASS。
+- 原428仍402PASS/26待，四小批各一次的用户决策尚未回复，不能把旧ACL两对象例外当作测试重验批准。旧五delta执行包因新增测试源delta已失效，正在准备A1后继；其他已授权双区与Eligibility修正验证继续。客户端仍暂停，不提交、不推送。
+
+- 2026-11-03 10:49 UTC，A1六delta下Eligibility2定点重验已在原72D `0e6a6a72` 完整实PASS（outer7A8E0F9B，result1ADDC42F，completed68754A60）：两例各一次PASS，F/E/S/extra均0，2803源稳定，两native退出0，资源及IO闭合。仅此两独立影响身份，不给原428增加credit；旧49剔除两Eligibility后的47项与新2项精确核账待。
+- 本次执行后协调源审指出历史CEE一次性runner的公开JSON读取存在先hash后读、三个身份值未先判string的控制缺口。原件及claim保留，不复用、不重跑Maven；Root另以同批bytes核本次实际RootDecision C97114B9，schema/N/scope确为string、四批准确为typed true，guard与business源首尾均唯一绑定同SHA，未观察到实际输入违规或篡改。后续新核账/执行承载必须同批bytes核SHA后严格UTF8/重复键检查并先判身份类型，不能把潜在源码缺口当成已发生的业务失败，也不据此反签旧FAIL。
+
+- 2026-11-03 10:57 UTC，Root独审正式inbox caller 0F62与8477承载（正逆构/Parser0、1919公开源当前一致、21项控制链显式覆盖；模板17叶仅依赖更新），新guard后仅一次执行已安装E425的`player_inbox -f retained -migrate`，原72D `aec4febb` 完整实PASS（outer74028C14，actual442B51F2，completed5111F713）。新调用确有完整退出码0，正常28主体仍零、应用0、源首尾/旧配置与同renderer逐字一致/私密输出CF3封存回读皆真；固定once90DCCB6A保留不复用，不重跑成功迁移。
+- 本次仅证明新inbox正式PE成功；迁移后CurrentStructure与三库clean ledger的新只读后验仍待，不能预填264或runtimeReady。旧da3三PE退出码仍UNKNOWN，不反签、不重放match/trade/CREATE/Prelude。Up逐句60秒，EnsureCatalog/role_fence保正式原语义只受PE300秒；未放宽预算。控制侧旧yaml仅CF3读取和比较，获准Go原生`-f`加载私密配置不在控制侧ordinaryPrivateIO=false声明范围；未创建NORMAL或REGISTER，也未启动36应用。
+
+- 2026-11-03 11:00 UTC，影响49纯公开精确核账在原72D `ef63f404` 实PASS（outer4BFCF1F3，actual E289748D）：旧49中排除旧Eligibility的FAIL/PASS两条后，47项各唯一PASS；新A1下两项Eligibility各唯一PASS，按F1C完整49顺序并集零遗漏、零重复，类别33原集+2旧额外+14独立。旧49整体FAIL保留，不称一次49全绿、不重跑Maven、不加原428credit。核账采用同批bytes SHA/strictUTF8/重复键拒绝及严格字符串身份，并复核真实RootDecision、claim、两stage来源、IO及家族退出；没有私密IO、SQL或CF3动作。Java现剩原428中的26项待用户四小批重验决策。
+
+- 2026-11-03 11:09 UTC，正式inbox迁移后的两轮独立只读后验均原72D实PASS：CurrentStructure `543b3c41`（outerDC808C53，actual64634907，completed09CB46E0）实见14库264表，13有库服务均满足DF8最低结构，3无库服务按原合同schemaReady=false，不冒全16 ready；28精确NORMAL仍零。三台账 `6604a9f5`（outerC35C6A9D，actual541DD3D9，completedAF4CE2CF）各唯一v1基线、dirty0、unfinished0、finished1、无非布尔dirty。两次查询分别4与3，SQL写0、不读业务/权限行、不反签迁移回执；资源/IO闭合，原72D预算保持。
+- 上述结构仍是minimum范围，不声称完整类型/全部索引/seed校验；两历史补索引表的计数连续性不等于完整列属性连续性。CurrentState无重放证据合同及Bootstrap/Carrier/Adapter/RootBinding正文SHA闭包正在源准备，尚未创建/REGISTER正常28账号或启动36应用；旧da3三个迁移退出码仍UNKNOWN。不得重放任何已成功迁移，也不得借新观察伪补旧三success journal。
+
+- 2026-11-03 11:25 UTC，固定5E212故障只读probe仅构建在原72D `531ccd43` 实PASS（outerF1EF9477），R/go1833与已批准正式Go集合零新增/缺失/改SHA，差异两条为公有manifest而非Go变更。新PE8E936BB8经同句柄核MZ、完整SHA及20810752字节；未执行probe、读取私密输入、创建observer身份或签发运行资格。有效构建manifest为r2 E2692BBF；r1 45C28398的sourceProbeSha256误填5字符简称，保留原件后以CreateNew r2改为计划内实际完整64hex，仅纠正元数据、没有重编。正式fullstack仍需36进程及source scene真实回执后由其当次构建controller/robot并跑角色/故障/恢复登录，不用提前PE替代。
+
+- 2026-11-03 11:54 UTC，用户对call_b5daaa6565514d918cd6406995acafdf明确回答「允许四小批各执行一次」，Root保留实际决定与当前A1严格reader后继审批。6/6/7/7依次仅各运行一次，Root逐批核完整闭合后才启动下一批：2c41a730（6P、result9509F268/outer02CF6B8B）、e59bf54b（6P、3CC53495/36C4C3A4）、e3f81983（7P、588D93D9/51B2C42D）、d554a28c（7P、35191696/4026554F）均原72D实际PASS；每批F/E/S/extra为0、2803源稳定、资源与IO闭合。不改ACL、不放宽任何预算/断言，旧G8启动error5/G9监控FAIL原件保留，不将本次成功倒推成原根因已修复。
+- 原BF428全部分批运行已有PASS证据（402+26），最终完整身份并集核账正在纯公开源准备；影响49旧47+新2及extra1亦已实闭合，不称一次Maven全428绿，不把额外项加进原集。Java验证结束后Root Native槽已空。
+- CurrentState仅公开源/摘要首次物化在原72D `62f121d6` 实PASS（outerDCE78934，Startup摘要71BDF25A、Structure摘要7116D16A、实际Q Adapter137E32B6）；目标函数/SQL/CF3/运行资格均未执行或签发。执行前Root外层准备命令曾因catch类型前缺空格在parse阶段停止，任何命令/候选均未执行；诊断修正后才是候选首次真实运行。旧只读900秒资格已过期，接下来的两Phase新桥必须真刷新观察/外部审批/MetadataOnly新摘要，再仅正常账号登记与目录建立，不重放迁移或重发既有身份。
