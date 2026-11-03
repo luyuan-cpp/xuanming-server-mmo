@@ -6,6 +6,8 @@ import com.game.gateway.dto.LoginResponse;
 import com.game.gateway.dto.RefreshTokenRequest;
 import com.game.gateway.dto.RefreshTokenResponse;
 import com.game.gateway.grpc.LoginRpcClient;
+import com.game.gateway.GatewayNodeApplication;
+import com.game.gateway.config.AuthorityDatabaseConfiguration;
 import com.game.table.tip.TipFaults;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
@@ -14,6 +16,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.TestComponent;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigurationExcludeFilter;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.context.TypeExcludeFilter;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -52,10 +64,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * differences. A full-context test catches those, while a {@code WebMvcTest}
  * would silently pick up default Jackson and miss snake_case mismatches.
  */
-@SpringBootTest
+@SpringBootTest(classes = LoginEndpointIntegrationTest.H2HttpApplication.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class LoginEndpointIntegrationTest {
+
+    /**
+     * 只隔离此HTTP契约用例的外部SQL适配。控制器、服务、Jackson、仓库与事务仍真实装配，
+     * 使用原test profile的H2；NORMAL围栏由其真实SQL合同另验，生产配置不加测试旁路。
+     * 排除原Main以免其ComponentScan再次导入AuthorityDatabaseConfiguration。
+     */
+    @Configuration(proxyBeanMethods = false)
+    @TestComponent
+    @EnableAutoConfiguration
+    @EnableScheduling
+    @EntityScan("com.game.gateway.entity")
+    @EnableJpaRepositories("com.game.gateway.repository")
+    @ComponentScan(basePackages = "com.game.gateway", excludeFilters = {
+            @ComponentScan.Filter(type = FilterType.CUSTOM, classes = TypeExcludeFilter.class),
+            @ComponentScan.Filter(type = FilterType.CUSTOM, classes = AutoConfigurationExcludeFilter.class),
+            @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
+                    classes = {AuthorityDatabaseConfiguration.class, GatewayNodeApplication.class})
+    })
+    static class H2HttpApplication { }
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;

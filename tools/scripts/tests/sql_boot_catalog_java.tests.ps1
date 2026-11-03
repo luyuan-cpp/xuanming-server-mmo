@@ -104,6 +104,117 @@ try {
         $go[1].Port = 55010
         Assert-Match (Get-JavaBootFailure { Assert-LocalSqlBootMergedPlan -RepoRoot $f.root -Instances ($go + $rows) -BootId 'abcdef12' }) '同zone的本轮合并实例计划' '不绕过自定义offset'
     }
+    Test-Case '真库provider的所有私密引用限定在当前新owner内' {
+        $root=Join-Path $fixtureRoot 'java-fixture-0123456789abcdef0123456789abcdef'
+        $settings=[pscustomobject]@{FixtureRoot=$root}
+        Assert-Equal ([IO.Path]::GetFullPath((Join-Path $root 'boot/input/request.json'))) (Assert-LocalJavaFixturePath $settings (Join-Path $root 'boot/input/request.json')) '只允许本例路径'
+        foreach ($path in @($root,(Join-Path $root '../other/owner.json'),($root+'-other/owner.json'))) {
+            Assert-Match (Get-JavaBootFailure { Assert-LocalJavaFixturePath $settings $path }) '越过本例owner' '根自身、父跳转和同名前缀都拒绝'
+        }
+    }
+    Test-Case 'R14单语句适配保留引号内分号,坏SQL在任何连接前拒绝' {
+        $rows=@(Split-LocalJavaFixtureSql "-- 源注释;`nINSERT INTO t VALUES('a;b'); /* 内注释; */ SELECT ``a;b`` FROM t;")
+        Assert-Equal 2 $rows.Count '两个完整语句'
+        Assert-Match $rows[0] "'a;b'" '字符串分号保留'
+        Assert-Match $rows[1] 'a;b' '标识符分号保留'
+        foreach ($sql in @("SELECT 'unterminated",'SELECT 1; /* unterminated',"DELIMITER //`nSELECT 1;",'/*! SELECT 1 */')) {
+            Assert-True (-not [string]::IsNullOrWhiteSpace((Get-JavaBootFailure { Split-LocalJavaFixtureSql $sql }))) '不支持或未闭合语法拒绝'
+        }
+    }
+    Test-Case '真库fresh账户沿用正式角色renderer,不存在改他人口令的兜底' {
+        $original=${function:ConvertTo-AuthorityRoleSql}
+        try {
+            function ConvertTo-AuthorityRoleSql { param($Plan,$TemplateRoot) return @{operator='-- fixture-operator';runtime='-- fixture-runtime'} }
+            $settings=[pscustomobject]@{RootPrincipal='fixture_schema@%';DirectorySchema='';DirectoryShards=@()}
+            $operators=@{registrar=@{principal='fixture_registrar@%';password='test-only-r'};maintenance=@{principal='fixture_maintenance@%';password='test-only-m'}}
+            $prepared=[pscustomobject]@{Service='mall';Principal='fixture_normal@%';Password='test-only-n';QualificationFile='new-only-i3';Registrations=@([pscustomobject]@{Database='mall_fixture';RequestFile='new-only-request';RequestSha256=('a'*64)})}
+            $arguments=@{Settings=$settings;RepoRoot=$script:JavaRealRepo;Operators=$operators;Prepared=@($prepared);TablesBySchema=@{mall_fixture=@('commerce_schema_version')};Manifest=@{mall=@{Own=@('mall_fixture');Cross=@()}};FreshAccountsOnly=$true}
+            $sql=New-LocalSqlBootAccountSql @arguments
+            Assert-Match $sql "CREATE USER 'fixture_normal'@'%'" '独立NORMAL主体'
+            Assert-NotMatch $sql 'IF NOT EXISTS|ALTER USER|IDENTIFIED BY.*root' '不接管已有账号不复用Schema'
+            $sql=New-LocalSqlBootAccountSql @arguments -SkipOperatorCreation
+            Assert-NotMatch $sql "CREATE USER 'fixture_(registrar|maintenance)'" '第二boot共用本owner控制身份,不改其口令'
+            Assert-Match $sql 'fixture-runtime' '权限仍出自同一renderer'
+        } finally { Set-Item -LiteralPath Function:ConvertTo-AuthorityRoleSql -Value $original }
+    }
+    Test-Case 'R14返回必须native和SQL与清理均确定,UNKNOWN不复发' {
+        $saveWrite=${function:Write-LocalJavaFixtureFile}; $saveRead=${function:Read-LocalJavaFixtureJson}; $saveProcess=${function:Invoke-LocalSqlBootProcess}
+        try {
+            function Write-LocalJavaFixtureFile { param($Settings,$Path,$Text) return ('a'*64) }
+            function Read-LocalJavaFixtureJson { param($Settings,$Path) return $script:JavaFixtureSqlResult }
+            function Invoke-LocalSqlBootProcess { param($FilePath,$Arguments,$TimeoutSeconds) $script:JavaFixtureNativeCalls++; $script:JavaFixtureArguments=$Arguments; return @{Code=$script:JavaFixtureNativeCode;Out='';Err=''} }
+            $settings=[pscustomobject]@{FixtureRoot=$fixtureRoot;Clock=[pscustomobject]@{ElapsedMilliseconds=0};SchemaDsnFile='fixture-only-new-dsn';RootPrincipal='fixture_schema@%';SqlFileSurface='fixture-only-qualified-R14'}
+            $script:JavaFixtureSqlResult=@{target_outcome='confirmed';principal='fixture_schema@%';sql_sha256=('a'*64);rows=@(@('1'))}
+            $script:JavaFixtureNativeCode=0; $script:JavaFixtureNativeCalls=0
+            $null=Invoke-LocalJavaFixtureSql $settings 'SELECT 1' 'query'
+            Assert-Equal 1 $script:JavaFixtureNativeCalls '只调用一次'
+            Assert-True ($script:JavaFixtureArguments -ccontains '--dsn-file') '只传新DSN原件引用,不经mysql/docker'
+            Assert-True ($script:JavaFixtureArguments -ccontains '--expected-principal') '本例精确Schema主体'
+            foreach ($bad in @('unknown','not_executed','confirmed-with-cleanup','confirmed-with-native-error')) {
+                $script:JavaFixtureSqlResult.target_outcome=if ($bad.StartsWith('confirmed')) {'confirmed'} else {$bad}
+                $script:JavaFixtureSqlResult.cleanup_errors=if ($bad -ceq 'confirmed-with-cleanup') {@(@{stage='connection_close'})} else {@()}
+                $script:JavaFixtureNativeCode=if ($bad -ceq 'confirmed-with-native-error') {1} else {0}
+                $before=$script:JavaFixtureNativeCalls
+                Assert-Match (Get-JavaBootFailure { Invoke-LocalJavaFixtureSql $settings 'SELECT 1' 'query' }) 'HOLD' '失败保留现场'
+                Assert-Equal ($before+1) $script:JavaFixtureNativeCalls '不能重试同一SQL或换输出重发'
+            }
+        } finally {
+            Set-Item -LiteralPath Function:Write-LocalJavaFixtureFile -Value $saveWrite
+            Set-Item -LiteralPath Function:Read-LocalJavaFixtureJson -Value $saveRead
+            Set-Item -LiteralPath Function:Invoke-LocalSqlBootProcess -Value $saveProcess
+            Remove-Variable -Scope Script -Name JavaFixtureSqlResult,JavaFixtureNativeCode,JavaFixtureNativeCalls,JavaFixtureArguments -ErrorAction SilentlyContinue
+        }
+    }
+    Test-Case 'Schema控制读的强会话证据来自同一条当前读,不接受弱读或快照' {
+        $saveSql=${function:Invoke-LocalJavaFixtureSql}
+        try {
+            function Invoke-LocalJavaFixtureSql { param($Settings,$Sql,$Mode) $script:JavaFixtureCurrentSql=$Sql; return @{rows=$script:JavaFixtureCurrentRows} }
+            $script:JavaFixtureCurrentRows=@(,@('owned-value','TiDB fixture-only version','','0','strict','leader','0'))
+            $result=Invoke-LocalJavaFixtureCurrentRows @{} 'nonce' '`mall_fixture`.`__java_fixture_owner` WHERE id=1' 1
+            Assert-Equal 'owned-value' $result.rows[0][0] '同连接检查成功后才暴露读取值'
+            Assert-Match $script:JavaFixtureCurrentSql 'FOR UPDATE$' '本例元数据采用当前读'
+            foreach ($bad in @(@(2,'historical'),@(3,'-1'),@(4,'weak'),@(5,'follower'),@(6,'1'))) {
+                $row=@('owned-value','TiDB fixture-only version','','0','strict','leader','0'); $row[$bad[0]]=$bad[1]
+                $script:JavaFixtureCurrentRows=@(,$row)
+                Assert-Match (Get-JavaBootFailure { Invoke-LocalJavaFixtureCurrentRows @{} 'nonce' '`mall_fixture`.`__java_fixture_owner` WHERE id=1' 1 }) 'HOLD' '每次实际连接都要强读'
+            }
+        } finally {
+            Set-Item -LiteralPath Function:Invoke-LocalJavaFixtureSql -Value $saveSql
+            Remove-Variable -Scope Script -Name JavaFixtureCurrentSql,JavaFixtureCurrentRows -ErrorAction SilentlyContinue
+        }
+    }
+    Test-Case '普通canonical REGISTER省略maintenanceRunId也合法,不能接纳维护run或外库' {
+        $owner=@{schema='mall_fixture'}; $registered=@{item=@{DeploymentId='fixture-deployment';Principal='fixture_normal@%'}}
+        $request=@{kind='REGISTER';authoritySchema='mall_fixture';protectedSchemas=@('mall_fixture');deploymentId='fixture-deployment';writer=@{sqlPrincipal=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('fixture_normal@%'));registrationDigest=[Convert]::ToBase64String([byte[]]::new(32))}}
+        # 与Go默认protojson一致：没有maintenanceRunId键。StrictMode下也必须正常通过。
+        Assert-LocalJavaFixtureRegistration $owner $registered $request
+        $request.maintenanceRunId=[Convert]::ToBase64String([byte[]]::new(16))
+        Assert-Match (Get-JavaBootFailure { Assert-LocalJavaFixtureRegistration $owner $registered $request }) '不是普通NORMAL' '不把维护run当普通boot'
+        $request.Remove('maintenanceRunId'); $request.protectedSchemas=@('foreign_fixture')
+        Assert-Match (Get-JavaBootFailure { Assert-LocalJavaFixtureRegistration $owner $registered $request }) '不是普通NORMAL' '不跨库'
+    }
+    Test-Case '未确认REGISTER的boot不能RETIRE或DROP,不以cleanup掩盖UNKNOWN' {
+        $saveOwner=${function:Assert-LocalJavaFixtureOwner}; $saveRead=${function:Read-LocalJavaFixtureJson}; $saveIo=${function:Invoke-LocalJavaFixturePrivateIo}; $saveSql=${function:Invoke-LocalJavaFixtureSql}; $saveProcess=${function:Invoke-LocalSqlBootProcess}
+        try {
+            $root=Join-Path $fixtureRoot 'close-unknown'; $null=[IO.Directory]::CreateDirectory((Join-Path $root 'boot-test'))
+            $script:JavaFixtureCleanupSql=0; $script:JavaFixtureCleanupNative=0
+            function Assert-LocalJavaFixtureOwner { param($Settings,$Owner) }
+            function Invoke-LocalJavaFixturePrivateIo { param($Settings,$Command,$Path) return '' }
+            function Read-LocalJavaFixtureJson { param($Settings,$Path) if ($Path.EndsWith('boot.registered.json')) { throw 'fixture UNKNOWN original register' }; return @{nonce='fixture-only'} }
+            function Invoke-LocalJavaFixtureSql { param($Settings,$Sql,$Mode) $script:JavaFixtureCleanupSql++; throw '不能执行SQL' }
+            function Invoke-LocalSqlBootProcess { param($FilePath,$Arguments) $script:JavaFixtureCleanupNative++; throw '不能执行native' }
+            Assert-Match (Get-JavaBootFailure { Close-LocalJavaFixture ([pscustomobject]@{FixtureRoot=$root;Nonce='fixture-only'}) @{} }) 'UNKNOWN' '注册未确定就保留'
+            Assert-Equal 0 $script:JavaFixtureCleanupSql '不能DELETE/DROP'
+            Assert-Equal 0 $script:JavaFixtureCleanupNative '不能发RETIRE补救未知注册'
+        } finally {
+            Set-Item -LiteralPath Function:Assert-LocalJavaFixtureOwner -Value $saveOwner
+            Set-Item -LiteralPath Function:Read-LocalJavaFixtureJson -Value $saveRead
+            Set-Item -LiteralPath Function:Invoke-LocalJavaFixturePrivateIo -Value $saveIo
+            Set-Item -LiteralPath Function:Invoke-LocalJavaFixtureSql -Value $saveSql
+            Set-Item -LiteralPath Function:Invoke-LocalSqlBootProcess -Value $saveProcess
+            Remove-Variable -Scope Script -Name JavaFixtureCleanupSql,JavaFixtureCleanupNative -ErrorAction SilentlyContinue
+        }
+    }
 } finally {
     $full = [IO.Path]::GetFullPath($fixtureRoot); $prefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/') + [IO.Path]::DirectorySeparatorChar
     if (-not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFileName($full) -notlike 'mmorpg-java-boot-test-*') { throw '测试清理越界。' }

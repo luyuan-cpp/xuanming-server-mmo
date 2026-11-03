@@ -1330,8 +1330,37 @@ function Get-ManifestContainerPorts {
 	param([Parameter(Mandatory = $true)][string]$ManifestContent)
 
 	$ports = @()
-	foreach ($match in [regex]::Matches($ManifestContent, '(?m)^[ \t]*(?:-[ \t]+)?containerPort:[ \t]*(\d+)[ \t]*\r?$')) {
-		$ports += [int]$match.Groups[1].Value
+	$portsIndent = -1
+	foreach ($rawLine in ($ManifestContent -split "`r?`n")) {
+		$line = Remove-YamlInlineComment -Value $rawLine
+		if ([string]::IsNullOrWhiteSpace($line)) { continue }
+		$leading = [regex]::Match($line, '^[ \t]*').Value
+		$line = $leading.Replace("`t", '  ') + $line.Substring($leading.Length)
+		$indent = $line.Length - $line.TrimStart(' ').Length
+		if ($line -cmatch '^[ ]*ports:[ \t]*\[' -and $line.Contains('containerPort')) { throw 'containerPort不支持整行内联列表，拒绝遗漏端口后生成准入策略。' }
+		if ($line -cmatch '^[ ]*ports:[ \t]*$') { $portsIndent = $indent; continue }
+		if ($portsIndent -lt 0) { continue }
+		if ($indent -lt $portsIndent -or ($indent -eq $portsIndent -and $line.TrimStart() -notlike '- *')) { $portsIndent = -1; continue }
+		$portText = $null
+		if ($line -cmatch '^[ ]*(?:-[ \t]+)?containerPort[ \t]*:[ \t]*(?<port>[0-9]+)[ \t]*$') {
+			$portText = $Matches.port
+		} elseif ($line -cmatch '^[ ]*-[ \t]+\{(?<fields>[^{}]+)\}[ \t]*$') {
+			# 当前模板使用无引号标量内联映射，键顺序不承载语义。
+			$fields = $Matches.fields
+			if ($fields -cmatch '(?:^|,)[ \t]*["'']containerPort["''][ \t]*:') { throw 'containerPort键不支持引号，拒绝遗漏端口后生成准入策略。' }
+			if ($fields -cnotmatch '(?:^|,)[ \t]*containerPort[ \t]*:') { continue }
+			$keyMatches = [regex]::Matches($fields, '(?:^|,)[ \t]*containerPort[ \t]*:')
+			$portMatches = [regex]::Matches($fields, '(?:^|,)[ \t]*containerPort[ \t]*:[ \t]*(?<port>[0-9]+)[ \t]*(?=,|$)')
+			if ($fields -match '["'']' -or $keyMatches.Count -ne 1 -or $portMatches.Count -ne 1) { throw '内联containerPort必须唯一且为无引号整数，拒绝遗漏端口后生成准入策略。' }
+			$portText = $portMatches[0].Groups['port'].Value
+		} elseif ($line -cmatch '(?:^|[ \t{,\-])["'']?containerPort["'']?[ \t]*:') {
+			throw 'containerPort声明形状不支持，拒绝遗漏端口后生成准入策略。'
+		}
+		if ($null -ne $portText) {
+			[long]$port = 0
+			if (-not [long]::TryParse($portText, [ref]$port) -or $port -lt 1 -or $port -gt 65535) { throw 'containerPort必须在1到65535之间。' }
+			$ports += [int]$port
+		}
 	}
 	return @($ports | Sort-Object -Unique)
 }
@@ -7259,8 +7288,8 @@ $($battleRewards -split "`r?`n" | ForEach-Object { "    $_" } | Out-String)
 
 function Get-SceneAssetSecretEnvLines {
 	param([string]$Indent)
-	foreach ($caller in @('guild', 'trade', 'mail', 'data_service')) {
-		if ($script:AssetOpsOn -and $caller -in @('guild', 'trade')) { continue }
+	# Guild/Trade 由 AssetOps 开关的专用分支注入，关闭时不能残留可选引用。
+	foreach ($caller in @('mail', 'data_service')) {
 		"${Indent}- name: MMORPG_ASSET_OP_SECRET_$($caller.ToUpperInvariant())"
 		"${Indent}  valueFrom: {secretKeyRef: {name: domain-service-secrets, key: asset-$($caller.Replace('_', '-')), optional: true}}"
 	}
@@ -9104,6 +9133,7 @@ function New-GuildServiceConfigYaml {
 	$timeout = Get-AuthoritativeScalar -RelativePath $source -KeyPath 'Timeout'
 	$quota = Get-AuthoritativeScalar -RelativePath $source -KeyPath 'ApplicationQuotaPerMinute'
 	$maxOpen = Get-AuthoritativeScalar -RelativePath $source -KeyPath 'MySQL.MaxOpenConn'
+	$maxIdle = Get-AuthoritativeScalar -RelativePath $source -KeyPath 'MySQL.MaxIdleConn'
 	$lease = Get-AuthoritativeScalar -RelativePath $source -KeyPath 'Node.LeaseTTL'
 	$dial = Get-AuthoritativeScalar -RelativePath $source -KeyPath 'Registry.Etcd.DialTimeout'
 	$null = Get-RedisPoolMirror -Target 'guild'
@@ -9124,6 +9154,7 @@ MySQL:
   DataSourceEnv: MMORPG_GUILD_SQL_DSN
   Backend: $DatabaseBackend
   MaxOpenConn: $maxOpen
+  MaxIdleConn: $maxIdle
 $DbPlacementBlock
 Schema:
   AutoMigrate: $autoMigrate
@@ -9161,7 +9192,7 @@ Prometheus:
 	}
 	foreach ($key in @('Cache', 'IdSegment', 'AssetOp', 'Activity', 'KillSwitchPrefix')) {
 		$block = Get-AuthoritativeYamlBlock -RelativePath $source -Key $key
-		if ($key -eq 'AssetOp' -and $ReleaseProfile -ne 'dev') {
+		if ($key -eq 'AssetOp' -and (-not $script:AssetOpsOn -or $ReleaseProfile -ne 'dev')) {
 			# 08-save-owner-fence.md 的生产启用门禁仍未全验；配置接线不能替代父快照屏障证据。
 			$block = $block -replace '(?m)^  Enabled:.*$', '  Enabled: false'
 		}
@@ -10857,7 +10888,7 @@ metadata:
   name: $configMapName
 data:
   ${configFileName}: |
-$($svcConfig -split "`n" | ForEach-Object { "    $_" } | Out-String)
+$($svcConfig -split "`r?`n" | ForEach-Object { "    $_" } | Out-String)
 "@
 }
 

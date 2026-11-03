@@ -1,7 +1,6 @@
 package com.game.mall;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.zaxxer.hikari.HikariDataSource;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -27,9 +26,8 @@ class TiDbEnvironmentIT {
             String snapshot = currentSnapshot(f);
             properties.setUrl(f.jdbcUrl + "?sessionVariables=" + URLEncoder.encode(
                     "tidb_read_consistency='weak',tidb_snapshot='" + snapshot + "'", StandardCharsets.UTF_8));
-            properties.setUsername(((HikariDataSource) f.source).getUsername());
-            properties.setPassword(((HikariDataSource) f.source).getPassword());
-            try (var pool = (HikariDataSource) new DatabaseConfiguration().dataSource(properties, f.props)) {
+            // 同一owner的新池领取独立NORMAL boot，不能再次消费第一个池的单次grant。
+            try (var pool = f.openAdditionalPool(properties)) {
                 List<Connection> held = new ArrayList<>();
                 try {
                     // 同时持有四个连接，不能靠同一条物理连接反复借还冒充初始化验证。
@@ -54,21 +52,27 @@ class TiDbEnvironmentIT {
         }
     }
     @ParameterizedTest @ValueSource(strings = {"weak", "snapshot"})
-    void startupRejectsWeakOrHistoricalSessions(String setting) throws Exception {
+    void normalSessionsRejectWeakOrHistoricalSessionChanges(String setting) throws Exception {
         assertNotNull(System.getProperty("commerce.it.tidb"));
         try (var f = new CommerceFixture()) {
             String snapshot = currentSnapshot(f);
             try (Connection connection = f.source.getConnection(); Statement statement = connection.createStatement()) {
                 statement.setQueryTimeout(5);
                 var single = new SingleConnectionDataSource(connection, true);
-                try {
-                    statement.execute("weak".equals(setting) ? "SET SESSION tidb_read_consistency='weak'"
-                            : "SET SESSION tidb_snapshot='" + snapshot + "'");
-                    assertThrows(IllegalStateException.class, () -> new DatabaseConfiguration()
-                            .commerceSchemaReady(new JdbcTemplate(single), f.props, single).afterPropertiesSet());
-                } finally {
-                    statement.execute("SET SESSION tidb_snapshot='',tidb_read_consistency='strict'");
+                // NORMAL在执行前拒绝改弱会话；不能先绕过StrongPolicy制造弱态，再用SET清理。
+                var denied = assertThrows(java.sql.SQLSyntaxErrorException.class, () ->
+                        statement.execute("weak".equals(setting) ? "SET SESSION tidb_read_consistency='weak'"
+                                : "SET SESSION tidb_snapshot='" + snapshot + "'"));
+                assertEquals("42000", denied.getSQLState());
+                try (ResultSet rows = statement.executeQuery(
+                        "SELECT @@session.tidb_read_consistency,@@session.tidb_snapshot")) {
+                    assertTrue(rows.next());
+                    assertEquals("strict", rows.getString(1));
+                    assertEquals("", rows.getString(2));
+                    assertFalse(rows.next());
                 }
+                assertDoesNotThrow(() -> new DatabaseConfiguration()
+                        .commerceSchemaReady(new JdbcTemplate(single), f.props, single).afterPropertiesSet());
             }
         }
     }
@@ -77,6 +81,54 @@ class TiDbEnvironmentIT {
             f.jdbc.queryForList("SELECT nonce FROM commerce_request_nonce WHERE caller_role='probe' AND nonce=X'00'");
             return f.jdbc.queryForObject("SELECT CAST(TIDB_CURRENT_TSO() AS CHAR)", String.class);
         });
+    }
+    /** 接口负例使用JDBC替身，单列为单元证据；真实NORMAL连接的改弱拒绝由上面的真库用例验证。 */
+    @ParameterizedTest @ValueSource(strings = {"weak", "snapshot"})
+    void startupRejectsAlreadyWeakOrHistoricalSessionFromDataSource(String setting) throws Exception {
+        var values = new java.util.HashMap<String, Object>();
+        values.put("SELECT tidb_version()", "test-tidb-capability");
+        values.put("SELECT @@session.tidb_txn_mode", "pessimistic");
+        values.put("SELECT @@session.tidb_replica_read", "leader");
+        values.put("SELECT @@session.tidb_read_staleness", 0L);
+        values.put("SELECT @@session.tidb_low_resolution_tso", 0);
+        values.put("SELECT @@session.tidb_read_consistency", "weak".equals(setting) ? "weak" : "strict");
+        values.put("SELECT @@session.tidb_snapshot", "snapshot".equals(setting) ? "2026-01-01 00:00:00" : "");
+        values.put("SELECT @@session.sql_mode", "STRICT_TRANS_TABLES");
+        var observedQueries = new ArrayList<String>();
+        var source = org.mockito.Mockito.mock(javax.sql.DataSource.class);
+        var connection = org.mockito.Mockito.mock(Connection.class);
+        org.mockito.Mockito.when(source.getConnection()).thenReturn(connection);
+        org.mockito.Mockito.when(connection.createStatement()).thenAnswer(call -> {
+            var statement = org.mockito.Mockito.mock(Statement.class);
+            org.mockito.Mockito.when(statement.executeQuery(org.mockito.ArgumentMatchers.anyString())).thenAnswer(query -> {
+                String sql = query.getArgument(0);
+                if (!values.containsKey(sql)) { throw new java.sql.SQLException("非预期会话查询"); }
+                observedQueries.add(sql);
+                Object value = values.get(sql);
+                var rows = org.mockito.Mockito.mock(ResultSet.class);
+                var metadata = org.mockito.Mockito.mock(java.sql.ResultSetMetaData.class);
+                org.mockito.Mockito.when(metadata.getColumnCount()).thenReturn(1);
+                org.mockito.Mockito.when(rows.getMetaData()).thenReturn(metadata);
+                org.mockito.Mockito.when(rows.next()).thenReturn(true, false);
+                org.mockito.Mockito.when(rows.getString(1)).thenReturn(value.toString());
+                if (value instanceof Long number) { org.mockito.Mockito.when(rows.getLong(1)).thenReturn(number); }
+                if (value instanceof Integer number) { org.mockito.Mockito.when(rows.getInt(1)).thenReturn(number); }
+                return rows;
+            });
+            return statement;
+        });
+        var props = new CommerceProperties(); props.setRequireTidb(true);
+        var schema = org.mockito.Mockito.mock(JdbcTemplate.class);
+        var refused = assertThrows(IllegalStateException.class, () -> new DatabaseConfiguration()
+                .commerceSchemaReady(schema, props, source).afterPropertiesSet());
+        assertEquals("商城生产数据库必须为 TiDB 悲观事务逻辑权威库", refused.getMessage());
+        assertTrue(observedQueries.contains("weak".equals(setting)
+                ? "SELECT @@session.tidb_read_consistency" : "SELECT @@session.tidb_snapshot"));
+        assertEquals(values.keySet(), new java.util.HashSet<>(observedQueries));
+        assertEquals(values.size(), observedQueries.size());
+        org.mockito.Mockito.verifyNoInteractions(schema);
+        org.mockito.Mockito.verify(source).getConnection();
+        org.mockito.Mockito.verify(connection).close();
     }
     @Test void sqlTsoNonceIsSharedCaseSensitiveAndRejectsExpiredSignatures() {
         assertNotNull(System.getProperty("commerce.it.tidb"));

@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,13 +38,27 @@ import org.springframework.web.bind.annotation.RestController;
     "commerce.delivery-secret=catalog-delivery-test-only-key-00003",
     "commerce.admin-secret=catalog-admin-test-only-key-0000004", "commerce.admin-subject=catalog-admin"
 })
-@Import(CatalogAdminHttpTest.ForwardConfiguration.class)
+@Import({CatalogAdminHttpTest.ForwardConfiguration.class, H2CommerceTestConfiguration.class})
 class CatalogAdminHttpTest {
     private static final String PREFIX = "/mall/rpc";
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+
+    @Test void H2适配不能接管真实SQL或生产强会话模式() {
+        var factory = new H2CommerceTestConfiguration().h2CommerceDataSourceFactory();
+        var source = new DataSourceProperties();
+        var properties = new CommerceProperties();
+        properties.setRunMode("test"); properties.setRequireTidb(false);
+        source.setUrl("jdbc:mysql://127.0.0.1:24000/mall_it_test_only");
+        assertThrows(IllegalStateException.class, () -> factory.create(source, properties));
+        source.setUrl("jdbc:h2:mem:factory_guard");
+        properties.setRunMode("prod");
+        assertThrows(IllegalStateException.class, () -> factory.create(source, properties));
+        properties.setRunMode("test"); properties.setRequireTidb(true);
+        assertThrows(IllegalStateException.class, () -> factory.create(source, properties));
+    }
 
     @Test void 管理命令签名与重放_保留预占和订单快照_不能直接改支付状态() throws Exception {
         var terms = new CatalogAdminApi.Terms(81, "admin-sku-811", 1250, "CNY", true, 10, 1, "玄铁");

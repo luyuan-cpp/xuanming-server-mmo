@@ -70,14 +70,11 @@ func ProcessAllHandlers(wg *sync.WaitGroup, methodList internal.RPCMethods) {
 		currentCfg := cfg
 
 		wg.Add(1)
+		// 头文件预检会读取同名源文件；同一组按序生成，避免与源文件发布并发。
+		// 不同配置仍可并行，守护段校验和失败退出保持不变。
 		go func() {
 			defer wg.Done()
 			writeHandlerHeadFile(wg, methodList, currentCfg)
-		}()
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
 			writeHandlerCppFile(wg, methodList, currentCfg)
 		}()
 	}

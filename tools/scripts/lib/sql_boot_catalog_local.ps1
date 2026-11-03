@@ -44,7 +44,10 @@ param(
     [string]$PhysicalAuthorityFile = '',
     [string]$PhysicalAuthoritySha256 = '',
     [string]$LockQualificationFile = '',
-    [string]$LockQualificationSha256 = ''
+    [string]$LockQualificationSha256 = '',
+    [ValidateSet('', 'create', 'open-boot', 'migrate', 'close')][string]$JavaFixtureAction = '',
+    [string]$JavaFixtureRequestFile = '',
+    [string]$JavaFixtureRequestSha256 = ''
 )
 
 . (Join-Path $PSScriptRoot 'release_common.ps1')
@@ -129,7 +132,8 @@ function Invoke-LocalSqlBootProcess {
         [Collections.IDictionary]$Environment = @{},
         [string]$WorkingDirectory = '',
         [string]$StandardInput = '',
-        [int]$TimeoutSeconds = 120
+        [int]$TimeoutSeconds = 120,
+        [switch]$RequireCompleteExit
     )
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $FilePath
@@ -159,11 +163,14 @@ function Invoke-LocalSqlBootProcess {
         }
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
             try { $process.Kill($true) } catch { $null = $_ }
+            if ($RequireCompleteExit -and -not $process.WaitForExit(5000)) { throw '受限控制进程超时且cleanup_pending；保留原件HOLD' }
             throw "$([IO.Path]::GetFileName($FilePath)) did not finish within $TimeoutSeconds seconds."
         }
         # 后台孙进程可能继承管道,读尾部只等有限时间。
-        $out = if ($stdout.Wait(5000)) { $stdout.Result } else { '' }
-        $err = if ($stderr.Wait(5000)) { $stderr.Result } else { '' }
+        $outDone=$stdout.Wait(5000); $errDone=$stderr.Wait(5000)
+        if ($RequireCompleteExit -and (-not $outDone -or -not $errDone)) { throw '受限控制进程输出未完整闭合；保留原件HOLD' }
+        $out = if ($outDone) { $stdout.Result } else { '' }
+        $err = if ($errDone) { $stderr.Result } else { '' }
         return [pscustomobject]@{ Code = $process.ExitCode; Out = $out; Err = $err }
     } finally {
         $process.Dispose()
@@ -1056,7 +1063,8 @@ function New-LocalSqlBootInstanceFiles {
         [Parameter(Mandatory)][string[]]$Databases,
         [Parameter(Mandatory)][hashtable]$MetaByDatabase,
         [Parameter(Mandatory)][string]$PhysicalSha256,
-        [Parameter(Mandatory)][string]$QualificationFile
+        [Parameter(Mandatory)][string]$QualificationFile,
+        $FixtureIo = $null
     )
     $key = $Instance.InstanceKey
     $service = $Instance.Service
@@ -1079,7 +1087,8 @@ function New-LocalSqlBootInstanceFiles {
         ConvertTo-LocalSqlBootConfig -Settings $Settings -Service $service -Content ([IO.File]::ReadAllText($Instance.ConfigPath)) -User $user -Password $password
     }
     $inputConfig = Join-Path $inputRoot 'runtime.yaml'
-    Write-LocalSqlBootText -Path $inputConfig -Text $configText
+    if ($null -ne $FixtureIo) { $null = Write-LocalJavaFixtureFile $FixtureIo $inputConfig $configText }
+    else { Write-LocalSqlBootText -Path $inputConfig -Text $configText }
 
     $environmentEntries = [Collections.Generic.List[object]]::new()
     $environmentNames = [Collections.Generic.List[string]]::new()
@@ -1095,7 +1104,13 @@ function New-LocalSqlBootInstanceFiles {
     }
 
     $qualificationCopy = Join-Path $inputRoot 'lock-qualification.original'
-    [IO.File]::Copy($QualificationFile, $qualificationCopy)
+    if ($null -ne $FixtureIo) {
+        # 资格原件是公开pin；新副本仍经同一受信私密IO封存，不读取旧DSN/owner/receipt。
+        $qualificationText=[Text.UTF8Encoding]::new($false,$true).GetString([IO.File]::ReadAllBytes($QualificationFile))
+        $null = Write-LocalJavaFixtureFile $FixtureIo $qualificationCopy $qualificationText
+    } else { [IO.File]::Copy($QualificationFile, $qualificationCopy) }
+    $qualificationSha = if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo $qualificationCopy).Sha256 } else { Get-MaintenanceSha256 $qualificationCopy }
+    $inputConfigSha = if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo $inputConfig).Sha256 } else { Get-MaintenanceSha256 $inputConfig }
     $deploymentId = "local-$BootId-$key"
     $writerKey = New-LocalSqlBootIdentity
     $instanceId = New-LocalSqlBootIdentity
@@ -1120,21 +1135,22 @@ function New-LocalSqlBootInstanceFiles {
             deploymentDigest = (ConvertTo-LocalSqlBootBase64 -Hex $PhysicalSha256)
             deploymentId = $deploymentId
             lockPrimitive = $Settings.LockPrimitive
-            lockQualificationSha256 = (ConvertTo-LocalSqlBootBase64 -Hex (Get-MaintenanceSha256 -Path $qualificationCopy))
+            lockQualificationSha256 = (ConvertTo-LocalSqlBootBase64 -Hex $qualificationSha)
         }
         $requestFile = Join-Path $inputRoot "request.$database.json"
-        $requestSha256 = Write-MaintenanceImmutableJson -Path $requestFile -Value $request
+        $requestSha256 = if ($null -ne $FixtureIo) { Write-LocalJavaFixtureJson $FixtureIo $requestFile $request } else { Write-MaintenanceImmutableJson -Path $requestFile -Value $request }
         $requests.Add($request)
         $registrations.Add([pscustomobject]@{ Database = $database; RequestFile = $requestFile; RequestSha256 = $requestSha256 })
     }
     $entry = [ordered]@{
         requests = [object[]]$requests.ToArray()
         runtimeConfigPath = 'runtime.yaml'
-        runtimeConfigSha256 = (ConvertTo-LocalSqlBootBase64 -Hex (Get-MaintenanceSha256 -Path $inputConfig))
+        runtimeConfigSha256 = (ConvertTo-LocalSqlBootBase64 -Hex $inputConfigSha)
     }
     if ($environmentEntries.Count -gt 0) { $entry['runtimeEnvironment'] = [object[]]$environmentEntries.ToArray() }
     $rosterFile = Join-Path $inputRoot 'roster.json'
-    $rosterSha256 = Write-MaintenanceImmutableJson -Path $rosterFile -Value ([ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V1'; entries = [object[]]@($entry) })
+    $roster = [ordered]@{ format = 'SQL_WRITER_BOOT_ROSTER_V1'; entries = [object[]]@($entry) }
+    $rosterSha256 = if ($null -ne $FixtureIo) { Write-LocalJavaFixtureJson $FixtureIo $rosterFile $roster } else { Write-MaintenanceImmutableJson -Path $rosterFile -Value $roster }
 
     return [pscustomobject]@{
         InstanceKey = $key; Service = $service; User = $user; Password = $password; Principal = $principal
@@ -1154,21 +1170,28 @@ function New-LocalSqlBootAccountSql {
         [Parameter(Mandatory)]$Operators,
         [Parameter(Mandatory)][object[]]$Prepared,
         [Parameter(Mandatory)][hashtable]$TablesBySchema,
-        [Parameter(Mandatory)][hashtable]$Manifest
+        [Parameter(Mandatory)][hashtable]$Manifest,
+        [switch]$FreshAccountsOnly,
+        [switch]$SkipOperatorCreation
     )
     $templateRoot = Join-Path $RepoRoot 'deploy/sql'
     $rootAccount = ConvertTo-AuthoritySqlAccount $Settings.RootPrincipal
     $builder = [Text.StringBuilder]::new()
     foreach ($operator in @($Operators.registrar, $Operators.maintenance)) {
+        if ($SkipOperatorCreation) { continue }
         $account = ConvertTo-AuthoritySqlAccount $operator.principal
-        $null = $builder.AppendLine("CREATE USER IF NOT EXISTS $account IDENTIFIED BY '$($operator.password)';")
-        $null = $builder.AppendLine("ALTER USER $account IDENTIFIED BY '$($operator.password)';")
+        if ($FreshAccountsOnly) { $null = $builder.AppendLine("CREATE USER $account IDENTIFIED BY '$($operator.password)';") }
+        else {
+            $null = $builder.AppendLine("CREATE USER IF NOT EXISTS $account IDENTIFIED BY '$($operator.password)';")
+            $null = $builder.AppendLine("ALTER USER $account IDENTIFIED BY '$($operator.password)';")
+        }
     }
     # 注册、维护账号按逻辑库授权,每个库一遍。闸门表的权限也按库:写者只看得见自己要写的库的闸门。
     $operatorDone = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($item in $Prepared) {
         $tables = @(Get-LocalSqlBootInstanceTables -Grant $Manifest[$item.Service] -TablesBySchema $TablesBySchema)
-        $null = $builder.AppendLine("CREATE USER IF NOT EXISTS $(ConvertTo-AuthoritySqlAccount $item.Principal) IDENTIFIED BY '$($item.Password)';")
+        $ifNew = if ($FreshAccountsOnly) { '' } else { 'IF NOT EXISTS ' }
+        $null = $builder.AppendLine("CREATE USER $ifNew$(ConvertTo-AuthoritySqlAccount $item.Principal) IDENTIFIED BY '$($item.Password)';")
         foreach ($registration in @($item.Registrations)) {
             $roles = ConvertTo-AuthorityRoleSql -TemplateRoot $templateRoot -Plan @{
                 authoritySchema = $registration.Database
@@ -1208,7 +1231,8 @@ function New-LocalSqlBootControlEnvironment {
 
 # 正式注册:每实例一次,单条目 roster。控制凭据只在这一个子进程的环境里;常驻进程拿不到(Enter-SqlWriterBootEnvironment 也会清)。
 function Register-LocalSqlBootInstance {
-    param([Parameter(Mandatory)]$Item, [Parameter(Mandatory)][string]$Tool, [Parameter(Mandatory)][hashtable]$ControlEnvironment, [Parameter(Mandatory)][string]$PhysicalSha256)
+    param([Parameter(Mandatory)]$Item, [Parameter(Mandatory)][string]$Tool, [Parameter(Mandatory)][hashtable]$ControlEnvironment, [Parameter(Mandatory)][string]$PhysicalSha256, [switch]$PreserveInputs, $FixtureIo = $null)
+    $operationSeconds=if ($null -ne $FixtureIo) { Get-LocalJavaFixtureOperationSeconds $FixtureIo 30 } else { 30 }
     $arguments = @(
         '-command', 'register'
         '-roster', $Item.RosterFile
@@ -1218,19 +1242,22 @@ function Register-LocalSqlBootInstance {
         '-runtime-config-output', $Item.RuntimeFile
         '-boot-output', $Item.GrantFile
         '-deployment-id', $Item.DeploymentId
-        '-timeout', '30s'
+        '-timeout', "${operationSeconds}s"
     )
     if ($Item.EnvironmentNames.Count -gt 0) { $arguments += @('-runtime-env-output', $Item.EnvironmentDirectory) }
-    $result = Invoke-LocalSqlBootProcess -FilePath $Tool -Arguments $arguments -Environment $ControlEnvironment -TimeoutSeconds 60
+    $processArguments=@{FilePath=$Tool;Arguments=$arguments;Environment=$ControlEnvironment;TimeoutSeconds=60}
+    if ($null -ne $FixtureIo) { $processArguments.RequireCompleteExit=$true; $processArguments.TimeoutSeconds=$operationSeconds+2 }
+    $result = Invoke-LocalSqlBootProcess @processArguments
     if ($result.Code -ne 0) { throw "writer_authority register failed for $($Item.InstanceKey) (exit code $($result.Code)): $(ConvertTo-LocalSqlBootSafeText -Text ([string]$result.Err))" }
-    $grantSha256 = Get-MaintenanceSha256 -Path $Item.GrantFile
-    if (([IO.File]::ReadAllText("$($Item.GrantFile).sha256")).Trim() -cne $grantSha256) { throw "Grant digest mismatch for $($Item.InstanceKey)." }
+    $grantSha256 = if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo $Item.GrantFile).Sha256 } else { Get-MaintenanceSha256 -Path $Item.GrantFile }
+    $sidecar = if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo "$($Item.GrantFile).sha256").Text } else { [IO.File]::ReadAllText("$($Item.GrantFile).sha256") }
+    if ($sidecar.Trim() -cne $grantSha256) { throw "Grant digest mismatch for $($Item.InstanceKey)." }
     $environmentEntries = @(foreach ($name in $Item.EnvironmentNames) {
             $valueFile = Join-Path $Item.EnvironmentDirectory $name
             [ordered]@{ name = $name; valueFile = $valueFile; valueSha256 = (Get-MaintenanceSha256 -Path $valueFile) }
         })
     # 输入里有明文口令,选中副本已写出,不再留第二份。
-    Remove-Item -LiteralPath $Item.InputRoot -Recurse -Force
+    if (-not $PreserveInputs) { Remove-Item -LiteralPath $Item.InputRoot -Recurse -Force }
     return [ordered]@{
         grantFile = $Item.GrantFile
         grantSha256 = $grantSha256
@@ -1238,7 +1265,7 @@ function Register-LocalSqlBootInstance {
         deploymentId = $Item.DeploymentId
         physicalAuthoritySha256 = $PhysicalSha256
         runtimeConfigFile = $Item.RuntimeFile
-        runtimeConfigSha256 = (Get-MaintenanceSha256 -Path $Item.RuntimeFile)
+        runtimeConfigSha256 = $(if ($null -ne $FixtureIo) { (Read-LocalJavaFixtureFile $FixtureIo $Item.RuntimeFile).Sha256 } else { Get-MaintenanceSha256 -Path $Item.RuntimeFile })
         runtimeEnvironment = [object[]]$environmentEntries
     }
 }
@@ -1597,8 +1624,293 @@ function Resolve-LocalSqlBootRequestedServices {
     return @($writers | Where-Object { $_ -cin $expanded })
 }
 
+# 真库测试只增加控制面适配：权限/注册/闸门DDL继续调用上面的正常producer和正式工具。
+# 不接收已有库，不扫描历史私密目录；每次动作只读当前java-fixture-<nonce>的原件。
+function Assert-LocalJavaFixturePath {
+    param($Settings, [string]$Path)
+    $root = [IO.Path]::GetFullPath($Settings.FixtureRoot).TrimEnd('\','/') + [IO.Path]::DirectorySeparatorChar
+    $full = [IO.Path]::GetFullPath($Path)
+    if (-not [IO.Path]::IsPathFullyQualified($Path) -or -not $full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { throw 'fixture私密路径越过本例owner' }
+    return $full
+}
+function Get-LocalJavaFixturePublicPin {
+    param([string]$Name, [string]$ShaName)
+    $path = [Environment]::GetEnvironmentVariable($Name)
+    $sha = [Environment]::GetEnvironmentVariable($ShaName)
+    if (-not $path -or -not [IO.Path]::IsPathFullyQualified($path) -or $sha -cnotmatch '^[a-fA-F0-9]{64}$') { throw "fixture缺公开工具/资格pin：$Name" }
+    $item = Get-Item -LiteralPath $path -ErrorAction Stop
+    if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or (Get-MaintenanceSha256 $path) -ine $sha) { throw 'fixture公开工具/资格原件漂移' }
+    return [IO.Path]::GetFullPath($path)
+}
+function Invoke-LocalJavaFixturePrivateIo {
+    param($Settings, [ValidateSet('read-file','create-file','validate-directory')][string]$Command, [string]$Path, [string]$InputText = '')
+    $full = Assert-LocalJavaFixturePath $Settings $Path
+    $result = Invoke-LocalSqlBootProcess -FilePath $Settings.PrivateHelper -Arguments @('--command',$Command,'--path',$full,'--max-bytes','16777216') -StandardInput $InputText -TimeoutSeconds 10 -RequireCompleteExit
+    if ($result.Code -ne 0) { throw 'fixture受信私密IO拒绝或结局未明，保留HOLD' }
+    return [string]$result.Out
+}
+function Read-LocalJavaFixtureFile {
+    param($Settings, [string]$Path, [string]$ExpectedSha256 = '')
+    $text = Invoke-LocalJavaFixturePrivateIo $Settings 'read-file' $Path
+    $bytes = [Text.UTF8Encoding]::new($false,$true).GetBytes($text)
+    $sha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+    if ($ExpectedSha256 -and ($ExpectedSha256 -cnotmatch '^[a-fA-F0-9]{64}$' -or $sha -ine $ExpectedSha256)) { throw 'fixture私密原件SHA不符' }
+    return [pscustomobject]@{ Text = $text; Sha256 = $sha }
+}
+function Read-LocalJavaFixtureJson {
+    param($Settings, [string]$Path, [string]$ExpectedSha256 = '')
+    $record = Read-LocalJavaFixtureFile $Settings $Path $ExpectedSha256
+    $document = [Text.Json.JsonDocument]::Parse($record.Text)
+    try { Assert-MaintenanceJsonKeys $document.RootElement } finally { $document.Dispose() }
+    return ($record.Text | ConvertFrom-Json -AsHashtable -Depth 80)
+}
+function Write-LocalJavaFixtureFile {
+    param($Settings, [string]$Path, [string]$Text)
+    $null = Invoke-LocalJavaFixturePrivateIo $Settings 'create-file' $Path $Text
+    return (Read-LocalJavaFixtureFile $Settings $Path).Sha256
+}
+function Write-LocalJavaFixtureJson {
+    param($Settings, [string]$Path, $Value)
+    return Write-LocalJavaFixtureFile $Settings $Path ($Value | ConvertTo-Json -Depth 80 -Compress)
+}
+function Split-LocalJavaFixtureSql {
+    param([string]$Sql)
+    # 仅拆既有源文件，保留引号内分号；不支持的delimiter/注释语法先于连接拒绝。
+    if ($Sql -match '(?im)^\s*DELIMITER\b' -or $Sql.Contains('/*!')) { throw 'fixture不接受SQL客户端指令或版本可执行注释' }
+    $statements = [Collections.Generic.List[string]]::new(); $builder = [Text.StringBuilder]::new()
+    $quote = [char]0; $lineComment = $false; $blockComment = $false
+    for ($i=0; $i -lt $Sql.Length; $i++) {
+        $c=$Sql[$i]; $next=if ($i+1 -lt $Sql.Length) { $Sql[$i+1] } else { [char]0 }
+        if ($lineComment) { if ($c -eq "`n") { $lineComment=$false; $null=$builder.Append(' ') }; continue }
+        if ($blockComment) { if ($c -eq '*' -and $next -eq '/') { $blockComment=$false; $i++; $null=$builder.Append(' ') }; continue }
+        if ($quote -ne [char]0) {
+            $null=$builder.Append($c)
+            if ($c -eq '\' -and $next -ne [char]0) { $null=$builder.Append($next); $i++; continue }
+            if ($c -eq $quote) { if ($next -eq $quote) { $null=$builder.Append($next); $i++ } else { $quote=[char]0 } }
+            continue
+        }
+        if (($c -eq '-' -and $next -eq '-') -or $c -eq '#') { $lineComment=$true; if ($c -eq '-') { $i++ }; continue }
+        if ($c -eq '/' -and $next -eq '*') { $blockComment=$true; $i++; continue }
+        if ($c -cin @([char]39,[char]34,[char]96)) { $quote=$c; $null=$builder.Append($c); continue }
+        if ($c -eq ';') { if ($builder.ToString().Trim()) { $statements.Add($builder.ToString().Trim()) }; $null=$builder.Clear(); continue }
+        $null=$builder.Append($c)
+    }
+    if ($quote -ne [char]0 -or $blockComment) { throw 'fixture SQL引号或注释未闭合' }
+    if ($builder.ToString().Trim()) { $statements.Add($builder.ToString().Trim()) }
+    return $statements.ToArray()
+}
+function Get-LocalJavaFixtureOperationSeconds {
+    param($Settings,[int]$Maximum=60)
+    $remaining = 110000 - $Settings.Clock.ElapsedMilliseconds
+    if ($remaining -le 0) { throw 'fixture动作总预算到期，保留HOLD' }
+    return [Math]::Min($Maximum, [Math]::Max(1,[int][Math]::Floor($remaining / 1000)))
+}
+function Invoke-LocalJavaFixtureSql {
+    param($Settings, [string]$Sql, [ValidateSet('query','exec')][string]$Mode = 'exec', [string]$Database = '', [string]$CredentialOutputFile = '')
+    $seconds = Get-LocalJavaFixtureOperationSeconds $Settings
+    $id = New-LocalSqlBootSecret 12
+    $sqlFile=Join-Path $Settings.FixtureRoot "sql-$id.txt"; $output=Join-Path $Settings.FixtureRoot "sql-$id.result.json"
+    $sha = Write-LocalJavaFixtureFile $Settings $sqlFile $Sql
+    $args = @('--dsn-file',$Settings.SchemaDsnFile,'--sql-file',$sqlFile,'--sql-sha256',$sha,'--mode',$Mode,'--database',$Database,'--expected-principal',$Settings.RootPrincipal,'--output-file',$output,'--timeout',"${seconds}s")
+    if ($CredentialOutputFile) { $null=Assert-LocalJavaFixturePath $Settings $CredentialOutputFile; $args+=@('--credential-output-file',$CredentialOutputFile) }
+    $native = Invoke-LocalSqlBootProcess -FilePath $Settings.SqlFileSurface -Arguments $args -TimeoutSeconds ($seconds+2) -RequireCompleteExit
+    $result = Read-LocalJavaFixtureJson $Settings $output
+    if ($native.Code -ne 0 -or $result.target_outcome -cne 'confirmed' -or ($result.Contains('error') -and $result.error) -or ($result.Contains('cleanup_errors') -and @($result.cleanup_errors).Count -gt 0) -or $result.sql_sha256 -cne $sha -or $result.principal -cne $Settings.RootPrincipal) { throw 'fixture SQL未取得确定终局，保留原件HOLD，不重发' }
+    return $result
+}
+function Invoke-LocalJavaFixtureSource {
+    param($Settings,[string]$Source,[string]$Database)
+    $statements=@(Split-LocalJavaFixtureSql $Source)
+    foreach ($sql in $statements) { $null=Invoke-LocalJavaFixtureSql $Settings $sql 'exec' $Database }
+}
+function Invoke-LocalJavaFixtureCurrentRows {
+    param($Settings,[string]$Projection,[string]$From,[int]$Columns)
+    # R14不提供跨语句会话：读取值与强读证据必须来自同一条实际SQL和同一条连接。
+    # 控制事务的RC/悲观会话仍由正式authoritysql装配；这里不把独立的SET或VERSION探针当作证据。
+    $sql="SELECT $Projection,TIDB_VERSION(),@@session.tidb_snapshot,@@session.tidb_read_staleness,@@session.tidb_read_consistency,@@session.tidb_replica_read,@@session.tidb_low_resolution_tso FROM $From FOR UPDATE"
+    $result=Invoke-LocalJavaFixtureSql $Settings $sql 'query'
+    $rows=[Collections.Generic.List[object]]::new()
+    foreach ($row in @($result.rows)) {
+        if (@($row).Count -ne ($Columns+6) -or [string]::IsNullOrWhiteSpace([string]$row[$Columns]) -or $row[$Columns+1] -cne '' -or $row[$Columns+2] -cne '0' -or $row[$Columns+3] -cne 'strict' -or $row[$Columns+4] -cne 'leader' -or $row[$Columns+5] -cne '0') { throw 'fixture当前读的同连接强会话不符，保留HOLD' }
+        $rows.Add([object[]]@($row[0..($Columns-1)]))
+    }
+    return @{rows=[object[]]$rows.ToArray()}
+}
+function Assert-LocalJavaFixtureOwner {
+    param($Settings,$Owner)
+    if ($Owner.format -cne 'JAVA_OWNED_TIDB_OWNER_V1' -or $Owner.nonce -cne $Settings.Nonce -or $Owner.schema -cne "mall_it_$($Settings.Nonce)" -or $Owner.endpoint -cne '127.0.0.1:24000' -or $Owner.physicalSha256 -cne $Settings.PhysicalSha256 -or $Owner.lockSha256 -cne $Settings.LockSha256 -or $Owner.schemaPrincipal -cne $Settings.RootPrincipal -or $Owner.writerToolSha256 -cne $env:COMMERCE_IT_WRITER_TOOL_SHA256.ToLowerInvariant() -or $Owner.sqlFileSurfaceSha256 -cne $env:COMMERCE_IT_SQL_FILE_SURFACE_SHA256.ToLowerInvariant()) { throw 'fixture owner与当前物理/I3或随机库不符' }
+    $identifier=ConvertTo-AuthoritySqlIdentifier $Owner.schema
+    $result=Invoke-LocalJavaFixtureCurrentRows $Settings 'HEX(nonce),physical_sha256' "$identifier.``__java_fixture_owner`` WHERE id=1" 2
+    if (@($result.rows).Count -ne 1 -or @($result.rows[0]).Count -ne 2 -or $result.rows[0][0] -ine $Settings.Nonce -or $result.rows[0][1] -cne $Settings.PhysicalSha256) { throw 'fixture SQL归属标记不符，不退休或删除' }
+}
+function Get-LocalJavaFixtureControlEnvironment {
+    param($Settings,$Operator,[string]$Schema,[ValidateSet('registrar','maintenance','schema')][string]$Role)
+    # 明确抹除继承的其他能力；Schema、Registrar、Maintenance不会进入NORMAL上下文。
+    $envs=@{ MMORPG_SQL_WRITER_GRANT_FILE=''; MMORPG_SQL_WRITER_GRANT_SHA256=''; MMORPG_SQL_WRITER_CONSUME_DIR=''; MMORPG_SQL_REGISTRAR_DSN=''; MMORPG_SQL_MAINTENANCE_DSN=''; MMORPG_SQL_SCHEMA_DSN=''; MMORPG_SQL_SCHEMA_PRINCIPAL=''; MMORPG_SQL_OPERATOR_PRINCIPAL=''; MMORPG_SQL_BACKEND='tidb'; MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256=$Settings.PhysicalSha256 }
+    $dsn="$($Operator.user):$($Operator.password)@tcp(127.0.0.1:24000)/$Schema"
+    if ($Role -ceq 'schema') { $envs.MMORPG_SQL_SCHEMA_DSN=$dsn; $envs.MMORPG_SQL_SCHEMA_PRINCIPAL=$Operator.principal }
+    else { $envs["MMORPG_SQL_$($Role.ToUpperInvariant())_DSN"]=$dsn; $envs.MMORPG_SQL_OPERATOR_PRINCIPAL=$Operator.principal }
+    return $envs
+}
+function New-LocalJavaFixtureBoot {
+    param($Settings,$Owner,[switch]$First)
+    $id=New-LocalSqlBootSecret 10; $bootRoot=Join-Path $Settings.FixtureRoot "boot-$id"; $null=[IO.Directory]::CreateDirectory($bootRoot)
+    $null=Invoke-LocalJavaFixturePrivateIo $Settings 'validate-directory' $bootRoot
+    $schema=$Owner.schema; $identifier=ConvertTo-AuthoritySqlIdentifier $schema
+    $metaResult=Invoke-LocalJavaFixtureCurrentRows $Settings 'generation,writable,writer_epoch,LENGTH(freeze_run_id)' "$identifier.``route_meta`` WHERE id=1" 4
+    if (@($metaResult.rows).Count -ne 1 -or @($metaResult.rows[0]).Count -ne 4 -or $metaResult.rows[0][0] -cnotmatch '^[a-fA-F0-9]{1,32}$' -or $metaResult.rows[0][1] -cne '1' -or $metaResult.rows[0][2] -cnotmatch '^[1-9][0-9]*$' -or $metaResult.rows[0][3] -cne '0') { throw 'fixture闸门不具备NORMAL注册条件' }
+    $instance=[pscustomobject]@{ Java=$true; Service='mall'; InstanceKey='mall'; Database=$schema; Port=0; ConfigPath=(Join-Path $Settings.RepoRoot 'java/mall_game/src/main/resources/application.yaml') }
+    $prepared=New-LocalSqlBootInstanceFiles -Settings $Settings -RepoRoot $Settings.RepoRoot -Instance $instance -BootRoot $bootRoot -BootId $id -Databases @($schema) -MetaByDatabase @{ $schema=[pscustomobject]@{Generation=$metaResult.rows[0][0]} } -PhysicalSha256 $Settings.PhysicalSha256 -QualificationFile $Settings.LockFile -FixtureIo $Settings
+    foreach ($registration in @($prepared.Registrations)) {
+        $null=Assert-LocalJavaFixturePath $Settings $registration.RequestFile
+        if ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($registration.RequestFile)) -ine [IO.Path]::GetFullPath($prepared.InputRoot)) { throw 'fixture角色renderer只接收本次新input内原Request' }
+        $null=Read-LocalJavaFixtureFile $Settings $registration.RequestFile $registration.RequestSha256
+    }
+    # 账号口令/原正式Request在第一次账号DDL前CreateNew。失败遗留的boot无registered原件会阻断整体清理。
+    $descriptor=[ordered]@{ format='JAVA_OWNED_TIDB_BOOT_V1'; nonce=$Settings.Nonce; item=$prepared }
+    $null=Write-LocalJavaFixtureJson $Settings (Join-Path $bootRoot 'boot.owner.json') $descriptor
+    $tablesResult=Invoke-LocalJavaFixtureSql $Settings "SELECT table_name FROM information_schema.tables WHERE table_schema='$schema' AND table_type='BASE TABLE'" 'query'
+    $tables=@($tablesResult.rows | ForEach-Object { $_[0] } | Where-Object { $_ -cne '__java_fixture_owner' })
+    $sql=New-LocalSqlBootAccountSql -Settings $Settings -RepoRoot $Settings.RepoRoot -Operators $Owner.operators -Prepared @($prepared) -TablesBySchema @{$schema=$tables} -Manifest @{mall=@{Own=@($schema);Cross=@()}} -FreshAccountsOnly -SkipOperatorCreation:(-not $First)
+    Invoke-LocalJavaFixtureSource $Settings $sql ''
+    $control=Get-LocalJavaFixtureControlEnvironment $Settings $Owner.operators.registrar $schema 'registrar'
+    $entry=Register-LocalSqlBootInstance -Item $prepared -Tool $Settings.WriterTool -ControlEnvironment $control -PhysicalSha256 $Settings.PhysicalSha256 -PreserveInputs -FixtureIo $Settings
+    $request=Read-LocalJavaFixtureJson $Settings $prepared.Registrations[0].RequestFile $prepared.Registrations[0].RequestSha256
+    $requestId=[Convert]::ToHexString([Convert]::FromBase64String($request.requestId)).ToLowerInvariant()
+    $canonical="$($prepared.GrantFile).$requestId.register.started.protojson"
+    $canonicalRecord=Read-LocalJavaFixtureFile $Settings $canonical
+    $registered=[ordered]@{format='JAVA_OWNED_TIDB_REGISTERED_V1';nonce=$Settings.Nonce;entry=$entry;item=$prepared;canonicalFile=$canonical;canonicalSha256=$canonicalRecord.Sha256}
+    $null=Write-LocalJavaFixtureJson $Settings (Join-Path $bootRoot 'boot.registered.json') $registered
+    return [ordered]@{ format='JAVA_OWNED_TIDB_CONTEXT_V1'; nonce=$Settings.Nonce; ownerFile=$Settings.OwnerFile; ownerSha256=$Settings.OwnerSha256; jdbcUrl="jdbc:mysql://127.0.0.1:24000/$schema"; username=$prepared.User; password=$prepared.Password; environment=[ordered]@{ MMORPG_SQL_WRITER_GRANT_FILE=$entry.grantFile; MMORPG_SQL_WRITER_GRANT_SHA256=$entry.grantSha256; MMORPG_SQL_WRITER_CONSUME_DIR=$entry.consumeDir; MMORPG_SQL_DEPLOYMENT_ID=$entry.deploymentId; MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256=$Settings.PhysicalSha256 } }
+}
+function Assert-LocalJavaFixtureRegistration {
+    param($Owner,$Registered,$Request)
+    if ($Request.kind -cne 'REGISTER' -or $Request.authoritySchema -cne $Owner.schema -or @($Request.protectedSchemas).Count -ne 1 -or $Request.protectedSchemas[0] -cne $Owner.schema -or $Request.deploymentId -cne $Registered.item.DeploymentId -or [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Request.writer.sqlPrincipal)) -cne $Registered.item.Principal -or -not $Request.writer.registrationDigest -or ($Request.Contains('maintenanceRunId') -and $Request.maintenanceRunId)) { throw 'fixture原注册不属于本例或不是普通NORMAL' }
+}
+function Close-LocalJavaFixture {
+    param($Settings,$Owner)
+    Assert-LocalJavaFixtureOwner $Settings $Owner
+    $boots=@(Get-ChildItem -LiteralPath $Settings.FixtureRoot -Directory -Filter 'boot-*')
+    if ($boots.Count -lt 1) { throw 'fixture缺原NORMAL boot，不清理' }
+    $users=[Collections.Generic.List[string]]::new()
+    foreach ($boot in $boots) {
+        $null=Invoke-LocalJavaFixturePrivateIo $Settings 'validate-directory' $boot.FullName
+        $descriptor=Read-LocalJavaFixtureJson $Settings (Join-Path $boot.FullName 'boot.owner.json')
+        $registered=Read-LocalJavaFixtureJson $Settings (Join-Path $boot.FullName 'boot.registered.json')
+        if ($descriptor.nonce -cne $Settings.Nonce -or $registered.nonce -cne $Settings.Nonce -or $descriptor.item.Principal -cne $registered.item.Principal -or $descriptor.item.RosterSha256 -cne $registered.item.RosterSha256) { throw 'fixture存在未确认或不同owner的注册，不清理' }
+        $request=Read-LocalJavaFixtureJson $Settings $registered.canonicalFile $registered.canonicalSha256
+        Assert-LocalJavaFixtureRegistration $Owner $registered $request
+        $identifier=ConvertTo-AuthoritySqlIdentifier $Owner.schema
+        $meta=Invoke-LocalJavaFixtureCurrentRows $Settings 'writer_epoch,catalog_revision,writable,LENGTH(freeze_run_id)' "$identifier.``route_meta`` WHERE id=1" 4
+        if (@($meta.rows).Count -ne 1 -or $meta.rows[0][2] -cne '1' -or $meta.rows[0][3] -cne '0') { throw 'fixture不可普通退休，保留HOLD' }
+        $request.kind='RETIRE'; $request.requestId=New-LocalSqlBootIdentity; $request.expectedEpoch=[string]$meta.rows[0][0]; $request.expectedCatalogRevision=[string]$meta.rows[0][1]
+        $retire=Join-Path $boot.FullName 'retire.request.json'; $receipt=Join-Path $boot.FullName 'retire.receipt.json'
+        $null=Write-LocalJavaFixtureJson $Settings $retire $request
+        $envs=Get-LocalJavaFixtureControlEnvironment $Settings $Owner.operators.maintenance $Owner.schema 'maintenance'
+        $seconds=Get-LocalJavaFixtureOperationSeconds $Settings 30
+        $native=Invoke-LocalSqlBootProcess -FilePath $Settings.WriterTool -Arguments @('-command','retire','-request',$retire,'-input-root',$boot.FullName,'-receipt-output',$receipt,'-timeout',"${seconds}s") -Environment $envs -TimeoutSeconds ($seconds+2) -RequireCompleteExit
+        if ($native.Code -ne 0) { throw 'fixture原请求RETIRE未确认，不重发或清理' }
+        $confirmed=Read-LocalJavaFixtureJson $Settings $receipt
+        if ($confirmed.kind -cne 'RETIRE' -or $confirmed.requestId -cne $request.requestId -or $confirmed.generation -cne $request.writer.generation -or $confirmed.previousEpoch -cne $request.expectedEpoch -or $confirmed.resultingEpoch -cne $request.expectedEpoch) { throw 'fixture正式RETIRE收据不符，不清理' }
+        $users.Add($registered.item.Principal)
+    }
+    # 每个池已经在Java侧seal/close；这里只在所有正式RETIRE确定后删除本例随机资源。
+    Assert-LocalJavaFixtureOwner $Settings $Owner
+    $identifier=ConvertTo-AuthoritySqlIdentifier $Owner.schema
+    $active=Invoke-LocalJavaFixtureCurrentRows $Settings 'COUNT(*)' "$identifier.``writer_slot`` WHERE state=1" 1
+    if (@($active.rows).Count -ne 1 -or $active.rows[0][0] -cne '0') { throw 'fixture仍有ACTIVE写者，不清理' }
+    foreach ($principal in @($users.ToArray()) + @($Owner.operators.registrar.principal,$Owner.operators.maintenance.principal)) {
+        $account=ConvertTo-AuthoritySqlAccount $principal
+        $null=Invoke-LocalJavaFixtureSql $Settings "DROP USER $account" 'exec'
+    }
+    $null=Invoke-LocalJavaFixtureSql $Settings "DROP DATABASE $identifier" 'exec'
+}
+function Invoke-LocalJavaFixtureAction {
+    param([string]$Action,[string]$RequestFile,[string]$RequestSha256)
+    # 仅目录名和新请求路径可在读取前检查；私密正文由CF3原句柄读取。
+    $root=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($RequestFile)); $leaf=[IO.Path]::GetFileName($root)
+    if ($leaf -cnotmatch '^java-fixture-([a-f0-9]{32})$') { throw 'fixture请求不在本例随机owner根' }
+    $nonce=$Matches[1]; $parent=[IO.Path]::GetFullPath([Environment]::GetEnvironmentVariable('COMMERCE_IT_PRIVATE_ROOT'))
+    if ([IO.Path]::GetDirectoryName($root) -ine $parent -or [IO.Path]::GetFileName($RequestFile) -cnotmatch '^action-[1-9][0-9]*[.]request[.]json$') { throw 'fixture请求越过显式私密根' }
+    $settings=[pscustomobject]@{ FixtureRoot=$root; Nonce=$nonce; Clock=[Diagnostics.Stopwatch]::StartNew(); PrivateHelper=(Get-LocalJavaFixturePublicPin 'MMORPG_SQL_PRIVATE_FILE_HELPER' 'MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256') }
+    $request=Read-LocalJavaFixtureJson $settings $RequestFile $RequestSha256
+    if ($request.format -cne 'JAVA_OWNED_TIDB_ACTION_V1' -or $request.nonce -cne $nonce -or [IO.Path]::GetFullPath($request.root) -ine $root) { throw 'fixture请求所有权不符' }
+    $output=Assert-LocalJavaFixturePath $settings $request.outputFile
+    $null=Write-LocalJavaFixtureJson $settings "$RequestFile.started" @{nonce=$nonce;action=$Action;requestSha256=$RequestSha256}
+    try {
+        foreach ($prior in @(Get-ChildItem -LiteralPath $root -File -Filter 'action-*.request.json.started')) {
+            if ($prior.FullName -ine "$RequestFile.started" -and -not [IO.File]::Exists(($prior.FullName -replace '[.]started$','.completed'))) { throw 'fixture已有UNKNOWN动作，只保留原件HOLD，禁止新动作/新boot' }
+        }
+        $schemaDsn=[Environment]::GetEnvironmentVariable('COMMERCE_IT_SCHEMA_DSN_FILE'); $principal=[Environment]::GetEnvironmentVariable('COMMERCE_IT_SCHEMA_PRINCIPAL')
+        if (-not $schemaDsn -or -not [IO.Path]::IsPathFullyQualified($schemaDsn) -or -not $principal) { throw 'fixture缺显式独立Schema凭据原件/主体' }
+        $null=ConvertTo-AuthoritySqlAccount $principal
+        $repo=[IO.Path]::GetFullPath([Environment]::GetEnvironmentVariable('COMMERCE_IT_REPO_ROOT'))
+        if ([IO.Path]::GetFullPath((Join-Path $repo 'tools/scripts/lib/sql_boot_catalog_local.ps1')) -ine $PSCommandPath) { throw 'fixture必须执行本仓库正常producer原件' }
+        $physical=Get-LocalJavaFixturePublicPin 'COMMERCE_IT_PHYSICAL_AUTHORITY_FILE' 'COMMERCE_IT_PHYSICAL_AUTHORITY_SHA256'
+        $lock=Get-LocalJavaFixturePublicPin 'COMMERCE_IT_LOCK_QUALIFICATION_FILE' 'COMMERCE_IT_LOCK_QUALIFICATION_SHA256'
+        foreach ($pair in @{Endpoint='127.0.0.1:24000';Backend='tidb';LockPrimitive='SELECT_ONLY';DirectorySchema='';DirectoryShards=@();RepoRoot=$repo;SchemaDsnFile=$schemaDsn;RootPrincipal=$principal;PhysicalSha256=([Environment]::GetEnvironmentVariable('COMMERCE_IT_PHYSICAL_AUTHORITY_SHA256').ToLowerInvariant());LockSha256=([Environment]::GetEnvironmentVariable('COMMERCE_IT_LOCK_QUALIFICATION_SHA256').ToLowerInvariant());LockFile=$lock;WriterTool=(Get-LocalJavaFixturePublicPin 'COMMERCE_IT_WRITER_TOOL' 'COMMERCE_IT_WRITER_TOOL_SHA256');SqlFileSurface=(Get-LocalJavaFixturePublicPin 'COMMERCE_IT_SQL_FILE_SURFACE' 'COMMERCE_IT_SQL_FILE_SURFACE_SHA256')}.GetEnumerator()) { $settings | Add-Member -NotePropertyName $pair.Key -NotePropertyValue $pair.Value }
+        $ownerPath=Join-Path $root 'owner.json'
+        if ($Action -ceq 'create') {
+            Assert-MaintenanceProperties $request @('format','nonce','root','outputFile','endpoint','schema')
+            if ($request.endpoint -cne 'jdbc:mysql://127.0.0.1:24000/' -or $request.schema -cne "mall_it_$nonce") { throw 'fixture仅接受本例随机库和已资格端点' }
+            $operators=@{}
+            foreach ($role in @('registrar','maintenance')) { $user='jf_'+(New-LocalSqlBootSecret 12); $operators[$role]=@{user=$user;password=(New-LocalSqlBootSecret);principal="$user@%"} }
+            $owner=[ordered]@{format='JAVA_OWNED_TIDB_OWNER_V1';nonce=$nonce;schema=$request.schema;endpoint=$settings.Endpoint;physicalSha256=$settings.PhysicalSha256;lockSha256=$settings.LockSha256;schemaPrincipal=$principal;writerToolSha256=$env:COMMERCE_IT_WRITER_TOOL_SHA256.ToLowerInvariant();sqlFileSurfaceSha256=$env:COMMERCE_IT_SQL_FILE_SURFACE_SHA256.ToLowerInvariant();operators=$operators}
+            $ownerSha=Write-LocalJavaFixtureJson $settings $ownerPath $owner
+        } else {
+            Assert-MaintenanceProperties $request @('format','nonce','root','outputFile','ownerFile','ownerSha256') @('resource')
+            if ([IO.Path]::GetFullPath($request.ownerFile) -ine $ownerPath) { throw 'fixture只接受本例owner' }
+            $ownerSha=$request.ownerSha256; $owner=Read-LocalJavaFixtureJson $settings $ownerPath $ownerSha
+        }
+        $settings | Add-Member -NotePropertyName OwnerFile -NotePropertyValue $ownerPath
+        $settings | Add-Member -NotePropertyName OwnerSha256 -NotePropertyValue $ownerSha
+        # R14本身验证DSN只指向24000且无Params；身份探针先于CREATE，导出的口令只存本例CF3新文件。
+        $credentialFile=Join-Path $root ('schema-credentials-'+(New-LocalSqlBootSecret 12)+'.json')
+        $probe=Invoke-LocalJavaFixtureSql $settings 'SELECT CURRENT_USER()' 'query' '' $credentialFile
+        if (-not $probe.credentials_written) { throw 'fixture Schema身份未确认' }
+        $credentials=Read-LocalJavaFixtureJson $settings $credentialFile
+        $settings | Add-Member -NotePropertyName RootUser -NotePropertyValue $credentials.User
+        $settings | Add-Member -NotePropertyName RootPassword -NotePropertyValue $credentials.Password
+        $schemaOperator=@{user=$credentials.User;password=$credentials.Password;principal=$principal}
+        if ($Action -ceq 'create') {
+            $probe=Invoke-LocalJavaFixtureSql $settings 'SELECT TIDB_VERSION()' 'query'
+            if (@($probe.rows).Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$probe.rows[0][0])) { throw 'fixture不是实际TiDB' }
+            $schema=$owner.schema; $identifier=ConvertTo-AuthoritySqlIdentifier $schema
+            $absent=Invoke-LocalJavaFixtureSql $settings "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='$schema'" 'query'
+            if (@($absent.rows).Count -ne 1 -or $absent.rows[0][0] -cne '0') { throw 'fixture随机库已存在，不接管' }
+            $null=Invoke-LocalJavaFixtureSql $settings "CREATE DATABASE $identifier DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" 'exec'
+            $null=Invoke-LocalJavaFixtureSql $settings "CREATE TABLE $identifier.``__java_fixture_owner`` (id INT PRIMARY KEY,nonce VARBINARY(16) NOT NULL,physical_sha256 CHAR(64) NOT NULL)" 'exec'
+            $null=Invoke-LocalJavaFixtureSql $settings "INSERT INTO $identifier.``__java_fixture_owner`` VALUES(1,X'$nonce','$($settings.PhysicalSha256)')" 'exec'
+            $envs=Get-LocalJavaFixtureControlEnvironment $settings $schemaOperator $schema 'schema'
+            $seconds=Get-LocalJavaFixtureOperationSeconds $settings
+            $migration=Invoke-LocalSqlBootProcess -FilePath $settings.WriterTool -Arguments @('-command','prepare-schema','-schema',$schema,'-timeout',"${seconds}s") -Environment $envs -TimeoutSeconds ($seconds+2) -RequireCompleteExit
+            if ($migration.Code -ne 0) { throw 'fixture正式本库闸门Schema迁移未确认，不注册NORMAL' }
+            Invoke-LocalJavaFixtureSource $settings ([IO.File]::ReadAllText((Join-Path $repo 'java/mall_game/src/main/resources/db/schema.sql'))) $schema
+            $context=New-LocalJavaFixtureBoot $settings $owner -First
+        } else {
+            Assert-LocalJavaFixtureOwner $settings $owner
+            if ($Action -ceq 'open-boot') { $context=New-LocalJavaFixtureBoot $settings $owner }
+            elseif ($Action -ceq 'migrate') {
+                if ($request.resource -cnotin @('db/migration/V3__catalog_admin.sql','db/migration/V4__mock_payment.sql','db/migration/V5__rmb_consignment.sql')) { throw 'fixture迁移不是已有商城事实源' }
+                Invoke-LocalJavaFixtureSource $settings ([IO.File]::ReadAllText((Join-Path $repo ('java/mall_game/src/main/resources/'+$request.resource)))) $owner.schema
+                $context=@{format='JAVA_OWNED_TIDB_CONTEXT_V1';nonce=$nonce}
+            } elseif ($Action -ceq 'close') { Close-LocalJavaFixture $settings $owner; $context=@{format='JAVA_OWNED_TIDB_CONTEXT_V1';nonce=$nonce} }
+            else { throw '未知fixture动作' }
+        }
+        $outputSha=Write-LocalJavaFixtureJson $settings $output $context
+        $null=Write-LocalJavaFixtureJson $settings "$RequestFile.completed" @{nonce=$nonce;action=$Action;outputSha256=$outputSha}
+    } catch {
+        try { $null=Write-LocalJavaFixtureJson $settings "$RequestFile.hold.json" @{format='JAVA_OWNED_TIDB_HOLD_V1';nonce=$nonce;action=$Action;automaticRetry=$false;automaticDrop=$false} } catch { }
+        throw '真库fixture未取得完整确定终局，原件HOLD，不自动重发或清理'
+    }
+}
+
 if ($MyInvocation.InvocationName -ne '.') {
     $ErrorActionPreference = 'Stop'
+    if ($JavaFixtureAction) {
+        Invoke-LocalJavaFixtureAction -Action $JavaFixtureAction -RequestFile $JavaFixtureRequestFile -RequestSha256 $JavaFixtureRequestSha256
+        return
+    }
     # 本文件在 tools/scripts/lib,仓库根往上三级,和 sql_boot_catalog_docker.ps1 同一写法。原来只退两级,直接调用时把 tools 当成了仓库根。
     $null = New-LocalSqlBootCatalog -RepoRoot ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))) -Services $Services -Endpoint $Endpoint -Backend $Backend -Zones $Zones -Counts $Counts -PortStride $PortStride -ZonePortShift $ZonePortShift -ZonePortOffsets $ZonePortOffsets -JavaInstancePlanPath $JavaInstancePlanPath -JavaInstancePlanSha256 $JavaInstancePlanSha256 -PhysicalAuthorityFile $PhysicalAuthorityFile -PhysicalAuthoritySha256 $PhysicalAuthoritySha256 -LockQualificationFile $LockQualificationFile -LockQualificationSha256 $LockQualificationSha256
 }

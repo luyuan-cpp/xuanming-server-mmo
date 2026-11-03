@@ -19640,3 +19640,117 @@ Java 版(AGENTS §12):对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。
 - C++新入口实际发现两类验证准备问题：2140份真实源码前后相同；安全检查的41份`.no_raw_ptr_check_ok`缓存原先误入源图，已仅从源图排除，原安全检查保持执行。后续MSBuild到CL时FileTracker环境路径初始化失败，wrapper又发生返回值污染，正在保留原件后修复执行环境与采集入口；没有把它记成C++测试通过。
 - `go/data_service/cmd/writer_authority`当前源已gofmt并真实复验：22/22、零跳过，原72D主进程与IO均exit0，源pin前后一致，原件native-stage-20261102T122756474Z-719bd857。只代表该工具单元与搬迁状态替身回归，不代表真实SQL或双区验收。
 - 原29文件范围继续验证。Java真库及默认H2夹具的14目标清单已具体化，额外触及11个唯一文件，预计总40；按AGENTS§10.2已请求用户范围授权，尚未实施新增范围。清单：build/verification/r-java-reactor-testcompile-prep-20261102-r2/Root-concrete-14-file-extension.scope.json。玩家TiDB/SQL player_store实现仍不在修改范围内。
+
+### 2026-11-02 Codex：四工程实测闭合、Java夹具授权后落盘与20分钟汇报
+
+- 用户已批准14目标Java夹具清单（预计总40文件）。实施时补记同一默认H2夹具遗漏的InitializationTest，合计15目标、预计总41；仅测试入口补装配并精确断原SchemaVerifier根因，保留HTTP未启动与订单零断言。原14清单与用户答复保留，增补范围单独记录在Root-minimal-InitializationTest-addendum.actual.json。15份CAS实际exit0，正式SHA与草稿一致；306份当前Java公开输入已固定，尚未运行本轮Maven/真库。玩家TiDB/SQL player_store实现无修改。
+- C++四个受影响工程真实build均0，七次定向/全量test均0；全量1463通过、2需真实Redis条件跳过、2禁用benchmark未执行。原wrapper退出1是RPC stdout的29条OK行前带ANSI SGR复位前缀，严格去除SGR后RUN/终止/XML一一核对；2140源码首尾及当前一致，原进程家族与IO证据闭合。原失败proof不改写，新的离线核对DA64CD7D…及Root接受回执单列，不据此宣称双区或真实Redis通过。
+- 七套PS合同第一轮实际517通过/5失败，六套全绿；剩余失败涉及Guild MaxIdle渲染、Scene关闭可选资产密钥、flow端口解析及Guild/Rank旧格式断言。原结果保留，修复和回归正在复核；无真实K8s/SQL操作。19Go模块串行build/vet/test已通过原72D启动，本轮重型槽独占，源码修复与Java准备并行。
+- 用户要求每20分钟汇报，已设置本聊天heartbeat（id20），检查点包含五项当前状态与实际证据；第1完成，第2/3/4尚未完成，第5保持63/221、余158，无清理授权或旧UNKNOWN关闭。
+### 2026-11-02 Codex：Go与脚本回归闭合、R Java真库六项通过、双区运行产物补齐
+
+- 原19个Go模块的build/vet/test已按受影响范围完成。唯一登录排队失败来自毫秒同分与UUID字典序，测试改为显式既有分数，并补同分排序回归；两例各100次通过，完整login模块992通过、4条件跳过。其他18模块保留本轮未受影响结果，727条条件跳过不记真环境通过。该单测试源为原41文件范围的一份具体增补，预计总42；未改玩家TiDB/SQL player_store实现。
+- 四套受影响PS合同完整464/464通过（client113、k8s283、logicaldb34、redis34）；另三套未受影响合同49/13/5原证据保留。Guild/Rank现役Secret DSN、健康探针、YAML flow端口及Go ConfigMap CRLF问题均有原失败与修复后实际证据。主证据为native-stage-20261102T151441399Z-49528a70，不代表真实Kubernetes部署。
+- R Java三个模块默认package实际364通过、5条件跳过、零失败，生成Authority/Gateway/Mall三份JAR；原72D完整通过native-stage-20261102T160423128Z-3d3fec01。五条跳过为Gateway真实TiDB/MySQL条件用例，未记真库通过。独立Authority随后正式退休闭合，证据native-stage-20261102T160733908Z-61b0fae3。
+- 新NORMAL夹具入口曾因UTC DateTime先字符串化再Parse而误认本地-05时区，现以保留Kind的DateTimeOffset强转修复，原120秒fresh门禁不变；另一收尾误拒改为具名参数唯一性检查后GetFullPath比较。旧失败原件保留，私密正文仅经CF3。
+- Mall真TiDB首轮有4通过、2错误，且同JVM累计超过正式180秒：旧环境用例的SET弱会话及finally恢复均被现行StrongPolicy拒绝。真实NORMAL用例改验拒绝SQLState42000、同连接读回strict与空snapshot、就绪成功；两个测试类串行独立JVM，仍各180秒。修后真实6/6、零跳过，完整outer为native-stage-20261102T162122075Z-ad5823a8；本轮独立Authority正式收尾完整通过native-stage-20261102T162542771Z-bfa21a2f。首轮未确认资源仍HOLD，未据此擅自清理。
+- 上述真实NORMAL改弱拒绝与“已有弱态时启动拒绝”是不同边界。后者已在同一获批TiDbEnvironmentIT源内补回两个JDBC接口替身负例，明确单列单元证据；尚未执行。新增块移除后其余源字节SHA仍为94093735…，不把替身称作真库或双区验收。
+- 第4项Go15份运行PE按原首5逐叶资格加新10完整outer补齐（native-stage-20261102T161559148Z-b982d508）。gate/scene两个运行工程串行MSBuild /m:1、CL_MPCount1通过，2140源稳定，正式postbuild副本等于产物（native-stage-20261102T162556781Z-997787ff）；旧bin副本已备份。尚未启动本轮双区36角色，隔离启动编排、双区业务和故障恢复仍待执行；14候选库存在性只读入口仅准备。
+- 第5项已在新手动27至54批窗口继续，当前接受至第40批167/221、余54。新增27至40共56对象均实际查询，主进程与IO及家族闭合经原driver检查；未清理，旧UNKNOWN不改写。第1公会27/27及原30轮完成证据保留；第2独立J的新Sync/A9/428仍未执行，不作为R双区前置。继续每20分钟在本聊天按checkpoint及新公开实际结果汇报。
+### 2026-11-02 Codex：第5项只读核账221对象全部完成
+
+- 新手动27至54批窗口完整退出0，最终接受至221/221、余0；原每批SELECT、CF3、物理观察、进程家族和IO门禁保持不变。公开聚合为build/verification/item5-readonly-resume-20261102-r1/aggregate.accepted-through-batch54.221-of221.actual.json，SHA DF24F351B8682D9799500C0AE4CA354A9891765AFA1B4350415D02C386EEAB61。
+- 全部匿名观察为207个未见库及收据具名账号、13个收据或绑定不完整HOLD、1个已知多NORMAL交叉字段待审；合计观察11个库、1个NORMAL主体仍在场，无staging主体。收据读取计数637、catalog计数2047，后者不是总wire SQL语句数。只读核账完成不代表删除或旧执行UNKNOWN闭合，清理授权仍为false。
+- 两个补充启动负例尚在运行：先前JAVA外层环境和cwd路径误拒均在Java前停止，后一次错误上游测试选择器导致authority未匹配、mall未运行；均保留原件，未关闭failIfNoSpecifiedTests。已核实改用现有AuthorityConnectionTest后实际运行，无真实SQL夹具。
+### 2026-11-02 Codex：双区独占基础设施启动与生成器并发诊断
+
+- 两个Java启动负例补充实际22/22（AuthorityConnectionTest20、启动弱态替身2），无SQL；native-stage-20261102T165700859Z-c0169fe2通过。第4项14个候选库只读确认全不存在，SQL写入0、注册0；运行Go15+writer工具已带旧产物备份安装。
+- 本轮独占Kafka/Redis/etcd从缓存镜像启动，三个容器运行、正式topic init退出0，未拉镜像、未改旧容器、未读取Config.Env；native-stage-20261102T174121384Z-2f653c69完整通过。仍未启动双区36应用角色，不把监听就绪计为业务验收。
+- 用户批准第43文件grpc_handler_preservation_test.go，只补AttachRelayGate/PromoteSpectateBroadcast现役方法表，原断言保留。补后battle_art_gen的build/vet/test均0（无测试）；protogen build/vet0，cpp测试包异常退出，正式模块尚未通过。
+- 隔离134份公开模块副本，仅将测试Nop logger改为可观测logger；目标100次在第22次捕获handler.go:47的Windows共享占用：头文件预检读取cpp与同组cpp发布并发。正式源未改。隔离handlers.go把同配置头源放同一goroutine按序生成，不同配置仍并行，目标100/100及CPP包5轮460/460通过，零跳过；native-stage-20261102T180152637Z-86ae579d完整通过。具体单文件范围增补44已准备并询问用户，未应用正式生产代码；原失败不改写。
+- 玩家持久化仍TiDB/SQL player_store，Redis仅协调；独立Java版0.1.0-SNAPSHOT的Sync/A9/原SQL428仍待正式运行。
+### 2026-11-02 Codex：获批44文件修复正式通过、契约同步与双区规划
+
+- 用户批准新增handlers.go，将同一handler配置的头源生成放同一goroutine按序执行，不同配置仍并行；未注入诊断logger、未降低断言或原子写保护。正式protogen build/vet/test均0，436通过、1条件跳过，2725份声明源首尾一致，原件native-stage-20261102T180436561Z-f061e394。原go/test.ps1入口随后实际490通过、8条件跳过、0失败，856源稳定，原件native-stage-20261102T181252305Z-cc307ac3；无race或真外部环境通过声明。
+- 第2独立Java版0.1.0-SNAPSHOT官方ContractSync和双源check均0，966份R输入首尾一致、bd2地图及J内部API保留，8受管域先备份；原件native-stage-20261102T181019034Z-8e604cf3。同步后的discovery及上游离线clean install正在执行；尚不代表A9或原SQL428通过。
+- 第4发现friend/trade/guild/player_inbox要求固定库名，故未以s4库名绕过Validate。另一次正规CF3/R14只读确认canonical14库全部不存在，SQL写入0，原件native-stage-20261102T180547212Z-671b259e；建库前仍须重查及严格CREATE，不接管既有库。
+- 双区Go28实际公开规划通过，实例键及RPC端口唯一，派生配置在本轮独占runRoot，56现役网络字段指向独占基础设施；原件native-stage-20261102T180825178Z-b1e11701。Java4计划正式校验通过，启动前纠正初版JDK21误配：R gateway实际class major67，后继固定本轮JDK23，不修改生产Java版本。
+- 本轮新private目录初始化/Schema内存装配实际失败，公开结果为MAIN36_PRIVATE_CONTEXT_INITIALIZATION_HOLD，异常类型RuntimeException，尚待只读定位阶段；目录已创建，不换UUID、不自动重试、不清理。SQL写入0、NORMAL注册0、应用启动0，原件native-stage-20261102T181805977Z-09ec37d5。凭据正文仅经CF3接口，不输出原始异常；玩家持久化保持TiDB/SQL player_store。
+### 2026-11-02 Codex：当前A9真库结果、双区初始化分段与客户端交付
+
+- 独立Java当前契约A9 clean install内层734通过、156条件跳过、0失败或错误，616份源首尾一致；18个RedisKeys回归及AuthorityPoolTiDbTest四例全部通过。外层native-stage-20261102T192352900Z-59a0a237的primary和IO均退出0、307样本/EOF/闭合，但runner汇总读取native_exit属性失败，原proof仍passed=false/completed0，不能改写成整轮通过。原428精确身份专项已按当前源码、正规CF3内存夹具、独立新私有收据启动，结果未出。
+- 第4私有根同intent只读资格通过，旧HOLD不重写；R4七参数AllowEmptyString部署适配加正式双区allowlist只读smoke通过，原件native-stage-20261102T193753048Z-c6417f5e。19:38:23正规精确计数14库/28账号均0。随后R4正式Catalog在CatalogFormalProducer停止，原件native-stage-20261102T193924726Z-3e01d038；19:42:31只读计数14库已在、28目标账号0，不把它当REGISTER或业务通过。正在核对当前新根的正规原件和匹配迁移空口令拒绝边界，不重复CREATE、不清旧UNKNOWN。
+- 用户新增授权完成后启动服务器并编译最新独立客户端，要求无需再询问。客户端当前HEAD工作区保持原样；Unity6000.6.0f1首轮日志明确缺有效Editor许可证，原外层另有资源/IO未闭合，未产出已验收可执行文件。Unity Hub界面显示Windows锁屏，按computer-use guidance停止界面操作；服务器侧继续。尚未启动Main36应用或取得真实进游戏结果。
+- 玩家持久化保持TiDB/SQL player_store，Redis仅协调；无提交、推送、旧资源清理或生产操作。
+
+### 2026-11-02 Codex：Java握手回归与TiDB OOM同实例恢复
+
+- 第2原428首轮在Pb10的AuthoritySqlFixture.admin握手读取阻塞；核实当前Maven/测试JVM父链与birth后终止本轮自有进程，旧新夹具原件均保留，未宣称428通过。夹具同类5直连及NORMAL属性统一补连接前connectTimeout/socketTimeout=5000；先使用真实ConnectorJ本地黑洞握手获得1FAIL/9.3秒，再修复后1PASS/0跳过/5.362秒，原outer分别native-stage-20261102T200334758Z-7bfdbede、native-stage-20261102T200556822Z-d706bf80。仅改J测试夹具、回归测试与common的现有版本test-scope驱动依赖，不改玩家存储实现。
+- 修复后原428复验源2802稳定；精确原身份2PASS、153ERROR、273未运行（全选择器2PASS/156ERROR、0FAIL、0SKIP，新增3例错误单列），原件native-stage-20261102T201058612Z-e6e40719。20:17新物理采样证明TiDB同CID在20:12:41.178532978Z OOM退出137，旧768MiB上限；Seal如实拒绝与旧epoch不同，所有SQL随后暂停。原428的未运行不等于跳过或失败。
+- 第4当前新privateRoot只读投影62/62 SQL结果全部confirmed，私密正文仅CF3入内存、SQLsha及主体匹配、strict CREATE14逐一确认，原件native-stage-20261102T195902646Z-58329649；首次投影误将缺失cleanup_errors当@null一项而失败已明确保留为读取错误，未解释为SQL失败。
+- 用户此前已授权内存最大、Root接手全部本地修复和服务器/客户端交付无需询问。Root将精确OOM137的TiDB原CID内存与memory+swap上限改为4GiB后start，逐前后固定投影核镜像、数据卷、CPU和网络模式一致，PD/TiKV未改、未删卷或数据、无SQL；恢复outer native-stage-20261102T202053784Z-24c34b9c完整通过。新两独立32字段/无ENV full观察outer native-stage-20261102T202150958Z-12705080通过，仅为采样，不代新physical/I3资格。
+- 旧4974 physical/704 I3及所有owner、grant、receipt保持历史，不能用于新启动状态冒当前。需正规重取绑定链及显式同CID/卷/镜像资源续接关联后再运行SQL、余下迁移、26登记和36应用业务/故障联验。客户端仍未构建交付：Unity缺有效许可证、锁屏界面未再操作。无提交或推送。
+
+### 2026-11-02 Codex：恢复后当前Raw通过及I3工具ABI红绿
+
+- TiDB4GiB恢复后的新C受控独立采样outer native-stage-20261102T203237888Z-d11c886b通过；Root用原FullInspectOrigin纯读取实际逐三节点全部32字段核同。新typed Fresh位于C:/Users/luyua/.codex/tmp/tidb4g-qualification-20261102-r1/Fresh.TiDB4GiB.ROOT.READY.json，SHA60DC2573FB2E84AA334D73B74772FEF7D77616FDCBDF4D7A7CB0ACFE6BDFD769。S中早期草案因路径ACL不满足旧强Pin而未作为当前来源，未放宽ACL判定、未改工作区权限。
+- Root批准仅本次精确六个新捕获零字节stdout/stderr诊断日志的CreateNew空写与内存empty SHA；跨阶段只允许受控共享只读Length0核验且不读取正文，不适用DSN/owner/raw/sql/leaf。其它控制侧私密正文/摘要全部CF3；原Go探针自有原件生命周期按原受审原生接缝保留，不虚称CF3。
+- 当前Raw E601真实adapter四held显式RC固定SELECT、前后强会话、rollback/close及同世代inspect完整通过，原outer native-stage-20261102T204203749Z-017b14d9；新引用公开定投影C/Raw.next-phase.refs.actual.public.json由CF3读取新private bracket后产生，原outer native-stage-20261102T204605326Z-73e339cb。凭据/主体正文未输出，无业务写、旧原件不改。
+- 新本地物理绑定C/physical.current-TiDB4G.ROOT.READY.json SHA C75D74409C574CE50029375075F4A1C7B56F13DEC2D93434B670316CA670E965仅批准当前本地物理/Raw来源事实，不是生产cluster ID、I3尚未发行。旧4974物理和704 I3保留历史，不用于当前cap/启动事实。
+- 旧I3 Go工具硬认历史F9 wrapper，不能让真实E601伪装旧launcher。Root隔离后继只将实际controller绑定更新为已运行C ROOT路径/E601，保留原Source/Binary/checkPinnedRef/SQL/四held/rollback/cleanup全部判定；路径别名及错误SHA明确拒绝。gofmt outer native-stage-20261102T205551688Z-873f9104；有效旧行为红native-stage-20261102T205652832Z-82115bcb，3叶反例失败；新行为4组12叶全通过及离线build0，原outer native-stage-20261102T205814122Z-93cc63e1。先前不同目录harness错误205612不计行为红。
+- 新工具source SHA04AB0A44F7B383A31EDCB7FC72CF29F9D0818AD3070D8659C02C83438E0419DD，PE F3014E68434BDF6832887A809E3671CBCFB8E3AA582DE4BE5E275847612269E2；原1BDA source/775 PE不改。以上仍非I3真实锁通过，Reader/controller续接待定稿执行。未启动36应用，未验证双区业务或故障，原428仍待新环境完整复验，客户端仍缺许可证。玩家TiDB/SQL player_store实现不改，无提交推送。
+
+### 2026-11-02 Codex：当前Reader来源路径比较定位
+
+- 新Reader58BE与controller2A9D精确复制至C受控根。首个纯验证outer native-stage-20261102T211105082Z-c457c241在初始化失败：Root caller误从新controller只抽三public函数，Pin-Locked新增依赖未导入；改为原3321三函数原文后已进入真实Raw回读。
+- 后续纯只读诊断outer native-stage-20261102T211220746Z-7f776049定位Reader Raw-ResourceEvidence第261行：当前Raw计划9个public来源ref逐个PinBuildSource均已通过，真实source_before/source_after一致，但计划部分路径用斜线，72D实际来源规范为反斜线，原JSON字符串严格相等误拒。原资源outer017b、源码摘要及私有原件均未改，SQL执行0；将补严格有序path+SHA规范等价检查，保留全部摘要、来源数量/顺序、资源及清理断言，不能把本次预检称作I3通过。
+- 当前九份冻结Main36 r4依赖实际摘要再次全匹配；服务器36应用仍未启动。客户端缺Unity许可证/锁屏阻塞仍保留，未绕过授权。
+
+### 2026-11-02 Codex：Reader实际全链通过、I3输入引用红绿
+
+- 新Reader49468严格规范有序来源ref，旧58BE与旧原件均保留；12个source-ref正负例、真实Raw/physical全链回读及5个纯内存负例实际通过，完整outer native-stage-20261102T211829533Z-eef65cfc。该步无SQL、不发行I3。
+- 首轮真实I3 native-stage-20261102T211905846Z-ec708651失败；CF3只读投影outer212213954-4e4cf6ff确认首尾inspect均0、Go退出1、无sql-run可读。无sql-run本身不能推断SQL0或owner不存在，原run/任何可能残留保持HOLD，不据此清理。
+- 同04AB原函数assertInputs只读诊断212408661-39559666及布尔定位212501139-a909b749：Raw四held/会话/关闭/SQL/fullgit/fresh/source/beforeSHA等均真，仅binary ref struct字面相等为假。新后继只替此一条件为已pin两边的Windows规范路径和SHA大小写等价，其余权限/原件/SQL/回滚/清理原判定保留。gofmt212657125-e845fd1d；旧行为规范等价3负结果重现红212748345-3712f928，新20边界及真实当前assertInputs全通过+离线build0，outer212801513-2ad3a645。原04AB/F301不改；新source4210736A、PEA734526E，完整摘要见C受控root的I3-Go-binary-ref-build.actual.public.json。
+- Root controller r5只随新source/PE四字符串更新，原Reader49468保持，已新启真实两原语探针，结果未出；服务器36应用与双区业务仍未启动，不把编译/纯读当业务通过。第2原428仍待环境当前资格完整后复验，第5新HOLD保持单列。玩家TiDB/SQL player_store不变，无提交推送。
+
+### 2026-11-02 Codex：当前I3双原语通过、最新协议重生与受影响复验
+
+- 新TiDB4GiB真实I3两原语SELECT_ONLY/LOCK_TOUCH完整通过，外层native-stage-20261102T212904768Z-1066ddeb，proof9A002D9C…。控制侧CF3复读真实原件、两case自有资源清理及原完整resource gate再核通过，outer213030578-478be43e；公开C受控root/I3.current.refs.actual.public.json SHA59804230…，SELECT_ONLY原SHA D1920A1C…。该结果不代表Main36迁移/REGISTER或双区业务通过；首轮失败仍保留。
+- 新epoch两独立Docker当前采样213134670-a3273b88通过，norm77960B51…、full00FA6224…；新Seal/Validator只随实际五引用更新并增加当前CF3实际投影/完整I3 outer公开依据，120秒、purpose和全部原门禁保持。旧owner/4974原件不改，Main仍需显式同存储续接资格。READONLY Context r7的execution_ready=false，不能拿它直接启动。
+- 当前内存控制R14只读213324744-2492de9b通过，GC tuner ON、server memory limit80%、schema cache512MiB，其余值保留，未改GLOBAL配置。14库结构/28账号四个只读查询213528559-9815cfb0完成：199表、28目标账号0、otherHost0，SQL写0；match/trade/inbox缺36/16/13表符合未迁移。data_service缺player_snapshot.idx_player_snapshot_3、transaction_log.idx_transaction_log_4，源码证实Go生成descriptor尚未包含当前proto新增尾索引，不能当假项或宣称迁移全验收。
+- 正式生成器135源重新构建通过df976565；协议生成前清单首次因PowerShell文化排序与Python ordinal不一致在任何备份/生成前拒绝，原35733ec8保留，未重写成成功。改为当前成员重新枚举与Ordinal排序后，正规NoUnity proto-gen-run及mail/rank hooks完整通过26dc8500，5506输入稳定；2309受管文件109124233字节先备份，26守护文件176方法段原文全同。实际仅8产物变化，含C++ rollback pb.cc、共享Go rollback pb.go及临时/合并协议副本，未手改生成代码、不写客户端仓。
+- 当前最新19Go启用模块原build/vet/test已重启在全新latest-proto-actual-r2输出，尚未整轮完成；C++2140当前输入与前版仅上述pb.cc一处预期变化，gate/scene串行MSBuild及16份Go运行PE重编计划已准备，未运行。原第1公会结果保留，第2原428仍待当前真库完整复验，第5原221只读核账保留、新HOLD单列。Unity许可证/锁屏阻塞仍未消除，无最新客户端exe交付；服务器36应用仍未启动。玩家TiDB/SQL player_store不变，无提交推送。
+
+### 2026-11-02 Codex：最新运行包完成、当前Main36接线实际只读通过
+
+- 正规NoUnity生成后的19Go build/vet/test整轮通过，3358源首尾稳定，outer native-stage-20261102T215107733Z-6414b5f7；外部条件跳过照实保留，不算真库业务通过。最新16Go运行PE全部构建、MZ/摘要核对和备份安装通过，原outer220947979-b07c5f0e、221735427-0c81d5b8，正式存储实现不变。
+- 直接节点工程首轮虽退出0但未重建proto.lib，未视为最新协议链接资格；补显式proto.vcxproj串行构建后再链接gate/scene完整通过，outer native-stage-20261102T221246956Z-1d7f5b24，2140输入稳定，gate C7CCD81E…、scene38FFBC91…、proto.lib A59CBF39…；原产物均先备份，未并行MSBuild。
+- 受控临时Main36接线provider仅修PowerShell空Traps判定，旧9例及新增真实函数物化Trap边界共10纯测试通过，outer223013196-7b1704d3。完整真实Instance函数3处CF3拼接、Bootstrap同owner续接2处及3个内部hook源物化均逆向复核，未调用Bootstrap。
+- 真实当前I3原件CF3摘要/结构、公有JSON拒绝、公有fallback、Normal重绑及Instance源安装实际通过，outer native-stage-20261102T224403533Z-4374e82f；公开Main36.actual-CF3-wiring.readonly.actual.public.json明确SQL=false、应用0、Bootstrap未调用、runtimeReady=false。前一轮Root caller漏mandatory AssemblyBinding在首hook前失败，原3e02086c保留，不当provider/SQL失败。
+- 当前proto索引正式生成规格2表9项纯导出通过04893bf5，未开数据库；既有完整库的正式data_service迁移入口故意跳过非fresh库，不能靠重跑宣称修复。正准备本次严格新建空库的prefix覆盖只读预检，实际缺项与本run空表/空写者/28账号0/owner/fresh均确认后才考虑最小补齐。match/trade/inbox余迁移、26REGISTER、36应用与双区业务/故障尚未执行。客户端仍缺Unity有效授权，锁屏UI未操作，未产出exe。无提交推送、无旧UNKNOWN清理。
+
+### 2026-11-02 Codex：恢复后原428运行中、双区签前端口缺口
+
+- 新4GiB物理/I3下独立Java原428再开新夹具与独立首方仓clean test，输入2802均与已修握手边界后来源相同；新调用位于all-five-resume-20261102-r1/j2-original428-current-TiDB4G-20261102-r3-HOLD。23:18仍运行，已生成的pbmysql10、PlayerStore三个类119共129例PASS、0FAIL/ERROR/SKIP；PlayerStoreSqlTest104例1268秒全部通过。不能把进行中未出XML用例判失败、跳过或已通过，旧OOM失败原件保留。
+- Main36真实CF3当前资格接线4374e82f和同run设施只读328f2672均完整通过，仍未启动应用。真实索引prefix覆盖四R14查询outer224642091-c1e484cb：9项7覆盖2缺失、两业务表/registry/28目标账号计数全0、SQL写0，公开coverage-readonly-r1.actual.public.json SHA8FB6FC61…。后继Apply37D及当前artifact-aware NoApps898已Root独立审，只准备未运行；固定CF3 intent后仅两派生CREATE INDEX，保留单clock110/句60/fresh120秒、每写前后无应用与四query、失败不自动重试，不改生产存储的fresh-only迁移语义。
+- 本次签REGISTER前另发现公开Go28只校RPC端口，两个区的嵌套Prometheus.Port重复：login9101、player_locator9190、guild9220；正式go_services只改顶层MetricsListenAddr，尚未改嵌套Port。新增go_services_ports测试CEAF覆盖显式双区及同区第二副本/不误改Other.Port，Parser0但未跑，正式launcher仍原4CD，待唯一重任务槽空后先红再修复、跑受影响PS。不能以旧Go28的静态RPC唯一称所有监听就绪。
+- 为保留旧公开规划，Core4仅把两个launcher-runtime字面量改新public子目录，完整逆变换；新source7A4EFF09与当前28Go公共planner89A65B96仅准备、Parser0，未调用、未建私有根或发运行资格。新规划须在metrics修复后实际产生；真实同run owner/boot保持。六域运行密钥内存适配及真实持续Job监督器由已授权协调聊天准备，旧私有密钥文件不用于补值。第4仍剩迁移/26登记/启动/业务及故障真实验收，Unity授权/锁屏阻塞未消除，玩家TiDB/SQL player_store不变，无提交推送。
+
+### 2026-11-03 Codex：真实索引补齐与端口回归完成、原428后继仍运行
+
+- 原428 r3整轮失败，非业务断言失败：当时XML201PASS/18SKIP/0FAIL/ERROR；精确原428为199PASS18SKIP211未运行，Player模块同fork累计1800秒触发退出。原结果和HOLD保留。r4保持单fork和1800秒类时限，改每类独立fork并明确TEAM_TEST_JDBC/TEAM_REQUIRE_TESTS，真实Maven于23:56启动，2802输入固定；当前仍运行，PlayerRouteAuthoritySqlTest新增1个真实SQL超时ERROR，不提前判整轮通过。
+- 空自有bootstrap两表派生索引真实Apply outer232643545-47cba73d通过：2DDL均R14确认并后读，9覆盖0缺失，两业务表/registry/28目标账号全0，无应用。未修改data_service生产fresh-only语义，未重建14库。
+- 正式Go launcher仅补嵌套Prometheus.Port按现有zone/replica偏移，0禁用保留；ports回归先28PASS1FAIL(旧9190重复)，后29PASS，另local_mysql40PASS/stop15PASS，共84PASS。local_mysql中文拒绝断言首次受nativepipe编码影响失败，后仅修测试UTF8捕获且保留原拒绝断言，所有旧失败保留。当前正式go_services SHA5B830F2B…。
+- 真实新Go28规划outer234403623-fe4a5bc4通过，54启用RPC/metrics端口唯一；两router正式metrics为空禁用。只是静态配置生成，SQL/应用0。新Core7A/launcherBCEE/bootstrap746/manifest2F来源均纯源物化，尚未运行启动。
+- 内存密钥smoke四组均失败，后安全诊断235455279-23060176定位首错在安装前名字契约；协调源码审发现harness AST只导Body丢外置参数，后继完整声明导入待真实验证，未据此改业务密钥逻辑。Main36仍剩3迁移/26登记/36应用/双区业务与故障，客户端仍缺Unity本机有效许可且桌面锁屏。玩家持久化仍TiDB/SQL player_store，无提交推送、无旧UNKNOWN清理。
+- 00:03 Root进度更新脚本复用XML强类型变量导致checkpoint错误序列化；已保留错误公开副本，从真实公开结果与既有交接重建V2当前五项状态/运行stage/关键原件路径。未触碰测试、运行进程或私密数据；旧细节仍在PROGRESS和原结果目录。
+- UTC00:24/本地19:24：r4当前Player模块已出XML118PASS1ERROR0FAIL/SKIP，其中PlayerStoreSql104全部通过；漏接ownerDDL的7例中6P1ERROR。整Maven未终局，2802源码仍冻结。正在准备两loop最小修法及既有ownerDDL期限/恢复替身回归，未变更业务断言或NORMAL超时。
+- 本段物化的Root源/计划全部明确非运行：CatalogResume七hunk逆向精确(04F686F6，函数body43905F…)保留历史严格CREATE与旧HOLD、当前九阶段真实provider；内存实际SQL/REGISTER/AssertCatalog journal64E692仅在正式成功返回后记成功；当前r10只读输入50A3DF/新结构observer61DA；四Cpp CF3配置helper C8D821仅定义。新36应用68监听静态计划B96795含54Go/4Java/10Cpp且无重复，已纠正旧463计划Java bind猜值为正式NewJavaConfig强制的127.0.0.1，旧计划保留。内存smoke新5DBC完整声明导入计划9CCE2E已备但未跑。以上均没有迁移、REGISTER、应用启动或业务验收通过。
+
+### 2026-11-03 Codex：owner DDL范围修复定向通过，运行原428互斥批次
+
+- r4实际最终精确原428为216PASS/1ERROR/211未运行，XML原始218PASS/1ERROR，2802源稳定；原件保留。错误定位AuthoritySqlFixture.prepareInternal两循环漏接既有owner DDL作用域，NORMAL五秒超时误用于建表。仅这两处接既有60秒单调owner helper，既有普通/业务超时不变；新增恢复/异常回归4和旧握手1共5PASS，原outer004114536-11aa9597。真实PlayerRoute7与prepareWithPlayerSchema2共9PASS/0FAIL/ERROR/SKIP，outer004713180-fca02275，2803源稳定。两类定向结果不替代原428。
+- 当前结构只读outer004016565-aeba8f89通过；199原表指纹连续性与两派生索引实际链闭合，SHA4DDEF2D9…；剩match/trade/inbox迁移仍未运行。内存密钥smoke完整函数声明导入后4组全PASS，outer003939033-a5359dba；旧失败保留，未改业务密钥逻辑。
+- Prelude outer010600055-277f9b62完整通过，实际公开AC38B8CA…：新迁移前明确拒绝、共享运行域密钥CF3 CreateNew逐键回读、独立match Schema身份4exec/4query和最小授权全验。固定原件已存在，后续只读不重生；应用0、NORMAL登记0、runtimeReady=false。该结果不代表迁移或双区业务完成。
+- 原428按同2803输入拆三个完整组互斥集合155/167/106；联合与原BF6CD锚428身份精确相等，仅首批guild167在original72D 011403376-6e42e826真实运行，其余未运行。01:24已出EconomyLockOrder7FAIL，XML精确断言为TiDB内部吸收死锁的采集未启用，失败在并发对撞前置而不是业务结局；不删除断言、不盲重跑，保留本轮完结结果后核定本地实例配置。
+- 持续Host资源Prime接线仅纯源物化SHA3999A974…，保持原资源提交余量12/8GiB、CPU2、采样1秒/最大2秒及所有实际身份/监听要求，未AddType/开Job/启动应用。玩家仍TiDB/SQL player_store，无提交推送、无旧UNKNOWN清理；客户端许可/锁屏外部阻塞仍在。

@@ -45,7 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
     "commerce.delivery-secret=rmb-http-delivery-test-only-key-00003",
     "commerce.admin-secret=rmb-http-admin-test-only-key-0000004", "commerce.admin-subject=rmb-admin"
 })
-@Import(RmbConsignmentHttpTest.TestEndpoints.class)
+@Import({RmbConsignmentHttpTest.TestEndpoints.class, H2CommerceTestConfiguration.class})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RmbConsignmentHttpTest {
     private static final String PREFIX = "/mall/rpc";

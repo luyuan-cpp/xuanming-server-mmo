@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
     "commerce.payment-secret=mock-http-payment-test-only-key-00002",
     "commerce.delivery-secret=mock-http-delivery-test-only-key-0003"
 })
-@Import(MockPaymentHttpTest.ForwardConfiguration.class)
+@Import({MockPaymentHttpTest.ForwardConfiguration.class, H2CommerceTestConfiguration.class})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class MockPaymentHttpTest {
     private static final String PREFIX = "/mall/rpc";

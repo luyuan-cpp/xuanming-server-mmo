@@ -14,8 +14,24 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 @Configuration
 public class DatabaseConfiguration {
+    @FunctionalInterface
+    public interface DataSourceFactory {
+        DataSource create(DataSourceProperties source, CommerceProperties props) throws java.io.IOException, java.sql.SQLException;
+    }
+
     @Bean Clock commerceClock() { return Clock.systemUTC(); }
-    @Bean DataSource dataSource(DataSourceProperties source, CommerceProperties props) throws java.io.IOException, java.sql.SQLException {
+    @Bean DataSourceFactory normalDataSourceFactory() { return this::dataSource; }
+    @Bean(name = "dataSource")
+    DataSource configuredDataSource(DataSourceProperties source, CommerceProperties props, DataSourceFactory factory) throws java.io.IOException, java.sql.SQLException {
+        return factory.create(source, props);
+    }
+
+    // 工厂只是装配接缝。运行包的默认工厂仍无条件消费NORMAL资格，不按URL或测试标志放行。
+    DataSource dataSource(DataSourceProperties source, CommerceProperties props) throws java.io.IOException, java.sql.SQLException {
+        return dataSource(source, props, com.game.authority.WriterAuthority.consumeEnvironment());
+    }
+
+    HikariConfig poolConfig(DataSourceProperties source, CommerceProperties props) {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(source.getUrl()); config.setUsername(source.getUsername()); config.setPassword(source.getPassword());
         config.setMaximumPoolSize(16); config.setConnectionTimeout(3000); config.setValidationTimeout(2000);
@@ -30,10 +46,14 @@ public class DatabaseConfiguration {
         } else if (source.getUrl() != null && source.getUrl().startsWith("jdbc:mysql:")) {
             config.setConnectionInitSql("SET SESSION sql_mode='STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION',innodb_lock_wait_timeout=5");
         }
+        return config;
+    }
+
+    DataSource dataSource(DataSourceProperties source, CommerceProperties props, com.game.authority.WriterAuthority boot) throws java.sql.SQLException {
+        HikariConfig config = poolConfig(source, props);
         var credentials=new java.util.Properties();credentials.putAll(config.getDataSourceProperties());
         credentials.setProperty("user",source.getUsername());credentials.setProperty("password",source.getPassword());
         String init=config.getConnectionInitSql();
-        var boot=com.game.authority.WriterAuthority.consumeEnvironment();
         config.setDataSource(new com.game.authority.AuthorityDataSource(source.getUrl(),credentials,
                 boot,props.isRequireTidb(),init==null?java.util.List.of():java.util.List.of(init)));
         config.setConnectionInitSql(null);

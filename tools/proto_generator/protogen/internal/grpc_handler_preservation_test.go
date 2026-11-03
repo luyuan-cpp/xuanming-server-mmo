@@ -974,7 +974,7 @@ func grpcWorkspaceRoot(t *testing.T) string {
 func buildBattleGrpcPreservationMethods() RPCMethods {
 	fd := &descriptorpb.FileDescriptorProto{Name: proto.String("proto/battle/battle_node.proto")}
 	svc := &descriptorpb.ServiceDescriptorProto{Name: proto.String("BattleNode")}
-	names := []string{"QueryObserver", "QueryBattleCreation", "CreateBattle", "DestroyBattle", "AddObserver", "RemoveObserver", "IssueBattleTicket"}
+	names := []string{"QueryObserver", "QueryBattleCreation", "CreateBattle", "DestroyBattle", "AddObserver", "RemoveObserver", "IssueBattleTicket", "AttachRelayGate", "PromoteSpectateBroadcast"}
 	methods := make(RPCMethods, 0, len(names))
 	for _, name := range names {
 		response := "." + name + "Response"

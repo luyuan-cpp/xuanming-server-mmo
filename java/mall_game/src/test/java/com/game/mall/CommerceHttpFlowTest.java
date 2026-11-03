@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** 通过真实 HTTP 与实际 Spring 装配验收订单切片；H2 不能代替 TiDB 集成证据。 */
@@ -35,6 +36,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
         "commerce.payment-secret=http-flow-payment-test-only-key-0002",
         "commerce.delivery-secret=http-flow-delivery-test-only-key-0003"
 })
+@Import(H2CommerceTestConfiguration.class)
 class CommerceHttpFlowTest {
     private static final String BUYER = "18446744073709551615";
     private static final String GATEWAY_KEY = "http-flow-gateway-test-only-key-0001";

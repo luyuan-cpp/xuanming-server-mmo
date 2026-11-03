@@ -1,67 +1,43 @@
 package com.game.mall;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.Properties;
-import java.util.UUID;
-import org.junit.jupiter.api.AfterAll;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/**
- * 显式执行的本地真 TiDB HTTP 契约：继承同一套 HTTP 行为断言，并启用生产数据库门禁。
- * -Dtest=CommerceTiDBHttpIT -Dcommerce.it.tidb=jdbc:mysql://127.0.0.1:24000/
- * 不接受已有库名或远端地址；没有参数直接失败，不把未运行集成伪装成通过。
- */
+/** 真TiDB继承全部HTTP业务断言；没有正规Schema/physical/I3/NORMAL前置即失败，不降级H2。 */
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Import(CommerceTiDBHttpIT.NormalConfiguration.class)
 class CommerceTiDBHttpIT extends CommerceHttpFlowTest {
-    private static String baseUrl;
-    private static String database;
-    private static Properties credentials;
-
     @DynamicPropertySource
-    static synchronized void realDatabase(DynamicPropertyRegistry registry) throws SQLException {
-        if (database == null) {
-            String configured = System.getProperty("commerce.it.tidb", "");
-            baseUrl = OwnedTiDbFixture.endpoint(configured);
-            credentials = new Properties();
-            credentials.setProperty("user", System.getenv().getOrDefault("COMMERCE_IT_TIDB_USER", "root"));
-            credentials.setProperty("password", System.getenv().getOrDefault("COMMERCE_IT_TIDB_PASSWORD", ""));
-            credentials.setProperty("connectTimeout", "3000");
-            credentials.setProperty("socketTimeout", "6000");
-            String candidate = "mallhttpit_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-            requireOwnedName(candidate);
-            System.out.println("TiDB HTTP隔离测试库：" + candidate);
-            try (Connection admin = OwnedTiDbFixture.admin(baseUrl, credentials);
-                 var statement = admin.createStatement()) {
-                statement.setQueryTimeout(6);
-                statement.execute("CREATE DATABASE `" + candidate + "`");
-            }
-            database = candidate;
-        }
-        registry.add("spring.datasource.url", () -> baseUrl + database);
-        registry.add("spring.datasource.username", () -> credentials.getProperty("user"));
-        registry.add("spring.datasource.password", () -> credentials.getProperty("password"));
+    static synchronized void realDatabase(DynamicPropertyRegistry registry) throws java.io.IOException {
+        OwnedTiDbFixture.Owner owner = OwnedTiDbFixture.prepareHttp();
+        String url = owner.jdbcUrl(), user = owner.username(), password = owner.password();
+        registry.add("test.mall.datasource", () -> "owned-normal");
+        registry.add("spring.datasource.url", () -> url);
+        registry.add("spring.datasource.username", () -> user);
+        registry.add("spring.datasource.password", () -> password);
+        // provider已按原schema.sql安装；Spring的NORMAL连接没有DDL权限。
+        registry.add("spring.sql.init.mode", () -> "never");
         registry.add("commerce.run-mode", () -> "prod");
         registry.add("commerce.require-tidb", () -> "true");
+        registry.add("commerce.fixture.normal-context-file", owner::contextFile);
+        registry.add("commerce.fixture.normal-context-sha256", owner::contextSha256);
     }
 
-    @AfterAll
-    static synchronized void removeOnlyThisTestDatabase() throws SQLException {
-        if (database == null) { return; }
-        requireOwnedName(database);
-        try (Connection admin = OwnedTiDbFixture.admin(baseUrl, credentials);
-             var statement = admin.createStatement()) {
-            statement.setQueryTimeout(6);
-            statement.execute("DROP DATABASE `" + database + "`");
-        }
-        database = null;
-    }
-
-    private static void requireOwnedName(String value) {
-        if (!value.matches("mallhttpit_[0-9a-f]{16}")) {
-            throw new IllegalStateException("拒绝操作不属于本测试的新库");
+    @TestConfiguration(proxyBeanMethods = false)
+    @ConditionalOnProperty(name = "test.mall.datasource", havingValue = "owned-normal")
+    static class NormalConfiguration {
+        @Bean @Primary
+        DatabaseConfiguration.DataSourceFactory ownedNormalDataSourceFactory(
+                @Value("${commerce.fixture.normal-context-file}") String contextFile,
+                @Value("${commerce.fixture.normal-context-sha256}") String contextSha) {
+            return (source, props) -> OwnedTiDbFixture.openHttpDataSource(source, props, contextFile, contextSha);
         }
     }
 }

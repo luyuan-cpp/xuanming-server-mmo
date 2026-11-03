@@ -143,6 +143,32 @@ try {
         Assert-True $script:Starts[0].ChatDsnPresent 'chat取得自己的SQL账号'
         Assert-Equal $false $script:Starts[1].ChatDsnPresent 'trade不得继承chat SQL账号'
     }
+    Test-Case '双区及同区多副本为嵌套Prometheus分配不同端口且不改其他Port' {
+        Reset-TestState
+        $savedZone = $Zone
+        $savedOffset = $ZonePortOffset
+        $savedStride = $PortStride
+        $sourcePath = Join-Path $GoRoot 'trade/etc/trade.yaml'
+        $original = [IO.File]::ReadAllText($sourcePath)
+        try {
+            $source = "ListenOn: 127.0.0.1:50800`nZoneId: 1`nMetricsListenAddr: `":9230`"`nPrometheus:`n  Host: 127.0.0.1`n  Port: 9190`n  Path: /metrics`nOther:`n  Port: 7777`n"
+            [IO.File]::WriteAllText($sourcePath, $source)
+            $Zone = 990017; $ZonePortOffset = 0; $PortStride = 1
+            $first = Resolve-InstanceConfig -Name trade -Info $ServiceCatalogue.trade -Index 1 -Total 1
+            Assert-Equal '9190' (Get-YamlScalar -Path $first.FullPath -KeyPath 'Prometheus.Port').Value '第一区保留基准监控端口'
+            $Zone = 990018; $ZonePortOffset = 1000
+            $second = Resolve-InstanceConfig -Name trade -Info $ServiceCatalogue.trade -Index 1 -Total 1
+            Assert-Equal '10190' (Get-YamlScalar -Path $second.FullPath -KeyPath 'Prometheus.Port').Value '第二区监控端口按显式偏移分离'
+            Assert-Equal ':10230' (Get-YamlScalar -Path $second.FullPath -KeyPath 'MetricsListenAddr').Value '已有顶层监控地址遵循相同偏移'
+            Assert-Equal '7777' (Get-YamlScalar -Path $second.FullPath -KeyPath 'Other.Port').Value '其他配置段的Port不被误改'
+            $replica = Resolve-InstanceConfig -Name trade -Info $ServiceCatalogue.trade -Index 2 -Total 2
+            Assert-Equal '10191' (Get-YamlScalar -Path $replica.FullPath -KeyPath 'Prometheus.Port').Value '同区第二副本使用独立监控端口'
+            Assert-Equal '9190' (Get-YamlScalar -Path $sourcePath -KeyPath 'Prometheus.Port').Value '源配置保持基准值'
+        } finally {
+            $Zone = $savedZone; $ZonePortOffset = $savedOffset; $PortStride = $savedStride
+            [IO.File]::WriteAllText($sourcePath, $original)
+        }
+    }
     Test-Case '常驻子进程不继承Match迁移凭据且父环境原样恢复' {
         Reset-TestState
         $savedUser = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_USER', 'Process')

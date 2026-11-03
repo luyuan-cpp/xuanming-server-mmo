@@ -279,8 +279,25 @@ try {
     }
     $driverAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../dev_tools.ps1'), [ref]$null, [ref]$null)
     Test-Case 'K8s入口拒绝本机档，且在任何部署动作前退出' {
-        $driverOutput = & pwsh -NoProfile -File (Join-Path $PSScriptRoot '../dev_tools.ps1') -Command k8s-zone-up -LocalMySQL 2>&1 | Out-String
-        Assert-True ($LASTEXITCODE -ne 0) '错误组合明确失败'
+        # 原生管道的代码页会把中文拒绝文案转成问号；显式UTF-8捕获真实入口结论。
+        $driverPath = (Join-Path $PSScriptRoot '../dev_tools.ps1').Replace("'", "''")
+        $command = '[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);try{& ''' + $driverPath + ''' -Command k8s-zone-up -LocalMySQL}catch{[Console]::Error.WriteLine($_.Exception.Message);exit 1}'
+        $info = [Diagnostics.ProcessStartInfo]::new()
+        $info.FileName = Join-Path $PSHOME 'pwsh.exe'
+        $info.UseShellExecute = $false; $info.CreateNoWindow = $true
+        $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
+        $info.StandardOutputEncoding = [Text.UTF8Encoding]::new($false, $true)
+        $info.StandardErrorEncoding = [Text.UTF8Encoding]::new($false, $true)
+        foreach ($argument in @('-NoLogo','-NoProfile','-NonInteractive','-Command',$command)) { $info.ArgumentList.Add($argument) }
+        $process = [Diagnostics.Process]::new(); $process.StartInfo = $info
+        try {
+            if (-not $process.Start()) { throw '拒绝路径子进程未启动' }
+            $stdout = $process.StandardOutput.ReadToEndAsync(); $stderr = $process.StandardError.ReadToEndAsync()
+            if (-not $process.WaitForExit(15000)) { $process.Kill($true); $process.WaitForExit(); throw '拒绝路径超过15秒截止' }
+            $driverOutput = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
+            $driverExitCode = $process.ExitCode
+        } finally { $process.Dispose() }
+        Assert-True ($driverExitCode -ne 0) '错误组合明确失败'
         Assert-Match $driverOutput '只用于本地 Go 启动命令' '执行到入口拒绝而不是部署'
     }
     foreach ($driverCommand in @('go-svc-start', 'go-svc-start-exe', 'dev-start', 'dev-start-exe', 'dev-start-zones')) {

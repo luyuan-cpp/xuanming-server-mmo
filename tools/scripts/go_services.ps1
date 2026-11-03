@@ -409,6 +409,26 @@ function Get-InstancePort([hashtable]$Info, [int]$Index) {
     return [int]$Info.Port + (Get-ZonePortOffset) + ($Index - 1) * $PortStride
 }
 
+function ConvertTo-ShiftedPrometheusConfig {
+    param([Parameter(Mandatory)][string]$Content, [int]$PortOffset)
+    $headers = [regex]::Matches($Content, '(?m)^Prometheus:[ \t]*(?:#.*)?\r?$')
+    if ($headers.Count -eq 0) { return $Content }
+    if ($headers.Count -ne 1) { throw 'Prometheus配置段重复，拒绝猜测监控端口。' }
+    $start = $headers[0].Index + $headers[0].Length
+    $next = [regex]::Match($Content.Substring($start), '(?m)^[^\s#]')
+    $length = if ($next.Success) { $next.Index } else { $Content.Length - $start }
+    $block = $Content.Substring($start, $length)
+    $pattern = [regex]::new('(?m)^(?<lead>  Port:[ \t]*)(?<port>\d+)(?<tail>[ \t]*(?:#.*)?\r?)$')
+    $ports = $pattern.Matches($block)
+    if ($ports.Count -ne 1) { throw 'Prometheus缺少唯一的直接子项数字Port。' }
+    $basePort = [long]$ports[0].Groups['port'].Value
+    if ($basePort -eq 0) { return $Content } # 0表示未启用，不能被区偏移意外开启。
+    $port = $basePort + [long]$PortOffset
+    if ($basePort -gt 65535 -or $port -lt 1 -or $port -gt 65535) { throw 'Prometheus派生端口越界。' }
+    $adjusted = $pattern.Replace($block, { param($m) "$($m.Groups['lead'].Value)$port$($m.Groups['tail'].Value)" }, 1)
+    return $Content.Substring(0, $start) + $adjusted + $Content.Substring($start + $length)
+}
+
 function Resolve-BindablePort {
     param([int]$Port, [string]$Label, [hashtable]$ReservedPorts = @{})
     if ($Port -lt 1 -or $Port -gt 65535) { throw "[port] $Label : 无效端口 $Port" }
@@ -789,6 +809,9 @@ function Resolve-InstanceConfig {
             1
         )
     }
+
+    # go-zero使用嵌套Prometheus.Port；和顶层监控地址使用同一个区/副本偏移。
+    $content = ConvertTo-ShiftedPrometheusConfig -Content $content -PortOffset ($zoneShift + ($Index - 1) * $PortStride)
 
     # Rewrite first ZoneId entry (handles both top-level 'ZoneId: N' and the
     # nested 'Node:\n  ZoneId: N' shape used by login/guild/player_locator).

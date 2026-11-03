@@ -4738,18 +4738,20 @@ Test-Case 'guild 部署形态:全局池 2 副本滚动 + PDB + 反亲和 + POD_I
     }) | Select-Object -First 1
     Assert-True -Condition ($null -ne $block) -Because 'infra-up 产物里应当有 guild 的 Deployment'
     Assert-Match -Text $block -Pattern '(?m)^  replicas: 2\s*$' -Because '单副本 = 全服帮会功能是单点'
-    Assert-Match -Text $block -Pattern 'type: RollingUpdate\s+rollingUpdate:\s+maxSurge: 1\s+maxUnavailable: 0' -Because '先起新的再停旧的'
+    Assert-Match -Text $block -Pattern 'type: RollingUpdate\s+rollingUpdate:\s+(?:maxSurge: 1\s+maxUnavailable: 0|\{maxSurge: 1,\s*maxUnavailable: 0\})' -Because '先起新的再停旧的，块式与内联映射保持相同策略'
     Assert-Match -Text $block -Pattern 'podAntiAffinity' -Because '两个副本不该落在同一个节点上'
     Assert-Match -Text $block -Pattern '(?s)kind: PodDisruptionBudget.*?name: guild-pdb.*?minAvailable: 1' -Because 'PDB 必须写在主 manifest 里'
-    Assert-Match -Text $block -Pattern 'name: POD_IP\s+valueFrom:\s+fieldRef:\s+fieldPath: status\.podIP' -Because 'ListenOn 是 0.0.0.0,注册进 etcd 的必须是 Pod IP(go/guild/guild.go advertisedHost)'
+    Assert-Match -Text $block -Pattern 'name: POD_IP\s+valueFrom:\s+fieldRef:\s+(?:fieldPath: status\.podIP|\{fieldPath: status\.podIP\})' -Because 'ListenOn 是 0.0.0.0,注册进 etcd 的必须是 Pod IP(go/guild/guild.go advertisedHost)'
     Assert-NotMatch -Text $block -Pattern '(?m)^\s*- name: MMORPG_ASSET_OP_SECRET_GUILD' -Because '资产密钥只在 -AssetOps on 时由脚本注入(Add-GoSvcSecretEnv),manifest 不手写,默认关着不引用 Secret'
-    Assert-Match -Text $block -Pattern 'containerPort: 9220\s+name: metrics' -Because 'metrics 端口与 ConfigMap 的 Prometheus.Port 一致'
+    Assert-Match -Text $block -Pattern '(?:containerPort: 9220\s+name: metrics|\{name: metrics,\s*containerPort: 9220\})' -Because 'metrics 端口与 ConfigMap 的 Prometheus.Port 一致'
     $jobIndex = $guildInfraRun.Output.IndexOf('name: guild-migrate')
     $deployIndex = $guildInfraRun.Output.IndexOf('name: guild-pdb')
     Assert-True -Condition ($jobIndex -ge 0 -and $deployIndex -gt $jobIndex) -Because '建表 Job 必须先于 Deployment apply'
     $job = Select-ManifestByName -Output $guildInfraRun.Output -Name 'guild-migrate'
     Assert-Match -Text $job -Pattern 'args: \["-f", "/app/etc/guild\.yaml", "-migrate"\]' -Because 'Job 必须用与服务同一份配置跑 -migrate'
-    Assert-Match -Text $job -Pattern 'name: go-svc-guild-config' -Because 'Job 挂的是 guild 自己的 ConfigMap'
+    Assert-Match -Text $job -Pattern '- name: svc-config\s+secret:\s+(?:secretName: fixture-schema-config\b|\{secretName: fixture-schema-config(?:, optional: false)?\})' -Because '迁移Job使用本次正规schema配置Secret，与常驻NORMAL配置分离'
+    Assert-Match -Text $job -Pattern 'name: MMORPG_GUILD_SQL_DSN\s+valueFrom:\s+secretKeyRef: \{name: fixture-schema-permission, key: dsn, optional: false\}' -Because '迁移DSN和schema主体必须来自同一个受审权限Secret'
+    Assert-Match -Text $job -Pattern 'name: MMORPG_SQL_SCHEMA_PRINCIPAL\s+valueFrom: \{secretKeyRef: \{name: fixture-schema-permission, key: principal, optional: false\}\}' -Because '迁移身份不能借常驻NORMAL账号'
     Assert-NotMatch -Text $job -Pattern '(?-i)__[A-Z][A-Z0-9_]*__|PLACEHOLDER_' -Because '占位必须全部替换'
 }
 
@@ -4767,14 +4769,17 @@ Test-Case 'guild ConfigMap 镜像 go/guild/etc/guild.yaml;AssetOp / Activity 整
     Assert-Equal -Expected (Get-TopLevelYamlBlockText -Text $guildYamlText -Key 'Activity') -Actual (Get-TopLevelYamlBlockText -Text $embedded -Key 'Activity') -Because 'Activity 整块原样搬运'
     Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'ResultTopicPartitions') -Actual (Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'Activity.TrialResult.Partitions') -Because '历练结果分区数必须等于 match 的结果 topic 分区数,否则结算漏读分区'
     Assert-NotMatch -Text $embedded -Pattern '(?m)^Etcd\s*:' -Because 'guild 刻意不写 go-zero 的 Etcd 段(D-13),写了会被当成按 zone 切片的发现键'
-    Assert-Match -Text $embedded -Pattern '(?m)^PlayerLocatorRedis:\s*\n\s+Host: "redis\.contract-battle-infra:6379"\s*\n\s+Password: "[^"]*"\s*\n\s+DB: 0\s*$' -Because 'PlayerLocatorRedis 必须是共享 Redis 的 DB 0(scene / battle 写在线、位置、历练结果的同一实例)'
+    Assert-Equal -Expected 'redis.contract-battle-infra:6379' -Actual ([string]$flat['PlayerLocatorRedis.Host']).Trim('"') -Because 'PlayerLocatorRedis必须连接scene/battle共享的协调Redis'
+    Assert-Equal -Expected '0' -Actual ([string]$flat['PlayerLocatorRedis.DB']) -Because '共享协调Redis必须使用同一DB 0'
+    Assert-True -Condition ($flat.Contains('PlayerLocatorRedis.Password')) -Because '共享协调Redis的密码配置不能遗漏'
     Assert-NotMatch -Text $embedded -Pattern '(?m)^MergeMarkerRedis\s*:' -Because 'go/guild 已删合服标记段,ConfigMap 不该再写'
-    Assert-Match -Text $embedded -Pattern 'DataSource: "[^"]*@tcp\(mysql\.contract-battle-infra:3306\)/mmorpg_guild\?' -Because 'DSN 库名必须是独占库 mmorpg_guild'
+    Assert-Match -Text $embedded -Pattern '(?m)^  DataSource: ""\s*$' -Because '公开ConfigMap不携带常驻DSN，实例使用正规NORMAL启动配置'
+    Assert-Match -Text $embedded -Pattern '(?m)^  DataSourceEnv: MMORPG_GUILD_SQL_DSN\s*$' -Because '本库DSN只从实例选中的独立授权环境读取'
     # 配置注释会解释为何禁用此参数;约束只作用于实际连接串。
     Assert-NotMatch -Text (Get-FlatValue -Flat (ConvertTo-FlatManifest -Block $cm) -KeyPath 'data.guild.yaml.MySQL.DataSource') -Pattern 'clientFoundRows' -Because 'guild config.Validate 拒绝 DSN 中的 clientFoundRows'
     Assert-Match -Text $embedded -Pattern '(?m)^Prometheus:\s*\n\s+Host: 0\.0\.0\.0\s*\n\s+Port: 9220\s*$' -Because 'metrics 绑 0.0.0.0、端口与清单一致'
     Assert-Equal -Expected '9220' -Actual (Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'Prometheus.Port') -Because '服务 yaml 的 Prometheus.Port 与清单的 9220 一致'
-    Assert-Match -Text $embedded -Pattern '(?m)^SnowflakeCacheDir: ""\s*$' -Because '容器里没有持久目录,不缓存 snowflake 槽位'
+    Assert-Match -Text $embedded -Pattern '(?m)^SnowflakeCacheDir: /tmp/snowflake\s*$' -Because '现役启动使用Pod内临时缓存目录，与其他Go服务的统一配置一致'
     $schemaDev = Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'Schema.AutoMigrate'
     Assert-Equal -Expected $schemaDev -Actual ([string]$flat['Schema.AutoMigrate']) -Because 'dev 档镜像服务 yaml 的建表策略'
 }
@@ -5269,15 +5274,16 @@ Test-Case 'rank 部署形态:全局池 2 副本滚动 + PDB + 反亲和 + POD_IP
     $svc = Select-RankManifestDocument -Output $guildInfraRun.Output -Kind 'Service' -Name 'rank'
     $pdb = Select-RankManifestDocument -Output $guildInfraRun.Output -Kind 'PodDisruptionBudget' -Name 'rank-pdb'
     Assert-Match -Text $deploy -Pattern '(?m)^  replicas: 2\s*$' -Because '单副本 = 全服排行榜是单点'
-    Assert-Match -Text $deploy -Pattern 'type: RollingUpdate\s+rollingUpdate:\s+maxSurge: 1\s+maxUnavailable: 0' -Because '先起新的再停旧的'
+    Assert-Match -Text $deploy -Pattern 'type: RollingUpdate\s+rollingUpdate:\s+(?:maxSurge: 1\s+maxUnavailable: 0|\{maxSurge: 1,\s*maxUnavailable: 0\})' -Because '先起新的再停旧的，块式与内联映射保持相同策略'
     Assert-Match -Text $deploy -Pattern 'podAntiAffinity' -Because '两个副本不该落在同一个节点上'
     Assert-Match -Text $pdb -Pattern '(?m)^  minAvailable: 1\s*$' -Because 'PDB 必须写在主 manifest 里,至少留一个副本'
-    Assert-Match -Text $deploy -Pattern 'name: POD_IP\s+valueFrom:\s+fieldRef:\s+fieldPath: status\.podIP' -Because 'ListenOn 是 0.0.0.0,注册进 etcd 的必须是 Pod IP(go/rank/rank.go advertisedHost)'
-    Assert-Match -Text $deploy -Pattern ('containerPort: {0}\s+name: grpc' -f $rankGrpcPort) -Because 'gRPC 容器端口 == 服务 yaml 的 ListenOn'
-    Assert-Match -Text $deploy -Pattern ('readinessProbe:\s+grpc:\s+port: {0}\s' -f $rankGrpcPort) -Because 'readiness 探针端口 == 服务 yaml 的 ListenOn'
-    Assert-Match -Text $deploy -Pattern ('livenessProbe:\s+grpc:\s+port: {0}\s' -f $rankGrpcPort) -Because 'liveness 探针端口 == 服务 yaml 的 ListenOn'
-    Assert-Match -Text $svc -Pattern ('(?m)^\s+port: {0}\s*\n\s+targetPort: {0}\s*$' -f $rankGrpcPort) -Because 'Service rank 的 port / targetPort == 服务 yaml 的 ListenOn'
-    Assert-Match -Text $deploy -Pattern ('containerPort: {0}\s+name: metrics' -f $rankMetricsPort) -Because 'metrics 容器端口 == 服务 yaml 的 MetricsListenAddr'
+    Assert-Match -Text $deploy -Pattern 'name: POD_IP\s+valueFrom:\s+fieldRef:\s+(?:fieldPath: status\.podIP|\{fieldPath: status\.podIP\})' -Because 'ListenOn 是 0.0.0.0,注册进 etcd 的必须是 Pod IP(go/rank/rank.go advertisedHost)'
+    Assert-Match -Text $deploy -Pattern ('(?:containerPort: {0}\s+name: grpc|\{{name: grpc,\s*containerPort: {0}\}})' -f $rankGrpcPort) -Because 'gRPC 容器端口 == 服务 yaml 的 ListenOn'
+    # 现役 domainhost 在 metrics HTTP 端口注册 /healthz，SQL/资源尚未就绪时不启动该入口。
+    Assert-Match -Text $deploy -Pattern 'readinessProbe:\s+httpGet: \{path: /healthz, port: metrics\}' -Because 'readiness 必须检查现役服务的健康入口'
+    Assert-Match -Text $deploy -Pattern 'livenessProbe:\s+httpGet: \{path: /healthz, port: metrics\}' -Because 'liveness 必须检查现役服务的健康入口'
+    Assert-Match -Text $svc -Pattern ('(?:port: {0}\s+targetPort: {0}|\{{name: grpc,\s*port: {0},\s*targetPort: {0}\}})' -f $rankGrpcPort) -Because 'Service rank 的 port / targetPort == 服务 yaml 的 ListenOn'
+    Assert-Match -Text $deploy -Pattern ('(?:containerPort: {0}\s+name: metrics|\{{name: metrics,\s*containerPort: {0}\}})' -f $rankMetricsPort) -Because 'metrics 容器端口 == 服务 yaml 的 MetricsListenAddr'
     Assert-Match -Text $deploy -Pattern ('prometheus\.io/port: "{0}"' -f $rankMetricsPort) -Because '抓取注解 == 服务 yaml 的 MetricsListenAddr'
     Assert-Match -Text $deploy -Pattern 'image: registry\.invalid/test/mmorpg-rank:' -Because '镜像名 mmorpg-rank(与 go_svc_image.ps1 一致)'
     Assert-Match -Text $deploy -Pattern '- name: KAFKA_TOPIC_REPLICATION_FACTOR' -Because 'rank 可能先于 match 建出快照 topic,副本数必须拿部署级契约(脚本注入)'
@@ -5520,6 +5526,37 @@ Test-Case 'New-GrpcAllowListNetworkPolicyYaml:逐个列端口(不用 endPort);gR
     Assert-Match -Text $message -Pattern '形同虚设' -Because 'gRPC 口出现在开放端口里必须拒绝'
     $ports = Get-ManifestContainerPorts -ManifestContent "ports:`n  - containerPort: 50300`n    name: grpc`n  - name: rpc`n    containerPort: 20000`n`t`t- containerPort: 9220`r`n"
     Assert-Equal -Expected '9220,20000,50300' -Actual ($ports -join ',') -Because 'containerPort 不论写在列表项首行还是第二行、制表符缩进或 CRLF 都要认出来'
+}
+
+Test-Case 'Get-ManifestContainerPorts:内联映射顺序不影响端口，离开ports后不读取env载荷' {
+    $yaml = @'
+containers:
+  - name: guild
+    ports:
+      - {name: grpc, containerPort: 50300}
+      - {containerPort: 9220, name: metrics}
+    env:
+      - name: NOTE
+        value: "containerPort: 12345"
+  - name: sidecar
+    ports:
+    - containerPort: 20000
+      name: rpc
+    - containerPort: 50300
+      name: repeated
+'@
+    Assert-Equal -Expected '9220,20000,50300' -Actual ((Get-ManifestContainerPorts -ManifestContent $yaml) -join ',') -Because '实际模板的flow/block端口均须进入准入策略，env文字不能放开额外端口'
+}
+
+Test-Case 'Get-ManifestContainerPorts:越界、重复内联键与不支持形状必须明确拒绝' {
+    foreach ($item in @('  - {name: grpc, containerPort: 0}', '  - {containerPort: 65536}', '  - {containerPort: 50300, containerPort: 9220}', '  - {containerPort: 50300, containerPort: bad}', '  - {"containerPort": 50300}', '  - {containerPort: "50300"}', '  - {containerPort: 50300,', '  - containerPort: invalid')) {
+        $message = ''
+        try { $null = Get-ManifestContainerPorts -ManifestContent ("ports:`n" + $item) } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern 'containerPort' -Because '不能静默遗漏端口后继续生成准入策略'
+    }
+    $message = ''
+    try { $null = Get-ManifestContainerPorts -ManifestContent 'ports: [{name: grpc, containerPort: 50300}]' } catch { $message = $_.Exception.Message }
+    Assert-Match -Text $message -Pattern 'containerPort' -Because '不支持整行内联列表时必须明确拒绝'
 }
 
 Test-Case '-AssetOps on 的组合与密钥校验都在任何写操作之前拒绝,报错不回显密钥' {

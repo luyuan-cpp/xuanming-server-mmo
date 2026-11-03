@@ -36,13 +36,10 @@ func newTestQueue(t *testing.T) (*Queue, *redis.Client, *miniredis.Miniredis, fu
 	return q, rdb, mr, func() { mr.Close(); _ = rdb.Close() }
 }
 
-// TestEnqueueAssignsAscendingRanks verifies the FIFO contract — first to
-// ZADD must rank 0, second 1, third 2 — which is what the client UI ("you
-// are #N in line") fundamentally relies on. A bug here is most likely to
-// surface as ranks scrambled by the meta/token writes in the same
-// pipeline; this test pins the contract.
+// TestEnqueueAssignsAscendingRanks 验证已有更早条目时，新入队者排在队尾。
+// 既有条目的分数显式固定到更早的正数，不依赖墙钟刚好跨毫秒；同毫秒的字典序另有独立用例。
 func TestEnqueueAssignsAscendingRanks(t *testing.T) {
-	q, _, _, cleanup := newTestQueue(t)
+	q, rdb, _, cleanup := newTestQueue(t)
 	defer cleanup()
 	ctx := context.Background()
 
@@ -54,14 +51,22 @@ func TestEnqueueAssignsAscendingRanks(t *testing.T) {
 		t.Errorf("first enqueue rank = %d, want 0", res1.Rank)
 	}
 
-	// Force a different score by advancing miniredis's clock between
-	// enqueues so the ZSET tie-break is well-defined.
+	// Enqueue 用 login 墙钟打分，miniredis 的时钟不控制该分数。
+	// 把已经在队列里的 Alice 固定到更早的正分数；仍由下一次真实 Enqueue 写 Bob 并返回名次。
+	if err := rdb.ZAdd(ctx, zoneZSetKey(1), redis.Z{Score: 1, Member: res1.QueueID}).Err(); err != nil {
+		t.Fatalf("固定第一个条目的早期分数失败: %v", err)
+	}
 	res2, err := q.Enqueue(ctx, 1, "bob", "dev2")
 	if err != nil {
 		t.Fatalf("enqueue 2: %v", err)
 	}
 	if res2.Rank != 1 {
 		t.Errorf("second enqueue rank = %d, want 1", res2.Rank)
+	}
+
+	// 保留 Alice 在前，显式让已经入队的 Bob 也早于下一次真实入队。
+	if err := rdb.ZAdd(ctx, zoneZSetKey(1), redis.Z{Score: 2, Member: res2.QueueID}).Err(); err != nil {
+		t.Fatalf("固定第二个条目的早期分数失败: %v", err)
 	}
 
 	res3, err := q.Enqueue(ctx, 1, "carol", "dev3")
@@ -76,6 +81,39 @@ func TestEnqueueAssignsAscendingRanks(t *testing.T) {
 	}
 	if res1.QueueToken == res2.QueueToken || res2.QueueToken == res3.QueueToken {
 		t.Error("queue tokens must be distinct across enqueues")
+	}
+}
+
+// 同分条目按 queueId 字典序排位，不能把 UUID 的随机字典序误当入队先后。
+// 先经真实 Enqueue 建立令牌和 meta，再确定地制造同分，通过客户端查询面逐条核对名次。
+func TestLookup_EqualScoresUseQueueIDLexicographicOrder(t *testing.T) {
+	q, rdb, _, cleanup := newTestQueue(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	entries := make([]*EnqueueResult, 0, 3)
+	for _, account := range []string{"alice", "bob", "carol"} {
+		entry, err := q.Enqueue(ctx, 1, account, "dev")
+		if err != nil {
+			t.Fatalf("入队 %s 失败: %v", account, err)
+		}
+		entries = append(entries, entry)
+	}
+	slices.SortFunc(entries, func(a, b *EnqueueResult) int { return strings.Compare(a.QueueID, b.QueueID) })
+	// 按字典逆序更新到同一个分数，期望顺序仍只由 queueId 决定。
+	for i := len(entries) - 1; i >= 0; i-- {
+		if err := rdb.ZAdd(ctx, zoneZSetKey(1), redis.Z{Score: 1, Member: entries[i].QueueID}).Err(); err != nil {
+			t.Fatalf("固定同分队列失败: %v", err)
+		}
+	}
+	for rank, entry := range entries {
+		state, err := q.Lookup(ctx, entry.QueueToken, 1, signMustNotRun(t))
+		if err != nil {
+			t.Fatalf("查询同分条目失败: %v", err)
+		}
+		if state == nil || state.Status != StatusQueueing || state.Rank != uint32(rank) || state.Total != 3 {
+			t.Fatalf("同分条目状态 = %+v, 期望排队中 rank=%d total=3", state, rank)
+		}
 	}
 }
 
