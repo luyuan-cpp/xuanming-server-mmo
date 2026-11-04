@@ -98,6 +98,10 @@ func routeStmtLabel(query string) string {
 		return "PROBE"
 	case "SELECT VERSION(),@@version_comment": // serverIsTiDB(schema.go)
 		return "VERSION"
+	case "SHOW CREATE TABLE player_route":
+		return "ROUTE_DDL"
+	case "SELECT @@GLOBAL.tidb_enable_check_constraint":
+		return "TIDB_CHECK_SWITCH"
 	case routeProbeTiDBTxnModeSQL:
 		return "TXN_MODE"
 	case routeReadWritableSQL:
@@ -152,6 +156,33 @@ func (f *fakeRouteDB) next(label, query string, args []driver.Value) (fakeRouteR
 	}
 	f.script.replies[label] = q[1:]
 	return q[0], nil
+}
+
+func TestVerifyRouteShardConstraintTiDB(t *testing.T) {
+	const ddl = "CREATE TABLE `player_route` (\n  CONSTRAINT `chk_route_shard` CHECK ((`route_shard` = `player_id` % 64))\n) ENGINE=InnoDB"
+	for _, tc := range []struct {
+		name      string
+		ddl       string
+		switchVal string
+		want      error
+	}{
+		{"约束生效", ddl, "ON", nil},
+		{"约束停用", strings.Replace(ddl, "))\n", ")) /*!80016 NOT ENFORCED */\n", 1), "ON", ErrRouteCheckNotEnforced},
+		{"总开关关闭", ddl, "OFF", ErrRouteCheckNotEnforced},
+		{"分片公式错误", strings.Replace(ddl, "% 64", "% 16", 1), "ON", ErrRouteShardModulusMismatch},
+		{"缺少约束", strings.Replace(ddl, "chk_route_shard", "other_check", 1), "ON", ErrRouteCheckNotEnforced},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
+				"VERSION":           {{rows: [][]driver.Value{{"8.0.11-TiDB-v8.5.4", "TiDB Server"}}}},
+				"ROUTE_DDL":         {{rows: [][]driver.Value{{"player_route", tc.ddl}}}},
+				"TIDB_CHECK_SWITCH": {{rows: [][]driver.Value{{tc.switchVal}}}},
+			}})
+			if err := verifyRouteShardConstraint(context.Background(), s.pools.first(), "route_test"); !errors.Is(err, tc.want) {
+				t.Fatalf("CHECK 校验结果 = %v，期望 %v", err, tc.want)
+			}
+		})
+	}
 }
 
 func (f *fakeRouteDB) record(label string) {

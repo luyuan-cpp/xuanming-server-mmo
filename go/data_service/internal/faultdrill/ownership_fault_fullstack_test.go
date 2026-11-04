@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/conf"
@@ -392,20 +393,24 @@ func ownershipFaultBarrier(t *testing.T, cfg ownershipFaultManagerConfig) time.D
 // ownershipFaultRedis 按真实配置连控制域与玩家域。玩家域没写 Addrs 时指向控制域那一个实例,口径同 EffectivePlayerRedis。
 func ownershipFaultRedis(t *testing.T, cfg ownershipFaultManagerConfig) (redis.UniversalClient, redis.UniversalClient, func()) {
 	t.Helper()
-	controlConfig := playerredis.Config{Addrs: []string{cfg.Redis.Host}, Password: cfg.Redis.Pass, Cluster: cfg.Redis.Type == "cluster"}
+	controlConfig := redis.UniversalOptions{
+		Addrs:                 []string{cfg.Redis.Host},
+		Password:              cfg.Redis.Pass,
+		IsClusterMode:         cfg.Redis.Type == "cluster",
+		MaxRetries:            -1,
+		ContextTimeoutEnabled: true,
+	}
 	playerConfig := cfg.PlayerRedis
 	if len(playerConfig.Addrs) == 0 {
 		playerConfig.Addrs = controlConfig.Addrs
 		playerConfig.Password = controlConfig.Password
-		playerConfig.Cluster = controlConfig.Cluster
+		playerConfig.Cluster = controlConfig.IsClusterMode
 	}
 	for _, addr := range append(append([]string(nil), controlConfig.Addrs...), playerConfig.Addrs...) {
 		ownershipFaultLocal(t, addr)
 	}
-	control, err := playerredis.New(controlConfig)
-	if err != nil {
-		t.Fatalf("control redis config rejected: %v", err)
-	}
+	// 控制域的判死标记没有玩家 hash tag，不能挂玩家域的键守卫。
+	control := redis.NewUniversalClient(&controlConfig)
 	player, err := playerredis.New(playerConfig)
 	if err != nil {
 		_ = control.Close()
@@ -414,6 +419,26 @@ func ownershipFaultRedis(t *testing.T, cfg ownershipFaultManagerConfig) (redis.U
 	return control, player, func() {
 		_ = player.Close()
 		_ = control.Close()
+	}
+}
+
+func TestOwnershipFaultControlRedisReadsDeathMark(t *testing.T) {
+	server := miniredis.RunT(t)
+	const deathKey = "node:zone:990017:1:death_at"
+	if err := server.Set(deathKey, "1793800000000"); err != nil {
+		t.Fatal(err)
+	}
+	cfg := ownershipFaultManagerConfig{}
+	cfg.Redis.Host = server.Addr()
+	control, player, closeClients := ownershipFaultRedis(t, cfg)
+	t.Cleanup(closeClients)
+
+	value, err := control.Get(t.Context(), deathKey).Result()
+	if err != nil || value != "1793800000000" {
+		t.Fatalf("控制域应读取未加 hash tag 的判死标记，实际 %q，错误 %v", value, err)
+	}
+	if err := player.Get(t.Context(), deathKey).Err(); !errors.Is(err, playerredis.ErrUntaggedKey) {
+		t.Fatalf("玩家域应继续拒绝未加 hash tag 的键，实际错误 %v", err)
 	}
 }
 

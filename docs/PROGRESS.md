@@ -19983,3 +19983,20 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 
 - 更正本条启动状态：Host8224随后16:42:07Z退出0，但正式Bootstrap记录真实HOLD：LaunchGoZone990017 / RuntimeException，Launch intent到HOLD共26.127秒，无launcher capture和36/listener snapshot；所以exit0不能作为运行成功。登录与业务仍未执行。
 - 16:43 Root正式只读NoApps actual01519B04/原72D outer058DC907通过，matched/candidate/incomplete均0、终止进程0。仅把已退出Host的3公有gate文件及本次3个固定Bootstrap公有叶完整归档，archive7AC18C04保存原路径/摘要，不改原字节/旧ACL/私密对象。下一步仅细化固定安全阶段/已知错误枚举并独立探针验证输出EOF接缝，保留RequireCompleteExit及全部门禁。
+
+### 2026-11-04 双区故障实际结果与常驻状态
+
+- Java 真库原 428 例以 17 份实际通过证据按用例身份核账，428/428，零遗漏和重复。双区前五步沿用原通过证据，r26 通过跨宿主 TiDB `player_store` 只读连续性对账。
+- r25 宿主 2924 在两个 Scene 仍活着但监听未齐时退出，退出时间与首个 Scene 的 120 秒监听期限吻合。原 72D 独立清场确认应用为 0。新签 11+11+4 个写者并只读核回完整目录后启动 r26。本地首次 Scene 的监听等待设为 180 秒，故障替换仍用 120 秒。模拟回归覆盖端口未开、外来进程占用和到期拒绝。派发器在启动服务器前离线编译。
+- r26 预编译用例名单在严格模式下读取未定义的 `LASTEXITCODE`。同 Job 诊断红件 6E1A6E50，改用既有显式进程退出码和完整输出读取后绿件 628F6D3A。后继公开源码摘要首次未同步，停在 `PublicInputs`。修正摘要后只从故障边界接续。
+- 正式故障实际注入。阻塞存盘提交的交接子用例通过，旧 Scene 迟到写入子用例在等待真实 etcd 租约到期和再入屏障的 145 秒窗口内超时，未启动目标侧接管。受控公开诊断 `formal-fault-closure.readonly.actual.public.json`（20F7E5DB）确认源 Scene 已解除挂起、清理错误为 0。保留故障原件，双区正式计 5/8，独立恢复登录和恢复后 TiDB 对账因前序失败未执行。
+- 09:28 美东时间独立以宿主实际监听计划和 Windows TCP 表逐条比对。r26 宿主 PID 32896 在线，36 个应用、68 个计划监听、4 个 C++ UID 齐全。证据 `Main36.r26.active-after-fault-stop.actual.public.json`（CD975823）。两份新增实际证据位于 `build/verification/stage4-continuation-current-20261102-r1/r26-startup-continuation-20261104/`。进度自动化 #20 保留。
+
+
+### 2026-11-04 双区正式验收闭合（10:25 美东时间）
+
+- 修复故障演练控制器误用玩家域 Redis 客户端读取控制域判死标记。真实回归先因键守卫失败，再用控制域普通 Redis 客户端通过。玩家域仍拒绝未带 hash tag 的键。离线按原 72D 运行红绿回归和构建，随后在运行宿主的同一受控 Job 内执行已编译的演练控制器。
+- r26 宿主在线期间误从 Job 外执行 `go env`，同期资源守卫报 `classification-rejected` 并退出。旧演练记录保留。r27 第二区 chat 在权威 SQL 会话/boot 核验启动阶段退出，本地启动计划将其放到独立末级就绪门。r28 写者目录批次绑定错误在应用创建前被拦截，归档原公有证据后修正目录和各服务写者批次的绑定。26 个已核验写者沿用，r28b 两区 Go 各 14 个均通过就绪检查。
+- r28b 只读复核旧业务角色跨宿主的 TiDB 资产连续性，沿用原 5 项通过证据。用新测试角色完成真实延迟提交及旧 Scene 迟到写入演练，随后独立登录并完成 TiDB `player_store` 恢复对账。原业务角色一致，金币为基线 +18，背包与账本一致。正式验收 8/8，worker exit 0，业务 actual 2ADAA9D7、原 72D outer 86A1738B、正式闭合 146F0EDB。
+- 10:25:43 美东时间独立复核宿主 PID 20640 仍在运行。36 个不同应用进程、68 个实际计划监听逐条核对归属、4 个 C++ UID 齐全。证据 `build/verification/stage4-continuation-current-20261102-r1/r28b-redis-domain-continuation-20261104/Main36.r28b.final-confirmation.actual.public.json`（6CA12168）。Java 真库 428/428 的 17 份证据按身份对账，遗漏与重复均为 0。
+- 进度自动化 #20 的查看动作只返回界面卡片，本地任务目录无对应配置。更新接口要求提供既有完整配置，本次未确认暂停。

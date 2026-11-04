@@ -344,20 +344,63 @@ func verifyRouteShard(ctx context.Context, db *sql.DB, schema string) error {
 }
 
 // verifyRouteShardConstraint 在正常启动时只读校验，避免用业务写探针绕过写者首锁。
-// 表级 ENFORCED、精确表达式及 TiDB 总开关必须同时成立；读取失败一律拒绝启动。
+// 表级约束必须生效并且表达式正确。TiDB 还要核对全局 CHECK 开关。
 func verifyRouteShardConstraint(ctx context.Context, db *sql.DB, schema string) error {
-	var enforced, clause string
-	err := db.QueryRowContext(ctx, "SELECT tc.ENFORCED,cc.CHECK_CLAUSE FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc JOIN INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc ON cc.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA AND cc.CONSTRAINT_NAME=tc.CONSTRAINT_NAME WHERE tc.TABLE_SCHEMA=? AND tc.TABLE_NAME='player_route' AND tc.CONSTRAINT_NAME='chk_route_shard' AND tc.CONSTRAINT_TYPE='CHECK'", schema).Scan(&enforced, &clause)
+	isTiDB, _, err := serverIsTiDB(ctx, db)
 	if err != nil {
-		return fmt.Errorf("%w: read chk_route_shard metadata: %v", ErrRouteCheckNotEnforced, err)
+		return err
 	}
-	if !strings.EqualFold(enforced, "YES") {
-		return fmt.Errorf("%w: chk_route_shard ENFORCED=%q", ErrRouteCheckNotEnforced, enforced)
+	var clause string
+	if isTiDB {
+		// TiDB 的 TABLE_CONSTRAINTS 没有 ENFORCED 列。SHOW CREATE TABLE 会在停用的约束后标出 NOT ENFORCED。
+		var name, ddl string
+		if err := db.QueryRowContext(ctx, "SHOW CREATE TABLE player_route").Scan(&name, &ddl); err != nil {
+			return fmt.Errorf("%w: read player_route definition: %v", ErrRouteCheckNotEnforced, err)
+		}
+		if name != "player_route" {
+			return ErrRouteCheckNotEnforced
+		}
+		clause, err = tiDBRouteShardClause(ddl)
+		if err != nil {
+			return err
+		}
+	} else {
+		var enforced string
+		err := db.QueryRowContext(ctx, "SELECT tc.ENFORCED,cc.CHECK_CLAUSE FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc JOIN INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc ON cc.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA AND cc.CONSTRAINT_NAME=tc.CONSTRAINT_NAME WHERE tc.TABLE_SCHEMA=? AND tc.TABLE_NAME='player_route' AND tc.CONSTRAINT_NAME='chk_route_shard' AND tc.CONSTRAINT_TYPE='CHECK'", schema).Scan(&enforced, &clause)
+		if err != nil {
+			return fmt.Errorf("%w: read chk_route_shard metadata: %v", ErrRouteCheckNotEnforced, err)
+		}
+		if !strings.EqualFold(enforced, "YES") {
+			return fmt.Errorf("%w: chk_route_shard ENFORCED=%q", ErrRouteCheckNotEnforced, enforced)
+		}
 	}
 	if !routeShardClauseMatches(clause) {
 		return fmt.Errorf("%w: chk_route_shard does not match route_shard = player_id %% %d", ErrRouteShardModulusMismatch, placement.RouteRowShards)
 	}
-	return requireTiDBCheckSwitch(ctx, db)
+	if isTiDB {
+		return verifyTiDBCheckSwitchEnabled(ctx, db)
+	}
+	return nil
+}
+
+func tiDBRouteShardClause(ddl string) (string, error) {
+	var clause string
+	for _, line := range strings.Split(ddl, "\n") {
+		// TiDB 的 SHOW CREATE TABLE 将每条表级 CHECK 渲染在单独一行。
+		fields := strings.Fields(line)
+		if len(fields) < 2 || !strings.EqualFold(fields[0], "CONSTRAINT") ||
+			!strings.EqualFold(strings.Trim(fields[1], "`\""), "chk_route_shard") {
+			continue
+		}
+		if clause != "" || len(fields) < 4 || !strings.EqualFold(fields[2], "CHECK") {
+			return "", ErrRouteCheckNotEnforced
+		}
+		clause = strings.TrimSuffix(strings.Join(fields[3:], " "), ",")
+	}
+	if clause == "" || strings.Contains(strings.ToUpper(clause), "NOT ENFORCED") {
+		return "", ErrRouteCheckNotEnforced
+	}
+	return clause, nil
 }
 
 // requireTiDBCheckSwitch 核 TiDB 的 CHECK 总开关开着。MySQL 上没有这个开关。
@@ -369,6 +412,10 @@ func requireTiDBCheckSwitch(ctx context.Context, db *sql.DB) error {
 	if !isTiDB {
 		return nil
 	}
+	return verifyTiDBCheckSwitchEnabled(ctx, db)
+}
+
+func verifyTiDBCheckSwitchEnabled(ctx context.Context, db *sql.DB) error {
 	var enabled string
 	if err := db.QueryRowContext(ctx, "SELECT @@GLOBAL.tidb_enable_check_constraint").Scan(&enabled); err != nil {
 		return fmt.Errorf("%w: read TiDB CHECK switch: %v", ErrRouteCheckNotEnforced, err)
