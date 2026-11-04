@@ -87,6 +87,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [afk-detection-design.md](design/afk-detection-design.md) — AFK (挂机) Detection Design
 - [agones-scene-node-high-density.md](design/agones-scene-node-high-density.md) — Agones 管理 Scene Node(高密度 GameServer)
 - [aoi_priority_design.md](design/aoi_priority_design.md) — AOI Priority, Capacity & Visibility Design · [EN](design/aoi_priority_design_en.md) · [中文](design/aoi_priority_design_zh.md)
+- [aoi-directed-interest.md](design/aoi-directed-interest.md) — AOI 单向关注与范围外移动同步（待实现）
 - [broadcast-message-size-analysis.md](design/broadcast-message-size-analysis.md) — BroadcastToPlayers 消息体积分析
 - [cross_scene_player_messaging.md](design/cross_scene_player_messaging.md) — Cross-Scene Player Messaging (跨场景玩家消息投递) · [EN](design/cross_scene_player_messaging_en.md) · [中文](design/cross_scene_player_messaging_zh.md)
 - [enter-scene-zone-routing.md](design/enter-scene-zone-routing.md) — EnterScene 选区路由设计
@@ -342,6 +343,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 ### 交接说明(`handoff/`)
 
+- [aoi-and-player-safeguards-20261104.md](handoff/aoi-and-player-safeguards-20261104.md) — Claude Code 交接：AOI 单向关注、持久化 GM 物品封禁、单玩家收益窗口重置
 - [class-skills-handoff-20261019.md](handoff/class-skills-handoff-20261019.md) — 四职业技能接入:交 Codex 的生成 / 编译 / 测试清单(2026-10-19)
 - [client-rpc-callback-handoff-20261019.md](handoff/client-rpc-callback-handoff-20261019.md) — 交接:客户端请求自带回调(按请求号认领回包)(2026-10-19)
 - [client-rpc-callback-robot-handoff-20261019.md](handoff/client-rpc-callback-robot-handoff-20261019.md) — 交接:robot 请求自带回调(按 MessageContent.id 认领回包)(2026-10-19)
@@ -403,6 +405,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [event-priority.md](notes/event-priority.md) — Events · [EN](notes/event-priority_en.md) · [中文](notes/event-priority_zh.md)
 - [gameplay-introduction-and-resources-research-2026-09-01.md](notes/gameplay-introduction-and-resources-research-2026-09-01.md) — Gameplay 是什么：入门文章与开源项目
 - [github-survivors-like-games-research-2026-08-27.md](notes/github-survivors-like-games-research-2026-08-27.md) — GitHub 幸存者割草类游戏源码调研
+- [golang-backend-interview-qa.md](notes/golang-backend-interview-qa.md) — Golang 后端面试详细问答
 - [mmorpg-stress-interview-qa.md](notes/mmorpg-stress-interview-qa.md) — MMORPG 项目压测容量与瓶颈优化面试回答
 - [NOTES_zh.md](notes/NOTES_zh.md) — 项目笔记 / Project Notes(中文) · [EN](notes/NOTES_en.md)
 - [player-data-loading-and-sharding-pain.md](notes/player-data-loading-and-sharding-pain.md) — 玩家数据加载与分库分表的痛点分析

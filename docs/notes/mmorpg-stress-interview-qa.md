@@ -4,6 +4,8 @@
 
 面试时先讲两分钟口述稿，再根据追问选择案例展开。历史轮次的指标有观测窗口、缓存命中和重试差异，数字均保留原指标名称与适用范围。
 
+Go、MySQL 并发扣款与受影响行数、事务与锁、Redis 超时任务及 Big Key、pprof、Kafka 顺序与幂等等基础追问，见 [Golang 后端面试详细问答](golang-backend-interview-qa.md)。
+
 ## 两分钟口述稿
 
 > 我的项目是多 zone 的 MMORPG 服务端，C++ Gate 和 Scene 负责连接与场景，Go 服务负责登录、场景编排和数据处理，HTTP 入口是 Java Gateway。

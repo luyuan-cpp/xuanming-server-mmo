@@ -19878,3 +19878,108 @@ Java 版(AGENTS §12):对应 0.1.0-SNAPSHOT,`PARITY.md` 记待做。
 - 2026-11-03 11:54 UTC，用户对call_b5daaa6565514d918cd6406995acafdf明确回答「允许四小批各执行一次」，Root保留实际决定与当前A1严格reader后继审批。6/6/7/7依次仅各运行一次，Root逐批核完整闭合后才启动下一批：2c41a730（6P、result9509F268/outer02CF6B8B）、e59bf54b（6P、3CC53495/36C4C3A4）、e3f81983（7P、588D93D9/51B2C42D）、d554a28c（7P、35191696/4026554F）均原72D实际PASS；每批F/E/S/extra为0、2803源稳定、资源与IO闭合。不改ACL、不放宽任何预算/断言，旧G8启动error5/G9监控FAIL原件保留，不将本次成功倒推成原根因已修复。
 - 原BF428全部分批运行已有PASS证据（402+26），最终完整身份并集核账正在纯公开源准备；影响49旧47+新2及extra1亦已实闭合，不称一次Maven全428绿，不把额外项加进原集。Java验证结束后Root Native槽已空。
 - CurrentState仅公开源/摘要首次物化在原72D `62f121d6` 实PASS（outerDCE78934，Startup摘要71BDF25A、Structure摘要7116D16A、实际Q Adapter137E32B6）；目标函数/SQL/CF3/运行资格均未执行或签发。执行前Root外层准备命令曾因catch类型前缺空格在parse阶段停止，任何命令/候选均未执行；诊断修正后才是候选首次真实运行。旧只读900秒资格已过期，接下来的两Phase新桥必须真刷新观察/外部审批/MetadataOnly新摘要，再仅正常账号登记与目录建立，不重放迁移或重发既有身份。
+
+### 2026-11-03 双区接续：Java核账完成，Catalog写入前STOP与闲置Redis停机
+
+- Java原428例已由17来源真实通过身份并集核账闭合，零遗漏、零重复；影响49与extra1另有真实证据。属于多轮证据并集，不宣称单轮/单最新快照全428；旧失败保留。最终公开核账：`build/verification/all-five-resume-20261102-r1/j2-bf428-public-identity-union-source-20261103-r1-HOLD/actual-union-r1/original428.multirun-evidence-union.actual.public.json`（8D906A43A0649F6B3938C6BFE5FA0EA380DDB47946CB1B828E4DC926FEB642A7）。
+- 双区0277零迁移Catalog链实际仅执行一次，MetadataOnly原72D外层2e532328通过，新目的物理guard完成后，在纯公开filler阶段STOP。公开失败记录明确`normalWritesMayHaveOccurred=false`、`retryAllowed=false`；未创建正常账号、未REGISTER、未启动业务进程。失败件`current-state-no-replay-source-r1/final-catalog-a4e2f352ecea47798168f3789127f7f7/CatalogFlow.failure.STOP.public.json`（08CFFF81FD23CA13B5BD567D549B54E28506326973DD83D2E63E6C9828A3F15C）保留；只做源码诊断，不连续重跑。旧迁移退出码UNKNOWN不反签。
+- 用户明确允许关闭不用的Docker进程以优先双区。核实Java已完成后，仅停止`rmain36-01d9656d-java-guild114-r1`及`rmain36-01d9656d-java-disband4-r1`两只专用Redis容器，退出码均0；不删除容器/数据卷，双区Redis/Kafka/etcd及TiDB三容器仍运行。公开实际证明`current-state-no-replay-source-r1/Docker.UnusedJavaRedis.Stopped.actual.public.json`（C7C8240AFD7FD13AC8A7B3D40EEF78FB1B0D120B95C584007055C75A2D212035）。未据此宣称性能提升。
+- 剩余三步仍为正常账号创建登记、36进程启动、普通登录/同账号跨区/故障恢复及恢复后重新登录。持久化验收仍以TiDB/SQL player_store为准，Redis仅协调；客户端继续暂停。
+### 2026-11-03 Golang 后端面试问答整理
+
+- 按用户要求新增 docs/notes/golang-backend-interview-qa.md，保存完整面试问答与官方、GitHub 资料入口；覆盖并发扣款、事务与锁、死锁、Redis 超时任务及 Big Key、Go channel、泄漏排查、pprof、架构案例、权重随机、Kafka 顺序与幂等。架构模板与真实历史压测证据分开表述。
+- 另设 Q3 解释受影响行数：500 分扣 300 分的 1/0 行示例、RowsAffected 错误处理、clientFoundRows 口径，以及语句成功与完整事务提交的区别。现有 MMORPG 压测面试文档补专题入口，文档总索引登记一行。
+- 文档结构、本地引用、代码围栏、空白与定向 diff 检查通过；数据库与 Go/Kafka 内容经只读复核并补充幂等生产者配置和 Outbox 发布顺序边界。索引生成器产生的无关既有条目漂移已排除，仅保留本次新增入口。仅文档变更，未运行服务构建、数据库执行或压测，未提交或推送。
+
+### 2026-11-03 电脑重启后双区接续与校验程序编译
+
+- 本次Windows重启使旧epoch物理/I3资格仅能作历史。只恢复原必要容器和原卷，未运行topic-init、迁移、Prelude或清库；两只已停闲置Java Redis保持停止。第一次TiDB退出1、非OOM，公开诊断显示Region unavailable；PD健康检查确认TiKV恢复时间晚于首次TiDB失败后，才仅启动一次原TiDB。新TiDB PID2914、StartedAt=2026-11-03T13:03:00.134693563Z；新独立双inspect、内存观测及TiDB status HTTP200均有真实闭合outer，HTTP就绪不当作SQL/业务通过。
+- 0277纯公开filler失败已定位为嵌套数组，多余单字符@的最小后继完成纯历史输入验证，全部filler断言真实通过；该验证不签当前资格、不写正常账号。旧STOP及normalWritesMayHaveOccurred=false原件保留。
+- SQL快照校验程序r2编译实际通过（PE 0EDFF7F5435FF8DA612290DE5177E7F1DBB38C8AC1253F67002A219975132070，outer 15C185CE14EF86BF19243EE3F306A0FD718AE9DF05060EA401F3F5BC270485C5）。Robot r2因唯一未使用net导入编译失败，保留旧件；只删除该导入的新r3编译实际通过（PE C4143416617CC2DD9A92D7EAA41D9D9424337AA6BD92ED9EFC28636F003006FD，outer 19FDE5DF2C41A1FEBAD5351047F98FBCF5153EE994412209C55F5DF588596623）。两项都仅编译，不算测试、SQL对账或业务验收。
+- 健康r2六公有实测Fresh纯准备已原72D执行通过，Fresh=74D362FABFA84FF595C820C54314F3BAC1DF8CD930A86AB35307A03B847C7197。随后原Raw四独立强会话固定SELECT、四held、回滚关闭及首尾32字段检查实际通过，outer=04B133A7C7E99049EA3CE57BD423D09349ABCCA195F9AA4655D01A9A6049D4F0。私密原件仅经正式CF3投影，公开投影Raw.next-phase.refs.after-pc-reboot-r2.actual.public.json=29EC991B1E8CDBFA37FD60CAF801E9A6B3C5CDA235CD9994A22066C3E5569C74；无普通私密read/stat/hash，未写业务数据。当前行锁资格仍待重验。
+- 剩余仍为正常28账号创建授权与26登记、36常驻进程、普通登录/同账号跨区/故障恢复/恢复后独立HTTP重新登录与TiDB SQL player_store守恒对账。客户端暂停；不把源码准备、编译、监听或历史epoch资格充作当前业务通过。
+### 2026-11-03 重启后当前两原语资格与测试名单诊断
+
+- 新physical物化BD1B02DB7876D5FBA4A4A9BC5FB63FDE7755666AC4A424DE18B9391119574D92及Reader正例/12引用边界/4公开pin边界/5负例全部实际通过（Reader actual 6B0B51C910AC56DF66991FD04724D7E237D5CD7BD033135F6073659EBFBF46D2，outer01956F0A894955CBDC21CBA52DD7AD7DBCB82408F076FFA180DB577B977CFF4B）。随后SELECT_ONLY、LOCK_TOUCH两原语SQL/物理首尾/回滚与自有资格对象清理实际通过，outer1BD7B30C3539247D0D68C573CBC9F2F71338B10F29A098BAF991455EA616C097，原72D 12样本、真实IO EOF/pending0/全部退出0；不据此宣称双区业务通过。
+- 两个旧inline名单wrapper实际失败件保留，分别outer725AA6E0FA03127C377B30C39CCF61D713AB30A651DF2A39BEE7387994CDD124与0A3466EF2B9261D8505B8F6B4E60DE44BBE855BF08310F06EA0A72B923765F12。为查退出原因，对同PE同filter各执行一次原资源门禁下的有界双流诊断；真实PE均exit0、无stderr、完整EOF、精确名单Robot3项/SQL1项。Robot诊断actualA3C9191C0A4B242BB039C2BA6C836F4AE60D80645BC866AC801A5288352C0EB9/outer0FFDE286BC3EB747169CAE600F939E2167CF4CF93D4F230F33A3FCC700D28D28；SQL诊断actual39B64164C71485B0BB32069B5808D580F4E5A239727A8B4A496E0E395767F0F1/outer1380541630536D2167A98E1F16582067DA87ACB19DF92BE9571540AB6AF96F8E。定位到旧wrapper调用/退出码路径，未进一步重编，不把诊断或test.list当业务测试。
+- I3公开投影单次失败（outer3022A4C0AD76CFB42C766F354BAF3844E16835CB646934327912C3AF8B978A7C）。静态调用链与本次公开计划ACL核验表明：RawResourceEvidence将本次D盘公开approved_plan送入只准可信ACL的Pin-Locked，被其非受信写权限规则拒；两原语原实际未失败。保留该STOP，不改既有ACL、不重跑SQL，准备仅对本次已审公开plan的精确path/SHA沿用已有公开来源共享句柄校验接缝；不扩私密文件读取范围。
+### 2026-11-03 重启后 I3 公有计划校验修正已实际通过
+
+- 原 I3 SQL 实际 `49dc8048 / 1BD7B30C…` 保持不变；只在 Reader 为本次公有 `I3.after-pc-reboot-r2.ROOT.READY.plan.json / 46C018DA…` 增加精确路径与 SHA 的同句柄只读校验。未修改 ACL、未重跑 I3 SQL，首次投影失败 `e1a7b57c / 3022A4C0…` 保留。
+- Reader 后继 `F1F339BD…` 经完整逆构 `2302096F…`；原 21 项及新增 4 项边界实际全部通过。实际 `Reader.full-and-five.after-pc-reboot-r3.exact-public-plan.actual.public.json / C6AC39F2…`，原 72D outer `43fe5cf2 / 8C44E1D6…`，真实 exit 0、EOF 与家族收尾闭合。
+- CF3 只读投影实际 `I3.current.refs.after-pc-reboot-r2.actual.public.json / B367C11D…`，outer `2af9f1f3 / 9387F9EE…`，确认当前 SELECT_ONLY 与 LOCK_TOUCH 两资格及原清理均通过；未导出私密正文，未执行新 SQL。仅从公开投影传递私密资格 ref 元数据。
+- 普通账号创建登记、Cpp4 配置、36 个服务进程，以及普通登录、跨区、故障恢复、独立 HTTP 重登和 TiDB SQL 资产验收仍未执行，继续按当前 epoch 完成；客户端仍暂停。
+### 2026-11-03 重启后当前结构与 Catalog 入口诊断
+
+Root 已实际通过当前14库264表结构观察、三份迁移记录clean完成观察、Match原身份精确权限及四自有非SQL基础设施观察；均保留原72D资源、家族、IO/EOF与退出证据。Owner连续性CF3公开投影3CAF与外层31BF实际通过，原Owner不变、无新增ACL调整；旧epoch资格不作为当前资格。
+
+本轮Catalog E43A在原72D下实际退出1（outer 4259C38C），公开HOLD为BeforeProducer/fixed-publication-source-and-path，第196行。停止且保留成功/失败原件，不重放。初步源码定位：CF3 custody reader返回旧181B Resume源ref，当前Provider要求333E CurrentState Resume源ref；正在核最小接缝修复与写入边界，normalWritesMayHaveOccurred仍保守保留true。当前28普通账号/26登记、四Cpp配置、36进程和全部业务/故障验收均未计通过；客户端继续暂停。
+
+### 2026-11-03 双区 Catalog 入口继续修复（14:25 UTC）
+
+- 重启后 physical/I3/Owner 实际资格保留。最新结构、三份迁移 ledger、match 权限及基础设施只读检查已重新实际通过；14:17 结构观测仍为 28 个待建 SQL 主体中精确存在 0 个，不把这些检查当业务验收。
+- Catalog 公开输出固定路径冲突及 Bootstrap 函数指纹遗漏均已定位，旧失败与 r8 intent/HOLD 保留。新 r9 固定输出保留 CreateNew；Carrier 后继 CB53 仅把旧 D99 函数体指纹更新为真实 C761 源的 EDB0。Root 对 5 文件闭包逐字正逆构、Parser/JSON 0 复核后，以新 nonce 7a6c7c5297624454b933db723e9ec022 执行原 72D 单槽；当前尚无账号/登记完成结果。
+- 后续 Cpp4 与完整业务有限入口补载既有 ReleaseCommon 完整函数。相关改动仅源码准备，尚未创建 Cpp4 配置、启动 36 进程或运行普通 HTTP 登录、跨区、正式故障恢复、独立恢复登录及 SQL 资产核对；客户端仍暂停。
+
+### 2026-11-03 双区中断后账号核账（14:47 UTC）
+
+- Catalog r9/body修复后的首次实际执行被未知cmake.exe（PID28392，父VS Code25280）触发并发门禁，原4500秒预算未超时；原失败39395C09保留。清理terminate_image_sha/Win32=5单独保留，最终232项家族均退出，不能反签整轮通过。此前Uninitialized/none不能证明未写。
+- 用户明确只批准停止三个遗留Gradle守护进程；Root核精确PID、CIM与原生创建时间、程序路径及Gradle主类后，仅停止21224/15776/4140，均实际退出（A6805246）。第一次只读身份预检因CIM微秒与原生100ns精度不同拒绝，尚未停止进程；补齐两套精确原值后才执行，未放宽比较。
+- 新原72D只读CurrentStructure实际通过：C373BC7B/outer CE78A4F2，14库264表，28个精确SQL主体现在全部存在，SQL写0。上轮账号写入已发生，严禁重跑完整Catalog创建；26登记及正式catalog发布、权限完整性仍待只读核账。Cpp4、36进程及全部业务故障验收尚未通过；客户端仍暂停。
+
+
+### 2026-11-03 双区原输入恢复前只读核账（15:00 UTC）
+
+- 28账号存在之后，Root新增有限只读前缀核账真实通过（actual 7D7B292D、outer CAA8F685）：14个逻辑库writer_registry总行和本轮cohort行均为0；SQL写0。固定catalog.json CF3 read未确认，只记READ_NOT_CONFIRMED，未解释为文件不存在或开放普通IO。
+- 前缀Root装配首次在纯公有Seal阶段因计划文件名不是.plan.json拒绝；第二次72D创建原生stage前因false模板遗漏原空immutable_pins拒绝；均未启动前缀SQL。仅修正文件名、恢复原3974模板空字段后，第三次新观察完整闭合，原CPU/12-8GiB/采样/IO/家族门禁未改。旧件保留。
+- 14:59原Match权限3条SELECT当前态及15:00非SQL自有基础设施观察再次实际通过；保留原checkedUtc，不续签历史观察。准备仅消费26份原roster、原key/principal/request、同deployment调用正式REGISTER；已有attempt由正式工具只查原receipt，未知仍HOLD，不重建账号或重跑迁移。Cpp4/36进程和业务验收仍未执行。
+
+### 2026-11-03 双区原输入恢复有限尝试（15:13 UTC）
+
+- 15:11 Match权限只读与15:12非SQL自有基础设施观察分别实际通过（FDA02469/020513E1、A8CD4B0C/C35D1DD4），原checkedUtc保留；新恢复purpose的两条物理inspect guard实际通过FA30E640。
+- Root对恢复r3源8FB06FF9逐字正逆构、Parser0、BB64原输入恢复与7108十个原完整纯核验声明独审后，仅执行一次原72D。真实outer A1F2E3E4为FAIL：原生exit1，未超时，清理/输出/证据错误均0；HOLD阶段RestoreOriginal26Prepared，控制流尚未进入正式Register，不能声明登记成功。旧7a6失败3939与本次失败均保留。
+- 已查明恢复入口遗漏原C761 Bootstrap的双区数据库白名单进程绑定；CD802配置解析强制显式白名单，而本次两个白名单变量均为空、命令环境无该字段。准备沿原流程保存、清除优先旧项、设置两个明确zone库并finally还原，补固定公开细分阶段；不改原账号/roster/request，不重放账号SQL或迁移。Cpp4/36进程与业务故障验收仍未运行。
+### 2026-11-03 双区原输入恢复接缝校正（15:24 UTC）
+
+- r4真实outer325BBA4F仍FAIL，新增安全诊断显示原helper Instance阶段；因此前条“缺白名单”是确定后续缺陷，不能解释为已证实的r3首错。实际首错为PS7 OrderedHashtable键大小写：Java4原小写instanceKey/service经统一大写读取触发StrictMode，Go22正常。
+- 仅将Java两字段公有元数据投影为PSCustomObject，原26顺序、key/principal唯一性及全部原件校验保留。Root真实PS7公有AST回归原件22成功/4失败，修复26成功/0失败，mock私密read0、CF3/SQL0。Root首次简写回归在预期旧缺字段处直接中断；改用捕获每个已知案例的实际AST harness后完成两组证据，未把PS5宽松对象结果代替PS7。
+- 新r5/D6A3946E真实恢复推进到RenderExpectedAccountPrivileges，26原输入CF3恢复、operators、显式双区settings、264表元数据与原writerDB计划已过；outer4566A83D因MissingProperty失败，原生exit1且无timeout/清理/输出/证据错误，尚未进入权限查询或REGISTER。纯公有合成renderer复现maintenance_drain:558单SELECT pipeline.Count在Latest下缺属性；准备只对纯NewAccountSql沿原Bootstrap Off作用域兼容，不执行渲染SQL，不放宽业务断言。
+### 2026-11-03 双区精确权限只读定位（15:37 UTC）
+
+- 纯权限SQL renderer已限定沿原Bootstrap Off作用域，公有mock原严格模式复现失败，限定作用域后26输入/28CREATE/949GRANT纯渲染通过，未执行渲染账号SQL。随后r6真实outer AF0AEAC8仍在ValidateExactExisting28Privileges失败，未进入REGISTER；旧失败保留。
+- Root对独立只读观察6942348A与索引1AB3280B逐字正逆构、Parser0及写命令AST零调用独审后执行一次。实际0B51BFBC与原72D outer3299524D闭合：应有1819表权限tuple，实有1815，缺4、额外0、重复0。退出0只表示只读观察完成，permissionConfirmed=false，不是Catalog或业务通过。账号修改/REGISTER/迁移/应用启动均0。
+- 接下来仅准备缺失4项原GRANT的有限补齐，先重查当前差集和精确28账号，再执行缺项并重跑原完整权限断言。原账号、roster、requests、旧失败outer不重建或改写；Cpp4、36进程与业务验收仍未运行。
+### 2026-11-03 双区仅缺失四权限补齐（15:44 UTC）
+
+- 新Match和非SQL自有基础设施r5观察真实通过后，Root对B22DE04C/726B981A逐字正逆构、Parser0及有限SQL路径独审，再经原72D执行一次。先重新查询确认1819/1815恰差4、零额外/重复，每个GRANT前重新复核精确28账号/零其他host及fresh infra，仅4个原缺失tuple各执行一次，confirmed4。
+- 修复实际22C00701与原72D outerCF1CCDC7真实闭合。原完整正式权限断言（table精确集合以及schema/column/global/role/defaultrole）全部通过；最终1819/1819、缺项/额外/重复0。账号创建/身份变更/REGISTER/迁移/应用启动均0，不是Catalog或业务验收通过。
+- Robot无凭据私密配置经D476 producer/正式CF3创建并回读，actual7E2E78EC与outer66C6B11D通过。第一次Robot Root装配反斜杠publicPath被严格比对拒绝，outer28c32499失败保留，intent/CF3不可达；仅Root正斜杠装配修复后新nonce执行成功，没有重放旧叶。
+- Root现在继续原26正式登记有限恢复，仍用4B97原载体及EAFC Root协调器，无账号SQL或迁移重放；Cpp4/36进程和业务验收尚未完成。
+### 2026-11-03 双区正式登记完成及Cpp表示核验失败（15:47 UTC）
+
+- Root原26登记有限恢复实际完成，actual C785BE71/原72D outerE5F9B47E通过；26个正式登记调用全部返回并经原数据库/回执断言，Catalog CF3 CreateNew、回读及正式AssertCatalog通过。completed D0BC5F2C只关联新4B97载体/EAFC Root执行，原失败3939等仍保持失败。账号未重建、迁移0、应用启动0。
+- Cpp4首次新guard后实际执行失败，outer59179ca4原生exit1，公开HOLD阶段CreateNewCpp4Cf3Configurations；新intent和失败记录保留，不能以Uninitialized诊断推断私密目录未创建。
+- 独立源审发现两处确定的副作用前表示不兼容：Core写行内JSON列表而ReleaseCommon只对块列表记录ListCounts；Windows路径由writer转义反斜杠，而flat parser只去引号。准备仅Cpp局部回核适配并保留长度、顺序、逐值及路径exact断言；先纯公有mock红绿验证，NewItem/CF3/SQL须0，不改全局parser或原账号/登记。36进程和业务验收仍未运行。
+### 2026-11-03 双区Cpp4完成及宿主授权前身份拒绝（16:02 UTC）
+
+- Cpp列表/路径局部回核修复72920经12例真实公有mock闭合（73F0D958）：原4列表错误、单修4路径错误、双修4到首NewItem mock sentinel；真实NewItem/CF3/SQL/私密普通IO0。7个后继源码与模板全字节正逆构/4源Parser0后，Root执行新Cpp4一次，actual0F9891B4/原72D outer36B72E56通过，四配置均CF3回读，completed D8AE48F6。26登记Catalog未重跑，应用启动0。
+- Host公有装配暴露Copy别名优先于同名函数，Root仅13词重命名后做元数据深拷贝公有回归；首次失败留下两固定公有safe projection，后继仅把这两公有输出路径随新OutputTag区分，Text/SHA不变、旧件保留，未读取Owner/I3私密正文。Sources后继E0A0真实完成DFCB6C00，finalHost53489A28、invocation8A30D3A5。
+- 新Host专用guard及Parent外审批通过后，Parent3087启动等待批准宿主28220，但授权前拒绝。Root同一活体只读比较birth/PE路径均一致，CIM CommandLine与Host使用的Environment.CommandLine摘要不一致；未发布授权，Host在GateIdentity自行60秒超时退出，没有应用启动。仅确认原PID已退出、gate只有applications0公有self且无授权后，将公有gate完整移动到失败保留目录，未改ACL或私密对象；不以新取得的句柄冒认原父句柄。
+- 正在做父启动方式的公有子进程命令行回归及最小修复，保持原句柄身份与全部门禁。36进程与业务故障/重登验收仍未运行。
+- Root新Match r7只读actual2AD39036/outerBE9F7678真实通过；infra r7原72D outer733BBD33及四自有基础设施当前观察真实通过（原checkedUtc16:06:19Z保留）。外层临时调用误读继承LASTEXITCODE抛出NATIVE_FAIL，原proof及全部native_exit均0；未重跑观察。
+- 公有无业务child回归源2DC4E226经Root全文审后原72D一次运行，outer52F50573通过；actual9a8f...证明原handle、PID/birth/image与12个计划参数均精确匹配；CIM唯一匹配带引号backslash pwsh.exe，CLR唯一匹配pwsh.dll argv0重建串。无Host/CF3/SQL/私密IO。新Host Sources124F12AB以Matchr7装配完成（Host F298005E/InvocationFEAA2D24），仍未执行。
+
+- Parent canonical argv最小修复639B5AB1与preparer97428D3A经Root完整正逆构/Parser0核定；Host专用新guard后，正式父句柄核定通过并授权18644（launchD5C292B6），父保留原handle至Host实际exit1（16:11:20Z）。未宣称36就绪，原fixedHOLD仍为16:00旧GateIdentity故本次阶段未记录，保持原件。
+- Root公有prefix9E7一次72D运行outer87BB475B FAIL：独立NoApps actual8C007FB1真实PASS，matched/incomplete/candidates均0；原Host106..175在导入及前置公开证据核对后因原guard超120秒停止。RuntimeException函数body line15与1316原age谓词对齐，不将该过期误报新业务失败。Root正新guard+826F诊断，仅公开metadata，不Host/CF3/SQL/业务。Matchr8只读协调已实际结束零退出。
+
+- 新120秒guard诊断826F真实完整通过F298106..175：actual99F9443D/原72D outer70B9FD08；仅公有前置，非Host或业务。新Matchr8/infra r8真实闭合，r12Owner metadata单hunk602B经Root正逆构验证但未执行Sources；不改Owner正文/ACL/PhaseB13ref门禁。
+- 手动新Host15724在监督器入口OwnedJobResourcePrimeLaunchAndContinuousSupervision HOLD（16:20:38Z）；原handle父保留至exit1，最新NoApps actual32D2E966真实PASS无残留。Root同实际Parent环境一次纯公有EntryJobProbe2818→actualF496499E：原791..793三检查PASS，parentHasAnyJob/childHasAnyJob均true，证实工具终端Job继承与PhaseA独立Job要求冲突。无创建/分配/关闭Job、无Host/CF3/SQL。现在审本地隐藏WMI broker仅启动Parent方案及原RequireDiskStandardOutputs的直接磁盘句柄，不改资源/Job门禁。
+
+### 2026-11-03 双区正式宿主独立启动链（16:41 UTC）
+
+- Root公有隐藏WMI隔离探针6214B6FF证明父子无既有Job；直接磁盘stdio r3实际742214D9证明父子四标准句柄均FILE_TYPE_DISK=1、原RequireDisk断言通过、原handle/birth/image一致且退出0，私密raw日志未读/stat/hash，未改旧ACL。只使用本地broker启动Parent，原Job及资源门禁保持。
+- Parent1199与preparer r13/6CF58B5A逐字全正逆构及Parser0通过；r13新Sources DA2E51C8完成既有Owner精确metadata接线，不读取Owner正文。新r9 Match E234EAD0/outer2606F92C及infra45ACE070/outer45C7F319实际通过，保留原checkedUtc。
+- Root新私密GUID目录仅当前用户/SYSTEM/Administrators ACL后，正式WMI启动器EFFD仅执行一次；真实Parent原handle核定并授权Host8224（birth134381976845145743），launch8AED7847。Parent保留原handle，WMI PID不作授权。当前Host启动中，尚无36/listeners公开快照；登录、跨区、正式故障恢复、恢复后独立登录及TiDB资产验收均未执行，不能由启动授权推定业务通过。
+
+- 更正本条启动状态：Host8224随后16:42:07Z退出0，但正式Bootstrap记录真实HOLD：LaunchGoZone990017 / RuntimeException，Launch intent到HOLD共26.127秒，无launcher capture和36/listener snapshot；所以exit0不能作为运行成功。登录与业务仍未执行。
+- 16:43 Root正式只读NoApps actual01519B04/原72D outer058DC907通过，matched/candidate/incomplete均0、终止进程0。仅把已退出Host的3公有gate文件及本次3个固定Bootstrap公有叶完整归档，archive7AC18C04保存原路径/摘要，不改原字节/旧ACL/私密对象。下一步仅细化固定安全阶段/已知错误枚举并独立探针验证输出EOF接缝，保留RequireCompleteExit及全部门禁。
