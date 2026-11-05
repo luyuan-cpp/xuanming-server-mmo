@@ -726,6 +726,12 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 	if db == nil || !validIdentifier(schema) {
 		return ErrWriterDenied
 	}
+	// 一次目录核验固定在同一物理连接上，避免每条元数据查询重复初始化会话。
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
 	for _, model := range []proto.Message{
 		&databasepb.RouteMeta{}, &databasepb.SqlWriterRegistry{}, &databasepb.SqlWriterSlot{},
 		&databasepb.SqlWriterLifecycleReceipt{}, &databasepb.SqlWriterDrainRun{},
@@ -736,7 +742,7 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 		if !ok || !validIdentifier(table) {
 			return ErrWriterDenied
 		}
-		rows, err := db.QueryContext(ctx, "SELECT column_name FROM information_schema.columns WHERE table_schema=? AND table_name=?", schema, table)
+		rows, err := conn.QueryContext(ctx, "SELECT column_name FROM information_schema.columns WHERE table_schema=? AND table_name=?", schema, table)
 		if err != nil {
 			return err
 		}
@@ -775,7 +781,7 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 				return ErrWriterDenied
 			}
 		}
-		rows, err = db.QueryContext(ctx, "SELECT column_name FROM information_schema.statistics WHERE table_schema=? AND table_name=? AND index_name='PRIMARY' ORDER BY seq_in_index", schema, table)
+		rows, err = conn.QueryContext(ctx, "SELECT column_name FROM information_schema.statistics WHERE table_schema=? AND table_name=? AND index_name='PRIMARY' ORDER BY seq_in_index", schema, table)
 		if err != nil {
 			return err
 		}
@@ -813,7 +819,7 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 		{"writer_lifecycle_receipt", []string{"kind", "request_digest"}, false},
 		{"writer_lifecycle_receipt", []string{"catalog_revision", "request_id"}, false},
 	} {
-		rows, err := db.QueryContext(ctx, "SELECT index_name,column_name,non_unique,sub_part FROM information_schema.statistics WHERE table_schema=? AND table_name=? ORDER BY index_name,seq_in_index", schema, check.table)
+		rows, err := conn.QueryContext(ctx, "SELECT index_name,column_name,non_unique,sub_part FROM information_schema.statistics WHERE table_schema=? AND table_name=? ORDER BY index_name,seq_in_index", schema, check.table)
 		if err != nil {
 			return err
 		}
