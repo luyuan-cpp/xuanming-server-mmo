@@ -19,6 +19,8 @@
 #include "proto/common/base/node.pb.h"
 #include "proto/common/base/session.pb.h"
 #include "rpc_reply_bridge.h"
+#include "core/security/caller_auth.h"
+#include "rpc/service_metadata/rpc_event_registry.h"
 #include "session/system/session.h"
 #include "thread_context/node_context_manager.h"
 
@@ -59,6 +61,15 @@ void SendForward(muduo_grpc::Channel &channel, const client_rpc_router::ForwardR
     // (grpc_async_client.cpp.tmpl 的 Start<Svc><Method>Call)的 Base64Encode 同一层;线上的 -bin 编码由传输层再做一层。
     // 两层都不能省(§4.2);字节本身原样转发,不解析、不重新序列化(路由 lane 的字段要原值往返)。
     call.metadata.emplace_back(kSessionBinMetaKey, Base64Encode(sessionDetailsBin));
+	const auto messageId = request.request().message_id();
+	if (messageId >= gRpcMethodRegistry.size() ||
+		!caller_auth::Append(call.metadata, gRpcMethodRegistry[messageId].grpcFullMethod,
+			sessionDetailsBin, std::getenv(caller_auth::kSecretEnv)))
+	{
+		gate_rpc_reply_bridge::NotifyCallFailure(kForwardMethodName,
+			static_cast<int>(muduo_grpc::StatusCode::kInternal), "内部会话签名失败", &sessionDetailsBin, nullptr);
+		return;
+	}
 
     channel.StartUnaryCall(
         std::move(call),

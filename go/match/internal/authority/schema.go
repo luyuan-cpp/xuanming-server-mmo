@@ -106,6 +106,9 @@ func openAuthorityDatabaseWithPermission(ctx context.Context, c config.GlobalMat
 	mc.User, mc.Passwd = c.User, os.Getenv(c.PasswordEnv)
 	mc.Net, mc.Addr, mc.DBName = "tcp", c.Host, c.Database
 	mc.ParseTime = true
+	// 避免临时 PREPARE/CLOSE 在本机 Docker 转发链路逐次停顿约 40ms，耗尽队列扫描预算。
+	// 使用驱动的 utf8mb4 参数转义，仍保持单语句和原有写者闸门。
+	mc.InterpolateParams = true
 	mc.Timeout, mc.ReadTimeout, mc.WriteTimeout = 3*time.Second, 3*time.Second, 3*time.Second
 	mc.Params = map[string]string{"charset": "utf8mb4", "sql_mode": "'STRICT_TRANS_TABLES'", "transaction_isolation": "'READ-COMMITTED'"}
 	if backend == authoritysql.BackendTiDB {

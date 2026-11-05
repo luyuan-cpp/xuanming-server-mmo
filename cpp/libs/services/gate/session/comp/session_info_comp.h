@@ -62,6 +62,9 @@ struct SessionInfo
 	uint64_t ownerEpoch{0}; // 本次路由的归属 epoch;0 = 旧版未铸造(兼容窗口),scene 侧存盘跳过 CAS 并计数
 	// 账号目录修订与本次路由绑定，不能用登录代次的max合并规则补成新所有者。
 	uint64_t ownerRevision{0};
+	// login 绑定的原账号与修订只由 BindSession 写，不能被场景路由提升权限。
+	std::string authenticatedAccount;
+	uint64_t authenticatedOwnerRevision{0};
 	uint64_t forwardedOwnerRevision{0};
 	// 上一次**实际转发给 scene** 的 PlayerEnterGameNodeRequest.owner_epoch(ownerEpoch 是"最近一次路由决策",转发前就被覆盖)。
 	// scene_route_helper.h ApplyRoute 第 4 条据此判断"同场景同节点、但归属换了代"的路由要不要再转发一次

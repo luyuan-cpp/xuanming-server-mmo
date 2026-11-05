@@ -14,12 +14,12 @@
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
 
-void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Message &message, Guid playerId)
+void SendToPlayerClient(uint32_t messageId, const google::protobuf::Message &message, Guid playerId)
 {
-	SendMessageToClientViaGate(messageId, message, tlsEcs.GetPlayer(playerId));
+	SendToPlayerClient(messageId, message, tlsEcs.GetPlayer(playerId));
 }
 
-void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Message &message, entt::entity playerEntity)
+void SendToPlayerClient(uint32_t messageId, const google::protobuf::Message &message, entt::entity playerEntity)
 {
 	if (!tlsEcs.actorRegistry.valid(playerEntity))
 	{
@@ -54,12 +54,12 @@ void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Mess
 	// try_get 而不是 get:极少数内部实体(测试桩 / 未完全构造的玩家)可能没有 Guid,
 	// 拿不到时带 0 走兼容位,总比在推送路径上抛异常好。
 	const auto *playerGuid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(playerEntity);
-	SendMessageToClientSessionViaGate(messageId, message, *gateRpcSession, sessionSnapshot->gate_session_id(),
-	                                  playerGuid != nullptr ? playerGuid->value : kInvalidGuid);
+	SendToClientSession(messageId, message, *gateRpcSession, sessionSnapshot->gate_session_id(),
+	                    playerGuid != nullptr ? playerGuid->value : kInvalidGuid);
 }
 
-void SendMessageToClientSessionViaGate(uint32_t messageId, const google::protobuf::Message &message,
-                                       RpcSession &gateRpcSession, SessionId clientSessionId, Guid targetPlayerId)
+void SendToClientSession(uint32_t messageId, const google::protobuf::Message &message,
+                         RpcSession &gateRpcSession, SessionId clientSessionId, Guid targetPlayerId)
 {
 	NodeRouteMessageRequest request;
 	const size_t serializedMessageSize = message.ByteSizeLong();
@@ -209,7 +209,7 @@ void BroadcastToSceneClients(uint32_t messageId, const google::protobuf::Message
 	BroadcastToSceneClientsImpl(messageId, message, sceneId, scenePlayerEntities);
 }
 
-void BroadcastToAllClientsOnKnownGates(uint32_t messageId, const google::protobuf::Message &message)
+void BroadcastToKnownGateClients(uint32_t messageId, const google::protobuf::Message &message)
 {
 	auto &gateNodeRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
 

@@ -150,6 +150,7 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 . (Join-Path $ScriptDir "lib\producer_dev_secret.ps1")
 # 角色护栏(docs/design/horizontal-scale-logical-db.md §3.3)的本机开发密钥,按服务只给各自那几把;用法见 Start-ServiceInstance。
 . (Join-Path $ScriptDir "lib\role_fence_dev_secret.ps1")
+. (Join-Path $ScriptDir "lib\gate_identity_environment.ps1")
 
 # ── Service catalogue ────────────────────────────────────────────────
 # Order matters: infrastructure-layer services first, then domain services.
@@ -1143,12 +1144,16 @@ function Start-ServiceInstance {
     # 角色护栏的密钥:data_service 拿全部,参与者拿自己和协调者那把,chat、go/db 只拿自己那把。同样只在分支里调用、finally 里还原;部署链从不调用这里。
     $roleFenceDevSecretService = if ($Name -in @('data_service','guild','trade','mail','match','player_inbox','friend','chat','db')) { $Name.Replace('_','-') } else { '' }
     $prevRoleFenceDevSecrets = $null
+    $previousGateIdentityEnvironment = $null
     $savedWriterEnvironment = $null
     $savedChatDsn = [Environment]::GetEnvironmentVariable('CHAT_AUTHORITY_DSN', 'Process')
 	$savedMatchMigrationUser = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_USER', 'Process')
 	$savedMatchMigrationPassword = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', 'Process')
 	$savedDatabaseAllowlist = [Environment]::GetEnvironmentVariable('DB_ALLOWED_DATABASES','Process')
     try {
+        if ($Name -in @('login','chat','friend','guild','trade','match','mail','rank')) {
+            $previousGateIdentityEnvironment = Enter-LocalGateIdentityEnvironment -RepoRoot $RepoRoot
+        }
         if($null -ne $writerEnvironment){$savedWriterEnvironment=Enter-SqlWriterBootEnvironment -Environment $writerEnvironment}
         if ($Name -eq 'chat') { $null = Get-LocalChatAuthoritySettings -ConfigPath $cfg.FullPath -RequireDsn }
 		# 显式迁移CLI的凭据不能被任意常驻服务顺带继承。
@@ -1226,6 +1231,7 @@ function Start-ServiceInstance {
                 -WindowStyle Hidden
         }
     } finally {
+        if ($null -ne $previousGateIdentityEnvironment) { Restore-LocalGateIdentityEnvironment $previousGateIdentityEnvironment }
         Restore-SqlWriterBootEnvironment -Saved $savedWriterEnvironment
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_USER', $savedMatchMigrationUser, 'Process')
 		[Environment]::SetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', $savedMatchMigrationPassword, 'Process')
@@ -1240,13 +1246,18 @@ function Start-ServiceInstance {
         if ($roleFenceDevSecretService) { Restore-RoleFenceDevSecrets $prevRoleFenceDevSecrets }
     }
 
+    # Windows 刚返回进程句柄时模块路径可能尚不可读，沿用启动时解析的可执行文件。
+    $startedExecutable = $proc.Path
+    if ([string]::IsNullOrWhiteSpace($startedExecutable)) {
+        $startedExecutable = if ($UseExe) { $exePath } else { (Get-Command go -CommandType Application -ErrorAction Stop).Source }
+    }
     $entry = [pscustomobject]@{
         Pid     = $proc.Id
         Port    = $cfg.Port
         Service = $Name
         StartTimeUtcTicks = $proc.StartTime.ToUniversalTime().Ticks
-        ExecutablePath = $proc.Path
-        ExecutableSha256 = Get-MaintenanceSha256 -Path $proc.Path
+        ExecutablePath = $startedExecutable
+        ExecutableSha256 = Get-MaintenanceSha256 -Path $startedExecutable
         AllowChildProcess = -not $UseExe
         ConfigPath = $cfg.Path
     }

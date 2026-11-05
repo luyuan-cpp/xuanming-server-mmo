@@ -198,7 +198,7 @@ message SyncDigestS2C {
   2. 按值捕获 `playerId` 发 `HGETALL player:%llu:sync_digest`；返回值 `!= REDIS_OK` 时回调不会被调，就地推 `UNAVAILABLE`。
   3. 回调里按 playerId 重新找实体（实体可能已销毁或换人），找不到就丢弃（客户端会超时重试）。
   4. 解析：`g` → generation；其余字段名能解析成已知 `SyncDomain` 值的进 entries，未知字段跳过（新服务端先上、旧 scene 未升级时字段会多于枚举）。应答类型不是数组、字段值不是十进制无符号整数 → `UNAVAILABLE`，打 ERROR。
-  5. 推 `NotifySyncDigest`（`SendMessageToClientViaGate`）。
+  5. 推 `NotifySyncDigest`（`SendToPlayerClient`）。
 - 解析做成 `player_landing.h` 里的纯函数（入参：字段名/值对的列表），单测只测它。
 - handler（`player_scene_handler.cpp` 守护段内）：`GetSyncDigest` 只委托 `PlayerLandingSystem::SendSyncDigest(player)`；`NotifySyncDigest` 照 `NotifySceneInfo` 转发给客户端。
 - 实体还在异步载入时，客户端请求会被 scene 丢弃且不回包 [C]（`ProcessClientPlayerMessage`）。客户端在收到 `NotifyEnterScene` 之后才发（§4.3），此时实体一定已建好。

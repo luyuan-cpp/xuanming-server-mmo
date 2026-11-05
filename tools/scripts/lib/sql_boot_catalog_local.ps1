@@ -1312,15 +1312,25 @@ function Get-LocalSqlBootInstancePlan {
 }
 
 # Java 的 WriterAuthority 在 Windows 上经 private_control_file 读写私有文件,并要求 exe 的整条路径都不能被非受信主体替换。
-# 仓库目录通常继承 Authenticated Users 的修改权限,过不了;%LOCALAPPDATA% 只属于当前账号,放这里,不改仓库目录的 ACL。
+# 仓库目录及 LocalAppData 的祖先可能允许其他主体修改。将 helper 放在用户配置目录下的专用私有目录。
+function Get-LocalSqlBootPrivateFileHelperDirectory {
+    $profileRoot = [Environment]::GetFolderPath('UserProfile')
+    return [IO.Path]::GetFullPath((Join-Path $profileRoot '.mmorpg/sql-boot-local'))
+}
+
 function Install-LocalSqlBootPrivateFileHelper {
     param([Parameter(Mandatory)][string]$RepoRoot)
     $source = Resolve-LocalSqlBootTool -RepoRoot $RepoRoot -Name 'private_control_file'
-    $directory = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'mmorpg/sql-boot-local'))
-    $null = [IO.Directory]::CreateDirectory($directory)
+    $directory = Get-LocalSqlBootPrivateFileHelperDirectory
+    Initialize-LocalSqlBootPrivateDirectory -Path $directory
     $target = Join-Path $directory 'private_control_file.exe'
+    $existing = Get-Item -LiteralPath $target -ErrorAction SilentlyContinue
+    if ($existing -and ($existing.PSIsContainer -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint))) {
+        throw 'Java 私有文件 helper 路径不是普通文件。'
+    }
     $sha256 = Get-MaintenanceSha256 -Path $source
     if (-not (Test-Path -LiteralPath $target -PathType Leaf) -or (Get-MaintenanceSha256 -Path $target) -cne $sha256) { Copy-Item -LiteralPath $source -Destination $target -Force }
+    if ((Get-MaintenanceSha256 -Path $target) -cne $sha256) { throw 'Java 私有文件 helper 复制后摘要不符。' }
     return [pscustomobject]@{ path = $target; sha256 = $sha256 }
 }
 
@@ -1598,10 +1608,9 @@ function New-LocalSqlBootCatalog {
         if ($javaInstances.Count -gt 0) { $summary['javaInstancePlan'] = @{ path = [IO.Path]::GetFullPath($JavaInstancePlanPath); sha256 = $JavaInstancePlanSha256.ToLowerInvariant() }; $summary['javaInstances'] = [object[]]@($javaInstances | ForEach-Object InstanceKey) }
         Write-LocalSqlBootText -Path $summaryPath -Text (ConvertTo-Json -InputObject $summary -Depth 4)
 
-        # 只留本轮:运行中的实例启动后不再读这些文件,旧授权已没有用处。
-        foreach ($old in @(Get-ChildItem -LiteralPath $bootsRoot -Directory | Where-Object { $_.Name -cne $bootId -and $javaInstances.Count -eq 0 })) {
-            try { Remove-Item -LiteralPath $old.FullName -Recurse -Force } catch { Write-Warning "Could not remove the old boot directory $($old.Name): $($_.Exception.Message)" }
-        }
+        # 不按本轮注册范围清理旧 boot：未请求的实例可能仍在运行，首次写入还要在原目录
+        # 落消费标记，进程身份核验也依赖原完整配置。旧 catalog 已替换，已停实例的 SQL
+        # 账号已撤销；文件仅作私有历史留存，清理须另行确认整批实例已退出及证据保留期。
         Write-LocalSqlBootLog "catalog: $catalogPath ($($pending.Count) instance(s) registered, $(@($instances | Where-Object { $_.Running }).Count) already running, $($skipped.Count) skipped)"
         Write-LocalSqlBootLog "next: `$env:MMORPG_SQL_BOOT_CATALOG='$catalogPath'; `$env:MMORPG_DB_ALLOWED_DATABASES='$($settings.PlayerDatabases -join ',')'"
         return $summary

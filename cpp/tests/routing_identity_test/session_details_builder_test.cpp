@@ -4,6 +4,71 @@
 #include <string>
 
 #include "../../nodes/gate/handler/rpc/session_details_builder.h"
+#include "../../nodes/gate/handler/event/authenticated_session_binding.h"
+#include "../../nodes/gate/handler/event/scene_route_helper.h"
+#include "core/security/caller_auth.h"
+#include "core/utils/encode/base64.h"
+#include "session/system/session.h"
+
+TEST(GateAuthenticatedIdentity, MetadataDecoderPreservesAuthenticatedAccount)
+{
+    SessionDetails original;
+    original.set_session_id(17);
+    original.set_gate_instance_id("gate-original");
+    original.set_session_incarnation(19);
+    original.set_player_id(100);
+    original.set_owner_revision(3);
+    original.set_authenticated_account("original-account");
+    // 经实际 session.lib 解码接缝，覆盖新协议与调用库必须一起重编的边界。
+    const auto decoded = ParseSessionDetailsMetadataValue(Base64Encode(original.SerializeAsString()));
+    ASSERT_NE(decoded, nullptr);
+    EXPECT_EQ(decoded->SerializeAsString(), original.SerializeAsString());
+}
+
+TEST(GateAuthenticatedIdentity, BindingRejectsReusedConnectionAndRouteCannotPromoteIdentity)
+{
+    SessionInfo session;
+    session.incarnation = 19;
+    session.loginSucceeded = true;
+    contracts::kafka::BindSessionEvent bind;
+    bind.set_player_id(100);
+    bind.set_session_incarnation(19);
+    bind.set_authenticated_account(" 原账号 ");
+    bind.set_owner_revision(3);
+    bind.set_login_generation(40);
+    ASSERT_TRUE(gate_authenticated_session::Bind(session, bind));
+    gate_scene_route::ApplyLoginBinding(session, 100, 2, 40, 1);
+    gate_scene_route::ApplyRouteIdentity(session, 100, 1, 20, 40, 9);
+    auto detail = gate_session_details::Build(7, 100, 1, "original-gate", &session);
+    EXPECT_EQ(detail.authenticated_account(), " 原账号 ");
+    EXPECT_EQ(detail.owner_revision(), 3);
+    EXPECT_TRUE(gate_session_details::MatchesAuthenticatedBinding(detail, session));
+    bind.set_login_generation(39);
+    EXPECT_FALSE(gate_authenticated_session::Bind(session, bind));
+    bind.set_login_generation(40);
+    bind.set_authenticated_account("新账号");
+    EXPECT_FALSE(gate_authenticated_session::Bind(session, bind));
+    SessionInfo restarted;
+    restarted.incarnation = 20;
+    restarted.loginSucceeded = true;
+    EXPECT_FALSE(gate_authenticated_session::Bind(restarted, bind));
+    EXPECT_TRUE(restarted.authenticatedAccount.empty());
+    gate_scene_route::ResetSceneRoute(session);
+    EXPECT_FALSE(gate_session_details::MatchesAuthenticatedBinding(detail, session));
+    detail = gate_session_details::Build(7, 100, 1, "original-gate", &session);
+    EXPECT_TRUE(detail.authenticated_account().empty());
+    EXPECT_EQ(detail.owner_revision(), 0);
+}
+
+TEST(GateAuthenticatedIdentity, SignatureMatchesGoCanonicalVector)
+{
+    const std::string subject("\0\1\xff\n", 4);
+    EXPECT_EQ(caller_auth::Sign("0123456789abcdef0123456789abcdef", "/login.ClientPlayerLogin/Login",
+        subject, 1762300000000LL, "00112233445566778899aabbccddeeff"),
+        "b06ac9d4ee1cdab3e9fef0f534b6ba8ba73cf73dd901d3d896f4329d6bfebd5e");
+    EXPECT_TRUE(caller_auth::Sign("short", "/login.ClientPlayerLogin/Login", subject, 0,
+        "00112233445566778899aabbccddeeff").empty());
+}
 
 // ---------------------------------------------------------------------------
 // session_details_builder_test —— gate 递给 Go 服务的会话头(session_details_builder.h 的 Build / NormalizePlayerId)。

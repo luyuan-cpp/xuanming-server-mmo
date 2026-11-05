@@ -43,7 +43,7 @@ t1  Redis 返回结果
     -> InitPlayerFromAllData(data, enterInfo_A)
       -> EnterScene -> HandleEnterScene
         -> 给玩家挂 SceneEntityComp 绑定到场景，并加入 AOI 网格
-        -> SendMessageToClientViaGate(EnterSceneS2C)  // 客户端收到响应
+        -> SendToPlayerClient(EnterSceneS2C)  // 客户端收到响应
 ```
 
 ## 流程 2：异步加载期间断线（取消）
@@ -96,7 +96,7 @@ t3  Redis 返回结果（对应 t0 发起的 GET；无论会话如何变化，�
     -> InitPlayerFromAllData(data, enterInfo_B)
       -> EnterScene(session_B) -> HandleEnterScene
         -> 使用 session_B 将玩家绑定到场景
-        -> SendMessageToClientViaGate(EnterSceneS2C)  // 客户端 B 收到响应
+        -> SendToPlayerClient(EnterSceneS2C)  // 客户端 B 收到响应
 ```
 
 **结果**：重连后的客户端成功进入场景。无需再次发起 Redis GET，尚未完成的同一次 GET

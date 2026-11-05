@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"shared/authoritysql"
+	"shared/callerauth"
 	"strconv"
 	"syscall"
 	"time"
@@ -190,7 +191,11 @@ func runChat(c config.Config) (runErr error) {
 	}
 	// go-zero 自带的 trace / recover / stat / prometheus / breaker / shedding / timeout 拦截器
 	// 在 NewServer 里已先加入,位于下面这条链的外层;"grpcstats 最外"指本服务自己的链内。
-	s.AddUnaryInterceptors(append([]grpc.UnaryServerInterceptor{serverbase.RootAdmission(root)}, buildUnaryInterceptors(ks, session.OriginalIdentityInterceptor(svcCtx.LoginSessions))...)...)
+	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
+	if authErr != nil {
+		return authErr
+	}
+	s.AddUnaryInterceptors(append([]grpc.UnaryServerInterceptor{serverbase.RootAdmission(root), gateIdentity}, buildUnaryInterceptors(ks, session.OriginalIdentityInterceptor(svcCtx.LoginSessions))...)...)
 
 	// 先启动gRPC再注册。保存真实Server用于主动排空,Start错误经通道交回主线程,
 	// 让监听失败、注册失败和收到启动期信号都能清理已创建的资源。

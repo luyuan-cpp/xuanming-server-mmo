@@ -35,6 +35,10 @@ private:
     static void NotifyEntityVisibilityChanges(entt::entity entity,
                                               const EntityUnorderedSet& enteringEntities, 
                                               const EntityUnorderedSet& leavingEntities);
+    // 同一实体的进出通知按观察者集合广播，自身的视野增删列表仍单独发送。
+    static void BroadcastEntityVisibilityChanges(entt::entity entity,
+                                                 const EntityUnorderedSet& enteringObservers,
+                                                 const EntityUnorderedSet& leavingObservers);
     static void RemoveEntityFromGrid(const Hex& hex, SceneGridListComp& gridList, entt::entity entity);
 
     static void BroadcastEntityLeave(const SceneGridListComp& gridList, entt::entity entity, const GridSet& gridsToLeave);

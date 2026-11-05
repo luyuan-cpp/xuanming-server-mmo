@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"shared/authoritysql"
+	"shared/callerauth"
 	"shared/drainproof"
 	"shared/rolefence"
 	"strconv"
@@ -264,7 +265,11 @@ func runFriend(c config.Config) (runErr error) {
 		return fmt.Errorf("friend RPC 构造失败: %w", err)
 	}
 	// go-zero 自带拦截器在 NewServer 里已先加入,位于下面这条链的外层。
-	s.AddUnaryInterceptors(serverbase.RootAdmission(root))
+	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
+	if authErr != nil {
+		return authErr
+	}
+	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks,
 		session.OriginalIdentityInterceptor(svcCtx.LoginSessions, c.RequestBudget(), deps.CheckOriginalRole))...)
 

@@ -29,6 +29,12 @@ SQL 事务内不访问 Redis、Kafka 或 scene。RPC 和事务共享可取消截
 
 登录列表、建角上限、EnterGame 归属、身份补齐和孤儿清理接缝均走 SQL 目录；既有无生产调用者的 LoginAdmin 删除 RPC 继续明确 Unimplemented，不借迁移扩大破坏性权限。旧账号 self-heal 不再根据 Redis 反向键制造角色。AssignGate 的“已有会话”优化也查询同一目录。P0-b 原始批次只覆盖这些目录入口；随后获授权的 P4 增加下节的交易锁与过户收据，但不改变玩家种子、父快照及 scene owner_epoch 的事实源。
 
+2026-11-04 在线身份补充：`EnterGame` 成功不清理本条 gate 连接的 `login_session`。匹配、聊天等在线服务需要通过 `shared/loginsession.Account` 将原连接绑定回认证账号，再以原归属修订进行授权；不能在进场后删掉认证事实，再查询角色当前归属补权。登录态仍受原 TTL 限制，由 `LeaveGame` / `Disconnect` 清理。回归测试必须经过完整异步入场链，并证明进场后可读原账号、离场或断线后不可再读。
+
+2026-11-05 已实施原身份传递：login 继续认证凭据并在选角时捕获原账号和 owner_revision，经内部 BindSessionEvent 连同 gate 连接 incarnation 交给 gate；gate 从其会话状态构造 authenticated_account，随每次内部调用的 SessionDetails 整体签名。在线业务先验签，再读取这份原身份，不为每条消息 GET 登录域 Redis；原账号不来自客户端正文，也不反查当前 owner。登录/选角阶段的 Redis 会话栅栏、设备集清理仍保留，业务提交的本库 role_fence 与事务外自愈保持。具体运行证据及未覆盖范围见 [本轮审核交接](../handoff/gate-auth-role-fence-review-20261104.md)。
+
+新 gate 进程不会继承旧连接的认证标记。客户端重连须重新取得 gate 票据、在新 TCP 连接以有效 access token 完成 Login，再对原角色发 EnterGame 并等 NotifyEnterScene；令牌失效时停止恢复，不能仅凭角色号恢复身份。旧客户端仍可手动重新登录，自动恢复是独立客户端增量。退出/踢线以后 gate 停止接收新业务；撤销前已经受理的调用按原业务合同完成或拒绝，角色冻结/过户仍由提交护栏决定，不能靠异步踢线消息代替提交互斥。
+
 > **2026-10-30**:旧调试导入工具已删除,`AccountDirectoryStore.ImportRole` 与 `account_role_import_receipt` 随之删除。新的 `debug_import` 只改本地已有角色的 `player_store` 行,不碰账号目录([online-debug-data-fetch.md](../ops/online-debug-data-fetch.md))。下面关于调试导入、维护收据与 `-replace` 墓碑恢复的段落只作历史保留;墓碑现在不能恢复。
 
 调试导出显示全局 SQL 目录，旧 Redis 目录仅标为历史缓存。调试导入的 `-local-account` 必须在目标本地全局目录登记角色；该受本地目标、来源隔离与离线检查约束的 CLI 直接调用 SQL store，不走仅允许 login 的 RPC。墓碑恢复还须显式 -replace，并继续递增归属修订号；不再只写反向 Redis 键冒充归属。工具不得改变认证口令。

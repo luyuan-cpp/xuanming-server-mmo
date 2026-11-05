@@ -430,9 +430,15 @@ var bootstrapUniqueColumns = map[string][]string{
 	PlayerNameOwnerTableName: {"player_id"},
 }
 
+// schemaReader 允许形状核对使用连接池或在同一物理连接上完成一批只读查询。
+type schemaReader interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 // primaryKeyColumns 读一张表主键的列序(按 SEQ_IN_INDEX)。表没有主键时返回空切片、不报错 ——
 // "没有主键"是一种要由调用方定性的形状,不是查询失败。
-func primaryKeyColumns(ctx context.Context, db *sql.DB, dbName, tableName string) ([]string, error) {
+func primaryKeyColumns(ctx context.Context, db schemaReader, dbName, tableName string) ([]string, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS
 		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY'
@@ -1711,7 +1717,7 @@ func warnIfLegacyTable(ctx context.Context, db *sql.DB, dbName string, table pro
 
 // assertColumnsPresent 漂移检查:proto 的每个字段在线上表都得有同名列。
 // 只用于不走 CreateOrUpdateTable 的预建表,免得 proto 加了字段而 bootstrap DDL 忘了跟。
-func assertColumnsPresent(ctx context.Context, db *sql.DB, dbName string, table proto.Message, tableName string) error {
+func assertColumnsPresent(ctx context.Context, db schemaReader, dbName string, table proto.Message, tableName string) error {
 	fields := table.ProtoReflect().Descriptor().Fields()
 	want := make([]string, 0, fields.Len())
 	for i := 0; i < fields.Len(); i++ {
@@ -1723,7 +1729,7 @@ func assertColumnsPresent(ctx context.Context, db *sql.DB, dbName string, table 
 // assertColumnNamesPresent 按列名比对:want 里每一列在线上表都得有同名列(只比名字,不比类型)。
 // 调用方是 assertColumnsPresent(列名由 proto 字段推出;路由表的 assertRouteTableShapes 也经由它)。
 // "怎么查一张预建表的列齐不齐"是同一条知识,只写这一份。
-func assertColumnNamesPresent(ctx context.Context, db *sql.DB, dbName, tableName string, want []string) error {
+func assertColumnNamesPresent(ctx context.Context, db schemaReader, dbName, tableName string, want []string) error {
 	rows, err := db.QueryContext(ctx,
 		`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?`,
 		dbName, tableName)

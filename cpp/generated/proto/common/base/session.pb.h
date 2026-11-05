@@ -221,6 +221,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SessionDetails final : public ::goo
   // accessors -------------------------------------------------------
   enum : int {
     kGateInstanceIdFieldNumber = 4,
+    kAuthenticatedAccountFieldNumber = 10,
     kPlayerIdFieldNumber = 2,
     kSessionIdFieldNumber = 1,
     kGateNodeIdFieldNumber = 3,
@@ -243,6 +244,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SessionDetails final : public ::goo
   const ::std::string& _internal_gate_instance_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_gate_instance_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_gate_instance_id();
+
+  public:
+  // string authenticated_account = 10;
+  void clear_authenticated_account() ;
+  [[nodiscard]] const ::std::string& authenticated_account() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_authenticated_account(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_authenticated_account();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_authenticated_account();
+  void set_allocated_authenticated_account(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_authenticated_account() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_authenticated_account(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_authenticated_account();
 
   public:
   // uint64 player_id = 2;
@@ -329,8 +345,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SessionDetails final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
-                          0, 47,
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          0, 68,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -359,6 +375,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SessionDetails final : public ::goo
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr gate_instance_id_;
+    ::google::protobuf::internal::ArenaStringPtr authenticated_account_;
     ::uint64_t player_id_;
     ::uint32_t session_id_;
     ::uint32_t gate_node_id_;
@@ -393,7 +410,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SessionDetails final : public ::goo
 inline void SessionDetails::clear_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t SessionDetails::session_id() const {
   // @@protoc_insertion_point(field_get:SessionDetails.session_id)
@@ -401,7 +418,7 @@ inline ::uint32_t SessionDetails::session_id() const {
 }
 inline void SessionDetails::set_session_id(::uint32_t value) {
   _internal_set_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:SessionDetails.session_id)
 }
 inline ::uint32_t SessionDetails::_internal_session_id() const {
@@ -417,7 +434,7 @@ inline void SessionDetails::_internal_set_session_id(::uint32_t value) {
 inline void SessionDetails::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t SessionDetails::player_id() const {
   // @@protoc_insertion_point(field_get:SessionDetails.player_id)
@@ -425,7 +442,7 @@ inline ::uint64_t SessionDetails::player_id() const {
 }
 inline void SessionDetails::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:SessionDetails.player_id)
 }
 inline ::uint64_t SessionDetails::_internal_player_id() const {
@@ -441,7 +458,7 @@ inline void SessionDetails::_internal_set_player_id(::uint64_t value) {
 inline void SessionDetails::clear_gate_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gate_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t SessionDetails::gate_node_id() const {
   // @@protoc_insertion_point(field_get:SessionDetails.gate_node_id)
@@ -449,7 +466,7 @@ inline ::uint32_t SessionDetails::gate_node_id() const {
 }
 inline void SessionDetails::set_gate_node_id(::uint32_t value) {
   _internal_set_gate_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:SessionDetails.gate_node_id)
 }
 inline ::uint32_t SessionDetails::_internal_gate_node_id() const {
@@ -529,7 +546,7 @@ inline void SessionDetails::set_allocated_gate_instance_id(::std::string* PROTOB
 inline void SessionDetails::clear_ticket_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ticket_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t SessionDetails::ticket_player_id() const {
   // @@protoc_insertion_point(field_get:SessionDetails.ticket_player_id)
@@ -537,7 +554,7 @@ inline ::uint64_t SessionDetails::ticket_player_id() const {
 }
 inline void SessionDetails::set_ticket_player_id(::uint64_t value) {
   _internal_set_ticket_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:SessionDetails.ticket_player_id)
 }
 inline ::uint64_t SessionDetails::_internal_ticket_player_id() const {
@@ -553,7 +570,7 @@ inline void SessionDetails::_internal_set_ticket_player_id(::uint64_t value) {
 inline void SessionDetails::clear_ticket_target_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ticket_target_zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t SessionDetails::ticket_target_zone_id() const {
   // @@protoc_insertion_point(field_get:SessionDetails.ticket_target_zone_id)
@@ -561,7 +578,7 @@ inline ::uint32_t SessionDetails::ticket_target_zone_id() const {
 }
 inline void SessionDetails::set_ticket_target_zone_id(::uint32_t value) {
   _internal_set_ticket_target_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:SessionDetails.ticket_target_zone_id)
 }
 inline ::uint32_t SessionDetails::_internal_ticket_target_zone_id() const {
@@ -577,7 +594,7 @@ inline void SessionDetails::_internal_set_ticket_target_zone_id(::uint32_t value
 inline void SessionDetails::clear_session_incarnation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_incarnation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t SessionDetails::session_incarnation() const {
   // @@protoc_insertion_point(field_get:SessionDetails.session_incarnation)
@@ -585,7 +602,7 @@ inline ::uint64_t SessionDetails::session_incarnation() const {
 }
 inline void SessionDetails::set_session_incarnation(::uint64_t value) {
   _internal_set_session_incarnation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:SessionDetails.session_incarnation)
 }
 inline ::uint64_t SessionDetails::_internal_session_incarnation() const {
@@ -601,7 +618,7 @@ inline void SessionDetails::_internal_set_session_incarnation(::uint64_t value) 
 inline void SessionDetails::clear_gate_call_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gate_call_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t SessionDetails::gate_call_seq() const {
   // @@protoc_insertion_point(field_get:SessionDetails.gate_call_seq)
@@ -609,7 +626,7 @@ inline ::uint64_t SessionDetails::gate_call_seq() const {
 }
 inline void SessionDetails::set_gate_call_seq(::uint64_t value) {
   _internal_set_gate_call_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:SessionDetails.gate_call_seq)
 }
 inline ::uint64_t SessionDetails::_internal_gate_call_seq() const {
@@ -625,7 +642,7 @@ inline void SessionDetails::_internal_set_gate_call_seq(::uint64_t value) {
 inline void SessionDetails::clear_owner_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t SessionDetails::owner_revision() const {
   // @@protoc_insertion_point(field_get:SessionDetails.owner_revision)
@@ -633,7 +650,7 @@ inline ::uint64_t SessionDetails::owner_revision() const {
 }
 inline void SessionDetails::set_owner_revision(::uint64_t value) {
   _internal_set_owner_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:SessionDetails.owner_revision)
 }
 inline ::uint64_t SessionDetails::_internal_owner_revision() const {
@@ -643,6 +660,70 @@ inline ::uint64_t SessionDetails::_internal_owner_revision() const {
 inline void SessionDetails::_internal_set_owner_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = value;
+}
+
+// string authenticated_account = 10;
+inline void SessionDetails::clear_authenticated_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.authenticated_account_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SessionDetails::authenticated_account() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SessionDetails.authenticated_account)
+  return _internal_authenticated_account();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SessionDetails::set_authenticated_account(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.authenticated_account_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SessionDetails.authenticated_account)
+}
+inline ::std::string* PROTOBUF_NONNULL SessionDetails::mutable_authenticated_account()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_authenticated_account();
+  // @@protoc_insertion_point(field_mutable:SessionDetails.authenticated_account)
+  return _s;
+}
+inline const ::std::string& SessionDetails::_internal_authenticated_account() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.authenticated_account_.Get();
+}
+inline void SessionDetails::_internal_set_authenticated_account(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.authenticated_account_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SessionDetails::_internal_mutable_authenticated_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.authenticated_account_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SessionDetails::release_authenticated_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SessionDetails.authenticated_account)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.authenticated_account_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.authenticated_account_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SessionDetails::set_allocated_authenticated_account(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.authenticated_account_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.authenticated_account_.IsDefault()) {
+    _impl_.authenticated_account_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SessionDetails.authenticated_account)
 }
 
 #ifdef __GNUC__

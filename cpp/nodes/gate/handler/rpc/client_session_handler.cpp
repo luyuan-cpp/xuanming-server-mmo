@@ -4,6 +4,7 @@
 #include "rpc_reply_bridge.h"
 #include "scene_client_call_reply.h"
 #include "session_details_builder.h"
+#include "core/security/caller_auth.h"
 
 #include <algorithm>
 #include <cassert>
@@ -586,8 +587,12 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 				std::string bin;
 				if (sessionDetails.SerializeToString(&bin))
 				{
-					options.metadata.emplace_back(kSessionBinMetaKey, std::move(bin));
+					options.metadata.emplace_back(kSessionBinMetaKey, bin);
 				}
+				if (caller_auth::Append(options.metadata,
+					gRpcMethodRegistry[ClientPlayerLoginDisconnectMessageId].grpcFullMethod,
+					bin, std::getenv(caller_auth::kSecretEnv)))
+				{
 				loginpb::SendClientPlayerLoginDisconnect(
 					tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request,
 					[sessionId](const GrpcCallOutcome &outcome, const loginpb::LoginEmptyResponse *)
@@ -605,6 +610,11 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 						}
 					},
 					options);
+				}
+				else
+				{
+					LOG_ERROR << "断线通知签名失败；继续清理本地会话";
+				}
 			}
 		}
 	}
@@ -985,6 +995,12 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 		if (sessionDetails.SerializeToString(&serializedSessionDetails))
 		{
 			options.metadata.emplace_back(kSessionBinMetaKey, serializedSessionDetails);
+		}
+		if (!caller_auth::Append(options.metadata, rpcHandlerMeta.grpcFullMethod, serializedSessionDetails,
+			std::getenv(caller_auth::kSecretEnv)))
+		{
+			SendRequestErrorEnvelope(conn, *request, kServiceUnavailable);
+			return;
 		}
 		rpcHandlerMeta.sender(
 			tlsNodeContextManager.GetRegistry(rpcHandlerMeta.targetNodeType), *node, *rpcHandlerMeta.requestProto,

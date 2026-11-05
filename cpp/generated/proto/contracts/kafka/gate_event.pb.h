@@ -1979,12 +1979,30 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindSessionEvent final : public ::g
 
   // accessors -------------------------------------------------------
   enum : int {
+    kAuthenticatedAccountFieldNumber = 6,
     kPlayerIdFieldNumber = 2,
     kSessionIdFieldNumber = 1,
     kSessionVersionFieldNumber = 3,
     kLoginGenerationFieldNumber = 5,
+    kSessionIncarnationFieldNumber = 7,
+    kOwnerRevisionFieldNumber = 8,
     kEnterGsTypeFieldNumber = 4,
   };
+  // string authenticated_account = 6;
+  void clear_authenticated_account() ;
+  [[nodiscard]] const ::std::string& authenticated_account() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_authenticated_account(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_authenticated_account();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_authenticated_account();
+  void set_allocated_authenticated_account(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_authenticated_account() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_authenticated_account(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_authenticated_account();
+
+  public:
   // uint64 player_id = 2;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2025,6 +2043,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindSessionEvent final : public ::g
   void _internal_set_login_generation(::uint64_t value);
 
   public:
+  // uint64 session_incarnation = 7;
+  void clear_session_incarnation() ;
+  [[nodiscard]] ::uint64_t session_incarnation() const;
+  void set_session_incarnation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_session_incarnation() const;
+  void _internal_set_session_incarnation(::uint64_t value);
+
+  public:
+  // uint64 owner_revision = 8;
+  void clear_owner_revision() ;
+  [[nodiscard]] ::uint64_t owner_revision() const;
+  void set_owner_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_owner_revision() const;
+  void _internal_set_owner_revision(::uint64_t value);
+
+  public:
   // uint32 enter_gs_type = 4;
   void clear_enter_gs_type() ;
   [[nodiscard]] ::uint32_t enter_gs_type() const;
@@ -2039,8 +2077,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindSessionEvent final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 70,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2068,10 +2106,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BindSessionEvent final : public ::g
         const BindSessionEvent& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr authenticated_account_;
     ::uint64_t player_id_;
     ::uint32_t session_id_;
     ::uint32_t session_version_;
     ::uint64_t login_generation_;
+    ::uint64_t session_incarnation_;
+    ::uint64_t owner_revision_;
     ::uint32_t enter_gs_type_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3758,7 +3799,7 @@ inline void PlayerLeaseExpiredEvent::set_allocated_gate_instance_id(::std::strin
 inline void BindSessionEvent::clear_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t BindSessionEvent::session_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BindSessionEvent.session_id)
@@ -3766,7 +3807,7 @@ inline ::uint32_t BindSessionEvent::session_id() const {
 }
 inline void BindSessionEvent::set_session_id(::uint32_t value) {
   _internal_set_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BindSessionEvent.session_id)
 }
 inline ::uint32_t BindSessionEvent::_internal_session_id() const {
@@ -3782,7 +3823,7 @@ inline void BindSessionEvent::_internal_set_session_id(::uint32_t value) {
 inline void BindSessionEvent::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t BindSessionEvent::player_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BindSessionEvent.player_id)
@@ -3790,7 +3831,7 @@ inline ::uint64_t BindSessionEvent::player_id() const {
 }
 inline void BindSessionEvent::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BindSessionEvent.player_id)
 }
 inline ::uint64_t BindSessionEvent::_internal_player_id() const {
@@ -3806,7 +3847,7 @@ inline void BindSessionEvent::_internal_set_player_id(::uint64_t value) {
 inline void BindSessionEvent::clear_session_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t BindSessionEvent::session_version() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BindSessionEvent.session_version)
@@ -3814,7 +3855,7 @@ inline ::uint32_t BindSessionEvent::session_version() const {
 }
 inline void BindSessionEvent::set_session_version(::uint32_t value) {
   _internal_set_session_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BindSessionEvent.session_version)
 }
 inline ::uint32_t BindSessionEvent::_internal_session_version() const {
@@ -3830,7 +3871,7 @@ inline void BindSessionEvent::_internal_set_session_version(::uint32_t value) {
 inline void BindSessionEvent::clear_enter_gs_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enter_gs_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t BindSessionEvent::enter_gs_type() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BindSessionEvent.enter_gs_type)
@@ -3838,7 +3879,7 @@ inline ::uint32_t BindSessionEvent::enter_gs_type() const {
 }
 inline void BindSessionEvent::set_enter_gs_type(::uint32_t value) {
   _internal_set_enter_gs_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BindSessionEvent.enter_gs_type)
 }
 inline ::uint32_t BindSessionEvent::_internal_enter_gs_type() const {
@@ -3854,7 +3895,7 @@ inline void BindSessionEvent::_internal_set_enter_gs_type(::uint32_t value) {
 inline void BindSessionEvent::clear_login_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.login_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t BindSessionEvent::login_generation() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.BindSessionEvent.login_generation)
@@ -3862,7 +3903,7 @@ inline ::uint64_t BindSessionEvent::login_generation() const {
 }
 inline void BindSessionEvent::set_login_generation(::uint64_t value) {
   _internal_set_login_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:contracts.kafka.BindSessionEvent.login_generation)
 }
 inline ::uint64_t BindSessionEvent::_internal_login_generation() const {
@@ -3872,6 +3913,118 @@ inline ::uint64_t BindSessionEvent::_internal_login_generation() const {
 inline void BindSessionEvent::_internal_set_login_generation(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.login_generation_ = value;
+}
+
+// string authenticated_account = 6;
+inline void BindSessionEvent::clear_authenticated_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.authenticated_account_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BindSessionEvent::authenticated_account() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:contracts.kafka.BindSessionEvent.authenticated_account)
+  return _internal_authenticated_account();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BindSessionEvent::set_authenticated_account(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.authenticated_account_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:contracts.kafka.BindSessionEvent.authenticated_account)
+}
+inline ::std::string* PROTOBUF_NONNULL BindSessionEvent::mutable_authenticated_account()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_authenticated_account();
+  // @@protoc_insertion_point(field_mutable:contracts.kafka.BindSessionEvent.authenticated_account)
+  return _s;
+}
+inline const ::std::string& BindSessionEvent::_internal_authenticated_account() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.authenticated_account_.Get();
+}
+inline void BindSessionEvent::_internal_set_authenticated_account(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.authenticated_account_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BindSessionEvent::_internal_mutable_authenticated_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.authenticated_account_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BindSessionEvent::release_authenticated_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:contracts.kafka.BindSessionEvent.authenticated_account)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.authenticated_account_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.authenticated_account_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BindSessionEvent::set_allocated_authenticated_account(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.authenticated_account_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.authenticated_account_.IsDefault()) {
+    _impl_.authenticated_account_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:contracts.kafka.BindSessionEvent.authenticated_account)
+}
+
+// uint64 session_incarnation = 7;
+inline void BindSessionEvent::clear_session_incarnation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_incarnation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t BindSessionEvent::session_incarnation() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.BindSessionEvent.session_incarnation)
+  return _internal_session_incarnation();
+}
+inline void BindSessionEvent::set_session_incarnation(::uint64_t value) {
+  _internal_set_session_incarnation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.BindSessionEvent.session_incarnation)
+}
+inline ::uint64_t BindSessionEvent::_internal_session_incarnation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.session_incarnation_;
+}
+inline void BindSessionEvent::_internal_set_session_incarnation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_incarnation_ = value;
+}
+
+// uint64 owner_revision = 8;
+inline void BindSessionEvent::clear_owner_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t BindSessionEvent::owner_revision() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.BindSessionEvent.owner_revision)
+  return _internal_owner_revision();
+}
+inline void BindSessionEvent::set_owner_revision(::uint64_t value) {
+  _internal_set_owner_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.BindSessionEvent.owner_revision)
+}
+inline ::uint64_t BindSessionEvent::_internal_owner_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owner_revision_;
+}
+inline void BindSessionEvent::_internal_set_owner_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_revision_ = value;
 }
 
 // -------------------------------------------------------------------

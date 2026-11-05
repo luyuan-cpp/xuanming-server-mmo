@@ -24,6 +24,8 @@ struct RpcMethodMeta {
 		GrpcMessageDone done,
 		const GrpcCallOptions& options
 	)> sender;
+	// 服务端内部调用签名使用 proto 声明的完整路径，不从请求消息所在包猜测。
+	const char* grpcFullMethod{nullptr};
 };
 
 constexpr uint32_t kMaxRpcMethodCount = 371;

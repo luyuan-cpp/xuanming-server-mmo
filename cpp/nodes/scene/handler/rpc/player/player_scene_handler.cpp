@@ -172,7 +172,7 @@ void SceneSceneClientPlayerHandler::NotifyEnterScene(entt::entity player,const :
 	::Empty* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-SendMessageToClientViaGate(SceneSceneClientPlayerNotifyEnterSceneMessageId, *request, player);
+SendToPlayerClient(SceneSceneClientPlayerNotifyEnterSceneMessageId, *request, player);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -193,7 +193,7 @@ void SceneSceneClientPlayerHandler::NotifySceneInfo(entt::entity player,const ::
 	::Empty* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-SendMessageToClientViaGate(SceneSceneClientPlayerNotifySceneInfoMessageId, *request, player);
+SendToPlayerClient(SceneSceneClientPlayerNotifySceneInfoMessageId, *request, player);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -264,7 +264,7 @@ void SceneSceneClientPlayerHandler::NotifySyncDigest(entt::entity player,const :
 	::Empty* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-SendMessageToClientViaGate(SceneSceneClientPlayerNotifySyncDigestMessageId, *request, player);
+SendToPlayerClient(SceneSceneClientPlayerNotifySyncDigestMessageId, *request, player);
 ///<<< END WRITING YOUR CODE
 
 }

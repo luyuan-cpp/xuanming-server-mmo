@@ -87,7 +87,7 @@ void PushSceneInfo(entt::entity player, const SceneInfoComp& sceneInfo, ::SceneC
 	{
 		message.mutable_channel_directory()->Swap(directory);
 	}
-	SendMessageToClientViaGate(SceneSceneClientPlayerNotifySceneInfoMessageId, message, player);
+	SendToPlayerClient(SceneSceneClientPlayerNotifySceneInfoMessageId, message, player);
 }
 
 // 把 "GET 分线目录" 的应答解析进 out。只有"应答是字符串、能解析、且确实是这张地图的目录"才返回 true;
@@ -265,7 +265,7 @@ bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
 	// 4. Notify client of scene entry.
 	EnterSceneS2C message;
 	message.mutable_scene_info()->CopyFrom(targetSceneInfo);
-	SendMessageToClientViaGate(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
+	SendToPlayerClient(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
 
 	// 4.5 补发"自己"的 ActorCreate:AOI 可见性遍历刻意跳过 observer 本身
 	// (aoi.cpp HandleEntityVisibility 的 otherEntity == entity 分支),因此
@@ -277,7 +277,7 @@ bool PlayerSceneSystem::HandleEnterScene(entt::entity player, SceneEntity scene)
 	if (netId != 0)
 	{
 		ViewSystem::FillActorCreateMessageInfo(player, netId, selfCreate);
-		SendMessageToClientViaGate(SceneSceneClientPlayerNotifyActorCreateMessageId, selfCreate, player);
+		SendToPlayerClient(SceneSceneClientPlayerNotifyActorCreateMessageId, selfCreate, player);
 	}
 	else
 	{

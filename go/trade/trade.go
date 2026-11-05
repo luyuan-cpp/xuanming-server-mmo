@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"shared/authoritysql"
+	"shared/callerauth"
 	"shared/drainproof"
 	"shared/rolefence"
 	"strconv"
@@ -296,7 +297,11 @@ func runTrade(c config.Config) (runErr error) {
 		return fmt.Errorf("trade RPC 构造失败: %w", err)
 	}
 	// go-zero 自带拦截器在 NewServer 里已先加入,位于下面这条链的外层。
-	s.AddUnaryInterceptors(serverbase.RootAdmission(root))
+	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
+	if authErr != nil {
+		return authErr
+	}
+	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
 
 	// **先起 gRPC,再注册**(契约 §2)。Start 在监听失败时 panic:recover 成错误交回主线程,

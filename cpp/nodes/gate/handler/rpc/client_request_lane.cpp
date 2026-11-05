@@ -137,6 +137,13 @@ void Pump(SessionId sessionId, SessionInfo &session)
 			SendEnvelope(session, item->clientRequestId, item->messageId, kLoginSessionNotFound);
 			continue;
 		}
+		SessionDetails admitted;
+		if (!admitted.ParseFromString(item->sessionDetailsBin) ||
+			!gate_session_details::MatchesAuthenticatedBinding(admitted, session))
+		{
+			SendEnvelope(session, item->clientRequestId, item->messageId, kLoginSessionNotFound);
+			continue;
+		}
 		const bool sent = gRouterSender != nullptr && gRouterSender(*item->request, item->sessionDetailsBin);
 		if (!sent)
 		{

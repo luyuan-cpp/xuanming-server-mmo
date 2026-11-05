@@ -31,9 +31,8 @@ const SessionMetaKey = "x-session-detail-bin"
 
 // forwardMetaPrefix:透传给目标的 metadata 键前缀。设计契约要求目标 Go 服务
 // 「看到的 metadata 与 gate 直连时完全相同」,所以按前缀整体透传而不是只挑
-// x-session-detail-bin 一个键。**当前 C++ gate 并不签 x-caller-*(login 的
-// callerauth 验签头)** —— 那是 gate 侧的既有缺口,dev 宽松档遮住了它;将来 gate
-// 接上签名后,这些键按同一前缀原样透传即可,不需要改本文件。注意签名的
+// x-session-detail-bin 一个键。gate 的 x-caller-* 签名头同样原值转发。
+// 下游验证身份来源，路由服不重签、不修改原账号和连接代次。签名的
 // canonical 里绑的是**目标业务方法**(如 /loginpb.ClientPlayerLogin/EnterGame),
 // 不是本跳的 Forward,所以原样透传是正确做法。
 // 按前缀整体透传应用层键;content-type / user-agent / grpc-* 等传输层键由本跳

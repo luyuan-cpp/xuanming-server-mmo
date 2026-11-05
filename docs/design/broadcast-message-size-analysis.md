@@ -60,11 +60,11 @@ message_content: msg_id=70, serialized_message ~20 bytes
 |------|------|------|
 | `BroadcastToPlayerClients(messageId, message, playerEntities)` | 每 Gate 一次 muduo TCP RPC | 指定玩家客户端，适用于 AOI 子集（自动 bitmap） |
 | `BroadcastToSceneClients(messageId, message, sceneId, scenePlayerEntities)` | 每 Gate 一次 muduo TCP RPC | 玩家集合只用于发现 Gate，实际收件人由 Gate 按 `sceneId` 筛选 |
-| `BroadcastToAllClientsOnKnownGates(messageId, message)` | 向当前线程注册表中拥有 `RpcSession` 的 Gate 发送 muduo TCP RPC | 这些 Gate 上的全部客户端会话，不保证全服覆盖 |
+| `BroadcastToKnownGateClients(messageId, message)` | 向当前线程注册表中拥有 `RpcSession` 的 Gate 发送 muduo TCP RPC | 这些 Gate 上的全部客户端会话，不保证全服覆盖 |
 
 发送接口位于 `client_message_sender.h`，只在所属节点的 EventLoop 线程调用。单发按玩家 ID / 实体调用
-`SendMessageToClientViaGate`；已经持有 Gate RPC 会话与客户端会话号的路径调用
-`SendMessageToClientSessionViaGate`。这些接口均不等待客户端确认；此次改名不改变身份栅栏、广播编码或发送行为。
+`SendToPlayerClient`；已经持有 Gate RPC 会话与客户端会话号的路径调用
+`SendToClientSession`。这些接口均不等待客户端确认；此次改名不改变身份栅栏、广播编码或发送行为。
 
 ### Go (Service → Gate, Kafka)
 

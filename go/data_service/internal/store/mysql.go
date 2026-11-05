@@ -69,8 +69,11 @@ const mysqlPingTimeout = 5 * time.Second
 // 驱动会还原成 SET sql_mode = 'STRICT_TRANS_TABLES')。快照是 MEDIUMBLOB 里的序列化
 // 数据、流水 extra 是自由文本,非严格模式下超长写入会**静默截断且无报错**;在连接层
 // 兜底,与 go/db 同口径。以前 transaction_log_store 漏了这一项,现在收口成一处。
+// 参数由驱动按 utf8mb4 转义后作为单条语句发送，不临时 PREPARE/CLOSE：CLOSE 无响应，
+// 本机 Docker 转发链路实测在后续命令前停顿约 40ms，建角串行查询会累积到 RPC 超时。
+// 不开启 multiStatements，也不改变事务、写者闸门或受影响行数语义。
 func buildDSN(cfg MySQLConfig) string {
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27",
+	return fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&interpolateParams=true&sql_mode=%%27STRICT_TRANS_TABLES%%27",
 		cfg.User, cfg.Password, cfg.Host, cfg.DBName)
 }
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"shared/authoritysql"
+	"shared/callerauth"
 	"shared/drainproof"
 	"shared/kafkautil"
 	"strconv"
@@ -213,7 +214,12 @@ func main() {
 	// sessionInterceptor 最外层先挡"带会话调 MatchInternal.*"(PermissionDenied),再把 x-session-detail-bin
 	// 解进 ctx(team 的调用者身份只从这里取,缺失即 fail-closed 回 4001);grpcstats 在内层计流量。
 	// zrpc 顶层 Timeout 保持 5000:改小会截断 WatchBattle 同步链;team 在每个方法入口自设 3500ms 预算(§A.3 第 7 条)。
+	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
+	if authErr != nil {
+		panic(authErr)
+	}
 	s.AddUnaryInterceptors(
+		gateIdentity,
 		serverbase.PublicationAdmission(root, relay, map[string]bool{
 			matchpb.MatchInternal_StartActivityBattle_FullMethodName:  true,
 			matchpb.MatchInternal_CancelActivityBattle_FullMethodName: true,

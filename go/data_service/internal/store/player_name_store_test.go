@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql/driver"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,21 @@ func TestStoreDSNDoesNotSetClientFoundRows(t *testing.T) {
 	if cfg.ClientFoundRows {
 		t.Fatal("buildDSN 设了 clientFoundRows=true:PlayerNameStore.Reserve 靠 ODKU 的受影响行数(1=插入 / 0=撞键 no-op)判定终局," +
 			"带了它 no-op 也回 1,撞名会被误判成插入成功")
+	}
+}
+
+// 临时预编译语句的 CLOSE 没有响应，本机 Docker 转发链路会在下一条命令前停顿约 40ms。
+// 建角串行参数查询会因此耗尽 RPC 预算；使用驱动在 utf8mb4 下的转义，仍禁止多语句。
+func TestStoreDSNBoundParametersUseSingleStatement(t *testing.T) {
+	base := MySQLConfig{Host: "127.0.0.1:3306", User: "u", Password: "p", DBName: "d"}
+	for _, dsn := range []string{buildDSN(base), buildRouteDSN(base)} {
+		cfg, err := mysql.ParseDSN(dsn)
+		if err != nil {
+			t.Fatal("存储连接配置无法解析")
+		}
+		if !cfg.InterpolateParams || cfg.MultiStatements || !strings.Contains(cfg.FormatDSN(), "charset=utf8mb4&") {
+			t.Fatal("参数查询必须使用驱动的 utf8mb4 转义并保持单语句，避免临时 PREPARE/CLOSE 累积延迟")
+		}
 	}
 }
 

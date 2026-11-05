@@ -8,14 +8,14 @@
 // 不保证跨发送路径的消息到达顺序。
 // 依赖下游处理结果的消息，必须等对应 RPC 完成后再发送。
 
-void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Message &message, Guid playerId);
-void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Message &message,
-                                entt::entity playerEntity);
+void SendToPlayerClient(uint32_t messageId, const google::protobuf::Message &message, Guid playerId);
+void SendToPlayerClient(uint32_t messageId, const google::protobuf::Message &message,
+                        entt::entity playerEntity);
 // 已知 Gate RPC 会话与客户端会话号时直接发送，不再查找玩家实体或 Gate 路由。
 // targetPlayerId 是 Gate 写 socket 前的身份栅栏（routing-identity-audit-20260908.md R13），
 // 防止会话号复用后把消息发给另一个玩家。0 / kInvalidGuid 表示无身份的兼容路径，仅限确实无法取得身份时使用。
-void SendMessageToClientSessionViaGate(uint32_t messageId, const google::protobuf::Message &message,
-                                       RpcSession &gateRpcSession, SessionId clientSessionId, Guid targetPlayerId);
+void SendToClientSession(uint32_t messageId, const google::protobuf::Message &message,
+                         RpcSession &gateRpcSession, SessionId clientSessionId, Guid targetPlayerId);
 
 // 只发送给指定玩家的客户端，按 Gate 分组，并携带每个目标的会话号与玩家身份。
 void BroadcastToPlayerClients(uint32_t messageId, const google::protobuf::Message &message,
@@ -32,4 +32,4 @@ void BroadcastToSceneClients(uint32_t messageId, const google::protobuf::Message
 
 // 向当前线程 Gate 注册表中拥有 RpcSession 的 Gate 发广播，由各 Gate 转发给其上已绑定玩家的客户端会话（未登录的连接不收）。
 // 覆盖范围取决于本节点已登记的 Gate，不保证覆盖其他节点或 zone 的客户端。
-void BroadcastToAllClientsOnKnownGates(uint32_t messageId, const google::protobuf::Message &message);
+void BroadcastToKnownGateClients(uint32_t messageId, const google::protobuf::Message &message);

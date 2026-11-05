@@ -153,6 +153,8 @@ inline void ResetSceneRoute(SessionInfo& session)
     session.homeZoneId = 0;
     session.ownerEpoch = 0;
     session.ownerRevision = 0;
+    session.authenticatedAccount.clear();
+    session.authenticatedOwnerRevision = 0;
     session.forwardedOwnerRevision = 0;
     session.forwardedOwnerEpoch = 0;
     const bool samePendingReset = session.sceneRouteResetPending &&

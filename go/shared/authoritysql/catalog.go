@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -732,6 +733,13 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 		return err
 	}
 	defer conn.Close()
+	type tableShape struct {
+		name    string
+		fields  protoreflect.FieldDescriptors
+		primary string
+	}
+	var tables []tableShape
+	args := []any{schema}
 	for _, model := range []proto.Message{
 		&databasepb.RouteMeta{}, &databasepb.SqlWriterRegistry{}, &databasepb.SqlWriterSlot{},
 		&databasepb.SqlWriterLifecycleReceipt{}, &databasepb.SqlWriterDrainRun{},
@@ -741,34 +749,6 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 		table, ok := proto.GetExtension(descriptor.Options(), dbopts.E_OptionTableName).(string)
 		if !ok || !validIdentifier(table) {
 			return ErrWriterDenied
-		}
-		rows, err := conn.QueryContext(ctx, "SELECT column_name FROM information_schema.columns WHERE table_schema=? AND table_name=?", schema, table)
-		if err != nil {
-			return err
-		}
-		columns := make(map[string]bool)
-		for rows.Next() {
-			var name string
-			if err = rows.Scan(&name); err != nil {
-				break
-			}
-			columns[name] = true
-		}
-		rowErr, closeErr := rows.Err(), rows.Close()
-		if err != nil {
-			return err
-		}
-		if rowErr != nil {
-			return rowErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		fields := descriptor.Fields()
-		for index := 0; index < fields.Len(); index++ {
-			if !columns[string(fields.Get(index).Name())] {
-				return errors.New("authority表缺少正式proto列，拒绝自动迁移")
-			}
 		}
 		primary, ok := proto.GetExtension(descriptor.Options(), dbopts.E_OptionPrimaryKey).(string)
 		if !ok {
@@ -781,33 +761,10 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 				return ErrWriterDenied
 			}
 		}
-		rows, err = conn.QueryContext(ctx, "SELECT column_name FROM information_schema.statistics WHERE table_schema=? AND table_name=? AND index_name='PRIMARY' ORDER BY seq_in_index", schema, table)
-		if err != nil {
-			return err
-		}
-		var got []string
-		for rows.Next() {
-			var name string
-			if err = rows.Scan(&name); err != nil {
-				break
-			}
-			got = append(got, name)
-		}
-		rowErr, closeErr = rows.Err(), rows.Close()
-		if err != nil {
-			return err
-		}
-		if rowErr != nil {
-			return rowErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		if strings.Join(got, ",") != strings.Join(wanted, ",") {
-			return errors.New("authority表主键与正式proto不一致")
-		}
+		tables = append(tables, tableShape{table, descriptor.Fields(), strings.Join(wanted, ",")})
+		args = append(args, table)
 	}
-	for _, check := range []struct {
+	checks := []struct {
 		table   string
 		columns []string
 		unique  bool
@@ -818,44 +775,39 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 		{"sql_writer_freeze_ticket", []string{"freeze_request_id"}, true},
 		{"writer_lifecycle_receipt", []string{"kind", "request_digest"}, false},
 		{"writer_lifecycle_receipt", []string{"catalog_revision", "request_id"}, false},
-	} {
-		rows, err := conn.QueryContext(ctx, "SELECT index_name,column_name,non_unique,sub_part FROM information_schema.statistics WHERE table_schema=? AND table_name=? ORDER BY index_name,seq_in_index", schema, check.table)
-		if err != nil {
-			return err
+	}
+	// 写者池会为每条查询过闸门。批读相同的元数据，避免每张表、每个索引重复往返。
+	tableFilter := " WHERE table_schema=? AND table_name IN (" + strings.Repeat("?,", len(tables)-1) + "?)"
+	columns, err := readCatalogColumns(ctx, conn, tableFilter, args)
+	if err != nil {
+		return err
+	}
+	var indexTables []string
+	for _, check := range checks {
+		if !slices.Contains(indexTables, check.table) {
+			indexTables = append(indexTables, check.table)
+			args = append(args, check.table)
 		}
-		type indexShape struct {
-			columns []string
-			unique  bool
-			full    bool
-		}
-		indexes := make(map[string]*indexShape)
-		for rows.Next() {
-			var name, column string
-			var nonUnique uint64
-			var prefix sql.NullInt64
-			if err = rows.Scan(&name, &column, &nonUnique, &prefix); err != nil {
-				break
+	}
+	indexFilter := tableFilter + " AND (index_name='PRIMARY' OR table_name IN (" + strings.Repeat("?,", len(indexTables)-1) + "?))"
+	indexes, err := readCatalogIndexes(ctx, conn, indexFilter, args)
+	if err != nil {
+		return err
+	}
+	for _, table := range tables {
+		for i := 0; i < table.fields.Len(); i++ {
+			if !columns[table.name][string(table.fields.Get(i).Name())] {
+				return errors.New("authority表缺少正式proto列，拒绝自动迁移")
 			}
-			shape := indexes[name]
-			if shape == nil {
-				shape = &indexShape{unique: nonUnique == 0, full: true}
-				indexes[name] = shape
-			}
-			shape.columns = append(shape.columns, column)
-			shape.full = shape.full && !prefix.Valid
 		}
-		rowErr, closeErr := rows.Err(), rows.Close()
-		if err != nil {
-			return err
+		primary := indexes[table.name]["PRIMARY"]
+		if primary == nil || strings.Join(primary.columns, ",") != table.primary {
+			return errors.New("authority表主键与正式proto不一致")
 		}
-		if rowErr != nil {
-			return rowErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
+	}
+	for _, check := range checks {
 		found := false
-		for _, shape := range indexes {
+		for _, shape := range indexes[check.table] {
 			if shape.full && (!check.unique || shape.unique) && strings.Join(shape.columns, ",") == strings.Join(check.columns, ",") {
 				found = true
 				break
@@ -866,6 +818,61 @@ func VerifyCatalogSchema(ctx context.Context, db *sql.DB, schema string) error {
 		}
 	}
 	return nil
+}
+
+func readCatalogColumns(ctx context.Context, conn *sql.Conn, filter string, args []any) (map[string]map[string]bool, error) {
+	rows, err := conn.QueryContext(ctx, "SELECT table_name,column_name FROM information_schema.columns"+filter, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	columns := make(map[string]map[string]bool)
+	for rows.Next() {
+		var table, column string
+		if err := rows.Scan(&table, &column); err != nil {
+			return nil, err
+		}
+		if columns[table] == nil {
+			columns[table] = make(map[string]bool)
+		}
+		columns[table][column] = true
+	}
+	return columns, errors.Join(rows.Err(), rows.Close())
+}
+
+type catalogIndexShape struct {
+	columns []string
+	unique  bool
+	full    bool
+}
+
+func readCatalogIndexes(ctx context.Context, conn *sql.Conn, filter string, args []any) (map[string]map[string]*catalogIndexShape, error) {
+	rows, err := conn.QueryContext(ctx, "SELECT table_name,index_name,column_name,non_unique,sub_part FROM information_schema.statistics"+
+		filter+" ORDER BY table_name,index_name,seq_in_index", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	indexes := make(map[string]map[string]*catalogIndexShape)
+	for rows.Next() {
+		var table, name, column string
+		var nonUnique uint64
+		var prefix sql.NullInt64
+		if err := rows.Scan(&table, &name, &column, &nonUnique, &prefix); err != nil {
+			return nil, err
+		}
+		if indexes[table] == nil {
+			indexes[table] = make(map[string]*catalogIndexShape)
+		}
+		shape := indexes[table][name]
+		if shape == nil {
+			shape = &catalogIndexShape{unique: nonUnique == 0, full: true}
+			indexes[table][name] = shape
+		}
+		shape.columns = append(shape.columns, column)
+		shape.full = shape.full && !prefix.Valid
+	}
+	return indexes, errors.Join(rows.Err(), rows.Close())
 }
 
 // MoveSentinelTable 是搬库的哨兵表:tools/dbmove 冻结源库之后写一行,目标能读到这一行才算复制追上。

@@ -311,7 +311,7 @@ Secrets:
   # InternalAuth:内部调用方身份声明(x-session-detail-bin)的验签密钥。
   # 上游(cpp gate / Java gateway)必须用同一把密钥按 callerauth 规范签名。
   InternalAuth:
-    # Env: "LOGIN_INTERNAL_AUTH_SECRET"
+    Env: "MMORPG_INTERNAL_AUTH_SECRET"
     Value: "local-dev-internal-auth-secret-0123456789abcdef"
 
 # 内部调用方验签策略。

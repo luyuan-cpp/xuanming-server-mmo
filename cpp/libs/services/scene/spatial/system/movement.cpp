@@ -221,7 +221,7 @@ void MovementSystem::TeleportWithinScene(const entt::entity entity, const Vector
 		teleport.set_entity(netId);
 		*teleport.mutable_transform() = *transform;
 		teleport.set_reason(reason);
-		SendMessageToClientViaGate(SceneMovementClientPlayerNotifyTeleportMessageId, teleport, entity);
+		SendToPlayerClient(SceneMovementClientPlayerNotifyTeleportMessageId, teleport, entity);
 	}
 
 	AoiSystem::ResetEntityVisibility(entity);

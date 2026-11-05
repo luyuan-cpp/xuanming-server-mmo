@@ -89,7 +89,7 @@ void SceneScenePlayerHandler::EnterSceneS2C(entt::entity player,const ::EnterSce
 		return;
 	}
 	message.mutable_scene_info()->CopyFrom(*sceneInfo);
-	SendMessageToClientViaGate(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
+	SendToPlayerClient(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
 	///<<< END WRITING YOUR CODE
 
 }

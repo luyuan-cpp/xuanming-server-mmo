@@ -113,7 +113,7 @@ func TestGateCommandAddressingMatchesSharedVectors(t *testing.T) {
 
 		gateID := strconv.FormatUint(c.NodeID, 10)
 
-		bind, err := buildBindSessionCommand(gateID, instanceID, 7, 1001, 1, 2, 1_760_000_000_000)
+		bind, err := buildBindSessionCommand(gateID, instanceID, &kafkapb.BindSessionEvent{SessionId: 7, PlayerId: 1001, SessionVersion: 1, EnterGsType: 2, LoginGeneration: 1_760_000_000_000})
 		if err != nil {
 			t.Fatalf("%s: buildBindSessionCommand(%s): %v", c.Name, gateID, err)
 		}
@@ -175,7 +175,7 @@ func TestGateCommandTargetFieldsArePopulated(t *testing.T) {
 		{
 			name: "bind session",
 			build: func() (gateCommandMessage, error) {
-				return buildBindSessionCommand(gateID, instanceID, sessionID, playerID, 5, 3, 1_760_000_000_000)
+				return buildBindSessionCommand(gateID, instanceID, &kafkapb.BindSessionEvent{SessionId: sessionID, PlayerId: playerID, SessionVersion: 5, EnterGsType: 3, LoginGeneration: 1_760_000_000_000})
 			},
 			wantEventID:  uint32(game.ContractsKafkaBindSessionEventEventId),
 			wantEnterGs:  3,
@@ -303,7 +303,7 @@ func TestGateCommandFailsClosed(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := sc.SendBindSessionToGate(tc.gateID, tc.instanceID, 1, 2, 0, 0, 0)
+			err := sc.SendBindSessionToGate(tc.gateID, tc.instanceID, &kafkapb.BindSessionEvent{SessionId: 1, PlayerId: 2})
 			if err == nil {
 				t.Fatal("SendBindSessionToGate: want error, got nil (command would be unroutable/unfilterable)")
 			}
@@ -506,7 +506,7 @@ func TestBindSessionCommandPayloadCarriesEvent(t *testing.T) {
 		loginGeneration = uint64(1_760_000_000_123)
 	)
 
-	msg, err := buildBindSessionCommand(gateID, instanceID, sessionID, playerID, sessionVersion, enterGsType, loginGeneration)
+	msg, err := buildBindSessionCommand(gateID, instanceID, &kafkapb.BindSessionEvent{SessionId: sessionID, PlayerId: playerID, SessionVersion: sessionVersion, EnterGsType: enterGsType, LoginGeneration: loginGeneration, AuthenticatedAccount: " 原账号 ", SessionIncarnation: 81, OwnerRevision: 7})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -539,6 +539,9 @@ func TestBindSessionCommandPayloadCarriesEvent(t *testing.T) {
 	}
 	if event.GetSessionId() != sessionID {
 		t.Errorf("BindSessionEvent.session_id = %d, want %d", event.GetSessionId(), sessionID)
+	}
+	if event.AuthenticatedAccount != " 原账号 " || event.SessionIncarnation != 81 || event.OwnerRevision != 7 {
+		t.Fatal("绑定命令丢失原账号、连接代次或归属修订")
 	}
 	if event.GetPlayerId() != playerID {
 		t.Errorf("BindSessionEvent.player_id = %d, want %d", event.GetPlayerId(), playerID)

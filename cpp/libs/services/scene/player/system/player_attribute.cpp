@@ -1273,5 +1273,5 @@ void PlayerAttributeSystem::PushPanel(entt::entity player) {
 	if (BuildPanel(player, *message.mutable_panel()) != kSuccess) {
 		return;
 	}
-	SendMessageToClientViaGate(SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId, message, player);
+	SendToPlayerClient(SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId, message, player);
 }

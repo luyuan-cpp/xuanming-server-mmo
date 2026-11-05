@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	base "proto/common/base"
 	"shared/authoritysql"
+	"shared/callerauth"
 	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/grpcstats"
@@ -181,6 +182,11 @@ func serve(ctx context.Context, c Config, nodeType base.ENodeType, clients map[s
 	if err != nil {
 		return err
 	}
+	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
+	if authErr != nil {
+		return authErr
+	}
+	framework.AddUnaryInterceptors(gateIdentity)
 	framework.AddOptions(grpc.MaxRecvMsgSize(4 << 20))
 	framework.AddUnaryInterceptors(serverbase.PublicationAdmission(root, relay, relayMethods, ingress...), Guard(clients, time.Duration(c.Timeout-500)*time.Millisecond), traffic.UnaryServerInterceptor(), kill.UnaryServerInterceptor(), serverbase.UnaryInterceptor(serverbase.Options{}))
 	done := make(chan error, 1)

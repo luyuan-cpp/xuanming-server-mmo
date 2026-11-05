@@ -21,6 +21,7 @@
 #include "gate_codec.h"
 #include "gate_router_mode.h"
 #include "gate_security.h"
+#include "core/security/caller_auth.h"
 #include "gate_version.h"
 #include "node_config_manager.h"
 #include "session/manager/session_manager.h"
@@ -324,6 +325,12 @@ namespace
 
 int main(int argc, char *argv[])
 {
+	const auto* internalAuthSecret = std::getenv(caller_auth::kSecretEnv);
+	if (internalAuthSecret == nullptr || std::string_view(internalAuthSecret).size() < 32)
+	{
+		LOG_ERROR << "内部会话签名密钥缺失或不足32字节，拒绝启动";
+		return EXIT_FAILURE;
+	}
     // 启动首行。事故复盘第一个问题永远是"线上跑的到底是哪一版",这一行直写
     // stdout(不经 muduo,不受 LogLevel 影响),即使进程在 etcd 阶段就崩掉,
     // 版本三元组也已经落进容器日志。node_id 要等 etcd CAS、zone_id 要等

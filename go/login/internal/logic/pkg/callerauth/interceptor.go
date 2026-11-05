@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"login/internal/logic/pkg/ctxkeys"
-	login_proto "proto/common/base"
+	"shared/callerauth"
 )
 
 // 稳定事件名:日志检索与告警规则认这些字符串,改它们等于改对外契约。
@@ -35,11 +35,11 @@ const (
 // 身份在这一层验完就**只**通过 ctxkeys 这条已验证通道往下传,
 // 原始 metadata 一律不留 —— 想伪造就没有可搬运的原料。
 var sensitiveMetadataKeys = []string{
-	MetaSessionDetail,
-	MetaCaller,
-	MetaTimestamp,
-	MetaNonce,
-	MetaSignature,
+	callerauth.MetaSessionDetail,
+	callerauth.MetaCaller,
+	callerauth.MetaTimestamp,
+	callerauth.MetaNonce,
+	callerauth.MetaSignature,
 	"authorization",
 	"proxy-authorization",
 	"grpcgateway-authorization",
@@ -58,7 +58,7 @@ var sensitiveMetadataKeys = []string{
 //  2. **带了身份声明就必须验签**。强制档下验不过直接 Unauthenticated;
 //     宽松档(dev/test)打 WARN 后放行,方便上游分批接签名。
 //  3. **只有验过的身份能进 ctx**。原始 metadata 在交给 handler 前被摘干净。
-func UnaryServerInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
+func UnaryServerInterceptor(v *callerauth.Verifier) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req any,
@@ -68,11 +68,14 @@ func UnaryServerInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
 		md, hasMD := metadata.FromIncomingContext(ctx)
 
 		if hasMD {
-			raw := mdFirst(md, MetaSessionDetail)
+			raw := ""
+			if values := md.Get(callerauth.MetaSessionDetail); len(values) == 1 {
+				raw = values[0]
+			}
 			if raw != "" {
-				detail, err := authenticate(v, md, info.FullMethod, raw)
+				verifiedCtx, detail, err := v.AuthenticateContext(ctx, info.FullMethod)
 				if err != nil {
-					reason := Reason(err)
+					reason := callerauth.Reason(err)
 					recordAuth(reason, v.Enforcing())
 					if v.Enforcing() {
 						logx.Errorw(EventRejected,
@@ -82,7 +85,7 @@ func UnaryServerInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
 						)
 						return nil, status.Errorf(codes.Unauthenticated,
 							"Internal caller identity signature verification failed (%s): caller must include %s/%s/%s/%s per callerauth contract",
-							reason, MetaCaller, MetaTimestamp, MetaNonce, MetaSignature)
+							reason, callerauth.MetaCaller, callerauth.MetaTimestamp, callerauth.MetaNonce, callerauth.MetaSignature)
 					}
 					logx.Errorw(EventBypassed,
 						logx.Field("method", info.FullMethod),
@@ -96,7 +99,7 @@ func UnaryServerInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
 					}
 				} else {
 					recordAuth("ok", v.Enforcing())
-					ctx = ctxkeys.WithSessionDetails(ctx, detail)
+					ctx = ctxkeys.WithSessionDetails(verifiedCtx, detail)
 				}
 			}
 
@@ -110,9 +113,9 @@ func UnaryServerInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
 		// ---- 把会话详情回显到响应头(cpp gate 依赖这条,行为保持不变) ----
 		if detail, ok := ctxkeys.GetSessionDetails(ctx); ok {
 			if bin, merr := proto.Marshal(detail); merr == nil {
-				header := metadata.Pairs(MetaSessionDetail, base64.StdEncoding.EncodeToString(bin))
+				header := metadata.Pairs(callerauth.MetaSessionDetail, base64.StdEncoding.EncodeToString(bin))
 				if serr := grpc.SendHeader(ctx, header); serr != nil {
-					logx.Errorf("Failed to write %s response header: %v", MetaSessionDetail, serr)
+					logx.Errorf("Failed to write %s response header: %v", callerauth.MetaSessionDetail, serr)
 				}
 			} else {
 				logx.Errorf("Failed to serialize SessionDetails: %v", merr)
@@ -121,34 +124,6 @@ func UnaryServerInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
 
 		return resp, err
 	}
-}
-
-// authenticate 解码 + 验签 + 反序列化。
-//
-// 返回的 *SessionDetails 在**失败时也可能非 nil**(签名不过但 proto 能解),
-// 这是给宽松档用的:dev 下要能继续把声明放进 ctx,否则本地链路直接断。
-// 强制档的调用方必须只看 error。
-func authenticate(v *Verifier, md metadata.MD, fullMethod, raw string) (*login_proto.SessionDetails, error) {
-	bin, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil {
-		return nil, ErrBadPayload
-	}
-
-	// 先验签再反序列化:proto.Unmarshal 是攻击面(未认证输入喂解析器),
-	// 能挡在签名后面就挡在签名后面。
-	verr := v.verifyOnly(md, fullMethod, bin)
-
-	detail := &login_proto.SessionDetails{}
-	if uerr := proto.Unmarshal(bin, detail); uerr != nil {
-		if verr != nil {
-			return nil, verr
-		}
-		return nil, ErrBadPayload
-	}
-	if verr != nil {
-		return detail, verr
-	}
-	return detail, nil
 }
 
 // stripSensitive 复制一份去掉敏感 key 的 metadata。

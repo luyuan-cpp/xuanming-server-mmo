@@ -542,7 +542,22 @@ try {
         Wait-LocalNode 'scene'
         # battle 和 scene 的自动端口基址相同，本机必须为 battle 指定独立端口。
         $env:RPC_PORT = '20010'
-        Invoke-Dev 'battle' @('-Command','cpp-node-start','-CppNodes','battle','-GateCount','0','-SceneCount','0','-BattleCount','1','-Zone','1','-NodeIp','loopback')
+        # 匹配服的地域探测只使用显式 client_endpoint，本机也须发布可达的战斗直连地址。
+        $battleClientEnvironment = @{}
+        foreach ($key in @('CLIENT_ENDPOINT_SOURCE','CLIENT_ENDPOINT_HOST','CLIENT_ENDPOINT_PORT','CLIENT_ENDPOINT_REQUIRED')) {
+            $battleClientEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
+        }
+        try {
+            if ([string]::IsNullOrWhiteSpace($env:CLIENT_ENDPOINT_SOURCE)) {
+                $env:CLIENT_ENDPOINT_SOURCE = 'static'
+                $env:CLIENT_ENDPOINT_HOST = '127.0.0.1'
+                $env:CLIENT_ENDPOINT_PORT = '20010'
+                $env:CLIENT_ENDPOINT_REQUIRED = '1'
+            }
+            Invoke-Dev 'battle' @('-Command','cpp-node-start','-CppNodes','battle','-GateCount','0','-SceneCount','0','-BattleCount','1','-Zone','1','-NodeIp','loopback')
+        } finally {
+            foreach ($key in $battleClientEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key, $battleClientEnvironment[$key], 'Process') }
+        }
         Assert-NodeStartup 'battle'
         Wait-LocalNode 'battle'
         Write-Step '5/6 Start login, match, chat, guild services and game gateway'

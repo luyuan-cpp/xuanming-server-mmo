@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"shared/authoritysql"
+	"shared/callerauth"
 	"shared/drainproof"
 	"strconv"
 	"strings"
@@ -537,7 +538,11 @@ func main() {
 	// (理由与告警口径见 server.PrimeGuildInternalMetrics)。
 	server.PrimeGuildInternalMetrics()
 	svc.PrimeMergedZoneMetrics()
-	s.AddUnaryInterceptors(serverbase.RootAdmission(root))
+	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
+	if authErr != nil {
+		panic(authErr)
+	}
+	s.AddUnaryInterceptors(serverbase.RootAdmission(root), gateIdentity)
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget(), session.OriginalIdentityInterceptor(loginRedis, repo.CheckOriginalRole, func(err error) bool {
 		return errors.Is(err, data.ErrWriteConflict) || errors.Is(err, rolefence.ErrRoleNotFound)
 	}))...)

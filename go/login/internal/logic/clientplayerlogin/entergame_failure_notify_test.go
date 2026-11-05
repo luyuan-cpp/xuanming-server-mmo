@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	pbbase "proto/common/base"
+	kafkapb "proto/contracts/kafka"
 	loginpb "proto/login"
 	smpb "proto/scene_manager"
 	"shared/generated/pb/table"
@@ -103,10 +105,12 @@ func TestNotifyEnterGameFailed_PushesEnterSceneFailedToOwnSession(t *testing.T) 
 type bindRecorder struct {
 	err   error
 	calls int
+	last  *kafkapb.BindSessionEvent
 }
 
-func (b *bindRecorder) SendBindSessionToGate(string, string, uint32, uint64, uint32, uint32, uint64) error {
+func (b *bindRecorder) SendBindSessionToGate(_ string, _ string, event *kafkapb.BindSessionEvent) error {
 	b.calls++
+	b.last = proto.Clone(event).(*kafkapb.BindSessionEvent)
 	return b.err
 }
 

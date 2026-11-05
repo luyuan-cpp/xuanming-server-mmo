@@ -1166,11 +1166,11 @@ constexpr BindSessionEvent::ParseTableT_ BindSessionEvent::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      8,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1180,45 +1180,63 @@ constexpr BindSessionEvent::ParseTableT_ BindSessionEvent::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::contracts::kafka::BindSessionEvent>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 owner_revision = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BindSessionEvent, _impl_.owner_revision_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.owner_revision_)}},
       // uint32 session_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BindSessionEvent, _impl_.session_id_), 1>(),
-       {8, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BindSessionEvent, _impl_.session_id_), 2>(),
+       {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.session_id_)}},
       // uint64 player_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BindSessionEvent, _impl_.player_id_), 0>(),
-       {16, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BindSessionEvent, _impl_.player_id_), 1>(),
+       {16, 1, 0,
         PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.player_id_)}},
       // uint32 session_version = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BindSessionEvent, _impl_.session_version_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BindSessionEvent, _impl_.session_version_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.session_version_)}},
       // uint32 enter_gs_type = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BindSessionEvent, _impl_.enter_gs_type_), 4>(),
-       {32, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BindSessionEvent, _impl_.enter_gs_type_), 7>(),
+       {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.enter_gs_type_)}},
       // uint64 login_generation = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BindSessionEvent, _impl_.login_generation_), 3>(),
-       {40, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BindSessionEvent, _impl_.login_generation_), 4>(),
+       {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.login_generation_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string authenticated_account = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.authenticated_account_)}},
+      // uint64 session_incarnation = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BindSessionEvent, _impl_.session_incarnation_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.session_incarnation_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 session_id = 1;
-      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 player_id = 2;
-      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 session_version = 3;
-      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.session_version_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.session_version_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 enter_gs_type = 4;
-      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.enter_gs_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.enter_gs_type_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 login_generation = 5;
-      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.login_generation_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.login_generation_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string authenticated_account = 6;
+      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.authenticated_account_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 session_incarnation = 7;
+      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.session_incarnation_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 owner_revision = 8;
+      {PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.owner_revision_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
+      "\40\0\0\0\0\0\25\0\0\0\0\0\0\0\0\0"
+      "contracts.kafka.BindSessionEvent"
+      "authenticated_account"
     }},
   };
 }
@@ -1228,10 +1246,15 @@ inline constexpr BindSessionEvent::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        authenticated_account_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
         session_id_{0u},
         session_version_{0u},
         login_generation_{::uint64_t{0u}},
+        session_incarnation_{::uint64_t{0u}},
+        owner_revision_{::uint64_t{0u}},
         enter_gs_type_{0u} {}
 
 template <typename>
@@ -1250,7 +1273,7 @@ inline void* PROTOBUF_NONNULL BindSessionEvent::PlacementNew_(
   return ::new (mem) BindSessionEvent(arena);
 }
 constexpr auto BindSessionEvent::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BindSessionEvent), alignof(BindSessionEvent));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(BindSessionEvent), alignof(BindSessionEvent));
 }
 constexpr auto BindSessionEvent::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -2044,17 +2067,23 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_._has_bits_),
-        8, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_.session_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_.session_version_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_.enter_gs_type_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_.login_generation_),
-        1,
-        0,
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_.authenticated_account_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_.session_incarnation_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_.owner_revision_),
         2,
-        4,
+        1,
         3,
+        7,
+        4,
+        0,
+        5,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_._has_bits_),
         10, // hasbit index offset
@@ -2134,12 +2163,12 @@ static const ::_pbi::MigrationSchema
         {28, sizeof(::contracts::kafka::PlayerDisconnectedEvent)},
         {39, sizeof(::contracts::kafka::PlayerLeaseExpiredEvent)},
         {54, sizeof(::contracts::kafka::BindSessionEvent)},
-        {67, sizeof(::contracts::kafka::RedirectToGateEvent)},
-        {84, sizeof(::contracts::kafka::PushToPlayerEvent)},
-        {93, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
-        {106, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
-        {113, sizeof(::contracts::kafka::BroadcastToAllEvent)},
-        {118, sizeof(::contracts::kafka::SpectateFrameEvent)},
+        {73, sizeof(::contracts::kafka::RedirectToGateEvent)},
+        {90, sizeof(::contracts::kafka::PushToPlayerEvent)},
+        {99, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
+        {112, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
+        {119, sizeof(::contracts::kafka::BroadcastToAllEvent)},
+        {124, sizeof(::contracts::kafka::SpectateFrameEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2174,36 +2203,38 @@ const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2e
     "iredEvent\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nsession_"
     "id\030\002 \001(\r\022\025\n\rscene_node_id\030\003 \001(\t\022\020\n\010scene"
     "_id\030\004 \001(\004\022\017\n\007gate_id\030\005 \001(\t\022\030\n\020gate_insta"
-    "nce_id\030\006 \001(\t:\005\210\346\325\002\001\"\212\001\n\020BindSessionEvent"
+    "nce_id\030\006 \001(\t:\005\210\346\325\002\001\"\336\001\n\020BindSessionEvent"
     "\022\022\n\nsession_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022"
     "\027\n\017session_version\030\003 \001(\r\022\025\n\renter_gs_typ"
-    "e\030\004 \001(\r\022\030\n\020login_generation\030\005 \001(\004:\005\210\346\325\002\001"
-    "\"\275\001\n\023RedirectToGateEvent\022\021\n\tplayer_id\030\001 "
-    "\001(\004\022\022\n\nsession_id\030\002 \001(\r\022\026\n\016target_gate_i"
-    "p\030\003 \001(\t\022\030\n\020target_gate_port\030\004 \001(\r\022\025\n\rtok"
-    "en_payload\030\005 \001(\014\022\027\n\017token_signature\030\006 \001("
-    "\014\022\026\n\016token_deadline\030\007 \001(\003:\005\210\346\325\002\001\"k\n\021Push"
-    "ToPlayerEvent\022\022\n\nsession_id\030\001 \001(\r\022(\n\017mes"
-    "sage_content\030\002 \001(\0132\017.MessageContent\022\021\n\tp"
-    "layer_id\030\003 \001(\004:\005\210\346\325\002\001\"\252\001\n\027BroadcastToPla"
-    "yersEvent\022\024\n\014session_list\030\001 \003(\r\022(\n\017messa"
-    "ge_content\030\002 \001(\0132\017.MessageContent\022\033\n\023ses"
-    "sion_bitmap_base\030\003 \001(\r\022\026\n\016session_bitmap"
-    "\030\004 \001(\014\022\023\n\013player_list\030\005 \003(\004:\005\210\346\325\002\001\"Z\n\025Br"
-    "oadcastToSceneEvent\022\020\n\010scene_id\030\001 \001(\004\022(\n"
-    "\017message_content\030\002 \001(\0132\017.MessageContent:"
-    "\005\210\346\325\002\001\"F\n\023BroadcastToAllEvent\022(\n\017message"
-    "_content\030\001 \001(\0132\017.MessageContent:\005\210\346\325\002\001\"\352"
-    "\001\n\022SpectateFrameEvent\022\021\n\tbattle_id\030\001 \001(\004"
-    "\022\032\n\022battle_instance_id\030\002 \001(\t\022\023\n\013round_in"
-    "dex\030\003 \001(\r\0221\n\004kind\030\004 \001(\0162#.contracts.kafk"
-    "a.eSpectateFrameKind\022\024\n\014client_frame\030\005 \001"
-    "(\014\022\023\n\013deadline_ms\030\006 \001(\004\022\026\n\016target_gate_i"
-    "d\030\007 \001(\r\022\032\n\022target_instance_id\030\010 \001(\t*x\n\022e"
-    "SpectateFrameKind\022\027\n\023SPECTATE_FRAME_NONE"
-    "\020\000\022\030\n\024SPECTATE_FRAME_STATE\020\001\022\027\n\023SPECTATE"
-    "_FRAME_TURN\020\002\022\026\n\022SPECTATE_FRAME_END\020\003B\021Z"
-    "\017contracts/kafkab\006proto3"
+    "e\030\004 \001(\r\022\030\n\020login_generation\030\005 \001(\004\022\035\n\025aut"
+    "henticated_account\030\006 \001(\t\022\033\n\023session_inca"
+    "rnation\030\007 \001(\004\022\026\n\016owner_revision\030\010 \001(\004:\005\210"
+    "\346\325\002\001\"\275\001\n\023RedirectToGateEvent\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\026\n\016target_ga"
+    "te_ip\030\003 \001(\t\022\030\n\020target_gate_port\030\004 \001(\r\022\025\n"
+    "\rtoken_payload\030\005 \001(\014\022\027\n\017token_signature\030"
+    "\006 \001(\014\022\026\n\016token_deadline\030\007 \001(\003:\005\210\346\325\002\001\"k\n\021"
+    "PushToPlayerEvent\022\022\n\nsession_id\030\001 \001(\r\022(\n"
+    "\017message_content\030\002 \001(\0132\017.MessageContent\022"
+    "\021\n\tplayer_id\030\003 \001(\004:\005\210\346\325\002\001\"\252\001\n\027BroadcastT"
+    "oPlayersEvent\022\024\n\014session_list\030\001 \003(\r\022(\n\017m"
+    "essage_content\030\002 \001(\0132\017.MessageContent\022\033\n"
+    "\023session_bitmap_base\030\003 \001(\r\022\026\n\016session_bi"
+    "tmap\030\004 \001(\014\022\023\n\013player_list\030\005 \003(\004:\005\210\346\325\002\001\"Z"
+    "\n\025BroadcastToSceneEvent\022\020\n\010scene_id\030\001 \001("
+    "\004\022(\n\017message_content\030\002 \001(\0132\017.MessageCont"
+    "ent:\005\210\346\325\002\001\"F\n\023BroadcastToAllEvent\022(\n\017mes"
+    "sage_content\030\001 \001(\0132\017.MessageContent:\005\210\346\325"
+    "\002\001\"\352\001\n\022SpectateFrameEvent\022\021\n\tbattle_id\030\001"
+    " \001(\004\022\032\n\022battle_instance_id\030\002 \001(\t\022\023\n\013roun"
+    "d_index\030\003 \001(\r\0221\n\004kind\030\004 \001(\0162#.contracts."
+    "kafka.eSpectateFrameKind\022\024\n\014client_frame"
+    "\030\005 \001(\014\022\023\n\013deadline_ms\030\006 \001(\004\022\026\n\016target_ga"
+    "te_id\030\007 \001(\r\022\032\n\022target_instance_id\030\010 \001(\t*"
+    "x\n\022eSpectateFrameKind\022\027\n\023SPECTATE_FRAME_"
+    "NONE\020\000\022\030\n\024SPECTATE_FRAME_STATE\020\001\022\027\n\023SPEC"
+    "TATE_FRAME_TURN\020\002\022\026\n\022SPECTATE_FRAME_END\020"
+    "\003B\021Z\017contracts/kafkab\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_deps[2] = {
@@ -2214,7 +2245,7 @@ static ::absl::once_flag descriptor_table_proto_2fcontracts_2fkafka_2fgate_5feve
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto = {
     false,
     false,
-    1864,
+    1948,
     descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto,
     "proto/contracts/kafka/gate_event.proto",
     &descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_once,
@@ -3540,21 +3571,43 @@ BindSessionEvent::BindSessionEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE 
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:contracts.kafka.BindSessionEvent)
 }
+PROTOBUF_NDEBUG_INLINE BindSessionEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::contracts::kafka::BindSessionEvent& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        authenticated_account_(arena, from.authenticated_account_) {}
+
 BindSessionEvent::BindSessionEvent(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BindSessionEvent& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BindSessionEvent& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, BindSessionEvent_get_class_data()),
+    : ::google::protobuf::Message(arena, BindSessionEvent_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  BindSessionEvent* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, enter_gs_type_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::enter_gs_type_));
+
+  // @@protoc_insertion_point(copy_constructor:contracts.kafka.BindSessionEvent)
 }
 PROTOBUF_NDEBUG_INLINE BindSessionEvent::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        authenticated_account_(arena) {}
 
 inline void BindSessionEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -3576,6 +3629,7 @@ inline void BindSessionEvent::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.authenticated_account_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -3613,7 +3667,10 @@ PROTOBUF_NOINLINE void BindSessionEvent::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.authenticated_account_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.enter_gs_type_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.enter_gs_type_));
@@ -3642,7 +3699,7 @@ PROTOBUF_NOINLINE void BindSessionEvent::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 session_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_session_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3651,7 +3708,7 @@ PROTOBUF_NOINLINE void BindSessionEvent::Clear() {
   }
 
   // uint64 player_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3660,7 +3717,7 @@ PROTOBUF_NOINLINE void BindSessionEvent::Clear() {
   }
 
   // uint32 session_version = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_session_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3669,7 +3726,7 @@ PROTOBUF_NOINLINE void BindSessionEvent::Clear() {
   }
 
   // uint32 enter_gs_type = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_enter_gs_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3678,11 +3735,39 @@ PROTOBUF_NOINLINE void BindSessionEvent::Clear() {
   }
 
   // uint64 login_generation = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_login_generation() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           5, this_._internal_login_generation(), target);
+    }
+  }
+
+  // string authenticated_account = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_authenticated_account().empty()) {
+      const ::std::string& _s = this_._internal_authenticated_account();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "contracts.kafka.BindSessionEvent.authenticated_account");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  // uint64 session_incarnation = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_session_incarnation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_session_incarnation(), target);
+    }
+  }
+
+  // uint64 owner_revision = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_owner_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_owner_revision(), target);
     }
   }
 
@@ -3711,37 +3796,58 @@ PROTOBUF_NOINLINE void BindSessionEvent::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // uint64 player_id = 2;
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string authenticated_account = 6;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_authenticated_account().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_authenticated_account());
+      }
+    }
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint32 session_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_session_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_session_id());
       }
     }
     // uint32 session_version = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_session_version() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_session_version());
       }
     }
     // uint64 login_generation = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_login_generation() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_login_generation());
       }
     }
+    // uint64 session_incarnation = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_session_incarnation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_session_incarnation());
+      }
+    }
+    // uint64 owner_revision = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_owner_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_owner_revision());
+      }
+    }
     // uint32 enter_gs_type = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_enter_gs_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_enter_gs_type());
@@ -3765,28 +3871,47 @@ void BindSessionEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_authenticated_account().empty()) {
+        _this->_internal_set_authenticated_account(from._internal_authenticated_account());
+      } else {
+        if (_this->_impl_.authenticated_account_.IsDefault()) {
+          _this->_internal_set_authenticated_account("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_session_id() != 0) {
         _this->_impl_.session_id_ = from._impl_.session_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_session_version() != 0) {
         _this->_impl_.session_version_ = from._impl_.session_version_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_login_generation() != 0) {
         _this->_impl_.login_generation_ = from._impl_.login_generation_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_session_incarnation() != 0) {
+        _this->_impl_.session_incarnation_ = from._impl_.session_incarnation_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_owner_revision() != 0) {
+        _this->_impl_.owner_revision_ = from._impl_.owner_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_enter_gs_type() != 0) {
         _this->_impl_.enter_gs_type_ = from._impl_.enter_gs_type_;
       }
@@ -3807,8 +3932,11 @@ void BindSessionEvent::CopyFrom(const BindSessionEvent& from) {
 
 void BindSessionEvent::InternalSwap(BindSessionEvent* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.authenticated_account_, &other->_impl_.authenticated_account_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(BindSessionEvent, _impl_.enter_gs_type_)
       + sizeof(BindSessionEvent::_impl_.enter_gs_type_)

@@ -15,6 +15,7 @@
 #include "network/rpc_client.h"
 #include "node/system/node/node_util.h"
 #include "scene_route_helper.h"
+#include "authenticated_session_binding.h"
 #include "scene_entry_dispatch.h"
 #include "handler/rpc/client_request_lane.h"
 #include "handler/gate_push_delivery.h"
@@ -271,6 +272,11 @@ void GateEventHandler::BindSessionEventHandler(const contracts::kafka::BindSessi
     // 指向随后被节点摘除置无效、或因同 uuid 重注册而悬空时,登录类型会永远挂着。现在按最近一次路由的
     // node_id 重新解析,建一笔有上限的欠账(超限推 kEnterSceneFailed 并踢线);还没收到路由时什么都不做,
     // 等路由到达时由 RoutePlayer 一并转发。归属 zone / epoch 仍取会话里 RoutePlayer 先前存下的那份。
+    if (!gate_authenticated_session::Bind(session, event))
+    {
+        LOG_WARN << "绑定认证身份失败，拒绝采用旧连接或不完整身份";
+        return;
+    }
     if (gate_scene_route::ApplyLoginBinding(session, playerId, event.session_version(), event.login_generation(),
                                             enterGsType))
     {

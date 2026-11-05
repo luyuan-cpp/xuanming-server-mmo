@@ -13,6 +13,7 @@ import (
 	"login/internal/logic/pkg/sessionmanager"
 	"login/internal/svc"
 	login_proto_common "proto/common/base"
+	kafkapb "proto/contracts/kafka"
 	login_proto "proto/login"
 	smpb "proto/scene_manager"
 	"shared/accountdirectory"
@@ -289,8 +290,9 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		}
 		logx.Infof("EnterGame complete (decision=%d) playerId=%d", decision, playerID)
 
-		// 异步清理也按本条连接的完整身份(sessionRef),不按可能撞号的 session_id。
-		cleanupLoginSessionState(chainCtx, l.svcCtx, sessionRef, "enterGame")
+		// 入场成功后仍保留本连接的登录态：匹配、聊天等在线服务通过它核验原账号。
+		// 只由 LeaveGame / Disconnect 清理，过期继续遵循登录态已有 TTL；不能在这里
+		// 删除再按玩家当前归属补权，否则原连接身份丢失，进场后的请求会全部被拒绝。
 		observeTotal(chainStart, ResultSuccess)
 	}
 
@@ -329,7 +331,7 @@ type enterFailureTipPusher interface {
 // sessionBindSender 是通知 gate 绑定会话唯一需要的能力。生产实现是 *svc.ServiceContext(SendBindSessionToGate),
 // 做法同 replacedSessionKicker:KafkaClient 是具体类型,单测里起不出来,收成接口才测得到 Bind 发出之后的链段。
 type sessionBindSender interface {
-	SendBindSessionToGate(gateID string, gateInstanceID string, sessionID uint32, playerID uint64, sessionVersion uint32, enterGsType uint32, loginGeneration uint64) error
+	SendBindSessionToGate(gateID string, gateInstanceID string, event *kafkapb.BindSessionEvent) error
 }
 
 // replacedSessionKicker 是 ReplaceLogin 踢旧会话唯一需要的能力:经 gate 踢掉被替换的会话。
@@ -566,7 +568,12 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	bindTimer := observeStage(applyBindGateSeconds)
 	bindErr := l.sessionBinder().SendBindSessionToGate(
 		state.gateID, state.gateInstanceID,
-		state.sessionID, state.playerID, version, enterGsType, loginGeneration,
+		&kafkapb.BindSessionEvent{
+			SessionId: state.sessionID, PlayerId: state.playerID, SessionVersion: version,
+			EnterGsType: enterGsType, LoginGeneration: loginGeneration,
+			AuthenticatedAccount: state.account, SessionIncarnation: state.fenceKey.Incarnation,
+			OwnerRevision: state.ownerRevision,
+		},
 	)
 	bindTimer()
 	if bindErr != nil {
@@ -613,7 +620,7 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	}
 	if enterResp.ErrorCode != 0 {
 		// 必须当失败返回:调用方(EnterGame 的异步链)只有在 applyErr != nil 时才会
-		// **跳过** cleanupLoginSessionState,把登录会话留给客户端重试。以前这里只记
+		// 保留登录会话给客户端重试。以前这里只记
 		// 一条 ERROR 就继续走 SetIdempotency + 清会话,于是 scene_manager 拒绝
 		// (ErrNoAvailableNode / 可重试的 18 ErrHandoffPending / 20 ErrHomeZoneUnavailable …;
 		// 历史上的 14 ErrUnsafeCrossNodeHandoff 已不再发出)之后客户端既等不到

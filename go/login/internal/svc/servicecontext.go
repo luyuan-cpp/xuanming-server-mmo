@@ -27,6 +27,7 @@ import (
 	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/token"
 	login_proto "proto/common/base"
+	kafkapb "proto/contracts/kafka"
 	dspb "proto/data_service"
 	plpb "proto/player_locator"
 	smpb "proto/scene_manager"
@@ -726,9 +727,9 @@ func (c *ServiceContext) SetNodeId(nodeId int64) {
 // 这里只负责组业务字段并把算好的 (topic, partition) 原样交给生产者。
 // loginGeneration 是本条登录链铸出的代次,随 BindSessionEvent 下发给 gate(scene-enter-session-fence.md §4)。
 func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID string,
-	sessionID uint32, playerID uint64, sessionVersion uint32, enterGsType uint32, loginGeneration uint64) error {
+	event *kafkapb.BindSessionEvent) error {
 
-	msg, err := buildBindSessionCommand(gateID, gateInstanceID, sessionID, playerID, sessionVersion, enterGsType, loginGeneration)
+	msg, err := buildBindSessionCommand(gateID, gateInstanceID, event)
 	if err != nil {
 		return err
 	}

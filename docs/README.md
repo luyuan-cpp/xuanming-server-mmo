@@ -343,6 +343,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 ### 交接说明(`handoff/`)
 
+- [gate-auth-role-fence-review-20261104.md](handoff/gate-auth-role-fence-review-20261104.md) — Claude Code 审核：login 认证后 Gate 保存身份、下游复用与角色提交护栏，进场清理和重启边界。
 - [aoi-and-player-safeguards-20261104.md](handoff/aoi-and-player-safeguards-20261104.md) — Claude Code 交接：AOI 单向关注、持久化 GM 物品封禁、单玩家收益窗口重置
 - [class-skills-handoff-20261019.md](handoff/class-skills-handoff-20261019.md) — 四职业技能接入:交 Codex 的生成 / 编译 / 测试清单(2026-10-19)
 - [client-rpc-callback-handoff-20261019.md](handoff/client-rpc-callback-handoff-20261019.md) — 交接:客户端请求自带回调(按请求号认领回包)(2026-10-19)
@@ -403,6 +404,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [cpp-text-template-libraries-20261021.md](notes/cpp-text-template-libraries-20261021.md) — C++ 文本模板库选型建议（2026-10-21）
 - [currency-crash-window-verification.md](notes/currency-crash-window-verification.md) — CurrencyComp 崩溃窗口验证方案
 - [event-priority.md](notes/event-priority.md) — Events · [EN](notes/event-priority_en.md) · [中文](notes/event-priority_zh.md)
+- [function-extraction-reasoning.md](notes/function-extraction-reasoning.md) — 函数提取的思考话术
 - [gameplay-introduction-and-resources-research-2026-09-01.md](notes/gameplay-introduction-and-resources-research-2026-09-01.md) — Gameplay 是什么：入门文章与开源项目
 - [github-survivors-like-games-research-2026-08-27.md](notes/github-survivors-like-games-research-2026-08-27.md) — GitHub 幸存者割草类游戏源码调研
 - [golang-backend-interview-qa.md](notes/golang-backend-interview-qa.md) — Golang 后端面试详细问答

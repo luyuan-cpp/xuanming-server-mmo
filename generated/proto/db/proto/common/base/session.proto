@@ -25,4 +25,8 @@ message SessionDetails
   uint64 gate_call_seq = 8;
   // gate绑定角色时确认的原归属修订；换图原样保留，解绑清零。业务提交须与原账号一起复核，禁止反查当前归属补值。
   uint64 owner_revision = 9;
+  // login 完成原连接认证与选角后，经内部 BindSessionEvent 交给 gate 的原账号。
+  // 仅服务端传递；下游必须先验证整份 SessionDetails 的调用方签名，不能信客户端自报。
+  // 角色解绑时清理，不能按 player_id 查询当前 owner 补值。
+  string authenticated_account = 10;
 }

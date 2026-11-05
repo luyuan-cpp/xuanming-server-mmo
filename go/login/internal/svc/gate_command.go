@@ -107,23 +107,20 @@ func buildGateCommandMessage(kind string, gateID string, gateInstanceID string,
 // 新旧 gate 都认得 payload 里的 BindSessionEvent(事件已在 gate 白名单里，BindSessionEvent=32,未知字段原样跳过)。
 // 信封字段照填(与 PushTip 同做法):分区 key 取自信封 PlayerId,broker 侧排障也读信封。
 func buildBindSessionCommand(gateID string, gateInstanceID string,
-	sessionID uint32, playerID uint64, sessionVersion uint32, enterGsType uint32, loginGeneration uint64,
+	event *kafkapb.BindSessionEvent,
 ) (gateCommandMessage, error) {
-	eventPayload, err := proto.Marshal(&kafkapb.BindSessionEvent{
-		SessionId:       sessionID,
-		PlayerId:        playerID,
-		SessionVersion:  sessionVersion,
-		EnterGsType:     enterGsType,
-		LoginGeneration: loginGeneration,
-	})
+	if event == nil {
+		return gateCommandMessage{}, fmt.Errorf("绑定事件不能为空")
+	}
+	eventPayload, err := proto.Marshal(event)
 	if err != nil {
-		return gateCommandMessage{}, fmt.Errorf("marshal BindSessionEvent (session=%d): %w", sessionID, err)
+		return gateCommandMessage{}, fmt.Errorf("序列化绑定事件失败: %w", err)
 	}
 	return buildGateCommandMessage("bind session", gateID, gateInstanceID, &kafkapb.GateCommand{
-		SessionId:   sessionID,
-		PlayerId:    playerID,
+		SessionId:   event.SessionId,
+		PlayerId:    event.PlayerId,
 		EventId:     uint32(game.ContractsKafkaBindSessionEventEventId),
-		EnterGsType: enterGsType,
+		EnterGsType: event.EnterGsType,
 		Payload:     eventPayload,
 	})
 }

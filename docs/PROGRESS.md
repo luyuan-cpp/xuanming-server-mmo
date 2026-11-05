@@ -20051,3 +20051,37 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 - 确认「运行 Java 冒烟验证」的独立 live04 已结束。保序 20 轮与帮会第 11 步 8/8 通过，本轮 Java 服务及容器已停止。
 - 本机一区启动先遇到 Docker 重名。核对同名 etcd、Redis 和 Kafka 都属于 player-store-r2-infra 后，启动时使用该 Compose 项目。旧 14306 MySQL 容器改名为 mysql-player-store-r2-preserved-5eb8c27f 后保留原容器，新 3306 MySQL 独立启动。MySQL、etcd、Redis 和 Kafka 就绪。
 - 启动停在第 3 步。db 已启动，data_service 的 MySQL 连接池初始化超时，部分事务结束结果未定。之后的只读 MySQL 查询与本机协议握手成功，网关仍未监听，客户端未打开。未重放结果未定的启动操作。证据 build/verification/enter-game-20261105-build-r1/manual-login-20261104-startup-stop.public.json。
+
+### 2026-11-04 本机 MySQL 启动目录核验修复与原五项交接
+
+- 单独启动 data_service 同样复现原 5 秒时限内的 SQL 初始化超时。权威目录核验固定在同一物理连接后，真实 MySQL 的快照、事务流水和角色名池初始化通过，随后账号目录形状核验在共用期限内失败。账号目录改为开池与形状核验各自使用 5 秒，形状检查复用一条物理连接。定向 store 测试及 data_service 构建通过，下一轮实际越过账号目录核验。
+- 权威目录原 20 条受闸元数据查询改为按表批读列和索引两条，继续核对正式 proto 列、主键顺序和完整索引，保留每条查询的写者守卫。authoritysql 定向测试通过，Go 正式入口 17 个目标构建通过。实际本机 MySQL 启动通过玩家路由、合服映射和召回通道，随后 Kafka 首次创建消费者偏移主题期间返回 Coordinator Not Available，data_service 退出。偏移主题随后完成初始化，50 个分区均已有 leader，已使用新的本机启动授权继续。两次结果未定的早期操作保留原件。
+- 原第 1 到 5 项交接按用户旧编号整理，包含 10 月 21 日起的阶段入口、原通过及失败范围、公开回执、SHA-256 索引和定点补丁。交付件位于 build/verification/enter-game-20261105-build-r1/Claude-Code-原五项完整验收交接.zip。
+
+### 2026-11-04 22:34 美东 本机一区就绪
+
+- Kafka 消费者偏移主题就绪后，存档服务、db 以及 Gate、Scene、Battle 全部通过原启动就绪检查。登录已实际监听，原脚本在获取刚启动进程的可执行文件路径时收到空值，未能写入该 PID。匹配和剩余 Go 服务使用同一启动目录逐项启动。为短暂空路径加入已解析可执行文件的回退，启动端口合同实测由 29/30 到 30/30，本机 MySQL 与停机合同分别 40/40、15/15。对已运行的登录服务按可执行文件、配置和监听归属回填 PID，进程未重启。
+- Java 网关首次在读取启动授权前拒绝 LocalAppData 的辅助程序路径。将相同 SHA-256 的辅助程序复制到用户配置目录下的专用私有目录，保留 Java 原有整条路径和摘要校验。采用修正路径接续网关后，健康返回 UP，服务器列表一区 OPEN。独立核对了 14 个 Go 监听、3 个 C++ 节点及响应中的 Unity 客户端窗口。公开回执 build/verification/enter-game-20261105-build-r1/manual-login-zone1-ready.public.json。实际账号登录及进地图由用户验证。
+- 本机写者启动目录合同 49/49，Java 启动目录合同 13/13。测试使用独立夹具目录，保留运行中的辅助程序与服务。本机以分阶段续启完成，修复后的完整冷启动尚未单独复跑。
+
+### 2026-11-04 23:22 美东 建角 1003 与 PVE 入口修复实测
+
+- 独立账号经真实 Gate 复现建角 1003：CreateAccountRole 的 2 秒期限到达，登录总预算随后耗尽。只读对照确认本机 Windows → Docker MySQL 的临时 PREPARE/CLOSE 在下一条命令前约有 43～47 毫秒停顿；20 次参数查询由 844.85 毫秒变为驱动参数转义方式的 5.33 毫秒。data_service 与 match 的连接配置启用驱动自带的 utf8mb4 参数转义，仍为单语句，事务、写者闸门、持久性与 RPC 期限均未放宽。这是本机功能故障定位数据，不是压测或生产性能结论。
+- PVE 另复现 GetNetworkProbePlan 被拒：EnterGame 完整异步链成功后删除了原连接登录态，匹配服无法取得认证账号。移除成功出口的提前清理，仍由 LeaveGame / Disconnect 清理并沿用原 TTL；新增完整异步链回归，先复现 redis:nil，再验证在线身份可读、离场和断线后失效。
+- 战斗节点原登记没有显式 client_endpoint，地域探测返回 16004。本机启动入口为 battle 发布 static 127.0.0.1:20010，并恢复调用前环境。实际重启 battle，核对旧进程已退出、端口无人监听且租约只有该节点三条键后清除其残留独立租约；新实例 3360 已登记地域 1、客户端 20010、gRPC 50010。
+- 更新本地启动授权时暴露旧清理逻辑删除其他运行实例 boot 文件；已停止自动清理历史 boot，保留完整配置与首次写入消费目录。本轮曾受影响的 Go / Java 实例均重新取得新授权并恢复；随后只更新 login / match 时，其他在运行实例的原配置仍存在。合同由 48/49 回到 49/49。
+- 编译和 go vet：data_service、login、match 通过；测试分别 1355 通过 / 74 跳过、995 通过 / 4 跳过、635 通过 / 228 跳过，跳过不作真实库通过。robot 全量测试及 go vet 通过，本机启动命令合同 28/28。冒烟原要求 Battle 直发个人终局，已按 10 月 30 日正式契约改为：直连有状态与回合、无个人终局，个人终局须等待 Scene 持久结算后经大厅送达；不是删除终局验证。
+- 真实本机 MySQL 功能验证：新账号建角并收到 NotifyEnterScene 通过；最终新账号完成登录、建角、进场、PVE 匹配、战斗直连、10 个回合及本局 Scene 终局通知，26.60 秒通过。网关 UP、一区 OPEN，服务继续运行。旧客户端须重新登录以重建修复前已删除的身份。证据位于 build/verification/enter-game-20261105-build-r1/create-player-1003/；不据此扩展为多人 PVE、跨区、故障恢复或所有游戏功能已验收。
+
+## 2026-11-05 Codex：客户端发送接口命名与 AOI 反向通知批量化
+
+- **命名**：按用户确认将 `SendMessageToClientViaGate` 改为 `SendToPlayerClient`，将 `SendMessageToClientSessionViaGate` 改为 `SendToClientSession`；复核整个发送模块后，将 `BroadcastToAllClientsOnKnownGates` 简化为 `BroadcastToKnownGateClients`，保留准确的玩家子集、场景广播名及私有模板名。同步所有当前 C++ 调用、AOI 网络替身、代码注释、现行设计及 Copilot 指引；历史交接和本文件旧条目保留原记录。未修改生成产物或协议，当前代码与模板旧名扫描为 0。
+- **AOI**：范围为本格与六个邻格，共七格。`HandleEntityVisibility` 收集真正新增、移除关系的观察者，通过 `BroadcastEntityVisibilityChanges` 各组装一次原有单 actor 列表消息，再交给 `BroadcastToPlayerClients` 按 Gate 合并。保留可见性、容量拒收、此前可见及 `kPinned` 条件；实体自身的对象增删继续聚合列表单发。`ResetEntityVisibility` 的反向清理复用同一批量入口，正式离场继续沿用已有广播。
+- **红绿证据**：为网络替身增加广播调用、收件集合与序列化消息记录。新增多人进入且排除满容量、多人离开且排除 Pinned/无关系、重置后重建三条回归。旧生产路径实际 21/24 通过，新增三条均因广播次数为 0 失败；实现后重建运行 24/24 通过。`routing_identity_test` 重建运行 224/224 通过，两组均无跳过。
+- **构建与静态检查**：Windows Debug/x64 串行 `/m:1 /nr:false /p:CL_MPCount=1` 构建 core、场景逻辑库、Scene、Gate、Battle 均退出 0；AOI 实现后再次构建场景逻辑库、Scene、Gate 均退出 0，保留仓库裸指针检查。验证期间另有并行工作更新会话协议，单独执行 proto 依赖构建检查退出 0，核对库内已有新字段元数据；该协议改动不属于本次。26 个本轮代码及现行文档输入在绿件前后 SHA-256 一致，范围内 `git diff --check` 通过；不宣称整个工作区冻结。
+- **Java 对齐**：Java `0.1.0-SNAPSHOT` 的 `SceneWorld` 进入、离开和瞬移通知已有按 Gate 链路分组广播；本次属于 C++ 内部命名及传输批量化，不新增客户端契约或 Java 功能，不新增 PARITY 功能行。仅源码核对，未执行 Java 构建或测试。
+- **证据与边界**：原始日志、命令、退出码、红件输入和哈希位于 `build/verification/client-message-rename-20261105T054858949Z/`；首轮为 `results.json`，最终生产构建与身份回归为 `final-results.json`，绿件为 `aoi_green.result.json`，输入核对为 `final-checks.json`。未扩展运行 Bag 全量、Linux/Release、联网验收或压测，不作吞吐提升结论。仅追加本条，保留其他会话既有改动；未提交、未推送。
+## 2026-11-05 Codex：记录 AOI 广播函数提取取舍
+
+- 按用户要求，将讨论结论补入 `docs/design/aoi_priority_design_zh.md` 的「广播函数的提取取舍」：保留已被普通移动和瞬移清理复用的外层函数，创建与销毁两个短分支暂不继续提取；控制流相似不等于同一条业务知识，不为假想特殊化增加通用组包抽象。
+- 记录后续拆分条件：独立职责或变化原因、细节遮住主流程、真实调用方复用；分别提取私有函数，并保留既有投递契约。仅修改现有文档并追加本条，无代码或协议变化，未重复构建和测试。Java 无新增功能或契约变更，无需同步代码或 PARITY 功能行；未提交。

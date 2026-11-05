@@ -43,8 +43,12 @@ type SessionDetails struct {
 	GateCallSeq uint64 `protobuf:"varint,8,opt,name=gate_call_seq,json=gateCallSeq,proto3" json:"gate_call_seq,omitempty"`
 	// gate绑定角色时确认的原归属修订；换图原样保留，解绑清零。业务提交须与原账号一起复核，禁止反查当前归属补值。
 	OwnerRevision uint64 `protobuf:"varint,9,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// login 完成原连接认证与选角后，经内部 BindSessionEvent 交给 gate 的原账号。
+	// 仅服务端传递；下游必须先验证整份 SessionDetails 的调用方签名，不能信客户端自报。
+	// 角色解绑时清理，不能按 player_id 查询当前 owner 补值。
+	AuthenticatedAccount string `protobuf:"bytes,10,opt,name=authenticated_account,json=authenticatedAccount,proto3" json:"authenticated_account,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *SessionDetails) Reset() {
@@ -140,11 +144,18 @@ func (x *SessionDetails) GetOwnerRevision() uint64 {
 	return 0
 }
 
+func (x *SessionDetails) GetAuthenticatedAccount() string {
+	if x != nil {
+		return x.AuthenticatedAccount
+	}
+	return ""
+}
+
 var File_proto_common_base_session_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_session_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/common/base/session.proto\"\xf1\x02\n" +
+	"\x1fproto/common/base/session.proto\"\xa6\x03\n" +
 	"\x0eSessionDetails\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
@@ -156,7 +167,9 @@ const file_proto_common_base_session_proto_rawDesc = "" +
 	"\x15ticket_target_zone_id\x18\x06 \x01(\rR\x12ticketTargetZoneId\x12/\n" +
 	"\x13session_incarnation\x18\a \x01(\x04R\x12sessionIncarnation\x12\"\n" +
 	"\rgate_call_seq\x18\b \x01(\x04R\vgateCallSeq\x12%\n" +
-	"\x0eowner_revision\x18\t \x01(\x04R\rownerRevisionB\x13Z\x11proto/common/baseb\x06proto3"
+	"\x0eowner_revision\x18\t \x01(\x04R\rownerRevision\x123\n" +
+	"\x15authenticated_account\x18\n" +
+	" \x01(\tR\x14authenticatedAccountB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_session_proto_rawDescOnce sync.Once

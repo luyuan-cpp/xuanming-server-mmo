@@ -32,6 +32,16 @@ inline Guid NormalizePlayerId(Guid playerId)
 	return playerId == kInvalidGuid ? 0 : playerId;
 }
 
+// 排队请求只能继续使用受理时的原身份，离场、换角或换连接之后不可再签发它。
+// 未携带在线账号的登录/选角请求由各自准入负责，不能在此补上后来才获得的身份。
+inline bool MatchesAuthenticatedBinding(const SessionDetails& admitted, const SessionInfo& session)
+{
+	return admitted.authenticated_account().empty() ||
+		(admitted.session_incarnation() == session.incarnation && admitted.player_id() == session.playerId &&
+		 admitted.authenticated_account() == session.authenticatedAccount &&
+		 admitted.owner_revision() == session.authenticatedOwnerRevision);
+}
+
 // playerId:会话当前绑定的角色,直接传 SessionInfo.playerId 即可(未绑定的 kInvalidGuid 在这里归一成 0;
 // proto3 隐式存在,0 与不设置在线上是同一形状)。
 // gateNodeId / gateInstanceId:gate 自身的节点号与启动 uuid(Kafka 路由与防僵尸)。
@@ -51,6 +61,11 @@ inline SessionDetails Build(SessionId sessionId, Guid playerId, uint32_t gateNod
 		sessionDetails.set_ticket_target_zone_id(session->ticketTargetZoneId);
 		sessionDetails.set_session_incarnation(session->incarnation);
 		sessionDetails.set_owner_revision(session->ownerRevision);
+		if (!session->authenticatedAccount.empty())
+		{
+			sessionDetails.set_authenticated_account(session->authenticatedAccount);
+			sessionDetails.set_owner_revision(session->authenticatedOwnerRevision);
+		}
 	}
 	return sessionDetails;
 }

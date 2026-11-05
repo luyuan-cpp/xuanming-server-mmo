@@ -73,6 +73,11 @@ message BindSessionEvent {
   // 本次登录链铸造的登录代次。gate 在按 lastSceneRoute 补发登录进场之前写进会话:Bind 先于本次路由
   // 到达时,补发带的必须是本次登录的代次(docs/design/scene-enter-session-fence.md §4)。
   uint64 login_generation = 5;
+  // 本次入场从原连接登录态捕获的账号、连接代次和归属修订；三者必须完整。
+  // gate 只接受本进程 UUID 信封及同一 incarnation 的绑定，旧连接迟到事件不得补权。
+  string authenticated_account = 6;
+  uint64 session_incarnation = 7;
+  uint64 owner_revision = 8;
 }
 
 // Sent by SceneManager to Gate when a player requests a cross-zone scene.

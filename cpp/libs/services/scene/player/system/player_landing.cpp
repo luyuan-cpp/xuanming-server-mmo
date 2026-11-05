@@ -63,7 +63,7 @@ namespace
 
 	void PushSyncDigest(entt::entity player, const SyncDigestS2C &digest)
 	{
-		SendMessageToClientViaGate(SceneSceneClientPlayerNotifySyncDigestMessageId, digest, player);
+		SendToPlayerClient(SceneSceneClientPlayerNotifySyncDigestMessageId, digest, player);
 	}
 
 	// 推一条 status = UNAVAILABLE 的摘要:客户端按全量拉处理,并靠它结束等待。

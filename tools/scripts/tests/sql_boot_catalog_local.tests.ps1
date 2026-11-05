@@ -175,6 +175,7 @@ function Invoke-LocalSqlBootProcess {
 }
 function Find-LocalSqlBootDocker { return 'C:\fixture\docker.exe' }
 function Test-LocalSqlBootGatewayRunning { param([string]$RepoRoot) return $script:GatewayRunning }
+function Get-LocalSqlBootPrivateFileHelperDirectory { return (Join-Path $fixtureRoot 'private-helper') }
 
 function New-FixtureRepo {
     $repo = Join-Path $fixtureRoot ('repo-' + [guid]::NewGuid().ToString('N'))
@@ -590,8 +591,9 @@ try {
         $text = Get-SqlText
         Assert-Match $text "DROP USER IF EXISTS '$firstChat'@'%'" '已停实例的账号删掉'
         Assert-NotMatch $text "DROP USER IF EXISTS '$firstDb'@'%'" '运行中实例的账号留着,它的连接池还要重连'
-        Assert-Equal $false (Test-Path -LiteralPath $firstCatalog['chat'].grantFile) '旧授权文件清掉'
-        Assert-Equal $false (Test-Path -LiteralPath (Join-Path (Get-LocalSqlBootRoot -RepoRoot $repo) "boots/$firstBoot")) '只留本轮目录'
+        Assert-Equal $true (Test-Path -LiteralPath $firstCatalog['db'].runtimeConfigFile) '运行实例的完整配置仍可读取'
+        Assert-Equal $true (Test-Path -LiteralPath $firstCatalog['db'].grantFile) '运行实例首次写入前仍保留授权目录'
+        Assert-Equal $true (Test-Path -LiteralPath (Join-Path (Get-LocalSqlBootRoot -RepoRoot $repo) "boots/$firstBoot")) '不能根据本轮请求范围清理其他 boot 的文件'
         $accounts = @(Get-Content -LiteralPath (Join-Path (Get-LocalSqlBootRoot -RepoRoot $repo) 'runtime-accounts.json') -Raw | ConvertFrom-Json)
         Assert-True (@($accounts | Where-Object { $_.principal -ceq "$firstDb@%" }).Count -eq 1) '账本继续记着运行中实例的账号'
         Assert-True (@($accounts | Where-Object { $_.principal -ceq "$firstChat@%" }).Count -eq 0) '删掉的账号出账本'

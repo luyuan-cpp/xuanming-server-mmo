@@ -7402,6 +7402,10 @@ function New-NodeDeploymentYaml {
 	# 结尾换行,第二次追加会直接接在上一行尾部,生成非法 YAML。
 	# GRPC_SERVER_MAX_POLLERS 已退役(grpc-muduo-transport.md §15.11),不再注入。
 	$extraEnvLines = @()
+	if ($NodeName -eq 'gate') {
+		$extraEnvLines += "`t`t`t- name: MMORPG_INTERNAL_AUTH_SECRET"
+		$extraEnvLines += "`t`t`t  valueFrom: {secretKeyRef: {name: gate-identity-auth, key: secret, optional: false}}"
+	}
 	if ($SceneNodeType -ge 0) {
 		# 覆盖 ConfigMap 里的 SceneNodeType 基线,是角色拆分真正生效的那一步。
 		$extraEnvLines += "`t`t`t- name: SCENE_NODE_TYPE"
@@ -11817,6 +11821,14 @@ function Apply-OneGoSvc {
 	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
 	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
+	if ($SvcName -in @('login','chat','friend','guild','trade','match','mail','rank')) {
+		$manifestContent = Add-GoSvcSecretEnv -SvcName $SvcName -ManifestContent $manifestContent `
+			-EnvName 'MMORPG_INTERNAL_AUTH_SECRET' -SecretName 'gate-identity-auth' -SecretKey 'secret'
+		if ($Stage -ne 'Prepare') {
+			Apply-InjectedSecret -Namespace $Namespace -Name 'gate-identity-auth' -Key 'secret' `
+				-Value $script:InternalAuthSecret -AppLabel 'gate-identity'
+		}
+	}
 	# Prepare 不碰写者名册:名册按迁移 Job 种下的 route_meta.generation 写,这一步还没有。工作负载的清单这一步也不 apply。
 	if ($Stage -ne 'Prepare' -and $SvcName -in @('db','data-service','login','chat','friend','guild','mail','rank','match','trade','player-inbox')) {
 		$manifestContent=Add-SqlWriterBootManifest -ManifestContent $manifestContent -Namespace $Namespace -SvcName $SvcName -RuntimeKind go
@@ -12841,6 +12853,8 @@ function Apply-Zone {
 	}
 	else {
 		$gateYaml = New-NodeDeploymentYaml -NodeName "gate" -Replicas $CurrentGateReplicas -RpcPort 18000 -StartCommand "./gate" -ConfigMapName $configMapName -CurrentZoneName $CurrentZoneName
+		Apply-InjectedSecret -Namespace $namespace -Name 'gate-identity-auth' -Key 'secret' `
+			-Value $script:InternalAuthSecret -AppLabel 'gate-identity'
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateYaml
 	}
 

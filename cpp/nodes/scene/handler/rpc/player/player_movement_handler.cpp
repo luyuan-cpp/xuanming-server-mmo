@@ -144,7 +144,7 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 			*ack.mutable_server_velocity() = *velocity;
 		}
 		ack.set_server_time_ms(TimeSystem::NowMilliseconds());
-		SendMessageToClientViaGate(SceneMovementClientPlayerNotifyMoveAckMessageId, ack, player);
+		SendToPlayerClient(SceneMovementClientPlayerNotifyMoveAckMessageId, ack, player);
 		// 纠偏是低频事件(合法道路上不会触发),INFO 级留证据:验收时看
 		// "合法道路不回拉 / 撞墙有回拉"就靠这一行。
 		LOG_INFO << "move corrected: entity=" << static_cast<uint64_t>(entt::to_integral(player))

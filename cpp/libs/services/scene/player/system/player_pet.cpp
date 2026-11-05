@@ -1104,5 +1104,5 @@ void PetSystem::PushList(entt::entity player) {
 	if (BuildList(player, *message.mutable_pets()) != kSuccess) {
 		return;
 	}
-	SendMessageToClientViaGate(ScenePetClientPlayerNotifyPetListChangedMessageId, message, player);
+	SendToPlayerClient(ScenePetClientPlayerNotifyPetListChangedMessageId, message, player);
 }

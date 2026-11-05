@@ -687,7 +687,7 @@ bool ArmItemSegment(uint64_t lo, uint64_t hi)
 }
 
 // 夹具里的玩家没有会话组件(PlayerSessionSnapshotComp),PlayerAttributeSystem::PushPanel 走到
-// SendMessageToClientViaGate 时留下一条 WARN 就返回 —— 本测试进程里没有 gate 连接可以收包,这条 WARN
+// SendToPlayerClient 时留下一条 WARN 就返回 —— 本测试进程里没有 gate 连接可以收包,这条 WARN
 // 是「推过一次面板」唯一看得见的痕迹。照 cross_zone_test.cpp 数 WARN 条数的做法:临时接管 muduo 的
 // 日志出口,数这句原文出现了几次(muduo 的 WARN 不受日志级别开关影响)。原文在
 // engine/core/network/client_message_sender.cpp;那边改了措辞,用到探针的用例会红在各自开头的校准断言上

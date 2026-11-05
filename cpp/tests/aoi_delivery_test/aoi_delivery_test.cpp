@@ -29,6 +29,13 @@ struct Delivery {
 };
 std::vector<Delivery> deliveries;
 
+struct BroadcastDelivery {
+    uint32_t messageId;
+    EntityUnorderedSet receivers;
+    std::string body;
+};
+std::vector<BroadcastDelivery> broadcasts;
+
 int CreatesFor(entt::entity receiver, entt::entity target) {
     int count = 0;
     for (const auto& sent : deliveries) {
@@ -59,9 +66,10 @@ protected:
         tlsIdGeneratorManager.SetNodeId(93);
         actor_net_id::Install(tlsEcs.actorRegistry);
         deliveries.clear();
+        broadcasts.clear();
         scene = tlsEcs.sceneRegistry.create();
     }
-    void TearDown() override { tlsEcs.Clear(); deliveries.clear(); }
+    void TearDown() override { tlsEcs.Clear(); deliveries.clear(); broadcasts.clear(); }
     entt::entity Spawn(double x = 0, double y = 0) {
         auto entity = tlsEcs.actorRegistry.create();
         EXPECT_NE(0, actor_net_id::Assign(tlsEcs.actorRegistry, entity));
@@ -77,14 +85,128 @@ protected:
 }
 
 // 测试只截获既有发送函数；生产 AOI 和可见性/容量/隐身判定未替换。
-void SendMessageToClientViaGate(uint32_t id, const google::protobuf::Message& message, entt::entity receiver) {
+void SendToPlayerClient(uint32_t id, const google::protobuf::Message& message, entt::entity receiver) {
     deliveries.push_back({id, receiver, message.SerializeAsString()});
 }
 void BroadcastToPlayerClients(uint32_t id, const google::protobuf::Message& message, const EntityUnorderedSet& receivers) {
-    for (auto receiver : receivers) SendMessageToClientViaGate(id, message, receiver);
+    const auto body = message.SerializeAsString();
+    broadcasts.push_back({id, receivers, body});
+    for (auto receiver : receivers) deliveries.push_back({id, receiver, body});
 }
 void BroadcastToPlayerClients(uint32_t id, const google::protobuf::Message& message, const EntityVector& receivers) {
-    for (auto receiver : receivers) SendMessageToClientViaGate(id, message, receiver);
+    const auto body = message.SerializeAsString();
+    broadcasts.push_back({id, EntityUnorderedSet(receivers.begin(), receivers.end()), body});
+    for (auto receiver : receivers) deliveries.push_back({id, receiver, body});
+}
+
+TEST_F(AoiDeliveryTest, EnterBroadcastSharesOneActorBodyAcrossAcceptedObservers) {
+    const auto firstObserver = Spawn();
+    const auto secondObserver = Spawn(1, 0);
+    const auto fullObserver = Spawn(2, 0);
+    AoiSystem::Update(0);
+    tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(fullObserver, AoiClientCapacityComp{kAoiListCapacityMin});
+    for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
+        const auto pinned = tlsEcs.actorRegistry.create();
+        ASSERT_TRUE(InterestSystem::AddAoiEntity(fullObserver, pinned, AoiPriority::kPinned));
+    }
+    const auto entrant = Spawn();
+    deliveries.clear();
+    broadcasts.clear();
+
+    AoiSystem::Update(0);
+
+    ASSERT_EQ(1u, broadcasts.size());
+    const auto& sent = broadcasts.front();
+    EXPECT_EQ(SceneSceneClientPlayerNotifyActorListCreateMessageId, sent.messageId);
+    EXPECT_EQ((EntityUnorderedSet{firstObserver, secondObserver}), sent.receivers);
+    ActorListCreateS2C message;
+    ASSERT_TRUE(message.ParseFromString(sent.body));
+    ASSERT_EQ(1, message.actor_list_size());
+    EXPECT_EQ(actor_net_id::Of(tlsEcs.actorRegistry, entrant), message.actor_list(0).entity());
+    EXPECT_EQ(1, CreatesFor(firstObserver, entrant));
+    EXPECT_EQ(1, CreatesFor(secondObserver, entrant));
+    EXPECT_EQ(0, CreatesFor(fullObserver, entrant));
+    EXPECT_EQ(1, CreatesFor(entrant, firstObserver));
+    EXPECT_EQ(1, CreatesFor(entrant, secondObserver));
+    EXPECT_EQ(1, CreatesFor(entrant, fullObserver));
+
+    deliveries.clear();
+    broadcasts.clear();
+    AoiSystem::Update(0);
+    EXPECT_TRUE(deliveries.empty());
+    EXPECT_TRUE(broadcasts.empty());
+}
+
+TEST_F(AoiDeliveryTest, SpatialLeaveBroadcastExcludesPinnedAndUninterestedObservers) {
+    const auto firstObserver = Spawn();
+    const auto secondObserver = Spawn(1, 0);
+    const auto pinnedObserver = Spawn(2, 0);
+    const auto uninterestedObserver = Spawn(3, 0);
+    const auto mover = Spawn();
+    AoiSystem::Update(0);
+    ASSERT_TRUE(InterestSystem::AddAoiEntity(pinnedObserver, mover, AoiPriority::kPinned));
+    InterestSystem::RemoveAoiEntity(uninterestedObserver, mover);
+    deliveries.clear();
+    broadcasts.clear();
+    auto& transform = tlsEcs.actorRegistry.get<Transform>(mover);
+    transform.mutable_location()->set_x(1000);
+    transform.mutable_location()->set_y(1000);
+
+    AoiSystem::Update(0);
+
+    ASSERT_EQ(1u, broadcasts.size());
+    const auto& sent = broadcasts.front();
+    EXPECT_EQ(SceneSceneClientPlayerNotifyActorListDestroyMessageId, sent.messageId);
+    EXPECT_EQ((EntityUnorderedSet{firstObserver, secondObserver}), sent.receivers);
+    ActorListDestroyS2C message;
+    ASSERT_TRUE(message.ParseFromString(sent.body));
+    ASSERT_EQ(1, message.entity_size());
+    EXPECT_EQ(actor_net_id::Of(tlsEcs.actorRegistry, mover), message.entity(0));
+    EXPECT_EQ(1, DestroysFor(firstObserver, mover));
+    EXPECT_EQ(1, DestroysFor(secondObserver, mover));
+    EXPECT_EQ(0, DestroysFor(pinnedObserver, mover));
+    EXPECT_EQ(0, DestroysFor(uninterestedObserver, mover));
+    EXPECT_EQ(1, DestroysFor(mover, firstObserver));
+    EXPECT_EQ(1, DestroysFor(mover, secondObserver));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(pinnedObserver).Contains(mover));
+}
+
+TEST_F(AoiDeliveryTest, VisibilityResetBroadcastsRemovalAndNextUpdateRebuildsObservers) {
+    const auto firstObserver = Spawn();
+    const auto secondObserver = Spawn(1, 0);
+    const auto pinnedObserver = Spawn(2, 0);
+    const auto mover = Spawn();
+    AoiSystem::Update(0);
+    ASSERT_TRUE(InterestSystem::AddAoiEntity(pinnedObserver, mover, AoiPriority::kPinned));
+    deliveries.clear();
+    broadcasts.clear();
+
+    AoiSystem::ResetEntityVisibility(mover);
+
+    ASSERT_EQ(1u, broadcasts.size());
+    const auto& sent = broadcasts.front();
+    EXPECT_EQ(SceneSceneClientPlayerNotifyActorListDestroyMessageId, sent.messageId);
+    EXPECT_EQ((EntityUnorderedSet{firstObserver, secondObserver}), sent.receivers);
+    EXPECT_EQ(1, DestroysFor(firstObserver, mover));
+    EXPECT_EQ(1, DestroysFor(secondObserver, mover));
+    EXPECT_EQ(0, DestroysFor(pinnedObserver, mover));
+    EXPECT_EQ(1, DestroysFor(mover, firstObserver));
+    EXPECT_EQ(1, DestroysFor(mover, secondObserver));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<Hex>(mover));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<AoiListComp>(pinnedObserver).Contains(mover));
+
+    deliveries.clear();
+    broadcasts.clear();
+    AoiSystem::Update(0);
+
+    ASSERT_EQ(1u, broadcasts.size());
+    EXPECT_EQ(SceneSceneClientPlayerNotifyActorListCreateMessageId, broadcasts.front().messageId);
+    EXPECT_EQ((EntityUnorderedSet{firstObserver, secondObserver}), broadcasts.front().receivers);
+    EXPECT_EQ(1, CreatesFor(firstObserver, mover));
+    EXPECT_EQ(1, CreatesFor(secondObserver, mover));
+    EXPECT_EQ(0, CreatesFor(pinnedObserver, mover));
+    EXPECT_EQ(1, CreatesFor(mover, firstObserver));
+    EXPECT_EQ(1, CreatesFor(mover, secondObserver));
 }
 
 TEST_F(AoiDeliveryTest, EmptySceneAndLoneActorCreateOnlyOccupiedGridState) {

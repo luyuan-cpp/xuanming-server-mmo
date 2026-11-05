@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"login/internal/config"
 	loginlogic "login/internal/logic/clientplayerlogin"
-	"login/internal/logic/pkg/callerauth"
+	loginauth "login/internal/logic/pkg/callerauth"
 	"login/internal/logic/pkg/node"
 	"login/internal/rpclogging"
 	loginserver "login/internal/server/clientplayerlogin"
@@ -21,6 +21,7 @@ import (
 	databasepb "proto/common/database"
 	login_proto_login "proto/login"
 	"shared/buildinfo"
+	"shared/callerauth"
 	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -409,14 +410,14 @@ func newSessionInterceptor(cfg config.Config) grpc.UnaryServerInterceptor {
 			"identity claims failing verification are logged but allowed; production mode cannot enter this mode", cfg.Mode)
 	}
 
-	return callerauth.UnaryServerInterceptor(callerauth.NewVerifier(callerauth.Options{
+	return loginauth.UnaryServerInterceptor(callerauth.NewVerifier(callerauth.Options{
 		Secrets:         secrets,
 		Enforce:         enforce,
 		MaxClockSkew:    cfg.InternalAuth.MaxClockSkew,
 		MaxNonceEntries: cfg.InternalAuth.MaxNonceEntries,
 		AllowedCallers:  cfg.InternalAuth.AllowedCallers,
 		OnNonceOverflow: func() {
-			callerauth.RecordNonceOverflow()
+			loginauth.RecordNonceOverflow()
 			logx.Error("callerauth nonce table exceeded MaxNonceEntries and rotated early; replay window temporarily shortened, increase InternalAuth.MaxNonceEntries")
 		},
 	}))
@@ -499,7 +500,7 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	//    也就是说,它无法让任何一个本该被②拒掉的请求通过。
 	//
 	// 3) "未鉴权方能借此探测方法是否存在"这条顾虑在 login 不成立:
-	//    - ②不是全局鉴权层。按 callerauth.UnaryServerInterceptor 的不变量①,
+	//    - ②不是全局鉴权层。按 loginauth.UnaryServerInterceptor 的不变量①,
 	//      它只校验**带了** x-session-detail-bin 的调用;不带身份声明的调用
 	//      (Java Gateway 的 /api/login 新链路)本来就原样直达 handler。
 	//      login 是登录入口,天然对外接受未鉴权调用 —— 这里没有"先鉴权

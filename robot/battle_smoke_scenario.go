@@ -4,7 +4,7 @@ package main
 //
 // 兑现 docs/design/turn-based-battle-server.md §9 预留的 "robot battle 动作":
 //   机器人 A(参战):地域探测 → JoinQueue(PVE_SOLO) → NotifyBattleStart → [直连 battle 节点 + GetBattleState 补拉]
-//                   → 等观战就绪屏障 → [直连上 SetAutoBattle] → 等 NotifyBattleEnd;
+//                   → 等观战就绪屏障 → [直连上 SetAutoBattle] → 等 Scene 持久结算后的 NotifyBattleEnd;
 //   机器人 B(观战):等 A 开战 → WatchBattle(battle_id=0,观战匹配随机对局;带 request_id,观战不要探测)
 //                   → NotifyBattleAssigned(role=OBSERVER,断言对局 == A 的对局) → [直连 battle 节点]
 //                   → 握手快照 NotifySpectateState(断言从直连到达) → 等 NotifySpectateEnd
@@ -495,12 +495,13 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 	}
 
 	turns := bot.player.GetTurnCount()
-	// 就绪补拉应答、回合结果与终局包都必须从直连到达(零字节经 gate,§18 验收判据;D68/D69)
+	// 就绪补拉和公共回合帧必须来自直连；个人终局只能由 Scene 持久结算后经大厅通知。
+	// 上面的 WaitBattleEnd 已核本局身份；直连不得提前发个人终局(总体存盘方案 §5.4)。
 	directTurns := int(direct.turnResults.Load())
 	zap.L().Info("[battle-smoke] A direct-connect delivery", zap.String("counts", direct.summary()))
-	if directTurns < 1 || direct.battleEnds.Load() < 1 || direct.stateReplies.Load() < 1 {
+	if directTurns < 1 || direct.battleEnds.Load() != 0 || direct.stateReplies.Load() < 1 {
 		return battleSmokeFighterResult{step: "a-direct-delivery",
-			err: fmt.Errorf("fighter direct connection saw %s, expected state_replies>=1, turn_results>=1 and battle_ends>=1",
+			err: fmt.Errorf("fighter direct connection saw %s, expected state_replies>=1, turn_results>=1 and battle_ends=0; personal settlement must arrive through scene",
 				direct.summary()),
 			battleId: battleId, outcome: outcome, turns: turns}
 	}

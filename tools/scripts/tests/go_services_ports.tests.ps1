@@ -24,6 +24,7 @@ foreach ($definition in $ast.FindAll({ param($node) $node -is [System.Management
 . (Join-Path $PSScriptRoot '../lib/assetop_dev_secret.ps1')
 . (Join-Path $PSScriptRoot '../lib/account_directory_dev_secret.ps1')
 . (Join-Path $PSScriptRoot '../lib/role_fence_dev_secret.ps1')
+. (Join-Path $PSScriptRoot '../lib/gate_identity_environment.ps1')
 . (Join-Path $PSScriptRoot '../lib/release_common.ps1')
 
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('mmorpg-go-ports-tests-' + [guid]::NewGuid().ToString('N'))
@@ -70,8 +71,8 @@ function Start-Process {
     [CmdletBinding()] param($FilePath, $ArgumentList, $WorkingDirectory, $RedirectStandardOutput, $RedirectStandardError, [switch]$PassThru, $WindowStyle)
     # MailToken:启动那一刻父进程环境里的 MailAdmin 令牌 = 子进程会继承到的值(只给 mail 注入的用例看它)。
     $script:Starts += [pscustomobject]@{ FilePath = $FilePath; Arguments = $ArgumentList; MailToken = [Environment]::GetEnvironmentVariable('MAIL_PRODUCER_SECRET_ADMIN'); ChatDsnPresent = -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable('CHAT_AUTHORITY_DSN', 'Process')); MatchMigrationUserPresent = -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable('MATCH_MIGRATION_USER', 'Process')); MatchMigrationPasswordPresent = -not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', 'Process')) }
-    # Start-ServiceInstance 用真实 Process 的 StartTime 和 Path 写 PID 记录(核对实例身份),桩也要有这两个属性。
-    return [pscustomobject]@{ Id = 1000 + $script:Starts.Count; StartTime = [datetime]::Now; Path = [string]$FilePath }
+    $processPath = if ($script:ProcessPathUnavailable) { '' } else { [string]$FilePath }
+    return [pscustomobject]@{ Id = 1000 + $script:Starts.Count; StartTime = [datetime]::Now; Path = $processPath }
 }
 function Stop-Process { throw '测试禁止终止进程' }
 function netsh { return @('开始端口 结束端口', ' 50700 50848 ') }
@@ -94,6 +95,7 @@ function Reset-TestState {
     $script:Starts = @()
     $script:NetworkQueryFailed = $false
     $script:ProcessQueryFailed = $false
+    $script:ProcessPathUnavailable = $false
 }
 function Get-ThrownMessage([scriptblock]$Action) {
     try { & $Action | Out-Null } catch { return $_.Exception.Message }
@@ -108,6 +110,8 @@ function New-TestProcess([int]$ProcessId, [string]$Name, [string]$ConfigPath, [i
 }
 
 $chatOuterDsn = [Environment]::GetEnvironmentVariable('CHAT_AUTHORITY_DSN', 'Process')
+$outerGateIdentity = [Environment]::GetEnvironmentVariable('MMORPG_INTERNAL_AUTH_SECRET', 'Process')
+[Environment]::SetEnvironmentVariable('MMORPG_INTERNAL_AUTH_SECRET', 'fixture-gate-identity-key-for-launcher-tests', 'Process')
 try {
     # 仅桩启动器的输入，不连接数据库；真实启动必须提供外部运行账号DSN。
     [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN','fixture@tcp(127.0.0.1:24000)/mmorpg_chat','Process')
@@ -295,6 +299,14 @@ try {
         Assert-Equal 0 $script:Starts.Count '正确实例被复用'
         Assert-Equal 'chat' $reserved[50849] '复用端口加入本批预留'
     }
+    Test-Case '刚启动的 exe 暂时未返回模块路径时仍保存 PID 记录' {
+        Reset-TestState
+        $script:ProcessPathUnavailable = $true
+        $pids = [pscustomobject]@{}
+        $null = Start-ServiceInstance -Name chat -Info $ServiceCatalogue.chat -Index 1 -Total 1 -Pids $pids -UseExe
+        Assert-Equal $script:Starts[0].FilePath $pids.chat.ExecutablePath '保存传给 Start-Process 的已解析 exe 路径'
+        Assert-Equal 1001 $pids.chat.Pid '保存已启动进程的 PID'
+    }
     Test-Case '复用同一可执行文件也必须匹配配置实例' {
         Reset-TestState
         $script:Processes[77] = New-TestProcess 77 'chat' (Join-Path $DerivedEtcDir 'z2_chat.yaml')
@@ -449,6 +461,7 @@ try {
     }
 }
 finally {
+    [Environment]::SetEnvironmentVariable('MMORPG_INTERNAL_AUTH_SECRET', $outerGateIdentity, 'Process')
     [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN',$chatOuterDsn,'Process')
     $resolvedRoot = [System.IO.Path]::GetFullPath($testRoot)
     $tempParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar

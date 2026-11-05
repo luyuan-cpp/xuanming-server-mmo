@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"slices"
 	"sync/atomic"
-	"time"
 
 	base "proto/common/base"
 	dbpb "proto/common/database"
@@ -54,13 +53,16 @@ func NewAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, max
 		return nil, accountdirectory.ErrInvalid
 	}
 	shards, err := openShardPools(cfg, func(one MySQLConfig) (*sql.DB, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		db, err := authoritysql.Open(ctx, buildDSN(one), one.DBName, backend, maxOpenConn, one.Permission, one.PoolOptions...)
+		openCtx, cancelOpen := context.WithTimeout(context.Background(), mysqlPingTimeout)
+		db, err := authoritysql.Open(openCtx, buildDSN(one), one.DBName, backend, maxOpenConn, one.Permission, one.PoolOptions...)
+		cancelOpen()
 		if err != nil {
 			return nil, err
 		}
-		if err = assertAccountDirectoryShape(ctx, db, one.DBName); err != nil {
+		// 权威连接池核对与业务表形状核对各用自己的有界启动预算。
+		shapeCtx, cancelShape := context.WithTimeout(context.Background(), mysqlPingTimeout)
+		defer cancelShape()
+		if err = assertAccountDirectoryShape(shapeCtx, db, one.DBName); err != nil {
 			_ = db.Close()
 			return nil, err
 		}
@@ -82,7 +84,13 @@ func (s *AccountDirectoryStore) Close() error {
 }
 
 func assertAccountDirectoryShape(ctx context.Context, db *sql.DB, name string) error {
-	if err := assertInitialPlayerCommitShape(ctx, db, name); err != nil {
+	// 保持同一物理会话，避免目录形状的每条只读查询重复核验会话。
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err := assertInitialPlayerCommitShape(ctx, conn, name); err != nil {
 		return err
 	}
 	for _, shape := range []struct {
@@ -95,10 +103,10 @@ func assertAccountDirectoryShape(ctx context.Context, db *sql.DB, name string) e
 		{&dbpb.AccountRoleRemoval{}, AccountRoleRemovalTableName, []string{"player_id"}},
 		{&dbpb.AccountRoleRef{}, AccountRoleRefTableName, []string{"account", "player_id"}},
 	} {
-		if err := assertColumnsPresent(ctx, db, name, shape.model, shape.table); err != nil {
+		if err := assertColumnsPresent(ctx, conn, name, shape.model, shape.table); err != nil {
 			return err
 		}
-		keys, err := primaryKeyColumns(ctx, db, name, shape.table)
+		keys, err := primaryKeyColumns(ctx, conn, name, shape.table)
 		if err != nil {
 			return err
 		}
@@ -107,7 +115,7 @@ func assertAccountDirectoryShape(ctx context.Context, db *sql.DB, name string) e
 		}
 		var typ string
 		var width sql.NullInt64
-		if err := db.QueryRowContext(ctx, "SELECT DATA_TYPE,CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME='account'", name, shape.table).Scan(&typ, &width); err != nil {
+		if err := conn.QueryRowContext(ctx, "SELECT DATA_TYPE,CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=? AND COLUMN_NAME='account'", name, shape.table).Scan(&typ, &width); err != nil {
 			return err
 		}
 		if typ != "varbinary" || !width.Valid || width.Int64 != 191 {

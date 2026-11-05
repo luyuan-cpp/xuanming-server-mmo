@@ -21,7 +21,7 @@ func ensureInitialPlayerCommitSchema(ctx context.Context, db *sql.DB, schema str
 	return assertInitialPlayerCommitShape(ctx, db, schema)
 }
 
-func assertInitialPlayerCommitShape(ctx context.Context, db *sql.DB, schema string) error {
+func assertInitialPlayerCommitShape(ctx context.Context, db schemaReader, schema string) error {
 	var dataType, columnType, nullable string
 	var defaultValue sql.NullString
 	if err := db.QueryRowContext(ctx, "SELECT DATA_TYPE,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME='account_role' AND COLUMN_NAME='initial_player_commit'", schema).Scan(&dataType, &columnType, &nullable, &defaultValue); err != nil {

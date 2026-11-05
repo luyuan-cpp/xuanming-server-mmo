@@ -896,7 +896,7 @@ namespace
 		message.set_battle_id(settlement.battle_id());
 		message.set_outcome(settlement.outcome());
 		*message.mutable_settlement() = settlement;
-		SendMessageToClientViaGate(BattleClientPlayerNotifyBattleEndMessageId, message, player);
+		SendToPlayerClient(BattleClientPlayerNotifyBattleEndMessageId, message, player);
 	}
 
 	// 解析 gate 路由(session_id / gate_node_id / gate_instance_id)。
@@ -2096,7 +2096,7 @@ void PlayerBattleSystem::NotifyBattleReconnectToClient(entt::entity player)
 	// 直连就绪后 GetBattleState 补拉全量状态。
 	::BattleReconnectS2C message;
 	message.set_battle_id(inBattle->battle_id());
-	SendMessageToClientViaGate(BattleClientPlayerNotifyBattleReconnectMessageId, message, player);
+	SendToPlayerClient(BattleClientPlayerNotifyBattleReconnectMessageId, message, player);
 
 	LOG_INFO << "[PlayerBattle] Session changed during battle;reconnect notification sent: player_id=" << tlsEcs.GetPlayerId(player)
 			 << " battle_id=" << inBattle->battle_id()

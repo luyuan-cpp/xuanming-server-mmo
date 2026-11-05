@@ -437,6 +437,7 @@ type rpcMethodMetaInit struct {
 	Protocol       uint32
 	NodeType       string // eNodeType 的全限定枚举值
 	SenderName     string // 空 = 不带 sender(cc_generic_services 的 muduo 方法)
+	GrpcFullMethod string // proto 服务全名；供 gate 直连与路由转发使用同一签名目标
 }
 
 // rpcMethodMetaInitLines 生成一条 RpcMethodMeta 初始化(纯函数),按字段角色分行:
@@ -455,6 +456,9 @@ func rpcMethodMetaInitLines(meta rpcMethodMetaInit) []string {
 	}
 	if meta.SenderName == "" {
 		return append(lines, fmt.Sprintf("    %d, %s};", meta.Protocol, meta.NodeType))
+	}
+	if meta.GrpcFullMethod != "" {
+		return append(lines, fmt.Sprintf("    %d, %s, %s, %q};", meta.Protocol, meta.NodeType, meta.SenderName, meta.GrpcFullMethod))
 	}
 	return append(lines, fmt.Sprintf("    %d, %s, %s};", meta.Protocol, meta.NodeType, meta.SenderName))
 }
@@ -561,6 +565,11 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 			if declaration, sender, ok := grpcSenderFor(method); ok {
 				senderDeclarations = appendUniqueString(senderDeclarations, senderDeclarationSet, declaration)
 				meta.SenderName = sender
+				qualifiedService := method.Service()
+				if method.Package() != "" {
+					qualifiedService = method.Package() + "." + qualifiedService
+				}
+				meta.GrpcFullMethod = "/" + qualifiedService + "/" + method.Method()
 			}
 			initLines = append(initLines, rpcMethodMetaInitLines(meta)...)
 

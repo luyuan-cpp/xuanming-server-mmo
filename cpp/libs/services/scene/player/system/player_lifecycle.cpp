@@ -137,7 +137,7 @@ thread_local relocate_confirm::Table tlsRelocateConfirms;
 namespace
 {
 	// 按会话把一条消息直接推给会话所在的 gate。用在没有玩家实体可用的两种场合:载入在途(SendTipToPendingSession),
-	// 以及实体已销毁、手里只剩改派票据抄下的会话(SendTipAndKickToSession)。有实体时走 SendMessageToClientViaGate
+	// 以及实体已销毁、手里只剩改派票据抄下的会话(SendTipAndKickToSession)。有实体时走 SendToPlayerClient
 	// 的实体重载,不要走这里。
 	//   expectedGateInstanceId  发票时 gate 的实例 uuid。非空时与 gate 当前的 NodeInfo.node_uuid 比对,不等 = gate 进程
 	//                           已换过一个、会话随旧进程消失,不推(kGateReplaced)。空 = 不比对(载入在途的提示;
@@ -157,7 +157,7 @@ namespace
 		// network_utils.h:27-30 明文禁止这种写法。单 gate 部署时 node_id 从 1 起、
 		// 实体槽位从 0 起,valid() 必假,这条提示 100% 发不出去;多 gate 时更糟,
 		// 会命中另一个 gate 的槽位、把提示发给没有这个会话的节点。
-		// 本文件 EnqueueRelocateTicket 与 SendMessageToClientViaGate 都走 ResolveLocalZoneGateEntity,
+		// 本文件 EnqueueRelocateTicket 与 SendToPlayerClient 都走 ResolveLocalZoneGateEntity,
 		// 按会话直推的函数同样一律走它。
 		const auto gateEntityOpt = ResolveLocalZoneGateEntity(sessionId);
 		if (!gateEntityOpt)
@@ -189,7 +189,7 @@ namespace
 				return relocate_confirm::GatePushResult::kGateReplaced;
 			}
 		}
-		SendMessageToClientSessionViaGate(messageId, message, *gateSessionPtr, sessionId, playerId);
+		SendToClientSession(messageId, message, *gateSessionPtr, sessionId, playerId);
 		return relocate_confirm::GatePushResult::kSent;
 	}
 
@@ -316,7 +316,7 @@ namespace
 		PlayerTipSystem::SendToPlayer(player, tipId, {});
 		GameKickPlayerRequest kick;
 		kick.mutable_reason()->set_id(tipId);
-		SendMessageToClientViaGate(SceneClientPlayerCommonKickPlayerMessageId, kick, player);
+		SendToPlayerClient(SceneClientPlayerCommonKickPlayerMessageId, kick, player);
 	}
 
 	// 在当前线程的 EventLoop 上挂一个 30s 周期定时器,把 travel_handoff_stats 打成一行 [TravelHandoff]。
@@ -2955,7 +2955,7 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 
 	// 1. Bind session: map session_id -> player_id on this Scene node
 	//    so session-addressed client messages (ProcessClientPlayerMessage) can find the player, and
-	//    SendMessageToClientViaGate can find the gate node.
+	//    SendToPlayerClient can find the gate node.
 	bool sessionChanged = false;
 	if (enterInfo.session_id() != 0)
 	{

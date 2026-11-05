@@ -108,6 +108,7 @@ SceneGridListComp* AoiSystem::UpdateGridState(const entt::entity entity, const S
 void AoiSystem::HandleEntityVisibility(entt::entity entity, SceneGridListComp& gridList, 
                                        const GridSet& gridsToEnter, const GridSet& gridsToLeave) {
     EntityUnorderedSet entitiesEnteringView, entitiesLeavingView;
+    EntityUnorderedSet enteringObservers, leavingObservers;
 
     // Entities in grids the observer is entering
     for (const auto& gridId : gridsToEnter) {
@@ -129,8 +130,8 @@ void AoiSystem::HandleEntityVisibility(entt::entity entity, SceneGridListComp& g
                 const auto* otherAoi = tlsEcs.actorRegistry.try_get<AoiListComp>(otherEntity);
                 const bool alreadyVisible = otherAoi && otherAoi->Contains(entity);
                 if (InterestSystem::AddAoiEntity(otherEntity, entity, priority) && !alreadyVisible) {
-                    // 静止观察者可能一直不跨格，必须在反向兴趣关系建立时立即通知。
-                    NotifyEntityVisibilityChanges(otherEntity, EntityUnorderedSet{entity}, {});
+                    // 静止观察者可能一直不跨格；只汇总真正新增的关系，统一广播同一实体的创建消息。
+                    enteringObservers.insert(otherEntity);
                 }
             }
         }
@@ -161,13 +162,42 @@ void AoiSystem::HandleEntityVisibility(entt::entity entity, SceneGridListComp& g
                 auto it = otherAoi->entries.find(entity);
                 if (it != otherAoi->entries.end() && it->second.priority != AoiPriority::kPinned) {
                     InterestSystem::RemoveAoiEntity(otherEntity, entity);
-                    NotifyEntityVisibilityChanges(otherEntity, {}, EntityUnorderedSet{entity});
+                    leavingObservers.insert(otherEntity);
                 }
             }
         }
     }
 
+    BroadcastEntityVisibilityChanges(entity, enteringObservers, leavingObservers);
     NotifyEntityVisibilityChanges(entity, entitiesEnteringView, entitiesLeavingView);
+}
+
+void AoiSystem::BroadcastEntityVisibilityChanges(entt::entity entity,
+                                                const EntityUnorderedSet& enteringObservers,
+                                                const EntityUnorderedSet& leavingObservers) {
+    if (enteringObservers.empty() && leavingObservers.empty()) return;
+
+    const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, entity);
+    if (netId == 0) {
+        LOG_ERROR << "AOI: actor visibility broadcast skipped, network id missing";
+        return;
+    }
+
+    // 各观察者接收相同的单实体消息，只组包一次；发送入口同步序列化并按 Gate 合并收件人。
+    // 缓冲复用与 NotifyEntityVisibilityChanges 遵循同一线程、无重入约束。
+    if (!enteringObservers.empty()) {
+        static thread_local ActorListCreateS2C createMsg;
+        createMsg.Clear();
+        ViewSystem::FillActorCreateMessageInfo(entity, netId, *createMsg.add_actor_list());
+        BroadcastToPlayerClients(SceneSceneClientPlayerNotifyActorListCreateMessageId, createMsg, enteringObservers);
+    }
+
+    if (!leavingObservers.empty()) {
+        static thread_local ActorListDestroyS2C destroyMsg;
+        destroyMsg.Clear();
+        destroyMsg.add_entity(netId);
+        BroadcastToPlayerClients(SceneSceneClientPlayerNotifyActorListDestroyMessageId, destroyMsg, leavingObservers);
+    }
 }
 
 void AoiSystem::NotifyEntityVisibilityChanges(entt::entity entity, 
@@ -188,7 +218,7 @@ void AoiSystem::NotifyEntityVisibilityChanges(entt::entity entity,
             ViewSystem::FillActorCreateMessageInfo(otherEntity, netId, *createMsg.add_actor_list());
         }
         if (!createMsg.actor_list().empty()) {
-            SendMessageToClientViaGate(SceneSceneClientPlayerNotifyActorListCreateMessageId, createMsg, entity);
+            SendToPlayerClient(SceneSceneClientPlayerNotifyActorListCreateMessageId, createMsg, entity);
         }
     }
 
@@ -205,7 +235,7 @@ void AoiSystem::NotifyEntityVisibilityChanges(entt::entity entity,
             destroyMsg.add_entity(netId);
         }
         if (!destroyMsg.entity().empty()) {
-            SendMessageToClientViaGate(SceneSceneClientPlayerNotifyActorListDestroyMessageId, destroyMsg, entity);
+            SendToPlayerClient(SceneSceneClientPlayerNotifyActorListDestroyMessageId, destroyMsg, entity);
         }
     }
 }
@@ -285,8 +315,8 @@ void AoiSystem::ResetEntityVisibility(entt::entity entity) {
 
             for (const auto& observer : observers) {
                 InterestSystem::RemoveAoiEntity(observer, entity);
-                NotifyEntityVisibilityChanges(observer, {}, EntityUnorderedSet{entity});
             }
+            BroadcastEntityVisibilityChanges(entity, {}, observers);
 
             RemoveEntityFromGrid(*hex, *gridList, entity);
         }

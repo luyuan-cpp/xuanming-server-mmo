@@ -419,8 +419,13 @@ type BindSessionEvent struct {
 	// 本次登录链铸造的登录代次。gate 在按 lastSceneRoute 补发登录进场之前写进会话:Bind 先于本次路由
 	// 到达时,补发带的必须是本次登录的代次(docs/design/scene-enter-session-fence.md §4)。
 	LoginGeneration uint64 `protobuf:"varint,5,opt,name=login_generation,json=loginGeneration,proto3" json:"login_generation,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 本次入场从原连接登录态捕获的账号、连接代次和归属修订；三者必须完整。
+	// gate 只接受本进程 UUID 信封及同一 incarnation 的绑定，旧连接迟到事件不得补权。
+	AuthenticatedAccount string `protobuf:"bytes,6,opt,name=authenticated_account,json=authenticatedAccount,proto3" json:"authenticated_account,omitempty"`
+	SessionIncarnation   uint64 `protobuf:"varint,7,opt,name=session_incarnation,json=sessionIncarnation,proto3" json:"session_incarnation,omitempty"`
+	OwnerRevision        uint64 `protobuf:"varint,8,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BindSessionEvent) Reset() {
@@ -484,6 +489,27 @@ func (x *BindSessionEvent) GetEnterGsType() uint32 {
 func (x *BindSessionEvent) GetLoginGeneration() uint64 {
 	if x != nil {
 		return x.LoginGeneration
+	}
+	return 0
+}
+
+func (x *BindSessionEvent) GetAuthenticatedAccount() string {
+	if x != nil {
+		return x.AuthenticatedAccount
+	}
+	return ""
+}
+
+func (x *BindSessionEvent) GetSessionIncarnation() uint64 {
+	if x != nil {
+		return x.SessionIncarnation
+	}
+	return 0
+}
+
+func (x *BindSessionEvent) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
 	}
 	return 0
 }
@@ -985,14 +1011,17 @@ const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"\rscene_node_id\x18\x03 \x01(\tR\vsceneNodeId\x12\x19\n" +
 	"\bscene_id\x18\x04 \x01(\x04R\asceneId\x12\x17\n" +
 	"\agate_id\x18\x05 \x01(\tR\x06gateId\x12(\n" +
-	"\x10gate_instance_id\x18\x06 \x01(\tR\x0egateInstanceId:\x05\x88\xe6\xd5\x02\x01\"\xcd\x01\n" +
+	"\x10gate_instance_id\x18\x06 \x01(\tR\x0egateInstanceId:\x05\x88\xe6\xd5\x02\x01\"\xda\x02\n" +
 	"\x10BindSessionEvent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12'\n" +
 	"\x0fsession_version\x18\x03 \x01(\rR\x0esessionVersion\x12\"\n" +
 	"\renter_gs_type\x18\x04 \x01(\rR\venterGsType\x12)\n" +
-	"\x10login_generation\x18\x05 \x01(\x04R\x0floginGeneration:\x05\x88\xe6\xd5\x02\x01\"\x9d\x02\n" +
+	"\x10login_generation\x18\x05 \x01(\x04R\x0floginGeneration\x123\n" +
+	"\x15authenticated_account\x18\x06 \x01(\tR\x14authenticatedAccount\x12/\n" +
+	"\x13session_incarnation\x18\a \x01(\x04R\x12sessionIncarnation\x12%\n" +
+	"\x0eowner_revision\x18\b \x01(\x04R\rownerRevision:\x05\x88\xe6\xd5\x02\x01\"\x9d\x02\n" +
 	"\x13RedirectToGateEvent\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +

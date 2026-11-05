@@ -126,6 +126,7 @@ $LegacyPidFile = Join-Path $RepoRoot "bin\cpp_nodes.pid.json"
 . (Join-Path $ScriptDir "lib\assetop_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\account_directory_dev_secret.ps1")
 . (Join-Path $ScriptDir "lib\match_dev_secret.ps1")
+. (Join-Path $ScriptDir "lib\gate_identity_environment.ps1")
 
 # ── Node catalogue ───────────────────────────────────────────────
 $NodeCatalogue = [ordered]@{
@@ -420,7 +421,11 @@ function Invoke-Start {
             # 全球匹配：探测与终局证明由 battle 签、match 验，两端要同一把；机房号决定 match 能不能把局放到这个节点。
             # 值取自 run/secrets/match-dev.env，只在没设时兜底、不回显、finally 里还原；部署链（k8s_deploy.ps1）从不调用这里。
             $previousMatchDevSecrets = $null
+            $previousGateIdentityEnvironment = $null
             try {
+                if ($name -eq 'gate') {
+                    $previousGateIdentityEnvironment = Enter-LocalGateIdentityEnvironment -RepoRoot $RepoRoot -AllowDevelopmentDefault ($env:GATE_RUN_MODE -in @('dev','test'))
+                }
                 if ($name -eq 'scene') {
                     $previousAccountDirectorySecrets = Backup-AccountDirectoryDevSecrets -Service 'scene'
                     Initialize-AccountDirectoryDevSecrets -RepoRoot $RepoRoot -Service 'scene'
@@ -456,6 +461,7 @@ function Invoke-Start {
                 if ($injectAssetOpSecrets) { Restore-AssetOpDevSecrets $prevAssetOpSecrets }
                 Restore-AccountDirectoryDevSecrets $previousAccountDirectorySecrets
                 Restore-MatchDevSecrets $previousMatchDevSecrets
+                if ($null -ne $previousGateIdentityEnvironment) { Restore-LocalGateIdentityEnvironment $previousGateIdentityEnvironment }
                 Restore-SqlWriterBootEnvironment $previousAuthorityEnvironment
             }
 
