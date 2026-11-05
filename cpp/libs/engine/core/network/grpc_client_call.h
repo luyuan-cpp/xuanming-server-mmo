@@ -19,10 +19,13 @@ namespace google::protobuf { class Message; }
 // (scene_manager 8000)加 2000 余量:下游先超时,调用方才收得到带真实错误码的应答(上游比下游宽)。
 inline constexpr uint32_t kDefaultGrpcCallDeadlineMs = 10000;
 
-// gRPC metadata:有序的键值对。随请求发出的按 Send 传入的原值保存(应用层 Base64 之前);
+// gRPC metadata:有序的键值对。随请求发出的按 Send 传入的原值保存(SessionMD 应用编码之前);
 // 应答里的按收到的值保存(`-bin` 键已解掉线上那一层 base64,与官方客户端的 GetServerInitialMetadata 同义)。
 using GrpcMetadata = std::vector<std::pair<std::string, std::string>>;
 using GrpcSentMetadata = GrpcMetadata;
+
+// SessionDetails 唯一的 metadata 键;生成客户端据此保留历史应用编码。
+inline constexpr char kSessionBinMetaKey[] = "x-session-detail-bin";
 
 // 与 grpc::StatusCode 同值(线上 grpc-status 的数值)。只列调用方需要按名字判断的几个。
 inline constexpr uint32_t kGrpcStatusOk = 0;
@@ -72,7 +75,8 @@ using GrpcDone = std::function<void(const GrpcCallOutcome&, const Reply* reply)>
 using GrpcMessageDone = std::function<void(const GrpcCallOutcome&, const google::protobuf::Message* reply)>;
 
 // 每次调用的可选参数。deadline <= 0 用该 proto 文件的默认 deadline(Set<File>CallDeadline);
-// metadata 填原值,发出前由生成代码做 Base64;需要在完成时使用的请求上下文由闭包捕获。
+// metadata 填原值,生成代码仅对 x-session-detail-bin 做历史应用层 Base64;
+// ASCII 头保持原值,其他 -bin 头只走传输编码。完成时使用的请求上下文由闭包捕获。
 struct GrpcCallOptions {
 	std::chrono::milliseconds deadline{0};
 	GrpcSentMetadata metadata;

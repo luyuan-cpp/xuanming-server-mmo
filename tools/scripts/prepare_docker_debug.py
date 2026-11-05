@@ -243,6 +243,7 @@ def main() -> None:
     parser.add_argument("--project", default="xuanming-debug-current")
     parser.add_argument("--subnet", default="172.29.220.0/24")
     parser.add_argument("--gateway-port", type=int, default=18081)
+    parser.add_argument("--gateway-client-port", type=int, default=8081)
     parser.add_argument("--gate-port", type=int, default=28000)
     parser.add_argument("--battle-port", type=int, default=28010)
     args = parser.parse_args()
@@ -254,11 +255,9 @@ def main() -> None:
         raise ValueError("输出目录没有被 Git 忽略，拒绝写入密钥")
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", args.project):
         raise ValueError("项目名必须由小写字母、数字、下划线或连字符组成")
-    ports = (args.gateway_port, args.gate_port, args.battle_port)
-    if len(set(ports)) != 3 or any(not 1024 <= port <= 65535 for port in ports):
-        raise ValueError("三个宿主入口端口必须不同且在 1024..65535 内")
-    if 8081 in (args.gate_port, args.battle_port):
-        raise ValueError("8081 已保留给客户端默认的 HTTP 网关入口")
+    ports = (args.gateway_client_port, args.gateway_port, args.gate_port, args.battle_port)
+    if len(set(ports)) != 4 or any(not 1024 <= port <= 65535 for port in ports):
+        raise ValueError("四个宿主入口端口必须不同且在 1024..65535 内")
     subnet = ipaddress.ip_network(args.subnet, strict=True)
     if subnet.version != 4 or subnet.prefixlen != 24 or not subnet.is_private:
         raise ValueError("开发栈需要独立私有 IPv4 /24 子网")
@@ -364,7 +363,7 @@ def main() -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPO / source, target)
     (output / "sql-writer-entry.sh").write_text(SQL_WRITER_ENTRY, encoding="utf-8", newline="\n")
-    environment.update(DEBUG_RUN_DIR=output.as_posix(), COMPOSE_PROJECT_NAME=args.project, DEBUG_SUBNET=str(subnet), GATEWAY_PORT=str(args.gateway_port), GATE_PORT=str(args.gate_port), BATTLE_PORT=str(args.battle_port), KAFKA_COMMAND_TOPIC_GENERATION=str(base["Kafka"]["CommandTopicGeneration"]), KAFKA_COMMAND_TOPIC_PARTITIONS=str(base["Kafka"]["CommandTopicPartitions"]))
+    environment.update(DEBUG_RUN_DIR=output.as_posix(), COMPOSE_PROJECT_NAME=args.project, DEBUG_SUBNET=str(subnet), GATEWAY_CLIENT_PORT=str(args.gateway_client_port), GATEWAY_PORT=str(args.gateway_port), GATE_PORT=str(args.gate_port), BATTLE_PORT=str(args.battle_port), KAFKA_COMMAND_TOPIC_GENERATION=str(base["Kafka"]["CommandTopicGeneration"]), KAFKA_COMMAND_TOPIC_PARTITIONS=str(base["Kafka"]["CommandTopicPartitions"]))
     for service, host_number in SERVICE_IP_OFFSETS.items():
         environment[f"{service.upper()}_IP"] = str(subnet.network_address + host_number)
     (output / ".env").write_text("# 仅用于本机独立开发栈；不要输出、上传或加入版本控制。\n" + "".join(f"{key}={value}\n" for key, value in sorted(environment.items())), encoding="utf-8")

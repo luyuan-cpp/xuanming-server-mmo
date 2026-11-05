@@ -2,12 +2,12 @@
 
 #include <optional>
 #include <string>
+#include "core/network/grpc_client_call.h"
 #include "entt/src/entt/entity/registry.hpp"
 #include "type_define/type_define.h"
 #include "core/utils/id/node_id_generator.h"
 #include <utils/id/snow_flake.h>
 
-constexpr char kSessionBinMetaKey[] = "x-session-detail-bin";
 using SessionIdGenerator = TransientNodeCompositeIdGenerator<uint32_t, kNodeBits>;
 
 void ParseIpPort(const std::string &input, std::string &ip, uint16_t &port);

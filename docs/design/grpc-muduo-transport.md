@@ -122,7 +122,7 @@ CreateScene、DestroyScene 等需要明确应答与截止的控制调用走 unar
 - 消息:1 字节压缩标志(恒 0)+ 4 字节大端长度 + protobuf;空消息也有 5 字节前缀。请求上限默认 4 MiB(Go 服务端
   `maxReceiveMessageSize` 默认值),超出本地直接 `RESOURCE_EXHAUSTED`,不发出。
 
-### 4.2 metadata 的两层 base64(不要「优化」)
+### 4.2 SessionDetails 的两层 base64
 
 ```
 SessionDetails 原始字节 raw
@@ -133,7 +133,8 @@ SessionDetails 原始字节 raw
 ```
 
 - 传输层对 `-bin` 键**只加 / 解一层**;解码同时接受有无 padding,并按逗号拆分重复值(规范要求)。
-- 应用层值仍由调用方(gate)按旧客户端的方式编码,传输层不知道 SessionDetails 是什么。
+- 仅 `x-session-detail-bin` 由生成客户端或 gate 路由转发按旧契约额外应用编码；其他 metadata 保持调用方原值，传输层不知道 SessionDetails 是什么。
+- 2026-11-05：`x-caller-*` ASCII 认证头必须逐字节发送，不能套用 SessionDetails 的额外 Base64；其他二进制头只有传输层的一层编码。真实生成客户端回环用例覆盖这三类字节契约。
 - 非 `-bin` 键的值必须是可打印 ASCII(0x20–0x7E),否则本地以 `INTERNAL` 失败。
 - 自定义键不得以 `grpc-` 开头、不得是伪头;路由服按 `x-` 前缀整体透传,新实现**不得私自添加 `x-` 键**。
 
@@ -532,7 +533,7 @@ EtcdHelper(唯一出口,EtcdManager 的 keepalive 也收进来)
 - **调用状态不进 ECS**:请求副本、发出的 metadata 原值、done 放在 `shared_ptr` 里,随完成回调走;不再有对象池、tag、
   `GrpcClientRuntime` 计数。本地拒绝(实体无通道 / 序列化失败)经 `queueInLoop` 延后投递,保持「永不在 Send 栈内回调」。
 - **线上字节不变**:`:path = "/<proto package>.<Service>/<Method>"`(无 package 时 `/<Service>/<Method>`,battle_node)由模板直接拼;
-  metadata 仍是应用层先 `Base64Encode` 一层、`-bin` 键再由传输层编一层(§4.2);截止时间按 steady_clock、线上 `grpc-timeout`。
+  SessionDetails metadata 仍是应用层先 `Base64Encode` 一层、再由传输层编一层；其他 metadata 按 §4.2 保留原值或仅做二进制传输编码。截止时间按 steady_clock、线上 `grpc-timeout`。
   应答解析失败报 INTERNAL(与官方客户端一致)。
 - **流式方法不生成客户端**:全仓只有 etcd 的 Watch / LeaseKeepAlive,已由 `MuduoEtcdTransport` 手写。为不打断
   `gRpcMethodRegistry` 的通用 sender,流式方法仍生成三个旧 Send 重载,调用即记 ERROR 拒绝;纯服务端流同样处理

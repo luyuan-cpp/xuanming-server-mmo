@@ -20085,3 +20085,40 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 
 - 按用户要求，将讨论结论补入 `docs/design/aoi_priority_design_zh.md` 的「广播函数的提取取舍」：保留已被普通移动和瞬移清理复用的外层函数，创建与销毁两个短分支暂不继续提取；控制流相似不等于同一条业务知识，不为假想特殊化增加通用组包抽象。
 - 记录后续拆分条件：独立职责或变化原因、细节遮住主流程、真实调用方复用；分别提取私有函数，并保留既有投递契约。仅修改现有文档并追加本条，无代码或协议变化，未重复构建和测试。Java 无新增功能或契约变更，无需同步代码或 PARITY 功能行；未提交。
+### 2026-11-05 Codex：Docker Debug SDK 封存与控制台编码停点
+
+- 用户在本聊天将启动条件改为「等现有构建结束，以最新源码开始」，并明确同意修正 Windows 长路径辅助脚本后重跑。原 Windows game.sln 已结束。当前来源 HEAD 372caca25620030f6f447aed7a4fb19abe52afac，保留其他会话提交及子模块脏状态。
+- 独立 SDK schema 2 输入封存结果 passed=true，共 38195 份（通用守卫 25298、独立 Protobuf/Abseil/BoringSSL 12897），清单 SHA256 66BDECA3215464C36BDB4DC792AD969F7FCAB77A4897564DB3090D425CF3EC91。实际宿主、封存副本及重新枚举均相等。原件位于 build/verification/docker-debug-refresh-20261104-r2/，旧 r1 双重长路径错误保留。
+- prepare 命令最后输出中文时遭遇 CP1252 UnicodeEncodeError，原生退出 1。sdk-snapshot-result.json 与 sdk-prepare-failure.json 分别记录封存通过和命令失败，两者均保留。单独的 python -X utf8 控制台检查退出 0。按 AGENTS.md §10.2 等用户决定后，可用进程级 UTF-8 从 SDK build 阶段接续，不重新封存或改系统环境。
+- 本聊天仅准备了 debug-compile-only 依赖构建配置，zlib 安装戳明确 ctest=0，hiredis 仅编库；独立 SDK 安装核验脚本补齐各依赖来源戳及 BoringSSL/curl/librdkafka 闭包复算。尚未构建或登记新 SDK 镜像，未重建业务镜像、未部署或进行本轮断点/登录验收，未运行第三方测试，未提交或推送。
+
+### 2026-11-05 Codex：Docker Debug SDK 以 UTF-8 接续编译
+
+- 用户在本聊天明确要求「你编译啊」，已按进程级 UTF-8 接续已封存来源。本轮 SDK build 已启动，BUILD_JOBS=1、SDK_BUILD_PROFILE=debug-compile-only；日志 build/verification/docker-debug-refresh-20261104-r2/sdk-build.log。旧封存成功与控制台编码退出记录均保留，未重跑 prepare。
+- 当前仅执行 Linux SDK 构建，尚无构建成功、安装资格或新 pin 声明。后续阶段串行执行。部署前核验最新完整生成、全部来源首尾与独立 SDK 安装戳；仍保留现有数据及本机其他服务器。
+- 必要开发入口配套已补 db-migrate 独立重编/一次性入口、player-inbox F5 入口及可配置客户端 HTTP 宿主端口，并使统一重编入口和子 Python 使用 UTF-8；目前仅完成语法/JSON/CLI 与差异检查，业务构建和真实验收待后续。
+
+### 2026-11-05 Codex：电脑重启后 SDK 核验通过，协议依赖检查停点
+
+- 用户在本聊天明确要求「电脑重启了继续」。只读确认本次 Windows 启动为 2026-11-05 04:10:40 美东，Docker desktop-linux 可连接；本项目旧容器仍停止，其他本机服务由其他窗口恢复，未停止或修改它们。重启前 SDK 构建结果 passed=true、镜像 sha256:3b01b5115dd9f2792eb1bdfb8d139943a3b92255759bc8e40b4751e201ad4565 仍存在，无需重编依赖。
+- 旧 sdk-qualify-failure.json 的空错误早于本次重启约17分钟，异常种类无法从原记录确定，不能归因于重启。原件保留。新接续承载保存完整异常类型、真实退出码和执行日志，不覆盖旧失败。
+- SDK 安装核验及两次38195份宿主/封存来源复核实际通过；独立 Protobuf/Abseil/BoringSSL、muduo overlay、zlib/hiredis/curl/librdkafka/yaml-cpp/nghttp2 安装戳、静态产物和共享链接闭包核对通过，官方 C++ gRPC 退休产物不存在。正式 schema 2 守卫认可后，已登记不可变 pin local/xuanming-independent-sdk:pin-3b01b5115dd9f2792eb1bdfb8d139943a3b92255759bc8e40b4751e201ad4565。sdk-install-result.json、sdk-qualify-resume-result.json 与 sdk-qualify-resume-invocation.json 均 passed=true，实际退出0；未运行第三方测试。
+- 完整 no-unity 生成前已备份输出及26个原守护文件，并补齐 go/db/data 与 robot/vendor/proto 全树的备份范围。正式协议工具尚未构建：前置 go list -m -json all 在 GOPROXY=off 下退出1。只读错误投影定位6项缺失缓存/元数据：github.com/golang/protobuf@v1.5.0、github.com/stretchr/testify@v1.8.1、golang.org/x/mod@v0.33.0、golang.org/x/sync@v0.20.0、golang.org/x/tools@v0.42.0、gopkg.in/check.v1@v0.0.0-20161208181325-20d25e280405；不将依赖检查当作正式生成或第三方测试。失败证据及完整输出备份位于 build/verification/docker-debug-refresh-20261104-r2/protocol-refresh/run-20261105T093711.164743Z-adfb9335/。
+- 按 AGENTS.md §10.2 保留失败并等待决定，不自动重试。C++/Go/Java 业务镜像尚未重建或部署，本轮真实断点和双客户端进场尚未验收；旧 SDK 及旧成功记录不冒充当前业务结果。现有数据、随机开发密钥及无关容器均保留，未提交或推送；独立 Java 版无本轮业务修改。
+
+### 2026-11-05 Codex：按用户要求复用另一窗口最新生成结果，启动 Docker Linux Debug
+
+- 用户明确要求「不用锁定了，就用人家编译的」，本聊天不再为新增的离线全模块采集重复构建协议工具或要求补齐其6项缓存。旧前置失败原件保留，不反签通过；改为复用另一窗口已实际完成的正式生成结果。
+- 只读核「双区恢复与剩余 3 项真库联验」：最终 proto-gen-build 与 no-unity 完整 proto-gen-run 命令真实退出0，最终生成日志 grpc-metadata-generator-run.log 于 2026-11-05 08:10:12Z 完成并含 mail/rank 后钩子；生成器工具08:08:24Z、模板08:07:28Z。三个 Windows Debug节点最终构建实际退出均0。该窗口本次重启后在恢复和验收本机服务器，不是另有正在执行的 C++ 编译；本聊天没有向其发消息或停止服务。
+- Windows .exe 不可直接作为 Linux 容器程序。本聊天直接使用当前共享的生成代码、现有工具与已经完成核验的 Linux SDK，执行 python -X utf8 -B tools/scripts/rebuild_docker_debug.py cpp --build-only --jobs 1；本轮证据 build/verification/docker-rebuild-cpp-20261105T094420.901766Z/。只重建 Docker 所需 Linux Debug，业务镜像尚无成功结论，未部署。
+- 派生配置已从最新源更新，现有开发密钥及镜像键逐项保留，实际结果 config-prepare-current-result.json passed=true。宿主8081正由另一窗口Java网关使用；本栈选择18085/18086，Gate28000、Battle28010，实际端口预检空闲。不清空业务数据、不停止其他服务。构建首尾源码一致性检查继续用于阻止并发源码混用，不把历史快照替代用户选择的最新源。
+
+### 2026-11-05 Gate 原身份传递、重启重新认证与 Java 阻塞修复
+
+- login 在入场时捕获原认证账号、owner_revision、连接 incarnation，经内部 BindSessionEvent 交给 Gate；Gate 分离认证原件和场景路由版本，排队请求在发送前复核原绑定。在线 Go 域通过 shared/callerauth 验签后复用原账号，不为每条消息读取登录 Redis；原账号与请求身份不一致、签名篡改、旧连接与缺钥均拒绝。原业务 role_fence 提交校验保留，客户端契约未改变。
+- 真连接测试发现直连模式的生成 gRPC 客户端对 ASCII 认证头也做了 Base64。先用真实生成客户端和 muduo_grpc 回环复现，再将生成模板改为仅对历史 x-session-detail-bin 保留额外应用编码，并正式 no-unity 重生成。元数据键收口到轻量调用契约，未手改生成产物。RPC 工程 287 项通过，2 项既有禁用性能基准未运行；此前完整依赖闭包后的身份/路由测试 225/225。Gate、Scene、Battle 最终串行构建全部通过。
+- Go shared/login/chat/friend/guild/trade/match/mail/rank/client_rpc_router 的测试与 vet 通过，9 个服务最终程序已构建。PowerShell 启动器 30/30、身份环境注入 3/3、k8s 部署合同 283/283；既有 lobby_authority_render 的 AssetOpsOn 夹具不一致仍失败，未改断言或隐藏。
+- Java 独立仓修复 Windows 控制台 UTF-8、旧 GM reserved 墓碑测试，并让已绑角色的 SessionContext 使用原 ownerAccount。game-gate 348/348，discovery 224 通过/134 条件跳过，本地真 TiDB AuthorityPoolTiDbTest 4/4，reactor BUILD SUCCESS。真实夹具证据不是全系列 SQL 资格续签或双区 8/8。
+- 电脑重启前出现本机 Out Of Memory 与登录 2020，失败记录保留。用户重启后沿用现有数据和已构建程序恢复：冷 Kafka 首次消费遇协调器未就绪，确认内部偏移主题分区就绪后，以新授权接续。最终真实协议测试完成登录进场、只删除独立测试连接的登录键后 PVE、Gate 换 PID/UUID 后未登录直接进场拒绝、重新登录同角色并再次 PVE；两场均等待 Scene 持久结算终局，直连回合消息实测 9/3，测试退出 0。外层原先错误固定 10 回合的检查已按原冒烟契约修正，保留原记录并重新跑完整链。
+- 本机 10001 被 360Safe 占用，最终验收使用空闲 10000/10002，等待强停后旧 Gate 的 180 秒发现租约自然退出并核对真实网关分配；未停止安全软件或删除租约。已恢复 router 模式，现 Gate 入口为网关分配的 127.0.0.1:10002，14 个 Go 服务监听、网关 UP。客户端无需因本轮修改而升级，但须按既有流程重新登录；未实现 UI 自动重连，也未验收生产无等待灰度。
+- 审核说明见 docs/handoff/gate-auth-role-fence-review-20261104.md；本轮公开收据、完整代码补丁和原五项交接包位于 build/verification/enter-game-20261105-build-r1。补丁固定 C++ 01d886679 与 Java 995f92ce 基线，覆盖期间由其他窗口提交的本任务改动，包含 5 个迁移旧文件删除，排除 AOI 与 Docker SDK 无关改动。两仓补丁正反向检查通过，真实索引未变。本任务未执行 commit/push；未新跑压测或宣称历史全部系列通过。

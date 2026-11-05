@@ -140,6 +140,8 @@ docker --context desktop-linux compose --env-file build/docker-debug-current/.en
 
 准备程序从当前十份源配置派生容器配置，随机密钥仅写入被 Git 忽略的 `build/docker-debug-current/`，再次执行保留原密钥。不要打印、上传或提交展开后的 Compose、`.env` 和带口令的派生配置。
 
+宿主机已有服务器占用 HTTP 端口时，用 `--gateway-client-port` 指定客户端 HTTP 端口，用 `--gateway-port` 指定附加 HTTP 端口。两者与 Gate、Battle 的宿主端口必须互不相同；重新准备时沿用本轮选择的参数。调试客户端和冒烟工具使用所选端口作为网关地址。
+
 首轮 C++ 调试镜像通过 `deploy/debug/Dockerfile` 继承同一次构建的运行镜像与 builder 镜像，增加容器内 GDB，并把对应的分离符号放到 `/app/bin/`；日常重编改用下节的 `Dockerfile.cpp` 与统一入口。三个节点通过 `SYS_PTRACE` 支持附加，不开放 SSH 或调试 TCP 端口。本节启停命令使用 `.env` 记录的本地调试镜像，重编入口会更新相应引用。各服务镜像成功构建后，在仓库根执行：
 
 ```powershell
@@ -157,7 +159,7 @@ docker @dc stop
 
 本轮配置已经准备好，日常启停不必重跑准备程序。修改 C++ 源码后须重新构建镜像并重建对应容器，再附加调试；仅重启原容器不会更新二进制。
 
-本机客户端默认 HTTP 入口为 `http://127.0.0.1:8081`，同一网关保留 `http://127.0.0.1:18081` 供本轮已有工具使用（该附加端口可用 `GATEWAY_PORT` 调整）。`GET /api/server-list` 正常返回 `zones` 数组；本轮可选区服为 `zone-1`。如果客户端未设置过网关地址，它使用 `8081`，因此 Docker 必须映射这个端口。配置准备程序将 `8081` 保留给 HTTP，Gate、Battle 不可使用该端口。
+本机客户端默认 HTTP 入口为 `http://127.0.0.1:8081`，同一网关默认另映射 `http://127.0.0.1:18081` 供工具使用。两个宿主端口分别由 `GATEWAY_CLIENT_PORT`、`GATEWAY_PORT` 控制；已有本机服务占用默认端口时，准备配置时指定空闲端口，并将客户端与冒烟工具的网关地址改为对应入口。`GET /api/server-list` 正常返回 `zones` 数组；本栈可选区服为 `zone-1`。HTTP、Gate、Battle 的宿主端口必须互不相同。
 
 Gate 入口为 `127.0.0.1:28000`、Battle 为 `127.0.0.1:28010`，通过 `CLIENT_ENDPOINT_*` 发布给客户端；内部 `NODE_IP` 仍为容器地址。Scene 与 gRPC 不发布到宿主机。
 
@@ -186,7 +188,10 @@ python tools/scripts/rebuild_docker_debug.py cpp
 
 # 只更新 Go 登录服；共享 Go 模块修改后应列出全部受影响服务。
 python tools/scripts/rebuild_docker_debug.py go --services login
-python tools/scripts/rebuild_docker_debug.py go --services login,db,data-service,scene-manager,player-locator,client-rpc-router,match
+python tools/scripts/rebuild_docker_debug.py go --services login,db,data-service,scene-manager,player-locator,client-rpc-router,match,player-inbox
+
+# 同批更新写者工具与独立数据库迁移镜像；下一次完整启动使用它们。
+python tools/scripts/rebuild_docker_debug.py go --services sql-boot,db-migrate
 
 # Java 网关：离线 Maven 测试、重新打包并更新容器。
 python tools/scripts/rebuild_docker_debug.py java
@@ -207,6 +212,7 @@ VS Code 的“终端 → 运行任务”中已有同名“Docker：重编并更�
 | player-locator | Docker：附加 Go player-locator | 2349 |
 | client-rpc-router | Docker：附加 Go client-rpc-router | 2350 |
 | match | Docker：附加 Go match | 2351 |
+| player-inbox | Docker：附加 Go player-inbox | 2352 |
 | gateway | Docker：附加 Java Gateway | 5005 |
 
 C++ 新入口用实际 `Debug` 构建，并核 core 与三个节点的最终编译参数；原 `debug-20261020` 镜像的应用源码虽然与本地一致，参数仍包含后置 `-O2`，会出现跳行和局部变量不可见。新的节点、分离符号、SDK 共享库与源码清单来自同批构建。对象缓存按精确 SDK 与 Debug 隔离；SDK 源码或锁定输入变化时须先更新 SDK，不能混用旧依赖。

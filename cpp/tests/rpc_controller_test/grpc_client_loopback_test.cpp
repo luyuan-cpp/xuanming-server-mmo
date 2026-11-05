@@ -120,6 +120,7 @@ public:
     Mode mode{Mode::kReply};
     int dispatched{0};
     int businessRuns{0};
+    muduo_grpc::Metadata receivedMetadata;
     std::vector<std::shared_ptr<GetPlayerHomeZoneCall>> heldBeforeBusiness;
     std::vector<muduo_grpc::ServerCall> heldAfterBusinessStarted;
 
@@ -127,6 +128,7 @@ private:
     void Dispatch(muduo_grpc::ServerCall serverCall, std::string_view requestBytes)
     {
         ++dispatched;
+        receivedMetadata = serverCall.metadata();
         const auto call = GetPlayerHomeZoneCall::Create(
             std::move(serverCall),
             [this](const GetPlayerHomeZoneRequest *request, GetPlayerHomeZoneResponse *response)
@@ -230,14 +232,16 @@ protected:
     }
 
     // 在 loop 任务里发起一次带 done 的调用(Send 只在 loop 线程上调用);done 只捕获 observed。
-    void SendInLoop(const std::shared_ptr<Observed> &observed, uint64_t playerId, std::chrono::milliseconds deadline)
+    void SendInLoop(const std::shared_ptr<Observed> &observed, uint64_t playerId, std::chrono::milliseconds deadline,
+                    GrpcSentMetadata metadata = {})
     {
-        loop_.queueInLoop([this, observed, playerId, deadline]
+        loop_.queueInLoop([this, observed, playerId, deadline, metadata = std::move(metadata)]
         {
             GetPlayerHomeZoneRequest request;
             request.set_player_id(playerId);
             GrpcCallOptions options;
             options.deadline = deadline;
+            options.metadata = metadata;
             data_service::SendDataServiceGetPlayerHomeZone(
                 registry_, nodeEntity_, request,
                 [observed](const GrpcCallOutcome &outcome, const GetPlayerHomeZoneResponse *reply)
@@ -264,6 +268,29 @@ protected:
     entt::entity nodeEntity_{entt::null};
     uint16_t port_{0};
 };
+
+// ASCII 认证头必须逐字节保留;仅历史 SessionMD 额外应用编码,其他二进制头只走传输编码。
+TEST_F(GrpcClientLoopbackTest, AuthenticationMetadataPreservesWireContract)
+{
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 42, kLiveness,
+               {{"x-caller-service", "gate"},
+                {"x-caller-signature", "0123456789abcdef"},
+                {"x-session-detail-bin", "session"},
+                {"x-test-bin", std::string("\0\xff", 2)}});
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
+    for (const auto& expected : GrpcMetadata{
+             {"x-caller-service", "gate"},
+             {"x-caller-signature", "0123456789abcdef"},
+             {"x-session-detail-bin", "c2Vzc2lvbg=="},
+             {"x-test-bin", std::string("\0\xff", 2)}})
+    {
+        const auto* actual = FindGrpcMetadata(service_.receivedMetadata, expected.first);
+        ASSERT_NE(actual, nullptr) << expected.first;
+        EXPECT_EQ(*actual, expected.second) << expected.first;
+    }
+}
 
 // 同步方法体:done 以 OK 恰好一次,应答字段来自业务;服务端在途计数归零。
 TEST_F(GrpcClientLoopbackTest, PerCallDoneSucceedsExactlyOnce)

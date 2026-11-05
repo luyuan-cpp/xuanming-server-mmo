@@ -49,6 +49,8 @@ pwsh -NoProfile -File tools/scripts/start_game.ps1 -JavaOnly -JavaInstancePlanPa
 
 在仓库根执行 `python tools/scripts/prepare_docker_debug.py`，从当前源配置派生容器配置、初始化 SQL 与 topic 契约，并复制写者注册步骤用的脚本和角色模板，输出到 Git 忽略的 `build/docker-debug-current/`。需要本机 Python、PyYAML 和运行中的 Docker；脚本只读检查现有 Docker 子网，不构建、不启动容器、不删除数据。首次生成随机密钥，后续保留原值，不把密钥写进受管文件或输出。
 
+HTTP 默认映射宿主 8081 与 18081。已有其他本机服务器占用时，分别通过 `--gateway-client-port`、`--gateway-port` 选择空闲端口，保留原有服务。两项参数连同 Gate、Battle 端口一起校验互异，调试客户端使用实际选定的 HTTP 地址。
+
 预先用当前源码构建镜像后，运行 `docker compose --env-file build/docker-debug-current/.env -f deploy/debug/compose.game.yml -f deploy/debug/compose.debug.yml up -d`。镜像构建沿用 `deploy/k8s/Dockerfile.cpp`、`Dockerfile.go-svc`（上下文 `go/`、命名上下文 `tables=generated/tables`）及 `Dockerfile.java-svc`；C++ 调试层见 `deploy/debug/Dockerfile`。Compose 禁止自动拉取，初始化任务成功后才启动 16 个常驻容器。
 
 写者注册步骤用单独的镜像（pwsh、mysql 客户端、`writer_authority`），首次要构建。基础镜像只构建一次，`writer_authority` 变了只跑第二行：
@@ -57,6 +59,8 @@ pwsh -NoProfile -File tools/scripts/start_game.ps1 -JavaOnly -JavaInstancePlanPa
 docker --context desktop-linux build -f deploy/debug/Dockerfile.sql-boot -t local/mmorpg-sql-boot:debug-20261031 deploy/debug
 python tools/scripts/rebuild_docker_debug.py go --services sql-boot
 ```
+
+`db-migrate` 使用独立的 `go/db/cmd/migrate` 入口。数据库迁移工具变更后执行 `python tools/scripts/rebuild_docker_debug.py go --services db-migrate`，更新 `DB_MIGRATE_IMAGE`。这是一次性任务，重编只登记新镜像，下一次完整启动时再执行迁移。
 
 `player-inbox` 的运行镜像同样首次要构建一次，之后重编只跑第二行（迁移任务用同一个镜像）。已有 `build/docker-debug-current` 时先重跑一次 `prepare_docker_debug.py`，补上 `player_inbox` 的配置和 `PLAYER_INBOX_IP`：
 

@@ -56,8 +56,9 @@ void StartClientPlayerJubaozhaiBrowseListingsCall(entt::registry& registry, entt
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -143,8 +144,9 @@ void StartClientPlayerJubaozhaiGetListingDetailCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -230,8 +232,9 @@ void StartClientPlayerJubaozhaiSetFavoriteCall(entt::registry& registry, entt::e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -317,8 +320,9 @@ void StartClientPlayerJubaozhaiGetMyShelfCall(entt::registry& registry, entt::en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -404,8 +408,9 @@ void StartClientPlayerJubaozhaiListOfficialSkusCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -491,8 +496,9 @@ void StartClientPlayerJubaozhaiCreateOfficialOrderCall(entt::registry& registry,
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -578,8 +584,9 @@ void StartClientPlayerJubaozhaiGetCommerceOrderCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -665,8 +672,9 @@ void StartClientPlayerJubaozhaiCancelCommerceOrderCall(entt::registry& registry,
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -752,8 +760,9 @@ void StartClientPlayerJubaozhaiListCommerceOrdersCall(entt::registry& registry, 
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -839,8 +848,9 @@ void StartClientPlayerJubaozhaiCreatePlayerTradeCall(entt::registry& registry, e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -926,8 +936,9 @@ void StartClientPlayerJubaozhaiConfirmPlayerTradeCall(entt::registry& registry, 
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1013,8 +1024,9 @@ void StartClientPlayerJubaozhaiCreateConsignmentCall(entt::registry& registry, e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1100,8 +1112,9 @@ void StartClientPlayerJubaozhaiBuyConsignmentCall(entt::registry& registry, entt
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1187,8 +1200,9 @@ void StartClientPlayerJubaozhaiCancelConsignmentCall(entt::registry& registry, e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1274,8 +1288,9 @@ void StartClientPlayerJubaozhaiPlaceMarketOrderCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1361,8 +1376,9 @@ void StartClientPlayerJubaozhaiCancelMarketOrderCall(entt::registry& registry, e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1448,8 +1464,9 @@ void StartClientPlayerJubaozhaiListMarketOrdersCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1535,8 +1552,9 @@ void StartClientPlayerJubaozhaiGetMarketDepthCall(entt::registry& registry, entt
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1622,8 +1640,9 @@ void StartClientPlayerJubaozhaiCreateAuctionLotCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1709,8 +1728,9 @@ void StartClientPlayerJubaozhaiPlaceAuctionBidCall(entt::registry& registry, ent
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1796,8 +1816,9 @@ void StartClientPlayerJubaozhaiGetAuctionLotCall(entt::registry& registry, entt:
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1883,8 +1904,9 @@ void StartClientPlayerJubaozhaiCancelAuctionLotCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -1970,8 +1992,9 @@ void StartClientPlayerJubaozhaiBrowseCommerceOffersCall(entt::registry& registry
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2057,8 +2080,9 @@ void StartClientPlayerJubaozhaiListTradeMarketsCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2144,8 +2168,9 @@ void StartClientPlayerJubaozhaiCreateRmbConsignmentCall(entt::registry& registry
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2231,8 +2256,9 @@ void StartClientPlayerJubaozhaiGetRmbConsignmentCall(entt::registry& registry, e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2318,8 +2344,9 @@ void StartClientPlayerJubaozhaiListRmbConsignmentsCall(entt::registry& registry,
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2405,8 +2432,9 @@ void StartClientPlayerJubaozhaiBuyRmbConsignmentCall(entt::registry& registry, e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2492,8 +2520,9 @@ void StartClientPlayerJubaozhaiCancelRmbConsignmentCall(entt::registry& registry
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2579,8 +2608,9 @@ void StartClientPlayerJubaozhaiGetRmbOrderCall(entt::registry& registry, entt::e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2666,8 +2696,9 @@ void StartClientPlayerJubaozhaiListRmbOrdersCall(entt::registry& registry, entt:
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2753,8 +2784,9 @@ void StartClientPlayerJubaozhaiCancelRmbOrderCall(entt::registry& registry, entt
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2840,8 +2872,9 @@ void StartClientPlayerJubaozhaiListSellerIncomesCall(entt::registry& registry, e
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -2927,8 +2960,9 @@ void StartClientPlayerJubaozhaiCreateWithdrawalCall(entt::registry& registry, en
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
@@ -3014,8 +3048,9 @@ void StartClientPlayerJubaozhaiGetWithdrawalCall(entt::registry& registry, entt:
     }
     unaryRequest.metadata.reserve(metadata.size());
     for (const auto& [key, value] : metadata) {
-        // Go 侧依赖这层应用编码;-bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, Base64Encode(value));
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
     }
     unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
     channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {

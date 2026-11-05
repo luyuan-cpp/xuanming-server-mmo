@@ -16,7 +16,7 @@ import sys
 REPO = Path(__file__).resolve().parents[2]
 STATE = REPO / "build/docker-debug-current"
 CPP = ("gate", "scene", "battle")
-GO = ("login", "db", "data-service", "scene-manager", "player-locator", "client-rpc-router", "match", "player-inbox", "sql-boot")
+GO = ("login", "db", "data-service", "scene-manager", "player-locator", "client-rpc-router", "match", "player-inbox", "sql-boot", "db-migrate")
 IMAGE_KEYS = {
     **dict.fromkeys(CPP, "NODE_DEBUG_IMAGE"),
     "login": "LOGIN_IMAGE", "db": "DB_IMAGE", "data-service": "DATA_SERVICE_IMAGE",
@@ -24,11 +24,12 @@ IMAGE_KEYS = {
     "client-rpc-router": "CLIENT_RPC_ROUTER_IMAGE", "match": "MATCH_IMAGE", "player-inbox": "PLAYER_INBOX_IMAGE",
     "gateway": "GATEWAY_IMAGE",
     "sql-boot": "SQL_BOOT_IMAGE",
+    "db-migrate": "DB_MIGRATE_IMAGE",
 }
 # 写者的单次启动授权启动即消费：换容器要连注册步骤（compose 的 <服务>-sql-boot）一起重建，只重建服务会被拒启。
 SQL_WRITERS = ("login", "db", "data-service", "match", "player-inbox", "gateway")
 # 一次性容器没有运行态可核对：重编只换 .env 里的镜像，下一次 up 生效。
-ONE_SHOT = ("sql-boot",)
+ONE_SHOT = ("sql-boot", "db-migrate")
 DOCKER = ["docker", "--context", "desktop-linux"]
 COMPOSE = DOCKER + ["compose", "--env-file", str(STATE / ".env"),
                     "-f", str(REPO / "deploy/debug/compose.game.yml"),
@@ -224,7 +225,7 @@ def main() -> int:
     bases = {s: config["services"][s]["image"] for s in services}
     base_file = root / "base-images.json"
     base_file.write_text(json.dumps(bases, indent=2), encoding="utf-8")
-    command = [sys.executable, str(REPO / f"tools/scripts/build_docker_{args.language}_debug.py"),
+    command = [sys.executable, "-X", "utf8", str(REPO / f"tools/scripts/build_docker_{args.language}_debug.py"),
                "--output", str(root / "build"), "--base-images", str(base_file)]
     if args.language != "java":
         command += ["--services", ",".join(services), "--jobs", str(args.jobs)]
@@ -261,6 +262,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
+        # VS Code 与 API 进程可能继承 CP1252 控制台；提示和子构建统一使用 UTF-8。
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
         raise SystemExit(main())
     except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as error:
         print("已停止：" + str(error), file=sys.stderr)

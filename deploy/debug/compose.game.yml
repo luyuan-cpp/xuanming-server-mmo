@@ -176,6 +176,7 @@ services:
   db-migrate:
     <<: *app
     image: ${DB_MIGRATE_IMAGE:-local/mmorpg-db-migrate:debug-20261020}
+    entrypoint: [/app/service]
     command: [-f, /app/etc/service.yaml, -command, up]
     environment:
       DB_ALLOWED_DATABASES: zone_1_db
@@ -559,8 +560,8 @@ services:
       - gateway-sql-writer:/run/sql-writer:ro
       - gateway-sql-consume:/run/sql-writer/consume
     ports:
-      # 对齐本机客户端默认地址；保留本轮已有的管理／冒烟入口。
-      - 127.0.0.1:8081:8081
+      # 默认对齐客户端地址；可在本机已有其他服务器时分配独立宿主端口。
+      - 127.0.0.1:${GATEWAY_CLIENT_PORT:-8081}:8081
       - 127.0.0.1:${GATEWAY_PORT:-18081}:8081
     depends_on:
       mysql:

@@ -669,6 +669,25 @@
       }
     },
     {
+      "label": "Docker：检查 player-inbox 源码",
+      "type": "process",
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/tools/scripts/rebuild_docker_debug.py",
+        "check",
+        "--services",
+        "player-inbox"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated"
+      }
+    },
+    {
       "label": "Docker：检查 gateway 源码",
       "type": "process",
       "command": "python",
