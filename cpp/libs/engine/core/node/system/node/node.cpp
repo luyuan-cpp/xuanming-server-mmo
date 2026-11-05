@@ -2094,8 +2094,8 @@ void Node::InitLogSystem()
 	const uint32_t configured = tlsNodeConfigManager.GetBaseDeployConfig().log_level();
 	if (!node_log_level::IsValidValue(configured))
 	{
-		FatalStartupConfig("LogLevel", "log_level=" + std::to_string(configured) +
-										   " is not a muduo Logger::LogLevel (0=TRACE .. 5=FATAL)");
+		node_log_level::RejectStartup("log_level=" + std::to_string(configured) +
+		                             " is not a muduo Logger::LogLevel (0=TRACE .. 5=FATAL)");
 	}
 	muduo::Logger::setLogLevel(static_cast<muduo::Logger::LogLevel>(configured));
 }

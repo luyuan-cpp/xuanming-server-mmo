@@ -406,6 +406,8 @@ muduo::Logger::setLogLevel(logLevel);
 > **(2026-10-22 处理进展)** 走的是前一种:`bin/etc/base_deploy_config.yaml` 的注释已改成 muduo 的真实枚举,映射表没做,`InitLogSystem` 仍是裸转换。同批还修了两处同根的错:`k8s_deploy.ps1` 生成的 `node-config` / `battle-node-config` 原先写死 `LogLevel: 1`(K8s 上实际一直是 DEBUG),现改为从 `bin/etc` 镜像(默认 2 = INFO);`release_preflight.ps1` 的 `debug.cpp.loglevel` 原先按「0=DEBUG」把下界设成 1,现改为 2。缺键得 0 = TRACE 的问题未处理(K8s 生成期总会写这一键,本机靠注释提醒)。已落码,未执行,待 Codex 验证;细节见 `docs/PROGRESS.md` 同日条目。
 >
 > **(2026-10-22 后续)** 缺键 / 越界也已处理:`readBaseDeployConfig` 对缺键、空值、非整数、越界(> 5)一律拒启(先写一行 stderr `FATAL LogLevel config: ...` 再 `LOG_FATAL`),`InitLogSystem` 转换前再核一次。映射表仍然没做,数值仍直接是 muduo 枚举;判定在 `cpp/libs/engine/config/node_log_level.h`。未编译,待 Codex 验证;语义取舍见 `gate-connection-admission-control.md` P0-3 的同日说明。
+>
+> **(2026-11-04 更正)** LogLevel 配置拒绝保留同一条 stderr FATAL，刷新后直接返回非零退出状态。两处检查均不再调用 `LOG_FATAL`，以免 Windows Debug 的 `abort()` 对话框阻塞启动；其他崩溃处理不变。
 
 ### 7.10 【已修 09-14】`RpcClient` 析构后连接仍回调进已释放对象(use-after-free)
 

@@ -286,11 +286,12 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 > **（2026-10-22 后半落地：缺键 / 越界校验，未编译，待 Codex 验证）** 即上一条「未做」那一项。
 > - **语义：fail-closed，启动失败，不回落 INFO。** 缺键、YAML 空值（`LogLevel:` / `~`）、序列或映射、非十进制整数（`INFO`、`-1`、`+2`、`2.5`、`0x2`、带空白）、越界（> 5）一律拒启：
->   先同步写一行 stderr `FATAL LogLevel config: ...`（`kubectl logs --previous` 可见，文本带枚举对照），再 `LOG_FATAL`。写法同节点里的 `FatalStartupConfig`。
+>   先同步写入并刷新一行 stderr `FATAL LogLevel config: ...`（`kubectl logs --previous` 可见，文本带枚举对照），再直接以 `EXIT_FAILURE` 退出。
+>   这是网络和外部服务初始化前的配置拒绝。2026-11-04 起不再经过 `LOG_FATAL` / `abort()`，避免 Windows Debug 的运行库弹窗阻塞无人值守启动。
 >   理由：
 >   1. 项目未上线，没有缺这一键的存量部署。仓库里实际的配置来源都写了这一键：`bin/etc`、`k8s_deploy.ps1` 生成的两份 node ConfigMap、`prepare_docker_debug.py` 从 `bin/etc` 复制的 debug 配置；`tools/archived/debug_gate.sh` 写的是 1，也合法。
 >   2. 落 INFO 再打 ERROR，会把「配置生成器漏键」这类错误再藏一次。K8s 写死 `LogLevel: 1` 跑了很久没人发现，就是同一类静默。
->   3. 与同文件 `PersistSchemaRegressionMode`（非法值拒启）、同一启动段的 fd 上限门槛（`FatalStartupConfig`）口径一致。
+>   3. 与同一启动段的 fd 上限门槛一样，配置不满足就拒启；LogLevel 的直接退出不改变其他启动门槛的诊断行为。
 >
 >   代价：手写的本机 yaml 漏了这一键会起不来，按报错补一行即可。滚动发布时配置错的新 Pod 起不来，旧 Pod 不受影响；K8s 生成期已先拦下非法值。
 > - **C++ 侧只核结构（0..5 的整数），不核下界。** 0 / 1（TRACE / DEBUG）仍合法，本机临时调级是正常用法；生产下界 2 是发布策略，仍由 `release_preflight.ps1` 的 `debug.cpp.loglevel` 判。没有引入映射表，数值仍直接是 muduo 枚举。

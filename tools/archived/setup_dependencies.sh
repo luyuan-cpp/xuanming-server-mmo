@@ -16,6 +16,13 @@ cd "$REPO_ROOT"
 CPU=${BUILD_JOBS:-$(nproc 2>/dev/null || echo 4)}
 echo "Build parallelism: $CPU"
 
+SDK_BUILD_PROFILE=${SDK_BUILD_PROFILE:-validated}
+case "$SDK_BUILD_PROFILE" in
+    validated) ZLIB_TESTING=ON; ZLIB_CTEST=1 ;;
+    debug-compile-only) ZLIB_TESTING=OFF; ZLIB_CTEST=0 ;;
+    *) echo "ERROR: unsupported SDK_BUILD_PROFILE: $SDK_BUILD_PROFILE" >&2; exit 2 ;;
+esac
+
 LIB_DIR="$REPO_ROOT/lib"
 mkdir -p "$LIB_DIR"
 
@@ -97,7 +104,7 @@ ZLIB_DIR="$REPO_ROOT/third_party/zlib"
 ZLIB_BUILD="$ZLIB_DIR/.build_linux"
 ZLIB_STAMP_FILE="/usr/local/share/mmorpg-deps/zlib-linux.stamp"
 ZLIB_SOURCE_ID="$(source_identity zlib "$ZLIB_DIR")"
-ZLIB_EXPECTED_STAMP="zlib-linux-v2:source=$ZLIB_SOURCE_ID:shared=1:static=1:ctest=1"
+ZLIB_EXPECTED_STAMP="zlib-linux-v2:source=$ZLIB_SOURCE_ID:shared=1:static=1:ctest=$ZLIB_CTEST"
 ZLIB_INSTALLED_STAMP="$(read_stamp "$ZLIB_STAMP_FILE")"
 ZLIB_ARTIFACTS=(
     "$LIB_DIR/libz.a"
@@ -114,7 +121,7 @@ else
     echo "=== zlib 源码变化或安装不完整，重新构建 ==="
     rm -f "$ZLIB_STAMP_FILE"
     rm -rf "$ZLIB_BUILD"
-    # CMake 不依赖 configure 的 shebang 换行；明确构建两种库并启用全部上游测试。
+    # 两种库都必须构建。仅编译调试 SDK 时，安装戳明确标为未运行上游测试。
     # v1.3.2 的静态 suffix=s 仅由 WIN32 设置，Linux 原生名称仍为 libz.a。
     # 保留静态归档标准名称，不改第三方源码。
     cmake -S "$ZLIB_DIR" -B "$ZLIB_BUILD" \
@@ -124,9 +131,11 @@ else
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DZLIB_BUILD_SHARED=ON \
         -DZLIB_BUILD_STATIC=ON \
-        -DZLIB_BUILD_TESTING=ON
+        -DZLIB_BUILD_TESTING="$ZLIB_TESTING"
     cmake --build "$ZLIB_BUILD" -j "$CPU"
-    ctest --test-dir "$ZLIB_BUILD" --output-on-failure --no-tests=error
+    if [ "$ZLIB_TESTING" = ON ]; then
+        ctest --test-dir "$ZLIB_BUILD" --output-on-failure --no-tests=error
+    fi
     if ! have_all_files "$ZLIB_BUILD/libz.a" "$ZLIB_BUILD/libz.so"; then
         echo "ERROR: zlib 本轮构建未产出所需静态库和共享库。" >&2
         exit 1
@@ -141,7 +150,7 @@ else
     fi
     ldconfig
     write_stamp "$ZLIB_STAMP_FILE" "$ZLIB_EXPECTED_STAMP"
-    echo "zlib 上游测试与安装完成 ($ZLIB_EXPECTED_STAMP)"
+    echo "zlib 安装完成 ($ZLIB_EXPECTED_STAMP)"
 fi
 
 # ── 2. 独立序列化与 TLS SDK ─────────────────────────────────────────
@@ -175,7 +184,12 @@ else
     cd "$HIREDIS_BUILD"
     # 来源可能留有旧对象，升级后不能仅靠文件时间戳判断它们有效。
     make clean
-    make -j"$CPU"
+    if [ "$SDK_BUILD_PROFILE" = validated ]; then
+        make -j"$CPU"
+    else
+        # 显式指定库和元数据目标，避免构建 hiredis-test。
+        make -j"$CPU" dynamic static pkgconfig
+    fi
     cp -f libhiredis.a "$LIB_DIR/"
     make install PREFIX=/usr/local
     ldconfig

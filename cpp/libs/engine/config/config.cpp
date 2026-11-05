@@ -1,5 +1,6 @@
 ﻿#include "config.h"
 #include <cstdio>
+#include <cstdlib>
 #include <yaml-cpp/yaml.h>
 #include <muduo/base/Logging.h>
 #include <node_config_manager.h>
@@ -25,6 +26,14 @@ const char *GetNonEmptyEnv(const char *name)
 // proto3 的 uint32 默认是 0,而 0 的含义是"关闭在线兜底",所以缺键时必须由加载器显式写入,不能依赖 proto 默认。
 constexpr uint32_t kDefaultPlayerInboxPeriodicFetchMinutes = 30;
 } // namespace
+
+[[noreturn]] void node_log_level::RejectStartup(const std::string &reason)
+{
+	std::fprintf(stderr, "FATAL LogLevel config: %s\n", reason.c_str());
+	std::fflush(stderr);
+	// 此时尚未初始化外部服务；配置拒绝无需崩溃转储，避免 abort() 在 Windows Debug 等待弹窗。
+	std::_Exit(EXIT_FAILURE);
+}
 
 bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseConfig)
 {
@@ -61,15 +70,10 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		const auto level = node_log_level::Parse(rawLevel);
 		if (!level)
 		{
-			// 写法同 node.cpp 的 FatalStartupConfig:Node 构造时已切到异步日志,LOG_FATAL 的 abort 可能赶在落盘之前,
-			// Linux 上 kubectl logs 也看不到;先同步写一行 stderr(kubectl logs --previous 可见)。原值是运维手写的数字,不敏感。
 			const std::string reason = "LogLevel must be an integer 0..5 (muduo Logger::LogLevel: 0=TRACE 1=DEBUG 2=INFO 3=WARN 4=ERROR 5=FATAL), got " +
 									   (rawLevel.empty() ? std::string("missing / empty value") : "'" + rawLevel + "'") +
 									   " in " + filename + "; refusing to start (a missing key used to mean 0=TRACE)";
-			std::fprintf(stderr, "FATAL LogLevel config: %s\n", reason.c_str());
-			std::fflush(stderr);
-			LOG_FATAL << "readBaseDeployConfig: " << reason;
-			return false; // LOG_FATAL 已 abort;这一行只为不在 nullopt 上解引用
+			node_log_level::RejectStartup(reason);
 		}
 		baseConfig.set_log_level(*level);
 	}

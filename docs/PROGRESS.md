@@ -20000,3 +20000,54 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 - r28b 只读复核旧业务角色跨宿主的 TiDB 资产连续性，沿用原 5 项通过证据。用新测试角色完成真实延迟提交及旧 Scene 迟到写入演练，随后独立登录并完成 TiDB `player_store` 恢复对账。原业务角色一致，金币为基线 +18，背包与账本一致。正式验收 8/8，worker exit 0，业务 actual 2ADAA9D7、原 72D outer 86A1738B、正式闭合 146F0EDB。
 - 10:25:43 美东时间独立复核宿主 PID 20640 仍在运行。36 个不同应用进程、68 个实际计划监听逐条核对归属、4 个 C++ UID 齐全。证据 `build/verification/stage4-continuation-current-20261102-r1/r28b-redis-domain-continuation-20261104/Main36.r28b.final-confirmation.actual.public.json`（6CA12168）。Java 真库 428/428 的 17 份证据按身份对账，遗漏与重复均为 0。
 - 进度自动化 #20 的查看动作只返回界面卡片，本地任务目录无对应配置。更新接口要求提供既有完整配置，本次未确认暂停。
+
+
+## 2026-11-04 Codex：Java 保序与帮会在线验收续跑仍未达到资源门槛
+
+- 续用 Java 0.1.0-SNAPSHOT / 0477cc0 和已通过的 65 项单测；2360 项快照输入复核零漂移。保留前两轮证据，使用独立 live03 与项目 java-ordering-smoke-20261104-r3。
+- 180 秒内采样 18 次，Windows 可用 1420–3765 MiB，低于 6144 MiB 门槛；Docker 最低可用 11548 MiB，符合整组门槛的采样为 0。脚本在 resource-check 阶段退出 1。
+- 本轮容器、Java 服务及两项在线 smoke 执行数均为 0。C++/Go 对应保序场景与帮会第 11 步已存在，本轮未重跑。证据：build/verification/java-ordering-guild-20261018-011135/live03/verification-summary.json。
+
+## 2026-11-04 Codex：LogLevel 补丁续验，五工程编译、十个测试工程和 K8s 契约通过
+
+- **范围**：续 10-23 的并发 C1041 停点与 10-30 的复核清单。两补丁已在当前主线，不重复应用。等另一轮 game.sln 退出、MSBuild/cl/link 连续 8 秒空闲后，在仓库根用本机 MSBuild Debug/x64 串行 `/m:1 /nr:false /p:CL_MPCount=1` 依次构建 config、core、gate、scene、battle，五条命令原生退出 0，未再出现 C1041；保留工程自带的裸指针静态检查。
+- **C++**：`run_cpp_tests.ps1 -Build -Filter <工程> -LogDir <证据目录>` 逐个执行。client_endpoint_test 70/70，六条新增 LogLevel 用例全部实际通过。九个读 bin/etc 的工程均退出 0，1587 通过、5 跳过、0 失败，无 `FATAL LogLevel config`。分别为 bag 781/783、configuration_table 50/50、cool_down_time 10/10、currency 296/299、kafka_command 52/52、missions 17/17、reward 5/5、skill 76/76、turn_battle_engine 300/300；五条跳过均为未配置真实 Redis 的条件用例。用原始 gtest stdout/stderr 汇总。
+- **K8s 与发布**：`k8s_deploy_contract.tests.ps1` 283/283，三条 LogLevel 契约均通过；`release_common_version.tests.ps1` 21/21。dev `release_preflight.ps1 -NoFailExit` 的 `debug.cpp.loglevel` 为 PASS，整体 14 PASS、9 WARN、6 FAIL；六项是缺镜像标签、gate 口令与一致性、Kafka brokers 与分区匹配、开发口令登录开关，不视为完整发布通过。对 C++ 节点单独执行 `zone-up -DryRun -SkipGoSvc -SkipJavaSvc`，渲染 `LogLevel: 2`，未访问真实集群。
+- **可选负例**：在系统临时目录以已有 gate.exe 的独立副本运行合成缺键配置，stderr 首个 FATAL 为预期的 `FATAL LogLevel config: ... missing / empty value`。进程 20 秒未自行退出，已结束该进程；只确认诊断，不算拒启退出通过，其余负例未重试或继续。GAME_CONFIG_PATH 指向临时目录内不存在文件，避免误放行后连接服务；未改共享 bin/etc。
+- **证据与边界**：`build/verification/loglevel-resume-20261104T161511530Z/summary.json` 与同目录原始日志、命令和退出码。开始与结束 HEAD 均为 `93eba1319`，32 个指定输入在快照窗口内哈希无变化，不宣称全仓冻结。只追加本条，不改代码或配置，不提交、不推送、不打标签。Java 版不适用，Spring Boot 不消费 BaseDeployConfig.log_level，未改 PARITY.md。
+
+
+### 2026-11-04 准备 11 月 5 日本机进游戏测试
+
+- 服务端 Windows Debug x64 串行构建 `game.sln` 退出 0，Gate、Scene、Battle 已同步到 `bin` 并逐个核对摘要。Go 正常构建入口退出 0，生成 14 个服务和 3 个工具。Java authority-jdbc、网关和商城通过 Maven compile，已有网关、商城 JAR 的应用类和内嵌权威库与当前编译目录一致，沿用现有运行包。
+- 客户端以 da911dbb 为基础，恢复工程声明的 Unity 官方 AI Assistant 2.17.0-pre.1 本地包并核对发布摘要。修复队伍 UI 条件分支语法，补齐缺失的匹配入口，沿用 TeamClient 与 BattleClient。Unity 自动更新包锁；368 个贴图导入器和 9 个角色资源索引的自动改写已备份并恢复。
+- Unity 6000.6.0f1 Windows x64 Development 出包成功，包含 Bootstrap 与天墉城，0 错误、505 警告。客户端产物 `D:/luyuan/mmorpg-client/Builds/enter-game-20261105-r4/mmorpg.exe`，约 49 GiB。两处排队提示断言对齐当前文案后，组队和队列 EditMode 复跑 93/93。
+- `start_game.ps1 -CheckOnly -OpenClient -ClientPath <本轮客户端>` 退出 0。验证范围为编译、出包、定向测试和启动前检查，实际进游戏留作本机测试。服务端构建及启动前检查日志位于 `build/verification/enter-game-20261105-build-r1/`，客户端日志位于同级客户端仓的 `Logs/`。
+
+## 2026-11-04 Codex：定位 Windows Debug gate 的 LogLevel 拒启弹窗，14 条负例均取得退出码 3
+
+- 仅诊断与验证，未改源码、系统设置或共享 `bin/etc`。用当前 `bin/gate.exe` 的独立副本、合成 YAML 和临时工作目录复现；游戏配置路径指向临时目录内不存在的文件，防止配置误放行后访问外部服务。
+- **根因**：缺键的 stderr 与 muduo FATAL 已输出；muduo 随后调用 `abort()`。本机 Debug UCRT 的 `abort()` 先报运行时错误再派发 `SIGABRT`。实际在受测 PID 上捕获到 `Microsoft Visual C++ Runtime Library` 对话框，显示 `abort() has been called` 及 Abort / Retry / Ignore。无人处理时独立复现 6 秒超时；选择 Abort 时进程实际以 3 退出。父进程 SetErrorMode 不能阻止该 CRT 对话框。
+- **批量结果**：只对受测 PID 的同一 CRT 对话框选择 Ignore，放行原 `abort()` 流程；缺键、空值、`~`、`[]`、`{}`、`INFO`、`6`、`-1`、`+2`、`2.5`、`0x2`、带首空格、带尾空格、`4294967296`，共 14/14 均先输出对应的 `FATAL LogLevel config`，再实际返回退出码 3，批次无超时、无强杀、无残留。该证据不表示 Windows Debug 无人值守时会自动退出，也未验证 Linux/Release。
+- **证据**：`build/verification/loglevel-exit-20261105T020823659Z/` 的 `gate-smoke-results.json`、`probe-results.json`、`batch-results.json` 及原始 stdout/stderr。前后核对共享两份 YAML 的 SHA256 不变。Java 版不适用，未改 PARITY.md；未提交。
+
+## 2026-11-04 Codex：Java 保序与帮会第 11 步在线验收通过
+
+- Windows 可用内存连续三次超过 6144 MiB，最后一次 6692 MiB；Docker VM 可用 19494 MiB。隔离 Compose 项目 `java-ordering-smoke-20261104-r4` 的 TiDB/Redis 就绪，Java 八个服务和主世界频道就绪。复用 Java 0.1.0-SNAPSHOT / `0477cc0` 已构建 JAR，本轮不重跑此前通过的 65 项单测。
+- `ordering-smoke` 原生退出 0，输出 `ORDERING_SMOKE_OK … rounds=20`；JoinQueue → CancelQueue 20 轮全部保序，帮会 5 轮、好友 5 轮、登录 3 轮的保序检查也通过。
+- `guild` 原生退出 0，第 11 步 8/8：带旧 `expected_guild_id` 退帮返回 14002，B 仍是新帮 H 普通成员且 H 仍有两人；带当前 H 的 ID 退帮成功，随后查帮会返回 14002，H 正常解散。仅有一区，本轮跨区第 4 步按 auto 跳过。
+- 验收脚本退出 0；八个本轮 Java 服务及本轮容器均已停止，日志保留。C++/Go 对应保序场景及帮会第 11 步已存在，本轮未重跑。原始证据：`build/verification/java-ordering-guild-20261018-011135/live04/result.json`、`ordering-smoke.stdout.log`、`guild.stdout.log`。
+
+## 2026-11-04 Codex：非法 LogLevel 同步记录后直接非零退出，无 Windows Debug 弹窗
+
+- `readBaseDeployConfig` 与 `Node::InitLogSystem` 的 LogLevel 守卫共用 `node_log_level::RejectStartup`。同步写入并刷新原 `FATAL LogLevel config` stderr 诊断，随后 `std::_Exit(EXIT_FAILURE)`；配置拒绝发生在外部服务初始化前，不走 `LOG_FATAL`、`abort()` 或崩溃转储。其他启动门槛和崩溃处理不变。设计 P0-3 与事故复盘 §7.9 已同步。
+- **红绿证据**：同一无弹窗交互脚本、合成配置和临时工作目录。旧 Debug gate 缺键输出 FATAL 后 6 秒超时，强杀不计通过；新编译的 Debug gate 全 14 条输出预期 stderr 并自行以 1 退出，无交互、无超时、无强杀，最慢 0.42 秒。共享两份 `bin/etc` YAML SHA256 自旧版复现前至验证结束不变。
+- **构建与回归**：Debug/x64 串行 `/m:1` 构建 config、core、gate、scene、battle，全部原生退出 0；configuration_table_test 50/50、client_endpoint_test 70/70，后者含六条 LogLevel 用例。未在 Linux/Release 重跑。证据：`build/verification/loglevel-no-popup-20261105T021421360Z/` 的 `run.jsonl`、`red/results.json`、`green/results.json` 和原始日志（目录名使用 UTC）。
+- Java 版不适用，不读该配置。未改 PARITY，未提交。
+
+
+### 2026-11-04 本机一区手动进游戏启动尝试
+
+- 确认「运行 Java 冒烟验证」的独立 live04 已结束。保序 20 轮与帮会第 11 步 8/8 通过，本轮 Java 服务及容器已停止。
+- 本机一区启动先遇到 Docker 重名。核对同名 etcd、Redis 和 Kafka 都属于 player-store-r2-infra 后，启动时使用该 Compose 项目。旧 14306 MySQL 容器改名为 mysql-player-store-r2-preserved-5eb8c27f 后保留原容器，新 3306 MySQL 独立启动。MySQL、etcd、Redis 和 Kafka 就绪。
+- 启动停在第 3 步。db 已启动，data_service 的 MySQL 连接池初始化超时，部分事务结束结果未定。之后的只读 MySQL 查询与本机协议握手成功，网关仍未监听，客户端未打开。未重放结果未定的启动操作。证据 build/verification/enter-game-20261105-build-r1/manual-login-20261104-startup-stop.public.json。
