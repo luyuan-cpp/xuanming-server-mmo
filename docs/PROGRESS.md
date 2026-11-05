@@ -20122,3 +20122,10 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 - 电脑重启前出现本机 Out Of Memory 与登录 2020，失败记录保留。用户重启后沿用现有数据和已构建程序恢复：冷 Kafka 首次消费遇协调器未就绪，确认内部偏移主题分区就绪后，以新授权接续。最终真实协议测试完成登录进场、只删除独立测试连接的登录键后 PVE、Gate 换 PID/UUID 后未登录直接进场拒绝、重新登录同角色并再次 PVE；两场均等待 Scene 持久结算终局，直连回合消息实测 9/3，测试退出 0。外层原先错误固定 10 回合的检查已按原冒烟契约修正，保留原记录并重新跑完整链。
 - 本机 10001 被 360Safe 占用，最终验收使用空闲 10000/10002，等待强停后旧 Gate 的 180 秒发现租约自然退出并核对真实网关分配；未停止安全软件或删除租约。已恢复 router 模式，现 Gate 入口为网关分配的 127.0.0.1:10002，14 个 Go 服务监听、网关 UP。客户端无需因本轮修改而升级，但须按既有流程重新登录；未实现 UI 自动重连，也未验收生产无等待灰度。
 - 审核说明见 docs/handoff/gate-auth-role-fence-review-20261104.md；本轮公开收据、完整代码补丁和原五项交接包位于 build/verification/enter-game-20261105-build-r1。补丁固定 C++ 01d886679 与 Java 995f92ce 基线，覆盖期间由其他窗口提交的本任务改动，包含 5 个迁移旧文件删除，排除 AOI 与 Docker SDK 无关改动。两仓补丁正反向检查通过，真实索引未变。本任务未执行 commit/push；未新跑压测或宣称历史全部系列通过。
+
+### 2026-11-05 Codex：最新 Linux C++ Debug 构建成功，剩余镜像串行接续
+
+- 复用另一窗口正式生成后的当前21742份输入，三个Linux节点已同批构建成功，完整SDK与宿主源码首尾检查通过。实际镜像 local/xuanming-node:debug-20261105t094632.267005z，ID sha256:bc15a19dd32999a2e91c011b5d9e9f8ecddbf2997372f15204da4e45c4337dd3；result.json success=true，证据 build/verification/docker-rebuild-cpp-20261105T094420.901766Z/build/。尚未部署，不把Windows编译结果当作本次Linux通过。
+- 当前认证代码要求Gate和Match读取MMORPG_INTERNAL_AUTH_SECRET。Compose两处均补为已有INTERNAL_AUTH_SECRET的映射，与Login同源；只在内存比较，caller-auth-compose-result.json passed=true，未输出或更换密钥。
+- 剩余镜像由 finish_images.py 串行执行：player-inbox仅复用现有Go镜像的系统层，清除旧业务后再包本次Debug程序；SQL启动工具使用正规Dockerfile.sql-boot准备必要容器系统；随后现有GoDebug入口构建8个常驻服务及sql-boot/db-migrate，Java直接复用经业务类/authority依赖/descriptor/行号核对的现有JAR重新包装。player-inbox系统层已实际退出0，其他阶段尚待结果；未并行执行重型构建。
+- 已准备本轮断点脚本：C++使用当前node.cpp的541→542，Go沿用真实Login断点，Java沿用ServerListController并使用本栈HTTP18085；均尚未附加。双客户端仍严格2人、360秒，沿用原功能冒烟与当前密钥脱敏。部署后健康、来源和真实断点/进场尚未验收。
