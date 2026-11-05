@@ -165,7 +165,6 @@ proto/common/asset
 proto/common/base
 proto/common/component
 proto/common/options
-proto/common/rollback
 proto/db
 proto/friend
 proto/gate

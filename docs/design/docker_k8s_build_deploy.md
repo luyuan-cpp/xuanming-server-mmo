@@ -127,9 +127,11 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-build-image `
 
 ## 本机 Docker Desktop 与 VS Code 断点（2026-10-20）
 
-本机完整开发栈入口为 `deploy/debug/compose.game.yml`，调试覆盖为同目录 `compose.debug.yml`。它包含 15 个常驻服务与 3 个初始化任务，使用独立网络及持久卷；不复用已有容器或历史演示数据。只启用登录、建角、主世界进场和战斗所需的服务。
+本机完整开发栈入口为 `deploy/debug/compose.game.yml`，调试覆盖为同目录 `compose.debug.yml`。当前配置包含 16 个常驻服务与 12 个初始化任务，使用独立网络及持久卷；常驻服务为三个 C++ 节点、八个 Go 服务、Java 网关及四个基础设施。只启用登录、建角、主世界进场和战斗所需的服务。
 
 （2026-10-31 补）SQL 写者接了写者授权：每个写者前有一次性注册步骤 `<服务>-sql-boot`，初始化任务相应变多，首次要多构建一个 `local/mmorpg-sql-boot` 镜像；重启写者要连注册步骤一起重建。操作见 [`tools/scripts/README.md`](../../tools/scripts/README.md) 的 prepare_docker_debug.py 一节。
+
+新空数据首次启动时，`kafka-init` 除业务 topic 外还通过正常消费组协调器查询等待内部偏移分区就绪，避免自有服务在冷协调器建立期间提前启动；总预算有界，不消费消息或提交位点。初始化失败会保留具体输出并阻止依赖服务启动。
 
 在仓库根准备配置：
 

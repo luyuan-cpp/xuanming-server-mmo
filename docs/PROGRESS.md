@@ -20176,3 +20176,34 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 - 新独占恢复build、qualify均实际退出0，restore-build.result.json及restore-qualify.result.json passed=true。镜像sha256:5789f627b0ce9080fc2fa78e52f4b5860ab149bf7328cf4806dfe29f8e743095已按完整schema2守卫登记到cpp-toolchain.json；SDK源清单12135aa2bd37d7c2b9429d2c4000d77a603bb4343beb0ab72106abcad86776e3，仍为原38195份来源逐字复核，原r2记录未覆写。安装核验退出0、安装日志SHAa9c09a90af28b87bb34c666266b621e3571c324b01eba59bebd7ec47802d81f9，verify脚本SHA66ad6c0bd3629745764a9fa57f0b91e661f30b4015344361db5a85bd09b171d6。保留独立依赖闭包并核退休官方grpc产物不存在，未运行第三方测试。
 - 根据信息形状/源码审查，已知新空Kafka首次协调器未就绪曾导致自有data_service退出；正给现有kafka-init补有界正常协调器请求与本轮内部偏移分区Leader/ISR检查，未手工建立内部topic或提交位点。当前仅在做自有初始化解析器夹具验证，实际冷启动待部署后核验，不把静态结果当成功。
 - SDK资格通过后已按原正规入口以--jobs1开始最新LinuxC++ Debug重编，本轮目录docker-rebuild-cpp-20261105T124958.188296Z。尚无本次业务构建成功或部署/断点/进场结论，其他重型阶段仍未启动。
+
+
+### 2026-11-05 Codex：新数据冷启动协调器门禁与夹具续验
+
+- 针对原有已实测的冷Kafka首次协调器未就绪退出，现有prepare_docker_debug.py::topic_script在6个业务topic后增加统一90秒单调截止时间：对实际两个审计消费组做正常Describe以触发broker自行引导内部偏移主题，核本轮完整分区集合及Leader/ISR，再复核组协调器。不手工创建内部topic、不加入组、消费或提交/重置位点。仅识别精确组不存在及已知协调器引导瞬态，未知错误/格式拒绝。按本地Kafka4.3.1-rc2对应官方源码补齐Leader:none；未硬写历史50分区。
+- 首轮自有AWK夹具承载漏Docker-i，首个正例因无stdin返回1后立即停止，原r1 result/argv/stdin/stdout/stderr均保留。辅助承载备份另因异步执行顺序触发自身摘要门禁，未覆盖原失败；原承载后来按原摘要留存。用户明确批准补-i并在新目录验证后继续，未把旧失败改为通过。
+- r2仅运行一次，16/16公开CLI形状夹具符合0/1/2预期、命令退出0，覆盖未知错误且native0、组名不符、缺失/重复分区及Leader/ISR未就绪。生产源码首尾SHA2498580cbee74f2f6cf8fb2ea91419609c5502e71220849cfa407be9774f61bc；结果SHA581edeaec71bfe3ea00b0537fc8e5cd7156d08cb2f6274ba9b030ee505c64ad9。仅运行本仓解析器，未执行Kafka命令、服务器或第三方测试；在已核本地Kafka镜像只读command-v确认awk/timeout/grep/sed可用。实际冷启动仍待部署验收。
+- 按18085/18086、28000/28010原端口重新prepare实际退出0，config-after-coordinator-result.json passed=true；现有密码、镜像键和数据批次均保留。生成init-topics.sh SHA865ab22fcaadd239dbb1dfcfe9269f4269e7effd953088329bd0a918fecc1d34。尚未启动新数据栈，C++单任务编译继续，后续重型阶段未并行。
+
+### 2026-11-05 Codex：记录跨服务数据副本与 C++ 协程边界（仅文档）
+
+- 按用户要求新增 `docs/design/scene-external-data-views.md`，以 Scene 读取 Guild 数据为例，记录默认按需读取/可丢弃缓存、必要时的快照/恢复令牌/变更流及伪代码。明确恢复属于数据模块，避免按服务器连接组合扩散业务回调；数据与 cursor 原子提交、重启共同重建，通信 Ready 与视图可用性分开。
+- 同文详细说明标准 C++ 协程的挂起与线程阻塞区别、同步 I/O 包装反例、awaiter 执行过程、恢复线程、期限/取消与对象生命周期。`Task` 等均标为能力占位名，未引入协程框架或修改业务代码。
+- 引用 Microsoft Cache-Aside、Kubernetes List/Watch 与当前 C++ 工作草案；这是通用方案记录与待实施验收条件，不声称当前仓库或 Java 已实现。Java 不涉及本次功能变更，无构建/测试义务；两版后续若实施再按各自契约登记对齐。
+- 使用既有生成器刷新文档索引；仅进行文档、引用与差分核对，不运行构建、单测、服务或压测。
+
+
+### 2026-11-05 Codex：最新 C++ Debug 成功与后续系统层接续
+
+- 最新共享源码21742份已同批Linux Debug构建成功，原生命令退出0，SDK及源码首尾检查通过。镜像local/xuanming-node:debug-20261105t125629.942516z，IDsha256:3d43a887175b4b3d1903512c708be3eaac6981ef8348c739876b0ae5b7b7a7dd；源集合SHAdf3bc2543761d44c989a92f8265d8cb97ee73a1fe276f03a5bc017d7baa376b8，SDK5789对应完整新资格。本轮目录docker-rebuild-cpp-20261105T124958.188296Z/build，旧失败和旧成功均保留，不反签；尚未更新运行镜像键或部署。
+- 随后已启动remaining-images-r2串行接续，显式--restore-inbox-system实际新建系统层成功，当前SQL系统层按正式Dockerfile下载容器内必需依赖；Go10及Java尚待后继，不把系统层成功当业务成功。
+- 只读发现机器人vendor有两份common绑定落后，既有mail/rank后钩子不覆盖这两个域；未重跑已成功的服务端proto生成，也未手改生成文件。以现有go1.27.2、进程级offline/local工具链在robot执行一次正规go mod vendor -o独占暂存，退出0；源proto/go-proto/shared及go.mod/sum首尾不变。真实差异4份：modules.txt、session.pb.go更新，两个无导入者的rollback包pb.go由正规工具移除。
+- 审核4份差异后按精确且已验证的绝对路径交换目录，原完整vendor保留在robot-vendor-sync-r1/previous-vendor；应用退出0，当前源绑定proto128/shared196均相符、原备份摘要一致。未编译或运行机器人；后续以build_robot_current.py在重型服务构建结束后生成当前测试程序，不借旧Oct20二进制。
+- 已准备只读qualify_app_candidates.py用于全部候选部署前两轮源码/资源/Java额外闭包核验；只AST通过，未执行。VSCode12个附加配置与扩展安装/入口元数据实际核过，CPP/Go/Java必需扩展均已安装；未安装工具或在GUI按F5，不把静态/协议证据等同GUI动态激活。
+
+### 2026-11-05 Codex：调试候选资格、测试机器人与部署预检修正
+
+- C++ 三个节点、Go 八个常驻服务及两个工具、Java 网关的候选镜像完成当前源、资源和本地镜像身份核验。Go 使用 Linux Debug，Java 使用与当前闭包对应且含行号表的既有 JAR 重新包装。候选检查不代替运行产物核对。
+- 当前双客户端验收机器人实际编译成功，编译输入 1508 份，proto 绑定 128 份，原机器人产物已单独保留。
+- 首次部署预检在读取容器状态时出错，脚本错误地假定所有挂载都有 Docker 卷名。保留 `local-deploy-r1/result.json`、原脚本和只读复核结果，未更新镜像配置、创建新数据卷或启动容器。
+- 用户发话继续后，修正缺失的挂载字段和健康状态字段读取，实际只读核对 141 个本机容器，其中调试项目 18 个。旧 MySQL 卷仍在，18 个本轮隔离数据卷尚不存在。校验同时区分 Compose 显式命名卷和镜像声明的匿名卷。第二次部署使用独立证据目录 `local-deploy-r2`。

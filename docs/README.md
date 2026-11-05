@@ -87,15 +87,14 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [afk-detection-design.md](design/afk-detection-design.md) — AFK (挂机) Detection Design
 - [agones-scene-node-high-density.md](design/agones-scene-node-high-density.md) — Agones 管理 Scene Node(高密度 GameServer)
 - [aoi_priority_design.md](design/aoi_priority_design.md) — AOI Priority, Capacity & Visibility Design · [EN](design/aoi_priority_design_en.md) · [中文](design/aoi_priority_design_zh.md)
-- [aoi-directed-interest.md](design/aoi-directed-interest.md) — AOI 单向关注与范围外移动同步（待实现）
 - [broadcast-message-size-analysis.md](design/broadcast-message-size-analysis.md) — BroadcastToPlayers 消息体积分析
 - [cross_scene_player_messaging.md](design/cross_scene_player_messaging.md) — Cross-Scene Player Messaging (跨场景玩家消息投递) · [EN](design/cross_scene_player_messaging_en.md) · [中文](design/cross_scene_player_messaging_zh.md)
 - [enter-scene-zone-routing.md](design/enter-scene-zone-routing.md) — EnterScene 选区路由设计
-- [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施，当前不实施）
 - [nav-spawn-fix-2026-09-05.md](design/nav-spawn-fix-2026-09-05.md) — 客户端/服务端导航数据、出生点与位置纠正契约
 - [scene-creation-architecture.md](design/scene-creation-architecture.md) — Scene Creation Architecture
 - [scene-enter-chain-residuals.md](design/scene-enter-chain-residuals.md) — 进场链余项 a–e:踢线、离场、落点、释放与断线上报的身份栅栏
 - [scene-enter-session-fence.md](design/scene-enter-session-fence.md) — 入场会话栅栏:登录代次(login_generation)
+- [scene-external-data-views.md](design/scene-external-data-views.md) — 跨服务数据副本：按需缓存、版本视图与 C++ 协程边界
 - [scene-navmesh-pipeline.md](design/scene-navmesh-pipeline.md) — 场景导航网格管线(Recast 烘焙 + 服务器寻路阻挡校验)
 - [scene-node-threading-model.md](design/scene-node-threading-model.md) — Scene Node 线程归属、帧循环与停机
 - [scene-owner-reentry-barrier.md](design/scene-owner-reentry-barrier.md) — 场景所有权：再入屏障与 owner_epoch
@@ -107,9 +106,8 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
-- [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（决策已定；§15 P1 / P2 落码契约，2026-10-30）
+- [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播（提案）
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
-- [global-match-hierarchical-pools.md](design/global-match-hierarchical-pools.md) — 全服匹配：按模板分池、zone→大区→全服逐级扩大范围、每池单写者（2026-10-24 拍板，分批落码）
 - [pve-team-size-matching.md](design/pve-team-size-matching.md) — PVE 人数档匹配:人越多怪越多
 - [session-extractability-mmo-slg.md](design/session-extractability-mmo-slg.md) — 「战斗抽出去」这套做法能套到哪些玩法:MOBA / MMO / SLG 定谳
 - [team-backfill-matching.md](design/team-backfill-matching.md) — 队伍补位匹配(已组好的队伍进人数档队列凑满 N 人)
@@ -165,9 +163,6 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [landing-recovery-sync-digest.md](design/landing-recovery-sync-digest.md) — 落地恢复：按域版本摘要、场景侧待办唤醒与超窗处置（2026-10-14）
 - [new-player-first-enter-no-cold-read.md](design/new-player-first-enter-no-cold-read.md) — 新号首次进场免冷读:建角时写入 PlayerAllData 种子
 - [player-async-save-loss-windows.md](design/player-async-save-loss-windows.md) — 玩家异步存盘：已修复问题、剩余丢失窗口与修复任务
-- [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展：总体方案（2026-10-30；存盘直接提交 TiDB、关键变化立即存 + 拆出热行、etcd 发号 + 可逆打散、落点目录路由、预算三档、MMO/SLG/MOBA；未落码）
-- [horizontal-scale-logical-db.md](design/horizontal-scale-logical-db.md) — 全层水平扩展规格：逻辑库自治、每库一份写者闸门、角色护栏、目录分片、不停服迁移物理库、多地域（2026-10-31，落码中）
-- [player-save-direct-commit.md](design/player-save-direct-commit.md) — 玩家存盘直接提交 TiDB 的落码规格：`player_store` 表、写权行、判定表、C++ 状态机与分批
 - [player-inbox-service.md](design/player-inbox-service.md) — 玩家持久收件箱服务（player_inbox）设计
 - [player-route-mapping-durability-proposal.md](design/player-route-mapping-durability-proposal.md) — 玩家归属与落点映射持久化:库为真源 + Redis 完整副本 + 就绪标记(已拍板;第 0 ~ 3 批已落码,未验证;2026-10-19 起读方按身份绑定的就绪标记判可信,见 §13)
 - [player-storage-placement.md](design/player-storage-placement.md) — 玩家存储落点(Placement):归属与存储拆分、单玩家搬库、Phase 2 全局库
@@ -257,6 +252,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 未分类
 
 - [account-role-authority.md](design/account-role-authority.md) — 账号角色目录的全局 SQL 权威
+- [aoi-directed-interest.md](design/aoi-directed-interest.md) — AOI 单向关注与范围外同步
 - [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
 - [client-rpc-callback.md](design/client-rpc-callback.md) — 客户端请求自带回调:按请求号认领回包,生成类型化调用桩取代每消息 Handler
 - [configurable-templates.md](design/configurable-templates.md) — 战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）
@@ -264,10 +260,15 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [data-overwrite-rollback-audit-20261018.md](design/data-overwrite-rollback-audit-20261018.md) — 全仓数据问题与覆盖回档审计（2026-10-18）
 - [data-overwrite-rollback-audit-r2-20261019.md](design/data-overwrite-rollback-audit-r2-20261019.md) — 全仓数据问题与覆盖回档审计·第二轮（2026-10-19）
 - [disconnect-reconnect-audit-20261020.md](design/disconnect-reconnect-audit-20261020.md) — 断线重连恢复审计（2026-10-20）
+- [global-match-hierarchical-pools.md](design/global-match-hierarchical-pools.md) — 全服匹配：按模板分池、逐级扩大范围、每池单写者
+- [horizontal-scale-logical-db.md](design/horizontal-scale-logical-db.md) — 全层水平扩展:逻辑库自治、角色护栏、目录分片、不停服迁移、多地域
 - [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
 - [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复)
 - [mall-administration.md](design/mall-administration.md) — 商城后台的受限经济命令
 - [mixed-version-persist-field-protection.md](design/mixed-version-persist-field-protection.md) — 新旧版本混跑时的玩家持久字段保护
+- [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施）
+- [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展:总体方案
+- [player-save-direct-commit.md](design/player-save-direct-commit.md) — 存盘直接提交 TiDB:落码规格
 - [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布客户端契约的合并兼容方案
 - [redis-player-store-cluster.md](design/redis-player-store-cluster.md) — 玩家态 Redis 集群化：物理水平扩展设计
 - [zone-redis-regression-guard-20261022.md](design/zone-redis-regression-guard-20261022.md) — zone Redis 回退防护：「Redis 回退一族」6 条 low 的合并设计
@@ -292,9 +293,9 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [cross-zone-failure-test-runbook.md](ops/cross-zone-failure-test-runbook.md) — 跨 Zone 传送 / 归属交接 失败场景测试 Runbook
 - [db-move-runbook.md](ops/db-move-runbook.md) — 不停服搬逻辑库操作手册
 - [etcd-maintenance-runbook.md](ops/etcd-maintenance-runbook.md) — etcd MVCC 压缩与空间维护 Runbook
-- [id-issuer-runbook.md](ops/id-issuer-runbook.md) — 发号器运维：首次初始化、预留记录丢失或回退的处置与恢复、演练
 - [gate-kernel-tuning-runbook.md](ops/gate-kernel-tuning-runbook.md) — Gate 内核调优 Runbook
 - [grafana-loki-local-logs.md](ops/grafana-loki-local-logs.md) — 本地日志观测台:Grafana + Loki + Alloy(C++ / Go / Java 三语言统一接入)
+- [id-issuer-runbook.md](ops/id-issuer-runbook.md) — 发号器运维手册
 - [k8s-docker-desktop-troubleshooting.md](ops/k8s-docker-desktop-troubleshooting.md) — K8s Docker Desktop Troubleshooting Guide · [EN](ops/k8s-docker-desktop-troubleshooting_en.md) · [中文](ops/k8s-docker-desktop-troubleshooting_zh.md)
 - [k8s-open-server-runbook.md](ops/k8s-open-server-runbook.md) — K8s 开服操作手册 · [EN](ops/k8s-open-server-runbook_en.md) · [中文](ops/k8s-open-server-runbook_zh.md)
 - [kafka-cluster-production-runbook.md](ops/kafka-cluster-production-runbook.md) — Kafka 集群化生产部署 Runbook
@@ -343,17 +344,17 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 ### 交接说明(`handoff/`)
 
-- [gate-auth-role-fence-review-20261104.md](handoff/gate-auth-role-fence-review-20261104.md) — Claude Code 审核：login 认证后 Gate 保存身份、下游复用与角色提交护栏，进场清理和重启边界。
-- [aoi-and-player-safeguards-20261104.md](handoff/aoi-and-player-safeguards-20261104.md) — Claude Code 交接：AOI 单向关注、持久化 GM 物品封禁、单玩家收益窗口重置
+- [aoi-and-player-safeguards-20261104.md](handoff/aoi-and-player-safeguards-20261104.md) — Claude Code 交接：AOI 单向关注与两项玩家止损能力
 - [class-skills-handoff-20261019.md](handoff/class-skills-handoff-20261019.md) — 四职业技能接入:交 Codex 的生成 / 编译 / 测试清单(2026-10-19)
 - [client-rpc-callback-handoff-20261019.md](handoff/client-rpc-callback-handoff-20261019.md) — 交接:客户端请求自带回调(按请求号认领回包)(2026-10-19)
 - [client-rpc-callback-robot-handoff-20261019.md](handoff/client-rpc-callback-robot-handoff-20261019.md) — 交接:robot 请求自带回调(按 MessageContent.id 认领回包)(2026-10-19)
 - [configurable-templates-handoff-20261019.md](handoff/configurable-templates-handoff-20261019.md) — 交接：战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）——从设计到落码（2026-10-19）
 - [d1-review-fix-handoff-20261023.md](handoff/d1-review-fix-handoff-20261023.md) — 交接:D1 最终语义评审与修复(10-19 ~ 10-23)——移交「映射直读 TiDB」新方向
 - [friend-handoff-20260920.md](handoff/friend-handoff-20260920.md) — friend 服务移植 —— 交接文档(2026-09-20)
+- [gate-auth-role-fence-review-20261104.md](handoff/gate-auth-role-fence-review-20261104.md) — Gate 登录身份修复与 Claude Code 审核说明
 - [global-economy-claude-review-20261022.md](handoff/global-economy-claude-review-20261022.md) — 全球同服、交易与角色归属：Claude Code 审核入口
 - [global-economy-review-20261021.md](handoff/global-economy-review-20261021.md) — 全球交易、角色归属与双版交付审核交接
-- [global-final-acceptance-resume-20261027.md](handoff/global-final-acceptance-resume-20261027.md) — 全球同服剩余验收：全新主窗口交接（545范围、实际失败及续跑入口）
+- [global-final-acceptance-resume-20261027.md](handoff/global-final-acceptance-resume-20261027.md) — 全球同服剩余验收：全新主窗口交接（2026-10-27）
 - [global-id-prelaunch-claude-20261028.md](handoff/global-id-prelaunch-claude-20261028.md) — 交接：全球同服 ID 发号上线前决策与修复（交 Claude Code，2026-10-28）
 - [global-singletons-p0-codex-tasksheet-20261014.md](handoff/global-singletons-p0-codex-tasksheet-20261014.md) — Codex 任务单:全局单点 P0 五项的实测核实(2026-10-14)
 - [global-singletons-p0-findings-20261014.md](handoff/global-singletons-p0-findings-20261014.md) — 全局单点 P0 五项:静态调查记录与修复设计(2026-10-14)
@@ -362,6 +363,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [godb-pipeline-handoff-20261013.md](handoff/godb-pipeline-handoff-20261013.md) — 交接：玩家存盘管线（go/db）瓶颈修复与条件写（2026-10-13）
 - [godb-pipeline-handoff-20261013-appendix.md](handoff/godb-pipeline-handoff-20261013-appendix.md) — 附录：存盘管线修复方案明细（工作流原始产出）
 - [godb-pipeline-impl-handoff-20261015.md](handoff/godb-pipeline-impl-handoff-20261015.md) — 交接：存盘管线剩余代码落码（2026-10-15）
+- [guild-economy-recovery-exits-handoff-20261023.md](handoff/guild-economy-recovery-exits-handoff-20261023.md) — 交接：帮会捐献 / 兑换恢复记录的两个出口（2026-10-23）
 - [handoff-backlog-2026-09-05.md](handoff/handoff-backlog-2026-09-05.md) — 交接清单:2026-09-02 ~ 09-05 三天工作的留档待办(经代码核实)
 - [handoff-client-request-ordering-20261015.md](handoff/handoff-client-request-ordering-20261015.md) — 交接:客户端请求按会话保序(路由服水平扩展下的乱序修复,2026-10-15)
 - [handoff-crosszone-20260920.md](handoff/handoff-crosszone-20260920.md) — 跨 zone 场景传送:交接说明(2026-09-20)
@@ -378,20 +380,18 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [handoff-orcontinue-closure-20260914.md](handoff/handoff-orcontinue-closure-20260914.md) — 交接：`Lookup*OrContinue` 修复收尾 + exporter-tests CI 复活
 - [handoff-tip-axis-and-port-20260903.md](handoff/handoff-tip-axis-and-port-20260903.md) — 交接清单：tip 码轴收尾 + 玄冥移植未开工项
 - [handoff-tip-fault-gateway-500-20261018.md](handoff/handoff-tip-fault-gateway-500-20261018.md) — 交接：Java 网关按 fault 列把登录故障回 500
-- [main-only-cleanup-20261101.md](handoff/main-only-cleanup-20261101.md) — 只保留 main：分支和 worktree 清理方案（2026-11-01）
+- [main-only-cleanup-20261101.md](handoff/main-only-cleanup-20261101.md) — 只保留 main:分支和 worktree 清理方案(2026-11-01)
 - [mixed-version-persist-handoff-20261019.md](handoff/mixed-version-persist-handoff-20261019.md) — 混版本持久字段保护：交接（2026-10-19）
 - [placement-line-handoff-20261019.md](handoff/placement-line-handoff-20261019.md) — 交接:玩家存储落点这条线——完成度核查与剩余工作(落点 + D1 映射持久化,2026-10-19)
 - [placement-reverify-checklist-20261012.md](handoff/placement-reverify-checklist-20261012.md) — 玩家存储落点:当前 HEAD 复验清单(交 Codex)
-- [guild-economy-recovery-exits-handoff-20261023.md](handoff/guild-economy-recovery-exits-handoff-20261023.md) — 交接：帮会捐献 / 兑换恢复记录的两个出口（离帮后照原字节重发、超窗确认作废）与第 3 道查重失败按故障回——两版服务端待 Codex 验证，客户端规格与参考补丁交 Codex（2026-10-23）
-- [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单:对代码逐条核实,列出已补、未做(按影响排序)、待确认和已作废的项。
-- [remaining-two-handoff-20261102-r1.md](handoff/remaining-two-handoff-20261102-r1.md) — 新窗口接续：新1 Java验收、新2双区联验与启动；WSL容量恢复实际、新物理/I3待重核、客户端暂停。
 - [player-inbox-handoff-20261015.md](handoff/player-inbox-handoff-20261015.md) — 玩家持久收件箱：实现交接（2026-10-15）
 - [redis-ha-deploy-path-handoff-20261019.md](handoff/redis-ha-deploy-path-handoff-20261019.md) — 交接：共享 Redis 高可用形态接进部署路径（2026-10-19）
 - [redis-horizontal-scaling-requirements-20261022.md](handoff/redis-horizontal-scaling-requirements-20261022.md) — 交接：Redis 物理水平扩展需求与当前存盘链问题（2026-10-22）
-- [spectate-tiered-fanout-20261030/README.md](handoff/spectate-tiered-fanout-20261030/README.md) — 交接：观战分级扩容 B / C / P0 已落码，评审修正与 P1 / P2 待做（含落码任务说明与给 Codex 的命令，2026-10-30）
 - [redis-player-store-batch2-brief-20261023.md](handoff/redis-player-store-batch2-brief-20261023.md) — 交接：玩家态 Redis 集群化第 2 批（2a–2d）落码简报（2026-10-23）
+- [remaining-two-handoff-20261102-r1.md](handoff/remaining-two-handoff-20261102-r1.md) — 剩余两项验收交接（2026-11-02 晚，America/New_York）
 - [repo-layout-20261007.md](handoff/repo-layout-20261007.md) — 仓库目录整理:交接说明(2026-10-07)
 - [rpc-channel-batch7-handoff-20261015.md](handoff/rpc-channel-batch7-handoff-20261015.md) — 交接:RpcChannel 改造收尾——第 7 批、剩余调用点迁移与玩家级延后完成(2026-10-15)
+- [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)
 - [session-summary-20260908-09.md](handoff/session-summary-20260908-09.md) — 本轮会话总览与遗留清单（2026-09-08 ~ 09-09）
 - [zone-home-and-physical-storage-conversation-20260924.md](handoff/zone-home-and-physical-storage-conversation-20260924.md) — 逻辑归属、物理存储与合服：完整对话记录（mmorpg）
 - [zone-rollback-r9-handoff-20261019.md](handoff/zone-rollback-r9-handoff-20261019.md) — 交接：整 zone 回档清理工具（R9）与两个小项的落码（2026-10-19）
