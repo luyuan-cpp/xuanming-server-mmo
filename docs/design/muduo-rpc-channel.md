@@ -382,11 +382,16 @@ lambda 捕获 `{sessionId, incarnation, clientRequestId, innerMessageId}`:
 
 ### 8.3 握手(`registration_manager.cpp`)
 
-`CallMethod`(`kNodeHandshakeCallTimeout`),lambda 捕获 `{nodeType, entity, weak_ptr<RpcClient>, weak_ptr<TcpConnection>}`,回调时先复核实体上仍是同一个 RpcClient。
-成功 → `OnHandshakeReplied` + 成功钩子 `NodeHandshakeManager::SetHandshakeSucceededHook(std::function<void(uint32_t, const TcpConnectionPtr&, const NodeHandshakeResponse&)>)`
-(gate/main.cpp 装 `gate_scene_entry::OnSceneLinkHandshaken`,engine/core 不反向依赖 gate)。`kTimeout` / `kRemote*` → 照旧 `RunAfter(0.5)` 重试(补上"应答丢失不重试");
-`kDisconnected` / `kChannelClosed` / `kNotSent` 不重试(UP 会经 RpcClient 的连接观察者重新握手,否则会握手两次)。lambda 不捕获 this。
-顺带修 `OnSceneNodeHandshakeReply` 判空前解引用(`scene_response_handler.cpp:141`)。
+2026-11-05 调整：握手只负责确认当前通信链路，不承担玩家注册、业务恢复或跨服务启动顺序。
+
+- `RpcClient` 拥有当前连接的 Ready。普通客户端默认 TCP UP 即 Ready；节点装配显式选择 `Readiness::kAfterHandshake`。业务 `CallMethod` / `SendRequest` 统一要求 Ready，未就绪分别异步返回 `kNotSent` / 返回 false，不缓存、不重放。
+- `NodeHandshakeManager::BeginHandshake(client, selfNode, expectedPeer, conn)` 直接接受依赖，每条连接立即发一次现有 typed `NodeHandshake`，超时 3s。请求经当前 channel 发出，不经过业务 Ready 门禁。回包核对预期实例身份，仅仍属于该 client 的当前连接可以 `MarkReady`；关机后和旧连接回包不能改变 Ready。
+- 失败时不留在同一连接无限握手，也不挂 ECS `TimerTaskComp`：仅对失败的当前连接延迟 0.5s 关闭，避免快速拒绝形成忙循环；后续建连由既有 muduo `enableRetry` 负责。延迟闭包只持 weak client / weak connection，晚到的关闭不影响替代连接。每条连接最多一次握手 RPC，不重放结果未知的业务请求。
+- 删除 `SetHandshakeSucceededHook`、Gate 的 `SceneLinkHandshakeComp` 和 `OnSceneLinkHandshaken`。进场待办仍按自身 250ms 扫描、期限与次数预算推进；握手成功不遍历玩家，不调整业务待办。
+- 同 UUID 的出站 client / 节点实体稳定复用。入站握手只把同 UUID 的 `RpcSession` 绑定到当前通信连接；旧连接 DOWN 只摘匹配连接的会话。TCP DOWN 不发布节点删除，不清理玩家内存；权威发现删除仍走既有节点移除流程。UUID 变化是新进程，不能冒充同实例重连。
+- Gate 的 Kick 来源继续按本次 RPC 的连接查已确认实例，使用 `IsReadyOn(conn)`；不以端点或另一条当前连接代替来源确认，既有会话代次栅栏保持不变。
+
+本次保留现有节点目录实体、入站绑定与发现准入规则，不引入全协议 `NodeLinks` 框架，也不把握手身份确认宣称为鉴权。Java 握手成功本来就没有此业务恢复钩子，无需复制 RPC0 的内部实现；Java 目前断链清退玩家的策略与 C++ 不同，属于另一个业务语义改造，本批不声称已统一。
 
 ### 8.4 B 的下游是 gRPC(本轮的过渡写法)
 

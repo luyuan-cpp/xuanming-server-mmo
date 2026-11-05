@@ -667,25 +667,43 @@ networks:
 
 volumes:
   mysql-data:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_mysql-data
   redis-data:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_redis-data
   etcd-data:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_etcd-data
   kafka-data:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_kafka-data
   gate-logs:
   scene-logs:
   battle-logs:
   # 注册与维护账号口令、物理 authority 原件、锁资格声明、各服务的账号记录。只有注册步骤挂载。
   sql-boot-private:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_sql-boot-private
   sql-boot-state:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_sql-boot-state
   # 每个写者两个卷：*-sql-writer 放授权、每 boot 配置和 SQL 变量（常驻容器只读），*-sql-consume 放消费标记（常驻容器可写）。
   db-sql-writer:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_db-sql-writer
   db-sql-consume:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_db-sql-consume
   data-service-sql-writer:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_data-service-sql-writer
   data-service-sql-consume:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_data-service-sql-consume
   login-sql-writer:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_login-sql-writer
   login-sql-consume:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_login-sql-consume
   match-sql-writer:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_match-sql-writer
   match-sql-consume:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_match-sql-consume
   player-inbox-sql-writer:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_player-inbox-sql-writer
   player-inbox-sql-consume:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_player-inbox-sql-consume
   gateway-sql-writer:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_gateway-sql-writer
   gateway-sql-consume:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_gateway-sql-consume

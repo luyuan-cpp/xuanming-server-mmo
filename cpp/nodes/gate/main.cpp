@@ -411,21 +411,6 @@ int main(int argc, char *argv[])
                                    ";client requests are NOT ordered per session(router lane is router-mode only, client-request-ordering.md O7; goes away with the direct path in D61)");
             }
 
-            // CPP-2 链路就绪印章:TCP 连上 0.5s 后才发握手,scene 在收到握手时才为本 gate 挂 RpcSession,之前发出的
-            // 进场通知会被丢掉,所以「可以向这个 scene 交付进场」要以握手成功为准。conn 是发出握手的那条出站连接
-            // (在途调用在 DOWN 时已全部失败,成功回调里它必然就是回包所走的连接),按连接对象盖章,重连后旧章自然失效。
-            // 以前写在按 message_id 注册的 OnSceneNodeHandshakeReply 里(docs/design/muduo-rpc-channel.md §8.3)。
-            node.GetNodeRegistrationManager().SetHandshakeSucceededHook(
-                [](uint32_t nodeType, const muduo::net::TcpConnectionPtr &conn, const NodeHandshakeResponse &response)
-                {
-                    if (nodeType != SceneNodeService)
-                    {
-                        return;
-                    }
-                    gate_scene_entry::OnSceneLinkHandshaken(conn, response.peer_node().node_uuid(),
-                                                            std::chrono::steady_clock::now());
-                });
-
             // GATE_ROUTER_TRANSPORT 已失效(docs/design/grpc-muduo-transport.md §14.1):官方 gRPC 客户端随第 3 批删除,
             // 所有出站 gRPC 都走 muduo_h2:节点通道(路由服、直连模式的业务服务)由 NodeConnector::ConnectToGrpcNode 统一建,
             // etcd 走 MuduoEtcdTransport。

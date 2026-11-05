@@ -47,7 +47,6 @@ struct SceneEntryCounters
     uint64_t superseded{0};    // 欠账未结清时被新路由决策整体替换
     uint64_t sessionClosed{0}; // 客户端连接已不可用或会话已消失,欠账随之撤销
     uint64_t playerChanged{0}; // 欠账属于另一名角色,撤销(不踢线)
-    uint64_t linksReady{0};    // scene 链路握手就绪次数
 
     bool operator==(const SceneEntryCounters &) const = default;
 };
@@ -79,14 +78,8 @@ int64_t ElapsedMs(const Clock::time_point from, const Clock::time_point to)
 }
 
 // 向 scene 转发 PlayerEnterGameNode,如实返回"有没有真的交出去"。
-// Gate is the bridge: it holds the TCP session and routes the RPC to the correct Scene node.
-//
-// 必须在调用 SendRequest **之前**判定链路:
-//   - RpcClient::SendRequest 在未连接时返回 false 并计数,但它只知道"有没有连接",不知道"当前连接上握过手没有";
-//   - TCP 连上后 registration_manager 要 RunAfter(0.5) 才发 NodeHandshake,scene 收到握手才为本 gate 挂
-//     RpcSession;在那之前发出的进场,scene 会照常载入玩家,但 NotifyEnterScene 等推送找不到 RpcSession
-//     会被丢掉(client_message_sender.cpp)。所以要求"已连上,且在**当前**连接上握过手"。
-// 这些都是"本地确定没发出去",调用方可以安全地补发(I1);一旦返回 kSent 就不再重发。
+// 通信层确认链路已可双向使用后才交付进场;建立步骤与当前连接的核验都由 RpcClient 隐藏。
+// 未就绪都是"本地确定没发出去",调用方可以安全地补发(I1);一旦返回 kSent 就不再重发。
 //
 // playerId / homeZoneId / ownerEpoch / loginGeneration 一律从会话取:路由到达时已把最新决策写进会话,BindSession
 // 晚到的补发读不到路由事件,只能从会话取。sceneId 显式传入:会话的 sceneId 只在转发成功后才提交,调用时还是旧图。
@@ -107,16 +100,9 @@ SceneForwardResult ForwardPlayerToScene(const SessionId sessionId, const uint32_
         return SceneForwardResult::kNoRpcClient;
     }
 
-    // 局部强引用只活到本函数返回,不外泄(AGENTS.md §11.7)。
-    const auto currentConn = (*rpcClient)->GetConnection();
-    const auto *handshake = sceneNodeRegistry.try_get<gate_scene_entry::SceneLinkHandshakeComp>(sceneNode);
-    const auto handshakenConn = handshake ? handshake->conn.lock() : muduo::net::TcpConnectionPtr{};
-    if (const auto notReady = gate_scene_route::ClassifySceneLink((*rpcClient)->connected(),
-                                                                   currentConn.get(),
-                                                                   currentConn && currentConn->connected(),
-                                                                   handshakenConn.get()))
+    if (!(*rpcClient)->IsReady())
     {
-        return *notReady;
+        return SceneForwardResult::kNotConnected;
     }
 
     const auto* info = sceneNodeRegistry.try_get<NodeInfo>(sceneNode);
@@ -338,7 +324,6 @@ void MaybeLogSummary(const Clock::time_point now)
              << " superseded=" << tlsCounters.superseded
              << " session_closed=" << tlsCounters.sessionClosed
              << " player_changed=" << tlsCounters.playerChanged
-             << " links_ready=" << tlsCounters.linksReady
              << " pending=" << pending;
 }
 } // namespace
@@ -415,57 +400,6 @@ void OnClientEnterGame(const SessionId sessionId, SessionInfo &session)
                  << " login_generation_at_leave=" << session.loginGenerationAtReset;
     }
     gate_scene_route::NoteEnterGameRequested(session);
-}
-
-void OnSceneLinkHandshaken(const muduo::net::TcpConnectionPtr &conn, const std::string &nodeUuid,
-                           const Clock::time_point now)
-{
-    const auto nodeEntity = NodeUtils::FindNodeEntityByUuid(SceneNodeService, nodeUuid);
-    if (!nodeEntity)
-    {
-        LOG_WARN << "[SceneEntry] handshake reply for unknown scene node, ignored uuid=" << nodeUuid;
-        return;
-    }
-
-    auto &sceneNodeRegistry = tlsNodeContextManager.GetRegistry(SceneNodeService);
-    // 应答所走的连接必须就是该节点 RpcClient 的**当前**连接:迟到的旧连接应答不能给新连接盖章,
-    // 否则新连接会在 scene 还没为它挂 RpcSession 时被当成就绪。
-    const auto *rpcClient = sceneNodeRegistry.try_get<RpcClientPtr>(*nodeEntity);
-    if (!conn || !rpcClient || !*rpcClient || (*rpcClient)->GetConnection() != conn)
-    {
-        LOG_WARN << "[SceneEntry] handshake reply not on the node's current link, ignored uuid=" << nodeUuid;
-        return;
-    }
-
-    // 握手应答路径,不是逐帧路径;重连后的再次握手就是要覆盖旧章,所以用 emplace_or_replace。
-    sceneNodeRegistry.emplace_or_replace<gate_scene_entry::SceneLinkHandshakeComp>(
-        *nodeEntity, gate_scene_entry::SceneLinkHandshakeComp{conn});
-    ++tlsCounters.linksReady;
-
-    const auto *nodeInfo = sceneNodeRegistry.try_get<NodeInfo>(*nodeEntity);
-    LOG_INFO << "[SceneEntry] scene link ready node_id=" << (nodeInfo ? nodeInfo->node_id() : 0u)
-             << " uuid=" << nodeUuid;
-    if (!nodeInfo)
-    {
-        return;
-    }
-
-    // 以该节点为目标的欠账提前到下一轮扫描(≤250ms)补发;不在应答处理器里同步转发。
-    const auto nodeId = nodeInfo->node_id();
-    auto &sessions = tlsSessionManager.sessions();
-    for (const auto sessionId : tlsSessionsWithPendingEntry)
-    {
-        const auto it = sessions.find(sessionId);
-        if (it == sessions.end() || !it->second.pendingSceneEntry.has_value())
-        {
-            continue;
-        }
-        auto &entry = *it->second.pendingSceneEntry;
-        if (entry.target.nodeId == nodeId && entry.nextAttemptAt > now)
-        {
-            entry.nextAttemptAt = now;
-        }
-    }
 }
 
 void RetryDueSceneEntries(const Clock::time_point now)

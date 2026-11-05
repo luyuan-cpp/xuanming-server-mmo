@@ -1202,7 +1202,9 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 
 ### 13.3 CPP-2 gate 侧进场转发补发(未编译)
 
-**问题**。在 gate 侧,RoutePlayerEvent 丢失后没有任何补发。现状证据:
+**2026-11-05 更新**:通信就绪已统一由 `RpcClient` 持有,见 [muduo-rpc-channel.md §8.3](muduo-rpc-channel.md)。Gate 不再保存握手章或安装握手成功业务钩子;欠账只由业务事件与自己的 250ms 扫描推进。本节的现行机制、状态与可观测性已按此同步;初版问题背景、文件清单与验证清单保留为历史记录,不能用其旧日志或测试数量判断当前版本是否通过。
+
+**初版问题背景(历史)**。在 gate 侧,RoutePlayerEvent 丢失后没有任何补发。初版证据:
 - `RoutePlayerEventHandler` 找不到目标节点时打 ERROR 就返回,会话仍指向原节点。
 - `ForwardPlayerToScene` 调 `RpcClient::CallRemoteMethod` 后无条件返回 true,而后者在未连接时只打一条 ERROR 就丢。
 - "TCP 已连上"不等于"可以交付":gate 连上 scene 之后,要过 **0.5s** 才发 NodeHandshake,scene 收到握手才建 RpcSession。缺这个 RpcSession 时,scene 发往客户端的推送(包括 NotifyEnterScene)都会被丢掉。所以连上后约 0.5s 内发出的进场,玩家会被载入,但进场通知会丢。
@@ -1210,32 +1212,31 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 - BindSession 晚到时,登录类型可能永远挂在会话上。
 - 结果是玩家在线,却没有实体,也收不到任何提示。登录链路上同样存在,不是传送特有。
 
-**改法**:转发前先如实判断链路是否可交付,交不出去就在会话上记欠账,按有上限的节奏补发,超限就收口。不改 proto,不改引擎公共接口,也不改客户端。
+**现行机制**:转发前通过通信层判断链路是否可交付,交不出去就在会话上记欠账,按有上限的节奏补发,超限就收口。保留现有 NodeHandshake wire 与客户端契约;业务不依赖握手步骤或连接成功事件。
 1. **不变量**
-   - I1:一次路由决策最多转发一次。kSent 的含义是"已交给当前连接,且这条连接上已握过手",不代表 scene 已处理。欠账只在本地确定没发出去时续期,一旦 kSent 就清掉欠账,绝不重发。
+   - I1:一次路由决策最多转发一次。kSent 的含义是"已交给通信层确认就绪的当前链路",不代表 scene 已处理。欠账只在本地确定没发出去时续期,一旦 kSent 就清掉欠账,绝不重发。
    - I2:欠账和路由快照都存在 SessionInfo 里,只由主 EventLoop 线程读写;会话 erase 时随之消失。
    - I3:每次尝试都按业务 node_id 重新解析节点实体,不缓存实体号。
    - I4:截止时刻一律按 `steady_clock` 判断,muduo 定时器只负责唤醒。
    - I5:路由(sceneId + 节点指向)只在转发成功那一刻才提交。失败窗口内,会话仍指向上一次成功提交的节点,客户端消息和断线后的 ExitGame 都去旧节点。
    - I6:放弃时只做三件事:推 tip、踢线、关连接。
 2. **状态**,在新头文件 `cpp/libs/services/gate/session/comp/pending_scene_entry_comp.h` 里:
-   - `SceneForwardResult`,名表为 `sent / node_not_found / no_rpc_client / not_connected / handshake_pending / invalid_route`;
+   - `SceneForwardResult`,名表为 `sent / node_not_found / no_rpc_client / not_connected / invalid_route`;未连接或通信建立尚未完成都归 `not_connected`,业务不单列握手状态。
    - `SceneRouteTarget{playerId, nodeId, sceneId}`;
    - `PendingSceneEntry`。
    - SessionInfo 新增两个字段:`lastSceneRoute`(每次路由到达时无条件覆盖,供 BindSession 晚到时建欠账)和 `std::optional<PendingSceneEntry> pendingSceneEntry`。
-3. **链路就绪 = 已连上 + 在当前连接上握过手**
-   - gate 的握手应答处理器 `OnSceneNodeHandshakeReply` 在守护段内判断:应答为 `kCommon_errorOK` 时调 `gate_scene_entry::OnSceneLinkHandshaken(conn, uuid, now)`。
-   - 它先核对应答所在的连接等于该节点 RpcClient 的 `GetConnection()`,不等就打 WARN 并忽略。
-   - 核对通过后,在节点实体上 emplace `SceneLinkHandshakeComp{weak_ptr<TcpConnection>}`,打 INFO `[SceneEntry] scene link ready node_id=… uuid=…`,并把指向该节点的欠账提前到下一轮扫描。
-   - 纯函数 `ClassifySceneLink` 按连接对象比对:重连之后旧章自然失效;握手失败时永远不就绪,这是 fail-closed。
-   - 主会话已亲自核实:RpcClient 把自己 TcpClient 的消息回调绑到 GameChannel,应答原样带回 conn,所以"应答 conn == `RpcClient::GetConnection()`"成立。
+3. **通信层提供链路就绪能力**
+   - 节点客户端显式选择 `Readiness::kAfterHandshake`,每次 TCP UP 立即发送一次现有 `NodeHandshake`,3s 截止。通信层核对预期实例身份及本次连接后才提交 Ready;普通业务 `CallMethod` / `SendRequest` 统一受此门禁约束。
+   - `ForwardPlayerToScene` 只查询 `RpcClient::IsReady()`:未就绪时返回 `kNotConnected`,不比较连接、不写业务握手组件。握手失败、旧连接回包和关机后的晚回包都不能使替代连接就绪。
+   - 已删除 `SetHandshakeSucceededHook`、`SceneLinkHandshakeComp`、`OnSceneLinkHandshaken` 与业务侧 `ClassifySceneLink`。通信成功不遍历玩家会话,不提前调整欠账时间。
+   - pending 由自己的扫描按 `nextAttemptAt` 推进;退避封顶 2s、扫描周期 250ms。短暂 TCP 断开只使链路不可用,不删除玩家内存或会话路由;节点 UUID 变化仍按新进程处理。
 4. **一次尝试**:纯逻辑 `gate_scene_route::AttemptPendingSceneEntry`,解析器和转发器都注入,可以单测。
    - 先过玩家围栏,再解析节点。
    - 解析成功后调 `CompareSceneNode`(只比较、不改写)→ `ApplyRoute` → 转发成功才 `SetEntityId` 并清掉欠账。
    - 失败时由 `RecordSceneEntryFailure` 决定重试还是放弃。
    - `RebindSceneNode` 在生产路径上已不再调用,只留给已有用例钉住原语语义。
 5. **参数**,都在 `scene_route_helper.h`:
-   - `kSceneEntryRetryBudget` 20s:muduo 断线后的重连时刻是 0 / 0.5 / 1.5 / 3.5 / 7.5 / 15.5s,每次连上后还要再等 0.5s 握手,停机 ≤16s 的节点都能赶上。20s 也远小于客户端等进场的 60s。
+   - `kSceneEntryRetryBudget` 20s:只给尚未发出的进场意图有限的等待时间,远小于客户端等进场的 60s。通信重连与身份确认由通信层推进,不再额外等待原来的 0.5s 首次握手定时器;此预算不保证任意停机长度都能恢复。
    - `kSceneEntryNodeDiscoveryBudget` 3s:找不到节点时只给这么多时间。
    - 退避:`kSceneEntryInitialBackoff` 250ms,每次翻倍,`kSceneEntryMaxBackoff` 2s 封顶。
    - `kSceneEntryMaxAttempts` 16,作纵深上限。
@@ -1257,8 +1258,8 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 9. **可观测性**
    - `[SceneEntry] forward deferred` / `forward recovered` 按 1/64 采样,第一条必打。
    - `giving up` 不采样。
-   - `scene link ready` 每条链路每次握手打一行。
-   - 30s 汇总行 `[SceneEntry] deferred= recovered= gave_up= superseded= session_closed= player_changed= links_ready= pending=`,有变化才打。
+   - 通信层确认就绪时打 `Node link ready: type=… uuid=…`;Gate 业务不再打 `scene link ready` 或计 `links_ready`。
+   - 30s 汇总行 `[SceneEntry] deferred= recovered= gave_up= superseded= session_closed= player_changed= pending=`,有变化才打。
    - 原来逐条的 `RoutePlayer: scene node not found in registry` 等三条 ERROR 已删除(已核实没有下游依赖)。
 
 **与其它节的关系**
@@ -1267,7 +1268,12 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 - §12.6.4 M8 / M10 不在"本地没发出去"的判定范围内,不受影响。
 - 与冻结上限的关系:放弃后的 ExitGame 落到旧节点,与"路由没到 gate 就断线"是同一条既有路径,本节没有新增任何解冻或销毁入口。
 
-**落在哪**
+**现行验证要求(2026-11-05)**
+- `routing_identity_test` 保留未发待办的期限、退避、身份与路由提交契约,不再以 `SceneLinkReady` 的业务握手章测试验证通信层。真实连接上的 Ready、重连、旧连接与关机晚回包由 `rpc_client_lifecycle_test` 覆盖。
+- 联调使用通信层的 `Node link ready` 与进场 `forward deferred / forward recovered / giving up` 观察当前行为;不要求已删除的 `scene link ready`、`links_ready` 或 `handshake_pending`。
+- 仅恢复链路时,既有玩家与 Gate 路由不得被清除;未发 pending 可由独立扫描推进,已经交出的进场和普通业务请求不得因重连重放。实际编译、测试与联调证据另行记录,下列初版清单不是本次执行结果。
+
+**初版文件与单测清单(历史)**
 - 新增:`pending_scene_entry_comp.h`;`cpp/nodes/gate/handler/event/scene_entry_dispatch.{h,cpp}`,已登记进 `gate.vcxproj`、`.filters` 与 `CMakeLists.txt`。
 - 修改:
   - `scene_route_helper.h`:纯逻辑与常量;
@@ -1276,7 +1282,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
   - `session_info_comp.h`。
 - 单测:`routing_identity_test.cpp` 新增 30 个:`SceneRouteEntry` 从 16 个增到 17 个,另有 `SceneEntryRetry` 11、`SceneLinkReady` 4、`SceneEntryAttempt` 9、`SceneEntryLateLogin` 5。
 
-**验证清单**(全部未执行,交 Codex)
+**初版验证清单(历史)**(初版记为全部未执行,以下旧日志、命令与数量原样保留)
 1. **编译**:
    - 依次执行 `msbuild cpp\libs\services\gate\gate.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64` 和 `msbuild cpp\nodes\gate\gate.vcxproj`(参数相同)。
    - 通过标准:0 error。
@@ -1299,21 +1305,21 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
   - **2026-10-16 更正**:`Gate.PlayerEnterGameNode`(42)已于 RpcChannel 批 7 退役并从 proto 删除(42 号留墓碑;全仓无发起端、无栅栏写路径,见 [muduo-rpc-channel.md §20.3](muduo-rpc-channel.md)),不再是「现成」的。
     二期做确认看门狗应让 gate 对 `Scene.PlayerEnterGameNode` 改用 `CallMethod` 拿送达确认(muduo-rpc-channel.md §14 第 4 项)。
 - **L2**:kSent 之后被 scene 拒绝(A2′、载入失败、场景不存在),只推 tip、不踢线,会话已提交到新节点。
-- **L3**:一条已投递、之后又被 scene_manager 回滚的路由,会在 ≤3s(找不到节点)或 ≤20s(连不上 / 未握手)内被补发,会话改绑到新节点 X,随后被 X 的 A2′ 拒建。若源端已凭回滚回执解冻,活实体会失去输入和 ExitGame,变成卡死加僵尸;不会双主。这一条已交给 GO-2,GO-2 定稿把它列为可接受结局(见 §13.7 残余"gate 迟到改绑"一条)。
+- **L3**:一条已投递、之后又被 scene_manager 回滚的路由,会在 ≤3s(找不到节点)或 ≤20s(通信未就绪)内被补发,会话改绑到新节点 X,随后被 X 的 A2′ 拒建。若源端已凭回滚回执解冻,活实体会失去输入和 ExitGame,变成卡死加僵尸;不会双主。这一条已交给 GO-2,GO-2 定稿把它列为可接受结局(见 §13.7 残余"gate 迟到改绑"一条)。
 - **L4**:跨会话乱序。旧会话还在重试时玩家顶号进了同一个 X,旧会话的迟到转发可能抢走新会话的实体。连接检查把窗口限定在"KickPlayer 迟到"之内。根治在 scene 侧:`PlayerEnterGameNode` 不应无条件摘掉在用会话,遇到过期 epoch 应直接拒绝。本轮不做。
   - **2026-10-14 更正**:已由 [scene-enter-session-fence.md](scene-enter-session-fence.md) 处理,但判据不是 epoch:同一节点上顶号两次路由的 owner_epoch 相同(R1),比 epoch 修不了。改为登录代次(login 持锁铸造,随 Bind / 路由带到 gate,gate 盖章后进 `PlayerEnterGameNodeRequest`),scene 入口第一步零副作用判定,跨会话且代次更旧即拒。
 - **L5**:20s 只盖得住短重连。gate→X 单向分区、X 在 etcd 里却仍健康时,会形成"每 20s 被踢一次"的循环。
-- **L6**:就绪标记依赖握手应答路径;写不上的话 20s 后全员被踢。防线是每条链路的 `scene link ready` 日志,加上基线 login-test 必须零 give-up。
+- **L6**:通信层必须完成当前连接的身份确认才能交付业务;持续不能 Ready 时,未发待办仍按 20s 预算收口。防线是通信层 `Node link ready`、真实连接生命周期测试,以及基线 login-test 零 give-up;Gate 不再有另一份可能漏写的业务就绪标记。
 - **L7**:行为变化五处:
   - scene_id 为 0 的路由改为踢线;
   - 找不到节点改为 3s 后踢线;
   - BindSession 晚到的补发有上限,会踢线;
-  - 未握手的转发被推迟;
+  - 通信未就绪的转发被推迟;
   - 失败窗口内旧指向无效时,客户端请求收到 `kServiceUnavailable`。
 - **L8**:放弃时的 ERROR 不采样,量级等于故障期间的进场数。
 - **L9**:同一条连接上换角色的流程没有核实,客户端也没有这种调用。
 - **复审补充一:玩家围栏排在覆盖之后。** `OnRouteDecision` 先覆盖 `lastSceneRoute` 并整体替换欠账,围栏要到尝试里才判;`RoutePlayerEventHandler` 在此之前还无条件覆盖了 `homeZoneId` / `ownerEpoch`。一条属于别的角色的迟到路由,会冲掉当前角色的欠账,只能等客户端 60s 超时。当前客户端不会触发(L9)。
-- **复审补充二:按 node_id 重新解析,放大了 GO-3 的 R1 窗口。** 每次尝试都按 node_id 解析、按 node_id 唤醒,可能把发给 X 的路由交给复用了同号的新进程,把 GO-3 残余 R1 的窗口延长到 ≤20s(找不到节点时 ≤3s)。修法是记下首次解析成功的 uuid、之后按 uuid 解析,与 GO-3 一起报用户拍板(§13.9)。
+- **复审补充二:按 node_id 重新解析,放大了 GO-3 的 R1 窗口。** 每次尝试都按 node_id 解析,可能把发给 X 的路由交给复用了同号的新进程,把 GO-3 残余 R1 的窗口延长到 ≤20s(找不到节点时 ≤3s)。修法是记下首次解析成功的 uuid、之后按 uuid 解析,与 GO-3 一起报用户拍板(§13.9)。2026-11-05 已删除原先按 node_id 提前唤醒欠账的握手钩子,不改变本条业务路由仍按 node_id 解析的残余。
 
 ### 13.4 P3 收尾:GO-6 / GO-4 残余 / 告警盲区(2026-09-28,未编译、未测试)
 
@@ -2011,7 +2017,8 @@ C++(`cpp/libs/services/scene/player/` 下,另有两个 handler 文件):
   6. (既有,复核补登)节点号被复用而 DELETE 没被领导者处理(领导者缺位、scene_manager 整体重启)时,旧进程名下副本场景的收尾快照拿不到:(zone,node) 身份一直在册,不会入死节点收尾队列。根治要让场景记录宿主实例号,归死节点收尾线;GO-3 的实例差集只记时间,不改变场景收尾。
 
 **3. 34 来源栅栏(§12.5.6 残余 1、§13.2「上限到期一律踢线」)**
-- gate `SendMessageToPlayer` 收到 34 时,比对两样:发送连接对应的 scene 进程实例号,以及会话当前绑定的 scene 进程实例号。发送方只认**在当前连接上握手核验过对端 uuid 的连接**(`SceneLinkHandshakeComp`,2026-10-24 复核订正:初版取注册表里 `RpcClient` 的连接,同地址换了进程、旧 RpcClient 重连到新进程而握手被拒时会认错发送方)。两边都认得出且不同,就丢弃这条 34 并打 WARN `SendMessageToPlayer: dropping KickPlayer from a scene process the session is no longer bound to …`。纯判定是 `session_identity_fence.h` `ClassifySceneKickSource`,用例在 `routing_identity_test`。
+- gate `SendMessageToPlayer` 收到 34 时,比对两样:发送连接对应的 scene 进程实例号,以及会话当前绑定的 scene 进程实例号。发送方只认**本次 RPC 所在连接已经核验对端身份且仍为当前就绪链路**:2026-11-05 起遍历 `RpcClientPtr + NodeInfo`,由 `client->IsReadyOn(ctx.conn())` 确认这条传入连接后取 UUID,不再读取业务握手章。两边都认得出且不同,就丢弃这条 34 并打 WARN `SendMessageToPlayer: dropping KickPlayer from a scene process the session is no longer bound to …`。纯判定是 `session_identity_fence.h` `ClassifySceneKickSource`,用例在 `routing_identity_test`。
+  - 历史(2026-10-24 复核订正):旧实现用 `SceneLinkHandshakeComp` 证明当前连接已经核验 UUID;更早只取注册表里 `RpcClient` 的连接,同地址换了进程、旧 RpcClient 重连到新进程而握手被拒时会认错发送方。新通信层查询保留这道当前连接约束,不能退回按端点、预期 UUID 或另一条连接推断发送身份。
 - 任一侧认不出时照发,与旧行为相同:34 是让客户端脱困的出口,没有证据就丢,会让一个实体已被销毁的客户端挂在原地。比进程实例号,不比 node_id 或实体句柄。
 - 只拦 34:前面那条 tip 仍会送到,多显示一条"传送未成"只是提示不准,不断连接。客户端契约不变。
 - 残余(2026-10-24 复核补):gate 的改绑发生在转发时,不代表目标已接住玩家。目标随后拒绝入场(资格登记失败、A2′ 清继承标记失败、CL-C1 预检)时只推 3023、不推 34、也不通知 gate 解绑;若源端此时正因冻结上限(70s,zone Redis 不可用的相关故障)、改派踢线或回滚采纳后的退出推 34,这条 34 会被栅栏丢掉,客户端挂在没有实体的节点上,要手动重登。路径很窄,只伤活性。根治是让目标的入场拒绝出口也按「3023 + 34」收口(与 gate 放弃补发的契约一致),但这改变入场失败时客户端的行为,属客户端契约,要两版同批、单独拍板。

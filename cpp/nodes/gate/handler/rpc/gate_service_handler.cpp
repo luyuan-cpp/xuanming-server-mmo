@@ -7,11 +7,11 @@
 #include "gate_security.h"
 #include "node/system/node/node.h"
 #include "network/rpc_controller.h"
+#include "network/rpc_client.h"
 
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/common/base/common.pb.h"
 #include "proto/common/base/node.pb.h"
-#include "handler/event/scene_entry_dispatch.h"
 #include "handler/gate_push_delivery.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
 #include "thread_context/node_context_manager.h"
@@ -40,9 +40,9 @@ namespace
 		return info != nullptr ? info->node_uuid() : std::string{};
 	}
 
-	// 本次 RPC 所在连接对应的 scene 进程实例号。scene 经 gate 拨过去的那条连接回推;只认在**当前连接**上握手核验过
-	// 对端 uuid 的连接(SceneLinkHandshakeComp,scene_entry_dispatch.cpp OnSceneLinkHandshaken 写入):同地址换了进程、
-	// 旧 RpcClient 重连到新进程而握手被拒时,不能拿注册表里的旧 uuid 认发送方。认不出返回空(按 kDeliverUnverified 照发)。
+	// 本次 RPC 所在连接对应的 scene 进程实例号。scene 经 gate 拨过去的那条连接回推;通信层必须确认
+	// 传入的这条连接就是已核验对端身份的当前链路。同地址换了进程、旧 RpcClient 重连后未就绪时,
+	// 不能拿注册表里的旧 uuid 认发送方。认不出返回空(按 kDeliverUnverified 照发)。
 	// 只在踢线这条罕见消息上遍历,不进普通推送的热路径。
 	std::string SenderSceneInstance(const muduo::net::TcpConnectionPtr &conn)
 	{
@@ -51,12 +51,9 @@ namespace
 			return {};
 		}
 		auto &sceneNodeRegistry = tlsNodeContextManager.GetRegistry(common::base::SceneNodeService);
-		for (const auto &[entity, handshake, info] :
-			 sceneNodeRegistry.view<gate_scene_entry::SceneLinkHandshakeComp, NodeInfo>().each())
+		for (const auto &[entity, client, info] : sceneNodeRegistry.view<RpcClientPtr, NodeInfo>().each())
 		{
-			// lock() 的强引用只活在本次比较内,不留存连接(AGENTS §11.7)。
-			const auto linked = handshake.conn.lock();
-			if (linked && linked.get() == conn.get())
+			if (client && client->IsReadyOn(conn))
 			{
 				return info.node_uuid();
 			}

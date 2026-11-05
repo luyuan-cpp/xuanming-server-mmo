@@ -1,10 +1,7 @@
 #pragma once
 
 #include <chrono>
-#include <memory>
-#include <string>
 
-#include "muduo/net/Callbacks.h"
 #include "type_define/type_define.h"
 
 struct SessionInfo;
@@ -13,10 +10,9 @@ struct SceneRouteTarget;
 // gate 侧 RoutePlayerEvent 进场转发的补发与收口(CPP-2;设计与残余见 cross-zone-scene-travel.md 的
 // "CPP-2 gate 侧进场转发补发"一节)。
 //
-// 生成式 handler 的守护段(gate_event_handler.cpp 的 RoutePlayer / BindSession)与 gate/main.cpp 装的握手成功钩子
-// (NodeHandshakeManager::SetHandshakeSucceededHook,原先写在已删除的 rpc_replies/scene_response_handler.cpp)只放一行委托,逻辑集中在本手写文件,
-// 重生成时不受影响(守护段只放委托的惯例)。判定逻辑本身是 scene_route_helper.h 里的纯函数,
-// 本文件只负责接注册表、连接、定时器与日志。
+// 生成式 handler 的守护段(gate_event_handler.cpp 的 RoutePlayer / BindSession)只放一行委托,
+// 逻辑集中在本手写文件,重生成时不受影响。判定逻辑本身是 scene_route_helper.h 里的纯函数,
+// 本文件只负责接注册表、通信就绪能力、定时器与日志;欠账由独立扫描推进。
 //
 // 契约:
 //   - 线程:全部入口只在 gate 主 EventLoop 线程调用(Kafka 回调 queueInLoop 到主 loop、RPC 应答与
@@ -35,14 +31,6 @@ using Clock = std::chrono::steady_clock;
 inline constexpr double kSweepIntervalSeconds = 0.25;
 // 放弃时先 shutdown 让 tip 与 34 发出去,再留 1s 后强关:不配合四次挥手的客户端也不能把会话一直挂着。
 inline constexpr double kGiveUpForceCloseDelaySeconds = 1.0;
-
-// "本 gate 在这条出站连接上已与该 scene 握过手"的印章,挂在 SceneNodeService 注册表的节点实体上。
-// 只存 weak_ptr(AGENTS.md §11.7:应用层不拥有连接)。按连接对象比对:重连后旧章自然失效,
-// 不需要挂断线钩子;实体销毁时随之消失。
-struct SceneLinkHandshakeComp
-{
-    std::weak_ptr<muduo::net::TcpConnection> conn;
-};
 
 // RoutePlayerEvent 到达:记下 lastSceneRoute,整体替换欠账(以最近一次路由决策为准,依据不是 epoch:
 // 同落点重连不铸造 epoch),并立即尝试一次。调用前调用方已用 scene_route_helper.h 的 ApplyRouteIdentity
@@ -63,10 +51,6 @@ void OnClientLeaveGame(SessionId sessionId, SessionInfo &session);
 // 从此 login 才可能为本连接发出新一次登录的 Bind 与路由;在这之前到达的一律按 LeaveGame 之前那条登录链丢弃
 // (gate_scene_route::NoteEnterGameRequested,location-release-binding.md §3.5,第二轮审计 r2-gate#1)。只改会话标志,不转发、不 erase。
 void OnClientEnterGame(SessionId sessionId, SessionInfo &session);
-
-// scene 握手成功应答(conn 是应答所走的出站连接):核对它就是该节点 RpcClient 的当前连接后盖章,
-// 并把以该节点为目标的欠账提前到下一轮扫描(不在应答处理器里同步转发)。
-void OnSceneLinkHandshaken(const muduo::net::TcpConnectionPtr &conn, const std::string &nodeUuid, Clock::time_point now);
 
 // 250ms 扫描定时器的回调:按需打 30s 汇总,对到期的欠账各尝试一次。
 void RetryDueSceneEntries(Clock::time_point now);

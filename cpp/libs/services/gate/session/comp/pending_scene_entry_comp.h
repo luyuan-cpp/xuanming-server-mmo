@@ -13,13 +13,13 @@
 //
 // 不变量:
 //   I1 一次路由决策最多真正转发一次。只有"本地确定没发出去"的失败(节点找不到 / 没有 RpcClient /
-//      TCP 未连上 / 当前连接未握手 / SendRequest 本地拒绝)才续期欠账;前四种在调用 SendRequest 之前判定,
+//      通信未就绪 / SendRequest 本地拒绝)才续期欠账;前三种在调用 SendRequest 之前判定,
 //      SendRequest 返回 false(本地确定没交给连接)归入 kNotConnected。一旦 kSent
 //      就清掉欠账,绝不重发 —— kSent 之后在路上丢失检测不到,是已登记的残余。
 //   I2 欠账与路由快照都存在 SessionInfo 里,只由 gate 主 EventLoop 线程读写(Kafka 回调、RPC 应答、
 //      定时器都投递到这个线程)。会话 erase 即随之取消;session_id 被复用时新 SessionInfo 上什么都没有。
-//   I3 每次尝试都按业务 node_id 重新解析节点实体,不缓存实体号:节点被摘除后不会以同一实体回来,
-//      同 uuid 重注册是"先销毁再创建"且不发 OnNodeRemoveEvent,缓存的实体号会悬空。
+//   I3 每次尝试都按业务 node_id 重新解析节点实体,不缓存实体号:同 UUID 的通信重连保持实体稳定,
+//      权威发现移除才使原实体失效;后续发现的节点不能沿用旧实体句柄。
 //   I5 会话的路由(sceneId + scene 节点指向)只在"转发成功或本来就不需要转发"时整体提交;失败窗口内
 //      会话仍指向上一次成功提交的节点,断线 ExitGame 与客户端消息照旧发往那里。
 
@@ -28,19 +28,16 @@ using SceneEntryClock = std::chrono::steady_clock;
 // 一次向 scene 转发 PlayerEnterGameNode 的结果。除 kSent 外都表示"本地确定没发出去"。
 enum class SceneForwardResult : uint8_t
 {
-    // 已交给当前出站连接,且这条连接上已握过手。**不**代表 scene 已处理:字节进了发送缓冲后
+    // 已交给通信层确认就绪的当前链路。**不**代表 scene 已处理:字节进了发送缓冲后
     // 连接断开、或 scene 处理前崩溃,都检测不到。
     kSent,
     // 按 node_id 在 gate 的 scene 注册表里找不到节点实体(尚未发现 / 已被摘除),或实体已失效。
     kNodeNotFound,
     // 节点实体在,但还没有挂 RpcClient(node_connector 先建实体后连)。
     kNoRpcClient,
-    // TCP 不在已连接态,在调用 SendRequest 之前按链路状态拦下;链路判定通过后 SendRequest
+    // 通信未就绪,在调用 SendRequest 之前按通信层状态拦下;就绪判定通过后 SendRequest
     // 仍返回 false(本地确定没交给连接,RpcClient / RpcChannel 内部计数)时也归入此类。
     kNotConnected,
-    // TCP 已连上,但 scene 还没为本 gate 挂 RpcSession(握手在连上 0.5s 后才发)。此时发出的进场
-    // scene 照常载入玩家,但 NotifyEnterScene 等下行推送找不到 RpcSession 会被丢掉。
-    kHandshakePending,
     // 路由本身无效(scene_id 为 0)。不可重试,直接放弃。
     kInvalidRoute,
     kCount
@@ -52,7 +49,6 @@ inline constexpr const char *kSceneForwardResultNames[] = {
     "node_not_found",
     "no_rpc_client",
     "not_connected",
-    "handshake_pending",
     "invalid_route",
 };
 static_assert(std::size(kSceneForwardResultNames) == static_cast<std::size_t>(SceneForwardResult::kCount),

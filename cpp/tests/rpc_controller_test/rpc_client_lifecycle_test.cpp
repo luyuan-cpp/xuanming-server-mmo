@@ -3,7 +3,7 @@
 //
 // 两条不变量,都围绕"出站节点链路(RpcClient / TcpClient)被拆掉的那一刻":
 //
-//  1. 握手重试定时器不得延长连接寿命。TryRegisterNodeSession 挂的 0.5s 重试闭包若按值捕获
+//  1. 握手失败后的延迟断连不得延长连接寿命。0.5s 闭包若按值捕获
 //     TcpConnectionPtr / RpcClientPtr(旧代码),就是在 muduo Timer 里多存了一份强引用,与
 //     tlsRpc.conn 同形:节点在窗口内被摘除时 ~TcpClient 看到 use_count()==2 → 跳过 forceClose
 //     → TcpConnection.cc:71 assert。判据:调用前后 conn.use_count() 不变。
@@ -46,6 +46,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
 #include <google/protobuf/util/json_util.h>
 #include "network/rpc_controller.h"
 #include "node/system/discovery/service_discovery_manager.h"
@@ -66,16 +67,17 @@
 #include "network/rpc_session.h"                             // RpcSession
 #include "network/rpc_status.h"                              // RpcStatus / RpcStatusCode
 #include "node/system/node/node_util.h"                      // NodeUtils::RemoveRpcSessionsBoundTo
+#include "node/system/node/node_connector.h"                 // 同 UUID 的通信重连不能重建节点实体
 #include "rpc/service_metadata/gate_service_service_metadata.h"  // GateNodeHandshakeRpc
+#include "rpc/service_metadata/scene_service_metadata.h"     // SceneNodeHandshakeRpc
 #include "node/system/registration/registration_manager.h"  // NodeHandshakeManager
 #include "thread_context/node_context_manager.h"             // tlsNodeContextManager(thread_local)
-#include "time/comp/timer_task_comp.h"                       // TimerTaskComp(握手定时器是否武装)
 #include "proto/common/base/common.pb.h"                     // NodeInfo
 #include "proto/common/base/node.pb.h"                       // common::base::SceneNodeService
 
 using namespace std::chrono_literals;
 
-// 链接桩(整个测试工程只在这里定义一次)。本文件调用 NodeHandshakeManager::TryRegisterNodeSession,
+// 链接桩(整个测试工程只在这里定义一次)。本文件调用 NodeHandshakeManager,
 // 于是把 core.lib 里的 registration_manager.obj 链进来;它的其他方法引用全局 gNode,又把 node.obj 拉进来;
 // 而 Node::RegisterHandlers 引用的下面两个注册入口是**各节点可执行工程的生成代码**才定义的
 // (gate / scene / battle 各一份),任何 lib 里都没有 —— 不给就 LNK2019 ×2。
@@ -143,6 +145,11 @@ protected:
             // server 侧连接只留 weak_ptr(测试 4 要用它构造 RpcSession),不延长它的寿命。
             server_->setConnectionCallback([this](const muduo::net::TcpConnectionPtr& conn) {
                 if (conn->connected()) { serverConnWeak_ = conn; return; }
+                if (const auto* channel = boost::any_cast<RpcChannelPtr>(&conn->getContext()); channel && *channel)
+                {
+                    (*channel)->OnDisconnect();
+                }
+                conn->setContext(RpcChannelPtr{});
                 if (!downSignalled_.exchange(true)) serverDown_.set_value();
             });
             server_->start();
@@ -173,12 +180,12 @@ protected:
     }
 
     // 在 loop 线程上建一个真实的 RpcClient 并等它报 UP。
-    RpcClientPtr ConnectClient()
+    RpcClientPtr ConnectClient(RpcClient::Readiness readiness = RpcClient::Readiness::kOnConnect)
     {
         auto upFuture = events_->firstUp.get_future();
         RpcClientPtr client;
         RunInLoopAndWait([&] {
-            client = std::make_shared<RpcClient>(&Loop(), serverAddr_);
+            client = std::make_shared<RpcClient>(&Loop(), serverAddr_, readiness, rpcMaintenance_);
             client->setConnectionObserver([weakEvents = std::weak_ptr<EventCounter>(events_)](const muduo::net::TcpConnectionPtr& conn) {
                 if (const auto events = weakEvents.lock())
                 {
@@ -189,6 +196,21 @@ protected:
         });
         EXPECT_EQ(upFuture.wait_for(5s), std::future_status::ready) << "RpcClient never reported UP";
         return client;
+    }
+
+    // 截止只防夹具挂住；通过条件始终是 loop 内观测到的事件或状态。
+    template <typename Predicate>
+    bool WaitInLoop(Predicate&& predicate)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + 5s;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            bool observed = false;
+            RunInLoopAndWait([&] { observed = predicate(); });
+            if (observed) return true;
+            std::this_thread::sleep_for(1ms);
+        }
+        return false;
     }
 
     // 销毁 RpcClient,把 loop 转空,并要求对端确实看到 DOWN。
@@ -217,12 +239,14 @@ protected:
     std::weak_ptr<muduo::net::TcpConnection> serverConnWeak_;
     std::promise<void> serverDown_;
     std::atomic<bool> downSignalled_{ false };
+    // Node 夹具结束会永久关闭真正的进程维护域；本夹具拓扑使用每例私有域，不重开或重置生产门禁。
+    std::shared_ptr<RpcMaintenanceState> rpcMaintenance_{std::make_shared<RpcMaintenanceState>()};
 };
 
 } // namespace
 
 // ---------------------------------------------------------------------------
-// 1. 握手重试定时器(registration_manager.cpp TryRegisterNodeSession)
+// 1. 握手失败后的延迟断连与连接状态
 // ---------------------------------------------------------------------------
 
 // 观察者直接报告连接状态，DOWN 时当前 channel 必须已经释放。
@@ -243,7 +267,7 @@ TEST_F(RpcClientLoopback, ConnectionObserverReportsUpAndDownWithoutDispatcher)
     auto downFuture = observation->firstDown.get_future();
     RpcClientPtr client;
     RunInLoopAndWait([&] {
-        client = std::make_shared<RpcClient>(&Loop(), serverAddr_);
+        client = std::make_shared<RpcClient>(&Loop(), serverAddr_, RpcClient::Readiness::kOnConnect, rpcMaintenance_);
         const std::weak_ptr<RpcClient> weakClient = client;
         client->setConnectionObserver([observation, weakClient](const muduo::net::TcpConnectionPtr& conn) {
             if (conn->connected())
@@ -311,37 +335,38 @@ TEST_F(RpcClientLoopback, ConnectionObserverReportsUpAndDownWithoutDispatcher)
     EXPECT_EQ(events_->down.load(), 0) << "本例不应经过旧 dispatcher DOWN 接线";
 }
 
-TEST_F(RpcClientLoopback, HandshakeRetryTimerDoesNotRetainTheConnection)
+TEST_F(RpcClientLoopback, HandshakeFailureDelayDoesNotRetainTheConnection)
 {
-    RpcClientPtr client = ConnectClient();
+    RpcClientPtr client = ConnectClient(RpcClient::Readiness::kAfterHandshake);
     ASSERT_TRUE(client && client->connected());
 
-    long before = -1, after = -1, afterDestroy = -1;
+    long before = -1, after = -1;
+    long clientBefore = -1, clientAfter = -1;
     RunInLoopAndWait([&] {
-        // tlsNodeContextManager 是 thread_local:实体必须建在 loop 线程的那份注册表里,
-        // TryRegisterNodeSession 也在这个线程上按连接指针匹配到它。
-        entt::registry& registry = tlsNodeContextManager.GetRegistry(kSceneNodeType);
-        const entt::entity node = registry.create();
-        registry.emplace<RpcClientPtr>(node, client);
-        registry.emplace<NodeInfo>(node);   // 内容无关:匹配只看 GetConnection().get()
-
         const muduo::net::TcpConnectionPtr conn = client->GetConnection();
         if (!conn) { ADD_FAILURE() << "client has no connection"; return; }
-
+        NodeInfo self;
+        self.set_node_type(common::base::GateNodeService);
+        self.set_node_uuid("local-gate");
+        NodeInfo expected;
+        expected.set_node_type(common::base::SceneNodeService);
+        expected.set_node_uuid("expected-scene");
         before = conn.use_count();
-        NodeHandshakeManager{}.TryRegisterNodeSession(kSceneNodeType, conn);
+        clientBefore = client.use_count();
+        NodeHandshakeManager::BeginHandshake(client, self, expected, conn);
+        EXPECT_EQ(client->channel()->OutstandingCount(), 1u);
+        EXPECT_EQ(conn.use_count(), before) << "在途握手不得强持连接";
+        EXPECT_EQ(client.use_count(), clientBefore) << "在途握手不得强持 RpcClient";
+        // 服务端不应答；用合成的单调时刻驱动超时，失败分支在本次 loop 调用内排入延迟关闭。
+        client->channel()->SweepTimeouts(RpcChannel::Clock::now() + 4s);
         after = conn.use_count();
-
-        // 立刻销毁实体:~TimerTaskComp → Cancel → cancelInLoop 同步 delete 定时器与闭包。
-        // 0.5s 后不会再有回调去碰 GetNodeInfo() / gNode(单测进程里没有 Node)。
-        registry.destroy(node);
-        afterDestroy = conn.use_count();
+        clientAfter = client.use_count();
+        EXPECT_FALSE(client->IsReady());
     });
 
     EXPECT_EQ(before, after)
-        << "TryRegisterNodeSession 之后连接多出 " << (after - before)
-        << " 个强引用 —— 重试闭包按值捕获了 TcpConnectionPtr(旧写法),与 tlsRpc.conn 同形";
-    EXPECT_EQ(before, afterDestroy) << "实体销毁后引用计数没有回到基线";
+        << "握手失败后的延迟关闭闭包强持连接，会破坏 TcpClient 析构时的独占判断";
+    EXPECT_EQ(clientBefore, clientAfter) << "延迟关闭不得延长 RpcClient 寿命";
 
     const auto [downBefore, downAfter] = DestroyClientAndDrain(client);
     (void)downBefore; (void)downAfter;   // 这里只要求对端看到 DOWN(在 DestroyClientAndDrain 里断言)
@@ -378,53 +403,309 @@ TEST_F(RpcClientLoopback, InboundHandshakeRejectsGrpcOnlyTypesBeforeTouchingAnyN
     DestroyClientAndDrain(client);
 }
 
-// 握手类型白名单的放行面(registration_manager.cpp IsHandshakeNodeType / VisitHandshakeRpc)。
-// 上一个用例只守拒绝集合;这里守「Scene / Gate 必须放行」。Gate 项在出站侧不可达(没有节点向 gate 拨 TCP),
-// 但 scene 收 gate 的握手(OnNodeHandshake)靠它放行,删掉它单测照样全绿、只有联调才暴露(muduo-rpc-channel.md §10)。
-// OnNodeHandshake 放行后会访问 gNode(单测进程里没有 Node),所以借道共用同一白名单的 TryRegisterNodeSession:
-// 放行 = 在实体上武装 0.5s 握手定时器,拒绝 = 不碰 registry。判据只看定时器是否武装,不等它触发、不依赖墙钟。
-TEST_F(RpcClientLoopback, HandshakeTypeWhitelistAdmitsSceneAndGate)
+namespace
 {
-    RpcClientPtr client = ConnectClient();
-    ASSERT_TRUE(client && client->connected());
 
-    struct Case
+NodeInfo HandshakeNode(uint32_t type, const std::string& uuid)
+{
+    NodeInfo info;
+    info.set_node_type(type);
+    info.set_node_uuid(uuid);
+    info.set_node_id(7);
+    info.set_zone_id(1);
+    return info;
+}
+
+// 服务端只接管回包；测试显式完成，避免把网络调度先后当成就绪判据。全部由 loop 线程访问。
+struct HandshakeServerState
+{
+    std::vector<NodeInfo> requests;
+    std::vector<RpcDoneCallback> replies;
+};
+
+template <typename Service>
+class HeldHandshakeService final : public Service
+{
+public:
+    explicit HeldHandshakeService(std::shared_ptr<HandshakeServerState> state) : state_(std::move(state)) {}
+
+    void NodeHandshake(::google::protobuf::RpcController*, const ::NodeHandshakeRequest* request,
+                       ::NodeHandshakeResponse*, ::google::protobuf::Closure* done) override
     {
-        uint32_t nodeType;
-        bool expectAdmitted;
-    };
-    const Case cases[] = {
-        { static_cast<uint32_t>(common::base::SceneNodeService), true },
-        { static_cast<uint32_t>(common::base::GateNodeService), true },
-        // 对照组:有 registry、但只有 gRPC、没有 RPC0 握手入口。
-        { static_cast<uint32_t>(common::base::SceneManagerNodeService), false },
-    };
+        state_->requests.push_back(request->self_node());
+        state_->replies.push_back(RpcDoneCallback::Adopt(done));
+    }
+
+private:
+    std::shared_ptr<HandshakeServerState> state_;
+};
+
+class RpcClientHandshakeLoopback : public RpcClientLoopback
+{
+protected:
+    void SetUp() override
+    {
+        RpcClientLoopback::SetUp();
+        RunInLoopAndWait([&] {
+            sceneService_ = std::make_shared<HeldHandshakeService<::Scene>>(handshakes_);
+            gateService_ = std::make_shared<HeldHandshakeService<::Gate>>(handshakes_);
+            RpcServiceMap services{
+                {std::string(sceneService_->GetDescriptor()->full_name()), sceneService_.get()},
+                {std::string(gateService_->GetDescriptor()->full_name()), gateService_.get()}};
+            // 连接由服务端持有，context 持有 channel；回调不持连接。服务对象活到服务端拆除之后。
+            server_->setMessageCallback([services = std::move(services), maintenance = rpcMaintenance_](
+                const muduo::net::TcpConnectionPtr& conn, muduo::net::Buffer* buffer, muduo::Timestamp time) {
+                RpcChannelPtr channel;
+                if (const auto* existing = boost::any_cast<RpcChannelPtr>(&conn->getContext()); existing && *existing)
+                {
+                    channel = *existing;
+                }
+                else
+                {
+                    channel = RpcChannel::Create(*conn->getLoop(), conn, services, maintenance);
+                    conn->setContext(channel);
+                }
+                channel->OnMessage(conn, buffer, time);
+            });
+        });
+    }
+
+    void TearDown() override
+    {
+        RunInLoopAndWait([&] {
+            server_.reset();
+            handshakes_->replies.clear();
+        });
+        RpcClientLoopback::TearDown();
+    }
+
+    void Begin(const RpcClientPtr& client, const NodeInfo& expected)
+    {
+        RunInLoopAndWait([&] {
+            NodeHandshakeManager::BeginHandshake(client, HandshakeNode(common::base::GateNodeService, "local-gate"),
+                                                 expected, client->GetConnection());
+        });
+    }
+
+    bool WaitForRequest(std::size_t count)
+    {
+        return WaitInLoop([&] { return handshakes_->requests.size() >= count; });
+    }
+
+    void Reply(std::size_t index, const NodeInfo& peer, uint32_t error = kCommon_errorOK)
+    {
+        RunInLoopAndWait([&] {
+            ASSERT_LT(index, handshakes_->replies.size());
+            const auto& reply = handshakes_->replies[index];
+            auto& response = reply.response<NodeHandshakeResponse>();
+            *response.mutable_peer_node() = peer;
+            response.mutable_error_message()->set_id(error);
+            reply.Run();
+        });
+    }
+
+    bool WaitForCompletion(const RpcClientPtr& client)
+    {
+        return WaitInLoop([&] { return !client->channel() || client->channel()->OutstandingCount() == 0; });
+    }
+
+    std::shared_ptr<HandshakeServerState> handshakes_{std::make_shared<HandshakeServerState>()};
+    std::shared_ptr<HeldHandshakeService<::Scene>> sceneService_;
+    std::shared_ptr<HeldHandshakeService<::Gate>> gateService_;
+};
+
+class RpcClientHandshakeTarget : public RpcClientHandshakeLoopback, public ::testing::WithParamInterface<uint32_t>
+{
+};
+
+enum class PeerIdentityField : uint8_t { kType, kUuid, kNodeId, kZone, kCount };
+
+class RpcClientHandshakeMismatch : public RpcClientHandshakeLoopback,
+                                   public ::testing::WithParamInterface<PeerIdentityField>
+{
+};
+
+} // namespace
+
+// 两种目标都走真实的生成方法和服务派发；tag 写反或漏 Gate 项会导致握手实际失败。
+TEST_P(RpcClientHandshakeTarget, CurrentPeerHandshakeMakesOnlyItsConnectionReady)
+{
+    auto client = ConnectClient(RpcClient::Readiness::kAfterHandshake);
+    const auto expected = HandshakeNode(GetParam(), "expected-peer");
     RunInLoopAndWait([&] {
-        const muduo::net::TcpConnectionPtr conn = client->GetConnection();
-        if (!conn) { ADD_FAILURE() << "client has no connection"; return; }
-        for (const Case& c : cases)
-        {
-            // 与用例 1 同法:实体建在 loop 线程的 thread_local 注册表里,TryRegisterNodeSession 按连接指针匹配到它。
-            entt::registry& registry = tlsNodeContextManager.GetRegistry(c.nodeType);
-            const entt::entity node = registry.create();
-            registry.emplace<RpcClientPtr>(node, client);
-            registry.emplace<NodeInfo>(node);   // 内容无关:匹配只看 GetConnection().get()
-
-            NodeHandshakeManager{}.TryRegisterNodeSession(c.nodeType, conn);
-            const auto* timer = registry.try_get<TimerTaskComp>(node);
-            const bool admitted = timer != nullptr && timer->IsActive();
-            EXPECT_EQ(admitted, c.expectAdmitted)
-                << "node_type=" << c.nodeType
-                << (c.expectAdmitted ? ": must have an RPC0 handshake entry (VisitHandshakeRpc lost its case)"
-                                     : ": has no RPC0 handshake entry but was admitted");
-
-            // 立刻销毁实体:~TimerTaskComp → Cancel,0.5s 后不会再有回调去碰 GetNodeInfo() / gNode。
-            registry.destroy(node);
-        }
+        EXPECT_TRUE(client->connected());
+        EXPECT_FALSE(client->IsReady()) << "TCP UP 不能提前交付业务";
     });
+    Begin(client, expected);
+    EXPECT_TRUE(WaitForRequest(1)) << "没有收到目标服务的 NodeHandshake";
+    RunInLoopAndWait([&] {
+        EXPECT_FALSE(client->IsReady()) << "服务端尚未确认，链路必须保持未就绪";
+        ASSERT_EQ(handshakes_->requests.size(), 1u);
+        EXPECT_EQ(handshakes_->requests.front().node_uuid(), "local-gate");
+    });
+    Reply(0, expected);
+    EXPECT_TRUE(WaitForCompletion(client));
+    RunInLoopAndWait([&] {
+        EXPECT_TRUE(client->IsReady());
+        EXPECT_TRUE(client->IsReadyOn(client->GetConnection()));
+        EXPECT_FALSE(client->IsReadyOn(serverConnWeak_.lock()));
+    });
+    DestroyClientAndDrain(client);
+}
 
-    const auto [downBefore, downAfter] = DestroyClientAndDrain(client);
-    (void)downBefore; (void)downAfter;   // 这里只要求对端看到 DOWN(在 DestroyClientAndDrain 里断言)
+INSTANTIATE_TEST_SUITE_P(SceneAndGate, RpcClientHandshakeTarget,
+                        ::testing::Values(uint32_t(common::base::SceneNodeService),
+                                          uint32_t(common::base::GateNodeService)));
+
+TEST_P(RpcClientHandshakeMismatch, MismatchedPeerIdentityCannotMakeTheLinkReady)
+{
+    auto client = ConnectClient(RpcClient::Readiness::kAfterHandshake);
+    const auto expected = HandshakeNode(common::base::SceneNodeService, "expected-scene");
+    auto wrongPeer = expected;
+    switch (GetParam())
+    {
+    case PeerIdentityField::kType: wrongPeer.set_node_type(common::base::GateNodeService); break;
+    case PeerIdentityField::kUuid: wrongPeer.set_node_uuid("another-scene-at-the-same-address"); break;
+    case PeerIdentityField::kNodeId: wrongPeer.set_node_id(expected.node_id() + 1); break;
+    case PeerIdentityField::kZone: wrongPeer.set_zone_id(expected.zone_id() + 1); break;
+    default: FAIL() << "身份字段用例未定义";
+    }
+    Begin(client, expected);
+    EXPECT_TRUE(WaitForRequest(1));
+    Reply(0, wrongPeer);
+    EXPECT_TRUE(WaitForCompletion(client));
+    RunInLoopAndWait([&] { EXPECT_FALSE(client->IsReady()); });
+    DestroyClientAndDrain(client);
+}
+
+INSTANTIATE_TEST_SUITE_P(EveryIdentityField, RpcClientHandshakeMismatch,
+                        ::testing::Values(PeerIdentityField::kType, PeerIdentityField::kUuid,
+                                          PeerIdentityField::kNodeId, PeerIdentityField::kZone));
+
+TEST_F(RpcClientHandshakeLoopback, PeerRejectionCannotMakeTheLinkReady)
+{
+    auto client = ConnectClient(RpcClient::Readiness::kAfterHandshake);
+    const auto expected = HandshakeNode(common::base::SceneNodeService, "expected-scene");
+    Begin(client, expected);
+    EXPECT_TRUE(WaitForRequest(1));
+    Reply(0, expected, kFailedToRegisterTheNode);
+    EXPECT_TRUE(WaitForCompletion(client));
+    RunInLoopAndWait([&] { EXPECT_FALSE(client->IsReady()); });
+    DestroyClientAndDrain(client);
+}
+
+TEST_F(RpcClientHandshakeLoopback, BusinessCallsBeforeHandshakeFailExactlyOnceWithoutSending)
+{
+    auto client = ConnectClient(RpcClient::Readiness::kAfterHandshake);
+    struct Outcomes
+    {
+        int runs{0};
+        bool hasResponse{false};
+        std::vector<RpcStatusCode> codes;
+    };
+    const auto outcomes = std::make_shared<Outcomes>();
+    RunInLoopAndWait([&] {
+        ProcessClientPlayerMessageRequest request;
+        client->CallMethod(SceneProcessClientPlayerMessageRpc::kMessageId, request,
+            [outcomes](const RpcStatus& status, const MessagePtr& response) {
+                ++outcomes->runs;
+                outcomes->codes.push_back(status.code());
+                outcomes->hasResponse |= response != nullptr;
+            });
+        client->CallMethod<SceneProcessClientPlayerMessageRpc>(request,
+            [outcomes](const RpcStatus& status, const std::shared_ptr<ProcessClientPlayerMessageResponse>& response) {
+                ++outcomes->runs;
+                outcomes->codes.push_back(status.code());
+                outcomes->hasResponse |= response != nullptr;
+            });
+        EXPECT_EQ(outcomes->runs, 0) << "未就绪失败也必须异步交付";
+        EXPECT_FALSE(client->SendRequest<SceneProcessClientPlayerMessageRpc>(request));
+        EXPECT_FALSE(client->SendRequest(SceneProcessClientPlayerMessageRpc::kMessageId, request));
+        EXPECT_EQ(client->channel()->OutstandingCount(), 0u) << "业务不应进入未就绪通道";
+        EXPECT_FALSE(rpcMaintenance_->LocalCallbacksJoined()) << "未就绪回调仍须由本客户端维护域跟踪";
+    });
+    PumpLoop(3);
+    RunInLoopAndWait([&] {
+        EXPECT_EQ(outcomes->runs, 2);
+        ASSERT_EQ(outcomes->codes.size(), 2u);
+        EXPECT_EQ(outcomes->codes[0], RpcStatusCode::kNotSent);
+        EXPECT_EQ(outcomes->codes[1], RpcStatusCode::kNotSent);
+        EXPECT_FALSE(outcomes->hasResponse);
+        EXPECT_TRUE(handshakes_->requests.empty());
+        EXPECT_TRUE(rpcMaintenance_->LocalCallbacksJoined());
+    });
+    DestroyClientAndDrain(client);
+}
+
+TEST_F(RpcClientHandshakeLoopback, ReconnectNeedsANewHandshakeAndRejectsTheOldConnection)
+{
+    auto client = ConnectClient(RpcClient::Readiness::kAfterHandshake);
+    const auto expected = HandshakeNode(common::base::SceneNodeService, "same-scene-process");
+    Begin(client, expected);
+    EXPECT_TRUE(WaitForRequest(1));
+    Reply(0, expected);
+    EXPECT_TRUE(WaitForCompletion(client));
+
+    // 仅为模拟晚到的旧连接句柄，在测试中保留已断开的连接；销毁客户端前必须释放。
+    muduo::net::TcpConnectionPtr oldConn;
+    RunInLoopAndWait([&] {
+        EXPECT_TRUE(client->IsReady());
+        oldConn = client->GetConnection();
+        ASSERT_NE(oldConn, nullptr);
+        oldConn->forceClose();
+    });
+    EXPECT_TRUE(WaitInLoop([&] { return events_->down.load() >= 1 && events_->up.load() >= 2; }))
+        << "服务仍监听时，唯一 TcpClient 应自动重连";
+    RunInLoopAndWait([&] {
+        EXPECT_TRUE(client->connected());
+        EXPECT_NE(client->GetConnection(), oldConn);
+        EXPECT_FALSE(client->IsReady()) << "同一节点的新 TCP 连接必须重新握手";
+        EXPECT_FALSE(client->MarkReady(oldConn));
+        EXPECT_FALSE(client->IsReadyOn(oldConn));
+        EXPECT_FALSE(client->IsReady());
+        oldConn.reset();
+    });
+    Begin(client, expected);
+    EXPECT_TRUE(WaitForRequest(2));
+    Reply(1, expected);
+    EXPECT_TRUE(WaitForCompletion(client));
+    RunInLoopAndWait([&] { EXPECT_TRUE(client->IsReady()); });
+    DestroyClientAndDrain(client);
+}
+
+TEST_F(RpcClientHandshakeLoopback, ShutdownAndLateHandshakeReplyCannotRestoreReadiness)
+{
+    auto client = ConnectClient(RpcClient::Readiness::kAfterHandshake);
+    const auto expected = HandshakeNode(common::base::SceneNodeService, "expected-scene");
+    Begin(client, expected);
+    EXPECT_TRUE(WaitForRequest(1));
+    RunInLoopAndWait([&] {
+        client->CloseChannel();
+        EXPECT_FALSE(client->IsReady());
+        EXPECT_FALSE(client->MarkReady(client->GetConnection()));
+    });
+    Reply(0, expected);
+    PumpLoop(3);
+    RunInLoopAndWait([&] {
+        EXPECT_FALSE(client->IsReady());
+        EXPECT_FALSE(client->IsReadyOn(client->GetConnection()));
+        EXPECT_FALSE(client->MarkReady(client->GetConnection()));
+    });
+    DestroyClientAndDrain(client);
+}
+
+TEST_F(RpcClientLoopback, PlainRpcClientIsReadyOnConnectAndClosedChannelIsNotReady)
+{
+    auto client = ConnectClient();
+    RunInLoopAndWait([&] {
+        EXPECT_TRUE(client->IsReady());
+        EXPECT_TRUE(client->IsReadyOn(client->GetConnection()));
+        EXPECT_FALSE(client->MarkReady({}));
+        client->CloseChannel();
+        EXPECT_FALSE(client->IsReady());
+        EXPECT_FALSE(client->MarkReady(client->GetConnection()));
+    });
+    DestroyClientAndDrain(client);
 }
 
 TEST(ServiceDiscoveryTypeBoundary, MismatchedJsonTypeIsRejectedBeforeSnapshotOrConnectionSideEffects)
@@ -464,11 +745,10 @@ TEST_F(RpcClientLoopback, DestroyingRpcClientDetachesCallbacksBeforeCloseRuns)
 }
 
 // ---------------------------------------------------------------------------
-// 3. 同 uuid 重注册路径(node_connector.cpp ConnectToTcpNode):旧 RpcClient 的最后一根引用
-//    由 registry.destroy(existingEntity) 释放。这里曾把旧 client push 进从不排空的
-//    Node::disconnectedClientList 来"延迟关闭"(为绕开本事故加的兜底),现已移除。本用例锁定
-//    移除后的行为:实体销毁 ⇒ RpcClient 立即析构 ⇒ 无 UAF 回调 ⇒ 对端看到 DOWN。
-//    ConnectToTcpNode 本身依赖 gNode,单测里不构造 Node,因此只复刻它对实体做的事。
+// 3. 同 UUID 的连接装配保持节点实体稳定；权威节点移除才销毁实体、释放通信资源。
+//    普通 TCP DOWN 不清业务路由。同 UUID 的 ConnectToTcpNode 重复调用必须复用原 client，
+//    有效的早返回分支不依赖 gNode，可直接验证。实体销毁用例锁定权威移除后的生命周期：
+//    RpcClient 立即析构 ⇒ 无 UAF 回调 ⇒ 对端看到 DOWN。
 // ---------------------------------------------------------------------------
 
 TEST_F(RpcClientLoopback, DestroyingNodeEntityReleasesItsRpcClientCleanly)
@@ -485,7 +765,7 @@ TEST_F(RpcClientLoopback, DestroyingNodeEntityReleasesItsRpcClientCleanly)
         registry.emplace<NodeInfo>(node);
         client.reset();                 // 组件现在是唯一持有者,与生产一致
         downBefore = events_->down.load();
-        registry.destroy(node);         // == node_connector.cpp 的 targetRegistry.destroy(existingEntity)
+        registry.destroy(node);         // 模拟权威节点移除，不是普通 TCP 重连
     });
     PumpLoop(3);
 
@@ -493,6 +773,57 @@ TEST_F(RpcClientLoopback, DestroyingNodeEntityReleasesItsRpcClientCleanly)
         << "对端没看到 DOWN:实体销毁没有让旧连接 forceClose(是否又有人把 RpcClient / conn 存起来了?)";
     EXPECT_EQ(downBefore, events_->down.load())
         << "实体销毁后连接仍回调进已释放的 RpcClient(use-after-free)";
+}
+
+TEST_F(RpcClientLoopback, RepeatedTcpNodeConnectionKeepsIdentityClientAndBusinessStateAcrossDisconnect)
+{
+    auto client = ConnectClient();
+    struct BusinessStateSentinel { uint64_t routeVersion; }; // 仅测试使用，探测实体是否被销毁重建
+    const auto info = [&] {
+        auto node = HandshakeNode(common::base::SceneNodeService, "stable-scene-instance");
+        node.mutable_endpoint()->set_ip(serverAddr_.toIp());
+        node.mutable_endpoint()->set_port(serverAddr_.port());
+        return node;
+    }();
+    entt::entity node = entt::null;
+    RunInLoopAndWait([&] {
+        auto& registry = tlsNodeContextManager.GetRegistry(kSceneNodeType);
+        node = registry.create();
+        registry.emplace<NodeInfo>(node, info);
+        registry.emplace<RpcClientPtr>(node, client);
+        registry.emplace<BusinessStateSentinel>(node, uint64_t{17});
+    });
+
+    const auto checkRepeatedConnection = [&] {
+        RunInLoopAndWait([&] {
+            auto& registry = tlsNodeContextManager.GetRegistry(kSceneNodeType);
+            NodeConnector::ConnectToTcpNode(info);
+            NodeConnector::ConnectToTcpNode(info);
+            ASSERT_TRUE(registry.valid(node));
+            const auto found = NodeUtils::FindNodeEntityByUuid(kSceneNodeType, info.node_uuid());
+            ASSERT_TRUE(found.has_value());
+            EXPECT_EQ(*found, node);
+            const auto* trackedClient = registry.try_get<RpcClientPtr>(node);
+            ASSERT_NE(trackedClient, nullptr);
+            EXPECT_EQ(*trackedClient, client);
+            const auto* businessState = registry.try_get<BusinessStateSentinel>(node);
+            ASSERT_NE(businessState, nullptr);
+            EXPECT_EQ(businessState->routeVersion, 17u);
+        });
+    };
+    checkRepeatedConnection();
+    EXPECT_TRUE(WaitInLoop([&] { return !serverConnWeak_.expired(); }));
+    RunInLoopAndWait([&] { server_.reset(); });
+    EXPECT_TRUE(WaitInLoop([&] { return events_->down.load() >= 1; }));
+    RunInLoopAndWait([&] { EXPECT_FALSE(client->connected()); });
+    checkRepeatedConnection();
+
+    RunInLoopAndWait([&] {
+        auto& registry = tlsNodeContextManager.GetRegistry(kSceneNodeType);
+        if (registry.valid(node)) registry.destroy(node);
+        client.reset();
+    });
+    PumpLoop(3);
 }
 
 // ---------------------------------------------------------------------------
@@ -522,7 +853,7 @@ TEST_F(RpcClientLoopback, RemoveRpcSessionsBoundToDetachesOnlyThatConnection)
         if (!serverConn || !clientConn) { ADD_FAILURE() << "missing connections"; return; }
         std::weak_ptr<RpcChannel> serverChannelWeak;
         {
-            const RpcChannelPtr serverChannel = RpcChannel::Create(Loop(), serverConn, RpcServiceMap{});
+            const RpcChannelPtr serverChannel = RpcChannel::Create(Loop(), serverConn, RpcServiceMap{}, rpcMaintenance_);
             serverChannelWeak = serverChannel;
             serverConn->setContext(serverChannel);   // context 成为唯一的强持有者
         }
@@ -644,7 +975,7 @@ TEST_F(RpcClientLoopback, SessionWithoutChannelFailsCallsExactlyOnceThroughTheLo
         if (!serverConn) { ADD_FAILURE() << "missing server connection"; return; }
         std::weak_ptr<RpcChannel> serverChannelWeak;
         {
-            const RpcChannelPtr serverChannel = RpcChannel::Create(Loop(), serverConn, RpcServiceMap{});
+            const RpcChannelPtr serverChannel = RpcChannel::Create(Loop(), serverConn, RpcServiceMap{}, rpcMaintenance_);
             serverChannelWeak = serverChannel;
             serverConn->setContext(serverChannel);   // context 成为唯一的强持有者
         }

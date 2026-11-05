@@ -22,21 +22,20 @@ enum class SceneNodeChange : uint8_t
 // CPP-2 进场转发补发的参数(设计与残余见 cross-zone-scene-travel.md "CPP-2 gate 侧进场转发补发")。
 // ---------------------------------------------------------------------------
 
-// 总预算 20s。muduo 断线后立即重连,之后按 0.5/1/2/4/8/16s 翻倍退避(Connector.h),累计重连时刻为
-// 0、0.5、1.5、3.5、7.5、15.5s,每次连上后 registration_manager 再等 0.5s 才握手:停机 ≤7.5s 的节点约 8s
-// 内就绪,停机 8–16s 的约 16s 就绪(余量约 4s),更久的一律放弃、让玩家重登。
+// 总预算 20s,只给尚未发送的进场意图有限的等待时间。重连与身份确认由通信层推进,
+// 业务仅检查就绪能力;能否恢复取决于实际通信耗时,不承诺某个停机长度一定赶得上。
 // 同时必须远小于客户端等进场的 60s:玩家要先看到准确原因(3023 + 踢线),而不是通用的"等待进入场景超时"。
 inline constexpr std::chrono::milliseconds kSceneEntryRetryBudget{20000};
 // 节点找不到时只给 3s 发现预算:etcd watch 推送是毫秒到亚秒级,3s 足以覆盖 gate 比 scene_manager 晚发现
-// 节点;而节点被摘除后不会以同一实体回来(同 uuid 重注册是同一次调用里先销毁再创建),"找不到"持续
-// 超过 3s 就应放弃。它还把"已投递、之后被回滚的路由在找不到节点时迟到改绑"的窗口从 20s 收窄到 3s。
+// 节点。同 UUID 的通信重连保持实体稳定,权威发现移除才使原实体失效;"找不到"持续超过 3s 就应放弃。
+// 它还把"已投递、之后被回滚的路由在找不到节点时迟到改绑"的窗口从 20s 收窄到 3s。
 inline constexpr std::chrono::milliseconds kSceneEntryNodeDiscoveryBudget{3000};
 // 首次退避 = 扫描周期(scene_entry_dispatch.h kSweepIntervalSeconds),再短扫描也唤不醒。
 inline constexpr std::chrono::milliseconds kSceneEntryInitialBackoff{250};
 // 退避封顶 2s:每次尝试只是本地判断(不产生远端副作用),封顶是为了在 20s 内仍有足够的检查点,
-// 让链路恢复到补发的延迟不超过 2s;握手就绪还会把欠账提前唤醒,不全靠这里。
+// 让链路恢复到补发的延迟不超过 2s;欠账只由自己的扫描与业务事件推进。
 inline constexpr std::chrono::milliseconds kSceneEntryMaxBackoff{2000};
-// 纵深上限:纯时间点下 not_connected 走满 20s 是 14 次,运行时加上 BindSession 与握手唤醒的额外尝试
+// 纵深上限:纯时间点下 not_connected 走满 20s 是 14 次,运行时加上 BindSession 的额外尝试
 // 通常 12–16 次;16 挡住"某条路径反复立即唤醒"的缺陷把尝试刷爆,而不是正常情况下的放弃依据。
 inline constexpr uint32_t kSceneEntryMaxAttempts{16};
 
@@ -47,7 +46,7 @@ inline constexpr uint32_t kSceneEntryMaxAttempts{16};
 // OnNodeRemoveEventHandler / ResolveSessionTargetNode(client_session_handler.cpp)会把指向置为
 // entt::null,随后 node_gone 迁频道(沿用原 scene_id)或同 node_id 重启后的改派必须重新进场,
 // 若把无效指向当"未变化",这条路由会被当成重复事件吞掉。首登(从未收到过路由)不会因此误转发:
-// ApplyRoute 要求 session.sceneId != 0。节点以新实体重新注册、而旧进程仍持有玩家实体时会多转发一次
+// ApplyRoute 要求 session.sceneId != 0。权威发现移除后同进程重新在册、但仍持有玩家实体时会多转发一次
 // enterType=0:scene 侧 PlayerEnterGameNode 对已有实体走 EnterScene 复用路径(player_lifecycle.cpp)——
 // session 重绑同号、HandleEnterScene 对"已在目标场景"幂等早退、3.2 交接就地收尾有 epoch 复核、
 // 0 不置登录态也不触发登录事件。唯一的状态副作用是 3.1 会顺带摘掉 PlayerSceneChangeInFlightComp,
@@ -366,34 +365,10 @@ inline bool IsRetryableForwardResult(const SceneForwardResult result)
     case SceneForwardResult::kNodeNotFound:
     case SceneForwardResult::kNoRpcClient:
     case SceneForwardResult::kNotConnected:
-    case SceneForwardResult::kHandshakePending:
         return true;
     default:
         return false;
     }
-}
-
-// scene 链路是否可交付进场。返回 nullopt = 就绪;否则返回未就绪的原因。
-// "TCP 连上"不等于"可交付":gate 每次连上 scene,registration_manager 要再等 0.5s 才发 NodeHandshake,
-// scene 收到握手才为本 gate 挂 RpcSession;在此之前发出的进场 scene 会照常载入玩家,但 NotifyEnterScene
-// 等下行推送找不到 RpcSession 会被丢掉(client_message_sender.cpp)。所以要求"在**当前**这条连接上握过手"。
-// 按连接对象的地址比对:重连后旧章自然失效(调用方传的是 weak_ptr::lock() 的结果,旧连接已析构时为空,
-// 不会与复用了同一地址的新连接混淆),不需要挂断线钩子。
-// 参数用 const void* 而不是 TcpConnection*:判定只需要身份,单测可以用局部变量的地址充当连接。
-inline std::optional<SceneForwardResult> ClassifySceneLink(const bool rpcClientConnected,
-                                                           const void* currentConn,
-                                                           const bool currentConnConnected,
-                                                           const void* handshakenConn)
-{
-    if (!rpcClientConnected || currentConn == nullptr || !currentConnConnected)
-    {
-        return SceneForwardResult::kNotConnected;
-    }
-    if (handshakenConn == nullptr || handshakenConn != currentConn)
-    {
-        return SceneForwardResult::kHandshakePending;
-    }
-    return std::nullopt;
 }
 
 enum class SceneEntryRetryVerdict : uint8_t
@@ -446,7 +421,7 @@ inline PendingSceneEntry BeginPendingSceneEntry(const SceneRouteTarget& target, 
 }
 
 // BindSession 晚到(登录类型在路由之后才到)时,是否要按最近一次路由建一笔欠账。
-// 以前按"已提交的节点指向"补发:指向被节点摘除置无效、或因同 uuid 重注册而悬空时,登录类型会永远挂着。
+// 以前按"已提交的节点指向"补发:指向被权威发现移除置无效时,登录类型会永远挂着。
 // 现在一律按最近一次路由的 node_id 重新解析,有上限、超限踢线。
 // 返回 nullopt 的几种情形:
 //   - 已有欠账:调用方应直接对现有欠账立即尝试一次(ApplyRoute 会优先带上登录类型),不另建第二笔;

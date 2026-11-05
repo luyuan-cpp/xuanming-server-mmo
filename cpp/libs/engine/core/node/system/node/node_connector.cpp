@@ -103,50 +103,37 @@ void NodeConnector::ConnectToGrpcNode(const NodeInfo &nodeInfo)
 
 void NodeConnector::ConnectToTcpNode(const NodeInfo &nodeInfo)
 {
-	auto &targetRegistry = tlsNodeContextManager.GetRegistry(nodeInfo.node_type());
-
-	// node_id 是业务寻址编号,不能转换成完整的 EnTT 实体句柄。
-	// 与 gRPC 路径一致,实体由 registry.create() 自动分配,按 uuid 判断同一进程;
-	// 调用方应使用 uuid 或 NodeUtils::FindNodeEntityByZoneAndNodeId 解析实体。
-	for (const auto &[existingEntity, existingNodeInfo] : targetRegistry.view<NodeInfo>().each())
-	{
-		if (!NodeUtils::IsSameNode(existingNodeInfo.node_uuid(), nodeInfo.node_uuid()))
-		{
-			continue;
-		}
-
-		LOG_INFO << "TCP node already registered, IP: " << nodeInfo.endpoint().ip()
-				 << ", Port: " << nodeInfo.endpoint().port()
-				 << ", uuid: " << nodeInfo.node_uuid();
-
-		// Same uuid resurfacing while the previous client is still tracked is
-		// effectively a re-registration after a transient drop. Destroying the
-		// entity releases the RpcClientPtr component — normally the last owner
-		// of the old RpcClient — so the old link is torn down right here:
-		// ~TcpClient sees use_count()==1 and forceClose()s it (kConnected ->
-		// kDisconnected on the next loop turn); the callbacks muduo still holds
-		// are bound to weak_ptrs, so once the RpcClient is gone they do nothing.
-		// Then fall through and create a fresh entity for the new registration.
-		//
-		// 历史:这里曾把旧 client push 进 Node::disconnectedClientList(只进不出)来
-		// "延迟关闭" —— 那是为绕开 TcpConnection.cc:71 的 assert 加的兜底:当年
-		// thread_local tlsRpc.conn 多持一根引用会让 ~TcpClient 跳过 forceClose,而
-		// 同步销毁又会让 handleClose 回调进已释放的 RpcClient(UAF)。不销毁就两个都
-		// 碰不到,代价是旧 RpcClient 与连接泄漏到进程退出、enableRetry 还会对同一端点
-		// 重连出第二条链路。两处根因已修(tlsRpc 整删;RpcClient 的回调改 weak_ptr 绑定),
-		// 兜底随之移除。见 docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §7.3 / §8.0。
-		targetRegistry.destroy(existingEntity);
-		break;
-	}
-
-	const auto createdId = targetRegistry.create();
+    auto &targetRegistry = tlsNodeContextManager.GetRegistry(nodeInfo.node_type());
+    entt::entity createdId = entt::null;
+    for (const auto &[entity, existing] : targetRegistry.view<NodeInfo>().each())
+    {
+        if (!NodeUtils::IsSameNode(existing.node_uuid(), nodeInfo.node_uuid())) continue;
+        // 同实例的实体和 client 是稳定句柄，通信断开由原 TcpClient 重连，不重建业务引用。
+        if (existing.node_id() != nodeInfo.node_id() || existing.zone_id() != nodeInfo.zone_id() ||
+            existing.endpoint().ip() != nodeInfo.endpoint().ip() || existing.endpoint().port() != nodeInfo.endpoint().port())
+        {
+            LOG_ERROR << "Reject changed TCP identity or endpoint for existing uuid=" << nodeInfo.node_uuid();
+            return;
+        }
+        if (const auto* existingClient = targetRegistry.try_get<RpcClientPtr>(entity); existingClient && *existingClient)
+        {
+            return;
+        }
+        // 同 UUID 已有入站目录实体时，只补出站通信能力，保留原实体和其他状态。
+        targetRegistry.remove<RpcClientPtr>(entity);
+        createdId = entity;
+        break;
+    }
+    if (createdId == entt::null)
+    {
+        createdId = targetRegistry.create();
+        targetRegistry.emplace<NodeInfo>(createdId, nodeInfo);
+    }
 
 	muduo::net::InetAddress remoteEndpoint(nodeInfo.endpoint().ip(), nodeInfo.endpoint().port());
 	auto &client = targetRegistry.emplace<RpcClientPtr>(
 		createdId,
-		std::make_shared<RpcClientPtr::element_type>(gNode->GetLoop(), remoteEndpoint));
-
-	targetRegistry.emplace<NodeInfo>(createdId, nodeInfo);
+		std::make_shared<RpcClient>(gNode->GetLoop(), remoteEndpoint, RpcClient::Readiness::kAfterHandshake));
 
 	auto *replyService = gNode->GetNodeReplyService();
 	if (replyService != nullptr)
@@ -157,14 +144,14 @@ void NodeConnector::ConnectToTcpNode(const NodeInfo &nodeInfo)
 	{
 		LOG_WARN << "Node reply service is null, skip client registerService. node_type=" << gNode->GetNodeType();
 	}
-	client->setConnectionObserver([nodeType = nodeInfo.node_type()](const muduo::net::TcpConnectionPtr& conn)
-	{
-		if (gNode == nullptr || !gNode->IsServiceStarted() || !conn->connected())
-		{
-			return;
-		}
-		gNode->GetNodeRegistrationManager().TryRegisterNodeSession(nodeType, conn);
-	});
+	client->setConnectionObserver([weakClient = std::weak_ptr<RpcClient>(client),
+                                   selfNode = gNode->GetNodeInfo(), expectedPeer = nodeInfo](const muduo::net::TcpConnectionPtr& conn)
+    {
+        if (conn->connected())
+        {
+            NodeHandshakeManager::BeginHandshake(weakClient.lock(), selfNode, expectedPeer, conn);
+        }
+    });
 	client->connect();
 
 	LOG_INFO << "Connecting to TCP node, Uuid: " << nodeInfo.node_uuid()

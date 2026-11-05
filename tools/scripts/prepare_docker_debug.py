@@ -149,6 +149,10 @@ def topic_script(base: dict, data: dict) -> str:
     audit = data["Kafka"]
     if base["AuditTopicGeneration"] != audit["TopicGeneration"]:
         raise ValueError("C++/data_service 的审计 topic 世代不一致")
+    groups = [audit["TransactionLogConsumerGroup"], audit["SnapshotConsumerGroup"]]
+    if any(not isinstance(group, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", group) for group in groups):
+        raise ValueError("源配置包含无效 Kafka 审计消费组")
+    groups = list(dict.fromkeys(groups))
     topics = [
         (f"gate-cmd_g{commands['CommandTopicGeneration']}", commands["CommandTopicPartitions"], 3600000),
         (f"scene-cmd_g{commands['CommandTopicGeneration']}", commands["CommandTopicPartitions"], 3600000),
@@ -234,6 +238,131 @@ ensure_topic() {
         if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or int(partitions) <= 0 or int(retention) <= 0:
             raise ValueError("源配置包含无效 topic 契约")
         script += f"ensure_topic '{name}' {int(partitions)} {int(retention)}\n"
+    script += r"""
+# 冷 broker 的 API/业务 topic 就绪不代表消费组协调器已装载。
+# DescribeGroup 经正常 FindCoordinator 让 broker 自行初始化内部偏移 topic；不加入组、不提交位点。
+ensure_group_coordinator() {
+  group="$1"
+  while :; do
+    status=0
+    run_cli "$coordinator_deadline" /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --describe --group "$group" --state --timeout 10000 || status=$?
+    case "$status" in 0|1) ;; *) fail_cli "消费组协调器查询超时或执行异常: $group (exit=$status)";; esac
+    # Kafka CLI 某些错误只打印到输出而仍退出 0，必须一起检查实际语义。
+    classification=0
+    awk -v group="$group" '
+      BEGIN { quote=sprintf("%c", 39) }
+      {
+        line=$0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]]+$/, "", line)
+        if (line == "Error: Consumer group " quote group quote " does not exist." ||
+            line == "Error: The consumer group " quote group quote " does not exist.") { missing=1; next }
+        if (line ~ /org[.]apache[.]kafka[.]common[.]errors[.]GroupIdNotFoundException([:[:space:]]|$)/) { missing=1; next }
+        if (line ~ /org[.]apache[.]kafka[.]common[.]errors[.](CoordinatorNotAvailableException|CoordinatorLoadInProgressException|NotCoordinatorException)([:[:space:]]|$)/) { pending=1; next }
+        if ($1 == "GROUP" && $2 == "COORDINATOR" && $3 == "(ID)") { headers++; next }
+        if ($1 == group) {
+          rows++
+          if ($2 !~ /:[0-9]+$/ || $3 !~ /^[(][0-9]+[)]$/ ||
+              $(NF-1) !~ /^(Empty|Stable|PreparingRebalance|CompletingRebalance|Assigning|Reconciling)$/ || $NF !~ /^[0-9]+$/) bad=1
+          next
+        }
+        if (line == "Consumer group " quote group quote " has no active members." ||
+            line == "Warning: Consumer group " quote group quote " is rebalancing.") next
+        if (line ~ /Error|ERROR|Exception/) bad=1
+      }
+      END {
+        if (bad) exit 1
+        if (pending) exit 2
+        if (missing && (headers || rows)) exit 1
+        if (missing || (headers == 1 && rows == 1)) exit 0
+        exit 1
+      }
+    ' "$cli_output" || classification=$?
+    if [ "$classification" -eq 0 ] && [ "$status" -eq 0 ]; then
+      cat "$cli_output"
+      echo "消费组协调器就绪: $group"
+      return
+    fi
+    if [ "$classification" -ne 2 ]; then fail_cli "消费组协调器查询失败或格式未知: $group (exit=$status)"; fi
+    wait_metadata "$coordinator_deadline" "消费组协调器在截止时间前仍未就绪: $group"
+  done
+}
+ensure_offsets_leaders() {
+  while :; do
+    status=0
+    run_cli "$coordinator_deadline" /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --describe --topic __consumer_offsets || status=$?
+    if topic_missing __consumer_offsets; then
+      # 已发出正规协调器请求后的明确传播延迟；不能混入其他错误。
+      if grep -E 'Error|ERROR|Exception' "$cli_output" | grep -Fv "Topic '__consumer_offsets' does not exist as expected" >/dev/null; then
+        fail_cli '内部偏移 topic 查询包含其他错误'
+      fi
+      wait_metadata "$coordinator_deadline" '内部偏移 topic 在截止时间前仍不可见'
+      continue
+    fi
+    [ "$status" -eq 0 ] || fail_cli '查询内部偏移 topic 失败或超时'
+    classification=0
+    awk '
+      function ids(text, empty_ok, parts, count, i, seen) {
+        if (text == "") return empty_ok
+        count=split(text, parts, ",")
+        for (i=1; i<=count; i++) {
+          if (parts[i] !~ /^[0-9]+$/ || seen[parts[i]]++) return 0
+        }
+        return 1
+      }
+      function contains(text, wanted, parts, count, i) {
+        count=split(text, parts, ",")
+        for (i=1; i<=count; i++) if (parts[i]+0 == wanted+0) return 1
+        return 0
+      }
+      NF == 0 { next }
+      {
+        topic=""; partition=""; leader=""; replicas=""; isr=""; count=""
+        nt=np=nl=nr=ni=nc=0
+        for (i=1; i<=NF; i++) {
+          value=(i<NF && $(i+1) !~ /:$/) ? $(i+1) : ""
+          if ($i == "Topic:") { topic=value; nt++ }
+          if ($i == "PartitionCount:") { count=value; nc++ }
+          if ($i == "Partition:") { partition=value; np++ }
+          if ($i == "Leader:") { leader=value; nl++ }
+          if ($i == "Replicas:") { replicas=value; nr++ }
+          if ($i == "Isr:") { isr=value; ni++ }
+        }
+        if (nt != 1 || topic != "__consumer_offsets") { bad=1; next }
+        if (nc) {
+          if (nc != 1 || np || nl || nr || ni || count !~ /^[1-9][0-9]*$/) bad=1
+          total=count+0; summaries++; next
+        }
+        if (np != 1 || nl != 1 || nr != 1 || ni != 1 || partition !~ /^[0-9]+$/ ||
+            leader !~ /^(none|-1|[0-9]+)$/ || !ids(replicas, 0) || !ids(isr, 1)) { bad=1; next }
+        if (seen[partition]++) bad=1
+        rows++
+        if (leader == "none" || leader == -1) pending=1
+        else if (!contains(replicas, leader) || !contains(isr, leader)) pending=1
+      }
+      END {
+        if (bad || summaries != 1 || rows != total) exit 1
+        for (i=0; i<total; i++) if (!(i in seen) || seen[i] != 1) exit 1
+        if (pending) exit 2
+        exit 0
+      }
+    ' "$cli_output" || classification=$?
+    if [ "$classification" -eq 0 ]; then
+      cat "$cli_output"
+      echo '内部偏移 topic 全部分区 Leader/ISR 就绪'
+      return
+    fi
+    if [ "$classification" -ne 2 ]; then fail_cli '内部偏移 topic 分区集合、Leader/ISR 或输出格式不符合预期'; fi
+    wait_metadata "$coordinator_deadline" '内部偏移 topic 在截止时间前仍有分区 Leader/ISR 未就绪'
+  done
+}
+# 两个真实组、内部偏移分区和最后复核共享最多 90 秒，不随调用次数增加总预算。
+coordinator_deadline=$(($(now_seconds) + 90))
+"""
+    for group in groups:
+        script += f"ensure_group_coordinator '{group}'\n"
+    script += "ensure_offsets_leaders\n"
+    for group in groups:
+        script += f"ensure_group_coordinator '{group}'\n"
+    script += '[ "$(now_seconds)" -lt "$coordinator_deadline" ] || fail_cli "消费组冷启动就绪超过总预算"\n'
     return script
 
 

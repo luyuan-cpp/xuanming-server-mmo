@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -30,11 +31,14 @@ class RpcClient : muduo::noncopyable, public std::enable_shared_from_this<RpcCli
 {
 public:
     using ConnectionObserver = std::function<void(const muduo::net::TcpConnectionPtr&)>;
+    enum class Readiness : uint8_t { kOnConnect, kAfterHandshake };
 
     RpcClient(muduo::net::EventLoop* loop,
-        const muduo::net::InetAddress& serverAddr)
+        const muduo::net::InetAddress& serverAddr,
+        Readiness readiness = Readiness::kOnConnect,
+        std::shared_ptr<RpcMaintenanceState> maintenance = RpcChannel::ProcessMaintenance())
         : client_(loop, serverAddr, "RpcClient"),
-        serverAddr_(serverAddr)
+        serverAddr_(serverAddr), readiness_(readiness), maintenance_(std::move(maintenance))
     {
         // 回调在 connect() 里绑:构造函数里还拿不到 weak_from_this()。
         client_.enableRetry();
@@ -62,8 +66,28 @@ public:
         return client_.connection()->peerAddress();
     }
 
-    // 当前有可用的 channel(TCP 已连上、且未在关机阶段 0 关闭)。握手是否完成由节点注册流程另外判定。
-    inline bool connected()const { return channel_ != nullptr && !channel_->IsClosed(); }
+    // 只在所属 loop 线程调用；connected 表示通信连接存在，业务发送统一使用 IsReady。
+    bool connected() const
+    {
+        const auto conn = client_.connection();
+        return conn && conn->connected() && channel_ && !channel_->IsClosed() && channel_->IsBoundTo(conn);
+    }
+
+    bool IsReady() const { return ready_ && !channelsClosed_ && connected(); }
+
+    // 来源校验必须匹配传入的那条连接，不能把替代连接上的确认借给旧连接。
+    bool IsReadyOn(const muduo::net::TcpConnectionPtr& conn) const
+    {
+        return conn && IsReady() && channel_->IsBoundTo(conn);
+    }
+
+    // 仅通信握手模块在验证对端身份后调用。旧连接回包与关机后的晚回包不能恢复 Ready。
+    bool MarkReady(const muduo::net::TcpConnectionPtr& conn)
+    {
+        if (channelsClosed_ || !conn || !connected() || !channel_->IsBoundTo(conn)) return false;
+        ready_ = true;
+        return true;
+    }
 
     // 必须在 connect() 之前调用:每次连上时把服务表拷进新的 RpcChannel。
     void registerService(google::protobuf::Service* service)
@@ -118,14 +142,14 @@ public:
         client_.connect();
     }
 
-    // 需要应答的调用,语义见 RpcChannel::CallMethod:done 恰好一次、永不同步执行;未连接时以 kNotSent 投递。
+    // 未就绪时异步投递 kNotSent；不缓存请求，连接恢复也不自动重放业务。
     void CallMethod(uint32_t messageId, const ::google::protobuf::Message& request, ClientDoneCallback done,
                     const RpcCallOptions& options = {})
     {
-        if (!channel_)
+        if (!IsReady())
         {
-            RpcChannel::FailNotSent(*client_.getLoop(), messageId, std::move(done), "not connected",
-                                    serverAddr_.toIpPort());
+            RpcChannel::FailNotSent(*client_.getLoop(), messageId, std::move(done), "link not ready",
+                                    serverAddr_.toIpPort(), maintenance_);
             return;
         }
         channel_->CallMethod(messageId, request, std::move(done), options);
@@ -134,7 +158,7 @@ public:
     template <typename Method, typename Done>
     void CallMethod(const typename Method::Request& request, Done&& done, const RpcCallOptions& options = {})
     {
-        if (!channel_)
+        if (!IsReady())
         {
             RpcChannel::FailNotSent(
                 *client_.getLoop(), Method::kMessageId,
@@ -142,21 +166,21 @@ public:
                 {
                     typedDone(status, std::shared_ptr<typename Method::Response>{});
                 },
-                "not connected", serverAddr_.toIpPort());
+                "link not ready", serverAddr_.toIpPort(), maintenance_);
             return;
         }
         channel_->CallMethod<Method>(request, std::forward<Done>(done), options);
     }
 
-    // 单向(调用方不要应答)。未连接时返回 false 并计数。
+    // 单向(调用方不要应答)。未就绪时返回 false 并计数。
     bool SendRequest(uint32_t messageId, const ::google::protobuf::Message& message)
     {
-        if (!channel_)
+        if (!IsReady())
         {
             const auto n = GetRpcChannelStats().onewayRejected.fetch_add(1, std::memory_order_relaxed) + 1;
             if (ShouldLogRpcEvent(n))
             {
-                LOG_WARN << "[RpcChannel] one-way request dropped: reason=not connected, message_id=" << messageId
+                LOG_WARN << "[RpcChannel] one-way request dropped: reason=link not ready, message_id=" << messageId
                          << ", peer=" << serverAddr_.toIpPort() << ", occurrences=" << n;
             }
             return false;
@@ -175,6 +199,7 @@ public:
     // 不能让新连接上再登记出在途调用 —— 它们会拖到拆除之后才由 ~RpcChannel 失败。
     void CloseChannel()
     {
+        ready_ = false;
         channelsClosed_ = true;
         if (channel_)
         {
@@ -185,7 +210,7 @@ public:
     // 没连接时 TcpClient::connection() 本来就返回空指针,不需要再造一个 static 哨兵。
     muduo::net::TcpConnectionPtr GetConnection() const { return client_.connection(); }
 
-    // 当前连接上的 channel(未连接时为空)。给测试与关机收尾用;业务代码走上面的 CallMethod / SendRequest。
+    // 当前连接上的 channel(未连接时为空)。仅通信握手、测试与关机使用；业务走上面的 Ready 门禁。
     const RpcChannelPtr& channel() const { return channel_; }
 
 private:
@@ -211,6 +236,7 @@ private:
     {
         if (conn->connected())
         {
+            ready_ = false;
             conn->setTcpNoDelay(true);
             conn->setHighWaterMarkCallback(OnInterNodeHighWaterMark, kInterNodeHighWaterMark);
             if (channel_)
@@ -218,10 +244,14 @@ private:
                 // 没等到旧连接的 DOWN 就来了新连接(不应发生):旧 channel 上的在途调用先按断连失败。
                 channel_->OnDisconnect();
             }
-            channel_ = RpcChannel::Create(*conn->getLoop(), conn, services_);
+            channel_ = RpcChannel::Create(*conn->getLoop(), conn, services_, maintenance_);
             if (channelsClosed_)
             {
                 channel_->Close();   // 节点已进入关机阶段 0(见 CloseChannel)
+            }
+            else
+            {
+                ready_ = readiness_ == Readiness::kOnConnect;
             }
             LOG_INFO << "Connected to server at " << conn->peerAddress().toIpPort() << ".";
         }
@@ -229,6 +259,7 @@ private:
         {
             if (channel_ && channel_->IsBoundTo(conn))
             {
+                ready_ = false;
                 // 在途调用以 kDisconnected 失败(回调 queueInLoop,不在本回调栈上执行);channel 随之丢弃 ——
                 // 本端在它上面接管(Adopt)的延后回复此后一律 lock 失败而丢弃,不会落到下一条连接上。
                 channel_->OnDisconnect();
@@ -250,6 +281,10 @@ private:
 
     muduo::net::TcpClient client_;
     muduo::net::InetAddress serverAddr_;
+    Readiness readiness_;
+    // 与 RpcChannel 使用同一维护域；生产默认进程域，独立域允许测试隔离节点关机的永久终态。
+    std::shared_ptr<RpcMaintenanceState> maintenance_;
+    bool ready_{false};
     RpcServiceMap services_;
     bool channelsClosed_{false};
     // 声明在 client_ 之后:析构时先于 client_ 释放(~RpcChannel 在 loop 还活着时把在途调用排进队列)。

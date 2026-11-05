@@ -20129,3 +20129,50 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 - 当前认证代码要求Gate和Match读取MMORPG_INTERNAL_AUTH_SECRET。Compose两处均补为已有INTERNAL_AUTH_SECRET的映射，与Login同源；只在内存比较，caller-auth-compose-result.json passed=true，未输出或更换密钥。
 - 剩余镜像由 finish_images.py 串行执行：player-inbox仅复用现有Go镜像的系统层，清除旧业务后再包本次Debug程序；SQL启动工具使用正规Dockerfile.sql-boot准备必要容器系统；随后现有GoDebug入口构建8个常驻服务及sql-boot/db-migrate，Java直接复用经业务类/authority依赖/descriptor/行号核对的现有JAR重新包装。player-inbox系统层已实际退出0，其他阶段尚待结果；未并行执行重型构建。
 - 已准备本轮断点脚本：C++使用当前node.cpp的541→542，Go沿用真实Login断点，Java沿用ServerListController并使用本栈HTTP18085；均尚未附加。双客户端仍严格2人、360秒，沿用原功能冒烟与当前密钥脱敏。部署后健康、来源和真实断点/进场尚未验收。
+
+### 2026-11-05 Codex：再次重启后接续与 Docker Desktop 启动停点
+
+- 用户再次明确「继续，然后我电脑重启了」。本次启动时间为 2026-11-05 05:41:35.5 美东。现有C++成功结果及player-inbox系统层原日志、退出0记录保留；SQL系统层日志截止10:41:07Z，未形成结果收据，判为重启中断且退出结果未定，不伪填成功。Go服务构建和Java包装均尚未开始。
+- 已准备 resume_images_after_reboot.py，先重新核当前C++来源与已完成系统层，随后只从中断的SQL系统层接续，独占新remaining-images-r2目录；AST通过，尚未启动。原remaining-images-r1不覆盖。另有窗口将现有修改提交为11791c684、7ec726ce1；本聊天未提交，仍须按实际字节核对是否可复用。
+- Docker Desktop原先未运行。一次以现有路径隐藏启动后，后台在services阶段失败：C:/Users/luyua/AppData/Local/Docker/backend.error.json明确记录engine.sock改名为engine.sock.stale时系统报The file cannot be accessed by the system，随后后台退出150。目标C:/Users/luyua/AppData/Local/docker-secrets-engine/engine.sock为0字节重解析点，写入时间早于本次重启；当前Docker相关进程与Linux引擎管道均未就绪。未据此推断WSL或磁盘损坏。
+- 只读失败摘要保存在reboot-docker-startup-hold-20261105-r2.json。未读取套接字内容、未删除或移动该文件、未改ACL/系统设置、未重置Docker或WSL、未改业务卷。按AGENTS.md §10.2等用户决定是否仅处理这个失效的宿主本机套接字后重新启动Docker Desktop；不重复启动或运行新构建。
+
+### 2026-11-05 Codex：套接字清理已获授权，但自动审批拒绝执行
+
+- 用户明确批准「只清理这个失效套接字，保留镜像和数据卷，然后继续部署和验收」。执行前再次核目标为原0字节重解析点、无Docker相关进程，命令仅针对精确engine.sock且无递归操作。
+- 自动审批在创建PowerShell进程前拒绝整条清理/启动命令，返回blocked by policy，未提供更细原因。没有实际执行Remove-Item或启动Docker，没有更换工具或方法绕过拦截。后续只读确认原套接字的长度、属性及写入时间未变，socket-cleanup-approved-result.json不存在；拦截原件摘要socket-cleanup-policy-rejection.json已保留。
+- 需要用户手动处理该精确套接字并打开Docker Desktop。授权本身已经存在，不再次请求同一授权；等待引擎实际就绪后继续。另有窗口正在MSBuild并修改Gate/RPC/注册管理源码，旧bc15a19成功镜像不能冒充这些新改动；接续时先等现有重型构建结束，核最新来源后按当前源码更新Linux候选，不唤醒或停止其他窗口。
+
+### 2026-11-05 Codex：C++ 节点握手收口通信就绪，移除业务恢复钩子
+
+- 基于 `7ec726ce1` 完成本仓内部 RPC0 重构：`RpcClient` 持有 Ready，节点显式使用 `kAfterHandshake`；typed/untyped 业务调用在未就绪时异步 `kNotSent` / 返回 false，不缓存、不自动重放。`IsReadyOn` 按本次连接识别来源，旧连接和关机晚回包不能确认替代连接。
+- `NodeHandshakeManager::BeginHandshake` 直接接收 client、本端身份、预期对端与连接，立即发一次 3s 截止的现有 typed 握手；校验 type / UUID / node_id / zone。删除出站 ECS 查找、握手 `TimerTaskComp` 和成功业务 hook；失败仅在 0.5s 后关闭仍为当前的失败连接，闭包仅 weak，通信重连由原 TcpClient 负责。同 UUID 的出站实体/client 幂等复用，原实体无 client 时补挂；入站 RpcSession 绑定、权威发现移除与业务所有权维持原职责。
+- Gate 删除 `SceneLinkHandshakeComp`、`OnSceneLinkHandshaken` 与业务 `links_ready`；进场只查通信 Ready，未就绪统一 `not_connected`，保留独立 250ms 待办扫描、既有期限/退避、已发送不重放。握手成功不遍历玩家，不提前改业务待办。Kick 来源改用 `IsReadyOn(ctx.conn())`，保留既有实例/会话代次栅栏及未知来源兼容规则。同步两份现有设计文档。
+- 验证：Windows Debug x64，MSBuild 串行 `/m:1 /nr:false /p:CL_MPCount=1`；core、gate/scene 逻辑库、Gate/Scene/Battle 节点及两个测试工程均构建通过，内置裸指针成员门禁通过；最终 `rpc_controller_test` **298/298**、`routing_identity_test` **220/220**。RPC 既有两个 DISABLED 性能基准未运行，无新增跳测。`git diff --check` 通过。
+- 验证过程保留了失败证据：新增夹具的 Protobuf string_view → std::string 显式转换已修正；首次 RPC 全集 292/298，六个末尾参数化握手例受此前 Node 关机测试关闭进程维护域影响。沿用 RpcChannel 的维护域注入接缝，RpcClient 默认仍用进程域，Create 和本地失败回调统一传播；本回环夹具每例私域，未重置生产维护终态或改变执行顺序。修后全集通过。路由脚本曾因运行中 RPC 测试占用 DLL 而在复制阶段未启动，等待退出后串行运行通过。
+- 证据：`build/verification/node-handshake-20261105/verification.json`、逐工程构建日志、`final-rpc-tests/`、`final-routing-tests/`、`change-details.txt` 和完整补丁；未跑真实服务集群断网冒烟、Linux 构建或压测，不据此宣称线上恢复/性能结论；“已有 NodeInfo、无 RpcClient 时补挂”的生产分支仅静态核查。未提交、推送、部署或改动原有四个 dirty 第三方子模块。
+- 双版本：Java **0.1.0-SNAPSHOT** 的握手成功原本无同类业务恢复 hook，本批不改客户端契约、不复制 C++ 内部结构；已在 Java `PARITY.md` 登记。Java 断链清退玩家的策略仍不同，短断网保留玩家内存语义尚待独立改造，不标记为双版全部对齐，未运行 Java 构建或测试。
+- 用户最初要求 Claude Code 独立审阅，CLI 返回未登录，未产生审阅意见；用户随后明确只需改动说明，因此不再调用。已完成通信生命周期、业务调用者、维护域传播的独立静态复核，不冒称 Claude 审阅。
+
+
+### 2026-11-05 Codex：Docker 恢复后的构建与旧库保留门禁
+
+- 用户已手动清理失效套接字并打开 Docker Desktop，实际 desktop-linux/Linux29.8.2 可连接。只读确认另一窗口握手改造的最终三节点 Windows 构建退出0、RPC298及路由220通过，且没有重型编译进程后，本聊天按最新共享源码启动 Linux Debug；没有将其 Windows 结果冒充 Linux 通过。
+- 本轮21742份输入已留存，SDK完整来源检查原先通过，但随后 Docker 在 FROM 解析 SDK pin 时退出1，日志为 pull access denied；未进入 C++ 编译器。后续只读 image ls/inspect 确认 SDK3b01 与此前业务 bc15 镜像当前不在本地，旧20261020镜像仍在，缺失原因未知；未删除任何镜像、未登录注册表、未用旧SDK替代、不自动重试。原件 build/verification/docker-rebuild-cpp-20261105T120414.382599Z/build/。
+- 只恢复本项目原 MySQL 容器（无宿主端口、原数据卷名称和项目/服务标签逐项核准），仅查询 information_schema.tables。testdb 有10张旧表且仅 route_meta，缺其余7张授权表；testdb_ledger 无表，正式分类 partial，sqlBootAllowed=false。未读业务记录或凭据值，未执行sql-boot、业务DDL、迁移或清卷。预检原件 mysql-metadata-preflight-r1/result.json。
+- 仓库当前没有旧模型到新目录/流水/玩家行模型的正式保数据迁移入口，不能手补表或绕过fresh门禁。已准备但未应用 compose.data-isolation.candidate.yml：原卷全部保留，用同项目一套新基础设施及SQL授权卷启动全新调试数据，不自动带入旧账号角色。若要求沿用原账号角色，则需另做迁移设计、备份与核账。按AGENTS.md10.2等待用户选择后再恢复SDK/构建与数据方案，Go/Java及真实断点/登录验收均未开始；未提交推送。
+
+
+### 2026-11-05 Codex：用户选择新调试数据并接续 SDK 恢复
+
+- 用户明确选择保留全部旧卷、另建隔离调试数据，旧账号角色不自动带入；随后说明本项目尚未上线、Docker资源可以清理。本聊天暂不删除仍需保护的旧卷或构建原件，只按选择切换本项目数据批次。
+- Compose18个数据/SQL授权卷增加统一可选DEBUG_DATA_VOLUME_PREFIX，默认保持原项目命名；当前.env设为xuanming-debug-current_20261105。真实Compose解析、18卷完整映射、项目名及现有密钥/镜像键保留检查通过，volume-choice-result.json passed=true。三个日志卷保持原配置，未引入第三Compose或重建业务容器。
+- SDK恢复使用新独占目录docker-debug-sdk-recover-20261105-r1，原r2日志/源码记录不覆盖。以当前toolchain为新基线，仍调用原完整来源校验；原38195份宿主与封存副本集合/字节、原安装核验脚本实际全部复核通过，restore-prepare.result.json退出0，新manifestSHA12135aa2bd37d7c2b9429d2c4000d77a603bb4343beb0ab72106abcad86776e3。已启动--stage build，BUILD_JOBS=1、debug-compile-only；尚未完成或登记新pin，不运行第三方测试。
+- 原inbox系统镜像8e780也已缺失，接续脚本增加显式--restore-inbox-system：新建唯一恢复镜像与收据，再用实际身份送Go构建，不伪称复用了已不存在的旧成功镜像；仅AST通过，尚未执行。后续仍须先完成SDK资格、最新LinuxC++、Go10/Java及实际部署/断点/两客户端验收。
+
+
+### 2026-11-05 Codex：独立 SDK 恢复与完整资格通过
+
+- 新独占恢复build、qualify均实际退出0，restore-build.result.json及restore-qualify.result.json passed=true。镜像sha256:5789f627b0ce9080fc2fa78e52f4b5860ab149bf7328cf4806dfe29f8e743095已按完整schema2守卫登记到cpp-toolchain.json；SDK源清单12135aa2bd37d7c2b9429d2c4000d77a603bb4343beb0ab72106abcad86776e3，仍为原38195份来源逐字复核，原r2记录未覆写。安装核验退出0、安装日志SHAa9c09a90af28b87bb34c666266b621e3571c324b01eba59bebd7ec47802d81f9，verify脚本SHA66ad6c0bd3629745764a9fa57f0b91e661f30b4015344361db5a85bd09b171d6。保留独立依赖闭包并核退休官方grpc产物不存在，未运行第三方测试。
+- 根据信息形状/源码审查，已知新空Kafka首次协调器未就绪曾导致自有data_service退出；正给现有kafka-init补有界正常协调器请求与本轮内部偏移分区Leader/ISR检查，未手工建立内部topic或提交位点。当前仅在做自有初始化解析器夹具验证，实际冷启动待部署后核验，不把静态结果当成功。
+- SDK资格通过后已按原正规入口以--jobs1开始最新LinuxC++ Debug重编，本轮目录docker-rebuild-cpp-20261105T124958.188296Z。尚无本次业务构建成功或部署/断点/进场结论，其他重型阶段仍未启动。

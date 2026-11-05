@@ -1114,7 +1114,6 @@ TEST(SceneEntryRetry, OnlyLocallyUnsentFailuresAreRetryable)
     EXPECT_TRUE(gate_scene_route::IsRetryableForwardResult(SceneForwardResult::kNodeNotFound));
     EXPECT_TRUE(gate_scene_route::IsRetryableForwardResult(SceneForwardResult::kNoRpcClient));
     EXPECT_TRUE(gate_scene_route::IsRetryableForwardResult(SceneForwardResult::kNotConnected));
-    EXPECT_TRUE(gate_scene_route::IsRetryableForwardResult(SceneForwardResult::kHandshakePending));
     EXPECT_FALSE(gate_scene_route::IsRetryableForwardResult(SceneForwardResult::kSent));
     EXPECT_FALSE(gate_scene_route::IsRetryableForwardResult(SceneForwardResult::kInvalidRoute));
 }
@@ -1131,16 +1130,6 @@ TEST(SceneEntryRetry, GivesUpExactlyAtDeadlineAfterBoundedAttempts)
     EXPECT_EQ(20000, attemptAtMs.back());
     EXPECT_LE(entry.attempts, gate_scene_route::kSceneEntryMaxAttempts);
     EXPECT_EQ(SceneForwardResult::kNotConnected, entry.lastFailure);
-}
-
-// 连上但没握手与没连上同预算:握手在连上 0.5s 后才发,重连窗口相同。
-TEST(SceneEntryRetry, HandshakePendingGetsTheSameBudgetAsNotConnected)
-{
-    auto entry = gate_scene_route::BeginPendingSceneEntry(SceneRouteTarget{42, 7, 2001}, kT0);
-    const auto attemptAtMs = DriveUntilGiveUp(entry, SceneForwardResult::kHandshakePending);
-    ASSERT_EQ(14u, attemptAtMs.size());
-    EXPECT_EQ(20000, attemptAtMs.back());
-    EXPECT_EQ(SceneForwardResult::kHandshakePending, entry.lastFailure);
 }
 
 // 节点找不到只给 3s 发现预算,截止收紧到 routedAt + 3s,最后一次正好落在 3s。
@@ -1198,12 +1187,12 @@ TEST(SceneEntryRetry, FirstAndLastFailureAreBothKept)
     auto entry = gate_scene_route::BeginPendingSceneEntry(SceneRouteTarget{42, 7, 2001}, kT0);
     entry.attempts = 1;
     ASSERT_EQ(SceneEntryRetryVerdict::kRetry,
-              gate_scene_route::RecordSceneEntryFailure(entry, SceneForwardResult::kHandshakePending, kT0));
+              gate_scene_route::RecordSceneEntryFailure(entry, SceneForwardResult::kNoRpcClient, kT0));
     entry.attempts = 2;
     ASSERT_EQ(SceneEntryRetryVerdict::kRetry,
               gate_scene_route::RecordSceneEntryFailure(entry, SceneForwardResult::kNotConnected,
                                                         entry.nextAttemptAt));
-    EXPECT_EQ(SceneForwardResult::kHandshakePending, entry.firstFailure);
+    EXPECT_EQ(SceneForwardResult::kNoRpcClient, entry.firstFailure);
     EXPECT_EQ(SceneForwardResult::kNotConnected, entry.lastFailure);
 }
 
@@ -1218,52 +1207,8 @@ TEST(SceneEntryRetry, ForwardResultNamesCoverEveryValue)
         EXPECT_GT(std::strlen(name), 0u);
         EXPECT_TRUE(seen.insert(name).second) << "重复的名字: " << name;
     }
-    EXPECT_STREQ("handshake_pending", SceneForwardResultName(SceneForwardResult::kHandshakePending));
+    EXPECT_STREQ("not_connected", SceneForwardResultName(SceneForwardResult::kNotConnected));
     EXPECT_STREQ("unknown", SceneForwardResultName(SceneForwardResult::kCount));
-}
-
-// --- SceneLinkReady:"已连上"不等于"可交付",还要在当前连接上握过手 --------------------------
-
-TEST(SceneLinkReady, NotConnectedWhenClientOrConnectionIsDown)
-{
-    int a = 0;
-    // 即使印章恰好等于当前连接,任一"没连上"都优先判 not_connected。
-    const auto clientDown = gate_scene_route::ClassifySceneLink(false, &a, true, &a);
-    ASSERT_TRUE(clientDown.has_value());
-    EXPECT_EQ(SceneForwardResult::kNotConnected, *clientDown);
-
-    const auto noConnection = gate_scene_route::ClassifySceneLink(true, nullptr, false, &a);
-    ASSERT_TRUE(noConnection.has_value());
-    EXPECT_EQ(SceneForwardResult::kNotConnected, *noConnection);
-
-    const auto connectionClosing = gate_scene_route::ClassifySceneLink(true, &a, false, &a);
-    ASSERT_TRUE(connectionClosing.has_value());
-    EXPECT_EQ(SceneForwardResult::kNotConnected, *connectionClosing);
-}
-
-// 刚连上(或刚重连)还没握手:scene 还没为本 gate 挂 RpcSession,进场通知会被丢。
-TEST(SceneLinkReady, ReconnectedLinkNotReadyUntilHandshakeOnSameConnection)
-{
-    int a = 0;
-    const auto verdict = gate_scene_route::ClassifySceneLink(true, &a, true, nullptr);
-    ASSERT_TRUE(verdict.has_value());
-    EXPECT_EQ(SceneForwardResult::kHandshakePending, *verdict);
-}
-
-// 旧连接上的握手章不算数:重连后必须在新连接上重新握手。
-TEST(SceneLinkReady, HandshakeOnOldConnectionDoesNotCount)
-{
-    int a = 0;
-    int b = 0;
-    const auto verdict = gate_scene_route::ClassifySceneLink(true, &b, true, &a);
-    ASSERT_TRUE(verdict.has_value());
-    EXPECT_EQ(SceneForwardResult::kHandshakePending, *verdict);
-}
-
-TEST(SceneLinkReady, ReadyWhenHandshakenOnCurrentConnection)
-{
-    int a = 0;
-    EXPECT_FALSE(gate_scene_route::ClassifySceneLink(true, &a, true, &a).has_value());
 }
 
 // --- SceneEntryAttempt:比较、转发、成功后才提交 --------------------------------------------
@@ -1315,7 +1260,7 @@ TEST(SceneEntryAttempt, UndiscoveredNodeRetriesThenForwardsLoginOnce)
     EXPECT_EQ(1u, calls.size());
 }
 
-// 没连上 / 没握手期间登录类型一直留着;链路就绪后恰好发一次,之后绝不重发(I1)。
+// 通信未就绪期间登录类型一直留着;独立重试看到就绪后恰好发一次,之后绝不重发(I1)。
 TEST(SceneEntryAttempt, NotConnectedKeepsLoginTypeAndSendsExactlyOnceAfterReconnect)
 {
     SessionInfo session;
@@ -1323,7 +1268,7 @@ TEST(SceneEntryAttempt, NotConnectedKeepsLoginTypeAndSendsExactlyOnceAfterReconn
     session.pendingSceneEntry = gate_scene_route::BeginPendingSceneEntry(SceneRouteTarget{0, 3, 1001}, kT0);
 
     const std::vector<SceneForwardResult> script{SceneForwardResult::kNotConnected,
-                                                 SceneForwardResult::kHandshakePending,
+                                                 SceneForwardResult::kNotConnected,
                                                  SceneForwardResult::kSent};
     std::vector<uint32_t> forwardedTypes;
     auto resolve = [](uint32_t) { return std::optional<entt::entity>{entt::entity{9}}; };
@@ -1394,7 +1339,7 @@ TEST(SceneEntryAttempt, FailedAttemptsNeverCommitTheNewRoute)
     session.SetNodeEntity(eNodeType::SceneNodeService, entt::entity{7});
     session.pendingSceneEntry = gate_scene_route::BeginPendingSceneEntry(SceneRouteTarget{42, 9, 3001}, kT0);
 
-    const std::vector<SceneForwardResult> script{SceneForwardResult::kHandshakePending,
+    const std::vector<SceneForwardResult> script{SceneForwardResult::kNotConnected,
                                                  SceneForwardResult::kNotConnected,
                                                  SceneForwardResult::kSent};
     std::vector<uint32_t> forwardedTypes;
