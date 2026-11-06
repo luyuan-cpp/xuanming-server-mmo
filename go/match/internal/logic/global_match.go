@@ -53,7 +53,8 @@ func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required uint32) (*p
 	}
 	var rating float64
 	if isRatedMode(in.Mode) {
-		if rating, e = loadRating(l.svcCtx, d.PlayerId); e != nil {
+		// 读本模式的评分轨道:与写进票的 mode、成局后 CreateBattleRequest.match_mode、结算时结果的 match_mode 是同一个值。
+		if rating, e = loadRating(l.svcCtx, in.Mode, d.PlayerId); e != nil {
 			return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "评分暂不可用")}, nil
 		}
 	}
@@ -195,7 +196,7 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 		if ticket == "" {
 			ticket = uuid.NewString()
 		}
-		group = append(group, &pb.MatchAuthorityTicketRecord{PlayerId: pid, Ticket: ticket, RequestId: f.OperationId, Mode: uint32(mode), ConfigId: config, TeamSize: uint32(len(members)), TeamId: opts.teamID, OwnerAccount: profiles[pid].OwnerAccount, OwnerRevision: profiles[pid].OwnerRevision, RatingCenti: int64(math.Round(loadRatingOrDefault(s, pid) * 100))})
+		group = append(group, &pb.MatchAuthorityTicketRecord{PlayerId: pid, Ticket: ticket, RequestId: f.OperationId, Mode: uint32(mode), ConfigId: config, TeamSize: uint32(len(members)), TeamId: opts.teamID, OwnerAccount: profiles[pid].OwnerAccount, OwnerRevision: profiles[pid].OwnerRevision, RatingCenti: ratingSnapshotCenti(s, mode, pid)})
 	}
 	return f, group, nil
 }

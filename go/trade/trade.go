@@ -48,6 +48,7 @@ import (
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
+	"shared/releasetrack"
 	"shared/serverbase"
 	"shared/sqlpoolstats"
 
@@ -165,6 +166,12 @@ func runTrade(c config.Config) (runErr error) {
 	if err != nil {
 		return err
 	}
+	// 发布轨道(docs/design/release-track-gray-canary.md §2.5):canary 副本只处理路由服转来的客户端请求,
+	// 不跑全局作用域的后台(重投、商务推进、维护选主、唤醒订阅、终态清理)。取值非法就拒启。
+	releaseTrack, err := releasetrack.FromEnv()
+	if err != nil {
+		return err
+	}
 
 	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
 	if err != nil {
@@ -256,12 +263,12 @@ func runTrade(c config.Config) (runErr error) {
 
 	// 资产通道:scene 节点镜像 + outbox 重投循环,以及落地恢复的唤醒订阅与选主维护(日对账 + 自动放弃)。
 	// 先于 gRPC 起,把上一轮留下的未决指令尽早投出去;ctx 取消(收到退出信号)即全部退出,连接在 svcCtx.Stop() 里关。
-	svcCtx.StartAssetChannel(ctx)
+	svcCtx.StartAssetChannel(ctx, releaseTrack.RunsGlobalBackgroundWork())
 
 	// 终态资产指令清理(trade.asset_op_cleanup,保留期外的终态行逐行删):与 AssetOp.Enabled 独立(同 guild),
 	// 通道关着时历史终态行照样要清。必须在 ensureSchema 之后(表一定在)。装配失败即拒启:配置说要清却没在清,
-	// 表会无界增长且没有任何报错。
-	if c.AssetOp.CleanupEnabled {
+	// 表会无界增长且没有任何报错。canary 副本不清(发布轨道设计 §2.5),由 stable 副本清。
+	if c.AssetOp.CleanupEnabled && releaseTrack.RunsGlobalBackgroundWork() {
 		stop, err := svc.StartAssetOpCleanup(svcCtx.DB, c.AssetOp, root)
 		if err != nil {
 			return err

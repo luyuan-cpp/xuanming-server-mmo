@@ -58,7 +58,8 @@ func (g *nodeViewGate) check(baseline, seen map[uint32]map[string]struct{}, snap
 		}
 		gate := g.zones[zoneID]
 		if gate == nil {
-			gate = liveview.NewGate(nodeViewHold)
+			// 放行之后立刻清扫、没有自己的去抖:恢复到一半以下时剩下的缺席多半也正在重新注册,缺席清零才算恢复。
+			gate = liveview.NewGate(nodeViewHold, liveview.RecoverWhenClear)
 			g.zones[zoneID] = gate
 		}
 		obs := liveview.Observation{Known: len(known), Missing: missing, Empty: snapshotEmpty}

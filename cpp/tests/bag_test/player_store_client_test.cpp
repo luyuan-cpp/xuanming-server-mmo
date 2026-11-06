@@ -1261,3 +1261,202 @@ TEST(PlayerStoreClientTest, SnapshotsWithNothingToWriteReportTheWatermark)
     EXPECT_EQ(4u, probe.reported[1].second);
     EXPECT_EQ(7u, probe.reported[2].second);
 }
+
+// ── 新分行与「只顺带」的行(docs/design/player-save-direct-commit.md §1.1)────────────────────
+
+namespace
+{
+    constexpr auto kLocation = static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_LOCATION);
+
+    player_store_rows::KindBytes WithLocation(player_store_rows::KindBytes rows, const std::string &location)
+    {
+        rows[kLocation] = location;
+        return rows;
+    }
+}
+
+// 写权行和退役号不是数据行;每行数据都声明了存盘方式,只有位置只顺带。
+TEST(PlayerStoreProjectionTest, EveryDataKindDeclaresASavePolicy)
+{
+    EXPECT_FALSE(player_store_rows::IsDataKind(0)) << "写权行";
+    EXPECT_FALSE(player_store_rows::IsDataKind(1)) << "退役的 HOT";
+    EXPECT_FALSE(player_store_rows::IsDataKind(2)) << "退役的 ASSET";
+    EXPECT_FALSE(player_store_rows::IsDataKind(player_store_rows::kKindCount));
+    for (const auto kind : {playerstore::PLAYER_STORE_KIND_GROWTH, playerstore::PLAYER_STORE_KIND_PROFILE,
+                            playerstore::PLAYER_STORE_KIND_LEGACY1, playerstore::PLAYER_STORE_KIND_CHARACTER,
+                            playerstore::PLAYER_STORE_KIND_WALLET, playerstore::PLAYER_STORE_KIND_BAG})
+    {
+        EXPECT_TRUE(player_store_rows::IsDataKind(kind)) << kind;
+        EXPECT_EQ(PERSIST_ROW_SAVE_PERIODIC, player_store_rows::RowSavePolicy(kind)) << kind;
+    }
+    EXPECT_TRUE(player_store_rows::IsDataKind(kLocation));
+    EXPECT_EQ(PERSIST_ROW_SAVE_PIGGYBACK, player_store_rows::RowSavePolicy(kLocation));
+}
+
+// 只改位置时只有位置那一行有内容;位置那一行里只有 transform,资产、账本不会被推迟。
+TEST(PlayerStoreProjectionTest, LocationRowHoldsOnlyTheTransform)
+{
+    player_database db;
+    db.mutable_transform()->mutable_location()->set_x(1.5);
+    player_database_1 db1;
+    player_store_rows::KindBytes bytes;
+    std::string error;
+    ASSERT_TRUE(player_store_rows::ProjectPlayer(db, db1, bytes, error)) << error;
+    for (std::size_t kind = 1; kind < player_store_rows::kKindCount; ++kind)
+    {
+        if (kind == kLocation || kind == static_cast<std::size_t>(playerstore::PLAYER_STORE_KIND_LEGACY1))
+        {
+            continue;
+        }
+        EXPECT_TRUE(bytes[kind].empty()) << "kind " << kind << " 不该有内容";
+    }
+    player_database location;
+    ASSERT_TRUE(location.ParseFromString(bytes[kLocation]));
+    EXPECT_DOUBLE_EQ(1.5, location.transform().location().x());
+    std::vector<const google::protobuf::FieldDescriptor *> present;
+    location.GetReflection()->ListFields(location, &present);
+    ASSERT_EQ(1u, present.size());
+    EXPECT_EQ("transform", std::string(present.front()->name()));
+}
+
+// 旧分行布局写的行(HOT=1、ASSET=2)按现在的分行解读会丢字段,整份拒绝。
+TEST(PlayerStoreProjectionTest, RetiredKindIsRejected)
+{
+    for (const int retired : {1, 2})
+    {
+        google::protobuf::RepeatedPtrField<playerstore::PlayerStoreRow> rows;
+        auto *row = rows.Add();
+        row->set_kind(static_cast<playerstore::PlayerStoreKind>(retired));
+        row->set_payload(SamplePlayer().SerializeAsString());
+        player_database restored;
+        player_database_1 restored1;
+        std::string error;
+        EXPECT_FALSE(player_store_rows::AssemblePlayer(rows, restored, restored1, error)) << retired;
+        EXPECT_FALSE(error.empty());
+    }
+}
+
+TEST(PlayerStoreClientTest, ClaimWithRetiredKindHasNoConclusion)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    client.RequestClaim(kPlayer);
+    playerstore::LoadAndClaimResponse response;
+    response.set_result(playerstore::LOAD_AND_CLAIM_CLAIMED);
+    response.set_storage_id(1);
+    response.set_owner_epoch(kEpoch);
+    response.add_rows()->set_kind(static_cast<playerstore::PlayerStoreKind>(1));
+    f.ReplyClaimWith(response);
+    ASSERT_EQ(1u, f.claimed.size());
+    EXPECT_FALSE(f.claimed.front().second.has_value()) << "退役行不播种";
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kNotSeeded, client.Submit(kPlayer, Rows("h0"), {}, nullptr));
+}
+
+// 定时存盘只遇到位置变化:不发、不取号、不进状态机。
+TEST(PlayerStoreClientTest, PeriodicSaveDefersWhenOnlyLocationChanged)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
+    EXPECT_TRUE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l1")));
+    EXPECT_TRUE(f.sent.empty());
+    EXPECT_EQ(1000u, f.nextSeq) << "推迟不取序号";
+    EXPECT_FALSE(client.HasUnsettled(kPlayer)) << "推迟的快照不进状态机";
+}
+
+// 有别的行要写时位置顺带写出去。
+TEST(PlayerStoreClientTest, LocationRidesAlongWithOtherRows)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
+    const auto rows = WithLocation(Rows("h1"), "l1");
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, rows));
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, rows, {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kCharacter));
+    EXPECT_EQ("l1", PayloadOf(f.sent.front().request, kLocation));
+}
+
+// 没有任何变化不归推迟管,照旧由 Submit 判已落盘。
+TEST(PlayerStoreClientTest, UnchangedSnapshotIsNotDeferred)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    const auto rows = WithLocation(Rows("h0"), "l0");
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, rows));
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, rows));
+    EXPECT_EQ(PlayerStoreClient::SubmitResult::kAlreadyPersisted, client.Submit(kPlayer, rows, {}, nullptr));
+}
+
+// 从第一次推迟算,到兜底间隔就照常写;写出去之后重新计时。
+TEST(PlayerStoreClientTest, DeferredLocationIsWrittenAtTheFallback)
+{
+    Fixture f;
+    f.options.piggybackFallbackSec = 300;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
+    EXPECT_TRUE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l1")));
+    f.clock += std::chrono::seconds(299);
+    EXPECT_TRUE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l2")));
+    f.clock += std::chrono::seconds(1);
+    const auto rows = WithLocation(Rows("h0"), "l3");
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, rows)) << "到兜底间隔";
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, rows, {}, nullptr));
+    ASSERT_EQ(1u, f.sent.size());
+    ASSERT_EQ(1, f.sent.front().request.rows_size());
+    EXPECT_EQ("l3", PayloadOf(f.sent.front().request, kLocation));
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+
+    f.clock += std::chrono::seconds(1);
+    EXPECT_TRUE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l4"))) << "写出去之后重新计时";
+}
+
+// 别的入口(资产、关键进度)写出了位置:推迟从下一次重新计时,不按最早那次判超时。
+TEST(PlayerStoreClientTest, DeferralRestartsWhenAnotherSaveWritesLocation)
+{
+    Fixture f;
+    f.options.piggybackFallbackSec = 300;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
+    EXPECT_TRUE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l1")));
+    f.clock += std::chrono::seconds(200);
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, WithLocation(Rows("h1"), "l2"), {}, nullptr));
+    f.Reply(playerstore::SAVE_PLAYER_COMMITTED);
+    f.clock += std::chrono::seconds(200);
+    EXPECT_TRUE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h1"), "l3")));
+}
+
+// 有在途时不推迟,照常并进排队。
+TEST(PlayerStoreClientTest, NoDeferralWhileASaveIsInFlight)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
+    ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted, client.Submit(kPlayer, WithLocation(Rows("h1"), "l0"), {}, nullptr));
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h1"), "l1")));
+}
+
+// 位置那一行结果未决(库里是哪一份不知道):不拖,照常写。
+TEST(PlayerStoreClientTest, UncertainLocationIsNotDeferred)
+{
+    Fixture f;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
+    client.Submit(kPlayer, WithLocation(Rows("h0"), "l1"), {}, nullptr);
+    f.ReplyUnknown();
+    f.FireTimers();
+    f.Reply(playerstore::SAVE_PLAYER_STALE_OWNER, 200, 55);
+    ASSERT_FALSE(client.HasUnsettled(kPlayer));
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l2")));
+}
+
+// 兜底间隔配 0:不推迟,定时存盘遇到位置变化也写(压测对照)。
+TEST(PlayerStoreClientTest, ZeroFallbackNeverDefers)
+{
+    Fixture f;
+    f.options.piggybackFallbackSec = 0;
+    PlayerStoreClient client(f.options);
+    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, WithLocation(Rows("h0"), "l0")));
+    EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l1")));
+}

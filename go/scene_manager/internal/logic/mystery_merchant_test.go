@@ -553,33 +553,160 @@ func TestScheduleMysteryMerchant_CorruptRecordWithAValidVersionIsStillReplaced(t
 	assert.Equal(t, uint64(101), readMerchantStateForTest(t, mr).GetSceneId())
 }
 
-// 联调时把间隔从 120 秒改回 3600 秒(冒烟配置 → 表值)是文档自己要求的操作:旧记录是 12:58 那一轮,
-// 新时间轴上「现在」属于 12:00 那一轮,出现时刻更早、版本号更小。不强制覆盖的话要等旧键 TTL 过期才写得进去。
-func TestScheduleMysteryMerchant_IntervalChangeDiscardsTheOldTimeline(t *testing.T) {
+// ── 改了出现间隔(第二轮审计 r2-mm#1)──────────────────────────────────────
+//
+// scene 节点在手里那一轮结束之前丢弃版本更小的记录(merchantrules::ShouldDiscardAsStale),新起的节点没有缓存、照单采纳。
+// 所以旧的一轮卖完之前不许写新一轮,否则两轮同时在售:玩家在两条线之间往返,RecordPurchase 每换一次轮整份清空,限购反复清零。
+// 轮次号是限购记录的账本键,新间隔下也不许用一个不比旧记录大的轮次号:那会撞上用过的号,把那一轮的已购数带进新货架。
+
+// mysteryMerchantVersionForTest 是记录里 v 字段应有的十进制原文。
+func mysteryMerchantVersionForTest(roundID uint64, revision uint32) string {
+	return fmt.Sprintf("%d", roundID*mysteryMerchantVersionRoundFactor+uint64(revision))
+}
+
+// requireMerchantScheduleLeavesRecord 跑一拍调度,断言结果并断言记录(state 与 v)一个字节都没变。
+func requireMerchantScheduleLeavesRecord(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Miniredis, offset int64,
+	tables merchantTables, want string) {
+	t.Helper()
+	key := mysteryMerchantKey(testZoneId)
+	state, version := mr.HGet(key, MysteryMerchantStateField), mr.HGet(key, MysteryMerchantVersionField)
+	outcome, err := scheduleMysteryMerchant(sc, testZoneId, merchantAt(offset), &scriptedMerchantRand{}, tables)
+	require.NoError(t, err, "offset=%d", offset)
+	assert.Equal(t, want, outcome, "offset=%d", offset)
+	assert.Equal(t, state, mr.HGet(key, MysteryMerchantStateField), "offset=%d:记录不许变", offset)
+	assert.Equal(t, version, mr.HGet(key, MysteryMerchantVersionField), "offset=%d:版本号不许变", offset)
+}
+
+// 联调时把间隔从 120 秒改回 3600 秒(冒烟配置 → 表值)是文档自己要求的操作。旧记录是 120 秒时间轴上 12:24 那一轮,
+// 新时间轴上「现在」属于 12:00 那一轮 —— 12:00 在 120 秒时间轴上也用过,轮次号撞号。旧的一轮先卖完,12:00 那一轮不写,
+// 13:00 那一轮才按新间隔写。旧记录要活到那时(TTL 不低于最长间隔):按 2 个旧间隔算它 4 分钟就过期,过期之后
+// 就没有东西挡住 12:00 那一轮了。
+func TestScheduleMysteryMerchant_IntervalChangeLetsTheOldRoundFinish(t *testing.T) {
 	sc, mr := newMerchantCtx(t)
 	publishMerchantDirectory(t, mr, merchantTestConfID, smoothLine(101, 1), smoothLine(102, 2))
+	key := mysteryMerchantKey(testZoneId)
 
 	short := merchantTestTables()
 	short.rule.intervalSeconds, short.rule.staySeconds = 120, 120
-	now := merchantAt(1500) // 整点后 25 分钟:120 秒时间轴上是 1440 秒那一轮,3600 秒时间轴上还在停留期内
-	outcome, err := scheduleMysteryMerchant(sc, testZoneId, now, &scriptedMerchantRand{}, short)
+	// 整点后 25 分钟:120 秒时间轴上是 1440 秒那一轮(停留到 1560 秒),3600 秒时间轴上 12:00 那一轮停留到 1800 秒。
+	outcome, err := scheduleMysteryMerchant(sc, testZoneId, merchantAt(1500), &scriptedMerchantRand{}, short)
 	require.NoError(t, err)
 	require.Equal(t, metrics.MerchantScheduleCreated, outcome)
-	old := readMerchantStateForTest(t, mr)
-	require.Equal(t, uint64(merchantTestRoundStart+1440), old.GetRoundId())
+	require.Equal(t, uint64(merchantTestRoundStart+1440), readMerchantStateForTest(t, mr).GetRoundId())
+	assert.Equal(t, 24*time.Hour, mr.TTL(key), "旧记录的轮次号是改间隔之后判撞号的依据,TTL 不低于最长间隔")
 
-	outcome, err = scheduleMysteryMerchant(sc, testZoneId, now.Add(5*time.Second), &scriptedMerchantRand{}, merchantTestTables())
+	// 旧的一轮还在停留期内:不覆盖,照常核对线(线还在 → kept)。
+	requireMerchantScheduleLeavesRecord(t, sc, mr, 1505, merchantTestTables(), metrics.MerchantScheduleKept)
+
+	// 旧的一轮结束了,新时间轴上「现在」是 12:00 那一轮:轮次号不比旧记录大,不写。
+	// 先快进 5 分钟:2 个旧间隔(240 秒)的 TTL 在这里早已过期,记录还在才挡得住。
+	mr.FastForward(5 * time.Minute)
+	for _, offset := range []int64{1560, 1795, 3599} {
+		requireMerchantScheduleLeavesRecord(t, sc, mr, offset, merchantTestTables(), metrics.MerchantScheduleIdle)
+	}
+
+	// 13:00:新间隔下轮次号更大的第一轮。版本号比旧记录大,照常写入(不强制覆盖)。
+	outcome, err = scheduleMysteryMerchant(sc, testZoneId, merchantAt(3600), &scriptedMerchantRand{}, merchantTestTables())
 	require.NoError(t, err)
-	require.Equal(t, metrics.MerchantScheduleCreated, outcome, "旧时间轴的记录版本号更大,也必须让位")
+	require.Equal(t, metrics.MerchantScheduleCreated, outcome)
 	fresh := readMerchantStateForTest(t, mr)
-	assert.Equal(t, merchantTestRoundID, fresh.GetRoundId())
+	assert.Equal(t, merchantTestRoundID+3600, fresh.GetRoundId())
 	assert.Equal(t, uint32(3600), fresh.GetIntervalSeconds())
-	assert.Equal(t, uint64(merchantTestRoundStart+1800)*1000, fresh.GetExpireAtMs())
+	assert.Equal(t, uint64(merchantTestRoundStart+3600+1800)*1000, fresh.GetExpireAtMs())
+	assert.Equal(t, mysteryMerchantVersionForTest(merchantTestRoundID+3600, 1), mr.HGet(key, MysteryMerchantVersionField))
 
 	// 之后回到正常路径:同一轮内不再重写。
-	outcome, err = scheduleMysteryMerchant(sc, testZoneId, now.Add(10*time.Second), &scriptedMerchantRand{}, merchantTestTables())
+	requireMerchantScheduleLeavesRecord(t, sc, mr, 3610, merchantTestTables(), metrics.MerchantScheduleKept)
+}
+
+// 审计里的原样场景:运维把间隔调大,新间隔下「现在」这一轮(轮次号更小)的停留期盖过旧一轮的结束时刻。
+// 旧实现当拍强制覆盖,于是缓存着旧轮的节点卖旧轮、新起的节点卖新轮。
+func TestScheduleMysteryMerchant_IntervalRaisedMidRoundKeepsASingleRoundOnSale(t *testing.T) {
+	sc, mr := newMerchantCtx(t)
+	publishMerchantDirectory(t, mr, merchantTestConfID, smoothLine(101, 1), smoothLine(102, 2))
+	key := mysteryMerchantKey(testZoneId)
+
+	// 13:00 那一轮(每小时一轮、停留 30 分钟),13:30 结束。
+	outcome, err := scheduleMysteryMerchant(sc, testZoneId, merchantAt(3605), &scriptedMerchantRand{}, merchantTestTables())
 	require.NoError(t, err)
-	assert.Equal(t, metrics.MerchantScheduleKept, outcome)
+	require.Equal(t, metrics.MerchantScheduleCreated, outcome)
+	require.Equal(t, uint64(101), readMerchantStateForTest(t, mr).GetSceneId())
+
+	// 13:10 起改成每两小时一轮、停留 7000 秒:merchantTestRoundStart 是 7200 的整数倍,新时间轴上「现在」是 12:00 那一轮,
+	// 停留到 13:56:40,盖过旧一轮的 13:30。
+	raised := merchantTestTables()
+	raised.rule.intervalSeconds, raised.rule.staySeconds = 7200, 7000
+	for _, offset := range []int64{4200, 5399} {
+		requireMerchantScheduleLeavesRecord(t, sc, mr, offset, raised, metrics.MerchantScheduleKept)
+	}
+	// 13:30 旧的一轮结束;12:00 那一轮的轮次号比旧记录小,不写。
+	for _, offset := range []int64{5400, 6999} {
+		requireMerchantScheduleLeavesRecord(t, sc, mr, offset, raised, metrics.MerchantScheduleIdle)
+	}
+
+	// 14:00 新时间轴上的下一轮:照常写,并避开上一轮那条线。
+	outcome, err = scheduleMysteryMerchant(sc, testZoneId, merchantAt(7200), &scriptedMerchantRand{}, raised)
+	require.NoError(t, err)
+	require.Equal(t, metrics.MerchantScheduleCreated, outcome)
+	fresh := readMerchantStateForTest(t, mr)
+	assert.Equal(t, merchantTestRoundID+7200, fresh.GetRoundId())
+	assert.Equal(t, uint32(7200), fresh.GetIntervalSeconds())
+	assert.Equal(t, uint64(merchantTestRoundStart+7200+7000)*1000, fresh.GetExpireAtMs())
+	assert.Equal(t, uint64(102), fresh.GetSceneId())
+	assert.Equal(t, mysteryMerchantVersionForTest(merchantTestRoundID+7200, 1), mr.HGet(key, MysteryMerchantVersionField))
+}
+
+// 两条时间轴在这个整点重合,新间隔下「现在」这一轮与旧记录同号。旧的一轮卖完之后也不许按同一个轮次号再掷一份货架:
+// 玩家的限购记录只认轮次号(player_mystery_merchant_comp.proto),同号就把旧轮的已购数带进了新货架。
+func TestScheduleMysteryMerchant_IntervalChangeNeverReusesARoundID(t *testing.T) {
+	sc, mr := newMerchantCtx(t)
+	publishMerchantDirectory(t, mr, merchantTestConfID, smoothLine(101, 1), smoothLine(102, 2))
+
+	// 12:00 那一轮(每小时一轮、停留 30 分钟),12:30 结束。
+	outcome, err := scheduleMysteryMerchant(sc, testZoneId, merchantAt(5), &scriptedMerchantRand{}, merchantTestTables())
+	require.NoError(t, err)
+	require.Equal(t, metrics.MerchantScheduleCreated, outcome)
+
+	// 12:10 起改成每两小时一轮、停留 90 分钟:新时间轴上「现在」也是 12:00 那一轮,停留到 13:30。
+	raised := merchantTestTables()
+	raised.rule.intervalSeconds, raised.rule.staySeconds = 7200, 5400
+	requireMerchantScheduleLeavesRecord(t, sc, mr, 600, raised, metrics.MerchantScheduleKept)
+	for _, offset := range []int64{1800, 5399, 7199} {
+		requireMerchantScheduleLeavesRecord(t, sc, mr, offset, raised, metrics.MerchantScheduleIdle)
+	}
+
+	outcome, err = scheduleMysteryMerchant(sc, testZoneId, merchantAt(7200), &scriptedMerchantRand{}, raised)
+	require.NoError(t, err)
+	require.Equal(t, metrics.MerchantScheduleCreated, outcome)
+	assert.Equal(t, merchantTestRoundID+7200, readMerchantStateForTest(t, mr).GetRoundId())
+}
+
+// 旧的一轮卖完之前照常核对线:线被回收就同一轮内换线,轮次号、货架、间隔、离开时刻都不变。
+func TestScheduleMysteryMerchant_IntervalChangeStillRelocatesTheOldRound(t *testing.T) {
+	sc, mr := newMerchantCtx(t)
+	publishMerchantDirectory(t, mr, merchantTestConfID, smoothLine(101, 1), smoothLine(102, 2))
+	_, err := scheduleMysteryMerchant(sc, testZoneId, merchantAt(5), &scriptedMerchantRand{}, merchantTestTables())
+	require.NoError(t, err)
+	original := readMerchantStateForTest(t, mr)
+	require.Equal(t, uint64(101), original.GetSceneId())
+
+	raised := merchantTestTables()
+	raised.rule.intervalSeconds, raised.rule.staySeconds = 7200, 5400
+	publishMerchantDirectory(t, mr, merchantTestConfID,
+		merchantTestLine{sceneID: 101, channelNo: 1, state: scenepb.SceneChannelState_SCENE_CHANNEL_STATE_CLOSING},
+		smoothLine(102, 2))
+	outcome, err := scheduleMysteryMerchant(sc, testZoneId, merchantAt(300), &scriptedMerchantRand{}, raised)
+	require.NoError(t, err)
+	require.Equal(t, metrics.MerchantScheduleRelocated, outcome)
+
+	moved := readMerchantStateForTest(t, mr)
+	assert.Equal(t, original.GetRoundId(), moved.GetRoundId())
+	assert.Equal(t, uint32(2), moved.GetRevision())
+	assert.Equal(t, uint64(102), moved.GetSceneId())
+	assert.Equal(t, original.GetIntervalSeconds(), moved.GetIntervalSeconds(), "旧的一轮是按旧间隔排的,换线不改它")
+	assert.Equal(t, original.GetExpireAtMs(), moved.GetExpireAtMs())
+	assert.True(t, gproto.Equal(&scenepb.MysteryMerchantState{Shelf: original.GetShelf()}, &scenepb.MysteryMerchantState{Shelf: moved.GetShelf()}),
+		"换线不换货架")
 }
 
 func TestScheduleMysteryMerchant_DirectoryOfAnotherMapUnderTheKeyIsAnError(t *testing.T) {

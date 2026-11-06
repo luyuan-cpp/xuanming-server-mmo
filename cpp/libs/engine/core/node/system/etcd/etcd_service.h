@@ -73,9 +73,25 @@ public:
     void OnKeepAliveStreamRestarted() override;
 
 private:
+    friend struct EtcdRegistrationTestAccess;
     enum class RegistrationMode : uint8_t {
         kInitialBoot,
         kReRegisterExisting,
+    };
+    enum class RegistrationStage : uint8_t { kPort, kAllocation, kPublish };
+
+    // 注册任务的节点边界。集成测试可替换节点和传输，不需要监听端口或启动 Kafka。
+    struct RegistrationIo {
+        using TxnDone = EtcdRegistrationCompletion<etcdserverpb::TxnResponse>;
+        std::function<void(EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse>)> requestLease;
+        std::function<void()> startKeepAlive;
+        std::function<bool()> selectPort;
+        std::function<void()> selectNodeId;
+        std::function<void()> recordLostNodeId;
+        std::function<std::string(RegistrationStage)> key;
+        std::function<void(RegistrationStage, bool, bool, TxnDone)> claim;
+        std::function<void()> startRpc;
+        std::function<void()> fenceIdentity;
     };
 
     // 每个发现前缀的 watch 状态(§13.5)。
@@ -110,6 +126,7 @@ private:
     static bool IsAllocationKey(const std::string& key);
 
     void RequestNodeLease();
+    void ConfigureRegistration(muduo::net::EventLoop& loop, RegistrationIo io);
     boost::cobalt::task<void> RegisterAsync(muduo::net::EventLoop& loop);
     void SetRegistrationMode(RegistrationMode mode, const char* reason);
     const char* RegistrationModeName(RegistrationMode mode) const;
@@ -140,5 +157,7 @@ private:
 	TimerTaskComp cancelRetryTimer_;
     // 先停止注册等待，再析构传输；传输回调不持有注册任务。
     std::unique_ptr<EtcdTransport> transport_;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> registrationLoop_;
+    RegistrationIo registrationIo_;
     std::optional<LoopTaskScope> registrationTasks_;
 };

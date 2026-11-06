@@ -1423,6 +1423,195 @@ TEST(ExitPersistEcs, StaleEpochRejectOnOnlinePlayerKeepsEntity)
     EXPECT_EQ(SessionMap().count(kSessionAtExit), 1u);
 }
 
+// ── 断线保留(docs/design/player-connection-lost-hold.md;常量与判定见 connection_lost_hold.h)──────────────────
+// 纯判定 + ECS 级接缝。宿主里没有 EventLoop:关键进度存盘与到期扫描定时器都不挂(RequestKeyProgressSave /
+// EnsureConnectionLostHoldTimer 没有 loop 时直接返回),到期由用例直接调 ExpireConnectionLostHolds 并注入时间。
+// 会走到真实退出的用例先 MarkPersisted,让退出存盘走快路径(宿主里没有 Redis,真写盘会解引用空指针)。
+
+namespace clh = connection_lost_hold;
+
+TEST(ConnectionLostHold, WindowEndsBeforeLoginLeaseWithMargin)
+{
+    static_assert(clh::kHoldWindow + clh::kSweepInterval + clh::kReleaseMargin <= clh::kLoginReconnectLease,
+                  "保留必须在 login 断线租约到期之前结束");
+    EXPECT_FALSE(clh::IsExpired(clh::kHoldWindow - std::chrono::milliseconds(1)));
+    EXPECT_TRUE(clh::IsExpired(clh::kHoldWindow)) << "恰好等于窗口即到期";
+    EXPECT_TRUE(clh::IsExpired(clh::kHoldWindow + std::chrono::seconds(1)));
+    EXPECT_FALSE(clh::IsExpired(clh::Clock::duration::zero()));
+}
+
+TEST(ConnectionLostHold, DecideHoldsOnlyAPlainOnlinePlayer)
+{
+    clh::Facts online;
+    online.sessionBound = true;
+    EXPECT_EQ(clh::Decide(online), clh::Decision::kHold);
+    EXPECT_EQ(clh::ExitNowReasonOf(online), clh::ExitNowReason::kNone);
+
+    auto exiting = online;
+    exiting.exiting = true;
+    EXPECT_EQ(clh::Decide(exiting), clh::Decision::kExitNow);
+    EXPECT_EQ(clh::ExitNowReasonOf(exiting), clh::ExitNowReason::kAlreadyExiting);
+
+    auto handoff = online;
+    handoff.handoffInFlight = true;
+    EXPECT_EQ(clh::Decide(handoff), clh::Decision::kExitNow);
+    EXPECT_EQ(clh::ExitNowReasonOf(handoff), clh::ExitNowReason::kHandoffInFlight);
+
+    auto evacuating = online;
+    evacuating.nodeEvacuating = true;
+    EXPECT_EQ(clh::Decide(evacuating), clh::Decision::kExitNow);
+    EXPECT_EQ(clh::ExitNowReasonOf(evacuating), clh::ExitNowReason::kNodeEvacuating);
+
+    auto sessionless = online;
+    sessionless.sessionBound = false;
+    EXPECT_EQ(clh::Decide(sessionless), clh::Decision::kExitNow);
+    EXPECT_EQ(clh::ExitNowReasonOf(sessionless), clh::ExitNowReason::kNoBoundSession);
+}
+
+TEST(ConnectionLostHold, RepeatedNoticeKeepsHoldingAlthoughTheSessionWasDropped)
+{
+    clh::Facts held;
+    held.alreadyHeld = true;
+    held.sessionBound = false; // 进入保留时会话已摘掉
+    EXPECT_EQ(clh::Decide(held), clh::Decision::kKeepHolding) << "不能因为会话已摘掉就当成没有会话退出";
+    held.exiting = true;
+    EXPECT_EQ(clh::Decide(held), clh::Decision::kExitNow) << "已在退出中优先:交给退出流程合并原因";
+}
+
+TEST(ConnectionLostHold, OnlyANewBoundSessionResumes)
+{
+    EXPECT_TRUE(clh::IsResumedBy(kNewerSession, kSessionAtExit));
+    EXPECT_FALSE(clh::IsResumedBy(kSessionAtExit, kSessionAtExit)) << "断开的那条会话不算接回";
+    EXPECT_FALSE(clh::IsResumedBy(0, kSessionAtExit)) << "没有会话的进场不算接回";
+    EXPECT_FALSE(clh::IsResumedBy(kInvalidSessionId, kSessionAtExit));
+}
+
+TEST(ConnectionLostHold, NamesMatchEnums)
+{
+    EXPECT_STREQ(clh::DecisionName(clh::Decision::kHold), "hold");
+    EXPECT_STREQ(clh::DecisionName(clh::Decision::kKeepHolding), "keep_holding");
+    EXPECT_STREQ(clh::DecisionName(clh::Decision::kExitNow), "exit_now");
+    EXPECT_STREQ(clh::ExitNowReasonName(clh::ExitNowReason::kNone), "none");
+    EXPECT_STREQ(clh::ExitNowReasonName(clh::ExitNowReason::kNoBoundSession), "no_bound_session");
+    EXPECT_STREQ(clh::ExitNowReasonName(static_cast<clh::ExitNowReason>(200)), "?");
+}
+
+TEST(ConnectionLostHoldEcs, DisconnectHoldsInPlaceAndDropsTheDeadSession)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    tlsEcs.actorRegistry.emplace<Velocity>(player).set_x(2.0);
+    const auto before = clh::Clock::now();
+
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "不退出、不销毁";
+    EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), player);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerExitIntentComp>(player));
+    const auto* held = tlsEcs.actorRegistry.try_get<PlayerConnectionLostComp>(player);
+    ASSERT_NE(held, nullptr);
+    EXPECT_EQ(held->sessionId, kSessionAtExit) << "记下断开的那条会话";
+    EXPECT_TRUE(held->lostAt >= before);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerSessionSnapshotComp>(player).gate_session_id(), kInvalidSessionId)
+        << "此刻起实体没有活会话:交接、跟随、改派都按断线处理";
+    EXPECT_EQ(SessionMap().count(kSessionAtExit), 0u);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<Velocity>(player).x(), 0.0) << "停在原地";
+}
+
+TEST(ConnectionLostHoldEcs, RepeatedNoticeDoesNotRestartTheWindow)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto pinned = clh::Clock::now() - std::chrono::seconds(5);
+    tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt = pinned;
+
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player)) << "重复通知不退出";
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt == pinned) << "窗口不延长";
+}
+
+TEST(ConnectionLostHoldEcs, OnlyANewSessionResumesTheHold)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+
+    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kSessionAtExit);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "断开的那条会话不算接回";
+    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kInvalidSessionId);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "没有会话的进场不算接回";
+
+    PlayerLifecycleSystem::ResumeConnectionLostHold(player, kNewerSession);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+
+    PlayerLifecycleSystem::ExpireConnectionLostHolds(clh::Clock::now() + clh::kHoldWindow);
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "接回之后不再到期退出";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+}
+
+TEST(ConnectionLostHoldEcs, HoldNotYetDueIsLeftAlone)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+
+    PlayerLifecycleSystem::ExpireConnectionLostHolds(lostAt + clh::kHoldWindow - std::chrono::milliseconds(1));
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+}
+
+TEST(ConnectionLostHoldEcs, ExpiredHoldExitsAsClientDisconnect)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    ASSERT_TRUE(MarkPersisted(player));
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+
+    PlayerLifecycleSystem::ExpireConnectionLostHolds(lostAt + clh::kHoldWindow);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "到期按客户端断线退出;盘上已是当前内存,同步收尾";
+    EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), entt::entity{entt::null});
+}
+
+TEST(ConnectionLostHoldEcs, OtherExitSupersedesTheHold)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    ASSERT_TRUE(MarkPersisted(player));
+
+    PlayerLifecycleSystem::HandleExitGameNode(player, ExitCause::kSceneDrain);
+
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "排空的退出取代保留,照常收尾";
+    EXPECT_EQ(tlsEcs.GetPlayer(kExitPlayerId), entt::entity{entt::null});
+}
+
+TEST(ConnectionLostHoldEcs, ExitingPlayerIsNotHeld)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+    tlsEcs.actorRegistry.get<PlayerExitIntentComp>(player).cause = ExitCause::kSceneDrain;
+    ASSERT_TRUE(MarkPersisted(player));
+
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "已在退出中:只合并原因,退出存盘仍在途";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
+    const auto& intent = tlsEcs.actorRegistry.get<PlayerExitIntentComp>(player);
+    EXPECT_EQ(intent.cause, ExitCause::kSceneDrain) << "原因保持第一次的";
+    EXPECT_TRUE(intent.clientDisconnected) << "会话已死:改派票据作废";
+}
+
 // ── 严格屏障覆盖世代校验 C3 的结局分派(docs/design/mixed-version-persist-field-protection.md §5.2、§10)──────────
 
 // enforce 拒写发生在退出存盘上:不会再有落地回调,必须不存盘收尾,否则退出永远收不了尾。
@@ -7954,7 +8143,7 @@ TEST_F(LifecycleCoroutineTest, TravelUnknownMarkDoesNotSendEnterScene)
     redis->Disconnect();
     ASSERT_NO_FATAL_FAILURE(RunUntil([&] { return tlsPlayerRedis.stats().nullReplies > before; }));
     RunPending();
-    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp, PlayerFrozenComp>(player));
+    ASSERT_TRUE((tlsEcs.actorRegistry.all_of<PlayerTravelHandoffComp, PlayerFrozenComp>(player)));
     EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(player).enterSceneCorrelationId, 0u);
     EXPECT_TRUE(sceneManager.pending->empty());
 }

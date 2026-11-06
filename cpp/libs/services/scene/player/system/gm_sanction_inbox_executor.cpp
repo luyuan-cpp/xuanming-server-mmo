@@ -189,8 +189,9 @@ PlayerInboxExecResult GmSanctionInboxExecutor::AttachCurrencyDebt(entt::entity p
 	// 同币种的既有欠款带着本版本不认识的字段:AttachDebt 会拒绝合并(混版本保护,
 	// docs/design/mixed-version-persist-field-protection.md §4.4)。这是版本错位,不是确定性拒绝 ——
 	// 记成 REJECTED 这笔 GM 欠款就永远不会再挂了(player-inbox-service.md §7.6「版本错位绝不能当成终态的 REJECTED」)。
-	// 回 kVersionSkew 而不是 kDefer:这种错位会在会话内消失(那笔欠款被 AddCurrency 还清删除),DEFER 的本地续做
-	// 看不到服务端之后挂的 VOID,会把已作废的处置挂上并报 APPLIED(评审 L1)。kVersionSkew 让收件箱停用本域,
+	// 回 kVersionSkew 而不是 kDefer:DEFER 的本地续做看不到服务端之后挂的 VOID,这种错位一旦在会话内消失(那笔欠款被删除),
+	// 续做就会把已作废的处置挂上并报 APPLIED(评审 L1);AddCurrency 不扣还带新字段的欠款(按冻结处理、不会还清删除),
+	// 错位不消失时续做只会空转。kVersionSkew 让收件箱停用本域,
 	// 实体重建后重拉(退出完成后再登录,或换节点);退出保留期内重登会复用实体,不重拉:已作废就记 SKIPPED,落到新版本节点就正常挂。
 	// 在调用原语之前用只读谓词判,不拿原语的通用返回码 kFeatureUnavailable 反推。
 	if (CurrencySystem::DebtCarriesUnknownFields(player, static_cast<CurrencyType>(decoded.currency_type())))

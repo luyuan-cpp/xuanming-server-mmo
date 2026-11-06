@@ -21,7 +21,7 @@ func expect(t *testing.T, step string, got, want Verdict) {
 
 // 小集群挂一台、大集群挂不到一半都是日常,照常放行,也不留下压住状态。
 func TestObserve_OrdinaryLossIsAccepted(t *testing.T) {
-	g := NewGate(testHold)
+	g := NewGate(testHold, RecoverWhenClear)
 	expect(t, "两台挂一台", g.Observe(Observation{Known: 2, Missing: 1}, at(0)), Accept)
 	expect(t, "三台全缺(少于 MinKnown)", g.Observe(Observation{Known: 3, Missing: 3}, at(0)), Accept)
 	expect(t, "四台挂两台(不超过一半)", g.Observe(Observation{Known: 4, Missing: 2}, at(0)), Accept)
@@ -32,7 +32,7 @@ func TestObserve_OrdinaryLossIsAccepted(t *testing.T) {
 
 // 存活集为空而基线不空:不管压了多久都不自动放行。
 func TestObserve_EmptyIsHeldForever(t *testing.T) {
-	g := NewGate(testHold)
+	g := NewGate(testHold, RecoverWhenClear)
 	for i := 0; i < 10; i++ {
 		expect(t, "空集", g.Observe(Observation{Known: 1, Missing: 1, Empty: true}, at(time.Duration(i)*testHold)), HoldEmpty)
 	}
@@ -42,7 +42,7 @@ func TestObserve_EmptyIsHeldForever(t *testing.T) {
 
 // 骤降先压住;缺席数连续 hold 不变才放行,Release 只返回一次,放行期内照常放行,放行期过了仍过半就重新压住。
 func TestObserve_StableDropIsReleasedOnceAfterHold(t *testing.T) {
-	g := NewGate(testHold)
+	g := NewGate(testHold, RecoverWhenClear)
 	drop := Observation{Known: 10, Missing: 6}
 	expect(t, "骤降", g.Observe(drop, at(0)), HoldDrop)
 	expect(t, "压住中", g.Observe(drop, at(testHold-time.Second)), HoldDrop)
@@ -55,7 +55,7 @@ func TestObserve_StableDropIsReleasedOnceAfterHold(t *testing.T) {
 
 // 缺席数一变(有成员回来,或又少了)计时从头算。
 func TestObserve_ChangeRestartsTheClock(t *testing.T) {
-	g := NewGate(testHold)
+	g := NewGate(testHold, RecoverWhenClear)
 	expect(t, "骤降", g.Observe(Observation{Known: 10, Missing: 8}, at(0)), HoldDrop)
 	expect(t, "回来两台", g.Observe(Observation{Known: 10, Missing: 6}, at(50*time.Second)), HoldDrop)
 	expect(t, "从回来那一刻起不满 hold", g.Observe(Observation{Known: 10, Missing: 6}, at(100*time.Second)), HoldDrop)
@@ -66,7 +66,7 @@ func TestObserve_ChangeRestartsTheClock(t *testing.T) {
 
 // 压住期间恢复到一半以下也继续压住(还没恢复完的那些多半也正在重新注册),恢复完复位。
 func TestObserve_RecoveringBelowHalfStaysHeldUntilClear(t *testing.T) {
-	g := NewGate(testHold)
+	g := NewGate(testHold, RecoverWhenClear)
 	expect(t, "骤降", g.Observe(Observation{Known: 10, Missing: 9}, at(0)), HoldDrop)
 	expect(t, "恢复到两台缺席", g.Observe(Observation{Known: 10, Missing: 2}, at(10*time.Second)), HoldDrop)
 	expect(t, "恢复完", g.Observe(Observation{Known: 10, Missing: 0}, at(20*time.Second)), Accept)
@@ -77,7 +77,7 @@ func TestObserve_RecoveringBelowHalfStaysHeldUntilClear(t *testing.T) {
 
 // 空集之后回到残缺:空集期间计时一直从头算,回到残缺后还要再稳定满 hold。
 func TestObserve_EmptyThenPartialNeedsAFullHold(t *testing.T) {
-	g := NewGate(testHold)
+	g := NewGate(testHold, RecoverWhenClear)
 	expect(t, "空集", g.Observe(Observation{Known: 10, Missing: 10, Empty: true}, at(0)), HoldEmpty)
 	expect(t, "仍是空集", g.Observe(Observation{Known: 10, Missing: 10, Empty: true}, at(5*testHold)), HoldEmpty)
 	// 回来三台,只剩七台缺席:还在压住期(空集已经让它进入压住),计时从这一刻起。
@@ -90,7 +90,7 @@ func TestObserve_EmptyThenPartialNeedsAFullHold(t *testing.T) {
 
 // 没有可比的观察(基线为空)不是恢复的证据:压住状态和计时都不动。
 func TestObserve_NoBaselineKeepsTheHold(t *testing.T) {
-	g := NewGate(testHold)
+	g := NewGate(testHold, RecoverWhenClear)
 	drop := Observation{Known: 4, Missing: 3}
 	expect(t, "骤降", g.Observe(drop, at(0)), HoldDrop)
 	expect(t, "这一拍没有基线", g.Observe(Observation{}, at(30*time.Second)), Accept)
@@ -99,7 +99,7 @@ func TestObserve_NoBaselineKeepsTheHold(t *testing.T) {
 
 // 时刻倒退(只会出现在调用方传错时刻时)按「还没满」处理:宁可多压。
 func TestObserve_BackwardsTimeKeepsHolding(t *testing.T) {
-	g := NewGate(testHold)
+	g := NewGate(testHold, RecoverWhenClear)
 	drop := Observation{Known: 4, Missing: 4}
 	expect(t, "骤降", g.Observe(drop, at(time.Hour)), HoldDrop)
 	expect(t, "时刻倒退", g.Observe(drop, at(0)), HoldDrop)

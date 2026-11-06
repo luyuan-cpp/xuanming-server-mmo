@@ -38,7 +38,7 @@ func liveSet(gates ...string) map[string]struct{} {
 // newViewTestSweeper 只装 checkLiveView 用得到的部分:闸门与时钟。
 func newViewTestSweeper(clock *testClock) *gateSweeper {
 	return &gateSweeper{
-		liveView: liveview.NewGate(liveViewHold),
+		liveView: liveview.NewGate(liveViewHold, liveview.RecoverBelowThreshold),
 		deps:     reconcilerDeps{now: clock.Now},
 	}
 }

@@ -249,14 +249,13 @@ func TestApplyNodeSnapshot_LeaderElectedMidSyncSkipsTheSweep(t *testing.T) {
 	var calls atomic.Int32
 	t.Cleanup(SetLeaderCheckForTest(func() bool { return calls.Add(1) > 1 })) // 第一次问是跟随者,之后都是领导者
 	const zone = uint32(74)
+	sc.Config.ZoneId = zone
 	for _, id := range idRange(7401, 7408) {
 		_, err := mr.ZAdd(nodeLoadKey(zone), 0, fmt.Sprint(id))
 		require.NoError(t, err)
 	}
-	_, err := mr.SAdd(zoneRegistryKeyForTest, fmt.Sprint(zone))
-	require.NoError(t, err)
 
-	_, err = applyNodeSnapshot(context.Background(), sc, sceneNodeKVsForTest(zone, 7401, 7402), 40)
+	_, err := applyNodeSnapshot(context.Background(), sc, sceneNodeKVsForTest(zone, 7401, 7402), 40)
 	require.NoError(t, err, "跟随者身份读基线,旧镜像为空,没有可比的,放行")
 	assert.Len(t, loadSetMembersForTest(t, mr, zone), 8, "中途当选的这一轮不清扫")
 	assert.False(t, mr.Exists(nodeDeathAtKey(zone, "7403")))

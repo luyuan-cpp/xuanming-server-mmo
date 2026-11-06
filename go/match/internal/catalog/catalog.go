@@ -28,6 +28,14 @@ const DefaultBattleSeconds = 180
 // MaxBattleSeconds 是单局战斗时长上限（负责人 2026-10-24 拍板 D6）。
 const MaxBattleSeconds = 3600
 
+// 回合制引擎按模板时限定回合上限的换算，镜像 cpp/libs/services/battle/constants/turn_battle_constants.h
+// （TurnBattleEngine::Initialize）：maxRounds = max(1, ceil(time_limit × 1000 / kRoundDurationMs))，time_limit 为 0
+// 或模板不在表里取 kDefaultMaxRounds。两边改动必须同步，TestRoundLimitMirrorsEngine 钉住这几个值。
+const (
+	EngineRoundDurationMs   = 6000 // turnbattle::kRoundDurationMs
+	EngineDefaultRoundLimit = 300  // turnbattle::kDefaultMaxRounds
+)
+
 // DungeonRow 是 Dungeon 表里匹配用得到的部分。
 type DungeonRow struct {
 	Id               uint32
@@ -262,4 +270,21 @@ func (c *Catalog) BattleSeconds(configId uint32) uint32 {
 		return DefaultBattleSeconds
 	}
 	return min(dungeon.TimeLimitSeconds, MaxBattleSeconds)
+}
+
+// RoundLimit 返回引擎给这个模板定的回合上限，与引擎同一换算（见 EngineRoundDurationMs）。回合打满时引擎判
+// 进攻方（0 队）负，计分局把它改判平局（logic.ratedScoreA）。
+// 它和 BattleSeconds 是两个量：BattleSeconds 是 match 给的整场期限（缺省 180 秒、截断到 MaxBattleSeconds），
+// 期限打满由 battle 直接判平；回合上限只看表里的 time_limit，不截断、缺省 300 回合。
+// nil 目录（单测）与不在表里的模板（含切磋的模板 0）取引擎缺省。
+func (c *Catalog) RoundLimit(configId uint32) uint32 {
+	if c == nil {
+		return EngineDefaultRoundLimit
+	}
+	dungeon, ok := c.dungeons[configId]
+	if !ok || dungeon.TimeLimitSeconds == 0 {
+		return EngineDefaultRoundLimit
+	}
+	// time_limit ≥ 1 秒时向上取整至少是 1 回合，引擎里的 max(1, …) 在这里自然成立。
+	return uint32((uint64(dungeon.TimeLimitSeconds)*1000 + EngineRoundDurationMs - 1) / EngineRoundDurationMs)
 }

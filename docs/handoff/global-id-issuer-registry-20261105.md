@@ -79,8 +79,8 @@ $nodes = @(@{ n = 'p'; port = 23791 }, @{ n = 's'; port = 23792 }, @{ n = 'r'; p
 foreach ($x in $nodes) {
   docker run -d --name "idissuer-it-$($x.n)" -p "127.0.0.1:$($x.port):2379" $img /usr/local/bin/etcd --name $x.n --data-dir /etcd-data `
     --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls "http://127.0.0.1:$($x.port)" `
-    --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://localhost:2380 `
-    --initial-cluster "$($x.n)=http://localhost:2380" --initial-cluster-token "idissuer-it-$($x.n)"
+    --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://127.0.0.1:2380 `
+    --initial-cluster "$($x.n)=http://127.0.0.1:2380" --initial-cluster-token "idissuer-it-$($x.n)"
 }
 ```
 
@@ -106,8 +106,8 @@ $img = 'quay.io/coreos/etcd:v3.5.15'
 function Start-DrillEtcd($n, $port, $dataDir) {
   docker run -d --name "idissuer-drill-$n" -p "127.0.0.1:${port}:2379" -v "idissuer-drill-${n}:/etcd-data" $img /usr/local/bin/etcd --name $n --data-dir $dataDir `
     --listen-client-urls http://0.0.0.0:2379 --advertise-client-urls "http://127.0.0.1:$port" `
-    --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://localhost:2380 `
-    --initial-cluster "$n=http://localhost:2380" --initial-cluster-token "idissuer-drill-$n"
+    --listen-peer-urls http://0.0.0.0:2380 --initial-advertise-peer-urls http://127.0.0.1:2380 `
+    --initial-cluster "$n=http://127.0.0.1:2380" --initial-cluster-token "idissuer-drill-$n"
 }
 Start-DrillEtcd p 23801 /etcd-data/data
 Start-DrillEtcd s 23802 /etcd-data/data
@@ -138,8 +138,8 @@ $env:MMORPG_ID_ISSUER_IT_STATE = Join-Path $env:TEMP 'idissuer-drill-state.json'
    foreach ($n in @('p', 's')) {
      docker rm -f "idissuer-drill-$n"
      docker run --rm -v "idissuer-drill-${n}:/etcd-data" --entrypoint /usr/local/bin/etcdutl $img snapshot restore /etcd-data/snap.db `
-       --data-dir /etcd-data/restored --name $n --initial-cluster "$n=http://localhost:2380" `
-       --initial-cluster-token "idissuer-drill-$n" --initial-advertise-peer-urls http://localhost:2380
+       --data-dir /etcd-data/restored --name $n --initial-cluster "$n=http://127.0.0.1:2380" `
+       --initial-cluster-token "idissuer-drill-$n" --initial-advertise-peer-urls http://127.0.0.1:2380
    }
    Start-DrillEtcd p 23801 /etcd-data/restored
    Start-DrillEtcd s 23802 /etcd-data/restored

@@ -36,6 +36,10 @@ import (
 // liveViewHold:骤降之后缺席的 gate 数连续这么久不变才放行。取 30 分钟:压住只推迟死 gate 上会话的清理(玩家重连照常
 // 顶掉旧会话),误判的代价却是全员被踢,所以留足人工介入的时间(PlayerLocatorGateLiveViewHeld 告警 5 分钟后响)。
 // 真有这么多 gate 死了,放行之后照常收尾。按时间计、不按拍数计:拍长可配,改拍长不该连带改压住时长。
+//
+// 恢复口径是 RecoverBelowThreshold:缺席不再超过一半就放行。每个 gate 还要连续两拍缺席才判死,剩下那些在去抖窗口里重新
+// 注册就不会被处理;要缺席清零才放行的话,gate 滚动发布里一次短暂过半(旧 gate 已下线、新 gate 还没接到玩家)就会把清扫
+// 压住整整 30 分钟,还会报 critical。
 const liveViewHold = 30 * time.Minute
 
 var (
@@ -84,7 +88,7 @@ func newGateSweeper(svcCtx *svc.ServiceContext, owner slotOwner, cfg config.Reco
 		transitionPacer: deps.newPacer(cfg.MaxTransitionsPerSecond),
 		memberBudget:    budget,
 		suspects:        make(map[string]int),
-		liveView:        liveview.NewGate(liveViewHold),
+		liveView:        liveview.NewGate(liveViewHold, liveview.RecoverBelowThreshold),
 		cursors:         make(map[gateSlot]uint64),
 	}
 	s.eligible.Store(true)

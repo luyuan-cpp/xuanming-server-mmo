@@ -556,7 +556,7 @@ func createBattleRPC(endpoint string, req *battlepb.CreateBattleRequest) (*battl
 // 其余模式走 teamIndexFor 的成员序语义;1v1 再按 battle_id 决定两人是否对调。
 func teamAssignment(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleId uint64, members []uint64) []uint32 {
 	if mode == matchpb.MatchMode_MATCH_MODE_5V5 {
-		ratings := loadRatings(svcCtx, members)
+		ratings := loadRatings(svcCtx, mode, members)
 		teams := assignBalancedTeams(members, ratings)
 		perMember := make([]string, 0, len(members))
 		for i, pid := range members {

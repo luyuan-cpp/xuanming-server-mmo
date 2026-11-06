@@ -21384,3 +21384,95 @@ Java 版(对应 0.1.0-SNAPSHOT):待做,`PARITY.md` 对应一行不变。
 - 红灯证据：损坏恢复 87 项中 17 个预期失败；确认期间合法替换 4 项全部复现误发。最终 Unity 6000.6.0f1 的 14 组相关 EditMode 501/501、零失败、零跳过、退出 0，含帮会恢复 83、存储 12；源码测试前后与当前工作区摘要一致。证据：客户端 `Logs/guild-corrupt-recovery-20261105/final-tests.xml`、`final-unity.log`、`final-sources-before.json`、`final-sources-after.json`；未执行联网冒烟、播放器打包或真实资产验收。
 - 设计 §5.44.2、原交接 §5 与客户端 `Docs/GuildUI.md` 已补齐；Java `0.1.0-SNAPSHOT` 的 `PARITY.md` 只追加共同客户端状态，本轮没有修改或重新验证 Go/Java 服务端，也未改 Claude Code 的业务改动。
 - 本聊天未提交或推送。收尾检测到外部操作已提交客户端 `1dfb79433`（相同测试源码及九份资源时间戳）和服务端 `0f484db0d`；时间戳清理保护检查因工作区已干净而停止，未逆向修改外部提交。最终验证文档在该状态上追加，保留他人历史记录。
+
+## 2026-11-05 混版本持久字段保护第 7 批补充：独立复核修正、存储分组门禁（Claude，未编译、未测试，待 Codex 验证）
+
+- **范围**：接同日第 7 批条目。设计 `docs/design/mixed-version-persist-field-protection.md` §3.1「存储分组不得改」、R4、§13 第 11 条、v0.10；交接 `docs/handoff/mixed-version-persist-handoff-20261019.md` §19。
+- **独立复核**（只读，没有高危）：
+  - 中危一条已修：发布预检只比世代号，合并带进同世代的行之后会误判 PASS。现在生成器加只核不写的 `--persist-schema-verify`（`dev_tools.ps1 -Command persist-schema-verify`），预检用它核每条封存的摘要；生成器单测同时核仓库台账的封存。
+  - 低危七条已修：预检函数的位置、档位说明、封存违反按成因分开报且同一根因只报一次、两处文档指针、契约测试说明、单项模式不起 pprof、封存前先跑一次生成。
+  - 范围外一条没动：`market.go` 会把托管阶段的材料订单选为最优对手单。该文件与 `engine.go` 正被别的会话改，留给交易线。
+- **存储分组门禁**（数据覆写审计 R2 的 N1，「数据覆写审计 R2 交接」会话转来）：字段换存储分组后，第一次载入会永久丢掉这个字段。现在生成器读 `OptionPersistGroup`，台账给玩家表顶层字段记 `group=`；换组或删掉分组选项，生成就失败，改走 R4 expand / contract；旧行在第一次生成时补记分组。`player-save-direct-commit.md` §1 原写的「换组必须安全」已改正。
+- **给 Codex**：在交接 §17 的命令之外：
+  - `proto-gen-run` 会给台账里 `player_database` 的顶层字段一次性补上 `group=`，这是预期差异，一起提交；
+  - 生成器单测新增 5 条；
+  - dev_tools 契约测试共 8 条台账命令用例。
+  - 不要封存主仓台账：`persist-schema-verify` 在未封存时失败是预期结果。
+- **Java 版（AGENTS §12）**：存储分组门禁不适用（Java 玩家状态是单个 BLOB，没有分组拆行），不登记 PARITY；封存核对模式随 Java 的机制二一起做，已在 PARITY 混版本那一行里。
+
+## 2026-11-05 Claude:节点链路应用层心跳,检测半开连接(未编译、未测试,待 Codex 验证;Java 已有等价,只记 proto 副本同步待做)
+
+- **为什么**:§8.3 的握手只在建连时确认一次对端身份,之后链路死活没人检测,节点链路只靠系统 TCP keepalive(空闲 2h 才探测)。对端断电或网络分区时:
+  - gate 的 `RpcClient::IsReady()` 一直为真,单向 `SendRequest`(移动、断线代发 ExitGame、`PlayerEnterGameNode`)写进内核缓冲就算成功,实际静默丢失;scene 经 `RpcSession` 的推送同样静默丢失;
+  - 只有单次调用自己超时(不断连)或 etcd 租约到期摘节点(本地 `NodeTTLSeconds` 180s)才会结束这种状态。
+- **做法**(设计见 `docs/design/muduo-rpc-channel.md` §21):
+  - RPC0 信封 `GameMessageType` 新增 `HEARTBEAT = 5`,心跳帧只有 type,线上 14 字节。
+  - 两端对称:写空闲满 5s 发一帧 HEARTBEAT,读空闲满 15s 就 `forceClose`。收到任何字节都算对端活着,忙的链路不发心跳。收到 HEARTBEAT 不派发、不回包、不记流量。为什么不用「出站 ping、入站回 pong」见 §21.3。
+  - 判死只走既有 DOWN 路径,不触发任何业务逻辑:在途调用以 `kDisconnected` 失败;出站由 `enableRetry` 重连后重新握手;入站摘掉 `RpcSession`。`forceClose` 当场让 `IsReady()` / `IsConnected()` 变假,之后的业务发送当场失败,不再写进死连接。
+  - 判定是纯逻辑 `RpcLinkLiveness`(新文件 `network/rpc_link_liveness.h`):
+    - 收发路径只置位,热路径不读时钟;每 1s 一次的检查把置位折算成时刻。
+    - 本次检查距上次超过 2s,说明本端 loop 卡过:只推迟判死,心跳照发。
+    - 常量 `kNodeLinkHeartbeat{5s, 15s, 1s}`,头文件用 `static_assert` 锁住余量,与 Java NodeLink 同值。
+  - `RpcChannel` 接线:
+    - `Create(..., std::optional<RpcLinkHeartbeat>)` 给值才启用;
+    - `OnMessage` 置「收到」,`SendFrame` 置「发出」;`OnRpcMessage` 遇到 HEARTBEAT 第一时间返回;
+    - 每个 channel 一个 1s 检查节拍,只绑 weak、从不 cancel;
+    - `CheckLinkLiveness(now)` 公开,既是节拍本体也是单测接缝;`Close()` 之后心跳照发。
+  - 开启入口:`RpcClient::setLinkHeartbeat` 与 `RpcServer::setLinkHeartbeat`,默认关。只在节点装配的两处开启:`NodeConnector::ConnectToTcpNode`(出站)和 `Node::StartRpcServer`(入站)。另新增 `RpcServer::setConnectionObserver`,是测试接缝,生产代码不用。
+  - 计数:`[RpcChannel] summary` 末尾追加 `link_idle_closed`、`link_idle_deferred`,`stress_summarize.ps1` 的 RPC0 段同步打出。心跳收发次数故意不计:空闲链路上它一直在变,汇总行会每 30s 打一次。
+- **行为变化**:
+  - gate↔scene 链路上,每个空闲方向每 5s 一帧 14 字节。
+  - 对端静默 15s(断电、分区、进程挂起、loop 卡死)就关闭并重连。以前要等单次调用超时或 etcd 摘除。
+  - 同 zone 的 gate 与 scene 必须同批升级。旧二进制不发心跳,新的一端会在它写空闲 15s 时关掉链路、反复重连;这是 fail-closed,日志可见。
+  - 直连 scene RPC0 端口的外部工具必须在 15s 内发出任意一帧。
+- **文件**:
+  - proto:`proto/common/base/rpc_message.proto`。只改了源文件,生成交 Codex。
+  - 新增:`cpp/libs/engine/core/network/rpc_link_liveness.h`、`cpp/tests/rpc_controller_test/rpc_link_heartbeat_test.cpp`。
+  - 修改:
+    - `cpp/libs/engine/core/network/` 下的 `rpc_channel.h`、`rpc_channel.cpp`、`rpc_client.h`、`rpc_server.h`、`rpc_server.cc`、`rpc_channel_stats.h`、`rpc_channel_stats.cpp`;
+    - `cpp/libs/engine/core/node/system/node/` 下的 `node.cpp`、`node_connector.cpp`;
+    - `cpp/libs/engine/core/core.vcxproj` 与 `core.vcxproj.filters`,各加一行 ClInclude;
+    - `cpp/tests/rpc_controller_test/rpc_controller_test.vcxproj`,加一行 ClCompile;
+    - `tools/scripts/stress_summarize.ps1`,字段表加两项,另加一行说明。
+  - 文档:`docs/design/muduo-rpc-channel.md` §21;Java 仓 `PARITY.md` 末尾一条。
+  - 下列共享文件里混有别的会话的未提交改动,本条只做了局部插入,没有动它们的内容:`rpc_client.h`(握手第二轮)、`node.cpp`(发布轨道)、`core.vcxproj` / `.filters`、`stress_summarize.ps1`、`muduo-rpc-channel.md`、本文件。提交时按上面的清单逐 hunk 选。
+- **交 Codex 的验证**。仓库根 `D:\luyuan\xuanming-server-mmo-cpp`,PowerShell;证据放 `$ev = "$env:TEMP\codex-rpc-heartbeat-<时间戳>"`。红了就停下归因,不连续重试,不改用例迁就。
+  0. **前置**:
+     - `git status --short > $ev\status-before.txt`;
+     - `Get-Process MSBuild,cl -ErrorAction SilentlyContinue` 必须为空;
+     - `pwsh -File tools\scripts\dev_tools.ps1 -Command dev-stop`。
+  1. **协议生成**:`pwsh -File tools\scripts\dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。提示生成器 exe 比源码旧时,先跑 `-Command proto-gen-build`。
+     - 通过标准:
+       - `cpp\generated\proto\common\base\rpc_message.pb.h` 有 `HEARTBEAT = 5`;
+       - `go\proto\common\base\rpc_message.pb.go` 有 `GameMessageType_HEARTBEAT`;
+       - `proto\message_id.txt` 零 diff(本批不加方法);
+       - `git -C ..\mmorpg-client status` 不变。
+     - 同日「断线重连应用层接入」会话改了 `proto/scene/player_lifecycle.proto`,同一次生成会一起产出,核对生成物 diff 时两边各认各的。
+     - 然后依次:`cd robot; go mod vendor`;`$env:GOTOOLCHAIN='local'`;在 `go\proto` 下 `go build ./...`;在 robot 下 `go build -mod=vendor ./...`。
+  2. **C++ 串行编译**:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64 /v:minimal > $ev\build-sln.txt`。
+     - `rpc_channel.h`、`rpc_client.h`、`rpc_server.h`(经 `node.h`)几乎所有工程都包含,必须在同一份头文件状态下整体重编。
+     - 整解被与本批无关的工程卡住时,改按设计 §16 第 2 步的顺序逐个工程串行编,至少覆盖 core → services\scene → services\gate → nodes\gate → nodes\scene → rpc_controller_test,并如实记录失败工程与首条错误。battle 若有与本批无关的既有阻塞,单列。
+  3. **单测**:`msbuild cpp\tests\rpc_controller_test\rpc_controller_test.vcxproj /t:Rebuild /m:1 /p:Configuration=Debug /p:Platform=x64`。库必须在第 2 步编好:`run_cpp_tests -Build` 不重编库,不能代替第 2 步。
+     - 新用例:`.\build\cpp\tests\rpc_controller_test.exe --gtest_filter=RpcLinkLiveness*:RpcLinkHeartbeat* --gtest_color=no > $ev\gtest-heartbeat.txt 2>&1`。17 个用例全部 PASS:`RpcLinkLiveness` 9 个、`RpcLinkHeartbeatLoopback` 7 个、`RpcLinkHeartbeatStats` 1 个。
+     - 重复:同一过滤加 `--gtest_shuffle --gtest_repeat=50`,输出 `> $ev\gtest-heartbeat-repeat.txt 2>&1`,0 失败。
+     - 回归:整个二进制跑一遍,输出 `> $ev\gtest-all.txt 2>&1`。既有的 `RpcChannelLoopback.*`、`RpcClientLoopback.*`、`RpcChain*` 等应照常 PASS:心跳默认关,行为不应变化。
+     - 通过标准:退出码 0,输出里没有 `[  FAILED  ]`。
+  4. **冒烟**:`dev-start` 起 gate、scene 与 Go 服务,跑 `robot -c etc/travel_smoke.yaml` 与 robot_smoke。gate / scene 日志应满足:
+     - `Node link ready` 照常出现;
+     - 全程没有 `link idle timeout`、`link idle verdict deferred`;
+     - 最后一行 `[RpcChannel] summary` 里 `link_idle_closed=0 link_idle_deferred=0 unknown_type=0`。`unknown_type` 增长说明有一端是不认识 HEARTBEAT 的旧二进制;
+     - 有压测目录时,`stress_summarize.ps1` 的「RPC0 call outcomes」段多出这两项。
+  5. **挂起演练**(可选,只对本机 dev 进程):
+     ```powershell
+     Add-Type -Namespace Codex -Name Proc -MemberDefinition '[DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h); [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);'
+     $p = Get-Process -Id <进程号>; [Codex.Proc]::NtSuspendProcess($p.Handle) | Out-Null; Start-Sleep -Seconds 25; [Codex.Proc]::NtResumeProcess($p.Handle) | Out-Null
+     ```
+     - 挂起 scene 25s:约 16s 内 gate 打出 `link idle timeout, forcing close: peer=<scene 地址>` 与 `Disconnected from server at <scene 地址>`;恢复后几秒内,该 scene 重新出现 `Node link ready`;gate 的 `link_idle_closed` 为 1。
+     - 挂起 gate 25s:约 16s 内 scene 打出 `link idle timeout ... peer=<gate 地址>`;恢复后 gate 收到断开,重连并重新握手。gate 恢复时可能打出一行 `link idle verdict deferred`,这是预期行为。
+  6. **回报**:每一步的命令、退出码和证据文件名;失败时附首条错误与相关日志摘要。
+- **残余**(详见 §21.9):
+  - 从对端最后一帧到判死有 15–16s,其间的单向消息照样会丢,由各业务协议兜底;
+  - 本端 loop 持续迟到时,判死会一直推迟,由对端判死与 etcd 租约兜底;
+  - 心跳只证明对端的 loop 与网络还在转,不证明业务健康。
+- **Java 版**(`0.1.0-SNAPSHOT`):节点链路已有等价机制,不需要改代码。gate 每 5s 发 `LinkPing`,scene 回 `LinkPong`,两端都用 Netty `IdleStateHandler` 按读空闲 15s 判死。只剩一项待做:同步 `game-proto` 里 `rpc_message.proto` 的副本,已在 Java 仓 `PARITY.md` 末尾登记。本次没有写 Java 代码。
+- 本次没有编译,也没有运行任何测试或程序。

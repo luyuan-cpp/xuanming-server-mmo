@@ -26,7 +26,8 @@
 //   * ATTACH_DEBT 时同币种的既有欠款带本版本不认识的字段(CurrencySystem::DebtCarriesUnknownFields)→ kVersionSkew:
 //     版本错位,AttachDebt 不会合并;不记终态,收件箱停用本域,实体重建后重拉(已作废记 SKIPPED,落到新版本节点再挂;
 //     退出保留期内重登复用实体,不重拉)。
-//     不用 kDefer:这种错位会在会话内消失(欠款还清被删),DEFER 的本地续做看不到之后挂的 VOID
+//     不用 kDefer:这种错位可能在会话内消失(这笔欠款被删除;AddCurrency 按冻结处理、不会把它还清删除),
+//     DEFER 的本地续做看不到之后挂的 VOID;错位不消失时续做只会空转
 //     (docs/design/mixed-version-persist-field-protection.md §4.4,player-inbox-service.md §7.5 评审 L1)。
 //
 // 不判冻结 / 战斗 / 可改:那是 PlayerInboxSystem 前置闸的事(闸**不下沉**到 CurrencySystem,D48 红线)。

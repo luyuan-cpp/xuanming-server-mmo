@@ -142,13 +142,14 @@ var (
 		Help:      "Battle result events consumed from Kafka by mode and outcome (applied|duplicate|ignored|error|decode_error).",
 	}, []string{"mode", "outcome"})
 
-	// ratingRoundCapDraw PVP 队列模式回合打满(total_rounds >= RatingDrawRoundCap)
-	// 被改按平局结算的局数:C++ 引擎回合打满一律判 SIDE_B_WIN,match 侧纠正。
+	// ratingRoundCapDraw 计分局回合打满被改按平局结算的局数(只计真正入账的):C++ 引擎回合打满一律判 SIDE_B_WIN,
+	// match 侧纠正(logic.ratedScoreA)。basis 是判定依据,封闭集合:survivors = 完整个人原件证明 0 队没全灭;
+	// round_limit = 旧版结果没有个人原件,回合数达到模板回合上限(catalog.RoundLimit)。
 	ratingRoundCapDraw = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "rating_round_cap_draw_total",
-		Help:      "Rated battles whose win/loss outcome was settled as a draw because total_rounds hit the round cap, by mode.",
-	}, []string{"mode"})
+		Help:      "Rated battles whose side-B win was settled as a draw because the engine's round limit, not a wipe, decided it, by mode and basis (survivors|round_limit).",
+	}, []string{"mode", "basis"})
 
 	// ---- 活动开局(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.18.3)----
 
@@ -288,15 +289,15 @@ func MergedZoneRefreshValue(result string) float64 {
 	return counterVecValue(mergedZoneRefreshTotal, result)
 }
 
-// ObserveRatingRoundCapDraw 记录一局回合打满被改按平局结算。
-func ObserveRatingRoundCapDraw(mode string) {
-	ratingRoundCapDraw.WithLabelValues(mode).Inc()
+// ObserveRatingRoundCapDraw 记录一局回合打满被改按平局结算;basis 取 survivors / round_limit。
+func ObserveRatingRoundCapDraw(mode, basis string) {
+	ratingRoundCapDraw.WithLabelValues(mode, basis).Inc()
 }
 
-// RatingRoundCapDrawValue 读回某 mode 的回合打满改平局计数(单测断言用)。
-func RatingRoundCapDrawValue(mode string) float64 {
+// RatingRoundCapDrawValue 读回某 (mode, basis) 的回合打满改平局计数(单测断言用)。
+func RatingRoundCapDrawValue(mode, basis string) float64 {
 	var m dto.Metric
-	if err := ratingRoundCapDraw.WithLabelValues(mode).Write(&m); err != nil {
+	if err := ratingRoundCapDraw.WithLabelValues(mode, basis).Write(&m); err != nil {
 		return 0
 	}
 	return m.GetCounter().GetValue()
@@ -562,8 +563,4 @@ func Start(addr string) {
 	}
 	go func() {
 		logx.Infof("[metrics] Prometheus /metrics listening on %s", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logx.Errorf("[metrics] HTTP server exited: %v", err)
-		}
-	}()
-}
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClose
