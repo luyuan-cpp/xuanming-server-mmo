@@ -8,7 +8,7 @@ Run from repo root:
     python3 tools/archived/vcxproj2cmake.py
 
 Current project structure (active nodes: gate + scene + battle):
-  - third_party/         → navmesh/hexagon static lib
+  - third_party/         → navmesh/hexagon/Cobalt static lib
   - cpp/generated/       → proto, rpc, table, grpc_client, proto_helpers
   - cpp/libs/engine/     → core, config, session, infra, thread_context, muduo_grpc
   - cpp/libs/modules/    → bag, mission, currency, etc.
@@ -320,6 +320,15 @@ def write_cmake(vcxproj_dir, project_name, source_files, include_dirs, target_ty
         lines.append(")")
         lines.append("")
 
+    # Cobalt 与聚合 Boost 头使用同一锁定版本。静态编译定义仅作用于上游实现文件。
+    cobalt_sources = [src for src in source_files if src.startswith("boost/libs/cobalt/src/")]
+    if cobalt_sources:
+        lines.append("set_source_files_properties(")
+        lines.extend("    %s" % src for src in cobalt_sources)
+        lines.append('    PROPERTIES COMPILE_DEFINITIONS "BOOST_COBALT_SOURCE=1;BOOST_COBALT_NO_LIB=1;BOOST_COBALT_STATIC_LINK=1"')
+        lines.append(")")
+        lines.append("")
+
     # Target
     if target_type == "lib":
         if source_files:
@@ -397,7 +406,7 @@ if __name__ == "__main__":
 
     # ── Static libraries (build order matters) ──
 
-    print("[1/16] third_party (navmesh/hexagon)")
+    print("[1/16] third_party (navmesh/hexagon/Cobalt)")
     generate("./third_party/third_party.vcxproj", "./third_party/", "lib")
 
     print("[2/16] generated/proto")

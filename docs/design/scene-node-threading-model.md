@@ -1,6 +1,6 @@
 # Scene Node 线程归属、帧循环与停机
 
-> 源码核对：2026-10-23。本次只更新文档，不新增构建、测试或线程采样证据。
+> 线程与停机基线于 2026-10-23 核对。2026-11-05 补充队伍跟随协程的接入契约。
 > gRPC 传输与排空细节以[gRPC 传输设计 §15](./grpc-muduo-transport.md)为准；
 > Redis 底层回调与释放见[Redis 生命周期设计](./redis-async-client-retry-fix.md)。
 
@@ -20,6 +20,12 @@ Kafka 后台线程只收取并投递，不能直接改 Scene 的 registry。
 2026-10-26 起移除官方 C++ SDK、初始化探针及其运行期守卫。依赖边界由构建与源码契约检查；
 ThreadMonitor 继续采样实际线程基线，不再查询官方库的初始化状态。
 `GRPC_SERVER_MAX_POLLERS` 已退役，不能用它或旧线程池变量调当前节点线程数。
+
+### 队伍跟随的两次异步读取
+
+`SceneRuntimeContext` 持有 `PlayerTeamFollowScope`，启动、两次 Redis GET 的恢复和停止均断言在所属 Scene EventLoop。Cobalt 的执行器使用同一个 muduo loop。同线程 `dispatch` 内联，根任务的完成通知经 `queueInLoop` 退休。两次正常 Redis 回包直接在原回调栈内恢复业务。Boost 的 `execution_context` 只提供执行器属性，实际工作由 muduo 驱动。
+
+等待回复期间协程挂起，Scene 可以执行其它排队工作。提交内即时拒绝或重入完成在 `command` 返回后交付。维护 P1、普通关机和身份冲突入口先关闭跟随准入并发出本地取消，拆除前再做幂等兜底。本地取消在当前 loop 结束等待，根任务完成通知稍后清理停止信号。Redis 迟到回包无法再访问任务帧。整个路径沿用已有线程，沿用下文 Redis 与 `MessageAsyncClient` 的销毁顺序。
 
 ## 2. 当前帧与派发预算
 
@@ -46,7 +52,7 @@ Running → ClosingIngress →（GrpcDraining 与 PersistenceDraining）→ Fina
 ```
 
 1. 停止并 join Kafka consumer，封住 Kafka 业务入站；producer 继续存活，供退出存盘使用。
-   执行关机前业务 hook，Scene 停止 lifecycle，并让尚待许可的创建请求按拒绝路径收口。
+   执行关机前业务 hook，Scene 停止队伍跟随和 lifecycle，并让尚待许可的创建请求按拒绝路径收口。
 2. 调用 `BeginShutdown({2s, 1s, 1s}, onDrained)`，设置排空状态、排队撤监听，发送两阶段 GOAWAY。
    最终 GOAWAY 前的在途请求仍可能追加业务工作。到期后拒绝未开始的调用、结束已开始的调用；
    已提交的 DATA / trailers 仍须处理写窗口与背压，帧写完且所有流关闭后半关；排空到期路径的 closeGrace 从该到期时刻起算，

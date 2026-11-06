@@ -158,7 +158,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\muduo_grpc_test\muduo_test_loop.cpp">
+      <ObjectFileName>$(IntDir)muduo_test_loop.obj</ObjectFileName>
+    </ClCompile>
     <ClCompile Include="cross_zone_test.cpp" />
+    <ClCompile Include="player_team_follow_test.cpp" />
     <ClCompile Include="role_admission_test.cpp" />
     <ClCompile Include="save_seq_test.cpp" />
     <ClCompile Include="player_ownership_metrics_test.cpp" />

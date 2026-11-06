@@ -83,15 +83,20 @@
 
 bool player_ownership::ParsePlayerLocationElement(const redisReply *element, storage::PlayerLocation &out)
 {
-	if (element == nullptr || element->type != REDIS_REPLY_STRING)
+	if (element == nullptr || element->type != REDIS_REPLY_STRING || (element->len != 0 && element->str == nullptr))
 	{
 		return false;
 	}
-	if (element->len > static_cast<size_t>(std::numeric_limits<int>::max()))
+	return ParsePlayerLocationBytes({element->len == 0 ? "" : element->str, element->len}, out);
+}
+
+bool player_ownership::ParsePlayerLocationBytes(std::string_view bytes, storage::PlayerLocation &out)
+{
+	if (bytes.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
 	{
 		return false;
 	}
-	return out.ParseFromArray(element->str, static_cast<int>(element->len));
+	return out.ParseFromArray(bytes.data(), static_cast<int>(bytes.size()));
 }
 
 thread_local PendingEnterMap tlsPendingEnterMap;

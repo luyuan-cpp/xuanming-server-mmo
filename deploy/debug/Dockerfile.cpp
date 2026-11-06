@@ -16,7 +16,7 @@ RUN python3 -c 'import os,re,sys; key=os.environ.get("CPP_CACHE_KEY", ""); jobs=
 # SDK 镜像可能带有验证时的旧业务源；COPY 不会删除旧文件，先清空明确的应用输入。
 # 已安装 SDK 位于 /usr/local 与 lib，保留；本轮对象缓存另由下方挂载提供。
 RUN rm -rf cpp generated proto data/scene_nav_bin \
-       third_party/boost/boost third_party/entt third_party/fmt third_party/spdlog \
+       third_party/boost/boost third_party/boost/libs/cobalt/src third_party/entt third_party/fmt third_party/spdlog \
        third_party/xxhash third_party/sol2 third_party/lua third_party/cppcodec \
        third_party/exprtk third_party/hexagons_grids third_party/ue5navmesh third_party/recastnavigation \
        third_party/librdkafka/src-cpp \
@@ -27,6 +27,8 @@ COPY cpp/ cpp/
 COPY generated/ generated/
 COPY proto/ proto/
 COPY third_party/boost/boost/ third_party/boost/boost/
+COPY third_party/boost/libs/cobalt/src/detail/exception.cpp third_party/boost/libs/cobalt/src/detail/util.cpp third_party/boost/libs/cobalt/src/detail/
+COPY third_party/boost/libs/cobalt/src/error.cpp third_party/boost/libs/cobalt/src/this_thread.cpp third_party/boost/libs/cobalt/src/
 COPY third_party/entt/ third_party/entt/
 COPY third_party/fmt/ third_party/fmt/
 COPY third_party/spdlog/ third_party/spdlog/

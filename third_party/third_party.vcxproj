@@ -19,6 +19,18 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="boost\libs\cobalt\src\detail\exception.cpp">
+      <PreprocessorDefinitions>BOOST_COBALT_SOURCE=1;BOOST_COBALT_NO_LIB=1;BOOST_COBALT_STATIC_LINK=1;_WIN32_WINNT=0x0601;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="boost\libs\cobalt\src\detail\util.cpp">
+      <PreprocessorDefinitions>BOOST_COBALT_SOURCE=1;BOOST_COBALT_NO_LIB=1;BOOST_COBALT_STATIC_LINK=1;_WIN32_WINNT=0x0601;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="boost\libs\cobalt\src\error.cpp">
+      <PreprocessorDefinitions>BOOST_COBALT_SOURCE=1;BOOST_COBALT_NO_LIB=1;BOOST_COBALT_STATIC_LINK=1;_WIN32_WINNT=0x0601;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="boost\libs\cobalt\src\this_thread.cpp">
+      <PreprocessorDefinitions>BOOST_COBALT_SOURCE=1;BOOST_COBALT_NO_LIB=1;BOOST_COBALT_STATIC_LINK=1;_WIN32_WINNT=0x0601;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="hexagons_grids\hexagons_grid.cpp" />
     <ClCompile Include="ue5navmesh\Private\DetourCrowd\DetourCrowd.cpp" />
     <ClCompile Include="ue5navmesh\Private\DetourCrowd\DetourLocalBoundary.cpp" />

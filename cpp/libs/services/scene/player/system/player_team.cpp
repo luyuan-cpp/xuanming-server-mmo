@@ -1,15 +1,28 @@
 #include "player_team.h"
+#include "player_team_follow_scope.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
+// 固定的 Cobalt 运行时已编入 third_party 静态库，由两套工程统一链接。
+#define BOOST_COBALT_NO_LIB 1
+#include <boost/asio/bind_cancellation_slot.hpp>
+#include <boost/cobalt/spawn.hpp>
 #include <hiredis/hiredis.h>
 
+#include <array>
+#include <cassert>
+#include <cstdio>
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <string>
+#include <type_traits>
+#include <unordered_set>
+#include <utility>
 
 #include "muduo/base/Logging.h"
+#include "muduo/net/EventLoop.h"
 
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
@@ -51,6 +64,148 @@
 
 namespace
 {
+	namespace asio = boost::asio;
+	namespace cobalt = boost::cobalt;
+	using muduo::net::EventLoop;
+
+	// execution_context 只为 Cobalt 提供执行器属性，所有执行与投递都交给 Scene 的 muduo loop。
+	struct FollowExecutor
+	{
+		std::reference_wrapper<EventLoop> loop;
+		std::reference_wrapper<asio::execution_context> context;
+		bool allowInline = true;
+
+		bool operator==(const FollowExecutor& other) const noexcept
+		{
+			return &loop.get() == &other.loop.get() && &context.get() == &other.context.get() &&
+				allowInline == other.allowInline;
+		}
+		asio::execution_context& query(asio::execution::context_t) const noexcept { return context.get(); }
+		asio::execution::blocking_t query(asio::execution::blocking_t) const noexcept
+		{
+			if (allowInline) return asio::execution::blocking.possibly;
+			return asio::execution::blocking.never;
+		}
+		FollowExecutor require(asio::execution::blocking_t::never_t) const noexcept { return {loop, context, false}; }
+		FollowExecutor require(asio::execution::blocking_t::possibly_t) const noexcept { return {loop, context, true}; }
+
+		template<class Work>
+		void execute(Work&& work) const
+		{
+			if (allowInline && loop.get().isInLoopThread())
+			{
+				std::forward<Work>(work)();
+				return;
+			}
+			// muduo 的 Functor 可拷贝，Cobalt 的完成对象可能只可移动。
+			auto pending = std::make_shared<std::decay_t<Work>>(std::forward<Work>(work));
+			loop.get().queueInLoop([pending] { (*pending)(); });
+		}
+	};
+
+	enum class GetStatus : uint8_t { kString, kNil, kError, kRejected, kNoReply, kStopped, kUnexpectedReply };
+	struct GetResult
+	{
+		GetStatus status;
+		std::string bytes{};
+	};
+
+	class GetCompletion
+	{
+	public:
+		using Handler = cobalt::completion_handler<GetResult>;
+		GetCompletion(EventLoop& loop, Handler handler) : loop_(loop), handler_(std::move(handler)) {}
+
+		void Receive(const redisReply* reply)
+		{
+			loop_.assertInLoopThread();
+			if (result_) return;
+			if (reply == nullptr) return Choose({GetStatus::kNoReply});
+			if (reply->type == REDIS_REPLY_NIL) return Choose({GetStatus::kNil});
+			if (reply->type == REDIS_REPLY_ERROR) return Choose({GetStatus::kError});
+			if (reply->type != REDIS_REPLY_STRING) return Choose({GetStatus::kUnexpectedReply});
+			if (reply->len == 0) return Choose({GetStatus::kString});
+			if (reply->str == nullptr) return Choose({GetStatus::kError});
+			Choose({GetStatus::kString, std::string(reply->str, reply->len)});
+		}
+
+		void Choose(GetResult result)
+		{
+			loop_.assertInLoopThread();
+			if (result_) return;
+			result_.emplace(std::move(result));
+			if (!submitting_) Deliver(false);
+		}
+
+		void Submitted(int status)
+		{
+			loop_.assertInLoopThread();
+			submitting_ = false;
+			// 只有提交被接纳才承认回复。已选出的本地停止仍然有效。
+			if (status != REDIS_OK && (!result_ || result_->status != GetStatus::kStopped))
+			{
+				result_.emplace(GetResult{GetStatus::kRejected});
+			}
+			if (result_) Deliver(true);
+		}
+
+	private:
+		void Deliver(bool immediate)
+		{
+			auto handler = std::move(*handler_);
+			handler_.reset();
+			auto slot = handler.get_cancellation_slot();
+			if (slot.is_connected()) slot.clear();
+			// 提交栈里的结果走 Cobalt 的即时完成协议，返回 await_suspend 后才继续业务。
+			// 正常 Redis 回调就在本 loop，当场恢复以保留与其它 Redis 命令的先后。
+			if (immediate)
+			{
+				auto executor = handler.get_immediate_executor();
+				asio::dispatch(executor, [handler = std::move(handler), result = std::move(*result_)]() mutable {
+					handler(std::move(result));
+				});
+				return;
+			}
+			handler(std::move(*result_));
+		}
+
+		EventLoop& loop_;
+		std::optional<Handler> handler_;
+		std::optional<GetResult> result_;
+		bool submitting_ = true;
+	};
+
+	class FollowRedisGet final : public cobalt::op<GetResult>
+	{
+	public:
+		FollowRedisGet(EventLoop& loop, const PlayerTeamFollowScope::RedisGet& submit, std::string key)
+			: loop_(loop), submit_(submit), key_(std::move(key)) {}
+
+		void initiate(cobalt::completion_handler<GetResult> handler) override
+		{
+			loop_.assertInLoopThread();
+			auto slot = handler.get_cancellation_slot();
+			state_ = std::make_shared<GetCompletion>(loop_, std::move(handler));
+			const std::weak_ptr<GetCompletion> weak = state_;
+			if (slot.is_connected())
+			{
+				slot.assign([weak](asio::cancellation_type) {
+					if (const auto state = weak.lock()) state->Choose({GetStatus::kStopped});
+				});
+			}
+			const int status = submit_(key_, [weak](const redisReply* reply) {
+				if (const auto state = weak.lock()) state->Receive(reply);
+			});
+			state_->Submitted(status);
+		}
+
+	private:
+		EventLoop& loop_;
+		const PlayerTeamFollowScope::RedisGet& submit_;
+		std::string key_;
+		std::shared_ptr<GetCompletion> state_;
+	};
+
 	// key 契约见 player_team.h 头注释;与 Go 侧 go/match/internal/team/keys.go 同一份口径。
 	constexpr std::string_view kTeamReadMethod = "/teampb.TeamAuthority/ReadMembership";
 	struct TeamSnapshotVersion { uint64_t epoch{0}, version{0}; };
@@ -134,6 +289,38 @@ namespace
 		return it != sessions.end() && it->second == playerId;
 	}
 
+	bool CanFollow(entt::entity player, uint64_t playerId)
+	{
+		if (PlayerBattleSystem::IsInBattle(player))
+		{
+			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=in_battle player_id=" << playerId;
+			return false;
+		}
+		if (IsOwnershipInFlight(player))
+		{
+			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=ownership_in_flight player_id=" << playerId;
+			return false;
+		}
+		if (IsSceneChangeInFlight(player))
+		{
+			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=scene_change_in_flight player_id=" << playerId;
+			return false;
+		}
+		if (!HasLiveSession(player, playerId))
+		{
+			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId;
+			return false;
+		}
+		return true;
+	}
+
+	std::string BattleLockKey(uint64_t playerId)
+	{
+		std::array<char, sizeof(battle_lock::kBattleLockKeyFmt) + std::numeric_limits<uint64_t>::digits10 + 1> key{};
+		std::snprintf(key.data(), key.size(), battle_lock::kBattleLockKeyFmt, static_cast<unsigned long long>(playerId));
+		return key.data();
+	}
+
 	uint64_t CurrentSceneId(entt::entity player)
 	{
 		const auto* sceneEntity = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
@@ -145,6 +332,78 @@ namespace
 		return sceneInfo != nullptr ? sceneInfo->scene_id() : 0;
 	}
 } // namespace
+
+struct PlayerTeamFollowScope::State
+{
+	EventLoop& loop;
+	asio::execution_context context;
+	cobalt::executor executor;
+	std::function<bool()> redisReady;
+	RedisGet get;
+	std::unordered_set<std::shared_ptr<asio::cancellation_signal>> active;
+	bool stopped = false;
+
+	State(EventLoop& loop, std::function<bool()> ready, RedisGet submit)
+		: loop(loop), executor(FollowExecutor{loop, context}), redisReady(std::move(ready)), get(std::move(submit)) {}
+
+	bool CheckRedis(uint64_t playerId, uint64_t leaderId) const
+	{
+		if (redisReady()) return true;
+		LOG_WARN << "[PlayerTeam] Leader location read skipped(Redis disconnected), player_id=" << playerId << " leader_id=" << leaderId;
+		return false;
+	}
+
+	cobalt::task<void> FollowLeaderAsync(entt::entity player, uint64_t playerId, uint64_t leaderId);
+};
+
+thread_local std::weak_ptr<PlayerTeamFollowScope::State> PlayerTeamFollowScope::current_;
+
+PlayerTeamFollowScope::PlayerTeamFollowScope(EventLoop& loop)
+	: PlayerTeamFollowScope(loop, &RedisReady, [](std::string_view key, RedisReplyHandler reply) {
+		return tlsPlayerRedis.command([reply = std::move(reply)](hiredis::Hiredis*, redisReply* value) { reply(value); },
+			"GET %b", key.data(), key.size());
+	}) {}
+
+PlayerTeamFollowScope::PlayerTeamFollowScope(EventLoop& loop, std::function<bool()> redisReady, RedisGet get)
+	: state_(std::make_shared<State>(loop, std::move(redisReady), std::move(get)))
+{
+	loop.assertInLoopThread();
+	assert(current_.expired());
+	current_ = state_;
+}
+
+PlayerTeamFollowScope::~PlayerTeamFollowScope()
+{
+	Stop();
+	current_.reset();
+}
+
+void PlayerTeamFollowScope::Stop()
+{
+	const auto state = state_;
+	state->loop.assertInLoopThread();
+	if (std::exchange(state->stopped, true)) return;
+	// Cobalt 在根完成通知里清停止槽。通知同时持有信号，直到该槽清理完。
+	const auto pending = std::exchange(state->active, {});
+	for (const auto& signal : pending) signal->emit(asio::cancellation_type::all);
+}
+
+void PlayerTeamFollowScope::Start(entt::entity player, uint64_t playerId, uint64_t leaderId)
+{
+	const auto state = current_.lock();
+	if (!state) return;
+	state->loop.assertInLoopThread();
+	if (state->stopped) return;
+	const auto signal = std::make_shared<asio::cancellation_signal>();
+	state->active.insert(signal);
+	// 根完成闭包保留作用域及停止信号，直到协程帧销毁且通知在所属 loop 退休。
+	cobalt::spawn(state->executor, state->FollowLeaderAsync(player, playerId, leaderId),
+		asio::bind_cancellation_slot(signal->slot(), [state, signal](std::exception_ptr error) {
+			state->loop.assertInLoopThread();
+			state->active.erase(signal);
+			if (error) LOG_ERROR << "[PlayerTeam] Follow task failed with an exception";
+		}));
+}
 
 void PlayerTeamSystem::OnEnteredScene(entt::entity player)
 {
@@ -265,189 +524,134 @@ void PlayerTeamSystem::ApplyMembership(entt::entity player, uint64_t teamId, uin
 
 void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 {
-	const uint64_t playerId = GuidOf(player);
-	if (PlayerBattleSystem::IsInBattle(player))
-	{
-		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=in_battle player_id=" << playerId;
-		return;
-	}
-	if (IsOwnershipInFlight(player))
-	{
-		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=ownership_in_flight player_id=" << playerId;
-		return;
-	}
-	if (IsSceneChangeInFlight(player))
-	{
-		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=scene_change_in_flight player_id=" << playerId;
-		return;
-	}
-	if (!HasLiveSession(player, playerId))
-	{
-		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId;
-		return;
-	}
-	if (!RedisReady())
-	{
-		LOG_WARN << "[PlayerTeam] Leader location read skipped(Redis disconnected), player_id=" << playerId << " leader_id=" << leaderId;
-		return;
-	}
-
-	// 两跳读:先读自己的战斗锁,再读队长位置。登录时 InBattleComp 由 PlayerBattleSystem 异步重建,
-	// 不依赖两条回调链的跳数先后,直接读锁 fail-closed(§F.2)。两把键属于不同玩家、不同 slot,不能并进一条 MGET
-	// (docs/design/redis-player-store-cluster.md §5.3)。顺序依赖只有「本人删锁先于本人读锁」
-	// (PlayerBattleSystem 先发条件删锁再摘组件、摘组件才触发这里),两条命令都在本人 slot。
-	const int ret = tlsPlayerRedis.command(
-		[player, playerId, leaderId](hiredis::Hiredis*, redisReply* reply) {
-			if (!IsSamePlayer(player, playerId))
-			{
-				return;
-			}
-			if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
-			{
-				LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
-				return;
-			}
-			if (reply->type != REDIS_REPLY_NIL)
-			{
-				// 锁存在,或回复形状不认识:都按战斗在途 fail-closed
-				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=battle_lock player_id=" << playerId;
-				return;
-			}
-			ReadLeaderLocationForFollow(player, playerId, leaderId);
-		},
-		(std::string("GET ") + battle_lock::kBattleLockKeyFmt).c_str(), playerId);
-	if (ret != REDIS_OK)
-	{
-		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
-	}
+	PlayerTeamFollowScope::Start(player, GuidOf(player), leaderId);
 }
 
-void PlayerTeamSystem::ReadLeaderLocationForFollow(entt::entity player, uint64_t playerId, uint64_t leaderId)
+cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(entt::entity player, uint64_t playerId, uint64_t leaderId)
 {
-	if (!RedisReady())
+	loop.assertInLoopThread();
+	if (stopped || !IsSamePlayer(player, playerId) || !CanFollow(player, playerId) || !CheckRedis(playerId, leaderId))
 	{
-		LOG_WARN << "[PlayerTeam] Leader location read skipped(Redis disconnected), player_id=" << playerId << " leader_id=" << leaderId;
-		return;
+		co_return;
 	}
-	const std::string leaderLocationKey = player_ownership::LocationRedisKey(leaderId);
-	const int ret = tlsPlayerRedis.command(
-		[player, playerId, leaderId](hiredis::Hiredis*, redisReply* reply) {
-			if (!IsSamePlayer(player, playerId))
-			{
-				return;
-			}
-			if (reply == nullptr)
-			{
-				LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
-				return;
-			}
-			// 回调期间可能刚进入战斗 / 刚断线 / 刚被发起跨 zone 交接:重新核对
-			if (PlayerBattleSystem::IsInBattle(player))
-			{
-				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=in_battle player_id=" << playerId;
-				return;
-			}
-			if (IsOwnershipInFlight(player))
-			{
-				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=ownership_in_flight player_id=" << playerId;
-				return;
-			}
-			if (IsSceneChangeInFlight(player))
-			{
-				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=scene_change_in_flight player_id=" << playerId;
-				return;
-			}
-			if (!HasLiveSession(player, playerId))
-			{
-				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId;
-				return;
-			}
 
-			storage::PlayerLocation leaderLocation;
-			if (!player_ownership::ParsePlayerLocationElement(reply, leaderLocation))
-			{
-				return; // 队长不在任何场景(或位置缺失/损坏):不跟随
-			}
-			if (leaderLocation.zone_id() != GetZoneId())
-			{
-				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=cross_zone player_id=" << playerId
-						 << " leader_id=" << leaderId << " leader_zone_id=" << leaderLocation.zone_id();
-				return;
-			}
-			// PlayerLocation.node_id 是十进制字符串(scene_manager strconv.FormatUint 写入)
-			if (leaderLocation.node_id() != std::to_string(GetNodeInfo().node_id()))
-			{
-				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=cross_node player_id=" << playerId
-						 << " leader_id=" << leaderId << " leader_node_id=" << leaderLocation.node_id();
-				return;
-			}
-
-			const uint64_t leaderSceneId = leaderLocation.scene_id();
-			if (leaderSceneId == 0)
-			{
-				return;
-			}
-			if (leaderSceneId == CurrentSceneId(player))
-			{
-				// 已经和队长在同一个场景实例:不用换图,只需要把人带到队长看得见的地方
-				RegroupToLeader(player, leaderId);
-				return;
-			}
-
-			const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
-			if (session == nullptr)
-			{
-				return;
-			}
-
-			// node_id 不是 entt 实体句柄(network_utils.h 禁令),必须走 ResolveLocalZoneGateEntity,
-			// 否则 gate_instance_id 为空,scene_manager 侧的 gate 防僵尸过滤会失效
-			const NodeId gateNodeId = GetGateNodeId(session->gate_session_id());
-			std::string gateInstanceId;
-			if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(session->gate_session_id()))
-			{
-				auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-				if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
-				{
-					gateInstanceId = gateNodeInfo->node_uuid();
-				}
-			}
-
-			const auto smEntity = GetSceneManagerEntity(playerId);
-			if (smEntity == entt::null)
-			{
-				LOG_WARN << "[PlayerTeam] No available SceneManager node;follow abandoned, player_id=" << playerId
-						 << " leader_scene_id=" << leaderSceneId;
-				return;
-			}
-
-			::scene_manager::EnterSceneRequest request;
-			request.set_player_id(playerId);
-			request.set_scene_id(leaderSceneId);
-			request.set_session_id(session->gate_session_id());
-			request.set_gate_id(std::to_string(gateNodeId));
-			request.set_gate_instance_id(gateInstanceId);
-			request.set_gate_zone_id(GetZoneId());
-			request.set_zone_id(leaderLocation.zone_id());
-			// 不设 request_id:同 player_lifecycle.cpp DispatchEmergencyRelocate 的理由,
-			// SceneManager 的 60s 去重会吞掉同一玩家短时间内的第二次合法跟随
-
-			// RequestSceneChange 在发送之前登记单槽在途记录(与上面的 IsSceneChangeInFlight 成对):跟随在途
-			// 期间客户端再发换图会被 EnterSceneC2S 以"切换中"拒掉,不会覆盖这条记录;应答按 correlation_id
-			// 对号。playerRequested=false:玩家没在等这条请求的结果,被拒只记日志,不起交接、不回 tip
-			// (见 PlayerSceneChangeInFlightComp)。应答 / 进场路由到达即摘;应答丢失靠短 TTL 失效。
-			const uint64_t correlationId = PlayerLifecycleSystem::RequestSceneChange(player, smEntity, request,
-																					 /*playerRequested=*/false);
-
-			// SceneManager 拒绝时只在其回包处理里记日志,队员留在原场景
-			LOG_INFO << "[PlayerTeam] Requesting scene change to follow leader: player_id=" << playerId << " leader_id=" << leaderId
-					 << " leader_scene_id=" << leaderSceneId << " corr=" << correlationId;
-		},
-		"GET %s", leaderLocationKey.c_str());
-	if (ret != REDIS_OK)
+	// 本人战斗锁与队长位置属于不同玩家 slot，顺序读取。登录时 InBattleComp 仍可能在异步重建。
+	const auto lock = co_await FollowRedisGet{loop, get, BattleLockKey(playerId)};
+	loop.assertInLoopThread();
+	if (stopped || !IsSamePlayer(player, playerId))
+	{
+		co_return;
+	}
+	if (lock.status == GetStatus::kError || lock.status == GetStatus::kRejected || lock.status == GetStatus::kNoReply)
 	{
 		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
+		co_return;
 	}
+	if (lock.status != GetStatus::kNil)
+	{
+		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=battle_lock player_id=" << playerId;
+		co_return;
+	}
+	if (!CheckRedis(playerId, leaderId))
+	{
+		co_return;
+	}
+
+	const auto location = co_await FollowRedisGet{loop, get, player_ownership::LocationRedisKey(leaderId)};
+	loop.assertInLoopThread();
+	if (stopped || !IsSamePlayer(player, playerId))
+	{
+		co_return;
+	}
+	if (location.status == GetStatus::kRejected || location.status == GetStatus::kNoReply)
+	{
+		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
+		co_return;
+	}
+	if (!CanFollow(player, playerId) || location.status != GetStatus::kString)
+	{
+		co_return;
+	}
+
+	storage::PlayerLocation leaderLocation;
+	if (!player_ownership::ParsePlayerLocationBytes(location.bytes, leaderLocation))
+	{
+		co_return; // 队长不在任何场景(或位置缺失/损坏):不跟随
+	}
+	if (leaderLocation.zone_id() != GetZoneId())
+	{
+		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=cross_zone player_id=" << playerId
+				 << " leader_id=" << leaderId << " leader_zone_id=" << leaderLocation.zone_id();
+		co_return;
+	}
+	// PlayerLocation.node_id 是十进制字符串(scene_manager strconv.FormatUint 写入)
+	if (leaderLocation.node_id() != std::to_string(GetNodeInfo().node_id()))
+	{
+		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=cross_node player_id=" << playerId
+				 << " leader_id=" << leaderId << " leader_node_id=" << leaderLocation.node_id();
+		co_return;
+	}
+
+	const uint64_t leaderSceneId = leaderLocation.scene_id();
+	if (leaderSceneId == 0)
+	{
+		co_return;
+	}
+	if (leaderSceneId == CurrentSceneId(player))
+	{
+		// 已经和队长在同一个场景实例:不用换图,只需要把人带到队长看得见的地方
+		PlayerTeamSystem::RegroupToLeader(player, leaderId);
+		co_return;
+	}
+
+	const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
+	if (session == nullptr)
+	{
+		co_return;
+	}
+
+	// node_id 不是 entt 实体句柄(network_utils.h 禁令),必须走 ResolveLocalZoneGateEntity,
+	// 否则 gate_instance_id 为空,scene_manager 侧的 gate 防僵尸过滤会失效
+	const NodeId gateNodeId = GetGateNodeId(session->gate_session_id());
+	std::string gateInstanceId;
+	if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(session->gate_session_id()))
+	{
+		auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
+		if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
+		{
+			gateInstanceId = gateNodeInfo->node_uuid();
+		}
+	}
+
+	const auto smEntity = GetSceneManagerEntity(playerId);
+	if (smEntity == entt::null)
+	{
+		LOG_WARN << "[PlayerTeam] No available SceneManager node;follow abandoned, player_id=" << playerId
+				 << " leader_scene_id=" << leaderSceneId;
+		co_return;
+	}
+
+	::scene_manager::EnterSceneRequest request;
+	request.set_player_id(playerId);
+	request.set_scene_id(leaderSceneId);
+	request.set_session_id(session->gate_session_id());
+	request.set_gate_id(std::to_string(gateNodeId));
+	request.set_gate_instance_id(gateInstanceId);
+	request.set_gate_zone_id(GetZoneId());
+	request.set_zone_id(leaderLocation.zone_id());
+	// 不设 request_id:同 player_lifecycle.cpp DispatchEmergencyRelocate 的理由,
+	// SceneManager 的 60s 去重会吞掉同一玩家短时间内的第二次合法跟随
+
+	// RequestSceneChange 在发送之前登记单槽在途记录(与上面的 IsSceneChangeInFlight 成对):跟随在途
+	// 期间客户端再发换图会被 EnterSceneC2S 以"切换中"拒掉,不会覆盖这条记录;应答按 correlation_id
+	// 对号。playerRequested=false:玩家没在等这条请求的结果,被拒只记日志,不起交接、不回 tip
+	// (见 PlayerSceneChangeInFlightComp)。应答 / 进场路由到达即摘;应答丢失靠短 TTL 失效。
+	const uint64_t correlationId = PlayerLifecycleSystem::RequestSceneChange(player, smEntity, request,
+																			 /*playerRequested=*/false);
+
+	// SceneManager 拒绝时只在其回包处理里记日志,队员留在原场景
+	LOG_INFO << "[PlayerTeam] Requesting scene change to follow leader: player_id=" << playerId << " leader_id=" << leaderId
+			 << " leader_scene_id=" << leaderSceneId << " corr=" << correlationId;
 }
 
 void PlayerTeamSystem::RegroupToLeader(entt::entity player, uint64_t leaderId)

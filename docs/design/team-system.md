@@ -1013,6 +1013,22 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 
 **收敛性**(提交 → 读 location → 发事件):team 的投影写入时刻早于它读成员 location 的时刻。成员在别处加载时，加载晚于 location 写入(scene_manager 先写 location,见 `enterscenelogic.go:417-426`),也就晚于投影写入，所以拉取一定能看到新投影。事件丢失不影响正确性，只影响 TeamId 的及时性。
 
+#### C++ 协程试点暂缓（2026-11-05）
+
+第一批只涉及 `CheckFollowLeader` 到 `ReadLeaderLocationForFollow` 的两次异步 Redis GET。最初因两套工具链缺标准执行库而暂缓，随后负责人选择用标准 C++ 协程语法搭配仓库锁定的 Boost.Cobalt 实施。以下工具链门禁留给日后迁移标准 `task` 时使用。
+
+- Windows 的 VS 2026 `v145` 工程已用 `/std:c++latest`。实测默认 MSVC 14.51 和本机已有的 14.52 都缺 `std::execution::task` 与 `schedule`、`connect`、`start`、`get_stop_token`。Linux 固定 Debug SDK 的 GCC 13.4.0 / libstdc++ 13 在 C++23 下同样缺这些接口，也不识别 `-std=c++26`。两边的 `std::stop_source`、`std::stop_callback` 编译和运行探针均通过。[C++ 工作草案](https://eel.is/c++draft/exec.task) · [MSVC STL 实现跟踪](https://github.com/microsoft/STL/issues/4768)
+- 迁移条件是在两套正式工具链上用 `std::execution::task` 实际编译并运行接入 muduo EventLoop 的探针。用可控的两次异步结果验证同 loop 启动与恢复、等待期间 loop 可推进、正常同 loop 完成保留回调顺序，以及本地停止后迟到结果不再恢复任务。此前 Linux 上的基础协程探针只验证了模拟结果的调度。
+- 日后迁移仍先验证这两跳。只在本人战斗锁明确为 NIL 时读取队长位置，两次完成后复核原实体和玩家身份，第二次完成后再检查跟随资格。保留同区同节点限制、归队和换图语义，以及 [Scene 现行停机顺序](scene-node-threading-model.md#4-finalize-的两阶段收尾)。
+
+#### 第一批 C++ 跟随协程
+
+`CheckFollowLeader` 仍是发起一次检查的入口。Scene 的 `PlayerTeamFollowScope` 在所属 loop 启动 Cobalt `task<void>`，由 `FollowLeaderAsync` 顺序读取本人战斗锁和队长位置。两个玩家键分属各自 slot，只有第一跳明确收到 NIL 才发第二跳。每次完成后核对原实体句柄和 `player_id`，第二次完成后重查战斗、交接、换图在途和会话。跨等待只携带身份值及已取得的自有结果。队伍 SQL 权威查询、签名、入场身份、成员应用规则仍由原入口处理。
+
+GET 继续调用 `tlsPlayerRedis.command`。结果区分字符串（含空串）、NIL、Redis 错误、未接纳、空回复和本地停止，另保留意外回复类型供战斗锁守卫诊断。借用的 `redisReply` 在回调返回前按长度复制，Redis 层沿用现有重试、背压及关闭规则。提交中重入的结果暂存到提交返回后再交付，正常回包在同一个 Redis 回调栈恢复。停机取消本地等待，已发出的命令仍由 Redis 层收尾。迟到回复只持等待状态的弱引用。执行与停机见 [Scene 线程模型](scene-node-threading-model.md)。
+
+同场景仍调用 `RegroupToLeader`。不同场景从当前会话组装 `RequestSceneChange`，沿用 Gate 实例、`playerRequested=false`、在途登记、关联号及失败清理，`request_id` 继续留空。Java 0.1.0-SNAPSHOT 保持原先的本地队长查询与本地换图，未新增客户端或双端行为差异。
+
 ### F.3 Go 侧发送 `PlayerTeamRefreshEvent`
 1. 只发给 tid 发生变化的玩家:J、L 集合，解散时为全员;另外 S_HEAL_ORPHAN 成功的玩家(GetMyTeam 或 Mutate 发现记录已过期)、`{-2}` 修复提交里被移出的成员也发。
 2. `playercontract.LoadLocation`(§A.2),为空就跳过(玩家不在场景，下次进场会拉取)。

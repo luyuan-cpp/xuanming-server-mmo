@@ -20207,3 +20207,48 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 - 当前双客户端验收机器人实际编译成功，编译输入 1508 份，proto 绑定 128 份，原机器人产物已单独保留。
 - 首次部署预检在读取容器状态时出错，脚本错误地假定所有挂载都有 Docker 卷名。保留 `local-deploy-r1/result.json`、原脚本和只读复核结果，未更新镜像配置、创建新数据卷或启动容器。
 - 用户发话继续后，修正缺失的挂载字段和健康状态字段读取，实际只读核对 141 个本机容器，其中调试项目 18 个。旧 MySQL 卷仍在，18 个本轮隔离数据卷尚不存在。校验同时区分 Compose 显式命名卷和镜像声明的匿名卷。第二次部署使用独立证据目录 `local-deploy-r2`。
+
+
+### 2026-11-05 Codex：队伍跟随 C++ 协程试点暂缓
+
+- 按用户决定，队伍跟随暂用现有两跳异步回调。Windows MSVC 14.51 和 14.52 在 /std:c++latest 下、Linux GCC 13.4 / libstdc++ 13 在 C++23 下均缺标准 task 和 sender 调度接口，普通 stop_source / stop_callback 探针通过。
+- Linux 真实 muduo 的模拟结果探针验证了暂扣回复期间的 loop 推进、两次同线程内联恢复和本地停止后的迟到结果隔离。证据在 build/verification/team-follow-execution-msvc-comparison-20261105T143427913Z/ 和 build/verification/cpp26-linux-toolchain-probe-20261105T143359614Z/。未接入生产跟随或真实 Redis，未跑完整 Scene 构建。
+- 恢复门禁见[队伍设计](design/team-system.md#c-协程试点暂缓2026-11-05)。等 Windows 和 Linux 正式工具链都用标准 task 跑通 muduo 接入探针，再实施第一批。仅更新文档。Java 0.1.0-SNAPSHOT 无新增行为或契约差异。
+
+### 2026-11-05 Codex：隔离数据栈实际部署失败，原注册证据保留
+
+- 部署第二次预检把 Compose 展开的 YAML 模板镜像字段误判为其他配置变化。镜像引用已更新，容器和数据卷尚未启动。保留 local-deploy-r2 原结果和脚本。仅允许预期镜像字段变化的修正版通过真实 Compose 只读核对，并拒绝了夹具中的意外项目变更。
+- local-deploy-r3 再验当前来源后，在 desktop-linux 的 xuanming-debug-current 用原两份 Compose 启动。Compose 实际退出 1。新建 18 个本轮隔离命名卷，四个旧数据卷仍在。启动结果 13 个容器在运行（其中 Match unhealthy），Login、Gateway、Battle 保持 Created。12 个初始化任务中 11 个正常退出，含 Kafka 初始化和四个数据库迁移。
+- Login 注册器退出 1，writer_authority 报 catalog 回滚未确认。原注册尝试文件和输入仍在，未生成授权或运行配置。对本轮隔离 MySQL 执行只读存在性核查，原请求未见永久注册收据及对应注册摘要。这是一次观察，保留原件等待正式结局处理，未重发 REGISTER。
+- Match 的实际运行 YAML 解析失败。经只读提取形状确认，原 Match 配置 LoginRedis.Addrs 是块序列，SQL 启动渲染改成行内序列后留下旧列表项。原镜像候选未重编，未进入断点和双客户端进场验收。
+- 证据在 build/verification/docker-debug-refresh-20261104-r2/local-deploy-r3。按 AGENTS.md §10.2 保留失败批次，等待恢复决策后执行。
+
+### 2026-11-05 Codex：串行恢复批次已备妥，等待并发 C++ 构建结束
+
+- 用户确认继续。已应用经过合成验证的 Docker Match YAML 修复，保持 LoginRedis.Addrs 的列表含义并在生成文件中用单行列表，供正式 SQL 注册渲染器替换。跟踪脚本摘要与已验证候选一致。
+- 正式配置生成器在独立忽略目录准备 20261105-serial-r1。配置源 19 份逐项一致，原开发凭据、端口和 Kafka 初始化脚本保持一致。只读预检通过，原有 4 个旧数据卷和失败批次 18 个命名卷仍在，本次拟用 18 个卷均未创建。规范 .env 和运行容器仍指向原批次。
+- 串行启动入口准备就绪。创建新容器后按实际 Compose 图核镜像、挂载和状态，精确 ID 启动基础设施、迁移和六个注册器，注册器逐一等待退出 0。应用按依赖顺序启动。失败停止后续，不重启或重跑已发起步骤。
+- 同仓库队伍跟随改动增加 C++ 和 Cobalt 编译输入，并修改 Debug Dockerfile 与 K8s Dockerfile。旧候选不可用于当前源。SDK 现役守卫的 38195 份输入只改一份 K8s Dockerfile，其依赖阶段字节未变。已完成本轮全量来源封存。待并发任务完成 C++ 改动和重型构建后，依次完成 SDK 构建、安装核验和正式 Linux Debug 构建，再接续部署。
+
+
+### 2026-11-05 Codex：队伍跟随首批协程落地
+
+- 用户随后选择用标准 C++ 协程语法和仓库锁定的 Boost.Cobalt 1.92 实施。仅替换队伍跟随的两次 Redis GET 回调接续。SceneRuntimeContext 持有跟随作用域。回包按长度复制，在原 Scene loop 内联恢复。停止先关闭准入，再完成本地等待，晚回包弱引用失效。保留原 SQL 成员关系、战斗与会话复核、同区同节点归队及现有换图请求契约。
+- Windows 与 Linux 的 Cobalt/muduo 探针均验证暂扣回复时 loop 可推进、两次同线程内联恢复和本地取消。Linux 另用 ASan/UBSan/泄漏检测覆盖即时拒绝、提交内重入、结果与停止先后共六序。证据在 build/verification/cobalt-muduo-probe-20261105T145430716Z/ 与 build/verification/cobalt-muduo-windows-20261105T145512522Z/。
+- Windows Debug x64 串行 /m:1 /nr:false /p:CL_MPCount=1 构建第三方静态库、Scene 逻辑库和节点、三个相关测试工程均退出 0。cross_zone_test 359/359（新增跟随用例 15/15）、aoi_test 61/61、rpc_controller_test 298/298（既有 2 项 DISABLED）。真实 SceneManager 回环验证当前会话、Gate 实例、登录代次、owner revision、关联号及拒绝后的在途清理。证据在 build/verification/team-follow-cobalt-20261105T145854735Z/。
+- Linux GCC 13.4 正式 Debug builder 用最终业务源码封存编译及链接 Gate、Scene、Battle，退出 0。21747 份封存输入在验证期间一致。证据在 build/verification/cobalt-scene-linux-final-20261105T151312382Z/。GCC 的 Cobalt PMR 协程分配/释放警告保留。发布 Dockerfile 的 builder 增加四份 Cobalt 源，旧共享 Debug SDK pin 的整文件摘要因此失配。本次用依赖阶段字节一致且已核验的 SDK 独立验证，共享 pin 由其原资格流程处理。
+- Linux Redis 回归首次因原测试 CMake 通配符误编上游 boilerplate.cc 失败，保留 build/verification/cobalt-redis-lifecycle-20261105T151615998Z/。修正源清单排除上游自身未编译的示例后，正式 Debug ASan/UBSan/泄漏检测入口通过 122/122，证据在 build/verification/cobalt-redis-lifecycle-final-20261105T152044053Z/。
+- 裸指针成员门禁与本批 git diff --check 通过。Java 0.1.0-SNAPSHOT 原有本地队长查询和本地换图，队伍客户端契约无变化。未跑 Release、真实集群跟随冒烟或压测。本聊天未提交、推送或部署。
+
+### 2026-11-05 Codex：更新后的 C++ 构建配方已通过 SDK 核验
+
+- 并发队伍跟随任务已结束，最终 Linux 产物为验证用导出，未发布可部署镜像。按现有来源守卫重新构建当前 SDK，依赖层命中缓存，安装脚本实际退出 0，登记 sha256:adaf6d33489dc8c48494910ccfcd3cb96d9e1a060bc232fc9ddb3a4abc782566。核验记录见 build/verification/docker-debug-sdk-current-recipe-20261105-r1。
+- 通过后启动正式 C++ Linux Debug 单任务构建，输出目录 build/verification/docker-rebuild-cpp-20261105T152947.979374Z。将核对 Dockerfile 首尾摘要和正式构建记录，再使用独立新数据批次继续串行部署。尚无本轮服务运行或验收结论。
+
+### 2026-11-05 Codex：本机调试栈部署和运行验收通过
+
+- 正式 Linux C++ Debug 三节点同批构建退出 0，输入 21747 份，来源摘要 c2b5af1fcfd66d3cd380ec2d1ba7c070fe3c22df112d75b9a45ad34b74952017，镜像 sha256:88bc62a63aaf3d576d296bbaa7fe95989e78e2f229fe42603ed9b577117a9750。编译档为 -O0 和调试符号，Debug Dockerfile 首尾一致。Go 八个常驻及两个构建工具沿用本轮已验证的 Debug 产物，Java 网关使用对应当前源码且含行号表的既有 JAR 重新包装。部署前重新核对全部镜像来源。
+- desktop-linux 的 xuanming-debug-current 使用规范 .env 与原两份 Compose 在独立批次 20261105_serial_r1 完成启动。16 个常驻服务运行，12 个容器健康检查通过，另外三个 C++ 监听和网关两个端口均已核实。12 个初始化任务全部退出 0，六个 SQL 写者逐一启动。18 个新批次卷与此前 22 个命名数据和授权卷均保留。没有重发失败批次 Login 原注册。已修复 Match LoginRedis.Addrs 的派生 YAML 形状。
+- 核对了 12 个运行应用的镜像、源码、二进制、调试符号和资源。三个 C++ 节点各核对 100 份表资源和 14 份导航资源。证据位于 build/verification/docker-debug-refresh-20261104-r2/local-deploy-serial-r1 和 runtime-checks/local-acceptance-serial-r1。
+- 三个 C++ 节点均实际附加后分离。Scene 的 node.cpp 命中第 541 行并单步至第 542 行。Go Login 命中 providers.go 第 67 行，恢复并确认 Delve 断开。Java 网关命中 ServerListController.java 第 21 行，恢复并分离。分离后 C++ TracerPid 均为 0。
+- 双客户端单区冒烟实际退出 0，约 23 秒，两端登录并进入场景，战斗与观战的四项计数各 9。验收结束服务持续运行，网关 18085 和 18086 均返回 UP。修改后先保存并运行对应 Docker 重编任务，再选对应附加配置按 F5，C++ 选择容器中的进程 1。

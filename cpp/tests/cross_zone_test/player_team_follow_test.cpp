@@ -1,0 +1,538 @@
+#include <chrono>
+#include <deque>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <utility>
+#include <vector>
+
+#include <gtest/gtest.h>
+#include <hiredis/hiredis.h>
+
+#include "../muduo_grpc_test/muduo_test_loop.h"
+#include "engine/core/type_define/player_guid_comp.h"
+#include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
+#include "modules/scene/comp/scene_comp.h"
+#include "muduo/net/EventLoop.h"
+#include "muduo_grpc/channel.h"
+#include "muduo_grpc/method_table.h"
+#include "muduo_grpc/server.h"
+#include "muduo_grpc/server_call.h"
+#include "network/network_utils.h"
+#include "network/node_utils.h"
+#include "node/system/node/muduo_grpc_channel_slot.h"
+#include "player/comp/player_frozen_comp.h"
+#include "player/comp/player_ownership_comp.h"
+#include "player/system/enter_fence.h"
+#include "player/system/player_team.h"
+#include "player/system/player_team_follow_scope.h"
+#include "player/system/role_admission_system.h"
+#include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/battle_comp.pb.h"
+#include "proto/common/component/player_network_comp.pb.h"
+#include "proto/scene/scene_info.pb.h"
+#include "proto/scene_manager/storage.pb.h"
+#include "spatial/comp/teleport_settle_comp.h"
+#include "thread_context/ecs_context.h"
+#include "thread_context/node_context_manager.h"
+#include "time/system/time.h"
+#include "type_alias/player_session_type_alias.h"
+
+NodeInfo& TestLocalNodeInfo();
+
+class PlayerTeamFollowTestAccess
+{
+public:
+    static void Check(entt::entity player, uint64_t leaderId)
+    {
+        PlayerTeamSystem::CheckFollowLeader(player, leaderId);
+    }
+};
+
+namespace
+{
+using namespace std::chrono_literals;
+using RedisReplyHandler = PlayerTeamFollowScope::RedisReplyHandler;
+
+constexpr uint64_t kPlayerId = 950200001;
+constexpr uint64_t kLeaderId = 950200002;
+constexpr uint64_t kCurrentSceneId = 700;
+constexpr uint32_t kZoneId = 3;
+constexpr uint32_t kSceneNodeId = 12;
+constexpr uint32_t kOriginalGateId = 5;
+constexpr uint32_t kCurrentGateId = 6;
+constexpr double kLeaderX = 20.0;
+
+SessionId SessionOnGate(uint32_t gateId)
+{
+    return (gateId << SessionIdGenerator::node_bit()) | 1;
+}
+
+void Deliver(RedisReplyHandler callback, int type, std::string bytes = {})
+{
+    redisReply reply{};
+    reply.type = type;
+    reply.str = bytes.data();
+    reply.len = bytes.size();
+    callback(&reply);
+}
+
+std::string LeaderLocation(uint64_t sceneId = kCurrentSceneId, uint32_t zoneId = kZoneId,
+                           uint32_t nodeId = kSceneNodeId)
+{
+    storage::PlayerLocation location;
+    location.set_scene_id(sceneId);
+    location.set_zone_id(zoneId);
+    location.set_node_id(std::to_string(nodeId));
+    // 跟随不读回滚回执，但必须能解析带内嵌零字节的完整 Redis 值。
+    location.set_rollback_receipt(std::string("test\0receipt", 12));
+    return location.SerializeAsString();
+}
+
+class FakeRedis
+{
+public:
+    int Get(std::string_view key, RedisReplyHandler callback)
+    {
+        keys.emplace_back(key);
+        threads.push_back(std::this_thread::get_id());
+        if (std::exchange(rejectNext, false))
+        {
+            return REDIS_ERR;
+        }
+        if (auto inlineReply = std::exchange(onSubmit, {}))
+        {
+            inlineReply(std::move(callback));
+        }
+        else
+        {
+            pending.push_back(std::move(callback));
+        }
+        return REDIS_OK;
+    }
+
+    RedisReplyHandler TakeReply()
+    {
+        auto callback = std::move(pending.front());
+        pending.pop_front();
+        return callback;
+    }
+
+    void Reply(int type, std::string bytes = {})
+    {
+        ASSERT_FALSE(pending.empty());
+        Deliver(TakeReply(), type, std::move(bytes));
+    }
+
+    void Disconnect()
+    {
+        ASSERT_FALSE(pending.empty());
+        TakeReply()(nullptr);
+    }
+
+    std::vector<std::string> keys;
+    std::vector<std::thread::id> threads;
+    std::deque<RedisReplyHandler> pending;
+    std::function<void(RedisReplyHandler)> onSubmit;
+    bool ready{true};
+    bool rejectNext{false};
+};
+
+class RecordingSceneManager final : public muduo_grpc::Service
+{
+public:
+    void RegisterMethods(muduo_grpc::MethodTable& methods) override
+    {
+        methods.AddUnary(std::string(scene_manager::kSceneManagerEnterSceneGrpcPath),
+            [weak = std::weak_ptr(requests)](muduo_grpc::ServerCall call, std::string_view bytes)
+            {
+                const auto observed = weak.lock();
+                if (!observed || !call.TryStartBusiness())
+                {
+                    return;
+                }
+                scene_manager::EnterSceneRequest request;
+                if (!request.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())))
+                {
+                    call.FinishError({muduo_grpc::StatusCode::kInvalidArgument, "invalid request"});
+                    return;
+                }
+                scene_manager::EnterSceneResponse response;
+                response.set_player_id(request.player_id());
+                response.set_correlation_id(request.correlation_id());
+                response.set_error_code(5); // 普通拒绝，走现有在途记录清理路径。
+                observed->push_back(std::move(request));
+                call.FinishOk(response.SerializeAsString());
+            });
+    }
+
+    std::shared_ptr<std::vector<scene_manager::EnterSceneRequest>> requests =
+        std::make_shared<std::vector<scene_manager::EnterSceneRequest>>();
+};
+
+class PlayerTeamFollowTest : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        tlsEcs.Clear();
+        TestLocalNodeInfo().set_zone_id(kZoneId);
+        TestLocalNodeInfo().set_node_id(kSceneNodeId);
+        scene_ = tlsEcs.sceneRegistry.create();
+        tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene_).set_scene_id(kCurrentSceneId);
+        player_ = MakePlayer(kPlayerId, 0.0);
+        MakePlayer(kLeaderId, kLeaderX);
+        BindSession(player_, kPlayerId, SessionOnGate(kOriginalGateId));
+        scope_.emplace(loop_, [&redis = redis_] { return redis.ready; },
+            [&redis = redis_](std::string_view key, RedisReplyHandler callback)
+            {
+                return redis.Get(key, std::move(callback));
+            });
+    }
+
+    void TearDown() override
+    {
+        scope_.reset();
+        tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService).clear();
+        tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService).clear();
+        server_.reset();
+        // 通道与服务端已在 I/O 派发栈外释放。处理它们排队的连接拆除以及任务完成通知。
+        loop_.queueInLoop([&loop = loop_] { loop.queueInLoop([&loop] { loop.quit(); }); });
+        loop_.wakeup();
+        loop_.loop();
+        tlsEcs.Clear();
+    }
+
+    entt::entity MakePlayer(uint64_t id, double x)
+    {
+        auto& registry = tlsEcs.actorRegistry;
+        const auto player = registry.create();
+        registry.emplace<PlayerGuidComp>(player, id);
+        registry.emplace<SceneEntityComp>(player, scene_);
+        auto& transform = registry.emplace<Transform>(player);
+        transform.mutable_location()->set_x(x);
+        transform.mutable_rotation()->set_y(x);
+        tlsEcs.playerList.emplace(id, player);
+        return player;
+    }
+
+    void BindSession(entt::entity player, uint64_t playerId, SessionId sessionId)
+    {
+        auto& snapshot = tlsEcs.actorRegistry.get_or_emplace<PlayerSessionSnapshotComp>(player);
+        SessionMap().erase(snapshot.gate_session_id());
+        snapshot.set_gate_session_id(sessionId);
+        SessionMap().insert_or_assign(sessionId, playerId);
+    }
+
+    void Check()
+    {
+        PlayerTeamFollowTestAccess::Check(player_, kLeaderId);
+    }
+
+    void OpenLocationRead()
+    {
+        Check();
+        ASSERT_EQ(redis_.pending.size(), 1u);
+        redis_.Reply(REDIS_REPLY_NIL);
+        ASSERT_EQ(redis_.pending.size(), 1u);
+        ASSERT_EQ(redis_.keys.size(), 2u);
+    }
+
+    static void ExpectNoRegroup(entt::entity player)
+    {
+        const auto* transform = tlsEcs.actorRegistry.try_get<Transform>(player);
+        ASSERT_NE(transform, nullptr);
+        EXPECT_DOUBLE_EQ(transform->location().x(), 0.0);
+        EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeleportSettleComp>(player));
+        EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
+    }
+
+    void StartSceneManager()
+    {
+        const auto port = muduo_grpc_test::FindFreeLoopbackPort();
+        ASSERT_NE(port, 0);
+        muduo_grpc::ServerOptions serverOptions;
+        serverOptions.statsLogInterval = 0s;
+        server_ = muduo_grpc::Server::Create(loop_, "127.0.0.1", port, std::move(serverOptions));
+        ASSERT_NE(server_, nullptr);
+        ASSERT_TRUE(server_->RegisterService(sceneManager_));
+        server_->Start();
+
+        muduo_grpc::ChannelOptions channelOptions;
+        channelOptions.maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
+        auto channel = muduo_grpc::Channel::Create(loop_, "127.0.0.1", port, std::move(channelOptions));
+        ASSERT_NE(channel, nullptr);
+        auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
+        const auto entity = registry.create();
+        registry.emplace<NodeInfo>(entity);
+        registry.emplace<MuduoGrpcChannelPtr>(entity, std::move(channel));
+    }
+
+    muduo::net::EventLoop loop_;
+    FakeRedis redis_;
+    std::optional<PlayerTeamFollowScope> scope_;
+    RecordingSceneManager sceneManager_;
+    std::shared_ptr<muduo_grpc::Server> server_;
+    SceneEntity scene_{entt::null};
+    entt::entity player_{entt::null};
+};
+
+TEST_F(PlayerTeamFollowTest, FirstGetRequiresExplicitNil)
+{
+    for (const auto type : {REDIS_REPLY_STRING, REDIS_REPLY_ERROR, REDIS_REPLY_INTEGER})
+    {
+        SCOPED_TRACE(type);
+        const auto count = redis_.keys.size();
+        Check();
+        redis_.Reply(type); // STRING 的长度为零，依然是已有键。
+        EXPECT_EQ(redis_.keys.size(), count + 1);
+        EXPECT_TRUE(redis_.pending.empty());
+        ExpectNoRegroup(player_);
+    }
+
+    const auto count = redis_.keys.size();
+    Check();
+    redis_.Disconnect();
+    EXPECT_EQ(redis_.keys.size(), count + 1);
+    redis_.rejectNext = true;
+    Check();
+    EXPECT_EQ(redis_.keys.size(), count + 2);
+    EXPECT_TRUE(redis_.pending.empty());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, RedisNotReadyBeforeSecondGetDoesNotSubmitIt)
+{
+    Check();
+    redis_.ready = false;
+    redis_.Reply(REDIS_REPLY_NIL);
+    EXPECT_EQ(redis_.keys.size(), 1u);
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, HeldRepliesLeaveLoopFreeAndRegroupOnOwningThread)
+{
+    const auto owner = std::this_thread::get_id();
+    const auto finished = std::make_shared<bool>(false);
+    loop_.queueInLoop([&loop = loop_, &redis = redis_, player = player_, owner, finished]
+    {
+        PlayerTeamFollowTestAccess::Check(player, kLeaderId);
+        ASSERT_EQ(redis.keys, (std::vector<std::string>{"battle:lock:{950200001}"}));
+        loop.queueInLoop([&loop, &redis, player = player, owner, finished]
+        {
+            EXPECT_EQ(std::this_thread::get_id(), owner);
+            EXPECT_EQ(redis.pending.size(), 1u);
+            EXPECT_EQ(redis.keys.size(), 1u);
+            ExpectNoRegroup(player);
+
+            redis.Reply(REDIS_REPLY_NIL);
+            ASSERT_EQ(redis.keys, (std::vector<std::string>{"battle:lock:{950200001}", "player:{950200002}:location"}));
+            EXPECT_EQ(redis.threads, (std::vector<std::thread::id>{owner, owner}));
+            loop.queueInLoop([&redis, player = player, owner, finished]
+            {
+                EXPECT_EQ(std::this_thread::get_id(), owner);
+                EXPECT_EQ(redis.pending.size(), 1u);
+                ExpectNoRegroup(player);
+                redis.Reply(REDIS_REPLY_STRING, LeaderLocation());
+
+                // 回调返回前已继续业务。瞬移写入当前线程所属的真实 ECS。
+                const auto& transform = tlsEcs.actorRegistry.get<Transform>(player);
+                EXPECT_DOUBLE_EQ(transform.location().x(), kLeaderX);
+                EXPECT_DOUBLE_EQ(transform.rotation().y(), kLeaderX);
+                EXPECT_TRUE(tlsEcs.actorRegistry.any_of<TeleportSettleComp>(player));
+                *finished = true;
+            });
+        });
+    });
+    loop_.wakeup();
+    EXPECT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [finished] { return *finished; }, 5s));
+}
+
+TEST_F(PlayerTeamFollowTest, MissingMalformedOrRemoteLeaderLocationDoesNotMovePlayer)
+{
+    ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    const std::vector<std::pair<int, std::string>> replies{
+        {REDIS_REPLY_NIL, {}}, {REDIS_REPLY_ERROR, {}}, {REDIS_REPLY_STRING, {}},
+        {REDIS_REPLY_STRING, std::string(1, '\x80')}, {REDIS_REPLY_STRING, LeaderLocation(0)},
+        {REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId, kZoneId + 1)},
+        {REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId, kZoneId, kSceneNodeId + 1)},
+    };
+    for (const auto& [type, bytes] : replies)
+    {
+        Check();
+        redis_.Reply(REDIS_REPLY_NIL);
+        redis_.Reply(type, bytes);
+        ExpectNoRegroup(player_);
+    }
+    Check();
+    redis_.Reply(REDIS_REPLY_NIL);
+    redis_.Disconnect();
+    ExpectNoRegroup(player_);
+
+    Check();
+    redis_.rejectNext = true;
+    redis_.Reply(REDIS_REPLY_NIL);
+    EXPECT_TRUE(redis_.pending.empty());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, ReusedEntitySlotDoesNotContinueAfterFirstGet)
+{
+    Check();
+    const auto original = player_;
+    tlsEcs.actorRegistry.destroy(original);
+    tlsEcs.playerList.erase(kPlayerId);
+    const auto replacement = MakePlayer(kPlayerId + 10, 0.0);
+    BindSession(replacement, kPlayerId + 10, SessionOnGate(kOriginalGateId));
+    ASSERT_EQ(entt::to_entity(original), entt::to_entity(replacement));
+    ASSERT_NE(original, replacement);
+    redis_.Reply(REDIS_REPLY_NIL);
+    EXPECT_EQ(redis_.keys.size(), 1u);
+    ExpectNoRegroup(replacement);
+}
+
+TEST_F(PlayerTeamFollowTest, ChangedPlayerIdDoesNotContinueAfterSecondGet)
+{
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    tlsEcs.actorRegistry.get<PlayerGuidComp>(player_).value = kPlayerId + 10;
+    BindSession(player_, kPlayerId + 10, SessionOnGate(kOriginalGateId));
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, BattleStartedWhileLocationPendingPreventsFollow)
+{
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player_);
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, DisconnectedWhileLocationPendingPreventsFollow)
+{
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    SessionMap().erase(SessionOnGate(kOriginalGateId));
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, OwnershipHandoffWhileLocationPendingPreventsFollow)
+{
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
+    tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player_);
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, SceneChangeWhileLocationPendingPreventsFollow)
+{
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    auto& pending = tlsEcs.actorRegistry.emplace<PlayerSceneChangeInFlightComp>(player_);
+    pending.sentAtMs = TimeSystem::NowMillisecondsUTC();
+    pending.correlationId = 33;
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeleportSettleComp>(player_));
+    const auto* unchanged = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player_);
+    ASSERT_NE(unchanged, nullptr);
+    EXPECT_EQ(unchanged->correlationId, 33u);
+}
+
+TEST_F(PlayerTeamFollowTest, DifferentSceneSendsCorrelatedRequestForCurrentGateSession)
+{
+    ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+
+    const auto session = SessionOnGate(kCurrentGateId);
+    BindSession(player_, kPlayerId, session);
+    tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player_, session, 29u);
+    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player_, 29u, 7u);
+    auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
+    auto& gate = gateRegistry.emplace<NodeInfo>(gateRegistry.create());
+    gate.set_zone_id(kZoneId);
+    gate.set_node_id(kCurrentGateId);
+    gate.set_node_uuid("gate-after-rebind");
+
+    constexpr uint64_t kDestination = kCurrentSceneId + 1;
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination));
+    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player_);
+    ASSERT_NE(pending, nullptr);
+    EXPECT_FALSE(pending->playerRequested);
+    EXPECT_EQ(pending->sceneId, kDestination);
+    const auto correlationId = pending->correlationId;
+    EXPECT_NE(correlationId, 0u);
+
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [requests = sceneManager_.requests, player = player_]
+    {
+        return !requests->empty() &&
+               !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
+    }, 5s));
+    ASSERT_EQ(sceneManager_.requests->size(), 1u);
+    const auto& request = sceneManager_.requests->front();
+    EXPECT_EQ(request.player_id(), kPlayerId);
+    EXPECT_EQ(request.scene_id(), kDestination);
+    EXPECT_EQ(request.session_id(), session);
+    EXPECT_EQ(request.gate_id(), std::to_string(kCurrentGateId));
+    EXPECT_EQ(request.gate_instance_id(), "gate-after-rebind");
+    EXPECT_EQ(request.zone_id(), kZoneId);
+    EXPECT_EQ(request.gate_zone_id(), kZoneId);
+    EXPECT_EQ(request.login_generation(), 29u);
+    EXPECT_EQ(request.owner_revision(), 7u);
+    EXPECT_EQ(request.correlation_id(), correlationId);
+    EXPECT_TRUE(request.request_id().empty());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, StoppingRejectsNewChecksAndLateReplyAfterScopeDestruction)
+{
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    auto late = redis_.TakeReply();
+    scope_->Stop();
+    Check();
+    ASSERT_EQ(redis_.keys.size(), 2u);
+    scope_.reset();
+    Deliver(std::move(late), REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player_);
+}
+
+TEST_F(PlayerTeamFollowTest, CompletedRegroupSurvivesLaterStop)
+{
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    scope_->Stop();
+    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player_).location().x(), kLeaderX);
+    EXPECT_EQ(redis_.keys.size(), 2u);
+}
+
+TEST_F(PlayerTeamFollowTest, InlineRepliesCompleteBothGetsOnce)
+{
+    redis_.onSubmit = [&redis = redis_](RedisReplyHandler callback)
+    {
+        redis.onSubmit = [](RedisReplyHandler location)
+        {
+            Deliver(std::move(location), REDIS_REPLY_STRING, LeaderLocation());
+        };
+        Deliver(std::move(callback), REDIS_REPLY_NIL);
+    };
+    Check();
+    EXPECT_EQ(redis_.keys.size(), 2u);
+    EXPECT_TRUE(redis_.pending.empty());
+    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player_).location().x(), kLeaderX);
+}
+
+TEST_F(PlayerTeamFollowTest, StopReenteredAfterInlineReplyPreventsSecondGet)
+{
+    redis_.onSubmit = [&scope = *scope_](RedisReplyHandler callback)
+    {
+        Deliver(std::move(callback), REDIS_REPLY_NIL);
+        scope.Stop();
+    };
+    Check();
+    EXPECT_EQ(redis_.keys.size(), 1u);
+    EXPECT_TRUE(redis_.pending.empty());
+    ExpectNoRegroup(player_);
+}
+} // namespace

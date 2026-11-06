@@ -52,6 +52,7 @@ namespace player_ownership
 	// 解析一条 Redis 应答元素(GET 的应答,或 MGET 数组里的一项)里的 PlayerLocation 二进制。
 	// NIL(键不存在)/ 非字符串 / 超长 / 解析失败都返回 false;返回 false 时 out 的内容不可用。
 	bool ParsePlayerLocationElement(const redisReply *element, storage::PlayerLocation &out);
+	bool ParsePlayerLocationBytes(std::string_view bytes, storage::PlayerLocation &out);
 } // namespace player_ownership
 
 // 一次 EnterScene 路由决策带给本节点的完整上下文:proto 入场信息 + 归属字段。

@@ -13,6 +13,7 @@
 #include "core/system/redis.h"
 #include "frame/manager/frame_time.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_team_follow_scope.h"
 #include "player/system/player_ownership_metrics.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_inbox_system.h"
@@ -43,6 +44,7 @@ namespace
         TimerTaskComp playerInboxTimer;
         DependencyGate dependencyGate;
         SceneNodeGrpcImpl grpcService;
+        PlayerTeamFollowScope teamFollow;
         std::unordered_set<Guid> shutdownPlayerIds;
         std::size_t lastPendingPlayerSaves = std::numeric_limits<std::size_t>::max();
         std::size_t lastPendingKafkaMessages = std::numeric_limits<std::size_t>::max();
@@ -53,7 +55,7 @@ namespace
         // 本次停机里"drain 只剩改派待确认表"的逐条清单已经打过(每次停机只打一次)。
         bool relocateBacklogLogged = false;
 
-        explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop) {}
+        explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop), teamFollow(loop) {}
     };
 
     struct SceneNodeHooks
@@ -147,6 +149,7 @@ int main(int argc, char *argv[])
         // 先复制实体列表,再逐个走完整 HandleExitGameNode 流程。
         auto exitAllPlayers = [&context](Node &)
         {
+            context->teamFollow.Stop();
             // 停机后不再续段(定时器取消、不再发 gRPC);手里的号照常发完。
             // 放在最前面与 dependencyGate / worldTimer 一起收,晚了会在拆传输层时再发请求。
             tlsGuidSegmentRegistry.ShutdownAll();
@@ -287,7 +290,11 @@ int main(int argc, char *argv[])
 
         // 拆除前钩子(Node::SetBeforeTeardown):日志 / ECS 都还活着,把没落定的存盘留一行证据(带玩家号)。
         node.SetBeforeTeardown([&context](Node &)
-                               { context->playerInboxTimer.Cancel(); PlayerLifecycleSystem::LogUnsettledPlayerStoreSaves(); });
+                               {
+                                   context->teamFollow.Stop();
+                                   context->playerInboxTimer.Cancel();
+                                   PlayerLifecycleSystem::LogUnsettledPlayerStoreSaves();
+                               });
 
         // 身份冲突(etcd 租约过期 / node_id 被别人抢走)和普通 SIGTERM 不是一回事:
         // 这台节点马上就不再是 node_id 的合法持有者,但玩家的 gate 会话还连着。
@@ -296,8 +303,9 @@ int main(int argc, char *argv[])
         //
         // 顺序由 PlayerLifecycleSystem 保证:抄会话 -> 存盘 -> 存盘落地后才发改派请求。
         // 反过来做的话,新节点会从 Redis 读到存盘前的旧数据(回档)。
-        node.SetOnConflictShutdown([](Node &, NodeIdConflictReason)
+        node.SetOnConflictShutdown([&context](Node &, NodeIdConflictReason)
                                    {
+            context->teamFollow.Stop();
             // 先停 Agones lifecycle worker(理由同 exitAllPlayers 里的注释),
             // 再动玩家数据。Stop() 幂等。
             agones::GameServerLifecycle::Instance().Stop();
@@ -395,6 +403,7 @@ int main(int argc, char *argv[])
 		PlayerLifecycleSystem::SetNodeIdentityProbe({});
 
 		// Node 正常 finalizer 已先 free Hiredis;这里是幂等兜底。
+		context->teamFollow.Stop();
 		tlsRedis.Shutdown();
 		tlsPlayerRedis.Shutdown();
 		tlsRedisSystem.Shutdown();

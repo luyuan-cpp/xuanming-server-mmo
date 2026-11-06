@@ -46,6 +46,10 @@ include_directories(
 )
 
 set(SOURCE_FILES
+    boost/libs/cobalt/src/detail/exception.cpp
+    boost/libs/cobalt/src/detail/util.cpp
+    boost/libs/cobalt/src/error.cpp
+    boost/libs/cobalt/src/this_thread.cpp
     hexagons_grids/hexagons_grid.cpp
     ue5navmesh/Private/DetourCrowd/DetourCrowd.cpp
     ue5navmesh/Private/DetourCrowd/DetourLocalBoundary.cpp
@@ -64,6 +68,14 @@ set(SOURCE_FILES
     ue5navmesh/Private/Detour/DetourNavMeshBuilder.cpp
     ue5navmesh/Private/Detour/DetourNavMeshQuery.cpp
     ue5navmesh/Private/Detour/DetourNode.cpp
+)
+
+set_source_files_properties(
+    boost/libs/cobalt/src/detail/exception.cpp
+    boost/libs/cobalt/src/detail/util.cpp
+    boost/libs/cobalt/src/error.cpp
+    boost/libs/cobalt/src/this_thread.cpp
+    PROPERTIES COMPILE_DEFINITIONS "BOOST_COBALT_SOURCE=1;BOOST_COBALT_NO_LIB=1;BOOST_COBALT_STATIC_LINK=1"
 )
 
 add_library(third_party STATIC ${SOURCE_FILES})

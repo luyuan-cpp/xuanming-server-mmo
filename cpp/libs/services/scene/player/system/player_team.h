@@ -20,7 +20,7 @@
 //   - 战斗中(IsInBattle 或 battle:lock 存在)一律不跟随,冻结解除后由 PlayerBattleSystem 回调补一次。
 //
 // 线程模型:所有方法都必须在 scene 节点 loop 线程调用;hiredis 回调同样在 loop 线程执行。
-// 每一跳回调都在发出命令前捕获 player_id,回调里先核对 valid(entity) && Guid == player_id,
+// 每次异步完成都核对原实体句柄和 player_id，
 // 实体已销毁或槽位被复用时丢弃,绝不让另一个玩家去跟随。
 
 #include <cstdint>
@@ -88,6 +88,8 @@ public:
 	static void RefreshTeammateAoi(entt::entity player);
 
 private:
+	friend class PlayerTeamFollowScope;
+	friend class PlayerTeamFollowTestAccess;
 	// 刷新之后要不要继续跟随:
 	//   kRefreshOnly           只刷新 TeamId(目前没有调用方,保留给"只对账不动人"的场合)
 	//   kFollowLeader          刷新 + 非队长跟随队长(组队服务事件、冻结解除补检查、队长扇出的成员侧)
@@ -112,9 +114,6 @@ private:
 	// 非队长跟随队长:战斗 / 会话 / battle:lock / zone / 节点守卫全部通过之后,
 	// 队长在别的场景 -> 请求 SceneManager 切过去;已在同一场景 -> RegroupToLeader。
 	static void CheckFollowLeader(entt::entity player, uint64_t leaderId);
-
-	// CheckFollowLeader 的第二跳:自己的战斗锁已确认不在,读队长位置并按上面的规则决定切场景或归队。
-	static void ReadLeaderLocationForFollow(entt::entity player, uint64_t playerId, uint64_t leaderId);
 
 	// 同一场景实例内的归队:按 ShouldRegroup 判定,需要时把 player 瞬移到队长脚下。
 	// 只由 CheckFollowLeader 在全部守卫通过后调用;队长实体不在本节点 / 不在同一场景 / 归属交接在途时不动。

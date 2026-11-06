@@ -106,10 +106,12 @@ COPY cpp/       cpp/
 COPY generated/ generated/
 COPY proto/     proto/
 
-# Header-only / small third-party dirs needed for compilation
+# 节点编译所需的第三方头文件与少量源码。
 # 序列化与 TLS 头库已经在 deps 阶段从独立源码安装。
-# Boost仅作为头文件依赖；避免传输libs/中的测试与示例（约5.7万文件/504MiB）。
+# Cobalt 只编译队伍跟随所需的锁定源码。其余 Boost 模块只复制聚合头。
 COPY third_party/boost/boost/       third_party/boost/boost/
+COPY third_party/boost/libs/cobalt/src/detail/exception.cpp third_party/boost/libs/cobalt/src/detail/util.cpp third_party/boost/libs/cobalt/src/detail/
+COPY third_party/boost/libs/cobalt/src/error.cpp third_party/boost/libs/cobalt/src/this_thread.cpp third_party/boost/libs/cobalt/src/
 COPY third_party/entt/              third_party/entt/
 COPY third_party/fmt/               third_party/fmt/
 COPY third_party/spdlog/            third_party/spdlog/

@@ -48,6 +48,7 @@
     <ClInclude Include="player\system\player_ownership_metrics.h" />
     <ClInclude Include="player\system\player_scene.h" />
     <ClInclude Include="player\system\player_team.h" />
+    <ClInclude Include="player\system\player_team_follow_scope.h" />
     <ClInclude Include="player\system\player_landing.h" />
     <ClInclude Include="player\system\player_skill.h" />
     <ClInclude Include="player\system\player_attribute.h" />

@@ -72,6 +72,8 @@ file(GLOB muduo_sources CONFIGURE_DEPENDS
     "${muduo_root}/muduo/base/*.cc"
     "${muduo_root}/muduo/net/*.cc"
     "${muduo_root}/muduo/net/poller/*.cc")
+# 上游 muduo_net 的源文件清单未包含这个示例，它引用了大小写不匹配的头文件。
+list(FILTER muduo_sources EXCLUDE REGEX "/boilerplate\\.cc$")
 
 add_library(lifecycle_muduo STATIC ${muduo_sources}
     "${muduo_root}/contrib/hiredis/Hiredis.cc")

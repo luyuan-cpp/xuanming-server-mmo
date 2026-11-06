@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClCompile Include="..\muduo_grpc_test\muduo_test_loop.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="cross_zone_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="player_team_follow_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="role_admission_test.cpp">
