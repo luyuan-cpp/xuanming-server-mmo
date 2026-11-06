@@ -729,8 +729,14 @@ WARN 的条数和 message_id.txt 的 diff(只改行、只追加、不删行)。
 - proto:`Gate.RouteNodeMessage`(41)、`Gate.RoutePlayerMessage`(74)、`Scene.RouteNodeStringMsg`(78)、`Scene.RoutePlayerStringMsg`(81),以及只被它们使用的
   `RoutingNodeInfo`、`RouteMessageRequest` / `Response`、`RoutePlayerMessageRequest` / `Response`。`PlayerInfoExternal`、`OptionMessagePriority` 定义保留。
 - regen 已由并发会话完成(用的是新生成器源码),结果:`message_id.txt` 只有 41 / 74 / 78 / 81 四行改成墓碑,其余为他人新增方法的追加行,**没有删行**;
-  两个 handler 的 Route 方法连同方法守护段已被生成器去掉。`generated/robot/proto` 是不在流水线里的旧快照,仍有 Route 一族,与本批无关。
+  两个 handler 的 Route 方法连同方法守护段已被生成器去掉。`generated/robot/proto` 目前也已纳入生成器的孤儿产物清退范围,不再是流水线之外的旧快照。
 - `proto_field_checker_test` 的两条用例改用 `ProtoFieldCheckerTestSubPB` / `items`(阈值语义不变)。
+
+2026-11-05 残留清理:正式 proto、handler 和 C++/Go 绑定已无这一族方法,剩下的旧活编号仅在
+`generated/proto/{db,login}/proto/service_id.txt` 与 `generated/robot/proto/service_id.txt` 三份无人读取的快照。
+由生成器定向清退这三份整文件,现行编号仍只取 `proto/message_id.txt`。清退只匹配暂存根部的固定文件名;
+源目录仍有 `service_id.txt` 时保留,源检查报错则停止。其他文本、子目录同名文件、正式绑定目录和消息号墓碑均保留。
+`NodeRouteMessageRequest` 仍承载 `Gate.SendMessageToPlayer` 的玩家推送,与本次退役接口不同,契约及调用链保持原样。
 
 ### 20.3 退役无发起端的四个方法(已从 proto 删除,1 / 40 / 42 / 56 留墓碑)
 

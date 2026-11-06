@@ -41,8 +41,11 @@ const (
 	outputUnproven
 )
 
-// protoOutputKind 描述一类由 proto 派生的产物:怎样从路径推出候选源,怎样从文件头证明来源。
+// protoOutputKind 描述一类 proto 流程产物:怎样从路径推出候选源,怎样从文件头证明来源。
 type protoOutputKind struct {
+	// retireServiceID 只用于 proto 暂存目录:旧编号表的源已退役时,清掉根部固定名称的副本。
+	// 不按 .txt 后缀推断来源,也不清子目录同名文件或正式绑定目录里的文件。
+	retireServiceID bool
 	// suffixes 是产物后缀,去掉后缀加 .proto 就是候选源。一个文件可能匹配多个后缀:
 	// x_grpc.pb.go 既可能是 x.proto 的 gRPC 桩,也可能是 x_grpc.proto 的消息绑定
 	// (proto/common/constants/etcd_grpc.proto 就是后者),所以路径只给候选,以文件头写明的源为准。
@@ -119,7 +122,8 @@ func grpcClientDeclaredSource(rel string, head []byte) (string, bool) {
 // 这些目录是 proto/ 的镜像,AGENTS §3 不许手改;go_package 行与所在位置对得上,说明它走过暂存流程。
 func stagedProtoOutput(goPackageBase string) protoOutputKind {
 	return protoOutputKind{
-		suffixes: []string{".proto"},
+		retireServiceID: true,
+		suffixes:        []string{".proto"},
 		declaredSource: func(rel string, head []byte) (string, bool) {
 			// 与 generator/go 的 GenGoPackageOptWithPkg 写出的一行相同。
 			want := fmt.Sprintf("option go_package = \"%s\";", path.Join(goPackageBase, protoSourcePrefix, path.Dir(rel)))
@@ -147,6 +151,16 @@ func (kind protoOutputKind) candidateSources(rel string) []string {
 
 // classify 判定 root 下的 rel(正斜杠)是否退役产物。工程条目也走这里,条目指向的文件可能已经不在。
 func (kind protoOutputKind) classify(protoRoot, root, rel string) (outputState, error) {
+	if kind.retireServiceID && rel == "service_id.txt" {
+		exists, err := protoSourceExists(protoRoot, rel)
+		if err != nil {
+			return outputLive, err
+		}
+		if exists {
+			return outputLive, nil
+		}
+		return outputRetired, nil
+	}
 	candidates := kind.candidateSources(rel)
 	if len(candidates) == 0 || !filepath.IsLocal(filepath.FromSlash(rel)) {
 		return outputLive, nil
@@ -261,7 +275,8 @@ func orphanRetirementRules() []retireRule {
 	return rules
 }
 
-// RetireOrphanedOutputs 清退源 proto 已删除的生成产物。必须排在 SyncCppBuildProjects 之后:
+// RetireOrphanedOutputs 清退源 proto 已删除的产物及暂存根部已废弃的 service_id.txt。
+// 必须排在 SyncCppBuildProjects 之后:
 // 工程清单校验失败时那一步直接终止,文件不会先于清单被删。
 func RetireOrphanedOutputs(wg *sync.WaitGroup) {
 	wg.Add(1)

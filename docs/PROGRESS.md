@@ -20260,3 +20260,14 @@ Root 已实际通过当前14库264表结构观察、三份迁移记录clean完�
 - **本次执行**：在仓库根目录，用 `build/cpp/tests/rpc_controller_test.exe` 的逐字节副本执行 `--gtest_filter=HiredisEventBatchWindows.* --gtest_repeat=20`。两条各运行并通过 20 次，共 **40/40**，进程退出 0，零失败、零跳过，stderr 为空。本轮没有重新编译；受测 exe 为 11-05 构建产物，晚于 `muduo.lib`，库哈希与 11-02 验证记录相同。
 - **源码与证据**：三份当前 `Hiredis.cc` / `Hiredis.h` 的 SHA256 分别一致，并与 11-02 记录及两版 Linux 构建副本一致；Windows 测试文件自 `e33b99351` 未改。运行前后记录的源码、库及原 exe 哈希均不变。证据目录 `build/verification/hiredis-event-batch-repeat-20261105-033750494/` 保存 stdout、stderr、`result.json`、前后输入哈希、二进制副本及哈希和原文档补丁。40/40 以 stdout 的 RUN / OK 计数为准，XML 仅最后一轮。
 - **边界**：本次只更新该设计文档与追加本条；未修改业务代码、其它会话的 `rpc_client_lifecycle_test.cpp` 或服务器缺口清单，未提交。历史 298/298 不代表当前工作区其它在途改动已重新全量验证。Java 版使用 Redisson，无对应 muduo 适配层或本项待办，不新增 PARITY 条目。
+
+## 2026-11-05 Codex：旧 Route 接口残留清理完成
+
+- **授权范围**：负责人审核通过后清理旧 `Gate.RoutePlayerMessage` / `Scene.RoutePlayerStringMsg` 残留，明确保留 `NodeRouteMessageRequest`，清理后运行相关测试。
+- **现状与删除**：旧接口的正式 proto、handler 与 C++/Go 绑定此前已删除；本次通过生成器清退逻辑只删除三份无读取方的旧编号快照：`generated/proto/db/proto/service_id.txt`、`generated/proto/login/proto/service_id.txt`、`generated/robot/proto/service_id.txt`。消息号 41/74/78/81 墓碑及回归测试保留，现役 10/72 号不变。
+- **生成器**：`retired_outputs.go` 只给 proto 暂存目录开启根部 `service_id.txt` 精确匹配；权威源仍存在时保留，源检查失败则中止。其他文本、子目录同名文件、正式绑定目录保持原样，沿用现有输出根与链接检查。测试覆盖三份删除及重复执行、源存在、关闭 robot、无 proto 源拒删、其他文件保护。
+- **执行与边界**：使用留在忽略目录的单次 Go overlay 驱动，仅启用正式清退器的旧编号分支；先确认清单恰好三份、原文件 SHA-256 与审批基线相同，再删除。第一次清理 3 份、第二次零删除。不执行全量协议生成，不覆盖其他会话的在途改动；设计文档只修正 §20.2，保留已有握手修改。同步更新生成器 README。
+- **验证**：Windows/amd64、Go 1.27.2，工作目录 `tools/proto_generator/protogen`，`GOTOOLCHAIN=local`、`GOPROXY=off`。旧实现定向四例实际 2 FAIL / 2 PASS，失败均为应清退的旧快照仍存在；修复及实际清理后 `go test -mod=readonly ./internal/prototools ./internal/generator/cpp ./internal -count=1 -json` 全部三个包退出 0：顶层 159 PASS / 0 FAIL / 1 SKIP，含子用例的终结事件 329 PASS / 1 SKIP。跳过仅 `TestRetireRefusesRedirectedOutputRoot`，原因是 Windows 不具备创建符号链接的权限，未改测试或系统权限。`go vet -mod=readonly` 同三包退出 0；两份改动 Go 文件 `gofmt -l` 无输出；`go build -mod=readonly -o <证据目录>/proto-gen.exe ./cmd` 退出 0；本任务文件 `git diff --check` 通过。
+- **保持不变**：清理前后 10 份现役文件 SHA-256 一致，含 `proto/message_id.txt`、`message.proto`、`rpc_message.proto`、Gate/Scene proto、Scene 推送发送与 Gate 接收实现、C++/Go message 绑定。`NodeRouteMessageRequest` 仍承载玩家推送。没有重编或运行业务服务、C++ 节点测试与联网冒烟，此次没有运行时改动。
+- **证据**：`build/verification/route-residue-20261105/`，含 `red.log`、`cleanup.log`、`after-cleanup-tests.jsonl`、`test-summary.json`、`protected-files.json`、`vet.log`、`build.log` 与单次 overlay 驱动；驱动未进入正式测试树。
+- **Java 版**：对应 `0.1.0-SNAPSHOT`。旧 Route 契约墓碑已对齐（既有 `PARITY.md` 记录），本次 C++/Go 生成器暂存快照清理不适用于 Java，不涉及 Java 运行时或共享客户端契约变更。未提交、未推送。

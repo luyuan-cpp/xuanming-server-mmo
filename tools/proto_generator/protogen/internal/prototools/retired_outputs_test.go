@@ -119,6 +119,10 @@ func retireFixture() (retired, kept map[string]string) {
 		"generated/proto/login/proto/db/db_task.proto": stagedProto("login/proto/db"),
 		"generated/proto/login/proto/gone/only.proto":  stagedProto("login/proto/gone"),
 		"generated/robot/proto/db/db_task.proto":       stagedProto("robot/proto/db"),
+		// 旧编号快照已由权威 message_id.txt 取代,只清暂存根目录的固定文件。
+		"generated/proto/db/proto/service_id.txt":    "74=GateRoutePlayerMessage\n",
+		"generated/proto/login/proto/service_id.txt": "81=SceneRoutePlayerStringMsg\n",
+		"generated/robot/proto/service_id.txt":       "74=GateRoutePlayerMessage\n81=SceneRoutePlayerStringMsg\n",
 	}
 	kept = map[string]string{
 		// 还在的协议和它们的产物。
@@ -154,7 +158,12 @@ func retireFixture() (retired, kept map[string]string) {
 		"cpp/generated/grpc_client/grpc_init_client.cpp":               "// 聚合入口\n",
 		"generated/robot/proto/keep.proto":                             "syntax = \"proto3\";\nmessage KeepExistingRobotContract {}\n",
 		"generated/proto/db/proto/db/moved.proto":                      stagedProto("db/proto/elsewhere"),
-		"generated/proto/db/proto/service_id.txt":                      "1=x\n",
+		"generated/proto/db/proto/message_id.txt":                      "74=reserved:GateRoutePlayerMessage\n",
+		"generated/proto/login/proto/event_id.txt":                     "1=SomeEvent\n",
+		"generated/robot/proto/notes.txt":                              "保留非编号快照\n",
+		"generated/proto/db/proto/nested/service_id.txt":               "1=x\n",
+		"go/proto/service_id.txt":                                      "1=x\n",
+		"cpp/generated/proto/service_id.txt":                           "1=x\n",
 		// 输出目录之外:文件头和退役产物一样也不能碰。
 		"go/shared/generated/only.pb.go": goOutput("gone/only"),
 		"robot/generated/only.pb.go":     goOutput("gone/only"),
@@ -180,6 +189,42 @@ func TestRetireOrphanedOutputsRemovesOnlyProvenOrphansAndIsIdempotent(t *testing
 			t.Errorf("清退后变空的目录 %s 应该删掉: %v", dir, err)
 		}
 	}
+}
+
+func TestRetireOrphanedOutputsKeepsServiceIDWhenSourceExists(t *testing.T) {
+	root := useRetireConfig(t)
+	kept := map[string]string{
+		"proto/db/db.proto":                          "syntax = \"proto3\";\n",
+		"proto/service_id.txt":                       "74=GateRoutePlayerMessage\n",
+		"generated/proto/db/proto/service_id.txt":    "74=GateRoutePlayerMessage\n",
+		"generated/proto/login/proto/service_id.txt": "74=GateRoutePlayerMessage\n",
+		"generated/robot/proto/service_id.txt":       "74=GateRoutePlayerMessage\n",
+	}
+	writeRepoFiles(t, root, kept)
+	if err := retireOrphanedOutputs(_config.Global.Paths.ProtoDir, orphanRetirementRules()); err != nil {
+		t.Fatal(err)
+	}
+	assertRepoFilesKept(t, root, kept)
+}
+
+func TestRetireOrphanedOutputsKeepsDisabledRobotServiceID(t *testing.T) {
+	root := useRetireConfig(t)
+	_config.Global.Generators.EnableRobotProto = false
+	kept := map[string]string{
+		"proto/db/db.proto":                    "syntax = \"proto3\";\n",
+		"generated/robot/proto/service_id.txt": "81=SceneRoutePlayerStringMsg\n",
+	}
+	retired := map[string]string{
+		"generated/proto/db/proto/service_id.txt":    "74=GateRoutePlayerMessage\n",
+		"generated/proto/login/proto/service_id.txt": "81=SceneRoutePlayerStringMsg\n",
+	}
+	writeRepoFiles(t, root, kept)
+	writeRepoFiles(t, root, retired)
+	if err := retireOrphanedOutputs(_config.Global.Paths.ProtoDir, orphanRetirementRules()); err != nil {
+		t.Fatal(err)
+	}
+	assertRepoFilesGone(t, root, retired)
+	assertRepoFilesKept(t, root, kept)
 }
 
 func TestRetireOrphanedOutputsKeepsOutputRootThatBecomesEmpty(t *testing.T) {
@@ -257,7 +302,10 @@ func TestRetireOrphanedOutputsPrintsWholePlanBeforeDeleting(t *testing.T) {
 
 func TestRetireOrphanedOutputsRefusesWithoutProtoSources(t *testing.T) {
 	root := useRetireConfig(t)
-	orphan := map[string]string{"go/proto/db/db_task.pb.go": goOutput("db/db_task")}
+	orphan := map[string]string{
+		"go/proto/db/db_task.pb.go":               goOutput("db/db_task"),
+		"generated/proto/db/proto/service_id.txt": "74=GateRoutePlayerMessage\n",
+	}
 	writeRepoFiles(t, root, orphan)
 
 	if err := retireOrphanedOutputs(_config.Global.Paths.ProtoDir, orphanRetirementRules()); err == nil {
